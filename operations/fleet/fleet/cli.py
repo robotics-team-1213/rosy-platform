@@ -762,35 +762,8 @@ def _trip_config(args):
 
 def _build_site_map(args, tasks_db):
     """D-488/D-490: site map store (+ first import) and the planner's ``fleet.routing`` costs."""
-    import yaml
-
-    from fleet.routing.cost import RoutingConfig
-    from fleet.server.site_map_store import SiteMapStore
-    from fleet.site_map import from_lane_graph
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        routing = ((site_config.get("fleet") or {}).get("routing") if isinstance(site_config, dict) else None)
-        routing_config = RoutingConfig.from_mapping(routing)
-        site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
-        source = getattr(args, "site_map_import", None)
-        if source is not None:
-            site_maps.import_source = Path(source)
-            # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
-            # report; the default "site" would filter every sighting (map pose UNKNOWN).
-            site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
-                                      source=Path(source).name)
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"site map / routing config: {exc}")
-    if tasks_db is None:
-        print("warning: no --tasks-db; the D-488 site map lives in memory and is lost on restart",
-              file=sys.stderr, flush=True)
-    if site_maps.active() is None:
-        print("warning: no active D-488 site map; /route and /trip are refused until one is "
-              "imported (--site-map-import) or activated", file=sys.stderr, flush=True)
-    return site_maps, routing_config
+    from fleet.server.site_map_bootstrap import build_site_map
+    return build_site_map(args, tasks_db)
 
 
 def _map_pose_config(args):

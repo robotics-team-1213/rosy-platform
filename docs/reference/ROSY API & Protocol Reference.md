@@ -5,9 +5,35 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.297
+**Version:** v1.300
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.300 STL 도면 참조와 Fleet 평면 지도 편집 (D-825)
+
+선택 `SiteMap.drawing={asset_sha256,projection_sha256}`의 두 값은 소문자 SHA-256 64자리다. 정본 DTO는 `core_common.protocol.site_drawing`이며 CORE snapshot/envelope를 확장하지 않는다. 도면 지도의 `survey.revision`은 projection 해시와 같아야 한다. 선택 `SiteEdge.name`은 ID와 분리된 1–64자 표시 이름이고 공백만인 값을 거절한다. 없는 두 선택 필드는 기존 지도 body/hash에서 생략한다. 기존 지도 JSON 제한은 2 MiB다.
+
+| Method | Path | Guard | Body / Result |
+|---|---|---|---|
+| POST | `/api/fleet/site-map/drawings` | named operator + 기존 CSRF | raw STL bytes → `{asset_sha256,format,triangle_count,bounds_3d}`; format은 `binary_stl` 또는 `ascii_stl`, bounds_3d는 원본 단위의 `[min_xyz,max_xyz]` |
+| POST | `/api/fleet/site-map/drawings/{asset_sha256}/projections` | named operator + 기존 CSRF | `DrawingTransform` → `{projection_sha256,asset_sha256,transform,bounds_m,segments}` |
+| GET | `/api/fleet/site-map/drawing-projections/{projection_sha256}` | 기존 지도 read guard | 저장한 projection JSON; bounds_m은 `[min_xy,max_xy]`, segments는 `[[[x1,y1],[x2,y2]],…]` 미터 좌표 |
+| GET | `/api/fleet/site-map/drawings/{asset_sha256}/source` | named operator | 원본 bytes; attachment, application/octet-stream, nosniff |
+
+`DrawingTransform`은 필수 `plane=xy|xz|yz`, `unit=m|cm|mm`, 원본 평면의 `source_origin:[x,y]`, 미터 `map_origin_m:[x,y]`, `heading_rad∈[-2π,2π]`, 양수 `scale`이다. 모든 수는 유한해야 한다. 지도 좌표는 기존 ±1000 m 범위다. 평면의 좌표 순서는 각각 (x,y)/(x,z)/(y,z)이며 `p_map=map_origin_m+R(heading_rad)*(p_source-source_origin)*unit_m*scale`이다. 등록은 단위·축을 추정하지 않는다. 사용자가 두 점의 실측 거리를 확인하고 survey의 measured 근거를 기록한다.
+
+원본 16 MiB, 삼각형 200,000개, 중복 제거 투영 선분 50,000개, projection JSON 8 MiB, DB별 보관 합계 1 GiB다. 업로드 수신은 60초, 변환은 동시 1개·wall 5초·자식 메모리 256 MiB로 제한한다. 성공한 원본/변환은 내용 해시로 영속 보관하며 자동 삭제하지 않는다. 같은 요청의 재시도는 같은 해시를 재사용한다. `--tasks-db`가 없으면 도면 보관만 비활성화하고 기존 메모리 지도는 유지한다. 파일 경로·외부 URL·임의 SVG/HTML은 입력이 아니다.
+
+| HTTP | Code | 의미 |
+|---|---|---|
+| 413 | `SITE_MAP_DRAWING_LIMIT` | bytes/삼각형/선분/출력 예산 초과 |
+| 422 | `SITE_MAP_DRAWING_INVALID` | 잘못된 STL·변환·참조 또는 유효하지 않은 미터 좌표 |
+| 429 | `SITE_MAP_DRAWING_BUSY` | 업로드/변환 슬롯 사용 중 |
+| 503 | `SITE_MAP_DRAWING_UNAVAILABLE` | 비영속 설정, worker 장애/시간 초과, 수신 기한 초과 |
+| 507 | `SITE_MAP_DRAWING_STORAGE` | 저장소 예산·디스크 부족 |
+| 404 | `SITE_MAP_DRAWING_NOT_FOUND` | 존재하지 않는 유효한 해시 |
+
+도면 생성/변환은 지도 저장이나 활성화를 하지 않는다. 잘못된 참조는 저장·활성화 전에 거절한다. 교체·템플릿 복사는 검토 완료와 교정 근거를 자동 계승하지 않는다. 기존 revision/CAS·named operator·trip/formation/teach busy 거절을 유지한다. 편집/저장/복사는 이동 명령을 보내지 않는다. 활성화와 실제 주행·현장 교정 수용은 별도다.
 
 ### v1.297 Control-unit delegation and scoped cancellation (D-855)
 
@@ -3640,6 +3666,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.300 | 2026-10-24 | Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
 | v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |

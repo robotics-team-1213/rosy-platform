@@ -22,6 +22,7 @@ from typing import Annotated, Literal, Optional
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from core_common.protocol.site_survey import RoadEvidence, SiteFacility, SurveyReference
+from core_common.protocol.site_drawing import DrawingReference
 
 from fleet.routing.graph import pinned, polyline_length
 
@@ -122,6 +123,7 @@ class SiteEdge(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
     id: str = Id
+    name: Optional[str] = Field(default=None, min_length=1, max_length=64, pattern=r"\S")
     from_: str = Field(alias="from", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
     to: str = Id
     polyline: list[tuple[float, float]] = Field(min_length=2, max_length=MAX_POINTS)
@@ -258,10 +260,13 @@ class SiteMap(BaseModel):
     #: D-573 rev 8: surveyed wall faces (optional; none = the crosswalk look ignores no return).
     walls: list[SiteWall] = Field(default_factory=list, max_length=MAX_WALLS)
     survey: Optional[SurveyReference] = None
+    drawing: Optional[DrawingReference] = None
     facilities: list[SiteFacility] = Field(default_factory=list, max_length=500)
 
     @model_validator(mode="after")
     def _references(self) -> "SiteMap":
+        if self.drawing and (self.survey is None or self.survey.revision != self.drawing.projection_sha256):
+            raise ValueError('drawing requires a matching survey revision')
         places = {place.id: place for place in self.places}
         if len(places) != len(self.places):
             raise ValueError("place ids must be unique")
@@ -350,9 +355,13 @@ class SiteMap(BaseModel):
             del body["walls"]
         if body["survey"] is None:
             del body["survey"]
+        if body["drawing"] is None:
+            del body["drawing"]
         if not body["facilities"]:
             del body["facilities"]
         for edge in body["edges"]:
+            if edge["name"] is None:
+                del edge["name"]
             if edge["evidence"] is None:
                 del edge["evidence"]
         return body

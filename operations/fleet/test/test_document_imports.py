@@ -99,6 +99,7 @@ OWN = {
         "cell-document-editor.js",
     },
     "site-map.js": {
+        "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",
