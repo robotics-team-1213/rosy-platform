@@ -38,8 +38,15 @@ done
 for f in $(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | grep '^rosy-'); do echo "failed $f"; done
 for u in $(systemctl --user list-units --no-legend --plain --type=service --state=active 'rosy-*' 2>/dev/null | awk '{print $1}'); do
   envs=$(systemctl --user show "$u" -p EnvironmentFiles --value | grep -oE '/[^ ]+' | grep -v '^/dev')
-  text="$(systemctl --user show "$u" -p ExecStart --value) $(cat $envs 2>/dev/null)"
-  src=$(printf '%s' "$text" | grep -oE '/home/[^ "=:;]*(/rosy-test/[^/ "]+|/releases/[^/ "]+|/source/[0-9a-f]{40}|/current)' | head -1)
+  exec=$(systemctl --user show "$u" -p ExecStart --value)
+  pattern='/home/[^ "=:;]*(/rosy-test/[^/ "]+|/releases/[^/ "]+|/source/[0-9a-f]{40}|/current)'
+  src=
+  # the program's own *_SOURCE / *_ROOT variable names its code; other env paths (a Python, a camera source) do not
+  for v in $(printf '%s' "$exec" | grep -oE 'ROSY_[A-Z_]*(SOURCE|ROOT)' | awk '!seen[$0]++'); do
+    src=$(cat $envs 2>/dev/null | grep "^$v=" | tail -1 | grep -oE "$pattern" | head -1)
+    [ -n "$src" ] && break
+  done
+  [ -z "$src" ] && src=$(printf '%s %s' "$exec" "$(cat $envs 2>/dev/null)" | grep -oE "$pattern" | head -1)
   echo "svc $u ${src:--}"
 done
 '''
