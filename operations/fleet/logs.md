@@ -4449,3 +4449,10 @@
 - 변경: common migration7/8의 physical attempt·raw observation 기록, 고정 grant/context·최초 전송의 최종 시간/표본 snapshot 검사, owner receipt causality·HOLD 유지, 별도 POST_ACTION receipt/원래 owner·generation claim 해제를 구현했다. 기존 Cell resolver·recipe·완료 callback·_KINDS에 등록하지 않았다. 실제 SDK submit/get/cancel과 credential HTTP/Harbor는 아직 없다.
 - 증거: 준비74·최초 의도91·결과 보완229·물리 종료101의 각 고정 SHA 집중 원격은 skip0/known0 NEW다. 원본 RED와 affected 실패를 별도 보존하고, legacy version 기대값72/구조 small 표시46을 보완했다. 독립 계약 검토의 TTL·clock/list·receipt causality/HOLD finding은 RED 후 재검토했으며 source3b 물리 해제의 추가 finding은 없다. 958d→3b19커밋 size/safety 각각exit0. docs/validation/harbor-physical-execution-2026-10-24/result.md를 따른다.
 - gate 변화: synthetic World 사실과 원장 transaction의 집중 검증이다. sourcecf의 local_invocations 두 그룹은 FULL이 아니며 후속 구현을 고정한 최종23개 FULL은 대기 중이다. HTTP58 FULL과 합치지 않고 중복 수치를 합산하지 않는다. 실제 bounds/장치/현장 수용을 넓히지 않는다. CE 미해결: 이전G1 timing 원인은 미확정이다.
+
+
+## 2026-10-24 · 54f27e6fb7 · D-856 전체 stop 대상과 내부 SDK dispatcher
+
+- 변경: 같은 workcell의 모든 physical participant를 별도 stop/rearm target에 결속하고 legacy dispatcher/recovery mapping을 유지했다. SDK 클래스는 모든 owner의 fresh simulation identity/capability, 공통 journal의 process-safe RPC guard, control 조회 뒤 최종 proof/fence/claim/freshness 재검사를 거쳐 고정 grant로 한 번만 제출한다. refresh/cancel은 원래 grant만 사용하고 유실/404/restart/HOLD는 점유를 보존한다. app ingress에는 아직 연결하지 않았다.
+- 증거: stop RED7 뒤 source80dde 집중65 passed/skip0/0 NEW와 genuine safety review/trailer, SDK RED14 errors 뒤 겹친 dispatcher·늦은 control read RED4 failed/14 passed를 재현했다. source54 집중121 passed/skip0/0 NEW(실제 POSIX process guard 포함), 독립 재검토 추가 finding 없음이다. docs/validation/harbor-physical-execution-2026-10-24/result.md와 stop-source-review.md를 따른다.
+- gate 변화: Fake SDK/stop port와 transaction·동시성의 집중 증거다. native UDS/독립 TCP HTTP·관측 credential·Harbor ARM·최종 FULL23은 후속이며 HTTP58 FULL에 합치지 않는다. 물리/현장 gate를 넓히지 않는다. CE 미해결: 이전G1 timing 원인은 미확정이다.

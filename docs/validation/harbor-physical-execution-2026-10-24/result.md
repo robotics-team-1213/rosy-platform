@@ -2,7 +2,7 @@
 
 ## 현재 범위
 
-HTTP v1.307의 FULL은 소스58에서 마감했으며 [별도 기록](../harbor-arm-job-http-2026-10-24/result.md)을 따른다. 이 문서는 그 뒤의 내부 준비·최초 전송 의도·장치 결과 투영·물리 종료 원장을 기록한다. 아직 SDK submit/get/cancel dispatcher, 관측 credential HTTP와 Harbor ARM은 연결하지 않았다.
+HTTP v1.307의 FULL은 소스58에서 마감했으며 [별도 기록](../harbor-arm-job-http-2026-10-24/result.md)을 따른다. 이 문서는 그 뒤의 내부 준비·최초 전송 의도·장치 결과 투영·물리 종료 원장과 SDK dispatcher를 기록한다. SDK 클래스는 내부 시험까지이며 app의 관측 credential HTTP와 Harbor ARM에는 아직 연결하지 않았다.
 
 준비 원장은 common migration7에서 별도 physical attempts를 추가한다. 고정 step/action/attempt·canonical grant/digest·owner journal/session·준비 시각을 저장해도 parent READY와 claims CLAIMED를 유지한다. 반복 호출은 현재 설치·capability·승인·fence·전체 점유와 기존 grant를 다시 검사하며 ID/만료를 갱신하지 않는다. grant TTL은 기존 Fleet 관례의 1~60초 범위와 설치 관측 창을 함께 검사한다. site-stop은 PREPARED→HOLD, SUBMITTING→UNKNOWN으로 바꾸며 점유를 보존한다.
 
@@ -37,6 +37,11 @@ pytest는 모두 공식 remote runner로 각 committed SHA에서 실행했다. �
 | 결과 보완 9f7f1e979e | rosy-physical-outcomes-fixed-focus | 229 passed/skip0, 0 NEW; legacy/version·구조 회귀 포함 |
 | 물리 종료 RED 99b8c06e0b | rosy-physical-closure-red | 21 failed, 21 NEW |
 | 물리 종료 3b23a23bca | rosy-physical-closure-focus | 101 passed/skip0, 0 NEW |
+| 전체 physical stop 대상 RED 0174c68791 | rosy-physical-stop-targets-red | 7 failed, 7 NEW |
+| stop 대상 보완 80dde18b85 | rosy-physical-stop-targets-focus | 65 passed/skip0, 0 NEW |
+| SDK RED 85cbf4b353 | rosy-physical-sdk-dispatch-red | 14 errors, 14 NEW |
+| SDK 경계 RED 33a53ee87b | rosy-physical-sdk-boundary-red | 14 passed/4 failed, 4 NEW: 겹친 dispatcher/지연된 송신 경계 |
+| SDK 보완 54f27e6fb7 | rosy-physical-sdk-fixed-focus | 121 passed/skip0, 0 NEW |
 
 준비 affected의 원본 실패 원인은 assertion에 보존했다. work unit이 1000행을 넘어 small 분류를 벗어나 기존 규칙에 따라 표시를 제거했다. 파일 예산·floor·안전 assertion을 완화하지 않았다. legacy 세 시험은 기존 데이터 보존과 구버전 host 거절을 그대로 검사하면서 현재 version8에 기대값만 맞췄다.
 
@@ -47,6 +52,20 @@ pytest는 모두 공식 remote runner로 각 committed SHA에서 실행했다. �
 독립 rosy_contract_reviewer가 준비 소스의 TTL 충돌을 지적했고 경계 RED 뒤 보완했다. 최초 전송 의도의 최종 clock/list 교체 두 finding도 RED4를 확인한 뒤 수정·재검토했다. reviewed writer의 LF-normalized SHA256은 `dfa67998c0a77c4c4739a467b07cd355876f9d60febc3dbcf0a7d1e19e55b13e`이며 소스cf의 execution 파일과 대응한다. 이 검토 뒤 KNOWN_WRITERS에 정확한 claim writer만 추가했다. 이후 b528 검토의 receipt/phase causality와 HOLD 자동활성화는 RED7 뒤 보완해 9f에서 추가 finding 없음으로 재검토했다(execution LF hash `4dad91825bc8a10f29667228448d9c7d7acd72a2e6897597d11fc26067bb6e3b`).
 
 물리 종료 소스3b23도 원래 owner/generation 해제·proof/receipt/parent/event 원자성·새 owner와 재호출 경합에 대해 독립 검토를 받았고 추가 supported material finding 없음이다. LF hash는 execution `2b8fd7bdbeccd0dbe8d22d6ecea54633736c4cb90f177eddc7461a0042298ce2`, observations `9c982011a8a970400f76f5a7b6b48f898b8bee64a6f59e18ba9b8ca892ca7add`다. 소스/시험 읽기 검토이며 SDK·credential ingress·실물 수용을 대신하지 않는다.
+
+## 전체 participant의 stop/rearm 연결
+
+실제 SDK 제출 전에 기존 stop 설정이 workcell마다 단일 instance만 표현한다는 한계를 확인했다. 같은 workcell에 있는 두 physical arm을 모두 대상으로 삼도록 별도 immutable stop-target pair 목록을 구성했다. 정확한 pair는 중복 제거하고 같은 instance가 다른 workcell로 연결되면 앱 구성 단계에서 거절한다. HTTP estop·intent estop·rearm·한 대상의 rearm 실패 후 전체 rollback과 control 부재의 UNKNOWN 보고가 이 목록을 사용한다. physical-only 구성에도 기본 stop transport를 만든다.
+
+legacy dispatcher·owner recovery·governance·app.state.omx_instances의 mapping은 유지했다. physical owner recovery를 암묵적으로 열지 않았다. app은905→902행으로 줄었으며 ratchet도 같은80dde commit에서902로 낮췄다. safety-tagged task_dispatch_routes를 포함한 [독립 source review와 hash](stop-source-review.md)는 구현 commit의 Safety-Review trailer에 결속돼 있다. source80dde의7개 새 경계와 기존 stop/latch/recovery/task/ARM HTTP를 포함한 원격65 passed/skip0/known0 NEW, 3bd→80dde 두 커밋 size/safety 각각exit0다. Fake stop transport의 호출·fence 검사이며 장치 정지 수용이 아니다.
+
+## 내부 SDK dispatcher
+
+source54f27은 같은 원장의 모든 dispatcher 객체·프로세스가 OS RPC guard를 공유한다. 2초 busy timeout과 FD 해제, thread 재진입과 fork PID 구분을 검사한다. prepare/send/refresh/cancel 때 모든 participant의 simulation is True·정확한 scope/journal identity와 typed managed capability를 새로 읽으며 SQLite 밖에서 호출한다. 전송 의도 뒤 control 조회가 지연돼도 SDK 송신 전에 영속 proof body/hash·RUNNING/SUBMITTING·전체 DISPATCHING claims·현재 fence·clock/grant/capability/동일 facts freshness를 다시 검사하고 DB 연결을 닫는다.
+
+최초 SDK submit은 고정 grant로 한 번만 호출한다. 중복 요청은 상태만 읽고, 이후 refresh는 같은 grant의 GetAction만 한다. 유실·404·교체·재시작은 HOLD/UNKNOWN 점유를 유지한다. cancel도 먼저 보류하고 이미 제출한 grant에만 CancelAction을 요청하며 ACK로 점유를 해제하지 않는다. 다른 journal·production profile·불완전 SDK는 구성 단계에서 거절한다. 실제 app ingress와는 아직 연결하지 않았다.
+
+독립 검토에서 객체별 lock의 겹친 수명 경합과 control 조회 뒤 stale 송신을 지적했고, RED4 뒤 OS guard와 final send 재검사를 추가해 재검토했다. 추가 material finding 없음이다. LF hash는 IO `aa045fd428361de63e376bfc1bb6914d999aa26cd564dec6c866f449c6c69ff0`, dispatcher `5fb23dc9f9d2c72b14a92ef9ee6ac4b3aaeedab77a193fcd684eb7a929fc454f`, execution `ae1a9b8543d6e1bf5a8e499bc34dd011708fd41a47e50537f5ead2a759d021f3`다. source54f27 집중121은 Fake SDK port의 동작·SQLite 비점유·실제 POSIX process guard 검증이다. Native UDS·독립 TCP HTTP·실물 물리 근거와 최종 FULL을 대신하지 않는다.
 
 첫 slice의 UNKNOWN/CANCEL/HOLD 복구는 기존 action/attempt의 사실 조회와 점유 보존까지다. 더 높은 RUNNING/SUCCEEDED receipt가 와도 HOLD를 자동활성화하지 않는다. 명시적 복구/재승인과 실패·취소 후 물리 종료는 별도 후속 계약이며 앱이 새 key나 true flag로 이를 우회하지 못한다.
 

@@ -248,3 +248,10 @@ API v1.307의 simulation 설치 경로에 closed physical create/read/key/admit�
 source3b까지 고정 준비·두 표본 최초 전송 의도·장치 결과 투영·별도 물리 종료 receipt/원자 점유 해제를 구현했다. source3b 집중101 passed/skip0/0 NEW와 독립 계약 검토를 확인했다. 앞선 결과 보완은229 passed/skip0/0 NEW다. [각 SHA·원본 실패·검토·검증 한계](../../docs/validation/harbor-physical-execution-2026-10-24/result.md)를 따른다.
 
 SDK submit/get/cancel dispatcher·관측 credential HTTP·Harbor ARM은 아직 없다. sourcecf의 부분 실행을 FULL로 보지 않으며 최종 소스의 전체23개 검증은 후속이다. 현재 증거는 synthetic World facts와 원장에 한정한다. 실물 bounds·동작·현장 gate와 이전G1 원인 미확정 상태는 유지한다.
+
+
+## 2026-10-24 · D-856 stop 대상과 SDK orchestration
+
+source80dde는 모든 physical participant의 stop/rearm/rollback을 별도 target tuple로 연결한다. legacy dispatch/recovery mapping은 유지하며 app902행 ratchet과 genuine safety review를 결속했다. 집중65 passed/skip0/0 NEW다.
+
+source54f27의 내부 dispatcher는 process-safe RPC 직렬화와 최종 send 재검사, 고정 grant의 단일 submit/이후 GET-only·취소 점유 보존을 구현했다. 집중121 passed/skip0/0 NEW·독립 재검토를 확인했다. [각 source·원본 RED·hash·한계](../../docs/validation/harbor-physical-execution-2026-10-24/result.md)를 따른다. app의 관측 credential HTTP·Harbor ARM 및 최종 FULL/독립 실제 HTTP는 아직 연결·검증 전이다. 현재 Fake SDK 근거로 물리 gate를 넓히지 않는다.
