@@ -37,3 +37,9 @@
 - 변경: 한 관제의 과거 fence로 전체 요청을 거절하던 sample을 관제별 STALE_FENCE와 최신 관제의 계속 처리로 정렬했다. 결과는 latch 소비 후 fence를 담고 HOLD 작업도 직접 소유 활성 건수에 포함한다.
 - 증거: source10fc372212의 공식 원격 sample RED8건으로 전체409·소비 전 fence·HOLD 누락을 재현했다. 기존 assertion을 약하게 하는 대신 독립 관제 진행과 stale 관제 미변경·중복 미실행을 함께 검증한다. 수정 source의 GREEN은 다음 실행이다.
 - gate 변화: 합성 예제의 계약 정합성 수정이며 실제 배포·네트워크·장치 수용이 아니다. CE 해당 없음 — 원인과 수용 조건이 해당 회귀·D862에 직접 남는다.
+
+## 2026-10-25 · uncommitted · 비동기·streaming backend HTTP 증거 수집
+
+- 변경: 기존 opt-in HTTP probe가 실제 AsyncClient send도 관찰한다. method/status/통과 node/commit만 기록하고 body·자격은 수집하지 않는다. request keyword 호출을 유지하며 harness-only207 회귀가 제품 성공 receipt로 사용되지 않게 구분한다.
+- 증거: sourcebbffbf8577의 capture 실행5건은 probe가 send의 request keyword를 받지 못해 실패했다. capture 없는 실제 backend179건은 sourceaaaf7ed3f2에서 통과했다. 정상 서명에 맞춘 probe와 전용 keyword-stream 회귀를 추가해 재실행한다. pending matrix는 실제 capture·통과 browser 근거를 얻은 뒤에만 verified로 바꾼다.
+- gate 변화: 검증 수집기 결속이며 새 제품 실행 권한을 추가하지 않는다. CE 해당 없음 — 원인과 복구 조건을 해당 회귀와 수집기 signature에 남긴다.

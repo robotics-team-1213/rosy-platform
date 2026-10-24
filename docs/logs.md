@@ -10385,3 +10385,9 @@ osy-d395-s1d\`.
 - 변경: 전용 service의 namespace 경계와 실제 직접 장치 소유 검사·worker 종료/재시운전 제약을 D-862/API에 명시했다. 기존 D-855 navigation 위임과 새 정보/정지 경로의 책임을 구분한다.
 - 증거: P1 contract7a3d0dc892는 FULL27 호출 뒤 로컬 main 착지했다. G1 timing은 suite/재실행 실패와 공식 격리 통과의 LOAD-FLAKY를 구분한다. 새 runtime source는 RED 후 구현 중이며 GREEN·최종 착지는 후속 검증이다.
 - gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
+
+## 2026-10-25 · uncommitted · 관제 역할·직계 네트워크·수용 목표 구현 현황 반영
+
+- 변경: 역할표와 HTTP 정보/정지/조회 흐름, CORE HTTP와 OMX local UDS 배치, 전용 자격·기본false 허용·명시 CA·Fleet-only mount를 현재 구현에 맞췄다. 이전의 Compose/CA 미구현 설명을 제거하고 소프트웨어와 N1–N3 현장 수용을 분리했다.
+- 증거: backend sourceaaaf7ed3f2 집중179건·CORE source10fc372212 연계21건·sample sourceef83569895 API39건과 sourcebbffbf8577 실제 Chromium/Node 그룹은 각각 NEW0이다. 실제 Fleet backend 무가로채기 browser·HTTP 증거·배치 계약·최종 착지는 후속 확인이다.
+- gate 변화: I1/I2/I4의 source 근거를 표시하며 전체 I6·실제 설치·장치·현장 수용을 미리 완료하지 않는다. CE 해당 없음 — 새 판단은 D862·코드·회귀·현재 목표에 직접 남긴다.

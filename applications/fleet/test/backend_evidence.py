@@ -48,9 +48,9 @@ def fleet_contract_probe(monkeypatch, request):
         record(method, response)
         return response
 
-    async def observe_async(client, http_request, *args, **kwargs):
-        response = await original_async(client, http_request, *args, **kwargs)
-        record(http_request.method, response)
+    async def observe_async(client, request, *args, **kwargs):
+        response = await original_async(client, request, *args, **kwargs)
+        record(request.method, response)
         return response
 
     monkeypatch.setattr(TestClient, 'request', observe)

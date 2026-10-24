@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 비동기·streaming backend HTTP 증거 수집
 - 2026-10-25 · uncommitted · 합성 정지 예제도 관제별 stale 결과 보존
 - 2026-10-25 · uncommitted · D-862 독립·중첩 통합관제 합성 예제
 - 2026-10-21 · a7ef52c3aa · Development module guards and public fixture identity
 - 2026-10-21 · c000a57004 · Cell approval and combined regression
-- 2026-10-21 · 030df77030 · Review corrections and cross-screen state
