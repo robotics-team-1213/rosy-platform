@@ -148,10 +148,10 @@ def test_open_transaction_and_future_version_are_rejected_without_implicit_commi
                 pass
         assert connection.in_transaction
         connection.rollback()
-        connection.execute("INSERT INTO fleet_component_migrations VALUES('cell_jobs',7,'future')")
+        connection.execute("INSERT INTO fleet_component_migrations VALUES('cell_jobs',8,'future')")
         connection.commit()
     before = snapshot(path)
-    with pytest.raises(RuntimeError, match="unsupported.*7"):
+    with pytest.raises(RuntimeError, match="unsupported.*8"):
         CellJobStore(path)
     assert snapshot(path) == before
 
@@ -166,7 +166,7 @@ def test_concurrent_startups_apply_once_and_preserve_legacy_data(tmp_path):
     before["fleet_physical_transfer_attempts"] = []
     assert snapshot(path) == before
     with closing(connect(path)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM fleet_component_migrations WHERE component='cell_jobs' AND version=6").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM fleet_component_migrations WHERE component='cell_jobs' AND version=7").fetchone()[0] == 1
 
 
 @pytest.mark.parametrize("kind,legacy", [(None, False), ("other", False), ("physical", True), ("legacy", False)])

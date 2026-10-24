@@ -12,8 +12,15 @@ from .step_action_kinds import step_grant_digest
 
 
 class PhysicalTransferExecution:
-    def __init__(self, store):
+    def __init__(self, store, *, grant_ttl_s=15.0):
+        if (isinstance(grant_ttl_s, bool) or not isinstance(grant_ttl_s, (int, float))
+                or not 1.0 <= grant_ttl_s <= 60.0):
+            raise ValueError("physical grant TTL must be between 1 and 60 seconds")
+        policy = store.installation.policy
+        if grant_ttl_s * 1e9 <= policy.min_separation_ns + policy.max_age_ns:
+            raise ValueError("physical grant lifetime must exceed the installed observation window")
         self.store = store
+        self.grant_ttl_s = float(grant_ttl_s)
 
     def _ready(self, connection, mission_id, capabilities, observed_at_ns, now_ns):
         store = self.store
@@ -51,7 +58,8 @@ class PhysicalTransferExecution:
                 target=installed.target, catalog_digest=policy.catalog_digest, bindings_digest=policy.bindings_digest,
                 resource_policy_digest=policy.digest), capability_revision=cap.capability_revision,
             config_revision=cap.config_revision, authority_epoch=job["authority_epoch"],
-            dispatch_generation=job["dispatch_generation"], issued_at=issued, expires_at=issued + timedelta(seconds=5))
+            dispatch_generation=job["dispatch_generation"], issued_at=issued,
+            expires_at=issued + timedelta(seconds=self.grant_ttl_s))
         return FleetArmTransferGrant.model_validate({**grant.model_dump(), "request_digest": step_grant_digest(grant)})
 
     def _view(self, row, job):

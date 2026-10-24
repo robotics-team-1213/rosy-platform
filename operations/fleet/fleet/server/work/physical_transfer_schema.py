@@ -32,6 +32,8 @@ def hold_for_site_stop(connection, *, now, reason, event):
         return  # A pre-v5 host starts its task journal before migrating the job journal.
     rows = connection.execute("SELECT mission_id FROM fleet_cell_jobs WHERE provenance_kind='physical' "
                               "AND status IN ('READY','RUNNING','ACTION_SUCCEEDED')").fetchall()
+    attempts_exist = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                                       "AND name='fleet_physical_transfer_attempts'").fetchone() is not None
     for row in rows:
         mission_id = row["mission_id"]
         connection.execute("UPDATE fleet_cell_jobs SET status='HOLD',reason=?,updated_at=? WHERE mission_id=?",
@@ -39,4 +41,8 @@ def hold_for_site_stop(connection, *, now, reason, event):
         connection.execute("UPDATE fleet_action_claims SET phase=CASE phase WHEN 'DISPATCHING' THEN 'UNKNOWN' "
                            "WHEN 'CLAIMED' THEN 'HELD' ELSE phase END,lease_until=NULL "
                            "WHERE owner_kind='mission' AND owner_id=?", (mission_id,))
+        if attempts_exist:
+            connection.execute("UPDATE fleet_physical_transfer_attempts SET status=CASE status "
+                "WHEN 'SUBMITTING' THEN 'UNKNOWN' WHEN 'PREPARED' THEN 'HOLD' ELSE status END WHERE mission_id=?",
+                (mission_id,))
         event(connection, mission_id, None, "PHYSICAL_TRANSFER_HELD", "site-stop", {"reason": reason})
