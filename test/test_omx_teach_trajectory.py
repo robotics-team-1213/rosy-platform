@@ -58,6 +58,33 @@ def test_a_trajectory_outside_the_contract_is_refused(tmp_path, change, message)
         t.load(path, fps=FPS)
 
 
+def cycle(stretch, pan_peak, closed=46.6, opened=58.0):
+    """Seven phases of a taught cycle; the gripper changes at the six phase boundaries."""
+    frames = []
+    for phase, (seconds, grip) in enumerate([(1, closed), (2, opened), (3, closed), (2, opened),
+                                             (3, closed), (2, opened), (2, closed)]):
+        n = round(seconds * stretch * FPS)
+        frames += [[pan_peak * phase / 6 + k / n, -60.0, 50.0, 45.0, 10.0, grip] for k in range(n)]
+    return frames
+
+
+def test_the_standard_cycle_is_the_median_of_demonstrations_cut_at_their_gripper_events():
+    demos = [cycle(1.0, 30.0), cycle(1.3, 34.0), cycle(0.8, 32.0), [[0.0] * 6] * 50]  # last: no grasps
+    assert len(t.gripper_events(demos[0], FPS)) == t.TRANSITIONS
+    actions, split, used = t.standard(demos, FPS, dwell_s=1.0)
+    assert used == [0, 1, 2]
+    assert max(f[0] for f in actions) == pytest.approx(32.0, abs=1.0)  # median peak, not one demo's
+    grasp = t.gripper_events(actions, FPS)[1]
+    assert actions[grasp - FPS][:5] == actions[grasp - 1][:5]  # one second still, jaws open, before closing
+    grip = [f[5] for f in actions]
+    assert grip[split] > 52 and t.gripper_events(actions, FPS)[2] < split < t.gripper_events(actions, FPS)[3]
+
+
+def test_too_few_usable_demonstrations_are_refused():
+    with pytest.raises(SystemExit, match="usable"):
+        t.standard([cycle(1.0, 30.0), [[0.0] * 6] * 50], FPS)
+
+
 def test_record_session_swaps_only_the_teleop_and_episode_timing_for_a_replay(tmp_path):
     session = module("record_session")
     trajectory = t.compose(demo(), FPS, split_s=3, end_s=4, reset_s=1, source={})
