@@ -167,4 +167,4 @@ def test_policy_and_context_are_closed_immutable_and_digest_covers_thresholds(po
                     {"zone_margin_m": float("nan")}, {"max_age_ns": True}, {"min_separation_ns": 0},
                     {"max_age_ns": 10, "min_separation_ns": 100}, {"outside_zone": True}):
         with pytest.raises(ValueError):
-            api().PhysicalTransferPolicy(**{**policy.model_dump(), **changes})
+            api().PhysicalTransferPolicy(**{**dict(policy), **changes})
