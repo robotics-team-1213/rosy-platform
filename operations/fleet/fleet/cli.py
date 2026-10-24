@@ -152,7 +152,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for durable CORE Agent event history")
     console.add_argument("--tasks-db", default=None, type=Path,
                          help="SQLite path for durable operator and policy task history")
-    console.add_argument("--control-unit-config", default=None, type=Path,
+    console.add_argument("--control-unit-config", default=os.environ.get("ROSY_CONTROL_UNIT_CONFIG") or None, type=Path,
                          help="optional static control-unit ownership and direct-neighbor configuration")
     add_cli_arguments(console)
     console.add_argument("--robot-credential-key-file", default=None, type=Path,

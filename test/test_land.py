@@ -690,6 +690,109 @@ def test_new_failure_that_passes_alone_lands_as_load_flaky(repos, monkeypatch, c
     assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
 
 
+def test_head_move_during_remote_checks_cannot_create_flaky_receipt(repos, monkeypatch, capsys):
+    main, wt = repos
+    calls = _red_once(repos, monkeypatch, [0])
+    original = land.remote_pytest.run
+
+    def run(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if len(calls) == 1:
+            commit(wt, {"pkg/a.py": "x = 3\n"}, "fix while original tests run")
+        return result
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert len(calls) == 1
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+    assert git(main, "rev-parse", "HEAD") == before
+    assert "HEAD changed" in capsys.readouterr().err
+
+
+def test_isolated_rerun_keeps_original_revision_even_when_head_moves(repos, tmp_path):
+    main, wt = repos
+    tested = git(wt, "rev-parse", "HEAD")
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "later fix")
+    received = []
+
+    def run(invocations, logs, sha, **kwargs):
+        received.append(sha)
+        return [0 if sha == tested else 1] * len(invocations)
+
+    ids, why = land.land_checks.load_flaky(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW pkg/test/test_a.py::test_a\n",
+        tmp_path, "pinned", sys.executable, run, tested_sha=tested)
+    assert not ids and "HEAD changed" in why
+    assert received == [tested]
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+
+
+@pytest.mark.parametrize("waiting", [False, True])
+def test_head_move_cannot_publish_full_record(repos, monkeypatch, waiting):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL"))
+
+    def run_tests(*args, **kwargs):
+        commit(wt, {"pkg/a.py": "x = 3\n"}, "late branch commit")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    monkeypatch.setattr(land.land_full, "save", lambda *a: pytest.fail("published an obsolete FULL record"))
+    if waiting:
+        with pytest.raises(land.Stop, match="HEAD changed"):
+            land.pretest(wt, "feat/x", land.argparse.Namespace(), sys.executable)
+    else:
+        before = git(main, "rev-parse", "HEAD")
+        assert land.main(["--tests", "auto"]) == 1
+        assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_incomplete_remote_results_cannot_land(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: [])
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+    assert "incomplete remote results" in capsys.readouterr().err
+
+
+def test_incomplete_isolated_results_cannot_create_flaky_receipt(repos, tmp_path):
+    main, wt = repos
+    ids, why = land.land_checks._rerun_alone(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW pkg/test/test_a.py::test_a\n",
+        tmp_path, "incomplete", sys.executable, lambda *a, **k: [],
+        tested_sha=git(wt, "rev-parse", "HEAD"))
+    assert not ids and "incomplete" in why
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+
+
+def test_head_move_during_isolated_check_cannot_publish_verdict_or_cache(repos, monkeypatch, tmp_path):
+    main, wt = repos
+    calls = _red_once(repos, monkeypatch, [0])
+    original, kept = land.remote_pytest.run, []
+
+    def run(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if len(calls) == 2:
+            commit(wt, {"test/known_failures.txt": "pkg/test/test_a.py::test_a  # later classification\n"},
+                   "change classification while isolated check runs")
+        return result
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    monkeypatch.setattr(land.land_cache, "split", lambda wt_, args, inv, *a:
+                        ([], inv, lambda *item: kept.append(item)))
+    with pytest.raises(land.Stop, match="HEAD changed"):
+        land.run_tests(wt, land.argparse.Namespace(tests="auto", no_cache=False, node=False),
+                       [["pkg/test"], ["pkg/test"]], tmp_path, "drift")
+    assert not kept
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+    assert (wt / "test/known_failures.txt").read_text(encoding="utf-8") == (
+        "pkg/test/test_a.py::test_a  # later classification\n")
+
+
 @pytest.mark.parametrize("alone_codes, ids, why", [
     ([1], ("pkg/test/test_a.py::test_a",), "failed again when run alone"),
     ([0] * 6, tuple(f"pkg/test/test_a.py::test_{n}" for n in range(6)), "a rerun alone is tried only for 1 to 5"),

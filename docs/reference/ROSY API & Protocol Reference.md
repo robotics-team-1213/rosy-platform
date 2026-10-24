@@ -30,7 +30,7 @@ ControlUnitDetail은 같은 owner/config/availability/time와 직접 `robots` �
 
 ControlMapRef는 `map_id,version,frame:unit_local`이며 version>=1이다. map ID는 기존 SiteMap의 `[A-Za-z0-9_.-]{1,64}`, place/lane ID는 같은 문자 집합1–32자를 사용한다. ControlMapSnapshot은 `unit_id,config_revision,map,places,lanes`이고 place는 id/label/x/y, lane은 id/points(x/y)만 포함한다. 최대500 places·1000 lanes·전체20000 points·2MiB다. 관제·map ID·version을 함께 표시하고 근거 없는 관제 간 좌표 overlay를 하지 않는다. survey·승인자·증거 metadata는 전송하지 않는다.
 
-`POST /stops`는 로컬 기명 운영자의 ControlStopRequest(`stop_id,target_unit,config_revision,expected_controls`)를 받는다. expected_controls는 대상 unit별 ControlDispatchFence(authority_epoch/generation>=0)이며1–64개다. `POST /stop-inbox`는 직계 부모 service의 ControlStopIngress(같은 필드+origin_id)만 받으며 명시적 accept_parent_stop과 ancestor/target 범위를 검증한다. 서버가 actor를 정하고 caller actor/URL/token 필드는 거절한다. identity는 origin+stop_id, 본문/fence는 immutable이다. 같은 SQLite transaction에서 journal·expected fence·기존 latch를 결속하고 같은 요청을 다시 실행하지 않는다. 지연된 과거 generation, 본문 충돌, 구성 변경은409다.
+`POST /stops`는 로컬 기명 운영자의 ControlStopRequest(`stop_id,target_unit,config_revision,expected_controls`)를 받는다. expected_controls는 대상 unit별 ControlDispatchFence(authority_epoch/generation>=0)이며1–64개다. `POST /stop-inbox`는 직계 부모 service의 ControlStopIngress(같은 필드+origin_id)만 받으며 명시적 accept_parent_stop과 ancestor/target 범위를 검증한다. 서버가 actor를 정하고 caller actor/URL/token 필드는 거절한다. identity는 origin+stop_id, 본문/fence는 immutable이다. 같은 SQLite transaction에서 journal·expected fence·기존 latch를 결속하고 같은 요청을 다시 실행하지 않는다. 본문 충돌·구성 변경은409다. 관제별 과거 fence는 STALE_FENCE 결과와 해당 관제의 미실행으로 보존하며, 독립된 최신 fence의 관제는 계속 처리한다. 결과 dispatch는 관제의 처리 시점 fence이며 로컬 latch를 소비했다면 소비 후 generation이다.
 
 `GET /stops/{origin}/{stop_id}`는 ControlStopSnapshot(`unit_id,origin_id,stop_id,target_unit,config_revision,results,revision`)이다. 결과 unit 최대64개·중복 금지이며 PENDING/SENDING/ACKNOWLEDGED/PARTIAL/UNKNOWN/STALE_FENCE/NOT_REACHED/SUPERSEDED_BY_OPERATOR_RECOMMISSIONING, 원래 dispatch fence, acknowledged_robots/unknown_robots, OMX 응답 상태, 제한된 오류 code를 보존한다. physical_stop은 UNVERIFIED로 고정한다. HTTP200·stopped:true·LOCAL_LATCHED를 물리 정지 증거로 바꾸지 않는다. polling·재시작은 stop을 자동 POST하지 않는다. 활성 send/불확실성은 기존 rearm transaction에서 거절한다.
 
@@ -41,6 +41,10 @@ ControlMapRef는 `map_id,version,frame:unit_local`이며 version>=1이다. map I
 typed 정지는 journal/fence를 확보하지 못하면 새 fanout 없이503 JOURNAL_UNAVAILABLE/UNKNOWN이다. 기존 `/api/fleet/estop`의 새 로컬 사람 긴급 정지는 DB 장애에도 원래 best-effort fanout을 유지한다. bad credentials401, 범위/권한 거절403, 없는 unit/map/record404, revision/identity/fence 충돌409, malformed422, 저장소/producer/transport 실패503이며 부분 연결 실패를 전체 성공으로 덮지 않는다. peer CA는 명시 tls_ca_file로 연결하고 hostname/체인 검증·redirect 거절·환경 proxy 미사용을 유지한다.
 
 정지 body의 불변성은 관제별 최초 배정 projection을 기준으로 한다. origin/stop/config는 유지하되 target이 자기이면 자식 target과 해당 subtree fence로 제한하고, 더 깊은 target이면 next hop으로 중계한다. 최초 child target/fence를 저장한 뒤 재시도·조회에서 바꾸지 않으며 자식 응답도 그 범위로 검증한다. 빈 fence projection에는 POST하지 않고 미전달/미확인으로 남긴다. sibling fence/결과를 다른 자식에게 공개하지 않는다.
+
+`control-unit:<이웃>` service 자격은 모든 method에서 정확한 이 namespace로 제한한다. 일반 Task/state/work/proposal API를 통한 원장·개인 metadata 접근은 거절한다. 일반 service와 사람의 기존 권한은 유지한다. 송신 토큰은 이웃별로 고유하며 로컬 수신·Console·로봇 REST·CORE Agent pairing 토큰과 재사용하지 않는다. peer는 명시 CA·hostname 검증을 유지하고 identity encoding만 받으며 전체 요청3초·기존 byte 상한을 적용한다.
+
+typed stop의 직접 장치는 실제 Console roster와 manifest `robot:` 목록을 대조한다. configured OMX workcell은 local `workcell:<id>`, 신호등은 local `signal:<id>` 소유여야 하며 누락·타 관제 소유는 시작 시 거절한다. `signal:`은 topology 소유 표기만 정의한다. 조건부 journal 실패에는 새 fanout을 하지 않으며, 로컬 E-stop의 기존 best-effort 처리는 유지한다. owned claim/send/reconciliation의 실제 thread 종료 전에는 재시운전 확인과 shutdown drain을 완료로 처리하지 않는다.
 ### v1.311 Device network recovery jobs (D-863)
 
 CORE keeps administrator authentication and explicit `confirmed: true` for

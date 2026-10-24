@@ -352,6 +352,6 @@
 
 - 2026-10-25 · uncommitted · docs(reference): v1.314 변경 이력 표행 추가
 - 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
+- 2026-10-25 · uncommitted · test(policy-chain): D-866 P0 SmolVLA 정책 사슬 Gazebo 확인
 - 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
 - 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
-- 2026-10-24 · 73fc8b2b09 · 실제 private HF 모델 전달·재적재

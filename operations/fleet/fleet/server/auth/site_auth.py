@@ -169,6 +169,10 @@ def build_authorize(console_token: Optional[str],
                                                              "message": "console token required"})
             principal = SitePrincipal("site-console", "operator")
         request.state.site_principal = principal
+        prefix = "/api/fleet/control-unit"
+        if (principal.role == "service" and principal.principal_id.startswith("control-unit:")
+                and request.url.path != prefix and not request.url.path.startswith(prefix + "/")):
+            raise HTTPException(status_code=403, detail={"code": "CONTROL_UNIT_CREDENTIAL_SCOPE_REQUIRED"})
         if (principal.password_change_required
                 and request.url.path not in {"/api/fleet/auth/session", "/api/fleet/auth/logout",
                                              "/api/fleet/auth/change-password"}):
