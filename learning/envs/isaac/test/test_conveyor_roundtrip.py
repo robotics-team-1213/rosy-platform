@@ -120,3 +120,12 @@ def test_rendering_never_advances_the_control_step():
     for tick in range(24):
         physics_step(world, tick)
     assert world.physics == 24 and world.renders == 2
+
+
+def test_clock_accepts_float32_callback_roundoff_but_not_an_extra_step():
+    import struct
+    mod = implementation()
+    observed_dt = struct.unpack('f', struct.pack('f', mod.DT))[0]
+    assert mod.clock_matches(3624, 3624, observed_dt*3624)
+    assert not mod.clock_matches(3624, 3625, observed_dt*3624)
+    assert not mod.clock_matches(3624, 3624, observed_dt*3625)
