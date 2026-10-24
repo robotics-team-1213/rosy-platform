@@ -156,9 +156,10 @@ def static_episodes(root: Path, threshold: float = STATIC_RANGE) -> dict:
 
 
 class Session:
-    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic, replay=None) -> None:
+    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic, replay=None,
+                 chunks=None) -> None:
         self.open_bus, self.systemctl, self.run_command, self.log = open_bus, systemctl, run, log
-        self.sleep, self.clock, self.replay = sleep, clock, replay
+        self.sleep, self.clock, self.replay, self.chunks = sleep, clock, replay, chunks
         self.hardware_faults = {}
 
     @staticmethod
@@ -341,13 +342,20 @@ class Session:
                 session._with_follower(lambda bus, s=session: s.write_caps(bus, caps))
             # Dependents first: stopping camera-view first also stops readiness (Requires=), whose
             # ExecStopPost restore outlasts the 10 s systemctl timeout (2026-10-24).
-            for unit in reversed(SERVICES):
+            # The chunk runner opens no camera: the services stay up so the judge can watch.
+            for unit in () if self.chunks else reversed(SERVICES):
                 # "activating" includes a readiness unit waiting out RestartSec; stop cancels that restart.
                 if self.systemctl("is-active", unit) in ("active", "activating"):
                     self.systemctl("stop", unit)
                     stopped.append(unit)
             record["stopped_services"] = stopped
-            command = self.command(config_path, teleop_only, body_only=body_only, replay=self.replay)
+            if self.chunks:
+                command = [sys.executable, str(Path(__file__).resolve().with_name("chunk_runner.py")),
+                           f"--config={config_path}", f"--library={self.chunks['library']}", f"--io={self.chunks['io']}"]
+                record["source_mode"] = "scripted_teacher"
+                record["chunks"] = self.chunks
+            else:
+                command = self.command(config_path, teleop_only, body_only=body_only, replay=self.replay)
             if self.replay is not None:
                 record["source_mode"] = "scripted_teacher"
                 record["replay"] = {k: self.replay[k] for k in ("path", "sha256", "segments", "source")}
@@ -465,6 +473,8 @@ def main(argv=None):
     parser.add_argument("--body-only", action="store_true", help="manual body joints only; grippers remain passive")
     parser.add_argument("--task-card", type=Path, help="task design card to embed in session.json")
     parser.add_argument("--replay", type=Path, help="teach_trajectory.py output: a scripted teacher replaces the leader")
+    parser.add_argument("--chunks", type=Path, help="chunk library: chunk_runner.py holds the arm and takes judge commands")
+    parser.add_argument("--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory")
     args = parser.parse_args(argv)
     if args.body_only and not args.teleop_only:
         parser.error("--body-only requires --teleop-only")
@@ -524,14 +534,20 @@ def main(argv=None):
         replay = {**load_trajectory(args.replay, fps=config["dataset"]["fps"]), "path": str(args.replay.resolve())}
         plugins = str(Path(__file__).resolve().with_name("lerobot_plugins"))  # LeRobot discovers the dist-info here
         os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (plugins, os.environ.get("PYTHONPATH")) if p)
+    chunks = None
+    if args.chunks is not None:
+        from chunk_runner import load_library
+        load_library(args.chunks)  # refuse a bad library before any cap is raised
+        chunks = {"library": str(args.chunks.resolve()), "io": str(args.io.resolve()),
+                  "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest()}
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
-                      replay=replay)
+                      replay=replay, chunks=chunks)
     lock = session_lock()
     record = {}
     try:
         record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card,
                                  body_only=args.body_only)
-        if not args.teleop_only:
+        if not args.teleop_only and chunks is None:
             try:
                 record["static_episodes"] = static_episodes(Path(config["dataset"]["root"]))
             except Exception as exc:  # the check must never hide a safe ending
