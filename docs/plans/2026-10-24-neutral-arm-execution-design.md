@@ -62,3 +62,13 @@ receipt 저장과 해당 generation의 claim 해제는 같은 원장 transaction
 구현 순서는 (1) 정확한 grant/receipt 모델과 거절 시험, (2) legacy 필수 provenance를 유지하는 원장 migration과 보존 시험, (3) 기존 owner phase runner의 중립 grant 분기 및 복구, (4) 신뢰 종료 증거와 claim transaction, (5) two-person 승인과 simulation HTTP, (6) Harbor CargoMove 변환과 업무 장부 독립 시험이다. 공개 활성화는 여섯 단계가 모두 연결된 뒤에 한다. wire 필드·API 버전은 검토된 모델을 실제 등록할 때 예약한다.
 
 독립 초안 검토는 기존 cancel/resume의 HELD 해제 우회와 성공했지만 종료 미입증인 공유 점유자 누락을 지적했다. 위 두 조건을 활성화 게이트와 회귀 범위에 추가했다. 아직 구현을 검증한 결과는 아니다.
+
+## 첫 실행 모델 등록안
+
+`ArmTransferPayload`는 `object_ref`, `catalog_digest`, `bindings_digest`, `source`, `target`, `resource_policy_digest` 여섯 필드만 갖는다. 참조·digest는 기존 사전검사의 strict 물리 참조/SHA-256 타입을 재사용하고 source와 target은 달라야 한다. 임의 좌표·기하 override·recipe·cargo·pallet·업무 상태를 받지 않는다. resource policy digest는 설치 자원/종료 조건에 결속할 참조이며 요청자가 만든 policy의 승인을 뜻하지 않는다.
+
+`FleetArmTransferGrant`는 기존 mission/step/action/attempt·request_digest·workcell/instance·capability/config revision·authority epoch·dispatch generation·issued/expires envelope와 `action_kind=ARM_TRANSFER`, `arm_transfer` payload를 갖는다. identity는 기존 Action identifier 규칙이며 네 실행 identity는 서로 달라야 한다. 시간은 aware timestamp이고 expiry가 issuance보다 뒤여야 한다. epoch/generation은 strict nonnegative int다. 여분 필드는 거절하고 모델은 불변이다. pair/barrier는 이번 모델에서 열지 않는다. 순차·팔 교대는 앱이 별도 Action으로 요청하며 미확정 claim을 넘겨 재배정하지 않는다.
+
+이 등록은 wire DTO만 추가한다. 기존 `parse_action_grant`·`PHASE_RUNNER_KINDS`·registry·UDS submit은 지원하지 않는 새 kind를 계속 거절한다. 실제 소비자를 연결할 때 capability/control admission/phase workflow/recovery와 모든 해제 입구를 함께 검증한다. 새 grant의 digest는 기존의 전체 canonical grant digest 규칙으로 계산해야 하며, DTO 생성 성공 자체는 서명·승인이나 물리 검증이 아니다.
+
+canonical export 공간은 기존 device-action/stop DTO의 정의를 별도 `device_actions.py`로 그대로 이동하고 `schemas.py`에 동일 클래스 re-export를 둬 확보한다. AST·JSON schema·기존 digest/stop/receipt 소비자 회귀로 의미 보존을 확인한다. 기존 grant와 stop 필드·validator·기본값은 바꾸지 않는다. 새 API 참조 버전은 모델 등록과 함께 예약하며 공개 submit route가 생겼다고 기록하지 않는다.
