@@ -100,14 +100,15 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
     stages = [('list', '/learning', '홈', '홈'), ('folder', '/catalog', '자료 등록', '자료'),
               ('pencil', '/', '정답 달기', '정답'), ('robot', '/learning/tasks', '학습 실행', '학습'),
               ('check', '/learning/evaluate', '평가·승격', '평가·승격')]
-    subs = {'/learning': None, '/catalog': ['/catalog', '/learning/camera'],
+    subs = {'/learning': None, '/catalog': ['/catalog', '/learning/camera', '/learning/workspaces'],
             '/': ['/', '/pixels', '/learning/omx', '/learning/vlm'],
             '/learning/tasks': ['/learning/tasks', '/learning#pipeline', '/learning/sim'], '/learning/evaluate': None}
     rails = set()
     for name, stage, here in [('learning.html', '/learning', None), ('index.html', '/', '/'),
                               ('pixels.html', '/', '/pixels'), ('omx.html', '/', '/learning/omx'),
                               ('vlm.html', '/', '/learning/vlm'), ('catalog.html', '/catalog', '/catalog'),
-                              ('camera.html', '/catalog', '/learning/camera'), ('tasks.html', '/learning/tasks', '/learning/tasks'),
+                              ('camera.html', '/catalog', '/learning/camera'),
+                              ('workspaces.html', '/catalog', '/learning/workspaces'), ('tasks.html', '/learning/tasks', '/learning/tasks'),
                               ('sim.html', '/learning/tasks', '/learning/sim'), ('evaluate.html', '/learning/evaluate', None)]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
