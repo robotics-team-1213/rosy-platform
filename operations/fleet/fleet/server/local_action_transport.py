@@ -13,6 +13,7 @@ from core_common.protocol.schemas import (
     ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckRejection,
     DeviceActionReceipt,
     FleetActionGrant,
+    FleetArmTransferGrant,
     FleetCellTransferGrant,
 )
 from core_common.protocol.arm_transfer_preflight import ARM_PREFLIGHT_REJECTION_STATUS
@@ -20,10 +21,10 @@ from core_common.protocol.arm_transfer_preflight import ARM_PREFLIGHT_REJECTION_
 from .action_receipts import receipt_matches_grant
 
 _INSTANCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$")
-# One wire version per admitted kind. Both kinds report ordered phase summaries
+# One wire version per admitted kind. Phased kinds report ordered phase summaries
 # (v2); a kind missing here has no local executor and is refused before any I/O.
-_PROTOCOL_VERSION_BY_KIND = {"PICK_PLACE": 2, "CELL_TRANSFER": 2}
-ActionGrant = FleetActionGrant | FleetCellTransferGrant
+_PROTOCOL_VERSION_BY_KIND = {"PICK_PLACE": 2, "CELL_TRANSFER": 2, "ARM_TRANSFER": 2}
+ActionGrant = FleetActionGrant | FleetCellTransferGrant | FleetArmTransferGrant
 
 
 class LocalActionUnavailable(TimeoutError):

@@ -1,6 +1,7 @@
 """The Fleet UDS client frames neutral grants as v2 and binds their receipts."""
 from core_common.protocol.schemas import FleetArmTransferGrant
 from fleet.server.local_action_transport import LocalActionUnavailable, UnixLocalActionTransport
+from fleet.server.step_action_kinds import step_grant_digest
 import pytest
 
 from test_cell_action_transport import _grant as cell_grant, _response
@@ -12,7 +13,8 @@ def grant():
     raw.update(action_kind="ARM_TRANSFER", arm_transfer=dict(
         object_ref="object-1", source="pose-1", target="pose-2", catalog_digest="a" * 64,
         bindings_digest="b" * 64, resource_policy_digest="c" * 64))
-    return FleetArmTransferGrant.model_validate(raw)
+    body = FleetArmTransferGrant.model_validate(raw)
+    return body.model_copy(update={"request_digest": step_grant_digest(body)})
 
 
 @pytest.mark.parametrize("operation", ["submit", "get", "cancel"])
