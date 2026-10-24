@@ -267,7 +267,9 @@ class Session:
         try:
             for session in pairs.values():
                 session._with_follower(lambda bus, s=session: s.write_caps(bus, caps))
-            for unit in SERVICES:
+            # Dependents first: stopping camera-view first also stops readiness (Requires=), whose
+            # ExecStopPost restore outlasts the 10 s systemctl timeout (2026-10-24).
+            for unit in reversed(SERVICES):
                 # "activating" includes a readiness unit waiting out RestartSec; stop cancels that restart.
                 if self.systemctl("is-active", unit) in ("active", "activating"):
                     self.systemctl("stop", unit)
@@ -359,7 +361,7 @@ class Session:
         record["hardware_faults"] = self.hardware_faults
         record["manual_attention_required"] = (bool(self.hardware_faults) or not torque_ok or bool(failures)
                                                or record["leader_gripper_torque_after"] != 0)
-        for unit in stopped:
+        for unit in reversed(stopped):
             try:
                 self.systemctl("start", unit)
             except Exception as exc:

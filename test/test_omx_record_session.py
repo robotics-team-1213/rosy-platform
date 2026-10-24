@@ -130,6 +130,16 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     assert ("stop", "rosy-omx-camera@front.service") not in calls  # was not running: left alone
 
 
+def test_services_stop_dependents_first_and_start_in_reverse(tmp_path):
+    # Stopping camera-view first cascades into readiness's ExecStopPost restore and timed out (2026-10-24).
+    arm, leader = follower(), leader_arm()
+    s, calls = session(arm, leader, active=m.SERVICES)
+    s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert [u for v, u in calls if v == "stop"] == list(reversed(m.SERVICES))
+    assert [u for v, u in calls if v == "start"] == list(m.SERVICES)
+    assert_restored(arm, leader)
+
+
 def test_a_readiness_unit_waiting_to_restart_is_stopped_before_recording(tmp_path):
     # Restart=on-failure leaves it "activating" for RestartSec; firing mid-session would restart the cameras.
     arm, leader = follower(), leader_arm()
