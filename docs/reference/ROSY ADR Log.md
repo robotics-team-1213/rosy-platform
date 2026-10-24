@@ -1254,3 +1254,9 @@ Approved local measurement facts preserve original source/time and durable repla
 **Status:** Accepted for implementation (2026-10-24). 실물 장치·ARM64 산출물 수용은 별도다.
 
 전용 network authority, 응답 후 실행되는 Wi-Fi 복구 작업, 첫 부팅 인계와 서명 boot catalog를 정의한다. 전문은 [D-863](../adr/D-863-device-network-recovery-and-update-continuity.md).
+
+## D-869 원본 이벤트 ID 재전송과 실행 receipt에 결속된 자동 후처리
+
+**Status:** Accepted for implementation (2026-10-25). 소스·시험·배포·실물 수용은 별도다.
+
+재접속에서 미응답 이벤트를 원래 event_id·내용·seq로 재전송하고, producer scope 없는 WELCOME 최대 seq를 삭제 근거로 사용하지 않는다. 늦은 명령 후처리는 원래 실행의 승인 receipt에만 결속한다. 영속 outbox나 구형·임대 없는 목표의 정지를 보증하지 않는다. 전문은 [D-869](../adr/D-869-original-identity-for-event-replay-and-command-cleanup.md).
