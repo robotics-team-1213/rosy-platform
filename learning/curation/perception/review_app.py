@@ -32,6 +32,7 @@ import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_s
 import review_versions, omx_center_web
 import learning_domains, learning_pipeline
 import learning_tasks_web
+from workspace_links import WORKSPACE_LINKS_SCHEMA, check_workspace_links, load_workspace_links
 from learning_tasks import Tasks
 from review_ai_jobs import Jobs
 from review_store import Conflict, ReviewStore
@@ -84,8 +85,10 @@ def check_link(url):
     return url
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None):
     check_bind_host(host)
+    if workspace_links is not None:
+        workspace_links = check_workspace_links({'schema': WORKSPACE_LINKS_SCHEMA, 'workspaces': workspace_links})
     if vlm_eval_url is not None:
         check_link(vlm_eval_url)
     if ai_jobs is not None and ai_jobs.store.db != store.db:
@@ -193,6 +196,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     if not match:
                         raise ValueError('invalid review version image path')
                     return self.send(review_versions.image(store, int(match[1]), int(match[2])), mime='image/png')
+                if path == '/api/learning/workspaces':
+                    return self.send({'configured': workspace_links is not None, 'workspaces': workspace_links or []})
                 if path == '/api/learning/storage':
                     return self.send(storage.snapshot() if storage else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
@@ -324,7 +329,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                          '/storage.js': 'storage.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
                          '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js',
-                         '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js'}
+                         '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js',
+                         '/learning/workspaces': 'workspaces.html', '/workspaces.js': 'workspaces.js'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
                     file = COMMON / name
@@ -490,6 +496,7 @@ def main():
     parser.add_argument('--omx-center-config', type=Path, help='private isolated OMX learning root and pinned host learner interpreters')
     parser.add_argument('--sim-config', type=Path, help='private workspace-bound local SIM subprocess configuration')
     parser.add_argument('--vlm-eval-url', help='link from 평가·승격 to a separate VLM evaluation state instance (D-857)')
+    parser.add_argument('--workspace-links', type=Path, help='private JSON listing the center\'s other review workspaces (D-857 §2)')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
@@ -502,6 +509,12 @@ def main():
             check_link(args.vlm_eval_url)
         except ValueError as exc:
             parser.error(str(exc))
+    workspace_links = None
+    if args.workspace_links:
+        try:
+            workspace_links = load_workspace_links(args.workspace_links)
+        except (OSError, ValueError) as exc:
+            parser.error(f'--workspace-links: {exc}')
     object_classes = None
     if args.object_classes:
         try:
@@ -544,7 +557,7 @@ def main():
     sim_runs = sim_web.LocalRuns(args.sim_config, review_evidence.metadata(store, 'workspace_id')) if args.sim_config else None
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
                          storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs,
-                         vlm_eval_url=args.vlm_eval_url)
+                         vlm_eval_url=args.vlm_eval_url, workspace_links=workspace_links)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 
