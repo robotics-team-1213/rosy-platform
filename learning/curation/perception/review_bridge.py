@@ -2,6 +2,8 @@
 
 review_bridge.py config.json --out STATE [--once]
 Config: source, peer, remote_reviews, interval_s, max_attempts. No training/approval.
+Optional authority: workspace_id plus exactly one of endpoint (loopback /api/decisions)
+or state (absolute review state read with SQLite mode=ro; collaboration mode).
 """
 import argparse
 import hashlib
@@ -17,12 +19,11 @@ import sys
 from urllib.parse import urlparse
 from urllib.request import urlopen
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
+for holder in ('learning/registry/perception', 'learning/training/perception'):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / holder))
 from job_state import Job, JobError, receipt
 from learning_cycle import verified_export
 
-#: Network load: the export archive scp is capped at this many kbit/s (config "limit_kbps"; 0 = unlimited).
-DEFAULT_LIMIT_KBPS = 2000
 SSH_OPTIONS = ["-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o",
                "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=5"]
 
@@ -47,7 +48,41 @@ def export_files(folder):
     return sorted({"manifest.json", "COMPLETE", *(item["path"] for item in doc["files"])})
 
 
+def read_current_state(authority):
+    """The /api/decisions document read in place; collaboration mode serves no port."""
+    state = Path(authority["state"])
+    database = state / "reviews.sqlite3"
+    if not state.is_absolute() or any(p.is_symlink() or (hasattr(p, "is_junction") and p.is_junction())
+                                      for p in (database, state, *state.parents)):
+        raise JobError("current authority state must be an absolute path without links")
+    if state != state.resolve():
+        raise JobError("current authority state must be a canonical path")
+    if not database.is_file():
+        raise JobError("current authority state has no review database")
+    if os.name == "posix":
+        # The port's replacement is only narrower if the files really are owner-only.
+        # Windows keeps its ACL defaults; no mode check there.
+        sidecars = [Path(str(database) + s) for s in ("-journal", "-wal", "-shm")]
+        for path in (state, database, *(p for p in sidecars if os.path.lexists(p))):
+            info = os.lstat(path)
+            if info.st_uid != os.getuid() or info.st_mode & 0o077:
+                raise JobError("current authority state must be owner-only (folder 0700, files 0600)")
+    with database.open("rb") as stream:
+        header = stream.read(20)
+    if len(header) == 20 and (header[18] == 2 or header[19] == 2):
+        # journal_mode=wal is persisted here; a mode=ro reader could create -wal/-shm.
+        raise JobError("current authority state in WAL mode refused")
+    from review_store import ReviewStore
+    import review_evidence
+    current = review_evidence.decisions(ReviewStore.read_only(state))
+    if current.get("workspace_id") != authority["workspace_id"]:
+        raise JobError("current authority state workspace differs")
+    return current
+
+
 def fetch_current(config):
+    if "state" in config["authority"]:
+        return read_current_state(config["authority"])
     endpoint = config["authority"]["endpoint"]
     parsed = urlparse(endpoint)
     if (parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
@@ -114,12 +149,8 @@ def publish(folder, digest, config, out):
             tar.add(folder / name, arcname=name, recursive=False)
     remote_archive = target + "/.incoming-" + digest + ".tar"
     # The remote root is provisioned by the producer; no root command or secret copy.
-    limit = int(config.get("limit_kbps", DEFAULT_LIMIT_KBPS))
-    cap = ["-l", str(limit)] if limit > 0 else []
-    # The capped copy may take longer than the old 60 s: allow twice its paced time.
-    timeout = max(60, 2 * archive.stat().st_size * 8 / (limit * 1000) + 30) if limit > 0 else 60
-    subprocess.run(["scp", *SSH_OPTIONS, *cap, str(archive), peer + ":" + remote_archive],
-                   check=True, capture_output=True, timeout=timeout)
+    subprocess.run(["scp", *SSH_OPTIONS, str(archive), peer + ":" + remote_archive],
+                   check=True, capture_output=True, timeout=60)
     script = r'''
 import hashlib,json,pathlib,tarfile
 root=pathlib.Path(ROOT);archive=root/('.incoming-'+DIGEST+'.tar')
@@ -246,8 +277,8 @@ def run_once(config, out, *, publisher=publish, current_fetcher=fetch_current,
         raise JobError("positive interval and attempt limit required")
     authority_config = config.get("authority")
     if authority_config is not None and (not isinstance(authority_config, dict)
-            or set(authority_config) != {"endpoint", "workspace_id"}):
-        raise JobError("authority endpoint/workspace_id required")
+            or set(authority_config) not in ({"endpoint", "workspace_id"}, {"state", "workspace_id"})):
+        raise JobError("authority workspace_id and exactly one of endpoint/state required")
     out = Path(out).resolve()
     with Job(out, config) as job:
         current, delivered = None, False

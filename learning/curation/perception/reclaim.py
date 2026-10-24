@@ -31,10 +31,8 @@ from pathlib import Path
 import bag_to_video
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / 'tools'))
-from data_paths import data_root  # noqa: E402
-DEFAULT_ROOT = data_root(REPO) / "perception"
-DEFAULT_VIDEO = data_root(REPO) / "teleop/learning"
+DEFAULT_ROOT = REPO / "data/perception"
+DEFAULT_VIDEO = REPO / "data/teleop/learning"
 DERIVATIVE_SUFFIXES = (".compact", ".compact.partial")
 RECLAIM_STATUS = frozenset({"ok", "compact_ok"})
 

@@ -278,7 +278,7 @@ def _capture_mcap_companions(eval_folders, companion_files, *, read_bytes):
             require(not any(p.is_symlink() or (hasattr(p, 'is_junction') and p.is_junction())
                             for p in (session, *session.parents)), 'MCAP source links refused')
             groups.setdefault(session, []).append((row, {'image': str(eval_root / row['image']), **mcap['frame']}))
-        scratch = Path(os.environ.get('ROSY_SCRATCH') or tempfile.gettempdir())
+        scratch = Path('X:/DevTemp') if os.name == 'nt' else Path(tempfile.gettempdir())
         for session, entries in groups.items():
             first = entries[0][0]['mcap']
             require(all(row['mcap']['metadata_sha256'] == first['metadata_sha256']

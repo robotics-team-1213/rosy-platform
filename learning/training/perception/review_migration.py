@@ -15,8 +15,10 @@ import re
 import shutil
 import stat
 import tempfile
+import sys
 from urllib.parse import urlparse
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 from job_state import JobError
 
 

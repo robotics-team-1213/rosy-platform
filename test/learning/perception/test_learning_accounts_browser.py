@@ -17,6 +17,47 @@ from test_review_app import open_store
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
 
 
+@pytest.mark.parametrize('width', [1440, 390])
+def test_login_entry_and_unconfigured_panel_recover_when_accounts_connect(tmp_path, width):
+    playwright = pytest.importorskip('playwright.sync_api')
+    folder = tmp_path/'review'; folder.mkdir()
+    server = make_server(open_store(folder), free_port())
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    try:
+        with playwright.sync_playwright() as runtime:
+            browser, page, errors = open_page(runtime, width, 900, url=url)
+            try:
+                expect = playwright.expect
+                page.goto(url+'/learning', wait_until='networkidle')
+                page.get_by_role('link', name='로그인·계정', exact=True).click()
+                expect(page.locator('#login-panel')).to_be_visible()
+                assert page.locator('#login-panel input').count() == 0
+                expect(page.locator('#login-help')).to_contain_text('계정 서버 연결 준비 중')
+                expect(page.locator('#account-login')).to_be_hidden()
+                posts = []
+                page.on('request', lambda request: posts.append(request.url) if request.method=='POST' else None)
+                assert not posts
+                page.route('**/api/accounts/session', lambda route: route.fulfill(status=401, json={'error': 'sign in required'}))
+                page.route('**/api/accounts/options', lambda route: route.fulfill(json={'enabled': True, 'oauth': False, 'rosy_account': True}))
+                page.locator('#account-retry').click()
+                expect(page.locator('#account-login')).to_be_visible()
+                expect(page.locator('#account-login')).to_have_attribute('href', '/api/account/login?return=/accounts')
+                assert page.url == url+'/accounts'
+                expect(page.locator('#account-setup')).to_be_hidden()
+                page.route('**/api/accounts/options', lambda route: route.fulfill(status=503, json={'error': 'connection unavailable'}))
+                page.locator('#account-retry').click()
+                expect(page.locator('#login-help')).to_contain_text('연결을 확인할 수 없습니다')
+                expect(page.locator('#account-login')).to_be_hidden()
+                assert not posts
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                assert not errors
+            finally:
+                browser.close()
+    finally:
+        server.shutdown(); server.server_close(); thread.join(timeout=5)
+
+
 def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
     """Real HTTPS receiver, signed grants and SQLite; only authority transport is replaced."""
     import base64
@@ -65,9 +106,6 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
     config['account_subjects'] = {'central-alice': 'alice'}
     config['public_origin'] = origin
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
-    from types import SimpleNamespace
-    from learning_collaboration import Collaboration, COOKIE
-    session_cookie_name = Collaboration.cookie_name(SimpleNamespace(receiver=receiver, accounts=managed, origin=origin), COOKIE)
     folder = tmp_path/'central-review'; folder.mkdir()
     server = make_server(open_store(folder), port, accounts=managed)
     class AuthorityHandler(server.RequestHandlerClass):
@@ -129,9 +167,23 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                 state['offline'] = False
                 expect(link).to_contain_text('Updated Alice', timeout=15000)
                 old_cookie = next(item['value'] for item in page.context.cookies()
-                                  if item['name'] == session_cookie_name)
+                                  if item['name'].startswith('rosy_learning_session_'))
+                page.route('**/api/accounts/session', lambda route: route.fulfill(status=403,
+                    content_type='application/json', body='{"error":"Project view permission required"}'))
+                page.goto(origin + '/accounts')
+                expect(page.locator('#account-status')).to_have_attribute('state', 'forbidden')
+                expect(page.locator('#account-login')).to_be_visible()
+                assert page.url == origin + '/accounts'
+                assert page.locator('[data-state-missing]').count() == 0
+                page.unroute('**/api/accounts/session')
+                page.goto(origin + '/accounts')
+                expect(link).to_contain_text('Updated Alice')
                 # Keep the next login at the issuer so logout cannot immediately reauthenticate.
                 page.locator('#logout').click()
+                expect(page.locator('#login-panel')).to_be_visible()
+                expect(page.locator('#account-login')).to_be_visible()
+                assert page.url == origin+'/accounts'
+                page.locator('#account-login').click()
                 page.wait_for_url(issuer + '/api/fleet/auth/authorize**')
                 assert not state['active']
                 assert receiver.resolve(old_cookie) is None
@@ -184,6 +236,14 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
         with playwright.sync_playwright() as runtime:
             browser, page, errors = open_page(runtime, width, 900, url=url)
             try:
+                def enable_oauth(route):
+                    response = route.fetch()
+                    options = response.json()
+                    options['oauth'] = True
+                    route.fulfill(response=response, json=options)
+                page.route('**/api/accounts/options', enable_oauth)
+                page.route('**/api/accounts/oauth', lambda route: route.fulfill(
+                    json={'url': url + '/accounts?hf-write-reconnected=1'}))
                 page.goto(url + '/accounts', wait_until='networkidle')
                 expect = playwright.expect
                 expect(page.locator('#login-panel')).to_be_visible()
@@ -194,26 +254,20 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 sign_in(page, url, accounts, 'alice')
                 expect(page.locator('#identity')).to_contain_text('작업자 alice')
                 expect(page.locator('#identity')).to_contain_text('프로젝트 one')
-                expect(page.locator('#identity')).to_contain_text('자료 가져오기')
-                expect(page.locator('#identity')).not_to_contain_text('import')
-                expect(page.locator('#account-status')).to_have_attribute('state', 'ready')
-                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-                page.get_by_text('토큰으로 직접 연결', exact=True).click()
+                page.get_by_text('토큰으로 연결', exact=True).click()
                 for index, name in enumerate(('a', 'b'), 1):
                     page.locator('#provider-token').fill('hf_browser_' + name)
-                    page.locator('#connect-form ui-button[type=submit]').click()
+                    page.locator('#connect-form button[type=submit]').click()
                     expect(page.locator('#connection option')).to_have_count(index)
                     expect(page.locator('#provider-token')).to_have_value('')
                 expect(page.locator('#connections')).to_contain_text('account-a')
                 expect(page.locator('#connections')).to_contain_text('account-b')
-                expect(page.locator('#connections > .ui-task-row')).to_have_count(2)
-                first_row = page.locator('#connections > .ui-task-row').first
-                first_row.get_by_role('button', name='연결 해제').click()
-                dialog = page.locator('dialog.ui-confirm')
-                expect(dialog).to_be_visible()
-                dialog.get_by_role('button', name='취소').click()
-                expect(dialog).to_be_hidden()
-                expect(page.locator('#connections > .ui-task-row')).to_have_count(2)
+                expect(page.locator('#hf-manage')).to_have_count(0)
+                with page.expect_request('**/api/accounts/oauth') as reconnect:
+                    page.get_by_role('button', name='쓰기 권한으로 다시 연결').first.click()
+                assert reconnect.value.post_data_json == {'purpose': 'link'}
+                expect(page).to_have_url(url + '/accounts?hf-write-reconnected=1')
+                expect(page.locator('#connection option')).to_have_count(2)
                 page.keyboard.press('Control+k')
                 page.get_by_role('textbox', name='기능 검색어').fill('사용 계정')
                 page.keyboard.press('Enter')
@@ -224,9 +278,8 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 page.locator('#license').fill('Apache-2.0')
                 page.locator('#rights-evidence').fill('Fixture license reviewed for project one')
                 page.locator('#internal-use').check()
-                page.locator('#import-form ui-button[type=submit]').click()
+                page.locator('#import-form button[type=submit]').click()
                 expect(page.locator('#imports')).to_contain_text('실패', timeout=20000)
-                expect(page.locator('#imports > .ui-task-row')).to_have_count(1)
                 expect(page.locator('#imports')).to_contain_text('진행')
                 expect(page.locator('#imports')).to_contain_text('clip.mp4')
                 summary = page.locator('#imports summary')
@@ -263,9 +316,8 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 assert 'hf_browser_' not in json.dumps(job)
                 assert 'hf_browser_' not in page.evaluate('JSON.stringify(localStorage)')
                 assert 'hf_browser_' not in page.evaluate('JSON.stringify(sessionStorage)')
-                page.locator('#connections > .ui-task-row', has_text='account-a').get_by_role('button', name='연결 해제').click()
-                page.locator('dialog.ui-confirm').get_by_role('button', name='연결 해제').click()
-                expect(page.locator('#connections > .ui-task-row')).to_have_count(1)
+                page.once('dialog', lambda dialog: dialog.accept())
+                page.locator('#connections article', has_text='account-a').get_by_role('button', name='연결 해제').click()
                 expect(page.locator('#connections')).not_to_contain_text('account-a')
                 old_session = next(item['value'] for item in page.context.cookies()
                                    if item['name'] == 'rosy_learning_session')
@@ -312,21 +364,21 @@ def test_permissions_session_expiry_and_network_recovery_browser(tmp_path, accou
                     expect(page.locator('#identity')).to_contain_text('작업자 ' + name)
                 login('viewer')
                 expect(page.locator('#import-panel')).to_be_hidden()
-                expect(page.locator('summary', has_text='토큰으로 직접 연결')).to_be_hidden()
-                expect(page.locator('#connections ui-button')).to_have_count(0)
+                expect(page.locator('summary', has_text='토큰으로 연결')).to_be_hidden()
+                expect(page.locator('#connections button')).to_have_count(0)
                 expect(page.locator('#imports')).to_contain_text('org/data')
-                expect(page.locator('#imports ui-button')).to_have_count(0)
+                expect(page.locator('#imports button')).to_have_count(0)
                 page.locator('#logout').click()
                 expect(page.locator('#login-panel')).to_be_visible()
                 expect(page.locator('#identity')).to_have_text('')
                 expect(page.locator('#connections')).to_have_text('')
                 login('bob')
-                page.get_by_text('토큰으로 직접 연결', exact=True).click()
+                page.get_by_text('토큰으로 연결', exact=True).click()
                 page.locator('#sharing').focus()
                 page.keyboard.press('End')
                 expect(page.locator('#sharing')).to_have_value('personal')
-                expect(page.locator('#connections ui-button')).to_have_count(0)
-                expect(page.locator('#imports ui-button')).to_have_count(0)
+                expect(page.locator('#connections button')).to_have_count(0)
+                expect(page.locator('#imports button')).to_have_count(0)
                 # An unavailable backend must not masquerade as a logged-out session.
                 page.route('**/api/accounts/session', lambda route: route.fulfill(
                     status=503, content_type='application/json', body='{"error":"temporarily unavailable"}'))

@@ -80,21 +80,7 @@ def prepare_sources(spec, out):
             source = Path(item["video"])
             if not source.is_absolute() or source.is_symlink() or not source.is_file():
                 raise ValueError("absolute regular video required")
-            declared = item.get("source_session")
-            if "source_session" in item and (
-                    not isinstance(declared, str) or
-                    not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", declared) or
-                    declared in (".", "..")):
-                raise ValueError("safe source session required")
-            try:
-                session = edge_review.session(source.name)
-                legacy = False
-            except ValueError:
-                if "source_session" not in item:
-                    raise ValueError("explicit source session required for legacy video") from None
-                session, legacy = declared, True
-            if not legacy and "source_session" in item and declared != session:
-                raise ValueError("source session differs from canonical video identity")
+            session = edge_review.session(source.name)
             if source.name in seen:
                 raise ValueError("duplicate source video")
             seen.add(source.name)
@@ -134,10 +120,7 @@ def prepare_sources(spec, out):
                         ok, encoded = cv2.imencode(".png", pixels)
                         if not ok:
                             raise ValueError("PNG encoding failed")
-                        image_session = f"{session}__{expected}" if legacy else session
-                        image = stage / "images" / f"{image_session}__{index:06d}.png"
-                        if image.exists():
-                            raise ValueError("duplicate image destination")
+                        image = stage / "images" / f"{session}__{index:06d}.png"
                         image.write_bytes(encoded.tobytes())
                         rows.append({"source_session": session, "capture_group": group,
                                      "source_video": f"videos/{source.name}",

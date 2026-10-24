@@ -14,7 +14,11 @@ import json
 import mimetypes
 import re
 import secrets
+import sqlite3
+import threading
 import time
+import uuid
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, urlsplit
@@ -30,6 +34,7 @@ import learning_domains, learning_pipeline
 import learning_tasks_web
 from learning_tasks import Tasks
 from review_ai_jobs import Jobs
+from review_store import Conflict, ReviewStore
 from review_decisions import make_decisions_server, serve_review
 from learning_control import Control, ControlConflict
 
@@ -54,9 +59,6 @@ def detail_preview(store, index):
     if not ok:
         raise ValueError('preview encoding failed')
     return data.tobytes()
-
-
-from review_store import Conflict, ReviewStore
 
 
 # D-478: loopback, RFC1918, link-local and Tailscale only; never wildcard or public.
@@ -159,7 +161,11 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
-                if (collaboration and collaboration.get(self, path, token)) or learning_tasks_web.get(self, path, tasks, omx_center, token) or omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token):
+                if collaboration and collaboration.get(self, path, token):
+                    return
+                if learning_tasks_web.get(self, path, tasks, omx_center, token):
+                    return
+                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -239,8 +245,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/control':
                     return self.send(control.status() if control else {'available': False})
                 if path == '/api/learning':
-                    captured = review_evidence.snapshot(store)
-                    current, frames = captured['authority'], captured['frames']
+                    frames = store.list_frames()
                     pixel_reviews = [review_masks.get(store, f['index']) for f in frames
                                      if f['status'] != 'excluded']
                     pixel_statuses = [row['status'] for row in pixel_reviews]
@@ -266,7 +271,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                        authority.get('generation') == current['generation'] and
                                        authority.get('decision_sha256') == current['decision_sha256']}
                     control_status = control.status() if control else None
-                    counts = {state: sum(f['status'] == state for f in frames)
+                    counts = {state: sum(row['object_decision'] == state for row in current['frames'])
                               for state in ('approved', 'pending', 'excluded')}
                     pixel_counts = {state: sum(row['mask_decision'] == state and not row['frame_excluded']
                                                for row in current['frames'])
@@ -275,10 +280,11 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                                          preparation=preparation, control=control_status)
                     items = learning.list()
                     with store.connect() as db:
-                        omx_reviewed, vlm_counts = learning_domains.stored(db)
+                        omx_reviewed, vlm_counts, task_count = learning_domains.stored(db)
                     domains = learning_domains.domains(
                         pipeline=pipeline, counts=counts, preparation=preparation, items=items,
-                        omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts, vlm_eval_url=vlm_eval_url)
+                        omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts,
+                        vlm_eval_url=vlm_eval_url, tasks=task_count)
                     return self.send({'workflows': WORKFLOWS, 'items': items, 'token': token,
                                       'pipeline': pipeline, 'domains': domains, 'vlm_eval_url': vlm_eval_url,
                                       'preparation': preparation,
@@ -318,9 +324,6 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                          '/storage.js': 'storage.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
                          '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js',
-                         '/learning-shell.js':'learning-shell.js', '/learning-shell.css':'learning-shell.css',
-                         '/learning-connections.js':'learning-connections.js', '/learning-connections.css':'learning-connections.css',
-                         '/learning-workspace.css':'learning-workspace.css',
                          '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
@@ -374,7 +377,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     raise ValueError('AI request accepts only action and version')
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
-                if (collaboration and collaboration.post(self, path, body, token)) or camera_setup_web.post(self, path, body, store.state, collaboration) or omx_web.post(self, path, body, learning, Conflict) or sim_web.post(self, path, body, sim_runs, collaboration) or vlm_judge_web.post(self, path, body, store, collaboration, Conflict):
+                if collaboration and collaboration.post(self, path, body, token):
                     return
                 if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration):
                     return
@@ -384,7 +387,11 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return
                 if sim_web.post(self, path, body, sim_runs, collaboration):
                     return
+                if vlm_judge_web.post(self, path, body, store, collaboration, Conflict):
+                    return
                 actor = self.learning_principal['user_id'] if collaboration else None
+                if omx_web.post(self, path, body, learning, Conflict):
+                    return
                 if path.startswith('/api/review-ai/'):
                     match = re.fullmatch(r'/api/review-ai/(\d+)', path)
                     if not match or body['action'] not in ('object_draft', 'pixel_draft', 'mask_check') or type(body['version']) is not int:
@@ -536,7 +543,8 @@ def main():
         omx_center = Center(json.loads(args.omx_center_config.read_text(encoding='utf-8')))
     sim_runs = sim_web.LocalRuns(args.sim_config, review_evidence.metadata(store, 'workspace_id')) if args.sim_config else None
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
-                         storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs, vlm_eval_url=args.vlm_eval_url)
+                         storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs,
+                         vlm_eval_url=args.vlm_eval_url)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

@@ -162,4 +162,5 @@ $('task-profile').onchange=configureParticipants;$('task-adapter').oninput=confi
 $('task-select').onchange=()=>{pending.delete('run');renderTask();};
 for(const id of ['run-dataset','run-method','run-execution','run-arm'])$(id).onchange=()=>{pending.delete('run');readiness();};
 $('tasks-refresh').onclick=()=>{error('');refresh();};
+$('theme').value=document.documentElement.dataset.theme||'dark';$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{}document.dispatchEvent(new CustomEvent('rosy:theme'));};
 participant();refresh();setInterval(()=>{if(!busy&&!document.hidden)refresh();},5000);

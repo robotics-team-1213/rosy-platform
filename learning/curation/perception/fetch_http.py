@@ -36,14 +36,10 @@ import shutil
 import ssl
 import sys
 import tarfile
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path, PurePosixPath
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
-from data_paths import data_root  # noqa: E402
 
 EXIT_NOT_IDLE = 4
 EXIT_TOKEN = 2
@@ -54,10 +50,8 @@ MANIFEST_NAME = "manifest.json"
 INTENT_TOPIC = "teleop/intent"
 RECORDING_ID = re.compile(r"\d{8}T\d{6}Z_[A-Za-z0-9_.-]{1,64}")
 CHUNK = 1 << 20
-DEFAULT_DEST = str(data_root(Path(__file__).resolve().parents[3]) / 'perception/raw') if 'ROSY_DATA_ROOT' in os.environ else "data/perception/raw"
+DEFAULT_DEST = "data/perception/raw"
 LIST_TIMEOUT_S = 15.0
-#: Network load: recording downloads are paced to this many Mbit/s by default (0 = unlimited).
-DEFAULT_LIMIT_MBPS = 2.0
 # A member must also land as a plain file on Windows: no reserved characters or device names.
 _WINDOWS_CHARS = set(':<>"|?*')
 _WINDOWS_NAMES = re.compile(r"(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?", re.I)
@@ -143,16 +137,8 @@ def list_recordings(base: str, token: str, timeout: float, opener=None) -> dict:
     return listing
 
 
-def _pace(started: float, sent: int, limit_bps: float) -> None:
-    """Sleep until ``sent`` bytes fit ``limit_bps`` bit/s since ``started`` (0 = unlimited)."""
-    if limit_bps > 0:
-        ahead = sent * 8 / limit_bps - (time.monotonic() - started)
-        if ahead > 0:
-            time.sleep(ahead)
-
-
 def download(base: str, token: str, recording_id: str, part: Path, timeout: float,
-             opener=None, limit_bps: float = 0.0) -> None:
+             opener=None) -> None:
     path = f"/api/v1/recordings/{urllib.parse.quote(recording_id, safe='')}/archive"
     try:
         resp = (opener or _OPENER).open(_request(base, path, token), timeout=timeout)
@@ -165,11 +151,10 @@ def download(base: str, token: str, recording_id: str, part: Path, timeout: floa
         if length is None or not length.isdigit():
             raise FetchError(f"{recording_id}: no Content-Length, cannot tell a whole download")
         expected, got = int(length), 0
-        started, size = time.monotonic(), (64 * 1024 if limit_bps > 0 else CHUNK)
         with part.open("wb") as handle:
             while True:
                 try:
-                    chunk = resp.read(size)
+                    chunk = resp.read(CHUNK)
                 except http.client.IncompleteRead as exc:
                     handle.write(exc.partial)
                     got += len(exc.partial)
@@ -180,7 +165,6 @@ def download(base: str, token: str, recording_id: str, part: Path, timeout: floa
                     break
                 handle.write(chunk)
                 got += len(chunk)
-                _pace(started, got, limit_bps)
     if got != expected:
         raise FetchError(f"{recording_id}: short body {got}/{expected} bytes — CORE aborted the "
                          "download (robot moved or recording started); fetch again later")
@@ -334,8 +318,7 @@ def _fetch_one(args, token: str, dest: Path, recording_id: str, convert) -> int:
     _remove(part)         # an earlier run's leftovers: never extract into an old tree
     _remove(staging)
     try:
-        download(args.base, token, recording_id, part, args.timeout, getattr(args, "opener", None),
-                 limit_bps=getattr(args, "limit_mbps", 0.0) * 1e6)
+        download(args.base, token, recording_id, part, args.timeout, getattr(args, "opener", None))
         manifest = verify(safe_extract(part, staging, recording_id), recording_id)
         os.replace(staging / recording_id, final)     # the last step: final exists only verified
     except (NotIdle, TokenRefused):
@@ -367,8 +350,6 @@ def main(argv=None, *, convert=default_convert) -> int:
     ap.add_argument("--ca-file", help="device CA for an https base (the URL name must match the certificate)")
     ap.add_argument("--timeout", type=float, default=600.0, help="per download socket timeout (s)")
     ap.add_argument("--list-timeout", type=float, default=LIST_TIMEOUT_S)
-    ap.add_argument("--limit-mbps", type=float, default=DEFAULT_LIMIT_MBPS,
-                    help="pace each download to this many Mbit/s on the site network (0 = unlimited)")
     args = ap.parse_args(argv)
     if args.since_id and not _id_ok(args.since_id):
         print("refused: --since-id must be a recording ID", file=sys.stderr)

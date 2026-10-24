@@ -24,17 +24,15 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
+from model_code_jobs import (PREFIX, LEGACY_LEARNING_PREFIXES, JOB_ENTRY_POINTS,
+                             CAMERA_MAP_ENTRY, job_entry)
 
-from model_code_layout import (  # noqa: F401 — preserve controller exports
-    PREFIX, LEARNING_CODE_PREFIXES, LEGACY_LEARNING_PREFIXES,
-    LEARNING_REQUIRED, CAMERA_PROFILE, CAMERA_MAP_FILES,
-    JOB_ENTRY_POINTS, CAMERA_MAP_ENTRY, SPLIT_CODE_PREFIXES,
-    SPLIT_REQUIRED, FITNESS_ENTRY, FITNESS_CONTRACT_FILES,
-    CODE_PREFIXES, CHECKOUT_PREFIXES, LIMIT, OMX_REVIEW_FILES,
-    FORBIDDEN, IMPORT_PATHS, PATH_SETUP,
+from model_code_layout import (
+    LEARNING_CODE_PREFIXES, LEARNING_REQUIRED, CAMERA_PROFILE, CAMERA_MAP_FILES, SPLIT_CODE_PREFIXES,
+    SPLIT_REQUIRED, FITNESS_ENTRY, FITNESS_CONTRACT_FILES, CODE_PREFIXES, CHECKOUT_PREFIXES,
+    LIMIT, FORBIDDEN, IMPORT_PATHS, PATH_SETUP,
 )
-import model_code_execution
-import model_code_source
+
 
 def bootstrap_command(python, root, script, args):
     code = PATH_SETUP + ";script=sys.argv.pop(1);sys.argv[0]=script;runpy.run_path(script,run_name='__main__')"
@@ -209,23 +207,50 @@ def legacy_busy(roots, *, proc=Path("/proc")):
     return None
 
 
-def source_policy():
-    return dict(prefixes=CODE_PREFIXES, forbidden=FORBIDDEN, limit=LIMIT,
-                required=(*LEARNING_REQUIRED,
-                          "middleware/perception/control/__init__.py",
-                          "contracts/foundation/core_common/__init__.py"),
-                conditional=(
-                    ("middleware/perception/control/_source_layout.py", SPLIT_REQUIRED,
-                     "missing perception or Drive source-holder dependency"),
-                    (CAMERA_MAP_ENTRY, CAMERA_MAP_FILES, "missing camera-map dependency"),
-                    ("learning/curation/perception/omx_web.py", OMX_REVIEW_FILES,
-                     "missing OMX review dependency"),
-                    (FITNESS_ENTRY, FITNESS_CONTRACT_FILES,
-                     "missing road-fitness observation dependency")))
-
-
 def unpack(archive, dest):
-    model_code_source.unpack(archive, dest, policy=source_policy())
+    """Manual extraction: code subtree only; no links, duplicates or special files."""
+    dest = Path(dest)
+    seen, total = set(), 0
+    with tarfile.open(archive, "r:") as tar:
+        entries = tar.getmembers()
+        if len(entries) > 10000: raise ValueError("too many archive members")
+        checked = []
+        for item in entries:
+            name = item.name.rstrip("/")
+            path = PurePosixPath(name)
+            if "\\" in name or path.is_absolute() or ".." in path.parts or str(path) != name:
+                raise ValueError("unsafe archive path")
+            ancestors = {str(p) for prefix in CODE_PREFIXES for p in PurePosixPath(prefix).parents}
+            if item.isdir() and (name in ancestors or any(name == prefix.rstrip("/") for prefix in CODE_PREFIXES)): continue
+            if not any(name == prefix or (prefix.endswith("/") and name.startswith(prefix)) for prefix in CODE_PREFIXES) or not (item.isfile() or item.isdir()):
+                raise ValueError("archive must contain only approved model-code dependencies, without links")
+            relative = path
+            if set(relative.parts) & FORBIDDEN or any(p.startswith(".env") for p in relative.parts):
+                raise ValueError("persistent data or secrets in code archive")
+            if str(relative) in seen: raise ValueError("duplicate archive member")
+            seen.add(str(relative))
+            total += item.size
+            if total > LIMIT: raise ValueError("expanded archive too large")
+            checked.append((item, dest.joinpath(*relative.parts)))
+        for item, target in checked:
+            if item.isdir(): target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with tar.extractfile(item) as src, target.open("xb") as out:
+                    shutil.copyfileobj(src, out)
+                if os.name == "posix": target.chmod(0o444)
+    for required in (*LEARNING_REQUIRED,
+                     "middleware/perception/control/__init__.py", "contracts/foundation/core_common/__init__.py"):
+        if not (dest / required).is_file(): raise ValueError("missing model-code entry point or dependency")
+    if (dest / "middleware/perception/control/_source_layout.py").is_file():
+        if not all((dest / name).is_file() for name in SPLIT_REQUIRED):
+            raise ValueError("missing perception or Drive source-holder dependency")
+    if (dest / CAMERA_MAP_ENTRY).is_file():
+        if not all((dest / name).is_file() for name in CAMERA_MAP_FILES):
+            raise ValueError("missing camera-map dependency")
+    if (dest / FITNESS_ENTRY).is_file():
+        if not all((dest / name).is_file() for name in FITNESS_CONTRACT_FILES):
+            raise ValueError("missing road-fitness observation dependency")
 
 
 def replace_link(root, target):
@@ -304,9 +329,24 @@ class Updater:
         return state
 
     def read_candidate(self, folder):
-        return model_code_source.read_candidate(folder, key_id=self.key_id,
-                                                public_key=self.public_key, limit=LIMIT)
-
+        for name, maximum in [("release.json", 65536), ("release.json.sig", 16384), ("READY", 128), ("code.tar", LIMIT)]:
+            p = folder / name
+            if p.is_symlink() or not p.is_file() or p.stat().st_size > maximum:
+                raise ValueError("missing or unsafe candidate file")
+        raw = (folder / "release.json").read_bytes()
+        if (folder / "READY").read_text().strip() != hashlib.sha256(raw).hexdigest():
+            raise ValueError("candidate is not complete")
+        verify_manifest_signature(raw, (folder / "release.json.sig").read_bytes(),
+                                  trusted_key_id=self.key_id, public_key=self.public_key)
+        v = json.loads(raw)
+        if not isinstance(v, dict) or set(v) != {"schema", "source_commit", "sequence", "environment_sha256", "archive_sha256"} or v["schema"] != "rosy-model-code/1":
+            raise ValueError("wrong model-code manifest")
+        if type(v["sequence"]) is not int or not 0 < v["sequence"] < 2**63:
+            raise ValueError("invalid sequence")
+        for k, length in [("source_commit", 40), ("environment_sha256", 64), ("archive_sha256", 64)]:
+            if not isinstance(v[k], str) or not re.fullmatch(f"[0-9a-f]{{{length}}}", v[k]):
+                raise ValueError("invalid manifest digest")
+        return v
 
     def run(self):
         try:
@@ -356,8 +396,6 @@ class Updater:
                 if digest(archive) != manifest["archive_sha256"]: raise ValueError("archive digest differs")
                 source = stage / "source"
                 unpack(archive, source)
-                model_code_source.retain_proof(folder, source, expected_manifest=manifest,
-                                              key_id=self.key_id, public_key=self.public_key, limit=LIMIT)
                 if self.data_root is not None:
                     (source / "data").symlink_to(self.data_root, target_is_directory=True)
                 self.health(source)
@@ -394,18 +432,10 @@ def build(repo, commit, sequence, env_hash, output, key_id, private_key, public_
         map_job = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
                                            CAMERA_MAP_ENTRY]).strip()
         paths = CODE_PREFIXES if map_job else tuple(p for p in CODE_PREFIXES if p not in CAMERA_MAP_FILES)
-        data_helper = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
-                                               "tools/data_paths.py"]).strip()
-        if not data_helper:
-            paths = tuple(p for p in paths if p != "tools/data_paths.py")
         split_layout = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
                                                 "middleware/perception/control/_source_layout.py"]).strip()
         if not split_layout:
             paths = tuple(p for p in paths if p not in SPLIT_CODE_PREFIXES)
-        review_page = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only", commit,
-                                               "learning/curation/perception/omx_web.py"]).strip()
-        if not review_page:
-            paths = tuple(p for p in paths if p not in OMX_REVIEW_FILES)
         subprocess.run(["git", "-C", str(repo), "archive", "--format=tar", "--output", str(stage / "code.tar"), commit, *paths], check=True)
         # Enforce the same source-only policy before signing. Worktree/ignored
         # files are never inputs; archive reads the committed Git object.
@@ -434,13 +464,44 @@ def load_config(path):
     return v
 
 
-def job_entry(source, script):
-    return model_code_execution.job_entry(source, script, runtime=globals())
 
 
-def execute(config, script, args, *, source_expectation=None):
-    return model_code_execution.execute(config, script, args, runtime=globals(),
-                                        source_expectation=source_expectation)
+def execute(config, script, args):
+    root = Path(config["root"])
+    # Serialize GPU jobs as well as code switches (D-434: no concurrent Isaac
+    # and training). The child inherits the lock, including if its parent dies.
+    with work_lock(root, exclusive=True, blocking=True) as lock_fd:
+        busy = legacy_busy(config.get("legacy_roots", [])) or gpu_busy()
+        if busy: raise WorkBusy("work busy: " + busy)
+        state = Updater(root, config["key_id"], config["public_key"], config["python"]).state()
+        if state.get("pending"): raise ValueError("interrupted update needs recovery first")
+        source = (root / "current").resolve(strict=True)
+        source.relative_to((root / "releases").resolve())
+        file, base, name, mapped = job_entry(source, script)
+        if file.suffix != ".py": raise ValueError("job entry point must be a Python script")
+        local = Path(config["work_dir"]) / (base.relative_to(source) if mapped is None else "")
+        conflict = checkout_script_conflict(base, local, name)
+        if conflict: raise ValueError(conflict)
+        if script != "camera_lane_map.py":
+            # Retained enrolled paths must not lose their local edit guard after a move.
+            for prefix in LEGACY_LEARNING_PREFIXES:
+                legacy = Path(config["work_dir"]) / prefix / Path(script).parent
+                conflict = checkout_script_conflict(file.parent, legacy, Path(script).name)
+                if conflict: raise ValueError(conflict)
+        env_hash = Updater(root, config["key_id"], config["public_key"], config["python"]).probe_environment()
+        if env_hash != state.get("environment_sha256"):
+            raise ValueError("job environment differs from the activated candidate")
+        receipt = root / "jobs" / f"{time.time_ns()}-{os.getpid()}.json"
+        job = {"source_commit": state["source_commit"], "environment_sha256": env_hash,
+               "script": str(file.relative_to(base)) if mapped is None else script,
+               "arguments_sha256": fingerprint(args), "started": time.time()}
+        if mapped is not None: job["entry"] = mapped
+        atomic_json(receipt, job)
+        result = subprocess.run(bootstrap_command(config["python"], source, file, args), cwd=config["work_dir"],
+                                pass_fds=(lock_fd,))
+        job.update(exit_code=result.returncode, finished=time.time())
+        atomic_json(receipt, job)
+        return result.returncode
 
 
 def main():

@@ -25,6 +25,10 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
     report.update(repo_id='local/native',camera_keys=['observation.images.front'],files={'meta/info.json':'a'*64})
     (root/'inspection.json').write_text(json.dumps(report))
     before = (root/'decisions.json').read_bytes()
+    bad = tmp_path / 'malformed'
+    prepared(bad)
+    Workspace(store.db).register(dict(kind='omx', name='Malformed source', path=str(bad)))
+    (bad / 'inspection.json').write_text(json.dumps(dict(episodes=[], camera_keys=42)))
     Workspace(store.db).register(dict(kind='omx',name='Grasp source',path=str(root)))
     rows = [dict(episode_index=e,frame_index=f,timestamp=f/30,task='pick',
                  **{'observation.images.front':np.full((3,32,32),f/12,dtype=np.float32)})
@@ -39,7 +43,12 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
             page = browser.new_page()
             errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
             try:
-                page.goto(f'http://127.0.0.1:{server.server_port}/learning/omx',wait_until='networkidle')
+                page.goto(f'http://127.0.0.1:{server.server_port}/learning',wait_until='networkidle')
+                page.get_by_role('link', name='정답 달기', exact=True).click()
+                page.get_by_role('link', name='로봇암 시범 검수', exact=True).click()
+                playwright.expect(page).to_have_url(f'http://127.0.0.1:{server.server_port}/learning/omx')
+                page.locator('#omx-sections a[href="#dataset-section"]').click()
+                playwright.expect(page.get_by_text('등록 자료가 불완전하거나 손상됐습니다. 원본 검증을 다시 실행하세요.', exact=True)).to_be_visible()
                 page.get_by_text('파지 구간 검수',exact=True).click()
                 page.get_by_label('확인 프레임',exact=True).fill('2')
                 page.get_by_role('button',name='프레임 확인',exact=True).click()

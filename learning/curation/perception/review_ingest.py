@@ -1,10 +1,7 @@
 """Validate/freeze additional image representations; imports never approve labels."""
 import json
-import os
 import re
-import stat
 import zipfile
-import zlib
 from pathlib import Path
 
 import cv2
@@ -27,159 +24,6 @@ def bounded(path, limit=32 * 1024 * 1024):
     if path.stat().st_size > limit:
         raise ValueError('input file exceeds local review limit')
     return path.read_bytes()
-
-
-class _CatalogCapture:
-    """One import's no-follow namespace and finite same-handle content captures."""
-    def __init__(self, selected):
-        self.selected = Path(selected)
-        self.fds, self.bindings, self.directories = [], [], {}
-
-    @staticmethod
-    def signature(info):
-        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-
-    def __enter__(self):
-        if (os.name != 'posix' or any(not hasattr(os, flag) for flag in
-                ('O_NOFOLLOW', 'O_DIRECTORY', 'O_NONBLOCK')) or
-                os.open not in os.supports_dir_fd or os.stat not in os.supports_dir_fd or
-                os.stat not in os.supports_follow_symlinks):
-            raise ValueError('catalog-relative requires POSIX nofollow/dir_fd support')
-        if not self.selected.is_absolute():
-            raise ValueError('absolute catalog path required')
-        try:
-            self.base = os.open('/', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-            self.fds.append(self.base)
-            parent, leaf = self.parent(self.selected)
-            info = os.stat(leaf, dir_fd=parent, follow_symlinks=False)
-            if stat.S_ISDIR(info.st_mode):
-                self.root = self.directory(parent, leaf)
-                self.path = Path(os.path.abspath(self.selected))
-                catalog_name = 'verified-inputs.jsonl'
-            else:
-                self.root, self.path, catalog_name = parent, Path(os.path.abspath(self.selected.parent)), leaf
-            self.catalog = self.path / catalog_name
-            self.raw = self.file(self.root, catalog_name, 32 * 1024**2)
-            return self
-        except BaseException as exc:
-            self.close()
-            if isinstance(exc, OSError):
-                raise ValueError('catalog capture path must contain no links and be regular') from exc
-            raise
-
-    def close(self):
-        for fd in reversed(self.fds):
-            os.close(fd)
-        self.fds.clear()
-
-    def __exit__(self, *args):
-        self.close()
-
-    def directory(self, parent, name):
-        key = (parent, name)
-        if key not in self.directories:
-            fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-            self.fds.append(fd)
-            info = os.fstat(fd)
-            self.bindings.append((parent, name, self.signature(info), True))
-            self.directories[key] = fd
-        return self.directories[key]
-
-    def parent(self, path):
-        # Walk the original spelling, including '..', so no normalization hides links.
-        parts = path.parts[1:]
-        parent = self.base
-        for component in parts[:-1]:
-            parent = self.directory(parent, component)
-        return parent, parts[-1] if parts else '.'
-
-    @staticmethod
-    def relative(reference):
-        if (not isinstance(reference, str) or not reference or reference.startswith('/') or
-                '\\' in reference or ':' in reference or any(ord(c) < 32 for c in reference) or
-                any(part in ('', '.', '..') for part in reference.split('/'))):
-            raise ValueError('portable relative catalog reference required')
-        return reference.split('/')
-
-    def file(self, parent, name, limit=None):
-        fd = None
-        try:
-            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
-            before = os.fstat(fd)
-            if not stat.S_ISREG(before.st_mode):
-                raise ValueError('regular catalog reference file required')
-            raw = None
-            if limit is not None:
-                if before.st_size > limit:
-                    raise ValueError('input file exceeds local review limit')
-                chunks, size = [], 0
-                while size < limit + 1:
-                    chunk = os.read(fd, min(1024**2, limit + 1 - size))
-                    if not chunk:
-                        break
-                    chunks.append(chunk)
-                    size += len(chunk)
-                raw = b''.join(chunks)
-                if size > limit:
-                    raise ValueError('input capture exceeds local review limit')
-                if size != before.st_size:
-                    raise ValueError('input capture size changed')
-            if self.signature(os.fstat(fd)) != self.signature(before):
-                raise ValueError('input capture metadata changed')
-            self.bindings.append((parent, name, self.signature(before), False))
-            return raw
-        except OSError as exc:
-            raise ValueError('catalog capture path must contain no links and be regular') from exc
-        finally:
-            if fd is not None:
-                os.close(fd)
-
-    def reference(self, reference, limit=None):
-        parts = self.relative(reference)
-        try:
-            parent = self.root
-            for name in parts[:-1]:
-                parent = self.directory(parent, name)
-            return self.file(parent, parts[-1], limit)
-        except OSError as exc:
-            raise ValueError('catalog reference path must contain no links') from exc
-
-    def classes(self, explicit):
-        if explicit:
-            path = Path(explicit)
-            if not path.is_absolute():
-                path = Path.cwd() / path
-            try:
-                parent, leaf = self.parent(path)
-                return self.file(parent, leaf, 1024**2)
-            except OSError as exc:
-                raise ValueError('class capture path must contain no links') from exc
-        return self.file(self.root, 'classes.yaml', 1024**2)
-
-    def adjacent_classes(self):
-        try:
-            os.stat('classes.yaml', dir_fd=self.root, follow_symlinks=False)
-            return True
-        except FileNotFoundError:
-            return False
-
-    def verify(self):
-        for parent, name, expected, directory in self.bindings:
-            try:
-                info = os.stat(name, dir_fd=parent, follow_symlinks=False)
-            except OSError as exc:
-                raise ValueError('catalog namespace binding changed') from exc
-            actual = self.signature(info)
-            if ((directory and (not stat.S_ISDIR(info.st_mode) or actual[:2] != expected[:2])) or
-                    (not directory and (not stat.S_ISREG(info.st_mode) or actual != expected))):
-                raise ValueError('catalog namespace binding changed')
-
-
-def _png(raw):
-    if (len(raw) < 33 or raw[:8] != b'\x89PNG\r\n\x1a\n' or
-            raw[8:16] != b'\x00\x00\x00\rIHDR' or
-            zlib.crc32(raw[12:29]) != int.from_bytes(raw[29:33], 'big')):
-        raise ValueError('PNG signature and IHDR required for catalog-relative image')
 
 
 def image(raw, digest, width, height):
@@ -206,55 +50,28 @@ def freeze_image(store, raw, suffix):
 
 
 def import_frames(store, body):
-    relative = body.get('catalog_relative', False)
-    if type(relative) is not bool:
-        raise ValueError('catalog_relative must be bool')
-    if relative:
-        with _CatalogCapture(body['path']) as capture:
-            return _import_frames(store, body, capture)
-    return _import_frames(store, body)
-
-
-def _import_frames(store, body, capture=None):
-    if capture:
-        catalog, raw = capture.catalog, capture.raw
-    else:
-        root = Path(body['path']).resolve()
-        catalog = root / 'verified-inputs.jsonl' if root.is_dir() else root
-        raw = bounded(catalog)
+    root = Path(body['path']).resolve()
+    catalog = root / 'verified-inputs.jsonl' if root.is_dir() else root
+    raw = bounded(catalog)
     rows = [json.loads(line) for line in raw.decode('utf-8-sig').splitlines() if line.strip()]
     if not rows or len(rows) > 2000:
         raise ValueError('1..2000 original frame representations required')
-    if capture and any(not isinstance(row, dict) for row in rows):
-        raise ValueError('catalog rows must be objects')
-    if capture and any(row.get('source_kind') == 'mcap' or 'mask' in row or row.get('objects')
-                       for row in rows):
-        raise ValueError('catalog-relative supports only draft-free PNG/video; unsupported mode')
     classes_path = body.get('classes')
     if not classes_path:
         draft = next((row.get('mask') for row in rows if row.get('mask')), None)
         if draft:
             classes_path = (str(Path(draft['zip']).parent / 'classes.yaml') if 'zip' in draft
                             else str(catalog.parent / 'classes.yaml'))
-        elif not review_masks.classes(store) and (capture.adjacent_classes() if capture else
-                                                  (catalog.parent / 'classes.yaml').is_file()):
+        elif not review_masks.classes(store) and (catalog.parent / 'classes.yaml').is_file():
             classes_path = str(catalog.parent / 'classes.yaml')   # first binding of a draft-free catalog
     binding = review_masks.classes(store)
     try:
-        class_raw = ((capture.classes(body.get('classes')) if capture else
-                      bounded(classes_path, 1024 * 1024)) if classes_path else None)
+        class_raw = bounded(classes_path, 1024 * 1024) if classes_path else None
     except OSError as exc:
         raise ValueError(f'픽셀 클래스 파일을 읽을 수 없습니다: {classes_path}') from exc
     if class_raw:
         try:
             values = build.load_classes(Path(classes_path), source_bytes=class_raw)
-            if capture:
-                indices = [value['index'] for value in values]
-                if len(set(indices)) != len(indices) or any(not 0 <= index < 255 for index in indices):
-                    raise ValueError('unique pixel class indices in 0..254 required')
-                for entry in yaml.safe_load(class_raw)['classes']:
-                    if 'display' in entry and (not isinstance(entry['display'], str) or not entry['display']):
-                        raise ValueError('pixel class display must be a non-empty string')
         except build.BuildError as exc:
             raise ValueError(f'픽셀 클래스 파일을 해석할 수 없습니다: {classes_path} ({exc})') from exc
         except (ValueError, KeyError, TypeError, AttributeError, yaml.YAMLError) as exc:
@@ -314,17 +131,7 @@ def _import_frames(store, body, capture=None):
         width, height = row['width'], row['height']
         if type(width) is not int or type(height) is not int:
             raise ValueError('integer image dimensions required')
-        video = row.get('source_video')
-        if capture:
-            capture.relative(row['image'])
-            if Path(row['image']).suffix.lower() != '.png':
-                raise ValueError('PNG original required for catalog-relative import')
-            capture.reference(video)  # Metadata only: no video bytes or independent proof.
-            video = str(capture.path / video)
-            data = capture.reference(row['image'], 32 * 1024**2)
-            _png(data)
-        else:
-            data = bounded(row['image'])
+        data = bounded(row['image'])
         image(data, row['image_sha256'], width, height)
         objects = row.get('objects', [])
         if not isinstance(objects, list) or len(objects) > 100:
@@ -380,7 +187,7 @@ def _import_frames(store, body, capture=None):
                 normalized['source_session'] = edge_review.session(row.get('source_video', ''))
             except ValueError:
                 pass  # Preserve historical identities; never invent authenticated capture stamps.
-        normalized.update(video=video, width=width, height=height,
+        normalized.update(video=row.get('source_video'), width=width, height=height,
                           image_sha256=row['image_sha256'], objects=objects,
                           original_video_verified=False, map_revision=None, map_pose=None,
                           fixed_eval_overlap=row.get('fixed_eval_overlap') is True,
@@ -391,13 +198,7 @@ def _import_frames(store, body, capture=None):
         checked.append((normalized, data, Path(row['image']).suffix, mask))
     # No frame/decision mutation until every image, draft and class reference passes.
     with store.lock:
-        if capture:
-            capture.verify()
         if class_raw:
-            # Another import may have bound classes during filesystem preflight.
-            current = review_masks.classes(store)
-            if current and current['sha256'] != binding['sha256']:
-                raise ValueError('pixel classes differ from existing workspace')
             review_masks.bind_classes(store, class_raw)
         frozen = []
         for source, data, suffix, mask in checked:

@@ -26,8 +26,6 @@ from pathlib import Path
 
 SCHEMA = "rosy.perception.catalog/1"
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / 'tools'))
-from data_paths import data_root  # noqa: E402
 DRIVERS = ("human", "logic", "claude-scripted")
 SCENE_TAGS = ("straight", "curve", "intersection", "stop_line", "crosswalk", "signal", "wall",
               "obstacle", "parking", "off_track")
@@ -196,7 +194,7 @@ def _split(text) -> list[str]:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--root", type=Path, default=data_root(REPO) / "perception")
+    ap.add_argument("--root", type=Path, default=REPO / "data" / "perception")
     ap.add_argument("--catalog", type=Path, help="default <root>/catalog.jsonl")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sc = sub.add_parser("scan")
@@ -226,7 +224,7 @@ def main(argv=None) -> int:
         return a.store if a.store is not None else root / "store"
 
     def videos_of(a):
-        return a.video_dir or [data_root(REPO) / "teleop" / "learning"]
+        return a.video_dir or [REPO / "data" / "teleop" / "learning"]
 
     if args.cmd == "scan":
         for sj in sorted((root / "raw").glob("*/session.json")):

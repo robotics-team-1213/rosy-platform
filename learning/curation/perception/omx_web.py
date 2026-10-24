@@ -20,11 +20,15 @@ LIMIT = 8 * 1024 * 1024
 def _read(root, name):
     """One JSON document directly inside a registered folder, or None when it is absent."""
     file = root / name
-    if not file.exists() and not file.is_symlink():
-        return None
-    if file.is_symlink() or file.resolve().parent != root.resolve() or file.stat().st_size > LIMIT:
-        raise ValueError(f'{name} must be a regular JSON file under 8 MiB in the registered folder')
-    return json.loads(file.read_bytes().decode('utf-8'))
+    try:
+        if not file.exists() and not file.is_symlink():
+            return None
+        if (file.is_symlink() or not file.is_file() or file.resolve().parent != root.resolve()
+                or file.stat().st_size > LIMIT):
+            raise ValueError('bounded regular file required')
+        return json.loads(file.read_bytes().decode('utf-8'))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f'{name}: 등록된 JSON 파일을 읽을 수 없습니다.') from exc
 
 
 def _verdicts(setup, index):
@@ -154,7 +158,7 @@ def post(handler, path, body, workspace, conflict):
     root = Path(row['path'])
     report = _read(root, 'inspection.json')
     document = segments.selection(report, body['segments'])
-    if actor:
+    if actor and isinstance(document['segments'], list):
         for segment in document['segments']:
             if not isinstance(segment, dict):
                 raise ValueError('segment object required')

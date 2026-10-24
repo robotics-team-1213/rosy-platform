@@ -110,50 +110,47 @@ def test_explicit_oauth_link_keeps_identity_and_expires_connection(accounts):
     assert accounts._subject_owner('another-hf-account') == 'alice'
 
 
-@pytest.mark.parametrize('purpose', ['link', 'manage'])
-def test_oauth_keeps_only_requested_repo_scopes_without_publish_grant(accounts, purpose):
-    session, alice = sign_in(accounts, 'alice')
-    assert 'import' in alice['capabilities'] and 'publish' not in alice['capabilities']
-    oauth, provider, query, binding, _ = setup_flow(accounts, purpose, session)
+def publisher(accounts):
+    cfg = json.loads(accounts.config_path.read_text())
+    membership = cfg['users'][0]['memberships']['one']
+    if 'publish' not in membership:
+        membership.append('publish')
+    accounts.config_path.write_text(json.dumps(cfg))
+    return sign_in(accounts, 'alice')
+
+
+def test_manage_oauth_keeps_only_requested_repo_scopes(accounts):
+    session, alice = publisher(accounts)
+    oauth, provider, query, binding, _ = setup_flow(accounts, 'manage', session)
     assert query['scope'] == ['openid profile read-repos gated-repos write-repos manage-repos']
     assert query['prompt'] == ['select_account']
-    provider.scope = 'openid profile read-repos gated-repos write-repos manage-repos inference-api'
+    provider.scope = 'openid profile read-repos write-repos manage-repos inference-api'
     provider.claims['sub'] = 'manage-subject'
     _session, connection = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
-    assert connection['scopes'] == ['gated-repos', 'manage-repos', 'read-repos', 'write-repos']
+    assert connection['scopes'] == ['manage-repos', 'read-repos', 'write-repos']
     assert 'token' not in connection
     assert accounts.credential(alice, connection['connection_id'])['token'] == 'oauth-private'
 
 
-def test_link_can_connect_without_optional_gated_scope(accounts):
+def test_account_link_requests_and_keeps_write_scopes(accounts):
     session, _alice = sign_in(accounts, 'alice')
     oauth, provider, query, binding, _ = setup_flow(accounts, 'link', session)
-    provider.scope = 'openid profile read-repos write-repos manage-repos'
-    provider.claims['sub'] = 'link-subject'
+    assert query['scope'] == ['openid profile read-repos gated-repos write-repos manage-repos']
+    provider.scope = 'openid profile read-repos gated-repos write-repos manage-repos'
+    provider.claims['sub'] = 'read-link-subject'
     _session, connection = oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
-    assert connection['scopes'] == ['manage-repos', 'read-repos', 'write-repos']
+    assert connection['scopes'] == ['gated-repos', 'manage-repos', 'read-repos', 'write-repos']
 
 
 @pytest.mark.parametrize('purpose', ['link', 'manage'])
-@pytest.mark.parametrize('missing', ['read-repos', 'write-repos', 'manage-repos'])
-def test_oauth_requires_each_repository_scope(accounts, purpose, missing):
+def test_repo_connection_needs_no_second_publish_approval_but_requires_provider_write(accounts, purpose):
     session, _alice = sign_in(accounts, 'alice')
     oauth, provider, query, binding, _ = setup_flow(accounts, purpose, session)
-    provider.scope = ' '.join(scope for scope in provider.scope.split() if scope != missing)
-    provider.claims['sub'] = 'insufficient-scopes-subject'
+    provider.scope = 'openid profile read-repos'
+    provider.claims['sub'] = 'write-only-subject'
     with pytest.raises(AccountError, match='management permission'):
         oauth.complete({'state': query['state'][0], 'code': 'x'}, binding, session=session)
     assert accounts.connections(_alice) == []
-
-
-@pytest.mark.parametrize('purpose', ['link', 'manage'])
-def test_oauth_still_requires_import_permission(accounts, purpose):
-    cfg = accounts.config()
-    cfg['users'][0]['memberships']['one'] = ['view']
-    accounts.config_path.write_text(json.dumps(cfg))
-    session, _ = sign_in(accounts, 'alice')
-    with pytest.raises(AccountError):
-        setup_flow(accounts, purpose, session)
 
 
 def test_expired_oauth_state_makes_no_provider_request(accounts):

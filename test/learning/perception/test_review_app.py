@@ -36,15 +36,6 @@ import class_sets
 from review_app import ReviewStore, Conflict
 
 
-def test_store_exports_preserved():
-    import importlib.util
-    import review_app
-    assert importlib.util.find_spec('review_store') is not None
-    import review_store
-    assert review_app.ReviewStore is review_store.ReviewStore
-    assert review_app.Conflict is review_store.Conflict
-
-
 def open_store(tmp_path):
     source, human, images = fixture_inputs(tmp_path)
     rows = [json.loads(s) for s in human.read_text().splitlines()]

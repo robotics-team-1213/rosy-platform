@@ -397,12 +397,14 @@ def build_dataset(export_root, *, fetch_current, workspace_id, eval_folders,
         if len(eligible_components) < 2:
             raise ValueError('at least two disconnected source components required')
         scratch_parent = Path(staging_parent).absolute()
+        if os.name == 'nt' and scratch_parent.drive.upper() != 'X:':
+            raise ValueError('scratch staging must be on X:')
         if any(part.is_symlink() or (hasattr(part, 'is_junction') and part.is_junction())
                for part in [scratch_parent, *scratch_parent.parents]):
             raise ValueError('scratch staging links refused')
         scratch_parent = scratch_parent.resolve()
-        if os.name == 'nt' and not scratch_parent.is_relative_to(Path(os.environ.get('ROSY_SCRATCH') or tempfile.gettempdir()).resolve()):
-            raise ValueError('scratch staging must remain within ROSY_SCRATCH or the system temp directory')
+        if os.name == 'nt' and not scratch_parent.is_relative_to(Path('X:/DevTemp').resolve()):
+            raise ValueError('scratch staging must remain within X:/DevTemp')
         scratch_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='indexed-dataset-', dir=scratch_parent) as temp:
             scratch = Path(temp); dataset = scratch / 'dataset'

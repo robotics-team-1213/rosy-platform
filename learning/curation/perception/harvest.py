@@ -44,9 +44,6 @@ import sys
 import urllib.request
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'tools'))
-from data_paths import data_root  # noqa: E402
-
 _PERCEPTION = Path(__file__).resolve().parents[3] / 'tools/perception'
 if str(_PERCEPTION) not in sys.path:
     sys.path.insert(0, str(_PERCEPTION))
@@ -181,7 +178,7 @@ def main(argv=None) -> int:
     ap.add_argument("host")
     ap.add_argument("--user", default=operator_ssh.USER)
     ap.add_argument("--remote-root", default=REMOTE_ROOT)
-    ap.add_argument("--dest", default=str(data_root(Path(__file__).resolve().parents[3]) / 'perception/raw') if 'ROSY_DATA_ROOT' in os.environ else "data/perception/raw")
+    ap.add_argument("--dest", default="data/perception/raw")
     ap.add_argument("--core-url", help="CORE base URL (default http://<host>:8080)")
     ap.add_argument("--core-token-file", help=f"viewer token file (env {TOKEN_ENV})")
     ap.add_argument("--assume-idle", action="store_true",

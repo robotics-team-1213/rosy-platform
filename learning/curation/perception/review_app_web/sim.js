@@ -1,6 +1,8 @@
 import {accountFetch} from '/account-session.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
+$('theme').value=document.documentElement.dataset.theme||'dark';
+$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 let token='', manager=false, busy=false, source='', checked=null, selected=null, pending=null;
 const terminal=new Set(['SUCCEEDED','FAILED','STOPPED']);
 const labels={PENDING:'준비 중',RUNNING:'실행 중',STOP_REQUESTED:'종료 확인 중',UNKNOWN:'확인 필요',SUCCEEDED:'모델 검사 통과',FAILED:'실패',STOPPED:'중단'};

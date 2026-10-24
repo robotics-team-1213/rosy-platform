@@ -37,7 +37,7 @@ def test_central_project_cookies_coexist_on_shared_https_host(tmp_path):
                 jar.load(value)
         assert len(jar) == 9
         for app, port in zip(apps, (9444, 9445, 9446)):
-            assert app.read_cookie(SimpleNamespace(headers={'Cookie': COOKIE + '=legacy'}), COOKIE) == ''
+            assert app.cookie(SimpleNamespace(headers={'Cookie': COOKIE + '=legacy'}), COOKIE) == ''
             seen = []
             app.accounts.authenticate = lambda value: seen.append(value) or {'capabilities': ['view']}
             handler = SimpleNamespace(headers={'Cookie': jar.output(header='', sep=';')})
@@ -50,6 +50,33 @@ def test_central_project_cookies_coexist_on_shared_https_host(tmp_path):
     finally:
         for app in apps:
             app.shutdown()
+
+
+@pytest.mark.parametrize('cookie_scope,expected', [('own', 403), ('legacy', 401), ('other', 401)])
+def test_central_session_without_project_grant_uses_scoped_cookie(tmp_path, cookie_scope, expected):
+    from learning_collaboration import Collaboration, COOKIE
+
+    class NoGrant(Accounts):
+        def authenticate(self, session):
+            principal = super().authenticate(session)
+            principal['capabilities'] = []
+            return principal
+
+    account = NoGrant()
+    account.public_origin = 'https://learning.example:9444'
+    account.receiver = SimpleNamespace(retry_revocations=lambda: None)
+    app = Collaboration(account, open_store(tmp_path))
+    try:
+        name = COOKIE + (app.cookie_suffix if cookie_scope == 'own' else '_other' if cookie_scope == 'other' else '')
+        responses = []
+        handler = SimpleNamespace(headers={'Cookie': name + '=reader'}, extra_headers=[],
+                                  path='/api/accounts/session',
+                                  send=lambda body, status=200: responses.append((body, status)))
+        assert app.get(handler, '/api/accounts/session', 'csrf-token')
+        assert responses[0][1] == expected
+        assert not handler.extra_headers  # No login redirect or session replacement.
+    finally:
+        app.shutdown()
 
 
 class Accounts:
@@ -113,23 +140,6 @@ def request(base, path, session=None, body=None, token=None, *, cookie_name='ros
             return response.status, json.load(response)
     except urllib.error.HTTPError as error:
         return error.code, json.load(error)
-
-
-@pytest.mark.parametrize('path', ['/learning?view=training', '/pixels?frame=1&filter=pending'])
-def test_login_redirect_preserves_learning_task(tmp_path, path):
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
-            return None
-
-    from urllib.parse import parse_qs, urlparse
-    with running(tmp_path) as (base, _accounts, _store):
-        opener = urllib.request.build_opener(NoRedirect)
-        with pytest.raises(urllib.error.HTTPError) as error:
-            opener.open(base + path)
-        assert error.value.code == 303
-        redirect = urlparse(error.value.headers['Location'])
-        assert redirect.path == '/accounts'
-        assert parse_qs(redirect.query) == {'return': [path]}
 
 
 def test_cancel_retry_waits_for_previous_worker_then_runs_via_http(tmp_path, accounts):

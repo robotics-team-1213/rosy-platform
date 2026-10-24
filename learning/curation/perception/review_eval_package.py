@@ -59,7 +59,7 @@ def _output_path(value):
     for part in (path,*path.parents):
         _require(not part.is_symlink() and not (hasattr(part,'is_junction') and part.is_junction()),'output links refused')
     if os.name=='nt':
-        _require(path.resolve().is_relative_to(Path(os.environ.get('ROSY_SCRATCH') or tempfile.gettempdir()).resolve()),'output must remain within ROSY_SCRATCH or the system temp directory')
+        _require(path.resolve().is_relative_to(Path('X:/DevTemp').resolve()),'output must remain within X:/DevTemp')
     _require(not path.exists(),'output already exists; immutable output never replaced')
     return path
 
@@ -247,7 +247,7 @@ def main(argv=None):
     parser.add_argument('--eval-folder',required=True)
     parser.add_argument('--sources',help='JSON array of absolute raw-hash-pinned source descriptors')
     parser.add_argument('--mcap',action='store_true',help='package human MCAP evaluation proof')
-    parser.add_argument('--out',required=True,help='new absolute output directory; on Windows under ROSY_SCRATCH or the system temp directory')
+    parser.add_argument('--out',required=True,help='new absolute output directory; Windows X:/DevTemp only')
     args=parser.parse_args(argv)
     try:
         if args.mcap:

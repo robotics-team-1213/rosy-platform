@@ -23,7 +23,7 @@ WORKFLOWS = [
      'files': ['state.json', 'comparison-report.json'],
      'next': 'm/s와 rad/s 평가를 각각 확인하세요. research_only 결과에는 로봇 실행 권한이 없습니다.'},
     {'id': 'omx', 'name': 'OMX 시연·ACT 학습', 'support': '기존 LeRobot export / act_job CLI',
-     'files': ['state.json', 'offline-report.json', 'intake-receipt.json'],
+     'files': ['state.json', 'offline-report.json', 'inspection.json', 'intake-receipt.json'],
      'next': 'episode 분리·관절 단위·평가 거절 이유를 확인하세요. offline_only는 장치 수용이 아닙니다.'},
     {'id': 'policy', 'name': '정책 산출물·원장', 'support': '기존 registry CLI / artifact 확인',
      'files': ['policy-artifact.json', 'offline-report.json', 'comparison-report.json'],

@@ -10,6 +10,40 @@ from review_app import ReviewStore, make_server
 from test_review_return import fixture_inputs
 
 
+@pytest.mark.parametrize('file,contents', [
+    ('inspection.json', None), ('inspection.json', 'null'),
+    ('inspection.json', '{'), ('decisions.json', '{}'),
+    ('decisions.json', '[null]'), ('camera-setup.json', '[]'),
+    *[('inspection.json', json.dumps(dict(episodes=[], camera_keys=value)))
+      for value in (None, 42, 'front', [42])],
+    ('decisions.json', '[]'),
+    ('decisions.json', '[{"episode_index":0}]'),
+    ('decisions.json', '[{"episode_index":null,"frames":12}]'),
+    ('camera-setup.json', '{"episodes":[{"episode_index":0,"checks":{"top":null}}]}'),
+])
+def test_bad_registered_intake_does_not_hide_other_sets_or_leak_paths(tmp_path, file, contents):
+    from learning_workspace import Workspace
+    from omx_web import get
+    from types import SimpleNamespace
+    workspace = Workspace(tmp_path / 'workspace.sqlite3')
+    for name in ('good', 'bad'):
+        root = tmp_path / name
+        prepared(root)
+        # Register the prepared folder before simulating an interrupted or corrupt write.
+        workspace.register(dict(kind='omx', name=name, path=str(root)))
+    target = tmp_path / 'bad' / file
+    if contents is None:
+        target.unlink()
+    else:
+        target.write_text(contents)
+    responses = []
+    assert get(SimpleNamespace(send=responses.append), '/api/learning/omx', workspace)
+    rows = {row['name']: row for row in responses[0]['sets']}
+    assert rows['good']['episodes'] and rows['bad']['error']
+    raw = json.dumps(responses, ensure_ascii=False)
+    assert str(tmp_path) not in raw and json.dumps(str(tmp_path))[1:-1] not in raw
+
+
 def prepared(root, *, camera=True):
     root.mkdir()
     decisions = [dict(episode_index=i, frames=12, outcome='unknown', object_result='unknown', split='exclude',
@@ -110,3 +144,33 @@ def test_segment_reviews_append_versions_and_leave_original_labels_untouched(tmp
         assert refused.value.code == 400
     finally:
         server.shutdown();server.server_close();thread.join()
+
+
+def test_collaboration_requires_manage_and_owns_segment_reviewer(tmp_path):
+    from learning_workspace import Workspace
+    from test_learning_collaboration import running, request
+    with running(tmp_path) as (url, accounts, store):
+        root = tmp_path / 'prepared'
+        prepared(root)
+        row = Workspace(store.db).register(dict(kind='omx', name='source', path=str(root)))
+        decision = json.loads((root / 'decisions.json').read_text())[0]
+        segment = {key: decision[key] for key in ('episode_index', 'frames', 'content_sha256', 'session_id', 'cycle_id')}
+        segment.update(start_frame=2, end_frame=6, object='cube', intervention=False,
+                       outcome='unknown', split='exclude', reviewer='forged', reason='uncertain retention')
+        body = dict(id=row['id'], version=0, segments=[segment])
+        assert request(url, '/api/learning/omx')[0] == 401
+        for session in ('reader', 'editor'):
+            _, workspace = request(url, '/api/workspace', session)
+            assert request(url, '/api/learning/omx', session)[0] == 200
+            assert request(url, '/api/learning/omx/segments', session, body, workspace['token'])[0] == 403
+        _, workspace = request(url, '/api/workspace', 'reviewer')
+        for invalid in (None, 42):
+            assert request(url, '/api/learning/omx/segments', 'reviewer',
+                           dict(body, segments=invalid), workspace['token'])[0] == 400
+        _, listed = request(url, '/api/learning/omx', 'reviewer')
+        assert listed['sets'][0]['segment_review']['version'] == 0
+        status, saved = request(url, '/api/learning/omx/segments', 'reviewer', body, workspace['token'])
+        assert status == 200 and saved['document']['segments'][0]['reviewer'] == 'reviewer'
+        accounts.active = False
+        body['version'] = 1
+        assert request(url, '/api/learning/omx/segments', 'reviewer', body, workspace['token'])[0] == 403

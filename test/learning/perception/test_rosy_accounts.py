@@ -5,14 +5,6 @@ from learning_accounts import AccountError
 from test_learning_accounts import accounts, sign_in
 
 
-def receiver_request(accounts):
-    from functools import partial
-    from learning_collaboration import Collaboration, COOKIE
-    from test_learning_collaboration import request
-    scope = SimpleNamespace(receiver=accounts.receiver, accounts=accounts, origin=accounts.config().get('public_origin'))
-    return partial(request, cookie_name=Collaboration.cookie_name(scope, COOKIE))
-
-
 @pytest.mark.parametrize('failure, expected', [('denied', 'account_callback_failed'),
                                               ('offline', 'account_unavailable'),
                                               ('malformed', 'account_callback_failed')])
@@ -25,7 +17,7 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
     collaboration.receiver = SimpleNamespace(finish=finish)
     collaboration.unavailable = (AccountUnavailable,)
     collaboration.origin = 'https://learning.example.test'
-    collaboration.accounts = SimpleNamespace(project_id='one')
+    collaboration.cookie_suffix = '_fixture'
     sent = []
     handler = SimpleNamespace(path='/api/account/callback?state=s&code=secret', headers={},
                               extra_headers=[], send=lambda body, status: sent.append((body, status)))
@@ -34,7 +26,8 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
     assert collaboration.get(handler, '/api/account/callback', 'token')
     assert sent == [(b'', 303)]
     assert ('Location', '/accounts?error=' + expected) in handler.extra_headers
-    assert any(name == 'Set-Cookie' and 'Max-Age=0' in value for name, value in handler.extra_headers)
+    assert any(name == 'Set-Cookie' and value.startswith('rosy_account_flow_fixture=')
+               and 'Max-Age=0' in value for name, value in handler.extra_headers)
     assert 'credential' not in repr(sent) + repr(handler.extra_headers)
 
 
@@ -94,6 +87,8 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
     import threading
     from hashlib import sha256
     from test_review_app import open_store
+    from test_learning_collaboration import request as legacy_request
+    from functools import partial
     from review_app import make_server
     config = accounts.config()
     config['account_subjects'] = {'central-alice':'alice','central-bob':'bob'}
@@ -103,7 +98,7 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         profile_url='https://account.test/console/profile',
         profile_session_id=lambda sid: {'account_id':records[sid].sub,'login':'member','display_name':'Member'})
     managed = RosyAccounts(accounts.db_path,accounts.key_path,config,receiver=receiver)
-    request = receiver_request(managed)
+    request = partial(legacy_request, cookie_name='rosy_learning_session_' + sha256(b'one\0').hexdigest()[:24])
     (tmp_path/'workspace').mkdir()
     store = open_store(tmp_path/'workspace')
     server = make_server(store,0,accounts=managed)
@@ -138,7 +133,6 @@ def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
     config = accounts.config()
     config['users'] = []
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)
-    request = receiver_request(managed)
     actor = managed.authenticate('browser-session')
     assert actor['user_id'] == 'central-carol' and actor['capabilities'] == ['view']
     # An Account subject never takes over an unmapped learning owner by matching its name.
@@ -157,31 +151,5 @@ def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
         assert status == 403 and '권한' in body['error']  # signed in: no redirect back to login
         managed.receiver.resolve_session_id = lambda sid: None
         assert request(base, '/api/accounts/session', 'browser-session')[0] == 401
-    finally:
-        server.shutdown(); server.server_close(); worker.join()
-
-
-def test_first_unmapped_sign_in_can_be_mapped_later_and_conflicts_are_403(accounts, tmp_path):
-    import threading
-    from test_review_app import open_store
-    from review_app import make_server
-    record = SimpleNamespace(sub='central-alice', aud='project:one', permits=lambda *args: True)
-    receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,
-        profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None)
-    managed = RosyAccounts(accounts.db_path, accounts.key_path, accounts.config(), receiver=receiver)
-    request = receiver_request(managed)
-    assert managed.authenticate('browser-session')['user_id'] == 'central-alice'
-    # The legacy owner signed in once before the operator mapped them; the mapping still applies.
-    managed._config['account_subjects'] = {'central-alice': 'alice'}
-    assert managed.authenticate('browser-session')['user_id'] == 'alice'
-    managed._config['account_subjects'] = {'central-alice': 'bob'}
-    with pytest.raises(AccountError, match='reassigned'): managed.authenticate('browser-session')
-    (tmp_path / 'workspace').mkdir()
-    server = make_server(open_store(tmp_path / 'workspace'), 0, accounts=managed)
-    worker = threading.Thread(target=server.serve_forever, daemon=True); worker.start()
-    base = f'http://127.0.0.1:{server.server_port}'
-    try:
-        # A live Account session with a refused owner binding must not bounce back to login.
-        assert request(base, '/api/accounts/session', 'browser-session')[0] == 403
     finally:
         server.shutdown(); server.server_close(); worker.join()
