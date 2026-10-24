@@ -11,8 +11,8 @@ CLI: python vlm_judge.py import --state <review-state> --rows <bench rows.jsonl>
      --questions <questions.json> --model <model name>
      python vlm_judge.py export-disputes --state <review-state> --out <debate.jsonl>
      python vlm_judge.py unpause --state <review-state> --question <id> --actor <name>
-Writes need a separate evaluation state (review_app.py --empty-eval, D-475, D-853 §4); reads of a state without
-VLM tables return empty results and create nothing.
+Writes need a separate evaluation state (review_app.py --empty-eval, D-475, D-853 §4); reads of any other state
+write nothing: without VLM tables they return empty results, and an older state that holds them is read as it is.
 Debate (D-857 §4): export-disputes lists disputed (photo, question) pairs with every model's current answer;
 ``tools/vlm_question_bench.py --debate-input`` re-asks one model offline on the model PC (D-459: this app never
 calls a model) and its rows' ``debate`` block imports as runtime ``debate`` of the same model name.
@@ -82,13 +82,22 @@ def _writable(store):
     configure(store)
 
 
+def _has(db, table):
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+
+
+def _evaluation(db):
+    row = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
+    return bool(row) and row[0] == 'evaluation'
+
+
 def _ready(store):
-    """True when this state holds VLM tables; reads never create them."""
+    """True when this state holds VLM tables; reads never create them and write only in an evaluation state."""
     with store.connect() as db:
-        found = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='vlm_items'").fetchone()
-    if found:
+        found, evaluation = _has(db, 'vlm_items'), _evaluation(db)
+    if found and evaluation:
         configure(store)  # tables added after the first import (audits, evaluation set) for older states
-    return bool(found)
+    return found
 
 
 def check_questions(questions):
@@ -285,14 +294,13 @@ def disputes(store):
     answer those), question not paused, no consensus. Each carries every model's current opinion."""
     if not _ready(store):
         return []
-    queue(store)  # freeze the evaluation set first
     with store.connect() as db:
         rows, usable, _, paused = _state(db)
-        frozen = {row[0] for row in db.execute('SELECT item FROM vlm_eval_set')}
+        blind = frozen(store, db, rows, usable)
         picks = _picks(db)
     lines = []
     for row in rows:
-        if row['status'] is not None or row['id'] in frozen:
+        if row['status'] is not None or row['id'] in blind:
             continue
         for question in json.loads(row['questions']):
             if question['id'] in paused or question['id'] in usable.get(row['id'], {}):
@@ -309,8 +317,10 @@ def audits(db):
     """{question: {n, errors, rate, paused}} over every audit so far (D-857 §5)."""
     stats = {}
     # An unpause (manage) starts the question's count again from audits saved after it; older rows stay as history.
+    if not _has(db, 'vlm_audits'):  # an older non-evaluation state, which reads never update
+        return stats
     after = ({row[0]: row[1] for row in db.execute('SELECT question, MAX(after) FROM vlm_unpauses GROUP BY question')}
-             if db.execute("SELECT 1 FROM sqlite_master WHERE name='vlm_unpauses'").fetchone() else {})
+             if _has(db, 'vlm_unpauses') else {})
     for row in db.execute('SELECT rowid, question, provisional, answer FROM vlm_audits'):
         if row['rowid'] <= after.get(row['question'], 0):
             continue
@@ -346,9 +356,11 @@ def _evaluation_set(db, name, group, questions, usable):
     """The view's frozen evaluation photos (D-857 §5): chosen once, topped up only when exclusions leave it short.
 
     New photos are seeded by sha256 and taken round-robin over consensus patterns (the provisional answer per
-    question, '' where models disagree), so later model imports do not move photos already chosen."""
+    question, '' where models disagree), so later model imports do not move photos already chosen.
+    Only an evaluation state stores the choice; another state's reads compute the same photos and write nothing."""
     excluded = {row['id'] for row in group if row['status'] == 'excluded'}
-    chosen = [row[0] for row in db.execute('SELECT item FROM vlm_eval_set WHERE view=? ORDER BY rowid', (name,))]
+    chosen = ([row[0] for row in db.execute('SELECT item FROM vlm_eval_set WHERE view=? ORDER BY rowid', (name,))]
+              if _has(db, 'vlm_eval_set') else [])
     members = [item for item in chosen if item not in excluded]
     if len(members) < EVAL_SET_SIZE:
         pools = {}
@@ -361,9 +373,27 @@ def _evaluation_set(db, name, group, questions, usable):
             for pool in order:
                 if pool and len(members) + len(added) < EVAL_SET_SIZE:
                     added.append(pool.pop(0))
-        db.executemany('INSERT OR IGNORE INTO vlm_eval_set (view, item) VALUES (?,?)', [(name, item) for item in added])
+        if _evaluation(db):
+            db.executemany('INSERT OR IGNORE INTO vlm_eval_set (view, item) VALUES (?,?)', [(name, item) for item in added])
         members += added
     return set(members)
+
+
+def _sets(db, rows, usable, view=None):
+    """{view: its evaluation-set photo ids} for one view's rows or every view's."""
+    views = {}
+    for row in rows:
+        if not view or row['view'] == view:
+            views.setdefault(row['view'], []).append(row)
+    return {name: _evaluation_set(db, name, group, {row['id']: [q['id'] for q in json.loads(row['questions'])]
+                                                    for row in group}, usable)
+            for name, group in sorted(views.items())}
+
+
+def frozen(store, db, rows, usable):
+    """Every view's evaluation-set photo ids, frozen first; the lock keeps two first reads from both topping it up."""
+    with store.lock:
+        return set().union(*_sets(db, rows, usable).values())
 
 
 def queue(store, view=None):
@@ -377,13 +407,11 @@ def queue(store, view=None):
         rows, usable, _, paused = _state(db)
         done = {row[0]: row[1] for row in db.execute(
             'SELECT i.view, COUNT(DISTINCT a.item) FROM vlm_audits a JOIN vlm_items i ON i.id=a.item '
-            'WHERE a.week=? GROUP BY i.view', (current,))}
+            'WHERE a.week=? GROUP BY i.view', (current,))} if _has(db, 'vlm_audits') else {}
         for row in rows:
             if not view or row['view'] == view:
                 views.setdefault(row['view'], []).append(row)
-        sets = {name: _evaluation_set(db, name, group, {row['id']: [q['id'] for q in json.loads(row['questions'])]
-                                                         for row in group}, usable)
-                for name, group in sorted(views.items())}
+        sets = _sets(db, rows, usable, view)
     for name, group in sorted(views.items()):
         questions = {row['id']: [q['id'] for q in json.loads(row['questions'])] for row in group}
         kinds = dict.fromkeys(sets[name], 'eval')
