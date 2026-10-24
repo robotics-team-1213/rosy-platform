@@ -192,6 +192,40 @@ jobs:
           pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
           python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
 
+      - name: Install OMX ACT CPU verification tools
+        if: matrix.name == 'omx-act-cpu'
+        env:
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          # Separate matrix runner/tool path: the Pinky comparison keeps its own torch pin.
+          pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu \
+            --extra-index-url https://download.pytorch.org/whl/cpu \
+            -r deploy/robot/omx/requirements-lerobot-export.txt
+          PYTHONPATH="/tmp/rosy-omx-act-cpu${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+          import json
+          from importlib.metadata import version
+          from pathlib import Path
+          import torch
+          import torchvision
+          from lerobot.policies.act.modeling_act import ACTPolicy
+
+          pins = dict(line.strip().split('==', 1) for line in
+                      Path('deploy/robot/omx/requirements-lerobot-export.txt').read_text().splitlines()
+                      if line.strip() and not line.lstrip().startswith('#'))
+          actual = {name: version(name) for name in pins}
+          assert actual == pins, (actual, pins)
+          assert torch.version.cuda is None
+          print(json.dumps(actual, sort_keys=True))
+          PY
+          echo "PYTHONPATH=/tmp/rosy-omx-act-cpu${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          echo "ROSY_ACT_CPU_REQUIRED=1" >> "$GITHUB_ENV"
+          echo "HF_HUB_OFFLINE=1" >> "$GITHUB_ENV"
+          echo "TRANSFORMERS_OFFLINE=1" >> "$GITHUB_ENV"
+          echo "OMP_NUM_THREADS=2" >> "$GITHUB_ENV"
+          echo "OPENBLAS_NUM_THREADS=2" >> "$GITHUB_ENV"
+          echo "MKL_NUM_THREADS=2" >> "$GITHUB_ENV"
+
       - name: Build and install ROS-free platform API wheels
         run: |
           # Build actual wheels outside src/ and install before colcon/pytest. This catches
@@ -292,6 +326,7 @@ jobs:
           sys.path.append("test")
           import known_failures
           quarantine = known_failures.load_known(known_failures.QUARANTINE.read_text(encoding="utf-8"))
+          act_cpu_required = os.environ.get("ROSY_ACT_CPU_REQUIRED") == "1"
           status = 0
           for paths, extra in runs:
               if not paths:
@@ -327,8 +362,9 @@ jobs:
                       print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
                       code = 0
               print("::endgroup::", flush=True)
-              if native_required and (code == 5 or re.search(r"\b\d+ skipped\b", "".join(out))):
-                  print(f"::error::native ROS fixture must execute without skips: {' '.join(paths)}", flush=True)
+              if (native_required or act_cpu_required) and (code == 5 or re.search(r"\b\d+ skipped\b", "".join(out))):
+                  kind = "ACT CPU" if act_cpu_required else "ROS"
+                  print(f"::error::native {kind} fixture must execute without skips: {' '.join(paths)}", flush=True)
                   status = 1
               # 경로가 여럿인데 0건 수집이면 세션 전체가 건너뛰어진 것이다(10-11부터 루트 test/ 가 그랬다).
               if known_failures.collected_nothing("".join(out), paths):

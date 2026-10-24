@@ -76,6 +76,57 @@ def test_ci_local_execution_wheel_pin_matches_package_metadata():
     assert f"{project['project']['name']}=={project['project']['version']}" in WORKFLOW.read_text(encoding='utf8')
 
 
+def test_actual_act_cpu_has_a_gating_runner_and_its_own_pinned_tools():
+    import yaml
+    from tools.harness.affected_tests import CI_FULL_MATRIX, Repo, Selection, ci_matrix
+
+    entries = [e for e in CI_FULL_MATRIX if e['name'] == 'omx-act-cpu']
+    assert len(entries) == 1, 'actual ACT must not depend on optional imports in learning-policy'
+    full = ci_matrix(Repo.load(ROOT), Selection('full', []))['include']
+    native = [e for e in full if e['name'] == 'omx-act-cpu']
+    assert len(native) == 1 and native[0]['gating'] and native[0]['ros'] == 'none'
+    assert {'learning/training/omx/test/test_act_inference_native.py',
+            'learning/training/omx/test/test_act_owner_capture.py',
+            'learning/training/omx/test/test_act_parent_chain.py'} <= {
+                path for invocation in entries[0]['invocations'] for path in invocation}
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    step = next(s for s in steps if s['name'] == 'Install OMX ACT CPU verification tools')
+    assert step['if'] == "matrix.name == 'omx-act-cpu'"
+    assert 'deploy/robot/omx/requirements-lerobot-export.txt' in step['run']
+    assert '--target /tmp/rosy-omx-act-cpu' in step['run']
+    assert 'https://download.pytorch.org/whl/cpu' in step['run']
+    assert 'ROSY_ACT_CPU_REQUIRED=1' in step['run'] and 'HF_HUB_OFFLINE=1' in step['run']
+
+
+@pytest.mark.parametrize('code,output,expected', [
+    (0, '1 skipped', 1), (5, 'no tests ran', 1), (1, '1 failed', 1), (0, '6 passed', 0),
+    (1, '1 failed, 1 skipped; quarantined', 1),
+])
+def test_actual_act_cpu_skips_and_empty_collection_cannot_pass(monkeypatch, code, output, expected):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    step = next(s for s in yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+                if s['name'] == 'Test (matrix suite, D-436)')
+    script = step['run'].split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([
+        ['learning/training/omx/test/test_act_inference_native.py']]))
+    monkeypatch.setenv('ROSY_ACT_CPU_REQUIRED', '1')
+    monkeypatch.setattr(subprocess, 'Popen', lambda *args, **kwargs:
+                        SimpleNamespace(stdout=iter([output]), wait=lambda: code))
+    if 'quarantined' in output:
+        monkeypatch.syspath_prepend(str(ROOT / 'test'))
+        import known_failures
+        monkeypatch.setattr(known_failures, 'should_rerun', lambda *args: True)
+        monkeypatch.setattr(known_failures, 'rerun_passed', lambda *args: True)
+        monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs:
+                            SimpleNamespace(stdout='1 passed', returncode=0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(script, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == expected
+
+
 def test_core_wheel_dependencies_are_available_before_offline_install():
     import ast
     import re
