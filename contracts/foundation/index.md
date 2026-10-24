@@ -40,6 +40,6 @@
 
 - 2026-10-24 · 73fc8b2b09 · 공통 Action·상태 구성 모델의 소유 분리
 - 2026-10-23 · uncommitted · D-855 관제 위임과 scoped cancel 공유 계약
-- 2026-10-20 · 37c3907d3 · D-821 명시적 이동과 locale 추가 계약
-- 2026-10-20 · uncommitted · D-810 Console 대화 DTO
-- 2026-10-19 · c6abafd83 · (origin #92 2026-10-16) v1.254 이안 허가와 실측 결과 readback
+- 2026-10-22 · uncommitted · 작업 셀 producer credential fingerprint 검증
+- 2026-10-22 · 79a11a4a54 · 출처에 결속된 모터 상태 계약
+- 2026-10-21 · uncommitted · STL 도면 좌표 등록 계약 (D-825)

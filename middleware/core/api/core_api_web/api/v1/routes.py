@@ -46,6 +46,7 @@ from core_api_web.api.v1.waypoints import waypoints_router
 vision_router.include_router(media_router)
 
 __all__ = [
+    "arm_router",
     "admin",
     "arm_router",
     "auth_router",

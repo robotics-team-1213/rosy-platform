@@ -26,6 +26,11 @@ def _recovery(role):
             **{name: {"state": "ok"} for name in ("watchdog", "kernel", "ssh", "swap")}}
 
 
+def _recovery(role):
+    return {"role": role, "time": 123, "state": "ok", "resources": {}, "issues": [],
+            **{name: {"state": "ok"} for name in ("watchdog", "kernel", "ssh", "swap")}}
+
+
 def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-06:20\n", now="12:00",
            action_rc=0, env_extra=None, recovery_answer="null"):
     """Run the guard with a stub ssh that answers ``health`` and records every remote command.

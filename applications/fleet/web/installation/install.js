@@ -17,7 +17,7 @@ import { createHostServices } from "./host-services.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
 import { addressMap, movableRobots } from "/console/assets/address-drift.js";
-import { createFleetClient } from "/common/fleet-client.js";
+import { createFleetClient } from "/console/assets/fleet-client.js";
 import { createPasswordLogin } from "./password-login.js";
 import { createPageScope } from "/common/scope.js";
 import { createTaskChooser } from "/common/task-chooser.js";

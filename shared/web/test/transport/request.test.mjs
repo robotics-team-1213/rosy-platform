@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRequest} from '../../request.js';
+import {createRequest} from '../../../../operations/site_ui/console/shared/request.js';
 
 for (const abortParent of [false, true]) {
   test(`page and caller cancellation compose: ${abortParent ? 'caller' : 'page'}`, async () => {
@@ -22,6 +22,22 @@ for (const abortParent of [false, true]) {
 
 const origin = 'https://robot.test';
 const json = (body, status = 200) => new Response(JSON.stringify(body), {status});
+
+test('authenticated binary reads keep JSON errors and request scope', async () => {
+  let authorization;
+  const request = createRequest({origin, credential: () => 'viewer', fetchImpl: async (_url, init) => {
+    authorization = init.headers.get('Authorization');
+    assert.equal(init.credentials, 'same-origin');
+    assert.equal('responseType' in init, false);
+    return new Response('pixels', {headers: {'Content-Type': 'image/png'}});
+  }});
+  const got = await request('/render', {responseType: 'blob'});
+  assert.equal(authorization, 'Bearer viewer');
+  assert.equal(await got.body.text(), 'pixels');
+  const failed = createRequest({origin, fetchImpl: async () => json({detail: {code: 'DENIED'}}, 403)});
+  assert.deepEqual((await failed('/render', {responseType: 'blob'})).body, {detail: {code: 'DENIED'}});
+  await assert.rejects(request('/render', {responseType: 'script'}), /response type/);
+});
 
 test('two concurrent audiences remain separate and credential is read per request', async () => {
   const calls = [];

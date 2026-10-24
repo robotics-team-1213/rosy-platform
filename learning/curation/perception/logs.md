@@ -155,6 +155,17 @@
 - 범위: strict signed source expectation/retained proof는 별도 후속 단위다. 운영 라벨·실물·배포·학습 품질·현장 수용은 검증하지 않았다.
 - gate 변화: 없음. 기본 환경의 optional MCAP 검사는 필수 raw-profile 검사 exit0/skip0을 대신하지 않는다.
 
+## 2026-10-19 · uncommitted · D-806 Learning 표시 이름 게시
+
+- 변경: 기존 검수·자료·학습·계정 화면과 오프라인 산출물의 표시 이름을 Rosy Learning으로 맞췄다. 원격 main에 없는 카메라 화면은 추가하지 않는다.
+- 증거: 원래 구현과 로컬 착지 검증은 보존한다. 이 게시 head는 별도 원격 검사·독립 검토·CI로 확인한다.
+- gate 변화: 없음. 이 기록은 운영 배포나 장치 수용의 증거가 아니다.
+
+## 2026-10-20 · 1bcd83ba3a · Legacy 937 Account boundary
+- 변경: 기존 별도 검수 웹의 HTTP 앞단에 D-757 개인 세션·project 권한·보호 감사 원장을 적용하고 D-809로 보존 경계를 기록했다. 운영 검수 파일을 변경하지 않았다.
+- 증거: `1bcd83ba3a` 원격 합성 시험 35 passed, known_failures NEW 0. 최종 통합 SHA·게시 검사·실제 HTTPS/사용자 수용은 별도다.
+- gate 변화: None. SOURCE and remote synthetic tests only; installation and user/device/field acceptance remain separate.
+
 ## 2026-10-21 · uncommitted · SIM 화면 연결 전 검수 저장 코드 분리
 
 - 변경: ReviewStore·Conflict를 review_store.py로 옮기고 review_app의 기존 import를 유지했다. HTTP 서버는 471행, 저장 코드는 300행이며 크기 ratchet의 과거 예외를 제거했다. 서명된 학습 payload가 새 필수 모듈을 빠뜨리지 않게 source 필수 목록을 연결했다.
@@ -202,3 +213,45 @@
 - 변경: 잘못되거나 만료된 callback과 인증 연결 장애는 흐름 쿠키를 지우고 계정 복구 화면으로 보낸다. callback 오류·프로젝트 권한 거부 뒤 자동 재로그인 반복을 막고 Rosy Account 로그인·상태 재확인 동작을 제공한다. 연속 장애에서도 재시도 버튼을 유지하며 일시적 장애로 기존 사용자나 입력을 로그아웃시키지 않는다.
 - 증거: f2d7ea9d21의 관련 원격 API 회귀 49개와 로그인·계정 Chromium 7개 통과. 반복 장애 버튼 소실은 별도 Chromium red로 재현 후 수정했다. 독립 검토의 해당 지적은 해소됐으며 최종 main 병합 후 실행은 착지 기록에 둔다.
 - gate 변화: 실제 사용자 권한 부여·모델 학습·검수 원본 변경·운영 배포는 수행하지 않았다.
+
+## 2026-10-22 · fd889ea429 · 공통 로봇·과제 학습 흐름 검증
+
+- 변경: 프로젝트별 불변 로봇·과제 원장과 개별/협동 참여 구성을 추가했다. 과제 화면에서 자료·방법·실제 host를 선택하고 지속 경험·평가·모델 receipt까지 같은 계보를 확인한다. 과제 전달은 자료 소유권을 보존하며 자격은 전달하지 않는다. 최신 중앙 로그인·HF 연결을 보존했다.
+- 증거: f5cb33bda891 원격 백엔드 2422통과·78건너뜀, Chromium 167통과. fd889ea429 Model·AI 실제 고정 CPU 환경에서 각각 ACT/HIL-SERL 합성 양팔·3카메라 자료 학습·저장·재적재 검사가 통과했다. 같은 SHA의 OAuth·Account·과제 브라우저 30통과. 각 로그의 NEW 0. 출처·한계는 [검증 기록](../../../docs/validation/learning-tasks-2026-10-22/result.md)에 명시했다.
+- gate 변화: 없음. 일반 로봇 실행 어댑터, 실제 HF 동의, 공식 이미지 활성화와 실물 actor·개입·보상·초기화 수용은 별도다.
+
+## 2026-10-22 · 08e1b34f33 · fix: HF 연결의 읽기/쓰기 분리 제거
+
+- 변경: 일반 HF 연결에서 읽기·쓰기·저장소 관리 권한을 함께 요청하고 승인된 쓰기 권한을 보존한다. 별도의 게시 승인을 요구하던 관리 연결 분기와 두 번째 연결 버튼을 제거했다. 기존 읽기 전용 연결에는 재연결 동작을 제공한다.
+- 증거: 5f298be9a3의 새 회귀 3개로 기존 실패를 재현했다. 08e1b34f33 원격 Chromium 1440/320 재연결·로그인·토큰·저장소 회귀 42 passed, 0 skipped, known_failures NEW 0. 독립 검토에서 발견한 중첩 pending 문제를 수정하고 요청·화면 이동을 검증했다.
+- gate 변화: 공급자 권한·소유권·세션 검증은 유지한다. 운영 4개 서비스에는 OAuth 설정·HF 연결이 없으므로 실제 HF 동의·쓰기 성공은 별도 확인한다.
+
+## 2026-10-22 · 18f0277fba · CI의 구형 pytest 초기화 충돌 수정
+
+- 변경: preview와 과제 회귀의 보조 함수 이름을 구형 nose 초기화 이름과 구분했다. fixture 내용·실제 검사·기존 CI guard는 유지한다.
+- 증거: PR #151의 CI39720000886에서 구형 pytest가 setup 보조 함수를 자동 호출하는 오류를 확인했다. 18f0277fba 관련 251건과 기존 CI 의존 guard 29건이 원격에서 통과했다. 최종 PR CI는 새 head로 다시 확인한다.
+- gate 변화: 없음. 이전 CI 실패를 성공으로 바꾸어 기록하지 않으며 운영·사용자·실물 수용은 별도다.
+
+## 2026-10-22 · ff01e057a6 · fix: Learning Account callback 오류에서 로그인 복구
+
+- 변경: 거부·연결 실패·잘못된 callback에서 고정된 계정 안내로 복귀하고 프로젝트별 flow 쿠키만 지운다. 반복 장애에도 재시도 동작을 유지한다. Rosy Account 구성에서는 중앙 로그인 링크를 제공하며, 기존 비SSO 설정의 API와 폼은 보존한다.
+- 증거: c13aeb8d71 원격 집중 53개 통과. 앞선 callback 단위 검사의 project cookie fixture 누락을 수정했다. 4e18d4a956 Chromium 기존 로그인·Learning 5개 통과, Auth heading 오류 2개는 ff01e057a6에서 수정 후 2개 통과했다. 최종 SHA의 게시 검사는 별도 수행한다.
+- gate 변화: 계정 원장·라벨을 수정하거나 권한을 우회하지 않았다. 운영 배포·실제 사용자의 project grant는 별도 확인한다.
+
+## 2026-10-22 · uncommitted · 게시 소스의 원격 학습센터 회귀
+
+- 변경: 검수 snapshot과 표시 수치를 결속하고 중앙 계정 cookie 범위를 보존했다. 운영 HTTPS 전송과 별도 학습 Python의 제한된 영상 reader를 연결했다.
+- 증거: source commit 1d9bce11ac의 백엔드 전체는 2366통과·78건너뜀·새 테스트 fixture 1실패였고, source commit 1dd36577a5의 해당 전송 모음 28건이 수정 후 통과했다. 앞선 게시 UI source commit b2af171cc5의 선택 전체 Chromium은 exit 0이다. 출처별 범위와 독립 검토 수정은 [검증 기록](../../../docs/validation/learning-center-publication-port-2026-10-22/result.md)에 묶었다.
+- gate 변화: 없음. 일반 로봇 identity 수용, 실제 사용자/HF 동의, 운영 이미지·서비스 배포와 실물 학습은 별도다.
+
+## 2026-10-22 · 0f3084afcf · fix: 열람 권한 부족과 로그아웃 구분
+
+- 변경: 인증된 세션의 view 거부는 403으로 보내 자동 재로그인 반복을 막는다. 로그아웃 표시는 공통 상태 empty를 사용한다. 독립 검토의 두 발견을 반영했다.
+- 증거: 7c24149120 원격 HTTP 회귀에서 기대 403 대신 401을 재현했다. ff74f0d196 집중 54개 통과. 최신 공개 main의 관측 기능과 로그를 보존해 재정렬했으며 최종 게시 검사는 별도 수행한다.
+- gate 변화: 인증·권한 검증을 유지한다. 운영 설치와 사람의 계정별 수용은 별도다.
+
+## 2026-10-22 · uncommitted · Published-source Learning Center port
+
+- 변경: 공개 원격 main의 검수·계정 권한 경계를 유지하며 공통 로봇·과제 Learning 진입점과 OMX 과제·입력 설정, 단계별 검수·학습 화면을 옮겼다. 카메라 기준 검증, 현재 검수 결정의 학습 계보, SIM 웹 어댑터에 필요한 소스와 회귀 시험을 함께 추가했다. SIM 실행 소스·운영 binding은 제공하지 않으며 미설정 상태에서는 실행할 수 없다.
+- 증거: 옮긴 소스의 Python 구문, 브라우저 JavaScript 구문, DOM 식별자와 화면 구조를 확인했다. 이 게시 소스의 커밋된 SHA에 대한 원격 pytest·Chromium·독립 검토는 대기 중이다. 보존한 개발 브랜치의 과거 시험 결과를 이 포트의 검증 결과로 사용하지 않는다.
+- gate 변화: 없음. 실제 학습 실행, 정책 배포, 장치·현장 수용은 확인하지 않았다.

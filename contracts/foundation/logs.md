@@ -781,6 +781,42 @@
 - 결정: D-766 4항(줄면 천장도 내려간다). D-767 A부 필드는 그대로.
 - 교훈: 없음.
 
+## 2026-10-16 · 7d3f6418d · D-772 이안 허가와 원본 실측 계약 추가
+
+- 변경: v1.254 StationDeparturePermit/Receipt를 canonical export에 추가했다. 세션/attempt·선택 작업 digest·native 세대와 원본 정지/접점/공간/절연 시각을 결속하고 strict true 근거를 요구한다. schema 1320줄 상한과 envelope 1.0을 유지한다.
+- 증거: 56c3e1ed8 신규 계약/피드 원격 RED 15건을 확인했다. 구현 원격 GREEN은 아직 실행 전이다. 독립 안전 검토와 후속 원격 검증 결과를 별도 기록한다.
+- gate 변화: 없음. DTO 추가는 이안 REST 활성화·실측 프로필·실기 수용을 뜻하지 않는다.
+
+## 2026-10-16 · c6abafd83 · v1.254 이안 허가와 실측 결과 readback
+
+- 변경: StationTargetStatus의 선택 departure_permit/departure_receipt가 현재 상태·session/boot/battery/correlation·원본 evidence 수명과 결속된다. Permit은 실제 binding/ACK와 설치 revision을, Receipt는 실제 operation을 요구한다. readback이 기존 착좌/충전 완료 flags를 빌려 이탈을 증명하지 못한다. 미착지 v1.254 범위의 연속 구현이며 envelope 1.0은 유지한다.
+- 증거: c6abafd83 task-8-departure-readback-green 원격 407개, aff57b47a 실제 transport/native 갱신 원격 208개, 9286f5f77 실제 runtime HTTP 원격 253개 통과. 각각 NEW 0/skip 0, exit 0이며 겹치는 범위를 합산하지 않는다. scoped 독립 안전 리뷰 PASS.
+- gate 변화: 계약과 SIM 회귀 근거. 운영 배포·설치 producer·실기 정밀도·전체 lifecycle/DEVICE/FIELD 수용은 아니다.
+
+## 2026-10-16 · uncommitted · feat(contracts): 스테이션 설치 위치와 충전 근거 분리 (D-772)
+
+- 변경: station_charging DTO에 지도/위치/교정/충전 session/boot/odom 세대를 분리하고, 제어 입력 문맥·유효기간·유한 수·미측정 건강도·정상 충전 종단을 검증한다. canonical schema export와 API v1.245 기록을 함께 추가했다. REST·실기 capability는 아직 열지 않았다.
+- 증거: 신규 계약 시험은 모듈 부재로 원격 RED 26 failed를 확인했다. `4e299e46c`에서 foundation 전체·구조·harness·라인 계약 문서 시험을 원격 실행해 exit 0, NEW 0을 확인했다(`C:/DevTemp/station-charge/task-1-green/run-1.txt`).
+- gate 변화: 없음. 계약 구현은 자동 충전 운영 완료나 장치 수용이 아니다.
+
+## 2026-10-16 · d5c1a61e4 · D-772 복귀 허가 계약과 현재 수명
+
+- 변경: v1.251 StationReturnPermit은 세션·robot/station/battery·boot·지도/위치 버전·correlation·기존 lease/trip ID·기대 native generation과 원본 유효기간을 분리한다. StationTargetStatus의 RETURNING/return_ready/현재 return_permit은 유효한 binding과 같은 범위·수명에서만 성립한다. canonical export를 기존 1320줄 안에 유지했다.
+- 증거: 4016579af의 신규 계약 부재 RED 뒤 d5c1a61e4에서 공유 계약·CORE lease/인계·Fleet camera scope 호환·구조/안전 포함 원격 283개 시험 통과, NEW 0. 로그 C:/DevTemp/station-charge/task-7-return-permit-final/run-1.txt.
+- gate 변화: 공유 계약/소프트웨어 증거. 귀환 경로 검증·실제 정지·충전·재투입을 DTO 수락만으로 주장하지 않는다.
+
+## 2026-10-16 · 39f94f151 · envelope 버전 규칙과 API 이력 정합성
+
+- 변경: canonical schema docstring에 protocol_version 1.0 동결 규칙을 명시하고 v1.253/v1.252 변경 이력을 보완했다. wire DTO나 envelope 버전은 바꾸지 않았다.
+- 증거: 원격 test_protocol_version_alignment를 포함한 CORE 237개와 계약·구조·설치 486개 통과, 각 NEW 0/skip 0. schema 1320줄 상한을 유지했다.
+- gate 변화: 소프트웨어 문서·계약 일치 증거이며 장치 수용을 뜻하지 않는다.
+
+## 2026-10-16 · 1216b3f7b · 이안 계약과 실제 native API 최종 회귀
+
+- 변경: v1.254 이안 허가/실측 Receipt, 로컬 원본 시각 피드·기존 native owner, 명시적 simulation 빈 피드와 관제 API·정확한 중단을 검증했다. 이전 API 경로 추적표·버전 이력·로그 제목/생성 인덱스 실패를 수정했으며 허용 한도나 안전 검사를 완화하지 않았다.
+- 증거: task-8-departure-final 원격 412개 통과, NEW 0/skip 0, exit 0. 별도 1f8569773 task-8-departure-contract-pins 96개 통과, NEW 0/skip 0, exit 0. 7d3f6418d의 native/기존 docking 회귀 194개와 범위가 겹치므로 합산하지 않는다. Safety-Review scoped PASS는 DTO/source/controller·owner/manager 및 API/갱신/프로필/중단 범위다.
+- gate 변화: 관련 소프트웨어 회귀 증거. HTTP 정상 경로는 실제 native owner+합성 로컬 facts로 adapter를 검증했고 bridge/mode 구성은 별도 시험이다. Fleet의 영속 선택 작업/예산 결속·실제 Receipt 기반 claim 해제/재투입·3회 cycle·독립 전역 위치 producer·실측 프로필/DEVICE/FIELD 수용은 미완료다. 목표 ACTIVE, 실기 구성 미정, push/merge/실기 활성화 없음.
+
 ## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
 
 - 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
@@ -798,6 +834,12 @@
 - 변경: WebRTC 전송·영상 내 capture identity, CORE의 60초 영상 위임과 원본 권한 재검사, 별도 media lease/HTTP/감독 모듈을 추가했다. 영상 설정은 기본 비활성이며 Fleet·명령 경로와 분리한다.
 - 증거: 실제 GStreamer→WHIP→MediaMTX→WHEP→Chromium 합성 재생과 capture watermark 판독을 원격 시험 PC에서 확인했다. 관련 원격 단위·API 검증과 정확한 revision은 `docs/validation/webrtc-source-2026-10-17.md`에 기록한다.
 - gate 변화: 기존 gate 변화 없음. Native ARM64·Android·실물 카메라·6대 FIELD 수용과 운영 기본값 전환은 미수행이다.
+
+## 2026-10-17 · uncommitted · feat(contracts): CELL_TRANSFER 선택 필드 sku와 item_key (D-781 §2, API v1.264)
+
+- 변경: `CellTransferPayload.sku`를 더했다. 식별자이고 `item: box`에서만 받는다. 없으면 직렬화에서 빠지므로 recipe/1·/2 grant의 바이트와 digest는 같다. `item_key`(`item` 또는 `box:<sku>`)와 `item_geometry_key`는 owner가 승인된 레시피 형상을 찾는 키다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.
 
 ## 2026-10-18 · 84140c4f8 · Bind selected-route geometry to movement authority (D-769) (이식, 원래 2026-10-16)
 
@@ -876,6 +918,60 @@
 - 변경: API v1.290에 ko-KR/en-US, execution_enabled 상태와 기명 운영자 좌표 제출용 AssistantNavigation을 추가했다. 모델의 action_admissible=false와 READ_ONLY 대화는 유지한다.
 - 증거: b0675386a1 집중 94개에 finite/좌표 범위/추가 도구 거부, 자기 CONTROL 요청·현재 권한 재확인, 기존 Task owner 결속을 포함했다. FULL은 별도 결과 기록을 따른다.
 - gate 변화: 없음. CORE 최종 명령 권한·로봇 envelope·Discord 신원은 변경하지 않았다.
+
+## 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
+
+- 변경: Added the three explicit Vault site capabilities. Signed-grant tests cover site scope, no inheritance and rejection on robot/project resources.
+- 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
+- gate 변화: none.
+
+## 2026-10-20 · 79cc935a8 · Account HTTP 전송 불명 회귀와 공통 예외 정규화
+
+- 변경: 공유 AccountClient의 HTTPException을 빈 AccountUnavailable로 정규화한다. IncompleteRead(read), BadStatusLine/LineTooLong(open)를 token/introspect/revoke/userinfo에 주입하고 불명확한 refresh 뒤 세션 삭제·재사용 금지, 반복 회수 실패 뒤 대기열 보존·복구 후 삭제를 고정했다. 서명·CSRF·grant·오프라인 만료 정책은 변경하지 않았다.
+- 증거: tests-only 79cc935a8dab7d57884c85c513022c50f8fbe989의 원격 model PC run-1.txt(account-http-red-20261020)는 신규 회귀 18건 실패, known_failures 비교 NEW 18/known 0/flaky 0, exit 1이다. 구현 GREEN은 후속 커밋 SHA로 별도 검증한다.
+- gate 변화: 없음. 이 회귀는 공유 전송/세션/회수 대기열 계약을 확인하며 실제 background thread·HTTPS 서버·배포·장치·현장 수용 증거는 아니다. D-757 계약을 보완하며 신규 ADR·API 버전은 없다.
+
+## 2026-10-20 · 3a1392d2e · Account HTTP 전송 불명 수정 원격 GREEN
+
+- 변경: HTTPException을 공유 AccountUnavailable 경계로 포함한 최소 수정과 Account protocol 설명을 검증했다. 앞선 tests-only 79cc935a8의 신규 실패 18건을 해소했다.
+- 증거: 3a1392d2efa959d84ad5bc14966d9524ad395254의 원격 model PC(account-http-green-20261020/run-1.txt)에서 account_client/account_access, CORE account_pipeline, harness/module_structure 191건 통과·2건 skip, exit 0, known_failures NEW 0/known 0/flaky 0. 로컬 harness lint exit 0(기존 경고 31건). pytest는 원격에서만 실행했다.
+- gate 변화: 없음. affected는 공유 foundation 변경으로 FULL이며 이번 focused 실행은 FULL/pre-push를 대체하지 않는다. 실제 HTTP 서버·background thread·배포·장치·현장 수용은 미검증이다. push/merge하지 않았다.
+
+## 2026-10-21 · uncommitted · 관제 AI 게시용 공통 계약 (D-810/D-821)
+
+- 변경: 기존 로컬 구현의 assistant DTO만 분리해 원격 API v1.293을 보존한 v1.294에 결속했다. 신원 없는 strict 대화 입력·ko/en locale·기본 실행 OFF·유한 명시 좌표를 계약으로 정의한다. Fleet 구현과 보호 운영 활성화는 후속이다.
+- 증거: tests-only `318ab265ab`의 원격 시험에서 assistant 모듈 부재로 예상한 수집 실패를 확인했다. `fd531b6803`의 원격 assistant 계약·protocol 버전 정렬·line-follow 문서 계약 세 파일은 exit 0이다. 전체 영향 선택·pre-push·CI는 별도다.
+- gate 변화: 없음. 공통 계약 추가는 모델·음성·장치·현장 수용을 뜻하지 않는다.
+
+## 2026-10-21 · uncommitted · Raster 등록·추출 요청과 선택 시설 근거 (D-835)
+
+- 변경: APIv1.293에 별도 RasterDrawingTransform·bounded 추출 설정/ROI 요청과 기존 RoadEvidence 형태의 선택 시설 근거를 정의했다. 없는 시설 근거는 기존 지도 body/hash에 추가하지 않고 CORE snapshot/envelope는 바꾸지 않는다.
+- 증거: 4a2f84e1fa 원격 계약·기존 STL·새 raster63통과, 93f8408f19 후보 검증·기존 지도 계약·브라우저·설치43통과, NEW0. API 예약 도구로 현행9핀을 맞췄으며 FULL 영향 검사는 별도다.
+- gate 변화: 없음. 도면 기준은 실제 위치·안전·주행 권한을 증명하지 않는다.
+
+## 2026-10-21 · uncommitted · 작업 셀 관측의 source 결속 계약 (D-837)
+
+- Change: strict arm capture and two-arm/three-camera manifest models define source identity, finite encoder data and preview-only registration without command authority. API v1.295 records producer authentication, original/receipt age, replay limits and native Fleet ownership.
+- Evidence: committed tests aa25b11d72 failed remotely because the new protocol module was absent. Implementation and canonical exports are verified at the next committed revision; source/host/browser/deployment evidence remain separate.
+- Gate: unchanged. Schemas do not establish an installed persistent reader, Fleet ingestion, native UI integration or physical acceptance.
+
+## 2026-10-21 · uncommitted · STL 도면 좌표 등록 계약 (D-825)
+
+- 변경: ROS-free drawing DTO에 명시적 평면·단위·원점·방향·축척과 원본/projection SHA-256 참조를 정의했다. extra 필드·비유한 값·범위 밖 지도 원점·잘못된 해시를 거절하며 CORE snapshot/envelope나 실행 권한은 확장하지 않는다.
+- 증거: tests-only2efb13fc82의 원격 RED에서 기존 지도 body1개 통과, 신규 계약20개 실패를 확인했다. 현재 DTO와 v1.291 계약의 GREEN·공통 protocol 회귀는 커밋 후 원격에서 확인한다.
+- gate 변화: 없음. 호스트 DTO 시험은 도면 변환·현장 교정·주행 수용 증거가 아니다.
+
+## 2026-10-22 · 79a11a4a54 · 출처에 결속된 모터 상태 계약
+
+- 변경: 읽기 전용 모터 DTO·명시 파일 검증과 D-837의 선택적 건강 기록·종료 전용 null 위치를 추가했다.
+- 증거: 79a11a4a54 공식 원격 154 passed/skip0/NEW0에 신원·나이·실제 TLS 파이프라인 회귀 포함.
+- gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+
+## 2026-10-22 · uncommitted · 작업 셀 producer credential fingerprint 검증
+
+- Change: require globally unique credential SHA-256 declarations, so role-specific consumers detect reuse without receiving another role's raw secret. Extract FleetTaskStatus into the existing work protocol module while retaining the canonical schema export.
+- Evidence: ada14033b9 remote protocol and architecture checks: 86 passed. Independent source review found no remaining scoped credential-contract finding. Earlier pre-push encountered a station-camera lifespan timeout; a focused rerun passed, but its original storage delay remains unexplained and the publication checks must run again.
+- Gate: unchanged. Live Fleet ingestion and physical motion remain unverified.
 
 ## 2026-10-23 · uncommitted · D-855 관제 위임과 scoped cancel 공유 계약
 

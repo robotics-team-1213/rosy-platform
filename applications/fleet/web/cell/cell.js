@@ -1,5 +1,5 @@
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
-import {createFleetClient} from '/common/fleet-client.js';
+import {createFleetClient} from '/console/assets/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';

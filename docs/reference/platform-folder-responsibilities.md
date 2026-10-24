@@ -28,7 +28,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 6 | 인지 노드 | `middleware/perception/nodes`. ROS 패키지 이름은 `control`; `control/`의 다섯 호환 초기화는 설치 이름만 잇는다. 기능별 전용 adapter는 해당 판단 holder에 둔다 |
 | 7 | 장치 | `middleware/devices`, `middleware/drivers` |
 | 8 | Fleet 원장 | `operations/fleet/fleet/server/{ledger,auth,cell,console,peer}`와 기존 `server/channel`. app.py는 조립하고 기존 fleet.server.* 설치 이름을 유지한다 |
-| 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}` |
+| 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}`, 그리고 `server/tracking`(D-457 천장 무마커 추적, 표시·대조 전용)과 `server/pose`(D-395 위치 서비스, D-494 지도 자세, D-594 경로 기록). 두 holder는 기존 `fleet.server.*` 설치 이름을 유지하고, 원장 테이블이 아닌 자기 기록 테이블(추적 보정, 경로 기록)에만 쓴다 |
 | 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/site_execution` |
 | 11 | 현장 표면 | `applications/fleet/{web,gateway}`, `operations/processes`, `operations/site_devices`, `operations/site_ui/{cam,media}`, `operations/apps`, `operations/overhead`, `operations/signal_observation` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
@@ -115,7 +115,7 @@ rosy-platform/
 │  └─ robot_ui/{robot,pilot,face}
 ├─ operations/
 │  ├─ fleet/ (원장·서빙·패키지 fleet)
-│  │  └─ fleet/server/{ledger,auth,cell,console,peer,channel}
+│  │  └─ fleet/server/{ledger,auth,cell,console,peer,channel,tracking,pose}
 │  ├─ decision/
 │  ├─ world/ (state/projections/map_pose)
 │  ├─ situation/

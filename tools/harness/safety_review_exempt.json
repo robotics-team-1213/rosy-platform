@@ -477,5 +477,30 @@
   {
     "commit": "fe7ef2f47500c19033b480c842a55e718c9614c9",
     "reason": "Independent Codex /root/control_wire_review retrospective SOURCE review, 2026-10-24, against exact commit and HEAD 7db21ac02367a88c1e15f8513a93d2f2f138434c: scoped cancellation preserves replacement navigation and trip-lease owners; Fleet verifies original boot/run/correlation TERMINAL/CANCELED receipts independently of the current facade and never falls back to unconditional cancel. Reviewed deterministic replacement-owner regression and malformed/mismatched/unsupported sender cases. Verified retained scoped 201-PASS log hash and final explicit-SHA 49eb597185ff833885f18e8558bcf86ba31ab1bb proof: 384 PASS, runner exit 0, NEW 0; evidence in docs/validation/control-unit-pipeline-2026-10-24/result.md and focused-invocation.json. This records the missing independent source-review receipt only; main integration verification remains separate, with no CI, deployment, physical-stop, device or field acceptance."
+  },
+  {
+    "commit": "fdd01f8fbbfd9b97959ee7fdea74477b98fd727f",
+    "original_commit": "995890b6f1c569603ae996b2e16d10f2b79bcfd4",
+    "reason": "PR #81 squash lost source Safety-Review trailers from 4f840a94, a892d160 and e77d8ada. Independent read-only /root/review_safety_merge, 2026-10-17: all 10 safety-classified paths byte-identical to the independently reviewed PR source head; no safety untagging; remaining tree differences are PR #80 ADR/research/gaps only. Scoped producer/consumer review found no additional contract violation. Exact squash provenance retention only, not new ROS-SIM, DEVICE or FIELD acceptance; existing source test evidence was not rerun by this reviewer."
+  },
+  {
+    "commit": "e0d77bcff8cab9b486a6ef8055960dc3e17d5b4b",
+    "original_commit": "8158a0a685aa27265a23131f4476c8c43d3532eb",
+    "reason": "PR #78 squash lost the source Safety-Review trailer of 8158a0a685 (test/flaky_quarantine.txt, D-762 stage 1). Independent read-only agent review, 2026-10-17, two passes: first pass required 3 fixes (drop the slow-feedback entry and reopen issue #68, correct the actionserver and timeout reasons), second pass no findings; evidence runs 38959095932 (attempts 1-3) and 38969322695 (attempts 1-2) verified. Squash patch-id equals the reviewed head (fc6879003987). Squash provenance retention only; no product code or safety rule change."
+  },
+  {
+    "commit": "057be833ab289ab341049191f90e1c7c94077015",
+    "original_commit": "55d5b426b9fc8fb8d79768515b47f74d26cc92d8",
+    "reason": "GitHub squash merge of PR #108 dropped the trailer of the reviewed commit; command_owner.py change is identical to 55d5b426b9 (D-785 final-state reach check, default off). Original Safety-Review: independent read-only reviewer agent, 2026-10-17: APPROVE WITH NOTES; unset policy is behaviour-identical (folded limit loop same order/messages/values, disabled configs skip it), HOLD path clears _active before _enter_hold so no extra cancel, no hold-reason whitelist anywhere (ros_runtime, action_runner, pilot_sim, g2_startup, recovery), stale snapshots cannot pass (freshness checked in the same locked poll); notes fixed: non-mapping policy is a ValueError, tests for failed Action, recovery state, negative/int/extra-joint inputs, disabled config; phase receipt still records ROS SUCCEEDED (fail-safe, documented). No device run."
+  },
+  {
+    "commit": "815e5027483cb49ceacc4c562d83cb1439692cbe",
+    "original_commit": "eddf756d3bfb93ac0d1879f4c1685f6f13859b91",
+    "reason": "PR #126 squash commit omitted the reviewed source Safety-Review trailer. Independent read-only /root/shared_http_review, 2026-10-20: exact source tree 752742953a12466d766080443de9729101b47ed5 reviewed with no supported findings; main squash has that identical tree. Four D-762 station classifications retain same-source fail/pass evidence, explicit environment caveats, unknown causes and twice-fail NEW; unpublished fixture lifespan excluded. Source native policy/scanner 170 passed, normal push 785 passed, PR CI39336986634 493 passed/0 skipped; main CI39337638405 failed its trailer gate before pytest. Exact squash provenance retention using the existing reviewed-history mechanism only; no production code, scanner, safety policy or device/field acceptance change."
+  },
+  {
+    "commit": "bb6a4e38c22714e05eeb601351c69a52f250a960",
+    "original_commit": "82c3bff42e31f13ee213b6bf782919a822b68971",
+    "reason": "PR #167 squash commit omitted the reviewed source Safety-Review trailer. Independent read-only review agent, 2026-10-23: APPROVE for bc6edabfe0/82c3bff42e against base d227b0c2c5; traced report_field/src.field -> _status_message -> _status_loop -> Rosy Cam parseStatus/CornerGuide/StreamScreen; the change only adds the phone-facing status field_state and corners_needed 0 and does not touch sightings, homography, authentication, motion or connection lifecycle. The squash diff equals the reviewed branch diff (same 17 files, identical ingest.py patch-id); PR CI 39963705171 passed. Provenance only; no production code, safety policy or device/field acceptance change."
   }
 ]

@@ -34,8 +34,8 @@
 
 ## 최근 기록
 
+- 2026-10-23 · bc6edabfe0 · 원격 송출 제어와 바닥 경계 설치 안내
 - 2026-10-22 · dadf5eed1f · Cam 복구 화면 렌더링과 안전한 lint 정리
 - 2026-10-22 · d297635cd4 · refactor(cam): 오류 복구 조작 배치 정리
+- 2026-10-20 · uncommitted · Explicit Vault site grants (D-808)
 - 2026-10-14 · 66321009d · fix(cam): D-741 앱 바 검토 반영
-- 2026-10-14 · 0f446e518 · feat(cam): D-741 앱 바 (통합 셸 조각 14)
-- 2026-10-14 · 57243be29 · feat: D-757 Rosy Account native management

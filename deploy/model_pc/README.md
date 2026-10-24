@@ -65,7 +65,26 @@ python3 ~/rosy-ml/bin/install_review_release.py <previous-release-id> \
   --host <model-pc-private-ip> --port 8774
 ```
 
-설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다.
+설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다. state 안의 `learning-collaboration.json`·`omx-center.json`·`learning-control.json`·`review-ai.json`·`workspace-links.json`이 있으면 대상 앱이 지원하는 옵션만 서비스에 붙이고, 예전 릴리스로 되돌릴 때는 그 앱이 모르는 옵션을 뺀다. `workspace-links.json`은 설치 때 일반 파일·스키마를 먼저 확인한다.
+
+### Account 프로젝트별 설치 (D-757)
+
+두 설치 CLI는 `--service <safe-name.service>`를 받으며 기본값은 기존 `rosy-review-v13.service`다. 다른 표준 `review_app.py` 서비스는 고유 `--root`, `--state`, `--port`, `--service`를 함께 지정한다. 사용자 유닛 경로·재시작·최초 백업 이름은 지정한 서비스에 맞춘다. 별도 구현의 데이터셋 서버에는 이 설치기를 적용하지 않는다. 자동 갱신 CLI에도 같은 `--service`와 프로젝트 경로를 지정해야 하며 기존 v13 타이머 설정은 v13에만 적용된다.
+
+`state/learning-collaboration.json`이 있으면 새 릴리스와 보관 릴리스 전환 모두 `--collaboration`을 유지한다. 앱은 `--host 127.0.0.1`로 실행하고 정확한 공개 HTTPS origin은 기존 승인 프록시에서 제공한다. 이 모드에서는 무인증 `--decisions-port`를 만들지 않는다. 이미 결속한 설정 파일이 사라지거나 보관 코드가 collaboration/중앙 Account를 지원하지 않으면 전환을 거부한다. 인증을 끄는 rollback은 지원하지 않는다. Account DB·키·HF 연결·검수 DB는 코드 릴리스 밖의 기존 비공개 경로에 남긴다.
+
+```bash
+python3 ~/rosy-ml/bin/install_review_release.py <release-id> \
+  --source <accepted-code-directory> --root <project-code-root> \
+  --state <existing-project-state> --python <project-venv>/bin/python \
+  --host 127.0.0.1 --port <project-loopback-port> --service <project-service>.service
+```
+
+`--source`는 링크가 없고 `--root`·`--state` 밖에 있는 폴더여야 한다. 승인된 D-446 릴리스 폴더는 `data` 링크가 있어 그대로 쓰지 못하므로, `data`를 뺀 복사본을 `--root` 밖의 형제 폴더에 만든다([절차](../../docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md#installing-an-accepted-d-446-model-code-release-with-install_review_releasepy)).
+
+협업 readiness는 무자격 `/api/workspace`의 **401**, `/api/accounts/options`의 활성화·프로젝트 ID·중앙 Account 모드 일치, `/accounts`의 **200**을 확인한다. 실패하면 이전 링크와 유닛으로 복구한다. 이 검사는 사용자 로그인·권한·회수나 프록시 TLS 수용을 대신하지 않는다. 실제 자료를 바꾸지 않는 일관 복사 상태의 로그인/권한/회수/브라우저 검사와 공개 HTTPS 확인은 별도 기록한다.
+
+같은 DNS 이름의 서로 다른 HTTPS 포트에서 중앙 Account 프로젝트를 열 수 있다. 세션·Account PKCE·HF OAuth 쿠키는 신뢰 설정의 프로젝트와 공개 origin별 이름을 쓴다. 기존 고정 이름의 중앙 앱 쿠키는 읽지 않으므로 전환 후 한 번 다시 로그인한다. 중앙 Account를 사용하지 않는 기존 모드는 쿠키 이름을 유지한다. 상세 계약은 [Account protocol](../../docs/reference/rosy-account-protocol.md#앱-수신-세션)을 따른다.
 
 ### Account 프로젝트별 설치 (D-757)
 

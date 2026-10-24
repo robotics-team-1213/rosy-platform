@@ -1,4 +1,4 @@
-import { createFleetClient } from "/common/fleet-client.js";
+import { createFleetClient } from "/console/assets/fleet-client.js";
 
 // Field check 2026-10-10: pages that minted a session on every 401 evicted each other's
 // sessions (D-473 keeps eight), so each then minted again. A page tries its stored token

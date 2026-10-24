@@ -77,6 +77,6 @@
 
 - 2026-10-24 · a7aaaed472 · 원래 실행에 한정한 관제 취소와 결과 종단
 - 2026-10-21 · ed405d1ecf · native map client cleanup
-- 2026-10-19 · uncommitted · (origin #92 2026-10-17) map refresh fixture preserves installed energy clock
-- 2026-10-19 · uncommitted · (origin #92 2026-10-17) non-simulation station source evidence
-- 2026-10-19 · uncommitted · (origin #92 2026-10-17) private energy handover naming
+- 2026-10-20 · uncommitted · composed SIM의 기존 readback probe 연결
+- 2026-10-20 · uncommitted · 출발 SIM의 숨겨진 예외 진단
+- 2026-10-20 · uncommitted · return HOLD의 제한된 Trip 상태 관측

@@ -1,6 +1,6 @@
 ﻿// D-683: pages own authority and drafts; this component owns cookie login and verified logout.
 import {actionIcon} from '/common/ui.js';
-import {createFleetClient} from '/common/fleet-client.js';
+import {createFleetClient} from '/console/assets/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
 import {canViewAccountSetup} from '/console/assets/account-permissions.js';
 

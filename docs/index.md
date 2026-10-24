@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-24 · 73fc8b2b09 · 실제 private HF 모델 전달·재적재
-- 2026-10-24 · 73fc8b2b09 · 실제 private HF 데이터 왕복
-- 2026-10-24 · 29d3f2e1d8 · 로봇 없는 충돌 표현 대조
-- 2026-10-24 · e79c1fe0e2 · 실제 SIM 7관절·접촉 진단
-- 2026-10-24 · b2421f9f7b · articulation 최종 source 시각 검증
+- 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
+- 2026-10-24 · uncommitted · Rosy Learning 게시 문서 리뷰 반영
+- 2026-10-24 · uncommitted · 객체·픽셀 검수의 정답 링크가 사진을 밀지 않게 (D-542 §2)
+- 2026-10-24 · c8aa8efc41 · Rosy Learning 정의와 VLM 빠른 판단 문서·도구 게시
+- 2026-10-24 · uncommitted · 검수 bridge state 읽기의 소유자 전용 권한·WAL·정규 경로 강제

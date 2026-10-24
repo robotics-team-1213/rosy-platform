@@ -951,6 +951,7 @@
 - Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
 - Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
 - Gate: Metadata correction only; existing physical and field gates are unchanged.
+
 ## 2026-10-05 · uncommitted · feat(robot): 기존 관리자 화면에서 LAN 연결 승인
 
 - 변경: 정상 /device 보안 절차와 기존 대시보드에 공용 수신 승인 컴포넌트를 연결한다. 요청 이름·4문자 확인값·역할·키와 공용 CA 확인값을 표시하고 명시 승인/거절·연결 기억·처리 결과를 제공한다. 세션/표면 lifetime이 끝나면 늦은 응답과 쓰기를 취소한다.
@@ -1052,11 +1053,13 @@
 - 변경: 실제 CORE 앱 응답의 `/console` 320/390px에서 조작·감지·관측 칸이 같은 폭으로 쌓이는지 브라우저 계약에 추가했다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, `/console`·`/setup`·`/device` 2폭 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: 로봇 역할 셸 LOCAL G2 배치 부분 근거 추가. 실제 CORE/장치 readback과 전체 G2/G3는 HOLD다.
+
 ## 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
 
 - 변경: 전방 카메라의 영상 확대·녹화 중지 행동을 390px에서 같은 폭으로 맞췄다. 320px에서는 공용 칸 반응 규칙에 따라 각각 전폭으로 쌓는다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW. 전체 화면 원본은 X: `captures/robot-camera-equal/`.
 - gate 변화: 로봇 운용 LOCAL 폭 근거 추가. 실제 카메라·장치와 사용자 G3 독회는 HOLD.
+
 ## 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
 
 - 변경: 호환 화면의 개발 연결 버튼에 요청 중·재시도 대기 이유를 붙이고, 활성화 때 지운다. 역할 G2의 목록형 기록은 D-329 규약의 `matrix.json`과 구분해 `role-state-records.json`으로 저장한다.
@@ -1252,6 +1255,7 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+
 ## 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
 
 - Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
@@ -1313,6 +1317,12 @@
 - 변경: 로그인한 사용자의 이름 표시만 긴 단어를 줄바꿈해 이름 전체와 작업 화면 링크가 좁은 화면 안에 남도록 했다.
 - 증거: 시험만 추가한 `c54b7e4246`에서 두 폭 모두 이름 영역이 720px로 늘어나 실패했다. 수정 `ed783cbaf5`의 원격 Chromium 접속 홈 전체 16 passed, NEW 0. 320·390px 캡처를 보존하고 320px에서 전체 이름과 목적지 링크를 확인했다.
 - gate 변화: 없음. 인증·명령 동작과 실제 장치 수용은 변경하지 않는다. CE: 해당 없음 — 원인과 해결이 CSS와 브라우저 회귀 시험에 드러나는 제한된 배치 수정이다.
+
+## 2026-10-22 · 79a11a4a54 · 로봇 콘솔의 모터 상세 연결
+
+- 변경: 같은 출처의 CORE viewer API를 읽고 HTTP 요청 시작부터의 시간을 관측 나이에 반영한다.
+- 증거: 8e8861fc39 원격 UI/D-837 회귀 15 passed/skip0/NEW0에 로봇 화면·전송 지연 회귀 포함.
+- gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
 
 ## 2026-10-23 · uncommitted · 웨이포인트 폼의 공통 오류 설명 적용
 
