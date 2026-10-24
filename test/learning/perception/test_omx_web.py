@@ -189,7 +189,10 @@ def saved_review(tmp_path, root, segments):
     return workspace, row['id'], sent[0]
 
 
-def test_dataset_step_reads_the_latest_saved_review_and_refuses_marked_or_missing(tmp_path, monkeypatch, capsys):
+def test_dataset_step_reads_the_latest_saved_review_read_only_and_refuses_marked_or_missing(
+        tmp_path, monkeypatch, capsys):
+    import os
+    import sqlite3
     import omx_web
     import native_segments
     root = tmp_path/'prepared'
@@ -199,22 +202,31 @@ def test_dataset_step_reads_the_latest_saved_review_and_refuses_marked_or_missin
     segment.update(start_frame=2, end_frame=6, object='cube', intervention=False,
                    outcome='failure', split='exclude', reviewer='person', reason='dropped')
     workspace, identifier, saved = saved_review(tmp_path, root, [segment])
+    other = tmp_path/'other'
+    prepared(other)
+    unsaved = workspace.register(dict(kind='omx', name='unsaved', path=str(other)))['id']
+    empty = tmp_path/'empty.sqlite3'
+    sqlite3.connect(empty).close()
+    before = {db: (db.read_bytes(), os.stat(db).st_mtime_ns) for db in (workspace.db, empty)}
     # omx.js download bytes; the manual path json.loads this file
     downloaded = json.dumps(saved['document'], indent=2, ensure_ascii=False) + '\n'
     calls = []
     monkeypatch.setattr(native_segments, 'export_segments', lambda *args: calls.append(args))
-    omx_web.export_saved(workspace, identifier, tmp_path/'out')
+    omx_web.export_saved(workspace.db, identifier, tmp_path/'out')
     assert calls == [(root, json.loads((root/'inspection.json').read_text()), json.loads(downloaded), tmp_path/'out')]
     monkeypatch.undo()
     (root/'DO_NOT_TRAIN.txt').write_text('leader never moved\n')
     with pytest.raises(SystemExit) as refused:
         omx_web.main(['export-segments', '--db', str(workspace.db), '--id', identifier, '--out', str(tmp_path/'out')])
-    assert refused.value.code == 2 and 'untrainable' in capsys.readouterr().err and not (tmp_path/'out').exists()
-    other = tmp_path/'other'
-    prepared(other)
-    row = workspace.register(dict(kind='omx', name='unsaved', path=str(other)))
+    assert refused.value.code == 2 and 'DO_NOT_TRAIN' in capsys.readouterr().err and not (tmp_path/'out').exists()
     with pytest.raises(ValueError, match='saved segment review required'):
-        omx_web.export_saved(workspace, row['id'], tmp_path/'out')
+        omx_web.export_saved(workspace.db, unsaved, tmp_path/'out')
+    with pytest.raises(ValueError, match='review database'):
+        omx_web.export_saved(empty, identifier, tmp_path/'out')
+    with pytest.raises(OSError):
+        omx_web.export_saved(tmp_path/'missing.sqlite3', identifier, tmp_path/'out')
+    assert not (tmp_path/'missing.sqlite3').exists()
+    assert {db: (db.read_bytes(), os.stat(db).st_mtime_ns) for db in (workspace.db, empty)} == before
 
 
 def test_db_export_is_byte_identical_to_the_downloaded_json_export(tmp_path):

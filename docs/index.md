@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · OMX 데이터셋 단계가 저장된 구간 검수를 DB에서 읽음
 - 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
 - 2026-10-24 · uncommitted · 센터 설치기가 작업 공간 목록 옵션을 유지
 - 2026-10-24 · uncommitted · Rosy Learning 작업 공간 목록 검토 반영
 - 2026-10-24 · uncommitted · Rosy Learning 센터의 작업 공간 목록 (D-857 §2)
-- 2026-10-24 · uncommitted · Rosy Learning #185 후속 검토 반영 (제목 칸 분리·휴대폰 여유·계정 링크 툴팁)

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA
 from native_environment import _events, seal_environment
 from native_review import (JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset,
-                           refuse_untrainable, write_json)
+                           static_episodes, write_json)
 
 SCHEMA = 'rosy.omx-collection-session.v1'
 MAX_TIME_NS = 2**63-1
@@ -426,8 +426,6 @@ def prepare_native(collections, output, repo_id):
     collections = [Path(path).absolute() for path in collections]
     _require(bool(collections) and len({c.name for c in collections}) == len(collections),
              'distinct sealed collections required')
-    for collection in collections:
-        refuse_untrainable(collection/'dataset')
     sealed = [(c, *_sealed_collection(c)) for c in collections]
     sealed.sort(key=lambda row: row[1].get('sealed_ns', 0))
     first = sealed[0][1]
@@ -439,13 +437,20 @@ def prepare_native(collections, output, repo_id):
     for collection, _, _ in sealed:
         _require(not output.resolve().is_relative_to(collection.resolve())
                  and not collection.resolve().is_relative_to(output.resolve()), 'output must be separate from every source')
-    expected, groups = [], []
+    expected, groups, static, thresholds = [], [], [], []
     for collection, manifest, _ in sealed:
-        for episode in _source_episodes(collection/'dataset', 'local/' + manifest['session_id']):
+        episodes = _source_episodes(collection/'dataset', 'local/' + manifest['session_id'])
+        # record_session markers die in the aggregate; carry them over with aggregated indexes.
+        static += [len(expected) + index for index in static_episodes(collection/'dataset', len(episodes))]
+        if (collection/'dataset'/'static_episodes.json').is_file():
+            thresholds.append(json.loads((collection/'dataset'/'static_episodes.json').read_text(encoding='utf-8'))['threshold'])
+        for episode in episodes:
             expected.append(episode['content_sha256'])
             groups.append((manifest['session_id'], f"{manifest['session_id']}-ep{episode['episode_index']:04d}"))
     aggregate_datasets([f"local/{m['session_id']}" for _, m, _ in sealed], repo_id,
                        roots=[c/'dataset' for c, _, _ in sealed], aggr_root=output)
+    if thresholds:
+        write_json(output/'static_episodes.json', dict(episodes=len(expected), static=static, threshold=max(thresholds)))
     for i, (collection, manifest, _) in enumerate(sealed):
         provenance = output/'rosy_provenance'/f'session-{i:06d}'
         provenance.mkdir(parents=True)

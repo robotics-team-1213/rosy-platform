@@ -218,7 +218,7 @@ prepared intake를 만든다. 봉인 manifest와 보정 revision을 다시 해�
 데이터셋 단계는 내려받기 없이 저장된 최신 검수 버전을 DB에서 바로 읽는다(D-857 P0).
 `python learning/curation/perception/omx_web.py export-segments --db <검수 state>/reviews.sqlite3 --id <등록 id> --out <new-segment-splits>`는
 내려받은 JSON을 위 `native_segments.py` CLI에 넣은 것과 같은 바이트를 쓴다. 내려받기는 보관용으로 남는다.
-`DO_NOT_TRAIN.txt`나 `static_episodes.json`이 있는 녹화(리더가 움직이지 않음)는 intake·분할·구간 내보내기에서 모두 거절한다.
+`record_session`이 녹화 dataset root에 남기는 표시를 따른다. `DO_NOT_TRAIN.txt`가 있으면 dataset 전체를 거절한다. `static_episodes.json`에 적힌 episode(리더가 움직이지 않음)만 빼며, intake가 aggregate 번호로 옮겨 적고 `inspection.json`의 `excluded_episodes`에 번호와 이유를 남긴다. 분할·구간 내보내기는 그 episode를 학습에 넣지 않는다. 파일이 깨졌거나 남는 episode가 없으면 전체를 거절한다. 이 규칙 전에 준비한 intake는 봉인 manifest에 표시가 있으면 거절되니 다시 준비한다.
 이 화면은 학습 작업이나 로봇 동작을 시작하지 않는다.
 
 ### 검토한 수집 자료를 학습센터로 가져오기
