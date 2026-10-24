@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contracts/learning/src"))
 from rosy.contracts.learning.action_space import (
     MOTORS, NORM, RAD, ROS, ROS_JOINTS, calibration_sha256, convert, validate_calibration, validate_declaration,
-    ros_declaration, validate_joint_map)
+    arm_identity, ros_declaration, validate_joint_map)
 
 CAL = {m: {"id": i + 11, "homing_offset": 0, "range_min": 1024, "range_max": 3072, "drive_mode": 0}
        for i, m in enumerate(MOTORS)}
@@ -86,7 +86,7 @@ RIG = "omx-cell-s-follower"
 
 
 def verdict(**change):
-    """Shape of joint_map_check.py output (schema 2), as recorded in omx-joint-map-check-2026-10-24."""
+    """Shape of joint_map_check.py output (schema 3), as recorded in omx-joint-map-check-2026-10-24."""
     joints = [dict(motor_id=11 + i, joint=name, homing_offset_raw=0, drive_mode=0, operating_mode=4,
                    reasons=[], holds=True) for i, name in enumerate(ROS_JOINTS)]
     doc = dict(schema="rosy.omx-joint-map-check/3", hypothesis="ros_joint_rad == dynamixel_rad_v1",
@@ -129,8 +129,22 @@ def test_a_verdict_for_another_rig_cannot_open_conversion():
             convert([0.0] * 6, NORM, ROS, CAL, joint_map=verdict(), rig_revision=rig)
 
 
+def test_two_arm_identities_never_share_a_verdict():
+    rig = "omx-cell-dual"
+    assert arm_identity(RIG) == RIG and arm_identity(rig, "arm_a") == "omx-cell-dual/arm_a"
+    arm_a = verdict(arm=arm_identity(rig, "arm_a"))
+    assert convert([0.0] * 6, NORM, ROS, CAL, joint_map=arm_a, rig_revision=arm_identity(rig, "arm_a"))[2] == 1
+    for other in (arm_identity(rig, "arm_b"), rig):
+        with pytest.raises(ValueError):
+            convert([0.0] * 6, NORM, ROS, CAL, joint_map=arm_a, rig_revision=other)
+    for bad in (("", None), ("a/b", None), (rig, "arm_c")):
+        with pytest.raises(ValueError):
+            arm_identity(*bad)
+
+
 def test_another_arm_with_clean_registers_cannot_use_the_verdict():
-    # arm_a/arm_b calibrations on the same PC also have homing 0 and drive 0; only their ranges differ.
+    # A calibration that differs only in range must not reuse the verdict (on the bench all ranges are 0..4095,
+    # so the arm identity check is what separates arm_a and arm_b in practice).
     other_arm = {**CAL, "elbow_flex": {**CAL["elbow_flex"], "range_min": 1000}}
     with pytest.raises(ValueError):
         convert([0.0] * 6, NORM, ROS, other_arm, joint_map=verdict(), rig_revision=RIG)

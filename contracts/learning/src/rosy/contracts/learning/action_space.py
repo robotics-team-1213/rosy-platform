@@ -74,6 +74,21 @@ def validate_declaration(declaration):
     return {k: (list(order) if k == "motor_order" else declaration[k]) for k in keys}
 
 
+def arm_identity(rig_revision, arm=None):
+    """The joint map identity of one follower: the rig revision, plus the arm key in a two-arm layout.
+
+    It is an operator-declared label, not a hardware-proven identity; re-cabling or swapping an arm needs a new
+    rig revision and a new verdict.
+    """
+    if not isinstance(rig_revision, str) or not rig_revision.strip() or "/" in rig_revision:
+        raise ValueError("rig revision required, without '/'")
+    if arm is None:
+        return rig_revision
+    if arm not in ("arm_a", "arm_b"):
+        raise ValueError("two-arm layouts name arm_a or arm_b")
+    return f"{rig_revision}/{arm}"
+
+
 def ros_declaration(calibration, verdict, rig_revision):
     """Declaration for data converted to ros_joint_rad from a recorded arm, after the joint map gate."""
     return {"unit": ROS, "motor_order": list(ROS_JOINTS), "calibration_sha256": calibration_sha256(calibration),
@@ -83,7 +98,8 @@ def ros_declaration(calibration, verdict, rig_revision):
 def validate_joint_map(verdict, calibration, rig_revision):
     """A passing D-864 joint map verdict for this arm and calibration; returns the verdict's revision.
 
-    The verdict's ``arm`` is the rig_revision the arm's datasets are reviewed under and must equal the data's.
+    ``rig_revision`` is the data's ``arm_identity()`` (rig revision, plus the arm key for two-arm data) and must
+    equal the verdict's ``arm``, so one arm's verdict never opens another arm of the same rig.
     Full-range calibrations are identical across arms, so the range digest alone cannot tell arms apart; it still
     must match, and the calibration's own homing offset and drive mode must be zero as found on the motors.
     """
