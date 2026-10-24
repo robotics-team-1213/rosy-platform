@@ -57,6 +57,8 @@ class SimProbeTarget(runner.CoreArmTarget):
 
 def main():
     settings = json.loads(sys.stdin.readline())
+    import torch
+    torch.set_num_threads(settings.get('torch_threads', 2))  # Share the run's CPU quota with Gazebo, CORE and Fleet.
     joints, checkpoint = settings['joint_names'], settings['checkpoint']
     adapter = runner.LeRobotAdapter(checkpoint, 'cuda', joint_names=joints, cameras=list(CAMERA_KEYS.values()),
                                     unit='ros_joint_rad', allowed_types=runner.SIM_PROBE_POLICY_TYPES,

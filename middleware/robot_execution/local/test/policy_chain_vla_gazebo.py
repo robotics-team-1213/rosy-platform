@@ -187,7 +187,19 @@ def scenario(case, out, runtime, rig, controllers, calibration):
         uvicorn.Config(closed_app, log_level='warning', lifespan='off').load()
         fleet.admin('GET', '/api/fleet/workcells/'+cfg.workcell_id+'/policy')
         (out/'preparation-timing.json').write_text(json.dumps(dict(prepared_s=runtime.monotonic()-began)))
-        consumer = FleetLeaseConsumer(scope, request=fleet.device, monotonic=runtime.monotonic)
+        exchanges = []
+        def request(method, path, body=None):
+            began, row = runtime.monotonic(), dict(method=method, path=path)
+            try:
+                return fleet.device(method, path, body)
+            except Exception as error:
+                row['error_type'] = type(error).__name__
+                raise
+            finally:
+                row['elapsed_s'] = runtime.monotonic()-began
+                exchanges.append(row)
+                (out/'exchanges.json').write_text(json.dumps(exchanges, indent=2))
+        consumer = FleetLeaseConsumer(scope, request=request, monotonic=runtime.monotonic)
         journal = PolicyExecutionJournal(out/'execution.sqlite3')
         chain = stack.enter_context(SimPolicyChain(policy=policy, runtime=runtime, fence=fence, consumer=consumer,
             journal=journal, owner_identity=lambda: dict(simulation=True, workcell_id=cfg.workcell_id,
@@ -293,6 +305,13 @@ def main():
     case = parser.parse_args().case
     out = Path(os.environ['OUT']).resolve()
     assert out.is_dir() and os.environ.get('ROS_AUTOMATIC_DISCOVERY_RANGE') == 'LOCALHOST'
+    # As policy_chain_gazebo.py: one BLAS thread per process, so the scope's CPU quota is not oversubscribed
+    # (the lease renewal's short Fleet exchange starved in the 2026-10-25 P0 run without this).
+    os.environ.update({key: '1' for key in ('LP_NUM_THREADS', 'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS')})
+    group = Path('/sys/fs/cgroup')/next(line.removeprefix('0::') for line in
+        Path('/proc/self/cgroup').read_text().splitlines() if line.startswith('0::')).lstrip('/')
+    (out/'cpu-profile.json').write_text(json.dumps(dict(cpu_max=(group/'cpu.max').read_text(),
+        cpu_before=(group/'cpu.stat').read_text())))
     world_file, calibration = vla_world(out)
     env = dict(os.environ, OMX_CELL_WORLD=str(world_file.with_suffix('')), OMX_CELL_LOG_DIR=str(out),
                OMX_CELL_DOMAIN_ID=os.environ['ROS_DOMAIN_ID'])
@@ -331,10 +350,9 @@ def main():
                 drained.set()
             threading.Thread(target=drain, daemon=True).start()
             workers_stopped = drained.wait(5)
-            group = next(line.removeprefix('0::') for line in Path('/proc/self/cgroup').read_text().splitlines()
-                         if line.startswith('0::'))
-            memory_peak = Path('/sys/fs/cgroup')/group.lstrip('/')/'memory.peak'
+            memory_peak = group/'memory.peak'
             (out/'teardown.json').write_text(json.dumps(dict(executor_stopped=stopped, workers_stopped=workers_stopped,
+                cpu_after=(group/'cpu.stat').read_text(),
                 primary_error=repr(errors[0]) if errors else None,
                 memory_peak=memory_peak.read_text().strip() if memory_peak.exists() else None), indent=2))
             assert stopped and workers_stopped, 'own executor/workers did not drain'
