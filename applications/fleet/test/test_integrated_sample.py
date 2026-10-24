@@ -69,14 +69,15 @@ def test_child_stop_is_one_shot_and_foreign_or_stale_fences_cannot_mutate_anothe
     assert call(engine, 'GET', PREFIX + '/stops/R/child%3Astop') == (200, snapshot)
     assert engine.control_units.controls == generations
     assert call(engine, 'POST', PREFIX + '/stops', body | {'target_unit': 'B'})[0] == 409
-    assert call(engine, 'POST', PREFIX + '/stops', body | {'stop_id': 'stale-stop'})[0] == 409
+    code, stale = call(engine, 'POST', PREFIX + '/stops', body | {'stop_id': 'stale-stop'})
+    assert code == 200 and all(row['state'] == 'STALE_FENCE' for row in stale['results'])
     foreign = stop_request(engine, 'foreign-stop', 'A')
     foreign['expected_controls']['B'] = engine.control_units.fence('B')
     assert call(engine, 'POST', PREFIX + '/stops', foreign)[0] == 409
     bad = stop_request(engine, 'bad-stop', 'A')
     bad['expected_controls']['A']['generation'] = True
     assert call(engine, 'POST', PREFIX + '/stops', bad)[0] == 422
-    assert len(engine.control_units.stops) == 1 and engine.control_units.controls == generations
+    assert len(engine.control_units.stops) == 2 and engine.control_units.controls == generations
 
 
 def test_local_unknown_needs_explicit_attestation_and_never_becomes_physical_stop_proof():
@@ -137,3 +138,56 @@ def test_invalid_source_map_is_rejected_instead_of_becoming_an_integrated_geomet
     assert call(engine, 'GET', PREFIX + '/units/R/map')[0] == 422
     engine.spatial.active['map']['places'][0]['x'] = float('nan')
     assert call(engine, 'GET', PREFIX + '/units/R/map')[0] == 422
+
+
+@pytest.mark.parametrize('stale_unit', ['R', 'A', 'A1', 'B'])
+def test_stale_unit_preserves_its_fence_while_fresh_units_still_receive_stop(stale_unit):
+    engine = signed_in()
+    body = stop_request(engine, 'mixed-stale-stop')
+    before = {unit: engine.control_units.fence(unit) for unit in ('R', 'A', 'A1', 'B')}
+    local_before = deepcopy(engine.work.dispatch)
+    body['expected_controls'][stale_unit]['generation'] -= 1
+    code, snapshot = call(engine, 'POST', PREFIX + '/stops', body)
+    assert code == 200
+    results = {row['unit_id']: row for row in snapshot['results']}
+    assert set(results) == set(before)
+    assert results[stale_unit]['state'] == 'STALE_FENCE'
+    assert results[stale_unit]['dispatch'] == before[stale_unit]
+    assert engine.control_units.fence(stale_unit) == before[stale_unit]
+    if stale_unit == 'R':
+        assert engine.work.dispatch == local_before
+    for unit in before.keys() - {stale_unit}:
+        assert results[unit]['state'] == ('UNKNOWN' if unit == 'R' else 'ACKNOWLEDGED')
+        assert engine.control_units.fence(unit)['generation'] == before[unit]['generation'] + 1
+    assert all(row['physical_stop'] == 'UNVERIFIED' for row in results.values())
+    after = {unit: engine.control_units.fence(unit) for unit in before}
+    assert call(engine, 'GET', PREFIX + '/stops/R/mixed-stale-stop') == (200, snapshot)
+    assert call(engine, 'POST', PREFIX + '/stops', body) == (200, snapshot)
+    assert {unit: engine.control_units.fence(unit) for unit in before} == after
+
+
+@pytest.mark.parametrize('target', ['R', 'A'])
+def test_successful_stop_results_report_the_post_latch_fence(target):
+    engine = signed_in()
+    body = stop_request(engine, 'post-latch-stop', target)
+    code, snapshot = call(engine, 'POST', PREFIX + '/stops', body)
+    assert code == 200
+    for row in snapshot['results']:
+        expected = body['expected_controls'][row['unit_id']]
+        assert row['dispatch'] == engine.control_units.fence(row['unit_id'])
+        assert row['dispatch']['generation'] == expected['generation'] + 1
+        assert row['dispatch']['authority_epoch'] == expected['authority_epoch']
+
+
+def test_hold_task_remains_in_the_owned_active_task_count():
+    engine = signed_in()
+    code, receipt = call(engine, 'POST', '/api/fleet/robots/sample-robot/goal', {'x': 1, 'y': 2, 'yaw': 0},
+                         {'idempotency-key': 'held-integrated-task'})
+    assert code == 200
+    task_id = receipt['task']['task_id']
+    engine.work.tasks[task_id]['status'] = 'HOLD'
+    overview = call(engine, 'GET', PREFIX + '/overview')[1]
+    counts = {row['unit_id']: row['tasks_active'] for row in overview['units']}
+    assert counts == {'R': 1, 'A': 0, 'A1': 0, 'B': 0}
+    detail = call(engine, 'GET', PREFIX + '/units/R')[1]
+    assert [(row['task_id'], row['status']) for row in detail['tasks']] == [(task_id, 'HOLD')]

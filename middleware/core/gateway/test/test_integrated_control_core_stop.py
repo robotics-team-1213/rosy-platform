@@ -42,7 +42,7 @@ def test_typed_stop_reaches_core_without_claiming_physical_stop(core_client, mon
             return response
 
     async def exercise():
-        async with httpx.AsyncClient(transport=Network()) as http:
+        async with httpx.AsyncClient(transport=Network(), base_url="http://core.invalid") as http:
             endpoint = RobotEndpoint("a1", "http://core.invalid", "rosy-dev-operator")
             console = FleetConsole([endpoint], [HttpRobotClient(endpoint, http=http)])
             tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"a1"})
