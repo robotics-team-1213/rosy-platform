@@ -10403,10 +10403,19 @@ osy-d395-s1d\`.
 - 변경: 첫 FULL의7실패와 원본27개 invocation을 별도 동결 기록에 보존했다. 문서 소유·공개 safety anchor·obsolete small 예외·exact provenance·공유 UI를 보완했다. land 격리 실행을 원래 tested SHA에 고정하고 HEAD 이동·불완전 결과는 통과 기록 전에 거절한다.
 - 증거: source42e079ef48은 통과가 아니다. 수정 후 문서 경계3건·구조/안전/비밀72건·공유 입력1건은 NEW0이며 source6a06333e92의 land 전체85건은 SKIP0·NEW0이다. 추가 격리 중 분류 목록 경합을 RED1건으로 재현했고 최종 source016f49d427의 land 전체86건은 SKIP0·NEW0이다. 교차 SHA로 잘못 생성된 자체 LOAD-FLAKY 후보3건은 원본 보존 후 무효화했다. 최종 공식 재검사·착지는 다음 단계다.
 - gate 변화: 통과 기준·known failures·quarantine·시간 기준을 낮추지 않았다. CE 해당 없음 — source 결속과 거절 조건이 명시 회귀·도구·동결 근거에 직접 남는다.
+
 ## 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
 
 - 변경: ADR D-865(정책 승인 — 승인 범위 안 작업 자동 승인, Proposed), [실행 설계](plans/2026-10-25-fleet-policy-admission-design.md), [업무 앱 지원 계약](reference/application-contract-support.md)에 Harbor 용어 대응표·승인 권한 소유 절 추가, ADR Log 행.
 - 증거: 미실행 — 문서 변경. lint·generate는 커밋 전 실행으로 확인. 방향 확정 근거: 사용자 2026-10-25(자동 승인 주체 Fleet 정책, Harbor 제안만). Harbor 쪽 대응 ADR은 팀 저장소 PR(robotics-team-1213/harborlogi#2).
 - gate 변화: 없음. 구현·활성화·현장 수용은 D-865 실행 계획 P1~P5의 별도 단계다.
 - 결정: D-865 Proposed.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
+
+- 변경: [FLEET SRS](spec/ROSY FLEET SRS.md)에 MSN-008(정책 승인, D-865 설계 단계) 신설, MSN-006·MSN-007·UI-WORK-001에 정책 승인 관계 문장 추가, D-865 실행 설계 P0 상태 표시.
+- 증거: 미실행 — 요구사항 문서 변경. lint·generate는 커밋 전 실행으로 확인. 근거: D-865(Proposed, main 착지)와 사용자 2026-10-25 방향 확정.
+- gate 변화: 없음. 설계 단계 표기이며 구현·활성화가 아니다.
+- 결정: D-865 P0 산출물.
 - 교훈: 없음

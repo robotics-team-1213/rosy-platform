@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
 - 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
 - 2026-10-25 · uncommitted · FULL 등록 누락과 교차 SHA 격리 판정 보완
 - 2026-10-25 · uncommitted · 통합관제 실제 HTTP·브라우저 집중 수용 근거
 - 2026-10-25 · uncommitted · 관제 역할·직계 네트워크·수용 목표 구현 현황 반영
-- 2026-10-25 · uncommitted · D-862 실제 통합관제 구현과 수용 경계 연결
