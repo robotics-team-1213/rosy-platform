@@ -10366,3 +10366,9 @@ osy-d395-s1d\`.
 - 변경: [HF 검증 기록](validation/omx-hf-private-roundtrip-2026-10-24/result.md)과 [읽기 전용 복구 교훈](solutions/workflow-issues/hf-readback-resume-keeps-commit-and-short-fetch-path-2026-10-24.md)을 추가했다.
 - 증거: 실제 private commit, payload/readback 각각1613파일 SHA 일치, LeRobot1587 SIM프레임, 원격·회수 EXIT0 및 잠금 해제. 독립 검토2건이 전체 파일을 재검사했다.
 - gate 변화: 실제 HF 데이터 전달 수용. 정책 HOLD·모델 Hub 전달·양팔/실물/주행 수용은 별도다. CE 새 교훈 기록; 코드·공유 SDK 변경 없음.
+
+## 2026-10-24 · 73fc8b2b09 · 실제 private HF 모델 전달·재적재
+
+- 변경: [모델 왕복 기록](validation/omx-hf-model-roundtrip-2026-10-24/result.md)과 [교차 플랫폼 byte 결속 교훈](solutions/workflow-issues/cross-platform-manifest-pins-must-separate-payload-from-serialization-2026-10-24.md)을 추가했다.
+- 증거: private Hub 고정 commit의6파일 SHA, fresh-process ACTInference 숫자 출력1회, 원래 fixture/정규화/출력 일치, 원격·회수 EXIT0·잠금 해제. 두 pre-write 중단과 미제출 요청도 보존했다.
+- gate 변화: 실제 모델 전달·숫자 재적재 수용. 정책 task 성공·실물/양팔/주행·서비스 배포는 별도다. CE 새 교훈 기록; 추가 학습·로봇 명령 없음.
