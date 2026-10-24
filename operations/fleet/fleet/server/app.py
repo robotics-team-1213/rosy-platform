@@ -383,7 +383,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         job_task = asyncio.create_task(app.state.job_trips.run()) if getattr(app.state, "job_trips", None) else None
         if task_service is not None and start_task_dispatcher:
             dispatcher = asyncio.create_task(
-                task_dispatch_loop(console, task_service, drive_cancel))
+                _task_dispatch_loop(console, task_service, drive_cancel))
         if proposal_store is not None:
             proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store, _LOG))
         if mission_dispatcher is not None:
