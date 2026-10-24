@@ -1,6 +1,12 @@
 # Synthetic three-level example. Copy to approved private deployment configuration.
 # Each instance keeps its own DB, roster, users and service credentials.
+# CLI: --control-unit-config <private-config>; ROSY_CONTROL_UNIT_CONFIG is the optional default.
+# Incoming control-unit:A service digest belongs in --users-file. Its token must differ
+# from this instance's outgoing token, every other incoming token, and device/UI tokens.
 unit_id: A1
+share_information_with_parent: false
+accept_parent_stop: false
+tls_ca_file: certs/control-peers-ca.pem
 manifest:
   revision: example-v1
   units:

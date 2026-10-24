@@ -105,6 +105,28 @@ def cancel_pending_task_queue(task_service, console, robot_id: Optional[str] = N
     console.discard_task_queue_entries(set(canceled))
 
 
+async def execute_local_fleet_stop(*, console, task_service, configured_omx,
+                                  stop_transport, stop_control, actor_id):
+    local_stop_task = asyncio.to_thread(
+        fanout_local_omx_stops, configured_omx, stop_transport, stop_control,
+        reason="FLEET_ESTOP",
+    )
+    outcomes = await asyncio.gather(console.estop_all(), local_stop_task, return_exceptions=True)
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
+    result, local_stop = outcomes
+    try:
+        cancel_pending_task_queue(task_service, console, actor_id=actor_id)
+    except Exception:
+        _LOG.exception("emergency stop queue cleanup unavailable principal=%s", actor_id)
+    result = dict(result)
+    result["omx_local_stop"] = local_stop
+    if stop_control is not None:
+        result["fleet_dispatch_control"] = stop_control
+    return result
+
+
 def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
@@ -292,21 +314,6 @@ def install_task_dispatch_routes(
                     stop_control = task_service.store.dispatch_control()
                 except Exception:
                     _LOG.exception("emergency stop dispatch readback unavailable")
-        local_stop_task = asyncio.to_thread(
-            fanout_local_omx_stops, configured_omx, stop_transport, stop_control,
-            reason="FLEET_ESTOP",
-        )
-        result, local_stop = await asyncio.gather(console.estop_all(), local_stop_task)
-        try:
-            cancel_pending_task_queue(task_service, console,
-                                      actor_id=principal.principal_id)
-        except Exception:
-            _LOG.exception(
-                "emergency stop queue cleanup unavailable principal=%s",
-                principal.principal_id,
-            )
-        result = dict(result)
-        result["omx_local_stop"] = local_stop
-        if stop_control is not None:
-            result["fleet_dispatch_control"] = stop_control
-        return result
+        return await execute_local_fleet_stop(
+            console=console, task_service=task_service, configured_omx=configured_omx,
+            stop_transport=stop_transport, stop_control=stop_control, actor_id=principal.principal_id)

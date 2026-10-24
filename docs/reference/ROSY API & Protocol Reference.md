@@ -5,10 +5,19 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.313
+**Version:** v1.314
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
+### v1.314 정책 승인 범위 readback·전환·감사 (D-865)
+
+[D-865](../adr/D-865-fleet-policy-admission.md)의 additive wire 계약이다. 정의는 `protocol/policy_admission.py`, canonical export는 `core_common.protocol.schemas`다. 승인(admit) 권한은 Fleet이 소유하며 업무 앱은 이 경로를 쓰지 않는다. 이 계약 등록은 구현·활성화·현장 수용 완료를 뜻하지 않는다.
+
+모든 경로는 `/api/fleet/policy-admission` 아래다. `GET /`는 viewer가 `PolicyAdmissionReadResponse`를 읽는다. scope는 사람이 정한 승인 범위로 `enabled`·`robots`(최대 32, 중복 금지)·`step_approval_kinds`(v1은 `one_person`만)·`max_admits`(1 이상)·`valid_until`·`scope_revision`을 담는다. 활성 scope는 로봇·승인 종류를 최소 하나씩 명시해야 하고, 비활성 scope는 빈 목록과 `admits_remaining` 0으로 닫힌다. 상한 소진·만료는 초기화하지 않고 `reason`으로 구분해 남긴다.
+
+`POST /`는 기명 운영자의 `PolicyAdmissionToggleRequest`(`enabled`)만 받는다. 전환은 스위치만 바꾸고 범위 내용(로봇·종류·상한)은 사이트 설정만 정한다. 해제는 새 자동 승인만 막고 진행 중 lease·claim을 소급 해제하지 않는다. `GET /audit`는 viewer가 최근 감사 항목(최대 100, `cursor`)을 읽는다. 항목은 `mission_id`·`decided_at`·`principal`(`fleet-policy-admission`)·`scope_revision`·`outcome`(ADMITTED/HELD)·`generation`·`reason`이며 사람 승인 행위와 구분해 기록한다.
+
+자동 승인은 사람 승인과 같은 admission 검사(승인 등록부·정지 세대·자원·전송 직전 재검사)를 전부 통과한 뒤에만 되고 규칙집 law(FL-*)는 이 경로로 해제하지 않는다. bad credentials 401, 권한 거절 403, malformed 422, 저장소 실패 503이며 부분 실패를 성공으로 덮지 않는다.
 ### v1.313 통합관제 정보와 관제별 정지 요청 (D-862)
 
 [D-862](../adr/D-862-integrated-control-information-and-stop-requests.md)의 additive wire 계약이다. canonical export는 `core_common.protocol.schemas`, 정의는 `protocol/integrated_control.py`다. Envelope protocol_version은1.0이다. 이 계약 등록은 runtime·배포·장치·현장 수용 완료를 뜻하지 않는다.
@@ -21,7 +30,7 @@ ControlUnitDetail은 같은 owner/config/availability/time와 직접 `robots` �
 
 ControlMapRef는 `map_id,version,frame:unit_local`이며 version>=1이다. map ID는 기존 SiteMap의 `[A-Za-z0-9_.-]{1,64}`, place/lane ID는 같은 문자 집합1–32자를 사용한다. ControlMapSnapshot은 `unit_id,config_revision,map,places,lanes`이고 place는 id/label/x/y, lane은 id/points(x/y)만 포함한다. 최대500 places·1000 lanes·전체20000 points·2MiB다. 관제·map ID·version을 함께 표시하고 근거 없는 관제 간 좌표 overlay를 하지 않는다. survey·승인자·증거 metadata는 전송하지 않는다.
 
-`POST /stops`는 로컬 기명 운영자의 ControlStopRequest(`stop_id,target_unit,config_revision,expected_controls`)를 받는다. expected_controls는 대상 unit별 ControlDispatchFence(authority_epoch/generation>=0)이며1–64개다. `POST /stop-inbox`는 직계 부모 service의 ControlStopIngress(같은 필드+origin_id)만 받으며 명시적 accept_parent_stop과 ancestor/target 범위를 검증한다. 서버가 actor를 정하고 caller actor/URL/token 필드는 거절한다. identity는 origin+stop_id, 본문/fence는 immutable이다. 같은 SQLite transaction에서 journal·expected fence·기존 latch를 결속하고 같은 요청을 다시 실행하지 않는다. 지연된 과거 generation, 본문 충돌, 구성 변경은409다.
+`POST /stops`는 로컬 기명 운영자의 ControlStopRequest(`stop_id,target_unit,config_revision,expected_controls`)를 받는다. expected_controls는 대상 unit별 ControlDispatchFence(authority_epoch/generation>=0)이며1–64개다. `POST /stop-inbox`는 직계 부모 service의 ControlStopIngress(같은 필드+origin_id)만 받으며 명시적 accept_parent_stop과 ancestor/target 범위를 검증한다. 서버가 actor를 정하고 caller actor/URL/token 필드는 거절한다. identity는 origin+stop_id, 본문/fence는 immutable이다. 같은 SQLite transaction에서 journal·expected fence·기존 latch를 결속하고 같은 요청을 다시 실행하지 않는다. 본문 충돌·구성 변경은409다. 관제별 과거 fence는 STALE_FENCE 결과와 해당 관제의 미실행으로 보존하며, 독립된 최신 fence의 관제는 계속 처리한다. 결과 dispatch는 관제의 처리 시점 fence이며 로컬 latch를 소비했다면 소비 후 generation이다.
 
 `GET /stops/{origin}/{stop_id}`는 ControlStopSnapshot(`unit_id,origin_id,stop_id,target_unit,config_revision,results,revision`)이다. 결과 unit 최대64개·중복 금지이며 PENDING/SENDING/ACKNOWLEDGED/PARTIAL/UNKNOWN/STALE_FENCE/NOT_REACHED/SUPERSEDED_BY_OPERATOR_RECOMMISSIONING, 원래 dispatch fence, acknowledged_robots/unknown_robots, OMX 응답 상태, 제한된 오류 code를 보존한다. physical_stop은 UNVERIFIED로 고정한다. HTTP200·stopped:true·LOCAL_LATCHED를 물리 정지 증거로 바꾸지 않는다. polling·재시작은 stop을 자동 POST하지 않는다. 활성 send/불확실성은 기존 rearm transaction에서 거절한다.
 
@@ -32,6 +41,10 @@ ControlMapRef는 `map_id,version,frame:unit_local`이며 version>=1이다. map I
 typed 정지는 journal/fence를 확보하지 못하면 새 fanout 없이503 JOURNAL_UNAVAILABLE/UNKNOWN이다. 기존 `/api/fleet/estop`의 새 로컬 사람 긴급 정지는 DB 장애에도 원래 best-effort fanout을 유지한다. bad credentials401, 범위/권한 거절403, 없는 unit/map/record404, revision/identity/fence 충돌409, malformed422, 저장소/producer/transport 실패503이며 부분 연결 실패를 전체 성공으로 덮지 않는다. peer CA는 명시 tls_ca_file로 연결하고 hostname/체인 검증·redirect 거절·환경 proxy 미사용을 유지한다.
 
 정지 body의 불변성은 관제별 최초 배정 projection을 기준으로 한다. origin/stop/config는 유지하되 target이 자기이면 자식 target과 해당 subtree fence로 제한하고, 더 깊은 target이면 next hop으로 중계한다. 최초 child target/fence를 저장한 뒤 재시도·조회에서 바꾸지 않으며 자식 응답도 그 범위로 검증한다. 빈 fence projection에는 POST하지 않고 미전달/미확인으로 남긴다. sibling fence/결과를 다른 자식에게 공개하지 않는다.
+
+`control-unit:<이웃>` service 자격은 모든 method에서 정확한 이 namespace로 제한한다. 일반 Task/state/work/proposal API를 통한 원장·개인 metadata 접근은 거절한다. 일반 service와 사람의 기존 권한은 유지한다. 송신 토큰은 이웃별로 고유하며 로컬 수신·Console·로봇 REST·CORE Agent pairing 토큰과 재사용하지 않는다. peer는 명시 CA·hostname 검증을 유지하고 identity encoding만 받으며 전체 요청3초·기존 byte 상한을 적용한다.
+
+typed stop의 직접 장치는 실제 Console roster와 manifest `robot:` 목록을 대조한다. configured OMX workcell은 local `workcell:<id>`, 신호등은 local `signal:<id>` 소유여야 하며 누락·타 관제 소유는 시작 시 거절한다. `signal:`은 topology 소유 표기만 정의한다. 조건부 journal 실패에는 새 fanout을 하지 않으며, 로컬 E-stop의 기존 best-effort 처리는 유지한다. owned claim/send/reconciliation의 실제 thread 종료 전에는 재시운전 확인과 shutdown drain을 완료로 처리하지 않는다.
 ### v1.311 Device network recovery jobs (D-863)
 
 CORE keeps administrator authentication and explicit `confirmed: true` for
@@ -3683,6 +3696,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.314 | 2026-10-25 | D-865: policy admission scope readback/toggle and bounded audit under `/api/fleet/policy-admission`; Fleet owns admission, the human-defined scope never relaxes rulebook law, and apps never self-approve. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
 | v1.313 | 2026-10-24 | D-862: bounded owner-scoped control-unit information/maps, immutable subtree stop assignments and local uncertainty reconciliation; explicit parent sharing/stop consent and peer CA. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
 | v1.310 | 2026-10-24 | Additive (D-854, feat/arm-policy-cameras): CORE arm policy `cameras` list (1..N installed cameras, installed order) on `/policy` and `/observations`; one-camera policies keep `camera`. Each observation camera adds `received_at_ns` and `frame_sha256`. All frames bind the action; owner freshness and causality checks apply per camera. Default unbound, SIM-only. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |

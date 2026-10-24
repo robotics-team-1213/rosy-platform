@@ -18,6 +18,8 @@ Isaac 버전은 D-434 §3이 정한 5.1이다(D-322 개정 완료). D-434 §3이
 - 두 GPU PC는 모두 RTX 5080 16GB다. 2026-10-24~25에 `nvidia-smi`로 본 사용량은 모델 PC 약 0.4GB, AI PC 약 10GB(ollama 등)였다. AI PC 지연 재측정에서는 전처리가 1차보다 느렸고, 기록은 원인을 CPU 공유 부하로 추정했다(`docs/validation/policy-latency-smolvla-2026-10-24b/`, 원인 미확인).
 - D-516은 모델 PC를 학습·평가, AI PC를 승인된 추론으로만 나눴다. 한 PC로는 Isaac 구축, 데이터 생산, 학습, 평가가 줄을 서서 늦어진다.
 
+**정정 (2026-10-25):** Context 첫 항목의 "top·front 카메라"는 틀렸다. 설치된 Gazebo world의 카메라는 작업대 카메라 1대(`workcell_camera`)다. D-866 P0 시험(`policy_chain_vla_gazebo.py`)이 이 카메라를 복제해 top 카메라를 덧붙이고 두 대로 실행한다.
+
 ### Decision
 
 #### 1. 시뮬레이터 역할
