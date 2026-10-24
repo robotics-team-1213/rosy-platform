@@ -74,8 +74,19 @@ def wrist_box(img, profile) -> dict:
     """The box in the wrist camera: centre (px) and area (bigger = closer)."""
     import cv2
 
+    import numpy as np
+
     spec = profile["wrist_box"]
-    mask = cv2.inRange(cv2.cvtColor(img, cv2.COLOR_BGR2HSV), tuple(spec["hsv_min"]), tuple(spec["hsv_max"]))
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, tuple(spec["hsv_min"]), tuple(spec["hsv_max"]))
+    shade = spec.get("shade")
+    if shade:  # in the arm's shadow the brown box reads dark mauve: low saturation, green below red and blue
+        b, g, r = (c.astype(int) for c in cv2.split(img))
+        s, v = hsv[..., 1].astype(int), hsv[..., 2].astype(int)
+        dark = ((s >= shade["s"][0]) & (s <= shade["s"][1]) & (v >= shade["v"][0]) & (v <= shade["v"][1])
+                & (g < r - shade["green_below_red"]) & (g < b - shade["green_below_blue"]))
+        mask = cv2.bitwise_or(mask, (dark * 255).astype(np.uint8))
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
     found = _largest(mask, spec.get("min_area", 300))
     if found is None:
         return {"found": False}
