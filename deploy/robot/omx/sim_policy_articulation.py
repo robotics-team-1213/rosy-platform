@@ -13,12 +13,11 @@ class ArticulationCapture:
         self.clock=clock;self.samples=[];self.closed=False;self.invalid=0;self.truncated=False
         self.messages=0;self.first_error=None;self.first_received=None;self.last_received=None
         self.last_source=None;self.latest_advance=None;self.maximum_gap=0
+        self.first_positive_stored=None;self.stored_advance=False
 
     @property
     def ready(self):
-        return (not self.invalid and not self.truncated and len(self.samples)>=2
-            and self.samples[0]['ros_stamp_ns']>0
-            and self.samples[-1]['ros_stamp_ns']>self.samples[0]['ros_stamp_ns'])
+        return not self.invalid and not self.truncated and self.stored_advance
 
     def status(self):
         return dict(schema=SCHEMA,ready=self.ready,invalid_messages=self.invalid,truncated=self.truncated,
@@ -48,6 +47,9 @@ class ArticulationCapture:
             # Validate every message before limiting stored samples.
             if self.samples and received-self.samples[-1]['received_owner_ns']<SAMPLE_PERIOD_NS:return
             if len(self.samples)>=MAX_SAMPLES:self.truncated=True;return
+            if stamp>0:
+                if self.first_positive_stored is None:self.first_positive_stored=stamp
+                elif stamp>self.first_positive_stored:self.stored_advance=True
             self.samples.append(dict(joint_names=names,positions=positions,velocities=velocities,
                 ros_stamp_ns=stamp,frame_id=frame,received_owner_ns=received))
         except Exception as error:

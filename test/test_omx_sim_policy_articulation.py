@@ -73,6 +73,14 @@ def test_frozen_source_does_not_refresh_progress_receipt():
     assert not fresh.ready
 
 
+def test_zero_time_warmup_requires_two_subsequent_positive_stored_stamps():
+    clock=[10.];trace=module().ArticulationCapture(clock=lambda:clock[0])
+    trace.observe(message(0));clock[0]=10.02;trace.observe(message())
+    assert not trace.ready
+    clock[0]=10.04;trace.observe(message(1_020_000_000))
+    assert trace.ready
+
+
 def test_storage_limit_marks_capture_incomplete(monkeypatch):
     m=module();monkeypatch.setattr(m,'MAX_SAMPLES',2)
     trace,clock=ready_trace();clock[0]=10.04;trace.observe(message(1_040_000_000))
@@ -113,3 +121,34 @@ def test_joint_artifact_is_required_when_closing_policy_diagnostic(tmp_path,faul
     report,clean=job.close_contact_diagnostic(observer,NS(close=lambda:True),tmp_path,articulation=True)
     assert clean and report['verified']==(fault=='none')
     if fault=='none':assert len(report['articulation']['sha256'])==64
+
+
+def test_stream_lost_during_homing_prevents_actual_policy_start(tmp_path,monkeypatch):
+    job=importlib.import_module('sim_pick_place_policy_job');events=[];directory=tmp_path/'episode'
+    def home_wait(**_):
+        receipt=dict(success=True,purpose='startup_home_only',owner_final=dict(active_goal=None,owner_state='ready'))
+        (directory/'startup/teacher-result.json').write_text(json.dumps(receipt))
+        events.append('home-exited');return 0
+    class Children:
+        def __init__(self,*_):pass
+        def start(self,name,*_,**kwargs):
+            events.append(name)
+            return NS(wait=home_wait,poll=lambda:None)
+        def assert_alive(self):pass
+    def require(_):
+        events.append('freshness-check')
+        if 'home-exited' in events:raise ValueError('articulation capture not clean and fresh')
+    monkeypatch.setattr(job,'Children',Children)
+    monkeypatch.setattr(job,'isolation_guard',lambda *_:None)
+    monkeypatch.setattr(job,'camera_world',lambda *_:{})
+    monkeypatch.setattr(job,'contact_world',lambda *_:dict(derived_sha256='fixture'))
+    monkeypatch.setattr(job,'controller_readiness',lambda **_:None)
+    monkeypatch.setattr(job,'wait_contacts',lambda *_:None)
+    monkeypatch.setattr(job,'wait_articulation',lambda *_:None)
+    monkeypatch.setattr(job,'require_articulation',require)
+    monkeypatch.setattr(job,'close_contact_diagnostic',lambda *_,**__: (dict(verified=True),True))
+    assert job.run(directory,contacts=True)==1
+    assert events.count('freshness-check')==2 and 'policy' not in events
+    assert events.index('freshness-check')<events.index('startup-home')<events.index('home-exited')
+    result=json.loads((directory/'result.json').read_text())
+    assert result['result']=='HOLD' and 'not clean and fresh' in result['error']
