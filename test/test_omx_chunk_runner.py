@@ -102,6 +102,17 @@ def test_a_relative_chunk_keeps_the_judges_correction_and_a_huge_one_is_refused(
     assert out[1]["ok"] is False and "exceeds" in out[1]["error"]
 
 
+def test_a_coordinated_jog_moves_its_joints_together_or_not_at_all():
+    robot = Robot()
+    runner(robot, ["jog shoulder_lift.pos 3 elbow_flex.pos -3 wrist_flex.pos 2", "stop"])
+    assert robot.pos[1:4] == [-57.0, 47.0, 47.0]
+    robot = Robot()
+    status = runner(robot, ["jog shoulder_lift.pos 3 elbow_flex.pos -9", "jog shoulder_lift.pos 1 shoulder_lift.pos 1",
+                            "stop"])
+    assert [s["ok"] for s in status[1:3]] == [False, False]
+    assert robot.pos == HOME  # the valid lift step was not applied alone
+
+
 def test_a_small_jog_and_grip_move_only_their_joint():
     robot = Robot()
     runner(robot, ["jog wrist_flex.pos -4", "grip 55", "stop"])
