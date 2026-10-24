@@ -9639,3 +9639,9 @@ osy-d395-s1d\`.
 - 변경: `deploy/model_pc/install_review_release.py`가 state 옆 `workspace-links.json`이 있고 대상 앱이 `--workspace-links`를 지원하면 ExecStart에 붙이고, 지원하지 않는 예전 릴리스로 되돌릴 때는 뺀다(`--omx-center-config`와 같은 방식). `test/test_model_review_release.py` 왕복 시험에 추가.
 - 증거: 원격 시험(아래 PR). 이 옵션이 없으면 센터를 설치할 때마다 작업 공간 목록(#190)이 빠진다.
 - gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
+
+- 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
+- 증거: 원격 시험(아래 PR).
+- gate 변화: 없음.
