@@ -24,6 +24,8 @@ def install_physical_observer_routes(app, *, service, task_store, job_view, requ
         return service
 
     def authenticate(request: Request, x_physical_observation_token: str | None = Header(default=None)):
+        if not x_physical_observation_token:
+            raise HTTPException(401, detail={"code": "ARM_TRANSFER_OBSERVER_UNAUTHORIZED"})
         current = installed()
         if not current.observer.authenticates(x_physical_observation_token, now=time.time()):
             raise HTTPException(401, detail={"code": "ARM_TRANSFER_OBSERVER_UNAUTHORIZED"})

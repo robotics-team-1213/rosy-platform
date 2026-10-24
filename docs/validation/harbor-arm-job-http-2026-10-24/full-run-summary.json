@@ -1,6 +1,6 @@
 {
   "source_commit": "58f7cc7b14272115a7f9be790839c35d935b55ac",
-  "baseline": "958d27562836e56743ba0d8eed421d0c8d53df6c",
+  "baseline_commit": "958d27562836e56743ba0d8eed421d0c8d53df6c",
   "runner_exit": 0,
   "selection_mode": "full",
   "invocation_count": 23,

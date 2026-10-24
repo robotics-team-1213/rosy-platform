@@ -10,8 +10,8 @@ LF-normalized SHA256:
 
 | Source | SHA256 |
 | --- | --- |
-| operations/fleet/fleet/server/app.py | 8dec3a7fa36629d48e33cf0260692d6937455a43a76cb10aff75080c7d1aa754 |
-| operations/fleet/fleet/server/ledger/task_dispatch_routes.py | ebc4d1520b6d197d7b68143d4aaff7944311f5d7f5c9218ba6b9fca86507a22f |
-| operations/fleet/fleet/server/work/physical_transfer_stop_targets.py | 273730ddc728b9935decbda20f53e1ca2eba0f49f9ea0559fb172288e86ee52e |
+| operations/fleet/fleet/server/app.py | sha256: 8dec3a7fa36629d48e33cf0260692d6937455a43a76cb10aff75080c7d1aa754 |
+| operations/fleet/fleet/server/ledger/task_dispatch_routes.py | sha256: ebc4d1520b6d197d7b68143d4aaff7944311f5d7f5c9218ba6b9fca86507a22f |
+| operations/fleet/fleet/server/work/physical_transfer_stop_targets.py | sha256: 273730ddc728b9935decbda20f53e1ca2eba0f49f9ea0559fb172288e86ee52e |
 
 The safety-tagged task_dispatch_routes change uses this record in its commit Safety-Review trailer. The app shrank from905 to902 lines and its ratchet is lowered in the same commit. The preceding committed regression source0174 produced7 NEW failures; it is a RED baseline, not successful verification. Fixed-source remote results belong in result.md. No robot, deployment, push or merge was performed for this review. CE: 해당 없음 — this is a read-only review record.

@@ -51,7 +51,7 @@ pytest는 모두 공식 remote runner로 각 committed SHA에서 실행했다. �
 
 독립 rosy_contract_reviewer가 준비 소스의 TTL 충돌을 지적했고 경계 RED 뒤 보완했다. 최초 전송 의도의 최종 clock/list 교체 두 finding도 RED4를 확인한 뒤 수정·재검토했다. reviewed writer의 LF-normalized SHA256은 `dfa67998c0a77c4c4739a467b07cd355876f9d60febc3dbcf0a7d1e19e55b13e`이며 소스cf의 execution 파일과 대응한다. 이 검토 뒤 KNOWN_WRITERS에 정확한 claim writer만 추가했다. 이후 b528 검토의 receipt/phase causality와 HOLD 자동활성화는 RED7 뒤 보완해 9f에서 추가 finding 없음으로 재검토했다(execution LF hash `4dad91825bc8a10f29667228448d9c7d7acd72a2e6897597d11fc26067bb6e3b`).
 
-물리 종료 소스3b23도 원래 owner/generation 해제·proof/receipt/parent/event 원자성·새 owner와 재호출 경합에 대해 독립 검토를 받았고 추가 supported material finding 없음이다. LF hash는 execution `2b8fd7bdbeccd0dbe8d22d6ecea54633736c4cb90f177eddc7461a0042298ce2`, observations `9c982011a8a970400f76f5a7b6b48f898b8bee64a6f59e18ba9b8ca892ca7add`다. 소스/시험 읽기 검토이며 SDK·credential ingress·실물 수용을 대신하지 않는다.
+물리 종료 소스3b23도 원래 owner/generation 해제·proof/receipt/parent/event 원자성·새 owner와 재호출 경합에 대해 독립 검토를 받았고 추가 supported material finding 없음이다. LF SHA256는 execution `2b8fd7bdbeccd0dbe8d22d6ecea54633736c4cb90f177eddc7461a0042298ce2`, observations `9c982011a8a970400f76f5a7b6b48f898b8bee64a6f59e18ba9b8ca892ca7add`다. 소스/시험 읽기 검토이며 SDK·credential ingress·실물 수용을 대신하지 않는다.
 
 ## 전체 participant의 stop/rearm 연결
 
@@ -65,7 +65,7 @@ source54f27은 같은 원장의 모든 dispatcher 객체·프로세스가 OS RPC
 
 최초 SDK submit은 고정 grant로 한 번만 호출한다. 중복 요청은 상태만 읽고, 이후 refresh는 같은 grant의 GetAction만 한다. 유실·404·교체·재시작은 HOLD/UNKNOWN 점유를 유지한다. cancel도 먼저 보류하고 이미 제출한 grant에만 CancelAction을 요청하며 ACK로 점유를 해제하지 않는다. 다른 journal·production profile·불완전 SDK는 구성 단계에서 거절한다. 실제 app ingress와는 아직 연결하지 않았다.
 
-독립 검토에서 객체별 lock의 겹친 수명 경합과 control 조회 뒤 stale 송신을 지적했고, RED4 뒤 OS guard와 final send 재검사를 추가해 재검토했다. 추가 material finding 없음이다. LF hash는 IO `aa045fd428361de63e376bfc1bb6914d999aa26cd564dec6c866f449c6c69ff0`, dispatcher `5fb23dc9f9d2c72b14a92ef9ee6ac4b3aaeedab77a193fcd684eb7a929fc454f`, execution `ae1a9b8543d6e1bf5a8e499bc34dd011708fd41a47e50537f5ead2a759d021f3`다. source54f27 집중121은 Fake SDK port의 동작·SQLite 비점유·실제 POSIX process guard 검증이다. Native UDS·독립 TCP HTTP·실물 물리 근거와 최종 FULL을 대신하지 않는다.
+독립 검토에서 객체별 lock의 겹친 수명 경합과 control 조회 뒤 stale 송신을 지적했고, RED4 뒤 OS guard와 final send 재검사를 추가해 재검토했다. 추가 material finding 없음이다. LF SHA256는 IO `aa045fd428361de63e376bfc1bb6914d999aa26cd564dec6c866f449c6c69ff0`, dispatcher `5fb23dc9f9d2c72b14a92ef9ee6ac4b3aaeedab77a193fcd684eb7a929fc454f`, execution `ae1a9b8543d6e1bf5a8e499bc34dd011708fd41a47e50537f5ead2a759d021f3`다. source54f27 집중121은 Fake SDK port의 동작·SQLite 비점유·실제 POSIX process guard 검증이다. Native UDS·독립 TCP HTTP·실물 물리 근거와 최종 FULL을 대신하지 않는다.
 
 첫 slice의 UNKNOWN/CANCEL/HOLD 복구는 기존 action/attempt의 사실 조회와 점유 보존까지다. 더 높은 RUNNING/SUCCEEDED receipt가 와도 HOLD를 자동활성화하지 않는다. 명시적 복구/재승인과 실패·취소 후 물리 종료는 별도 후속 계약이며 앱이 새 key나 true flag로 이를 우회하지 못한다.
 
