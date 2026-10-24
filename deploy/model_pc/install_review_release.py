@@ -153,6 +153,9 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     if ((state / 'omx-center.json').is_file()
             and '--omx-center-config' in ((source or current) / APP).read_text(encoding='utf-8')):
         control += f" --omx-center-config {state / 'omx-center.json'}"
+    if ((state / 'workspace-links.json').is_file()
+            and '--workspace-links' in ((source or current) / APP).read_text(encoding='utf-8')):
+        control += f" --workspace-links {state / 'workspace-links.json'}"
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
@@ -363,6 +366,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                 line = re.sub(r' --learning-control [^\s]+', '', line)
                 line = re.sub(r' --review-ai-config [^\s]+', '', line)
                 line = re.sub(r' --omx-center-config [^\s]+', '', line)
+                line = re.sub(r' --workspace-links [^\s]+', '', line)
                 line = re.sub(r' --decisions-port [^\s]+', '', line)
                 cli = app.read_text(encoding='utf-8')
                 port_arg = re.search(r' --port ([0-9]+)', line)
@@ -388,6 +392,9 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                 if state_arg and '--omx-center-config' in cli:
                     binding = Path(state_arg[1]) / 'omx-center.json'
                     if binding.is_file(): line = line.rstrip('\n') + f' --omx-center-config {binding}\n'
+                if state_arg and '--workspace-links' in cli:
+                    binding = Path(state_arg[1]) / 'workspace-links.json'
+                    if binding.is_file(): line = line.rstrip('\n') + f' --workspace-links {binding}\n'
             lines.append(line)
         adjusted = ''.join(lines)
         if adjusted != text: unit_text = adjusted
