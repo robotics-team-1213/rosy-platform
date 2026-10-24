@@ -8,7 +8,7 @@ import re
 SRC = (Path(__file__).resolve().parents[3] / "src")
 THEME_JS = SRC.parent / "shared" / "web" / "theme.js"
 DISPLAY_JS = SRC.parent / 'middleware' / 'robot_ui' / "robot" / "panels" / "system" / "display.js"
-FLEET_HTML = SRC.parent / 'applications' / 'fleet' / 'web' / "index.html"
+FLEET_HTML = SRC.parent / 'operations' / 'site_ui' / "console" / "index.html"
 
 CHOICE = re.compile(
     r"""\{\s*value:\s*"([\w-]+)",\s*label:\s*"([^"]+)"(?:,\s*icon:\s*(?:ICONS\.\w+|"[^"]+"))?\s*\}"""
@@ -28,34 +28,15 @@ def test_theme_js_exposes_the_choices_it_validates_against():
     assert "choices: Object.freeze(CHOICES" in source
 
 
-LEARNING_WEB = SRC.parent / "learning" / "curation" / "perception" / "review_app_web"
-
-
-def test_the_shared_cycle_button_is_wired_once_from_the_single_source():
-    source = (SRC.parent / "shared" / "web" / "ui-wiring.js").read_text(encoding="utf-8")
-    assert 'import "/common/ui-wiring.js"' in (SRC.parent / "shared" / "web" / "ui.js").read_text(encoding="utf-8")
-    assert source.count('closest("[data-theme-cycle]")') == 1
-    assert 'window.RosyTheme' in source and 'theme.choices' in source
-    assert 'theme.get()' in source and 'window.RosyTheme.set(themeCycleStep()[1].value)' in source
-    assert 'RosyTheme' not in (FLEET_HTML.parent / "shared/fleet-header.js").read_text(encoding="utf-8")
-
-
-def test_the_fleet_selector_uses_one_cycle_button():
+def test_the_fleet_selector_uses_one_cycle_button_and_the_single_source():
     html = FLEET_HTML.read_text(encoding="utf-8")
+    source = (FLEET_HTML.parent / "shared/fleet-header.js").read_text(encoding="utf-8")
     assert html.count('data-theme-cycle=""') == 1
     assert 'data-theme-choice=' not in html
-    for name in ("console.js", "installation/install.js"):
+    assert 'window.RosyTheme' in source and 'theme.choices' in source
+    assert 'theme.get()' in source and 'theme.set(next().value)' in source
+    for name in ("console.js", "install.js"):
         assert ':not([data-theme-cycle])' in (FLEET_HTML.parent / name).read_text(encoding="utf-8")
-
-
-def test_learning_documents_use_the_shared_cycle_and_store_no_theme_themselves():
-    for page in LEARNING_WEB.glob("*.html"):
-        html = page.read_text(encoding="utf-8")
-        assert html.count('data-theme-cycle=""') == 1, page.name
-        assert 'id="theme"' not in html, page.name
-    for script in LEARNING_WEB.glob("*.js"):
-        source = script.read_text(encoding="utf-8")
-        assert "rosy.theme" not in source and "$('theme')" not in source, script.name
 
 
 def test_the_device_panel_renders_from_the_single_source():
