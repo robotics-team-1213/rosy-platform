@@ -3662,6 +3662,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.309 | 2026-10-24 | D-862: bounded owner-scoped control-unit information/maps, immutable subtree stop assignments and local uncertainty reconciliation; explicit parent sharing/stop consent and peer CA. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
