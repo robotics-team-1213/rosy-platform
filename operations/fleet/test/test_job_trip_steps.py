@@ -309,11 +309,13 @@ def _routes(app) -> set:
     return {getattr(route, "path", None) for route in app.routes}
 
 
-def test_the_route_exists_only_in_the_simulation_profile(tmp_path, monkeypatch):
+def test_the_write_route_exists_only_in_the_simulation_profile(tmp_path, monkeypatch):
     for name in ("production", "simulation"):
         (tmp_path / name).mkdir()
     client, _ = _app(tmp_path / "production")
-    assert "/api/fleet/trip-jobs" not in _routes(client.app) and getattr(client.app.state, "job_trips", None) is None
+    assert not any(route.path == "/api/fleet/trip-jobs" and "POST" in getattr(route, "methods", ())
+                   for route in client.app.routes)
+    assert "/api/fleet/trip-jobs" in _routes(client.app) and getattr(client.app.state, "job_trips", None) is None
     import test_approval_registry
     original = test_approval_registry.create_app
     monkeypatch.setattr(test_approval_registry, "create_app",
@@ -522,13 +524,15 @@ def test_a_second_resume_by_another_operator_at_the_same_fence_is_recorded(tmp_p
 def test_a_closed_profile_holds_open_trip_jobs_at_startup(tmp_path):
     """Review 7: a ledger with open TRIP jobs opened outside the simulation profile parks them."""
     from types import SimpleNamespace
+    from fastapi import FastAPI
     from fleet.server.trip_job_routes import install_trip_job_routes
     rig = Rig(tmp_path)
     mid = rig.create()
-    app = SimpleNamespace(state=SimpleNamespace())
+    app = FastAPI()
     assert install_trip_job_routes(app, store=rig.store, runner=rig.runner, console=None, episodes=None,
                                    deployment_profile="production", require_named_operator=None,
-                                   operator_guard=None) is None
+                                   operator_guard=None, read_guard=[],
+                                   require_viewer=lambda: SimpleNamespace(principal_id="kim")) is None
     assert rig.job(mid)["status"] == "HOLD" and rig.job(mid)["reason"] == "FLEET_PROFILE_CLOSED"
 
 
