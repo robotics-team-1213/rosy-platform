@@ -20,4 +20,17 @@ World에 불변 PhysicalPose/Bounds3/LinkPhysicalState/ArmPhysicalState/Transfer
 
 기존 kinematics YAML은 pinned URDF의 관절 기하를 옮긴 값이다. 다음 coverage 구현에는 실제 로컬 `learning/envs/isaac/assets/open_manipulator_description/urdf/omx_f/omx_f.urdf`와 참조 mesh를 사용한다. 정규화 URDF SHA-256은 기존 kinematics source pin과 일치하고 mesh 8개가 존재한다. 모델에는 collision이 있는 link0..link7 외에 collision 없이 1cm visual box를 가진 end_effector_link가 있으므로, collision 개수나 관절 개수만으로 모든 링크의 범위를 단정하지 않는다. 해당 기하를 보수적으로 포함하거나 검토된 모델 규칙을 명시한 coverage를 먼저 검증한다. 이 조사 자체는 형상/퇴피 수용이 아니다.
 
+## 고정 OMX 전체 형상 식별
+
+source commit `b045ed0050871505a3f1b19845b1ec73c4f77f65`의 `omx_geometry.load_omx_geometry`는 설치가 전달한 실제 URDF/mesh bytes를 검증한다. vendor 5.1.2의 정규화 URDF와 정확한 mesh 참조 집합·8개 mesh 내용의 canonical fingerprint가 고정 profile과 다르면 거절한다. URDF만 같고 mesh가 바뀐 경우도 거절한다. production 코드는 파일·네트워크를 열지 않는다.
+
+반환하는 불변 descriptor의 필수 링크는 visual 또는 collision이 있는 전체9개다. link0..link7과 visual-only end_effector_link를 포함하며 geometry 없는 world frame은 제외한다. 모델 식별값은 축약 kinematics/URDF hash와 구별한다. 이 결과는 FK나 측정 bounds 검증·부착물·센서 보수성의 증거가 아니다. 후속 설치 소비자는 실제 asset loader의 결과를 사용해야 하며 ArmGeometry의 직접 생성만으로 검증을 대신하지 않는다.
+
+- RED commit `7ab2d12eb2`: 실제 bundle을 사용하는8개 원격 시험이 누락 모듈로 실패했다. known8 NEW, skip0이며 `rosy-world-geometry-red/run-1.txt`에 보존한다.
+- source b045의 World 전체 원격 검사: **36 passed/skip0**, exit0/known0 NEW, `rosy-world-geometry-green/run-1.txt`. 실제 bundle의 모든 visual/collision 링크·CRLF 정규화·mesh/URDF 변조·누락/추가·입력 형식을 검사한다. 별도 wheel 설치의 isolated Python에서도 새 모듈과 잘못된 profile 거절을 확인했다.
+- 동일 SHA 독립 계약 검토: material finding 없음. descriptor 직접 생성은 asset 검증 증거가 아니며 실제 bounds/현장 수용은 미확인이라는 한계를 명시했다. source 구간 size/safety는2 commits, 각각 exit0다.
+- source b045의 affected 전체32 targets/1 invocation: **753 passed/2 skipped/39 warnings**, exit0/known0 NEW, `rosy-world-geometry-affected/run-1.txt`. World 전체36과 겹치므로 합산하지 않으며2 skips는 수용 근거로 세지 않는다. 이전 raw-facts 변경의 affected764와는 selector 입력 구간/목록이 다르다. 원격30139/48450은 모두 종료했다.
+
+producer 인증·두 표본의 시각/정지/목표 pose·전체 링크 bounds 검사·같은 transaction의 claim 해제는 여전히 다음 Fleet 소비자 작업이다. 새 route/DTO/장치 명령 경로는 열지 않았다.
+
 실물 실행·배포·push·병합은 하지 않았다. CE: 해당 없음 — 자료형/회귀/이 기록이 검증 책임과 불완전 관측의 의미를 보존한다. 과거 e26 G1 timing의 미확정 원인은 기존 기록에서 별도로 유지한다.

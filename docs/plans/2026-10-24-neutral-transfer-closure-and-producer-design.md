@@ -4,6 +4,8 @@
 
 단계1의 World raw-facts는 source commit `037c29121f`에서 구현하고 `0849ce4825`에서 미측정 속도를 None으로 보존했다. 최신 World28 passed/skip0·affected764 passed/2 skipped·각0 NEW와 고정 SHA 독립 검토를 확인했다. [검증과 남은 범위](../validation/harbor-physical-observations-2026-10-24/result.md)를 따른다. 아직 producer 인증·freshness/coverage evaluator·claim 해제는 없으며 이후 단계도 미완료다.
 
+고정 OMX 형상 descriptor는 source `b045ed0050`에서 실제 URDF·8개 mesh 내용 검증과 visual/collision 전체9개 필수 링크를 구현했다. World 전체36 passed/skip0·affected753 passed/2 skipped·각0 NEW, 동일 SHA 독립 검토 finding 없음이다. descriptor는 측정 bounds·부착물·실제 구역 이탈의 검증을 대신하지 않으며 Fleet의 두 표본 정책 소비자는 아직 없다.
+
 ## 목표와 소유권
 
 첫 독립 HTTP 팔 흐름에서 Harbor는 CargoMove를 물리 참조로 변환하고 업무 완료를 판단한다. ROSY는 설치된 정책, 두 사람 승인, 실행·점유, 물리 관측의 검증과 receipt를 소유한다. 물체가 목표에 놓이고 전체 로봇 링크가 공유 구역 밖에서 정지했다는 근거가 없으면 동작 성공 뒤에도 점유를 보존한다. 새 broker/DB/장치 writer를 만들지 않는다.
