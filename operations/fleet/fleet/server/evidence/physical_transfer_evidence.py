@@ -17,9 +17,12 @@ from core_common.protocol.arm_transfer_preflight import ArmDigest, ArmPhysicalRe
 from rosy.world.state.projections.omx_geometry import ArmGeometry
 from rosy.world.state.projections.physical_transfer import Bounds3, PhysicalPose, TransferObservation
 
+from .dispatch_admission import normalize_resources
+
 Counter = Annotated[int, Field(strict=True, ge=0, lt=2**63)]
 Nonnegative = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]
 Scope = tuple[ArmPhysicalRef, ArmPhysicalRef]
+ResourceId = Annotated[ArmPhysicalRef, Field(max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
 
 
 class _Closed(BaseModel):
@@ -29,6 +32,7 @@ class _Closed(BaseModel):
 class TransferParticipant(_Closed):
     workcell_id: ArmPhysicalRef
     instance_id: ArmPhysicalRef
+    arm_resource_id: ResourceId
     geometry: ArmGeometry
     calibration_revision: ArmPhysicalRef
     transform_revision: ArmPhysicalRef
@@ -49,6 +53,8 @@ class PhysicalTransferPolicy(_Closed):
     participants: Annotated[tuple[TransferParticipant, ...], Field(min_length=1, max_length=32)]
     primary: Scope
     zones: Annotated[tuple[Bounds3, ...], Field(min_length=1, max_length=32)]
+    zone_resource_ids: Annotated[tuple[ResourceId, ...], Field(min_length=1, max_length=32)]
+    object_resource_id: ResourceId
     zone_margin_m: Nonnegative
     producer_id: ArmPhysicalRef
     evaluator_revision: ArmPhysicalRef
@@ -73,7 +79,20 @@ class PhysicalTransferPolicy(_Closed):
             raise ValueError("policy requires unique participants and an installed primary")
         if self.min_separation_ns > self.max_age_ns:
             raise ValueError("observation interval exceeds the freshness window")
+        if (len(set(self.zone_resource_ids)) != len(self.zones)
+                or len(self.zone_resource_ids) != len(self.zones)
+                or len({p.arm_resource_id for p in self.participants}) != len(self.participants)):
+            raise ValueError("policy requires distinct arm and zone resource bindings")
+        self.resources  # Validate the existing shared claim-key format, including owner workcells.
         return self
+
+    @property
+    def resources(self):
+        keys = [("workcell", p.workcell_id) for p in self.participants]
+        keys += [("arm", p.arm_resource_id) for p in self.participants]
+        keys += [("zone", value) for value in self.zone_resource_ids]
+        keys.append(("object", self.object_resource_id))
+        return tuple((kind, identifier) for kind, identifier, _ in normalize_resources(keys))
 
     @property
     def digest(self):

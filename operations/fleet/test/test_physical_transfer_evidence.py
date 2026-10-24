@@ -37,8 +37,10 @@ def geometry():
 def policy(geometry):
     m = api()
     participants = tuple(m.TransferParticipant(workcell_id=w, instance_id=i, geometry=geometry,
-                         calibration_revision="cal-1", transform_revision="tf-1") for w, i in (PRIMARY, SECONDARY))
+                         arm_resource_id=f"{w}.{i}", calibration_revision="cal-1", transform_revision="tf-1")
+                         for w, i in (PRIMARY, SECONDARY))
     return m.PhysicalTransferPolicy(participants=participants, primary=PRIMARY, zones=(Bounds3((-.1, -.1, 0), (.1, .1, .3)),),
+        zone_resource_ids=("w-1.shared",), object_resource_id="object-1",
         zone_margin_m=.01, producer_id="observer-1", evaluator_revision="eval-1", frame_id="world",
         catalog_digest="c" * 64, bindings_digest="d" * 64, object_ref="object-1", object_origin_id="model-origin",
         source_pose=PhysicalPose((0, 0, .2), (0, 0, 0, 1)), target_pose=PhysicalPose((.05, 0, .2), (0, 0, 0, 1)),
@@ -195,6 +197,7 @@ def test_resource_policy_pins_owner_workcells_arm_aliases_zones_and_object(polic
     assert set(bound.resources) == {("workcell", "w-1"), ("arm", "w-1.arm-0"), ("arm", "w-1.arm-1"),
                                    ("zone", "w-1.shared"), ("object", "object-1")}
     assert bound.digest != bound.model_copy(update={"zone_resource_ids": ("w-1.other",)}).digest
+    assert api().PhysicalTransferPolicy.model_validate_json(bound.model_dump_json()) == bound
     for changes in ({"zone_resource_ids": ()}, {"zone_resource_ids": ("w-1.shared", "extra")},
                     {"object_resource_id": "invalid/key"},
                     {"participants": (participants[0], participants[1].model_copy(
