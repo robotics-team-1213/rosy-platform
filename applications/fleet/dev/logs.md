@@ -43,3 +43,9 @@
 - 변경: 기존 opt-in HTTP probe가 실제 AsyncClient send도 관찰한다. method/status/통과 node/commit만 기록하고 body·자격은 수집하지 않는다. request keyword 호출을 유지하며 harness-only207 회귀가 제품 성공 receipt로 사용되지 않게 구분한다.
 - 증거: sourcebbffbf8577의 capture 실행5건은 probe가 send의 request keyword를 받지 못해 실패했다. capture 없는 실제 backend179건은 sourceaaaf7ed3f2에서 통과했다. 정상 서명에 맞춘 probe와 전용 keyword-stream 회귀를 추가해 재실행한다. pending matrix는 실제 capture·통과 browser 근거를 얻은 뒤에만 verified로 바꾼다.
 - gate 변화: 검증 수집기 결속이며 새 제품 실행 권한을 추가하지 않는다. CE 해당 없음 — 원인과 복구 조건을 해당 회귀와 수집기 signature에 남긴다.
+
+## 2026-10-25 · uncommitted · 관제8 API 관측 receipt와 통과 sample flow 등록
+
+- 변경: pending 통합관제 항목을 실제 성공 응답과 통과 browser source로 결속하고 기존 모든 receipt를 보존했다. sample R/A/A1/B 설명을 현재 구성에 맞췄다.
+- 증거: sourceef6dc95958 capture5건은8 API200을 통과 node에서 관찰했고 sourcebbffbf8577의 browser/Node33건은 SKIP0·NEW0이다. source45d1f72ac0 actual backend Chromium1건은 가로채기 없이 실제 Fleet API·원장·지도·한 번 정지와 GET-only readback을 확인했다.
+- gate 변화: source 검증이며 실물·현장 수용은 아니다. 최종 metadata/공식 착지 검사를 진행한다. CE 해당 없음 — 증거 형식과 회귀에 직접 남는다.

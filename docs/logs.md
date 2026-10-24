@@ -10391,3 +10391,9 @@ osy-d395-s1d\`.
 - 변경: 역할표와 HTTP 정보/정지/조회 흐름, CORE HTTP와 OMX local UDS 배치, 전용 자격·기본false 허용·명시 CA·Fleet-only mount를 현재 구현에 맞췄다. 이전의 Compose/CA 미구현 설명을 제거하고 소프트웨어와 N1–N3 현장 수용을 분리했다.
 - 증거: backend sourceaaaf7ed3f2 집중179건·CORE source10fc372212 연계21건·sample sourceef83569895 API39건과 sourcebbffbf8577 실제 Chromium/Node 그룹은 각각 NEW0이다. 실제 Fleet backend 무가로채기 browser·HTTP 증거·배치 계약·최종 착지는 후속 확인이다.
 - gate 변화: I1/I2/I4의 source 근거를 표시하며 전체 I6·실제 설치·장치·현장 수용을 미리 완료하지 않는다. CE 해당 없음 — 새 판단은 D862·코드·회귀·현재 목표에 직접 남긴다.
+
+## 2026-10-25 · uncommitted · 통합관제 실제 HTTP·브라우저 집중 수용 근거
+
+- 변경: 정보·지도·정지/원장·기명 처분8 API의 통과 응답을 기존 receipt에 추가하고 기능 표를 실제 source와 결속했다. 별도 동결 검증 기록에 역할·중첩 HTTP·TCP/TLS·실제 Fleet browser와 실물/현장 한계를 구분했다.
+- 증거: sourceef6dc95958의 HTTP capture5건·배치/수집기2건과 source45d1f72ac0의 실제 Fleet 무가로채기 Chromium1건은 SKIP0·NEW0이다. sourcebbffbf8577의 Chromium/Node33건을 기능 표에 결속했다. 독립 후속 계약 검토에서 지원되는 Critical/Important finding이 없었다.
+- gate 변화: I3/I5 소프트웨어 검증을 기록했다. I6의 공식 최종 착지와 N1–N3 실제 PC/장치 수용은 분리한다. CE 해당 없음 — 원인·수정은 해당 코드·회귀·D862에 직접 남는다.

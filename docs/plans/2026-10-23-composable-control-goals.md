@@ -14,14 +14,14 @@
 
 - [x] **I1 공유 계약:** D-862/API v1.313을 등록하고 strict/bounded 회귀·독립 검토 후 commit `7a3d0dc892`로 로컬 main에 반영했다. FULL27호출의 G1 timing LOAD-FLAKY 격리 통과와 원래 실패는 구분한다.
 - [x] **I2 정보 수집:** SharedGather·직접 소유 SQL·활성 지도와 R/A/B/A1 수집·신선도·부분 단절·권한/개인정보 거절을 구현했다. source `aaaf7ed3f2`의 실제 backend HTTP·SQLite·TLS 집중 회귀는 NEW0이다. 최종 병합은 I6에서 확인한다.
-- [ ] **I3 통합 화면:** 관제별 연결/상태/작업, 소유 관제·map ID/version을 표시하는 지도, 단위별 정지 요청/결과/복구 정보를 실제 API와 연결한다. 근거 없는 좌표 융합이나 물리 정지 완료 표시를 하지 않는다.
+- [x] **I3 통합 화면:** 관제별 연결/상태/작업·지도 출처·정지 결과를 연결했다. source `bbffbf8577`의 Chromium/Node33건과 `45d1f72ac0`의 실제 Fleet HTTP 무가로채기 Chromium1건이 통과했다. 좌표 융합·물리 정지 완료를 주장하지 않는다.
 - [x] **I4 정지 요청:** immutable identity/fence·같은 transaction latch·활성 send/미확인 rearm guard·기명 로컬 재시운전 처분과 중복/DB/재시작 경합을 구현·회귀했다. backend source `aaaf7ed3f2`와 CORE 연계 source `10fc372212`는 각각 NEW0이며 소스 독립 검토를 받았다. 기존 로컬 긴급 정지는 보존하고 물리 정지는 UNVERIFIED다.
-- [ ] **I5 TLS·배치:** 명시 peer CA와 opt-in 설정/token/CA mount를 연결하고 실제 TCP/TLS·배치 계약을 검증한다. 부모 정보 공유와 정지 수신 권한은 각각 기본false로 명시 허용한다.
+- [x] **I5 TLS·배치:** 명시 peer CA와 opt-in 설정/token/CA mount를 연결했다. source `aaaf7ed3f2`의 TCP/TLS 회귀와 `ef6dc95958`의 배치/증거 수집기2건이 NEW0이다. 부모 정보 공유와 정지 수신은 각각 기본false이며 실제 PC 설치 수용은 N1–N3으로 남긴다.
 - [ ] **I6 소프트웨어 수용:** 실제 생산자→수집→화면 및 정지 요청→기존 owner→관제별 결과의 source SHA 원격 회귀·Chromium·독립 계약/안전 검토를 남기고 커밋·로컬 main 병합한다. 실물·현장 수용은 아래 N1–N3과 분리한다.
 
 선행 구조 정리는 schema1170→569줄의 기존 모델 소유 분리이며 FULL23호출·통합892 PASS/6 SKIP·NEW0으로 로컬 main에 반영했다. 이 작업을 I1–I6 전체 구현 완료로 세지 않는다.
 
-runtime source는 `feat/integrated-control-runtime`에서 최종 수용 중이다. 실제 sample/browser가 viewer 읽기 잠금과 정지 응답/overview 세대 차이를 찾아 수정했고, source `bbffbf8577`의 UI·실제 sample Chromium 재검증은 NEW0이다. 실제 Fleet backend와의 무가로채기 browser smoke, HTTP 증거 등록·배치 계약·공식 최종 착지 게이트가 남아 있다. 실제 PC 배포·장치 수용은 N1–N3으로 유지한다.
+runtime source는 `feat/integrated-control-runtime`에서 최종 착지 게이트를 진행한다. 실제 sample/browser가 viewer 읽기 잠금과 정지 응답/overview 세대 차이를 찾아 수정했다. [동결 검증 기록](../validation/integrated-control-information-2026-10-25/result.md)에 생산자·중첩 HTTP·실제 Fleet browser·배치 증거를 구분했다. 최종 공식 착지는 I6에서 확인하며 실제 PC 배포·장치 수용은 N1–N3으로 유지한다.
 
 **최종 목표:** 각 관제가 자기 자원·원장·운영자와 실행 책임을 가지고 독립 운영하며, 동일한 관제가 하위 관제를 포함하거나 상위 통합관제에 참여할 수 있게 한다. 각 PC의 배치와 네트워크 연결은 이 논리 책임에 맞추고, 상위의 요청 접수가 하위 승인이나 장치 실행 권한으로 바뀌지 않게 한다.
 

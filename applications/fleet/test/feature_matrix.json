@@ -12,7 +12,7 @@
       "consumers": [
         "applications/fleet/web/work/control-unit-view.js"
       ],
-      "availability": "Configured control unit; named local human approval. The sample is one independent synthetic unit, not nested-network or device evidence.",
+      "availability": "Configured control unit; named local human approval. The current sample has a synthetic R/A/A1/B hierarchy with directly owned sample resources at R; device acceptance remains unverified.",
       "calls": [
         {
           "consumer": "applications/fleet/web/work/control-unit-view.js",
@@ -5744,8 +5744,8 @@
             401,
             403
           ],
-          "status": "pending",
-          "verification_scope": "Pending committed remote HTTP regression. Prepared tests use actual FastAPI/ASGI routes, temporary SQLite and synthetic device callbacks; they do not establish TCP/TLS, device or field acceptance.",
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
           "contract_tests": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py",
             "operations/fleet/test/test_control_unit_information_routes.py"
@@ -5757,7 +5757,7 @@
             "operations/fleet/test/test_control_unit_information_routes.py::test_information_requires_local_viewer_or_explicit_direct_parent_grant",
             "operations/fleet/test/test_control_unit_information_routes.py::test_information_scope_never_exposes_parent_or_sibling_to_parent_service"
           ],
-          "test_reference_kind": "Exact prepared HTTP regression nodes; not executed or bound to source evidence yet",
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/overview"
         },
         {
@@ -5773,8 +5773,8 @@
             404,
             503
           ],
-          "status": "pending",
-          "verification_scope": "Pending committed remote HTTP regression. Prepared tests use actual FastAPI/ASGI routes, temporary SQLite and synthetic device callbacks; they do not establish TCP/TLS, device or field acceptance.",
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
           "contract_tests": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py",
             "operations/fleet/test/test_control_unit_information_routes.py"
@@ -5784,7 +5784,7 @@
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_partial_information_failure_and_spoofed_projection_preserve_other_units",
             "operations/fleet/test/test_control_unit_information_routes.py::test_information_requires_local_viewer_or_explicit_direct_parent_grant"
           ],
-          "test_reference_kind": "Exact prepared HTTP regression nodes; not executed or bound to source evidence yet",
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/units/{unit_id}"
         },
         {
@@ -5798,8 +5798,8 @@
             404,
             503
           ],
-          "status": "pending",
-          "verification_scope": "Pending committed remote HTTP regression. Prepared tests use actual FastAPI/ASGI routes, temporary SQLite and synthetic device callbacks; they do not establish TCP/TLS, device or field acceptance.",
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
           "contract_tests": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py",
             "operations/fleet/test/test_control_unit_information_routes.py"
@@ -5809,7 +5809,7 @@
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_partial_information_failure_and_spoofed_projection_preserve_other_units",
             "operations/fleet/test/test_control_unit_information_routes.py::test_information_requires_local_viewer_or_explicit_direct_parent_grant"
           ],
-          "test_reference_kind": "Exact prepared HTTP regression nodes; not executed or bound to source evidence yet",
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/units/{unit_id}/map"
         },
         {
@@ -5823,8 +5823,8 @@
             409,
             503
           ],
-          "status": "pending",
-          "verification_scope": "Pending committed remote HTTP regression. Prepared tests use actual FastAPI/ASGI routes, temporary SQLite and synthetic device callbacks; they do not establish TCP/TLS, device or field acceptance.",
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
           "contract_tests": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py"
           ],
@@ -5834,7 +5834,7 @@
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_partial_stop_child_does_not_erase_successful_independent_units",
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_unknown_local_stop_blocks_rearm_and_only_named_local_attestation_reconciles"
           ],
-          "test_reference_kind": "Exact prepared HTTP regression nodes; not executed or bound to source evidence yet",
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/stops"
         },
         {
@@ -5847,8 +5847,8 @@
             200,
             403
           ],
-          "status": "pending",
-          "verification_scope": "Pending committed remote HTTP regression. Prepared tests use actual FastAPI/ASGI routes, temporary SQLite and synthetic device callbacks; they do not establish TCP/TLS, device or field acceptance.",
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
           "contract_tests": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py"
           ],
@@ -5856,7 +5856,7 @@
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity",
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_parent_information_and_stop_require_opt_in_and_directional_credentials"
           ],
-          "test_reference_kind": "Exact prepared HTTP regression nodes; not executed or bound to source evidence yet",
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/stop-inbox"
         },
         {
@@ -5869,15 +5869,15 @@
             200,
             403
           ],
-          "status": "pending",
-          "verification_scope": "Pending committed remote HTTP regression. Prepared tests use actual FastAPI/ASGI routes, temporary SQLite and synthetic device callbacks; they do not establish TCP/TLS, device or field acceptance.",
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
           "contract_tests": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py"
           ],
           "contract_test_nodes": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity"
           ],
-          "test_reference_kind": "Exact prepared HTTP regression nodes; not executed or bound to source evidence yet",
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/stops"
         },
         {
@@ -5889,15 +5889,15 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
-          "verification_scope": "Pending committed remote HTTP regression. Prepared tests use actual FastAPI/ASGI routes, temporary SQLite and synthetic device callbacks; they do not establish TCP/TLS, device or field acceptance.",
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
           "contract_tests": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py"
           ],
           "contract_test_nodes": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity"
           ],
-          "test_reference_kind": "Exact prepared HTTP regression nodes; not executed or bound to source evidence yet",
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/stops/{origin}/{identity}"
         },
         {
@@ -5912,8 +5912,8 @@
             409,
             422
           ],
-          "status": "pending",
-          "verification_scope": "Pending committed remote HTTP regression. Prepared tests use actual FastAPI/ASGI routes, temporary SQLite and synthetic device callbacks; they do not establish TCP/TLS, device or field acceptance.",
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
           "contract_tests": [
             "operations/fleet/test/test_integrated_control_http_pipeline.py"
           ],
@@ -5921,7 +5921,7 @@
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_unknown_local_stop_blocks_rearm_and_only_named_local_attestation_reconciles",
             "operations/fleet/test/test_integrated_control_http_pipeline.py::test_live_local_send_cannot_be_overridden_by_reconciliation_http"
           ],
-          "test_reference_kind": "Exact prepared HTTP regression nodes; not executed or bound to source evidence yet",
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/stops/{origin}/{identity}/reconcile"
         }
       ],
@@ -5949,12 +5949,13 @@
           ],
           "scenario_id": "integrated_control.happy",
           "browser_test": "applications/fleet/test/test_integrated_sample_browser.py::test_integrated_sample_reads_ownership_and_stops_without_claiming_device_proof",
-          "sample_status": "pending",
+          "sample_status": "verified",
           "sample_contract_nodes": [
             "applications/fleet/test/test_integrated_sample.py::test_owned_information_reuses_current_roster_task_and_active_map_without_private_fields",
             "applications/fleet/test/test_integrated_sample.py::test_child_stop_is_one_shot_and_foreign_or_stale_fences_cannot_mutate_another_subtree"
           ],
-          "test_scope": "Pending standalone sample-host Chromium plus sample API regressions; no intercepted API in the sample browser. Separate backend ASGI relay regression establishes the prepared peer path after execution, not real network/device acceptance."
+          "test_scope": "Passed remote standalone sample-host Chromium plus sample API regressions; no intercepted API in the sample browser. Separate backend ASGI relay regression establishes the peer path, not real network/device acceptance.",
+          "source_revision": "bbffbf8577ce1968ad293ac4f8e4d5d7113ea83c"
         },
         {
           "id": "integrated_control.refused",
@@ -5979,11 +5980,12 @@
           ],
           "scenario_id": "integrated_control.refused",
           "browser_test": "operations/fleet/test/test_integrated_control_browser.py::test_local_history_reconciliation_requires_named_operator_and_both_typed_attestations[UNKNOWN-viewer]",
-          "sample_status": "pending",
+          "sample_status": "verified",
           "sample_contract_nodes": [
             "applications/fleet/test/test_integrated_sample.py::test_viewer_can_read_but_cannot_send_or_reconcile_synthetic_stops"
           ],
-          "test_scope": "Pending sample API refusal plus a separate Chromium UI role test with intercepted HTTP fixtures, and backend ASGI authorization/scope regressions. These scopes must remain distinct in the evidence."
+          "test_scope": "Passed remote sample API refusal plus a separate Chromium UI role test with intercepted HTTP fixtures, and backend ASGI authorization/scope regressions. These scopes must remain distinct in the evidence.",
+          "source_revision": "bbffbf8577ce1968ad293ac4f8e4d5d7113ea83c"
         },
         {
           "id": "integrated_control.terminal",
@@ -6006,11 +6008,12 @@
           ],
           "scenario_id": "integrated_control.terminal",
           "browser_test": "applications/fleet/test/test_integrated_sample_browser.py::test_integrated_sample_reads_ownership_and_stops_without_claiming_device_proof",
-          "sample_status": "pending",
+          "sample_status": "verified",
           "sample_contract_nodes": [
             "applications/fleet/test/test_integrated_sample.py::test_local_unknown_needs_explicit_attestation_and_never_becomes_physical_stop_proof"
           ],
-          "test_scope": "Pending standalone sample-host browser and API readback/reconciliation, plus actual backend HTTP duplicate/restart/live-send guards. Recommissioning attestation is not device proof or automatic rearm."
+          "test_scope": "Passed remote standalone sample-host browser and API readback/reconciliation, plus actual backend HTTP duplicate/restart/live-send guards. Recommissioning attestation is not device proof or automatic rearm.",
+          "source_revision": "bbffbf8577ce1968ad293ac4f8e4d5d7113ea83c"
         }
       ]
     }
