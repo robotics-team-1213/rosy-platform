@@ -1,7 +1,7 @@
 # VLM 닫힌 질문 벤치 (T3–T4) — 2026-10-23
 
 **계획:** [실험 계획](../../plans/2026-10-23-vlm-fast-judge-experiment.md) T3·T4, A2 배선. **도구:** [`tools/vlm_question_bench.py`](../../../tools/vlm_question_bench.py).
-**도구 리비전:** 이 기록과 같은 커밋(`feat/vlm-question-bench`). **위치:** 모델 PC(RTX 5080 Laptop 16 GB), 오프라인 재생. 운영 경로·AI PC·로봇은 쓰지 않았다.
+**도구 리비전:** 질문 세트 v1, 미게시 로컬 `commit e3c40c29b9`의 `tools/vlm_question_bench.py`(게시 시 정정 2026-10-24: 게시된 도구는 질문 세트 v3다). **위치:** 모델 PC(RTX 5080 Laptop 16 GB), 오프라인 재생. 운영 경로·AI PC·로봇은 쓰지 않았다.
 **범위:** 지연과 답 분포만. 사람 정답(T1)이 없으므로 **정확도 수치가 아니다**. 아래 「육안 확인」은 에이전트가 사진 6장을 본 것이며 정답셋이 아니다.
 
 ## 입력

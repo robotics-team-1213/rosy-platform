@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · Rosy Learning 게시 문서 리뷰 반영
 - 2026-10-24 · c8aa8efc41 · Rosy Learning 정의와 VLM 빠른 판단 문서·도구 게시
 - 2026-10-24 · uncommitted · 외부 업무 앱 카탈로그 등록과 은퇴 앱 정리
 - 2026-10-23 · 5c74a6e25b · 모델 제어 근거의 범위 연결
 - 2026-10-22 · 79a11a4a54 · 현재 운영 기준 모터 상태 연결 검증
-- 2026-10-22 · fd889ea429 · Learning Center implementation evidence

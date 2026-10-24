@@ -6,9 +6,10 @@ options' first tokens, read from logits without generating text. ``--check`` com
 probabilities with a full forward of the same tokens. ``--ollama`` times the current per-image observation call
 (operations/situation/rosy_situation/incidents/vision.py) on the same frames as a lower bound for that method.
 Frames are read only; results are JSON lines and a summary. No labels: this measures latency and answer spread.
-``--debate-input`` (D-857 §4) re-asks one model the disputed questions from ``vlm_judge.py export-disputes`` with a
-short note of the other models' anonymised answers; its rows carry a ``debate`` block that imports as runtime
-``debate`` of the same model name. A debate answer stays provisional.
+``--debate-input`` (D-857 §4) re-asks one model the disputed questions of a disputes JSONL (one line per photo and
+question: image, view, question, text, options, answers[]; the Learning exporter is not published yet), with a
+short note of the other models' anonymised answers. Its rows carry a ``debate`` block, one row per round, that
+imports as runtime ``debate`` of the same model name. A debate answer stays provisional.
 """
 
 import argparse
@@ -23,6 +24,7 @@ import statistics
 import sys
 import time
 import urllib.request
+from urllib.parse import urlsplit
 from pathlib import Path
 
 import numpy as np
@@ -242,8 +244,8 @@ def debate(args) -> int:
     scorer = None if args.ollama else Scorer(args.model, args.quant)
     previous, started = {}, time.perf_counter()
     long_side = (args.long_side or [0])[0]  # the size this model was benched at; the import names it <model>@<px>
+    rows = []  # every round is kept in order; each row names its debate_round
     for number in range(1, args.debate_rounds + 1):
-        rows = []
         for (path, view), group in photos.items():
             image = Image.open(path).convert("RGB")
             questions = {line["question"]: (line["text"], tuple(line["options"])) for line in group}
@@ -293,11 +295,11 @@ def main(argv=None) -> int:
     parser.add_argument("--ollama", default="", help="loopback Ollama URL to time the observation call")
     parser.add_argument("--ollama-model", default="qwen3-vl:8b-instruct")
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--debate-input", type=Path, help="vlm_judge.py export-disputes output; re-ask --model")
+    parser.add_argument("--debate-input", type=Path, help="disputes JSONL (image, view, question, text, options, answers); re-ask --model")
     parser.add_argument("--debate-as", help="the imported model name of --model, left out of the others' answers")
     parser.add_argument("--debate-rounds", type=int, choices=(1, 2), default=1)
     parser.add_argument("--dump-questions", type=Path, metavar="FILE",
-                        help="write {question_set, questions} for learning/curation/perception/vlm_judge.py and exit")
+                        help="write {question_set, questions} as JSON for a Learning import and exit")
     known = argparse.ArgumentParser(add_help=False)
     known.add_argument("--dump-questions", type=Path)
     if (target := known.parse_known_args(argv)[0].dump_questions):
@@ -305,7 +307,7 @@ def main(argv=None) -> int:
         return 0
     args = parser.parse_args(argv)
     _selftest()
-    if args.ollama and not args.ollama.startswith(("http://127.0.0.1:", "http://localhost:")):
+    if args.ollama and urlsplit(args.ollama).hostname not in ("127.0.0.1", "localhost"):
         raise SystemExit("--ollama must be a loopback URL")
     if args.debate_input:
         if not args.debate_as:

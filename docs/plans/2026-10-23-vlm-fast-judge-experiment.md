@@ -2,7 +2,7 @@
 
 **설계:** [2026-10-23-vlm-fast-judge-design.md](2026-10-23-vlm-fast-judge-design.md)
 **위치:** 모델 PC, 오프라인 재생만. 노트북·AI PC 운영 경로·로봇은 쓰지 않는다. `operations/situation`의 운영 코드는 이 계획에서 바꾸지 않는다.
-**시작 전:** [시험 저장소 운영 규칙](../../../rosy-ops/docs/lab-host-storage.md)대로 `df -h ~/rosy-test`를 확인한다.
+**시작 전:** rosy-ops의 시험 저장소 운영 규칙(`docs/lab-host-storage.md`)대로 `df -h ~/rosy-test`를 확인한다.
 
 ## 목표
 

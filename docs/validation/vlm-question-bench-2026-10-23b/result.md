@@ -1,6 +1,6 @@
 # VLM 닫힌 질문 벤치 v2와 T1 정답 묶음 — 2026-10-23 (b)
 
-**앞 회차:** [vlm-question-bench-2026-10-23](../vlm-question-bench-2026-10-23/result.md). **도구 리비전:** 이 기록과 같은 커밋(`feat/vlm-question-set-v2`).
+**앞 회차:** [vlm-question-bench-2026-10-23](../vlm-question-bench-2026-10-23/result.md). **도구 리비전:** 질문 세트 v2, 미게시 로컬 `commit c92dbd8372`의 `tools/vlm_question_bench.py`·`tools/vlm_label_sheet.py`(게시 시 정정 2026-10-24: 게시된 도구는 질문 세트 v3다).
 **범위:** 질문 세트 v2의 front 답 분포·지연, 그리고 사람 정답(T1)용 화면 준비. 사람 정답이 아직 없으므로 정확도 수치가 아니다.
 
 ## 바꾼 것
