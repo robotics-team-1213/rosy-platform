@@ -113,7 +113,8 @@ def sim(runs):
     result = latest.get('result')
     if isinstance(result, dict):
         success = {True: '성공', False: '실패'}.get(result.get('task_success'), '기록 없음')
-        stages['evaluate'] = ('done', f"최근 단계 {str(result.get('stage') or '없음')[:40]} · 과제 성공 {success} · "
+        failed = result.get('task_success') is False or str(result.get('status', '')).lower() == 'failed'
+        stages['evaluate'] = ('blocked' if failed else 'done', f"최근 단계 {str(result.get('stage') or '없음')[:40]} · 과제 성공 {success} · "
                               f"판정 {str(result.get('status') or '없음')[:40]} (근거일 뿐 승인 아님)",
                               go('SIM 평가 근거', '/learning/evaluate?domain=sim'))
     else:

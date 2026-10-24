@@ -84,6 +84,9 @@ def test_sim_row_shows_the_latest_run_stage_evidence_and_opens_that_run():
     assert evaluate['evidence'] == '최근 단계 model_import · 과제 성공 기록 없음 · 판정 passed (근거일 뿐 승인 아님)'
     assert evaluate['next']['href'] == '/learning/evaluate?domain=sim'
     assert sim['stages'][5]['state'] == 'not_available'  # a SIM verdict is evidence, never a promotion record
+    failed = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [
+        {'run_id': run_id, 'status': 'SUCCEEDED', 'result': {'status': 'failed', 'task_success': False}}]})))['sim']
+    assert failed['stages'][4]['state'] == 'blocked'
     waiting = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [{'status': 'RUNNING'}]})))['sim']
     assert waiting['stages'][4]['state'] == 'waiting' and waiting['next']['href'] == '/learning/sim'
 
