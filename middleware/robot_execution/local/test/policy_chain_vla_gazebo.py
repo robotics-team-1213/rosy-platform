@@ -9,6 +9,7 @@ from dataclasses import replace
 from contextlib import ExitStack, contextmanager, closing
 import argparse
 import copy
+import gc
 import hashlib
 import json
 import os
@@ -201,7 +202,8 @@ def scenario(case, out, runtime, rig, controllers, calibration):
         (out/'preparation-timing.json').write_text(json.dumps(dict(prepared_s=runtime.monotonic()-began)))
         exchanges = []
         def request(method, path, body=None):
-            began, row = runtime.monotonic(), dict(method=method, path=path)
+            began = runtime.monotonic()
+            row = dict(method=method, path=path, started_s=began)
             try:
                 return fleet.device(method, path, body)
             except Exception as error:
@@ -215,8 +217,17 @@ def scenario(case, out, runtime, rig, controllers, calibration):
         journal = PolicyExecutionJournal(stores/'execution.sqlite3')
         renewals = []
         renew = consumer.renew
+        fetch = consumer._fetch
+        def timed_fetch(old):
+            try:
+                return fetch(old)
+            finally:
+                if renewals and 'done_s' not in renewals[-1]:
+                    renewals[-1]['fetched_s'] = runtime.monotonic()
+        consumer._fetch = timed_fetch
         def timed_renew(session):
             row = dict(called_s=runtime.monotonic(), remaining_s=session.lease.expires_at_ns/1e9-runtime.monotonic())
+            renewals.append(row)
             try:
                 return renew(session)
             except Exception as error:
@@ -227,7 +238,6 @@ def scenario(case, out, runtime, rig, controllers, calibration):
                 raise
             finally:
                 row['done_s'] = runtime.monotonic()
-                renewals.append(row)
                 (out/'renewals.json').write_text(json.dumps(renewals, indent=2))
         consumer.renew = timed_renew
         chain = stack.enter_context(SimPolicyChain(policy=policy, runtime=runtime, fence=fence, consumer=consumer,
@@ -373,6 +383,22 @@ def main():
         # bound is 1.0 s. Real and production owners keep their own values.
         cfg = replace(cfg, max_joint_state_age_s=JOINT_STATE_AGE_S)
         runtime = RosArmCommandRuntime(node, cfg, poll_period_s=.01, owner_clock='steady')
+        stalls, gc_pauses = deque(maxlen=2000), deque(maxlen=2000)
+        def heartbeat():  # Process-wide stalls: a 10 ms sleeper that wakes late was kept off the GIL or paused.
+            while True:
+                began = time.monotonic()
+                time.sleep(.01)
+                late = time.monotonic()-began-.01
+                if late > .05:
+                    stalls.append(dict(at_s=began, late_s=late))
+        threading.Thread(target=heartbeat, daemon=True, name='stall-heartbeat').start()
+        gc_began = {}
+        def gc_timing(phase, info):
+            if phase == 'start':
+                gc_began['s'] = time.monotonic()
+            elif time.monotonic()-gc_began.get('s', time.monotonic()) > .01:
+                gc_pauses.append(dict(at_s=gc_began['s'], pause_s=time.monotonic()-gc_began['s'], **info))
+        gc.callbacks.append(gc_timing)
         intake_trace = deque(maxlen=4000)  # Same joint intake trace as policy_chain_gazebo.py, to tell gaps apart.
         intake = runtime._joint_state_intake
         snapshot = intake.snapshot
@@ -420,6 +446,7 @@ def main():
                 real_time_factor=(node.get_clock().now().nanoseconds-started[0])/1e9/max(1e-9, time.monotonic()-started[1]),
                 primary_error=repr(errors[0]) if errors else None,
                 memory_peak=memory_peak.read_text().strip() if memory_peak.exists() else None), indent=2))
+            (out/'stalls.json').write_text(json.dumps(dict(stalls=list(stalls), gc=list(gc_pauses)), indent=2))
             (out/'joint-intake.json').write_text(json.dumps(list(intake_trace), default=str))
             assert stopped and workers_stopped, 'own executor/workers did not drain'
             runtime.destroy()
