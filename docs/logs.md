@@ -10306,3 +10306,9 @@ osy-d395-s1d\`.
 - 변경: [새 독립 관측 기록](validation/omx-policy-tracking-after-admission-2026-10-24/result.md). 기존 모델·world·허용치로 calibration1회와 정책 관측1회만 실행했다.
 - 증거: calibration PASS/96파일, 정책 HOLD/254파일·추종2771개. 170수락 중169성공 뒤 joint4/5 JTC 허용오차 실패, 이번 admission 거부·worker 오류0. DB/전체 archive/추종/종료정리를 독립 대조했다. 기존 validation state-hold 비교도 사후 설명으로 별도 구분했다.
 - gate 변화: formal0·기존 HOLD·실물 권한0 보존. CE 미해결 — 추종 실패의 물리 원인 증거가 부족하며 새 성공·성능 보장으로 바꾸지 않는다.
+
+## 2026-10-24 · uncommitted · 원격 시험 꼬리 출력의 코드 페이지 충돌 방지
+
+- 변경: `remote_pytest.py`가 시작할 때 `sys.stdout`·`sys.stderr`의 인코딩 오류 정책을 `replace`로 둔다. Windows 콘솔·파이프의 cp1252로 한국어 운영자 문구가 섞인 UTF-8 시험 꼬리를 인쇄하다 `UnicodeEncodeError`로 끝난 회차 전체를 버리던 것을 막는다. 디스크 로그는 바이트 그대로 유지된다.
+- 증거: 자식 프로세스 재현 — 수정 전 `print('방향 어긋남')` cp1252 exit 1(UnicodeEncodeError), reconfigure 후 exit 0. 2026-10-24 D-856 착지 회차에서 같은 충돌로 FULL 티어 35분 결과가 폐기됐고 `PYTHONIOENCODING=utf-8`로 회피했었다.
+- gate 변화: 없음. 도구 출력 정책만 바꾸며 시험 판정·로그 보존 규칙은 그대로다. CE 해결 — 증상·원인·회피·근본 수정을 이 행과 코드 주석으로 남긴다.
