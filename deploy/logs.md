@@ -3162,3 +3162,28 @@
 - 증거: 커밋 source의 원격 진단·종료 처리14PASS와 기존 gripper/Pilot 계약18PASS, 두 로그 모두 known_failures NEW0. [회귀 검증](../docs/validation/omx-teacher-gripper-observation-2026-10-23/verification.md)에 실행 범위와 로그 해시를 보존했다.
 - gate 변화: 없음. 새 native 실행·그리퍼 물리 원인 해결·학습·정책 평가 증거가 아니며 두 고정 수집본은 HOLD로 유지한다.
 - CE: 미해결. 정확한 실패 표본의 보존 회귀만 통과했고 실제 실패 순간 물리 상태는 아직 확인하지 못했다.
+
+## 2026-10-24 · 8d119665da8f · native teacher 진단 실행과 정리 확인
+
+- 변경: [실제 native 진단 기록](../docs/validation/omx-teacher-gripper-native-diagnostic-2026-10-24/result.md)에 착지 receipt·실행 source·archive/map·종료와 정리를 보존했다.
+- 증거: 공식 착지57107 종료0·guard273/영향490PASS·NEW0. 같은 준비 identity를 단 한 번 시작한 native3회 PASS, RGB1,586/1,585/1,586프레임 complete, 전체4,889파일 대조, 서비스/PID/cgroup/예산 정리와 독립 재검토 확인.
+- gate 변화: 없음. 실패 거부 미재현·물리 원인 미해결이다. 수집 적격 판정·optimizer·정책 평가·실물 실행·Hub 전달을 의미하지 않는다.
+- CE: 미해결 — 진단 실행 성공과 과거 물리 실패 해결을 구분한다.
+
+## 2026-10-24 · a7aaaed472 · 독립·중첩 관제의 격리 설정 예제
+
+- 변경: 합성 R→A→A1 manifest·고정 이웃과 별도 service token 파일의 예제를 추가하고 각 인스턴스의 DB·로봇 목록·수신 principal을 분리하는 기동 절차를 기록했다.
+- 증거: 실제 CLI의 무로봇 독립 aggregate와 기존 CLI52 PASS, 잘못된 peer URL/port 시작 거절 및 앱 transport 종료 회귀. [관제 구성](../docs/deployment/control-units.md).
+- gate 변화: 예시와 소프트웨어 기동 검증이다. 실제 서비스 배포·네트워크 변경·장치 운행은 실행하지 않았다. CE 해당 없음.
+
+## 2026-10-24 · 8d119665da8f · MODEL 고정 예산 복구 학습 완료 관측
+
+- 변경: [학습 완료 기록](../docs/validation/omx-recovered-teacher-training-2026-10-24/result.md)에 source8d·검증된 durable 전송ed473·same native63bc43의 종료/회수와 영구 study 무결성을 구분했다.
+- 증거: MODEL8CPU/6GiB/120분 고정 실행의 terminal0·로컬 종료0·100파일 회수, scope inactive/dead·빈 cgroup·lock/예약 없음·terminal journal 보존. 실제10k history·dataset25episodes·36export·두 fresh reload의 독립 검토 Important 없음.
+- gate 변화: 학습·offline·reload 증거만 추가했다. 운영 배포·실물 동작·HF 전달은 수행하지 않았다. CE 해당 없음.
+
+## 2026-10-24 · 8d119665da8f · 고정 정책 engineering 실패와 종료 정리
+
+- 변경: [정책 평가 기록](../docs/validation/omx-recovered-policy-engineering-2026-10-24/result.md)에 AI calibration5e00180bfe37 종료0·engineering791f6a0c8160 종료1과 원본 회수·cgroup/lock 정리를 남겼다.
+- 증거: 두 archive 각각95/253파일 byte대조. engineering의 JTC 허용오차 초과를 owner HOLD로 보존했고 main PID0·빈 cgroup·lock/예약 없음·cleanupverified를 확인했다. formal20회는 시작하지 않았다.
+- gate 변화: 실제 모델 작업 성공은 HOLD다. 별도 서비스 운영 승격·실물 동작·HF 업로드는 없다. CE 미해결 — 추종 오차의 물리 원인은 미확정이다.

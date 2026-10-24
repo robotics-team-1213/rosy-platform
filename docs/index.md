@@ -246,7 +246,7 @@
 | D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 |
 | D-850 | 독립 운영과 하위 구성을 지원하는 관제 단위 |
 | D-851 | 독립·상하위 관제의 상태 소유권과 위임·복구 계약 |
-| D-856 | 업무 공정 해석과 로봇 동작 실행의 분리 |
+| D-855 | 관제 위임 요청과 실행 시도에 결속된 취소 계약 |
 
 ## 계획·결과 문서
 
@@ -336,8 +336,6 @@
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 - [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
-- [2026-10-24-application-action-contract-design.md](plans/2026-10-24-application-action-contract-design.md)
-- [2026-10-24-harbor-rosy-application-action-boundary.md](plans/2026-10-24-harbor-rosy-application-action-boundary.md)
 
 ## 교훈 (docs/solutions)
 
@@ -352,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-24 · uncommitted · D-856 첫 TRIP 계약과 구현 착수
-- 2026-10-24 · uncommitted · D-856 업무 공정과 로봇 동작 실행 경계
-- 2026-10-23 · uncommitted · 독립·상하위 관제 상세 설계와 최종 목표 등록
-- 2026-10-23 · 118425b1b5 · VLM 질문 세트 v2와 T1 정답 화면
-- 2026-10-23 · 2df7fdcc35 · 해시 표의 시크릿 스캔 교훈 보강
+- 2026-10-24 · 521529fe5f · 관제 역할·직계 네트워크와 목표 현황 정렬
+- 2026-10-24 · 8d119665da8f · 복구 정책의 calibration 통과와 engineering HOLD
+- 2026-10-24 · 8d119665da8f · 고정 예산 복구 학습의 실제 완료와 재로딩
+- 2026-10-24 · 67b368605a · 선택형 학습 실행의 연결 복구와 종료 증거 보존
+- 2026-10-24 · 8d119665da8f · OMX 고정 예산 입력 검사와 중단된 학습 기록

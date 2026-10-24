@@ -9,9 +9,11 @@ from __future__ import annotations
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
 from .trip_jobs import (TripJobRequest, TripJobStep, TripJobSnapshot, TripJobStepSnapshot,
                         TripJobReadResponse, TripRequestKey)  # noqa: F401
-from .ssh_keys import (SSH_KEY_TYPES, SSH_LABEL_PATTERN, SSH_MAX_KEYS, SSH_TIME_PATTERN,  # noqa: F401
-                       SshHostKeys, SshKeyAddRequest, SshKeyAdded, SshKeyInfo, SshKeyList,
-                       SshPasswordIssued, SshPasswordRequest, SshPasswordStatus)  # noqa: F401
+from .control_units import (  # noqa: F401
+    ControlGoal, ControlNavigationCandidate, ControlWorkRequest, ControlIngressRequest,
+    ControlApproveRequest, ControlDelegationState, ControlDelegationSnapshot, ControlUnitReply,
+)
+from .navigation_cancel import ScopedNavigationCancelRequest  # noqa: F401
 from .lamp import LampIdentifyRequest  # noqa: F401
 from .media_grants import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest  # noqa: F401
 from .channel_requests import (  # noqa: F401
@@ -1156,3 +1158,13 @@ class UiSurfaceManifest(BaseModel):
     revision: str
 
 
+# --- D-418 로봇 SSH 접속 (API Ref §5.8, v1.89 additive) ----------------------
+#
+# administrator 전용 /api/v1/host/ssh/... 의 본문과 응답. CORE 는 이 모양을 검사한
+# 뒤 root rosy-ssh-access 에 넘기고, 그 도우미가 같은 규칙을 따로 다시 검사한다.
+
+from .ssh import (  # noqa: F401
+    SSH_LABEL_PATTERN, SSH_KEY_TYPES, SSH_TIME_PATTERN, SSH_MAX_KEYS,
+    SshKeyAddRequest, SshKeyAdded, SshKeyInfo, SshKeyList, SshHostKeys,
+    SshPasswordRequest, SshPasswordIssued, SshPasswordStatus,
+)

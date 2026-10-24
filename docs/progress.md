@@ -29,7 +29,7 @@ gates:
   FIELD:
     state: N/A
 adrs:
-- D-856
+- D-855
 - D-851
 - D-850
 - D-827
@@ -269,8 +269,6 @@ adrs:
 - D-777
 - D-784
 plans:
-- docs/plans/2026-10-24-application-action-contract-design.md
-- docs/plans/2026-10-24-harbor-rosy-application-action-boundary.md
 - docs/plans/2026-10-17-native-map-adoption.md
 - docs/plans/2026-10-15-omx-learning-operations-design.md
 - docs/plans/2026-10-15-omx-learning-operations.md

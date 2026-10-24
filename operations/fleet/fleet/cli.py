@@ -22,7 +22,7 @@ from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
 from fleet.server.context_options import activate_from_args, add_cli_arguments
-from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled
+from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled, _realign_config
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -152,6 +152,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for durable CORE Agent event history")
     console.add_argument("--tasks-db", default=None, type=Path,
                          help="SQLite path for durable operator and policy task history")
+    console.add_argument("--control-unit-config", default=None, type=Path,
+                         help="optional static control-unit ownership and direct-neighbor configuration")
     add_cli_arguments(console)
     console.add_argument("--robot-credential-key-file", default=None, type=Path,
                          help="base64 AES key sealing enrolled robot tokens (D-361); needs --tasks-db")
@@ -474,7 +476,7 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--robots is required unless --robot-credential-key-file is set")
     endpoints = []
     if args.robots is not None:
-        endpoints = load_robots(args.robots, allow_empty=key_file is not None)
+        endpoints = load_robots(args.robots, allow_empty=bool(key_file or getattr(args, "control_unit_config", None)))
         _warn_if_world_readable(args.robots)
     enrollment_store = robot_key = robot_key_text = robot_key_error = None
     if key_file is not None:
@@ -669,6 +671,7 @@ def run_console(args: argparse.Namespace) -> None:
         notification_config = NotificationConfig.load(args.notifications_config)
     activate_from_args(args)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
+                     control_unit_config=getattr(args, "control_unit_config", None),
                      hub=hub, sightings=sighting_service, tracking=tracking_service,
                      calibration_drift_watch=calibration_drift_watch, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
@@ -739,18 +742,6 @@ def _goal_lease_ttl_s(args) -> float:
             value == 0 or floor <= value <= 5):
         sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
     return float(value)
-
-
-def _realign_config(args):
-    """D-622 opt-in standalone recovery; empty areas and robot list by default."""
-    import yaml
-    from fleet.stuck.realign import RealignConfig
-    try:
-        site = (yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-                if getattr(args, "site_config", None) else {})
-        return RealignConfig.from_mapping((site.get("fleet") or {}).get("stuck_resolver"))
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"realign config: {exc}")
 
 
 def _trip_config(args):

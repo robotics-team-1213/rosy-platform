@@ -378,5 +378,9 @@
   {
     "commit": "5ee7a103b3314e2e2dafbf934e286c1988ecc4e0",
     "reason": "Independent read-only critic (opus), 2026-10-15, D-767 Part A instruction pose_stamp: CONDITIONS (HIGH stale fallback worse than before) then CONDITIONS MET after fail-closed refusal INSTRUCTION_STAMP_UNUSABLE, no 2 s age cut for counting travel, Fleet stamps only instructions with a distance; MEDIUM stamp-check ordering fixed (armed-bend refresh / running-maneuver resend unaffected). Flag default off; remote services/gateway/fleet/guards exit 0, known_failures 0 new; no device acceptance."
+  },
+  {
+    "commit": "fe7ef2f47500c19033b480c842a55e718c9614c9",
+    "reason": "Independent Codex /root/control_wire_review retrospective SOURCE review, 2026-10-24, against exact commit and HEAD 7db21ac02367a88c1e15f8513a93d2f2f138434c: scoped cancellation preserves replacement navigation and trip-lease owners; Fleet verifies original boot/run/correlation TERMINAL/CANCELED receipts independently of the current facade and never falls back to unconditional cancel. Reviewed deterministic replacement-owner regression and malformed/mismatched/unsupported sender cases. Verified retained scoped 201-PASS log hash and final explicit-SHA 49eb597185ff833885f18e8558bcf86ba31ab1bb proof: 384 PASS, runner exit 0, NEW 0; evidence in docs/validation/control-unit-pipeline-2026-10-24/result.md and focused-invocation.json. This records the missing independent source-review receipt only; main integration verification remains separate, with no CI, deployment, physical-stop, device or field acceptance."
   }
 ]

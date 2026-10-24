@@ -1,14 +1,10 @@
-"""D-418 로봇 SSH 접속 wire 모델 (API Ref §5.8, v1.89 additive).
+"""SSH wire models; existing canonical exports remain in protocol.schemas."""
 
-administrator 전용 /api/v1/host/ssh/... 의 본문과 응답. CORE 는 이 모양을 검사한
-뒤 root rosy-ssh-access 에 넘기고, 그 도우미가 같은 규칙을 따로 다시 검사한다.
-schemas.py 의 크기 한도(D-766)를 지키기 위해 같은 내용을 그대로 옮겼고,
-정식 수출은 schemas.py 가 계속한다.
-"""
 import re
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 
 SSH_LABEL_PATTERN = r"^[a-z0-9][a-z0-9._:-]{0,47}$"
 SSH_KEY_TYPES = ("ssh-ed25519", "sk-ssh-ed25519@openssh.com",

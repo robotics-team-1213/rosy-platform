@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosy Learning — 평가·승격</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/learning-shell.css"><link rel="stylesheet" href="/learning-workspace.css">
+<script type="module" src="/learning-shell.js"></script><script type="module" src="/evaluate.js"></script></head>
+<body><a class="skip-link" href="#evaluate-main">평가·승격으로 이동</a>
+<ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<div class="ui-app-body" data-seats="rail"><div class="ui-rail"></div><div class="ui-app-main">
+<div class="ui-pathbar"><h1>평가·승격</h1></div>
+<main id="evaluate-main" class="learning-main workspace-page" tabindex="-1">
+<ui-status id="evaluate-error" state="error" role="alert" hidden></ui-status>
+<section class="workspace-block" aria-labelledby="sources-title">
+<div class="workspace-section-heading"><div><h2 id="sources-title">지금 있는 평가 근거</h2><p id="evaluate-filter" class="quiet" role="status">평가 근거를 불러오는 중입니다.</p></div></div>
+<p class="quiet">읽기 전용입니다. 지표와 모델 합의는 측정값이며 승인이 아닙니다. 승격 평가에는 사람이 확정한 정답만 씁니다(D-857).</p>
+<div id="evaluate-sources" class="evaluate-sources" aria-live="polite"></div>
+</section>
+<section class="workspace-block" aria-labelledby="promote-title">
+<div class="workspace-section-heading"><div><h2 id="promote-title">승격 요청</h2></div></div>
+<p>승격 승인과 배포는 Fleet에서 승인권자가 합니다(D-793). Learning은 확정 정답 평가 근거를 모아 넘기는 데까지입니다.</p>
+<ui-button id="promote-request" kind="quiet" disabled reason="다음 조각에서 연결합니다.">승격 요청</ui-button>
+<p class="quiet">승격 요청 연결은 다음 조각입니다.</p>
+</section>
+</main></div></div></ui-shell></body></html>

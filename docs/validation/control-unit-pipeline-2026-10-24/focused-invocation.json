@@ -1,0 +1,44 @@
+{
+  "record_kind": "agent-compiled index of retained runner output",
+  "tested_commit": "49eb597185ff833885f18e8558bcf86ba31ab1bb",
+  "runner": "python -X utf8 tools/remote/remote_pytest.py",
+  "sha_was_explicit": true,
+  "log_directory": "<external>/rosy-control-final-proof",
+  "pytest_arguments": [
+    "operations/fleet/test/test_control_unit_config.py",
+    "operations/fleet/test/test_control_unit_store.py",
+    "operations/fleet/test/test_control_unit_service.py",
+    "operations/fleet/test/test_control_unit_runtime.py",
+    "operations/fleet/test/test_control_unit_routes.py",
+    "operations/fleet/test/test_control_unit_bootstrap.py",
+    "operations/fleet/test/test_control_unit_http_pipeline.py",
+    "middleware/core/gateway/test/test_control_unit_core_pipeline.py",
+    "middleware/core/gateway/test/test_scoped_navigation_cancel.py",
+    "operations/fleet/test/test_scoped_cancel_transport.py",
+    "operations/fleet/test/test_task_service.py",
+    "middleware/core/gateway/test/test_goal_lease.py",
+    "middleware/core/gateway/test/test_core_trip_lease.py",
+    "operations/fleet/test/test_transport.py",
+    "operations/fleet/test/test_cli.py",
+    "operations/fleet/test/test_server_app.py",
+    "-q"
+  ],
+  "runner_exit": 0,
+  "progress_counts": {"passed": 384, "skipped": 0, "failed": 0, "errors": 0, "xfail": 0},
+  "comparison": {
+    "command": "python -X utf8 test/known_failures.py <external>/rosy-control-final-proof/run-1.txt",
+    "exit": 0,
+    "stdout": "0 new, 0 known, 0 flaky, 0 listed but not failing"
+  },
+  "pytest_output": {
+    "file": "run-1.txt",
+    "sha256": "7016cb6ce55fe597dd3a815949a6b4ac5522b3116386997567d9ce12f28198f5"
+  },
+  "runner_transcript": {
+    "file": "runner-transcript.txt",
+    "encoding": "UTF-16LE with BOM",
+    "sha256": "62c7081a7416a432f8143e5c83a6842609c20cb6f551fbd509fff47cf1f34c4c",
+    "contents": "Native PowerShell Tee output: explicit tested_sha, command, remote runner stdout/stderr, runner_exit and known-failure comparison. Original remains external because it includes private host/path metadata."
+  },
+  "limits": "Host software verification only; not push CI, deployment, physical actuator or field acceptance. Final main integration remains separate."
+}

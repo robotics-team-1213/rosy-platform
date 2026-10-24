@@ -4345,6 +4345,24 @@
 - gate 변화: 없음. 동시 실행으로 공유 로그가 겹친 범위의 전체 합계는 주장하지 않으며, 실물·배포·현장 수용과 push는 수행하지 않았다.
 - CE: 해당 없음. 화면 준비 보완은 기존 helper로 설명되며, 남은 대기 불안정 원인은 해결된 교훈으로 기록하지 않는다.
 
+## 2026-10-23 · 56762a179e · 독립·중첩 관제 구성과 영속 위임 기반
+
+- 변경: 구성·직접 소유 검증과 영속 위임 identity·로컬 승인·owner 결과·취소 요청 기록을 추가했다. 기존 TaskStore admission transaction 안에서 위임과 작업을 함께 결속한다.
+- 증거: 구성·저장·결속·null 승인 RED/GREEN을 공식 원격 실행했다. 최종 세 파일 30 cases 종료 0, known failures 0 NEW. [검증 기록](../../docs/validation/control-unit-foundation-2026-10-23/result.md).
+- gate 변화: 없음. HTTP·화면·복구 종단·장치 수용은 후속이며 파이프라인 완성을 주장하지 않는다. CE 해당 없음: 검증한 판단은 코드·시험에 남는다.
+
+## 2026-10-23 · uncommitted · 공통 조합 CSS의 닫힌 목록과 Fleet 적용 회귀
+
+- 변경: 공통 동작 모음 CSS만 정확히 허용하고 다른 제품 CSS는 계속 거절하는 대조 검사를 추가했다. 로봇 선택 이동·긴 라벨 회귀를 별도 착지 단위로 보존한다.
+- 증거: `37951c2501`의 검증된 두 시험 파일을 그대로 옮겼다. 이전 스타일 계약 4 passed·후속 영향 선택 707 passed 근거를 유지하고 새 main 조합은 착지 도구로 확인한다.
+- gate 변화: 없음. API·명령·원장·물리 운전 변경 없음.
+
+## 2026-10-24 · a7aaaed472 · 관제 간 위임·현장 승인과 native 결과 연결
+
+- 변경: 직접 이웃 위임 HTTP·기명 현장 승인·동일 Task transaction 결속·고정 peer 자격과 앱 생애를 연결했다. stale·취소 요청·단절/재시작을 원래 identity로 조정하며 기존 dispatch와 native 결과 검사를 사용한다. 무로봇 독립 aggregate도 CLI에서 연다.
+- 증거: 집중 store/서비스/routes/HTTP/재시작47 PASS, 실제 앱/CLI132 PASS, 독립 aggregate/기존 CLI52 PASS, port/앱/CORE 종단16 PASS(서로 겹치는 별도 실행). [검증 기록](../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
+- gate 변화: 최종 통합 검증·로컬 main 착지는 대기한다. 실물·FIELD 수용은 열지 않는다. CE 해당 없음: 판단을 코드·회귀·검증 기록에 보존했다.
+
 ## 2026-10-24 · uncommitted · D-856 중립 운송 snapshot과 요청 대조
 
 - 변경: 기존 TRIP 원장에서 생성 principal 전용 GET 두 경로를 추가했다. 원본 요청 key·본문 digest·로봇·step/attempt와 수행 상태만 반환하고 Cell 공정 문서는 노출하지 않는다. 닫힌 profile에서도 읽되 쓰기·재시작 HOLD·claim·lease·안전 권한은 유지한다.

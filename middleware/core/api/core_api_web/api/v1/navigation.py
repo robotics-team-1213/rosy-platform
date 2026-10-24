@@ -22,6 +22,7 @@ from core_api_web.api.errors import ApiError
 from core_api_web.api.grants import NAVIGATE, check_grant
 from core_api_web.api.v1.localization import send_decision
 from core_common.domain.tasks import TaskKind
+from core_common.protocol.schemas import ScopedNavigationCancelRequest
 from core_api_web.api.v1.navigation_handover import navigation_handover
 
 
@@ -103,6 +104,21 @@ def navigation_cancel(auth: AuthContext = Depends(operator),
     receipt = []
     svc.nav.cancel(source=f"api:{auth.role}", receipt_sink=receipt.append)
     stop_ends_trip_lease(svc, auth)
+    return {"navigation": svc.nav.nav_state.value,
+            "operation": receipt[0].model_dump(mode="json") if receipt else None}
+
+
+@navigation_router.post("/navigation/cancel-scoped")
+def navigation_cancel_scoped(body: ScopedNavigationCancelRequest,
+                             auth: AuthContext = Depends(operator),
+                             svc: CoreServicesLike = Depends(get_services)):
+    receipt = []
+    canceled = svc.nav.cancel(source=f"api:{auth.role}", expected_boot_id=body.expected_boot_id,
+                              run_id=body.run_id, correlation_id=body.correlation_id,
+                              receipt_sink=receipt.append)
+    if not canceled:
+        raise ApiError("NAVIGATION_SCOPE_CHANGED", 409, "the exact active navigation owner has changed")
+    # Ending a current trip lease here could halt a replacement run admitted after this exact cancel.
     return {"navigation": svc.nav.nav_state.value,
             "operation": receipt[0].model_dump(mode="json") if receipt else None}
 

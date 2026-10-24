@@ -89,7 +89,7 @@ def _endpoint(robot_id, base_url, token, where: str,
 
 
 def load_robots(path: Path, *, allow_empty: bool = False) -> list[RobotEndpoint]:
-    """`allow_empty` only when the enrollment register can supply robots (D-361 4)."""
+    """`allow_empty` for enrollment or an aggregate with no directly owned robots."""
     try:
         text = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:

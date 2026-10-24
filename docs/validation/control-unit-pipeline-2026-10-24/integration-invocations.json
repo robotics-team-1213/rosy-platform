@@ -1,0 +1,46 @@
+{
+  "record_kind": "agent-compiled index of retained remote runner output, not CI receipt",
+  "tested_commit": "0cadc2668638750d6a7913071b86390d16572dc3",
+  "runner": "python -X utf8 tools/remote/remote_pytest.py",
+  "sha_was_explicit": true,
+  "runs": [
+    {
+      "name": "rosy-control-feature-evidence",
+      "pytest_arguments": ["ROSY_CAPTURE_FLEET_APP_CONTRACTS=1", "operations/fleet/test/test_control_unit_routes.py", "operations/fleet/test/test_control_unit_bootstrap.py", "-q"],
+      "passed": 17,
+      "skipped": 0,
+      "runner_exit": 0,
+      "comparison_exit": 0,
+      "new_failures": 0,
+      "pytest_sha256": "1bb59d16a386e9ca40c1d74ee3f4cb21b7846d97759a735787d0f2f1d715889f",
+      "runner_transcript_sha256": "1a1371a1c360fc5e6105af52ed24b59740be02744b9d1a1e36467e78b644448b",
+      "scope": "Six HTTP 200 receipts captured only from passing TestClient cases; real configured routes and SQLite, fake task/device transports. Existing backend receipts preserved."
+    },
+    {
+      "name": "rosy-control-sample-final",
+      "pytest_arguments": ["ROSY_RUN_BROWSER_TESTS=1", "applications/fleet/test/test_sample_flows.py", "applications/fleet/test/test_sample_browser.py", "applications/fleet/test/test_feature_browser_flows.py", "-q"],
+      "passed": 52,
+      "skipped": 0,
+      "runner_exit": 0,
+      "comparison_exit": 0,
+      "new_failures": 0,
+      "pytest_sha256": "4cf2124032e464147e816ec20702b3b32e3647b01af12dd56f695de26cf6f779",
+      "runner_transcript_sha256": "28e79f078609f4007b00a873c55edc7e37e8f7a03c9f1f2fa0f52deb3a3a529d",
+      "scope": "Independent process-local synthetic unit binds existing sample Work tasks. Includes real sample-page form submission, defaults after reset, named approval, terminal readbacks, cancellation and viewer refusal. Not nested-network or device evidence."
+    },
+    {
+      "name": "rosy-control-ui-final-proof",
+      "pytest_arguments": ["ROSY_RUN_BROWSER_TESTS=1", "shared/web/test/test_shared_controls.py", "operations/fleet/test/test_control_unit_browser.py", "operations/fleet/test/test_work_overview_browser.py", "operations/fleet/test/test_component_adoption_browser.py", "-q", "-s"],
+      "passed": 77,
+      "skipped": 0,
+      "runner_exit": 0,
+      "comparison_exit": 0,
+      "new_failures": 0,
+      "pytest_sha256": "76fcd0e26d65bb1b7d6d8beed43fe0faaeb9802a3d36fd4dc498394399971fee",
+      "runner_transcript_sha256": "e5a11e559f54a8d1bb905c5672b96f73d853843255670380921f18d6b4cb98c2",
+      "scope": "34 shared-control checks and 43 real Chromium cases with synthetic API fixtures. Twelve latest captures in evidence/final-ui."
+    }
+  ],
+  "retention": "Each external directory retains run-1.txt and native PowerShell Tee runner-transcript.txt (UTF-16LE BOM), including explicit source, invocation and exit/comparison output. Private host/path data remains external.",
+  "limits": "Runs overlap; do not sum. Formal FULL/main landing remains separate. No push CI, deployment, physical-stop or field acceptance."
+}

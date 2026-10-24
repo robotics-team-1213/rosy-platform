@@ -54,7 +54,10 @@ from fleet.server.background_workers import proposal_expiry_loop as _proposal_ex
 from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.background_workers import lane_compliance_loop
 from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
-from fleet.server.dispatch_workers import mission_feedback_schedule_loop, mission_dispatch_loop, task_dispatch_loop
+from fleet.server.background_workers import _task_dispatch_loop, _mission_model_turn_worker_loop
+from fleet.server.background_workers import control_unit_loop
+from fleet.server.control_unit_runtime import install_control_unit
+from fleet.server.dispatch_workers import mission_feedback_schedule_loop, mission_dispatch_loop
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
@@ -95,6 +98,7 @@ DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
 def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                web_common: Optional[Path] = None, hub=None, sightings=None,
                task_service: Optional[FleetTaskService] = None,
+               control_unit_config: Optional[Path] = None,
                mission_service: Optional[MissionService] = None,
                proposal_store: Optional[ProposalStore] = None,
                cell_job_compiler=None,
@@ -335,6 +339,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     @asynccontextmanager
     async def lifespan(app):
+        control_task = (asyncio.create_task(control_unit_loop(app.state.control_unit))
+                        if app.state.control_unit is not None else None)
         dispatcher = None
         mission_worker = None
         cell_job_worker = None
@@ -401,6 +407,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         finally:
             async with AsyncExitStack() as cleanup:
                 for resource in (getattr(app.state, "power_health_display", None), notification_http,
+                                 app.state.control_unit_http,
                                  calibration_drift_watch, post_action_observation_source, app.state.charge_runtime):
                     close = getattr(resource, "aclose", None)
                     if callable(close):
@@ -412,7 +419,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                    goal_evidence_worker, mission_feedback_scheduler,
                                    mission_model_turn_worker_task, localization_task,
                                    signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                                   lease_task, path_task, calibration_drift_task, notification_task, job_task, charge_task)
+                                   lease_task, path_task, calibration_drift_task, notification_task, job_task, charge_task,
+                                   control_task)
                                if background is not None]
                 for background in backgrounds:
                     background.cancel()
@@ -522,6 +530,10 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                 password_sessions=password_sessions)
     require_viewer, require_operator, require_named_operator, require_proposer = build_role_guards(
         authorize, principals, named_logins=password_sessions is not None)
+    install_control_unit(app, control_unit_config, tasks=task_service, console=console,
+                         principals=principals, named_logins=password_sessions is not None,
+                         console_token=console_token, authorize=authorize, require_viewer=require_viewer,
+                         require_named_operator=require_named_operator)
     # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
     # X-Forwarded-For carries the browser address the development session checks.
     install_development_routes(app, sessions=development_sessions, task_service=task_service,
@@ -894,15 +906,3 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_charge_runtime(app, factory=charge_runtime_factory, runner=trip_runner, plans=site_maps,
         task_service=task_service, ingress=station_ingress, console=console)
     return app
-
-
-async def _mission_model_turn_worker_loop(worker) -> None:
-    """Consume durable ER 2 turns only when an approved worker is injected."""
-    while True:
-        try:
-            await worker.consume_next(worker_id="fleet-feedback")
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            _LOG.exception("Fleet Mission model-turn worker cycle failed")
-        await asyncio.sleep(0.25)

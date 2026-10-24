@@ -3,6 +3,11 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3",
+      "result": "17 passed, 0 skipped; configured control-unit HTTP, real SQLite and fake task/device transports",
+      "pytest_root": "operations/fleet"
+    },
+    {
       "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563",
       "result": "6 passed; configured HTTP success and authorization refusals, fake device transports",
       "pytest_root": "operations/fleet"
@@ -29,6 +34,54 @@
     }
   ],
   "requests": {
+    "GET:/api/fleet/control-unit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_bootstrap.py",
+        "test_real_app_builds_control_unit_and_closes_its_transport"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "GET:/api/fleet/control-unit/delegations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_http_summary_listing_read_and_canceled_task_projection"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "GET:/api/fleet/control-unit/delegations/{origin}/{identity}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_child_service_reads_only_its_assigned_identity_and_never_the_ledger"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "POST:/api/fleet/control-unit/delegations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_child_service_reads_only_its_assigned_identity_and_never_the_ledger"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/approve": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_http_summary_listing_read_and_canceled_task_projection"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_http_summary_listing_read_and_canceled_task_projection"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
     "GET:/api/fleet/auth/authorize": {
       "status": 302,
       "test": [

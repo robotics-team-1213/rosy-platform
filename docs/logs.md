@@ -10074,6 +10074,177 @@ osy-d395-s1d\`.
 - 증거: 독립 설계 검토 지적 4건을 수정하고 재검토에서 닫았다. 최종 커밋은 공식 착지 도구의 lint·원격 시험·known failures 비교 후 병합한다.
 - gate 변화: 없음. 세부 계약은 Proposed이며 기능 구현·API 개방·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 새 장애 해결이 아닌 구조 설계 기록이다.
 
+## 2026-10-23 · 56762a179e · 관제 구성·영속 위임 기반 검증 기록
+
+- 변경: [검증 기록](validation/control-unit-foundation-2026-10-23/result.md)에 정적 소유·영속 identity·동일 transaction 결속의 범위와 RED/GREEN 근거를 모았다.
+- 증거: 원격 집중 30 cases 종료 0, known failures 0 NEW. 실행 파이프라인·브라우저·장치 시험은 이 범위에 없다.
+- gate 변화: 없음. D-851 Proposed와 전체 구현 목표를 유지한다. CE 해당 없음: 코드·회귀가 판단을 설명한다.
+
+## 2026-10-23 · uncommitted · Learning VLM 판단 화면(D-853)
+
+- 변경: `review_app.py`에 작업 도구 `/learning/vlm`을 더했다(`vlm_judge.py`·`vlm_judge_web.py`·`vlm.html/js/css`). 벤치 rows를 사진 hash 기준으로 한 번 가져오고, 사람이 질문별 정답을 달며(모델 답 비표시, version 409), 정답 있는 사진만으로 모델·런타임별 일치율·balanced accuracy·혼동표·모순 답 수를 낸다. `tools/vlm_question_bench.py --dump-questions`가 질문 JSON을 만든다.
+- 증거: `test_vlm_judge.py`, `test_vlm_judge_browser.py`(원격 시험 PC). 실제 정답 품질·모델 PC 운영은 아직이다.
+- gate 변화: 없음. 평가 전용 정답이며 검수 승인·export·학습 자료가 아니다. CE 해당 없음: 새 기능 구현이며 해결한 장애가 없다.
+
+## 2026-10-23 · uncommitted · 공통 UI 부품 구현 검증 이력 보존
+
+- 변경: [구현 기록](validation/shared-component-kit-2026-10-23/result.md)과 [후속 수정 검증](validation/shared-component-kit-2026-10-23/2026-10-23-final-checks.md)을 원래 `37951c2501`의 동결 내용 그대로 보존한다. 공통 라이브러리와 제품 적용은 별도 착지 단위다.
+- 증거: 각 문서의 SHA·실패와 후속 통과·검토 범위·화면 해시 보관 위치를 유지한다. 새 main 통합의 결과는 별도 후속 기록으로 추가한다.
+- gate 변화: 없음. 이력 보존이며 장치·현장 수용이나 새 독립 검토를 뜻하지 않는다.
+
+## 2026-10-23 · uncommitted · D-855 관제 wire와 조건부 취소 계약
+
+- 변경: 관제 위임·owner 응답·하위 승인과 별도 navigation/cancel-scoped 계약을 API v1.297·공유 schema·D-855에 함께 기록했다. 기존 무조건 취소와 새 경로를 분리해 구버전 body 무시가 다른 목표를 취소하지 않게 한다.
+- 증거: 새 모델 원격 RED를 확인했다. schema/API와 모든 live-version pin은 하나의 공유 계약으로 변경해야 하므로 파일 수만 줄이기 위한 불완전한 버전 변경으로 나누지 않았다. 실제 runtime·종단·장치 수용은 후속이다.
+- gate 변화: 없음. D-851 전체를 일괄 Accepted로 바꾸지 않는다. CE 해당 없음: 새 계약과 회귀가 판단을 보존한다.
+
+## 2026-10-24 · 1fd406e367 · Rosy Learning 제품 지도
+
+- 변경: [제품 지도](plans/2026-10-24-rosy-learning-product-map.md)를 추가했다. 정의, 사용자 네 역할, 공통 학습 루프 일곱 단계, 도메인×단계 현황, 현재 메뉴와 목표 메뉴(단계=메뉴, 도메인=필터), 우선순위 P0–P3, 모델 PC 인스턴스 여섯 개의 정리안, 결정할 것 여섯 가지.
+- 증거: 앱 화면·파이프라인·의도 문서·배포 기록 조사. 한 바퀴를 끝까지 돈 도메인은 없고, 자동 루프는 Pinky 차로 하나이며 승인 정답 0건으로 멈춰 있다.
+- gate 변화: 없음. 문서만이며 ADR로 옮기기 전 제안이다.
+
+## 2026-10-24 · 2d9acbfa51 · 공통 UI 부품과 Fleet·Robot 로컬 통합 검증
+
+- 변경: 공통 라이브러리·Fleet 적용·Robot 폼 적용을 분리해 main에 반영하고 [통합 기록](validation/shared-component-kit-2026-10-23/2026-10-24-local-integration.md)에 SHA와 검증 범위를 묶었다.
+- 증거: 각 착지의 브라우저 1,292·527·253 passed, 모두 skip 0/0 NEW. 같은 최종 실행 SHA의 캡처 회귀 407 passed/1 native export skipped와 전체 Robot UI 셸 1 passed, 새 PNG 36장 원격·회수 SHA-256 일치를 확인했다. 실행 자산 19개·핵심 시험 4개는 기존 최종 검증본과 같은 Git 내용이다.
+- gate 변화: 없음. push·배포·실물·실제 사용자 과업 수용은 미실시다. CE 미해결: 작업 공간은 복구했으나 외부 제거 원인은 확인하지 못해 관측·가설·다음 확인을 작업 기록에 남겼다.
+
+## 2026-10-24 · 2d9acbfa51 · UI 통합 근거 JSON 형식 정정
+
+- 변경: [정정 기록](validation/shared-component-kit-2026-10-23/2026-10-24-manifest-format-correction.md)에 원본 manifest의 패치 표시 문자 오류와 v2 위치·해시를 추가했다. 기존 동결 기록·원본 파일을 보존한다.
+- 증거: 문자 1개만 제거됐고 v2 JSON 파싱·근거 파일 71개의 SHA-256 대조를 통과했다. 실행 코드와 앞선 시험·캡처의 근거를 그대로 확인했다.
+- gate 변화: 없음. UI 구현과 호스트 검증 범위는 통합 기록을 따르며 작업 공간 제거의 CE 미해결 상태도 유지한다.
+
+## 2026-10-24 · uncommitted · 플랫폼 최상위 목표를 범용 실행 플랫폼으로 확정
+
+- 변경: 사용자 결정으로 [PRODUCT.md 「Product Purpose」](../PRODUCT.md#product-purpose)에 목표(업무 앱이 플랫폼을 고치지 않고 로봇에 작업을 맡기는 범용 실행 플랫폼, 첫 적용 사례 Harbor)와 완료 조건 3개를 정본으로 적었다. README는 한 줄로 가리키고, handoff 1절의 구체 목표 셋은 능력 증명 마일스톤 둘로 바꾸고 Rosy Cell 팔레타이징은 Harbor 흐름에 흡수했다.
+- 증거: 2026-10-21 모듈 경계 합의와 2026-10-24 사용자 확인.
+- gate 변화: 없음. 목표 선언이며 기능 구현·장치/현장 수용을 뜻하지 않는다. CE 해당 없음: 장애 해결이 아닌 목표 문서 변경이다.
+
+## 2026-10-24 · uncommitted · 외부 업무 앱 카탈로그 등록과 은퇴 앱 정리
+
+- 변경: `app-names-and-roles.md`에 외부 업무 앱 절을 추가해 Harbor(HarborLogi)를 등록하고 은퇴한 rosy-vault의 Rosy Vault·Rosy Device·device-core 행을 정리했다. README 문서 지도와 `docs/reference/AGENTS.md`에 `application-contract-support.md`를 색인하고 PRODUCT.md의 앱 구분 문장을 갱신했다.
+- 증거: 공개 팀 저장소 kernel-robot-repo-2의 README·CONTRIBUTING·platform-contract와 이 저장소의 D-806·D-836·지원 계약 표를 대조했다. Harbor가 쓰는 경로·권한은 지원 계약 표와 일치한다. 제품 코드·wire·권한은 바꾸지 않았다.
+- gate 변화: 없음. 문서 색인·카탈로그 등록이며 외부 앱 연동·실물 수용을 열지 않는다. CE 해당 없음: 새 장애 해결이 아닌 문서 정리다.
+
+## 2026-10-24 · bd746466aa · 닫힌 VLM 질문 설계 교훈
+
+- 변경: [교훈](solutions/design-patterns/closed-vlm-questions-need-one-kind-per-question-and-capped-human-queues-2026-10-24.md) 추가 — 종류마다 yes/no, 사진 단위 평가셋, 모든 사람 대기열에 상한, 정답 전 답 분포 확인.
+- 증거: 다지선다 40/40 `wall`, 질문별 평가셋 합집합 132/135, 상한 없는 의견 갈림. 각각 고친 뒤 4/60, 보기당 30, 보기당 50·대기 수.
+- gate 변화: 없음. 애매한 질문(v3)은 확인 중이며 결과 후 덧붙인다.
+
+## 2026-10-24 · 1fd406e367 · D-857 Rosy Learning 제품 정의
+
+- 변경: [D-857](adr/D-857-rosy-learning-product-definition.md) Accepted(사용자 결정 6건): 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답, 사람 확인 한도 시작값, VLM 별도 평가 state. D-449·D-792·D-834에 개정 메모, `app-responsibilities.md` Learning 행 갱신.
+- 증거: Learning 관련 Proposed 20건 분류 — 대체 0, 일부 개정 4(D-449·D-792·D-834·D-853), 유지 9, 범위 밖 7. D-853 개정 메모는 그 ADR이 착지한 뒤 단다.
+- gate 변화: 없음. 코드·배포·인스턴스 퇴역은 별도 조각이다.
+
+## 2026-10-24 · 64fd9ad65c · Learning 지도 결정 반영과 VLM 질문 교훈 갱신
+
+- 변경: [제품 지도](plans/2026-10-24-rosy-learning-product-map.md) §9를 D-857 결정으로 바꿨다. [닫힌 질문 교훈](solutions/design-patterns/closed-vlm-questions-need-one-kind-per-question-and-capped-human-queues-2026-10-24.md)에 v3 결과를 덧붙였다.
+- 증거: 모델 PC v3 벤치·토론 — 기준을 적은 `tape_left`·`tape_right`는 의견 갈림 0/1(이전 0/27 합의), `object_between_tapes` 1/26, `robot_count` 0/10.
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · Learning 다섯 단계 메뉴(D-857 §3)
+
+- 변경: Learning 주 메뉴를 홈·자료·정답·학습·평가·승격 다섯 단계로 바꾸고 「작업 도구」 펼침을 없앴다. 화면이 여럿인 단계(자료·정답·학습)는 경로 줄 하위 메뉴로 기존 화면을 두 번 안에 연다. 계정·저장 공간은 상단 「설정」으로 옮겼다. 새 `/learning/evaluate`(`evaluate.html/js`)는 학습 실행기 평가 단계와 VLM 모델 대 확정 정답을 읽기 전용으로 모으고, `?domain=` 필터를 따르며, 승격 요청은 비활성(다음 조각)이다. 기존 URL은 그대로다.
+- 증거: `test_learning_shell_browser.py`(다섯 단계·두 번 안 도달·설정), `test_app_shell_seats.py`, `test_learning_workspace_browser.py`, `test_vlm_judge.py`(원격 시험 PC).
+- gate 변화: 없음. 승격 승인·배포는 Fleet·사람(D-793)이며 이 화면은 근거만 보인다. CE 해당 없음: 화면 구조 변경이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · Learning 홈의 도메인별 단계(D-857 §3)
+
+- 변경: `learning_domains.py`가 차로·객체·OMX·SIM·VLM·판단 모델 여섯 도메인을 루프 여섯 칸(수집~승격 기록)과 다음 할 일 하나로 묶어 `/api/learning`의 `domains`로 준다(기존 키 유지). 작업대가 이미 가진 자료(`project()`, 객체 수·준비본, `learning_links`·`omx_segment_reviews`, SIM 목록, VLM 표)만 읽고, 모르는 칸은 이유를 적은 `not_available`이다. 홈은 도메인마다 한 줄을 보이고 `?domain=`을 따르며, 평가·승격 화면은 각 도메인의 평가·승격 기록 칸을 보인다.
+- 증거: `test_learning_domains.py`, `test_sim_web.py`, `test_learning_workspace_browser.py`(390·1280 가로 스크롤 없음, 원격 시험 PC).
+- gate 변화: 없음. 읽기 전용 표시이며 승인·승격·실행을 바꾸지 않는다. CE 해당 없음: 새 표시 기능이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · VLM 임시·확정 정답과 작은 사람 확인 대기열(D-857 §4–5)
+
+- 변경: `vlm_judge.py`가 모델 합의(서로 다른 모델 2개 이상 같은 답·각 p ≥ 0.8·반대 답 없음, 같은 모델의 런타임·크기는 하나로 셈)를 읽을 때마다 임시 정답으로 만든다(저장하지 않음). 사람 대기열은 보기×질문별 고정 평가셋(최대 30, 임시 정답별로 번갈아 뽑음)·의견 갈림(둘 다 모델 답 비표시)과 주마다 보기당 최대 10건의 점검(임시 정답과 「맞음」·「고침」)이며, 열린 건이 50을 넘으면 점검을 더하지 않는다. 점검 5건 이상에서 오류율이 10%를 넘은 질문은 임시 정답을 멈춘다. 평가 탭은 확정 정답만으로 계산하고 범위·점검 오류율·멈춘 질문을 보이며, 내보내기는 답마다 `tier`를 적는다. `review_app.py --vlm-eval-url`은 평가·승격 화면과 홈 VLM 줄에서 별도 VLM 평가 인스턴스로 가는 링크만 준다. 홈 VLM 줄은 임시 정답 수를 더한다.
+- 증거: `test_vlm_judge.py`(합의 규칙·같은 모델 한 번·대기열 결정성과 상한·점검 멈춤·비표시와 표시 응답·링크 검사), `test_vlm_judge_browser.py`(점검 맞음·고침 흐름), `test_learning_domains.py`(원격 시험 PC). 실제 모델 답에서의 합의 비율·점검 오류율은 아직 없다.
+- gate 변화: 없음. 모델 합의는 승인·승격이 아니며(D-514 §5, D-853 §3) 승격 평가는 확정 정답만 쓴다. CE 해당 없음: 새 기능 구현이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · VLM 고정 평가셋을 보기당 30장으로 줄임(D-857 §5)
+
+- 변경: 모델 PC 인스턴스(사진 135장)에서 대기열이 「평가셋 132 · 의견 갈림 2 · 점검 0」이었다. 보기×질문마다 30장을 뽑아 합치면 거의 모든 사진이 평가셋이 됐기 때문이다. 이제 평가셋은 보기마다 최대 30장이고 그 사진의 모든 질문을 모델 답 없이 단다. 합의 모양별로 번갈아 뽑아 `vlm_eval_set`에 고정하며, 모델이 더해져도 바뀌지 않고 제외로 줄 때만 채운다. 보기당 50건 상한은 의견 갈림·점검만 세고, 화면은 「평가셋 n/30」을 따로 보인다.
+- 증거: `test_vlm_judge.py`(보기당 30장·고정·제외 뒤 채움·상한), `test_vlm_judge_browser.py`(원격 시험 PC). 모델 PC 인스턴스 재확인은 아직이다.
+- gate 변화: 없음. CE 해당 없음: 착지 전 기능 조각의 선택 규칙 수정이며 운영 장애 복구가 아니다.
+
+## 2026-10-24 · f256684c37 · VLM 의견 갈림 대기열 상한
+
+- 변경: 의견 갈림 사진도 보기마다 오래된 것부터 50장까지만 연다(`QUEUE_CAP`). 나머지는 `disputed_waiting`으로 세고 화면에 「대기 n」으로 보인다(D-857 §5).
+- 증거: 모델 PC 8790 배포에서 front 평가셋 밖 30장이 모두 의견 갈림이었다. 자료가 늘면 상한이 없어 사람 확인이 끝없이 쌓인다.
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · VLM 의견 갈림 질문의 오프라인 모델 토론(D-857 §4)
+
+- 변경: `vlm_judge.py export-disputes`가 평가셋 밖·멈추지 않은 의견 갈림 (사진, 질문)을 모든 모델의 지금 답과 함께 내보내고, `tools/vlm_question_bench.py --debate-input`이 한 모델에 다른 모델 답을 「model A/B」로 익명화한 메모를 붙여 다시 묻는다. 가져오기는 같은 모델 이름의 런타임 `debate`로 저장하고(그 모델이 전에 답한 질문만), 합의에서 그 모델의 다른 런타임을 대신해 모델 수가 늘지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 따른다. 웹앱은 모델을 부르지 않는다(D-459).
+- 증거: `test_vlm_judge.py`(원격 시험 PC 25건 통과). 모델 PC 실제 상태(사진 135장, `reviews.sqlite3`는 먼저 백업)에서 Qwen3-VL-8B-Instruct-nf4·Qwen3-VL-4B-Instruct·Qwen3.5-4B 한 판: 의견 갈림 62쌍 중 7쌍이 합의(front.shape 2/2, front.wall_ahead 1/1, wrist.gripper_empty 4/5, front.lane_tape 0/27, front.lane_obstruction 0/17, top.robots_close 0/10). 대기열 의견 갈림 사진은 front 30→29, top 10→10, wrist 5→1, 점검 0→5(front 1, wrist 4). 모델별 토론 시간은 8B 74초, 4B 48초, Qwen3.5-4B 32초(로드 포함).
+- gate 변화: 없음. 토론 합의는 임시 정답이며 승인·승격이 아니다(D-514 §5, D-853 §3). CE 해당 없음: 새 기능이며 해결한 장애가 없다.
+
+## 2026-10-24 · uncommitted · VLM 질문 세트 v3와 새 평가 state(D-857 §4)
+
+- 변경: v2 토론이 0건 정한 `front.lane_tape`(0/27)·`front.lane_obstruction`(0/17)·`top.robots_close`(0/10)를 `front.tape_left`·`front.tape_right`, `front.object_between_tapes`, `top.robot_count`(zero·one·two·many)로 바꿨다(`tools/vlm_question_bench.py`, QUESTION_SET v3). 천장 프레임에는 로봇별 화면 위치가 없어 로봇별 잘라 묻기는 미뤘다. 모델 PC 서비스는 사람 정답 0건을 확인한 뒤 새 `state-v3`로 옮겼고, 옛 `state`는 v2 백업으로 그대로 둔다.
+- 증거: `test_vlm_judge.py` 26건 통과(원격 시험 PC). 모델 PC에서 v3 앞(60장)·위(40장, 448) 벤치를 Qwen3-VL-8B-nf4(+Ollama)·Qwen3-VL-4B·Qwen3.5-4B로 돌리고 v2 손목 행과 함께 가져온 뒤 토론 한 판: 의견 갈림 82쌍 중 18쌍 합의(front.tape_left 0쌍 갈림, front.tape_right 0/1, front.object_between_tapes 1/26, front.wall_ahead 12/25, front.shape 1/15, top.robot_count 0/10, wrist.gripper_empty 4/5). front.wall_ahead·front.shape의 갈림이 늘어난 것은 Qwen3.5-4B가 v3에서 처음 앞 사진에 답한 탓이다. 대기열 의견 갈림 사진 front 27, top 10, wrist 5→1, 점검 front 3·wrist 4.
+- gate 변화: 없음. 토론 합의는 임시 정답이다. CE 해당 없음: 질문 문장 개정이며 해결한 장애가 없다.
+
+## 2026-10-24 · 8d119665da8f · teacher 진단의 실제 native 실행 기록
+
+- 변경: [새 날짜 검증 기록](validation/omx-teacher-gripper-native-diagnostic-2026-10-24/result.md)에 공식 착지와 단 한 번의 native 진단 원본을 연결했다. 이전 날짜의 동결 결과는 유지했다.
+- 증거: source8d 공식 guard273/영향490PASS·NEW0, 실제 native EXITED0/PASS3·전체4,889파일 바이트 대조·정리 확인과 독립 검토. 실패 근거 필드는 null이며 거부는 재현되지 않았다.
+- gate 변화: 없음. 진단 성공 경로의 근거이며 물리 원인 해결·학습·정책 평가·실물 수용 근거가 아니다. 두 HOLD cohort와 진단3개 제외를 유지한다.
+- CE: 미해결 — 과거 held/stale 물리 원인이 확인되지 않아 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-24 · a7aaaed472 · 관제 위임의 실행 경로·배치·집중 검증 기록
+
+- 변경: [독립·중첩 관제 기동 절차](deployment/control-units.md)와 [소프트웨어 검증](validation/control-unit-pipeline-2026-10-24/result.md)을 기록했다. 직접 자식의 exact 배정 조회는 승인 직전 조상 연결 확인에만 한정한다.
+- 증거: 실제 HTTP 응답 유실/3곳 재시작, 기존 Task→CORE native 결과와 상위 투영, 실제 Chromium·CLI·원장 회귀를 SHA·로그 hash로 구분했다.
+- gate 변화: 최종 통합 검사·착지는 대기하며 D-851 전체·장치/현장 수용을 완료로 바꾸지 않는다. CE 해당 없음.
+
+## 2026-10-24 · d154853fc8 · 관제 위임 소프트웨어 공식 검증·착지
+
+- 변경: [최종 검증 기록](validation/control-unit-pipeline-2026-10-24b/result.md)에 FULL candidate·최신 main 통합·실행별 source와 hash·로컬 착지를 연결했다. 이전 집중 기록은 유지했다.
+- 증거: 공식 FULL 27개 호출과 SVG 단독 재시도, 통합 guard 273 PASS·영향 505 PASS·NEW 0, 구현의 main ancestry와 독립 재검토를 확인했다. `land_exit=0`, push 안 함.
+- gate 변화: D-855 유한 이동 위임의 소프트웨어 범위다. D-851 전체·실물·배포·원격 CI 수용을 열지 않는다.
+- CE: 미해결 — 기존 SVG label 측정의 간헐 0px 원인은 미확인이다. 단독 재시도 통과와 다음 관측을 기록하고 기준·quarantine은 바꾸지 않았다.
+
+## 2026-10-24 · 8d119665da8f · OMX 고정 예산 입력 검사와 중단된 학습 기록
+
+- 변경: [검증 기록](validation/omx-fixed-budget-input-audit-2026-10-24/result.md)에 36회 원본 수집·전체 실제 입력 검사·고정 순서 20+5 선택과 중단된 학습을 구분했다.
+- 증거: 수집·입력 검사 각각 실제 종료 0, 전체 export 58,109파일 재대조와 독립 검토 지적 없음. 학습은 연결 중단 뒤 체크포인트·최종 보고서 없이 종료됐고 원래 OUT을 회수·보존했다. 학습 완료나 정책 평가 통과로 기록하지 않는다.
+- gate 변화: 입력 적격성만 확인했다. 정책 품질·실물·HF 업로드·운영 승격은 수용하지 않는다.
+- CE: 미해결 — 정확한 정지 원인과 연결 중단에 견디는 학습 실행 경로의 검증이 남았다.
+
+## 2026-10-24 · 67b368605a · 선택형 학습 실행의 연결 복구와 종료 증거 보존
+
+- 변경: 기존 native 자원·host·종료 경계를 유지하는 `remote_sim.py --durable`과 동일 작업 추적을 추가했다. 연결 소실에는 작업을 보존하고, PID/starttime·metadata가 맞는 actor만 추적·취소한다.
+- 증거: [검증 기록](validation/omx-durable-learning-transport-2026-10-24/result.md). 실제 원격 98 PASS, MODEL native 경로에서 첫 START 응답을 숨겨도 RPC 2회·실행 1회·종료 0, source/OUT 정리 뒤 같은 terminal rc/log 재조회까지 확인했다.
+- gate 변화: 실행 계약만 검증했다. 기존 interrupted 학습과 동결 자료는 유지하며 새 학습·정책 평가·실물·HF 업로드를 수용하지 않는다.
+- CE: 해당 없음 — 재발 방지 동작과 증거를 코드·회귀 검사·검증 기록에 직접 남겼다. 원래 정지 주체와 물리 원인은 미해결이다.
+
+## 2026-10-24 · 8d119665da8f · 고정 예산 복구 학습의 실제 완료와 재로딩
+
+- 변경: [복구 학습 기록](validation/omx-recovered-teacher-training-2026-10-24/result.md)에 별도 사전 고정 시도1회·실제10k 완료·원본 데이터와 모델 해시·두 fresh process 검증을 남겼다.
+- 증거: 동일 native63bc43/로컬 runner 종료0,100파일 회수, finite loss10000개, dataset80547파일·36export58109파일 대조와 두 reload/stdout 일치. 실제 증거·payload의 독립 검토 Important 없음.
+- gate 변화: 학습·offline·reload만 확인했다. 독립 SIM 정책 성공·운영 승격·실물·HF 업로드 수용은 별도다.
+- CE: 해당 없음 — 동결 코드와 실제 검증 기록이 판단을 보존한다. 원래 중단의 상세 원인은 미해결이다.
+
+## 2026-10-24 · 8d119665da8f · 복구 정책의 calibration 통과와 engineering HOLD
+
+- 변경: [실제 평가 기록](validation/omx-recovered-policy-engineering-2026-10-24/result.md)에 calibration PASS·engineering1회 실패·formal0회를 구분하고 사전 manifest/원본 archive·map·안전 종료를 남겼다.
+- 증거: calibration 종료0/95파일 검증, engineering 종료1/253파일 검증. 170수락 목표 중169성공·마지막1개 JTC 목표 허용오차 초과, owner HOLD·cleanup확인. 허용치·모델·기준을 변경하거나 실패를 대체하지 않았다.
+- gate 변화: 모델 작업 성공은 HOLD다. 학습/offline/reload 수용을 SIM 작업 성공·운영·실물·HF 수용으로 확대하지 않는다.
+- CE: 미해결 — 실제 추종 오차의 물리 원인을 아직 구분하지 못했다.
+
+## 2026-10-24 · 521529fe5f · 관제 역할·직계 네트워크와 목표 현황 정렬
+
+- 변경: [기동 안내](deployment/control-units.md)에 독립·통합·중간·대상 관제 및 화면/장치/모델 PC의 책임표, R/A/B/A1 연결도, 요청·결과·승인 확인·취소의 실제 호출 방향, 방향별 service 자격과 실제 PC 연결 확인 순서를 보완했다.
+- 목표: [후속 목표](plans/2026-10-23-composable-control-goals.md)에 D-855 소프트웨어 완료와 미확인 실제 배치·LAN/TLS·현장 수용을 구분했다. 최초 전체 설계 체크리스트는 이력으로 보존한다.
+- gate 변화: 소프트웨어 완료 범위를 기존 동결 증거에 연결했다. 실제 PC 간 TLS·배치·장치·현장 gate는 수용 대기다.
+- 소스 대조: Fleet의 topology/runtime/routes/service, CLI, site Caddy·Compose를 확인했다. 기본 site Compose에는 control-unit 인자·mount가 없고 peer client의 기본 TLS 신뢰에 site `SSL_CERT_FILE`이 자동 적용되지 않으므로 설치만으로 중첩 연결 완료를 주장하지 않는다. 새 API·장치 권한·배포 변경은 없다.
+- 검증: 독립 계약 검토와 커밋된 revision의 공식 원격 회귀·known failures 비교 후 착지한다. 기존 소프트웨어 검증은 동결된 pipeline 기록을 참조하며 현장 검증으로 확대하지 않는다.
+- CE: 해당 없음 — 역할·배치 제약과 다음 수용 기준을 해당 정본에 직접 남겼다. 실제 네트워크 장애를 해결한 사례는 아니다.
+
 ## 2026-10-24 · uncommitted · D-856 업무 공정과 로봇 동작 실행 경계
 
 - 변경: D-856과 단계별 실행 계획을 등록했다. Harbor는 업무·공정 변환·완료를, ROSY는 지원 동작·실행 원장·자원·안전을 소유한다. 기존 Cell 공정은 호환 경로로 보존한다.

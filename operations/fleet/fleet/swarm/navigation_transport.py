@@ -1,10 +1,26 @@
 """Existing native navigation HTTP calls; guarded transport remains the sole sender."""
 from uuid import UUID
 
+from core_common.protocol.schemas import ScopedNavigationCancelRequest
+
 
 class NavigationTransport:
     async def navigation_cancel(self) -> dict:
         return await self._post("/api/v1/navigation/cancel")
+
+    async def navigation_cancel_scoped(self, *, expected_boot_id, run_id, correlation_id) -> dict:
+        body = ScopedNavigationCancelRequest(expected_boot_id=expected_boot_id, run_id=run_id,
+                                              correlation_id=correlation_id).model_dump(mode="json")
+        # A missing scoped endpoint must never fall back to cancelling today's unrelated goal.
+        response = await self._post("/api/v1/navigation/cancel-scoped", body)
+        operation = response.get("operation") if isinstance(response, dict) else None
+        if (not isinstance(operation, dict) or not isinstance(response.get("navigation"), str)
+                or operation.get("boot_id") != body["expected_boot_id"]
+                or operation.get("run_id") != body["run_id"]
+                or operation.get("correlation_id") != body["correlation_id"]
+                or operation.get("phase") != "TERMINAL" or operation.get("result") != "CANCELED"):
+            raise ValueError("SCOPED_CANCEL_RESPONSE_UNVERIFIED")
+        return response
 
     async def navigation_path(self) -> dict:
         """현재 계획 경로(map 프레임 폴리라인). Fleet 이 교행을 미리 보는 유일한 재료다."""

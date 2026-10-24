@@ -4,6 +4,218 @@
   "evidence_scope": "HTTP response receipts from passing backend tests; refusal-only routes are explicit. Sample evidence covers representative transactions, not every configured API branch or physical device behavior.",
   "features": [
     {
+      "id": "control_units",
+      "title": "관제 간 작업 위임",
+      "entrypoints": [
+        "applications/fleet/web/index.html"
+      ],
+      "consumers": [
+        "applications/fleet/web/work/control-unit-view.js"
+      ],
+      "availability": "Configured control unit; named local human approval. The sample is one independent synthetic unit, not nested-network or device evidence.",
+      "calls": [
+        {
+          "consumer": "applications/fleet/web/work/control-unit-view.js",
+          "expression": "/api/fleet/control-unit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/control-unit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/control-unit-view.js",
+          "expression": "/api/fleet/control-unit/delegations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/delegations",
+            "POST:/api/fleet/control-unit/delegations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/control-unit-view.js",
+          "expression": "/api/fleet/control-unit/delegations/${encodeURIComponent(row.origin_id)}/${encodeURIComponent(row.delegation_id)}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/delegations/{origin}/{identity}",
+            "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/approve",
+            "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/control-unit-view.js",
+          "expression": "/api/fleet/control-unit/delegations/${encodeURIComponent(unit.unit_id)}/${encodeURIComponent(identity)}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/delegations/{origin}/{identity}"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/control-unit",
+          "method": "GET",
+          "path": "/api/fleet/control-unit",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_routes.py",
+          "handler": "summary",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
+          "contract_tests": [
+            "operations/fleet/test/test_control_unit_routes.py",
+            "operations/fleet/test/test_control_unit_bootstrap.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit"
+        },
+        {
+          "id": "GET:/api/fleet/control-unit/delegations",
+          "method": "GET",
+          "path": "/api/fleet/control-unit/delegations",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_routes.py",
+          "handler": "listing",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
+          "contract_tests": [
+            "operations/fleet/test/test_control_unit_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/delegations"
+        },
+        {
+          "id": "POST:/api/fleet/control-unit/delegations",
+          "method": "POST",
+          "path": "/api/fleet/control-unit/delegations",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_routes.py",
+          "handler": "submit",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
+          "contract_tests": [
+            "operations/fleet/test/test_control_unit_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/delegations"
+        },
+        {
+          "id": "GET:/api/fleet/control-unit/delegations/{origin}/{identity}",
+          "method": "GET",
+          "path": "/api/fleet/control-unit/delegations/{origin}/{identity}",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_routes.py",
+          "handler": "read",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
+          "contract_tests": [
+            "operations/fleet/test/test_control_unit_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/delegations/{origin}/{identity}"
+        },
+        {
+          "id": "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/approve",
+          "method": "POST",
+          "path": "/api/fleet/control-unit/delegations/{origin}/{identity}/approve",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_routes.py",
+          "handler": "approve",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
+          "contract_tests": [
+            "operations/fleet/test/test_control_unit_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/delegations/{origin}/{identity}/approve"
+        },
+        {
+          "id": "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/cancel",
+          "method": "POST",
+          "path": "/api/fleet/control-unit/delegations/{origin}/{identity}/cancel",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_routes.py",
+          "handler": "cancel",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed HTTP 200 in a passing configured TestClient test; real SQLite and fake task/device transports",
+          "contract_tests": [
+            "operations/fleet/test/test_control_unit_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/delegations/{origin}/{identity}/cancel"
+        }
+      ],
+      "flows": [
+        {
+          "id": "control_units.happy",
+          "kind": "happy",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/control-unit",
+                "GET:/api/fleet/control-unit/delegations",
+                "POST:/api/fleet/control-unit/delegations",
+                "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/approve"
+              ],
+              "screen_assertion": "기명 승인 후 기존 sample Task와 연결된 작업을 표시한다"
+            }
+          ],
+          "scenario_id": "control_units.happy",
+          "browser_test": "applications/fleet/test/test_sample_browser.py::test_control_unit_form_approves_then_reads_existing_task_result",
+          "sample_status": "verified",
+          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence",
+          "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+        },
+        {
+          "id": "control_units.refused",
+          "kind": "refused",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/control-unit/delegations",
+                "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/approve"
+              ],
+              "screen_assertion": "잘못된 revision과 viewer 제출을 거절한다"
+            }
+          ],
+          "scenario_id": "control_units.refused",
+          "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[control_units]",
+          "sample_status": "verified",
+          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence",
+          "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+        },
+        {
+          "id": "control_units.terminal",
+          "kind": "terminal",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/control-unit/delegations/{origin}/{identity}",
+                "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/cancel",
+                "GET:/api/fleet/control-unit/delegations"
+              ],
+              "screen_assertion": "기존 sample Task 완료와 취소 결과를 다시 조회한다"
+            }
+          ],
+          "scenario_id": "control_units.terminal",
+          "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[control_units]",
+          "sample_status": "verified",
+          "test_scope": "Independent process-local sample: representative HTTP fetch/readbacks and document rendering, not nested recovery or physical stop evidence",
+          "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+        }
+      ]
+    },
+    {
       "id": "auth",
       "title": "로그인·세션",
       "entrypoints": [

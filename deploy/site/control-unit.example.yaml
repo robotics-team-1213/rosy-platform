@@ -1,0 +1,18 @@
+# Synthetic three-level example. Copy to approved private deployment configuration.
+# Each instance keeps its own DB, roster, users and service credentials.
+unit_id: A1
+manifest:
+  revision: example-v1
+  units:
+    - id: R
+      resources: []
+    - id: A
+      parent: R
+      resources: []
+    - id: A1
+      parent: A
+      resources: [robot:example-robot]
+peers:
+  A:
+    url: https://control-a.invalid
+    token_file: secrets/parent-service.token

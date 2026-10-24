@@ -55,6 +55,38 @@ def test_eight_pages_use_same_frontend_without_unhandled_requests(sample_site, p
             browser.close()
 
 
+def test_control_unit_form_approves_then_reads_existing_task_result(sample_site):
+    from playwright.sync_api import sync_playwright, expect
+    engine, origin = sample_site
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            assert page.request.post(origin + '/api/fleet/auth/login', headers={'Origin': origin},
+                data={'login': 'sample', 'password': 'CHANGE_ME'}).status == 204
+            page.goto(origin + '/console?view=work')
+            panel = page.locator('#control-unit-work')
+            expect(panel).to_contain_text('sample-unit')
+            panel.locator('summary').click()
+            expect(panel.locator('#control-unit-yaw')).to_have_value('0')
+            panel.locator('#control-unit-robot_id').fill('sample-robot')
+            panel.locator('#control-unit-x').fill('1')
+            panel.locator('#control-unit-y').fill('2')
+            panel.get_by_role('button', name='대상 관제에 요청', exact=True).click()
+            expect(panel).to_contain_text('현장 승인 대기')
+            panel.get_by_role('button', name='이 관제에서 승인', exact=True).click()
+            expect(panel).to_contain_text('현장 승인 sample')
+            expect(panel).to_contain_text('연결된 작업 sample-task-1')
+            engine.advance('monitoring', 'complete')
+            expect(panel).to_contain_text('작업 완료', timeout=10000)
+            panel.get_by_role('button', name='새 요청 작성', exact=True).click()
+            expect(panel.locator('#control-unit-x')).to_have_value('0')
+            expect(panel.locator('#control-unit-yaw')).to_have_value('0')
+            assert not engine.unhandled, engine.unhandled
+        finally:
+            browser.close()
+
+
 def test_profile_save_and_logout_use_sample_session(sample_site):
     from playwright.sync_api import sync_playwright, expect
     _, origin = sample_site
