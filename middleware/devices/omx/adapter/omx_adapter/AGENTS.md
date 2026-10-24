@@ -8,7 +8,7 @@
 
 ## Purpose
 
-Disabled-by-default profile validation plus optional ROS action and camera adapters. No fake joint-state publisher or `cmd_vel`. The only serial access is `dynamixel_port.py` with its `dynamixel_bus.py` (D-858 S1), which nothing composes yet.
+Disabled-by-default profile validation plus optional ROS action and camera adapters. No fake joint-state publisher or `cmd_vel`. The only serial access is `real/dynamixel_port.py` with its `real/dynamixel_bus.py` (D-858 S1), which nothing composes yet.
 
 ## Key Files
 
@@ -31,7 +31,7 @@ Disabled-by-default profile validation plus optional ROS action and camera adapt
 - Disabled + selected `omx_ai` model and empty measured joint map is valid and **not capable**. Contract is `{}`.
 - Enabled profile requires a known model alias, driver package, hardware plugin, ≥4 unique joint names, frames, and finite positive `update_rate_hz`.
 - Do not open hardware from `cli.py`. It is a validator.
-- `dynamixel_bus.py` imports `serial`/`dynamixel_sdk` only inside `SdkBus`. Keep the module importable without them; tests use a fake bus. Do not add another serial writer for the same arm (D-858 §3).
+- `real/dynamixel_bus.py` imports `serial`/`dynamixel_sdk` only inside `SdkBus`. Keep the module importable without them; tests use a fake bus. Do not add another serial writer for the same arm (D-858 §3).
 
 ### Testing Requirements
 

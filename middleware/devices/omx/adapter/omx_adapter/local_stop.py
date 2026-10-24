@@ -202,8 +202,12 @@ class LocalStopController:
 
     def rearm(self, *, authority_epoch: int, dispatch_generation: int,
               operator_confirmed: bool,
-              fleet_fence_current: Callable[[int, int], bool]) -> LocalStopSnapshot:
-        """Explicitly clear a local latch only on a newer, reconciled Fleet generation."""
+              fleet_fence_current: Callable[[int, int], bool],
+              reason: str = "OPERATOR_REARM") -> LocalStopSnapshot:
+        """Explicitly clear a local latch only on a newer, reconciled Fleet generation.
+        ``reason`` tells a bench commissioning rearm (D-858 S3) apart from a Fleet one."""
+        if reason not in ("OPERATOR_REARM", "BENCH_COMMISSIONING_REARM"):
+            raise ValueError("unknown rearm reason")
         if (type(authority_epoch) is not int or authority_epoch < 0
                 or type(dispatch_generation) is not int or dispatch_generation < 0):
             raise ValueError("rearm generation values must be non-negative integers")
@@ -237,8 +241,8 @@ class LocalStopController:
             connection.execute(
                 """UPDATE omx_local_stop SET authority_epoch=?, dispatch_generation=?,
                    state='OPEN', source='fleet', dispatch_enabled=1, observed_at=?,
-                   reason='OPERATOR_REARM' WHERE workcell_id=? AND instance_id=?""",
-                (authority_epoch, dispatch_generation, _stamp(self.now()),
+                   reason=? WHERE workcell_id=? AND instance_id=?""",
+                (authority_epoch, dispatch_generation, _stamp(self.now()), reason,
                  self.workcell_id, self.instance_id),
             )
             updated = connection.execute(
