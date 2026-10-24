@@ -49,8 +49,8 @@ import remote_pytest as rp  # noqa: E402
 # D-571: production only, never a sim host (user 2026-10-09 "관제 PC는 시뮬레이션에서 제외").
 PRODUCTION_REFUSAL = "production only, excluded from simulation (D-571)"
 # D-571 4: memory cap (GB) and CPU cap (cores) for one run, by role. A host without a role
-# gets the shared-PC ("ai") caps.
-PROFILES = {"model": {"mem_gb": 6, "cpus": 8}, "ai": {"mem_gb": 4, "cpus": 4}}
+# gets the shared-PC ("ai") caps. D-867 raised "ai" for VLA probes (Gazebo + CORE + SmolVLA in one run).
+PROFILES = {"model": {"mem_gb": 6, "cpus": 8}, "ai": {"mem_gb": 10, "cpus": 6}}
 
 # CORE's pip pins, the Fleet pins CORE's set lacks (one interpreter runs CORE and a SIM Fleet; CORE's
 # pins win, as remote_pytest.py VENV does with the device set), wheel build tools, and the D-373
