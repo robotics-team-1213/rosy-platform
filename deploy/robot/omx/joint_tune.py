@@ -144,6 +144,18 @@ class SerialBus:
         if comm or error:
             raise RuntimeError(f"write {name}: comm {comm} error {error}")
 
+    def alert(self) -> tuple[int, bool]:
+        """Torque and the status packet's hardware-alert bit, readable while an alert makes read() fail."""
+        torque, comm, error = self.packet.read1ByteTxRx(self.port, self.motor, READS["torque"][0])
+        if comm:
+            raise RuntimeError(f"motor {self.motor}: comm {comm}")
+        return torque, bool(error & 0x80)
+
+    def reboot(self) -> None:
+        comm, _ = self.packet.reboot(self.port, self.motor)
+        if comm:
+            raise RuntimeError(f"reboot motor {self.motor}: comm {comm}")
+
     def close(self) -> None:
         self.port.ser.close()
 
@@ -237,7 +249,7 @@ class Run:
         found = {name: self.bus.read(name) for name in limits}
         if any(found[name] != BASELINE[name] for name in limits):
             raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; an earlier "
-                             "run did not restore them - lower them with commissioning_limits.py (torque OFF)")
+                             "run did not restore them - lower them with commissioning_limits.py --baseline (torque OFF)")
         restore = {}  # filled before each write, so a write whose readback fails is still restored
         try:
             for name, value in (("pwm_limit", args.pwm),

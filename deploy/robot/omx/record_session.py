@@ -5,7 +5,8 @@ LeRobot's OmxFollower.configure() writes modes and PID but never the PWM/Current
 commissioning caps (PWM 20, Current 50) keep the follower from following. This wrapper:
 
 1. validates the record config (record_config.py) and requires follower IDs 11-16 idle (torque OFF,
-   no hardware error);
+   no hardware error), and reboots torque-OFF leader motors 1-6 that latched a hardware alert (its
+   supply sags below XL330 spec), again after the session so the next one starts clean;
 2. saves the follower PWM Limit (36) and XL330 Current Limit (38) and writes the caps file values
    with torque OFF, reading each back;
 3. stops the active camera services, because the recorder opens the V4L devices itself (D-770 §3:
@@ -38,6 +39,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import signal
 import subprocess
@@ -51,6 +53,7 @@ from record_config import validate_config
 SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
             "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service")
 LEADER_GRIPPER = 6
+LEADER = range(1, 7)
 PWM_MAX = CURRENT_MAX = CAP_MAX  # first sessions stay well below the hardware maximum (885 / 1750)
 TORQUE_OFF_DEADLINE_S = 30.0
 
@@ -124,18 +127,57 @@ def compose(config: dict, card: dict, *, stamp: str) -> dict:
     return {**config, "dataset": dataset}
 
 
+STATIC_RANGE = 1.0  # largest per-joint action range (LeRobot units) that still counts as an untouched leader
+
+
+def static_episodes(root: Path, threshold: float = STATIC_RANGE) -> dict:
+    """Episodes whose leader action never moved beyond `threshold` on any joint. 2026-10-24: ten
+    recorded episodes had range 0.0 because nobody held the leader. Listed in static_episodes.json;
+    a dataset with no moving episode also gets DO_NOT_TRAIN.txt."""
+    import numpy as np
+    import pandas as pd
+
+    static, total = [], 0
+    for path in sorted(root.glob("data/**/*.parquet")):
+        frame = pd.read_parquet(path, columns=["episode_index", "action"])
+        for episode, rows in frame.groupby("episode_index"):
+            total += 1
+            action = np.stack(rows["action"].to_numpy())
+            if float((action.max(0) - action.min(0)).max()) <= threshold:
+                static.append(int(episode))
+    result = {"episodes": total, "static": static, "threshold": threshold}
+    if static:
+        (root / "static_episodes.json").write_text(json.dumps(result, indent=2))
+    if total and len(static) == total:
+        (root / "DO_NOT_TRAIN.txt").write_text(f"every episode is static (leader action range <= {threshold}); "
+                                               "the leader was not moved - do not train on this dataset\n")
+    return result
+
+
 class Session:
-    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic) -> None:
+    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic, replay=None,
+                 chunks=None) -> None:
         self.open_bus, self.systemctl, self.run_command, self.log = open_bus, systemctl, run, log
-        self.sleep, self.clock = sleep, clock
+        self.sleep, self.clock, self.replay, self.chunks = sleep, clock, replay, chunks
 
     @staticmethod
-    def command(config_path: Path, teleop_only: bool) -> list:
-        """lerobot-record on the record config, or lerobot-teleoperate on its robot/teleop part."""
+    def command(config_path: Path, teleop_only: bool, replay: dict | None = None) -> list:
+        """lerobot-record on the record config, or lerobot-teleoperate on its robot/teleop part. With a
+        validated replay trajectory the teleop becomes rosy_replay (scripted teacher) and the dataset
+        records its two equal episodes A and B with the reset hold between them."""
         bin_dir = Path(sys.executable).parent
-        if not teleop_only:
+        if replay is None and not teleop_only:
             return [str(bin_dir / "lerobot-record"), f"--config_path={config_path}"]
         config = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        if replay is not None:
+            (a0, a1), (r0, r1) = replay["segments"]["A"], replay["segments"]["reset"]
+            config["teleop"] = {"type": "rosy_replay", "id": "rosy_replay", "trajectory": replay["path"]}
+            config["dataset"] = {**config["dataset"], "num_episodes": 2,
+                                 "episode_time_s": (a1 - a0) / replay["fps"], "reset_time_s": (r1 - r0) / replay["fps"]}
+        if not teleop_only:
+            path = config_path.with_name(config_path.stem + ".replay.json")
+            path.write_text(json.dumps(config, indent=2))
+            return [str(bin_dir / "lerobot-record"), f"--config_path={path}"]
         teleop = config_path.with_name(config_path.stem + ".teleop.json")
         teleop.write_text(json.dumps({"robot": config["robot"], "teleop": config["teleop"],
                                       "fps": config["dataset"]["fps"], "display_data": False}, indent=2))
@@ -161,8 +203,36 @@ class Session:
             caps = {name: bus.read(name) for name in self._cap_registers(motor)}
             if any(caps[name] != BASELINE[name] for name in caps):
                 raise SystemExit(f"follower {motor} caps {caps} are not the commissioning baseline; an earlier "
-                                 "session did not restore them - lower them with commissioning_limits.py "
+                                 "session did not restore them - lower them with commissioning_limits.py --baseline "
                                  "(torque OFF) before recording")
+
+    def clear_leader_alerts(self, bus) -> list:
+        """The leader's supply sags below XL330 spec (3.6 V on the S cell, 2026-10-24) and latches an
+        input-voltage alert; LeRobot then reports every leader motor missing. A reboot of a torque-OFF
+        motor clears the latch; a motor whose alert returns at once is refused."""
+        alerted = []
+        for motor in LEADER:
+            bus.motor = motor
+            torque, alert = bus.alert()
+            if alert:
+                if torque:
+                    raise SystemExit(f"leader {motor} reports a hardware alert with torque ON")
+                bus.reboot()
+                alerted.append(motor)
+        if alerted:
+            self.sleep(1.5)
+            for motor in alerted:
+                bus.motor = motor
+                if bus.alert()[1]:
+                    raise SystemExit(f"leader {motor} alert persists after reboot: check the leader supply")
+        return alerted
+
+    def _with_leader(self, action):
+        bus = self.open_bus("leader")
+        try:
+            return action(bus)
+        finally:
+            bus.close()
 
     def baseline(self) -> dict:
         return {motor: {name: BASELINE[name] for name in self._cap_registers(motor)} for motor in FOLLOWER}
@@ -225,15 +295,32 @@ class Session:
                                    "text": text.decode("utf-8")}
         validate_config(json.loads(config_path.read_text(encoding="utf-8-sig")))
         self._with_follower(self.check_idle)
+        record["leader_rebooted"] = self._with_leader(self.clear_leader_alerts)
         stopped = []
         try:
             self._with_follower(lambda bus: self.write_caps(bus, caps))
-            for unit in SERVICES:
-                if self.systemctl("is-active", unit) == "active":
+            # Dependents first: stopping camera-view first also stops readiness (Requires=), whose
+            # ExecStopPost restore outlasts the 10 s systemctl timeout (2026-10-24).
+            # The chunk runner opens no camera: the services stay up so the judge can watch.
+            for unit in () if self.chunks else reversed(SERVICES):
+                # "activating" includes a readiness unit waiting out RestartSec; stop cancels that restart.
+                if self.systemctl("is-active", unit) in ("active", "activating"):
                     self.systemctl("stop", unit)
                     stopped.append(unit)
             record["stopped_services"] = stopped
-            command = self.command(config_path, teleop_only)
+            if self.chunks:
+                command = [sys.executable, str(Path(__file__).resolve().with_name("chunk_runner.py")),
+                           f"--config={config_path}", f"--library={self.chunks['library']}", f"--io={self.chunks['io']}"]
+                record["source_mode"] = "scripted_teacher"
+                record["chunks"] = self.chunks
+            else:
+                command = self.command(config_path, teleop_only, self.replay)
+            if self.replay is not None:
+                record["source_mode"] = "scripted_teacher"
+                record["replay"] = {k: self.replay[k] for k in ("path", "sha256", "segments", "source")}
+                if not teleop_only:  # episodes 0/1 are the trajectory's A/B; operator review decides the outcome
+                    record["episode_outcomes"] = [{"episode": 0, "segment": "A", "outcome": "unknown"},
+                                                  {"episode": 1, "segment": "B", "outcome": "unknown"}]
             self.log(step="run", command=command)
             try:
                 record["exit_code"] = self.run_command(command)
@@ -250,7 +337,15 @@ class Session:
             leader = self.open_bus("leader")
             try:
                 leader.motor = LEADER_GRIPPER
-                leader.write("torque", 0)
+                try:
+                    leader.write("torque", 0)
+                except RuntimeError:
+                    pass  # a latched alert fails the status, not the write; torque is read back below
+                try:  # leave the leader clean for the next session; a refusal here must not skip the caps
+                    record["leader_rebooted_after"] = self.clear_leader_alerts(leader)
+                except SystemExit as exc:
+                    record["leader_rebooted_after"] = f"error: {exc}"
+                leader.motor = LEADER_GRIPPER
                 record["leader_gripper_torque_after"] = leader.read("torque")
             finally:
                 leader.close()
@@ -258,7 +353,7 @@ class Session:
             record["leader_gripper_torque_after"] = f"error: {exc}"
         failures = self.restore_caps()
         record["caps_restored"] = not failures or failures
-        for unit in stopped:
+        for unit in reversed(stopped):
             try:
                 self.systemctl("start", unit)
             except Exception as exc:
@@ -278,6 +373,9 @@ def main(argv=None):
     parser.add_argument("--caps", required=True, type=Path)
     parser.add_argument("--teleop-only", action="store_true")
     parser.add_argument("--task-card", type=Path, help="task design card to embed in session.json")
+    parser.add_argument("--replay", type=Path, help="teach_trajectory.py output: a scripted teacher replaces the leader")
+    parser.add_argument("--chunks", type=Path, help="chunk library: chunk_runner.py holds the arm and takes judge commands")
+    parser.add_argument("--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory")
     args = parser.parse_args(argv)
     caps = load_caps(args.caps)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
@@ -317,11 +415,29 @@ def main(argv=None):
             raise
 
     protect_signals()
-    session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log)
+    replay = None
+    if args.replay is not None:
+        from teach_trajectory import load as load_trajectory
+        replay = {**load_trajectory(args.replay, fps=config["dataset"]["fps"]), "path": str(args.replay.resolve())}
+        plugins = str(Path(__file__).resolve().with_name("lerobot_plugins"))  # LeRobot discovers the dist-info here
+        os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (plugins, os.environ.get("PYTHONPATH")) if p)
+    chunks = None
+    if args.chunks is not None:
+        from chunk_runner import load_library
+        load_library(args.chunks)  # refuse a bad library before any cap is raised
+        chunks = {"library": str(args.chunks.resolve()), "io": str(args.io.resolve()),
+                  "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest()}
+    session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
+                      replay=replay, chunks=chunks)
     lock = session_lock()
     record = {}
     try:
         record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card)
+        if not args.teleop_only and chunks is None:
+            try:
+                record["static_episodes"] = static_episodes(Path(config["dataset"]["root"]))
+            except Exception as exc:  # the check must never hide a safe ending
+                record["static_episodes"] = f"error: {exc}"
     finally:
         lock.close()
         if record:

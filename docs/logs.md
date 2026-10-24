@@ -9610,6 +9610,12 @@ osy-d395-s1d\`.
 - 증거: 검토(APPROVE WITH FIXES)가 권한 주장을 강제로 바꾸라고 지적했다. 운영 모델 PC state는 0755·DB 0644이므로 배포 시 권한 변경이 필요하다. 원격 시험은 0755/0644·journal 0644 거절, 0700/0600 성공, WAL 거절, `..` 거절을 확인한다.
 - gate 변화: 없음. 모델 PC 권한 변경·bridge 설정 교체·운영 수용은 별도다.
 
+## 2026-10-24 · uncommitted · 공급암 S 셀 점검·상한 복구·카메라 재시도 코드화
+
+- 변경: `cell_check.py`(읽기 전용 단암 셀 판정, 실패마다 고칠 명령)와 `commissioning_limits.py --baseline`을 추가했다. `joint_tune.py`·`record_session.py`의 거부 문구가 `--baseline`을 안내하고, `rosy-omx-camera-readiness.service`를 `Restart=on-failure`(15 s, 300 s에 3회)로 바꿨다. `services.yaml`의 관제 PC 관측기 arm_a/b를 `off`로 고쳤다(이 PC는 단암 S 셀).
+- 증거: 관제 PC 실측 — 팔로워 6개 PWM 300/전류 500이 남아 joint_tune이 거부했다. 수동 상한 복구 뒤 ID 15가 +40/50으로 이동했다. 부팅 거부 뒤 restore는 성공했지만 재시작이 없어 50분 동안 미준비였고, 수동 restart로 READY가 됐다. 새 시험 `test_omx_cell_check.py`, `--baseline` 시험, 유닛 재시도 단언을 추가했다. 1틱 떨림 거부는 의도된 안전 계약이라 바꾸지 않았다.
+- gate 변화: 없음. 실물 동작을 승인하지 않는다. CE: 새 교훈 `omx-follower-caps-left-raised-in-eeprom-2026-10-24.md`, 기존 교훈 갱신 `omx-camera-readiness-…-2026-10-23.md`(세 번째 실패).
+
 ## 2026-10-24 · uncommitted · Rosy Learning #185 후속 (정답 메뉴 초점 순서·VLM 읽기 무기록·휴대폰 상단 바)
 
 - 변경: `/`·`/pixels`의 정답 하위 메뉴를 DOM에서 `.ui-pathbar` 바로 뒤로 옮겨 Tab이 편집기보다 먼저 닿게 했다(WCAG 2.4.3, 배치는 그대로). 평가 state가 아닌 예전 학습 state에 VLM 표가 있으면 읽기(`queue`·`evaluation`·`export`·`disputes`·`_ready`)가 표를 만들거나 평가셋을 고정하지 않고 같은 평가셋을 계산만 한다. 30rem 미만 상단 바에서 「로그인·계정」은 아이콘만, 테마 선택은 「화면」 글자를 접근 이름에만 남겨 한 줄로 유지한다. `unpause` 403 HTTP 시험과 초점 순서 브라우저 시험을 더했다. D-446 릴리스를 `install_review_release.py`로 설치하는 원천 규칙을 기존 교훈과 `deploy/model_pc/README.md`에 적었다.
@@ -9645,3 +9651,9 @@ osy-d395-s1d\`.
 - 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
+
+## 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
+
+- 변경: `deploy/robot/omx/`에 청크 실행기(`chunk_runner.py`: 토크 유지, 멈춤·과열·추종 오차 정지, 위치+전류 집기 판정, 들고 돌고 내리는 `goto`/`park`, `live.json`), top-down 계획기(`grasp_planner.py`), 탐침 기반 손목 보정(`grasp_servo.py`), 그림자 상자 검출과 놓기 확인(`cell_perception.py`), scripted_teacher 봉인(`record_seal.py`), Fleet 관측 송신기(`arm_status_bridge.py`), 판단 자리(`judge_seat.py`)를 더했다.
+- 증거: 관제 PC 실물 — 가르친 위치 사이클 성공, 보정 뒤 집기 성공(잡음 ~200 mA, 빈 집게 ~74 mA), `park` 2회. 결정 모델 오프라인 평가 6/30(수치 포함), 1/30(이미지만), 상자 없이 grasp 선택 → 측정 거부권 설계. 원격 시험: `test_omx_arm_status_bridge.py`+`test_omx_chunk_runner.py` 24 passed, `test_omx_judge_seat.py` 7 passed, 거부권 제거 변이에서 실패 확인.
+- gate 변화: 없음. Fleet 송신은 S용 source·토큰 발급 전까지 보내지 않는다. 시뮬 실험은 로컬 main 병합 뒤. 실물 영점·카메라→팔 좌표 보정은 현장 필요. ADR 초안 `Rosy/docs/workspace-records/2026-10-25/adr-draft-arm-s-platform-integration.md`.

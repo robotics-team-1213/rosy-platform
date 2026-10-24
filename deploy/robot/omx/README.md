@@ -646,11 +646,22 @@ without those fields require migration. Native PTY rejection and torque-off read
 evidence, including an unresolved one-tick goal-register change that failed the
 preservation check, are recorded in [measured-status validation](../../../docs/validation/omx-measured-status-2026-10-16/result.md).
 
+### One-arm cell check before motion
+
+`cell_check.py --follower <by-id> --leader <by-id>` reads the follower through
+`register_probe.py` and the camera readiness state, writes nothing, and prints one
+JSON verdict. Each failed check names its fix: a missing board, a busy bus, torque
+or a hardware error, voltage out of range, caps left raised (`commissioning_limits.py
+--baseline`), or camera readiness not READY. The leader is checked for presence only.
+Run it before `joint_tune.py` or `record_session.py`.
+
 ### Torque-off commissioning limits
 
 `commissioning_limits.py` is a separate exclusive configuration procedure. It
 requires the confirmed follower, six known motors, existing modes and torque/error
-zero. An explicit JSON input supplies positive raw PWM/current/profile caps. Only
+zero. An explicit JSON input supplies positive raw PWM/current/profile caps;
+`--baseline` supplies the resting caps (PWM 20, Current 50, profiles 1) that
+`joint_tune.py` and `record_session.py` require when an earlier session left them raised. Only
 non-increasing supported caps may change, with durable original/intent records,
 one exact unicast write, acknowledgment and full readback before each next write.
 It never writes goals, torque, modes or offsets and never retries or rolls back an

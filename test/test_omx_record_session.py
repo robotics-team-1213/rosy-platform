@@ -38,6 +38,15 @@ class Arm:
         self.writes.append((self.motor, name, value))
         self.motors[self.motor][name] = value
 
+    def alert(self):
+        return self.motors[self.motor]["torque"], self.motors[self.motor].get("alert", False)
+
+    def reboot(self):
+        self.writes.append((self.motor, "reboot", None))
+        motor = self.motors[self.motor]
+        motor["alert"] = motor.get("sticky", False)
+        motor["torque"] = 0
+
     def close(self):
         self.closed += 1
 
@@ -74,12 +83,14 @@ def config(tmp_path):
     return path
 
 
-def session(arm, leader, *, active=("rosy-omx-camera@top.service",), run=lambda command: 0):
+def session(arm, leader, *, active=("rosy-omx-camera@top.service",), activating=(), run=lambda command: 0):
     calls = []
 
     def systemctl(verb, unit):
         calls.append((verb, unit))
-        return "active" if verb == "is-active" and unit in active else ""
+        if verb != "is-active":
+            return ""
+        return "active" if unit in active else "activating" if unit in activating else ""
 
     def recorder(command):
         # while recording, LeRobot has turned the follower on
@@ -98,8 +109,68 @@ def session(arm, leader, *, active=("rosy-omx-camera@top.service",), run=lambda 
     return s, calls
 
 
-def leader_arm():
-    return Arm({6: {"torque": 0}})
+def leader_arm(**state):
+    return Arm({motor: {"torque": 0, **state} for motor in m.LEADER})
+
+
+@pytest.mark.parametrize("moving, marked", [((), True), ((1,), False)])
+def test_episodes_with_an_untouched_leader_are_flagged_after_recording(tmp_path, moving, marked):
+    # 2026-10-24: two five-episode datasets had leader action range 0.0 in every episode.
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    rows = []
+    for episode in range(3):
+        for step in range(30):
+            delta = step * 0.5 if episode in moving else 0.0  # 14.5 at the end: a hand on the leader
+            rows.append({"episode_index": episode, "action": [10.0 + delta, 20.0, 30.0, 40.0, 50.0, 0.4]})
+    (tmp_path / "data/chunk-000").mkdir(parents=True)
+    pd.DataFrame(rows).to_parquet(tmp_path / "data/chunk-000/file-000.parquet")
+    result = m.static_episodes(tmp_path)
+    assert result["episodes"] == 3
+    assert result["static"] == [e for e in range(3) if e not in moving]
+    assert (tmp_path / "DO_NOT_TRAIN.txt").exists() is marked
+    assert json.loads((tmp_path / "static_episodes.json").read_text())["static"] == result["static"]
+
+
+def test_a_latched_leader_voltage_alert_is_cleared_before_lerobot_connects(tmp_path):
+    # 2026-10-24: LeRobot reported all six leader motors missing while each answered with alert 0x80.
+    arm, leader = follower(), leader_arm(alert=True)
+
+    def run(command):
+        assert not any(motor.get("alert") for motor in leader.motors.values())
+        return 0
+
+    s, calls = session(arm, leader, run=run)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert record["leader_rebooted"] == list(m.LEADER) and record["safe_end"] is True
+    assert_restored(arm, leader)
+
+
+def test_an_alert_latched_during_the_session_is_cleared_for_the_next_one(tmp_path):
+    arm, leader = follower(), leader_arm()
+
+    def run(command):
+        leader.motors[4]["alert"] = True  # the supply sagged while the leader moved
+        return 0
+
+    s, _ = session(arm, leader, run=run)
+    record = s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert record["leader_rebooted"] == [] and record["leader_rebooted_after"] == [4]
+    assert record["safe_end"] is True and not leader.motors[4]["alert"]
+    assert_restored(arm, leader)
+
+
+@pytest.mark.parametrize("state, message", [
+    ({"alert": True, "torque": 1}, "torque ON"),
+    ({"alert": True, "sticky": True}, "persists"),
+])
+def test_a_leader_alert_that_reboot_cannot_safely_clear_refuses_before_any_cap(tmp_path, state, message):
+    arm, leader = follower(), leader_arm()
+    leader.motors[3].update(state)
+    s, _ = session(arm, leader)
+    with pytest.raises(SystemExit, match=message):
+        s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert arm.writes == []
 
 
 def assert_restored(arm, leader):
@@ -119,6 +190,38 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     assert_restored(arm, leader)
     assert ("stop", "rosy-omx-camera@top.service") in calls and ("start", "rosy-omx-camera@top.service") in calls
     assert ("stop", "rosy-omx-camera@front.service") not in calls  # was not running: left alone
+
+
+def test_chunk_mode_runs_the_chunk_runner_and_keeps_the_cameras_for_the_judge(tmp_path):
+    seen = []
+    arm, leader = follower(), leader_arm()
+    s, calls = session(arm, leader, active=m.SERVICES, run=lambda command: seen.append(command) or 0)
+    s.chunks = {"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "x"}
+    record = s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert Path(seen[0][1]).name == "chunk_runner.py" and f"--io={tmp_path / 'io'}" in seen[0]
+    assert not [u for v, u in calls if v == "stop"] and record["source_mode"] == "scripted_teacher"
+    assert record["safe_end"] is True
+    assert_restored(arm, leader)
+
+
+def test_services_stop_dependents_first_and_start_in_reverse(tmp_path):
+    # Stopping camera-view first cascades into readiness's ExecStopPost restore and timed out (2026-10-24).
+    arm, leader = follower(), leader_arm()
+    s, calls = session(arm, leader, active=m.SERVICES)
+    s.execute(config(tmp_path), CAPS, teleop_only=True)
+    assert [u for v, u in calls if v == "stop"] == list(reversed(m.SERVICES))
+    assert [u for v, u in calls if v == "start"] == list(m.SERVICES)
+    assert_restored(arm, leader)
+
+
+def test_a_readiness_unit_waiting_to_restart_is_stopped_before_recording(tmp_path):
+    # Restart=on-failure leaves it "activating" for RestartSec; firing mid-session would restart the cameras.
+    arm, leader = follower(), leader_arm()
+    s, calls = session(arm, leader, active=(), activating=("rosy-omx-camera-readiness.service",))
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["stopped_services"] == ["rosy-omx-camera-readiness.service"]
+    assert calls.index(("stop", "rosy-omx-camera-readiness.service")) < calls.index(("start", "rosy-omx-camera-readiness.service"))
+    assert_restored(arm, leader)
 
 
 @pytest.mark.parametrize("outcome", ["fails", "raises"])

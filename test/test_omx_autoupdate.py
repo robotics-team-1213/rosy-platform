@@ -54,6 +54,8 @@ class FakeHost:
         self.envs_built.append(lock.read_text() if lock else None)
         (target / "bin").mkdir(parents=True)
         (target / "bin" / "python").write_text("")
+        # what pip writes into a venv built at the staging path
+        (target / "bin" / "lerobot-teleoperate").write_text(f"#!{target}/bin/python\nimport lerobot\n")
 
     def smoke(self, release, python):
         assert Path(os.path.realpath(python)).exists() or str(python).endswith("python")
@@ -137,6 +139,8 @@ def test_the_environment_is_built_once_per_lock_and_rebuilt_when_it_changes(tmp_
     host.head = "b" * 40
     u.run()
     assert len(host.envs_built) == 1  # same lock: reused
+    env = tmp_path / "envs" / u.state()["env"]
+    assert (env / "bin" / "lerobot-teleoperate").read_text().splitlines()[0] == f"#!{env}/bin/python"
     host.head, host.lock_text = "c" * 40, "lerobot==0.4.5\n"
     u.run()
     assert len(host.envs_built) == 2 and u.state()["env"] != u.state()["previous_env"]
