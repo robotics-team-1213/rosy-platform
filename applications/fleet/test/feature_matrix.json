@@ -12,7 +12,7 @@
       "consumers": [
         "applications/fleet/web/work/control-unit-view.js"
       ],
-      "availability": "Configured control unit; named local human approval. The sample is one independent synthetic unit, not nested-network or device evidence.",
+      "availability": "Configured control unit; named local human approval. The current sample has a synthetic R/A/A1/B hierarchy with directly owned sample resources at R; device acceptance remains unverified.",
       "calls": [
         {
           "consumer": "applications/fleet/web/work/control-unit-view.js",
@@ -5647,6 +5647,373 @@
           "sample_status": "verified",
           "source_revision": "c000a570047bbbdddf947c349ad0d6ffb3bd5b28",
           "test_scope": "Browser fetch replays representative contract and renders target document; form interactions tested separately"
+        }
+      ]
+    },
+    {
+      "id": "integrated_control",
+      "title": "통합 관제 정보·관제별 정지 요청",
+      "entrypoints": [
+        "applications/fleet/web/index.html"
+      ],
+      "consumers": [
+        "applications/fleet/web/work/integrated-control-view.js"
+      ],
+      "availability": "Configured control units. Local viewers read bounded owner-scoped information; named local operators explicitly request subtree stops and record local reconciliation. Parent information/stop grants default false. The standalone sample is a process-local synthetic R/A/A1/B tree; physical stop remains unverified.",
+      "calls": [
+        {
+          "consumer": "applications/fleet/web/work/integrated-control-view.js",
+          "expression": "/api/fleet/control-unit",
+          "resolution": "literal-prefix",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/overview",
+            "GET:/api/fleet/control-unit/units/{unit_id}",
+            "GET:/api/fleet/control-unit/units/{unit_id}/map",
+            "POST:/api/fleet/control-unit/stops",
+            "GET:/api/fleet/control-unit/stops",
+            "GET:/api/fleet/control-unit/stops/{origin}/{identity}",
+            "POST:/api/fleet/control-unit/stops/{origin}/{identity}/reconcile"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/integrated-control-view.js",
+          "expression": "prefix + \"/overview\"",
+          "resolution": "prefix-concatenation",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/overview"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/integrated-control-view.js",
+          "expression": "prefix + \"/units/\" + encodeURIComponent(selected)",
+          "resolution": "prefix-plus-encoded-identifier",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/units/{unit_id}"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/integrated-control-view.js",
+          "expression": "prefix + \"/units/\" + encodeURIComponent(selected) + \"/map\"",
+          "resolution": "prefix-plus-encoded-identifier",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/units/{unit_id}/map"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/integrated-control-view.js",
+          "expression": "write(prefix + \"/stops\", pending.body)",
+          "resolution": "explicit-write-helper",
+          "request_ids": [
+            "POST:/api/fleet/control-unit/stops"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/integrated-control-view.js",
+          "expression": "prefix + \"/stops\"",
+          "resolution": "prefix-concatenation",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/stops"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/integrated-control-view.js",
+          "expression": "prefix + \"/stops/\" + encodeURIComponent(expected.origin) + \"/\" + encodeURIComponent(expected.body.stop_id)",
+          "resolution": "prefix-plus-encoded-identifiers",
+          "request_ids": [
+            "GET:/api/fleet/control-unit/stops/{origin}/{identity}"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/integrated-control-view.js",
+          "expression": "prefix + \"/stops/\" + encodeURIComponent(pending.origin) + \"/\" + encodeURIComponent(pending.body.stop_id) + \"/reconcile\"",
+          "resolution": "explicit-write-helper-with-encoded-identifiers",
+          "request_ids": [
+            "POST:/api/fleet/control-unit/stops/{origin}/{identity}/reconcile"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/control-unit/overview",
+          "method": "GET",
+          "path": "/api/fleet/control-unit/overview",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_information_routes.py",
+          "handler": "overview",
+          "expected_statuses": [
+            200,
+            401,
+            403
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
+          "contract_tests": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py",
+            "operations/fleet/test/test_control_unit_information_routes.py"
+          ],
+          "contract_test_nodes": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_nested_producer_collection_http_keeps_unit_robot_task_and_map_ownership",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_parent_information_and_stop_require_opt_in_and_directional_credentials",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_partial_information_failure_and_spoofed_projection_preserve_other_units",
+            "operations/fleet/test/test_control_unit_information_routes.py::test_information_requires_local_viewer_or_explicit_direct_parent_grant",
+            "operations/fleet/test/test_control_unit_information_routes.py::test_information_scope_never_exposes_parent_or_sibling_to_parent_service"
+          ],
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/overview"
+        },
+        {
+          "id": "GET:/api/fleet/control-unit/units/{unit_id}",
+          "method": "GET",
+          "path": "/api/fleet/control-unit/units/{unit_id}",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_information_routes.py",
+          "handler": "detail",
+          "expected_statuses": [
+            200,
+            401,
+            403,
+            404,
+            503
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
+          "contract_tests": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py",
+            "operations/fleet/test/test_control_unit_information_routes.py"
+          ],
+          "contract_test_nodes": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_nested_producer_collection_http_keeps_unit_robot_task_and_map_ownership",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_partial_information_failure_and_spoofed_projection_preserve_other_units",
+            "operations/fleet/test/test_control_unit_information_routes.py::test_information_requires_local_viewer_or_explicit_direct_parent_grant"
+          ],
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/units/{unit_id}"
+        },
+        {
+          "id": "GET:/api/fleet/control-unit/units/{unit_id}/map",
+          "method": "GET",
+          "path": "/api/fleet/control-unit/units/{unit_id}/map",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_information_routes.py",
+          "handler": "map_snapshot",
+          "expected_statuses": [
+            200,
+            404,
+            503
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
+          "contract_tests": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py",
+            "operations/fleet/test/test_control_unit_information_routes.py"
+          ],
+          "contract_test_nodes": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_nested_producer_collection_http_keeps_unit_robot_task_and_map_ownership",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_partial_information_failure_and_spoofed_projection_preserve_other_units",
+            "operations/fleet/test/test_control_unit_information_routes.py::test_information_requires_local_viewer_or_explicit_direct_parent_grant"
+          ],
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/units/{unit_id}/map"
+        },
+        {
+          "id": "POST:/api/fleet/control-unit/stops",
+          "method": "POST",
+          "path": "/api/fleet/control-unit/stops",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_stop_routes.py",
+          "handler": "submit",
+          "expected_statuses": [
+            200,
+            409,
+            503
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
+          "contract_tests": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py"
+          ],
+          "contract_test_nodes": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_journal_failure_before_claim_causes_no_local_or_child_fanout",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_partial_stop_child_does_not_erase_successful_independent_units",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_unknown_local_stop_blocks_rearm_and_only_named_local_attestation_reconciles"
+          ],
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/stops"
+        },
+        {
+          "id": "POST:/api/fleet/control-unit/stop-inbox",
+          "method": "POST",
+          "path": "/api/fleet/control-unit/stop-inbox",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_stop_routes.py",
+          "handler": "inbox",
+          "expected_statuses": [
+            200,
+            403
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
+          "contract_tests": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py"
+          ],
+          "contract_test_nodes": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_parent_information_and_stop_require_opt_in_and_directional_credentials"
+          ],
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/stop-inbox"
+        },
+        {
+          "id": "GET:/api/fleet/control-unit/stops",
+          "method": "GET",
+          "path": "/api/fleet/control-unit/stops",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_stop_routes.py",
+          "handler": "history",
+          "expected_statuses": [
+            200,
+            403
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
+          "contract_tests": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py"
+          ],
+          "contract_test_nodes": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity"
+          ],
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/stops"
+        },
+        {
+          "id": "GET:/api/fleet/control-unit/stops/{origin}/{identity}",
+          "method": "GET",
+          "path": "/api/fleet/control-unit/stops/{origin}/{identity}",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_stop_routes.py",
+          "handler": "read",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
+          "contract_tests": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py"
+          ],
+          "contract_test_nodes": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity"
+          ],
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/control-unit/stops/{origin}/{identity}"
+        },
+        {
+          "id": "POST:/api/fleet/control-unit/stops/{origin}/{identity}/reconcile",
+          "method": "POST",
+          "path": "/api/fleet/control-unit/stops/{origin}/{identity}/reconcile",
+          "implementation": "operations/fleet/fleet/server/ledger/control_unit_stop_routes.py",
+          "handler": "reconcile",
+          "expected_statuses": [
+            200,
+            403,
+            409,
+            422
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing actual FastAPI/ASGI HTTP response with temporary SQLite and synthetic device transports; no device or field acceptance.",
+          "contract_tests": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py"
+          ],
+          "contract_test_nodes": [
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_unknown_local_stop_blocks_rearm_and_only_named_local_attestation_reconciles",
+            "operations/fleet/test/test_integrated_control_http_pipeline.py::test_live_local_send_cannot_be_overridden_by_reconciliation_http"
+          ],
+          "test_reference_kind": "Committed remote HTTP regression and observed response bound to source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/control-unit/stops/{origin}/{identity}/reconcile"
+        }
+      ],
+      "flows": [
+        {
+          "id": "integrated_control.happy",
+          "kind": "happy",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/control-unit/overview",
+                "GET:/api/fleet/control-unit/units/{unit_id}",
+                "GET:/api/fleet/control-unit/units/{unit_id}/map"
+              ],
+              "screen_assertion": "R/A/A1/B 소유·상위 관계와 R의 직접 로봇·기존 활성 지도 출처를 읽기 전용으로 표시한다."
+            },
+            {
+              "request_ids": [
+                "POST:/api/fleet/control-unit/stops",
+                "POST:/api/fleet/control-unit/stop-inbox",
+                "GET:/api/fleet/control-unit/stops/{origin}/{identity}"
+              ],
+              "screen_assertion": "선택한 A subtree의 고정 fence로 한 번 요청하고 관제별 수신 결과·물리 정지 미확인을 구분한다. stop-inbox는 실제 백엔드 relay 회귀가 담당한다."
+            }
+          ],
+          "scenario_id": "integrated_control.happy",
+          "browser_test": "applications/fleet/test/test_integrated_sample_browser.py::test_integrated_sample_reads_ownership_and_stops_without_claiming_device_proof",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_integrated_sample.py::test_owned_information_reuses_current_roster_task_and_active_map_without_private_fields",
+            "applications/fleet/test/test_integrated_sample.py::test_child_stop_is_one_shot_and_foreign_or_stale_fences_cannot_mutate_another_subtree"
+          ],
+          "test_scope": "Passed remote standalone sample-host Chromium plus sample API regressions; no intercepted API in the sample browser. Separate backend ASGI relay regression establishes the peer path, not real network/device acceptance.",
+          "source_revision": "bbffbf8577ce1968ad293ac4f8e4d5d7113ea83c"
+        },
+        {
+          "id": "integrated_control.refused",
+          "kind": "refused",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/control-unit/stops",
+                "POST:/api/fleet/control-unit/stops/{origin}/{identity}/reconcile"
+              ],
+              "screen_assertion": "보기 전용 사용자의 정지·재시운전 기록 조작을 막고 기명 운영자 조건을 표시한다. 표본 API는 쓰기를 403으로 거절한다."
+            },
+            {
+              "request_ids": [
+                "GET:/api/fleet/control-unit/overview",
+                "GET:/api/fleet/control-unit/units/{unit_id}",
+                "GET:/api/fleet/control-unit/units/{unit_id}/map",
+                "POST:/api/fleet/control-unit/stop-inbox"
+              ],
+              "screen_assertion": "기본 미허용 부모 grant, 방향이 다른 자격, sibling 정보·지도 사칭을 실제 backend HTTP 회귀로 거절한다."
+            }
+          ],
+          "scenario_id": "integrated_control.refused",
+          "browser_test": "operations/fleet/test/test_integrated_control_browser.py::test_local_history_reconciliation_requires_named_operator_and_both_typed_attestations[UNKNOWN-viewer]",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_integrated_sample.py::test_viewer_can_read_but_cannot_send_or_reconcile_synthetic_stops"
+          ],
+          "test_scope": "Passed remote sample API refusal plus a separate Chromium UI role test with intercepted HTTP fixtures, and backend ASGI authorization/scope regressions. These scopes must remain distinct in the evidence.",
+          "source_revision": "bbffbf8577ce1968ad293ac4f8e4d5d7113ea83c"
+        },
+        {
+          "id": "integrated_control.terminal",
+          "kind": "terminal",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/control-unit/stops",
+                "GET:/api/fleet/control-unit/stops/{origin}/{identity}"
+              ],
+              "screen_assertion": "새로고침 뒤 기존 정지 identity를 원장에서 찾아 GET으로만 다시 읽고 자동으로 POST하지 않는다."
+            },
+            {
+              "request_ids": [
+                "POST:/api/fleet/control-unit/stops/{origin}/{identity}/reconcile",
+                "GET:/api/fleet/control-unit/stops/{origin}/{identity}"
+              ],
+              "screen_assertion": "이 관제의 UNKNOWN을 명시적 두 확인과 근거로 처분하되 원래 미확인 결과를 보존하고 물리 정지·재무장 완료로 표시하지 않는다."
+            }
+          ],
+          "scenario_id": "integrated_control.terminal",
+          "browser_test": "applications/fleet/test/test_integrated_sample_browser.py::test_integrated_sample_reads_ownership_and_stops_without_claiming_device_proof",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_integrated_sample.py::test_local_unknown_needs_explicit_attestation_and_never_becomes_physical_stop_proof"
+          ],
+          "test_scope": "Passed remote standalone sample-host browser and API readback/reconciliation, plus actual backend HTTP duplicate/restart/live-send guards. Recommissioning attestation is not device proof or automatic rearm.",
+          "source_revision": "bbffbf8577ce1968ad293ac4f8e4d5d7113ea83c"
         }
       ]
     }

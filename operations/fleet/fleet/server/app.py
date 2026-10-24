@@ -55,7 +55,7 @@ from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.background_workers import lane_compliance_loop
 from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
 from fleet.server.background_workers import _task_dispatch_loop, _mission_model_turn_worker_loop
-from fleet.server.background_workers import control_unit_loop
+from fleet.server.control_unit_observation_runtime import start_control_unit_tasks
 from fleet.server.control_unit_runtime import install_control_unit
 from fleet.server.dispatch_workers import mission_feedback_schedule_loop, mission_dispatch_loop
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
@@ -339,8 +339,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     @asynccontextmanager
     async def lifespan(app):
-        control_task = (asyncio.create_task(control_unit_loop(app.state.control_unit))
-                        if app.state.control_unit is not None else None)
+        control_tasks = start_control_unit_tasks(app)
         dispatcher = None
         mission_worker = None
         cell_job_worker = None
@@ -407,7 +406,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         finally:
             async with AsyncExitStack() as cleanup:
                 for resource in (getattr(app.state, "power_health_display", None), notification_http,
-                                 app.state.control_unit_http,
+                                 app.state.control_unit_http, app.state.control_unit_stops,
                                  calibration_drift_watch, post_action_observation_source, app.state.charge_runtime):
                     close = getattr(resource, "aclose", None)
                     if callable(close):
@@ -420,7 +419,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                    mission_model_turn_worker_task, localization_task,
                                    signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
                                    lease_task, path_task, calibration_drift_task, notification_task, job_task, charge_task,
-                                   control_task)
+                                   *control_tasks)
                                if background is not None]
                 for background in backgrounds:
                     background.cancel()
@@ -533,7 +532,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_control_unit(app, control_unit_config, tasks=task_service, console=console,
                          principals=principals, named_logins=password_sessions is not None,
                          console_token=console_token, authorize=authorize, require_viewer=require_viewer,
-                         require_named_operator=require_named_operator)
+                         require_named_operator=require_named_operator, map_snapshot=site_maps.active,
+                         configured_omx=configured_omx, stop_transport=stop_transport)
     # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
     # X-Forwarded-For carries the browser address the development session checks.
     install_development_routes(app, sessions=development_sessions, task_service=task_service,
