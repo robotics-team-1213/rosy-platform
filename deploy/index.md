@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · 29002a4845 · D-861 전체 기기의 동일한 단일 NTP endpoint
 - 2026-10-24 · ce5018413b · D-859 공통 UTC 시간 동기화
 - 2026-10-24 · b2421f9f7b · articulation 최종 원본 시각 보존
 - 2026-10-24 · afd400b7bc · passive7관절 관측과 실행 직전 신선도 검사
 - 2026-10-24 · bbf2af074bb7 · SIM 정책의 passive controller 추종 증거
-- 2026-10-24 · 8d119665da8f · 고정 정책 engineering 실패와 종료 정리

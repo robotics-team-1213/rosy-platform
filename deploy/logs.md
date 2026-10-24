@@ -3212,3 +3212,9 @@
 - 변경: 관제 chrony 중심 NTP 계층과 Linux 공통 설치·읽기 전용 오차/갱신 검사, Windows W32Time 설치를 추가했다. Pinky native runtime은 같은 도구를 포함한다. 유지보수 가드·원본 백업·구문 검사·재시작 실패 복구를 포함한다.
 - 증거: [검증 기록](../docs/validation/shared-time-sync-2026-10-24/result.md). 공식 CSV 형식으로 parser 오류를 먼저 재현한 뒤 수정했고 최종 소스 원격 영향 시험 739개 통과·NEW 0, Windows 구문/WhatIf 통과, 독립 재검토 주요 지적 없음.
 - gate 변화: SOURCE 구현 증거만 추가한다. 관제 PC 연결 불가·승인 로봇 SSH 키 부재로 실제 배포와 장치별 동기 수용은 미완료다. 기존 ARTIFACT/DEVICE/FIELD gate는 올리지 않는다. CE 해당 없음 — 형식 차이는 회귀시험과 기록에 보존했다.
+
+## 2026-10-24 · 29002a4845 · D-861 전체 기기의 동일한 단일 NTP endpoint
+
+- 변경: Linux client source를 하나로 제한하고 D-861에 개별 fallback 금지를 결정했다. 관제의 기존 NTS를 유지한 채 승인된 LAN/VPN 클라이언트의 NTP 응답 ACL을 적용했다.
+- 증거: [후속 실행 기록](../docs/validation/shared-time-sync-2026-10-24/result.md). 복수 source 거부 red→green, 시간/harness 원격 exit 0, 독립 검토 주요 지적 없음. 모델·AI·Windows에서 동일 endpoint의 실제 UDP NTP 응답을 확인했다. 서버/관제 재시작과 clock step은 없었다.
+- gate 변화: 전체 시간 동기 수용은 HOLD다. 모델·AI sudo, Windows 관리자 실행, 오프라인 Pinky 두 대와 관제 UTC 오차 상한 검증이 남았다. 설치 파일을 준비했고 CE 미해결로 보존했다.

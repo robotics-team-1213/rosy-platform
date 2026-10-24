@@ -33,3 +33,24 @@ PowerShell parser와 `install-time-sync.ps1 -Server site.example.invalid -Mainte
 **운영 배포·전체 기기 동기 수용은 미완료다.** 관제 PC 접속 복구, 승인된 외부 시간원·현장 CIDR 확정, 실제 워크로드 중지와 유지보수 창 확보 후 관제→클라이언트 순서로 [운영 절차](../../../deploy/hosts/README.md#공통-시간-동기화-d-859)를 실행해야 한다. 기기별 `check`, 선택된 시간원, UDP 차단/복구, 재부팅 후 재동기 증거를 남긴다. 모바일·MCU의 capture clock domain과 Windows offset도 별도 수용한다. 현재 시험은 ARM64 이미지 빌드나 실물 시간 정확도 검증을 대신하지 않는다. main 착지·push는 수행하지 않았다.
 
 CE: 해당 없음 — CSV 출력 가정과 실제 형식의 차이는 최종 회귀시험·주석과 이 기록에 보존됐고, 재조사를 막기 위한 별도 교훈 문서를 더할 판단은 없다.
+
+## 후속 실행: 동일한 NTP endpoint 강제 (D-861)
+
+사용자의 즉시 적용·전체 기기 동일 NTP 지시에 따라 [D-861](../../adr/D-861-one-identical-ntp-endpoint-for-all-devices.md)을 결정했다. Linux client의 복수 source를 거부하며 개별 공용 pool·fallback을 허용하지 않는다. 새 거부 시험이 `8c2687ab6a`에서 실패했고 구현 후 `29002a4845`의 시간 동기·harness 원격 검증은 exit 0이다. 독립 검토에서 주요 지적은 없었다.
+
+관제 PC 접속이 복구됐다. 기존 Ubuntu NTS upstream 다섯 개와 구성을 유지하고 `/etc/chrony/conf.d/60-rosy-ntp-server.conf`에 현장 LAN 및 모델·AI·Windows의 승인된 VPN 주소만 허용했다. 전체망 allow는 없다. `chronyd -p` 구문 검사와 `chronyc accheck`가 성공했다. 실행 중 chrony에 같은 ACL을 적용하고 자동 step 창은 비활성화했다. CORE/Fleet·chrony 재시작, 수동 clock step, upstream 인증 해제는 하지 않았다. 파일은 다음 daemon 시작에도 읽힌다.
+
+공통 endpoint는 관제의 기존 VPN DNS 이름이다. 실제 이름과 ACL은 gitignored `private/network/shared-time-sync.json`에 기록했다. 동일한 이름을 사용한 실제 UDP NTP 요청에서 원래 요청 timestamp 일치, 유효 stratum 및 leap 상태를 확인했다.
+
+| 기기 | 동일 서버 UDP 응답 | 관측 offset (단일 표본) | OS 시간원 적용 |
+|---|---|---|---|
+| 모델 PC | 성공, stratum 3 | 약 +73ms | 미완료 — 비밀번호 sudo 필요 |
+| AI PC | 성공, stratum 3 | 약 +40ms | 미완료 — 비밀번호 sudo 필요 |
+| Windows 개발 PC | 성공, stratum 3 | 약 -433ms | 미완료 — 현재 프로세스 비관리자, W32Time 중지 |
+| Pinky 두 대 | 미확인 | 미측정 | 미완료 — 모델 PC의 등록 키/별칭 경로에서 No route to host |
+
+이는 연결 검증이며 실제 동기화 완료 또는 50ms 오차 상한 수용이 아니다. 관제의 기존 외부 시간원은 root delay 약 0.25초 수준이 관측돼 현재 엄격한 50ms UTC 상한을 만족한다고 주장하지 않는다. 인터넷 지연/시간원 품질을 추가 확인하고 수용 기준은 약하게 바꾸지 않는다.
+
+모델·AI PC의 `~/rosy-test/maintenance/time-sync/`에 같은 endpoint가 들어 있는 `apply.sh`, 검증된 Python 도구와 설정 미리보기를 준비했다. 실제 값은 공개 저장소로 복사하지 않았다. 각 PC의 관리자 유지보수 창에서 `sudo bash ~/rosy-test/maintenance/time-sync/apply.sh`를 실행해야 한다. 실행 중 시험·학습이나 알려진 런타임을 감지하면 설치를 거부한다. Windows는 gitignored `private/network/apply-time-sync-windows.ps1 -Maintenance`를 관리자 PowerShell에서 실행한다. 현재는 WhatIf만 통과했다.
+
+남은 확인: 관리자 실행 → 단일 source 설정/실제 선택 서버 검사 → 오차·stale 검사 → 로봇 네트워크 복구와 같은 endpoint 적용 → 모바일/MCU별 OS/펌웨어 지원·망 연결 확인. 전체 완료는 이 확인 전까지 HOLD다. CE: 미해결 — 운영 권한·오프라인 기기·관제 UTC 오차 상한의 수용이 남았으며 해결 교훈으로 쓰지 않는다.
