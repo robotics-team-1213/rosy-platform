@@ -1,4 +1,5 @@
 import copy
+import json
 import importlib.util
 from pathlib import Path
 
@@ -232,3 +233,48 @@ def test_legacy_inspection_can_split_with_explicit_unknown_environment(module, r
     assert receipt['source']['environment_summary']['status'] == 'unrecorded'
     assert receipt['environment_coverage']['eval']['unobserved_episodes'] == 1
     assert 'environment_summary' not in report
+
+
+def _calibration(tmp_path, name, lo=1024):
+    motors = ['shoulder_pan', 'shoulder_lift', 'elbow_flex', 'wrist_flex', 'wrist_roll', 'gripper']
+    path = tmp_path / f'{name}.json'
+    path.write_text(json.dumps({m: {'id': i, 'drive_mode': 0, 'homing_offset': 0, 'range_min': lo,
+                                    'range_max': 3072} for i, m in enumerate(motors)}), encoding='utf-8')
+    return path
+
+
+def test_action_space_is_declared_from_calibration_and_kept_on_recheck(module, recording, monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    info, rows = recording
+    class Dataset(list):
+        meta = SimpleNamespace(info=info)
+    monkeypatch.setattr(module, 'dataset_files', lambda root: {'meta/info.json': 'a' * 64})
+    monkeypatch.setattr(module, 'load_dataset', lambda *args: Dataset(rows))
+    declared = module.declaration_from_calibration([str(_calibration(tmp_path, 'follower'))])
+    report = module.inspect_dataset(tmp_path, 'local/data', body_units='normalized_-100_100',
+                                    rig_revision='rig', calibration_revision='cal', action_space=declared)
+    assert report['action_space']['unit'] == 'lerobot_norm_v1'
+    assert report['action_space']['calibration_sha256'] == declared['calibration_sha256']
+    undeclared = module.inspect_dataset(tmp_path, 'local/data', body_units='normalized_-100_100',
+                                        rig_revision='rig', calibration_revision='cal')
+    assert 'action_space' not in undeclared
+    with pytest.raises(ValueError):
+        module.inspect_dataset(tmp_path, 'local/data', body_units='degrees', rig_revision='rig',
+                               calibration_revision='cal', action_space=declared)
+
+
+def test_bimanual_action_space_needs_one_declaration_per_arm(module, recording, tmp_path):
+    info, _ = recording
+    names = [f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in module.JOINTS]
+    info = copy.deepcopy(info)
+    info['robot_type'] = 'bi_omx_follower'
+    for key in ('action', 'observation.state'):
+        info['features'][key] = {'dtype': 'float32', 'shape': [12], 'names': names}
+    both = module.declaration_from_calibration([f'arm_a={_calibration(tmp_path, "a")}',
+                                                f'arm_b={_calibration(tmp_path, "b", lo=1000)}'])
+    bound = module.bind_action_space(info, 'normalized_-100_100', both)
+    assert set(bound) == {'arm_a', 'arm_b'} and bound['arm_a'] != bound['arm_b']
+    for bad in ({'arm_a': both['arm_a']}, both['arm_a'],
+                {**both, 'arm_b': {**both['arm_b'], 'unit': 'dynamixel_rad_v1'}}):
+        with pytest.raises(ValueError):
+            module.bind_action_space(info, 'normalized_-100_100', bad)
