@@ -35,6 +35,7 @@
 | [고정 OMX 전체 형상](../validation/harbor-physical-observations-2026-10-24/result.md#고정-omx-전체-형상-식별) | sourceb045 URDF·8개 mesh 내용·전체9개 링크, World36/affected753 passed·0 NEW·독립 검토 | 실제 bounds·관측 producer·두 표본 정책/claims |
 | [Fleet 두 표본 물리 검사](../validation/harbor-physical-evaluator-2026-10-24/result.md) | source205 정책/시각/전체 링크/정지/object pose·집중67 passed/skip0·affected4587/6312 passed·각0 NEW·독립 재검토 | credential ingress·현재 원장 context/fence·atomic claim 종료·producer/Harbor |
 | [중립 원장·물리 승인](../validation/harbor-physical-proposals-2026-10-24/result.md) | source76 내부 create/read/two-person approval·공통claims·version6·공유 자원 leaf·집중1292 passed/skip0·FULL23 모두0 NEW·독립 안전 검토 | public HTTP/DTO·live capability·prepared context/dispatcher·관측/claim 종료·Harbor; 원본 G1 timing 원인 미확정 |
+| [중립 ARM 작업 HTTP](../validation/harbor-arm-job-http-2026-10-24/result.md) | API v1.307·closed DTO·실제 all-owner capability·2인 승인/Origin/audit, source58 HTTP18 passed/skip0·FULL23 각각0 NEW·독립 계약/전체로그 검토 | prepared context·최초 전송·장치/관측/claim 종료·Harbor ARM은 별도 검증 |
 | 전체 P3–P5 | 진행 중 | 중립 팔 실행의 승인/자원 종료, Harbor 공정 변환, 복구·독립성 통합 증거 |
 
 첫 HTTP 증거는 플랫폼 commit `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor commit `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.

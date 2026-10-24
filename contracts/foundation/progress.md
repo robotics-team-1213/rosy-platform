@@ -51,3 +51,8 @@ plans:
 ## 2026-10-24 · D-856 공유 자원 키의 contract leaf
 
 source76의 core_common.resource_keys는 stdlib-only 자원 식별자 정규화다. safety/decision 양쪽이 이 leaf를 소비하고 기존 Fleet import는 같은 함수 재수출로 보존한다. wire·API 버전·writer 권한은 바꾸지 않는다. Foundation 전체와 관련 Fleet/구조 집중 원격1292 passed/skip0와 FULL23개 각각exit0/known0 NEW·독립 안전 검토를 확인했다. [원본 실패·skip·물리 수용의 한계](../../docs/validation/harbor-physical-proposals-2026-10-24/result.md)를 따른다. runtime/물리 수용 gate는 그대로다.
+
+
+## 2026-10-24 · D-856 중립 ARM 작업 HTTP DTO
+
+API v1.307의 frozen closed 제안·승인·조회 DTO를 store와 HTTP가 공유한다. TaskStatus 분리는 AST와 facade identity를 유지한다. 소스58 HTTP18 passed/skip0/0 NEW와 FULL23개 각각exit0/known0 NEW, 독립 계약·전체로그 검토를 확인했다. [결과와 원본 실패·skip 범위](../../docs/validation/harbor-arm-job-http-2026-10-24/result.md)를 따른다. 이후 schema7/8·제출/물리 종료·Harbor 연결을 이 증거로 대신하지 않으며 기존 모듈 gate를 넓히지 않는다.

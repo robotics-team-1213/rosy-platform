@@ -4435,3 +4435,10 @@
 - 변경: 같은 Fleet DB에 physical create/read/approval을 추가했다. 정책에 arm/zone/object 키를 결속하고 legacy owner workcell도 함께 claim한다. 정확한 proposal/설치/capability와 두 사람·dispatch control을 확인해 approval/READY/claims를 원자 기록한다. schema version6·old-host 거절, stop/startup HELD/UNKNOWN 보존, 무관 DB/권위 필드 덮어쓰기/역행 시각 거절을 포함한다. legacy 완료 메서드는 AST 동일 이동하고 기존 호출을 보존했다.
 - 증거: 초기 RED21, 검토 네 finding은 RED5 failed/24 passed 뒤 보완했다. 원본3c 회귀의 구조 검사2건·기존 version 기대값1건과9d FULL의 구조/G1 2 NEW를 보존했다. source76 집중1292 passed/skip0, FULL23개 각각exit0/known0 NEW(Fleet6343 passed/336 skipped, root9707 passed/1135 skipped), 동일source G1 timing4 passed/skip0와 독립 안전 검토, source9 commits size/safety exit0다. 기존 normalize/reserve/release AST는 유지했고 중복/skip은 합산·수용으로 세지 않는다. docs/validation/harbor-physical-proposals-2026-10-24/result.md를 따른다.
 - gate 변화: public HTTP/DTO·실제 capability 수집·prepared context/dispatcher·관측 ingress·물리 claim 종료·Harbor ARM은 미완료다. CE 미해결: 원본G1 접촉 간격 p99 0.525457s의 원인은 미확정이며 최신 strict 통과를 해결로 보지 않는다. 코드 검토 finding은 source·회귀·검증 기록에 남긴다.
+
+
+## 2026-10-24 · 58f7cc7b14 · D-856 중립 ARM 작업 HTTP 제안과 승인
+
+- 변경: simulation 설치 시 create/read-by-key/ID와 named-operator admit를 기존 auth/audit에 연결했다. 모든 owner의 실제 SDK capability를 transaction 밖에서 수집하고 기존 원장의 승인/CAS/fence/claims를 호출한다. present-Origin은 기존 same_origin helper로 검사한다. 앱은 물리 refs만 보내며 자원·capability·grant·업무 완료를 지정하지 못한다. 미설치는503이다.
+- 증거: b5 집중1205 passed/16 NEW(시험의 잘못된 자원 조회15건/Origin누락1건) 뒤 최종18 passed/skip0/known0 NEW다. 소스58 FULL23개 각각exit0/known0 NEW(Fleet6361 passed/336 skipped, root9710 passed/1132 skipped), 독립 계약·전체로그 evidence 검토 추가 finding 없음이다. docs/validation/harbor-arm-job-http-2026-10-24/result.md를 따른다. 원본 실패와 각SHA를 보존하고 중복/skip을 합산·수용으로 세지 않는다.
+- gate 변화: 제안/승인 HTTP만 연결했다. prepared context·장치 제출·관측 credential·physical receipt/claim 종료·Harbor ARM은 이 소스에서 미완료다. 뒤의 schema7/8 변경은 별도 검증한다. CE 미해결: 이전G1 timing 실패 원인은 미확정이며 이번 strict 통과는 원인 해결 근거가 아니다.

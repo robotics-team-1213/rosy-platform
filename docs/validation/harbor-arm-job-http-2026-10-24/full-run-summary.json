@@ -1,0 +1,302 @@
+{
+  "source_commit": "58f7cc7b14272115a7f9be790839c35d935b55ac",
+  "baseline": "958d27562836e56743ba0d8eed421d0c8d53df6c",
+  "runner_exit": 0,
+  "selection_mode": "full",
+  "invocation_count": 23,
+  "log_root": "C:/Users/SERIGGG/AppData/Local/Temp/rosy-arm-job-http-58-full",
+  "runs": [
+    {
+      "index": 1,
+      "summary": "117 passed, 4 skipped in 4.90s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/registry/policy/test"
+      ],
+      "log": "run-1.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 2,
+      "summary": "142 passed, 16 skipped in 1.53s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/training/omx/test"
+      ],
+      "log": "run-2.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 3,
+      "summary": "6 passed, 6 skipped in 0.75s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/training/pinky/test"
+      ],
+      "log": "run-3.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 4,
+      "summary": "229 passed, 3 skipped in 2.65s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/curation/omx/test"
+      ],
+      "log": "run-4.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 5,
+      "summary": "21 passed, 28 skipped in 0.89s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/curation/pinky/test"
+      ],
+      "log": "run-5.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 6,
+      "summary": "3 passed in 0.58s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/training/world_model/test"
+      ],
+      "log": "run-6.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 7,
+      "summary": "4 passed in 0.72s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/evaluation/world_model/test"
+      ],
+      "log": "run-7.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 8,
+      "summary": "12 passed in 0.41s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/prediction/world_model/test"
+      ],
+      "log": "run-8.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 9,
+      "summary": "7398 passed, 91 skipped, 12 warnings, 5 subtests passed in 517.00s (0:08:37)",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/core/gateway/test",
+        "middleware/core/events/test",
+        "middleware/core/services/test",
+        "shared/web/test",
+        "contracts/foundation/test",
+        "middleware/devices/pinky/profile/test",
+        "middleware/devices/omx/profile/test"
+      ],
+      "log": "run-9.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 10,
+      "summary": "6 passed, 2 skipped, 12 warnings in 15.02s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/core/gateway/test/test_account_pipeline.py"
+      ],
+      "log": "run-10.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 11,
+      "summary": "3554 passed, 113 skipped, 62 subtests passed in 153.37s (0:02:33)",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/perception/test"
+      ],
+      "log": "run-11.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 12,
+      "summary": "6361 passed, 336 skipped, 2 warnings in 695.13s (0:11:35)",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/fleet/test"
+      ],
+      "log": "run-12.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 13,
+      "summary": "49 passed, 34 skipped in 5.14s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "applications/fleet/test"
+      ],
+      "log": "run-13.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 14,
+      "summary": "736 passed in 52.72s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/overhead/test"
+      ],
+      "log": "run-14.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 15,
+      "summary": "155 passed in 0.51s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/processes/cell/test"
+      ],
+      "log": "run-15.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 16,
+      "summary": "121 passed, 2 warnings in 3.86s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/situation/test"
+      ],
+      "log": "run-16.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 17,
+      "summary": "38 passed in 1.74s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/world/test"
+      ],
+      "log": "run-17.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 18,
+      "summary": "25 passed in 0.83s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "test/test_platform_palletizing_compat.py",
+        "test/test_platform_cell_submission.py",
+        "test/architecture/test_platform_dependency_boundaries.py"
+      ],
+      "log": "run-18.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 19,
+      "summary": "328 passed, 4 skipped in 10.93s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "integrations/simulation/gazebo/test"
+      ],
+      "log": "run-19.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 20,
+      "summary": "473 passed in 0.63s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/devices/pinky/bringup/test",
+        "middleware/drivers/pinky_adc/test",
+        "middleware/perception/test/test_ir_adc_lock.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"
+      ],
+      "log": "run-20.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 21,
+      "summary": "9710 passed, 1132 skipped, 56 warnings in 720.33s (0:12:00)",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "test"
+      ],
+      "log": "run-21.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 22,
+      "summary": "2031 passed, 298 skipped, 2 warnings in 54.42s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/site_ui/media/test",
+        "middleware/media/test",
+        "learning/evaluation/perception/test",
+        "operations/apps/games/test",
+        "operations/processes/palletizing/test",
+        "middleware/robot_ui/face/test/test_info_screen.py",
+        "middleware/robot_ui/face/test/test_info_screen_boot.py",
+        "middleware/robot_ui/face/test/test_wifi_qr.py",
+        "middleware/drivers/pinky_led/test/test_led_package_contract.py",
+        "middleware/drivers/imu_bno055/test/test_package_contract.py",
+        "middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py",
+        "middleware/robot_ui/robot/test",
+        "middleware/robot_ui/pilot/test",
+        "middleware/devices/omx/adapter/test",
+        "contracts/ros_idl/test/test_srv_surface.py",
+        "middleware/devices/pinky/description/test/test_urdf_surface.py",
+        "operations/signal_observation/test",
+        "learning/envs/isaac/test",
+        "deploy/robot/pinky_pro/release/test/test_secret_scan.py",
+        "middleware/robot_execution/local/test/test_native_parent_fence.py",
+        "middleware/robot_execution/local/test/test_omx_policy_session.py",
+        "middleware/robot_execution/local/test/test_policy_runtime_ros.py",
+        "tools/calibration/test/test_analyze_store.py",
+        "tools/calibration/test/test_camera_board.py",
+        "tools/calibration/test/test_store_cli.py",
+        "tools/calibration/test/test_urdf_nominal.py",
+        "tools/capture/test/test_edge_drive_advisory.py"
+      ],
+      "log": "run-22.txt",
+      "runner_exit": 0
+    },
+    {
+      "index": 23,
+      "summary": "188 passed, 13 skipped, 2 warnings, 25 subtests passed in 10.69s",
+      "known_exit": 0,
+      "known": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/core/api/test"
+      ],
+      "log": "run-23.txt",
+      "runner_exit": 0
+    }
+  ]
+}

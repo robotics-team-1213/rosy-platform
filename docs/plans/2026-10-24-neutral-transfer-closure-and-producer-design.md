@@ -63,6 +63,8 @@ admit 전 현재 설치/capability/참가자 identity를 읽고, 같은 SQLite w
 
 새 physical store/projection을 만들고 legacy Cell resolver/recipe/checkpoint/arm-success release에는 등록하지 않는다. 공통 parent/step/event·claim SQL을 재사용하되 nullable legacy provenance를 채우지 않는다. schema를 추가하면 기존 initializer가 가진 atomic migration transaction에 넣고, old host가 새 physical journal을 잘못 복구하지 않도록 schema version을 올린다. legacy row/claim/FK/mirror/UNKNOWN을 보존한다.
 
+2026-10-24 코드 대조 결과, 최초 physical step은 공통 parent/event/claim 아래 `fleet_physical_transfer_attempts`에 둔다. 기존 `fleet_cell_steps` CHECK는 `_KINDS`로 생성되고 Cell dispatcher에는 sheet checkpoint·Cell grant·전송 전 release 규칙이 결합돼 있다. ARM 등록만으로 physical 경로가 생기지 않으면서 legacy dispatcher의 kind 범위가 넓어지므로 이 첫 slice에서는 `_KINDS`를 확장하지 않는다. 공통 atomic migration version7 안에서 job당 하나의 준비 attempt를 만들고 고정 step/action/attempt·canonical grant/digest·owner journal/session·approval/fence·준비 시각을 영속화한다. 별도 DB나 범용 attempt framework는 만들지 않는다. 독립 계약 검토가 실제 producer/consumer 경로를 대조한 구현 선택이며 위 승인 계획의 소유권을 바꾸지 않는다.
+
 Action SUCCEEDED는 공통 ACTION_SUCCEEDED 상태로 저장하되 claims를 유지한다. World 관측 ingress와 immutable physical receipt 저장, 동일 action/attempt·generation의 claim 해제를 같은 DB transaction에서 판정·commit한다. 내부 GOAL_CONFIRMED는 물리 object-at-target/정지/전체 link 근거를 뜻하며 Harbor 업무 완료로 내보내지 않는다. 표본 중복은 같은 receipt, 다른 attempt/revision/fence나 부분 근거는 해제0이다. CANCEL/UNKNOWN/HOLD도 같은 물리 종료 경계 없이 해제하거나 다른 팔에 재배정하지 않는다.
 
 ## 실행 순서와 확인 기준

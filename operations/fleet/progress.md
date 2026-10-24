@@ -234,3 +234,10 @@ credential ingress·현재 원장에서 만든 context/fence·physical create/ap
 source3c는 simulation 내부 physical create/read/two-person approval과 공통 claims를 같은 DB transaction으로 처리한다. 자원 키를 정책 digest에 포함하고 모든 owner workcell도 잠근다. schema version6 승인 테이블과 idempotency index는 기존 migration에 포함한다. stop/startup은 HELD/UNKNOWN 점유를 보존한다. 새 Cell 완료 파일로 이동한 메서드의 AST/호출 의미는 그대로이며 physical 완료에 재사용하지 않는다.
 
 자원 정규화를 공용 contracts leaf로 옮긴 최종source76의 집중1292 passed/skip0, FULL23개 각각exit0/known0 NEW와 독립 안전 검토를 확인했다. 원본9d FULL의 구조/G1 timing 실패는 별도로 보존한다. source76 G1 timing4 passed/skip0도 확인했지만 원본 접촉 간격 실패의 원인은 미확정이다. HTTP/DTO·live SDK capability·prepared action/attempt·관측 credential ingress·dispatcher·물리 receipt/claim 종료·Harbor ARM은 후속이다. READY를 실행 제출로 보지 않는다. [검증 기록](../../docs/validation/harbor-physical-proposals-2026-10-24/result.md)을 따른다.
+
+
+## 2026-10-24 · D-856 중립 ARM 작업 HTTP
+
+API v1.307의 simulation 설치 경로에 closed physical create/read/key/admit를 연결했다. 실제 SDK의 모든 참여 capability를 SQLite 밖에서 읽고 기존 2인 승인·CAS·fence·공통 claims transaction을 호출한다. auth/audit와 present-Origin 검사를 적용하며 미설치503/내부 설치 자료 비노출을 보존한다.
+
+소스58 HTTP18 passed/skip0/known0 NEW와 FULL23개 각각exit0/known0 NEW·독립 검토를 확인했다. [원본 실패·manifest·한계](../../docs/validation/harbor-arm-job-http-2026-10-24/result.md)를 따른다. 장치 제출·물리 종료·Harbor ARM 및 뒤의 schema7/8은 이 소스 검증에 포함하지 않는다. 기존 물리/현장 gate와 이전G1 원인 미확정 상태는 그대로다.

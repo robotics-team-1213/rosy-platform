@@ -908,3 +908,10 @@
 - 변경: 기존 순수 자원 정규화를 stdlib-only core_common.resource_keys로 옮겼다. safety와 decision 양쪽이 계약 leaf를 소비하며 Fleet의 기존 normalize_resources 재수출과 normalize/reserve/release AST는 유지한다. 새 wire shape·API version·writer·권한은 추가하지 않았다.
 - 증거: 공유 leaf 누락 RED7 뒤 Foundation 전체·Fleet 중립/Cell 원장·점유·writer/safety 구조의 공식 원격1292 passed/skip0/known0 NEW, source76 FULL23개 각각exit0/known0 NEW, 독립 안전 검토와 source9 commits size/safety exit0를 확인했다. 원본 실패와 skip 한계는 docs/validation/harbor-physical-proposals-2026-10-24/result.md를 따른다.
 - gate 변화: 라이브러리와 host 집중 검증이다. 실제 HTTP producer·장치 제출·관측 credential·물리 점유 해제·Harbor 연결은 후속이다. CE 해당 없음: 코드·회귀·기존 D-430 의존 규칙과 검증 문서가 판단 근거를 보존한다.
+
+
+## 2026-10-24 · 58f7cc7b14 · D-856 중립 ARM 작업 HTTP 계약
+
+- 변경: API v1.307 closed/frozen physical request·admit·snapshot/response를 정본 DTO로 추가하고 store/HTTP가 같은 타입을 소비한다. TaskStatus는 AST 동일 분리 후 facade 재수출을 유지하고 schemas 예산을800으로 낮췄다. 기존 live pins9곳과 reference의 version 표행을 함께 갱신했다.
+- 증거: 계약/라우트 RED35 NEW 뒤 b5 집중1205 passed/16 NEW를 보존했다. 최종 HTTP18 passed/skip0/known0 NEW, FULL23개 각각exit0/known0 NEW(공통entry9 7398 passed/91 skipped), 독립 계약·23로그 evidence 검토 추가 finding 없음이다. 상세는 docs/validation/harbor-arm-job-http-2026-10-24/result.md와 manifest를 따른다.
+- gate 변화: HTTP 제안·조회·승인 계약의 검증이다. 실제 제출·물리 종료·Harbor ARM 연결은 후속이며 skip을 수용으로 세지 않는다. 뒤의 schema7/8은 이 FULL58 검증에 합치지 않는다. CE 해당 없음: source·회귀·정본 계약이 수정 근거를 보존한다.
