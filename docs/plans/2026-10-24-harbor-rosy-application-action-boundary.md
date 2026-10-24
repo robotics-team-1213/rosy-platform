@@ -26,7 +26,7 @@
 | [팔 catalog·사전검사](2026-10-24-neutral-arm-preflight-design.md) | API v1.299·owner/Fleet HTTP 연결, 신규/기존 원격 213 passed/skip0, 실제 HTTP/UDS·독립 검토 | 중립 grant·원장 경계 분리, 설치 wheel·장치 수용 |
 | 전체 P3–P5 | 진행 중 | 중립 팔 실행, Harbor 공정 변환, 복구·독립성 통합 증거 |
 
-첫 HTTP 증거는 플랫폼 `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.
+첫 HTTP 증거는 플랫폼 commit `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor commit `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.
 
 ## Global Constraints
 

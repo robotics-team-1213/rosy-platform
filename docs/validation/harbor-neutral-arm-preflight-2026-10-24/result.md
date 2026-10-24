@@ -13,7 +13,7 @@ API v1.299의 **simulation 읽기 경로**를 검증했다. 중립 팔 grant·�
 | `72cec3a1e0` | 단독 HTTP suite와 서버 source bootstrap | 1 passed, skip0 |
 | `364a579f47` | v1 거절 envelope 보존 RED | 1 failed; v1 요청에 v2 오류 응답 |
 | `7d40743637` | 고정 code/reason 결속 RED | 3 failed; 다른 reason 허용 |
-| `1c66d5cfa555c61ef858454c7af3a8769b2410d9` | 최종 신규 계약/HTTP와 기존 ActionApi·Cell runner/owner·UI·SIM pose 회귀 | 213 passed, skip0, 0 NEW; 공식 원격 runner exit0 |
+| commit `1c66d5cfa555c61ef858454c7af3a8769b2410d9` | 최종 신규 계약/HTTP와 기존 ActionApi·Cell runner/owner·UI·SIM pose 회귀 | 213 passed, skip0, 0 NEW; 공식 원격 runner exit0 |
 
 위 SHA는 실제 시험한 당시 커밋이다. ActionApi의 안전 태그를 확인한 뒤 독립 검토 근거를 빠진 `Safety-Review:` trailer에 보완했다. 이 세션의 깨끗한 격리·미게시 브랜치만 재작성했고, 원래 이력은 `refs/wip/2026-10-24/d856-public-preflight-before-safety-trailer`에 보존했다. 재작성 head `f5bba002ecb76a427ae9155fe727078576c85ec6`과 시험 head `1c66d5cfa5`의 **전체 tree diff는 0**이다. 안전 태그 변경 commit은 `33ea1dec63`이다. 이후 이 기록·생성 문서 변경은 별도 metadata이며 새 SHA의 FULL 통과로 대신하지 않는다.
 
