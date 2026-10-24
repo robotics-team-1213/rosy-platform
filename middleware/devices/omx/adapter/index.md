@@ -52,3 +52,8 @@
 - 2026-10-23 · a3a75e6fd2 · 5fps 보조 SIM 교사 시연 종료
 - 2026-10-23 · a3a75e6fd2 · 긴 교사 시연의 원본 시각 기반 5fps 기록
 - 2026-10-21 · uncommitted · 영상 처리와 관절 기록 수신 분리
+- 2026-10-17 · uncommitted · test(omx): keep timeout input independent of owner scheduling
+- 2026-10-17 · uncommitted · test(omx): restore intake isolation after the external-peer negative control
+- 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
+- 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
+- 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD

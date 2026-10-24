@@ -608,3 +608,36 @@
 - 변경: 최초 runtime 게시 지연안은 확장 검사에서 기존 policy attach/coalescing 의존성을 깨뜨려 착지하지 않았다. native intake 선게시를 복원하고 readonly owner.joint_state를 Pilot 읽기 5곳에서 사용한다. command transaction과 기존 순번·freshness·seat 검사는 유지한다. 시험용 owner도 같은 명시적 계약을 제공한다.
 - 증거: 기존 policy assertion을 유지한 HTTP/Pilot/owner/정책 검사 173 passed, 0 NEW. 실제 Jazzy pending/admitted·source stamp·watchdog 3 passed/0 skipped. 최초 transaction producer의 보조 교사 시연은 PASS/1,586프레임이며 MODEL 독립 truth·전체 RGB·377명령·718지원 chunk를 확인했다. 세부 source별 범위는 docs/validation/omx-pilot-readback-2026-10-23/result.md를 따른다.
 - gate 변화: SOURCE·원격 ROS 회귀와 명시적 교사 SIM 원본 범위다. 최종 landing 확장 검사, 새 25개 수집·학습·독립 정책 평가·실물 수용은 미완료다. 교사 source와 최종 정책 runtime을 혼동하지 않는다.
+- Change: Run the two native ROS action fixture files separately using the existing native wrapper DDS/plugin environment, preserve directory and explicit node selection, and fail on skipped native fixtures. Other module environments are unchanged.
+- Evidence: Run 38916624138 fixed Fleet stamps but showed publication gaps of 0.755 s and owner age of 1.174 s in the combined modules process; native host wrappers passed. Two new selection regressions fail against the old workflow. Isolation is a controlled environment correction, not a proven plugin root cause.
+- Gate: No change; final cloud verification is required. Production timing and safety policy are unchanged.
+
+## 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD
+
+- Change: Record accepted/rejected intake, vendor execution boundaries and the first owner HOLD before terminal-event delivery can block its observation.
+- Evidence: Issue #68 records two main CI failures of the same native regression. This diagnostic revision keeps the existing executor, 0.5 s freshness allowance and 1.5 s blocked feedback interval to distinguish source scheduling from intake/owner delay.
+- Gate: No change. No physical devices or production policy changes.
+
+## 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
+
+- Change: Give the synthetic vendor ActionServer its own executor, matching the external vendor boundary. Keep the owner executor at four workers, all callback groups, 40 feedback messages, 0.5 s freshness, at least 1.5 s blocked sink and completed/ready assertions. Remove investigative switches, affinity changes and callback instrumentation.
+- Evidence: CI 38939987985 at 4932c2c177 recorded a 0.5956 s source-publication gap, stale source rejection and owner HOLD at age 0.6059 s. The owner correctly enforced its policy. Native wrappers passed with separated vendor scheduling at 636d102c5c. A callback-group mutation at c282f6729d kept publications advancing (maximum gap 0.2013 s) but stopped owner sequence at 4 and failed freshness at age 1.6698 s, proving the regression still detects excluded intake. Final SHA and cloud results are recorded in PR #69.
+- Gate: No change. This corrects the test boundary; it does not establish a GIL defect, physical stop or hardware acceptance.
+
+## 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
+
+- Change: Use a spawned, localhost-only test peer with its own ROS context for the vendor and 100 Hz state source. Keep owner MTE4, 40 feedback messages, 0.5 s freshness, blocked sink and completion assertions unchanged. Bound peer startup/shutdown and stop it if its parent disappears. Freeze the synthetic readback clock only in the lost-reply admission unit test.
+- Evidence: The separate-executor trial above passed initially but failed again at 275e14dc46, so it is insufficient. The same pre-push run exposed readback expiry during SQLite setup before the lost-reply test could exercise its intended send failure. No production threshold is changed. Final verification is recorded in PR #69.
+- Gate: No change. This remains a hardware-free test correction.
+
+## 2026-10-17 · uncommitted · test(omx): restore intake isolation after the external-peer negative control
+
+- Change: Remove the two-line callback-group mutation; retain the spawned vendor peer.
+- Evidence: Native, admission and secret guards passed 105 at 91536e1588. Mutation 0e518ae7ba failed the intended owner-sequence assertion with 165 publications and a maximum 0.01096 s gap, while owner sequence remained 2. The other seven native runtime tests passed.
+- Gate: No change. Final native, pre-push and cloud results belong to the restored commit in PR #69.
+
+## 2026-10-17 · uncommitted · test(omx): keep timeout input independent of owner scheduling
+
+- Change: Reuse the spawned vendor peer for the timeout regression, including its original 30 ms state period and 1.2 s delayed result. A second peer worker handles cancel requests; the synthetic peer yields between readiness checks. Owner timing, HOLD latch, cancel ACK and terminal CANCELED assertions are unchanged.
+- Evidence: CI 38944470403 passed slow-feedback but the timeout fixture reached joint_state_stale before action_timeout. Its state source still shared the owner interpreter. This extends the same external-input boundary to that fixture; final verification is recorded in PR #69.
+- Gate: No change. No production executor or safety threshold changes.
