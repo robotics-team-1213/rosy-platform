@@ -109,3 +109,7 @@ task unknown, skill null, action 결과와 native terminal 결과는 구분해 �
 실행 원장을 인증·새 dispatch 권한·학습 GT로 승격하지 않는다. DatasetStore와
 승격은 기존 demonstration profile만 허용하며 이 실행 profile을 학습으로 받지 않는다.
 실제 설치/추론/장치/원래 timing·물리 승인은 별도이고 기존 공개 Action wire는 유지한다.
+
+## Amendment by D-857 (2026-10-24)
+
+PromotionRecord의 평가 증거는 사람이 단 정답 또는 사람이 확인한 정답(확정 정답)만 쓴다. 모델 합의로 만든 임시 정답은 증거가 아니다. [D-857](D-857-rosy-learning-product-definition.md)
