@@ -61,6 +61,11 @@ def legacy_database(tmp_path):
                     resources=[("workcell", mission)], phase="CLAIMED")
             connection.execute("UPDATE fleet_action_claims SET phase=? WHERE owner_id=?", (phase, mission))
         connection.execute("CREATE INDEX provenance_test_status ON fleet_cell_jobs(status)")
+        from test_cell_sheet_checkpoints import checkpoint
+
+        sheet = checkpoint(1)
+        connection.execute("INSERT INTO fleet_cell_checkpoints VALUES(?,?,?,?,?,?)",
+                           ("legacy-1", sheet["checkpoint_id"], 1, json.dumps(sheet), "WAITING_ACCESS", "before"))
         connection.execute("CREATE VIEW provenance_test_view AS SELECT mission_id,reason FROM fleet_cell_jobs")
         connection.execute("CREATE TRIGGER provenance_test_child AFTER UPDATE ON fleet_cell_events BEGIN "
                            "UPDATE fleet_cell_jobs SET reason='child-updated' WHERE mission_id=NEW.mission_id; END")
@@ -201,3 +206,22 @@ def test_matching_columns_without_provenance_constraints_are_not_accepted(tmp_pa
                 pass
         assert connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0] == before
         assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 4
+
+
+def test_schema_restore_sql_failure_preserves_the_old_database(tmp_path):
+    path = legacy_database(tmp_path)
+    before = snapshot(path)
+    with closing(connect(path)) as connection:
+        old_sql = connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0]
+        connection.set_authorizer(lambda operation, *_: sqlite3.SQLITE_DENY
+                                  if operation == sqlite3.SQLITE_CREATE_VIEW else sqlite3.SQLITE_OK)
+        with pytest.raises(sqlite3.DatabaseError):
+            with initialize()(connection, version=5, now="after"):
+                pass
+        connection.set_authorizer(None)
+        assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0] == old_sql
+        assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 4
+    assert snapshot(path) == before
+    CellJobStore(path)
+    assert snapshot(path) == before
