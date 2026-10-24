@@ -697,7 +697,7 @@ def test_network_start_runs_only_after_response_body_is_sent(client, monkeypatch
                 events.append("response_sent")
         await client.app(scope, receive, observed_send)
     response = TestClient(observed_app).post("/api/v1/host/network/connect", headers=_auth(ADMIN_TOKEN),
-                                            json={"ssid": "site", "psk": "test-passphrase", "confirmed": True,
+                                            json={"ssid": "site", "psk": "supersecretpsk", "confirmed": True,
                                                   "idempotency_key": "browser-job"})
     assert response.json()["data"]["state"] == "prepared"
     assert events == ["network.connect", "response_sent", "network.start"]
@@ -719,7 +719,7 @@ def test_nonprepared_network_reply_never_starts_radio(client, monkeypatch, state
         return AgentReply(True, "OK", data={"state": state, "request_id": "known"})
     monkeypatch.setattr(HostAgentClient, "request", request)
     result = client.post("/api/v1/host/network/connect", headers=_auth(ADMIN_TOKEN),
-                         json={"ssid": "site", "psk": "test-passphrase", "confirmed": True,
+                         json={"ssid": "site", "psk": "supersecretpsk", "confirmed": True,
                                "idempotency_key": "known"}).json()
     assert result["data"]["state"] == state
     assert commands == ["network.connect"]
@@ -727,10 +727,10 @@ def test_nonprepared_network_reply_never_starts_radio(client, monkeypatch, state
 
 @pytest.mark.parametrize("case", ["short", "long", "list", "missing_ssid", "missing_psk", "nested_confirmed", "list_body"])
 def test_network_connect_validation_never_echoes_credentials(client, case):
-    secret = "private-wifi-passphrase"
+    secret = "supersecretpsk"
     payload = {"ssid": "site", "psk": secret, "confirmed": True}
     if case == "short":
-        secret = "shh123"
+        secret = "x" * 6
         payload["psk"] = secret
     elif case == "long":
         secret = "x" * 64

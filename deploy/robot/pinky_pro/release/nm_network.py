@@ -81,7 +81,7 @@ class NMNetworkBackend:
                              # Byte lists avoid numeric-semicolon SSIDs being reinterpreted.
                              f"ssid={''.join(str(byte) + ';' for byte in ssid.encode('utf-8'))}\n"
                              "[wifi-security]\nkey-mgmt=wpa-psk\npsk-flags=0\n"
-                             f"psk={_escape(psk)}\n"
+                             "psk=" + _escape(psk) + "\n"
                              "[ipv4]\nmethod=auto\n[ipv6]\nmethod=auto\n")
                 handle.flush()
                 os.fsync(handle.fileno())

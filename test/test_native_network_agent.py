@@ -38,12 +38,12 @@ class Transaction:
 
 def test_retried_job_still_checks_role_and_request_identity(module, tmp_path):
     agent = module.make_agent(module.NetworkCommands(Transaction(), root=tmp_path))
-    body = request('network.connect', ssid='site', psk='test-passphrase')
+    body = request('network.connect', ssid='site', psk='supersecretpsk')
     body['idempotency_key'] = 'network-job-1'
     assert agent.handle(body)['ok']
     viewer = {**body, 'actor': {'role': 'viewer', 'user_id': 'other'}}
     assert not agent.handle(viewer)['ok']
-    changed = {**body, 'params': {'ssid': 'changed', 'psk': 'test-passphrase'}}
+    changed = {**body, 'params': {'ssid': 'changed', 'psk': 'supersecretpsk'}}
     assert not agent.handle(changed)['ok']
 
 
@@ -51,7 +51,7 @@ def test_connect_prepares_before_explicit_acknowledgment(module, tmp_path):
     transaction, scheduled = Transaction(), []
     commands = module.NetworkCommands(transaction, root=tmp_path, submit=scheduled.append)
     agent = module.make_agent(commands)
-    prepared = agent.handle(request('network.connect', ssid='site', psk='test-passphrase'))
+    prepared = agent.handle(request('network.connect', ssid='site', psk='supersecretpsk'))
     assert prepared['ok']
     assert prepared['data']['state'] == 'prepared'
     assert transaction.calls == scheduled == []
@@ -59,7 +59,7 @@ def test_connect_prepares_before_explicit_acknowledgment(module, tmp_path):
     assert accepted['ok'] and len(scheduled) == 1
     assert transaction.calls == []
     scheduled.pop()()
-    assert transaction.calls == [('site', 'test-passphrase', 'network-job-1')]
+    assert transaction.calls == [('site', 'supersecretpsk', 'network-job-1')]
 
 
 @pytest.mark.parametrize('command,params', [
@@ -78,19 +78,19 @@ def test_network_entrypoint_refuses_other_authorities(module, tmp_path, command,
 
 def test_restart_needs_secret_resubmission_not_automatic_radio_work(module, tmp_path):
     first = module.NetworkCommands(Transaction(), root=tmp_path)
-    module.make_agent(first).handle(request('network.connect', ssid='site', psk='test-passphrase'))
+    module.make_agent(first).handle(request('network.connect', ssid='site', psk='supersecretpsk'))
     transaction = Transaction()
     second = module.NetworkCommands(transaction, root=tmp_path)
     reply = module.make_agent(second).handle(request('network.start', request_id='network-job-1'))
     assert not reply['ok'] or reply['data']['state'] == 'needs_resubmit'
     assert transaction.calls == []
-    assert all(b'test-passphrase' not in item.read_bytes() for item in tmp_path.rglob('*') if item.is_file())
+    assert all(b'supersecretpsk' not in item.read_bytes() for item in tmp_path.rglob('*') if item.is_file())
 
 
 def test_viewer_cannot_stage_or_start_network_change(module, tmp_path):
     transaction = Transaction()
     agent = module.make_agent(module.NetworkCommands(transaction, root=tmp_path))
-    for command, params in [('network.connect', {'ssid': 'site', 'psk': 'test-passphrase'}),
+    for command, params in [('network.connect', {'ssid': 'site', 'psk': 'supersecretpsk'}),
                             ('network.start', {'request_id': 'network-job-1'})]:
         body = request(command, **params)
         body['actor']['role'] = 'viewer'
@@ -104,7 +104,7 @@ def test_prejournal_refusal_is_retained_for_reconnecting_client(module, tmp_path
             return {'state': 'rejected', 'code': 'needs_maintenance', 'request_id': 'network-job-1'}
     scheduled = []
     agent = module.make_agent(module.NetworkCommands(Refused(), root=tmp_path, submit=scheduled.append))
-    agent.handle(request('network.connect', ssid='site', psk='test-passphrase'))
+    agent.handle(request('network.connect', ssid='site', psk='supersecretpsk'))
     agent.handle(request('network.start', request_id='network-job-1'))
     scheduled.pop()()
     data = agent.handle(request('network.status', request_id='network-job-1'))['data']
@@ -117,7 +117,7 @@ def test_blocking_previous_job_is_reported_under_the_submitted_job_id(module, tm
             return {'state': 'held', 'code': 'restore_unverified', 'request_id': 'older-job'}
     scheduled = []
     agent = module.make_agent(module.NetworkCommands(Blocked(), root=tmp_path, submit=scheduled.append))
-    agent.handle(request('network.connect', ssid='site', psk='test-passphrase'))
+    agent.handle(request('network.connect', ssid='site', psk='supersecretpsk'))
     agent.handle(request('network.start', request_id='network-job-1'))
     scheduled.pop()()
     data = agent.handle(request('network.status', request_id='network-job-1'))['data']

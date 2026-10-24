@@ -9,7 +9,7 @@ import subprocess
 import pytest
 
 
-PSK = "not-for-argv-or-journal"
+PSK = "supersecretpsk"
 OLD = {"uuid": "11111111-1111-4111-8111-111111111111", "name": "rosy-site-sta", "ssid": "old-site"}
 
 
