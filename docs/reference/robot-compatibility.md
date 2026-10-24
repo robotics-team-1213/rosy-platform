@@ -9,6 +9,7 @@
 | Pinky Pro | 기존 Raspberry Pi 5 구성 | `middleware/devices/pinky`, 실행 모델 `pinky_pro` | [배포 안내](../deployment/pinky-pro-first-device-runbook.md)와 해당 모듈의 SOURCE/ARTIFACT/DEVICE/FIELD 기록을 각각 확인 | 기존 구현 대상 |
 | OMX | 독립 팔 또는 기체와 조합한 구성 | `middleware/devices/omx`; joint/action owner는 어댑터 | 시뮬레이션·실물 경로와 장치별 수용 증거를 구분. 이 표가 실물 활성화를 승인하지 않음 | 기존 구현 대상 |
 | Adeept RaspTank Metal / ADR034 | 우선 Raspberry Pi 4B 4GB, Ubuntu Server 24.04 arm64 + ROS 2 Jazzy 목표 | [`rasptank_metal` 설정 패키지](../../middleware/devices/rasptank/profile/AGENTS.md) 소스 준비. I/O·실행 드라이버 없음 | 공식 Ubuntu 순정 이미지와 ROSY 통합 이미지는 별개. native 설치·실기 부팅·주행·팔·정지 수용 미수행 | **무구동 소스 준비 / 실행 미지원** |
+| DJI Neo 2 | 제조사 기체·조종 경로. ROSY 설치 대상 없음 | 공식 SDK 미지원 확인. ROSY 어댑터·실시간 관측 연결 없음 | [2026-10-25 공식 지원 조사와 재검토 조건](../deployment/multi-device-onboarding.md#dji-neo-2-판정). 직접 설치·SDK 제어·실물 수용 없음 | **SDK 제어 미지원 / 추적 대상** |
 
 RaspTank의 Pi 5 장착도 제조사 지원 범위지만 ROSY의 Pi 5 조합 수용을 뜻하지 않는다. 보유 Pi의 RAM, HAT 버전, 카메라와 전원 회로를 확인한 뒤 프로파일을 고정한다. 제조사 상품 페이지와 배포 PDF의 HAT 버전 표기가 달라 실물 대조가 필요하다.
 
@@ -17,6 +18,10 @@ RaspTank의 Pi 5 장착도 제조사 지원 범위지만 ROSY의 Pi 5 조합 수
 제조사 근거: [RaspTank Metal 상품](https://www.adeept.com/adeept-rasptank-metal-smart-robot-car-kit-for-raspberry-pi-5-4b-3b-3bboard-not-included-tank-tracked-robot-with-4-dof-robotic-arm-opencv_p0436_s0100.html), [공식 배포 자료](https://www.adeept.com/learn/detail-85.html), [고정 소스](https://github.com/adeept/Adeept_RaspTank_Metal/tree/e60a17a59185a86abfdd67828364185c4011bb22).
 
 ## 다른 로봇이 같은 ROSY를 쓰는 방식
+
+다기종의 직접 설치형·외부 SDK 연결형 분류와 기종 접수표는
+[다기종 배포 준비](../deployment/multi-device-onboarding.md)를 따른다.
+단계별 후속 작업은 [다기종 배포 설계](../plans/2026-10-25-multi-device-deployment-design.md)에 기록한다.
 
 [HWA-001/002/003과 CAP-003](../spec/ROSY%20CORE%20SRS.md)은 로봇별 하드웨어를 프로파일과 드라이버 어댑터로 격리하고, 기능 선언과 미지원 명령 거절을 요구한다. [D-14](../adr/D-14-.md)의 경계를 재사용한다.
 
