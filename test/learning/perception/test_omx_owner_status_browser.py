@@ -190,16 +190,29 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(empty_learning_center+'/learning/omx', wait_until='networkidle')
-            links = page.locator('.ui-rail-nav a').evaluate_all('(els)=>els.map(e=>e.getAttribute("href"))')
-            assert len(links) >= 6
-            for href in links:
-                page.locator(f'.ui-rail-nav a[href="{href}"]').click()
-                page.wait_for_load_state('networkidle')
+            hrefs = '(els)=>els.map(e=>e.getAttribute("href"))'
+            links = page.locator('.ui-rail-nav a').evaluate_all(hrefs)
+            # D-857 §3: five stages; every page is the stage entry or one sub-menu click away (two clicks at most).
+            assert links == ['/learning', '/catalog', '/', '/learning/tasks', '/learning/evaluate']
+
+            def opened(selector, href):
+                page.locator(selector).click()
+                page.wait_for_load_state('load')  # the SIM page keeps polling, so the network never idles
                 playwright.expect(page.locator('main')).to_be_visible()
                 playwright.expect(page.locator('[data-learning-account-entry]')).to_have_attribute('href', '/accounts')
                 playwright.expect(page.locator('[data-learning-account-entry]')).to_be_visible()
                 assert len(page.locator('main').inner_text().strip()) > 40
                 assert page.url == empty_learning_center+href
+            reached = set()
+            for href in links:
+                opened(f'.ui-rail-nav a[href="{href}"]', href)
+                # The two editors carry the 정답 pages in their title row (.review-kinds), the others in the sub-menu.
+                for sub in page.locator('.ui-subnav-nav a, .review-kinds a').evaluate_all(hrefs):
+                    opened(f'.ui-rail-nav a[href="{href}"]', href)
+                    opened(f':is(.ui-subnav-nav, .review-kinds) a[href="{sub}"]', sub)
+                    reached.add(sub)
+            assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/learning/omx', '/learning/vlm',
+                               '/learning/tasks', '/learning#pipeline', '/learning/sim'}
             assert not errors
         finally:
             browser.close()

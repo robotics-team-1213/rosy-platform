@@ -7,7 +7,7 @@ probabilities with a full forward of the same tokens. ``--ollama`` times the cur
 (operations/situation/rosy_situation/incidents/vision.py) on the same frames as a lower bound for that method.
 Frames are read only; results are JSON lines and a summary. No labels: this measures latency and answer spread.
 ``--debate-input`` (D-857 §4) re-asks one model the disputed questions of a disputes JSONL (one line per photo and
-question: image, view, question, text, options, answers[]; the Learning exporter is not published yet), with a
+question: image, view, question, text, options, answers[]; ``vlm_judge.py export-disputes`` writes it), with a
 short note of the other models' anonymised answers. Its rows carry a ``debate`` block, one row per round, that
 imports as runtime ``debate`` of the same model name. A debate answer stays provisional.
 """
@@ -295,7 +295,7 @@ def main(argv=None) -> int:
     parser.add_argument("--ollama", default="", help="loopback Ollama URL to time the observation call")
     parser.add_argument("--ollama-model", default="qwen3-vl:8b-instruct")
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--debate-input", type=Path, help="disputes JSONL (image, view, question, text, options, answers); re-ask --model")
+    parser.add_argument("--debate-input", type=Path, help="vlm_judge.py export-disputes output (image, view, question, text, options, answers); re-ask --model")
     parser.add_argument("--debate-as", help="the imported model name of --model, left out of the others' answers")
     parser.add_argument("--debate-rounds", type=int, choices=(1, 2), default=1)
     parser.add_argument("--dump-questions", type=Path, metavar="FILE",

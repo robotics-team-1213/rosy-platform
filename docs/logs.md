@@ -9573,3 +9573,21 @@ osy-d395-s1d\`.
 - 변경: 독립 리뷰 지적 반영 — D-853은 결정만 게시(구현은 후속), D-857·제품 지도에서 내부 포트와 미게시 ADR 의존 문구 정리, 저장소 밖 링크 제거, 두 벤치 기록의 도구 리비전 정정(측정은 v1·v2, 게시 도구는 v3), [토론 1라운드 기록](validation/vlm-question-debate-2026-10-24/result.md) 추가와 교훈 근거 연결, 도구의 루프백 검사(`urlsplit`)·인라인 JSON 이스케이프·출력 폴더 번호·토론 라운드 보존.
 - 증거: [벤치](validation/vlm-question-bench-2026-10-23/result.md)·[v2](validation/vlm-question-bench-2026-10-23b/result.md)·[토론](validation/vlm-question-debate-2026-10-24/result.md) 기록(모델 PC, 사람 정답 없음).
 - gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · Rosy Learning 5단계 메뉴와 VLM 판단 화면 (D-857, D-853)
+
+- 변경: 레일을 홈·자료·정답·학습·평가·승격 다섯 칸으로 바꾸고 화면이 여럿인 단계에 공용 하위 메뉴(`ui-subnav`)를 붙였다. 기존 URL은 그대로이며 레일 한 번과 하위 메뉴 한 번 안에 닿는다. `/learning/vlm`(`vlm_judge.py`·`vlm_judge_web.py`, 임시·확정 정답, 보기당 평가셋 30장·의견 갈림 50장 상한·주 10건 점검·10% 멈춤, 토론 가져오기, `export-disputes`), `/learning/evaluate`, 홈 도메인 줄(`learning_domains.py`, `/api/learning`의 `domains`, OMX 학습 칸은 학습 과제 수), `--vlm-eval-url`. 협업은 VLM 경로 가져오기를 거절하고 정답 저장에 edit를 요구한다. 제품 지도 §9.2 오타 둘.
+- 증거: 시험 PC의 단위·HTTP·브라우저 시험 기록은 이 브랜치의 작업 기록에 둔다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.
+- gate 변화: 없음. 학습 검수 웹앱 화면과 평가 전용 state만이다. 로봇 실행·배포 권한은 바뀌지 않는다.
+
+## 2026-10-24 · uncommitted · Rosy Learning VLM 판단 검토 반영 (블라인드 내보내기·평가 state·다시 켜기)
+
+- 변경: 내보내기는 고정 평가셋·의견 갈림 사진을 임시 정답에서 빼고 협업에서 manage를 요구한다. 가져오기·정답 저장·다시 켜기는 `--empty-eval` 평가 state에서만 되고, VLM 표가 없는 state의 읽기는 표를 만들지 않는다. 평가는 고정 평가셋만의 비교를 따로 보인다. 멈춘 질문은 `vlm_judge.py unpause`(누가·언제 기록)로 다시 켠다. 토론의 `none_in_top`은 그 모델의 앞 답을 대신해 합의를 막는다. 모델 이름은 LIKE 없이 정확히 비교한다. 홈 OMX 줄은 OMX 과제만 센다. 레일 `aria-current`는 지금 화면에만 `page`, 품은 단계에는 `true`이며 전화의 하위 메뉴 줄은 48px로 줄였다.
+- 증거: 시험 PC 단위·브라우저·affected 기록. 화면 뷰포트 시험 9건은 origin/main에서도 같은 ID로 실패한다(상단 막대 줄바꿈). 실제 정답 품질은 별도 증거다.
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · 객체·픽셀 검수의 정답 링크가 사진을 밀지 않게 (D-542 §2)
+
+- 변경: `/`·`/pixels`는 따로 하위 메뉴 줄 없이 정답 화면 링크를 넓은 화면에서는 제목 줄 오른쪽, 전화에서는 편집기 아래에 둔다.
+- 증거: 사진 위쪽 위치가 origin/main과 같다(390×800 `/` 372.6 px·`/pixels` 367.0 px, 1280×720 281.6·284.0 px, 시험 PC 측정).
+- gate 변화: 없음.

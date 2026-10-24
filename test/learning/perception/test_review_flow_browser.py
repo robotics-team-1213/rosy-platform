@@ -477,7 +477,8 @@ def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     workspace = page.locator('.workspace')
-    assert workspace.bounding_box()['width'] == min(width, workspace.evaluate('(node) => parseFloat(getComputedStyle(node).maxWidth)'))
+    # D-857 §3: the 정답 sub-menu takes its own column beside the rail on wide screens.
+    assert workspace.bounding_box()['width'] == min(page.locator('.ui-app-main').bounding_box()['width'], workspace.evaluate('(node) => parseFloat(getComputedStyle(node).maxWidth)'))
     # D-741: the path row (page heading) sits between the app bar and the work area.
     pathbar = page.locator('.ui-pathbar').bounding_box()
     assert page.locator('.workspace').bounding_box()['y'] == pathbar['y'] + pathbar['height']
@@ -653,7 +654,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     page.goto(page.url.split('?')[0] + '?frame=1', wait_until='networkidle')
     expect(page.locator('#frame-title')).to_have_text('사진 2')
     expect(page.locator('a[href="/pixels?frame=1"]')).to_have_count(2)
-    page.locator('.workspace-tabs a[href^="/pixels"]').click()
+    page.locator('.review-kinds a[href^="/pixels"]').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
     page.locator('#pixel-class').select_option('0')
