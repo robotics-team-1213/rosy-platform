@@ -9579,3 +9579,9 @@ osy-d395-s1d\`.
 - 변경: 레일을 홈·자료·정답·학습·평가·승격 다섯 칸으로 바꾸고 화면이 여럿인 단계에 공용 하위 메뉴(`ui-subnav`)를 붙였다. 기존 URL은 그대로이며 레일 한 번과 하위 메뉴 한 번 안에 닿는다. `/learning/vlm`(`vlm_judge.py`·`vlm_judge_web.py`, 임시·확정 정답, 보기당 평가셋 30장·의견 갈림 50장 상한·주 10건 점검·10% 멈춤, 토론 가져오기, `export-disputes`), `/learning/evaluate`, 홈 도메인 줄(`learning_domains.py`, `/api/learning`의 `domains`, OMX 학습 칸은 학습 과제 수), `--vlm-eval-url`. 협업은 VLM 경로 가져오기를 거절하고 정답 저장에 edit를 요구한다. 제품 지도 §9.2 오타 둘.
 - 증거: 시험 PC의 단위·HTTP·브라우저 시험 기록은 이 브랜치의 작업 기록에 둔다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.
 - gate 변화: 없음. 학습 검수 웹앱 화면과 평가 전용 state만이다. 로봇 실행·배포 권한은 바뀌지 않는다.
+
+## 2026-10-24 · uncommitted · Rosy Learning VLM 판단 검토 반영 (블라인드 내보내기·평가 state·다시 켜기)
+
+- 변경: 내보내기는 고정 평가셋·의견 갈림 사진을 임시 정답에서 빼고 협업에서 manage를 요구한다. 가져오기·정답 저장·다시 켜기는 `--empty-eval` 평가 state에서만 되고, VLM 표가 없는 state의 읽기는 표를 만들지 않는다. 평가는 고정 평가셋만의 비교를 따로 보인다. 멈춘 질문은 `vlm_judge.py unpause`(누가·언제 기록)로 다시 켠다. 토론의 `none_in_top`은 그 모델의 앞 답을 대신해 합의를 막는다. 모델 이름은 LIKE 없이 정확히 비교한다. 홈 OMX 줄은 OMX 과제만 센다. 레일 `aria-current`는 지금 화면에만 `page`, 품은 단계에는 `true`이며 전화의 하위 메뉴 줄은 48px로 줄였다.
+- 증거: 시험 PC 단위·브라우저·affected 기록. 화면 뷰포트 시험 9건은 origin/main에서도 같은 ID로 실패한다(상단 막대 줄바꿈). 실제 정답 품질은 별도 증거다.
+- gate 변화: 없음.
