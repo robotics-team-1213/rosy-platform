@@ -116,6 +116,13 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondar
 .workspace-heading h2 { font-size: var(--text-title); }
 .learning-section { margin-top: var(--space-4); }
 ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
+/* D-741 §5 one-row app bar: below 30rem the account link shows only its icon and the theme select drops its visible
+   word; both keep their names for assistive tech (as the Fleet account button's role name, D-741 2026-10-13 note). */
+[data-learning-account-entry] > .ui-icon { display: none; }
+@media (width < 30rem) {
+  [data-learning-account-entry] > .ui-icon { display: inline-block; }
+  [data-learning-account-entry] > .ui-icon-label, .theme-label > span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .learning-panel { min-width: 0; padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-flat); }
 #journey-goal { overflow-wrap: anywhere; font-weight: var(--weight-medium); }
 .learning-next-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
