@@ -62,17 +62,17 @@ def assess(tracking, *, now):
     refused = {"synchronized": False, "reason": "invalid_tracking"}
     try:
         fields = next(csv.reader([tracking.strip()]))
-        if len(fields) != 13:
+        if len(fields) != 14:
             return refused
-        stratum = int(fields[1])
-        stamp, correction, delay, dispersion = (float(fields[i]) for i in (2, 3, 9, 10))
+        stratum = int(fields[2])
+        stamp, correction, delay, dispersion = (float(fields[i]) for i in (3, 4, 10, 11))
         if not all(math.isfinite(v) for v in (now, stamp, correction, delay, dispersion)):
             return refused
         if delay < 0 or dispersion < 0:
             return refused
         age = now - stamp
         bound = abs(correction) + delay / 2 + dispersion
-        ready = fields[12] == "Normal" and 1 <= stratum <= 15 and 0 <= age <= MAX_AGE_S and bound <= MAX_ERROR_S
+        ready = fields[13] == "Normal" and 1 <= stratum <= 15 and 0 <= age <= MAX_AGE_S and bound <= MAX_ERROR_S
         return {"synchronized": ready, "reason": "ready" if ready else "unsynchronized_or_out_of_bounds",
                 "error_bound_s": bound, "sample_age_s": age, "stratum": stratum}
     except (ValueError, StopIteration, csv.Error):
