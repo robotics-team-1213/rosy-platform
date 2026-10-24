@@ -38,6 +38,9 @@ CORE의 [프로파일 로더](../../contracts/foundation/core_common/profile.py)
 
 ## 이미지와 펌웨어
 
+부품·카메라/센서 연결 조사, 내려받은 순정 이미지, SD 준비 및 도착 후 순서는
+[RaspTank Pi 4 준비서](../deployment/rasptank-pi4-preparation.md)에 정리한다.
+
 공통 운영 기반은 [D-161](../adr/D-161-ubuntu-server-native-ros-runtime.md)의 Ubuntu Server 24.04 arm64 + Jazzy + systemd다. 같은 OS 기반을 쓴다는 것이 동일한 기체 패키지·overlay·드라이버·SD 이미지를 그대로 복제한다는 뜻은 아니다.
 
 RaspTank는 먼저 no-motion 프로파일·장치 인식부터 검증하고, 실제 HAT의 단일 writer·명령 만료·전원·독립 정지와 팔 동작을 단계적으로 확인한다. Pi 4의 부트 EEPROM은 실제 revision·현재 버전과 공식 요구사항을 확인한 뒤 판단한다. 제조사 제어 Python은 HAT에 flash하는 firmware 이미지가 아니다.
