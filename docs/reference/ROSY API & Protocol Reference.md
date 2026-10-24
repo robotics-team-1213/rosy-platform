@@ -417,6 +417,18 @@ messages are rejected by this runtime subscription; the legacy pure replay parse
   behavior, not just request schema support. Legacy unversioned diagnostic input is not
   evidence of this capability. Direction never establishes visible floor or pivot permission.
 
+### v1.264 두 팔 제안 경로와 팔별 목표 술어 (D-781 §2·§5)
+
+Additive. recipe/3 Step은 팔마다 `goal_predicates`(그 팔 `robot_base`)를 저장하고, 목표 증거는 Step을 실제로 실행한 팔(첫 주 배정 팔 또는 대체 팔)의 술어로 판정한다. 그 팔 술어가 없으면 409 `CELL_GOAL_PREDICATE_MISSING`. `cell_transfer.sku`는 선택 필드이고 없으면 recipe/1·2 grant 직렬화와 digest가 이전과 같다. `POST /api/fleet/cell-app/compile`은 recipe/3를 `summary.multi_arm`으로 미리 본다. 자세한 내용은 변경 이력 v1.264 행.
+
+### v1.263 두 팔 Cell Job의 Step 목표 증거와 팔 하나 재개 (D-779 §3·§6)
+
+Additive. 새 경로 하나와 기존 Cell 목표 증거 ingress의 두 팔 Job 판정이다. envelope 1.0과 한 팔 Job의 동작은 그대로다.
+
+- **팔 하나 재개.** `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume`, 이름 있는 운영자, 본문 `{expected_generation}`. 두 팔 Job에서 `HOLD`·`OFFLINE`인 팔 하나만 지금의 fence 아래에서 `READY`로 돌리고, 그 팔이 잡은 `HELD` 팔·구역 claim을 놓는다. 그 팔의 마지막 장치 결과가 성공이면 Action은 `ACTION_SUCCEEDED`로 남고 다시 보내지 않는다. 거절은 409 `CELL_JOB_RECOVERY_REFUSED`다: 한 팔 Job, 없는 팔이나 잡히지 않은 팔, 취소된 Job, 정지·권한 세대가 바뀐 경우(Job 전체 재개를 쓴다), 그 팔의 claim이 `DISPATCHING`·`UNKNOWN`인 경우(readback 먼저), 그리고 `TIGHT_PARTNER_HELD`로 잡힌 팔의 단단한 결합 짝이 아직 `HOLD`·`OFFLINE`인 경우(짝을 먼저 재개하거나 Job 전체 재개). 없는 Job은 404 `CELL_JOB_NOT_FOUND`.
+- **두 팔 Job의 목표 증거.** `POST /api/fleet/cell-goal-evidence`는 두 팔 Job을 `current_step_index`가 아니라 Step 단위로 판정한다. 증거는 저장된 `item_at_pose` 술어가 컴파일된 팔(그 Step 배치의 첫 주 배정 팔)의 Action을 가리켜야 하고, producer는 Job의 cell `workcell_id`와 그 팔의 `instance_id`로 등록되어 있어야 한다. 협조 Step은 배정된 모든 팔 Action의 마지막 장치 결과가 그 시도의 `SUCCEEDED`일 때만 `GOAL_CONFIRMED`가 되며, 관측은 마지막 성공 뒤에, 첫 관측은 모든 grant 발행 뒤이자 첫 성공 전에 있어야 한다. 대체 팔이 실행한 Step은 그 팔 좌표의 술어가 없으면 거절한다(fail closed). v1.264부터 술어는 팔마다(`goal_predicates`) 저장되고 대체 팔 Step도 그 팔 술어로 판정한다. 확인된 Step은 `depends_on`을 풀고, 모든 Step이 확인되면 Job은 `GOAL_CONFIRMED`가 된다(D-779 §1).
+- **협조 Step의 재전송.** 협조 Step은 모든 팔 Action이 함께 시작할 수 있을 때만 다시 낸다. 한 팔만 성공하고 다른 팔이 재개된 협조 Step은 한 팔만 다시 보내지 않는다. 그 Step은 `HOLD`·`PAIR_PARTIALLY_SUCCEEDED`로 읽히고 취소로만 끝난다.
+
 ### v1.242 작업의 운행 단계: 한 사람이 시작하는 trip 단계 작업 (D-763 조각 7, simulation 프로필만)
 
 Additive. 새 경로 하나와 Step 원장의 새 종류 하나다. envelope 1.0은 그대로다.
