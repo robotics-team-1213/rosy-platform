@@ -1062,7 +1062,7 @@ Timestamp / Robot ID / Source / Command·Event / Result / Error Code
 
 ### 시간 동기화
 
-로봇은 chrony(NTP)로 시간 동기화를 권장하며, 타임스탬프는 UTC(ISO 8601)로 기록한다. Fleet 로그 상관 분석의 전제가 된다.
+물리 로봇과 Linux 운영 호스트는 [D-859](../adr/D-859-shared-utc-time-synchronization.md)의 현장 NTP 계층으로 시간을 동기화하고, 타임스탬프는 UTC(ISO 8601)로 기록한다. Fleet 로그 상관 분석의 전제가 된다. 시각 변경은 호스트 유지보수 책임이며 CORE에는 OS 시계 변경 권한을 주지 않는다. 수용 오차·갱신 시각·Windows와 모바일의 범위는 해당 ADR을 따른다.
 
 ### 확장성 제약
 

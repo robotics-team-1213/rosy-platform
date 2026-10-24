@@ -27,6 +27,7 @@ for helper in host_agent.py host_agent_server.py host_lane_perception.py ssh_pai
 done
 # D-805: the site-wide update gate rosy-auto-update.service checks first (one source for every host).
 cp "$SCRIPT_DIR/../../../hosts/common/host-state/rosy-update-gate" "$DESTINATION/rosy-update-gate"
+cp "$SCRIPT_DIR/../../../hosts/common/rosy_time_sync.py" "$DESTINATION/rosy_time_sync.py"
 # D-388: the udev rules and modprobe options the image installs, carried in
 # every copy so sync-image-layer.py has a signed source for them on a robot
 # that only receives payload releases.

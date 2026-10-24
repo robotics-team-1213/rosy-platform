@@ -79,6 +79,11 @@ python learning/curation/omx/native_review.py inspect <dataset-root> --repo-id l
 출처를 생략한 검사는 `unverified_native`를 기록하며 학습용 분할을 거절한다.
 검토 명령은 body 단위를 변환하지 않는다. 선언한 rig/보정은 실물 검증 증거가 아니다.
 
+`--calibration <follower.json>`(양팔은 `arm_a=<a.json> arm_b=<b.json>`)을 주면 [D-854](../../../docs/adr/D-854-omx-policy-runner-and-action-space.md)
+행동 단위 선언 `action_space`(`lerobot_norm_v1`, omx_follower 모터 순서, 보정 range digest)를 `inspection.json`에 남긴다.
+정규화 데이터만 선언할 수 있고, 분할과 구간 선택은 선언을 그대로 다시 확인한다. 선언 없는 보고서는 지금처럼 동작한다.
+VLA 학습 입구에서 선언을 필수로 하는 일은 D-854 정책 실행기 단계에서 한다. SIM rad 데이터셋은 변환하지 않는다.
+
 ```text
 python learning/curation/omx/native_review.py split <dataset-root> --report <review-directory>/inspection.json --decisions <review-directory>/decisions.json --out <new-split-directory>
 ```
