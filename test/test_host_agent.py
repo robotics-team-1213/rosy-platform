@@ -126,6 +126,7 @@ def test_the_allowlist_matches_the_contract():
         "network.apply_profile",
         "network.set_mode",
         "network.connect",
+        "network.start",
         "release.status",
         "release.install",
         "release.rollback",
@@ -376,7 +377,7 @@ def test_the_whole_parameter_surface_is_enumerated():
     not an identifier; the agent still lists it so the surface stays closed.
     """
     every_param = {param for spec in ALLOWLIST.values() for param in spec.params}
-    assert every_param == {"profile_id", "release_id", "unit", "mode", "ssid", "psk", "paint_source", "public_key"}
+    assert every_param == {"profile_id", "release_id", "unit", "mode", "ssid", "psk", "paint_source", "public_key", "request_id"}
 
 
 def test_a_missing_required_parameter_is_refused(agent, commands):

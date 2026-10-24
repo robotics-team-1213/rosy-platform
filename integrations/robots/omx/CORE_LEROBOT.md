@@ -207,3 +207,31 @@ expose an immutable `camera_current` snapshot without waiting for that capture
 lock, so watchdogs and stop remain available. Static sources can return
 `contextlib.nullcontext((rgb_bytes, camera_snapshot))`. Pinning preserves original
 timestamps and all existing freshness, authority and exact-frame checks.
+
+## Policy Runner (D-854)
+
+`rosy.integrations.robots.omx.policy_runner` is the single inference loop that D-854 places on the AI PC.
+Its fixed skeleton is observe, preprocess, infer, postprocess with unit conversion, and submit, and every
+stage is timed. Before each step the runner checks that the policy unit, the conversion and the target unit
+agree, and that the policy joint order equals the target's. A failed stage never submits. `CoreArmClient`
+requests stop when a reply is uncertain. It has three plug-in points:
+
+- `LeRobotAdapter` loads a LeRobot 0.4.4 checkpoint with its saved processors. It follows
+  `predict_action`'s steps, including autocast when the checkpoint sets `use_amp` on CUDA. The caller
+  declares the checkpoint's action unit. Execution allows only `act`; the latency bench may also load
+  `smolvla` until D-854 step 6 allows it.
+- `ActionSpace` holds only declared unit conversions. Today that is identity; `lerobot_norm_v1` to CORE ROS
+  joint rad is refused until the ROS joint to Dynamixel motor map is measured.
+- `CoreArmTarget` speaks CORE arm policy HTTP through a connected `CoreArmClient`.
+
+CORE still admits one target per observation, so the adapter refuses `n_action_steps != 1` and temporal
+ensembling. The latency bench may override `n_action_steps` to 1 to time full inference every step, and it
+records the saved value.
+
+```sh
+python -m rosy.integrations.robots.omx.policy_runner <checkpoint-dir> --device cuda --joints <names...> --camera <name>=<H>x<W> [--camera ...] --unit lerobot_norm_v1 --task "<text>" --warmup 50 --steps 1000 --out <new-report.json>
+```
+
+The bench uses synthetic frames and no CORE, so its observe and submit stages do not include CORE or the
+network. The report records the checkpoint path and a sha256 over its files. Results belong in
+`docs/validation/policy-latency-<policy_type>-<date>/`.

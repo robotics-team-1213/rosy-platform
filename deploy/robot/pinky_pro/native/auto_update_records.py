@@ -249,7 +249,28 @@ class UpdaterRecords:
         return reasons
 
     def _inputs_problems(self) -> list[str]:
-        return self._sample()[0]
+        return self._sample()[0] + self._network_problems()
+
+    def _network_problems(self) -> list[str]:
+        reasons = []
+        for relative in ("var/lib/rosy/network/transaction.json", "run/rosy-network/recovery.json"):
+            path = self.root / relative
+            if not path.exists() and not path.is_symlink():
+                continue  # A legacy image has no network transaction/recovery producer.
+            try:
+                data = _read_json(path, 64 * 1024)
+                if not isinstance(data, dict):
+                    raise ValueError("invalid state")
+                if path.name == "transaction.json":
+                    state = data.get("state")
+                    if (state not in {"committed", "rolled_back", "rejected"}
+                            or ("phase" in data and data["phase"] != state)):
+                        reasons.append("network transaction is active or held")
+                elif data.get("active") is not False or data.get("boot_id") != self.host.boot_id():
+                    reasons.append("network recovery is active or unknown")
+            except (OSError, ValueError):
+                reasons.append("network state is unreadable or invalid")
+        return reasons
 
     def _sample(self) -> tuple[list[str], _dt.datetime | None]:
         """(problems, written_at) for one read of status-inputs.json."""
@@ -333,6 +354,7 @@ class UpdaterRecords:
         if kind in {"active", "invalid"}:
             reasons.append(detail)
         reasons += self._sealed(current)
+        reasons += self._network_problems()
         held = bool(reasons)
         claim = rosy_claim.check(self.root, now=self.host.now())
         if claim is not None and not (own_claim_ok and claim.get("holder") == CLAIM_HOLDER):

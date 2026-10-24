@@ -1193,3 +1193,9 @@
 - 변경: 현재 동일 native 완료의 수동적 navigation/handover를 기존 navigation router의 canonical 경로로 등록했다. guard callback이 끝난 다음 exact native/transport proof를 확인하며 공유 admission은 Nav lock 아래 비차단으로만 획득한다. 늦은 소유권 생성·reentrant 새 실행·busy admission에서 mode/candidate를 넘기지 않는다.
 - 증거: task-10-navigation-handover-final 원격 387개, task-10-handover-version-pins 원격 93개 통과, 각 NEW 0/skip 0/exit 0. 최초 fe5671413의 nested-router 경로 추적과 이미 terminal인 cancel을 상태 변경으로 본 잘못된 시험 2건은 canonical 등록 및 실제 새 native 실행을 만드는 회귀로 수정했다. 독립 scoped 안전 리뷰 PASS. 0ba8294c9의 실제 HttpRobotClient/귀환/카메라/기존 재투입·구조/안전 원격 261개에서도 통과했다. 범위가 겹쳐 합산하지 않는다.
 - gate 변화: 관련 CORE/HTTP 소프트웨어 회귀 근거. Fleet 완료 원장·native safe-release와 주기 인계의 결속, 전체 3회 연속 cycle와 실측 DEVICE/FIELD 수용은 아직 미완료다. 목표 ACTIVE, push/merge/장치 활성화 없음.
+
+## 2026-10-24 · c60d6046bb · network-only 호스트 작업 중계
+
+- 변경: 네트워크 조회/연결을 전용 Unix socket으로 전달하고 HTTP 본문 전송 후 준비 작업을 시작한다. 기존 관리자 재확인과 viewer 조회를 유지하며 잘못된 connect 본문의 검증 오류에서도 비밀 입력을 제거한다.
+- 증거: `9198a18c7b` 경계 원격 선택 332 passed, `3b29e960ce` CORE/인증 선택 107 passed. [검증 기록](../../../docs/validation/device-network-recovery-2026-10-24/result.md). 실제 ASGI 응답 순서·역할·socket·실패 응답을 확인했다.
+- gate 변화: SOURCE 근거 추가. 실제 Pinky 및 현장 네트워크 수용은 별도다. API v1.311, D-863.
