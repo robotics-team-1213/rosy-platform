@@ -427,3 +427,4 @@ plans:
 - step 시작의 typed grant 파싱·공통 identity·종류별 전체 payload 검증을 분리했다. Cell 원장/복구 184개와 dispatcher/transport 등 152개 별도 원격 회귀가 통과했으며 새 kind는 열지 않았다. 선행 공개 사전검사 FULL의 충전 조회 타임아웃은 단독 통과와 구별해 미해결로 기록했다. docs/plans/2026-10-24-step-grant-boundary-design.md와 위 validation을 따른다.
 - owner 설치 물체 참조→기하 결속을 불변 catalog/revision으로 검증한다. d0d7f4616d의 원격 112 passed/skip0/0 NEW와 독립 검토를 기록했다. 실행 소비자와 중립 grant는 후속이며 docs/plans/2026-10-24-neutral-arm-execution-design.md를 따른다.
 - 중립 팔 grant DTO를 v1.303에 등록했다. commit 1258314f51의 신규·기존 소비자 원격 1385 passed/skip0/0 NEW, 독립 검토와 크기·안전 trailer 검사를 통과했다. runtime 접수는 비활성이며 docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md의 한계를 따른다.
+- grant 단계 source 8da8bb1593의 FULL 세 그룹이 각각 11932/4359/6257 passed, 543/117/336 skipped, 0 NEW로 끝났다. 이후 원장 version5·Cell 소비자 차단의 69/13/244개 별도 회귀도 통과했다. physical creator·owner 실행은 후속이며 docs/validation/harbor-neutral-arm-ledger-2026-10-24/result.md를 따른다.

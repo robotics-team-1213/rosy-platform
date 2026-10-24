@@ -19,3 +19,9 @@ owner parser·phase/direct-driver kind sets·UDS v1/v2·Fleet step registry가 A
 실제 grant 발행, owner capability와 phase/recovery 연결, legacy provenance migration, 모든 claim 해제 입구의 물리 종료 검증, simulation HTTP와 Harbor CargoMove 변환은 후속이다. 선행 FULL의 충전 조회 타임아웃은 이 집중 회귀로 해소됐다고 기록하지 않는다. 실물 실행·배포·push는 수행하지 않았다.
 
 CE: 해당 없음 — 기능 추가와 DTO 이동의 판단 근거는 계약·설계·시험에 남는다.
+
+## 후속 FULL 결과 — commit 8da8bb1593
+
+공통 schema 변경의 영향 선택은 FULL이었다. source/selection을 commit `8da8bb1593999f977387deb6b8ddb06ac9d61aa6`으로 고정해 native runner의 세 그룹을 모두 실행했고 exit0을 확인했다. `rosy-neutral-arm-grant-full`의 결과는 run-1 **11932 passed/543 skipped**, run-2 **4359 passed/117 skipped**, run-3 **6257 passed/336 skipped**다. 각 보고서의 known_failures 비교는 0 NEW/known/flaky다. opt-in browser·환경 의존 skip은 실제 실행 수용과 구별한다.
+
+이 FULL은 이후 원장 provenance migration을 포함하지 않는다. 선행 충전 조회 타임아웃은 이번 FULL에서 재현되지 않았으나 원인을 고쳤다고 판정하지 않는다. timeout·HOLD 동작이나 시험 기대를 완화하지 않았다.

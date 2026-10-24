@@ -10275,3 +10275,9 @@ osy-d395-s1d\`.
 - 변경: 기존 parent의 네 legacy provenance를 보존하고 새 물리 형식과 구분하는 최소 재구성·소비자 차단·원복/동시성 검증 계획을 작성했다.
 - 증거: 현재 schema version 4, FK·per-arm mirror·read projection·site-stop 해제 경로를 조사하고 독립 계약 검토를 받았다. source 8da8bb1593의 FULL 원격 실행은 진행 중이며 결과를 기다린다.
 - gate 변화: 다음 migration의 RED/SQL 구현 준비다. schema·물리 creator·새 runtime kind를 구현했다는 기록이 아니다. CE 해당 없음: 검증 전 설계이며 해결된 운영 장애가 아니다.
+
+## 2026-10-24 · dda08892c9 · D-856 원장 migration 구현과 선행 FULL 결과
+
+- 변경: legacy provenance를 보존하는 원장 version5와 기존 Cell 소비자의 physical 차단을 구현했다. 선행 grant 단계 FULL 결과도 해당 SHA에 결속해 기록했다.
+- 증거: migration 관련 원격 69/13/244개 별도 회귀가 skip0/0 NEW로 통과하고 독립 검토 지적을 수정·재검토했다. grant source 8da8bb1593의 FULL 세 그룹은 11932/4359/6257 passed와 543/117/336 skipped, 각각 0 NEW다. 서로 다른 소스·수용 범위를 docs/validation의 두 기록에서 구분한다.
+- gate 변화: migration 이후 affected 전체 검증과 실제 creator·owner 실행·자원 종료·Harbor 변환은 남는다. CE 해당 없음: 운영 장애 해결이 아닌 구현·시험 보완이다.

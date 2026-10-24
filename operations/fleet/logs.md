@@ -4393,3 +4393,9 @@
 - 변경: Store의 고정 Cell 파싱과 직접 Cell 속성 검사를 registry의 typed 파싱·common identity/fence·전체 payload 대조로 분리했다. Cell body가 recipe/cell/job/step·자세·item·pallet/layer·선택 SKU를 계속 결속한다. DB 생성·등록 kind·승인/profile·owner dispatch·claim 상태 전이는 유지한다.
 - 증거: 경계 함수 누락 RED12 후 구현했다. 유효하게 재서명한 Cell payload 변조와 원장/claim 불변, 비활성 시험 kind의 Cell 없는 helper 검사를 포함해 commit f3213debe8 원격 184 passed/skip0/0 NEW다. commit 1b9ed965ab의 별도 dispatcher/transport/문서·release 회귀는 152 passed/skip0/0 NEW이며 중복 사례가 있다. 독립 검토의 material finding은 없었다. Store ratchet은 943→928줄로 낮췄다.
 - gate 변화: 중립 실행의 내부 선행 단계다. 새 kind·wire·DB producer·실행 권한을 열지 않았다. CE 해당 없음: 검증 책임과 거절 조건을 source·회귀·docs/plans/2026-10-24-step-grant-boundary-design.md에 남겼다.
+
+## 2026-10-24 · dda08892c9 · D-856 원장 provenance 분리
+
+- 변경: version5 parent schema가 legacy/physical 저장 형식을 구분하고 네 Cell 필수 provenance를 physical 행에서는 NULL로 강제한다. 기존 Cell 읽기·복구·checkpoint·정지 소비자의 물리 행 해석을 차단하며 root 연결의 FK ON 정책을 유지한다.
+- 증거: 원격 RED9와 약한 schema 수용 RED2 뒤 atomic migration·전체 SQL 제약 대조를 구현했다. 원장 69개, 추가 checkpoint/SQL 실패 13개, 기존 Cell/다중 팔/TRIP 소비자 244개 별도 원격 회귀가 각각 skip0/0 NEW로 통과했다. 독립 구현 재검토 finding 해소. 정확한 소스와 실패 이력은 docs/validation/harbor-neutral-arm-ledger-2026-10-24/result.md를 따른다.
+- gate 변화: schema 준비와 legacy 소비자 차단이다. 실제 physical 생성·승인·owner 실행·물리 자원 종료·Harbor 연결은 후속이다. CE 해당 없음: 코드·회귀에 보완 이유가 남는다.

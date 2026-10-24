@@ -1,6 +1,6 @@
 # D-856 중립 팔 원장 provenance와 기존 데이터 보존
 
-**Status:** 독립 검토를 마친 migration 설계. RED·정확한 SQL 순서·구현 검증은 후속이다. 실제 새 kind·생성·dispatch는 아직 비활성이다. [실행 계약](2026-10-24-neutral-arm-execution-design.md)의 grant 모델을 실제 원장으로 연결하는 다음 단계다.
+**Status:** schema migration과 Cell 소비자 차단 구현·집중 원격 회귀·독립 검토 완료. 전체 affected 검증과 physical 생성·dispatch는 후속이다. [실행 계약](2026-10-24-neutral-arm-execution-design.md)의 grant 모델을 실제 원장으로 연결하는 단계다.
 
 ## 현재 제약
 
@@ -44,3 +44,9 @@ startup/site-stop의 보존 hook은 physical mission 점유도 유지해야 한�
 5. 독립 계약/데이터 보존 검토 후에만 물리 creator와 실행 소비자를 연결한다. 스키마 준비만으로 팔 접수·실행·업무 분리가 완료됐다고 기록하지 않는다.
 
 독립 검토는 최소 parent 재구성과 legacy TRIP 보존 방향에 material finding이 없음을 확인했다. discriminator의 명시적 NOT NULL/CHECK, lock 후 version 재확인·마지막 version 기록, FK 정책 복원과 의존 정의 동작 비교, physical 소비자 차단을 SQL 구현의 필수 조건으로 확인했다. 현재 source의 `_MIGRATION_VERSION`은 4이며 새 migration은 이를 기준으로 한다. 기존 초기화의 `executescript`나 version INSERT를 새 atomic transaction 안에 무심코 재사용하지 않는다.
+
+## 구현과 확인
+
+production commit `dda08892c9`에서 version5로 구현했다. 별도 initializer가 parent/child 초기화 transaction을 소유하며 기존 SQL statement 실행 helper를 재사용해 implicit commit을 피한다. Store는 928→876줄로 줄였다. 기존 Cell 읽기에서 새 내부 discriminator를 숨기고, by-ID·목록·복구·checkpoint·단일 팔 stop 소비자가 physical 행을 Cell 공정으로 선택하지 않게 했다.
+
+독립 구현 검토는 동일 column이지만 DEFAULT/enum/union CHECK가 없는 schema의 수용을 지적했다. 두 RED를 확인한 뒤 알려진 legacy/current CREATE문 전체를 대조하도록 고쳤고 재검토에서 finding이 해소됐다. 정확한 schema 표기만 지원하는 제한은 유지한다. 이후 원격 69개, 추가 실패·checkpoint 보존 13개, 기존 소비자 244개 회귀가 각각 통과했다. [소스·실패 이력·한계](../validation/harbor-neutral-arm-ledger-2026-10-24/result.md)를 따른다. 아직 physical creator나 새 실행 종류가 생긴 것은 아니다.
