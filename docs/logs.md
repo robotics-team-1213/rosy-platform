@@ -9561,3 +9561,15 @@ osy-d395-s1d\`.
 - 변경: `app-names-and-roles.md`에 외부 업무 앱 절을 추가해 Harbor(HarborLogi)를 등록하고 은퇴한 rosy-vault의 Rosy Vault·Rosy Device·device-core 행을 정리했다. PRODUCT.md의 앱 구분 문장을 갱신했다. 업무 앱 지원 계약 문서와 그 문서 지도·AGENTS 색인은 그 문서의 공개 게시 변경에서 함께 붙는다.
 - 증거: 공개 팀 저장소 kernel-robot-repo-2의 README·CONTRIBUTING·platform-contract과 이 저장소의 D-806·D-858을 대조했다. 공개 저장소에 아직 없는 문서·ADR(D-797·D-836, 지원 계약 표)는 링크·인용하지 않았다. 제품 코드·wire·권한은 바꾸지 않았다.
 - gate 변화: 없음. 문서 카탈로그 등록이며 외부 앱 연동·실물 수용을 열지 않는다. CE 해당 없음: 새 장애 해결이 아닌 문서 정리다.
+
+## 2026-10-24 · c8aa8efc41 · Rosy Learning 정의와 VLM 빠른 판단 문서·도구 게시
+
+- 변경: [D-857](adr/D-857-rosy-learning-product-definition.md) Accepted(네 역할, 센터 하나, 5단계 메뉴, 임시·확정 정답, 작은 사람 확인 한도)와 [D-853](adr/D-853-learning-vlm-question-truth-and-evaluation.md) Proposed, [제품 지도](plans/2026-10-24-rosy-learning-product-map.md), [VLM 빠른 판단 설계](plans/2026-10-23-vlm-fast-judge-design.md)·[실험 계획](plans/2026-10-23-vlm-fast-judge-experiment.md), 벤치 기록 둘, 교훈 하나 추가·하나 갱신, `tools/vlm_question_bench.py`·`tools/vlm_label_sheet.py`. D-449 개정 메모, `app-responsibilities.md` Learning 행.
+- 증거: 로컬 main에서 같은 내용이 착지·검증됨(모델 PC 벤치: Ollama 확률 읽기 질문 전부 p50 0.10–0.25 s vs 설명 호출 1.7 s). Learning 화면(VLM 판단·5단계 메뉴)은 로컬 Learning 셸에 의존해 이 PR에 넣지 않았다.
+- gate 변화: 없음. 문서·오프라인 도구만이다.
+
+## 2026-10-24 · uncommitted · Rosy Learning 게시 문서 리뷰 반영
+
+- 변경: 독립 리뷰 지적 반영 — D-853은 결정만 게시(구현은 후속), D-857·제품 지도에서 내부 포트와 미게시 ADR 의존 문구 정리, 저장소 밖 링크 제거, 두 벤치 기록의 도구 리비전 정정(측정은 v1·v2, 게시 도구는 v3), [토론 1라운드 기록](validation/vlm-question-debate-2026-10-24/result.md) 추가와 교훈 근거 연결, 도구의 루프백 검사(`urlsplit`)·인라인 JSON 이스케이프·출력 폴더 번호·토론 라운드 보존.
+- 증거: [벤치](validation/vlm-question-bench-2026-10-23/result.md)·[v2](validation/vlm-question-bench-2026-10-23b/result.md)·[토론](validation/vlm-question-debate-2026-10-24/result.md) 기록(모델 PC, 사람 정답 없음).
+- gate 변화: 없음.

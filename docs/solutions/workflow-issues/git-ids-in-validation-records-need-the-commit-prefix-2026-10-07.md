@@ -28,10 +28,15 @@ push를 막는다** — 2026-10-07 오전(`db006d7cf`로 고침, uiux-site-g3-re
 - 검증 회차 문서에서 기준 git id를 쓸 때는 SHA 앞에 `commit` 을 붙여라: `` `commit befcc5d0…` ``.
   스캐너는 이 접두어를 git id 신호로 읽고 매처를 통과시킨다(`scan_files`의 허용 규칙).
 - 컨테이너 이미지·펌웨어 등 git id가 아닌 16진수는 `SHA-256:` 처럼 종류를 앞에 적으면 같은 효과다.
+- 허용 단어는 **같은 줄**에 있어야 한다. 원본 해시를 표로 적을 때 머리글(`| 파일 | sha256 |`)만으로는
+  통과하지 않는다 — 각 행 셀에 `` sha256 `<64-hex>` ``로 적는다(2026-10-23 vlm-question-bench 회차가
+  머리글만 적어 9행이 걸렸고 착지가 멈췄다).
 - 9자리 단축 SHA(`961b5d654`)는 매처에 걸리지 않는다 — 접두어 없이 써도 된다.
-- 회차 문서를 착지하기 전에 이 시험을 한 번 돌려라:
-  `python -m pytest test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files -q`
-  (약 1분). push 훅에서 깨지는 것보다 여기서 깨지는 게 싸다.
+- 회차 문서를 착지하기 전에 확인하라. pytest는 노트북에서 돌리지 않으므로(D-584) 원격으로
+  `python tools/remote/remote_pytest.py -- test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`
+  를 돌리거나, 시험이 쓰는 순수 함수를 파일 하나에 직접 부른다:
+  `python -c "import sys; sys.path.insert(0, 'deploy/robot/pinky_pro/release'); import secret_scan as s; p='<path>'; print(s.scan_text(p, open(p, encoding='utf-8').read()))"`
+  (인자 순서는 path, text). 빈 목록이면 통과다. push 훅에서 깨지는 것보다 여기서 깨지는 게 싸다.
 
 ## Why This Matters
 
