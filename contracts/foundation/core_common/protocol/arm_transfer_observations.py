@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
-from .arm_transfer import ArmActionId, ArmScopeId
+from .arm_transfer import ArmActionId, ArmJournalId, ArmScopeId
 from .arm_transfer_jobs import ArmTransferJobSnapshot
 from .arm_transfer_preflight import ArmDigest, ArmPhysicalRef
 
@@ -59,7 +59,7 @@ class ArmLinkObservation(_Closed):
 class ArmTransferOwnerContext(_Closed):
     workcell_id: ArmScopeId
     instance_id: ArmScopeId
-    journal_id: ArmPhysicalRef
+    journal_id: ArmJournalId
     owner_session_id: ArmPhysicalRef
     model_digest: ArmDigest
     calibration_revision: ArmPhysicalRef
@@ -68,7 +68,7 @@ class ArmTransferOwnerContext(_Closed):
 
 class ArmOwnerObservation(ArmTransferOwnerContext):
     links_observed_at_ns: _Counter
-    links: Annotated[dict[ArmPhysicalRef, ArmLinkObservation], Field(min_length=1, max_length=128)]
+    links: Annotated[dict[ArmPhysicalRef, ArmLinkObservation], Field(max_length=128)]
     gripper_observed_at_ns: _Counter
     gripper_state: Literal["OPEN", "CLOSED", "MOVING", "UNKNOWN"]
     held_state: Literal["NONE", "HELD", "UNKNOWN"]
@@ -102,7 +102,7 @@ class ArmTransferObservation(_Closed):
     object_origin_id: ArmPhysicalRef
     object_observed_at_ns: _Counter
     object_pose: ArmObservationPose | None
-    owners: Annotated[tuple[ArmOwnerObservation, ...], BeforeValidator(_sequence), Field(min_length=1, max_length=32)]
+    owners: Annotated[tuple[ArmOwnerObservation, ...], BeforeValidator(_sequence), Field(max_length=32)]
 
     @model_validator(mode="after")
     def _owners(self):

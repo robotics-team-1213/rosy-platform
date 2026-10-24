@@ -150,6 +150,8 @@ class PhysicalTransferStore:
 
     def create(self, *, principal, request_key, request):
         actor = _principal(principal, propose=True)
+        if actor == self.installation.policy.producer_id:
+            raise PermissionError("physical observer cannot propose an operation")
         key = _nonempty("request_key", request_key, limit=160)
         request = PhysicalTransferRequest.model_validate(request)
         digest = sha256(_json(request.model_dump(mode="json")).encode()).hexdigest()
@@ -191,6 +193,8 @@ class PhysicalTransferStore:
     def admit(self, mission_id, *, principal, expected_proposal_digest, expected_generation,
               capabilities, capabilities_observed_at_ns):
         actor = _principal(principal, operator=True)
+        if actor == self.installation.policy.producer_id:
+            raise PermissionError("physical observer cannot approve an operation")
         if (not isinstance(expected_proposal_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_proposal_digest)
                 or type(expected_generation) is not int or expected_generation < 0):
             raise ValueError("exact proposal digest and dispatch generation are required")

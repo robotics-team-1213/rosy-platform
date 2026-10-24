@@ -59,7 +59,7 @@ from fleet.server.background_workers import goal_evidence_expiry_loop
 from fleet.server.background_workers import lane_compliance_loop
 from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
 from fleet.server.background_workers import _task_dispatch_loop, _mission_model_turn_worker_loop
-from fleet.server.background_workers import control_unit_loop
+from fleet.server.background_workers import control_unit_loop, start_notification_worker
 from fleet.server.control_unit_runtime import install_control_unit
 from fleet.server.dispatch_workers import mission_feedback_schedule_loop, mission_dispatch_loop
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
@@ -151,7 +151,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                identity_config=None, lane_compliance_config=None,
                notification_config=None, incident_model_config=None, channel_config=None,channel_model_config=None,
                conversation_config=None, assistant_config=None, station_ingress=None,
-               charge_runtime_factory=None, arm_transfer_installation=None) -> FastAPI:
+               charge_runtime_factory=None, arm_transfer_installation=None, arm_transfer_observer=None) -> FastAPI:
     if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
         raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
     if notification_config is not None and task_service is None:
@@ -320,15 +320,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         localization_task = None
         signal_task = None
         calibration_drift_task = None
-        notification_http = None
-        notification_task = None
-        if notification_config is not None:
-            import httpx
-            from fleet.incidents.notifications import NotificationWorker
-            notification_http = httpx.AsyncClient(trust_env=False)
-            notification_task = asyncio.create_task(NotificationWorker(
-                app.state.line_stuck._log.notifications, notification_config, notification_http,
-                board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
+        notification_http, notification_task = start_notification_worker(app, notification_config)
+        physical_worker = (asyncio.create_task(app.state.arm_transfer_dispatcher.run())
+                           if app.state.arm_transfer_dispatcher is not None else None)
         if console._signals is not None:
             signal_task = asyncio.create_task(console._signals.run())
         app.state.signal_supervision = signal_task
@@ -389,7 +383,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                    mission_model_turn_worker_task, localization_task,
                                    signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
                                    lease_task, path_task, calibration_drift_task, notification_task, job_task, charge_task,
-                                   control_task)
+                                   control_task, physical_worker)
                                if background is not None]
                 for background in backgrounds:
                     background.cancel()
@@ -536,9 +530,11 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         transport=action_transport, socket_root=omx_socket_root, require_proposer=require_proposer)
     install_arm_transfer_job_routes(
         app, installation=arm_transfer_installation, deployment_profile=deployment_profile,
-        journal_path=task_service.store.path if mission_configured else None, transport=action_transport,
+        task_store=task_service.store if mission_configured else None, transport=action_transport,
         socket_root=omx_socket_root, require_proposer=require_proposer, require_viewer=require_viewer,
-        require_named_operator=require_named_operator)
+        require_named_operator=require_named_operator, observer=arm_transfer_observer, console=console,
+        principals=principals, other_tokens=other_tokens, other_services=(sightings, policy_evidence),
+        registries=(cell_goal_registry, goal_evidence_service.registry if goal_evidence_service is not None else None))
 
     from fleet.server.peer_routes import install_peer_catalogue
     catalogue = install_peer_catalogue(app, console=console, enrollment=enrollment,

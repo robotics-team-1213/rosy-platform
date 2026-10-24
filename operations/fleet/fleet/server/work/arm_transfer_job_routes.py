@@ -23,19 +23,32 @@ def _view(job):
                     "resource_policy_digest": job["installation"]["capabilities"][0]["resource_policy_digest"]}}
 
 
-def install_arm_transfer_job_routes(app, *, installation, deployment_profile, journal_path, transport,
-                                    socket_root, require_proposer, require_viewer, require_named_operator):
+def install_arm_transfer_job_routes(app, *, installation, deployment_profile, task_store, transport,
+                                    socket_root, require_proposer, require_viewer, require_named_operator,
+                                    observer, console, principals, other_tokens, other_services, registries):
     store = reader = None
     if installation is not None:
         if deployment_profile != "simulation":
             raise ValueError("ARM transfer HTTP requires the simulation profile")
-        if journal_path is None:
+        if task_store is None:
             raise ValueError("ARM transfer HTTP requires the shared Mission and API audit journal")
         reader = transport if transport is not None else UnixLocalActionTransport(socket_root)
         if not callable(getattr(reader, "transfer_capability", None)):
             raise ValueError("ARM transfer HTTP requires a capability SDK reader")
-        store = PhysicalTransferStore(journal_path, installation=installation, deployment_profile=deployment_profile)
+        store = PhysicalTransferStore(task_store.path, installation=installation, deployment_profile=deployment_profile)
     app.state.arm_transfer_job_store = store
+    from .physical_transfer_observer import PhysicalObservationService, validate_observer
+    from .physical_transfer_observer_routes import install_physical_observer_routes
+    from .physical_transfer_execution import PhysicalTransferExecution
+    from .physical_transfer_dispatcher import PhysicalTransferDispatcher
+    dispatcher = service = None
+    if observer is not None:
+        validate_observer(observer, None if store is None else store.installation, console=console,
+            principals=principals, other_tokens=other_tokens, other_services=other_services, registries=registries)
+        dispatcher = PhysicalTransferDispatcher(PhysicalTransferExecution(store), reader, task_store,
+                                               deployment_profile=deployment_profile)
+        service = PhysicalObservationService(dispatcher, observer)
+    app.state.arm_transfer_dispatcher = dispatcher
 
     def installed_store():
         if store is None:
@@ -60,6 +73,9 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, jo
     def write_origin(request: Request):
         if request.headers.get("origin") is not None and not same_origin(request):
             raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
+
+    install_physical_observer_routes(app, service=service, task_store=task_store, job_view=_view,
+        require_viewer=require_viewer, require_proposer=require_proposer, write_origin=write_origin)
 
     @app.post(path, response_model=ArmTransferJobResponse, tags=["fleet-work"], dependencies=[Depends(write_origin)])
     async def create(body: ArmTransferJobCreate, principal=Depends(require_proposer)):
@@ -105,7 +121,11 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, jo
                 if (cap.workcell_id, cap.instance_id) != (participant.workcell_id, participant.instance_id):
                     raise LocalActionUnavailable("capability targets a different participant")
                 capabilities.append(cap)
-            return _view(rows.admit(mission_id, principal=principal,
+            job = rows.admit(mission_id, principal=principal,
                 expected_proposal_digest=body.expected_proposal_digest, expected_generation=body.expected_generation,
-                capabilities=tuple(capabilities), capabilities_observed_at_ns=observed_at))
+                capabilities=tuple(capabilities), capabilities_observed_at_ns=observed_at)
+            if dispatcher is not None and job["status"] == "READY":
+                dispatcher.prepare(mission_id)
+                job = rows.get(mission_id, principal=principal)
+            return _view(job)
         return await call(approve)
