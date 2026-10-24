@@ -67,6 +67,15 @@ def test_request_requires_exactly_two_samples_and_unique_owner_scopes():
         api().ArmTransferObservationRequest.model_validate(raw)
 
 
+def test_wire_preserves_missing_coverage_as_unknown_raw_facts():
+    raw = fixture()["request"]
+    raw["observations"][0]["owners"] = []
+    raw["observations"][1]["owners"][0]["links"] = {}
+    parsed = api().ArmTransferObservationRequest.model_validate(raw)
+    assert parsed.observations[0].owners == ()
+    assert parsed.observations[1].owners[0].links == {}
+
+
 def test_reply_binds_the_physical_receipt_to_the_job_without_equating_request_hash_domains():
     raw = fixture()
     job = json.loads((Path(__file__).parent / "fixtures/arm_transfer_job_v1.json").read_text())["proposed"]

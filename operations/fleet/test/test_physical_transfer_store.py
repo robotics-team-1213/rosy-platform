@@ -85,6 +85,17 @@ def test_create_is_principal_scoped_idempotent_and_has_no_legacy_process_fields(
     assert CellJobStore(path).get(proposed["mission_id"]) is None
 
 
+def test_physical_producer_identity_cannot_propose_or_approve(rig):
+    path, _, control, store = rig
+    producer = store.installation.policy.producer_id
+    with pytest.raises(PermissionError):
+        create(store, principal=SitePrincipal(producer, "service"))
+    job = create(store)
+    with pytest.raises(PermissionError):
+        admit(store, job, control, principal=SitePrincipal(producer, "operator"))
+    assert claims(path) == []
+
+
 def test_creator_and_named_operator_read_permissions_are_distinct(rig):
     _, _, _, store = rig
     proposal = create(store)
