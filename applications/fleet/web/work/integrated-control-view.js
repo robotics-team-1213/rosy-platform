@@ -79,17 +79,18 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   historyFold.append(historyHeading, historyState, history);
   const reconcileFold = node("details", "", "ui-disclosure"), form = node("form", "", "ui-form"),
     attestations = [], evidence = node("textarea"), reconcile = button("이 관제의 재시운전 확인 기록");
+  evidence.className = "ui-field";
   reconcileFold.id = "integrated-reconcile"; reconcileFold.hidden = true;
   reconcileFold.append(node("summary", "미확인 전송의 운영자 확인"));
   form.append(node("p", "이 관제에서 실제 전송 연결 종료와 영향 receiver 재시운전을 마친 기명 운영자만 기록하세요. 정지 해제·재무장·물리 정지 증명이 아닙니다."));
   for (const [id, text] of [["channels", "기존 정지 전송 연결을 종료했습니다"],
     ["receivers", "영향받은 receiver의 재시운전을 확인했습니다"]]) {
-    const label = node("label", text), input = node("input"); input.type = "checkbox"; input.className = "ui-field"; input.required = true;
+    const label = node("label", text, "ui-check"), input = node("input"); input.type = "checkbox"; input.className = "ui-field"; input.required = true;
     input.id = "integrated-confirm-" + id; label.htmlFor = input.id; label.prepend(input);
     form.append(label); attestations.push(input);
   }
   const evidenceLabel = node("label", "전송 종료·재시운전 확인 근거");
-  evidence.id = "integrated-reconcile-evidence"; evidence.className = "ui-field";
+  evidence.id = "integrated-reconcile-evidence";
   evidence.required = true; evidence.minLength = 16; evidence.maxLength = 2048; evidenceLabel.htmlFor = evidence.id;
   form.append(evidenceLabel, evidence, reconcile); reconcileFold.append(form);
   panel.append(heading, node("p", "상단 비상 정지는 이 관제의 직접 장치에 적용됩니다. 아래 하위 관제 정지 요청은 관제별 전달 결과를 확인해야 합니다.", "hint"),
