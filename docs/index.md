@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 통합관제 구현 main 착지와 I6 소프트웨어 수용
 - 2026-10-25 · uncommitted · test(policy-chain): D-866 P0 SmolVLA 정책 사슬 Gazebo 확인
 - 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
 - 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
 - 2026-10-25 · uncommitted · FULL 등록 누락과 교차 SHA 격리 판정 보완
-- 2026-10-25 · uncommitted · 통합관제 실제 HTTP·브라우저 집중 수용 근거

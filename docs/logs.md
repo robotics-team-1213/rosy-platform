@@ -10427,3 +10427,9 @@ osy-d395-s1d\`.
 - gate 변화: P0 실행 계약 확인. 모델 성능·지연 한계·실물은 별도다.
 - 결정: D-867 Accepted.
 - 교훈: 새 교훈 기록(기본 `MultiThreadedExecutor`가 갱신 스레드를 굶김, 실험실 디스크 fsync).
+
+## 2026-10-25 · uncommitted · 통합관제 구현 main 착지와 I6 소프트웨어 수용
+
+- 변경: 통합관제 runtime이 main9b10086126에 착지해 I1–I6 소프트웨어 목표를 닫았다. 최종 동결 기록에 선행 Chromium 포함 FULL27과 최신 main 기준 guard273·기본 FULL23, 동일 SHA quarantine 재실행2건을 구분했다.
+- 증거: 공식 land exit0·main ancestry 확인. sourcee7cdace7f6의 Chromium118/181/121/143건은 SKIP0이며 source9b10086126의 모든 기본23로그·재실행1로그 비교는 NEW0이다. 원래 root2 FAIL/10036 PASS/1139 SKIP과 동일 source 재실행2 PASS는 별도로 보존했다.
+- gate 변화: 소프트웨어 구현·회귀·로컬 착지 수용이다. N1–N3 실제 PC/장치·FIELD·push는 미실시다. CE 해당 없음 — 판단과 재발 방지는 해당 코드·회귀·동결 근거에 직접 남는다.
