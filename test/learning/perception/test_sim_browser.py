@@ -47,6 +47,43 @@ class SharedRuns(Runs):
 
 
 @pytest.mark.parametrize('width', [1280, 390])
+def test_contact_run_exposes_report_and_phase_evidence_without_promotion(tmp_path, width):
+    playwright = pytest.importorskip('playwright.sync_api')
+    runs = SharedRuns()
+    row = runs.rows['b' * 32]
+    row['input']['scenario_id'] = 'pinky-conveyor-roundtrip'
+    row['result'].update(stage='contact_roundtrip', task_success=True)
+    artifact_ids = ['contact-report', 'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle']
+    row['artifacts'] = {'files': [{'id': name} for name in [*artifact_ids, 'unknown-artifact']]}
+    server = make_server(open_store(tmp_path), 0, accounts=Accounts(), sim_runs=runs)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f'http://127.0.0.1:{server.server_port}'
+    try:
+        with playwright.sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={'width': width, 'height': 900})
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            browser.contexts[0].add_cookies([{'name': 'rosy_learning_session', 'value': 'reader', 'url': base}])
+            try:
+                page.goto(base + '/learning/sim', wait_until='networkidle')
+                page.locator('#sim-runs ui-button').first.click()
+                playwright.expect(page.locator('#sim-artifacts a')).to_have_count(6)
+                links = page.locator('#sim-artifacts a').evaluate_all('links=>links.map(link=>link.getAttribute("href"))')
+                assert links == [f'/api/learning/sim/runs/{row["run_id"]}/artifacts/{name}' for name in artifact_ids]
+                playwright.expect(page.locator('#sim-selected')).to_contain_text('실행 완료')
+                playwright.expect(page.locator('#sim-start')).to_be_disabled()
+                playwright.expect(page.locator('#sim-main')).to_contain_text('학습 정책·실물 수용은 별도')
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                assert errors == [] and not runs.requests
+            finally:
+                browser.close()
+    finally:
+        server.shutdown(); server.server_close(); thread.join()
+
+
+@pytest.mark.parametrize('width', [1280, 390])
 def test_sim_shared_runs_replay_stop_and_disabled_scenarios(tmp_path, width):
     playwright = pytest.importorskip('playwright.sync_api')
     runs = SharedRuns()

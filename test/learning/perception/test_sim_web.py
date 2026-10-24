@@ -35,6 +35,7 @@ class Runs:
 
 
 @pytest.mark.parametrize('artifact_id,media_type,raw', [
+    ('import-report', 'application/json', b'{"import_verified":true}'),
     ('contact-report', 'application/json', b'{"task_success":true}'),
     *[(name, 'image/png', b'\x89PNG\r\n\x1a\n') for name in (
         'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle')],
