@@ -78,7 +78,7 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | 단계 | 화면 |
 |---|---|
 | 홈 | 학습센터 `/learning`: 도메인별 진행, 현재 인식 자료의 학습 흐름, 현재 검수 작업, 실행·평가 결과, 수집·저장 공간 |
-| 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera` |
+| 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera`, 작업 공간 `/learning/workspaces` |
 | 정답 | 객체 검수 `/`, 픽셀 검수 `/pixels`, 로봇암 시범 검수 `/learning/omx`, VLM 판단 `/learning/vlm` |
 | 학습 | 학습 과제 `/learning/tasks`, 인식 학습 `/learning#pipeline`(홈의 학습 흐름 구역), SIM 실험 `/learning/sim` |
 | 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 다음 조각까지 비활성이다 |
@@ -97,6 +97,26 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | `decision` | 모두 `not_available`(「Learning에 연결 전」) |
 
 모르는 칸은 숫자를 만들지 않고 이유를 적은 `not_available`이다. 표를 만들지 않고 읽으므로 홈을 열어도 VLM·OMX 표가 생기지 않는다. 홈은 도메인마다 한 줄(이름, 여섯 칸, 막힌 이유, 다음 할 일 하나)을 보이고 평가·승격 화면은 같은 `domains`의 평가·승격 기록 칸을 도메인별로 보인다. 390px에서는 줄이 세로로 쌓이고 가로 스크롤이 없다.
+
+### 같은 센터의 작업 공간 (D-857 §2)
+
+모델 PC는 센터 밖에도 검수 작업 공간을 별도 인스턴스로 돌린다(예: 인식 학습 루프가 묶인 v13 주행 학습, v13 평가, v12 장애물, 데이터셋 검수). D-485에 따라 작업 공간마다 클래스셋이 하나라 검수 DB를 합치지 않는다. 대신 센터가 그 목록을 보여 주어 들어가는 문은 센터 하나로 남는다. 자료 단계의 하위 메뉴 「작업 공간」 `/learning/workspaces`는 이 센터를 「이 센터」로 맨 앞에 두고, 연결한 작업 공간마다 이름·종류(학습·평가·검수)·메모와 같은 탭에서 여는 「열기」 링크를 보인다. 링크만 보이며 다른 작업 공간의 자료를 읽거나 옮기지 않는다. 같은 계정으로 로그인하지만 검수 자료는 작업 공간끼리 나누지 않는다.
+
+목록은 `--workspace-links <private-json>`으로 준다. 이 파일은 Git 밖의 private 파일로 state 옆에 두고 소유 사용자 전용 권한(`chmod 600`)으로 둔다. 주소는 내부 망 이름이라 저장소에 넣지 않는다. 시작할 때 검사하고 하나라도 어긋나면 시작하지 않는다: `schema` 정확히 일치, 최상위 키는 `schema`·`workspaces`뿐, 20개 이하, `id`는 서로 다른 `[a-z0-9-]{1,40}`, `label` 1~60자, `note` 160자 이하(선택), `kind`는 `training`·`evaluation`·`review`, `url`은 host가 있는 `http(s)`이고 자격 증명·fragment·공백이 없으며 300자 이하, 파일은 링크가 아닌 일반 파일이고 64 KiB 이하.
+
+```json
+{
+  "schema": "rosy.learning.workspace-links/1",
+  "workspaces": [
+    {"id": "v13-drivable-train", "label": "v13 주행 영역 학습", "url": "https://<host-tailscale-name>:<port>/learning",
+     "kind": "training", "note": "인식 학습 루프가 이 작업 공간에 묶여 있습니다."},
+    {"id": "v13-eval", "label": "v13 평가", "url": "https://<host-tailscale-name>:<port>/learning", "kind": "evaluation"},
+    {"id": "v12-obstacle", "label": "v12 장애물", "url": "https://<host-tailscale-name>:<port>/learning", "kind": "review"}
+  ]
+}
+```
+
+`GET /api/learning/workspaces`는 `{"configured": bool, "workspaces": [...]}`를 준다. 플래그가 없으면 `{"configured": false, "workspaces": []}`다. 협업 모드에서는 다른 GET과 같이 `view` 권한이 필요하다.
 
 ### 공통 학습 작업 화면 (D-458)
 
@@ -322,7 +342,7 @@ python learning/curation/perception/review_app.py \
 
 위 예는 초기화된 작업공간이다. 신규 작업공간은 기존 초기화 인자 또는 `--empty-training`을 사용한다. 협업 모드에서 `--decisions-port`는 인증 없는 우회 경로라 함께 사용할 수 없다. 그 포트를 쓰던 같은 PC bridge는 아래의 `authority.state` 경로로 바꾼다. state 폴더와 DB가 소유 사용자 전용 권한일 때만 읽으므로, 이 조건을 맞추기 전에는 운영 협업 전환을 활성화하지 않는다.
 
-같은 PC의 `review_bridge.py`는 협업 모드에서 `authority.endpoint` 대신 `authority.state`를 쓴다. 검수 state의 `reviews.sqlite3`를 SQLite `mode=ro`로 열어 `/api/decisions`와 같은 문서(`review_evidence.decisions`)를 읽고, 표를 만들거나 쓰지 않는다. `endpoint`와 `state` 중 정확히 하나만 둔다. `state`는 링크·`..` 없는 정규 절대 경로여야 하고, DB의 `workspace_id`가 설정값과 다르면 거절한다. 홈 폴더가 심볼릭 링크를 거쳐 닿는 경로도 안전 쪽으로 거절하므로 실제 경로를 쓴다. WAL 모드 DB는 읽기 전용 연결도 `-wal`/`-shm`을 만들 수 있어 거절한다. 무인증 loopback 포트는 같은 PC의 모든 사용자에게 열리지만, state 읽기는 파일 권한으로 소유 사용자에게만 허용되므로 범위가 더 좁다. 그래서 POSIX에서 bridge는 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 group/other 권한이 없을 때만 읽는다(Windows는 이 검사 없이 기존 ACL을 따른다). 배포 단계: `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`.
+같은 PC의 `review_bridge.py`는 협업 모드에서 `authority.endpoint` 대신 `authority.state`를 쓴다. 검수 state의 `reviews.sqlite3`를 SQLite `mode=ro`로 열어 `/api/decisions`와 같은 문서(`review_evidence.decisions`)를 읽고, 표를 만들거나 쓰지 않는다. `endpoint`와 `state` 중 정확히 하나만 둔다. `state`는 링크·`..` 없는 정규 절대 경로여야 하고, DB의 `workspace_id`가 설정값과 다르면 거절한다. 홈 폴더가 심볼릭 링크를 거쳐 닿는 경로도 안전 쪽으로 거절하므로 실제 경로를 쓴다. WAL 모드 DB는 읽기 전용 연결도 `-wal`/`-shm`을 만들 수 있어 거절한다. 무인증 loopback 포트는 같은 PC의 모든 사용자에게 열리지만, state 읽기는 파일 권한으로 소유 사용자에게만 허용되므로 범위가 더 좁다. 그래서 POSIX에서 bridge는 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 group/other 권한이 없을 때만 읽는다(Windows는 이 검사 없이 기존 ACL을 따른다). 배포 단계: `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`. bridge 설정을 바꾸면(예: `authority.endpoint`에서 `authority.state`로 전환) 새 `--out` 작업 폴더로 시작한다. 작업 상태가 입력 서명에 묶여 있어 기존 폴더는 `job inputs changed; use a new job directory`로 거절된다.
 
 ```json
 {
