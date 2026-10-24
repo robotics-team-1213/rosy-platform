@@ -153,6 +153,15 @@ only by the proxy runtime UID10001. These keys are separate from site backend
 TLS and Account signing keys. The candidate's `Caddyfile.account` retains
 verified Fleet backend TLS and serves the existing public app-link statements.
 
+The daily `rosy-account-tls-renew.timer` keeps that pair valid. It runs
+`account_tls_renew.py` from a release folder
+(`~/.local/share/rosy/account-tls/releases/<sha>/`), never from a preparation copy. The
+certificate folder (keys, `backups/`) is data and stays where it was prepared.
+`~/.config/rosy/account-tls.env` sets `ROSY_ACCOUNT_TLS_SOURCE` (the release script),
+`ROSY_ACCOUNT_TLS_CERTS` (that folder) and `ROSY_ACCOUNT_TLS_DOMAIN` (the approved
+hostname). tailscale issues a new pair only below 30 days of validity. A changed pair
+reloads the Account proxy and recreates the Vault proxy.
+
 On the existing `site_edge` network, the proxy also owns the approved Account
 hostname as a Docker DNS alias. Approved container clients on that network use
 the same HTTPS issuer and certificate verification without routing through the
