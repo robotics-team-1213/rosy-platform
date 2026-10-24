@@ -10348,3 +10348,9 @@ osy-d395-s1d\`.
 - 변경: [관측 기록](validation/omx-policy-articulation-2026-10-24/result.md)을 첫·마지막 source stamp를 포함한 최종 source와 별도 SDK 결과로 갱신했다. 이전 실행 원본은 보존했다.
 - 증거: 원격53PASS/SDK1SKIP/NEW0, 실제 SDK1PASS0SKIP/EXIT0·93메시지93샘플, 양쪽 capture hash와 cleanuptrue 대조.
 - gate 변화: 관절 transport 수용이며 실제 event geometry·정책 성공은 미수용이다. CE 미해결.
+
+## 2026-10-24 · e79c1fe0e2 · 실제 SIM 7관절·접촉 진단
+
+- 변경: [별도 실제 실행 기록](validation/omx-policy-articulation-native-2026-10-24/result.md)에 고정 입력, 원본 해시, producer 시간·좌표 경로와 종료 근거를 남겼다.
+- 증거: calibration PASS, 정책 HOLD(status6/−5), 7관절19049표본/invalid0, archive96/264파일 대조·종료 확인. 독립 검토2건과 실제 관절값을 사용한 FK 대조.
+- gate 변화: 관측 확보이며 task success=false, formal/물리/HF0. 약10mm 명목 기하 차이는 실패 원인으로 확정하지 않았다. CE 미해결.
