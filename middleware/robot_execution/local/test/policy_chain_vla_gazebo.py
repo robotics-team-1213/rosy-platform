@@ -213,7 +213,10 @@ def scenario(case, out, runtime, rig, controllers, calibration):
             try:
                 return renew(session)
             except Exception as error:
+                cause = error.__context__  # renew() raises `from None`; the check that failed is kept here.
                 row['error'] = f'{type(error).__name__}: {error}'[:200]
+                row['cause'] = f'{type(cause).__name__}: {cause}'[:300] if cause else None
+                row['hold_reason'] = session.hold_reason
                 raise
             finally:
                 row['done_s'] = runtime.monotonic()
