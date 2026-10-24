@@ -1,9 +1,8 @@
 // D-517 9 M3 / 10: the convoy line, the card line and the 운행 panel's leader choice.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  convoyLeaders, repeatTripBody, trafficCardLine, trafficDrawing, tripErrorText,
-} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {convoyLeaders, repeatTripBody, trafficCardLine, trafficDrawing} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {tripErrorText} from '../../../../applications/fleet/web/shared/trip-display.js';
 
 const ACTIVE = {version: 7, map: {edges: [{id: 'east', polyline: [[0, 0], [4, 0]]}],
   places: [{id: 'start_n', kind: 'start'}, {id: 'start_s', kind: 'start'}, {id: 'X', kind: 'junction'}]}};

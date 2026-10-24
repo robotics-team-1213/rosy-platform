@@ -226,7 +226,7 @@ function render() {
   signals.render();
   roster.fillQueues();
   inbox.refresh();
-  roster.trip.syncConvoy();  // D-540 (d) 대형·대열
+  roster.syncConvoy();  // D-540 (d) 대형·대열
   if (!el("work-new").hidden) paintMove();
   lineStuck.render();
   deviceWatch.render();
@@ -301,27 +301,23 @@ if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
 });
 view.focusRobotWorkspace = (robotId) => roster.openCard(robotId);
 view.openFormationWorkspace = () => {
-  confirmedAction.cancel(); roster.trip.close(); view.pinning = null; clearPinStart();
+  confirmedAction.cancel(); roster.closeTrip(); view.pinning = null; clearPinStart();
   if (view.selected) disarmGoal('대형 관리로 목표 지정 취소');
   render();
   inbox.select('tools');
   const heading = el('formation-heading'); heading.tabIndex = -1;
   heading.focus({preventScroll: false});
 };
-view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openCard(robotId); roster.trip.focus(robotId); render(); };
+view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openTrip(robotId); render(); };
 // D-763 6·9 — 새 작업의 이동은 로봇 카드의 운행 폼(card-trip.js) 그 자체다: 같은 계획·시작 요청, 같은 거절.
 // 이동이 종류 목록에 서는지는 서버의 종류 목록이 정한다(work-view.js showKinds, D-763 9). 꺼진 단추로 보이지 않는다.
 function paintMove() {
-  const pick = el("work-move-robot"), box = el("work-move-form"), focused = document.activeElement;
+  const pick = el("work-move-robot"), box = el("work-move-form");
   el("work-move").hidden = el("work-new-move-item").hidden || el("work-new-move").getAttribute("aria-pressed") !== "true";
   const id = placeOptions(pick, view.robots.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
   const robot = view.stateUnavailable ? null : view.robots.find(row => row.robot_id === id);  // as roster.js
   el("work-move-state").textContent = robot ? cardTripLine(view, id) : "";
-  if (el("work-move").hidden || (focused?.tagName === "SELECT" && box.contains(focused))) return;  // as roster.place
-  const controls = () => [...box.querySelectorAll("ui-button, select")], at = controls().indexOf(focused);
-  if (robot && !roster.trip.section(robot)) roster.trip.focus(id);  // another robot, or reopened after a start
-  box.replaceChildren(...(robot ? [roster.trip.section(robot)] : []));
-  controls()[at]?.focus({preventScroll: true});
+  if (!el("work-move").hidden) roster.paintTrip(box, id);
 }
 pageScope.listen(el("work-new-move"), "click", ({currentTarget: button}) => {
   for (const name of ["aria-pressed", "aria-expanded"]) button.setAttribute(name, String(button.getAttribute(name) !== "true"));

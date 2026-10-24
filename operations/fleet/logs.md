@@ -4363,9 +4363,27 @@
 - 증거: 집중 store/서비스/routes/HTTP/재시작47 PASS, 실제 앱/CLI132 PASS, 독립 aggregate/기존 CLI52 PASS, port/앱/CORE 종단16 PASS(서로 겹치는 별도 실행). [검증 기록](../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
 - gate 변화: 최종 통합 검증·로컬 main 착지는 대기한다. 실물·FIELD 수용은 열지 않는다. CE 해당 없음: 판단을 코드·회귀·검증 기록에 보존했다.
 
+## 2026-10-24 · e1e69f32c7 · Fleet UI 책임 경계 회귀
+
+- 변경: 표시 모듈·로스터 공개 동작·전용 CSS의 소비자와 회귀를 갱신했다. Node와 실제 제공 Console의 로봇 전환·초점·계획/시작·대열·반응형·정적 자산·패키지 연결을 검증한다. 서비스 API·명령 권한은 바꾸지 않는다.
+- 증거: 원격 집중44 passed/0 NEW, 별도 지도/API·문법30 passed/0 NEW. 실패 로그와 수정 근거는 [검증 기록](../../docs/validation/fleet-ui-boundaries-2026-10-24/result.md)에 구분한다. 통과 수를 고유 시험 총수로 합산하지 않는다.
+- gate 변화: 없음. 최종 착지 검증·실물·현장 수용과 구분한다. CE: UI 추출 판단은 코드·시험으로 설명되며 부모 stdout 복구는 별도 교훈에 남겼다.
+
+## 2026-10-24 · 9a2c0be210 · UI 문서 소유와 표시 코드 검사 연결
+
+- 변경: 새 표시 모듈을 공유 목록에, 로스터 표현 모듈을 Console 전용 목록에 연결하고 오류 어휘 전수 검사의 실제 소유 파일을 갱신했다. 설치 문서의 로스터 접근 금지는 대조 시험으로 유지한다.
+- 증거: 원격 집중 6 passed/2 warnings, 0 NEW. 첫 전체 회귀의 두 실패와 수정 전 RED는 [후속 기록](../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-integration-contracts.md)에 구분한다.
+- gate 변화: 없음. 기준선·제품 동작·권한 변경 없음. CE 해당 없음: 코드와 회귀에 판단을 남겼다.
+
 ## 2026-10-24 · uncommitted · D-856 중립 운송 snapshot과 요청 대조
 
 - 변경: 기존 TRIP 원장에서 생성 principal 전용 GET 두 경로를 추가했다. 원본 요청 key·본문 digest·로봇·step/attempt와 수행 상태만 반환하고 Cell 공정 문서는 노출하지 않는다. 닫힌 profile에서도 읽되 쓰기·재시작 HOLD·claim·lease·안전 권한은 유지한다.
 - 계약: API v1.298과 schema·버전 핀을 함께 갱신했다. POST 응답 유실 뒤 404는 미접수 증명이 아니며 자동 재접수 근거로 사용하지 않는다.
 - 증거: RED commit 8cea2b26cb에서 새 시험 12개가 누락 route로 실패했다. commit 95664a6496의 공식 원격 관련 회귀는 77 passed, skip 0이다. 최초 회귀의 두 기존 호출자 시험은 새 읽기/기존 쓰기 경계를 구분하도록 보완했다. 공정 import 금지 subprocess에서도 읽기 동작을 확인했다. 최종 변경과 외부 앱 HTTP 검증은 후속 결과로 구분한다.
 - gate 변화: 실물·production dispatch 활성화 없음. 첫 TRIP 흐름이며 팔 동작 중립화·Harbor 도달 검증 계약은 남는다. CE 해당 없음: 기존 실행·조회 구조와 회귀 시험으로 판단을 복구할 수 있다.
+
+## 2026-10-24 · afb218aed1 · 표시 추출과 최신 main 오류 코드 통합
+
+- 변경: main에 추가된 TRIP_JOB_NOT_FOUND 표시를 추출 모듈에 보존하고 Node 단언으로 연결했다. 기존 전수 오류 코드 검사·문서 소유·금지 의존성 검사는 유지한다.
+- 증거: [통합 기록](../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md). 새 고정 커밋의 집중·공식 회귀는 후속 검증 대상이다. 이전 지도 시험의 단발 실패와 단독 통과는 Git 밖 원장에서 구분했다.
+- gate 변화: 없음. 기준선·신선도·대기시간·실행 권한 변경 없음. CE 해당 없음: 판단은 소유 경계와 단언으로 설명된다.

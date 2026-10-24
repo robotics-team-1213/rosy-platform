@@ -1,5 +1,5 @@
 // Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
-import { tripWaitText } from "/console/assets/site-map-model.js";
+import {tripWaitText} from "/console/assets/trip-display.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",

@@ -291,6 +291,14 @@
       "path": "shared/poll-gate.js",
       "media_type": "application/javascript"
     },
+    "roster.css": {
+      "path": "roster.css",
+      "media_type": "text/css"
+    },
+    "roster-presentation.js": {
+      "path": "roster-presentation.js",
+      "media_type": "application/javascript"
+    },
     "roster.js": {
       "path": "roster.js",
       "media_type": "application/javascript"
@@ -325,6 +333,10 @@
     },
     "site-map-model.js": {
       "path": "shared/site-map-model.js",
+      "media_type": "application/javascript"
+    },
+    "trip-display.js": {
+      "path": "shared/trip-display.js",
       "media_type": "application/javascript"
     },
     "route-attention.js": {

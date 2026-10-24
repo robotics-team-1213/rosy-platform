@@ -33,11 +33,9 @@
 936 fleet/fleet/server/missions/mission_store.py
 628 fleet/fleet/swarm/session.py
 755 fleet/web/line-stuck.js
-709 fleet/web/roster.js
-788 fleet/web/shared/site-map-model.js
-834 fleet/web/shared/styles.css
+606 fleet/web/shared/site-map-model.js
 788 fleet/web/shared/vision-view.js
-771 fleet/web/sitemap/site-map.js
+767 fleet/web/sitemap/site-map.js
 1170 foundation/core_common/protocol/schemas.py
 678 learning/curation/perception/lane_derived_drivable.py
 629 learning/registry/perception/deliver.py
