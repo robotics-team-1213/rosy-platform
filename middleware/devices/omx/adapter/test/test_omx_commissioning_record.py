@@ -14,7 +14,7 @@ from omx_adapter.real.dynamixel_gates import MotionEvidence
 JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
 NOW = datetime(2026, 10, 24, 9, 0, tzinfo=timezone.utc)
 STOP = {"joint": "joint1", "measured_stop_ms": 180, "joint1_deviation_rad": 0.02,
-        "joint1_velocity_rad_s": 0.01, "passed": True, "driver": "dynamixel",
+        "joint1_velocity_rad_s": 0.01, "pre_stop_velocity_rad_s": 0.19, "passed": True, "driver": "dynamixel",
         "config_revision": "cal-measured-1"}
 MEASURED = {"joint_limits": {name: [-1.6, 1.6] for name in JOINTS},
             "gripper": {"open_rad": 0.5, "close_rad": -0.2},
@@ -117,6 +117,7 @@ def test_damaged_record_closes_the_gate(tmp_path):
     ({"measured_stop_ms": 501}, "did not pass"),
     ({"joint1_deviation_rad": -0.11}, "did not pass"),
     ({"joint1_velocity_rad_s": 0.2}, "did not pass"),
+    ({"pre_stop_velocity_rad_s": 0.1}, "did not pass"),  # the arm was not really moving
     ({"passed": False}, "did not pass"),
     ({"driver": "fake"}, "did not pass"),
     ({"config_revision": "cal-old"}, "not run under the record's config revision"),
@@ -140,6 +141,22 @@ def test_record_of_another_config_revision_or_wider_limits_is_refused(tmp_path):
     assert "owner config is not enabled" in disabled.blockers()
 
 
+def test_items_measured_under_different_config_revisions_are_refused(tmp_path):
+    """S3 review M1: a later save under another revision never relabels earlier items."""
+    store = _store(tmp_path)
+    _save(store, {"joint_limits": MEASURED["joint_limits"]}, revision="cal-measured-1")
+    _save(store, {"gripper": MEASURED["gripper"], "workspace": MEASURED["workspace"],
+                  "stop_test": {**STOP, "config_revision": "cal-measured-2"}}, revision="cal-measured-2")
+    items = store.read()["items"]
+    assert items["joint_limits"]["config_revision"] == "cal-measured-1"
+    assert items["gripper"]["config_revision"] == "cal-measured-2"
+    for config in (_config("cal-measured-1"), _config("cal-measured-2")):
+        evidence = load_motion_evidence(store, config)
+        blockers = "; ".join(evidence.blockers(config_revision=config.calibration_revision))
+        assert "different config revisions" in blockers and "items not measured under" in blockers
+        assert evidence.config_revision is None
+
+
 def test_evidence_without_a_record_revision_is_refused():
     assert "evidence not loaded from a commissioning record" in MotionEvidence().blockers()
 
@@ -149,7 +166,8 @@ def test_gate_status_lists_items_and_blockers_read_only(tmp_path):
     _save(store, {"gripper": MEASURED["gripper"]}, by="park")
     before = store.path.read_bytes()
     status = gate_status(store)
-    assert status["items"]["gripper"] == {"measured_at": NOW.isoformat(), "measured_by": "park"}
+    assert status["items"]["gripper"] == {"measured_at": NOW.isoformat(), "measured_by": "park",
+                                          "config_revision": "cal-measured-1"}
     assert status["items"]["stop_test"] is None and status["revision"] == store.revision()
     assert any("no stop test record" in b for b in status["blockers"])
     json.dumps(status, allow_nan=False)

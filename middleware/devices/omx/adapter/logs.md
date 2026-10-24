@@ -649,3 +649,9 @@
 - 증거: 가짜 버스·가짜 시계 시험 `test/test_omx_commissioning_record.py`, `test/test_omx_dynamixel_stop_test.py`, `test/test_omx_commissioning_view.py`. 실물 팔은 쓰지 않았다(KAN-30은 사람 몫). 독립 검토 대기(D-430 §5).
 - 구조: 실물 팔 경로(S1 `dynamixel_*`와 S3 모듈)를 `omx_adapter/real/`로 옮겨 D-766 크기 단위로 등록했다(패키지 1만 줄 상한). 내용 변경 없는 이동이다.
 - gate 변화: 없음. owner는 `enabled=False`(S4).
+
+## 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
+
+- 변경: 정지 시험 속도를 0.15~0.2 rad/s로 강제하고, 정지 직전 joint1 실측 속도(0.12 rad/s 이상)를 기록·관문에서 재검사한다. 정지 시점은 소프트웨어 STOPPED가 아니라 실측 속도가 0.03 rad/s 아래로 떨어진 때다. 뷰어 JS 문자열의 실제 줄바꿈을 고치고 `node --check`·따옴표 검사 시험을 넣었다. 기록 항목마다 측정 당시 `config_revision`을 남기고, 항목끼리 또는 port 설정과 다르면 관문이 닫힌다. `submit_stop_test`는 joint1만, 진폭 0.2 rad 이내, 20단계 이하만 받는다. CLI는 같은 인스턴스 owner 소켓이 살아 있으면 거부하고, rearm 사유를 `BENCH_COMMISSIONING_REARM`으로 남기며, 끝나면 port를 정지해 펜스를 닫아 둔다. port는 store에서 직접 evidence를 읽고 `reload_evidence()`는 인자 없이 다시 읽는다.
+- 증거: 가짜 버스·가짜 시계 시험(정지 쓰기를 무시하고 계속 미끄러지는 가짜 장치는 불합격). 실물 팔은 쓰지 않았다. 재검토 대기(D-430 §5).
+- gate 변화: 없음. owner는 `enabled=False`(S4).

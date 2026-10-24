@@ -9,7 +9,6 @@ import sys
 import threading
 import time
 from contextlib import closing
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -22,7 +21,8 @@ from omx_adapter.real.dynamixel_bus import (
     ADDR_GOAL, ADDR_HW_ERROR, ADDR_PRESENT, ADDR_PRESENT_CURRENT, ADDR_TORQUE, BusBusy,
     Hardware, HardwareMismatch, SdkBus, _BusClaims, to_raw,
 )
-from omx_adapter.real.dynamixel_gates import MotionEvidence, Tracking
+from omx_adapter.real.commissioning_record import SCHEMA, revision_of
+from omx_adapter.real.dynamixel_gates import Tracking
 from omx_adapter.real.dynamixel_port import DynamixelPort, open_real_port
 from omx_adapter.local_stop import LocalStopBlocked, LocalStopController
 
@@ -31,11 +31,35 @@ HW = Hardware()
 BOX = ((-1.0, 1.0), (-1.0, 1.0), (-0.5, 1.0))
 STOP_OK = {"passed": True, "driver": "dynamixel", "measured_stop_ms": 180, "joint": "joint1",
            "joint1_deviation_rad": 0.02, "joint1_velocity_rad_s": 0.01,
-           "config_revision": "cal-measured-1"}
-PASSED = MotionEvidence(limits_measured=True, gripper_open_rad=0.5, gripper_close_rad=-0.2,
-                        stop_test=STOP_OK, workspace_m=BOX, config_revision="cal-measured-1",
-                        revision="rec-1")
-REV = lambda: "rec-1"  # noqa: E731 - the stored commissioning record matches PASSED
+           "pre_stop_velocity_rad_s": 0.19, "config_revision": "cal-measured-1"}
+MEASURED = {"joint_limits": {name: [-1.6, 1.6] for name in JOINTS},
+            "gripper": {"open_rad": 0.5, "close_rad": -0.2},
+            "workspace": [list(pair) for pair in BOX], "stop_test": STOP_OK}
+
+
+def record(**items):
+    """A commissioning record; an item set to None is left out."""
+    return {"schema": SCHEMA, "workcell_id": "omx-1", "instance_id": "omx-1-control",
+            "joint_names": list(JOINTS),
+            "items": {name: {"value": value, "measured_at": "2026-10-24T09:00:00+00:00",
+                             "measured_by": "test", "config_revision": "cal-measured-1"}
+                      for name, value in {**MEASURED, **items}.items() if value is not None}}
+
+
+class FakeStore:
+    """CommissioningStore stand-in: the port reads its evidence only through it (S3 L1)."""
+
+    def __init__(self, rec):
+        self.record = rec
+
+    def read(self):
+        return self.record
+
+    def revision(self):
+        return revision_of(self.record)
+
+
+PASSED = record()
 GRASP = {"position_rad": [-0.3, 0.1], "current_ma": [20, 200], "stable_rad": 0.05,
          "samples": 3, "period_s": 0.01}
 
@@ -155,12 +179,12 @@ def _grant(workcell="omx-1", instance="omx-1-control", generation=8):
     return FleetActionGrant.model_validate(value)
 
 
-def _port(bus=None, *, plan=None, evidence=PASSED, claims=None, config=None,
+def _port(bus=None, *, plan=None, rec=PASSED, claims=None, config=None,
           device="/dev/serial/by-id/usb-FAKE-ARM-0", fence=None, tracking=Tracking()):
     plan = plan if plan is not None else [{"pose": [0.1, 0.0, 0.0, 0.0, 0.0]}]
     return DynamixelPort(
-        bus or FakeBus(), device=device, config=config or _config(), evidence=evidence,
-        planner=lambda grant: plan, stop_fence=fence or Fence(), tracking=tracking, record_revision=REV,
+        bus or FakeBus(), device=device, config=config or _config(), store=FakeStore(rec),
+        planner=lambda grant: plan, stop_fence=fence or Fence(), tracking=tracking,
         sleep=lambda s: None, start=lambda fn: fn(), claims=claims or _BusClaims())
 
 
@@ -333,22 +357,20 @@ def test_close_without_grasp_check_is_refused():
     assert port.last_refusal == "GRASP_CHECK_MISSING"
 
 
-@pytest.mark.parametrize("evidence,missing", [
-    (MotionEvidence(), "joint limits not measured"),
-    (MotionEvidence(limits_measured=True, stop_test=PASSED.stop_test), "gripper"),
-    (MotionEvidence(limits_measured=True, gripper_open_rad=0.5, gripper_close_rad=-0.2), "no stop test"),
-    (MotionEvidence(limits_measured=True, gripper_open_rad=0.5, gripper_close_rad=-0.2,
-                    stop_test={"passed": True, "driver": "fake", "measured_stop_ms": 100}), "did not pass"),
-    (MotionEvidence(limits_measured=True, gripper_open_rad=0.5, gripper_close_rad=-0.2,
-                    stop_test={"passed": True, "driver": "dynamixel", "measured_stop_ms": 900}), "did not pass"),
-    (MotionEvidence(limits_measured=True, gripper_open_rad=0.5, gripper_close_rad=-0.2,
-                    stop_test=STOP_OK), "workspace box not measured"),
-    (replace(PASSED, gripper_close_rad=0.5), "must differ"),
-    (replace(PASSED, gripper_open_rad=3.5), "inside (-pi, pi)"),
+@pytest.mark.parametrize("rec,missing", [
+    (record(joint_limits=None, gripper=None, workspace=None, stop_test=None), "joint limits not measured"),
+    (record(gripper=None), "gripper"),
+    (record(stop_test=None), "no stop test"),
+    (record(stop_test={**STOP_OK, "driver": "fake"}), "did not pass"),
+    (record(stop_test={**STOP_OK, "measured_stop_ms": 900}), "did not pass"),
+    (record(stop_test={**STOP_OK, "pre_stop_velocity_rad_s": 0.05}), "did not pass"),
+    (record(workspace=None), "workspace box not measured"),
+    (record(gripper={"open_rad": 0.5, "close_rad": 0.5}), "must differ"),
+    (record(gripper={"open_rad": 3.5, "close_rad": -0.2}), "inside (-pi, pi)"),
 ])
-def test_motion_gate_refuses_without_measured_evidence(evidence, missing):
+def test_motion_gate_refuses_without_measured_evidence(rec, missing):
     bus = FakeBus()
-    port = _armed(bus, evidence=replace(evidence, revision="rec-1"))  # the stored record
+    port = _armed(bus, rec=rec)
     bus.log.clear()
     assert port.submit(_grant()).accepted is False
     assert port.last_refusal.startswith("MOTION_GATE") and missing in port.last_refusal
@@ -370,8 +392,8 @@ def test_wrong_instance_grant_is_refused():
 def test_one_goal_at_a_time_and_no_retry():
     started = []
     port = DynamixelPort(FakeBus(), device="/dev/serial/by-id/usb-FAKE-ARM-0", config=_config(),
-                         evidence=PASSED, planner=lambda g: [{"pose": [0.1, 0, 0, 0, 0]}],
-                         stop_fence=Fence(), sleep=lambda s: None, record_revision=REV,
+                         store=FakeStore(PASSED), planner=lambda g: [{"pose": [0.1, 0, 0, 0, 0]}],
+                         stop_fence=Fence(), sleep=lambda s: None,
                          start=started.append, claims=_BusClaims())
     port.stop_fence.person_rearm(8)
     port.rearm(authority_epoch=2, dispatch_generation=8)
@@ -516,7 +538,7 @@ def test_planner_runs_outside_the_state_lock_and_a_stop_during_planning_refuses(
         return [{"pose": [0.1, 0.0, 0.0, 0.0, 0.0]}]
     bus = FakeBus()
     port = DynamixelPort(bus, device="/dev/serial/by-id/usb-FAKE-ARM-0", config=_config(),
-                         evidence=PASSED, planner=planner, stop_fence=Fence(), record_revision=REV,
+                         store=FakeStore(PASSED), planner=planner, stop_fence=Fence(),
                          sleep=lambda s: None, start=lambda fn: fn(), claims=_BusClaims())
     holder["port"] = port
     port.stop_fence.person_rearm(8)
@@ -541,8 +563,8 @@ def test_fence_closing_during_motion_holds_within_a_cycle():
 
 def test_plan_outside_workspace_is_refused_by_fk():
     bus = FakeBus()
-    evidence = replace(PASSED, workspace_m=((0.1, 0.35), (-0.25, 0.25), (0.01, 0.25)))
-    port = _armed(bus, evidence=evidence, plan=[{"pose": [0.0, 1.0, 0.0, 0.0, 0.0]}])
+    rec = record(workspace=[[0.1, 0.35], [-0.25, 0.25], [0.01, 0.25]])
+    port = _armed(bus, rec=rec, plan=[{"pose": [0.0, 1.0, 0.0, 0.0, 0.0]}])
     bus.log.clear()
     assert port.submit(_grant()).accepted is False
     assert port.last_refusal.startswith("WORKSPACE: tcp z") and bus.log == []
@@ -550,8 +572,8 @@ def test_plan_outside_workspace_is_refused_by_fk():
 
 def test_interpolated_point_outside_workspace_holds():
     bus = FakeBus()  # q1 0 -> 1: TCP x 0.31 m -> 0.17 m; the end is inside, the path is not
-    evidence = replace(PASSED, workspace_m=((-1.0, 0.2), (-1.0, 1.0), (-0.5, 1.0)))
-    port = _armed(bus, evidence=evidence, plan=[{"pose": [1.0, 0.0, 0.0, 0.0, 0.0]}])
+    rec = record(workspace=[[-1.0, 0.2], [-1.0, 1.0], [-0.5, 1.0]])
+    port = _armed(bus, rec=rec, plan=[{"pose": [1.0, 0.0, 0.0, 0.0, 0.0]}])
     assert port.submit(_grant()).accepted is True
     assert port.outcome["reason"].startswith("WORKSPACE: tcp x")
     assert bus.regs[11][ADDR_PRESENT] == 2048
@@ -682,9 +704,9 @@ class _FakeSdk:
 
 
 def _open_real(claims, device="/dev/serial/by-id/usb-FAKE-ARM-0"):
-    return open_real_port(device, config=_config(), evidence=PASSED,
+    return open_real_port(device, config=_config(), store=FakeStore(PASSED),
                           planner=lambda g: [{"pose": [0.1, 0.0, 0.0, 0.0, 0.0]}],
-                          stop_fence=Fence(), sleep=lambda s: None, record_revision=REV,
+                          stop_fence=Fence(), sleep=lambda s: None,
                           start=lambda fn: fn(), claims=claims)
 
 
@@ -740,7 +762,7 @@ def _person_rearm(controller, generation):
 
 def _threaded_port(bus, controller, plan):
     return DynamixelPort(bus, device="/dev/serial/by-id/usb-FAKE-ARM-0", config=_config(),
-                         evidence=PASSED, planner=lambda g: plan, stop_fence=controller, record_revision=REV,
+                         store=FakeStore(PASSED), planner=lambda g: plan, stop_fence=controller,
                          sleep=lambda s: None, claims=_BusClaims())  # real motion thread
 
 

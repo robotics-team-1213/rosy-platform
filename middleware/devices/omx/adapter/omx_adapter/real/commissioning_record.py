@@ -26,8 +26,8 @@ from ..hardware_profile import _fields, _number, _range
 
 SCHEMA = "rosy.omx-commissioning-record.v1"
 ITEMS = ("joint_limits", "gripper", "workspace", "stop_test")
-_STOP_FIELDS = ("joint measured_stop_ms joint1_deviation_rad joint1_velocity_rad_s passed "
-                "driver config_revision")
+_STOP_FIELDS = ("joint measured_stop_ms joint1_deviation_rad joint1_velocity_rad_s "
+                "pre_stop_velocity_rad_s passed driver config_revision")
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 
 
@@ -60,7 +60,8 @@ def _check_value(name: str, value: object, joint_names: list[str]) -> None:
             _range(pair, f"workspace.{axis}")
     elif name == "stop_test":
         _fields(value, _STOP_FIELDS, name)
-        for key in ("measured_stop_ms", "joint1_deviation_rad", "joint1_velocity_rad_s"):
+        for key in ("measured_stop_ms", "joint1_deviation_rad", "joint1_velocity_rad_s",
+                    "pre_stop_velocity_rad_s"):
             _number(value[key], f"stop_test.{key}")
         if type(value["passed"]) is not bool or value["joint"] != "joint1":
             raise ValueError("stop_test: expected boolean passed on joint1")
@@ -71,10 +72,10 @@ def _check_value(name: str, value: object, joint_names: list[str]) -> None:
 
 
 def check_record(record: object) -> dict:
-    _fields(record, "schema workcell_id instance_id joint_names config_revision items", "record")
+    _fields(record, "schema workcell_id instance_id joint_names items", "record")
     if record["schema"] != SCHEMA:
         raise ValueError(f"record: expected schema {SCHEMA}")
-    for key in ("workcell_id", "instance_id", "config_revision"):
+    for key in ("workcell_id", "instance_id"):
         _text(record[key], f"record.{key}")
     names = record["joint_names"]
     if (not isinstance(names, list) or not names or len(set(names)) != len(names)
@@ -83,7 +84,8 @@ def check_record(record: object) -> dict:
     if not isinstance(record["items"], dict):
         raise ValueError("record.items: expected a mapping")
     for name, item in record["items"].items():
-        _fields(item, "value measured_at measured_by", f"items.{name}")
+        _fields(item, "value measured_at measured_by config_revision", f"items.{name}")
+        _text(item["config_revision"], f"items.{name}.config_revision")
         _check_value(name, item["value"], names)
         datetime.fromisoformat(_text(item["measured_at"], f"items.{name}.measured_at"))
         _text(item["measured_by"], f"items.{name}.measured_by")
@@ -139,15 +141,17 @@ class CommissioningStore:
             raise ValueError("record changed since it was read; reload and measure again")
         record = old or {"schema": SCHEMA, "workcell_id": self.workcell_id,
                          "instance_id": self.instance_id, "joint_names": list(joint_names),
-                         "config_revision": config_revision, "items": {}}
+                         "items": {}}
         if record["joint_names"] != list(joint_names):
             raise ValueError("joint names differ from the arm's record")
         stamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
         record = json.loads(json.dumps(record))  # private copy; tuples become lists
-        record["config_revision"] = config_revision
         for name, value in changes.items():
+            # Each item keeps the config revision it was measured under (S3 review M1): a later
+            # save under another revision never relabels earlier measurements.
             record["items"][name] = {"value": json.loads(json.dumps(value, allow_nan=False)),
-                                     "measured_at": stamp, "measured_by": by}
+                                     "measured_at": stamp, "measured_by": by,
+                                     "config_revision": _text(config_revision, "config_revision")}
         check_record(record)
         revision = revision_of(record)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -188,13 +192,17 @@ def _evidence(record: dict | None, refusals: list[str]) -> MotionEvidence:
     missing = [name for name in ITEMS if name not in items and name != "stop_test"]
     if missing:
         refusals.append("commissioning record missing: " + ", ".join(missing))
+    revisions = {item["config_revision"] for item in items.values()}
+    if len(revisions) > 1:
+        refusals.append("items measured under different config revisions: " + ", ".join(
+            f"{name}={item['config_revision']}" for name, item in sorted(items.items())))
     grip = items.get("gripper", {}).get("value", {})
     workspace = items.get("workspace", {}).get("value")
     return MotionEvidence(
         limits_measured="joint_limits" in items, gripper_open_rad=grip.get("open_rad"),
         gripper_close_rad=grip.get("close_rad"), stop_test=items.get("stop_test", {}).get("value"),
         workspace_m=tuple(tuple(pair) for pair in workspace) if workspace else None,
-        config_revision=record["config_revision"], revision=revision_of(record),
+        config_revision=revisions.pop() if len(revisions) == 1 else None, revision=revision_of(record),
         refusals=tuple(refusals))
 
 
@@ -208,6 +216,11 @@ def load_motion_evidence(store: CommissioningStore, config) -> MotionEvidence:
         return MotionEvidence(refusals=(f"commissioning record unreadable: {type(exc).__name__}: {exc}"[:300],))
     refusals: list[str] = []
     if record is not None:
+        stale = sorted(name for name, item in record["items"].items()
+                       if item["config_revision"] != config.calibration_revision)
+        if stale:
+            refusals.append(f"items not measured under port config revision "
+                            f"{config.calibration_revision!r}: {', '.join(stale)}")
         if not config.enabled:
             refusals.append("owner config is not enabled")
         elif tuple(record["joint_names"]) != tuple(config.joint_names):
@@ -230,9 +243,9 @@ def gate_status(store: CommissioningStore) -> dict:
     except (OSError, ValueError, TypeError) as exc:
         return {"revision": None, "items": {}, "blockers": [f"commissioning record unreadable: {type(exc).__name__}"]}
     items = (record or {}).get("items", {})
-    return {"revision": revision_of(record), "config_revision": (record or {}).get("config_revision"),
-            "items": {name: ({"measured_at": items[name]["measured_at"],
-                              "measured_by": items[name]["measured_by"]} if name in items else None)
+    return {"revision": revision_of(record),
+            "items": {name: ({key: items[name][key] for key in
+                              ("measured_at", "measured_by", "config_revision")} if name in items else None)
                       for name in ITEMS},
             "stop_test": items.get("stop_test", {}).get("value"),
             "blockers": _evidence(record, []).blockers()}

@@ -16,10 +16,11 @@ Absorbed from the retired device-core driver and safety wrapper (rosy-vault 9a74
 - Tracking error, motor hardware error, missed pose, or an empty grasp HOLD the arm.
 - Motion goals are refused until measured limits, measured gripper values and a passed stop
   test exist (D-858 §4). Learned-policy steps are refused (D-793).
-- The evidence comes from the commissioning record (S3). When the stored record's revision
-  moves away from the loaded one (checked at submit, before each step and at rearm), the port
-  HOLDs; a person reloads the record (``reload_evidence``) and rearms.
-- ``submit_stop_test`` is measurement mode: poses only, slow, gate without the stop-test item.
+- The port loads its evidence from the commissioning store itself (S3, no other source).
+  When the stored record's revision moves away from the loaded one (checked at submit, before
+  each step and at rearm), the port HOLDs; a person reloads (``reload_evidence``) and rearms.
+- ``submit_stop_test`` is measurement mode: gate without the stop-test item, at most 20 poses
+  that move only joint1 within 0.2 rad of where it is, at 0.15..0.2 rad/s.
 - One bus writer: a port claims its arm instance and its serial device in this process; the
   real bus also opens the device exclusively. The claim is per instance, never a wildcard over
   other arms' owners (device-core ``lock.py:64`` defect, D-773).
@@ -44,8 +45,10 @@ from .dynamixel_bus import (
     ADDR_PRESENT_CURRENT, ADDR_TORQUE, BUS_CLAIMS, Bus, Hardware, HardwareMismatch, SdkBus,
     WRITABLE, _BusClaims, _signed, to_rad, to_raw,
 )
+from .commissioning_record import CommissioningStore, load_motion_evidence
 from .dynamixel_gates import (
-    STOP_TEST_MAX_SPEED_RAD_S, MotionEvidence, Tracking, _finite, _validate_grasp,
+    STOP_TEST_MAX_AMPLITUDE_RAD, STOP_TEST_MAX_SPEED_RAD_S, STOP_TEST_MAX_STEPS,
+    STOP_TEST_MIN_SPEED_RAD_S, STOP_TEST_POSE_TOLERANCE_RAD, Tracking, _finite, _validate_grasp,
 )
 
 
@@ -77,8 +80,7 @@ class DynamixelPort:
     """
 
     def __init__(self, bus: Bus, *, device: str, config: ArmCommandConfig,
-                 evidence: MotionEvidence, planner: Planner, stop_fence: TrippableFence,
-                 record_revision: Callable[[], str | None],
+                 store: CommissioningStore, planner: Planner, stop_fence: TrippableFence,
                  hardware: Hardware = Hardware(), tracking: Tracking = Tracking(),
                  kinematics: OmxKinematics | None = None,
                  sleep: Callable[[float], None] | None = None,
@@ -96,9 +98,9 @@ class DynamixelPort:
         claims.acquire(self.instance, device)
         try:
             self.bus, self.hw, self.config = bus, hardware, config
-            self.evidence, self.planner, self.stop_fence = evidence, planner, stop_fence
+            self.store, self.planner, self.stop_fence = store, planner, stop_fence
+            self.evidence = load_motion_evidence(store, config)
             self.tracking = tracking
-            self._record_revision = record_revision  # CommissioningStore.revision
             self._vel = config.velocity_limits  # capped only while a stop test runs
             self.kinematics = kinematics or OmxKinematics.load()
             self.sleep = sleep or time.sleep
@@ -235,8 +237,17 @@ class DynamixelPort:
                          dispatch_generation: int, max_speed_rad_s: float) -> DriverSubmission:
         """Commissioning stop-test motion (D-858 S3 measurement mode): the §4 gate without the
         stop-test item, joint poses only, every joint capped at a slow V-016 speed."""
-        if not (_finite(max_speed_rad_s) and 0 < max_speed_rad_s <= STOP_TEST_MAX_SPEED_RAD_S):
+        if not (_finite(max_speed_rad_s)
+                and STOP_TEST_MIN_SPEED_RAD_S <= max_speed_rad_s <= STOP_TEST_MAX_SPEED_RAD_S):
             return self._refuse("STOP_TEST_SPEED")
+        present, tol = self._read_joints(), STOP_TEST_POSE_TOLERANCE_RAD
+        if not 0 < len(poses) <= STOP_TEST_MAX_STEPS:
+            return self._refuse("STOP_TEST_STEPS")
+        for q in poses:
+            if (len(q) != len(present) or not all(_finite(v) for v in q)
+                    or abs(q[0] - present[0]) > STOP_TEST_MAX_AMPLITUDE_RAD + tol
+                    or any(abs(a - b) > tol for a, b in zip(q[1:], present[1:]))):
+                return self._refuse("STOP_TEST_POSE: joint1 only, within the stop-test amplitude")
         steps = [{"pose": list(q)} for q in poses]
         vel = {name: min(v, max_speed_rad_s) for name, v in self.config.velocity_limits.items()}
         return self._submit(self.instance, (authority_epoch, dispatch_generation),
@@ -288,13 +299,17 @@ class DynamixelPort:
         """The stored commissioning record is no longer the loaded one (D-858 S3 HOLD after
         save). Reads a file: never call it under the state lock."""
         try:
-            current = self._record_revision()
+            current = self.store.revision()
         except Exception as exc:  # unreadable record: fail closed
             return f"COMMISSIONING_RECORD_UNREADABLE: {type(exc).__name__}"
         return None if current == self.evidence.revision else "COMMISSIONING_RECORD_CHANGED"
 
-    def reload_evidence(self, evidence: MotionEvidence) -> None:
-        """Take a newly loaded record while HOLD and idle; the latch stays until a person rearms."""
+    def reload_evidence(self) -> None:
+        """Re-read the store while HOLD and idle; the latch stays until a person rearms."""
+        with self._state_lock:
+            if self._running or not self.latched:
+                raise PermissionError("reload the commissioning record only while HOLD and idle")
+        evidence = load_motion_evidence(self.store, self.config)  # file read: outside the lock
         with self._state_lock:
             if self._running or not self.latched:
                 raise PermissionError("reload the commissioning record only while HOLD and idle")

@@ -185,21 +185,18 @@ const itemNames = {joint_limits:"관절 한계", gripper:"그리퍼 열림·닫�
 function gateText(gates) {
   const labels = Object.keys(gates || {});
   if (!labels.length) return "기록 경로 없음 (--record-root)";
+  const NL = "\\n";
   return labels.map(label => {
     const gate = gates[label];
     if (!gate.items) return `${label}: 읽기 실패`;
     const items = Object.entries(gate.items).map(([name, item]) =>
-      `  ${itemNames[name] || name}: ${item ? `${item.measured_by} · ${item.measured_at}` : "비어 있음"}`);
-    const verdict = gate.blockers.length ? "닫힘
-" + gate.blockers.map(b => "  - " + b).join("
-") : "열림 (설정 revision은 port가 확인)";
-    return `${label} · revision ${(gate.revision || "없음").slice(0, 12)}
-${items.join("
-")}
-관문: ${verdict}`;
-  }).join("
-
-");
+      `  ${itemNames[name] || name}: ${item ? `${item.measured_by} · ${item.measured_at} · ${item.config_revision}` : "비어 있음"}`);
+    const verdict = gate.blockers.length
+      ? "닫힘" + NL + gate.blockers.map(b => "  - " + b).join(NL)
+      : "열림 (port 설정 revision은 port가 확인)";
+    return [`${label} · revision ${(gate.revision || "없음").slice(0, 12)}`, ...items,
+            `관문: ${verdict}`].join(NL);
+  }).join(NL + NL);
 }
 async function refresh() {
   try {

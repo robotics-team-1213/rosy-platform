@@ -12,9 +12,20 @@ from typing import Mapping, Optional, Sequence
 MAX_STOP_MS = 500
 MAX_JOINT1_DEVIATION_RAD = 0.1
 MAX_JOINT1_VELOCITY_RAD_S = 0.1
-# V-016 stop-test motion: small and slow (device-core STOP_TEST_RULES bounds).
+# V-016 stop-test motion: small and slow (device-core STOP_TEST_RULES bounds), but fast enough
+# that a stop is measurable: well above the "stopped" speed and the 0.1 rad/s V-016 bound, or a
+# stop that never lands would still read as stopped (S3 review H1).
 STOP_TEST_MAX_AMPLITUDE_RAD = 0.2
 STOP_TEST_MAX_SPEED_RAD_S = 0.2
+STOP_TEST_MIN_SPEED_RAD_S = 0.15
+STOP_TEST_MAX_STEPS = 20
+STOP_TEST_POSE_TOLERANCE_RAD = 0.01  # other joints stay where they are (a few encoder ticks)
+# Measured joint1 speed just before the stop: commanded >= 0.15 rad/s runs at 0.95x, less one
+# encoder tick (0.0015 rad) over the 100 ms window.
+STOP_TEST_MIN_PRE_STOP_RAD_S = 0.12
+# "Stopped" = joint1 slower than this over a 100 ms window: two encoder ticks, not the 0.1 rad/s
+# V-016 bound (that one is the speed still allowed at the end of the window).
+JOINT1_STILL_RAD_S = 0.03
 
 
 def _finite(value: object) -> bool:
@@ -36,7 +47,8 @@ class MotionEvidence:
     limits_measured: bool = False
     gripper_open_rad: Optional[float] = None
     gripper_close_rad: Optional[float] = None
-    # {passed, driver, config_revision, measured_stop_ms, joint1_deviation_rad, joint1_velocity_rad_s}
+    # {passed, driver, config_revision, measured_stop_ms, joint1_deviation_rad,
+    #  joint1_velocity_rad_s, pre_stop_velocity_rad_s}
     stop_test: Optional[Mapping[str, object]] = None
     # TCP box ((x_min, x_max), (y_min, y_max), (z_min, z_max)) [m] in link0 (device-core
     # Limits.workspace). Measured on the bench: desk, tray, robot position.
@@ -82,9 +94,12 @@ class MotionEvidence:
                 or not _finite(st.get("joint1_deviation_rad"))
                 or not _within(abs(st["joint1_deviation_rad"]), MAX_JOINT1_DEVIATION_RAD)
                 or not _finite(st.get("joint1_velocity_rad_s"))
-                or not _within(abs(st["joint1_velocity_rad_s"]), MAX_JOINT1_VELOCITY_RAD_S)):
+                or not _within(abs(st["joint1_velocity_rad_s"]), MAX_JOINT1_VELOCITY_RAD_S)
+                or not _finite(st.get("pre_stop_velocity_rad_s"))
+                or abs(st["pre_stop_velocity_rad_s"]) < STOP_TEST_MIN_PRE_STOP_RAD_S):
             out.append(f"stop test record did not pass on this driver (V-016: <= {MAX_STOP_MS} ms, "
-                       f"joint1 +-{MAX_JOINT1_DEVIATION_RAD} rad, {MAX_JOINT1_VELOCITY_RAD_S} rad/s)")
+                       f"joint1 +-{MAX_JOINT1_DEVIATION_RAD} rad, {MAX_JOINT1_VELOCITY_RAD_S} rad/s, "
+                       f"moving >= {STOP_TEST_MIN_PRE_STOP_RAD_S} rad/s at the stop)")
         if not self.config_revision or st.get("config_revision") != self.config_revision:
             out.append("stop test not run under the record's config revision")
         return out

@@ -1,5 +1,8 @@
 """Read-only camera monitor refuses stale/replayed observations and remote hosts."""
 import json
+import re
+import shutil
+import subprocess
 import threading
 import time
 import importlib.util
@@ -328,3 +331,20 @@ def test_commissioning_gate_panel_is_read_only_and_names_missing_items(tmp_path)
     with pytest.raises(ValueError):
         _viewer.gate_reader(tmp_path, ["arm_a=../x"])
     assert _viewer.gate_reader(None, []) is None
+
+
+def _unbalanced_quote_lines(script):
+    """Lines whose ``"`` strings do not close on the same line (a JS string cannot hold a newline)."""
+    return [line for line in script.splitlines() if len(re.findall(r'(?<!\\)"', line)) % 2]
+
+
+def test_viewer_script_parses_even_when_browser_tests_skip(tmp_path):
+    assert _unbalanced_quote_lines(_viewer.SCRIPT) == []
+    assert _unbalanced_quote_lines('const a = "x\n";')  # the check sees a broken literal
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is unavailable; the quote check above still ran")
+    script = tmp_path / "viewer.js"
+    script.write_text(_viewer.SCRIPT, encoding="utf-8")
+    checked = subprocess.run([node, "--check", str(script)], capture_output=True, text=True)
+    assert checked.returncode == 0, checked.stderr
