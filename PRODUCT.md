@@ -26,7 +26,7 @@
 
 1. Harbor 첫 흐름이 공개 계약만으로 끝까지 돈다: 회수 전 변경 지시 → 방해 화물 처리 → 목표 운송 → S 하역 → 방해 화물 정리·팔 퇴피.
 2. 항만 정책 하나를 바꿔도 이 저장소의 diff가 0이다.
-3. 최종 명령은 주행은 CORE, 팔은 device-core만 낸다.
+3. 최종 명령은 주행은 CORE, 팔은 OMX owner만 낸다(D-858: device-core 은퇴, 실물 Dynamixel 경로는 owner로 흡수). 실물 owner 조립·수용(D-858 S4·S5)이 끝나기 전까지 owner의 실물 동작은 꺼져 있다.
 
 Pinky 차로 주행과 OMX 집기는 이 목표의 능력 증명 마일스톤이고, Rosy Cell 팔레타이징은 Harbor 흐름에 흡수한다.
 
