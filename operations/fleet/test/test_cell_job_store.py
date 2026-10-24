@@ -116,7 +116,7 @@ def test_cell_job_migration_preserves_existing_pick_place_missions(tmp_path):
         migration = connection.execute(
             "SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'",
         ).fetchone()[0]
-    assert migration == 4  # 3: per-arm tables (D-779 stage 1); 4: multi-arm Jobs (stages 2-4)
+    assert migration == 5  # D-856: physical provenance; legacy missions retain their values.
 
 
 def test_cell_job_steps_advance_only_after_matching_goal_confirmation(tmp_path):

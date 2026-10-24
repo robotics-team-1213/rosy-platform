@@ -1,5 +1,6 @@
 """Atomic parent-journal provenance migration; legacy execution values stay unchanged."""
 from contextlib import contextmanager
+import re
 
 from .cell_arm_ledger import _run
 
@@ -57,11 +58,22 @@ _LEGACY_COLUMNS = (
 )
 
 
+def _canonical_sql(sql):
+    sql = sql.replace('CREATE TABLE "fleet_cell_jobs"', 'CREATE TABLE fleet_cell_jobs')
+    return re.sub(r"\s+", " ", sql).strip().rstrip(";")
+
+
 def _quoted(identifier):
     return '"' + identifier.replace('"', '""') + '"'
 
 
 def _rebuild(connection):
+    expected = _PARENT_SQL.split(",\nprovenance_kind ", 1)[0] + "\n)"
+    for name in ("job_id", "recipe_digest", "cell_digest", "process_artifact_digest"):
+        expected = expected.replace(f"\n{name} TEXT,", f"\n{name} TEXT NOT NULL,")
+    sql = connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0]
+    if _canonical_sql(sql) != _canonical_sql(expected):
+        raise RuntimeError("unsupported legacy job provenance schema")
     objects = connection.execute(
         "SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL "
         "AND (type IN ('trigger','view') OR (type='index' AND tbl_name='fleet_cell_jobs'))"
@@ -102,10 +114,10 @@ def initialize(connection, *, version, now):
             connection.execute(_PARENT_SQL)
         elif set(columns) == set(_LEGACY_COLUMNS):
             _rebuild(connection)
-        elif (set(columns) != set(_LEGACY_COLUMNS) | {"provenance_kind"}
-              or columns["provenance_kind"][3] != 1
-              or any(columns[name][3] for name in ("job_id", "recipe_digest", "cell_digest", "process_artifact_digest"))):
-            raise RuntimeError("unsupported job provenance schema")
+        else:
+            sql = connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0]
+            if _canonical_sql(sql) != _canonical_sql(_PARENT_SQL):
+                raise RuntimeError("unsupported job provenance schema")
         yield
         if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
             raise RuntimeError("job provenance migration violates foreign keys")

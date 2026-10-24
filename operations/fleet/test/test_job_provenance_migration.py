@@ -90,6 +90,7 @@ def test_populated_v4_migrates_without_changing_rows_claims_or_mirror_behavior(t
         assert connection.execute("SELECT reason FROM provenance_test_view WHERE mission_id='legacy-0'").fetchone()[0] is None
         connection.execute("UPDATE fleet_cell_events SET actor_id='other' WHERE mission_id='legacy-0'")
         assert connection.execute("SELECT reason FROM fleet_cell_jobs WHERE mission_id='legacy-0'").fetchone()[0] == "child-updated"
+        assert connection.execute("SELECT reason FROM fleet_cell_job_arms WHERE mission_id='legacy-0'").fetchone()[0] == "child-updated"
         assert connection.execute("SELECT name FROM sqlite_master WHERE name='provenance_test_status'").fetchone()
     assert snapshot(path) == before
     CellJobStore(path)
@@ -110,6 +111,23 @@ def test_later_initialization_failure_rolls_back_schema_version_and_rows_and_res
     assert snapshot(path) == before
     CellJobStore(path)
     assert snapshot(path) == before
+
+
+def test_existing_foreign_key_violation_aborts_without_partial_migration(tmp_path):
+    path = legacy_database(tmp_path)
+    with closing(connect(path)) as connection:
+        connection.execute("PRAGMA foreign_keys=OFF")
+        connection.execute("INSERT INTO fleet_cell_events(event_key,mission_id,event_type,actor_id,"
+                           "detail_json,created_at) VALUES('orphan','absent','legacy','operator-1','{}','before')")
+        connection.commit()
+        connection.execute("PRAGMA foreign_keys=ON")
+        before = connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0]
+        with pytest.raises(RuntimeError, match="foreign keys"):
+            with initialize()(connection, version=5, now="after"):
+                pass
+        assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert connection.execute("SELECT sql FROM sqlite_master WHERE name='fleet_cell_jobs'").fetchone()[0] == before
+        assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 4
 
 
 def test_open_transaction_and_future_version_are_rejected_without_implicit_commit(tmp_path):
