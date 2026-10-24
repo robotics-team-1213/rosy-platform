@@ -12,7 +12,6 @@
 |---|---|---|
 | D-866 | VLA 주 시뮬레이터는 Isaac Sim, Gazebo는 실행 계약 회귀용. 모델 PC와 AI PC는 역할을 나누되 오프라인 일괄 작업은 병렬로 처리 | Proposed (2026-10-25) |
 | D-865 | Fleet 정책 승인 — 사람이 정한 승인 범위 안 작업 자동 승인 | Proposed (2026-10-25) |
-| D-867 | AI PC 시뮬레이션 실행 상한을 4코어·4GB에서 6코어·10GB로 올린다 | Accepted (2026-10-25) |
 | D-867 | 시뮬레이션 실행 상한을 올린다: AI PC 12코어·10GB, 모델 PC 16코어·10GB | Accepted (2026-10-25) |
 | D-862 | 관제 정보 집계와 관제별 결과를 보존하는 정지 요청 | Accepted for implementation (2026-10-24) |
 | D-863 | 장치 네트워크 복구와 서명 업데이트 연속성 | Accepted for implementation (2026-10-24) |
