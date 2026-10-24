@@ -179,6 +179,8 @@ def main(argv=None):
     from lerobot.robots.omx_follower import OmxFollower, OmxFollowerConfig
 
     robot_cfg = {k: v for k, v in config["robot"].items() if k not in ("type", "cameras")}
+    # LeRobot's ensure_safe_goal_position accepts only float/dict; draccus converts it for lerobot-record, JSON keeps 5 an int
+    robot_cfg["max_relative_target"] = float(robot_cfg["max_relative_target"])
     robot = OmxFollower(OmxFollowerConfig(**robot_cfg, cameras={}))  # the camera services keep the cameras
     args.io.mkdir(parents=True, exist_ok=True)
     status_path = args.io / "chunk-status.jsonl"
