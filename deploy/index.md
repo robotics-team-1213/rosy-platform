@@ -79,8 +79,3 @@
 - 2026-10-24 · a7aaaed472 · 독립·중첩 관제의 격리 설정 예제
 - 2026-10-24 · 8d119665da8f · native teacher 진단 실행과 정리 확인
 - 2026-10-23 · dec8962001 · teacher 그리퍼 진단 회귀 검증
-- 2026-10-17 · uncommitted · fix: OMX 수집의 내부 액션 client 검사 연결
-- 2026-10-17 · uncommitted · fix: OMX 시뮬레이션 owner 종료 자원 정리
-- 2026-10-17 · uncommitted · feat(omx): 다음 날 실물 수집·전송·학습 실행 경로 연결
-- 2026-10-17 · uncommitted · fix(omx): fresh 재조회와 실제 stale 구분
-- 2026-10-17 · uncommitted · feat(omx): 환경 범위와 지속적인 양방향 카메라 복구
