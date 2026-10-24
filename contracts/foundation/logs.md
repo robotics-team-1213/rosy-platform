@@ -884,3 +884,10 @@
 - gate 변화: 없음. 이 변경은 wire 계약이며 HTTP runtime·실행·브라우저·장치 수용 완료가 아니다. 코드 소비 경로는 후속 구현에서 연결한다.
 
 구현 보완: oversized schemas.py의 SSH 모델을 독립 `protocol/ssh.py`로 옮기고 기존 canonical export·필드·검증을 유지했다. 루트 스키마의 크기 상한을 늘리거나 검사를 약하게 하지 않고 새 wire 모델을 추가하기 위한 책임 분리다. 중간 크기 위반 커밋은 보존하고 새 브랜치에서 모델 이동과 export를 같은 커밋으로 구성한다.
+
+## 2026-10-24 · 73fc8b2b09 · 공통 Action·상태 구성 모델의 소유 분리
+
+- 변경: 기존 Action·국소 정지 모델14개를 `protocol/device_actions.py`, 상태 구성 모델20개를 `protocol/state_components.py`로 옮겼다. canonical `schemas` import·공개 필드·검증·Envelope1.0을 유지하고 schemas를1170줄에서569줄로 줄여 기존 초과 ratchet 행을 제거했다.
+- 증거: 이동한34개 class의 AST가 기존 HEAD와 동일함을 확인했다. 공식 원격 protocol/CORE 계약과 전체 tier 결과는 해당 커밋의 실행 기록을 따른다. 새 통합관제 wire 테스트는 아직 미구현 RED 준비 상태이며 이 분리 변경에 포함하지 않는다.
+- gate 변화: 없음. 모델 소유 분리이며 실행·네트워크·화면·장치 권한을 추가하지 않는다.
+- CE: 해당 없음 — AST 동작 보존과 기존 계약 회귀로 직접 검증할 책임 분리다.
