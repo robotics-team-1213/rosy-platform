@@ -726,6 +726,27 @@ def test_isolated_rerun_keeps_original_revision_even_when_head_moves(repos, tmp_
     assert received == [tested]
     text = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
     assert "on " + tested[:10] in text
+
+
+@pytest.mark.parametrize("waiting", [False, True])
+def test_head_move_cannot_publish_full_record(repos, monkeypatch, waiting):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL"))
+
+    def run_tests(*args, **kwargs):
+        commit(wt, {"pkg/a.py": "x = 3\n"}, "late branch commit")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    monkeypatch.setattr(land.land_full, "save", lambda *a: pytest.fail("published an obsolete FULL record"))
+    if waiting:
+        with pytest.raises(land.Stop, match="HEAD changed"):
+            land.pretest(wt, "feat/x", land.argparse.Namespace(), sys.executable)
+    else:
+        before = git(main, "rev-parse", "HEAD")
+        assert land.main(["--tests", "auto"]) == 1
+        assert git(main, "rev-parse", "HEAD") == before
     assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
 
 
