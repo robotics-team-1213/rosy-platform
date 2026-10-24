@@ -50,7 +50,8 @@ def configuration(role, sources, networks):
         "driftfile /var/lib/chrony/chrony.drift",
         "rtcsync",
         "makestep 0.1 3",
-        "maxdistance 0.1",
+        # Source eligibility is separate from the strict UTC readiness check.
+        "maxdistance 3.0",
         "bindcmdaddress 127.0.0.1",
         "bindcmdaddress ::1",
     ]
