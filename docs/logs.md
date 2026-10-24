@@ -9657,3 +9657,9 @@ osy-d395-s1d\`.
 - 변경: robot-47 답변에 따라 `DO_NOT_TRAIN.txt`는 dataset 전체 거절, `static_episodes.json`은 적힌 episode만 제외로 바꿨다. 파일이 깨졌거나 남는 episode가 없으면 전체 거절. 표시는 `record_session`이 LeRobot dataset root에 쓰고 `record_seal`이 `collection/dataset/`으로 복사한다(fix/omx-arm-s-cell-check 읽기 확인). `prepare_native`가 aggregate 번호로 intake root에 옮겨 쓰고, `inspect_dataset`이 `excluded_episodes`(번호·이유)로 남기며, `reviewed_splits`·구간 선택이 그 episode를 뺀다. 이 변경 전에 준비한 intake는 봉인 manifest에 표시가 있으면 거절한다(다시 준비 필요). manifest 없는 예전 fixture intake는 확인하지 않는다. `export-segments`는 DB를 `mode=ro`로 열어 두 표를 직접 읽는다.
 - 증거: 원격 시험 PC에서 대상 247 passed, 9 skipped, affected 2684 passed, 324 skipped, known_failures 0 NEW. LeRobot 바이트 비교 시험은 시험 PC에 lerobot이 없어 여전히 건너뜀.
 - gate 변화: 없음. CE 해당 없음 — 규칙 변경이며 새 장치 판단이 없다.
+
+## 2026-10-25 · uncommitted · OMX 구간 DB 내보내기 바이트 비교를 센터 CPU venv에서 실행
+
+- 변경: 없음(검증 기록). pytest가 없는 모델 PC 센터 CPU venv(lerobot 0.4.4, Python 3.12.3)에서 1ce299ce22 사본과 독립 스크립트로 `test_db_export_is_byte_identical_to_the_downloaded_json_export`와 `test_real_lerobot_segment_readback`의 절차를 재현했다. venv·센터·state는 건드리지 않았고 임시 폴더는 지웠다.
+- 증거: DB `export-segments`와 내려받은 JSON 경로의 split-receipt.json이 바이트 동일, train·eval child 파일 12개 sha256 모두 일치, 내보내기 전후 DB 바이트 동일, 구간 readback 3프레임·action 2,3,4 확인.
+- gate 변화: 없음. CE 해당 없음 — 시험 PC에 lerobot이 없다는 사실은 기존 기록에 있다.
