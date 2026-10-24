@@ -163,6 +163,31 @@ def test_core_target_decodes_installed_cameras_in_order():
         runner.CoreArmTarget(Client())
 
 
+def sim_client(simulation=True):
+    class Client:
+        is_connected = True
+        info = {'joint_names': ['joint1', 'joint2'], 'simulation': simulation}
+    return Client()
+
+
+def test_smolvla_reaches_core_only_as_a_sim_probe():
+    assert runner.CoreArmTarget(sim_client()).policy_type == 'act'
+    assert runner.CoreArmTarget(sim_client(), policy_type='smolvla', sim_probe=True).policy_type == 'smolvla'
+    for kwargs, client in ((dict(policy_type='smolvla'), sim_client()),
+                           (dict(policy_type='smolvla', sim_probe=True), sim_client(simulation=False)),
+                           (dict(policy_type='diffusion', sim_probe=True), sim_client())):
+        with pytest.raises(PermissionError):
+            runner.CoreArmTarget(client, **kwargs)
+
+
+def test_target_opened_for_another_type_never_observes():
+    adapter, target = Adapter(), Target()
+    adapter.policy_type, target.policy_type = 'smolvla', 'act'
+    target.observe = lambda: pytest.fail('observed before the binding check')
+    with pytest.raises(ValueError):
+        runner.step(adapter, target, runner.ActionSpace('ros_joint_rad', 'ros_joint_rad'), '')
+
+
 @pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 environment not configured')
 def test_lerobot_adapter_runs_a_saved_act_checkpoint(tmp_path):
     script = r'''
