@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Iterable
 
-from .dispatch_resources import _IDENTIFIER, normalize_resources
+from core_common.resource_keys import _IDENTIFIER, normalize_resources
 
 _OWNER_KINDS = {"task", "mission", "direct_action", "charge_session"}
 

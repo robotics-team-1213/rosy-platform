@@ -1,4 +1,4 @@
-"""Pure resource-key validation shared by policies and the claim transaction owner."""
+"""Shared pure resource keys; no transaction, decision or command authority."""
 from __future__ import annotations
 
 from collections.abc import Iterable
