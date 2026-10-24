@@ -1,6 +1,8 @@
 """Validate/freeze additional image representations; imports never approve labels."""
 import json
+import os
 import re
+import threading
 import zipfile
 from pathlib import Path
 
@@ -337,5 +339,7 @@ def import_hf(store, job, files, registered_by):
         raise ValueError('가져온 자료에 검수할 JPEG/PNG 사진이 없습니다.')
     catalog = store.state / 'hf-imports' / (job['id'] + '.jsonl')
     catalog.parent.mkdir(exist_ok=True)
-    catalog.write_text('\n'.join(json.dumps(row, sort_keys=True) for row in rows), encoding='utf-8')
+    temp = catalog.with_name(f'{catalog.name}.{os.getpid()}.{threading.get_ident()}.tmp')
+    temp.write_text('\n'.join(json.dumps(row, sort_keys=True) for row in rows), encoding='utf-8')
+    os.replace(temp, catalog)  # a concurrent send must never read a half-written catalog
     return import_frames(store, {'path': str(catalog)}, upstream)
