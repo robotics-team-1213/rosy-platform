@@ -17,6 +17,7 @@ import secrets
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -347,6 +348,10 @@ def main():
     # As policy_chain_gazebo.py: one BLAS thread per process, so the scope's CPU quota is not oversubscribed
     # (the lease renewal's short Fleet exchange starved in the 2026-10-25 P0 run without this).
     os.environ.update({key: '1' for key in ('LP_NUM_THREADS', 'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS')})
+    # py-spy --gil (P0 2026-10-25): 82% of GIL time was rclpy's executor rebuilding its wait set. At the default
+    # 5 ms switch interval each GIL hand-back in a renewal exchange waited behind it (server 5 ms, client up to
+    # 166 ms), and renewals expired the 1 s lease. The lease and transport bounds are unchanged.
+    sys.setswitchinterval(.0005)
     group = Path('/sys/fs/cgroup')/next(line.removeprefix('0::') for line in
         Path('/proc/self/cgroup').read_text().splitlines() if line.startswith('0::')).lstrip('/')
     (out/'cpu-profile.json').write_text(json.dumps(dict(cpu_max=(group/'cpu.max').read_text(),
