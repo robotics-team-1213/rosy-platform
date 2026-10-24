@@ -33,13 +33,6 @@ class TransferParticipant(_Closed):
     calibration_revision: ArmPhysicalRef
     transform_revision: ArmPhysicalRef
 
-    @model_validator(mode="after")
-    def _geometry(self):
-        if (not self.geometry.required_links or len(self.geometry.required_links) > 128
-                or len(self.geometry.model_digest) != 64):
-            raise ValueError("installed geometry coverage is required")
-        return self
-
     @field_serializer("geometry")
     def _serialize_geometry(self, value):
         return {"model_digest": value.model_digest, "required_links": sorted(value.required_links)}
@@ -110,8 +103,9 @@ class PhysicalEvidenceRejected(ValueError):
 def _pose_matches(actual, goal, policy):
     if actual is None or math.dist(actual.position_m, goal.position_m) > policy.position_tolerance_m:
         return False
-    # q and -q denote the same orientation; clamp only roundoff in validated units.
-    dot = abs(sum(a * b for a, b in zip(actual.orientation_xyzw, goal.orientation_xyzw)))
+    # Preserve measured input; remove allowed norm error only for angle comparison.
+    a, b = actual.orientation_xyzw, goal.orientation_xyzw
+    dot = abs(sum(x * y for x, y in zip(a, b))) / (math.hypot(*a) * math.hypot(*b))
     return 2 * math.acos(min(1., dot)) <= policy.orientation_tolerance_rad
 
 

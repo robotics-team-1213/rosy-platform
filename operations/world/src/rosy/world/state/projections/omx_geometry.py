@@ -15,12 +15,18 @@ import xml.etree.ElementTree as ET
 # Same normalized vendor 5.1.2 URDF as omx_f_kinematics.yaml, with all eight meshes.
 _URDF_DIGEST = "d06720f50c71b380daa91f6cf52ae089725bc588617e5f42ed2433b6e665b809"
 _MODEL_DIGEST = "c99e3b4ba229be84f40f9af44155a8ae9d1a4b250301cbe57d5f179d4dfaec51"
+_REQUIRED_LINKS = frozenset({"end_effector_link", *(f"link{i}" for i in range(8))})
 
 
 @dataclass(frozen=True)
 class ArmGeometry:
     model_digest: str
     required_links: frozenset[str]
+
+    def __post_init__(self):
+        if (self.model_digest != _MODEL_DIGEST or not isinstance(self.required_links, frozenset)
+                or self.required_links != _REQUIRED_LINKS):
+            raise ValueError("geometry descriptor must cover the exact reviewed OMX profile")
 
 
 def load_omx_geometry(urdf: bytes, meshes: Mapping[str, bytes]) -> ArmGeometry:
