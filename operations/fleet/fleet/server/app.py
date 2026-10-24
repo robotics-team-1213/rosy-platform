@@ -36,7 +36,7 @@ from fleet.server.goal_evidence_store import GoalEvidenceStore
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.arm_transfer_preflight_routes import install_arm_transfer_preflight_routes
 from fleet.server.arm_transfer_job_routes import install_arm_transfer_job_routes
-from fleet.server.mission_storage import validate_mission_storage
+from fleet.server.mission_storage import configure_mission_storage
 from fleet.server.simulation_pose_binding import validate_simulation_pose_binding
 from fleet.server.physical_transfer_stop_targets import configure_omx_stops
 from fleet.server.mission_dispatcher import MissionDispatcher
@@ -162,25 +162,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if development_sessions is not None and task_service is None:
         # D-473 3: every development session issue and POST is in the durable API audit.
         raise ValueError("development connection mode requires the durable API audit (task_service)")
-    mission_configured = mission_service is not None or proposal_store is not None
-    if (mission_service is None) != (proposal_store is None):
-        raise ValueError("Mission API requires both MissionService and ProposalStore")
-    if candidate_resolver is not None and not mission_configured:
-        raise ValueError("Mission candidate resolver requires MissionService and ProposalStore")
-    if candidate_resolver is not None and not callable(candidate_resolver):
-        raise ValueError("Mission candidate resolver must be callable")
-    if cell_job_compiler is not None and not mission_configured:
-        raise ValueError("Cell Job compiler requires the persistent Mission API")
-    if cell_job_compiler is not None and not callable(getattr(cell_job_compiler, "compile", None)):
-        raise ValueError("Cell Job compiler must implement compile(recipe, cell)")
-    if goal_evidence_service is not None and not mission_configured:
-        raise ValueError("goal evidence requires the persistent Mission API")
-    if goal_evidence_service is not None and goal_evidence_service.missions is not mission_service:
-        raise ValueError("goal evidence service must use the configured MissionService")
-    if mission_configured and task_service is None:
-        raise ValueError("Mission API requires persistent API audit and dispatch-control storage")
-    if mission_configured:
-        validate_mission_storage(task_service, mission_service, proposal_store, goal_evidence_service)
+    mission_configured = configure_mission_storage(task_service, mission_service, proposal_store,
+        goal_evidence_service, candidate_resolver, cell_job_compiler)
     cell_job_store = CellJobStore(mission_service.store.path) if mission_configured else None
     if cell_job_store is not None:
         cell_job_store.recover_after_startup()
