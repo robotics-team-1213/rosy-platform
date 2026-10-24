@@ -237,7 +237,7 @@ class Run:
         found = {name: self.bus.read(name) for name in limits}
         if any(found[name] != BASELINE[name] for name in limits):
             raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; an earlier "
-                             "run did not restore them - lower them with commissioning_limits.py (torque OFF)")
+                             "run did not restore them - lower them with commissioning_limits.py --baseline (torque OFF)")
         restore = {}  # filled before each write, so a write whose readback fails is still restored
         try:
             for name, value in (("pwm_limit", args.pwm),

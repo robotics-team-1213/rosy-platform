@@ -161,7 +161,7 @@ class Session:
             caps = {name: bus.read(name) for name in self._cap_registers(motor)}
             if any(caps[name] != BASELINE[name] for name in caps):
                 raise SystemExit(f"follower {motor} caps {caps} are not the commissioning baseline; an earlier "
-                                 "session did not restore them - lower them with commissioning_limits.py "
+                                 "session did not restore them - lower them with commissioning_limits.py --baseline "
                                  "(torque OFF) before recording")
 
     def baseline(self) -> dict:

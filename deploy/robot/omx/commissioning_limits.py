@@ -18,6 +18,9 @@ from register_probe import open_readonly_port, read_motors, read_packet_allowed,
 
 CAPS = {"pwm_limit_raw": (36, 2, 885), "current_limit_raw": (38, 2, 1750),
         "profile_acceleration_raw": (108, 4, 32767), "profile_velocity_raw": (112, 4, 32767)}
+# The resting caps joint_tune.BASELINE and record_session require, plus the 1/1 profiles joint_tune starts from.
+BASELINE = {"pwm_limit_raw": 20, "current_limit_raw": 50,
+            "profile_acceleration_raw": 1, "profile_velocity_raw": 1}
 DYNAMIC = {"position_raw", "velocity_raw", "goal_position_raw", "voltage_raw", "temperature"}
 
 
@@ -182,14 +185,20 @@ def unique_object(pairs):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", required=True)
-    parser.add_argument("--limits", required=True, type=Path)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--limits", type=Path)
+    source.add_argument("--baseline", action="store_true",
+                        help="the resting caps a session left raised must return to (PWM 20, Current 50, profiles 1)")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     if os.geteuid() == 0:
         parser.error("run as the unprivileged commissioning device owner")
-    raw = args.limits.read_bytes()
-    if len(raw) > 4096 or args.limits.resolve().is_relative_to(args.output.resolve()):
-        parser.error("bounded external limits input required")
+    if args.baseline:
+        raw = json.dumps(BASELINE).encode()
+    else:
+        raw = args.limits.read_bytes()
+        if len(raw) > 4096 or args.limits.resolve().is_relative_to(args.output.resolve()):
+            parser.error("bounded external limits input required")
     limits = json.loads(raw, object_pairs_hook=unique_object)
     args.output.mkdir()  # Never overwrite or resume an uncertain procedure.
     (args.output / "limits.json").write_bytes(raw)
