@@ -7,7 +7,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contracts/learning/src"))
 from rosy.contracts.learning.action_space import (
-    MOTORS, NORM, RAD, calibration_sha256, convert, validate_calibration, validate_declaration)
+    MOTORS, NORM, RAD, ROS, ROS_JOINTS, calibration_sha256, convert, validate_calibration, validate_declaration,
+    validate_joint_map)
 
 CAL = {m: {"id": i + 11, "homing_offset": 0, "range_min": 1024, "range_max": 3072, "drive_mode": 0}
        for i, m in enumerate(MOTORS)}
@@ -77,5 +78,56 @@ def test_declaration_is_exact():
     for bad in ({**good, "unit": "normalized_-100_100"}, {**good, "motor_order": list(reversed(MOTORS))},
                 {**good, "calibration_sha256": "x"}, {k: v for k, v in good.items() if k != "unit"},
                 {**good, "fps": 30}):
+        with pytest.raises(ValueError):
+            validate_declaration(bad)
+
+
+def verdict(**change):
+    """Shape of joint_map_check.py output (schema 2), as recorded in omx-joint-map-check-2026-10-24."""
+    joints = [dict(motor_id=11 + i, joint=name, homing_offset_raw=0, drive_mode=0, operating_mode=4,
+                   reasons=[], holds=True) for i, name in enumerate(ROS_JOINTS)]
+    doc = dict(schema="rosy.omx-joint-map-check/2", hypothesis="ros_joint_rad == dynamixel_rad_v1",
+               arm="S cell follower", probes=2, probe_sha256=["a" * 64, "b" * 64], holds=True, joints=joints)
+    doc.update(change)
+    return doc
+
+
+def test_ros_joint_rad_needs_a_bound_verdict():
+    norm = [-87.5, -10.0, 0.0, 33.3, 99.0, 12.5]
+    with pytest.raises(ValueError):
+        convert(norm, NORM, ROS, CAL)
+    ros, clipped, version = convert(norm, NORM, ROS, CAL, joint_map=verdict())
+    assert (clipped, version) == (0, 1) and ros == convert(norm, NORM, RAD, CAL)[0]
+    assert convert(ros, ROS, NORM, CAL, joint_map=verdict())[0] == pytest.approx(norm)
+    assert convert(ros, ROS, RAD, CAL, joint_map=verdict())[0] == ros
+    assert len(validate_joint_map(verdict(), CAL)) == 64
+
+
+@pytest.mark.parametrize("bad", [
+    verdict(holds=False), verdict(probes=1), verdict(schema="rosy.omx-joint-map-check/1"),
+    verdict(joints=verdict()["joints"][:5]),
+    verdict(joints=[dict(j, holds=False) if j["motor_id"] == 16 else j for j in verdict()["joints"]]),
+    verdict(joints=list(reversed(verdict()["joints"]))),
+])
+def test_failing_or_malformed_verdicts_are_refused(bad):
+    with pytest.raises(ValueError):
+        convert([0.0] * 6, NORM, ROS, CAL, joint_map=bad)
+
+
+def test_calibration_from_another_register_state_cannot_use_the_verdict():
+    # The older pinky_follower calibration on the same PC carries wrist_roll homing 957.
+    other = {**CAL, "wrist_roll": {**CAL["wrist_roll"], "homing_offset": 957}}
+    with pytest.raises(ValueError):
+        convert([0.0] * 6, NORM, ROS, other, joint_map=verdict())
+    flipped = {**CAL, "gripper": {**CAL["gripper"], "drive_mode": 1}}
+    with pytest.raises(ValueError):
+        validate_joint_map(verdict(), flipped)
+
+
+def test_ros_declaration_uses_ros_joint_order_and_may_omit_calibration():
+    sim = {"unit": ROS, "motor_order": list(ROS_JOINTS), "calibration_sha256": None}
+    assert validate_declaration(sim) == sim
+    for bad in ({**sim, "motor_order": list(MOTORS)}, {"unit": NORM, "motor_order": list(MOTORS),
+                                                        "calibration_sha256": None}):
         with pytest.raises(ValueError):
             validate_declaration(bad)

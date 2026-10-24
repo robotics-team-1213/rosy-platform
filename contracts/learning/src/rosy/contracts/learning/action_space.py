@@ -2,7 +2,9 @@
 
 Formulas follow lerobot 0.4.4 ``motors_bus._normalize``/``_unnormalize`` for ``omx_follower`` recorded with
 ``use_degrees: false``. ``dynamixel_rad_v1`` is Present Position ticks around 2048 (raw * 2pi/4096 - pi);
-its equality with ROS joint radians of a given install is not asserted here. lerobot 0.4.4's
+``ros_joint_rad`` (D-864) is the ROS joint radian of joint1..5 and gripper_joint_1, the unit of CORE, Gazebo and
+Isaac Sim. Converting to or from it needs a passing D-864 joint map verdict for the same register state as the
+calibration, because only that ties a recorded arm's motor radians to ROS joint radians. lerobot 0.4.4's
 ``DynamixelMotorsBus`` sets ``apply_drive_mode = False``, so ``drive_mode`` never changes OMX values and is not read.
 """
 
@@ -15,10 +17,14 @@ from .artifacts import seal
 
 NORM = "lerobot_norm_v1"
 RAD = "dynamixel_rad_v1"
-UNITS = frozenset({NORM, RAD})
+ROS = "ros_joint_rad"
+UNITS = frozenset({NORM, RAD, ROS})
 #: lerobot 0.4.4 omx_follower motor order = observation.state/action column order.
 MOTORS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 GRIPPER = "gripper"
+#: ROS joints in the same order (open_manipulator omx_f, motor IDs 11..16).
+ROS_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")
+MOTOR_IDS = (11, 12, 13, 14, 15, 16)
 TICKS = 4096
 EPS = 1e-6  # float round trips land a few ulps past a range edge; that is not a clip
 
@@ -45,17 +51,44 @@ def calibration_sha256(calibration):
 
 
 def validate_declaration(declaration):
-    """``{unit, motor_order, calibration_sha256}`` every dataset and policy must carry; returns a copy."""
+    """``{unit, motor_order, calibration_sha256}`` every dataset and policy must carry; returns a copy.
+
+    ``ros_joint_rad`` names the ROS joints and may carry ``calibration_sha256: None`` (SIM data has no motors).
+    """
     if not isinstance(declaration, dict) or set(declaration) != {"unit", "motor_order", "calibration_sha256"}:
         raise ValueError("action space needs exactly unit, motor_order and calibration_sha256")
-    if declaration["unit"] not in UNITS:
+    unit, sha = declaration["unit"], declaration["calibration_sha256"]
+    if unit not in UNITS:
         raise ValueError("unknown action space unit")
-    if list(declaration["motor_order"]) != list(MOTORS):
-        raise ValueError("motor order must be the omx_follower order")
-    if not re.fullmatch(r"[0-9a-f]{64}", str(declaration["calibration_sha256"])):
+    order = ROS_JOINTS if unit == ROS else MOTORS
+    if list(declaration["motor_order"]) != list(order):
+        raise ValueError(f"motor order must be {'the ROS joint' if unit == ROS else 'the omx_follower'} order")
+    if not (unit == ROS and sha is None) and not re.fullmatch(r"[0-9a-f]{64}", str(sha)):
         raise ValueError("calibration sha256 required")
-    return {"unit": declaration["unit"], "motor_order": list(MOTORS),
-            "calibration_sha256": declaration["calibration_sha256"]}
+    return {"unit": unit, "motor_order": list(order), "calibration_sha256": sha}
+
+
+def validate_joint_map(verdict, calibration):
+    """A passing D-864 joint map verdict whose register state is the calibration's; returns its revision.
+
+    The calibration's own homing offset and drive mode must be zero, as the verdict found on the motors, so a
+    calibration from another register state (another arm or an earlier one) cannot use this verdict.
+    """
+    if (not isinstance(verdict, dict) or verdict.get("schema") != "rosy.omx-joint-map-check/2"
+            or verdict.get("holds") is not True or not isinstance(verdict.get("probes"), int) or verdict["probes"] < 2):
+        raise ValueError("a passing joint map verdict over two or more probes is required")
+    joints = verdict.get("joints")
+    if (not isinstance(joints, list) or [(j.get("motor_id"), j.get("joint")) for j in joints]
+            != list(zip(MOTOR_IDS, ROS_JOINTS))
+            or any(j.get("holds") is not True or j.get("homing_offset_raw") != 0 or j.get("drive_mode", 1) & 1
+                   for j in joints)):
+        raise ValueError("joint map verdict must hold for motors 11..16 in ROS joint order")
+    validate_calibration(calibration)
+    for motor, motor_id in zip(MOTORS, MOTOR_IDS):
+        entry = calibration[motor]
+        if entry.get("id") != motor_id or entry.get("homing_offset") != 0 or entry.get("drive_mode") != 0:
+            raise ValueError(f"calibration register state for {motor} differs from the joint map verdict")
+    return seal(verdict)["revision"]
 
 
 def _finite(values):
@@ -96,17 +129,29 @@ def _norm_to_rad(values, calibration):
     return out, clipped
 
 
+def _identity(values, calibration):
+    return list(values), 0
+
+
 #: (from_unit, to_unit) -> (converter version, pure function). A changed formula gets a new version.
-CONVERTERS = {(RAD, NORM): (1, _rad_to_norm), (NORM, RAD): (1, _norm_to_rad)}
+#: ros_joint_rad equals dynamixel_rad_v1 per joint once a joint map verdict holds (D-864 §2).
+CONVERTERS = {(RAD, NORM): (1, _rad_to_norm), (NORM, RAD): (1, _norm_to_rad),
+              (ROS, NORM): (1, _rad_to_norm), (NORM, ROS): (1, _norm_to_rad),
+              (ROS, RAD): (1, _identity), (RAD, ROS): (1, _identity)}
 
 
-def convert(values, from_unit, to_unit, calibration):
-    """One frame in omx_follower order -> (values, clipped count, converter version). Never silent: count clips."""
+def convert(values, from_unit, to_unit, calibration, joint_map=None):
+    """One frame in declared order -> (values, clipped count, converter version). Never silent: count clips.
+
+    A conversion to or from ros_joint_rad needs ``joint_map``, a passing verdict bound to ``calibration``.
+    """
     values = _finite(values)
     if from_unit == to_unit and from_unit in UNITS:
         return values, 0, 0
     if (from_unit, to_unit) not in CONVERTERS:
         raise ValueError(f"no converter {from_unit} -> {to_unit}")
+    if ROS in (from_unit, to_unit):
+        validate_joint_map(joint_map, calibration)
     version, fn = CONVERTERS[(from_unit, to_unit)]
     out, clipped = fn(values, validate_calibration(calibration))
     return out, clipped, version
