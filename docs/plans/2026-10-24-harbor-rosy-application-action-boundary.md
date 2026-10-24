@@ -30,7 +30,8 @@
 | [owner 실행](2026-10-24-neutral-arm-owner-design.md) | 내부 복구 74개, v1.305 설치 factory/phase-only IPC 153개·v2 client 15개 별도 회귀 및 독립 검토 | actual admitted-state/HTTP·Fleet producer·물리 종료·Harbor 연결 |
 | [managed owner 권한](2026-10-24-managed-transfer-authority-design.md) | 영속 mode/최종 명령 경계, 집중 119개·affected 1754 passed/34 skipped/0 NEW | 실제 ROS/장치·승인/물리 종료 |
 | [실제 capability/대상 owner](2026-10-24-managed-transfer-capability-design.md) | API v1.306·canonical journal/session·receipt/404 결속, 집중790/0 NEW, FULL표행1NEW 수정 후 entry9 7371 passed/91 skipped/0 NEW(다른22개원본0NEW), 독립 검토 | Fleet physical producer·claim 종료·Harbor ARM |
-| [물리 종료/producer 계획](2026-10-24-neutral-transfer-closure-and-producer-design.md) | 독립 architecture/critic 2회 검토 approve, World 사실/Fleet atomic claim/Harbor 업무 분리와 object origin 기준 명시 | policy·물리 관측·승인/producer·Harbor 연결 구현 |
+| [물리 종료/producer 계획](2026-10-24-neutral-transfer-closure-and-producer-design.md) | 독립 architecture/critic 3회 검토 approve, World 사실/Fleet atomic claim/Harbor 업무 분리와 object origin·실행 전 점유 확인 명시 | policy·물리 관측·승인/producer·Harbor 연결 구현 |
+| [World 물리 관측 자료형](../validation/harbor-physical-observations-2026-10-24/result.md) | source084 불변 raw facts·미측정 속도 None 보존·독립 wheel, World28/affected764 passed·0 NEW | 실제 producer 인증·두 표본 freshness/모델 coverage·Fleet 판정/claims |
 | 전체 P3–P5 | 진행 중 | 중립 팔 실행의 승인/자원 종료, Harbor 공정 변환, 복구·독립성 통합 증거 |
 
 첫 HTTP 증거는 플랫폼 commit `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor commit `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.

@@ -1,8 +1,8 @@
 # D-856 물리 종료 관측과 중립 job producer
 
-**Status:** ralplan 독립 architecture/critic 1차는 frozen commit `5dad5fd6c4`, object pose 기준점 보완의 2차는 frozen commit `ebba429c4c`를 모두 approve했다. source 실행 중 확인한 pre-dispatch occupancy 보완은 3차의 좁은 검토 대상으로 둔다. 이 문서 자체는 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
+**Status:** ralplan 독립 architecture/critic는 frozen commit `5dad5fd6c4`의1차, object pose 기준점 보완 `ebba429c4c`의2차, pre-dispatch occupancy 보완 `b241ef1cc5`의3차를 모두 approve했다. 이견/필수 보완 없음으로 이미 승인된 execution을 진행한다. 계획 승인은 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
 
-단계1의 World raw-facts 부분은 source commit `037c29121f`에서 구현해 World27 passed/skip0·affected763 passed/2 skipped·각0 NEW와 고정 SHA 독립 검토를 확인했다. [검증과 남은 범위](../validation/harbor-physical-observations-2026-10-24/result.md)를 따른다. 아직 producer 인증·freshness/coverage evaluator·claim 해제는 없으며 이후 단계도 미완료다.
+단계1의 World raw-facts는 source commit `037c29121f`에서 구현하고 `0849ce4825`에서 미측정 속도를 None으로 보존했다. 최신 World28 passed/skip0·affected764 passed/2 skipped·각0 NEW와 고정 SHA 독립 검토를 확인했다. [검증과 남은 범위](../validation/harbor-physical-observations-2026-10-24/result.md)를 따른다. 아직 producer 인증·freshness/coverage evaluator·claim 해제는 없으며 이후 단계도 미완료다.
 
 ## 목표와 소유권
 
