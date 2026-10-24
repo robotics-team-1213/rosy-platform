@@ -55,4 +55,10 @@ Fleet의 실제 중립 producer는 기존 two-person 승인과 원장/claim/fenc
 
 receipt 저장과 해당 generation의 claim 해제는 같은 원장 transaction에 둔다. 중복 receipt는 같은 결과를 돌려주며 다른 attempt·오래된 fence·변경된 설치 revision·일부 zone 누락은 해제를 만들지 않는다. 공유 zone은 모든 점유 Action의 종료 증거가 갖춰져야 해제한다. 실패는 HELD, 접수/실행 여부 불명은 UNKNOWN으로 유지하고 기존 조회·복구 절차를 따른다. 앱 재전송·다른 팔 선택이나 TTL 만료로 이를 풀지 않는다.
 
+위 해제 검증은 성공 callback뿐 아니라 **취소·재개·재승인·복구**에도 적용한다. 기존 단일 팔의 `resume`, `cancel`, `_set_claims`, `confirm_step_goal`, 다중 팔의 `_hold_before_send`, `record_action_result`, `confirm_step_goal`, `resume_arm`, `resume`, `cancel`을 시작 목록으로 삼아 실제 claim 삭제 소비자를 전부 추적한다. 현재 Cell의 `cancel`과 `resume_arm`에는 물리 종료 증거 없이 HELD claim을 푸는 경로가 있으므로 새 kind가 이를 그대로 호출하지 못하게 한다. 취소는 작업을 종료할 수 있지만 미검증 물리 점유는 보존한다. 접수 전 무진행 해제도 durable 미접수·이전 점유 없음이 입증된 경우만 허용한다. 기존 Cell 동작은 유지한다.
+
+공유 점유자 계산에는 RUNNING/HOLD뿐 아니라 **동작은 성공했으나 해당 자원의 종료 증거가 없는 Action**도 포함한다. 상태명만 바꿔 공유 zone 점유자를 숨기지 않는다. 실패·부분 완료·재시작·응답 유실 뒤 cancel/resume/reapproval과 완료 미입증 sharer가 있는 경우에도 zone 유지 회귀를 둔다. 새 정책 엔진 대신 불변 설치 조건과 기존 credential/producer registry·evidence 저장·event replay·claim transaction을 사용하는 작은 검증 함수를 둔다.
+
 구현 순서는 (1) 정확한 grant/receipt 모델과 거절 시험, (2) legacy 필수 provenance를 유지하는 원장 migration과 보존 시험, (3) 기존 owner phase runner의 중립 grant 분기 및 복구, (4) 신뢰 종료 증거와 claim transaction, (5) two-person 승인과 simulation HTTP, (6) Harbor CargoMove 변환과 업무 장부 독립 시험이다. 공개 활성화는 여섯 단계가 모두 연결된 뒤에 한다. wire 필드·API 버전은 검토된 모델을 실제 등록할 때 예약한다.
+
+독립 초안 검토는 기존 cancel/resume의 HELD 해제 우회와 성공했지만 종료 미입증인 공유 점유자 누락을 지적했다. 위 두 조건을 활성화 게이트와 회귀 범위에 추가했다. 아직 구현을 검증한 결과는 아니다.
