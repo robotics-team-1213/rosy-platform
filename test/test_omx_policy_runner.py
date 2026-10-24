@@ -87,6 +87,16 @@ def test_mismatched_binding_never_observes_or_submits(fault):
     assert target.sent == []
 
 
+def test_checkpoint_digest_needs_local_files(tmp_path):
+    for missing in (tmp_path / 'lerobot' / 'smolvla_base', tmp_path):
+        with pytest.raises(ValueError):
+            runner.checkpoint_digest(missing)
+    (tmp_path / 'config.json').write_text('{}')
+    first = runner.checkpoint_digest(tmp_path)
+    (tmp_path / 'config.json').write_text('{"a": 1}')
+    assert len(first) == 64 and runner.checkpoint_digest(tmp_path) != first
+
+
 def test_output_must_match_installed_joints():
     assert runner.check_output([0.1, 0.2], ['a', 'b']) == [0.1, 0.2]
     for bad in ([0.1], [0.1, float('nan')]):

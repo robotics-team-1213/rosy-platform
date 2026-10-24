@@ -210,7 +210,10 @@ def checkpoint_digest(path):
     """sha256 over every file's relative path and bytes, so the report names exactly what ran (D-854 §2)."""
     digest = hashlib.sha256()
     root = Path(path)
-    for item in sorted(p for p in root.rglob('*') if p.is_file() and '.cache' not in p.parts):
+    files = sorted(p for p in root.rglob('*') if p.is_file() and '.cache' not in p.parts) if root.is_dir() else []
+    if not files:
+        raise ValueError('a local checkpoint directory with files is required')  # a Hub ID would hash nothing
+    for item in files:
         digest.update(item.relative_to(root).as_posix().encode() + b'\0' + item.read_bytes())
     return digest.hexdigest()
 
@@ -229,6 +232,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.out.exists():
         raise SystemExit('report exists; choose a new path')
+    checkpoint_sha256 = checkpoint_digest(args.checkpoint)
     shapes = {}
     for item in args.camera:
         name, size = item.split('=', 1)
@@ -244,7 +248,7 @@ def main(argv=None):
     report.update(policy_type=adapter.policy_type, n_action_steps=adapter.n_action_steps,
                   saved_n_action_steps=adapter.saved_n_action_steps, use_amp=adapter.use_amp, device=str(device),
                   gpu=torch.cuda.get_device_name(device) if device.type == 'cuda' else None,
-                  checkpoint=str(args.checkpoint), checkpoint_sha256=checkpoint_digest(args.checkpoint),
+                  checkpoint=str(args.checkpoint), checkpoint_sha256=checkpoint_sha256,
                   versions={k: metadata.version(k) for k in ('lerobot', 'torch')}, cameras=shapes,
                   target='synthetic: observe/submit stages exclude CORE and network')
     with args.out.open('x', encoding='utf-8') as stream:
