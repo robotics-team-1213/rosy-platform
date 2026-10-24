@@ -108,6 +108,13 @@ def test_unreachable_target_uses_existing_physical_rejection(kin, profile):
         _check(_service(kin, profile, catalog=_catalog(kin, profile, poses=poses)))
 
 
+def test_clock_reversal_during_planning_is_not_hidden_by_later_recovery(kin, profile):
+    ticks = iter([100.01, 99.9, 100.02])
+    with pytest.raises(TransferPlanRejected) as failure:
+        _check(_service(kin, profile, clock=lambda: next(ticks)))
+    assert failure.value.reason == STATE_INVALID
+
+
 def test_wrong_installed_profile_is_rejected_at_service_construction(kin, profile):
     with pytest.raises(ValueError):
         _service(kin, profile, catalog=_catalog(kin, profile, profile_revision="0" * 64))
