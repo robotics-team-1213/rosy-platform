@@ -8,10 +8,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'deploy/robot/omx'))
-
-
-def module():
-    return importlib.import_module('sim_policy_articulation')
+import sim_policy_articulation as articulation
 
 
 def message(stamp=1_000_000_000):
@@ -21,7 +18,7 @@ def message(stamp=1_000_000_000):
 
 
 def ready_trace():
-    clock=[10.];trace=module().ArticulationCapture(clock=lambda:clock[0])
+    clock=[10.];trace=articulation.ArticulationCapture(clock=lambda:clock[0])
     trace.observe(message());clock[0]=10.02;trace.observe(message(1_020_000_000))
     return trace,clock
 
@@ -68,13 +65,13 @@ def test_frozen_source_does_not_refresh_progress_receipt():
     trace,clock=ready_trace();before=trace.status()['latest_advance_owner_ns']
     clock[0]=11.;trace.observe(message(1_020_000_000))
     assert trace.status()['latest_advance_owner_ns']==before
-    fresh=module().ArticulationCapture(clock=lambda:clock[0])
+    fresh=articulation.ArticulationCapture(clock=lambda:clock[0])
     fresh.observe(message());clock[0]=11.02;fresh.observe(message())
     assert not fresh.ready
 
 
 def test_zero_time_warmup_requires_two_subsequent_positive_stored_stamps():
-    clock=[10.];trace=module().ArticulationCapture(clock=lambda:clock[0])
+    clock=[10.];trace=articulation.ArticulationCapture(clock=lambda:clock[0])
     trace.observe(message(0));clock[0]=10.02;trace.observe(message())
     assert not trace.ready
     clock[0]=10.04;trace.observe(message(1_020_000_000))
@@ -82,7 +79,7 @@ def test_zero_time_warmup_requires_two_subsequent_positive_stored_stamps():
 
 
 def test_storage_limit_marks_capture_incomplete(monkeypatch):
-    m=module();monkeypatch.setattr(m,'MAX_SAMPLES',2)
+    monkeypatch.setattr(articulation,'MAX_SAMPLES',2)
     trace,clock=ready_trace();clock[0]=10.04;trace.observe(message(1_040_000_000))
     doc=trace.finish();assert len(doc['samples'])==2 and doc['summary']['truncated']
     assert doc['summary']['status']=='incomplete'
