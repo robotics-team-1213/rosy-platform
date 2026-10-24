@@ -38,6 +38,7 @@ def test_site_serves_only_explicit_networks(sync):
     config = sync.configuration("site", ["a.example.invalid", "b.example.invalid", "c.example.invalid"], ["192.0.2.0/24"])
     assert "allow 192.0.2.0/24\n" in config
     assert "port 0" not in config and "local " not in config
+    assert "server a.example.invalid iburst minpoll 6 maxpoll 6" in config
 
 
 @pytest.mark.parametrize("role,sources,networks", [
