@@ -129,3 +129,9 @@ from their preserved snapshots; this is an integrity audit, not operating approv
 ## Private Hub 동기화
 
 `hub_sync.py`는 명시적으로 고른 파일만 기존 private 저장소에 올린다. 고정 commit의 재다운로드 해시가 일치해야 receipt를 남긴다. [실행 안내](../../curation/omx/README.md)를 따른다. 모델 loader 검증·배포 승인은 별도다.
+
+`test/test_hub_model_native.py`는 실제 native ACT 6·12관절 모델을 fixture Hub로 왕복한 뒤,
+다운로드한 모델만 새 Python 프로세스의 `native_cycle.py verify`로 읽는다. 저장된 processor가
+빠진 모델도 검사한다. 모델 전송 receipt의 `reader_verified=False`는 유지하며, 이 별도 SDK
+통합 시험은 실제 HF 서비스 전달·모델 품질·장치 실행을 입증하지 않는다. SDK 없는 일반 원격
+시험의 skip과 MODEL PC의 고정 CPU 환경에서 실행한 결과를 구분한다.

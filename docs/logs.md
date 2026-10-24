@@ -10318,3 +10318,21 @@ osy-d395-s1d\`.
 - 변경: native study `pick-place-policy-contact`와 bounded 접촉 수집·종료 검증. [검증 기록](validation/omx-policy-contact-diagnostic-2026-10-24/result.md).
 - 증거: 원격 RED13FAIL 뒤 계약132통과/NEW0, AI4CPU·4GiB·5분의 로봇 없는 실제 SDK1PASS. 양 채널 접촉·유한 nonzero force와 수집 종료·프로세스 부재를 확인했다.
 - gate 변화: 정책 재실행·학습·실물0. 무수신은 unknown이다. CE 미해결 — 기존 정책 추종 실패의 원인은 별도 실제 관측이 필요하다.
+
+## 2026-10-24 · 22081a48da · 동일 모델의 실제 접촉 관측
+
+- 변경: [단일 contact 관측 기록](validation/omx-policy-contact-observation-2026-10-24/result.md). 새 고정 manifest로 calibration1회와 접촉 관측1회만 수행했다.
+- 증거: calibration PASS/96파일, 정책 HOLD/264파일. 172수락 중171정상 뒤 joint4/5 허용오차 실패. 두 손가락–테이블 접촉이 각315개 저장됐고 마지막 goal 구간에 각37개다. source/전체 archive·DB·관측·파생 world·종료를 독립 대조했다.
+- gate 변화: 새 optimizer/formal/실물0·기존 HOLD 유지. CE 미해결 — 접촉은 직접 확인했으나 실패 인과와 실제 runtime 형상·nominal STL 대조는 추가 확인한다.
+
+## 2026-10-24 · uncommitted · D-790 플레이키 후보 백로그의 격리 등록
+
+- 변경: 2026-10-18~24 착지 흐름이 모은 `rosy-flaky-candidates.txt` 53건을 고유 시험으로 중복 제거해 `test/flaky_quarantine.txt`에 22항 등록했다. 삭제된 구 경로 `test_rosy_auto_update.py`의 1건(시험은 D-798 분리로 `test_rosy_auto_update_apply.py`에 존재, 별도 항목으로 등록)은 독립 검토 지적으로 뺐다. 매 항목은 같은 sha에서 스위트 안 실패·단독 재실행 통과를 인용하고 제거 조건·날짜·소유자를 적었다.
+- 증거: 후보 53행 전부 동일 패턴(sha 목록·횟수 항목에 기록). 반복 상위(test_platform_g1_timing 3종·omx_hardware_observer 3파라미터)은 여러 분기·sha에서 재목격돼 분기 결함이 아니다. safety 루트 경로 변경으로 Safety-Review trailer와 독립 검토를 동반했다.
+- gate 변화: 없음. 격리 등록은 재실행 한 번 규칙(D-762 stage 1)을 적용할 뿐 두 번 실패는 여전히 NEW다. CE 해당 없음 — 증거 패턴 분류·서식 작성이며 새 장애 해결이 아니다.
+
+## 2026-10-24 · 3c67e4237e · native ACT 모델의 전송 후 재적재
+
+- 변경: 단독 verify의 필수 checkpoint/processor·링크 검사와 실제6/12관절 모델의 fixture Hub 왕복·새 프로세스 재적재 시험. [검증 기록](validation/native-model-readback-2026-10-24/result.md).
+- 증거: RED5FAIL→GREEN39PASS/SDK2SKIP/NEW0. 별도 고정 CPU SDK 실행은 단일 팔·양팔 각각1PASS/0SKIP·EXIT0, eval3·배열6/12·processor 누락 거부. 회수 모델·payload·readback7파일과 원본/분할 해시를 별도 대조했다.
+- gate 변화: 실제 HF·장치 실행·승격0, 기존 SIM HOLD 유지. CE 새 교훈 — 임시 패키지 prefix가 고정 SDK 환경을 덮을 수 있어 전체 요구 버전을 시험 전에 검사한다.
