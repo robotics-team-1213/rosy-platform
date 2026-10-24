@@ -347,4 +347,3 @@ class LocalStopSnapshot(BaseModel):
         if not _ACTION_ID.fullmatch(value):
             raise ValueError("stop identity must be a trimmed identifier")
         return value
-

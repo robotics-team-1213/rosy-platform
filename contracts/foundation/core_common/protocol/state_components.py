@@ -290,4 +290,3 @@ class SafetyPolicyStatus(BaseModel):
     sources: dict[str, str] = Field(default_factory=dict)
     shadow: Optional[SafetyShadowStatus] = None
     hold: Optional[SafetyPolicyHold] = None  # enforce only
-
