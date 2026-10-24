@@ -90,6 +90,9 @@ SCOPE: dict[str, list[str]] = {
     "learning/curation/perception/review_app_web/account-session.js": LEARNING,
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING for name in
        ("omx.html", "omx.js", "omx-profiles.js", "omx-review.js")},
+    # Their rail and sub-menu are walked by the OMX owner-status and stage browser tests.
+    **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STAGES for name in
+       ("catalog.html", "camera.html")},
     "learning/curation/perception/omx_web.py": OMX_LEARNING,
     "learning/curation/perception/omx_center_web.py": OMX_LEARNING,
     "learning/training/omx/": OMX_LEARNING + TASKS,
@@ -107,7 +110,8 @@ SCOPE: dict[str, list[str]] = {
     **{f"learning/curation/perception/{name}": STAGES for name in
        ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
         "review_app_web/vlm.css", "review_app_web/evaluate.html", "review_app_web/evaluate.js",
-        "review_app_web/workspaces.html", "review_app_web/workspaces.js")},
+        "review_app_web/workspaces.js")},
+    "learning/curation/perception/review_app_web/workspaces.html": OMX_LEARNING + STAGES,
     **{f"learning/curation/perception/{name}": ACCOUNTS for name in
        ("learning_accounts.py", "learning_collaboration.py", "learning_oauth.py", "learning_rosy_accounts.py",
         "review_app_web/accounts.html", "review_app_web/accounts.js")},

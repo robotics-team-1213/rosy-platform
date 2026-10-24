@@ -21,6 +21,7 @@ def write(tmp_path, workspaces, schema='rosy.learning.workspace-links/1', **extr
 
 def test_valid_file_loads_every_kind(tmp_path):
     rows = [ROW, dict(ROW, id='v13-eval', kind='evaluation', url='http://eval.example/'),
+            dict(ROW, id='v13-upper', url='HTTPS://Learning.Example/learning'),
             {'id': 'dataset-937', 'label': '937장 검수', 'url': 'https://review.example', 'kind': 'review'}]
     assert load_workspace_links(write(tmp_path, rows)) == rows
 
@@ -47,6 +48,9 @@ def test_valid_file_loads_every_kind(tmp_path):
     ({'workspaces': [dict(ROW, url='https://learning.example/#top')]}, 'url'),
     ({'workspaces': [dict(ROW, url='https://learning.example:99999/')]}, 'url'),
     ({'workspaces': [dict(ROW, url='https://learning.example/ x')]}, 'url'),
+    ({'workspaces': [dict(ROW, url=r'https://learning.example\@evil.example/')]}, 'url'),  # browsers read \ as /
+    ({'workspaces': [dict(ROW, url=r'https:\\evil.example/')]}, 'url'),
+    ({'workspaces': [dict(ROW, url=r'https://learning.example/a\b')]}, 'url'),
     ({'workspaces': [dict(ROW, url='https://learning.example/' + 'a' * 300)]}, 'url'),
 ])
 def test_each_rejection(tmp_path, change, message):

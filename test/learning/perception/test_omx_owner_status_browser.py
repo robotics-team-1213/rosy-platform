@@ -212,7 +212,7 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                     opened(f':is(.ui-subnav-nav, .review-kinds) a[href="{sub}"]', sub)
                     reached.add(sub)
             assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/learning/omx', '/learning/vlm',
-                               '/learning/tasks', '/learning#pipeline', '/learning/sim'}
+                               '/learning/tasks', '/learning#pipeline', '/learning/sim', '/learning/workspaces'}
             assert not errors
         finally:
             browser.close()

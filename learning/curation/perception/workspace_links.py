@@ -39,7 +39,7 @@ def check_workspace_links(value):
         except ValueError:
             parts = None
         if (parts is None or parts.scheme not in ('http', 'https') or not parts.hostname or '@' in parts.netloc
-                or '#' in url or len(url) > 300 or any(c.isspace() or not c.isprintable() for c in url)):
+                or '#' in url or '\\' in url or len(url) > 300 or any(c.isspace() or not c.isprintable() for c in url)):
             raise ValueError(f'workspace {row["id"]}: url must be http(s) with a host, no credentials or fragment, at most 300 characters')
     return rows
 
