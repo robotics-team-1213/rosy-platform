@@ -7,9 +7,11 @@ What the hardware can break is the register state the motors apply before Presen
 homing offset or the reverse bit. This tool checks only that, from read-only register_probe.py outputs taken
 with no driver running (the vendor driver writes EEPROM and enables torque on start, so it is not used here).
 It does not show that the physical zero matches the URDF zero.
-Exit 0: every probe agrees and the hypothesis holds; 3: it does not; 2: invalid input.
+The verdict names the arm and each probe file's sha256; a converter must check that binding.
+Exit 0: every probe (two or more) agrees and the hypothesis holds; 3: it does not; 2: invalid input.
 """
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -34,10 +36,12 @@ def motors(probe):
     return rows
 
 
-def check(probes, *, still_ticks=4):
-    """Pure comparison over one or more probes of a resting arm; returns the verdict document."""
-    if not probes:
-        raise ValueError('at least one probe required')
+def check(probes, *, still_ticks=4, arm=None, probe_sha256=()):
+    """Pure comparison over two or more probes of a resting arm; returns the verdict document."""
+    if len(probes) < 2:
+        raise ValueError('at least two probes required: one snapshot cannot show the arm and registers held still')
+    if not isinstance(arm, str) or not arm.strip():
+        raise ValueError('the probed arm identity is required (by-id path or calibration revision)')
     readings = [motors(probe) for probe in probes]
     rows, holds = [], True
     for motor_id, joint in JOINTS.items():
@@ -59,18 +63,22 @@ def check(probes, *, still_ticks=4):
         holds &= not reasons
     return dict(schema='rosy.omx-joint-map-check/2', hypothesis='ros_joint_rad == dynamixel_rad_v1',
                 proves='register state only; physical zero vs URDF zero is not checked',
-                probes=len(probes), still_ticks=still_ticks, holds=holds, joints=rows)
+                arm=arm, probes=len(probes), probe_sha256=list(probe_sha256), still_ticks=still_ticks,
+                holds=holds, joints=rows)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('probes', type=Path, nargs='+', help='register_probe.py JSON outputs of a resting arm')
+    parser.add_argument('probes', type=Path, nargs='+', help='two or more register_probe.py JSON outputs of a resting arm')
+    parser.add_argument('--arm', required=True, help='probed follower: /dev/serial/by-id path or calibration revision')
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.out.exists():
             raise ValueError('verdict exists; choose a new path')
-        verdict = check([json.loads(path.read_text(encoding='utf-8')) for path in args.probes])
+        raw = [path.read_bytes() for path in args.probes]
+        verdict = check([json.loads(data.decode('utf-8')) for data in raw], arm=args.arm,
+                        probe_sha256=[hashlib.sha256(data).hexdigest() for data in raw])
         with args.out.open('x', encoding='utf-8') as stream:
             json.dump(verdict, stream, indent=2)
     except (OSError, ValueError, AttributeError, TypeError) as exc:

@@ -22,8 +22,11 @@ def probe(raw=RAW, change=None):
     return {'motors': rows}
 
 
+ARM = '/dev/serial/by-id/usb-follower'
+
+
 def test_hypothesis_holds_on_clean_registers():
-    verdict = check_map.check([probe(), probe()])
+    verdict = check_map.check([probe(), probe()], arm=ARM)
     assert verdict['holds'] and all(row['holds'] for row in verdict['joints'])
     # Independent of the code's formula: 2048 ticks is 0 rad, 1024 is -pi/2 (vendor model unit, offset -pi).
     assert verdict['joints'][0]['ros_rad'] == pytest.approx(0.0)
@@ -36,18 +39,18 @@ def test_hypothesis_holds_on_clean_registers():
     (probe({**RAW, 13: 3005}), 'moved_between_probes'),
 ])
 def test_changes_between_probes_are_named(second, reason):
-    verdict = check_map.check([probe(), second])
+    verdict = check_map.check([probe(), second], arm=ARM)
     assert not verdict['holds'] and any(reason in row['reasons'] for row in verdict['joints'])
 
 
 def test_still_tolerance_boundary():
-    assert check_map.check([probe(), probe({**RAW, 13: 3004})])['holds']
+    assert check_map.check([probe(), probe({**RAW, 13: 3004})], arm=ARM)['holds']
 
 
 @pytest.mark.parametrize('change,reason', [({16: {'homing_offset_raw': -50}}, 'homing_offset_nonzero'),
                                            ({12: {'drive_mode': 5}}, 'reverse_bit_set')])
 def test_register_state_breaks_the_hypothesis(change, reason):
-    verdict = check_map.check([probe(change=change)])
+    verdict = check_map.check([probe(change=change), probe(change=change)], arm=ARM)
     assert not verdict['holds'] and any(reason in row['reasons'] for row in verdict['joints'])
 
 
@@ -57,11 +60,15 @@ def test_main_exit_codes(tmp_path):
         path.write_text(json.dumps(doc))
         return str(path)
     good, bad = write('a.json', probe()), write('b.json', probe(change={12: {'drive_mode': 5}}))
-    assert check_map.main([good, good, '--out', str(tmp_path / 'ok.json')]) == 0
-    assert json.loads((tmp_path / 'ok.json').read_text())['holds'] is True
-    assert check_map.main([bad, '--out', str(tmp_path / 'no.json')]) == 3
-    assert check_map.main([good, '--out', str(tmp_path / 'ok.json')]) == 2  # never replaces a verdict
+    arm = ['--arm', ARM]
+    assert check_map.main([good, good, *arm, '--out', str(tmp_path / 'ok.json')]) == 0
+    verdict = json.loads((tmp_path / 'ok.json').read_text())
+    assert verdict['holds'] is True and verdict['arm'] == ARM and len(verdict['probe_sha256']) == 2
+    assert check_map.main([bad, bad, *arm, '--out', str(tmp_path / 'no.json')]) == 3
+    assert check_map.main([good, good, *arm, '--out', str(tmp_path / 'ok.json')]) == 2  # never replaces a verdict
+    assert check_map.main([good, *arm, '--out', str(tmp_path / 'one.json')]) == 2  # one snapshot is not enough
     failed_probe = write('failed.json', {'error': 'busy'})  # register_probe output without motors
-    assert check_map.main([failed_probe, '--out', str(tmp_path / 'f.json')]) == 2
-    with pytest.raises(ValueError):
-        check_map.check([])
+    assert check_map.main([failed_probe, failed_probe, *arm, '--out', str(tmp_path / 'f.json')]) == 2
+    for probes, who in (([probe()], ARM), ([probe(), probe()], ' ')):
+        with pytest.raises(ValueError):
+            check_map.check(probes, arm=who)
