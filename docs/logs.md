@@ -9621,3 +9621,9 @@ osy-d395-s1d\`.
 - 변경: 40rem 이상에서 `/`·`/pixels`의 정답 메뉴를 제목과 다른 격자 칸에 두어 제목을 덮지 않게 하고 768 px 비겹침 브라우저 시험을 더했다. 30rem 미만 편집기 제목 줄의 위아래 여백을 없애고 줄 높이를 줄였다. 휴대폰 「로그인·계정」 아이콘에 `title` 툴팁을 달고 D-741 끝에 그 규칙(D-683 참조) 부기를 더했다. review-app.md에 휴대폰의 보이는 순서와 초점 순서 차이를 적고, 교훈의 `curl -w` 예를 한 줄로 고쳤다.
 - 증거: 시험 PC 측정 사진 위쪽 390×800 `/` 307.6·`/pixels` 302.0 px(이전 319.6·314.0), 1280×720 281.6·284.0 px 그대로.
 - gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 판단이 없다.
+
+## 2026-10-24 · uncommitted · Rosy Learning 센터의 작업 공간 목록 (D-857 §2)
+
+- 변경: `review_app.py --workspace-links <private-json>`(`rosy.learning.workspace-links/1`)을 더했다. 검사는 `workspace_links.py`가 시작할 때 한다(schema·20개·id·label·note·kind·http(s) url·일반 파일 64 KiB). 하나라도 어긋나면 시작하지 않는다. `GET /api/learning/workspaces`는 `{configured, workspaces}`를 주고 협업 모드에서는 `view`가 필요하다. 자료 하위 메뉴에 「작업 공간」 `/learning/workspaces`를 더했다. 이 화면은 이 센터를 맨 앞에 두고, 연결한 작업 공간마다 종류 표지·메모·같은 탭 「열기」 링크를 보인다. `review-app.md`에 설정 예와 bridge 설정 변경 시 새 `--out`이 필요하다는 문장을 더했다.
+- 증거: 원격 시험 PC에서 집중 시험(브라우저 포함, 1280·390 px) 97개가 통과했다. affected 계층은 2799 passed, 315 skipped였고 known_failures 비교는 0 NEW다. 첫 affected 실행은 `review_app.py` 600줄 한도(D-766 2)에 걸렸고, 검사를 별도 모듈로 옮겨 고쳤다.
+- gate 변화: 없음. 모델 PC의 비공개 링크 파일 작성과 운영 센터 재시작은 별도다. CE 해당 없음 — 평범한 기능 추가이고 줄 수 한도는 시험이 이미 잡는다.
