@@ -1,6 +1,6 @@
 # D-856 중립 팔 실행: 물리 결속·권한·원장
 
-**Status:** 실행 계약 초안. 먼저 아래 물체–기하 결속의 내부 데이터 경계를 검토·구현한다. 새 공개 submit path·API 버전·dispatch kind는 아직 등록하지 않는다. [전체 계획](2026-10-24-harbor-rosy-application-action-boundary.md), [완료한 grant 검증 경계](2026-10-24-step-grant-boundary-design.md)를 잇는다.
+**Status:** 실행 계약 초안. 아래 물체–기하 결속의 내부 데이터 경계는 구현·독립 검토·원격 회귀를 마쳤다. 새 공개 submit path·API 버전·dispatch kind는 아직 등록하지 않는다. [전체 계획](2026-10-24-harbor-rosy-application-action-boundary.md), [완료한 grant 검증 경계](2026-10-24-step-grant-boundary-design.md)를 잇는다.
 
 ## 현재 소스에서 이어받을 경로
 
@@ -29,6 +29,10 @@ constructor는 모든 참조를 기존 public physical-ref 문자열 규칙으�
 
 ## 다음 실행 계약에서 닫아야 할 항목
 
+### 내부 결속 구현 증거
+
+commit `4ebbf08576`의 공식 원격 RED는 누락 모듈로 14 failed였다. commit `d0d7f4616d`의 결속·사전검사·기존 pose/Cell acceptance 회귀는 **112 passed, skip0, 0 NEW**다. 독립 검토에서 불변 map·canonical revision·기하 선택권·거절 경계의 material finding은 없었다. 로그는 저장소 밖 `rosy-transfer-object-bindings-red`와 `rosy-transfer-object-bindings-green`에 보존한다. 실제 소비자·물체 관측·attempt 결속과 실행 승인의 증거는 아니다.
+
 새 ARM_TRANSFER는 같은 mission/step/action/attempt·시간·epoch/generation envelope와 canonical complete-grant digest를 사용하되 payload에는 위 물리 참조만 둔다. Cell recipe/cell/process 값을 다른 digest로 채워 이름만 바꾸지 않는다. default owner·미설치 결속·미지원 profile에서는 접수 전에 거절한다. phase runner만 허용하고 shared control admission·held-object·stop/fence를 우회하지 않는다.
 
 기존 fleet_cell_jobs는 legacy metadata NOT NULL과 Cell 생성 검증을 갖는다. 중립 producer를 넣기 전 legacy provenance와 중립 물리 provenance를 구분하는 schema migration을 설계한다. 기존 row·step·FK·mirror trigger·grant/event·claim·UNKNOWN 상태를 보존하는 atomic migration과 회귀가 필요하다. 공통 시작 검증을 분리한 사실이 중립 DB 생성의 구현 증거는 아니다.
@@ -38,3 +42,17 @@ constructor는 모든 참조를 기존 public physical-ref 문자열 규칙으�
 Fleet의 실제 중립 producer는 기존 two-person 승인과 원장/claim/fence/불명 조회를 재사용한다. 자원 목록은 설치 설정에서 결정하고 앱은 줄이거나 바꾸지 못한다. 응답 유실 뒤 새 요청·다른 팔 재배정·claim 해제가 없다. 다른 최소 HTTP 소비자와 Harbor의 실제 CargoMove 변환을 모두 연결하고, 동작 성공만 있는 경우 업무 장부가 진행되지 않는 독립 시험을 유지한다.
 
 공개 submit의 활성화 조건은 물리 결속·owner capability/phase runner·원장/승인/복구·자원 해제 계약과 HTTP 통합 증거가 모두 준비되는 것이다. 실물 활성화·배포·push는 별도 범위다.
+
+## 실행·자원 종료 계약 제안 — 독립 검토 전
+
+기존 claim 경로는 두 가지다. 단일 팔 `CellJobStore.confirm_step_goal`은 별도 goal evidence 뒤 최종 Job claim을 해제한다. 다중 팔 `cell_arm_claims.release_succeeded`는 장치 성공 뒤 자신의 arm/zone key를 해제하되 다른 미완료 Action과 공유하는 key는 유지한다. Job-level claim은 이 함수가 건드리지 않는다. 앞의 ACTION_SUCCEEDED/CLAIMED 설명은 단일 팔 Job 경로를 가리킨다. 새 kind를 다중 팔 성공 callback에 등록하는 것만으로는 아래의 물리 자원 종료 검증이 생기지 않는다.
+
+중립 동작은 앱의 화물 도착·하역 완료를 조건으로 삼지 않는다. ROSY는 물체 참조의 목표 위치 관측과 그리퍼 해제, 설치된 자원별 안전 위치/정지 조건을 검증해 물리 실행 receipt를 만든다. Harbor는 이 receipt와 별도 업무 관측으로 자신의 장부를 진행한다. 앱의 업무 완료 요청은 ROSY claim 해제 입력이 아니다.
+
+설치 설정은 해당 팔의 arm/zone 자원과 종료 정책을 함께 고정한다. 승인된 grant는 물체·두 catalog/binding digest·source/target뿐 아니라 그 설치 자원 정책 revision에도 결속한다. 요청자가 자원 목록·종료 허용 영역·관측 producer를 고르지 못한다. 종료 정책이 없거나 현재 revision이 다르면 pre-dispatch에서 거절한다.
+
+물리 성공만으로 모든 zone이 비었다고 보지 않는다. 자원별 종료 증거는 동일 action/attempt·dispatch generation·authority epoch·설치 revision·owner journal에 결속하고, 완료 이후의 신선한 관측이어야 한다. arm은 실행 종료와 정지/열린 그리퍼/held-object 없음이 필요하다. zone은 추가로 승인된 전체 팔 링크 영역 이탈 증거가 필요하다. TCP 위치나 home 목표 도달만으로 대체하지 않는다. simulation에서도 전체 링크의 영역 관계를 제공하는 신뢰 producer가 없으면 zone을 유지한다. 단순 합성 joint-state 시험은 전체 링크 물리 검증의 증거로 기록하지 않는다.
+
+receipt 저장과 해당 generation의 claim 해제는 같은 원장 transaction에 둔다. 중복 receipt는 같은 결과를 돌려주며 다른 attempt·오래된 fence·변경된 설치 revision·일부 zone 누락은 해제를 만들지 않는다. 공유 zone은 모든 점유 Action의 종료 증거가 갖춰져야 해제한다. 실패는 HELD, 접수/실행 여부 불명은 UNKNOWN으로 유지하고 기존 조회·복구 절차를 따른다. 앱 재전송·다른 팔 선택이나 TTL 만료로 이를 풀지 않는다.
+
+구현 순서는 (1) 정확한 grant/receipt 모델과 거절 시험, (2) legacy 필수 provenance를 유지하는 원장 migration과 보존 시험, (3) 기존 owner phase runner의 중립 grant 분기 및 복구, (4) 신뢰 종료 증거와 claim transaction, (5) two-person 승인과 simulation HTTP, (6) Harbor CargoMove 변환과 업무 장부 독립 시험이다. 공개 활성화는 여섯 단계가 모두 연결된 뒤에 한다. wire 필드·API 버전은 검토된 모델을 실제 등록할 때 예약한다.
