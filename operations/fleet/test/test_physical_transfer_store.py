@@ -224,13 +224,14 @@ def test_migration_adds_physical_tables_preserves_legacy_and_old_host_refuses_ne
     path = legacy_database(tmp_path)
     before = snapshot(path)
     api().PhysicalTransferStore(path, installation=installation, deployment_profile="simulation")
-    assert snapshot(path) == {**before, "fleet_physical_transfer_approvals": [], "fleet_physical_transfer_attempts": []}
+    assert snapshot(path) == {**before, "fleet_physical_transfer_approvals": [], "fleet_physical_transfer_attempts": [],
+                              "fleet_physical_transfer_observations": []}
     with closing(connect(path)) as connection:
         assert not connection.execute("PRAGMA foreign_key_check").fetchall()
-        assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 7
+        assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 8
     module = import_module("fleet.server.cell_job_store")
     monkeypatch.setattr(module, "_MIGRATION_VERSION", 5)
-    with pytest.raises(RuntimeError, match="unsupported.*7"):
+    with pytest.raises(RuntimeError, match="unsupported.*8"):
         CellJobStore(path)
 
 

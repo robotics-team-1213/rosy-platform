@@ -6,7 +6,8 @@ from uuid import uuid4
 from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from core_common.resource_keys import normalize_resources
 from .mission_store import MissionConflict, _json
-from .physical_transfer_evidence import TransferEvidenceContext, TransferOwnerTarget
+from .physical_transfer_evidence import TransferEvidenceContext, TransferOwnerTarget, validate_transfer_observations
+from .physical_transfer_observations import record
 from .physical_transfer_store import PhysicalTransferRequest
 from .step_action_kinds import step_grant_digest
 
@@ -103,3 +104,33 @@ class PhysicalTransferExecution:
             result = self._view(row, job)
             connection.commit()
             return result
+
+    def authorize_submission(self, mission_id, *, expected_request_digest, observations,
+                             authenticated_producer_id, capabilities, capabilities_observed_at_ns):
+        store = self.store
+        with closing(store._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            now_ns = store._now_ns()
+            job = self._ready(connection, mission_id, capabilities, capabilities_observed_at_ns, now_ns)
+            row = connection.execute("SELECT * FROM fleet_physical_transfer_attempts WHERE mission_id=?", (mission_id,)).fetchone()
+            if row is None or row["status"] != "PREPARED":
+                raise MissionConflict("first send requires the durable prepared attempt")
+            result = self._view(row, job)
+            grant = FleetArmTransferGrant.model_validate(result["grant"])
+            if (expected_request_digest != grant.request_digest or now_ns < row["prepared_at_ns"]
+                    or not grant.issued_at <= datetime.fromtimestamp(now_ns / 1e9, timezone.utc) < grant.expires_at):
+                raise MissionConflict("physical first-send grant changed or expired")
+            context = TransferEvidenceContext.model_validate_json(_json(result["context"]))
+            validate_transfer_observations(store.installation.policy, context, observations,
+                now_ns=now_ns, authenticated_producer_id=authenticated_producer_id)
+            record(connection, mission_id=mission_id, grant=grant, context=context,
+                   observations=observations, validated_at_ns=now_ns)
+            connection.execute("UPDATE fleet_physical_transfer_attempts SET status='SUBMITTING' WHERE mission_id=?", (mission_id,))
+            connection.execute("UPDATE fleet_cell_jobs SET status='RUNNING',updated_at=? WHERE mission_id=?",
+                (datetime.fromtimestamp(now_ns / 1e9, timezone.utc).isoformat(), mission_id))
+            connection.execute("UPDATE fleet_action_claims SET phase='DISPATCHING' WHERE owner_kind='mission' AND owner_id=?", (mission_id,))
+            store._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_SUBMITTING", "fleet",
+                dict(action_id=grant.action_id, attempt_id=grant.attempt_id, request_digest=grant.request_digest,
+                     preconditions_validated_at_ns=now_ns))
+            connection.commit()
+            return {**result, "status": "SUBMITTING"}

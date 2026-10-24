@@ -107,9 +107,9 @@ def test_old_host_rejects_prepared_journal_before_changing_any_table(rig, monkey
     job = admit(store, create(store), control)
     prepare(execution(store), job["mission_id"], store)
     module = import_module("fleet.server.cell_job_store")
-    monkeypatch.setattr(module, "_MIGRATION_VERSION", 6)
+    monkeypatch.setattr(module, "_MIGRATION_VERSION", 7)
     before = claims(path)
-    with pytest.raises(RuntimeError, match="version 7"):
+    with pytest.raises(RuntimeError, match="version 8"):
         CellJobStore(path)
     assert claims(path) == before
 

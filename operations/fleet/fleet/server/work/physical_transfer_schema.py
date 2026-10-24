@@ -24,6 +24,16 @@ def ensure(connection):
         status TEXT NOT NULL CHECK(status IN ('PREPARED','SUBMITTING','ACTION_SUCCEEDED','HOLD','UNKNOWN')),
         CHECK(step_id!=action_id AND step_id!=attempt_id AND action_id!=attempt_id)
     )""")
+    connection.execute("""CREATE TABLE IF NOT EXISTS fleet_physical_transfer_observations (
+        mission_id TEXT NOT NULL REFERENCES fleet_physical_transfer_attempts(mission_id),
+        phase TEXT NOT NULL CHECK(phase IN ('PRE_DISPATCH','POST_ACTION')),
+        record_id TEXT NOT NULL UNIQUE,
+        request_digest TEXT NOT NULL CHECK(length(request_digest)=64),
+        evidence_digest TEXT NOT NULL CHECK(length(evidence_digest)=64),
+        evidence_json TEXT NOT NULL,
+        validated_at_ns INTEGER NOT NULL CHECK(validated_at_ns>=0),
+        PRIMARY KEY(mission_id,phase)
+    )""")
 
 
 def hold_for_site_stop(connection, *, now, reason, event):

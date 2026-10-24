@@ -112,3 +112,38 @@ def test_observation_or_event_sql_failure_rolls_back_proof_parent_attempt_and_cl
     with connect(path) as connection:
         assert connection.execute("SELECT status FROM fleet_physical_transfer_attempts").fetchone()[0] == "PREPARED"
         assert connection.execute("SELECT COUNT(*) FROM fleet_physical_transfer_observations").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("final_ns", [NOW + 340_000_000, NOW + 1_100_000_000, NOW + 20_000_000_000])
+def test_final_send_check_rejects_clock_regression_stale_facts_and_expiry(prepared, monkeypatch, final_ns):
+    path, _, store, _, job, _ = prepared
+    original = store._document
+    def advance_during_snapshot_check(request):
+        store._clock_ns = lambda: final_ns
+        return original(request)
+    monkeypatch.setattr(store, "_document", advance_during_snapshot_check)
+    before = claims(path)
+    with pytest.raises((MissionConflict, ValueError)):
+        authorize(prepared)
+    assert claims(path) == before
+    assert store.get(job["mission_id"], principal=PROPOSER)["status"] == "READY"
+    with connect(path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM fleet_physical_transfer_observations").fetchone()[0] == 0
+
+
+def test_caller_list_mutation_cannot_replace_the_facts_validated_and_persisted(prepared, monkeypatch):
+    from importlib import import_module
+    import json
+    path, _, store, _, _, row = prepared
+    caller_samples = list(observations(store, row))
+    module = import_module("fleet.server.physical_transfer_execution")
+    real_validate = module.validate_transfer_observations
+    def mutate_after_validation(*args, **kwargs):
+        result = real_validate(*args, **kwargs)
+        caller_samples[0] = replace(caller_samples[0], object_pose=store.installation.policy.target_pose)
+        return result
+    monkeypatch.setattr(module, "validate_transfer_observations", mutate_after_validation)
+    assert authorize(prepared, observations=caller_samples)["status"] == "SUBMITTING"
+    with connect(path) as connection:
+        proof = json.loads(connection.execute("SELECT evidence_json FROM fleet_physical_transfer_observations").fetchone()[0])
+        assert proof["samples"][0]["object_pose"]["position_m"] == list(store.installation.policy.source_pose.position_m)
