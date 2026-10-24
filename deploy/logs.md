@@ -3392,3 +3392,9 @@
 - 변경: D-863 network-only agent·AP HTTPS 복구·장치 결속 첫 부팅 인계, bridge/기능 릴리스 discovery와 signed boot catalog/inverse를 연결했다. 전역 claim과 radio lock, 실제 연결 관측, 비밀 없는 재접속 작업 조회를 사용한다.
 - 증거: [검증 기록](../docs/validation/device-network-recovery-2026-10-24/result.md). 경계 332, 업데이트/화면 680, 설치 격리 41, opt-in 브라우저 10 passed. 선택별 중복이 있어 합산하지 않는다. 원격 skip 60은 미검증이며 PowerShell inverse 실패 중단은 별도 mock 실행했다. 독립 검토의 deferred reconcile·fallback claim·부팅 복구 오류 전파를 회귀로 보완한다.
 - gate 변화: SOURCE 근거 추가. signed ARM64 산출물·Pinky 무선/TLS 등록·정전/재부팅·OTA DEVICE/FIELD 수용은 미실시이며 배포하지 않았다. CE: 기존 첫 부팅 Wi-Fi 교훈 갱신, 호스트 회귀와 실물을 구분했다.
+
+## 2026-10-25 · uncommitted · 여러 Pinky 카드의 사전 용량 확인과 결과 보존
+
+- 변경: 순차 SD 준비는 카드 검색 전에 자동 번호 40–49의 여유를 요청 장수와 비교하고, 카드별 번호·장치명·UUID 재사용과 공통 이미지 checksum 변경을 작성기 앞에서 거부한다. 비밀값 없이 batch.json에 검증 완료·미확인 수와 카드별 증거 경로를 보존한다.
+- 증거: 실제 Windows PowerShell에서 가짜 디스크·서명·분리 작성기를 사용하는 기존 두 자체 점검을 실행했다. 번호 부족 red→green, 3장 순차 완료, 식별자 중복 3종, 작성기·readback·영수증 식별자·등록부 실패, 두 번째 카드 취소와 단일 PrepareOnly/Configure 경로를 확인했다.
+- gate 변화: SOURCE 운영 도구 보강이며 실물 쓰기·부팅·장치 수용은 하지 않았다. CE: 해당 없음 — 원인과 방지책이 코드·회귀 시험·운영 절차에 직접 드러난다.

@@ -11104,6 +11104,7 @@ osy-d395-s1d\`.
 - 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
 
 - 변경: ADR D-865(정책 승인 — 승인 범위 안 작업 자동 승인, Proposed), [실행 설계](plans/2026-10-25-fleet-policy-admission-design.md), [업무 앱 지원 계약](reference/application-contract-support.md)에 Harbor 용어 대응표·승인 권한 소유 절 추가, ADR Log 행.
@@ -11118,4 +11119,12 @@ osy-d395-s1d\`.
 - 증거: origin 커밋 120개의 추가 줄을 병합 트리와 대조해 빠진 것만 골랐다. 장치 코드(dynamixel_port, update_status)는 origin과 같다. lint 0 error. 원격 시험은 land.py 결과를 따른다.
 - gate 변화: 없음. GitHub 저장소 병합 방식과 ruleset 변경은 게시 때 따로 적용한다.
 - 결정: D-868 Accepted.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
+
+- 변경: [FLEET SRS](spec/ROSY FLEET SRS.md)에 MSN-008(정책 승인, D-865 설계 단계) 신설, MSN-006·MSN-007·UI-WORK-001에 정책 승인 관계 문장 추가, D-865 실행 설계 P0 상태 표시.
+- 증거: 미실행 — 요구사항 문서 변경. lint·generate는 커밋 전 실행으로 확인. 근거: D-865(Proposed, main 착지)와 사용자 2026-10-25 방향 확정.
+- gate 변화: 없음. 설계 단계 표기이며 구현·활성화가 아니다.
+- 결정: D-865 P0 산출물.
 - 교훈: 없음

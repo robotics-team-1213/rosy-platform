@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 여러 Pinky 카드의 사전 용량 확인과 결과 보존
 - 2026-10-24 · c60d6046bb · 장치 Wi-Fi 복구와 서명 boot 계층 연속성
 - 2026-10-24 · uncommitted · 서명된 review payload의 OMX action-space 의존성 포함
 - 2026-10-24 · fe0519eea1 · 공용·내부 NTP polling과 Windows 최신성
 - 2026-10-24 · c50c268c1410 · 공통 NTP 시간원 선택과 정밀도 수용 분리
-- 2026-10-24 · 528962cb8d · 공통 NTP Windows 실제 적용과 workgroup 트리거
