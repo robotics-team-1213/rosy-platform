@@ -1,6 +1,6 @@
 # D-856 managed physical owner 검증
 
-소스: `69607b2b0dc3ca62bd1e5f65764b10766f808f16`. 명시적으로 선택한 새 프로파일에만 적용하며 기본 Cell/Pilot 설정은 바꾸지 않는다. journal schema3에 owner/policy/journal identity를 영속 결속하고, 같은 admission·journal·grant·phase·최종 owner에 연결된 synchronous command만 허용한다. TTL/재시작으로 unmanaged로 돌아가지 않는다.
+소스 commit: `69607b2b0dc3ca62bd1e5f65764b10766f808f16`. 명시적으로 선택한 새 프로파일에만 적용하며 기본 Cell/Pilot 설정은 바꾸지 않는다. journal schema3에 owner/policy/journal identity를 영속 결속하고, 같은 admission·journal·grant·phase·최종 owner에 연결된 synchronous command만 허용한다. TTL/재시작으로 unmanaged로 돌아가지 않는다.
 
 ## 고정 SHA 증거
 
@@ -11,6 +11,8 @@
 - e26→696의 공식 affected 선택은 `affected`, 한 invocation이다. `rosy-managed-arm-affected/run-1.txt`는 1729 passed/36 skipped/1 failed, **1 NEW**였다. test helper 두 곳의 `setup` 이름이 저장소의 nose 호환성 guard에 걸렸다. 호출부까지 `_setup`으로 변경했으며 전체 선택 재실행 전이다. 이 집중 결과를 전체 affected 통과로 대체하지 않는다.
 
 ## 실패 이력
+
+후속 test/docs commit `114bb18834`의 전체 선택은 1751 passed/34 skipped/3 NEW였다. 생성 목차 미동기화가 두 guard를 실패시켰고, 검증 문서의 전체 소스 hash에 `commit` 표기가 없어 secret scanner가 불투명 token으로 분류했다. 생성기와 동일한 목차로 맞추고 공개 소스 commit임을 명시했다. scanner 예외나 guard를 완화하지 않았다. 수정 후 전체 선택 검증은 별도로 기록한다.
 
 `ed5eecc216`의 미구현 admission은 공식 RED 4 failed/1 passed였다. 첫 기능 SHA `e4b2c6c3c0`는 117 passed/1 failed/1 skipped였다. 실패는 새 시험의 수기 owner 설정에 rate limit이 없었던 것이며 설치 profile의 `arm_command_config`를 재사용하도록 고쳤다. 같은 실행의 ROS runtime module은 `rclpy` 부재로 skip됐고 실제 native ROS 수용의 증거가 아니다.
 
