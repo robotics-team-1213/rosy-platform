@@ -843,8 +843,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_channel_feature(
         app, config=channel_config, task_service=task_service, principals=principals, site_logins=site_logins,
         require_operator=require_operator, require_named_operator=require_named_operator, read_guard=read_guard,
-        console=console, existing_tokens=other_tokens,
-        secret_owners=(sightings, policy_evidence), proposals=proposal_store, proposal_create=proposal_create,
+        existing_tokens=other_tokens + ((arm_transfer_observer.token,) if arm_transfer_observer else ()),
+        console=console, secret_owners=(sightings, policy_evidence), proposals=proposal_store, proposal_create=proposal_create,
         proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit, cell_service_id=cell_app_service_id)
     install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
