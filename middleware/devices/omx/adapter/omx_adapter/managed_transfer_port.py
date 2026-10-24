@@ -49,10 +49,12 @@ class _ManagedTransferPort:
                         or admission._managed_scope != self.scope):
                     raise PermissionError("managed command context is already occupied or changed")
                 admission._managed_command.command = command
+                admission._managed_command.validate = self._current_time
             try:
                 yield
             finally:
                 del admission._managed_command.command
+                del admission._managed_command.validate
 
     def submit(self, command, *, on_goal_event):
         if self.executor is None:

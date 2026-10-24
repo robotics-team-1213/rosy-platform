@@ -31,6 +31,8 @@ class ControlSeatAdmission:
         def enable(state):
             with self._lock:
                 self._session()
+                if self.owner._control_admission is not self:
+                    raise PermissionError("managed mode requires the bound final owner admission")
                 self._expire()
                 self._reconcile(state)
                 if state != "ready" or self._seat or any(not goal[1] for goal in self._goals.values()):
@@ -169,8 +171,14 @@ class ControlSeatAdmission:
             if command.session_id != self.session_id:
                 return False
             if self._managed_scope is not None:
-                return (command.owner == "rule_based"
-                        and getattr(self._managed_command, "command", None) is command)
+                if (command.owner != "rule_based"
+                        or getattr(self._managed_command, "command", None) is not command):
+                    return False
+                try:
+                    self._managed_command.validate()
+                except Exception:
+                    return False
+                return True
             if command.owner == "pilot_sim":
                 return bool(self._seat and not self._revoked and command.command_id in self._goals
                             and self._goals[command.command_id][2] == self._seat[1]
