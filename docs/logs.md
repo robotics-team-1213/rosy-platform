@@ -9651,3 +9651,9 @@ osy-d395-s1d\`.
 - 변경: 자료 화면(`/catalog`)이 협업 모드의 HF 가져오기를 보여 주고, 끝난 작업에 「검수로 보내기」(`POST /api/learning/imports/review`, `import` 권한)를 단다. 서버는 `LearningImports.verified`로 공개 산출물 manifest·크기·SHA-256·media sidecar를 디스크에서 다시 검증하고(`_recover`와 같은 검사 `_published`), `review_ingest.import_hf`가 작업 공간 픽셀 클래스셋이 없거나 가져온 `classes.yaml`·`data.yaml`이 다르면 거절한다(D-485). JPEG/PNG만 객체·픽셀 `pending`으로 들어가고 승인·초안은 만들지 않는다. 사진 source에 `upstream`(저장소·고정 revision·경로·해시·가져오기 id·요청자·보낸 사람)이, 가져오기 작업에 첫 `review` 기록이 남는다. `import_frames(upstream=)`는 서버가 검증한 출처만 받고 카탈로그 행의 선언은 쓰지 않는다.
 - 증거: 원격 시험 PC 단위·HTTP 시험과 브라우저 시험(1440·390px, 44px 누름 면, 가로 스크롤 없음), affected 계층. known_failures 비교 0 NEW. 실제 HF 저장소와 모델 PC 센터에서의 수용은 하지 않았다.
 - gate 변화: 없음. 영상 원본이 없는 사진이라 데이터셋 빌드는 `source_video_hash_unknown`으로 계속 막힌다. CE 해당 없음 — 새 장애나 반복 원인이 없다.
+
+## 2026-10-25 · uncommitted · 승인한 HF 사진을 학습 데이터셋에만 (D-857)
+
+- 변경: `review_dataset.hf_group`이 사람이 승인한 HF 사진의 출처(저장소·고정 revision·경로·sha256=사진 해시)를 검증된 묶음 `inputs/source.jsonl`에서 읽어 `hf:<repo_type>/<repo_id>@<revision>` 묶음을 준다. 그런 사진만 `source_video_hash_unknown`·영상 증명 요구를 건너뛰고, 다른 검사는 그대로다. HF 묶음은 늘 `train`이고 val은 우리 카메라 묶음만으로 `assign_splits`가 나눈다(우리 사진의 묶음·분할은 그대로). manifest `external_sources`(HF가 있을 때만, 우리 사진만의 데이터셋 내용은 그대로)와 빌드 보고에 장수·%·묶음, 홈 학습 기록에 「외부(HF) 사진 N장 · P% (학습에만)」.
+- 증거: 원격 시험 PC 대상 시험과 affected 계층, known_failures 0 NEW. 실제 HF 자료로 학습·평가까지 돈 수용은 하지 않았다.
+- gate 변화: 없음. HF 사진은 평가셋·승격 증거에 들어가지 않는다. CE 해당 없음 — 새 장애나 반복 원인이 없다.
