@@ -7,8 +7,6 @@
 !operations/situation/rosy_situation/__init__.py
 !operations/situation/rosy_situation/assessment.py
 !operations/situation/rosy_situation/snapshot_assessment.py
-!operations/situation/rosy_situation/fact_rules.py
-!operations/situation/rosy_situation/wait_graph.py
 !operations/site_execution/src/rosy/execution/site/__init__.py
 !operations/site_execution/src/rosy/execution/site/goal_evidence.py
 !operations/site_execution/src/rosy/execution/site/workflow.py

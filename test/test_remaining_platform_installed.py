@@ -470,11 +470,6 @@ from fleet.server import mission_service
 from rosy.execution.site.goal_evidence import GoalEvidence
 assert mission_service.GoalEvidence is GoalEvidence
 from rosy_situation.assessment import Assessment
-for name in ('fleet.stuck.ai_facts', 'fleet.traffic.blocks'):
-    importlib.import_module(name)
-for name in ('rosy_situation.fact_rules', 'rosy_situation.wait_graph'):
-    spec = importlib.util.find_spec(name)
-    assert Path(spec.origin).resolve().is_relative_to(roots[0].parent / 'situation/rosy_situation')
 assert importlib.util.find_spec('rosy_situation.service') is None
 board = LineStuckBoard(clock=lambda: 100.0, wall=lambda: 100.0)
 board.observe([{'robot_id': 'pinky', 'online': False}])
@@ -483,8 +478,8 @@ assert board.intervention_assessment('pinky').necessity == 'ABSTAIN'
 '''
     run(['-I', '-c', probe, json.dumps(list(map(str, roots)))], tmp_path)
     package = image / 'opt/rosy/src/site/situation/rosy_situation'
-    modules = ('__init__.py', 'assessment.py', 'snapshot_assessment.py', 'fact_rules.py', 'wait_graph.py')
-    assert {p.name for p in package.glob('*.py')} == set(modules)
+    assert {p.name for p in package.glob('*.py')} == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
     allowed = {line for line in (ROOT / 'deploy/site/Dockerfile.fleet.dockerignore').read_text().splitlines()
                if line.startswith('!operations/situation')}
-    assert allowed == {'!operations/situation/rosy_situation/' + name for name in modules}
+    assert allowed == {'!operations/situation/rosy_situation/' + name for name in
+                       ('__init__.py', 'assessment.py', 'snapshot_assessment.py')}
