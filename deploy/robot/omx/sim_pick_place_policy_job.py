@@ -12,6 +12,30 @@ from g2_ports import isolation_guard, write_json
 from g2_runner import Children
 from sim_pick_place_demonstrations import camera_world
 from sim_policy_contacts import CHANNELS, COVERAGE, contact_world, topic
+from sim_policy_articulation import SCHEMA as ARTICULATION_SCHEMA, COVERAGE as ARTICULATION_COVERAGE
+
+
+def require_articulation(directory):
+    status=json.loads((directory/'articulation-ready.json').read_text())
+    received=status.get('latest_advance_owner_ns')
+    stamp=status.get('source_stamp_ns')
+    if (status.get('schema')!=ARTICULATION_SCHEMA or status.get('ready') is not True
+            or status.get('invalid_messages')!=0 or status.get('truncated') is not False
+            or type(received) is not int or type(stamp) is not int or stamp<=0
+            or not 0<=int(time.monotonic()*1e9)-received<=500_000_000):
+        raise ValueError('articulation capture not clean and fresh')
+
+
+def wait_articulation(observer,bridge,directory,deadline):
+    while True:
+        contacts_alive(observer,bridge)
+        try:
+            require_articulation(directory)
+            return
+        except FileNotFoundError:
+            pass
+        if time.monotonic()>=deadline:raise TimeoutError('articulation unavailable')
+        time.sleep(.05)
 
 
 def contacts_alive(observer,bridge):
@@ -44,7 +68,7 @@ def wait_contact_policy(actor,observer,bridge,deadline):
         return code
 
 
-def close_contact_diagnostic(observer,children,directory):
+def close_contact_diagnostic(observer,children,directory,*,articulation=False):
     result=dict(verified=False)
     try:
         if observer is None or observer.poll() is not None:
@@ -58,6 +82,15 @@ def close_contact_diagnostic(observer,children,directory):
                 or summary.get('truncated') is not False
                 or summary.get('positive_control_channels')!=sorted(CHANNELS)):
             raise ValueError('contact capture incomplete; silence is unknown')
+        if articulation:
+            joint_raw=(directory/'policy-articulation.json').read_bytes();joints=json.loads(joint_raw)
+            joint_summary=joints['summary']
+            if (joints.get('schema')!=ARTICULATION_SCHEMA or joints.get('coverage')!=ARTICULATION_COVERAGE
+                    or joint_summary.get('status')!='captured' or joint_summary.get('invalid_messages')!=0
+                    or joint_summary.get('truncated') is not False or len(joints.get('samples',[]))<2):
+                raise ValueError('articulation capture incomplete')
+            result['articulation']=dict(sha256=hashlib.sha256(joint_raw).hexdigest(),summary=joint_summary,
+                coverage=ARTICULATION_COVERAGE)
         result.update(verified=True,sha256=hashlib.sha256(raw).hexdigest(),summary=summary,
             coverage=COVERAGE,channels=document['channels'])
     except Exception as error:
@@ -102,12 +135,17 @@ def run(directory,*,calibration=False,contacts=False):
                 *[topic(label)+'@ros_gz_interfaces/msg/Contacts[gz.msgs.Contacts' for label in CHANNELS]],env=env)
             contact_observer=children.start('contact-observer',['/usr/bin/python3',
                 str(ROOT/'deploy/robot/omx/sim_policy_contacts.py'),'--evidence',str(directory)],env=env)
-            wait_contacts(contact_observer,contact_bridge,directory,min(deadline,time.monotonic()+90))
+            diagnostic_deadline=min(deadline,time.monotonic()+90)
+            wait_contacts(contact_observer,contact_bridge,directory,diagnostic_deadline)
+            wait_articulation(contact_observer,contact_bridge,directory,diagnostic_deadline)
         observer=directory/'observer.sock'
         children.start('observer',['/usr/bin/python3',str(ROOT/'deploy/robot/omx/g2_observer.py'),
             '--socket',str(observer),'--open-position','1.0'],env=env)
         controller_readiness(timeout_s=90);children.assert_alive()
         startup=directory/'startup';startup.mkdir(mode=0o700)
+        if contacts:
+            contacts_alive(contact_observer,contact_bridge)
+            require_articulation(directory)
         home=children.start('startup-home',['/usr/bin/python3',
             str(ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'),'--evidence',str(startup),
             '--world',str(world),'--observer',str(observer),'--home-only'],env=env)
@@ -119,7 +157,9 @@ def run(directory,*,calibration=False,contacts=False):
                 or receipt['owner_final']['owner_state']!='ready'):
             raise PermissionError('startup home process did not exit with idle owner proof')
         result['startup_owner_exited']=True
-        if contacts:contacts_alive(contact_observer,contact_bridge)
+        if contacts:
+            contacts_alive(contact_observer,contact_bridge)
+            require_articulation(directory)
         command=['/usr/bin/python3',str(ROOT/'deploy/robot/omx/sim_pick_place_policy.py'),
             '--evidence',str(directory),'--observer',str(observer),'--deadline-owner-s',str(deadline)]
         if calibration:command.append('--calibration')
@@ -138,7 +178,8 @@ def run(directory,*,calibration=False,contacts=False):
         result['error']=type(error).__name__+': '+str(error)
     finally:
         if contacts:
-            result['contacts'],result['cleanup_verified']=close_contact_diagnostic(contact_observer,children,directory)
+            result['contacts'],result['cleanup_verified']=close_contact_diagnostic(
+                contact_observer,children,directory,articulation=True)
         else:result['cleanup_verified']=children.close()
         result['wall_s']=time.monotonic()-started
         passed=bool(result['successes'] or result.get('calibration_pass'))
