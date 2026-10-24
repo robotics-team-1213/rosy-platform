@@ -1106,3 +1106,20 @@ Python은 호스트 ROS ABI와 맞아야 한다. Jazzy setup을 먼저 source하
 실제 owner로 전환할 때는 두 `rosy-omx-observer@arm_a/arm_b` 유닛을 중지하고
 각 포트의 FD/버스 해제를 확인한 뒤 별도로 수용된 CORE/OMX owner만 시작한다.
 관측 서비스 설치·활성화는 토크 ON, 정책 활성화, 파지 실행을 승인하지 않는다.
+
+## 낮은 출력의 첫 관절 시운전
+
+`joint_tune.py`는 기존 owner/controller를 정지한 뒤 사람이 지켜보며 한 관절씩 사용하는
+시운전 도구다. 기본 raw 값은 PWM Limit 20, Current Limit 50(XL330), Goal Current 50,
+Profile Velocity/Acceleration 1/1이다. 출력 자동 증가는 없으며 더 높은 값은 명시해야 한다.
+XL430에는 Current Limit을 적용하지 않는다. 이 기본값은 `record_session.py`의 별도 cap 파일을
+대신하지 않으며, 실측된 안전 토크나 힘을 뜻하지 않는다.
+
+시간 기반 프로파일과 목표값 쓰기로 토크가 켜지는 Drive Mode를 거부한다. 설정 readback,
+설정 후 현재 위치 재확인, 토크 ON 후 처짐·연속 정지 확인을 통과해야 다음 목표를 쓴다.
+정지 시간 초과, 비정상 시계, 0.25초를 넘는 피드백 공백은 중단 사유다. 카메라 캡처 뒤에도
+관절 상태를 다시 확인한다. 이 Python 검사와 카메라 I/O는 물리 정지의 최대 지연을 보장하지 않는다.
+
+종료 시 토크 OFF를 readback으로 확인한 뒤에만 설정을 복원한다. 확인에 실패하면 복원을
+건너뛰고 unsafe end를 보고한다. 낮은 출력이나 토크 OFF 때 하중 관절이 처질 수 있으므로
+실물 첫 구동에는 관절 지지, 외부 정지 수단, 관절별 실측 수용이 필요하다.
