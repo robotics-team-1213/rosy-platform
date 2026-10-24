@@ -36,12 +36,14 @@ class ActionApi:
     def __init__(self, runner: ActionRunner, *, stop_api: Any | None = None,
                  recovery_api: Any | None = None,
                  identity: Mapping[str, Any] | None = None,
-                 coordinator_api: Any | None = None) -> None:
+                 coordinator_api: Any | None = None,
+                 transfer_preflight_api: Any | None = None) -> None:
         self.runner = runner
         self.stop_api = stop_api
         self.recovery_api = recovery_api
         # D-780 1: per-operation coordinator peer roles; None keeps every Fleet-only path as before.
         self.coordinator_api = coordinator_api
+        self.transfer_preflight_api = transfer_preflight_api
         # Read-only owner identity (D-390 §5): the simulation composition reports simulation=True;
         # an owner without one answers UNKNOWN_OPERATION, so Fleet never opens dispatch to it.
         self.identity = dict(identity) if identity is not None else None
@@ -85,6 +87,8 @@ class ActionApi:
             if routed is not None:
                 return routed
         try:
+            if operation == "CheckTransfer" and self.transfer_preflight_api is not None:
+                return self.transfer_preflight_api.dispatch(request, peer_uid=peer_uid)
             if operation == "SubmitAction":
                 if set(request) != {"version", "operation", "grant"}:
                     raise ValueError("SubmitAction contains unsupported fields")

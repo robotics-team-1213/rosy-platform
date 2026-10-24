@@ -141,7 +141,8 @@ def build_cell_owner(settings: CellOwnerSettings, *,
                      http_app_factory: Callable[[Any], Any],
                      refuse_second_owner: Callable[[], None],
                      gripper_readback: Callable[[Any], Any],
-                     fleet_fence_current: Callable[[int, int], bool]) -> CellOwner:
+                     fleet_fence_current: Callable[[int, int], bool],
+                     transfer_catalog=None) -> CellOwner:
     refuse_second_owner()
     kinematics = OmxKinematics.load()
     profile = CellPlanningProfile.load(settings.profile_path)
@@ -251,10 +252,17 @@ def build_cell_owner(settings: CellOwnerSettings, *,
                                     read_peer_uids=settings.coordinator_peer_uids)
     if coordinator_api is not None:
         coordinator_api.read_receipt = runner.read_receipt
+    owner_journal_id = journal_identity(store.path)
+    transfer_preflight_api = None
+    if transfer_catalog is not None:
+        from omx_adapter.transfer_preflight_owner import build_transfer_preflight_api
+        transfer_preflight_api = build_transfer_preflight_api(
+            runtime, catalog=transfer_catalog, profile=profile, kinematics=kinematics,
+            journal_id=owner_journal_id, allowed_peer_uids={settings.fleet_peer_uid})
     action_api = ActionApi(runner, stop_api=stop_api, recovery_api=recovery_api, identity={
         "workcell_id": settings.workcell_id, "instance_id": settings.instance_id,
-        "simulation": True, "profile": "omx-cell-sim", "journal_id": journal_identity(store.path)},
-        coordinator_api=coordinator_api)
+        "simulation": True, "profile": "omx-cell-sim", "journal_id": owner_journal_id},
+        coordinator_api=coordinator_api, transfer_preflight_api=transfer_preflight_api)
     uds_server = UnixActionServer(
         action_api, Path(settings.socket_root) / settings.instance_id / "control.sock")
     return CellOwner(settings, profile, runtime, store, stop, acceptance, planner, runner,

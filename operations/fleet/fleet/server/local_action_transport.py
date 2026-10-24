@@ -10,10 +10,12 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 from core_common.protocol.schemas import (
+    ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckRejection,
     DeviceActionReceipt,
     FleetActionGrant,
     FleetCellTransferGrant,
 )
+from core_common.protocol.arm_transfer_preflight import ARM_PREFLIGHT_REJECTION_STATUS
 
 from .action_receipts import receipt_matches_grant
 
@@ -30,6 +32,14 @@ class LocalActionUnavailable(TimeoutError):
 
 class LocalActionRejected(ValueError):
     """The local API explicitly rejected the Action request before acceptance."""
+
+
+class ArmPreflightRejected(LocalActionRejected):
+    """A supported, typed read-only planning refusal from the owner."""
+
+    def __init__(self, rejection: ArmTransferCheckRejection, status: int):
+        super().__init__(rejection.code)
+        self.code, self.reason, self.status = rejection.code, rejection.reason, status
 
 
 class DeviceActionTransport(Protocol):
@@ -52,6 +62,29 @@ class UnixLocalActionTransport:
                 or not 0.01 <= float(timeout_s) <= 2.0):
             raise ValueError("UDS Action timeout must be between 10 ms and 2 s")
         self.timeout_s = float(timeout_s)
+
+    def check_transfer(self, request: ArmTransferCheckRequest) -> ArmTransferCheckResult:
+        request = ArmTransferCheckRequest.model_validate(request)
+        response = self._exchange(request.instance_id, {
+            "version": 2, "operation": "CheckTransfer", "transfer": request.model_dump(mode="json")})
+        if (type(response.get("version")) is not int or response["version"] != 2
+                or type(response.get("status")) is not int):
+            raise LocalActionUnavailable("invalid owner preflight protocol")
+        if response["status"] != 200:
+            try:
+                rejection = ArmTransferCheckRejection.model_validate(response.get("error"))
+                if ARM_PREFLIGHT_REJECTION_STATUS[rejection.code] != response["status"]:
+                    raise ValueError("planning rejection status mismatch")
+            except (TypeError, ValueError, KeyError) as exc:
+                raise LocalActionUnavailable("unsupported owner preflight response") from exc
+            raise ArmPreflightRejected(rejection, response["status"])
+        try:
+            result = ArmTransferCheckResult.model_validate(response.get("check"))
+            if result.request != request:
+                raise ValueError("owner preflight response refers to another request")
+        except (TypeError, ValueError) as exc:
+            raise LocalActionUnavailable("invalid owner preflight facts") from exc
+        return result
 
     def submit(self, grant: ActionGrant) -> DeviceActionReceipt:
         version = self._version(grant)
@@ -177,6 +210,6 @@ class UnixLocalActionTransport:
 
 
 __all__ = [
-    "ActionGrant", "DeviceActionTransport", "LocalActionRejected", "LocalActionUnavailable",
+    "ActionGrant", "DeviceActionTransport", "LocalActionRejected", "LocalActionUnavailable", "ArmPreflightRejected",
     "UnixLocalActionTransport",
 ]

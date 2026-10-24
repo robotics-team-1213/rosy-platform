@@ -93,7 +93,7 @@ owner의 지원 거절은 다음 안정된 code/reason만 Fleet가 전달한다.
 
 ### owner 조립과 구현 단위
 
-새 `rosy_agent.omx_transfer_preflight` 조립 helper는 기존 runtime owner의 `joint_state`만 읽고 `JointStateSnapshot`의 실제 calibration revision을 보존한다. runtime.latest_joint_state·desired home에서 상태를 만들지 않는다. profile/kinematics/catalog의 고정 transform/scene 대응과 같은 runtime.monotonic clock으로 내부 서비스를 구성한다. 상태 없음은 준비 불가다. helper는 ROS·palletizing·Cell compiler를 import하거나 두 번째 owner를 만들지 않는다.
+새 `omx_adapter.transfer_preflight_owner` 조립 helper는 기존 runtime owner의 `joint_state`만 읽고 `JointStateSnapshot`의 실제 calibration revision을 보존한다. runtime.latest_joint_state·desired home에서 상태를 만들지 않는다. profile/kinematics/catalog의 고정 transform/scene 대응과 같은 runtime.monotonic clock으로 내부 서비스를 구성한다. 상태 없음은 준비 불가다. helper는 ROS·palletizing·Cell compiler를 import하거나 두 번째 owner를 만들지 않는다. `rosy-app-agent` wheel은 palletizing을 필수 의존하므로 helper를 그 wheel에 두지 않는다. 기존 Cell 조립은 adapter helper를 소비한다.
 
 기존 `build_cell_owner`에는 선택적인 설치 catalog 인수만 추가해 같은 runtime·journal의 읽기 API를 연결한다. 기존 호출자는 None으로 새 operation이 닫힌다. 독립 simulation 시험은 같은 helper와 기존 `ArmCommandOwner`/ActionApi를 조립하고 palletizing import를 차단해 계산 경로를 검증한다. 이 시험은 새 실물 capability나 neutral grant dispatch의 증거가 아니다.
 

@@ -23,7 +23,7 @@
 630 drive/behaviors/traffic_policy/manager.py
 842 drive/motion_limits/adapter/node.py
 872 fleet/fleet/cli.py
-908 fleet/fleet/server/app.py
+905 fleet/fleet/server/app.py
 847 fleet/fleet/server/auth/enrollment.py
 943 fleet/fleet/server/cell/cell_job_store.py
 1325 fleet/fleet/server/console/console.py
@@ -37,7 +37,7 @@
 834 fleet/web/shared/styles.css
 788 fleet/web/shared/vision-view.js
 771 fleet/web/sitemap/site-map.js
-1170 foundation/core_common/protocol/schemas.py
+1142 foundation/core_common/protocol/schemas.py
 678 learning/curation/perception/lane_derived_drivable.py
 629 learning/registry/perception/deliver.py
 1533 middleware/core/events/test/test_audit.py

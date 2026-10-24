@@ -73,7 +73,7 @@ def test_composition_reads_admitted_state_and_preserves_its_calibration(kin, pro
     runtime = SimpleNamespace(owner=SimpleNamespace(joint_state=measured,
         config=SimpleNamespace(workcell_id="arm-cell", instance_id="arm-a")),
         latest_joint_state=SimpleNamespace(sequence=999), monotonic=lambda: 100.01)
-    build = _module("rosy_agent.omx_transfer_preflight").build_transfer_preflight_api
+    build = _module("omx_adapter.transfer_preflight_owner").build_transfer_preflight_api
     api = build(runtime, catalog=catalog, profile=profile, kinematics=kin,
                 journal_id="owner-journal-1", allowed_peer_uids={1000})
     assert api.dispatch(_request(catalog), peer_uid=1000)["check"]["source_state_sequence"] == 7

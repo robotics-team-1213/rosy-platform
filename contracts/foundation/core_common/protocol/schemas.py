@@ -6,6 +6,8 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 
 from __future__ import annotations
 
+from .arm_transfer_preflight import (  # noqa: F401
+    ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckResponse, ArmTransferCheckRejection)
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
 from .trip_jobs import (TripJobRequest, TripJobStep, TripJobSnapshot, TripJobStepSnapshot,
                         TripJobReadResponse, TripRequestKey)  # noqa: F401
@@ -1125,38 +1127,8 @@ class AckPayload(BaseModel):
     error: Optional[str] = None
 
 
-class UiSurfaceLink(BaseModel):
-    id: str
-    title: str
-
-
-class UiPanelDescriptor(BaseModel):
-    id: str
-    title: str
-    slot: str
-    order: int
-    module: str
-    css: list[str]
-    action_group: str | None = None
-    state: str
-    reason: str | None = None
-
-
-class UiActionGroup(BaseModel):
-    id: str
-    title: str
-    order: int
-
-
-class UiSurfaceManifest(BaseModel):
-    surface: str
-    grammar: str
-    role: str
-    surfaces: list[UiSurfaceLink]
-    action_groups: list[UiActionGroup]
-    panels: list[UiPanelDescriptor]
-    revision: str
-
+from .ui_surface import (  # noqa: F401
+    UiSurfaceLink, UiPanelDescriptor, UiActionGroup, UiSurfaceManifest)
 
 # --- D-418 로봇 SSH 접속 (API Ref §5.8, v1.89 additive) ----------------------
 #

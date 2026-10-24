@@ -34,6 +34,8 @@ from fleet.server.console import FleetConsole
 from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.goal_evidence_store import GoalEvidenceStore
 from fleet.server.local_action_transport import UnixLocalActionTransport
+from fleet.server.arm_transfer_preflight_routes import install_arm_transfer_preflight_routes
+from fleet.server.simulation_pose_binding import validate_simulation_pose_binding
 from fleet.server.local_stop_transport import UnixLocalStopTransport
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
@@ -154,15 +156,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         raise ValueError('team notifications require the durable Fleet journal (task_service)')
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
-    simulation_pose = bool(getattr(map_pose_port, 'simulation_only', False))
-    if simulation_pose:
-        if deployment_profile != 'simulation' or simulation_pose_binding is None:
-            raise ValueError('native SIM pose requires simulation deployment and explicit runner binding')
-        if not callable(getattr(map_pose_port, 'validate_simulation_binding', None)):
-            raise ValueError('native SIM pose requires a validated runner binding')
-        map_pose_port.validate_simulation_binding(simulation_pose_binding)
-    elif simulation_pose_binding is not None:
-        raise ValueError('runner SIM binding requires an explicit native SIM pose port')
+    simulation_pose = validate_simulation_pose_binding(map_pose_port, deployment_profile, simulation_pose_binding)
     if development_sessions is not None and task_service is None:
         # D-473 3: every development session issue and POST is in the durable API audit.
         raise ValueError("development connection mode requires the durable API audit (task_service)")
@@ -562,6 +556,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return principal
         return authorize(request, request.headers.get("Authorization"))
     operator_guard = [Depends(require_operator)]
+    install_arm_transfer_preflight_routes(
+        app, instances=configured_omx, deployment_profile=deployment_profile,
+        transport=action_transport, socket_root=omx_socket_root, require_proposer=require_proposer)
 
     from fleet.server.peer_routes import install_peer_catalogue
     catalogue = install_peer_catalogue(app, console=console, enrollment=enrollment,
