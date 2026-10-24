@@ -1193,3 +1193,10 @@
 - 변경: 현재 동일 native 완료의 수동적 navigation/handover를 기존 navigation router의 canonical 경로로 등록했다. guard callback이 끝난 다음 exact native/transport proof를 확인하며 공유 admission은 Nav lock 아래 비차단으로만 획득한다. 늦은 소유권 생성·reentrant 새 실행·busy admission에서 mode/candidate를 넘기지 않는다.
 - 증거: task-10-navigation-handover-final 원격 387개, task-10-handover-version-pins 원격 93개 통과, 각 NEW 0/skip 0/exit 0. 최초 fe5671413의 nested-router 경로 추적과 이미 terminal인 cancel을 상태 변경으로 본 잘못된 시험 2건은 canonical 등록 및 실제 새 native 실행을 만드는 회귀로 수정했다. 독립 scoped 안전 리뷰 PASS. 0ba8294c9의 실제 HttpRobotClient/귀환/카메라/기존 재투입·구조/안전 원격 261개에서도 통과했다. 범위가 겹쳐 합산하지 않는다.
 - gate 변화: 관련 CORE/HTTP 소프트웨어 회귀 근거. Fleet 완료 원장·native safe-release와 주기 인계의 결속, 전체 3회 연속 cycle와 실측 DEVICE/FIELD 수용은 아직 미완료다. 목표 ACTIVE, push/merge/장치 활성화 없음.
+
+## 2026-10-24 · uncommitted · D-862 공통 reference 버전 pin 정렬
+
+- 변경: 공식 api_reserve bump 도구로 API app의 공통 reference pin을 v1.309로 옮겼다. CORE route·최종 명령·안전·정지 해제 동작은 변경하지 않는다.
+- 증거: 통합관제 정보/정지 요청은 Fleet 소유의 additive wire 계약이며 D-862·canonical schema와 함께 등록한다. 버전 정합성은 커밋된 source의 공식 원격 회귀에서 확인한다.
+- gate 변화: 없음. 버전 정렬이며 CORE 실행·ARM64 이미지·DEVICE/FIELD 수용의 승격이 아니다.
+- CE: 해당 없음 — 공식 버전 pin과 정합성 회귀로 설명된다.

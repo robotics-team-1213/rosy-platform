@@ -130,6 +130,8 @@ def test_wire_roundtrip_preserves_owner_scope_and_stop_identity(wire, name, body
     ("ControlRobotPose", pose(), {"source": "x" * 65}),
     ("ControlRobotPose", pose(), {"source": ""}),
     ("ControlTaskInfo", task(), {"status": "STOP_CONFIRMED"}),
+    ("ControlTaskInfo", task(), {"status": "PENDING"}),
+    ("ControlTaskInfo", task(), {"status": "APPROVING"}),
     ("ControlTaskInfo", task(), {"updated_at": "yesterday"}),
     ("ControlUnitDetail", detail(), {"tasks_truncated": 1}),
     ("ControlStopSnapshot", snapshot(), {"revision": 0}),
@@ -336,3 +338,11 @@ def test_stop_history_has_a_bounded_number_of_unique_identities(wire):
     stops = [dict(stop_reference(), stop_id=f"stop-{n}") for n in range(101)]
     with pytest.raises(ValidationError):
         wire.ControlStopHistory(unit_id="A", config_revision="lab-1", stops=stops)
+
+
+def test_integrated_models_keep_the_canonical_schema_exports(wire):
+    from core_common.protocol import schemas
+
+    models = {name: value for name, value in vars(wire).items() if name.startswith("Control")}
+    assert models
+    assert all(getattr(schemas, name) is value for name, value in models.items())

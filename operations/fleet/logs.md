@@ -4387,3 +4387,10 @@
 - 변경: main에 추가된 TRIP_JOB_NOT_FOUND 표시를 추출 모듈에 보존하고 Node 단언으로 연결했다. 기존 전수 오류 코드 검사·문서 소유·금지 의존성 검사는 유지한다.
 - 증거: [통합 기록](../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md). 새 고정 커밋의 집중·공식 회귀는 후속 검증 대상이다. 이전 지도 시험의 단발 실패와 단독 통과는 Git 밖 원장에서 구분했다.
 - gate 변화: 없음. 기준선·신선도·대기시간·실행 권한 변경 없음. CE 해당 없음: 판단은 소유 경계와 단언으로 설명된다.
+
+## 2026-10-24 · uncommitted · D-862 공통 API reference 버전 정렬
+
+- 변경: 공식 api_reserve bump 도구로 Fleet의 현행 API reference 검증 pin을 v1.309에 정렬했다. 기존 TRIP·Task·Mission 읽기/쓰기의 내용과 권한은 유지한다.
+- 증거: 새 통합관제 wire RED134건 확인 후 모델·API reference를 함께 구현한다. 기존 동작 회귀와 실제 collector/stop/runtime 경로의 증거는 다음 단계에서 별도로 남긴다.
+- gate 변화: 없음. 이번 변경은 공유 계약의 버전 pin이며 새 runtime·배포·장치 활성화가 아니다.
+- CE: 해당 없음 — 공식 버전 도구와 계약 회귀로 직접 설명되는 정렬이다.

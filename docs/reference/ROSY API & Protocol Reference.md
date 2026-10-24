@@ -5,9 +5,31 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.298
+**Version:** v1.309
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.309 통합관제 정보와 관제별 정지 요청 (D-862)
+
+[D-862](../adr/D-862-integrated-control-information-and-stop-requests.md)의 additive wire 계약이다. canonical export는 `core_common.protocol.schemas`, 정의는 `protocol/integrated_control.py`다. Envelope protocol_version은1.0이다. 이 계약 등록은 runtime·배포·장치·현장 수용 완료를 뜻하지 않는다.
+
+모든 경로는 `/api/fleet/control-unit` 아래다. `GET /overview`는 ControlOverview, `GET /units/{unit_id}`는 ControlUnitDetail, `GET /units/{unit_id}/map`은 ControlMapSnapshot을 반환한다. 로컬 viewer와 명시적으로 정보 공유를 허용받은 직계 부모 service만 자기 subtree를 읽는다. 부모 service의 전체 원장 조회·sibling/임의 URL 조회는 허용하지 않는다. `share_information_with_parent` 기본false, `accept_parent_stop` 기본false로 기존 자격의 권한을 자동 확대하지 않는다.
+
+ControlOverview는 `unit_id,config_revision,units`이며 unit 최대64개·중복 금지다. ControlUnitSummary는 `unit_id,parent,availability,sampled_at,age_s,robots_total,robots_online,tasks_active,map,dispatch,error,stop_pending`이다. availability는 AVAILABLE/STALE/UNAVAILABLE, age는 유한한 비음수 또는 null, timestamp는 timezone-aware다. stale 기준은5초이며 reported age에 수신 후 monotonic 경과를 반영한다. 연결 실패는 관제별 unavailable/stale로 유지한다. dispatch는 기존 authority_epoch/generation 두 정수만 담고 장치 권한·재무장을 부여하지 않는다.
+
+ControlUnitDetail은 같은 owner/config/availability/time와 직접 `robots` 최대256개·`tasks` 최대100개·`tasks_truncated,map,dispatch`를 담는다. ControlRobotInfo는 robot_id/online/state_age_s/mode/battery_percent/estop/pose/evidence만 공유한다. evidence는 pose/battery/safety의 fresh/delayed/disconnected/unavailable/unknown이며 메시지 나이가 센서 신선도를 대신하지 않는다. 미관측/default 값을 실측으로 만들지 않는다. ControlRobotPose의 x/y/yaw는 유한 수치이고 map_id/source/frame(map/odom/unknown)을 보존한다. Task는 task_id/robot_id/status/aware updated_at만 공유하며 actor/request/evidence/reason·개인 Mission/Cell Job은 제외한다. overview/detail/stop snapshot은 유한 JSON128KiB 이하로 제한한다.
+
+ControlMapRef는 `map_id,version,frame:unit_local`이며 version>=1이다. map ID는 기존 SiteMap의 `[A-Za-z0-9_.-]{1,64}`, place/lane ID는 같은 문자 집합1–32자를 사용한다. ControlMapSnapshot은 `unit_id,config_revision,map,places,lanes`이고 place는 id/label/x/y, lane은 id/points(x/y)만 포함한다. 최대500 places·1000 lanes·전체20000 points·2MiB다. 관제·map ID·version을 함께 표시하고 근거 없는 관제 간 좌표 overlay를 하지 않는다. survey·승인자·증거 metadata는 전송하지 않는다.
+
+`POST /stops`는 로컬 기명 운영자의 ControlStopRequest(`stop_id,target_unit,config_revision,expected_controls`)를 받는다. expected_controls는 대상 unit별 ControlDispatchFence(authority_epoch/generation>=0)이며1–64개다. `POST /stop-inbox`는 직계 부모 service의 ControlStopIngress(같은 필드+origin_id)만 받으며 명시적 accept_parent_stop과 ancestor/target 범위를 검증한다. 서버가 actor를 정하고 caller actor/URL/token 필드는 거절한다. identity는 origin+stop_id, 본문/fence는 immutable이다. 같은 SQLite transaction에서 journal·expected fence·기존 latch를 결속하고 같은 요청을 다시 실행하지 않는다. 지연된 과거 generation, 본문 충돌, 구성 변경은409다.
+
+`GET /stops/{origin}/{stop_id}`는 ControlStopSnapshot(`unit_id,origin_id,stop_id,target_unit,config_revision,results,revision`)이다. 결과 unit 최대64개·중복 금지이며 PENDING/SENDING/ACKNOWLEDGED/PARTIAL/UNKNOWN/STALE_FENCE/NOT_REACHED/SUPERSEDED_BY_OPERATOR_RECOMMISSIONING, 원래 dispatch fence, acknowledged_robots/unknown_robots, OMX 응답 상태, 제한된 오류 code를 보존한다. physical_stop은 UNVERIFIED로 고정한다. HTTP200·stopped:true·LOCAL_LATCHED를 물리 정지 증거로 바꾸지 않는다. polling·재시작은 stop을 자동 POST하지 않는다. 활성 send/불확실성은 기존 rearm transaction에서 거절한다.
+
+`GET /stops`는 로컬 사람 viewer 전용 ControlStopHistory(`unit_id,config_revision,stops`)다. 최대100개 ControlStopReference에 origin/stop/target/config/revision, incomplete/local_reconciliation_required, aware updated_at만 포함한다. 중복 origin+stop은 금지하며 actor·재시운전 근거·raw receipt는 노출하지 않는다. 부모 service는 전체 목록을 읽을 수 없다. 활성 최대64개 기록을 먼저 조회해 미해결 결과가 최근 종단 이력 뒤로 사라지지 않게 한다.
+
+`POST /stops/{origin}/{stop_id}/reconcile`는 해당 관제의 로컬 기명 운영자만 ControlStopReconcile로 확인한다. 현행 expected_generation과 receiver_channels_terminated:true, receivers_recommissioned:true, 제한된 evidence, 해당 관제의 affected_units를 요구하며 bool을 숫자로 대체할 수 없다. 살아 있는 send는 override할 수 없다. 원래 UNKNOWN과 확인 근거를 보존하고 해당 불확실성 guard만 처분한다. 부모가 하위의 사람 확인·CORE release·OMX recovery·Fleet rearm을 대신하지 않는다.
+
+typed 정지는 journal/fence를 확보하지 못하면 새 fanout 없이503 JOURNAL_UNAVAILABLE/UNKNOWN이다. 기존 `/api/fleet/estop`의 새 로컬 사람 긴급 정지는 DB 장애에도 원래 best-effort fanout을 유지한다. bad credentials401, 범위/권한 거절403, 없는 unit/map/record404, revision/identity/fence 충돌409, malformed422, 저장소/producer/transport 실패503이며 부분 연결 실패를 전체 성공으로 덮지 않는다. peer CA는 명시 tls_ca_file로 연결하고 hostname/체인 검증·redirect 거절·환경 proxy 미사용을 유지한다.
 
 ### v1.298 Scoped transport execution snapshots (D-856)
 
