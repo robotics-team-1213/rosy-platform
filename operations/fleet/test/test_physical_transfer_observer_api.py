@@ -164,7 +164,10 @@ def test_host_rejects_observer_credentials_that_overlap_another_authority(instal
     if realm == "site-identity":
         principals["other"] = SitePrincipal(observer.producer_id, "operator")
     overlaps = realm == "robot-secret"
-    console = SimpleNamespace(user_credential_overlaps_robot_secret=lambda digests: overlaps)
+    class CredentialConsole:
+        def user_credential_overlaps_robot_secret(self, digests):
+            return overlaps
+    console = CredentialConsole()
     registries = (SimpleNamespace(producers=(SimpleNamespace(token=TOKEN),)),) if realm == "registry" else ()
     services = (SimpleNamespace(uses_token=lambda token: True),) if realm == "service" else ()
     with pytest.raises(ValueError) as failure:
