@@ -14,8 +14,10 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import sqlite3
 import subprocess
+import tempfile
 import threading
 import time
 from types import SimpleNamespace
@@ -150,6 +152,10 @@ def scenario(case, out, runtime, rig, controllers, calibration):
                                  str(Path.home()/'rosy-test/venvs/policy-latency-gpu/bin/python')))
     assert python.is_file(), 'GPU policy environment required'
     with ExitStack() as stack:
+        # The lab disk's fsync stalls pushed a lease POST past the 0.25 s transport bound; SIM stores live in RAM
+        # with their fsync unchanged, and are copied into the evidence once every store has closed.
+        stores = Path(stack.enter_context(tempfile.TemporaryDirectory(dir='/dev/shm', prefix='rosy-vla-p0-')))
+        stack.callback(shutil.copytree, stores, out, dirs_exist_ok=True)
         env = dict(os.environ, PYTHONPATH=str(ROOT/'integrations/robots/omx/src'), HF_HUB_OFFLINE='1',
                    TRANSFORMERS_OFFLINE='1')
         child = stack.enter_context(process([str(python), '-u', str(Path(__file__).with_name('policy_chain_vla_child.py'))],
@@ -174,14 +180,14 @@ def scenario(case, out, runtime, rig, controllers, calibration):
         until(controllers_ready, 90, 'vendor controller, joint state and both cameras required')
         checkpoint = {k: ready[k] for k in ('checkpoint_sha256', 'hub_repo', 'hub_revision', 'checkpoint') if k in ready}
         policy = installation(out, runtime, calibration, cfg, checkpoint)
-        fence_db = out/'stop.sqlite3'
+        fence_db = stores/'stop.sqlite3'
         ActionStore(fence_db)
         fence = LocalStopController(fence_db, workcell_id=cfg.workcell_id, instance_id=cfg.instance_id)
         fence.rearm(authority_epoch=1, dispatch_generation=1, operator_confirmed=True, fleet_fence_current=lambda *_: True)
         identity = AttemptIdentity('sim-local-mission', 'step', 'action', 'attempt', cfg.workcell_id, cfg.instance_id,
                                    'a'*64, 1, 1)
         revision = policy.recheck()['revision']
-        fleet = stack.enter_context(approved_fleet(out/'fleet', workcell_id=cfg.workcell_id, instance_id=cfg.instance_id,
+        fleet = stack.enter_context(approved_fleet(stores/'fleet', workcell_id=cfg.workcell_id, instance_id=cfg.instance_id,
             policy_revision=revision, rig_revision=RIG, calibration_revision=cfg.calibration_revision))
         scope = LeaseScope(identity, 'sim-episode', revision, runtime.owner.session_id, fleet.window['window_id'], RIG,
                            cfg.calibration_revision, fleet.scope)
@@ -205,7 +211,7 @@ def scenario(case, out, runtime, rig, controllers, calibration):
                 exchanges.append(row)
                 (out/'exchanges.json').write_text(json.dumps(exchanges, indent=2))
         consumer = FleetLeaseConsumer(scope, request=request, monotonic=runtime.monotonic)
-        journal = PolicyExecutionJournal(out/'execution.sqlite3')
+        journal = PolicyExecutionJournal(stores/'execution.sqlite3')
         renewals = []
         renew = consumer.renew
         def timed_renew(session):
