@@ -164,8 +164,8 @@ def test_stale_installation_keeps_original_idempotent_proposal_but_cannot_admit(
     assert not claims(path)
 
 
-def test_conflicting_jobs_and_a_legacy_owner_workcell_cannot_both_be_admitted(rig):
-    path, tasks, control, store = rig
+def test_conflicting_jobs_cannot_both_be_admitted(rig):
+    path, _, control, store = rig
     first, second = create(store), create(store, key="move-2")
     with ThreadPoolExecutor(max_workers=2) as pool:
         def attempt(proposal):
@@ -176,15 +176,15 @@ def test_conflicting_jobs_and_a_legacy_owner_workcell_cannot_both_be_admitted(ri
         results = list(pool.map(attempt, (first, second)))
     assert len([item for item in results if item]) == 1
     assert len(claims(path)) == len(store.installation.policy.resources)
-    with closing(connect(path)) as connection:
-        connection.execute("DELETE FROM fleet_action_claims")
-        connection.execute("DELETE FROM fleet_physical_transfer_approvals")
-        connection.execute("UPDATE fleet_cell_jobs SET status='PROPOSED',authority_epoch=NULL,dispatch_generation=NULL")
-        connection.commit()
+
+
+def test_a_legacy_owner_workcell_claim_blocks_neutral_admission(rig):
+    path, tasks, control, store = rig
+    proposal = create(store)
     assert tasks.reserve_resources(owner_kind="mission", owner_id="legacy-owner", generation=control["generation"],
                                    resources=[("workcell", store.installation.policy.primary[0])])
     with pytest.raises(MissionConflict):
-        admit(store, first, control)
+        admit(store, proposal, control)
     assert {row["owner_id"] for row in claims(path)} == {"legacy-owner"}
 
 
@@ -250,3 +250,12 @@ def test_physical_schema_failure_rolls_back_tables_indexes_and_legacy_migration(
     with closing(connect(path)) as connection:
         assert connection.execute("PRAGMA foreign_keys").fetchone()[0] == 1
         assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 4
+
+
+def test_old_job_schema_allows_task_startup_before_the_atomic_job_upgrade(tmp_path):
+    path = legacy_database(tmp_path)
+    from fleet.server.task_store import FleetTaskStore
+    FleetTaskStore(path).close_dispatch_for_startup()
+    with closing(connect(path)) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM fleet_cell_jobs").fetchone()[0] == 3
+        assert {row[0] for row in connection.execute("SELECT phase FROM fleet_action_claims")} == {"UNKNOWN", "HELD"}

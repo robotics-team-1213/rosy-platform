@@ -19,8 +19,10 @@ from .step_action_kinds import parse_step_grant, validate_step_grant, step_grant
 from . import cell_arm_jobs as arm_jobs, cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
 from . import job_provenance_schema
+from . import physical_transfer_schema
+from .cell_job_completion import confirm_step_goal
 
-_MIGRATION_VERSION = 5  # D-856: separate physical provenance; legacy Cell/TRIP rows are unchanged.
+_MIGRATION_VERSION = 6  # D-856: physical two-person approvals; old hosts must refuse this journal.
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 # Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
 # terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
@@ -51,6 +53,8 @@ def hold_for_site_stop(connection: sqlite3.Connection, *, now: str, hold_reason:
     if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_cell_jobs'"
                           ).fetchone() is None:
         return
+    physical_transfer_schema.hold_for_site_stop(connection, now=now,
+        reason="SITE_AUTHORITY_CHANGED" if hold_reason is None else "SITE_STOP", event=CellJobStore._event)
     if hold_reason is not None:
         generation = connection.execute(
             "SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()[0]
@@ -75,6 +79,7 @@ class CellJobStore:
             with job_provenance_schema.initialize(connection, version=_MIGRATION_VERSION, now=_now()):
                 step_ledger_schema.ensure(connection)
                 sheets.migrate(connection)
+                physical_transfer_schema.ensure(connection)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)
@@ -757,98 +762,7 @@ class CellJobStore:
             raise MissionConflict("Cell Job event identity was reused with different evidence")
         return True
 
-    def confirm_step_goal(self, mission_id: str, *, step_index: int,
-                          action_id: str, attempt_id: str,
-                          evidence: Mapping[str, Any]) -> dict[str, Any]:
-        """Record already authenticated sim-model and post-action gripper evidence."""
-        required_evidence = {
-            "producer_id", "evidence_id", "evidence_source", "action_id", "attempt_id",
-            "satisfied", "gripper_state", "gripper_evidence_id",
-        }
-        if not isinstance(evidence, Mapping) or not required_evidence.issubset(evidence):
-            raise ValueError("Cell step goal confirmation requires independent producer and gripper evidence")
-        if (evidence["evidence_source"] != "sim_model_pose"
-                or evidence["action_id"] != action_id or evidence["attempt_id"] != attempt_id
-                or evidence["gripper_state"] != "OPEN"
-                or type(evidence["satisfied"]) is not bool):
-            raise MissionConflict("Cell step goal evidence does not match the current transfer attempt")
-        if evidence["satisfied"] is not True:
-            raise MissionConflict("unsatisfied Cell step goal evidence cannot advance the Job")
-        for field in ("producer_id", "evidence_id", "gripper_evidence_id"):  # from main 64b4b1faa
-            _nonempty(field, evidence[field], limit=192)
-        evidence_json = _json(dict(evidence))
-        event_id = f"goal:{step_index}:{_nonempty('evidence_id', evidence['evidence_id'])}"
-        detail = {**json.loads(evidence_json), "event_id": event_id}
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
-            ).fetchone()
-            step = connection.execute(
-                "SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
-                (mission_id, step_index),
-            ).fetchone()
-            if job is None or step is None:
-                raise KeyError(mission_id if job is None else (mission_id, step_index))
-            final = connection.execute(
-                "SELECT MAX(step_index) FROM fleet_cell_steps WHERE mission_id=?", (mission_id,),
-            ).fetchone()[0] == step_index
-            event_type = "CELL_JOB_GOAL_CONFIRMED" if final else "CELL_STEP_GOAL_CONFIRMED"
-            if self._replayed(connection, mission_id, step_index, event_type, "goal-evidence",
-                              event_id, detail):
-                result = self._get(connection, mission_id)
-                connection.commit()
-                return result
-            if (job["status"] != "ACTION_SUCCEEDED" or step["status"] != "ACTION_SUCCEEDED"
-                    or job["current_step_index"] != step_index
-                    or step["action_id"] != action_id or step["attempt_id"] != attempt_id
-                    or not self._durable_success(connection, mission_id, step_index, action_id, attempt_id)):
-                raise MissionConflict("independent goal evidence requires this step's terminal Action success")
-            now = _now()
-            connection.execute(
-                "UPDATE fleet_cell_steps SET status='GOAL_CONFIRMED', goal_evidence_json=?, "
-                "reason=NULL, updated_at=? WHERE mission_id=? AND step_index=?",
-                (evidence_json, now, mission_id, step_index),
-            )
-            next_index = step_index + 1
-            next_step = connection.execute(
-                "SELECT step_index FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
-                (mission_id, next_index),
-            ).fetchone()
-            if next_step is not None:
-                # From main 64b4b1faa: the next step opens only under the current fence; otherwise
-                # the Job waits for re-approval with its claims parked HELD (D-403 보강).
-                can_continue = self._fence_current(connection, job)
-                if can_continue:
-                    connection.execute(
-                        "UPDATE fleet_cell_steps SET status='READY', updated_at=? "
-                        "WHERE mission_id=? AND step_index=? AND status='WAITING'",
-                        (now, mission_id, next_index),
-                    )
-                else:
-                    self._set_claims(connection, job, "HELD", strict=False, context="goal-advance")
-                connection.execute(
-                    "UPDATE fleet_cell_jobs SET status=?, current_step_index=?, "
-                    "reason=?, updated_at=? WHERE mission_id=?",
-                    ("READY" if can_continue else "HOLD", next_index,
-                     None if can_continue else "SITE_AUTHORITY_CHANGED", now, mission_id),
-                )
-                sheets.hold_due(connection, self._require(connection, mission_id), next_index, now, self._event)
-                event_type = "CELL_STEP_GOAL_CONFIRMED"
-            else:
-                connection.execute(
-                    "UPDATE fleet_cell_jobs SET status='GOAL_CONFIRMED', current_step_index=?, "
-                    "reason=NULL, updated_at=? WHERE mission_id=?",
-                    (next_index, now, mission_id),
-                )
-                release_claims(connection, owner_kind="mission", owner_id=mission_id,
-                               generation=job["dispatch_generation"])
-                event_type = "CELL_JOB_GOAL_CONFIRMED"
-            self._event(connection, mission_id, step_index, event_type, "goal-evidence", detail)
-            result = self._get(connection, mission_id)
-            connection.commit()
-        return result
+    confirm_step_goal = confirm_step_goal
 
     @staticmethod
     def _event(connection: sqlite3.Connection, mission_id: str, step_index: int | None,
