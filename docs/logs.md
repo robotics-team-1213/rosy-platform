@@ -9597,3 +9597,9 @@ osy-d395-s1d\`.
 - 변경: `application-contract-support.md`를 공개 게시하고, 이 문서와 D-827~829가 참조하는 미게시 ADR 14개(D-775·787·792·794·795·797·822·823·826·827·828·829·834·836)와 계획 문서 4개를 의존 닫힘으로 함께 게시했으며 ADR Log 행 14개를 추가했다. README 문서 지도·reference AGENTS·app-names·PRODUCT의 지원 계약 링크를 연결했다.
 - 증거: 재귀 링크 닫힘 검사로 게시 세트를 확정했다(계획 4종 포함). 이미 공개된 D-853·D-857은 Learning 게시 판을 보존하고 이 변경에서 뺐다. 공개 API 참조는 v1.296으로 이 문서의 v1.290 기준 인용보다 최신이며, 인용은 확인 시점 기록이다. 제품 코드·wire는 바꾸지 않았다. 독립 검토가 Log 재구성 과정에서 D-857 행의 내부 포트 노출을 지목해 base 판 그대로 + 신규 14행만 남도록 다시 만들었다(diff +14행, 기존 행 불변).
 - gate 변화: 없음. 문서 게시이며 외부 앱 연동·실물 수용을 열지 않는다. CE 해당 없음 — 문서 이동·색인 작성이다.
+
+## 2026-10-24 · uncommitted · Rosy Learning #185 후속 (정답 메뉴 초점 순서·VLM 읽기 무기록·휴대폰 상단 바)
+
+- 변경: `/`·`/pixels`의 정답 하위 메뉴를 DOM에서 `.ui-pathbar` 바로 뒤로 옮겨 Tab이 편집기보다 먼저 닿게 했다(WCAG 2.4.3, 배치는 그대로). 평가 state가 아닌 예전 학습 state에 VLM 표가 있으면 읽기(`queue`·`evaluation`·`export`·`disputes`·`_ready`)가 표를 만들거나 평가셋을 고정하지 않고 같은 평가셋을 계산만 한다. 30rem 미만 상단 바에서 「로그인·계정」은 아이콘만, 테마 선택은 「화면」 글자를 접근 이름에만 남겨 한 줄로 유지한다. `unpause` 403 HTTP 시험과 초점 순서 브라우저 시험을 더했다. D-446 릴리스를 `install_review_release.py`로 설치하는 원천 규칙을 기존 교훈과 `deploy/model_pc/README.md`에 적었다.
+- 증거: 시험 PC 측정 사진 위쪽 — 메뉴 이동만: origin과 같음(390×800 `/` 372.6·`/pixels` 367.0 px, 1280×720 281.6·284.0 px). 상단 바 수정 후: 휴대폰 상단 바 117→64 px, 390×800 319.6·314.0 px(40% 기준 320 이내), 1280×720 그대로. VLM·셸 자리 시험 38 passed, NEW 0.
+- gate 변화: 없음. 실물·운영 설치 수용은 아니다. CE 기존 교훈 갱신 — `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`.
