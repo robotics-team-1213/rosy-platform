@@ -7,7 +7,7 @@
 
 1. 진행 중이던 교사 시연 녹화(`chunk_runner.py`)가 포트를 놓기를 기다렸다. 포트가 30초 이상 비어 있는 것을 확인한 뒤에만 읽었다.
 2. ROS 드라이버나 LeRobot은 띄우지 않았다. 읽기 전용 도구 `deploy/robot/omx/register_probe.py`(ID 11~16에 PING과 READ만 허용)로 3초 간격을 두고 두 번 읽었다. 두 번 모두 exit 0이었다.
-3. `deploy/robot/omx/joint_map_check.py`(D-864 브랜치 `docs/d854-revision`)로 판정했다. 결과는 `holds: true`, exit 0이다.
+3. `deploy/robot/omx/joint_map_check.py`(D-864 브랜치 `docs/d854-revision`)로 판정했다. 결과는 `holds: true`, exit 0이다. 이 판정 파일은 보정 digest가 없어 변환을 열지 못한다(아래 근거 파일 참고).
 
 장치 시리얼, 경로, 주소는 공개 기록에 남기지 않는다. 판정의 `arm` 값은 셀과 보정 이름이다.
 
@@ -30,7 +30,7 @@
 
 - `evidence/probe-1.json`: sha256 `fcfe7bdec50283d2ac54ac71934ad50e7614e70af686d9255096b65dff98f9a8`
 - `evidence/probe-2.json`: sha256 `5a8e7de0a2ce8b750dfb8ea322a455746f6b19bb060ab73d9030584301328cf6`
-- `evidence/verdict.json`: 판정 결과. 두 측정 파일의 sha256을 담는다.
+- 판정 파일은 이 기록에 넣지 않았다. 판정 도구가 보정 range digest를 함께 기록하도록 바뀐 뒤(D-864 후속), 같은 두 측정 파일로 다시 만들어 덧붙인다. 그때까지 `ros_joint_rad` 변환은 닫혀 있다.
 
 ## 증명하지 않는 것
 
