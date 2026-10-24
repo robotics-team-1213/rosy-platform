@@ -50,6 +50,21 @@ def test_the_wrist_view_reports_centre_and_area():
     assert box["found"] and box["cx"] == pytest.approx(350, abs=2) and box["area"] == pytest.approx(201 * 181, rel=0.05)
 
 
+@pytest.mark.parametrize("box_bgr, found", [
+    ((50, 41, 51), True),    # the box in the arm's shadow over the belt (2026-10-25 frames): dark mauve
+    ((30, 90, 200), True),   # the box in light: orange-brown
+    ((60, 65, 63), False),   # the tray in shadow: green highest, never the box
+])
+def test_the_wrist_view_finds_the_box_in_light_and_in_shadow_but_not_the_tray(box_bgr, found):
+    img = np.zeros((480, 640, 3), np.uint8)
+    img[:] = (111, 52, 43)                                        # blue belt mesh, strongly saturated
+    cv2.rectangle(img, (220, 80), (440, 300), box_bgr, -1)
+    box = m.wrist_box(img, PROFILE)
+    assert box["found"] is found
+    if found:
+        assert box["cx"] == pytest.approx(330, abs=3) and box["area"] == pytest.approx(221 * 221, rel=0.05)
+
+
 def test_yaw_gap_treats_a_square_box_as_repeating_every_90_degrees():
     assert m.yaw_gap(2, 88) == pytest.approx(4) and m.yaw_gap(0, 45) == 45
 

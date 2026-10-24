@@ -10,7 +10,8 @@
     "green_below": 5,
     "min_area": 300
   },
-  "wrist_box": {"hsv_min": [5, 70, 60], "hsv_max": [25, 255, 255], "min_area": 300},
+  "wrist_box": {"hsv_min": [5, 70, 35], "hsv_max": [25, 255, 255], "min_area": 3000,
+                "shade": {"s": [30, 120], "v": [30, 120], "green_below_red": 5, "green_below_blue": 3}},
   "reference": {
     "top": {"cx": 134.5, "cy": 239.5, "yaw": 0.0},
     "wrist": {"cx": 347, "cy": 204, "area": 103000}
