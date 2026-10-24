@@ -2,7 +2,8 @@
 
 Formulas follow lerobot 0.4.4 ``motors_bus._normalize``/``_unnormalize`` for ``omx_follower`` recorded with
 ``use_degrees: false``. ``dynamixel_rad_v1`` is Present Position ticks around 2048 (raw * 2pi/4096 - pi);
-its equality with ROS joint radians of a given install is not asserted here.
+its equality with ROS joint radians of a given install is not asserted here. lerobot 0.4.4's
+``DynamixelMotorsBus`` sets ``apply_drive_mode = False``, so ``drive_mode`` never changes OMX values and is not read.
 """
 
 from __future__ import annotations
@@ -23,17 +24,18 @@ EPS = 1e-6  # float round trips land a few ulps past a range edge; that is not a
 
 
 def validate_calibration(calibration):
-    """Copy of the LeRobot calibration entries for MOTORS; refuses missing motors or empty ranges."""
+    """Copy of the ranges the converters read for MOTORS; refuses missing motors or empty ranges."""
     if not isinstance(calibration, dict) or set(MOTORS) - set(calibration):
         raise ValueError("calibration must name every omx_follower motor")
     out = {}
     for motor in MOTORS:
         entry = calibration[motor]
-        lo, hi, mode = entry.get("range_min"), entry.get("range_max"), entry.get("drive_mode")
-        if (type(lo) is not int or type(hi) is not int or not 0 <= lo < hi <= TICKS - 1
-                or mode not in (0, 1) or type(mode) is not int):
+        if not isinstance(entry, dict):
+            raise ValueError(f"invalid calibration entry for {motor}")
+        lo, hi = entry.get("range_min"), entry.get("range_max")
+        if type(lo) is not int or type(hi) is not int or not 0 <= lo < hi <= TICKS - 1:
             raise ValueError(f"invalid calibration range for {motor}")
-        out[motor] = {"range_min": lo, "range_max": hi, "drive_mode": mode}
+        out[motor] = {"range_min": lo, "range_max": hi}
     return out
 
 
@@ -72,11 +74,9 @@ def _rad_to_norm(values, calibration):
         bounded = min(hi, max(lo, raw))
         clipped += abs(bounded - raw) > EPS
         if motor == GRIPPER:
-            n = (bounded - lo) / (hi - lo) * 100
-            out.append(100 - n if c["drive_mode"] else n)
+            out.append((bounded - lo) / (hi - lo) * 100)
         else:
-            n = (bounded - lo) / (hi - lo) * 200 - 100
-            out.append(-n if c["drive_mode"] else n)
+            out.append((bounded - lo) / (hi - lo) * 200 - 100)
     return out, clipped
 
 
@@ -86,14 +86,12 @@ def _norm_to_rad(values, calibration):
         c = calibration[motor]
         lo, hi = c["range_min"], c["range_max"]
         if motor == GRIPPER:
-            v = 100 - norm if c["drive_mode"] else norm
-            bounded = min(100.0, max(0.0, v))
+            bounded = min(100.0, max(0.0, norm))
             raw = bounded / 100 * (hi - lo) + lo
         else:
-            v = -norm if c["drive_mode"] else norm
-            bounded = min(100.0, max(-100.0, v))
+            bounded = min(100.0, max(-100.0, norm))
             raw = (bounded + 100) / 200 * (hi - lo) + lo
-        clipped += abs(bounded - v) > EPS
+        clipped += abs(bounded - norm) > EPS
         out.append(raw * 2 * math.pi / TICKS - math.pi)
     return out, clipped
 

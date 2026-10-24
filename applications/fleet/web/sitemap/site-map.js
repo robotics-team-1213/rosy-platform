@@ -6,12 +6,8 @@ import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
-import {
-  PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView,
-  soccerProfileMap,
-  planIsCurrent, planPolylines, siteMapErrorText, tripStatusText, rectangularView, viewTurnOf, editViewTurn,
-  planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose, planeView, addApproach, removeApproach, mergeCrosswalks,
-} from '/console/assets/site-map-model.js';
+import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, soccerProfileMap, planIsCurrent, planPolylines, siteMapErrorText, rectangularView, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose, planeView, addApproach, removeApproach, mergeCrosswalks} from '/console/assets/site-map-model.js';
+import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';

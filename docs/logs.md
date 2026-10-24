@@ -10252,6 +10252,24 @@ osy-d395-s1d\`.
 - gate 변화: 실제 정책 작업 성공은 기존 HOLD다. 수집기 회귀는 물리 원인 해결·운영·실물·HF 수용을 뜻하지 않는다. CE 미해결 — 실제 추종 원인을 진단한다.
 - 실제 진단: 별도 manifest로 calibration1회 종료0·331추종 샘플·96파일을 검증한 뒤 정책1회 종료1·748샘플·126파일을 검증했다. 41목표 모두 성공했지만42번째 intent의 journal_prepare733.731ms 중 기존 lease가 만료돼 제출 전 HOLD했다. 원래 JTC 실패는 재현되지 않았고 formal0·optimizer0을 유지한다. archive·SQLite·timing·closure 독립 검토 Important 없음.
 
+## 2026-10-24 · e1e69f32c7 · Fleet UI 구조 후속 검증과 Windows 출력 교훈
+
+- 변경: [후속 검증](validation/fleet-ui-boundaries-2026-10-24/result.md)에 표시·로스터 수명·CSS 소유, RED/수정/통과와 화면 근거를 기록했다. [부모 UTF-8 교훈](solutions/workflow-issues/windows-remote-test-parent-needs-utf8-2026-10-24.md)은 원격 로그 회수 후 한국어 실패 꼬리의 cp1252 출력 중단과 복구를 다룬다.
+- 증거: 같은 로컬 시험 commit의 기본/UTF-8 runner 비교와 stdout·자식 인코딩 대조. UI 집중44 passed/0 NEW, 8조합 계산 스타일 일치. 최종 착지와 사용자/장치 수용은 이 기록에서 완료로 주장하지 않는다.
+- gate 변화: 없음. CE: 새 교훈 기록. 기존 PowerShell 파일 쓰기 교훈과 구분하며 새 도메인 어휘·지침 파일은 추가하지 않았다.
+
+## 2026-10-24 · 9a2c0be210 · Fleet UI 통합 검사 소유 경로 보완
+
+- 변경: [통합 검사 보완](validation/fleet-ui-boundaries-2026-10-24/2026-10-24-integration-contracts.md)에 첫 공식 회귀의 두 실패와 검사 경로 보완을 구분했다. 초기 검증 기록은 보존한다.
+- 증거: 원격 집중 3 failed → 6 passed/2 warnings, 0 NEW. 설치 문서의 로스터 표시 접근을 거절하는 대조 시험을 포함한다.
+- gate 변화: 없음. 공식 재검증·로컬 main 착지는 대기한다. CE 해당 없음: 검사 경로 판단은 코드·시험으로 설명된다.
+
+## 2026-10-24 · 9b6bd2f5c7 · Fleet UI 검증 기록의 Git 해시 표기
+
+- 변경: 새 통합 검사 기록의 전체 Git 해시 두 곳에 `commit` 접두어를 붙였다. 해시·시험 결과·관측은 유지한다. [기존 교훈](solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md)의 동결 기록 표기 보완 절차를 따른다.
+- 증거: 두 번째 native 회귀에서 secret guard가 이 두 표기를 탐지했다. 같은 순수 scanner에서 원문2 findings, 같은 해시의 접두어 표기0 findings를 확인했다. scanner·기준선·제품 코드는 바꾸지 않는다. 커밋된 후보를 원격 재검증한다.
+- gate 변화: 없음. CE: 해당 없음 — 기존 교훈을 적용했고 새로운 원인·복구 판단은 없다. 최초 부모 UTF-8 새 교훈은 유지한다.
+
 ## 2026-10-24 · bbf2af074bb7 · 정책 저널 I/O 귀속 진단
 
 - 변경: [저널 진단 기록](validation/omx-policy-journal-io-2026-10-24/result.md)을 추가했다. 실제 원본 데이터의 복사본만 네 번 재생했고 정책·optimizer·formal·실물 동작은0이다.
@@ -10270,3 +10288,27 @@ osy-d395-s1d\`.
 - 변경: 사용자 목표 진행 지시로 P1 상세 계약을 작성하고 독립 검토 승인을 받았다. 첫 범위는 기존 simulation TRIP이며 읽기 ID/key 계약과 API v1.298을 추가했다. 업무 의미·팔 공정·도달 검증의 전체 분리 완료와 구별한다.
 - 증거: 문서 등록 f14d00748e의 원격 552 passed, 첫 읽기 회귀 95664a6496의 77 passed. Harbor는 별도 작업 브랜치에서 소비하며 기본 checkout의 동료 변경을 보존한다. 최신 전체 검증과 실제 HTTP는 별도 결과다.
 - gate 변화: 문서 승인과 첫 흐름 구현 진행이며 장치·배포·현장 수용은 열지 않는다. CE 해당 없음: 기능 추가와 기존 계약 재사용이다.
+
+## 2026-10-24 · afb218aed1 · 최신 main과 UI 표시 추출의 충돌 통합
+
+- 변경: [추가 통합 기록](validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md)에 새 오류 문구 보존·지도 크기 기록 하향·양쪽 로그 보존 판단을 남겼다. 초기 동결 관측은 유지한다.
+- 증거: 공식 도구가 수동 소유 판단이 필요한 충돌에서 착지를 중단했다. 직접 병합은 작업 브랜치에서 수행하고, 고정 커밋의 집중 회귀 뒤 공식 도구에 다시 등록한다.
+- gate 변화: 없음. 원격 main 게시·배포·현장 수용은 포함하지 않는다. CE 해당 없음: 코드·회귀에 설명되는 소유 판단이다.
+
+## 2026-10-24 · 2c47808edc · 저널 쓰기와 최종 권한 검사 잠금 분리
+
+- 변경: [검증 기록](validation/omx-policy-journal-admission-2026-10-24/result.md). durable intent를 session/fence 밖에서 쓰고 pending submit만 직렬화한다. 최종 재검증과 native 전송 전후에 기록된 grant/현재 lease를 함께 검사한다.
+- 증거: 원격 RED 경합5FAIL·grant만료1FAIL 뒤 host312통과 점/NEW0, 별도 합성 Jazzy 전송6PASS. 실제4goal DB/receipt와 cleanup·164파일 회수·actor종료0을 독립 확인했다.
+- gate 변화: 권한·TTL·freshness·WAL/FULL·callback 증거를 유지한다. 기존 실제 모델 평가HOLD/formal0과 원래 추종 실패는 해결로 바꾸지 않는다. CE 해당 없음 — 불변식은 코드/회귀/README/검증 기록에 직접 남겼다.
+
+## 2026-10-24 · 2c47808edc · 잠금 수정 이후 동일 모델 추종 진단
+
+- 변경: [새 독립 관측 기록](validation/omx-policy-tracking-after-admission-2026-10-24/result.md). 기존 모델·world·허용치로 calibration1회와 정책 관측1회만 실행했다.
+- 증거: calibration PASS/96파일, 정책 HOLD/254파일·추종2771개. 170수락 중169성공 뒤 joint4/5 JTC 허용오차 실패, 이번 admission 거부·worker 오류0. DB/전체 archive/추종/종료정리를 독립 대조했다. 기존 validation state-hold 비교도 사후 설명으로 별도 구분했다.
+- gate 변화: formal0·기존 HOLD·실물 권한0 보존. CE 미해결 — 추종 실패의 물리 원인 증거가 부족하며 새 성공·성능 보장으로 바꾸지 않는다.
+
+## 2026-10-24 · uncommitted · 원격 시험 꼬리 출력의 코드 페이지 충돌 방지
+
+- 변경: `remote_pytest.py`가 시작할 때 `sys.stdout`·`sys.stderr`의 인코딩 오류 정책을 `replace`로 둔다. Windows 콘솔·파이프의 cp1252로 한국어 운영자 문구가 섞인 UTF-8 시험 꼬리를 인쇄하다 `UnicodeEncodeError`로 끝난 회차 전체를 버리던 것을 막는다. 디스크 로그는 바이트 그대로 유지된다.
+- 증거: 자식 프로세스 재현 — 수정 전 `print('방향 어긋남')` cp1252 exit 1(UnicodeEncodeError), reconfigure 후 exit 0. 2026-10-24 D-856 착지 회차에서 같은 충돌로 FULL 티어 35분 결과가 폐기됐고 `PYTHONIOENCODING=utf-8`로 회피했었다.
+- gate 변화: 없음. 도구 출력 정책만 바꾸며 시험 판정·로그 보존 규칙은 그대로다. CE 해결 — 증상·원인·회피·근본 수정을 이 행과 코드 주석으로 남긴다.

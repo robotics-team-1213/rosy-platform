@@ -5,7 +5,8 @@ import { ruleMTag } from "./link-tag.js";
 import { localizationUrgent } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
-import { routeAttention, trafficAttention, tripEndText, tripWaitText } from "/console/assets/site-map-model.js";
+import {routeAttention, trafficAttention} from "/console/assets/site-map-model.js";
+import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
 
 function nodeWithText(tagName, className = "", text) {

@@ -2,7 +2,7 @@
 // `바뀐 경로로 계속` (confirm-replan, a move: named operator, D-540 9) or `운행 취소` (a stop: quiet, no confirm).
 // D-577 (d): the wait-cycle row opens on Fleet's resolver decision, the AI facts (shadow) and the same two
 // trip routes plus the robot card. No new motion route.
-import { AI_FACT_LABEL, RESOLVER_DECISION_LABEL, tripErrorText } from "/console/assets/site-map-model.js";
+import {AI_FACT_LABEL, RESOLVER_DECISION_LABEL, tripErrorText} from "/console/assets/trip-display.js";
 import { primaryButton, quietButton, setReason } from "./queues.js";
 
 /** What the slot shows for one held trip: the changed route, or why there is none. */

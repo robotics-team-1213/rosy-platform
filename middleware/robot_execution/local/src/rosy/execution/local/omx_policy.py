@@ -136,7 +136,8 @@ class OwnerPolicySession:
         self._execution_journal=execution_journal
         self._runtime_binding=None
         self.enabled=enabled;self._ttl=max_lease_duration_ns
-        self._lock=threading.RLock();self._snapshot=None;self._active_command=None
+        self._lock=threading.RLock();self._submit_lock=threading.Lock()
+        self._snapshot=None;self._active_command=None
         self._history=OrderedDict();self._history_capacity=observation_history_capacity
         self._camera_history=OrderedDict()
         self._last_now=None;self._last_submit=None;self.hold_reason='';self.cancel_decision=None
@@ -340,31 +341,26 @@ class OwnerPolicySession:
         return source
 
     def submit(self,candidate):
-        with self._lock:
+        with self._submit_lock:
             try:
-                doc,now,cameras=self._guard()
-                if not isinstance(candidate,PolicyCandidate): self._fail('policy_candidate_type')
-                lease=self.lease
-                if ((candidate.lease_id,candidate.episode_id,candidate.policy_revision)!=
-                        (lease.lease_id,lease.episode_id,lease.policy_revision)):
-                    self._fail('policy_candidate_scope_or_observation')
-                self._source(candidate,doc,now)
-                self._camera_source(candidate,doc,now,cameras)
-                if not candidate.observed_at_ns<=candidate.produced_at_ns<=now:
-                    self._fail('policy_action_clock')
-                if now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
-                    self._fail('policy_action_stale')
-                if len(candidate.positions)!=len(doc['joint_names']) or any(
-                        not low<=value<=high for value,(low,high) in zip(candidate.positions,doc['action']['limits'])):
-                    self._fail('policy_action_envelope')
-                if self._last_submit is not None and now-self._last_submit<doc['timing']['period_ns']:
-                    self._fail('policy_period_not_elapsed')
-                def final_submit():
-                    _,final_now,final_cameras=self._guard()
-                    source=self._source(candidate,doc,final_now)
-                    self._camera_source(candidate,doc,final_now,final_cameras)
-                    if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
-                        self._fail('policy_action_stale_at_submit')
+                with self._lock:
+                    doc,now,cameras=self._guard()
+                    if not isinstance(candidate,PolicyCandidate): self._fail('policy_candidate_type')
+                    lease=self.lease;binding=self._runtime_binding
+                    if ((candidate.lease_id,candidate.episode_id,candidate.policy_revision)!=
+                            (lease.lease_id,lease.episode_id,lease.policy_revision)):
+                        self._fail('policy_candidate_scope_or_observation')
+                    source=self._source(candidate,doc,now)
+                    self._camera_source(candidate,doc,now,cameras)
+                    if not candidate.observed_at_ns<=candidate.produced_at_ns<=now:
+                        self._fail('policy_action_clock')
+                    if now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
+                        self._fail('policy_action_stale')
+                    if len(candidate.positions)!=len(doc['joint_names']) or any(
+                            not low<=value<=high for value,(low,high) in zip(candidate.positions,doc['action']['limits'])):
+                        self._fail('policy_action_envelope')
+                    if self._last_submit is not None and now-self._last_submit<doc['timing']['period_ns']:
+                        self._fail('policy_period_not_elapsed')
                     cfg=self._config
                     command=TrajectoryCommand(workcell_id=cfg.workcell_id,instance_id=cfg.instance_id,
                         command_id=str(uuid4()),session_id=self.owner.session_id,owner='learned_policy',
@@ -373,46 +369,51 @@ class OwnerPolicySession:
                         calibration_revision=cfg.calibration_revision,joint_names=cfg.joint_names,
                         expected_start_state_positions=dict(source.positions),
                         start_state_tolerances=dict(cfg.max_start_state_tolerances))
-                    if self._execution_journal is not None:
-                        kwargs={} if self._runtime_binding is None else dict(source_revision=self._runtime_binding.source_revision)
-                        self._execution_journal.prepare(self.lease,candidate,command,**kwargs)
-                    registered=False;submission_started=False
-                    try:
-                        if self._runtime_binding is not None:
-                            self._runtime_binding.prepare(command);registered=True
-                        if self._execution_journal is not None:
-                            # Storage and sink registration can block: retain
-                            # main's complete re-admission after durable intent.
+                    kwargs={} if binding is None else dict(source_revision=binding.source_revision)
+                # Durable I/O must hold neither session nor stop-fence lock.
+                if self._execution_journal is not None:
+                    self._execution_journal.prepare(lease,candidate,command,**kwargs)
+                with self._lock:
+                    def final_submit():
+                        if self._runtime_binding is not binding:
+                            self._fail('policy_prepared_binding_changed')
+                        registered=False;submission_started=False
+                        try:
+                            if binding is not None:
+                                binding.prepare(command);registered=True
                             _,_,final_cameras=self._guard()
-                        self._stop_open()
-                        final_now=self._now()
-                        self._lease_time(self.lease,final_now)
-                        self._fresh(doc,final_now,final_cameras)
-                        self._source(candidate,doc,final_now)
-                        self._camera_source(candidate,doc,final_now,final_cameras)
-                        if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
-                            self._fail('policy_action_stale_at_submit')
-                        self._check_hold()
-                        submission_started=True
-                        decision=(self.owner.submit(command) if self._runtime_binding is None
-                                  else self._runtime_binding.submit(command,candidate))
-                    except Exception:
-                        if registered and not submission_started:self._runtime_binding.abandon(command)
-                        raise
-                    # Once submission starts, transport outcome may be unknown even on
-                    # rejection. Retain the sink for original late goal/cancel facts.
-                    if not decision.accepted: self._fail('owner_rejected:'+decision.reason)
-                    self._active_command=command.command_id;self._last_submit=final_now
-                    return decision
-                identity=lease.identity
-                return self.fence.run_if_open(authority_epoch=identity.authority_epoch,
-                    dispatch_generation=identity.dispatch_generation,
-                    fleet_fence_current=lambda:self._authority(self.lease) is True,operation=final_submit)
+                            if ((self.lease.lease_id,self.lease.episode_id,self.lease.identity)!=
+                                    (lease.lease_id,lease.episode_id,lease.identity)):
+                                self._fail('policy_prepared_binding_changed')
+                            self._stop_open()
+                            final_now=self._now()
+                            self._lease_time(self.lease,final_now);self._lease_time(lease,final_now)
+                            self._fresh(doc,final_now,final_cameras)
+                            self._source(candidate,doc,final_now)
+                            self._camera_source(candidate,doc,final_now,final_cameras)
+                            if final_now-candidate.produced_at_ns>doc['timing']['max_action_age_ns']:
+                                self._fail('policy_action_stale_at_submit')
+                            self._check_hold()
+                            submission_started=True
+                            decision=(self.owner.submit(command) if binding is None
+                                      else binding.submit(command,candidate,lease))
+                        except Exception:
+                            if registered and not submission_started:binding.abandon(command)
+                            raise
+                        # Unknown transport outcomes retain the original late-event sink.
+                        if not decision.accepted: self._fail('owner_rejected:'+decision.reason)
+                        self._active_command=command.command_id;self._last_submit=final_now
+                        return decision
+                    identity=lease.identity
+                    return self.fence.run_if_open(authority_epoch=identity.authority_epoch,
+                        dispatch_generation=identity.dispatch_generation,
+                        fleet_fence_current=lambda:self._authority(self.lease) is True,operation=final_submit)
             except PermissionError:
-                if not self.hold_reason:self._fail('local_stop_or_authority_closed')
+                with self._lock:
+                    if not self.hold_reason:self._fail('local_stop_or_authority_closed')
                 raise
             except Exception as exc:
-                self._fail('policy_submit_validation:'+type(exc).__name__)
+                with self._lock:self._fail('policy_submit_validation:'+type(exc).__name__)
 
     def poll(self):
         with self._lock:

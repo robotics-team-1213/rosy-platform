@@ -36,6 +36,7 @@ SHARED = {
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
+    "trip-display.js",  # DOM-free trip vocabulary shared by map and Console consumers.
     "route-attention.js",
     "drawing-errors.js",
 }
@@ -60,6 +61,7 @@ OWN = {
         "roster.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
         "motor-health-view.js",  # Fleet robot rows adapt shared read-only motor evidence.
+        "roster-presentation.js",
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
