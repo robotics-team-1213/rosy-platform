@@ -10,8 +10,6 @@
 
 | ID | 제목 | Status |
 |---|---|---|
-| D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
-| D-853 | Learning VLM 판단은 닫힌 질문의 사람 정답과 모델 비교를 평가 전용으로 둔다 | Proposed (2026-10-23) |
 | D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |
 | D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 | Accepted for implementation (2026-10-21) |
@@ -20,6 +18,8 @@
 | D-849 | 팔레타이징 제출 검증은 공정이 소유하고 Fleet은 주입된 제출 경계를 소비한다 | Accepted for implementation (2026-10-23) |
 | D-833 | 원본 계보를 보존한 native OMX 파지 구간 검수와 학습 | Accepted for implementation (2026-10-21) |
 | D-848 | 봉인한 리더 녹화의 세션·사이클 계보 | Accepted for implementation (2026-10-23) |
+| D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나, 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
+| D-853 | Learning VLM 판단은 닫힌 질문의 사람 정답과 모델 비교를 평가 전용으로 둔다 | Proposed (2026-10-23) |
 | D-852 | 실험실 PC 사용자 서비스 목록과 대조 | Accepted for implementation (2026-10-23) |
 | D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
 | D-831 | 관제 자연어 전처리·명령 후보 검증·토큰 예산 | Accepted (2026-10-21) |
