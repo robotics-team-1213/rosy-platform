@@ -195,3 +195,23 @@ def test_server_lifespan_starts_and_awaits_the_physical_monitor(rig, monkeypatch
     with rig.client:
         assert started.wait(2)
     assert stopped.wait(2)
+
+
+@pytest.mark.parametrize("credential", ["transport", "bot"])
+def test_app_rejects_an_observer_token_reused_by_channel_credentials(rig, tmp_path, credential):
+    from fleet.server.channel_requests import ChannelConfig
+    from test_channel_requests import GUILD, CHANNEL, BOT, USER
+    token_path = tmp_path / "synthetic-bot.token"
+    token_path.write_text(TOKEN, encoding="utf-8")
+    channel = ChannelConfig(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT, users={USER: "operator"},
+        transport_key=TOKEN if credential == "transport" else "different-channel-key-" * 3,
+        bot_token_file=str(token_path) if credential == "bot" else None)
+    observer = api().PhysicalTransferObserver(producer_id=rig.installation.policy.producer_id, token=TOKEN,
+        valid_until=datetime(2035, 1, 1, tzinfo=timezone.utc))
+    users = {sha256(b"operator-secret").hexdigest(): {"principal_id": "operator", "role": "operator"}}
+    with pytest.raises(ValueError, match="isolated") as failure:
+        create_app(FleetConsole([], []), task_service=FleetTaskService(rig.tasks, robot_ids=()),
+            mission_service=MissionService(MissionStore(rig.db)), proposal_store=ProposalStore(rig.db),
+            site_users=users, deployment_profile="simulation", omx_action_transport=rig.port,
+            arm_transfer_installation=rig.installation, arm_transfer_observer=observer, channel_config=channel)
+    assert TOKEN not in str(failure.value)
