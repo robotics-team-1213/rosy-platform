@@ -18,7 +18,6 @@ import secrets
 import shutil
 import sqlite3
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -249,6 +248,7 @@ def scenario(case, out, runtime, rig, controllers, calibration):
         token_file = out/'sdk.private'
         token_file.touch(mode=0o600, exist_ok=False)
         token_file.write_text(credential)
+        stack.callback(token_file.unlink, missing_ok=True)  # Run-scoped, but not evidence.
         config = dict(auth=dict(tokens=[dict(id='sim-sdk', role='operator',
                                              sha256=hashlib.sha256(credential.encode()).hexdigest())]))
         services = SimpleNamespace(config=config, arm_policy=chain.port, safety=SimpleNamespace(estop=False, estop_listeners=[]))
@@ -337,7 +337,8 @@ def scenario(case, out, runtime, rig, controllers, calibration):
                           cancel_after_s=time.monotonic()-began)
         base.sdk_send(child, dict(op='reconnect'))
         reconnect = emit_line(child)
-        assert all(r['refused'] for r in reconnect['results']), reconnect
+        assert ([(r['refused'], r.get('code'), r.get('status')) for r in reconnect['results']]
+                == [(True, 'ARM_POLICY_FORBIDDEN', 403)]*2), reconnect
         with closing(sqlite3.connect(fleet.db)) as db:
             leases = db.execute('SELECT lease_id, issued_ns, expires_ns FROM fleet_policy_lease').fetchall()
         result.update(policy_revision=revision, timing=TIMING, checkpoint=checkpoint, child=ready, steps=steps,
@@ -359,10 +360,6 @@ def main():
     # As policy_chain_gazebo.py: one BLAS thread per process, so the scope's CPU quota is not oversubscribed
     # (the lease renewal's short Fleet exchange starved in the 2026-10-25 P0 run without this).
     os.environ.update({key: '1' for key in ('LP_NUM_THREADS', 'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS')})
-    # py-spy --gil (P0 2026-10-25): 82% of GIL time was rclpy's executor rebuilding its wait set. At the default
-    # 5 ms switch interval each GIL hand-back in a renewal exchange waited behind it (server 5 ms, client up to
-    # 166 ms), and renewals expired the 1 s lease. The lease and transport bounds are unchanged.
-    sys.setswitchinterval(.0005)
     group = Path('/sys/fs/cgroup')/next(line.removeprefix('0::') for line in
         Path('/proc/self/cgroup').read_text().splitlines() if line.startswith('0::')).lstrip('/')
     (out/'cpu-profile.json').write_text(json.dumps(dict(cpu_max=(group/'cpu.max').read_text(),

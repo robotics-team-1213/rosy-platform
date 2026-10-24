@@ -90,6 +90,7 @@ def main():
     emit(dict(connected=client.is_connected, cameras=client.info['cameras']))
     for line in sys.stdin:
         op = json.loads(line)['op']
+        target.last = {}  # A refused step must not report the previous step's values.
         try:
             if op in ('step', 'stale'):
                 target.delay_s = settings['stale_delay_s'] if op == 'stale' else 0.0
