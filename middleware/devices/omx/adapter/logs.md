@@ -608,3 +608,9 @@
 - 변경: 최초 runtime 게시 지연안은 확장 검사에서 기존 policy attach/coalescing 의존성을 깨뜨려 착지하지 않았다. native intake 선게시를 복원하고 readonly owner.joint_state를 Pilot 읽기 5곳에서 사용한다. command transaction과 기존 순번·freshness·seat 검사는 유지한다. 시험용 owner도 같은 명시적 계약을 제공한다.
 - 증거: 기존 policy assertion을 유지한 HTTP/Pilot/owner/정책 검사 173 passed, 0 NEW. 실제 Jazzy pending/admitted·source stamp·watchdog 3 passed/0 skipped. 최초 transaction producer의 보조 교사 시연은 PASS/1,586프레임이며 MODEL 독립 truth·전체 RGB·377명령·718지원 chunk를 확인했다. 세부 source별 범위는 docs/validation/omx-pilot-readback-2026-10-23/result.md를 따른다.
 - gate 변화: SOURCE·원격 ROS 회귀와 명시적 교사 SIM 원본 범위다. 최종 landing 확장 검사, 새 25개 수집·학습·독립 정책 평가·실물 수용은 미완료다. 교사 source와 최종 정책 runtime을 혼동하지 않는다.
+
+## 2026-10-24 · uncommitted · D-856 물리 이송 계획과 Cell provenance 분리
+
+- 변경: pose_plan의 승인 recipe/cell 검증은 호환 adapter에 남기고 물리 입력/profile/기하/plan을 transfer_motion, 궤적 계산을 transfer_planner로 나눴다. 새 요청은 home/pick/place와 접근·운반 높이만 가지며 job·recipe·pallet·layer·업무 완료를 해석하지 않는다. 기존 import/type alias, profile 파일·hash, callback 순서, owner/그리퍼/fence 검증을 유지한다.
+- 증거: commit 67389d0a03의 새 중립 API 시험 10개 RED 후 구현했다. 첫 회귀에서 옮긴 단계 상수 import 누락을 확인해 수정했다. commit 613c6b1b20의 공식 원격 물리/기존 Cell/owner/레이아웃 회귀는 135 passed, skip 0이다. 크기 검사는 통과했고 기존 728줄 예외는 제거했다. 코드 검토·최종 metadata 검증은 후속 결과와 구분한다.
+- gate 변화: simulation 내부 순수 계산 분리다. 충돌 장면·비대칭 물체·실물·새 wire/dispatch를 열지 않는다. 등록 기하를 승인하는 책임은 owner 측 binding에 남으며 후속 중립 preflight/실행 계약이 필요하다. CE 해당 없음: 코드·회귀 시험에서 판단을 복원할 수 있는 구조 분리다.

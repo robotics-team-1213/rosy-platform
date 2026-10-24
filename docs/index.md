@@ -336,6 +336,7 @@
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 - [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
+- [2026-10-24-neutral-arm-planning-design.md](plans/2026-10-24-neutral-arm-planning-design.md)
 
 ## 교훈 (docs/solutions)
 
