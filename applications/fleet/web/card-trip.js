@@ -4,11 +4,8 @@
 // behind a leader's open repeat trip. Every request goes through the site map's own trip path
 // (shared/site-map-model.js) to the unchanged D-494 routes. Moving controls need a named operator (D-540 9).
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
-import {
-  convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody,
-  repeatTripReason, startTrip,
-  trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason, tripWaitText,
-} from "/console/assets/site-map-model.js";
+import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
+import {tripWaitText} from "/console/assets/trip-display.js";
 import { chooseConvoyLeader, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";

@@ -36,6 +36,7 @@ SHARED = {
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
+    "trip-display.js",  # DOM-free trip vocabulary shared by map and Console consumers.
     "route-attention.js",
 }
 
@@ -57,6 +58,7 @@ OWN = {
         "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
         "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
+        "roster-presentation.js",
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy

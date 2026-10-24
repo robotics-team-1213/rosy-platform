@@ -453,3 +453,9 @@
 - 변경: 기존 작업 화면에 관제 범위·목표·위임 출처·stale와 현장 승인/취소 요청을 연결했다. 미확인 body/ID는 사용자별로 보존하고 원장 재조회 없이 새 요청으로 바꾸지 않는다. 접수 전 확정 거절의 수정과 키보드 포커스 복원을 지원한다.
 - 증거: 실제 Chromium36 PASS(기존 작업면 포함), 별도 1366/320·dark/light·미확인 재적재/거절 복구6 PASS. [검증 기록](../../../docs/validation/control-unit-pipeline-2026-10-24/result.md). 합성 fixture이며 실제 장치 상태가 아니다.
 - gate 변화: 집중 소프트웨어 경로만 확인했다. 최종 통합 검사·착지·현장 화면 수용은 별도다. CE 해당 없음.
+
+## 2026-10-24 · e1e69f32c7 · 관제 UI 표시·수명·스타일 경계 분리
+
+- 변경: 운행 표시를 trip-display, 목록 표현을 roster-presentation, 로스터 전용 스타일을 roster.css로 분리했다. 셸은 로스터 공개 과업 동작을 쓰고 기존 권한·요청·폴링·초점을 유지한다. 실제 소비자·자산 registry·문서 로드를 함께 갱신했다.
+- 증거: 원격 집중44 passed/2 warnings/0 NEW, 4폭×2테마의 계산 스타일 일치. [검증 기록](../../../docs/validation/fleet-ui-boundaries-2026-10-24/result.md). 최종 완결 커밋의 공식 착지 검증은 별도다.
+- gate 변화: 없음. 합성 호스트 UI 검증이며 장치·사용자 G3·현장 수용은 미실시다. CE: 부모 Python stdout의 UTF-8 복구 교훈을 docs/solutions에 기록했다.

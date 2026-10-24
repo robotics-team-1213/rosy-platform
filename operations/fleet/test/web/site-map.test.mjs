@@ -1,9 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
-  addApproach, removeApproach, mergeCrosswalks,
-} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, rectangularView, addApproach, removeApproach, mergeCrosswalks} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {tripErrorText} from '../../../../applications/fleet/web/shared/trip-display.js';
 import {
   editEdge, editPlace,
   createSurveyDraft, appendSurveyElement, reviewSurveyDraft,
@@ -143,7 +141,8 @@ test('invalid draft errors list the fields', async () => {
 });
 
 test('D-494 trip panel text and button reasons', async () => {
-  const {tripStatusText, tripStartReason} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const {tripStartReason} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const {tripStatusText} = await import('../../../../applications/fleet/web/shared/trip-display.js');
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
@@ -170,7 +169,7 @@ test('D-494 trip panel text and button reasons', async () => {
 });
 
 test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who', async () => {
-  const {tripStatusText, tripErrorText} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const {tripStatusText, tripErrorText} = await import('../../../../applications/fleet/web/shared/trip-display.js');
   const trip = {state: 'running', robot_id: 'r1', reason: null, detail: {}, lease: {state: 'held'}};
   assert.match(tripStatusText(trip, MAP), /CORE 점유 중/);
   const lost = {...trip, state: 'stopped', reason: 'lease_lost', lease: {state: 'lost'},
@@ -182,7 +181,8 @@ test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who
 });
 
 test('D-494 trip stop reasons name the configured stall time and loop errors', async () => {
-  const {tripStatusText, PLACE_KIND_LABEL} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const {PLACE_KIND_LABEL} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const {tripStatusText} = await import('../../../../applications/fleet/web/shared/trip-display.js');
   const trip = {state: 'stopped', robot_id: 'r1', reason: 'stall', detail: {stall_s: 35}};
   assert.match(tripStatusText(trip, MAP), /35초 넘게 경로를 따라 나아가지 않아/);
   assert.match(tripStatusText({...trip, reason: 'TRIP_LOOP_ERROR', detail: {}}, MAP), /관제 운행 처리에 오류/);

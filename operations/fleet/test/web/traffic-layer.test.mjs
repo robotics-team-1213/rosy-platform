@@ -1,9 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  loopCapacityText, occupancyLampText, repeatTripBody, routePoint, signalAheadText, signalText, tripErrorText, tripStartReason,
-  trafficAttention, trafficCardLine, trafficClock, trafficDrawing, unitParts,
-} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {loopCapacityText, occupancyLampText, repeatTripBody, routePoint, signalAheadText, signalText, tripStartReason, trafficAttention, trafficCardLine, trafficClock, trafficDrawing, unitParts} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {tripErrorText} from '../../../../applications/fleet/web/shared/trip-display.js';
 
 // A square loop: east (0,0)->(2,0) cut in 3 blocks, ring (2,0)->(2,1) one zone, west (2,1)->(0,1)->(0,0).
 const ACTIVE = {version: 7, map: {edges: [

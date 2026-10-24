@@ -4362,3 +4362,15 @@
 - 변경: 직접 이웃 위임 HTTP·기명 현장 승인·동일 Task transaction 결속·고정 peer 자격과 앱 생애를 연결했다. stale·취소 요청·단절/재시작을 원래 identity로 조정하며 기존 dispatch와 native 결과 검사를 사용한다. 무로봇 독립 aggregate도 CLI에서 연다.
 - 증거: 집중 store/서비스/routes/HTTP/재시작47 PASS, 실제 앱/CLI132 PASS, 독립 aggregate/기존 CLI52 PASS, port/앱/CORE 종단16 PASS(서로 겹치는 별도 실행). [검증 기록](../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
 - gate 변화: 최종 통합 검증·로컬 main 착지는 대기한다. 실물·FIELD 수용은 열지 않는다. CE 해당 없음: 판단을 코드·회귀·검증 기록에 보존했다.
+
+## 2026-10-24 · e1e69f32c7 · Fleet UI 책임 경계 회귀
+
+- 변경: 표시 모듈·로스터 공개 동작·전용 CSS의 소비자와 회귀를 갱신했다. Node와 실제 제공 Console의 로봇 전환·초점·계획/시작·대열·반응형·정적 자산·패키지 연결을 검증한다. 서비스 API·명령 권한은 바꾸지 않는다.
+- 증거: 원격 집중44 passed/0 NEW, 별도 지도/API·문법30 passed/0 NEW. 실패 로그와 수정 근거는 [검증 기록](../../docs/validation/fleet-ui-boundaries-2026-10-24/result.md)에 구분한다. 통과 수를 고유 시험 총수로 합산하지 않는다.
+- gate 변화: 없음. 최종 착지 검증·실물·현장 수용과 구분한다. CE: UI 추출 판단은 코드·시험으로 설명되며 부모 stdout 복구는 별도 교훈에 남겼다.
+
+## 2026-10-24 · 9a2c0be210 · UI 문서 소유와 표시 코드 검사 연결
+
+- 변경: 새 표시 모듈을 공유 목록에, 로스터 표현 모듈을 Console 전용 목록에 연결하고 오류 어휘 전수 검사의 실제 소유 파일을 갱신했다. 설치 문서의 로스터 접근 금지는 대조 시험으로 유지한다.
+- 증거: 원격 집중 6 passed/2 warnings, 0 NEW. 첫 전체 회귀의 두 실패와 수정 전 RED는 [후속 기록](../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-integration-contracts.md)에 구분한다.
+- gate 변화: 없음. 기준선·제품 동작·권한 변경 없음. CE 해당 없음: 코드와 회귀에 판단을 남겼다.

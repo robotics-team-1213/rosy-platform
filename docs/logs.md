@@ -10244,3 +10244,15 @@ osy-d395-s1d\`.
 - 소스 대조: Fleet의 topology/runtime/routes/service, CLI, site Caddy·Compose를 확인했다. 기본 site Compose에는 control-unit 인자·mount가 없고 peer client의 기본 TLS 신뢰에 site `SSL_CERT_FILE`이 자동 적용되지 않으므로 설치만으로 중첩 연결 완료를 주장하지 않는다. 새 API·장치 권한·배포 변경은 없다.
 - 검증: 독립 계약 검토와 커밋된 revision의 공식 원격 회귀·known failures 비교 후 착지한다. 기존 소프트웨어 검증은 동결된 pipeline 기록을 참조하며 현장 검증으로 확대하지 않는다.
 - CE: 해당 없음 — 역할·배치 제약과 다음 수용 기준을 해당 정본에 직접 남겼다. 실제 네트워크 장애를 해결한 사례는 아니다.
+
+## 2026-10-24 · e1e69f32c7 · Fleet UI 구조 후속 검증과 Windows 출력 교훈
+
+- 변경: [후속 검증](validation/fleet-ui-boundaries-2026-10-24/result.md)에 표시·로스터 수명·CSS 소유, RED/수정/통과와 화면 근거를 기록했다. [부모 UTF-8 교훈](solutions/workflow-issues/windows-remote-test-parent-needs-utf8-2026-10-24.md)은 원격 로그 회수 후 한국어 실패 꼬리의 cp1252 출력 중단과 복구를 다룬다.
+- 증거: 같은 로컬 시험 commit의 기본/UTF-8 runner 비교와 stdout·자식 인코딩 대조. UI 집중44 passed/0 NEW, 8조합 계산 스타일 일치. 최종 착지와 사용자/장치 수용은 이 기록에서 완료로 주장하지 않는다.
+- gate 변화: 없음. CE: 새 교훈 기록. 기존 PowerShell 파일 쓰기 교훈과 구분하며 새 도메인 어휘·지침 파일은 추가하지 않았다.
+
+## 2026-10-24 · 9a2c0be210 · Fleet UI 통합 검사 소유 경로 보완
+
+- 변경: [통합 검사 보완](validation/fleet-ui-boundaries-2026-10-24/2026-10-24-integration-contracts.md)에 첫 공식 회귀의 두 실패와 검사 경로 보완을 구분했다. 초기 검증 기록은 보존한다.
+- 증거: 원격 집중 3 failed → 6 passed/2 warnings, 0 NEW. 설치 문서의 로스터 표시 접근을 거절하는 대조 시험을 포함한다.
+- gate 변화: 없음. 공식 재검증·로컬 main 착지는 대기한다. CE 해당 없음: 검사 경로 판단은 코드·시험으로 설명된다.
