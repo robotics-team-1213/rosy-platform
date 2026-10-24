@@ -92,8 +92,8 @@ class Cluster:
 
         async def handle_async_request(self, request):
             cluster, destination = self.cluster, request.url.host.upper()
-            bearer = request.headers.get("authorization", "").removeprefix("Bearer ")
-            sender = next((unit for unit in UNITS if bearer == edge(unit, destination)), "human")
+            presented = request.headers.get("authorization", "").removeprefix("Bearer ")
+            sender = next((unit for unit in UNITS if presented == edge(unit, destination)), "human")
             cluster.calls.append((sender, destination, request.method, request.url.path))
             if destination in cluster.down:
                 raise httpx.ConnectError("synthetic disconnected unit", request=request)

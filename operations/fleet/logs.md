@@ -4408,3 +4408,9 @@
 - 변경: SharedGather·직접 소유 SQL·최소 지도 projection과 직계 자식 collector/routes를 연결했다. 전용 자격의 일반 API 우회를 막고 CA·방향별 자격·deadline·byte cap을 적용했다. 정지 journal/latch/rearm guard·owned 작업과 기존 Console/OMX callback을 결속했다.
 - 증거: source0fe4d9825e의 공식 원격 RED: 자격 범위8 FAIL, 미구현 정보/정지/collector3 import ERROR. 기존 pure split은 a400의 AST39 일치·집중255 PASS·독립 검토 근거를 유지한다. 현재 구현 source의 원격 GREEN과 실제 helper/safety 검토는 다음 단계다.
 - gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
+
+## 2026-10-25 · uncommitted · 통합관제 경계 등록의 전체 회귀 보완
+
+- 변경: 새 통합 화면을 Console 문서 OWN에 등록하고 install 금지-import mutation을 기존 사례와 함께 검사한다. 실제 호출하는 공유 정지 helper를 정확한 공개 safety anchor로 등록하며 커진 work 단위의 obsolete small 예외를 제거한다. 공개 source 해시7줄은 exact-line provenance로 결속하고 HTTP fixture의 동적 헤더 읽기 지역명만 명확히 했다.
+- 증거: source42e079ef48 첫 FULL에서 Fleet2 FAIL/6388 PASS/362 SKIP, root4 FAIL/10027 PASS/1139 SKIP을 확인했다. 문서 소유 누락과 구조/출처 누락을 고치며 timing 실패는 별도로 판별한다. sourced73aede28c의 문서 경계3건은 SKIP0·NEW0이고 독립 검토는 경계 완화가 없음을 확인했다. 나머지 수정과 최종 FULL은 후속 검증이다.
+- gate 변화: 검사 규칙·known failures·시간 기준은 유지한다. 실물·현장 수용을 승격하지 않는다. CE 해당 없음 — 등록 누락과 복구 조건은 manifest·회귀·정확한 출처 결속에 직접 남긴다.
