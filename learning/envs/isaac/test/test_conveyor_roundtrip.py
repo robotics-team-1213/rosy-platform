@@ -104,3 +104,19 @@ def test_contact_worker_finalizes_its_scenario_and_keeps_failed_evidence(tmp_pat
         assert final['status'] == ('SUCCEEDED' if passed else 'FAILED')
         assert final['result']['task_success'] is passed
         assert store.artifact(row['run_id'], 'contact-report')['bytes'] > 0
+
+
+def test_rendering_never_advances_the_control_step():
+    from conveyor_task import physics_step
+    class World:
+        physics = 0
+        renders = 0
+        def step(self, *, render, update_fabric):
+            assert render is False and update_fabric is True
+            self.physics += 1
+        def render(self):
+            self.renders += 1
+    world = World()
+    for tick in range(24):
+        physics_step(world, tick)
+    assert world.physics == 24 and world.renders == 2
