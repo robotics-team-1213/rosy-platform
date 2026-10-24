@@ -33,7 +33,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 11 | 현장 표면 | `applications/fleet/{web,gateway}`, `operations/processes`, `operations/site_devices`, `operations/site_ui/{cam,media}`, `operations/apps`, `operations/overhead`, `operations/signal_observation` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
 
-집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sighting·운영자 pin·odom의 현재 자세다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽는다(D-752). `source=bridged`는 dead reckoning이고 미래 예측이나 완료 증거가 아니다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
+집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sighting·운영자 pin·odom의 현재 자세다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽는다(D-752). `source=bridged`는 dead reckoning이고 미래 예측이나 완료 증거가 아니다. Fleet 원장 테이블(`fleet_tasks`, `fleet_task_history`, `fleet_robot_reservations`, `fleet_action_claims`)은 집 8의 `task_store`가 만들지만, 쓰는 모듈은 집 8 안팎에 열 개다. 그 목록은 `test/architecture/test_fleet_ledger_writers.py`가 고정하고, 새 writer는 리뷰를 거쳐 목록에 올려야 한다. stuck·incidents 등은 자기 테이블에만 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
 
 같은 영어 단어는 집을 나눈다.
 
