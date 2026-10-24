@@ -9651,3 +9651,9 @@ osy-d395-s1d\`.
 - 변경: D-857 P0 2번. `omx_web.py export-segments --db <state>/reviews.sqlite3 --id <등록 id> --out <새 폴더>`가 `/learning/omx`에 저장된 최신 구간 검수 버전을 DB에서 읽어 `native_segments.export_segments`에 그대로 넘긴다(JSON 내려받기·수동 전달 불필요, 내려받기는 남김). `native_review.refuse_untrainable`이 `DO_NOT_TRAIN.txt`·`static_episodes.json` 표시 녹화를 intake(`prepare_native`)·분할(`split_reviewed`)·구간 내보내기에서 거절한다. 학습에는 여전히 사람이 성공·무개입으로 확인한 구간만 들어간다.
 - 증거: 원격 시험 PC에서 대상 시험 233 passed, 9 skipped, affected 계층 2478 passed, 324 skipped, known_failures 0 NEW. DB 경로가 내려받은 JSON과 같은 입력을 export에 넘기는 시험은 통과했다. 두 경로의 receipt·dataset 바이트를 비교하는 LeRobot 왕복 시험은 시험 PC에 lerobot이 없어 건너뛰었다(미검증).
 - gate 변화: 없음. CE 해당 없음 — 새 장치·환경 판단이 없다.
+
+## 2026-10-25 · uncommitted · 정지 episode 제외 규칙과 검수 DB 읽기 전용
+
+- 변경: robot-47 답변에 따라 `DO_NOT_TRAIN.txt`는 dataset 전체 거절, `static_episodes.json`은 적힌 episode만 제외로 바꿨다. 파일이 깨졌거나 남는 episode가 없으면 전체 거절. 표시는 `record_session`이 LeRobot dataset root에 쓰고 `record_seal`이 `collection/dataset/`으로 복사한다(fix/omx-arm-s-cell-check 읽기 확인). `prepare_native`가 aggregate 번호로 intake root에 옮겨 쓰고, `inspect_dataset`이 `excluded_episodes`(번호·이유)로 남기며, `reviewed_splits`·구간 선택이 그 episode를 뺀다. 이 변경 전에 준비한 intake는 봉인 manifest에 표시가 있으면 거절한다(다시 준비 필요). manifest 없는 예전 fixture intake는 확인하지 않는다. `export-segments`는 DB를 `mode=ro`로 열어 두 표를 직접 읽는다.
+- 증거: 원격 시험 PC에서 대상 247 passed, 9 skipped, affected 2684 passed, 324 skipped, known_failures 0 NEW. LeRobot 바이트 비교 시험은 시험 PC에 lerobot이 없어 여전히 건너뜀.
+- gate 변화: 없음. CE 해당 없음 — 규칙 변경이며 새 장치 판단이 없다.
