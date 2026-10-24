@@ -236,6 +236,10 @@ class RosArmPhaseGoalPort:
         self._lock = threading.RLock()
         self._command_by_goal: dict[str, tuple[str, str]] = {}
 
+    @property
+    def command_owner(self):
+        return self.runtime.owner
+
     def submit(
         self, command: TrajectoryCommand, *,
         on_goal_event: Callable[[RosGoalEvent], bool],

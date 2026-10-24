@@ -234,8 +234,14 @@ class ActionRunner:
                                 if isinstance(grant, FleetActionGrant) else ""),
                 owner_generation=grant.dispatch_generation, payload=request,
             )
-        created = (create_action() if self.control_admission is None else
-                   self.control_admission.run_action_admission(create_action))
+        if self.control_admission is None:
+            created = create_action()
+        elif isinstance(grant, FleetArmTransferGrant):
+            created = self.control_admission.run_action_admission(
+                create_action, action_kind=grant.action_kind,
+                resource_policy_digest=grant.arm_transfer.resource_policy_digest)
+        else:
+            created = self.control_admission.run_action_admission(create_action)
         action = created["action"]
         if not created["created"] and action["state"] != "PREPARED":
             return self._receipt(action, created=False)

@@ -32,7 +32,7 @@ def api():
         pytest.fail("installed neutral arm phase factory is missing")
 
 
-def setup(tmp_path, kin, profile, *, install=True, fault=None):
+def setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False):
     catalog = _catalog(kin, profile, workcell_id="omx-1", instance_id="omx-1-control")
     installation = api().ArmTransferInstallation(
         TransferObjectBindings(catalog, {"object-1": "g1"}), "arm-cap-1", "cfg-1", "d" * 64)
@@ -49,6 +49,24 @@ def setup(tmp_path, kin, profile, *, install=True, fault=None):
     store, driver, runner = _runner(tmp_path, capability_current=installation.capability_current)
     states = [_state(kin, profile)]
     port = _GoalPort()
+    if managed:
+        from omx_adapter.command_owner import ArmCommandOwner, JointStateSnapshot
+        from omx_adapter.control_seat_admission import ControlSeatAdmission
+        from test_omx_command_owner import FakeActionClient, make_config
+
+        config = make_config(workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+                             joint_names=profile.joint_names,
+                             position_limits={name: (-10, 10) for name in profile.joint_names},
+                             max_start_state_tolerances=profile.start_state_tolerances(),
+                             calibration_revision=catalog.calibration_revision,
+                             max_goal_duration_s=1000, action_timeout_s=1001)
+        owner = ArmCommandOwner(config, FakeActionClient(), session_id="session-1", monotonic=lambda: 100.1)
+        owner.observe_joint_state(JointStateSnapshot(states[0].joint_positions, states[0].sequence,
+                                                     100.1, catalog.calibration_revision))
+        runner.control_admission = ControlSeatAdmission(owner, store, monotonic=lambda: 100.1)
+        owner.bind_control_admission(runner.control_admission)
+        runner.control_admission.enable_managed_transfers(installation.resource_policy_digest)
+        port.command_owner = owner
 
     def succeed(command, goal, callback):
         callback(_event("GOAL_ACCEPTED", command, command.phase_id, goal, 1))
@@ -78,10 +96,58 @@ def setup(tmp_path, kin, profile, *, install=True, fault=None):
             trajectory_points=phase.points, phase_id=phase.phase_id),
         goal_port=port, submission_fence=runner.submission_fence, phase_gate=lambda *_: True,
         current_fence=runner.current_fence, gripper_readback=readback, gripper_sensor_revision="sensor-1",
-        monotonic=lambda: 100.1)
+        monotonic=lambda: 100.1,
+        control_admission=runner.control_admission if managed else None)
     if install:
         runner.phase_runner_factories["ARM_TRANSFER"] = factory
     return grant, store, driver, runner, port, states, installation
+
+
+def test_managed_phase_reaches_final_owner_only_during_exact_synchronous_submission(tmp_path, kin, profile):
+    from concurrent.futures import ThreadPoolExecutor
+
+    grant, store, _, runner, port, _, _ = setup(tmp_path, kin, profile, managed=True)
+    admission = runner.control_admission
+    decisions = []
+
+    def submit(command, goal, callback):
+        assert admission.check_command(command)
+        assert not admission.check_command(replace(command))
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            assert pool.submit(admission.check_command, command).result(timeout=1) is False
+        decisions.append(admission.owner.submit(command))
+        callback(_event("GOAL_ACCEPTED", command, command.phase_id, goal, 1))
+
+    port.on_submit = submit
+    receipt = runner.submit(grant, peer_uid=1001)
+    assert receipt["state"] == "ACCEPTED", receipt
+    assert len(decisions) == 1 and decisions[0].accepted, decisions
+    assert store.get_action(grant.action_id)["state"] == "ACCEPTED"
+    assert not admission.check_command(port.submissions[0][0])
+    with pytest.raises(PermissionError):
+        admission.acquire("token", "seat", ttl_s=1)
+
+
+def test_managed_submission_context_is_cleared_after_port_error(tmp_path, kin, profile):
+    grant, store, _, runner, port, _, _ = setup(tmp_path, kin, profile, managed=True)
+
+    def fail(command, *_):
+        assert runner.control_admission.check_command(command)
+        raise TimeoutError("unknown dispatch")
+
+    port.on_submit = fail
+    runner.submit(grant, peer_uid=1001)
+    assert store.get_action(grant.action_id)["state"] == "HOLD"
+    assert not runner.control_admission.check_command(port.submissions[0][0])
+
+
+def test_managed_factory_rejects_a_port_bound_to_another_final_owner(tmp_path, kin, profile):
+    grant, store, _, runner, port, _, _ = setup(tmp_path, kin, profile, managed=True)
+    port.command_owner = object()
+    receipt = runner.submit(grant, peer_uid=1001)
+    assert receipt["state"] in {"HOLD", "UNKNOWN"}
+    assert store.get_action(grant.action_id)["state"] in {"HOLD", "UNKNOWN"}
+    assert not port.submissions
 
 
 def test_neutral_grant_runs_four_physical_phases_without_cell_recipe_or_direct_driver(tmp_path, kin, profile):

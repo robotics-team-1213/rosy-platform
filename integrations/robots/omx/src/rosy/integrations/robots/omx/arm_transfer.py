@@ -10,6 +10,7 @@ from core_common.protocol.schemas import FleetArmTransferGrant
 from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.kinematics import OmxKinematics
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
+from omx_adapter.managed_transfer_port import _ManagedTransferPort
 from omx_adapter.phase_gate import PHASE_WAIT
 from omx_adapter.pick_place_runner import PickPlaceRunner
 from omx_adapter.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
@@ -58,7 +59,7 @@ class ArmTransferInstallation:
 def create_arm_transfer_phase_factory(*, installation, profile, kinematics, execution_state,
                                       command_for_phase, goal_port, submission_fence, phase_gate,
                                       current_fence, gripper_readback, gripper_sensor_revision,
-                                      monotonic, now=None):
+                                      monotonic, now=None, control_admission=None):
     """No node, driver or loop is created; the caller supplies admitted owner ports."""
     if (not isinstance(installation, ArmTransferInstallation) or not isinstance(profile, ArmPlanningProfile)
             or not isinstance(kinematics, OmxKinematics)):
@@ -132,13 +133,17 @@ def create_arm_transfer_phase_factory(*, installation, profile, kinematics, exec
                 workflow.cancel(reason="ARM_TRANSFER_STATE_UNAVAILABLE")
                 raise
 
+        admitted_port = (goal_port if control_admission is None else
+                         _ManagedTransferPort(control_admission, goal_port, grant, recorder))
         execution = PickPlaceRunner(
             recorder, grant, plan, command_for_phase=lambda phase: command_for_phase(grant, phase),
-            goal_port=goal_port, submission_fence=submission_fence, phase_gate=gate,
+            goal_port=admitted_port, submission_fence=submission_fence, phase_gate=gate,
             current_fence=current_fence, current_execution_state=execution_state,
             start_state_tolerances=profile.start_state_tolerances(), max_joint_state_age_s=profile.max_joint_state_age_s,
             monotonic=clock, now=now, cell_profile=profile, gripper_readback=readback,
             held_object_id=grant.arm_transfer.object_ref)
+        if control_admission is not None:
+            admitted_port.bind_executor(execution)
 
         def complete_if_current(operation):
             try:

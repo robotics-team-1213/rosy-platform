@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .action_store_readback import ActionStoreReadback, _nonempty
+from .managed_transfer_scope import initialize_journal
 from .workflow_states import (_PICK_PLACE_PHASES, _WORKFLOW_STATES,
                               _WORKFLOW_EVIDENCE_KEYS, _COMPLETION_BY_KIND)
 
@@ -54,10 +55,7 @@ class ActionStore(ActionStoreReadback):
             if str(mode).lower() != "wal":
                 raise RuntimeError(f"SQLite WAL mode is required, got {mode!r}")
             connection.execute("PRAGMA synchronous=FULL")
-            version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version > 2:
-                raise RuntimeError(f"unsupported Action database schema version {version}")
-            connection.executescript(
+            initialize_journal(connection,
                 """
                 CREATE TABLE IF NOT EXISTS omx_actions (
                     action_id TEXT PRIMARY KEY,
@@ -124,7 +122,6 @@ class ActionStore(ActionStoreReadback):
                 );
                 CREATE INDEX IF NOT EXISTS omx_action_phases_state
                     ON omx_action_phases(action_id, attempt_id, state, ordinal);
-                PRAGMA user_version=2;
                 """
             )
 
