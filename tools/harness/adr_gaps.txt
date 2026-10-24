@@ -87,8 +87,4 @@ D-844 reserved outside this branch; remove when its ADR lands
 D-848 reserved outside this branch; remove when its ADR lands
 D-849 reserved outside this branch; remove when its ADR lands
 D-852 reserved outside this branch (refs/adr/D-852); remove when its ADR lands
-D-853 reserved outside this branch (refs/adr/D-853); remove when its ADR lands
-D-854 reserved outside this branch (refs/adr/D-854); remove when its ADR lands
-D-855 reserved outside this branch (refs/adr/D-855); remove when its ADR lands
 D-852 reserved outside this branch; remove when its ADR lands
-D-856 reserved outside this branch; remove when its ADR lands
