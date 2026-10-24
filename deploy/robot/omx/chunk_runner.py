@@ -99,7 +99,8 @@ def load_library(path: Path) -> dict:
 
 
 class Runner:
-    def __init__(self, robot, library: dict, *, fps: int, status, clock=time.monotonic, sleep=time.sleep):
+    def __init__(self, robot, library: dict, *, fps: int, status, clock=time.monotonic, sleep=time.sleep,
+                 live=None):
         self.robot, self.library, self.fps, self.status = robot, library, fps, status
         self.clock, self.sleep = clock, sleep
         self.target = None
@@ -110,6 +111,7 @@ class Runner:
         self.last_grip = None
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
+        self.live = live  # called about twice a second with the current state (Fleet observation bridge)
         self.health_present = None
 
     def present(self) -> list:
@@ -271,6 +273,10 @@ class Runner:
             if self.pending and not self.command(self.pending.pop(0)):
                 return
             self.tick()
+            if self.live and self.ticks % max(1, self.fps // 2) == 0:
+                self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in self.present()],
+                           "target": [round(v, 2) for v in self.target], "chunk": self.chunk,
+                           "fault": self.fault, "health": self.health})
             self.sleep(max(0.0, period - (self.clock() - started)))
 
 
@@ -327,7 +333,14 @@ def main(argv=None):
     lines = fifo_lines(args.io / "chunk-cmd")
     robot.connect(calibrate=False)
     try:
-        Runner(robot, library, fps=config["dataset"]["fps"], status=status).run(lines)
+        live_path = args.io / "live.json"
+
+        def live(row):  # replaced atomically so a reader never sees half a file
+            tmp = live_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(row))
+            os.replace(tmp, live_path)
+
+        Runner(robot, library, fps=config["dataset"]["fps"], status=status, live=live).run(lines)
     finally:
         lines.close()
         robot.disconnect()

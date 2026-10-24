@@ -218,6 +218,15 @@ def test_a_measured_hold_current_must_agree_with_the_jaw_position(current, holdi
     assert done["holding"] is holding and done["gripper_current_ma"] == current
 
 
+def test_the_live_state_is_published_about_twice_a_second():
+    rows, clock, queue = [], [0.0], ["run approach_pinky", "state", "stop"]
+    r = m.Runner(Robot(), library(), fps=30, status=lambda row: None, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30), live=rows.append)
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health"}
+    assert rows[-1]["state"][0] == 18.0  # held at the end of the approach chunk
+
+
 def test_a_small_jog_and_grip_move_only_their_joint():
     robot = Robot()
     runner(robot, ["jog wrist_flex.pos -4", "grip 55", "stop"])
