@@ -11111,3 +11111,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 구현·활성화·현장 수용은 D-865 실행 계획 P1~P5의 별도 단계다.
 - 결정: D-865 Proposed.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · 로컬 main과 origin/main 이력 합치기, D-868 게시 순서
+
+- 변경: 2026-10-16(#54)부터 갈라진 origin/main(squash 120개)을 로컬 main에 병합했다. 충돌은 로컬 배치·판을 따르고, 로컬에 없던 #191·#144와 squash 안전 검토 연결 5건을 들였다. 양쪽 logs.md 항목을 모두 남기고, #179 초안 한 항목은 `tools/harness/log_repairs.yaml`로 로컬 문구에 잇는다. D-868로 게시 순서를 정했다: 로컬 main에 먼저 착지하고, 공개 main에는 로컬 main을 merge commit PR로 올리며 squash·rebase 병합을 쓰지 않는다. AGENTS.md D-427 4항·6항·GitHub 게시 절, shared-checkout.md, pr-pipeline.md, git-workflow.md, 착지 명령 카드를 맞췄다.
+- 증거: origin 커밋 120개의 추가 줄을 병합 트리와 대조해 빠진 것만 골랐다. 장치 코드(dynamixel_port, update_status)는 origin과 같다. lint 0 error. 원격 시험은 land.py 결과를 따른다.
+- gate 변화: 없음. GitHub 저장소 병합 방식과 ruleset 변경은 게시 때 따로 적용한다.
+- 결정: D-868 Accepted.
+- 교훈: 없음

@@ -10,7 +10,7 @@
 |---|---|---|
 | 작업 위치 | 자기 clone의 주제 브랜치 | 공유 체크아웃의 `.worktrees/<짧은이름>` |
 | 브랜치 이름 | `<type>/<topic>` — `feat` `fix` `refactor` `docs` `uiux` | 같다 |
-| `main`에 넣는 법 | PR → CI 녹색 확인 → **Squash and merge** | `tools/land.py`로 로컬 `main`에 `--ff-only` 착지 |
+| `main`에 넣는 법 | PR → CI 녹색 확인 → **Create a merge commit**(squash 금지, D-868) | `tools/land.py`로 로컬 `main`에 `--ff-only` 착지 |
 | `origin`에 올리는 사람 | 본인(브랜치만. `main`은 PR로만) | 관리자 계정이 로컬 `main`을 push |
 | 시험 | 자기 PC에서 돌려도 된다(D-584 개정) | 실험실 시험 PC로 보낸다. 노트북에서 pytest 금지 |
 | 절차 전문 | [CONTRIBUTING](../../.github/CONTRIBUTING.md) | [같이 하는 깃](shared-checkout.md) · 루트 [AGENTS.md](../../AGENTS.md) |

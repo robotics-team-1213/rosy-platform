@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-868 | 로컬 main에 먼저 착지하고, 공개 main에는 그 로컬 main을 merge commit으로 올린다 | Accepted (2026-10-25) |
 | D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
 | D-866 | VLA 주 시뮬레이터는 Isaac Sim, Gazebo는 실행 계약 회귀용. 모델 PC와 AI PC는 역할을 나누되 오프라인 일괄 작업은 병렬로 처리 | Proposed (2026-10-25) |
 | D-865 | Fleet 정책 승인 — 사람이 정한 승인 범위 안 작업 자동 승인 | Proposed (2026-10-25) |
