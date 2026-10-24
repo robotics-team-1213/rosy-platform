@@ -9645,3 +9645,9 @@ osy-d395-s1d\`.
 - 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · OMX 데이터셋 단계가 저장된 구간 검수를 DB에서 읽음
+
+- 변경: D-857 P0 2번. `omx_web.py export-segments --db <state>/reviews.sqlite3 --id <등록 id> --out <새 폴더>`가 `/learning/omx`에 저장된 최신 구간 검수 버전을 DB에서 읽어 `native_segments.export_segments`에 그대로 넘긴다(JSON 내려받기·수동 전달 불필요, 내려받기는 남김). `native_review.refuse_untrainable`이 `DO_NOT_TRAIN.txt`·`static_episodes.json` 표시 녹화를 intake(`prepare_native`)·분할(`split_reviewed`)·구간 내보내기에서 거절한다. 학습에는 여전히 사람이 성공·무개입으로 확인한 구간만 들어간다.
+- 증거: 원격 시험 PC에서 대상 시험 233 passed, 9 skipped, affected 계층 2478 passed, 324 skipped, known_failures 0 NEW. DB 경로가 내려받은 JSON과 같은 입력을 export에 넘기는 시험은 통과했다. 두 경로의 receipt·dataset 바이트를 비교하는 LeRobot 왕복 시험은 시험 PC에 lerobot이 없어 건너뛰었다(미검증).
+- gate 변화: 없음. CE 해당 없음 — 새 장치·환경 판단이 없다.
