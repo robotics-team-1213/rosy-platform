@@ -5,9 +5,38 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.299
+**Version:** v1.303
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.303 Neutral arm transfer grant model (D-856)
+
+`FleetArmTransferGrant` and `ArmTransferPayload` add an inactive physical execution
+contract. No submit endpoint or runtime kind is enabled by this version. The local
+owner parser, phase/direct-driver kind sets and Fleet step registry still reject
+`ARM_TRANSFER` until its owner, ledger, approval, recovery and physical resource
+closure contracts are installed and verified. Envelope protocol_version stays 1.0.
+
+The payload has exactly `object_ref`, `catalog_digest`, `bindings_digest`, `source`,
+`target`, `resource_policy_digest`. References use the strict physical-reference
+type from v1.299; all three digests are lowercase SHA-256. Source and target differ.
+Raw geometry, coordinates, resource policies, Cell recipes and business state are
+not payload fields. Owner installation resolves these references; model validation
+does not approve their physical meaning or grant execution authority.
+
+The grant has exactly `mission_id`, `step_id`, `action_id`, `attempt_id`,
+`request_digest`, `workcell_id`, `instance_id`, `action_kind` (`ARM_TRANSFER`),
+`arm_transfer`, `capability_revision`, `config_revision`, `authority_epoch`,
+`dispatch_generation`, `issued_at`, `expires_at`. The four execution identities are
+distinct strict Action identifiers of 1..192 characters; scope identifiers use the
+same syntax and 96-character limit. Revisions are strict trimmed control-free
+1..128-character strings. Epoch/generation are strict nonnegative integers. Times
+are timezone-aware and expiry follows issuance. Models are frozen and extra fields
+are forbidden, including pair/barrier fields. Whole-grant canonical digest binding
+remains required at runtime; a valid digest alone is not approval.
+
+The existing Action/stop DTO definitions move unchanged to `device_actions.py`;
+their canonical imports from `core_common.protocol.schemas` remain available.
 
 ### v1.299 Neutral arm transfer preflight (D-856)
 
@@ -3705,6 +3734,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.303 | 2026-10-24 | D-856: inactive physical arm transfer grant DTO and unchanged Action/stop DTO extraction; no runtime kind or submit activation, envelope 1.0 unchanged. |
 | v1.299 | 2026-10-24 | D-856: authenticated simulation arm-transfer preflight with installed physical references, scoped owner IPC and request-bound planning facts; no admission/dispatch authority, envelope 1.0 unchanged. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |

@@ -111,3 +111,10 @@ def test_resigned_cell_payload_changes_still_leave_ledger_and_claims_unchanged(t
         store.start_step("cell-mission-1", step_index=0, action_id="action-0", attempt_id="attempt-0", grant=grant)
     assert store.get("cell-mission-1") == ready
     assert tasks.resource_claims(resource_kind="workcell", resource_id="omx_01") == claims
+
+
+def test_uninstalled_arm_transfer_dto_is_not_a_fleet_execution_kind():
+    from fleet.server.step_action_kinds import parse_step_grant
+
+    with pytest.raises(ValueError):
+        parse_step_grant({"action_kind": "ARM_TRANSFER"})

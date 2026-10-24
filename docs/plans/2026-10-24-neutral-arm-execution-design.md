@@ -63,6 +63,8 @@ receipt 저장과 해당 generation의 claim 해제는 같은 원장 transaction
 
 독립 초안 검토는 기존 cancel/resume의 HELD 해제 우회와 성공했지만 종료 미입증인 공유 점유자 누락을 지적했다. 위 두 조건을 활성화 게이트와 회귀 범위에 추가했다. 아직 구현을 검증한 결과는 아니다.
 
+추가 소스 조사에서 `TaskStore._advance_dispatch_control`의 site-stop/authority 변경은 Cell/charging 보존 hook을 호출한 뒤 남은 모든 CLAIMED claim을 삭제함을 확인했다. 중립 kind의 점유도 그 hook에서 HELD/UNKNOWN 보존되는지 회귀해야 한다. `dispatch_admission.release`, `action_claims.release_keys/release_held_keys`가 실제 삭제를 수행하며, TRIP arrived와 channel task 결과의 삭제 경로도 존재한다. 후자는 해당 owner_kind/owner_id에만 한정되는지 확인해 중립 mission 점유를 지우지 못하게 한다. 함수명 검색만으로 전체 입구 검증 완료를 주장하지 않는다.
+
 ## 첫 실행 모델 등록안
 
 `ArmTransferPayload`는 `object_ref`, `catalog_digest`, `bindings_digest`, `source`, `target`, `resource_policy_digest` 여섯 필드만 갖는다. 참조·digest는 기존 사전검사의 strict 물리 참조/SHA-256 타입을 재사용하고 source와 target은 달라야 한다. 임의 좌표·기하 override·recipe·cargo·pallet·업무 상태를 받지 않는다. resource policy digest는 설치 자원/종료 조건에 결속할 참조이며 요청자가 만든 policy의 승인을 뜻하지 않는다.

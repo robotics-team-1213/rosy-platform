@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · D-856 중립 팔 실행 grant 모델
 - 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 공유 계약
 - 2026-10-23 · uncommitted · D-855 관제 위임과 scoped cancel 공유 계약
 - 2026-10-20 · 37c3907d3 · D-821 명시적 이동과 locale 추가 계약
 - 2026-10-20 · uncommitted · D-810 Console 대화 DTO
-- 2026-10-19 · c6abafd83 · (origin #92 2026-10-16) v1.254 이안 허가와 실측 결과 readback

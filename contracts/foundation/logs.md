@@ -890,3 +890,9 @@
 - 변경: API v1.299에 엄격한 물리 참조 요청·원래 요청에 결속한 검사 결과·지원 거절 모델을 등록했다. simulation/collision 명시값·유한 나이·revision·고정 code/reason을 검증하며 Envelope 1.0은 유지한다. UI DTO는 leaf로 그대로 옮겨 canonical export를 유지하고 facade 크기를 줄였다.
 - 증거: 신규 계약/owner/Fleet RED 36 failed 뒤 구현하고 고정 code/reason RED 3개를 추가해 수정했다. 최종 신규·기존 관련 원격 213 passed/skip0/0 NEW다. 정확한 시험 SHA·metadata 재작성·HTTP 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 결속했다.
 - gate 변화: 읽기 계약의 SOURCE·simulation 집중 검증이다. 중립 팔 grant·실행·장치 수용을 열지 않는다. CE 해당 없음: 검증 조건은 schema·회귀·검증 기록에 남는다.
+
+## 2026-10-24 · uncommitted · D-856 중립 팔 실행 grant 모델
+
+- 변경: 예약 v1.303에 설치 물리 참조 여섯 개와 공통 실행 envelope의 불변 grant DTO를 등록한다. 기존 Action/stop DTO 14개의 AST를 그대로 leaf에 옮기고 canonical export를 유지한다. schemas facade는 1142→811줄로 줄인다.
+- 증거: commit 93ec6212ea의 공식 원격 RED 31 failed는 신규 모델 누락이다. 모델·기존 digest/stop/receipt·API version·미설치 kind 거절의 최종 원격 결과는 후속 SHA에 결속한다.
+- gate 변화: DTO 등록만 진행한다. 새 kind의 Fleet registry·owner parser·phase/direct-driver·UDS submit은 계속 거절하며 실제 grant 발행·실행은 후속이다. CE 해당 없음: 계약과 회귀가 판단 근거를 보존한다.
