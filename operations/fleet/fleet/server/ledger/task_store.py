@@ -7,16 +7,19 @@ import os
 import sqlite3
 from collections.abc import Mapping
 from contextlib import closing
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
 from fleet.server.cancel_all_store import ensure_schema as ensure_cancel_all_schema
+from fleet.server.control_stop_schema import ensure_schema as ensure_control_stop_schema
 from fleet.server.dispatch_admission import release as release_dispatch_claims
-from fleet.server.dispatch_admission import reserve as reserve_dispatch_claims
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 from fleet.server.task_payloads import safe_json as _safe_json
 from fleet.server.task_schema import TaskSchemaMigrations
+
+from .task_dispatch_control import TaskDispatchControl
+from .task_dispatch_queue import TaskDispatchQueue
+from .task_store_types import IdempotencyConflict, InvalidTaskTransition, _now
 
 _TASK_TRANSITIONS = {
     "REQUESTED": {"QUEUED", "ACCEPTED", "FAILED", "UNKNOWN", "HOLD"},
@@ -26,7 +29,6 @@ _TASK_TRANSITIONS = {
     "UNKNOWN": {"ACCEPTED", "RUNNING", "COMPLETED", "FAILED", "HOLD"},
     "FAILED": set(), "COMPLETED": set(), "HOLD": set(), "CANCELED": set(), "EXPIRED": set(),
 }
-_PRIORITY_CLASSES = {0, 1, 2}
 _QUEUE_POSITION_QUERY = """SELECT COUNT(*) FROM fleet_tasks
     INDEXED BY fleet_tasks_dispatch_queue_position
     WHERE status='QUEUED' AND lease_owner IS NULL
@@ -34,19 +36,7 @@ _QUEUE_POSITION_QUERY = """SELECT COUNT(*) FROM fleet_tasks
       AND (priority_class, queued_at, task_id) < (?, ?, ?)"""
 
 
-class IdempotencyConflict(ValueError):
-    """The same actor reused an idempotency key for a different task request."""
-
-
-class InvalidTaskTransition(ValueError):
-    """A task status transition is outside the declared state machine."""
-
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-
-
-class FleetTaskStore(TaskSchemaMigrations):
+class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueue):
     """Current task projection plus a transactional, append-only status journal."""
 
     def __init__(self, path: Path | str) -> None:
@@ -147,6 +137,7 @@ class FleetTaskStore(TaskSchemaMigrations):
             self._migrate_dispatch_control(connection)
             self._migrate_dispatch_claims(connection)
             ensure_cancel_all_schema(connection)  # D-421 cancel-all record and attempt tags
+            ensure_control_stop_schema(connection)
         if os.name != "nt":
             self.path.chmod(0o600)
 
@@ -198,221 +189,6 @@ class FleetTaskStore(TaskSchemaMigrations):
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def reserve_resources(self, *, owner_kind: str, owner_id: str, generation: int,
-                          resources: list[tuple[str, str]], phase: str = "CLAIMED") -> bool:
-        """Atomically reserve canonical resources for a task, Mission, or direct Action."""
-        if phase != "CLAIMED":
-            raise ValueError("new resource reservations must use CLAIMED phase")
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            control = connection.execute(
-                "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            if (not control["dispatch_enabled"] or control["generation"] != generation):
-                connection.commit()
-                return False
-            claimed = reserve_dispatch_claims(
-                connection, owner_kind=owner_kind, owner_id=owner_id,
-                generation=generation, resources=resources, phase="CLAIMED",
-            )
-            connection.commit()
-        return claimed
-
-    def restore_unresolved_action_claim(self, *, owner_kind: str, owner_id: str,
-                                        generation: int, resources: list[tuple[str, str]],
-                                        phase: str) -> bool:
-        """Restore persisted in-flight device ownership while dispatch is closed.
-
-        Only an external, durable Action reconciliation path should call this;
-        regular admission cannot manufacture DISPATCHING or UNKNOWN claims.
-        """
-        if owner_kind not in {"mission", "direct_action"}:
-            raise ValueError("only Mission or direct Action claims may be restored here")
-        if phase not in {"DISPATCHING", "UNKNOWN"}:
-            raise ValueError("restored Action claim phase must be DISPATCHING or UNKNOWN")
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            control = connection.execute(
-                "SELECT dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            if control["dispatch_enabled"]:
-                connection.rollback()
-                raise ValueError("unresolved Action claims may only be restored while dispatch is closed")
-            claimed = reserve_dispatch_claims(
-                connection, owner_kind=owner_kind, owner_id=owner_id,
-                generation=generation, resources=resources, phase=phase,
-            )
-            connection.commit()
-        return claimed
-
-    def release_resources(self, *, owner_kind: str, owner_id: str,
-                          generation: int | None = None) -> bool:
-        """Release only the matching owner generation after outcome reconciliation."""
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            released = release_dispatch_claims(
-                connection, owner_kind=owner_kind, owner_id=owner_id,
-                generation=generation,
-            )
-            if owner_kind == "task":
-                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
-                                   (owner_id,))
-            connection.commit()
-        return released > 0
-
-    def resource_claims(self, *, resource_kind: str, resource_id: str) -> list[dict]:
-        resource_key = f"{resource_kind}:{resource_id}"
-        with closing(self._connect()) as connection:
-            rows = connection.execute(
-                """SELECT resource_kind, resource_id, owner_kind, owner_id,
-                          generation, phase
-                   FROM fleet_action_claims WHERE resource_key=?""",
-                (resource_key,),
-            ).fetchall()
-        return [dict(row) for row in rows]
-
-    def dispatch_control(self) -> dict:
-        with closing(self._connect()) as connection:
-            row = connection.execute(
-                """SELECT authority_epoch, generation, dispatch_enabled, reason
-                   FROM fleet_dispatch_control WHERE control_id=1"""
-            ).fetchone()
-            queued = connection.execute(
-                """SELECT COUNT(*) FROM fleet_tasks WHERE status='QUEUED'
-                   AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')"""
-            ).fetchone()[0]
-            unresolved = connection.execute(
-                """SELECT COUNT(*) FROM fleet_action_claims
-                   WHERE phase IN ('DISPATCHING', 'UNKNOWN')"""
-            ).fetchone()[0]
-        return {"authority_epoch": row["authority_epoch"],
-                "generation": row["generation"],
-                "dispatch_enabled": bool(row["dispatch_enabled"]),
-                "reason": row["reason"], "queued_tasks": int(queued),
-                "unresolved_actions": int(unresolved),
-                "rearm_available": not bool(row["dispatch_enabled"]) and unresolved == 0}
-
-    def close_dispatch_for_startup(self) -> dict:
-        return self._advance_dispatch_control(enabled=False, actor_id="system",
-                                              reason="PROCESS_RESTARTED",
-                                              release_pre_dispatch=True,
-                                              advance_authority_epoch=True)
-
-    def trip_stop_latch(self, *, actor_id: str, reason: str = "SITE_STOP") -> dict:
-        if not actor_id or len(actor_id) > 96 or not reason or len(reason) > 64:
-            raise ValueError("invalid stop latch attribution")
-        return self._advance_dispatch_control(enabled=False, actor_id=actor_id,
-                                              reason=reason, release_pre_dispatch=True)
-
-    def rearm_dispatch(self, *, expected_generation: int, actor_id: str) -> dict:
-        if (isinstance(expected_generation, bool) or not isinstance(expected_generation, int)
-                or expected_generation < 0 or not actor_id or len(actor_id) > 96):
-            raise ValueError("invalid dispatch rearm request")
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            current = connection.execute(
-                "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            if current["generation"] != expected_generation:
-                raise InvalidTaskTransition("dispatch generation changed; refresh before rearm")
-            if current["dispatch_enabled"]:
-                raise InvalidTaskTransition("dispatch is already enabled")
-            unresolved = connection.execute(
-                "SELECT 1 FROM fleet_action_claims "
-                "WHERE phase IN ('DISPATCHING', 'UNKNOWN') LIMIT 1"
-            ).fetchone()
-            if unresolved is not None:
-                raise InvalidTaskTransition("unresolved Action claims must be reconciled before rearm")
-            connection.execute(
-                """UPDATE fleet_dispatch_control SET generation=generation+1,
-                   dispatch_enabled=1, reason='OPERATOR_REARM', actor_id=?, updated_at=?
-                   WHERE control_id=1 AND generation=? AND dispatch_enabled=0""",
-                (actor_id, now, expected_generation),
-            )
-            connection.commit()
-        return self.dispatch_control()
-
-    def dispatch_generation_is_current(self, generation: int) -> bool:
-        with closing(self._connect()) as connection:
-            row = connection.execute(
-                """SELECT 1 FROM fleet_dispatch_control
-                   WHERE control_id=1 AND dispatch_enabled=1 AND generation=?""",
-                (generation,),
-            ).fetchone()
-        return row is not None
-
-    def abort_dispatch_before_send(self, task_id: str, *, attempt_id: str) -> dict:
-        """Return an attempt to READY only when a stale permit prevented any send."""
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            current = connection.execute(
-                "SELECT * FROM fleet_tasks WHERE task_id=?", (task_id,)
-            ).fetchone()
-            control = connection.execute(
-                "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            if current is None:
-                raise KeyError(task_id)
-            if (current["dispatch_phase"] != "DISPATCHING"
-                    or current["attempt_id"] != attempt_id
-                    or (control["dispatch_enabled"]
-                        and control["generation"] == current["dispatch_generation"])):
-                raise InvalidTaskTransition("dispatch attempt is not fenced by a changed stop generation")
-            reason = "STOP_GENERATION_CHANGED_BEFORE_SEND"
-            connection.execute(
-                """UPDATE fleet_tasks SET dispatch_phase='READY', attempt_id=NULL,
-                   lease_owner=NULL, lease_until=NULL, reason=?, updated_at=?
-                   WHERE task_id=?""",
-                (reason, now, task_id),
-            )
-            connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?", (task_id,))
-            release_dispatch_claims(connection, owner_kind="task", owner_id=task_id)
-            self._append_history(connection, task_id, "QUEUED", "system", "fleet-dispatch",
-                                 now, reason)
-            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
-                                     (task_id,)).fetchone()
-            connection.commit()
-        return self._task_dict(row)
-
-    def _advance_dispatch_control(self, *, enabled: bool, actor_id: str,
-                                  reason: str, release_pre_dispatch: bool = False,
-                                  advance_authority_epoch: bool = False) -> dict:
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            connection.execute(
-                """UPDATE fleet_dispatch_control SET generation=generation+1,
-                   authority_epoch=authority_epoch+?,
-                   dispatch_enabled=?, reason=?, actor_id=?, updated_at=? WHERE control_id=1""",
-                (int(advance_authority_epoch), int(enabled), reason, actor_id, now),
-            )
-            if release_pre_dispatch:
-                from fleet.server.cell_job_store import hold_for_site_stop  # Cell Jobs keep claims (D-403)
-                from fleet.server.charge_store import retain_charge_claims_for_stop
-                hold_for_site_stop(connection, now=now, hold_reason=None if advance_authority_epoch else "site_stop")
-                retain_charge_claims_for_stop(connection)
-                rows = connection.execute(
-                    """SELECT owner_kind, owner_id FROM fleet_action_claims
-                       WHERE phase='CLAIMED'"""
-                ).fetchall()
-                for row in rows:
-                    if row["owner_kind"] == "task":
-                        connection.execute(
-                            """UPDATE fleet_tasks SET lease_owner=NULL, lease_until=NULL,
-                               updated_at=? WHERE task_id=? AND status='QUEUED'
-                               AND dispatch_phase='READY'""",
-                            (now, row["owner_id"]),
-                        )
-                        connection.execute(
-                            "DELETE FROM fleet_robot_reservations WHERE task_id=?",
-                            (row["owner_id"],),
-                        )
-                connection.execute("DELETE FROM fleet_action_claims WHERE phase='CLAIMED'")
-            connection.commit()
-        return self.dispatch_control()
-
     def create_task(self, *, task_id: str, robot_id: str, task_type: str,
                     source: str, actor_id: str, request_key: str,
                     request: Mapping, evidence: Mapping | None, admission=None) -> dict:
@@ -456,220 +232,6 @@ class FleetTaskStore(TaskSchemaMigrations):
                                      (task_id,)).fetchone()
             connection.commit()
         return {"created": True, "task": self._task_dict(row)}
-
-    def enqueue(self, task_id: str, *, priority_class: int, expires_at: str | None = None,
-                actor_id: str = "site-scheduler", source: str = "scheduler") -> dict:
-        """Durably move a validated request into the dispatchable queue."""
-        if priority_class not in _PRIORITY_CLASSES:
-            raise ValueError("priority_class must be operator=0, accepted-policy=1, background=2")
-        if expires_at is not None:
-            expires_at = _parse_time(expires_at).isoformat(timespec="milliseconds")
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",
-                                         (task_id,)).fetchone()
-            if current is None:
-                raise KeyError(task_id)
-            if current["status"] != "REQUESTED":
-                raise InvalidTaskTransition(f"{current['status']} cannot transition to QUEUED")
-            connection.execute(
-                """UPDATE fleet_tasks SET status='QUEUED', priority_class=?, queued_at=?,
-                   expires_at=?, reason=NULL, updated_at=? WHERE task_id=?""",
-                (priority_class, now, expires_at, now, task_id),
-            )
-            self._append_history(connection, task_id, "QUEUED", source, actor_id, now)
-            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",
-                                     (task_id,)).fetchone()
-            connection.commit()
-        return self._task_dict(row)
-
-    def claim_next(self, *, worker_id: str, available_robot_ids: set[str],
-                   lease_seconds: float = 30.0) -> dict | None:
-        """Atomically claim the highest-priority eligible task and reserve its robot."""
-        if not worker_id or len(worker_id) > 96:
-            raise ValueError("invalid worker_id")
-        if lease_seconds <= 0:
-            raise ValueError("lease_seconds must be positive")
-        robot_ids = sorted(set(available_robot_ids))
-        now_dt = datetime.now(timezone.utc)
-        now = now_dt.isoformat(timespec="milliseconds")
-        lease_until = (now_dt + timedelta(seconds=lease_seconds)).isoformat(
-            timespec="milliseconds")
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            expired = connection.execute(
-                """SELECT task_id, source, actor_id FROM fleet_tasks
-                   WHERE status='QUEUED' AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')
-                     AND expires_at IS NOT NULL AND expires_at <= ?""",
-                (now,),
-            ).fetchall()
-            for row in expired:
-                connection.execute(
-                    """UPDATE fleet_tasks SET status='EXPIRED', dispatch_phase='EXPIRED',
-                       reason='TASK_EXPIRED', blocked_by=NULL, waiting_on_json='[]', updated_at=? """
-                    "WHERE task_id=? AND status='QUEUED'", (now, row["task_id"]),
-                )
-                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
-                                   (row["task_id"],))
-                release_dispatch_claims(connection, owner_kind="task",
-                                        owner_id=row["task_id"])
-                self._append_history(connection, row["task_id"], "EXPIRED", "scheduler",
-                                     "site-scheduler", now, "TASK_EXPIRED")
-            stale_claims = connection.execute(
-                """SELECT task_id FROM fleet_tasks WHERE status='QUEUED'
-                   AND dispatch_phase='READY' AND lease_until IS NOT NULL AND lease_until <= ?""",
-                (now,),
-            ).fetchall()
-            for row in stale_claims:
-                connection.execute(
-                    "UPDATE fleet_tasks SET lease_owner=NULL, lease_until=NULL "
-                    "WHERE task_id=?", (row["task_id"],),
-                )
-                connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?",
-                                   (row["task_id"],))
-                release_dispatch_claims(connection, owner_kind="task",
-                                        owner_id=row["task_id"])
-            selected = None
-            control = connection.execute(
-                "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            if not control["dispatch_enabled"]:
-                connection.commit()
-                return None
-            if robot_ids:
-                placeholders = ",".join("?" for _ in robot_ids)
-                selected = connection.execute(
-                    f"""SELECT t.task_id, t.robot_id FROM fleet_tasks AS t
-                        WHERE t.status='QUEUED' AND t.dispatch_phase='READY'
-                          AND t.robot_id IN ({placeholders})
-                          AND (t.lease_until IS NULL OR t.lease_until <= ?)
-                          AND NOT EXISTS (SELECT 1 FROM fleet_action_claims c
-                                          WHERE c.resource_key='robot:' || t.robot_id)
-                        ORDER BY t.priority_class ASC, t.queued_at ASC, t.task_id ASC LIMIT 1""",
-                    (*robot_ids, now),
-                ).fetchone()
-            if selected is None:
-                connection.commit()
-                return None
-            connection.execute(
-                """UPDATE fleet_tasks SET lease_owner=?, lease_until=?, dispatch_generation=?,
-                   updated_at=? WHERE task_id=?""",
-                (worker_id, lease_until, control["generation"], now, selected["task_id"]),
-            )
-            claimed = reserve_dispatch_claims(
-                connection, owner_kind="task", owner_id=selected["task_id"],
-                generation=control["generation"], resources=[("robot", selected["robot_id"])],
-                phase="CLAIMED", lease_until=lease_until,
-            )
-            if not claimed:
-                connection.rollback()
-                return None
-            connection.execute(
-                "INSERT INTO fleet_robot_reservations(robot_id, task_id, reserved_at) VALUES (?, ?, ?)",
-                (selected["robot_id"], selected["task_id"], now),
-            )
-            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
-                                     (selected["task_id"],)).fetchone()
-            connection.commit()
-        return self._task_dict(row)
-
-    def mark_dispatching(self, task_id: str, *, worker_id: str) -> dict:
-        """Persist an attempt ID before a CORE call; its presence forbids blind replay."""
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
-                                         (task_id,)).fetchone()
-            if current is None:
-                raise KeyError(task_id)
-            if (current["status"] != "QUEUED" or current["lease_owner"] != worker_id
-                    or current["dispatch_phase"] != "READY"
-                    or current["lease_until"] is None or current["lease_until"] <= now):
-                raise InvalidTaskTransition("task is not held by this active dispatch lease")
-            control = connection.execute(
-                "SELECT generation, dispatch_enabled FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            if (not control["dispatch_enabled"]
-                    or control["generation"] != current["dispatch_generation"]):
-                raise InvalidTaskTransition("task claim belongs to an obsolete stop generation")
-            attempt_id = str(uuid4())
-            connection.execute(
-                """UPDATE fleet_tasks SET dispatch_phase='DISPATCHING', attempt_id=?,
-                   attempt_seq=attempt_seq+1, updated_at=? WHERE task_id=?""",
-                (attempt_id, now, task_id),
-            )
-            claim = connection.execute(
-                """UPDATE fleet_action_claims SET phase='DISPATCHING', lease_until=NULL
-                   WHERE resource_key='robot:' || ? AND owner_kind='task'
-                     AND owner_id=? AND generation=? AND phase='CLAIMED'""",
-                (current["robot_id"], task_id, current["dispatch_generation"]),
-            )
-            if claim.rowcount != 1:
-                raise InvalidTaskTransition("task no longer owns its robot dispatch claim")
-            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
-                                     (task_id,)).fetchone()
-            connection.commit()
-        return self._task_dict(row)
-
-    def wait_for_traffic(self, task_id: str, *, worker_id: str, reason: str,
-                         blocked_by: str | None, waiting_on: list[str],
-                         dispatch_attempted: bool, cancel_confirmed: bool) -> dict:
-        """Persist a queued traffic wait only when no goal remains active on the robot."""
-        if dispatch_attempted and not cancel_confirmed:
-            raise ValueError("traffic wait requires confirmed cancellation")
-        if not reason or len(reason) > 64 or len(waiting_on) > 32:
-            raise ValueError("invalid traffic wait details")
-        waiting_json = _safe_json(list(waiting_on))
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
-                                         (task_id,)).fetchone()
-            if current is None:
-                raise KeyError(task_id)
-            if (current["status"] != "QUEUED" or current["dispatch_phase"] != "DISPATCHING"
-                    or current["lease_owner"] != worker_id):
-                raise InvalidTaskTransition("task is not held by this dispatch attempt")
-            if json.loads(current['receipt_json'] or '{}').get('operation'):
-                raise InvalidTaskTransition('native traffic cancellation requires exact outcome reconciliation')
-            connection.execute(
-                """UPDATE fleet_tasks SET dispatch_phase='WAITING_TRAFFIC', reason=?,
-                   blocked_by=?, waiting_on_json=?, lease_owner=NULL, lease_until=NULL,
-                   updated_at=? WHERE task_id=?""",
-                (reason, blocked_by, waiting_json, now, task_id),
-            )
-            connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=?", (task_id,))
-            release_dispatch_claims(connection, owner_kind="task", owner_id=task_id)
-            self._append_history(connection, task_id, "QUEUED", current["source"],
-                                 current["actor_id"], now, reason)
-            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
-                                     (task_id,)).fetchone()
-            connection.commit()
-        return self._task_dict(row)
-
-    def release_traffic_wait(self, task_id: str) -> dict:
-        """Make a confirmed-canceled traffic wait eligible for a fresh attempt."""
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
-                                         (task_id,)).fetchone()
-            if current is None:
-                raise KeyError(task_id)
-            if current["status"] != "QUEUED" or current["dispatch_phase"] != "WAITING_TRAFFIC":
-                raise InvalidTaskTransition("task is not waiting for traffic release")
-            connection.execute(
-                """UPDATE fleet_tasks SET dispatch_phase='READY', reason=NULL, blocked_by=NULL,
-                   waiting_on_json='[]', queued_at=?, updated_at=? WHERE task_id=?""",
-                (now, now, task_id),
-            )
-            self._append_history(connection, task_id, "QUEUED", "scheduler",
-                                 "site-scheduler", now, "TRAFFIC_QUEUE_RELEASED")
-            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
-                                     (task_id,)).fetchone()
-            connection.commit()
-        return self._task_dict(row)
 
     def cancel_queued(self, task_id: str, *, actor_id: str) -> dict:
         """Cancel only a task that has not entered its CORE dispatch attempt."""
@@ -943,13 +505,3 @@ class FleetTaskStore(TaskSchemaMigrations):
                                      reason)
             connection.commit()
         return task_ids
-
-
-def _parse_time(value: str) -> datetime:
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except (TypeError, ValueError) as exc:
-        raise ValueError("expires_at must be an ISO-8601 timestamp") from exc
-    if parsed.tzinfo is None:
-        raise ValueError("expires_at must include a timezone")
-    return parsed.astimezone(timezone.utc)

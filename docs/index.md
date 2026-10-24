@@ -353,5 +353,5 @@
 - 2026-10-25 · uncommitted · test(policy-chain): D-866 P0 SmolVLA 정책 사슬 Gazebo 확인
 - 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
 - 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
-- 2026-10-24 · 73fc8b2b09 · 실제 private HF 모델 전달·재적재
-- 2026-10-24 · 73fc8b2b09 · 실제 private HF 데이터 왕복
+- 2026-10-25 · uncommitted · FULL 등록 누락과 교차 SHA 격리 판정 보완
+- 2026-10-25 · uncommitted · 통합관제 실제 HTTP·브라우저 집중 수용 근거
