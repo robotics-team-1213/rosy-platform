@@ -22,7 +22,9 @@
 function Save-SdBatch([Collections.IDictionary]$Batch) {
     $temporary = $Batch.Path + ".tmp"
     $Batch.Report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $temporary -Encoding utf8 -ErrorAction Stop
-    Move-Item -LiteralPath $temporary -Destination $Batch.Path -Force -ErrorAction Stop
+    # Windows PowerShell converts $null to an empty string for the backup path.
+    if ([IO.File]::Exists($Batch.Path)) { [IO.File]::Replace($temporary, $Batch.Path, [NullString]::Value) }
+    else { [IO.File]::Move($temporary, $Batch.Path) }
 }
 
 function Set-SdBatchCard([Collections.IDictionary]$Batch, $Plan, [string]$RegistryJson,
