@@ -78,3 +78,5 @@ canonical export 공간은 기존 device-action/stop DTO의 정의를 별도 `de
 이 등록은 commit `1258314f51`, API v1.303으로 구현했다. 신규·기존 소비자 공식 원격 **1385 passed, skip0, 0 NEW**와 독립 검토를 확인했다. DTO 14개의 AST 동일성과 canonical identity/JSON schema 생성은 확인했으며 전체 JSON schema 문서 전후 비교는 별도다. [정확한 범위와 한계](../validation/harbor-neutral-arm-grant-2026-10-24/result.md)를 따른다. 실제 소비자·원장·자원 종료·Harbor 연결은 계속 진행한다.
 
 다음 원장 변경은 [provenance migration 설계](2026-10-24-neutral-arm-ledger-design.md)를 따른다. Cell/기존 TRIP 데이터 보존과 물리 형식의 구분, parent FK·mirror·projection·startup 소비자 검증을 함께 수행한 뒤 실제 creator를 연결한다.
+
+owner 소비자는 [중립 팔 owner 설계](2026-10-24-neutral-arm-owner-design.md)를 따른다. 내부 transaction의 결속과 HOLD 복구는 검증했고, 설치 factory·기존 물리 phase/gripper workflow·runtime 활성화와 parent journal 검증을 연결해야 한다.

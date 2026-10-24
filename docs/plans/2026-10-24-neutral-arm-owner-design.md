@@ -1,6 +1,6 @@
 # D-856 중립 팔 grant의 owner 실행
 
-**Status:** 구현 전 검토안. [전체 실행 계약](2026-10-24-neutral-arm-execution-design.md)을 실제 OMX owner에 연결한다. schema version5와 비활성 grant DTO만으로 실행을 열지 않는다.
+**Status:** 독립 검토 후 내부 transaction 구현·집중 원격 검증 완료. 설치 factory와 runtime 연결은 미완료다. [전체 실행 계약](2026-10-24-neutral-arm-execution-design.md)을 실제 OMX owner에 연결한다. schema version5와 비활성 grant DTO만으로 실행을 열지 않는다.
 
 ## 소비 경로
 
@@ -27,3 +27,7 @@ PickPlaceRunner와 현재 CellTransferWorkflowExecution의 물리 부분을 재�
 transaction·설치 factory가 검증된 뒤 parse/grant union·phase-only kind·shared control admission 요구·ActionStore camera-blind/완료 event·UDS 최소 v2를 같은 변경으로 연결한다. capability callback은 기존 필수 인수를 유지하고 설치 검증을 수행해야 한다. default owner는 설치 factory가 없어 새 kind를 journal 전 거절한다. direct-driver 종류는 늘리지 않는다. 새 kind를 지원하게 되는 시점에 API 버전을 예약·기록한다.
 
 기존 비활성 DTO의 parser 거절 시험은 설치 없는 실제 runner/API 거절 시험으로 바꾸되 동일한 journal/actuator 무변경 보장을 유지한다. 승인 factory의 simulation 성공·gripper 누락/물체 변경·stale calibration/fence·응답 유실 뒤 중복·재시작 HOLD를 통합 검증한다. 팔/zone claim 해제와 Harbor 도착·하역·퇴피 업무 판단은 이 owner 코드의 권한이 아니다.
+
+## 내부 transaction 확인
+
+commit `11486ce7cd`에서 raw identity/generation·물체 결속과 새 snapshot의 HOLD 복구를 구현했다. 독립 검토가 발견한 태그 두 개 삭제 우회는 RED 뒤 legacy 필수 형식 검증으로 차단했다. 신규·기존 Cell/PICK 소비자 원격 74 passed/skip0/0 NEW와 재검토를 확인했다. [정확한 소스와 한계](../validation/harbor-neutral-arm-owner-2026-10-24/result.md)를 따른다. parent Action kind·grant·durable journal과의 대조는 실제 recovery 소비자를 연결할 때 수행하며 factory/runtime 활성화 조건은 그대로다.

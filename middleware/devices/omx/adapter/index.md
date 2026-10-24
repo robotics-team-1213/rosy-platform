@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · 11486ce7cd · 중립 grant의 물리 transaction과 재시작 복구
 - 2026-10-24 · uncommitted · D-856 인증된 owner 사전검사 읽기 연결
 - 2026-10-24 · uncommitted · D-856 owner 물리 catalog와 사전검사
 - 2026-10-24 · uncommitted · D-856 물리 이송 계획과 Cell provenance 분리
 - 2026-10-23 · 187d5b758b · Pilot admitted readback와 policy pending intake 분리
-- 2026-10-23 · db4d8f87ca · Pilot readback와 제출의 owner transaction

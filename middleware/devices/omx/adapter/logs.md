@@ -626,3 +626,9 @@
 - 변경: 선택적인 v2 CheckTransfer와 peer UID/scope 검사, admitted joint_state 조립 helper를 추가했다. transform은 owner 설치 설정과 catalog를 대조하고 calibration은 측정 snapshot의 값을 보존한다. helper는 adapter에 두어 agent/palletizing 필수 의존성을 피했다. 기존 Cell owner는 선택적 catalog가 없으면 이전 경로를 유지한다.
 - 증거: 설치 transform 누락과 v1 거절 envelope RED 후 수정했다. 기존 ActionApi·Cell runner/owner를 포함한 원격 213 passed/skip0/0 NEW와 실제 HTTP/UDS를 확인했다. 독립 리뷰의 transform finding은 닫혔고 ActionApi 안전 태그의 Safety-Review trailer를 이력에 보완했다. 정확한 SHA는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md를 따른다.
 - gate 변화: simulation 읽기만 연결했다. 새 grant/dispatch·실물 capability는 없다. 공정 독립성은 import 차단, 상태는 합성 fixture이며 UDS stop 지연·설치 wheel·장치 수용은 미확인이다. CE 해당 없음: 경계와 회귀가 판단을 보존한다.
+
+## 2026-10-24 · 11486ce7cd · 중립 grant의 물리 transaction과 재시작 복구
+
+- 변경: 전체 ARM_TRANSFER grant/object_ref를 transaction에 결속하고 관측·Cell 필드 없이 snapshot을 만든다. 새 snapshot은 엄격한 identity/generation 대조 뒤 HOLD로 복구하며 태그를 모두 지워 legacy 완료 복구로 우회하지 못하게 한다.
+- 증거: 누락 consumer RED16·태그 삭제 RED1 뒤 신규·기존 Cell/PICK/transfer provider 원격 74 passed/skip0/0 NEW. 독립 재검토 finding 해소. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md를 따른다.
+- gate 변화: 내부 transaction만 연결했다. factory·실제 parent journal·phase-only runtime/권한·claim 종료·Harbor 연결은 후속이다. CE 해당 없음: source와 거절 회귀에 판단 근거가 남는다.

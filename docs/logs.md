@@ -10281,3 +10281,9 @@ osy-d395-s1d\`.
 - 변경: legacy provenance를 보존하는 원장 version5와 기존 Cell 소비자의 physical 차단을 구현했다. 선행 grant 단계 FULL 결과도 해당 SHA에 결속해 기록했다.
 - 증거: migration 관련 원격 69/13/244개 별도 회귀가 skip0/0 NEW로 통과하고 독립 검토 지적을 수정·재검토했다. grant source 8da8bb1593의 FULL 세 그룹은 11932/4359/6257 passed와 543/117/336 skipped, 각각 0 NEW다. 서로 다른 소스·수용 범위를 docs/validation의 두 기록에서 구분한다.
 - gate 변화: migration 이후 affected 전체 검증과 실제 creator·owner 실행·자원 종료·Harbor 변환은 남는다. CE 해당 없음: 운영 장애 해결이 아닌 구현·시험 보완이다.
+
+## 2026-10-24 · 11486ce7cd · D-856 owner transaction 물체·복구 결속
+
+- 변경: 중립 grant/object_ref만으로 그리퍼 transaction과 별도 snapshot을 만들고, raw identity·generation을 대조해 재시작을 HOLD로 복구한다. 가짜 Cell/camera 자료를 만들지 않는다.
+- 증거: 누락 consumer RED16과 태그 삭제 우회 RED1 뒤 신규·기존 소비자 원격 74 passed/skip0/0 NEW, 독립 재검토 finding 해소. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md에 결속했다.
+- gate 변화: 내부 상태 기계 소비자다. 설치 factory·phase-only runtime·parent journal 대조·Fleet 물리 자원 종료와 Harbor 연결은 남는다. CE 해당 없음: 보완 근거는 source·시험에 남는다.

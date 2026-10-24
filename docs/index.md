@@ -351,8 +351,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · 11486ce7cd · D-856 owner transaction 물체·복구 결속
 - 2026-10-24 · dda08892c9 · D-856 원장 migration 구현과 선행 FULL 결과
 - 2026-10-24 · uncommitted · D-856 중립 원장 migration 설계
 - 2026-10-24 · 1258314f51 · D-856 비활성 중립 팔 grant 계약
 - 2026-10-24 · d0d7f4616d · D-856 물체 참조와 owner 기하 결속
-- 2026-10-24 · uncommitted · D-856 첫 TRIP 계약과 구현 착수
