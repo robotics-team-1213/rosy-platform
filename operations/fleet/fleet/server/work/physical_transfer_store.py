@@ -17,7 +17,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from core_common.protocol.arm_transfer import ArmScopeId, ArmTransferCapability
+from core_common.protocol.arm_transfer import ArmTransferCapability
+from core_common.protocol.arm_transfer_jobs import ArmTransferRequest as PhysicalTransferRequest
 from core_common.protocol.arm_transfer_preflight import ArmPhysicalRef
 from .cell_job_store import CellJobStore
 from .dispatch_admission import reserve
@@ -25,21 +26,6 @@ from core_common.resource_keys import normalize_resources
 from .mission_store import MissionConflict, _json, _nonempty
 from .physical_transfer_evidence import PhysicalTransferPolicy
 from .site_auth import SitePrincipal
-
-
-class PhysicalTransferRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
-    workcell_id: ArmScopeId
-    instance_id: ArmScopeId
-    object_ref: ArmPhysicalRef
-    source: ArmPhysicalRef
-    target: ArmPhysicalRef
-
-    @model_validator(mode="after")
-    def _distinct(self):
-        if self.source == self.target:
-            raise ValueError("source and target must differ")
-        return self
 
 
 class TransferInstallation(BaseModel):

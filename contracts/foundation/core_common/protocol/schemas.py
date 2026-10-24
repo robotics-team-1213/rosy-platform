@@ -12,6 +12,10 @@ from .device_actions import (  # noqa: F401
     DeviceActionLookup, DeviceActionCancelRequest, LocalStopRequest, LocalStopQuery,
     LocalStopRearmRequest, LocalStopSnapshot)
 from .arm_transfer import ArmTransferCapability, ArmTransferPayload, FleetArmTransferGrant  # noqa: F401
+from .arm_transfer_jobs import (  # noqa: F401
+    ArmTransferRequest, ArmTransferRequestKey, ArmTransferJobCreate, ArmTransferJobAdmit,
+    ArmTransferJobSnapshot, ArmTransferJobResponse)
+from .task_state import FleetTaskStatus
 
 from .arm_transfer_preflight import (  # noqa: F401
     ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckResponse, ArmTransferCheckRejection)
@@ -124,21 +128,6 @@ class AckStatus(str, enum.Enum):
     STARTED = "STARTED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
-
-
-class FleetTaskStatus(str, enum.Enum):
-    """Site Fleet task lifecycle; separate from a robot command ACK."""
-
-    REQUESTED = "REQUESTED"
-    QUEUED = "QUEUED"
-    ACCEPTED = "ACCEPTED"
-    RUNNING = "RUNNING"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-    UNKNOWN = "UNKNOWN"
-    HOLD = "HOLD"
-    CANCELED = "CANCELED"
-    EXPIRED = "EXPIRED"
 
 
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------

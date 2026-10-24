@@ -48,7 +48,8 @@ def rig(tmp_path, installation):
     tasks = FleetTaskStore(db)
     port = CapabilityPort(installation, db)
     users = {sha256((name + "-secret").encode()).hexdigest(): {"principal_id": name, "role": role}
-             for name, role in (("harbor", "service"), ("other", "service"), ("operator", "operator"), ("viewer", "viewer"))}
+             for name, role in (("harbor", "service"), ("other", "service"), ("operator", "operator"),
+                                ("viewer", "viewer"), ("observer", "ai_observer"), ("policy-admin", "policy-admin"))}
     app = create_app(FleetConsole([], []), task_service=FleetTaskService(tasks, robot_ids=()),
         mission_service=MissionService(MissionStore(db)), proposal_store=ProposalStore(db),
         site_users=users, deployment_profile="simulation", omx_action_transport=port,
@@ -103,7 +104,7 @@ def test_approval_reads_every_current_capability_then_atomically_claims_without_
     assert "-secret" not in json.dumps(audit)
 
 
-@pytest.mark.parametrize("who,status", [(None, 401), ("viewer", 403)])
+@pytest.mark.parametrize("who,status", [(None, 401), ("viewer", 403), ("observer", 403), ("policy-admin", 403)])
 def test_proposals_reuse_existing_auth_roles_before_owner_io(rig, who, status):
     assert create(rig, who=who).status_code == status
     assert rig[2].calls == [] and rig[1].resource_claims() == []
@@ -151,3 +152,8 @@ def test_unbound_routes_return_unavailable_instead_of_false_absence(tmp_path):
     client = TestClient(app)
     assert client.get(PATH, params={"request_key": "move-1"}).status_code == 503
     assert client.get(PATH + "/unknown").status_code == 503
+
+
+def test_physical_profile_cannot_be_installed_in_a_production_application(installation):
+    with pytest.raises(ValueError, match="simulation"):
+        create_app(FleetConsole([], []), deployment_profile="production", arm_transfer_installation=installation)

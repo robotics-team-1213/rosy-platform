@@ -37,7 +37,7 @@ resource_policy_digest, status, authority_epoch, dispatch_generation,
 approved_by and reason. Status is PROPOSED/READY/RUNNING/ACTION_SUCCEEDED/
 GOAL_CONFIRMED/HOLD; only proposal, approval and HOLD are provided in this slice.
 GOAL_CONFIRMED is physical closure, never application completion. The nullable
-epoch/generation pair and approved_by are absent in a PROPOSED state (JSON null);
+epoch/generation pair and approved_by are JSON null in a PROPOSED state;
 READY and later active states require all three. HOLD can preserve prior approval.
 
 request_digest hashes compact sorted ASCII-escaped JSON of the five physical
