@@ -24,7 +24,7 @@ COPY integrations/messaging/discord/rosy_discord/ /opt/rosy/src/site/fleet/_sour
 COPY operations/decision/ /opt/rosy/src/site/decision/
 COPY operations/site_execution/src/ /opt/rosy/src/site/site_execution/src/
 COPY applications/fleet/web/ /opt/rosy/src/site/fleet/_source_roots/console/
-COPY operations/situation/rosy_situation/__init__.py operations/situation/rosy_situation/assessment.py operations/situation/rosy_situation/snapshot_assessment.py /opt/rosy/src/site/situation/rosy_situation/
+COPY operations/situation/rosy_situation/__init__.py operations/situation/rosy_situation/assessment.py operations/situation/rosy_situation/snapshot_assessment.py operations/situation/rosy_situation/fact_rules.py operations/situation/rosy_situation/wait_graph.py /opt/rosy/src/site/situation/rosy_situation/
 COPY operations/site_execution/src/rosy/execution/site/__init__.py operations/site_execution/src/rosy/execution/site/goal_evidence.py operations/site_execution/src/rosy/execution/site/workflow.py /opt/rosy/src/site/site_execution/src/rosy/execution/site/
 COPY operations/world/src/ /opt/rosy/src/operations/world/
 COPY contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_common/
