@@ -4,6 +4,7 @@ Poses and bounds use the observation's common frame. Object origin is explicit;
 an absent object pose remains absent. Capture times are source UTC nanoseconds,
 not refreshed when a consumer reads a record. Producer authentication and Fleet
 policy/attempt/freshness checks belong to the consumers, not these records.
+Unmeasured velocity stays None; consumers cannot use it as evidence of rest.
 """
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -69,14 +70,15 @@ class Bounds3:
 @dataclass(frozen=True)
 class LinkPhysicalState:
     bounds: Bounds3
-    linear_velocity_m_s: tuple[float, float, float]
-    angular_velocity_rad_s: tuple[float, float, float]
+    linear_velocity_m_s: tuple[float, float, float] | None
+    angular_velocity_rad_s: tuple[float, float, float] | None
 
     def __post_init__(self):
         if not isinstance(self.bounds, Bounds3):
             raise ValueError("measured link bounds are required")
-        object.__setattr__(self, "linear_velocity_m_s", _vector(self.linear_velocity_m_s, 3))
-        object.__setattr__(self, "angular_velocity_rad_s", _vector(self.angular_velocity_rad_s, 3))
+        for name in ("linear_velocity_m_s", "angular_velocity_rad_s"):
+            value = getattr(self, name)
+            object.__setattr__(self, name, None if value is None else _vector(value, 3))
 
 
 @dataclass(frozen=True)
