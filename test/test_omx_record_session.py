@@ -81,12 +81,14 @@ def config(tmp_path):
     return path
 
 
-def session(arm, leader, *, active=("rosy-omx-camera@top.service",), run=lambda command: 0):
+def session(arm, leader, *, active=("rosy-omx-camera@top.service",), activating=(), run=lambda command: 0):
     calls = []
 
     def systemctl(verb, unit):
         calls.append((verb, unit))
-        return "active" if verb == "is-active" and unit in active else ""
+        if verb != "is-active":
+            return ""
+        return "active" if unit in active else "activating" if unit in activating else ""
 
     def recorder(command):
         # while recording, LeRobot has turned the follower on
@@ -126,6 +128,16 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     assert_restored(arm, leader)
     assert ("stop", "rosy-omx-camera@top.service") in calls and ("start", "rosy-omx-camera@top.service") in calls
     assert ("stop", "rosy-omx-camera@front.service") not in calls  # was not running: left alone
+
+
+def test_a_readiness_unit_waiting_to_restart_is_stopped_before_recording(tmp_path):
+    # Restart=on-failure leaves it "activating" for RestartSec; firing mid-session would restart the cameras.
+    arm, leader = follower(), leader_arm()
+    s, calls = session(arm, leader, active=(), activating=("rosy-omx-camera-readiness.service",))
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["stopped_services"] == ["rosy-omx-camera-readiness.service"]
+    assert calls.index(("stop", "rosy-omx-camera-readiness.service")) < calls.index(("start", "rosy-omx-camera-readiness.service"))
+    assert_restored(arm, leader)
 
 
 @pytest.mark.parametrize("outcome", ["fails", "raises"])
