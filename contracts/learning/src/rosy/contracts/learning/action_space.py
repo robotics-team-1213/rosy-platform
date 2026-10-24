@@ -74,27 +74,29 @@ def validate_declaration(declaration):
     return {k: (list(order) if k == "motor_order" else declaration[k]) for k in keys}
 
 
-def ros_declaration(calibration, verdict):
+def ros_declaration(calibration, verdict, rig_revision):
     """Declaration for data converted to ros_joint_rad from a recorded arm, after the joint map gate."""
     return {"unit": ROS, "motor_order": list(ROS_JOINTS), "calibration_sha256": calibration_sha256(calibration),
-            "joint_map_revision": validate_joint_map(verdict, calibration)}
+            "joint_map_revision": validate_joint_map(verdict, calibration, rig_revision)}
 
 
-def validate_joint_map(verdict, calibration):
-    """A passing D-864 joint map verdict for exactly this calibration; returns the verdict's revision.
+def validate_joint_map(verdict, calibration, rig_revision):
+    """A passing D-864 joint map verdict for this arm and calibration; returns the verdict's revision.
 
-    The verdict names the calibration's range digest, which differs between arms and between calibration runs, so
-    a verdict for one arm or an earlier calibration cannot open conversion for another. The calibration's own
-    homing offset and drive mode must also be zero, as the verdict found on the motors.
+    The verdict's ``arm`` is the rig_revision the arm's datasets are reviewed under and must equal the data's.
+    Full-range calibrations are identical across arms, so the range digest alone cannot tell arms apart; it still
+    must match, and the calibration's own homing offset and drive mode must be zero as found on the motors.
     """
+    if not isinstance(rig_revision, str) or not rig_revision.strip():
+        raise ValueError("the data's rig revision is required")
     try:
-        return _joint_map(verdict, calibration)
+        return _joint_map(verdict, calibration, rig_revision)
     except (AttributeError, TypeError, KeyError) as exc:
         raise ValueError("malformed joint map verdict or calibration") from exc
 
 
-def _joint_map(verdict, calibration):
-    if (not isinstance(verdict, dict) or verdict.get("schema") != "rosy.omx-joint-map-check/2"
+def _joint_map(verdict, calibration, rig_revision):
+    if (not isinstance(verdict, dict) or verdict.get("schema") != "rosy.omx-joint-map-check/3"
             or verdict.get("holds") is not True or not isinstance(verdict.get("probes"), int) or verdict["probes"] < 2):
         raise ValueError("a passing joint map verdict over two or more probes is required")
     joints = verdict.get("joints")
@@ -103,6 +105,8 @@ def _joint_map(verdict, calibration):
             or any(j.get("holds") is not True or j.get("homing_offset_raw") != 0
                    or type(j.get("drive_mode")) is not int or j["drive_mode"] & 1 for j in joints)):
         raise ValueError("joint map verdict must hold for motors 11..16 in ROS joint order")
+    if verdict.get("arm") != rig_revision:
+        raise ValueError("joint map verdict was made for another arm")
     if verdict.get("calibration_sha256") != calibration_sha256(calibration):
         raise ValueError("joint map verdict was made for another calibration")
     for motor, motor_id in zip(MOTORS, MOTOR_IDS):
@@ -161,10 +165,11 @@ CONVERTERS = {(RAD, NORM): (1, _rad_to_norm), (NORM, RAD): (1, _norm_to_rad),
               (ROS, RAD): (1, _identity), (RAD, ROS): (1, _identity)}
 
 
-def convert(values, from_unit, to_unit, calibration, joint_map=None):
+def convert(values, from_unit, to_unit, calibration, joint_map=None, rig_revision=None):
     """One frame in declared order -> (values, clipped count, converter version). Never silent: count clips.
 
-    A conversion to or from ros_joint_rad needs ``joint_map``, a passing verdict bound to ``calibration``.
+    A conversion to or from ros_joint_rad needs ``joint_map``, a passing verdict for this ``rig_revision`` and
+    ``calibration``.
     """
     values = _finite(values)
     if from_unit == to_unit and from_unit in UNITS:
@@ -172,7 +177,7 @@ def convert(values, from_unit, to_unit, calibration, joint_map=None):
     if (from_unit, to_unit) not in CONVERTERS:
         raise ValueError(f"no converter {from_unit} -> {to_unit}")
     if ROS in (from_unit, to_unit):
-        validate_joint_map(joint_map, calibration)
+        validate_joint_map(joint_map, calibration, rig_revision)
     version, fn = CONVERTERS[(from_unit, to_unit)]
     out, clipped = fn(values, validate_calibration(calibration))
     return out, clipped, version
