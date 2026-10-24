@@ -51,13 +51,14 @@ from policy_chain_fixtures import approved_fleet, HttpServer
 
 SHAPE = (3, 240, 320)
 CAMERA_HZ = 5  # Halves the parent's per-frame copy/hash work and Gazebo's render pauses; observation age is 3 s.
-# Contract timing, not a performance claim: headless Gazebo on the lab PCs renders cameras on the CPU (EGL falls
-# back to software), so a SmolVLA step there took ~0.5 s (2026-10-25). Observation age stays above action age so a
-# late action reaches the action-age check itself; latency is measured GPU-exclusively instead (D-866 §4).
-TIMING = dict(period_ns=1_500_000_000, max_observation_age_ns=3_000_000_000, max_action_age_ns=2_000_000_000)
+# Contract timing, not a performance claim; latency is measured GPU-exclusively (D-866 §4). Observation age covers
+# Gazebo's camera render pauses (up to 0.53 s). With NVIDIA EGL and the owner executor a step's observe-to-submit is
+# 0.12-0.15 s (2026-10-25), so action age is 0.4 s. The stale delay must stay inside the session's 64-entry joint
+# history (~0.66 s at ~97 Hz): an evicted source is refused as policy_candidate_scope_or_observation instead.
+TIMING = dict(period_ns=1_500_000_000, max_observation_age_ns=3_000_000_000, max_action_age_ns=400_000_000)
 CAMERAS = (('front', '/front_camera/image_raw'), ('top', '/top_camera/image_raw'))
 RIG = 'sim-rig-vla-p0'
-MAX_STEP_RAD, PRELUDE_STEPS, STALE_DELAY_S, JOINT_STATE_AGE_S = .04, 3, 2.5, 1.0
+MAX_STEP_RAD, PRELUDE_STEPS, STALE_DELAY_S, JOINT_STATE_AGE_S = .04, 3, .5, 1.0
 TASK = 'pick up the cube and place it on the pallet'
 
 
