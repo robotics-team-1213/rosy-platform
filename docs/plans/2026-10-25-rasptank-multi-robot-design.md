@@ -2,6 +2,8 @@
 
 상태: 설계 제안 v2, 문서 등록. 2026-10-25. 기준 소스: rosy-platform `26499b1f51546072cd1edce7068ed489bc54b0e2`. 새 ADR·API·실물 지원 승인을 대신하지 않는다.
 
+후속 준비: 무구동 설정 패키지 소스를 추가하는 단계다. 아래 기준 소스에서의 부재 설명과 실제 후속 상태는 구분하며, 최신 상태는 [호환 목록](../reference/robot-compatibility.md)과 해당 모듈 progress를 따른다. 제품 활성화 결속·드라이버·이미지·실물 수용은 여전히 별도다.
+
 ## 이번에 준비할 결과
 
 1. 공식 Ubuntu 24.04 LTS Raspberry Pi arm64 OS 이미지, 서명된 checksum, 고정된 Adeept 소스·설명 자료를 확보한다. 순정 OS를 ROSY 통합 이미지로 부르지 않는다.

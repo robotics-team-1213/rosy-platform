@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | Pinky Pro | 기존 Raspberry Pi 5 구성 | `middleware/devices/pinky`, 실행 모델 `pinky_pro` | [배포 안내](../deployment/pinky-pro-first-device-runbook.md)와 해당 모듈의 SOURCE/ARTIFACT/DEVICE/FIELD 기록을 각각 확인 | 기존 구현 대상 |
 | OMX | 독립 팔 또는 기체와 조합한 구성 | `middleware/devices/omx`; joint/action owner는 어댑터 | 시뮬레이션·실물 경로와 장치별 수용 증거를 구분. 이 표가 실물 활성화를 승인하지 않음 | 기존 구현 대상 |
-| Adeept RaspTank Metal / ADR034 | 우선 Raspberry Pi 4B 4GB, Ubuntu Server 24.04 arm64 + ROS 2 Jazzy 목표 | `rasptank_metal`은 후속 모델 식별자 제안. 현재 실행 package·I/O 어댑터 없음 | 공식 Ubuntu 순정 이미지 준비와 ROSY 통합 이미지는 별개. 실측·부팅·주행·팔·정지 수용 미수행 | **지원 후보 / 실행 미지원** |
+| Adeept RaspTank Metal / ADR034 | 우선 Raspberry Pi 4B 4GB, Ubuntu Server 24.04 arm64 + ROS 2 Jazzy 목표 | [`rasptank_metal` 설정 패키지](../../middleware/devices/rasptank/profile/AGENTS.md) 소스 준비. I/O·실행 드라이버 없음 | 공식 Ubuntu 순정 이미지와 ROSY 통합 이미지는 별개. native 설치·실기 부팅·주행·팔·정지 수용 미수행 | **무구동 소스 준비 / 실행 미지원** |
 
 RaspTank의 Pi 5 장착도 제조사 지원 범위지만 ROSY의 Pi 5 조합 수용을 뜻하지 않는다. 보유 Pi의 RAM, HAT 버전, 카메라와 전원 회로를 확인한 뒤 프로파일을 고정한다. 제조사 상품 페이지와 배포 PDF의 HAT 버전 표기가 달라 실물 대조가 필요하다.
 
@@ -30,7 +30,7 @@ CORE의 [프로파일 로더](../../contracts/foundation/core_common/profile.py)
 
 ## RaspTank에서 아직 광고하면 안 되는 기능
 
-- 운전 가능한 로봇 모델: 현재 `rasptank_metal` profile package가 없다.
+- 운전 가능한 로봇 모델: `rasptank_metal`은 설정만 있는 무구동 소스 패키지다. 속도 한계 0, teleop/SLAM/이동/복귀/군집/도킹 false, 수용된 센서 없음으로 시작하며 팔·집게 제어를 광고하지 않는다. [모듈 상태](../../middleware/devices/rasptank/profile/progress.md)의 native 설치·이미지·실물 증거가 필요하다.
 - 검증된 m/s 주행과 odometry: 제조사 코드의 PWM throttle은 실측 속도가 아니다. encoder·위치 추정·궤도 선회 보정 경로를 확인해야 한다.
 - 관절 측정과 파지 완료: 서보에 보낸 명령이나 경과 시간은 관절·물체의 측정 근거가 아니다. 기존 gripper descriptor의 readback 의미와 맞지 않으면 광고하지 않는다.
 - 지도 주행·복귀·군집·자동 집기: 센서·실행 경로·통신 실패 처리·기체 수용을 기능별로 검증해야 한다.

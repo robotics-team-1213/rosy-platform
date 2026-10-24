@@ -7,7 +7,7 @@
 
 ROSY Platform은 관측한 세계 상태, 현장 미션 조정, 로봇의 안전한 실행, 오프라인 학습·평가를 연결한다. 첫 하드웨어는 Raspberry Pi 5 기반 **Pinky Pro**이며, [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 포크에서 출발했다.
 
-기존 구현 기체와 신규 지원 후보는 [로봇 호환성과 검증 상태](docs/reference/robot-compatibility.md)에서 구분한다. RaspTank Metal / Pi 4는 지원 후보이며, 실행 프로파일·통합 이미지·실물 수용은 아직 없다.
+기존 구현 기체와 신규 지원 후보는 [로봇 호환성과 검증 상태](docs/reference/robot-compatibility.md)에서 구분한다. RaspTank Metal / Pi 4는 무구동 소스 프로파일을 준비한 지원 후보이며, 장치 드라이버·통합 이미지·실물 수용은 아직 없다.
 
 목표는 업무 앱이 플랫폼을 고치지 않고 로봇에 작업을 맡기는 범용 실행 플랫폼이며, 첫 적용 사례는 항만 앱 Harbor다. 완료 조건은 [PRODUCT.md 「Product Purpose」](PRODUCT.md#product-purpose)가 정본이다.
 

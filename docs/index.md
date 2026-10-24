@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · RaspTank 무구동 설정 패키지와 소유권 준비
 - 2026-10-25 · uncommitted · docs: RaspTank 지원 후보와 공통 ROSY 통합 조건
 - 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
 - 2026-10-24 · 73fc8b2b09 · 실제 private HF 모델 전달·재적재
 - 2026-10-24 · 73fc8b2b09 · 실제 private HF 데이터 왕복
-- 2026-10-24 · uncommitted · D-862 실제 통합관제의 공유 계약과 수용 목표
