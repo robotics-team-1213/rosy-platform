@@ -89,6 +89,7 @@ def _evaluate(model, splits, repo_id, output):
     receipt = validate_split(splits)
     if receipt['source']['repo_id'] != repo_id:
         raise ValueError('evaluation repo identity differs from reviewed source')
+    _artifact_files(model)
     import torch
     from lerobot.policies.act.modeling_act import ACTPolicy
     from lerobot.policies.factory import make_pre_post_processors
