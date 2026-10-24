@@ -91,7 +91,7 @@ def test_a_relative_chunk_keeps_the_judges_correction_and_a_huge_one_is_refused(
     robot = Robot()
     status = runner(robot, ["run approach_pinky", "jog shoulder_pan.pos -5", "jog shoulder_pan.pos -5",
                             "run grasp_pinky rel", "stop"])
-    done = by_command(status, "run grasp_pinky rel")[0]
+    done = by_command(status, "run grasp_pinky")[0]  # status names the chunk
     assert done["ok"] and done["state"][0] == 8.0 and done["state"][5] == 46.6  # pan 18 - 10, jaws not shifted
     lib = library()
     lib["chunks"]["grasp_pinky"] = [[f[0] + 40, *f[1:]] for f in lib["chunks"]["grasp_pinky"]]
