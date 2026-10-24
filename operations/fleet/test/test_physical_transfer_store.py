@@ -259,3 +259,68 @@ def test_old_job_schema_allows_task_startup_before_the_atomic_job_upgrade(tmp_pa
     with closing(connect(path)) as connection:
         assert connection.execute("SELECT COUNT(*) FROM fleet_cell_jobs").fetchone()[0] == 3
         assert {row[0] for row in connection.execute("SELECT phase FROM fleet_action_claims")} == {"UNKNOWN", "HELD"}
+
+
+@pytest.mark.parametrize("change", ["session", "stale"])
+def test_ready_retry_requires_current_capability_facts_without_replacing_original_approval(rig, change):
+    path, _, control, store = rig
+    proposal = create(store)
+    ready = admit(store, proposal, control)
+    before = claims(path)
+    changes = {"capabilities_observed_at_ns": NOW - store.installation.policy.max_age_ns - 1}
+    if change == "session":
+        caps = store.installation.capabilities
+        changes = {"capabilities": (caps[0], caps[1].model_copy(update={"owner_session_id": "changed"}))}
+    with pytest.raises(MissionConflict):
+        admit(store, proposal, control, **changes)
+    assert store.get(proposal["mission_id"], principal=PROPOSER) == ready
+    assert claims(path) == before
+
+
+def test_constructor_rejects_unrelated_sqlite_without_creating_or_migrating_tables(tmp_path, installation):
+    path = tmp_path / "unrelated.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE unrelated(value TEXT)")
+        connection.execute("INSERT INTO unrelated VALUES('preserve')")
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="Fleet journal"):
+        api().PhysicalTransferStore(path, installation=installation, deployment_profile="simulation")
+    assert path.read_bytes() == before
+
+
+def test_projection_rejects_unrecognized_snapshot_keys_instead_of_overwriting_authority(rig):
+    import json
+    path, _, _, store = rig
+    proposal = create(store)
+    with closing(connect(path)) as connection:
+        value = json.loads(connection.execute("SELECT job_json FROM fleet_cell_jobs WHERE mission_id=?", (proposal["mission_id"],)).fetchone()[0])
+        value.update(status="READY", approved_by="fabricated", proposal_principal_id="other-service")
+        connection.execute("UPDATE fleet_cell_jobs SET job_json=? WHERE mission_id=?", (json.dumps(value), proposal["mission_id"]))
+        connection.commit()
+    with pytest.raises(ValueError, match="snapshot"):
+        store.get(proposal["mission_id"], principal=SitePrincipal("other-service", "service"))
+
+
+def test_backwards_server_time_during_reservation_rolls_back_all_approval_effects(rig):
+    path, _, control, store = rig
+    proposal = create(store)
+    times = iter((NOW, NOW - 10))
+    store._clock_ns = lambda: next(times)
+    with pytest.raises(MissionConflict, match="clock"):
+        admit(store, proposal, control, capabilities_observed_at_ns=NOW - 100)
+    assert not claims(path)
+    assert store.get(proposal["mission_id"], principal=PROPOSER) == proposal
+
+
+def test_restart_with_an_inflight_physical_action_retains_unknown_claims(rig):
+    path, tasks, control, store = rig
+    proposal = create(store)
+    admit(store, proposal, control)
+    with closing(connect(path)) as connection:
+        connection.execute("UPDATE fleet_cell_jobs SET status='RUNNING' WHERE mission_id=?", (proposal["mission_id"],))
+        connection.execute("UPDATE fleet_action_claims SET phase='DISPATCHING' WHERE owner_id=?", (proposal["mission_id"],))
+        connection.commit()
+    tasks.close_dispatch_for_startup()
+    assert store.get(proposal["mission_id"], principal=PROPOSER)["status"] == "HOLD"
+    assert {row["phase"] for row in claims(path)} == {"UNKNOWN"}
+    assert not tasks.dispatch_control()["rearm_available"]
