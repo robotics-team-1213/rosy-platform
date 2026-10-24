@@ -9645,3 +9645,9 @@ osy-d395-s1d\`.
 - 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · 센터 설치 교훈: 서명 릴리스에 없는 것들
+
+- 변경: [설치 교훈](solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md)에 서명 꾸러미에 설치기(`deploy/model_pc`)가 없어 모델 PC의 `~/rosy-ml/bin` 사본을 같은 커밋 판으로 바꿔야 하는 점, 환경 지문이 바뀌면 같은 커밋을 새 환경·더 큰 sequence로 다시 서명하는 점, bridge 설정을 바꾸면 새 `--out` 작업 폴더가 필요한 점을 더했다.
+- 증거: 2026-10-24/25 sequence 33(환경 거절)·34(적용)·35(설치기 교체 뒤 센터 설치, `--workspace-links` 유지), bridge `--out` 이동 뒤 복구.
+- gate 변화: 없음.
