@@ -247,6 +247,7 @@
 | D-850 | 독립 운영과 하위 구성을 지원하는 관제 단위 |
 | D-851 | 독립·상하위 관제의 상태 소유권과 위임·복구 계약 |
 | D-855 | 관제 위임 요청과 실행 시도에 결속된 취소 계약 |
+| D-784 | 공개 소스·비공개 운영 설정과 staging 경계 |
 
 ## 계획·결과 문서
 
@@ -355,8 +356,8 @@
 - 2026-10-24 · 8d119665da8f · 고정 예산 복구 학습의 실제 완료와 재로딩
 - 2026-10-24 · 67b368605a · 선택형 학습 실행의 연결 복구와 종료 증거 보존
 - 2026-10-24 · 8d119665da8f · OMX 고정 예산 입력 검사와 중단된 학습 기록
+- 2026-10-17 · uncommitted · docs: 비공개 운영 저장소 구현 계획과 검증 경로
+- 2026-10-17 · uncommitted · docs: 공개 소스와 비공개 운영 설정 및 staging 경계 제안
+- 2026-10-17 · uncommitted · docs: affected 선택기와 원격 실행을 명령에서 구분
+- 2026-10-17 · uncommitted · docs: 개발·배포 안내의 중복과 오래된 상태 정리
 - 2026-10-17 · uncommitted · docs: 간결한 문서와 단일 기준을 정하고 협업 안내에 적용
-- 2026-10-16 · uncommitted · docs: 한 명의 게시와 두 에이전트 검토 절차
-- 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
-- 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
-- 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계

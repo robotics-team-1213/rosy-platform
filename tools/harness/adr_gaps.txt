@@ -95,3 +95,10 @@ D-774 reserved in another worktree (refs/adr/D-774), absent from origin/main; re
 D-775 reserved in another worktree (refs/adr/D-775), absent from origin/main; remove when its ADR lands
 
 D-776 reserved in another worktree (refs/adr/D-776), absent from origin/main; remove when its ADR lands
+
+D-778 reserved in another worktree (refs/adr/D-778), absent from origin/main; remove when its ADR lands
+D-779 reserved in another worktree (refs/adr/D-779), absent from origin/main; remove when its ADR lands
+D-780 reserved in another worktree (refs/adr/D-780), absent from origin/main; remove when its ADR lands
+D-781 reserved in another worktree (refs/adr/D-781), absent from origin/main; remove when its ADR lands
+D-782 reserved in another worktree (refs/adr/D-782), absent from origin/main; remove when its ADR lands
+D-783 reserved in another worktree (refs/adr/D-783), absent from origin/main; remove when its ADR lands

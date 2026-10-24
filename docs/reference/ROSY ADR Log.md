@@ -843,6 +843,7 @@
 | D-834 | 웹·CLI 공통 Isaac 실험 run과 소유 실행 경계 | Proposed |
 | D-773 | OMX 로봇팔과 AI를 더하기 위한 플랫폼 구조 — 장치 권한 포트 하나, 모델·정책 배포 경로 하나, AI 출력은 사실과 후보 두 종류 | Proposed |
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 | Accepted |
+| D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
