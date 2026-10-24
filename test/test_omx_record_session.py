@@ -113,6 +113,25 @@ def leader_arm(**state):
     return Arm({motor: {"torque": 0, **state} for motor in m.LEADER})
 
 
+@pytest.mark.parametrize("moving, marked", [((), True), ((1,), False)])
+def test_episodes_with_an_untouched_leader_are_flagged_after_recording(tmp_path, moving, marked):
+    # 2026-10-24: two five-episode datasets had leader action range 0.0 in every episode.
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    rows = []
+    for episode in range(3):
+        for step in range(30):
+            delta = step * 0.5 if episode in moving else 0.0  # 14.5 at the end: a hand on the leader
+            rows.append({"episode_index": episode, "action": [10.0 + delta, 20.0, 30.0, 40.0, 50.0, 0.4]})
+    (tmp_path / "data/chunk-000").mkdir(parents=True)
+    pd.DataFrame(rows).to_parquet(tmp_path / "data/chunk-000/file-000.parquet")
+    result = m.static_episodes(tmp_path)
+    assert result["episodes"] == 3
+    assert result["static"] == [e for e in range(3) if e not in moving]
+    assert (tmp_path / "DO_NOT_TRAIN.txt").exists() is marked
+    assert json.loads((tmp_path / "static_episodes.json").read_text())["static"] == result["static"]
+
+
 def test_a_latched_leader_voltage_alert_is_cleared_before_lerobot_connects(tmp_path):
     # 2026-10-24: LeRobot reported all six leader motors missing while each answered with alert 0x80.
     arm, leader = follower(), leader_arm(alert=True)
