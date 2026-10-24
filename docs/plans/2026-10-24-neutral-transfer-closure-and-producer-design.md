@@ -1,6 +1,6 @@
 # D-856 물리 종료 관측과 중립 job producer
 
-**Status:** 구현 전 frozen draft, ralplan 독립 architecture/critic 1차 검토 대상. 기존 실행 승인은 유지하되 이 문서 자체는 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
+**Status:** ralplan 독립 architecture/critic 1차는 frozen commit `5dad5fd6c4`를 모두 approve했다. 구현 준비 상태이며 아래 object pose 기준점 보완은 추가 검토 대상으로 둔다. 기존 실행 승인은 유지하되 이 문서 자체는 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
 
 ## 목표와 소유권
 
@@ -28,6 +28,8 @@ owner success만으로 해제하는 대안은 물체 배치·전체 link 이탈�
 server 설정이 owner별 object/catalog/bindings·resource-policy digest, arm/zone claim key, 허용 source/target, 각 zone의 보수적 경계와 required participant/link 집합을 고정한다. 앱은 resources·경계·producer·허용 오차를 고르거나 줄이지 못한다. 정책의 canonical digest는 owner factory의 resource_policy_digest와 일치해야 한다.
 
 정책은 참조 frame/calibration/kinematics/collision-model/evaluator revision, target object pose 허용 오차, 최대 관측 age와 정지 속도/최소 관측 간격을 포함한다. required links는 pinned collision model의 전체 coverage로 검증하며 누락/unknown model은 비활성화한다. home 위치나 부분 joint map으로 링크를 보충하지 않는다.
+
+object pose의 기준점/방향은 관측 model·frame에 명시적으로 결속한다. catalog의 TransferPose는 grasp motion 기준이며 object 중심/관측 model origin과 같다고 가정하지 않는다. 설치된 object goal/reference 또는 검토된 geometry/calibration 변환으로 목표 object pose를 고정하고, 높이·grasp depth·origin offset·tilt가 다른 fixture에서 이 결속을 검증한다. 명령 EE pose를 관측 object pose로 복사하지 않는다.
 
 모든 참가자의 작업이 진입 가능한 zone을 보수적으로 claim하게 한다. 이 첫 profile에서는 zone 밖 동작이어도 해당 zone을 생략해 병렬로 움직이는 최적화를 하지 않는다. 따라서 이전 job의 미확정 점유가 있으면 다음 참가자 action도 시작하지 못한다. 참가자 일부가 unmanaged/unknown이면 접수·dispatch를 닫는다.
 
