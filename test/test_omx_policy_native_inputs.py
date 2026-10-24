@@ -11,6 +11,17 @@ from native_sim_prepare import environment
 from test_native_sim_job import prepared
 
 
+def test_contact_diagnostic_is_an_approved_study_and_only_its_entry_gets_contacts():
+    from native_sim_inputs import STUDY_EXPERIMENTS
+    from native_sim_prepare import run_script
+    assert 'pick-place-policy-contact' in STUDY_EXPERIMENTS
+    command=run_script(Path('/committed/source'),experiment='pick-place-policy-contact')
+    assert '--contacts' in command and 'sim_pick_place_policy_job.py' in command
+    assert '--calibration' not in command
+    for kind in ('pick-place-policy','pick-place-policy-calibration'):
+        assert '--contacts' not in run_script(Path('/committed/source'),experiment=kind)
+
+
 def host_config(tmp_path):
     for name in ('ros','overlay','base','act','science','policy'):
         (tmp_path/name).mkdir()

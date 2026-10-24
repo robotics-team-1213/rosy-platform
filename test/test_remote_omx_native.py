@@ -87,17 +87,19 @@ def test_separate_execution_approvals_are_required(tmp_path, sim, startup):
     assert remote.calls == []
 
 
-def test_policy_study_requires_its_own_explicit_start_approval(tmp_path):
+@pytest.mark.parametrize('experiment',['pick-place-policy','pick-place-policy-contact'])
+def test_policy_study_requires_its_own_explicit_start_approval(tmp_path,experiment):
     m,remote=module(),Remote()
-    value=receipt()|dict(experiment='pick-place-policy')
+    value=receipt()|dict(experiment=experiment)
     with pytest.raises(PermissionError):
         m.start_prepared(value,tmp_path,remote,approve_sim=True,approve_startup=True)
     assert not remote.calls
 
 
-def test_policy_approval_reaches_reservation_and_is_recorded_before_start(tmp_path):
+@pytest.mark.parametrize('experiment',['pick-place-policy-calibration','pick-place-policy-contact'])
+def test_policy_approval_reaches_reservation_and_is_recorded_before_start(tmp_path,experiment):
     m,remote=module(),Remote()
-    value=receipt()|dict(experiment='pick-place-policy-calibration')
+    value=receipt()|dict(experiment=experiment)
     result=m.start_prepared(value,tmp_path,remote,approve_sim=True,approve_startup=True,
                             approve_study=True)
     reserve=next(call for call in remote.calls if 'reserve' in call)
