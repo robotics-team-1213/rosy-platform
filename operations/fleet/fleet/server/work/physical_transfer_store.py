@@ -20,7 +20,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from core_common.protocol.arm_transfer import ArmScopeId, ArmTransferCapability
 from core_common.protocol.arm_transfer_preflight import ArmPhysicalRef
 from .cell_job_store import CellJobStore
-from .dispatch_admission import normalize_resources, reserve
+from .dispatch_admission import reserve
+from .dispatch_resources import normalize_resources
 from .mission_store import MissionConflict, _json, _nonempty
 from .physical_transfer_evidence import PhysicalTransferPolicy
 from .site_auth import SitePrincipal

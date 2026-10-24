@@ -17,7 +17,7 @@ from core_common.protocol.arm_transfer_preflight import ArmDigest, ArmPhysicalRe
 from rosy.world.state.projections.omx_geometry import ArmGeometry
 from rosy.world.state.projections.physical_transfer import Bounds3, PhysicalPose, TransferObservation
 
-from .dispatch_admission import normalize_resources
+from .dispatch_resources import normalize_resources
 
 Counter = Annotated[int, Field(strict=True, ge=0, lt=2**63)]
 Nonnegative = Annotated[float, Field(strict=True, ge=0, allow_inf_nan=False)]

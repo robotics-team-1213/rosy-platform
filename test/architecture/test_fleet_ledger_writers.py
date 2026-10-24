@@ -35,6 +35,7 @@ KNOWN_WRITERS = {
     "server/cell/cell_arm_claims.py": {"fleet_action_claims"},
     "server/cell/cell_arm_jobs.py": {"fleet_action_claims"},
     "server/cell/cell_sheet_checkpoints.py": {"fleet_action_claims"},
+    "server/work/physical_transfer_schema.py": {"fleet_action_claims"},  # D-856: stop/startup retains HELD/UNKNOWN.
     "server/channel/execution/journal.py": {"fleet_action_claims"},
     "server/channel/execution/outcomes/reconcile.py": {"fleet_tasks", "fleet_robot_reservations",
                                                        "fleet_action_claims"},
