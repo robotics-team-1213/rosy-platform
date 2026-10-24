@@ -52,14 +52,10 @@ def setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False, wa
     if managed:
         from omx_adapter.command_owner import ArmCommandOwner, JointStateSnapshot
         from omx_adapter.control_seat_admission import ControlSeatAdmission
-        from test_omx_command_owner import FakeActionClient, make_config
+        from test_omx_command_owner import FakeActionClient
 
-        config = make_config(workcell_id=grant.workcell_id, instance_id=grant.instance_id,
-                             joint_names=profile.joint_names,
-                             position_limits={name: (-10, 10) for name in profile.joint_names},
-                             max_start_state_tolerances=profile.start_state_tolerances(),
-                             calibration_revision=catalog.calibration_revision,
-                             max_goal_duration_s=1000, action_timeout_s=1001)
+        config = profile.arm_command_config(workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+                                            calibration_revision=catalog.calibration_revision)
         owner = ArmCommandOwner(config, FakeActionClient(), session_id="session-1", monotonic=lambda: 100.1)
         owner.observe_joint_state(JointStateSnapshot(states[0].joint_positions, states[0].sequence,
                                                      100.1, catalog.calibration_revision))
