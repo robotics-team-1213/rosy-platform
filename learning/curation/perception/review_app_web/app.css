@@ -430,3 +430,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 @media (width < 64rem){.domain-row{grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "stages" "blocked" "next"}.domain-stages{grid-template-columns:repeat(3,minmax(0,1fr))}}
 /* D-857 §3: on phones the stage sub-menu row is only its 48px targets, so the review photo keeps its first view. */
 @container (width < 64rem){.ui-subnav-nav{padding-block:0}}
+/* D-857 §3, D-542 §2: on the two editors the 정답 pages share the title row, so no extra row pushes the photo down. */
+.ui-pathbar:has(> .review-kinds){flex-wrap:nowrap}
+.review-kinds{display:flex;flex:1 1 0;min-width:0;gap:var(--gap-rail);overflow-x:auto}

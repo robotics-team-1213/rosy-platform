@@ -654,7 +654,7 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     page.goto(page.url.split('?')[0] + '?frame=1', wait_until='networkidle')
     expect(page.locator('#frame-title')).to_have_text('사진 2')
     expect(page.locator('a[href="/pixels?frame=1"]')).to_have_count(2)
-    page.locator('.ui-subnav-nav a[href^="/pixels"]').click()
+    page.locator('.review-kinds a[href^="/pixels"]').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
     page.locator('#pixel-class').select_option('0')
