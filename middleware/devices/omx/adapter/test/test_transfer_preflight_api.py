@@ -47,7 +47,8 @@ def test_peer_and_scope_are_checked_before_measured_state(kin, profile):
     service.execution_state = lambda: pytest.fail("unauthorized/mismatched request read owner state")
     request = _request(service.catalog)
     assert api.dispatch(request, peer_uid=1001)["status"] == 403
-    assert api.dispatch({**request, "version": 1}, peer_uid=1000)["status"] == 400
+    old_version = api.dispatch({**request, "version": 1}, peer_uid=1000)
+    assert old_version["status"] == 400 and old_version["version"] == 1
     assert api.dispatch(_request(service.catalog, instance_id="arm-b"), peer_uid=1000)["status"] == 404
     changed = api.dispatch(_request(service.catalog, catalog_digest="0" * 64), peer_uid=1000)
     assert changed["status"] == 409 and changed["error"]["code"] == "ARM_CATALOG_CHANGED"
