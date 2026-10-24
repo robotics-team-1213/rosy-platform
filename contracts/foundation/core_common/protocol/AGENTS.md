@@ -4,11 +4,11 @@
 # protocol
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-10-25 (D-870 payload/envelope version rule)
 
 ## Purpose
 
-Single source of pydantic schemas for REST snapshots and Fleet WS envelope (D-10, D-18). Additive changes only; bump `PROTOCOL_VERSION` MINOR (PRT-006).
+Single source of pydantic schemas for REST snapshots and Fleet WS envelope (D-10, D-18). For additive payload fields, reserve and bump the API reference version with its live pins; keep envelope `PROTOCOL_VERSION` at 1.0 under API Ref §7.7 and its alignment test (D-870). A change to the envelope/version-negotiation contract needs its own explicit protocol decision; do not infer it from a new payload field.
 
 ## Key Files
 

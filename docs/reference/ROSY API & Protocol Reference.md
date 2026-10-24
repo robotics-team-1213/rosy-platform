@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.315
+**Version:** v1.316
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.316 군집 원본 자세 시각과 만료 (D-870)
+
+PoseSample에 선택 strict positive finite UTC epoch `sampled_at`을 추가한다. 원본 capture를 재전송/anchor 변환 때 보존하고 수신측은 새 표본의 남은 수명만 단조 시계 만료로 고정한다. `swarm.reference_freshness`는 실제 구현 지원이며 시계 품질이 아니다. 구형/누락 peer는 freshness-required Fleet 무장 전에 거절한다. D-859 UTC 수용은 별도이며 envelope1.0은 유지한다.
 
 ### v1.315 이벤트 ID 재전송과 안전한 WELCOME watermark (D-869)
 
@@ -1763,10 +1767,14 @@ Leader 로봇 → Fleet ≥10 Hz, Fleet → Follower 릴레이 ≥5 Hz. envelope
 { "protocol_version": "1.0", "msg_id": "...", "type": "pose",
   "ts": "2026-08-29T12:00:00.123Z",
   "payload": { "robot_id": "rosy_01", "pose": { "x": 1.1, "y": 0.5, "yaw": 0.2 }, "seq": 8123,
-               "map_id": "site_a", "frame": "map" } }
+               "map_id": "site_a", "frame": "map", "sampled_at": 1788004800.1 } }
 ```
 
-Follower의 rosy_core은 스트림 수신 여부를 `stream_timeout_ms`(기본 1000 ms)로 감시하고 단절 시 SWM-004 정책(HOLD)을 적용한다.
+Follower의 rosy_core은 `stream_timeout_ms`(기본1000ms) 안의 유효 원본 표본을 감시하고 만료 시 SWM-004 정책(HOLD)을 적용한다(D-870). `sampled_at`은 원본 자세가 갱신된 UTC epoch 초이며 양수·finite 숫자만 허용하고 bool·문자열을 강제 변환하지 않는다. 모델의 legacy 누락 값은None이지만 freshness-required 추종의 이동 근거로 사용하지 않는다. Envelope.ts는 송신 시각이다.
+
+원본 capture와 monotonic age는 좌표·frame·map_id와 같은 잠금에서 읽으며 source 미수신/만료를 현재 시각으로 보완하지 않는다. D-859의 양쪽 UTC 오차 상한 각50ms 수용을 전제로 `age=max(0,now-sampled_at)+0.1`, `remaining=timeout_s-age`가 양수일 때만 유효하다. 0.1초 넘는 미래 시각·잘못된 시각/기한은 사용 불가다. 같은/이전 원본 stamp는 수명을 연장하지 않으며 remaining은 새 표본 수용 때 한 번만 수신측 monotonic deadline으로 바꾼다. 재접속·재전송·anchor 변환은 원본 stamp를 보존하고 만료한 pending 목표를 보내지 않는다.
+
+`GET /api/v1/system/capabilities`의 `swarm.reference_freshness`는 실제 설치된 서비스가 이 원본 신선도 계약을 집행하는지의 boolean이다. 기존 lead/follow·runtime withholding은 유지한다. Fleet은 이 지원을 전원에서 확인하고 첫 유효 표본을 받은 뒤 무장한다. 이 광고는 UTC 품질·현재 이동 가능 상태가 아니며, D-859 check 실패/미확인 실물의 시간 의존 운용/재개는 운영 수용에서 보류한다. 자동 NTP 품질 측정이나 전체 애플리케이션 admission gate를 추가했다는 의미가 아니다.
 
 `frame` 은 v1.170 additive 다(D-559): `map` 또는 `odom`. 리더의 map TF 가 2 s 넘게 끊기면 보고 pose 는
 odom 으로 떨어지는데, 그 좌표는 맵의 장소가 아니다. trail 팔로워는 `odom` 표본을 자취에 넣지 않고 멈춘다
@@ -3688,6 +3696,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.315 | 2026-10-25 | D-869: replay unacknowledged events by immutable event_id/content; WELCOME watermark0 for unscoped legacy producers, memory/durable identity conflict parity. No new wire fields or envelope1.0 change; no durable outbox guarantee. |
+| v1.316 | 2026-10-25 | D-870: optional strict source sampled_at UTC, conservative100ms clock-bound lifetime, receiver monotonic expiry and implementation-derived swarm.reference_freshness; mixed peer and field UTC acceptance stay explicit, envelope1.0 unchanged. |
 | v1.313 | 2026-10-24 | D-862: bounded owner-scoped control-unit information/maps, immutable subtree stop assignments and local uncertainty reconciliation; explicit parent sharing/stop consent and peer CA. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
 | v1.310 | 2026-10-24 | Additive (D-854, feat/arm-policy-cameras): CORE arm policy `cameras` list (1..N installed cameras, installed order) on `/policy` and `/observations`; one-camera policies keep `camera`. Each observation camera adds `received_at_ns` and `frame_sha256`. All frames bind the action; owner freshness and causality checks apply per camera. Default unbound, SIM-only. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
