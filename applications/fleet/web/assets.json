@@ -63,6 +63,10 @@
       "path": "roster-cards.js",
       "media_type": "application/javascript"
     },
+    "learning.css": {
+      "path": "learning.css",
+      "media_type": "text/css"
+    },
     "cell-document-editor.js": {
       "path": "cell/cell-document-editor.js",
       "media_type": "application/javascript"

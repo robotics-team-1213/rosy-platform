@@ -34,6 +34,22 @@ def test_unconfigured_documents_explain_preparation(monkeypatch, tmp_path, confi
         assert 'Location' not in response.headers
         assert "script-src 'self'" in response.headers['content-security-policy']
         assert 'no-store' in response.headers['cache-control']
+        assert '운영 연결 준비 중' in response.text
+        assert response.text.count('status="neutral"') >= 1     # 보이는 호스트 카드는 준비 중
+        assert 'status="active"' not in response.text
+        assert '{{' not in response.text                        # 모든 채움 토큰이 다 채워졌다
+
+
+@pytest.mark.parametrize('path,focus', [('/console/learning/model', 'model'), ('/console/learning/ai', 'ai')])
+def test_entry_documents_focus_the_requested_host(monkeypatch, tmp_path, path, focus):
+    http = client(monkeypatch, tmp_path, None)
+    response = http.get(path, follow_redirects=False)
+    assert response.status_code == 503
+    assert f'data-host-focus="{focus}"' in response.text
+    assert 'learning-focus-note' in response.text
+    assert 'learning-hub-note' in response.text        # 허브 문장과 초점 문장이 함께 실려 CSS로 갈린다
+    other = 'ai' if focus == 'model' else 'model'
+    assert f'data-host="{other}"' in response.text     # 다른 카드는 CSS로 감춘다(문서에는 남는다)
 
 
 def test_constant_redirects_do_not_forward_credentials_or_queries(monkeypatch, tmp_path):
@@ -55,7 +71,14 @@ def test_constant_redirects_do_not_forward_credentials_or_queries(monkeypatch, t
 
 def test_partial_config_and_startup_snapshot(monkeypatch, tmp_path):
     http = client(monkeypatch, tmp_path, {'model': 'https://model.example'})
-    assert http.get('/console/learning').status_code == 200
+    page = http.get('/console/learning')
+    assert page.status_code == 200
+    body = page.text
+    assert '운영 연결 등록됨' in body and '운영 연결 준비 중' in body
+    assert 'status="active"' in body and 'status="neutral"' in body   # 카드 상태가 호스트별로 갈린다
+    assert 'data-host-state="active"' in body and 'data-host-state="neutral"' in body
+    assert 'model.example' in body and body.count('미등록') == 1      # 등록된 원본은 카드에 실명으로 보인다
+    assert 'data-host-focus=""' in body                               # 허브 문서는 초점 없음
     assert http.get('/console/learning/ai').status_code == 503
     (tmp_path / 'learning.json').write_text('{"model":"https://changed.example"}')
     assert http.get('/console/learning/model', follow_redirects=False).headers['location'] == (
@@ -107,6 +130,17 @@ def test_launch_uses_house_components_without_inline_code_and_work_navigation():
     assert 'style=' not in html and '<style' not in html
     assert '<script>' not in html
     assert '/console/learning/model' in html and '/console/learning/ai' in html
+    assert '<ui-tag status="{{model_state}}">' in html and '<ui-tag status="{{ai_state}}">' in html
+    assert 'learning-hosts' in html and 'learning-host-head' in html
+    assert 'learning-host-readout' in html and '{{model_origin}}' in html and '{{ai_origin}}' in html
+    assert 'learning-steps-list' in html and 'learning-focus-note' in html and 'learning-hub-note' in html
+    assert 'data-host-focus="{{focus}}"' in html
+    assert '/console/assets/learning.css' in html
+    learning_css = (WEB_ROOT / 'learning.css').read_text(encoding='utf-8')
+    assert 'learning-hosts' in learning_css and '@media (width < 30rem)' in learning_css
+    assert '[data-host-focus="model"]' in learning_css          # 초점 문서 전환이 시트에 있다
+    assert '--surface-raised' in learning_css                   # 카드 면은 역할 토큰만 쓴다
+    assert '#' not in learning_css.replace('\\#', '')           # 원시 색 금지
     index = (WEB_ROOT / 'index.html').read_text(encoding='utf-8')
     work = index.split('data-area="work"', 1)[1].split('</nav>', 1)[0]
     assert 'href="/console/learning"' in work

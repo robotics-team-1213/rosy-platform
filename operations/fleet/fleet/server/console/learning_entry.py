@@ -72,11 +72,15 @@ def install_learning_routes(app, web_root, csp):
     headers = {'Cache-Control': 'no-store', 'Content-Security-Policy': csp,
                'Referrer-Policy': 'no-referrer'}
 
-    def document(status_code):
-        html = template
+    def document(status_code, focus=''):
+        html = template.replace('{{focus}}', focus)
         for host in ('model', 'ai'):
+            state = 'active' if host in apps else 'neutral'
+            origin = urlsplit(apps[host]).hostname if host in apps else '미등록'
+            html = html.replace('{{' + host + '_state}}', state)
             html = html.replace('{{' + host + '_status}}',
                                 '운영 연결 등록됨' if host in apps else '운영 연결 준비 중')
+            html = html.replace('{{' + host + '_origin}}', origin or '미등록')
         return HTMLResponse(html, status_code=status_code, headers=headers)
 
     @app.get('/console/learning', include_in_schema=False)
@@ -88,7 +92,7 @@ def install_learning_routes(app, web_root, csp):
             if request.url.query:
                 raise HTTPException(status_code=400, detail='Learning entry does not accept query parameters')
             if host not in apps:
-                return document(503)
+                return document(503, focus=host)
             return RedirectResponse(apps[host] + '/learning', status_code=303, headers=headers)
         return redirect
 
