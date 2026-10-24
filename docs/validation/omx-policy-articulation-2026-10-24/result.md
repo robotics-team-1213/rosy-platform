@@ -35,7 +35,9 @@ no Important findings.
 ## Actual isolated SDK transport
 
 AI-PC native SDK run at the source commit:1PASS,0SKIP, terminal EXIT0,2.89seconds
-pytest time. The runner applied4CPU/4GiB with a5-minute total limit. The existing
+pytest time. The runner selected4CPU/4GiB with a5-minute total limit; its startup
+output and preserved wrapper record that selection. No separate live-scope
+resource-property snapshot was collected for this transport probe. The existing
 two-contact world contains no robot. A separately owned synthetic publisher on
 `/articulation_probe/joint_states` verifies namespace-derived subscription,
 seven positions, original timestamps/frame, empty optional velocity, capture
