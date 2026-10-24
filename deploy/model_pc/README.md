@@ -65,7 +65,7 @@ python3 ~/rosy-ml/bin/install_review_release.py <previous-release-id> \
   --host <model-pc-private-ip> --port 8774
 ```
 
-설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다.
+설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다. state 안의 `learning-collaboration.json`·`omx-center.json`·`learning-control.json`·`review-ai.json`·`workspace-links.json`이 있으면 대상 앱이 지원하는 옵션만 서비스에 붙이고, 예전 릴리스로 되돌릴 때는 그 앱이 모르는 옵션을 뺀다. `workspace-links.json`은 설치 때 일반 파일·스키마를 먼저 확인한다.
 
 ### Account 프로젝트별 설치 (D-757)
 

@@ -90,10 +90,11 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     root=tmp_path/'root'; state=tmp_path/'state'; state.mkdir()
     (state/'learning-control.json').write_text('{}')
     (state/'review-ai.json').write_text('{}')
+    (state/'workspace-links.json').write_text('{"schema": "rosy.learning.workspace-links/1", "workspaces": []}')
     center_config(state)
     old=root/'releases/old'; new=root/'releases/new'
     source_tree(old); source_tree(new)
-    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config'); parser.add_argument('--omx-center-config')")
+    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config'); parser.add_argument('--omx-center-config'); parser.add_argument('--workspace-links')")
     (root/'current').symlink_to(new)
     unit=tmp_path/'unit'
     unit.write_text(release.unit_contents(root/'current',state,Path('/usr/bin/python3'),'127.0.0.1',8774))
@@ -104,11 +105,18 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     assert '--decisions-port' not in unit.read_text()
     assert '--review-ai-config' not in unit.read_text()
     assert '--omx-center-config' not in unit.read_text()
+    assert '--workspace-links' not in unit.read_text()
     release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
     assert f'--learning-control {state}/learning-control.json' in unit.read_text()
     assert '--decisions-port 18774' in unit.read_text()
     assert f'--review-ai-config {state}/review-ai.json' in unit.read_text()
     assert f'--omx-center-config {state}/omx-center.json' in unit.read_text()
+    assert f'--workspace-links {state}/workspace-links.json' in unit.read_text()
+    before = unit.read_text()
+    (state/'workspace-links.json').write_text('{"schema": "other"}')
+    with pytest.raises(ValueError):
+        release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
+    assert unit.read_text() == before  # a bad file stops the install; the unit is not rewritten without it
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='Linux retained release symlinks')
@@ -405,3 +413,19 @@ def test_finished_learning_and_missing_center_database_allow_switch_check_read_o
     before = database.read_bytes()
     release.check_learning_idle(state / 'omx-center.json')
     assert database.read_bytes() == before
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux symlink semantics')
+@pytest.mark.parametrize('bad', ['wrong-schema', 'symlink', 'not-json'])
+def test_workspace_links_are_checked_before_the_unit_changes(tmp_path, bad):
+    state = tmp_path/'state'
+    state.mkdir()
+    links = state/'workspace-links.json'
+    if bad == 'symlink':
+        target = tmp_path/'elsewhere.json'
+        target.write_text('{"schema": "rosy.learning.workspace-links/1", "workspaces": []}')
+        links.symlink_to(target)
+    else:
+        links.write_text('{"schema": "other"}' if bad == 'wrong-schema' else 'not json')
+    with pytest.raises(ValueError):
+        release.check_workspace_links(links)

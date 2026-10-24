@@ -9633,3 +9633,15 @@ osy-d395-s1d\`.
 - 변경: 작업 공간 url에 `\`가 있으면 거절한다(브라우저가 `/`로 읽는다). 대소문자 섞인 scheme 시험을 더했다. OMX owner-status 레일 순회 시험의 기대 집합에 `/learning/workspaces`를 넣었고, `browser_scope.py`가 `catalog.html`·`camera.html`·`workspaces.html` 변경에 그 순회 시험과 단계 시험을 고르게 했다.
 - 증거: 원격 시험 PC에서 레일·하위 메뉴 순회 브라우저 시험과 단위 시험 129개가 통과했고, affected 계층은 2940 passed, 315 skipped였다. known_failures 비교는 0 NEW다.
 - gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 판단이 없다.
+
+## 2026-10-24 · uncommitted · 센터 설치기가 작업 공간 목록 옵션을 유지
+
+- 변경: `deploy/model_pc/install_review_release.py`가 state 옆 `workspace-links.json`이 있고 대상 앱이 `--workspace-links`를 지원하면 ExecStart에 붙이고, 지원하지 않는 예전 릴리스로 되돌릴 때는 뺀다(`--omx-center-config`와 같은 방식). `test/test_model_review_release.py` 왕복 시험에 추가.
+- 증거: 원격 시험(아래 PR). 이 옵션이 없으면 센터를 설치할 때마다 작업 공간 목록(#190)이 빠진다.
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
+
+- 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
+- 증거: 원격 시험(아래 PR).
+- gate 변화: 없음.
