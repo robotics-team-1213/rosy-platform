@@ -140,6 +140,8 @@ builtins.__import__ = guarded
 from test_arm_transfer_preflight_http import _probe
 _probe(pathlib.Path(sys.argv[1]))
 '''
+    # The host harness loads this ROS adapter from its frozen source package.
+    adapter_source = Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter"
     result = subprocess.run([sys.executable, "-c", script, str(tmp_path)], capture_output=True, text=True,
-                            timeout=45, env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)})
+                            timeout=45, env={**os.environ, "PYTHONPATH": os.pathsep.join([str(adapter_source), *sys.path])})
     assert result.returncode == 0, result.stderr
