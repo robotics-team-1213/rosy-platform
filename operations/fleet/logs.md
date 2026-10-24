@@ -1,4 +1,4 @@
-﻿# fleet logs
+ fleet logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the fleet harness record
 - 변경: `progress.md`, `logs.md` 추가
