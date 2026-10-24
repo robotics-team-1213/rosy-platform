@@ -1,0 +1,78 @@
+{
+  "first_step": {
+    "observe": 919,
+    "preprocess": 59879766,
+    "infer": 880597354,
+    "postprocess": 147100,
+    "submit": 5289
+  },
+  "warmup": 50,
+  "steps": 1000,
+  "stages": {
+    "observe": {
+      "p50": 448,
+      "p95": 712,
+      "p99": 803,
+      "max": 921,
+      "mean": 483
+    },
+    "preprocess": {
+      "p50": 35762472,
+      "p95": 68320807,
+      "p99": 74241482,
+      "max": 86169235,
+      "mean": 37343852
+    },
+    "infer": {
+      "p50": 103089594,
+      "p95": 138086501,
+      "p99": 146372350,
+      "max": 150942474,
+      "mean": 106366040
+    },
+    "postprocess": {
+      "p50": 66323,
+      "p95": 96153,
+      "p99": 104841,
+      "max": 115346,
+      "mean": 69772
+    },
+    "submit": {
+      "p50": 2336,
+      "p95": 3312,
+      "p99": 3666,
+      "max": 6109,
+      "mean": 2414
+    },
+    "end_to_end": {
+      "p50": 139598501,
+      "p95": 180237125,
+      "p99": 193630935,
+      "max": 218239215,
+      "mean": 143782563
+    }
+  },
+  "policy_type": "smolvla",
+  "n_action_steps": 1,
+  "saved_n_action_steps": 50,
+  "use_amp": false,
+  "device": "cuda",
+  "gpu": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "checkpoint": "/home/ai/.cache/huggingface/hub/models--lerobot--smolvla_base/snapshots/5e8d12a6e2975b0e5e5fce7c8caf47c371d257b6",
+  "checkpoint_sha256": "b2e1a3df9c1df678cb88df85a5fee23e982953c947ac3bc9af36af8d14ece5ad",
+  "versions": {
+    "lerobot": "0.4.4",
+    "torch": "2.7.1+cu128"
+  },
+  "cameras": {
+    "camera1": [
+      480,
+      640
+    ],
+    "camera2": [
+      480,
+      640
+    ]
+  },
+  "target": "synthetic: observe/submit stages exclude CORE and network"
+}
