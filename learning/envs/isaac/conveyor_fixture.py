@@ -24,6 +24,12 @@ def fixture_sha256():
                                     separators=(',', ':')).encode()).hexdigest()
 
 
+def clock_matches(tick, observed_steps, elapsed):
+    # PhysX callback dt is float32: bound accumulated half-ULP rounding, not a whole step.
+    tolerance = tick*math.ldexp(1., math.frexp(DT)[1]-25)+1e-9
+    return observed_steps == tick and math.isfinite(elapsed) and abs(elapsed-tick*DT) <= tolerance
+
+
 def forward(q):
     """Pinned OMX-F end_effector_link in base=world, including measured roll."""
     yaw, a, b, c, roll = q
@@ -76,6 +82,8 @@ def evaluate(samples):
                       ('angular_velocity', 3), ('contact_forces', 4)]
             if type(tick) is not int or not last_tick < tick <= 4800:
                 raise ValueError('nonadvancing_or_unbounded_clock')
+            if not clock_matches(tick, row['physics_steps'], row['physics_time_s']):
+                raise ValueError('physics_clock_mismatch')
             for key, count in fields:
                 if len(row[key]) != count or not all(type(v) in (int, float) and math.isfinite(v) for v in row[key]):
                     raise ValueError('invalid_measurement')

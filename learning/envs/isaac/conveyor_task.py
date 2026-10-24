@@ -6,7 +6,7 @@ import math
 import os
 from pathlib import Path
 
-from conveyor_fixture import CARGO_SIZE, CONVEYOR, DT, FIXTURE, PINKY, evaluate, fixture_sha256, forward, solve
+from conveyor_fixture import CARGO_SIZE, CONVEYOR, DT, FIXTURE, PINKY, clock_matches, evaluate, fixture_sha256, forward, solve
 from importer_compat import import_model, reference_model
 from model_checks import ASSETS, check_urdf, check_vendor_manifest
 
@@ -92,7 +92,7 @@ def main():
         contacts = world.scene.add(RigidPrim('/World/Cargo', name='cargo_contacts',
             track_contact_forces=True, contact_filter_prim_paths_expr=[links['link6'], links['link7'],
                 '/World/PinkyTray', '/World/Conveyor'], max_contact_count=64))
-        eye = Gf.Vec3d(.62, -.60, .53)
+        eye = Gf.Vec3d(.42, -.42, .35)
         look = Gf.Matrix4d().SetLookAt(eye, Gf.Vec3d(.16, 0., .10), Gf.Vec3d(0., 0., 1.)).GetInverse()
         quat = look.ExtractRotationQuat()
         camera = Camera('/World/Observer', position=np.array(eye), resolution=(640, 480))
@@ -131,8 +131,7 @@ def main():
                 controller.apply_action(ArticulationAction(joint_positions=positions))
                 physics_step(world, tick)
                 tick += 1
-                if (tick > 4800 or world.current_time_step_index != first_step+tick
-                        or abs(world.current_time-first_time-tick*DT) > 1e-6):
+                if tick > 4800 or not clock_matches(tick, world.current_time_step_index-first_step, world.current_time-first_time):
                     raise RuntimeError('Physics step budget or observed clock mismatch')
                 if tick % 4 == 0:
                     p, orient = cargo.get_world_pose()
@@ -142,9 +141,11 @@ def main():
                     force = np.asarray(contacts.get_contact_force_matrix(dt=DT))
                     if force.shape != (1, 4, 3):
                         raise ValueError('Four contact filters required')
-                    samples.append(dict(tick=tick, phase=phase, position=p.tolist(), orientation=orient.tolist(),
+                    samples.append(dict(tick=tick, physics_steps=world.current_time_step_index-first_step,
+                        physics_time_s=world.current_time-first_time, phase=phase, position=p.tolist(), orientation=orient.tolist(),
                         linear_velocity=cargo.get_linear_velocity().tolist(), angular_velocity=cargo.get_angular_velocity().tolist(),
                         contact_forces=np.linalg.norm(force[0], axis=1).tolist(), tool_distance=float(np.linalg.norm(tcp-p)),
+                        finger_joints=robot.get_joint_positions()[fingers].tolist(), tcp_position=tcp.tolist(),
                         joint_error=float(np.max(np.abs(measured-q))), tcp_error=float(np.linalg.norm(tcp-forward(measured)))))
                     if not np.isfinite(p).all() or p[2] < 0 or np.linalg.norm(p[:2]) > .7:
                         raise RuntimeError('Cargo escaped fixture')

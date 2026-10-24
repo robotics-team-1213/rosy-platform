@@ -57,7 +57,7 @@ def observations():
                 forces[:2] = [.3, .3]
             else:
                 forces[support] = .49
-            rows.append(dict(tick=len(rows)*4, phase=phase,
+            rows.append(dict(tick=len(rows)*4, physics_steps=len(rows)*4, physics_time_s=len(rows)*4/120, phase=phase,
                 position=[base[0], base[1], base[2]+mod.CARGO_SIZE/2+(.08 if support is None else 0)],
                 orientation=[1., 0., 0., 0.], linear_velocity=[0., 0., 0.], angular_velocity=[0., 0., 0.],
                 contact_forces=forces, tool_distance=.08 if support is not None else 0.,
