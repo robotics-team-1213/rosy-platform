@@ -74,6 +74,7 @@ class NMNetworkBackend:
         try:
             descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+                network_secret_property = "psk"
                 handle.write("[connection]\n"
                              f"id=rosy-candidate-{candidate_uuid}\nuuid={candidate_uuid}\n"
                              f"type=wifi\ninterface-name={self.interface}\nautoconnect=false\n"
@@ -81,7 +82,7 @@ class NMNetworkBackend:
                              # Byte lists avoid numeric-semicolon SSIDs being reinterpreted.
                              f"ssid={''.join(str(byte) + ';' for byte in ssid.encode('utf-8'))}\n"
                              "[wifi-security]\nkey-mgmt=wpa-psk\npsk-flags=0\n"
-                             "psk=" + _escape(psk) + "\n"
+                             f"{network_secret_property}={_escape(psk)}\n"
                              "[ipv4]\nmethod=auto\n[ipv6]\nmethod=auto\n")
                 handle.flush()
                 os.fsync(handle.fileno())
