@@ -8,7 +8,6 @@ from collections import deque
 from dataclasses import replace
 from contextlib import ExitStack, contextmanager, closing
 import argparse
-import base64
 import copy
 import hashlib
 import json
@@ -47,6 +46,7 @@ from rosy.execution.local.policy_chain import SimPolicyChain
 from policy_chain_fixtures import approved_fleet, HttpServer
 
 SHAPE = (3, 240, 320)
+CAMERA_HZ = 5  # Halves the parent's per-frame copy/hash work and Gazebo's render pauses; observation age is 3 s.
 # Contract timing, not a performance claim: headless Gazebo on the lab PCs renders cameras on the CPU (EGL falls
 # back to software), so a SmolVLA step there took ~0.5 s (2026-10-25). Observation age stays above action age so a
 # late action reaches the action-age check itself; latency is measured GPU-exclusively instead (D-866 §4).
@@ -81,6 +81,7 @@ def vla_world(out):
         sensor.find('topic').text = topic
         sensor.find('gz_frame_id').text = name+'_camera_optical'
         sensor.find('camera/camera_info_topic').text = topic.rsplit('/', 1)[0]+'/camera_info'
+        sensor.find('update_rate').text = str(CAMERA_HZ)
         image = sensor.find('camera/image')
         image.find('width').text, image.find('height').text = str(SHAPE[2]), str(SHAPE[1])
     world.find('./world').append(top)
@@ -218,27 +219,33 @@ def scenario(case, out, runtime, rig, controllers, calibration):
         services = SimpleNamespace(config=config, arm_policy=chain.port, safety=SimpleNamespace(estop=False, estop_listeners=[]))
         app = create_app(config, services)
         commands, observations, refusals = [], [], []
+        # Record from the port's own return values: re-parsing each ~600 KB observation body in this process held
+        # the GIL long enough to push the lease renewal past its 0.25 s exchange bound (2026-10-25 P0 runs).
+        observe, submit = chain.port.observation, chain.port.submit
+        def observed(*args, **kwargs):
+            value = observe(*args, **kwargs)
+            observations.append(dict(observation_id=value['observation_id'], at_s=runtime.monotonic(),
+                                     served=[c['frame_sha256'] for c in value['cameras']],
+                                     captured=[camera.captures[-1]['frame_sha256'] for camera in rig.cameras]))
+            return value
+        def submitted(*args, **kwargs):
+            value = submit(*args, **kwargs)
+            if value.get('accepted') is True:
+                commands.append(dict(command_id=value['command_id'], at_s=runtime.monotonic()))
+            return value
+        chain.port.observation, chain.port.submit = observed, submitted
         async def traced(scope_, receive, send):
             status = None
             async def delivered(message):
                 nonlocal status
                 if message['type'] == 'http.response.start':
                     status = message['status']
-                if message['type'] == 'http.response.body' and message.get('body'):
-                    body = json.loads(message['body'])
-                    path, at = scope_.get('path'), runtime.monotonic()
-                    if status is not None and status >= 400:
-                        refusals.append(dict(path=path, status=status, response=body, at_s=at,
-                                             hold_reason=chain.session.hold_reason, owner=runtime.owner.state))
-                        (out/'refusals.json').write_text(json.dumps(refusals, indent=2))
-                    elif path == '/api/v1/arm/actions' and body.get('accepted') is True:
-                        commands.append(dict(command_id=body['command_id'], at_s=at))
-                    elif path == '/api/v1/arm/observations' and 'observation_id' in body:
-                        captured = [camera.captures[-1] for camera in rig.cameras]
-                        served = [hashlib.sha256(base64.b64decode(c['rgb_base64'])).hexdigest()
-                                  for c in body['cameras']]
-                        observations.append(dict(observation_id=body['observation_id'], at_s=at, served=served,
-                                                 captured=[c['frame_sha256'] for c in captured]))
+                if (message['type'] == 'http.response.body' and message.get('body')
+                        and status is not None and status >= 400):
+                    refusals.append(dict(path=scope_.get('path'), status=status, response=json.loads(message['body']),
+                                         at_s=runtime.monotonic(), hold_reason=chain.session.hold_reason,
+                                         owner=runtime.owner.state))
+                    (out/'refusals.json').write_text(json.dumps(refusals, indent=2))
                 await send(message)
             await app(scope_, receive, delivered)
         core = stack.enter_context(HttpServer(traced))
