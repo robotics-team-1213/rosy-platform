@@ -241,3 +241,10 @@ source3c는 simulation 내부 physical create/read/two-person approval과 공통
 API v1.307의 simulation 설치 경로에 closed physical create/read/key/admit를 연결했다. 실제 SDK의 모든 참여 capability를 SQLite 밖에서 읽고 기존 2인 승인·CAS·fence·공통 claims transaction을 호출한다. auth/audit와 present-Origin 검사를 적용하며 미설치503/내부 설치 자료 비노출을 보존한다.
 
 소스58 HTTP18 passed/skip0/known0 NEW와 FULL23개 각각exit0/known0 NEW·독립 검토를 확인했다. [원본 실패·manifest·한계](../../docs/validation/harbor-arm-job-http-2026-10-24/result.md)를 따른다. 장치 제출·물리 종료·Harbor ARM 및 뒤의 schema7/8은 이 소스 검증에 포함하지 않는다. 기존 물리/현장 gate와 이전G1 원인 미확정 상태는 그대로다.
+
+
+## 2026-10-24 · D-856 내부 물리 실행 원장
+
+source3b까지 고정 준비·두 표본 최초 전송 의도·장치 결과 투영·별도 물리 종료 receipt/원자 점유 해제를 구현했다. source3b 집중101 passed/skip0/0 NEW와 독립 계약 검토를 확인했다. 앞선 결과 보완은229 passed/skip0/0 NEW다. [각 SHA·원본 실패·검토·검증 한계](../../docs/validation/harbor-physical-execution-2026-10-24/result.md)를 따른다.
+
+SDK submit/get/cancel dispatcher·관측 credential HTTP·Harbor ARM은 아직 없다. sourcecf의 부분 실행을 FULL로 보지 않으며 최종 소스의 전체23개 검증은 후속이다. 현재 증거는 synthetic World facts와 원장에 한정한다. 실물 bounds·동작·현장 gate와 이전G1 원인 미확정 상태는 유지한다.
