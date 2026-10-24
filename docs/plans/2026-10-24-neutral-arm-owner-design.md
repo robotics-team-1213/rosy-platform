@@ -1,6 +1,6 @@
 # D-856 중립 팔 grant의 owner 실행
 
-**Status:** 독립 검토 후 내부 transaction 구현·집중 원격 검증 완료. 설치 factory와 runtime 연결은 미완료다. [전체 실행 계약](2026-10-24-neutral-arm-execution-design.md)을 실제 OMX owner에 연결한다. schema version5와 비활성 grant DTO만으로 실행을 열지 않는다.
+**Status:** 내부 transaction·명시적 설치 factory·phase-only IPC v2 구현과 집중 원격 검증 완료. actual owner-state 조립·독립 HTTP·Fleet producer와 물리 자원 종료는 미완료다. [전체 실행 계약](2026-10-24-neutral-arm-execution-design.md)을 따른다. 기본 owner에 factory를 설치하거나 배포한 것은 아니다.
 
 ## 소비 경로
 
@@ -31,3 +31,5 @@ transaction·설치 factory가 검증된 뒤 parse/grant union·phase-only kind�
 ## 내부 transaction 확인
 
 commit `11486ce7cd`에서 raw identity/generation·물체 결속과 새 snapshot의 HOLD 복구를 구현했다. 독립 검토가 발견한 태그 두 개 삭제 우회는 RED 뒤 legacy 필수 형식 검증으로 차단했다. 신규·기존 Cell/PICK 소비자 원격 74 passed/skip0/0 NEW와 재검토를 확인했다. [정확한 소스와 한계](../validation/harbor-neutral-arm-owner-2026-10-24/result.md)를 따른다. parent Action kind·grant·durable journal과의 대조는 실제 recovery 소비자를 연결할 때 수행하며 factory/runtime 활성화 조건은 그대로다.
+
+설치 factory/phase-only 연결은 commit `45173e6f92`, API v1.305로 구현하고 test-only `337e42e314`의 원격 153 passed/skip0/0 NEW와 최종 SHA 독립 검토를 확인했다. Fleet client의 ARM→v2 누락도 RED 뒤 `fc5d75eecd`에서 연결해 원격 15 passed/skip0/0 NEW를 확인했다. Fleet registry·physical creator는 계속 닫혀 있고 actual owner-state/HTTP·모든 자원 종료 입구·Harbor 연결은 남는다.

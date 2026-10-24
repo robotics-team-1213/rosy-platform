@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · fc5d75eecd · D-856 중립 팔 v2 transport 호환
 - 2026-10-24 · dda08892c9 · D-856 원장 provenance 분리
 - 2026-10-24 · uncommitted · D-856 step grant의 종류별 검증 경계
 - 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 HTTP
 - 2026-10-24 · uncommitted · D-856 전체 회귀 발견 사항 교정
-- 2026-10-24 · uncommitted · Fleet task worker 기동 이름 보존

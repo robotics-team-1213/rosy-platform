@@ -26,3 +26,9 @@ commit `dda08892c9efb4c88bf7b86c1c0f71906b497bd0`의 production 코드는 versio
 migration 이후 영향 선택은 affected이며 전체 선택의 원격 결과는 별도 기록한다. 선행 grant FULL은 commit `8da8bb1593`으로 이 migration을 포함하지 않는다. 실제 physical 생성·요청 scope·승인·fence·owner phase/recovery·모든 claim 해제 입구의 물리 종료 증거와 Harbor 연결은 후속이다. 실물·배포·push는 수행하지 않았다.
 
 CE: 해당 없음 — 정상 구현 중 발견한 검증 누락을 코드·회귀·독립 검토 기록에 남겼다.
+
+## 후속 affected 전체 선택 — commit 635d1e226e
+
+source와 영향 선택을 commit `635d1e226e9344736df427b4be7863f7f48ef61c`으로 고정한 공식 원격 실행이 exit0으로 끝났다. `rosy-job-provenance-affected/run-1.txt`는 **4722 passed/187 skipped/39 warnings/5 subtests passed**, run-2는 **6270 passed/336 skipped/2 warnings**다. 각 보고서의 known_failures 비교는 0 NEW/known/flaky다. skip은 browser·환경 의존 수용을 실행했다는 증거로 쓰지 않는다.
+
+이 소스는 이후 owner transaction/factory/runtime 변경을 포함하지 않는다. 해당 검증은 [owner 기록](../harbor-neutral-arm-owner-2026-10-24/result.md)에서 따로 관리한다.

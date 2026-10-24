@@ -25,8 +25,9 @@
 | [중립 팔 계산](2026-10-24-neutral-arm-planning-design.md) | 기존 Cell provenance 보존, 관련 원격 135 passed, 독립 검토 | public wire/실행 조립 |
 | [팔 catalog·사전검사](2026-10-24-neutral-arm-preflight-design.md) | API v1.299·owner/Fleet HTTP 연결, 신규/기존 원격 213 passed/skip0, 실제 HTTP/UDS·독립 검토 | 중립 grant·원장 경계 분리, 설치 wheel·장치 수용 |
 | [step grant 검증 경계](2026-10-24-step-grant-boundary-design.md) | typed kind·공통 identity와 종류별 전체 payload 분리, 원격 184/152개 별도 회귀·독립 검토 | 실제 물리 producer·등록 kind·실행 |
-| [중립 팔 실행 계약](2026-10-24-neutral-arm-execution-design.md) | 물체–기하 결속 원격 112개, v1.303 비활성 grant·기존 소비자 원격 1385개 및 독립 검토 | 원장 provenance·owner 소비·전체 자원 종료·Harbor 변환 |
-| [원장 provenance](2026-10-24-neutral-arm-ledger-design.md) | version5 schema·Cell 소비자 차단, 원격 69/13/244개 별도 회귀·독립 재검토 | affected 전체 검증·물리 생성/승인·owner/claim 종료 연결 |
+| [중립 팔 실행 계약](2026-10-24-neutral-arm-execution-design.md) | 물체–기하 결속 원격 112개, v1.303 grant·기존 소비자 원격 1385개 및 독립 검토 | 실제 physical producer·전체 자원 종료·Harbor 변환 |
+| [원장 provenance](2026-10-24-neutral-arm-ledger-design.md) | version5 schema·Cell 소비자 차단, 원격 69/13/244개 별도 회귀와 affected 두 그룹 통과 | 물리 생성/승인·claim 종료 연결 |
+| [owner 실행](2026-10-24-neutral-arm-owner-design.md) | 내부 복구 74개, v1.305 설치 factory/phase-only IPC 153개·v2 client 15개 별도 회귀 및 독립 검토 | actual admitted-state/HTTP·Fleet producer·물리 종료·Harbor 연결 |
 | 전체 P3–P5 | 진행 중 | 중립 팔 실행, Harbor 공정 변환, 복구·독립성 통합 증거 |
 
 첫 HTTP 증거는 플랫폼 commit `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor commit `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.

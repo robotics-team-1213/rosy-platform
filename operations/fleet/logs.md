@@ -4399,3 +4399,9 @@
 - 변경: version5 parent schema가 legacy/physical 저장 형식을 구분하고 네 Cell 필수 provenance를 physical 행에서는 NULL로 강제한다. 기존 Cell 읽기·복구·checkpoint·정지 소비자의 물리 행 해석을 차단하며 root 연결의 FK ON 정책을 유지한다.
 - 증거: 원격 RED9와 약한 schema 수용 RED2 뒤 atomic migration·전체 SQL 제약 대조를 구현했다. 원장 69개, 추가 checkpoint/SQL 실패 13개, 기존 Cell/다중 팔/TRIP 소비자 244개 별도 원격 회귀가 각각 skip0/0 NEW로 통과했다. 독립 구현 재검토 finding 해소. 정확한 소스와 실패 이력은 docs/validation/harbor-neutral-arm-ledger-2026-10-24/result.md를 따른다.
 - gate 변화: schema 준비와 legacy 소비자 차단이다. 실제 physical 생성·승인·owner 실행·물리 자원 종료·Harbor 연결은 후속이다. CE 해당 없음: 코드·회귀에 보완 이유가 남는다.
+
+## 2026-10-24 · fc5d75eecd · D-856 중립 팔 v2 transport 호환
+
+- 변경: Fleet client의 ARM kind→v2 map·grant union·공통 receipt 타입을 연결했다. receipt identity·phase summaries·timeout·재시도 없는 경계를 유지한다.
+- 증거: kind 누락 RED6 후 관련 원격 15 passed/skip0/0 NEW와 독립 검토를 확인했다. 선행 migration affected source 635d1e226e도 두 그룹 4722/6270 passed, 187/336 skipped, 각각 0 NEW로 끝났다. owner와 migration 검증 기록의 소스 범위를 구분한다.
+- gate 변화: client 호환이며 실제 physical creator·등록 kind·claim 해제는 아직 없다. CE 해당 없음: source와 프레이밍 회귀에 조건이 남는다.

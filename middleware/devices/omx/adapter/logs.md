@@ -632,3 +632,9 @@
 - 변경: 전체 ARM_TRANSFER grant/object_ref를 transaction에 결속하고 관측·Cell 필드 없이 snapshot을 만든다. 새 snapshot은 엄격한 identity/generation 대조 뒤 HOLD로 복구하며 태그를 모두 지워 legacy 완료 복구로 우회하지 못하게 한다.
 - 증거: 누락 consumer RED16·태그 삭제 RED1 뒤 신규·기존 Cell/PICK/transfer provider 원격 74 passed/skip0/0 NEW. 독립 재검토 finding 해소. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md를 따른다.
 - gate 변화: 내부 transaction만 연결했다. factory·실제 parent journal·phase-only runtime/권한·claim 종료·Harbor 연결은 후속이다. CE 해당 없음: source와 거절 회귀에 판단 근거가 남는다.
+
+## 2026-10-24 · 45173e6f92 · D-856 설치된 중립 팔의 phase-only IPC
+
+- 변경: ARM의 typed parse·phase-only/shared control·v2·camera-blind 저장·durable workflow 완료를 연결했다. 설치 factory가 없으면 journal 전에 거절하고 direct driver 종류를 유지한다. Store의 workflow metadata를 leaf로 옮겨 ratchet을 낮췄다.
+- 증거: 새 factory RED9 후 구현하고 합성 goal/gripper port의 실제 planner/journal·기존 API/store/stop/runner/transaction/provider 원격 153 passed/skip0/0 NEW를 확인했다. 최종 feature SHA 독립 검토와 Safety-Review trailer를 기록했다. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md를 따른다.
+- gate 변화: 명시적 설치를 위한 owner library 경로다. 실제 device/ROS·admitted-state 조립·Fleet producer·물리 claim 종료·Harbor 연결은 후속이다. CE 해당 없음: source·회귀·검토 기록이 판단 근거를 보존한다.

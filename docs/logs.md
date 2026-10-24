@@ -10287,3 +10287,9 @@ osy-d395-s1d\`.
 - 변경: 중립 grant/object_ref만으로 그리퍼 transaction과 별도 snapshot을 만들고, raw identity·generation을 대조해 재시작을 HOLD로 복구한다. 가짜 Cell/camera 자료를 만들지 않는다.
 - 증거: 누락 consumer RED16과 태그 삭제 우회 RED1 뒤 신규·기존 소비자 원격 74 passed/skip0/0 NEW, 독립 재검토 finding 해소. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md에 결속했다.
 - gate 변화: 내부 상태 기계 소비자다. 설치 factory·phase-only runtime·parent journal 대조·Fleet 물리 자원 종료와 Harbor 연결은 남는다. CE 해당 없음: 보완 근거는 source·시험에 남는다.
+
+## 2026-10-24 · 45173e6f92 · D-856 설치된 owner phase 실행과 client 연결
+
+- 변경: API v1.305의 설치 결속 factory와 기존 phase/그리퍼 workflow, v2/shared control/완료 기록을 연결했다. 기본 owner와 direct driver의 거절 경계를 유지한다.
+- 증거: owner 집중 회귀 153 passed/skip0/0 NEW, SDK 15 passed/skip0/0 NEW 및 독립 검토를 기록했다. 선행 migration affected 전체도 exit0으로 끝났다. 소스·합성 port·실물 미검증 한계는 owner/migration validation에 결속했다.
+- gate 변화: Fleet physical 생성/승인·actual owner-state/HTTP·물리 자원 종료와 Harbor 업무 변환은 남는다. CE 해당 없음: 정상 구현과 검증의 기록이다.

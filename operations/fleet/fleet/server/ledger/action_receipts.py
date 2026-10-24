@@ -2,7 +2,8 @@
 
 from typing import Mapping
 
-from core_common.protocol.schemas import DeviceActionReceipt, FleetActionGrant, FleetArmTransferGrant, FleetCellTransferGrant
+from core_common.protocol.schemas import (
+    DeviceActionReceipt, FleetActionGrant, FleetArmTransferGrant, FleetCellTransferGrant)
 
 #: The fields a device receipt must echo from its Fleet grant. The one rule for every caller.
 RECEIPT_IDENTITY = ("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id",

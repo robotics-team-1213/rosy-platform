@@ -36,10 +36,10 @@ motion and cannot infer success from the snapshot alone.
 ### v1.303 Neutral arm transfer grant model (D-856)
 
 `FleetArmTransferGrant` and `ArmTransferPayload` add an inactive physical execution
-contract. No submit endpoint or runtime kind is enabled by this version. The local
-owner parser, phase/direct-driver kind sets and Fleet step registry still reject
-`ARM_TRANSFER` until its owner, ledger, approval, recovery and physical resource
-closure contracts are installed and verified. Envelope protocol_version stays 1.0.
+contract. At v1.303 no submit endpoint or runtime kind was enabled. v1.305 adds
+explicitly installed local owner execution; the Fleet step registry and HTTP
+producer remain closed until ledger, approval, recovery and physical resource
+closure contracts are connected and verified. Envelope protocol_version stays 1.0.
 
 The payload has exactly `object_ref`, `catalog_digest`, `bindings_digest`, `source`,
 `target`, `resource_policy_digest`. References use the strict physical-reference

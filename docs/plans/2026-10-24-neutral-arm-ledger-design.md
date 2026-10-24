@@ -1,6 +1,6 @@
 # D-856 중립 팔 원장 provenance와 기존 데이터 보존
 
-**Status:** schema migration과 Cell 소비자 차단 구현·집중 원격 회귀·독립 검토 완료. 전체 affected 검증과 physical 생성·dispatch는 후속이다. [실행 계약](2026-10-24-neutral-arm-execution-design.md)의 grant 모델을 실제 원장으로 연결하는 단계다.
+**Status:** schema migration과 Cell 소비자 차단 구현·집중/affected 원격 회귀·독립 검토 완료. physical 생성·dispatch는 후속이다. [실행 계약](2026-10-24-neutral-arm-execution-design.md)의 grant 모델을 실제 원장으로 연결하는 단계다.
 
 ## 현재 제약
 

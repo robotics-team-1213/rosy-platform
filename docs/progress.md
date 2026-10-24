@@ -429,3 +429,4 @@ plans:
 - 중립 팔 grant DTO를 v1.303에 등록했다. commit 1258314f51의 신규·기존 소비자 원격 1385 passed/skip0/0 NEW, 독립 검토와 크기·안전 trailer 검사를 통과했다. runtime 접수는 비활성이며 docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md의 한계를 따른다.
 - grant 단계 source 8da8bb1593의 FULL 세 그룹이 각각 11932/4359/6257 passed, 543/117/336 skipped, 0 NEW로 끝났다. 이후 원장 version5·Cell 소비자 차단의 69/13/244개 별도 회귀도 통과했다. physical creator·owner 실행은 후속이며 docs/validation/harbor-neutral-arm-ledger-2026-10-24/result.md를 따른다.
 - 중립 owner transaction의 grant/object·snapshot/HOLD 복구를 구현했다. commit 11486ce7cd의 신규·기존 소비자 원격 74 passed/skip0/0 NEW와 독립 재검토를 확인했다. 설치 factory/runtime·parent journal 대조는 docs/plans/2026-10-24-neutral-arm-owner-design.md의 다음 단계다.
+- API v1.305의 명시적 설치 factory·phase-only IPC와 Fleet v2 client를 연결했다. 원격 owner 153개·client 15개 별도 회귀가 skip0/0 NEW로 통과했다. 실제 admitted-state/HTTP·Fleet producer·자원 종료·Harbor 변환은 남는다. 선행 migration affected는 4722/6270 passed, 187/336 skipped, 각각 0 NEW로 끝났다.
