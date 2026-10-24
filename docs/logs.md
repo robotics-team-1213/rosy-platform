@@ -10300,3 +10300,9 @@ osy-d395-s1d\`.
 - 변경: [검증 기록](validation/omx-policy-journal-admission-2026-10-24/result.md). durable intent를 session/fence 밖에서 쓰고 pending submit만 직렬화한다. 최종 재검증과 native 전송 전후에 기록된 grant/현재 lease를 함께 검사한다.
 - 증거: 원격 RED 경합5FAIL·grant만료1FAIL 뒤 host312통과 점/NEW0, 별도 합성 Jazzy 전송6PASS. 실제4goal DB/receipt와 cleanup·164파일 회수·actor종료0을 독립 확인했다.
 - gate 변화: 권한·TTL·freshness·WAL/FULL·callback 증거를 유지한다. 기존 실제 모델 평가HOLD/formal0과 원래 추종 실패는 해결로 바꾸지 않는다. CE 해당 없음 — 불변식은 코드/회귀/README/검증 기록에 직접 남겼다.
+
+## 2026-10-24 · 2c47808edc · 잠금 수정 이후 동일 모델 추종 진단
+
+- 변경: [새 독립 관측 기록](validation/omx-policy-tracking-after-admission-2026-10-24/result.md). 기존 모델·world·허용치로 calibration1회와 정책 관측1회만 실행했다.
+- 증거: calibration PASS/96파일, 정책 HOLD/254파일·추종2771개. 170수락 중169성공 뒤 joint4/5 JTC 허용오차 실패, 이번 admission 거부·worker 오류0. DB/전체 archive/추종/종료정리를 독립 대조했다. 기존 validation state-hold 비교도 사후 설명으로 별도 구분했다.
+- gate 변화: formal0·기존 HOLD·실물 권한0 보존. CE 미해결 — 추종 실패의 물리 원인 증거가 부족하며 새 성공·성능 보장으로 바꾸지 않는다.
