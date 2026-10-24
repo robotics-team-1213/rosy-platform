@@ -11,6 +11,13 @@ from importer_compat import import_model, reference_model
 from model_checks import ASSETS, check_urdf, check_vendor_manifest
 
 
+def physics_step(world, tick):
+    """Kit render=True advances rendering_dt, which can contain multiple physics steps."""
+    world.step(render=False, update_fabric=True)
+    if tick % 12 == 0:
+        world.render()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--urdf', type=Path, required=True)
@@ -22,7 +29,7 @@ def main():
     args.output_dir.mkdir()
     from isaacsim import SimulationApp
     app = SimulationApp(dict(headless=True, fast_shutdown=False, width=640, height=480))
-    samples, images, joints, tick, error = [], [], [], 0, None
+    samples, images, image_frames, joints, tick, error = [], [], [], [], 0, None
     try:
         import numpy as np
         import omni.kit.app
@@ -43,7 +50,7 @@ def main():
         usd = import_model(api, omni.kit.commands.execute, args.urdf, args.output_dir, 'Manipulator')
         stage = reference_model(omni.usd.get_context(), usd, Usd, UsdGeom)
         app.update()
-        world = World(physics_dt=DT, rendering_dt=DT*12, stage_units_in_meters=1.)
+        world = World(physics_dt=DT, rendering_dt=DT, stage_units_in_meters=1.)
         material = PhysicsMaterial('/World/GripMaterial', static_friction=1., dynamic_friction=1., restitution=0.)
         supports = []
         for name, surface, scale, color in [
@@ -70,9 +77,9 @@ def main():
             if prim.IsA(UsdPhysics.RevoluteJoint):
                 drive = UsdPhysics.DriveAPI.Apply(prim, 'angular')
                 finger = prim.GetName().startswith('gripper')
-                drive.CreateStiffnessAttr(30. if finger else 800.)
-                drive.CreateDampingAttr(2. if finger else 40.)
-                drive.CreateMaxForceAttr(.2 if finger else 30.)
+                drive.CreateStiffnessAttr(30. if finger else FIXTURE['arm_drive_stiffness'])
+                drive.CreateDampingAttr(2. if finger else FIXTURE['arm_drive_damping'])
+                drive.CreateMaxForceAttr(FIXTURE['finger_max_effort_nm'] if finger else FIXTURE['arm_max_effort_nm'])
             if prim.HasAPI(UsdPhysics.CollisionAPI):
                 collision = PhysxSchema.PhysxCollisionAPI.Apply(prim)
                 collision.CreateContactOffsetAttr(.0005)
@@ -92,6 +99,10 @@ def main():
         world.reset()
         camera.initialize()
         camera.set_world_pose(np.array(eye), np.array([quat.GetReal(), *quat.GetImaginary()]), camera_axes='usd')
+        camera.set_clipping_range(*FIXTURE['camera_clip_m'])
+        camera.prim.GetAttribute('focalLength').Set(24.)
+        camera.prim.GetAttribute('horizontalAperture').Set(36.)
+        camera.prim.GetAttribute('verticalAperture').Set(27.)
         joints = list(robot.dof_names)
         indices = [robot.get_dof_index('joint'+str(i)) for i in range(1, 6)]
         fingers = [robot.get_dof_index('gripper_joint_1'), robot.get_dof_index('gripper_joint_2')]
@@ -104,6 +115,7 @@ def main():
         initial[fingers] = [aperture, -aperture]
         robot.set_joint_positions(initial)
         controller = robot.get_articulation_controller()
+        first_time, first_step = world.current_time, world.current_time_step_index
         def segment(phase, target, opening, steps):
             nonlocal tick, current, aperture
             start, old_aperture = current.copy(), aperture
@@ -117,10 +129,11 @@ def main():
                 positions[indices] = q
                 positions[fingers] = [grip, -grip]
                 controller.apply_action(ArticulationAction(joint_positions=positions))
-                world.step(render=tick % 12 == 0)
+                physics_step(world, tick)
                 tick += 1
-                if tick > 4800:
-                    raise RuntimeError('Physics step budget exceeded')
+                if (tick > 4800 or world.current_time_step_index != first_step+tick
+                        or abs(world.current_time-first_time-tick*DT) > 1e-6):
+                    raise RuntimeError('Physics step budget or observed clock mismatch')
                 if tick % 4 == 0:
                     p, orient = cargo.get_world_pose()
                     measured = robot.get_joint_positions()[indices]
@@ -145,24 +158,28 @@ def main():
                 name = phase+'.png'
                 Image.fromarray(rgba.astype(np.uint8)).save(args.report.parent/name)
                 images.append(name)
+                frame = camera.get_current_frame()
+                image_frames.append(dict(name=name, tick=tick, physics_time_s=world.current_time-first_time,
+                                         rendering_frame=frame.get('rendering_frame'), rendering_time=frame.get('rendering_time')))
+        closed = FIXTURE['gripper_closed_rad']
         segment('pinky_initial', pose(PINKY, .08), 1., 240)
         segment('out_approach', pose(PINKY), 1., 180)
-        segment('out_close', pose(PINKY), 0., 180)
-        segment('out_raise', pose(PINKY, .08), 0., 180)
-        segment('out_lift', pose(PINKY, .08), 0., 124)
-        segment('out_move', pose(CONVEYOR, .08), 0., 240)
-        segment('out_transport', pose(CONVEYOR, .08), 0., 124)
-        segment('out_lower', pose(CONVEYOR, .004), 0., 180)
+        segment('out_close', pose(PINKY), closed, 180)
+        segment('out_raise', pose(PINKY, .08), closed, 180)
+        segment('out_lift', pose(PINKY, .08), closed, 124)
+        segment('out_move', pose(CONVEYOR, .08), closed, 240)
+        segment('out_transport', pose(CONVEYOR, .08), closed, 124)
+        segment('out_lower', pose(CONVEYOR, .004), closed, 180)
         segment('out_open', pose(CONVEYOR, .004), 1., 180)
         segment('out_retreat', pose(CONVEYOR, .08), 1., 180)
         segment('conveyor_settle', pose(CONVEYOR, .08), 1., 124)
         segment('back_approach', pose(CONVEYOR), 1., 180)
-        segment('back_close', pose(CONVEYOR), 0., 180)
-        segment('back_raise', pose(CONVEYOR, .08), 0., 180)
-        segment('back_lift', pose(CONVEYOR, .08), 0., 124)
-        segment('back_move', pose(PINKY, .08), 0., 240)
-        segment('back_transport', pose(PINKY, .08), 0., 124)
-        segment('back_lower', pose(PINKY, .004), 0., 180)
+        segment('back_close', pose(CONVEYOR), closed, 180)
+        segment('back_raise', pose(CONVEYOR, .08), closed, 180)
+        segment('back_lift', pose(CONVEYOR, .08), closed, 124)
+        segment('back_move', pose(PINKY, .08), closed, 240)
+        segment('back_transport', pose(PINKY, .08), closed, 124)
+        segment('back_lower', pose(PINKY, .004), closed, 180)
         segment('back_open', pose(PINKY, .004), 1., 180)
         segment('back_retreat', pose(PINKY, .08), 1., 180)
         segment('pinky_settle', pose(PINKY, .08), 1., 124)
@@ -176,7 +193,7 @@ def main():
     judgement = evaluate(samples) if error is None else dict(task_success=False, failures=[error], evidence_class='INCOMPLETE_CONTACT_TASK')
     value = dict(schema='rosy.pinky-conveyor-report/1', fixture=FIXTURE, fixture_sha256=fixture_sha256(),
         assets_sha256=hashlib.sha256((ASSETS/'manifest.json').read_bytes()).hexdigest(), sdk_version=version('isaacsim'),
-        joints=joints, completed_frames=tick, samples=samples, images=images, judgement=judgement,
+        joints=joints, completed_frames=tick, samples=samples, images=images, image_frames=image_frames, judgement=judgement,
         attachment_aid=False, error=error)
     with args.report.open('x', encoding='utf-8') as stream:
         json.dump(value, stream, allow_nan=False, separators=(',', ':'))

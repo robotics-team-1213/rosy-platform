@@ -41,5 +41,5 @@ def normalize(scenario_id: str, config: dict) -> dict:
         raise ValueError('settings require only an integer seed in 0..2147483647')
     if scenario_id == 'pinky-conveyor-roundtrip':
         return {'model': 'omx_f', 'headless': True, 'frames': 4800, 'seed': config['seed'],
-                'fixture': 'stationary-proxy-v1'}
+                'fixture': 'stationary-proxy-v2'}
     return {'model': 'omx_f', 'headless': True, 'frames': 120, 'seed': config['seed']}

@@ -7,13 +7,16 @@ PINKY = (.14, -.07, .09)
 CONVEYOR = (.14, .07, .09)
 CARGO_SIZE = .018
 DT = 1 / 120
-FIXTURE = dict(revision='stationary-proxy-v1', coordinate_scope='SYNTHETIC_NOT_CAMERA_REGISTERED',
+FIXTURE = dict(revision='stationary-proxy-v2', coordinate_scope='SYNTHETIC_NOT_CAMERA_REGISTERED',
     pinky_support_m=PINKY, conveyor_surface_m=CONVEYOR, cargo_size_m=CARGO_SIZE,
     cargo_mass_kg=.05, physics_dt_s=DT, gravity_m_s2=9.81, friction=1., restitution=0.,
     pinky_representation='STATIC_TRAY_PROXY_NOT_FULL_ROBOT', belt_speed_m_s=0.,
     controller='DETERMINISTIC_CAD_IK_NOT_LEARNED_POLICY', attachment_aid=False,
     xy_tolerance_m=.015, z_tolerance_m=.005, tilt_tolerance_deg=10.,
-    speed_tolerance_m_s=.01, settle_seconds=1., minimum_lift_m=.02)
+    speed_tolerance_m_s=.01, settle_seconds=1., minimum_lift_m=.02,
+    gripper_open_rad=1., gripper_closed_rad=-.12, finger_max_effort_nm=.2,
+    arm_drive_stiffness=5000., arm_drive_damping=100., arm_max_effort_nm=30.,
+    step_contract='ONE_PHYSICS_STEP_RENDER_SEPARATELY', camera_clip_m=[.01, 10.])
 
 
 def fixture_sha256():

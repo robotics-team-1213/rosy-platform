@@ -19,7 +19,7 @@ def implementation():
 def test_only_fixed_stationary_fixture_is_accepted():
     import run_catalog
     config = run_catalog.normalize('pinky-conveyor-roundtrip', {'seed': 0})
-    assert config['fixture'] == 'stationary-proxy-v1'
+    assert config['fixture'] == 'stationary-proxy-v2'
     assert config['frames'] == 4800
     for extra in ({'belt_speed': 1}, {'path': '/tmp/task'}, {'frames': 0}):
         with pytest.raises(ValueError):
