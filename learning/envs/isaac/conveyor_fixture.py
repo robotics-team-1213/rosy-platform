@@ -3,8 +3,8 @@ import hashlib
 import json
 import math
 
-PINKY = (.23, -.11, .12)
-CONVEYOR = (.23, .11, .12)
+PINKY = (.14, -.07, .09)
+CONVEYOR = (.14, .07, .09)
 CARGO_SIZE = .018
 DT = 1 / 120
 FIXTURE = dict(revision='stationary-proxy-v1', coordinate_scope='SYNTHETIC_NOT_CAMERA_REGISTERED',

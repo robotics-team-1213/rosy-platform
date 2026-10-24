@@ -38,10 +38,10 @@ def test_reachable_targets_have_small_fk_error_and_unreachable_fails():
 def observations():
     mod = implementation()
     rows = []
-    for phase, support in [('pinky_initial', 2), ('out_lift', None), ('out_transport', None),
-                           ('conveyor_settle', 3), ('back_lift', None), ('back_transport', None),
+    for phase, support in [('pinky_initial', 2), ('out_lift', None), ('out_move', None), ('out_transport', None),
+                           ('conveyor_settle', 3), ('back_lift', None), ('back_move', None), ('back_transport', None),
                            ('pinky_settle', 2)]:
-        base = mod.CONVEYOR if phase == 'conveyor_settle' else mod.PINKY
+        base = mod.CONVEYOR if phase in ('conveyor_settle', 'out_move', 'out_transport', 'back_lift') else mod.PINKY
         for step in range(0, 124, 4):
             forces = [0., 0., 0., 0.]
             if support is None:
@@ -59,7 +59,7 @@ def observations():
 def test_two_contact_lifts_and_unassisted_settles_are_required():
     mod = implementation()
     assert mod.evaluate(observations())['task_success'] is True
-    for broken in ('finger', 'support', 'retreat', 'drift', 'nan', 'clock', 'missing', 'tracking'):
+    for broken in ('finger', 'support', 'retreat', 'drift', 'nan', 'clock', 'missing', 'tracking', 'dropped', 'no_transport'):
         rows = observations()
         for row in rows:
             if broken == 'finger' and row['phase'] == 'back_lift': row['contact_forces'][1] = 0.
@@ -69,5 +69,7 @@ def test_two_contact_lifts_and_unassisted_settles_are_required():
             if broken == 'nan': row['position'][0] = float('nan')
             if broken == 'clock': row['tick'] = 0
             if broken == 'tracking': row['tcp_error'] = .05
+            if broken == 'dropped' and row['phase'] == 'out_move': row['contact_forces'][1] = 0.
+            if broken == 'no_transport' and row['phase'] == 'out_transport': row['position'][:2] = list(implementation().PINKY[:2])
         if broken == 'missing': rows = rows[:-31]
         assert mod.evaluate(rows)['task_success'] is False, broken
