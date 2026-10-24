@@ -484,3 +484,9 @@
 - 변경: 신선한 overview를 전제로 같은 authority epoch의 더 최신 로컬 정지 응답 세대를 재시운전 확인에 사용한다. 이전 응답으로 세대를 내리거나 다른 epoch·오래된 overview를 통과시키지 않으며 원래 정지 body와 자동 전송 정책은 유지한다.
 - 증거: source0b30c65d59의 실제 standalone sample browser가 정지 직후 이전 overview 세대를 보내 복구 결과를 갱신하지 못했다. 직접 API 회귀39건과 CORE 연계21건은 별도 source에서 통과했으며, UI에 최신 응답/이전 응답/다른 epoch/stale overview4회귀를 추가했다. 수정 source의 실제 sample/browser 통과는 후속 실행이다.
 - gate 변화: 재시운전 확인은 현재 backend generation 검사와 사람의 두 확인·근거를 계속 요구한다. 물리 정지나 자동 재무장 증거가 아니다. CE 해당 없음 — 원인을 코드 주석과 실제 sample/browser 회귀에 남긴다.
+
+## 2026-10-25 · uncommitted · 통합 재시운전 확인 입력의 공유 UI 적용
+
+- 변경: checkbox label에 기존 ui-check를 적용하고 textarea의 ui-field 설정을 생성 위치로 옮겼다. 입력 의미·기명 권한·원장 처분은 유지한다.
+- 증거: source42e079ef48 FULL의 공유 입력 검사1 FAIL을 source79ff20cc96에서 수정했고 해당 원격 회귀1 PASS·SKIP0·NEW0이다. 기존 sourcebbffbf8577의 집중 Chromium/Node33건과 source42e079ef48의 명시 Chromium4그룹은 각각 통과했다. 최종 수정 source의 공식 FULL은 후속 실행이다.
+- gate 변화: 공통 입력 표현을 맞추며 장치·현장 수용을 승격하지 않는다. CE 해당 없음 — 원인과 수정 조건이 기존 공유 UI 검사에 직접 남는다.
