@@ -126,11 +126,12 @@ def load_workspace_links(path):
     if Path(path).is_symlink():
         raise ValueError('--workspace-links must be a regular file, not a link')
     fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_BINARY', 0))
-    with os.fdopen(fd, 'rb') as file:
-        info = os.fstat(file.fileno())
-        if not stat.S_ISREG(info.st_mode):
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise ValueError('--workspace-links must be a regular file, not a link')
-        raw = file.read(64 * 1024 + 1)
+        raw = os.read(fd, 64 * 1024 + 1)  # a regular file returns up to EOF in one read
+    finally:
+        os.close(fd)
     if len(raw) > 64 * 1024:
         raise ValueError('--workspace-links is larger than 64 KiB')
     try:
