@@ -11,7 +11,8 @@ VLA) writes one command per line into the command FIFO and reads one JSON status
   jog <joint> <delta> ... move one or more joint targets together, each by at most JOG_MAX units
   grip <value>            set the gripper target
   state                   report the current state
-  stop                    end; torque goes OFF where the arm is, so run the home chunk first
+  park                    close the jaws, rise, turn at that height and descend into home, slowly
+  stop                    end; torque goes OFF where the arm is, so park (or run home) first
 
 Commands apply one per control tick, and a jog may not put its target more than JOG_MAX + SETTLE_TOL
 from the joint's present position, so a burst of commands cannot add up to one large step.
@@ -40,6 +41,24 @@ FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0   # body joints, LeRobot units; the clip 
 SETTLE_TOL, SETTLE_S = 3.0, 3.0
 EMPTY_MARGIN = 2.0
 REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
+# park: lift/elbow/wrist of the taught carry (high and clear) and a slow, even speed. Turning low first
+# scraped the jaws on the table on 2026-10-24.
+TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
+PARK_SPEED = 6.0  # units per second for every joint
+
+
+def park_path(start: list, home: list, closed: float, fps: int) -> list:
+    """Close the jaws, rise to TRANSIT, turn pan/roll to home at that height, then descend into home."""
+    waypoints = [list(start)]
+    waypoints.append(waypoints[-1][:5] + [closed])
+    waypoints.append([TRANSIT.get(i, v) for i, v in enumerate(waypoints[-1])])
+    waypoints.append([home[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
+    waypoints.append(home[:5] + [closed])
+    step, frames = PARK_SPEED / fps, []
+    for a, b in zip(waypoints, waypoints[1:]):
+        n = max(1, math.ceil(max(abs(y - x) for x, y in zip(a, b)) / step))
+        frames += [[x + (y - x) * k / n for x, y in zip(a, b)] for k in range(1, n + 1)]
+    return frames
 SCHEMA = "rosy.omx-chunk-library.v1"
 
 
@@ -122,10 +141,17 @@ class Runner:
                     if abs(moved[index] - present[index]) > JOG_MAX + SETTLE_TOL:
                         raise ValueError(f"jog would put the target more than {JOG_MAX + SETTLE_TOL} from the joint")
                 self.target = moved
+            elif verb == "park" and len(words) == 1:
+                home = self.library["chunks"].get("home")
+                if not home:
+                    raise ValueError("park needs a home chunk in the library")
+                self.queue = park_path(self.target, home[-1], self.library["gripper_closed"], self.fps)
+                self.chunk, self.settle_since = "park", None
+                return True
             elif verb == "grip" and len(words) == 2:
                 self.target[5] = max(0.0, min(100.0, float(words[1])))
             elif verb != "state":
-                raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | state | stop")
+                raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | park | state | stop")
             self.report(command=line, ok=True)
         except ValueError as error:
             self.report(command=line, ok=False, error=str(error))
