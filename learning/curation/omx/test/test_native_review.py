@@ -44,6 +44,31 @@ def test_review_does_not_infer_task_success(module, recording):
     assert all(len(e['content_sha256']) == 64 for e in report['episodes'])
 
 
+@pytest.mark.parametrize('linked_worktree', [False, True])
+def test_outputs_stay_outside_checkouts_and_preserve_source(module, tmp_path, linked_worktree):
+    checkout, source = tmp_path / 'checkout', tmp_path / 'source'
+    checkout.mkdir()
+    marker = checkout / '.git'
+    if linked_worktree:
+        marker.write_text('gitdir: elsewhere', encoding='utf-8')
+    else:
+        marker.mkdir()
+    output = checkout / 'new' / 'output'
+    assert module._in_checkout(output)
+    with pytest.raises(ValueError, match='checkout'):
+        module._new_output(output, source)
+    assert not output.exists()
+    for overlap in (source, source / 'nested', tmp_path):
+        with pytest.raises(ValueError, match='separate'):
+            module._new_output(overlap, source)
+    external = tmp_path / 'external'
+    assert not module._in_checkout(external)
+    assert module._new_output(external, source) == external.resolve()
+    external.mkdir()
+    with pytest.raises(ValueError, match='already exists'):
+        module._new_output(external, source)
+
+
 def test_reader_tuple_shapes_are_supported(module, recording):
     info, rows = recording
     for feature in info['features'].values():

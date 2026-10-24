@@ -69,7 +69,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     assert {'sitemap/edit-history.js', 'sitemap/geometry-edit.js', 'sitemap/drawing-import.js', 'sitemap/map-editor.js',
             'sitemap/map-authoring.js', 'sitemap/map-editor.css', 'sitemap/map-topology.js',
             'sitemap/extraction-review.js', 'shared/drawing-errors.js', 'cell/cell-observation.js',
-            'motor-health-view.js', 'roster-cards.js'} <= expected.keys()
+            'motor-health-view.js', 'roster-cards.js', 'learning.html'} <= expected.keys()
     # Colcon selects full install for external holders instead of unsafe editable cleanup.
     develop_help = run(['setup.py', '--help', 'develop'], staging / 'operations/fleet').stdout
     assert not any(line.lstrip().startswith('--editable') for line in develop_help.splitlines()), develop_help

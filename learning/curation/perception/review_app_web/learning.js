@@ -3,7 +3,7 @@ import { taskRow } from '/common/workspace.js';
 import '/commands.js';
 import { loadStorage, clearStorage } from '/storage.js';
 const $=id=>document.getElementById(id);
-let workspace, busy=false, checkedAt=0, readSequence=0;
+let workspace, busy=false, checkedAt=0, connectionRestored=false, readSequence=0;
 const trainingView=new URL(location.href).searchParams.get('view')==='training';
 $('workspace-title').textContent=trainingView?'학습':'홈';
 document.title=`Rosy Learning — ${trainingView?'학습':'홈'}`;
@@ -302,14 +302,17 @@ async function load() {
       text($('capabilities'),'h3',row.name);text($('capabilities'),'p',row.support);text($('capabilities'),'p',row.next);
       if(row.files) for(const select of [$('kind'),$('kind-filter')]) {const option=text(select,'option',row.name);option.value=row.id;}
     }
-    $('kind').value='perception';fileHint();
     const params=new URLSearchParams(location.search);
+    $('kind').value=params.get('connect')==='omx'?'omx':'perception';fileHint();
     $('search').value=params.get('q')||'';
     for(const [id,key] of [['kind-filter','kind'],['state-filter','state']]) {$(id).value=params.get(key)||'all';if(!$(id).value) $(id).value='all';}
   }
   render();
   await loadStorage(request);
   } catch(error) {showUnavailable(error);throw error;} finally {clearInterval(timer);setBusy(false);}
+  if(!connectionRestored&&location.hash==='#connection-panel'){
+    connectionRestored=true;$('connection-panel').open=true;$('name').focus();$('connection-panel').scrollIntoView({block:'start'});
+  }
 }
 function renderReview() {
   const {approved,pending,excluded}=workspace.counts;

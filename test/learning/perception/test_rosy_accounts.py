@@ -130,6 +130,7 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
 def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
     import threading
     from test_review_app import open_store
+    from test_learning_collaboration import request
     from review_app import make_server
     record = SimpleNamespace(sub='central-carol', aud='project:one', permits=lambda resource, cap: cap == 'learning.view')
     receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,

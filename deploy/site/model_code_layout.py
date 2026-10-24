@@ -2,7 +2,8 @@
 
 PREFIX = "tools/perception/"
 LEARNING_CODE_PREFIXES = ("learning/curation/perception/", "learning/registry/perception/",
-                          "learning/training/perception/", "learning/evaluation/perception/", PREFIX)
+                          "learning/training/perception/", "learning/evaluation/perception/",
+                          "learning/curation/omx/", "learning/training/omx/", PREFIX)
 LEGACY_LEARNING_PREFIXES = ("learning/training/perception/", "tools/perception/")
 LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
                      PREFIX + "operator_ssh.py", "learning/registry/perception/store.py",
@@ -22,7 +23,55 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                      "learning/curation/perception/classes/lane_lr6_drivable.yaml",
                      "learning/curation/perception/classes/object_review_obstacle_v1.yaml",
                      "learning/curation/perception/review_app_web/index.html",
-                     "learning/curation/perception/review_app_web/pixels.html")
+                     "learning/curation/perception/review_app_web/pixels.html",
+                     "learning/curation/perception/omx_web.py",
+                     "learning/curation/perception/omx_center_web.py",
+                     "learning/curation/perception/camera_setup.py",
+                     "learning/curation/perception/camera_setup_web.py",
+                     "learning/curation/perception/learning_pipeline.py",
+                     "learning/curation/perception/learning_tasks.py",
+                     "learning/curation/perception/learning_tasks_web.py",
+                     "learning/curation/perception/review_app_web/tasks.html",
+                     "learning/curation/perception/review_app_web/tasks.js",
+                     "learning/curation/perception/review_app_web/omx.html",
+                     "learning/curation/perception/review_app_web/omx.js",
+                     "learning/curation/perception/review_app_web/omx-review.js",
+                     "learning/curation/perception/review_app_web/omx-profiles.js",
+                     "learning/curation/perception/review_app_web/camera.html",
+                     "learning/curation/perception/review_app_web/camera.js",
+                     "learning/curation/omx/native_review.py",
+                     "learning/curation/omx/native_capture.py",
+                     "learning/curation/omx/native_environment.py",
+                     "learning/curation/omx/native_segments.py",
+                     "learning/curation/omx/collection_intake.py",
+                     "learning/curation/omx/collection_pipeline.py",
+                     "contracts/learning/src/rosy/contracts/learning/__init__.py",
+                     "contracts/learning/src/rosy/contracts/learning/artifacts.py",
+                     "contracts/learning/src/rosy/contracts/learning/omx.py",
+                     "contracts/learning/src/rosy/contracts/learning/png.py",
+                     "contracts/learning/src/rosy/contracts/learning/camera_setup.py",
+                     "learning/training/omx/experiment_artifact.py",
+                     "learning/training/omx/experiment_catalog.py",
+                     "learning/training/omx/experiment_center.py",
+                     "learning/training/omx/experiment_dataset.py",
+                     "learning/training/omx/experiment_evaluation.py",
+                     "learning/training/omx/experiment_export.py",
+                     "learning/training/omx/experiment_inbox.py",
+                     "learning/training/omx/experiment_io.py",
+                     "learning/training/omx/experiment_jobs.py",
+                     "learning/training/omx/experiment_native.py",
+                     "learning/training/omx/experiment_online.py",
+                     "learning/training/omx/experiment_owner_status.py",
+                     "learning/training/omx/experiment_preview.py",
+                     "learning/training/omx/experiment_process.py",
+                     "learning/training/omx/experiment_profile.py",
+                     "learning/training/omx/experiment_profiles.py",
+                     "learning/training/omx/experiment_reviews.py",
+                     "learning/training/omx/experiment_scope.py",
+                     "learning/training/omx/experiment_smoke.py",
+                     "learning/training/omx/experiment_train.py",
+                     "learning/training/omx/experiment_transfer.py",
+                     "learning/training/omx/native_cycle.py")
 CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
 CAMERA_MAP_FILES = tuple("operations/overhead/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))
@@ -135,7 +184,7 @@ OMX_REVIEW_FILES = (
     *("contracts/learning/src/rosy/contracts/learning/" + name for name in
       ("__init__.py", "omx.py", "artifacts.py", "png.py", "camera_setup.py")))
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "shared/web/", "tools/data_paths.py", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES,
+                 "contracts/learning/src/", "shared/web/", "tools/data_paths.py", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES,
                  *OMX_REVIEW_FILES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
@@ -143,7 +192,7 @@ CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sen
 LIMIT = 512 * 1024 * 1024
 FORBIDDEN = {"data", "private", "runs", "scratch", "checkpoints", "store", ".git", ".venv", "__pycache__", "secrets"}
 IMPORT_PATHS = tuple(p.rstrip("/") for p in LEARNING_CODE_PREFIXES) + (
-                "middleware/perception", "contracts/foundation", "operations/overhead",
+                "middleware/perception", "contracts/foundation", "contracts/learning/src", "operations/overhead",
                 *(prefix + name for prefix in LEGACY_LEARNING_PREFIXES for name in ("model", "dataset", "training")),
                 "src/runtime/sensing", "src/contracts/foundation")
 PATH_SETUP = ("import pathlib,sys,runpy;root=pathlib.Path(sys.argv.pop(1)).resolve();"

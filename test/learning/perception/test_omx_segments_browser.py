@@ -47,7 +47,7 @@ def test_mark_review_and_download_original_grasp_range(tmp_path, monkeypatch):
                 playwright.expect(page.locator('details img')).to_have_js_property('naturalWidth', 32)
                 for width,height in [(1440,1000),(390,844),(320,568)]:
                     page.set_viewport_size(dict(width=width,height=height))
-                    page.evaluate('scrollTo(0,0)')
+                    page.locator('.omx-stage').scroll_into_view_if_needed()
                     assert page.locator('details img').bounding_box()['y'] <= height*0.7
                     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                     for button in page.locator('details [role="button"]').all():

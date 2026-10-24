@@ -97,7 +97,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
     """Learning supplies the shared seats; one module owns their navigation."""
     web = WEB.parents[1] / 'learning/curation/perception/review_app_web'
     for name in ['learning.html', 'index.html', 'pixels.html', 'catalog.html',
-                 'camera.html', 'omx.html', 'sim.html', 'vlm.html', 'accounts.html', 'evaluate.html']:
+                 'camera.html', 'omx.html', 'sim.html', 'vlm.html', 'accounts.html', 'evaluate.html', 'tasks.html']:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
         assert html.index('/app.css') < html.index('/learning-shell.css')

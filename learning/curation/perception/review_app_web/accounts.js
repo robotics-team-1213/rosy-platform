@@ -74,7 +74,7 @@ async function refresh() {
   if(!options.enabled) {
     signedOut();
     status('Rosy Account 연결이 설정되지 않았습니다. 관리자에게 이 앱의 Rosy Account 등록을 요청하세요.', 'unavailable');
-    $('login-panel').hidden=$('signed-in').hidden=true; $('account-retry').hidden=false; active=false; return;
+    return;
   }
   if(loginFailure) {
     signedOut(); status(loginFailure[1],loginFailure[0]); $('account-retry').hidden=false; return;

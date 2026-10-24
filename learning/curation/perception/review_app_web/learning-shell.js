@@ -19,6 +19,7 @@ if (shell && body && main) {
   ];
   // Every page belongs to one stage; a stage with several pages shows them as a sub-menu.
   const pages = {
+    home: [['홈', '/learning', 'list'], ['로봇·과제', '/learning/tasks', 'robot']],
     data: [['자료 등록', '/catalog', 'folder'], ['카메라 맞춤', '/learning/camera', 'image']],
     truth: [['객체 검수', '/', 'box'], ['픽셀 검수', '/pixels', 'pixels'], ['OMX 구간', '/learning/omx', 'robot'], ['VLM 판단', '/learning/vlm', 'check']],
     training: [['학습 실행', '/learning?view=training', 'history'], ['SIM 실험', '/learning/sim', 'cell']],
