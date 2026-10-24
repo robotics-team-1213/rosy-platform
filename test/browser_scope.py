@@ -71,7 +71,8 @@ REVIEW = [
 ]
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED
+COMMISSIONING = ["test/test_omx_commissioning_view.py"]
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED + COMMISSIONING
 
 SCOPE: dict[str, list[str]] = {
     "applications/fleet/dev/": FLEET,
@@ -85,6 +86,7 @@ SCOPE: dict[str, list[str]] = {
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
     "integrations/simulation/gazebo/scripts/": GAZEBO,
+    "deploy/robot/omx/commissioning_view.py": COMMISSIONING,
     # Every surface loads /common (ui.js, components.css, tokens.css).
     "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW,
     "test/browser_harness.py": EVERYTHING,

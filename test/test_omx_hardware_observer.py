@@ -22,6 +22,49 @@ def rows():
                  torque_enabled=0, hardware_error=0) for i in range(11, 17)]
 
 
+@pytest.mark.parametrize("topic", ["/joint_states", "/omx/arm_a/joint_states",
+                                    "/omx_commissioning/arm_a/command", "/omx_commissioning//joint_states"])
+def test_dual_arm_observer_cannot_masquerade_as_control_feedback(topic):
+    with pytest.raises(ValueError):
+        observer().joint_topic(topic)
+
+
+@pytest.mark.parametrize("arm", ["arm_a", "arm_b"])
+def test_dual_arm_observer_routes_a_guarded_sample_to_its_own_topic(monkeypatch, capsys, arm):
+    monkeypatch.setenv("RMW_IMPLEMENTATION", "rmw_fastrtps_cpp")
+    module = observer()
+    topics, nodes, messages = [], [], []
+    clock = [0.0]
+    @contextmanager
+    def port(device):
+        yield object()
+    def publisher(kind, topic, depth):
+        topics.append(topic)
+        return SimpleNamespace(publish=lambda message: messages.append(message))
+    node = SimpleNamespace(create_publisher=publisher,
+        get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(to_msg=lambda: 0)),
+        destroy_node=lambda: None)
+    def create_node(name):
+        nodes.append(name)
+        return node
+    monkeypatch.setitem(sys.modules, "register_probe", SimpleNamespace(open_readonly_port=port, read_motors=lambda p: rows()))
+    monkeypatch.setitem(sys.modules, "rclpy", SimpleNamespace(init=lambda **kwargs: None,
+        create_node=create_node, ok=lambda: True, shutdown=lambda: None))
+    monkeypatch.setitem(sys.modules, "sensor_msgs.msg", SimpleNamespace(JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(module.time, "sleep", lambda delay: clock.__setitem__(0, clock[0] + 1.5))
+    topic = f"/omx_commissioning/{arm}/joint_states"
+    assert module.main(["--device", f"/test/{arm}", "--domain-id", "13", "--duration", "1", "--joint-topic", topic]) == 0
+    assert topics == [topic]
+    assert arm in nodes[0]
+    assert len(messages) == 1
+    import json
+    sample = next(json.loads(line) for line in capsys.readouterr().out.splitlines() if '"sample"' in line)
+    assert sample["device"] == f"/test/{arm}"
+    assert sample["joint_topic"] == topic
+    assert sample["motion_admitted"] is False
+
+
 def test_nominal_radians_preserve_register_offset_without_applying_it_twice():
     data = rows()
     data[4].update(position_raw=3072, homing_offset_raw=1024)
