@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · Rosy Learning #185 후속 검토 반영 (제목 칸 분리·휴대폰 여유·계정 링크 툴팁)
+- 2026-10-24 · uncommitted · Rosy Learning #185 후속 (정답 메뉴 초점 순서·VLM 읽기 무기록·휴대폰 상단 바)
 - 2026-10-24 · uncommitted · 검수 bridge state 읽기의 소유자 전용 권한·WAL·정규 경로 강제
 - 2026-10-24 · uncommitted · 협업 모드 검수 bridge의 state 직접 읽기
 - 2026-10-24 · uncommitted · 외부 업무 앱 지원 계약 문서 공개
-- 2026-10-24 · uncommitted · 객체·픽셀 검수의 정답 링크가 사진을 밀지 않게 (D-542 §2)
-- 2026-10-24 · uncommitted · Rosy Learning VLM 판단 검토 반영 (블라인드 내보내기·평가 state·다시 켜기)
