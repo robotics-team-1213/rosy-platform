@@ -29,7 +29,7 @@
 | [원장 provenance](2026-10-24-neutral-arm-ledger-design.md) | version5 schema·Cell 소비자 차단, 원격 69/13/244개 별도 회귀와 affected 두 그룹 통과 | 물리 생성/승인·claim 종료 연결 |
 | [owner 실행](2026-10-24-neutral-arm-owner-design.md) | 내부 복구 74개, v1.305 설치 factory/phase-only IPC 153개·v2 client 15개 별도 회귀 및 독립 검토 | actual admitted-state/HTTP·Fleet producer·물리 종료·Harbor 연결 |
 | [managed owner 권한](2026-10-24-managed-transfer-authority-design.md) | 영속 mode/최종 명령 경계, 집중 119개·affected 1754 passed/34 skipped/0 NEW | 실제 ROS/장치·승인/물리 종료 |
-| [실제 capability/대상 owner](2026-10-24-managed-transfer-capability-design.md) | API v1.306·canonical journal/session·receipt/404 결속, 집중 790 passed/7 skipped/0 NEW 및 독립 검토 | FULL23의 이력 표 행 누락1 NEW 수정/실패 entry9 재검증 중, Fleet physical producer·claim 종료·Harbor ARM |
+| [실제 capability/대상 owner](2026-10-24-managed-transfer-capability-design.md) | API v1.306·canonical journal/session·receipt/404 결속, 집중790/0 NEW, FULL표행1NEW 수정 후 entry9 7371 passed/91 skipped/0 NEW(다른22개원본0NEW), 독립 검토 | Fleet physical producer·claim 종료·Harbor ARM |
 | [물리 종료/producer 계획](2026-10-24-neutral-transfer-closure-and-producer-design.md) | 독립 architecture/critic 2회 검토 approve, World 사실/Fleet atomic claim/Harbor 업무 분리와 object origin 기준 명시 | policy·물리 관측·승인/producer·Harbor 연결 구현 |
 | 전체 P3–P5 | 진행 중 | 중립 팔 실행의 승인/자원 종료, Harbor 공정 변환, 복구·독립성 통합 증거 |
 

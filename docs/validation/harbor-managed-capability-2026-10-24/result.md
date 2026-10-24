@@ -16,7 +16,7 @@ base commit `7838eb3cad`부터 소스 commit `46f56d6b48`까지 공식 selector�
 
 `tools/remote/remote_pytest.py --sha 46f56d6b48 --affected-json <external>/rosy-managed-capability-46-full-execution.json --log-dir <external>/rosy-managed-capability-46-full`은 exit1로 종료했다. 23개 원본 로그를 모두 known_failures와 대조했고 run-9만1 NEW, 나머지22개는0 NEW였다. run-9는7370 passed/91 skipped/1 failed로, API 설명 section은 있었으나 변경 이력 표에 v1.306 행이 빠져 `test_changelog_has_a_row_for_the_live_version`이 실패했다. run-12 Fleet는6285 passed/336 skipped, run-21 root는9710 passed/1132 skipped였고 각각0 NEW다. skip·중복 실행 수를 수용/고유 test 수로 합산하지 않는다.
 
-문서 수정 commit `ebba429c4c`에 누락된 변경 이력 표 행을 추가했다. production Python은46 이후 동일하다. 실패한 FULL entry9의 원래7 targets 전체를 같은 공식 runner로 재실행 중이며 원본은 `rosy-managed-capability-full9-recheck/run-1.txt`에 둔다. 원래 FULL 실패를 지우거나 아직 FULL 통과로 표시하지 않는다.
+문서 수정 commit `ebba429c4c`에 누락된 변경 이력 표 행을 추가했다. production Python은46 이후 동일하다. 실패한 FULL entry9의 원래7 targets 전체를 같은 공식 runner로 재실행했고 **7371 passed/91 skipped/12 warnings/5 subtests**, exit0/known0 NEW였다. 원본은 `rosy-managed-capability-full9-recheck/run-1.txt`다. 원래46의 FULL 실패와 ebba의 해당 entry 재검증을 구분하며, 한 SHA에서23개를 다시 실행했다고 표시하지 않는다. 다른22개 source46 결과와 합쳐 현재 변경 범위의 검증 근거로 보존한다.
 
 [23개 실행별 target·요약·known failure 분류](full-run-summary.json)를 보존한다. 원본 로그는 외부 scratch의 같은 run 번호로 대조한다.
 

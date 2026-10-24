@@ -4417,3 +4417,9 @@
 - 변경: 빠진 v1.306 변경 이력 표 행을 추가했다. 원본 FULL summary JSON을 validation에 보존했다.
 - 증거: entry9의 API 이력 표 행 누락1 NEW, 다른22개0 NEW로 종료했다. Fleet entry12는6285 passed/336 skipped/0 NEW였다. doc commit ebba429c4c에서 표를 보완하고 entry9 전체를 재실행 중이다. source Python은46 이후 동일하다.
 - gate 변화: FULL 통과 판정 전이다. 기존 Cell/TRIP와 새 physical producer/claim 경계를 유지한다.
+
+## 2026-10-24 · ebba429c4c · D-856 이력 표 수정 재검증 완료
+
+- 변경: 수정 후 재검증과 원본 FULL 실패를 validation/plan에 함께 기록했다.
+- 증거: 실패 entry9 전체가7371 passed/91 skipped/0 NEW, runner exit0였다. 원본46의 다른22개는0 NEW다. 원본과 수정 SHA의 결과를 구분한다.
+- gate 변화: physical create/approval/World 관측/atomic claim 종료·Harbor ARM은 다음 승인된 계획의 실행 범위다. 이 host 결과를 실물 수용으로 사용하지 않는다.

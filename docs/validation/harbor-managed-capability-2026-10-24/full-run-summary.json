@@ -2,6 +2,17 @@
   "source_commit": "46f56d6b481af9d7af50c29a546d8a5ceb15547a",
   "execution_tier": "full_invocations (23 unchanged entries)",
   "runner_exit_code": 1,
+  "rechecks": [
+    {
+      "source_commit": "ebba429c4c26aae7f3eab347138a081868fd5e7f",
+      "original_entry": 9,
+      "production_unchanged_from_commit": "46f56d6b481af9d7af50c29a546d8a5ceb15547a",
+      "pytest_summary": "7371 passed, 91 skipped, 12 warnings, 5 subtests passed in 509.13s (0:08:29)",
+      "runner_exit_code": 0,
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "log": "rosy-managed-capability-full9-recheck/run-1.txt"
+    }
+  ],
   "entries": [
     {
       "run": 1,

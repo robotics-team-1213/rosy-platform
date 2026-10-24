@@ -657,3 +657,9 @@
 - 변경: 빠진 v1.306 변경 이력 표 행을 추가했다. production Python은46 이후 동일하다.
 - 증거: 23개 로그 분류에서 entry9의 API 이력 표 행 누락1 NEW, 다른22개0 NEW였다. doc commit ebba429c4c에서 표를 보완했고 같은 entry9 전체를 공식 원격 재실행 중이다. 원래 FULL 실패와790 집중 결과를 구분한다.
 - gate 변화: FULL 통과 판정 전이다. physical producer/claim/Harbor ARM·실물은 계속 후속이다.
+
+## 2026-10-24 · ebba429c4c · D-856 이력 표 수정 재검증 완료
+
+- 변경: 수정 후 재검증과 원본 FULL 실패를 validation/plan에 함께 기록했다.
+- 증거: 실패 entry9의 원래7 targets 전체가7371 passed/91 skipped/0 NEW, runner exit0였다. 원본46의 다른22개는0 NEW이며 한 SHA에서23개를 재실행했다고 주장하지 않는다.
+- gate 변화: 설치/owner/receipt의 host 검증 근거다. 물리 관측·producer/claim·Harbor ARM·장치/현장은 후속이다. CE 미해결: 기존 G1 timing 원인 미확정.

@@ -1,6 +1,6 @@
 # D-856 실제 설치 capability와 grant의 owner 결속
 
-**Status:** source commit `46f56d6b48`, API v1.306에서 구현·고정 SHA 독립 검토·집중 원격 790 passed/7 skipped/0 NEW를 확인했다. FULL23개는 변경 이력 표 행 누락1 NEW로 종료했고 doc commit `ebba429c4c` 수정 후 실패 entry9 전체를 재검증 중이다. [검증 기록](../validation/harbor-managed-capability-2026-10-24/result.md)을 따른다. 새 Fleet producer나 자원 해제는 이 변경으로 활성화하지 않는다.
+**Status:** source commit `46f56d6b48`, API v1.306에서 구현·고정 SHA 독립 검토·집중 원격 790 passed/7 skipped/0 NEW를 확인했다. FULL23개는 변경 이력 표 행 누락1 NEW로 종료했고 doc commit `ebba429c4c` 수정 후 실패 entry9 전체가7371 passed/91 skipped/0 NEW였다. 다른22개는원래source46에서0 NEW다. [검증 기록](../validation/harbor-managed-capability-2026-10-24/result.md)을 따른다. 새 Fleet producer나 자원 해제는 이 변경으로 활성화하지 않는다.
 
 ## 현재 소스와 필요한 경계
 
