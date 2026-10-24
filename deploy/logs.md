@@ -3194,3 +3194,9 @@
 - 증거: 새 수집기·기존 runtime/camera/evidence/config/demonstration 원격116개 통과·NEW0, 독립 권한 경계 검토 Important 없음.
 - gate 변화: 제어 권한·목표·허용치·실패 HOLD 판정을 유지한다. 정책·실물 수용은 기존 HOLD이며 CE 미해결이다.
 - 실제 실행: source 동일 calibration eb3932d8a7be 종료0/331샘플, 정책1cb9bea72585 종료1/748샘플. 두 archive96/126파일과 PID0·빈 cgroup·lock/예약 없음을 검증했다. 정책은41목표 성공 뒤 lease 만료로42번째 제출을 막았으며 새 formal·학습·실물 실행은 없다. journal 세부 지연 원인은 미확정이다.
+
+## 2026-10-24 · ce5018413b · D-859 공통 UTC 시간 동기화
+
+- 변경: 관제 chrony 중심 NTP 계층과 Linux 공통 설치·읽기 전용 오차/갱신 검사, Windows W32Time 설치를 추가했다. Pinky native runtime은 같은 도구를 포함한다. 유지보수 가드·원본 백업·구문 검사·재시작 실패 복구를 포함한다.
+- 증거: [검증 기록](../docs/validation/shared-time-sync-2026-10-24/result.md). 공식 CSV 형식으로 parser 오류를 먼저 재현한 뒤 수정했고 최종 소스 원격 영향 시험 739개 통과·NEW 0, Windows 구문/WhatIf 통과, 독립 재검토 주요 지적 없음.
+- gate 변화: SOURCE 구현 증거만 추가한다. 관제 PC 연결 불가·승인 로봇 SSH 키 부재로 실제 배포와 장치별 동기 수용은 미완료다. 기존 ARTIFACT/DEVICE/FIELD gate는 올리지 않는다. CE 해당 없음 — 형식 차이는 회귀시험과 기록에 보존했다.
