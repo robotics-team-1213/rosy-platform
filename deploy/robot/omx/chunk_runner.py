@@ -6,7 +6,8 @@ under the same max_relative_target clip as a hand on the leader. Between chunks 
 held, so an extended arm never drops. A judge (an operator, an agent watching the cameras, later a
 VLA) writes one command per line into the command FIFO and reads one JSON status per command:
 
-  run <chunk>             play a chunk of the library, then report the settled state
+  run <chunk> [rel]       play a chunk, then report the settled state; rel shifts its body joints by
+                          the held correction (held target minus the chunk start, at most REL_MAX)
   jog <joint> <delta>     move one joint target by at most JOG_MAX units
   grip <value>            set the gripper target
   state                   report the current state
@@ -38,6 +39,7 @@ JOG_MAX = 5.0
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0   # body joints, LeRobot units; the clip alone keeps steps small
 SETTLE_TOL, SETTLE_S = 3.0, 3.0
 EMPTY_MARGIN = 2.0
+REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
 SCHEMA = "rosy.omx-chunk-library.v1"
 
 
@@ -89,15 +91,21 @@ class Runner:
                 return False
             if self.chunk is not None:
                 raise ValueError(f"chunk {self.chunk} is still running")
-            if verb == "run" and len(words) == 2:
+            if verb == "run" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
                 frames = self.library["chunks"].get(words[1])
                 if frames is None:
                     raise ValueError(f"unknown chunk {words[1]}")
                 start = frames[0]
-                gap = max(abs(a - b) for a, b in zip(start[:5], self.target[:5]))
+                offset = [0.0] * 6
+                if words[2:] == ["rel"]:  # keep the judge's corrections: shift the body joints, never the jaws
+                    offset = [t - s for t, s in zip(self.target[:5], start[:5])] + [0.0]
+                    if max(abs(v) for v in offset) > REL_MAX:
+                        raise ValueError(f"relative offset {max(abs(v) for v in offset):.1f} exceeds {REL_MAX}")
+                gap = max(abs(a + o - b) for a, o, b in zip(start[:5], offset, self.target[:5]))
                 if gap > JOG_MAX * 2:  # chunks chain end to start; a big jump means the wrong order
                     raise ValueError(f"chunk {words[1]} starts {gap:.1f} away from the held target")
-                self.queue, self.chunk, self.settle_since = [list(f) for f in frames], words[1], None
+                self.queue = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
+                self.chunk, self.settle_since = words[1], None
                 return True
             if verb == "jog" and len(words) == 3 and words[1] in NAMES:
                 delta = float(words[2])
