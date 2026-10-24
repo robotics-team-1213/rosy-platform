@@ -36,6 +36,7 @@
 - [2026-10-02-rosy-cell-c3-gazebo.md](../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-15-omx-camera-recovery.md](../../../../docs/plans/2026-10-15-omx-camera-recovery.md)
+- [2026-10-24-managed-transfer-authority-design.md](../../../../docs/plans/2026-10-24-managed-transfer-authority-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -47,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · 69607b2b0d · D-856 managed transfer의 영속 owner 권한
 - 2026-10-24 · 45173e6f92 · D-856 설치된 중립 팔의 phase-only IPC
 - 2026-10-24 · 11486ce7cd · 중립 grant의 물리 transaction과 재시작 복구
 - 2026-10-24 · uncommitted · D-856 인증된 owner 사전검사 읽기 연결
 - 2026-10-24 · uncommitted · D-856 owner 물리 catalog와 사전검사
-- 2026-10-24 · uncommitted · D-856 물리 이송 계획과 Cell provenance 분리
