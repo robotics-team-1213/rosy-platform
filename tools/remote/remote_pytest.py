@@ -60,6 +60,14 @@ import remote_test_tools  # noqa: E402
 import xdist_plan  # noqa: E402
 from work_queue import Work, cost  # noqa: E402,F401
 
+# A Windows console or pipe encodes with the legacy code page (cp1252), so printing a
+# UTF-8 pytest tail that carries Korean operator text raised UnicodeEncodeError at the
+# final print and threw away a finished run (2026-10-24). Unencodable characters become
+# "?" instead; the on-disk logs stay byte-for-byte UTF-8.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="replace")
+
 # Live Fleet host: last resort, Fleet reserve, CPU cap (D-568 3).
 # The address is ROSY_SITE_HOST, else gitignored private/lab-hosts.json (D-226).
 _LAB = lab_hosts.load()
