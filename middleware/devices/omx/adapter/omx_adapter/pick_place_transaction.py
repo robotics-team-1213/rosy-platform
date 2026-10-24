@@ -334,6 +334,12 @@ class PickPlaceTransaction:
                     or type(sensor) is not str or not sensor or sensor != sensor.strip()
                     or type(snapshot.get("object_held")) is not bool):
                 raise ValueError("neutral transaction scope or object does not match its grant")
+        elif "cell_grant" not in snapshot:
+            for name in ("source_object_id", "destination_object_id",
+                         "source_observation_id", "destination_observation_id"):
+                value = snapshot.get(name)
+                if type(value) is not str or not value or value != value.strip():
+                    raise ValueError("legacy transaction requires its original object and observation references")
         try:
             state = PickPlaceState(snapshot["state"])
             action_id = str(snapshot["action_id"])
