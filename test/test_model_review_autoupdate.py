@@ -79,3 +79,10 @@ def test_cli_selects_explicit_service(tmp_path, monkeypatch):
     module.main()
     assert seen[0][-1] == 'rosy-edge-review.service'
     assert seen[0][6].name == 'rosy-edge-review.service'
+
+
+def test_release_update_unit_takes_the_running_review_python_and_host_from_its_env():
+    unit = (Path(__file__).resolve().parents[1] / 'deploy/model_pc/rosy-review-release-update.service').read_text(encoding='utf-8')
+    start = next(line for line in unit.splitlines() if line.startswith('ExecStart='))
+    assert '--python ${REVIEW_PYTHON}' in start and '--host ${REVIEW_HOST}' in start
+    assert '.venv/bin/python' not in start  # a fixed venv dropped the account rollout's environment (2026-10-20)
