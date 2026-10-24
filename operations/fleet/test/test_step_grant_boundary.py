@@ -95,7 +95,7 @@ def test_only_registered_device_grants_can_be_parsed(kind):
 
 @pytest.mark.parametrize("field,value", [
     ("recipe_sha256", "f" * 64), ("cell_sha256", "f" * 64), ("job_id", "f" * 64),
-    ("step_index", 1), ("item", "another-item"), ("pallet", "another-pallet"),
+    ("step_index", 1), ("item", "slip_sheet"), ("pallet", "another-pallet"),
     ("pick", {"x": 0.9, "y": 0.2, "z": 0.3, "yaw": 0.0}),
 ])
 def test_resigned_cell_payload_changes_still_leave_ledger_and_claims_unchanged(tmp_path, field, value):

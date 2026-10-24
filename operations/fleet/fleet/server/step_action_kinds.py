@@ -104,13 +104,40 @@ def rejection_reason(action_kind: str, code: str) -> str:
     return step_action_kind(action_kind).rejection_reasons.get(code, "LOCAL_ACTION_REJECTED")
 
 
+def parse_step_grant(grant: Mapping[str, Any]) -> BaseModel:
+    """Parse only a registered device Action; TRIP uses its own Fleet execution path."""
+    if not isinstance(grant, Mapping) or not isinstance(grant.get("action_kind"), str):
+        raise ValueError("a device Action grant needs a registered action_kind")
+    kind = step_action_kind(grant["action_kind"])
+    if kind.grant_model is None:
+        raise ValueError(f"{kind.action_kind} is not a device Action")
+    return kind.grant_model.model_validate(dict(grant))
+
+
+def validate_step_grant(parsed: BaseModel, job: Mapping[str, Any], step: Mapping[str, Any], *,
+                        step_index: int, action_id: str, attempt_id: str) -> None:
+    """Bind common authority and the kind's complete payload to the persisted step."""
+    kind = step_action_kind(step["action_kind"])
+    if kind.grant_model is None or kind.body is None or not isinstance(parsed, kind.grant_model):
+        raise ValueError("typed device grant does not match the persisted step kind")
+    if (parsed.action_kind != step["action_kind"]
+            or parsed.mission_id != job["mission_id"] or parsed.step_id != step["step_id"]
+            or parsed.action_id != action_id or parsed.attempt_id != attempt_id
+            or parsed.workcell_id != job["workcell_id"] or parsed.instance_id != job["instance_id"]
+            or parsed.authority_epoch != job["authority_epoch"]
+            or parsed.dispatch_generation != job["dispatch_generation"]):
+        raise ValueError(f"{kind.action_kind} grant does not match the current persisted step")
+    expected_payload = kind.body(job, step_index, json.loads(step["step_json"])["inputs"])
+    if getattr(parsed, kind.body_field).model_dump(mode="json") != expected_payload:
+        raise ValueError(f"{kind.action_kind} payload does not match the persisted PlanBundle step")
+
+
 def step_grant_digest(grant: Mapping[str, Any] | BaseModel) -> str:
     """sha256 over the canonical complete grant without its digest (the OMX owner's rule)."""
     if isinstance(grant, BaseModel):
         document = grant.model_dump(mode="json")
     else:
-        document = step_action_kind(grant["action_kind"]).grant_model.model_validate(
-            dict(grant)).model_dump(mode="json")
+        document = parse_step_grant(grant).model_dump(mode="json")
     document.pop("request_digest")
     canonical = json.dumps(document, sort_keys=True, separators=(",", ":"),
                            ensure_ascii=False, allow_nan=False)
@@ -119,5 +146,5 @@ def step_grant_digest(grant: Mapping[str, Any] | BaseModel) -> str:
 
 __all__ = [
     "APPROVALS", "StepActionKind", "dispatch_open", "open_kinds", "rejection_reason",
-    "required_approval", "step_action_kind", "step_grant_digest",
+    "required_approval", "step_action_kind", "step_grant_digest", "parse_step_grant", "validate_step_grant",
 ]

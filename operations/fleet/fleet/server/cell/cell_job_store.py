@@ -10,14 +10,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from core_common.protocol.schemas import FleetCellTransferGrant
-
 from .dispatch_admission import release as release_claims
 from .dispatch_admission import reserve as reserve_claims
 from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _json, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
-from .step_action_kinds import step_action_kind, step_grant_digest
+from .step_action_kinds import parse_step_grant, validate_step_grant, step_grant_digest
 from . import cell_arm_jobs as arm_jobs, cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
 
@@ -330,13 +328,13 @@ class CellJobStore:
                    now: datetime | None = None, owner_journal_id: str | None = None) -> dict[str, Any]:
         action_id = _nonempty("action_id", action_id)
         attempt_id = _nonempty("attempt_id", attempt_id)
-        parsed = FleetCellTransferGrant.model_validate(dict(grant))
+        parsed = parse_step_grant(grant)
         canonical_grant = parsed.model_dump(mode="json")
         if step_grant_digest(parsed) != parsed.request_digest:
-            raise ValueError("CELL_TRANSFER request digest does not match the complete grant")
+            raise ValueError(f"{parsed.action_kind} request digest does not match the complete grant")
         now_dt = now or datetime.now(timezone.utc)  # the dispatcher passes its own clock (1b B4)
         if parsed.issued_at > now_dt or parsed.expires_at <= now_dt:
-            raise MissionConflict("CELL_TRANSFER grant is not current")
+            raise MissionConflict(f"{parsed.action_kind} grant is not current")
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -378,21 +376,8 @@ class CellJobStore:
                 result = self._get(connection, mission_id)
                 connection.commit()
                 return result
-            if (parsed.mission_id != mission_id or parsed.step_id != step["step_id"]
-                    or parsed.action_id != action_id or parsed.attempt_id != attempt_id
-                    or parsed.workcell_id != job["workcell_id"]
-                    or parsed.instance_id != job["instance_id"]
-                    or parsed.cell_transfer.job_id != job["job_id"]
-                    or parsed.cell_transfer.step_index != step_index
-                    or parsed.cell_transfer.recipe_sha256 != job["recipe_digest"]
-                    or parsed.cell_transfer.cell_sha256 != job["cell_digest"]
-                    or parsed.authority_epoch != job["authority_epoch"]
-                    or parsed.dispatch_generation != job["dispatch_generation"]):
-                raise ValueError("CELL_TRANSFER grant does not match the current persisted step")
-            kind = step_action_kind(step["action_kind"])
-            expected_payload = kind.body(job, step_index, json.loads(step["step_json"])["inputs"])
-            if getattr(parsed, kind.body_field).model_dump(mode="json") != expected_payload:
-                raise ValueError("CELL_TRANSFER payload does not match the persisted PlanBundle step")
+            validate_step_grant(parsed, job, step, step_index=step_index,
+                                action_id=action_id, attempt_id=attempt_id)
             if not self._owns_runnable_claims(connection, job):
                 # Nothing was sent: a pre-send hold releases what is left (D-420 §4.5 row 1).
                 self._hold_in_transaction(
