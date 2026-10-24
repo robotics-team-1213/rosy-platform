@@ -13,6 +13,17 @@ def ensure(connection):
     )""")
     connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS fleet_physical_request_key "
                        "ON fleet_cell_jobs(proposal_principal_id,request_key) WHERE provenance_kind='physical'")
+    connection.execute("""CREATE TABLE IF NOT EXISTS fleet_physical_transfer_attempts (
+        mission_id TEXT PRIMARY KEY REFERENCES fleet_physical_transfer_approvals(mission_id),
+        step_id TEXT NOT NULL UNIQUE,
+        action_id TEXT NOT NULL UNIQUE,
+        attempt_id TEXT NOT NULL UNIQUE,
+        request_digest TEXT NOT NULL CHECK(length(request_digest)=64),
+        grant_json TEXT NOT NULL,
+        prepared_at_ns INTEGER NOT NULL CHECK(prepared_at_ns>=0),
+        status TEXT NOT NULL CHECK(status IN ('PREPARED','SUBMITTING','ACTION_SUCCEEDED','HOLD','UNKNOWN')),
+        CHECK(step_id!=action_id AND step_id!=attempt_id AND action_id!=attempt_id)
+    )""")
 
 
 def hold_for_site_stop(connection, *, now, reason, event):

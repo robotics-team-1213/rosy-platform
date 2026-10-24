@@ -220,17 +220,17 @@ def test_site_stop_and_restart_preserve_admitted_occupancy_and_close_legacy_resu
     assert len(claims(path)) == len(store.installation.policy.resources)
 
 
-def test_migration_adds_empty_approval_table_preserves_legacy_and_old_host_refuses_v6(tmp_path, installation, monkeypatch):
+def test_migration_adds_physical_tables_preserves_legacy_and_old_host_refuses_new_version(tmp_path, installation, monkeypatch):
     path = legacy_database(tmp_path)
     before = snapshot(path)
     api().PhysicalTransferStore(path, installation=installation, deployment_profile="simulation")
-    assert snapshot(path) == {**before, "fleet_physical_transfer_approvals": []}
+    assert snapshot(path) == {**before, "fleet_physical_transfer_approvals": [], "fleet_physical_transfer_attempts": []}
     with closing(connect(path)) as connection:
         assert not connection.execute("PRAGMA foreign_key_check").fetchall()
-        assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 6
+        assert connection.execute("SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'").fetchone()[0] == 7
     module = import_module("fleet.server.cell_job_store")
     monkeypatch.setattr(module, "_MIGRATION_VERSION", 5)
-    with pytest.raises(RuntimeError, match="unsupported.*6"):
+    with pytest.raises(RuntimeError, match="unsupported.*7"):
         CellJobStore(path)
 
 

@@ -22,7 +22,7 @@ from . import job_provenance_schema
 from . import physical_transfer_schema
 from .cell_job_completion import confirm_step_goal
 
-_MIGRATION_VERSION = 6  # D-856: physical two-person approvals; old hosts must refuse this journal.
+_MIGRATION_VERSION = 7  # D-856: physical prepared attempts; old hosts must refuse this journal.
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 # Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
 # terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
