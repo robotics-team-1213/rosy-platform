@@ -1,7 +1,15 @@
 """Single installed simulation profile: persisted first send, then SDK lookup only."""
+import asyncio
+from contextlib import closing
+from datetime import datetime, timezone
+import logging
+
 from core_common.protocol.arm_transfer import ArmTransferCapability, FleetArmTransferGrant
+from .physical_transfer_store import PhysicalTransferRequest
 from .local_action_transport import LocalActionUnavailable
 from .physical_transfer_io import physical_io
+
+_LOG = logging.getLogger(__name__)
 
 
 class PhysicalTransferDispatcher:
@@ -100,3 +108,37 @@ class PhysicalTransferDispatcher:
                 return self.execution.record_receipt(mission_id, response)
             except Exception:
                 return held
+
+    def tick(self):
+        store = self.execution.store
+        installed, policy = store.installation, store.installation.policy
+        document = store._document(PhysicalTransferRequest(workcell_id=policy.primary[0], instance_id=policy.primary[1],
+            object_ref=policy.object_ref, source=installed.source, target=installed.target))
+        with physical_io(self._journal_path):
+            with closing(store._journal._connect()) as connection:
+                rows = connection.execute("SELECT a.mission_id FROM fleet_physical_transfer_attempts a "
+                    "JOIN fleet_cell_jobs j ON j.mission_id=a.mission_id WHERE j.provenance_kind='physical' "
+                    "AND j.job_json=? AND j.status IN ('READY','RUNNING','HOLD') "
+                    "AND a.status IN ('PREPARED','SUBMITTING','UNKNOWN') ORDER BY a.prepared_at_ns", (document,)).fetchall()
+                candidates = [(row["mission_id"], self.execution._last_receipt(connection, row["mission_id"])) for row in rows]
+            for mission_id, latest in candidates:
+                if latest is not None and latest["receipt"]["state"] in {"SUCCEEDED", "FAILED", "HOLD"}:
+                    continue
+                current = self.execution.snapshot(mission_id)
+                if current["status"] == "PREPARED":
+                    grant = FleetArmTransferGrant.model_validate(current["grant"])
+                    now_ns = store._now_ns()
+                    if (now_ns < current["prepared_at_ns"]
+                            or datetime.fromtimestamp(now_ns / 1e9, timezone.utc) >= grant.expires_at):
+                        return self.execution.hold(mission_id, reason="PHYSICAL_OBSERVATION_WINDOW_EXPIRED")
+                    return current
+                return self.refresh(mission_id)
+        return None
+
+    async def run(self):
+        while True:
+            try:
+                await asyncio.to_thread(self.tick)
+            except Exception:
+                _LOG.exception("Physical receipt monitor failed")
+            await asyncio.sleep(.25)
