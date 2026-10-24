@@ -15,6 +15,7 @@ Single source of pydantic schemas for REST snapshots and Fleet WS envelope (D-10
 | File | Description |
 |------|-------------|
 | `__init__.py` | Package marker |
+| `swarm_freshness.py` | D-870 pure reference lifetime check under separately accepted clock bounds; no clock-quality measurement or motion authority |
 | `fleet_judgment.py` | D-660 read-only judgment/closure DTOs; canonical exports remain in schemas.py, no action authority |
 | `schemas.py` | Enums (`RobotMode`, `PowerMode`, `BatteryLevel`, …), `StateSnapshot`, envelope, events. D-400: `SafetyPolicyStatus` on `StateSnapshot.safety_policy` (v1.71; `mode`/verdict are lowercase plain strings, an exception to the enum rule) |
 | `power.py` | PWR-001~005 and D-440 wire models: `PowerMode`, `PresenceState`, `DevicePowerState`, `PowerStatus`; canonical exports remain in schemas.py |

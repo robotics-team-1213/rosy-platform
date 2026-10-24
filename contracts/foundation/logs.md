@@ -898,3 +898,9 @@
 - 증거: 모델 미구현 commit09df122297에서 공식 원격 RED134건이 모두 같은 새 모듈 ImportError임을 확인했다. 모델과 public export 구현 후 strict 타입·관측 evidence·시간대·목록/크기·중복·정지 주장·복구 metadata를 원격 GREEN으로 검증한다. P0 분리의 실제 source/검증은 commit20af36c343 및 통합 commit8a80472a23의 별도 공식 실행 기록을 따른다.
 - gate 변화: 없음. 공유 계약 등록이며 collector/runtime·새 화면·배포·장치 수용을 완료하지 않는다. 기존 부모 자격의 정보/정지 권한은 자동 확대하지 않고 명시 설정으로 허용한다.
 - CE: 해당 없음 — 실행 경계와 receiver 불확실성의 근거를 D-862에 직접 기록하고 회귀로 검증한다.
+
+## 2026-10-25 · 6d79c46bf8 · D-870 군집 원본 시각과 수명 계약
+
+- 변경: PoseSample.sampled_at을 strict finite UTC 선택 필드로 추가하고 공유 순수 helper가 별도 수용된 양 끝 UTC±50ms 전제 아래 remaining을 보수적으로 계산한다. 실제 시계 품질·로봇 작동을 만들어내지 않는다. APIv1.316·pin과 기존 envelope1.0 지침을 정렬했다.
+- 증거: [공유 계약 검증](../../docs/validation/swarm-reference-contract-2026-10-25/result.md). schema20 RED와 helper 미구현 collectionerror 뒤 신규58개+기존 계약을 합쳐 원격86개 통과, skip0. 안전 태그·독립 제한 범위 검토와 source trailer 포함. FULL 착지 gate는 별도다.
+- gate 변화: 공유 계약 회귀만 확인했다. consumer·혼합 peer 관문·실물 UTC/운행은 다음 단계다. CE 해당 없음: 근거는 D-870·helper·회귀로 복원된다.
