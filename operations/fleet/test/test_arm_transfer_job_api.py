@@ -68,6 +68,10 @@ def create(rig, who="harbor", **changes):
     return client.post(PATH, headers=headers(who), json={**body(installed), **changes})
 
 
+def claims(rig):
+    return rig[0].app.state.cell_job_store.resource_claims()
+
+
 def test_create_is_scoped_idempotent_and_does_not_query_or_submit_to_an_owner(rig):
     client, tasks, port, installed = rig
     response = create(rig)
@@ -82,7 +86,7 @@ def test_create_is_scoped_idempotent_and_does_not_query_or_submit_to_an_owner(ri
     assert client.get(PATH + "/" + job["mission_id"], headers=headers("operator")).json() == response.json()
     assert client.get(PATH + "/" + job["mission_id"], headers=headers("other")).status_code == 403
     assert client.get(PATH, params={"request_key": "move-1"}, headers=headers("other")).status_code == 404
-    assert port.calls == [] and tasks.resource_claims() == []
+    assert port.calls == [] and claims(rig) == []
     assert client.app.state.cell_job_store.get(job["mission_id"]) is None
 
 
@@ -96,7 +100,7 @@ def test_approval_reads_every_current_capability_then_atomically_claims_without_
     assert ready.json()["job"]["status"] == "READY" and ready.json()["job"]["approved_by"] == "operator"
     expected = [(p.workcell_id, p.instance_id) for p in installed.policy.participants]
     assert port.calls == expected
-    assert len(tasks.resource_claims()) == len(installed.policy.resources)
+    assert len(claims(rig)) == len(installed.policy.resources)
     assert client.post(url, headers=headers("operator"), json=args).json() == ready.json()
     assert port.calls == expected + expected
     audit = tasks.api_audit()
@@ -107,14 +111,14 @@ def test_approval_reads_every_current_capability_then_atomically_claims_without_
 @pytest.mark.parametrize("who,status", [(None, 401), ("viewer", 403), ("observer", 403), ("policy-admin", 403)])
 def test_proposals_reuse_existing_auth_roles_before_owner_io(rig, who, status):
     assert create(rig, who=who).status_code == status
-    assert rig[2].calls == [] and rig[1].resource_claims() == []
+    assert rig[2].calls == [] and claims(rig) == []
 
 
 @pytest.mark.parametrize("field,value", [("resources", []), ("capabilities", []), ("grant", {}),
     ("satisfied", True), ("producer_id", "caller"), ("recipe", {})])
 def test_extra_authority_or_process_fields_are_rejected(rig, field, value):
     assert create(rig, **{field: value}).status_code == 422
-    assert rig[1].resource_claims() == []
+    assert claims(rig) == []
 
 
 def test_service_self_approval_bad_origin_and_unknown_job_do_not_query_the_owner(rig):
@@ -127,7 +131,9 @@ def test_service_self_approval_bad_origin_and_unknown_job_do_not_query_the_owner
                        json={**args, "expected_proposal_digest": own["proposal_digest"]}).status_code == 403
     assert client.post(PATH + "/unknown/admit", headers=headers("operator"), json=args).status_code == 404
     assert client.post(PATH, headers={**headers("harbor"), "Origin": "https://untrusted.invalid"}, json=body(rig[3])).status_code == 403
-    assert port.calls == [] and tasks.resource_claims() == []
+    assert client.post(PATH + "/" + job["mission_id"] + "/admit",
+                       headers={**headers("operator"), "Origin": "https://untrusted.invalid"}, json=args).status_code == 403
+    assert port.calls == [] and claims(rig) == []
 
 
 @pytest.mark.parametrize("failure,status", [("unavailable", 503), ("changed", 409), ("disabled", 409)])
@@ -142,7 +148,7 @@ def test_unavailable_or_changed_owners_and_closed_control_preserve_the_proposal(
     else:
         tasks.trip_stop_latch(actor_id="operator")
     response = client.post(PATH + "/" + job["mission_id"] + "/admit", headers=headers("operator"), json=args)
-    assert response.status_code == status and tasks.resource_claims() == []
+    assert response.status_code == status and claims(rig) == []
     assert client.get(PATH + "/" + job["mission_id"], headers=headers("harbor")).json()["job"]["status"] == "PROPOSED"
 
 

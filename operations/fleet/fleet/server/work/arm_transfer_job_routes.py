@@ -3,7 +3,7 @@ import asyncio
 import sqlite3
 import time
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from core_common.protocol.arm_transfer import ArmActionId, ArmTransferCapability
 from core_common.protocol.arm_transfer_jobs import (
@@ -12,6 +12,7 @@ from core_common.protocol.arm_transfer_jobs import (
 from .local_action_transport import LocalActionUnavailable, UnixLocalActionTransport
 from .mission_store import MissionConflict
 from .physical_transfer_store import PhysicalTransferStore
+from .password_session import same_origin
 
 
 def _view(job):
@@ -56,7 +57,11 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, jo
 
     path = "/api/fleet/arm-transfers/jobs"
 
-    @app.post(path, response_model=ArmTransferJobResponse, tags=["fleet-work"])
+    def write_origin(request: Request):
+        if request.headers.get("origin") is not None and not same_origin(request):
+            raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
+
+    @app.post(path, response_model=ArmTransferJobResponse, tags=["fleet-work"], dependencies=[Depends(write_origin)])
     async def create(body: ArmTransferJobCreate, principal=Depends(require_proposer)):
         rows = installed_store()
         request = ArmTransferRequest.model_validate(body.model_dump(exclude={"request_key"}))
@@ -82,7 +87,8 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, jo
             return _view(job)
         return await call(read)
 
-    @app.post(path + "/{mission_id}/admit", response_model=ArmTransferJobResponse, tags=["fleet-work"])
+    @app.post(path + "/{mission_id}/admit", response_model=ArmTransferJobResponse, tags=["fleet-work"],
+              dependencies=[Depends(write_origin)])
     async def admit(mission_id: ArmActionId, body: ArmTransferJobAdmit, principal=Depends(require_named_operator)):
         rows = installed_store()
         def approve():
