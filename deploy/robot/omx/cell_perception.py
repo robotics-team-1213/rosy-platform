@@ -90,9 +90,26 @@ def wrist_box(img, profile) -> dict:
     found = _largest(mask, spec.get("min_area", 300))
     if found is None:
         return {"found": False}
-    _, stats, centroid = found
+    blob, stats, centroid = found
+    x, y, w, h = (int(v) for v in stats[:4])
     return {"found": True, "cx": round(float(centroid[0]), 1), "cy": round(float(centroid[1]), 1),
-            "area": int(stats[4]), "bbox": [int(v) for v in stats[:4]]}
+            "area": int(stats[4]), "bbox": [x, y, w, h], "tilt": _lower_edge_tilt(blob, x, w),
+            "cut_top": y <= 2}
+
+
+def _lower_edge_tilt(blob, x, w):
+    """Tilt (deg) of the box's lower edge: a line through the lowest box pixel of each middle column.
+    The wrist camera sees the box obliquely, so a rectangle fit is not informative (2026-10-25)."""
+    import numpy as np
+
+    if w < 40:
+        return None
+    columns = range(x + w // 6, x + w - w // 6)
+    lows = [(c, int(np.nonzero(blob[:, c])[0].max())) for c in columns if blob[:, c].any()]
+    if len(lows) < 20:
+        return None
+    xs, ys = np.array(lows, dtype=float).T
+    return round(float(np.degrees(np.arctan(np.polyfit(xs, ys, 1)[0]))), 1)
 
 
 def yaw_gap(a: float, b: float) -> float:
