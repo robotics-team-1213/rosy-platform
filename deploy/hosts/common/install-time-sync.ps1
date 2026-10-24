@@ -26,6 +26,9 @@ if ($PSCmdlet.ShouldProcess('Windows Time service', 'Use the approved site NTP s
     if ($LASTEXITCODE -ne 0) { throw 'Could not back up W32Time; no settings changed.' }
     Write-Host "W32Time registry backup: $backup"
     Set-Service W32Time -StartupType Automatic
+    # Automatic startup alone does not keep W32Time running on a workgroup PC (Microsoft KB 2385818).
+    & sc.exe triggerinfo W32Time start/networkon stop/networkoff
+    if ($LASTEXITCODE -ne 0) { throw "Could not set W32Time network triggers. Backup: $backup" }
     Start-Service W32Time
     & w32tm.exe /config "/manualpeerlist:$Server,0x8" /syncfromflags:manual /update
     if ($LASTEXITCODE -ne 0) { throw "W32Time configuration failed. Backup: $backup" }
