@@ -45,13 +45,21 @@ REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
 # scraped the jaws on the table on 2026-10-24.
 TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
 PARK_SPEED = 6.0  # units per second for every joint
+# Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read every HEALTH_EVERY ticks.
+HEALTH_EVERY = 3
+PWM_STOP, PWM_STOP_S = 285, 0.5  # a load-bearing joint pushing at its session cap (300) is blocked or colliding
+TEMP_STOP = 65                    # degrees C; the motors' own limits are 70-72
+MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos",
+                                    "wrist_roll.pos", "gripper.pos"]]
 
 
-def park_path(start: list, home: list, closed: float, fps: int) -> list:
-    """Close the jaws, rise to TRANSIT, turn pan/roll to home at that height, then descend into home."""
+def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None) -> list:
+    """Close the jaws, rise to the transit height, turn pan/roll to home there, then descend into home.
+    `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S)."""
+    transit = TRANSIT if transit is None else transit
     waypoints = [list(start)]
     waypoints.append(waypoints[-1][:5] + [closed])
-    waypoints.append([TRANSIT.get(i, v) for i, v in enumerate(waypoints[-1])])
+    waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])
     waypoints.append([home[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
     waypoints.append(home[:5] + [closed])
     step, frames = PARK_SPEED / fps, []
@@ -89,6 +97,7 @@ class Runner:
         self.far_since = None
         self.last_grip = None
         self.pending: list = []
+        self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
 
     def present(self) -> list:
         observation = self.robot.get_observation()
@@ -96,7 +105,19 @@ class Runner:
 
     def report(self, **fields) -> None:
         self.status(dict(fields, state=[round(v, 2) for v in self.present()],
-                         target=[round(v, 2) for v in self.target], t=round(time.time(), 3)))
+                         target=[round(v, 2) for v in self.target], health=self.health, fault=self.fault,
+                         t=round(time.time(), 3)))
+
+    def read_health(self):
+        """Temperature, PWM and current of every motor, or None when the robot exposes no bus (tests)."""
+        bus = getattr(self.robot, "bus", None)
+        if bus is None:
+            return None
+        def signed(v):
+            return int(v) - 65536 if int(v) > 32767 else int(v)
+        pwm, current, temp = (bus.sync_read(name) for name in ("Present_PWM", "Present_Current", "Present_Temperature"))
+        return {"pwm": [signed(pwm[m]) for m in MOTORS], "current_ma": [signed(current[m]) for m in MOTORS],
+                "temp_c": [int(temp[m]) for m in MOTORS]}
 
     def command(self, line: str) -> bool:
         """Apply one judge command; False means stop."""
@@ -110,6 +131,8 @@ class Runner:
                 return False
             if self.chunk is not None:
                 raise ValueError(f"chunk {self.chunk} is still running")
+            if self.fault and verb not in ("park", "state"):
+                raise ValueError(f"fault ({self.fault}): only park, state or stop")
             if verb == "run" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
                 frames = self.library["chunks"].get(words[1])
                 if frames is None:
@@ -145,7 +168,8 @@ class Runner:
                 home = self.library["chunks"].get("home")
                 if not home:
                     raise ValueError("park needs a home chunk in the library")
-                self.queue = park_path(self.target, home[-1], self.library["gripper_closed"], self.fps)
+                transit = {NAMES.index(k): float(v) for k, v in self.library.get("transit", {}).items()} or None
+                self.queue = park_path(self.target, home[-1], self.library["gripper_closed"], self.fps, transit)
                 self.chunk, self.settle_since = "park", None
                 return True
             elif verb == "grip" and len(words) == 2:
@@ -166,6 +190,24 @@ class Runner:
         # Load-bearing joints only: the taught wrist roll lagged its leader by 66 units (2026-10-24 teach r2).
         loaded = max(abs(a - b) for a, b in zip(present[:4], self.target[:4]))
         now = self.clock()
+        self.ticks += 1
+        if self.ticks % HEALTH_EVERY == 0:
+            self.health = self.read_health()
+        if self.health and not self.fault:
+            hot = max(self.health["temp_c"])
+            pushing = max(abs(v) for v in self.health["pwm"][:4])
+            if pushing < PWM_STOP:
+                self.overload_since = None
+            elif self.overload_since is None:
+                self.overload_since = now
+            reason = (f"temperature {hot} C" if hot >= TEMP_STOP else
+                      f"load-bearing joint at PWM {pushing} for {PWM_STOP_S} s"
+                      if self.overload_since is not None and now - self.overload_since >= PWM_STOP_S else None)
+            if reason:  # stop pushing where the arm is; the judge may only park or stop
+                self.fault, self.queue, self.target = reason, [], present[:5] + [self.target[5]]
+                chunk, self.chunk = self.chunk, None
+                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason)
+                return
         if loaded > FOLLOW_STOP:
             self.far_since = self.far_since if self.far_since is not None else now
             if now - self.far_since >= FOLLOW_STOP_S:
@@ -180,7 +222,14 @@ class Runner:
             if (error <= SETTLE_TOL and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
                 fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL)
                 if grasp:  # jaws stopped short of this chunk's closed target: something is between them
-                    fields["holding"] = present[5] > self.target[5] + EMPTY_MARGIN
+                    by_position = present[5] > self.target[5] + EMPTY_MARGIN
+                    fields["holding"] = by_position
+                    if self.health:
+                        current = abs(self.health["current_ma"][5])
+                        fields["gripper_current_ma"] = current
+                        threshold = self.library.get("hold_current_ma")
+                        if threshold is not None:  # both must agree once the cell has a measured threshold
+                            fields["holding"] = by_position and current >= threshold
                 self.chunk, self.last_grip = None, None
                 self.report(**fields)
 

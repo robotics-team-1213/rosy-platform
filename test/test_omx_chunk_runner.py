@@ -139,6 +139,56 @@ def test_park_runs_through_the_runner_and_needs_a_home_chunk():
     assert refused[1]["ok"] is False and "home chunk" in refused[1]["error"]
 
 
+class Bus:
+    """Present_PWM / Present_Current / Present_Temperature per motor name, raw like the Dynamixel bus."""
+
+    def __init__(self, pwm=None, current=None, temp=None):
+        names = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
+        self.values = {"Present_PWM": dict.fromkeys(names, 0), "Present_Current": dict.fromkeys(names, 0),
+                       "Present_Temperature": dict.fromkeys(names, 35)}
+        for key, extra in (("Present_PWM", pwm), ("Present_Current", current), ("Present_Temperature", temp)):
+            self.values[key].update(extra or {})
+
+    def sync_read(self, name):
+        return dict(self.values[name])
+
+
+def run_with(robot, lib, commands):
+    status, clock, queue = [], [0.0], list(commands)
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    return status
+
+
+@pytest.mark.parametrize("bus, reason", [
+    (Bus(pwm={"shoulder_lift": 65536 - 290}), "PWM"),  # negative raw reads as a large unsigned value
+    (Bus(temp={"elbow_flex": 66}), "temperature"),
+])
+def test_an_overloaded_or_hot_arm_stops_where_it_is_and_only_parks(bus, reason):
+    robot = Robot()
+    robot.bus = bus
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    status = run_with(robot, lib, ["run approach_pinky", "run grasp_pinky", "park", "stop"])
+    fault = next(s for s in status if s["ok"] is False and reason in s.get("error", ""))
+    assert fault["fault"] and fault["health"]
+    refused = next(s for s in status if s["command"] == "run grasp_pinky" and s is not fault)
+    assert refused["ok"] is False and "only park" in refused["error"]
+    assert by_command(status, "run park")[0]["ok"] is True
+
+
+@pytest.mark.parametrize("current, holding", [(120, True), (20, False)])
+def test_a_measured_hold_current_must_agree_with_the_jaw_position(current, holding):
+    robot = Robot(object_at=51.0)  # jaws stop short: position alone says holding
+    robot.bus = Bus(current={"gripper": current})
+    lib = library()
+    lib["hold_current_ma"] = 80
+    status = run_with(robot, lib, ["run approach_pinky", "run grasp_pinky", "stop"])
+    done = by_command(status, "run grasp_pinky")[0]
+    assert done["holding"] is holding and done["gripper_current_ma"] == current
+
+
 def test_a_small_jog_and_grip_move_only_their_joint():
     robot = Robot()
     runner(robot, ["jog wrist_flex.pos -4", "grip 55", "stop"])
