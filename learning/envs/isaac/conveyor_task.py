@@ -30,6 +30,7 @@ def main():
     from isaacsim import SimulationApp
     app = SimulationApp(dict(headless=True, fast_shutdown=False, width=640, height=480))
     samples, images, image_frames, joints, tick, error = [], [], [], [], 0, None
+    drive_modes = {}
     try:
         import numpy as np
         import omni.kit.app
@@ -76,6 +77,11 @@ def main():
                 links[prim.GetName()] = str(prim.GetPath())
             if prim.IsA(UsdPhysics.RevoluteJoint):
                 drive = UsdPhysics.DriveAPI.Apply(prim, 'angular')
+                before = drive.GetTypeAttr().Get()
+                drive.CreateTypeAttr(FIXTURE['drive_type'])
+                if drive.GetTypeAttr().Get() != 'force':
+                    raise ValueError('Explicit force drive required for declared Nm effort caps')
+                drive_modes[prim.GetName()] = dict(imported=before, configured=drive.GetTypeAttr().Get())
                 finger = prim.GetName().startswith('gripper')
                 drive.CreateStiffnessAttr(30. if finger else FIXTURE['arm_drive_stiffness'])
                 drive.CreateDampingAttr(2. if finger else FIXTURE['arm_drive_damping'])
@@ -195,7 +201,7 @@ def main():
     value = dict(schema='rosy.pinky-conveyor-report/1', fixture=FIXTURE, fixture_sha256=fixture_sha256(),
         assets_sha256=hashlib.sha256((ASSETS/'manifest.json').read_bytes()).hexdigest(), sdk_version=version('isaacsim'),
         joints=joints, completed_frames=tick, samples=samples, images=images, image_frames=image_frames, judgement=judgement,
-        attachment_aid=False, error=error)
+        attachment_aid=False, drive_modes=drive_modes, error=error)
     with args.report.open('x', encoding='utf-8') as stream:
         json.dump(value, stream, allow_nan=False, separators=(',', ':'))
         stream.flush()
