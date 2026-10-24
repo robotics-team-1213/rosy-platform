@@ -9651,3 +9651,9 @@ osy-d395-s1d\`.
 - 변경: [설치 교훈](solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md)에 서명 꾸러미에 설치기(`deploy/model_pc`)가 없어 모델 PC의 `~/rosy-ml/bin` 사본을 같은 커밋 판으로 바꿔야 하는 점, 환경 지문이 바뀌면 같은 커밋을 새 환경·더 큰 sequence로 다시 서명하는 점, bridge 설정을 바꾸면 새 `--out` 작업 폴더가 필요한 점을 더했다.
 - 증거: 2026-10-24/25 sequence 33(환경 거절)·34(적용)·35(설치기 교체 뒤 센터 설치, `--workspace-links` 유지), bridge `--out` 이동 뒤 복구.
 - gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · 교훈: LeRobot은 센터 학습 venv에 있다
+
+- 변경: [교훈](solutions/workflow-issues/lerobot-lives-in-the-center-learner-venv-not-the-test-venv-2026-10-25.md) 추가 — 원격 시험 venv에 `lerobot`이 없어 건너뛴 시험을 "ROSY에 LeRobot 없음"으로 잘못 판단한 일. 모델 PC 센터의 OMX 학습 venv(`~/.local/share/rosy-learning-center/venv-cpu`)에 `lerobot 0.4.4`가 있고, LeRobot 시험은 `test_experiment_tasks_pinned.py`처럼 명시 플래그와 그 Python 하위 프로세스로 돌린다.
+- 증거: 2026-10-25 모델 PC에서 시험 venv들은 `ModuleNotFoundError`, 학습 venv는 `lerobot 0.4.4`·`torch 2.10.0+cpu`·pytest 없음.
+- gate 변화: 없음.
