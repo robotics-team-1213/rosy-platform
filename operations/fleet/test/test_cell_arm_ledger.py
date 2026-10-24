@@ -122,7 +122,7 @@ def test_a_version_two_ledger_is_backfilled_on_start(tmp_path):
 def test_an_older_fleet_refuses_a_version_three_ledger(tmp_path, monkeypatch):
     path, _, _ = _ledger(tmp_path)
     monkeypatch.setattr(store_module, "_MIGRATION_VERSION", 2)
-    with pytest.raises(RuntimeError, match="unsupported Cell Job journal migration version 4"):
+    with pytest.raises(RuntimeError, match="unsupported Cell Job journal migration version 5"):
         CellJobStore(path)
 
 

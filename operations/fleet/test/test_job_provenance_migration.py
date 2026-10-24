@@ -17,7 +17,7 @@ from test_cell_job_store import _stores, _submission, _step
 
 def initialize():
     try:
-        return importlib.import_module("fleet.server.work.job_provenance_schema").initialize
+        return importlib.import_module("fleet.server.job_provenance_schema").initialize
     except ModuleNotFoundError:
         pytest.fail("atomic job provenance migration is missing")
 

@@ -18,8 +18,9 @@ from .sqlite_policy import configure_connection, enable_wal
 from .step_action_kinds import parse_step_grant, validate_step_grant, step_grant_digest
 from . import cell_arm_jobs as arm_jobs, cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
+from . import job_provenance_schema
 
-_MIGRATION_VERSION = 4  # 2: TRIP (D-763 7); 3: per-arm tables; 4: multi-arm marker/placement (D-779 2-4)
+_MIGRATION_VERSION = 5  # D-856: separate physical provenance; legacy Cell/TRIP rows are unchanged.
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 # Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
 # terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
@@ -71,63 +72,9 @@ class CellJobStore:
         self._noted: set[tuple[str, str, str]] = set()  # device receipts already recorded
         with closing(self._connect()) as connection:
             enable_wal(connection)
-            connection.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS fleet_component_migrations (
-                    component TEXT NOT NULL,
-                    version INTEGER NOT NULL,
-                    applied_at TEXT NOT NULL,
-                    PRIMARY KEY(component, version)
-                );
-                CREATE TABLE IF NOT EXISTS fleet_cell_jobs (
-                    mission_id TEXT PRIMARY KEY,
-                    proposal_principal_id TEXT NOT NULL,
-                    request_key TEXT NOT NULL,
-                    request_digest TEXT NOT NULL,
-                    job_id TEXT NOT NULL,
-                    workcell_id TEXT NOT NULL,
-                    instance_id TEXT NOT NULL,
-                    recipe_digest TEXT NOT NULL,
-                    cell_digest TEXT NOT NULL,
-                    process_artifact_digest TEXT NOT NULL,
-                    job_json TEXT NOT NULL,
-                    resources_json TEXT NOT NULL,
-                    ledger_markers_json TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK(status IN (
-                        'PROPOSED', 'READY', 'RUNNING', 'ACTION_SUCCEEDED',
-                        'GOAL_CONFIRMED', 'HOLD'
-                    )),
-                    current_step_index INTEGER NOT NULL DEFAULT 0 CHECK(current_step_index >= 0),
-                    authority_epoch INTEGER,
-                    dispatch_generation INTEGER,
-                    reason TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS fleet_cell_events (
-                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_key TEXT NOT NULL UNIQUE,
-                    mission_id TEXT NOT NULL REFERENCES fleet_cell_jobs(mission_id),
-                    step_index INTEGER,
-                    event_type TEXT NOT NULL,
-                    actor_id TEXT NOT NULL,
-                    detail_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                );
-                """
-            )
-            connection.execute(
-                "INSERT OR IGNORE INTO fleet_component_migrations(component, version, applied_at) "
-                "VALUES ('cell_jobs', ?, ?)", (_MIGRATION_VERSION, _now()),
-            )
-            applied = connection.execute(
-                "SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'",
-            ).fetchone()[0]
-            if applied > _MIGRATION_VERSION:
-                raise RuntimeError(f"unsupported Cell Job journal migration version {applied}")
-            step_ledger_schema.ensure(connection)  # D-763 7: the steps table and its registry kind CHECK
-            sheets.migrate(connection)
-            connection.commit()
+            with job_provenance_schema.initialize(connection, version=_MIGRATION_VERSION, now=_now()):
+                step_ledger_schema.ensure(connection)
+                sheets.migrate(connection)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)
@@ -237,7 +184,8 @@ class CellJobStore:
             ).fetchone()
             rows = connection.execute(
                 """SELECT mission_id, current_step_index, authority_epoch, dispatch_generation
-                   FROM fleet_cell_jobs WHERE status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')
+                   FROM fleet_cell_jobs WHERE provenance_kind='legacy'
+                     AND status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')
                      AND (authority_epoch != ? OR dispatch_generation != ?)
                      AND mission_id NOT IN (SELECT mission_id FROM fleet_cell_arm_jobs)""",
                 (control["authority_epoch"], control["generation"])).fetchall()
@@ -276,7 +224,7 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             if job is None:
                 raise KeyError(mission_id)
@@ -339,7 +287,7 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             if job is None:
                 raise KeyError(mission_id)
@@ -429,7 +377,7 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             step = connection.execute(
                 "SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
@@ -609,7 +557,7 @@ class CellJobStore:
 
     @staticmethod
     def _require(connection: sqlite3.Connection, mission_id: str) -> sqlite3.Row:
-        job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,)).fetchone()
+        job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,)).fetchone()
         if job is None:
             raise KeyError(mission_id)
         return job
@@ -636,7 +584,7 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             if job is None:
                 raise KeyError(mission_id)
@@ -835,7 +783,7 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             step = connection.execute(
                 "SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
