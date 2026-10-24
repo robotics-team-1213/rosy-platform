@@ -1,4 +1,4 @@
-# docs logs
+﻿# docs logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the docs harness pilot
 - 변경: `progress.md`, `logs.md` 추가
@@ -10385,3 +10385,11 @@ osy-d395-s1d\`.
 - 변경: [왕복 검증 기록](validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md), 실행 안내와 [혼합 drive 방식 교훈](solutions/runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md)을 추가했다.
 - 증거: 실제 SDK의 양방향 접촉 파지·이송·안착과 소유 GPU 해제, FINAL6파일 해시·원격377 PASS/1 SKIP·독립 이미지 검토. 이전4개 SDK 실패를 유지했다.
 - gate 변화: 합성 정지 지지면 간 단일 물리 SIM 스모크 수용이다. 실제 카메라 맵·Pinky 전체·learned AI·실물 수용은 미검증. CE 새 교훈 기록.
+
+## 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
+
+- 변경: ADR D-865(정책 승인 — 승인 범위 안 작업 자동 승인, Proposed), [실행 설계](plans/2026-10-25-fleet-policy-admission-design.md), [업무 앱 지원 계약](reference/application-contract-support.md)에 Harbor 용어 대응표·승인 권한 소유 절 추가, ADR Log 행.
+- 증거: 미실행 — 문서 변경. lint·generate는 커밋 전 실행으로 확인. 방향 확정 근거: 사용자 2026-10-25(자동 승인 주체 Fleet 정책, Harbor 제안만). Harbor 쪽 대응 ADR은 팀 저장소 PR(robotics-team-1213/harborlogi#2).
+- gate 변화: 없음. 구현·활성화·현장 수용은 D-865 실행 계획 P1~P5의 별도 단계다.
+- 결정: D-865 Proposed.
+- 교훈: 없음
