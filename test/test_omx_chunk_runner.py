@@ -161,21 +161,37 @@ def run_with(robot, lib, commands):
     return status
 
 
-@pytest.mark.parametrize("bus, reason", [
-    (Bus(pwm={"shoulder_lift": 65536 - 290}), "PWM"),  # negative raw reads as a large unsigned value
-    (Bus(temp={"elbow_flex": 66}), "temperature"),
-])
-def test_an_overloaded_or_hot_arm_stops_where_it_is_and_only_parks(bus, reason):
-    robot = Robot()
-    robot.bus = bus
+def lifting_library():
     lib = library()
     lib["chunks"]["home"] = [HOME]
-    status = run_with(robot, lib, ["run approach_pinky", "run grasp_pinky", "park", "stop"])
+    lib["chunks"]["approach_pinky"] = [[0.0, -60.0 + k, 50.0, 45.0, 10.0, 46.6] for k in range(12)]  # lift rises
+    return lib
+
+
+@pytest.mark.parametrize("blocked, bus, reason", [
+    ((1,), Bus(pwm={"shoulder_lift": 290}), "stalled"),
+    ((1,), Bus(pwm={"shoulder_lift": 65536 - 290}), "stalled"),  # negative raw reads as a large unsigned value
+    ((), Bus(temp={"elbow_flex": 66}), "temperature"),
+])
+def test_a_stalled_or_hot_arm_stops_where_it_is_and_only_parks(blocked, bus, reason):
+    robot = Robot(blocked=blocked)
+    robot.bus = bus
+    # a still-blocked joint cannot park (the following-error stop would end the run), so park only when free
+    commands = ["run approach_pinky", "run grasp_pinky"] + ([] if blocked else ["park"]) + ["stop"]
+    status = run_with(robot, lifting_library(), commands)
     fault = next(s for s in status if s["ok"] is False and reason in s.get("error", ""))
     assert fault["fault"] and fault["health"]
     refused = next(s for s in status if s["command"] == "run grasp_pinky" and s is not fault)
     assert refused["ok"] is False and "only park" in refused["error"]
-    assert by_command(status, "run park")[0]["ok"] is True
+    if not blocked:
+        assert by_command(status, "run park")[0]["ok"] is True
+
+
+def test_pushing_at_the_cap_while_following_is_normal():
+    robot = Robot()  # the elbow saturates while lifting out of home, yet the arm keeps up
+    robot.bus = Bus(pwm={"elbow_flex": 300, "shoulder_lift": 300})
+    status = run_with(robot, lifting_library(), ["run approach_pinky", "stop"])
+    assert by_command(status, "run approach_pinky")[0]["ok"] is True and not any(s.get("fault") for s in status)
 
 
 @pytest.mark.parametrize("current, holding", [(120, True), (20, False)])

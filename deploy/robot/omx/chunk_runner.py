@@ -47,7 +47,9 @@ TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
 PARK_SPEED = 6.0  # units per second for every joint
 # Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read every HEALTH_EVERY ticks.
 HEALTH_EVERY = 3
-PWM_STOP, PWM_STOP_S = 285, 0.5  # a load-bearing joint pushing at its session cap (300) is blocked or colliding
+# Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
+# At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
+PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 TEMP_STOP = 65                    # degrees C; the motors' own limits are 70-72
 MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos",
                                     "wrist_roll.pos", "gripper.pos"]]
@@ -98,6 +100,7 @@ class Runner:
         self.last_grip = None
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
+        self.health_present = None
 
     def present(self) -> list:
         observation = self.robot.get_observation()
@@ -191,17 +194,22 @@ class Runner:
         loaded = max(abs(a - b) for a, b in zip(present[:4], self.target[:4]))
         now = self.clock()
         self.ticks += 1
-        if self.ticks % HEALTH_EVERY == 0:
+        fresh = self.ticks % HEALTH_EVERY == 0
+        if fresh:
             self.health = self.read_health()
-        if self.health and not self.fault:
+        if self.health and fresh and not self.fault:
             hot = max(self.health["temp_c"])
-            pushing = max(abs(v) for v in self.health["pwm"][:4])
-            if pushing < PWM_STOP:
+            moved = self.health_present or present
+            stalled = [i for i in range(4) if abs(self.health["pwm"][i]) >= PWM_STOP
+                       and abs(self.target[i] - present[i]) > STALL_GAP and abs(present[i] - moved[i]) < STALL_MOVE]
+            self.health_present = present
+            pushing = max((abs(self.health["pwm"][i]) for i in stalled), default=0)
+            if not stalled:
                 self.overload_since = None
             elif self.overload_since is None:
                 self.overload_since = now
             reason = (f"temperature {hot} C" if hot >= TEMP_STOP else
-                      f"load-bearing joint at PWM {pushing} for {PWM_STOP_S} s"
+                      f"load-bearing joint stalled at PWM {pushing} for {PWM_STOP_S} s"
                       if self.overload_since is not None and now - self.overload_since >= PWM_STOP_S else None)
             if reason:  # stop pushing where the arm is; the judge may only park or stop
                 self.fault, self.queue, self.target = reason, [], present[:5] + [self.target[5]]
