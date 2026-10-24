@@ -138,3 +138,4 @@ def test_windows_uses_ntp_client_mode_and_preserves_domain_policy():
     assert ",0x8" in source
     assert "PartOfDomain" in source and "ShouldProcess" in source
     assert "/query" in source and "/resync" in source
+    assert "start/networkon" in source and "stop/networkoff" in source
