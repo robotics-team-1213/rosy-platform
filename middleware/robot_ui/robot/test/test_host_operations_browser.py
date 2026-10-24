@@ -32,6 +32,115 @@ class _Handler(SimpleHTTPRequestHandler):
         pass
 
 
+@pytest.fixture
+def network_job_page():
+    server = safe_http_server(_Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(f"http://127.0.0.1:{server.server_port}/")
+            page.evaluate("""async () => {
+              await import('/common/ui.js');
+              const {mount} = await import('/middleware/robot_ui/robot/panels/host/operations.js');
+              const root = document.createElement('main'); document.body.replaceChildren(root);
+              window.__callbacks = {}; window.__api = async () => {throw new Error('unexpected API call');};
+              window.__mountPanel = () => {
+                root.replaceChildren();
+                window.__unmount = mount(root, {role:'administrator',
+                  store:{poll(path, _interval, onData, onError) {
+                    window.__callbacks[path] = {onData, onError}; return () => {};
+                  }}, api:(...args) => window.__api(...args)});
+                window.__callbacks['/api/v1/host/network'].onData({available:true,ok:true,
+                  evidence:{evidence:'fresh',age_s:0},data:{mode:'SITE_STA'}});
+              };
+              window.__mountPanel();
+            }""")
+            yield page
+            assert errors == []
+            page.evaluate("window.__unmount()")
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def _submit_wifi(page, ssid="site"):
+    page.get_by_role("textbox", name="Wi-Fi SSID", exact=True).fill(ssid)
+    page.locator('input[aria-label="Wi-Fi 암호"]').fill("test-passphrase")
+    page.locator("form").filter(has=page.locator('input[aria-label="Wi-Fi SSID"]')).evaluate(
+        "form => form.dispatchEvent(new Event('submit', {bubbles:true,cancelable:true}))"
+    )
+    page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
+
+
+def test_wifi_lost_response_reopens_same_job_without_storing_psk(network_job_page):
+    page = network_job_page
+    page.evaluate("""() => {
+      window.__api = async (_path, options) => {
+        window.__submitted = JSON.parse(options.body);
+        window.__savedAtSend = sessionStorage.getItem('rosy.network.pending');
+        throw new Error('connection lost');
+      };
+    }""")
+    _submit_wifi(page, " site with edges ")
+    page.wait_for_function("window.__submitted !== undefined")
+    saved = page.evaluate("window.__savedAtSend")
+    assert saved is not None, "job identity must survive losing the response"
+    import json
+    job = json.loads(saved)
+    assert job["request_id"] == page.evaluate("window.__submitted.idempotency_key")
+    assert job["ssid"] == " site with edges "
+    assert "test-passphrase" not in saved
+    assert "psk" not in saved
+    page.evaluate("window.__unmount(); window.__mountPanel()")
+    path = "/api/v1/host/network?request_id=" + job["request_id"]
+    assert page.evaluate("path => Boolean(window.__callbacks[path])", path)
+    assert page.get_by_role("textbox", name="Wi-Fi SSID", exact=True).is_disabled()
+    result = page.locator('section.ui-readback').first.locator('.ui-readback > ui-status').last
+    expect(result).to_contain_text(job["request_id"])
+    page.evaluate("""({path, job}) => window.__callbacks[path].onData({available:true,ok:true,
+      evidence:{evidence:'fresh',age_s:0},data:{state:'activating',request_id:job.request_id,
+        ssid:job.ssid,observed:{ssid:'old-site',ipv4:'192.0.2.8',active:true,uuid:'old'}}})""", {"path": path, "job": job})
+    expect(result).not_to_contain_text("Wi-Fi 연결을 확인했습니다")
+    page.evaluate("""({path, job}) => window.__callbacks[path].onData({available:true,ok:true,
+      evidence:{evidence:'fresh',age_s:0},data:{state:'committed',request_id:job.request_id,
+        profile_uuid:'candidate',ssid:job.ssid,
+        observed:{ssid:job.ssid,ipv4:'192.0.2.7',active:true,uuid:'candidate'}}})""", {"path": path, "job": job})
+    expect(result).to_contain_text("Wi-Fi 연결을 확인했습니다")
+    assert page.evaluate("sessionStorage.getItem('rosy.network.pending')") is None
+    assert page.get_by_role("textbox", name="Wi-Fi SSID", exact=True).is_enabled()
+
+
+@pytest.mark.parametrize("state,label", [("rolled_back", "이전 연결로 복구"), ("held", "보류"),
+                                         ("needs_resubmit", "암호를 다시")])
+def test_wifi_prepared_ack_waits_for_real_job_outcome(network_job_page, state, label):
+    page = network_job_page
+    page.evaluate("""() => {
+      window.__api = async (_path, options) => {
+        window.__submitted = JSON.parse(options.body);
+        return {available:true,ok:true,data:{state:'prepared',request_id:window.__submitted.idempotency_key}};
+      };
+    }""")
+    _submit_wifi(page)
+    page.wait_for_function("window.__submitted !== undefined")
+    result = page.locator('section.ui-readback').first.locator('.ui-readback > ui-status').last
+    expect(result).not_to_contain_text("Wi-Fi 연결을 확인했습니다")
+    job_id = page.evaluate("window.__submitted.idempotency_key")
+    path = "/api/v1/host/network?request_id=" + job_id
+    page.wait_for_function("path => Boolean(window.__callbacks[path])", arg=path)
+    page.evaluate("""({path, state, job_id}) => window.__callbacks[path].onData({available:true,ok:true,
+      evidence:{evidence:'fresh',age_s:0},data:{state,request_id:job_id,ssid:'site'}})""",
+                  {"path": path, "state": state, "job_id": job_id})
+    expect(result).to_contain_text(label)
+    expect(result).not_to_contain_text("Wi-Fi 연결을 확인했습니다")
+
+
 def test_network_action_reports_rejection_and_success_beside_controls():
     server = safe_http_server(_Handler)
     thread = Thread(target=server.serve_forever, daemon=True)

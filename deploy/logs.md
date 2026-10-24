@@ -3242,3 +3242,9 @@
 - 변경: 기존 OMX review allowlist에 `action_space.py`를 포함한다. 해당 모듈의 프로젝트 의존성 `artifacts.py`는 이미 포함되어 있다.
 - 증거: 통합관제 병합 FULL과 깨끗한 main의 signed catalog 가져오기 시험에서 같은 ImportError가 재현됐다. 기존 실제 서명·설치·CLI 재가져오기 회귀 시험으로 수정 커밋을 원격 검증한다.
 - gate 변화: 서명 검증·health gate·사람 이력 보호를 유지한다. 실제 배포·장치 수용 변화 없음. 기존 installed-layout 교훈을 적용했으며 별도 교훈 추가 대상은 아니다.
+
+## 2026-10-24 · c60d6046bb · 장치 Wi-Fi 복구와 서명 boot 계층 연속성
+
+- 변경: D-863 network-only agent·AP HTTPS 복구·장치 결속 첫 부팅 인계, bridge/기능 릴리스 discovery와 signed boot catalog/inverse를 연결했다. 전역 claim과 radio lock, 실제 연결 관측, 비밀 없는 재접속 작업 조회를 사용한다.
+- 증거: [검증 기록](../docs/validation/device-network-recovery-2026-10-24/result.md). 경계 332, 업데이트/화면 680, 설치 격리 41, opt-in 브라우저 10 passed. 선택별 중복이 있어 합산하지 않는다. 원격 skip 60은 미검증이며 PowerShell inverse 실패 중단은 별도 mock 실행했다. 독립 검토의 deferred reconcile·fallback claim·부팅 복구 오류 전파를 회귀로 보완한다.
+- gate 변화: SOURCE 근거 추가. signed ARM64 산출물·Pinky 무선/TLS 등록·정전/재부팅·OTA DEVICE/FIELD 수용은 미실시이며 배포하지 않았다. CE: 기존 첫 부팅 Wi-Fi 교훈 갱신, 호스트 회귀와 실물을 구분했다.

@@ -1200,3 +1200,9 @@
 - 증거: 통합관제 정보/정지 요청은 Fleet 소유의 additive wire 계약이며 D-862·canonical schema와 함께 등록한다. 버전 정합성은 커밋된 source의 공식 원격 회귀에서 확인한다.
 - gate 변화: 없음. 버전 정렬이며 CORE 실행·ARM64 이미지·DEVICE/FIELD 수용의 승격이 아니다.
 - CE: 해당 없음 — 공식 버전 pin과 정합성 회귀로 설명된다.
+
+## 2026-10-24 · c60d6046bb · network-only 호스트 작업 중계
+
+- 변경: 네트워크 조회/연결을 전용 Unix socket으로 전달하고 HTTP 본문 전송 후 준비 작업을 시작한다. 기존 관리자 재확인과 viewer 조회를 유지하며 잘못된 connect 본문의 검증 오류에서도 비밀 입력을 제거한다.
+- 증거: `9198a18c7b` 경계 원격 선택 332 passed, `3b29e960ce` CORE/인증 선택 107 passed. [검증 기록](../../../docs/validation/device-network-recovery-2026-10-24/result.md). 실제 ASGI 응답 순서·역할·socket·실패 응답을 확인했다.
+- gate 변화: SOURCE 근거 추가. 실제 Pinky 및 현장 네트워크 수용은 별도다. API v1.311, D-863.

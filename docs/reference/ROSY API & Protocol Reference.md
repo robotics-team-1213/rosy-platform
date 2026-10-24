@@ -32,6 +32,27 @@ ControlMapRef는 `map_id,version,frame:unit_local`이며 version>=1이다. map I
 typed 정지는 journal/fence를 확보하지 못하면 새 fanout 없이503 JOURNAL_UNAVAILABLE/UNKNOWN이다. 기존 `/api/fleet/estop`의 새 로컬 사람 긴급 정지는 DB 장애에도 원래 best-effort fanout을 유지한다. bad credentials401, 범위/권한 거절403, 없는 unit/map/record404, revision/identity/fence 충돌409, malformed422, 저장소/producer/transport 실패503이며 부분 연결 실패를 전체 성공으로 덮지 않는다. peer CA는 명시 tls_ca_file로 연결하고 hostname/체인 검증·redirect 거절·환경 proxy 미사용을 유지한다.
 
 정지 body의 불변성은 관제별 최초 배정 projection을 기준으로 한다. origin/stop/config는 유지하되 target이 자기이면 자식 target과 해당 subtree fence로 제한하고, 더 깊은 target이면 next hop으로 중계한다. 최초 child target/fence를 저장한 뒤 재시도·조회에서 바꾸지 않으며 자식 응답도 그 범위로 검증한다. 빈 fence projection에는 POST하지 않고 미전달/미확인으로 남긴다. sibling fence/결과를 다른 자식에게 공개하지 않는다.
+### v1.311 Device network recovery jobs (D-863)
+
+CORE keeps administrator authentication and explicit `confirmed: true` for
+`POST /api/v1/host/network/connect` (`ssid`, secret `psk`, stable `idempotency_key`).
+SSID is printable UTF-8, 1–32 bytes; supported WPA2 passphrases are 8–63 characters.
+Only network status/connect use the dedicated `/run/rosy-network-agent/core.sock`
+(configuration `network_agent.socket_path`). Existing lane authority is unchanged.
+
+A `prepared` response acknowledges a job, not a connected network. CORE sends
+`network.start` only after the HTTP response body. `GET /api/v1/host/network?request_id=...`
+lets a viewer reconcile the same job after transport loss. States include prepared,
+activating, committing, committed, rolling_back, rolled_back, held, rejected and
+needs_resubmit. Committed requires observed candidate UUID, SSID, interface and IPv4;
+internet access is optional. Unknown/stale/disconnected evidence is never success.
+The browser retains only job ID and SSID; losing an in-memory PSK requires explicit re-entry.
+
+Initial boot failure recovery uses a separate AP-bound HTTPS listener on port 8443,
+physical code and certificate-fingerprint enrollment. It grants only network commands,
+never a CORE token. An image lacking first-boot handoff support exposes diagnostics
+only and reports image_required for writes. See [Host Agent contract](rosy-host-agent-contract.md)
+and [recovery operations](../deployment/network-recovery-and-updates.md).
 
 ### v1.298 Scoped transport execution snapshots (D-856)
 
@@ -3665,6 +3686,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.313 | 2026-10-24 | D-862: bounded owner-scoped control-unit information/maps, immutable subtree stop assignments and local uncertainty reconciliation; explicit parent sharing/stop consent and peer CA. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
 | v1.310 | 2026-10-24 | Additive (D-854, feat/arm-policy-cameras): CORE arm policy `cameras` list (1..N installed cameras, installed order) on `/policy` and `/observations`; one-camera policies keep `camera`. Each observation camera adds `received_at_ns` and `frame_sha256`. All frames bind the action; owner freshness and causality checks apply per camera. Default unbound, SIM-only. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
+| v1.311 | 2026-10-24 | D-863: network-only native authority, prepared jobs, response-before-start acknowledgement and job reconciliation; AP recovery and signed boot-layer continuity. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
 | v1.290 | 2026-10-20 | D-821 explicit named navigation handoff to existing Task owner, independently OFF by default; ko-KR/en-US locale. Model replies remain read-only. |

@@ -36,9 +36,9 @@ USER_AGENT = "rosy-auto-update/1 (D-412)"
 DEFAULT_REPO = "robotics-team-1213/rosy-platform"
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 RELEASE_ID = re.compile(r"^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$")
-TAG = re.compile(r"^payload-([0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3})$")
+TAG = re.compile(r"^payload-(?:v2-)?([0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3})$")
 PHASES = ("idle", "staged", "waiting", "held", "ineligible", "applying", "committed",
-          "rolled_back", "failed", "disabled", "error", "stuck")
+          "rolled_back", "failed", "disabled", "error", "stuck", "image_required")
 # Re-review N3: the only native_release errors that say "this release can never work here".
 DEFINITIVE = re.compile(
     r"^(NATIVE_MANIFEST_[A-Z_]+|NATIVE_TARGET_MISMATCH|NATIVE_RUNTIME_MISMATCH|NATIVE_PYTHON_RUNTIME"

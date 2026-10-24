@@ -221,8 +221,8 @@ def test_activation_refused_marks_failed_without_rollback(device, host, hub, key
 
     result = updater(host, hub).run()
 
-    assert result["phase"] == "failed"
-    assert result["last_result"]["outcome"] == "refused"
+    assert result["phase"] == "image_required"
+    assert result["last_result"]["outcome"] == "image_required"
     assert NEXT in state(device)["failed"]
     assert "rollback" not in kinds(host)
 
