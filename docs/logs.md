@@ -10324,3 +10324,9 @@ osy-d395-s1d\`.
 - 변경: [단일 contact 관측 기록](validation/omx-policy-contact-observation-2026-10-24/result.md). 새 고정 manifest로 calibration1회와 접촉 관측1회만 수행했다.
 - 증거: calibration PASS/96파일, 정책 HOLD/264파일. 172수락 중171정상 뒤 joint4/5 허용오차 실패. 두 손가락–테이블 접촉이 각315개 저장됐고 마지막 goal 구간에 각37개다. source/전체 archive·DB·관측·파생 world·종료를 독립 대조했다.
 - gate 변화: 새 optimizer/formal/실물0·기존 HOLD 유지. CE 미해결 — 접촉은 직접 확인했으나 실패 인과와 실제 runtime 형상·nominal STL 대조는 추가 확인한다.
+
+## 2026-10-24 · 3c67e4237e · native ACT 모델의 전송 후 재적재
+
+- 변경: 단독 verify의 필수 checkpoint/processor·링크 검사와 실제6/12관절 모델의 fixture Hub 왕복·새 프로세스 재적재 시험. [검증 기록](validation/native-model-readback-2026-10-24/result.md).
+- 증거: RED5FAIL→GREEN39PASS/SDK2SKIP/NEW0. 별도 고정 CPU SDK 실행은 단일 팔·양팔 각각1PASS/0SKIP·EXIT0, eval3·배열6/12·processor 누락 거부. 회수 모델·payload·readback7파일과 원본/분할 해시를 별도 대조했다.
+- gate 변화: 실제 HF·장치 실행·승격0, 기존 SIM HOLD 유지. CE 새 교훈 — 임시 패키지 prefix가 고정 SDK 환경을 덮을 수 있어 전체 요구 버전을 시험 전에 검사한다.
