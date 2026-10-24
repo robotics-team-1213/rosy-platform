@@ -113,6 +113,32 @@ def test_a_coordinated_jog_moves_its_joints_together_or_not_at_all():
     assert robot.pos == HOME  # the valid lift step was not applied alone
 
 
+def test_park_closes_rises_turns_then_descends_slowly():
+    start = [35.0, -30.0, 29.0, 41.0, 71.0, 56.0]
+    path = m.park_path(start, HOME, 46.6, fps=30)
+    step = m.PARK_SPEED / 30 + 1e-9
+    assert all(max(abs(b - a) for a, b in zip(p, q)) <= step for p, q in zip([start] + path, path))
+    closed = next(i for i, f in enumerate(path) if f[5] == pytest.approx(46.6))
+    risen = next(i for i, f in enumerate(path) if f[1] == pytest.approx(-27.0) and f[2] == pytest.approx(18.0))
+    turned = next(i for i, f in enumerate(path) if f[0] == pytest.approx(HOME[0]) and f[4] == pytest.approx(HOME[4]))
+    assert closed < risen < turned  # never turn while low with open jaws (the head scraped the table)
+    assert all(f[0] == start[0] for f in path[:risen + 1])  # no pan until risen
+    assert path[-1][:5] == pytest.approx(HOME[:5])
+
+
+def test_park_runs_through_the_runner_and_needs_a_home_chunk():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    robot, status, clock, queue = Robot(), [], [0.0], ["run approach_pinky", "park", "stop"]
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    done = by_command(status, "run park")[0]
+    assert done["settled"] and done["state"][:5] == pytest.approx(HOME[:5])
+    refused = runner(Robot(), ["park", "stop"])  # library() has no home chunk
+    assert refused[1]["ok"] is False and "home chunk" in refused[1]["error"]
+
+
 def test_a_small_jog_and_grip_move_only_their_joint():
     robot = Robot()
     runner(robot, ["jog wrist_flex.pos -4", "grip 55", "stop"])
