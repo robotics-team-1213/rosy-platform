@@ -87,6 +87,21 @@ def test_a_chunk_out_of_order_and_a_large_jog_are_refused_without_motion():
     assert all(a["shoulder_pan.pos"] == 0.0 for a in robot.sent)
 
 
+def test_a_relative_chunk_keeps_the_judges_correction_and_a_huge_one_is_refused():
+    robot = Robot()
+    status = runner(robot, ["run approach_pinky", "jog shoulder_pan.pos -5", "jog shoulder_pan.pos -5",
+                            "run grasp_pinky rel", "stop"])
+    done = by_command(status, "run grasp_pinky rel")[0]
+    assert done["ok"] and done["state"][0] == 8.0 and done["state"][5] == 46.6  # pan 18 - 10, jaws not shifted
+    lib = library()
+    lib["chunks"]["grasp_pinky"] = [[f[0] + 40, *f[1:]] for f in lib["chunks"]["grasp_pinky"]]
+    clock, out, queue = [0.0], [], ["run grasp_pinky rel", "stop"]
+    r = m.Runner(Robot(), lib, fps=30, status=out.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert out[1]["ok"] is False and "exceeds" in out[1]["error"]
+
+
 def test_a_small_jog_and_grip_move_only_their_joint():
     robot = Robot()
     runner(robot, ["jog wrist_flex.pos -4", "grip 55", "stop"])
