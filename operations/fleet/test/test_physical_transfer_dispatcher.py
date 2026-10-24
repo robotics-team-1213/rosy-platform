@@ -298,3 +298,34 @@ def test_rpc_guard_is_exclusive_across_processes_and_a_fork_is_not_reentrant(dri
     assert run_child() == "acquired"
     result.close()
     result.join_thread()
+
+
+def test_monitor_observes_the_existing_attempt_without_an_application_refresh(driver):
+    submit(driver, ready(driver))
+    tick = getattr(driver.dispatcher, "tick", None)
+    assert callable(tick), "Fleet-owned physical receipt monitor is missing"
+    assert tick()["status"] == "ACTION_SUCCEEDED"
+    assert len(driver.port.submitted) == 1 and len(driver.port.lookups) == 1
+    assert tick() is None and len(driver.port.lookups) == 1
+
+
+def test_monitor_never_submits_a_prepared_action_and_holds_an_expired_window(driver):
+    ready(driver)
+    tick = getattr(driver.dispatcher, "tick", None)
+    assert callable(tick), "Fleet-owned physical receipt monitor is missing"
+    assert tick()["status"] == "PREPARED" and driver.port.submitted == [] and driver.port.lookups == []
+    driver.clock[0] = NOW + 16_000_000_000
+    assert tick()["status"] == "HOLD"
+    assert driver.port.submitted == [] and driver.port.lookups == []
+    assert {c["phase"] for c in claims(driver.path)} == {"HELD"}
+
+
+def test_monitor_stops_polling_a_terminal_receipt_while_retaining_uncertainty(driver):
+    measured = ready(driver)
+    driver.port.drop_submit = True
+    submit(driver, measured)
+    tick = getattr(driver.dispatcher, "tick", None)
+    assert callable(tick), "Fleet-owned physical receipt monitor is missing"
+    assert tick()["status"] == "UNKNOWN" and len(driver.port.lookups) == 1
+    assert tick() is None and len(driver.port.lookups) == 1
+    assert {c["phase"] for c in claims(driver.path)} == {"UNKNOWN"}
