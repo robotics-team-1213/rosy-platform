@@ -22,7 +22,7 @@ def _device_id(value):
 
 def _text(value, field, limit, *, required=False):
     if (not isinstance(value, str) or len(value) > limit
-            or any(unicodedata.category(char) == "Cc" for char in value)
+            or any(unicodedata.category(char) in {"Cc", "Cs"} for char in value)
             or (required and not value.strip())):
         raise ValueError(f"{field} must be a {'nonblank ' if required else ''}string of at most {limit} characters")
     return value
