@@ -135,3 +135,31 @@ def test_pending_submit_cannot_be_overtaken_or_duplicated(tmp_path):
         assert run.results['first'].accepted
         assert isinstance(run.results['second'], PermissionError)
     assert len(run.commands) == len(run.client.commands) == 1
+
+
+def test_recorded_grant_expiry_during_native_send_cancels_and_keeps_late_sink(tmp_path):
+    from test_policy_runtime_binding import attached
+    from omx_adapter.ros_goal_contract import RosGoalEvent
+    from uuid import uuid4
+    session, runtime, client, clock, _, journal, _ = attached(tmp_path)
+    session._lease = replace(session.lease, expires_at_ns=10_020_000_000)
+    prepare = journal.prepare
+    def renew_after_intent(*args, **kwargs):
+        prepare(*args, **kwargs)
+        session.renew(replace(session.lease, expires_at_ns=11_000_000_000))
+    journal.prepare = renew_after_intent
+    send = client.send_goal
+    def slow_send(command):
+        handle = send(command)
+        clock[0] = 10.03
+        return handle
+    client.send_goal = slow_send
+    with pytest.raises(PermissionError):
+        session.submit(candidate(session))
+    assert session.hold_reason and session.owner.state == 'hold'
+    assert client.handles[0].cancel_calls == 1
+    command = client.commands[0]
+    assert command.command_id in runtime._phase_event_sinks
+    goal = str(uuid4())
+    runtime._dispatch_goal_event(RosGoalEvent('GOAL_ACCEPTED', command.command_id, None, goal, 10.03, 1))
+    assert journal.read(command.command_id)['driver_goal_id'] == goal
