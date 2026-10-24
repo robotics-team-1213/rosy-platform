@@ -28,6 +28,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_NO_ACTIVE_MAP: '활성 지도가 없습니다',
   TRIP_POSE_UNTRUSTED: '현장 지도 위치를 확인할 수 없습니다 · 위치와 관측 갱신을 확인하세요',
   TRIP_PLAN_FAILED: '이 지도에서 경로 계산이 실패했습니다 · 관리자에게 알리세요',
+  TRIP_JOB_NOT_FOUND: '해당하는 이송 작업이 없습니다 · 접수 키와 권한을 확인하세요',
   UNKNOWN_ROBOT: '등록되지 않은 로봇입니다',
   // D-494 5 trip start / control
   TRIP_PLAN_UNKNOWN: '저장된 경로가 없습니다 · 다시 계산하세요',

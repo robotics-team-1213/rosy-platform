@@ -459,3 +459,9 @@
 - 변경: 운행 표시를 trip-display, 목록 표현을 roster-presentation, 로스터 전용 스타일을 roster.css로 분리했다. 셸은 로스터 공개 과업 동작을 쓰고 기존 권한·요청·폴링·초점을 유지한다. 실제 소비자·자산 registry·문서 로드를 함께 갱신했다.
 - 증거: 원격 집중44 passed/2 warnings/0 NEW, 4폭×2테마의 계산 스타일 일치. [검증 기록](../../../docs/validation/fleet-ui-boundaries-2026-10-24/result.md). 최종 완결 커밋의 공식 착지 검증은 별도다.
 - gate 변화: 없음. 합성 호스트 UI 검증이며 장치·사용자 G3·현장 수용은 미실시다. CE: 부모 Python stdout의 UTF-8 복구 교훈을 docs/solutions에 기록했다.
+
+## 2026-10-24 · afb218aed1 · 최신 운행 오류 문구의 표시 소유 보존
+
+- 변경: main의 TRIP_JOB_NOT_FOUND 문구를 새 trip-display 소유로 통합했다. 지도 fitView 선언 정리를 유지하고 지도 ratchet을606으로 낮췄다. 문구 반환 Node 단언을 추가한다.
+- 증거: [통합 기록](../../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md). 고정 커밋의 오류 어휘·Node·소유·8화면 집중 검증과 공식 착지 결과는 후속 보고로 구분한다.
+- gate 변화: 없음. 동료 실행 계약·권한·문구는 유지한다. CE 해당 없음: 기존 소유 설계와 회귀에 판단을 남겼다.

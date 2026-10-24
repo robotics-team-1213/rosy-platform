@@ -67,8 +67,7 @@ export function planIsCurrent(plan, active) {
  * ``discs`` ({x, y, r} metres, D-540 4 robot rings) are kept inside the view too. */
 export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
   const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
-  const rot = (x, y) => [x * c + y * s, -x * s + y * c];
-  const xs = [], ys = [];
+  const rot = (x, y) => [x * c + y * s, -x * s + y * c], xs = [], ys = [];
   const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
   for (const place of map.places) add(place.x, place.y);
   for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);

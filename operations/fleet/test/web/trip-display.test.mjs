@@ -6,6 +6,7 @@ import {
 
 test('trip display loads without a DOM and preserves refusal detail and unknown codes', () => {
   assert.equal(tripErrorText('FUTURE_REFUSAL'), '경로 계획 거절 (FUTURE_REFUSAL)');
+  assert.equal(tripErrorText('TRIP_JOB_NOT_FOUND'), '해당하는 이송 작업이 없습니다 · 접수 키와 권한을 확인하세요');
   assert.equal(tripErrorText('TRIP_UNKNOWN_EDGE', {edge: 'lane-x'}), '지도에 없는 차로입니다 · lane-x');
   assert.equal(startCheckText({code: 'TRIP_START_HEADING_MISMATCH', heading_err_deg: -178.2}), '방향 반대(178°)');
   assert.match(tripErrorText('TRIP_START_OFF_LANE', {off_lane_m: 0.123}), /차선 밖 12 cm/);
