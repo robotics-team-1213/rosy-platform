@@ -70,6 +70,8 @@ SDK 원시 로그는 run 디렉터리의 `sdk.log`이며 내부 경로가 포함
 
 같은 check/start/status/fetch에 `scenario_id=pinky-conveyor-roundtrip`과 `config={"seed":0}`을 사용한다. 경로·자유 명령·속도·임의 프레임 수를 받지 않는다. seed는 고정 배치에서 사용하지 않는다. `conveyor_fixture.py`의 `stationary-proxy-v3`는 미터 단위의 **합성 배치**이며 실제 영상으로 재구성한 맵이 아니다.
 
+Learning의 `/learning/sim`에서 해당 실행을 선택하면 접촉 보고서와 다섯 단계 PNG를 같은 run에서 열 수 있다. 재실행은 선택한 run의 시나리오·seed를 복원하고 새 run으로 이전 run을 참조한다. 이 화면의 실행 완료는 policy 승격이 아니다. 희소 접촉 보고서를 학습 Episode로 사용하지 않으며, 동기화된 시연 수집·독립 정책 평가의 남은 연결은 [검증 기록](../validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md#학습-파이프라인과의-연결)에 둔다.
+
 - 팔 기준 원점에서 지지면 중심은 Pinky `(0.14,-0.07,0.09)`, 컨베이어 `(0.14,0.07,0.09)` m다. 물체는 18 mm 정육면체·0.05 kg, 두 지지면과 벨트는 정지한다.
 - 기존 ROBOTIS OMX-F URDF·STL을 사용한다. CAD 수직 파지 IK는 도달 불가를 거절하고, 실제 관절·TCP를 읽어 명령 및 FK와 대조한다. controller는 결정론적 제어기이며 HF 학습 정책을 실행하지 않는다.
 - 물체는 중력·충돌·마찰로만 움직인다. 초기 배치 이후 pose 쓰기·부착·외력 보조가 없다. 120 Hz, 최대 4,800 physics step과 기존 165/180초 실행 상한을 유지한다.

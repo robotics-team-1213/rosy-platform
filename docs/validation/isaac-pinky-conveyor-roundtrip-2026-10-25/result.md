@@ -49,3 +49,11 @@ Isaac Sim 5.1.0.0에서 OMX-F CAD 집게가 동적 물체를 Pinky 적재면 pro
 실제 top 영상에서 컨베이어와 팔 구조는 보였지만 Pinky 적재면은 식별하지 못했다. front 시야는 구조물에 가려져 있었다. 카메라 내부 보정·카메라↔팔 변환·Pinky/컨베이어의 실측 좌표·높이와 물체 물성을 확보하기 전에는 합성 배치를 현장 맵으로 사용하지 않는다. 벨트 이동, full Pinky 자산·이동, learned AI 평가, 실물 제어는 미검증이다.
 
 실행 source의 원격 Isaac/CLI 회귀는 377 PASS·1 SKIP(xacro 환경), NEW 0이다. 이후 문서 커밋과 main 병합 검증은 landing receipt를 따른다. CE: [구동 방식 교훈](../../solutions/runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md) 새 기록.
+
+## 학습 파이프라인과의 연결
+
+기존 Learning의 SIM 실행 경로는 같은 run 원장을 조회하지만 HTTP와 화면의 산출물 허용 목록이 `import-report`만 받아 새 접촉 보고서·5개 PNG를 숨겼다. 기존 경로에 이 여섯 artifact ID를 연결하고 JSON/PNG별 MIME, 1 MiB 크기, SHA-256 확인과 프로젝트 조회 권한을 유지했다. 원격 회귀에서 미연결 경로의 404를 먼저 재현했고, 연결 후 API·명시적 Chromium 21개가 통과했다. 성공 상태 문구는 시나리오 공통의 ‘실행 완료’로 표시하며 실제 과제 판정은 보고서에 남긴다. 독립 검토에서 재실행 시 선택한 run의 시나리오도 복원해야 함을 추가 확인했다. 최종 재실행 회귀와 main 통합 상태는 landing receipt를 따른다.
+
+이 연결은 물리 파지·이송 기준선의 실행 → 독립 판정 → 원본 결과 보관 → Learning 화면 조회를 제공한다. 이번 보고서는 희소 접촉 관측과 단계별 이미지이며, 학습에 필요한 동기화된 전체 관절 상태·행동 목표·카메라 시계열을 갖춘 Episode가 아니다. 기존 ACT 입력 계약으로 임의 변환하거나 HF에 학습 데이터로 등록하지 않는다. 이 자료에는 평가할 policy revision도 결속하지 않았으므로 학습 정책의 SIM pass receipt로 사용하지 않는다.
+
+후속 연결은 기존 Episode 계약에 맞춘 시연 수집·원본 검토 → 에피소드별 train/eval 분리 → ACT 학습·별도 프로세스 재적재 → 정확한 policy revision을 실행한 독립 SIM 과제 평가 순서다. 실제 카메라 정합·장치 보정·운영 수용 전에는 실물 HOLD를 유지한다. 검증된 drive-mode 교훈은 위 CE 기록에서 재사용하고, 각 실행의 조건·실패·수정·종료 증거는 해당 run과 이 검증 기록에 남긴다.

@@ -77,7 +77,7 @@ $('sim-start').addEventListener('click',()=>work(()=>start()));
 $('sim-refresh').addEventListener('click',()=>work(refresh));
 $('sim-stop').addEventListener('click',()=>work(async()=>{detail(await api('stop',{run_id:selected.run_id,expected_revision:selected.revision}));await refresh();}));
 $('sim-replay').addEventListener('click',()=>work(async()=>{
-  const parent=selected.run_id;$('sim-seed').value=selected.input.config.seed;pending=null;
+  const parent=selected.run_id;$('sim-scenario').value=selected.input.scenario_id;$('sim-seed').value=selected.input.config.seed;pending=null;
   await check();await start(parent);
 }));
 work(async()=>{
