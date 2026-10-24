@@ -17,24 +17,28 @@ def emit(value):
     print('VLA_CHILD=' + json.dumps(value), flush=True)
 
 
-def clamp(raw, observed, limits, max_step):
+def clamp(raw, observed, limits, max_step, hold=()):
     """Keep each target within max_step of the observed joint and inside its limits.
 
     shortcut: the untrained base model's output is arbitrary; this only makes it admissible so the execution
     contract can be exercised. Remove when a fine-tuned checkpoint runs (D-864 §5).
     """
     out = []
-    for value, now, (low, high) in zip(raw, observed, limits):
-        out.append(min(high, max(low, min(now + max_step, max(now - max_step, value)))))
+    for index, (value, now, (low, high)) in enumerate(zip(raw, observed, limits)):
+        step = 0.0 if index in hold else max_step
+        out.append(min(high, max(low, min(now + step, max(now - step, value)))))
     return out
 
 
 class SimProbeTarget(runner.CoreArmTarget):
     """CoreArmTarget for the P0 probe: renames cameras to the checkpoint keys and clamps the proposal."""
 
-    def __init__(self, client, *, policy_type, limits, max_step, keys=CAMERA_KEYS):
+    def __init__(self, client, *, policy_type, limits, max_step, keys=CAMERA_KEYS, hold=('gripper_joint_1',)):
         super().__init__(client, policy_type=policy_type, sim_probe=True)
         self.limits, self.max_step, self.keys = list(limits), max_step, dict(keys)
+        # The SIM gripper's goal is unchecked and its readback carries mimic error, so P0 commands it at its
+        # readback (zero step); arm joints carry the contract.
+        self.hold = {i for i, name in enumerate(self.joint_names) if name in hold}
         self.delay_s, self.last = 0.0, {}
         self._observed_at, self._positions = None, None
 
@@ -48,7 +52,7 @@ class SimProbeTarget(runner.CoreArmTarget):
 
     def submit(self, positions):
         raw = [positions[name] for name in self.joint_names]
-        target = clamp(raw, self._positions, self.limits, self.max_step)
+        target = clamp(raw, self._positions, self.limits, self.max_step, self.hold)
         if self.delay_s:
             time.sleep(max(0.0, self._observed_at + self.delay_s - time.monotonic()))
         self.last = dict(raw=raw, submitted=target, observed=self._positions,

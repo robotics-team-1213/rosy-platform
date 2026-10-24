@@ -15,6 +15,7 @@ LIMITS = [(-1.0, 1.0), (-0.5, 0.5)]
 def test_clamp_keeps_step_and_limits():
     assert child.clamp([0.9, -0.9], [0.0, -0.48], LIMITS, 0.04) == pytest.approx([0.04, -0.5])
     assert child.clamp([0.01, 0.2], [0.0, 0.0], LIMITS, 0.04) == pytest.approx([0.01, 0.04])
+    assert child.clamp([0.3, 0.3], [0.1, 0.2], LIMITS, 0.04, hold={1}) == pytest.approx([0.14, 0.2])
 
 
 class Client:

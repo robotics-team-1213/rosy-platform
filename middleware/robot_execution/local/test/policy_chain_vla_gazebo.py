@@ -247,9 +247,14 @@ def scenario(case, out, runtime, rig, controllers, calibration):
         def run_step(op='step'):
             if commands:
                 last = commands[-1]['command_id']
-                until(lambda: any(e['kind'] == 'TERMINAL_RESULT' for e in journal.read(last)['events']), 8,
-                      'previous goal terminal')
-                until(lambda: runtime.owner.state == 'ready', 3, 'owner ready')
+                state = lambda: dict(owner=runtime.owner.recovery_state(), hold_reason=chain.session.hold_reason,
+                                     events=[e['kind'] for e in journal.read(last)['events']][-4:])
+                try:
+                    until(lambda: any(e['kind'] == 'TERMINAL_RESULT' for e in journal.read(last)['events']), 8,
+                          'previous goal terminal')
+                    until(lambda: runtime.owner.state == 'ready', 3, 'owner ready')
+                except AssertionError as error:
+                    raise AssertionError(f'{error}: {json.dumps(state(), default=str)[:1500]}') from None
                 time.sleep(max(0., commands[-1]['at_s']+TIMING['period_ns']/1e9+.05-runtime.monotonic()))
             base.sdk_send(child, dict(op=op))
             reply = emit_line(child)
