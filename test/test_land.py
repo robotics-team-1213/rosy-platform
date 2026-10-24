@@ -722,10 +722,9 @@ def test_isolated_rerun_keeps_original_revision_even_when_head_moves(repos, tmp_
     ids, why = land.land_checks.load_flaky(
         wt, ["pkg/test"], tmp_path / "original.txt", "NEW pkg/test/test_a.py::test_a\n",
         tmp_path, "pinned", sys.executable, run, tested_sha=tested)
-    assert ids == ["pkg/test/test_a.py::test_a"] and not why
+    assert not ids and "HEAD changed" in why
     assert received == [tested]
-    text = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
-    assert "on " + tested[:10] in text
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
 
 
 @pytest.mark.parametrize("waiting", [False, True])

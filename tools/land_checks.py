@@ -77,7 +77,7 @@ def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, 
     A stop also says whether the ids fail on main too (``main_red``).
     """
     ids, why = _rerun_alone(wt, inv, log, verdict, logdir, tag, python, run, tested_sha=tested_sha)
-    if ids:
+    if ids or why.startswith("HEAD changed"):
         return ids, why
     where = main_red(wt, inv, verdict, logdir, tag, python, run)
     return [], f"{why}; {where}" if where else why
@@ -97,6 +97,8 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
     codes = run([[*env, nodeid] for nodeid in ids], logs, tested_sha, repo=wt, label=f"land-alone-{tag}")
     if len(codes) != len(ids):
         return [], "incomplete isolated rerun results"
+    if _git(wt, "rev-parse", "HEAD").stdout.strip() != tested_sha:
+        return [], "HEAD changed during isolated checks; retry the landing"
     again = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code != 0]
     if again:
         return [], "failed again when run alone: " + "; ".join(again)

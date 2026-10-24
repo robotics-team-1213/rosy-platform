@@ -293,6 +293,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
     whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
     for inv, log, code in zip(todo, logs, codes):
+        if out(wt, "rev-parse", "HEAD") != head:
+            raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
         if why := land_cache.unusable(code, log):
             raise Stop(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
@@ -301,6 +303,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
         flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
             wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run,
             tested_sha=head)
+        if out(wt, "rev-parse", "HEAD") != head:
+            raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
         if check.returncode != 0 and not flaky:
             raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
         if check.returncode == 0 and whole:
@@ -320,6 +324,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
             done.append(f"node --test {len(mjs)} file(s) ok")
         else:
             done.append("node skipped: no web/*.mjs under the selected test dirs")
+    if out(wt, "rev-parse", "HEAD") != head:
+        raise Stop(f"HEAD changed during checks; {head[:10]} was tested; retry the landing")
     return done
 
 
