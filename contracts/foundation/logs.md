@@ -891,3 +891,10 @@
 - 증거: 이동한34개 class의 AST가 기존 HEAD와 동일함을 확인했다. 공식 원격 protocol/CORE 계약과 전체 tier 결과는 해당 커밋의 실행 기록을 따른다. 새 통합관제 wire 테스트는 아직 미구현 RED 준비 상태이며 이 분리 변경에 포함하지 않는다.
 - gate 변화: 없음. 모델 소유 분리이며 실행·네트워크·화면·장치 권한을 추가하지 않는다.
 - CE: 해당 없음 — AST 동작 보존과 기존 계약 회귀로 직접 검증할 책임 분리다.
+
+## 2026-10-24 · uncommitted · D-862 통합관제 정보·정지 요청 공유 계약
+
+- 변경: API v1.309와 D-862에 관제별 요약/직접 로봇·Task/지도, immutable 정지 identity·expected fence·관제별 응답·로컬 재시운전 확인 계약을 등록했다. 새 strict 모델19개를 leaf 모듈에 두고 canonical schemas exports를 유지했다. Task 상태 enum은 기존 Work 계약 모듈로 AST 그대로 옮겨 위임 전용 상태와 혼동하지 않는다.
+- 증거: 모델 미구현 commit09df122297에서 공식 원격 RED134건이 모두 같은 새 모듈 ImportError임을 확인했다. 모델과 public export 구현 후 strict 타입·관측 evidence·시간대·목록/크기·중복·정지 주장·복구 metadata를 원격 GREEN으로 검증한다. P0 분리의 실제 source/검증은 commit20af36c343 및 통합 commit8a80472a23의 별도 공식 실행 기록을 따른다.
+- gate 변화: 없음. 공유 계약 등록이며 collector/runtime·새 화면·배포·장치 수용을 완료하지 않는다. 기존 부모 자격의 정보/정지 권한은 자동 확대하지 않고 명시 설정으로 허용한다.
+- CE: 해당 없음 — 실행 경계와 receiver 불확실성의 근거를 D-862에 직접 기록하고 회귀로 검증한다.

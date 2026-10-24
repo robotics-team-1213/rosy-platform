@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-862 | 관제 정보 집계와 관제별 결과를 보존하는 정지 요청 | Accepted for implementation (2026-10-24) |
 | D-863 | 장치 네트워크 복구와 서명 업데이트 연속성 | Accepted for implementation (2026-10-24) |
 | D-864 | D-854 보완 — 공통 행동 단위 ros_joint_rad, 목표 묶음은 궤적 하나, Isaac은 학습 데이터·Gazebo는 실행 확인 | Proposed (2026-10-24) |
 | D-861 | 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다 | Accepted (2026-10-24) |
