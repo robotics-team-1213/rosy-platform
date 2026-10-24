@@ -10257,3 +10257,9 @@ osy-d395-s1d\`.
 - 변경: [저널 진단 기록](validation/omx-policy-journal-io-2026-10-24/result.md)을 추가했다. 실제 원본 데이터의 복사본만 네 번 재생했고 정책·optimizer·formal·실물 동작은0이다.
 - 증거: 각2,396 API/18,427측정·네 테이블 fingerprint 일치·원본3SHA 불변·worker 종료0·회수/정리를 독립 확인했다. threaded 한 조건의 prepare3318.251ms 중 commit3276.184ms를 관측했지만 과거733ms의 동일 원인을 증명하지 않는다.
 - gate 변화: 기존 HOLD 유지. session lock만 해제하는 변경의 fence 교착 위험과 두 임계구역 분리·재검증 조건을 기록했다. 권한·TTL·freshness·WAL/FULL은 그대로다. CE 미해결 — 원래 지연/추종 실패 해결 증거가 없다.
+
+## 2026-10-24 · 2c47808edc · 저널 쓰기와 최종 권한 검사 잠금 분리
+
+- 변경: [검증 기록](validation/omx-policy-journal-admission-2026-10-24/result.md). durable intent를 session/fence 밖에서 쓰고 pending submit만 직렬화한다. 최종 재검증과 native 전송 전후에 기록된 grant/현재 lease를 함께 검사한다.
+- 증거: 원격 RED 경합5FAIL·grant만료1FAIL 뒤 host312통과 점/NEW0, 별도 합성 Jazzy 전송6PASS. 실제4goal DB/receipt와 cleanup·164파일 회수·actor종료0을 독립 확인했다.
+- gate 변화: 권한·TTL·freshness·WAL/FULL·callback 증거를 유지한다. 기존 실제 모델 평가HOLD/formal0과 원래 추종 실패는 해결로 바꾸지 않는다. CE 해당 없음 — 불변식은 코드/회귀/README/검증 기록에 직접 남겼다.
