@@ -31,7 +31,7 @@ import policy_chain_gazebo as base
 from policy_chain_gazebo import ROOT, process, until
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from controller_manager_msgs.srv import ListControllers
@@ -417,7 +417,8 @@ def main():
         rig = Rig(node, runtime.monotonic, calibration)
         controllers = node.create_client(ListControllers, '/controller_manager/list_controllers')
         started = (node.get_clock().now().nanoseconds, time.monotonic())
-        executor = MultiThreadedExecutor(num_threads=4)
+        # The product owner executor (yields the GIL each turn); the stock one held 82% of GIL time spinning.
+        executor = OwnerMultiThreadedExecutor(num_threads=4)
         executor.add_node(node)
         errors = []
         def work():
