@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · feat(omx): D-858 S3 커미셔닝 기록·정지 시험 관문·저장 뒤 HOLD
 - 2026-10-24 · uncommitted · fix(omx): D-858 S1 재검토 지적 반영 (N1-N4, 재-trip)
 - 2026-10-24 · uncommitted · fix(omx): D-858 S1 독립 안전 검토 지적 반영 (H1, M1-M6)
 - 2026-10-24 · uncommitted · feat(omx): D-858 S1 실물 Dynamixel port와 가짜 버스 시험
 - 2026-10-21 · uncommitted · 동일 일련번호 손목 카메라의 포트 구분
-- 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)

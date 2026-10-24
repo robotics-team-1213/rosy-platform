@@ -642,3 +642,10 @@
 - 변경: port는 `_state_lock`을 잡은 채 펜스(`is_open`·`snapshot`·`trip`)를 부르지 않는다(`run_if_open`이 펜스 잠금을 잡고 `submit`을 부르는 순서와 맞춤). 시작 시 펜스 세대를 래치 세대로 기록해 시작 HOLD도 사람 rearm(더 새 세대)으로만 풀린다. 펜스가 이미 닫혀 있으면 다시 trip하지 않아 원래 정지 기록을 남긴다. submit은 정지 요청 플래그를 덮지 않고, rearm 도중 들어온 정지는 정지 카운터로 잡아 래치를 유지한다.
 - 증거: 실제 `LocalStopController`·실제 스레드 교착 회귀 시험 두 개가 수정 전 커밋에서 join 시간 초과로 실패하고 수정 후 통과한다(원격). 실물 팔은 쓰지 않았다.
 - gate 변화: 없음. 재검토 대기(D-430 §5).
+
+## 2026-10-24 · uncommitted · feat(omx): D-858 S3 커미셔닝 기록·정지 시험 관문·저장 뒤 HOLD
+
+- 변경: `commissioning_record.py`가 팔 인스턴스별 실측 기록(관절 한계·그리퍼 열림/닫힘·작업 공간 상자·정지 시험, 항목별 측정 시각·측정자)을 원자적으로 저장하고(임시 파일·fsync·rename), 저장마다 전체 기록을 history에 남기며, 내용 해시를 revision으로 쓴다. `load_motion_evidence`가 기록에서 `MotionEvidence`를 만든다. 정지 시험 관문은 V-016 수치(500 ms·joint1 ±0.1 rad·0.1 rad/s)를 다시 검사하고, 기록과 정지 시험이 port 설정 `calibration_revision`에 묶이지 않으면 닫힌다. port는 기록 revision이 바뀌면(submit·단계마다·rearm) HOLD하고 기록 다시 읽기와 사람 rearm을 요구한다. `dynamixel_stop_test.py`는 측정 모드(정지 시험 항목만 뺀 관문, 느린 joint1 왕복)에서 정지를 걸고 정지 시간·편차·속도를 잰다. 커미셔닝 뷰어에 팔별 관문 상태를 읽기 전용으로 보인다.
+- 증거: 가짜 버스·가짜 시계 시험 `test/test_omx_commissioning_record.py`, `test/test_omx_dynamixel_stop_test.py`, `test/test_omx_commissioning_view.py`. 실물 팔은 쓰지 않았다(KAN-30은 사람 몫). 독립 검토 대기(D-430 §5).
+- 구조: 실물 팔 경로(S1 `dynamixel_*`와 S3 모듈)를 `omx_adapter/real/`로 옮겨 D-766 크기 단위로 등록했다(패키지 1만 줄 상한). 내용 변경 없는 이동이다.
+- gate 변화: 없음. owner는 `enabled=False`(S4).

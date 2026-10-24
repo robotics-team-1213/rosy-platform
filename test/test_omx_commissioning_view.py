@@ -1,4 +1,5 @@
 """Read-only camera monitor refuses stale/replayed observations and remote hosts."""
+import json
 import threading
 import time
 import importlib.util
@@ -295,3 +296,35 @@ def test_browser_expires_old_image_when_download_stalls_but_metadata_advances():
         server.shutdown()
         server.server_close()
         worker.join()
+
+
+def test_commissioning_gate_panel_is_read_only_and_names_missing_items(tmp_path):
+    gates = _viewer.gate_reader(tmp_path, ["arm_a=omx-1/omx-1-control", "arm_b=omx-2/omx-2-control"])
+    from omx_adapter.real.commissioning_record import CommissioningStore
+    store = CommissioningStore(tmp_path, workcell_id="omx-1", instance_id="omx-1-control")
+    store.save({"gripper": {"open_rad": 0.5, "close_rad": -0.2}}, by="kim",
+               config_revision="cal-1", joint_names=["joint1", "joint2"], expected_revision=None)
+    server = make_server(ObservationStore(gates=gates), port=0)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with urllib.request.urlopen(base + "/state.json") as response:
+            state = json.loads(response.read())
+        arm_a, arm_b = state["gates"]["arm_a"], state["gates"]["arm_b"]
+        assert arm_a["revision"] == store.revision()
+        assert arm_a["items"]["gripper"]["measured_by"] == "kim" and arm_a["items"]["stop_test"] is None
+        assert any("missing: joint_limits, workspace" in b for b in arm_a["blockers"])
+        assert arm_b["revision"] is None and "no commissioning record for this arm" in arm_b["blockers"]
+        with pytest.raises(urllib.error.HTTPError) as error:  # still no write path
+            urllib.request.urlopen(urllib.request.Request(base + "/state.json", method="POST"))
+        assert error.value.code == 405
+        with urllib.request.urlopen(base + "/") as response:
+            assert 'id="gates"' in response.read().decode()
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join()
+    with pytest.raises(ValueError):
+        _viewer.gate_reader(tmp_path, ["arm_a=../x"])
+    assert _viewer.gate_reader(None, []) is None
