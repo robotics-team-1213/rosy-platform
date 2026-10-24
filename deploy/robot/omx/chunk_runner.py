@@ -11,6 +11,7 @@ VLA) writes one command per line into the command FIFO and reads one JSON status
   jog <joint> <delta> ... move one or more joint targets together, each by at most JOG_MAX units
   grip <value>            set the gripper target
   state                   report the current state
+  goto <chunk>            the same rise-turn-descend path to a chunk's start pose (recovery, re-approach)
   park                    close the jaws, rise, turn at that height and descend into home, slowly
   stop                    end; torque goes OFF where the arm is, so park (or run home) first
 
@@ -55,21 +56,27 @@ MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "el
                                     "wrist_roll.pos", "gripper.pos"]]
 
 
-def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None) -> list:
-    """Close the jaws, rise to the transit height, turn pan/roll to home there, then descend into home.
+def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None) -> list:
+    """From anywhere to `goal` without sweeping low: jaws to `grip_transit`, rise to the transit height,
+    turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
     `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S)."""
     transit = TRANSIT if transit is None else transit
     waypoints = [list(start)]
-    waypoints.append(waypoints[-1][:5] + [closed])
+    waypoints.append(waypoints[-1][:5] + [grip_transit])
     waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])
-    waypoints.append([home[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
-    waypoints.append(home[:5] + [closed])
+    waypoints.append([goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
+    waypoints.append(list(goal[:5]) + [grip_transit])
+    waypoints.append(list(goal[:6]))
     step, frames = PARK_SPEED / fps, []
     for a, b in zip(waypoints, waypoints[1:]):
         n = max(1, math.ceil(max(abs(y - x) for x, y in zip(a, b)) / step))
         frames += [[x + (y - x) * k / n for x, y in zip(a, b)] for k in range(1, n + 1)]
     return frames
-SCHEMA = "rosy.omx-chunk-library.v1"
+
+
+def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None) -> list:
+    """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed)."""
+    return transit_path(start, list(home[:5]) + [closed], closed, fps, transit)
 
 
 def load_library(path: Path) -> dict:
@@ -167,6 +174,14 @@ class Runner:
                     if abs(moved[index] - present[index]) > JOG_MAX + SETTLE_TOL:
                         raise ValueError(f"jog would put the target more than {JOG_MAX + SETTLE_TOL} from the joint")
                 self.target = moved
+            elif verb == "goto" and len(words) == 2:
+                frames = self.library["chunks"].get(words[1])
+                if frames is None:
+                    raise ValueError(f"unknown chunk {words[1]}")
+                transit = {NAMES.index(k): float(v) for k, v in self.library.get("transit", {}).items()} or None
+                self.queue = transit_path(self.target, frames[0], self.library["gripper_closed"], self.fps, transit)
+                self.chunk, self.settle_since = f"goto {words[1]}", None
+                return True
             elif verb == "park" and len(words) == 1:
                 home = self.library["chunks"].get("home")
                 if not home:
@@ -178,7 +193,7 @@ class Runner:
             elif verb == "grip" and len(words) == 2:
                 self.target[5] = max(0.0, min(100.0, float(words[1])))
             elif verb != "state":
-                raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | park | state | stop")
+                raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | park | state | stop")
             self.report(command=line, ok=True)
         except ValueError as error:
             self.report(command=line, ok=False, error=str(error))
