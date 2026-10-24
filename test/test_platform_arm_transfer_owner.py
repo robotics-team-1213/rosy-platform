@@ -17,6 +17,7 @@ from omx_adapter.action_api import ActionApi  # noqa: E402
 from omx_adapter.action_runner import action_grant_digest  # noqa: E402
 from omx_adapter.command_owner import TrajectoryCommand  # noqa: E402
 from omx_adapter.gripper_contract import GripperObservation  # noqa: E402
+from omx_adapter.pick_place_transaction import TransactionError  # noqa: E402
 from omx_adapter.transfer_object_bindings import TransferObjectBindings  # noqa: E402
 from test_omx_action_api import _runner  # noqa: E402
 from test_omx_pick_place_runner import _event, _GoalPort  # noqa: E402
@@ -99,7 +100,16 @@ def test_neutral_grant_runs_four_physical_phases_without_cell_recipe_or_direct_d
     assert not any(e["event_type"] == "GOAL_CONFIRMED" for e in store.history(grant.action_id))
     replay = runner.submit(grant, peer_uid=1001)
     assert replay["created"] is False and len(port.submissions) == 4
-    _, reopened_driver, reopened = _runner(tmp_path)
+    from omx_adapter.action_runner import ActionRunner
+    from omx_adapter.action_store import ActionStore
+    from test_omx_action_api import FakeDriver
+
+    reopened_driver = FakeDriver()
+    reopened = ActionRunner(
+        ActionStore(tmp_path / "actions.sqlite3"), reopened_driver,
+        workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+        principal_for_peer=runner.principal_for_peer, allowed_peer_uids={1001},
+        current_fence=runner.current_fence, capability_current=runner.capability_current)
     read = ActionApi(reopened).dispatch(dict(version=2, operation="GetAction", action_id=grant.action_id),
                                        peer_uid=1001)
     assert read["status"] == 200 and read["receipt"]["state"] == "SUCCEEDED"
@@ -112,7 +122,7 @@ def test_gripper_fault_holds_before_transfer(tmp_path, kin, profile, fault):
     runner.submit(grant, peer_uid=1001)
     execution = runner._phase_runners[(grant.action_id, grant.attempt_id)]
     execution.advance()
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TransactionError):
         execution.advance()
     assert store.get_action(grant.action_id)["state"] == "HOLD"
     assert len(port.submissions) == 2 and driver.submissions == []
