@@ -1,6 +1,8 @@
 # D-856 물리 종료 관측과 중립 job producer
 
-**Status:** ralplan 독립 architecture/critic 1차는 frozen commit `5dad5fd6c4`, object pose 기준점 보완의 2차는 frozen commit `ebba429c4c`를 모두 approve했다. 필수 보완/이견 없음으로 이미 승인된 실행 workflow에 넘긴다. 이 문서 자체는 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
+**Status:** ralplan 독립 architecture/critic 1차는 frozen commit `5dad5fd6c4`, object pose 기준점 보완의 2차는 frozen commit `ebba429c4c`를 모두 approve했다. source 실행 중 확인한 pre-dispatch occupancy 보완은 3차의 좁은 검토 대상으로 둔다. 이 문서 자체는 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
+
+단계1의 World raw-facts 부분은 source commit `037c29121f`에서 구현해 World27 passed/skip0·affected763 passed/2 skipped·각0 NEW와 고정 SHA 독립 검토를 확인했다. [검증과 남은 범위](../validation/harbor-physical-observations-2026-10-24/result.md)를 따른다. 아직 producer 인증·freshness/coverage evaluator·claim 해제는 없으며 이후 단계도 미완료다.
 
 ## 목표와 소유권
 
@@ -50,6 +52,8 @@ Fleet는 동일 grant의 durable action success 뒤에 잡힌 두 순서 있는 
 create는 proposer/service의 principal-scoped idempotency로 PROPOSED physical row를 만든다. 같은 key/다른 요청은409다. creator는 자기 job만 읽고, 다른 named human operator는 기존 site 권한 범위의 승인 자료를 읽을 수 있어야 한다. 일반 viewer/service가 남의 job을 읽거나 self-approval하지 못하게 한다. 승인자는 proposer와 다르고 검토한 정확한 proposal digest/revision을 제출한다.
 
 admit 전 현재 설치/capability/참가자 identity를 읽고, 같은 SQLite write transaction 안에서 snapshot digest/CAS·현재 dispatch control·미확정 점유를 다시 대조한 뒤 claims와 READY를 함께 기록한다. network/DB 조회를 최종 command lock 안에 넣지 않는다. 승인 뒤 owner 교체는 v1.306 target binding으로 device 접수 전 거절/HOLD돼야 한다. stale proposal의 값을 조용히 갱신해 승인하거나 새 request key로 자동 재접수하지 않는다.
+
+**실행 전 물리 점유 확인:** managed 활성화의 ready 상태와 capability 조회는 실제 구역이 비었음을 증명하지 않는다. 다른 참가자가 기존 claim 없이 zone 안에 정지해 있을 수도 있다. READY claim을 확보해 이후 다른 참가자의 진입을 막은 뒤, 그 시점 이후의 신선한 두 표본으로 모든 required participant/link의 구역 이탈·정지와 primary gripper의 열림/빈 상태, 대상 object의 등록 source pose를 확인하기 전에는 전송하지 않는다. READY에서 action/attempt/grant identity를 먼저 영속 준비하되 이는 제출/실행을 뜻하지 않는다. 관측은 이 준비 context에 결속하고, 최초 send 직전 transaction에서 해당 precondition proof·claim·fence·identity·freshness/CAS를 다시 검사한다. 변경/누락/재시작이면 HOLD이며 관측 후 resource 직렬화를 건너뛰지 않는다. 이 첫 isolated profile의 초기 배치가 조건을 만족하지 않으면 자동 homing/manual fallback으로 보충하지 않는다. object source/target 판정 모두 검토된 object-origin 기준을 쓴다.
 
 새 physical store/projection을 만들고 legacy Cell resolver/recipe/checkpoint/arm-success release에는 등록하지 않는다. 공통 parent/step/event·claim SQL을 재사용하되 nullable legacy provenance를 채우지 않는다. schema를 추가하면 기존 initializer가 가진 atomic migration transaction에 넣고, old host가 새 physical journal을 잘못 복구하지 않도록 schema version을 올린다. legacy row/claim/FK/mirror/UNKNOWN을 보존한다.
 
