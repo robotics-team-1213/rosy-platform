@@ -4,6 +4,8 @@
 
 ## 확인한 생산자와 소비자
 
+내부 서비스는 구현됐다. 신규 API RED 17개 뒤 clock 역행 회귀를 보완한 `d8e20d980e`에서 관련 원격 117 passed/skip0를 확인했고 독립 검토의 필수 finding을 닫았다. 이 결과는 아래 공개/실행 단계의 완료 증거가 아니다.
+
 `omx_cell_owner.build_cell_owner`는 승인 Cell/recipe 장부, 현재 관절 상태, 계획기와 phase runner를 한 owner에 조립한다. `transfer_provider.OMXAnalyticTransferPlanner`는 `FleetCellTransferGrant`를 `pallet.transfer` 입력으로 투영하고 recipe에서 파지 기하를 읽는다. `ActionRunner`의 capability·peer·fence 검사 뒤 `PickPlaceRunner`와 `ArmCommandOwner`가 최종 상태와 출력을 검증한다.
 
 Fleet `step_action_kinds`는 종류별 grant·승인·phase 규칙을 갖지만 `CellJobStore.start_step`에는 아직 CELL_TRANSFER digest 대조가 직접 들어 있다. `create_in_transaction`도 recipe/cell/process digest를 필수로 요구한다. 따라서 새 종류를 registry에 추가하는 것만으로 중립 실행이 완성되지 않는다. 이 필드에 물리 문서 hash를 대신 넣어 통과시키지 않는다. 기존 TRIP 전용 읽기 결과 역시 팔 공정의 실행 근거로 사용할 수 없다.

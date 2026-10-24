@@ -459,3 +459,9 @@
 - 변경: 새 중립 TRIP 조회의 TRIP_JOB_NOT_FOUND에 요청 번호·접속 계정을 확인하는 문구를 추가했다. 권한 밖 원장의 존재를 구별해 알리지 않는다.
 - 증거: f3d7d3fba5의 기존 trip 오류 문구 coverage가 누락을 재현했다. 52a9ccf6b5에서 이 coverage를 포함한 관련 원격 261 passed, skip 0이다.
 - gate 변화: 문구 표 한 줄이며 화면 구조·동작·실물 변경은 없다. CE 해당 없음.
+
+## 2026-10-24 · uncommitted · 운행 오류 문구 표 분리와 크기 회귀
+
+- 변경: 기존 788줄 site-map-model에 라벨을 추가하는 대신 표를 trip-error-labels.js로 옮기고 기존 export를 유지했다. 자산 manifest를 등록하고 source ratchet을 720줄로 낮췄다. 구버전 표의 다른 코드 맵을 포함하는 coverage와 공유 문서 import 경계를 함께 연결했다.
+- 증거: 34ff5f55c1의 원격 라벨 coverage·문서 import·서버 자산·모듈 구조 회귀 94 passed, skip0, 0 NEW다. 기존 node 모델 소비자 6개 suite는 63 tests/exit0이며 f3d7d3fba5..34ff5f55c1 크기 검사 8 commits가 통과했다. 추출 소스의 독립 검토를 받았다.
+- gate 변화: 공개 import·자산 제공을 보존했다. 전체 FULL은 이전 f3의 실패 기록이며 수정 범위의 GREEN과 구별한다. CE 해당 없음: 모듈·manifest·기존 coverage로 변경 판단을 복원할 수 있다.
