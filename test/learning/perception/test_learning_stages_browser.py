@@ -4,13 +4,15 @@ from urllib.parse import urlsplit
 import pytest
 
 from browser_harness import browser_tests_enabled
-from test_review_flow_browser import browser_workspace  # noqa: F401
+from test_review_app import open_store
+from test_review_flow_browser import browser_workspace, serve  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
 
 # (rail link name, sub-menu name or None, sub-menu link or None, address)
 STAGE_PAGES = [('홈', None, None, '/learning'), ('자료 등록', '자료 하위 메뉴', '자료 등록', '/catalog'),
-               ('자료 등록', '자료 하위 메뉴', '카메라 맞춤', '/learning/camera'), ('정답 달기', '정답 하위 메뉴', '객체 검수', '/'),
+               ('자료 등록', '자료 하위 메뉴', '카메라 맞춤', '/learning/camera'),
+               ('자료 등록', '자료 하위 메뉴', '작업 공간', '/learning/workspaces'), ('정답 달기', '정답 하위 메뉴', '객체 검수', '/'),
                ('정답 달기', '정답 하위 메뉴', '픽셀 검수', '/pixels'), ('정답 달기', '정답 하위 메뉴', '로봇암 시범 검수', '/learning/omx'),
                ('정답 달기', '정답 하위 메뉴', 'VLM 판단', '/learning/vlm'), ('학습 실행', '학습 하위 메뉴', '학습 과제', '/learning/tasks'),
                ('학습 실행', '학습 하위 메뉴', '인식 학습', '/learning'), ('학습 실행', '학습 하위 메뉴', 'SIM 실험', '/learning/sim'),
@@ -51,3 +53,63 @@ def test_five_stage_menu_reaches_every_page_in_two_clicks(browser_workspace, wid
     assert page.locator('.evaluate-source[data-domain="lane"]').count() == 0
     expect(page.locator('#promote-request')).to_be_disabled()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize('route', ['/', '/pixels'])
+def test_answer_links_never_cover_the_title_at_768(browser_workspace, route):
+    page, _, _ = browser_workspace
+    origin = urlsplit(page.url)
+    page.set_viewport_size({'width': 768, 'height': 900})
+    page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
+    title, nav = page.locator('.ui-pathbar h1').bounding_box(), page.locator('.review-kinds').bounding_box()
+    apart = (title['x'] + title['width'] <= nav['x'] or nav['x'] + nav['width'] <= title['x']
+             or title['y'] + title['height'] <= nav['y'] or nav['y'] + nav['height'] <= title['y'])
+    assert apart, (route, title, nav)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), route
+
+
+@pytest.mark.parametrize('route', ['/', '/pixels'])
+def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspace, route):
+    """WCAG 2.4.3: Tab from the title row reaches the 정답 links before the editor and canvas controls."""
+    page, _, _ = browser_workspace
+    origin = urlsplit(page.url)
+    page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
+    links = page.locator('.review-kinds a').evaluate_all('links => links.map(link => link.pathname)')  # / adds ?frame=
+    page.locator('.ui-pathbar h1').evaluate('title => { title.tabIndex = -1; title.focus(); }')
+    focused = []
+    for _ in links:
+        page.keyboard.press('Tab')
+        focused.append(page.evaluate('document.activeElement.closest(".review-kinds") && document.activeElement.pathname'))
+    assert focused == links == ['/', '/pixels', '/learning/omx', '/learning/vlm'], (route, focused)
+    page.keyboard.press('Tab')
+    assert page.evaluate('!document.activeElement.closest(".review-kinds") && !!document.activeElement.closest(".ui-app-main")'), route
+
+
+LINKS = [{'id': 'v13-train', 'label': '<b>v13 주행 학습</b>', 'url': 'https://learning.example:8443/learning',
+          'kind': 'training', 'note': '인식 학습 루프가 이 작업 공간에 묶여 있습니다.'},
+         {'id': 'dataset-937', 'label': '937장 검수', 'url': 'http://review.example/', 'kind': 'review'}]
+
+
+@pytest.mark.parametrize('width', [1280, 390])
+def test_workspaces_page_lists_this_center_first_then_same_tab_links(tmp_path, width):
+    """D-857 §2: the other review workspaces are reached from the center; their text is never markup."""
+    with serve(open_store(tmp_path), workspace_links=LINKS) as (page, _, expect):
+        base = '{0.scheme}://{0.netloc}'.format(urlsplit(page.url))
+        page.set_viewport_size({'width': width, 'height': 844})
+        page.goto(base + '/learning/workspaces', wait_until='networkidle')
+        entries = page.locator('#workspaces > li')
+        expect(entries).to_have_count(3)
+        expect(entries.nth(0).locator('ui-tag')).to_have_text('이 센터')
+        assert entries.nth(0).locator('a').count() == 0
+        expect(entries.nth(1).locator('h3')).to_have_text('<b>v13 주행 학습</b>')
+        assert entries.nth(1).locator('b').count() == 0
+        expect(entries.nth(1).locator('ui-tag')).to_have_text('학습')
+        expect(entries.nth(1)).to_contain_text('인식 학습 루프가')
+        expect(entries.nth(2).locator('ui-tag')).to_have_text('검수')
+        links = page.get_by_role('link', name='열기')
+        expect(links).to_have_count(2)
+        assert links.evaluate_all('links => links.map(link => [link.getAttribute("href"), link.target])') == [
+            [LINKS[0]['url'], ''], [LINKS[1]['url'], '']]
+        assert all(link.bounding_box()['height'] >= 44 for link in links.all())
+        expect(page.locator('#workspaces-status')).to_have_text('연결된 작업 공간 2개')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

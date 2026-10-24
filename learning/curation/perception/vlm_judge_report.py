@@ -48,13 +48,12 @@ def evaluation(store):
     if not vlm_judge._ready(store):
         return {'labelled': 0, 'models': [], 'human': [], 'provisional': [], 'audits': [], 'paused': [],
                 'eval_set': {'labelled': 0, 'models': []}}
-    vlm_judge.queue(store)  # freeze the evaluation set first
     with store.connect() as db:
         rows = db.execute(vlm_judge.SELECT + " WHERE l.status='labelled'").fetchall()
         answers = db.execute("SELECT a.* FROM vlm_model_answers a JOIN vlm_labels l ON l.item=a.item "
                              "WHERE l.status='labelled' ORDER BY a.model, a.runtime, a.question").fetchall()
-        frozen = {row[0] for row in db.execute('SELECT item FROM vlm_eval_set')}
         everything, usable, stats, paused = vlm_judge._state(db)
+        frozen = vlm_judge.frozen(store, db, everything, usable)
         debated = set()
         vlm_judge.provisional(db, debated)
     coverage = {}
@@ -90,10 +89,9 @@ def export(store):
     disputed photos stay blind and are left out until people decide them. Only `confirmed` is truth (D-857 §4)."""
     if not vlm_judge._ready(store):
         return {'count': 0, 'sha256': vlm_judge.sha(b''), 'jsonl': ''}
-    vlm_judge.queue(store)  # freeze the evaluation set first
     with store.connect() as db:
         rows, usable, _, paused = vlm_judge._state(db)
-        frozen = {row[0] for row in db.execute('SELECT item FROM vlm_eval_set')}
+        frozen = vlm_judge.frozen(store, db, rows, usable)
     lines = []
     for row in rows:
         questions = [q['id'] for q in json.loads(row['questions'])]

@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
-- 2026-10-24 · uncommitted · 공급암 S 셀 점검·상한 복구·카메라 재시도 코드화
-- 2026-10-24 · uncommitted · 검수 bridge state 읽기의 소유자 전용 권한·WAL·정규 경로 강제
-- 2026-10-24 · uncommitted · 협업 모드 검수 bridge의 state 직접 읽기
-- 2026-10-24 · uncommitted · 외부 업무 앱 지원 계약 문서 공개
-- 2026-10-24 · uncommitted · 객체·픽셀 검수의 정답 링크가 사진을 밀지 않게 (D-542 §2)
+- 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
+- 2026-10-24 · uncommitted · 센터 설치기가 작업 공간 목록 옵션을 유지
+- 2026-10-24 · uncommitted · Rosy Learning 작업 공간 목록 검토 반영
+- 2026-10-24 · uncommitted · Rosy Learning 센터의 작업 공간 목록 (D-857 §2)
+- 2026-10-24 · uncommitted · Rosy Learning #185 후속 검토 반영 (제목 칸 분리·휴대폰 여유·계정 링크 툴팁)

@@ -392,6 +392,50 @@ def test_vlm_writes_need_an_evaluation_state_and_reads_create_nothing(tmp_path):
         assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'vlm_%'").fetchone()[0] == 0
 
 
+def test_reads_of_an_older_training_state_with_vlm_tables_write_nothing(tmp_path):
+    store = training_store(tmp_path)
+    vlm_judge.configure(store)  # an older state that took VLM rows before D-853 §4, without the later tables
+    question = json.dumps([{'id': HELD, 'text': 'held?', 'options': ['yes', 'no', 'unclear']}])
+    with store.connect() as db:
+        for table in ('vlm_eval_set', 'vlm_audits', 'vlm_unpauses'):
+            db.execute('DROP TABLE ' + table)
+        for number in range(1, 41):
+            db.execute('INSERT INTO vlm_items (view, image_sha256, image_name, question_set, questions, source) '
+                       'VALUES (?,?,?,?,?,?)', ('wrist', f'{number:064x}', f'{number}.jpg', 'v2', question, '{}'))
+            for model, p in (('m1', 0.9), ('m2', 0.85)):
+                put(db, number, model, 'transformers', 'yes' if number % 2 else 'no', p)
+
+    def schema():
+        with store.connect() as db:
+            return [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE name LIKE 'vlm_%' ORDER BY name")]
+
+    before = schema()
+    first = vlm_judge.queue(store)
+    assert first['counts']['wrist']['eval_size'] == 30 and vlm_judge.queue(store) == first
+    assert vlm_judge.item(store, first['items'][0]['id'])['kind'] == 'eval'
+    assert vlm_judge.disputes(store) == []  # every photo outside the blind set has a consensus
+    assert vlm_judge_report.export(store)['count'] == 10  # the 30 computed blind photos stay out
+    assert vlm_judge_report.evaluation(store)['labelled'] == 0
+    assert schema() == before and 'vlm_eval_set' not in before
+
+
+def test_http_unpause_needs_manage(tmp_path):
+    with running(tmp_path) as (base, store, body):
+        vlm_judge.import_rows(store, body)
+        with store.connect() as db:  # five wrong audits pause the question (D-857 §5)
+            db.executemany('INSERT INTO vlm_audits (item, question, week, provisional, answer) VALUES (?,?,?,?,?)',
+                           [(number, HELD, '2026-W43', 'yes', 'no') for number in range(1, 6)])
+        unpause = {'question': HELD}
+        for user in ('reader', 'editor'):
+            _, session = request(base, '/api/learning/vlm/summary', user)
+            assert request(base, '/api/learning/vlm/unpause', user, unpause, session['token'])[0] == 403
+        assert vlm_judge.queue(store)['paused'] == [HELD]
+        _, manager = request(base, '/api/learning/vlm/summary', 'reviewer')
+        code, result = request(base, '/api/learning/vlm/unpause', 'reviewer', unpause, manager['token'])
+        assert code == 200 and result == {'question': HELD, 'actor': 'reviewer'}
+        assert vlm_judge.queue(store)['paused'] == []
+
+
 def test_http_queue_audit_payload_and_eval_link(tmp_path, monkeypatch):
     monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W43')
     monkeypatch.setattr(vlm_judge, 'EVAL_SET_SIZE', 1)

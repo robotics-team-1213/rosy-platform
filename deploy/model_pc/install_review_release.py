@@ -153,11 +153,25 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     if ((state / 'omx-center.json').is_file()
             and '--omx-center-config' in ((source or current) / APP).read_text(encoding='utf-8')):
         control += f" --omx-center-config {state / 'omx-center.json'}"
+    links = state / 'workspace-links.json'
+    if ((links.exists() or links.is_symlink())
+            and '--workspace-links' in ((source or current) / APP).read_text(encoding='utf-8')):
+        control += f" --workspace-links {check_workspace_links(links)}"
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
             f"ExecStart={python} {dataset / 'review_app.py'} --state {state} --port {port} --host {host}{control}\n"
             "Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
+
+
+def check_workspace_links(binding: Path) -> Path:
+    # The app validates every entry at start; refuse here what would only fail later in check_live.
+    if binding.is_symlink() or not binding.is_file():
+        raise ValueError('workspace links must be a regular file inside the review state')
+    config = json.loads(binding.read_text(encoding='utf-8'))
+    if not isinstance(config, dict) or config.get('schema') != 'rosy.learning.workspace-links/1':
+        raise ValueError('workspace links file has the wrong schema')
+    return binding
 
 
 def check_collaboration(app: Path, binding: Path, host: str) -> dict:
@@ -363,6 +377,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                 line = re.sub(r' --learning-control [^\s]+', '', line)
                 line = re.sub(r' --review-ai-config [^\s]+', '', line)
                 line = re.sub(r' --omx-center-config [^\s]+', '', line)
+                line = re.sub(r' --workspace-links [^\s]+', '', line)
                 line = re.sub(r' --decisions-port [^\s]+', '', line)
                 cli = app.read_text(encoding='utf-8')
                 port_arg = re.search(r' --port ([0-9]+)', line)
@@ -388,6 +403,10 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                 if state_arg and '--omx-center-config' in cli:
                     binding = Path(state_arg[1]) / 'omx-center.json'
                     if binding.is_file(): line = line.rstrip('\n') + f' --omx-center-config {binding}\n'
+                if state_arg and '--workspace-links' in cli:
+                    binding = Path(state_arg[1]) / 'workspace-links.json'
+                    if binding.exists() or binding.is_symlink():
+                        line = line.rstrip('\n') + f' --workspace-links {check_workspace_links(binding)}\n'
             lines.append(line)
         adjusted = ''.join(lines)
         if adjusted != text: unit_text = adjusted

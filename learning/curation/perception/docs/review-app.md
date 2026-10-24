@@ -73,10 +73,12 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 
 모든 화면의 왼쪽 레일(전화에서는 위 한 줄)은 학습 루프의 단계다: **홈** `/learning` · **자료** `/catalog` · **정답** `/` · **학습** `/learning/tasks` · **평가·승격** `/learning/evaluate`. 화면이 여럿인 단계는 레일 옆(전화에서는 그 아래 한 줄)에 공용 하위 메뉴(`ui-subnav`)를 보인다. 모든 기존 화면은 레일 한 번과 하위 메뉴 한 번 안에 닿고, 기존 URL은 그대로다. 자료 칸의 접근 이름은 기능 검색이 찾는 「자료 등록」이다. 레일 칸은 지금 화면 자체일 때만 `aria-current="page"`이고, 지금 화면을 품은 단계일 때는 `aria-current="true"`다. 전화에서 하위 메뉴 줄은 위아래 여백 없이 48px 누름 칸만 차지한다. 객체·픽셀 검수 화면은 사진이 첫 화면에서 밀리지 않도록(D-542 §2) 따로 하위 메뉴 줄을 두지 않고, 같은 정답 화면 링크를 넓은 화면에서는 제목 줄 오른쪽에, 전화(40rem 미만)에서는 편집기 아래에 둔다. 도메인(차로·객체·OMX·SIM·VLM·판단 모델)은 메뉴가 아니라 `?domain=` 필터다(값 `lane`·`object`·`omx`·`sim`·`vlm`·`decision`). 여러 도메인을 나열하는 홈과 평가·승격만 이 값을 따른다.
 
+`/`·`/pixels`의 정답 메뉴는 DOM에서 제목 바로 뒤라 초점 순서는 편집기보다 먼저다. 40rem 이상에서는 제목 옆 자기 칸에, 40rem 미만에서는 편집기 뒤에 보인다. 휴대폰에서 보이는 순서와 초점 순서가 다른 것은 지금은 받아들인다.
+
 | 단계 | 화면 |
 |---|---|
 | 홈 | 학습센터 `/learning`: 도메인별 진행, 현재 인식 자료의 학습 흐름, 현재 검수 작업, 실행·평가 결과, 수집·저장 공간 |
-| 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera` |
+| 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera`, 작업 공간 `/learning/workspaces` |
 | 정답 | 객체 검수 `/`, 픽셀 검수 `/pixels`, 로봇암 시범 검수 `/learning/omx`, VLM 판단 `/learning/vlm` |
 | 학습 | 학습 과제 `/learning/tasks`, 인식 학습 `/learning#pipeline`(홈의 학습 흐름 구역), SIM 실험 `/learning/sim` |
 | 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 다음 조각까지 비활성이다 |
@@ -95,6 +97,26 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | `decision` | 모두 `not_available`(「Learning에 연결 전」) |
 
 모르는 칸은 숫자를 만들지 않고 이유를 적은 `not_available`이다. 표를 만들지 않고 읽으므로 홈을 열어도 VLM·OMX 표가 생기지 않는다. 홈은 도메인마다 한 줄(이름, 여섯 칸, 막힌 이유, 다음 할 일 하나)을 보이고 평가·승격 화면은 같은 `domains`의 평가·승격 기록 칸을 도메인별로 보인다. 390px에서는 줄이 세로로 쌓이고 가로 스크롤이 없다.
+
+### 같은 센터의 작업 공간 (D-857 §2)
+
+모델 PC는 센터 밖에도 검수 작업 공간을 별도 인스턴스로 돌린다(예: 인식 학습 루프가 묶인 v13 주행 학습, v13 평가, v12 장애물, 데이터셋 검수). D-485에 따라 작업 공간마다 클래스셋이 하나라 검수 DB를 합치지 않는다. 대신 센터가 그 목록을 보여 주어 들어가는 문은 센터 하나로 남는다. 자료 단계의 하위 메뉴 「작업 공간」 `/learning/workspaces`는 이 센터를 「이 센터」로 맨 앞에 두고, 연결한 작업 공간마다 이름·종류(학습·평가·검수)·메모와 같은 탭에서 여는 「열기」 링크를 보인다. 링크만 보이며 다른 작업 공간의 자료를 읽거나 옮기지 않는다. 같은 계정으로 로그인하지만 검수 자료는 작업 공간끼리 나누지 않는다.
+
+목록은 `--workspace-links <private-json>`으로 준다. 이 파일은 Git 밖의 private 파일로 **state 폴더 안 `<state>/workspace-links.json`**에 두고 소유 사용자 전용 권한(`chmod 600`)으로 둔다. 모델 PC 설치기는 이 위치에 파일이 있을 때만 `--workspace-links`를 서비스에 붙이고 설치마다 유지한다(다른 위치는 다음 설치 때 빠진다). 주소는 내부 망 이름이라 저장소에 넣지 않는다. 시작할 때 검사하고 하나라도 어긋나면 시작하지 않는다: `schema` 정확히 일치, 최상위 키는 `schema`·`workspaces`뿐, 20개 이하, `id`는 서로 다른 `[a-z0-9-]{1,40}`, `label` 1~60자, `note` 160자 이하(선택), `kind`는 `training`·`evaluation`·`review`, `url`은 host가 있는 `http(s)`이고 자격 증명·fragment·공백·`\`(브라우저가 `/`로 읽는다)가 없으며 300자 이하, 파일은 링크가 아닌 일반 파일이고 64 KiB 이하.
+
+```json
+{
+  "schema": "rosy.learning.workspace-links/1",
+  "workspaces": [
+    {"id": "v13-drivable-train", "label": "v13 주행 영역 학습", "url": "https://<host-tailscale-name>:<port>/learning",
+     "kind": "training", "note": "인식 학습 루프가 이 작업 공간에 묶여 있습니다."},
+    {"id": "v13-eval", "label": "v13 평가", "url": "https://<host-tailscale-name>:<port>/learning", "kind": "evaluation"},
+    {"id": "v12-obstacle", "label": "v12 장애물", "url": "https://<host-tailscale-name>:<port>/learning", "kind": "review"}
+  ]
+}
+```
+
+`GET /api/learning/workspaces`는 `{"configured": bool, "workspaces": [...]}`를 준다. 플래그가 없으면 `{"configured": false, "workspaces": []}`다. 협업 모드에서는 다른 GET과 같이 `view` 권한이 필요하다.
 
 ### 공통 학습 작업 화면 (D-458)
 
@@ -320,7 +342,7 @@ python learning/curation/perception/review_app.py \
 
 위 예는 초기화된 작업공간이다. 신규 작업공간은 기존 초기화 인자 또는 `--empty-training`을 사용한다. 협업 모드에서 `--decisions-port`는 인증 없는 우회 경로라 함께 사용할 수 없다. 그 포트를 쓰던 같은 PC bridge는 아래의 `authority.state` 경로로 바꾼다. state 폴더와 DB가 소유 사용자 전용 권한일 때만 읽으므로, 이 조건을 맞추기 전에는 운영 협업 전환을 활성화하지 않는다.
 
-같은 PC의 `review_bridge.py`는 협업 모드에서 `authority.endpoint` 대신 `authority.state`를 쓴다. 검수 state의 `reviews.sqlite3`를 SQLite `mode=ro`로 열어 `/api/decisions`와 같은 문서(`review_evidence.decisions`)를 읽고, 표를 만들거나 쓰지 않는다. `endpoint`와 `state` 중 정확히 하나만 둔다. `state`는 링크·`..` 없는 정규 절대 경로여야 하고, DB의 `workspace_id`가 설정값과 다르면 거절한다. 홈 폴더가 심볼릭 링크를 거쳐 닿는 경로도 안전 쪽으로 거절하므로 실제 경로를 쓴다. WAL 모드 DB는 읽기 전용 연결도 `-wal`/`-shm`을 만들 수 있어 거절한다. 무인증 loopback 포트는 같은 PC의 모든 사용자에게 열리지만, state 읽기는 파일 권한으로 소유 사용자에게만 허용되므로 범위가 더 좁다. 그래서 POSIX에서 bridge는 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 group/other 권한이 없을 때만 읽는다(Windows는 이 검사 없이 기존 ACL을 따른다). 배포 단계: `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`.
+같은 PC의 `review_bridge.py`는 협업 모드에서 `authority.endpoint` 대신 `authority.state`를 쓴다. 검수 state의 `reviews.sqlite3`를 SQLite `mode=ro`로 열어 `/api/decisions`와 같은 문서(`review_evidence.decisions`)를 읽고, 표를 만들거나 쓰지 않는다. `endpoint`와 `state` 중 정확히 하나만 둔다. `state`는 링크·`..` 없는 정규 절대 경로여야 하고, DB의 `workspace_id`가 설정값과 다르면 거절한다. 홈 폴더가 심볼릭 링크를 거쳐 닿는 경로도 안전 쪽으로 거절하므로 실제 경로를 쓴다. WAL 모드 DB는 읽기 전용 연결도 `-wal`/`-shm`을 만들 수 있어 거절한다. 무인증 loopback 포트는 같은 PC의 모든 사용자에게 열리지만, state 읽기는 파일 권한으로 소유 사용자에게만 허용되므로 범위가 더 좁다. 그래서 POSIX에서 bridge는 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 group/other 권한이 없을 때만 읽는다(Windows는 이 검사 없이 기존 ACL을 따른다). 배포 단계: `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`. bridge 설정을 바꾸면(예: `authority.endpoint`에서 `authority.state`로 전환) 새 `--out` 작업 폴더로 시작한다. 작업 상태가 입력 서명에 묶여 있어 기존 폴더는 `job inputs changed; use a new job directory`로 거절된다.
 
 ```json
 {
@@ -573,7 +595,7 @@ python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --ro
 
 점검 저장은 `vlm_audits`에 질문마다 임시 정답과 사람 답을 남긴다. 한 질문의 점검이 5건 이상이고 틀린 비율이 10%를 넘으면 그 질문의 임시 정답을 멈춘다(대기열·평가 탭에 표시, 범위·내보내기·점검에서 뺀다. 의견 갈림으로 보내지는 않는다). 질문과 모델을 고친 뒤 관리자가 서버에서 `python learning/curation/perception/vlm_judge.py unpause --state <VLM_STATE> --question <질문 id> --actor <이름>` 또는 `POST /api/learning/vlm/unpause {question}`(협업은 manage)으로 다시 켠다. 누가·언제 켰는지 `vlm_unpauses`에 남고, 그 질문의 점검 수는 그 뒤 점검부터 다시 센다(이전 `vlm_audits`는 이력으로 남는다). 대기열 밖의 합의된 사진은 정답 달기에 나오지 않는다. 대기열 고르기의 「정답 있음」으로 확정 정답을 다시 열어 고칠 수 있다. 평가 탭은 확정 정답만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 같은 비교를 고정 평가셋만으로도 따로 보인다(`eval_set`). 평가셋은 모델 답 없이 달았고, 점검은 임시 정답을 보고 달았기 때문이다. 또 질문별 임시 정답 범위(대기 사진 중 임시 정답이 있는 비율), 점검 오류율, 멈춘 질문을 보인다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
 
-운영 검수 state와 섞지 않도록 별도 state를 만든다(D-853 §4). 가져오기·정답 저장·다시 켜기는 `--empty-eval`이 만든 state(`metadata.workspace_kind=evaluation`)에서만 되고 다른 state에서는 거절한다. 읽기는 VLM 표가 없으면 빈 결과를 주고 표를 만들지 않는다. 센터(학습 검수 인스턴스)를 `--vlm-eval-url <https://…/learning/vlm>`으로 띄우면 평가·승격 화면과 홈의 VLM 줄이 그 별도 인스턴스로 가는 링크를 보인다(링크만, 자료를 읽지 않는다. http(s)·자격 증명 없는 주소만 받는다).
+운영 검수 state와 섞지 않도록 별도 state를 만든다(D-853 §4). 가져오기·정답 저장·다시 켜기는 `--empty-eval`이 만든 state(`metadata.workspace_kind=evaluation`)에서만 되고 다른 state에서는 거절한다. 읽기는 VLM 표가 없으면 빈 결과를 주고 표를 만들지 않는다. 이미 VLM 표가 있는 예전 학습 state에서도 읽기는 평가셋을 고정하거나 표를 만들지 않고, 같은 평가셋을 계산만 해서 결과를 준다. 센터(학습 검수 인스턴스)를 `--vlm-eval-url <https://…/learning/vlm>`으로 띄우면 평가·승격 화면과 홈의 VLM 줄이 그 별도 인스턴스로 가는 링크를 보인다(링크만, 자료를 읽지 않는다. http(s)·자격 증명 없는 주소만 받는다).
 
 ```bash
 python learning/curation/perception/review_app.py --state <VLM_STATE> --empty-eval --host <tailscale-ip> --port <port>   # 첫 시작

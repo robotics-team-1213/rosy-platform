@@ -65,7 +65,7 @@ python3 ~/rosy-ml/bin/install_review_release.py <previous-release-id> \
   --host <model-pc-private-ip> --port 8774
 ```
 
-설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다.
+설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다. state 안의 `learning-collaboration.json`·`omx-center.json`·`learning-control.json`·`review-ai.json`·`workspace-links.json`이 있으면 대상 앱이 지원하는 옵션만 서비스에 붙이고, 예전 릴리스로 되돌릴 때는 그 앱이 모르는 옵션을 뺀다. `workspace-links.json`은 설치 때 일반 파일·스키마를 먼저 확인한다.
 
 ### Account 프로젝트별 설치 (D-757)
 
@@ -79,6 +79,8 @@ python3 ~/rosy-ml/bin/install_review_release.py <release-id> \
   --state <existing-project-state> --python <project-venv>/bin/python \
   --host 127.0.0.1 --port <project-loopback-port> --service <project-service>.service
 ```
+
+`--source`는 링크가 없고 `--root`·`--state` 밖에 있는 폴더여야 한다. 승인된 D-446 릴리스 폴더는 `data` 링크가 있어 그대로 쓰지 못하므로, `data`를 뺀 복사본을 `--root` 밖의 형제 폴더에 만든다([절차](../../docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md#installing-an-accepted-d-446-model-code-release-with-install_review_releasepy)).
 
 협업 readiness는 무자격 `/api/workspace`의 **401**, `/api/accounts/options`의 활성화·프로젝트 ID·중앙 Account 모드 일치, `/accounts`의 **200**을 확인한다. 실패하면 이전 링크와 유닛으로 복구한다. 이 검사는 사용자 로그인·권한·회수나 프록시 TLS 수용을 대신하지 않는다. 실제 자료를 바꾸지 않는 일관 복사 상태의 로그인/권한/회수/브라우저 검사와 공개 HTTPS 확인은 별도 기록한다.
 
