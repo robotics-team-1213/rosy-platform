@@ -12,9 +12,19 @@
 
 ## 실행 상태와 선행 조건
 
-2026-10-24 실행 중. 사용자의 “목표잡고 진행” 지시로 문서 등록 뒤 구현·원격 검증을 진행한다. P0는 완료했다. P1의 첫 TRIP 계약과 P2/P4/P5의 해당 slice는 구현·HTTP 검증했지만, 팔 중립 실행과 Harbor 공정 변환까지 포함한 전체 단계는 미완료다. 각 상세 계약을 검토한 뒤 그 범위의 구현을 진행하며 아직 정하지 않은 public path·wire 필드를 제공 API로 선언하지 않는다.
+2026-10-24 실행 중. 사용자의 “목표잡고 진행” 지시로 문서 등록 뒤 구현·원격 검증을 진행한다. P0와 첫 TRIP slice 뒤 API v1.312의 중립 ARM 제안·승인·독립 raw 관측·서버 실행 추적·별도 물리 receipt와 Harbor 업무 binding을 구현했다. 고정 플랫폼 source bb38/Harbor source93e71의 독립 HTTP/UDS와 기존 Cell/TRIP 회귀는 통과했다. 2026-10-25 최신 bb38 FULL23개가 모두exit0/official0NEW로 종료했고 독립 증거 검토도 완료했다. 아래 체크리스트의 다단계 업무·현장 binding·운영 producer·실패 후 명시 복구·착지는 이 첫 simulation 검증과 구별한다.
 
 문서 등록은 사용자의 2026-10-24 “바로 처리” 지시로 `docs/application-action-boundary` 작업용 worktree 1개 일회 추가 예외를 사용한다. 기존 등록 15개·고아 디렉터리 3개를 보존했다. 예외는 문서 등록과 검증용이며 추가 제품 구현 슬롯·착지·push 승인으로 확대하지 않는다. 검증 후 다음 실행 전까지 브랜치·증거를 보존하고 소유자 정리 절차로 슬롯을 회수한다.
+
+첫 simulation 흐름의 마감 근거는 다음과 같다. 아래 P1–P5의 넓은 전환 과제와 실물 수용은 별도로 유지한다.
+
+- [x] D-856·Harbor ADR0006에 업무/물리 참조·실행·관측·완료 책임을 기록한다.
+- [x] API v1.312의 typed 제안/승인/관측/receipt/cancel과 principal/key/body·두 사람·fence·claim 검증을 구현하고 원격 RED/GREEN을 보존한다.
+- [x] 준비/최초 전송/receipt/물리 종료를 공유 원장에 결속하고 기존 stop·최종 owner 권한·UNKNOWN 점유를 유지한다.
+- [x] Harbor에 단일 물리 이동 binding과 HTTP 소비를 추가하고 물리 receipt만으로 업무 완료를 기록하지 않는다.
+- [x] 고정 bb38/Harbor93e71에서 독립 HTTP·실제 UDS framing·두 번째 stdlib 소비자·플랫폼 미import·rosy_cell import 차단·기존 Cell/TRIP 회귀를 확인한다.
+- [x] 최종 bb38의 FULL23 전체를 완료·공식 분류하고 manifest와 독립 증거 검토를 기록한다.
+- [ ] 최종 metadata 커밋과 size/safety/lint·문서 guard·clean Git 상태를 확인한다.
 
 이후 기존 브랜치는 `feat/application-action-boundary`로 전환됐다. 동료의 병합이 끝나고 슬롯이 9개로 줄어든 뒤 정규 예산 안에서 `app-neutral-actions`/`feat/neutral-arm-actions`를 생성했다(base `ba256ec45d`). 팔 구현은 이 격리 작업 공간이 소유한다. 과거 문서 슬롯 예외를 확대하지 않았으며 착지·push·배포·실물은 수행하지 않는다.
 
@@ -36,6 +46,7 @@
 | [Fleet 두 표본 물리 검사](../validation/harbor-physical-evaluator-2026-10-24/result.md) | source205 정책/시각/전체 링크/정지/object pose·집중67 passed/skip0·affected4587/6312 passed·각0 NEW·독립 재검토 | credential ingress·현재 원장 context/fence·atomic claim 종료·producer/Harbor |
 | [중립 원장·물리 승인](../validation/harbor-physical-proposals-2026-10-24/result.md) | source76 내부 create/read/two-person approval·공통claims·version6·공유 자원 leaf·집중1292 passed/skip0·FULL23 모두0 NEW·독립 안전 검토 | public HTTP/DTO·live capability·prepared context/dispatcher·관측/claim 종료·Harbor; 원본 G1 timing 원인 미확정 |
 | [중립 ARM 작업 HTTP](../validation/harbor-arm-job-http-2026-10-24/result.md) | API v1.307·closed DTO·실제 all-owner capability·2인 승인/Origin/audit, source58 HTTP18 passed/skip0·FULL23 각각0 NEW·독립 계약/전체로그 검토 | prepared context·최초 전송·장치/관측/claim 종료·Harbor ARM은 별도 검증 |
+| [독립 ARM 관측·Harbor HTTP](../validation/harbor-arm-observer-http-2026-10-24/result.md) | API v1.312; raw observer/expiry/isolation/audit, Fleet monitor와 단일 SDK 제출, 별도 physical receipt. source bb38/Harbor93e71 ARM1·Cell3·TRIP1 HTTP 통과, ARM 두 진입 각각 Submit1/Get1, 업무 WAITING 유지 | 최신 bb38 FULL23개 각각exit0/0NEW·독립 증거 검토; facts는 synthetic. 운영 producer·physics/실물·현장 binding·실패 후 물리 정리·복구는 별도 |
 | [내부 물리 실행 원장](../validation/harbor-physical-execution-2026-10-24/result.md) | source3b 고정 준비/전송 의도·owner 결과·별도 POST_ACTION receipt/atomic release·집중101 passed/skip0/0 NEW·독립 계약 검토 | 실제 SDK dispatcher·관측 credential HTTP·Harbor ARM·최종 FULL23/독립 실제 HTTP |
 | [전체 stop 대상·내부 SDK](../validation/harbor-physical-execution-2026-10-24/result.md#내부-sdk-dispatcher) | source80 stop65/source54 SDK121 passed·skip0·0 NEW, process guard/최종 send 경계·독립 safety/contract 검토 | app 관측 credential HTTP·Harbor ARM·native UDS/TCP HTTP·최종 FULL23 |
 | 전체 P3–P5 | 진행 중 | 중립 팔 실행의 승인/자원 종료, Harbor 공정 변환, 복구·독립성 통합 증거 |
@@ -163,4 +174,4 @@ python test/known_failures.py X:/DevTemp/harbor-action-boundary/<단계>/run-1.t
 
 이번 문서 작성의 CE 판정은 **해당 없음**이다. 운영 장애 해결이나 비자명한 검증된 복구를 수행하지 않았다. 구현 단계에서 장애·데이터 무결성·권한 경계 문제가 실제로 해결되면 workspace CE 게이트를 적용한다.
 
-현재 다음 행동은 physical 생성/두 사람 승인·trusted 물리 종료 관측·atomic claim 해제를 연결한 뒤 Harbor의 공정 변환을 중립 API로 옮기는 것이다. 공통 원장 provenance, 설치된 owner 실행, 영속 managed 권한과 canonical owner/receipt 경계는 위 근거까지 구현했으며 [최신 검증과 FULL 진행 상태](../validation/harbor-managed-capability-2026-10-24/result.md)를 따른다. 기존 World ArmState의 정규화 관절값/unobserved 물체 상태는 퇴피·물체 배치 증거로 쓰지 않는다. 전체 D-856 목표는 계속 진행 중이다. 이 기록은 push·병합·배포·장치 실행 승인이 아니다.
+고정 source bb38의 FULL23 결과를 전부 분류했고 양쪽 source·실패·skip·수용 한계를 기록했다. 현재는 최종 metadata 커밋과 guard·clean Git 상태를 마감한다. physical 생성/두 사람 승인·단일 SDK 전송·독립 관측·atomic 원래 claim 해제·Harbor의 단일 이동 binding은 위 독립 HTTP 근거까지 연결했다. 최신 상태는 [관측·HTTP 검증](../validation/harbor-arm-observer-http-2026-10-24/result.md)을 따른다. 기존 World ArmState의 정규화 관절값/unobserved 물체 상태는 퇴피·물체 배치 증거로 쓰지 않는다. 다단계 업무·운영 producer·현장 수용은 후속이며 이 기록은 push·병합·배포·장치 실행 승인이 아니다.

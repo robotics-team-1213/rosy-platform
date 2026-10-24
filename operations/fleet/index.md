@@ -103,8 +103,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · bb38fdcdd0 · D-856 independent observer and Harbor ARM HTTP
 - 2026-10-24 · 54f27e6fb7 · D-856 전체 stop 대상과 내부 SDK dispatcher
 - 2026-10-24 · 3b23a23bca · D-856 물리 준비·전송 의도·종료 원장
 - 2026-10-24 · 58f7cc7b14 · D-856 중립 ARM 작업 HTTP 제안과 승인
 - 2026-10-24 · 76a173b5fd · D-856 중립 물리 제안과 두 사람 승인
-- 2026-10-24 · 205cd08767 · D-856 두 표본 물리 검사

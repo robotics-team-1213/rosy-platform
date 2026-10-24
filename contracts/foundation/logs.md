@@ -915,3 +915,10 @@
 - 변경: API v1.307 closed/frozen physical request·admit·snapshot/response를 정본 DTO로 추가하고 store/HTTP가 같은 타입을 소비한다. TaskStatus는 AST 동일 분리 후 facade 재수출을 유지하고 schemas 예산을800으로 낮췄다. 기존 live pins9곳과 reference의 version 표행을 함께 갱신했다.
 - 증거: 계약/라우트 RED35 NEW 뒤 b5 집중1205 passed/16 NEW를 보존했다. 최종 HTTP18 passed/skip0/known0 NEW, FULL23개 각각exit0/known0 NEW(공통entry9 7398 passed/91 skipped), 독립 계약·23로그 evidence 검토 추가 finding 없음이다. 상세는 docs/validation/harbor-arm-job-http-2026-10-24/result.md와 manifest를 따른다.
 - gate 변화: HTTP 제안·조회·승인 계약의 검증이다. 실제 제출·물리 종료·Harbor ARM 연결은 후속이며 skip을 수용으로 세지 않는다. 뒤의 schema7/8은 이 FULL58 검증에 합치지 않는다. CE 해당 없음: source·회귀·정본 계약이 수정 근거를 보존한다.
+
+
+## 2026-10-24 · bb38fdcdd0 · D-856 v1.312 raw physical observation contract
+
+- 변경: 13개 closed wire 모델을 facade에서 재수출한다. 기존5개 status enum은 AST 동일하게 leaf로 옮겨 facade767행 ratchet을 지켰다. 빈 raw coverage는 unknown으로 보존하며 evaluator의 완전 coverage gate는 유지한다. v1.312는 정식 선점했고 기존 pin의 header/assertion 문맥도 복구했다.
+- 증거: wire RED16, empty coverage/observer/store RED8NEW, source c4 Foundation/정합성/관련 Fleet1266passed/skip0/0NEW, 최종 bb38 auth/observer/release122passed/skip0/0NEW 및 독립 재검토. docs/validation/harbor-arm-observer-http-2026-10-24/result.md를 따른다.
+- gate 변화: 최신 bb38 FULL23개 모두exit0/official0NEW·독립 전체 증거 검토를 확인했다. 이전 dc FULL의2개 gate 실패를 보존하며 이전58 FULL에 합치지 않는다. 실제 HTTP/UDS의 raw facts도 synthetic이며 schema/통신 결과를 물리 수용으로 부르지 않는다. CE 미해결: 이전G1 timing 원인은 미확정, 이번 수정은 source·회귀·ADR로 복원 가능해 새 교훈 없음.

@@ -48,6 +48,8 @@ ADR 채택 당시에는 외부 동작 계약의 path·schema·종류·버전을 
 
 ## 기존 ADR과의 관계
 
+구현 후속: API v1.312는 별도 관측자 context/raw facts·physical receipt와 취소 계약을 등록했다. 첫 simulation의 [독립 ARM HTTP 검증](../validation/harbor-arm-observer-http-2026-10-24/result.md)은 Harbor의 업무 binding·완료 gate, Fleet의 실행/claim, 독립 관측자, 장치 owner의 역할을 구분한다. 합성 facts의 HTTP/UDS 통과와 native actuator·실물 수용을 구별하며 최종 FULL 상태도 이 검증 기록을 따른다.
+
 | ADR | 관계 |
 |---|---|
 | D-827 (Proposed) | 업무·공정·실행 분리를 구체화한다. 재사용 공정이 플랫폼 저장소에 있을 수 있다는 것과 공통 실행의 필수 의존성이라는 것을 구별한다. |

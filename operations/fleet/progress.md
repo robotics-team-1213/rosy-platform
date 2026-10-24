@@ -255,3 +255,8 @@ SDK submit/get/cancel dispatcher·관측 credential HTTP·Harbor ARM은 아직 �
 source80dde는 모든 physical participant의 stop/rearm/rollback을 별도 target tuple로 연결한다. legacy dispatch/recovery mapping은 유지하며 app902행 ratchet과 genuine safety review를 결속했다. 집중65 passed/skip0/0 NEW다.
 
 source54f27의 내부 dispatcher는 process-safe RPC 직렬화와 최종 send 재검사, 고정 grant의 단일 submit/이후 GET-only·취소 점유 보존을 구현했다. 집중121 passed/skip0/0 NEW·독립 재검토를 확인했다. [각 source·원본 RED·hash·한계](../../docs/validation/harbor-physical-execution-2026-10-24/result.md)를 따른다. app의 관측 credential HTTP·Harbor ARM 및 최종 FULL/독립 실제 HTTP는 아직 연결·검증 전이다. 현재 Fake SDK 근거로 물리 gate를 넓히지 않는다.
+
+
+## 2026-10-24 · D-856 독립 observer와 Harbor ARM HTTP
+
+source bb38까지 별도 expiring observer credential/identity isolation·audit·closed raw ingress, READY 준비와 단일 SDK 제출, lifespan monitor Get-only·scoped receipt/cancel을 연결했다. Channel 자격 재사용 P1과 missing Header 순서도 RED 뒤 보완·독립 재검토했다. 최종 집중122passed/skip0/0NEW, 플랫폼 bb38/Harbor93e71의 ARM1/Cell3/TRIP1 독립 HTTP·실제 UDS framing을 확인했다. Harbor는 물리 receipt 뒤에도 WAITING을 유지한다. [원본 RED·중복/skip·검토·FULL 상태](../../docs/validation/harbor-arm-observer-http-2026-10-24/result.md)가 근거다. 최신 bb38 FULL23개 각각exit0/0NEW와 독립 전체 증거 검토를 확인했다. synthetic raw facts와 통신/원장 검증을 실물 gate로 확대하지 않는다. 과거 G1 timing 원인 미확정도 유지한다.

@@ -4456,3 +4456,10 @@
 - 변경: 같은 workcell의 모든 physical participant를 별도 stop/rearm target에 결속하고 legacy dispatcher/recovery mapping을 유지했다. SDK 클래스는 모든 owner의 fresh simulation identity/capability, 공통 journal의 process-safe RPC guard, control 조회 뒤 최종 proof/fence/claim/freshness 재검사를 거쳐 고정 grant로 한 번만 제출한다. refresh/cancel은 원래 grant만 사용하고 유실/404/restart/HOLD는 점유를 보존한다. app ingress에는 아직 연결하지 않았다.
 - 증거: stop RED7 뒤 source80dde 집중65 passed/skip0/0 NEW와 genuine safety review/trailer, SDK RED14 errors 뒤 겹친 dispatcher·늦은 control read RED4 failed/14 passed를 재현했다. source54 집중121 passed/skip0/0 NEW(실제 POSIX process guard 포함), 독립 재검토 추가 finding 없음이다. docs/validation/harbor-physical-execution-2026-10-24/result.md와 stop-source-review.md를 따른다.
 - gate 변화: Fake SDK/stop port와 transaction·동시성의 집중 증거다. native UDS/독립 TCP HTTP·관측 credential·Harbor ARM·최종 FULL23은 후속이며 HTTP58 FULL에 합치지 않는다. 물리/현장 gate를 넓히지 않는다. CE 미해결: 이전G1 timing 원인은 미확정이다.
+
+
+## 2026-10-24 · bb38fdcdd0 · D-856 independent observer and Harbor ARM HTTP
+
+- 변경: 독립 observer token/identity/expiry·audit, raw facts→immutable World 변환, context/observations/physical-receipt/cancel, 승인 뒤 고정 준비·단일 SDK send·Fleet-owned monitor를 조립했다. stop/unknown/HOLD와 원래 owner/generation 점유를 유지하고 업무 완료는 Harbor에 남긴다. app881행 ratchet과 기존 Cell route를 보존했다.
+- 증거: c4 집중1266passed, f1 추가38passed, Channel 자격 재사용 RED2 뒤 dc5 집중64passed, bb38 auth/observer/release122passed(각skip0/official0NEW). 독립 검토의 unknown P2·Channel P1·Header 순서 보완을 재검토했다. 양 끝 bb38/Harbor93e71 ARM1/Cell3/TRIP1 HTTP 각각skip0, ARM의두 진입은 각각 UDS Submit1/Get1·PRE/POST2이며 업무 WAITING을 유지했다. 상세 원본/범위는 docs/validation/harbor-arm-observer-http-2026-10-24/result.md다.
+- gate 변화: 최신 bb38 FULL23개 모두exit0/official0NEW·독립 전체 증거 검토를 확인했다. dc5 FULL의secret/auth2실패와743 집중잔여scanner1실패를 보존·분류했으며 성공으로 대체하지 않는다. 합성 bounds/zero speeds/poses를 physics·native actuator·실물/현장 수용으로 부르지 않는다. CE 미해결: 이전G1 timing 원인은 미확정, 이번 구현·하네스 수정에는 새 교훈 없음.
