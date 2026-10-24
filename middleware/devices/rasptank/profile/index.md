@@ -23,8 +23,9 @@
 
 ## 시험
 
-- `test/test_rasptank_profile.py`
+- `middleware/devices/rasptank/profile/test`
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 신규 패키지 구조 계약 정렬
 - 2026-10-25 · uncommitted · 무구동 소스 프로파일 준비

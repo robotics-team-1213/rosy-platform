@@ -10,6 +10,6 @@ Profile and capability limits are one HWA-003 definition. `core.yaml` is mandato
 
 Before changing runtime behavior, read `docs/reference/robot-compatibility.md`, `docs/plans/2026-10-25-rasptank-multi-robot-design.md`, the owning CORE/driver/Action contracts and relevant existing lessons. Base output remains CORE-owned; joint/action ownership must be integrated through the existing device boundary, never a new raw PWM endpoint in CORE.
 
-Host contracts: `test/test_rasptank_profile.py` exercises real model selection, profile loading, Capability/TaskKind refusal and descriptor absence. Run it through `tools/remote/remote_pytest.py` on the committed revision, not local pytest. This test is not ROS install, Pi boot, image or physical validation.
+Host contracts: `middleware/devices/rasptank/profile/test/test_rasptank_profile.py` exercises real model selection, profile loading, Capability/TaskKind refusal and descriptor absence. Run it through `tools/remote/remote_pytest.py` on the committed revision, not local pytest. This test is not ROS install, Pi boot, image or physical validation.
 
-Completion requires exact tested revision and preserved HOLD states for any unverified native/image/device gates. Record changes in this module's logs and regenerate its index/STATUS through the harness.
+Completion requires exact tested revision and preserved HOLD states for any unverified native/image/device gates. Keep evidence in [progress.md](progress.md), append changes to [logs.md](logs.md), and regenerate [index.md](index.md) and STATUS through the harness.

@@ -14,7 +14,7 @@ from core_common.domain.tasks import TaskKind
 from core_common.profile import RobotProfile, robot_config_dir
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[5]
 CONFIG = ROOT / "middleware/devices/rasptank/profile/config"
 
 
