@@ -2,7 +2,6 @@ import {createMotorHealthState, renderMotorHealth, renderMotorHealthSummary} fro
 
 export function createFleetMotorHealth({view, scope}) {
   const states = new Map(), nodes = new Map();
-  let ticking = false;
   function health(previous) {
     const robot = view.robots.find(row => row.robot_id === previous.robot_id) || previous;
     if (!states.has(robot.robot_id)) states.set(robot.robot_id, createMotorHealthState());
@@ -15,9 +14,14 @@ export function createFleetMotorHealth({view, scope}) {
   function make(robot, detail) {
     const root = document.createElement(detail ? "section" : "span");
     root.dataset.motorRobot = robot.robot_id;
-    const paint = () => (detail ? renderMotorHealth : renderMotorHealthSummary)(root, health(robot));
+    const paint = () => {
+      const read = health(robot);
+      if (!detail) return renderMotorHealthSummary(root, read);
+      // A robot that never reported motors keeps only its summary chip; the card stays compact.
+      root.hidden = !read.motors.length && read.status === 'unavailable' && !read.lastFault;
+      renderMotorHealth(root, read);
+    };
     nodes.set(root, paint); paint();
-    if (!ticking) { scope.interval(tick, 1000); ticking = true; }
     return root;
   }
   function tick() {
@@ -27,5 +31,7 @@ export function createFleetMotorHealth({view, scope}) {
     }
     for (const id of states.keys()) if (!view.robots.some(robot => robot.robot_id === id)) states.delete(id);
   }
+  // Registered once with the page, not on the first card, so the page owns a fixed set of polls.
+  scope.interval(tick, 1000);
   return {summary: robot => make(robot, false), detail: robot => make(robot, true)};
 }
