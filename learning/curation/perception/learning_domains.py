@@ -3,6 +3,8 @@
 Read-only. A stage nothing here can see is ``not_available`` with a Korean reason; no count is invented and
 nothing is approved or promoted (D-514 §5, D-793). ⑦ 배포 is outside Learning and has no row.
 """
+import re
+
 STAGES = (('collect', '수집'), ('label', '정답'), ('dataset', '데이터셋'), ('train', '학습'),
           ('evaluate', '평가'), ('promote', '승격 기록'))
 NOT_CONNECTED = 'Learning에 연결 전'
@@ -93,17 +95,30 @@ def omx(items, reviewed, tasks=0):
 
 
 def sim(runs):
-    """runs: None when not configured, {'error': ...} when the adapter failed, else {'runs': [...]}."""
+    """runs: None when not configured, {'error': ...} when the adapter failed, else {'runs': [sim_web.public rows]}.
+    A SIM verdict or task_success is evidence only, never approval or promotion (D-793, D-857)."""
     if runs is None:
-        return {'collect': ('not_available', 'SIM 실행 연결이 설정되지 않았습니다.', None)}
+        reason = 'SIM 실행 연결이 설정되지 않았습니다.'
+        return {'collect': ('not_available', reason, None), 'evaluate': ('not_available', reason, None)}
     if 'error' in runs:
         return {'collect': ('blocked', 'SIM 실행 연결을 확인하세요.', go('SIM 실험', '/learning/sim'))}
     if not runs['runs']:
         return {'collect': ('active', 'SIM 실험 기록이 없습니다.', go('SIM 실험 시작', '/learning/sim'))}
     latest = max(runs['runs'], key=lambda run: str(run.get('updated_at') or run.get('created_at') or ''))
     status = str(latest.get('status', ''))[:40]
-    return {'collect': (SIM_TERMINAL.get(status, 'active'), f"실험 {len(runs['runs'])}회 · 최근 {status or '상태 없음'}",
-                        go('SIM 결과 확인', '/learning/sim'))}
+    run_id = str(latest.get('run_id', ''))
+    href = '/learning/sim?run=' + run_id if re.fullmatch('[0-9a-f]{32}', run_id) else '/learning/sim'
+    stages = {'collect': (SIM_TERMINAL.get(status, 'active'), f"실험 {len(runs['runs'])}회 · 최근 {status or '상태 없음'}",
+                          go('SIM 결과 확인', href))}
+    result = latest.get('result')
+    if isinstance(result, dict):
+        success = {True: '성공', False: '실패'}.get(result.get('task_success'), '기록 없음')
+        stages['evaluate'] = ('done', f"최근 단계 {str(result.get('stage') or '없음')[:40]} · 과제 성공 {success} · "
+                              f"판정 {str(result.get('status') or '없음')[:40]} (근거일 뿐 승인 아님)",
+                              go('SIM 평가 근거', '/learning/evaluate?domain=sim'))
+    else:
+        stages['evaluate'] = ('waiting', '최근 실험 결과가 나오면 평가 근거로 보입니다.', None)
+    return stages
 
 
 def vlm(counts, eval_url=None):

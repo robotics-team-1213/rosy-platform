@@ -35,7 +35,9 @@ def test_every_domain_has_the_six_stages_and_unknowns_say_why():
     decision = by_id(rows)['decision']
     assert set(states(decision)) == {'not_available'} and decision['blocked'] == 'Learning에 연결 전'
     assert decision['next'] is None
-    assert states(by_id(rows)['sim'])[0] == 'not_available'
+    sim = by_id(rows)['sim']['stages']
+    assert [sim[i]['state'] for i in (0, 4)] == ['not_available'] * 2
+    assert sim[4]['evidence'] == 'SIM 실행 연결이 설정되지 않았습니다.'
     assert by_id(rows)['vlm']['stages'][0]['evidence'] == 'VLM 질문 자료가 없습니다.'
     assert by_id(rows)['object']['next'] == {'label': '자료 등록', 'href': '/catalog'}
 
@@ -69,6 +71,21 @@ def test_object_omx_sim_and_vlm_count_only_what_exists():
     assert rows['vlm']['stages'][4]['state'] == 'done'
     failed = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'error': 'x'})))['sim']
     assert failed['blocked'] == 'SIM 실행 연결을 확인하세요.'
+
+
+def test_sim_row_shows_the_latest_run_stage_evidence_and_opens_that_run():
+    run_id = 'e' * 32
+    sim = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [
+        {'run_id': 'f' * 32, 'status': 'FAILED', 'updated_at': '2026-10-23T01:00:00'},
+        {'run_id': run_id, 'status': 'SUCCEEDED', 'updated_at': '2026-10-24T01:00:00',
+         'result': {'status': 'passed', 'stage': 'model_import', 'task_success': None}}]})))['sim']
+    assert sim['next'] == {'label': 'SIM 결과 확인', 'href': '/learning/sim?run=' + run_id}
+    evaluate = sim['stages'][4]
+    assert evaluate['evidence'] == '최근 단계 model_import · 과제 성공 기록 없음 · 판정 passed (근거일 뿐 승인 아님)'
+    assert evaluate['next']['href'] == '/learning/evaluate?domain=sim'
+    assert sim['stages'][5]['state'] == 'not_available'  # a SIM verdict is evidence, never a promotion record
+    waiting = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [{'status': 'RUNNING'}]})))['sim']
+    assert waiting['stages'][4]['state'] == 'waiting' and waiting['next']['href'] == '/learning/sim'
 
 
 def test_stored_reads_without_creating_tables(tmp_path):

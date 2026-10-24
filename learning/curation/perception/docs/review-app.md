@@ -81,7 +81,7 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera`, 작업 공간 `/learning/workspaces` |
 | 정답 | 객체 검수 `/`, 픽셀 검수 `/pixels`, 로봇암 시범 검수 `/learning/omx`, VLM 판단 `/learning/vlm` |
 | 학습 | 학습 과제 `/learning/tasks`, 인식 학습 `/learning#pipeline`(홈의 학습 흐름 구역), SIM 실험 `/learning/sim` |
-| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 다음 조각까지 비활성이다 |
+| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답, 최근 SIM 실험 10개의 상태·단계·과제 성공·판정과 그 run을 여는 `/learning/sim?run=<run_id>` 링크). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 다음 조각까지 비활성이다 |
 
 로그인·계정과 Hugging Face 가져오기는 메뉴가 아니라 상단 막대의 「로그인·계정」 `/accounts`에 있다. 수집·저장 공간은 아직 홈의 구역이다. 로봇암 화면(`/learning/omx`)은 시범 검수 밖에 학습·비교 구역도 품지만 한 화면이라 정답 단계에 둔다. 인식 학습은 별도 화면 없이 홈의 학습 흐름 구역으로 간다.
 
@@ -92,7 +92,7 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | `lane` | 기존 `project()` 단계를 여섯 칸에 맞춘다(자료→수집, 픽셀 검수→정답, 준비+데이터셋→데이터셋, 학습, 평가, 적용 검토→승격 기록) |
 | `object` | 객체 승인·대기·제외 수와 최신 준비본(`exports`). 학습·평가는 학습기가 없어 `not_available` |
 | `omx` | `learning_links`의 OMX 결과 폴더와 `omx_segment_reviews`가 있는 폴더 수. 학습 칸은 학습 과제 화면의 OMX 과제 수(`learning_task_records`의 `task` 중 `adapter`가 `omx`) |
-| `sim` | `--sim-config`가 없으면 `not_available`. 있으면 실험 목록의 수와 최근 상태(홈은 1분에 한 번만 읽는다) |
+| `sim` | `--sim-config`가 없으면 `not_available`. 있으면 실험 목록의 수와 최근 상태, 평가 단계에 최근 run의 단계·과제 성공·판정(`sim_web.public()` 필드만, 승인 아님). 다음 할 일은 그 run을 여는 `/learning/sim?run=<run_id>`다(홈은 1분에 한 번만 읽는다) |
 | `vlm` | VLM 표가 있을 때 사진·확정·제외·임시 정답 수. 확정이 1장 이상이면 평가 칸이 열린다 |
 | `decision` | 모두 `not_available`(「Learning에 연결 전」) |
 
@@ -506,7 +506,7 @@ Native export는 `execution_mode=native_export`로 학습과 구분한다. 화�
 
 SIM 웹 어댑터와 화면은 조건 확인·실행 요청을 위한 준비 경로다. 현재 공개 소스에는 실행에 필요한 `learning/envs/isaac/run_control.py`가 포함되어 있지 않다. 운영자가 검증된 외부 실행 소스·SDK·workspace binding을 준비하기 전에는 실행 연결 미설정으로 표시하고 실행을 허용하지 않는다. 이 화면의 추가나 모의 실행 시험을 실제 SIM 실행·로봇 학습 수용 근거로 쓰지 않는다.
 
-작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
+작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. `?run=<run_id>`로 열면 목록을 읽은 뒤 그 run을 클릭과 같은 방법으로 선택한다. SIM 판정과 과제 성공은 평가 근거일 뿐 승인·승격이 아니다(D-793, D-857). 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
 
 서버는 선택적 `--sim-config PRIVATE.json`을 사용한다. 설정이 없으면 SIM 연결 미설정으로 응답하고 기존 검수는 계속 동작한다. 이 파일은 현재 계정 소유·0600이며 검수 state의 workspace_id와 결속한다.
 

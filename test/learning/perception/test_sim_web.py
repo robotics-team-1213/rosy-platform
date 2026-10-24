@@ -78,6 +78,8 @@ def test_unidentified_local_mode_cannot_start_or_stop(tmp_path):
         _, workspace = request(base, '/api/learning')
         sim = next(row for row in workspace['domains'] if row['id'] == 'sim')
         assert sim['stages'][0]['state'] == 'active' and '최근 RUNNING' in sim['stages'][0]['evidence']
+        assert sim['next']['href'] == '/learning/sim?run=' + 'b' * 32
+        assert '/private/operator' not in json.dumps(workspace)  # the home row reads public() rows only
         code, _ = request(base, '/api/learning/sim/start', body={'request_id': 'b' * 32}, token=workspace['token'])
         assert code == 403 and runs.calls == [{'action': 'list'}]  # the home row reads; nothing starts
         request(base, '/api/learning')
