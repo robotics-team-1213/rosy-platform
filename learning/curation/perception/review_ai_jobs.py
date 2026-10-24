@@ -114,6 +114,11 @@ class Jobs:
                         reason = '픽셀 재검수를 시작한 뒤 초안을 요청하세요.'
                     elif not self.backend and 'sam_checkpoint' not in self.config:
                         reason = 'SAM 체크포인트 설정이 필요합니다.'
+            if not reason and action == 'mask_check':
+                try:
+                    vlm_mask_feedback.feedback_binding(mask['classes'])
+                except ValueError:
+                    reason = '현재 AI 확인은 구형 또는 current_road_region/1 클래스 의미만 지원합니다.'
             actions[action] = {'available': not reason, 'reason': reason}
         with self.store.connect() as db:
             jobs = [json.loads(row[0]) for row in db.execute(
@@ -141,6 +146,9 @@ class Jobs:
             snapshot.update(version=mask['version'], status=mask['status'], mask_sha256=mask['sha256'],
                             binding=mask['classes'],
                             mask=base64.b64encode(review_masks.encode(review_masks.pixels(self.store, mask))).decode('ascii'))
+        if action == 'mask_check':
+            snapshot['binding'] = review_masks.classes(self.store)
+            snapshot['review_binding'] = vlm_mask_feedback.feedback_binding(snapshot['binding'])
         if version is not None and version != snapshot['version']:
             raise ValueError('검수 버전이 바뀌었습니다. 사진을 다시 불러오세요.')
         return snapshot
@@ -276,6 +284,7 @@ class Jobs:
         report = {'schema': 'rosy.v13-vlm-feedback/1', 'advisory_only': True, 'training_admission': False,
                   'workspace_id': meta['workspace_id'], 'generation': meta['generation'],
                   'model': job['model'], 'model_digest': job['model_digest'], 'frames': [item],
+                  'review_binding': snapshot['review_binding'],
                   'job_id': job['id'], 'requested_by': job['actor'], 'created_at': job['created_at']}
         db.execute('INSERT OR REPLACE INTO review_ai_feedback VALUES (?,?)', (job['frame'], json.dumps(report)))
         return {'feedback': value}
