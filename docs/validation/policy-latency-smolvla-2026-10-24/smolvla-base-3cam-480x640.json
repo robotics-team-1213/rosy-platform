@@ -1,0 +1,79 @@
+{
+  "first_step": {
+    "observe": 46476,
+    "preprocess": 24522404,
+    "infer": 762660072,
+    "postprocess": 365793,
+    "submit": 60887
+  },
+  "warmup": 50,
+  "steps": 1000,
+  "stages": {
+    "observe": {
+      "p50": 319,
+      "p95": 619,
+      "p99": 799,
+      "max": 955,
+      "mean": 350
+    },
+    "preprocess": {
+      "p50": 2358070,
+      "p95": 54995234,
+      "p99": 88676942,
+      "max": 112751032,
+      "mean": 19327215
+    },
+    "infer": {
+      "p50": 102654172,
+      "p95": 148676673,
+      "p99": 150828088,
+      "max": 154557712,
+      "mean": 107671569
+    },
+    "postprocess": {
+      "p50": 48004,
+      "p95": 81276,
+      "p99": 93119,
+      "max": 105653,
+      "mean": 52482
+    },
+    "submit": {
+      "p50": 2297,
+      "p95": 3741,
+      "p99": 4387,
+      "max": 16946,
+      "mean": 2528
+    },
+    "end_to_end": {
+      "p50": 106909449,
+      "p95": 175215180,
+      "p99": 208027994,
+      "max": 233425093,
+      "mean": 127054145
+    }
+  },
+  "policy_type": "smolvla",
+  "n_action_steps": 1,
+  "saved_n_action_steps": 50,
+  "device": "cuda",
+  "gpu": "NVIDIA GeForce RTX 5080 Laptop GPU",
+  "versions": {
+    "lerobot": "0.4.4",
+    "torch": "2.7.1+cu128"
+  },
+  "cameras": {
+    "camera1": [
+      480,
+      640
+    ],
+    "camera2": [
+      480,
+      640
+    ],
+    "camera3": [
+      480,
+      640
+    ]
+  },
+  "target": "synthetic: observe/submit stages exclude CORE and network"
+}

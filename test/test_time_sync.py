@@ -38,6 +38,7 @@ def test_site_serves_only_explicit_networks(sync):
     config = sync.configuration("site", ["a.example.invalid", "b.example.invalid", "c.example.invalid"], ["192.0.2.0/24"])
     assert "allow 192.0.2.0/24\n" in config
     assert "port 0" not in config and "local " not in config
+    assert "server a.example.invalid iburst minpoll 6 maxpoll 6" in config
 
 
 @pytest.mark.parametrize("role,sources,networks", [
@@ -64,6 +65,15 @@ def test_readiness_bounds_clock_error_and_freshness(sync):
     assert report["error_bound_s"] == pytest.approx(0.008)
     assert sync.assess(tracking(correction="-0.1"), now=1010)["synchronized"] is False
     assert sync.assess(tracking(dispersion="0.06"), now=1010)["synchronized"] is False
+
+
+def test_wan_root_distance_can_discipline_clock_without_claiming_precision(sync):
+    # Observed site packets were valid but rejected at 100ms before the clock could converge.
+    config = sync.configuration("client", ["site.example.invalid"], [])
+    limit = float(next(line.split()[1] for line in config.splitlines() if line.startswith("maxdistance ")))
+    report = sync.assess(tracking(delay="0.242", dispersion="0.014"), now=1010)
+    assert report["error_bound_s"] < limit
+    assert report["synchronized"] is False
 
 
 @pytest.mark.parametrize("csv", [
@@ -139,3 +149,5 @@ def test_windows_uses_ntp_client_mode_and_preserves_domain_policy():
     assert "PartOfDomain" in source and "ShouldProcess" in source
     assert "/query" in source and "/resync" in source
     assert "start/networkon" in source and "stop/networkoff" in source
+    assert "-Name MinPollInterval -Value 6" in source
+    assert "-Name MaxPollInterval -Value 6" in source

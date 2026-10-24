@@ -1,0 +1,40 @@
+[Unit]
+Description=ROSY narrowly scoped device network authority
+After=NetworkManager.service dbus.service
+After=rosy-network-users.service
+Requires=rosy-network-users.service
+Wants=NetworkManager.service
+ConditionPathIsDirectory=/etc/NetworkManager/system-connections
+
+[Service]
+Type=simple
+User=root
+Group=rosy-recovery
+ExecStartPre=/usr/bin/install -d -m 0750 -o root -g rosy-recovery /var/lib/rosy/network-recovery
+ExecStartPre=/usr/bin/install -d -m 0750 -o root -g rosy-recovery /run/rosy-network-recovery
+ExecStartPre=/usr/bin/install -d -m 0700 -o rosy-recovery -g rosy-recovery /run/rosy-network-recovery/auth
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/rosy-network-agent.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+ReadWritePaths=/run /var/lib/rosy/network /etc/NetworkManager/system-connections
+StateDirectory=rosy/network rosy/network-recovery
+StateDirectoryMode=0700
+RuntimeDirectory=rosy-network-agent rosy-network-recovery
+RuntimeDirectoryMode=0755
+# Auth attempts must outlive agent restarts while the same-AP verifier survives.
+RuntimeDirectoryPreserve=yes
+LogsDirectory=rosy-network-agent
+LogsDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target

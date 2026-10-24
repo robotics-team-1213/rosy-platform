@@ -133,7 +133,7 @@ OMX_REVIEW_FILES = (
     *("learning/curation/omx/" + name for name in
       ("native_review.py", "native_capture.py", "native_environment.py", "native_segments.py", "omx_output_paths.py")),
     *("contracts/learning/src/rosy/contracts/learning/" + name for name in
-      ("__init__.py", "omx.py", "artifacts.py", "png.py", "camera_setup.py")))
+      ("__init__.py", "omx.py", "artifacts.py", "png.py", "camera_setup.py", "action_space.py")))
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
                  "shared/web/", "tools/data_paths.py", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES,
                  *OMX_REVIEW_FILES)

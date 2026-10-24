@@ -3224,3 +3224,27 @@
 - 변경: Windows 설치기가 registry 백업과 도메인/정책 가드 뒤 networkon/networkoff 시작·중지 트리거를 설정한다. Automatic 서비스가 멈춘 실제 관측과 Microsoft KB2385818을 근거로 했다.
 - 증거: [최신 운영 기록](../docs/validation/shared-time-sync-2026-10-24/result.md). 새 조건 red→green 원격 33개 통과·NEW 0, PowerShell 구문·독립 검토 통과. 관리자 실행 exit 0 뒤 서비스 Running, 동일 관제 Source·stratum 4·최근 동기 성공·Last Sync Error 0을 관측했다.
 - gate 변화: Windows의 공통 서버 실제 적용만 확인했다. 정밀 오차/재부팅 수용과 모델·AI sudo·오프라인 로봇은 남았다. main 착지는 타 작업 대기열에서 timeout으로 보류했고 push하지 않았다. CE 미해결 — 전체 기기 수용은 아직 HOLD다.
+
+## 2026-10-24 · c50c268c1410 · 공통 NTP 시간원 선택과 정밀도 수용 분리
+
+- 변경: `maxdistance`를 chrony 기본 3초로 복구해 WAN root distance가 100ms를 넘는 공통 서버도 시계를 보정하도록 했다. 50ms UTC 정밀도·stale 검사는 유지했다. 모델·AI 설정은 백업·구문 검사 및 step 없는 재시작으로 복구했고, 관제는 기존 NTS를 유지한 채 최대 polling 64초를 적용했다.
+- 증거: [후속 검증](../docs/validation/shared-time-sync-source-selection-2026-10-24/result.md). 원격 red 재현→34개/영향 354개 통과·NEW 0, 독립 검토 주요 지적 없음. 두 PC가 같은 source를 실제 선택, stratum 4/Normal/enabled 및 남은 correction 1ms 미만을 관측했다.
+- gate 변화: PC 공통 NTP 실제 동기는 복구했다. 보고 UTC 상한 약 140ms로 정밀도 수용은 HOLD, 오프라인 Pinky 두 대·모바일/MCU·재부팅 수용도 남는다. 임시 워크트리 한 개는 사용자 예외 승인 범위다. CE 미해결 — 전체 장치 수용 전이며 원인·회귀·운영 안내는 보존했다.
+
+## 2026-10-24 · fe0519eea1 · 공용·내부 NTP polling과 Windows 최신성
+
+- 변경: 관제의 외부 시간원은 chrony 권고에 맞춰 64초, 내부 Linux 클라이언트는 기존 16–64초를 유지한다. Windows는 backup/domain/policy 가드 뒤 MinPollInterval/MaxPollInterval 6으로 같은 내부 source를 64초마다 조회한다. 로봇의 실제 DNS/경로 사전 확인을 운영 절차에 명시했다.
+- 증거: [polling 검증](../docs/validation/shared-time-sync-polling-2026-10-24/result.md). 두 조건 red→green, 원격 영향 354개 통과·NEW 0, 독립 검토 주요 지적 없음. 관제 NTS source 5개 모두 64초 설정, Windows 관리자 exit 0 뒤 실제 poll 64초·동일 Source·Last Sync Error 0을 확인했다.
+- gate 변화: PC 구성·갱신은 확인했으나 전체 로봇·UTC 정밀도·재부팅 수용은 HOLD다. 사용자의 실제 로봇 전원 꺼짐 정정을 반영해 추가 접속을 중단했다. 앞선 수정은 main 반영·임시 공간 정리 완료이며 같은 NTP 수정 범위에서 한 슬롯만 재사용한다. CE 미해결 — 미관측 실물 수용을 완료로 보고하지 않는다.
+
+## 2026-10-24 · uncommitted · 서명된 review payload의 OMX action-space 의존성 포함
+
+- 변경: 기존 OMX review allowlist에 `action_space.py`를 포함한다. 해당 모듈의 프로젝트 의존성 `artifacts.py`는 이미 포함되어 있다.
+- 증거: 통합관제 병합 FULL과 깨끗한 main의 signed catalog 가져오기 시험에서 같은 ImportError가 재현됐다. 기존 실제 서명·설치·CLI 재가져오기 회귀 시험으로 수정 커밋을 원격 검증한다.
+- gate 변화: 서명 검증·health gate·사람 이력 보호를 유지한다. 실제 배포·장치 수용 변화 없음. 기존 installed-layout 교훈을 적용했으며 별도 교훈 추가 대상은 아니다.
+
+## 2026-10-24 · c60d6046bb · 장치 Wi-Fi 복구와 서명 boot 계층 연속성
+
+- 변경: D-863 network-only agent·AP HTTPS 복구·장치 결속 첫 부팅 인계, bridge/기능 릴리스 discovery와 signed boot catalog/inverse를 연결했다. 전역 claim과 radio lock, 실제 연결 관측, 비밀 없는 재접속 작업 조회를 사용한다.
+- 증거: [검증 기록](../docs/validation/device-network-recovery-2026-10-24/result.md). 경계 332, 업데이트/화면 680, 설치 격리 41, opt-in 브라우저 10 passed. 선택별 중복이 있어 합산하지 않는다. 원격 skip 60은 미검증이며 PowerShell inverse 실패 중단은 별도 mock 실행했다. 독립 검토의 deferred reconcile·fallback claim·부팅 복구 오류 전파를 회귀로 보완한다.
+- gate 변화: SOURCE 근거 추가. signed ARM64 산출물·Pinky 무선/TLS 등록·정전/재부팅·OTA DEVICE/FIELD 수용은 미실시이며 배포하지 않았다. CE: 기존 첫 부팅 Wi-Fi 교훈 갱신, 호스트 회귀와 실물을 구분했다.

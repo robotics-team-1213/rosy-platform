@@ -8,11 +8,11 @@
 15915 control
 748 core/events/core_events/events/audit.py
 873 core/gateway/core/bridge/ros_bridge.py
-817 deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py
-1273 deploy/robot/pinky_pro/native/rosy-face.py
+804 deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py
+1235 deploy/robot/pinky_pro/native/rosy-face.py
 641 deploy/robot/pinky_pro/native/rosy-hw-probe.py
 862 deploy/robot/pinky_pro/native/rosy-ssh-access.py
-1023 deploy/robot/pinky_pro/native/sync-image-layer.py
+1014 deploy/robot/pinky_pro/native/sync-image-layer.py
 815 deploy/robot/pinky_pro/release/secret_scan.py
 686 deploy/robot/pinky_pro/release/updater.py
 806 deploy/robot/pinky_pro/sd/verify-media-readback.py
@@ -62,6 +62,6 @@
 703 tools/device_twin/scenarios.py
 858 tools/harness/rosy_harness.py
 749 tools/perception/rosy_ml.py
-697 tools/release/publish_payload_release.py
+659 tools/release/publish_payload_release.py
 942 web/components.css
 814 web/ui.js

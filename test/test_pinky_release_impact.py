@@ -75,6 +75,16 @@ def test_empty_diff_needs_no_robot_artifact():
     assert classify_paths([]).impact == "none"
 
 
+def test_signed_boot_support_and_native_runtime_choose_payload_but_os_inputs_require_image():
+    for path in ('deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py',
+                 'deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.sh',
+                 'deploy/robot/pinky_pro/native/network_agent.py',
+                 'deploy/robot/pinky_pro/native/rosy-network-agent.service'):
+        assert classify_paths([path]).impact == 'native-payload'
+    assert classify_paths(['deploy/robot/pinky_pro/image/inputs.lock.yaml']).impact == 'flashable-image'
+    assert classify_paths(['deploy/robot/pinky_pro/native/unlisted.service']).impact == 'review'
+
+
 def test_selector_reads_changed_paths_from_the_git_merge_base(tmp_path: Path):
     def git(*args: str) -> str:
         return subprocess.run(

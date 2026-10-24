@@ -23,9 +23,16 @@
      --source <upstream-a> --source <upstream-b> --source <upstream-c> --allow <client-cidr>
    ```
 
+   관제의 외부 공용 시간원은 64초마다 조회한다. 현장 Linux 클라이언트는 승인된 내부
+   관제 서버만 16–64초 간격으로 조회한다. 공용 서버에 내부용 16초 간격을 적용하지 않는다.
+
 3. **각 Linux PC·로봇:** 관제 서버가 먼저 동기된 뒤 같은 도구로 등록한다. 서버는 DHCP가
    바뀌어도 유지되는 승인된 DNS/mDNS 이름을 쓴다. 서로 다른 공용 pool로 우회하지 않는다.
    모든 기기에 같은 `--source` 하나를 사용한다. 두 번째 source와 개별 공용 fallback은 거부한다.
+
+   적용 전에 해당 기기에서 공통 이름이 해석되고 UDP 123으로 도달하는지 확인한다.
+   Pinky의 기본 VPN 가입은 `--accept-dns=false`이므로 PC의 VPN DNS 성공을 로봇에도
+   적용된 사실로 읽지 않는다. LAN 전용 운용과 VPN 운용의 실제 resolver·경로를 각각 확인한다.
 
    ```bash
    sudo python3 deploy/hosts/common/rosy_time_sync.py install --maintenance --role client --source <site-ntp-name>
@@ -48,6 +55,9 @@
    w32tm /stripchart /computer:<site-ntp-name> /dataonly /samples:10
    ```
 
+   Windows 설치기는 registry 원본을 먼저 보존하고 내부 관제 peer의 최소·최대 polling을
+   64초로 맞춘다. 실제 서비스 설정은 관리자 창에서 `w32tm /query /configuration`으로 확인한다.
+
 5. **수용:** Linux `check`의 JSON `synchronized=true`와 exit 0, 선택된 시간원, 표본 시각을
    장치별로 기록한다. 보고 오차 상한 50ms·표본 나이 180초 기준을 벗어나면 exit 1이다.
    UDP 차단/해제·재부팅 뒤 다시 확인한다. 실패하면 시간 의존 작업을 재개하지 않는다.
@@ -55,6 +65,13 @@
    시각·offset을 별도로 관측하고 Linux의 50ms 통과로 간주하지 않는다. 휴대전화·MCU는
    OS/MDM 시간 설정과 원본 capture clock domain을 별도로 확인한다. 앱 설치나 서버의
    수신 시각만으로 모바일 시계까지 맞았다고 기록하지 않는다.
+
+chrony의 시간원 선택 한도(`maxdistance`, 기본 3초)와 위의 정밀도 수용은 별개다.
+상위 NTP가 보고한 root distance가 100ms를 넘을 수 있으므로 선택 한도를 100ms로 줄이면
+응답이 정상이어도 시계 보정 자체가 중단된다. 공통 서버로의 보정은 허용하되, UTC 오차
+상한 50ms·표본 나이 검사는 유지하며 기준 밖이면 수용 실패로 보고한다. 설정에 같은
+서버가 들어 있다는 사실만으로 동기를 판정하지 않고 `chronyc sources`의 선택 표시와
+tracking의 stratum/leap 상태를 확인한다.
 
 설치 전 chrony 원본은 `/etc/chrony/chrony.conf.rosy-backup-*`에 보존된다. 구문 오류는
 적용 전 거부하고 서비스 재시작 실패는 이전 설정으로 복구한다. 시간원 연결 실패는 새

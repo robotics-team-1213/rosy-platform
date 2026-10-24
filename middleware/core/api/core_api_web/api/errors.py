@@ -135,6 +135,11 @@ def register_exception_handlers(app) -> None:
         )
 
     @app.exception_handler(RequestValidationError)
-    async def _validation(_: Request, exc: RequestValidationError):
+    async def _validation(request: Request, exc: RequestValidationError):
+        detail = exc.errors()
+        if request.method == "POST" and request.url.path == "/api/v1/host/network/connect":
+            # Missing fields can embed the entire credential body in an error.
+            detail = [{key: value for key, value in error.items() if key not in {"input", "ctx"}}
+                      for error in detail]
         return JSONResponse(status_code=400,
-                            content=error_body("VALIDATION_ERROR", "invalid request", exc.errors()))
+                            content=error_body("VALIDATION_ERROR", "invalid request", detail))

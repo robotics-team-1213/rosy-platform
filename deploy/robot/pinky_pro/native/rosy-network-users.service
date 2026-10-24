@@ -1,0 +1,20 @@
+[Unit]
+Description=Create the dedicated ROSY network recovery account
+Before=rosy-network-agent.service rosy-network-recovery.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/systemd-sysusers /opt/rosy/native-runtime/rosy-network-users.conf
+ExecStart=/usr/bin/install -d -m 0755 /etc/issue.d
+ExecStart=/usr/bin/ln -sfn /run/rosy-boot/recovery-display.txt /etc/issue.d/65-rosy-network-recovery.issue
+RemainAfterExit=yes
+NoNewPrivileges=true
+PrivateDevices=true
+# sysusers atomically replaces account databases under /etc; this provisioning
+# oneshot runs only the fixed signed commands above, without a filesystem sandbox.
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

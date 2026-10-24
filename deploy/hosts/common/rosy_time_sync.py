@@ -50,11 +50,14 @@ def configuration(role, sources, networks):
         "driftfile /var/lib/chrony/chrony.drift",
         "rtcsync",
         "makestep 0.1 3",
-        "maxdistance 0.1",
+        # Source eligibility is separate from the strict UTC readiness check.
+        "maxdistance 3.0",
         "bindcmdaddress 127.0.0.1",
         "bindcmdaddress ::1",
     ]
-    lines += [f"server {source} iburst minpoll 4 maxpoll 6" for source in sources]
+    # Public upstreams should not be polled more often than once per 64 seconds.
+    minpoll = 6 if role == "site" else 4
+    lines += [f"server {source} iburst minpoll {minpoll} maxpoll 6" for source in sources]
     lines += [f"allow {network}" for network in allowed] if role == "site" else ["port 0"]
     return "\n".join(lines) + "\n"
 

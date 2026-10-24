@@ -141,9 +141,9 @@ def test_rollback_plan_skips_the_release_and_only_rolls_back_and_waits(release):
     assert result["verification"] is None
     plan = _without_claim(result["plan"])
     # rollback, D-388 image-layer sync, D-433 display restore, core-release check, readiness
-    assert len(plan) == 1 + 3 + 1 + 1 + 1
-    assert plan[0]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
-    assert "sudo" in plan[0]["arguments"] and "-n" in plan[0]["arguments"]
+    assert len(plan) == 3 + 3 + 1 + 1 + 1
+    assert plan[1]["arguments"][-1] == "/opt/rosy/native-runtime/rollback-release.sh"
+    assert "sudo" in plan[1]["arguments"] and "-n" in plan[1]["arguments"]
     ready_args = plan[-1]["arguments"]
     assert ready_args[-5:-1] == ["sudo", "-n", "bash", "-lc"]
     assert "wait-core-ready.py" in ready_args[-1]
@@ -315,12 +315,13 @@ def test_rollback_plan_resyncs_the_image_layer_from_the_release_that_becomes_cur
     plan = _without_claim(json.loads(completed.stdout)["plan"])
     # The sync runs BEFORE the readiness check: if the newer release's units do
     # not work with the older one, CORE only becomes ready after the sync.
-    assert [step["role"] for step in plan] == ["", *IMAGE_LAYER_ROLES[:3], "display-restore",
+    assert [step["role"] for step in plan] == ["boot-inverse-preflight", "", "boot-inverse-apply",
+                                               *IMAGE_LAYER_ROLES[:3], "display-restore",
                                                "core-release-check", ""]
-    assert "rollback-release.sh" in plan[0]["arguments"][-1]
+    assert "rollback-release.sh" in plan[1]["arguments"][-1]
     assert "wait-core-ready.py" in plan[-1]["arguments"][-1]
     assert not any("wait-core-ready.py" in " ".join(step["arguments"]) for step in plan[:-1])
-    dry_run, apply = plan[1]["arguments"], plan[2]["arguments"]
+    dry_run, apply = plan[3]["arguments"], plan[4]["arguments"]
     assert dry_run[-5:-1] == ["sudo", "-n", "sh", "-c"] and apply[-5:-1] == ["sudo", "-n", "sh", "-c"]
     # current first; the release rolled away from only if current predates D-388.
     assert dry_run[-1].index("/opt/rosy/current/deploy/robot/native/sync-image-layer.py") < \
@@ -341,11 +342,12 @@ def test_skip_image_layer_sync_leaves_the_old_plan(release, rollback):
 
     assert completed.returncode == 0, completed.stderr
     plan = _without_claim(json.loads(completed.stdout)["plan"])
-    assert len(plan) == (3 if rollback else 8)
+    assert len(plan) == (5 if rollback else 8)
     if rollback:
-        assert "wait-core-ready.py" in plan[2]["arguments"][-1]
+        assert "wait-core-ready.py" in plan[4]["arguments"][-1]
     # The core-release check is not part of the image-layer sync: it stays.
-    assert [step["role"] for step in plan if step["role"]] == ["core-release-check"]
+    expected = ["boot-inverse-preflight", "boot-inverse-apply"] if rollback else []
+    assert [step["role"] for step in plan if step["role"]] == [*expected, "core-release-check"]
 
 
 FAKE_SSH = r"""
@@ -353,6 +355,9 @@ $all = $args -join ' '
 Add-Content -Path $env:ROSY_FAKE_LOG -Value $all
 if ($env:ROSY_FAKE_SYNC_MISSING -and $all -match 'IMAGE_LAYER_SYNC_MISSING') {
     'IMAGE_LAYER_SYNC_MISSING'; exit 3
+}
+if ($env:ROSY_FAKE_INVERSE_FAIL -and $all -match '--rollback-target-previous') {
+    '{"ok": false, "error": "BOOT_INVERSE: corrupt backup"}'; exit 1
 }
 if ($all -match '--dry-run') {
     '{"ok": true, "release_id": "R", "changed": ["/etc/systemd/system/rosy-io.service"], "new": [], "unchanged": [], "skipped": [], "restart_units": ["rosy-io.service"]}'
@@ -386,6 +391,29 @@ def _fake_run(tmp_path, monkeypatch, args: list[str], *, missing: bool = False, 
     completed = _run(["-Robot", "rosy-e4us.local", "-SshExe", str(fake), "-ScpExe", str(fake), *args])
     lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
     return completed, lines
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_rollback_checks_inverse_before_switch_and_applies_it_before_legacy_sync():
+    completed = _run(["-Robot", "rosy-e4us.local", "-Rollback", "-PrintCommands"])
+    assert completed.returncode == 0, completed.stderr
+    plan = _without_claim(json.loads(completed.stdout)["plan"])
+    roles = [step["role"] for step in plan]
+    preflight = roles.index("boot-inverse-preflight")
+    inverse = roles.index("boot-inverse-apply")
+    rollback = next(i for i, step in enumerate(plan) if step["arguments"][-1].endswith("rollback-release.sh"))
+    assert preflight < rollback < inverse < roles.index("image-layer-dry-run")
+    assert "--rollback-target-previous" in plan[preflight]["display"]
+    assert "--dry-run" in plan[preflight]["display"]
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
+def test_invalid_boot_inverse_prevents_operator_rollback(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_FAKE_INVERSE_FAIL", "1")
+    completed, calls = _fake_run(tmp_path, monkeypatch, ["-Rollback"])
+    assert completed.returncode != 0
+    assert not any("rollback-release.sh" in call for call in calls)
+    assert not any("IMAGE_LAYER_SYNC_MISSING" in call for call in calls)
 
 
 @pytest.mark.skipif(POWERSHELL is None or TAR is None, reason="PowerShell and tar are required")
