@@ -214,6 +214,12 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-face.service" "$OVERLAY/etc/systemd/system/"
 # D-176: boot settings file and fallback AP, both root and outside CORE.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"
+if [[ "${ROSY_BOOT_SUPPORT:-feature}" != bridge ]]; then
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-users.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-agent.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-recovery.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-recovery.timer" "$OVERLAY/etc/systemd/system/"
+fi
 # D-193: the root login-code issuer (no network), enabled by the image.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"
 # D-247: the read-only root board device probe and CORE's refresh request watch.

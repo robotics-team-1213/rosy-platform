@@ -437,12 +437,17 @@ systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.servic
     rosy-login-code.service rosy-hw-probe.service rosy-hw-probe.path rosy-hw-test.path \
     rosy-auto-update.timer rosy-ssh-access.path rosy-ssh-access-boot.service \
     tailscaled.service rosy-tailscale-join.service
+if [[ -f "$ROOT/etc/systemd/system/rosy-network-agent.service" ]]; then
+    systemctl --root "$ROOT" enable rosy-network-users.service rosy-network-agent.service \
+        rosy-network-recovery.service rosy-network-recovery.timer
+fi
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
 # D-193: the one-time login code on the console (no LCD), written by
 # rosy-login-code.service into /run/rosy-boot/login.issue (0600, root).
 ln -sfn /run/rosy-boot/login.issue "$ROOT/etc/issue.d/60-rosy-login.issue"
+ln -sfn /run/rosy-boot/recovery-display.txt "$ROOT/etc/issue.d/65-rosy-network-recovery.issue"
 # D-193: `sudo rosy-login-code [--role ...] [--minutes ...]` prints a code to
 # the caller's terminal only; the wrapper resolves the link.
 mkdir -p "$ROOT/usr/local/sbin"

@@ -42,6 +42,7 @@ if ($all -match 'rosy_claim.py acquire') {
 }
 if ($all -match 'rosy_claim.py refresh') { if ($env:ROSY_FAKE_REFRESH_FAIL) { 'usage: rosy_claim.py: invalid choice: refresh'; exit 2 }; exit 0 }
 if ($all -match 'rosy_claim.py release') { if ($env:ROSY_FAKE_RELEASE_FAIL) { exit 1 }; exit 0 }
+if ($all -match '--inverse-before-legacy-sync') { 'BOOT_INVERSE_NOT_REQUIRED'; exit 0 }
 if ($all -match 'IMAGE_LAYER_SYNC_MISSING') { 'IMAGE_LAYER_SYNC_MISSING'; exit 3 }
 if ($all -match 'CORE_RELEASE_OK') {
     if ($env:ROSY_FAKE_CORE -eq 'dead') { 'CORE_RELEASE_STALE pid=7 cwd=a want=b'; 'CORE_RESTART_FAILED' }

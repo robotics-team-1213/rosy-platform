@@ -94,6 +94,8 @@ sys.dont_write_bytecode = True
 # The shared switch parser (rosy_display_env.py) sits beside this program.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rosy_display_env  # noqa: E402
+import recovery_display  # noqa: E402
+from face_card_renderer import card_renderer  # noqa: E402
 
 try:  # the release's rule table (D-260); an older release has none
     from core_common import robot_state
@@ -229,7 +231,7 @@ def read_view(root: Path, battery: tuple[float, float] | None) -> dict:
     """What the card shows, from the indicator files and the last battery reading."""
     status = _read_json(root / STATUS_DIR / "boot-status.json")
     network = {key: value for key, value in _read_json(root / STATUS_DIR / "network.json").items()
-               if key in {"mode", "ssid", "address"}}
+               if key in {"mode", "ssid", "address", "epoch"}}
     view = {
         "stage": status.get("stage") or "BOOTING",
         "failed_unit": status.get("failed_unit"),
@@ -902,6 +904,10 @@ class FaceDisplay:
             light_assist=self._light_session, **extra)
         if screen["kind"] != "light":
             self._light_session = False
+        if (screen["kind"] == "status" and screen.get("row") in {"failed", "ap", "booting"}
+                and not (core and (core.get("estop") or core.get("robot_mode") == "EMERGENCY"))):
+            if page := recovery_display.read_page(self.root, view, now):
+                screen = {**screen, "row": "network_recovery", "recovery_page": page}
         return screen
 
     def _lcd_call(self, name: str, *args) -> None:
@@ -1098,50 +1104,6 @@ def _gpio_module():
 def _lcd_factory():
     from emotion.rosy_lcd import LCD
     return LCD
-
-
-def card_renderer(info_screen) -> Callable[[dict], object]:
-    """D-433: one entry for every card the table can ask for; a release image each.
-
-    ``card["screen"]`` is ``face_screen.screen_for``'s answer (absent on a release
-    without it: the boot card, as before).
-    """
-
-    def render(card: dict):
-        screen = card.get("screen") or {}
-        kind = screen.get("kind")
-        frame = int(card.get("frame") or 0)
-        if kind == "stopped":
-            image = info_screen.render_stopped({"device_name": card.get("device_name"),
-                                                "cause": screen.get("cause"), "release": screen.get("release")})
-        elif kind == "light":
-            image = info_screen.render_light_assist()
-        elif kind == "update":
-            image = info_screen.render_notice("Updating", [f"to {screen.get('release') or '?'}",
-                                                           f"now {card.get('release_id') or '?'}"], frame=frame)
-        elif kind == "shutdown":
-            image = info_screen.render_notice(str(card.get("shutdown_title") or "Shutting down"),
-                                              [str(card.get("device_name") or "")])
-        elif kind == "face" and screen.get("overlay"):  # a card takes the expression area, under the bar
-            image = info_screen.render_overlay(screen["overlay"]["payload"])
-        elif screen.get("row") == "peer_request":
-            # D-483: ASCII, as every card (the DejaVu card font has no Hangul).
-            # One "XXXX  CODE" line per live request, so each requester reads its own code.
-            peer = screen.get("peer") or {}
-            lines = [f"{r['display_code']}  {r['approval_code']}" for r in peer.get("requests") or []]
-            if peer.get("tls_ca_sha256"):
-                # What the tablet asks a first-contact requester to compare (its first 16 digits).
-                ca = peer["tls_ca_sha256"][:16]
-                lines.append("CA " + " ".join(ca[i:i + 4] for i in range(0, 16, 4)))
-            image = info_screen.render_notice("Pair request", lines)
-        else:
-            image = info_screen.render_boot(card, frame=frame)
-        if kind == "face" and card.get("bar"):
-            band, mask = info_screen.render_bar(*card["bar"][:4])
-            image.paste(band, (0, 0), mask)
-        return image
-
-    return render
 
 
 def face_converter(info_screen) -> Callable[[object], object]:

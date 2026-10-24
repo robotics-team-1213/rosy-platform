@@ -36,12 +36,13 @@ class UpdaterStage:
 
     def _releases(self, state: dict, repo: str) -> list[dict]:
         headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
-        if state.get("etag") and isinstance(state.get("releases"), list):
-            headers["If-None-Match"] = state["etag"]
+        # Legacy engines must never consume feature entries from our cache after downgrade.
+        if state.get("etag_v2") and isinstance(state.get("releases_v2"), list):
+            headers["If-None-Match"] = state["etag_v2"]
         status, found, body = self.http.get(
             f"{self.api_base}/repos/{repo}/releases?per_page=20", headers, MAX_LIST_BYTES)
         if status == 304:
-            return state["releases"]
+            return state["releases_v2"]
         if status in (403, 429):
             until = self._backoff(state, found)
             raise UpdateError(f"GITHUB_RATE_LIMITED: HTTP {status}; backing off until {_z(until)}")
@@ -70,8 +71,8 @@ class UpdaterStage:
                          if isinstance(asset, dict) and asset.get("name") == wanted["tarball"]), None)
             releases.append({"release_id": release_id, **{key: urls[name] for key, name in wanted.items()},
                              "size": size if _number(size) and size >= 0 else None})
-        state["etag"] = found.get("etag")
-        state["releases"] = releases
+        state["etag_v2"] = found.get("etag")
+        state["releases_v2"] = releases
         return releases
 
     def _rollout(self, release: dict) -> dict:

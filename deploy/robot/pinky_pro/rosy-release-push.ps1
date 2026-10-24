@@ -287,6 +287,14 @@ function Get-CoreReleaseCheckArguments {
     return @("sudo", "-n", "sh", "-c", "'$script'")
 }
 
+function Get-BootInverseArguments([switch]$Preflight) {
+    $options = ""
+    if ($Preflight) { $options = " --rollback-target-previous --dry-run" }
+    $journal = "/var/lib/rosy/image-layer-backup/boot-transition.json"
+    $command = "if test -e $journal || test -L $journal; then exec python3 -B /opt/rosy/native-runtime/sync-image-layer.py --inverse-before-legacy-sync$options; else echo BOOT_INVERSE_NOT_REQUIRED; fi"
+    return @("sudo", "-n", "sh", "-c", "'$command'")
+}
+
 function Get-ImageLayerSyncArguments([string]$ReleaseId, [switch]$DryRun) {
     # A push runs the script of the release it just activated. After a
     # rollback the release that became current may predate D-388, so fall back
@@ -392,7 +400,9 @@ function Get-RemoteCommandPlan {
         # do not work with the older one, CORE is only ready after the sync.
         # The core-release check follows the sync for the same reason: a CORE
         # restarted into the older release before its units are back may fail.
+        Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-BootInverseArguments -Preflight)) "boot-inverse-preflight"
         Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $RollbackWrapper))
+        Add-Step $plan "ssh" $SshExe ($claimSsh + (Get-BootInverseArguments)) "boot-inverse-apply"
         if (-not $SkipImageLayerSync) {
             Add-ImageLayerSteps $plan "" -NoReadyCheck
             # D-433 Q5: a rollback past rosy-face restores rosy-boot-display.service
@@ -546,6 +556,13 @@ foreach ($step in $plan) {
         Fail "$($step.kind) failed (exit $($result.exit_code)): $display`n$($result.output -join [Environment]::NewLine)"
     }
     if ($result.output) { Write-Host ($result.output -join [Environment]::NewLine) }
+
+    if ($step.role -like "boot-inverse-*") {
+        if (($result.output -join " ").Trim() -eq "BOOT_INVERSE_NOT_REQUIRED") { continue }
+        $inverse = Read-LastJsonLine $result.output
+        if (-not $inverse -or $inverse.ok -ne $true) { Fail "boot inverse could not be verified: $display" }
+        continue
+    }
 
     if ($step.role -eq "image-layer-dry-run" -or $step.role -eq "image-layer-apply") {
         $imageLayer = Read-LastJsonLine $result.output

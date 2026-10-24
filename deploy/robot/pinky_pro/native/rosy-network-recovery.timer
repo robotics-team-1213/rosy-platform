@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry eligible local ROSY network recovery
+
+[Timer]
+OnBootSec=15
+OnUnitInactiveSec=10
+AccuracySec=1
+Unit=rosy-network-recovery.service
+
+[Install]
+WantedBy=timers.target

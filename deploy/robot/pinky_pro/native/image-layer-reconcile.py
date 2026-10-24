@@ -5,8 +5,9 @@ sync-image-layer.py replaces /opt/rosy/native-runtime files one at a time; a run
 between its first change and its files_applied flag leaves files from two releases there. Its
 reconcile() finishes such a run (every file landed) or undoes it from the backups, but only on
 the next sync. rosy-release-recover runs this after recovery, before rosy-core and the runtime
-target start, so no service starts on a mix. It only reconciles: no plan, no install, no
-restart. Reload/enable work it owes goes to pending.json for the next sync, as reconcile() does.
+target start, so no service starts on a mix. The boot catalog follows the native result:
+finish signed boot files after a completed native install, or inverse them after an undo.
+Reload/enable work it owes goes to pending.json for the next sync, as reconcile() does.
 
     python3 -I -B image-layer-reconcile.py [--root /]   # JSON report on stdout
 """
@@ -34,11 +35,25 @@ def _sync_module():
 
 def reconcile_at_boot(root: Path, run: Callable[[list[str]], object] = subprocess.run) -> dict:
     sync = _sync_module()
+    journal = root / sync.boot.JOURNAL
+    has_boot = journal.exists() or journal.is_symlink()
     pending, _, _ = sync.reconcile(root, dry_run=True)
-    if not pending:  # the usual boot: nothing unfinished, no lock taken, nothing written
+    if not pending and not has_boot:
         return {"reconciled": []}
     with sync._release_lock(root):
+        if has_boot:
+            # Native release recovery may already have restored current to an old release.
+            target, _ = sync.resolve_current(root)
+            verify = sync._verifier(root, root / sync.DEFAULT_PUBLIC_KEY)
+            sync.boot.inverse(root, target, verify, run, install=sync._install)
         report, steps, _ = sync.reconcile(root, dry_run=False)
+        if has_boot:
+            transitions = sync.boot._transitions(root)
+            if (transitions and transitions[-1]["release_id"] == target
+                    and any(item["outcome"] == "undone" for item in report)):
+                sync.boot.inverse(root, transitions[-1]["previous_release"], verify, run, install=sync._install)
+            else:
+                sync.boot.reconcile_forward(root, target, verify, install=sync._install)
     # Units start right after this; they must see the unit files reconcile left.
     if steps["daemon_reload"]:
         run(["systemctl", "daemon-reload"])

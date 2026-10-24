@@ -11,6 +11,8 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
+| D-863 | 장치 네트워크 복구와 서명 업데이트 연속성 | Accepted for implementation (2026-10-24) |
+| D-864 | D-854 보완 — 공통 행동 단위 ros_joint_rad, 목표 묶음은 궤적 하나, Isaac은 학습 데이터·Gazebo는 실행 확인 | Proposed (2026-10-24) |
 | D-861 | 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다 | Accepted (2026-10-24) |
 | D-859 | 현장 NTP 계층과 공통 UTC 시간 동기화 | Accepted (2026-10-24) |
 | D-856 | 업무 공정 해석과 로봇 동작 실행의 분리 | Accepted (2026-10-24) |
@@ -1273,3 +1275,8 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted for implementation (2026-10-22).
 
 기존 중앙 Account 프로젝트에서 로봇·참여 구성·과제·학습 방식·계산 자원을 구분한다. Fleet의 공통 Learning 진입은 보호된 `/learning`으로 연결하며 OMX는 첫 지원 어댑터다. 전문은 [D-840](../adr/D-840-shared-multi-robot-learning-center.md).
+## D-863 장치 네트워크 복구와 서명 업데이트 연속성
+
+**Status:** Accepted for implementation (2026-10-24). 실물 장치·ARM64 산출물 수용은 별도다.
+
+전용 network authority, 응답 후 실행되는 Wi-Fi 복구 작업, 첫 부팅 인계와 서명 boot catalog를 정의한다. 전문은 [D-863](../adr/D-863-device-network-recovery-and-update-continuity.md).

@@ -18,18 +18,23 @@ whenever the AP is not up. Nothing here prints the key.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
+import secrets
 import subprocess
 import sys
 import tempfile
 import time
 from typing import Callable
 
+from network_transaction import change_lock
+
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import rosy_claim
 
 Runner = Callable[[list[str]], str]
 PROFILE = "rosy-fallback-ap"
@@ -148,7 +153,7 @@ def _profile(ssid: str, secret: str, country: str) -> str:
 def _status(root: Path, mode: str, ssid: str | None = None) -> None:
     status = {"mode": mode}
     if mode == "ap":
-        status.update(ssid=ssid, address=AP_ADDRESS)
+        status.update(ssid=ssid, address=AP_ADDRESS, epoch=str(time.monotonic_ns()))
     else:
         clear_display_ap(root)
     _write(root / STATUS, json.dumps(status, sort_keys=True) + "\n", 0o644)
@@ -212,13 +217,42 @@ def perform(root: Path, action: str, run: Runner) -> bool:
     return True
 
 
+@contextmanager
+def _radio_lock(root: Path):
+    holder = "network-fallback:" + secrets.token_hex(12)
+    try:
+        rosy_claim.acquire(root, holder, "fallback network supervision", 300, lock_wait_s=0)
+    except rosy_claim.ClaimBusy:
+        yield False
+        return
+    try:
+        with change_lock(root, blocking=False) as acquired:
+            yield acquired
+    finally:
+        rosy_claim.release(root, holder)
+
+
 def step(state: LinkState, now: float, policy: dict, uplink: bool, root: Path, run: Runner) -> LinkState:
+    with _radio_lock(root) as acquired:
+        if not acquired:
+            return state
+        return _step_locked(state, now, policy, uplink, root, run)
+
+
+def _step_locked(state: LinkState, now: float, policy: dict, uplink: bool, root: Path, run: Runner) -> LinkState:
+    request = root / 'var/lib/rosy/network/recovery-request.json'
+    if _read_json(request).get('source') == 'network-transaction':
+        from network_runtime import maintenance_ready
+        if maintenance_ready(root):
+            state = LinkState(no_uplink_since=now - policy.get('grace_seconds', 120))
     action, following = decide(state, now, policy, uplink=uplink)
     if action and not perform(root, action, run) and action == "open":
         # Not up: fallback waits another grace period, relay retries next poll.
         return LinkState(no_uplink_since=now)
     if action:
         print(json.dumps({"action": action}), flush=True)
+        if action == 'open':
+            request.unlink(missing_ok=True)
     return following
 
 
@@ -229,11 +263,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     state = LinkState()
     # A restart loses the in-memory state; start from a known "AP down".
-    _run(["nmcli", "connection", "down", PROFILE])
-    clear_display_ap(args.root)  # the AP is down; the LCD must not show its key
+    with _radio_lock(args.root) as acquired:
+        if acquired:
+            _run(["nmcli", "connection", "down", PROFILE])
+            clear_display_ap(args.root)
     while True:
         try:
-            state = step(state, time.monotonic(), load_policy(args.root), has_uplink(_run), args.root, _run)
+            with _radio_lock(args.root) as acquired:
+                if acquired:
+                    state = _step_locked(state, time.monotonic(), load_policy(args.root),
+                                         has_uplink(_run), args.root, _run)
         except Exception as exc:  # keep supervising; the next poll retries
             print(f"rosy-network: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
         if args.once:
