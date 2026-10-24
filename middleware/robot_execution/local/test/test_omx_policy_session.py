@@ -40,6 +40,9 @@ def setup_session(tmp_path,enabled=True,camera=False,**session_options):
     if camera:
         doc['cameras']=[dict(name='front',identity='cam-front',calibration_sha256='a'*64,
                             source_shape=[3,2,2],model_shape=[3,2,2],color='rgb',scale=1/255)]
+    if camera==2:  # D-854: a second installed camera after front
+        doc['cameras'].append(dict(name='top',identity='cam-top',calibration_sha256='b'*64,
+                                   source_shape=[3,2,2],model_shape=[3,2,2],color='rgb',scale=1/255))
     doc=seal(doc);(root/'policy-artifact.json').write_text(json.dumps(doc))
     binding=InstallBinding(policy_revision=doc['revision'],profile=doc['profile'],robot_type=doc['robot_type'],
         environment='sim',device_profile_revision=doc['device_profile_revision'],camera_profile_revision=doc['camera_profile_revision'],
@@ -54,7 +57,9 @@ def setup_session(tmp_path,enabled=True,camera=False,**session_options):
         owner_identity=lambda:dict(workcell_id=cfg.workcell_id,instance_id=cfg.instance_id,
                                    simulation=True,profile=doc['device_profile_revision']),
         authority_current=lambda _:authority[0],monotonic=lambda:clock[0],enabled=enabled,
-        camera_current=(lambda:(CameraSnapshot('front','cam-front','a'*64,(3,2,2),10_000_000_000,'c'*64),)) if camera else None,
+        camera_current=(lambda:(CameraSnapshot('front','cam-front','a'*64,(3,2,2),10_000_000_000,'c'*64),)
+                        +((CameraSnapshot('top','cam-top','b'*64,(3,2,2),10_000_000_000,'d'*64),) if camera==2 else ()))
+                       if camera else None,
         **session_options)
     session.observe(JointStateSnapshot({'joint_1':0.1,'joint_2':0.0},10,10.0,'cal-7'))
     return session,client,clock,authority,root

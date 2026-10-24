@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.304
+**Version:** v1.310
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -388,8 +388,8 @@ port supports an explicitly installed SIM session only.
 
 | Method/path | Request | Response |
 |---|---|---|
-| `GET /api/v1/arm/policy` | none | `policy_revision`, `simulation: true`, ordered `joint_names`, `units: rad`, `camera: {name, shape}` (CHW) |
-| `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `camera: {name, shape, rgb_base64}`; bytes are interleaved RGB uint8 HWC |
+| `GET /api/v1/arm/policy` | none | `policy_revision`, `simulation: true`, ordered `joint_names`, `units: rad`, `cameras: [{name, shape}]` (CHW, installed order, 1..N); a one-camera policy also returns that entry as `camera` (D-854) |
+| `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `cameras: [{name, shape, rgb_base64, received_at_ns, frame_sha256}]` (owner-monotonic receipt time, SHA-256 of the RGB bytes) in installed order over one joint snapshot (one-camera policy also `camera`); bytes are interleaved RGB uint8 HWC. Every frame binds the action and its age |
 | `POST /api/v1/arm/actions` | `{policy_revision, observation_id, positions}` | 202 owner decision `{accepted, state, reason, command_id, cancel_outcome}`; admission is not completion |
 | `POST /api/v1/arm/stop` | none | `local_stop`, `hold_reason`, `physical_stop_verified: false` |
 
@@ -3763,6 +3763,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.310 | 2026-10-24 | Additive (D-854, feat/arm-policy-cameras): CORE arm policy `cameras` list (1..N installed cameras, installed order) on `/policy` and `/observations`; one-camera policies keep `camera`. Each observation camera adds `received_at_ns` and `frame_sha256`. All frames bind the action; owner freshness and causality checks apply per camera. Default unbound, SIM-only. |
 | v1.304 | 2026-10-24 | (origin #152 v1.296, 2026-10-24 port) Read-only source-bound motor health in CORE, Fleet and Cell; preserve original measurement age and registered motor identity, including terminal hardware faults without fabricated positions. No torque, fault-clear or motion authority. |
 | v1.302 | 2026-10-24 | (origin #148 v1.295, 2026-10-24 port) D-837 source-bound workcell arm observations and preview-only camera registration; native Fleet intake and existing Cell UI are implementation/deployment work, not motion admission. |
 | v1.301 | 2026-10-24 | (origin #135 v1.293, 2026-10-24 port) Additive (D-835): measured PNG/JPEG registration, bounded immutable line/contour candidates, non-writing candidate map validation and optional facility evidence. Existing STL hashes and envelope 1.0 unchanged. |
