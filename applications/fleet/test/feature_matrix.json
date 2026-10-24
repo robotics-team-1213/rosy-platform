@@ -3101,7 +3101,10 @@
         "applications/fleet/web/map/map-polling.js",
         "applications/fleet/web/sitemap/site-map-camera.js",
         "applications/fleet/web/sitemap/site-map-teach.js",
-        "applications/fleet/web/sitemap/site-map.js"
+        "applications/fleet/web/sitemap/site-map.js",
+        "applications/fleet/web/sitemap/drawing-import.js",
+        "applications/fleet/web/sitemap/extraction-review.js",
+        "applications/fleet/web/sitemap/map-authoring.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -3218,6 +3221,54 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/site-map/activate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/drawing-import.js",
+          "expression": "/api/fleet/site-map/drawings",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/drawings"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/drawing-import.js",
+          "expression": "/api/fleet/site-map/drawings/${source.asset_sha256}/projections",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/drawings/{asset_sha256}/projections"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/extraction-review.js",
+          "expression": "/api/fleet/site-map/drawing-projections/${before.projection.projection_sha256}/extractions",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/drawing-projections/{projection_sha256}/extractions"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/extraction-review.js",
+          "expression": "/api/fleet/site-map/drawing-extractions/${result.extraction_sha256}/validate",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/map-authoring.js",
+          "expression": "/api/fleet/site-map/drawing-projections/${hash}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/map-authoring.js",
+          "expression": "/api/fleet/site-map/drawing-projections/${hash}/render",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}/render"
           ]
         }
       ],
@@ -3442,6 +3493,108 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/site-map/profiles/{profile_id}"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/drawings",
+          "method": "POST",
+          "path": "/api/fleet/site-map/drawings",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_drawing_routes.py",
+          "handler": "drawing_upload",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (origin port, 2026-10-24)",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_drawing_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/drawings"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/drawings/{asset_sha256}/projections",
+          "method": "POST",
+          "path": "/api/fleet/site-map/drawings/{asset_sha256}/projections",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_drawing_routes.py",
+          "handler": "drawing_project",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (origin port, 2026-10-24)",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_drawing_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/drawings/{asset_sha256}/projections"
+        },
+        {
+          "id": "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}",
+          "method": "GET",
+          "path": "/api/fleet/site-map/drawing-projections/{projection_sha256}",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_drawing_routes.py",
+          "handler": "drawing_projection",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (origin port, 2026-10-24)",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_drawing_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/site-map/drawing-projections/{projection_sha256}"
+        },
+        {
+          "id": "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}/render",
+          "method": "GET",
+          "path": "/api/fleet/site-map/drawing-projections/{projection_sha256}/render",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_drawing_routes.py",
+          "handler": "drawing_render",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (origin port, 2026-10-24)",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_raster.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/site-map/drawing-projections/{projection_sha256}/render"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/drawing-projections/{projection_sha256}/extractions",
+          "method": "POST",
+          "path": "/api/fleet/site-map/drawing-projections/{projection_sha256}/extractions",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_extraction_routes.py",
+          "handler": "extract",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (origin port, 2026-10-24)",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_extraction.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/drawing-projections/{projection_sha256}/extractions"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate",
+          "method": "POST",
+          "path": "/api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_extraction_routes.py",
+          "handler": "validate_candidate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (origin port, 2026-10-24)",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_extraction.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate"
         }
       ],
       "flows": [
@@ -5123,7 +5276,8 @@
         "applications/fleet/web/installation/install.js",
         "applications/fleet/web/shared/robot-video.js",
         "applications/fleet/web/shared/vision-view.js",
-        "applications/fleet/web/sitemap/site-map.js"
+        "applications/fleet/web/sitemap/site-map.js",
+        "applications/fleet/web/cell/cell-observation.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -5199,6 +5353,22 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-observation.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-observation.js",
+          "expression": "/api/fleet/workcell-observations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/workcell-observations"
           ]
         }
       ],
@@ -5287,6 +5457,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/vision/lease"
+        },
+        {
+          "id": "GET:/api/fleet/workcell-observations",
+          "method": "GET",
+          "path": "/api/fleet/workcell-observations",
+          "implementation": "operations/fleet/fleet/server/recognition/workcell_observation_routes.py",
+          "handler": "observations",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response (origin port, 2026-10-24)",
+          "contract_tests": [
+            "operations/fleet/test/test_workcell_observation_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/workcell-observations"
         }
       ],
       "flows": [
