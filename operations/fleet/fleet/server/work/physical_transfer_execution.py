@@ -1,11 +1,14 @@
 """Durable physical preparation; no device submission or claim release."""
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
+import json
 from uuid import uuid4
 
 from core_common.protocol.arm_transfer import FleetArmTransferGrant
+from core_common.protocol.device_actions import DeviceActionReceipt
 from core_common.resource_keys import normalize_resources
 from .mission_store import MissionConflict, _json
+from .action_receipts import verify_phase_receipt
 from .physical_transfer_evidence import TransferEvidenceContext, TransferOwnerTarget, validate_transfer_observations
 from .physical_transfer_observations import record
 from .physical_transfer_store import PhysicalTransferRequest
@@ -39,13 +42,16 @@ class PhysicalTransferExecution:
                 or control["generation"] != job["dispatch_generation"]):
             raise MissionConflict("physical preparation fence is closed or changed")
         store._check_capabilities(capabilities, observed_at_ns, now_ns)
-        rows = connection.execute("SELECT resource_key,generation,phase FROM fleet_action_claims "
-            "WHERE owner_kind='mission' AND owner_id=?", (mission_id,)).fetchall()
-        expected = {key for _, _, key in normalize_resources(store.installation.policy.resources)}
-        if ({row["resource_key"] for row in rows} != expected
-                or any(row["generation"] != job["dispatch_generation"] or row["phase"] != "CLAIMED" for row in rows)):
+        if not self._owns_claims(connection, job, phases={"CLAIMED"}):
             raise MissionConflict("physical preparation requires every current claim")
         return job
+
+    def _owns_claims(self, connection, job, *, phases):
+        rows = connection.execute("SELECT resource_key,generation,phase FROM fleet_action_claims "
+            "WHERE owner_kind='mission' AND owner_id=?", (job["mission_id"],)).fetchall()
+        expected = {key for _, _, key in normalize_resources(self.store.installation.policy.resources)}
+        return ({row["resource_key"] for row in rows} == expected
+                and all(row["generation"] == job["dispatch_generation"] and row["phase"] in phases for row in rows))
 
     def _grant(self, job, *, prepared_at_ns, identities):
         installed = self.store.installation
@@ -146,3 +152,80 @@ class PhysicalTransferExecution:
                      preconditions_validated_at_ns=final_ns))
             connection.commit()
             return {**result, "status": "SUBMITTING"}
+
+    @staticmethod
+    def _last_receipt(connection, mission_id):
+        row = connection.execute("SELECT detail_json FROM fleet_cell_events WHERE mission_id=? "
+            "AND event_type='PHYSICAL_TRANSFER_RECEIPT' ORDER BY event_id DESC LIMIT 1", (mission_id,)).fetchone()
+        return None if row is None else json.loads(row[0])
+
+    def _state(self, connection, mission_id):
+        job = self.store._read(connection, mission_id)
+        row = connection.execute("SELECT * FROM fleet_physical_transfer_attempts WHERE mission_id=?", (mission_id,)).fetchone()
+        if job is None or row is None:
+            raise KeyError(mission_id)
+        result = self._view(row, job)
+        latest = self._last_receipt(connection, mission_id)
+        boundary = None if latest is None else latest.get("action_succeeded_at_ns")
+        result["action_succeeded_at_ns"] = boundary
+        if row["status"] == "ACTION_SUCCEEDED" and boundary is not None:
+            result["context"] = {**result["context"], "phase": "POST_ACTION", "not_before_ns": boundary}
+        return result
+
+    def snapshot(self, mission_id):
+        with closing(self.store._journal._connect()) as connection:
+            return self._state(connection, mission_id)
+
+    def record_receipt(self, mission_id, response):
+        store = self.store
+        with closing(store._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = self._state(connection, mission_id)
+            grant = FleetArmTransferGrant.model_validate(current["grant"])
+            raw = response.model_dump(mode="json") if isinstance(response, DeviceActionReceipt) else response
+            parsed = DeviceActionReceipt.model_validate(raw)
+            receipt = verify_phase_receipt(grant, parsed, phase_ids=("approach", "grasp", "transfer", "release"))
+            canonical = receipt.model_dump(mode="json", exclude={"created"})
+            prior = self._last_receipt(connection, mission_id)
+            if prior is not None:
+                old = prior["receipt"]
+                if receipt.journal_event_id < old["journal_event_id"]:
+                    return current
+                if receipt.journal_event_id == old["journal_event_id"]:
+                    if canonical != old:
+                        raise MissionConflict("physical receipt watermark was reused with different evidence")
+                    return current
+                if old["state"] in {"SUCCEEDED", "FAILED", "HOLD"}:
+                    raise MissionConflict("a terminal physical owner receipt cannot be replaced")
+            proof = connection.execute("SELECT request_digest FROM fleet_physical_transfer_observations "
+                "WHERE mission_id=? AND phase='PRE_DISPATCH'", (mission_id,)).fetchone()
+            if proof is None or proof[0] != grant.request_digest or current["status"] == "PREPARED":
+                raise MissionConflict("physical owner receipt requires a committed first-send intent")
+            now_ns = store._now_ns()
+            now = datetime.fromtimestamp(now_ns / 1e9, timezone.utc)
+            if (now_ns < current["prepared_at_ns"] or not grant.issued_at <= receipt.observed_at <= now
+                    or any(not grant.issued_at <= phase.observed_at <= receipt.observed_at for phase in receipt.phase_summaries)
+                    or (prior is not None and now_ns < prior["received_at_ns"])):
+                raise MissionConflict("physical owner receipt clock is future or regressed")
+            job = store._read(connection, mission_id)
+            control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+            authority = (control is not None and control["dispatch_enabled"]
+                and control["authority_epoch"] == grant.authority_epoch and control["generation"] == grant.dispatch_generation
+                and self._owns_claims(connection, job, phases={"CLAIMED", "DISPATCHING", "HELD", "UNKNOWN"}))
+            state = receipt.state.value
+            succeeded = state == "SUCCEEDED" and authority
+            active = state in {"PREPARED", "SUBMITTING", "ACCEPTED", "RUNNING"} and authority
+            parent_status = "ACTION_SUCCEEDED" if succeeded else "RUNNING" if active else "HOLD"
+            attempt_status = "ACTION_SUCCEEDED" if succeeded else "SUBMITTING" if active else "UNKNOWN"
+            phase = "HELD" if succeeded else "DISPATCHING" if active else "UNKNOWN"
+            reason = None if succeeded or active else "PHYSICAL_ACTION_REQUIRES_RECONCILIATION"
+            store._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_RECEIPT", "fleet",
+                dict(event_id=f"physical-receipt:{receipt.journal_event_id}", receipt=canonical, received_at_ns=now_ns,
+                     action_succeeded_at_ns=now_ns if succeeded else None))
+            connection.execute("UPDATE fleet_cell_jobs SET status=?,reason=?,updated_at=? WHERE mission_id=?",
+                               (parent_status, reason, now.isoformat(), mission_id))
+            connection.execute("UPDATE fleet_physical_transfer_attempts SET status=? WHERE mission_id=?", (attempt_status, mission_id))
+            connection.execute("UPDATE fleet_action_claims SET phase=? WHERE owner_kind='mission' AND owner_id=?", (phase, mission_id))
+            result = self._state(connection, mission_id)
+            connection.commit()
+            return result
