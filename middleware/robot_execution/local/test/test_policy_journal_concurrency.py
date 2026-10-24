@@ -15,7 +15,7 @@ from core_common.protocol.schemas import LocalStopRequest, StopRequestSource
 @contextmanager
 def paused_submission(tmp_path, *, short_lease=False):
     journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
-    session, client, clock, *_ = setup_session(tmp_path, execution_journal=journal)
+    session, client, clock, authority, _ = setup_session(tmp_path, execution_journal=journal)
     if short_lease:
         session._lease = replace(session.lease, expires_at_ns=10_020_000_000)
     entered, release = threading.Event(), threading.Event()
@@ -49,7 +49,7 @@ def paused_submission(tmp_path, *, short_lease=False):
         assert entered.wait(5), results
         yield SimpleNamespace(session=session, client=client, clock=clock, journal=journal,
                               commands=commands, results=results, release=release,
-                              first=first, launch=launch)
+                              first=first, launch=launch, authority=authority)
     finally:
         release.set()
         for thread in threads:
@@ -78,6 +78,8 @@ def test_journal_write_allows_current_session_services(tmp_path, operation):
         intent = run.journal.read(run.commands[0])['intent']
         assert intent['lease']['expires_at_ns'] == 10_900_000_000
     assert len(run.client.commands) == 1
+    assert run.client.commands[0].source_state_sequence == 10
+    assert dict(run.client.commands[0].expected_start_state_positions) == {'joint_1': .1, 'joint_2': 0.}
 
 
 def test_stop_can_close_while_intent_waits_and_prevents_transport(tmp_path):
@@ -163,3 +165,38 @@ def test_recorded_grant_expiry_during_native_send_cancels_and_keeps_late_sink(tm
     goal = str(uuid4())
     runtime._dispatch_goal_event(RosGoalEvent('GOAL_ACCEPTED', command.command_id, None, goal, 10.03, 1))
     assert journal.read(command.command_id)['driver_goal_id'] == goal
+
+
+@pytest.mark.parametrize('operation', ['observe_hold', 'poll_revoke'])
+def test_hold_during_durable_intent_blocks_original_and_queued_submits(tmp_path, operation):
+    with paused_submission(tmp_path) as run:
+        def invalidate():
+            if operation == 'observe_hold':
+                run.session.observe(None)
+            else:
+                run.authority[0] = False
+                run.session.poll()
+        done = run.launch('invalidate', invalidate)
+        assert done.wait(2)
+        assert isinstance(run.results['invalidate'], PermissionError)
+        assert run.session.hold_reason
+        run.release.set()
+        assert run.first.wait(5)
+        assert isinstance(run.results['first'], PermissionError)
+        with pytest.raises(PermissionError):
+            run.session.submit(candidate(run.session))
+    assert len(run.commands) == 1 and not run.client.commands
+
+
+def test_runtime_attach_during_intent_cannot_rebind_prepared_command(tmp_path):
+    from test_policy_runtime_binding import runtime_methods
+    with paused_submission(tmp_path) as run:
+        runtime = runtime_methods(run.session, run.client)
+        done = run.launch('attach', lambda: run.session.bind_runtime(runtime))
+        assert done.wait(2)
+        assert run.results['attach'] is None, run.results
+        run.release.set()
+        assert run.first.wait(5)
+        assert isinstance(run.results['first'], PermissionError)
+        assert run.session.hold_reason == 'policy_prepared_binding_changed'
+    assert not run.client.commands and not runtime._phase_event_sinks
