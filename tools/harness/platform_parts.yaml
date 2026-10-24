@@ -881,6 +881,8 @@ roots:
 # roots above are the directory form.
 safety_modules:
   - contracts/foundation/core_common/protocol/swarm_freshness.py  # D-870 source-time expiry bound
+  - middleware/drive/behaviors/swarm/manager.py  # Swarm follow ownership, HOLD and timeout
+  - middleware/drive/behaviors/swarm/reference_stream.py  # Swarm reference admission and trail sampling
   - operations/fleet/fleet/server/channel/execution/outcomes/handover.py
   - operations/fleet/fleet/server/channel/execution/outcomes/evidence.py
   - operations/fleet/fleet/swarm/dispatch_guard.py
@@ -1004,6 +1006,8 @@ safety_modules:
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
   - {symbol: core_common.protocol.swarm_freshness.remaining_reference_s, public: true}  # D-870 pure lifetime check
+  - {symbol: core_features.swarm.manager.SwarmManager, public: true}
+  - {symbol: core_features.swarm.reference_stream.SwarmReferenceStream}
   - {symbol: core_features.command._execution_fence.Fence}
   - {symbol: core_features.command._execution_fence.install}
   - {symbol: core_features.command._execution_ledger.Ledger}
