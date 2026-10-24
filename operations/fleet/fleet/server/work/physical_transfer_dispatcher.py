@@ -1,8 +1,7 @@
 """Single installed simulation profile: persisted first send, then SDK lookup only."""
-from threading import RLock
-
 from core_common.protocol.arm_transfer import ArmTransferCapability, FleetArmTransferGrant
 from .local_action_transport import LocalActionUnavailable
+from .physical_transfer_io import physical_io
 
 
 class PhysicalTransferDispatcher:
@@ -15,8 +14,7 @@ class PhysicalTransferDispatcher:
                 "owner_identity", "transfer_capability", "submit", "get", "cancel")):
             raise ValueError("physical SDK dispatch requires the complete owner SDK")
         self.execution, self.transport, self.task_store = execution, transport, task_store
-        # Serialize this profile's RPCs so refresh cannot query an unsent intent.
-        self._io_lock = RLock()
+        self._journal_path = execution.store._journal.path.resolve()
 
     def _capabilities(self):
         store = self.execution.store
@@ -36,7 +34,7 @@ class PhysicalTransferDispatcher:
         return tuple(capabilities), observed_at_ns
 
     def prepare(self, mission_id):
-        with self._io_lock:
+        with physical_io(self._journal_path):
             try:
                 capabilities, observed_at_ns = self._capabilities()
                 return self.execution.prepare(mission_id, capabilities=capabilities,
@@ -46,7 +44,10 @@ class PhysicalTransferDispatcher:
                 raise
 
     def submit(self, mission_id, *, observations, authenticated_producer_id):
-        with self._io_lock:
+        if not isinstance(observations, (tuple, list)):
+            raise ValueError("physical observations require a bounded sample sequence")
+        observations = tuple(observations)
+        with physical_io(self._journal_path):
             current = self.execution.snapshot(mission_id)
             if current["status"] != "PREPARED":
                 return current
@@ -64,12 +65,15 @@ class PhysicalTransferDispatcher:
                 if (not control["dispatch_enabled"] or control["authority_epoch"] != grant.authority_epoch
                         or control["generation"] != grant.dispatch_generation):
                     return self.execution.hold(mission_id, reason="PHYSICAL_FENCE_CHANGED_BEFORE_SEND")
+                self.execution.validate_send(mission_id, expected_request_digest=grant.request_digest,
+                    observations=observations, authenticated_producer_id=authenticated_producer_id,
+                    capabilities=capabilities, capabilities_observed_at_ns=observed_at_ns)
                 return self.execution.record_receipt(mission_id, self.transport.submit(grant))
             except Exception:
                 return self.execution.hold(mission_id, reason="PHYSICAL_SUBMIT_OUTCOME_UNKNOWN")
 
     def refresh(self, mission_id):
-        with self._io_lock:
+        with physical_io(self._journal_path):
             current = self.execution.snapshot(mission_id)
             if not current["first_send_committed"] or current["status"] == "ACTION_SUCCEEDED":
                 return current
@@ -83,7 +87,7 @@ class PhysicalTransferDispatcher:
                 return self.execution.hold(mission_id, reason="PHYSICAL_LOOKUP_OUTCOME_UNKNOWN")
 
     def cancel(self, mission_id, *, reason):
-        with self._io_lock:
+        with physical_io(self._journal_path):
             current = self.execution.snapshot(mission_id)
             if current["status"] == "ACTION_SUCCEEDED":
                 return current

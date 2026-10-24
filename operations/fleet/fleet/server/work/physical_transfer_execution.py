@@ -289,6 +289,36 @@ class PhysicalTransferExecution:
             connection.commit()
             return result
 
+    def validate_send(self, mission_id, *, expected_request_digest, observations,
+                      authenticated_producer_id, capabilities, capabilities_observed_at_ns):
+        store = self.store
+        with closing(store._journal._connect()) as connection:
+            connection.execute("BEGIN")
+            current = self._state(connection, mission_id)
+            job = store._read(connection, mission_id)
+            grant = FleetArmTransferGrant.model_validate(current["grant"])
+            control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+            if (current["status"] != "SUBMITTING" or job["status"] != "RUNNING"
+                    or expected_request_digest != grant.request_digest or control is None
+                    or not control["dispatch_enabled"] or control["authority_epoch"] != grant.authority_epoch
+                    or control["generation"] != grant.dispatch_generation
+                    or not self._owns_claims(connection, job, phases={"DISPATCHING"})):
+                raise MissionConflict("physical send intent is held or its fence/claims changed")
+            context = TransferEvidenceContext.model_validate_json(_json(current["context"]))
+            proof = connection.execute("SELECT * FROM fleet_physical_transfer_observations "
+                "WHERE mission_id=? AND phase='PRE_DISPATCH'", (mission_id,)).fetchone()
+            document = evidence_document(context, observations)
+            if (proof is None or proof["request_digest"] != grant.request_digest
+                    or proof["evidence_json"] != document or proof["evidence_digest"] != sha256(document.encode()).hexdigest()):
+                raise MissionConflict("physical send facts differ from the committed intent")
+            now_ns = store._now_ns()
+            if (now_ns < proof["validated_at_ns"]
+                    or not grant.issued_at <= datetime.fromtimestamp(now_ns / 1e9, timezone.utc) < grant.expires_at):
+                raise MissionConflict("physical send clock regressed or grant expired")
+            store._check_capabilities(capabilities, capabilities_observed_at_ns, now_ns)
+            validate_transfer_observations(store.installation.policy, context, observations,
+                now_ns=now_ns, authenticated_producer_id=authenticated_producer_id)
+
     def record_receipt(self, mission_id, response):
         store = self.store
         with closing(store._journal._connect()) as connection:

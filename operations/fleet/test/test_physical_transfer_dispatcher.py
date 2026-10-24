@@ -258,3 +258,43 @@ def test_overlapping_dispatchers_serialize_rpcs_for_the_same_journal(driver, mon
         sent.result()
         canceled.result()
     assert len(driver.port.submitted) == 1 and len(driver.port.cancels) == 1
+
+
+def test_dispatcher_requires_its_control_store_to_use_the_same_journal(driver, tmp_path):
+    other = FleetTaskStore(tmp_path / "different.sqlite3")
+    with pytest.raises(ValueError, match="journal"):
+        api().PhysicalTransferDispatcher(driver.execution, driver.port, other, deployment_profile="simulation")
+
+
+def _forked_rpc_lock(path, result):
+    from fleet.server.physical_transfer_io import physical_io
+    try:
+        with physical_io(path):
+            result.put("acquired")
+    except TimeoutError:
+        result.put("busy")
+
+
+def test_rpc_guard_is_exclusive_across_processes_and_a_fork_is_not_reentrant(driver):
+    import multiprocessing
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("fork inheritance check requires a POSIX test host")
+    from fleet.server.physical_transfer_io import physical_io
+    context = multiprocessing.get_context("fork")
+    result = context.Queue()
+    def run_child():
+        child = context.Process(target=_forked_rpc_lock, args=(driver.path, result))
+        child.start()
+        try:
+            child.join(4)
+            assert not child.is_alive() and child.exitcode == 0
+            return result.get(timeout=1)
+        finally:
+            if child.is_alive():
+                child.terminate()
+                child.join(1)
+    with physical_io(driver.path):
+        assert run_child() == "busy"
+    assert run_child() == "acquired"
+    result.close()
+    result.join_thread()
