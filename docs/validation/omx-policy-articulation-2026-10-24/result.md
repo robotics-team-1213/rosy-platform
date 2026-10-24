@@ -54,7 +54,7 @@ These are transport observations, not timing acceptance for actual robot poses.
 
 External evidence root: `C:/DevTemp/learning-execution-20261023/`.
 
-| Artifact | SHA256 |
+| Artifact | SHA-256 |
 |---|---|
 | articulation-transport-sdk-final/out/pytest-tmp/**/policy-articulation.json | `8911ceb94ff3c49b38c749a24e05e0669f347ae34fd23b256ebd8b912b61e024` |
 | articulation-transport-sdk-final/out/pytest-tmp/**/policy-contacts.json | `4c108ad4d17bcb4653599430d9ef468407f6c5b85d39c296c17a794dd06bf876` |
