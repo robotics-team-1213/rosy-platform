@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-859 | 현장 NTP 계층과 공통 UTC 시간 동기화 | Accepted (2026-10-24) |
 | D-856 | 업무 공정 해석과 로봇 동작 실행의 분리 | Accepted (2026-10-24) |
 | D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
 | D-855 | 관제 위임 요청과 실행 시도에 결속된 취소 계약 | Accepted for implementation (2026-10-23) |
@@ -1224,6 +1225,12 @@ Details: docs/adr/D-745-learning-center-owner-controls.md.
 
 Dedicated D-772 measurement sources request the existing demand while their installed owner runs. Ordinary D-691 preview behavior is unchanged. Details: [D-774](../adr/D-774-station-measurement-camera-lifespan.md).
 
+
+## D-859 — 현장 NTP 계층과 공통 UTC 시간 동기화
+
+**Status:** Accepted (2026-10-24)
+
+관제 chrony를 현장 시간 기준으로 삼고 Linux 클라이언트·Windows 개발 PC를 같은 계층에 연결한다. 유지보수 중 보정, UTC 오차·표본 나이 검사, 단절·모바일 수용 범위는 [D-859](../adr/D-859-shared-utc-time-synchronization.md)를 따른다.
 
 ## D-776 - Installed station charge facts
 

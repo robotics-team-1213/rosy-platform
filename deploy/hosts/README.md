@@ -1,5 +1,69 @@
 # PC 자동 복구와 모니터링
 
+## 공통 시간 동기화 (D-859)
+
+관제 PC가 현장 NTP 서버이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
+기준과 수용 조건은 [D-859](../../docs/adr/D-859-shared-utc-time-synchronization.md)다.
+실제 서버 이름·주소·CIDR은 호스트에만 둔다. 아래 자리표시자는 운영 값으로 바꾼다.
+표시 시간대(예: Asia/Seoul)는 UTC 동기화와 별개이며 바꿀 필요가 없다.
+
+1. **유지보수:** 작업·주행·학습·수집과 현장 컨테이너를 중지한다. `chrony`를 설치한다
+   (`sudo apt-get install chrony`). 다른 시간 데몬(`systemd-timesyncd`, `ntp`, `ntpsec`)이
+   실행 중이면 운영자가 중지·비활성화한다. 자동 설치가 이 작업을 대신하지 않는다.
+   최초 보정과 chrony 재시작은 시계 점프를 일으킬 수 있다.
+2. **관제:** 아래 명령으로 먼저 미리 보고, 외부 서버 세 곳의 독립성·도달성과 현장
+   CIDR을 확인한다. `render`는 출력만 한다. 기존 방화벽 절차로 승인된 LAN 인터페이스와
+   클라이언트 CIDR에서 UDP 123만 허용한다. 인터넷에 NTP 포트를 공개하지 않는다.
+
+   ```bash
+   python3 deploy/hosts/common/rosy_time_sync.py render --role site \
+     --source <upstream-a> --source <upstream-b> --source <upstream-c> --allow <client-cidr>
+   sudo python3 deploy/hosts/common/rosy_time_sync.py install --maintenance --role site \
+     --source <upstream-a> --source <upstream-b> --source <upstream-c> --allow <client-cidr>
+   ```
+
+3. **각 Linux PC·로봇:** 관제 서버가 먼저 동기된 뒤 같은 도구로 등록한다. 서버는 DHCP가
+   바뀌어도 유지되는 승인된 DNS/mDNS 이름을 쓴다. 서로 다른 공용 pool로 우회하지 않는다.
+   필요하면 `--source`로 승인된 두 번째 현장 서버를 추가한다.
+
+   ```bash
+   sudo python3 deploy/hosts/common/rosy_time_sync.py install --maintenance --role client --source <site-ntp-name>
+   python3 deploy/hosts/common/rosy_time_sync.py check
+   chronyc -N sources -v
+   ```
+
+   새 Pinky native runtime에는 `rosy_time_sync.py`가 함께 배포된다. 저장소가 없는 장치는
+   `/opt/rosy/native-runtime/rosy_time_sync.py` 또는 승인된 release의 native 사본을 사용한다.
+   예전 장치에는 승인된 리비전의 도구를 먼저 복사한다. 이미지/OTA 설치만으로 현장별
+   NTP 등록이 끝나는 것은 아니다. 컨테이너·Harbor 앱은 호스트 시간을 공유하며 별도 NTP
+   데몬이나 `CAP_SYS_TIME`을 넣지 않는다. OMX는 팔 자체가 아닌 제어 호스트에 적용한다.
+4. **Windows 개발 PC:** 관리자 PowerShell 유지보수 창에서 먼저 `-WhatIf`로 확인한다.
+   도메인·정책 관리 PC는 스크립트가 거부하며 도메인 관리자가 같은 기준을 연결한다.
+
+   ```powershell
+   ./deploy/hosts/common/install-time-sync.ps1 -Server <site-ntp-name> -Maintenance -WhatIf
+   ./deploy/hosts/common/install-time-sync.ps1 -Server <site-ntp-name> -Maintenance
+   w32tm /query /status /verbose
+   w32tm /stripchart /computer:<site-ntp-name> /dataonly /samples:10
+   ```
+
+5. **수용:** Linux `check`의 JSON `synchronized=true`와 exit 0, 선택된 시간원, 표본 시각을
+   장치별로 기록한다. 보고 오차 상한 50ms·표본 나이 180초 기준을 벗어나면 exit 1이다.
+   UDP 차단/해제·재부팅 뒤 다시 확인한다. 실패하면 시간 의존 작업을 재개하지 않는다.
+   이 명령은 읽기 전용이며 앱의 자동 차단 기능은 아니다. Windows는 source·최근 성공
+   시각·offset을 별도로 관측하고 Linux의 50ms 통과로 간주하지 않는다. 휴대전화·MCU는
+   OS/MDM 시간 설정과 원본 capture clock domain을 별도로 확인한다. 앱 설치나 서버의
+   수신 시각만으로 모바일 시계까지 맞았다고 기록하지 않는다.
+
+설치 전 chrony 원본은 `/etc/chrony/chrony.conf.rosy-backup-*`에 보존된다. 구문 오류는
+적용 전 거부하고 서비스 재시작 실패는 이전 설정으로 복구한다. 시간원 연결 실패는 새
+설정을 유지하되 실패를 반환한다. DNS·UDP 123·관제 시간원부터 고친 뒤 `check`한다.
+구성 복구는 유지보수 중 출력된 원본 백업을 `chrony.conf`로 복사하고 chrony를 재시작한 뒤
+재검증한다. Windows는 출력된 `.reg`를 `reg import`하고 W32Time 재시작·상태 확인을 한다.
+백업은 운영 설정이므로 공개 저장소에 넣지 않는다.
+
+## PC 복구 설치
+
 모델·AI·관제 PC의 복구 기준은 `common/host-state/manifest`가 소유한다.
 각 PC는 승인된 저장소 리비전을 설치하고, 이후에는 로컬 사본과 실행값을 점검한다.
 Fleet은 결과만 읽으며 root 설치 명령을 실행하지 않는다(D-530).

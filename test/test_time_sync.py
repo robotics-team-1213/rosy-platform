@@ -1,10 +1,10 @@
 """Shared NTP configuration and honest readiness; no host clock is changed."""
 
 import importlib.util
-import math
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -49,6 +49,7 @@ def test_site_serves_only_explicit_networks(sync):
     ("site", ["a", "b", "c"], ["::/0"]),
     ("site", ["a"], ["192.0.2.0/24"]),
     ("site", ["a", "a", "a"], ["192.0.2.0/24"]),
+    ("site", ["a", "A", "a."], ["192.0.2.0/24"]),
 ])
 def test_unsafe_or_incomplete_config_is_refused(sync, role, sources, networks):
     with pytest.raises(ValueError):
@@ -77,6 +78,52 @@ def test_install_requires_maintenance_before_any_mutation():
     result = subprocess.run([sys.executable, str(TOOL), "install", "--role", "client", "--source", "site.example.invalid"], capture_output=True, text=True)
     assert result.returncode != 0
     assert "maintenance" in result.stderr.lower()
+
+
+def test_busy_runtime_refuses_install_before_writing(sync, tmp_path, monkeypatch):
+    monkeypatch.setattr(sync.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(sync, "run", lambda *a, **k: SimpleNamespace(returncode=0))
+    config = tmp_path / "chrony.conf"
+    config.write_text("original")
+    with pytest.raises(ValueError, match="stop rosy-core"):
+        sync.install("replacement", config)
+    assert config.read_text() == "original"
+    assert list(tmp_path.iterdir()) == [config]
+
+
+@pytest.mark.parametrize("failure", ["syntax", "restart", None])
+def test_install_validates_backs_up_and_recovers(sync, tmp_path, monkeypatch, failure):
+    config = tmp_path / "chrony.conf"
+    config.write_text("original")
+    calls = []
+
+    def fake_run(*args, **kwargs):
+        calls.append(args)
+        if args[:2] == ("systemctl", "is-active"):
+            return SimpleNamespace(returncode=3)
+        if args[0] == "chronyd" and failure == "syntax":
+            raise subprocess.CalledProcessError(1, args)
+        if args[:2] == ("systemctl", "restart") and failure == "restart" and kwargs.get("check", True):
+            raise subprocess.CalledProcessError(1, args)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(sync.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(sync, "run", fake_run)
+    monkeypatch.setattr(sync.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
+    monkeypatch.setattr(sync, "check", lambda: 0)
+    if failure:
+        with pytest.raises(subprocess.CalledProcessError):
+            sync.install("replacement", config)
+        assert config.read_text() == "original"
+    else:
+        assert sync.install("replacement", config) == 0
+        assert config.read_text() == "replacement"
+    backups = list(tmp_path.glob("chrony.conf.rosy-backup-*"))
+    assert len(backups) == (0 if failure == "syntax" else 1)
+    assert all(p.read_text() == "original" for p in backups)
+    assert not list(tmp_path.glob(".rosy-time-*"))
+    assert next(i for i, c in enumerate(calls) if c[0] == "chronyd") < next(
+        (i for i, c in enumerate(calls) if c[:2] == ("systemctl", "restart")), len(calls))
 
 
 def test_native_payload_carries_standalone_tool():
