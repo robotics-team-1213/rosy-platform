@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from importlib import import_module
 from types import SimpleNamespace
+from threading import Event
 
 from fastapi.testclient import TestClient
 import pytest
@@ -141,3 +142,56 @@ def test_observer_configuration_rejects_unsafe_tokens_without_echoing_them(token
         api().PhysicalTransferObserver(producer_id="observer", token=token,
             valid_until=datetime(2035, 1, 1, tzinfo=timezone.utc))
     assert not token or token not in str(failure.value)
+
+
+def test_observer_token_has_no_bearer_fallback_and_expiry_precedes_owner_io(rig, monkeypatch):
+    assert rig.client.get(CONTEXT, headers=headers("harbor")).status_code == 401
+    assert rig.client.get(CONTEXT, headers={"X-Physical-Observation-Token": "wrong"}).status_code == 401
+    monkeypatch.setattr("fleet.server.physical_transfer_observer_routes.time.time",
+                        lambda: datetime(2036, 1, 1, tzinfo=timezone.utc).timestamp())
+    assert rig.client.get(CONTEXT, headers=OBSERVER).status_code == 401
+    assert rig.port.reads == [] and rig.port.submitted == []
+
+
+@pytest.mark.parametrize("realm", ["site-token", "site-identity", "reserved-token", "registry", "robot-secret", "service"])
+def test_host_rejects_observer_credentials_that_overlap_another_authority(installation, realm):
+    from fleet.server.site_auth import SitePrincipal
+    observer = api().PhysicalTransferObserver(producer_id=installation.policy.producer_id, token=TOKEN,
+        valid_until=datetime(2035, 1, 1, tzinfo=timezone.utc))
+    principals = {}
+    if realm == "site-token":
+        principals[sha256(TOKEN.encode()).hexdigest()] = SitePrincipal("harbor", "service")
+    if realm == "site-identity":
+        principals["other"] = SitePrincipal(observer.producer_id, "operator")
+    console = SimpleNamespace(user_credential_overlaps_robot_secret=lambda digests: realm == "robot-secret")
+    registries = (SimpleNamespace(producers=(SimpleNamespace(token=TOKEN),)),) if realm == "registry" else ()
+    services = (SimpleNamespace(uses_token=lambda token: True),) if realm == "service" else ()
+    with pytest.raises(ValueError) as failure:
+        api().validate_observer(observer, installation, console=console, principals=principals,
+            other_tokens=(TOKEN,) if realm == "reserved-token" else (), other_services=services, registries=registries)
+    assert TOKEN not in str(failure.value)
+
+
+def test_wire_unknown_coverage_is_rejected_by_the_evaluator_without_submission(rig):
+    mission = approved(rig)
+    context = rig.client.get(CONTEXT, headers=OBSERVER).json()["context"]
+    request = measured(rig, context, phase="PRE_DISPATCH")
+    request["observations"][0]["owners"] = []
+    response = rig.client.post(PATH + "/" + mission + "/observations", headers=OBSERVER, json=request)
+    assert response.status_code == 409
+    assert rig.port.submitted == [] and {c["phase"] for c in claims(rig.db)} == {"CLAIMED"}
+
+
+def test_server_lifespan_starts_and_awaits_the_physical_monitor(rig, monkeypatch):
+    import asyncio
+    started, stopped = Event(), Event()
+    async def monitor():
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+    monkeypatch.setattr(rig.app.state.arm_transfer_dispatcher, "run", monitor)
+    with rig.client:
+        assert started.wait(2)
+    assert stopped.wait(2)
