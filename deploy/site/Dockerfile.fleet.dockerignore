@@ -15,11 +15,14 @@
 !operations/world/src/**
 !contracts/foundation/core_common/**
 !contracts/learning/src/**
+!contracts/skill/src/**
+!operations/processes/palletizing/src/**
 !applications/fleet/gateway/src/**
 !shared/web/**
 !deploy/site/requirements-fleet.txt
 !deploy/site/secret_exec.py
 !deploy/site/site_db.py
+!deploy/site/fleet_import_check.py
 !middleware/perception/map/map_v2_fleet/lane_graph.yaml
 !middleware/perception/map/map_v2_fleet/meshes/road_lines.stl
 **/__pycache__
