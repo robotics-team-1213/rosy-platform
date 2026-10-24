@@ -21,7 +21,8 @@ CONFIG = ROOT / "middleware/devices/rasptank/profile/config"
 @pytest.fixture(autouse=True)
 def source_without_operator_overlays(monkeypatch, tmp_path):
     for name in ("ROSY_CONFIG", "ROSY_ROBOT", "ROSY_RUNTIME_MODE", "ROSY_NAMESPACE",
-                 "ROSY_DEVICE_NAME", "ROSY_DEVICE_UID", "ROSY_ROBOT_NUMBER", "ROSY_DEV_AUTH"):
+                 "ROSY_DEVICE_NAME", "ROSY_DEVICE_UID", "ROSY_ROBOT_NUMBER", "ROSY_DEV_AUTH",
+                 "ROSY_NAVIGATION_BACKEND", "ROSY_DEPLOYMENT"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setitem(sys.modules, "ament_index_python.packages", None)
     monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", tmp_path / "absent.yaml")
