@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import vlm_judge
+import vlm_judge_report
 
 STATIC = Path(__file__).with_name('review_app_web')
 PREFIX = '/api/learning/vlm/'
@@ -51,11 +52,11 @@ def get(handler, path, store, token, collaboration=None):
         else:
             handler.send(data, mime=mime, etag=etag, cache='no-cache')
     elif path == PREFIX + 'evaluation':
-        handler.send(vlm_judge.evaluation(store))
+        handler.send(vlm_judge_report.evaluation(store))
     elif path == PREFIX + 'export':
         if collaboration:
             collaboration.accounts.require(handler.learning_principal, 'manage')
-        handler.send(vlm_judge.export(store))
+        handler.send(vlm_judge_report.export(store))
     else:
         handler.send({'error': 'VLM 경로를 확인하세요.'}, 404)
     return True

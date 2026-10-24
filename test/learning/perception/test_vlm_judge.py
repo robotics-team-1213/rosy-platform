@@ -8,6 +8,7 @@ from contextlib import contextmanager
 import pytest
 
 import vlm_judge
+import vlm_judge_report
 from review_app import make_server
 from review_store import Conflict, ReviewStore
 from test_learning_collaboration import Accounts, request
@@ -108,7 +109,7 @@ def test_evaluation_counts_labelled_photos_only(tmp_path):
     label(store, 1, **{'wrist.object_in_gripper': 'yes', 'wrist.gripper_empty': 'no'})
     label(store, 2, **{'wrist.object_in_gripper': 'no', 'wrist.gripper_empty': 'unclear'})
     label(store, 3, 'excluded', **{'wrist.object_in_gripper': None, 'wrist.gripper_empty': None})
-    result = vlm_judge.evaluation(store)
+    result = vlm_judge_report.evaluation(store)
     assert result['labelled'] == 2
     hf = next(m for m in result['models'] if m['runtime'] == 'transformers')
     assert hf['contradictions'] == 1  # photo 1 only; photo 3's yes/no is excluded and photo 2 is no/yes
@@ -125,7 +126,7 @@ def test_evaluation_counts_labelled_photos_only(tmp_path):
     human = {row['question']: row for row in result['human']}
     assert human['wrist.gripper_empty']['unclear_rate'] == 0.5
     label(store, 4, **{'front.lane_tape': 'left'})
-    tape = {q['question']: q for m in vlm_judge.evaluation(store)['models'] for q in m['questions']}['front.lane_tape']
+    tape = {q['question']: q for m in vlm_judge_report.evaluation(store)['models'] for q in m['questions']}['front.lane_tape']
     assert tape['balanced_accuracy'] == 0.0 and tape['n'] == 1
 
 
@@ -133,7 +134,7 @@ def test_export_hash_and_image_hash_check(tmp_path):
     store = open_store(tmp_path)
     vlm_judge.import_rows(store, bench(tmp_path, ROWS))
     label(store, 2, **{'wrist.object_in_gripper': 'no', 'wrist.gripper_empty': 'yes'})
-    exported = vlm_judge.export(store)
+    exported = vlm_judge_report.export(store)
     assert exported['count'] == 1 and hashlib.sha256(exported['jsonl'].encode()).hexdigest() == exported['sha256']
     row = json.loads(exported['jsonl'])
     assert set(row) == {'image_sha256', 'view', 'question_set', 'answers', 'status', 'tiers', 'actor', 'version'}
@@ -319,7 +320,7 @@ def test_evaluation_set_is_30_photos_per_view_frozen_and_topped_up_after_exclusi
 def test_audits_confirm_or_fix_and_pause_a_question(tmp_path, monkeypatch):
     monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W43')
     store = consensus_store(tmp_path, 120)
-    exported = [json.loads(line) for line in vlm_judge.export(store)['jsonl'].splitlines()]
+    exported = [json.loads(line) for line in vlm_judge_report.export(store)['jsonl'].splitlines()]
     assert len(exported) == 90 and {row['status'] for row in exported} == {'provisional'}  # the 30 blind ones stay out
     assert {row['tiers'][HELD] for row in exported} == {'provisional'}
 
@@ -334,21 +335,21 @@ def test_audits_confirm_or_fix_and_pause_a_question(tmp_path, monkeypatch):
         assert audit(fix)['status'] == 'labelled'
     excluded = next(row['id'] for row in vlm_judge.queue(store)['items'] if row['kind'] == 'audit')
     label(store, excluded, 'excluded', **{HELD: None})  # an exclusion is not an audit
-    assert vlm_judge.queue(store)['paused'] == [] and vlm_judge.evaluation(store)['audits'][0]['n'] == 4
+    assert vlm_judge.queue(store)['paused'] == [] and vlm_judge_report.evaluation(store)['audits'][0]['n'] == 4
     audit(True)  # 2 of 5 wrong: 40% > 10%
-    queue, result = vlm_judge.queue(store), vlm_judge.evaluation(store)
+    queue, result = vlm_judge.queue(store), vlm_judge_report.evaluation(store)
     assert queue['paused'] == [HELD] and queue['counts']['wrist']['audit'] == 0
     assert result['audits'] == [{'question': HELD, 'n': 5, 'errors': 2, 'rate': 0.4, 'paused': True}]
     assert result['paused'] == [HELD] and result['provisional'][0]['provisional'] == 0
     assert result['labelled'] == 5  # confirmed answers include the confirmed and the fixed audits
     assert result['eval_set'] == {'labelled': 0, 'models': []}  # audits were answered with the consensus shown
-    rows = [json.loads(line) for line in vlm_judge.export(store)['jsonl'].splitlines()]
+    rows = [json.loads(line) for line in vlm_judge_report.export(store)['jsonl'].splitlines()]
     assert {row['status'] for row in rows} == {'labelled', 'excluded'}  # paused provisional answers are not used
     assert {row['tiers'][HELD] for row in rows} == {'confirmed', None}
     with pytest.raises(ValueError, match='question id'):
         vlm_judge.unpause(store, 'bad question')
     assert vlm_judge.unpause(store, HELD, actor='lee') == {'question': HELD, 'actor': 'lee'}
-    assert vlm_judge.queue(store)['paused'] == [] and vlm_judge.evaluation(store)['audits'] == []  # count restarts
+    assert vlm_judge.queue(store)['paused'] == [] and vlm_judge_report.evaluation(store)['audits'] == []  # count restarts
     with store.connect() as db:
         assert [tuple(row) for row in db.execute('SELECT question, actor, ts IS NOT NULL FROM vlm_unpauses')] == [
             (HELD, 'lee', 1)]
@@ -367,7 +368,7 @@ def test_export_keeps_the_evaluation_set_and_disputed_photos_blind(tmp_path, mon
         for number in outside[:3]:  # a third model dissents: these photos are disputed
             put(db, number, 'm3', 'transformers', 'unclear', 0.6)
         sha = {row[0]: row[1] for row in db.execute('SELECT id, image_sha256 FROM vlm_items')}
-    rows = [json.loads(line) for line in vlm_judge.export(store)['jsonl'].splitlines()]
+    rows = [json.loads(line) for line in vlm_judge_report.export(store)['jsonl'].splitlines()]
     shown = {row['image_sha256'] for row in rows if 'provisional' in row['tiers'].values()}
     assert shown == {sha[number] for number in outside[3:]} and len(frozen) == 30
     assert not shown & {sha[number] for number in frozen | set(outside[:3])}
@@ -376,8 +377,8 @@ def test_export_keeps_the_evaluation_set_and_disputed_photos_blind(tmp_path, mon
 def test_vlm_writes_need_an_evaluation_state_and_reads_create_nothing(tmp_path):
     store = training_store(tmp_path)
     assert vlm_judge.items(store) == [] and vlm_judge.disputes(store) == []
-    assert vlm_judge.summary(store)['total'] == 0 and vlm_judge.export(store)['count'] == 0
-    assert vlm_judge.evaluation(store)['labelled'] == 0 and vlm_judge.queue(store)['items'] == []
+    assert vlm_judge.summary(store)['total'] == 0 and vlm_judge_report.export(store)['count'] == 0
+    assert vlm_judge_report.evaluation(store)['labelled'] == 0 and vlm_judge.queue(store)['items'] == []
     with pytest.raises(ValueError, match='not found'):
         vlm_judge.item(store, 1)
     with store.connect() as db:
@@ -496,7 +497,7 @@ def test_debate_consensus_moves_a_photo_out_of_the_disputed_queue(tmp_path, monk
     assert [row['id'] for row in after['items'] if row['kind'] == 'disputed'] == disputed[1:]
     assert any(row['id'] == disputed[0] for row in after['items'] if row['kind'] == 'audit') or \
         disputed[0] not in [row['id'] for row in after['items']]
-    coverage = vlm_judge.evaluation(store)['provisional'][0]
+    coverage = vlm_judge_report.evaluation(store)['provisional'][0]
     assert (coverage['provisional'], coverage['debate']) == (1, 1)
 
 

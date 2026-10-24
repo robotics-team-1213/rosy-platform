@@ -105,7 +105,7 @@ SCOPE: dict[str, list[str]] = {
     **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS + STAGES
        for name in ("learning.html", "learning.js")},
     **{f"learning/curation/perception/{name}": STAGES for name in
-       ("vlm_judge.py", "vlm_judge_web.py", "learning_domains.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
+       ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
         "review_app_web/vlm.css", "review_app_web/evaluate.html", "review_app_web/evaluate.js")},
     **{f"learning/curation/perception/{name}": ACCOUNTS for name in
        ("learning_accounts.py", "learning_collaboration.py", "learning_oauth.py", "learning_rosy_accounts.py",
