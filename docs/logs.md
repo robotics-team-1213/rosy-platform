@@ -10235,3 +10235,10 @@ osy-d395-s1d\`.
 - 증거: calibration 종료0/95파일 검증, engineering 종료1/253파일 검증. 170수락 목표 중169성공·마지막1개 JTC 목표 허용오차 초과, owner HOLD·cleanup확인. 허용치·모델·기준을 변경하거나 실패를 대체하지 않았다.
 - gate 변화: 모델 작업 성공은 HOLD다. 학습/offline/reload 수용을 SIM 작업 성공·운영·실물·HF 수용으로 확대하지 않는다.
 - CE: 미해결 — 실제 추종 오차의 물리 원인을 아직 구분하지 못했다.
+
+## 2026-10-24 · bbf2af074bb7 · SIM 제어기 추종 기록 보완
+
+- 변경: [관측 검증 기록](validation/omx-policy-controller-tracking-2026-10-24/result.md)과 읽기 전용 Jazzy reference/feedback/error 수집기를 추가했다. 최대10Hz·6000개이며 진단 오류는 원래 정책 결과와 분리한다.
+- 증거: committed RED 후 AI 원격 회귀116개 통과·NEW0·skip0. 독립 검토에서 owner/session 권한·허용치·목표 판정과 cleanup 경계를 확인했다.
+- gate 변화: 실제 정책 작업 성공은 기존 HOLD다. 수집기 회귀는 물리 원인 해결·운영·실물·HF 수용을 뜻하지 않는다. CE 미해결 — 실제 추종 원인을 진단한다.
+- 실제 진단: 별도 manifest로 calibration1회 종료0·331추종 샘플·96파일을 검증한 뒤 정책1회 종료1·748샘플·126파일을 검증했다. 41목표 모두 성공했지만42번째 intent의 journal_prepare733.731ms 중 기존 lease가 만료돼 제출 전 HOLD했다. 원래 JTC 실패는 재현되지 않았고 formal0·optimizer0을 유지한다. archive·SQLite·timing·closure 독립 검토 Important 없음.
