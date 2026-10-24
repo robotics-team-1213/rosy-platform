@@ -20,6 +20,8 @@ Robot endpoints, HTTP/WS transport, byte-for-byte pose relay, pure arming plans,
 | `relay.py` | Leader pose socket 1 → follower reference sockets N; stopped stream is 0 Hz, not last-frame repeat |
 | `arming.py` | `FormationSpec` + pure pre-check/assignment; finished before the relay is touched |
 | `session.py` | `FormationSession`: arm (all-or-nothing) → relay → watch → HOLD/ABORT; `pending_triggers` while HOLDING |
+| `session_arming.py` | Member preflight and all-or-nothing arming on session-owned state |
+| `session_state.py` | SessionState and HoldPolicy; session.py retains existing exports |
 
 ## Subdirectories
 
