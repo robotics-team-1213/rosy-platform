@@ -10354,3 +10354,9 @@ osy-d395-s1d\`.
 - 변경: [별도 실제 실행 기록](validation/omx-policy-articulation-native-2026-10-24/result.md)에 고정 입력, 원본 해시, producer 시간·좌표 경로와 종료 근거를 남겼다.
 - 증거: calibration PASS, 정책 HOLD(status6/−5), 7관절19049표본/invalid0, archive96/264파일 대조·종료 확인. 독립 검토2건과 실제 관절값을 사용한 FK 대조.
 - gate 변화: 관측 확보이며 task success=false, formal/물리/HF0. 약10mm 명목 기하 차이는 실패 원인으로 확정하지 않았다. CE 미해결.
+
+## 2026-10-24 · 29d3f2e1d8 · 로봇 없는 충돌 표현 대조
+
+- 변경: [충돌 표현 pilot 기록](validation/omx-collision-envelope-pilot-2026-10-24/result.md)에 고정2조건의 원본·수치 기준·종료와 수용 한계를 남겼다.
+- 증거: 별도 실제 SDK EXIT0, fixture2개 관측·정리 확인, endpoint 대조8.401100mm. 독립 검토2건이 원본과 STL 계산을 재현했다.
+- gate 변화: fixture 차이만 확인했다. 정책 HOLD·로봇 실패 인과·제품 형상·실물 수용 미해결, formal/HF0. CE 미해결.
