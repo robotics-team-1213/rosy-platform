@@ -8,7 +8,7 @@ VLA) writes one command per line into the command FIFO and reads one JSON status
 
   run <chunk> [rel]       play a chunk, then report the settled state; rel shifts its body joints by
                           the held correction (held target minus the chunk start, at most REL_MAX)
-  jog <joint> <delta>     move one joint target by at most JOG_MAX units
+  jog <joint> <delta> ... move one or more joint targets together, each by at most JOG_MAX units
   grip <value>            set the gripper target
   state                   report the current state
   stop                    end; torque goes OFF where the arm is, so run the home chunk first
@@ -107,19 +107,25 @@ class Runner:
                 self.queue = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
                 self.chunk, self.settle_since = words[1], None
                 return True
-            if verb == "jog" and len(words) == 3 and words[1] in NAMES:
-                delta = float(words[2])
-                if not abs(delta) <= JOG_MAX:
-                    raise ValueError(f"jog is limited to {JOG_MAX}")
-                index = NAMES.index(words[1])
-                moved = max(-100.0, min(100.0, self.target[index] + delta))
-                if abs(moved - self.present()[index]) > JOG_MAX + SETTLE_TOL:
-                    raise ValueError(f"jog would put the target more than {JOG_MAX + SETTLE_TOL} from the joint")
-                self.target[index] = moved
+            if verb == "jog" and len(words) >= 3 and len(words) % 2 == 1:
+                # jog <joint> <delta> [<joint> <delta> ...]: one coordinated step (e.g. a forward reach),
+                # validated as a whole before any joint moves
+                present, moved = self.present(), list(self.target)
+                pairs = list(zip(words[1::2], words[2::2]))
+                if len({name for name, _ in pairs}) != len(pairs) or any(name not in NAMES for name, _ in pairs):
+                    raise ValueError("jog takes distinct follower joint names")
+                for name, value in pairs:
+                    delta, index = float(value), NAMES.index(name)
+                    if not abs(delta) <= JOG_MAX:
+                        raise ValueError(f"jog is limited to {JOG_MAX}")
+                    moved[index] = max(-100.0, min(100.0, moved[index] + delta))
+                    if abs(moved[index] - present[index]) > JOG_MAX + SETTLE_TOL:
+                        raise ValueError(f"jog would put the target more than {JOG_MAX + SETTLE_TOL} from the joint")
+                self.target = moved
             elif verb == "grip" and len(words) == 2:
                 self.target[5] = max(0.0, min(100.0, float(words[1])))
             elif verb != "state":
-                raise ValueError("commands: run <chunk> | jog <joint> <delta> | grip <value> | state | stop")
+                raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | state | stop")
             self.report(command=line, ok=True)
         except ValueError as error:
             self.report(command=line, ok=False, error=str(error))
