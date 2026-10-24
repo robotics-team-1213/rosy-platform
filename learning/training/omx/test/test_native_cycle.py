@@ -155,3 +155,31 @@ def test_verify_entrypoint_refuses_tampered_environment_before_loading_model(mod
     with pytest.raises(ValueError, match='environment'):
         module._evaluate(tmp_path/'no-model', root, 'local/source', tmp_path/'evaluation.json')
     assert not (tmp_path/'evaluation.json').exists()
+
+
+@pytest.mark.parametrize('missing', ['config.json', 'model.safetensors',
+                                    'policy_preprocessor.json', 'policy_postprocessor.json'])
+def test_standalone_verify_requires_complete_checkpoint_before_sdk(module, splits, tmp_path, missing):
+    root, _ = splits
+    model = tmp_path/'model'
+    model.mkdir()
+    for name in ('config.json', 'model.safetensors', 'policy_preprocessor.json', 'policy_postprocessor.json'):
+        if name != missing:
+            (model/name).write_bytes(b'{}')
+    output = tmp_path/'evaluation.json'
+    with pytest.raises(ValueError, match=f'missing model artifact: {missing}'):
+        module._evaluate(model, root, 'local/source', output)
+    assert not output.exists()
+
+
+def test_standalone_verify_rejects_linked_checkpoint_before_sdk(module, splits, tmp_path):
+    root, _ = splits
+    model = tmp_path/'model'
+    model.mkdir()
+    outside = tmp_path/'outside.json'
+    outside.write_bytes(b'{}')
+    (model/'policy_preprocessor.json').symlink_to(outside)
+    output = tmp_path/'evaluation.json'
+    with pytest.raises(ValueError, match='must not contain links'):
+        module._evaluate(model, root, 'local/source', output)
+    assert not output.exists()
