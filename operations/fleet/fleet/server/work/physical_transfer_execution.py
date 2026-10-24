@@ -107,6 +107,9 @@ class PhysicalTransferExecution:
 
     def authorize_submission(self, mission_id, *, expected_request_digest, observations,
                              authenticated_producer_id, capabilities, capabilities_observed_at_ns):
+        if not isinstance(observations, (tuple, list)):
+            raise ValueError("physical observations require a bounded sample sequence")
+        observations = tuple(observations)
         store = self.store
         with closing(store._journal._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -125,12 +128,21 @@ class PhysicalTransferExecution:
                 now_ns=now_ns, authenticated_producer_id=authenticated_producer_id)
             record(connection, mission_id=mission_id, grant=grant, context=context,
                    observations=observations, validated_at_ns=now_ns)
+            final_ns = store._now_ns()
+            if (final_ns < now_ns
+                    or not grant.issued_at <= datetime.fromtimestamp(final_ns / 1e9, timezone.utc) < grant.expires_at):
+                raise MissionConflict("physical first-send clock moved backwards or grant expired")
+            store._check_capabilities(capabilities, capabilities_observed_at_ns, final_ns)
+            validate_transfer_observations(store.installation.policy, context, observations,
+                now_ns=final_ns, authenticated_producer_id=authenticated_producer_id)
+            connection.execute("UPDATE fleet_physical_transfer_observations SET validated_at_ns=? "
+                               "WHERE mission_id=? AND phase='PRE_DISPATCH'", (final_ns, mission_id))
             connection.execute("UPDATE fleet_physical_transfer_attempts SET status='SUBMITTING' WHERE mission_id=?", (mission_id,))
             connection.execute("UPDATE fleet_cell_jobs SET status='RUNNING',updated_at=? WHERE mission_id=?",
-                (datetime.fromtimestamp(now_ns / 1e9, timezone.utc).isoformat(), mission_id))
+                (datetime.fromtimestamp(final_ns / 1e9, timezone.utc).isoformat(), mission_id))
             connection.execute("UPDATE fleet_action_claims SET phase='DISPATCHING' WHERE owner_kind='mission' AND owner_id=?", (mission_id,))
             store._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_SUBMITTING", "fleet",
                 dict(action_id=grant.action_id, attempt_id=grant.attempt_id, request_digest=grant.request_digest,
-                     preconditions_validated_at_ns=now_ns))
+                     preconditions_validated_at_ns=final_ns))
             connection.commit()
             return {**result, "status": "SUBMITTING"}
