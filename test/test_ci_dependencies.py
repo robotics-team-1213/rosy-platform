@@ -100,6 +100,7 @@ def test_actual_act_cpu_has_a_gating_runner_and_its_own_pinned_tools():
 
 @pytest.mark.parametrize('code,output,expected', [
     (0, '1 skipped', 1), (5, 'no tests ran', 1), (1, '1 failed', 1), (0, '6 passed', 0),
+    (1, '1 failed, 1 skipped; quarantined', 1),
 ])
 def test_actual_act_cpu_skips_and_empty_collection_cannot_pass(monkeypatch, code, output, expected):
     import json
@@ -114,6 +115,13 @@ def test_actual_act_cpu_skips_and_empty_collection_cannot_pass(monkeypatch, code
     monkeypatch.setenv('ROSY_ACT_CPU_REQUIRED', '1')
     monkeypatch.setattr(subprocess, 'Popen', lambda *args, **kwargs:
                         SimpleNamespace(stdout=iter([output]), wait=lambda: code))
+    if 'quarantined' in output:
+        monkeypatch.syspath_prepend(str(ROOT / 'test'))
+        import known_failures
+        monkeypatch.setattr(known_failures, 'should_rerun', lambda *args: True)
+        monkeypatch.setattr(known_failures, 'rerun_passed', lambda *args: True)
+        monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs:
+                            SimpleNamespace(stdout='1 passed', returncode=0))
     with pytest.raises(SystemExit) as ended:
         exec(compile(script, str(WORKFLOW), 'exec'), {})
     assert ended.value.code == expected
