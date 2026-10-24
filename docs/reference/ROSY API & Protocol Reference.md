@@ -3587,6 +3587,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.308 | 2026-10-24 | D-860: descriptive device metadata in the existing Fleet database; named operator writes, no enrollment, connection attestation or motion authority. |
 | v1.296 | 2026-10-22 | Read-only source-bound motor health in CORE, Fleet and Cell; preserve original measurement age and registered motor identity, including terminal hardware faults without fabricated positions. No torque, fault-clear or motion authority. |
 | v1.295 | 2026-10-21 | D-837 source-bound workcell arm observations and preview-only camera registration; native Fleet intake and existing Cell UI are implementation/deployment work, not motion admission. |
 | v1.294 | 2026-10-21 | D-810/D-821 shared operator assistant DTOs, isolated named dialogue, ko-KR/en-US and separately OFF explicit coordinate handoff. Implementation and protected operational activation remain separate. |

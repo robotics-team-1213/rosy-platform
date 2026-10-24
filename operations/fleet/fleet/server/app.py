@@ -572,7 +572,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_registry_routes(app, registry=central_registry, enrollment=enrollment, pairing=pairing,
         sync_token=pairing_sync_token, require_viewer=require_viewer, require_operator=require_operator,
         named_identity=bool(principals) or password_sessions is not None,
-        device_profile_path=task_service.store.path if task_service else None, require_named_operator=require_named_operator)
+        device_profile_path=task_service and task_service.store.path, require_named_operator=require_named_operator)
     from fleet.server.camera_peer_adapter import install_camera_peer
     app.state.camera_peer = install_camera_peer(app, pairing=pairing,
         current_users=lambda:site_users or {}, require_named_operator=require_named_operator)
