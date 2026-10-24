@@ -16,10 +16,9 @@ export function createFleetMotorHealth({view, scope}) {
     root.dataset.motorRobot = robot.robot_id;
     const paint = () => {
       const read = health(robot);
-      if (!detail) return renderMotorHealthSummary(root, read);
-      // A robot that never reported motors keeps only its summary chip; the card stays compact.
+      // A robot that never reported motors shows no motor row, so the local roster stays compact.
       root.hidden = !read.motors.length && read.status === 'unavailable' && !read.lastFault;
-      renderMotorHealth(root, read);
+      (detail ? renderMotorHealth : renderMotorHealthSummary)(root, read);
     };
     nodes.set(root, paint); paint();
     return root;
