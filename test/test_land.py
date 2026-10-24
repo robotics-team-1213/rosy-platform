@@ -687,6 +687,7 @@ def test_new_failure_that_passes_alone_lands_as_load_flaky(repos, monkeypatch, c
     assert "LOAD-FLAKY pkg/test/test_a.py::test_a" in out
     candidates = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
     assert candidates.startswith("pkg/test/test_a.py::test_a  # LOAD-FLAKY ") and "flaky_quarantine" in candidates
+    assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
 
 
 def test_head_move_during_remote_checks_cannot_create_flaky_receipt(repos, monkeypatch, capsys):
@@ -788,7 +789,8 @@ def test_head_move_during_isolated_check_cannot_publish_verdict_or_cache(repos, 
                        [["pkg/test"], ["pkg/test"]], tmp_path, "drift")
     assert not kept
     assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
-    assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
+    assert (wt / "test/known_failures.txt").read_text(encoding="utf-8") == (
+        "pkg/test/test_a.py::test_a  # later classification\n")
 
 
 @pytest.mark.parametrize("alone_codes, ids, why", [
