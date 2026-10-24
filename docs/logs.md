@@ -10360,3 +10360,9 @@ osy-d395-s1d\`.
 - 변경: [충돌 표현 pilot 기록](validation/omx-collision-envelope-pilot-2026-10-24/result.md)에 고정2조건의 원본·수치 기준·종료와 수용 한계를 남겼다.
 - 증거: 별도 실제 SDK EXIT0, fixture2개 관측·정리 확인, endpoint 대조8.401100mm. 독립 검토2건이 원본과 STL 계산을 재현했다.
 - gate 변화: fixture 차이만 확인했다. 정책 HOLD·로봇 실패 인과·제품 형상·실물 수용 미해결, formal/HF0. CE 미해결.
+
+## 2026-10-24 · 73fc8b2b09 · 실제 private HF 데이터 왕복
+
+- 변경: [HF 검증 기록](validation/omx-hf-private-roundtrip-2026-10-24/result.md)과 [읽기 전용 복구 교훈](solutions/workflow-issues/hf-readback-resume-keeps-commit-and-short-fetch-path-2026-10-24.md)을 추가했다.
+- 증거: 실제 private commit, payload/readback 각각1613파일 SHA 일치, LeRobot1587 SIM프레임, 원격·회수 EXIT0 및 잠금 해제. 독립 검토2건이 전체 파일을 재검사했다.
+- gate 변화: 실제 HF 데이터 전달 수용. 정책 HOLD·모델 Hub 전달·양팔/실물/주행 수용은 별도다. CE 새 교훈 기록; 코드·공유 SDK 변경 없음.

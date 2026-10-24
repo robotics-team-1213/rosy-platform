@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · 73fc8b2b09 · 실제 private HF 데이터 왕복
 - 2026-10-24 · 29d3f2e1d8 · 로봇 없는 충돌 표현 대조
 - 2026-10-24 · e79c1fe0e2 · 실제 SIM 7관절·접촉 진단
 - 2026-10-24 · b2421f9f7b · articulation 최종 source 시각 검증
 - 2026-10-24 · afd400b7bc · SIM 정책 articulation 관측 검증
-- 2026-10-24 · 3c67e4237e · native ACT 모델의 전송 후 재적재
