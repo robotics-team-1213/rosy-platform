@@ -10306,3 +10306,9 @@ osy-d395-s1d\`.
 - 변경: [새 독립 관측 기록](validation/omx-policy-tracking-after-admission-2026-10-24/result.md). 기존 모델·world·허용치로 calibration1회와 정책 관측1회만 실행했다.
 - 증거: calibration PASS/96파일, 정책 HOLD/254파일·추종2771개. 170수락 중169성공 뒤 joint4/5 JTC 허용오차 실패, 이번 admission 거부·worker 오류0. DB/전체 archive/추종/종료정리를 독립 대조했다. 기존 validation state-hold 비교도 사후 설명으로 별도 구분했다.
 - gate 변화: formal0·기존 HOLD·실물 권한0 보존. CE 미해결 — 추종 실패의 물리 원인 증거가 부족하며 새 성공·성능 보장으로 바꾸지 않는다.
+
+## 2026-10-24 · 7521075353 · 수신 전용 정책 접촉 진단
+
+- 변경: native study `pick-place-policy-contact`와 bounded 접촉 수집·종료 검증. [검증 기록](validation/omx-policy-contact-diagnostic-2026-10-24/result.md).
+- 증거: 원격 RED13FAIL 뒤 계약132통과/NEW0, AI4CPU·4GiB·5분의 로봇 없는 실제 SDK1PASS. 양 채널 접촉·유한 nonzero force와 수집 종료·프로세스 부재를 확인했다.
+- gate 변화: 정책 재실행·학습·실물0. 무수신은 unknown이다. CE 미해결 — 기존 정책 추종 실패의 원인은 별도 실제 관측이 필요하다.

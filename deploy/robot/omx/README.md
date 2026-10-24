@@ -101,6 +101,17 @@ or discovery failed; exit 0 means only the observed software prerequisites exist
 `motion_admitted` is always false. Publisher names, action presence and package
 availability do not establish hardware identity, measured limits or a real stop.
 
+### Passive policy contact diagnostic
+
+The native study kind `pick-place-policy-contact` requires `--approve-study` and
+uses the existing policy, command owner and task judge. It adds receive-only
+cube/table contact sensors without changing collision geometry or physics.
+`policy-contacts.json` preserves published collision pairs, stamps and wrenches;
+silence means unknown, not contact absence. Invalid data, truncated capture,
+observer/bridge loss or failed cleanup keeps the diagnostic on HOLD.
+The opt-in `test/test_omx_sim_contacts_ros.py` checks the installed SDK without
+spawning a robot. It does not establish policy success or hardware acceptance.
+
 ### Supervised register inspection
 
 After physically identifying the follower cable, use the pinned DynamixelSDK
