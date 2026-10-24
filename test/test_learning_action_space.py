@@ -11,8 +11,7 @@ from rosy.contracts.learning.action_space import (
 
 CAL = {m: {"id": i + 11, "homing_offset": 0, "range_min": 1024, "range_max": 3072, "drive_mode": 0}
        for i, m in enumerate(MOTORS)}
-CAL["wrist_roll"]["drive_mode"] = 1
-CAL["gripper"] = {"id": 16, "homing_offset": 0, "range_min": 2000, "range_max": 3000, "drive_mode": 1}
+CAL["gripper"] = {"id": 16, "homing_offset": 0, "range_min": 2000, "range_max": 3000, "drive_mode": 0}
 
 
 def rad(raw):
@@ -20,11 +19,21 @@ def rad(raw):
 
 
 def test_golden_values_match_lerobot_normalize():
-    # raw 2048 -> 0, raw 3072 -> +100, raw 1024 -> -100; drive_mode negates body, flips gripper (100 - n).
+    # raw 2048 -> 0, raw 3072 -> +100, raw 1024 -> -100; gripper raw 2250 in 2000..3000 -> 25.
     values = [rad(2048), rad(3072), rad(1024), rad(1536), rad(3072), rad(2250)]
     out, clipped, version = convert(values, RAD, NORM, CAL)
     assert (clipped, version) == (0, 1)
-    assert out == pytest.approx([0.0, 100.0, -100.0, -50.0, -100.0, 75.0])
+    assert out == pytest.approx([0.0, 100.0, -100.0, -50.0, 100.0, 25.0])
+
+
+def test_drive_mode_is_ignored_like_lerobot_dynamixel_bus():
+    # lerobot 0.4.4 DynamixelMotorsBus.apply_drive_mode is False: omx_follower values never flip.
+    flipped = {m: {**v, "drive_mode": 1} for m, v in CAL.items()}
+    values = [rad(2048), rad(3072), rad(1024), rad(1536), rad(3072), rad(2250)]
+    assert convert(values, RAD, NORM, flipped)[0] == convert(values, RAD, NORM, CAL)[0]
+    norm = [-87.5, -10.0, 0.0, 33.3, 99.0, 12.5]
+    assert convert(norm, NORM, RAD, flipped)[0] == convert(norm, NORM, RAD, CAL)[0]
+    assert calibration_sha256(flipped) == calibration_sha256(CAL)
 
 
 def test_round_trip_inside_range():
@@ -35,7 +44,7 @@ def test_round_trip_inside_range():
 
 def test_out_of_range_is_clipped_and_counted():
     out, clipped, _ = convert([rad(4000), 0.0, 0.0, 0.0, 0.0, rad(1000)], RAD, NORM, CAL)
-    assert clipped == 2 and out[0] == pytest.approx(100.0) and out[5] == pytest.approx(100.0)
+    assert clipped == 2 and out[0] == pytest.approx(100.0) and out[5] == pytest.approx(0.0)
     _, clipped, _ = convert([150.0, 0, 0, 0, 0, -5.0], NORM, RAD, CAL)
     assert clipped == 2
 
@@ -51,6 +60,8 @@ def test_refuses_bad_input():
         validate_calibration({m: CAL[m] for m in MOTORS[:-1]})
     with pytest.raises(ValueError):
         validate_calibration({**CAL, "gripper": {**CAL["gripper"], "range_min": 3000}})
+    with pytest.raises(ValueError):
+        validate_calibration({**CAL, "gripper": None})
 
 
 def test_calibration_digest_ignores_unread_fields():
