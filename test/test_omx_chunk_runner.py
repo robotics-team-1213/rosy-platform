@@ -126,6 +126,19 @@ def test_park_closes_rises_turns_then_descends_slowly():
     assert path[-1][:5] == pytest.approx(HOME[:5])
 
 
+def test_goto_reaches_a_chunk_start_by_rising_turning_and_descending():
+    goal = [-3.0, -16.0, 9.0, 48.0, 5.0, 55.0]  # over the belt, jaws open
+    path = m.transit_path(HOME, goal, 46.6, fps=30)
+    risen = next(i for i, f in enumerate(path) if f[1] == pytest.approx(-27.0) and f[2] == pytest.approx(18.0))
+    assert all(f[0] == HOME[0] for f in path[:risen + 1])  # no turn while low
+    arrived = next(f for f in path if f[:5] == pytest.approx(goal[:5]))
+    assert arrived[5] == pytest.approx(46.6) and path[-1] == pytest.approx(goal)  # jaws open only at the goal
+    lib = library()
+    status = run_with(Robot(), lib, ["goto grasp_pinky", "run grasp_pinky", "stop"])
+    assert by_command(status, "run goto grasp_pinky")[0]["settled"]
+    assert by_command(status, "run grasp_pinky")[0]["ok"] is True  # starts where goto left the arm
+
+
 def test_park_runs_through_the_runner_and_needs_a_home_chunk():
     lib = library()
     lib["chunks"]["home"] = [HOME]
