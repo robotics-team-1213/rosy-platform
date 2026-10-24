@@ -62,3 +62,9 @@ def test_result_cannot_omit_simulation_limits_or_claim_a_naive_receipt_time():
         model("ArmTransferCheckResult").model_validate(data)
     with pytest.raises(ValidationError):
         model("ArmTransferCheckResponse").model_validate({"check": result(), "received_at": datetime(2026, 1, 1)})
+
+
+@pytest.mark.parametrize("code", ["ARM_CATALOG_CHANGED", "ARM_REFERENCE_UNAVAILABLE", "ARM_STATE_UNAVAILABLE"])
+def test_supported_rejection_cannot_substitute_another_reason(code):
+    with pytest.raises(ValidationError):
+        model("ArmTransferCheckRejection").model_validate({"code": code, "reason": "another-reason"})
