@@ -1,10 +1,10 @@
 """Explicit passive contacts preserve world geometry and distinguish silence from evidence."""
-import copy
 import hashlib
 import importlib
 import json
 from pathlib import Path
 import sys
+import subprocess
 from types import SimpleNamespace as NS
 import xml.etree.ElementTree as ET
 
@@ -96,7 +96,7 @@ def test_per_channel_sampling_retains_positive_gap_without_no_contact_inference(
     clock[0]=10.01;trace.observe('table',message())
     clock[0]=13.;trace.observe('table',message())
     doc=trace.finish();assert len(doc['samples'])==3
-    assert doc['channels']['table']['maximum_receipt_gap_ns']==3_000_000_000
+    assert doc['channels']['table']['maximum_receipt_gap_ns']==2_990_000_000
     assert doc['coverage']=='positive_contacts_only_silence_unknown'
 
 
@@ -106,3 +106,70 @@ def test_sample_cap_is_explicit_per_channel():
         clock[0]=i*.2;trace.observe('table',message())
     doc=trace.finish();assert len(doc['samples'])==6000
     assert doc['summary']['truncated'] and doc['summary']['status']=='incomplete'
+
+
+@pytest.mark.parametrize('fault',['nan','wrench','entity','frame','points','pairs'])
+def test_bad_message_inside_storage_throttle_still_invalidates_diagnostic(fault):
+    clock=[10.];m=module();trace=m.ContactCapture(clock=lambda:clock[0])
+    trace.observe('table',message());trace.observe('infeed',message())
+    clock[0]=10.01;msg=message()
+    if fault=='nan':msg.contacts[0].depths=[float('nan')]
+    elif fault=='wrench':msg.contacts[0].wrenches[0].body_1_wrench.force.x=float('inf')
+    elif fault=='entity':msg.contacts[0].collision1.name='x'*513
+    elif fault=='frame':msg.header.frame_id='x'*513
+    elif fault=='points':msg.contacts[0].positions=[vector(0.)]*9
+    else:msg.contacts=msg.contacts*17
+    trace.observe('table',msg);doc=trace.finish()
+    assert len(doc['samples'])==2 and doc['summary']['status']=='incomplete'
+    assert doc['summary']['invalid_messages'] or doc['summary']['truncated']
+
+
+def test_observer_receipt_precedes_global_cleanup_and_missing_data_cannot_pass(tmp_path):
+    job=importlib.import_module('sim_pick_place_policy_job');events=[]
+    class Observer:
+        def poll(self):return None
+        def terminate(self):events.append('observer-term')
+        def wait(self,*,timeout):
+            assert timeout==3
+            events.append('observer-exited')
+            return 0
+    class Children:
+        def close(self):events.append('global-close');return True
+    report,clean=job.close_contact_diagnostic(Observer(),Children(),tmp_path)
+    assert clean and not report['verified'] and 'FileNotFoundError' in report['error']
+    assert events==['observer-term','observer-exited','global-close']
+
+
+@pytest.mark.parametrize('fault',['none','incomplete','truncated','invalid','wrong_coverage'])
+def test_shutdown_validates_final_capture_even_after_successful_policy(tmp_path,fault):
+    job=importlib.import_module('sim_pick_place_policy_job');m=module();trace=m.ContactCapture(clock=lambda:10.)
+    trace.observe('table',message());trace.observe('infeed',message());doc=trace.finish()
+    if fault=='incomplete':doc['summary']['status']='incomplete'
+    elif fault=='truncated':doc['summary']['truncated']=True
+    elif fault=='invalid':doc['summary']['invalid_messages']=1
+    elif fault=='wrong_coverage':doc['coverage']='continuous_no_contact'
+    raw=json.dumps(doc).encode();(tmp_path/'policy-contacts.json').write_bytes(raw)
+    observer=NS(poll=lambda:None,terminate=lambda:None,wait=lambda **_:0)
+    report,clean=job.close_contact_diagnostic(observer,NS(close=lambda:True),tmp_path)
+    assert clean and report['verified']==(fault=='none')
+    if fault=='none':assert report['sha256']==hashlib.sha256(raw).hexdigest()
+
+
+def test_policy_wait_detects_bridge_loss_and_keeps_original_policy_result_unknown(monkeypatch):
+    job=importlib.import_module('sim_pick_place_policy_job');calls=[]
+    def wait(**kwargs):
+        calls.append('policy-pending')
+        raise subprocess.TimeoutExpired('policy',.2)
+    statuses=iter([None,1]);bridge=NS(poll=lambda:next(statuses));observer=NS(poll=lambda:None)
+    monkeypatch.setattr(job.time,'monotonic',lambda:10.)
+    with pytest.raises(RuntimeError,match='contact bridge exited'):
+        job.wait_contact_policy(NS(wait=wait),observer,bridge,11.)
+    assert calls==['policy-pending']
+
+
+def test_observer_timeout_cannot_skip_global_cleanup(tmp_path):
+    job=importlib.import_module('sim_pick_place_policy_job');closed=[]
+    def wait(**_):raise subprocess.TimeoutExpired('contact-observer',3)
+    observer=NS(poll=lambda:None,terminate=lambda:None,wait=wait)
+    report,clean=job.close_contact_diagnostic(observer,NS(close=lambda:closed.append(True) or True),tmp_path)
+    assert closed==[True] and clean and not report['verified']

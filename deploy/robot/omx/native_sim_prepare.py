@@ -55,6 +55,8 @@ def run_script(source, *, experiment="g2", episodes=1):
         mode = ' --episodes ' + str(episodes)
     if experiment == 'pick-place-policy-calibration':
         mode = ' --calibration'
+    if experiment == 'pick-place-policy-contact':
+        mode = ' --contacts'
     return ("#!/bin/bash\nset -eo pipefail\n"
             "source \"$OMX_NATIVE_STATE/environment.sh\"\n"
             "exec /usr/bin/python3 -B " + shlex.quote(runner) +

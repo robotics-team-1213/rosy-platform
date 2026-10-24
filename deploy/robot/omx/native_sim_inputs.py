@@ -7,7 +7,7 @@ import re
 
 RUN_ID = re.compile(r"([0-9a-f]{40})-([0-9a-f]{12})")
 CAPS = {"ai": (4, 4), "model": (8, 6)}
-STUDY_EXPERIMENTS = {'pick-place-policy', 'pick-place-policy-calibration'}
+STUDY_EXPERIMENTS = {'pick-place-policy', 'pick-place-policy-calibration', 'pick-place-policy-contact'}
 MUTABLE = {"manifest.json", "start-intent.json", "run-intent.json", "exit.json",
            "budget.resv", "budget.lock", "home", "tmp", "logs", "cache", "g2", "pick-place"}
 
