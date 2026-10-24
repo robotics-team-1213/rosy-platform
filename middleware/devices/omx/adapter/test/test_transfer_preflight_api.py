@@ -1,5 +1,6 @@
 """Peer/scoped read-only owner API; calculation never admits an Action."""
 from importlib import import_module
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -75,7 +76,17 @@ def test_composition_reads_admitted_state_and_preserves_its_calibration(kin, pro
         latest_joint_state=SimpleNamespace(sequence=999), monotonic=lambda: 100.01)
     build = _module("omx_adapter.transfer_preflight_owner").build_transfer_preflight_api
     api = build(runtime, catalog=catalog, profile=profile, kinematics=kin,
-                journal_id="owner-journal-1", allowed_peer_uids={1000})
+                transform_revision="tf-sim-1", journal_id="owner-journal-1", allowed_peer_uids={1000})
     assert api.dispatch(_request(catalog), peer_uid=1000)["check"]["source_state_sequence"] == 7
     runtime.owner.joint_state = JointStateSnapshot(measured.positions, 8, 100.0, "different-calibration")
     assert api.dispatch(_request(catalog), peer_uid=1000)["error"]["code"] == "ARM_STATE_UNAVAILABLE"
+
+
+def test_composition_rejects_a_catalog_for_another_installed_transform(kin, profile):
+    catalog = replace(_catalog(kin, profile), transform_revision="uninstalled-transform")
+    runtime = SimpleNamespace(owner=SimpleNamespace(joint_state=None,
+        config=SimpleNamespace(workcell_id="arm-cell", instance_id="arm-a")), monotonic=lambda: 100.01)
+    build = _module("omx_adapter.transfer_preflight_owner").build_transfer_preflight_api
+    with pytest.raises(ValueError, match="transform"):
+        build(runtime, catalog=catalog, profile=profile, kinematics=kin,
+              transform_revision="tf-sim-1", journal_id="owner-journal-1", allowed_peer_uids={1000})
