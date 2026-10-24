@@ -355,3 +355,8 @@
 - 2026-10-24 · 8d119665da8f · 고정 예산 복구 학습의 실제 완료와 재로딩
 - 2026-10-24 · 67b368605a · 선택형 학습 실행의 연결 복구와 종료 증거 보존
 - 2026-10-24 · 8d119665da8f · OMX 고정 예산 입력 검사와 중단된 학습 기록
+- 2026-10-17 · uncommitted · docs: 간결한 문서와 단일 기준을 정하고 협업 안내에 적용
+- 2026-10-16 · uncommitted · docs: 한 명의 게시와 두 에이전트 검토 절차
+- 2026-10-16 · uncommitted · docs: GitHub 공유·동시 작업 절차 정비
+- 2026-10-16 · uncommitted · docs(omx): manager watchdog 시한과 powered 시야 공백 검증
+- 2026-10-16 · uncommitted · feat(omx): 별도 stop-only transport와 process-death 인계
