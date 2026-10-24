@@ -3194,3 +3194,9 @@
 - 증거: 새 수집기·기존 runtime/camera/evidence/config/demonstration 원격116개 통과·NEW0, 독립 권한 경계 검토 Important 없음.
 - gate 변화: 제어 권한·목표·허용치·실패 HOLD 판정을 유지한다. 정책·실물 수용은 기존 HOLD이며 CE 미해결이다.
 - 실제 실행: source 동일 calibration eb3932d8a7be 종료0/331샘플, 정책1cb9bea72585 종료1/748샘플. 두 archive96/126파일과 PID0·빈 cgroup·lock/예약 없음을 검증했다. 정책은41목표 성공 뒤 lease 만료로42번째 제출을 막았으며 새 formal·학습·실물 실행은 없다. journal 세부 지연 원인은 미확정이다.
+
+## 2026-10-24 · afd400b7bc · passive7관절 관측과 실행 직전 신선도 검사
+
+- 변경: 기존 contact observer에 원본 JointState7관절 수집을 추가하고 homing 전·policy 전의 clean/fresh 상태 및 종료 artifact를 검증한다. [검증 기록](../docs/validation/omx-policy-articulation-2026-10-24/result.md).
+- 증거: RED26FAIL→원격52PASS/SDK1SKIP/NEW0. 별도 실제 SDK1PASS0SKIP, 합성100메시지85샘플·invalid0·정리true. 독립 검토2건 Important0.
+- gate 변화: 실제 정책 성공·실물·HF 승격 없음. SDK 관절값은 synthetic transport이며 기존 독립 SIM HOLD를 유지한다. CE 미해결 — 물리 원인 확정은 다음 실제 관절/접촉 event 대조가 필요하다.

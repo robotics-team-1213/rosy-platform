@@ -10336,3 +10336,9 @@ osy-d395-s1d\`.
 - 변경: 단독 verify의 필수 checkpoint/processor·링크 검사와 실제6/12관절 모델의 fixture Hub 왕복·새 프로세스 재적재 시험. [검증 기록](validation/native-model-readback-2026-10-24/result.md).
 - 증거: RED5FAIL→GREEN39PASS/SDK2SKIP/NEW0. 별도 고정 CPU SDK 실행은 단일 팔·양팔 각각1PASS/0SKIP·EXIT0, eval3·배열6/12·processor 누락 거부. 회수 모델·payload·readback7파일과 원본/분할 해시를 별도 대조했다.
 - gate 변화: 실제 HF·장치 실행·승격0, 기존 SIM HOLD 유지. CE 새 교훈 — 임시 패키지 prefix가 고정 SDK 환경을 덮을 수 있어 전체 요구 버전을 시험 전에 검사한다.
+
+## 2026-10-24 · afd400b7bc · SIM 정책 articulation 관측 검증
+
+- 변경: [7관절 관측 기록](validation/omx-policy-articulation-2026-10-24/result.md)에 원본 state·launch freshness·종료 검증과 합성 ROS transport의 수용 경계를 남겼다.
+- 증거: 원격52PASS/SDK1SKIP/NEW0; 별도 실제 SDK1PASS0SKIP/EXIT0,100메시지85샘플, 원본 JSON hash와 정리true. 독립 구현 검토2건 Important0.
+- gate 변화: 실제 정책 episode/formal/물리/HF0. 기존 정책 HOLD 유지. CE 미해결 — 관측 보강은 원인 해결·학습 품질 수용을 뜻하지 않는다.
