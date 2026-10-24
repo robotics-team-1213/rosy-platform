@@ -15,5 +15,5 @@
     "top": {"cx": 134.5, "cy": 239.5, "yaw": 0.0},
     "wrist": {"cx": 347, "cy": 204, "area": 103000}
   },
-  "tolerance": {"home": 3.0, "box_px": 15.0, "box_yaw": 10.0}
+  "tolerance": {"home": 3.0, "box_px": 5.0, "box_yaw": 8.0}
 }

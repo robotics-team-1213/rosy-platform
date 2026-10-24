@@ -56,6 +56,7 @@ def test_yaw_gap_treats_a_square_box_as_repeating_every_90_degrees():
 
 @pytest.mark.parametrize("state, frame, kinds", [
     (HOME, top_frame(134.5, 239.5, 0), []),
+    (HOME, top_frame(136.5, 228.5, 0), ["box_moved"]),  # 11 px toward the belt: the jaws caught the box edge (2026-10-25)
     (HOME, top_frame(173, 222, 38), ["box_moved", "box_turned"]),  # the 2026-10-24 miss
     ([HOME[0] + 10, *HOME[1:]], top_frame(134.5, 239.5, 0), ["arm_not_home"]),
     (HOME, np.full((480, 640, 3), (240, 230, 200), np.uint8), ["box_not_seen"]),
