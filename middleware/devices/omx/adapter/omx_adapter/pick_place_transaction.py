@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Mapping
 
-from core_common.protocol.schemas import FleetCellTransferGrant
+from core_common.protocol.schemas import FleetArmTransferGrant, FleetCellTransferGrant
 
 from .gripper_contract import (
     GripperObservation,
@@ -105,6 +105,25 @@ class PickPlaceTransaction:
         transaction.destination = None
         transaction._item_id = grant.cell_transfer.item
         transaction._cell_grant = grant
+        return transaction
+
+    @classmethod
+    def for_arm_transfer(cls, grant: FleetArmTransferGrant, *,
+                         gripper_sensor_revision: str) -> "PickPlaceTransaction":
+        """Bind physical gripper evidence to an opaque object in the complete grant."""
+        if not isinstance(grant, FleetArmTransferGrant):
+            raise ValueError("a validated ARM_TRANSFER grant is required")
+        grant = FleetArmTransferGrant.model_validate(grant.model_dump())
+        transaction = cls.__new__(cls)
+        transaction._initialize(
+            action_id=grant.action_id, attempt_id=grant.attempt_id, workcell_id=grant.workcell_id,
+            instance_id=grant.instance_id, gripper_sensor_revision=gripper_sensor_revision,
+            owner_generation=grant.dispatch_generation,
+        )
+        transaction.source = None
+        transaction.destination = None
+        transaction._item_id = grant.arm_transfer.object_ref
+        transaction._arm_grant = grant
         return transaction
 
     def _initialize(self, *, action_id: str, attempt_id: str, workcell_id: str,
@@ -264,6 +283,18 @@ class PickPlaceTransaction:
         return self.state
 
     def snapshot(self) -> dict[str, Any]:
+        arm_grant = getattr(self, "_arm_grant", None)
+        if arm_grant is not None:
+            return {
+                "action_kind": "ARM_TRANSFER", "arm_grant": arm_grant.model_dump(mode="json"),
+                "action_id": self.action_id, "attempt_id": self.attempt_id,
+                "workcell_id": self.workcell_id, "instance_id": self.instance_id,
+                "owner_generation": self.owner_generation,
+                "gripper_sensor_revision": self.gripper_sensor_revision,
+                "source_object_id": self._item_id, "state": self.state.value,
+                "hold_reason": self.hold_reason, "object_held": self.object_held,
+                "last_result_id": self.last_result_id,
+            }
         cell_grant = getattr(self, "_cell_grant", None)
         snapshot = {
             "action_id": self.action_id, "attempt_id": self.attempt_id,
@@ -286,6 +317,23 @@ class PickPlaceTransaction:
     def recover(cls, snapshot: Mapping[str, Any]) -> "PickPlaceTransaction":
         if not isinstance(snapshot, Mapping):
             raise ValueError("transaction snapshot must be a mapping")
+        arm_grant = None
+        if "arm_grant" in snapshot or "action_kind" in snapshot:
+            if (snapshot.get("action_kind") != "ARM_TRANSFER" or "arm_grant" not in snapshot
+                    or set(snapshot) & {"cell_grant", "destination_object_id",
+                                        "source_observation_id", "destination_observation_id"}):
+                raise ValueError("neutral transaction requires its own tag and grant without legacy evidence")
+            arm_grant = FleetArmTransferGrant.model_validate(snapshot["arm_grant"])
+            for name in ("action_id", "attempt_id", "workcell_id", "instance_id"):
+                if type(snapshot.get(name)) is not str or snapshot[name] != getattr(arm_grant, name):
+                    raise ValueError("neutral transaction identity does not match its grant")
+            sensor = snapshot.get("gripper_sensor_revision")
+            if (type(snapshot.get("owner_generation")) is not int
+                    or snapshot["owner_generation"] != arm_grant.dispatch_generation
+                    or snapshot.get("source_object_id") != arm_grant.arm_transfer.object_ref
+                    or type(sensor) is not str or not sensor or sensor != sensor.strip()
+                    or type(snapshot.get("object_held")) is not bool):
+                raise ValueError("neutral transaction scope or object does not match its grant")
         try:
             state = PickPlaceState(snapshot["state"])
             action_id = str(snapshot["action_id"])
@@ -306,6 +354,8 @@ class PickPlaceTransaction:
         recovered.source = None
         recovered.destination = None
         recovered._item_id = snapshot.get("source_object_id")
+        if arm_grant is not None:
+            recovered._arm_grant = arm_grant
         if "cell_grant" in snapshot:
             grant = FleetCellTransferGrant.model_validate(snapshot["cell_grant"])
             if (grant.action_id != action_id or grant.attempt_id != attempt_id
@@ -325,7 +375,8 @@ class PickPlaceTransaction:
                          PickPlaceState.VERIFY_RELEASE}
         )
         recovered.last_result_id = snapshot.get("last_result_id")
-        if state is PickPlaceState.ACTION_SUCCEEDED and snapshot.get("object_held") is False:
+        if (arm_grant is None and state is PickPlaceState.ACTION_SUCCEEDED
+                and snapshot.get("object_held") is False):
             recovered.hold_reason = None
         else:
             recovered._hold("restart_reconciliation_required")
