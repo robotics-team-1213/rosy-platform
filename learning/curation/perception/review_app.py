@@ -121,8 +121,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
             return None
         if time.monotonic() - sim_seen.get('at', -60.0) >= 60:
             try:
-                value = {'runs': sim_runs.call({'action': 'list'})}
-            except ValueError:
+                value = {'runs': [sim_web.public(row) for row in sim_runs.call({'action': 'list'})]}
+            except (ValueError, KeyError, TypeError):  # one malformed row must not break the home page
                 value = {'error': 'unavailable'}
             sim_seen.update(at=time.monotonic(), value=value)
         return sim_seen['value']

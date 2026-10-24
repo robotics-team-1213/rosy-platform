@@ -52,3 +52,11 @@ Procedure that worked:
 Evidence: protected Learning center, 2026-10-24, sequence 32. The installer exited 1 on the release folder (symlink), 1 on the copy inside `--root` (not separate), then 0 on the sibling copy outside `--root`.
 
 The source rule is also stated in `deploy/model_pc/README.md` beside the project install command.
+
+### Things the signed release does not carry (2026-10-24/25, sequences 33–35)
+
+- **The installer itself.** The D-446 payload holds the app code (`learning/`, `middleware/`, `contracts/`, `operations/`) but not `deploy/model_pc/`. The center is installed with the copy at `~/rosy-ml/bin/install_review_release.py`. When an installer change is merged (for example `--workspace-links`), copy that file from the same merged commit (`git -c core.autocrlf=false show <sha>:deploy/model_pc/install_review_release.py`), keep the old one as `.before-<date>`, and compare sha256 before installing. Otherwise the new release installs but the old installer drops the new option.
+- **The environment.** The updater refuses a release whose `--environment-sha256` differs from the host (`environment fingerprint differs; separate environment release required`). Packages added to `~/rosy-ml/.venv` by another task change the fingerprint. Read it with `rosy_model_code.py fingerprint`, check the change is additive, and sign the same commit again with a higher sequence and the new value. A failed sequence is not retried.
+- **Bridge job state.** Changing the bridge config (for example switching `authority` to `state`) makes the next run fail with `job inputs changed; use a new job directory`, because the job state is bound to the input signature. Point the unit's `--out` to a new folder (keep the old one) and `daemon-reload`.
+
+Evidence: sequence 33 was refused for the environment (packages added at 20:14 the same day), sequence 34 (same commit, new environment) applied. Sequence 35 installed on the center only after the `~/rosy-ml/bin` installer was replaced; the unit then carried `--workspace-links`. The bridge recovered after the `--out` move (authority `verified`, delivery `available: true`).
