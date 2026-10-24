@@ -10,7 +10,7 @@ import time
 from typing import Callable, Sequence
 
 from .kinematics import ARM_JOINTS, IkLimits, OmxKinematics, TopDownPose
-from .manipulation_plan import ExecutionStateSnapshot, JointTrajectoryPoint, PlannedMotionPhase
+from .manipulation_plan import MOTION_PHASES, ExecutionStateSnapshot, JointTrajectoryPoint, PlannedMotionPhase
 from .transfer_motion import (
     ArmPlanningProfile, TransferMotionPlan, TransferMotionRequest, GraspGeometry, TransferPlanRejected,
     PLANNER_REVISION, STATE_INVALID, HOME_DEVIATION, GRIPPER_NOT_OPEN, CARRY_Z_INSUFFICIENT,
