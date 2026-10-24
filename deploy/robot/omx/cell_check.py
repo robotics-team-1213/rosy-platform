@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import time
 
 from register_probe import collect
 
@@ -37,17 +38,21 @@ def judge_motors(rows, device):
     return checks
 
 
-def judge_readiness(path):
+def judge_readiness(path, now_ns):
     try:
         state = json.loads(Path(path).read_text())
     except (OSError, ValueError) as error:
         state = {"state": f"unreadable: {error}"}
-    ready = state.get("state") == "READY" and state.get("photometric_ready") is True
-    return dict(name="camera readiness", ok=ready, detail=state.get("state"),
-                **({} if ready else {"fix": "systemctl --user restart rosy-omx-camera-readiness"}))
+    # A killed run leaves READY behind and a boot refusal never overwrites it; only an unexpired one counts.
+    fresh = isinstance(state.get("expires_ns"), int) and state["expires_ns"] > now_ns
+    ready = state.get("state") == "READY" and state.get("photometric_ready") is True and fresh
+    detail = state.get("state") if fresh or state.get("state") != "READY" else "READY but expired"
+    unit = "rosy-omx-camera-readiness"
+    return dict(name="camera readiness", ok=ready, detail=detail,
+                **({} if ready else {"fix": f"systemctl --user reset-failed {unit} && systemctl --user restart {unit}"}))
 
 
-def check(follower, leader, readiness=READINESS, *, read=collect):
+def check(follower, leader, readiness=READINESS, *, read=collect, now_ns=time.time_ns):
     checks = [dict(name=f"{role} board", ok=Path(device).exists(), detail=device,
                    **({} if Path(device).exists() else {"fix": "connect and power the board, then re-grant serial access"}))
               for role, device in (("follower", follower), ("leader", leader))]
@@ -55,10 +60,13 @@ def check(follower, leader, readiness=READINESS, *, read=collect):
     if checks[0]["ok"]:
         try:
             checks += judge_motors(read(follower), follower)
-        except Exception as error:  # busy bus, missing motor, unsupported model
+        except Exception as error:  # busy bus, missing motor, unsupported model, hardware alert
+            alert = ", 128)" in str(error) or "hardware alert" in str(error)
             checks.append(dict(name="follower registers", ok=False, detail=str(error),
-                               fix="stop the process holding the bus (observer, session) and check all six motors answer"))
-    checks.append(judge_readiness(readiness))
+                               fix="a motor reports a hardware error: inspect it, then power-cycle the follower"
+                               if alert else
+                               "stop the process holding the bus (observer, session) and check all six motors answer"))
+    checks.append(judge_readiness(readiness, now_ns()))
     return {"scope": "readonly_cell_check", "motion_admitted": False,
             "ok": all(c["ok"] for c in checks), "checks": checks}
 

@@ -229,7 +229,8 @@ class Session:
         try:
             self._with_follower(lambda bus: self.write_caps(bus, caps))
             for unit in SERVICES:
-                if self.systemctl("is-active", unit) == "active":
+                # "activating" includes a readiness unit waiting out RestartSec; stop cancels that restart.
+                if self.systemctl("is-active", unit) in ("active", "activating"):
                     self.systemctl("stop", unit)
                     stopped.append(unit)
             record["stopped_services"] = stopped
