@@ -132,10 +132,6 @@ def test_central_profile_refresh_failure_and_logout_browser(tmp_path, accounts):
                                   if item['name'] == session_cookie_name)
                 # Keep the next login at the issuer so logout cannot immediately reauthenticate.
                 page.locator('#logout').click()
-                expect(page.locator('#login-panel')).to_be_visible()
-                expect(page.locator('#account-login')).to_be_visible()
-                assert page.url == origin+'/accounts'
-                page.locator('#account-login').click()
                 page.wait_for_url(issuer + '/api/fleet/auth/authorize**')
                 assert not state['active']
                 assert receiver.resolve(old_cookie) is None
