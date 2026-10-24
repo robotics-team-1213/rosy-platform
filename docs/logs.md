@@ -9651,3 +9651,9 @@ osy-d395-s1d\`.
 - 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
+
+## 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
+
+- 변경: `deploy/robot/omx/`에 청크 실행기(`chunk_runner.py`: 토크 유지, 멈춤·과열·추종 오차 정지, 위치+전류 집기 판정, 들고 돌고 내리는 `goto`/`park`, `live.json`), top-down 계획기(`grasp_planner.py`), 탐침 기반 손목 보정(`grasp_servo.py`), 그림자 상자 검출과 놓기 확인(`cell_perception.py`), scripted_teacher 봉인(`record_seal.py`), Fleet 관측 송신기(`arm_status_bridge.py`), 판단 자리(`judge_seat.py`)를 더했다.
+- 증거: 관제 PC 실물 — 가르친 위치 사이클 성공, 보정 뒤 집기 성공(잡음 ~200 mA, 빈 집게 ~74 mA), `park` 2회. 결정 모델 오프라인 평가 6/30(수치 포함), 1/30(이미지만), 상자 없이 grasp 선택 → 측정 거부권 설계. 원격 시험: `test_omx_arm_status_bridge.py`+`test_omx_chunk_runner.py` 24 passed, `test_omx_judge_seat.py` 7 passed, 거부권 제거 변이에서 실패 확인.
+- gate 변화: 없음. Fleet 송신은 S용 source·토큰 발급 전까지 보내지 않는다. 시뮬 실험은 로컬 main 병합 뒤. 실물 영점·카메라→팔 좌표 보정은 현장 필요. ADR 초안 `Rosy/docs/workspace-records/2026-10-25/adr-draft-arm-s-platform-integration.md`.
