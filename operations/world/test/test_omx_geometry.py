@@ -69,3 +69,12 @@ def test_unpinned_incomplete_or_substituted_assets_are_rejected(bundle, change):
         meshes = list(meshes)
     with pytest.raises(ValueError):
         api().load_omx_geometry(urdf, meshes)
+
+
+@pytest.mark.parametrize("change", ["partial_links", "unknown_model"])
+def test_direct_descriptor_cannot_shrink_coverage_or_select_an_unreviewed_model(bundle, change):
+    geometry = api().load_omx_geometry(*bundle)
+    digest = geometry.model_digest if change == "partial_links" else "a" * 64
+    links = frozenset({"link1"}) if change == "partial_links" else geometry.required_links
+    with pytest.raises(ValueError):
+        api().ArmGeometry(digest, links)

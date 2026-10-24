@@ -140,6 +140,23 @@ def test_orientation_uses_object_origin_and_accepts_equivalent_quaternion_sign(p
             check(policy, (first, replace(second, object_pose=pose)))
 
 
+def test_nearly_unit_measured_quaternion_does_not_hide_orientation_error(policy):
+    strict = policy.model_copy(update={"orientation_tolerance_rad": 0.})
+    first, second = samples(strict)
+    norm = math.sqrt(1 + 9e-7)
+    tilted = PhysicalPose((0, 0, .2), (norm * math.sin(.0005), 0, 0, norm * math.cos(.0005)))
+    with pytest.raises(api().PhysicalEvidenceRejected):
+        check(strict, (first, replace(second, object_pose=tilted)))
+    assert check(strict, (first, replace(second, object_pose=PhysicalPose((0, 0, .2), (0, 0, 0, norm))))) is None
+
+
+def test_participant_cannot_use_a_manufactured_subset_descriptor(policy):
+    from rosy.world.state.projections.omx_geometry import ArmGeometry
+    original = policy.participants[0]
+    with pytest.raises(ValueError):
+        api().TransferParticipant(**{**dict(original), "geometry": ArmGeometry(original.geometry.model_digest, frozenset({"link1"}))})
+
+
 def test_two_distinct_ordered_wholly_fresh_samples_after_durable_boundary(policy):
     first, second = samples(policy)
     cases = [(first,), (second, first), (first, first), (first, replace(second, evidence_id=first.evidence_id)),
