@@ -153,6 +153,13 @@ only by the proxy runtime UID10001. These keys are separate from site backend
 TLS and Account signing keys. The candidate's `Caddyfile.account` retains
 verified Fleet backend TLS and serves the existing public app-link statements.
 
+On the existing `site_edge` network, the proxy also owns the approved Account
+hostname as a Docker DNS alias. Approved container clients on that network use
+the same HTTPS issuer and certificate verification without routing through the
+host's tailnet listener. Attach only the receiving service to this network;
+do not add a static proxy IP or relax the host firewall. The alias follows proxy
+recreation and keeps Fleet on its existing backend network.
+
 The firewall reconciles both listeners together: the existing site port keeps
 its configured LAN interfaces, while443 admits only loopback and `tailscale0`.
 The wildcard is IPv4 only; no literal host address or public ingress is needed.
