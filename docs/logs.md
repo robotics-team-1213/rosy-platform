@@ -10387,3 +10387,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 구현·활성화·현장 수용은 D-865 실행 계획 P1~P5의 별도 단계다.
 - 결정: D-865 Proposed.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs: RaspTank 지원 후보와 공통 ROSY 통합 조건
+
+- 변경: README에서 [로봇 호환 목록](reference/robot-compatibility.md)을 연결하고, RaspTank Metal / Pi 4B 4GB를 실행 미지원 후보로 기록했다. [통합 설계](plans/2026-10-25-rasptank-multi-robot-design.md)는 기존 Profile/Adapter·CORE·Fleet·장치 owner 경계, 절대경로 overlay 결속, 독립 정지·팔 피드백·기체별 이미지 조건을 정리한다.
+- 증거: 설계 v2 독립 architecture/critic 2회 검토. 순정 Ubuntu·Bookworm 이미지와 제조사 자료의 로컬 무결성 검사는 ROSY 통합 이미지·장치 시험과 구분한다. 이 커밋의 문서 lint·harness·원격 계약 검증은 완료 보고에 별도로 결속한다.
+- gate 변화: 없음. RaspTank profile·driver·제어 광고·통합 이미지·실물 수용은 미구현/미수행이다.
+- 결정: 기존 HWA/CAP·D-14·D-161·D-856 경계를 유지하는 설계 제안이며 새 ADR/API를 만들지 않았다.
+- 교훈: 미해결 — 모델/프로파일 결속과 실물 수용 조건은 후속 구현이며 해결 교훈으로 기록하지 않는다.
