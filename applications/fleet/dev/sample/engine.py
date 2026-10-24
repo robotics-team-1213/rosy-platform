@@ -140,6 +140,9 @@ class SampleEngine:
                 robots.append(added)
             return reply({'fleet': {'name': '샘플 현장', 'online': len(robots), 'total': len(robots)},
                           'robots': robots, 'signals': {}, 'alarms': [], 'ts': 1792454400})
+        if (method, path) == ('GET', '/workcell-observations'):
+            # The sample site has no observation producer, as an unconfigured Fleet (D-837).
+            return error(503, 'WORKCELL_OBSERVATIONS_UNAVAILABLE')
         if method == 'GET' and f'GET {path}' in self.reads:
             return reply(self.reads[f'GET {path}'])
         match = re.fullmatch('/robots/([^/]+)/path', path)
