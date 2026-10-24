@@ -15,6 +15,11 @@ from .physical_transfer_store import PhysicalTransferRequest
 from .step_action_kinds import step_grant_digest
 
 
+def _timestamp_ns(value):
+    delta = value - datetime(1970, 1, 1, tzinfo=timezone.utc)
+    return (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
+
+
 class PhysicalTransferExecution:
     def __init__(self, store, *, grant_ttl_s=15.0):
         if (isinstance(grant_ttl_s, bool) or not isinstance(grant_ttl_s, (int, float))
@@ -197,19 +202,22 @@ class PhysicalTransferExecution:
                     return current
                 if old["state"] in {"SUCCEEDED", "FAILED", "HOLD"}:
                     raise MissionConflict("a terminal physical owner receipt cannot be replaced")
-            proof = connection.execute("SELECT request_digest FROM fleet_physical_transfer_observations "
+            proof = connection.execute("SELECT request_digest,validated_at_ns FROM fleet_physical_transfer_observations "
                 "WHERE mission_id=? AND phase='PRE_DISPATCH'", (mission_id,)).fetchone()
             if proof is None or proof[0] != grant.request_digest or current["status"] == "PREPARED":
                 raise MissionConflict("physical owner receipt requires a committed first-send intent")
             now_ns = store._now_ns()
             now = datetime.fromtimestamp(now_ns / 1e9, timezone.utc)
             if (now_ns < current["prepared_at_ns"] or not grant.issued_at <= receipt.observed_at <= now
+                    or _timestamp_ns(receipt.observed_at) <= proof["validated_at_ns"]
+                    or any(_timestamp_ns(phase.observed_at) <= proof["validated_at_ns"] for phase in receipt.phase_summaries)
                     or any(not grant.issued_at <= phase.observed_at <= receipt.observed_at for phase in receipt.phase_summaries)
                     or (prior is not None and now_ns < prior["received_at_ns"])):
                 raise MissionConflict("physical owner receipt clock is future or regressed")
             job = store._read(connection, mission_id)
             control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
             authority = (control is not None and control["dispatch_enabled"]
+                and job["status"] == "RUNNING" and current["status"] == "SUBMITTING"
                 and control["authority_epoch"] == grant.authority_epoch and control["generation"] == grant.dispatch_generation
                 and self._owns_claims(connection, job, phases={"CLAIMED", "DISPATCHING", "HELD", "UNKNOWN"}))
             state = receipt.state.value
