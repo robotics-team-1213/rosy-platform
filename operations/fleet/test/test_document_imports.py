@@ -78,6 +78,7 @@ OWN = {
     },
     "install.js": {
         "enrollment.js",
+        "device-profiles.js",
         "device-request.js",
         "camera-pairing.js",
         "camera-peer.js",
