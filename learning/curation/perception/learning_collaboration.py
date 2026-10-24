@@ -89,9 +89,7 @@ class Collaboration:
                                      + ('; Max-Age=0' if clear else '') + suffix))
 
     def identity(self, handler):
-        handler.learning_signed_in = False
         principal = self.accounts.authenticate(self.read_cookie(handler, COOKIE))
-        handler.learning_signed_in = True
         self.accounts.require(principal, 'view')
         handler.learning_principal = principal
         return principal
@@ -185,9 +183,7 @@ class Collaboration:
                 # 401 would send a signed-in Account user back to login in a loop.
                 handler.send({'error': '이 프로젝트의 학습 권한이 없습니다. 계정 관리자에게 권한을 요청하세요.'}, 403)
             else:
-                signed_in = handler.learning_signed_in
-                handler.send({'error': '프로젝트 열람 권한이 필요합니다. 다른 계정으로 로그인하거나 관리자에게 권한을 요청하세요.'
-                              if signed_in else '로그인이 필요합니다.'}, 403 if signed_in else 401)
+                handler.send({'error': '로그인이 필요합니다.'}, 401)
             return True
         if path == '/api/accounts/session':
             public = {key: principal[key] for key in ('user_id', 'project_id', 'capabilities')}
