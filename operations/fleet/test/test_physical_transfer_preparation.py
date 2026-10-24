@@ -112,3 +112,66 @@ def test_old_host_rejects_prepared_journal_before_changing_any_table(rig, monkey
     with pytest.raises(RuntimeError, match="version 7"):
         CellJobStore(path)
     assert claims(path) == before
+
+
+def test_site_stop_holds_the_prepared_attempt_and_preserves_all_occupancy(rig):
+    path, tasks, control, store = rig
+    job = admit(store, create(store), control)
+    executor = execution(store)
+    prepare(executor, job["mission_id"], store)
+    tasks.trip_stop_latch(actor_id="operator")
+    with connect(path) as connection:
+        assert connection.execute("SELECT status FROM fleet_physical_transfer_attempts").fetchone()[0] == "HOLD"
+    assert len(claims(path)) == len(store.installation.policy.resources)
+    assert {c["phase"] for c in claims(path)} == {"HELD"}
+    with pytest.raises(MissionConflict):
+        prepare(executor, job["mission_id"], store)
+
+
+def test_event_failure_rolls_back_attempt_and_preserves_ready_approval_and_claims(rig):
+    path, _, control, store = rig
+    job = admit(store, create(store), control)
+    before = claims(path)
+    with connect(path) as connection:
+        connection.execute("CREATE TRIGGER fail_preparation BEFORE INSERT ON fleet_cell_events "
+                           "WHEN NEW.event_type='PHYSICAL_TRANSFER_PREPARED' BEGIN SELECT RAISE(ABORT,'injected'); END")
+    import sqlite3
+    with pytest.raises(sqlite3.IntegrityError, match="injected"):
+        prepare(execution(store), job["mission_id"], store)
+    assert claims(path) == before
+    assert store.get(job["mission_id"], principal=PROPOSER) == job
+    with connect(path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM fleet_physical_transfer_attempts").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("delta", [-1, 15_000_000_001])
+def test_preparation_replay_never_renews_ids_on_clock_regression_or_expiry(rig, delta):
+    path, _, control, store = rig
+    job = admit(store, create(store), control)
+    executor = execution(store)
+    first = prepare(executor, job["mission_id"], store)
+    store._clock_ns = lambda: NOW + delta
+    with pytest.raises(MissionConflict):
+        prepare(executor, job["mission_id"], store, capabilities_observed_at_ns=NOW + delta)
+    with connect(path) as connection:
+        row = connection.execute("SELECT action_id,attempt_id,prepared_at_ns FROM fleet_physical_transfer_attempts").fetchone()
+        assert (row["action_id"], row["attempt_id"], row["prepared_at_ns"]) == (
+            first["grant"]["action_id"], first["grant"]["attempt_id"], NOW)
+
+
+def test_preparation_ttl_must_support_the_installed_observation_window(rig):
+    _, _, control, store = rig
+    policy = store.installation.policy.model_copy(update={"min_separation_ns": 10_000_000_000,
+                                                         "max_age_ns": 11_000_000_000})
+    capabilities = tuple(c.model_copy(update={"resource_policy_digest": policy.digest})
+                         for c in store.installation.capabilities)
+    store.installation = store.installation.model_copy(update={"policy": policy, "capabilities": capabilities})
+    with pytest.raises(ValueError, match="window"):
+        execution(store)
+    module = import_module("fleet.server.physical_transfer_execution")
+    executor = module.PhysicalTransferExecution(store, grant_ttl_s=30)
+    job = admit(store, create(store), control)
+    row = prepare(executor, job["mission_id"], store)
+    from datetime import datetime
+    assert (datetime.fromisoformat(row["grant"]["expires_at"].replace("Z", "+00:00"))
+            - datetime.fromisoformat(row["grant"]["issued_at"].replace("Z", "+00:00"))).total_seconds() == 30
