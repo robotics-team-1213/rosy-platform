@@ -35,41 +35,24 @@ D-771 reserved by another in-flight branch; no ADR on station-charge branch
 D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet on main; remove when it lands
 
 
-D-775 reserved in another worktree (refs/adr/D-775), absent from origin/main; remove when its ADR lands
 D-786 landed on local main only (not yet on origin); remove when its ADR reaches origin
-D-787 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-788 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-789 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-790 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-791 landed on local main only (not yet on origin); remove when its ADR reaches origin
-D-792 landed on local main only (not yet on origin); remove when its ADR reaches origin
 D-786 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
-D-787 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-788 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-789 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-790 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-791 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
-D-792 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
-D-794 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
-D-795 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-796 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
-D-797 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-798 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-799 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-801 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-802 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
 D-803 reserved in another worktree or local main, absent from origin/main at D-805; remove when its ADR lands
-D-822 reserved in another in-flight branch (refs/adr/D-822); remove when its ADR lands
-D-823 reserved in another in-flight branch (refs/adr/D-823); remove when its ADR lands
 D-824 reserved in another in-flight branch (refs/adr/D-824); remove when its ADR lands
-D-826 reserved in another in-flight branch (refs/adr/D-826), absent from this branch at D-835; remove when its ADR lands
-D-827 reserved in another in-flight branch (refs/adr/D-827), absent from this branch at D-835; remove when its ADR lands
-D-828 reserved in another in-flight branch (refs/adr/D-828), absent from this branch at D-835; remove when its ADR lands
-D-829 reserved in another in-flight branch (refs/adr/D-829), absent from this branch at D-835; remove when its ADR lands
 D-830 reserved in another in-flight branch (refs/adr/D-830), absent from this branch at D-835; remove when its ADR lands
-D-834 reserved in another in-flight branch (refs/adr/D-834), absent from this branch at D-835; remove when its ADR lands
-D-836 reserved in another in-flight branch (refs/adr/D-836), absent from this branch at D-837; remove when its ADR lands
-D-836 reserved in another in-flight branch (refs/adr/D-836); remove when its ADR lands
 D-838 reserved in another in-flight branch (refs/adr/D-838); remove when its ADR lands
 D-839 reserved in another in-flight branch (refs/adr/D-839); remove when its ADR lands
 D-841 reserved in another in-flight branch (refs/adr/D-841), absent from origin/main at D-848; remove when its ADR lands
@@ -82,6 +65,6 @@ D-847 reserved in another in-flight branch (refs/adr/D-847), absent from origin/
 D-850 reserved in another in-flight branch (refs/adr/D-850), absent from origin/main at D-852; remove when its ADR lands
 D-851 reserved in another in-flight branch (refs/adr/D-851), absent from origin/main at D-852; remove when its ADR lands
 D-853 reserved in another in-flight branch (refs/adr/D-853), absent from origin/main at D-858; remove when its ADR lands
+D-854 reserved in another in-flight branch (refs/adr/D-854), absent from origin/main at D-858; remove when its ADR lands
 D-855 reserved in another in-flight branch (refs/adr/D-855), absent from origin/main at D-858; remove when its ADR lands
 D-856 reserved in another in-flight branch (refs/adr/D-856), absent from origin/main at D-858; remove when its ADR lands
-D-857 reserved in another in-flight branch (refs/adr/D-857), absent from origin/main at D-858; remove when its ADR lands

@@ -52,7 +52,7 @@ surfaces:
     ports:
       - {port: 8767, source: learning/curation/perception/review_app.py}
     audience: Pinky 학습 객체·픽셀 라벨 검수자
-    role: Rosy Learning — 객체·픽셀 검수, 자료 등록, 학습 작업을 제공하는 학습 관리 센터. Studio는 검수 작업대 이름이다. 별도 런처·PWA·ROS·Android 앱 등록은 아니다 (D-461·D-806).
+    role: Rosy Learning — 홈·자료·정답·학습·평가·승격 다섯 단계 메뉴로 로봇 자료를 정답과 모델 평가 근거로 바꾸는 학습 센터(D-857). 도메인은 메뉴가 아니라 필터이고 로그인·계정은 상단 막대에 있다. Studio는 검수 작업대 이름이다. 별도 런처·PWA·ROS·Android 앱 등록은 아니다 (D-461·D-806).
     owns: [pinky-object-review, pinky-pixel-review, pinky-review-export]
     contracts: [shared_controls, typography_focus]
     contract_reason: 로컬 학습 도구이며 로봇 명령·운용 셸·비상정지 또는 비가역 장치 행동이 없다. 초안 교체 확인은 브라우저 기본 dialog다.

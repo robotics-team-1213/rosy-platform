@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
-- 2026-10-24 · uncommitted · 외부 업무 앱 카탈로그 등록과 은퇴 앱 정리
-- 2026-10-23 · 5c74a6e25b · 모델 제어 근거의 범위 연결
-- 2026-10-22 · 79a11a4a54 · 현재 운영 기준 모터 상태 연결 검증
-- 2026-10-22 · fd889ea429 · Learning Center implementation evidence
-- 2026-10-22 · uncommitted · Shared multi-robot Learning Center decisions
+- 2026-10-24 · uncommitted · 외부 업무 앱 지원 계약 문서 공개
+- 2026-10-24 · uncommitted · 객체·픽셀 검수의 정답 링크가 사진을 밀지 않게 (D-542 §2)
+- 2026-10-24 · uncommitted · Rosy Learning VLM 판단 검토 반영 (블라인드 내보내기·평가 state·다시 켜기)
+- 2026-10-24 · uncommitted · Rosy Learning 5단계 메뉴와 VLM 판단 화면 (D-857, D-853)
+- 2026-10-24 · uncommitted · Rosy Learning 게시 문서 리뷰 반영

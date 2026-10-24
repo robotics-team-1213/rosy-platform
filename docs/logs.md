@@ -9561,3 +9561,39 @@ osy-d395-s1d\`.
 - 변경: `app-names-and-roles.md`에 외부 업무 앱 절을 추가해 Harbor(HarborLogi)를 등록하고 은퇴한 rosy-vault의 Rosy Vault·Rosy Device·device-core 행을 정리했다. PRODUCT.md의 앱 구분 문장을 갱신했다. 업무 앱 지원 계약 문서와 그 문서 지도·AGENTS 색인은 그 문서의 공개 게시 변경에서 함께 붙는다.
 - 증거: 공개 팀 저장소 kernel-robot-repo-2의 README·CONTRIBUTING·platform-contract과 이 저장소의 D-806·D-858을 대조했다. 공개 저장소에 아직 없는 문서·ADR(D-797·D-836, 지원 계약 표)는 링크·인용하지 않았다. 제품 코드·wire·권한은 바꾸지 않았다.
 - gate 변화: 없음. 문서 카탈로그 등록이며 외부 앱 연동·실물 수용을 열지 않는다. CE 해당 없음: 새 장애 해결이 아닌 문서 정리다.
+
+## 2026-10-24 · c8aa8efc41 · Rosy Learning 정의와 VLM 빠른 판단 문서·도구 게시
+
+- 변경: [D-857](adr/D-857-rosy-learning-product-definition.md) Accepted(네 역할, 센터 하나, 5단계 메뉴, 임시·확정 정답, 작은 사람 확인 한도)와 [D-853](adr/D-853-learning-vlm-question-truth-and-evaluation.md) Proposed, [제품 지도](plans/2026-10-24-rosy-learning-product-map.md), [VLM 빠른 판단 설계](plans/2026-10-23-vlm-fast-judge-design.md)·[실험 계획](plans/2026-10-23-vlm-fast-judge-experiment.md), 벤치 기록 둘, 교훈 하나 추가·하나 갱신, `tools/vlm_question_bench.py`·`tools/vlm_label_sheet.py`. D-449 개정 메모, `app-responsibilities.md` Learning 행.
+- 증거: 로컬 main에서 같은 내용이 착지·검증됨(모델 PC 벤치: Ollama 확률 읽기 질문 전부 p50 0.10–0.25 s vs 설명 호출 1.7 s). Learning 화면(VLM 판단·5단계 메뉴)은 로컬 Learning 셸에 의존해 이 PR에 넣지 않았다.
+- gate 변화: 없음. 문서·오프라인 도구만이다.
+
+## 2026-10-24 · uncommitted · Rosy Learning 게시 문서 리뷰 반영
+
+- 변경: 독립 리뷰 지적 반영 — D-853은 결정만 게시(구현은 후속), D-857·제품 지도에서 내부 포트와 미게시 ADR 의존 문구 정리, 저장소 밖 링크 제거, 두 벤치 기록의 도구 리비전 정정(측정은 v1·v2, 게시 도구는 v3), [토론 1라운드 기록](validation/vlm-question-debate-2026-10-24/result.md) 추가와 교훈 근거 연결, 도구의 루프백 검사(`urlsplit`)·인라인 JSON 이스케이프·출력 폴더 번호·토론 라운드 보존.
+- 증거: [벤치](validation/vlm-question-bench-2026-10-23/result.md)·[v2](validation/vlm-question-bench-2026-10-23b/result.md)·[토론](validation/vlm-question-debate-2026-10-24/result.md) 기록(모델 PC, 사람 정답 없음).
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · Rosy Learning 5단계 메뉴와 VLM 판단 화면 (D-857, D-853)
+
+- 변경: 레일을 홈·자료·정답·학습·평가·승격 다섯 칸으로 바꾸고 화면이 여럿인 단계에 공용 하위 메뉴(`ui-subnav`)를 붙였다. 기존 URL은 그대로이며 레일 한 번과 하위 메뉴 한 번 안에 닿는다. `/learning/vlm`(`vlm_judge.py`·`vlm_judge_web.py`, 임시·확정 정답, 보기당 평가셋 30장·의견 갈림 50장 상한·주 10건 점검·10% 멈춤, 토론 가져오기, `export-disputes`), `/learning/evaluate`, 홈 도메인 줄(`learning_domains.py`, `/api/learning`의 `domains`, OMX 학습 칸은 학습 과제 수), `--vlm-eval-url`. 협업은 VLM 경로 가져오기를 거절하고 정답 저장에 edit를 요구한다. 제품 지도 §9.2 오타 둘.
+- 증거: 시험 PC의 단위·HTTP·브라우저 시험 기록은 이 브랜치의 작업 기록에 둔다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.
+- gate 변화: 없음. 학습 검수 웹앱 화면과 평가 전용 state만이다. 로봇 실행·배포 권한은 바뀌지 않는다.
+
+## 2026-10-24 · uncommitted · Rosy Learning VLM 판단 검토 반영 (블라인드 내보내기·평가 state·다시 켜기)
+
+- 변경: 내보내기는 고정 평가셋·의견 갈림 사진을 임시 정답에서 빼고 협업에서 manage를 요구한다. 가져오기·정답 저장·다시 켜기는 `--empty-eval` 평가 state에서만 되고, VLM 표가 없는 state의 읽기는 표를 만들지 않는다. 평가는 고정 평가셋만의 비교를 따로 보인다. 멈춘 질문은 `vlm_judge.py unpause`(누가·언제 기록)로 다시 켠다. 토론의 `none_in_top`은 그 모델의 앞 답을 대신해 합의를 막는다. 모델 이름은 LIKE 없이 정확히 비교한다. 홈 OMX 줄은 OMX 과제만 센다. 레일 `aria-current`는 지금 화면에만 `page`, 품은 단계에는 `true`이며 전화의 하위 메뉴 줄은 48px로 줄였다.
+- 증거: 시험 PC 단위·브라우저·affected 기록. 화면 뷰포트 시험 9건은 origin/main에서도 같은 ID로 실패한다(상단 막대 줄바꿈). 실제 정답 품질은 별도 증거다.
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · 객체·픽셀 검수의 정답 링크가 사진을 밀지 않게 (D-542 §2)
+
+- 변경: `/`·`/pixels`는 따로 하위 메뉴 줄 없이 정답 화면 링크를 넓은 화면에서는 제목 줄 오른쪽, 전화에서는 편집기 아래에 둔다.
+- 증거: 사진 위쪽 위치가 origin/main과 같다(390×800 `/` 372.6 px·`/pixels` 367.0 px, 1280×720 281.6·284.0 px, 시험 PC 측정).
+- gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · 외부 업무 앱 지원 계약 문서 공개
+
+- 변경: `application-contract-support.md`를 공개 게시하고, 이 문서와 D-827~829가 참조하는 미게시 ADR 14개(D-775·787·792·794·795·797·822·823·826·827·828·829·834·836)와 계획 문서 4개를 의존 닫힘으로 함께 게시했으며 ADR Log 행 14개를 추가했다. README 문서 지도·reference AGENTS·app-names·PRODUCT의 지원 계약 링크를 연결했다.
+- 증거: 재귀 링크 닫힘 검사로 게시 세트를 확정했다(계획 4종 포함). 이미 공개된 D-853·D-857은 Learning 게시 판을 보존하고 이 변경에서 뺐다. 공개 API 참조는 v1.296으로 이 문서의 v1.290 기준 인용보다 최신이며, 인용은 확인 시점 기록이다. 제품 코드·wire는 바꾸지 않았다. 독립 검토가 Log 재구성 과정에서 D-857 행의 내부 포트 노출을 지목해 base 판 그대로 + 신규 14행만 남도록 다시 만들었다(diff +14행, 기존 행 불변).
+- gate 변화: 없음. 문서 게시이며 외부 앱 연동·실물 수용을 열지 않는다. CE 해당 없음 — 문서 이동·색인 작성이다.
