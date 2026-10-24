@@ -293,7 +293,8 @@ def main(argv=None):
     parser.add_argument('--arm-health-file', action='append', metavar='SOURCE_ID=/absolute/file',
                         default=os.environ.get('ROSY_OBSERVATION_ARM_HEALTH', '').split(),
                         help='private trusted health file for a registered arm; owner derives from its arm_id '
-                             '(default: the space-separated ROSY_OBSERVATION_ARM_HEALTH, one per arm of this cell)')
+                             '(default: the space-separated ROSY_OBSERVATION_ARM_HEALTH, one per arm of this cell; '
+                             'a flag adds to that list, so a source bound twice is refused)')
     args = parser.parse_args(argv)
     if not 0 <= args.domain_id <= 232:
         parser.error('domain-id must be 0..232')

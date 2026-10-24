@@ -369,19 +369,26 @@ class Updater:
         before = {link: os.readlink(self.root / link) for link in ("current", "current-env")
                   if (self.root / link).is_symlink()}
         self.link(name, env)
-        units = self.host.running(self.cfg.get("units", []))  # once: the rollback restarts the same ones
         smoked = self.host.smoke(self.root / "current", self.root / "current-env" / "bin" / "python")
-        # rosy-omx-observer@ refuses to start while anyone holds the cell lock, this updater included
-        session.close()
+        if not smoked:  # still under the lock: no session sees the broken release in current
+            self.relink(previous, previous_env, before)
+        # Chosen after the smoke check, right before the restart, and reused by the rollback: a unit stopped
+        # by hand meanwhile stays stopped.
+        units = self.host.running(self.cfg.get("units", []))
+        released = self.cfg.get("idle_gate") == "cell"
+        if released:  # rosy-omx-observer@ refuses to start while anyone holds the cell lock, this updater included
+            session.close()
         if not (smoked and self.host.restart(units)):
-            if previous:
-                self.link(previous, previous_env)
-            else:  # first install: what was there before, or no current pointing at a broken release
-                self.unlink()
-                for link, target in before.items():
-                    (self.root / link).symlink_to(target)
+            if smoked:
+                self.relink(previous, previous_env, before)
             self.host.restart(units)
             log(step="rolled_back", release=name, to=previous)
+            retaken = self.host.hold_session() if released and smoked else True
+            if retaken is None:  # a session started after the release: the release was not at fault
+                log(step="deferred", release=name, reason="session_started_during_restart")
+                return "deferred"
+            if released and smoked:
+                retaken.close()
             state["failed"] = name  # do not retry it every run until main moves on
             state["history"].append({"release": name, "result": "rolled_back", "at": time.time()})
             self.save(state)
@@ -392,6 +399,14 @@ class Updater:
         self.cleanup(state)
         log(step="switched", release=name, previous=previous)
         return "switched"
+
+    def relink(self, previous, previous_env, before) -> None:
+        if previous:
+            self.link(previous, previous_env)
+        else:  # first install: what was there before, or no current pointing at a broken release
+            self.unlink()
+            for link, target in before.items():
+                (self.root / link).symlink_to(target)
 
     def rollback(self) -> str:
         state = self.state()
@@ -408,9 +423,12 @@ class Updater:
                 return "deferred"
             units = self.host.running(self.cfg.get("units", []))
             self.link(state["previous"], state["previous_env"])
+            if self.cfg.get("idle_gate") != "cell":
+                self.host.restart(units)
         finally:
             session.close()
-        self.host.restart(units)
+        if self.cfg.get("idle_gate") == "cell":  # after the release, as in switch()
+            self.host.restart(units)
         # current_sha is dropped: after a manual rollback the next forward update is not refused as older
         state.update(current=state["previous"], previous=state["current"], env=state["previous_env"],
                      previous_env=state["env"], current_sha=None)

@@ -487,3 +487,40 @@ def test_a_rollback_restarts_the_units_that_ran_before_the_switch_even_if_they_d
     host.head, host.healthy = "b" * 40, False
     assert u.run() == "rolled_back"
     assert host.restarts[-2:] == [["rosy-omx-observer@arm_a.service"]] * 2  # never the hand-stopped camera
+
+
+@pytest.mark.parametrize("cfg", [{}, CELL_SERVICE], ids=["cell", "cell_gated_service"])
+def test_a_release_failing_smoke_through_current_is_unlinked_before_the_lock_goes(tmp_path, cfg):
+    host = FakeHost()
+    u = updater(tmp_path, host, **cfg)
+    u.run()
+    held_at_relink = []
+    relink = u.relink
+    u.relink = lambda *a: held_at_relink.append(host.held) or relink(*a)
+    host.head, host.smoke = "b" * 40, flaky_smoke(1)
+    assert u.run() == "rolled_back"
+    assert held_at_relink == [True]  # no session can start on the broken release
+
+
+def test_a_service_without_the_cell_gate_restarts_under_its_own_lock_as_before(tmp_path):
+    host = FakeHost()
+    locked_at_restart = []
+    restart = host.restart
+    host.restart = lambda units: locked_at_restart.append(host.held) or restart(units)
+    assert updater(tmp_path, host, **SERVICE).run() == "switched"
+    assert locked_at_restart == [True]
+
+
+def test_a_session_that_starts_during_the_restart_defers_instead_of_condemning_the_release(tmp_path, capsys):
+    host = FakeHost()
+    u = updater(tmp_path, host, **CELL_SERVICE)
+    u.run()
+    host.head, host.healthy = "b" * 40, False
+    hold = host.hold_session
+    calls = []
+    host.hold_session = lambda: calls.append(1) or (None if len(calls) == 2 else hold())
+    assert u.run() == "deferred"  # the observer refused to start because the session took the cell
+    assert "session_started_during_restart" in capsys.readouterr().out
+    assert current(tmp_path) == str(Path("releases") / ("a" * 12))
+    host.healthy = True
+    assert u.run() == "switched"  # retried, not known_bad
