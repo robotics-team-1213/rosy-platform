@@ -423,8 +423,8 @@ def test_catalog_sends_a_verified_hf_import_to_review_browser(tmp_path, width):
         fake.require(actor, capability)
     transport = Transport()
     transport.data = {'img/a.png': cv2.imencode('.png', np.full((24, 32, 3), 90, np.uint8))[1].tobytes()}
-    imports = LearningImports(tmp_path / 'imports', authorize,
-                              lambda *args, **kwargs: {'token': 'selected-secret', 'generation': 1}, transport=transport)
+    imports = LearningImports(tmp_path / 'imports', authorize, transport=transport,
+                              credential=lambda *args, **kwargs: {'token': 'selected-secret', 'generation': 1})
     reviewer = fake.authenticate('reviewer')
     job = imports.create(reviewer, 'alpha', 'hf-a', 'dataset', 'org/data', 'main', ['img/a.png'], RIGHTS)
     imports.run(job['id'], reviewer)

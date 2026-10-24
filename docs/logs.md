@@ -9645,3 +9645,9 @@ osy-d395-s1d\`.
 - 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · HF 가져오기를 검수 대기열로 보내기 (D-857 P1)
+
+- 변경: 자료 화면(`/catalog`)이 협업 모드의 HF 가져오기를 보여 주고, 끝난 작업에 「검수로 보내기」(`POST /api/learning/imports/review`, `import` 권한)를 단다. 서버는 `LearningImports.verified`로 공개 산출물 manifest·크기·SHA-256·media sidecar를 디스크에서 다시 검증하고(`_recover`와 같은 검사 `_published`), `review_ingest.import_hf`가 작업 공간 픽셀 클래스셋이 없거나 가져온 `classes.yaml`·`data.yaml`이 다르면 거절한다(D-485). JPEG/PNG만 객체·픽셀 `pending`으로 들어가고 승인·초안은 만들지 않는다. 사진 source에 `upstream`(저장소·고정 revision·경로·해시·가져오기 id·요청자·보낸 사람)이, 가져오기 작업에 첫 `review` 기록이 남는다. `import_frames(upstream=)`는 서버가 검증한 출처만 받고 카탈로그 행의 선언은 쓰지 않는다.
+- 증거: 원격 시험 PC 단위·HTTP 시험과 브라우저 시험(1440·390px, 44px 누름 면, 가로 스크롤 없음), affected 계층. known_failures 비교 0 NEW. 실제 HF 저장소와 모델 PC 센터에서의 수용은 하지 않았다.
+- gate 변화: 없음. 영상 원본이 없는 사진이라 데이터셋 빌드는 `source_video_hash_unknown`으로 계속 막힌다. CE 해당 없음 — 새 장애나 반복 원인이 없다.

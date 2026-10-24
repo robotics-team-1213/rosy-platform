@@ -512,26 +512,20 @@ class LearningImports:
                 raise ValueError('published media revision mismatch')
         return published
 
-    def verified(self, actor, project_id, job_id):
-        """A completed import re-read from disk: (job, {selected path: published file})."""
+    def verified(self, actor, project_id, job_id):  # completed import re-read from disk: (job, {path: file})
         job = self.get(actor, project_id, job_id)
         self.authorize(actor, project_id, 'import')
-        if job['status'] != 'completed':
-            raise ValueError('import is not completed')
+        if job['status'] != 'completed': raise ValueError('import not completed')
         final = self.root / 'artifacts' / job['id']
-        published = self._published(job, final, lambda: None)
-        if [row['sha256'] for row in published['files']] != [row.get('sha256') for row in job['files']]:
-            raise ValueError('published checksum mismatch')
-        return job, {row['path']: final / 'files' / _filename(row['path']) for row in published['files']}
+        files = self._published(job, final, lambda: None)['files']
+        return dict(job, files=files), {row['path']: final / 'files' / _filename(row['path']) for row in files}
 
     def record_review(self, actor, project_id, job_id, review):
-        """Keep the first registration; the review store deduplicates repeated frames itself."""
         self.authorize(actor, project_id, 'import')
         with self.lock, self._db() as db:
             job = self._load(job_id, db)
-            if job['project_id'] != project_id or job['status'] != 'completed':
-                raise ValueError('import is not completed')
-            job.setdefault('review', review)
+            if job['project_id'] != project_id or job['status'] != 'completed': raise ValueError('import not completed')
+            job.setdefault('review', review)   # the first registration stays; the review store dedups frames
             self._write(db, job)
         return job
 
