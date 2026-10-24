@@ -31,8 +31,9 @@
 | [managed owner 권한](2026-10-24-managed-transfer-authority-design.md) | 영속 mode/최종 명령 경계, 집중 119개·affected 1754 passed/34 skipped/0 NEW | 실제 ROS/장치·승인/물리 종료 |
 | [실제 capability/대상 owner](2026-10-24-managed-transfer-capability-design.md) | API v1.306·canonical journal/session·receipt/404 결속, 집중790/0 NEW, FULL표행1NEW 수정 후 entry9 7371 passed/91 skipped/0 NEW(다른22개원본0NEW), 독립 검토 | Fleet physical producer·claim 종료·Harbor ARM |
 | [물리 종료/producer 계획](2026-10-24-neutral-transfer-closure-and-producer-design.md) | 독립 architecture/critic 3회 검토 approve, World 사실/Fleet atomic claim/Harbor 업무 분리와 object origin·실행 전 점유 확인 명시 | policy·물리 관측·승인/producer·Harbor 연결 구현 |
-| [World 물리 관측 자료형](../validation/harbor-physical-observations-2026-10-24/result.md) | source084 불변 raw facts·미측정 속도 None 보존·독립 wheel, World28/affected764 passed·0 NEW | 실제 producer 인증·두 표본 freshness/모델 coverage·Fleet 판정/claims |
+| [World 물리 관측 자료형](../validation/harbor-physical-observations-2026-10-24/result.md) | source084 불변 raw facts·미측정 속도 None 보존·독립 wheel, World28/affected764 passed·0 NEW | 실제 producer·현재 원장 결속/claims |
 | [고정 OMX 전체 형상](../validation/harbor-physical-observations-2026-10-24/result.md#고정-omx-전체-형상-식별) | sourceb045 URDF·8개 mesh 내용·전체9개 링크, World36/affected753 passed·0 NEW·독립 검토 | 실제 bounds·관측 producer·두 표본 정책/claims |
+| [Fleet 두 표본 물리 검사](../validation/harbor-physical-evaluator-2026-10-24/result.md) | source205 정책/시각/전체 링크/정지/object pose·집중67 passed/skip0·affected4587/6312 passed·각0 NEW·독립 재검토 | credential ingress·현재 원장 context/fence·atomic claim 종료·producer/Harbor |
 | 전체 P3–P5 | 진행 중 | 중립 팔 실행의 승인/자원 종료, Harbor 공정 변환, 복구·독립성 통합 증거 |
 
 첫 HTTP 증거는 플랫폼 commit `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor commit `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.

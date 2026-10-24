@@ -108,6 +108,7 @@ adrs:
 - D-472
 - D-497
 plans:
+- docs/plans/2026-10-24-neutral-transfer-closure-and-producer-design.md
 - docs/plans/2026-10-24-managed-transfer-capability-design.md
 - docs/plans/2026-10-11-mapless-fleet-control.md
 - docs/plans/2026-10-11-stable-map-readouts-design.md
@@ -221,3 +222,9 @@ c3ac314b5 원격 CORE/HTTP 144개, 3f44891bd Fleet 회귀 149개 통과, 각 NEW
 기존 tracking/sighting 승인과 World/CORE 권한은 유지한다. 원격 시험의 커밋·실행·실패 수정·skipped와
 실측 근거의 한계는 [구현 검증 기록](../../docs/validation/measured-camera-lifecycle-2026-10-16/result.md)에 모은다. 기존 모듈 gate의 물리 수용 범위를
 넓히지 않는다. D-598의 현재 현장 readback·로봇별 오차 계수는 아직 확보하지 못했다.
+
+## 2026-10-24 · D-856 두 표본 물리 검사
+
+source205의 내부 validator는 World 사실과 설치 정책/durable attempt context를 대조한다. 물체 model origin의 source/target pose, 전체 참가자9개 링크의 정지·엄격한 구역 이탈, 두 표본 freshness/순서/경계 이후 조건을 검사한다. quaternion norm 오차와 직접 축소 descriptor를 회귀로 보완했다. 집중67 passed/skip0, affected 전체 두 묶음4587 passed/189 skipped와6312 passed/336 skipped·각exit0/known0 NEW와 독립 재검토를 확인했다. 범위 중복과 skips는 합산/수용으로 세지 않는다.
+
+credential ingress·현재 원장에서 만든 context/fence·physical create/approval·claim 해제 transaction·Harbor ARM은 아직 연결하지 않았다. validator 성공은 receipt나 점유 해제 권한이 아니다. [검증과 한계](../../docs/validation/harbor-physical-evaluator-2026-10-24/result.md)를 따른다. 기존 모듈/현장 gate의 수용 범위를 넓히지 않는다.

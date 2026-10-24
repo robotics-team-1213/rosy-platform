@@ -91,6 +91,7 @@
 - [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
 - [2026-10-11-stable-map-readouts-design.md](../../docs/plans/2026-10-11-stable-map-readouts-design.md)
 - [2026-10-24-managed-transfer-capability-design.md](../../docs/plans/2026-10-24-managed-transfer-capability-design.md)
+- [2026-10-24-neutral-transfer-closure-and-producer-design.md](../../docs/plans/2026-10-24-neutral-transfer-closure-and-producer-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -102,8 +103,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · 205cd08767 · D-856 두 표본 물리 검사
 - 2026-10-24 · ebba429c4c · D-856 이력 표 수정 재검증 완료
 - 2026-10-24 · ebba429c4c · D-856 FULL 이력 표 guard 수정
 - 2026-10-24 · 46f56d6b48 · D-856 canonical owner capability와 ARM 응답 검증
 - 2026-10-24 · fc5d75eecd · D-856 중립 팔 v2 transport 호환
-- 2026-10-24 · dda08892c9 · D-856 원장 provenance 분리

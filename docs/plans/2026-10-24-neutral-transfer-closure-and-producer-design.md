@@ -2,9 +2,11 @@
 
 **Status:** ralplan 독립 architecture/critic는 frozen commit `5dad5fd6c4`의1차, object pose 기준점 보완 `ebba429c4c`의2차, pre-dispatch occupancy 보완 `b241ef1cc5`의3차를 모두 approve했다. 이견/필수 보완 없음으로 이미 승인된 execution을 진행한다. 계획 승인은 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
 
-단계1의 World raw-facts는 source commit `037c29121f`에서 구현하고 `0849ce4825`에서 미측정 속도를 None으로 보존했다. 최신 World28 passed/skip0·affected764 passed/2 skipped·각0 NEW와 고정 SHA 독립 검토를 확인했다. [검증과 남은 범위](../validation/harbor-physical-observations-2026-10-24/result.md)를 따른다. 아직 producer 인증·freshness/coverage evaluator·claim 해제는 없으며 이후 단계도 미완료다.
+단계1의 World raw-facts는 source commit `037c29121f`에서 구현하고 `0849ce4825`에서 미측정 속도를 None으로 보존했다. 해당 소스의 World28 passed/skip0·affected764 passed/2 skipped·각0 NEW와 고정 SHA 독립 검토를 확인했다. [검증과 한계](../validation/harbor-physical-observations-2026-10-24/result.md)를 따른다. 당시에는 producer 인증·freshness/coverage evaluator·claim 해제가 없었다. 후속 구현과 현재 미완료 범위는 아래에 기록한다.
 
-고정 OMX 형상 descriptor는 source `b045ed0050`에서 실제 URDF·8개 mesh 내용 검증과 visual/collision 전체9개 필수 링크를 구현했다. World 전체36 passed/skip0·affected753 passed/2 skipped·각0 NEW, 동일 SHA 독립 검토 finding 없음이다. descriptor는 측정 bounds·부착물·실제 구역 이탈의 검증을 대신하지 않으며 Fleet의 두 표본 정책 소비자는 아직 없다.
+고정 OMX 형상 descriptor는 source `b045ed0050`에서 실제 URDF·8개 mesh 내용 검증과 visual/collision 전체9개 필수 링크를 구현했다. World 전체36 passed/skip0·affected753 passed/2 skipped·각0 NEW, 동일 SHA 독립 검토 finding 없음이다. descriptor는 측정 bounds·부착물·실제 구역 이탈의 검증을 대신하지 않는다. 이후 source205에서는 직접 생성하는 descriptor에도 정확한 고정 profile과 전체 링크 invariant를 적용했다.
+
+두 표본 정책 소비자는 source `205cd08767`에서 구현했다. [검증 기록](../validation/harbor-physical-evaluator-2026-10-24/result.md)의 집중67 passed/skip0, affected 두 묶음4587 passed/189 skipped와6312 passed/336 skipped·각0 NEW와 독립 재검토를 확인했다. 최초 소스에서 발견한 quaternion norm/축소 descriptor 누락은 RED 재현 뒤 보완했다. 이 첫 profile은 모든 참가자의 gripper가 열려 있고 비어 있어야 한다. credential ingress·현재 원장 context/fence·atomic claim 종료는 후속이며 validator 성공을 그 권한으로 사용하지 않는다.
 
 ## 목표와 소유권
 

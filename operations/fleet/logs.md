@@ -4423,3 +4423,9 @@
 - 변경: 수정 후 재검증과 원본 FULL 실패를 validation/plan에 함께 기록했다.
 - 증거: 실패 entry9 전체가7371 passed/91 skipped/0 NEW, runner exit0였다. 원본46의 다른22개는0 NEW다. 원본과 수정 SHA의 결과를 구분한다.
 - gate 변화: physical create/approval/World 관측/atomic claim 종료·Harbor ARM은 다음 승인된 계획의 실행 범위다. 이 host 결과를 실물 수용으로 사용하지 않는다.
+
+## 2026-10-24 · 205cd08767 · D-856 두 표본 물리 검사
+
+- 변경: World 사실을 설치 정책·durable attempt context와 대조하는 내부 pure validator. 모든 참가자의 전체9개 링크·속도/그리퍼·엄격한 expanded-zone 이탈, object-origin source/target pose, 두 관측의 순서/경계 이후/age를 검사한다. 원장/claim/dispatch 쓰기는 없다.
+- 증거: 최초 RED25 뒤 집중63 passed, 독립 검토의 quaternion norm/축소 descriptor 두 누락을 RED4로 재현하고 보완했다. source205 집중67 passed/skip0, affected 전체 두 묶음4587 passed/189 skipped와6312 passed/336 skipped, 각각exit0/known0 NEW·고정 SHA 독립 재검토 finding 없음, source size/safety exit0. 범위 중복과 skips는 합산/수용으로 세지 않는다. 상세는 docs/validation/harbor-physical-evaluator-2026-10-24/result.md다.
+- gate 변화: credential ingress·실제 current context/fence·physical create/approval·atomic claim 종료·Harbor ARM은 미완료다. CE 해당 없음: source·회귀·검증 문서가 두 검토 finding의 원인/수정을 보존한다. 과거 e26 G1 timing 원인 미확정은 별도다.
