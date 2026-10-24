@@ -45,12 +45,14 @@ def test_persistence_replace_and_metadata_only(tmp_path):
 
 @pytest.mark.parametrize("changes", [
     {"display_name": ""}, {"display_name": "  "}, {"display_name": "x" * 81},
-    {"display_name": 123}, {"display_name": "robot\nname"}, {"model": None},
+    {"display_name": 123}, {"display_name": "robot\nname"}, {"display_name": "\ud800"},
+    {"manufacturer": "\udfff"}, {"hardware_ids": ["serial:\ud800"]}, {"model": None},
     {"manufacturer": "x" * 81}, {"model": "bad\x7f"}, {"device_kind": "arm"},
     {"arm_count": True}, {"arm_count": 2.0}, {"arm_count": "2"},
     {"arm_count": -1}, {"arm_count": 17}, {"arm_count": 0},
     {"hardware_ids": "serial"}, {"hardware_ids": ["same", "same"]},
     {"hardware_ids": [""]}, {"hardware_ids": [" "]}, {"hardware_ids": [False]},
+    {"hardware_ids": [{}]}, {"hardware_ids": [[]]}, {"device_kind": {}},
     {"hardware_ids": ["x" * 201]}, {"hardware_ids": ["bad\tserial"]},
     {"hardware_ids": [str(i) for i in range(17)]}, {"control_enabled": True},
     {"connection_status": "connected"}, {"updated_by": "forged"}, {"base_url": "http://device"},

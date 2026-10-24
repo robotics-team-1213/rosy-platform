@@ -1228,3 +1228,9 @@ Dedicated D-772 measurement sources request the existing demand while their inst
 ## D-776 - Installed station charge facts
 
 Approved local measurement facts preserve original source/time and durable replay fences. Fleet owns selected-work route budgets; existing CORE authority and hardware acceptance remain. Details: [D-776](../adr/D-776-installed-station-charge-facts.md).
+
+## D-860 - Descriptive device profiles independent of enrollment and control
+
+**Status:** Accepted (2026-10-24)
+
+Fleet stores editable device names, models, declared arm counts and hardware identifiers in its existing database. Profiles confer no membership, connection attestation or motion authority. Details: [D-860](../adr/D-860-descriptive-device-profiles.md).

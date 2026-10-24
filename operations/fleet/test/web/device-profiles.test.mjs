@@ -61,8 +61,10 @@ test('save prevents duplicate submission and verifies saved metadata without con
   f.setRows([saved]);
   const first=f.nodes.save.handlers.click();await f.nodes.save.handlers.click();
   assert.equal(f.calls.filter(([,opts])=>opts.method==='PUT').length,1);
+  assert.equal('device_id' in JSON.parse(f.calls.find(([,opts])=>opts.method==='PUT')[1].body),false);
   finish(saved);await first;
   assert.match(f.nodes.status.textContent,/저장/);
   assert.match(f.nodes.saved.textContent,/연결 미확인/);
   assert.equal(f.nodes.save.disabled,false);
+  assert.equal(f.nodes.device_id.disabled,true);
 });
