@@ -4400,3 +4400,9 @@
 - 변경: WELCOME0으로 구 Agent의 새 부팅 버퍼 삭제를 방지하고, 메모리 Hub도 기존 durable store와 같은 ID·본문 충돌 규칙으로 재전송을 처리한다. 최대 seq는 진단값만 유지한다. D-869/APIv1.315에 호환성과 한계를 기록했다.
 - 증거: [검증 기록](../../docs/validation/event-reconnect-replay-2026-10-25/result.md). 신규 RED5건과 durable replay 보존 뒤 관련 원격98개 통과, skip0/NEW0. 원본 ID·내용·seq와 audit/projection 한 번 기록을 단언한다.
 - gate 변화: SOURCE 회귀만 확인했다. 구 peer·메모리 재시작·실물 수용과 영속 outbox는 보장하지 않는다. CE 해당 없음: 판단은 정본 ADR·회귀로 복원된다.
+
+## 2026-10-25 · 4ed200d0ee · 군집 세션 무장 경로 의미 보존 분리
+
+- 변경: 기존 네 메서드와 enum을 같은 패키지에 옮겨 session628→520줄. 기존 export·logger·정리 순서를 유지하고 안전 분류와 ratchet를 함께 반영했다.
+- 증거: [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). 원격 기준108개, 추출·기능 회귀123개 통과, skip0/NEW0. 독립 검토 승인.
+- gate 변화: 준비 추출만 검증했다. FULL 착지·신선도 소비자·실물 수용은 별도다. CE 해당 없음.
