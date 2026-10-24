@@ -1,4 +1,11 @@
-"""OMX intake inspection and immutable human grasp-segment reviews; no device action."""
+"""OMX intake inspection and immutable human grasp-segment reviews; no device action.
+
+Dataset step (D-857 P0): python learning/curation/perception/omx_web.py export-segments
+  --db <review state>/reviews.sqlite3 --id <registered set id> --out <new folder>
+exports the latest saved segment review exactly as native_segments.py does for a downloaded JSON.
+"""
+import argparse
+from contextlib import closing
 import io
 import json
 import sqlite3
@@ -174,3 +181,40 @@ def post(handler, path, body, workspace, conflict):
                    (row['id'], current+1, json.dumps(document, ensure_ascii=False, allow_nan=False)))
     handler.send({'version': current+1, 'document': document})
     return True
+
+
+def export_saved(db, identifier, output):
+    """Latest saved human segment review -> the native_segments export; the review DB is opened read-only."""
+    import native_segments as segments
+    try:
+        with closing(sqlite3.connect(Path(db).resolve(strict=True).as_uri() + '?mode=ro', uri=True)) as conn:
+            link = conn.execute("SELECT path FROM learning_links WHERE id=? AND kind='omx'", (identifier,)).fetchone()
+            review = conn.execute('SELECT document FROM omx_segment_reviews WHERE id=? '
+                                  'ORDER BY version DESC LIMIT 1', (identifier,)).fetchone()
+    except sqlite3.Error as exc:
+        raise ValueError(f'review database with registered sets and segment reviews required ({exc})') from exc
+    if link is None or _read(Path(link[0]), 'intake-receipt.json') is None:
+        raise ValueError('registered OMX intake required')
+    if review is None:
+        raise ValueError('saved segment review required')
+    root = Path(link[0])
+    return segments.export_segments(root, _read(root, 'inspection.json'), json.loads(review[0]), output)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest='command', required=True)
+    export = commands.add_parser('export-segments', help='latest saved segment review -> train/eval datasets')
+    export.add_argument('--db', type=Path, required=True)
+    export.add_argument('--id', required=True)
+    export.add_argument('--out', type=Path, required=True)
+    args = parser.parse_args(argv)
+    try:
+        export_saved(args.db, args.id, args.out)
+    except (ValueError, OSError, ImportError, AssertionError) as exc:
+        parser.exit(2, f'refused: {exc}\n')
+    print(f'Written: {args.out}; offline segments, no upload or device action.')
+
+
+if __name__ == '__main__':
+    main()

@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · OMX 구간 DB 내보내기 바이트 비교를 센터 CPU venv에서 실행
+- 2026-10-25 · uncommitted · 정지 episode 제외 규칙과 검수 DB 읽기 전용
+- 2026-10-25 · uncommitted · OMX 데이터셋 단계가 저장된 구간 검수를 DB에서 읽음
 - 2026-10-25 · uncommitted · SIM 실험 결과를 평가·승격과 홈에 연결 (D-857 P1)
 - 2026-10-25 · uncommitted · 교훈: LeRobot은 센터 학습 venv에 있다
-- 2026-10-24 · uncommitted · 센터 설치 교훈: 서명 릴리스에 없는 것들
-- 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
-- 2026-10-24 · uncommitted · 센터 설치기가 작업 공간 목록 옵션을 유지

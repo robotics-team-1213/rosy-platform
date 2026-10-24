@@ -9663,3 +9663,21 @@ osy-d395-s1d\`.
 - 변경: `/learning/evaluate`가 최근 SIM 실험 10개를 상태·단계·과제 성공·판정(`sim_web.public()`의 `status`·`result.stage`·`result.task_success`·`result.status`만)으로 보이고, 각 줄이 `/learning/sim?run=<run_id>`로 그 run을 연다. `sim.js`는 목록을 읽은 뒤 `?run=`의 run을 클릭과 같은 방법으로 선택한다. 홈 SIM 행은 `public()` 행만 읽고(1분 읽기 제한 유지) 평가 단계에 최근 run의 단계 근거를, 다음 할 일에 그 run 링크를 둔다. 연결 미설정이면 평가 단계도 `not_available`(「SIM 실행 연결이 설정되지 않았습니다.」). 화면 문구가 SIM 판정·과제 성공은 근거일 뿐 승인·승격이 아니라고 밝힌다(D-793, D-857). `review-app.md` 갱신.
 - 증거: 원격 시험 PC에서 대상 시험 25 passed(브라우저 포함, 1280·390px), affected 계층 2508 passed, 317 skipped. known_failures 비교 둘 다 0 NEW. SIM은 가짜 run으로만 시험했고 실제 SDK 실행은 별도 증거다.
 - gate 변화: 없음. CE 해당 없음 — 기존 화면 연결이며 새 판단이 없다.
+
+## 2026-10-25 · uncommitted · OMX 데이터셋 단계가 저장된 구간 검수를 DB에서 읽음
+
+- 변경: D-857 P0 2번. `omx_web.py export-segments --db <state>/reviews.sqlite3 --id <등록 id> --out <새 폴더>`가 `/learning/omx`에 저장된 최신 구간 검수 버전을 DB에서 읽어 `native_segments.export_segments`에 그대로 넘긴다(JSON 내려받기·수동 전달 불필요, 내려받기는 남김). `native_review.refuse_untrainable`이 `DO_NOT_TRAIN.txt`·`static_episodes.json` 표시 녹화를 intake(`prepare_native`)·분할(`split_reviewed`)·구간 내보내기에서 거절한다. 학습에는 여전히 사람이 성공·무개입으로 확인한 구간만 들어간다.
+- 증거: 원격 시험 PC에서 대상 시험 233 passed, 9 skipped, affected 계층 2478 passed, 324 skipped, known_failures 0 NEW. DB 경로가 내려받은 JSON과 같은 입력을 export에 넘기는 시험은 통과했다. 두 경로의 receipt·dataset 바이트를 비교하는 LeRobot 왕복 시험은 시험 PC에 lerobot이 없어 건너뛰었다(미검증).
+- gate 변화: 없음. CE 해당 없음 — 새 장치·환경 판단이 없다.
+
+## 2026-10-25 · uncommitted · 정지 episode 제외 규칙과 검수 DB 읽기 전용
+
+- 변경: robot-47 답변에 따라 `DO_NOT_TRAIN.txt`는 dataset 전체 거절, `static_episodes.json`은 적힌 episode만 제외로 바꿨다. 파일이 깨졌거나 남는 episode가 없으면 전체 거절. 표시는 `record_session`이 LeRobot dataset root에 쓰고 `record_seal`이 `collection/dataset/`으로 복사한다(fix/omx-arm-s-cell-check 읽기 확인). `prepare_native`가 aggregate 번호로 intake root에 옮겨 쓰고, `inspect_dataset`이 `excluded_episodes`(번호·이유)로 남기며, `reviewed_splits`·구간 선택이 그 episode를 뺀다. 이 변경 전에 준비한 intake는 봉인 manifest에 표시가 있으면 거절한다(다시 준비 필요). manifest 없는 예전 fixture intake는 확인하지 않는다. `export-segments`는 DB를 `mode=ro`로 열어 두 표를 직접 읽는다.
+- 증거: 원격 시험 PC에서 대상 247 passed, 9 skipped, affected 2684 passed, 324 skipped, known_failures 0 NEW. LeRobot 바이트 비교 시험은 시험 PC에 lerobot이 없어 여전히 건너뜀.
+- gate 변화: 없음. CE 해당 없음 — 규칙 변경이며 새 장치 판단이 없다.
+
+## 2026-10-25 · uncommitted · OMX 구간 DB 내보내기 바이트 비교를 센터 CPU venv에서 실행
+
+- 변경: 없음(검증 기록). pytest가 없는 모델 PC 센터 CPU venv(lerobot 0.4.4, Python 3.12.3)에서 1ce299ce22 사본과 독립 스크립트로 `test_db_export_is_byte_identical_to_the_downloaded_json_export`와 `test_real_lerobot_segment_readback`의 절차를 재현했다. venv·센터·state는 건드리지 않았고 임시 폴더는 지웠다.
+- 증거: DB `export-segments`와 내려받은 JSON 경로의 split-receipt.json이 바이트 동일, train·eval child 파일 12개 sha256 모두 일치, 내보내기 전후 DB 바이트 동일, 구간 readback 3프레임·action 2,3,4 확인.
+- gate 변화: 없음. CE 해당 없음 — 시험 PC에 lerobot이 없다는 사실은 기존 기록에 있다.
