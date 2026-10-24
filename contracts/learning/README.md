@@ -12,8 +12,8 @@ D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt�
 
 [D-854](../../docs/adr/D-854-omx-policy-runner-and-action-space.md)의 `action_space`는 OMX 데이터셋·정책이 선언하는 행동 단위
 (`lerobot_norm_v1`, `dynamixel_rad_v1`)와 버전이 붙은 순수 변환기다. 식은 lerobot 0.4.4 `omx_follower`
-(`use_degrees: false`) 정규화와 같고, 범위 밖 값은 잘라 맞추되 `convert()`가 잘린 개수를 돌려준다. 보정 digest는
-변환이 읽는 `range_min`·`range_max`·`drive_mode`만 쓴다. `dynamixel_rad_v1`이 설치된 ROS 관절 rad와 같은지는
+(`use_degrees: false`) 정규화와 같고, 범위 밖 값은 잘라 맞추되 `convert()`가 잘린 개수를 돌려준다. lerobot
+0.4.4 Dynamixel 버스는 `apply_drive_mode = False`라 `drive_mode`를 읽지 않으며, 보정 digest는 `range_min`·`range_max`만 쓴다. `dynamixel_rad_v1`이 설치된 ROS 관절 rad와 같은지는
 보증하지 않는다. 다음 wheel 버전은 첫 소비자(정책 실행기)가 붙을 때 올린다.
 
 ```python
