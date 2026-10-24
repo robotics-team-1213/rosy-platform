@@ -67,6 +67,8 @@ class ArticulationCapture:
             if self.first_error is None:self.first_error=type(error).__name__
         return dict(schema=SCHEMA,coverage=COVERAGE,sample_period_ns=SAMPLE_PERIOD_NS,
             maximum_samples=MAX_SAMPLES,messages=self.messages,samples=self.samples,
+            first_ros_stamp_ns=self.samples[0]['ros_stamp_ns'] if self.samples else None,
+            last_ros_stamp_ns=self.last_source,
             first_received_owner_ns=self.first_received,last_received_owner_ns=self.last_received,
             maximum_receipt_gap_ns=self.maximum_gap,ended_owner_ns=ended,
             end_gap_ns=ended-self.last_received if ended is not None and self.last_received is not None else None,

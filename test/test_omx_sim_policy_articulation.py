@@ -85,6 +85,14 @@ def test_storage_limit_marks_capture_incomplete(monkeypatch):
     assert doc['summary']['status']=='incomplete'
 
 
+def test_final_source_stamp_includes_valid_throttled_messages():
+    trace,clock=ready_trace();clock[0]=10.021;trace.observe(message(1_021_000_000))
+    doc=trace.finish()
+    assert len(doc['samples'])==2 and doc['first_ros_stamp_ns']==1_000_000_000
+    assert doc['last_ros_stamp_ns']==1_021_000_000
+    assert doc['samples'][-1]['ros_stamp_ns']==1_020_000_000
+
+
 @pytest.mark.parametrize('fault',['none','missing','invalid','truncated','stale','future','frozen'])
 def test_launch_requires_current_clean_progress_after_homing(tmp_path,monkeypatch,fault):
     job=importlib.import_module('sim_pick_place_policy_job');trace,clock=ready_trace()
