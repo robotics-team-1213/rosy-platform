@@ -23,17 +23,19 @@ class TransferPreflightApi:
         self.journal_id = TypeAdapter(ArmPhysicalRef).validate_python(journal_id)
 
     @staticmethod
-    def _error(status, code, *, reason=None):
+    def _error(status, code, *, reason=None, version=2):
         error = {"code": code}
         if reason is not None:
             error["reason"] = reason
-        return {"version": 2, "status": status, "error": error}
+        return {"version": version, "status": status, "error": error}
 
     def dispatch(self, frame: Mapping, *, peer_uid: int) -> dict:
+        version = frame.get("version") if isinstance(frame, Mapping) else None
+        reply_version = version if type(version) is int and version in {1, 2} else 2
         if type(peer_uid) is not int or peer_uid not in self.allowed_peer_uids:
-            return self._error(403, "PEER_NOT_ALLOWED")
-        if not isinstance(frame, Mapping) or type(frame.get("version")) is not int or frame["version"] != 2:
-            return self._error(400, "UNSUPPORTED_VERSION")
+            return self._error(403, "PEER_NOT_ALLOWED", version=reply_version)
+        if type(version) is not int or version != 2:
+            return self._error(400, "UNSUPPORTED_VERSION", version=reply_version)
         if set(frame) != {"version", "operation", "transfer"} or frame["operation"] != "CheckTransfer":
             return self._error(400, "INVALID_REQUEST")
         try:

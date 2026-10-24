@@ -1,7 +1,7 @@
 """D-856 physical transfer planning facts, without admission or execution authority."""
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def _reference(value: str) -> str:
@@ -57,6 +57,14 @@ class ArmTransferCheckRejection(BaseModel):
     code: Literal["ARM_CATALOG_CHANGED", "ARM_REFERENCE_UNAVAILABLE", "ARM_STATE_UNAVAILABLE",
                   "ARM_TRANSFER_UNPLANNABLE"]
     reason: ArmPhysicalRef
+
+    @model_validator(mode="after")
+    def _reason_matches_code(self):
+        expected = {"ARM_CATALOG_CHANGED": "CATALOG_MISMATCH",
+                    "ARM_REFERENCE_UNAVAILABLE": "REFERENCE_UNAVAILABLE", "ARM_STATE_UNAVAILABLE": "STATE_INVALID"}
+        if self.code in expected and self.reason != expected[self.code]:
+            raise ValueError("preflight refusal reason does not match its code")
+        return self
 
 
 ARM_PREFLIGHT_REJECTION_STATUS = {
