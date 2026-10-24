@@ -10388,6 +10388,14 @@ osy-d395-s1d\`.
 - 결정: D-865 Proposed.
 - 교훈: 없음
 
+## 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
+
+- 변경: [FLEET SRS](spec/ROSY FLEET SRS.md)에 MSN-008(정책 승인, D-865 설계 단계) 신설, MSN-006·MSN-007·UI-WORK-001에 정책 승인 관계 문장 추가, D-865 실행 설계 P0 상태 표시.
+- 증거: 미실행 — 요구사항 문서 변경. lint·generate는 커밋 전 실행으로 확인. 근거: D-865(Proposed, main 착지)와 사용자 2026-10-25 방향 확정.
+- gate 변화: 없음. 설계 단계 표기이며 구현·활성화가 아니다.
+- 결정: D-865 P0 산출물.
+- 교훈: 없음
+
 ## 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
 
 - 변경: [API reference](reference/ROSY API & Protocol Reference.md) v1.314 절(경로·권한·의미), [D-865 실행 설계](plans/2026-10-25-fleet-policy-admission-design.md) P1 상태 표시.
