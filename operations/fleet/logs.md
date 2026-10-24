@@ -1,4 +1,4 @@
-# fleet logs
+﻿# fleet logs
 
 ## 2026-09-15 · uncommitted · docs(harness): start the fleet harness record
 - 변경: `progress.md`, `logs.md` 추가
@@ -4394,3 +4394,11 @@
 - 증거: 새 통합관제 wire RED134건 확인 후 모델·API reference를 함께 구현한다. 기존 동작 회귀와 실제 collector/stop/runtime 경로의 증거는 다음 단계에서 별도로 남긴다.
 - gate 변화: 없음. 이번 변경은 공유 계약의 버전 pin이며 새 runtime·배포·장치 활성화가 아니다.
 - CE: 해당 없음 — 공식 버전 도구와 계약 회귀로 직접 설명되는 정렬이다.
+
+## 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
+
+- 변경: fleet/server/missions/policy_admission.py 신설(설정 해석·운영자 전환·상한·감사 판정 core), test/test_policy_admission_core.py 추가, D-865 실행 설계 P2 상태(P2a/P2b 분리) 표시.
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. core는 어떤 실행 경로에도 연결 전이고 상한 지속화·루트·루프는 P2b다.
+- gate 변화: 없음. 활성화가 아니며 POLICY_DISPATCH·mission admit 현행 동작 불변.
+- 결정: D-865 P2a 산출물.
+- 교훈: 없음
