@@ -95,6 +95,8 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
     logs = [logdir / f"alone-{tag}-{i}.txt" for i in range(1, len(ids) + 1)]
     print(f"[land] {len(ids)} NEW failure(s) in {log.name}: rerunning each alone once (D-790)", flush=True)
     codes = run([[*env, nodeid] for nodeid in ids], logs, tested_sha, repo=wt, label=f"land-alone-{tag}")
+    if len(codes) != len(ids):
+        return [], "incomplete isolated rerun results"
     again = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code != 0]
     if again:
         return [], "failed again when run alone: " + "; ".join(again)

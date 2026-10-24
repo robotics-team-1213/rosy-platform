@@ -288,6 +288,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
     if out(wt, "rev-parse", "HEAD") != head:
         raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
+    if len(codes) != len(todo):
+        raise Stop("incomplete remote results; not landing")
     print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
     whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
     for inv, log, code in zip(todo, logs, codes):

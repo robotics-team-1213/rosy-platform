@@ -717,7 +717,7 @@ def test_isolated_rerun_keeps_original_revision_even_when_head_moves(repos, tmp_
 
     def run(invocations, logs, sha, **kwargs):
         received.append(sha)
-        return [0] * len(invocations)
+        return [0 if sha == tested else 1] * len(invocations)
 
     ids, why = land.land_checks.load_flaky(
         wt, ["pkg/test"], tmp_path / "original.txt", "NEW pkg/test/test_a.py::test_a\n",
@@ -747,6 +747,26 @@ def test_head_move_cannot_publish_full_record(repos, monkeypatch, waiting):
         before = git(main, "rev-parse", "HEAD")
         assert land.main(["--tests", "auto"]) == 1
         assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_incomplete_remote_results_cannot_land(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: [])
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+    assert "incomplete remote results" in capsys.readouterr().err
+
+
+def test_incomplete_isolated_results_cannot_create_flaky_receipt(repos, tmp_path):
+    main, wt = repos
+    ids, why = land.land_checks._rerun_alone(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW pkg/test/test_a.py::test_a\n",
+        tmp_path, "incomplete", sys.executable, lambda *a, **k: [],
+        tested_sha=git(wt, "rev-parse", "HEAD"))
+    assert not ids and "incomplete" in why
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
     assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
 
 
