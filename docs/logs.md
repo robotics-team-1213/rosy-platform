@@ -9597,3 +9597,15 @@ osy-d395-s1d\`.
 - 변경: `application-contract-support.md`를 공개 게시하고, 이 문서와 D-827~829가 참조하는 미게시 ADR 14개(D-775·787·792·794·795·797·822·823·826·827·828·829·834·836)와 계획 문서 4개를 의존 닫힘으로 함께 게시했으며 ADR Log 행 14개를 추가했다. README 문서 지도·reference AGENTS·app-names·PRODUCT의 지원 계약 링크를 연결했다.
 - 증거: 재귀 링크 닫힘 검사로 게시 세트를 확정했다(계획 4종 포함). 이미 공개된 D-853·D-857은 Learning 게시 판을 보존하고 이 변경에서 뺐다. 공개 API 참조는 v1.296으로 이 문서의 v1.290 기준 인용보다 최신이며, 인용은 확인 시점 기록이다. 제품 코드·wire는 바꾸지 않았다. 독립 검토가 Log 재구성 과정에서 D-857 행의 내부 포트 노출을 지목해 base 판 그대로 + 신규 14행만 남도록 다시 만들었다(diff +14행, 기존 행 불변).
 - gate 변화: 없음. 문서 게시이며 외부 앱 연동·실물 수용을 열지 않는다. CE 해당 없음 — 문서 이동·색인 작성이다.
+
+## 2026-10-24 · uncommitted · 협업 모드 검수 bridge의 state 직접 읽기
+
+- 변경: `review_bridge.py`의 `authority`가 `endpoint` 대신 `state`(절대 경로)를 받으면 `ReviewStore.read_only`(SQLite `mode=ro`, 생성·이전·쓰기 없음)로 `review_evidence.decisions`를 같은 PC에서 읽는다. 둘 다/둘 다 없음, 상대·링크 경로, DB 없음, 다른 `workspace_id`는 거절한다. endpoint 경로와 이후 검증·revision·전달은 그대로다. review-app 문서와 D-742 addendum에 설정 예와 이유를 적었다.
+- 증거: 협업 모드 앱이 `--decisions-port`를 거절해 bridge가 `current authority unavailable or not delivered`로 멈춘 관측(2026-10-22경부터)이 원인이다. 원격 시험은 HTTP 문서와 바이트 동일, DB mtime·크기·표 불변, 설정 거절, `-E -s` `--once` 전달 성공을 확인한다.
+- gate 변화: 없음. 모델 PC의 비공개 bridge 설정 교체와 운영 수용은 별도다.
+
+## 2026-10-24 · uncommitted · 검수 bridge state 읽기의 소유자 전용 권한·WAL·정규 경로 강제
+
+- 변경: `read_current_state`가 POSIX에서 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 `mode & 0o077 == 0`일 때만 읽는다(오류 문구에 경로 없음, Windows는 검사 없음). DB 헤더가 WAL이면 거절하고, `..`·정규화되지 않은 경로를 거절한다. review-app 문서에 배포 단계 `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`와 심볼릭 링크 홈 거절을 적고, D-742 addendum에 D-757 관계와 "D-742를 뒤집지 않는 같은 PC state 출처"임을 적었다.
+- 증거: 검토(APPROVE WITH FIXES)가 권한 주장을 강제로 바꾸라고 지적했다. 운영 모델 PC state는 0755·DB 0644이므로 배포 시 권한 변경이 필요하다. 원격 시험은 0755/0644·journal 0644 거절, 0700/0600 성공, WAL 거절, `..` 거절을 확인한다.
+- gate 변화: 없음. 모델 PC 권한 변경·bridge 설정 교체·운영 수용은 별도다.
