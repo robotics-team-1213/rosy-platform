@@ -30,6 +30,10 @@
    바뀌어도 유지되는 승인된 DNS/mDNS 이름을 쓴다. 서로 다른 공용 pool로 우회하지 않는다.
    모든 기기에 같은 `--source` 하나를 사용한다. 두 번째 source와 개별 공용 fallback은 거부한다.
 
+   적용 전에 해당 기기에서 공통 이름이 해석되고 UDP 123으로 도달하는지 확인한다.
+   Pinky의 기본 VPN 가입은 `--accept-dns=false`이므로 PC의 VPN DNS 성공을 로봇에도
+   적용된 사실로 읽지 않는다. LAN 전용 운용과 VPN 운용의 실제 resolver·경로를 각각 확인한다.
+
    ```bash
    sudo python3 deploy/hosts/common/rosy_time_sync.py install --maintenance --role client --source <site-ntp-name>
    python3 deploy/hosts/common/rosy_time_sync.py check
