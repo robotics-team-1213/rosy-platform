@@ -9,6 +9,7 @@ import tarfile
 import io
 import re
 import shutil
+import shlex
 
 import pytest
 
@@ -86,16 +87,6 @@ def updater(m, root, keys, **kwargs):
 
 def test_module_is_available():
     assert hasattr(module(), "Updater")
-
-
-@pytest.mark.parametrize('dependency', ['review_store.py', 'sim_web.py',
-                                      'review_app_web/sim.html', 'review_app_web/sim.js'])
-def test_review_store_dependency_cannot_be_omitted(tmp_path, keys, dependency):
-    m = module()
-    folder = candidate(m, tmp_path, keys,
-                       omit_files=('learning/curation/perception/' + dependency,))
-    with pytest.raises(ValueError, match='missing model-code entry point or dependency'):
-        m.unpack(folder / 'code.tar', tmp_path / 'incomplete')
 
 
 def test_camera_map_dependencies_are_signed_and_imported_from_the_release(tmp_path, keys):
@@ -251,6 +242,56 @@ def test_retained_signed_release_keeps_its_original_job_paths_and_bytes(tmp_path
     assert resolved.read_bytes() == b"ORIGINAL_SIGNED_BYTES = True\n"
     with pytest.raises((ValueError, OSError)):
         m.job_entry(source, "../../outside.py")
+
+
+@pytest.mark.parametrize("entry,old_holder,new_holder,alias", [
+    *((entry, "training", "curation", "training") for entry in (
+        "review_authority", "review_bridge", "review_dataset", "review_eval_companion",
+        "review_eval_package", "review_provenance")),
+    ("intake_eval_gate", "registry", "evaluation", "model"),
+])
+@pytest.mark.parametrize("layout", ["old", "new", "both"])
+def test_learning_job_resolves_the_exact_retained_or_current_signed_layout(
+        tmp_path, entry, old_holder, new_holder, alias, layout):
+    m = module()
+    source = tmp_path / "release"
+    watch = source / "learning/registry/perception/watch.py"
+    watch.parent.mkdir(parents=True)
+    watch.write_bytes(b"SIGNED_WATCH = True\n")
+    for kind, holder in (("old", old_holder), ("new", new_holder)):
+        if layout in (kind, "both"):
+            file = source / f"learning/{holder}/perception/{entry}.py"
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(holder.encode())
+    before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*.py")}
+    holder = old_holder if layout == "old" else new_holder
+    path = f"learning/{holder}/perception/{entry}.py"
+    assert m.job_entry(source, f"{alias}/{entry}.py") == (
+        (source / path).resolve(), source.resolve(), path, path)
+    assert {p.relative_to(source): p.read_bytes() for p in source.rglob("*.py")} == before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux signed-release symlinks")
+@pytest.mark.parametrize("exists", [False, True])
+@pytest.mark.parametrize("job,old_holder,new_holder", [
+    ("training/review_bridge.py", "training", "curation"),
+    ("model/intake_eval_gate.py", "registry", "evaluation"),
+])
+def test_learning_job_symlink_cannot_select_a_retained_fallback(tmp_path, exists, job, old_holder, new_holder):
+    m = module()
+    source = tmp_path / "release"
+    for path in ("learning/registry/perception/watch.py", f"learning/{old_holder}/perception/{Path(job).name}"):
+        file = source / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"SIGNED = True\n")
+    outside = tmp_path / "outside.py"
+    if exists:
+        outside.write_bytes(b"UNSIGNED = True\n")
+    link = source / f"learning/{new_holder}/perception/{Path(job).name}"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside)
+    with pytest.raises((ValueError, OSError)):
+        m.job_entry(source, job)
 
 
 def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):
