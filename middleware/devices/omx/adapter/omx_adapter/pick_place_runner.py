@@ -24,7 +24,8 @@ from .manipulation_plan import (
 )
 from .phase_gate import PHASE_WAIT
 from .phase_recorder import ActionPhaseRecorder
-from .pose_plan import CellPlanningProfile, CellTransferPlan, validate_cell_transfer_plan
+from .transfer_motion import (ArmPlanningProfile as CellPlanningProfile, TransferMotionPlan as CellTransferPlan,
+                              validate_transfer_motion_plan as validate_cell_transfer_plan)
 from .ros_goal_contract import RosGoalEvent
 
 

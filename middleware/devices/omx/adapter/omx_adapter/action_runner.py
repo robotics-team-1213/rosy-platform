@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Mapping, Protocol
 
-from core_common.protocol.schemas import FleetActionGrant, FleetCellTransferGrant
+from core_common.protocol.schemas import FleetActionGrant, FleetArmTransferGrant, FleetCellTransferGrant
 
 from .action_store import ActionStore, InvalidActionTransition
 from .local_stop import LocalStopBlocked
@@ -17,14 +17,14 @@ from .phase_recorder import ActionPhaseRecorder
 
 # Kinds the ordered phase runner may execute, and the only kind the direct
 # driver path admits. CELL_TRANSFER runs through the phase runner only (D-402 §3).
-PHASE_RUNNER_KINDS = frozenset({"PICK_PLACE", "CELL_TRANSFER"})
+PHASE_RUNNER_KINDS = frozenset({"PICK_PLACE", "CELL_TRANSFER", "ARM_TRANSFER"})
 DIRECT_DRIVER_KINDS = frozenset({"PICK_PLACE"})
-ActionGrant = FleetActionGrant | FleetCellTransferGrant
+ActionGrant = FleetActionGrant | FleetCellTransferGrant | FleetArmTransferGrant
 
 
 def parse_action_grant(value: ActionGrant | Mapping[str, object]) -> ActionGrant:
-    """Parse the two explicitly supported local Action grant variants."""
-    if isinstance(value, (FleetActionGrant, FleetCellTransferGrant)):
+    """Parse explicitly supported local Action grant variants; parsing grants no authority."""
+    if isinstance(value, (FleetActionGrant, FleetCellTransferGrant, FleetArmTransferGrant)):
         return value
     if not isinstance(value, Mapping):
         raise ValueError("grant must be an object")
@@ -33,6 +33,8 @@ def parse_action_grant(value: ActionGrant | Mapping[str, object]) -> ActionGrant
         return FleetActionGrant.model_validate(value)
     if action_kind == "CELL_TRANSFER":
         return FleetCellTransferGrant.model_validate(value)
+    if action_kind == "ARM_TRANSFER":
+        return FleetArmTransferGrant.model_validate(value)
     raise ValueError("grant action_kind is unsupported")
 
 
@@ -217,8 +219,8 @@ class ActionRunner:
             # Fail closed before any journal row: unknown kinds never reach the driver.
             raise PermissionError(f"action kind {grant.action_kind!r} has no admitted executor")
         self._validate(grant)
-        if grant.action_kind == "CELL_TRANSFER" and self.control_admission is None:
-            raise PermissionError("CELL_TRANSFER requires shared control admission")
+        if grant.action_kind in {"CELL_TRANSFER", "ARM_TRANSFER"} and self.control_admission is None:
+            raise PermissionError(f"{grant.action_kind} requires shared control admission")
         request = grant.model_dump(mode="json")
         def create_action():
             return self.store.create_action(

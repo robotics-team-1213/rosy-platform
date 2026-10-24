@@ -99,6 +99,11 @@ def test_neutral_grant_runs_four_physical_phases_without_cell_recipe_or_direct_d
     assert not any(e["event_type"] == "GOAL_CONFIRMED" for e in store.history(grant.action_id))
     replay = runner.submit(grant, peer_uid=1001)
     assert replay["created"] is False and len(port.submissions) == 4
+    _, reopened_driver, reopened = _runner(tmp_path)
+    read = ActionApi(reopened).dispatch(dict(version=2, operation="GetAction", action_id=grant.action_id),
+                                       peer_uid=1001)
+    assert read["status"] == 200 and read["receipt"]["state"] == "SUCCEEDED"
+    assert not reopened._phase_runners and not reopened_driver.submissions
 
 
 @pytest.mark.parametrize("fault", ["object", "readback"])
@@ -130,3 +135,38 @@ def test_owner_rejects_before_journal_or_actuator(tmp_path, kin, profile, condit
     assert reply["status"] in {400, 403, 409}, reply
     assert store.get_action(grant.action_id) is None
     assert not port.submissions and not driver.submissions
+
+
+@pytest.mark.parametrize("fault", ["stale", "calibration", "transform"])
+def test_changed_measured_state_cannot_start_a_physical_phase(tmp_path, kin, profile, fault):
+    grant, store, driver, runner, port, states, _ = setup(tmp_path, kin, profile)
+    changes = {"stale": dict(observed_at_monotonic_s=90.0),
+               "calibration": dict(calibration_revision="other"),
+               "transform": dict(transform_revision="other")}[fault]
+    states[0] = replace(states[0], **changes)
+    receipt = runner.submit(grant, peer_uid=1001)
+    assert receipt["state"] in {"HOLD", "UNKNOWN"}
+    assert not port.submissions and not driver.submissions
+
+
+@pytest.mark.parametrize("fault", ["revision", "stop"])
+def test_final_completion_requires_current_state_and_serialized_stop_fence(tmp_path, kin, profile, fault):
+    from core_common.protocol.schemas import LocalStopRequest, StopRequestSource
+
+    grant, store, driver, runner, port, states, _ = setup(tmp_path, kin, profile)
+    runner.submit(grant, peer_uid=1001)
+    execution = runner._phase_runners[(grant.action_id, grant.attempt_id)]
+    for _ in range(3):
+        execution.advance()
+    assert len(port.submissions) == 4
+    if fault == "revision":
+        states[0] = replace(states[0], calibration_revision="changed")
+    else:
+        runner.local_stop.trip(LocalStopRequest(
+            workcell_id=grant.workcell_id, instance_id=grant.instance_id,
+            authority_epoch=2, dispatch_generation=8, requested_at=datetime.now(timezone.utc), reason="test"),
+            source=StopRequestSource.FLEET)
+    with pytest.raises((PermissionError, ValueError)):
+        execution.advance()
+    assert store.get_action(grant.action_id)["state"] == "HOLD"
+    assert len(port.submissions) == 4 and not driver.submissions

@@ -5,9 +5,33 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.303
+**Version:** v1.305
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.305 Installed neutral arm owner execution (D-856)
+
+Local Action IPC v2 accepts `ARM_TRANSFER` only through an explicitly installed
+phase factory and the existing shared control admission. The owner validates the
+whole grant digest, UID, scope, fence, lifetime and installed capability. A default
+owner without that factory rejects before journaling or actuator submission. IPC
+v1 rejects this kind. The direct-driver path remains PICK_PLACE-only. Fleet's step
+registry and HTTP submission do not gain a neutral producer in this version.
+
+The immutable installation binds object geometry/catalog, capability/configuration
+revisions and an installed resource-policy digest. Physical planning uses registered
+poses and owner-admitted measured state, with matching profile/kinematics/calibration/
+transform/scene revisions and freshness. Mandatory gripper readback binds the opaque
+object, scope, sensor revision and generation. The existing phase/goal port and local
+stop/fence remain the execution authority; no second ROS owner or retry loop is added.
+
+Durable ARM completion uses source `arm-transfer-workflow` and event
+`ARM_TRANSFER_ACTION_COMPLETED`, after four successful phases and fresh release
+readback. Its observation_id is empty, without fabricated camera evidence. Action
+success does not confirm cargo arrival, a business goal or zone clearance. Fleet's
+physical resource-closure evidence and Harbor's business completion remain separate.
+Neutral transaction snapshots require their grant/tag; restart reconciliation holds
+motion and cannot infer success from the snapshot alone.
 
 ### v1.303 Neutral arm transfer grant model (D-856)
 
@@ -3734,6 +3758,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.305 | 2026-10-24 | D-856: explicitly installed neutral arm owner phase execution through IPC v2, mandatory shared control/gripper/fence and durable workflow completion; no Fleet producer or business/zone completion. |
 | v1.303 | 2026-10-24 | D-856: inactive physical arm transfer grant DTO and unchanged Action/stop DTO extraction; no runtime kind or submit activation, envelope 1.0 unchanged. |
 | v1.299 | 2026-10-24 | D-856: authenticated simulation arm-transfer preflight with installed physical references, scoped owner IPC and request-bound planning facts; no admission/dispatch authority, envelope 1.0 unchanged. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |

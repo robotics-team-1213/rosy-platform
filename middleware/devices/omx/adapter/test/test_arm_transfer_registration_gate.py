@@ -21,21 +21,26 @@ def grant():
 
 
 @pytest.mark.parametrize("as_json", [False, True])
-def test_owner_parser_does_not_admit_a_model_without_its_execution_contract(as_json):
+def test_parsing_a_model_does_not_install_an_owner_executor(tmp_path, as_json):
+    from test_omx_action_api import _runner
+
     value = grant()
-    with pytest.raises(ValueError):
-        parse_action_grant(value.model_dump(mode="json") if as_json else value)
-    assert value.action_kind not in PHASE_RUNNER_KINDS
+    parsed = parse_action_grant(value.model_dump(mode="json") if as_json else value)
+    store, driver, runner = _runner(tmp_path)
+    with pytest.raises(PermissionError, match="no admitted executor"):
+        runner.submit(parsed, peer_uid=1001)
+    assert store.get_action(value.action_id) is None and not driver.submissions
+    assert value.action_kind in PHASE_RUNNER_KINDS
     assert value.action_kind not in DIRECT_DRIVER_KINDS
 
 
 @pytest.mark.parametrize("version", [1, 2])
-def test_ipc_submit_refuses_before_journal_or_driver(version):
-    class NoSubmitRunner:
-        def submit(self, *args, **kwargs):
-            raise AssertionError("uninstalled kind reached journal/driver")
+def test_uninstalled_owner_ipc_refuses_before_journal_or_driver(tmp_path, version):
+    from test_omx_action_api import _runner
 
-    reply = ActionApi(NoSubmitRunner()).dispatch(dict(
-        version=version, operation="SubmitAction", grant=grant().model_dump(mode="json")), peer_uid=1000)
-    assert reply["status"] == 400
-    assert reply["error"]["code"] == "INVALID_REQUEST"
+    store, driver, runner = _runner(tmp_path)
+    value = grant()
+    reply = ActionApi(runner).dispatch(dict(
+        version=version, operation="SubmitAction", grant=value.model_dump(mode="json")), peer_uid=1001)
+    assert reply["status"] == (400 if version == 1 else 403)
+    assert store.get_action(value.action_id) is None and not driver.submissions

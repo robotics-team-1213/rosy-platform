@@ -24,7 +24,7 @@ from .local_stop import LocalStopBlocked, LocalStopController
 
 # A phase-runner-only kind is never journaled from a v1 frame, whose reply drops the
 # ordered phase summaries Fleet needs to reconcile it (D-403 §2).
-MIN_SUBMIT_VERSION_BY_KIND = {"CELL_TRANSFER": 2}
+MIN_SUBMIT_VERSION_BY_KIND = {"CELL_TRANSFER": 2, "ARM_TRANSFER": 2}
 
 
 class ActionApi:
