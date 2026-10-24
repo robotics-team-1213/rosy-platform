@@ -206,6 +206,20 @@ def scenario(case, out, runtime, rig, controllers, calibration):
                 (out/'exchanges.json').write_text(json.dumps(exchanges, indent=2))
         consumer = FleetLeaseConsumer(scope, request=request, monotonic=runtime.monotonic)
         journal = PolicyExecutionJournal(out/'execution.sqlite3')
+        renewals = []
+        renew = consumer.renew
+        def timed_renew(session):
+            row = dict(called_s=runtime.monotonic(), remaining_s=session.lease.expires_at_ns/1e9-runtime.monotonic())
+            try:
+                return renew(session)
+            except Exception as error:
+                row['error'] = f'{type(error).__name__}: {error}'[:200]
+                raise
+            finally:
+                row['done_s'] = runtime.monotonic()
+                renewals.append(row)
+                (out/'renewals.json').write_text(json.dumps(renewals, indent=2))
+        consumer.renew = timed_renew
         chain = stack.enter_context(SimPolicyChain(policy=policy, runtime=runtime, fence=fence, consumer=consumer,
             journal=journal, owner_identity=lambda: dict(simulation=True, workcell_id=cfg.workcell_id,
                 instance_id=cfg.instance_id, profile='sim-omx-vla-p0'), camera_current=rig.current,
