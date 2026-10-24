@@ -782,7 +782,7 @@ def test_own_frame_linked_to_an_hf_frame_is_forced_into_train_and_counted(tmp_pa
     result = target.build_dataset(**args)
     assert result['status'] == 'PUBLISHED_CONTENT_NOT_ADMITTED', result
     manifest = json.loads((Path(result['dataset_path']) / 'manifest.json').read_bytes())
-    frames = manifest['frames']
+    frames = {int(f['image'][7:13]): f for f in manifest['frames']}   # entries follow components, not indices
     assert frames[0]['source_component'] == frames[3]['source_component']
     assert frames[0]['split'] == frames[3]['split'] == 'train'
     assert {frames[1]['split'], frames[2]['split']} == {'train', 'val'}
