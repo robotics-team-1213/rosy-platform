@@ -163,7 +163,7 @@ class ControlUnits:
             units.append({'unit_id': unit, 'parent': parent, 'availability': detail['availability'],
                 'sampled_at': detail['sampled_at'], 'age_s': detail['age_s'], 'robots_total': len(detail['robots']),
                 'robots_online': sum(row['online'] for row in detail['robots']),
-                'tasks_active': sum(task['status'] not in TERMINAL | {'HOLD'} for task in tasks),
+                'tasks_active': sum(task['status'] not in TERMINAL for task in tasks),
                 'map': detail['map'], 'dispatch': detail['dispatch'], 'error': None,
                 'stop_pending': sum(result['unit_id'] == unit and result['state'] == 'UNKNOWN'
                                     for record in self.stops.values() for result in record['snapshot']['results'])})
@@ -214,28 +214,30 @@ class ControlUnits:
             return error(409, 'CONTROL_UNIT_CONFIG_CHANGED')
         if body['target_unit'] not in self.parents or not set(fences) <= self.subtree(body['target_unit']):
             return error(409, 'CONTROL_UNIT_OUTSIDE_SCOPE')
-        if any(fence != self.fence(unit) for unit, fence in fences.items()):
-            return error(409, 'CONTROL_STOP_STALE_FENCE')
         if len(self.stops) >= 100:
             return error(409, 'CONTROL_STOP_CAPACITY')
         results = []
         for unit in self.parents:
             if unit not in self.subtree(body['target_unit']):
                 continue
-            current = fences.get(unit)
-            if current is not None:
+            expected = fences.get(unit)
+            current = self.fence(unit)
+            state = 'NOT_REACHED' if expected is None else 'STALE_FENCE'
+            if expected == current:
                 if unit == 'R':
                     # Synthetic lost local receipt demonstrates uncertainty without fabricating device proof.
                     self.work.handle('POST', '/estop', {})
                     self.work.dispatch['rearm_available'] = False
                 else:
                     self.controls[unit]['generation'] += 1
+                current = self.fence(unit)
+                state = 'UNKNOWN' if unit == 'R' else 'ACKNOWLEDGED'
             results.append({'unit_id': unit,
-                'state': 'NOT_REACHED' if current is None else 'UNKNOWN' if unit == 'R' else 'ACKNOWLEDGED',
+                'state': state,
                 'dispatch': deepcopy(current), 'acknowledged_robots': 0,
-                'unknown_robots': len(self.read_state()['robots']) if unit == 'R' and current is not None else 0,
+                'unknown_robots': len(self.read_state()['robots']) if state == 'UNKNOWN' else 0,
                 'omx_state': 'NOT_CONFIGURED', 'physical_stop': 'UNVERIFIED',
-                'error': 'SAMPLE_DELIVERY_UNCERTAIN' if unit == 'R' and current is not None else None})
+                'error': 'SAMPLE_DELIVERY_UNCERTAIN' if state == 'UNKNOWN' else None})
         snapshot = {'unit_id': 'R', 'origin_id': 'R', 'stop_id': body['stop_id'], 'target_unit': body['target_unit'],
                     'config_revision': body['config_revision'], 'results': results, 'revision': 1}
         self.stops[body['stop_id']] = {'body': deepcopy(body), 'snapshot': snapshot,
