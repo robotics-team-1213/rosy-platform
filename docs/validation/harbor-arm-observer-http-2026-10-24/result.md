@@ -69,4 +69,6 @@ Harbor 기본 unittest discovery는91tests/exit0/skip1(90pass)다. 환경 미설
 
 이 HTTP 하네스의 bounding boxes·영 속도·물체 자세는 synthetic fixtures다. 인증·통신·원장·점유 종료·소비자 독립성의 근거이며 physics·native actuator·센서 보정·실물 현장 수용의 근거가 아니다. 운영 producer·현장 binding·실패/취소 후 물리 정리와 명시적 복구/재승인은 후속이다. 실물 profile·push·merge·deploy를 개방하지 않았다.
 
+2026-10-25 metadata commit `6f5e71dfa6`의 공식 원격 release/harness/architecture/계약 문서/버전 guard는235passed/skip0/0NEW다. metadata를 포함한 secret scan은0findings, module lint는0errors/33warnings, source730부터6f까지14개 commit의 size/safety 검사는 각각exit0이다. 실행 소스 bb38과 이 문서 검증 소스를 구분한다. 양쪽 소유 checkout은 각각 커밋해 보존했으며 착지·push는 수행하지 않았다.
+
 CE: 새 교훈 해당 없음 — 구현·시험·ADR로 판단을 복원할 수 있다. 과거 G1 timing 원인은 여전히 미해결이며 새 단독 통과를 원인 해결로 부르지 않는다.
