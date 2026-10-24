@@ -7,7 +7,7 @@ import math
 
 from rosy.contracts.skill import SkillInvocation
 from rosy.execution.api import PlanBundle, PlanStep
-from rosy.execution.site.cell_submission import operator_checkpoint_id
+from .submission import operator_checkpoint_id
 
 from .cell import CellConfig, Pose
 from .compiler import Job, OperatorSheetStep, compile_job
