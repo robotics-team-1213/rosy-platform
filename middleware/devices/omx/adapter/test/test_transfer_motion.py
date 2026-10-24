@@ -70,3 +70,29 @@ def test_legacy_adapter_keeps_recipe_and_cell_authority_before_neutral_calculati
     with pytest.raises(pose_plan.CellTransferPlanRejected) as changed_item:
         _planner(kin).plan_transfer(replace(request, grasp_width_m=0.04), profile, _state(kin, profile))
     assert changed_item.value.reason == pose_plan.ITEM_GEOMETRY_MISMATCH
+
+
+def test_legacy_validation_callbacks_keep_their_order(kin, profile):
+    _api("AnalyticTransferPlanner")
+    calls = []
+    def cell():
+        calls.append("cell")
+        return "c" * 64
+    def geometry(recipe, item):
+        calls.append((recipe, item))
+        return {"grasp_width_m": 0.03, "grasp_depth_m": 0.01, "height_m": 0.03}
+    def clock():
+        calls.append("clock")
+        return 100.5
+    planner = pose_plan.AnalyticCellTransferPlanner(kin, accepted_cell_sha256=cell,
+                                                   accepted_item_geometry=geometry, monotonic=clock)
+    planner.plan_transfer(_request(), profile, _state(kin, profile))
+    assert calls == ["cell", ("a" * 64, "box"), "clock"]
+
+
+def test_legacy_nonfinite_registered_height_is_rejected_without_a_partial_plan(kin, profile):
+    _api("AnalyticTransferPlanner")
+    items = {("a" * 64, "box"): {"grasp_width_m": 0.03, "grasp_depth_m": 0.01, "height_m": float("nan")}}
+    with pytest.raises(pose_plan.CellTransferPlanRejected) as invalid:
+        _planner(kin, items=items).plan_transfer(_request(), profile, _state(kin, profile))
+    assert invalid.value.reason == pose_plan.GRASP_DEPTH_BELOW_FINGERTIPS
