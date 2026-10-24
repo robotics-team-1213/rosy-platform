@@ -5,7 +5,7 @@
 
 ## 조건
 
-- 체크포인트: 공개 `lerobot/smolvla_base`, snapshot `5e8d12a6e2975b0e5e5fce7c8caf47c371d257b6`(HF 캐시 경로 이름). 학습하지 않은 기본 모델이며 성능 근거가 아니다.
+- 체크포인트: 공개 `lerobot/smolvla_base`, Hub revision `5e8d12a6e2975b0e5e5fce7c8caf47c371d257b6`(HF 캐시의 snapshot 이름). 학습하지 않은 기본 모델이며 성능 근거가 아니다.
 - 소프트웨어: lerobot 0.4.4, torch 2.7.1+cu128, transformers 4.57.6. 별도 venv `~/rosy-test/venvs/policy-latency-gpu`.
 - 입력: 카메라 3대(`camera1..3`, 기본 모델 구성) 480×640 합성 프레임, 상태 6차원, 같은 task 문장.
 - 실행: `policy_runner` 측정 CLI, 예열 50회 뒤 1,000회. 저장된 `n_action_steps=50`을 1로 바꿔 걸음마다 전체 추론을 쟀다.
