@@ -107,4 +107,4 @@ def test_the_replay_plugin_is_discoverable_by_its_dist_info_name():
     plugins = OMX / "lerobot_plugins"
     meta = (plugins / "lerobot_teleoperator_rosy_replay-0.1.0.dist-info/METADATA").read_text()
     assert "Name: lerobot_teleoperator_rosy_replay" in meta  # LeRobot imports dists named lerobot_teleoperator_*
-    assert (plugins / "lerobot_teleoperator_rosy_replay/__init__.py").exists()
+    assert (plugins / "lerobot_teleoperator_rosy_replay.py").exists()
