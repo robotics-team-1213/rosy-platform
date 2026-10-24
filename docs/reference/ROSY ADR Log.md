@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-861 | 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다 | Accepted (2026-10-24) |
 | D-859 | 현장 NTP 계층과 공통 UTC 시간 동기화 | Accepted (2026-10-24) |
 | D-856 | 업무 공정 해석과 로봇 동작 실행의 분리 | Accepted (2026-10-24) |
 | D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
@@ -1227,6 +1228,14 @@ Dedicated D-772 measurement sources request the existing demand while their inst
 
 
 ## D-859 — 현장 NTP 계층과 공통 UTC 시간 동기화
+
+## D-861 — 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다
+
+**Status:** Accepted (2026-10-24)
+
+모든 Linux·Windows·로봇·모바일/MCU에 동일한 현장 NTP endpoint 하나를 적용한다. 개별 공용 pool·DHCP·복수 fallback을 금지하며 미적용 기기는 미완료로 보존한다. [D-861](../adr/D-861-one-identical-ntp-endpoint-for-all-devices.md).
+
+### D-859 상세
 
 **Status:** Accepted (2026-10-24)
 

@@ -2,6 +2,8 @@
 
 **Status:** Accepted (2026-10-24; 사용자 요청으로 결정·구현)
 
+클라이언트의 복수 source 허용은 [D-861](D-861-one-identical-ntp-endpoint-for-all-devices.md)로 대체됐다. 모든 기기는 같은 현장 NTP endpoint 하나를 사용한다.
+
 ## 배경과 대안
 
 CORE SRS §25는 UTC 기록과 chrony를 권고한다. Pinky 이미지는 chrony를 설치·활성화하지만 기본 Ubuntu 시간원과 PC들의 시간원을 통일하지 않는다. `publish_payload_release.py`의 시각 비교, World의 future/stale 판정, 카메라·로그 상관은 장치 간 시계가 가깝다는 전제에 의존한다.

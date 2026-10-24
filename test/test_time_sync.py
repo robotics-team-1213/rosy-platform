@@ -45,6 +45,7 @@ def test_site_serves_only_explicit_networks(sync):
     ("client", ["site\nlocal stratum 1"], []),
     ("client", ["site iburst"], []), ("client", ["site;reboot"], []),
     ("client", ["site"], ["192.0.2.0/24"]),
+    ("client", ["site", "other-site"], []),
     ("site", ["a", "b", "c"], []),
     ("site", ["a", "b", "c"], ["0.0.0.0/0"]),
     ("site", ["a", "b", "c"], ["::/0"]),
