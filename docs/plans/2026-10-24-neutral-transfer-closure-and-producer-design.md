@@ -1,6 +1,6 @@
 # D-856 물리 종료 관측과 중립 job producer
 
-**Status:** ralplan 독립 architecture/critic 1차는 frozen commit `5dad5fd6c4`를 모두 approve했다. 구현 준비 상태이며 아래 object pose 기준점 보완은 추가 검토 대상으로 둔다. 기존 실행 승인은 유지하되 이 문서 자체는 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
+**Status:** ralplan 독립 architecture/critic 1차는 frozen commit `5dad5fd6c4`, object pose 기준점 보완의 2차는 frozen commit `ebba429c4c`를 모두 approve했다. 필수 보완/이견 없음으로 이미 승인된 실행 workflow에 넘긴다. 이 문서 자체는 구현·안전 수용 증거가 아니다. 공개 route/DTO 이름은 제안이며 실제 API ref 예약·반영 전 제공 API로 취급하지 않는다.
 
 ## 목표와 소유권
 

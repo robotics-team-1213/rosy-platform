@@ -10,11 +10,15 @@
 
 RED commit `f6c3a7195e`는 35 failed/2 passed/skip0, known35NEW였다. 누락 capability DTO/API/SDK와 목표 owner/receipt/404 소비 경계를 확인한 뒤 구현했다. feature commit의 고정 SHA 독립 재검토는 material finding 없음이며 size/safety 각 1 commit, exit0다. local harness lint는 0 errors/33 warnings였다.
 
-## FULL 실행 중
+## FULL 결과와 문서 수정 재검증
 
 base commit `7838eb3cad`부터 소스 commit `46f56d6b48`까지 공식 selector는 FULL이다. 원본 `rosy-managed-capability-46-selection.json`의 full_invocations는 23개다. 원격 runner는 FULL JSON에서도 기본적으로 mapped local_invocations 3개를 고르므로, 별도 `rosy-managed-capability-46-full-execution.json`에서 local_invocations를 원본 full_invocations 23개와 완전히 같게 확장했다. mode/full 목록/targets를 유지했고 skip filter를 넣지 않았다.
 
-`tools/remote/remote_pytest.py --sha 46f56d6b48 --affected-json <external>/rosy-managed-capability-46-full-execution.json --log-dir <external>/rosy-managed-capability-46-full`을 실행 중이다. 모든 run-N의 실행/skip/수집 오류/known failure 분류와 최종 runner exit를 확인한 뒤 결과를 기록한다. 현재 집중 결과를 FULL 통과로 표시하지 않는다.
+`tools/remote/remote_pytest.py --sha 46f56d6b48 --affected-json <external>/rosy-managed-capability-46-full-execution.json --log-dir <external>/rosy-managed-capability-46-full`은 exit1로 종료했다. 23개 원본 로그를 모두 known_failures와 대조했고 run-9만1 NEW, 나머지22개는0 NEW였다. run-9는7370 passed/91 skipped/1 failed로, API 설명 section은 있었으나 변경 이력 표에 v1.306 행이 빠져 `test_changelog_has_a_row_for_the_live_version`이 실패했다. run-12 Fleet는6285 passed/336 skipped, run-21 root는9710 passed/1132 skipped였고 각각0 NEW다. skip·중복 실행 수를 수용/고유 test 수로 합산하지 않는다.
+
+문서 수정 commit `ebba429c4c`에 누락된 변경 이력 표 행을 추가했다. production Python은46 이후 동일하다. 실패한 FULL entry9의 원래7 targets 전체를 같은 공식 runner로 재실행 중이며 원본은 `rosy-managed-capability-full9-recheck/run-1.txt`에 둔다. 원래 FULL 실패를 지우거나 아직 FULL 통과로 표시하지 않는다.
+
+[23개 실행별 target·요약·known failure 분류](full-run-summary.json)를 보존한다. 원본 로그는 외부 scratch의 같은 run 번호로 대조한다.
 
 ## 다음 단계와 한계
 

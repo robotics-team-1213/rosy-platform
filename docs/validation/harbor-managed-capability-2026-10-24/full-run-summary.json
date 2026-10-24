@@ -1,0 +1,261 @@
+{
+  "source_commit": "46f56d6b481af9d7af50c29a546d8a5ceb15547a",
+  "execution_tier": "full_invocations (23 unchanged entries)",
+  "runner_exit_code": 1,
+  "entries": [
+    {
+      "run": 1,
+      "targets": [
+        "learning/registry/policy/test"
+      ],
+      "pytest_summary": "117 passed, 4 skipped in 2.94s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 2,
+      "targets": [
+        "learning/training/omx/test"
+      ],
+      "pytest_summary": "142 passed, 16 skipped in 1.18s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 3,
+      "targets": [
+        "learning/training/pinky/test"
+      ],
+      "pytest_summary": "6 passed, 6 skipped in 0.73s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 4,
+      "targets": [
+        "learning/curation/omx/test"
+      ],
+      "pytest_summary": "229 passed, 3 skipped in 2.70s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 5,
+      "targets": [
+        "learning/curation/pinky/test"
+      ],
+      "pytest_summary": "21 passed, 28 skipped in 0.60s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 6,
+      "targets": [
+        "learning/training/world_model/test"
+      ],
+      "pytest_summary": "3 passed in 0.58s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 7,
+      "targets": [
+        "learning/evaluation/world_model/test"
+      ],
+      "pytest_summary": "4 passed in 0.74s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 8,
+      "targets": [
+        "operations/prediction/world_model/test"
+      ],
+      "pytest_summary": "12 passed in 0.48s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 9,
+      "targets": [
+        "middleware/core/gateway/test",
+        "middleware/core/events/test",
+        "middleware/core/services/test",
+        "shared/web/test",
+        "contracts/foundation/test",
+        "middleware/devices/pinky/profile/test",
+        "middleware/devices/omx/profile/test"
+      ],
+      "pytest_summary": "1 failed, 7370 passed, 91 skipped, 12 warnings, 5 subtests passed in 488.60s (0:08:08)",
+      "known_failure_summary": "1 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": [
+        "middleware/core/gateway/test/test_protocol_version_alignment.py::test_changelog_has_a_row_for_the_live_version"
+      ]
+    },
+    {
+      "run": 10,
+      "targets": [
+        "middleware/core/gateway/test/test_account_pipeline.py"
+      ],
+      "pytest_summary": "6 passed, 2 skipped, 12 warnings in 11.75s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 11,
+      "targets": [
+        "middleware/perception/test"
+      ],
+      "pytest_summary": "3554 passed, 113 skipped, 62 subtests passed in 156.41s (0:02:36)",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 12,
+      "targets": [
+        "operations/fleet/test"
+      ],
+      "pytest_summary": "6285 passed, 336 skipped, 2 warnings in 707.78s (0:11:47)",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 13,
+      "targets": [
+        "applications/fleet/test"
+      ],
+      "pytest_summary": "49 passed, 34 skipped in 4.96s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 14,
+      "targets": [
+        "operations/overhead/test"
+      ],
+      "pytest_summary": "736 passed in 50.57s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 15,
+      "targets": [
+        "operations/processes/cell/test"
+      ],
+      "pytest_summary": "155 passed in 0.52s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 16,
+      "targets": [
+        "operations/situation/test"
+      ],
+      "pytest_summary": "121 passed, 2 warnings in 3.62s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 17,
+      "targets": [
+        "operations/world/test"
+      ],
+      "pytest_summary": "9 passed in 1.74s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 18,
+      "targets": [
+        "test/test_platform_palletizing_compat.py",
+        "test/test_platform_cell_submission.py",
+        "test/architecture/test_platform_dependency_boundaries.py"
+      ],
+      "pytest_summary": "25 passed in 0.94s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 19,
+      "targets": [
+        "integrations/simulation/gazebo/test"
+      ],
+      "pytest_summary": "328 passed, 4 skipped in 9.40s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 20,
+      "targets": [
+        "middleware/devices/pinky/bringup/test",
+        "middleware/drivers/pinky_adc/test",
+        "middleware/perception/test/test_ir_adc_lock.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"
+      ],
+      "pytest_summary": "473 passed in 0.46s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 21,
+      "targets": [
+        "test"
+      ],
+      "pytest_summary": "9710 passed, 1132 skipped, 56 warnings in 857.94s (0:14:17)",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 22,
+      "targets": [
+        "operations/site_ui/media/test",
+        "middleware/media/test",
+        "learning/evaluation/perception/test",
+        "operations/apps/games/test",
+        "operations/processes/palletizing/test",
+        "middleware/robot_ui/face/test/test_info_screen.py",
+        "middleware/robot_ui/face/test/test_info_screen_boot.py",
+        "middleware/robot_ui/face/test/test_wifi_qr.py",
+        "middleware/drivers/pinky_led/test/test_led_package_contract.py",
+        "middleware/drivers/imu_bno055/test/test_package_contract.py",
+        "middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py",
+        "middleware/robot_ui/robot/test",
+        "middleware/robot_ui/pilot/test",
+        "middleware/devices/omx/adapter/test",
+        "contracts/ros_idl/test/test_srv_surface.py",
+        "middleware/devices/pinky/description/test/test_urdf_surface.py",
+        "operations/signal_observation/test",
+        "learning/envs/isaac/test",
+        "contracts/motion/test/test_motion_types.py",
+        "middleware/robot_execution/local/test/test_core_arm_lerobot_ros.py",
+        "middleware/robot_execution/local/test/test_native_parent_fence.py",
+        "middleware/robot_execution/local/test/test_omx_policy_session.py",
+        "middleware/robot_execution/local/test/test_policy_execution_episode.py",
+        "middleware/robot_execution/local/test/test_policy_execution_journal.py",
+        "middleware/robot_execution/local/test/test_policy_parent_binding.py",
+        "middleware/robot_execution/local/test/test_policy_runtime_binding.py",
+        "middleware/robot_execution/local/test/test_policy_runtime_ros.py",
+        "middleware/robot_execution/local/test/test_ros_policy_event_order.py",
+        "tools/calibration/test/test_analyze_store.py",
+        "tools/calibration/test/test_camera_board.py",
+        "tools/calibration/test/test_store_cli.py",
+        "tools/calibration/test/test_urdf_nominal.py",
+        "tools/capture/test/test_edge_drive_advisory.py"
+      ],
+      "pytest_summary": "2183 passed, 299 skipped, 2 warnings in 62.39s (0:01:02)",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    },
+    {
+      "run": 23,
+      "targets": [
+        "middleware/core/api/test"
+      ],
+      "pytest_summary": "188 passed, 13 skipped, 2 warnings, 25 subtests passed in 9.52s",
+      "known_failure_summary": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "new_failures": []
+    }
+  ]
+}

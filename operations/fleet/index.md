@@ -102,8 +102,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · ebba429c4c · D-856 FULL 이력 표 guard 수정
 - 2026-10-24 · 46f56d6b48 · D-856 canonical owner capability와 ARM 응답 검증
 - 2026-10-24 · fc5d75eecd · D-856 중립 팔 v2 transport 호환
 - 2026-10-24 · dda08892c9 · D-856 원장 provenance 분리
 - 2026-10-24 · uncommitted · D-856 step grant의 종류별 검증 경계
-- 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 HTTP

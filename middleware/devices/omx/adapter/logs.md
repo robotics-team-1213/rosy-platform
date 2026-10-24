@@ -651,3 +651,9 @@
 - 변경: v2 Fleet-auth GetTransferCapability가 실제 등록 factory/admission/store/final owner와 canonical journal/session을 읽는다. ARM grant는 대상 journal/session을 완전 digest에 포함해 접수/phase 전에 대조한다. receipt는 실제 snapshot journal을 사용하고 static identity가 덮지 않는다. 읽기는 identity를 만들지 않는다.
 - 증거: RED35 뒤 관련 contract·adapter 전체·SDK·actual UDS/owner/provider 원격 790 passed/7 skipped/0 NEW, fixed SHA 독립 검토 no material finding, size/safety exit0. docs/validation/harbor-managed-capability-2026-10-24/result.md 참조.
 - gate 변화: source/host 검증이며 FULL23개 목록은 진행 중이다. 설치 설명이 admission·물리 완료·claim 해제를 승인하지 않는다. 기존 Cell/TRIP 형식과 과거 Action 조회를 유지한다. physical producer·Harbor ARM·실물/배포는 후속이다. CE 미해결: 기존 e26 G1 timing 원인 미확정.
+
+## 2026-10-24 · ebba429c4c · D-856 FULL 이력 표 guard 수정
+
+- 변경: 빠진 v1.306 변경 이력 표 행을 추가했다. production Python은46 이후 동일하다.
+- 증거: 23개 로그 분류에서 entry9의 API 이력 표 행 누락1 NEW, 다른22개0 NEW였다. doc commit ebba429c4c에서 표를 보완했고 같은 entry9 전체를 공식 원격 재실행 중이다. 원래 FULL 실패와790 집중 결과를 구분한다.
+- gate 변화: FULL 통과 판정 전이다. physical producer/claim/Harbor ARM·실물은 계속 후속이다.
