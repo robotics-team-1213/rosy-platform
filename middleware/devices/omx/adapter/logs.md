@@ -638,3 +638,9 @@
 - 변경: ARM의 typed parse·phase-only/shared control·v2·camera-blind 저장·durable workflow 완료를 연결했다. 설치 factory가 없으면 journal 전에 거절하고 direct driver 종류를 유지한다. Store의 workflow metadata를 leaf로 옮겨 ratchet을 낮췄다.
 - 증거: 새 factory RED9 후 구현하고 합성 goal/gripper port의 실제 planner/journal·기존 API/store/stop/runner/transaction/provider 원격 153 passed/skip0/0 NEW를 확인했다. 최종 feature SHA 독립 검토와 Safety-Review trailer를 기록했다. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md를 따른다.
 - gate 변화: 명시적 설치를 위한 owner library 경로다. 실제 device/ROS·admitted-state 조립·Fleet producer·물리 claim 종료·Harbor 연결은 후속이다. CE 해당 없음: source·회귀·검토 기록이 판단 근거를 보존한다.
+
+## 2026-10-24 · 69607b2b0d · D-856 managed transfer의 영속 owner 권한
+
+- 변경: 새 opt-in profile의 owner/policy/journal을 schema3에 결속하고 Pilot/raw motion을 제한했다. 검증된 phase의 durable intent·정확한 command/thread·같은 최종 owner와 유효 grant만 동기 제출한다. 예외 후 context를 지우고 최종 writer에서도 만료를 검사한다. 기본 Cell/PICK/Pilot profile은 유지한다.
+- 증거: admission RED4 뒤 구현, 독립 검토의 schema 초기화 경합과 delegate-owner 누락 수정, 유효한 final-writer 만료 RED1 뒤 보강. 최종 planner/journal/final owner·기존 회귀 원격 119 passed/skip0/0 NEW. size/safety 4 commits exit0와 fixed-SHA 소스 재검토 확인. docs/validation/harbor-managed-arm-2026-10-24/result.md 참조.
+- gate 변화: host 집중 검증이며 affected 최초 실행은 1729 passed/36 skipped/1 NEW(nose 호환 setup helper)였다. 두 helper와 호출부를 _setup으로 변경하고 전체 선택 재실행을 준비했다. 실제 ROS module은 앞선 실행에서 rclpy 부재로 skip됐다. Fleet physical producer·claim 해제·Harbor ARM·실물 배포는 후속이다. CE 미해결: 이전 e26 G1 timing 2 NEW는 별도 재현 통과했으나 원인 미확정이다.

@@ -1,6 +1,6 @@
 # D-856 중립 자원 종료의 owner 권한 경계
 
-**Status:** 소스 조사에 따른 구현 전 검토안. physical Fleet producer/claim 해제를 열기 전에 이 경계를 닫는다. 기존 Cell/Pilot profile의 동작은 유지한다.
+**Status:** `69607b2b0d`에서 owner 권한 경계 구현과 독립 검토·집중 원격 119 passed/skip0/0 NEW를 확인했다. affected·Fleet physical producer/claim 해제는 후속이다. 기존 Cell/Pilot profile의 동작은 유지한다. [검증과 한계](../validation/harbor-managed-arm-2026-10-24/result.md)를 따른다.
 
 ## 기존 코드에서 확인한 빈틈
 

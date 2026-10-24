@@ -32,7 +32,7 @@ def api():
         pytest.fail("installed neutral arm phase factory is missing")
 
 
-def setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False, wall_clock=None):
+def _setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False, wall_clock=None):
     catalog = _catalog(kin, profile, workcell_id="omx-1", instance_id="omx-1-control")
     installation = api().ArmTransferInstallation(
         TransferObjectBindings(catalog, {"object-1": "g1"}), "arm-cap-1", "cfg-1", "d" * 64)
@@ -103,7 +103,7 @@ def setup(tmp_path, kin, profile, *, install=True, fault=None, managed=False, wa
 def test_managed_phase_reaches_final_owner_only_during_exact_synchronous_submission(tmp_path, kin, profile):
     from concurrent.futures import ThreadPoolExecutor
 
-    grant, store, _, runner, port, _, _ = setup(tmp_path, kin, profile, managed=True)
+    grant, store, _, runner, port, _, _ = _setup(tmp_path, kin, profile, managed=True)
     admission = runner.control_admission
     decisions = []
 
@@ -126,7 +126,7 @@ def test_managed_phase_reaches_final_owner_only_during_exact_synchronous_submiss
 
 
 def test_managed_submission_context_is_cleared_after_port_error(tmp_path, kin, profile):
-    grant, store, _, runner, port, _, _ = setup(tmp_path, kin, profile, managed=True)
+    grant, store, _, runner, port, _, _ = _setup(tmp_path, kin, profile, managed=True)
 
     def fail(command, *_):
         assert runner.control_admission.check_command(command)
@@ -139,7 +139,7 @@ def test_managed_submission_context_is_cleared_after_port_error(tmp_path, kin, p
 
 
 def test_managed_factory_rejects_a_port_bound_to_another_final_owner(tmp_path, kin, profile):
-    grant, store, _, runner, port, _, _ = setup(tmp_path, kin, profile, managed=True)
+    grant, store, _, runner, port, _, _ = _setup(tmp_path, kin, profile, managed=True)
     port.command_owner = object()
     receipt = runner.submit(grant, peer_uid=1001)
     assert receipt["state"] in {"HOLD", "UNKNOWN"}
@@ -149,7 +149,7 @@ def test_managed_factory_rejects_a_port_bound_to_another_final_owner(tmp_path, k
 
 def test_managed_expiry_is_checked_again_at_the_final_writer(tmp_path, kin, profile):
     clock = [datetime.now(timezone.utc)]
-    grant, _, _, runner, port, _, _ = setup(tmp_path, kin, profile, managed=True,
+    grant, _, _, runner, port, _, _ = _setup(tmp_path, kin, profile, managed=True,
                                             wall_clock=lambda: clock[0])
     clock[0] = grant.issued_at + timedelta(seconds=1)
     decisions = []
@@ -168,7 +168,7 @@ def test_managed_expiry_is_checked_again_at_the_final_writer(tmp_path, kin, prof
 
 
 def test_neutral_grant_runs_four_physical_phases_without_cell_recipe_or_direct_driver(tmp_path, kin, profile):
-    grant, store, driver, runner, port, _, _ = setup(tmp_path, kin, profile)
+    grant, store, driver, runner, port, _, _ = _setup(tmp_path, kin, profile)
     reply = ActionApi(runner).dispatch(dict(version=2, operation="SubmitAction", grant=grant.model_dump(mode="json")),
                                       peer_uid=1001)
     assert reply["status"] == 200 and reply["receipt"]["state"] == "ACCEPTED", reply
@@ -201,7 +201,7 @@ def test_neutral_grant_runs_four_physical_phases_without_cell_recipe_or_direct_d
 
 @pytest.mark.parametrize("fault", ["object", "readback"])
 def test_gripper_fault_holds_before_transfer(tmp_path, kin, profile, fault):
-    grant, store, driver, runner, port, _, _ = setup(tmp_path, kin, profile, fault=fault)
+    grant, store, driver, runner, port, _, _ = _setup(tmp_path, kin, profile, fault=fault)
     runner.submit(grant, peer_uid=1001)
     execution = runner._phase_runners[(grant.action_id, grant.attempt_id)]
     execution.advance()
@@ -213,7 +213,7 @@ def test_gripper_fault_holds_before_transfer(tmp_path, kin, profile, fault):
 
 @pytest.mark.parametrize("condition", ["uninstalled", "v1", "no-control", "catalog", "object", "policy"])
 def test_owner_rejects_before_journal_or_actuator(tmp_path, kin, profile, condition):
-    grant, store, driver, runner, port, _, _ = setup(tmp_path, kin, profile, install=condition != "uninstalled")
+    grant, store, driver, runner, port, _, _ = _setup(tmp_path, kin, profile, install=condition != "uninstalled")
     if condition == "no-control":
         runner.control_admission = None
     changes = {"catalog": {"catalog_digest": "0" * 64}, "object": {"object_ref": "other"},
@@ -232,7 +232,7 @@ def test_owner_rejects_before_journal_or_actuator(tmp_path, kin, profile, condit
 
 @pytest.mark.parametrize("fault", ["stale", "calibration", "transform"])
 def test_changed_measured_state_cannot_start_a_physical_phase(tmp_path, kin, profile, fault):
-    grant, store, driver, runner, port, states, _ = setup(tmp_path, kin, profile)
+    grant, store, driver, runner, port, states, _ = _setup(tmp_path, kin, profile)
     changes = {"stale": dict(observed_at_monotonic_s=90.0),
                "calibration": dict(calibration_revision="other"),
                "transform": dict(transform_revision="other")}[fault]
@@ -246,7 +246,7 @@ def test_changed_measured_state_cannot_start_a_physical_phase(tmp_path, kin, pro
 def test_final_completion_requires_current_state_and_serialized_stop_fence(tmp_path, kin, profile, fault):
     from core_common.protocol.schemas import LocalStopRequest, StopRequestSource
 
-    grant, store, driver, runner, port, states, _ = setup(tmp_path, kin, profile)
+    grant, store, driver, runner, port, states, _ = _setup(tmp_path, kin, profile)
     runner.submit(grant, peer_uid=1001)
     execution = runner._phase_runners[(grant.action_id, grant.attempt_id)]
     for _ in range(3):

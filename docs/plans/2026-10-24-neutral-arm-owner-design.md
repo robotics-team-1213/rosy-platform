@@ -33,3 +33,5 @@ transaction·설치 factory가 검증된 뒤 parse/grant union·phase-only kind�
 commit `11486ce7cd`에서 raw identity/generation·물체 결속과 새 snapshot의 HOLD 복구를 구현했다. 독립 검토가 발견한 태그 두 개 삭제 우회는 RED 뒤 legacy 필수 형식 검증으로 차단했다. 신규·기존 Cell/PICK 소비자 원격 74 passed/skip0/0 NEW와 재검토를 확인했다. [정확한 소스와 한계](../validation/harbor-neutral-arm-owner-2026-10-24/result.md)를 따른다. parent Action kind·grant·durable journal과의 대조는 실제 recovery 소비자를 연결할 때 수행하며 factory/runtime 활성화 조건은 그대로다.
 
 설치 factory/phase-only 연결은 commit `45173e6f92`, API v1.305로 구현하고 test-only `337e42e314`의 원격 153 passed/skip0/0 NEW와 최종 SHA 독립 검토를 확인했다. Fleet client의 ARM→v2 누락도 RED 뒤 `fc5d75eecd`에서 연결해 원격 15 passed/skip0/0 NEW를 확인했다. Fleet registry·physical creator는 계속 닫혀 있고 actual owner-state/HTTP·모든 자원 종료 입구·Harbor 연결은 남는다.
+
+Pilot/raw 명령이 Fleet epoch/generation을 새로 만들지 않는 source 경로를 확인해 [managed authority](2026-10-24-managed-transfer-authority-design.md)를 추가했다. `69607b2b0d`의 영속 profile/최종 owner 권한 보강은 원격 119 passed/skip0/0 NEW와 고정 SHA 독립 검토를 확인했다. [결과와 남은 affected/ROS/claim 게이트](../validation/harbor-managed-arm-2026-10-24/result.md)를 따른다. 이 단계로 resource closure나 Fleet producer를 활성화하지 않는다.
