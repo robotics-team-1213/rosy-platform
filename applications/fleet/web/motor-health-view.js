@@ -31,6 +31,6 @@ export function createFleetMotorHealth({view, scope}) {
     for (const id of states.keys()) if (!view.robots.some(robot => robot.robot_id === id)) states.delete(id);
   }
   // Registered once with the page, not on the first card, so the page owns a fixed set of polls.
-  scope.interval(tick, 1000);
+  scope?.interval(tick, 1000);
   return {summary: robot => make(robot, false), detail: robot => make(robot, true)};
 }
