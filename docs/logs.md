@@ -9573,3 +9573,9 @@ osy-d395-s1d\`.
 - 변경: 독립 리뷰 지적 반영 — D-853은 결정만 게시(구현은 후속), D-857·제품 지도에서 내부 포트와 미게시 ADR 의존 문구 정리, 저장소 밖 링크 제거, 두 벤치 기록의 도구 리비전 정정(측정은 v1·v2, 게시 도구는 v3), [토론 1라운드 기록](validation/vlm-question-debate-2026-10-24/result.md) 추가와 교훈 근거 연결, 도구의 루프백 검사(`urlsplit`)·인라인 JSON 이스케이프·출력 폴더 번호·토론 라운드 보존.
 - 증거: [벤치](validation/vlm-question-bench-2026-10-23/result.md)·[v2](validation/vlm-question-bench-2026-10-23b/result.md)·[토론](validation/vlm-question-debate-2026-10-24/result.md) 기록(모델 PC, 사람 정답 없음).
 - gate 변화: 없음.
+
+## 2026-10-24 · uncommitted · Rosy Learning 5단계 메뉴와 VLM 판단 화면 (D-857, D-853)
+
+- 변경: 레일을 홈·자료·정답·학습·평가·승격 다섯 칸으로 바꾸고 화면이 여럿인 단계에 공용 하위 메뉴(`ui-subnav`)를 붙였다. 기존 URL은 그대로이며 레일 한 번과 하위 메뉴 한 번 안에 닿는다. `/learning/vlm`(`vlm_judge.py`·`vlm_judge_web.py`, 임시·확정 정답, 보기당 평가셋 30장·의견 갈림 50장 상한·주 10건 점검·10% 멈춤, 토론 가져오기, `export-disputes`), `/learning/evaluate`, 홈 도메인 줄(`learning_domains.py`, `/api/learning`의 `domains`, OMX 학습 칸은 학습 과제 수), `--vlm-eval-url`. 협업은 VLM 경로 가져오기를 거절하고 정답 저장에 edit를 요구한다. 제품 지도 §9.2 오타 둘.
+- 증거: 시험 PC의 단위·HTTP·브라우저 시험 기록은 이 브랜치의 작업 기록에 둔다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.
+- gate 변화: 없음. 학습 검수 웹앱 화면과 평가 전용 state만이다. 로봇 실행·배포 권한은 바뀌지 않는다.

@@ -16,20 +16,21 @@ import re
 import secrets
 import sqlite3
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, urlsplit
 
 import cv2
 import numpy as np
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
 import review_versions, omx_center_web
-import learning_pipeline
+import learning_domains, learning_pipeline
 import learning_tasks_web
 from learning_tasks import Tasks
 from review_ai_jobs import Jobs
@@ -75,8 +76,18 @@ def check_bind_host(host):
     return host
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None):
+def check_link(url):
+    """--vlm-eval-url: an http(s) address without credentials, shown as a link only (D-857 §2)."""
+    parts = urlsplit(url)
+    if parts.scheme not in ('http', 'https') or not parts.hostname or parts.username or parts.password or len(url) > 300:
+        raise ValueError('--vlm-eval-url must be an http(s) address without credentials')
+    return url
+
+
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None):
     check_bind_host(host)
+    if vlm_eval_url is not None:
+        check_link(vlm_eval_url)
     if ai_jobs is not None and ai_jobs.store.db != store.db:
         raise ValueError('AI jobs must belong to the review workspace')
     collaboration = None
@@ -99,6 +110,19 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     token = secrets.token_urlsafe(32)
     learning = Workspace(store.db)
     ai_jobs = ai_jobs if ai_jobs is not None else Jobs(store)
+    sim_seen = {}
+
+    def sim_status():
+        # shortcut: the home row reads the SIM list at most once a minute; the SIM page itself reads live.
+        if sim_runs is None:
+            return None
+        if time.monotonic() - sim_seen.get('at', -60.0) >= 60:
+            try:
+                value = {'runs': sim_runs.call({'action': 'list'})}
+            except ValueError:
+                value = {'error': 'unavailable'}
+            sim_seen.update(at=time.monotonic(), value=value)
+        return sim_seen['value']
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, data, code=200, mime='application/json; charset=utf-8', etag=None, cache='no-store'):
@@ -141,7 +165,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return
                 if learning_tasks_web.get(self, path, tasks, omx_center, token):
                     return
-                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs):
+                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -254,8 +278,15 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                     for state in ('approved', 'pending', 'excluded')}
                     pipeline = learning_pipeline.project(current, counts=counts, pixel_counts=pixel_counts,
                                                          preparation=preparation, control=control_status)
-                    return self.send({'workflows': WORKFLOWS, 'items': learning.list(), 'token': token,
-                                      'pipeline': pipeline,
+                    items = learning.list()
+                    with store.connect() as db:
+                        omx_reviewed, vlm_counts, task_count = learning_domains.stored(db)
+                    domains = learning_domains.domains(
+                        pipeline=pipeline, counts=counts, preparation=preparation, items=items,
+                        omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts,
+                        vlm_eval_url=vlm_eval_url, tasks=task_count)
+                    return self.send({'workflows': WORKFLOWS, 'items': items, 'token': token,
+                                      'pipeline': pipeline, 'domains': domains, 'vlm_eval_url': vlm_eval_url,
                                       'preparation': preparation,
                                       'control': control_status,
                                       'counts': counts,
@@ -292,7 +323,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
                          '/storage.js': 'storage.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
-                         '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js'}
+                         '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js',
+                         '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js'}
                 name = path.removeprefix('/common/')
                 if path.startswith('/common/') and name in SHARED_ASSETS:
                     file = COMMON / name
@@ -354,6 +386,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if camera_setup_web.post(self, path, body, store.state, collaboration):
                     return
                 if sim_web.post(self, path, body, sim_runs, collaboration):
+                    return
+                if vlm_judge_web.post(self, path, body, store, collaboration, Conflict):
                     return
                 actor = self.learning_principal['user_id'] if collaboration else None
                 if omx_web.post(self, path, body, learning, Conflict):
@@ -455,6 +489,7 @@ def main():
     parser.add_argument('--review-ai-config', type=Path, help='private workspace-bound model-PC AI execution configuration')
     parser.add_argument('--omx-center-config', type=Path, help='private isolated OMX learning root and pinned host learner interpreters')
     parser.add_argument('--sim-config', type=Path, help='private workspace-bound local SIM subprocess configuration')
+    parser.add_argument('--vlm-eval-url', help='link from 평가·승격 to a separate VLM evaluation state instance (D-857)')
     parser.add_argument('--host', default='127.0.0.1', help='bind address; default loopback (D-478)')
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
@@ -462,6 +497,11 @@ def main():
     args = parser.parse_args()
     if args.empty_eval and args.empty_training:
         parser.error('choose one empty workspace kind')
+    if args.vlm_eval_url:
+        try:
+            check_link(args.vlm_eval_url)
+        except ValueError as exc:
+            parser.error(str(exc))
     object_classes = None
     if args.object_classes:
         try:
@@ -503,7 +543,8 @@ def main():
         omx_center = Center(json.loads(args.omx_center_config.read_text(encoding='utf-8')))
     sim_runs = sim_web.LocalRuns(args.sim_config, review_evidence.metadata(store, 'workspace_id')) if args.sim_config else None
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
-                         storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs)
+                         storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs,
+                         vlm_eval_url=args.vlm_eval_url)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

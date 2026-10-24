@@ -94,34 +94,48 @@ def test_collapsed_seats_do_not_stretch_or_overflow():
 
 
 def test_review_documents_share_the_app_bar_and_the_screen_rail():
-    """D-741 3, 6 and D-833: app/theme in the bar, six screens in the rail, heading in the path row."""
+    """D-741 3, 6, D-833 and D-857 §3: app/theme in the bar, the five loop stages in the rail, the stage's
+    pages in the sub-menu, heading in the path row."""
     web = WEB.parents[1] / 'learning/curation/perception/review_app_web'
+    stages = [('list', '/learning', '홈', '홈'), ('folder', '/catalog', '자료 등록', '자료'),
+              ('pencil', '/', '정답 달기', '정답'), ('robot', '/learning/tasks', '학습 실행', '학습'),
+              ('check', '/learning/evaluate', '평가·승격', '평가·승격')]
+    subs = {'/learning': None, '/catalog': ['/catalog', '/learning/camera'],
+            '/': ['/', '/pixels', '/learning/omx', '/learning/vlm'],
+            '/learning/tasks': ['/learning/tasks', '/learning#pipeline', '/learning/sim'], '/learning/evaluate': None}
     rails = set()
-    for name, here in [('learning.html', '/learning'), ('index.html', '/'),
-                       ('pixels.html', '/pixels'), ('catalog.html', '/catalog'), ('omx.html', '/learning/omx'),
-                       ('camera.html', '/learning/camera'), ('sim.html', '/learning')]:
+    for name, stage, here in [('learning.html', '/learning', None), ('index.html', '/', '/'),
+                              ('pixels.html', '/', '/pixels'), ('omx.html', '/', '/learning/omx'),
+                              ('vlm.html', '/', '/learning/vlm'), ('catalog.html', '/catalog', '/catalog'),
+                              ('camera.html', '/catalog', '/learning/camera'), ('tasks.html', '/learning/tasks', '/learning/tasks'),
+                              ('sim.html', '/learning/tasks', '/learning/sim'), ('evaluate.html', '/learning/evaluate', None)]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html
         bar = re.search(r'<ui-topbar role="banner">(.*?)</ui-topbar>', html, re.S).group(1)
         assert bar.startswith('<ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand>')
         assert '<h1' not in bar and '<nav' not in bar and 'class="theme-label"' in bar
-        assert 'data-learning-account-entry href="/accounts"' in bar
+        assert 'data-learning-account-entry href="/accounts"' in bar, 'accounts stay in the top bar (D-857 §3)'
         assert 'kind="irreversible"' not in html, 'this tool commands no robot, so it has no stop'
         body = html.split('</ui-topbar>', 1)[1]
-        rail = re.search(r'<div class="ui-app-body" data-seats="rail"><div class="ui-rail">'
+        seats = ' data-seats="rail"' if subs[stage] is None else ''
+        rail = re.search(rf'<div class="ui-app-body"{seats}><div class="ui-rail">'
                          r'<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면">(.*?)</nav></div>', body, re.S).group(1)
         items = re.findall(r'<a class="ui-rail-item" data-action-icon="(\w+)" href="([^"]+)" aria-label="([^"]+)"'
                            r'( aria-current="page")?>([^<]+)</a>', rail)
-        assert [(icon, href, full, short) for icon, href, full, _, short in items] == [
-            ('list', '/learning', '작업 목록', '목록'), ('box', '/', '객체 검수', '객체'),
-            ('pixels', '/pixels', '픽셀 검수', '픽셀'), ('folder', '/catalog', '자료 등록', '자료'),
-            ('image', '/learning/camera', '카메라 맞춤', '카메라'), ('robot', '/learning/omx', '로봇암 학습', '로봇암')]
-        assert [href for _, href, _, current, _ in items if current] == ([here] if here else [])
+        assert [(icon, href, full, short) for icon, href, full, _, short in items] == stages, name
+        assert [href for _, href, _, current, _ in items if current] == [stage], name
         assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
+        sub = re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
+                        r'<span class="ui-subnav-head">[^<]+</span>(.*?)</nav></div>', body, re.S)
+        assert (sub is None) == (subs[stage] is None), name
+        if sub:
+            links = re.findall(r'<a class="ui-subnav-item" href="([^"]+)"( aria-current="page")?>[^<]+</a>', sub.group(1))
+            assert [href for href, _ in links] == subs[stage], name
+            assert [href for href, current in links if current] == [here], name
         assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
         assert html.count('<h1') == 1
         rails.add(re.sub(r' aria-current="page"', '', rail))
-    assert len(rails) == 1, 'the rail is the same in all five documents'
+    assert len(rails) == 1, 'the rail is the same in every document'
     css = (web / 'app.css').read_text(encoding='utf-8')
     assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'

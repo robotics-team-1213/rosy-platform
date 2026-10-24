@@ -35,7 +35,7 @@ def test_review_photo_and_result_are_in_first_view(browser_workspace):
                     assert page.locator(action).get_attribute('aria-label')
 
 
-@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels'])
+@pytest.mark.parametrize('route', ['/learning', '/catalog', '/', '/pixels', '/learning/vlm', '/learning/evaluate'])
 @pytest.mark.parametrize('width,height', [(390, 844), (320, 568)])
 def test_learning_compact_header_stays_within_first_view_budget(browser_workspace, route, width, height):
     page, _, _ = browser_workspace
@@ -51,7 +51,7 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     rail = page.locator('.ui-rail').bounding_box()
     assert rail['y'] == topbar['y'] + topbar['height'], (route, rail, topbar)
     assert set(page.locator('.workspace-tabs a').evaluate_all('links => links.map(link => new URL(link.href).pathname)')) == {
-        '/learning', '/catalog', '/', '/pixels', '/learning/omx',
+        '/learning', '/catalog', '/', '/learning/tasks', '/learning/evaluate',
     }
     assert page.locator('.workspace-tabs a[aria-current="page"]').count() == 1
     for link in page.locator('.workspace-tabs a').all():

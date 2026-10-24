@@ -407,3 +407,24 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .task-participants{inline-size:100%;display:grid;gap:var(--gap-form)}
 .task-participant{display:flex;flex-wrap:wrap;align-items:end;gap:var(--gap-form);border:1px solid var(--field-line);padding:var(--space-3);margin:0}
 #selected-task,#task-runs,#robots{overflow-wrap:anywhere}
+/* D-857 §3: home domain rows and the 평가·승격 sources */
+.domain-rows{display:grid;gap:0;margin:0;padding:0;list-style:none;border-block-start:1px solid var(--surface-line)}
+.domain-row{display:grid;grid-template-columns:10rem minmax(0,1fr) auto;grid-template-areas:"name stages next" "name blocked next";column-gap:var(--space-4);row-gap:var(--space-1);align-items:center;min-width:0;padding-block:var(--space-3);border-block-end:1px solid var(--surface-line)}
+.domain-row h3{grid-area:name;margin:0;font-size:var(--text-body);font-weight:var(--weight-label)}
+.domain-stages{grid-area:stages;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--space-1);margin:0;padding:0;list-style:none}
+.domain-stage{display:flex;flex-direction:column;min-width:0;padding:var(--space-1) var(--space-2);border-block-start:2px solid var(--control-line);font-size:var(--text-label);color:var(--text-secondary)}
+.domain-stage small{font-size:var(--text-label)}
+.domain-stage[data-state="done"]{border-block-start-color:var(--status-good);color:var(--text-primary)}
+.domain-stage[data-state="active"]{border-block-start-color:var(--text-primary);color:var(--text-primary);font-weight:var(--weight-strong)}
+.domain-stage[data-state="blocked"]{border-block-start-color:var(--status-warn);color:var(--text-primary)}
+.domain-stage[data-state="not_available"]{border-block-start-style:dashed}
+.domain-blocked{grid-area:blocked;margin:0;color:var(--text-secondary);font-size:var(--text-label)}
+.domain-next{grid-area:next;justify-self:start;display:inline-flex;align-items:center;min-block-size:var(--target-secondary)}
+.evaluate-sources{display:grid;gap:var(--space-4)}
+.evaluate-source{min-width:0;padding-block:var(--space-3);border-block-start:1px solid var(--surface-line)}
+.evaluate-source h3{margin:0 0 var(--space-2);font-size:var(--text-body)}
+.evaluate-source p{margin-block:0 var(--space-2)}
+.evaluate-source a{display:inline-flex;align-items:center;min-block-size:var(--target-secondary)}
+.evaluate-source table{display:block;max-inline-size:100%;overflow-x:auto;border-collapse:collapse;margin-block-end:var(--space-2);font-size:var(--text-label)}
+.evaluate-source th,.evaluate-source td{text-align:start;padding:var(--space-1) var(--space-2);border-block-end:1px solid var(--border-subtle)}
+@media (width < 64rem){.domain-row{grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "stages" "blocked" "next"}.domain-stages{grid-template-columns:repeat(3,minmax(0,1fr))}}
