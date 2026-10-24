@@ -48,13 +48,13 @@ def _largest(mask, min_area):
     return labels == i, stats[i], centroids[i]
 
 
-def top_box(img, profile) -> dict:
-    """The box on the tray seen from above: centre (px) and yaw (0..90 deg, 0 = square to the image)."""
+def top_box(img, profile, roi=None) -> dict:
+    """The box seen from above inside `roi` (default: the tray): centre (px) and yaw (0..90 deg, 0 = square)."""
     import cv2
     import numpy as np
 
     spec = profile["top_box"]
-    x0, y0, x1, y1 = spec["roi"]
+    x0, y0, x1, y1 = roi or spec["roi"]
     roi = img[y0:y1, x0:x1].astype(int)
     b, g, r = roi[..., 0], roi[..., 1], roi[..., 2]
     lo, hi, below = spec["bgr_min"], spec["bgr_max"], spec.get("green_below", 0)
@@ -110,6 +110,32 @@ def _lower_edge_tilt(blob, x, w):
         return None
     xs, ys = np.array(lows, dtype=float).T
     return round(float(np.degrees(np.arctan(np.polyfit(xs, ys, 1)[0]))), 1)
+
+
+def place_check(img, profile, site: str) -> dict:
+    """After a release: is the box inside the zone the next grasp at `site` can reach? 2026-10-25 a box set
+    down on the belt's far edge could not be picked again and later fell off; catching that right after the
+    release lets the judge re-place it instead. The site's `search` roi finds the box, `reach` bounds it."""
+    zone = profile["sites"][site]
+    if "hsv_min" in zone:  # against the dark belt the box reads bright and unsaturated, not mauve as on the tray
+        import cv2
+        import numpy as np
+
+        x0, y0, x1, y1 = zone["search"]
+        mask = cv2.inRange(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2HSV),
+                           tuple(zone["hsv_min"]), tuple(zone["hsv_max"]))
+        found = _largest(mask, zone.get("min_area", 600))
+        box = {"found": False}
+        if found is not None:
+            _, stats, centroid = found
+            box = {"found": True, "cx": round(float(centroid[0]) + x0, 1), "cy": round(float(centroid[1]) + y0, 1),
+                   "area": int(stats[4])}
+    else:
+        box = top_box(img, profile, roi=zone["search"])
+    if not box.get("found"):
+        return {"found": False, "inside": False}
+    x0, y0, x1, y1 = zone["reach"]
+    return dict(box, inside=bool(x0 <= box["cx"] <= x1 and y0 <= box["cy"] <= y1))
 
 
 def yaw_gap(a: float, b: float) -> float:

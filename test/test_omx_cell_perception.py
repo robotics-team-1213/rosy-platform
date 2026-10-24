@@ -65,6 +65,24 @@ def test_the_wrist_view_finds_the_box_in_light_and_in_shadow_but_not_the_tray(bo
         assert box["cx"] == pytest.approx(330, abs=3) and box["area"] == pytest.approx(221 * 221, rel=0.05)
 
 
+@pytest.mark.parametrize("centre, inside", [
+    ((320, 150), True),    # on the near half of the belt: the next grasp reaches it
+    ((267, 82), False),    # on the belt's far edge (2026-10-25: could not be picked again, later fell off)
+])
+def test_after_a_release_the_box_must_land_where_the_next_grasp_reaches(centre, inside):
+    img = np.full((480, 640, 3), (90, 70, 55), np.uint8)       # dark belt, slightly blue
+    cv2.rectangle(img, (centre[0] - 16, centre[1] - 16), (centre[0] + 16, centre[1] + 16), (127, 119, 142), -1)
+    cv2.rectangle(img, (495, 95), (505, 140), (130, 125, 128), -1)  # a thin piece of belt frame: too small to be the box
+    result = m.place_check(img, PROFILE, "belt")
+    assert result["found"] and result["inside"] is inside
+    assert result["cx"] == pytest.approx(centre[0], abs=2)
+
+
+def test_a_missing_box_after_a_release_is_never_inside():
+    img = np.full((480, 640, 3), (90, 70, 55), np.uint8)
+    assert m.place_check(img, PROFILE, "belt") == {"found": False, "inside": False}
+
+
 def test_yaw_gap_treats_a_square_box_as_repeating_every_90_degrees():
     assert m.yaw_gap(2, 88) == pytest.approx(4) and m.yaw_gap(0, 45) == 45
 
