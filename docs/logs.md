@@ -10263,3 +10263,9 @@ osy-d395-s1d\`.
 - 변경: [통합 검사 보완](validation/fleet-ui-boundaries-2026-10-24/2026-10-24-integration-contracts.md)에 첫 공식 회귀의 두 실패와 검사 경로 보완을 구분했다. 초기 검증 기록은 보존한다.
 - 증거: 원격 집중 3 failed → 6 passed/2 warnings, 0 NEW. 설치 문서의 로스터 표시 접근을 거절하는 대조 시험을 포함한다.
 - gate 변화: 없음. 공식 재검증·로컬 main 착지는 대기한다. CE 해당 없음: 검사 경로 판단은 코드·시험으로 설명된다.
+
+## 2026-10-24 · 9b6bd2f5c7 · Fleet UI 검증 기록의 Git 해시 표기
+
+- 변경: 새 통합 검사 기록의 전체 Git 해시 두 곳에 `commit` 접두어를 붙였다. 해시·시험 결과·관측은 유지한다. [기존 교훈](solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md)의 동결 기록 표기 보완 절차를 따른다.
+- 증거: 두 번째 native 회귀에서 secret guard가 이 두 표기를 탐지했다. 같은 순수 scanner에서 원문2 findings, 같은 해시의 접두어 표기0 findings를 확인했다. scanner·기준선·제품 코드는 바꾸지 않는다. 커밋된 후보를 원격 재검증한다.
+- gate 변화: 없음. CE: 해당 없음 — 기존 교훈을 적용했고 새로운 원인·복구 판단은 없다. 최초 부모 UTF-8 새 교훈은 유지한다.
