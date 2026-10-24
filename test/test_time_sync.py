@@ -21,7 +21,8 @@ def sync():
 
 
 def tracking(*, correction="0.001", delay="0.010", dispersion="0.002", stamp="1000", leap="Normal", stratum="3"):
-    return f"C0000201,{stratum},{stamp},{correction},0,0,0,0,0,{delay},{dispersion},16,{leap}"
+    # chrony 4.5 client.c process_cmd_tracking emits separate ref-id and source-name fields.
+    return f"C0000201,site.example.invalid,{stratum},{stamp},{correction},0,0,0,0,0,{delay},{dispersion},16,{leap}"
 
 
 def test_client_has_only_approved_site_sources(sync):
