@@ -350,6 +350,7 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · docs(spec): MSN-008 정책 승인 요구사항 초안
 - 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
 - 2026-10-25 · 7d0cfcd6e9 · Isaac 정지 적재면·컨베이어 접촉 왕복
 - 2026-10-24 · 73fc8b2b09 · 실제 private HF 모델 전달·재적재
