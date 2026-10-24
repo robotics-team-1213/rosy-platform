@@ -472,3 +472,9 @@
 - 변경: 기존 delegation 화면에 통합 tree/detail/evidence/task와 소유 단위별 읽기 전용 지도를 연결했다. 하위 정지와 단위별 UNVERIFIED 결과·조회 이력·명시 로컬 재시운전 확인을 표시하며 auth/lifecycle reset을 유지한다.
 - 증거: 준비 patch의 JS/JSON/Python 구문과 독립 범위 검토를 확인했다. 실제 browser·Node와 backend HTTP의 새 source 증거는 원격 GREEN 후 기록한다. feature matrix의 verified 등록도 실제 HTTP 통과 후 수행한다.
 - gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
+
+## 2026-10-25 · uncommitted · viewer의 관제·지도·정지 이력 조회 유지
+
+- 변경: 통합 화면의 읽기 버튼에 기존 data-work-read 표기를 적용했다. 공통 operatorControls가 동적 버튼을 운영 조작으로 잠그던 원인을 수정하며 정지 쓰기·재시운전 버튼의 운영자 제한은 유지한다.
+- 증거: source10fc372212 실제 Chromium에서 UNKNOWN/PARTIAL viewer2건이 이력 버튼의 운영자 잠금으로 실패했다. 해당 시험에 viewer의 관제 선택·지도·같은 정지 기록 조회와 쓰기 금지를 함께 추가해 수정 source를 원격 검증한다.
+- gate 변화: 읽기 권한과 운영 조작을 구분하는 UI 수정이며 backend 권한·실제 장치 수용은 바꾸지 않는다. CE 해당 없음 — 원인을 코드의 공통 잠금 표기와 실제 browser 회귀에 직접 남긴다.

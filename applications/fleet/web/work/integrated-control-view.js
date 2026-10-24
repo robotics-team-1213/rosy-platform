@@ -10,8 +10,10 @@ const stopStates = {PENDING: "전달 대기", SENDING: "전달 중", ACKNOWLEDGE
 const omxStates = {NOT_CONFIGURED: "미설정", REQUESTED: "요청됨", LOCAL_LATCHED: "국소 래치 응답",
   UNKNOWN: "미확인", PARTIAL: "일부 응답"};
 const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
-const button = text => {
+const button = (text, readOnly = false) => {
   const result = node("ui-button", text);
+  // The shared role lock treats unmarked dynamic buttons as operator actions.
+  if (readOnly) result.dataset.workRead = "";
   result.setAttribute("kind", "quiet"); result.setAttribute("type", "button"); return result;
 };
 function guard(control, reason) {
@@ -61,8 +63,8 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   const panel = node("section"), heading = node("h2", "통합 관제"), status = node("p", "", "hint"),
     list = node("ul", "", "work-list"), selectedName = node("h3"), detail = node("div"),
     map = node("div", "", "integrated-map"), mapInfo = node("p", "", "hint"),
-    mapRead = button("선택 관제 지도 보기"), notice = node("p"), stop = button("선택한 하위 관제에 정지 요청"),
-    newStop = button("새 정지 요청 준비"), readStop = button("같은 정지 기록 확인"),
+    mapRead = button("선택 관제 지도 보기", true), notice = node("p"), stop = button("선택한 하위 관제에 정지 요청"),
+    newStop = button("새 정지 요청 준비"), readStop = button("같은 정지 기록 확인", true),
     results = node("ul", "", "work-list"), history = node("ul", "", "work-list"),
     historyState = node("p", "", "hint"), historyFold = node("details", "", "ui-disclosure"),
     historyHeading = node("summary", "이 관제의 정지 요청 기록"), stopIdentity = node("p", "", "hint");
@@ -132,7 +134,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     list.replaceChildren();
     const items = new Map();
     for (const row of overview.units) {
-      const item = node("li"), choose = button(row.unit_id + " · " + (row.parent ? "직접 상위 " + row.parent : "독립 관제"));
+      const item = node("li"), choose = button(row.unit_id + " · " + (row.parent ? "직접 상위 " + row.parent : "독립 관제"), true);
       choose.dataset.integratedUnit = row.unit_id; choose.setAttribute("aria-pressed", String(target === row.unit_id));
       choose.setAttribute("kind", "toggle");
       const info = node("p", (availability[row.availability] || "정보 없음") + evidenceAgeText(age(row, elapsed()))
@@ -287,7 +289,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
       history.replaceChildren(); historyState.textContent = value.stops.length + "건 · 이 관제의 최근 정지 기록";
       for (const row of value.stops) {
         const item = node("li"), choose = button(row.origin_id + " / " + row.stop_id + " · 대상 " + row.target_unit
-          + (row.incomplete ? " · 결과 미확인" : " · 결과 기록됨"));
+          + (row.incomplete ? " · 결과 미확인" : " · 결과 기록됨"), true);
         choose.dataset.integratedStop = JSON.stringify([row.origin_id, row.stop_id]);
         choose.addEventListener("click", () => {
           if (busy) return;

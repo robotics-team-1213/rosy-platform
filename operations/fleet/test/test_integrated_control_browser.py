@@ -197,6 +197,12 @@ def test_local_history_reconciliation_requires_named_operator_and_both_typed_att
             page.goto(site + "/console?view=work")
             page.clock.run_for(1500)
             page.locator("#integrated-control summary").filter(has_text="이 관제의 정지 요청 기록").click()
+            if role == "viewer":
+                panel = page.locator("#integrated-control")
+                panel.get_by_role("button", name="A1 · 직접 상위 A", exact=True).click()
+                expect(page.locator("#integrated-control-detail")).to_contain_text("a1")
+                panel.get_by_role("button", name="선택 관제 지도 보기", exact=True).click()
+                expect(panel.locator("svg[role=img]")).to_have_count(1)
             page.locator("#integrated-stop-history").get_by_role("button").click()
             form = page.locator("#integrated-reconcile")
             expect(form).to_be_visible()
@@ -205,6 +211,7 @@ def test_local_history_reconciliation_requires_named_operator_and_both_typed_att
             if role == "viewer":
                 expect(save).to_be_disabled()
                 expect(page.locator("#integrated-stop")).to_be_disabled()
+                expect(page.locator("#integrated-control").get_by_role("button", name="같은 정지 기록 확인", exact=True)).to_be_enabled()
                 assert not posts
                 return
             save.click()
