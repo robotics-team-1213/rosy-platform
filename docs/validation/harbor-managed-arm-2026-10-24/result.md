@@ -8,11 +8,13 @@
 
 - **119 passed, 0 skipped**, runner exit0. `test/known_failures.py`도 **0 NEW**. 재시작 scope/policy 유지·잘못된 identity/저널 손상 거절·동시 초기화·Pilot/raw 차단·정확한 object/thread/context 종료·잘못 연결된 최종 owner·최종 writer에서 만료 거절을 포함한다.
 - native `size_range.py ed5eecc216 69607b2b0d`와 `safety_review.py`는 각각 4 commits, exit0. 독립 fixed-SHA 소스 재검토는 material finding 없음이다. [검토 기록](source-review.md)을 따른다.
-- e26→696의 공식 affected 선택은 `affected`, 한 invocation이다. `rosy-managed-arm-affected/run-1.txt`는 1729 passed/36 skipped/1 failed, **1 NEW**였다. test helper 두 곳의 `setup` 이름이 저장소의 nose 호환성 guard에 걸렸다. 호출부까지 `_setup`으로 변경했으며 전체 선택 재실행 전이다. 이 집중 결과를 전체 affected 통과로 대체하지 않는다.
+- e26→696의 공식 affected 선택은 `affected`, 한 invocation이다. `rosy-managed-arm-affected/run-1.txt`는 1729 passed/36 skipped/1 failed, **1 NEW**였다. test helper 두 곳의 `setup` 이름이 저장소의 nose 호환성 guard에 걸렸다. 호출부까지 `_setup`으로 변경한 뒤 아래 최종 전체 선택 결과를 확인했다.
+
+최종 test/docs commit `21217e4ea8`의 e26→212 affected 전체 선택(64 targets, 한 invocation)은 **1754 passed, 34 skipped, 44 warnings**, runner exit0, known failures **0 NEW**였다. JSON은 저장소 밖 `rosy-managed-arm-212-selection.json`, 원본은 `rosy-managed-arm-212-affected/run-1.txt`다. skipped 34건은 수용 증거로 세지 않는다. 이 결과는 해당 선택 전체의 host 회귀이며 CI FULL·장치·현장 수용과 구분한다. production 코드는 집중 검증한 696 이후 동일하다. 212까지 size/safety 검사는 7 commits, 각각 exit0다.
 
 ## 실패 이력
 
-후속 test/docs commit `114bb18834`의 전체 선택은 1751 passed/34 skipped/3 NEW였다. 생성 목차 미동기화가 두 guard를 실패시켰고, 검증 문서의 전체 소스 hash에 `commit` 표기가 없어 secret scanner가 불투명 token으로 분류했다. 생성기와 동일한 목차로 맞추고 공개 소스 commit임을 명시했다. scanner 예외나 guard를 완화하지 않았다. 수정 후 전체 선택 검증은 별도로 기록한다.
+후속 test/docs commit `114bb18834`의 전체 선택은 1751 passed/34 skipped/3 NEW였다. 생성 목차 미동기화가 두 guard를 실패시켰고, 검증 문서의 전체 소스 hash에 `commit` 표기가 없어 secret scanner가 불투명 token으로 분류했다. 생성기와 동일한 목차로 맞추고 공개 소스 commit임을 명시했다. scanner 예외나 guard를 완화하지 않았다. 수정 후 전체 선택 검증은 위 최종 결과를 따른다.
 
 `ed5eecc216`의 미구현 admission은 공식 RED 4 failed/1 passed였다. 첫 기능 SHA `e4b2c6c3c0`는 117 passed/1 failed/1 skipped였다. 실패는 새 시험의 수기 owner 설정에 rate limit이 없었던 것이며 설치 profile의 `arm_command_config`를 재사용하도록 고쳤다. 같은 실행의 ROS runtime module은 `rclpy` 부재로 skip됐고 실제 native ROS 수용의 증거가 아니다.
 
