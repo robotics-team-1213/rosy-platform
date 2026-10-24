@@ -76,6 +76,8 @@ def main(argv=None):
     try:
         if args.out.exists():
             raise ValueError('verdict exists; choose a new path')
+        if len({path.resolve() for path in args.probes}) != len(args.probes):
+            raise ValueError('each probe must be a separate file')  # one snapshot named twice proves nothing
         raw = [path.read_bytes() for path in args.probes]
         verdict = check([json.loads(data.decode('utf-8')) for data in raw], arm=args.arm,
                         probe_sha256=[hashlib.sha256(data).hexdigest() for data in raw])

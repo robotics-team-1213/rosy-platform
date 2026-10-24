@@ -59,16 +59,18 @@ def test_main_exit_codes(tmp_path):
         path = tmp_path / name
         path.write_text(json.dumps(doc))
         return str(path)
-    good, bad = write('a.json', probe()), write('b.json', probe(change={12: {'drive_mode': 5}}))
+    good, again = write('a.json', probe()), write('a2.json', probe())  # two reads of a still arm may be identical
+    bad, bad2 = (write(n, probe(change={12: {'drive_mode': 5}})) for n in ('b.json', 'b2.json'))
     arm = ['--arm', ARM]
-    assert check_map.main([good, good, *arm, '--out', str(tmp_path / 'ok.json')]) == 0
+    assert check_map.main([good, again, *arm, '--out', str(tmp_path / 'ok.json')]) == 0
     verdict = json.loads((tmp_path / 'ok.json').read_text())
     assert verdict['holds'] is True and verdict['arm'] == ARM and len(verdict['probe_sha256']) == 2
-    assert check_map.main([bad, bad, *arm, '--out', str(tmp_path / 'no.json')]) == 3
-    assert check_map.main([good, good, *arm, '--out', str(tmp_path / 'ok.json')]) == 2  # never replaces a verdict
+    assert check_map.main([bad, bad2, *arm, '--out', str(tmp_path / 'no.json')]) == 3
+    assert check_map.main([good, again, *arm, '--out', str(tmp_path / 'ok.json')]) == 2  # never replaces a verdict
+    assert check_map.main([good, good, *arm, '--out', str(tmp_path / 'same.json')]) == 2  # one file named twice
     assert check_map.main([good, *arm, '--out', str(tmp_path / 'one.json')]) == 2  # one snapshot is not enough
-    failed_probe = write('failed.json', {'error': 'busy'})  # register_probe output without motors
-    assert check_map.main([failed_probe, failed_probe, *arm, '--out', str(tmp_path / 'f.json')]) == 2
+    failed = [write(n, {'error': 'busy'}) for n in ('f1.json', 'f2.json')]  # register_probe output without motors
+    assert check_map.main([*failed, *arm, '--out', str(tmp_path / 'f.json')]) == 2
     for probes, who in (([probe()], ARM), ([probe(), probe()], ' ')):
         with pytest.raises(ValueError):
             check_map.check(probes, arm=who)
