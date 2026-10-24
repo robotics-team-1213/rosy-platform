@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · 객체·픽셀 검수의 정답 링크가 사진을 밀지 않게 (D-542 §2)
 - 2026-10-24 · uncommitted · Rosy Learning VLM 판단 검토 반영 (블라인드 내보내기·평가 state·다시 켜기)
 - 2026-10-24 · uncommitted · Rosy Learning 5단계 메뉴와 VLM 판단 화면 (D-857, D-853)
 - 2026-10-24 · uncommitted · Rosy Learning 게시 문서 리뷰 반영
 - 2026-10-24 · c8aa8efc41 · Rosy Learning 정의와 VLM 빠른 판단 문서·도구 게시
-- 2026-10-24 · uncommitted · 외부 업무 앱 카탈로그 등록과 은퇴 앱 정리
