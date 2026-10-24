@@ -359,6 +359,9 @@ class Session:
             if self.replay is not None:
                 record["source_mode"] = "scripted_teacher"
                 record["replay"] = {k: self.replay[k] for k in ("path", "sha256", "segments", "source")}
+                if not teleop_only:  # episodes 0/1 are the trajectory's A/B; operator review decides the outcome
+                    record["episode_outcomes"] = [{"episode": 0, "segment": "A", "outcome": "unknown"},
+                                                  {"episode": 1, "segment": "B", "outcome": "unknown"}]
             self.log(step="run", command=command)
             try:
                 record["exit_code"] = self.run_command(command)
