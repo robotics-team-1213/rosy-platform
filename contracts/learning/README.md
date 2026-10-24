@@ -25,8 +25,10 @@ D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt�
 
 [D-864](../../docs/adr/D-864-d854-units-trajectory-and-simulator-roles.md)의 `ros_joint_rad`는 CORE·Gazebo·Isaac Sim이 쓰는
 ROS 관절 rad(`joint1..5`, `gripper_joint_1`)다. 이 단위로 바꾸려면 `validate_joint_map()`이 받아들이는 관절 대응 판정이 필요하다.
-판정은 통과해야 하고, 보정 파일의 homing offset·drive mode도 판정한 레지스터 상태(0)와 같아야 한다. 다른 팔이나 이전 보정은 같은 판정을 쓸 수 없다.
-SIM 데이터는 모터가 없으므로 `ros_joint_rad` 선언의 `calibration_sha256`을 `null`로 둘 수 있다.
+판정은 통과해야 하고, 판정이 기록한 보정 range digest가 변환에 쓰는 보정과 같아야 하며, 보정 파일의 homing offset·drive mode도
+0이어야 한다. range는 팔마다·보정마다 다르므로 다른 팔이나 다시 보정한 팔은 같은 판정을 쓸 수 없다.
+`ros_joint_rad` 선언은 `joint_map_revision`을 더 가진다. 보정과 판정이 둘 다 `null`이면 SIM 데이터이고, 실물 데이터를 바꾼 것이면
+`ros_declaration()`이 둘을 채운다.
 
 ```python
 from rosy.contracts.learning import seal, validate_episode

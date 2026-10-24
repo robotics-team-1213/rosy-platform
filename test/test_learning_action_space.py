@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contracts/learning/src"))
 from rosy.contracts.learning.action_space import (
     MOTORS, NORM, RAD, ROS, ROS_JOINTS, calibration_sha256, convert, validate_calibration, validate_declaration,
-    validate_joint_map)
+    ros_declaration, validate_joint_map)
 
 CAL = {m: {"id": i + 11, "homing_offset": 0, "range_min": 1024, "range_max": 3072, "drive_mode": 0}
        for i, m in enumerate(MOTORS)}
@@ -87,7 +87,8 @@ def verdict(**change):
     joints = [dict(motor_id=11 + i, joint=name, homing_offset_raw=0, drive_mode=0, operating_mode=4,
                    reasons=[], holds=True) for i, name in enumerate(ROS_JOINTS)]
     doc = dict(schema="rosy.omx-joint-map-check/2", hypothesis="ros_joint_rad == dynamixel_rad_v1",
-               arm="S cell follower", probes=2, probe_sha256=["a" * 64, "b" * 64], holds=True, joints=joints)
+               arm="S cell follower", calibration_sha256=calibration_sha256(CAL), probes=2,
+               probe_sha256=["a" * 64, "b" * 64], holds=True, joints=joints)
     doc.update(change)
     return doc
 
@@ -108,10 +109,20 @@ def test_ros_joint_rad_needs_a_bound_verdict():
     verdict(joints=verdict()["joints"][:5]),
     verdict(joints=[dict(j, holds=False) if j["motor_id"] == 16 else j for j in verdict()["joints"]]),
     verdict(joints=list(reversed(verdict()["joints"]))),
+    verdict(calibration_sha256=None),  # a verdict made before it named its calibration
+    verdict(joints=[dict(j, drive_mode=None) for j in verdict()["joints"]]),
+    verdict(joints=["not a joint"] * 6),
 ])
 def test_failing_or_malformed_verdicts_are_refused(bad):
     with pytest.raises(ValueError):
         convert([0.0] * 6, NORM, ROS, CAL, joint_map=bad)
+
+
+def test_another_arm_with_clean_registers_cannot_use_the_verdict():
+    # arm_a/arm_b calibrations on the same PC also have homing 0 and drive 0; only their ranges differ.
+    other_arm = {**CAL, "elbow_flex": {**CAL["elbow_flex"], "range_min": 1000}}
+    with pytest.raises(ValueError):
+        convert([0.0] * 6, NORM, ROS, other_arm, joint_map=verdict())
 
 
 def test_calibration_from_another_register_state_cannot_use_the_verdict():
@@ -124,10 +135,14 @@ def test_calibration_from_another_register_state_cannot_use_the_verdict():
         validate_joint_map(verdict(), flipped)
 
 
-def test_ros_declaration_uses_ros_joint_order_and_may_omit_calibration():
-    sim = {"unit": ROS, "motor_order": list(ROS_JOINTS), "calibration_sha256": None}
+def test_ros_declarations_separate_sim_data_from_converted_data():
+    sim = {"unit": ROS, "motor_order": list(ROS_JOINTS), "calibration_sha256": None, "joint_map_revision": None}
     assert validate_declaration(sim) == sim
-    for bad in ({**sim, "motor_order": list(MOTORS)}, {"unit": NORM, "motor_order": list(MOTORS),
-                                                        "calibration_sha256": None}):
+    converted = ros_declaration(CAL, verdict())
+    assert validate_declaration(converted) == converted and converted["calibration_sha256"] == calibration_sha256(CAL)
+    for bad in ({**sim, "motor_order": list(MOTORS)}, {**converted, "joint_map_revision": None},
+                {**sim, "calibration_sha256": calibration_sha256(CAL)},
+                {k: v for k, v in sim.items() if k != "joint_map_revision"},
+                {"unit": NORM, "motor_order": list(MOTORS), "calibration_sha256": None}):
         with pytest.raises(ValueError):
             validate_declaration(bad)

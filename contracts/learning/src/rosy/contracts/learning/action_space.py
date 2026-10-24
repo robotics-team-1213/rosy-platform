@@ -51,39 +51,60 @@ def calibration_sha256(calibration):
 
 
 def validate_declaration(declaration):
-    """``{unit, motor_order, calibration_sha256}`` every dataset and policy must carry; returns a copy.
+    """The action space every dataset and policy must carry; returns a copy.
 
-    ``ros_joint_rad`` names the ROS joints and may carry ``calibration_sha256: None`` (SIM data has no motors).
+    ``lerobot_norm_v1``/``dynamixel_rad_v1``: ``{unit, motor_order, calibration_sha256}``.
+    ``ros_joint_rad`` adds ``joint_map_revision``. Both are null only for SIM data, which has no motors; data
+    converted from a recorded arm names the calibration and the joint map verdict it was converted with.
     """
-    if not isinstance(declaration, dict) or set(declaration) != {"unit", "motor_order", "calibration_sha256"}:
-        raise ValueError("action space needs exactly unit, motor_order and calibration_sha256")
-    unit, sha = declaration["unit"], declaration["calibration_sha256"]
+    unit = declaration.get("unit") if isinstance(declaration, dict) else None
+    keys = {"unit", "motor_order", "calibration_sha256"} | ({"joint_map_revision"} if unit == ROS else set())
+    if not isinstance(declaration, dict) or set(declaration) != keys:
+        raise ValueError(f"action space needs exactly {sorted(keys)}")
     if unit not in UNITS:
         raise ValueError("unknown action space unit")
     order = ROS_JOINTS if unit == ROS else MOTORS
     if list(declaration["motor_order"]) != list(order):
         raise ValueError(f"motor order must be {'the ROS joint' if unit == ROS else 'the omx_follower'} order")
-    if not (unit == ROS and sha is None) and not re.fullmatch(r"[0-9a-f]{64}", str(sha)):
-        raise ValueError("calibration sha256 required")
-    return {"unit": unit, "motor_order": list(order), "calibration_sha256": sha}
+    digests = [declaration[k] for k in sorted(keys - {"unit", "motor_order"})]
+    hexes = [isinstance(d, str) and re.fullmatch(r"[0-9a-f]{64}", d) is not None for d in digests]
+    simulated = unit == ROS and all(d is None for d in digests)
+    if not simulated and not all(hexes):
+        raise ValueError("calibration sha256 (and for converted ROS data the joint map revision) required")
+    return {k: (list(order) if k == "motor_order" else declaration[k]) for k in keys}
+
+
+def ros_declaration(calibration, verdict):
+    """Declaration for data converted to ros_joint_rad from a recorded arm, after the joint map gate."""
+    return {"unit": ROS, "motor_order": list(ROS_JOINTS), "calibration_sha256": calibration_sha256(calibration),
+            "joint_map_revision": validate_joint_map(verdict, calibration)}
 
 
 def validate_joint_map(verdict, calibration):
-    """A passing D-864 joint map verdict whose register state is the calibration's; returns its revision.
+    """A passing D-864 joint map verdict for exactly this calibration; returns the verdict's revision.
 
-    The calibration's own homing offset and drive mode must be zero, as the verdict found on the motors, so a
-    calibration from another register state (another arm or an earlier one) cannot use this verdict.
+    The verdict names the calibration's range digest, which differs between arms and between calibration runs, so
+    a verdict for one arm or an earlier calibration cannot open conversion for another. The calibration's own
+    homing offset and drive mode must also be zero, as the verdict found on the motors.
     """
+    try:
+        return _joint_map(verdict, calibration)
+    except (AttributeError, TypeError, KeyError) as exc:
+        raise ValueError("malformed joint map verdict or calibration") from exc
+
+
+def _joint_map(verdict, calibration):
     if (not isinstance(verdict, dict) or verdict.get("schema") != "rosy.omx-joint-map-check/2"
             or verdict.get("holds") is not True or not isinstance(verdict.get("probes"), int) or verdict["probes"] < 2):
         raise ValueError("a passing joint map verdict over two or more probes is required")
     joints = verdict.get("joints")
     if (not isinstance(joints, list) or [(j.get("motor_id"), j.get("joint")) for j in joints]
             != list(zip(MOTOR_IDS, ROS_JOINTS))
-            or any(j.get("holds") is not True or j.get("homing_offset_raw") != 0 or j.get("drive_mode", 1) & 1
-                   for j in joints)):
+            or any(j.get("holds") is not True or j.get("homing_offset_raw") != 0
+                   or type(j.get("drive_mode")) is not int or j["drive_mode"] & 1 for j in joints)):
         raise ValueError("joint map verdict must hold for motors 11..16 in ROS joint order")
-    validate_calibration(calibration)
+    if verdict.get("calibration_sha256") != calibration_sha256(calibration):
+        raise ValueError("joint map verdict was made for another calibration")
     for motor, motor_id in zip(MOTORS, MOTOR_IDS):
         entry = calibration[motor]
         if entry.get("id") != motor_id or entry.get("homing_offset") != 0 or entry.get("drive_mode") != 0:
