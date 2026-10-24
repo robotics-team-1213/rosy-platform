@@ -9645,3 +9645,9 @@ osy-d395-s1d\`.
 - 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · SIM 실험 결과를 평가·승격과 홈에 연결 (D-857 P1)
+
+- 변경: `/learning/evaluate`가 최근 SIM 실험 10개를 상태·단계·과제 성공·판정(`sim_web.public()`의 `status`·`result.stage`·`result.task_success`·`result.status`만)으로 보이고, 각 줄이 `/learning/sim?run=<run_id>`로 그 run을 연다. `sim.js`는 목록을 읽은 뒤 `?run=`의 run을 클릭과 같은 방법으로 선택한다. 홈 SIM 행은 `public()` 행만 읽고(1분 읽기 제한 유지) 평가 단계에 최근 run의 단계 근거를, 다음 할 일에 그 run 링크를 둔다. 연결 미설정이면 평가 단계도 `not_available`(「SIM 실행 연결이 설정되지 않았습니다.」). 화면 문구가 SIM 판정·과제 성공은 근거일 뿐 승인·승격이 아니라고 밝힌다(D-793, D-857). `review-app.md` 갱신.
+- 증거: 원격 시험 PC에서 대상 시험 25 passed(브라우저 포함, 1280·390px), affected 계층 2508 passed, 317 skipped. known_failures 비교 둘 다 0 NEW. SIM은 가짜 run으로만 시험했고 실제 SDK 실행은 별도 증거다.
+- gate 변화: 없음. CE 해당 없음 — 기존 화면 연결이며 새 판단이 없다.
