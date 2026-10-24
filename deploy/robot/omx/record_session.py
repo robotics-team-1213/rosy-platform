@@ -39,6 +39,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import signal
 import subprocess
@@ -154,17 +155,28 @@ def static_episodes(root: Path, threshold: float = STATIC_RANGE) -> dict:
 
 
 class Session:
-    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic) -> None:
+    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic, replay=None) -> None:
         self.open_bus, self.systemctl, self.run_command, self.log = open_bus, systemctl, run, log
-        self.sleep, self.clock = sleep, clock
+        self.sleep, self.clock, self.replay = sleep, clock, replay
 
     @staticmethod
-    def command(config_path: Path, teleop_only: bool) -> list:
-        """lerobot-record on the record config, or lerobot-teleoperate on its robot/teleop part."""
+    def command(config_path: Path, teleop_only: bool, replay: dict | None = None) -> list:
+        """lerobot-record on the record config, or lerobot-teleoperate on its robot/teleop part. With a
+        validated replay trajectory the teleop becomes rosy_replay (scripted teacher) and the dataset
+        records its two equal episodes A and B with the reset hold between them."""
         bin_dir = Path(sys.executable).parent
-        if not teleop_only:
+        if replay is None and not teleop_only:
             return [str(bin_dir / "lerobot-record"), f"--config_path={config_path}"]
         config = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        if replay is not None:
+            (a0, a1), (r0, r1) = replay["segments"]["A"], replay["segments"]["reset"]
+            config["teleop"] = {"type": "rosy_replay", "id": "rosy_replay", "trajectory": replay["path"]}
+            config["dataset"] = {**config["dataset"], "num_episodes": 2,
+                                 "episode_time_s": (a1 - a0) / replay["fps"], "reset_time_s": (r1 - r0) / replay["fps"]}
+        if not teleop_only:
+            path = config_path.with_name(config_path.stem + ".replay.json")
+            path.write_text(json.dumps(config, indent=2))
+            return [str(bin_dir / "lerobot-record"), f"--config_path={path}"]
         teleop = config_path.with_name(config_path.stem + ".teleop.json")
         teleop.write_text(json.dumps({"robot": config["robot"], "teleop": config["teleop"],
                                       "fps": config["dataset"]["fps"], "display_data": False}, indent=2))
@@ -294,7 +306,10 @@ class Session:
                     self.systemctl("stop", unit)
                     stopped.append(unit)
             record["stopped_services"] = stopped
-            command = self.command(config_path, teleop_only)
+            command = self.command(config_path, teleop_only, self.replay)
+            if self.replay is not None:
+                record["source_mode"] = "scripted_teacher"
+                record["replay"] = {k: self.replay[k] for k in ("path", "sha256", "segments", "source")}
             self.log(step="run", command=command)
             try:
                 record["exit_code"] = self.run_command(command)
@@ -347,6 +362,7 @@ def main(argv=None):
     parser.add_argument("--caps", required=True, type=Path)
     parser.add_argument("--teleop-only", action="store_true")
     parser.add_argument("--task-card", type=Path, help="task design card to embed in session.json")
+    parser.add_argument("--replay", type=Path, help="teach_trajectory.py output: a scripted teacher replaces the leader")
     args = parser.parse_args(argv)
     caps = load_caps(args.caps)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
@@ -386,7 +402,14 @@ def main(argv=None):
             raise
 
     protect_signals()
-    session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log)
+    replay = None
+    if args.replay is not None:
+        from teach_trajectory import load as load_trajectory
+        replay = {**load_trajectory(args.replay, fps=config["dataset"]["fps"]), "path": str(args.replay.resolve())}
+        plugins = str(Path(__file__).resolve().with_name("lerobot_plugins"))  # LeRobot discovers the dist-info here
+        os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (plugins, os.environ.get("PYTHONPATH")) if p)
+    session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
+                      replay=replay)
     lock = session_lock()
     record = {}
     try:
