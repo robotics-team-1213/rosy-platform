@@ -22,6 +22,42 @@ def rows():
                  torque_enabled=0, hardware_error=0) for i in range(11, 17)]
 
 
+def test_existing_owner_publishes_fault32_before_stopping_without_joint_state(monkeypatch, tmp_path):
+    import json
+    monkeypatch.setenv('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp')
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / 'deploy/robot/omx'))
+    module, published, events = observer(), [], []
+    data = [{**row, 'hardware_error': 32 if row['id'] == 12 else 0,
+             'goal_position_raw': 2048, 'present_pwm_raw': 0, 'pwm_limit_raw': 20,
+             'temperature': 43, 'temperature_limit': 70, 'voltage_raw': 116,
+             'min_voltage_raw': 60, 'max_voltage_raw': 140} for row in rows()]
+    @contextmanager
+    def port(device):
+        events.append('open')
+        try:
+            yield object()
+        finally:
+            events.append('close')
+    def read(port, *, allow_fault):
+        assert allow_fault is True
+        events.append('read')
+        return data
+    node = SimpleNamespace(create_publisher=lambda *args: SimpleNamespace(publish=published.append),
+        get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(to_msg=lambda: 0)), destroy_node=lambda: None)
+    monkeypatch.setitem(sys.modules, 'register_probe', SimpleNamespace(open_readonly_port=port, read_motors=read))
+    monkeypatch.setitem(sys.modules, 'rclpy', SimpleNamespace(init=lambda **kwargs: None,
+        create_node=lambda *args: node, ok=lambda: True, shutdown=lambda: None))
+    monkeypatch.setitem(sys.modules, 'sensor_msgs.msg', SimpleNamespace(
+        JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
+    state = tmp_path / 'health.json'
+    result = module.main(['--device', '/test/follower', '--domain-id', '13', '--persistent',
+                         '--health-file', str(state), '--health-owner', 'arm_a'])
+    assert result == 2 and published == [] and events == ['open', 'read', 'close']
+    snapshot = json.loads(state.read_text())
+    assert snapshot['status'] == 'fault' and snapshot['motors'][1]['hardware_error'] == 32
+    assert all(m['torque_enabled'] is False for m in snapshot['motors'])
+
+
 @pytest.mark.parametrize("ending", ["stop", "torque", "fault"])
 def test_persistent_observation_stops_and_releases_bus_without_restarting(monkeypatch, ending):
     monkeypatch.setenv("RMW_IMPLEMENTATION", "rmw_fastrtps_cpp")

@@ -9,6 +9,58 @@ from core_common.protocol.workcell_observations import ArmObservation, WorkcellO
 from fleet.server.workcell_observations import WorkcellObservations
 
 
+def motor_health(owner='arm_a', status='active'):
+    from core_common.protocol.motor_health import MotorHealthResponse
+    return MotorHealthResponse(evidence='fresh' if status == 'active' else 'disconnected', status=status,
+        owner_id=owner, session_id='11111111-1111-4111-8111-111111111111', sample_age_s=0.1,
+        motors=[dict(group=owner, joint=f'joint{i}', id=11+i, sample_age_s=0.1, command_raw=2028.,
+            present_raw=2028., error_deg=0., pwm=0., pwm_limit=330., pwm_utilization=0., temperature_c=43.,
+            temperature_limit_c=70., voltage_v=11.6, min_voltage_v=6., max_voltage_v=14.,
+            hardware_error=32 if i == 1 and status == 'fault' else 0,
+            fault=i == 1 and status == 'fault') for i in range(6)])
+
+
+def test_health_binding_and_ages_are_not_refreshed_by_fleet_snapshot(setup):
+    service, clock, _, _ = setup
+    observation = sample()
+    observation = ArmObservation(**{**observation.model_dump(), 'motor_health': motor_health()})
+    service.ingest('feedback_a', 'arm-a-secret', observation)
+    clock.wall += 3
+    clock.monotonic += 3
+    health = arms(service)['feedback_a']['motor_health']
+    assert health['evidence'] == 'delayed' and health['sample_age_s'] >= 3.1
+    assert all(m['sample_age_s'] >= 3.1 for m in health['motors'])
+    with pytest.raises(ValueError):
+        service.ingest('feedback_b', 'arm-b-secret', ArmObservation(
+            epoch='2'*32, sequence=1, captured_at=clock.wall, positions=observation.positions,
+            motor_health=motor_health('arm_a')))
+
+
+@pytest.mark.parametrize('wall,mono', [(99.5, 10.1), (100.1, 9.9), (float('nan'), 10.1),
+                                       (100.1, float('inf'))])
+def test_motor_health_cannot_remain_fresh_when_either_receipt_clock_is_invalid(setup, wall, mono):
+    service, clock, _, _ = setup
+    observation = ArmObservation(**{**sample().model_dump(), 'motor_health': motor_health()})
+    service.ingest('feedback_a', 'arm-a-secret', observation)
+    clock.wall, clock.monotonic = wall, mono
+    health = arms(service)['feedback_a']['motor_health']
+    assert health['evidence'] == 'delayed'
+    assert health['sample_age_s'] > 2 and all(m['sample_age_s'] > 2 for m in health['motors'])
+
+
+def test_terminal_health_only_never_fabricates_position_freshness(setup):
+    service, clock, _, _ = setup
+    service.ingest('feedback_a', 'arm-a-secret', ArmObservation(epoch='1'*32, sequence=1,
+        captured_at=clock.wall, positions=None, motor_health=motor_health(status='fault')))
+    arm = arms(service)['feedback_a']
+    assert arm['positions'] is None and not arm['fresh']
+    assert arm['motor_health']['status'] == 'fault'
+    assert arm['motor_health']['motors'][1]['hardware_error'] == 32
+    with pytest.raises(ValueError):
+        ArmObservation(epoch='2'*32, sequence=1, captured_at=clock.wall,
+                       positions=None, motor_health=motor_health())
+
+
 @pytest.fixture
 def setup():
     arms = [{"source_id": f"feedback_{side}", "arm_id": f"arm_{side}", "label": f"Arm {side}",

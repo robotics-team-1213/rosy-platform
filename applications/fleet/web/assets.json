@@ -55,6 +55,14 @@
       "path": "cell/cell-observation.js",
       "media_type": "application/javascript"
     },
+    "motor-health-view.js": {
+      "path": "motor-health-view.js",
+      "media_type": "application/javascript"
+    },
+    "roster-cards.js": {
+      "path": "roster-cards.js",
+      "media_type": "application/javascript"
+    },
     "cell-document-editor.js": {
       "path": "cell/cell-document-editor.js",
       "media_type": "application/javascript"

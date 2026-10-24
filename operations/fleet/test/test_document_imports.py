@@ -58,6 +58,8 @@ OWN = {
         "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
         "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
+        "roster-cards.js",  # Retains focused cards only within the robot workspace.
+        "motor-health-view.js",  # Fleet robot rows adapt shared read-only motor evidence.
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy

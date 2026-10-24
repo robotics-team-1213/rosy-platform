@@ -53,7 +53,7 @@
 709 simulation/gazebo/scripts/lane_live_view.py
 791 site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt
 755 fleet/web/line-stuck.js
-709 fleet/web/roster.js
+694 fleet/web/roster.js
 788 fleet/web/shared/site-map-model.js
 834 fleet/web/shared/styles.css
 788 fleet/web/shared/vision-view.js

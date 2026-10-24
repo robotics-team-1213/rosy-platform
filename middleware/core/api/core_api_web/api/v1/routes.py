@@ -20,6 +20,7 @@ from core_api_web.api.v1.host import host_router
 from core_api_web.api.v1.intent import intent_router
 from core_api_web.api.v1.map import map_router
 from core_api_web.api.v1.motion import motion_router
+from core_api_web.api.v1.motors import motors_router
 from core_api_web.api.v1.line_follow import line_follow_router
 from core_api_web.api.v1.localization import localization_router
 from core_api_web.api.v1.navigation import navigation_router, slam_router
@@ -64,6 +65,7 @@ __all__ = [
     "map_router",
     "metrics_router",
     "motion_router",
+    "motors_router",
     "navigation_router",
     "operator",
     "power_router",
