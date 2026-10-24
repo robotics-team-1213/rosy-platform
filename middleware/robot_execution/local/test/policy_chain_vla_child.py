@@ -51,7 +51,8 @@ class SimProbeTarget(runner.CoreArmTarget):
         target = clamp(raw, self._positions, self.limits, self.max_step)
         if self.delay_s:
             time.sleep(max(0.0, self._observed_at + self.delay_s - time.monotonic()))
-        self.last = dict(raw=raw, submitted=target, observed=self._positions)
+        self.last = dict(raw=raw, submitted=target, observed=self._positions,
+                         observe_to_submit_s=time.monotonic()-self._observed_at)
         return super().submit(dict(zip(self.joint_names, target)))
 
 
@@ -88,8 +89,16 @@ def main():
         try:
             if op in ('step', 'stale'):
                 target.delay_s = settings['stale_delay_s'] if op == 'stale' else 0.0
-                stages = runner.step(adapter, target, space, settings['task'])
-                emit(dict(op=op, stages=stages, **target.last))
+                marks = []
+                def clock():
+                    marks.append(time.perf_counter_ns())
+                    return marks[-1]
+                try:
+                    stages = runner.step(adapter, target, space, settings['task'], clock=clock)
+                finally:
+                    partial = {stage: b-a for stage, a, b in zip(runner.STAGES, marks, marks[1:])}
+                    target.last['stages'] = partial
+                emit(dict(op=op, **target.last))
             elif op == 'stop':
                 client.disconnect()
                 emit(dict(op=op, stopped=True))
