@@ -1,6 +1,10 @@
 """D-436 full CI suite catalog and documented exclusions."""
 
 CI_FULL_MATRIX = (
+    {"name": "omx-act-cpu", "invocations": [[
+        "learning/training/omx/test/test_act_inference_native.py",
+        "learning/training/omx/test/test_act_owner_capture.py",
+        "learning/training/omx/test/test_act_parent_chain.py"]], "ros": "none"},
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
         ["learning/curation/omx/test"], ["learning/curation/pinky/test"],
