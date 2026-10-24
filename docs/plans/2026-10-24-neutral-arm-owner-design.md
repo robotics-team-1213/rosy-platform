@@ -35,3 +35,5 @@ commit `11486ce7cd`에서 raw identity/generation·물체 결속과 새 snapshot
 설치 factory/phase-only 연결은 commit `45173e6f92`, API v1.305로 구현하고 test-only `337e42e314`의 원격 153 passed/skip0/0 NEW와 최종 SHA 독립 검토를 확인했다. Fleet client의 ARM→v2 누락도 RED 뒤 `fc5d75eecd`에서 연결해 원격 15 passed/skip0/0 NEW를 확인했다. Fleet registry·physical creator는 계속 닫혀 있고 actual owner-state/HTTP·모든 자원 종료 입구·Harbor 연결은 남는다.
 
 Pilot/raw 명령이 Fleet epoch/generation을 새로 만들지 않는 source 경로를 확인해 [managed authority](2026-10-24-managed-transfer-authority-design.md)를 추가했다. `69607b2b0d`의 영속 profile/최종 owner 권한 보강은 원격 119 passed/skip0/0 NEW와 고정 SHA 독립 검토를 확인했다. [결과와 남은 affected/ROS/claim 게이트](../validation/harbor-managed-arm-2026-10-24/result.md)를 따른다. 이 단계로 resource closure나 Fleet producer를 활성화하지 않는다.
+
+`46f56d6b48`, API v1.306에서 실제 등록 factory·canonical journal/session의 capability 조회와 grant/receipt/404 결속을 추가했다. 집중 원격 790 passed/7 skipped/0 NEW와 fixed SHA 독립 검토를 확인했고 FULL23 목록은 진행 중이다. [결과](../validation/harbor-managed-capability-2026-10-24/result.md)를 따른다. capability는 설치 사실이며 admission·World 물리 관측·claim 해제를 대신하지 않는다.

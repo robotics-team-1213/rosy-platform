@@ -4405,3 +4405,9 @@
 - 변경: Fleet client의 ARM kind→v2 map·grant union·공통 receipt 타입을 연결했다. receipt identity·phase summaries·timeout·재시도 없는 경계를 유지한다.
 - 증거: kind 누락 RED6 후 관련 원격 15 passed/skip0/0 NEW와 독립 검토를 확인했다. 선행 migration affected source 635d1e226e도 두 그룹 4722/6270 passed, 187/336 skipped, 각각 0 NEW로 끝났다. owner와 migration 검증 기록의 소스 범위를 구분한다.
 - gate 변화: client 호환이며 실제 physical creator·등록 kind·claim 해제는 아직 없다. CE 해당 없음: source와 프레이밍 회귀에 조건이 남는다.
+
+## 2026-10-24 · 46f56d6b48 · D-856 canonical owner capability와 ARM 응답 검증
+
+- 변경: SDK가 실제 설치 capability를 v2 UDS로 한 번 조회하고 scope/closed DTO를 대조한다. ARM receipt는 grant의 canonical journal과 일치해야 하며 ARM404는 None 대신 fenced reconciliation이 필요한 unavailable다. Cell/TRIP 형식과 기존 조회를 유지한다.
+- 증거: 누락 DTO/API/owner binding·receipt/404 RED35 뒤 관련 원격 790 passed/7 skipped/0 NEW. 실제 adapter/UDS와 SDK를 함께 검증했고 fixed SHA 독립 검토와 size/safety exit0를 확인했다. docs/validation/harbor-managed-capability-2026-10-24/result.md를 따른다.
+- gate 변화: FULL23개 목록은 진행 중이다. registry·physical creator/two-person 승인·World 물리 종료 증거·claim 해제·Harbor ARM 연결은 아직 닫혀 있다. CE 미해결: 이전 e26 G1 timing의 원인은 미확정이다.

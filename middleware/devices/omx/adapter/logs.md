@@ -645,3 +645,9 @@
 - 증거: admission RED4 뒤 구현, 독립 검토의 schema 초기화 경합과 delegate-owner 누락 수정, 유효한 final-writer 만료 RED1 뒤 보강. 최종 planner/journal/final owner·기존 회귀 원격 119 passed/skip0/0 NEW. size/safety 4 commits exit0와 fixed-SHA 소스 재검토 확인. docs/validation/harbor-managed-arm-2026-10-24/result.md 참조.
 - gate 변화: host 집중 검증이며 affected 최초 실행은 1729 passed/36 skipped/1 NEW(nose 호환 setup helper)였다. 두 helper와 호출부를 _setup으로 변경하고 전체 선택 재실행을 준비했다. 실제 ROS module은 앞선 실행에서 rclpy 부재로 skip됐다. Fleet physical producer·claim 해제·Harbor ARM·실물 배포는 후속이다. CE 미해결: 이전 e26 G1 timing 2 NEW는 별도 재현 통과했으나 원인 미확정이다.
 - 후속 확인: test/docs commit 21217e4ea8의 전체 affected(64 targets)는 공식 원격 1754 passed/34 skipped/0 NEW, exit0였다. 중간 목차·소스 commit 표기 guard 실패도 수정했으며 원본 이력은 validation에 보존했다. production 코드는 69607b2b0d 이후 동일하다. 34 skips·CI FULL·실제 ROS/장치 수용을 이 결과로 대체하지 않는다.
+
+## 2026-10-24 · 46f56d6b48 · D-856 실제 managed capability와 대상 owner 결속
+
+- 변경: v2 Fleet-auth GetTransferCapability가 실제 등록 factory/admission/store/final owner와 canonical journal/session을 읽는다. ARM grant는 대상 journal/session을 완전 digest에 포함해 접수/phase 전에 대조한다. receipt는 실제 snapshot journal을 사용하고 static identity가 덮지 않는다. 읽기는 identity를 만들지 않는다.
+- 증거: RED35 뒤 관련 contract·adapter 전체·SDK·actual UDS/owner/provider 원격 790 passed/7 skipped/0 NEW, fixed SHA 독립 검토 no material finding, size/safety exit0. docs/validation/harbor-managed-capability-2026-10-24/result.md 참조.
+- gate 변화: source/host 검증이며 FULL23개 목록은 진행 중이다. 설치 설명이 admission·물리 완료·claim 해제를 승인하지 않는다. 기존 Cell/TRIP 형식과 과거 Action 조회를 유지한다. physical producer·Harbor ARM·실물/배포는 후속이다. CE 미해결: 기존 e26 G1 timing 원인 미확정.

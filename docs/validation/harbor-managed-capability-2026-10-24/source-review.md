@@ -6,4 +6,4 @@
 
 구현 재검토에서 material finding은 없었다. capability는 실제 등록된 불변 callable factory·같은 admission/store/final owner·session/managed scope를 대조한다. canonical journal과 scope는 같은 SQLite read snapshot에서 읽고 identity를 만들지 않는다. ARM journal/session의 완전 digest와 pre-journal/phase/command 결속도 확인했다.
 
-이는 소스 검토이며 고정 기능 SHA와 원격 GREEN은 후속으로 기록한다. Fleet physical producer/claim 해제·실제 ROS·장치·현장 수용을 승인한 결과가 아니다.
+고정 feature commit `46f56d6b481af9d7af50c29a546d8a5ceb15547a`도 같은 독립 검토자가 재검토했고 material finding은 없었다. 원격 결과와 진행 중인 FULL은 [검증 기록](result.md)에서 구분한다. 이는 Fleet physical producer/claim 해제·실제 ROS·장치·현장 수용을 승인한 결과가 아니다.

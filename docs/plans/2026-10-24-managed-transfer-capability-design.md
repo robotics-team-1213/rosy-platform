@@ -1,6 +1,6 @@
 # D-856 실제 설치 capability와 grant의 owner 결속
 
-**Status:** 구현 전 계약 검토. [managed authority](2026-10-24-managed-transfer-authority-design.md)의 다음 단계다. 새 Fleet producer나 자원 해제는 이 변경으로 활성화하지 않는다.
+**Status:** source commit `46f56d6b48`, API v1.306에서 구현·고정 SHA 독립 검토·집중 원격 790 passed/7 skipped/0 NEW를 확인했다. FULL 23개 실행 목록은 진행 중이다. [검증 기록](../validation/harbor-managed-capability-2026-10-24/result.md)을 따른다. 새 Fleet producer나 자원 해제는 이 변경으로 활성화하지 않는다.
 
 ## 현재 소스와 필요한 경계
 

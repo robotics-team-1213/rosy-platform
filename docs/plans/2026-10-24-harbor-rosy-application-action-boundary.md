@@ -22,13 +22,15 @@
 |---|---|---|
 | P0 ADR·Log·계획 | `f14d00748e` 문서 원격 552 passed | 없음 |
 | [TRIP 상세 계약](2026-10-24-application-action-contract-design.md) | 조회/응답 유실 대조 구현, Harbor와 독립 HTTP 1 passed, 기존 Cell HTTP 3 passed | 팔 공정 변환을 대신하지 않음 |
-| [중립 팔 계산](2026-10-24-neutral-arm-planning-design.md) | 기존 Cell provenance 보존, 관련 원격 135 passed, 독립 검토 | public wire/실행 조립 |
-| [팔 catalog·사전검사](2026-10-24-neutral-arm-preflight-design.md) | API v1.299·owner/Fleet HTTP 연결, 신규/기존 원격 213 passed/skip0, 실제 HTTP/UDS·독립 검토 | 중립 grant·원장 경계 분리, 설치 wheel·장치 수용 |
+| [중립 팔 계산](2026-10-24-neutral-arm-planning-design.md) | 기존 Cell provenance 보존, 관련 원격 135 passed, 독립 검토 | 실제 실행 통합은 아래 owner 행 참조 |
+| [팔 catalog·사전검사](2026-10-24-neutral-arm-preflight-design.md) | API v1.299·owner/Fleet HTTP 연결, 신규/기존 원격 213 passed/skip0, 실제 HTTP/UDS·독립 검토 | 중립 실행 통합은 아래 원장/owner 행 참조, 설치 wheel·장치 수용 |
 | [step grant 검증 경계](2026-10-24-step-grant-boundary-design.md) | typed kind·공통 identity와 종류별 전체 payload 분리, 원격 184/152개 별도 회귀·독립 검토 | 실제 물리 producer·등록 kind·실행 |
 | [중립 팔 실행 계약](2026-10-24-neutral-arm-execution-design.md) | 물체–기하 결속 원격 112개, v1.303 grant·기존 소비자 원격 1385개 및 독립 검토 | 실제 physical producer·전체 자원 종료·Harbor 변환 |
 | [원장 provenance](2026-10-24-neutral-arm-ledger-design.md) | version5 schema·Cell 소비자 차단, 원격 69/13/244개 별도 회귀와 affected 두 그룹 통과 | 물리 생성/승인·claim 종료 연결 |
 | [owner 실행](2026-10-24-neutral-arm-owner-design.md) | 내부 복구 74개, v1.305 설치 factory/phase-only IPC 153개·v2 client 15개 별도 회귀 및 독립 검토 | actual admitted-state/HTTP·Fleet producer·물리 종료·Harbor 연결 |
-| 전체 P3–P5 | 진행 중 | 중립 팔 실행, Harbor 공정 변환, 복구·독립성 통합 증거 |
+| [managed owner 권한](2026-10-24-managed-transfer-authority-design.md) | 영속 mode/최종 명령 경계, 집중 119개·affected 1754 passed/34 skipped/0 NEW | 실제 ROS/장치·승인/물리 종료 |
+| [실제 capability/대상 owner](2026-10-24-managed-transfer-capability-design.md) | API v1.306·canonical journal/session·receipt/404 결속, 집중 790 passed/7 skipped/0 NEW 및 독립 검토 | FULL23 진행 중, Fleet physical producer·claim 종료·Harbor ARM |
+| 전체 P3–P5 | 진행 중 | 중립 팔 실행의 승인/자원 종료, Harbor 공정 변환, 복구·독립성 통합 증거 |
 
 첫 HTTP 증거는 플랫폼 commit `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor commit `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.
 
@@ -153,4 +155,4 @@ python test/known_failures.py X:/DevTemp/harbor-action-boundary/<단계>/run-1.t
 
 이번 문서 작성의 CE 판정은 **해당 없음**이다. 운영 장애 해결이나 비자명한 검증된 복구를 수행하지 않았다. 구현 단계에서 장애·데이터 무결성·권한 경계 문제가 실제로 해결되면 workspace CE 게이트를 적용한다.
 
-현재 다음 행동은 Cell 원장의 공통 실행/공정 provenance 경계를 분리하고 중립 팔 grant·simulation 실행과 Harbor 변환을 연결하는 것이다. 팔 사전검사의 공개 framing·인증된 owner 상태 투영·Fleet HTTP는 집중 검증했으며 [정확한 SHA와 한계](../validation/harbor-neutral-arm-preflight-2026-10-24/result.md)를 따른다. 전체 D-856 목표는 계속 진행 중이다. 이번 계획 기록은 push·병합·배포·장치 실행 승인이 아니다.
+현재 다음 행동은 physical 생성/두 사람 승인·trusted 물리 종료 관측·atomic claim 해제를 연결한 뒤 Harbor의 공정 변환을 중립 API로 옮기는 것이다. 공통 원장 provenance, 설치된 owner 실행, 영속 managed 권한과 canonical owner/receipt 경계는 위 근거까지 구현했으며 [최신 검증과 FULL 진행 상태](../validation/harbor-managed-capability-2026-10-24/result.md)를 따른다. 기존 World ArmState의 정규화 관절값/unobserved 물체 상태는 퇴피·물체 배치 증거로 쓰지 않는다. 전체 D-856 목표는 계속 진행 중이다. 이 기록은 push·병합·배포·장치 실행 승인이 아니다.

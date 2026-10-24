@@ -108,6 +108,7 @@ adrs:
 - D-472
 - D-497
 plans:
+- docs/plans/2026-10-24-managed-transfer-capability-design.md
 - docs/plans/2026-10-11-mapless-fleet-control.md
 - docs/plans/2026-10-11-stable-map-readouts-design.md
 - docs/plans/2026-10-04-d442-omx-preempt-recovery.md
