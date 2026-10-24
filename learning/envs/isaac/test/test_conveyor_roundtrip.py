@@ -38,6 +38,11 @@ def test_reachable_targets_have_small_fk_error_and_unreachable_fails():
         mod.solve([2., 0., 0.])
 
 
+def test_measured_roll_is_included_in_fk_even_when_commanded_roll_is_zero():
+    import math
+    assert implementation().forward([0., 0., 0., math.pi/2, math.pi/2]) == pytest.approx([.19065, 0., .09002])
+
+
 def observations():
     mod = implementation()
     rows = []
