@@ -51,6 +51,10 @@
       "path": "cell/cell.js",
       "media_type": "application/javascript"
     },
+    "cell-observation.js": {
+      "path": "cell/cell-observation.js",
+      "media_type": "application/javascript"
+    },
     "cell-document-editor.js": {
       "path": "cell/cell-document-editor.js",
       "media_type": "application/javascript"

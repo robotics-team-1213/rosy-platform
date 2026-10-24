@@ -23,6 +23,7 @@
 | D-847 | OMX 팔로워 PWM 캡은 관절별로 둔다 | Accepted for implementation (2026-10-23) |
 | D-841 | 공통 모듈 재사용과 독립 앱의 계약 검증 범위를 정한다 | Accepted for implementation (2026-10-22) |
 | D-845 | 공통 HTTP 전송 안에서 화면의 응답 해석을 유지한다 | Accepted for implementation (2026-10-22) |
+| D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 | Accepted for implementation (2026-10-21) |
 | D-835 | 도메인 독립 지도 따라 그리기와 검토 가능한 선·영역 추출 | Accepted (2026-10-21) |
 | D-830 | Fleet 프런트 개발은 샘플·실제 API 공급과 앱 소유 자산 목록으로 분리한다 | Accepted (2026-10-21) |

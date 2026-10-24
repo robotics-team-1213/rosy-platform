@@ -98,6 +98,7 @@ OWN = {
     },
     "cell.js": {
         "cell-document-editor.js",
+        "cell-observation.js",
     },
     "site-map.js": {
         "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",

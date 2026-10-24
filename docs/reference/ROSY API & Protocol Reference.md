@@ -5,9 +5,39 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.301
+**Version:** v1.302
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.302 Fleet workcell observation (D-837)
+
+Additive read-only observation boundary; [D-837](../adr/D-837-workcell-observation.md)
+defines the source manifest, bounded latest cache, source identity and freshness.
+It does not enable a physical owner, command, calibration or motion admission.
+
+| Method/path | Authentication and body | Response |
+|---|---|---|
+| `GET /api/fleet/workcell-observations` | Existing Fleet viewer authentication | `{read_only:true,physical_acceptance:false,workcells:[{workcell_id,label,arms,cameras}]}`; no-store. Each arm has `{source_id,arm_id,label,units:"encoder_rad",fresh,epoch,sequence,captured_at,source_age_s,receipt_age_s,positions}`; cameras have `{source_id,label,role,arm_id}`. Missing samples have null data/age/epoch, sequence0. Stale positions are null. No producer secret or serial selector. |
+| `POST /api/fleet/workcell-observations/arms/{source_id}` | Source-bound `X-Workcell-Observation-Token`; strict `ArmObservation` `{epoch,sequence,captured_at,positions}`; actual body limit16KiB | 202 `{accepted:true}`; 401 bad/unknown source credential; 409 replay, nonadvancing capture, expired/future capture; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 invalid structure; 503 unconfigured. Identity comes from the registered source, never the payload. |
+
+Epoch is lowercase UUID hex32; sequence is a positive strict integer. Original
+UNIX capture seconds and exact registered joint→number positions are finite JSON
+numbers excluding bool/string. New epoch starts at sequence1; capture time
+advances even across epoch changes. Ingest capture age is -0.25..2s. Display
+requires source and server-monotonic receipt ages both within2s. Latest-only
+memory and64 retired epochs do not provide durable replay history across server
+restart; original age checks remain mandatory. Rejected updates preserve prior
+valid observations. Each source expires separately and logout clears the UI.
+Preview-only camera IDs reuse existing authenticated Vision ingestion and frame
+leases, with no map/sighting/calibration registration. ID/credential collisions
+with existing sources are rejected before merge.
+
+Private manifest arm/camera entries also require globally unique
+`credential_sha256` (lowercase hex64). Each server verifies its own raw producer
+secret against that fingerprint; other-role secrets are not shared. Fleet checks
+all fingerprints against existing site credentials and Vision reserves all of
+them against dynamic paired credential reuse. Rotation mismatch refuses startup.
+Fingerprints are excluded from GET responses.
 
 ### v1.301 이미지 도면 등록과 범용 추출 후보 (D-835)
 
@@ -3684,6 +3714,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.302 | 2026-10-24 | (origin #148 v1.295, 2026-10-24 port) D-837 source-bound workcell arm observations and preview-only camera registration; native Fleet intake and existing Cell UI are implementation/deployment work, not motion admission. |
 | v1.301 | 2026-10-24 | (origin #135 v1.293, 2026-10-24 port) Additive (D-835): measured PNG/JPEG registration, bounded immutable line/contour candidates, non-writing candidate map validation and optional facility evidence. Existing STL hashes and envelope 1.0 unchanged. |
 | v1.300 | 2026-10-24 | (origin #133 v1.291, 2026-10-24 port) Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |

@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSY OMX native observation handoff to Fleet and Vision
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/rosy/omx-observation-bridge.env
+ExecStart=/bin/bash -c 'source "$ROSY_ROS_SETUP"; exec "$ROSY_OBSERVATION_PYTHON" "$ROSY_OBSERVATION_SOURCE" --manifest "$ROSY_WORKCELL_OBSERVATIONS" --workcell "$ROSY_OBSERVATION_WORKCELL" --fleet-url "$ROSY_OBSERVATION_FLEET_URL" --vision-url "$ROSY_OBSERVATION_VISION_URL" --domain-id "$ROS_DOMAIN_ID" --ca-file "$ROSY_OBSERVATION_CA_FILE"'
+Restart=no
+KillSignal=SIGTERM
+TimeoutStopSec=10
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

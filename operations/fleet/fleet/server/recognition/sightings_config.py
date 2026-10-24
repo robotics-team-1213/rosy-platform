@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Mapping
 
@@ -166,3 +167,27 @@ def load_identity_config(path: Path | str):
     except TypeError as exc:
         raise ValueError(f"identity config: {exc}") from exc
 
+
+def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
+    """D-361 5: a mapping to an unenrolled/pending-logout robot is disabled with a warning;
+    an id never seen in robots.yaml or the register still refuses start (a typo)."""
+    from dataclasses import replace
+
+    kept = []
+    for source in sources:
+        if source.follow_roster:  # D-580: targets come from the roster, never a typo
+            kept.append(source)
+            continue
+        unknown = set(source.robot_ids) - known
+        if unknown - retired:
+            sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")
+        if unknown:
+            print(f"warning: sighting source {source.source_id!r}: mapping disabled for "
+                  f"unenrolled robots {sorted(unknown)}", file=sys.stderr)
+        robot_ids = tuple(rid for rid in source.robot_ids if rid not in unknown)
+        if robot_ids:
+            kept.append(replace(source, robot_ids=robot_ids))
+        else:
+            print(f"warning: sighting source {source.source_id!r} disabled: no enrolled targets",
+                  file=sys.stderr)
+    return kept

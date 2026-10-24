@@ -269,7 +269,7 @@ class SiteUpdater:
             if manifest.get('source_commit') != (expected_commit or folder.name):
                 raise Rejected('signed manifest commit differs from candidate commit')
             overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
-            for name, field in (('account', 'account_https'), ('omx', 'omx')):
+            for name, field in (('account', 'account_https'), ('omx', 'omx'), ('workcell', 'workcell')):
                 if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):
                     raise Rejected(f'{name} overlay is not covered by this signed candidate')
             if loaded:

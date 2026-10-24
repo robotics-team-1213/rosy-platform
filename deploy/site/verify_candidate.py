@@ -31,7 +31,7 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
-    "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
+    "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
     "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
 )
@@ -109,6 +109,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         required.difference_update(ACCOUNT_DEPLOYMENT_FILES)
     if "compose.omx.yaml" not in hashes:
         required.discard("compose.omx.yaml")
+    if "compose.workcell.yaml" not in hashes:
+        required.discard("compose.workcell.yaml")
     unsupported = set(hashes) - required
     if unsupported:
         raise CandidateVerificationError("unsupported deployment file path")
@@ -168,6 +170,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "deployment_files": len(hashes),
         "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
         "omx": "compose.omx.yaml" in hashes,
+        "workcell": "compose.workcell.yaml" in hashes,
         "image_archive_sha256": archive_hash,
     }
 
@@ -330,6 +333,7 @@ def verify_candidate(
             "deployment_files": summary["deployment_files"],
             "account_https": summary["account_https"],
             "omx": summary["omx"],
+            "workcell": summary["workcell"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
         }

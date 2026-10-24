@@ -24,6 +24,7 @@ FLEET = [
     "applications/fleet/test/test_feature_browser_flows.py",
     "applications/fleet/test/test_browser_adapters.py",
     "test/test_measured_calibration_browser.py",
+    "test/test_fleet_workcell_observation_browser.py",
     "test/test_fleet_console_browser.py",
     "test/test_console_lifetime_browser.py",
     "test/test_console_session_browser.py",
