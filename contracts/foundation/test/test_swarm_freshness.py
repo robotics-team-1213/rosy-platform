@@ -30,14 +30,14 @@ def test_reference_with_no_positive_budget_after_clock_skew_is_expired(timeout_s
 
 
 @pytest.mark.parametrize("sampled_at", [
-    None, True, False, "100", float("nan"), float("inf"), -float("inf"), 0, -1,
+    None, True, False, "100", float("nan"), float("inf"), -float("inf"), 0, -1, 10**1000,
 ])
 def test_invalid_capture_time_has_no_reference_lifetime(sampled_at):
     assert remaining_reference_s(sampled_at, now=100.0, timeout_s=1.0) is None
 
 
 @pytest.mark.parametrize("field", ["now", "timeout_s"])
-@pytest.mark.parametrize("invalid", [None, True, "100", float("nan"), float("inf"), 0, -1])
+@pytest.mark.parametrize("invalid", [None, True, "100", float("nan"), float("inf"), 0, -1, 10**1000])
 def test_invalid_clock_or_timeout_has_no_reference_lifetime(field, invalid):
     arguments = {"now": 100.0, "timeout_s": 1.0, field: invalid}
     assert remaining_reference_s(100.0, **arguments) is None
