@@ -54,6 +54,19 @@ def test_five_stage_menu_reaches_every_page_in_two_clicks(browser_workspace, wid
 
 
 @pytest.mark.parametrize('route', ['/', '/pixels'])
+def test_answer_links_never_cover_the_title_at_768(browser_workspace, route):
+    page, _, _ = browser_workspace
+    origin = urlsplit(page.url)
+    page.set_viewport_size({'width': 768, 'height': 900})
+    page.goto(f'{origin.scheme}://{origin.netloc}{route}', wait_until='networkidle')
+    title, nav = page.locator('.ui-pathbar h1').bounding_box(), page.locator('.review-kinds').bounding_box()
+    apart = (title['x'] + title['width'] <= nav['x'] or nav['x'] + nav['width'] <= title['x']
+             or title['y'] + title['height'] <= nav['y'] or nav['y'] + nav['height'] <= title['y'])
+    assert apart, (route, title, nav)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), route
+
+
+@pytest.mark.parametrize('route', ['/', '/pixels'])
 def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspace, route):
     """WCAG 2.4.3: Tab from the title row reaches the 정답 links before the editor and canvas controls."""
     page, _, _ = browser_workspace

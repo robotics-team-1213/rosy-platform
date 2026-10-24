@@ -47,8 +47,7 @@ Procedure that worked:
 2. Check the copy against the release: `diff -r --exclude=data <release> <copy>` prints nothing.
 3. Back up the review state with the SQLite backup API, not `cp` of a live database: `python3 -c "import sqlite3; sqlite3.connect('<state>/reviews.sqlite3').backup(sqlite3.connect('<backup>.sqlite3'))"`.
 4. Run the installer with `--source <copy>` and the service's current `--root`, `--state`, `--python`, `--host 127.0.0.1`, `--port` and `--service`. Read the installer's own exit code (`python3 install_review_release.py ...; echo $?`), not the exit code of a pipe such as `| tail`.
-5. After `INSTALLED`, check the HTTPS front by the host's Tailscale name: `curl -sS -o /dev/null -w '%{http_code}
-' https://<host-tailscale-name>:<port>/accounts`. Using the IP address gives a TLS internal error, because the front serves its certificate by name only. That error is not an install failure.
+5. After `INSTALLED`, check the HTTPS front by the host's Tailscale name: `curl -sS -o /dev/null -w '%{http_code}\n' https://<host-tailscale-name>:<port>/accounts`. Using the IP address gives a TLS internal error, because the front serves its certificate by name only. That error is not an install failure.
 
 Evidence: protected Learning center, 2026-10-24, sequence 32. The installer exited 1 on the release folder (symlink), 1 on the copy inside `--root` (not separate), then 0 on the sibling copy outside `--root`.
 
