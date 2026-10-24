@@ -44,7 +44,7 @@ ROSY는 해당 action/attempt의 접수·진행·성공·실패·취소·불명 
 
 새 중립 경로가 계약·consumer 시험을 통과하기 전까지 기존 `cell-app`/`CELL_TRANSFER`를 삭제하거나 의미를 바꾸지 않는다. 공정 digest에 결속된 기하·보정·검증 보장은 새 경계에서도 소유자와 시험이 있어야 한다. 새 경로는 임의 JSON 실행 또는 검증 없는 좌표 실행이 아니다.
 
-외부 동작 계약의 path·schema·종류·버전은 아직 확정하지 않는다. 실제 구현과 등록된 동작을 대조한 상세 설계에서 최소 한 가지 동작을 정하고, API reference·schema·양 끝 시험을 같은 변경으로 묶는다. 기존 Motion Intent가 있다는 이유로 외부 앱 공개 기능이 있다고 주장하지 않는다.
+ADR 채택 당시에는 외부 동작 계약의 path·schema·종류·버전을 확정하지 않았다. 실제 구현과 등록 동작을 대조한 상세 설계에서 동작별 API reference·schema·양 끝 시험을 함께 정한다. 후속 API v1.298은 TRIP 조회/대조, v1.299는 중립 팔의 읽기 전용 사전검사를 등록했다. [실행 계획](../plans/2026-10-24-harbor-rosy-application-action-boundary.md)이 각각의 구현·검증 상태를 소유하며 팔 grant·중립 실행 완료로 확대하지 않는다. 기존 Motion Intent가 있다는 이유로 외부 앱 공개 기능이 있다고 주장하지 않는다.
 
 ## 기존 ADR과의 관계
 

@@ -11,7 +11,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ### v1.299 Neutral arm transfer preflight (D-856)
 
-Implementation target; simulation-only and disabled on an owner without an installed
+Simulation-only and disabled on an owner without an installed
 physical catalog. This adds read-only planning, not Action admission or dispatch.
 The existing envelope protocol_version remains 1.0 and local Action IPC remains v2.
 

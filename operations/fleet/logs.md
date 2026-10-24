@@ -4381,3 +4381,9 @@
 - 변경: TRIP_JOB_NOT_FOUND를 운영자 오류 문구 표에 추가했다. 없는 요청과 권한 밖 요청을 같은 조회 불가 문구로 표현한다.
 - 증거: 고정 f3d7d3fba5 전체 회귀에서 worker NameError 34건과 문구 누락 1건을 분류했다. 수정 commit 52a9ccf6b5에서 해당 파일의 전체 suite와 기존 CLI/link-address/app ownership을 원격 실행해 261 passed, skip 0을 확인했다. 이는 수정 범위의 회귀이며 이전 FULL 실행 전체를 통과로 바꾸지 않는다.
 - gate 변화: dispatch/권한 변경 없음. CE 해당 없음: 오류 문구 coverage와 기존 기동 시험이 회귀를 검증한다.
+
+## 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 HTTP
+
+- 변경: 기존 proposer 인증과 workcell→instance 설치 대응으로 simulation preflight만 전달한다. dispatcher·Cell compiler·새 원장을 요구하지 않으며 응답 version/status·요청 전체 결속·typed code/reason을 검증한다. Fleet 수신 시각과 owner의 계산 시점 상태 나이를 구별한다.
+- 증거: 신규 계약 RED 뒤 API v1.299를 구현했다. 전체 관련 원격 213 passed/skip0/0 NEW이며 독립 stdlib-only HTTP client→Fleet→UDS→owner admitted state를 검증했다. 최종 소스·이력 metadata 보완과 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 기록했다. 기존 충전 HTTP pipeline은 별도 34ff5f55c1에서 10 passed/skip0다.
+- gate 변화: 공개 simulation 읽기다. 기존 두 사람 승인·원장·claim·stop/rearm·출력 writer는 변경하지 않는다. 새 팔 실행·Harbor 공정 변환은 남는다. CE 해당 없음: 검증과 소스가 처리 조건을 보존한다.

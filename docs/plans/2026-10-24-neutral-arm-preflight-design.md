@@ -1,6 +1,6 @@
 # D-856 중립 팔 사전검사와 실행 계약
 
-**Status:** 내부 catalog·사전검사 설계 검토 승인(2026-10-24). 이 문서는 후속 상세 설계이며 현재 제공되는 API 목록이 아니다. [책임 ADR](../adr/D-856-application-action-boundary.md), [전체 계획](2026-10-24-harbor-rosy-application-action-boundary.md), [분리한 물리 계획기](2026-10-24-neutral-arm-planning-design.md)를 잇는다. 공개 path·schema·API 버전은 검토 뒤 예약하고 reference와 함께 등록한다.
+**Status:** 내부·공개 읽기 계약 구현 및 원격 집중 검증(2026-10-24). API v1.299, 신규/기존 관련 회귀 213 passed·skip0와 실제 HTTP/UDS를 [검증 기록](../validation/harbor-neutral-arm-preflight-2026-10-24/result.md)에 결속했다. [책임 ADR](../adr/D-856-application-action-boundary.md), [전체 계획](2026-10-24-harbor-rosy-application-action-boundary.md), [물리 계획기](2026-10-24-neutral-arm-planning-design.md)를 잇는다. 중립 grant·팔 실행·Harbor 공정 변환·전체 FULL은 미완료다.
 
 ## 확인한 생산자와 소비자
 
@@ -60,9 +60,9 @@ Harbor의 `CargoMove`/outbound 변환은 source/target와 geometry를 설치 bin
 
 전체 D-856은 팔 HTTP·Harbor 변환·복구/독립성 증거까지 닫아야 한다. 내부 사전검사나 TRIP 통과만으로 완료 처리하지 않는다. 실물 실행·배포·push는 이 설계의 승인 범위가 아니다.
 
-## 공개 사전검사 상세 계약 제안
+## 공개 사전검사 계약 — API v1.299
 
-다음 항목은 구현 전 검토 대상이다. 내부 서비스 구현 승인을 새 wire 승인으로 확대하지 않는다. 공개 API reference와 foundation schema를 함께 등록한 뒤 구현한다.
+다음 항목은 별도 계약 검토 후 API reference와 foundation schema에 등록하고 구현했다. 읽기 경계의 검증이며 중립 실행 권한 승인이 아니다. 정확한 소스 SHA와 한계는 위 검증 기록을 따른다.
 
 ### 생산자와 인증 경로
 

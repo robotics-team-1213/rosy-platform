@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 HTTP
 - 2026-10-24 · uncommitted · D-856 전체 회귀 발견 사항 교정
 - 2026-10-24 · uncommitted · Fleet task worker 기동 이름 보존
 - 2026-10-24 · uncommitted · D-856 중립 운송 snapshot과 요청 대조
 - 2026-10-24 · a7aaaed472 · 관제 간 위임·현장 승인과 native 결과 연결
-- 2026-10-23 · uncommitted · 공통 조합 CSS의 닫힌 목록과 Fleet 적용 회귀

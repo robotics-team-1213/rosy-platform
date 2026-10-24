@@ -884,3 +884,9 @@
 - gate 변화: 없음. 이 변경은 wire 계약이며 HTTP runtime·실행·브라우저·장치 수용 완료가 아니다. 코드 소비 경로는 후속 구현에서 연결한다.
 
 구현 보완: oversized schemas.py의 SSH 모델을 독립 `protocol/ssh.py`로 옮기고 기존 canonical export·필드·검증을 유지했다. 루트 스키마의 크기 상한을 늘리거나 검사를 약하게 하지 않고 새 wire 모델을 추가하기 위한 책임 분리다. 중간 크기 위반 커밋은 보존하고 새 브랜치에서 모델 이동과 export를 같은 커밋으로 구성한다.
+
+## 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 공유 계약
+
+- 변경: API v1.299에 엄격한 물리 참조 요청·원래 요청에 결속한 검사 결과·지원 거절 모델을 등록했다. simulation/collision 명시값·유한 나이·revision·고정 code/reason을 검증하며 Envelope 1.0은 유지한다. UI DTO는 leaf로 그대로 옮겨 canonical export를 유지하고 facade 크기를 줄였다.
+- 증거: 신규 계약/owner/Fleet RED 36 failed 뒤 구현하고 고정 code/reason RED 3개를 추가해 수정했다. 최종 신규·기존 관련 원격 213 passed/skip0/0 NEW다. 정확한 시험 SHA·metadata 재작성·HTTP 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 결속했다.
+- gate 변화: 읽기 계약의 SOURCE·simulation 집중 검증이다. 중립 팔 grant·실행·장치 수용을 열지 않는다. CE 해당 없음: 검증 조건은 schema·회귀·검증 기록에 남는다.

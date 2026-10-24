@@ -422,5 +422,5 @@ plans:
 
 ## D-856 애플리케이션 업무와 동작 경계 (2026-10-24)
 
-- 정식 ADR·Log·전체 계획을 등록했다. 첫 중립 TRIP 조회/대조는 Harbor 독립 HTTP로 검증했다. 팔은 공정 없는 물리 계획기를 분리한 뒤 owner 설치 catalog·내부 사전검사까지 구현했다. 관련 원격 117 passed/skip0와 독립 검토로 내부 범위를 확인했다.
-- 전체 목표는 진행 중이다. 공개 팔 사전검사/실행 계약, owner 조립, 중립 원장 경계와 Harbor 공정 변환·독립성/복구 통합 증거가 남는다. 기존 Cell 호환과 실물 비활성 상태를 유지한다. 실행 상세와 SHA는 docs/plans/2026-10-24-harbor-rosy-application-action-boundary.md를 따른다.
+- 정식 ADR·Log·전체 계획을 등록했다. 첫 중립 TRIP 조회/대조는 Harbor 독립 HTTP로 검증했다. 팔의 중립 계획기·owner 설치 catalog와 API v1.299 읽기 사전검사를 연결했다. 신규/기존 관련 원격 213 passed/skip0와 실제 stdlib-only HTTP→UDS 및 독립 검토를 확인했다. SHA·이력 metadata·합성 상태/설치 검증 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 기록했다.
+- 전체 목표는 진행 중이다. 중립 팔 grant/실행과 공통 원장/Cell provenance 경계, Harbor 공정 변환·업무 관측·복구/설치 독립성 증거가 남는다. 기존 Cell 호환과 실물 비활성 상태를 유지한다. 실행 상세는 docs/plans/2026-10-24-harbor-rosy-application-action-boundary.md를 따른다.

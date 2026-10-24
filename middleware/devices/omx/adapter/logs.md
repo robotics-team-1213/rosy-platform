@@ -620,3 +620,9 @@
 - 변경: 불변 물리 catalog에 설치 scope·revision·자세/접근 높이·물체 기하를 결속하고 중립 check_transfer 서비스를 추가했다. owner가 admission한 측정 상태와 같은 monotonic clock을 주입받아 계산 전후 freshness·revision·계획 출력을 검증하며 궤적·permit·업무 완료를 반환하지 않는다. submit·claim·journal·driver 포트는 없다.
 - 증거: a1a6b6cb19의 새 API 시험 17개 RED 후 구현했다. 독립 계약 검토의 중간 clock 역행 지적은 a62a360ce2의 정확한 sequence에서 RED 1개로 재현하고 d8e20d980e에서 수정했다. 최종 관련 원격 회귀 117 passed, skip 0, 0 NEW이며 재검토의 필수 finding은 닫혔다.
 - gate 변화: 내부 simulation 계산 서비스만 검증했다. owner 조립·인증된 공개 HTTP/UDS·중립 grant·Harbor 공정 변환은 미완료이며 기존 Cell 실행 경로와 실물 capability는 바꾸지 않았다. CE 해당 없음: clock 조건과 회귀가 판단을 직접 보존한다.
+
+## 2026-10-24 · uncommitted · D-856 인증된 owner 사전검사 읽기 연결
+
+- 변경: 선택적인 v2 CheckTransfer와 peer UID/scope 검사, admitted joint_state 조립 helper를 추가했다. transform은 owner 설치 설정과 catalog를 대조하고 calibration은 측정 snapshot의 값을 보존한다. helper는 adapter에 두어 agent/palletizing 필수 의존성을 피했다. 기존 Cell owner는 선택적 catalog가 없으면 이전 경로를 유지한다.
+- 증거: 설치 transform 누락과 v1 거절 envelope RED 후 수정했다. 기존 ActionApi·Cell runner/owner를 포함한 원격 213 passed/skip0/0 NEW와 실제 HTTP/UDS를 확인했다. 독립 리뷰의 transform finding은 닫혔고 ActionApi 안전 태그의 Safety-Review trailer를 이력에 보완했다. 정확한 SHA는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md를 따른다.
+- gate 변화: simulation 읽기만 연결했다. 새 grant/dispatch·실물 capability는 없다. 공정 독립성은 import 차단, 상태는 합성 fixture이며 UDS stop 지연·설치 wheel·장치 수용은 미확인이다. CE 해당 없음: 경계와 회귀가 판단을 보존한다.
