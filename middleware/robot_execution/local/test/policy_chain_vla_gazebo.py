@@ -329,6 +329,7 @@ def main():
         runtime = RosArmCommandRuntime(node, cfg, poll_period_s=.01, owner_clock='steady')
         rig = Rig(node, runtime.monotonic, calibration)
         controllers = node.create_client(ListControllers, '/controller_manager/list_controllers')
+        started = (node.get_clock().now().nanoseconds, time.monotonic())
         executor = MultiThreadedExecutor(num_threads=4)
         executor.add_node(node)
         errors = []
@@ -355,6 +356,7 @@ def main():
             memory_peak = group/'memory.peak'
             (out/'teardown.json').write_text(json.dumps(dict(executor_stopped=stopped, workers_stopped=workers_stopped,
                 cpu_after=(group/'cpu.stat').read_text(),
+                real_time_factor=(node.get_clock().now().nanoseconds-started[0])/1e9/max(1e-9, time.monotonic()-started[1]),
                 primary_error=repr(errors[0]) if errors else None,
                 memory_peak=memory_peak.read_text().strip() if memory_peak.exists() else None), indent=2))
             assert stopped and workers_stopped, 'own executor/workers did not drain'
