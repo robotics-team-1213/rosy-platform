@@ -41,10 +41,11 @@ def test_reachable_targets_have_small_fk_error_and_unreachable_fails():
 def observations():
     mod = implementation()
     rows = []
-    for phase, support in [('pinky_initial', 2), ('out_lift', None), ('out_move', None), ('out_transport', None),
-                           ('conveyor_settle', 3), ('back_lift', None), ('back_move', None), ('back_transport', None),
+    for phase, support in [('pinky_initial', 2), ('out_raise', None), ('out_lift', None), ('out_move', None), ('out_transport', None),
+                           ('out_lower', None), ('conveyor_settle', 3), ('back_raise', None), ('back_lift', None), ('back_move', None), ('back_transport', None),
+                           ('back_lower', None),
                            ('pinky_settle', 2)]:
-        base = mod.CONVEYOR if phase in ('conveyor_settle', 'out_move', 'out_transport', 'back_lift') else mod.PINKY
+        base = mod.CONVEYOR if phase in ('conveyor_settle', 'out_move', 'out_transport', 'out_lower', 'back_raise', 'back_lift') else mod.PINKY
         for step in range(0, 124, 4):
             forces = [0., 0., 0., 0.]
             if support is None:

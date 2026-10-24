@@ -62,8 +62,8 @@ def solve(position):
 def evaluate(samples):
     """Read measured samples only; no controller acknowledgement counts as success."""
     failures = []
-    phases = ['pinky_initial', 'out_lift', 'out_transport', 'conveyor_settle',
-              'back_lift', 'back_transport', 'pinky_settle']
+    phases = ['pinky_initial', 'out_raise', 'out_lift', 'out_move', 'out_transport', 'out_lower',
+              'conveyor_settle', 'back_raise', 'back_lift', 'back_move', 'back_transport', 'back_lower', 'pinky_settle']
     groups = {phase: [] for phase in phases}
     last_tick, order = -1, -1
     try:
@@ -96,12 +96,20 @@ def evaluate(samples):
                 failures.append(phase+':missing_observations')
             if any(r['joint_error'] > .08 or r['tcp_error'] > .008 for r in rows[-31:]):
                 failures.append(phase+':tracking')
-            if 'lift' in phase or 'transport' in phase:
+            if phase not in ('pinky_initial', 'conveyor_settle', 'pinky_settle'):
+                free = [r for r in rows if r['position'][2] >= PINKY[2]+CARGO_SIZE/2+.02]
+                if any(min(r['contact_forces'][:2]) <= .02 or r['tool_distance'] > .025
+                       or max(r['contact_forces'][2:]) >= .02 for r in free):
+                    failures.append(phase+':contact_lost_during_motion')
                 contact = [r for r in rows if min(r['contact_forces'][:2]) > .02
                            and r['position'][2] >= PINKY[2]+CARGO_SIZE/2+.02
                            and max(r['contact_forces'][2:]) < .02]
-                if len(contact)/len(rows) < .8:
+                if ('lift' in phase or 'transport' in phase or 'move' in phase) and len(contact)/len(rows) < .8:
                     failures.append(phase+':no_bilateral_free_lift')
+                if 'transport' in phase or 'lift' in phase:
+                    target = CONVEYOR if phase in ('out_transport', 'back_lift') else PINKY
+                    if any(math.hypot(r['position'][0]-target[0], r['position'][1]-target[1]) > .015 for r in rows[-31:]):
+                        failures.append(phase+':wrong_endpoint')
             else:
                 target, support = (CONVEYOR, 3) if phase == 'conveyor_settle' else (PINKY, 2)
                 for r in rows[-31:]:
