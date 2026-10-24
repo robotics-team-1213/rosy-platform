@@ -10252,6 +10252,12 @@ osy-d395-s1d\`.
 - gate 변화: 실제 정책 작업 성공은 기존 HOLD다. 수집기 회귀는 물리 원인 해결·운영·실물·HF 수용을 뜻하지 않는다. CE 미해결 — 실제 추종 원인을 진단한다.
 - 실제 진단: 별도 manifest로 calibration1회 종료0·331추종 샘플·96파일을 검증한 뒤 정책1회 종료1·748샘플·126파일을 검증했다. 41목표 모두 성공했지만42번째 intent의 journal_prepare733.731ms 중 기존 lease가 만료돼 제출 전 HOLD했다. 원래 JTC 실패는 재현되지 않았고 formal0·optimizer0을 유지한다. archive·SQLite·timing·closure 독립 검토 Important 없음.
 
+## 2026-10-24 · bbf2af074bb7 · 정책 저널 I/O 귀속 진단
+
+- 변경: [저널 진단 기록](validation/omx-policy-journal-io-2026-10-24/result.md)을 추가했다. 실제 원본 데이터의 복사본만 네 번 재생했고 정책·optimizer·formal·실물 동작은0이다.
+- 증거: 각2,396 API/18,427측정·네 테이블 fingerprint 일치·원본3SHA 불변·worker 종료0·회수/정리를 독립 확인했다. threaded 한 조건의 prepare3318.251ms 중 commit3276.184ms를 관측했지만 과거733ms의 동일 원인을 증명하지 않는다.
+- gate 변화: 기존 HOLD 유지. session lock만 해제하는 변경의 fence 교착 위험과 두 임계구역 분리·재검증 조건을 기록했다. 권한·TTL·freshness·WAL/FULL은 그대로다. CE 미해결 — 원래 지연/추종 실패 해결 증거가 없다.
+
 ## 2026-10-24 · uncommitted · D-856 업무 공정과 로봇 동작 실행 경계
 
 - 변경: D-856과 단계별 실행 계획을 등록했다. Harbor는 업무·공정 변환·완료를, ROSY는 지원 동작·실행 원장·자원·안전을 소유한다. 기존 Cell 공정은 호환 경로로 보존한다.
