@@ -125,6 +125,7 @@ def test_joint_artifact_is_required_when_closing_policy_diagnostic(tmp_path,faul
 
 def test_stream_lost_during_homing_prevents_actual_policy_start(tmp_path,monkeypatch):
     job=importlib.import_module('sim_pick_place_policy_job');events=[];directory=tmp_path/'episode'
+    monkeypatch.setenv('ROS_DOMAIN_ID','77')
     def home_wait(**_):
         receipt=dict(success=True,purpose='startup_home_only',owner_final=dict(active_goal=None,owner_state='ready'))
         (directory/'startup/teacher-result.json').write_text(json.dumps(receipt))

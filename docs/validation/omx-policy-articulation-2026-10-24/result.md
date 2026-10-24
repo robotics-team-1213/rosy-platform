@@ -1,7 +1,7 @@
 # Passive OMX articulation diagnostic
 
-The contact diagnostic now preserves the seventh, independently exported gripper
-joint and rejects stale or damaged evidence before homing and policy launch.
+The contact diagnostic now preserves all seven publisher-supplied joint positions
+and rejects stale or damaged evidence before homing and policy launch.
 The policy model, command owner, admission, six-joint controller feedback,
 tolerances, world collision geometry and physics parameters are unchanged.
 The existing independent policy evaluation remains HOLD.
