@@ -21,7 +21,8 @@ class SimPolicyChain:
             raise ValueError('installed policy, scoped consumer and trusted SIM providers required')
         doc, scope, owner = policy.recheck(), consumer.scope, runtime.owner
         cfg = owner.config
-        if (doc['environment'] != SIM_POLICY_ENVIRONMENT or len(doc['cameras']) != 1
+        # D-854 §3: one or more installed cameras; the owner checks each frame against the installed order.
+        if (doc['environment'] != SIM_POLICY_ENVIRONMENT or not doc['cameras']
                 or doc['revision'] != scope.policy_revision
                 or (cfg.workcell_id, cfg.instance_id) != (scope.identity.workcell_id, scope.identity.instance_id)
                 or scope.owner_session_id != owner.session_id
