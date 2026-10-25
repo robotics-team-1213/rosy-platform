@@ -32,6 +32,7 @@ JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L
 echo "$$ pytest 2 6" > "$L"; echo $$ > "$D/$K.pid"; rm -f ~/rosy-jobs/"$1".resv
 # The next invocation reuses L; release it before publishing completion.
 trap 'c=$?; [ $c = 124 ] && echo "[remote-pytest] timed out after $T s"
+[ -z "${B:-}" ] || { chmod -R u+rwX -- "$B"; rm -rf -- "$B"; } 2>/dev/null  # tests leave read-only dirs
 echo $c > "$D/$K.rc.tmp"; rm -f "$L"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' EXIT
 trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would still be 0
 """ + remote_test_tools.DEFAULT_CONTEXT + r"""shift 5
@@ -46,8 +47,14 @@ echo "$$ pytest $C $M" > "$L"
 [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
 umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
+# tmp_path root per job, removed by the EXIT trap: /tmp/pytest-of-<user> garbage filled a host disk (2026-10-26).
+# Short and 0700 under /tmp, not the run dir: AF_UNIX paths stop at 108 bytes and TLS file checks refuse
+# group-writable ancestors (login umask 0002 makes the run dir 0775).
+B=$(mktemp -d /tmp/rosy-pytest-XXXXXX) || exit 1
+# Best-effort lowest, not idle (-c3): idle gets no disk time while any other process writes, so a timing
+# test's SQLite fsync stalled for seconds on a busy AI PC (g1 contact gap p99 4.7-5.7 s, 2026-10-26).
 timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=${M}G ${CPU:+-p CPUQuota=$CPU} -- \
-  nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@"
+  nice -n 15 ionice -c2 -n7 "$V/bin/python" -m pytest --basetemp "$B" "$@"
 """
 
 # Job k is alive while the pid in <k>.pid (the lock's pid, but k-specific) answers kill -0.
@@ -72,10 +79,11 @@ POLL = r"""D=~/rosy-test/runs/$1.jobs; K=$2; rc=; [ -f "$D/$2.rc" ] && rc=$(cat 
 echo "ROSYJOB ${rc:--} $alive"; tail -c +$(($3 + 1)) "$D/$2.log"
 """
 
-# SHIP: runs left behind after lost contact (an exit code, no live job, untouched for 12 h).
+# SHIP: runs left behind after lost contact (an exit code, no live job, untouched for 2 h; the laptop
+# fetches the log as the job ends, so a finished run holds nothing it still needs).
 # Only <label>-<6 hex> runs that have a <run>.jobs dir, i.e. this runner's; never sim-* or anything else.
 SWEEP = r"""for J in "$R"/runs/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].jobs; do
-  [ -d "$J" ] && compgen -G "$J/*.rc" > /dev/null && [ -n "$(find "$J" -maxdepth 0 -mmin +720)" ] || continue
+  [ -d "$J" ] && compgen -G "$J/*.rc" > /dev/null && [ -n "$(find "$J" -maxdepth 0 -mmin +120)" ] || continue
   n=$(basename "$J" .jobs); live=0
   case $n in sim-*) continue;; esac  # remote_sim.py runs clean up themselves
   for p in "$J"/*.pid ~/rosy-jobs/"$n".lock; do
@@ -83,6 +91,7 @@ SWEEP = r"""for J in "$R"/runs/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f
   done
   [ $live = 0 ] || continue
   echo "[remote] removing $n, left after lost contact" >&2
+  chmod -R u+rwX -- "$R/runs/$n" "$J" 2>/dev/null || true  # tests leave read-only dirs; rm -rf cannot enter them
   git worktree remove -f -f "$R/runs/$n" 2>/dev/null || rm -rf "$R/runs/$n"
   git update-ref -d "refs/remote-pytest/$n" 2>/dev/null || true
   rm -rf "$J"
