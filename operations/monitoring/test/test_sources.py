@@ -4,6 +4,8 @@ import asyncio
 import json
 
 import httpx
+import pytest
+from pydantic import ValidationError
 
 from rosy.monitoring.cache import ObservationCache
 from rosy.monitoring.config import MonitoringConfig, load_credentials
@@ -19,6 +21,33 @@ def setup(source):
     cache = ObservationCache(config, monotonic=clock.monotonic, utcnow=clock.utcnow)
     creds = load_credentials(config, {'READ': 'r' * 32, 'UPSTREAM': 'u' * 32})
     return config, cache, creds, clock
+
+
+@pytest.mark.parametrize('kind', ['http', 'fleet'])
+def test_registered_composite_graph_ids_fit_before_collecting(kind):
+    site = 's' * 64
+    with pytest.raises(ValidationError):
+        MonitoringConfig(collector_id='c' * 96, site_id=site,
+                         readers=[{'principal_id': 'reader', 'token_env': 'READ', 'sites': [site]}],
+                         sources=[{'id': 't' * 96, 'label': 'target', 'site_id': site,
+                                   'kind': kind, 'url': 'https://example.invalid'}])
+
+
+def test_fleet_legacy_tls_refused_preserves_owner_auth_failure():
+    cfg, cache, creds, clock = setup({'kind': 'fleet', 'url': 'https://fleet.invalid'})
+    paths = []
+    def answer(request):
+        paths.append(request.url.path)
+        body = {'schema_version': 1, 'sampled_at': clock.utcnow().isoformat(), 'cache_age_s': 0.0,
+                'robots': [{'robot_id': 'robot1', 'link': 'tls-refused', 'reachable': True,
+                            'reason_code': 'PAIRING_REQUIRED', 'state_age_s': None}]}
+        return httpx.Response(200, stream=httpx.ByteStream(json.dumps(body).encode()))
+    asyncio.run(SourceReader(cache, creds, transport=httpx.MockTransport(answer)).poll(cfg.sources[0]))
+    snapshot = cache.snapshot(frozenset({'site-a'}))
+    reported = next(link for link in snapshot.links if link.kind == 'reported')
+    assert paths == ['/api/fleet/monitoring']
+    assert reported.reachable is True and reported.failure_stage == 'auth'
+    assert reported.reason_code == 'PAIRING_REQUIRED' and reported.last_success_at is None
 
 
 def test_core_reads_only_identity_and_owner_diagnostics():

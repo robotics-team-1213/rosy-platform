@@ -1,6 +1,7 @@
 """The API reads one scoped cache and never performs an upstream request."""
 
 from fastapi.testclient import TestClient
+import asyncio
 
 from rosy.monitoring.config import load_credentials
 from rosy.monitoring.service import Collector, create_app
@@ -60,3 +61,35 @@ def test_storage_error_response_does_not_reflect_exception(runtime, tmp_path, mo
                                                      headers={'Authorization': f'Bearer {TOKEN}'})
     assert response.status_code == 503
     assert response.json() == {'error': {'code': 'MONITORING_STORAGE'}}
+
+
+def test_invalid_source_result_does_not_stop_other_sources(runtime, tmp_path, monkeypatch):
+    cache, clock = runtime
+    collector = Collector(cache.config, load_credentials(cache.config, {'READ': TOKEN}),
+                          MonitoringStore(tmp_path / 'monitoring.sqlite3', cache.config.collector_id))
+    calls = []
+    async def poll(source):
+        calls.append(source.id)
+        if source.id == 'pc-a':
+            raise ValueError('private source failure')
+    monkeypatch.setattr(collector.reader, 'poll', poll)
+    asyncio.run(collector.poll_once())
+    assert set(calls) == {'pc-a', 'collector-b'}
+    snapshot = collector.cache.snapshot(frozenset({'site-a', 'site-b'}))
+    own = {node.site_id: node for node in snapshot.nodes if node.origin_source == 'collector'}
+    assert own['site-a'].reported_health == 'WARNING'
+    assert own['site-b'].reported_health == 'OK'
+    assert 'private source failure' not in snapshot.model_dump_json()
+
+
+def test_stopped_collection_task_cannot_serve_fresh_ok(runtime, tmp_path, monkeypatch):
+    cache, clock = runtime
+    collector = Collector(cache.config, load_credentials(cache.config, {'READ': TOKEN}),
+                          MonitoringStore(tmp_path / 'monitoring.sqlite3', cache.config.collector_id))
+    async def broken():
+        raise RuntimeError('private collector failure')
+    monkeypatch.setattr(collector, 'run', broken)
+    with TestClient(create_app(collector)) as client:
+        assert client.get('/health').status_code == 503
+        response = client.get('/api/monitoring/v1/snapshot', headers={'Authorization': f'Bearer {TOKEN}'})
+        assert response.status_code == 503 and 'private collector failure' not in response.text
