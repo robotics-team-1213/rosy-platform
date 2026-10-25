@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import time
@@ -61,6 +62,24 @@ RUNTIME_STOP_UNITS = (RUNTIME_TARGET, "rosy-core.service", "rosy-io.service", "r
 # when every changed payload file is camera perception code no other unit loads.
 RESTARTABLE_ALONE = {"rosy-camera.service"}
 UNIT_SETTLE_S = 3.0
+
+
+def _ab_marked(root: Path) -> bool:
+    # Legacy standalone verifiers ship only this file and signing.py.
+    slot = root / "etc/rosy/os-slot.json"
+    if slot.exists() or slot.is_symlink():
+        return True
+    try:
+        descriptor = os.open(root / "proc/cmdline", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return False
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError("OS_PAYLOAD_INCOMPATIBLE: kernel command line is not regular")
+        raw = stream.read(16385)
+    if len(raw) > 16384:
+        raise ValueError("OS_PAYLOAD_INCOMPATIBLE: kernel command line exceeds limit")
+    return any(word.startswith(b"rosy.os_layout=") for word in raw.split())
 
 
 def _runtime_id(path: Path) -> str | None:
@@ -298,8 +317,12 @@ class NativeReleaseManager:
             path = release / relative
             if path.is_symlink() or sha256_file(path) != digest:
                 raise ValueError(f"NATIVE_MANIFEST_PAYLOAD: digest mismatch for {relative}")
-        from os_payload_compatibility import require_ab_payload
-        require_ab_payload(self.root, release)
+        if _ab_marked(self.root):
+            try:
+                from os_payload_compatibility import require_ab_payload
+            except ImportError as exc:
+                raise ValueError("OS_PAYLOAD_INCOMPATIBLE: installed SDK lacks the A/B verifier") from exc
+            require_ab_payload(self.root, release)
         return manifest
 
     def check_python_runtime(self, release_id: str) -> str:
