@@ -84,3 +84,32 @@ def test_root_readback_does_not_silently_repair_tampered_configuration(tmp_path,
     assert target.read_text() == "UNTRUSTED=1\n"
     assert (common / "state/current.json").read_bytes() == pointer
     assert not (root / "run/rosy-os-state/ready.json").exists()
+
+
+def test_committed_live_settings_refresh_the_current_boot_receipt(tmp_path, monkeypatch):
+    first, root, _, _, _ = _device(tmp_path, monkeypatch)
+    ready = first._native_helper("os_state_ready")
+    before = ready.publish_ready(root)
+    config = first._native_helper("os_state_config")
+    with config.configuration_update(root) as update:
+        update.stage("etc/rosy/login-policy.json", b'{"ssh_password_login":false}\n', 0o600)
+        update.commit()
+    after = ready.verify_ready(root)
+    assert after["generation"] != before["generation"]
+    assert after["boot_id"] == before["boot_id"]
+
+
+def test_publication_before_completion_cannot_issue_readiness(tmp_path, monkeypatch):
+    first, root, _, _, _ = _device(tmp_path, monkeypatch)
+    config = first._native_helper("os_state_config")
+    with config.configuration_update(root) as update:
+        update.stage("etc/rosy/login-policy.json", None, 0o600)
+
+        def interrupted():
+            raise RuntimeError("fixture power loss after canonical pointer")
+
+        monkeypatch.setattr(update.shared, "prepare_existing", interrupted)
+        with pytest.raises(RuntimeError, match="power loss"):
+            update.commit()
+    with pytest.raises(ValueError, match="completion"):
+        first._native_helper("os_state_ready").publish_ready(root)

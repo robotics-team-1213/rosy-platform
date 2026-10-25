@@ -71,6 +71,26 @@ def test_actual_tls_owner_publishes_runtime_for_b_and_return_to_a(device, tmp_pa
         assert (root / tls.TLS / "ca.pem").read_bytes() == ca
 
 
+def test_tls_maintenance_refreshes_readiness_only_after_pending_is_cleared(device, tmp_path):
+    from test_os_tailnet_state import _serial
+    first, store, _, common, _ = device
+    _serial(store.root)
+    (store.root / "proc/sys/kernel/hostname").write_text("rosy-pinky-k7m4\n")
+    ready = first._native_helper("os_state_ready")
+    before = ready.publish_ready(store.root)
+    held = []
+
+    def fence():
+        if (common / "state/tls-pending.json").exists():
+            with pytest.raises(ValueError):
+                ready.verify_ready(store.root)
+            held.append(True)
+
+    assert _apply(store, tmp_path, fence=fence)["ok"]
+    assert held
+    assert ready.verify_ready(store.root)["generation"] != before["generation"]
+
+
 def _interrupt_after_ca_key(store, tmp_path):
     atomic = store.atomic
     lost = False
