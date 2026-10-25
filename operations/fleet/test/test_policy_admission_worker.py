@@ -116,6 +116,7 @@ class TestPolicyAdmissionWorkerTick:
         worker, _, audit = _worker(tmp_path, missions=missions,
                                    proposals=FakeProposals(
                                        _proposal(resources=(("workcell", "wc"),))))
+        assert worker.tick() == 1
         assert audit.latest()[0]["reason"] == "ROBOT_UNBOUND"
 
     def test_admit_refusal_is_recorded_not_raised(self, tmp_path):
