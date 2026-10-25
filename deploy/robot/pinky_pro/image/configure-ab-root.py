@@ -41,6 +41,8 @@ def configure(root: Path, release_id: str) -> None:
     sums = _read(_path(root, "opt/rosy/releases/" + release_id + "/SHA256SUMS"), 16 * 1024 * 1024, owner)
     record = dict(schema_version=1, release_id=release_id, checksums_sha256=hashlib.sha256(sums).hexdigest())
     changes = {"etc/rosy/os-factory-release.json": (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")}
+    changes["etc/cloud/cloud.cfg.d/99-rosy-ssh-hostkeys.cfg"] = b"ssh_deletekeys: false\nssh_genkeytypes: []\n"
+    changes["etc/ssh/sshd_config.d/01-rosy-hostkey.conf"] = b"HostKey /etc/ssh/ssh_host_ed25519_key\n"
     for source, destination in OVERRIDES.items():
         changes["etc/systemd/system/" + destination] = _read(prefix / "native-runtime" / source, 8192, owner)
     targets = {}
