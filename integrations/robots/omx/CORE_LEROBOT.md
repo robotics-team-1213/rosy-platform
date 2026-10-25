@@ -165,6 +165,11 @@ with FleetPolicyHttp(origin, private_token_file, loopback_sim=True) as transport
     # Enter the explicitly enabled SimPolicyChain inside this transport context.
 ```
 
+Spin the process that hosts this worker on `omx_adapter.ros_owner_executor.OwnerMultiThreadedExecutor`,
+never the stock `MultiThreadedExecutor`: the stock one's wait-set loop held 82% of the GIL in the D-866 P0
+probe and the renewal expired the lease
+(`docs/solutions/runtime-errors/stock-rclpy-executor-starves-sim-lease-renewal-2026-10-25.md`).
+
 Create `LeaseScope` from the trusted local SIM execution configuration: exact
 AttemptIdentity, episode, installed policy revision, owner session, approved window,
 rig, calibration and approval scope. The SDK cannot supply these values. The

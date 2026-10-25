@@ -71,6 +71,8 @@ class PoseSample(BaseModel):
     robot_id: str
     pose: Pose
     seq: int
+    #: D-870: original source pose capture UTC epoch seconds; absent means unknown.
+    sampled_at: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False, strict=True)
     #: v1.7 additive. 어느 맵의 좌표인지 — 없으면 확인하지 않는다(구 릴레이 호환).
     map_id: Optional[str] = None
     frame: Optional[Literal["map", "odom"]] = None  # D-559 additive; trail drops "odom" samples
