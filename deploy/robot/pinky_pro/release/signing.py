@@ -354,8 +354,8 @@ def find_unlisted_files(root: Path, entries: dict[str, str]) -> list[Rejection]:
     return rejections
 
 
-def verify_release_files(root: Path, public_key: Path) -> list[Rejection]:
-    """Verify a release directory: signature first, then payload checksums.
+def verify_release_checksums(root: Path, public_key: Path) -> tuple[dict[str, str], list[Rejection]]:
+    """Return the authenticated checksum map only after every file check passes.
 
     Order is the point. If the checksums were validated before the signature
     over the list, rewriting ``SHA256SUMS`` would make every file agree with
@@ -365,9 +365,9 @@ def verify_release_files(root: Path, public_key: Path) -> list[Rejection]:
     sig_path = root / SIGNATURE_FILENAME
 
     if not sums_path.is_file():
-        return [Rejection("SHA256SUMS_MISSING", CHECKSUM_FILENAME, "release has no checksum list")]
+        return {}, [Rejection("SHA256SUMS_MISSING", CHECKSUM_FILENAME, "release has no checksum list")]
     if not sig_path.is_file():
-        return [Rejection("SIGNATURE_MISSING", SIGNATURE_FILENAME, "release is unsigned")]
+        return {}, [Rejection("SIGNATURE_MISSING", SIGNATURE_FILENAME, "release is unsigned")]
 
     sums = sums_path.read_bytes()
     try:
@@ -375,20 +375,26 @@ def verify_release_files(root: Path, public_key: Path) -> list[Rejection]:
     except UnicodeDecodeError:
         # Not valid text, so certainly not valid base64 — a rejection, not a
         # traceback out of the update path.
-        return [
+        return {}, [
             Rejection("SIGNATURE_MALFORMED", SIGNATURE_FILENAME, "signature file is not UTF-8 text")
         ]
     rejections = verify_signature(sums, signature, public_key)
     if rejections:
         # Do not hash anything on an untrusted list: it would report
         # reassuring "checksum OK" lines for attacker-chosen content.
-        return rejections
+        return {}, rejections
 
     entries, rejections = parse_sha256sums(sums)
     if rejections:
-        return rejections
+        return {}, rejections
 
-    return verify_checksums(root, entries) + find_unlisted_files(root, entries)
+    rejections = verify_checksums(root, entries) + find_unlisted_files(root, entries)
+    return ({} if rejections else entries), rejections
+
+
+def verify_release_files(root: Path, public_key: Path) -> list[Rejection]:
+    """Verify a release directory, keeping the existing rejection-list API."""
+    return verify_release_checksums(root, public_key)[1]
 
 
 #: Marker a delta payload carries (D-553 addendum 3): the base release id and

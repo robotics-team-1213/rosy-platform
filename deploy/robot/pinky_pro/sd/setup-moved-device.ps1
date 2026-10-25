@@ -6,6 +6,7 @@ param(
     [string]$RpiImager = "C:\Program Files\Raspberry Pi Ltd\Imager\rpi-imager.exe",
     [int]$DiskNumber,
     [string]$ConfigPath,
+    [string]$ExpectedImageRevision,
     [ValidateRange(1, 10)][int]$CardCount = 1,
     [switch]$Configure,
     [switch]$PrepareOnly
@@ -230,14 +231,23 @@ try {
 
     $verifyArguments = @((Join-Path $PSScriptRoot "verify-image-release.py"), "--release-root", $ReleaseDir,
         "--public-key", $publicKey, "--image", $imagePath, "--release-id", $releaseId)
-    $null = @(& python @verifyArguments 2>&1)
-    if ($LASTEXITCODE -ne 0) { Stop-Setup "SD 이미지의 서명·checksum 검증에 실패했습니다. 카드에는 기록하지 않았습니다." }
+    if ($settings.ExpectedImageRevision) { $verifyArguments += @("--expected-source-revision", $settings.ExpectedImageRevision) }
+    $verifiedOutput = @(& python @verifyArguments 2>&1)
+    if ($LASTEXITCODE -ne 0) { Stop-Setup "SD 이미지의 서명·checksum·소스 버전 검증에 실패했습니다. 기대 소스 설정과 서명된 릴리스를 확인하세요. 카드에는 기록하지 않았습니다." }
+    try {
+        $verifiedImage = ($verifiedOutput -join [Environment]::NewLine) | ConvertFrom-Json
+        if ([string]$verifiedImage.ok -cne "true" -or [string]$verifiedImage.release_id -cne $releaseId -or
+            [string]$verifiedImage.image -cne $imageName -or [string]$verifiedImage.sha256 -cne $hashes[0] -or
+            [string]$verifiedImage.source_revision -cnotmatch '^[0-9a-f]{40}$') { throw "invalid verified metadata" }
+    }
+    catch { Stop-Setup "이미지 검증 결과가 선택한 릴리스와 일치하지 않습니다. 카드에는 기록하지 않았습니다." }
+    Write-Host ("검증된 이미지 source revision: " + $verifiedImage.source_revision)
     $scratchRoot = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [IO.Path]::GetTempPath() }
     if (-not (Test-Path -LiteralPath $scratchRoot -PathType Container)) {
         Stop-Setup "임시 폴더 $scratchRoot 를 사용할 수 없습니다. ROSY_SCRATCH를 확인한 뒤 다시 시도하세요. 변경된 항목은 없습니다."
     }
     if ($CardCount -gt 1) {
-        $batch = New-SdBatch -RegistryJson $registry -CardCount $CardCount -ScratchRoot $scratchRoot -ReleaseId $releaseId -ImageSha256 $hashes[0]
+        $batch = New-SdBatch -RegistryJson $registry -CardCount $CardCount -ScratchRoot $scratchRoot -ReleaseId $releaseId -ImageSha256 $hashes[0] -SourceRevision $verifiedImage.source_revision
     }
     for ($cardIndex = 1; $cardIndex -le $CardCount; $cardIndex++) {
         Write-Host ("카드 {0}/{1}" -f $cardIndex, $CardCount)
@@ -253,6 +263,9 @@ try {
         $sessionRoot = if ($batch) { Split-Path -Parent $batch.Path } else { $scratchRoot }
         $session = Join-Path $sessionRoot $sessionName
         New-Item -ItemType Directory -Path $session -ErrorAction Stop | Out-Null
+        [ordered]@{release_id=$releaseId;image=$imageName;sha256=$hashes[0];source_revision=$verifiedImage.source_revision;
+            expected_source_revision=$settings.ExpectedImageRevision} | ConvertTo-Json |
+            Set-Content -LiteralPath (Join-Path $session "verified-image.json") -Encoding utf8
         $planPath = Join-Path $session "plan.json"
         $receiptPath = Join-Path $session "receipt.json"
         $preparePath = Join-Path $PSScriptRoot "prepare-rosy-sd.ps1"
@@ -297,6 +310,7 @@ try {
         [pscustomobject]@{
             Robot = $RobotAddress
             Release = $plan.release_id
+            ImageSourceRevision = $verifiedImage.source_revision
             DeviceName = $plan.device_name
             RobotNumber = $plan.robot_number
             Namespace = $plan.namespace

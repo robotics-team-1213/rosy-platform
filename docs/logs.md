@@ -11338,3 +11338,24 @@ osy-d395-s1d\`.
 - 변경: `collection_pipeline.py prepare-native --camera-reference ROLE=PATH`(역할마다 한 번)와 `prepare_native(camera_references=)`. 새 `learning/curation/omx/camera_reference.py`가 계약 `validate_reference`로 읽고 파일 이름=revision, 역할 중복·불일치, dataset `observation.images.*`와 다른 역할 집합, 합친 `meta/info.json`의 폭·높이(축 이름으로 읽음)·fps 불일치를 거절한다. `{역할: revision}`만 `inspection.json`·`capture.json`의 `camera_setup`에 남기고 `camera_identity`·경로는 남기지 않는다. 분할·구간 재검사는 같은 값을 넘겨 보고서를 그대로 비교한다. 옵션이 없으면 출력은 같다. 프레임 비교와 `camera-setup.json`은 아직 없다.
 - 증거: 원격 시험 PC 대상 시험 11 passed, 모델 PC learner venv(LeRobot 0.4.4) 실제 intake에서 revision 기록·fps 거절·식별자 미기록 1 passed, affected 계층 791 passed·known_failures 0 NEW.
 - gate 변화: 없음. CE 해당 없음 — 계획된 조각 구현이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · guard 교사 모드 첫 실물: 대기 중 오래된 모터 상태 표본으로 토크 OFF
+
+- 변경: `chunk_runner.py`가 모터 상태를 1초에 한 번(`HEALTH_PERIOD_S`)만 읽고, 집기 판정 때 한 번 새로 읽는다. 전에는 3틱마다 PWM·전류·온도를 읽어 guard의 표본(초당 약 5회)과 같은 USB 버스 거래가 두 배였다.
+- 증거: 관제 PC 실물 — 상자 위 15 mm에서 대기 중 guard 표본 간격이 11분 동안 0.234 s로 일정하다가 0.28→0.43→0.62 s로 튀고 0.5 s 기준을 넘어 토크 OFF(팔이 상자에 얹힘). 원격 시험 통과, 주기를 3틱으로 되돌린 변이에서 새 시험 실패. 복구는 고친 도구로 원격(현 자세 시드 → 집게 연 채 15 mm 상승 → park), `safe_end` True, 상자 제자리.
+- gate 변화: 없음. guard 규칙(오래된 표본 = 고장 = 토크 OFF)은 그대로이고, 허브 지연 자체는 남는다. CE: 새 교훈 `docs/solutions/runtime-errors/omx-guard-stale-health-sample-drops-held-arm-2026-10-25.md`.
+
+## 2026-10-25 · f80019b842 · fix(learning): SIM 실행 목록 행 방어와 Learning 첫 화면 픽셀 검수 일괄 읽기
+
+- 변경: `sim_web.py` 실행 목록은 형식이 깨진 행을 빼고 `skipped` 개수를 함께 보낸다. 단일 실행 조회는 깨진 행에 502와 「SIM 실행 기록 형식을 확인하세요」를 돌려준다. `/api/learning`은 프레임마다 `review_masks.get`(연결 3개)과 빈 마스크 디코드를 하던 것을 `review_masks.get_many`(연결 2개)로 바꾸고, 저장된 마스크가 없는 행은 디코드하지 않는다. 저장된 대기 마스크의 디코드는 남는다(저장 형식 변경 없음).
+- 증거: 원격 pytest `test_sim_web.py`·`test_review_app.py`·`test_pixel_draft_import.py`·`test_review_app_smoke.py` 통과, 브라우저 `test_sim_browser.py`·`test_pixel_review_browser.py`·`test_learning_pipeline_browser.py`·`test_learning_stages_browser.py` 61 passed.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
+
+## 2026-10-25 · uncommitted · D-876 ROSY Monitoring
+
+- 변경: ROSY Monitoring(`rosy-monitoring`)의 사이트 독립 감시·통합 집계, 기존 CORE·host-guard·watchdog 재사용, Fleet 독립 실행·조회, 읽기 권한과 복구 소유권을 ADR D-876과 ADR Log에 등록했다. Grafana는 도입 후보로 유지한다.
+- 증거: 기존 producer·consumer 소스와 관련 ADR을 대조했다. 문서 lint·원격 계약 검사 결과는 커밋 SHA와 실행 로그로 확인한다.
+- gate 변화: 구조 결정 수용만 기록했다. 런타임·패키지·배포·장치·현장 수용 상태를 변경하지 않았다. 문서 lint·원격 계약 검사 결과는 커밋 SHA와 실행 로그로 별도 확인한다.
+- CE: 해당 없음 — 새 장애 해결 교훈이 아닌 구조·명칭 결정이다.

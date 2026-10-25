@@ -1,5 +1,5 @@
 ﻿function New-SdBatch([string]$RegistryJson, [int]$CardCount, [string]$ScratchRoot,
-                     [string]$ReleaseId, [string]$ImageSha256) {
+                     [string]$ReleaseId, [string]$ImageSha256, [string]$SourceRevision) {
     $registry = Get-Content -LiteralPath $RegistryJson -Raw -Encoding utf8 | ConvertFrom-Json
     # D-562: automatic numbers are also ceiling marker IDs, limited to 40-49.
     $free = @(40..49 | Where-Object { @($registry.robot_numbers) -notcontains $_ })
@@ -10,7 +10,7 @@
     New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
     $batch = @{
         Path=(Join-Path $directory "batch.json")
-        Report=[ordered]@{schema_version=1;status="in_progress";release_id=$ReleaseId;
+        Report=[ordered]@{schema_version=1;status="in_progress";release_id=$ReleaseId;source_revision=$SourceRevision;
             image_sha256=$ImageSha256;requested_count=$CardCount;completed_count=0;
             remaining_count=$CardCount;cards=@();active_card=$null}
     }
