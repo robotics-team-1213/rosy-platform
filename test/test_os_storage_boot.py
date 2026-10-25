@@ -75,6 +75,7 @@ def test_offline_enable_creates_required_edges_for_network_and_ssh_sockets(tmp_p
     assert "After=rosy-first-boot" not in text
     assert "ProtectSystem=strict" in text and "PrivateDevices=true" in text
     assert "ProtectHome=true" not in text, "operator key mount must remain visible to admission"
+    assert "/native-runtime/os_storage_dispatch.py" in text
 
 
 def test_storage_entrypoint_imports_from_the_staged_image_in_isolation(tmp_path):
@@ -97,3 +98,20 @@ def test_image_builder_checks_actual_vendor_units_before_mounted_image_acceptanc
     block = source.split(command, 1)[1].split('python3 "$(dirname "$0")/verify-mounted-image.py"', 1)[0]
     for unit in CONSUMERS | {UNIT}:
         assert unit in block
+
+
+@pytest.mark.parametrize("marked", [False, True])
+def test_early_dispatcher_needs_no_payload_helpers_and_never_falls_back_for_ab(tmp_path, marked):
+    runtime = tmp_path / "opt/rosy/native-runtime"
+    runtime.mkdir(parents=True)
+    shutil.copy2(NATIVE / "os_storage_dispatch.py", runtime / "os_storage_dispatch.py")
+    root = tmp_path / "root"
+    (root / "etc/rosy").mkdir(parents=True)
+    if marked:
+        (root / "etc/rosy/os-slot.json").write_text("{}", encoding="ascii")
+    result = subprocess.run([sys.executable, "-I", "-B", str(runtime / "os_storage_dispatch.py"),
+                             "--root", str(root)], cwd=tmp_path,
+                            capture_output=True, text=True, check=False, timeout=30)
+    report = json.loads(result.stdout)
+    assert result.returncode == (1 if marked else 0), result.stderr
+    assert report["phase"] == ("HOLD" if marked else "LEGACY")
