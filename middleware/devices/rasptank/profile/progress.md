@@ -7,9 +7,11 @@ gates:
   SOURCE:
     state: GO
     evidence: "eb616252ea 승인 원격 호스트의 설정·capability·TaskKind·기종 결속 결합 회귀 통과. 설정 전용이며 드라이버/실행 지원 아님"
+    cmd: "python tools/remote/remote_pytest.py -- middleware/devices/rasptank/profile/test middleware/core/gateway/test/test_core_node_robot_paths.py -q"
   LOCAL:
     state: GO
     evidence: "승인 원격 source 계약 실행, 결합213 PASS/NEW0. native ament 설치 검증과 구분"
+    cmd: "python tools/remote/remote_pytest.py -- middleware/devices/rasptank/profile/test contracts/foundation/test/test_robot_selection.py -q"
   ROS-SIM:
     state: HOLD
     blocker: "ament install/share와 ROS 실행 검증 미수행"
