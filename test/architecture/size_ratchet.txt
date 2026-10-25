@@ -60,7 +60,7 @@
 2725 test/test_sd_writer_contract.py
 609 tools/device_test/run.py
 703 tools/device_twin/scenarios.py
-858 tools/harness/rosy_harness.py
+843 tools/harness/rosy_harness.py
 749 tools/perception/rosy_ml.py
 659 tools/release/publish_payload_release.py
 942 web/components.css

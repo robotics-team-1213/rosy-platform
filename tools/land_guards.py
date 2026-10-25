@@ -14,7 +14,7 @@ from pathlib import Path
 GUARDS = ("test/architecture", "test/test_harness_contracts.py")
 
 
-def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int, run_tests) -> list[str]:
+def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int | str, run_tests) -> list[str]:
     """Run the guards through land's own run_tests; summary lines, or [] when skipped.
 
     Skipped for explicit --tests and when every selected path already is a guard.
