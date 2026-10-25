@@ -10380,6 +10380,12 @@ osy-d395-s1d\`.
 - 증거: private Hub 고정 commit의6파일 SHA, fresh-process ACTInference 숫자 출력1회, 원래 fixture/정규화/출력 일치, 원격·회수 EXIT0·잠금 해제. 두 pre-write 중단과 미제출 요청도 보존했다.
 - gate 변화: 실제 모델 전달·숫자 재적재 수용. 정책 task 성공·실물/양팔/주행·서비스 배포는 별도다. CE 새 교훈 기록; 추가 학습·로봇 명령 없음.
 
+## 2026-10-24 · uncommitted · 공급암 S 셀 점검·상한 복구·카메라 재시도 코드화
+
+- 변경: `cell_check.py`(읽기 전용 단암 셀 판정, 실패마다 고칠 명령)와 `commissioning_limits.py --baseline`을 추가했다. `joint_tune.py`·`record_session.py`의 거부 문구가 `--baseline`을 안내하고, `rosy-omx-camera-readiness.service`를 `Restart=on-failure`(15 s, 300 s에 3회)로 바꿨다. `services.yaml`의 관제 PC 관측기 arm_a/b를 `off`로 고쳤다(이 PC는 단암 S 셀).
+- 증거: 관제 PC 실측 — 팔로워 6개 PWM 300/전류 500이 남아 joint_tune이 거부했다. 수동 상한 복구 뒤 ID 15가 +40/50으로 이동했다. 부팅 거부 뒤 restore는 성공했지만 재시작이 없어 50분 동안 미준비였고, 수동 restart로 READY가 됐다. 새 시험 `test_omx_cell_check.py`, `--baseline` 시험, 유닛 재시도 단언을 추가했다. 1틱 떨림 거부는 의도된 안전 계약이라 바꾸지 않았다.
+- gate 변화: 없음. 실물 동작을 승인하지 않는다. CE: 새 교훈 `omx-follower-caps-left-raised-in-eeprom-2026-10-24.md`, 기존 교훈 갱신 `omx-camera-readiness-…-2026-10-23.md`(세 번째 실패).
+
 ## 2026-10-25 · 7d0cfcd6e9 · Isaac 정지 적재면·컨베이어 접촉 왕복
 
 - 변경: [왕복 검증 기록](validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md), 실행 안내와 [혼합 drive 방식 교훈](solutions/runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md)을 추가했다.
@@ -10479,3 +10485,23 @@ osy-d395-s1d\`.
 - gate 변화: 없음. autocast로는 10Hz 한 걸음 추론이 안 되고 3b가 필요하다는 판단이 그대로다.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
+
+## 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
+
+- 변경: `deploy/robot/omx/`에 청크 실행기(`chunk_runner.py`: 토크 유지, 멈춤·과열·추종 오차 정지, 위치+전류 집기 판정, 들고 돌고 내리는 `goto`/`park`, `live.json`), top-down 계획기(`grasp_planner.py`), 탐침 기반 손목 보정(`grasp_servo.py`), 그림자 상자 검출과 놓기 확인(`cell_perception.py`), scripted_teacher 봉인(`record_seal.py`), Fleet 관측 송신기(`arm_status_bridge.py`), 판단 자리(`judge_seat.py`)를 더했다.
+- 증거: 관제 PC 실물 — 가르친 위치 사이클 성공, 보정 뒤 집기 성공(잡음 ~200 mA, 빈 집게 ~74 mA), `park` 2회. 결정 모델 오프라인 평가 6/30(수치 포함), 1/30(이미지만), 상자 없이 grasp 선택 → 측정 거부권 설계. 원격 시험: `test_omx_arm_status_bridge.py`+`test_omx_chunk_runner.py` 24 passed, `test_omx_judge_seat.py` 7 passed, 거부권 제거 변이에서 실패 확인.
+- gate 변화: 없음. Fleet 송신은 S용 source·토큰 발급 전까지 보내지 않는다. 시뮬 실험은 로컬 main 병합 뒤. 실물 영점·카메라→팔 좌표 보정은 현장 필요. ADR 초안 `Rosy/docs/workspace-records/2026-10-25/adr-draft-arm-s-platform-integration.md`.
+
+## 2026-10-25 · uncommitted · 공급암 S 교사 셀을 로컬 main에 착지, 교사 경로를 guard 안으로
+
+- 변경: PR #189의 자기 커밋 31개를 로컬 main 위로 옮겼다(origin 병합분 제외, `deploy/hosts/services.yaml` 변경은 로컬 main에 파일이 없어 빼고 origin 병합 때 들어온다). 로컬 main의 `record_session.py`(쌍 세션, `hardware_faults`)와 합칠 때 리더 경보 재부팅은 1암 셀에만 두고, 끝 정리는 `note_fault` 기록 뒤에 재부팅한다. 사용자 결정(2026-10-25)으로 교사 경로를 guard 안으로 옮겼다: `guarded_native.py record --teacher`(리더 없이 동작이 목표, 6관절 1→10 deg/s·10 deg/s² 흐름, 집게만 추종 오차 제외), `chunk_runner.py`도 passive connect와 같은 guard로 보낸다. `teach_trajectory.GUARD_UNITS_PER_S = 5`로 궤적·청크·계획기·park를 늦추고 더 빠른 파일은 거부한다.
+- 증거: 원격 OMX 시험 전체 통과(exit 0). 변이(집게 예외를 모든 관절로, 속도 거부 제거)에서 새 시험이 실패함을 확인.
+- gate 변화: 없음. 실물 재생·청크 실행은 guard 속도로 다시 확인해야 한다(사이클이 사람 시연보다 길어진다). 실물 동작은 전원 스위치 옆에 사람이 있을 때만.
+
+## 2026-10-25 · uncommitted · docs(spec): MSN-008 계약 줄 v1.314 확정
+
+- 변경: [FLEET SRS](spec/ROSY FLEET SRS.md) MSN-008 계약 줄을 API Ref v1.314로 확정(설계 문구 제거).
+- 증거: 미실행 — 문서 변경.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음

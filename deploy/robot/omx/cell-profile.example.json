@@ -1,0 +1,25 @@
+{
+  "schema": "rosy.omx-cell-profile.v1",
+  "cell": "<cell-name>",
+  "home": [0.8, -62.2, 53.1, 51.6, 45.2],
+  "transit": {"shoulder_lift.pos": -27.0, "elbow_flex.pos": 18.0, "wrist_flex.pos": 46.0},
+  "top_box": {
+    "roi": [105, 180, 215, 290],
+    "bgr_min": [70, 0, 70],
+    "bgr_max": [165, 255, 165],
+    "green_below": 5,
+    "min_area": 300
+  },
+  "wrist_box": {"hsv_min": [5, 70, 35], "hsv_max": [25, 255, 255], "min_area": 3000,
+                "shade": {"s": [30, 120], "v": [30, 120], "green_below_red": 5, "green_below_blue": 3}},
+  "reference": {
+    "top": {"cx": 134.5, "cy": 239.5, "yaw": 0.0},
+    "wrist": {"cx": 347, "cy": 204, "area": 103000}
+  },
+  "sites": {
+    "pinky": {"search": [105, 180, 215, 290], "reach": [115, 220, 155, 260]},
+    "belt": {"search": [150, 40, 510, 200], "reach": [200, 100, 460, 190],
+             "hsv_min": [0, 0, 105], "hsv_max": [180, 70, 195], "min_area": 600}
+  },
+  "tolerance": {"home": 3.0, "box_px": 5.0, "box_yaw": 8.0}
+}

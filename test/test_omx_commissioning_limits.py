@@ -233,6 +233,30 @@ def test_cli_refuses_existing_output_before_any_port_open(tmp_path, monkeypatch)
         m.main(["--device", "/dev/serial/by-id/test", "--limits", str(request), "--output", str(output)])
 
 
+def test_baseline_option_lowers_caps_a_session_left_raised_without_a_limits_file(tmp_path, monkeypatch):
+    import contextlib
+    m = module()
+    seen = {}
+
+    def configure(port, requested, record):
+        seen.update(requested)
+        record({"event": "complete"})
+
+    monkeypatch.setattr(m.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(m, "open_readonly_port", lambda device: contextlib.nullcontext())
+    monkeypatch.setattr(m, "configure_limits", configure)
+    assert m.main(["--device", "/dev/serial/by-id/test", "--baseline", "--output", str(tmp_path / "out")]) == 0
+    assert seen == limits()
+    raised = motors()  # 2026-10-24: a session ended with every follower at PWM 300 / Current 500
+    for row in raised:
+        row["pwm_limit_raw"] = 300
+        row["current_limit_raw"] = None if row["id"] < 14 else 500
+    caps = {(op["id"], op["field"], op["value"]) for op in m.plan_limits(raised, seen)
+            if op["field"] in ("pwm_limit_raw", "current_limit_raw")}
+    assert caps == ({(i, "pwm_limit_raw", 20) for i in range(11, 17)}
+                    | {(i, "current_limit_raw", 50) for i in range(14, 17)})
+
+
 def test_slow_durable_intent_cannot_send_after_deadline(monkeypatch):
     m = module()
     now = [0]

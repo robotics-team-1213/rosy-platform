@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seal one finished native leader recording as a closed collection for the model-PC transfer.
+"""Seal one finished native recording (leader or scripted teacher) as a closed collection for the model-PC transfer.
 
 Runs on the site PC after record_session.py, from no robot or camera access:
 
@@ -7,7 +7,9 @@ Runs on the site PC after record_session.py, from no robot or camera access:
 
 It accepts only a safe, non-teleop recording that exited 0 without interruption. It copies the
 LeRobot dataset, session.json and the recording config into ~/rosy-test/omx-collections/<name>/
-and writes the manifest last. tools/remote/omx_collection_transfer.py then moves it to the model PC.
+and writes the manifest last. A scripted_teacher recording (record_session.py --replay) also
+carries its trajectory as teacher/trajectory.json; the manifest names it with teacher_sha256 for
+the intake. tools/remote/omx_collection_transfer.py then moves it to the model PC.
 """
 import argparse
 import hashlib
@@ -43,6 +45,17 @@ def seal(session_dir, name, collections):
     if (session.get('safe_end') is not True or session.get('teleop_only') is not False
             or session.get('exit_code') != 0 or session.get('interrupted')):
         raise ValueError('only a safe, completed, non-teleop recording can be sealed')
+    source_mode = session.get('source_mode', 'leader_native')
+    teacher_path = None
+    if source_mode == 'scripted_teacher':  # record_session --replay: the trajectory is the teacher
+        replay = session.get('replay') or {}
+        if not (isinstance(replay.get('sha256'), str) and replay.get('path')):
+            raise ValueError('a scripted_teacher recording needs its replay path and sha256')
+        teacher_path = Path(replay['path'])
+        if not teacher_path.is_file() or teacher_path.is_symlink() or _hash(teacher_path) != replay['sha256']:
+            raise ValueError('the replay trajectory is missing or differs from the one recorded')
+    elif source_mode != 'leader_native':
+        raise ValueError('only leader_native or scripted_teacher recordings can be sealed')
     config_path = Path(session['config'])
     if not config_path.is_absolute():
         config_path = session_dir/config_path
@@ -63,14 +76,22 @@ def seal(session_dir, name, collections):
         shutil.copytree(dataset, staging/'dataset')
         shutil.copyfile(session_dir/'session.json', staging/'session.json')
         shutil.copyfile(config_path, staging/'record-config.json')
+        if teacher_path is not None:
+            (staging/'teacher').mkdir()
+            shutil.copyfile(teacher_path, staging/'teacher'/'trajectory.json')
         if _hashes(dataset) != before:
             raise ValueError('dataset changed while sealing')
         files = _hashes(staging)
         if {k.removeprefix('dataset/'): v for k, v in files.items() if k.startswith('dataset/')} != before:
             raise ValueError('copied dataset differs from the recording')
         manifest = dict(schema='rosy.omx-collection-session.v1', state='CLOSED', mode='hardware',
-                        source_mode='leader_native', robot_type=info['robot_type'],
+                        source_mode=source_mode, robot_type=info['robot_type'],
                         total_episodes=info.get('total_episodes'), sealed_ns=time.time_ns(), files=files)
+        if teacher_path is not None:
+            trajectory = json.loads((staging/'teacher'/'trajectory.json').read_text(encoding='utf-8'))
+            manifest.update(teacher_sha256=files['teacher/trajectory.json'], teacher=dict(
+                kind='replay_trajectory', file='teacher/trajectory.json', schema=trajectory.get('schema'),
+                segments=session['replay'].get('segments'), source=trajectory.get('source')))
         with (staging/'manifest.json').open('x', encoding='utf-8') as stream:
             json.dump(manifest, stream, indent=2, allow_nan=False)
             stream.write('\n')
