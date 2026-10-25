@@ -222,6 +222,21 @@ def test_cancelled_preparation_can_start_a_fresh_confirmed_allocation(setup_case
     assert second['id'] != first['id'] and second['bytes_verified'] and remote.commits == 3
 
 
+def test_cancelled_probe_can_be_verified_again_after_repair(setup_case, monkeypatch):
+    build, actor, body, now, artifact, remote = setup_case
+    for quota in body['quotas'].values(): quota['remaining_bytes'] = 1048576
+    build().save(actor, body)
+    info = remote.info
+    def unavailable(*args): raise OSError('temporary provider failure')
+    monkeypatch.setattr(remote, 'info', unavailable)
+    first = build().verify(actor, 1)
+    for job in first['jobs']: build().jobs().cancel(actor, job['id'])
+    monkeypatch.setattr(remote, 'info', info)
+    assert build().verify(actor, 1)['status'] == 'verified'
+    assert build().activate(actor, 1)['enabled']
+    assert remote.commits == 2
+
+
 @pytest.mark.parametrize('field,value', [('id', {}), ('connection_id', [])])
 def test_invalid_json_target_types_are_validation_errors(setup_case, field, value):
     build, actor, body, now, artifact, remote = setup_case
