@@ -434,6 +434,15 @@ def inspect(root: Path, release_id: str) -> list[str]:
     connections = root / "etc/NetworkManager/system-connections"
     if connections.is_dir() and any(connections.iterdir()):
         findings.append(f"common image contains device-specific state: {connections.relative_to(root)}")
+    tls = root / "etc/rosy/tls"
+    if any(path.is_symlink() for path in (root / "etc", root / "etc/rosy", tls)) or not tls.is_dir():
+        findings.append("factory TLS directory is missing or unsafe: etc/rosy/tls")
+    else:
+        info = tls.stat()
+        if info.st_uid != root.stat().st_uid or info.st_mode & 0o7777 != 0o750:
+            findings.append("factory TLS directory owner/permissions differ: etc/rosy/tls")
+        if any(tls.iterdir()):
+            findings.append("common image contains device-specific TLS state: etc/rosy/tls")
     return findings
 
 

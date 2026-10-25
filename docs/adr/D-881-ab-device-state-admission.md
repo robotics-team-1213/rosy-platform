@@ -30,6 +30,8 @@ firstboot와 canonical 설정 writer는 공통 lock으로 직렬화한다. 첫 b
 
 모터 commissioning 도구의 runtime.env 변경과 실패 시 복구도 완료된 기체의 canonical generation을 갱신한다. 공통 lock을 잡은 뒤 예상한 이전 runtime bytes와 정본을 비교하며, 미초기화 기체의 runtime 교체나 runtime 삭제는 허용하지 않는다. 복구 중 현재 값이 도구가 설정한 값 또는 원래 값과 다르면 다른 변경을 덮지 않고 중지 상태에서 운영자 복구를 요구한다. 이 저장 경로는 기존 commissioning 승인·torque-free preflight·E-Stop·단일 cmd_vel 검사나 drive 활성화 조건을 대신하지 않는다.
 
+TLS 파일은 `/etc/rosy/tls` 디렉터리 전체를 공통 data의 `/tls`에 연결한다. 양 root에서 같은 root 소유·rosy-core 그룹·0750 디렉터리를 사용하고, 실제 mount의 device/subpath/쓰기 권한 및 caller가 보는 device를 초기 쓰기 전에 검사한다. image builder는 비어 있는 mountpoint를 같은 권한으로 준비하고 storage service는 이 mount 이후에 검사한다. 공장 이미지 검사는 symlink·잘못된 owner/권한·기체별 TLS 파일이 들어 있는 디렉터리를 거절한다. TLS 디렉터리는 firstboot snapshot에 넣지 않아 rotation·삭제를 예전 root가 되살리지 않는다. 이 저장 경로만으로 기존 native TLS 도구의 runtime.env·CORE YAML·인증서 묶음 트랜잭션이 완성된 것은 아니며, 그 공통 commit 및 중단 복구는 별도 구현·검증이 필요하다.
+
 ### Ownership and existing decisions
 
 | 기준 | 관계 |
