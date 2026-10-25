@@ -65,3 +65,5 @@ Needs `torch` and `onnxruntime`; tests skip where missing.
 ## Owner evidence
 
 See [progress.md](progress.md), [logs.md](logs.md), and [index.md](index.md). The folder split in D-637 preserves bare import identities and the shared artifact/provenance store. Remote host tests do not admit learning or activate robot behavior.
+
+Review transport, indexed dataset preparation and sealed evidence helpers live in `learning/curation/perception/`. This holder retains `review_admission.py` and `review_pipeline.py`; training source proofs must pin the implementation files in their actual holders.

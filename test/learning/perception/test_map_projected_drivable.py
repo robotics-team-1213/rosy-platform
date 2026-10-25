@@ -9,6 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/training/perception'))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/evaluation/perception'))
 import lane_derived_drivable as ldd  # noqa: E402
 import map_projected_drivable as mpd  # noqa: E402
 from geometry import Camera, PoseSeries  # noqa: E402

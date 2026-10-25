@@ -9,8 +9,7 @@ def _finite(values, count):
         return False
 
 
-def _wrap(angle):
-    return math.atan2(math.sin(angle),math.cos(angle))
+from control.sensing.localization import wrap as _wrap
 
 
 def _rotation_key(rotation):

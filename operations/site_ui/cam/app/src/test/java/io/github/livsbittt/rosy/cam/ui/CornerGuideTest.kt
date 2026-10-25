@@ -49,4 +49,13 @@ class CornerGuideTest {
         assertEquals(true, CornerGuide.reportsMarkers(status(listOf(30))))
         assertEquals(true, CornerGuide.reportsMarkers(status(emptyList(), robots = listOf("rosy_01"))))
     }
+
+    @Test
+    fun fieldBoundarySourceNeedsNoCornerMarkers() {
+        val field = ServerMessage.Status(emptyList(), 0, emptyList(), rxFps = 3.0, dropped = 0, fieldState = "no_field")
+        assertEquals(true, CornerGuide.usesFieldBoundary(field))
+        // Older receivers send no field_state and still ask for four corner markers.
+        assertEquals(false, CornerGuide.usesFieldBoundary(status(emptyList())))
+        assertEquals(false, CornerGuide.usesFieldBoundary(field.copy(cornersNeeded = 4)))
+    }
 }

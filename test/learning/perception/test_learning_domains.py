@@ -35,7 +35,9 @@ def test_every_domain_has_the_six_stages_and_unknowns_say_why():
     decision = by_id(rows)['decision']
     assert set(states(decision)) == {'not_available'} and decision['blocked'] == 'Learning에 연결 전'
     assert decision['next'] is None
-    assert states(by_id(rows)['sim'])[0] == 'not_available'
+    sim = by_id(rows)['sim']['stages']
+    assert [sim[i]['state'] for i in (0, 4)] == ['not_available'] * 2
+    assert sim[4]['evidence'] == 'SIM 실행 연결이 설정되지 않았습니다.'
     assert by_id(rows)['vlm']['stages'][0]['evidence'] == 'VLM 질문 자료가 없습니다.'
     assert by_id(rows)['object']['next'] == {'label': '자료 등록', 'href': '/catalog'}
 
@@ -58,10 +60,12 @@ def test_object_omx_sim_and_vlm_count_only_what_exists():
                          omx_reviewed=['a', 'zzz'], sim_runs={'runs': [
                              {'status': 'FAILED', 'updated_at': '2026-10-24T01:00:00'},
                              {'status': 'SUCCEEDED', 'updated_at': '2026-10-23T01:00:00'}]},
-                         vlm_counts={'total': 4, 'labelled': 1, 'excluded': 1, 'provisional': 1}))
+                         vlm_counts={'total': 4, 'labelled': 1, 'excluded': 1, 'provisional': 1}, tasks=2))
     assert states(rows['object'])[:4] == ['done', 'active', 'blocked', 'not_available']
     assert rows['object']['stages'][1]['evidence'] == '객체 승인 2 · 대기 1 · 제외 0'
     assert rows['omx']['stages'][1]['evidence'] == '구간 검수 1/2' and states(rows['omx'])[2] == 'not_available'
+    assert rows['omx']['stages'][3]['evidence'] == 'OMX 학습 과제 2개'  # the #151 task page is where OMX training starts
+    assert rows['omx']['stages'][3]['next'] == {'label': '학습 과제', 'href': '/learning/tasks'}
     assert rows['sim']['stages'][0]['state'] == 'blocked' and '실험 2회 · 최근 FAILED' in rows['sim']['stages'][0]['evidence']
     assert rows['vlm']['stages'][1]['evidence'] == '확정 1 · 미확정 2 (임시 정답 1)'
     assert rows['vlm']['stages'][4]['state'] == 'done'
@@ -69,9 +73,27 @@ def test_object_omx_sim_and_vlm_count_only_what_exists():
     assert failed['blocked'] == 'SIM 실행 연결을 확인하세요.'
 
 
+def test_sim_row_shows_the_latest_run_stage_evidence_and_opens_that_run():
+    run_id = 'e' * 32
+    sim = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [
+        {'run_id': 'f' * 32, 'status': 'FAILED', 'updated_at': '2026-10-23T01:00:00'},
+        {'run_id': run_id, 'status': 'SUCCEEDED', 'updated_at': '2026-10-24T01:00:00',
+         'result': {'status': 'passed', 'stage': 'model_import', 'task_success': None}}]})))['sim']
+    assert sim['next'] == {'label': 'SIM 결과 확인', 'href': '/learning/sim?run=' + run_id}
+    evaluate = sim['stages'][4]
+    assert evaluate['evidence'] == '최근 단계 model_import · 과제 성공 기록 없음 · 판정 passed (근거일 뿐 승인 아님)'
+    assert evaluate['next']['href'] == '/learning/evaluate?domain=sim'
+    assert sim['stages'][5]['state'] == 'not_available'  # a SIM verdict is evidence, never a promotion record
+    failed = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [
+        {'run_id': run_id, 'status': 'SUCCEEDED', 'result': {'status': 'failed', 'task_success': False}}]})))['sim']
+    assert failed['stages'][4]['state'] == 'blocked'
+    waiting = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [{'status': 'RUNNING'}]})))['sim']
+    assert waiting['stages'][4]['state'] == 'waiting' and waiting['next']['href'] == '/learning/sim'
+
+
 def test_stored_reads_without_creating_tables(tmp_path):
     db = sqlite3.connect(tmp_path / 'x.sqlite3')
-    assert stored(db) == ([], None)
+    assert stored(db) == ([], None, 0)
     assert db.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()[0] == 0
 
 

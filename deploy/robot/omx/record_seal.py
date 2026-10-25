@@ -3,13 +3,14 @@
 
 Runs on the site PC after record_session.py, from no robot or camera access:
 
-    python record_seal.py --session-dir <dir where record_session.py ran> --name <new collection name>
+    python record_seal.py --session-dir <dir where record_session.py ran> --name <new collection name>         --rig-revision <bench layout name> --calibration <follower/leader calibration json> ...
 
 It accepts only a safe, non-teleop recording that exited 0 without interruption. It copies the
 LeRobot dataset, session.json and the recording config into ~/rosy-test/omx-collections/<name>/
-and writes the manifest last. A scripted_teacher recording (record_session.py --replay) also
-carries its trajectory as teacher/trajectory.json; the manifest names it with teacher_sha256 for
-the intake. tools/remote/omx_collection_transfer.py then moves it to the model PC.
+and writes the manifest last. The operator names the rig revision and the calibration files used;
+nothing is inferred. The collection name is the session id and episode i is cycle `<name>-ep<i>`
+(D-848), so the model PC can keep one recording in one train/eval split.
+tools/remote/omx_collection_transfer.py then moves it to the model PC.
 """
 import argparse
 import hashlib
@@ -37,9 +38,22 @@ def _hashes(root):
     return result
 
 
-def seal(session_dir, name, collections):
+def calibration_revision(files):
+    """One digest over the copied calibration files; the model-PC intake recomputes it."""
+    rows = sorted((k, v) for k, v in files.items() if k.startswith('calibration/'))
+    return hashlib.sha256(json.dumps(rows).encode('utf-8')).hexdigest()
+
+
+def seal(session_dir, name, collections, *, rig_revision, calibrations):
     if not re.fullmatch('[A-Za-z0-9][A-Za-z0-9_.-]{0,95}', name):
         raise ValueError('collection name must be a safe basename')
+    if not isinstance(rig_revision, str) or not rig_revision.strip() or rig_revision != rig_revision.strip():
+        raise ValueError('explicit rig revision required')
+    calibrations = [Path(path) for path in calibrations]
+    names = [path.name for path in calibrations]
+    if not calibrations or len(set(names)) != len(names) or not all(
+            path.suffix == '.json' and path.is_file() and not path.is_symlink() for path in calibrations):
+        raise ValueError('explicit distinct calibration json files required')
     session_dir = Path(session_dir)
     session = json.loads((session_dir/'session.json').read_text(encoding='utf-8'))
     if (session.get('safe_end') is not True or session.get('teleop_only') is not False
@@ -76,6 +90,9 @@ def seal(session_dir, name, collections):
         shutil.copytree(dataset, staging/'dataset')
         shutil.copyfile(session_dir/'session.json', staging/'session.json')
         shutil.copyfile(config_path, staging/'record-config.json')
+        (staging/'calibration').mkdir()
+        for path in calibrations:
+            shutil.copyfile(path, staging/'calibration'/path.name)
         if teacher_path is not None:
             (staging/'teacher').mkdir()
             shutil.copyfile(teacher_path, staging/'teacher'/'trajectory.json')
@@ -86,7 +103,9 @@ def seal(session_dir, name, collections):
             raise ValueError('copied dataset differs from the recording')
         manifest = dict(schema='rosy.omx-collection-session.v1', state='CLOSED', mode='hardware',
                         source_mode=source_mode, robot_type=info['robot_type'],
-                        total_episodes=info.get('total_episodes'), sealed_ns=time.time_ns(), files=files)
+                        total_episodes=info.get('total_episodes'), sealed_ns=time.time_ns(),
+                        session_id=name, rig_revision=rig_revision,
+                        calibration_revision=calibration_revision(files), files=files)
         if teacher_path is not None:
             trajectory = json.loads((staging/'teacher'/'trajectory.json').read_text(encoding='utf-8'))
             manifest.update(teacher_sha256=files['teacher/trajectory.json'], teacher=dict(
@@ -109,10 +128,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--session-dir', required=True, type=Path)
     parser.add_argument('--name', required=True)
+    parser.add_argument('--rig-revision', required=True)
+    parser.add_argument('--calibration', action='append', required=True, type=Path)
     parser.add_argument('--collections', type=Path, default=Path.home()/'rosy-test'/'omx-collections')
     args = parser.parse_args()
     try:
-        result = seal(args.session_dir, args.name, args.collections)
+        result = seal(args.session_dir, args.name, args.collections,
+                      rig_revision=args.rig_revision, calibrations=args.calibration)
     except (ValueError, OSError, KeyError, json.JSONDecodeError) as exc:
         parser.exit(2, f'refused: {exc}\n')
     sys.stdout.write(json.dumps(result, indent=2) + '\n')

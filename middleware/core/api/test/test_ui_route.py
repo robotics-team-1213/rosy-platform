@@ -135,7 +135,7 @@ def test_each_base_surface_has_its_role_panel_mounts():
         "system.display",
         "host.system", "host.operations", "setup.localization", "system.security", "setup.docking",
         "console.map", "console.mode", "console.teleop", "console.camera", "console.docking",
-        "console.line_follow",
+        "console.line_follow", "console.motor_health",
         "setup.dock_admin",
         "setup.traffic_policy",
     }

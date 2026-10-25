@@ -129,12 +129,14 @@ flowchart TD
    알리고, 다른 세션 파일을 치운 뒤 다시 시도하지 않는다. 멈춘 라운드의 NEW id는 `main`에서 한 번 더 돌린다. 거기서도 실패하는 id는 `MAIN-RED`로 찍히고 멈춤 문구가 main이 깨졌다고 적는다. 그때는 자기 브랜치를 고치지 말고, 동료가 이미 고치는지 본 다음 main만 고치는 작은 `fix/` 브랜치를 먼저 착지한다. `tools/land.py`는 치울 수 있는
    끝난 워크트리 개수를 알리기만 한다(`--prune`을 주면 치운다). 착지한 자신의 워크트리는
    `main` 체크아웃에서 명령 하나 `python tools/worktrees.py prune --apply`로 치운다. 보류하는 브랜치는 커밋해 두면 남고, 워크트리까지 남기려면
-   `git worktree lock`으로 잠근다. 푸시 순서는 `AGENTS.md`의
-   D-427 4항이다. `git fetch` 하고 `origin/main` 위로 rebase 한 뒤
-   `python tools/harness/rosy_harness.py generate`를 하고, pre-push 검사를
-   통과한 다음에 push 한다. force-push는 하지 않는다. 로컬 `main`이
-   `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
+   `git worktree lock`으로 잠근다. 푸시는 사용자가 말한 뒤에만 하고, 순서는
+   [D-868](../adr/D-868-local-main-first-merge-commit-publish.md)이다. 모든 변경은 로컬 `main`에 먼저
+   착지한다. `origin/main`이 로컬 `main`의 조상이 아니면 워크트리에서 `git merge origin/main`으로 합쳐
+   착지한다. `generate` 뒤 로컬 `main`의 끝을 `publish/main-<YYYYMMDD>` 브랜치로 push해 PR을 열고,
+   `ci-result`가 녹색이면 `gh pr merge <PR> --merge --match-head-commit <SHA>`로 merge commit 병합한 뒤
+   `main` 체크아웃에서 `git merge --ff-only origin/main`. squash·rebase 병합과 force-push는 하지 않는다.
+   로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
 
-위 푸시 순서의 rebase는 아직 원격에 게시하지 않은 주제 브랜치에만 적용한다. 이미 게시한 브랜치는 `git merge origin/main`으로 갱신하고 force-push하지 않는다. 공개 GitHub 게시·검토·병합은 [PR 파이프라인](pr-pipeline.md)을 따른다.
+주제 브랜치는 `origin/main`이 아니라 로컬 `main`에서 만든다. 이미 게시한 브랜치는 `git merge`로 갱신하고 force-push하지 않는다. 공개 GitHub 게시·검토·병합은 [PR 파이프라인](pr-pipeline.md)을 따른다.
 
 착수 다음에 손댈 제품 규칙은 [README 「핵심 계약」](../../README.md#핵심-계약)이다.

@@ -8,6 +8,7 @@ import re
 import sys
 
 
+# Format pinned: operational comparison evidence stores this digest; test_canonical_hash_formats.
 def digest(value):
     raw = json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
     if len(raw) > 1024 * 1024: raise ValueError('COMPARISON_INPUT_LIMIT')

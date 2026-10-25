@@ -148,6 +148,51 @@ def test_sim_shared_runs_replay_stop_and_disabled_scenarios(tmp_path, width):
         server.shutdown(); server.server_close(); thread.join()
 
 
+@pytest.mark.parametrize('width', [1280, 390])
+def test_evaluate_lists_sim_runs_and_each_opens_its_run(tmp_path, width):
+    playwright = pytest.importorskip('playwright.sync_api')
+    runs = SharedRuns()
+    runs.rows['b' * 32]['result'].update(stage='model_import', status='passed')
+    for index, configured in enumerate([runs, None]):
+        root = tmp_path / str(index)
+        root.mkdir()
+        server = make_server(open_store(root), 0, accounts=Accounts(), sim_runs=configured)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        base = f'http://127.0.0.1:{server.server_port}'
+        try:
+            with playwright.sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page(viewport={'width': width, 'height': 900})
+                errors = []
+                page.on('pageerror', lambda error: errors.append(str(error)))
+                browser.contexts[0].add_cookies([{'name': 'rosy_learning_session', 'value': 'reader', 'url': base}])
+                try:
+                    page.goto(base + '/learning/evaluate?domain=sim', wait_until='networkidle')
+                    block = page.locator('.evaluate-source[data-domain="sim"]')
+                    expect = playwright.expect
+                    expect(block).to_contain_text('승인·승격이 아닙니다')
+                    if configured is None:
+                        expect(block).to_contain_text('SIM 실행 연결이 설정되지 않았습니다.')
+                        assert block.locator('.evaluate-runs').count() == 0
+                    else:
+                        link = block.locator('.evaluate-runs a')
+                        expect(link).to_have_count(1)
+                        expect(link).to_contain_text('SUCCEEDED · 단계 model_import · 과제 성공 기록 없음 · 판정 passed')
+                        assert link.bounding_box()['height'] >= 44
+                        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                        link.click()
+                        page.wait_for_url('**/learning/sim?run=' + 'b' * 32)
+                        expect(page.locator('#sim-selected')).to_contain_text('b' * 32)
+                        expect(page.locator('#sim-result')).to_contain_text('model_import')
+                    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                    assert errors == []
+                finally:
+                    browser.close()
+        finally:
+            server.shutdown(); server.server_close(); thread.join()
+
+
 def test_sim_discards_check_response_after_browser_identity_changes(tmp_path):
     playwright = pytest.importorskip('playwright.sync_api')
     runs = SharedRuns()

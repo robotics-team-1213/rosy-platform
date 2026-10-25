@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from omx_adapter.camera_source import open_capture, read_frame, selected_device
+from omx_adapter.camera_source import main, open_capture, read_frame, selected_device
 
 
 class Capture:
@@ -71,16 +71,40 @@ def test_disconnected_or_changed_frame_closes_device_for_reopen(camera, frame):
     assert cap.released
 
 
-def test_numeric_device_selection_is_refused_before_open():
+@pytest.mark.parametrize("device", [
+    "/dev/video2", "0", "dev/v4l/by-path/camera", "/tmp/camera",
+    "/dev/v4l/by-path/../camera", "/dev/v4l/by-path/nested/camera",
+])
+def test_untrusted_device_selection_is_refused_before_open(device):
     with pytest.raises(ValueError, match="persistent"):
-        selected_device("/dev/video2")
+        selected_device(device)
 
 
-def test_unplugged_persistent_device_is_retryable(monkeypatch):
+@pytest.mark.parametrize("directory", ["by-id", "by-path"])
+def test_persistent_camera_symlink_to_character_device_is_accepted(monkeypatch, directory):
+    monkeypatch.setattr("omx_adapter.camera_source.Path.exists", lambda path: True)
+    monkeypatch.setattr("omx_adapter.camera_source.Path.is_symlink", lambda path: True)
+    monkeypatch.setattr("omx_adapter.camera_source.Path.is_char_device", lambda path: True)
+    device = f"/dev/v4l/{directory}/selected-camera"
+    assert selected_device(device) == device
+
+
+@pytest.mark.parametrize("directory", ["by-id", "by-path"])
+@pytest.mark.parametrize("symlink,character,error", [(False, True, ValueError), (True, False, OSError)])
+def test_persistent_selector_requires_symlink_and_character_device(monkeypatch, directory, symlink, character, error):
+    monkeypatch.setattr("omx_adapter.camera_source.Path.exists", lambda path: True)
+    monkeypatch.setattr("omx_adapter.camera_source.Path.is_symlink", lambda path: symlink)
+    monkeypatch.setattr("omx_adapter.camera_source.Path.is_char_device", lambda path: character)
+    with pytest.raises(error):
+        selected_device(f"/dev/v4l/{directory}/selected-camera")
+
+
+@pytest.mark.parametrize("directory", ["by-id", "by-path"])
+def test_unplugged_persistent_device_is_retryable(monkeypatch, directory):
     monkeypatch.setattr("omx_adapter.camera_source.Path.is_symlink", lambda path: False)
     monkeypatch.setattr("omx_adapter.camera_source.Path.exists", lambda path: False)
     with pytest.raises(OSError, match="unavailable"):
-        selected_device("/dev/v4l/by-id/unplugged-camera")
+        selected_device(f"/dev/v4l/{directory}/unplugged-camera")
 
 
 @pytest.mark.parametrize("fps", ["0", "-1", "31"])
@@ -90,3 +114,19 @@ def test_frame_rate_cap_is_bounded_before_ros_starts(monkeypatch, fps):
                                      "--topic", "/omx/top", "--frame-id", "top", "--max-fps", fps])
     with pytest.raises(SystemExit):
         camera_source.main()
+
+
+def test_cli_accepts_persistent_by_path_before_optional_ros_imports(monkeypatch):
+    import builtins
+    original_import = builtins.__import__
+
+    def stop_at_camera_import(name, *args, **kwargs):
+        if name == "cv2":
+            raise RuntimeError("camera arguments accepted")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("sys.argv", ["camera_source", "--device", "/dev/v4l/by-path/selected-camera",
+                                     "--topic", "/arm_a_wrist_camera/image_raw", "--frame-id", "arm_a_wrist"])
+    monkeypatch.setattr(builtins, "__import__", stop_at_camera_import)
+    with pytest.raises(RuntimeError, match="camera arguments accepted"):
+        main()

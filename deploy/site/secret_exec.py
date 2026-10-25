@@ -20,13 +20,17 @@ def main(argv: list[str] | None = None) -> int:
     if separator != 0 or len(args) < 2:
         raise SystemExit("unexpected secret bootstrap arguments")
     command = args[1:]
-    mapping_text = os.environ.pop("ROSY_CREDENTIAL_PATHS", "{}")
-    try:
-        mounted_paths = json.loads(mapping_text)
-    except json.JSONDecodeError as exc:
-        raise SystemExit("ROSY_CREDENTIAL_PATHS must be a JSON object") from exc
-    if not isinstance(mounted_paths, dict):
-        raise SystemExit("ROSY_CREDENTIAL_PATHS must be a JSON object")
+    mounted_paths = {}
+    for setting in ("ROSY_CREDENTIAL_PATHS", "ROSY_ADDITIONAL_CREDENTIAL_PATHS"):
+        try:
+            paths = json.loads(os.environ.pop(setting, "{}"))
+        except json.JSONDecodeError:
+            raise SystemExit(f"{setting} must be a JSON object") from None
+        if not isinstance(paths, dict):
+            raise SystemExit(f"{setting} must be a JSON object")
+        if mounted_paths.keys() & paths.keys():
+            raise SystemExit("additional credentials must not replace existing credential names")
+        mounted_paths.update(paths)
     for name, raw_path in mounted_paths.items():
         if not isinstance(name, str) or not _ENV_NAME.fullmatch(name):
             raise SystemExit("secret environment names must be uppercase identifiers")

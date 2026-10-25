@@ -1,6 +1,8 @@
 import {accountFetch} from '/account-session.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
+$('theme').value=document.documentElement.dataset.theme||'dark';
+$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 let token='', manager=false, busy=false, source='', checked=null, selected=null, pending=null;
 const terminal=new Set(['SUCCEEDED','FAILED','STOPPED']);
 const labels={PENDING:'준비 중',RUNNING:'실행 중',STOP_REQUESTED:'종료 확인 중',UNKNOWN:'확인 필요',SUCCEEDED:'실행 완료',FAILED:'실패',STOPPED:'중단'};
@@ -91,5 +93,9 @@ work(async()=>{
   }
   const saved=sessionStorage.getItem('rosy.sim.pending.'+source);
   if(saved){pending=JSON.parse(saved);$('sim-seed').value=pending.config.seed;notice('sim-checked','이전 요청이 보존되었습니다. 조건 확인 후 같은 요청을 재전송할 수 있습니다.');}
-  await refresh();notice('sim-notice',manager?'조건을 확인한 뒤 실험을 시작하세요.':'조회 화면입니다. 실행·중지는 프로젝트 관리 권한이 필요합니다.');
+  await refresh();
+  // /learning/sim?run=<id> (home row, 평가·승격 list) opens that run the same way a click does.
+  const wanted=new URLSearchParams(location.search).get('run');
+  if(/^[0-9a-f]{32}$/.test(wanted||''))detail(await api('runs/'+wanted));
+  notice('sim-notice',manager?'조건을 확인한 뒤 실험을 시작하세요.':'조회 화면입니다. 실행·중지는 프로젝트 관리 권한이 필요합니다.');
 });

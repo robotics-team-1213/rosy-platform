@@ -817,6 +817,18 @@
 - 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
 - gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
 
+## 2026-10-19 · uncommitted · D-806 웹 전용 앱 제목 게시
+
+- 변경: Learning·Games의 title_prefix와 기존 Fleet 하위 화면 제목 검사를 반영한다. 런처·패키지 신원은 유지한다.
+- 증거: 원래 구현과 로컬 착지 검증은 보존한다. 이 게시 head는 별도 원격 검사·독립 검토·CI로 확인한다.
+- gate 변화: 없음. 이 기록은 운영 배포나 장치 수용의 증거가 아니다.
+
+## 2026-10-20 · uncommitted · Console transport 소유 위치 정리
+
+- 변경: Console에서만 쓰는 fleet-client.js·request.js를 Console/shared로 byte 그대로 옮겼다. 설치·정적 경로·브라우저 fixture·Node import를 갱신하고 기존 common 두 URL은 Fleet의 고정 alias로 보존했다.
+- 증거: f6dc4ceca8 원격 shared/web·설치·앱 소유 계약·아키텍처 479 passed/49 skipped, NEW0. 이동 후 scope fixture 경로와 문서 공통 목록에서 드러난 실패는 소유 위치에 맞춰 수정했다. 최종 head의 정상 push gate와 GitHub CI는 별도로 확인한다.
+- gate 변화: 없음. 실제 로봇·현장 수용은 수행하지 않았다.
+
 ## 2026-10-21 · uncommitted · 공용 테마 순환 단추와 ui-button 암묵 제출
 
 - 변경: `[data-theme-cycle]` 단추 배선을 Fleet 머리(fleet-header.js)에서 ui.js로 옮겨 모든 앱이 같은 단추를 쓴다. 폼 안의 첫 `ui-button type="submit"`이 입력칸 Enter의 기본 단추가 된다(사용자 정의 요소는 브라우저 암묵 제출 대상이 아니다).
@@ -841,6 +853,24 @@
 - 증거: 시험 PC 캡처(학습 8화면·Robot 3표면, 두 테마). 원격 pytest는 착지에서 기록한다.
 - gate 변화: 없음.
 
+## 2026-10-21 · uncommitted · 지도 source holder의 공용 UI 계약 연결
+
+- 변경: 이동한 지도 소스를 palette·문서 제목 검사가 계속 읽도록 경로를 갱신했다. 새 편집 버튼의 종류와 실행 취소·다시 실행·파일 입력 비활성 사유도 공용 부품 계약에 맞췄다.
+- 증거: 78e3516e45 원격 지도/브라우저/계약526통과 NEW0 이후 전체 영향 검사에서 공용 UI 계약 누락을 발견했다. 수정 SHA의 공용 UI·브라우저·게시 검사는 별도로 실행한다.
+- gate 변화: 없음. 물리 교정·로봇 이동 수용은 수행하지 않았다.
+
+## 2026-10-21 · uncommitted · 인증 범위를 유지하는 binary 응답 읽기
+
+- 변경: Console 소유 request에 명시적 blob 응답 선택만 추가했다. 기본 JSON·JSON 오류·현재 credential·same-origin·redirect 거절·취소 전파는 유지하며 지도는 이를 통해 이미지 ObjectURL을 만들고 정리한다.
+- 증거: 02d8082c89의 원격 transport/importer RED2실패를 관찰하고, 7ae0f2e05a 원격 shared transport·Node·실제 Chromium·설치17통과와 93f8408f19 후속43통과를 확인했다. NEW0이며 browser skip을 성공으로 세지 않았다.
+- gate 변화: 없음. 새 credential 저장·다른 origin 허용·자동 쓰기 재시도는 추가하지 않았다.
+
+## 2026-10-21 · uncommitted · Console 인증 분리 후 캔버스 검사 유지
+
+- 변경: Console 인증 팩토리로 이동한 지도 캔버스 초기화도 기존 색상·글꼴 검사 목록에 포함했다. 면제나 검사 완화는 추가하지 않았다.
+- 증거: source commit 27d4576f4230의 원격 영향 검사에서 미등록 캔버스 파일 1개를 발견했다. 수정 커밋에서 공용 UI 계약과 최종 게시 검사를 다시 실행한다.
+- gate 변화: 없음. 운영 배포와 실제 장치 수용은 별도 확인한다.
+
 ## 2026-10-22 · uncommitted · Account 브라우저 세션을 공통 모듈 하나로
 
 - 변경: Robot·Pilot·Games가 각자 복사해 쓰던 Account 세션 확인(순번으로 늦은 응답 버리기, 프로필 발행, 같은 origin 탭 신원 표시 `rosy.account.identity`, 10초 확인, 로그아웃)을 `account-session.js` 하나로 모았다. 앱은 자기 상태를 `current`/`apply`/`changed` 훅으로 넘기며 `restoreAccount` 등 기존 export는 그대로다. Games는 첫 확인 실패 뒤에도 계속 확인하도록 자체 주기를 유지한다. 서버 쪽 `/api/account/session` 본문은 `AccountClient.browser_session` 하나가 만들고 CORE와 Games가 쓴다(Games는 `can_operate`만 더함). 공유 자산 목록·CMake·Pilot 오프라인 캐시에 등록했다.
@@ -852,6 +882,30 @@
 - 변경: createRequest factory의 선택적 readResponse가 raw Response를 해석하도록 했다. 헤더 우선 거절·엄격 JSON은 소비자에 남기고, 기본 JSON/204/blob와 인증·origin·timeout·취소·단일 전송은 보존한다. Fleet 소비자는 이 커밋에 포함하지 않는다.
 - 증거: 이전 committed transport에 새 시험을 적용하면 7개 RED, 구현 뒤 request Node 31 passed/skip 0. reader 결과·오류와 본문 미소비 거절, malformed/empty/204 거절, body 중 부모 취소·timeout, 오류 시 구독 정리와 기본 blob을 확인했다. 공식 원격·FULL 검증은 커밋 후 수행한다.
 - gate 변화: 기존 gate의 물리 수용 범위를 넓히지 않는다. camera-peer 전환·장치·배포 완료를 주장하지 않는다.
+
+## 2026-10-22 · 79a11a4a54 · 모터 상태 공용 표시와 하드웨어 오류 신원
+
+- 변경: 주의 모터 수와 실제 알려진 고장 모터 수를 구분하고 표준 관절 이름·오류 32·마지막 관측을 표시한다.
+- 증거: 921062fb1c 공용 자산/부품/패널/Node 계약 원격 84 passed/skip0/NEW0; JS/CSS 검출 결과 [] exit0.
+- gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+
+## 2026-10-22 · uncommitted · 모터 표 포커스 공용 치수
+
+- 변경: 모터 표 스크롤 영역의 2px 포커스 폭·간격을 같은 값의 공유 토큰으로 바꿨다.
+- 증거: PR152 CORE CI에서 공유 포커스 치수 계약 위반 1개를 확인했다. 해당 계약과 모터 표를 수정 커밋에서 공식 원격 재검증한다.
+- gate 변화: 포커스 표시 치수는 동일하며, 명령·토크·정지 경로는 바꾸지 않았다.
+
+## 2026-10-22 · c95916b97d · Learning 카메라 캔버스 계약 포함
+
+- 변경: 새 카메라 정렬 renderer를 정상 CANVAS_FILES 목록에 추가해 공용 팔레트·글꼴 판정을 받도록 했다. 예외는 추가하지 않았다.
+- 증거: 139dc53f5d 확대 회귀에서 목록 누락 NEW 1을 재현했다. c95916b97d 원격 공용 캔버스 계약 41건 통과, 기존 실패 비교 NEW 0.
+- gate 변화: 없음. 실물 카메라 위치·동기와 운영 배포 수용은 별도다.
+
+## 2026-10-22 · uncommitted · Published-source Learning shell coverage
+
+- 변경: 공개 원격 main의 테마 선택과 공용 셸을 유지하면서 Learning 화면의 계정 진입점·로봇암·카메라 레일 계약을 맞췄다. OMX 설정·검수·학습, 계정, 카메라, SIM, 현재 자료의 학습 흐름을 읽는 Chromium 시험을 소유 소스와 공용 웹 변경의 browser scope에 연결했다.
+- 증거: 셸 문서의 식별자·구조와 시험 선택 코드의 구문을 확인했다. 이 포트의 커밋된 SHA에 대한 공용 UI 계약·원격 브라우저 시험은 대기 중이며 이전 개발 브랜치 결과를 대신 쓰지 않는다.
+- gate 변화: 없음. 운영 배포·실제 사용자·장치 수용은 별도다.
 
 ## 2026-10-23 · uncommitted · Fleet 머리 계정 메뉴를 한 줄로 접는다
 

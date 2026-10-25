@@ -4,11 +4,79 @@ import threading
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
+from types import SimpleNamespace
+from http.cookies import SimpleCookie
 
 import pytest
 from test_review_app import open_store
 from review_app import make_server
 from test_learning_accounts import accounts, sign_in
+
+
+def test_central_project_cookies_coexist_on_shared_https_host(tmp_path):
+    from learning_collaboration import Collaboration, COOKIE, BINDING
+    jar = SimpleCookie()
+    apps = []
+    try:
+        for project, port in [('alpha', 9444), ('beta', 9445), ('alpha', 9446)]:
+            folder = tmp_path / str(port); folder.mkdir()
+            account = Accounts()
+            account.project_id = project
+            account.public_origin = f'https://learning.example:{port}'
+            account.receiver = SimpleNamespace(retry_revocations=lambda: None)
+            app = Collaboration(account, open_store(folder))
+            apps.append(app)
+            handler = SimpleNamespace(extra_headers=[])
+            for name in (COOKIE, BINDING, 'rosy_account_flow'):
+                app.set_cookie(handler, name, f'{port}-value')
+            for _, value in handler.extra_headers:
+                parsed = SimpleCookie(value)
+                morsel = next(iter(parsed.values()))
+                assert morsel['secure'] and morsel['httponly'] and morsel['samesite'] == 'Lax'
+                assert morsel['path'] == '/' and not morsel['domain']
+                jar.load(value)
+        assert len(jar) == 9
+        for app, port in zip(apps, (9444, 9445, 9446)):
+            assert app.cookie(SimpleNamespace(headers={'Cookie': COOKIE + '=legacy'}), COOKIE) == ''
+            seen = []
+            app.accounts.authenticate = lambda value: seen.append(value) or {'capabilities': ['view']}
+            handler = SimpleNamespace(headers={'Cookie': jar.output(header='', sep=';')})
+            app.identity(handler)
+            assert seen == [f'{port}-value']
+            handler.extra_headers = []
+            app.set_cookie(handler, COOKIE, '', clear=True)
+            assert 'Max-Age=0' in handler.extra_headers[0][1]
+            jar.load(handler.extra_headers[0][1])
+    finally:
+        for app in apps:
+            app.shutdown()
+
+
+@pytest.mark.parametrize('cookie_scope,expected', [('own', 403), ('legacy', 401), ('other', 401)])
+def test_central_session_without_project_grant_uses_scoped_cookie(tmp_path, cookie_scope, expected):
+    from learning_collaboration import Collaboration, COOKIE
+
+    class NoGrant(Accounts):
+        def authenticate(self, session):
+            principal = super().authenticate(session)
+            principal['capabilities'] = []
+            return principal
+
+    account = NoGrant()
+    account.public_origin = 'https://learning.example:9444'
+    account.receiver = SimpleNamespace(retry_revocations=lambda: None)
+    app = Collaboration(account, open_store(tmp_path))
+    try:
+        name = COOKIE + (app.cookie_suffix if cookie_scope == 'own' else '_other' if cookie_scope == 'other' else '')
+        responses = []
+        handler = SimpleNamespace(headers={'Cookie': name + '=reader'}, extra_headers=[],
+                                  path='/api/accounts/session',
+                                  send=lambda body, status=200: responses.append((body, status)))
+        assert app.get(handler, '/api/accounts/session', 'csrf-token')
+        assert responses[0][1] == expected
+        assert not handler.extra_headers  # No login redirect or session replacement.
+    finally:
+        app.shutdown()
 
 
 class Accounts:
@@ -50,6 +118,15 @@ def running(tmp_path):
         thread.join()
 
 
+def test_session_without_view_is_forbidden_not_signed_out(tmp_path):
+    with running(tmp_path) as (base, accounts, _):
+        def deny(principal, capability):
+            raise PermissionError('denied')
+        accounts.require = deny
+        assert request(base, '/api/accounts/session', 'reader')[0] == 403
+        assert request(base, '/api/accounts/session')[0] == 401
+
+
 def request(base, path, session=None, body=None, token=None, *, cookie_name='rosy_learning_session'):
     headers = {'Origin': base}
     if session:
@@ -63,23 +140,6 @@ def request(base, path, session=None, body=None, token=None, *, cookie_name='ros
             return response.status, json.load(response)
     except urllib.error.HTTPError as error:
         return error.code, json.load(error)
-
-
-@pytest.mark.parametrize('path', ['/learning?view=training', '/pixels?frame=1&filter=pending'])
-def test_login_redirect_preserves_learning_task(tmp_path, path):
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
-            return None
-
-    from urllib.parse import parse_qs, urlparse
-    with running(tmp_path) as (base, _accounts, _store):
-        opener = urllib.request.build_opener(NoRedirect)
-        with pytest.raises(urllib.error.HTTPError) as error:
-            opener.open(base + path)
-        assert error.value.code == 303
-        redirect = urlparse(error.value.headers['Location'])
-        assert redirect.path == '/accounts'
-        assert parse_qs(redirect.query) == {'return': [path]}
 
 
 def test_cancel_retry_waits_for_previous_worker_then_runs_via_http(tmp_path, accounts):
@@ -285,3 +345,64 @@ def test_oauth_setup_rejected_before_workspace_binding(tmp_path, accounts, origi
         Collaboration(accounts, store, oauth=OAuth(accounts))
     with store.connect() as db:
         assert db.execute("SELECT value FROM metadata WHERE key='collaboration_project'").fetchone() is None
+
+
+def test_verified_hf_import_enters_review_pending_with_provenance(tmp_path):
+    import hashlib
+    import cv2
+    import numpy as np
+    import review_masks
+    from learning_imports import LearningImports
+    from test_learning_imports import Transport, RIGHTS, SHA
+    from test_review_cycle import CLASSES
+    accounts = Accounts()
+    def authorize(actor, project, capability):
+        if project != 'alpha':
+            raise PermissionError('project')
+        accounts.require(actor, capability)
+    def credential(actor, project, connection, generation=None, resource=None):
+        return {'token': 'selected-secret', 'generation': 1}
+    transport = Transport()
+    imports = LearningImports(tmp_path / 'imports', authorize, credential, transport=transport)
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    reviewer = accounts.authenticate('reviewer')
+    def job(files):
+        transport.data = files
+        return imports.create(reviewer, 'alpha', 'hf-a', 'dataset', 'org/data', 'main', sorted(files), RIGHTS)
+    png = lambda value: cv2.imencode('.png', np.full((24, 32, 3), value, np.uint8))[1].tobytes()
+    good = job({'img/a.png': png(90), 'classes.yaml': CLASSES})
+    server = make_server(store, 0, accounts=accounts, imports=imports)
+    thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+    url = f'http://127.0.0.1:{server.server_port}'
+    try:
+        _, workspace = request(url, '/api/workspace', 'reviewer')
+        send = lambda session, ident: request(url, '/api/learning/imports/review', session, {'id': ident},
+                                              workspace['token'])
+        frames = len(store.list_frames())
+        assert send('reviewer', good['id'])[0] == 400   # not downloaded yet
+        imports.run(good['id'], reviewer)
+        assert send('editor', good['id'])[0] == 403      # edit alone cannot bring data in
+        status, done = send('reviewer', good['id'])
+        assert status == 200 and done['review']['added'] == 1 and done['review']['registered_by'] == 'reviewer'
+        index = done['review']['indices'][0]
+        assert store.get(index)['status'] == 'pending'
+        assert review_masks.get(store, index)['status'] == 'pending'
+        with store.connect() as db:
+            source = json.loads(db.execute('SELECT source FROM frames WHERE id=?', (index,)).fetchone()[0])
+        assert source['upstream'] == dict(source['upstream'], provider='huggingface', repo_id='org/data',
+                                          revision=SHA, path='img/a.png', registered_by='reviewer',
+                                          sha256=hashlib.sha256(png(90)).hexdigest(), import_id=good['id'])
+        assert send('reviewer', good['id'])[1]['review'] == done['review']
+        assert len(store.list_frames()) == frames + 1
+        other = job({'img/b.png': png(120), 'classes.yaml': CLASSES + b'# another class set\n'})
+        imports.run(other['id'], reviewer)
+        assert send('reviewer', other['id'])[0] == 400   # D-485: another class set is refused
+        tampered = job({'img/c.png': png(150)})
+        imports.run(tampered['id'], reviewer)
+        (tmp_path / 'imports' / 'artifacts' / tampered['id'] / 'files' / 'img' / 'c.png').write_bytes(png(151))
+        assert send('reviewer', tampered['id'])[0] == 400
+        assert len(store.list_frames()) == frames + 1
+        assert 'review' not in imports.get(reviewer, 'alpha', other['id'])
+    finally:
+        server.shutdown(); server.server_close(); thread.join(5)

@@ -28,7 +28,7 @@ Ubuntu site-host stack: Caddy TLS proxy, Fleet console and task SQLite, and Visi
 | `site-maps/map_v2_fleet-v5.json` | D-525 rev 5 site map traced from the painted track; activated through the Fleet site-map draft/activate API, never read at start |
 | `site_db.py`, `site_users.py`, `secret_exec.py` | Site DB maintenance, atomic `site-users.yaml` maintenance (digest-only registry), secret-injecting exec wrapper |
 | `install-model-watch.sh`, `rosy-model-watch`, `rosy-model-watch.*`, `model-watch.yaml.example` | Model watch installer, stable entry-point wrapper (finds the watcher before or after the D-427 move), units and config template |
-| `rosy_model_code.py`, `model_code_layout.py`, `model_code_execution.py`, `model_code_source.py`, `install-model-code.sh` | Installed D-446 controller, its allowlisted signed layout, retained signature proof, and fresh source verification under the same lock and idle/environment guards. The installer copies all trusted helpers beside the controller; legacy public controller calls and exports remain available. Strict calls supply full source, manifest, and environment pins. |
+| `rosy_model_code.py`, `model_code_jobs.py`, `model_code_layout.py`, `install-model-code.sh` | Installed D-446 controller, its signed job entry table and allowlisted signed layout (origin packaging, model PC release 32); the installer copies the helpers beside the controller. Strict signed execution with retained proof (local 10-19) is a follow-up on this packaging |
 | `rosy-site-stack.service` | systemd unit for the stack |
 | `*.example`, `*.template.txt` | Config and secret templates only (robots, users, cameras, tokens) |
 

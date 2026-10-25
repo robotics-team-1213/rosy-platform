@@ -122,6 +122,22 @@ class ProtocolTest {
     }
 
     @Test
+    fun parsesFieldBoundaryStatusExample() {
+        val parsed = Protocol.parseServerMessage(messages.getJSONObject("status_field_example").toString())
+        assertEquals(
+            ServerMessage.Status(
+                cornersSeen = emptyList(),
+                cornersNeeded = 0,
+                robotsSeen = listOf("rosy_01"),
+                rxFps = 3.0,
+                dropped = 0,
+                fieldState = "orientation_pending",
+            ),
+            parsed,
+        )
+    }
+
+    @Test
     fun rejectsConfigWithOutOfRangeValues() {
         val base = messages.getJSONObject("config_default")
         val cases = listOf("fps" to 0, "width" to 0, "jpeg_quality" to 101, "jpeg_quality" to 0, "max_bytes" to 0)

@@ -19,3 +19,11 @@
 | D-446/D-545/D-561 | 모델 PC 서명 릴리스·검수 상태 보존·실패 복구 유지 |
 
 원격 시험은 loopback 쓰기/Host 거절, 같은 PC 봉인 전달과 중복·변조·링크 거절, owner 수용과 TTL·철회·eval 중복을 검증한다. 격리 fixture와 실제 사람 정답/운영 학습 수용은 구별한다.
+
+### Addendum (2026-10-24)
+
+협업 모드(D-757) 앱은 무인증 `--decisions-port`를 열지 않으므로 같은 PC bridge는 `authority.state`로 검수 state의 `reviews.sqlite3`를 SQLite `mode=ro`로 읽는다. 문서는 `/api/decisions`와 같다. 이 보완은 권한 규칙을 지키는 같은 PC state 출처를 추가할 뿐 D-742의 loopback 결정을 뒤집지 않는다. `endpoint`와 `state` 중 하나만 허용하고, 링크·`..` 없는 정규 절대 경로, 같은 `workspace_id`, WAL이 아닌 DB를 요구한다. POSIX에서는 state 폴더·DB·journal 파일이 현재 사용자 소유이고 group/other 권한이 없어야 하므로 무인증 loopback 포트보다 범위가 좁다. 이후 검증·revision·전달 단계는 바뀌지 않는다. 원격 시험 수용이며 모델 PC 운영 수용은 별도다.
+
+| 계약 | 관계 |
+|---|---|
+| D-757 | 협업 모드는 무인증 decisions-port를 제외한다. 같은 PC bridge는 이 addendum의 state 출처를 쓴다 |

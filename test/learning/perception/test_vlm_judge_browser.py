@@ -5,9 +5,9 @@ import pytest
 from browser_harness import browser_tests_enabled, free_port
 
 import vlm_judge
+import vlm_judge_report
 from review_app import make_server
-from test_review_app import open_store
-from test_vlm_judge import QUESTIONS, wrist
+from test_vlm_judge import QUESTIONS, open_store, wrist
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
@@ -135,6 +135,6 @@ def test_audit_shows_the_consensus_and_records_confirm_and_fix(tmp_path, monkeyp
                 browser.close()
     finally:
         server.shutdown(); server.server_close(); thread.join()
-    audits = {row['question']: row for row in vlm_judge.evaluation(store)['audits']}
+    audits = {row['question']: row for row in vlm_judge_report.evaluation(store)['audits']}
     assert audits['wrist.object_in_gripper'] == {'question': 'wrist.object_in_gripper', 'n': 2, 'errors': 1, 'rate': 0.5, 'paused': False}
     assert audits['wrist.gripper_empty']['errors'] == 0

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 import threading
 
-from omx_adapter.pick_place_transaction import ArmActionResult, PickPlaceWorkflowJournal, TransactionError
+from omx_adapter.pick_place.pick_place_transaction import ArmActionResult, PickPlaceWorkflowJournal, TransactionError
 
 
 class CellTransferWorkflowExecution:

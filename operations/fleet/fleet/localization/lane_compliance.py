@@ -27,6 +27,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, fields
 from typing import Mapping, Optional
+from rosy.world.state.projections.map_pose import wrap_angle as _wrap
 
 from core_common.robot_body import NOMINAL_BODY
 
@@ -178,10 +179,6 @@ class LaneCompliance:
     #: Consecutive samples under ``warn_margin_m`` / under 0 so far (ACT ones count for both).
     warn_count: int
     act_count: int
-
-
-def _wrap(angle: float) -> float:
-    return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
 
 #: Numerical tolerance for "the foot point is the arc's end", not a tuning value.

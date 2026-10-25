@@ -35,6 +35,10 @@ data class CornerGuide(val seen: List<Int>, val needed: Int, val robots: List<St
         fun reportsMarkers(status: ServerMessage.Status): Boolean =
             status.cornersSeen.isNotEmpty() || status.robotsSeen.isNotEmpty()
 
+        /** A field_boundary source (D-484) calibrates from the floor boundary and needs no corner markers. */
+        fun usesFieldBoundary(status: ServerMessage.Status): Boolean =
+            status.fieldState != null && status.cornersNeeded == 0
+
         fun from(status: ServerMessage.Status): CornerGuide = CornerGuide(
             seen = status.cornersSeen.distinct().sorted(),
             needed = status.cornersNeeded.coerceAtLeast(0),

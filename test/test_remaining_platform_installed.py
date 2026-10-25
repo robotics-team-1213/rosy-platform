@@ -12,6 +12,7 @@ import tarfile
 import zipfile
 
 import pytest
+import yaml
 from setuptools.command.develop import develop
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,7 +42,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     sources = []
     for relative in ('operations/fleet', 'operations/decision', 'applications/fleet/web', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
-                     'operations/site_execution', 'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
+                     'operations/site_execution', 'operations/processes/palletizing', 'applications/fleet/gateway',
+                     'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
@@ -64,6 +66,10 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
     assert {'incident-view.js', 'sitemap/site-map-survey.js', 'sitemap/site-map-camera.js', 'shared/site-map-edit.js',
             'work/__init__.py', 'work/work-view.js', 'work/work.css', 'shared/power-action.js', 'shared/area-nav.js', 'work/channel-request-view.js'} <= expected.keys()
+    assert {'sitemap/edit-history.js', 'sitemap/geometry-edit.js', 'sitemap/drawing-import.js', 'sitemap/map-editor.js',
+            'sitemap/map-authoring.js', 'sitemap/map-editor.css', 'sitemap/map-topology.js',
+            'sitemap/extraction-review.js', 'shared/drawing-errors.js', 'cell/cell-observation.js',
+            'motor-health-view.js', 'roster-cards.js', 'learning.html'} <= expected.keys()
     # Colcon selects full install for external holders instead of unsafe editable cleanup.
     develop_help = run(['setup.py', '--help', 'develop'], staging / 'operations/fleet').stdout
     assert not any(line.lstrip().startswith('--editable') for line in develop_help.splitlines()), develop_help
@@ -78,7 +84,8 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
             assert any(name.endswith('/_build/fleet_sources.py') for name in archive.getnames())
             assessment_files = {Path(name).name for name in archive.getnames()
                                 if '/_source_roots/assessment/' in name and name.endswith('.py')}
-            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
+            assert assessment_files == {'__init__.py', 'assessment.py', 'snapshot_assessment.py',
+                                        'wait_graph.py', 'fact_rules.py'}
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
         shutil.rmtree(staging / 'applications/fleet/web')
@@ -308,7 +315,30 @@ with TestClient(app) as client:
         assert client.get('/console/assets/' + name).status_code == 200, name
     assert client.get('/console/assets/not-allowed.js').status_code == 404
     assert client.get('/console/assets/%2e%2e/package.xml').status_code == 404
-print('installed namespace, resources and HTTP guards verified')
+from fleet.server.cell_compiler import PalletizingCellJobCompiler
+from fleet.server.cell_goal_evidence import make_cell_job_resolver
+import rosy.processes.palletizing.submission as process_submission
+assert Path(process_submission.__file__).resolve().is_relative_to(installed)
+recipe, cell = json.loads(sys.argv[7])
+compiler = PalletizingCellJobCompiler(tol_m=.001)
+compilation = compiler.compile(recipe, cell)
+candidate = dict(kind='cell_job', recipe=recipe, cell=cell, job=compilation.job,
+                 recipe_sha256=compilation.plan_bundle.recipe_digest,
+                 cell_sha256=compilation.plan_bundle.cell_digest)
+resolve = make_cell_job_resolver(compiler, None)
+document = resolve(candidate, workcell_id='cell-1', instance_id='arm-1')
+assert document['resources'] == [['workcell', 'cell-1'], ['pallet', 'A'], ['pallet', 'B']]
+assert len(document['steps']) == 18
+assert document['ledger_markers'] == [{'after_step_ordinal': 9, 'pallet_id': 'A'},
+                                     {'after_step_ordinal': 18, 'pallet_id': 'B'}]
+candidate['job']['steps'][1]['target']['x'] += .001
+try:
+    resolve(candidate, workcell_id='cell-1', instance_id='arm-1')
+except ValueError as exc:
+    assert 'differs from the recompiled Job' in str(exc)
+else:
+    raise AssertionError('installed Fleet accepted tampered process Job')
+print('installed namespace, resources, HTTP guards and Fleet Cell submission verified')
 '''
     modules = ['rosy.decision.deliberation.evaluation.reasoning_candidate',
                'rosy.decision.conversation.codec', 'fleet.server.channel.conversation.jobs',
@@ -355,9 +385,12 @@ print('installed namespace, resources and HTTP guards verified')
                'rosy_situation.assessment', 'rosy_situation.snapshot_assessment',
                'fleet.incidents.notifications', 'fleet.incidents.handoff', 'rosy.execution.site.goal_evidence',
                'rosy.execution.site.workflow']
+    examples = ROOT / 'operations/processes/cell/examples/omx_sim'
+    documents = json.dumps([yaml.safe_load((examples / name).read_text(encoding='utf-8'))
+                            for name in ('recipe.yaml', 'cell.yaml')])
     for order in (modules, list(reversed(modules))):
         run(['-I', '-c', probe, str(installed), json.dumps(order), json.dumps(expected),
-             json.dumps(signed(kind=APPROVE)), json.dumps(binding()), KEY.hex()], tmp_path)
+             json.dumps(signed(kind=APPROVE)), json.dumps(binding()), KEY.hex(), documents], tmp_path)
     if delivery == 'wheel':
         native = tmp_path / 'native/lib/python3.12/site-packages'
         excluded = ('rosy_execution-', 'rosy_contracts_skill-', 'rosy_contracts_motion-')
@@ -438,6 +471,11 @@ from fleet.server import mission_service
 from rosy.execution.site.goal_evidence import GoalEvidence
 assert mission_service.GoalEvidence is GoalEvidence
 from rosy_situation.assessment import Assessment
+for name in ('fleet.stuck.ai_facts', 'fleet.traffic.blocks'):
+    importlib.import_module(name)
+for name in ('rosy_situation.fact_rules', 'rosy_situation.wait_graph'):
+    spec = importlib.util.find_spec(name)
+    assert Path(spec.origin).resolve().is_relative_to(roots[0].parent / 'situation/rosy_situation')
 assert importlib.util.find_spec('rosy_situation.service') is None
 board = LineStuckBoard(clock=lambda: 100.0, wall=lambda: 100.0)
 board.observe([{'robot_id': 'pinky', 'online': False}])
@@ -446,8 +484,8 @@ assert board.intervention_assessment('pinky').necessity == 'ABSTAIN'
 '''
     run(['-I', '-c', probe, json.dumps(list(map(str, roots)))], tmp_path)
     package = image / 'opt/rosy/src/site/situation/rosy_situation'
-    assert {p.name for p in package.glob('*.py')} == {'__init__.py', 'assessment.py', 'snapshot_assessment.py'}
+    modules = ('__init__.py', 'assessment.py', 'snapshot_assessment.py', 'fact_rules.py', 'wait_graph.py')
+    assert {p.name for p in package.glob('*.py')} == set(modules)
     allowed = {line for line in (ROOT / 'deploy/site/Dockerfile.fleet.dockerignore').read_text().splitlines()
                if line.startswith('!operations/situation')}
-    assert allowed == {'!operations/situation/rosy_situation/' + name for name in
-                       ('__init__.py', 'assessment.py', 'snapshot_assessment.py')}
+    assert allowed == {'!operations/situation/rosy_situation/' + name for name in modules}

@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
+from core_common.protocol.motor_health import MotorHealthResponse
 from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.http_errors import http_error
@@ -174,6 +175,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     power_display = app.state.power_health_display = CapabilityDisplay(
         console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse,
         refresh_s=1.0, max_age_s=5.0)
+    motor_display = app.state.motor_health_display = CapabilityDisplay(
+        console._clients, console._clock, read_method="motor_health", schema=MotorHealthResponse,
+        refresh_s=1.0, age_from_request=True)
     lane = getattr(app.state, "lane_compliance", None)
     async def gathered() -> dict:
         snapshot = await gather()
@@ -189,13 +193,21 @@ def install_console_routes(app, *, console, sightings, require_viewer,
             observed = row.pop("_state_mono", None)
             row["state_age_s"] = None if observed is None else round(max(0.0, now - observed), 3)
             rows.append(row)
-        power = await asyncio.gather(*(power_display.shown(row["robot_id"], wait_s=0.5)
-                                       for row in rows if row["online"]))
+        power, motors = await asyncio.gather(
+            asyncio.gather(*(power_display.shown(row["robot_id"], wait_s=0.5)
+                             for row in rows if row["online"])),
+            asyncio.gather(*(motor_display.shown(row["robot_id"], wait_s=0.5)
+                             for row in rows if row["online"])))
         power_values = iter(power)
         for row in rows:
             row["power_health"] = next(power_values) if row["online"] else None
             row["power_health_age_s"] = (power_display.age(row["robot_id"])
                                          if row["power_health"] is not None else None)
+        motor_values = iter(motors)
+        for row in rows:
+            row["motor_health"] = next(motor_values) if row["online"] else None
+            row["motor_health_age_s"] = (motor_display.age(row["robot_id"])
+                                         if row["motor_health"] is not None else None)
         # D-550 8 / D-760 3 stage 1: warn only. The verdict is shown, nothing is refused.
         runner = getattr(app.state, "trip_runner", None)
         trips = {trip["robot_id"]: trip for trip in runner.open_trips()} if runner is not None else {}

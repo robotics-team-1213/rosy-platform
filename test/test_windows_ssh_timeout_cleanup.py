@@ -22,7 +22,8 @@ def ps_quote(value):
 @pytest.mark.parametrize('filename', ['verify-from-windows.ps1', 'validate-pinky-from-windows.ps1'])
 @pytest.mark.parametrize('case', ['already_exited', 'still_running', 'silent_nonzero'])
 def test_timeout_cleanup_preserves_classification_without_accepting_live_failure(tmp_path, host, filename, case):
-    source = VERIFY / filename
+    assert '. (Join-Path $PSScriptRoot "bounded-ssh.ps1")' in (VERIFY / filename).read_text(encoding='utf-8')
+    source = VERIFY / 'bounded-ssh.ps1'
     launch_marker = tmp_path / 'launches.txt'
     owned_marker = tmp_path / 'owned-pid.txt'
     child = tmp_path / 'benign_child.py'

@@ -139,7 +139,7 @@ def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(p
     assert body['edges'][0]['polyline'] == [[10, 20], [10, 20.2]]
     assert body['edges'][0]['evidence']['source'] == 'odometry'
     assert body['survey']['reviewed'] is False and store.active_view() is None
-    assert {call[0] for call in robot.calls} <= {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}
+    assert {call[0] for call in robot.calls} <= {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
@@ -439,7 +439,7 @@ def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
     expect(page.locator('#teach-robot')).to_have_value('')
     expect(page.locator('#teach-start')).to_be_disabled()
     assert not [call for call in robot.calls if call[0] not in
-        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+        {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
 
 
 def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(page_site):
@@ -475,7 +475,7 @@ def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(p
     expect(page.locator('#teach-robot')).to_have_value('')
     expect(page.locator('#teach-stop')).to_be_enabled()
     assert not [call for call in robot.calls if call[0] not in
-        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+        {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -1075,7 +1075,7 @@ def test_normal_teach_preview_disappears_on_an_unrelated_profile(page_site, widt
     expect(page.locator('#site-map-svg polyline.teach')).to_have_count(0)
     assert store.active_view() == active and store.draft_view()['map'] is None
     assert not [call for call in robot.calls if call[0] not in
-        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+        {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
@@ -1121,7 +1121,7 @@ def test_camera_observation_accumulates_without_replacing_operator_features(page
     assert store.draft_view()['map'] == saved['map']
     assert store.active_view() == active
     assert not [call for call in robot.calls if call[0] not in
-        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+        {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
@@ -1174,7 +1174,7 @@ def test_camera_road_review_without_survey_keeps_lineage_and_requires_recheck(pa
     assert error.value.code == 'SITE_MAP_ROAD_UNREVIEWED'
     assert store.active_view() == active
     assert not [call for call in robot.calls if call[0] not in
-        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+        {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
@@ -1254,7 +1254,7 @@ def test_camera_connections_require_review_before_extending_the_saved_map(page_s
     assert error.value.code == 'SITE_MAP_SURVEY_UNREVIEWED'
     assert store.active_view() == active
     assert not [call for call in robot.calls if call[0] not in
-        {'state', 'power_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
+        {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 

@@ -81,7 +81,7 @@ export function queuedReason(queued) {
   return `${who} 경로와 겹쳐 대기 중 — 앞이 비면 자동 출발합니다`;
 }
 
-export function createRosterSummary({scope, view, openCard, render, attentionItems}) {
+export function createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth}) {
   return function summary(robot, index) {
     const node = nodeWithText("article", `robot-summary s${index % view.colors.length}`);
     node.dataset.robotId = robot.robot_id;
@@ -113,7 +113,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
       tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
     const battery = nodeWithText("span", "robot-line-battery", `배터리 ${powerHealthView(robot, view.receivedAtMs, Date.now()).battery}`);
     battery.dataset.fact = "battery";
-    facts.append(battery);
+    facts.append(battery, motorHealth.summary(robot));
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
     const position = tag(loc?.text || "위치 미확인", loc ? loc.cls : "warn");

@@ -35,6 +35,14 @@ class MissionProgressService:
     def model_context(self, mission_id: str, *, principal_id: str,
                       workcell_id: str) -> dict[str, Any] | None:
         snapshot = self.snapshot(mission_id)
+        return self.model_context_from_snapshot(
+            snapshot, principal_id=principal_id, workcell_id=workcell_id,
+        )
+
+    @staticmethod
+    def model_context_from_snapshot(snapshot: dict[str, Any] | None, *,
+                                    principal_id: str,
+                                    workcell_id: str) -> dict[str, Any] | None:
         if snapshot is None:
             return None
         mission = snapshot["mission"]
@@ -50,7 +58,7 @@ class MissionProgressService:
         except (AttributeError, TypeError, ValueError):
             return None
         context = MissionModelContext(
-            mission_id=mission_id, workcell_id=workcell_id,
+            mission_id=mission["mission_id"], workcell_id=workcell_id,
             snapshot_event_id=progress["snapshot_event_id"],
             mission_state=progress["mission"]["state"],
             step_state=progress["step"]["state"],
