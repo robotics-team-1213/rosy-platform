@@ -109,7 +109,11 @@ class Files:
     def open(self, location):
         root = open_root(self.roots[location['root_id']]['path'])
         try:
-            with directory(root, parts(location['relative'], internal=True)) as fd: yield fd
+            with directory(root, parts(location['relative'], internal=True)) as fd:
+                info = os.fstat(fd)
+                if location.get('identity') is not None and location['identity'] != [info.st_dev, info.st_ino]:
+                    raise ValueError('managed directory identity changed')
+                yield fd
         finally:
             os.close(root)
 
@@ -148,7 +152,9 @@ class Files:
             if names(fd) != set(files) | {SOURCE}: raise ValueError('source file set differs from manifest')
             if any(entry(fd, name) != expected for name, expected in files.items()):
                 raise ValueError('source bytes differ from manifest')
-            return dict(files={**files, SOURCE: entry(fd, SOURCE)}, provenance=source['provenance'])
+            info = os.fstat(fd)
+            return dict(files={**files, SOURCE: entry(fd, SOURCE)}, provenance=source['provenance'],
+                        identity=[info.st_dev, info.st_ino])
 
     def verify(self, location, files, *, subset=False):
         with self.open(location) as fd:
@@ -167,7 +173,7 @@ class Files:
     def quarantine(self, location, job_id):
         path = parts(location['relative'], internal=True)
         hidden = '.reclaim-' + job_id
-        target = dict(root_id=location['root_id'], relative='/'.join([*path[:-1], hidden]))
+        target = dict(location, relative='/'.join([*path[:-1], hidden]))
         if self.exists(target): raise ValueError('cleanup destination already exists')
         root = open_root(self.roots[location['root_id']]['path'])
         try:
@@ -200,6 +206,11 @@ class Files:
         partial = '.' + job['id'] + '.partial'
         result = dict(root_id=self.cache_id, relative=job['id'])
         try:
+            if self.exists(result):
+                self.verify(result, job['files'])
+                with self.open(result) as fd:
+                    info = os.fstat(fd); result['identity'] = [info.st_dev, info.st_ino]
+                return result
             if free_space(root) < sum(v['bytes'] for v in job['files'].values()) + self.inventory.reserve:
                 raise ValueError('insufficient local space for restoration')
             try: os.mkdir(partial, 0o700, dir_fd=root)
@@ -217,7 +228,13 @@ class Files:
                         consume(chunks(name), expected, check, output)
                         output.flush(); os.fsync(output.fileno())
                 os.fsync(fd)
+                info = os.fstat(fd); result['identity'] = [info.st_dev, info.st_ino]
             if self.exists(result): raise ValueError('restore destination already exists')
             os.rename(partial, job['id'], src_dir_fd=root, dst_dir_fd=root); os.fsync(root)
             return result
         finally: os.close(root)
+
+    def available(self):
+        fd = open_root(self.roots[self.cache_id]['path'])
+        try: return free_space(fd)
+        finally: os.close(fd)

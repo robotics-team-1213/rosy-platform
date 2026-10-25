@@ -237,7 +237,9 @@ def test_cache_policy_reclaims_only_unpinned_managed_cache_copies(jobs_setup):
     inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=0)
     assert build().reclaim_cache(actor)['reclaimed_bytes'] == 0
     assert artifact.exists(), 'automatic policy must never delete source outputs'
+    inventory.config['pool']['cache_policy']['enabled'] = False
     build().reclaim(actor, job['id'], job['id']); build().restore(actor, job['id'])
+    inventory.config['pool']['cache_policy']['enabled'] = True
     build().pin(actor, job['id'], True)
     assert build().reclaim_cache(actor)['reclaimed_bytes'] == 0
     build().pin(actor, job['id'], False)

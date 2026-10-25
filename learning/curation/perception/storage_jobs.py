@@ -8,6 +8,7 @@ import uuid
 
 from storage_files import Files, consume, parts
 from storage_hub import StorageHub
+from storage_inventory import size
 
 
 class StorageJobs:
@@ -16,6 +17,11 @@ class StorageJobs:
             raise ValueError('storage services must share a project')
         self.inventory, self.pool, self.accounts = inventory, pool, accounts
         self.project_id, self.files = inventory.project_id, Files(inventory)
+        self.policy = inventory.config['pool'].get('cache_policy', dict(enabled=False, max_bytes=0))
+        if (not isinstance(self.policy, dict) or set(self.policy) != {'enabled', 'max_bytes'}
+                or type(self.policy['enabled']) is not bool):
+            raise ValueError('cache policy needs enabled and max_bytes')
+        size(self.policy['max_bytes'])
         self.transport = transport or StorageHub()
         self.lock_path = pool.db.with_suffix('.storage.lock')
         with pool.connect() as db:
@@ -64,7 +70,7 @@ class StorageJobs:
             'revision', 'bytes_verified', 'provenance', 'error', 'pinned', 'created_at', 'updated_at', 'upload_bytes')}
         result.update({key: job.get('assignment', {}).get(key) for key in ('target_id', 'repo_id', 'repo_type')})
         try: present = bool(job.get('local')) and self.files.exists(job['local'])
-        except OSError: present = None
+        except (OSError, ValueError): present = None
         root = self.files.roots.get(job.get('local', {}).get('root_id'), {}) if job.get('local') else {}
         result.update(local_present=present, reclaimable=bool(present and job['bytes_verified']
             and job['status'] == 'verified' and not job['pinned']
@@ -94,6 +100,7 @@ class StorageJobs:
             try: manifest = self.files.manifest(location, body['profile'])
             except (OSError, KeyError, TypeError, UnicodeError):
                 raise ValueError('completed source manifest is unavailable') from None
+            location['identity'] = manifest['identity']
             job = dict(id=uuid.uuid4().hex, project_id=self.project_id, requester_id=actor['user_id'],
                 profile=body['profile'], status='queued', local=location, files=manifest['files'],
                 provenance=manifest['provenance'], revision=None, bytes_verified=False, pinned=False,
@@ -172,6 +179,7 @@ class StorageJobs:
             if not job.get('local') or job['status'] != 'verified':
                 raise ValueError('verified local managed data is required')
             self.files.verify(job['local'], job['files'])
+            self._save(job, last_used_at=self.pool.clock())
             yield self.files.path(job['local'])
 
     def reclaim(self, actor, job_id, confirmation):
@@ -189,13 +197,16 @@ class StorageJobs:
                 raise ValueError('source root is not enabled for explicit reclaim')
             self._verify_remote(actor, job)
             cleanup = job.get('cleanup_location')
+            if cleanup and not self.files.exists(cleanup) and not self.files.exists(job['local']):
+                self._save(job, status='verified', local=None, cleanup_location=None, error=None)
+                return self._public(job)
             if cleanup and self.files.exists(cleanup):
                 if self.files.exists(job['local']) and job['local'] != cleanup:
                     raise ValueError('original path was recreated during cleanup')
             else:
                 self.files.verify(job['local'], job['files'])
                 relative = parts(job['local']['relative'], internal=True)
-                cleanup = dict(root_id=job['local']['root_id'],
+                cleanup = dict(job['local'],
                     relative='/'.join([*relative[:-1], '.reclaim-' + job_id]))
                 self._save(job, status='reclaiming', cleanup_location=cleanup)
                 self.files.quarantine(job['local'], job_id)
@@ -204,6 +215,11 @@ class StorageJobs:
             return self._public(job)
 
     def restore(self, actor, job_id):
+        pending = self._load(job_id)
+        self._check(actor, pending, 'read-repos')
+        if self.policy['enabled'] and not self._public(pending)['local_present']:
+            result = self.reclaim_cache(actor, required_bytes=pending['upload_bytes'])
+            if result['status'] == 'blocked': raise ValueError('cache policy has insufficient space')
         with self._lease():
             job = self._load(job_id)
             self._check(actor, job, 'read-repos')
@@ -223,3 +239,25 @@ class StorageJobs:
                 raise ValueError('local restoration failed; partial data is not published') from None
             self._save(job, local=location, error=None)
             return self._public(job)
+
+    def reclaim_cache(self, actor, *, required_bytes=0):
+        size(required_bytes)
+        if not self.policy['enabled']: return dict(status='disabled', reclaimed_bytes=0)
+        self.accounts.require(actor, 'manage')
+        with self.pool.connect() as db:
+            records = [json.loads(row[0]) for row in db.execute(
+                'SELECT document FROM storage_jobs WHERE project=?', (self.project_id,))]
+        cached = [job for job in records if job['requester_id'] == actor['user_id'] and job.get('local')
+                  and job['local']['root_id'] == self.files.cache_id and self.files.exists(job['local'])]
+        total = sum(job['upload_bytes'] for job in cached)
+        reclaimed = 0
+        def enough():
+            return (total + required_bytes <= self.policy['max_bytes']
+                    and self.files.available() >= required_bytes + self.inventory.reserve)
+        for job in sorted(cached, key=lambda row: (row.get('last_used_at', row['created_at']), row['id'])):
+            if enough(): break
+            if job['pinned'] or not job['bytes_verified'] or job['status'] != 'verified': continue
+            result = self.reclaim(actor, job['id'], job['id'])
+            if result['local_present'] is False:
+                total -= job['upload_bytes']; reclaimed += job['upload_bytes']
+        return dict(status='ready' if enough() else 'blocked', reclaimed_bytes=reclaimed)
