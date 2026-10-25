@@ -63,7 +63,9 @@ def test_offline_enable_creates_required_edges_for_network_and_ssh_sockets(tmp_p
     for consumer in CONSUMERS:
         link = directory / (consumer + ".requires") / UNIT
         assert link.is_symlink(), f"{consumer} must require storage validation"
-        assert link.resolve() == (directory / UNIT).resolve()
+        target = Path(os.readlink(link))
+        target = tmp_path / str(target).lstrip("/") if target.is_absolute() else link.parent / target
+        assert target.resolve() == (directory / UNIT).resolve()
     text = (directory / UNIT).read_text(encoding="utf-8")
     before = {unit for line in text.splitlines() if line.startswith("Before=")
               for unit in line.partition("=")[2].split()}

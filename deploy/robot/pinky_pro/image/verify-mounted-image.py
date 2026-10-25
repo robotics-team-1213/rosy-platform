@@ -13,6 +13,7 @@ import sys
 
 
 REQUIRED_UNITS = (
+    "rosy-os-storage.service",
     "rosy-first-boot.service",
     "rosy-new-device-setup.service",
     "rosy-release-recover.service",
@@ -232,9 +233,35 @@ def lamp_driver_findings(root: Path) -> list[str]:
     return findings
 
 
+STORAGE_CONSUMERS = ("NetworkManager.service", "ssh.service", "ssh.socket", "tailscaled.service",
+                     "rosy-ssh-access-boot.service", "rosy-first-boot.service", "rosy-first-boot-retry.service")
+STORAGE_HELPERS = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py")
+
+
+def storage_gate_findings(root: Path) -> list[str]:
+    findings = []
+    unit = root / "etc/systemd/system/rosy-os-storage.service"
+    if unit.is_symlink() or not unit.is_file():
+        findings.append("missing regular storage admission unit")
+    for name in STORAGE_HELPERS:
+        helper = root / "opt/rosy/native-runtime" / name
+        if helper.is_symlink() or not helper.is_file():
+            findings.append(f"missing storage admission helper: {name}")
+    for consumer in STORAGE_CONSUMERS:
+        link = root / "etc/systemd/system" / (consumer + ".requires") / unit.name
+        if not link.is_symlink():
+            findings.append(f"{consumer} has no required storage admission dependency")
+            continue
+        target = Path(os.readlink(link))
+        target = root / str(target).lstrip("/") if target.is_absolute() else link.parent / target
+        if not target.resolve().is_relative_to(root.resolve()) or target.resolve() != unit.resolve():
+            findings.append(f"{consumer} storage admission dependency points outside its unit")
+    return findings
+
+
 def inspect(root: Path, release_id: str) -> list[str]:
     root = root.resolve()
-    findings: list[str] = []
+    findings: list[str] = storage_gate_findings(root)
     release = root / "opt/rosy/releases" / release_id
     required_paths = (
         root / "opt/ros/jazzy/setup.bash",
