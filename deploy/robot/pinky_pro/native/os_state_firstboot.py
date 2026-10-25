@@ -50,6 +50,8 @@ def _hold(operation):
     def guarded(*args, **kwargs):
         try:
             return operation(*args, **kwargs)
+        except StateError:
+            raise
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise StateError(f"OS_STATE_HOLD: {exc}") from exc
     return guarded
@@ -167,7 +169,7 @@ class FirstBootState:
 
     @_hold
     def begin(self, payload: dict, hardware_serial: str, bundle: Path) -> None:
-        self._bundle_path(bundle)
+        self.validate_bundle_path(bundle)
         identity = payload["device_identity"]
         if self.current.exists() or self.complete.exists():
             raise ValueError("initialization cannot replace a committed device")
@@ -227,11 +229,12 @@ class FirstBootState:
 
     @_hold
     def consume_bundle(self, bundle: Path) -> None:
-        self._bundle_path(bundle)
+        self.validate_bundle_path(bundle)
         bundle.unlink()
         _sync(bundle.parent)
 
-    def _bundle_path(self, bundle: Path) -> None:
+    @_hold
+    def validate_bundle_path(self, bundle: Path) -> None:
         # The supplied bundle must be on the admitted boot_a provision mount.
         expected = self.root / "run/rosy-provision-boot/rosy-provision/provision.json"
         if bundle.absolute() != expected.absolute():
@@ -242,7 +245,7 @@ class FirstBootState:
     def finish_existing(self, bundle: Path) -> None:
         if not bundle.exists():
             return
-        self._bundle_path(bundle)
+        self.validate_bundle_path(bundle)
         payload = _load(bundle, self.owner)
         from first_boot_runtime import validate_provision_bundle
         validate_provision_bundle(payload)

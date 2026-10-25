@@ -536,11 +536,7 @@ def _hardware_serial(root: Path) -> str:
 def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("/"))
-    parser.add_argument(
-        "--bundle",
-        type=Path,
-        default=Path("/boot/firmware/rosy-provision/provision.json"),
-    )
+    parser.add_argument("--bundle", type=Path)
     parser.add_argument("--hardware-serial")
     parser.add_argument(
         "--network", choices=("activate", "check"), default="activate",
@@ -548,19 +544,26 @@ def _main(argv: list[str] | None = None) -> int:
              "(the retry timer must not take the single radio from the fallback AP)",
     )
     args = parser.parse_args(argv)
-    network_activate = _default_network_activate
-    if args.network == "check" and not (args.root / "var/lib/rosy/provisioning/complete.json").is_file():
-        # The retry timer's run: until NM has the site profile up, change nothing
-        # (no state.json, hostname, avahi restart or file rewrite every 30 s).
-        profile = args.root / SITE_PROFILE_PATH
-        if profile.is_file():
-            # Re-read the kept profile from disk; this never touches the radio.
-            _nmcli(["nmcli", "connection", "load", str(profile)], 15)
-        if not site_wifi_up(SITE_PROFILE):
-            print(json.dumps({"ok": False, **HELD}, sort_keys=True))
-            return 1
-        network_activate = lambda _profile: True  # noqa: E731 - just checked above
     try:
+        shared = _native_helper("os_state_firstboot").FirstBootState.admit(args.root)
+        if args.bundle is None:
+            relative = ("run/rosy-provision-boot/rosy-provision/provision.json" if shared is not None
+                        else "boot/firmware/rosy-provision/provision.json")
+            args.bundle = args.root / relative
+        if shared is not None:
+            shared.validate_bundle_path(args.bundle)
+        network_activate = _default_network_activate
+        if args.network == "check" and not (args.root / "var/lib/rosy/provisioning/complete.json").is_file():
+            # The retry timer's run: until NM has the site profile up, change nothing
+            # (no state.json, hostname, avahi restart or file rewrite every 30 s).
+            profile = args.root / SITE_PROFILE_PATH
+            if profile.is_file():
+                # Re-read the kept profile from disk; this never touches the radio.
+                _nmcli(["nmcli", "connection", "load", str(profile)], 15)
+            if not site_wifi_up(SITE_PROFILE):
+                print(json.dumps({"ok": False, **HELD}, sort_keys=True))
+                return 1
+            network_activate = lambda _profile: True  # noqa: E731 - just checked above
         result = FirstBootProvisioner(root=args.root, network_activate=network_activate).apply(
             bundle=args.bundle,
             hardware_serial=args.hardware_serial or _hardware_serial(args.root),
