@@ -3466,3 +3466,4 @@
 - 증거: 공식 비현장 원격 RED `c7bf2535b3`는98실행/62통과/36NEW/skip0, marker 시험 RED `a0ac3b1102`는108실행/64통과/44NEW/skip0이다. 각 run을 known_failures로 분류했으며 known/flaky0이다. 후자는 과거 marker·도구 미포함 허용과 실제 Ed25519 서명 변조 거절도 확인했다. 구현 후 GREEN·전체 착지 검증은 별도이며 이 RED를 통과 증거로 쓰지 않는다.
 - gate 변화: source 구현·검증 진행이다. 운영 서비스 신원·ARM 설치 binding·관측·실물 장치 수용을 열지 않는다.
 - 교훈: CE 해당 없음 — 기존 committed-state 교훈을 적용했으며 원자적 저장·서명 전환의 판단은 구현·회귀 시험·운영 절차에 보존했다.
+- 후속 GREEN: 독립 소스 리뷰 후 커밋 `4c4aef6e9a`를 비현장 승인 원격에서 검증했다. CLI·candidate builder/verifier·실제 signing·updater/rollback·workflow·fetch 일곱 파일237 PASS/skip0/NEW0/known0/flaky0이며 모든 run을 분류했다. 신뢰 verifier 교체·서명된 candidate 설치·운영 principal 발급·실제 연결은 수행하지 않았다. 플랫폼 전체 착지 검증은 별도다.
