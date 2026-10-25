@@ -4705,3 +4705,19 @@
 - 변경: WELCOME0으로 구 Agent의 새 부팅 버퍼 삭제를 방지하고, 메모리 Hub도 기존 durable store와 같은 ID·본문 충돌 규칙으로 재전송을 처리한다. 최대 seq는 진단값만 유지한다. D-869/APIv1.315에 호환성과 한계를 기록했다.
 - 증거: [검증 기록](../../docs/validation/event-reconnect-replay-2026-10-25/result.md). 신규 RED5건과 durable replay 보존 뒤 관련 원격98개 통과, skip0/NEW0. 원본 ID·내용·seq와 audit/projection 한 번 기록을 단언한다.
 - gate 변화: SOURCE 회귀만 확인했다. 구 peer·메모리 재시작·실물 수용과 영속 outbox는 보장하지 않는다. CE 해당 없음: 판단은 정본 ADR·회귀로 복원된다.
+
+## 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
+
+- 변경: fleet/server/missions/policy_admission.py 신설(설정 해석·운영자 전환·상한·감사 판정 core), test/test_policy_admission_core.py 추가, D-865 실행 설계 P2 상태(P2a/P2b 분리) 표시.
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. core는 어떤 실행 경로에도 연결 전이고 상한 지속화·루트·루프는 P2b다.
+- gate 변화: 없음. 활성화가 아니며 POLICY_DISPATCH·mission admit 현행 동작 불변.
+- 결정: D-865 P2a 산출물.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
+
+- 변경: test_policy_admission_core.py test_minimal_enabled_section 이 robots 만으로 enabled 를 기대했으나 구현은 enabled 명시까지 요구하는 fail-closed 가 정책이다. 입력에 enabled: true 를 명시하고 robots-only 절은 비활성을 확인하는 시험을 추가.
+- 증거: 착지 회차에서 NEW 1건(이 시험) 단독 재실행으로 확인 — 구현 결함 아님. 수정 커밋 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음

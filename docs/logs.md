@@ -11205,3 +11205,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs(plans): D-865 P2 분리 표시
+
+- 변경: [D-865 실행 설계](plans/2026-10-25-fleet-policy-admission-design.md) P2를 P2a(판정 core, 이번 착지)와 P2b(루트·루프·설정 조립·지속화·SRS 계약 줄)로 분리 기록.
+- 증거: 미실행 — 문서 변경.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
