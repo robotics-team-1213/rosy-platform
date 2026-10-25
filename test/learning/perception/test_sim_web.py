@@ -203,3 +203,13 @@ def test_a_malformed_sim_row_does_not_break_the_home_page(tmp_path):
         code, workspace = request(base, '/api/learning')
         sim = next(row for row in workspace['domains'] if row['id'] == 'sim')
         assert code == 200 and sim['blocked'] == 'SIM 실행 연결을 확인하세요.'
+
+
+def test_a_malformed_sim_row_is_skipped_in_the_list_and_502_on_its_own(tmp_path):
+    with running(tmp_path) as (base, runs):
+        good = runs.row
+        runs.call = lambda payload: [good, dict(good, result=None)] if payload['action'] == 'list' else dict(good, result=None)
+        code, data = request(base, '/api/learning/sim/runs', 'reader')
+        assert code == 200 and data['skipped'] == 1 and [row['run_id'] for row in data['runs']] == [good['run_id']]
+        code, data = request(base, '/api/learning/sim/runs/' + 'b' * 32, 'reader')
+        assert code == 502 and data['error'].startswith('SIM 실행 기록 형식을 확인하세요.')
