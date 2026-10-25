@@ -15,17 +15,28 @@ LANE = {'collect': ('data',), 'label': ('review',), 'dataset': ('preparation', '
         'train': ('training',), 'evaluate': ('evaluation',), 'promote': ('application',)}
 LANE_STATE = {'done': 'done', 'running': 'active', 'waiting': 'waiting', 'attention': 'blocked', 'connection': 'blocked'}
 SIM_TERMINAL = {'SUCCEEDED': 'done', 'STOPPED': 'done', 'FAILED': 'blocked', 'UNKNOWN': 'blocked'}
+QUEUE = 50  # D-857 §5: human 「맞음/고침」 queue per domain
+OMX_NO_MODEL = '구간을 만드는 모델이 없습니다. 모든 구간은 사람이 정합니다.'
 
 
 def go(label, href):
     return {'label': label, 'href': href}
 
 
-def row(key, name, stages):
+def truth(confirmed, pending, drafted, href=None, reason=None, cap=QUEUE):
+    """D-857 §4 tiers. 확정: a human decision, the only rows evaluation and promotion read. 임시: a model answer
+    still undecided, at most `cap` oldest first in the 「맞음/고침」 queue (cap=None: VLM consensus, audited
+    instead). 대기: every other undecided row, including model answers past the cap."""
+    queue = drafted if cap is None else min(drafted, cap)
+    return {'confirmed': confirmed, 'provisional': queue, 'waiting': pending - queue, 'over_cap': drafted - queue,
+            'href': href if queue else None, 'reason': reason}
+
+
+def row(key, name, stages, tiers=None):
     """stages: {stage: (state, evidence, next)}; a stage left out is not_available."""
     rows = [dict(stage=stage, label=label, **dict(zip(('state', 'evidence', 'next'),
                  stages.get(stage, ('not_available', NOT_CONNECTED, None))))) for stage, label in STAGES]
-    return {'id': key, 'name': name, 'stages': rows,
+    return {'id': key, 'name': name, 'stages': rows, 'truth': tiers,
             'next': next((stage['next'] for stage in rows if stage['next']), None),
             'blocked': next((stage['evidence'] for stage in rows if stage['state'] in ('blocked', 'not_available')), None)}
 
@@ -139,10 +150,25 @@ def vlm(counts, eval_url=None):
             if labelled else ('waiting', '확정 정답이 생기면 평가합니다.', None)}
 
 
-def domains(*, pipeline, counts, preparation, items, omx_reviewed, sim_runs, vlm_counts, vlm_eval_url=None, tasks=0):
+def domains(*, pipeline, counts, preparation, items, omx_reviewed, sim_runs, vlm_counts, vlm_eval_url=None, tasks=0,
+            pixel_counts=None, drafts=None):
+    """drafts: {'object'|'pixel': pending frame indices holding a model draft, oldest first}."""
     sources = {'lane': lane(pipeline), 'object': objects(counts, preparation), 'omx': omx(items, omx_reviewed, tasks),
                'sim': sim(sim_runs), 'vlm': vlm(vlm_counts, vlm_eval_url), 'decision': {}}
-    return [row(key, name, sources[key]) for key, name in DOMAINS]
+    drafts = drafts or {}
+
+    def reviewed(decided, kind, page):
+        frames = drafts.get(kind) or []
+        return truth(decided.get('approved', 0), decided.get('pending', 0), len(frames),
+                     f'{page}?filter=pending&frame={frames[0]}' if frames else None)
+    sets = {item['id'] for item in items if item['kind'] == 'omx'}
+    done = len(sets & set(omx_reviewed))
+    tiers = {'lane': reviewed(pixel_counts or {}, 'pixel', '/pixels'), 'object': reviewed(counts, 'object', '/'),
+             'omx': truth(done, len(sets) - done, 0, reason=OMX_NO_MODEL)}
+    if vlm_counts and vlm_counts['total']:
+        tiers['vlm'] = truth(vlm_counts['labelled'], vlm_counts['total'] - vlm_counts['labelled'] - vlm_counts['excluded'],
+                             vlm_counts['provisional'], cap=None)
+    return [row(key, name, sources[key], tiers.get(key)) for key, name in DOMAINS]
 
 
 def stored(db):
