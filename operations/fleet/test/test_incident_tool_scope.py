@@ -33,8 +33,8 @@ def test_mission_tools_are_not_incident_observation_or_success(domain):
         judgment(p, b, raw)
     schema = judgment_schema(p, b)
     for key in ('next_step', 'success_check'):
-        names = {entry['properties']['tool_name']['const'] for entry in schema['properties'][key]['anyOf']
-                 if 'properties' in entry}
+        names = {schema['$defs'][entry['$ref'].removeprefix('#/$defs/')]['properties']['tool_name']['const']
+                 for entry in schema['properties'][key]['anyOf'] if '$ref' in entry}
         assert names == {'get_incident_status'}
 
 
