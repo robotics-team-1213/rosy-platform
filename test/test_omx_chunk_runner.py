@@ -163,6 +163,7 @@ class Bus:
             self.values[key].update(extra or {})
 
     def sync_read(self, name):
+        self.reads = getattr(self, "reads", 0) + 1
         return dict(self.values[name])
 
 
@@ -286,3 +287,12 @@ def test_a_library_faster_than_the_guard_streams_is_refused(tmp_path):
         m.load_library(path)
     path.write_text(json.dumps({**library(), "fps": 2}))
     assert m.load_library(path)["fps"] == 2
+
+
+def test_the_runner_reads_motor_health_about_once_a_second_beside_the_guard():
+    robot = Robot()
+    robot.bus = Bus()
+    status = run_with(robot, library(), ["run approach_pinky"] + ["state"] * 3 + ["stop"])
+    ticks = len(robot.sent)
+    assert robot.bus.reads <= 3 * (ticks // 30 + 1)  # three registers per second, not every third tick
+    assert status[-1]["command"] == "stop"
