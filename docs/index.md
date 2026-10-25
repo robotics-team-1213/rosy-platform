@@ -340,7 +340,9 @@
 ## 교훈 (docs/solutions)
 
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
+- [모듈 logs.md 의 BOM 상태가 제각각이라 append 만 해도 append-only 검사가 깨진다](solutions/workflow-issues/logs-md-bom-states-vary-preserve-per-file-2026-10-25.md)
 - [PowerShell 한글 저널 append가 UTF-8을 망가뜨린다 (2026-10-04, 4회)](solutions/workflow-issues/powershell-utf8-append-mangles-korean-journals.md)
+- [병합 해결 중 main이 움직이면 스쿼시 커밋이 동료 착지를 되돌릴 수 있다](solutions/workflow-issues/squash-after-stale-merge-can-revert-concurrent-landings-2026-10-25.md)
 - [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험

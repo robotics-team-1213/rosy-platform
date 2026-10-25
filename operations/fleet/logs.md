@@ -4459,3 +4459,11 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · feat(fleet): D-865 P2c 정책 승인 자동 admit 루프·지속 상한·감사 저장소
+
+- 변경: missions/policy_admission_worker.py(주기 틱: RESOLVED 제안 → 승인 종류·robot 자원 → 범위 판정 → mission_service.admit, generation 은 제안의 source_dispatch_generation 사용), missions/policy_admission_audit.py(SQLite 감사·상한, LineStuckAnswerLog 패턴), proposal_store.list_resolved, core issued_provider(재시작 생존 상한), 콘솔 설정이 tasks_db 있을 때 감사 저장소 연결, 라우트 인스톨러의 startup/shutdown 루프 기동(app.py 0줄 증가), 시험 2건(worker 8 + audit 3).
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. digest 재판정(resolver)은 운영 candidate_resolver 주입이 확인되지 않아 1차 제외, 후속 조각.
+- gate 변화: 없음. 설정 없으면 루프·상한 모두 비활성이고 현행 승인 동작 불변.
+- 결정: D-865 P2c 산출물.
+- 교훈: docs/solutions/workflow-issues/ 에 BOM 상태 보존·스쿼시 후 main-diff 경로 검사 2건 기록(같은 커밋).
