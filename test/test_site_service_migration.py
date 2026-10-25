@@ -67,7 +67,7 @@ def test_fixture_inventory_does_not_follow_tag_or_link_and_restart_keeps_orphans
 
 @pytest.mark.parametrize("services", [LEGACY, CURRENT], ids=["legacy3", "current4"])
 def test_current_candidate_uses_its_verified_service_set(host, services):
-    machine = InventoryHost(host.paths, services)
+    machine = InventoryHost(host.paths, services, manual=False)
     updater = updater_for(host, machine)
     assert updater.run() == upd.EXIT_OK
     assert updater.load_state()["installed"]["commit"] == OLD

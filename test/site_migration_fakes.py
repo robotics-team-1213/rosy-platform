@@ -80,7 +80,7 @@ class RecordingHttp(FakeHttp):
 class InventoryHost:
     """Compose up creates expected services but never removes an orphan implicitly."""
 
-    def __init__(self, paths, services=LEGACY, *, unhealthy=()):
+    def __init__(self, paths, services=LEGACY, *, unhealthy=(), manual=True):
         self.paths, self.unhealthy = paths, set(unhealthy)
         self.calls, self.events, self.verifications = [], [], []
         self.containers, self.image_ids = {}, {}
@@ -94,7 +94,7 @@ class InventoryHost:
         write_candidate(paths.candidates / OLD, OLD, services)
         self.load_images(paths.candidates / OLD)
         self.restart()
-        self.manual = self.add_container("manual-fleet", "fleet", OLD, managed=False)
+        self.manual = self.add_container("manual-fleet", "fleet", OLD, managed=False) if manual else None
 
     def result(self, stdout="", code=0, **kwargs):
         if code and kwargs.get("check"):
