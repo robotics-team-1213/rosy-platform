@@ -126,6 +126,12 @@ class StoragePool:
             raise ValueError('upload must contain bytes')
         with (self.connect() if connection is None else nullcontext(connection)) as conn:
             if not conn.in_transaction: conn.execute('BEGIN IMMEDIATE')
+            if 'settings_revision' in self.config:
+                current = conn.execute('SELECT revision,document FROM storage_settings WHERE project=?',
+                    (self.project_id,)).fetchone()
+                if (current is None or current[0] != self.config['settings_revision']
+                        or not self.config.get('settings_probe') and not json.loads(current[1])['pool']['enabled']):
+                    raise ValueError('storage settings changed or new assignments are paused')
             existing = conn.execute('SELECT document FROM storage_allocations WHERE project=? AND id=?',
                                     (self.project_id, job_id)).fetchone()
             if existing:
