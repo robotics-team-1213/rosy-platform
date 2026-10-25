@@ -9,4 +9,12 @@ if _root not in sys.path:
     sys.path.insert(0, _root)
 
 # Keep exceptions, monkeypatches and function globals identical for both import paths.
-sys.modules[__name__] = importlib.import_module("deploy.hosts.common.release.signing")
+_implementation = importlib.import_module("deploy.hosts.common.release.signing")
+
+
+def __getattr__(name):
+    # spec.loader clients may retain the original module object after execution.
+    return getattr(_implementation, name)
+
+
+sys.modules[__name__] = _implementation
