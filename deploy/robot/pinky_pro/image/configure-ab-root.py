@@ -40,9 +40,12 @@ def configure(root: Path, release_id: str) -> None:
     for relative, data in changes.items():
         target = _path(root, relative)
         if target.exists():
-            if target.stat().st_nlink != 1 or _read(target, 8192, owner) != data:
+            if target.stat().st_nlink != 1:
+                raise ValueError("OS boot configuration is hard-linked")
+            if _read(target, 8192, owner) != data:
                 # Descriptor serialization is not significant; the pinned fields are.
-                if relative != "etc/rosy/os-factory-release.json" or json.loads(_read(target, 8192, owner)) != record:
+                if (relative != "etc/rosy/os-factory-release.json"
+                        or _object(_read(target, 8192, owner), set(record)) != record):
                     raise ValueError("existing OS boot configuration differs")
         targets[relative] = target
     for relative, target in targets.items():

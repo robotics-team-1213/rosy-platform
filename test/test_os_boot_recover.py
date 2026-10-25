@@ -33,7 +33,8 @@ def test_frozen_recovery_restores_an_interrupted_payload_before_runtime(tmp_path
     report = first._native_helper("os_boot_recover").recover(root, run=lambda *_a, **_kw: SimpleNamespace(returncode=0))
     assert report["phase"] == "RECOVERED"
     assert report["release_id"] == FACTORY_ID
-    assert os.readlink(current) == "releases/" + FACTORY_ID
+    assert current.is_symlink()
+    assert current.resolve() == root / "opt/rosy/releases" / FACTORY_ID
     assert not manager.journal.exists()
     assert (common / "provisioning/complete.json").read_bytes() == completion
 

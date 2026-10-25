@@ -5,16 +5,18 @@ import argparse
 import base64
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import stat
 import sys
+import tempfile
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from os_state_config import common_lock
 from os_state_firstboot import _hold
-from os_state_io import _json_atomic, _write_atomic
+from os_state_io import _json_atomic
 from os_state_files import sync_directory
 from os_state_layout import COMMON, _digest, _layout, _object, _path, _read
 from os_state_ready import verify_ready_locked
@@ -82,15 +84,33 @@ def cache_signature(root: Path, record: dict) -> None:
         _json_atomic(path, capsule, 0o600)
 
 
-@_hold
-def prepare_factory(root: Path) -> dict:
-    from native_release import NativeReleaseManager
-    root = Path(root).absolute()
+def _write_signature(root, target, data):
+    # Orphans must not appear as unlisted files inside the signed payload.
+    staging = _path(root, "var/lib/rosy/releases")
+    if staging.stat().st_dev != target.parent.stat().st_dev:
+        raise ValueError("factory signature staging crosses filesystems")
+    descriptor, name = tempfile.mkstemp(dir=staging, prefix=".factory-signature-")
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            os.fchmod(stream.fileno(), 0o644)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+        sync_directory(target.parent)
+        sync_directory(staging)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _prepare_locked(root, manager):
     with common_lock(root) as shared:
         verify_ready_locked(root, shared)
-        descriptor, release, sums, key, key_sha = _binding(root)
-        manager = NativeReleaseManager(root=root, public_key=key)
+        descriptor, _, sums, key, key_sha = _binding(root)
         signature = _path(root, "opt/rosy/releases/" + descriptor["release_id"] + "/SHA256SUMS.sig")
+        if signature.exists() and (signature.stat().st_nlink != 1 or stat.S_IMODE(signature.stat().st_mode) != 0o644):
+            raise ValueError("factory signature permissions differ")
         previous = _read(signature, 512, root.stat().st_uid) if signature.exists() else None
         try:
             manager.verify(descriptor["release_id"])
@@ -99,7 +119,7 @@ def prepare_factory(root: Path) -> dict:
             if {k: record[k] for k in descriptor} != descriptor or record["public_key_sha256"] != key_sha:
                 raise ValueError("factory signature capsule belongs to another root")
             _signature(record["sha256sums_sig_b64"], sums, key)
-            _write_atomic(signature, record["sha256sums_sig_b64"] + "\n", 0o644)
+            _write_signature(root, signature, (record["sha256sums_sig_b64"] + "\n").encode("ascii"))
             try:
                 manager.verify(descriptor["release_id"])
             except BaseException:
@@ -107,10 +127,24 @@ def prepare_factory(root: Path) -> dict:
                     signature.unlink()
                     sync_directory(signature.parent)
                 else:
-                    _write_atomic(signature, previous.decode("ascii"), 0o644)
+                    _write_signature(root, signature, previous)
                 raise
         return dict(schema_version=1, phase="FACTORY_VERIFIED", release_id=descriptor["release_id"],
                     checksums_sha256=descriptor["checksums_sha256"])
+
+
+@_hold
+def prepare_factory(root: Path) -> dict:
+    from native_release import NativeReleaseManager
+    root = Path(root).absolute()
+    lock = _path(root, "var/lib/rosy/releases/native-release.lock")
+    if lock.exists():
+        _read(lock, 8192, root.stat().st_uid)
+        if lock.stat().st_nlink != 1:
+            raise ValueError("factory release lock is hard-linked")
+    manager = NativeReleaseManager(root=root, public_key=_path(root, PUBLIC_KEY))
+    with manager._locked():  # Same release -> common order as signed TLS maintenance.
+        return _prepare_locked(root, manager)
 
 
 def pinned_factory(root: Path) -> str | None:
