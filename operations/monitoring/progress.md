@@ -10,6 +10,7 @@ gates:
   LOCAL:
     state: GO
     evidence: 실제 backend Chromium16+G1 총151 PASS, scope 거부 상태6 PASS, G2 40셀 캡처와 G3 대표 검토 차단 없음. docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md 참조.
+    cmd: python tools/remote/remote_pytest.py --log-dir "$env:TEMP/rosy-monitoring-ui-canonical-green" -- ROSY_RUN_BROWSER_TESTS=1 test/test_monitoring_browser.py shared/web/test/test_surface_registry.py shared/web/test/test_shared_controls.py shared/web/test/test_surface_typography_focus_contracts.py shared/web/test/test_ui_token_contracts.py shared/web/test/test_palette_gates.py -q
   ROS-SIM:
     state: N/A
   ARTIFACT:
