@@ -10479,3 +10479,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. autocast로는 10Hz 한 걸음 추론이 안 되고 3b가 필요하다는 판단이 그대로다.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
+
+## 2026-10-25 · uncommitted · queued FULL pretest 구조 검사 우선
+
+- 변경: 대기 중 FULL pretest에도 기존 구조 검사 runner를 먼저 호출하고 검사 뒤 HEAD를 다시 확인한다. FIFO·기존 main 기준·캐시·FULL 기록 규칙은 유지한다.
+- 증거: [검증 기록](validation/land-pretest-guards-2026-10-25/result.md). 커밋된 RED 세 사례 실패 후 land·queue·record 원격 회귀 98개 통과, skip0/NEW0. 잘못된 최초 selector의 exit4는 통과 근거에서 제외했다.
+- gate 변화: 소스 집중 검증 완료. 공식 selector·FULL·착지·게시·운영 수용은 별도다.
+- 결정: D-803의 기존 guard-first 원칙을 queued 경로까지 적용한다. 새로운 예외나 검사 완화는 없다.
+- 교훈: [기존 구조 검사 우선 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)을 갱신했다. 파일 전체 Safety 분류의 import 파급과 queued 우회 경로를 구분하고, 26개 사실을 검증했다.
