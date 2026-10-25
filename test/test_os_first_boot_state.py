@@ -147,16 +147,19 @@ def test_corrupt_generation_is_rejected_before_any_b_projection(tmp_path, monkey
 
 
 @pytest.mark.parametrize("change", ["missing", "wrong_subpath", "read_only"])
-def test_root_local_or_wrong_shared_provisioning_is_refused_before_identity(tmp_path, monkeypatch, change):
+@pytest.mark.parametrize("point", ["/var/lib/rosy/provisioning", "/var/lib/rosy/core",
+                                   "/etc/NetworkManager/system-connections", "/var/lib/rosy/ssh",
+                                   "/home/rosy/.ssh"])
+def test_root_local_or_wrong_shared_provisioning_is_refused_before_identity(tmp_path, monkeypatch, change, point):
     root_a, _, _, _ = shared_roots(tmp_path, monkeypatch)
-    point = "/var/lib/rosy/provisioning"
     for name in ("proc/1/mountinfo", "proc/self/mountinfo"):
         table = root_a / name
         lines = table.read_text().splitlines(keepends=True)
         for index, line in enumerate(lines):
             if f" {point} " in line:
                 lines[index] = ("" if change == "missing" else
-                                line.replace(" /provisioning ", " /foreign ") if change == "wrong_subpath" else
+                                " ".join([*line.split()[:3], "/foreign", *line.split()[4:]]) + "\n"
+                                if change == "wrong_subpath" else
                                 line.replace(" rw -", " ro -"))
         table.write_text("".join(lines), encoding="ascii")
     bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
@@ -167,3 +170,13 @@ def test_root_local_or_wrong_shared_provisioning_is_refused_before_identity(tmp_
             bundle=bundle, hardware_serial=SERIAL)
     assert not (root_a / "etc/rosy/device-identity.json").exists()
     assert bundle.exists()
+
+
+def test_projection_repairs_a_cached_runtime_file_with_excessive_read_permissions(tmp_path, monkeypatch):
+    module, root_a, root_b, _, bundle = _provision_a(tmp_path, monkeypatch)
+    target = root_b / "etc/rosy/runtime.env"
+    target.write_bytes((root_a / "etc/rosy/runtime.env").read_bytes())
+    target.chmod(0o644)
+    report = module.FirstBootProvisioner(root=root_b).apply(bundle=bundle, hardware_serial=SERIAL)
+    assert report["ok"] is True
+    assert target.stat().st_mode & 0o777 == 0o640
