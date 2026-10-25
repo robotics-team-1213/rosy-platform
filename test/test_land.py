@@ -742,7 +742,7 @@ def test_head_move_cannot_publish_full_record(repos, monkeypatch, waiting):
     monkeypatch.setattr(land.land_full, "save", lambda *a: pytest.fail("published an obsolete FULL record"))
     if waiting:
         with pytest.raises(land.Stop, match="HEAD changed"):
-            land.pretest(wt, "feat/x", land.argparse.Namespace(), sys.executable)
+            land.pretest(wt, "feat/x", land.argparse.Namespace(tests="auto"), sys.executable)
     else:
         before = git(main, "rev-parse", "HEAD")
         assert land.main(["--tests", "auto"]) == 1
@@ -966,14 +966,50 @@ def test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout(repos, mo
 def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos, monkeypatch, capsys):
     """2026-10-19: five landers ahead, each with its FULL tier inside the queue, held a landing 100+ min."""
     main, wt = repos
-    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    commit(wt, {"pkg/a.py": "x = 2\n", "test/architecture/test_guard.py": "def test_guard(): pass\n"}, "branch")
     land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")      # a live lander ahead
     real_select, rounds = land.select, []
     monkeypatch.setattr(land, "select", lambda *a, **k: (real_select(*a, **k)[0], "FULL tier (test)"))
     monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append(round_no) or [])
+    real_save = land.land_full.save
+
+    def save(*args):
+        rounds.append("save")
+        return real_save(*args)
+
+    monkeypatch.setattr(land.land_full, "save", save)
     assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1                # the peer never leaves
-    assert rounds == ["pre"] and "FULL tier while waiting" in capsys.readouterr().out
+    assert rounds == ["gpre", "pre", "save"] and "FULL tier while waiting" in capsys.readouterr().out
     assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
+
+
+@pytest.mark.parametrize("guard_outcome", ["failure", "head_move"])
+def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeypatch, capsys, guard_outcome):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n", "test/architecture/test_guard.py": "def test_guard(): pass\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    qdir = main / ".git" / land.land_queue.QUEUE
+    peer = land.land_queue.take(qdir, "feat/peer")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL tier (test)"))
+    phases, saved = [], []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        phases.append(round_no)
+        if round_no == "gpre":
+            assert invocations == [["test/architecture"]] and args.node is False
+            if guard_outcome == "failure":
+                raise land.Stop("structural guard failed")
+            commit(wt, {"pkg/a.py": "x = 3\n"}, "changed during guard")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    monkeypatch.setattr(land.land_full, "save", lambda *a: saved.append(a))
+    assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1
+    assert phases == ["gpre"] and saved == []
+    assert git(main, "rev-parse", "HEAD") == before
+    assert sorted(qdir.glob("*.json")) == [peer]
+    expected = "structural guard failed" if guard_outcome == "failure" else "HEAD changed"
+    assert expected in capsys.readouterr().err
 
 
 def test_no_pretest_without_anyone_ahead(repos, monkeypatch):
