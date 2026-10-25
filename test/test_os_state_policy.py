@@ -18,6 +18,49 @@ def test_projected_ab_uses_common_policy_despite_sandbox_read_only_mounts(device
     assert not (common / "policy/updates/state.json").exists()
 
 
+@pytest.mark.parametrize("change", ["runtime", "runtime_mode", "live_hostname", "hardware",
+    "shared_mount_id", "shared_subpath", "login_tombstone", "tls_pending", "setup"])
+def test_actual_updater_rechecks_root_projection_and_robot_authority(device, host, hub, monkeypatch, change):
+    common, host_table, _ = projected_device(device, monkeypatch)
+    worker = updater(host, hub)
+    assert worker._config()["enabled"] is False
+    if change == "runtime":
+        (device / "etc/rosy/runtime.env").write_text("FOREIGN=1\n")
+    elif change == "runtime_mode":
+        (device / "etc/rosy/runtime.env").chmod(0o644)
+    elif change == "live_hostname":
+        (device / "proc/sys/kernel/hostname").write_text("other-robot\n")
+    elif change == "hardware":
+        (device / "proc/device-tree/serial-number").write_bytes(b"10000000abcdef02\0")
+    elif change == "shared_mount_id":
+        lines = host_table.read_text().splitlines()
+        for i, line in enumerate(lines):
+            if " /home/rosy/.ssh " in line:
+                fields = line.split()
+                fields[0] = str(int(fields[0]) + 500)
+                lines[i] = " ".join(fields)
+        host_table.write_text("\n".join(lines) + "\n")
+    elif change == "shared_subpath":
+        host_table.write_text(host_table.read_text().replace("/operator-ssh /home", "/foreign /home"))
+    elif change == "login_tombstone":
+        (device / "etc/rosy/login-policy.json").write_text("{}")
+    elif change == "tls_pending":
+        (common / "state/tls-pending.json").write_text("{}")
+    elif change == "setup":
+        (device / "var/lib/rosy/provisioning/new-device-setup.json").write_text("{}")
+    with pytest.raises(upd.UpdateError, match="OS_STATE_HOLD"):
+        worker._config()
+
+
+def test_actual_updater_remains_admitted_after_settings_owner_commit(device, host, hub, monkeypatch):
+    projected_device(device, monkeypatch)
+    from os_state_config import configuration_update
+    with configuration_update(device) as update:
+        update.stage("etc/rosy/login-policy.json", b'{"ssh_password_login":false}\n', 0o600)
+        update.commit()
+    assert updater(host, hub)._config()["enabled"] is False
+
+
 def test_ab_hold_set_and_unlink_use_shared_policy_but_history_stays_slot_local(device, host, hub, monkeypatch):
     common, _, _ = projected_device(device, monkeypatch)
     worker = updater(host, hub)
