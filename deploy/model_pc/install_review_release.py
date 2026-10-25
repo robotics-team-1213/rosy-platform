@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import sqlite3
+import stat
 import subprocess
 import time
 import urllib.error
@@ -157,11 +158,24 @@ def unit_contents(current: Path, state: Path, python: Path, host: str, port: int
     if ((links.exists() or links.is_symlink())
             and '--workspace-links' in ((source or current) / APP).read_text(encoding='utf-8')):
         control += f" --workspace-links {check_workspace_links(links)}"
+    sim = state / 'sim-config.json'
+    if ((sim.exists() or sim.is_symlink())
+            and '--sim-config' in ((source or current) / APP).read_text(encoding='utf-8')):
+        control += f" --sim-config {check_sim_config(sim)}"
     return ("[Unit]\nDescription=ROSY v13 drivable review\nAfter=network-online.target\n"
             "Wants=network-online.target\n\n[Service]\nType=simple\n"
             f"WorkingDirectory={dataset}\nEnvironment=PYTHONPATH={':'.join(map(str, paths))}\n"
             f"ExecStart={python} {dataset / 'review_app.py'} --state {state} --port {port} --host {host}{control}\n"
             "Restart=on-failure\nRestartSec=5\n\n[Install]\nWantedBy=default.target\n")
+
+
+def check_sim_config(binding: Path) -> Path:
+    # LocalRuns validates workspace/source/hash bindings when the app starts.
+    info = binding.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+            or info.st_mode & 0o077 or info.st_size > 65536 or binding.resolve() != binding):
+        raise ValueError('SIM configuration must be a private owned regular file')
+    return binding
 
 
 def check_workspace_links(binding: Path) -> Path:
@@ -378,6 +392,7 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                 line = re.sub(r' --review-ai-config [^\s]+', '', line)
                 line = re.sub(r' --omx-center-config [^\s]+', '', line)
                 line = re.sub(r' --workspace-links [^\s]+', '', line)
+                line = re.sub(r' --sim-config [^\s]+', '', line)
                 line = re.sub(r' --decisions-port [^\s]+', '', line)
                 cli = app.read_text(encoding='utf-8')
                 port_arg = re.search(r' --port ([0-9]+)', line)
@@ -407,6 +422,10 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
                     binding = Path(state_arg[1]) / 'workspace-links.json'
                     if binding.exists() or binding.is_symlink():
                         line = line.rstrip('\n') + f' --workspace-links {check_workspace_links(binding)}\n'
+                if state_arg and '--sim-config' in cli:
+                    binding = Path(state_arg[1]) / 'sim-config.json'
+                    if binding.exists() or binding.is_symlink():
+                        line = line.rstrip('\n') + f' --sim-config {check_sim_config(binding)}\n'
             lines.append(line)
         adjusted = ''.join(lines)
         if adjusted != text: unit_text = adjusted

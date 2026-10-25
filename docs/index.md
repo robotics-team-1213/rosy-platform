@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
-- 2026-10-25 · uncommitted · 모델 구조화 출력 원칙과 OMX judge seat 파싱 실패 거부 (D-878)
-- 2026-10-25 · uncommitted · D-876 ROSY Monitoring
-- 2026-10-25 · f80019b842 · fix(learning): SIM 실행 목록 행 방어와 Learning 첫 화면 픽셀 검수 일괄 읽기
-- 2026-10-25 · uncommitted · guard 교사 모드 첫 실물: 대기 중 오래된 모터 상태 표본으로 토크 OFF
+- 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
+- 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인
+- 2026-10-25 · 9f0df4f99b · RaspTank 평가 기준선과 공개 무결성 값 등록
+- 2026-10-25 · 3dca62ed05 · RaspTank 패키지 구조 정합성

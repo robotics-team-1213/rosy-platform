@@ -11,9 +11,23 @@ import sys
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from remote_omx_native import choose_target
 
 LIMIT = 1024 * 1024
+
+
+def choose_target(lab, role):
+    if role not in ('ai', 'model'):
+        raise ValueError('simulation role must be ai or model')
+    found = []
+    for entry in lab.get('sim_hosts', []):
+        host, _, declared = entry.partition('=')
+        if declared == role and host != lab.get('site_host'):
+            if not re.fullmatch(r'[a-z_][a-z0-9_-]*@[a-zA-Z0-9.-]+', host):
+                raise ValueError('invalid approved SSH target')
+            found.append(host)
+    if len(found) != 1:
+        raise ValueError('exactly one explicitly declared simulation host is required for '+role)
+    return found[0]
 
 
 def _sha(value):
