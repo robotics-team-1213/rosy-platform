@@ -12,6 +12,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import camera_reference
 from native_capture import bind_capture, check_capture_groups
 from native_environment import bind_environment, seal_environment, split_coverage, validate_environment
 
@@ -177,7 +178,8 @@ def load_dataset(root, repo_id):
 
 
 def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revision,
-                    source_mode=None, capture_provenance=None, environment_evidence=None):
+                    source_mode=None, capture_provenance=None, environment_evidence=None, camera_setup=None):
+    """``camera_setup`` is the D-792 ``{role: revision}`` an intake checked; absent keeps the report unchanged."""
     root = Path(root).resolve()
     if body_units not in ('degrees', 'normalized_-100_100') or not all(
             isinstance(value, str) and value.strip() for value in (rig_revision, calibration_revision)):
@@ -198,6 +200,10 @@ def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revi
         calibration_revision=calibration_revision, evidence=environment_evidence)
     if environment_evidence is not None:
         report['environment_evidence'] = copy.deepcopy(environment_evidence)
+    if camera_setup is not None or (capture_provenance or {}).get('camera_setup') is not None:
+        report['camera_setup'] = camera_reference.recorded(camera_setup, report['camera_keys'])
+        if (capture_provenance or {}).get('camera_setup', camera_setup) != camera_setup:
+            raise ValueError('capture provenance names other camera references')
     static = static_episodes(root, len(report['episodes']))
     if static:
         report['excluded_episodes'] = [dict(episode_index=i, reason=STATIC_REASON) for i in static]
@@ -272,7 +278,8 @@ def split_reviewed(root, report, decisions, output):
                               calibration_revision=report['calibration_revision'],
                               source_mode=report['source_mode'] if report['source_mode'] != 'unverified_native' else None,
                               capture_provenance=report.get('capture_provenance'),
-                              environment_evidence=report.get('environment_evidence'))
+                              environment_evidence=report.get('environment_evidence'),
+                              camera_setup=report.get('camera_setup'))
     current = copy.deepcopy(current)
     current.setdefault('environment_summary', validate_environment(current))
     expected = copy.deepcopy(report)
