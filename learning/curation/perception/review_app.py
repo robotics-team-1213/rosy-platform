@@ -252,8 +252,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send(control.status() if control else {'available': False})
                 if path == '/api/learning':
                     frames = store.list_frames()
-                    pixel_reviews = [review_masks.get(store, f['index']) for f in frames
-                                     if f['status'] != 'excluded']
+                    pixel_reviews = review_masks.get_many(store, [f for f in frames if f['status'] != 'excluded'])
                     pixel_statuses = [row['status'] for row in pixel_reviews]
                     with store.connect() as db:
                         queued_objects = {row[0] for row in db.execute('SELECT DISTINCT frame FROM object_drafts')}
@@ -261,7 +260,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                             and (f['index'] in queued_objects or f['source'].get('objects')
                                                  or f['source'].get('boxes'))]
                     pixel_draft_indices = [row['frame'] for row in pixel_reviews
-                                           if row['status'] == 'pending' and
+                                           if row['status'] == 'pending' and row['path'] is not None and
                                            bool((review_masks.pixels(store, row) != 255).any())]
                     pixel_candidate_indices = [row['frame'] for row in pixel_reviews if row['status'] == 'pending'
                                                and row['draft_candidates']]
