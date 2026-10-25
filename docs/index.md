@@ -354,4 +354,4 @@
 - 2026-10-26 · uncommitted · fix(land): 다시 시도하면 실패한 시험 묶음만 다시 돈다
 - 2026-10-26 · uncommitted · fix(land): FULL를 다시 돌지 않는 차례, pretest 공백 정리, 차례 중 우회 거부
 - 2026-10-26 · uncommitted · 공급암 S: 실물 사례를 모델 PC Isaac에서 재현하는 사례 파이프라인
-- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+- 2026-10-26 · 9816e56bd9 · Site updater pure split verified
