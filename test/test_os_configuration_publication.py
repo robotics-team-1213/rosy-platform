@@ -30,7 +30,8 @@ def test_interrupted_revision_keeps_a_proven_old_or_new_generation(tmp_path, mon
         return write(path, payload, mode)
 
     monkeypatch.setattr(module, "_json_atomic", interrupted)
-    with pytest.raises(OSError, match="modeled configuration"):
+    expected_error = OSError if point == "before_pointer" else ValueError
+    with pytest.raises(expected_error, match="modeled configuration"):
         _update(first, root_a, POLICY, {"mode": "off"})
     assert (common / "state/config-publishing.json").exists()
     assert first.FirstBootProvisioner(root=root_b).apply(bundle=bundle, hardware_serial=SERIAL)["ok"]

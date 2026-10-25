@@ -243,6 +243,7 @@ class FirstBootState:
             path = _path(self.root, relative)
             values[relative] = (_read(path, 64 * 1024, self.owner)
                                 if path.exists() or relative in BASE_FILES else None)
+        project_files(self.root, values)
         pointer = self.stage_generation(self.record["generation"], complete, values)
         _json_atomic(self.current, pointer, 0o600)
         return dict(complete, os_state={"generation": pointer["generation"],

@@ -18,6 +18,9 @@ def shared_roots(tmp_path, monkeypatch):
             f"{name}:x:{uid}:{uid}::{('/home/rosy' if name == 'rosy' else '/nonexistent')}:"
             f"{('/bin/bash' if name == 'rosy' else '/usr/sbin/nologin')}\n" for name, uid in accounts), encoding="ascii")
         (root / "etc/group").write_text("".join(f"{name}:x:{uid}:\n" for name, uid in accounts), encoding="ascii")
+        zone = root / "usr/share/zoneinfo/Etc/UTC"
+        zone.parent.mkdir(parents=True)
+        zone.write_bytes(b"TZif synthetic UTC payload")
         boot = root / "proc/sys/kernel/random/boot_id"
         boot.parent.mkdir(parents=True)
         boot.write_text("fixture")

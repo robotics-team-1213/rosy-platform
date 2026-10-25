@@ -53,9 +53,7 @@ def initial_changes(root: Path, factory_id: str) -> dict[str, bytes | None]:
 
 
 def _timezone(root: Path, data: bytes | None) -> str | None:
-    if data is None:
-        return None
-    value = _object(data, {"schema_version", "timezone"})["timezone"]
+    value = "Etc/UTC" if data is None else _object(data, {"schema_version", "timezone"})["timezone"]
     if (not isinstance(value, str) or not value or value.startswith("/") or "\\" in value
             or any(part in ("", ".", "..") for part in value.split("/"))):
         raise ValueError("invalid canonical timezone")
@@ -87,7 +85,7 @@ def validate_projection(root: Path, values: dict[str, bytes | None]) -> dict[str
 
 def project_files(root: Path, values: dict[str, bytes | None]) -> None:
     targets = validate_projection(root, values)
-    timezone = _timezone(root, values.get("etc/rosy/timezone.json"))
+    timezone = _timezone(root, values["etc/rosy/timezone.json"]) if "etc/rosy/timezone.json" in values else None
     localtime = _path(root, "etc") / "localtime"
     if timezone is not None and (localtime.exists() or localtime.is_symlink()):
         info = localtime.lstat()
