@@ -9723,3 +9723,9 @@ osy-d395-s1d\`.
 - 변경: 재검토 반영. 학습 기록 행은 요청 폴더가 주장하는 revision만으로 고르지 않고, 그 폴더를 공개한 행(`result.location`이 같은 실제 경로)이며 기록한 모델 파일 sha256이 봉인할 파일과 같아야 한다. `learning_cycle`이 `ready` 행에 공개 폴더의 `eval_set`과 `files`를 남긴다. 그 기록이 없는 예전 행은 거절된다. 시험 추가: 실제 `eval_set`·`files` 기록, `evalsets/` 안의 밖을 가리키는 링크와 `..` 경로 거절, GET 캐시가 있어도 POST가 다시 해시해 같은 크기·mtime의 바뀐 파일을 거절, 다른 폴더·다른 파일의 같은 revision 행 거절.
 - 증거: 원격 시험 PC 대상 54 passed, 브라우저(1440·390px) 10 passed, affected 2794 passed·known_failures 0 NEW.
 - gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · 봉인한 자동 교사 녹화의 Learning intake (D-848)
+
+- 변경: `collection_intake.prepare_native`가 `record_session.py --replay`로 녹화해 `record_seal.py`로 봉인한 `source_mode=scripted_teacher` 녹화를 받는다. `teacher/trajectory.json`을 다시 해시해 manifest `teacher_sha256`(64-hex)과 대조하고, `kind=replay_trajectory`·`rosy.omx-replay-trajectory.v1`, 정수로 이어진 A·reset·B 구간(A·B 길이 같음), 작은 JSON `teacher.source`(4 KiB·깊이 3·목록 64개 이하), Episode 정확히 두 개를 요구한다. 리더 녹화와 한 intake에 섞으면 거절한다. `capture.json`은 리더 manifest 해시 대신 `teacher_sha256`과 녹화별 `teachers`(hash·kind·segments·source)를 담아 `native_capture`의 자동 교사 검사를 그대로 통과한다. 현장 PC 절대 경로 `replay.path`는 `rosy_provenance` session 사본에서 지운다. 정적 episode·`DO_NOT_TRAIN.txt`·Episode 번호 옮기기는 그대로다.
+- 증거: 원격 시험 PC 대상 시험(intake·segments·capture), 모델 PC 학습센터 learner venv(LeRobot 0.4.4)로 실제 봉인 녹화→prepared intake 왕복(`ROSY_RUN_PINNED_LEARNING=1`) 1 passed, affected 계층 487 passed·known_failures 0 NEW. 실제 Fleet PC 봉인본과 `deploy/robot/omx` 쪽 변경(PR #189)은 이 시험에 없다.
+- gate 변화: 없음. 판정은 모두 unknown/exclude로 시작하고 자동 교사 녹화도 사람 검수 뒤에만 학습에 들어간다. CE 해당 없음 — 합의한 형식의 구현이며 새 장애나 반복 원인이 없다.
