@@ -7,6 +7,7 @@ thinning) so Isaac replays exactly what chunk_runner would stream. Body joints i
 the Isaac CAD gripper's radians (open 1.0; closed -0.12, a force-limited squeeze that stops on the box).
 
   isaac_cell_frames.py --scenario overhang --out frames-overhang.json
+  isaac_cell_frames.py --case case.json --out frames-case.json   (a case from cell_cases.py)
 """
 from __future__ import annotations
 
@@ -35,14 +36,16 @@ def fixture():
     return module
 
 
-def frames_for(scenario: str, plan: dict | None = None) -> dict:
+def frames_for(scenario, plan: dict | None = None) -> dict:
+    """``scenario``: a fixture scenario name, or a case dict (``arm_s_cell_fixture.check_case``)."""
     f = fixture()
+    case = f.spec(scenario)
     plan = plan or json.loads((HERE / "grasp-plan.example.json").read_text())
     (bx, by, _), yaw = f.box_start(scenario)
     px, py, top = f.place_point(scenario)
-    on_belt = f.SCENARIOS[scenario]["place"] == "belt"
+    on_belt = case["place"] == "belt"
     grasp_z = f.TRAY["top"] + f.BOX - GRASP_DEPTH
-    site_yaw = math.radians(plan["pick"]["yaw_deg"])  # the site's yaw: the jaws do not follow the box's turn
+    site_yaw = math.radians(plan["pick"]["yaw_deg"] + case["grasp_turn"])  # the site's yaw, turned by the case
     place_yaw = math.radians(plan["place"]["yaw_deg"] if on_belt else plan["pick"]["yaw_deg"])
     transit = {NAMES.index(k): v for k, v in plan["transit"].items()}
     transit_q = [norm_to_rad(transit.get(i, plan["home"][i])) for i in range(5)]
@@ -51,7 +54,8 @@ def frames_for(scenario: str, plan: dict | None = None) -> dict:
                    approach_m=plan["approach_m"], grip_open=f.FIXTURE["gripper_open_rad"],
                    grip_close=f.FIXTURE["gripper_closed_rad"], limits=plan["limits"], fps=f.FIXTURE["frame_fps"])
     phases = chunk_phases(Planner(arm), JOINTS, "gripper_joint_1", 0.0)  # step 0: keep every frame
-    return {"schema": SCHEMA, "scenario": scenario, "fps": f.FIXTURE["frame_fps"], "joints": list(JOINTS),
+    return {"schema": SCHEMA, "scenario": scenario if isinstance(scenario, str) else "case",
+            **({} if isinstance(scenario, str) else {"case": case}), "fps": f.FIXTURE["frame_fps"], "joints": list(JOINTS),
             "fixture_revision": f.FIXTURE["revision"], "box_start_m": [bx, by], "box_yaw_deg": yaw,
             "start": list(phases[0].start_state_positions),
             "phases": [{"phase_id": p.phase_id, "frames": [list(q.positions) for q in p.points]} for p in phases]}
@@ -59,10 +63,12 @@ def frames_for(scenario: str, plan: dict | None = None) -> dict:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--scenario", required=True, choices=sorted(fixture().SCENARIOS))
+    which = parser.add_mutually_exclusive_group(required=True)
+    which.add_argument("--scenario", choices=sorted(fixture().SCENARIOS))
+    which.add_argument("--case", type=Path, help="a case JSON from cell_cases.py")
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv)
-    value = frames_for(args.scenario)
+    value = frames_for(args.scenario or json.loads(args.case.read_text()))
     args.out.write_text(json.dumps(value))
     print(json.dumps({"out": str(args.out), "frames": sum(len(p["frames"]) for p in value["phases"])}))
 

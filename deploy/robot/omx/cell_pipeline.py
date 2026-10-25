@@ -181,6 +181,17 @@ def rule_backend(prompt, images, schema):
     return {"decision": "retry" if "retry" in allowed else "abort", "reason": "rule: no decision model"}
 
 
+def scene(config: dict, source: str, dest: str, tried: dict) -> dict | None:
+    """What a simulator needs to replay this attempt (cell_cases.from_row): box, jaw turn, place, outcome."""
+    found, transfer = tried["locate"], tried.get("transfer") or {}
+    if not found.get("found") or "grasp_yaw" not in tried:
+        return None
+    place = config["sites"][dest]["place"]
+    return {"box_m": found["arm_m"], "box_turn_deg": found.get("turn_deg", 0.0),
+            "grasp_turn_deg": round(tried["grasp_yaw"]["yaw_deg"] - config["sites"][source]["yaw_deg"], 1),
+            "place": "belt" if dest == "belt" else place, "outcome": transfer.get("result"), "at": transfer.get("at")}
+
+
 def case(work: Path, row: dict) -> None:
     """One line per check that did not simply pass, and the outcome that followed: new failure cases to fix
     and turn into tests, and the decision model's training data (it learns before any VLA, D-872)."""
@@ -406,7 +417,8 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
         decision = seat.decide(dict(facts, site=source, attempt=attempt))
         out["decisions"].append(decision)
         case(work, {"from": source, "to": dest, "attempt": attempt, "facts": facts, "decision": decision["decision"],
-                    "by": decision["by"], "reason": decision.get("reason")})
+                    "by": decision["by"], "reason": decision.get("reason"),
+                    "scene": scene(config, source, dest, tried)})
         if decision["decision"] != "retry" or (facts.get("fault")):
             return {**out, "result": f"stopped: {decision['decision']} ({facts['check']})"}
     return {**out, "result": f"stopped: {attempts} attempts"}
