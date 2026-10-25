@@ -52,6 +52,12 @@ def validate_shared_owners(root: Path) -> None:
     if (tls.st_uid != root.stat().st_uid or tls.st_gid != ACCOUNT_IDS["rosy-core"]
             or tls.st_mode & 0o7777 != 0o750):
         raise ValueError("shared TLS owner/group/permissions differ")
+    for name, uid, gid, mode in (("maps", ACCOUNT_IDS["rosy-io"], ACCOUNT_IDS["rosy-core"], 0o2750),
+                                 ("models", root.stat().st_uid, ACCOUNT_IDS["rosy-camera"], 0o750),
+                                 ("pilot-recordings", ACCOUNT_IDS["rosy-camera"], ACCOUNT_IDS["rosy-core"], 0o2750)):
+        info = (root / "var/lib/rosy" / name).stat()
+        if (info.st_uid, info.st_gid, info.st_mode & 0o7777) != (uid, gid, mode):
+            raise ValueError("shared data owner/group/permissions differ")
     for relative in ("var/lib/tailscale", COMMON + "/tailscale/join"):
         info = _path(root, relative).stat()
         if info.st_uid != root.stat().st_uid or info.st_mode & 0o7777 != 0o700:

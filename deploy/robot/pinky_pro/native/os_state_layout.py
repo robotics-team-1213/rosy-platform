@@ -22,6 +22,8 @@ SHARED_BINDINGS = {
     "var/lib/rosy/ssh": "/ssh", "home/rosy/.ssh": "/operator-ssh",
     "etc/rosy/tls": "/tls",
     "var/lib/tailscale": "/tailscale/machine",
+    "var/lib/rosy/maps": "/maps", "var/lib/rosy/models": "/models",
+    "var/lib/rosy/pilot-recordings": "/pilot-recordings",
 }
 
 
