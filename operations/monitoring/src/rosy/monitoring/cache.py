@@ -284,3 +284,10 @@ class ObservationCache:
         now, wall = self._now(), self._wall()
         self._sequence += 1
         return self._compose(self._groups, sites, now, wall, self._sequence)
+
+    def checkpoint(self):
+        """Record expiration transitions even when a remote peer never responds again."""
+        if self.store is not None:
+            now, wall = self._now(), self._wall()
+            for key, records in self._groups.items():
+                self.store.save(key, [record.value(now) for record in records.values()], wall=wall)
