@@ -3426,3 +3426,10 @@
 - 변경: legacy signing facade의 `__getattr__`가 원래 spec module 객체를 유지하는 소비자에도 공통 API를 제공한다. 기존 alias identity와 설치된 독립 signing 구현은 유지한다.
 - 증거: 정상 착지 FULL 중 perception learned-signature9 FAIL을 확인해 착지를 취소했다. retained module 객체 반례 RED 뒤 binding/signing 관련153 PASS/NEW0, 기존 learned signature 사례 포함. 최종 FULL 재착지는 별도다.
 - gate 변화: source 호환 보완. 실제 배포·서명 key 사용·SDK/firmware/OS 전체 갱신 수용 없음. CE 해당 없음 — 기존 소비자와 반례에 원인/해결을 보존했다.
+
+## 2026-10-25 · 9f0df4f99b · 설치형 updater 복구 시험과 공개 digest inventory
+
+- 변경: 설치기와 같이 독립 공통 signing 구현을 복사하도록 updater resync fixture를 맞췄다. secret scanner 규칙은 유지하고 공개 image checksum·source commit·정규화된 profile/capability digest·기존 journal repair digest 11개 행을 exact provenance에 등록했다.
+- 증거: 기존 fixture는 원격 RED 1 FAIL/3 PASS로 ModuleNotFoundError를 재현했다. 정상 FULL도 같은 실패와 inventory/scorecard 실패를 검출했고 같은 main의 3개 반례는 PASS였다. 수정 후 원격 GREEN은 별도 기록한다.
+- gate 변화: source 회귀 보완 중이며 실제 설치·SD 기록·OS/펌웨어 갱신·기체 부팅 검증은 수행하지 않았다.
+- 교훈: CE 해당 없음 — 실제 설치 closure와 복구 회귀 시험으로 이유를 남겼다.
