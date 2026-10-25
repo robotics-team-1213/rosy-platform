@@ -61,6 +61,8 @@ Task 정책 경로(`policy_evidence`, `POLICY_DISPATCH_ENABLED`)는 이미 만�
 
 ### P2 — 서버 구현
 
+**상태:** P2a 착지(2026-10-25) — 판정 core(`missions/policy_admission.py`: 설정 해석·전환·상한·감사)와 단위 시험. P2b(루트 `GET/POST /api/fleet/policy-admission`·`/audit`, 자동 admit 루프·제안 열거·digest 재판정·generation 결정, `cli_config` adapter·app.py 조립, 상한의 SQLite 지속화, SRS MSN-008 계약 줄 v1.314 갱신)는 별도 브랜치다.
+
 **산출물:** `cli_config` adapter, 범위 객체·스위치·readback, 정책 principal admit 경로, 감사 기록, 회귀 시험(신규 `test_policy_admission*.py` + 기존 `test_mission_store`·`test_mission_dispatcher`·`test_dispatch_stop_latch` 확장). · **주의:** `missions/`는 safety_modules 밖이지만 `console.py`·`task_dispatch_routes.py` 등을 만지면 D-430 §5 `Safety-Review:` trailer와 독립 리뷰가 필요하다. 범위를 최소로 잡아 missions 경로 안에서 끝내는 것을 먼저 본다. · **Exit:** E-stop·generation 변경·범위 밖 제안·digest 불일치가 전부 거절/HOLD되는 회귀 통과.
 
 ### P3 — 콘솔 표시

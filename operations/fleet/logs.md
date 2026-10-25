@@ -4440,3 +4440,18 @@
 - Change: merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-reference-stream-land without production-code conflicts.
 - Evidence: Git blob comparison and [integration record](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). Static integration checks only; no new remote pass for this integrated HEAD.
 - gate 변화: unchanged. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable.
+## 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
+
+- 변경: fleet/server/missions/policy_admission.py 신설(설정 해석·운영자 전환·상한·감사 판정 core), test/test_policy_admission_core.py 추가, D-865 실행 설계 P2 상태(P2a/P2b 분리) 표시.
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. core는 어떤 실행 경로에도 연결 전이고 상한 지속화·루트·루프는 P2b다.
+- gate 변화: 없음. 활성화가 아니며 POLICY_DISPATCH·mission admit 현행 동작 불변.
+- 결정: D-865 P2a 산출물.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
+
+- 변경: test_policy_admission_core.py test_minimal_enabled_section 이 robots 만으로 enabled 를 기대했으나 구현은 enabled 명시까지 요구하는 fail-closed 가 정책이다. 입력에 enabled: true 를 명시하고 robots-only 절은 비활성을 확인하는 시험을 추가.
+- 증거: 착지 회차에서 NEW 1건(이 시험) 단독 재실행으로 확인 — 구현 결함 아님. 수정 커밋 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음

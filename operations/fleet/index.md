@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
+- 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
 - 2026-10-25 · uncommitted · Swarm lifecycle extraction integration preparation
 - 2026-10-25 · 4ed200d0ee · 군집 세션 무장 경로 의미 보존 분리
 - 2026-10-25 · 85838e52ea · 재접속 scalar 대신 원본 이벤트 확인
-- 2026-10-25 · uncommitted · refactor(fleet): cli 사이트 설정 helper를 console_site_config로 이동
-- 2026-10-25 · uncommitted · 통합관제 경계 등록의 전체 회귀 보완
