@@ -11,6 +11,8 @@ from fakes import FakeClock, FakeRobot, run
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_routes import SharedGather
+from fleet.server.task_service import FleetTaskService
+from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 
 
@@ -28,6 +30,7 @@ def row(robot_id="rosy_01", **changes):
 
 def seeded(rows=None):
     clock = FakeClock()
+    clock.now = 0.0
     body = {"robots": rows if rows is not None else [row()]}
     counters = {"snapshot": 0, "observe": 0, "flush": 0}
 
@@ -50,19 +53,21 @@ def seeded(rows=None):
     return gather, clock, counters, body
 
 
-def app_client():
+def app_client(tmp_path):
     clock = FakeClock()
+    clock.now = 0.0
     robot = FakeRobot("rosy_01")
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "fixture")],
                            [robot], clock=clock)
     users = {sha256(READ_TOKEN.encode()).hexdigest(): {"principal_id": "monitor-reader", "role": "viewer"}}
-    app = create_app(console, site_users=users, start_task_dispatcher=False)
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids={"rosy_01"})
+    app = create_app(console, site_users=users, task_service=tasks, start_task_dispatcher=False)
     app.state.fleet_gather._clock = clock
     return TestClient(app), clock, robot, console
 
 
-def test_real_fleet_http_route_is_guarded_and_empty_cache_does_not_gather():
-    client, _clock, robot, console = app_client()
+def test_real_fleet_http_route_is_guarded_and_empty_cache_does_not_gather(tmp_path):
+    client, _clock, robot, console = app_client(tmp_path)
 
     async def forbidden():
         raise AssertionError("monitoring must not gather, dispatch, hand off or refresh")
@@ -76,8 +81,8 @@ def test_real_fleet_http_route_is_guarded_and_empty_cache_does_not_gather():
     assert robot.calls == []
 
 
-def test_real_fleet_http_route_preserves_stale_cache_without_robot_reads():
-    client, clock, robot, console = app_client()
+def test_real_fleet_http_route_preserves_stale_cache_without_robot_reads(tmp_path):
+    client, clock, robot, console = app_client(tmp_path)
     gather = client.app.state.fleet_gather
     run(gather())
     calls = list(robot.calls)
@@ -143,8 +148,8 @@ def test_unknown_invalid_or_future_robot_clock_keeps_state_age_unknown(mono):
     assert gather.cached_monitoring().robots[0].state_age_s is None
 
 
-def test_corrupt_cache_fails_closed_without_echoing_source_errors():
-    client, _clock, _robot, _console = app_client()
+def test_corrupt_cache_fails_closed_without_echoing_source_errors(tmp_path):
+    client, _clock, _robot, _console = app_client(tmp_path)
     gather = client.app.state.fleet_gather
     run(gather())
     gather._clock = lambda: float("nan")
