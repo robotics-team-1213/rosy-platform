@@ -223,7 +223,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/catalog':
                     return self.send({'catalog': review_evidence.metadata(store, 'import_catalog'),
                                       'cad_catalog': review_evidence.metadata(store, 'cad_catalog'),
-                                      'map_reference': review_evidence.map_reference(store), 'token': token})
+                                      'map_reference': review_evidence.map_reference(store), 'token': token,
+                                      'imports': bool(collaboration)})  # HF imports exist only in collaboration mode
                 if path.startswith('/api/mask-images/'):
                     review = review_masks.get(store, int(path.rsplit('/', 1)[1]))
                     pixels = review_masks.encode(review_masks.pixels(store, review))
