@@ -128,7 +128,7 @@ class FirstBootState:
             raise ValueError("invalid initialization hardware binding")
         return record
 
-    def _generation(self) -> tuple[dict, dict, dict[str, bytes]]:
+    def _generation(self) -> tuple[dict, dict, dict[str, bytes | None]]:
         pointer = _load(self.current, self.owner,
                         {"schema_version", "state_schema", "generation", "manifest_sha256"})
         generation = _guid(pointer["generation"])

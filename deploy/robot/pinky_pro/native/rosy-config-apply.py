@@ -36,7 +36,6 @@ except ModuleNotFoundError:  # installed image layout
 
 
 Runner = Callable[[list[str]], str]
-CARD_FILE = "boot/firmware/rosy-config.yaml"
 CONNECTIONS = "etc/NetworkManager/system-connections"
 APPLIED_STATE = "var/lib/rosy/config/applied.json"
 STATUS = "run/rosy-boot/config-status.json"

@@ -24,6 +24,10 @@ storage admission 코드는 OS 이미지 소유 `/opt/rosy/os-bootstrap`에 고�
 
 공유 HOME을 다른 root가 chown하지 않도록 native 이미지의 로컬 UID/primary GID를 CORE960, I/O961, display962, camera963, operator1001로 고정한다. builder는 operator 계정도 비밀번호 없이 미리 만들고 모든 예약 ID·동일 ID의 다른 계정/그룹 alias·operator home/shell을 검사한다. A/B storage admission은 각 root의 실제 passwd/group과 공유 CORE/operator directory의 owner/group/권한을 검사한 뒤에만 firstboot 쓰기를 허용한다. data formatter는 이 소유권으로 공장 directory를 준비해야 한다. 잘못된 소유권을 부팅 중 임의 chown으로 고쳐 이전 root의 접근을 깨뜨리지 않는다. 기존 legacy 이미지의 계정 번호를 이 경로에서 강제로 바꾸지 않는다.
 
+설정 입력도 A/B에서는 admitted boot_a의 `rosy-config.yaml` 하나를 사용한다. 각 root의 `/boot/firmware`에 남은 예전 파일을 다시 적용하지 않는다. config-apply의 network/login/AP/Fleet 설정, 논리 timezone, 적용 digest는 canonical generation으로 게시하고 root별 cache로 투영한다. null entry는 명시적 삭제이며 기존 cache를 제거한다. timezone override 삭제는 양 root에서 UTC로 돌아가고, 논리 timezone은 해당 OS의 zoneinfo와 `/etc/localtime`으로 투영한다. CORE token·NM profile·SSH mutable directory는 이 snapshot에 넣지 않는다.
+
+firstboot와 canonical 설정 writer는 공통 lock으로 직렬화한다. 첫 bundle 적용 전 설정은 factory ID에 결속한 bounded 초기 설정 기록에 보존한다. 완료된 기체의 수정은 직전 generation을 확인하고 새 generation·directory entries를 fsync한 뒤, 이전/새 pointer와 이전 completion hash를 가진 publication journal, current pointer, completion 순으로 게시한다. 중단 후에는 그 journal과 동일한 기록만 복구한다. 이전 기체의 completion이나 stale writer를 이용해 새 정본을 덮어쓰지 못한다. 카드의 비밀번호 scrub과 성공 표시는 canonical commit 뒤에만 수행한다. 공통 private state와 boot_a 입력은 진단 수집에서 읽지 않는다.
+
 ### Ownership and existing decisions
 
 | 기준 | 관계 |
