@@ -11,8 +11,6 @@ from test_learning_repos import identified, publisher
 
 @pytest.fixture
 def pool_setup(tmp_path, accounts):
-    assert importlib.util.find_spec('storage_pool'), 'capacity-aware storage pool is missing'
-    pool_type = importlib.import_module('storage_pool').StoragePool
     _, actor = publisher(accounts)
     targets = []
     for n, owner in enumerate(('first', 'second')):
@@ -26,7 +24,9 @@ def pool_setup(tmp_path, accounts):
         reserve_bytes=10, source='admin measurement', measured_at=90, expires_at=200)
         for owner in ('first', 'second')})
     db = tmp_path / 'pool.db'
-    build = lambda: pool_type(db, config, accounts, clock=lambda: now[0])
+    def build():
+        assert importlib.util.find_spec('storage_pool'), 'capacity-aware storage pool is missing'
+        return importlib.import_module('storage_pool').StoragePool(db, config, accounts, clock=lambda: now[0])
     return build, actor, config, now
 
 
