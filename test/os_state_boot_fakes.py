@@ -41,7 +41,8 @@ def shared_roots(tmp_path, monkeypatch):
                 "var/lib/rosy/core": common / "core",
                 "etc/NetworkManager/system-connections": common / "network/system-connections",
                 "var/lib/rosy/ssh": common / "ssh", "home/rosy/.ssh": common / "operator-ssh",
-                "etc/rosy/tls": common / "tls"}
+                "etc/rosy/tls": common / "tls", "var/lib/tailscale": common / "tailscale/machine"}
+    (common / "tailscale/join").mkdir(parents=True, mode=0o700)
     mountpoints = set()
     for root, (_, host_table, local_table) in zip(roots, tables):
         (root / "run/rosy-os-state/ready.json").unlink()
@@ -51,6 +52,8 @@ def shared_roots(tmp_path, monkeypatch):
                 backing.chmod(0o750 if relative == "var/lib/rosy/core" else 0o700)
             elif relative == "etc/rosy/tls":
                 backing.chmod(0o750)
+            elif relative == "var/lib/tailscale":
+                backing.chmod(0o700)
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.is_dir():
