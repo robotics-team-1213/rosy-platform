@@ -5,9 +5,30 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.318
+**Version:** v1.321
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.321 Learning 저장 대상 풀과 자료 회수 (D-884)
+
+아래 경로는 협업 계정이 활성화된 Learning Center 전용이며 CORE 경로가 아니다. private storage 설정에 `pool`이 없으면 읽기는 `not_configured`, 변경은 400이다. 기존 `/api/learning/storage`와 정확한 `/storage/preflight` 입력·순간 추정 의미는 유지한다. 새 작업만 용량을 예약하며 기존 HF CLI는 바꾸지 않는다.
+
+모든 읽기는 현재 프로젝트 view와 요청자 범위를 확인한다. 새 보관·전송·복원은 publish, 로컬 회수·고정 보관·관리 cache 정책 실행은 manage도 요구한다. 모든 POST는 기존 Origin·X-Pinky-Token 검사를 통과해야 한다. 서버에서 actor를 정하고 토큰·절대 경로·provider 오류 본문을 반환하지 않는다.
+
+| 경로 | 정확한 입력과 반환 |
+|---|---|
+| `GET /api/learning/storage/pool` | 대상별 `id`, 상태, namespace별 `available_bytes`와 quota 측정 근거를 반환한다. 접근 불가 연결은 unavailable이며 그 연결의 저장소 정보를 숨긴다. `sources`에는 등록 root ID·label만, `capabilities`에는 현재 사용자의 수행 가능 행위를 반환한다. |
+| `GET /api/learning/storage/jobs` | 요청자가 만든 최근 200개 작업. id, profile, status, 대상/저장소, 고정 revision, bytes_verified, provenance, upload_bytes, local_present, reclaimable, pinned와 오류 코드. 원격 보관 검증은 학습·실물 수용이 아니다. |
+| `POST /api/learning/storage/jobs` | `source_id`, `artifact_id`, `profile`. source_id는 등록 root ID, artifact_id는 그 root 안 완료된 자료의 상대 폴더이며 절대·상위·숨김·링크 경로는 거부한다. profile은 isaac/dataset/model이다. 작업을 등록하며 전송은 아래 run으로 시작한다. |
+| `POST /api/learning/storage/jobs/<id>/run` | 빈 객체. 같은 연결·대상·manifest의 전송 또는 고정 revision 검증을 실행한다. 이미 commit된 작업은 다시 쓰지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/restore` | 빈 객체. 해당 고정 revision만 검증하며 관리 cache로 복원한다. |
+| `POST /api/learning/storage/jobs/<id>/reclaim` | `confirm`이 작업 id와 같아야 한다. 검증·권한·정확한 로컬 파일 집합·identity·사용 lease·pin을 다시 확인한다. 원격 자료를 삭제하지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/pin` | `pinned`: boolean. 로컬 회수로부터 보호하거나 해제한다. |
+| `POST /api/learning/storage/cache/reclaim` | 빈 객체. 관리자가 활성화한 cache 정책의 용량 상한과 최소 여유에 맞게 사용이 오래된 검증 cache를 회수한다. source root는 자동 회수하지 않는다. |
+
+작업 변경은 비동기 실행을 수락하면 202이며 GET으로 갱신 상태와 `operation`/`operation_error`를 확인한다. 중복 실행은 하나로 합치고 작업 중인 같은 자료의 다른 변경은 거절한다. 잘못된 입력·용량 부족·미검증·사용 중은 400, 접근 거부는 기존 401/403 규칙이다. 미확인 commit 결과는 `hold/upload_outcome_unknown`, 전송·검증 실패는 `failed/transfer_failed`로 남기며 로컬과 예약을 보존한다. 서버 재시작은 계정 교체나 재업로드 근거가 아니다.
+
+source manifest는 `storage-source.json`의 `rosy.storage-source/1`이며 completed 상태, profile, 파일별 bytes/SHA-256, provenance를 포함한다. 파일 집합 전체를 검증하고 출처가 검증되지 않은 파일을 자동으로 추가하지 않는다. Isaac 출처는 run_id·seed·source_revision을 보존한다. manifest 완료 표시는 파일 보관 범위의 선언이며 시뮬레이션 성공을 증명하지 않는다. 고정 revision과 자료 이력은 로컬 회수 뒤에도 남는다.
 
 ### v1.318 Fleet 캐시 전용 모니터링 읽기 (D-876)
 
