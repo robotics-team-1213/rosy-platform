@@ -142,9 +142,9 @@ CORE의 `core/drive`는 같은 CORE 프로세스 안의 조립 코드다. `line_
 
 CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `core_features.command`, `core.bridge`에 남는다. Drive의 body/sweep/floor/envelope 검사는 해당 운동 후보의 실행 근거이며 공통 Safety를 대체하지 않는다. Arm의 joint/action writer와 stop/rearm/HOLD는 OMX owner에 남는다. Base `cmd_vel`과 Arm 출력을 하나의 writer로 합치지 않는다.
 
-## 전체 manifest root 판정
+## manifest root 판정 기록
 
-현재 manifest의 **90개 root를 각각 한 행**으로 기록했다. 하위 root는 상위 root의 일부를 따로 소유하므로 행 개수를 패키지 개수로 읽지 않는다. `유지`는 실제 책임이 현재 위치에 맞는다는 뜻이다. `이전 완료`·`분리 완료`는 소스 holder 변경을 뜻한다. `후속 분리 보류`는 기존 패키지·transaction 소비자를 유지한다는 결정이며 새로운 빈 폴더를 뜻하지 않는다. ROS 배포명과 Python import명이 다른 경우 둘 다 적었다.
+아래는 각 소유 경계를 판정한 기록이다. 현재 root 목록과 권한은 `tools/harness/platform_parts.yaml`이 정본이다. 하위 root는 상위 root의 일부를 따로 소유하므로 행 개수를 패키지 개수로 읽지 않는다. `유지`는 실제 책임이 현재 위치에 맞는다는 뜻이다. `이전 완료`·`분리 완료`는 소스 holder 변경을 뜻한다. `후속 분리 보류`는 기존 패키지·transaction 소비자를 유지한다는 결정이며 새로운 빈 폴더를 뜻하지 않는다. ROS 배포명과 Python import명이 다른 경우 둘 다 적었다.
 
 | 현재 manifest root | 실제 패키지·import 또는 형식 | 판정과 현재 책임·소비자 |
 |---|---|---|
@@ -196,8 +196,10 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/fleet/fleet/incidents` | `fleet.incidents.handoff`, `fleet.incidents.notifications` | 분리 완료 — D-661 이름 있는 담당자의 사건 인수와 기존 Fleet DB의 알림 outbox·고정 채널 worker·receipt. 판단·resolver는 `fleet/stuck`, 인증·라우트·worker 생명주기는 `fleet/server`에 유지. 실제 운영 수용은 HOLD |
 | `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — ER2/VLM·candidate·provider-neutral tool 계약/제안. store 결속 dispatcher는 D-657에서 Fleet로 이전; 기존 transaction/배포 유지, 옛 module shim 없음 |
 | `applications/fleet/web` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
+| `applications/monitoring` | 독립 상태 앱의 소유·표면 기준, backend 브라우저 계약 | D-876 등록 — 서비스의 scoped read API를 소비한다. 현재 화면 구현/G1·G2·G3는 HOLD이며 API 브라우저 시험을 화면 완성으로 계산하지 않는다 |
 | `applications/fleet/gateway` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
 | `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — `ObservationSnapshot`과 `state/projections/map_pose.py`. Fleet은 그 모듈을 직접 import한다(D-752). MapPoseService·trip·swarm·lane·history의 서비스와 원장은 Fleet |
+| `operations/monitoring` | wheel `rosy-monitoring`; `rosy.monitoring`, CLI `rosy-monitoring` | D-876 독립 수집·집계·durable 관측·scoped read API/POSIX 실행기. CORE/Fleet/host 기존 출력을 읽으며 명령·원장·복구 소유권을 갖지 않는다 |
 | `operations/processes/palletizing` | wheel `rosy-palletizing`; `rosy.processes.palletizing` | 유지 — palletizing process 정의/조정. Arm owner·skill·site execution 소비 경계 유지 |
 | `operations/processes/cell` | ROS `rosy_cell`; `rosy_cell` | 유지 — cell process·site 조립. agent/gateway contract 소비; 직접 joint writer가 아님 |
 | `operations/situation` | `rosy_situation` | 분리 완료 — 기존 사실과 제한된 advisory 제안은 별도 출력. D-652 `assessment`는 개입 필요성, `snapshot_assessment`는 관측 변환을 소유하며 Fleet/Situation이 내부 shadow로 소비. 기존 import/patch identity 유지 |

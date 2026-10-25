@@ -68,6 +68,7 @@ CI_FULL_MATRIX = (
     {"name": "sensing", "invocations": [["middleware/perception/test"]], "ros": "none", "gating": False},
     {"name": "fleet", "invocations": [["operations/fleet/test"]], "ros": "none"},
     {"name": "app-fleet", "invocations": [["applications/fleet/test"]], "ros": "none"},
+    {"name": "monitoring-browser", "invocations": [["test/test_monitoring_browser.py"]], "ros": "none"},
     {"name": "site-vision-cell", "invocations": [
         ["operations/overhead/test"], ["operations/processes/cell/test"], ["operations/situation/test"],
         ["operations/world/test"], ["operations/monitoring/test"],
