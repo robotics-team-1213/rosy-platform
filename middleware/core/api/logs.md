@@ -1280,3 +1280,9 @@
 - 변경: 네트워크 조회/연결을 전용 Unix socket으로 전달하고 HTTP 본문 전송 후 준비 작업을 시작한다. 기존 관리자 재확인과 viewer 조회를 유지하며 잘못된 connect 본문의 검증 오류에서도 비밀 입력을 제거한다.
 - 증거: `9198a18c7b` 경계 원격 선택 332 passed, `3b29e960ce` CORE/인증 선택 107 passed. [검증 기록](../../../docs/validation/device-network-recovery-2026-10-24/result.md). 실제 ASGI 응답 순서·역할·socket·실패 응답을 확인했다.
 - gate 변화: SOURCE 근거 추가. 실제 Pinky 및 현장 네트워크 수용은 별도다. API v1.311, D-863.
+
+## 2026-10-25 · uncommitted · 호스트 에이전트 중계 문구 표기 정렬
+
+- 변경: host·system 라우터가 돌려주는 한국어 detail/reason의 `Host Agent`를 화면 말 `호스트 에이전트`로 바꾸고, SSH 페어링 안내 영어 문장을 같은 한국어 평문으로 옮겼다. 경로·역할·available·evidence 판단은 그대로다.
+- 증거: 패널이 `result.detail`을 우선 표시하므로 CORE 반환 문구도 운용자 문구다(CONCEPTS.md, DESIGN.md 운용자 말). 이 문구를 단언하는 시험은 없으며 원격 시험으로 회귀를 확인한다.
+- gate 변화: 없음. 표기 변경이며 CORE 실행·장치 수용은 바꾸지 않는다. CE: 해당 없음.

@@ -2,13 +2,17 @@
 Description=ROSY OMX automatic camera tuning and photometric readiness
 Requires=rosy-omx-camera-view.service
 After=rosy-omx-camera-view.service
+# A refused start runs ExecStopPost restore; the documented recovery is one more start (2026-10-23/24).
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 [Service]
 Type=simple
 EnvironmentFile=%h/.config/rosy/omx-camera-readiness.env
 ExecStart=/usr/bin/python3 ${ROSY_CAMERA_PIPELINE_ROOT}/camera_readiness.py run --profile %h/.config/rosy/omx-camera-readiness.json --state-dir %h/.local/state/rosy/omx-camera-environment
 ExecStopPost=/usr/bin/python3 ${ROSY_CAMERA_PIPELINE_ROOT}/camera_readiness.py restore --state-dir %h/.local/state/rosy/omx-camera-environment
-Restart=no
+Restart=on-failure
+RestartSec=15
 TimeoutStopSec=20
 NoNewPrivileges=true
 UMask=0077

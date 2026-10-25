@@ -1335,3 +1335,9 @@
 - 변경: Wi-Fi 변경 전에 비밀 없는 작업 ID/SSID만 보관하고 응답 유실·화면 재진입 뒤 같은 작업을 조회한다. 준비 응답을 연결 성공으로 표시하지 않고 실제 UUID/SSID/IPv4 관측 또는 rollback/held/resubmit을 표시한다.
 - 증거: `9198a18c7b` opt-in 실제 Chromium 10 passed(대시보드와 복구 화면 선택). [검증 기록](../../../docs/validation/device-network-recovery-2026-10-24/result.md). 암호 저장 금지·연결 끊김 뒤 동일 작업 재조회·최종 결과를 확인했다.
 - gate 변화: SOURCE 근거 추가. 실물 연결 전환과 사람 과업 수용은 미실시다. CE: 별도 새 교훈 없음.
+
+## 2026-10-25 · uncommitted · 호스트 에이전트 화면 표기 정렬
+
+- 변경: 호스트 상태 태그·버튼 비활성 사유·적용 실패 안내의 `Host Agent`를 화면 말 `호스트 에이전트`로 바꿨다. 역할 판단·조회·적용 동작은 그대로다.
+- 증거: 운용자 문구 규칙(DESIGN.md 운용자 말, CONCEPTS.md 호스트 에이전트)에 맞춘 표기 변경이다. 화면 문구 회귀(`test_panel_copy_evidence_browser.py`)와 원격 시험으로 회귀 여부를 확인한다.
+- gate 변화: 없음. 표기 변경이며 동작·실물 수용은 바꾸지 않는다. CE: 해당 없음.

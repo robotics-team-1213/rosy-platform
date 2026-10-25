@@ -257,6 +257,12 @@ class Updater:
             self.envs.mkdir(parents=True, exist_ok=True)
             self.host.build_env(lock, staging)
             os.replace(staging, target)
+            # A venv is not relocatable: console scripts keep "#!<staging>/bin/python" (2026-10-24:
+            # lerobot-teleoperate failed with ENOENT on the missing envs/<hash>.tmp interpreter).
+            old, new = str(staging).encode(), str(target).encode()
+            for script in (target / "bin").iterdir():
+                if script.is_file() and not script.is_symlink() and old in (data := script.read_bytes()):
+                    script.write_bytes(data.replace(old, new))
             log(step="env_built", env=name)
         return name
 

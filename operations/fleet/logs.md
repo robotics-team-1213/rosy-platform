@@ -4721,3 +4721,18 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+## 2026-10-25 · uncommitted · feat(fleet): D-865 P2b policy admission HTTP surface
+
+- 변경: missions/policy_admission_routes.py 신설(GET/POST /api/fleet/policy-admission, GET /audit), app.py 조립(policy_admission_core 주입), cli.py 사이트 설정 fleet.policy_admission 해석, test/test_policy_admission_routes.py 추가, FLEET SRS MSN-008 계약 줄 v1.314 확정.
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. 자동 admit 루프·상한 지속화는 P2c 별도 조립이다.
+- gate 변화: 없음. 설정 없이는 core가 비활성이고 어떤 승인 경로도 바뀌지 않는다.
+- 결정: D-865 P2b 산출물.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · fix(fleet): 정책 승인 라우트의 가드 dependencies 형태 수정
+
+- 변경: policy_admission_routes.py 가 dependencies=[guard] 로 감싸 리스트-속-리스트 를 만들었다. 기존 mission_routes 패턴대로 guard 는 이미 리스트이므로 dependencies=guard 로 바로 쓴다(라우트 3건). 착지 회차 NEW 10건(라우트 시험 6 + cli 조립 시험 4)의 원인.
+- 증거: 착지 로그 AttributeError 'list' object has no attribute 'dependency' 로 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음

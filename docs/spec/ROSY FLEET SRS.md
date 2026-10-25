@@ -257,7 +257,7 @@ PENDING → RUNNING → COMPLETED
 
 ### MSN-008 정책 승인 — 승인 범위 안 작업 자동 승인 (D-865, 설계 단계)
 
-사람이 정한 승인 범위 안에서 Fleet 정책이 승인 대기 작업을 자동 승인한다. 승인(admit) 권한은 Fleet이 소유하며 업무 앱은 자기 제안을 승인하지 않는다. 자동 승인은 사람 승인과 같은 검사를 전부 통과한 뒤에만 된다: 단계 종류 등록부(MSN-006), 정지 세대·재해석 검사, trip lease·claim·자원 admission(MSN-007, FL-RESOURCE·FL-FENCE), 전송 직전 재검사. 규칙집의 law(FL-*)는 승인 범위로 해제하지 않고 사람 점유·E-stop·UNKNOWN은 기존 인계·정지 경로로 사람에게 돌아간다. 1차 범위는 승인 종류 `one_person`의 Mission/Cell Job이고 `two_person`(팔 단계)과 레거시 `proposer_only`의 자동 승인은 열지 않는다. 자동 승인은 정책 principal(범위 근거·범위 revision 포함)로 감사 기록을 남긴다. 승인 범위는 사이트 설정과 운영자 전환·readback으로 보존하며, 상한 소진은 초기화하지 않고 자동 대기로 돌아간다. 계약: API 경로·스키마는 [D-865 실행 설계](../plans/2026-10-25-fleet-policy-admission-design.md) P1에서 버전 선점과 함께 정한다.
+사람이 정한 승인 범위 안에서 Fleet 정책이 승인 대기 작업을 자동 승인한다. 승인(admit) 권한은 Fleet이 소유하며 업무 앱은 자기 제안을 승인하지 않는다. 자동 승인은 사람 승인과 같은 검사를 전부 통과한 뒤에만 된다: 단계 종류 등록부(MSN-006), 정지 세대·재해석 검사, trip lease·claim·자원 admission(MSN-007, FL-RESOURCE·FL-FENCE), 전송 직전 재검사. 규칙집의 law(FL-*)는 승인 범위로 해제하지 않고 사람 점유·E-stop·UNKNOWN은 기존 인계·정지 경로로 사람에게 돌아간다. 1차 범위는 승인 종류 `one_person`의 Mission/Cell Job이고 `two_person`(팔 단계)과 레거시 `proposer_only`의 자동 승인은 열지 않는다. 자동 승인은 정책 principal(범위 근거·범위 revision 포함)로 감사 기록을 남긴다. 승인 범위는 사이트 설정과 운영자 전환·readback으로 보존하며, 상한 소진은 초기화하지 않고 자동 대기로 돌아간다. 계약: API Ref v1.314(D-865 P1). 서버 표면 구현은 P2, 콘솔 표시는 P3다.
 
 ---
 

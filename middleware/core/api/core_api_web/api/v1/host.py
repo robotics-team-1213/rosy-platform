@@ -46,7 +46,7 @@ def host_ssh_pair(body: SshPairRequest, request: Request, auth: AuthContext = De
                             timeout_s=5.0)
     reply = agent.request('ssh.register_key', role='administrator', user_id=auth.token_id,
                           confirmed=body.confirmed, params={'public_key': body.public_key})
-    return _relay(reply, absent_detail='Host Agent unavailable; SSH key was not registered.')
+    return _relay(reply, absent_detail='호스트 에이전트에 연결할 수 없어 SSH 키를 등록하지 못했습니다.')
 
 
 # Keep the status summary built from the hardware module's validated readback.
@@ -110,7 +110,7 @@ def host_network(request_id: str | None = Query(default=None, min_length=1, max_
     """현재 네트워크 모드와 도달성. SSID 는 표시하되 secret 은 절대 싣지 않는다."""
     reply = _network_agent(svc).request("network.status", role="viewer",
                                         params={"request_id": request_id} if request_id else None)
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 상태를 알 수 없습니다.",
+    return _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 네트워크 상태를 알 수 없습니다.",
                   status_read=True)
 
 
@@ -148,7 +148,7 @@ def host_network_apply(
         params={"profile_id": body.profile_id},
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 프로파일을 바꾸지 못했습니다.")
+    return _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 네트워크 프로파일을 바꾸지 못했습니다.")
 
 
 @host_router.post("/network/mode")
@@ -166,7 +166,7 @@ def host_network_mode(
         params={"mode": body.mode},
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 네트워크 모드를 바꾸지 못했습니다.")
+    return _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 네트워크 모드를 바꾸지 못했습니다.")
 
 
 def _without_secrets(payload: dict) -> dict:
@@ -205,7 +205,7 @@ def host_network_connect(
                                       user_id=auth.token_id, confirmed=body.confirmed,
                                       params={"request_id": job_id})
     return _without_secrets(
-        _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 Wi-Fi에 연결하지 못했습니다.")
+        _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 Wi-Fi에 연결하지 못했습니다.")
     )
 
 
@@ -213,7 +213,7 @@ def host_network_connect(
 def host_release(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """current / previous / staged 와 마지막 실패 사유."""
     reply = _agent(svc).request("release.status", role="viewer")
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 릴리스 상태를 알 수 없습니다.",
+    return _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 릴리스 상태를 알 수 없습니다.",
                   status_read=True)
 
 
@@ -256,7 +256,7 @@ def host_release_install(
         params={"release_id": body.release_id},
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 설치를 시작하지 못했습니다.")
+    return _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 설치를 시작하지 못했습니다.")
 
 
 @host_router.post("/release/rollback")
@@ -273,7 +273,7 @@ def host_release_rollback(
         confirmed=body.confirmed,
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 롤백을 시작하지 못했습니다.")
+    return _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 롤백을 시작하지 못했습니다.")
 
 
 @host_router.post("/release/clear-hold")
@@ -290,7 +290,7 @@ def host_release_clear_hold(
         confirmed=body.confirmed,
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 홀드를 해제하지 못했습니다.")
+    return _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 홀드를 해제하지 못했습니다.")
 
 
 @host_router.post("/reboot")
@@ -308,7 +308,7 @@ def host_reboot(
         confirmed=body.confirmed,
         idempotency_key=body.idempotency_key,
     )
-    return _relay(reply, absent_detail="Host Agent 에 연결할 수 없어 재부팅하지 못했습니다.")
+    return _relay(reply, absent_detail="호스트 에이전트에 연결할 수 없어 재부팅하지 못했습니다.")
 
 
 # D-247 7's sentences live in the D-260 rule table, which the boot display shares.
