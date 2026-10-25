@@ -1,6 +1,7 @@
 """Allowlisted service control for the site, AI, and model Ubuntu hosts.
 
-The control system accepts reboot, cancel-reboot, restart-unit, and stop-unit.
+The control system accepts reboot, cancel-reboot, restart-unit, stop-unit, and on the
+lab PCs clean-storage (D-883: start the rosy-ops storage service once).
 A process name, a signal, and a shell command are not actions. Fleet reaches
 every host, its own included, through one forced-command SSH key; the host's
 `rosy-host-control-remote` runs `sudo -n /usr/local/sbin/rosy-host-control`.
@@ -34,7 +35,9 @@ HOSTS: dict[str, dict[str, frozenset[str]]] = {
     "model": {},
 }
 
-ACTIONS = frozenset({"reboot", "cancel-reboot", "restart-unit", "stop-unit"})
+# Host-wide actions besides reboot; the site keeps product data, so it never cleans storage.
+HOST_ACTIONS: dict[str, frozenset[str]] = {host: frozenset({"clean-storage"}) for host in ("ai", "model")}
+ACTIONS = frozenset({"reboot", "cancel-reboot", "restart-unit", "stop-unit", "clean-storage"})
 UNIT_ACTIONS = RESTART_OR_STOP
 REBOOT_DELAY_MIN = 10
 CONFIG_DIR = Path("/run/rosy-fleet-host-control")  # host /etc/rosy/fleet-host-control, Fleet only
@@ -42,7 +45,7 @@ SSH = "/usr/bin/ssh"
 _LOG = logging.getLogger(__name__)
 _TARGET = re.compile(r"^[a-z_][a-z0-9_-]{0,31}@[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
 # Exit codes of deploy/site/rosy-host-control; anything else is HOST_HELPER_FAILED.
-_HELPER_EXIT = {3: "REBOOT_ALREADY_SCHEDULED", 4: "NO_HOST_CONTROL_REBOOT"}
+_HELPER_EXIT = {3: "REBOOT_ALREADY_SCHEDULED", 4: "NO_HOST_CONTROL_REBOOT", 5: "NO_STORAGE_SERVICE"}
 
 
 class HostControlError(Exception):
@@ -113,7 +116,8 @@ def catalogue() -> dict:
         unit_actions = set().union(*units.values()) if units else set()
         hosts.append({
             "host": host,
-            "actions": ["reboot", "cancel-reboot", *sorted(unit_actions)],
+            "actions": ["reboot", "cancel-reboot", *sorted(HOST_ACTIONS.get(host, ())),
+                        *sorted(unit_actions)],
             "units": sorted(units),
             "stoppable_units": sorted(u for u, a in units.items() if "stop-unit" in a),
             "reboot_delay_min": REBOOT_DELAY_MIN,
@@ -133,6 +137,8 @@ def decide(host: str, action: str, unit: str | None, *, confirmed: bool) -> dict
             raise HostControlError("UNIT_NOT_ALLOWED")
     elif unit is not None:
         raise HostControlError("UNIT_NOT_ALLOWED")
+    elif action == "clean-storage" and action not in HOST_ACTIONS.get(host, ()):
+        raise HostControlError("ACTION_NOT_ALLOWED")
     argv = (action,) if unit is None else (action, unit)
     return {"host": host, "action": action, "unit": unit, "argv": argv}
 

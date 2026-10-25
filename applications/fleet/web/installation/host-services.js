@@ -106,6 +106,13 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
       cancel.type = "button";
       cancel.addEventListener("click", () => send(host.host, "cancel-reboot", null, `${HOST_LABEL[host.host] || host.host}에 예약된 이 재부팅만 취소합니다.`));
       actions.append(reboot, cancel);
+      if ((host.actions || []).includes("clean-storage")) {
+        const clean = node("ui-button", "", "시험 저장소 정리");
+        clean.setAttribute("kind", "quiet");
+        clean.type = "button";
+        clean.addEventListener("click", () => send(host.host, "clean-storage", null, `${HOST_LABEL[host.host] || host.host}의 시험 저장소 정리 서비스를 한 번 실행합니다. 모델·데이터·사용 중 환경은 지우지 않으며, 결과는 다음 점검(최대 10분)의 디스크 여유로 확인합니다.`));
+        actions.append(clean);
+      }
       block.append(actions);
       for (const unit of host.units || []) {
         const row = node("ui-actions");
