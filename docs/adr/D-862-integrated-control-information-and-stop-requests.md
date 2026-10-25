@@ -70,3 +70,13 @@ immutable body는 각 관제에 최초 배정된 projection이다. origin_id/sto
 ### 착지 통합의 reference 버전
 
 초기 구현 브랜치에서 선점·검증한 v1.309 뒤에 main의 v1.310이 먼저 착지했다. 해당 계약을 보존하고 새로 선점한 **v1.313**에 이 ADR의 동일 wire를 통합한다. API reference·9개 현재 버전 pin·자기 changelog 제목/행을 공식 도구와 함께 정렬하며, 위 모델·권한·실행 범위 결정은 바꾸지 않는다. 초기 RED/GREEN의 v1.309 source와 최종 통합 source를 검증 기록에서 구분한다.
+
+### 구현 결속: 전용 자격과 실제 직접 장치 목록
+
+`role: service`, `principal_id: control-unit:<이웃>`은 모든 HTTP method에서 정확한 `/api/fleet/control-unit` namespace만 호출한다. 일반 Fleet read/proposal 경로로 우회해 raw Task의 actor/request/evidence를 읽거나 Cell Job 후보를 쓰지 못한다. namespace 안에서도 기존 직계 이웃·ancestor·배정 범위·opt-in·기명 사람 검사를 적용한다. 일반 Cell service와 사람의 기존 권한은 유지한다.
+
+송신 토큰은 각 이웃 사이에서 다르고, 모든 로컬 수신 principal·Console·로봇 REST·CORE Agent pairing 자격과도 달라야 한다. `Accept-Encoding: identity`만 사용하고 압축 응답은 읽기 전에 거절한다. 요청 전체 3초와 JSON byte 상한을 지키며, 이 시간은 물리 정지 보장 시간이 아니다.
+
+typed stop 설치 시 실제 `Console.robot_ids`와 manifest의 직접 `robot:` 목록이 정확히 일치해야 한다. configured OMX의 각 workcell은 자기 관제의 `workcell:<id>`, 설정된 신호등은 `signal:<id>` 자원이어야 한다. `signal:`은 topology의 직접 소유 표기이며 admission resource kind를 추가하지 않는다. 기존 topology의 중복 소유 거절을 사용하며 누락·타 관제 소유를 시작 시 거절한다. 각 인스턴스의 DB를 공유하지 않는다.
+
+조건부 정지는 journal/fence/latch의 같은 transaction이 성공한 최초 ticket만 장치 경로로 보낸다. SQLite 실패를 새 무조건 정지로 대체하지 않는다. 기존 로컬 사람 E-stop의 DB 장애 시 best-effort 경로는 유지한다. 공통 장치 callback은 Console·OMX의 실제 작업이 모두 끝나기 전에 반환하지 않는다. 요청 취소는 owned 작업을 취소하지 않으며, 종료는 그 작업을 drain한 뒤 peer client를 닫는다. 재시운전 확인도 owned 작업이 live-work gate를 유지하고 실제 thread 완료까지 기다린다.

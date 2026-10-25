@@ -10386,6 +10386,30 @@ osy-d395-s1d\`.
 - 증거: 실제 SDK의 양방향 접촉 파지·이송·안착과 소유 GPU 해제, FINAL6파일 해시·원격377 PASS/1 SKIP·독립 이미지 검토. 이전4개 SDK 실패를 유지했다.
 - gate 변화: 합성 정지 지지면 간 단일 물리 SIM 스모크 수용이다. 실제 카메라 맵·Pinky 전체·learned AI·실물 수용은 미검증. CE 새 교훈 기록.
 
+## 2026-10-25 · uncommitted · D-862 실제 통합관제 구현과 수용 경계 연결
+
+- 변경: 전용 service의 namespace 경계와 실제 직접 장치 소유 검사·worker 종료/재시운전 제약을 D-862/API에 명시했다. 기존 D-855 navigation 위임과 새 정보/정지 경로의 책임을 구분한다.
+- 증거: P1 contract7a3d0dc892는 FULL27 호출 뒤 로컬 main 착지했다. G1 timing은 suite/재실행 실패와 공식 격리 통과의 LOAD-FLAKY를 구분한다. 새 runtime source는 RED 후 구현 중이며 GREEN·최종 착지는 후속 검증이다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
+
+## 2026-10-25 · uncommitted · 관제 역할·직계 네트워크·수용 목표 구현 현황 반영
+
+- 변경: 역할표와 HTTP 정보/정지/조회 흐름, CORE HTTP와 OMX local UDS 배치, 전용 자격·기본false 허용·명시 CA·Fleet-only mount를 현재 구현에 맞췄다. 이전의 Compose/CA 미구현 설명을 제거하고 소프트웨어와 N1–N3 현장 수용을 분리했다.
+- 증거: backend sourceaaaf7ed3f2 집중179건·CORE source10fc372212 연계21건·sample sourceef83569895 API39건과 sourcebbffbf8577 실제 Chromium/Node 그룹은 각각 NEW0이다. 실제 Fleet backend 무가로채기 browser·HTTP 증거·배치 계약·최종 착지는 후속 확인이다.
+- gate 변화: I1/I2/I4의 source 근거를 표시하며 전체 I6·실제 설치·장치·현장 수용을 미리 완료하지 않는다. CE 해당 없음 — 새 판단은 D862·코드·회귀·현재 목표에 직접 남긴다.
+
+## 2026-10-25 · uncommitted · 통합관제 실제 HTTP·브라우저 집중 수용 근거
+
+- 변경: 정보·지도·정지/원장·기명 처분8 API의 통과 응답을 기존 receipt에 추가하고 기능 표를 실제 source와 결속했다. 별도 동결 검증 기록에 역할·중첩 HTTP·TCP/TLS·실제 Fleet browser와 실물/현장 한계를 구분했다.
+- 증거: sourceef6dc95958의 HTTP capture5건·배치/수집기2건과 source45d1f72ac0의 실제 Fleet 무가로채기 Chromium1건은 SKIP0·NEW0이다. sourcebbffbf8577의 Chromium/Node33건을 기능 표에 결속했다. 독립 후속 계약 검토에서 지원되는 Critical/Important finding이 없었다.
+- gate 변화: I3/I5 소프트웨어 검증을 기록했다. I6의 공식 최종 착지와 N1–N3 실제 PC/장치 수용은 분리한다. CE 해당 없음 — 원인·수정은 해당 코드·회귀·D862에 직접 남는다.
+
+## 2026-10-25 · uncommitted · FULL 등록 누락과 교차 SHA 격리 판정 보완
+
+- 변경: 첫 FULL의7실패와 원본27개 invocation을 별도 동결 기록에 보존했다. 문서 소유·공개 safety anchor·obsolete small 예외·exact provenance·공유 UI를 보완했다. land 격리 실행을 원래 tested SHA에 고정하고 HEAD 이동·불완전 결과는 통과 기록 전에 거절한다.
+- 증거: source42e079ef48은 통과가 아니다. 수정 후 문서 경계3건·구조/안전/비밀72건·공유 입력1건은 NEW0이며 source6a06333e92의 land 전체85건은 SKIP0·NEW0이다. 추가 격리 중 분류 목록 경합을 RED1건으로 재현했고 최종 source016f49d427의 land 전체86건은 SKIP0·NEW0이다. 교차 SHA로 잘못 생성된 자체 LOAD-FLAKY 후보3건은 원본 보존 후 무효화했다. 최종 공식 재검사·착지는 다음 단계다.
+- gate 변화: 통과 기준·known failures·quarantine·시간 기준을 낮추지 않았다. CE 해당 없음 — source 결속과 거절 조건이 명시 회귀·도구·동결 근거에 직접 남는다.
+
 ## 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강
 
 - 변경: ADR D-865(정책 승인 — 승인 범위 안 작업 자동 승인, Proposed), [실행 설계](plans/2026-10-25-fleet-policy-admission-design.md), [업무 앱 지원 계약](reference/application-contract-support.md)에 Harbor 용어 대응표·승인 권한 소유 절 추가, ADR Log 행.
@@ -10400,4 +10424,34 @@ osy-d395-s1d\`.
 - 증거: 미실행 — 요구사항 문서 변경. lint·generate는 커밋 전 실행으로 확인. 근거: D-865(Proposed, main 착지)와 사용자 2026-10-25 방향 확정.
 - gate 변화: 없음. 설계 단계 표기이며 구현·활성화가 아니다.
 - 결정: D-865 P0 산출물.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · test(policy-chain): D-866 P0 SmolVLA 정책 사슬 Gazebo 확인
+
+- 변경: SIM 시험 대상 관문(`SIM_PROBE_POLICY_TYPES`, `CoreArmTarget(sim_probe=True)`), `SimPolicyChain` 설치 카메라 1대 이상, D-867 시뮬레이션 상한(AI PC 12코어·10GB, 모델 PC 16코어·10GB), Gazebo 시험 `policy_chain_vla_gazebo.py`·`policy_chain_vla_child.py`, [검증 기록](validation/omx-vla-policy-chain-2026-10-25/result.md), [실행기 굶주림 교훈](solutions/runtime-errors/stock-rclpy-executor-starves-sim-lease-renewal-2026-10-25.md), D-864·D-866 Gazebo 카메라 정정.
+- 증거: AI PC Gazebo 3회차 stale·stop·revoke 9/9 통과(3회차는 GIL 전환 간격 변경 없이). lease 갱신 최대 249ms(예산 750ms), Fleet 교환 중앙값 5~6ms. 독립 검토 1회, 지적 반영. lease 1s·교환 0.25s는 그대로다.
+- gate 변화: P0 실행 계약 확인. 모델 성능·지연 한계·실물은 별도다.
+- 결정: D-867 Accepted.
+- 교훈: 새 교훈 기록(기본 `MultiThreadedExecutor`가 갱신 스레드를 굶김, 실험실 디스크 fsync).
+
+## 2026-10-25 · uncommitted · 통합관제 구현 main 착지와 I6 소프트웨어 수용
+
+- 변경: 통합관제 runtime이 main9b10086126에 착지해 I1–I6 소프트웨어 목표를 닫았다. 최종 동결 기록에 선행 Chromium 포함 FULL27과 최신 main 기준 guard273·기본 FULL23, 동일 SHA quarantine 재실행2건을 구분했다.
+- 증거: 공식 land exit0·main ancestry 확인. sourcee7cdace7f6의 Chromium118/181/121/143건은 SKIP0이며 source9b10086126의 모든 기본23로그·재실행1로그 비교는 NEW0이다. 원래 root2 FAIL/10036 PASS/1139 SKIP과 동일 source 재실행2 PASS는 별도로 보존했다.
+- gate 변화: 소프트웨어 구현·회귀·로컬 착지 수용이다. N1–N3 실제 PC/장치·FIELD·push는 미실시다. CE 해당 없음 — 판단과 재발 방지는 해당 코드·회귀·동결 근거에 직접 남는다.
+
+## 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
+
+- 변경: [API reference](reference/ROSY API & Protocol Reference.md) v1.314 절(경로·권한·의미), [D-865 실행 설계](plans/2026-10-25-fleet-policy-admission-design.md) P1 상태 표시.
+- 증거: 미실행 — 문서·계약 변경. 원격 회귀로 계약 시험 확인 예정.
+- gate 변화: 없음.
+- 결정: D-865 P1.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs(reference): v1.314 변경 이력 표행 추가
+
+- 변경: [API reference](reference/ROSY API & Protocol Reference.md) §11 변경 이력 표에 v1.314 행 추가. `### v1.314` 절만 두고 표행을 빠뜨려 test_changelog_has_a_row_for_the_live_version 가 실패했다(P1 첫 착지 중단 원인).
+- 증거: 진단 재실행으로 실패 식별(run-1.txt FAILED 1건) 후 수정. 재검증은 같은 시트 원격 재실행으로 확인.
+- gate 변화: 없음.
+- 결정: 없음.
 - 교훈: 없음

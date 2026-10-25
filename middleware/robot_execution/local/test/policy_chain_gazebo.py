@@ -125,11 +125,16 @@ def sdk_send(child, message):
 
 
 class Camera:
-    def __init__(self, node, monotonic, calibration):
+    def __init__(self, node, monotonic, calibration, *, name='front', identity='sim-workcell-camera',
+                 topic='/workcell_camera/image', shape=None, max_age_ns=None):
+        # Defaults keep this probe's single 32x24 camera; policy_chain_vla_gazebo.py passes its own (D-866 P0).
         self.node, self.clock, self.calibration = node, monotonic, calibration
+        self.name, self.identity = name, identity
+        self.shape = SHAPE if shape is None else tuple(shape)
+        self.max_age_ns = TIMING['max_observation_age_ns'] if max_age_ns is None else max_age_ns
         self._lock, self._latest, self._stamp = threading.Lock(), None, -1
         self.accepted, self.rejected, self.captures = 0, 0, []
-        self.subscription = node.create_subscription(Image, '/workcell_camera/image', self.receive, qos_profile_sensor_data)
+        self.subscription = node.create_subscription(Image, topic, self.receive, qos_profile_sensor_data)
 
     def receive(self, message):
         stamp = message.header.stamp.sec*1_000_000_000+message.header.stamp.nanosec
@@ -137,13 +142,14 @@ class Camera:
         now = self.node.get_clock().now().nanoseconds
         raw = bytes(message.data)
         with self._lock:
-            if (message.encoding != 'rgb8' or (message.height,message.width) != SHAPE[1:]
-                    or message.step != SHAPE[2]*3 or len(raw) != SHAPE[1]*SHAPE[2]*3
-                    or stamp <= self._stamp or not 0 <= now-stamp <= TIMING['max_observation_age_ns']
-                    or not 0 <= int(self.clock()*1e9)-received_at_ns+now-stamp <= TIMING['max_observation_age_ns']):
+            shape, age = self.shape, self.max_age_ns
+            if (message.encoding != 'rgb8' or (message.height,message.width) != shape[1:]
+                    or message.step != shape[2]*3 or len(raw) != shape[1]*shape[2]*3
+                    or stamp <= self._stamp or not 0 <= now-stamp <= age
+                    or not 0 <= int(self.clock()*1e9)-received_at_ns+now-stamp <= age):
                 self.rejected += 1
                 return
-            camera = CameraSnapshot('front','sim-workcell-camera',self.calibration,SHAPE,
+            camera = CameraSnapshot(self.name,self.identity,self.calibration,shape,
                 received_at_ns-(now-stamp),hashlib.sha256(raw).hexdigest())
             self._latest, self._stamp = (raw,camera), stamp
             self.accepted += 1
@@ -155,7 +161,7 @@ class Camera:
                 raise PermissionError('no original Gazebo camera frame')
             raw, camera = self._latest
             self.captures.append(dict(frame_sha256=camera.frame_sha256, received_at_ns=camera.received_at_ns,
-                                      source_stamp_ns=self._stamp, shape=SHAPE))
+                                      source_stamp_ns=self._stamp, shape=self.shape))
             yield raw, camera
 
     def current(self):
