@@ -11394,3 +11394,10 @@ osy-d395-s1d\`.
 - 증거: 정상 착지 FULL 공통 묶음 3 FAIL/10727 PASS/1185 SKIP. 세 실패가 각각 단독 재현되었고 같은 main에서는 3 PASS여서 이 브랜치의 실패로 처리했다. 수정 후 원격 검증은 별도 기록한다.
 - gate 변화: 전체 source 착지는 아직 미완료다. 새 A/B 이미지의 media consumer·OS 전환·ARM64 artifact·실기 복구 수용을 주장하지 않는다.
 - 교훈: CE 해당 없음 — 재현 시험·기준선·정확한 provenance 정책에 판단 근거를 보존하며 별도 교훈 문서를 늘리지 않는다.
+
+## 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인
+
+- 변경: RaspTank baseline·정확한 공개 digest inventory·설치형 updater fixture의 수정 검증을 기록한다.
+- 증거: 승인 원격 `python tools/remote/remote_pytest.py --log-dir <scratch>/landing-fixes-green -- test/test_module_scorecard.py test/test_release_boundary_guards.py test/test_secret_public_provenance.py test/test_rosy_auto_update_resync.py test/test_shared_release_signing.py test/test_native_runtime_installed_layout.py` — 125 PASS, known_failures NEW0. 독립 리뷰는 profile digest4개 재계산·provenance11행 결속·설치기 fixture 일치를 확인했다.
+- gate 변화: 관련 source 회귀 통과이며 전체 정상 착지는 다시 수행한다. OS 전체 자동 업데이트·이미지 artifact·실기 수용은 미완료다.
+- 교훈: CE 해당 없음 — 원인/복구와 반례는 시험 및 기존 정책에 보존했다.

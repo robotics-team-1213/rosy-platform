@@ -3433,3 +3433,10 @@
 - 증거: 기존 fixture는 원격 RED 1 FAIL/3 PASS로 ModuleNotFoundError를 재현했다. 정상 FULL도 같은 실패와 inventory/scorecard 실패를 검출했고 같은 main의 3개 반례는 PASS였다. 수정 후 원격 GREEN은 별도 기록한다.
 - gate 변화: source 회귀 보완 중이며 실제 설치·SD 기록·OS/펌웨어 갱신·기체 부팅 검증은 수행하지 않았다.
 - 교훈: CE 해당 없음 — 실제 설치 closure와 복구 회귀 시험으로 이유를 남겼다.
+
+## 2026-10-25 · 055f40747f · signing 설치 closure와 provenance 회귀 통과
+
+- 변경: 설치형 resync fixture와 공개 digest inventory 보완 결과를 기록한다. scanner/시험 assertion은 유지했다.
+- 증거: `landing-fixes-green` 승인 원격 committed SHA 검증 125 PASS/NEW0. 범위는 module scorecard·release boundary·public provenance·updater resync·shared signing·실제 installed layout이며 docs logs에 실행 명령을 남겼다. 독립 리뷰 승인.
+- gate 변화: 이 source 회귀만 통과했다. 정상 전체 착지·SD/부팅·OS/펌웨어 갱신은 별도다.
+- 교훈: CE 해당 없음 — 설치기와 복구 반례가 판단을 직접 보존한다.
