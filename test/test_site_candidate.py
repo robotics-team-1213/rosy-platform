@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,7 +29,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
                  "candidate_signing.py", "sign_candidate.py",
                  "verify_candidate.py",
-                 "discovery-token.template.txt", "site_db.py",
+                 "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
@@ -76,6 +77,9 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert all(item["image_id"].startswith("sha256:") for item in manifest["images"].values())
     assert all(item["sbom_sha256"] for item in manifest["images"].values())
     assert manifest["image_archive_sha256"]
+    assert (output / "deploy/site/site_users.py").read_bytes() == (site / "site_users.py").read_bytes()
+    assert manifest["deployment_file_sha256"]["site_users.py"] == sha256(
+        (site / "site_users.py").read_bytes()).hexdigest()
     assert "compose.workcell.yaml" in manifest["deployment_file_sha256"]
     assert (output / "release.json").is_file()
     assert (output / "images.tar").is_file()
@@ -100,7 +104,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
         "verify_candidate.py",
         "candidate_signing.py", "sign_candidate.py",
-        "discovery-token.template.txt", "site_db.py",
+        "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account",
     }
@@ -152,7 +156,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "site-firewall.py", "rosy-site-firewall.service", "rosy-site-firewall-failclosed.service",
                  "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
-                 "discovery-token.template.txt", "site_db.py",
+                 "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):

@@ -109,7 +109,7 @@ def candidate(tmp_path):
     sbom_dir.mkdir()
     docs.mkdir(parents=True)
 
-    deploy_files = (*DEPLOY_FILES, "verify_candidate.py")
+    deploy_files = (*DEPLOY_FILES, "verify_candidate.py", "site_users.py")
     for name in deploy_files:
         (deploy / name).write_text(f"candidate:{name}\n", encoding="utf-8")
     (deploy / ".env.example").write_text(
@@ -297,6 +297,28 @@ def test_rejects_changed_deployment_file(candidate):
     (root / "deploy/site/compose.yaml").write_text("changed\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="deployment file hash mismatch"):
+        _verify(candidate)
+
+
+def test_rejects_candidate_without_site_users_tool(candidate):
+    root = candidate[0]
+    manifest_path = root / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["deployment_file_sha256"].pop("site_users.py")
+    (root / "deploy/site/site_users.py").unlink()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="required deployment"):
+        _verify(candidate)
+
+
+@pytest.mark.parametrize("damage", ["missing", "changed"])
+def test_site_users_tool_must_exist_and_match_signed_hash(candidate, damage):
+    tool = candidate[0] / "deploy/site/site_users.py"
+    if damage == "missing":
+        tool.unlink()
+    else:
+        tool.write_text("changed\n", encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file"):
         _verify(candidate)
 
 
