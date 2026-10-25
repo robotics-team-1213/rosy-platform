@@ -276,7 +276,7 @@ class StorageJobs:
             if job.get('local') and self.files.exists(job['local']):
                 self.files.verify(job['local'], job['files'])
                 return self._public(job)
-            if self.policy['enabled'] and sum(row['upload_bytes'] for row in self._cached(actor)) + job['upload_bytes'] > self.policy['max_bytes']:
+            if self.policy['enabled'] and sum(row['upload_bytes'] for row in self._cached()) + job['upload_bytes'] > self.policy['max_bytes']:
                 raise ValueError('cache space changed during admission; retry after reclaim')
             def chunks(name):
                 assigned, token = self._assignment(actor, job)
@@ -294,7 +294,7 @@ class StorageJobs:
         size(required_bytes)
         if not self.policy['enabled']: return dict(status='disabled', reclaimed_bytes=0)
         self.accounts.require(actor, 'manage')
-        cached = self._cached(actor)
+        cached = self._cached()
         total = sum(job['upload_bytes'] for job in cached)
         reclaimed = 0
         def enough():
@@ -302,15 +302,16 @@ class StorageJobs:
                     and self.files.available() >= required_bytes + self.inventory.reserve)
         for job in sorted(cached, key=lambda row: (row.get('last_used_at', row['created_at']), row['id'])):
             if enough(): break
+            if job['requester_id'] != actor['user_id']: continue
             if job['pinned'] or not job['bytes_verified'] or job['status'] != 'verified': continue
             result = self.reclaim(actor, job['id'], job['id'])
             if result['local_present'] is False:
                 total -= job['upload_bytes']; reclaimed += job['upload_bytes']
         return dict(status='ready' if enough() else 'blocked', reclaimed_bytes=reclaimed)
 
-    def _cached(self, actor):
+    def _cached(self):
         with self.pool.connect() as db:
             records = [json.loads(row[0]) for row in db.execute(
                 'SELECT document FROM storage_jobs WHERE project=?', (self.project_id,))]
-        return [job for job in records if job['requester_id'] == actor['user_id'] and job.get('local')
+        return [job for job in records if job.get('local')
                 and job['local']['root_id'] == self.files.cache_id and self.files.exists(job['local'])]
