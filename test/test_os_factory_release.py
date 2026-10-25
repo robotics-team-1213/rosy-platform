@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 
 import pytest
 
@@ -20,6 +21,13 @@ def _factory(root, release_id, private, public, *, signed=False):
     release = root / "opt/rosy/releases" / release_id
     _payload(release, release_id)
     shutil.rmtree(release / "image-overlay")
+    # Real A/B factories carry the SDK the builder installs, not just a target unit.
+    from test_os_frozen_firstboot import BASE
+    native = release / "deploy/robot/native"
+    shutil.rmtree(native)
+    installed = subprocess.run(["bash", str(BASE / "native/install-native-runtime.sh"), str(native)],
+                               capture_output=True, text=True, timeout=30)
+    assert installed.returncode == 0, installed.stderr
     seal_release(release, release_id)
     signature = sign_checksums((release / "SHA256SUMS").read_bytes(), private)
     if signed:
