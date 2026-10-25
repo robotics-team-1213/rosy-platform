@@ -146,14 +146,15 @@ def test_isolated_dispatch_forwards_maintenance_admission_to_the_os_entrypoint(t
     assert json.loads(result.stdout) == {"flag": flag}
 
 
-def test_ab_dispatch_executes_the_os_copy_with_a_partial_native_runtime(tmp_path):
+@pytest.mark.parametrize("flag", [None, "--no-pending-maintenance", "--tailnet", "--projected"])
+def test_ab_dispatch_executes_the_os_copy_with_a_partial_native_runtime(tmp_path, flag):
     prefix = tmp_path / "opt/rosy"
     runtime = prefix / "native-runtime"
     runtime.mkdir(parents=True)
     shutil.copy2(NATIVE / "os_storage_dispatch.py", runtime / "os_storage_dispatch.py")
     bootstrap = prefix / "os-bootstrap"
     bootstrap.mkdir()
-    for name in ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "os_state_io.py", "os_state_accounts.py", "os_state_files.py", "os_state_config.py"):
+    for name in ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "os_state_io.py", "os_state_accounts.py", "os_state_files.py", "os_state_config.py", "os_state_ready.py"):
         shutil.copy2(NATIVE / name, bootstrap / name)
         (runtime / name).write_text('raise RuntimeError("interrupted payload helper")\n', encoding="ascii")
     shutil.copytree(NATIVE.parent / "sd", prefix / "deploy/sd")
@@ -163,7 +164,7 @@ def test_ab_dispatch_executes_the_os_copy_with_a_partial_native_runtime(tmp_path
     (root / "etc/rosy").mkdir(parents=True)
     (root / "etc/rosy/os-slot.json").write_text("{}", encoding="ascii")
     result = subprocess.run([sys.executable, "-I", "-B", str(runtime / "os_storage_dispatch.py"),
-                             "--root", str(root)], cwd=tmp_path,
+                             "--root", str(root), *([flag] if flag else [])], cwd=tmp_path,
                             capture_output=True, text=True, check=False, timeout=30)
     assert result.returncode == 1
     assert json.loads(result.stdout)["phase"] == "HOLD"
