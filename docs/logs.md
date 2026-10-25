@@ -11514,3 +11514,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 개발 도구 변경이다.
 - 결정: 없음.
 - 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.
+
+## 2026-10-26 · uncommitted · docs(solutions): read-only test dirs filled the lab test-PC disks
+
+- 변경: 새 교훈 `docs/solutions/workflow-issues/read-only-test-dirs-fill-lab-disks-2026-10-26.md`(pytest `garbage-*`·고아 run 디렉터리·디스크를 안 보는 호스트 선택, chmod 후 회수 명령, 읽기 전용 시험은 고치지 않음). `landing-blockers-cost-hours-2026-10-18.md` §5의 g1 LOAD-FLAKY 줄을 부하가 아니라 AI PC 디스크 I/O 경합(증명 안 됨)으로 정정. `test/flaky_quarantine.txt` g1 3개 id의 사유 문구만 같은 사유로 바꿈(제거 조건·날짜·소유자 유지).
+- 증거: 2026-10-26 시험 PC 측정. AI PC 100%(1.4 GB 남음)·모델 PC 89% → 수동 회수 뒤 81%·82%. 정리 뒤 AI PC에서 g1 첫 시도 3/3 실패, 모델 PC 0/2 실패, io pressure full avg10 최대 57%. 수정은 rosy-platform `fix/test-host-disk-2`와 rosy-ops `ops/daily-host-maintenance`(9f907ab, e24736e, 5f88c77).
+- gate 변화: 없음. 문서와 격리 사유 정정이다.
+- 결정: 없음.
+- 교훈: CE 새 교훈 기록 — 위 경로.
