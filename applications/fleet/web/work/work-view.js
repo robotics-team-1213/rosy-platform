@@ -1,6 +1,7 @@
 // Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
 import { tripWaitText } from "/console/assets/site-map-model.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
+import { createArmTransferView } from "/console/assets/arm-transfer-view.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
@@ -15,13 +16,14 @@ export const workKind = row => ({task: "주행", trip: "운행", cell_job: "Cell
 const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
 export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
 
-export function createWorkView({scope, call, el, channelRequestView, approveReason, principal}) {
+export function createWorkView({scope, call, el, channelRequestView, approveReason, principal, confirm}) {
   const query = new URLSearchParams(location.search), area = query.get("view") === "work", fresh = area && query.get("show") === "new", active = area && !fresh;
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
   let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
   const units = createControlUnitView({scope, call, anchor: el("channel-requests-heading"), active, approveReason, principal});
+  const arms = createArmTransferView({scope, call, anchor: el("channel-requests-heading"), active, approveReason, principal, confirm});
   const clear = () => { detail.replaceChildren(); admit.hidden = true; };
   // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
   function showKinds(kinds = []) {
@@ -41,7 +43,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
   }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.", preserveUnits = false) {
-    if (!preserveUnits) units.reset();
+    if (!preserveUnits) { units.reset(); arms.reset(); }
     channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
     showKinds();
@@ -137,6 +139,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     if (!area || inFlight) return;
     const life = scope.capture(); inFlight = true;
     try {
+      await arms.refresh();
       await units.refresh();
       const result = await call("/api/fleet/work"); life.check();
       showKinds(result.kinds);
