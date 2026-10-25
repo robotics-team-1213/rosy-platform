@@ -1,9 +1,12 @@
 """Real file/SQLite lifecycle; only the remote HF bytes are substituted."""
 from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib
 import json
 import shutil
+import threading
+from pathlib import Path
 
 import pytest
 
@@ -254,3 +257,41 @@ def test_consumer_lease_survives_other_service_startup(jobs_setup):
         with pytest.raises(ValueError, match='use'):
             build().reclaim(actor, job['id'], job['id'])
     assert artifact.exists()
+
+
+def test_native_training_consumer_prevents_reclaim(jobs_setup, tmp_path, monkeypatch):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); build().run(actor, job['id'])
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / 'learning/training/omx'))
+    import experiment_train
+    monkeypatch.setattr(experiment_train, 'load_dataset', lambda *args, **kwargs: object())
+    def fitting(*args, **kwargs):
+        with pytest.raises(ValueError, match='use'):
+            build().reclaim(actor, job['id'], job['id'])
+    monkeypatch.setattr(experiment_train, 'train_dataset', fitting)
+    experiment_train.train(artifact, tmp_path / 'new-training-output')
+    assert artifact.exists()
+
+
+def test_cache_budget_is_rechecked_after_worker_admission(jobs_setup, monkeypatch):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    first, second = create(build, actor), create(build, actor)
+    build().run(actor, first['id']); build().run(actor, second['id'])
+    build().reclaim(actor, first['id'], first['id'])
+    inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=first['upload_bytes'])
+    waiting, proceed = threading.Event(), threading.Event()
+    service = build(); reclaim = service.reclaim_cache
+    def previous_snapshot(*args, **kwargs):
+        value = reclaim(*args, **kwargs)
+        waiting.set()
+        assert proceed.wait(10)
+        return value
+    monkeypatch.setattr(service, 'reclaim_cache', previous_snapshot)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        later = executor.submit(service.restore, actor, second['id'])
+        assert waiting.wait(10)
+        try: build().restore(actor, first['id'])
+        finally: proceed.set()
+        try: later.result()
+        except ValueError: pass
+    assert sum(1 for path in cache.iterdir() if not path.name.startswith('.')) <= 1

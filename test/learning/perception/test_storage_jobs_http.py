@@ -112,6 +112,7 @@ def test_storage_browser_capacity_archive_reclaim_restore(tmp_path, jobs_setup, 
                 page.locator('#storage-source').select_option('raw')
                 page.locator('#storage-artifact').fill('run-one')
                 page.locator('#storage-profile').select_option('isaac')
+                assert page.get_by_role('button', name='보관 작업 등록', exact=True).bounding_box()['height'] >= 44
                 page.get_by_role('button', name='보관 작업 등록', exact=True).click()
                 expect(page.locator('#storage-jobs')).to_contain_text('전송 대기')
                 page.get_by_role('button', name='전송·검증', exact=True).click()
@@ -121,6 +122,7 @@ def test_storage_browser_capacity_archive_reclaim_restore(tmp_path, jobs_setup, 
                 job_id = service.list(actor)[0]['id']
                 expect(page.locator('#storage-confirmation')).to_be_visible()
                 page.locator('#storage-confirm-id').fill(job_id)
+                assert page.get_by_role('button', name='확인한 로컬 사본 정리', exact=True).bounding_box()['height'] >= 44
                 page.get_by_role('button', name='확인한 로컬 사본 정리', exact=True).click()
                 expect(page.locator('#storage-jobs')).to_contain_text('로컬 사본 없음')
                 page.get_by_role('button', name='필요 자료 복원', exact=True).click()
