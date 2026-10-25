@@ -180,6 +180,10 @@ def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
              'assets_sha256': hashlib.sha256((ASSETS / 'manifest.json').read_bytes()).hexdigest(),
              'verifier_sha256': hashlib.sha256(Path(__file__).with_name('import_omx.py').read_bytes()).hexdigest(),
              'scene': None, 'scene_not_applicable_reason': 'model_import_has_no_cargo_scene'}
+    if scenario_id == 'pinky-conveyor-roundtrip':
+        from conveyor_fixture import FIXTURE, fixture_sha256
+        value.update(scene=FIXTURE, scene_sha256=fixture_sha256(), scene_not_applicable_reason=None,
+            verifier_sha256=hashlib.sha256(Path(__file__).with_name('conveyor_report.py').read_bytes()).hexdigest())
     return {'input': value, 'input_sha256': hashlib.sha256(_bytes(value)).hexdigest()}
 
 
@@ -361,10 +365,19 @@ class RunStore:
             if not isinstance(result, dict) or result.get('status') not in TERMINAL:
                 raise ValueError('a terminal result is required')
             value = self._change(row, expected_revision, {'status': result['status']})
-            if result['status'] == 'SUCCEEDED' and (result.get('stage') != 'model_import'
-                    or result.get('import_verified') is not True or result.get('completed_frames') != 120
-                    or result.get('task_success') is not None):
-                raise ValueError('SDK exit alone is not verified model import')
+            if result['status'] == 'SUCCEEDED':
+                if row['input']['scenario_id'] == 'pinky-conveyor-roundtrip':
+                    required = {'contact-report', 'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle'}
+                    if (result.get('stage') != 'contact_roundtrip' or result.get('import_verified') is not True
+                            or type(result.get('completed_frames')) is not int or not 0 < result['completed_frames'] <= 4800
+                            or result.get('task_success') is not True or result.get('evidence_class') != 'PHYSICS_GRASP'
+                            or result.get('cleanup') != 'OWNED_PROCESSES_EXITED_GPU_RELEASED'
+                            or result.get('coordinate_scope') != 'SYNTHETIC_NOT_CAMERA_REGISTERED'
+                            or not required <= {item.get('id') for item in artifacts}):
+                        raise ValueError('SDK exit alone is not verified contact roundtrip')
+                elif (result.get('stage') != 'model_import' or result.get('import_verified') is not True
+                      or result.get('completed_frames') != 120 or result.get('task_success') is not None):
+                    raise ValueError('SDK exit alone is not verified model import')
             manifest = self._manifest(run_id, artifacts, durable=True)
             value['result_sha256'] = hashlib.sha256(_bytes(result)).hexdigest()
             value['artifacts_sha256'] = hashlib.sha256(_bytes(manifest)).hexdigest()

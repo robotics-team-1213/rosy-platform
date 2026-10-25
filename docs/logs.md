@@ -11080,6 +11080,12 @@ osy-d395-s1d\`.
 - 증거: 2026-10-24/25 sequence 33(환경 거절)·34(적용)·35(설치기 교체 뒤 센터 설치, `--workspace-links` 유지), bridge `--out` 이동 뒤 복구.
 - gate 변화: 없음.
 
+## 2026-10-25 · 7d0cfcd6e9 · Isaac 정지 적재면·컨베이어 접촉 왕복
+
+- 변경: [왕복 검증 기록](validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md), 실행 안내와 [혼합 drive 방식 교훈](solutions/runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md)을 추가했다.
+- 증거: 실제 SDK의 양방향 접촉 파지·이송·안착과 소유 GPU 해제, FINAL6파일 해시·원격377 PASS/1 SKIP·독립 이미지 검토. 이전4개 SDK 실패를 유지했다.
+- gate 변화: 합성 정지 지지면 간 단일 물리 SIM 스모크 수용이다. 실제 카메라 맵·Pinky 전체·learned AI·실물 수용은 미검증. CE 새 교훈 기록.
+
 ## 2026-10-25 · uncommitted · D-862 실제 통합관제 구현과 수용 경계 연결
 
 - 변경: 전용 service의 namespace 경계와 실제 직접 장치 소유 검사·worker 종료/재시운전 제약을 D-862/API에 명시했다. 기존 D-855 navigation 위임과 새 정보/정지 경로의 책임을 구분한다.
@@ -11213,3 +11219,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · feat(policy-runner): D-864 반정밀도 지연 재측정
+
+- 변경: 측정 도구 `--amp`(CUDA autocast), [재측정 기록](validation/policy-latency-smolvla-2026-10-25/result.md).
+- 증거: AI PC GPU 연산 단독, 카메라 2대 480×640, 1000걸음씩 fp32·amp·fp32. 추론 p50 95/106/96ms, 종단 p99 182/181/182ms. 단일 카메라 Gazebo 회귀는 단독 실행에서 통과.
+- gate 변화: 없음. autocast로는 10Hz 한 걸음 추론이 안 되고 3b가 필요하다는 판단이 그대로다.
+- 결정: 없음.
+- 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
