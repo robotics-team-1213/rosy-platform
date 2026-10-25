@@ -108,6 +108,19 @@ def test_new_bridge_does_not_accept_a_missing_declared_helper(tmp_path):
     assert not (tmp_path / UNIT).exists()
 
 
+def test_engine_bytes_cannot_change_together_during_release_verification(tmp_path):
+    payload(tmp_path)
+    bridge(tmp_path)
+
+    def change_after_verification(_):
+        for native in (tmp_path / "opt/rosy/native-runtime", tmp_path / "opt/rosy/releases" / OLD / "deploy/robot/native"):
+            path = native / "os_state_layout.py"
+            path.write_text(path.read_text() + "\n# changed after verification\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="BRIDGE_REQUIRED"):
+        module("image_layer_boot").require_bridge(tmp_path, NEW, change_after_verification)
+
+
 @pytest.mark.parametrize("remove", [False, True])
 def test_candidate_cannot_expand_paths_or_drop_the_base_bridge_contract(tmp_path, remove):
     payload(tmp_path)
