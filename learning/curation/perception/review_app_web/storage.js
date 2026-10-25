@@ -156,7 +156,7 @@ async function operate(id,action,body={}){
 }
 $('storage-archive').onsubmit=async event=>{
   event.preventDefault();if(poolBusy||!send)return;poolBusy=true;const current=epoch;
-  const button=event.target.querySelector('button');button.disabled=true;
+  const button=event.target.querySelector('[type="submit"]');button.disabled=true;
   $('storage-pool-error').hidden=true;$('storage-pool-message').textContent='완료된 자료 목록과 해시를 확인하는 중입니다.';
   try{
     await send('/api/learning/storage/jobs',{source_id:$('storage-source').value,artifact_id:$('storage-artifact').value,profile:$('storage-profile').value});

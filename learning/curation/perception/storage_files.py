@@ -1,6 +1,7 @@
 """Descriptor-bound managed artifact files; metadata stays outside reclaimable roots."""
 from contextlib import contextmanager, ExitStack
 import hashlib
+import errno
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -17,6 +18,30 @@ PROFILES = {
     'dataset': {'.json', '.jsonl', '.png', '.jpg', '.jpeg', '.mp4', '.parquet', '.md'},
     'model': {'.json', '.safetensors', '.md'},
 }
+
+
+@contextmanager
+def claim(fd, *, exclusive=False):
+    import fcntl
+    try:
+        fcntl.flock(fd, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+    except OSError as error:
+        if error.errno not in (errno.EAGAIN, errno.EACCES): raise
+        raise ValueError('managed artifact is in use') from None
+    try: yield
+    finally: fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+@contextmanager
+def consumer(root):
+    """Hold finalized managed data through a native consumer's complete read lifetime."""
+    if not (Path(root) / SOURCE).exists():
+        yield
+        return
+    fd = open_root(str(Path(root).absolute()))
+    try:
+        with claim(fd): yield
+    finally: os.close(fd)
 
 
 def parts(value, *, internal=False):
@@ -122,6 +147,10 @@ class Files:
             with self.open(location): return True
         except FileNotFoundError:
             return False
+
+    @contextmanager
+    def exclusive(self, location):
+        with self.open(location) as fd, claim(fd, exclusive=True): yield
 
     def path(self, location):
         return Path(self.roots[location['root_id']]['path']).joinpath(*parts(location['relative'], internal=True))

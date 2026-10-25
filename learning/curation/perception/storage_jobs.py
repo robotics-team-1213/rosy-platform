@@ -1,5 +1,5 @@
 """Pinned archive/restore jobs; explicit reclaim requires verified, unused local data."""
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import errno
 import json
 import os
@@ -184,7 +184,7 @@ class StorageJobs:
 
     def reclaim(self, actor, job_id, confirmation):
         if confirmation != job_id: raise ValueError('confirm the exact storage job ID')
-        with self._lease():
+        with self._lease(), ExitStack() as locks:
             job = self._load(job_id)
             self._actor(actor, job, 'manage')
             self._check(actor, job)
@@ -200,6 +200,7 @@ class StorageJobs:
             if cleanup and not self.files.exists(cleanup) and not self.files.exists(job['local']):
                 self._save(job, status='verified', local=None, cleanup_location=None, error=None)
                 return self._public(job)
+            locks.enter_context(self.files.exclusive(cleanup if cleanup and self.files.exists(cleanup) else job['local']))
             if cleanup and self.files.exists(cleanup):
                 if self.files.exists(job['local']) and job['local'] != cleanup:
                     raise ValueError('original path was recreated during cleanup')
@@ -228,6 +229,8 @@ class StorageJobs:
             if job.get('local') and self.files.exists(job['local']):
                 self.files.verify(job['local'], job['files'])
                 return self._public(job)
+            if self.policy['enabled'] and sum(row['upload_bytes'] for row in self._cached(actor)) + job['upload_bytes'] > self.policy['max_bytes']:
+                raise ValueError('cache space changed during admission; retry after reclaim')
             def chunks(name):
                 assigned, token = self._assignment(actor, job)
                 if self.transport.info(assigned, token).get('private') is not True:
@@ -244,11 +247,7 @@ class StorageJobs:
         size(required_bytes)
         if not self.policy['enabled']: return dict(status='disabled', reclaimed_bytes=0)
         self.accounts.require(actor, 'manage')
-        with self.pool.connect() as db:
-            records = [json.loads(row[0]) for row in db.execute(
-                'SELECT document FROM storage_jobs WHERE project=?', (self.project_id,))]
-        cached = [job for job in records if job['requester_id'] == actor['user_id'] and job.get('local')
-                  and job['local']['root_id'] == self.files.cache_id and self.files.exists(job['local'])]
+        cached = self._cached(actor)
         total = sum(job['upload_bytes'] for job in cached)
         reclaimed = 0
         def enough():
@@ -261,3 +260,10 @@ class StorageJobs:
             if result['local_present'] is False:
                 total -= job['upload_bytes']; reclaimed += job['upload_bytes']
         return dict(status='ready' if enough() else 'blocked', reclaimed_bytes=reclaimed)
+
+    def _cached(self, actor):
+        with self.pool.connect() as db:
+            records = [json.loads(row[0]) for row in db.execute(
+                'SELECT document FROM storage_jobs WHERE project=?', (self.project_id,))]
+        return [job for job in records if job['requester_id'] == actor['user_id'] and job.get('local')
+                and job['local']['root_id'] == self.files.cache_id and self.files.exists(job['local'])]
