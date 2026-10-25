@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · fix(fleet): 감사 저장소 append 의 reason 기본값 수정
 - 2026-10-25 · uncommitted · feat(fleet): D-865 P2c 정책 승인 자동 admit 루프·지속 상한·감사 저장소
 - 2026-10-25 · uncommitted · fix(fleet): 정책 승인 라우트의 가드 dependencies 형태 수정
 - 2026-10-25 · uncommitted · feat(fleet): D-865 P2b policy admission HTTP surface
 - 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
-- 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
