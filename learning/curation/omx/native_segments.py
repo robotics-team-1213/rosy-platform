@@ -124,7 +124,8 @@ def verified_source(root, report):
     current = native.inspect_dataset(root, report['repo_id'], body_units=report['body_units'],
         rig_revision=report['rig_revision'], calibration_revision=report['calibration_revision'],
         source_mode=report['source_mode'], capture_provenance=report.get('capture_provenance'),
-        environment_evidence=report.get('environment_evidence'), action_space=report.get('action_space'))
+        environment_evidence=report.get('environment_evidence'), action_space=report.get('action_space'),
+        camera_setup=report.get('camera_setup'))
     if current != report:
         raise ValueError('original source inspection changed')
     return native.load_dataset(root, report['repo_id'])

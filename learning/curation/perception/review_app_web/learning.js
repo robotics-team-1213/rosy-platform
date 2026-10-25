@@ -43,10 +43,14 @@ function renderDomains() {
     const item=text(list,'li','','domain-row');item.dataset.domain=domain.id;
     text(item,'h3',domain.name);
     const chips=text(item,'ol','','domain-stages');chips.setAttribute('aria-label',`${domain.name} 단계`);
+    // D-857 §4: 확정 is human-decided and the only truth evaluation reads; 임시 is a model answer awaiting 「맞음/고침」.
+    const t=domain.truth,truthText=t&&`확정 ${t.confirmed} · 임시 ${t.provisional} · 대기 ${t.waiting}${t.over_cap?` (임시 ${t.over_cap}건은 확인 대기열이 비면 들어감)`:''}${t.reason?` · 임시 없음: ${t.reason}`:''}`;
     for(const stage of domain.stages) {
-      const chip=text(chips,'li','','domain-stage');chip.dataset.stage=stage.stage;chip.dataset.state=stage.state;chip.title=stage.evidence;
-      text(chip,'span',stage.label);text(chip,'small',domainStates[stage.state]||stage.state);text(chip,'span',` · ${stage.evidence}`,'sr-only');
+      const evidence=stage.stage==='label'&&truthText?`${stage.evidence} · ${truthText}`:stage.evidence;
+      const chip=text(chips,'li','','domain-stage');chip.dataset.stage=stage.stage;chip.dataset.state=stage.state;chip.title=evidence;
+      text(chip,'span',stage.label);text(chip,'small',domainStates[stage.state]||stage.state);text(chip,'span',` · ${evidence}`,'sr-only');
     }
+    if(t){const line=text(item,'p',`정답 ${truthText}`,'domain-truth');if(t.href){const confirm=text(line,'a',' · 임시 정답 확인(맞음/고침)');confirm.href=t.href;}}
     text(item,'p',domain.blocked||'막힌 단계가 없습니다.','domain-blocked');
     if(domain.next){const next=text(item,'a',domain.next.label,'workspace-link domain-next');next.href=domain.next.href;}
   }

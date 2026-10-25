@@ -74,3 +74,25 @@ def check_capture_groups(episodes, decisions):
             if group in groups and groups[group] != split:
                 raise ValueError(f'capture {key} crosses dataset splits')
             groups[group] = split
+
+
+def _local_path(value):
+    return isinstance(value, str) and (value.startswith(('/', '~')) or re.match('[A-Za-z]:[\\\\/]', value) is not None)
+
+
+SITE_TEXT = re.compile(r'''/home/[^\s'"]+|/dev/serial/by-id/[^\s'"]+|/dev/v4l/by-id/[^\s'"]+|/dev/tty[A-Za-z0-9]+''')
+
+
+def redacted(value, keep_name=False):
+    """Drop absolute site-PC paths (dataset root, /dev/serial ports, /dev/v4l cameras, replay.path) from copies
+    and mask them inside free text such as error messages. keep_name keeps only the basename instead
+    (teacher.source.dataset), never for /dev names: a by-id basename is the device serial."""
+    def drop(item):
+        return _local_path(item) and (not keep_name or item.startswith('/dev/'))
+    if isinstance(value, dict):
+        return {k: redacted(v, keep_name) for k, v in value.items() if not drop(v)}
+    if isinstance(value, list):
+        return [redacted(v, keep_name) for v in value if not drop(v)]
+    if _local_path(value) and keep_name and not value.startswith('/dev/'):
+        value = re.split(r'[\\/]', value.rstrip('\\/'))[-1]
+    return SITE_TEXT.sub('<redacted-path>', value) if isinstance(value, str) else value

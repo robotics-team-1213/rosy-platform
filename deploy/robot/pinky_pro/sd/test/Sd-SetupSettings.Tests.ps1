@@ -22,11 +22,21 @@ Save "$release\rosy-os-pinky-pro-2026.10.19-001-arm64.img.xz" "fixture image"
 Save "$release\SHA256SUMS" (("a" * 64) + "  rosy-os-pinky-pro-2026.10.19-001-arm64.img.xz")
 Save "$sandbox\imager.exe" "fixture executable, never run"
 Save "$sd\verify-image-release.py" @'
-import os
+import json, os, sys
 from pathlib import Path
 with Path(os.environ['SD_EVENTS']).open('a') as events:
     events.write('verify\n')
-raise SystemExit(5 if os.environ.get('SD_CASE') == 'signature' else 0)
+if os.environ.get('SD_CASE') == 'signature':
+    raise SystemExit(5)
+if '--expected-source-revision' in sys.argv:
+    expected = sys.argv[sys.argv.index('--expected-source-revision') + 1]
+    with Path(os.environ['SD_EVENTS']).open('a') as events:
+        events.write('expected_revision:' + expected + '\n')
+    if expected != 'c' * 40:
+        raise SystemExit(6)
+print(json.dumps(dict(ok='true', release_id='2026.10.19-001',
+    image='rosy-os-pinky-pro-2026.10.19-001-arm64.img.xz', sha256='a' * 64,
+    source_revision='c' * 40)))
 '@
 Save "$sd\prepare-rosy-sd.ps1" @'
 param([string]$PlanPath, [string]$ReceiptPath, [string]$RegistryJson, [int]$DiskNumber,
@@ -87,7 +97,7 @@ if ($env:SD_CASE -ne "registry") {
 '@
 $driver = "$sandbox\driver.ps1"
 Save $driver @'
-param([switch]$PrepareOnly, [switch]$Configure, [int]$CardCount, [string]$ReleaseDir)
+param([switch]$PrepareOnly, [switch]$Configure, [int]$CardCount, [string]$ReleaseDir, [string]$ExpectedImageRevision)
 $ErrorActionPreference = "Stop"
 $env:LOCALAPPDATA = "$env:SD_SANDBOX\local"
 $env:ROSY_SCRATCH = "$env:SD_SANDBOX\scratch"
@@ -110,6 +120,7 @@ if ($PrepareOnly) { $arguments.PrepareOnly = $true }
 if ($Configure) { $arguments.Configure = $true }
 if ($PSBoundParameters.ContainsKey("CardCount")) { $arguments.CardCount = $CardCount }
 if ($PSBoundParameters.ContainsKey("ReleaseDir")) { $arguments.ReleaseDir = $ReleaseDir }
+if ($PSBoundParameters.ContainsKey("ExpectedImageRevision")) { $arguments.ExpectedImageRevision = $ExpectedImageRevision }
 & "$env:SD_SANDBOX\sd\setup-moved-device.ps1" @arguments
 exit $LASTEXITCODE
 '@
@@ -146,6 +157,21 @@ function Read-BatchReport {
     $text | ConvertFrom-Json
 }
 Reset-Fixture
+$config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+$config | Add-Member -NotePropertyName expected_image_revision -NotePropertyValue ("c" * 40)
+Save $configPath ($config | ConvertTo-Json)
+$result = Run-Fixture @("-PrepareOnly", "-CardCount", "1")
+Assert ($result.Code -eq 0) ("configured source pin must permit its exact image: " + $result.Text)
+Assert ((Get-Content -LiteralPath $env:SD_EVENTS) -contains ("expected_revision:" + ("c" * 40))) "source pin must reach the cryptographic verifier"
+$proof = @(Get-ChildItem -LiteralPath "$sandbox\scratch" -Filter verified-image.json -Recurse)
+Assert ($proof.Count -eq 1) "single-card planning must preserve verified image source evidence"
+Assert ((Get-Content -LiteralPath $proof[0].FullName -Raw | ConvertFrom-Json).source_revision -ceq ("c" * 40)) "image source must come from the verified release"
+Save $env:SD_EVENTS ""
+$result = Run-Fixture @("-PrepareOnly", "-CardCount", "1", "-ExpectedImageRevision", ("b" * 40))
+Assert ($result.Code -ne 0) "a CLI source mismatch must override config and fail"
+Assert (-not ((Get-Content -LiteralPath $env:SD_EVENTS) -match '^disk$|^write$')) "source mismatch must stop before any disk discovery"
+Write-Output "PASS: signed source evidence is preserved and an exact source pin fails before media access"
+Reset-Fixture
 Save $registry '{"robot_numbers":[40,41,42,43,44,45,46,47],"device_names":[],"device_uids":[]}'
 $result = Run-Fixture
 Assert ($result.Code -ne 0) "three cards with only two free numbers must fail"
@@ -165,6 +191,7 @@ Assert (($events -join ',') -ceq 'plan:40,wait:40,plan:41,wait:41,plan:42,wait:4
 Assert (@(Get-Content -LiteralPath $env:SD_EVENTS | Where-Object { $_ })[0] -ceq "verify") "signature verification must precede disk discovery"
 $report = Read-BatchReport
 Assert ($report.status -ceq "completed" -and $report.completed_count -eq 3 -and $report.remaining_count -eq 0) "batch report must account for all verified cards"
+Assert ($report.source_revision -ceq ("c" * 40)) "batch results must identify the verified image source"
 Assert (($report.cards.robot_number -join ',') -ceq '40,41,42') "report must bind each verified card to its identity"
 foreach ($card in $report.cards) { Assert (Test-Path -LiteralPath $card.receipt_path) "verified card evidence must exist" }
 Write-Output "PASS: root settings resolve relative paths and register three distinct cards in order"
@@ -190,7 +217,7 @@ foreach ($failure in @("writer", "readback", "identity", "registry")) {
     Assert (Test-Path -LiteralPath $report.active_card.plan_path) "interrupted card must retain a plan reference for investigation"
 }
 Write-Output "PASS: writer, readback, identity and registry failures stop before the next card"
-foreach ($bad in @(@{password="<fixture-secret-not-allowed>"}, @{card_count=2.5}, @{card_count=0}, @{schema_version=2})) {
+foreach ($bad in @(@{password="<fixture-secret-not-allowed>"}, @{card_count=2.5}, @{card_count=0}, @{schema_version=2}, @{expected_image_revision="HEAD"})) {
     Reset-Fixture
     $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     foreach ($key in $bad.Keys) { $config | Add-Member -NotePropertyName $key -NotePropertyValue $bad[$key] -Force }
