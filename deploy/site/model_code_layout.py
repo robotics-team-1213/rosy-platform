@@ -4,6 +4,7 @@ LEARNING_CODE_PREFIXES = ("learning/curation/perception/", "learning/registry/pe
                           "learning/training/perception/", "learning/evaluation/perception/",
                           "learning/curation/omx/", "learning/training/omx/", PREFIX)
 LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.py",
+                     "tools/data_paths.py",
                      PREFIX + "operator_ssh.py", "learning/registry/perception/store.py",
                      "learning/curation/perception/review_app.py",
                      "learning/training/perception/train_job.py",
@@ -107,7 +108,7 @@ SPLIT_REQUIRED = (
 FITNESS_ENTRY = "learning/evaluation/perception/road_fitness_replay.py"
 FITNESS_CONTRACT_FILES = ("contracts/foundation/core_common/observation.py",)
 CODE_PREFIXES = (*LEARNING_CODE_PREFIXES, "middleware/perception/control/", "contracts/foundation/core_common/",
-                 "contracts/learning/src/", "shared/web/", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
+                 "contracts/learning/src/", "shared/web/", "tools/data_paths.py", CAMERA_PROFILE, *CAMERA_MAP_FILES, *SPLIT_CODE_PREFIXES)
 # Observe enrolled pre-migration checkouts too; new signed archives stay canonical.
 CHECKOUT_PREFIXES = CODE_PREFIXES + (*LEGACY_LEARNING_PREFIXES, "src/runtime/sensing/control/",
                                     "src/contracts/foundation/core_common/")
