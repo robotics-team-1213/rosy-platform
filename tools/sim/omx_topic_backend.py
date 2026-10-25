@@ -69,6 +69,10 @@ def main():
                                         '--ros-args', '--params-file', str(rsp)])
         manager = start('ros2_control_node', ['ros2', 'run', 'controller_manager', 'ros2_control_node', *sim_time,
                                               '--params-file', str(config/'hardware_controller_manager.yaml')])
+        # The controller manager runs on simulation time; spawning before the simulator's first /clock times out the
+        # controller switch (Isaac takes ~20 s to start, MuJoCo hid this).
+        subprocess.run(['ros2', 'topic', 'echo', '--once', '/clock', 'rosgraph_msgs/msg/Clock'],
+                       stdout=subprocess.DEVNULL, timeout=600, check=True)
         # Same order and constraints as the vendor Gazebo launch (omx_f_follower_ai_gazebo.launch.py). gz_ros2_control
         # puts controllers on simulation time itself; here each controller gets use_sim_time in its own parameter
         # file, or the trajectory controller stamps goals in wall time and never advances on the simulator clock.

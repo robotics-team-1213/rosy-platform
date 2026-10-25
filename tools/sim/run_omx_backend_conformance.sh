@@ -28,7 +28,7 @@ case "$backend" in
   *) echo "unknown backend $backend" >&2; exit 2 ;;
 esac
 for _ in $(seq 240); do grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" && break; sleep 0.5; done
-grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" || { tail -20 "$OUT/layer.log" "$OUT/backend.log"; exit 1; }
+grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" || { tail -n 20 "$OUT/layer.log" "$OUT/backend.log"; exit 1; }
 # Evidence for any backend: what the shared layer commanded and what the simulator reported.
 for topic in joint_commands joint_states; do
   ros2 topic echo --csv "/sim/$topic" sensor_msgs/msg/JointState >"$OUT/sim-$topic.csv" 2>/dev/null &
