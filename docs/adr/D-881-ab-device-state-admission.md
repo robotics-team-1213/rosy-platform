@@ -30,7 +30,15 @@ firstboot와 canonical 설정 writer는 공통 lock으로 직렬화한다. 첫 b
 
 모터 commissioning 도구의 runtime.env 변경과 실패 시 복구도 완료된 기체의 canonical generation을 갱신한다. 공통 lock을 잡은 뒤 예상한 이전 runtime bytes와 정본을 비교하며, 미초기화 기체의 runtime 교체나 runtime 삭제는 허용하지 않는다. 복구 중 현재 값이 도구가 설정한 값 또는 원래 값과 다르면 다른 변경을 덮지 않고 중지 상태에서 운영자 복구를 요구한다. 이 저장 경로는 기존 commissioning 승인·torque-free preflight·E-Stop·단일 cmd_vel 검사나 drive 활성화 조건을 대신하지 않는다.
 
-TLS 파일은 `/etc/rosy/tls` 디렉터리 전체를 공통 data의 `/tls`에 연결한다. 양 root에서 같은 root 소유·rosy-core 그룹·0750 디렉터리를 사용하고, 실제 mount의 device/subpath/쓰기 권한 및 caller가 보는 device를 초기 쓰기 전에 검사한다. image builder는 비어 있는 mountpoint를 같은 권한으로 준비하고 storage service는 이 mount 이후에 검사한다. 공장 이미지 검사는 symlink·잘못된 owner/권한·기체별 TLS 파일이 들어 있는 디렉터리를 거절한다. TLS 디렉터리는 firstboot snapshot에 넣지 않아 rotation·삭제를 예전 root가 되살리지 않는다. 이 저장 경로만으로 기존 native TLS 도구의 runtime.env·CORE YAML·인증서 묶음 트랜잭션이 완성된 것은 아니며, 그 공통 commit 및 중단 복구는 별도 구현·검증이 필요하다.
+TLS 파일은 `/etc/rosy/tls` 디렉터리 전체를 공통 data의 `/tls`에 연결한다. 양 root에서 같은 root 소유·rosy-core 그룹·0750 디렉터리를 사용하고, 실제 mount의 device/subpath/쓰기 권한 및 caller가 보는 device를 초기 쓰기 전에 검사한다. image builder는 비어 있는 mountpoint를 같은 권한으로 준비하고 storage service는 이 mount 이후에 검사한다. 공장 이미지 검사는 symlink·잘못된 owner/권한·기체별 TLS 파일이 들어 있는 디렉터리를 거절한다. TLS 디렉터리는 firstboot snapshot에 넣지 않아 rotation·삭제를 예전 root가 되살리지 않는다.
+
+기존 native TLS maintenance 도구는 claim·release lock 다음에 공통 설정 lock, CORE YAML lock을 잡는다. runtime 정지와 소스 검증 조건은 유지한다. TLS 파일 여섯 개·CORE YAML·runtime.env의 쓰기 집합을 root 전용 `state/tls-pending.json`에 먼저 fsync한다. 이 기록은 기체·직전 canonical pointer·새 generation ID·hostname에 결속하며, 이전 파일의 checksum/owner/mode와 다음 내용/checksum/owner/mode를 포함한다. 전체 2MiB, runtime 64KiB, 나머지 각 파일 128KiB를 넘기지 않는다. 형식·권한·내용 checksum을 검사하고, 실제 파일이 기록의 이전/다음 상태에 해당하는지 전체를 확인한 뒤에만 재생한다. 다른 인증 변경이나 손상된 쓰기 집합을 덮어쓰지 않는다. private key가 포함될 수 있으므로 이 기록은 0600이며 공통 private state의 진단 수집 제외 규칙을 따른다.
+
+TLS 파일과 CORE YAML의 readback 뒤 runtime.env를 canonical generation으로 게시한다. pointer가 게시되기 전에는 기존 파일 묶음으로 복구할 수 있지만, pointer가 바뀐 뒤에는 로컬 파일만 되돌리지 않고 중지 상태를 유지한다. 명시적 maintenance 도구 재실행은 같은 CA와 기록된 쓰기 집합으로 완료하며 다른 root에서도 복구할 수 있다. 미게시 generation 디렉터리는 재사용하거나 지우지 않고 새 ID를 기록해 재시도한다. 이 경로는 자동 부팅 복구나 전체 OS trial 수용을 뜻하지 않는다.
+
+TLS pending 동안 일반 canonical writer와 updater를 차단한다. 초기 storage 검사는 복구용 NetworkManager·SSH 접근을 허용하지만, CORE가 요구하는 `rosy-sd-provision.service`는 OS bootstrap dispatcher의 `--no-pending-maintenance` 검사도 통과해야 한다. 해당 gate는 `PartOf=rosy-core.service`로 CORE 정지 때 캐시된 admission을 해제하고 다음 시작 때 다시 검사한다([systemd dependency semantics](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html)). 이 root 검사만 operator mount metadata를 읽을 수 있도록 ProtectHome을 read-only로 두며 CORE 프로세스의 권한은 늘리지 않는다. 별도의 실제 PROJECTED producer와 나머지 owner의 완성·수용은 여전히 필요하다.
+
+새 root에 hostname 파일을 투영하는 것만으로 실행 중인 hostname이 바뀌지는 않는다. 같은 기체의 기존 완료 기록을 확인한 A/B firstboot는 committed hostname도 적용한 뒤 ALREADY_PROVISIONED로 돌아온다. 이미 같은 이름이면 hostnamectl·avahi 재시작을 하지 않는다. 다른 board의 완료 기록에서 이전 hostname을 적용하지 않는다.
 
 ### Ownership and existing decisions
 
