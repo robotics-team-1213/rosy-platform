@@ -398,6 +398,12 @@ def test_remote_pytest_failure_and_signal_death_propagate(tmp_path, monkeypatch)
     assert rp.main(["--log-dir", str(tmp_path), "--require-host", "--", "test/x.py"]) == 1
 
 
+def test_the_pytest_job_is_best_effort_lowest_io_not_idle():
+    """2026-10-26: idle I/O (-c3) starved timing tests' SQLite fsync behind any other writer on the AI PC."""
+    job = rj.JOB.split("systemd-run", 1)[1]
+    assert "ionice -c2 -n7 " in job and "ionice -c3" not in job
+
+
 def test_setup_steps_run_at_low_priority_and_capped_on_site_hosts(monkeypatch):
     sent = []
     monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **kw: sent.append(cmd[-1]) or

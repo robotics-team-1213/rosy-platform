@@ -53,7 +53,7 @@ roles:
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
   ai:
-    pinky-backend.service: {run: active, channel: external, note: "Pinky stack from ~/.local/bin, outside this repository", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-backend.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin, outside this repository; stopped and disabled 2026-10-26 (user approval): its SQLite WAL wrote ~1.8 MB/s nonstop during test I/O contention", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
@@ -92,3 +92,5 @@ roles:
     rosy-user-overhead-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
     rosy-user-mdns-bridge.service: {run: oneshot, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
     rosy-user-mdns-bridge.timer: {run: timer, channel: snapshot, doc: deploy/site/README.md}
+    rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
+    rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}

@@ -11548,3 +11548,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 문서와 격리 사유 정정이다.
 - 결정: 없음.
 - 교훈: CE 새 교훈 기록 — 위 경로.
+
+## 2026-10-26 · 5acb6bbb94 · 시험 job의 I/O 등급과 현장 PC 정리 타이머 선언
+
+- 변경: `remote_job.JOB`의 pytest를 `ionice -c3`(idle)에서 `-c2 -n7`(best-effort 최하위)로 바꾼다. 설치·복사·정리 단계는 idle 그대로다. `deploy/hosts/services.yaml`의 site 역할에 `rosy-test-storage.service/.timer`를 선언하고, AI PC `pinky-backend.service`를 `run: "off"`로 바꾼다(10-26 사용자 승인으로 중지).
+- 이유: idle 등급은 다른 쓰기가 있으면 디스크 시간을 받지 못해, g1 시간 제한 시험의 SQLite fsync가 수 초씩 멈췄다(AI PC contact gap p99 4.7~5.7초, 디스크 여유 87GB에서도 실패). site 역할에 선언이 없어서 현장 PC에 정리 도구가 없었는데도 `update_status.py`가 잡지 못했다.
+- 증거: `test/test_remote_pytest.py::test_the_pytest_job_is_best_effort_lowest_io_not_idle`, `test/test_host_services_manifest.py`. g1이 실제로 통과하는지는 이 착지 뒤 AI PC에서 다시 확인한다(아직 가설).
+- gate 변화: 없음.
+- 교훈: CE 미해결 — g1 원인은 착지 뒤 재현 실험으로 확정한다.
