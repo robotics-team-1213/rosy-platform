@@ -249,6 +249,7 @@ def main(argv=None):
     parser.add_argument('--warmup', type=int, default=50)
     parser.add_argument('--steps', type=int, default=1000)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--amp', action='store_true', help='autocast on CUDA even if the checkpoint saved use_amp=false')
     args = parser.parse_args(argv)
     if args.out.exists():
         raise SystemExit('report exists; choose a new path')
@@ -260,6 +261,10 @@ def main(argv=None):
         shapes[name] = (height, width)
     adapter = LeRobotAdapter(args.checkpoint, args.device, joint_names=args.joints, cameras=list(shapes),
                              unit=args.unit, allowed_types=BENCH_POLICY_TYPES, single_step_override=True)
+    if args.amp:
+        if adapter._device.type != 'cuda':
+            raise SystemExit('--amp needs a CUDA device')
+        adapter.use_amp = True
     report = measure(adapter, SyntheticTarget(args.joints, shapes, args.unit), ActionSpace(args.unit, args.unit),
                      args.task, warmup=args.warmup, steps=args.steps)
     import importlib.metadata as metadata
