@@ -41,7 +41,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lab_hosts
-# by file, not sys.path: tools/release/deploy.py would shadow the deploy package for every later import
+# by file, not sys.path: putting tools/release on sys.path lets any script there shadow a repo package
+# (tools/release/deploy.py did, 2026-10-26; renamed deploy_cli.py, test_no_tool_script_shadows_a_repo_package)
 _spec = importlib.util.spec_from_file_location('robot_cd', Path(__file__).resolve().parents[1] / 'release/robot_cd.py')
 robot_cd = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(robot_cd)

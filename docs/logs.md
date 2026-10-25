@@ -11403,6 +11403,18 @@ osy-d395-s1d\`.
 - 증거: 운영 로그인 화면과 동기화 Episode·learned policy·실물 수용은 확인하지 않았다. 복사 상태 화면은 계정 바인딩 보호로 시작이 거절됐으며 우회하지 않았다. 별개 G1 지연 bound 초과와 동일 소스 후속 CI 통과를 함께 보존했다.
 - gate 변화: 모델 PC 코드·Learning 실제 활성화를 확인. 데이터·정책·현장 gate를 승격하지 않는다. CE 해당 없음 — 기존 교훈 보존·재사용, G1 원인은 미해결이다.
 
+## 2026-10-25 · uncommitted · D-871 관측 env를 uv로 만들기
+
+- 변경: `omx_autoupdate.py`의 `uv` 설정이 있으면 venv와 lock 설치를 uv로 한다(`uv venv --python <base> [--system-site-packages]`, `uv pip install`). 관제 PC 첫 적용에서 시스템 Python 3.14에 `ensurepip`(python3.14-venv)이 없어 `python -m venv`가 실패했다. sudo가 없어 패키지를 설치할 수 없고, 기존 관측 venv도 uv로 만든 것이다. `omx-devices-autoupdate.json.example`에 `uv`를 넣었다.
+- 증거: 관제 PC 2026-10-25 20:24 `run`이 `ensurepip is not available`로 준비 단계에서 멈췄다(유닛 변화 없음). 원격 시험(아래 PR).
+- gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · D-871 여러 유닛 재시작: 하나씩 확인, 순서대로
+
+- 변경: `omx_autoupdate.py` 재시작 뒤 `is-active`를 유닛마다 따로 확인한다. `systemctl is-active a b`는 하나만 active여도 0을 낸다. `sequential: true`이면 역순으로 하나씩 stop한 뒤 순서대로 start한다. 예시 설정에 넣었다.
+- 증거: 관제 PC 2026-10-25 20:33 첫 전환에서 카메라와 camera-readiness를 함께 restart했다. readiness의 정지 복원이 카메라 재개방과 겹쳐 `camera restore incomplete`, 재시작은 `camera settings changed since baseline; refusing overwrite`로 실패했는데 업데이터는 `switched`로 기록했다. 복원이 끝난 뒤 readiness를 손으로 다시 시작하자 READY였다(top·front 120회 확인). 원격 시험(아래 PR).
+- gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · chore(sync): merge origin/main #201-#207 into local main
 
 - 변경: origin/main(61addd5695, PR #201-#207, 28커밋)을 로컬 main에 병합했다. 충돌 14파일 가운데 add/add 4건(tools/remote/remote_isaac.py, test/test_remote_isaac.py, docs/deployment/isaac-experiment-runs.md, test/learning/perception/test_sim_browser.py)은 main 내용을 포함한 origin 최신판(inline choose_target, free_port, 접촉 왕복 PNG 문구)을 채택했고, 추가 전용 logs 5파일은 main 본문을 그대로 두고 origin 전용 블록 10건을 날짜 위치에 덧붙여 풀었다.
@@ -11494,6 +11506,12 @@ osy-d395-s1d\`.
 - 증거: 새 계약 시험의 미구현 import 실패를 원격에서 확인한 뒤 스키마를 추가했다. 후속 원격 검증과 독립 계약 검토로 확인한다.
 - gate 변화: 없음. ADR D-876의 첫 wire 계약이며 운영 활성화는 아니다. CE: 해당 없음.
 
+## 2026-10-25 · uncommitted · D-871 학습 센터 자동 업데이트
+
+- 변경: `deploy/model_pc/learning_center_update.py`가 2026-10-23 교훈의 수동 절차를 자동화한다. 동작 조건은 CI 통과 + 후손 커밋, 센터 enabled·active, `experiment_*` 작업과 자식 프로세스 없음이다. 새 커밋을 `source/<sha>`에 받고, 새 설치기 `prepare()`로 유닛을 만든다. 백업 → 정지 → 쓰기 → `--apply` → active·새 sha·HTTP 200을 확인하고, 실패하면 백업 유닛으로 복구한다. `rosy-learning-center-update.{service,timer}`(D-805 관문), services.yaml model·ai 항목을 `autoupdate`로 바꾸고 업데이터를 추가했다.
+- 증거: 원격 시험(아래 PR). 모델 PC 센터는 10/25 현재 사람이 멈추고 disabled 상태라 `idle`로 남는다.
+- gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
 
 - 변경: `motion_profile.py`(동기 사다리꼴, 모서리 이어 돌기, 정확한 정지점, `retime`). `chunk_runner.transit_path`는 올라가며 돌기 시작하는 한 흐름(겹침 0.6 s, 높이 1 unit 이내에서만 회전), `grasp_planner`의 수직 내려가기·들기는 같은 경로에 부드러운 가감속. `cell_record.py`와 `--stage record`(A/B 한 사이클 녹화, 녹화된 집게로 held/empty 판정, 원위치 확인). native SIM 시나리오 `pick-place-chunks-offset`·`-yaw-site`·`-yaw-box`(상자 이동·회전, 관측한 상자 위치로 계획).
@@ -11529,11 +11547,18 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
 - 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
 
+## 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+
+- 변경: `learning/envs/isaac/arm_s_cell_fixture.py`·`arm_s_cell_task.py`·`arm_s_cell_report.py`, `deploy/robot/omx/isaac_cell_frames.py`. 실행 관리자에 `arm-s-cell-nominal`·`-overhang`·`-wrong-yaw`(run_catalog·run_store·run_worker·remote_isaac).
+- 증거: 원격 시험 통과. Isaac 6회 실행 결과는 `docs/validation/omx-arm-s-isaac-cell-2026-10-25/result.md`. overhang은 frame_contact로 기대와 맞고, nominal은 집게가 상자를 옆으로 흘려 15.6 mm 어긋남(미해결).
+- gate 변화: 없음. 집게 결합과 관측 카메라 자세는 미해결.
+
 ## 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
 
 - 변경: `tools/remote/remote_job.py` JOB이 pytest에 job마다 `mktemp -d /tmp/rosy-pytest-XXXXXX`를 `--basetemp`로 주고 EXIT trap이 지운다. 처음엔 실행 디렉터리 아래(`$D/$K.tmp`)에 뒀으나 land 전체 시험에서 Fleet TLS 시험 59개가 깨졌다: 로그인 umask 0002로 실행 디렉터리가 0775라 TLS 파일 조상 권한 검사가 거절했고, 경로가 길어 AF_UNIX 108바이트를 넘었다. land의 MAIN-RED 재확인은 노트북 쪽 JOB(같은 `--basetemp`)으로 main을 돌려 이를 main 고장으로 잘못 보였다. SWEEP은 연락이 끊긴 채 끝난 실행을 12시간이 아니라 2시간 뒤에 치운다. SWEEP·CLEANUP·SHIP 재시도는 실행·job 디렉터리를 지우기 전에 `chmod -R u+rwX`를 한다(릴리스·롤백 시험이 만드는 읽기 전용 디렉터리는 제품 동작이라 시험은 그대로 둠). 새 `tools/remote/host_probe.py`(`remote_pytest.py`에서 PROBE와 파서를 옮겨 D-766 600줄 아래로 유지)의 PROBE가 `~/rosy-test`와 `/tmp` 파일시스템의 남은 공간을 재고, `place()`는 남은 공간이 20 GB 미만인 호스트를 고르지 않는다(바닥 아래 대체 선택에도 적용). 사용률 기준은 두지 않는다: 434-468 GB 디스크에서 90%여도 45 GB가 남아 멀쩡한 호스트를 뺀다. 디스크 값이 없는 예전 probe는 알 수 없음으로 보고 통과시킨다. 시험 `test/test_remote_pytest.py`.
 - 증거: 2026-10-26 AI PC 루트 디스크 100%, `/tmp/pytest-of-ai` 19 GB(지우지 못한 `garbage-*` 약 40개), `~/rosy-test/runs` 37 GB/229개. 디스크가 찬 PC로 시험이 가서 `test_platform_g1_timing`이 SQLite fsync 지연으로 거짓 실패했다. 원격 pytest 122 passed, known_failures NEW 0. 새 시험은 변이(바닥 해제, `--basetemp` 제거, 720분 복구, chmod 제거)에서 빨간색을 확인했다. 실행 중 probe가 AI PC를 `disk 26.4 GB free (95%) - below disk floor`로 제외했다.
 - gate 변화: 디스크 바닥 아래 시험 PC는 pytest를 받지 않는다. 두 PC가 모두 바닥 아래면 기다린 뒤 "no test host reachable"로 끝난다. 이미 쌓인 `/tmp/pytest-of-*/garbage-*`는 이 변경이 지우지 않는다. CE: 해당 없음(원인과 규칙은 코드 주석과 시험에 남김).
+
 ## 2026-10-26 · 3733f72b5d · 낡은 설치본 pre-push는 게시 push를 멈춘다
 
 - 변경: `rosy.publishOnly` clone에서 설치된 `.git/hooks/pre-push`가 push하는 커밋의 `tools/hooks/pre-push`와 다르면 `bash tools/hooks/install.sh`를 안내하고 멈춘다.
@@ -11541,6 +11566,7 @@ osy-d395-s1d\`.
 - 증거: `test/test_pre_push_hook.py::test_a_stale_installed_copy_refuses_the_push` 같음·다름 두 경우. bash로 같은 구간을 돌려 같음 0, 다름 1을 확인했다.
 - gate 변화: 공유 clone의 게시 push에만 적용된다. 팀원 clone은 설정이 없어 영향이 없다.
 - 교훈: CE 해당 없음 — 원인과 재발 방지가 이 검사와 시험에 있다.
+
 ## 2026-10-26 · uncommitted · docs(solutions): read-only test dirs filled the lab test-PC disks
 
 - 변경: 새 교훈 `docs/solutions/workflow-issues/read-only-test-dirs-fill-lab-disks-2026-10-26.md`(pytest `garbage-*`·고아 run 디렉터리·디스크를 안 보는 호스트 선택, chmod 후 회수 명령, 읽기 전용 시험은 고치지 않음). `landing-blockers-cost-hours-2026-10-18.md` §5의 g1 LOAD-FLAKY 줄을 부하가 아니라 AI PC 디스크 I/O 경합(증명 안 됨)으로 정정. `test/flaky_quarantine.txt` g1 3개 id의 사유 문구만 같은 사유로 바꿈(제거 조건·날짜·소유자 유지).
@@ -11557,6 +11583,15 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 교훈: CE 미해결 — g1 원인은 착지 뒤 재현 실험으로 확정한다.
 
+## 2026-10-26 · uncommitted · 원격 pytest job의 /tmp 누수 경고와 설치 환경 지문
+
+- 변경: `tools/remote/remote_job.py` JOB이 job 전용 `/tmp/rosy-pytest-XXXXXX` 아래 `p`를 `--basetemp`로, 형제 `t`를 `TMPDIR`/`TEMP`/`TMP`로 준다(pytest가 시작할 때 basetemp를 지우므로 안이 아니라 옆). pytest가 끝나면 `/tmp` 바로 아래에서 사용자 소유이고 lock보다 새로운 항목(`rosy-pytest-*` 제외)을 최대 20줄 `[remote-pytest] leaked into /tmp: <path>`로 알린다. 경고만 하고 종료 코드는 pytest 것 그대로다. pytest 전에 `[remote-pytest] env <deps-sha> freeze <16자리>`를 남긴다. freeze는 venv에 설치된 `*.dist-info` 이름 목록의 sha256이다.
+- 이유: `TEMP`가 없으면 `/tmp`로 떨어지는 브라우저 시험 4곳(`test/browser_harness.py` `save_temp_screenshot` 등)이 시험 PC `/tmp`에 파일을 남겼다. VENV는 pytest·setuptools·wheel·flake8·jsonschema·ext4·playwright를 고정 없이 설치하는데, `.deps-sha`와 land 캐시 env는 설치 입력의 해시라 같은 해시의 venv가 호스트·빌드 시점마다 다른 버전일 수 있다.
+- 결정: freeze를 VENV에서 `.freeze-sha` 파일로 쓰지 않고 job마다 dist-info 이름으로 계산한다. VENV 문구를 바꾸면 고정 해시 시험(`test_default_recipe_and_hash_remain_identical`)과 기존 venv가 모두 바뀌고, 이미 있는 venv는 파일이 없어 값을 못 남긴다. land 캐시 키에는 넣지 않는다: env id는 실행 전에 노트북에서 커밋만으로 계산하고, freeze는 실행한 호스트에서만 알 수 있으며 호스트마다 다를 수 있어 넣으면 캐시가 사실상 꺼진다. 버전 고정도 하지 않는다(CI 설치와 갈라짐).
+- 증거: 원격 `test/test_remote_pytest.py test/test_remote_test_tools.py` 102 passed, known_failures NEW 0. 새 시험 2개는 변이 6개(find 제거, `rosy-pytest-*` 제외 제거, `exit $c` 제거, 20줄 상한 99로, TMPDIR export 제거, freeze를 venv 밖에서 계산)에서 각각 빨간색이었다. 첫 실행에서 시험 PC 실제 누수 줄이 나왔다(`/tmp/g1udsgax_ixxe`, 두 번째는 기존 `/tmp/pytest-of-ai` 갱신). 같은 사용자의 동시 job이 만든 것도 잡히므로 경고로만 두고, job 로그 끝을 고정하던 기존 시험 3개는 뒤에 누수 줄이 붙어도 통과하게 고쳤다.
+- gate 변화: 없음(경고와 로그 줄만 추가).
+- 교훈: CE 해당 없음 — 이유는 코드 주석과 이 기록에 있다.
+
 ## 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
 
 - 변경: `update_status.py`가 rosy-platform·rosy-ops 각각 비교한 ref, 그 끝 커밋, 마지막 fetch 뒤 시간(FETCH_HEAD·origin/main reflog 파일 mtime 중 늦은 것)을 찍는다. origin/main이 없어 HEAD를 읽었거나, fetch 기록이 없거나, `--ref-stale-hours`(기본 12)보다 오래되면 `STALE-REF`로 exit 1. 파일별 HEAD 대체 읽기를 없앴다(origin/main에 없는 파일은 `note cannot read`). `--fetch`는 먼저 `git fetch origin main`을 돌린다(기본 꺼짐, 읽기 전용 유지). 이 PC에 robot CD가 설치돼 있으면 `robot_cd.snapshot_drift`로 스냅숏 파일 중 같은 ref와 다른 파일을 `WARN`으로 나열한다(exit 코드는 그대로).
@@ -11564,6 +11599,7 @@ osy-d395-s1d\`.
 - 증거: `test/test_update_status.py::test_ref_state_names_the_ref_and_ages_the_last_fetch_not_the_tip_commit`, `::test_repo_digest_reads_only_the_named_ref`, `test/test_robot_cd.py::test_snapshot_drift_lists_snapshot_files_that_differ_from_origin_main`. 실제 PC에서 `update_status.py`를 돌린 확인은 아니다.
 - gate 변화: 없음.
 - 교훈: 해당 없음 — 새 검사 추가, 장애 해결 아님.
+
 ## 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
 
 - 변경: 새 교훈 `docs/solutions/workflow-issues/copied-or-declared-artifacts-drift-silently-and-disable-gates-2026-10-26.md`(설치된 pre-push 10-11 복사본으로 2주간 게이트 미실행, services.yaml site 역할의 정비 unit 누락과 침묵한 update_status.py, 정비 도구 옛 버전). 같은 부류의 열린 항목 세 개(원격 시험 환경 id의 미고정 패키지, fetch 안 된 origin/main 비교, robot_cd 스냅숏 낡음 미검사)를 적음.
@@ -11571,3 +11607,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 문서만이다.
 - 결정: 없음.
 - 교훈: CE 새 교훈 기록 — 위 경로.
+
+## 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
+
+- 변경: `tools/release/deploy.py`를 `tools/release/deploy_cli.py`로 옮기고, 시험 1곳과 문서 2개의 경로를 고친다. `test/test_tool_script_names.py`는 `tools/` 아래 스크립트 이름이 저장소 최상위 폴더 이름과 같으면 실패한다. 묶음 병합에서 빠졌던 `docs/logs.md` 항목도 되살린다.
+- 이유: `eb616252ea`(10-25)가 추가한 `deploy.py`가, `tools/release`가 sys.path 맨 앞에 오는 실행에서 `deploy` 패키지를 가렸다. 그래서 `test/test_robot_cd.py`의 2건이 깨끗한 main에서도 `No module named 'deploy.hosts'`로 실패했다(10-26 원격 실행: main, 묶음 브랜치, fix/test-host-disk-2에서 모두 2 failed).
+- 증거: 원격 `test/test_robot_cd.py`, `test/test_deployment_targets.py`, `test/test_tool_script_names.py`, `test/test_update_status.py`. 새 시험은 옛 이름이 있으면 실패한다.
+- gate 변화: main의 `test_robot_cd` 2건이 다시 녹색이 된다.
+- 교훈: CE 해당 없음 — 재발 방지가 이름 검사 시험에 있다.
