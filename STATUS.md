@@ -61,7 +61,7 @@
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
-- monitoring ARTIFACT: CLI 포함 wheel 설치는 검증했으며 화면·native 서비스·TLS 프록시 배포 묶음이 남아 있다.
+- monitoring ARTIFACT: CLI wheel·UI 묶음 byte 일치·3프로필 검사는 통과했고 native unit·프록시 입력을 제공한다. 대상 OS의 systemd-analyze verify·Caddy 설정 검사·실제 TLS 프록시 수용은 수행하지 않았다.
 - monitoring DEVICE: 실제 관제 PC의 네이티브 설치·프로세스 수명 검증을 수행하지 않았다.
 - monitoring FIELD: 실 PC 배치·LAN/TLS 단절 및 복구·시각·제어 영향 수용이 남아 있다.
 - fleet_decision ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.

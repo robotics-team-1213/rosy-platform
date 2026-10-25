@@ -15,7 +15,7 @@ gates:
     state: N/A
   ARTIFACT:
     state: HOLD
-    blocker: CLI wheel·고정 UI 묶음 구성과 byte 일치·native unit/3프로필/프록시 입력은 검증했다. 대상 OS의 systemd-analyze verify와 실제 TLS 프록시 수용은 수행하지 않았다.
+    blocker: CLI wheel·UI 묶음 byte 일치·3프로필 검사는 통과했고 native unit·프록시 입력을 제공한다. 대상 OS의 systemd-analyze verify·Caddy 설정 검사·실제 TLS 프록시 수용은 수행하지 않았다.
   DEVICE:
     state: HOLD
     blocker: 실제 관제 PC의 네이티브 설치·프로세스 수명 검증을 수행하지 않았다.
