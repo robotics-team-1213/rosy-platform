@@ -11,6 +11,7 @@ from rosy.decision.conversation.operator import (
     OperatorAnswer, OperatorInput, OperatorProfile, checked_operator_answer, operator_policy)
 from rosy.decision.deliberation import canonical
 from rosy.decision.conversation.preprocessing import InferenceUsage, prepare
+from rosy.decision.structured_output import ollama_chat, ollama_reply
 
 from .conversation_acceptance import source_files
 from .deliberation_ollama import exchange, loaded
@@ -100,22 +101,17 @@ evidence_refs contains only supplied references; CHAT/CONTROL/CLARIFY/REFUSE hav
 Fleet renders published replies itself; never generate factual prose, promises, completion claims or URLs.'''
     schema = OperatorAnswer.model_json_schema(mode='serialization')
     schema['properties']['response']['enum'] = ['Classified']
-    body = {'model':profile.model_id, 'messages':[{'role':'system','content':instructions},
+    body = ollama_chat(profile.model_id, [{'role':'system','content':instructions},
         {'role':'user','content':prepared.prompt_json+'\nLATEST USER MESSAGE:\n'+prepared.normalized}],
-        'format':schema, 'stream':False,
-        'options':{'num_predict':1024,'temperature':0,'num_ctx':8192}}
+        schema, temperature=0, num_ctx=8192)
     value = exchange('/api/chat', body, available())
     loaded(exchange('/api/ps', None, available()))
-    message = value.get('message') or {}
-    if (value.get('model') != profile.model_id or value.get('done') is not True or value.get('done_reason') != 'stop'
-            or type(value.get('eval_count')) is not int or not 0 < value['eval_count'] <= 1024
-            or type(value.get('prompt_eval_count')) is not int or not 0 < value['prompt_eval_count'] <= 8192
-            or message.get('role') != 'assistant' or message.get('tool_calls') or message.get('function_call')):
+    raw, counts = ollama_reply(value, profile.model_id, 'OPERATOR_LOCAL_RESULT_INVALID', max_input=8192)
+    if counts['input_tokens'] == 0:
         raise ValueError('OPERATOR_LOCAL_RESULT_INVALID')
-    raw = json.loads(message['content'])
     if type(raw) is not dict or 'usage' in raw:
         raise ValueError('OPERATOR_MODEL_USAGE_REFUSED')
-    usage = InferenceUsage(input_tokens=value['prompt_eval_count'], output_tokens=value['eval_count'],
+    usage = InferenceUsage(input_tokens=counts['input_tokens'], output_tokens=counts['output_tokens'],
         elapsed_ms=(time.monotonic()-started)*1000, preparation_hash=prepared.digest)
     return checked_operator_answer(raw, question).model_dump() | {'usage':usage.model_dump()}
 
