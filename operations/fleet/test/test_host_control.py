@@ -97,6 +97,15 @@ def test_helper_script_matches_the_allowlist_and_has_no_test_switch():
                 assert listed is (action in actions), (host, action, unit)
 
 
+@posix
+@pytest.mark.parametrize("role, writes", [("ai", True), ("model", True), ("site", False)])
+def test_installer_names_the_storage_owner_on_the_lab_pcs(role, writes):
+    """D-883: a model PC without units-user refused every clean-storage request."""
+    out = subprocess.run(["bash", str(INSTALL), "--role", role, "--dry-run", "--units-user", "lab"],
+                         capture_output=True, text=True, timeout=20, check=True).stdout
+    assert ("+ write /etc/rosy/host-control/units-user (0644)\n    lab\n" in out) is writes
+
+
 def test_installer_ships_a_sudoers_line_without_env_rights():
     text = INSTALL.read_text(encoding="utf-8")
     assert "ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control\"" in text
