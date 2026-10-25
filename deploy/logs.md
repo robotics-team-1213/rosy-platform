@@ -3487,3 +3487,10 @@
 - 증거: no-JSON HTTP 흐름과 양 테마/폭의 전체 브라우저 흐름, 별도 신규 파일 누락 부정 시험의 RED/GREEN을 확인했다. 독립 리뷰의 과거 복원·취소·부분 export 및 원자적 manifest 지적을 회귀 시험으로 수정했다. 최종 committed revision의 영향 시험/브라우저 결과는 후속 검증 기록에 남긴다.
 - gate 변화: host source closure에 한한다. 운영 계정 사용, 실제 HF 전송, SDK/모델 실행, signed artifact 설치·장치 수용을 수행하지 않았다.
 - CE: 해당 없음 — 복구 근거는 D-884·운영 안내·실제 파일/SQLite 회귀에 보존한다.
+
+## 2026-10-26 · 007e6c3b5a · Learning UI 설정·보관 흐름 source 검증 완료 (D-884)
+
+- 증거: 영향 선택 affected/no escalation, `00e54f4c82` 원격 3,563 passed / 326 skipped / NEW0. 신규 setup/prepare/JS 필수 archive 입력과 기존 계정·검수·API·하네스 회귀를 포함한다. source guard92/0, 명시적 browser·HTTP·공용 control47/0, 펼친 설정 양 폭/테마2/0은 각각 NEW0다. 커밋별 근거는 learning/curation/perception/docs/storage-pool.md의 UI 확장 검증을 따른다.
+- 검토: 별도 전체 read-only 리뷰의 복원·취소·부분 export·바이트 보존·완료 목록 원자성 지적을 재현 후 수정했고 후속 리뷰에서 닫았다. 모바일 기존 percentage flex-basis와 공용 column 배치의 충돌은 실제 computed geometry로 확인해 신규 그룹에 공용 폼만 적용했다.
+- gate 변화: source closure만 검증했다. 운영 SDK/환경 설치, 실제 HF 왕복, signed artifact 설치·서비스 활성화·장치/현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 결정의 근거와 복구 조건은 구현·회귀·주석·운영 안내에 보존한다.
