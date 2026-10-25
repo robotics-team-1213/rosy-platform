@@ -120,6 +120,12 @@ private config는 `~/.config/rosy/review-pipeline/bridge.json` 및 `pipeline.jso
 
 Perception 결과로 out_path를 연결하면 시작·중지·재시도 버튼이 나타난다. Ctrl+K에서 같은 이름으로 실행할 수 있다. 시작은 자동 확인을 켜고, 중지는 해당 실행기의 자식 프로세스까지 중지하며, 재시도는 자동 확인을 켜지 않고 한 번 실행한다. 완료·품질 거절·시도 한도 원장은 초기화하지 않는다. 원장 읽기 오류가 있어도 검증된 실행기의 중지는 가능하다. 화면은 실제 서비스 상태와 현재 학습 결과를 다시 읽으며 요청 접수를 완료로 표시하지 않는다.
 
+## Learning SIM 실행 연결
+
+기존 검수 state의 `sim-config.json`을 소유자 전용 일반 파일(0600)로 마련하면 설치기는 대상 앱의 CLI 지원 여부를 확인해 `--sim-config`를 연결한다. 이전 앱으로 복귀하면 지원하지 않는 인자는 제거하고, 지원하는 앱으로 돌아오면 같은 state의 연결을 복원한다. 잘못된 파일 권한이나 링크는 서비스 전환 전에 거절한다.
+
+설정은 기존 `sim_web.LocalRuns`의 정확한 여섯 필드(`workspace_id`, `source_sha`, `source_root`, `binding_file`, `binding_sha256`, `entry_sha256`)를 사용한다. 실제 workspace와 별도로 설치된 clean Git 실행 소스·binding·entry 지문을 결속한다. SDK 실행 소스를 검수 release에 복제하지 않는다. 앱 시작과 독립 운영 조회에서 실제 결속을 검증하며, 페이지 HTTP 200만으로 실행 연결을 수용하지 않는다. 기존 실행의 보고서·단계별 PNG를 조회해 검증하고 신규 실행은 별도로 판단한다.
+
 ## 헤드리스 Gazebo 준비 (D-571)
 
 모델 PC는 시뮬레이션의 기본 실행 위치다. 2026-10-09 rootless `--dry-run`에서 `approval=sim` apt 줄은 차이가 없었다(필요한 패키지가 이미 설치됨). 패키지가 빠지면 소유자가 저장소 checkout에서 한 번 실행한다.

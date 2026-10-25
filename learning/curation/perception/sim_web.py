@@ -11,6 +11,11 @@ import subprocess
 STATIC = Path(__file__).with_name('review_app_web')
 PREFIX = '/api/learning/sim/'
 ID = '[0-9a-f]{32}'
+ARTIFACT_TYPES = {
+    'import-report': 'application/json', 'contact-report': 'application/json',
+    **{name: 'image/png' for name in (
+        'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle')},
+}
 
 
 class LocalRuns:
@@ -98,14 +103,17 @@ def get(handler, path, runs):
         handler.send({'runs': [public(row) for row in runs.call({'action': 'list'})]})
     elif match := re.fullmatch(PREFIX + 'runs/(' + ID + ')', path):
         handler.send(public(runs.call({'action': 'status', 'run_id': match[1]})))
-    elif match := re.fullmatch(PREFIX + 'runs/(' + ID + ')/artifacts/(import-report)', path):
+    elif match := re.fullmatch(PREFIX + 'runs/(' + ID + ')/artifacts/(' + '|'.join(ARTIFACT_TYPES) + ')', path):
         blob = runs.call({'action': 'artifact', 'run_id': match[1], 'artifact_id': match[2]})
-        if blob['media_type'] != 'application/json' or type(blob['bytes']) is not int or not 0 <= blob['bytes'] <= 1048576:
-            raise ValueError('SIM 보고서 형식이 올바르지 않습니다.')
+        media_type = ARTIFACT_TYPES[match[2]]
+        if (blob['media_type'] != media_type or type(blob['bytes']) is not int
+                or not 0 <= blob['bytes'] <= 1048576
+                or len(blob['data_base64']) > 4 * ((blob['bytes'] + 2) // 3)):
+            raise ValueError('SIM 증거 형식이 올바르지 않습니다.')
         raw = base64.b64decode(blob['data_base64'], validate=True)
         if len(raw) != blob['bytes'] or hashlib.sha256(raw).hexdigest() != blob['sha256']:
             raise ValueError('SIM 보고서 지문이 달라졌습니다.')
-        handler.send(raw, mime='application/json; charset=utf-8')
+        handler.send(raw, mime=media_type + ('; charset=utf-8' if media_type == 'application/json' else ''))
     else:
         handler.send({'error': 'SIM 경로를 확인하세요.'}, 404)
     return True
