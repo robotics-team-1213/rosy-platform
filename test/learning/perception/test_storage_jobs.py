@@ -503,7 +503,8 @@ def test_job_listing_limits_only_requesters_history(jobs_setup):
     assert [row['id'] for row in service.list(actor)] == [job['id']]
 
 
-def test_official_native_cycle_holds_managed_inputs(jobs_setup, monkeypatch, tmp_path):
+@pytest.mark.parametrize('entrypoint', ['cycle', 'verify'])
+def test_official_native_cycle_holds_managed_inputs(jobs_setup, monkeypatch, tmp_path, entrypoint):
     build, actor, remote, artifact, cache, inventory = jobs_setup
     job = create(build, actor); build().run(actor, job['id'])
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / 'learning/training/omx'))
@@ -514,7 +515,8 @@ def test_official_native_cycle_holds_managed_inputs(jobs_setup, monkeypatch, tmp
         raise RuntimeError('stop before training')
     monkeypatch.setattr(native_cycle, 'validate_split', validate)
     with pytest.raises(RuntimeError, match='stop before training'):
-        native_cycle.run_cycle(artifact, tmp_path / 'cycle')
+        if entrypoint == 'cycle': native_cycle.run_cycle(artifact, tmp_path / 'cycle')
+        else: native_cycle._evaluate(tmp_path / 'model', artifact, 'dataset', tmp_path / 'evaluation.json')
 
 
 def test_native_child_retains_lease_after_supervisor_death(jobs_setup, monkeypatch, tmp_path):
