@@ -11381,3 +11381,9 @@ osy-d395-s1d\`.
 - 증거: FULL 중 발견한 learned-signature 회귀9건과 잘못 포장된 기종 내용/metadata 반례를 원격 RED로 확인한 뒤 관련153 PASS/NEW0. independent source 검토 승인. 기존 D-387/D-412 소스와 실제 완료 범위를 구분했다.
 - gate 변화: 소스 보완이며 OS 전체 자동 업데이트·ARM64 이미지·현재 연결 기체의 timer 활성/배포/복구는 미수용이다. 전체 source 착지는 재검증한다.
 - 교훈: 해당 없음 — 잘못된 package 내용과 동적 import는 코드/시험/안내에 보존했고 추가 OS 목표는 미완료로 기록한다.
+
+## 2026-10-25 · 3dca62ed05 · RaspTank 패키지 구조 정합성
+
+- 변경: 신규 config-only package 이름·폴더 이름 대응표를 명시 등록하고 이미 정위치인 루트의 migration wave를 none으로 정렬했다. 기존 package/경계 검사의 동등성 조건은 유지한다.
+- 증거: 정상 착지 사전 검사에서 3 NEW, 같은 main의 반례3 PASS를 확인한 뒤 수정했다. 승인 원격 architecture/harness287 PASS/NEW0. 최신 전체 착지 검증은 별도다.
+- gate 변화: 소스 등록 정합성만 보완했다. 사용자 정정에 따라 현재 기체는 미연결이며 새 이미지 준비 단계다. 실기 조회·SD 기록·장치 배포를 수행하지 않았다.

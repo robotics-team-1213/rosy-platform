@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · 3dca62ed05 · RaspTank 패키지 구조 정합성
 - 2026-10-25 · uncommitted · 설치 내용 결속 보완과 전 계층 자동 업데이트 목표
 - 2026-10-25 · uncommitted · 다기종 배포 도구와 제품 설정 검증 구현
 - 2026-10-25 · uncommitted · 다기종 배포·DJI SDK 연결 준비
 - 2026-10-25 · uncommitted · RaspTank Pi 4 SD·센서 준비서
-- 2026-10-25 · uncommitted · RaspTank 무구동 설정 패키지와 소유권 준비
