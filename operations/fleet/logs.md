@@ -1,10 +1,5 @@
 # fleet logs
 
-## 2026-10-26 · Monitoring 독립 화면 진입
-
-- 관제 utility 영역에 `/monitoring/` 새 창 링크를 추가했다. Fleet 자격 전달·추가 polling·명령은 없다. 같은 TLS site의 독립 Monitoring proxy 경로가 배포 전제다.
-- 고정 topbar·5영역·정지 배선은 변경하지 않았다. 검증은 후속 결과를 따른다.
-
 ## 2026-09-15 · uncommitted · docs(harness): start the fleet harness record
 - 변경: `progress.md`, `logs.md` 추가
 - 증거: `python -m pytest src/fleet/test -q` 216 passed, 5 skipped (2026-09-15 Windows, 미커밋 WIP 포함 작업 트리); `python -m pytest src/fleet/test/test_boundaries.py -q` 6 passed
