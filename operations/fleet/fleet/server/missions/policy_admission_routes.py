@@ -19,14 +19,14 @@ from core_common.protocol.policy_admission import (
 def install_policy_admission_routes(app, *, core, read_guard, operator_guard,
                                     require_viewer,
                                     require_named_operator) -> None:
-    @app.get("/api/fleet/policy-admission", dependencies=[read_guard],
+    @app.get("/api/fleet/policy-admission", dependencies=read_guard,
              tags=["fleet-policy-admission"])
     def policy_admission_status(
             principal: object = Depends(require_viewer)) -> dict:
         return PolicyAdmissionReadResponse(status=core.status()).model_dump(
             mode="json")
 
-    @app.post("/api/fleet/policy-admission", dependencies=[operator_guard],
+    @app.post("/api/fleet/policy-admission", dependencies=operator_guard,
               tags=["fleet-policy-admission"])
     def policy_admission_toggle(body: PolicyAdmissionToggleRequest,
                                 principal: object = Depends(
@@ -40,7 +40,7 @@ def install_policy_admission_routes(app, *, core, read_guard, operator_guard,
         return PolicyAdmissionReadResponse(status=status).model_dump(
             mode="json")
 
-    @app.get("/api/fleet/policy-admission/audit", dependencies=[read_guard],
+    @app.get("/api/fleet/policy-admission/audit", dependencies=read_guard,
              tags=["fleet-policy-admission"])
     def policy_admission_audit(
             principal: object = Depends(require_viewer)) -> dict:
