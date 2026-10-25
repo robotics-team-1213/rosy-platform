@@ -11499,3 +11499,9 @@ osy-d395-s1d\`.
 - 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
 - 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · Monitoring 기존 원천 수집·durable 집계·읽기 API
+
+- 변경: 독립 Monitoring에 기존 CORE/Fleet/host 출력을 읽는 제한 수집기, 사이트별 reader API, 정규화 SQLite 관측·anchor·peer cursor·제한 이력을 구현했다. 캐시 GET은 운영 gather와 원천 polling을 호출하지 않는다. 쓰기 전용 lease와 게시 전 durable commit, 복구 시 stale 보고 경로, 고정 오류 코드 및 원천 JSON 제한을 적용했다.
+- 증거: `5a5355aa69` 원격89시험과 구조/harness/affected247시험이 모두 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 재시작/역순/동시 writer/응답 aging/task 종료/원천 손상/이력 만료 RED와 수정을 확인했고, 최종 SHA 독립 재검토에서 추가 차단 없음이 확인됐다.
+- gate 변화: Monitoring의 CLI·독립 프로세스·브라우저·native 묶음·실제 PC/LAN/TLS/장치 수용은 HOLD다. 공유 기반/등록을 먼저 착지한 뒤 이 서비스를 병합한다. CE: 해당 없음 — 새 구현의 계약과 회귀로 기록했다.
