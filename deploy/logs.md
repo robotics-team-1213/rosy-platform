@@ -3117,3 +3117,9 @@
 - 변경: 기존 단일 소유자의 레지스터 블록에서 오류·PWM·온도·전압을 기록하고 고장 후 위치를 생성하지 않는다.
 - 증거: 79a11a4a54 공식 원격 154 passed/skip0/NEW0; 독립 소스 검토에서 차단 결함 없음.
 - gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+
+## 2026-10-25 · uncommitted · 검수 release의 private SIM 연결 보존
+
+- 변경: 기존 설치기는 state의 소유자 전용 일반 SIM 설정을 대상 CLI에 맞춰 연결하고 구버전 복귀·재진입에서 보존한다. 기존 collaboration·center·workspace와 rollback 경로를 유지한다.
+- 증거: b1f990bbd8에서 네 건의 연결 누락을 재현했고 e24bb3ea58 원격 설치기·자동 갱신기 48개가 통과했다. [검증 기록](../docs/validation/learning-conveyor-release-2026-10-25/result.md).
+- gate 변화: 없음. 서명된 코드 승인과 실제 서비스 전환·인증된 조회는 별도 수용이다.
