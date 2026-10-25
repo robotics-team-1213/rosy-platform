@@ -1,7 +1,10 @@
 """Persistent UI setup uses real Accounts/SQLite and normal archive jobs."""
+import base64
 import copy
+import hashlib
 import importlib
 import json
+import uuid
 from pathlib import Path
 
 import pytest
@@ -124,3 +127,67 @@ def test_no_json_setup_uses_dedicated_workspace_roots_only(tmp_path, accounts, p
     assert {row['id'] for row in config['roots']} == {'exports', 'cache'}
     assert all(Path(row['path']).is_relative_to(db.parent / 'storage-data') for row in config['roots'])
     assert all(Path(row['path']).is_dir() for row in config['roots'])
+
+
+def test_preparation_retry_uses_the_same_verified_archive(setup_case):
+    from storage_prepare import StoragePrepare
+    build, actor, body, now, artifact, remote = setup_case
+    for quota in body['quotas'].values(): quota['remaining_bytes'] = 1048576
+    build().save(actor, body); build().verify(actor, 1); build().activate(actor, 1)
+    _, config = build().configuration()
+    root = Path(next(row['path'] for row in config['roots'] if row['id'] == 'exports'))
+    folder = root / 'episode'; folder.mkdir(); (folder / 'frame.json').write_text('{}')
+    request = dict(kind='folder', artifact_id='episode', profile='dataset', provenance={}, confirm_completed=True, archive=True)
+    first = StoragePrepare(build()).prepare(actor, request)
+    second = StoragePrepare(build()).prepare(actor, request)
+    assert first['id'] == second['id'] and first['bytes_verified'] and remote.commits == 3
+
+
+def test_activation_rechecks_remote_privacy(setup_case):
+    build, actor, body, now, artifact, remote = setup_case
+    for quota in body['quotas'].values(): quota['remaining_bytes'] = 1048576
+    build().save(actor, body); build().verify(actor, 1)
+    remote.private = False
+    with pytest.raises(ValueError, match='private'): build().activate(actor, 1)
+    assert build().snapshot(actor)['enabled'] is False
+
+
+def test_isaac_preparation_reads_final_owner_artifacts_without_starting_sdk(setup_case, monkeypatch, tmp_path):
+    from storage_prepare import StoragePrepare
+    build, actor, body, now, artifact, remote = setup_case
+    for quota in body['quotas'].values(): quota['remaining_bytes'] = 1048576
+    build().save(actor, body); build().verify(actor, 1); build().activate(actor, 1)
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / 'learning/envs/isaac'))
+    from run_store import RunStore
+    store = RunStore(tmp_path / 'owner')
+    row = store.create(uuid.uuid4().hex, 'omx-f-import', {'seed': 42}, 'c' * 40)
+    calls = []
+    class Runs:
+        def call(self, request):
+            calls.append(request['action'])
+            if request['action'] == 'list': return store.list()
+            if request['action'] == 'status': return store.get(request['run_id'])
+            assert request['action'] == 'artifact'
+            result = store.artifact(request['run_id'], request['artifact_id'])
+            return dict(result, data_base64=base64.b64encode(result['data']).decode())
+    prepare = StoragePrepare(build(), Runs())
+    request = dict(kind='isaac', run_id=row['run_id'], confirm_completed=True, archive=True)
+    with pytest.raises(ValueError, match='final'): prepare.prepare(actor, request)
+    row = store.update(row['run_id'], 0, dict(status='RUNNING'))
+    raw = b'{"completed_frames":12}'
+    (store.root / 'runs' / row['run_id'] / 'import-report.json').write_bytes(raw)
+    store.finish(row['run_id'], row['revision'], dict(status='SUCCEEDED', stage='model_import', import_verified=True,
+        completed_frames=12, task_success=None, cleanup='OWNED_PROCESSES_EXITED_GPU_RELEASED'),
+        [dict(id='import-report', name='import-report.json', media_type='application/json',
+              bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())])
+    assert prepare.sim_sources(actor)['runs'][0]['run_id'] == row['run_id']
+    result = prepare.prepare(actor, request)
+    assert result['bytes_verified'] and result['provenance']['seed'] == 42
+    assert set(calls) == {'list', 'status', 'artifact'}
+
+
+@pytest.mark.parametrize('field,value', [('id', {}), ('connection_id', [])])
+def test_invalid_json_target_types_are_validation_errors(setup_case, field, value):
+    build, actor, body, now, artifact, remote = setup_case
+    body['targets'][0][field] = value
+    with pytest.raises(ValueError): build().save(actor, body)
