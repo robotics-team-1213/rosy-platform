@@ -24,6 +24,9 @@ case "$1" in
   health)
     [ $# -eq 1 ] || refuse
     # avail% swap_used% load1 cores uptime_s down_units(comma list or -)
+    # then (D-883) free_kb use% of ~/rosy-test (else $HOME) and of /, GPU used_mib total_mib util%
+    # temp_c (or - - - -), RAM total_kb available_kb, CPU busy% over 1 s and hottest thermal zone
+    # temp_c (each - when unreadable). CPU and thermal follow CORE's runtime.py on the robots.
     awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} /^SwapTotal:/{st=$2} /^SwapFree:/{sf=$2}
          END {printf "%d %d ", 100*a/t, (st ? 100*(st-sf)/st : 0)}' /proc/meminfo
     down=""
@@ -33,7 +36,24 @@ case "$1" in
       done
     fi
     down=${down#,}
-    printf '%s %s %s %s\n' "$(cut -d' ' -f1 /proc/loadavg)" "$(nproc)" "$(cut -d. -f1 /proc/uptime)" "${down:--}"
+    test_dir=$HOME/rosy-test
+    [ -d "$test_dir" ] || test_dir=$HOME
+    disk() { df -Pk "$1" 2>/dev/null | awk 'NR==2 {sub("%", "", $5); print $4, $5; ok=1} END {if (!ok) print "- -"}'; }
+    # several GPUs: memory is summed, utilization and temperature are the busiest/hottest one
+    gpu=$(nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu,temperature.gpu \
+            --format=csv,noheader,nounits 2>/dev/null |
+          awk -F', *' '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ {
+                         u+=$1; t+=$2; if ($3 > p) p=$3; if ($4 > c) c=$4; n++}
+                       END {print (n ? u " " t " " p+0 " " c+0 : "- - - -")}') || gpu="- - - -"
+    mem=$(awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END {print t, a}' /proc/meminfo)
+    ticks() { awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8+$9, $5+$6}' /proc/stat; }
+    before=$(ticks); sleep 1; after=$(ticks)
+    cpu=$(echo "$before $after" | awk '{d=$3-$1; i=$4-$2; print (d > 0 ? int(100*(d-i)/d) : "-")}')
+    temp=$(set +f; cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null |
+           awk '$1 ~ /^-?[0-9]+$/ {v=($1 >= 1000 || $1 <= -1000) ? $1/1000 : $1; if (!n || v > m) m=v; n++}
+                END {print (n ? int(m) : "-")}') || temp=-
+    printf '%s %s %s %s %s %s %s %s %s %s\n' "$(cut -d' ' -f1 /proc/loadavg)" "$(nproc)" "$(cut -d. -f1 /proc/uptime)" \
+      "${down:--}" "$(disk "$test_dir")" "$(disk /)" "${gpu:-- - - -}" "$mem" "${cpu:--}" "${temp:--}"
     ;;
   restart)
     [ $# -eq 2 ] && [ -f "$UNITS" ] && grep -v '^#' "$UNITS" | grep -qxF -- "$2" || refuse

@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
-- 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
-- 2026-10-25 · uncommitted · 구조화 출력 공통 어댑터와 실제 모델 파이프라인 시험 (D-878)
-- 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
-- 2026-10-25 · a401f49f6d · D-879 GPT media prototype 경계
+- 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
+- 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
+- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
+- 2026-10-26 · uncommitted · 원격 pytest job의 /tmp 누수 경고와 설치 환경 지문
+- 2026-10-26 · 5acb6bbb94 · 시험 job의 I/O 등급과 현장 PC 정리 타이머 선언
