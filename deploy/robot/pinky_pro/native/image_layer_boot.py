@@ -22,7 +22,7 @@ FEATURE_UNITS = ("rosy-network-users.service", "rosy-network-agent.service",
                  "rosy-network-recovery.service", "rosy-network-recovery.timer")
 ENGINE_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
                 "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py", "os_state_layout.py",
-                "first_boot_runtime.py", "os_state_firstboot.py", "os_state_storage.py", "os_storage_dispatch.py",
+                "first_boot_runtime.py", "os_state_firstboot.py", "os_state_storage.py", "os_storage_dispatch.py", "os_state_accounts.py",
                 "rosy_auto_update.py", "rosy_claim.py",
                 "image_layer_boot.py", "image_layer_files.py")
 # The signed bridge-v1 baseline stays valid when later engines add helpers.

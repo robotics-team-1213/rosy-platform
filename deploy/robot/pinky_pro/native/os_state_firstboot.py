@@ -12,6 +12,7 @@ from first_boot_runtime import _json_atomic, _write_atomic
 from os_state_layout import (
     COMMON, StateError, _digest, _guid, _layout, _object, _pairs, _path, _read, shared_mount_facts,
 )
+from os_state_accounts import validate_local_accounts, validate_shared_owners
 
 # Live CORE tokens, NetworkManager profiles and consumable join secrets are never projected.
 ROOT_FILES = {"etc/rosy/device-identity.json": 0o644, "etc/rosy/runtime.env": 0o640,
@@ -64,6 +65,8 @@ class FirstBootState:
         self.root, self.layout = root, layout
         self.owner = root.stat().st_uid
         shared_mount_facts(root, layout)
+        validate_local_accounts(root)
+        validate_shared_owners(root)
         schema = _load(_path(root, COMMON + "/state/schema.json"), self.owner,
                        {"schema_version", "state_schema"})
         if schema != {"schema_version": 1, "state_schema": 1}:

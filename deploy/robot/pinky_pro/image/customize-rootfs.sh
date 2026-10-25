@@ -373,6 +373,11 @@ chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
 chroot "$ROOT" getent group rosy-camera >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 963 rosy-camera
 chroot "$ROOT" getent passwd rosy-camera >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 963 --gid 963 --system --no-create-home --shell /usr/sbin/nologin rosy-camera
+# A/B roots must agree before either root installs keys into the shared operator home.
+chroot "$ROOT" getent group rosy >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 1001 rosy
+chroot "$ROOT" getent passwd rosy >/dev/null 2>&1 || \
+    chroot "$ROOT" useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash \
+        --groups systemd-journal,adm rosy
 # D-190: the boot display's own account; no login shell, no home of its own
 # (the unit gives it HOME=/var/lib/rosy/display). SupplementaryGroups= in the
 # units names spi, gpio and i2c; systemd refuses to start a unit whose group
@@ -392,6 +397,7 @@ chroot "$ROOT" install -d -m 0750 -o root -g rosy-camera /var/lib/rosy/models  #
 chroot "$ROOT" install -d -m 2750 -o rosy-camera -g rosy-core /var/lib/rosy/pilot-recordings  # D-411
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
+chroot "$ROOT" /usr/bin/python3 -I -B /opt/rosy/native-runtime/os_state_accounts.py
 rm -rf -- "$RELEASE/image-overlay"
 # D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
 # Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
