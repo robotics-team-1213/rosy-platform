@@ -12,6 +12,7 @@
 |---|---|---|
 | D-868 | 로컬 main에 먼저 착지하고, 공개 main에는 그 로컬 main을 merge commit으로 올린다 | Accepted (2026-10-25) |
 | D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
+| D-869 | 원본 이벤트 ID 재전송과 실행 receipt에 결속된 자동 후처리 | Accepted for implementation (2026-10-25) |
 | D-866 | VLA 주 시뮬레이터는 Isaac Sim, Gazebo는 실행 계약 회귀용. 모델 PC와 AI PC는 역할을 나누되 오프라인 일괄 작업은 병렬로 처리 | Proposed (2026-10-25) |
 | D-865 | Fleet 정책 승인 — 사람이 정한 승인 범위 안 작업 자동 승인 | Proposed (2026-10-25) |
 | D-867 | 시뮬레이션 실행 상한을 올린다: AI PC 12코어·10GB, 모델 PC 16코어·10GB | Accepted (2026-10-25) |
@@ -1285,3 +1286,9 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted for implementation (2026-10-24). 실물 장치·ARM64 산출물 수용은 별도다.
 
 전용 network authority, 응답 후 실행되는 Wi-Fi 복구 작업, 첫 부팅 인계와 서명 boot catalog를 정의한다. 전문은 [D-863](../adr/D-863-device-network-recovery-and-update-continuity.md).
+
+## D-869 원본 이벤트 ID 재전송과 실행 receipt에 결속된 자동 후처리
+
+**Status:** Accepted for implementation (2026-10-25). 소스·시험·배포·실물 수용은 별도다.
+
+재접속에서 미응답 이벤트를 원래 event_id·내용·seq로 재전송하고, producer scope 없는 WELCOME 최대 seq를 삭제 근거로 사용하지 않는다. 늦은 명령 후처리는 원래 실행의 승인 receipt에만 결속한다. 영속 outbox나 구형·임대 없는 목표의 정지를 보증하지 않는다. 전문은 [D-869](../adr/D-869-original-identity-for-event-replay-and-command-cleanup.md).
