@@ -3450,3 +3450,25 @@
 - 증거: a401f49f6d 원격 실제 PowerShell GPT·resume·Storage cmdlet mock 17 passed; af08bd9987 원격 image/GPT/gateway 303 passed, 3 skipped, NEW0. 독립 전체 및 resume delta 검토에 중대한 지적 없음. Storage mock은 실제 Windows mount 수용이 아니다. Linux PS 전체의24 실패는 변경 전 c74ce311a9에서도 동일한24 id로 재현됐다(현재160 passed/5 skipped, 변경 전154 passed/5 skipped); 전체 Windows 회귀 통과로 표시하지 않는다.
 - gate 변화: SOURCE prototype이며 native ARM64 artifact·실물 SD·부팅·OS 자동 갱신·powercut 수용은 HOLD다. 기존 작업 브랜치는 보존하고 현재 main에서 완결된 source snapshot을 새 착지 브랜치로 검증한다.
 - 교훈: CE 해당 없음 — 수정 근거는 회귀 시험과 기존 설치/검증 교훈에 명시된다. Linux 전체 PS 한계는 작업 기록에 미해결로 남긴다.
+
+## 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
+
+- 변경: `rosy-host-guard-remote health`가 `~/rosy-test`·`/` 여유와 GPU 메모리를 덧붙인다. `rosy-host-guard`는 30GiB/90% 기준의 `disk-low`를 보고만 하고 복구 단계를 진행시키지 않는다. `rosy-host-control`의 ai·model `clean-storage`는 `rosy-test-storage.service`를 한 번 시작한다(없으면 exit 5).
+- 증거: `test/test_host_guard.py`, `operations/fleet/test/test_host_control.py` 원격 실행.
+- gate 변화: 없음. PC별 재설치와 실제 정리 수용은 미완료다.
+- 검토 수정: `install-host-control.sh`가 `units-user`를 ai에만 써서 모델 PC의 `clean-storage`가 늘 거부됐다. ai·model에 쓰도록 고치고 dry-run 시험으로 RED→GREEN을 확인했다.
+- 추가(사용자 요청): `health`에 RAM 전체·여유 용량, GPU 사용률·온도, CPU 사용률(1초 `/proc/stat`)·최고 thermal zone 온도를 더했다. 방식은 CORE `runtime.py`와 같다. RAM 10% 미만은 보고 전용 `memory-low`, 온도·사용률은 표시 전용이다.
+
+## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
+
+- 변경: relocate only six existing runtime/verification methods to site_update_runtime; updater590 to516lines, helper110. Keep switch/rollback/order and public import bindings; update reviewed five-file administrator install closure.
+- 증거: all23 method ASTs, unchanged I/O/verifier/builder and global import targets verified statically. Tests-only d50e67e208 actualCLIclosure RED1FAIL/0skip, NEW1; committed source regression GREEN/review pending. See site-updater-runtime-split validation record/external proofs.
+- gate 변화: none; three/four-image compatibility waits for a separate feature unit after this pure split lands. No host/site/deployment/FIELD acceptance.
+- CE: no new lesson; source/tests/README and existing installer lessons explain this routine split.
+
+## 2026-10-26 · 9816e56bd9 · Site updater pure split verified
+
+- 변경: bind the independent source review and preserved 23 method ASTs/global imports to the six-method runtime extraction; keep complete five-file administrator install closure.
+- 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
+- gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
+- CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
