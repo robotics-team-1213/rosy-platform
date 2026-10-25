@@ -52,10 +52,15 @@ class Seat:
             row = {"decision": forced, "by": "measurement", "reason": "fault" if facts.get("fault") else "box not seen"}
         else:
             allowed = [d for d in DECISIONS if d not in forbidden]
-            schema = {"type": "object", "required": ["decision", "reason"],
+            schema = {"type": "object", "required": ["decision", "reason"], "additionalProperties": False,
                       "properties": {"decision": {"type": "string", "enum": allowed}, "reason": {"type": "string"}}}
             started = time.time()
-            reply = self.backend(prompt(facts, allowed), images, schema)
+            try:
+                reply = self.backend(prompt(facts, allowed), images, schema)
+            except Exception as error:  # timeout, HTTP or broken JSON: no answer is an abort, never a retry
+                reply = {"decision": f"no reply ({type(error).__name__})"}
+            if not isinstance(reply, dict):
+                reply = {"decision": f"non-object reply ({type(reply).__name__})"}
             if reply.get("decision") not in allowed:  # the schema is advice to the model, not a guarantee
                 row = {"decision": "abort", "by": "veto", "reason": f"model chose {reply.get('decision')!r}"}
             else:

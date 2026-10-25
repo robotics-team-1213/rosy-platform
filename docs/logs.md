@@ -11360,6 +11360,12 @@ osy-d395-s1d\`.
 - gate 변화: 구조 결정 수용만 기록했다. 런타임·패키지·배포·장치·현장 수용 상태를 변경하지 않았다. 문서 lint·원격 계약 검사 결과는 커밋 SHA와 실행 로그로 별도 확인한다.
 - CE: 해당 없음 — 새 장애 해결 교훈이 아닌 구조·명칭 결정이다.
 
+## 2026-10-25 · uncommitted · 모델 구조화 출력 원칙과 OMX judge seat 파싱 실패 거부 (D-878)
+
+- 변경: D-878(Proposed) — 출력 스키마 정본 한 곳, 전송 형식은 어댑터, 파싱 실패=무효 답, 라우터 조건, 판단 경로 JSON 수리 금지. `deploy/robot/omx/judge_seat.py`가 호출 실패·깨진 JSON·객체 아닌 답을 `abort` 거부로 받고 스키마에 `additionalProperties: false`를 더한다.
+- 증거: `test/test_omx_judge_seat.py` 세 실패 경우 추가, 원격 시험 결과는 착지 기록 참조.
+- gate 변화: 없음. CE 해당 없음 — 조사 결과의 원칙 기록과 작은 fail-closed 보강이며 장애 해결이 아니다.
+
 ## 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
 
 - 변경: Fleet의 캐시 전용 연결 관측 응답과 목표 읽기 경로를 API 정본에 등록했다. handler와 독립 Monitoring 런타임은 아직 구현되지 않았음을 명시했다. 기존 API 설명·시험 버전 고정값을 예약 도구로 함께 갱신했다.
