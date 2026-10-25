@@ -206,7 +206,9 @@ class InventoryHost:
                     "Image": row["Config"]["Image"],
                     "State": "running" if row["State"]["Running"] else "exited",
                     "Health": row["State"]["Health"]["Status"]})
-                    for cid, row in self.containers.items()), **kwargs)
+                    for cid, row in self.containers.items()
+                    if row["Config"]["Labels"].get(PROJECT_LABEL) == upd.PROJECT
+                    and row["Config"]["Labels"].get(HASH_LABEL)), **kwargs)
         if args[:3] == ["docker", "image", "load"]:
             folder = Path(args[-1]).parent
             self.load_images(folder)

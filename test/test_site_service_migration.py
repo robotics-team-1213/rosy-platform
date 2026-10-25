@@ -65,6 +65,19 @@ def test_fixture_inventory_does_not_follow_tag_or_link_and_restart_keeps_orphans
     assert target.exists()
 
 
+def test_fixture_compose_selector_keeps_canonical_fleet_and_global_inventory_keeps_manual(host):
+    machine = InventoryHost(host.paths)
+    global_ids = machine(["docker", "ps", "--all", "--quiet", "--filter",
+                          f"label={PROJECT_LABEL}={upd.PROJECT}", "--filter",
+                          f"label={SERVICE_LABEL}=fleet"]).stdout.splitlines()
+    assert set(global_ids) == set(managed(machine, "fleet")) | {machine.manual}
+    output = updater_for(host, machine)._compose(
+        upd.read_env(host.paths.site_env), "ps", "--all", "--format", "json").stdout
+    rows = [json.loads(line) for line in output.splitlines()]
+    assert {r["ID"] for r in rows if r["Service"] == "fleet"} == set(managed(machine, "fleet"))
+    assert machine.manual in machine.containers
+
+
 @pytest.mark.parametrize("services", [LEGACY, CURRENT], ids=["legacy3", "current4"])
 def test_current_candidate_uses_its_verified_service_set(host, services):
     machine = InventoryHost(host.paths, services, manual=False)
