@@ -1,6 +1,9 @@
 """Storage routes keep project, publish, manage and CSRF authority distinct."""
 from contextlib import contextmanager
 import json
+import builtins
+import importlib.util
+from pathlib import Path
 import threading
 import time
 
@@ -12,6 +15,21 @@ from test_learning_collaboration import request
 from test_review_app import open_store
 from test_storage_jobs import jobs_setup  # noqa: F401
 from test_storage_pool import pool_setup  # noqa: F401
+
+
+def test_disabled_pool_does_not_import_optional_storage_dependencies(tmp_path, monkeypatch):
+    source = Path(__file__).resolve().parents[3] / 'learning/curation/perception/storage_web.py'
+    original = builtins.__import__
+    def optional_missing(name, *args, **kwargs):
+        if name in ('storage_jobs', 'storage_pool'):
+            raise ModuleNotFoundError('optional upload dependencies are not installed')
+        return original(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, '__import__', optional_missing)
+    spec = importlib.util.spec_from_file_location('isolated_storage_web', source)
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    web = module.StorageWeb(None, None, None, tmp_path / 'unused.db')
+    web.close()
+    assert not (tmp_path / 'unused.db').exists()
 
 
 @contextmanager
