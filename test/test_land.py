@@ -1050,9 +1050,19 @@ def test_the_ticket_is_released_after_a_stop_and_after_ctrl_c(repos, monkeypatch
 def test_no_queue_lands_without_a_ticket(repos, monkeypatch):
     main, wt = repos
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
-    land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # would block a queued run
     assert land.main(["--tests", "none", "--no-queue"]) == 0
     assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+    assert queued(main) == []
+
+
+def test_no_queue_is_refused_while_a_lander_holds_its_turn(repos, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # this live pid: holds its turn
+    assert land.main(["--tests", "none", "--no-queue"]) == 1
+    assert "--no-queue refused: feat/peer" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
 
 
 def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
@@ -1060,7 +1070,7 @@ def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
     calls = []
 
-    def select(wt_, base, python, head=None):
+    def select(wt_, base, python, head=None, landed=False):
         calls.append(head)
         return [["pkg/test"]], (None if head else "selector escalated to FULL")
 
@@ -1112,8 +1122,54 @@ def test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge(repos, c
     commit(main, {"docs/adr/D-3-peer.md": "## D-3 peer\n"}, "peer lands D-3")
     assert land.main(["--tests", "none"]) == 0
     assert (main / gaps).read_text() == "D-4 reserved in another worktree\n"
-    assert "drop adr_gaps lines of landed D-3" in git(main, "log", "-1", "--format=%s")
+    assert git(main, "log", "-1", "--format=%s").startswith("Merge branch 'main'"), "in the merge commit"
     assert "dropped ['D-3']" in capsys.readouterr().out
+
+
+def test_a_gap_main_declared_for_an_adr_this_branch_adds_is_dropped_by_the_pretest_merge(repos):
+    """D-877, 2026-10-25: a peer declared the gap while the branch waited; the pretest's merge drops it too."""
+    main, wt = repos
+    gaps = "tools/harness/adr_gaps.txt"
+    commit(wt, {"docs/adr/D-3-mine.md": "## D-3 mine\n"}, "branch adds D-3")
+    commit(main, {gaps: "D-3 reserved in another worktree\n"}, "peer declares D-3 as a gap")
+    land.merge(wt, git(main, "rev-parse", "HEAD"), "feat/x", sys.executable, False)
+    assert (wt / gaps).read_text() == ""
+    assert len(git(wt, "log", "-1", "--format=%P").split()) == 2
+
+
+def test_a_merge_that_only_dropped_gap_lines_keeps_the_full_pass(repos, monkeypatch):
+    main, wt = repos
+    gaps = "tools/harness/adr_gaps.txt"
+    commit(wt, {gaps: "D-3 reserved in another worktree\n"}, "declare a peer's gap")
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(main, {"docs/adr/D-3-peer.md": "## D-3 peer\n"}, "peer lands D-3")
+    peer_main = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [peer_main], "delta selection only: the gap drop is a record, not a change of the branch"
+    assert (main / gaps).read_text() == ""
+
+
+HARNESS_ONLY = """import json, sys
+def generated_targets(repo):
+    return {}
+def generate(repo):
+    return []
+if sys.argv[1] == 'affected':
+    print(json.dumps({"mode": "full", "escalations": ["tools/harness/x.py: harness configuration or the selector itself"],
+                      "invocations": [], "local_invocations": [["pkg/test/test_a.py"]], "full_invocations": [["pkg/test"]]}))
+"""
+
+
+@pytest.mark.parametrize("landed", [True, False])
+def test_main_delta_escalated_only_by_landed_harness_files_runs_its_mapped_suites(repos, landed):
+    """2026-10-25: a selector edit on main held every lander behind it for a FULL tier of its own."""
+    main, wt = repos
+    commit(wt, {"tools/harness/rosy_harness.py": HARNESS_ONLY, "tools/harness/affected_tests.py": ""}, "harness")
+    invocations, note = land.select(wt, "main", sys.executable, head="HEAD", landed=landed)
+    if landed:
+        assert (invocations, note) == ([["pkg/test/test_a.py"]], None)
+    else:
+        assert invocations == [["pkg/test"]] and note.startswith("selector escalated to FULL")
 
 
 _CANONICAL_GENERATOR = r'''from pathlib import Path

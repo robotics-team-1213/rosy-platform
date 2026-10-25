@@ -11499,3 +11499,9 @@ osy-d395-s1d\`.
 - 변경: `motion_profile.py`(동기 사다리꼴, 모서리 이어 돌기, 정확한 정지점, `retime`). `chunk_runner.transit_path`는 올라가며 돌기 시작하는 한 흐름(겹침 0.6 s, 높이 1 unit 이내에서만 회전), `grasp_planner`의 수직 내려가기·들기는 같은 경로에 부드러운 가감속. `cell_record.py`와 `--stage record`(A/B 한 사이클 녹화, 녹화된 집게로 held/empty 판정, 원위치 확인). native SIM 시나리오 `pick-place-chunks-offset`·`-yaw-site`·`-yaw-box`(상자 이동·회전, 관측한 상자 위치로 계획).
 - 증거: 원격 시험 통과. 매끄러운 동작으로 Gazebo `pick-place-chunks` PASS(xy 0.26 mm, 들기 102 mm). 시나리오 결과는 이어서 기록한다.
 - gate 변화: 없음. 실물의 매끄러운 동작·녹화는 실물 실행에서 확인한다.
+
+## 2026-10-26 · uncommitted · fix(land): FULL를 다시 돌지 않는 차례, pretest 공백 정리, 차례 중 우회 거부
+
+- 변경: `land.merge`가 착지된 ADR 공백 줄을 병합 커밋 안에서 지운다(pretest·차례 공통). `land_full.restore`는 병합 커밋이 git 병합과 자동 정리 기록만 다르면 FULL 통과를 유지한다. 대기 중 main 변화분이 이미 착지한 하네스 파일 때문에만 FULL로 오르면 guard와 매핑 시험만 돈다. 다른 착지가 차례를 쥐면 `--no-queue`를 거부한다.
+- 증거: `test/test_land.py`·`test_land_queue.py`·`test_land_record.py` 원격 통과(109 passed). 원인 근거는 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 6절.
+- gate 변화: 없음. 잠금 밖 시험·준비 순서 대기열은 다음 단계.

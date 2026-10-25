@@ -55,6 +55,7 @@ from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
 HARNESS = "tools/harness/rosy_harness.py"
+HARNESS_TRIGGER = ": harness configuration or the selector itself"  # affected_tests.FULL_TRIGGERS
 SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
@@ -124,6 +125,12 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
                 raise Stop(f"changes outside canonical generation targets: {sorted(unexpected)}")
             if written:
                 git(wt, "add", "--", *written)
+        gaps, dropped = landed_gaps(wt)
+        if dropped:  # in the merge commit, so the pretest's merge drops them too and land_full keeps its FULL pass
+            (wt / ADR_GAPS).write_bytes(gaps)
+            git(wt, "add", "--", ADR_GAPS)
+            print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
+            resolved[ADR_GAPS] = gaps
         git(wt, "commit", "--no-edit")
     except (Stop, ValueError, KeyError, OSError, subprocess.CalledProcessError) as exc:
         abort = git(wt, "merge", "--abort", check=False)
@@ -177,11 +184,13 @@ def pack(wt: Path, paths: list[str]) -> list[list[str]]:
     return [members for members, _ in groups]
 
 
-def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[list[list[str]], str | None]:
+def select(wt: Path, base: str, python: str, head: str | None = None,
+           landed: bool = False) -> tuple[list[list[str]], str | None]:
     """pytest invocations for base...HEAD (or base...head), and a FULL note owed to the summary.
 
     The D-436 selector (`rosy_harness.py affected`) when the harness is present —
     it adds the guard set and reverse dependents — otherwise the nearest test/ dir.
+    ``landed``: base...head is main's delta, already on main with its own FULL tier when it escalated.
     """
     if (wt / "tools/harness/affected_tests.py").is_file():
         # Strict UTF-8: the JSON must parse whole; PYTHONUTF8 makes the child write UTF-8.
@@ -193,6 +202,12 @@ def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[l
                        f"{result.stdout}{result.stderr}".rstrip())
         try:
             sel = json.loads(result.stdout)
+            if landed and sel["escalations"] and all(e.endswith(HARNESS_TRIGGER) for e in sel["escalations"]):
+                # A harness edit on main passed its own FULL tier when it landed; a FULL tier for every lander
+                # behind it held the queue an hour each (2026-10-25). Its guards and mapped suites still run.
+                print("[tests] main's delta escalated only for harness files that landed with their own FULL"
+                      " tier: the guards and its mapped suites")
+                return sel["local_invocations"] + browser_tier(wt, base, head), None
             if sel["mode"] == "full":
                 # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
                 # guards alone; not via GitHub, which would publish unpushed main commits.
@@ -399,6 +414,11 @@ def land(args) -> int:
         except Exception as exc:
             print(f"[land] warning: worktree prune failed, landing continues: {exc}")
     python = sys.executable
+    if args.no_queue and not args.dry_run:
+        holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
+        if holders:  # a landing outside the queue mid-turn gave that turn another round (2026-10-25, 22:52)
+            raise Stop(f"--no-queue refused: {land_queue.describe(holders[:1])} holds its turn. Wait, or stop it"
+                       " first during an incident")
     if not (args.no_queue or args.dry_run):
         before = out(wt, "rev-parse", "main")
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
@@ -425,13 +445,6 @@ def land(args) -> int:
             resolved = merge(wt, main_sha, branch, python, args.dry_run)
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                            + (f", auto-resolved {resolved}" if resolved else ""))
-            gaps, dropped = landed_gaps(wt) if not args.dry_run else (b"", [])
-            if dropped:  # merge=union brought back lines main removed when those ADRs landed
-                (wt / ADR_GAPS).write_bytes(gaps)
-                git(wt, "add", "--", ADR_GAPS)
-                git(wt, "commit", "-m", f"chore(adr): drop adr_gaps lines of landed {', '.join(dropped)}")
-                print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
-                summary.append(f"round {round_no}: dropped landed ADR gap(s) {dropped} from {ADR_GAPS}")
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
         size_check(wt, main_sha, candidate, python)
@@ -450,7 +463,7 @@ def land(args) -> int:
             elif full_main:
                 # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
                 # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
-                invocations, note = select(wt, full_main, python, head=main_sha)
+                invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
                 reusable = False  # the FULL tier ran on an earlier candidate
                 summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
