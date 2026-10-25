@@ -42,7 +42,8 @@ def _keys(directory: Path, owner: int) -> dict[str, str]:
         content[name] = _read(path, 16384, owner).decode("ascii")
     derived = _ssh_keygen("-y", "-P", "", "-f", str(directory / KEY)).split()
     public = content[KEY + ".pub"].split()
-    if (len(derived) < 2 or derived[0] != "ssh-ed25519" or len(public) < 2
+    if (len(content[KEY + ".pub"].strip().splitlines()) != 1
+            or len(derived) < 2 or derived[0] != "ssh-ed25519" or len(public) < 2
             or public[:2] != derived[:2]):
         raise ValueError("SSH host key pair differs")
     return content

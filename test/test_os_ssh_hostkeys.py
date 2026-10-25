@@ -39,7 +39,7 @@ def test_same_regular_host_key_survives_root_switch_and_stale_root_copy(tmp_path
     assert (common / "ssh-hostkeys/ssh_host_ed25519_key").read_bytes() == private
 
 
-@pytest.mark.parametrize("case", ["private_mode", "public_mismatch", "hardlink", "symlink", "extra"])
+@pytest.mark.parametrize("case", ["private_mode", "public_mismatch", "multiline_public", "hardlink", "symlink", "extra"])
 def test_corrupt_common_keys_hold_without_overwriting_the_other_root(tmp_path, monkeypatch, case):
     root, other, common, _ = shared_roots(tmp_path, monkeypatch)
     helper = _module()
@@ -50,6 +50,8 @@ def test_corrupt_common_keys_hold_without_overwriting_the_other_root(tmp_path, m
         private.chmod(0o644)
     elif case == "public_mismatch":
         public.write_text("ssh-ed25519 invalid\n")
+    elif case == "multiline_public":
+        public.write_text(public.read_text() + "ssh-ed25519 invalid\n")
     elif case == "hardlink":
         (common / "alias").hardlink_to(private)
     elif case == "symlink":
