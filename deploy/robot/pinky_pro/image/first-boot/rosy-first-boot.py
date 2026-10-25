@@ -467,7 +467,8 @@ class FirstBootProvisioner:
         if "tailscale" in payload:
             # D-477: rosy-tailscale-join.service spends this key once (0600).
             _json_atomic(
-                self._inside("etc/rosy/tailscale-join.json"),
+                (shared.directory.parent / "tailscale/join/request.json" if shared is not None
+                 else self._inside("etc/rosy/tailscale-join.json")),
                 {
                     "auth_key": payload["tailscale"]["auth_key"],
                     "tags": payload["tailscale"]["tags"],

@@ -1,8 +1,6 @@
 """The actual provisioning and join owners share a one-time channel across slots."""
 import json
 
-import pytest
-
 from os_state_boot_fakes import shared_roots
 from test_first_boot_provisioning import _bundle, _module
 from test_os_first_boot_state import SERIAL

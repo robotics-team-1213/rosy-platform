@@ -221,7 +221,8 @@ def _read_unit() -> str:
 
 def test_the_unit_only_runs_with_a_provisioned_join_file():
     unit = _read_unit()
-    assert "ConditionPathExists=/etc/rosy/tailscale-join.json" in unit
+    assert "ConditionPathExists=|/etc/rosy/tailscale-join.json" in unit
+    assert "ConditionPathExists=|/var/lib/rosy-device/tailscale/join/request.json" in unit
     assert "ProtectSystem=strict" in unit
     assert "StateDirectory=rosy/tailscale" in unit
     assert "ReadWritePaths=-/etc/rosy/tailscale-join.json" in unit
