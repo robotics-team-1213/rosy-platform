@@ -44,7 +44,11 @@ TLS pending 동안 일반 canonical writer와 updater를 차단한다. 초기 st
 
 Tailscale daemon의 `/var/lib/tailscale`은 공통 data의 `/tailscale/machine`에 연결하고 root 소유 0700으로 제한한다. 고정된 1.102.5의 [upstream 서비스](https://github.com/tailscale/tailscale/blob/v1.102.5/cmd/tailscaled/tailscaled.service)도 이 state 경로와 mode를 사용한다. 새 `rosy-os-tailnet.service`는 실제 daemon·join unit의 required dependency이며, 첫 provisioning 이후 커널 device-tree serial과 committed 기체 binding을 대조한다. 기체 UID·hardware serial에 결속된 root0600 machine-binding 기록을 daemon보다 먼저 durable하게 만든다. 기록이 없으면 비어 있는 machine 저장소만 초기화하며 기존 key/state를 임의 채택하지 않는다. 다른 보드나 다른 UID이면 기존 파일을 지우거나 remote logout하지 않고 daemon 시작을 차단한다. LAN/SSH를 제공하는 초기 storage 단계와 이 tailnet authority 검사를 구분한다.
 
-tailnet gate는 firstboot를 Wants/After로 기다리되 legacy 복구 경로까지 firstboot 성공에 결속하지 않는다. 초기 Wi-Fi 실패 후 성공한 firstboot 재실행은 tailnet daemon·join을 no-block으로 다시 요청한다. gate는 daemon 정지 때 해제되어 다음 시작에서 다시 검사한다. 공장 이미지는 tailnet state가 비어 있어야 하며 verifier는 실제 required 링크와 비어 있는 0700 디렉터리를 검사한다. 이 구현은 동일 패키지 baseline의 A/B file-state 시험이다. 실제 daemon/network, 패키지 버전 간 state 호환과 moved-card 전체 재설정 수용을 대신하지 않는다. join key 소비 경로의 공통 저장소 이전과 rebind owner의 정리는 추가로 필요하다.
+tailnet gate는 firstboot를 Wants/After로 기다리되 legacy 복구 경로까지 firstboot 성공에 결속하지 않는다. 초기 Wi-Fi 실패 후 성공한 firstboot 재실행은 tailnet daemon·join을 no-block으로 다시 요청한다. gate는 daemon 정지 때 해제되어 다음 시작에서 다시 검사한다. 공장 이미지는 tailnet state가 비어 있어야 하며 verifier는 실제 required 링크와 비어 있는 0700 디렉터리를 검사한다. 이 구현은 동일 패키지 baseline의 A/B file-state 시험이다. 실제 daemon/network, 패키지 버전 간 state 호환과 moved-card 전체 재설정 수용을 대신하지 않는다.
+
+A/B firstboot는 일회용 join 요청을 공통 `/tailscale/join/request.json`에 쓴다. join owner는 공통 request lock과 기체 binding을 확인하고 키를 권한0600 임시 파일로 전달한다. 고정 버전의 [auth-key file 입력](https://github.com/tailscale/tailscale/blob/v1.102.5/cmd/tailscale/cli/up.go)을 사용하며 명령행에 키를 넣지 않는다. 성공 후 durable한 키 없는 소비 기록으로 교체하고, 다른 root의 과거 요청은 사용하지 않는다. 이미 소비한 요청은 CLI를 호출하지 않고 완료 처리한다. 실패하면 요청을 보존하고 진단에서 키를 지운다.
+
+다른 보드에서 A/B firstboot를 반복해도 공통 canonical pointer·완료 기록·현장 Wi-Fi는 보존하고, 하나의 임시 등록 identity로 SETUP 안내를 유지한다. 이전 hostname을 live 적용하거나 tailnet 권한을 이전하지 않는다. 새 기체 등록은 기존 안내대로 새 서명 이미지 카드를 준비하는 경로를 지원한다. root-local archive 도구는 A/B marker가 있으면 파일 이동 전에 거부한다. 이 도구로 공통 generation이나 machine credential을 재등록하지 않는다. legacy single-root 재등록도 CORE·하드웨어·tailnet daemon/join의 정지를 확인한 뒤에만 진행한다. 실제 반복 부팅·서비스 관리자·복구 페이지 접근 수용은 별도다.
 
 ### Ownership and existing decisions
 

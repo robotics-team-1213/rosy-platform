@@ -41,9 +41,18 @@ def test_repeated_moved_boots_keep_setup_identity_and_shared_recovery_state(tmp_
     assert json.loads(pending)["hardware_serial"] == MOVED_SERIAL
 
 
-def test_legacy_rebind_cannot_partially_move_shared_ab_state(tmp_path, monkeypatch):
+@pytest.mark.parametrize("marker", ["descriptor", "kernel_only", "malformed", "broken_link"])
+def test_legacy_rebind_cannot_partially_move_shared_ab_state(tmp_path, monkeypatch, marker):
     _, root, _, common, _ = _provision_a(tmp_path, monkeypatch)
     fresh = _fresh_bundle(root)
+    descriptor = root / "etc/rosy/os-slot.json"
+    if marker == "kernel_only":
+        descriptor.unlink()
+    elif marker == "malformed":
+        descriptor.write_text("{")
+    elif marker == "broken_link":
+        descriptor.unlink()
+        descriptor.symlink_to(root / "missing-slot-descriptor")
     before = {p.relative_to(common): p.read_bytes() for p in common.rglob("*") if p.is_file()}
     with pytest.raises(ValueError, match="fresh.*card"):
         _rebind().quarantine_previous(root, fresh, MOVED_SERIAL)
