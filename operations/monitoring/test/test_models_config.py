@@ -100,6 +100,13 @@ def test_sources_are_registered_read_targets_with_tls_or_literal_loopback(url):
         MonitoringConfig.model_validate(value)
 
 
+def test_generic_health_url_rejects_control_characters():
+    value = configuration()
+    value["sources"][0].update(kind="http", url="https://service.example.invalid/health\x00")
+    with pytest.raises(ValidationError):
+        MonitoringConfig.model_validate(value)
+
+
 def test_reader_and_source_credentials_are_isolated_and_not_printable():
     cfg = MonitoringConfig.model_validate(configuration())
     reader_token, source_token = "r" * 40, "u" * 40
