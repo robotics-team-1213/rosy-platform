@@ -189,7 +189,13 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
             }).map(e=>({tag:e.tagName,id:e.id,left:e.getBoundingClientRect().left,
               right:e.getBoundingClientRect().right,width:e.getBoundingClientRect().width,
               parent:e.parentElement.id||e.parentElement.tagName,
-              parentWidth:e.parentElement.getBoundingClientRect().width})).slice(0,12)''')
+              parentWidth:e.parentElement.getBoundingClientRect().width,
+              parentDisplay:getComputedStyle(e.parentElement).display,
+              parentDirection:getComputedStyle(e.parentElement).flexDirection,
+              parentWrap:getComputedStyle(e.parentElement).flexWrap,
+              parentColumns:getComputedStyle(e.parentElement).gridTemplateColumns,
+              parentHeight:getComputedStyle(e.parentElement).height,
+              basis:getComputedStyle(e).flexBasis})).slice(0,12)''')
             fits = page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             if not fits: print('overflow: ' + json.dumps(overflow))
             assert fits, overflow
