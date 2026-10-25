@@ -26,24 +26,23 @@ def common_lock(root: Path):
     if found is None:
         yield None
         return
-    try:
-        shared = FirstBootState(root, found[0])
-        path = _path(root, COMMON + "/state/config.lock")
-        descriptor = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    with contextlib.ExitStack() as cleanup:
         try:
+            shared = FirstBootState(root, found[0])
+            path = _path(root, COMMON + "/state/config.lock")
+            descriptor = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+            cleanup.callback(os.close, descriptor)
             info = os.fstat(descriptor)
             if (not stat.S_ISREG(info.st_mode) or info.st_uid != root.stat().st_uid
                     or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
                 raise ValueError("canonical configuration lock is unsafe")
             fcntl.flock(descriptor, fcntl.LOCK_EX)
             shared.validate_storage_state()
-            yield shared
-        finally:
-            os.close(descriptor)
-    except StateError:
-        raise
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise StateError(f"OS_STATE_HOLD: {exc}") from exc
+        except StateError:
+            raise
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise StateError(f"OS_STATE_HOLD: {exc}") from exc
+        yield shared
 
 
 class ConfigurationUpdate:
