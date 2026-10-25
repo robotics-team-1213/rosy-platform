@@ -116,9 +116,13 @@ def _json_sidecar(destination: Path, value: dict) -> None:
     _publish(temporary, destination)
 
 
-def assemble(source: Path, output: Path, work: Path, release_id: str) -> dict:
-    if os.geteuid() != 0 or platform.machine() != "aarch64":
+def _require_native() -> None:
+    if platform.machine() != "aarch64" or not hasattr(os, "geteuid") or os.geteuid() != 0:
         raise ValueError("A/B release assembly requires root on native arm64")
+
+
+def assemble(source: Path, output: Path, work: Path, release_id: str) -> dict:
+    _require_native()
     if not re.fullmatch(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}", release_id):
         raise ValueError("invalid factory release ID")
     source, output, work = checked_inputs(source, output, work)
