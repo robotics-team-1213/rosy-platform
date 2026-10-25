@@ -10493,6 +10493,7 @@ osy-d395-s1d\`.
 - gate 변화: 소스 집중 검증 완료. 공식 selector·FULL·착지·게시·운영 수용은 별도다.
 - 결정: D-803의 기존 guard-first 원칙을 queued 경로까지 적용한다. 새로운 예외나 검사 완화는 없다.
 - 교훈: [기존 구조 검사 우선 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)을 갱신했다. 파일 전체 Safety 분류의 import 파급과 queued 우회 경로를 구분하고, 26개 사실을 검증했다.
+
 ## 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
 
 - 변경: `deploy/robot/omx/`에 청크 실행기(`chunk_runner.py`: 토크 유지, 멈춤·과열·추종 오차 정지, 위치+전류 집기 판정, 들고 돌고 내리는 `goto`/`park`, `live.json`), top-down 계획기(`grasp_planner.py`), 탐침 기반 손목 보정(`grasp_servo.py`), 그림자 상자 검출과 놓기 확인(`cell_perception.py`), scripted_teacher 봉인(`record_seal.py`), Fleet 관측 송신기(`arm_status_bridge.py`), 판단 자리(`judge_seat.py`)를 더했다.
@@ -10527,3 +10528,9 @@ osy-d395-s1d\`.
 - 증거: `18c09b384e` 원격 land/queue/record/harness 207 passed, skip 0, NEW 0. 독립 소스 리뷰 승인. 먼저 실패한 6개 생성물 사례와 2개 취소 진단 사례 및 중간 실패 3개도 [검증 기록](validation/land-pretest-guards-2026-10-25/result.md)에 보존했다.
 - gate 변화: 없음. 최신 소스의 공식 FULL·착지·게시·배포는 별도 확인한다.
 - 교훈: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 병합 생성 시점과 취소 실패 보존 근거를 갱신했다.
+
+## 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
+
+- 변경: `sim_chunk_plan.py`가 `grasp_planner` 청크와 `transit_path` 이동을 sim 셀의 집기·놓기 목표에 맞춰 SIM teacher의 approach/grasp/transfer/release로 바꾼다. `--plan chunks`가 teacher·demonstrations·prepare·job·`remote_omx_native.py`를 지난다. 놓기는 측정한 집게 위치부터 연다(`open_from`). 앞의 착지 merge 커밋 `5ceabe6015`이 작업 트리의 추적 파일 변경(실험 연결부)을 함께 담았고, 새 파일은 이 커밋에서 들어간다.
+- 증거: AI 시험 호스트 native SIM 2회. 1회 FAIL(release 첫 목표가 상자에 막힌 집게를 더 닫으라고 함), 수정 뒤 2회 **PASS** — xy 0.12 mm, 들기 102 mm, 2.25 s 정지, RGB 2,060장. `docs/validation/omx-arm-s-chunks-sim-2026-10-25/result.md`.
+- gate 변화: 없음. sim 셀은 S 셀 좌표가 아니고, B 구간·판단 자리·실물 guard 속도는 별도다.
