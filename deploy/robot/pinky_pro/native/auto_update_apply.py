@@ -302,6 +302,13 @@ class UpdaterApply:
         pruned = []
         try:
             with self._locked_file(self.root / RELEASE_LOCK):
+                from os_factory_release import pinned_factory
+                try:
+                    factory = pinned_factory(self.root)
+                except ValueError:
+                    return  # Unknown factory binding must never make it a prune candidate.
+                if factory is not None:
+                    keep.add(factory)
                 cutoff = self.host.now().timestamp() - PRUNE_MIN_AGE_S
                 for path in sorted((self.root / RELEASES).iterdir()):
                     if (path.name in keep or not RELEASE_ID.fullmatch(path.name) or path.is_symlink()
