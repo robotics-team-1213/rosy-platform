@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · a401f49f6d · 서명된 GPT 이미지의 SD 준비 경로
 - 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
 - 2026-10-25 · 055f40747f · signing 설치 closure와 provenance 회귀 통과
 - 2026-10-25 · 9f0df4f99b · 설치형 updater 복구 시험과 공개 digest inventory
 - 2026-10-25 · 4fdf8c9fee · 동적 서명 소비자 호환과 추가 회귀
-- 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리

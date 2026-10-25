@@ -39,23 +39,28 @@ def environment(config):
     return "\n".join(lines) + "\n"
 
 
+# arm S chunk-plan experiments and their Gazebo scenario (sim_pick_place_demonstrations.SCENARIOS)
+CHUNK_EXPERIMENTS = {"pick-place-chunks": "nominal", "pick-place-chunks-offset": "offset",
+                     "pick-place-chunks-yaw-site": "yaw-site", "pick-place-chunks-yaw-box": "yaw-box"}
+
+
 def run_script(source, *, experiment="g2", episodes=1):
-    if experiment not in {"g2", "pick-place", "pick-place-demonstrations", "pick-place-chunks"}|STUDY_EXPERIMENTS:
+    if experiment not in {"g2", "pick-place", "pick-place-demonstrations", *CHUNK_EXPERIMENTS}|STUDY_EXPERIMENTS:
         raise ValueError("unknown native simulation experiment")
     if (type(episodes) is not int or not 1 <= episodes <= 3
             or experiment != 'pick-place-demonstrations' and episodes != 1):
         raise ValueError('only demonstrations allow one to three episodes')
     entry = {"g2": "g2_runner.py", "pick-place": "sim_pick_place_task.py",
              "pick-place-demonstrations": "sim_pick_place_demonstrations.py",
-             "pick-place-chunks": "sim_pick_place_demonstrations.py",  # arm S chunk plan, D-872
+             **{name: "sim_pick_place_demonstrations.py" for name in CHUNK_EXPERIMENTS},  # arm S chunks, D-872
              **{name:'sim_pick_place_policy_job.py' for name in STUDY_EXPERIMENTS}}[experiment]
     output = "g2" if experiment == "g2" else "pick-place"
     runner = str(Path(source) / "deploy/robot/omx" / entry)
     mode = " --mode run" if experiment == "g2" else ""
     if experiment == 'pick-place-demonstrations':
         mode = ' --episodes ' + str(episodes)
-    if experiment == 'pick-place-chunks':
-        mode = ' --episodes 1 --plan chunks'
+    if experiment in CHUNK_EXPERIMENTS:
+        mode = ' --episodes 1 --plan chunks --scenario ' + CHUNK_EXPERIMENTS[experiment]
     if experiment == 'pick-place-policy-calibration':
         mode = ' --calibration'
     if experiment == 'pick-place-policy-contact':
@@ -200,7 +205,7 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--staging", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
-    parser.add_argument("--experiment", choices=("g2", "pick-place", "pick-place-demonstrations", "pick-place-chunks",*sorted(STUDY_EXPERIMENTS)), default="g2")
+    parser.add_argument("--experiment", choices=("g2", "pick-place", "pick-place-demonstrations", *CHUNK_EXPERIMENTS, *sorted(STUDY_EXPERIMENTS)), default="g2")
     parser.add_argument('--episodes', type=int, choices=(1, 2, 3), default=1)
     parser.add_argument("--activate", action="store_true")
     parser.add_argument("--state-root", type=Path)
