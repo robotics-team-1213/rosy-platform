@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "native"))
 from os_state_io import _write_atomic
 from os_state_layout import LAYOUT_FIELDS, _guid, _object, _path, _read
 from os_storage_dispatch import BOOTSTRAP_FILES, FIRST_BOOT_FILES, trusted_files
+from os_payload_compatibility import verify_contract
 
 OVERRIDES = {"rosy-os-firstboot.conf": "rosy-first-boot.service.d/10-rosy-os.conf",
              "rosy-os-recover.conf": "rosy-release-recover.service.d/10-rosy-os.conf",
@@ -35,6 +36,8 @@ def configure(root: Path, release_id: str) -> None:
     prefix = root / "opt/rosy/os-bootstrap"
     trusted_files(prefix, BOOTSTRAP_FILES, owner)
     trusted_files(prefix, FIRST_BOOT_FILES, owner)
+    verify_contract(_path(root, "opt/rosy/releases/" + release_id + "/deploy/robot/native"),
+                    state_schema=slot["state_schema"])
     sums = _read(_path(root, "opt/rosy/releases/" + release_id + "/SHA256SUMS"), 16 * 1024 * 1024, owner)
     record = dict(schema_version=1, release_id=release_id, checksums_sha256=hashlib.sha256(sums).hexdigest())
     changes = {"etc/rosy/os-factory-release.json": (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")}

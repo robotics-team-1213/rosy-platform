@@ -31,8 +31,9 @@ def _integer(value):
 
 
 def verify_contract(native: Path, *, state_schema: int, boot_abi: int = BOOT_ABI) -> dict:
-    """The caller has verified this whole candidate's signature and checksum inventory."""
+    """Parse metadata only; deployment callers first verify the whole candidate's signature."""
     from image_layer_boot import _engine_contract, _safe
+    state_schema, boot_abi = _integer(state_schema), _integer(boot_abi)
     files, source = _engine_contract(native)
     declarations = [node.value for node in ast.parse(source).body if isinstance(node, ast.Assign)
                     and any(isinstance(t, ast.Name) and t.id == "OS_COMPATIBILITY" for t in node.targets)]
