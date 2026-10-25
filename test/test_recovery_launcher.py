@@ -24,7 +24,7 @@ def setup(launcher, tmp_path):
     state = launcher.RecoveryState("boot-1", "ap-1", "10.42.0.1", "device-1", "board-1", "board-1",
                                    "site_wifi_unreachable", False, True)
     current = [state]
-    accounts = launcher.Accounts(os.getuid(), os.getuid(), os.getgid(), os.getgid())
+    accounts = launcher.Accounts(os.getuid(), os.getuid() or 1000, os.getgid(), os.getgid())
     identity = tmp_path / "etc/rosy/device-identity.json"
     identity.parent.mkdir(parents=True)
     identity.write_text(json.dumps({"device_uid": "device-1", "device_name": "rosy-pinky-abcd"}))
