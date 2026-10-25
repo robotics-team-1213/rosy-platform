@@ -185,7 +185,12 @@ def test_isaac_preparation_reads_final_owner_artifacts_without_starting_sdk(setu
               bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())])
     assert prepare.sim_sources(actor)['runs'][0]['run_id'] == row['run_id']
     with pytest.raises(OSError): prepare.prepare(actor, request)
+    _, config = build().configuration()
+    export_root = Path(next(item['path'] for item in config['roots'] if item['id'] == 'exports'))
+    exported = export_root / ('isaac-' + row['run_id']) / 'import-report.json'
+    exported.write_bytes(raw[:6])
     result = prepare.prepare(actor, request)
+    assert exported.read_bytes() == raw
     assert result['bytes_verified'] and result['provenance']['seed'] == 42
     assert set(calls) == {'list', 'status', 'artifact'}
 
@@ -235,6 +240,29 @@ def test_cancelled_probe_can_be_verified_again_after_repair(setup_case, monkeypa
     assert build().verify(actor, 1)['status'] == 'verified'
     assert build().activate(actor, 1)['enabled']
     assert remote.commits == 2
+
+
+def test_other_members_personal_target_is_redacted_and_preserved(setup_case, accounts):
+    from test_learning_repos import identified
+    build, actor, body, now, artifact, remote = setup_case
+    config = json.loads(accounts.config_path.read_text())
+    config['users'][1]['memberships']['one'] += ['publish', 'manage']
+    accounts.config_path.write_text(json.dumps(config))
+    _, bob = sign_in(accounts, 'bob')
+    connection = accounts.connect_token(bob, 'hf_x', transport=identified('write'))
+    service = build()
+    service.base['pool']['targets'].append(dict(id='private-bob', connection_id=connection['connection_id'],
+        repo_id='account-x/private', repo_type='dataset', quota_owner='account-x', priority=3, enabled=True))
+    service.base['pool']['quotas']['account-x'] = copy.deepcopy(body['quotas']['first'])
+    snapshot = service.snapshot(actor)
+    assert 'account-x' not in json.dumps(snapshot) and 'private-bob' in json.dumps(snapshot)
+    saved = service.save(actor, body)
+    _, current = service.configuration()
+    assert next(row for row in current['pool']['targets'] if row['id'] == 'private-bob')['enabled'] is True
+    body['revision'] = saved['revision']; body['targets'].append(dict(id='private-bob', enabled=False))
+    service.save(actor, body)
+    _, current = service.configuration()
+    assert next(row for row in current['pool']['targets'] if row['id'] == 'private-bob')['enabled'] is False
 
 
 @pytest.mark.parametrize('field,value', [('id', {}), ('connection_id', [])])

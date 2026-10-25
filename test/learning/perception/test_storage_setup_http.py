@@ -93,6 +93,12 @@ def test_no_json_http_setup_verifies_activates_prepares_and_archives(setup_serve
         session, token = session_for(url, accounts)
         assert request(url, '/api/learning/storage/settings', session)[1]['enabled'] is True
         assert request(url, '/api/learning/storage/jobs', session)[1]['jobs']
+        assert request(url, '/api/learning/storage/settings', session, dict(body, revision=2, targets=[], quotas={}), token)[0] == 200
+        assert request(url, '/api/learning/storage/jobs', session)[1]['jobs']
+        assert request(url, prefix + '/reclaim', session, dict(confirm=state['result']['id']), token)[0] == 202
+        assert finished(url, session, state['result']['id'])['local_present'] is False
+        assert request(url, prefix + '/restore', session, {}, token)[0] == 202
+        assert finished(url, session, state['result']['id'])['local_present'] is True
 
 
 def test_setup_routes_preserve_roles_csrf_and_fenced_updates(setup_server, accounts):
@@ -135,6 +141,7 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
                 row.locator('[data-field=connection_id]').select_option(target['connection_id'])
                 row.locator('[data-field=repo_id]').fill(target['repo_id'])
                 row.locator('[data-field=repo_id]').press('Tab')
+            expect(page.locator('#storage-verify')).to_be_disabled()
             for row in page.locator('.storage-quota').all():
                 row.locator('[data-field=remaining_bytes]').fill('1')
                 row.locator('[data-field=reserve_bytes]').fill('0')
@@ -145,6 +152,10 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
             expect(page.locator('#storage-setup-result')).to_contain_text('검증 완료', timeout=15000)
             page.get_by_role('button', name='새 보관 활성화', exact=True).click()
             expect(page.locator('#storage-setup-status')).to_contain_text('활성화')
+            page.locator('#storage-settings-open').click()
+            page.locator('#storage-cache-limit').fill('11')
+            expect(page.locator('#storage-verify')).to_be_disabled()
+            expect(page.locator('#storage-prepare-submit')).to_be_disabled()
             data = folder / 'storage-data/exports/episode-ui'; data.mkdir()
             (data / 'episode.json').write_text('{"frames":5}')
             page.get_by_role('button', name='준비할 자료 새로 확인', exact=True).click()
