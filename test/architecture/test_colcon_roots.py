@@ -62,6 +62,8 @@ EXEMPT = {
     # Container workspaces built from per-package COPY lines; moves edit those COPY sources.
     "deploy/robot/pinky_pro/Dockerfile": "per-package COPY into /opt/rosy_ws",
     "deploy/robot/omx/Dockerfile": "upstream OMX sources in /opt/omx_ws",
+    "tools/sim/build_topic_based_ros2_control.sh":
+        "D-877 builds one pinned upstream package (topic_based_ros2_control) in a user overlay; no repo roots",
     "contracts/foundation/core_common/profile.py": "error-message text",
     "middleware/perception/nodes/web_node.py": "docstring",
     "operations/fleet/package.xml": "XML comment",
