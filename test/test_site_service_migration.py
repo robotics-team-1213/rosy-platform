@@ -325,6 +325,20 @@ def test_migration_flag_alone_cannot_bypass_normal_outgoing_authentication(host)
     assert not any(e[0] in ("stop", "remove") for e in machine.events)
 
 
+def test_same_commit_physical_flag_cannot_restore_a_different_active_target(host):
+    machine, target, _ = prepare_normal_recovery(host)
+    cold = updater_for(host, machine)
+    state = cold.load_state()
+    state["switch"].update(migration=True, commit=OLD, tag=_tag(OLD))
+    cold.save_state(state)
+    before = host.paths.site_env.read_bytes()
+    assert cold.run() == upd.EXIT_FAILED
+    assert host.paths.link.resolve() == target
+    assert host.paths.site_env.read_bytes() == before
+    assert "switch" in cold.load_state()
+    assert not any(e[0] in ("restart", "stop", "remove") for e in machine.events)
+
+
 @pytest.mark.parametrize("value", [None, "missing", "legacy", [], list(LEGACY[:2]),
                                    ["fleet", "fleet", "proxy"], [*CURRENT, "other"]])
 def test_missing_or_unknown_verified_set_is_rejected_not_inferred(host, value):
