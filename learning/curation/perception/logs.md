@@ -260,3 +260,9 @@
 - 변경: 기존 SIM HTTP·화면에서 접촉 보고서와 다섯 단계 PNG를 허용하고 MIME·크기·SHA 검사를 유지했다. 모델 검사에 고정된 완료 문구·설명을 수정하고 재실행이 선택한 run의 시나리오·seed를 복원하도록 했다.
 - 증거: 새 artifact 경로 9개 RED 뒤 API·Chromium 21 PASS. 독립 검토가 발견한 시나리오 복원 누락도 데스크톱·모바일 Chromium 2개 RED로 확인했으며 최종 GREEN은 착지 기록에 남긴다.
 - gate 변화: SIM 결과 조회·동일 조건 재실행 연결이다. 학습 Episode 생성·policy 승격·운영 설치·실물 수용은 추가하지 않았다. 검증된 drive 방식 교훈은 Isaac 검증 기록에서 참조한다.
+
+## 2026-10-25 · uncommitted · 공개 Learning의 접촉 왕복 증거 연결
+
+- 변경: 공개 화면·실행 상세 링크·평가 연결을 보존하며 접촉 보고서와 다섯 PNG의 제한된 조회와 재실행 scenario 복원을 옮겼다.
+- 증거: 28cbe5dc48에서 새 경로 아홉 건의 404를 재현했고 ebc1a89c52 명시적 원격 API/Chromium 26개가 통과했다. [검증 기록](../../../docs/validation/learning-conveyor-release-2026-10-25/result.md).
+- gate 변화: 없음. 최종 SHA CI·운영 조회·학습 데이터·정책 평가·실물 수용은 각각 별도 확인한다.

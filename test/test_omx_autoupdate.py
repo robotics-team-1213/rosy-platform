@@ -31,6 +31,7 @@ class FakeHost:
         self.smoke_ok = {}
         self.archived, self.envs_built = [], []
         self.restarts, self.healthy = [], True
+        self.stopped = set()
 
     def remote_head(self):
         return self.head
@@ -75,6 +76,9 @@ class FakeHost:
 
     def device_in_use(self):
         return self.in_use
+
+    def running(self, units):
+        return [u for u in units if u not in self.stopped]
 
     def restart(self, units):
         self.restarts.append(list(units))
@@ -413,3 +417,154 @@ def test_failed_preparations_of_older_releases_are_removed(tmp_path):
     (tmp_path / "releases" / "0123456789ab.tmp").mkdir(parents=True)
     assert updater(tmp_path, host).run() == "switched"
     assert not list((tmp_path / "releases").glob("*.tmp"))
+
+
+CELL_SERVICE = {"kind": "service", "lock": "deploy/robot/omx/requirements-cell.lock", "idle_gate": "cell",
+                "units": ["rosy-omx-observer@arm_a.service"]}
+
+
+@pytest.mark.parametrize("busy, reason", [({"busy": True}, "session_running"), ({"in_use": True}, "device_in_use"),
+                                          ({"torque_off": False}, "follower_torque_not_off")])
+def test_a_cell_gated_service_waits_for_the_idle_cell_like_the_cell_tools(tmp_path, busy, reason, capsys):
+    host = FakeHost()
+    for key, value in busy.items():
+        setattr(host, key, value)
+    assert updater(tmp_path, host, **CELL_SERVICE).run() == "deferred"
+    assert reason in capsys.readouterr().out and host.restarts == []
+
+
+def test_the_cell_lock_is_released_before_the_units_restart(tmp_path):
+    host = FakeHost()
+    locked_at_restart = []
+    restart = host.restart
+    host.restart = lambda units: locked_at_restart.append(host.held) or restart(units)
+    assert updater(tmp_path, host, **CELL_SERVICE).run() == "switched"
+    assert locked_at_restart == [False]  # the observer's start guard takes the same lock
+
+
+def test_a_cell_gated_service_config_names_the_cells_devices_and_takes_its_lock(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "home"))
+    path = tmp_path / "cfg.json"
+    base = ('"kind": "service", "repo_url": "u", "github_repo": "o/r", "base_python": "p", "paths": ["x"], '
+            '"smoke": "s", "units": ["a.service"], "root": "%s", "idle_gate": "cell"' % (tmp_path / "devices"))
+    path.write_text("{%s}" % base)
+    with pytest.raises(SystemExit, match="devices"):
+        m.load_config(path)
+    path.write_text('{%s, "devices": ["d"]}' % base)
+    with pytest.raises(SystemExit, match="observers or follower_device"):
+        m.load_config(path)
+    path.write_text('{%s, "devices": ["d"], "observers": [{"unit": "o", "device": "d", "health": "h"}]}' % base)
+    assert m.load_config(path)["session_lock"] == str(tmp_path / "home" / "session.lock")
+    path.write_text('{%s}' % base.replace('"cell"', '"other"'))
+    with pytest.raises(SystemExit, match="idle_gate"):
+        m.load_config(path)
+
+
+@pytest.mark.parametrize("system, expected", [(True, ["--system-site-packages"]), (False, [])])
+def test_a_locked_env_may_build_over_the_host_pythons_packages(tmp_path, monkeypatch, system, expected):
+    calls = []
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: calls.append(args))
+    lock = tmp_path / "lock"
+    lock.write_text("pyserial==3.5\n")
+    m.Host({"base_python": "py", "system_site_packages": system}).build_env(lock, tmp_path / "env")
+    assert calls[0] == ["py", "-m", "venv", *expected, str(tmp_path / "env")] and "-r" in calls[1]
+
+
+def test_only_running_units_are_selected_so_a_hand_stopped_observer_stays_stopped(tmp_path, monkeypatch):
+    (tmp_path / "bin").mkdir()
+    fake = tmp_path / "bin" / "systemctl"
+    # observer@arm_b was stopped by hand for an owner handover: is-active fails for it
+    fake.write_text('#!/bin/sh\ncase "$*" in *arm_b*) exit 3;; esac\nexit 0\n')
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
+    units = ["rosy-omx-observer@arm_a.service", "rosy-omx-observer@arm_b.service"]
+    assert m.Host({"restart_running_only": True}).running(units) == units[:1]
+    assert m.Host({}).running(units) == units
+
+
+def test_a_rollback_restarts_the_units_that_ran_before_the_switch_even_if_they_died(tmp_path):
+    host = FakeHost()
+    host.stopped = {"rosy-omx-camera@front.service"}
+    u = updater(tmp_path, host, **{**CELL_SERVICE, "units": ["rosy-omx-observer@arm_a.service",
+                                                               "rosy-omx-camera@front.service"]})
+    u.run()
+    host.head, host.healthy = "b" * 40, False
+    assert u.run() == "rolled_back"
+    assert host.restarts[-2:] == [["rosy-omx-observer@arm_a.service"]] * 2  # never the hand-stopped camera
+
+
+@pytest.mark.parametrize("cfg", [{}, CELL_SERVICE], ids=["cell", "cell_gated_service"])
+def test_a_release_failing_smoke_through_current_is_unlinked_before_the_lock_goes(tmp_path, cfg):
+    host = FakeHost()
+    u = updater(tmp_path, host, **cfg)
+    u.run()
+    held_at_relink = []
+    relink = u.relink
+    u.relink = lambda *a: held_at_relink.append(host.held) or relink(*a)
+    host.head, host.smoke = "b" * 40, flaky_smoke(1)
+    assert u.run() == "rolled_back"
+    assert held_at_relink == [True]  # no session can start on the broken release
+
+
+def test_a_service_without_the_cell_gate_restarts_under_its_own_lock_as_before(tmp_path):
+    host = FakeHost()
+    locked_at_restart = []
+    restart = host.restart
+    host.restart = lambda units: locked_at_restart.append(host.held) or restart(units)
+    assert updater(tmp_path, host, **SERVICE).run() == "switched"
+    assert locked_at_restart == [True]
+
+
+def test_a_session_that_starts_during_the_restart_defers_instead_of_condemning_the_release(tmp_path, capsys):
+    host = FakeHost()
+    u = updater(tmp_path, host, **CELL_SERVICE)
+    u.run()
+    host.head, host.healthy = "b" * 40, False
+    hold = host.hold_session
+    calls = []
+    host.hold_session = lambda: calls.append(1) or (None if len(calls) == 2 else hold())
+    assert u.run() == "deferred"  # the observer refused to start because the session took the cell
+    assert "session_started_during_restart" in capsys.readouterr().out
+    assert current(tmp_path) == str(Path("releases") / ("a" * 12))
+    host.healthy = True
+    assert u.run() == "switched"  # retried, not known_bad
+
+
+def test_a_host_python_without_ensurepip_builds_the_env_with_uv(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: calls.append(args))
+    lock = tmp_path / "lock"
+    lock.write_text("pyserial==3.5\n")
+    m.Host({"base_python": "/usr/bin/python3", "system_site_packages": True, "uv": "/opt/uv"}).build_env(
+        lock, tmp_path / "env")
+    assert calls[0] == ["/opt/uv", "venv", "-q", "--python", "/usr/bin/python3", "--system-site-packages",
+                        str(tmp_path / "env")]
+    assert calls[1] == ["/opt/uv", "pip", "install", "-q", "--python", str(tmp_path / "env" / "bin" / "python"),
+                        "-r", str(lock)]
+
+
+def fake_systemctl(tmp_path, monkeypatch, failing=""):
+    (tmp_path / "bin").mkdir()
+    calls = tmp_path / "calls"
+    fake = tmp_path / "bin" / "systemctl"
+    fake.write_text('#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in "--user is-active --quiet %s") exit 3;; esac\nexit 0\n'
+                    % (calls, failing))
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
+    return calls
+
+
+def test_one_failed_unit_among_several_fails_the_restart(tmp_path, monkeypatch):
+    # systemctl is-active with several units succeeds when any one is active (Fleet PC 2026-10-25)
+    fake_systemctl(tmp_path, monkeypatch, failing="rosy-omx-camera-readiness.service")
+    host = m.Host({"root": str(tmp_path), "settle": 0})
+    assert not host.restart(["rosy-omx-camera@top.service", "rosy-omx-camera-readiness.service"])
+    assert host.restart(["rosy-omx-camera@top.service"])
+
+
+def test_a_sequential_restart_stops_in_reverse_then_starts_in_order(tmp_path, monkeypatch):
+    calls = fake_systemctl(tmp_path, monkeypatch)
+    units = ["rosy-omx-camera@top.service", "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service"]
+    assert m.Host({"root": str(tmp_path), "settle": 0, "sequential": True}).restart(units)
+    verbs = [line for line in calls.read_text().splitlines() if " is-active " not in line]
+    assert verbs == [f"--user stop {u}" for u in reversed(units)] + [f"--user start {u}" for u in units]

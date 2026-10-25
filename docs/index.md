@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · ce056c8fb4 · pytest helper 전이 import 격리 복원
-- 2026-10-25 · uncommitted · 모델 구조화 출력 원칙과 OMX judge seat 파싱 실패 거부 (D-878)
-- 2026-10-25 · uncommitted · D-876 ROSY Monitoring
-- 2026-10-25 · f80019b842 · fix(learning): SIM 실행 목록 행 방어와 Learning 첫 화면 픽셀 검수 일괄 읽기
-- 2026-10-25 · uncommitted · guard 교사 모드 첫 실물: 대기 중 오래된 모터 상태 표본으로 토크 OFF
+- 2026-10-25 · uncommitted · D-871 여러 유닛 재시작: 하나씩 확인, 순서대로
+- 2026-10-25 · uncommitted · D-871 관측 env를 uv로 만들기
+- 2026-10-25 · uncommitted · Learning 서명 sequence41 실제 활성화 검증
+- 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
+- 2026-10-25 · uncommitted · Isaac 원격 receipt·회수 진입의 공개 소스 포트
