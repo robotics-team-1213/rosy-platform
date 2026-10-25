@@ -9,7 +9,8 @@ then require exact stored content equality. No actual store publication occurs.
 from pathlib import Path as _SourcePath
 import sys as _source_sys
 _source_sys.path[:0] = [str(_SourcePath(__file__).resolve().parents[3] / p)
-                        for p in ('learning/registry/perception',)]
+                        for p in ('learning/registry/perception', 'learning/curation/perception',
+                                  'learning/evaluation/perception')]
 
 
 
@@ -29,6 +30,7 @@ from store import Store, content_sha, file_hashes, parse_dataset_ref
 from review_dataset import build_dataset, _delivery, _stable_bytes, _capture_proofs, validate_eval_companions
 
 
+# Format pinned: review admission config_sha uses this digest; test_canonical_hash_formats.
 def _hash(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 

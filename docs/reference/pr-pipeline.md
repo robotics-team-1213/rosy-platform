@@ -9,7 +9,7 @@ flowchart TD
     review -->|수정 필요 사항 없음| post["게시 담당: pre-push·PR"]
     post --> ci{"최신 SHA의 CI·개별 잡 확인"}
     ci -->|새 실패·미확인| author
-    ci -->|병합 조건 충족| merge["같은 SHA로 squash 병합"]
+    ci -->|병합 조건 충족| merge["같은 SHA로 merge commit 병합"]
     merge --> check["병합 SHA·반영 내용·후속 상태 확인"]
 ```
 
@@ -48,10 +48,10 @@ PR에는 다음 근거를 남긴다. 인수인계 내용은 [팀 가이드 §3.6
 ```bash
 gh pr checks <PR번호> --required --watch
 gh pr view <PR번호> --json headRefOid,statusCheckRollup,mergeable
-gh pr merge <PR번호> --squash --match-head-commit <확인한-head-SHA>
+gh pr merge <PR번호> --merge --match-head-commit <확인한-head-SHA>
 ```
 
-squash 커밋 메시지는 PR 제목과 **PR 본문**으로 만들어진다(저장소 설정 `PR_TITLE`/`PR_BODY`). 브랜치 커밋의 trailer는 남지 않는다. 안전 경로 PR은 본문에 줄 맨 앞에서 시작하는 `Safety-Review: <검토자/레인> <증거>` 줄을 두어야 한다. 빠뜨리면 main의 scope 잡이 실패하고, `tools/harness/safety_review_exempt.json`에 squash SHA를 원본 head와 이어 주는 항목을 나중에 추가해야 한다(#81→#82, #78).
+merge commit 병합은 브랜치의 원래 커밋과 그 `Safety-Review:` trailer를 그대로 `main`에 남긴다(D-868). 예전 squash 병합은 trailer를 지워 `tools/harness/safety_review_exempt.json`에 squash SHA를 원본 head와 이어 주는 항목이 필요했다(#81→#82, #78). 그 항목은 지우지 않는다.
 
 병합 상태·SHA와 기본 브랜치에 반영된 파일을 확인한다. 파일 존재와 실제 화면 확인은 구분하고, 로그인 등으로 화면을 확인하지 못했으면 그 한계를 남긴다. 공유 로컬 `main`은 임의로 reset·stash·clean하지 않는다. 다른 세션의 변경과 현재의 손실 없는 정리 규칙을 지킨다.
 
@@ -95,7 +95,7 @@ Fleet와 명시된 계정 SSO 여정 외의 CORE 브라우저 시험은 기본 �
 | main 보호 | PR 필요, 삭제·force-push 제한, 관리자 우회도 PR 경로로 제한 |
 | 필수 검사 | `ci-result` |
 | 사람 승인 | 0명, code owner 승인 강제 꺼짐. `CODEOWNERS`의 리뷰 요청과 서버의 승인 강제는 구분 |
-| 병합 | squash만 허용, 병합 후 원격 브랜치 자동 삭제 |
+| 병합 | merge commit만 허용(D-868, 2026-10-25), 병합 후 원격 브랜치 자동 삭제 |
 | auto-merge·merge queue | auto-merge 꺼짐, ruleset에 queue 없음 |
 
 ```bash

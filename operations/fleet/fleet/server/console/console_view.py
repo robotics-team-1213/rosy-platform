@@ -53,11 +53,12 @@ class CapabilityDisplay:
     """
 
     def __init__(self, clients, clock, *, read_method="capabilities", schema=None,
-                 refresh_s=5.0, max_age_s=None):
+                 refresh_s=5.0, max_age_s=None, age_from_request=False):
         self.clients, self.clock = clients, clock
         self.read_method = read_method
         self.schema = schema
         self.refresh_s, self.max_age_s = refresh_s, max_age_s
+        self.age_from_request = age_from_request
         self.cache = {}
         self.identities = {}
         self.pending = {}
@@ -104,6 +105,7 @@ class CapabilityDisplay:
         return round(max(0.0, self.clock() - self.cache[robot_id][0]), 3)
 
     async def _refresh(self, robot_id, client):
+        read_started = self.clock()
         try:
             try:
                 caps = await getattr(client, self.read_method)()
@@ -115,7 +117,8 @@ class CapabilityDisplay:
                 caps = None
             if self.clients.get(robot_id) is client:
                 shown = copy.deepcopy(caps) if isinstance(caps, dict) else None
-                self.cache[robot_id] = (self.clock(), shown)
+                observed = read_started if self.age_from_request else self.clock()
+                self.cache[robot_id] = (observed, shown)
                 self.identities[robot_id] = client
         finally:
             if self.pending.get(robot_id) is asyncio.current_task():

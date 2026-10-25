@@ -25,7 +25,8 @@ def test_launch_exposes_all_motor_limits_to_the_node():
         ("max_wheel_rpm", "100.0"),
         ("motor_profile_acceleration", "200"),
     ):
-        assert f"DeclareLaunchArgument('{name}', default_value='{default}')" in normalized
+        expression = f"str(DEFAULTS['{name}'])" if name in ('max_linear_mps', 'max_angular_rps') else repr(default)
+        assert f"DeclareLaunchArgument('{name}', default_value={expression})" in normalized
         assert re.search(
             rf"'{name}'\s*:\s*LaunchConfiguration\(\s*'{name}'\s*\)",
             launch,

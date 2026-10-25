@@ -9,24 +9,26 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from install_review_release import APP, WEB, install
+from install_review_release import APP, WEB, SERVICE, install, validate_service
 
 if os.name == "posix":
     import fcntl
 
 
 def apply(model_root: Path, review_root: Path, state_dir: Path, python: Path,
-          host: str, port: int, unit: Path, minimum_sequence: int) -> str:
+          host: str, port: int, unit: Path, minimum_sequence: int, service: str = SERVICE) -> str:
+    validate_service(service)
     with (model_root / "work.lock").open("rb") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
         except BlockingIOError:
             return "waiting for model-code update or learning job"
-        return apply_locked(model_root, review_root, state_dir, python, host, port, unit, minimum_sequence)
+        return apply_locked(model_root, review_root, state_dir, python, host, port, unit, minimum_sequence, service)
 
 
 def apply_locked(model_root: Path, review_root: Path, state_dir: Path, python: Path,
-                 host: str, port: int, unit: Path, minimum_sequence: int) -> str:
+                 host: str, port: int, unit: Path, minimum_sequence: int, service: str = SERVICE) -> str:
+    validate_service(service)
     state = json.loads((model_root / "state.json").read_text(encoding="utf-8"))
     sequence = state["sequence"]
     commit = state.get("source_commit")
@@ -38,15 +40,17 @@ def apply_locked(model_root: Path, review_root: Path, state_dir: Path, python: P
         raise ValueError("model-code current differs from accepted state")
     release = f"model-code-{sequence}-{commit[:12]}"
     target = review_root / "releases" / release
-    if target.is_dir() and (review_root / "current").resolve(strict=True) == target.resolve():
-        return f"already active: {release}"
+    if target.is_dir():
+        active = (review_root / "current").resolve(strict=True) == target.resolve()
+        install(None, release, review_root, None, None, host, port, unit, service)
+        return f"{'already active' if active else 'activated'}: {release}"
     for required in (APP, WEB / "index.html", WEB / "pixels.html", Path("shared/web/shared-assets.json")):
         if not (source / required).is_file():
             raise ValueError(f"signed source lacks review app file: {required}")
     with tempfile.TemporaryDirectory(prefix="rosy-review-release-") as staging:
         source_copy = Path(staging) / "source"
         shutil.copytree(source, source_copy, ignore=lambda path, names: {"data"} if Path(path) == source else set())
-        install(source_copy, release, review_root, state_dir, python, host, port, unit)
+        install(source_copy, release, review_root, state_dir, python, host, port, unit, service)
     return f"activated: {release}"
 
 
@@ -59,10 +63,11 @@ def main() -> None:
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, default=8774)
     parser.add_argument("--minimum-sequence", type=int, required=True)
+    parser.add_argument("--service", type=validate_service, default=SERVICE)
     args = parser.parse_args()
-    unit = Path.home() / ".config/systemd/user/rosy-review-v13.service"
+    unit = Path.home() / ".config/systemd/user" / args.service
     print(apply(args.model_code_root, args.review_root, args.state, args.python,
-                args.host, args.port, unit, args.minimum_sequence))
+                args.host, args.port, unit, args.minimum_sequence, args.service))
 
 
 if __name__ == "__main__":

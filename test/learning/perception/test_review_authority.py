@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/training/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 from review_authority import ReviewAuthorityError, advance_revision, validate_current, verify_bundle
 
 

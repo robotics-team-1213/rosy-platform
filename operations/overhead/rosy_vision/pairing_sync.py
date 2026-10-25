@@ -57,13 +57,15 @@ class PairedCredentials:
 
     def __init__(self, paired_sources: Iterable[str], *, max_age_s: float = STALE_AFTER_S,
                  clock: Callable[[], float] = time.monotonic,
-                 wall: Callable[[], float] = time.time) -> None:
+                 wall: Callable[[], float] = time.time,
+                 forbidden_digests: Iterable[bytes] = ()) -> None:
         self.sources = frozenset(paired_sources)
         if not self.sources:
             raise ValueError("paired credentials need at least one paired source")
         self.max_age_s = float(max_age_s)
         self._clock = clock
         self._wall = wall
+        self._forbidden_digests = frozenset(forbidden_digests)
         # (synced_at, {source: ((digest, credential_id, expires_wall), ...)}); replaced whole.
         self._state: tuple[float, dict[str, tuple[tuple[bytes, str, float], ...]]] | None = None
 
@@ -72,8 +74,10 @@ class PairedCredentials:
 
     def replace_rows(self, rows: list[tuple[str, bytes, str, float]]) -> None:
         by_source: dict[str, list[tuple[bytes, str, float]]] = {}
+        # Quarantine a source that reuses another role's credential; keep unrelated sources live.
+        blocked = {source for source, digest, _, _ in rows if digest in self._forbidden_digests}
         for source, digest, credential_id, expires in rows:
-            if source in self.sources:  # static or unknown sources never take paired tokens
+            if source in self.sources and source not in blocked:  # static/unknown sources never take paired tokens
                 by_source.setdefault(source, []).append((digest, credential_id, expires))
         self._state = (self._clock(), {source: tuple(items) for source, items in by_source.items()})
 

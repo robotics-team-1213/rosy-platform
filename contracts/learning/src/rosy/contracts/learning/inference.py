@@ -68,6 +68,15 @@ class InferenceResult:
     chunk_index: int
     consumed_current: bool
 
+    def __post_init__(self):
+        _text(self.policy_revision)
+        if not isinstance(self.source,InferenceObservation):raise ValueError('inference observation required')
+        object.__setattr__(self,'positions',_vector(self.positions,len(self.source.joint_names)))
+        for value in (self.produced_at_ns,self.returned_at_ns,self.chunk_index):_ns(value)
+        if not max(self.source.observed_at_ns,self.source.camera_received_at_ns)<=self.produced_at_ns<=self.returned_at_ns:
+            raise ValueError('inference times must follow original observations and precede return')
+        if type(self.consumed_current) is not bool:raise ValueError('explicit observation consumption flag required')
+
     def candidate_fields(self):
         """Existing local Python candidate fields; this is not a public wire API."""
         return dict(lease_id=self.source.lease_id,episode_id=self.source.episode_id,

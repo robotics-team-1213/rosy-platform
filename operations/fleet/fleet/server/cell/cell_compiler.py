@@ -13,7 +13,6 @@ import math
 from collections.abc import Mapping
 from pathlib import Path
 
-from rosy.execution.site.cell_submission import CellJobCompilation
 from rosy.processes import palletizing
 from rosy.processes.palletizing import compiler as process_compiler
 from rosy.processes.palletizing.cell import load_cell
@@ -22,6 +21,7 @@ from rosy.processes.palletizing.mixed_recipe import load_mixed_recipe
 from rosy.processes.palletizing.mixed_submission import compile_mixed_cell_job
 from rosy.processes.palletizing.plan_bundle import compile_plan_bundle
 from rosy.processes.palletizing.recipe import load_recipe
+from rosy.processes.palletizing.submission import CellJobCompilation, compile_cell_submission
 
 from .cell_mixed_submission import MIXED_RECIPE_SCHEMA, MixedCellCompilation
 
@@ -74,6 +74,10 @@ class PalletizingCellJobCompiler:
                                   "pallet_id": marker.pallet_id} for marker in plan.ledger_markers),
             operator_checkpoints=tuple(checkpoint.as_dict() for checkpoint in plan.operator_checkpoints),
         )
+
+    def compile_submission(self, candidate: Mapping, *, workcell_id: str, instance_id: str) -> dict:
+        return compile_cell_submission(
+            candidate, compiler=self, workcell_id=workcell_id, instance_id=instance_id).as_store_document()
 
     def compile_mixed(self, recipe: Mapping, cell: Mapping) -> MixedCellCompilation:
         """recipe/3 + cell/3 -> the mixed plan compiled for every arm (D-781 §5). The planner and

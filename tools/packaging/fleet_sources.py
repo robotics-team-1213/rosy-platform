@@ -24,7 +24,7 @@ package_dirs = {
     'rosy_situation': roots['assessment'] / 'rosy_situation',
     'rosy_discord': roots['discord'] / 'rosy_discord',
 }
-ASSESSMENT_MODULES = ('__init__', 'assessment', 'snapshot_assessment')
+ASSESSMENT_MODULES = ('__init__', 'assessment', 'snapshot_assessment', 'wait_graph', 'fact_rules')
 
 
 class HolderDevelop(develop):

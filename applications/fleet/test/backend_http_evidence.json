@@ -36,6 +36,11 @@
       "source_revision": "4cb62aa16775175d9173f03de72d8c1b92917f2d",
       "result": "6 passed",
       "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067",
+      "result": "5 passed, 0 skipped; ported origin #133/#135/#148 Fleet HTTP routes, TestClient",
+      "pytest_root": "."
     }
   ],
   "requests": {
@@ -1422,6 +1427,62 @@
         "test_console_assistant_unconfigured_is_visible_but_never_executes"
       ],
       "source_revision": "4cb62aa16775175d9173f03de72d8c1b92917f2d"
+    },
+    "POST:/api/fleet/site-map/drawings": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_drawing_api.py",
+        "test_anonymous_and_readonly_cannot_upload"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "POST:/api/fleet/site-map/drawings/{asset_sha256}/projections": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_drawing_api.py",
+        "test_anonymous_and_readonly_cannot_upload"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_drawing_api.py",
+        "test_anonymous_and_readonly_cannot_upload"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}/render": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_raster.py",
+        "test_raster_http_guards_registration_and_render"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "POST:/api/fleet/site-map/drawing-projections/{projection_sha256}/extractions": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_extraction.py",
+        "test_extraction_http_keeps_map_unchanged_and_provenance_durable"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "POST:/api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_extraction.py",
+        "test_candidate_map_validation_retains_facility_provenance_without_writing"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "GET:/api/fleet/workcell-observations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_workcell_observation_routes.py",
+        "test_read_requires_viewer_and_disables_caching"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
     }
   }
 }

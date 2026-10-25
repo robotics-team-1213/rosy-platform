@@ -20,6 +20,15 @@ GUILD, CHANNEL, OTHER_CHANNEL, BOT = ("100000000000000000", "100000000000000001"
 KST = ZoneInfo("Asia/Seoul")
 
 
+@pytest.mark.parametrize("field", ["channel_id", "bot_id"])
+@pytest.mark.parametrize("value", ["abc", "1" * 16, "1" * 21, 123])
+def test_bare_publisher_rejects_invalid_destination_before_network(field, value):
+    values = dict(guild_id=GUILD, channel_id=CHANNEL, bot_id=BOT, token="token", http=None)
+    values[field] = value
+    with pytest.raises(ValueError, match="destination"):
+        BareDiscordPublisher(**values)
+
+
 def config(*, enabled=True, channel=CHANNEL):
     return ChannelConfig(guild_id=GUILD, channel_id=channel, bot_id=BOT,
                          transport_key="k" * 40, users={"100000000000000004": "operator"},

@@ -46,9 +46,13 @@ def check_overrides(env: dict[str, str], commit: str, run, compose) -> None:
     """Refuse when anything could pin a site image other than the candidate's."""
     link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
     pairing, omx = (["-f", f"/opt/rosy/candidate/deploy/site/compose.{name}.yaml"] for name in ("pairing", "omx"))
-    if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in ([], pairing, omx, pairing + omx):  # D-785
+    account = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
+    allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
+    workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
+    allowed += [base + workcell for base in allowed]
+    if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account for base in allowed]:
         raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
-                      "the candidate's compose.pairing.yaml and compose.omx.yaml")
+                      "the candidate's pairing, omx, workcell and Account overlays")
     if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
         raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
     unit = run(["systemctl", "cat", STACK_UNIT]).stdout

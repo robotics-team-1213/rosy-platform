@@ -1,11 +1,41 @@
 """Signed direct Vision preview grants; measured confirmation is operator-only."""
 from typing import Optional
+import hmac
+from hashlib import sha256
 
+from core_common.protocol.vision_preview import VisionLeaseSigner
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from core_common.protocol.vision_preview import PreviewRectification, validate_measured_request
 from fleet.server.site_auth import SitePrincipal
+
+
+def configure_vision_previews(console, *, console_token, vision_lease_secret, vision_sources,
+                              discovery_token, sightings, site_users, workcell_observations=None):
+    if workcell_observations is not None:
+        preview_sources = workcell_observations.camera_source_ids()
+        if set(preview_sources).intersection(vision_sources):
+            raise ValueError("Workcell preview source collision with an existing Vision source")
+        vision_sources = (*vision_sources, *preview_sources)
+    signer = VisionLeaseSigner(vision_lease_secret) if vision_lease_secret else None
+    if signer is not None:
+        if console_token is not None and hmac.compare_digest(vision_lease_secret, console_token):
+            raise ValueError("vision preview secret must differ from Fleet credentials")
+        if (console.uses_rest_token(vision_lease_secret)
+                or console.uses_agent_pairing_token(vision_lease_secret)):
+            raise ValueError("vision preview secret must differ from robot credentials")
+        if discovery_token is not None and hmac.compare_digest(vision_lease_secret, discovery_token):
+            raise ValueError("vision preview secret must differ from discovery credentials")
+        if sightings is not None and sightings.uses_token(vision_lease_secret):
+            raise ValueError("vision preview secret must differ from sighting credentials")
+        digest = sha256(vision_lease_secret.encode("utf-8")).hexdigest()
+        if site_users is not None and any(hmac.compare_digest(digest, item) for item in site_users):
+            raise ValueError("vision preview secret must differ from site user credentials")
+        if len(set(vision_sources)) != len(vision_sources) or any(
+                not isinstance(source, str) or not source for source in vision_sources):
+            raise ValueError("vision preview sources must be unique non-empty ids")
+    return signer, vision_sources
 
 
 class VisionLeaseRequest(BaseModel):

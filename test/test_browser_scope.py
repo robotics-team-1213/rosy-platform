@@ -72,6 +72,20 @@ def test_shared_web_reaches_review_smoke_and_core_console():
     assert "test/test_surface_shell_browser.py" in browser_scope.targets(["middleware/robot_ui/robot/web/app.js"])
 
 
+def test_learning_changes_select_the_screens_that_use_them():
+    root = "learning/curation/perception/"
+    for source, expected in [("review_app_web/omx-profiles.js", browser_scope.OMX_LEARNING),
+                             ("camera_setup_web.py", browser_scope.CAMERA),
+                             ("sim_web.py", browser_scope.SIM),
+                             ("learning_pipeline.py", browser_scope.PIPELINE),
+                             ("learning_rosy_accounts.py", browser_scope.ACCOUNTS)]:
+        found = browser_scope.targets([root + source])
+        assert set(expected) <= set(found)
+        assert not any(path.startswith("operations/fleet/") for path in found)
+    for source in (root + "review_app.py", root + "review_app_web/app.css", "shared/web/ui.js"):
+        assert set(browser_scope.LEARNING) <= set(browser_scope.targets([source]))
+
+
 def test_empty_selection_exits_3_without_targets(capsys):
     assert browser_scope.main(["docs/logs.md"]) == 3
     out = capsys.readouterr()
@@ -87,3 +101,11 @@ def test_sim_sources_select_sim_browser():
         "shared/web/ui.js",
     ):
         assert "test/learning/perception/test_sim_browser.py" in browser_scope.targets([path])
+
+
+def test_common_robot_tasks_select_real_browser_flow():
+    expected = 'test/learning/perception/test_learning_tasks_browser.py'
+    for source in ('learning_tasks.py', 'learning_tasks_web.py', 'review_app.py',
+                   'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
+        assert expected in browser_scope.targets(['learning/curation/perception/' + source])
+    assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])

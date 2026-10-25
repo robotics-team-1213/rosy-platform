@@ -15,11 +15,14 @@ import re
 import shutil
 import stat
 import tempfile
+import sys
 from urllib.parse import urlparse
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 from job_state import JobError
 
 
+# Format pinned: migrated state input_signature hashes these bytes; test_canonical_hash_formats.
 def _canonical(value):
     return json.dumps(value, sort_keys=True, allow_nan=False).encode()
 

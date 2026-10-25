@@ -98,6 +98,7 @@ services:
       ROSY_ACCOUNT_CONFIG: "${ROSY_ACCOUNT_CONFIG:-}"
       # D-801: e.g. /run/rosy-fleet-media/fleet-media.json; empty keeps site robot media grants off.
       ROSY_FLEET_MEDIA_CONFIG: "${ROSY_FLEET_MEDIA_CONFIG:-}"
+      ROSY_LEARNING_APPS_CONFIG: "${ROSY_LEARNING_APPS_CONFIG:-}"
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
       - sighting_data:/var/lib/rosy
@@ -111,6 +112,7 @@ services:
       - /etc/rosy/account:/run/rosy-account:ro
       # D-801: the site media grant signing key and its config, Fleet only.
       - /etc/rosy/fleet-media:/run/rosy-fleet-media:ro
+      - /etc/rosy/fleet-learning:/run/rosy-fleet-learning:ro
       # D-530 read-only reports. Absent dirs come up empty; the hosts route then returns null.
       - /var/lib/rosy-host-guard:/var/lib/rosy-host-guard:ro
       - /var/lib/rosy-host-state:/var/lib/rosy-host-state:ro

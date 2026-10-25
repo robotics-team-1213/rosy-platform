@@ -266,9 +266,10 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
             assert page.locator('.doc-tabs a[href="/console?view=work"]').get_attribute("aria-current") == "page"
             assert page.locator('.doc-tabs a[aria-current="page"]').count() == 1
             screens = page.get_by_role("navigation", name="작업 화면", exact=True)
-            assert screens.locator("a").all_inner_texts() == ["전체 작업", "승인 대기", "끝난 작업", "새 작업"]
+            assert screens.locator("a").all_inner_texts() == ["전체 작업", "승인 대기", "끝난 작업", "새 작업", "학습"]
             assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["전체 작업"]
             assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console?view=work&show=new"
+            assert screens.get_by_role("link", name="학습", exact=True).get_attribute("href") == "/console/learning"
             seat, work = page.locator('.ui-subnav[data-area="work"]').bounding_box(), page.locator("#work-overview").bounding_box()
             if size[0] >= 1024:
                 assert seat["width"] == 232 and seat["x"] + seat["width"] <= work["x"], (seat, work)

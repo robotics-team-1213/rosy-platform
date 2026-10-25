@@ -181,3 +181,21 @@ def test_auto_tune_defaults_on_and_can_be_turned_off(tmp_path):
 def test_auto_tune_must_be_a_boolean(tmp_path, value):
     with pytest.raises(ValueError, match="auto_tune"):
         load_vision_sources(_write(tmp_path / "c.yaml", [_source(auto_tune=value)]), environ=_ENV)
+
+
+def test_vision_accepts_identity_key(tmp_path):
+    path = _write(tmp_path / "s.yaml", [_source()])
+    path.write_text(path.read_text(encoding="utf-8") + "identity: {}\n", encoding="utf-8")
+    assert load_vision_sources(path, environ=ENV)
+
+
+@pytest.mark.parametrize("corners", [
+    [[float("nan"), 0], [4, 0], [4, 2], [0, 2]],
+    [[float("inf"), 0], [4, 0], [4, 2], [0, 2]],
+    [[0, 0], [0, 0], [4, 2], [0, 2]],
+    [[True, 0], [4, 0], [4, 2], [0, 2]],
+])
+def test_vision_rejects_invalid_world_corners(tmp_path, corners):
+    path = _write(tmp_path / "s.yaml", [_source(corner_world_m=corners)])
+    with pytest.raises(ValueError, match="corner_world_m"):
+        load_vision_sources(path, environ=ENV)

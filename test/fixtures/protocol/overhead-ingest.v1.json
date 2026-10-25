@@ -130,6 +130,17 @@
       "rx_fps": 2.9,
       "dropped": 0
     },
+    "status_field_example": {
+      "type": "status",
+      "corners_seen": [],
+      "corners_needed": 0,
+      "robots_seen": [
+        "rosy_01"
+      ],
+      "rx_fps": 3.0,
+      "dropped": 0,
+      "field_state": "orientation_pending"
+    },
     "camera_example": {
       "type": "camera",
       "seq": 12,

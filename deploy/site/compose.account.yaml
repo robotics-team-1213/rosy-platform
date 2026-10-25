@@ -1,0 +1,33 @@
+# Optional Account HTTPS frontend on the existing proxy. The host firewall admits
+# port443 only on lo/tailscale0; primary site discovery and ingress stay unchanged.
+x-rosy-site:
+  account_https: "1"
+
+services:
+  fleet:
+    environment:
+      ROSY_ACCOUNT_CONFIG: "${ROSY_ACCOUNT_CONFIG:?set ROSY_ACCOUNT_CONFIG}"
+  proxy:
+    networks:
+      site_backend: {}
+      site_edge:
+        aliases:
+          - "${ROSY_ACCOUNT_HTTPS_HOST:?set ROSY_ACCOUNT_HTTPS_HOST}"
+    ports:
+      - "0.0.0.0:443:443"
+    environment:
+      ROSY_ACCOUNT_HTTPS_HOST: "${ROSY_ACCOUNT_HTTPS_HOST:?set ROSY_ACCOUNT_HTTPS_HOST}"
+    volumes:
+      - type: bind
+        source: ./Caddyfile.account
+        target: /etc/caddy/account/frontend.caddy
+        read_only: true
+        bind:
+          create_host_path: false
+      # Keep atomic certificate replacement visible inside the running proxy.
+      - type: bind
+        source: /etc/rosy/account-tls
+        target: /run/rosy-account-tls
+        read_only: true
+        bind:
+          create_host_path: false

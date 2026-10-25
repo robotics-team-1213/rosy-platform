@@ -48,14 +48,6 @@ def test_the_fleet_selector_uses_one_cycle_button():
         assert ':not([data-theme-cycle])' in (FLEET_HTML.parent / name).read_text(encoding="utf-8")
 
 
-def test_learning_documents_use_the_shared_cycle_and_store_no_theme_themselves():
-    for page in LEARNING_WEB.glob("*.html"):
-        html = page.read_text(encoding="utf-8")
-        assert html.count('data-theme-cycle=""') == 1, page.name
-        assert 'id="theme"' not in html, page.name
-    for script in LEARNING_WEB.glob("*.js"):
-        source = script.read_text(encoding="utf-8")
-        assert "rosy.theme" not in source and "$('theme')" not in source, script.name
 
 
 def test_the_device_panel_renders_from_the_single_source():

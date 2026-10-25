@@ -14,7 +14,7 @@ from omx_adapter.gripper_contract import GripperObservation
 from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics
 from omx_adapter.manipulation_plan import ExecutionStateSnapshot
 from omx_adapter.phase_recorder import ActionPhaseRecorder
-from omx_adapter.pick_place_runner import PickPlaceRunner
+from omx_adapter.pick_place.pick_place_runner import PickPlaceRunner
 from omx_adapter.pose_plan import CellPlanningProfile
 
 from test_omx_action_api import (

@@ -142,8 +142,11 @@ digraph land {
    for a person to review (never auto-quarantined); any fails again -> stop. A stop reruns its NEW ids once on main:
    red there too -> `MAIN-RED` (main is broken; fix main in a small `fix/` branch first, after checking no peer is). A branch
    you hold back stays as long as it is committed; `git worktree lock` keeps its worktree too.
-5. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
-   Local main ahead of `origin/main` has no CI evidence.
+5. Push only when the task says to push, in the D-868 order: land on local main first; if `origin/main`
+   is not an ancestor, `git merge origin/main` in a worktree and land it; push local main's tip as
+   `publish/main-<YYYYMMDD>`, open a PR, merge it with `gh pr merge <PR> --merge --match-head-commit <SHA>`
+   once `ci-result` is green, then `git merge --ff-only origin/main` on main. Never squash, rebase-merge
+   or force-push. Local main ahead of `origin/main` has no CI evidence.
 
 ## Red flags — stop
 

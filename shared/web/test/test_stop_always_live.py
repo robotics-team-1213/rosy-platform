@@ -80,9 +80,10 @@ def test_every_stop_on_a_ui_js_page_is_always_live():
 def test_the_scan_fires_when_the_attribute_is_removed():
     """Mutation proof on the real shell markup."""
     shell = (REPO / 'middleware' / 'robot_ui' / "robot" / "surface.html").read_text(encoding="utf-8")
-    assert stops_in(shell) == [(25, True)]
+    stops = stops_in(shell)
+    assert len(stops) == 1 and stops[0][1] is True
     stripped = shell.replace(" data-always-live", "")
-    assert stops_in(stripped) == [(25, False)]
+    assert stops_in(stripped) == [(stops[0][0], False)]
     assert stops_in('<ui-button kind="irreversible">도크 삭제</ui-button>') == []
     assert stops_in('<ui-button kind="irreversible" aria-label="전체 로봇 정지"><span>전체</span></ui-button>') == [(1, False)]
 

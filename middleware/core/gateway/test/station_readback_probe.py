@@ -1,5 +1,6 @@
 """Test-only probes preserve the real readback and nonblocking lock results."""
 import json
+import sys
 import threading
 import traceback
 
@@ -74,3 +75,24 @@ def install_readback_probe(owner, motion, clock, monkeypatch):
     monkeypatch.setattr(owner, 'ack', ack)
     monkeypatch.setattr(owner, 'readback', readback)
     return reports
+
+
+def install_hold_probe(motion, clock):
+    """Observe the caught cause at HOLD entry without changing the real stop."""
+    original = motion.stop_hold
+
+    async def stop_hold(current, reason, **kwargs):
+        error = sys.exception()
+        if error is not None and reason in (
+                'CHARGE_MOTION_READBACK_UNAVAILABLE', 'CHARGE_DEPARTURE_UNVERIFIED'):
+            report = dict(session_id=current.session_id, reason=reason, clock=clock(),
+                exception_type=type(error).__name__, exception=str(error),
+                traceback=traceback.format_exception(error))
+            for frame, _ in traceback.walk_tb(error.__traceback__):
+                view = frame.f_locals.get('view') if frame.f_code.co_name == 'read_return' else None
+                if isinstance(view, dict):
+                    report['return_trip'] = {key: view.get(key) for key in ('state', 'reason', 'detail')}
+            print('STATION_HOLD_DIAGNOSTIC '+json.dumps(report), flush=True)
+        return await original(current, reason, **kwargs)
+
+    motion.stop_hold = stop_hold

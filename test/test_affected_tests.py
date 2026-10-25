@@ -590,6 +590,26 @@ def test_full_ci_includes_learning_policy_registry_and_omx_helpers():
     assert suites <= set(affected.FULL_SUITES)
 
 
+@pytest.mark.parametrize('target', [
+    'learning/training/omx/test',
+    'learning/training/omx/test/test_act_inference_native.py',
+    'learning/training/omx/test/test_act_inference_native.py::test_actual_act_weights_consume_snapshot_and_keep_queue_source',
+])
+def test_affected_act_tests_also_require_the_actual_cpu_runner(target):
+    repo = affected.Repo.load(ROOT)
+    matrix = affected.ci_matrix(repo, affected.Selection('affected', [], invocations=[[target]]))['include']
+    native = [e for e in matrix if e['name'] == 'omx-act-cpu']
+    assert len(native) == 1 and native[0]['gating'] and native[0]['ros'] == 'none'
+    assert any(target in paths for e in matrix if e['name'] != 'omx-act-cpu' for paths in e['invocations'])
+
+
+def test_unrelated_affected_tests_do_not_install_act_cpu_dependencies():
+    repo = affected.Repo.load(ROOT)
+    matrix = affected.ci_matrix(repo, affected.Selection(
+        'affected', [], invocations=[['operations/world/test']]))['include']
+    assert all(e['name'] != 'omx-act-cpu' for e in matrix)
+
+
 def test_modules_runner_gates_by_2026_11_15():
     """D-762 stage 1: `modules` reports only until its first green run; it may not stay non-gating."""
     import datetime

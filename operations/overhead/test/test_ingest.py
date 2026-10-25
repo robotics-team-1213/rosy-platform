@@ -370,6 +370,32 @@ def test_marker_report_expires_so_status_falls_back_to_empty(monkeypatch):
     assert server._marker_status(src) == ([], [])
 
 
+def test_field_boundary_source_status_needs_no_corner_markers(monkeypatch):
+    from types import SimpleNamespace
+
+    from rosy_vision import ingest as ingest_module
+
+    server = IngestServer({"overhead-1": TOKEN})
+    src = ingest_module._Source(name="overhead-1", connection=SimpleNamespace())
+    server._sources["overhead-1"] = src
+    now = [100.0]
+    monkeypatch.setattr(ingest_module.time, "monotonic", lambda: now[0])
+    from pathlib import Path
+    vectors = Path(__file__).resolve().parents[3] / "test/fixtures/protocol/overhead-ingest.v1.json"
+    vector = json.loads(vectors.read_text(encoding="utf-8"))["messages"]
+
+    # A corner_markers source never reports a field: the old four-marker status.
+    status = server._status_message(src)
+    assert (status["corners_needed"], status["field_state"]) == (4, None)
+    assert set(status) == set(vector["status_field_example"])
+
+    server.report_field("overhead-1", {"state": "orientation_pending", "corners": None})
+    status = server._status_message(src)
+    assert (status["corners_needed"], status["field_state"]) == (0, "orientation_pending")
+    now[0] += ingest_module.MARKER_REPORT_TTL_S + 0.1
+    assert server._status_message(src)["field_state"] is None
+
+
 @run_async
 async def test_hello_lens_is_recorded_per_source_and_older_hellos_report_none():
     async with _Harness(tokens={"overhead-1": TOKEN, "overhead-2": "token-2"}) as h:

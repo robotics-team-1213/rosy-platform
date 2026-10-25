@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, model_serializer
 
 Coordinate = Annotated[float, Field(allow_inf_nan=False, ge=-1000, le=1000)]
 Point = tuple[Coordinate, Coordinate]
@@ -66,6 +66,14 @@ class SiteFacility(BaseModel):
     approaches: list[FacilityApproach] = Field(default_factory=list, max_length=64)
     signal_id: Optional[Identifier] = None
     signal_kind: Optional[Literal["physical", "virtual"]] = None
+    evidence: Optional[RoadEvidence] = None
+
+    @model_serializer(mode="wrap")
+    def _optional_evidence(self, handler):
+        body = handler(self)
+        if self.evidence is None:
+            body.pop("evidence", None)
+        return body
 
     @model_validator(mode="after")
     def _geometry_and_device(self) -> "SiteFacility":

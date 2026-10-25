@@ -48,6 +48,11 @@ SUITE_SHARDS = {"fleet": 5, "sensing": 2}  # Station suites (D-772) retain the f
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
 CI_FULL_MATRIX = (
+    # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
+    {"name": "omx-act-cpu", "invocations": [[
+        "learning/training/omx/test/test_act_inference_native.py",
+        "learning/training/omx/test/test_act_owner_capture.py",
+        "learning/training/omx/test/test_act_parent_chain.py"]], "ros": "none"},
     {"name": "learning-policy", "invocations": [
         ["learning/registry/policy/test"], ["learning/training/omx/test"], ["learning/training/pinky/test"],
         ["learning/curation/omx/test"], ["learning/curation/pinky/test"],
@@ -126,6 +131,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
             out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
             out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
         entries = affected_ros.entries(out, CI_FULL_MATRIX)
+        if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
+               for inv in sel.invocations for p in inv):
+            entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
     entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")

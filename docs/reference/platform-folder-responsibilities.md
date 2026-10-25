@@ -28,12 +28,12 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 6 | 인지 노드 | `middleware/perception/nodes`. ROS 패키지 이름은 `control`; `control/`의 다섯 호환 초기화는 설치 이름만 잇는다. 기능별 전용 adapter는 해당 판단 holder에 둔다 |
 | 7 | 장치 | `middleware/devices`, `middleware/drivers` |
 | 8 | Fleet 원장 | `operations/fleet/fleet/server/{ledger,auth,cell,console,peer}`와 기존 `server/channel`. app.py는 조립하고 기존 fleet.server.* 설치 이름을 유지한다 |
-| 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}` |
+| 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}`, 그리고 `server/tracking`(D-457 천장 무마커 추적, 표시·대조 전용)과 `server/pose`(D-395 위치 서비스, D-494 지도 자세, D-594 경로 기록). 두 holder는 기존 `fleet.server.*` 설치 이름을 유지하고, 원장 테이블이 아닌 자기 기록 테이블(추적 보정, 경로 기록)에만 쓴다 |
 | 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/site_execution` |
 | 11 | 현장 표면 | `applications/fleet/{web,gateway}`, `operations/processes`, `operations/site_devices`, `operations/site_ui/{cam,media}`, `operations/apps`, `operations/overhead`, `operations/signal_observation` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
 
-집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sighting·운영자 pin·odom의 현재 자세다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽는다(D-752). `source=bridged`는 dead reckoning이고 미래 예측이나 완료 증거가 아니다. 집 8만 Fleet SQLite 전이를 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
+집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sighting·운영자 pin·odom의 현재 자세다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽는다(D-752). `source=bridged`는 dead reckoning이고 미래 예측이나 완료 증거가 아니다. Fleet 원장 테이블(`fleet_tasks`, `fleet_task_history`, `fleet_robot_reservations`, `fleet_action_claims`)은 집 8의 `task_store`가 만들지만, 쓰는 모듈은 집 8 안팎에 열 개다. 그 목록은 `test/architecture/test_fleet_ledger_writers.py`가 고정하고, 새 writer는 리뷰를 거쳐 목록에 올려야 한다. stuck·incidents 등은 자기 테이블에만 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
 
 같은 영어 단어는 집을 나눈다.
 
@@ -115,7 +115,7 @@ rosy-platform/
 │  └─ robot_ui/{robot,pilot,face}
 ├─ operations/
 │  ├─ fleet/ (원장·서빙·패키지 fleet)
-│  │  └─ fleet/server/{ledger,auth,cell,console,peer,channel}
+│  │  └─ fleet/server/{ledger,auth,cell,console,peer,channel,tracking,pose}
 │  ├─ decision/
 │  ├─ world/ (state/projections/map_pose)
 │  ├─ situation/
@@ -276,4 +276,4 @@ D-637에서 기존 298파일과 동시 개발로 추가된 Console `inbox.js` 1�
 
 현재 물리 이동과 설치 매핑, 원격 시험, 배포/장치 수용은 별도 기록이다. [D-649](../adr/D-649-drive-behavior-source-ownership.md), [실행 계획](../plans/2026-10-11-role-folder-boundaries.md)을 따른다.
 
-D-671의 현재 Discord source는 `integrations/messaging/discord/rosy_discord/intake.py`의 순수 envelope/signature adapter다. 기존 Fleet 배포물에 설치하며 source image는 같은 코드를 포함한다. 기명 계정 연결·인증·접수 원장은 `operations/fleet/fleet/server/channel_requests.py`, 조회 표면은 기존 Console 작업 화면이 소유한다. 별도 실행 서비스·wheel·Mission DB는 없다. Gateway 실행기와 실제 수신, 후보·승인·위험 조치/reply는 미구현이며 D-669 후속이다.
+D-671의 현재 Discord source는 `integrations/messaging/discord/rosy_discord/intake.py`의 순수 envelope/signature adapter다. 기존 Fleet 배포물에 설치하며 source image는 같은 코드를 포함한다. 기명 계정 연결·인증·접수 원장은 `operations/fleet/fleet/server/channel/requests.py`, 조회 표면은 기존 Console 작업 화면이 소유한다. 별도 실행 서비스·wheel·Mission DB는 없다. Gateway 실행기와 실제 수신, 후보·승인·위험 조치/reply는 미구현이며 D-669 후속이다.
