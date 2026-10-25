@@ -95,9 +95,7 @@ async function load(){
   $('evaluate-filter').textContent=domain?`${DOMAINS[domain]}만 보는 중`:'모든 도메인';
   if(domain){const all=go($('evaluate-filter'),' · 전체 보기','/learning/evaluate');all.classList.remove('workspace-link');}
   const workspace=await read('/api/learning');
-  token=workspace.token;
-  const session=await accountFetch('/api/accounts/session',{cache:'no-store'});
-  if(session.ok)token=(await session.json()).token;
+  token=workspace.token;  // the server swaps in the account CSRF token in collaboration mode
   await promotion();
   stages(workspace);
   if(!domain||domain==='vlm')await vlm(workspace);
