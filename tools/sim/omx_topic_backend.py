@@ -25,10 +25,15 @@ HARDWARE = ('<hardware><plugin>topic_based_ros2_control/TopicBasedSystem</plugin
 
 
 def with_topic_hardware(urdf):
-    """Swap the vendor mock hardware for the topic bridge; joints, limits and interfaces stay the vendor's."""
+    """Swap the vendor mock hardware for the topic bridge; joints, limits and interfaces stay the vendor's.
+
+    The vendor block also declares the Dynamixel registers as <gpio> (dxl11..16); only the real driver exports
+    them, and ros2_control refuses a hardware that leaves declared interfaces unexported, so they are dropped.
+    """
     out, count = re.subn(r'<hardware>.*?</hardware>', HARDWARE, urdf, flags=re.S)
     if count != 1:
         raise ValueError('expected exactly one vendor <hardware> block')
+    out = re.sub(r'<gpio.*?</gpio>', '', out, flags=re.S)
     return re.sub(r'(<ros2_control[^>]*?)is_async="true"', r'\1is_async="false"', out)
 
 

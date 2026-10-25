@@ -12,7 +12,8 @@ URDF = """<robot name="omx_f"><link name="link5"><visual><geometry>
 <gazebo><plugin filename="gz_ros2_control-system" name="x"/></gazebo>
 <ros2_control is_async="true" name="OMXFSystem" type="system"><hardware>
 <plugin>mock_components/GenericSystem</plugin><param name="mock_sensor_commands">false</param></hardware>
-<joint name="joint1"><command_interface name="position"/></joint></ros2_control></robot>"""
+<joint name="joint1"><command_interface name="position"/></joint>
+<gpio name="dxl11"><command_interface name="Goal Position"/></gpio></ros2_control></robot>"""
 
 
 def _mod(name):
@@ -28,6 +29,7 @@ def test_vendor_mock_hardware_becomes_the_topic_bridge():
     out = mod.with_topic_hardware(URDF)
     assert "mock_components/GenericSystem" not in out and "topic_based_ros2_control/TopicBasedSystem" in out
     assert mod.SIM_STATES in out and mod.SIM_COMMANDS in out and 'is_async="false"' in out
+    assert "<gpio" not in out  # Dynamixel registers exist only on the real driver.
     assert '<joint name="joint1"><command_interface name="position"/>' in out  # Vendor joints untouched.
     with pytest.raises(ValueError):
         mod.with_topic_hardware(URDF.replace("<hardware>", "<hardware/><x>", 1))
