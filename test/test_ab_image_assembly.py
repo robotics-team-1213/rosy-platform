@@ -37,7 +37,7 @@ def test_loop_is_bound_to_the_new_regular_file_and_closes_after_mounts(tmp_path,
     resources.mount(loop + "p2", tmp_path / "mounted", readonly=True, filesystem="ext4")
     resources.close()
     assert "--read-only" in calls[0]
-    assert calls[-2:] == [["umount", "--", str(tmp_path / "mounted")], ["losetup", "--detach", loop]]
+    assert calls.index(["umount", "--", str(tmp_path / "mounted")]) < calls.index(["losetup", "--detach", loop])
     assert "ro,noload" in next(command for command in calls if command[0] == "mount")
 
 
@@ -101,3 +101,59 @@ def test_non_native_builder_is_rejected_before_creating_output(tmp_path, monkeyp
     with pytest.raises(ValueError, match="native arm64"):
         m.assemble(tmp_path / "source.img", tmp_path / "out.img", tmp_path, "2026.10.26-001")
     assert not list(tmp_path.iterdir())
+
+
+def test_mismatched_loop_backing_is_not_detached_by_cleanup(tmp_path, monkeypatch):
+    m = module()
+    image, foreign = tmp_path / "owned.img", tmp_path / "foreign.img"
+    image.write_bytes(b"owned")
+    foreign.write_bytes(b"do not touch")
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if "--find" in command:
+            return SimpleNamespace(stdout="/dev/loop17\n")
+        if "--json" in command:
+            return SimpleNamespace(stdout=json.dumps({"loopdevices": [{"name": "/dev/loop17", "back-file": str(foreign)}]}))
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setattr(m, "_run", run)
+    resources = m.ImageResources()
+    with pytest.raises(ValueError, match="bound"):
+        resources.loop(image)
+    with pytest.raises(OSError, match="detach"):
+        resources.close()
+    assert not any("--detach" in command for command in calls)
+
+
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+def test_failed_assembly_only_removes_workspace_after_resources_close(tmp_path, monkeypatch, cleanup_fails):
+    m = module()
+    source, output = tmp_path / "source.img", tmp_path / "output.img"
+    source.write_bytes(b"fixture source")
+    monkeypatch.setattr(m.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(m.platform, "machine", lambda: "aarch64")
+    monkeypatch.setattr(m, "checked_inputs", lambda *args: (source, output, tmp_path))
+    monkeypatch.setattr(m.shutil, "which", lambda *args: "/fixture/tool")
+
+    class Resources:
+        def loop(self, *args, **kwargs):
+            return "/dev/loop17"
+
+        def mount(self, *args, **kwargs):
+            raise RuntimeError("injected mount failure")
+
+        def close(self):
+            if cleanup_fails:
+                raise OSError("injected detach failure")
+
+    monkeypatch.setattr(m, "ImageResources", Resources)
+    monkeypatch.setattr(m, "_run", lambda command, **kwargs: SimpleNamespace(
+        stdout="vfat" if command[-1].endswith("p1") else "ext4"))
+    with pytest.raises(OSError if cleanup_fails else RuntimeError, match="injected"):
+        m.assemble(source, output, tmp_path, "2026.10.26-001")
+    assert bool(list(tmp_path.glob("rosy-ab-image.*"))) is cleanup_fails
+    assert bool(list(tmp_path.glob("output.img.part.*"))) is cleanup_fails
+    assert not output.exists()
+    assert source.read_bytes() == b"fixture source"
