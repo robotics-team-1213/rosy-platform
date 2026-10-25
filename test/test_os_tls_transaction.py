@@ -82,8 +82,9 @@ def test_tls_maintenance_refreshes_readiness_only_after_pending_is_cleared(devic
 
     def fence():
         if (common / "state/tls-pending.json").exists():
-            with pytest.raises(ValueError):
-                ready.verify_ready(store.root)
+            # The TLS owner already holds the common lock; inspect without re-entering it.
+            receipt = json.loads((store.root / "run/rosy-os-state/ready.json").read_text())
+            assert receipt["generation"] == before["generation"]
             held.append(True)
 
     assert _apply(store, tmp_path, fence=fence)["ok"]
