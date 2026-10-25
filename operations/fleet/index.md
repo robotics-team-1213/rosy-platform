@@ -102,8 +102,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · cc237b02c1 · D-875 committed verification
 - 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
 - 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
 - 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
 - 2026-10-25 · uncommitted · Swarm lifecycle extraction integration preparation
-- 2026-10-25 · 4ed200d0ee · 군집 세션 무장 경로 의미 보존 분리

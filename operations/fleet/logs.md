@@ -4461,3 +4461,10 @@
 - Change: owner-local API holds existing declarations, the Decision facade supplies existing planning choices, and actual lifecycle/arming/relay safety behavior stays in tagged owners. No frozen violation growth or wire change.
 - Evidence: official source9f9fc5846d two separation failures versus main6abf6a8a7e two passes; new sourcecac7a23477 API/planning guards RED3 and emergency guard PASS1 remotely. All22 nonconstructor lifecycle method ASTs and original CORE C1 blobs remain identical. Independent implementation review and committed GREEN follow separately.
 - gate 변화: pending implementation verification; no landing/device/field claim. Existing structural-guard lesson will be updated only after GREEN.
+
+## 2026-10-25 · cc237b02c1 · D-875 committed verification
+
+- Change: independently reviewed owner-local API and actual Safety lifecycle separation; legacy exports/planner/default construction preserved, no frozen violation growth.
+- Evidence: committed remote architecture plus15 focused Fleet suites 578PASS5SKIP, NEW0/known0/flaky0, runnerexit0. Original22 lifecycle method ASTs and prepared2bea CORE3 Git blobs exact. Logs: %LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt and known-final.txt.
+- Gate: generate/lint/diff/syntax/size and official dry-run PASS; actual FULL/landing/device/field pending. Initial afba candidate sole CLI size failure retained externally; root-authorized own amendment removed one blankline, independently confirmed, then finalSHA rerun.
+- CE: root owns existing structural-guards lesson update with separate queued-FULL tooling unit; verified case draft supplied outside Git. Prior pending entry is superseded by this evidence.

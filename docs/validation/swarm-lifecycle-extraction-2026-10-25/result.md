@@ -23,3 +23,15 @@ Merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-referen
 Git blob comparison confirms manager/reference_stream, session/session_arming/session_state and the boundary mutation test equal prepared commit 2bea6f4d1e byte for byte. Shared schemas and both incoming CE documents equal pinned C0.
 
 Only static integration checks are authorized here. Historical remote results above remain attached to their original source commits; they are not a new pass for this integrated HEAD. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable; existing ADR, tests and source comparisons already capture the merge rationale.
+
+## 2026-10-25 D-875 safety boundary correction
+
+Official C1 source commit `9f9fc5846d` failed both D-430 separation guards; the same guards passed on official main commit `6abf6a8a7e`. Whole-module safety classification exposed Decision dependencies and non-public legacy type reexports. D-875 keeps actual lifecycle, admission and relay authority in Safety, moves existing declarations to an owner-local API and supplies the existing planner/default assigner through the Decision facade. No frozen violation was added.
+
+New pure-API, same-object reexport and planner/stop guards at commit `cac7a23477` produced remote RED: 3 FAIL, 1 PASS. Independently reviewed implementation commit `cc237b02c1` passed the entire architecture suite and 15 focused Fleet suites: **578 PASS, 5 SKIP, NEW0/known0/flaky0**, remote runner exit0. This includes separation, anchors/API roots, arming/start/stop/reform/resume, relay/transport, assignment/geometry, CLI/bench, formation routes and native/idle channel outcomes. The skips belong to existing architecture/environment guards; no browser or device acceptance is claimed.
+
+Logs: `%LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt`, `green-final-runner.txt`, and `known-final.txt`. The preliminary unpublished source commit `afba821aa9` had 577 PASS, 5 SKIP and one CLI size failure; its evidence remains in `green/`. Root authorized amending only that owned candidate to remove one blank line and restore the existing 773-line limit; independent review confirmed the whitespace-only delta. The final committed SHA was rerun in full for the selected scope.
+
+Static generate/lint passed (0 errors, 34 existing warnings); staged diff/syntax and size-range passed. Official dry-run exit0 selects FULL; actual FULL/landing remain pending. All 22 nonconstructor lifecycle method ASTs equal source `9f9fc5846d`, and CORE manager/reference_stream/test_swarm Git blobs equal original prepared C1 source `2bea6f4d1e`. External `source-preservation.json` records the exact blob IDs. Independent implementation review approved the actual final tree and is recorded in its Safety-Review trailer; it does not attest tests or field behavior.
+
+CE: existing lesson update coordinated with root's separate queued-FULL guard tooling unit. Verified C1 case facts are supplied outside Git in `ce-case-draft.md`; this branch does not duplicate or concurrently edit that lesson. No deployment, clock convergence, robot motion or field acceptance.
