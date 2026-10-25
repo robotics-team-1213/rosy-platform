@@ -1,0 +1,173 @@
+const $=id=>document.getElementById(id), GiB=1024**3;
+let send, changed, state, draft=[], quotas={}, generation=0, timer, busy=false;
+const text=(parent,tag,value)=>{const node=document.createElement(tag);node.textContent=value;parent.append(node);return node;};
+const localDate=seconds=>{const date=new Date(seconds*1000);return new Date(date-date.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+const bytes=input=>Math.ceil(Number(input.value)*GiB);
+function error(message){$('storage-setup-error').textContent=message;$('storage-setup-error').hidden=false;}
+function field(parent,label,key,value,type='text'){
+  const holder=text(parent,'label',label);holder.className='ui-field-label';
+  const input=document.createElement('input');input.className='ui-field';input.type=type;input.dataset.field=key;
+  input.value=value??'';input.required=true;
+  if(type==='number'){input.min='0';input.max='8000000';input.step='any';}
+  holder.append(input);return input;
+}
+function select(parent,label,key,choices,value){
+  const holder=text(parent,'label',label);holder.className='ui-field-label';
+  const input=document.createElement('select');input.className='ui-field';input.dataset.field=key;
+  for(const [key,title] of choices){const option=text(input,'option',title);option.value=key;}
+  input.value=value;holder.append(input);return input;
+}
+function button(parent,label,call){
+  const element=text(parent,'ui-button',label);element.setAttribute('kind','quiet');element.addEventListener('click',call);return element;
+}
+function readTargets(){
+  return [...$('storage-settings-targets').children].map((row,index)=>{
+    const previous=draft[index];
+    if(!previous.connection_id)return {id:previous.id,enabled:false};
+    const result={id:previous.id,priority:index};
+    for(const key of ['connection_id','repo_type','repo_id'])result[key]=row.querySelector(`[data-field=${key}]`).value.trim();
+    result.enabled=row.querySelector('[data-field=enabled]').checked;
+    result.quota_owner=result.repo_id.split('/')[0].toLowerCase();return result;
+  });
+}
+function readQuotas(){
+  const result={};
+  for(const row of $('storage-settings-quotas').children){
+    const get=key=>row.querySelector(`[data-field=${key}]`);
+    result[row.dataset.owner]={remaining_bytes:bytes(get('remaining_bytes')),reserve_bytes:bytes(get('reserve_bytes')),
+      source:get('source').value.trim(),measured_at:Math.floor(new Date(get('measured_at').value).getTime()/1000),
+      expires_at:Math.floor(new Date(get('expires_at').value).getTime()/1000)};
+  }
+  return result;
+}
+function showQuotas(){
+  const previous=readQuotas();Object.assign(quotas,previous);
+  $('storage-settings-quotas').replaceChildren();
+  const owners=[...new Set(readTargets().filter(row=>row.connection_id&&row.repo_id.includes('/')).map(row=>row.quota_owner))];
+  for(const owner of owners){
+    const now=Math.floor(Date.now()/1000), quota=quotas[owner]||{remaining_bytes:0,reserve_bytes:GiB,
+      source:'HF 설정 화면에서 확인',measured_at:now,expires_at:now+3600};
+    const row=document.createElement('fieldset');row.className='storage-quota';row.dataset.owner=owner;
+    text(row,'legend',owner);const fields=document.createElement('div');fields.className='ui-form learning-form';row.append(fields);
+    field(fields,'실제 잔여량 GiB','remaining_bytes',quota.remaining_bytes/GiB,'number');
+    field(fields,'원격 여유분 GiB','reserve_bytes',quota.reserve_bytes/GiB,'number');
+    field(fields,'측정 근거','source',quota.source).maxLength=160;
+    field(fields,'측정 시각','measured_at',localDate(quota.measured_at),'datetime-local');
+    field(fields,'유효기간 끝','expires_at',localDate(quota.expires_at),'datetime-local');
+    $('storage-settings-quotas').append(row);
+  }
+}
+function renderTargets(){
+  $('storage-settings-targets').replaceChildren();
+  for(const [index,target] of draft.entries()){
+    const row=document.createElement('fieldset');row.className='storage-settings-target';
+    text(row,'legend',`저장 대상 ${index+1}`);
+    if(!target.connection_id){text(row,'p','연결에 접근할 수 없습니다. 계정·권한을 확인하거나 이 대상을 중지하세요.');$('storage-settings-targets').append(row);continue;}
+    const fields=document.createElement('div');fields.className='ui-form learning-form';row.append(fields);
+    select(fields,'HF 계정 연결','connection_id',state.connections.map(item=>[item.connection_id,
+      `${item.username||'HF 계정'} · ${item.sharing==='project'?'프로젝트 연결':'개인 연결'}`]),target.connection_id);
+    select(fields,'저장소 종류','repo_type',[['dataset','데이터셋'],['model','모델']],target.repo_type);
+    field(fields,'비공개 저장소 이름','repo_id',target.repo_id).placeholder='계정 또는 조직/저장소';
+    const holder=text(fields,'label','새 자료 배정에 사용');holder.className='ui-check';
+    const enabled=document.createElement('input');enabled.type='checkbox';enabled.dataset.field='enabled';enabled.checked=target.enabled;holder.prepend(enabled);
+    const status={verified:'소량 전송·읽기 검증 완료',needs_verification:'소량 전송·읽기 검증 필요',unavailable:'연결 권한 확인 필요'};
+    text(row,'p',status[target.status]||'저장 후 연결을 검증하세요.');
+    const actions=document.createElement('div');actions.className='ui-actions';row.append(actions);
+    button(actions,'대상 제거',()=>{draft=readTargets();quotas=readQuotas();draft.splice(index,1);renderTargets();showQuotas();});
+    if(index>0)button(actions,'우선순위 올리기',()=>{draft=readTargets();quotas=readQuotas();[draft[index-1],draft[index]]=[draft[index],draft[index-1]];renderTargets();showQuotas();});
+    row.addEventListener('change',event=>{if(event.target.dataset.field==='repo_id')showQuotas();});
+    $('storage-settings-targets').append(row);
+  }
+}
+function controls(){
+  const pending=busy||state?.busy, enabled=Boolean(state?.enabled), saved=state?.revision>0;
+  const targets=(state?.targets||[]).filter(row=>row.enabled);
+  const verified=targets.length>0&&targets.every(row=>row.status==='verified');
+  $('storage-settings-save').disabled=Boolean(pending);
+  $('storage-target-add').disabled=Boolean(pending)||!state?.connections?.length;
+  $('storage-verify').disabled=Boolean(pending)||!saved||!targets.length||!$('storage-check-consent').checked;
+  $('storage-activate').disabled=Boolean(pending)||enabled||!verified;
+  $('storage-prepare-submit').disabled=Boolean(pending)||!enabled||!$('storage-completed-consent').checked;
+  $('storage-check-reason').textContent=pending?'보관 작업 처리 중입니다. 끝나면 다음 작업을 할 수 있습니다.':
+    !saved?'계정 연결과 실제 용량을 선택하고 저장 설정을 저장하세요.':!targets.length?'새 자료를 받을 저장 대상을 하나 이상 선택하세요.':
+      !verified?'소량 전송과 읽기 검증 후 새 보관을 활성화할 수 있습니다.':'연결 검증을 마쳤습니다. 새 보관 활성화 후 완료 자료를 준비하세요.';
+}
+function result(data){
+  if(data.error){error('작업을 마치지 못했습니다. 계정의 쓰기·읽기 권한, 비공개 설정, 측정 용량과 서버 연결을 확인한 뒤 재시도하세요.');return;}
+  if(data.operation){$('storage-setup-result').textContent=data.operation==='verify'?'비공개 저장소에 소량 전송하고 실제 내용을 다시 확인하는 중입니다.':'완료 자료를 준비하고 보관하는 중입니다.';return;}
+  if(data.result){
+    const value=data.result;
+    $('storage-setup-result').textContent=value.bytes_verified?'원격 검증 완료 · 아래 보관 작업에서 고정·회수·복원을 이어갈 수 있습니다.':
+      value.status==='verified'?'저장 대상 연결 검증 완료 · 새 보관을 활성화하세요.':
+        value.status==='prepared'?'완료 자료 준비됨 · 보관 작업에 등록할 수 있습니다.':'검증을 마치지 못했습니다. 아래 작업의 실패·보류 이유와 기존 커밋 확인을 살펴보세요.';
+  }
+}
+async function refresh(current){
+  const data=await send('/api/learning/storage/settings');if(current!==generation)return;
+  const redraw=!state||state.revision!==data.revision;
+  state=data;$('storage-setup').hidden=false;$('storage-manager').hidden=!data.can_manage;
+  $('storage-setup-status').textContent=!data.can_manage?'저장 대상 설정은 프로젝트의 게시·관리 권한이 필요합니다.':
+    data.enabled?'새 보관 활성화됨 · 완료 자료를 준비하거나 기존 자료를 복원하세요.':
+      !data.connections.length?'먼저 HF 계정을 연결하고 비공개 저장소를 준비하세요.':'저장 설정과 연결 검증을 마친 뒤 새 보관을 활성화하세요.';
+  if(data.can_manage){
+    if(redraw){draft=data.targets;quotas=data.quotas;$('storage-settings-quotas').replaceChildren();renderTargets();showQuotas();
+      $('storage-local-reserve').value=data.reserve_bytes/GiB;$('storage-cache-limit').value=data.cache_policy.max_bytes/GiB;
+      $('storage-cache-enabled').checked=data.cache_policy.enabled;}
+    controls();result(data);
+    if(data.operation)timer=setTimeout(()=>poll(current),700);
+  }
+  return data;
+}
+async function poll(current){
+  try{const before=state?.operation;await refresh(current);if(current===generation&&before&&!state.operation)changed?.();}
+  catch(failure){if(current===generation)error(failure.message||'진행 상황을 확인하지 못했습니다. 저장 현황을 다시 확인하세요.');}
+}
+export function clearStorageSetup(){generation++;clearTimeout(timer);state=null;draft=[];quotas={};$('storage-setup').hidden=true;}
+export async function loadStorageSetup(request,onChanged){
+  send=request;changed=onChanged;const current=generation;
+  try{await refresh(current);}catch(failure){if(current===generation){$('storage-setup').hidden=false;error(failure.message||'저장 설정을 확인하지 못했습니다. 다시 확인하세요.');}}
+}
+async function action(path,body){
+  if(busy||!send)return;busy=true;controls();$('storage-setup-error').hidden=true;
+  const current=generation;
+  try{
+    await send('/api/learning/storage/'+path,body);if(current!==generation)return;
+    await refresh(current);if(!state.operation)changed?.();
+  }catch(failure){if(current===generation)error(failure.message||'설정 또는 보관 작업을 마치지 못했습니다. 입력과 권한을 확인하세요.');}
+  finally{busy=false;if(current===generation)controls();}
+}
+$('storage-target-add').addEventListener('click',()=>{
+  draft=readTargets();quotas=readQuotas();draft.push({id:'target-'+crypto.randomUUID().slice(0,8),
+    connection_id:state.connections[0].connection_id,repo_type:'dataset',repo_id:'',enabled:true});renderTargets();showQuotas();
+  $('storage-settings-targets').lastElementChild.querySelector('[data-field=repo_id]').focus();
+});
+$('storage-settings-form').onsubmit=event=>{event.preventDefault();action('settings',{revision:state.revision,
+  targets:readTargets(),quotas:readQuotas(),reserve_bytes:bytes($('storage-local-reserve')),
+  cache_policy:{enabled:$('storage-cache-enabled').checked,max_bytes:bytes($('storage-cache-limit'))}});};
+$('storage-check-consent').onchange=controls;$('storage-completed-consent').onchange=controls;
+$('storage-verify').addEventListener('click',()=>action('settings/verify',{revision:state.revision,confirm:true}));
+$('storage-activate').addEventListener('click',()=>action('settings/activate',{revision:state.revision}));
+async function sources(){
+  if(!send||!state?.can_manage)return;
+  const current=generation, isaac=$('storage-prepare-kind').value==='isaac';
+  try{
+    const data=await send('/api/learning/storage/'+(isaac?'sim-sources':'sources'));if(current!==generation)return;
+    $('storage-folder-fields').hidden=isaac;$('storage-isaac-fields').hidden=!isaac;
+    const input=$(isaac?'storage-prepare-run':'storage-prepare-folder');input.replaceChildren();
+    const rows=isaac?data.runs:data.folders.filter(row=>row.can_prepare);
+    for(const row of rows){const option=text(input,'option',isaac?`${row.scenario_id||'Isaac 결과'} · ${row.run_id}`:row.artifact_id);option.value=isaac?row.run_id:row.artifact_id;}
+    $('storage-source-help').textContent=isaac&&!data.configured?'SIM 실행 연결이 필요합니다. SIM 실험 화면에서 실행기 상태를 확인하세요.':
+      !rows.length?'준비할 완료 자료가 없습니다. 등록된 완료 자료 위치 또는 SIM 실험의 종료 결과를 확인하세요.':
+        '파일의 쓰기가 끝난 자료만 선택하세요. 이미 준비한 목록은 다시 작성하지 않습니다.';
+  }catch(failure){if(current===generation)error(failure.message||'완료 자료를 불러오지 못했습니다. 다시 확인하세요.');}
+}
+$('storage-sources-refresh').addEventListener('click',sources);$('storage-prepare-kind').onchange=sources;
+$('storage-prepare-form').onsubmit=event=>{
+  event.preventDefault();const kind=$('storage-prepare-kind').value;
+  const body={kind,archive:true,confirm_completed:$('storage-completed-consent').checked};
+  if(kind==='isaac')body.run_id=$('storage-prepare-run').value;
+  else{body.artifact_id=$('storage-prepare-folder').value;body.profile=$('storage-prepare-profile').value;
+    body.provenance={source_revision:$('storage-source-revision').value.trim()};
+    if(!body.provenance.source_revision){error('자료의 출처 버전을 입력하세요.');return;}}
+  action('sources/prepare',body);
+};

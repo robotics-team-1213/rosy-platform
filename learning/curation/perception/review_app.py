@@ -332,7 +332,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
-                         '/storage.js': 'storage.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
+                         '/storage.js': 'storage.js', '/storage-settings.js': 'storage-settings.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
                          '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js',
                          '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js',

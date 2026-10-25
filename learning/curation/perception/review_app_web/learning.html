@@ -46,6 +46,52 @@
 <p id="updated" class="quiet" role="status"></p><div id="jobs" aria-live="polite"></div>
 <ui-empty id="empty-jobs" hidden><h3 id="empty-title">연결한 작업이 없습니다</h3><p id="empty-description">작업 결과 연결에서 기존 결과 폴더를 연결하세요.</p><ui-button id="reset-filters" data-action-icon="refresh" kind="quiet" hidden>검색·필터 초기화</ui-button></ui-empty></section>
 <section class="learning-section" aria-labelledby="storage-title"><h2 id="storage-title">수집·저장 공간</h2>
+<section id="storage-setup" class="storage-setup" aria-labelledby="storage-setup-title" hidden>
+<h3 id="storage-setup-title">보관 준비와 다음 작업</h3>
+<p id="storage-setup-status" role="status">저장 설정 확인 중</p>
+<p><a class="workspace-link" href="/accounts#connect-panel">HF 계정 연결</a> · <a class="workspace-link" href="/accounts#repo-panel">비공개 저장소 준비</a></p>
+<ui-status id="storage-setup-error" state="error" role="alert" hidden></ui-status>
+<p id="storage-setup-result" role="status" tabindex="-1"></p>
+<div id="storage-manager" hidden>
+<details id="storage-settings"><summary id="storage-settings-open">저장 대상·용량 설정</summary>
+<p class="quiet">계정 연결의 쓰기 권한과 허용한 저장소를 사용합니다. 같은 계정·조직의 용량은 한 번만 입력합니다. 저장하면 새 보관 배정을 일시중지하며, 기존 자료의 복원과 이력은 유지합니다.</p>
+<form id="storage-settings-form">
+<div id="storage-settings-targets"></div>
+<ui-button id="storage-target-add" kind="quiet">저장 대상 추가</ui-button>
+<h4>계정·조직별 실제 잔여량</h4>
+<p class="quiet">HF 계정 설정에서 확인한 값과 측정 시각·유효기간을 기록하세요. 만료된 값으로는 새 전송을 배정하지 않습니다. 다른 설정을 저장해도 측정 시각은 자동 갱신하지 않습니다.</p>
+<div id="storage-settings-quotas"></div>
+<div class="ui-form learning-form">
+<label class="ui-field-label">로컬 여유분 GiB <input id="storage-local-reserve" class="ui-field" type="number" min="0" max="8000000" step="any" value="1" required></label>
+<label class="ui-field-label">작업 캐시 한도 GiB <input id="storage-cache-limit" class="ui-field" type="number" min="0" max="8000000" step="any" value="10" required></label>
+<label class="ui-check"><input id="storage-cache-enabled" type="checkbox">오래된 검증 캐시를 필요할 때 자동 회수</label>
+</div>
+<ui-button id="storage-settings-save" kind="primary" type="submit">저장 설정 저장</ui-button>
+</form>
+</details>
+<div class="storage-setup-checks">
+<p id="storage-check-reason" class="quiet">설정을 저장한 뒤 소량 전송으로 비공개 보관·읽기를 확인하세요.</p>
+<label class="ui-check"><input id="storage-check-consent" type="checkbox">작은 검증 파일을 각 비공개 저장소에 보관하는 데 동의합니다.</label>
+<div class="ui-actions"><ui-button id="storage-verify" kind="quiet" disabled>소량 전송으로 연결 검증</ui-button><ui-button id="storage-activate" kind="primary" disabled>새 보관 활성화</ui-button></div>
+</div>
+<details id="storage-preparation"><summary>완료 자료 준비하고 보관</summary>
+<p class="quiet">준비된 폴더를 재사용하거나 종료된 Isaac 결과를 별도 보관 자료로 만듭니다. 보관 검증은 학습·시뮬레이션의 성공 승인이 아닙니다.</p>
+<ui-button id="storage-sources-refresh" kind="quiet">준비할 자료 새로 확인</ui-button>
+<form id="storage-prepare-form" class="ui-form learning-form">
+<label class="ui-field-label">자료 가져올 곳 <select id="storage-prepare-kind" class="ui-field"><option value="folder">등록된 완료 자료 폴더</option><option value="isaac">종료된 Isaac Sim 결과</option></select></label>
+<div id="storage-folder-fields" class="storage-prepare-fields">
+<label class="ui-field-label">완료 자료 폴더 <select id="storage-prepare-folder" class="ui-field"></select></label>
+<label class="ui-field-label">자료 종류 <select id="storage-prepare-profile" class="ui-field"><option value="dataset">학습 데이터</option><option value="model">모델 파일</option></select></label>
+<label class="ui-field-label">출처 버전 <input id="storage-source-revision" class="ui-field" maxlength="160" autocomplete="off" placeholder="고정된 출처 버전 또는 기록 식별자"></label>
+</div>
+<label id="storage-isaac-fields" class="ui-field-label" hidden>종료된 SIM 실행 <select id="storage-prepare-run" class="ui-field"></select></label>
+<p id="storage-source-help" class="quiet"></p>
+<label class="ui-check"><input id="storage-completed-consent" type="checkbox">선택한 자료의 쓰기가 끝났고 출처와 보관 범위를 확인했습니다.</label>
+<ui-button id="storage-prepare-submit" kind="primary" type="submit" disabled>준비하고 보관</ui-button>
+</form>
+</details>
+</div>
+</section>
 <p id="storage-status" role="status">저장 현황을 확인하는 중입니다.</p>
 <p class="quiet">등록한 폴더만 집계합니다. 자료 크기는 학습 승인 여부와 별개이며, 폴더별 할당량은 공유 블록·백업 전체의 실제 사용량과 다를 수 있습니다.</p>
 <button id="storage-refresh" class="ui-field" type="button">저장 현황 다시 확인</button>

@@ -1,3 +1,4 @@
+import {clearStorageSetup,loadStorageSetup} from '/storage-settings.js';
 const $=id=>document.getElementById(id);
 const bytes=value=>value==null?'미확인':`${(value/1024**3).toLocaleString('ko-KR',{maximumFractionDigits:3})} GiB`;
 const roles={raw:'수집 원본',derived:'파생 자료',cache:'작업 캐시',pending:'전송 대기'};
@@ -5,6 +6,7 @@ let send, busy=false, epoch=0;
 function line(parent,value){const p=document.createElement('p');p.textContent=value;parent.append(p);}
 function fail(error){$('storage-error').textContent=error.message||'저장 현황을 확인할 수 없습니다.';$('storage-error').hidden=false;}
 export function clearStorage(){
+  clearStorageSetup();
   clearTimeout(poolTimer);lastJobs='';confirmJob=null;reconcileJob=null;
   $('storage-pool').hidden=true;$('storage-targets').replaceChildren();$('storage-jobs').replaceChildren();
   $('storage-source').replaceChildren();$('storage-artifact').value='';
@@ -20,6 +22,7 @@ export async function loadStorage(request){
   send=request;busy=true;$('storage-refresh').disabled=true;$('storage-error').hidden=true;
   clearStorage();
   const current=epoch;
+  await loadStorageSetup(send,()=>loadStorage(send));
   $('storage-status').textContent='저장 현황을 확인하는 중입니다.';
   try{
     const data=await send('/api/learning/storage');
@@ -128,7 +131,7 @@ async function refreshPool(current=epoch){
       $('storage-archive').hidden=true;$('storage-cache-reclaim').hidden=true;return;
     }
     capabilities=pool.capabilities;
-    $('storage-pool-status').textContent='같은 계정·조직의 저장소는 용량을 공유합니다. 표시한 잔여량은 예약과 여유분을 뺀 추정입니다.';
+    $('storage-pool-status').textContent=(pool.enabled===false?'새 보관 배정 중지 · 위 설정에서 활성화하세요. ':'')+'같은 계정·조직의 저장소는 용량을 공유합니다. 표시한 잔여량은 예약과 여유분을 뺀 추정입니다.';
     $('storage-targets').replaceChildren();
     for(const target of pool.targets){
       const row=document.createElement('p');row.className='storage-target';
@@ -139,7 +142,7 @@ async function refreshPool(current=epoch){
     const selected=$('storage-source').value;$('storage-source').replaceChildren();
     for(const root of pool.sources){const option=document.createElement('option');option.value=root.id;option.textContent=root.label;$('storage-source').append(option);}
     if(pool.sources.some(root=>root.id===selected))$('storage-source').value=selected;
-    $('storage-archive').hidden=!capabilities.publish;$('storage-cache-reclaim').hidden=!capabilities.manage;
+    $('storage-archive').hidden=!capabilities.publish||pool.enabled===false;$('storage-cache-reclaim').hidden=!capabilities.manage;
     if(!capabilities.publish)line($('storage-targets'),'자료 게시 권한이 필요합니다. 계정 관리자에게 요청하세요.');
     showJobs(listing.jobs);
     if(pool.cache_operation)$('storage-pool-message').textContent=operations[pool.cache_operation];
