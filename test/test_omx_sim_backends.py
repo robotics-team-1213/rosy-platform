@@ -41,3 +41,11 @@ def test_mujoco_urdf_drops_ros_blocks_and_resolves_meshes():
     assert "<gazebo" not in out and "<ros2_control" not in out
     assert 'filename="follower_05_tip.stl"' in out and 'meshdir="/share/meshes/omx_f"' in out
     assert out.index("<mujoco>") < out.index("<link")
+
+
+def test_adjacent_links_come_from_urdf_joints_without_the_world_anchor():
+    mod = _mod("omx_mujoco_backend")
+    urdf = ('<joint name="world_fixed" type="fixed"><parent link="world"/><child link="link0"/></joint>'
+            '<joint name="joint1" type="revolute"><origin/><parent link="link0"/>\n<child link="link1"/></joint>'
+            '<ros2_control><joint name="joint1"><command_interface name="position"/></joint></ros2_control>')
+    assert mod.adjacent_links(urdf) == [("link0", "link1")]

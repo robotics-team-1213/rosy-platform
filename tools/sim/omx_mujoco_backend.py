@@ -32,6 +32,12 @@ def mjcf_urdf(urdf, mesh_root):
     return re.sub(r'(<robot\b[^>]*>)', r'\1'+head, urdf, count=1)
 
 
+def adjacent_links(urdf):
+    """URDF joint parent/child link pairs, without the world anchor."""
+    pairs = re.findall(r'<joint\s[^>]*>.*?<parent link="([^"]+)"/>\s*<child link="([^"]+)"/>', urdf, flags=re.S)
+    return [(parent, child) for parent, child in pairs if 'world' not in (parent, child)]
+
+
 def build(urdf, mesh_root, shape):
     import mujoco
     spec = mujoco.MjSpec.from_string(mjcf_urdf(urdf, mesh_root))
@@ -50,6 +56,11 @@ def build(urdf, mesh_root, shape):
                           gaintype=mujoco.mjtGain.mjGAIN_FIXED, gainprm=[KP]+[0]*9,
                           biastype=mujoco.mjtBias.mjBIAS_AFFINE, biasprm=[0, -KP, -2*KP**.5*.5]+[0]*7,
                           ctrllimited=True, ctrlrange=list(joint.range))
+    # The vendor meshes overlap at each joint (link0/link1 by 8 mm blocked joint1) and between the two fingers;
+    # Gazebo does not self-collide them either. Contacts with the world and objects stay.
+    for parent, child in adjacent_links(urdf):
+        spec.add_exclude(bodyname1=parent, bodyname2=child)
+    spec.add_exclude(bodyname1='link6', bodyname2='link7')
     # The URDF mimic (gripper_joint_2 = -gripper_joint_1) as an equality, since MuJoCo ignores <mimic>.
     spec.add_equality(type=mujoco.mjtEq.mjEQ_JOINT, name1='gripper_joint_2', name2='gripper_joint_1',
                       data=[0, -1, 0, 0, 0]+[0]*6)
