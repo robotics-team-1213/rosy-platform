@@ -466,12 +466,16 @@ def test_released_allocation_never_writes_remote_bytes(jobs_setup):
 
 def test_publish_only_restore_with_cache_policy_and_sufficient_space(jobs_setup, accounts):
     build, actor, remote, artifact, cache, inventory = jobs_setup
+    config = json.loads(accounts.config_path.read_text())
+    config['users'][1]['memberships']['one'] += ['publish', 'manage']
+    accounts.config_path.write_text(json.dumps(config))
+    _, actor = sign_in(accounts, 'bob')
     job = create(build, actor); build().run(actor, job['id'])
     build().reclaim(actor, job['id'], job['id'])
     config = json.loads(accounts.config_path.read_text())
-    config['users'][0]['memberships']['one'].remove('manage')
+    config['users'][1]['memberships']['one'].remove('manage')
     accounts.config_path.write_text(json.dumps(config))
-    _, actor = sign_in(accounts, 'alice')
+    _, actor = sign_in(accounts, 'bob')
     inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=job['upload_bytes'])
     assert build().restore(actor, job['id'])['local_present'] is True
 
