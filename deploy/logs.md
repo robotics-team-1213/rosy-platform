@@ -3446,3 +3446,10 @@
 - 증거: `landing-fixes-green` 승인 원격 committed SHA 검증 125 PASS/NEW0. 범위는 module scorecard·release boundary·public provenance·updater resync·shared signing·실제 installed layout이며 docs logs에 실행 명령을 남겼다. 독립 리뷰 승인.
 - gate 변화: 이 source 회귀만 통과했다. 정상 전체 착지·SD/부팅·OS/펌웨어 갱신은 별도다.
 - 교훈: CE 해당 없음 — 설치기와 복구 반례가 판단을 직접 보존한다.
+
+## 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
+
+- 변경: main의 `verify_release_checksums` 구현을 공통 정본으로 반영하고 기존 legacy facade/standalone 설치 경로를 유지했다. journal 충돌은 기존 append_blocks로 합치고 index를 재생성했다. 후속 시험은 신규 API의 dynamic/isolated 호출도 직접 확인한다.
+- 증거: canonical 본문은 merge의 main parent와 첫 docstring 행 외 동일하다. 독립 contract review 승인. committed e732c6bd2c 원격 signing·legacy/dynamic·SD provenance·installed layout·updater resync84 PASS/NEW0. 후속 assertion 및 정상 전체 착지는 별도다.
+- gate 변화: source 병합 호환만 검증했다. A/B media/OS 엔진·native ARM64 artifact·실기 powercut 수용은 미완료다.
+- 교훈: CE 해당 없음 — 구현 동등성·소비자 경로·회귀 시험에 근거를 보존했다.
