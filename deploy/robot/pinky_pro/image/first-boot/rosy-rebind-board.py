@@ -17,6 +17,13 @@ import subprocess
 import sys
 import tempfile
 
+for native in (Path(__file__).resolve().parents[1] / "native-runtime",
+               Path(__file__).resolve().parents[2] / "native"):
+    if (native / "os_storage_dispatch.py").is_file():
+        sys.path.insert(0, str(native))
+        break
+from os_storage_dispatch import marked
+
 try:
     from deploy.robot.pinky_pro.sd.personalization import DeviceIdentity, validate_device_identity, validate_provision_bundle
 except ModuleNotFoundError:
@@ -81,6 +88,9 @@ def _archive_for(root: Path, fresh_uid: str, serial: str) -> Path | None:
 def quarantine_previous(root: Path, bundle: Path, hardware_serial: str) -> Path:
     """Move old identity and CORE data aside; safe to retry after a partial move."""
     root = Path(root)
+    # Root-local moves cannot retire shared A/B generations and machine identity.
+    if marked(root):
+        raise ValueError("A/B device registration requires a fresh provisioned card")
     serial = hardware_serial.strip().lower()
     if not SERIAL.fullmatch(serial):
         raise ValueError("new board hardware serial is invalid")
@@ -173,10 +183,12 @@ def main() -> int:
     parser.add_argument("--first-boot-script", type=Path,
                         default=Path("/opt/rosy/first-boot/rosy-first-boot.py"))
     args = parser.parse_args()
-    for unit in ("rosy-core.service", "rosy-io.service", "rosy-navigation.service"):
+    for unit in ("rosy-core.service", "rosy-io.service", "rosy-navigation.service",
+                 "rosy-tailscale-join.service", "tailscaled.service"):
         state = subprocess.run(["systemctl", "is-active", unit], capture_output=True, text=True, check=False)
-        if state.stdout.strip() == "active":
-            print(f"rebind refused: {unit} is active", file=sys.stderr)
+        if (state.returncode not in {3, 4}
+                or state.stdout.strip() not in {"inactive", "failed", "unknown"}):
+            print(f"rebind refused: {unit} is not confirmed stopped", file=sys.stderr)
             return 1
     serial_path = Path("/sys/firmware/devicetree/base/serial-number")
     serial = serial_path.read_bytes().replace(b"\0", b"").decode("ascii").strip()
