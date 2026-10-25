@@ -23,3 +23,9 @@
 - 변경: `applications/monitoring`의 소유·표면·상태/뷰포트 기준을 기록하고 source part·측정·browser scope·CI 실행 경로를 등록했다. 원격 Chromium은 실제 독립 backend의 인증·사이트 범위·이력 API를 읽으며 API를 가로채지 않는다.
 - 증거: `1a9cd5b164` 실제 Chromium3 PASS/0 SKIP, 구조/harness/affected/browser-scope262 PASS/0 SKIP, 두 비교 NEW/KNOWN/FLAKY0. 화면 HTML/JS·G1/G2/G3는 아직 구현/수용하지 않았다.
 - gate 변화: 없음. UI와 배포·DEVICE/FIELD HOLD를 유지한다. CE: 해당 없음 — 등록과 실제 경로 시험에 직접 기록했다.
+
+## 2026-10-26 · 42404e6d6c · 독립 상태 화면과 실제 근거 검증
+
+- 변경: canonical shell/control/theme/evidence 어휘로 scoped 항목·연결·이력 화면을 구현했다. 키는 메모리만 사용하며 epoch 격리와 자체 만료로 이전 로그인 응답·API 단절을 처리한다. prefixed common 자산도 Fleet와 독립이다.
+- 증거: 실제 backend Chromium16+G1 원격151 PASS/0 SKIP, scope 거부 포함 상태 회차8e92f7f658 원격6 PASS/0 SKIP, 비교 NEW/KNOWN/FLAKY0. 40 PNG와 G3 차단 없음 검토를 docs/validation/uiux-surfaces-2026-10-26/monitoring에 보존했다. detector []이나 배포 common 해석 제한은 검증 기록에 명시했다.
+- gate 변화: LOCAL GO. ARTIFACT/DEVICE/FIELD HOLD. CE 해당 없음 — 판단 근거는 코드·회귀·검증 기록에 직접 남는다.
