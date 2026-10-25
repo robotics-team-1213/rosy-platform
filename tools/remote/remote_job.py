@@ -40,9 +40,10 @@ export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 # Leading ROSY_*=value args are this job's environment (remote_pytest.ENV_ARG), not pytest args.
 while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
 # xdist_plan job words: an xdist job's workers and a light host's memory cap, for the lock and MemoryMax.
-C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}
-[[ $C$M =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/ROSY_JOB_MEM_GB must be whole numbers"; exit 2; }
-echo "$$ pytest $C $M" > "$L"
+# ROSY_JOB_RESERVE_GB: the lock budget placement counts (laptop memory history), apart from the MemoryMax cap.
+C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-$M}
+[[ $C$M$G =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/_MEM_GB/_RESERVE_GB must be whole numbers"; exit 2; }
+echo "$$ pytest $C $G" > "$L"
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
 [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
@@ -58,9 +59,17 @@ echo "[remote-pytest] env ${V##*/} freeze $(cd "$V" && ls -d lib/python3*/site-p
   receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16)"
 # Best-effort lowest, not idle (-c3): idle gets no disk time while any other process writes, so a timing
 # test's SQLite fsync stalled for seconds on a busy AI PC (g1 contact gap p99 4.7-5.7 s, 2026-10-26).
+# The scope's cgroup ends with pytest, so a watcher inside it reads memory.peak (kernel >= 5.19) after pytest is
+# gone; pytest stays exec'd, so timeout's TERM/KILL still reach it directly. No memory.peak: an empty file.
+W='f=$1; shift; P=$$; cg=${ROSY_CGROUP_FS:-/sys/fs/cgroup}$(cut -d: -f3 /proc/self/cgroup)
+{ while kill -0 $P 2>/dev/null; do sleep 0.5; done; cat "$cg/memory.peak" > "$f.tmp"; mv -f "$f.tmp" "$f"; } \
+  < /dev/null > /dev/null 2>&1 & exec "$@"'
 timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=${M}G ${CPU:+-p CPUQuota=$CPU} -- \
-  nice -n 15 ionice -c2 -n7 "$V/bin/python" -m pytest --basetemp "$B/p" "$@"
-c=$?  # warning only: what the job left directly in /tmp (the four TEMP-fallback browser tests did)
+  bash -c "$W" peak "$B/peak" nice -n 15 ionice -c2 -n7 "$V/bin/python" -m pytest --basetemp "$B/p" "$@"
+c=$?
+for _ in $(seq 25); do [ -e "$B/peak" ] && break; sleep 0.2; done  # remote_pytest reads this line (memory_history)
+read -r p < "$B/peak" 2>/dev/null && [[ $p =~ ^[0-9]+$ ]] && echo "[remote-pytest] memory peak $((p / 1048576)) MiB"
+# warning only: what the job left directly in /tmp (the four TEMP-fallback browser tests did)
 find /tmp -mindepth 1 -maxdepth 1 -user "$(id -u)" -newer "$L" ! -name 'rosy-pytest-*' \
   -printf '[remote-pytest] leaked into /tmp: %p\n' 2>/dev/null | head -n 20
 exit $c

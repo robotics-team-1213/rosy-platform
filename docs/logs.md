@@ -11615,3 +11615,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_robot_cd.py`, `test/test_deployment_targets.py`, `test/test_tool_script_names.py`, `test/test_update_status.py`. 새 시험은 옛 이름이 있으면 실패한다.
 - gate 변화: main의 `test_robot_cd` 2건이 다시 녹색이 된다.
 - 교훈: CE 해당 없음 — 재발 방지가 이름 검사 시험에 있다.
+
+## 2026-10-26 · ef0600c636 · pytest 작업마다 메모리 최고치를 재고, 기록에 따라 예약을 줄인다
+
+- 변경: `tools/remote/remote_job.py`의 JOB이 pytest가 끝난 뒤 scope cgroup의 `memory.peak`를 읽어 `[remote-pytest] memory peak <MiB> MiB`를 찍는다. scope 안의 감시 프로세스가 읽으므로 pytest는 그대로 exec되어 timeout의 TERM/KILL을 직접 받는다. 잠금 예산은 새 `ROSY_JOB_RESERVE_GB`(기본값은 `MemoryMax` GB)로 따로 두고 `MemoryMax`는 `ROSY_JOB_MEM_GB`(기본 6)를 유지한다. 새 `tools/remote/memory_history.py`가 노트북에서 그 줄을 `<git-common-dir>/rosy-pytest-memory.jsonl`에 쌓고, 같은 argv의 기록이 있고 모두 4 GiB 이하면 3 GB를 예약한다. 기록이 없거나 하나라도 4 GiB를 넘으면 6 GB이다. 가벼운 호스트는 기존처럼 자기 상한을 예약한다.
+- 이유: 10-26에 잰 140개 pytest scope의 중앙값은 0.3 GB, p90은 약 3.1 GB, 최대는 5.7 GB였고 4 GB를 넘은 것은 4개뿐이었다. 그런데 작업마다 6 GB를 잡아서 30 GB 호스트에 pytest 4개가 돌면 실제 MemAvailable이 16 GB 넘게 남아도 sim(8 GB)이 들어가지 못했다.
+- 증거: 원격 `test/test_remote_pytest_memory.py`, `test/test_remote_pytest.py`, `test/test_remote_test_tools.py`. 최고치 줄·기록·예약 선택·예약과 상한 분리를 변이로 확인했다.
+- gate 변화: 없음. 시험 PC 배치만 바뀐다. 실제 호스트에서 sim이 함께 배치되는지는 아직 보지 않았다.
+- 교훈: CE 해당 없음 — 규칙과 이유가 코드 주석과 시험에 있다.
