@@ -4422,3 +4422,11 @@
 - gate 변화: 없음. 활성화가 아니며 POLICY_DISPATCH·mission admit 현행 동작 불변.
 - 결정: D-865 P2a 산출물.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
+
+- 변경: test_policy_admission_core.py test_minimal_enabled_section 이 robots 만으로 enabled 를 기대했으나 구현은 enabled 명시까지 요구하는 fail-closed 가 정책이다. 입력에 enabled: true 를 명시하고 robots-only 절은 비활성을 확인하는 시험을 추가.
+- 증거: 착지 회차에서 NEW 1건(이 시험) 단독 재실행으로 확인 — 구현 결함 아님. 수정 커밋 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음

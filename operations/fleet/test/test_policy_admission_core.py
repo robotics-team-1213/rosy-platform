@@ -60,10 +60,15 @@ class TestSettingsFromConfig:
             PolicyAdmissionSettings.from_config(["enabled"])
 
     def test_minimal_enabled_section(self):
-        settings = PolicyAdmissionSettings.from_config({"robots": ["rosy_01"]})
+        settings = PolicyAdmissionSettings.from_config(
+            {"enabled": True, "robots": ["rosy_01"]})
         assert settings.enabled is True
         assert settings.max_admits == 1
         assert settings.step_approval_kinds == frozenset({"one_person"})
+
+    def test_robots_without_enabled_stays_disabled(self):
+        settings = PolicyAdmissionSettings.from_config({"robots": ["rosy_01"]})
+        assert settings.enabled is False
 
 
 class TestScopeStatusAndToggle:
