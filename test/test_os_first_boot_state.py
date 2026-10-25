@@ -144,3 +144,26 @@ def test_corrupt_generation_is_rejected_before_any_b_projection(tmp_path, monkey
     with pytest.raises(ValueError, match="OS_STATE_HOLD"):
         module.FirstBootProvisioner(root=root_b).apply(bundle=bundle, hardware_serial=SERIAL)
     assert not (root_b / "etc/hostname").exists()
+
+
+@pytest.mark.parametrize("change", ["missing", "wrong_subpath", "read_only"])
+def test_root_local_or_wrong_shared_provisioning_is_refused_before_identity(tmp_path, monkeypatch, change):
+    root_a, _, _, _ = shared_roots(tmp_path, monkeypatch)
+    point = "/var/lib/rosy/provisioning"
+    for name in ("proc/1/mountinfo", "proc/self/mountinfo"):
+        table = root_a / name
+        lines = table.read_text().splitlines(keepends=True)
+        for index, line in enumerate(lines):
+            if f" {point} " in line:
+                lines[index] = ("" if change == "missing" else
+                                line.replace(" /provisioning ", " /foreign ") if change == "wrong_subpath" else
+                                line.replace(" rw -", " ro -"))
+        table.write_text("".join(lines), encoding="ascii")
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
+    bundle.parent.mkdir()
+    bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
+    with pytest.raises(ValueError, match="OS_STATE_HOLD"):
+        _module().FirstBootProvisioner(root=root_a, network_activate=lambda _: True).apply(
+            bundle=bundle, hardware_serial=SERIAL)
+    assert not (root_a / "etc/rosy/device-identity.json").exists()
+    assert bundle.exists()
