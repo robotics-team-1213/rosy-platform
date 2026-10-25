@@ -92,3 +92,6 @@ D-858 reserved by another session outside this branch; remove when its ADR lands
 D-860 reserved by another session outside this branch; remove when its ADR lands
 D-868 reserved outside this branch (refs/adr/D-868); remove when its ADR lands
 D-874 reserved outside this branch; remove when its ADR lands
+D-871 reserved on preserved communication preparation branches outside this branch; remove when its ADR lands
+D-872 reserved on preserved communication preparation branches outside this branch; remove when its ADR lands
+D-873 reserved on preserved communication preparation branches outside this branch; remove when its ADR lands

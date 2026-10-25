@@ -64,6 +64,7 @@
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 | D-801 | 관제 콘솔 로봇 실시간 영상은 사이트 발급 읽기 위임과 SFU 기본·사이트 PC MCU 모자이크 혼합 토폴로지를 쓴다(D-789 Decision 3 대체) |
+| D-875 | Swarm owner-local API separates planning from safety lifecycle |
 
 ## 계획·결과 문서
 
@@ -101,8 +102,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
 - 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
 - 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
 - 2026-10-25 · uncommitted · Swarm lifecycle extraction integration preparation
 - 2026-10-25 · 4ed200d0ee · 군집 세션 무장 경로 의미 보존 분리
-- 2026-10-25 · 85838e52ea · 재접속 scalar 대신 원본 이벤트 확인

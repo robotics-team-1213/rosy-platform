@@ -5,16 +5,34 @@ import asyncio
 import logging
 from typing import Optional, Sequence
 
-from core_common.protocol.schemas import SwarmFollowParams
-from fleet.formation.geometry import Formation, SlotOffset
-from fleet.swarm.arming import (
-    ArmingFailed, FormationSpec, SessionError, check_leader_ready, plan_assignment,
-)
-from fleet.swarm.session_state import SessionState
-from fleet.swarm.transport import RobotApiError, RobotClient, require_capability
+from core_common.protocol.schemas import RobotMode, SwarmFollowParams
+from fleet.swarm.api.types import Formation, SlotOffset, ArmingFailed, FormationSpec, SessionError, SessionState
+from fleet.swarm.api.ports import RobotApiError, RobotClient
 
 # Keep the original session log channel after extraction.
 log = logging.getLogger("fleet.swarm.session")
+
+
+def check_leader_ready(leader_state: dict, leader_id: Optional[str] = None) -> None:
+    """리더가 무장을 받을 상태인가. 팔로워를 한 대도 묶기 전에 본다.
+
+    팔로워를 리더에 묶는 것이 무장이다. 선 리더에 묶으면 e-stop 이 풀리는 순간
+    전원이 그 프레임을 따라간다.
+    """
+    if leader_state.get("mode") == RobotMode.EMERGENCY.value:
+        raise ArmingFailed(leader_id or str(leader_state.get("robot_id") or "leader"), "EMERGENCY_ACTIVE",
+                           "leader is in e-stop")
+
+
+async def require_capability(client: RobotClient, feature: str) -> dict:
+    """Fresh CAP-001 preflight; cached presentation never authorizes a command.
+    Returns the capabilities it read."""
+    caps = value = await client.capabilities()
+    for part in feature.split("."):
+        value = value.get(part) if isinstance(value, dict) else None
+    if value is not True:
+        raise RobotApiError(client.robot_id, 501, "NOT_SUPPORTED", f"{feature} is not advertised")
+    return caps
 
 
 class SessionArming:
@@ -67,7 +85,7 @@ class SessionArming:
                 raise ArmingFailed(robot.robot_id, result.code, result.message) from result
             if isinstance(result, BaseException):
                 raise ArmingFailed(robot.robot_id, "TRANSPORT", str(result)) from result
-        return plan_assignment(leader_state, states, spec, self._assigner,
+        return self._plan_assignment(leader_state, states, spec, self._assigner,
                                leader_id=self._leader.robot_id)
 
     async def _arm(self, spec: FormationSpec, assignment: dict[str, SlotOffset]) -> None:

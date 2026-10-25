@@ -30,9 +30,9 @@ from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _t
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
 from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint, load_robots
-from fleet.swarm.session import FormationSession, FormationSpec, HoldPolicy, SessionError
+from fleet.swarm.session import FormationSession
+from fleet.swarm.api.types import FormationSpec, HoldPolicy, SessionError
 from fleet.swarm.transport import HttpRobotClient
-
 
 def default_web_common() -> Path:
     """Resolve installed assets first, with a source-tree fallback for host tools.

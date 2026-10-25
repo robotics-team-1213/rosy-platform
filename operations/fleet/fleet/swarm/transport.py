@@ -14,6 +14,9 @@ import logging
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol, Sequence, runtime_checkable
 
 import httpx
+
+from fleet.swarm.api.ports import RobotApiError, ReferenceSink, RobotClient
+from fleet.swarm.session_arming import require_capability
 from pydantic import ValidationError
 
 from core_common.protocol.localization import CandidateReport, LocalizationDecision
@@ -30,18 +33,6 @@ _ws_log.setLevel(logging.INFO)
 
 #: `InvalidStatus` 가 없다는 경고는 한 번이면 된다. 소켓마다 찍으면 재연결 로그가 그것뿐이 된다.
 _missing_invalid_status_logged = False
-
-
-class RobotApiError(Exception):
-    """로봇이 4xx/5xx 를 돌려줬다. `code` 는 ERR-101 본문의 것, 없으면 `HTTP_<status>`."""
-
-    def __init__(self, robot_id: str, status: int, code: str, message: str, detail: Optional[dict] = None) -> None:
-        super().__init__(f"{robot_id}: {code} ({status}) {message}")
-        self.robot_id = robot_id
-        self.status = status
-        self.code = code
-        self.message = message
-        self.detail = detail  # ERR-101 ``detail`` when it is an object (D-541: why a trip lease ended)
 
 
 def _invalid_status_class():
@@ -99,83 +90,6 @@ def _as_event(frame) -> Optional[dict]:
     except (TypeError, ValueError):
         return None
     return event if isinstance(event, dict) else None
-
-
-class ReferenceSink(Protocol):
-    async def send(self, frame: str) -> None: ...
-    async def close(self) -> None: ...
-
-    async def wait_closed(self) -> BaseException:
-        """Resolve when the robot closes the socket; return why (RobotApiError for 4401/4403)."""
-        ...
-
-
-@runtime_checkable
-class RobotClient(Protocol):
-    robot_id: str
-
-    async def state(self) -> dict: ...
-    async def power_health(self) -> dict: ...
-    async def capabilities(self) -> dict: ...
-    async def map(self) -> dict: ...
-    async def swarm_state(self) -> dict: ...
-    async def follow(self, params: SwarmFollowParams) -> dict: ...
-    async def swarm_cancel(self) -> dict: ...
-    async def navigation_cancel(self) -> dict: ...
-    async def navigation_path(self) -> dict: ...
-
-    async def navigation_goal(
-        self, x: float, y: float, yaw: float, *, correlation_id: str | None = None,
-        lease_ttl_s: float | None = None, expected_boot_id: str | None = None,
-        expected_owner_generation: int | None = None,
-    ) -> dict: ...
-
-    async def navigation_goal_lease(self, correlation_id: str, ttl_s: float) -> dict: ...
-
-    async def line_follow_mode(self, mode: str) -> dict: ...
-    async def line_follow(self) -> dict: ...
-    async def line_follow_junction(self, action: str, place_id: str, *, stop_after_m: float | None,
-                                   expires_s: float, turn_deg: float | None = None,
-                                   advance_m: float | None = None, expect: dict | None = None) -> dict: ...
-
-    async def line_stuck_decision(self, stuck_id: str, decision: str, *,
-                                  yield_m: float | None = None,
-                                  yield_turn_rad: float | None = None,
-                                  expected_stuck: dict | None = None,
-                                  before_submit: Callable[[], Awaitable[bool]] | None = None,
-                                  realign: dict | None = None) -> dict: ...
-
-    async def estop(self) -> dict: ...
-    async def identify_lamp(self, color: Optional[str] = None, quiet: bool = False) -> dict: ...
-    async def power(self, action: str) -> dict: ...
-    async def identify_lamp_result(self, request_id: str) -> dict: ...
-    # D-395 Phase 2 (contract §2): Fleet-assisted localization.
-    async def localization_candidates(self) -> Optional[CandidateReport]: ...
-    async def localization_request(self) -> Optional[dict]: ...
-    async def localization_decision(self, decision: LocalizationDecision) -> dict: ...
-    async def localization_suspect(self, reason: str) -> dict: ...
-
-    async def localization_mission(
-        self, kind: str, *, max_distance_m: float, max_time_s: float,
-        target: Optional[dict] = None,
-    ) -> dict: ...
-
-    async def localization_mission_status(self) -> dict: ...
-
-    def pose_stream(self) -> AsyncIterator[str]: ...
-    async def open_reference_sink(self) -> ReferenceSink: ...
-    def events(self, types: Sequence[str]) -> AsyncIterator[dict]: ...
-
-
-async def require_capability(client: RobotClient, feature: str) -> dict:
-    """Fresh CAP-001 preflight; cached presentation never authorizes a command.
-    Returns the capabilities it read."""
-    caps = value = await client.capabilities()
-    for part in feature.split("."):
-        value = value.get(part) if isinstance(value, dict) else None
-    if value is not True:
-        raise RobotApiError(client.robot_id, 501, "NOT_SUPPORTED", f"{feature} is not advertised")
-    return caps
 
 
 class _WebsocketSink:

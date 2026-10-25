@@ -21,7 +21,8 @@ def test_api_declarations_have_no_implementation_or_io_imports():
             if isinstance(node, ast.Import):
                 assert all(name.name.startswith(allowed) for name in node.names), path
             elif isinstance(node, ast.ImportFrom):
-                assert node.level or (node.module or "").startswith(allowed), path
+                assert (node.level == 1 and node.module in (None, "types", "ports")
+                        or not node.level and (node.module or "").startswith(allowed)), path
 
 
 def test_legacy_exports_are_the_same_api_objects():
