@@ -442,6 +442,7 @@ DECLARED_WRITES = {
         "/var/lib/rosy/updates/state.json", "/var/lib/rosy/updates/status.json",
         "/var/lib/rosy/updates/history.jsonl", "/var/lib/rosy/updates/hold.json",
         "/var/lib/rosy/updates/downloads",
+        "/var/lib/rosy-device/policy/updates/config.json", "/var/lib/rosy-device/policy/updates/hold.json",
         # rosy_claim.py CLAIM_DIR: mkdir in /run, and the stale rename beside it.
         "/run/rosy-claim", "/run/rosy-claim.stale.x",
         # rosy-release-unpack.sh into the release store; native_release.py
@@ -492,6 +493,10 @@ DECLARED_READS = {
         # sync only reads metadata in the updater's namespace. PID 1 starts a
         # separate bounded tmpfiles worker to create/repair these directories.
         "/var/lib/rosy/maps", "/var/lib/rosy/models", "/var/lib/rosy/pilot-recordings",
+        # A/B admission only reads storage identities and the projection receipt.
+        "/run/rosy-provision-boot", "/run/rosy-os-state/ready.json", "/etc/rosy/os-slot.json",
+        "/var/lib/rosy-device/state", "/proc/1/mountinfo", "/proc/self/mountinfo",
+        "/proc/1/root/dev/disk/by-partuuid",
     },
     "rosy-core.service": {
         # D-456: signed receiver crypto is loaded from immutable release payloads.
