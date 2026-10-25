@@ -14,6 +14,7 @@ import sys
 
 REQUIRED_UNITS = (
     "rosy-os-storage.service",
+    "rosy-os-tailnet.service",
     "rosy-first-boot.service",
     "rosy-new-device-setup.service",
     "rosy-release-recover.service",
@@ -235,7 +236,7 @@ def lamp_driver_findings(root: Path) -> list[str]:
 
 STORAGE_CONSUMERS = ("NetworkManager.service", "ssh.service", "ssh.socket", "tailscaled.service",
                      "rosy-ssh-access-boot.service", "rosy-first-boot.service", "rosy-first-boot-retry.service")
-BOOTSTRAP_HELPERS = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py", "os_state_accounts.py", "os_state_files.py")
+BOOTSTRAP_HELPERS = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py", "os_state_accounts.py", "os_state_files.py", "os_state_config.py")
 STORAGE_HELPERS = (*BOOTSTRAP_HELPERS, "os_storage_dispatch.py")
 
 

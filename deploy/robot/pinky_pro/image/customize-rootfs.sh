@@ -399,6 +399,7 @@ cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 chroot "$ROOT" /usr/bin/python3 -I -B /opt/rosy/native-runtime/os_state_accounts.py
 chroot "$ROOT" install -d -m 0750 -o root -g rosy-core /etc/rosy/tls
+chroot "$ROOT" install -d -m 0700 -o root -g root /var/lib/tailscale
 rm -rf -- "$RELEASE/image-overlay"
 # D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
 # Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
@@ -437,7 +438,7 @@ rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/s
 # chrony: CORE SRS §25 — UTC ISO 8601 timestamps and evidence freshness are
 # cross-module premises; NTP reachability is a runtime concern, not an image one.
 systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
-    rosy-first-boot.service rosy-first-boot-retry.timer rosy-release-recover.service rosy-os-storage.service \
+    rosy-first-boot.service rosy-first-boot-retry.timer rosy-release-recover.service rosy-os-storage.service rosy-os-tailnet.service \
     rosy-runtime.target rosy-host-agent.service \
     rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service rosy-face.service \
@@ -552,7 +553,7 @@ cp -- "$RELEASE/manifest.json" "$RELEASE/SHA256SUMS" "$FACTORY_EXPORT/"
 
 # Parse the actual image's vendor units and required links, including early SSH socket ordering.
 chroot "$ROOT" /usr/bin/systemd-analyze --man=no verify \
-    rosy-os-storage.service NetworkManager.service ssh.service ssh.socket tailscaled.service \
+    rosy-os-storage.service rosy-os-tailnet.service NetworkManager.service ssh.service ssh.socket tailscaled.service \
     rosy-first-boot.service rosy-first-boot-retry.service rosy-ssh-access-boot.service
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
 echo "ROOTFS_CUSTOMIZED $RELEASE_ID"

@@ -7,7 +7,7 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from os_state_layout import _path, _read
+from os_state_layout import COMMON, _path, _read
 
 ACCOUNT_IDS = {"rosy-core": 960, "rosy-io": 961, "rosy-display": 962, "rosy-camera": 963, "rosy": 1001}
 
@@ -52,6 +52,10 @@ def validate_shared_owners(root: Path) -> None:
     if (tls.st_uid != root.stat().st_uid or tls.st_gid != ACCOUNT_IDS["rosy-core"]
             or tls.st_mode & 0o7777 != 0o750):
         raise ValueError("shared TLS owner/group/permissions differ")
+    for relative in ("var/lib/tailscale", COMMON + "/tailscale/join"):
+        info = _path(root, relative).stat()
+        if info.st_uid != root.stat().st_uid or info.st_mode & 0o7777 != 0o700:
+            raise ValueError("shared tailnet owner/permissions differ")
 
 
 def main(argv=None) -> int:

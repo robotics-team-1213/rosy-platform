@@ -21,6 +21,7 @@ SHARED_BINDINGS = {
     "etc/NetworkManager/system-connections": "/network/system-connections",
     "var/lib/rosy/ssh": "/ssh", "home/rosy/.ssh": "/operator-ssh",
     "etc/rosy/tls": "/tls",
+    "var/lib/tailscale": "/tailscale/machine",
 }
 
 

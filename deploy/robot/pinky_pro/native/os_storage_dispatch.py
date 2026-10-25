@@ -9,7 +9,7 @@ import stat
 import sys
 
 BOOTSTRAP_FILES = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py",
-                   "os_state_accounts.py", "os_state_files.py")
+                   "os_state_accounts.py", "os_state_files.py", "os_state_config.py")
 
 
 def marked(root: Path) -> bool:
@@ -45,6 +45,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("/"))
     parser.add_argument("--no-pending-maintenance", action="store_true")
+    parser.add_argument("--tailnet", action="store_true")
     args = parser.parse_args(argv)
     try:
         if marked(args.root):
@@ -52,6 +53,8 @@ def main(argv=None) -> int:
             command = [sys.executable, "-I", "-B", str(entry), "--root", str(args.root)]
             if args.no_pending_maintenance:
                 command.append("--no-pending-maintenance")
+            if args.tailnet:
+                command.append("--tailnet")
             os.execv(sys.executable, command)
         print(json.dumps({"schema_version": 1, "phase": "LEGACY"}, sort_keys=True))
         return 0

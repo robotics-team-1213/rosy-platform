@@ -178,7 +178,7 @@ cp -a "$FIRST_BOOT_SOURCE" "$OVERLAY/opt/rosy/first-boot"
 cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
 # Early A/B admission must survive an interrupted application image-layer sync.
 mkdir -p "$OVERLAY/opt/rosy/os-bootstrap"
-for helper in os_state_storage.py os_state_firstboot.py os_state_layout.py first_boot_runtime.py os_state_accounts.py os_state_files.py; do
+for helper in os_state_storage.py os_state_firstboot.py os_state_layout.py first_boot_runtime.py os_state_accounts.py os_state_files.py os_state_config.py; do
     cp "$NATIVE_RUNTIME_SOURCE/$helper" "$OVERLAY/opt/rosy/os-bootstrap/"
 done
 # The native units address the motor bus as /dev/rosy-motor; the image must
@@ -197,6 +197,7 @@ cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.timer" "$OVERLAY/etc/systemd/system
 cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-os-storage.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-os-tailnet.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-host-agent.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-pairing.service" "$OVERLAY/etc/systemd/system/"
