@@ -11662,3 +11662,10 @@ osy-d395-s1d\`.
 - 증거: 공식 원격 회귀 124 passed와 offline assembly 포함 365 passed, 각각 0 NEW. OS bundle backend 및 실제 부팅 수용을 이 결과로 주장하지 않는다.
 - gate 변화: 없음. 전체 이미지·trial/commit/fallback·SD 기록은 계속 진행 중이다.
 - CE: 해당 없음 — 판단과 반례가 ADR·소스·시험에 남아 있다.
+
+## 2026-10-26 · e2860d4e5f · D-881 지속 데이터·SSH host identity 구체화
+
+- 변경: 기존 navigation/model/capture owner의 공통 directory bind, SSH pair의 초기 한 번 생성·일반 파일 투영·missing/corrupt HOLD, OS launcher와 cloud-init 경계를 Proposed ADR에 추가한다.
+- 증거: 통합878 passed/16 skipped 및 마지막 공개키 단일 record 보강11 passed, 각0 NEW. 실제 부팅/서비스 manager와 전원 차단은 검증하지 않았다.
+- gate 변화: 없음. 전체 이미지·OS trial/commit/fallback·SD 기록은 남았다.
+- CE: 해당 없음 — 판단은 ADR·소스·반례 시험으로 재현할 수 있다.

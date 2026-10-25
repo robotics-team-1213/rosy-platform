@@ -3486,3 +3486,10 @@
 - 증거: 공식 원격 runner의 ABI·legacy closure 회귀 124 passed, offline factory 포함 회귀 365 passed, 각각 known_failures 0 NEW. 두 결과는 겹치므로 합산하지 않는다. main GPT 소비자 통합 커밋은 21c8e443d1이다.
 - gate 변화: 새 ARM64 A/B 이미지·OS engine·실물 부팅·SD 기록 수용은 아직 없음. 기존 카드를 유지한다.
 - CE: 해당 없음 — 호환성 경계와 legacy 재현 조건을 소스·회귀 시험·D-881에 기록했다.
+
+## 2026-10-26 · e2860d4e5f · A/B 지속 데이터와 SSH host identity 보존
+
+- 변경: maps·models·pilot-recordings의 실제 mount/uid/gid/mode를 storage admission에 포함한다. 공통 SSH Ed25519 pair를 FACTORY_EMPTY에서만 게시하고 OS-owned storage ExecStartPost가 root별 일반 파일에 투영한다. cloud-init의 host key 삭제·생성을 offline A/B 설정에서 끄며 legacy는 유지한다. 기존 pairing API의 no-symlink 계약을 보존한다.
+- 증거: 데이터 admission 반례15 failed/1 passed 뒤 774 passed/16 skipped, SSH 초기8 failed와 실제 keygen 댓글 비교 오류6 failed/59 passed 뒤 집중83 passed. 통합 updater apply/resume 포함878 passed/16 skipped/5 warnings(115.98s, f822424f6a), 마지막 single-record 보강11 passed(1.00s, e2860d4e5f), 각 확인 실행0 NEW. 파일 IO·실제 OpenSSH와 modeled mount 시험이며 실물 부팅·daemon/namespace·powercut 수용은 아니다. 중복 수치를 합산하지 않는다.
+- gate 변화: SOURCE 보강. GPT 조립·OS update backend·새 ARM64 이미지·SD 기록은 아직 미완료다.
+- CE: 해당 없음 — 경계와 재시도 조건은 소스·회귀 시험·D-881에 기록했다.

@@ -66,6 +66,14 @@ A/B firstboot는 일회용 join 요청을 공통 `/tailscale/join/request.json`�
 
 다른 보드에서 A/B firstboot를 반복해도 공통 canonical pointer·완료 기록·현장 Wi-Fi는 보존하고, 하나의 임시 등록 identity로 SETUP 안내를 유지한다. 이전 hostname을 live 적용하거나 tailnet 권한을 이전하지 않는다. 등록 대기 기록이 있으면 원래 보드로 카드를 돌려놔도 tailnet daemon/join을 승인하지 않는다. 새 기체 등록은 기존 안내대로 새 서명 이미지 카드를 준비하는 경로를 지원한다. root-local archive 도구는 A/B marker가 있으면 파일 이동 전에 거부한다. 이 도구로 공통 generation이나 machine credential을 재등록하지 않는다. legacy single-root 재등록도 CORE·하드웨어·tailnet daemon/join의 정지를 확인한 뒤에만 진행한다. 실제 반복 부팅·서비스 관리자·복구 페이지 접근 수용은 별도다.
 
+### 지속 데이터와 SSH host identity
+
+기존 `/var/lib/rosy/maps`, `/var/lib/rosy/models`, `/var/lib/rosy/pilot-recordings`는 공통 data의 같은 이름 디렉터리에 directory bind한다. navigation의 maps는 rosy-io:rosy-core 2750, operator delivery의 models는 root:rosy-camera 0750, camera capture의 pilot-recordings는 rosy-camera:rosy-core 2750을 유지한다. storage admission은 host·caller mount와 실제 uid/gid/mode를 확인하며 slot 전환을 이유로 이전 파일을 복사하거나 삭제를 되돌리지 않는다. 모델 payload·지도 포맷 자체의 버전 간 호환 수용은 별도다.
+
+SSH host identity는 root0700 공통 `ssh-hostkeys` 디렉터리의 Ed25519 pair가 정본이다. OS-owned storage gate의 ExecStartPost가 SSH service/socket 전에 고정 helper를 실행한다. FACTORY_EMPTY에서만 새 pair를 생성해 파일·디렉터리를 fsync한 뒤 directory rename으로 게시한다. 공통 key가 이미 있으면 개인키에서 공개키를 유도해 대조하고, hardlink·symlink·잘못된 mode·추가 파일을 거부한다. COMMITTED/INITIALIZING에서 key가 없으면 자동 rotation하지 않고 HOLD한다. root별 `/etc/ssh/ssh_host_ed25519_key{,.pub}`에는 일반 파일을 원자적으로 투영한다. 기존 pairing·공개키 API의 no-symlink 계약을 유지하며 `/etc/ssh` 전체와 SSH 설정을 공유하지 않는다.
+
+offline configurer는 고정 HostKey 경로와 cloud-init의 `ssh_deletekeys: false`, 빈 `ssh_genkeytypes`를 설치한다([cloud-init SSH module](https://cloudinit.readthedocs.io/en/latest/topics/modules.html#ssh)). 일반 legacy 이미지는 바꾸지 않는다. 원격 시험은 실제 OpenSSH key 생성·pair 확인과 파일 재적용·게시 직후 fsync 오류 재시도를 검증하며, 실제 daemon ordering·namespace·전원 차단은 입증하지 않는다. 초기화 stage의 미게시 key는 채택하지 않고, 이미 게시한 pair는 재시도에서 유지한다.
+
 ### Payload와 OS의 호환 경계
 
 A/B root의 native payload admission은 서명·전체 inventory 검증을 마친 뒤 `image_layer_boot.py`의 literal `OS_COMPATIBILITY`를 읽는다. 후보 Python을 실행하지 않고 boot ABI 범위·공통 state 읽기 범위·쓰기 schema를 검사한다. 현재 boot ABI는1, 공통 state는1이며 writer schema는 현재 공통 schema와 같아야 한다. schema migration은 이 구현의 지원 범위에 없고, 되돌아갈 root가 읽지 못하는 writer를 활성화하지 않는다. 필수 A/B reader·writer·검증 모듈이 `ENGINE_FILES`에 선언되고 실제 파일로 존재해야 한다. 미지원 후보는 activation·rollback의 journal·runtime·link 변경 전에 `OS_PAYLOAD_INCOMPATIBLE`로 거부한다. offline root configurer도 같은 검사를 root별 descriptor·override 쓰기 전에 적용한다.
