@@ -77,7 +77,7 @@
 ## 최근 기록
 
 - 2026-10-26 · b3044a5b6d · A/B payload와 offline factory의 호환성 검사
+- 2026-10-26 · a3518e509c · A/B 슬롯 admission과 공통 업데이트 정책 구현 중
 - 2026-10-26 · 9816e56bd9 · Site updater pure split verified
 - 2026-10-26 · uncommitted · Site updater runtime extraction before migration
 - 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
-- 2026-10-25 · a401f49f6d · 서명된 GPT 이미지의 SD 준비 경로

@@ -3444,13 +3444,6 @@
 - gate 변화: source 병합 호환만 검증했다. A/B media/OS 엔진·native ARM64 artifact·실기 powercut 수용은 미완료다.
 - 교훈: CE 해당 없음 — 구현 동등성·소비자 경로·회귀 시험에 근거를 보존했다.
 
-## 2026-10-26 · a3518e509c · A/B 슬롯 admission과 공통 업데이트 정책 구현 중
-
-- 변경: image-owned descriptor와 kernel marker, host/caller mount, 실제 PARTUUID·파티션 번호·동일 disk parent, 부팅/슬롯/generation receipt를 확인하는 updater 소비자를 추가했다. config/Hold만 공통 policy를 사용하고 applying/state/history/lock은 각 root에 유지한다. 누락된 공통 config와 다른 사용자가 쓸 수 있는 파일은 거절하며 보류 생성·해제·만료에 directory fsync를 적용한다.
-- 증거: 실제 updater 신규 반례와 legacy control의 RED를 확인한 뒤 정상 A/B·namespace·설치 resync·systemd 계약 256 passed(ed9df76398), 보류 durability·기존 eligibility 포함146 passed(a3518e509c)를 확인했다. 일부 source namespace는 file/stat 모의이며 실제 privileged sandbox·mount·powercut 수용은 아니다.
-- gate 변화: state/firstboot 단위 구현 중이다. 실제 storage/state oneshot, canonical generation publisher/projector, firstboot·live writer 통합과 native ARM64 이미지·SD·boot·전체 OS OTA는 남았다. 시험 receipt를 실제 readiness producer로 표시하지 않는다.
-- 교훈: CE 해당 없음 — 기존 installed-layout/실제 소비자 교훈을 적용했고 구현 판단은 ADR·회귀 시험·실행 기록에 보존한다.
-
 ## 2026-10-25 · a401f49f6d · 서명된 GPT 이미지의 SD 준비 경로
 
 - 변경: 실험용 image manifest v2의 여섯 파티션 역할·GUID·범위와 primary/backup GPT를 검증한다. SD 도구는 서명 검증 결과의 snapshot을 받아 boot_a에만 개인화하며 full readback과 기록 직전 GPT 재검사를 유지한다. MBR v1은 기존 경로를 유지하고 GPT emergency는 거절한다. producer는 실제 image를 검사하며 v2 production BUILD_GO는 명시적으로 차단한다.
@@ -3479,6 +3472,13 @@
 - 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
 - gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
 - CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
+
+## 2026-10-26 · a3518e509c · A/B 슬롯 admission과 공통 업데이트 정책 구현 중
+
+- 변경: image-owned descriptor와 kernel marker, host/caller mount, 실제 PARTUUID·파티션 번호·동일 disk parent, 부팅/슬롯/generation receipt를 확인하는 updater 소비자를 추가했다. config/Hold만 공통 policy를 사용하고 applying/state/history/lock은 각 root에 유지한다. 누락된 공통 config와 다른 사용자가 쓸 수 있는 파일은 거절하며 보류 생성·해제·만료에 directory fsync를 적용한다.
+- 증거: 실제 updater 신규 반례와 legacy control의 RED를 확인한 뒤 정상 A/B·namespace·설치 resync·systemd 계약 256 passed(ed9df76398), 보류 durability·기존 eligibility 포함146 passed(a3518e509c)를 확인했다. 일부 source namespace는 file/stat 모의이며 실제 privileged sandbox·mount·powercut 수용은 아니다.
+- gate 변화: state/firstboot 단위 구현 중이다. 실제 storage/state oneshot, canonical generation publisher/projector, firstboot·live writer 통합과 native ARM64 이미지·SD·boot·전체 OS OTA는 남았다. 시험 receipt를 실제 readiness producer로 표시하지 않는다.
+- 교훈: CE 해당 없음 — 기존 installed-layout/실제 소비자 교훈을 적용했고 구현 판단은 ADR·회귀 시험·실행 기록에 보존한다.
 
 ## 2026-10-26 · b3044a5b6d · A/B payload와 offline factory의 호환성 검사
 
