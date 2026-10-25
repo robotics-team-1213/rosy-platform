@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · D-876 API reference v1.318 표시 정렬
 - 2026-10-25 · uncommitted · 호스트 에이전트 중계 문구 표기 정렬
 - 2026-10-24 · c60d6046bb · network-only 호스트 작업 중계
 - 2026-10-24 · uncommitted · D-862 공통 reference 버전 pin 정렬
 - 2026-10-22 · 79a11a4a54 · 모터 상태 API와 공용 출처 검증
-- 2026-10-19 · uncommitted · OMX SIM CORE 준비와 안전한 내부 port 연결

@@ -11366,6 +11366,12 @@ osy-d395-s1d\`.
 - 증거: `test/test_omx_judge_seat.py` 세 실패 경우 추가, 원격 시험 결과는 착지 기록 참조.
 - gate 변화: 없음. CE 해당 없음 — 조사 결과의 원칙 기록과 작은 fail-closed 보강이며 장애 해결이 아니다.
 
+## 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
+
+- 변경: Fleet의 캐시 전용 연결 관측 응답과 목표 읽기 경로를 API 정본에 등록했다. handler와 독립 Monitoring 런타임은 아직 구현되지 않았음을 명시했다. 기존 API 설명·시험 버전 고정값을 예약 도구로 함께 갱신했다.
+- 증거: 새 계약 시험의 미구현 import 실패를 원격에서 확인한 뒤 스키마를 추가했다. 후속 원격 검증과 독립 계약 검토로 확인한다.
+- gate 변화: 없음. ADR D-876의 첫 wire 계약이며 운영 활성화는 아니다. CE: 해당 없음.
+
 ## 2026-10-25 · ce056c8fb4 · pytest helper 전이 import 격리 복원
 
 - 변경: 정본 affected_pack 호출과 Repo.test_import_names를 복원했다. 같은 helper 소유자는 함께 묶고 다른 디렉터리의 동명 helper는 분리하며, 기존 CI 순서·명령 길이·시험 누락 방지 검사는 유지한다.
