@@ -10,6 +10,7 @@ from .models import MonitoringLink, MonitoringNode
 
 
 APPLICATION_ID = 0x52534D31
+MAX_ANCHORS = 8192
 
 
 class StoreUnavailable(ValueError):
@@ -68,8 +69,8 @@ class MonitoringStore:
         try:
             with self._connection() as db:
                 for table in ('visible', 'anchors'):
-                    rows = db.execute(f'select kind,source,id,captured,payload from {table} limit 8193').fetchall()
-                    if len(rows) > 8192:
+                    rows = db.execute(f'select kind,source,id,captured,payload from {table} limit {MAX_ANCHORS + 1}').fetchall()
+                    if len(rows) > MAX_ANCHORS:
                         raise StoreUnavailable()
                     parsed = []
                     for kind, source, item_id, captured, payload in rows:
@@ -108,6 +109,9 @@ class MonitoringStore:
                     self._event(db, item.site_id, item.id, public, wall)
             for item_id, previous in old.items():
                 self._event(db, previous['site_id'], item_id, {'freshness': 'unknown', 'present': False}, wall)
+            if (db.execute('select count(*) from anchors').fetchone()[0] > MAX_ANCHORS
+                    or db.execute('select count(*) from counters').fetchone()[0] > 64):
+                raise StoreUnavailable()
             if peer_cursor is not None:
                 db.execute('insert or replace into peers values (?,?)', (key[1], json.dumps(peer_cursor)))
             cutoff = (wall - timedelta(days=7)).isoformat()

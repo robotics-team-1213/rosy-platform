@@ -9,10 +9,10 @@ from uuid import uuid4
 
 from .config import MonitoringConfig
 from .models import MonitoringLink, MonitoringNode, MonitoringSnapshot
-from .store import StoreUnavailable
+from .store import MAX_ANCHORS, StoreUnavailable
 
 
-MAX_REMEMBERED = 8192
+MAX_REMEMBERED = MAX_ANCHORS
 
 
 class ObservationRejected(ValueError):
