@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import uuid
 
 from first_boot_runtime import _json_atomic, _write_atomic
@@ -158,7 +159,8 @@ class FirstBootState:
             if target.exists():
                 _read(target, 64 * 1024, self.owner)
         for relative, target in targets.items():
-            if not target.exists() or _read(target, 64 * 1024, self.owner) != content[relative]:
+            if (not target.exists() or _read(target, 64 * 1024, self.owner) != content[relative]
+                    or stat.S_IMODE(target.stat().st_mode) != ROOT_FILES[relative]):
                 _write_atomic(target, content[relative].decode("utf-8"), ROOT_FILES[relative])
         if not self.complete.exists():
             _json_atomic(self.complete, expected, 0o640)
