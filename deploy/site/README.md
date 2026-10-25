@@ -861,8 +861,11 @@ set-policy-admin /etc/rosy/site/site-users.yaml --principal <id> [--principal <i
 Deploy a Fleet that knows `policy_admin` before setting it: an older Fleet refuses the
 key at startup. All roles remain subject to CORE's local safety checks.
 
-Maintain `site-users.yaml` with `deploy/site/site_users.py` instead of an
-editor: `python3 deploy/site/site_users.py add /etc/rosy/site/site-users.yaml
+The signed candidate includes the host tool at
+`/opt/rosy/candidate/deploy/site/site_users.py`; it runs on the site host with
+Python 3 and PyYAML, without installing Fleet there. Maintain `site-users.yaml`
+with that tool instead of an editor:
+`sudo python3 /opt/rosy/candidate/deploy/site/site_users.py add /etc/rosy/site/site-users.yaml
 --principal <id> --role <operator|viewer|policy-admin> --token-stdin` pipes the
 raw token through stdin only (it never enters argv, `ps`, or logs), stores just
 its SHA-256 digest, and publishes atomically — temp file plus rename, then a
@@ -874,10 +877,23 @@ empty users list. After each write the tool applies `root:10001` mode `0440`
 itself when run as root, and otherwise prints the exact `chown`/`chmod` line
 to run.
 
+For a machine client, provision a distinct high-entropy token through the
+approved secret manager and privately pipe it to
+`sudo python3 /opt/rosy/candidate/deploy/site/site_users.py add-service
+/etc/rosy/site/site-users.yaml --principal <machine-id> --token-stdin`.
+Use `--dry-run` first. The token travels through stdin; never paste it into
+command arguments, shell history, logs, or chat. Deliver the same raw token to
+the client's protected credential store through the secret manager. The registry
+stores only its digest, and this command prints only the principal, fixed
+`service` role, outcome and ownership guidance. It grants the existing Fleet
+service permissions; it adds no operator, policy, or scoped grants. A service
+principal cannot have a Console login or password. `add` remains limited to its
+human-role whitelist; use the separate person login flow below for operators.
+
 For a human Console login, generate the password hash with the existing
 `python3 -m fleet.server.site_users hash-password` command in the Fleet
 environment. It prompts without echo on an interactive terminal. Supply the
-result through a private pipe to `sudo python3 deploy/site/site_users.py
+result through a private pipe to `sudo python3 /opt/rosy/candidate/deploy/site/site_users.py
 add-login /etc/rosy/site/site-users.yaml --principal <person-id> --role operator
 --login <login-id> --password-hash-stdin`. Do not put the password or hash in
 command arguments, logs, or chat. `--dry-run` validates without publishing;
@@ -894,7 +910,7 @@ manually restored file was published with group `101` instead of `10001`, and
 the watcher fed the unreadable file straight into a roughly two-minute Fleet
 crash loop (`unable to load site user credentials`). Never edit or restore
 this file by hand — always use `site_users.py`. Gate every automatic restart
-on `python3 deploy/site/site_users.py validate <file>` (YAML shape, digest
+on `python3 /opt/rosy/candidate/deploy/site/site_users.py validate <file>` (YAML shape, digest
 formats, permission bits, owning group; a non-zero exit means keep Fleet on
 the last good file and log instead of restarting).
 
@@ -1035,6 +1051,33 @@ authenticate that same candidate: an unsigned replacement could replace both.
 The production site key ID and public key are not selected or present in this
 repository yet; until they are independently provisioned, host activation is
 HOLD.
+
+Candidates built with the service-token tool carry the signed manifest field
+`site_users_tool_required: true` and the hash of `deploy/site/site_users.py`.
+Before accepting these candidates, an administrator must refresh the independently
+installed verifier from the reviewed checkout through the trusted administrator
+path above. For the updater, use the reviewed-checkout installation procedure
+below; it imports the verifier installed beside it, never the candidate's copy.
+The previous verifier rejects the new tool as an unsupported deployment file.
+The updated verifier accepts historical signed candidates without the marker;
+when a tool is listed, its file and hash are always checked. A present marker
+must be literal `true`, and requires the tool and its hash. Removing or changing
+the marker also invalidates the manifest signature.
+
+Before enabling updates, run the independently installed verifier against the
+running candidate, each retained rollback candidate, and the new signed candidate.
+Use `--signature-only` for the new candidate before loading its images, then
+verify the loaded images as below. Historical running and rollback candidates
+must retain their original signed manifests; do not add the marker or tool to
+them. Record this transition matrix in host evidence:
+
+| Signed candidate | Updated verifier outcome |
+|---|---|
+| Historical, no marker and no tool | Accepted under the existing checks |
+| No marker, tool listed | Tool must exist and match its signed hash |
+| Marker `true`, tool listed | Tool must exist and match its signed hash |
+| Marker `true`, tool omitted | Rejected |
+| Marker present with any other value | Rejected |
 
 Copy the signed candidate to the approved Ubuntu host using the site's
 controlled transfer path. Verify its signature and files before Docker loads
