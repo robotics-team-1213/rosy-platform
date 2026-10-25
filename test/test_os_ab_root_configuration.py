@@ -37,6 +37,10 @@ def test_offline_root_installs_frozen_boot_and_recovery_with_its_factory_binding
     for text in (first, recover):
         assert "Type=oneshot" in text
         assert "RemainAfterExit=yes" in text
+    for unit in ("rosy-first-boot", "rosy-release-recover", "rosy-os-storage", "rosy-os-tailnet", "rosy-sd-provision"):
+        text = (units / (unit + ".service.d/10-rosy-os.conf")).read_text()
+        assert "/opt/rosy/native-runtime/" not in text
+        assert "/opt/rosy/os-bootstrap/" in text
     _configurer().configure(root, FACTORY_ID)  # Identical assembly is idempotent.
 
 

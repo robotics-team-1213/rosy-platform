@@ -142,3 +142,20 @@ def test_firstboot_dispatch_cannot_run_without_ab_identity(tmp_path):
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 1, result.stderr
     assert json.loads(result.stdout)["phase"] == "HOLD"
+
+
+@pytest.mark.parametrize("flag", [None, "--projected", "--tailnet"])
+def test_os_admission_does_not_need_the_mutable_launcher(tmp_path, flag):
+    prefix = _prefix(tmp_path)
+    _stage(prefix)
+    for path in (prefix / "native-runtime").glob("*.py"):
+        path.write_text('raise RuntimeError("application launcher is unavailable")\n')
+    root = tmp_path / "device"
+    (root / "etc/rosy").mkdir(parents=True)
+    (root / "etc/rosy/os-slot.json").write_text("{}")
+    result = subprocess.run([sys.executable, "-I", "-B", str(prefix / "os-bootstrap/os_storage_dispatch.py"),
+                             "--root", str(root), *([flag] if flag else [])], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 1, result.stderr
+    assert json.loads(result.stdout)["phase"] == "HOLD"
+    assert "application launcher" not in result.stderr
