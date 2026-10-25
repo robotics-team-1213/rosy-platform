@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -259,8 +260,8 @@ def test_full_local_uses_deploy_functional_tests_and_leaves_root_suite_to_ci(sam
 def test_pack_bounds_remote_command_length_without_dropping_tests():
     class FakeRepo:
         @staticmethod
-        def test_files_under(path):
-            return [path]
+        def test_import_names(path):
+            return {PurePosixPath(path).name: path}
 
     paths = [f"test/test_case_{i:04d}_{'x' * 24}.py" for i in range(200)]
     groups = affected.pack(FakeRepo(), paths)
@@ -278,6 +279,27 @@ def test_duplicate_basenames_run_in_separate_invocations(sample):
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
         assert len(names) == len(set(names)), inv
+
+
+def test_pack_separates_transitively_imported_test_helpers(tmp_path):
+    files = {
+        'a/test_lease.py': 'VALUE = 1\n',
+        'b/test_lease.py': 'VALUE = 2\n',
+        'b/test_bridge.py': 'from test_lease import VALUE\n',
+        'b/test_job.py': 'from test_bridge import VALUE\n',
+    }
+    for name, source in files.items():
+        path = tmp_path / name
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(source, encoding='utf-8')
+    subprocess.run([sys.executable, "-c", "from test_job import VALUE; assert VALUE == 2"],
+                   cwd=tmp_path / "b", check=True)
+    repo = affected.Repo(tmp_path, modules=[], owners=[], tracked=list(files), test_files=list(files))
+    groups = affected.pack(repo, ['a/test_lease.py', 'b/test_job.py'])
+    assert groups == [['a/test_lease.py'], ['b/test_job.py']]
+    assert affected.pack(repo, ['b/test_job.py', 'b/test_bridge.py']) == [
+        ['b/test_job.py', 'b/test_bridge.py']]
+
 
 
 def test_reasons_name_the_reverse_dependency(sample):
