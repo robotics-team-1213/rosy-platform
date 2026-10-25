@@ -145,6 +145,31 @@ def test_publish_only_clone_pushes_publish_branches_only(tmp_path, refs, config,
         assert "ROSY_PUSH_REASON" in pushed.stderr
 
 
+@pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
+@pytest.mark.parametrize("same", [True, False])
+def test_a_stale_installed_copy_refuses_the_push(tmp_path, same):
+    """2026-10-26: the shared clone ran a 10-11 copy for two weeks; a copy unlike the pushed hook stops."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "ROSY_PUSH_REASON"}
+    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, env=env,
+                                    capture_output=True, text=True).stdout.strip()
+    git("init", "-q")
+    git("config", "rosy.publishOnly", "true")
+    stdin_part = SCRIPT.read_text(encoding="utf-8").split("# Git exports repository-local", 1)[0]
+    installed = tmp_path / "installed-pre-push"
+    installed.write_text(stdin_part.replace('cd "$(git rev-parse --show-toplevel)"', ""), encoding="utf-8")
+    tracked = tmp_path / "tools/hooks/pre-push"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text(installed.read_text(encoding="utf-8") + ("" if same else "# newer gate\n"), encoding="utf-8")
+    git("add", "tools/hooks/pre-push")
+    git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "hook")
+    line = f"refs/heads/b {git('rev-parse', 'HEAD')} refs/heads/publish/main-20261026 {'0' * 40}\n"
+    pushed = subprocess.run([BASH, str(installed), "origin", "url"], input=line, capture_output=True,
+                            text=True, cwd=tmp_path, env=env)
+    assert (pushed.returncode == 0) == same, pushed.stderr
+    if not same:
+        assert "install.sh" in pushed.stderr
+
+
 def _safety_step_repo(tmp_path, manifest="roots:\n  - path: safe\n    concern: safety\n"):
     """A throwaway clone layout: the real safety_review.py (BASELINE = its root commit) and a safety root."""
     def git(*args):

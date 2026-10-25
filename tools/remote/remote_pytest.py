@@ -16,7 +16,7 @@ link for ``ROSY_TEST_RECONNECT`` s (default 600); past that the invocation exits
 job is left running on the host.
 
 Hosts: ``ROSY_TEST_HOSTS`` (space separated), default model PC, AI PC, site PC. Each
-host is measured (cores, load, memory, ``~/rosy-jobs/*.lock``, ``~/rosy-jobs/busy``)
+host is measured (cores, load, memory, free disk, ``~/rosy-jobs/*.lock``, ``~/rosy-jobs/busy``)
 and the ones above the class floor are used, most headroom first (a pytest host with 4-6 GB is light:
 serial, capped at its free GB, smallest invocations); the site PC only when no other host qualifies (D-568).
 An invocation gets pytest-xdist ``-n`` unless ``xdist_plan.py`` keeps it serial. Several invocations
@@ -55,8 +55,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.append(str(Path(__file__).resolve().parents[2] / "test"))
 import known_failures  # noqa: E402
 import lab_hosts  # noqa: E402
+import memory_history  # noqa: E402
 import remote_job  # noqa: E402
 import remote_test_tools  # noqa: E402
+from host_probe import DISK_FLOOR_GB, PROBE, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
 from work_queue import Work, cost  # noqa: E402,F401
 
@@ -126,7 +128,8 @@ cd "$R/repo"
 git fetch -q "$3" +refs/heads/main:refs/remotes/origin/main || echo "[remote] fetching public main failed" >&2
 git bundle verify -q "$R/runs/$NAME.bundle" >/dev/null 2>&1 || exit 3
 git fetch -q "$R/runs/$NAME.bundle" "+refs/remote-pytest/$NAME:refs/remote-pytest/$NAME"
-""" + remote_job.SWEEP + r"""git worktree remove -f -f "$R/runs/$NAME" 2>/dev/null || rm -rf "$R/runs/$NAME"  # a retried ship; -f -f: locked
+""" + remote_job.SWEEP + r"""chmod -R u+rwX -- "$R/runs/$NAME" 2>/dev/null || true
+git worktree remove -f -f "$R/runs/$NAME" 2>/dev/null || rm -rf "$R/runs/$NAME"  # a retried ship; -f -f: locked
 git worktree prune
 git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 """
@@ -141,33 +144,13 @@ git worktree add -q --detach "$R/runs/$NAME" "$SHA"
 # other sessions that use it directly; a new hash never waits for their tests.
 VENV = remote_test_tools.VENV
 
-# One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site. Dead-pid
-# locks and expired reservations (<expiry epoch> <class> <cores> <GB>) go; both count toward the budget.
-PROBE = r"""J=~/rosy-jobs; c=0; m=0; now=$(date +%s)
-for f in "$J"/*.resv; do
-  [ -e "$f" ] || continue; read -r t _ fc fm < "$f" || true
-  case "$t$fc$fm" in ''|*[!0-9]*) rm -f "$f"; continue;; esac
-  if [ "$t" -gt "$now" ]; then c=$((c+fc)); m=$((m+fm)); else rm -f "$f"; fi
-done
-for f in "$J"/*.lock; do
-  [ -e "$f" ] || continue; read -r pid _ fc fm < "$f" || true
-  case "$fc$fm" in ''|*[!0-9]*) fc=0 fm=0;; esac  # whole numbers only; never evaluate file text
-  if kill -0 "$pid" 2>/dev/null; then c=$((c+${fc:-0})); m=$((m+${fm:-0})); else rm -f "$f"; fi
-done
-py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
-  "$p" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1 && break; done
-s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
-b=0; [ -e "$J/busy" ] && b=1
-st=0; [ -e "$J/site" ] && st=1
-echo "ROSYPROBE $(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
-  "$(awk '/^MemAvailable:/{a=$2} /^MemTotal:/{t=$2} END{print a, t}' /proc/meminfo) $py $s $b $c $m $st"
-"""
-
 # --pick: reserve the class budget on the chosen host until the Gazebo script writes its own lock.
 RESERVE = r"""mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) $1 $2 $3" > ~/rosy-jobs/pick-$(date +%s%N).resv"""
 
 CLEANUP = r"""R=~/rosy-test
 rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".resv
+# Release/rollback tests leave read-only dirs (product behaviour); without u+w rm -rf leaves them behind.
+chmod -R u+rwX -- "$R/runs/$1" "$R/runs/$1.jobs" 2>/dev/null || true
 git -C "$R/repo" worktree remove --force "$R/runs/$1" 2>/dev/null || rm -rf "$R/runs/$1"
 git -C "$R/repo" worktree prune
 git -C "$R/repo" update-ref -d "refs/remote-pytest/$1" 2>/dev/null || true
@@ -209,18 +192,6 @@ def probe(host: str) -> dict | None:
     return parse_probe(out)
 
 
-def parse_probe(out: str) -> dict | None:
-    """The ROSYPROBE line of PROBE output (login-shell chatter around it is ignored), or None."""
-    try:
-        line = [ln for ln in out.splitlines() if ln.startswith("ROSYPROBE ")][-1]
-        n, load, avail, total, py, sim, busy, cores, gb, site = line.split()[1:]
-        return {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
-                "total_gb": int(total) / 2**20, "pytest": py == "1", "sim": sim == "1", "busy": busy == "1",
-                "lock_cores": int(cores), "lock_gb": int(gb), "site": site == "1"}
-    except (IndexError, ValueError):
-        return None
-
-
 def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[str], list[str]]:
     """(hosts above the cls floor, most headroom first, light ones after, the site PC only when no other fits; notes)."""
     need_c, need_m = NEEDS[cls]
@@ -234,9 +205,11 @@ def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[s
         cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - (SITE_RESERVE[0] if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (SITE_RESERVE[1] if site else 0)
         why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else f"no {cls} capability" if not p[cls]
+               else f"below disk floor {DISK_FLOOR_GB} GB" if disk_full(p)
                else f"below {cls} floor {need_c} cores/{floor_m} GB" if cores < need_c or mem < floor_m
                else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
-        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{' (site PC)' if site else ''} - {why}")
+        disk = f", disk {p['disk_free_gb']:.1f} GB free ({p['disk_use']}%)" if "disk_free_gb" in p else ""
+        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}")
         if why == "ok" or why.startswith("light"):
             HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m}
             ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))
@@ -299,8 +272,9 @@ def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[st
     for note in notes:
         print(f"[remote-pytest] {note}", file=sys.stderr, flush=True)
     if not chosen and cls == "pytest":
-        # D-568 7: busy hosts must not stop the gate; the site PC never takes this fallback.
-        chosen = [h for h, p in zip(hosts, probes) if p and p["pytest"] and not p["busy"] and h not in SITES]
+        # D-568 7: busy hosts must not stop the gate; the site PC and a full disk never take this fallback.
+        chosen = [h for h, p in zip(hosts, probes)
+                  if p and p["pytest"] and not p["busy"] and not disk_full(p) and h not in SITES]
         if chosen:
             print("[remote-pytest] WARNING: no host above the pytest floor; using the reachable ones anyway",
                   file=sys.stderr, flush=True)
@@ -493,6 +467,11 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
         sha: str) -> tuple[int, str | None]:
     """(exit code, lost message or None) of invocation inv as job k of run dir name on host."""
     words, extra, note = xdist_plan.plan(inv, HEADROOM.get(host))
+    history = memory_history.path(repo)
+    reserve = memory_history.reserve_gb(history, inv)
+    if reserve < xdist_plan.JOB_MEM_GB and not any(w.startswith("ROSY_JOB_MEM_GB=") for w in words):
+        words = [*words, f"ROSY_JOB_RESERVE_GB={reserve}"]  # light hosts already reserve their smaller cap
+        note += f", reserve {reserve} GB (memory history)"
     print(f"[remote-pytest] {note}", flush=True)
     try:
         code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH)
@@ -501,6 +480,8 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
         return remote_job.LOST_EXIT, str(error)
     text = log.read_bytes().decode("utf-8", errors="replace")
     print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
+    if (peak := memory_history.peak_mib(text)) is not None:
+        memory_history.record(history, inv, host, peak, sha)
     failed = known_failures.failed_ids(text)
     ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if code == 1 and failed else []
     if not known_failures.should_rerun(code, failed, ids):  # D-762 stage 1: once, listed ids only

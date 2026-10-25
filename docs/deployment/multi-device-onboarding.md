@@ -54,7 +54,7 @@ SDK가 없으면 연결 가능한 것처럼 보이는 빈 드라이버·가짜 t
 
 ## SDK 어댑터 준비 순서
 
-현재 `python tools/release/deploy.py list`로 직접 설치형과 SDK-host target의 상태를 조회할 수 있다.
+현재 `python tools/release/deploy_cli.py list`로 직접 설치형과 SDK-host target의 상태를 조회할 수 있다.
 실제 apply/rollback은 기존 Pinky executor만 연결되어 있으며 SDK adapter를 제공하는 것은 아니다.
 
 1. 공식 지원표와 해당 SDK 문서로 기종/조종기/펌웨어 조합을 확인한다. 미지원이면 제어 구현을 중단하고

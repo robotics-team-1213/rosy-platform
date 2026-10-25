@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-26 · 9816e56bd9 · Site updater pure split verified
-- 2026-10-26 · uncommitted · Site updater runtime extraction before migration
-- 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
-- 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
-- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+- 2026-10-26 · uncommitted · tools/doctor.py와 FULL 승격 경로 설명
+- 2026-10-26 · ef0600c636 · pytest 작업마다 메모리 최고치를 재고, 기록에 따라 예약을 줄인다
+- 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
+- 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
+- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
