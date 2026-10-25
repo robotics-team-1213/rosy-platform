@@ -154,8 +154,8 @@ TLS and Account signing keys. The candidate's `Caddyfile.account` retains
 verified Fleet backend TLS and serves the existing public app-link statements.
 
 The daily `rosy-account-tls-renew.timer` keeps that pair valid. It runs
-`account_tls_renew.py` from a release folder
-(`~/.local/share/rosy/account-tls/releases/<sha>/`), never from a preparation copy. The
+`account_tls_renew.py` from a release folder, never from a preparation copy. Since D-871 that is the
+auto-updated site-tools release: `ROSY_ACCOUNT_TLS_SOURCE=~/.local/share/rosy/site-tools/current/deploy/site/account_tls_renew.py`. The
 certificate folder (keys, `backups/`) is data and stays where it was prepared.
 `~/.config/rosy/account-tls.env` sets `ROSY_ACCOUNT_TLS_SOURCE` (the release script),
 `ROSY_ACCOUNT_TLS_CERTS` (that folder) and `ROSY_ACCOUNT_TLS_DOMAIN` (the approved
@@ -1917,14 +1917,17 @@ serial·model·포커스·잠금·상태를 다시 읽고, 서비스 상태가 �
 `started`/`stopped`다. 이 상태는 카메라 세션이며 Vision의 프레임 수신 증거가 아니다.
 `snapshot`은 폰 화면(미리보기·상태 문구)을 PNG로 받아 화각을 원격으로 확인할 때 쓴다.
 
-멈춘 송출을 사람 없이 다시 켜려면 관제 PC 사용자 계정에 타이머를 둔다. 스크립트와
-개인 설정은 `~/.local/share/rosy/cam-screen/`에 있어야 한다. 일부러 끄는 동안에는
+멈춘 송출을 사람 없이 다시 켜려면 관제 PC 사용자 계정에 타이머를 둔다. 개인 설정은
+`~/.local/share/rosy/cam-screen/cam-screen.json`에 둔다. 스크립트는 D-871부터 자동 업데이트되는
+site-tools 릴리스(`~/.local/share/rosy/site-tools/current/deploy/site/rosy_cam_screen.py`)에서 실행한다. 일부러 끄는 동안에는
 타이머를 먼저 멈춘다(`systemctl --user stop rosy-cam-stream.timer`).
 
 ```bash
 install -m 0644 deploy/site/rosy-cam-stream.service deploy/site/rosy-cam-stream.timer ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now rosy-cam-stream.timer
 ```
+
+**site-tools 자동 업데이트 (D-871).** `site-tools-autoupdate.json.example`을 `~/.config/rosy/site-tools-autoupdate.json`에 복사하고 `<owner>`를 채운다. 저장소 사본의 `deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/site-tools-autoupdate.json run`을 한 번 실행하면 `current`가 생긴다. 그다음 `account-tls.env`의 `ROSY_ACCOUNT_TLS_SOURCE`를 `current` 경로로 바꾸고 `systemctl --user enable --now rosy-site-tools-autoupdate.timer`를 실행한다. 이후 업데이터는 30분마다 CI를 통과한 main을 받아 cam-stream과 account-tls 타이머만 다시 띄운다.
 
 CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
 `_adb-tls-connect._tcp`에서 예상 serial의 후보를 찾아 변경된 포트로 재연결한다.
