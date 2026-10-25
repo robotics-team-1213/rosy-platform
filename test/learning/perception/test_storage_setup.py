@@ -265,6 +265,44 @@ def test_other_members_personal_target_is_redacted_and_preserved(setup_case, acc
     assert next(row for row in current['pool']['targets'] if row['id'] == 'private-bob')['enabled'] is False
 
 
+def test_resumed_generated_file_never_overwrites_changed_existing_bytes(tmp_path):
+    import storage_source
+    from storage_inventory import open_root
+    target = tmp_path / 'report.json'; target.write_bytes(b'{"ok":2}')
+    fd = open_root(str(tmp_path))
+    try:
+        with pytest.raises(ValueError): storage_source._generated(fd, 'report.json', b'{"ok":1}', resume=True)
+    finally:
+        import os
+        os.close(fd)
+    assert target.read_bytes() == b'{"ok":2}'
+
+
+def test_interrupted_source_publication_is_not_exposed_and_can_resume(setup_case, monkeypatch):
+    from storage_prepare import StoragePrepare
+    import storage_source
+    build, actor, body, now, artifact, remote = setup_case
+    for quota in body['quotas'].values(): quota['remaining_bytes'] = 1048576
+    build().save(actor, body); build().verify(actor, 1); build().activate(actor, 1)
+    _, config = build().configuration()
+    root = Path(next(row['path'] for row in config['roots'] if row['id'] == 'exports'))
+    folder = root / 'episode'; folder.mkdir(); (folder / 'frame.json').write_text('{}')
+    generate = storage_source._generated
+    def interrupted(fd, name, raw, **kwargs):
+        if name == 'storage-source.json.pending':
+            generate(fd, name, raw[:len(raw)//2], **kwargs)
+            raise OSError('interrupted before publication')
+        return generate(fd, name, raw, **kwargs)
+    request = dict(kind='folder', artifact_id='episode', profile='dataset', provenance={}, confirm_completed=True, archive=True)
+    with monkeypatch.context() as patch:
+        patch.setattr(storage_source, '_generated', interrupted)
+        with pytest.raises(OSError): StoragePrepare(build()).prepare(actor, request)
+    assert not (folder / 'storage-source.json').exists()
+    result = StoragePrepare(build()).prepare(actor, request)
+    assert result['bytes_verified'] and (folder / 'storage-source.json').is_file()
+    assert not (folder / 'storage-source.json.pending').exists()
+
+
 @pytest.mark.parametrize('field,value', [('id', {}), ('connection_id', [])])
 def test_invalid_json_target_types_are_validation_errors(setup_case, field, value):
     build, actor, body, now, artifact, remote = setup_case
