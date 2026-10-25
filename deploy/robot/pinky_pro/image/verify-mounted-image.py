@@ -242,9 +242,6 @@ STORAGE_HELPERS = (*BOOTSTRAP_HELPERS, "os_storage_dispatch.py")
 
 def storage_gate_findings(root: Path) -> list[str]:
     findings = []
-    unit = root / "etc/systemd/system/rosy-os-storage.service"
-    if unit.is_symlink() or not unit.is_file():
-        findings.append("missing regular storage admission unit")
     for name in STORAGE_HELPERS:
         helper = root / "opt/rosy/native-runtime" / name
         if helper.is_symlink() or not helper.is_file():
@@ -253,15 +250,21 @@ def storage_gate_findings(root: Path) -> list[str]:
         helper = root / "opt/rosy/os-bootstrap" / name
         if helper.is_symlink() or not helper.is_file():
             findings.append(f"missing OS-owned bootstrap helper: {name}")
-    for consumer in STORAGE_CONSUMERS:
-        link = root / "etc/systemd/system" / (consumer + ".requires") / unit.name
-        if not link.is_symlink():
-            findings.append(f"{consumer} has no required storage admission dependency")
-            continue
-        target = Path(os.readlink(link))
-        target = root / str(target).lstrip("/") if target.is_absolute() else link.parent / target
-        if not target.resolve().is_relative_to(root.resolve()) or target.resolve() != unit.resolve():
-            findings.append(f"{consumer} storage admission dependency points outside its unit")
+    for name, consumers, label in (
+            ("rosy-os-storage.service", STORAGE_CONSUMERS, "storage"),
+            ("rosy-os-tailnet.service", ("tailscaled.service", "rosy-tailscale-join.service"), "tailnet")):
+        unit = root / "etc/systemd/system" / name
+        if unit.is_symlink() or not unit.is_file():
+            findings.append(f"missing regular {label} admission unit")
+        for consumer in consumers:
+            link = root / "etc/systemd/system" / (consumer + ".requires") / unit.name
+            if not link.is_symlink():
+                findings.append(f"{consumer} has no required {label} admission dependency")
+                continue
+            target = Path(os.readlink(link))
+            target = root / str(target).lstrip("/") if target.is_absolute() else link.parent / target
+            if not target.resolve().is_relative_to(root.resolve()) or target.resolve() != unit.resolve():
+                findings.append(f"{consumer} {label} admission dependency points outside its unit")
     return findings
 
 
@@ -444,6 +447,16 @@ def inspect(root: Path, release_id: str) -> list[str]:
             findings.append("factory TLS directory owner/permissions differ: etc/rosy/tls")
         if any(tls.iterdir()):
             findings.append("common image contains device-specific TLS state: etc/rosy/tls")
+    machine = root / "var/lib/tailscale"
+    if (any(path.is_symlink() for path in (root / "var", root / "var/lib", machine))
+            or not machine.is_dir()):
+        findings.append("factory tailnet state directory is missing or unsafe")
+    else:
+        info = machine.stat()
+        if info.st_uid != root.stat().st_uid or info.st_mode & 0o7777 != 0o700:
+            findings.append("factory tailnet state owner/permissions differ")
+        if any(machine.iterdir()):
+            findings.append("common image contains device-specific tailnet state")
     return findings
 
 

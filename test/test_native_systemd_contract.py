@@ -667,6 +667,12 @@ PROGRAM_SOURCES = {
                                  "deploy/robot/pinky_pro/native/sync-image-layer.py"],
 }
 
+DECLARED_READS["rosy-os-tailnet.service"] = DECLARED_READS["rosy-os-storage.service"]
+DECLARED_READS["rosy-sd-provision.service"] = DECLARED_READS["rosy-os-storage.service"]
+PROGRAM_SOURCES["rosy-os-tailnet.service"] = [*PROGRAM_SOURCES["rosy-os-storage.service"],
+                                           "deploy/robot/pinky_pro/native/os_state_config.py"]
+PROGRAM_SOURCES["rosy-sd-provision.service"] = PROGRAM_SOURCES["rosy-os-storage.service"]
+
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
 SEGMENT_CHAIN = re.compile(r"""["'](var|opt|run|etc)["'](?:\s*/\s*["'][^"'/]+["'])+""")
 HOME_USE = re.compile(r"Path\.home\(\)|expanduser\(|os\.path\.expanduser|[\"']~/")
