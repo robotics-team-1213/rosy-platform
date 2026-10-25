@@ -11275,3 +11275,11 @@ osy-d395-s1d\`.
 - 변경: `sim_chunk_plan.py`가 `grasp_planner` 청크와 `transit_path` 이동을 sim 셀의 집기·놓기 목표에 맞춰 SIM teacher의 approach/grasp/transfer/release로 바꾼다. `--plan chunks`가 teacher·demonstrations·prepare·job·`remote_omx_native.py`를 지난다. 놓기는 측정한 집게 위치부터 연다(`open_from`). 앞의 착지 merge 커밋 `5ceabe6015`이 작업 트리의 추적 파일 변경(실험 연결부)을 함께 담았고, 새 파일은 이 커밋에서 들어간다.
 - 증거: AI 시험 호스트 native SIM 2회. 1회 FAIL(release 첫 목표가 상자에 막힌 집게를 더 닫으라고 함), 수정 뒤 2회 **PASS** — xy 0.12 mm, 들기 102 mm, 2.25 s 정지, RGB 2,060장. `docs/validation/omx-arm-s-chunks-sim-2026-10-25/result.md`.
 - gate 변화: 없음. sim 셀은 S 셀 좌표가 아니고, B 구간·판단 자리·실물 guard 속도는 별도다.
+
+## 2026-10-25 · f80019b842 · fix(learning): SIM 실행 목록 행 방어와 Learning 첫 화면 픽셀 검수 일괄 읽기
+
+- 변경: `sim_web.py` 실행 목록은 형식이 깨진 행을 빼고 `skipped` 개수를 함께 보낸다. 단일 실행 조회는 깨진 행에 502와 「SIM 실행 기록 형식을 확인하세요」를 돌려준다. `/api/learning`은 프레임마다 `review_masks.get`(연결 3개)과 빈 마스크 디코드를 하던 것을 `review_masks.get_many`(연결 2개)로 바꾸고, 저장된 마스크가 없는 행은 디코드하지 않는다. 저장된 대기 마스크의 디코드는 남는다(저장 형식 변경 없음).
+- 증거: 원격 pytest `test_sim_web.py`·`test_review_app.py`·`test_pixel_draft_import.py`·`test_review_app_smoke.py` 통과, 브라우저 `test_sim_browser.py`·`test_pixel_review_browser.py`·`test_learning_pipeline_browser.py`·`test_learning_stages_browser.py` 61 passed.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음.
