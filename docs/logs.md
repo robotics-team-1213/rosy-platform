@@ -11378,3 +11378,9 @@ osy-d395-s1d\`.
 - 변경: `cell_pipeline.py`(run = 원위치 → 받침·벨트 보정 → A/B, 단계마다 판단 자리와 사례 기록, recover), `cell_calibration.py`(면별 아핀 지도, 집게 손가락으로 대략 지도, 시차), `cell_choices.py`(가르친·측정·시뮬 값의 경쟁 후보와 실제 결과). `chunk_runner.py`: `load`, 부드러운 접촉 정지와 `retreat`, `grip` 하한. 고정 카메라 여러 대 합침(top, rosy cam), 손목 위 확인.
 - 증거: 관제 PC 실물 — 대략 지도 5점, 자율 집기 3번(189·201 mA), 원위치 복귀, 원격 복구 4번(전부 safe_end). guard 정지 3번(대기 중 오래된 표본, 받침 밖 상자 가장자리, 25° 회전)은 각각 코드·시험으로 고쳤다. 원격 시험 통과, 변이(접촉 감지 끔, 고장 뒤 park, 읽기 주기) 실패 확인. 기록 `docs/validation/omx-arm-s-real-cell-pipeline-2026-10-25/`.
 - gate 변화: 없음. 실물 전체 보정과 A/B 사이클, 부드러운 접촉 정지의 실물 확인은 남았다. CE: 새 교훈 `docs/solutions/logic-errors/omx-taught-values-belong-to-their-plan-2026-10-25.md`, `docs/solutions/runtime-errors/omx-contact-on-descent-becomes-guard-torque-off-2026-10-25.md`.
+
+## 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
+
+- 변경: `motion_profile.py`(동기 사다리꼴, 모서리 이어 돌기, 정확한 정지점, `retime`). `chunk_runner.transit_path`는 올라가며 돌기 시작하는 한 흐름(겹침 0.6 s, 높이 1 unit 이내에서만 회전), `grasp_planner`의 수직 내려가기·들기는 같은 경로에 부드러운 가감속. `cell_record.py`와 `--stage record`(A/B 한 사이클 녹화, 녹화된 집게로 held/empty 판정, 원위치 확인). native SIM 시나리오 `pick-place-chunks-offset`·`-yaw-site`·`-yaw-box`(상자 이동·회전, 관측한 상자 위치로 계획).
+- 증거: 원격 시험 통과. 매끄러운 동작으로 Gazebo `pick-place-chunks` PASS(xy 0.26 mm, 들기 102 mm). 시나리오 결과는 이어서 기록한다.
+- gate 변화: 없음. 실물의 매끄러운 동작·녹화는 실물 실행에서 확인한다.
