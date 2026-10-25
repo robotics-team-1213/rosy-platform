@@ -11479,3 +11479,11 @@ osy-d395-s1d\`.
 - 증거: 승인 원격 `python tools/remote/remote_pytest.py --log-dir <scratch>/landing-fixes-green -- test/test_module_scorecard.py test/test_release_boundary_guards.py test/test_secret_public_provenance.py test/test_rosy_auto_update_resync.py test/test_shared_release_signing.py test/test_native_runtime_installed_layout.py` — 125 PASS, known_failures NEW0. 독립 리뷰는 profile digest4개 재계산·provenance11행 결속·설치기 fixture 일치를 확인했다.
 - gate 변화: 관련 source 회귀 통과이며 전체 정상 착지는 다시 수행한다. OS 전체 자동 업데이트·이미지 artifact·실기 수용은 미완료다.
 - 교훈: CE 해당 없음 — 원인/복구와 반례는 시험 및 기존 정책에 보존했다.
+
+## 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+
+- 변경: `tools/hooks/pre-push`가 `git config rosy.publishOnly true`인 clone에서 `publish/main-*` 밖의 브랜치 push를 거절한다(삭제는 통과, 사고 대응은 `ROSY_PUSH_REASON`). 팀원 clone은 설정이 없어 영향이 없다. `git-workflow.md`의 옛 `git push origin main` 순서와 `rosy-release-push` 1단계를 D-868 게시 절차로 고쳤다.
+- 이유: D-868 동결 중 에이전트 세션이 origin에 직접 PR #192~#209를 병합해 동기화 FULL이 반복됐다(로컬 기록 `Rosy/docs/workspace-records/2026-10-25/local-main-landing-speed.md`). 문서 규칙만으로는 막지 못했다.
+- 증거: `test/test_pre_push_hook.py::test_publish_only_clone_pushes_publish_branches_only` 5개 경우. bash로 같은 구간을 돌려 게시 0·주제 1·이유 0·설정 없음 0을 확인하고, 허용 분기를 거절로 바꾼 변형이 1로 바뀌는 것을 확인했다.
+- gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
+- 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
