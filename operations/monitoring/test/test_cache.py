@@ -147,6 +147,76 @@ def test_changing_a_fact_under_the_same_sample_identity_is_rejected(runtime):
     assert find(cache, "site-b:host:pc-b", "site-b").reported_health == "OK"
 
 
+def test_older_local_sample_cannot_replace_a_more_recent_error(runtime):
+    cache, clock = runtime
+    latest = observed_node(health="ERROR", sample="latest")
+    cache.update_local("pc-a", nodes=(latest,))
+    clock.advance(1)
+    older = observed_node(health="OK", sample="older", age=201.0,
+                          sampled_at=BASE - timedelta(seconds=200))
+    with pytest.raises(ValueError):
+        cache.update_local("pc-a", nodes=(older,))
+    assert find(cache, latest.id).reported_health == "ERROR"
+
+
+def test_newer_peer_envelope_cannot_make_an_older_source_fact_current(runtime):
+    cache, clock = runtime
+    latest = peer(clock, health="ERROR")
+    receive(cache, clock, latest)
+    clock.advance(1)
+    value = peer(clock, sequence=2)
+    older = value.nodes[1].model_copy(update={"sample_id": "older", "sampled_at": BASE - timedelta(seconds=200),
+                                             "age_s": 201.0, "remaining_s": 699.0})
+    with pytest.raises(ValueError):
+        receive(cache, clock, value.model_copy(update={"nodes": (value.nodes[0], older)}))
+    assert find(cache, "site-b:host:pc-b", "site-b").reported_health == "ERROR"
+
+
+@pytest.mark.parametrize("replacement", ["missing", "unknown"])
+def test_disappearing_fact_cannot_reset_its_original_deadline(runtime, replacement):
+    cache, clock = runtime
+    initial = peer(clock)
+    initial = initial.model_copy(update={"nodes": (initial.nodes[0],
+                                                   initial.nodes[1].model_copy(update={"remaining_s": 10.0}))})
+    receive(cache, clock, initial)
+    first = find(cache, "site-b:host:pc-b", "site-b")
+    clock.advance(1)
+    value = peer(clock, sequence=2)
+    nodes = (value.nodes[0],)
+    if replacement == "unknown":
+        unknown = value.nodes[1].model_copy(update={"sample_id": None, "sampled_at": None, "age_s": None,
+                                                   "remaining_s": 0.0, "report_remaining_s": 0.0,
+                                                   "freshness": "unknown", "reported_health": "UNKNOWN"})
+        nodes += (unknown,)
+    receive(cache, clock, value.model_copy(update={"nodes": nodes}))
+    clock.advance(1)
+    value = peer(clock, sequence=3)
+    returned = value.nodes[1].model_copy(update={"remaining_s": 10.0})
+    receive(cache, clock, value.model_copy(update={"nodes": (value.nodes[0], returned)}))
+    result = find(cache, returned.id, "site-b")
+    assert result.remaining_s <= first.remaining_s - 2.0
+    clock.advance(8)
+    assert find(cache, returned.id, "site-b").freshness == "stale"
+
+
+def test_retained_fact_budget_rejects_new_identities_without_forgetting_old_ones(runtime, monkeypatch):
+    cache, clock = runtime
+    monkeypatch.setattr("rosy.monitoring.cache.MAX_REMEMBERED", 3, raising=False)
+    receive(cache, clock, peer(clock))
+    clock.advance(1)
+    value = peer(clock, sequence=2)
+    second = observed_node(site="site-b", collector="collector-b", source="pc-c", age=101.0)
+    receive(cache, clock, value.model_copy(update={"nodes": (value.nodes[0], second)}))
+    clock.advance(1)
+    value = peer(clock, sequence=3)
+    third = observed_node(site="site-b", collector="collector-b", source="pc-d", age=102.0)
+    with pytest.raises(ValueError):
+        receive(cache, clock, value.model_copy(update={"nodes": (value.nodes[0], third)}))
+    assert find(cache, second.id, "site-b").reported_health == "OK"
+    value = peer(clock, sequence=4)
+    receive(cache, clock, value.model_copy(update={"nodes": (value.nodes[0], second)}))
+
+
 @pytest.mark.parametrize("change", [
     {"collector_id": "impostor"}, {"scope_sites": ("site-c",)},
     {"produced_at": BASE + timedelta(seconds=60)},
