@@ -340,6 +340,7 @@ ROOT_ONLY_STATE = (
 # "$HOME" is the unit's Environment=HOME. Keep this next to the code references.
 DECLARED_WRITES = {
     "rosy-os-storage.service": set(),
+    "rosy-os-tailnet.service": {"/var/lib/rosy-device/tailscale", "/var/lib/rosy-device/state/config.lock"},
     "rosy-network-agent.service": {
         "/var/lib/rosy/network", "/etc/NetworkManager/system-connections",
         "/run/rosy-network", "/run/rosy-claim", "/run/rosy-claim.lock", "/run/rosy-claim.stale.x",
@@ -485,7 +486,7 @@ DECLARED_READS = {
     "rosy-os-storage.service": {
         "$HOME",  # CORE's default is documented in the imported helper; admission never reads it.
         "/var/lib/rosy-device", "/etc/rosy", "/etc/hostname", "/etc/hosts",
-        "/etc/passwd", "/etc/group",
+        "/etc/passwd", "/etc/group", "/var/lib/tailscale", "/proc/device-tree/serial-number",
         "/var/lib/rosy/provisioning", "/var/lib/rosy/core", "/var/lib/rosy/ssh",
         "/etc/NetworkManager/system-connections", "/home/rosy/.ssh",
         "/run/rosy-provision-boot", "/proc/1/mountinfo", "/proc/self/mountinfo",
