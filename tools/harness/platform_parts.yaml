@@ -319,7 +319,7 @@ roots:
     layout_target: middleware/devices/rasptank/profile
     part: middleware
     d427_target: middleware/devices/rasptank/profile
-    wave: "post-427"
+    wave: "none"
     concern: control
   - path: middleware/devices/omx/adapter
     layout_target: middleware/devices/omx/adapter
