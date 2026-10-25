@@ -8,7 +8,8 @@ HTTP API, UI and deployment are not implemented yet. See [README.md](README.md).
 
 - Keep this wheel ROS-free and independent of the Fleet distribution. Fleet owns its passive
   `/api/fleet/monitoring` producer; CORE/host owners retain their diagnostics and repair logic.
-- Preserve original sample identity, reported health and source age across forwarding and restarts.
+- Preserve original sample identity, reported health and source age across forwarding and peer restarts
+  within one cache instance. Receiving-process restart requires durable anchors in the later service.
   A successful reread may renew the report path's 15-second lifetime, never the source deadline.
   Existing host reports may use 900/2100-second source lifetimes.
 - A node's `reported_health` is evidence, not command authority or a physical acceptance result.

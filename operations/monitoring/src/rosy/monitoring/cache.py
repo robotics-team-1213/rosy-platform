@@ -111,9 +111,14 @@ class ObservationCache:
         if (old is not None and item.sample_id is not None and item.sample_id == old.item.sample_id
                 and item.origin_collector == old.item.origin_collector
                 and item.origin_source == old.item.origin_source):
-            if _fact(item) != _fact(old.item):
+            if item.sampled_at != old.item.sampled_at:
                 raise ObservationRejected()
         if old is not None and item.sampled_at == old.item.sampled_at:
+            current, previous = _fact(item), _fact(old.item)
+            current.pop("sample_id")
+            previous.pop("sample_id")
+            if current != previous:
+                raise ObservationRejected()
             source_until = min(source_until, old.source_until)
             if old.age is not None:
                 age = max(age, old.age + now - old.at)
