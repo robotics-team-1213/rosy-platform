@@ -40,3 +40,31 @@ def test_firstboot_imports_only_the_staged_image_helpers(tmp_path):
         cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False)
     assert result.returncode == 0, result.stderr[-2000:]
     assert "--hardware-serial" in result.stdout
+
+
+def test_installed_rebind_refuses_ab_without_checkout_imports_or_state_moves(tmp_path):
+    prefix = tmp_path / "opt/rosy"
+    shutil.copytree(FIRST_BOOT, prefix / "first-boot")
+    shutil.copytree(FIRST_BOOT.parents[1] / "native", prefix / "native-runtime")
+    shutil.copytree(FIRST_BOOT.parents[1] / "sd", prefix / "deploy/sd")
+    root = tmp_path / "device"
+    (root / "etc/rosy").mkdir(parents=True)
+    (root / "etc/rosy/os-slot.json").write_text("{}")
+    code = """
+import runpy, sys
+from pathlib import Path
+module = runpy.run_path(sys.argv[1])
+root = Path(sys.argv[2])
+try:
+    module['quarantine_previous'](root, root / 'missing-bundle.json', '10000000abcdef02')
+except ValueError as exc:
+    assert 'fresh provisioned card' in str(exc), str(exc)
+else:
+    raise AssertionError('A/B registration was allowed')
+assert not (root / 'var').exists()
+"""
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", code,
+         str(prefix / "first-boot/rosy-rebind-board.py"), str(root)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False)
+    assert result.returncode == 0, result.stderr[-2000:]
