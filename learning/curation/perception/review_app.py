@@ -30,7 +30,7 @@ import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
 import review_versions, omx_center_web
-import learning_domains, learning_pipeline
+import learning_domains, learning_pipeline, promotion_request
 import learning_tasks_web
 from workspace_links import WORKSPACE_LINKS_SCHEMA, check_workspace_links, load_workspace_links
 from learning_tasks import Tasks
@@ -250,6 +250,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return self.send({'drafts': store.object_drafts(int(path.rsplit('/', 1)[1]))})
                 if path == '/api/learning/control':
                     return self.send(control.status() if control else {'available': False})
+                if path == '/api/learning/promotion-requests':
+                    return self.send(promotion_request.listing(store.state, learning.list(), control))
                 if path == '/api/learning':
                     frames = store.list_frames()
                     pixel_reviews = review_masks.get_many(store, [f for f in frames if f['status'] != 'excluded'])
@@ -289,7 +291,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     domains = learning_domains.domains(
                         pipeline=pipeline, counts=counts, preparation=preparation, items=items,
                         omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts,
-                        vlm_eval_url=vlm_eval_url, tasks=task_count)
+                        vlm_eval_url=vlm_eval_url, tasks=task_count, pixel_counts=pixel_counts,
+                        drafts={'object': object_draft_indices, 'pixel': pixel_candidate_indices})
                     return self.send({'workflows': WORKFLOWS, 'items': items, 'token': token,
                                       'pipeline': pipeline, 'domains': domains, 'vlm_eval_url': vlm_eval_url,
                                       'preparation': preparation,
@@ -450,6 +453,14 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path.startswith('/api/masks/'):
                     return self.send(review_masks.update(store, int(path.rsplit('/', 1)[1]), body, Conflict,
                                                          actor=actor))
+                if path == '/api/learning/promotion-requests':
+                    # `manage` via authorize_write: a project action, not truth approval (`approve`) nor Fleet's.
+                    item = next((row for row in learning.list() if row['kind'] == 'perception'
+                                 and set(body) == {'id'} and row['id'] == body['id']), None)
+                    if item is None:
+                        raise ValueError('승격 요청은 등록된 인식 학습 결과의 id 하나만 받습니다.')
+                    bundle = promotion_request.build(item['path'], actor or 'local-unidentified', control)
+                    return self.send(promotion_request.write(store.state, bundle))
                 if path in ('/api/learning/register', '/api/learning/remove', '/api/learning/control'):
                     return self.send(learning.action(path, body, control, Conflict))
                 if path.startswith('/api/frames/'):
