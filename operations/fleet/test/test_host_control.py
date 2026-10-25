@@ -375,13 +375,9 @@ def test_helper_starts_only_the_lab_storage_service_and_refuses_the_site(tmp_pat
     assert "systemctl --user --machine=pinky@ --no-block start rosy-test-storage.service" in calls
     assert helper("clean-storage", "x.service") == 2
     (tmp_path / "bin" / "systemctl").write_text(  # a PC where rosy-ops never linked the unit
-        f'#!/bin/sh
-echo "systemctl $*" >> {tmp_path}/calls
-case "$*" in *" cat "*) exit 1;; esac
-')
+        f'#!/bin/sh\necho "systemctl $*" >> {tmp_path}/calls\ncase "$*" in *" cat "*) exit 1;; esac\n')
     assert helper("clean-storage") == 5
-    (tmp_path / "conf" / "role").write_text("site
-")
+    (tmp_path / "conf" / "role").write_text("site\n")
     assert helper("clean-storage") == 2
     assert (tmp_path / "calls").read_text().count(" start rosy-test-storage.service") == 1
 
