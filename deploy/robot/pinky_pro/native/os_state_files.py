@@ -8,7 +8,7 @@ from pathlib import Path
 import stat
 import uuid
 
-from first_boot_runtime import _write_atomic
+from os_state_io import _write_atomic
 from os_state_layout import COMMON, _digest, _guid, _object, _path, _read
 
 BASE_FILES = {"etc/rosy/device-identity.json": 0o644, "etc/rosy/runtime.env": 0o640,

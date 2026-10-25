@@ -589,7 +589,7 @@ PROGRAM_SOURCES = {
                                 "deploy/robot/pinky_pro/native/os_state_accounts.py",
                                 "deploy/robot/pinky_pro/native/os_state_files.py",
                                 "deploy/robot/pinky_pro/native/os_state_firstboot.py",
-                                "deploy/robot/pinky_pro/native/first_boot_runtime.py"],
+                                "deploy/robot/pinky_pro/native/os_state_io.py"],
     "rosy-network-agent.service": NETWORK_SOURCES + [
         "deploy/robot/pinky_pro/native/rosy-network-agent.py",
         "deploy/robot/pinky_pro/native/network_agent.py",

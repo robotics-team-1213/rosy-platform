@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import uuid
 
-from first_boot_runtime import _json_atomic, _write_atomic
+from os_state_io import _json_atomic, _write_atomic
 from os_state_layout import (
     COMMON, StateError, _digest, _guid, _layout, _object, _pairs, _path, _read, shared_mount_facts,
 )

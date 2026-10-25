@@ -39,7 +39,7 @@ def main(argv=None) -> int:
 
 
 def admit_tailnet(root: Path, *, bind_machine: bool = False) -> dict:
-    from first_boot_runtime import SERIAL, _json_atomic
+    from os_state_io import SERIAL, _json_atomic
     from os_state_config import common_lock
 
     root = Path(root).absolute()

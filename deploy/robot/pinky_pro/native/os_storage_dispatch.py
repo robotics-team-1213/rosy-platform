@@ -8,7 +8,7 @@ from pathlib import Path
 import stat
 import sys
 
-BOOTSTRAP_FILES = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py",
+BOOTSTRAP_FILES = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "os_state_io.py",
                    "os_state_accounts.py", "os_state_files.py", "os_state_config.py")
 
 

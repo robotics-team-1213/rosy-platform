@@ -10,7 +10,7 @@ from pathlib import Path
 import stat
 import uuid
 
-from first_boot_runtime import _json_atomic
+from os_state_io import _json_atomic
 from os_state_firstboot import FirstBootState
 from os_state_files import (CONFIG_FILES, INITIAL, POINTER_FIELDS, PUBLICATION, initial_changes,
                             load_record, project_files, validate_projection)

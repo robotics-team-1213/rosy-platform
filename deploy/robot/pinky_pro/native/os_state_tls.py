@@ -9,7 +9,7 @@ from pathlib import Path
 import stat
 import uuid
 
-from first_boot_runtime import _json_atomic
+from os_state_io import _json_atomic
 from os_state_config import ConfigurationUpdate, common_lock
 from os_state_files import POINTER_FIELDS, load_record, sync_directory
 from os_state_layout import COMMON, TLS_PENDING, _digest, _guid, _object, _path, _read
