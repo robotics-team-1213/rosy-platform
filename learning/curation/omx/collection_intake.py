@@ -12,7 +12,7 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA
+from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA, redacted as _redacted
 from native_environment import _events, seal_environment
 from native_review import (JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset,
                            static_episodes, write_json)
@@ -385,24 +385,91 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
 
 
 
-def _sealed_collection(root):
-    """Re-hash a record_seal.py collection; the manifest must cover every file exactly."""
+TEACHER_FILE = 'teacher/trajectory.json'
+TEACHER_SCHEMA = 'rosy.omx-replay-trajectory.v1'
+
+
+def _small_json(value, depth=1):
+    """teacher.source is a lineage note, never a trajectory: containers nest at most 3 deep, lists <= 1000
+    (a median teacher names its source episodes); the caller also caps the serialized size."""
+    if isinstance(value, dict):
+        return depth <= 3 and all(isinstance(k, str) and _small_json(v, depth+1) for k, v in value.items())
+    if isinstance(value, list):
+        return depth <= 3 and len(value) <= 1000 and all(_small_json(v, depth+1) for v in value)
+    return value is None or type(value) in (str, int, bool) or _number(value)
+
+
+def _sealed_teacher(root, manifest, actual):
+    """record_session --replay: the sealed trajectory is the fixed teacher; A=episode 0, B=episode 1."""
+    teacher = manifest.get('teacher')
+    _require(isinstance(teacher, dict) and teacher.get('kind') == 'replay_trajectory'
+             and teacher.get('file') == TEACHER_FILE and teacher.get('schema') == TEACHER_SCHEMA,
+             'sealed replay_trajectory teacher required')
+    _require(TEACHER_FILE in actual, 'sealed teacher trajectory missing')
+    _require(_hash(manifest.get('teacher_sha256')) and manifest['teacher_sha256'] == actual[TEACHER_FILE],
+             'teacher trajectory differs from its teacher_sha256')
+    trajectory = _json((root/TEACHER_FILE).read_bytes())
+    source = teacher.get('source')
+    _require(trajectory.get('schema') == TEACHER_SCHEMA and trajectory.get('source') == source,
+             'teacher trajectory differs from its manifest')
+    _require(isinstance(source, dict) and _small_json(source)
+             and len(json.dumps(source, allow_nan=False).encode('utf-8')) <= 16384, 'teacher source must be small JSON')
+    segments = teacher.get('segments')
+    _require(isinstance(segments, dict) and set(segments) == {'A', 'reset', 'B'} and all(
+        isinstance(v, list) and len(v) == 2 and all(type(i) is int for i in v) for v in segments.values()),
+        'teacher segments must be integer frame ranges')
+    (a0, a1), (r0, r1), (b0, b1) = segments['A'], segments['reset'], segments['B']
+    # B is its own taught return leg of A's length, after a reset hold of at least one frame.
+    _require(a0 == 0 < a1 == r0 < r1 == b0 and b1 - b0 == a1 - a0, 'teacher segments must be contiguous A, reset, B')
+    frames = trajectory.get('frames')
+    _require(trajectory.get('segments') == segments and isinstance(frames, list) and len(frames) == b1,
+             'teacher segments differ from the trajectory frames')
+    replay = _json((root/'session.json').read_bytes()).get('replay')
+    _require(isinstance(replay, dict) and replay.get('sha256') == manifest['teacher_sha256']
+             and replay.get('segments') == segments, 'session replay differs from the sealed teacher')
+    _require(manifest.get('total_episodes') == 2, 'a replay recording has exactly episodes A and B')
+
+
+REVISIONS = ('rig_revision', 'calibration_revision')
+
+
+def _sealed_collection(root, operator=None):
+    """Re-hash a record_seal.py collection; the manifest must cover every file exactly.
+
+    A scripted_teacher seal may lack session_id and revisions (local-main record_seal): the folder
+    name is the session and the operator names the revisions; sealed values must equal them.
+    """
     root = Path(root).absolute()
     raw = (root/'manifest.json').read_bytes()
     manifest = json.loads(raw)
     _require(manifest.get('schema') == 'rosy.omx-collection-session.v1' and manifest.get('state') == 'CLOSED'
-             and manifest.get('mode') == 'hardware' and manifest.get('source_mode') == 'leader_native',
-             'sealed leader collection required')
+             and manifest.get('mode') == 'hardware'
+             and manifest.get('source_mode') in ('leader_native', 'scripted_teacher'),
+             'sealed leader or scripted_teacher collection required')
     actual = {}
     for path in sorted(root.rglob('*')):
         _require(not path.is_symlink() and (path.is_dir() or path.is_file()), 'links and special files refused')
         if path.is_file() and path != root/'manifest.json':
             with path.open('rb') as stream:
                 actual[path.relative_to(root).as_posix()] = hashlib.file_digest(stream, 'sha256').hexdigest()
+    teacher = manifest['source_mode'] == 'scripted_teacher'
+    if teacher:
+        _sealed_teacher(root, manifest, actual)
     _require(actual == manifest.get('files'), 'collection bytes differ from its manifest')
-    rows = sorted((k, v) for k, v in actual.items() if k.startswith('calibration/'))
-    _require(bool(rows) and manifest.get('calibration_revision')
-             == hashlib.sha256(json.dumps(rows).encode('utf-8')).hexdigest(), 'calibration revision differs')
+    if teacher:
+        _require(isinstance(operator, dict) and all(_text(operator.get(k)) for k in REVISIONS),
+                 'a scripted_teacher intake needs the operator --rig-revision and --calibration-revision')
+        manifest['session_id_origin'] = 'seal' if 'session_id' in manifest else 'folder'
+        manifest.setdefault('session_id', root.name)
+        manifest['revision_origin'] = {k: 'seal' if k in manifest else 'operator' for k in REVISIONS}
+        for key in REVISIONS:
+            _require(manifest.setdefault(key, operator[key]) == operator[key], f'sealed {key} differs from the operator value')
+    else:
+        _require(operator is None, 'operator revisions apply to scripted_teacher intakes only')
+    if not teacher or manifest['revision_origin']['calibration_revision'] == 'seal':
+        rows = sorted((k, v) for k, v in actual.items() if k.startswith('calibration/'))
+        _require(bool(rows) and manifest.get('calibration_revision')
+                 == hashlib.sha256(json.dumps(rows).encode('utf-8')).hexdigest(), 'calibration revision differs')
     for key in ('session_id', 'rig_revision'):
         _require(isinstance(manifest.get(key), str) and manifest[key].strip() == manifest[key] != '',
                  f'sealed {key} required')
@@ -415,8 +482,9 @@ def _source_episodes(root, repo_id):
     return inspect_frames(dataset.meta.info, (dataset[i] for i in range(len(dataset))))['episodes']
 
 
-def prepare_native(collections, output, repo_id):
-    """D-848: sealed leader recordings -> one prepared intake; one session per recording, one cycle per episode.
+def prepare_native(collections, output, repo_id, *, rig_revision=None, calibration_revision=None):
+    """D-848: sealed leader or replay-teacher recordings -> one prepared intake; one session per recording,
+    one cycle per episode. Replay-teacher intakes take the operator's rig and calibration revisions.
 
     The official LeRobot 0.4.4 aggregate joins recordings without re-encoding. Every aggregated
     episode must carry the content hash its source recording had, in sealed order. Decisions start unknown.
@@ -426,9 +494,17 @@ def prepare_native(collections, output, repo_id):
     collections = [Path(path).absolute() for path in collections]
     _require(bool(collections) and len({c.name for c in collections}) == len(collections),
              'distinct sealed collections required')
-    sealed = [(c, *_sealed_collection(c)) for c in collections]
+    operator = (None if rig_revision is None and calibration_revision is None
+                else dict(rig_revision=rig_revision, calibration_revision=calibration_revision))
+    sealed = [(c, *_sealed_collection(c, operator)) for c in collections]
     sealed.sort(key=lambda row: row[1].get('sealed_ns', 0))
     first = sealed[0][1]
+    mode = first['source_mode']
+    _require(all(m['source_mode'] == mode for _, m, _ in sealed),
+             'leader_native and scripted_teacher recordings cannot share one intake')
+    # teacher_sha256 names one fixed teacher (native_capture); different replays need separate intakes.
+    _require(mode != 'scripted_teacher' or len({m['teacher_sha256'] for _, m, _ in sealed}) == 1,
+             'recordings of different teachers cannot share one intake')
     _require(all(m['rig_revision'] == first['rig_revision'] and m['calibration_revision'] == first['calibration_revision']
                  and m.get('robot_type') == first.get('robot_type') for _, m, _ in sealed),
              'recordings with different rig, calibration or robot type cannot share one intake')
@@ -440,6 +516,7 @@ def prepare_native(collections, output, repo_id):
     expected, groups, static, thresholds = [], [], [], []
     for collection, manifest, _ in sealed:
         episodes = _source_episodes(collection/'dataset', 'local/' + manifest['session_id'])
+        _require(mode != 'scripted_teacher' or len(episodes) == 2, 'a replay recording has exactly episodes A and B')
         # record_session markers die in the aggregate; carry them over with aggregated indexes.
         static += [len(expected) + index for index in static_episodes(collection/'dataset', len(episodes))]
         if (collection/'dataset'/'static_episodes.json').is_file():
@@ -451,30 +528,45 @@ def prepare_native(collections, output, repo_id):
                        roots=[c/'dataset' for c, _, _ in sealed], aggr_root=output)
     if thresholds:
         write_json(output/'static_episodes.json', dict(episodes=len(expected), static=static, threshold=max(thresholds)))
-    for i, (collection, manifest, _) in enumerate(sealed):
+    for i, (collection, manifest, digest) in enumerate(sealed):
         provenance = output/'rosy_provenance'/f'session-{i:06d}'
         provenance.mkdir(parents=True)
-        for name in ('session.json', 'record-config.json', 'manifest.json'):
-            shutil.copyfile(collection/name, provenance/name)
-        shutil.copytree(collection/'calibration', provenance/'calibration')
+        # Site-PC paths and device serials never leave the Fleet PC; the sealed hashes bind the originals.
+        # Ports and camera by-id names carry serials, so those are dropped; teacher.source.dataset keeps its basename.
+        for name in ('session.json', 'record-config.json'):
+            write_json(provenance/name, _redacted(_json((collection/name).read_bytes())))
+        write_json(provenance/'manifest.json', _redacted(_json((collection/'manifest.json').read_bytes()), keep_name=True))
+        write_json(provenance/'redactions.json', dict(
+            {name: dict(redacted_from_sha256=manifest['files'][name]) for name in ('session.json', 'record-config.json')},
+            **{'manifest.json': dict(redacted_from_sha256=digest)}))
+        if (collection/'calibration').is_dir():
+            shutil.copytree(collection/'calibration', provenance/'calibration')
     files = dataset_files(output)
     digests = [d for _, _, d in sealed]
-    capture = dict(schema=CAPTURE_SCHEMA, source_mode='leader_native', action_semantics=ACTION,
+    lineage = (dict(collection_manifest_sha256=digests[0] if len(digests) == 1
+                    else hashlib.sha256(json.dumps(digests).encode('utf-8')).hexdigest())
+               if mode == 'leader_native' else dict(
+        teacher_sha256=first['teacher_sha256'],
+        teachers=[dict(session_id=m['session_id'], teacher_sha256=m['teacher_sha256'],
+                       **_redacted({k: m['teacher'][k] for k in ('kind', 'segments', 'source')}, keep_name=True))
+                  for _, m, _ in sealed]))
+    capture = dict(schema=CAPTURE_SCHEMA, source_mode=mode, action_semantics=ACTION,
                    body_units='normalized_-100_100', gripper_units='normalized_0_100',
                    rig_revision=first['rig_revision'], calibration_revision=first['calibration_revision'],
-                   collection_manifest_sha256=digests[0] if len(digests) == 1
-                   else hashlib.sha256(json.dumps(digests).encode('utf-8')).hexdigest(),
-                   collection_manifests=[dict(session_id=m['session_id'], manifest_sha256=d) for _, m, d in sealed],
+                   **lineage,
+                   collection_manifests=[dict(session_id=m['session_id'], manifest_sha256=d,
+                                              **{k: m[k] for k in ('session_id_origin', 'revision_origin') if k in m})
+                                         for _, m, d in sealed],
                    files=files, episodes=[dict(episode_index=i, session_id=session, cycle_id=cycle)
                                           for i, (session, cycle) in enumerate(groups)])
     report = inspect_dataset(output, repo_id, body_units='normalized_-100_100', rig_revision=first['rig_revision'],
                              calibration_revision=first['calibration_revision'],
-                             source_mode='leader_native', capture_provenance=capture)
+                             source_mode=mode, capture_provenance=capture)
     _require([e['content_sha256'] for e in report['episodes']] == expected,
              'aggregated episodes differ from their sealed recordings')
-    _require([_sealed_collection(c)[1] for c, _, _ in sealed] == digests, 'source changed during intake')
+    _require([_sealed_collection(c, operator)[1] for c, _, _ in sealed] == digests, 'source changed during intake')
     receipt = dict(schema='rosy.omx-collection-intake.v1', reader_verified=True, uploaded=False,
-                   completed_only=False, fixture_only=False, source_mode='leader_native',
+                   completed_only=False, fixture_only=False, source_mode=mode,
                    sessions=[dict(session_id=m['session_id'], manifest_sha256=d, provenance_path=f'rosy_provenance/session-{i:06d}')
                              for i, (_, m, d) in enumerate(sealed)],
                    episodes=[dict(episode_index=i, session_id=session, attempt_index=int(cycle.rsplit('-ep', 1)[1]),
