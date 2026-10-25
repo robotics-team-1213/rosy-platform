@@ -40,7 +40,8 @@ def shared_roots(tmp_path, monkeypatch):
                 "var/lib/rosy/provisioning": common / "provisioning",
                 "var/lib/rosy/core": common / "core",
                 "etc/NetworkManager/system-connections": common / "network/system-connections",
-                "var/lib/rosy/ssh": common / "ssh", "home/rosy/.ssh": common / "operator-ssh"}
+                "var/lib/rosy/ssh": common / "ssh", "home/rosy/.ssh": common / "operator-ssh",
+                "etc/rosy/tls": common / "tls"}
     mountpoints = set()
     for root, (_, host_table, local_table) in zip(roots, tables):
         (root / "run/rosy-os-state/ready.json").unlink()
@@ -48,6 +49,8 @@ def shared_roots(tmp_path, monkeypatch):
             backing.mkdir(parents=True, exist_ok=True)
             if relative in ("var/lib/rosy/core", "home/rosy/.ssh"):
                 backing.chmod(0o750 if relative == "var/lib/rosy/core" else 0o700)
+            elif relative == "etc/rosy/tls":
+                backing.chmod(0o750)
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.is_dir():
@@ -81,6 +84,8 @@ def shared_roots(tmp_path, monkeypatch):
                 fields.update(st_uid=960, st_gid=960)
             elif key.endswith("/home/rosy/.ssh"):
                 fields.update(st_uid=1001, st_gid=1001)
+            elif key.endswith("/etc/rosy/tls"):
+                fields.update(st_gid=960)
             return SimpleNamespace(**fields)
         return info
 
@@ -100,11 +105,12 @@ def shared_roots(tmp_path, monkeypatch):
     def bind_fstat(descriptor):
         info = original_fstat(descriptor)
         path = os.readlink(f"/proc/self/fd/{descriptor}")
-        identity = {str(common / "core"): 960, str(common / "operator-ssh"): 1001}.get(path)
+        identity = {str(common / "core"): (960, 960), str(common / "operator-ssh"): (1001, 1001),
+                    str(common / "tls"): (common.stat().st_uid, 960)}.get(path)
         if identity is None:
             return info
         fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
-        fields.update(st_uid=identity, st_gid=identity, st_dev=os.makedev(8, 6))
+        fields.update(st_uid=identity[0], st_gid=identity[1], st_dev=os.makedev(8, 6))
         return SimpleNamespace(**fields)
 
     # Real binds look like directories to lstat. Only the explicitly modeled
