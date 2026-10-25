@@ -1118,7 +1118,7 @@ OLD_VERIFIERS = {
 def _python_native(destination: Path) -> None:
     """install-native-runtime.sh in pure Python, so this runs without bash."""
     shutil.copytree(NATIVE, destination, ignore=shutil.ignore_patterns("__pycache__", "install-native-runtime.sh"))
-    shutil.copyfile(ROOT / "deploy/robot/pinky_pro/release/signing.py", destination / "signing.py")
+    shutil.copyfile(ROOT / "deploy/hosts/common/release/signing.py", destination / "signing.py")
     for folder, pattern in (("udev", "*.rules"), ("modprobe", "*.conf")):
         (destination / "image-layer" / folder).mkdir(parents=True)
         for source in (ROOT / "deploy/robot/pinky_pro" / folder).glob(pattern):

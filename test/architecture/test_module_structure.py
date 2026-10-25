@@ -169,6 +169,7 @@ ROLE_DIR = {
     "dashboard": ("robot_ui", "robot"),  # middleware/robot_ui/robot (D-427 wave 4b)
     # D-427 wave 4c: middleware/apps/device/<robot>/<role>, middleware/drivers/<robot>_<role>.
     "pinky_pro": ("devices", "pinky", "profile"),
+    "rasptank_metal": ("devices", "rasptank", "profile"),
     "bringup": ("devices", "pinky", "bringup"),
     "description": ("devices", "pinky", "description"),
     "sensor_adc": ("drivers", "pinky_adc"),

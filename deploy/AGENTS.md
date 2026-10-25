@@ -39,6 +39,9 @@ unit. At this level only the harness records.
 | `site/` | Site-host Fleet, Vision, and Caddy stack; separate from the Pi product image (see `site/AGENTS.md`) |
 | `model_pc/` | Decision 독립 L0 평가·승격 증거의 실행 안내 (see `model_pc/AGENTS.md`) |
 | `ai_pc/` | 승인 고정 버전의 추론·배포 스모크 유닛; GPU timer와 disabled loopback Laya service (see `ai_pc/AGENTS.md`) |
+| `hosts/common/release/` | Shared self-contained release signing implementation; legacy Pinky imports alias it and native installation copies it |
+| `hosts/sdk/` | External SDK-host target descriptors; Neo 2 is explicitly unsupported, with no executable adapter |
+| `robot/rasptank_metal/` | Source-only deployment target descriptor; no accepted image, driver or executor |
 
 `robot/` groups deployment inputs by robot product. Shared ROS packages remain
 under `src/`; this folder is not a shared device-control library.
