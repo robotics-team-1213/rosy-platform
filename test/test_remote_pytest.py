@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import shlex
 import threading
@@ -643,7 +644,9 @@ def _poll_until_done(env, k="0"):
 def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path):
     if not shutil.which("setsid") or sys.platform == "win32":
         pytest.skip("Linux setsid/timeout/ionice are required")
-    home, env = _job_env(tmp_path, 'echo out; echo err >&2; sleep 2; echo "args $*"; exit 3\n')
+    # $4 is the basetemp: leave a read-only dir in it, as release/rollback tests do
+    home, env = _job_env(tmp_path, 'echo out; echo err >&2; mkdir "$4/ro"; touch "$4/ro/f"; chmod 555 "$4/ro"\n'
+                                   'sleep 2; echo "args $* mode $(stat -c %a "$4")"; exit 3\n')
     start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, "test/x.py", "-q")
     assert start.returncode == 0, start.stderr
     lock, jobs = home / "rosy-jobs" / "r.lock", home / "rosy-test" / "runs" / "r.jobs"
@@ -654,8 +657,9 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
     assert _poll_until_done(env) == 3
     assert not lock.exists() and not (jobs / "0.rc.tmp").exists() and (jobs / "0.rc").read_text() == "3\n"
     out = (jobs / "0.log").read_bytes()
-    # tmp_path lives in the run's job dir, which CLEANUP/SWEEP remove (not /tmp/pytest-of-<user>)
-    assert out.startswith(b"out\nerr\n") and out.endswith(f"args -m pytest --basetemp {jobs}/0.tmp test/x.py -q\n".encode())
+    # a short private tmp_path root per job (not /tmp/pytest-of-<user>), gone with the job despite read-only dirs
+    base = re.search(rb"args -m pytest --basetemp (/tmp/rosy-pytest-\w{6}) test/x.py -q mode 700\n$", out)
+    assert out.startswith(b"out\nerr\n") and base and not Path(base.group(1).decode()).exists()
     _skip_unreaped(pid)
     assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "4").stdout) == (3, False, out[4:])  # offset 4: after "out\n"
 
@@ -788,7 +792,7 @@ def test_sweep_removes_only_old_finished_runs_of_this_runner(tmp_path):
             if kind != "running":
                 (j / "0.rc").write_text("1\n")
             (j / "0.pid").write_text(f"{live.pid if kind in ('live', 'running') else 999999999}\n")
-            if kind == "old":  # read-only dirs from release tests, in the checkout and in the job's basetemp
+            if kind == "old":  # read-only dirs from release tests, in the checkout and in the job dir
                 _read_only_tree(runs / name / "store")
                 _read_only_tree(j / "0.tmp" / "store")
             if kind != "fresh":
@@ -856,7 +860,8 @@ def test_leading_rosy_words_are_the_job_environment_and_browser_jobs_get_chromiu
     assert start.returncode == 0, start.stderr
     assert _poll_until_done(env) == 0
     out = (home / "rosy-test" / "runs" / "r.jobs" / "0.log").read_text()
-    assert out.endswith(f"browser={'1' if install else ''} args -m pytest --basetemp {home}/rosy-test/runs/r.jobs/0.tmp test/x_browser.py -q\n")
+    assert re.search(f"browser={'1' if install else ''} args -m pytest --basetemp /tmp/rosy-pytest-\\w{{6}} test/x_browser.py -q\n$",
+                     out)
     installed = home / "installed"
     assert installed.exists() == install
     assert not install or installed.read_text() == "-m playwright install chromium\n"
