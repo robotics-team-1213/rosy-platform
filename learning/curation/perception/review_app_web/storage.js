@@ -84,6 +84,7 @@ function showJobs(rows){
     const heading=document.createElement('h4');heading.textContent=job.provenance?.run_id||job.id;article.append(heading);
     line(article,`${jobStates[job.status]||'상태 확인 필요'} · ${bytes(job.upload_bytes)} · ${job.local_present===true?'로컬 사본 있음':job.local_present===false?'로컬 사본 없음':'로컬 사본 확인 필요'}${job.pinned?' · 고정 보관':''}`);
     line(article,`${job.repo_id||'저장소 미확인'}${job.revision?' · 버전 '+job.revision.slice(0,12):''}`);
+    if(job.files_total>32)line(article,`전송 기록 ${job.files_uploaded}/${job.files_total}개 · 전체 검증 후 로컬 정리 가능`);
     if(job.operation)line(article,operations[job.operation]||'작업 중');
     if(job.error==='upload_outcome_unknown')line(article,'원격 커밋 결과를 확인해야 합니다. 계정을 바꾸거나 다시 업로드하지 않습니다.');
     else if(job.error||job.operation_error)line(article,'작업을 마치지 못했습니다. 원격 권한·공간과 현재 자료 상태를 확인한 뒤 같은 작업으로 재시도하세요.');

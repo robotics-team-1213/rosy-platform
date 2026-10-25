@@ -32,6 +32,8 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 source manifest는 `storage-source.json`의 `rosy.storage-source/1`이며 completed 상태, profile, 파일별 bytes/SHA-256, provenance를 포함한다. 파일 집합 전체를 검증하고 출처가 검증되지 않은 파일을 자동으로 추가하지 않는다. Isaac 출처는 run_id·seed·source_revision을 보존한다. manifest 완료 표시는 파일 보관 범위의 선언이며 시뮬레이션 성공을 증명하지 않는다. 고정 revision과 자료 이력은 로컬 회수 뒤에도 남는다.
 
+큰 파일 집합은 32개 파일씩 같은 저장소에 기록하며 `files_uploaded`/`files_total`은 확인된 전송 기록이다. 부분 전송의 중간 commit을 reconcile하면 확인한 prefix만 확정하고 queued로 돌아가 남은 묶음을 같은 대상에 이어 쓴다. 전체 전송 후 final revision을 고정해 모든 bytes를 검증하기 전에는 bytes_verified나 reclaimable을 true로 표시하지 않는다.
+
 ### v1.318 Fleet 캐시 전용 모니터링 읽기 (D-876)
 
 **단계:** wire 계약 등록. 이 변경만으로 아래 Fleet handler나 독립 Monitoring 서비스가 구현·배포된 것은 아니다. 실제 producer는 후속 구현·회귀에서 확인한다.

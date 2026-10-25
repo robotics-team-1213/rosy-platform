@@ -2,6 +2,7 @@
 from contextlib import contextmanager, ExitStack
 import hashlib
 import errno
+import io
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -129,6 +130,29 @@ def consume(chunks, expected, checkpoint, output=None):
         raise ValueError('remote bytes differ from manifest')
 
 
+class CheckedReader(io.BufferedReader):
+    """Let a revoked project connection interrupt the SDK's source reads."""
+    def __init__(self, stream, checkpoint):
+        super().__init__(stream)
+        self.checkpoint = checkpoint
+
+    def read(self, size=-1):
+        self.checkpoint()
+        return super().read(size)
+
+    def readinto(self, buffer):
+        self.checkpoint()
+        return super().readinto(buffer)
+
+    def read1(self, size=-1):
+        self.checkpoint()
+        return super().read1(size)
+
+    def readinto1(self, buffer):
+        self.checkpoint()
+        return super().readinto1(buffer)
+
+
 class Files:
     def __init__(self, inventory):
         self.inventory = inventory
@@ -199,10 +223,19 @@ class Files:
                 raise ValueError('local bytes differ from verified manifest')
 
     @contextmanager
-    def streams(self, location, files):
-        self.verify(location, files)
-        with self.open(location) as fd, ExitStack() as stack:
-            yield {name: stack.enter_context(file_open(fd, name)) for name in files}
+    def streams(self, location, files, selected, checkpoint):
+        with self.open(location) as fd, claim(fd), ExitStack() as stack:
+            if names(fd) != files.keys(): raise ValueError('source file set changed before upload')
+            streams = {}
+            for name in selected:
+                checkpoint()
+                stream = stack.enter_context(file_open(fd, name))
+                if (os.fstat(stream.fileno()).st_size != files[name]['bytes']
+                        or hashlib.file_digest(stream, 'sha256').hexdigest() != files[name]['sha256']):
+                    raise ValueError('source bytes changed before upload')
+                stream.seek(0)
+                streams[name] = stack.enter_context(CheckedReader(stream, checkpoint))
+            yield streams
 
     def quarantine(self, location, job_id):
         path = parts(location['relative'], internal=True)

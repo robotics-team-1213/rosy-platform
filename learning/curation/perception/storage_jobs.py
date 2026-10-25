@@ -75,6 +75,8 @@ class StorageJobs:
         result.update(local_present=present, reclaimable=bool(present and job['bytes_verified']
             and job['status'] == 'verified' and not job['pinned']
             and (root.get('role') == 'cache' or root.get('reclaimable') is True)))
+        result.update(files_total=len(job['files']), files_uploaded=len(job.get('uploaded_files',
+            list(job['files']) if job.get('revision') else [])))
         return result
 
     def get(self, actor, job_id):
@@ -104,6 +106,7 @@ class StorageJobs:
             location['identity'] = manifest['identity']
             job = dict(id=uuid.uuid4().hex, project_id=self.project_id, requester_id=actor['user_id'],
                 profile=body['profile'], status='queued', local=location, files=manifest['files'],
+                uploaded_files=[], pending_files=[], upload_revision=None,
                 provenance=manifest['provenance'], revision=None, bytes_verified=False, pinned=False,
                 error=None, created_at=self.pool.clock(), upload_bytes=sum(v['bytes'] for v in manifest['files'].values()))
             with self.pool.connect() as db:
@@ -119,17 +122,43 @@ class StorageJobs:
         if job['revision']: assigned['revision'] = job['revision']
         return assigned, cred['token']
 
-    def _verify_remote(self, actor, job):
+    def _verify_remote(self, actor, job, selected=None):
         assigned, token = self._assignment(actor, job)
         info = self.transport.info(assigned, token)
         if info.get('private') is not True: raise ValueError('private destination required')
-        for name, expected in job['files'].items():
+        for name in job['files'] if selected is None else selected:
+            expected = job['files'][name]
             assigned, token = self._assignment(actor, job)
             consume(self.transport.chunks(assigned, name, token), expected,
                     lambda: self._check(actor, job, 'read-repos'))
         assigned, token = self._assignment(actor, job)
         if self.transport.info(assigned, token).get('private') is not True:
             raise ValueError('destination visibility changed')
+
+    def _upload(self, actor, job):
+        allocation = self.pool.assignment(actor, job['id'])
+        completed = job.get('uploaded_files', [])
+        if allocation['status'] == 'uploading' and (job.get('pending_files') or not completed):
+            self._save(job, status='hold', error='upload_outcome_unknown')
+            return False
+        ordered = list(job['files'])
+        if completed != ordered[:len(completed)]: raise ValueError('upload batch history differs from manifest')
+        for offset in range(len(completed), len(ordered), 32):
+            selected = ordered[offset:offset + 32]
+            assigned, token = self._assignment(actor, job, 'write-repos')
+            if job.get('upload_revision'): assigned['parent_commit'] = job['upload_revision']
+            if self.transport.info(assigned, token).get('private') is not True:
+                raise ValueError('private destination required')
+            with self.files.streams(job['local'], job['files'], selected, lambda: self._check(actor, job)) as streams:
+                if allocation['status'] == 'reserved':
+                    allocation = self.pool.start(actor, job['id'])
+                self._save(job, status='uploading', pending_files=selected, error=None)
+                revision = self.transport.commit(assigned, streams, token)
+            if not isinstance(revision, str) or not re.fullmatch(r'[0-9a-f]{40}', revision):
+                raise ValueError('immutable destination revision required')
+            self._save(job, upload_revision=revision, uploaded_files=ordered[:offset + len(selected)], pending_files=[])
+        self._save(job, revision=job['upload_revision'], status='uploaded')
+        return True
 
     def run(self, actor, job_id):
         with self._lease():
@@ -138,28 +167,15 @@ class StorageJobs:
             if job['status'] in ('hold', 'reclaiming', 'cancelled') or job['bytes_verified']:
                 return self._public(job)
             try:
-                allocation = self.pool.assignment(actor, job_id)
-                if not job['revision'] and allocation['status'] == 'uploading':
-                    self._save(job, status='hold', error='upload_outcome_unknown')
-                    return self._public(job)
-                if not job['revision']:
-                    assigned, token = self._assignment(actor, job, 'write-repos')
-                    if self.transport.info(assigned, token).get('private') is not True:
-                        raise ValueError('private destination required')
-                    with self.files.streams(job['local'], job['files']) as streams:
-                        self.pool.start(actor, job_id)
-                        self._save(job, status='uploading', error=None)
-                        revision = self.transport.commit(assigned, streams, token)
-                    if not isinstance(revision, str) or not re.fullmatch(r'[0-9a-f]{40}', revision):
-                        raise ValueError('immutable destination revision required')
-                    self._save(job, revision=revision, status='uploaded')
+                if not job['revision'] and not self._upload(actor, job): return self._public(job)
                 self.pool.mark_uploaded(actor, job_id, job['revision'])
                 self._save(job, status='verifying', error=None)
                 self._verify_remote(actor, job)
                 self.files.verify(job['local'], job['files'])
                 self._save(job, status='verified', bytes_verified=True)
             except Exception:
-                unknown = job['status'] == 'uploading' and not job['revision']
+                unknown = bool(job.get('pending_files')) or (job['status'] == 'uploading'
+                    and not job['revision'] and not job.get('upload_revision'))
                 self._save(job, status='hold' if unknown else 'failed', bytes_verified=False,
                            error='upload_outcome_unknown' if unknown else 'transfer_failed')
             return self._public(job)
@@ -182,11 +198,16 @@ class StorageJobs:
             if job['status'] != 'hold' or job['revision'] is not None:
                 raise ValueError('only an uncertain upload can reconcile an existing commit')
             candidate = dict(job, revision=revision)
-            try: self._verify_remote(actor, candidate)
+            confirmed = [*job.get('uploaded_files', []), *job.get('pending_files', [])] or list(job['files'])
+            if confirmed != list(job['files'])[:len(confirmed)]: raise ValueError('upload batch history differs from manifest')
+            try: self._verify_remote(actor, candidate, confirmed)
             except PermissionError: raise
             except Exception: raise ValueError('existing commit does not verify this artifact manifest') from None
-            self.pool.mark_uploaded(actor, job_id, revision)
-            self._save(job, revision=revision, status='verified', bytes_verified=True, error=None)
+            complete = len(confirmed) == len(job['files'])
+            if complete: self.pool.mark_uploaded(actor, job_id, revision)
+            self._save(job, revision=revision if complete else None, upload_revision=revision,
+                uploaded_files=confirmed, pending_files=[], status='verified' if complete else 'queued',
+                bytes_verified=complete, error=None)
             return self._public(job)
 
     def pin(self, actor, job_id, value):
