@@ -245,6 +245,13 @@ def test_declared_g2_evidence_states_use_the_actual_backend(monitoring_backend, 
         if mode == 'error':
             expect(page.locator('#observation-rows .danger')).to_contain_text('오류')
     capture(page, 'fresh' if mode == 'web' else mode)
+    if mode == 'web':
+        # A modified selector still goes through the real server's scope boundary.
+        page.locator('#scope-select').evaluate("select => select.add(new Option('site-b', 'site-b'))")
+        page.locator('#scope-select').select_option('site-b')
+        expect(page.locator('#connection-status')).to_contain_text('허용된 사이트를 확인하세요.')
+        expect(page.locator('#observation-rows')).to_be_empty()
+        capture(page, 'scope-denied')
 
 
 @pytest.mark.parametrize('monitoring_backend', ['prefix'], indirect=True)
