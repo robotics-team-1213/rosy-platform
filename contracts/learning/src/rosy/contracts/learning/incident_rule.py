@@ -2,6 +2,7 @@
 import json
 import math
 import re
+from .digest import is_sha256_hex
 
 
 def validate_rule(value):
@@ -22,7 +23,7 @@ def validate_rule(value):
             or value['outcome'] is not None):
         raise ValueError('RULE_SELECTION_CANNOT_ADMIT_ACTION_OR_OUTCOME')
     for name in ('source_sha256', 'config_sha256'):
-        if type(value[name]) is not str or not re.fullmatch('[0-9a-f]{64}', value[name]):
+        if type(value[name]) is not str or not is_sha256_hex(value[name]):
             raise ValueError('INVALID_RULE_SELECTION_HASH')
     assessment = value['assessment']
     fields(assessment, 'necessity reason request policy_revision evaluated_at valid_until')
@@ -57,7 +58,7 @@ def validate_rule(value):
         if selection['rule'] is None or selection['decision'] not in ('WAIT', 'BACK_AND_RETRY', 'YIELD', 'RESUME', 'REALIGN'):
             raise ValueError('INVALID_RULE_ANSWER')
         if (selection['decision'] == 'REALIGN') != realign or realign and (
-                type(selection['realign_sha256']) is not str or not re.fullmatch('[0-9a-f]{64}', selection['realign_sha256'])):
+                type(selection['realign_sha256']) is not str or not is_sha256_hex(selection['realign_sha256'])):
             raise ValueError('UNBOUND_RULE_REALIGN')
         if selection['decision'] != 'YIELD' and any(selection[n] is not None for n in ('yield_m', 'yield_turn_rad')):
             raise ValueError('UNBOUND_RULE_YIELD')

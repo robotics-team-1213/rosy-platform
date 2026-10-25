@@ -65,6 +65,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/roster.js": 1,
     # Activation and profile replacement; D-655 camera replacement moved to its controller.
     "applications/fleet/web/sitemap/site-map.js": 2,
+    "applications/fleet/web/sitemap/map-authoring.js": 1,  # replace drawing reference while retaining geometry
     "applications/fleet/web/sitemap/site-map-camera.js": 1,
     "applications/fleet/web/sitemap/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
     "applications/fleet/web/installation/tracking-relearn.js": 1,

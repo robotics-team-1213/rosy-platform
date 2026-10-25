@@ -5,6 +5,16 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_account_origin_resolves_to_its_tls_proxy_for_container_clients():
+    base = yaml.safe_load((ROOT / 'deploy/site/compose.yaml').read_text())['services']
+    proxy = yaml.safe_load((ROOT / 'deploy/site/compose.account.yaml').read_text())['services']['proxy']
+    assert proxy['networks']['site_edge']['aliases'] == [
+        '${ROSY_ACCOUNT_HTTPS_HOST:?set ROSY_ACCOUNT_HTTPS_HOST}']
+    assert set(proxy['networks']) == set(base['proxy']['networks'])
+    assert 'site_edge' not in base['fleet']['networks']
+    assert 'network_mode' not in proxy
+
+
 def test_authority_and_public_app_links_have_separate_mounts():
     services = yaml.safe_load((ROOT/'deploy/site/compose.yaml').read_text())['services']
     private = '/etc/rosy/account:/run/rosy-account:ro'

@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import pytest
-sys.path.insert(0,str(Path(__file__).resolve().parents[3] / 'learning/training/perception'))
+sys.path.insert(0,str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 from test_review_dataset import companion_fixture
 import review_dataset
 

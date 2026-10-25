@@ -3,7 +3,7 @@ import {openLiveDialog} from '/common/ui.js';
 const trigger=document.createElement('ui-button');
 trigger.id='review-command-open';trigger.setAttribute('kind','quiet');
 trigger.setAttribute('aria-keyshortcuts','Control+K Meta+K');
-trigger.textContent='기능 검색';trigger.title='기능 검색 · Ctrl+K';
+trigger.textContent='기능 검색 · Ctrl+K';
 (document.querySelector('.review-flow')||document.querySelector('main')).append(trigger);
 const dialog=document.createElement('dialog');
 dialog.id='review-commands';dialog.className='review-commands';dialog.setAttribute('aria-label','기능 검색');

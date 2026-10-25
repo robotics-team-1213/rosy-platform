@@ -55,6 +55,9 @@ class StationTransport:
     async def power_health(self) -> dict:
         return await self._get('/api/v1/power/health')
 
+    async def motor_health(self) -> dict:
+        return await self._get('/api/v1/motors/health')
+
     async def station_target(self):
         return StationTargetStatus.model_validate(await self._get('/api/v1/docking/station-target'))
 

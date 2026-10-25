@@ -993,6 +993,11 @@ safety_modules:
   - middleware/devices/omx/adapter/omx_adapter/action_api.py
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
   - middleware/devices/omx/adapter/omx_adapter/action_store_readback.py
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_port.py  # D-858 S1 real bus port: HOLD, stop latch, gate
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_bus.py  # D-858 S1 RAM-only writes, exclusive SDK bus, one-writer claim
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_gates.py  # D-858 S1 §4 motion gate evidence, tracking bounds
+  - middleware/devices/omx/adapter/omx_adapter/real/commissioning_record.py  # D-858 S3 measured record, MotionEvidence loader, revision
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_stop_test.py  # D-858 S3 V-016 timed stop test and its CLI
   - middleware/devices/omx/agent/src/rosy_agent/barrier_supervisor.py  # D-780 barrier timeout, coordinator liveness HOLD
   - middleware/devices/omx/agent/src/rosy_agent/barrier_journal.py  # D-780 PHASE_WAIT/release journal
   - middleware/devices/omx/agent/src/rosy_agent/coordinator_api.py  # D-780 coordinator peer roles, ReleaseBarrier
@@ -1160,6 +1165,12 @@ safety_anchors:
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
   - {symbol: omx_adapter.contracts.command_types.ArmCommandConfig}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
+  - {symbol: omx_adapter.real.dynamixel_port.DynamixelPort}
+  - {symbol: omx_adapter.real.dynamixel_bus.SdkBus}
+  - {symbol: omx_adapter.real.dynamixel_gates.MotionEvidence}
+  - {symbol: omx_adapter.real.commissioning_record.load_motion_evidence}
+  - {symbol: omx_adapter.real.commissioning_record.CommissioningStore.save}
+  - {symbol: omx_adapter.real.dynamixel_stop_test.run_stop_test}
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}
   - {symbol: omx_adapter.owner_recovery_api.OwnerRecoveryApi.dispatch}
   - {symbol: omx_adapter.action_store_readback.ActionStoreReadback.run_if_no_unresolved}

@@ -1,0 +1,128 @@
+/* 학습 진입 문서 배치 — 색·글자·부품 계약은 /common(tokens·components)이 소유하고
+   이 시트는 문서 폭·호스트 격자·카드 면·초점 전환만 정의한다(D-624 표면 배치 규칙).
+   카드는 솟은 면(--surface-raised) + 선 1장으로 깊이를 표현한다(그림자 없음).
+   /console/learning/{model,ai} 는 초점 호스트만 보여 준다(미등록 준비 안내 문서). */
+
+.learning-main {
+  box-sizing: border-box;
+  width: min(100%, 48rem);
+  margin: var(--space-6) auto;
+  padding: 0 var(--space-4);
+  display: grid;
+  gap: var(--space-5);
+}
+
+.learning-main p {
+  margin: 0;
+}
+
+/* 보조 글: 공용 부품 이름을 선택자에 두지 않는 표면 소유 클래스만 칠한다(D-624) */
+.learning-hub-note,
+.learning-focus-note,
+.learning-prep-note {
+  color: var(--text-secondary);
+}
+
+/* 초점 문서(/console/learning/{model,ai})에서는 다른 호스트와 허브 전용 칸을 감춘다 */
+.learning-focus-note {
+  display: none;
+}
+
+.learning-main[data-host-focus="model"] .learning-hub-note,
+.learning-main[data-host-focus="ai"] .learning-hub-note {
+  display: none;
+}
+
+.learning-main:not([data-host-focus=""]) .learning-focus-note {
+  display: block;
+}
+
+.learning-main[data-host-focus="model"] .learning-host[data-host="ai"],
+.learning-main[data-host-focus="ai"] .learning-host[data-host="model"],
+.learning-main:not([data-host-focus=""]) .learning-steps,
+.learning-main:not([data-host-focus=""]) .learning-prep {
+  display: none;
+}
+
+.learning-hosts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.learning-main:not([data-host-focus=""]) .learning-hosts {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.learning-host {
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-panel);
+  padding: var(--space-5);
+  gap: var(--space-3);
+}
+
+.learning-host-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.learning-host > p {
+  color: var(--text-secondary);
+}
+
+.learning-host-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-flat);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius-control);
+}
+
+.learning-host-hint {
+  display: none;
+}
+
+.learning-host[data-host-state="neutral"] .learning-host-hint {
+  display: block;
+}
+
+.learning-steps-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+  counter-reset: learning-step;
+}
+
+.learning-steps-list li {
+  counter-increment: learning-step;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--space-3);
+  color: var(--text-secondary);
+}
+
+.learning-steps-list li::before {
+  content: counter(learning-step);
+  font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
+  color: var(--text-primary);
+}
+
+.learning-steps-list b {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+@media (width < 30rem) {
+  .learning-hosts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

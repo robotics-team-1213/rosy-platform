@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / 'contracts/learning/src'))
 from rosy.contracts.learning import seal, validate_policy, validate_promotion  # noqa: E402
 
 
+# Format pinned: policy registry records use this JSON; test_canonical_hash_formats.
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
 

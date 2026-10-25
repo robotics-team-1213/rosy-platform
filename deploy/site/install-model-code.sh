@@ -43,9 +43,7 @@ pathlib.Path(out).write_text(json.dumps(dict(root=root,key_id=key,public_key=roo
 PY
   chmod 0600 "$CONF"
 fi
-install -m 0644 "$HERE/rosy_model_code.py" "$HERE/candidate_signing.py" "$LIB/"
-install -m 0644 "$HERE/model_code_layout.py" "$HERE/model_code_execution.py" "$LIB/"
-install -m 0644 "$HERE/model_code_source.py" "$LIB/"
+install -m 0644 "$HERE/rosy_model_code.py" "$HERE/model_code_jobs.py" "$HERE/model_code_layout.py" "$HERE/candidate_signing.py" "$LIB/"
 install -m 0644 "$HERE/model-mdns.py" "$HERE/../../contracts/foundation/core_common/protocol/discovery_txt.py" "$LIB/"
 python3 -I "$LIB/rosy_model_code.py" --config "$CONF" status
 install -m 0644 "$HERE/rosy-model-code-update.service" "$HERE/rosy-model-code-update.timer" \

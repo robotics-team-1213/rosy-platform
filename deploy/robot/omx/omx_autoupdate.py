@@ -132,6 +132,10 @@ class Host:
         mirror = Path(self.cfg["root"]) / "mirror.git"
         if not mirror.exists():
             subprocess.run(["git", "init", "--bare", "-q", str(mirror)], check=True)
+        # main() holds update.lock, so no other git process uses this mirror: a lock here is left by a
+        # fetch that was killed (AI PC 10-20: shallow.lock blocked every run for three days).
+        for stale in mirror.glob("*.lock"):
+            stale.unlink()
         subprocess.run(["git", "-C", str(mirror), "fetch", "-q", "--depth", "1", self.cfg["repo_url"], sha],
                        check=True, timeout=600)
         data = subprocess.run(["git", "-C", str(mirror), "archive", "--format=tar", sha, *paths],
@@ -253,6 +257,12 @@ class Updater:
             self.envs.mkdir(parents=True, exist_ok=True)
             self.host.build_env(lock, staging)
             os.replace(staging, target)
+            # A venv is not relocatable: console scripts keep "#!<staging>/bin/python" (2026-10-24:
+            # lerobot-teleoperate failed with ENOENT on the missing envs/<hash>.tmp interpreter).
+            old, new = str(staging).encode(), str(target).encode()
+            for script in (target / "bin").iterdir():
+                if script.is_file() and not script.is_symlink() and old in (data := script.read_bytes()):
+                    script.write_bytes(data.replace(old, new))
             log(step="env_built", env=name)
         return name
 
@@ -305,7 +315,8 @@ class Updater:
                 log(step="would_prepare", release=name)
                 return "would_prepare"
             staging = self.releases / f"{name}.tmp"
-            shutil.rmtree(staging, ignore_errors=True)
+            for leftover in self.releases.glob("*.tmp"):  # failed preparations of this or older releases
+                shutil.rmtree(leftover, ignore_errors=True)
             staging.mkdir()
             self.host.archive(sha, self.cfg["paths"], staging)
             (staging / "RELEASE").write_text(sha + "\n")

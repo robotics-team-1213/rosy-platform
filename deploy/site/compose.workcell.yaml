@@ -1,0 +1,37 @@
+# Optional display-only workcell observations. Append after pairing/omx and before Account.
+# All inputs are private files provisioned on the site host, outside the candidate/config tree.
+services:
+  fleet:
+    environment:
+      ROSY_WORKCELL_OBSERVATIONS: /run/rosy-workcell/observations.yaml
+      ROSY_ADDITIONAL_CREDENTIAL_PATHS: '{"ROSY_ARM_A_TOKEN":"/run/rosy-workcell-arm-secrets/arm_a_token","ROSY_ARM_B_TOKEN":"/run/rosy-workcell-arm-secrets/arm_b_token"}'
+    volumes:
+      - type: bind
+        source: "${ROSY_SITE_WORKCELL_MANIFEST:?set ROSY_SITE_WORKCELL_MANIFEST}"
+        target: /run/rosy-workcell/observations.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${ROSY_SITE_WORKCELL_ARM_SECRETS_DIR:?set ROSY_SITE_WORKCELL_ARM_SECRETS_DIR}"
+        target: /run/rosy-workcell-arm-secrets
+        read_only: true
+        bind:
+          create_host_path: false
+  vision:
+    environment:
+      ROSY_WORKCELL_OBSERVATIONS: /run/rosy-workcell/observations.yaml
+      ROSY_ADDITIONAL_CREDENTIAL_PATHS: '{"ROSY_CAMERA_OVERHEAD_TOKEN":"/run/rosy-workcell-camera-secrets/overhead_token","ROSY_CAMERA_WRIST_A_TOKEN":"/run/rosy-workcell-camera-secrets/wrist_a_token","ROSY_CAMERA_WRIST_B_TOKEN":"/run/rosy-workcell-camera-secrets/wrist_b_token"}'
+    volumes:
+      - type: bind
+        source: "${ROSY_SITE_WORKCELL_MANIFEST:?set ROSY_SITE_WORKCELL_MANIFEST}"
+        target: /run/rosy-workcell/observations.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR:?set ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR}"
+        target: /run/rosy-workcell-camera-secrets
+        read_only: true
+        bind:
+          create_host_path: false

@@ -45,6 +45,7 @@ from core_common.protocol.vision_preview import (
     PreviewRectification, VisionLeaseError, VisionLeaseSigner,
 )
 from rosy_vision import map_worker
+from rosy_vision.ingest_status import status_message
 from rosy_vision.map_register import MapPaint
 from rosy_vision.pairing_sync import PairedCredentials
 from rosy_vision.preview_plane import map_plane_response, rectified_jpeg
@@ -594,19 +595,14 @@ class IngestServer:
             self._map_done.pop(source_name, None)
             self._plane_cache.pop(source_name, None)
 
+    def _status_message(self, src: _Source) -> dict:
+        return status_message(src.stats.snapshot(), *self._marker_status(src), src.field, time.monotonic(),
+                              MARKER_REPORT_TTL_S)
+
     async def _status_loop(self, src: _Source) -> None:
         while True:
             await asyncio.sleep(STATUS_INTERVAL_S)
-            snap = src.stats.snapshot()
-            corners_seen, robots_seen = self._marker_status(src)
-            status = {
-                "type": "status",
-                "corners_seen": corners_seen,
-                "corners_needed": 4,
-                "robots_seen": robots_seen,
-                "rx_fps": snap["rx_fps"],
-                "dropped": snap["dropped_bad_header"] + snap["oversize"],
-            }
+            status = self._status_message(src)
             try:
                 await src.connection.send(json.dumps(status))
                 await self._send_demand(src)

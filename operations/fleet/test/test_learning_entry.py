@@ -1,0 +1,151 @@
+"""Fleet documents only launch configured Learning origins; targets own authentication."""
+
+import json
+from pathlib import Path
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from fleet.server.static_routes import WEB_ROOT, install_static_routes
+
+
+def client(monkeypatch, tmp_path, config=None):
+    monkeypatch.delenv('ROSY_LEARNING_APPS_CONFIG', raising=False)
+    if config is not None:
+        path = tmp_path / 'learning.json'
+        path.write_text(json.dumps(config), encoding='utf-8')
+        monkeypatch.setenv('ROSY_LEARNING_APPS_CONFIG', str(path))
+    app = FastAPI()
+    app.state.web_common = None
+    install_static_routes(app)
+    return TestClient(app)
+
+
+@pytest.mark.parametrize('config', [None, {}])
+def test_unconfigured_documents_explain_preparation(monkeypatch, tmp_path, config):
+    http = client(monkeypatch, tmp_path, config)
+    for path in ['/console/learning', '/console/learning/model', '/console/learning/ai']:
+        response = http.get(path, follow_redirects=False)
+        assert response.status_code == 503
+        assert 'text/html' in response.headers['content-type']
+        assert 'Rosy Account' in response.text
+        assert '/console?view=work' in response.text
+        assert 'Location' not in response.headers
+        assert "script-src 'self'" in response.headers['content-security-policy']
+        assert 'no-store' in response.headers['cache-control']
+        assert '운영 연결 준비 중' in response.text
+        assert response.text.count('status="neutral"') >= 1     # 보이는 호스트 카드는 준비 중
+        assert 'status="active"' not in response.text
+        assert '{{' not in response.text                        # 모든 채움 토큰이 다 채워졌다
+
+
+@pytest.mark.parametrize('path,focus', [('/console/learning/model', 'model'), ('/console/learning/ai', 'ai')])
+def test_entry_documents_focus_the_requested_host(monkeypatch, tmp_path, path, focus):
+    http = client(monkeypatch, tmp_path, None)
+    response = http.get(path, follow_redirects=False)
+    assert response.status_code == 503
+    assert f'data-host-focus="{focus}"' in response.text
+    assert 'learning-focus-note' in response.text
+    assert 'learning-hub-note' in response.text        # 허브 문장과 초점 문장이 함께 실려 CSS로 갈린다
+    other = 'ai' if focus == 'model' else 'model'
+    assert f'data-host="{other}"' in response.text     # 다른 카드는 CSS로 감춘다(문서에는 남는다)
+
+
+def test_constant_redirects_do_not_forward_credentials_or_queries(monkeypatch, tmp_path):
+    http = client(monkeypatch, tmp_path, {'model': 'https://model.example', 'ai': 'https://ai.example:8443'})
+    assert http.get('/console/learning').status_code == 200
+    for host, origin in [('model', 'https://model.example'), ('ai', 'https://ai.example:8443')]:
+        response = http.get('/console/learning/' + host, follow_redirects=False,
+                            headers={'Authorization': 'Bearer fleet-secret', 'Cookie': 'session=fleet-cookie'})
+        assert response.status_code == 303
+        assert response.headers['location'] == origin + '/learning'
+        assert 'set-cookie' not in response.headers
+        assert 'fleet-secret' not in response.text and 'fleet-cookie' not in response.text
+    for query in ['url=https://evil.example', 'target=ai', 'token=fleet-secret', 'next=//evil.example']:
+        response = http.get('/console/learning/model?' + query, follow_redirects=False)
+        assert response.status_code == 400
+        assert 'location' not in response.headers
+    assert http.get('/console/learning/other', follow_redirects=False).status_code == 404
+
+
+def test_partial_config_and_startup_snapshot(monkeypatch, tmp_path):
+    http = client(monkeypatch, tmp_path, {'model': 'https://model.example'})
+    page = http.get('/console/learning')
+    assert page.status_code == 200
+    body = page.text
+    assert '운영 연결 등록됨' in body and '운영 연결 준비 중' in body
+    assert 'status="active"' in body and 'status="neutral"' in body   # 카드 상태가 호스트별로 갈린다
+    assert 'data-host-state="active"' in body and 'data-host-state="neutral"' in body
+    assert 'model.example' in body and body.count('미등록') == 1      # 등록된 원본은 카드에 실명으로 보인다
+    assert 'data-host-focus=""' in body                               # 허브 문서는 초점 없음
+    assert http.get('/console/learning/ai').status_code == 503
+    (tmp_path / 'learning.json').write_text('{"model":"https://changed.example"}')
+    assert http.get('/console/learning/model', follow_redirects=False).headers['location'] == (
+        'https://model.example/learning')
+
+
+@pytest.mark.parametrize('config', [[], None, {'other': 'https://model.example'}, {'model': None},
+    {'model': ''}, {'model': {}}, {'model': 'http://model.example'},
+    {'model': 'https://user:password@model.example'}, {'model': 'https://model.example/'},
+    {'model': 'https://model.example/path'}, {'model': 'https://model.example?token=x'},
+    {'model': 'https://model.example#x'}, {'model': 'https://localhost'},
+    {'model': 'https://localhost.localdomain'}, {'model': 'https://127.0.0.2'},
+    {'model': 'https://[::1]'}, {'model': 'https://0.0.0.0'}, {'model': 'https://*.example'},
+    {'model': 'https://model.example:bad'}, {'model': 'https://model.example\\@evil.example'},
+    {'model': 'https://model.example\n'}, {'model': 'https://model.example?'},
+    {'model': 'https://model.example#'}, {'model': 'https://app.localhost'},
+    {'model': 'https://localdomain'}, {'model': 'https://[::]'},
+    {'model': 'https://[::ffff:127.0.0.1]'}, {'model': 'https://127.1'},
+    {'model': 'https://0177.0.0.1'}, {'model': 'https://2130706433'},
+    {'model': 'https://0x7f000001'}])
+def test_invalid_config_fails_before_serving(monkeypatch, tmp_path, config):
+    # Explicit null differs from the absent environment variable.
+    path = tmp_path / 'bad.json'
+    path.write_text(json.dumps(config), encoding='utf-8')
+    monkeypatch.setenv('ROSY_LEARNING_APPS_CONFIG', str(path))
+    app = FastAPI()
+    app.state.web_common = None
+    with pytest.raises(ValueError):
+        install_static_routes(app)
+
+
+@pytest.mark.parametrize('content', ['{broken', '{"model":"https://one.example","model":"https://two.example"}'])
+def test_missing_or_malformed_config_fails_startup(monkeypatch, tmp_path, content):
+    path = tmp_path / 'missing.json'
+    monkeypatch.setenv('ROSY_LEARNING_APPS_CONFIG', str(path))
+    app = FastAPI()
+    app.state.web_common = None
+    with pytest.raises(ValueError):
+        install_static_routes(app)
+    path.write_text(content)
+    with pytest.raises(ValueError):
+        install_static_routes(app)
+
+
+def test_launch_uses_house_components_without_inline_code_and_work_navigation():
+    html = (WEB_ROOT / 'learning.html').read_text(encoding='utf-8')
+    assert '/common/tokens.css' in html and '/common/components.css' in html
+    assert '<ui-shell' in html and '<ui-section' in html
+    assert 'style=' not in html and '<style' not in html
+    assert '<script>' not in html
+    assert '/console/learning/model' in html and '/console/learning/ai' in html
+    assert '<ui-tag status="{{model_state}}">' in html and '<ui-tag status="{{ai_state}}">' in html
+    assert 'learning-hosts' in html and 'learning-host-head' in html
+    assert 'learning-host-readout' in html and '{{model_origin}}' in html and '{{ai_origin}}' in html
+    assert 'learning-steps-list' in html and 'learning-focus-note' in html and 'learning-hub-note' in html
+    assert 'data-host-focus="{{focus}}"' in html
+    assert '/console/assets/learning.css' in html
+    learning_css = (WEB_ROOT / 'learning.css').read_text(encoding='utf-8')
+    assert 'learning-hosts' in learning_css and '@media (width < 30rem)' in learning_css
+    assert '[data-host-focus="model"]' in learning_css          # 초점 문서 전환이 시트에 있다
+    assert '--surface-raised' in learning_css                   # 카드 면은 역할 토큰만 쓴다
+    assert '#' not in learning_css.replace('\\#', '')           # 원시 색 금지
+    index = (WEB_ROOT / 'index.html').read_text(encoding='utf-8')
+    work = index.split('data-area="work"', 1)[1].split('</nav>', 1)[0]
+    assert 'href="/console/learning"' in work
+    root = Path(__file__).resolve().parents[3]
+    compose = (root / 'deploy/site/compose.yaml').read_text(encoding='utf-8')
+    assert 'ROSY_LEARNING_APPS_CONFIG:' in compose
+    assert '/etc/rosy/fleet-learning:/run/rosy-fleet-learning:ro' in compose
+    assert json.loads((root / 'deploy/site/learning-apps.example.json').read_text()) == {}

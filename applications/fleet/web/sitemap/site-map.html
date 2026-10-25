@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/common/components.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/site-map.css">
+<link rel="stylesheet" href="/console/assets/map-editor.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
   <link rel="stylesheet" href="/console/assets/password-login.css">
@@ -95,7 +96,7 @@
       <ui-status id="map-status" state="empty">관제 접속 필요</ui-status>
       <ui-text id="map-scroll-hint" class="map-scroll-hint" hidden>좁은 화면에서는 지도를 좌우로 밀어 확인하세요.</ui-text>
       <div id="map-viewport" class="map-viewport" role="region" aria-label="현장 지도 가로 이동" tabindex="0" hidden>
-        <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로"></svg>
+        <svg id="site-map-svg" viewBox="0 0 800 480" role="img" aria-label="현장 지도 · 장소와 방향 있는 차로" tabindex="0"></svg>
       </div>
       <ui-text id="map-legend" hidden>점은 주소, 선은 차로, 화살표는 통행 방향입니다. 점선 면은 횡단보도, 색 면은 그 대기 띠입니다. 색 원은 로봇(점선 고리 = 위치 불확실성, 막대 = 방향), 색 선은 운행 경로입니다. 실선은 차선 주행, 점선은 좌표 주행입니다. 지도 위 장소나 차로를 누르면 아래에서 고칩니다.</ui-text>
       <details class="plane-tools">
@@ -109,6 +110,86 @@
           </div>
           <ui-text id="plane-status" role="status">카메라 평면 영상과 좌표 확인은 표시 전용입니다.</ui-text>
           <ui-text id="plane-point" role="status">확인한 좌표 없음 · 운행 목적지로 전달하지 않습니다.</ui-text>
+        </div>
+      </details>
+    </ui-section>
+    <ui-section aria-labelledby="drawing-heading">
+      <ui-head><h2 class="ui-section-heading" id="drawing-heading">도면과 직접 편집</h2></ui-head>
+      <details id="drawing-tools">
+        <summary class="ui-disclosure-row">도면 가져오기·좌표 맞춤</summary>
+        <div class="drawing-tools-body">
+          <ui-text>STL 또는 PNG/JPEG 평면 도면 위에 직접 그립니다. 이미지 좌표는 방향을 바로잡은 그림의 왼쪽 위가 원점이며 오른쪽·아래로 증가합니다. 실제 기준 두 점과 거리를 확인하세요. 사진의 원근은 자동 보정하지 않습니다.</ui-text>
+          <label>도면 원본 · 최대 16 MiB<input class="ui-field" id="drawing-file" type="file" accept=".stl,.png,.jpg,.jpeg,application/octet-stream,image/png,image/jpeg"></label>
+          <div class="form">
+            <label>투영 평면<select class="ui-field" id="drawing-plane"><option value="xy">XY</option><option value="xz">XZ</option><option value="yz">YZ</option></select></label>
+            <label>원본 좌표 단위<select class="ui-field" id="drawing-unit"><option value="m">m</option><option value="cm">cm</option><option value="mm">mm</option></select></label>
+            <label>원본 기준점 x<input class="ui-field" id="drawing-source-x" type="number" step="any" value="0"></label>
+            <label>원본 기준점 y<input class="ui-field" id="drawing-source-y" type="number" step="any" value="0"></label>
+            <label>축척 기준 두 번째 점 x<input class="ui-field" id="drawing-axis-x" type="number" step="any" value="1"></label>
+            <label>축척 기준 두 번째 점 y<input class="ui-field" id="drawing-axis-y" type="number" step="any" value="0"></label>
+            <label>두 점 사이 실측 거리 (m)<input class="ui-field" id="drawing-distance" type="number" min="0.001" max="2000" step="any" value="1"></label>
+            <label>지도 기준점 x (m)<input class="ui-field" id="drawing-map-x" type="number" min="-1000" max="1000" step="any" value="0"></label>
+            <label>지도 기준점 y (m)<input class="ui-field" id="drawing-map-y" type="number" min="-1000" max="1000" step="any" value="0"></label>
+            <label>원본 축 회전 (°)<input class="ui-field" id="drawing-rotation" type="number" min="-360" max="360" step="any" value="0"></label>
+          </div>
+          <label>실측 기준점·방향 설명<input class="ui-field" id="drawing-description" maxlength="1000"></label>
+          <div class="actions"><ui-button id="drawing-register" kind="primary">도면 좌표 맞추기</ui-button><ui-button id="drawing-cancel" kind="quiet">요청 취소</ui-button></div>
+          <ui-text id="drawing-status" role="status">도면 원본을 선택하세요. 맞춤 실패 시 현재 초안은 그대로입니다.</ui-text>
+        </div>
+      </details>
+      <details id="extraction-tools">
+        <summary class="ui-disclosure-row">이미지에서 선·윤곽 추출</summary>
+        <div class="drawing-tools-body">
+          <ui-text>평면 도면의 픽셀 범위를 지정하세요. 추출된 선은 이동 경로가 아닙니다. 후보를 원본과 대조하고 용도를 정한 뒤 초안에 반영하세요.</ui-text>
+          <div class="form">
+            <label>추출 방식<select class="ui-field" id="extract-method"><option value="lines">직선</option><option value="contours">윤곽선</option></select></label>
+            <label>왼쪽 x (px)<input class="ui-field" id="extract-x0" type="number" min="0" max="8192" value="0"></label>
+            <label>위쪽 y (px)<input class="ui-field" id="extract-y0" type="number" min="0" max="8192" value="0"></label>
+            <label>오른쪽 x (px)<input class="ui-field" id="extract-x1" type="number" min="1" max="8192" value="1"></label>
+            <label>아래쪽 y (px)<input class="ui-field" id="extract-y1" type="number" min="1" max="8192" value="1"></label>
+            <label>최소 선 길이 (px)<input class="ui-field" id="extract-min-length" type="number" min="2" max="8192" value="30"></label>
+            <label>윤곽 단순화 오차 (px)<input class="ui-field" id="extract-tolerance" type="number" min="0" max="10" step="any" value="1"></label>
+          </div>
+          <div class="actions"><ui-button id="extract-run" kind="primary">후보 추출</ui-button><ui-button id="extract-cancel" kind="quiet">후보·요청 취소</ui-button></div>
+          <label>검토할 후보<select class="ui-field" id="extract-candidate"><option value="">후보 선택</option></select></label>
+          <label>후보 꼭짓점 (px) · 한 줄에 x,y<textarea class="ui-field" id="extract-geometry" rows="4" maxlength="4096"></textarea></label>
+          <ui-button id="extract-preview" kind="quiet">수정한 후보 미리보기</ui-button>
+          <div class="form">
+            <label>후보의 용도<select class="ui-field" id="extract-kind"><option value="">용도를 선택하세요</option><option value="road">도로</option><option value="stop_line">정지선</option><option value="exclusion">금지 구역</option></select></label>
+            <label>이름<input class="ui-field" id="extract-name" maxlength="64" value="추출 요소"></label>
+            <label>도로 시작 장소<select class="ui-field" id="extract-from"></select></label>
+            <label>도로 끝 장소<select class="ui-field" id="extract-to"></select></label>
+            <label>도로 폭 (m)<input class="ui-field" id="extract-width" type="number" min="0.001" max="10" step="any" value="0.2"></label>
+            <label>도로 통행 방향<select class="ui-field" id="extract-direction"><option value="one_way">한 방향</option><option value="two_way">양방향</option></select></label>
+          </div>
+          <ui-button id="extract-accept" kind="primary">선택 후보를 초안에 반영</ui-button>
+          <ui-text id="extract-status" role="status">이미지 도면을 좌표에 맞춘 후 사용할 수 있습니다. 후보 반영은 지도 저장·활성화와 별도입니다.</ui-text>
+        </div>
+      </details>
+      <details id="editor-tools">
+        <summary class="ui-disclosure-row">그리기·꼭짓점 편집</summary>
+        <div class="drawing-tools-body">
+          <label class="ui-check"><input class="ui-field" id="editor-enabled" type="checkbox">초안 직접 편집 켜기</label>
+          <label class="ui-check"><input class="ui-field" id="editor-snap" type="checkbox">선택한 시작·끝 장소에 끝점 붙이기 (화면 8 px)</label>
+          <div class="form">
+            <label>편집 도구<select class="ui-field" id="editor-kind"><option value="select">선택·이동</option><option value="park">목적지 점</option><option value="road">도로 선</option><option value="exclusion">금지 구역 면</option></select></label>
+            <label>이름<input class="ui-field" id="editor-name" maxlength="64" value="새 요소"></label>
+            <label>화면 확대<select class="ui-field" id="editor-zoom"><option value="1">100%</option><option value="2">200%</option><option value="4">400%</option></select></label>
+            <div class="actions" role="group" aria-label="지도 화면 이동"><ui-button id="editor-pan-left" kind="quiet">왼쪽</ui-button><ui-button id="editor-pan-right" kind="quiet">오른쪽</ui-button><ui-button id="editor-pan-up" kind="quiet">위쪽</ui-button><ui-button id="editor-pan-down" kind="quiet">아래쪽</ui-button></div>
+            <label>도로 시작 장소<select class="ui-field" id="editor-from"></select></label><label>도로 끝 장소<select class="ui-field" id="editor-to"></select></label>
+            <label>도로 폭 (m)<input class="ui-field" id="editor-width" type="number" min="0.001" max="10" step="any" value="0.2"></label>
+            <label>통행 방향<select class="ui-field" id="editor-direction"><option value="one_way">일방</option><option value="two_way">양방</option></select></label>
+          </div>
+          <div class="actions"><ui-button id="editor-finish" kind="primary">그리기 완료</ui-button><ui-button id="editor-cancel" kind="quiet">그리기 취소</ui-button><ui-button id="editor-undo" kind="quiet">실행 취소</ui-button><ui-button id="editor-redo" kind="quiet">다시 실행</ui-button></div>
+          <div class="form editor-properties">
+            <label>수정할 요소<select class="ui-field" id="editor-element"></select></label><label>꼭짓점<select class="ui-field" id="editor-vertex"></select></label>
+            <label>x (m)<input class="ui-field" id="editor-x" type="number" min="-1000" max="1000" step="any" value="0"></label><label>y (m)<input class="ui-field" id="editor-y" type="number" min="-1000" max="1000" step="any" value="0"></label>
+          </div>
+          <div class="actions"><ui-button id="editor-add-point" kind="primary">좌표 점 추가</ui-button><ui-button id="editor-apply" kind="primary">선택 좌표·이름 적용</ui-button><ui-button id="editor-delete-vertex" kind="quiet">꼭짓점 삭제</ui-button><ui-button id="editor-delete" kind="quiet">요소 삭제</ui-button></div>
+          <ui-text id="editor-status" role="status">Enter 완료 · Esc 취소 · Delete 삭제 · Ctrl/Cmd+Z 실행 취소. 입력 필드 안에서는 일반 입력을 유지합니다.</ui-text>
+          <div class="actions"><ui-button id="editor-split" kind="quiet">선택 꼭짓점에서 도로 나누기</ui-button>
+            <label>연결할 다음 도로<select class="ui-field" id="editor-join-target"></select></label>
+            <ui-button id="editor-join" kind="quiet">선택한 두 도로 연결</ui-button></div>
         </div>
       </details>
     </ui-section>

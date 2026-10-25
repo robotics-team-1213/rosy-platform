@@ -62,6 +62,9 @@ async def _bounded_body(request: Request) -> bytes:
 
 def install_site_map_routes(app, *, site_maps, route_active, read_guard, require_named_operator) -> None:
     app.state.site_maps = site_maps
+    from fleet.server.site_map_drawing_routes import install_site_map_drawing_routes
+    install_site_map_drawing_routes(app, assets=site_maps.drawing_assets, read_guard=read_guard,
+                                   require_named_operator=require_named_operator)
 
     def fail(exc: SiteMapError) -> HTTPException:
         return site_map_error(exc.status_code, exc.code, str(exc))

@@ -212,3 +212,12 @@ def test_http_counts_and_identity_use_one_review_snapshot(tmp_path, monkeypatch)
         assert value['pipeline']['identity']['decision_sha256'] == observed[-1]['decision_sha256']
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+def test_dataset_record_shows_the_hf_share():
+    doc = ledger()
+    doc['review_autobuild']['build'] = {'external_sources': {'huggingface_frames': 3, 'percent': 60.0,
+                                                             'groups': ['hf:dataset/org/data@' + 'a' * 40]}}
+    assert snapshot(doc)['external'] == {'huggingface_frames': 3, 'percent': 60.0}
+    assert progress(doc)['external'] == {'huggingface_frames': 3, 'percent': 60.0}
+    assert 'external' not in progress()

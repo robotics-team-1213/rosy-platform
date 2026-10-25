@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from fleet.server.sqlite_policy import configure_connection
 
-COMMAND_WORDS = frozenset({"WAIT", "RESUME", "BACK_AND_RETRY", "YIELD", "ABORT", "MANUAL", "STOP", "GO"})
+from rosy_situation.fact_rules import COMMAND_WORDS
 FACT_KINDS = ("wait_cycle_confirmed", "wait_cycle_stale_input", "waiting_but_moving", "livelock", "stalled",
               "unknown_occupancy_long", "lane_obs_vs_range", "lane_conf_collapse", "shadow_active_drift",
               "pose_vs_paint", "pose_sources_disagree", "obstacle_identity",

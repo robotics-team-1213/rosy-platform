@@ -136,7 +136,7 @@ def test_pixel_tools_are_readable_and_reachable_beside_photo(browser_workspace, 
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 900})
     open_pixels(page, store, expect)
-    page.locator('#pixel-quick-classes ui-button').nth(1).click()
+    page.locator('#pixel-quick-classes button').nth(1).click()
     actions = page.locator('.pixel-quick-actions')
     if width >= 1024:
         assert page.locator('.pixel-quick-tools').evaluate('el => el.scrollWidth <= el.clientWidth')
@@ -528,7 +528,7 @@ def test_drivable_class_can_be_selected_painted_and_saved(browser_workspace):
     review_masks.bind_classes(store, raw)
     page.goto(page.url.split('?')[0].rstrip('/') + '/pixels?frame=0', wait_until='networkidle')
     expect(page.locator('#pixel-status')).to_contain_text('v0')
-    chip = page.locator('#pixel-quick-classes ui-button').nth(5)
+    chip = page.locator('#pixel-quick-classes button').nth(5)
     expect(chip).to_contain_text('주행 가능 영역')
     chip.click()
     expect(page.locator('#pixel-class')).to_have_value('5')
@@ -583,13 +583,16 @@ def test_pixel_photo_picker_returns_to_canvas_and_quick_tools(browser_workspace)
     tools = page.locator('.pixel-quick-tools').bounding_box()
     assert tools['x'] < canvas['x'] and tools['y'] < canvas['y']
     assert page.locator('#pixel-prev').bounding_box()['y'] < canvas['y']
-    assert page.locator('#pixel-undo').bounding_box()['y'] < canvas['y']
+    for action in ['#pixel-prev', '#pixel-next', '#pixel-undo']:
+        bounds = page.locator(action).bounding_box()
+        assert bounds['x'] + bounds['width'] < canvas['x']
+        assert 0 <= bounds['y'] < min(800, canvas['y'] + canvas['height'])
     page.locator('#pixel-frame').select_option('1')
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     expect(page.locator('#pixel-canvas')).to_be_focused()
     page.keyboard.press('ArrowLeft')
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
-    page.locator('#pixel-quick-classes ui-button').nth(1).click()
+    page.locator('#pixel-quick-classes button').nth(1).click()
     expect(page.locator('#pixel-class')).to_have_value('1')
     expect(page.locator('#pixel-canvas')).to_be_focused()
     page.keyboard.press('t')

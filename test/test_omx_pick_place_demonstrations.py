@@ -330,7 +330,7 @@ def test_batch_preserves_failed_attempt_and_stops_before_the_next_episode(tmp_pa
     import json
     import sim_pick_place_demonstrations as demo
     calls = []
-    def episode(path):
+    def episode(path, plan="analytic"):
         calls.append(path.name)
         path.mkdir()
         success = len(calls) == 1

@@ -24,7 +24,8 @@ export function createSurveyDraft(mapId, reference) {
 export function appendSurveyElement(map, item) {
   if (!map?.survey) throw new Error('조사 기준이 있는 초안을 먼저 만드세요');
   const {id, name, kind, geometry} = item;
-  if (!/^[A-Za-z0-9_.-]{1,32}$/.test(id) || !name?.trim() || name.length > 64)
+  if (!/^[A-Za-z0-9_.-]{1,32}$/.test(id) || typeof name !== 'string' || name.length > 64
+      || (kind !== 'road' && !name.trim()))
     throw new Error('요소 ID와 이름을 확인하세요');
   if (!Array.isArray(geometry) || !geometry.length || geometry.length > 32
       || !geometry.every(p => Array.isArray(p) && p.length === 2
@@ -48,7 +49,7 @@ export function appendSurveyElement(map, item) {
     if (Math.hypot(geometry[0][0] - start.x, geometry[0][1] - start.y) > .05
         || Math.hypot(geometry.at(-1)[0] - end.x, geometry.at(-1)[1] - end.y) > .05)
       throw new Error('도로 선의 양 끝을 지정한 장소에 맞추세요');
-    next.edges.push({id, from: start.id, to: end.id, polyline: [[start.x, start.y], ...geometry.slice(1, -1), [end.x, end.y]],
+    next.edges.push({id, ...(name.trim() ? {name: name.trim()} : {}), from: start.id, to: end.id, polyline: [[start.x, start.y], ...geometry.slice(1, -1), [end.x, end.y]],
       width_m: item.width_m, direction: item.direction, drive_mode: 'lane', speed_cap_mps: .03,
       evidence: {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''}});
   } else if (['traffic_signal', 'stop_line', 'landmark', 'exclusion'].includes(kind)) {
@@ -59,6 +60,7 @@ export function appendSurveyElement(map, item) {
     if (kind === 'traffic_signal' && (!item.signal_id || !['physical', 'virtual'].includes(item.signal_kind) || !approaches.length))
       throw new Error('신호등 ID·종류와 제어 진입 차로를 지정하세요');
     next.facilities = [...(next.facilities || []), {id, name: name.trim(), kind, geometry: copy(geometry), approaches: copy(approaches),
+      ...(item.evidence ? {evidence: copy(item.evidence)} : {}),
       ...(kind === 'traffic_signal' ? {signal_id: item.signal_id, signal_kind: item.signal_kind} : {})}];
   } else throw new Error('알 수 없는 지도 요소입니다');
   return next;
@@ -68,7 +70,8 @@ export function reviewSurveyDraft(map, note) {
   if ((!map?.survey && !map?.edges?.some(e => e.evidence)) || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
   const next = copy(map);
   if (next.survey) next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
-  for (const edge of next.edges) {
+  for (const edge of [...next.edges, ...(next.facilities || [])]) {
+    if (next.facilities?.includes(edge) && !edge.evidence) continue;
     if (!next.survey && !edge.evidence) continue;
     const evidenceNote = [edge.evidence?.note, note.trim()].filter(Boolean).join('\n');
     if (evidenceNote.length > 1000) throw new Error('관측 근거와 검토 메모의 합계는 1000자 이내여야 합니다');
@@ -96,6 +99,8 @@ export function editSurveyElement(map, item) {
     edge.speed_cap_mps = old.speed_cap_mps;
     if (old.robot_kinds !== undefined) edge.robot_kinds = copy(old.robot_kinds);
   }
+  if (group === map.facilities && old.evidence)
+    next.facilities.find(row => row.id === item.id).evidence = {...copy(old.evidence), status: 'observed'};
   if (group === map.places && item.yaw === undefined && old.yaw !== undefined)
     next.places.find(row => row.id === item.id).yaw = old.yaw;
   if (group === map.places) {
@@ -147,10 +152,15 @@ export function editPlace(map, id, {name, kind}) {
   return next;
 }
 
-export function editEdge(map, id, {direction, drive_mode: driveMode, speed_cap_mps: speed}) {
+export function editEdge(map, id, {name, direction, drive_mode: driveMode, speed_cap_mps: speed}) {
   const next = copy(map);
   const edge = next.edges.find(item => item.id === id);
   if (!edge) throw new Error(`없는 차로 ${id}`);
+  if (name !== undefined) {
+    if (name.length > 64) throw new Error('도로 이름은 64자 이내입니다');
+    if (name.trim()) edge.name = name.trim();
+    else delete edge.name;
+  }
   if (direction !== undefined) {
     if (!['one_way', 'two_way'].includes(direction)) throw new Error('통행 방향은 일방/양방입니다');
     edge.direction = direction;

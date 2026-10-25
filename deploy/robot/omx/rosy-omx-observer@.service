@@ -1,0 +1,22 @@
+[Unit]
+Description=ROSY OMX %i persistent torque-OFF observation
+# Keep retrying a failed observer; the guard below decides each attempt.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/rosy/omx-observer-%i.env
+# A transient register stall ends the observer (field PC 2026-10-22..23: eight exits, each restarted by
+# hand). Come back only into an idle cell: no session holds session.lock (joint_tune, record_session,
+# omx_autoupdate) and no other process owns this bus. A manual stop is not a failure and stays stopped.
+ExecStartPre=/bin/sh -c 'exec 9>>"%h/rosy-omx/session.lock"; flock -n 9 || { echo "a session holds the OMX cell"; exit 1; }; if fuser "$ROSY_OBSERVER_DEVICE" >/dev/null 2>&1; then echo "another process owns $ROSY_OBSERVER_DEVICE"; exit 1; fi'
+ExecStart=/bin/bash -c 'source "$ROSY_ROS_SETUP"; exec "$ROSY_OBSERVER_PYTHON" "$ROSY_OBSERVER_SOURCE" --device "$ROSY_OBSERVER_DEVICE" --domain-id "$ROS_DOMAIN_ID" --joint-topic "$ROSY_OBSERVER_TOPIC" --persistent'
+Restart=on-failure
+RestartSec=30
+KillSignal=SIGTERM
+TimeoutStopSec=5
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

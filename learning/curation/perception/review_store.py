@@ -21,6 +21,18 @@ class Conflict(ValueError):
 
 
 class ReviewStore:
+    uri = None  # set only by read_only(): a SQLite mode=ro connection
+
+    @classmethod
+    def read_only(cls, state):
+        """Readers outside the app: no mkdir, CREATE, migration or write on open."""
+        store = cls.__new__(cls)
+        store.state = Path(state)
+        store.lock = threading.RLock()
+        store.db = store.state / 'reviews.sqlite3'
+        store.uri = store.db.as_uri() + '?mode=ro'
+        return store
+
     def __init__(self, state, source=None, human=None, images=None, object_classes=None, *,
                  empty_eval=False, empty_training=False):
         self.state = Path(state).resolve()
@@ -103,7 +115,7 @@ class ReviewStore:
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.db, timeout=30)
+        db = sqlite3.connect(self.uri or self.db, timeout=30, uri=self.uri is not None)
         db.row_factory = sqlite3.Row
         try:
             with db:

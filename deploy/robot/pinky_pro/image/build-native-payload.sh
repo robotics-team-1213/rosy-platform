@@ -45,17 +45,7 @@ ROSDEP_ROOTS=("${COLCON_ROOTS[@]/#/$WORKSPACE/}")
 [[ -f "/opt/ros/jazzy/setup.bash" ]] || fail "native ROS 2 Jazzy is not installed"
 [[ -f "$LOCK" ]] || fail "input lock is missing: $LOCK"
 
-lock_value() {
-    local section="$1" wanted="$2"
-    awk -v section="$section" -v wanted="$wanted" '
-        $0 ~ "^" section ":[[:space:]]*$" { inside=1; next }
-        inside && /^[^[:space:]]/ { exit }
-        inside {
-            key=$1; sub(/:$/, "", key)
-            if (key == wanted) { $1=""; sub(/^[[:space:]]+/, ""); sub(/\r$/, ""); print; exit }
-        }
-    ' "$LOCK"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/lib/lock.sh"
 
 # D-192 US-005: the RPLIDAR C1 driver the bringup launch includes. Not in the
 # repository and not an apt package: install-pinky-hardware-deps.sh fetched

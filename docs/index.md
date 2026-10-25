@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · cc237b02c1 · D-875 committed verification
-- 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
-- 2026-10-25 · uncommitted · feat(policy-runner): D-864 반정밀도 지연 재측정
-- 2026-10-25 · uncommitted · docs(plans): D-865 P2 분리 표시
-- 2026-10-25 · uncommitted · 시간 측정·배포 검증의 소스 귀속 교훈
+- 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
+- 2026-10-25 · uncommitted · 병합 입력으로 생성물 갱신과 취소 거부 보존
+- 2026-10-25 · uncommitted · feat(sim): D-866 P1 OMX 시뮬레이터 백엔드 적합성 시험
+- 2026-10-25 · uncommitted · docs(spec): MSN-008 계약 줄 v1.314 확정
+- 2026-10-25 · uncommitted · 공급암 S 교사 셀을 로컬 main에 착지, 교사 경로를 guard 안으로

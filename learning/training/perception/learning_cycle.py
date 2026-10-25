@@ -18,6 +18,7 @@ from job_state import Job, JobError, Rejected, sha
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 from store import Store, content_sha, parse_dataset_ref  # noqa: E402
 
 

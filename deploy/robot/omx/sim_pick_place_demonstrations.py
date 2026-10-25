@@ -73,14 +73,14 @@ def dispatch_readback_target(desired, read_positions, send):
     raise RuntimeError('bounded_readback_step_limit')
 
 
-def episode(directory):
+def episode(directory, plan='analytic'):
     from g2_common import ROOT, controller_readiness
     from g2_ports import isolation_guard, write_json
     from g2_runner import Children
     isolation_guard(ROOT)
     directory.mkdir(mode=0o700)
     children = Children(directory)
-    result = {'experiment': 'pick-place-demonstrations', 'attempts': 0, 'successes': 0,
+    result = {'experiment': 'pick-place-demonstrations', 'plan': plan, 'attempts': 0, 'successes': 0,
               'sim_aid': True, 'training': 'NOT_RUN', 'policy_evaluation': 'NOT_RUN'}
     started, error, code = time.monotonic(), None, 1
     try:
@@ -104,7 +104,7 @@ def episode(directory):
         children.assert_alive()
         teacher = children.start('teacher', ['/usr/bin/python3',
             str(ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'), '--evidence', str(directory),
-            '--world', str(world), '--observer', str(observer)], env=env)
+            '--world', str(world), '--observer', str(observer), '--plan', plan], env=env)
         result['attempts'] = 1
         code = teacher.wait(timeout=900)
         receipt = json.loads((directory/'teacher-result.json').read_text())
@@ -120,7 +120,7 @@ def episode(directory):
     return 0 if result['result'] == 'PASS' else 1
 
 
-def run(directory, *, episodes=1):
+def run(directory, *, episodes=1, plan='analytic'):
     from g2_ports import write_json
     if type(episodes) is not int or not 1 <= episodes <= 3:
         raise ValueError('one to three episodes per bounded archive required')
@@ -128,12 +128,12 @@ def run(directory, *, episodes=1):
     results = []
     for index in range(episodes):
         path = directory / f'episode-{index+1}'
-        code = episode(path)
+        code = episode(path, plan)
         results.append(json.loads((path/'result.json').read_text()))
         if code:
             break
     success = len(results) == episodes and all(r['result'] == 'PASS' for r in results)
-    write_json(directory/'result.json', {'experiment': 'pick-place-demonstrations',
+    write_json(directory/'result.json', {'experiment': 'pick-place-demonstrations', 'plan': plan,
         'requested_episodes': episodes, 'episodes': results,
         'attempts': sum(r['attempts'] for r in results), 'successes': sum(r['successes'] for r in results),
         'cleanup_verified': all(r['cleanup_verified'] for r in results),
@@ -145,9 +145,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--episodes', type=int, choices=(1, 2, 3), default=1)
+    parser.add_argument('--plan', choices=('analytic', 'chunks'), default='analytic')
     parser.add_argument('--approve-isolated-simulation', action='store_true')
     parser.add_argument('--approve-startup-home', action='store_true')
     args = parser.parse_args()
     if not (args.approve_isolated_simulation and args.approve_startup_home):
         raise PermissionError('isolated SIM and bounded startup-home approvals required')
-    raise SystemExit(run(args.evidence, episodes=args.episodes))
+    raise SystemExit(run(args.evidence, episodes=args.episodes, plan=args.plan))

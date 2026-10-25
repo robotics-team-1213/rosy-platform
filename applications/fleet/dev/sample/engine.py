@@ -130,6 +130,9 @@ class SampleEngine:
                 return response
         if (method, path) == ('GET', '/state'):
             return reply(self._state())
+        if (method, path) == ('GET', '/workcell-observations'):
+            # The sample site registers no observed workcell (D-837): an empty read-only snapshot.
+            return reply({'read_only': True, 'physical_acceptance': False, 'workcells': []})
         if method == 'GET' and f'GET {path}' in self.reads:
             return reply(self.reads[f'GET {path}'])
         match = re.fullmatch('/robots/([^/]+)/path', path)

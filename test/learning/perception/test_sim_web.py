@@ -121,6 +121,8 @@ def test_unidentified_local_mode_cannot_start_or_stop(tmp_path):
         _, workspace = request(base, '/api/learning')
         sim = next(row for row in workspace['domains'] if row['id'] == 'sim')
         assert sim['stages'][0]['state'] == 'active' and '최근 RUNNING' in sim['stages'][0]['evidence']
+        assert sim['next']['href'] == '/learning/sim?run=' + 'b' * 32
+        assert '/private/operator' not in json.dumps(workspace)  # the home row reads public() rows only
         code, _ = request(base, '/api/learning/sim/start', body={'request_id': 'b' * 32}, token=workspace['token'])
         assert code == 403 and runs.calls == [{'action': 'list'}]  # the home row reads; nothing starts
         request(base, '/api/learning')
@@ -144,13 +146,11 @@ def test_start_retry_and_stop_use_shared_run_and_revision(tmp_path):
 
 def test_sim_page_and_existing_learning_link(tmp_path):
     with running(tmp_path) as (base, runs):
-        for path in ['/learning/sim', '/sim.js', '/learning', '/learning-shell.js']:
+        for path in ['/learning/sim', '/sim.js', '/learning']:
             req = urllib.request.Request(base + path, headers={'Cookie': 'rosy_learning_session=reader'})
             with urllib.request.urlopen(req) as response:
                 text = response.read().decode()
-                assert ('src="/learning-shell.js"' in text if path == '/learning' else 'sim' in text.lower())
-                if path == '/learning-shell.js':
-                    assert '/learning/sim' in text
+                assert ('/learning/sim' in text if path == '/learning' else 'sim' in text.lower())
 
 
 def test_local_adapter_pins_source_and_workspace_without_importing_sdk(tmp_path, monkeypatch):
@@ -195,3 +195,11 @@ def test_local_adapter_pins_source_and_workspace_without_importing_sdk(tmp_path,
     with pytest.raises(ValueError, match='SIM'):
         adapter.call({'action': 'start'})
     assert len(calls) == before
+
+
+def test_a_malformed_sim_row_does_not_break_the_home_page(tmp_path):
+    with running(tmp_path, authenticated=False) as (base, runs):
+        runs.row = dict(runs.row, result=None)  # public() raises TypeError on this row
+        code, workspace = request(base, '/api/learning')
+        sim = next(row for row in workspace['domains'] if row['id'] == 'sim')
+        assert code == 200 and sim['blocked'] == 'SIM 실행 연결을 확인하세요.'

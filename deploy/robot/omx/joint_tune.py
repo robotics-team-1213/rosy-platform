@@ -3,10 +3,12 @@
 
 Commissioning tool, not an actuator owner: run it only while no owner or controller holds the bus
 and a person watches the arm. Only the chosen motor and the registers below are ever written, and
-only that motor's torque is ever turned on. Each run raises that motor's PWM Limit (EEPROM 36),
-its Current Limit (EEPROM 38, XL330 only) and, optionally, its position P/I gains (RAM 84/82) for
-its own duration only, and always ends with torque OFF and every changed register written back and
-read back. EEPROM is written with torque OFF only.
+only that motor's torque is ever turned on. The default raw limits are PWM 20, Current Limit 50
+(XL330 only), Goal Current 50 and velocity/acceleration profiles 1/1. Higher limits require explicit
+arguments; the tool never increases output automatically. Configuration is read back before motion.
+Cleanup confirms torque OFF before restoring changed registers; an unconfirmed OFF is an unsafe
+end and skips restoration. EEPROM is written with torque OFF only. Support loaded joints: torque
+OFF can let them fall, and low output limits alone do not establish a safe physical operating envelope.
 
 Per joint:
 - 16 gripper (XL330, mode 5 current-based position): the goal current caps the force, so `sweep`
@@ -14,7 +16,10 @@ Per joint:
 - 14-15 wrist (XL330, mode 4) and 11-13 (XL430, mode 4; 11-13 carry the arm's weight): only the
   PWM Limit caps the force. `move` only, at most --max-delta ticks from the start (default 200). At
   torque ON the joint must hold its position within --sag ticks for the hold window, or the run stops
-  before any motion (a weak PWM Limit lets a loaded joint sag).
+  before the next goal (a weak PWM Limit lets a loaded joint sag). Failure to settle also aborts.
+
+Time-based profiles and Torque On by Goal Update are refused. Camera capture is followed by fresh
+motor feedback before continuing; Python polling and camera I/O do not provide a hard stop deadline.
 
 Every step goes to tune.jsonl; each settled position also saves the top and wrist frames from the
 local camera viewer (frames/). A gripper sweep writes gripper-profile.json.
@@ -31,6 +36,7 @@ import argparse
 import contextlib
 import fcntl
 import json
+import math
 import os
 import signal
 import time
@@ -46,14 +52,15 @@ CAP_MAX = 400  # trial ceiling for PWM and Current Limit (PWM max 885)
 WRITES = {"torque": (64, 1), "goal_current": (102, 2), "profile_acc": (108, 4), "profile_vel": (112, 4),
           "goal_pos": (116, 4), "pwm_limit": (36, 2), "current_limit": (38, 2), "p_gain": (84, 2),
           "i_gain": (82, 2)}
-READS = {"model": (0, 2), "mode": (11, 1), "torque": (64, 1), "hw_error": (70, 1), "moving": (122, 1),
+READS = {"model": (0, 2), "mode": (11, 1), "drive_mode": (10, 1), "hw_error": (70, 1), "moving": (122, 1),
          "present_load": (126, 2), "present_pos": (132, 4),
-         **{k: WRITES[k] for k in ("pwm_limit", "current_limit", "p_gain", "i_gain")}}
+         **WRITES}
 #: commissioning resting caps; every run starts from and ends at these (D-770)
 BASELINE = {"pwm_limit": 20, "current_limit": 50}
-SIGNED = {"present_load": 2, "present_pos": 4}  # present_load: XL330 current (mA), XL430 load (0.1 %)
+SIGNED = {"present_load": 2, "present_pos": 4, "goal_pos": 4, "goal_current": 2}
 EEPROM = ("pwm_limit", "current_limit")
 STATE = ("torque", "hw_error", "moving", "present_load", "present_pos")
+MAX_FEEDBACK_GAP_S = 0.25  # commissioning polling guard, not a physical stop deadline
 
 
 def lock_root() -> Path:
@@ -176,6 +183,18 @@ class SerialBus:
         comm, error = fn(self.port, self.motor, address, value)
         self._cleanup_check(comm, error)
 
+    def alert(self) -> tuple[int, bool]:
+        """Torque and the status packet's hardware-alert bit, readable while an alert makes read() fail."""
+        torque, comm, error = self.packet.read1ByteTxRx(self.port, self.motor, READS["torque"][0])
+        if comm:
+            raise RuntimeError(f"motor {self.motor}: comm {comm}")
+        return torque, bool(error & 0x80)
+
+    def reboot(self) -> None:
+        comm, _ = self.packet.reboot(self.port, self.motor)
+        if comm:
+            raise RuntimeError(f"reboot motor {self.motor}: comm {comm}")
+
     def close(self) -> None:
         self.port.ser.close()
 
@@ -208,32 +227,65 @@ class Run:
         """Until the position has not changed for `still` s. A stall in the first `grace` s is not an
         end: an integrator wound up at the previous end needs time to unwind. With `sag`, any drift
         beyond `sag` ticks from `origin` stops the run."""
-        begun = self.clock()
+        begun = previous = self.clock()
+        if not math.isfinite(begun):
+            raise RuntimeError("invalid startup observation clock")
         last, since, s = None, begun, None
-        while self.clock() - begun < timeout:
+        while True:
             s = self.state()
             self.log(step="watch", label=label, motor=self.motor, **s)
             if s["hw_error"]:
                 raise RuntimeError(f"hardware error {s['hw_error']}")
+            if s["torque"] != 1:
+                raise RuntimeError(f"{label}: torque unavailable during hold")
             if sag is not None and abs(s["present_pos"] - origin) > sag:
                 raise RuntimeError(f"joint {self.motor} sagged {s['present_pos'] - origin} ticks at torque ON")
             now = self.clock()
-            if s["present_pos"] != last:
+            if not math.isfinite(now) or now < previous:
+                raise RuntimeError("invalid startup observation clock")
+            if now - previous > MAX_FEEDBACK_GAP_S:
+                raise RuntimeError(f"{label}: feedback sample gap")
+            if now - begun >= timeout:
+                raise RuntimeError(f"{label}: did not settle within {timeout} seconds")
+            if s["present_pos"] != last or s["moving"]:
                 last, since = s["present_pos"], now
             elif now - since >= still and now - begun >= grace:
-                break
+                self.grab(label)
+                after = self.state()
+                if (after["torque"] != 1 or after["hw_error"] or after["moving"]
+                        or after["present_pos"] != s["present_pos"]):
+                    raise RuntimeError(f"{label}: feedback changed during camera capture")
+                return after
             self.sleep(0.1)
-        self.grab(label)
-        return s
+            advanced = self.clock()
+            if not math.isfinite(advanced) or advanced <= now:
+                raise RuntimeError("startup observation clock did not advance")
+            previous = now
 
     def execute(self, args) -> dict:
         before = self.state()
         model, mode = self.bus.read("model"), self.bus.read("mode")
+        drive_mode = self.bus.read("drive_mode")
         self.log(step="before", motor=self.motor, model=model, mode=mode, **before)
         self.grab("before")
         if ((model, mode) != TUNABLE[self.motor] or before["torque"] != 0 or before["hw_error"] != 0):
             raise SystemExit(f"precondition failed: motor {self.motor} must be {TUNABLE[self.motor]} "
                              f"(model, mode), torque OFF, no hardware error")
+        if drive_mode & 0x0C:
+            raise SystemExit("drive mode must use velocity profiles without automatic torque enable")
+
+        def target_for(start):
+            if args.command != "move":
+                return None
+            target = args.to if args.to is not None else start + args.delta
+            low, high = (0, 4095) if self.motor == GRIPPER else (-1048575, 1048575)
+            if not low <= target <= high:
+                raise SystemExit(f"motor {self.motor}: target is outside the position range")
+            if self.motor != GRIPPER and abs(target - start) > args.max_delta:
+                raise SystemExit(f"joint {self.motor}: {target - start} ticks exceeds --max-delta {args.max_delta}")
+            return target
+
+        target_for(before["present_pos"])
         limits = ("pwm_limit", "current_limit") if self.xl330 else ("pwm_limit",)
         found = {name: self.bus.read(name) for name in limits}
         leader_wrist = self.motor == LEADER_WRIST
@@ -245,7 +297,7 @@ class Run:
                 raise SystemExit("leader wrist permits bounded move only")
         elif any(found[name] != BASELINE[name] for name in limits):
             raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; an earlier "
-                             "run did not restore them - lower them with commissioning_limits.py (torque OFF)")
+                             "run did not restore them - lower them with commissioning_limits.py --baseline (torque OFF)")
         restore = {}  # filled before each write, so a write whose readback fails is still restored
         try:
             if leader_wrist:
@@ -259,19 +311,21 @@ class Run:
                 if value is not None:
                     restore[name] = BASELINE[name] if name in BASELINE else self.bus.read(name)
                     self.set(name, value)
-            start = before["present_pos"]
-            target = None
-            if args.command == "move":  # bounded before any torque
-                target = args.to if args.to is not None else start + args.delta
-                if self.motor != GRIPPER and abs(target - start) > args.max_delta:
-                    raise SystemExit(f"joint {self.motor}: {target - start} ticks exceeds --max-delta {args.max_delta}")
             self.set("profile_acc", 1 if leader_wrist else args.acceleration)
             self.set("profile_vel", 1 if leader_wrist else args.velocity)
             if self.motor == GRIPPER:
                 self.set("goal_current", args.goal_current)
+            fresh = self.state()
+            if (fresh["torque"] != 0 or fresh["hw_error"] or fresh["moving"]
+                    or self.bus.read("mode") != mode or self.bus.read("drive_mode") != drive_mode):
+                raise RuntimeError("startup motor state changed during configuration")
+            if abs(fresh["present_pos"] - before["present_pos"]) > args.sag:
+                raise RuntimeError("startup position changed during configuration")
+            start = fresh["present_pos"]
+            target = target_for(start)
             self.set("goal_pos", start)
             self.set("torque", 1)
-            self.settle("hold", timeout=args.hold, still=args.hold, grace=0, origin=start, sag=args.sag)
+            self.settle("hold", timeout=args.hold + 1.0, still=args.hold, grace=0, origin=start, sag=args.sag)
             if args.command == "move":
                 self.set("goal_pos", target)
                 end = self.settle("move")
@@ -300,17 +354,22 @@ class Run:
     def finish(self, restore: dict) -> None:
         """Torque OFF, then every changed register back; each step is tried even if another failed."""
         failures = []
+        torque_off = False
         for attempt in range(5):  # a USB hiccup: try again for a few seconds before declaring it unsafe
             try:
                 self.bus.write("torque", 0)
-                self.log(step="after", motor=self.motor, **self.state())
+                state = self.state()
+                self.log(step="after", motor=self.motor, **state)
+                if state["torque"] != 0:
+                    raise RuntimeError("torque OFF readback not confirmed")
+                torque_off = True
                 break
             except Exception as exc:
                 if attempt == 4:
                     failures.append(f"torque OFF: {exc}")
                 self.sleep(0.5)
         self.grab("after")
-        for name, value in restore.items():  # torque is OFF, so EEPROM may be written
+        for name, value in (restore.items() if torque_off else ()):
             try:
                 self.set(name, value)
             except Exception as exc:
@@ -328,13 +387,13 @@ def parse(argv=None):
     parser.add_argument("command", choices=("move", "sweep"))
     parser.add_argument("--to", type=int)
     parser.add_argument("--delta", type=int)
-    parser.add_argument("--pwm", type=int, default=300)
-    parser.add_argument("--current-limit", type=int, default=250, help="XL330 only")
-    parser.add_argument("--goal-current", type=int, default=200, help="gripper only")
+    parser.add_argument("--pwm", type=int, default=BASELINE["pwm_limit"])
+    parser.add_argument("--current-limit", type=int, default=BASELINE["current_limit"], help="XL330 only")
+    parser.add_argument("--goal-current", type=int, default=BASELINE["current_limit"], help="gripper only")
     parser.add_argument("--p-gain", type=int)
     parser.add_argument("--i-gain", type=int)
-    parser.add_argument("--velocity", type=int, default=20)
-    parser.add_argument("--acceleration", type=int, default=10)
+    parser.add_argument("--velocity", type=int, default=1)
+    parser.add_argument("--acceleration", type=int, default=1)
     parser.add_argument("--hold", type=float, default=1.0, help="seconds to hold the start at torque ON")
     parser.add_argument("--sag", type=int, default=20, help="ticks the start may drift while holding")
     parser.add_argument("--max-delta", type=int, default=200, help="non-gripper move limit in ticks")
@@ -347,6 +406,8 @@ def parse(argv=None):
         parser.error(f"caps must be 1..{CAP_MAX} and the goal current at most the current limit")
     if any(gain is not None and not 0 <= gain <= 2000 for gain in (args.p_gain, args.i_gain)):
         parser.error("gains must be 0..2000")
+    if not (1 <= args.velocity <= 32767 and 1 <= args.acceleration <= 32767 and 1 <= args.reach <= 4095):
+        parser.error("profile velocity/acceleration must be 1..32767 and sweep reach 1..4095")
     if not (0 < args.hold <= 5 and 0 < args.sag <= 100 and 0 < args.max_delta <= 400):
         parser.error("--hold 0..5 s, --sag 1..100, --max-delta 1..400")
     if args.command == "sweep" and args.id != GRIPPER:
