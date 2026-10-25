@@ -1,5 +1,6 @@
 """Firstboot consumers must prepare each root, even when common completion exists."""
 import json
+import socket
 
 import pytest
 
@@ -47,7 +48,7 @@ def test_projected_b_applies_its_committed_live_hostname_before_already_provisio
 
 def test_a_matching_live_hostname_does_not_restart_avahi(tmp_path, monkeypatch):
     runtime = _module()._native_helper("first_boot_runtime")
-    monkeypatch.setattr(runtime.socket, "gethostname", lambda: "fixture-robot")
+    monkeypatch.setattr(socket, "gethostname", lambda: "fixture-robot")
 
     def unexpected(*_args, **_kwargs):
         raise AssertionError("matching hostname must not invoke host commands")

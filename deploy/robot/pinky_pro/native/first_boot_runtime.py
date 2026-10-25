@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import socket
 import stat
 import subprocess
 import sys
@@ -174,6 +175,8 @@ def _default_network_activate(profile: str) -> bool:
 
 def _default_hostname_apply(hostname: str) -> None:
     """Rename the running system and let avahi announce the new name (D-174 F2)."""
+    if socket.gethostname() == hostname:
+        return
     quiet = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
              "stderr": subprocess.DEVNULL, "check": False, "timeout": 20}
     if subprocess.run(["hostnamectl", "set-hostname", hostname], **quiet).returncode != 0:

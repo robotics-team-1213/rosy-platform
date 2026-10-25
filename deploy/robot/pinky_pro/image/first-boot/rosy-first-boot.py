@@ -173,6 +173,14 @@ class FirstBootProvisioner:
         lines.append(f"127.0.1.1 {hostname}")
         _write_atomic(hosts, "\n".join(lines) + "\n", 0o644)
 
+    def _live_hostname(self, hostname: str) -> None:
+        if self.hostname_apply is not None:
+            try:
+                self.hostname_apply(hostname)
+            except (OSError, subprocess.SubprocessError) as exc:
+                # /etc/hostname is already correct; the next boot picks it up.
+                print(f"rosy-first-boot: live hostname not applied: {exc}", file=sys.stderr)
+
     def _operator(self, operator: dict | None) -> list[str]:
         """Install per-card operator keys for a key-only login (D-174 F3)."""
         if not operator:
@@ -411,6 +419,8 @@ class FirstBootProvisioner:
         existing = self._existing(hardware_serial)
         if existing is not None:
             if shared is not None and existing.get("ok"):
+                identity = json.loads(shared._generation()[2]["etc/rosy/device-identity.json"])
+                self._live_hostname(identity["hostname"])
                 shared.finish_existing(Path(bundle))
             return existing
         bundle = Path(bundle)
@@ -436,12 +446,7 @@ class FirstBootProvisioner:
         else:
             _json_atomic(identity_path, identity, 0o644)
         self._hostname(identity["hostname"])
-        if self.hostname_apply is not None:
-            try:
-                self.hostname_apply(identity["hostname"])
-            except (OSError, subprocess.SubprocessError) as exc:
-                # /etc/hostname is already correct; the next boot picks it up.
-                print(f"rosy-first-boot: live hostname not applied: {exc}", file=sys.stderr)
+        self._live_hostname(identity["hostname"])
         _write_atomic(
             self._inside("etc/rosy/runtime.env"), self._runtime_env(payload), 0o640
         )
