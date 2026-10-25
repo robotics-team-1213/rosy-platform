@@ -2,7 +2,7 @@
 
 기준: [D-325](../adr/D-325-pinky-deployment-artifact-selection.md) · 기존 장치의 카드 재기록 정책: [D-225](../adr/D-225-update-without-reflash-and-faster-card-writes.md)
 
-먼저 배포 기록의 **설치된 signed image manifest `source_revision`**과 배포할 candidate revision을 비교한다. active native payload의 `git_revision`은 이미지 revision과 다를 수 있으므로 둘을 혼동하지 않는다. 이미지 manifest가 없거나 revision을 입증할 수 없으면 full-image 검토로 보내고, 추정한 `main`/`HEAD`로 빠른 경로를 선택하지 않는다.
+먼저 배포 기록의 **설치한 이미지의 서명된 소스 커밋**과 배포할 candidate revision을 비교한다. 현재 v1 이미지 manifest에는 source 필드가 없으며, 같은 서명 목록의 `source-revision.txt`와 `build-provenance.json`으로 입증한다. SD 안내 도구는 두 파일의 source/release 일치를 확인하고 `verified-image.json`에 남긴다. active native payload의 `git_revision`은 이미지 revision과 다를 수 있으므로 둘을 혼동하지 않는다. 서명된 이미지 출처를 입증할 수 없으면 full-image 검토로 보내고, 추정한 `main`/`HEAD`로 빠른 경로를 선택하지 않는다.
 
 ```powershell
 python deploy\robot\pinky_pro\release\artifact_impact.py `

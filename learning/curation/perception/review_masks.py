@@ -105,19 +105,35 @@ def freeze(store, raw):
     return path.relative_to(store.state).as_posix(), sha(raw)
 
 
+def review_row(frame, row, drafts, binding):
+    result = dict(row) if row else {'frame': frame['index'], 'version': 0, 'status': 'pending',
+                                   'path': None, 'sha256': None, 'complete': 0, 'background': 0}
+    result.update(width=frame['source']['width'], height=frame['source']['height'], classes=binding)
+    result['approval'] = json.loads(result['approval']) if result.get('approval') else None
+    result['draft_candidates'] = [value for value in drafts if row is None or value['sha256'] != row['sha256']]
+    return result
+
+
 def get(store, index):
     frame = store.get(index)
     with store.connect() as db:
         row = db.execute('SELECT * FROM masks WHERE frame=?', (index,)).fetchone()
         drafts = [dict(value) for value in db.execute(
-            'SELECT sha256,catalog_sha256,origin FROM pixel_drafts WHERE frame=? AND withdrawn=0 ORDER BY rowid DESC', (index,))
-                  if row is None or value['sha256'] != row['sha256']]
-    result = dict(row) if row else {'frame': index, 'version': 0, 'status': 'pending',
-                                   'path': None, 'sha256': None, 'complete': 0, 'background': 0}
-    result.update(width=frame['source']['width'], height=frame['source']['height'], classes=served_classes(store))
-    result['approval'] = json.loads(result['approval']) if result.get('approval') else None
-    result['draft_candidates'] = drafts
-    return result
+            'SELECT sha256,catalog_sha256,origin FROM pixel_drafts WHERE frame=? AND withdrawn=0 ORDER BY rowid DESC', (index,))]
+    return review_row(frame, row, drafts, served_classes(store))
+
+
+def get_many(store, frames):
+    """get() for already-loaded frames over two connections in total, not three per frame."""
+    binding = served_classes(store)
+    with store.connect() as db:
+        rows = {row['frame']: row for row in db.execute('SELECT * FROM masks')}
+        drafts = {}
+        for value in db.execute('SELECT frame,sha256,catalog_sha256,origin FROM pixel_drafts '
+                                'WHERE withdrawn=0 ORDER BY rowid DESC'):
+            drafts.setdefault(value['frame'], []).append(
+                {key: value[key] for key in ('sha256', 'catalog_sha256', 'origin')})
+    return [review_row(frame, rows.get(frame['index']), drafts.get(frame['index'], ()), binding) for frame in frames]
 
 
 def pixels(store, review):

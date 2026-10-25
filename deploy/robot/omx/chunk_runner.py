@@ -51,8 +51,11 @@ REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
 # scraped the jaws on the table on 2026-10-24.
 TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
 PARK_SPEED = GUARD_UNITS_PER_S  # units per second for every joint: what the guard's teacher mode streams
-# Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read every HEALTH_EVERY ticks.
-HEALTH_EVERY = 3
+# Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read once per HEALTH_PERIOD_S, and
+# fresh for a grasp verdict. The guard already samples PWM about 5 times a second on the same bus; reading
+# these three every 3 ticks as well doubled the traffic, and on 2026-10-25 a bus read stalled the loop past
+# the guard's 0.5 s sample bound while the arm held over the box, so the guard turned torque off.
+HEALTH_PERIOD_S = 1.0
 # Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
 # At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
@@ -224,7 +227,7 @@ class Runner:
         loaded = max(abs(a - b) for a, b in zip(present[:4], self.target[:4]))
         now = self.clock()
         self.ticks += 1
-        fresh = self.ticks % HEALTH_EVERY == 0
+        fresh = self.ticks % max(1, round(self.fps * HEALTH_PERIOD_S)) == 0
         if fresh:
             self.health = self.read_health()
         if self.health and fresh and not self.fault:
@@ -262,8 +265,10 @@ class Runner:
                 if grasp:  # jaws stopped short of this chunk's closed target: something is between them
                     by_position = present[5] > self.target[5] + EMPTY_MARGIN
                     fields["holding"] = by_position
-                    if self.health:
-                        current = abs(self.health["current_ma"][5])
+                    health = self.read_health()  # the jaws just stopped: the 1 s sample may predate it
+                    if health:
+                        self.health = health
+                        current = abs(health["current_ma"][5])
                         fields["gripper_current_ma"] = current
                         threshold = self.library.get("hold_current_ma")
                         if threshold is not None:  # both must agree once the cell has a measured threshold
