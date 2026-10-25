@@ -84,3 +84,27 @@ def test_timezone_deletion_removes_the_derived_cached_timezone_too(tmp_path, mon
     for root in (root_a, root_b):
         assert str((root / "etc/localtime").readlink()) == "/usr/share/zoneinfo/Etc/UTC"
         assert not (root / "etc/rosy/timezone.json").exists()
+
+
+def test_an_interrupted_revision_cannot_recover_using_a_forged_completion_proof(tmp_path, monkeypatch):
+    first, root_a, root_b, common, bundle = _provision_a(tmp_path, monkeypatch)
+    state = first._native_helper("os_state_firstboot")
+    write = state._json_atomic
+
+    def interrupted(path, value, mode):
+        if path == root_a / "var/lib/rosy/provisioning/complete.json":
+            raise OSError("modeled publication interruption")
+        return write(path, value, mode)
+
+    monkeypatch.setattr(state, "_json_atomic", interrupted)
+    with pytest.raises(ValueError, match="modeled publication"):
+        _update(first, root_a, POLICY, {"mode": "off"})
+    journal = common / "state/config-publishing.json"
+    record = json.loads(journal.read_text())
+    record["previous_completion_sha256"] = "0" * 64
+    journal.write_text(json.dumps(record), encoding="utf-8")
+    completion = (common / "provisioning/complete.json").read_bytes()
+    with pytest.raises(ValueError, match="OS_STATE_HOLD"):
+        first.FirstBootProvisioner(root=root_b).apply(bundle=bundle, hardware_serial=SERIAL)
+    assert not (root_b / "etc/hostname").exists()
+    assert (common / "provisioning/complete.json").read_bytes() == completion

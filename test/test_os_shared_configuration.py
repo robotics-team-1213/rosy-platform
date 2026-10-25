@@ -71,3 +71,21 @@ def test_timezone_is_root_specific_projection_of_the_same_committed_setting(tmp_
     target = root_b / "etc/localtime"
     assert target.is_symlink(), "timezone must be projected without running timedatectl on the test host"
     assert target.readlink() == Path("/usr/share/zoneinfo/Asia/Seoul")
+
+
+def test_card_password_is_not_scrubbed_when_canonical_publication_fails(tmp_path, monkeypatch):
+    from test_rosy_config_apply import AP_VALUE, PW
+
+    first, root_a, _, common, _ = _provision_a(tmp_path, monkeypatch)
+    card = _card(root_a, f"ap:\n  mode: fallback\n  {PW}: {AP_VALUE}\n")
+    previous = (common / "state/current.json").read_bytes()
+    state = first._native_helper("os_state_firstboot")
+
+    def interrupted(*_args, **_kwargs):
+        raise OSError("modeled publication failure before card scrub")
+
+    monkeypatch.setattr(state.FirstBootState, "stage_generation", interrupted)
+    with pytest.raises(OSError, match="modeled publication"):
+        config_module().apply(root_a, lambda _: "")
+    assert AP_VALUE in card.read_text(), "the only source of a new password must survive failed publication"
+    assert (common / "state/current.json").read_bytes() == previous
