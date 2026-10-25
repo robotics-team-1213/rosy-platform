@@ -17,6 +17,7 @@ ACTION = '/arm_controller/follow_joint_trajectory'
 CAMERAS = {'top': '/top_camera/image_raw', 'front': '/front_camera/image_raw'}
 JOINT_MIN_HZ = 20.0
 STOP_TOLERANCE_RAD = .005  # Joint travel allowed after the cancel is acknowledged and the settle window ends.
+MOVED_MIN_RAD = .02  # The probe joint must have moved before the cancel, or a backend ignoring goals would pass.
 
 
 def _rate(stamps):
@@ -29,7 +30,7 @@ def _increasing(stamps):
 
 def check(samples, *, shape, camera_hz, joint_hz=JOINT_MIN_HZ):
     """samples: joint_states [(stamp_ns, names, positions)], cameras {name: [(stamp_ns, encoding, height, width)]},
-    clock [ns], stop {accepted, cancel_acknowledged, travel_after_rad}. Returns the list of failures."""
+    clock [ns], stop {accepted, cancel_acknowledged, travel_before_rad, travel_after_rad}. Returns the list of failures."""
     failures = []
     joints = samples.get('joint_states') or []
     if not joints:
@@ -64,6 +65,8 @@ def check(samples, *, shape, camera_hz, joint_hz=JOINT_MIN_HZ):
     stop = samples.get('stop') or {}
     if not (stop.get('accepted') and stop.get('cancel_acknowledged')):
         failures.append('stop: trajectory goal must be accepted and its cancel acknowledged')
+    elif not stop.get('travel_before_rad', 0.0) >= MOVED_MIN_RAD:
+        failures.append(f"stop: {stop.get('travel_before_rad')} rad moved before cancel < {MOVED_MIN_RAD}")
     elif not stop.get('travel_after_rad', 1.0) <= STOP_TOLERANCE_RAD:
         failures.append(f"stop: {stop.get('travel_after_rad')} rad travel after cancel > {STOP_TOLERANCE_RAD}")
     return failures
@@ -131,11 +134,12 @@ def collect(*, seconds=10.0, ready_s=120.0, settle_s=1.0, probe_joint='joint1', 
             handle = spin_until(client.send_goal_async(goal), 5)
             stop['accepted'] = bool(handle and handle.accepted)
             if stop['accepted']:
+                index = names.index(probe_joint)
                 spin_for(1.0)  # Mid-motion: a quarter of the 4 s trajectory.
+                stop['travel_before_rad'] = abs(samples['joint_states'][-1][2][index]-positions[index])
                 cancel = spin_until(handle.cancel_goal_async(), 5)
                 stop['cancel_acknowledged'] = bool(cancel and cancel.goals_canceling)
                 spin_for(settle_s)
-                index = samples['joint_states'][-1][1].index(probe_joint)
                 begin = samples['joint_states'][-1][2][index]
                 spin_for(2.0)
                 stop['travel_after_rad'] = abs(samples['joint_states'][-1][2][index]-begin)

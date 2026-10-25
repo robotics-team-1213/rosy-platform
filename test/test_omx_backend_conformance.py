@@ -19,7 +19,7 @@ def _samples(mod, **changes):
     samples = dict(joint_states=[(n*10_000_000, names, [0.0]*6) for n in range(200)],
                    cameras={name: list(frames) for name in mod.CAMERAS},
                    clock=[n*1_000_000 for n in range(100)],
-                   stop=dict(accepted=True, cancel_acknowledged=True, travel_after_rad=0.001))
+                   stop=dict(accepted=True, cancel_acknowledged=True, travel_before_rad=0.05, travel_after_rad=0.001))
     samples.update(changes)
     return samples
 
@@ -42,7 +42,10 @@ def test_each_contract_breach_is_reported():
         'camera rate': dict(cameras={name: [(n*1_000_000_000, 'rgb8', 240, 320) for n in range(5)] for name in mod.CAMERAS}),
         'clock': dict(clock=[5, 4, 6]),
         'cancel': dict(stop=dict(accepted=True, cancel_acknowledged=False)),
-        'moving after stop': dict(stop=dict(accepted=True, cancel_acknowledged=True, travel_after_rad=0.05)),
+        'moving after stop': dict(stop=dict(accepted=True, cancel_acknowledged=True, travel_before_rad=0.05,
+                                             travel_after_rad=0.05)),
+        'goal ignored': dict(stop=dict(accepted=True, cancel_acknowledged=True, travel_before_rad=0.0,
+                                       travel_after_rad=0.0)),
     }
     for label, change in cases.items():
         assert mod.check(_samples(mod, **change), shape=(240, 320), camera_hz=4.5), label
