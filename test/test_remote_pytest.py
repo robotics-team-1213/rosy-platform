@@ -435,10 +435,10 @@ def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
     monkeypatch.setattr(rp, "remote", lambda h, script, *a, **kw: subprocess.CompletedProcess(
         [], 1 if script == rp.VENV and h in venv_fails else 0, b"", b""))
 
-    def run(h, name, k, log, job_args, inv, *a):
+    def run(h, name, k, log, job_args, inv, *a, **kw):
         path = next(w for w in inv if not rp.ENV_ARG.match(w))  # past xdist_plan's ROSY_JOB_* words
         seen.append((h, path))
-        code = job(h, path)
+        code = job(h, path, kw["stop"]) if kw else job(h, path)  # stop only reaches a job when on_done is given
         log.write_bytes(b"")
         return code
     monkeypatch.setattr(rp.remote_job, "run", run)
@@ -502,6 +502,79 @@ def test_an_invocation_that_fails_mid_run_is_retried_on_another_host_and_a_lost_
     seen.clear()
     codes = rp.run([["gone"], ["x"]], [tmp_path / "g.txt", tmp_path / "x2.txt"], repo=tmp_path)
     assert codes == [rj.LOST_EXIT, 0] and [p for _, p in seen].count("gone") == 1
+
+
+def test_on_done_is_asked_once_per_finished_invocation_and_false_changes_nothing(monkeypatch, tmp_path):
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], lambda h, path, stop=None: len(path))
+    asked, logs = [], [tmp_path / f"{i}.txt" for i in range(3)]
+    codes = rp.run([["x"], ["yy"], ["zzz"]], logs, repo=tmp_path, on_done=lambda inv, log: asked.append((inv, log)))
+    assert codes == [1, 2, 3] and len(seen) == 3
+    assert sorted(asked) == sorted(zip([["x"], ["yy"], ["zzz"]], logs))
+
+
+def test_on_done_true_skips_queued_and_terms_running_invocations(monkeypatch, tmp_path, capsys):
+    slow_started, stops = threading.Event(), []
+
+    def job(h, path, stop):
+        if path == "slow":  # what remote_job.run does when its poll sees stop: KILL, then CANCELLED
+            slow_started.set()
+            stops.append(stop.wait(10))
+            return rj.CANCELLED
+        assert slow_started.wait(10)
+        return 1
+
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], job)
+    order = ["fail", "slow", "q1", "q2"]
+    codes = rp.run([[p] for p in order], [tmp_path / f"{p}.txt" for p in order], repo=tmp_path,
+                   on_done=lambda inv, log: inv == ["fail"])
+    assert codes == [1, rp.CANCELLED, rp.CANCELLED, rp.CANCELLED] and stops == [True]
+    assert sorted(p for _, p in seen) == ["fail", "slow"], "queued invocations never start"
+    out = capsys.readouterr().out
+    assert all(f"cancelled after a failure: {p}" in out for p in ("slow", "q1", "q2")) and ": fail" not in out
+
+
+def test_on_done_raising_cancels_the_rest_with_a_warning(monkeypatch, tmp_path, capsys):
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1"], lambda h, path, stop: 0)
+
+    def boom(inv, log):
+        raise ValueError("bad callback")
+
+    codes = rp.run([["x"], ["y"]], [tmp_path / "x.txt", tmp_path / "y.txt"], repo=tmp_path, on_done=boom)
+    assert codes == [0, rp.CANCELLED] and [p for _, p in seen] == ["x"]
+    assert "on_done raised ValueError('bad callback'); cancelling the rest" in capsys.readouterr().err
+
+
+def test_on_done_may_call_run_again_from_inside_without_deadlock(monkeypatch, tmp_path):
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], lambda h, path, stop=None: 1 if path.startswith("x") else 0)
+    nested = []
+
+    def rerun_alone(inv, log):  # land's flaky check reruns the failing ids before deciding
+        nested.append(rp.run([["x::t"]], [tmp_path / "rerun.txt"], repo=tmp_path))
+        return inv == ["x"]
+
+    result = []
+    worker = threading.Thread(target=lambda: result.append(rp.run(
+        [["x"], ["y"]], [tmp_path / "x.txt", tmp_path / "y.txt"], repo=tmp_path, on_done=rerun_alone)), daemon=True)
+    worker.start()
+    worker.join(30)
+    assert not worker.is_alive(), "a nested run() inside on_done deadlocked"
+    assert nested and all(n == [1] for n in nested) and result[0][0] == 1
+    assert ("a@1", "x::t") in seen or ("b@2", "x::t") in seen
+
+
+def test_a_set_stop_terms_a_job_it_can_see_but_never_a_lost_one(tmp_path):
+    stop = threading.Event()
+    stop.set()
+    fake = FakeJobHost([b"a", b"b", b"c"], 0)
+    now, sleep, clock = _clock()
+    log = tmp_path / "1.txt"
+    assert rj.run("h", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock,
+                  stop=stop) == rj.CANCELLED
+    assert fake.scripts[-1] == rj.KILL and fake.polls == 1 and b"cancelled after a failure" in log.read_bytes()
+    fake = FakeJobHost([b"a", b"b"], 0, fail=set(range(1, 99)))
+    with pytest.raises(rj.Lost):
+        rj.run("h", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock, budget=60, stop=stop)
+    assert rj.KILL not in fake.scripts
 
 
 def test_largest_test_files_are_queued_first(tmp_path):

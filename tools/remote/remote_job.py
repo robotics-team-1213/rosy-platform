@@ -122,6 +122,7 @@ KILL = r"""read -r pid _ < ~/rosy-jobs/"$1".lock 2>/dev/null && kill -TERM -- "-
 
 LOST_EXIT = 255  # what land.py sees for an invocation whose host went silent
 VANISHED_EXIT = 254  # the job ended without an exit code (host reboot, SIGKILL, START cut off)
+CANCELLED = "cancelled"  # not an int: a cancelled invocation never reads as a pass or a cached result
 
 
 class Lost(Exception):
@@ -166,8 +167,11 @@ def parse_poll(out: bytes) -> tuple[int | None, bool, bytes] | None:
 
 
 def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_args: list[str], timeout_s: int,
-        ssh: list[str], call=ssh_call, sleep=time.sleep, clock=time.monotonic, budget: float | None = None) -> int:
+        ssh: list[str], call=ssh_call, sleep=time.sleep, clock=time.monotonic, budget: float | None = None,
+        stop=None) -> int | str:
     """Start job k of run name on host and copy its log to log as it grows; its exit code.
+
+    stop (a threading.Event): once set, the next poll that reaches the job TERMs it and returns CANCELLED.
 
     Raises Lost after budget s without contact, KeyboardInterrupt after TERMing the job.
     """
@@ -215,6 +219,10 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                 if clock() > deadline:
                     call(ssh, host, KILL, name)
                     return 124
+                if stop is not None and stop.is_set():  # only a job this poll just saw; a lost one is left alone
+                    call(ssh, host, KILL, name)
+                    out.write(f"\n[remote-pytest] cancelled after a failure elsewhere: {where}\n".encode())
+                    return CANCELLED
                 sleep(POLL_S)
     except KeyboardInterrupt:
         call(ssh, host, KILL, name)  # as before: the caller's cleanup then removes the run

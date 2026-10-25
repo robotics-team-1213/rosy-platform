@@ -11664,3 +11664,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 도구는 읽기만 하고 `land.py`·CI는 바꾸지 않았다.
 - 결정: 없음.
 - 교훈: CE 해당 없음 — 새 도구와 시험이 내용을 담는다.
+
+## 2026-10-26 · uncommitted · remote_pytest.run이 첫 실패에서 남은 호출을 멈출 수 있게 한다
+
+- 변경: `remote_pytest.run(..., on_done=None)`을 추가한다. 호출 하나가 끝날 때마다(호스트를 잃은 호출 제외) 그 호스트의 작업 스레드에서 `on_done(invocation, log_path)`를 한 번에 하나씩 부른다. True를 돌려주거나 예외를 내면 공유 큐(`work_queue.Work.stop`)가 더 내주지 않고, 다른 호스트에서 돌고 있는 작업은 다음 poll이 그 작업을 볼 때 `remote_job.KILL`로 TERM한다. 시작하지 않은 호출과 중단한 호출은 int가 아닌 `remote_job.CANCELLED`(`"cancelled"`)로 돌아오고 `[remote-pytest] cancelled after a failure: <inv>`를 찍는다. 연결을 잃은 작업은 전처럼 건드리지 않는다. `on_done`이 없으면 전과 같다.
+- 이유: 10-26 착지 차례 하나가 03:05에 NEW 실패 8건을 보고도 나머지 호출을 03:24까지 돌려 착지 대기열을 약 19분 잡았다.
+- 증거: 원격 `test/test_remote_pytest.py`(호출마다 콜백, True면 대기 호출 미실행·실행 중 작업 중단, 예외면 경고 뒤 중단, 콜백 안에서 `run()` 다시 호출해도 교착 없음, 잃은 작업은 KILL 안 함). 변이로 확인했다.
+- gate 변화: 없음. `tools/land.py` 연결은 별도 브랜치가 한다.
+- 교훈: CE 해당 없음 — 규칙이 코드 주석과 시험에 있다.
