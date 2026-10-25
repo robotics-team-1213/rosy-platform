@@ -1538,3 +1538,9 @@
 - 변경: 네 메서드를 SwarmReferenceStream으로 옮겨 manager691→561줄. 기존 상수·잠금·세션 검사를 보존하고 안전 분류와 ratchet를 함께 반영했다.
 - 증거: [검증 기록](../../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). 원격 기준137개, 추출139개 통과, skip0/NEW0. 추가2개는 전송 경계의 socket/rclpy 변이 검증이다. 독립 검토 승인.
 - gate 변화: 준비 추출만 검증했다. FULL 착지·신선도 소비자·실물 수용은 별도다. CE 해당 없음.
+
+## 2026-10-25 · uncommitted · Swarm lifecycle extraction integration preparation
+
+- Change: merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-reference-stream-land without production-code conflicts.
+- Evidence: Git blob comparison and [integration record](../../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). Static integration checks only; no new remote pass for this integrated HEAD.
+- gate 변화: unchanged. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable.

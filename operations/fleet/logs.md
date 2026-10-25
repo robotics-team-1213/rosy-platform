@@ -4434,3 +4434,9 @@
 - 변경: 기존 네 메서드와 enum을 같은 패키지에 옮겨 session628→520줄. 기존 export·logger·정리 순서를 유지하고 안전 분류와 ratchet를 함께 반영했다.
 - 증거: [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). 원격 기준108개, 추출·기능 회귀123개 통과, skip0/NEW0. 독립 검토 승인.
 - gate 변화: 준비 추출만 검증했다. FULL 착지·신선도 소비자·실물 수용은 별도다. CE 해당 없음.
+
+## 2026-10-25 · uncommitted · Swarm lifecycle extraction integration preparation
+
+- Change: merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-reference-stream-land without production-code conflicts.
+- Evidence: Git blob comparison and [integration record](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). Static integration checks only; no new remote pass for this integrated HEAD.
+- gate 변화: unchanged. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable.

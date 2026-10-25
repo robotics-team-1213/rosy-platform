@@ -15,3 +15,11 @@ FormationSession의 네 메서드는 SessionArming으로 옮겼고 두 enum은 s
 이 브랜치는 군집 수명주기 준비라는 한 관심사로 묶고, 공유 계약 및 실제 동작 소비자와 분리한다. 공식 FULL 착지 검증은 아직 남아 있다. 배포·UTC50ms·실물 정지·radio·FIELD를 수용하지 않는다.
 
 CE: 해당 없음 — 추출은 동작을 보존하며 판단은 원문 비교·회귀·D-870에 직접 남긴다.
+
+## 2026-10-25 integration preparation
+
+Merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-reference-stream-land. Resolved changelog and owner-log ordering; generated indexes are regenerated. No production-code conflict occurred. API reference v1.316 and envelope1.0 remain unchanged.
+
+Git blob comparison confirms manager/reference_stream, session/session_arming/session_state and the boundary mutation test equal prepared commit 2bea6f4d1e byte for byte. Shared schemas and both incoming CE documents equal pinned C0.
+
+Only static integration checks are authorized here. Historical remote results above remain attached to their original source commits; they are not a new pass for this integrated HEAD. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable; existing ADR, tests and source comparisons already capture the merge rationale.

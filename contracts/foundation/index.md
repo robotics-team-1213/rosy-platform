@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · 6d79c46bf8 · D-870 군집 원본 시각과 수명 계약
 - 2026-10-25 · uncommitted · feat(contracts): D-865 policy admission wire schemas v1.314
+- 2026-10-25 · 6d79c46bf8 · D-870 군집 원본 시각과 수명 계약
 - 2026-10-24 · uncommitted · D-862 통합관제 정보·정지 요청 공유 계약
 - 2026-10-24 · 73fc8b2b09 · 공통 Action·상태 구성 모델의 소유 분리
 - 2026-10-23 · uncommitted · D-855 관제 위임과 scoped cancel 공유 계약

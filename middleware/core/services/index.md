@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · Swarm lifecycle extraction integration preparation
 - 2026-10-25 · 77826ac7e1 · 군집 참조 수신 경로 의미 보존 분리
 - 2026-10-25 · 85838e52ea · 미응답 이벤트의 원본 ID 재전송
 - 2026-10-19 · uncommitted · 횡단보도 대기 중 pivot 차단 회귀
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) non-simulation station source evidence
-- 2026-10-19 · uncommitted · (origin #92 2026-10-17) private energy handover naming
