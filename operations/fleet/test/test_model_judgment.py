@@ -122,6 +122,23 @@ def test_empty_missing_allowlist_has_no_empty_enum_and_round_trips():
         judgment(p, b, payload(p, missing_evidence=['camera']))
 
 
+@pytest.mark.parametrize('domain', ['line_follow', 'door', 'arm_target'])
+def test_schema_variants_pair_each_verdict_with_the_steps_judgment_requires(domain):
+    """2026-10-25 Model PC: 2 of 3 real judgments were reobserve with next_step null, refused after decoding."""
+    from rosy.decision.model_tool_catalog import MODEL_TOOL_CATALOG, ToolEffectClass
+    p = problem(domain)
+    variants = {tuple(v['properties']['verdict']['enum']): v['properties'] for v in judgment_schema(p, bound(p))['anyOf']}
+    assert set(variants) == {('abstain',), ('reobserve',), ('candidate',)}  # INTERVENE: do_not_intervene conflicts
+    assert variants[('abstain',)]['next_step'] == variants[('abstain',)]['success_check'] == {'type': 'null'}
+    for names, props in variants.items():
+        if names != ('abstain',):
+            assert {'type': 'null'} not in props['next_step']['anyOf'] + props['success_check']['anyOf']
+    reads = [e['properties']['tool_name']['const'] for e in variants[('reobserve',)]['next_step']['anyOf']]
+    assert reads and all(MODEL_TOOL_CATALOG[n].effect_class == ToolEffectClass.READ_ONLY for n in reads)
+    for entry in judgment_schema(p, bound(p))['properties']['next_step']['anyOf'][1:]:
+        assert not MODEL_TOOL_CATALOG[entry['properties']['tool_name']['const']].device_action_api
+
+
 def test_schema_is_fresh_closed_and_bound_to_problem_and_revision():
     p, b = problem(), bound(problem())
     schema = judgment_schema(p, b, missing_allowlist=('front-image',))

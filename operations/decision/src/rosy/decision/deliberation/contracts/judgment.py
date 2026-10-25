@@ -136,6 +136,7 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                                               'required': ['choice', 'probability'], 'properties': {
                                                   'choice': {'enum': list(problem.choices)},
                                                   'probability': {'type': 'number', 'minimum': 0, 'maximum': 1}}}})
+    read_steps = []
     for field in ('next_step', 'success_check'):
         entries = []
         scope = ('channel' if problem.domain == 'fleet_status' else
@@ -143,7 +144,8 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
         for definition in MODEL_TOOL_CATALOG.values():
             if definition.name == 'propose_lane_back' and (problem.domain != 'line_follow' or 'back_and_retry' not in problem.choices):
                 continue
-            if definition.scope != scope or not definition.feedback_enabled or ((field == 'success_check' or problem.domain == 'fleet_status')
+            if (definition.scope != scope or not definition.feedback_enabled or definition.device_action_api
+                    or (field == 'success_check' or problem.domain == 'fleet_status')
                     and definition.effect_class != ToolEffectClass.READ_ONLY):
                 continue
             entries.append({'type': 'object', 'additionalProperties': False,
@@ -159,5 +161,21 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                 entries[-1]['properties']['expected_facts'] = {
                     'type': 'object', 'minProperties': 1, 'additionalProperties': False,
                     'properties': {key: {'type': 'string', 'enum': states} for key in fact_keys}}
+            elif definition.effect_class == ToolEffectClass.READ_ONLY:
+                read_steps.append(entries[-1])
         properties[field] = {'anyOf': [{'type': 'null'}, *entries]}
-    return {'type': 'object', 'additionalProperties': False, 'required': list(FIELDS), 'properties': properties}
+    base = {'type': 'object', 'additionalProperties': False, 'required': list(FIELDS)}
+    # Root properties keep the readers' view; the variants carry judgment()'s verdict/step pairing so a
+    # constrained decoder cannot emit an acting verdict without its steps (D-878, 2026-10-25 pipeline run).
+    acting = problem.necessity == ('READ_ONLY_QUERY' if problem.domain == 'fleet_status' else 'INTERVENE')
+    resting = [v for v in properties['verdict']['enum'] if v == 'abstain' or v == 'do_not_intervene'
+               and (problem.domain == 'fleet_status' or problem.necessity == 'DO_NOT_INTERVENE')]
+    variants = [(resting, {'type': 'null'}, {'type': 'null'})]
+    checks = {'anyOf': properties['success_check']['anyOf'][1:]}
+    if acting and read_steps and checks['anyOf']:
+        variants.append((['reobserve'], {'anyOf': read_steps}, checks))
+    if acting and problem.domain != 'fleet_status' and properties['next_step']['anyOf'][1:] and checks['anyOf']:
+        variants.append((['candidate'], {'anyOf': properties['next_step']['anyOf'][1:]}, checks))
+    return {**base, 'properties': properties, 'anyOf': [
+        {**base, 'properties': {**properties, 'verdict': {'enum': names}, 'next_step': planned, 'success_check': check}}
+        for names, planned, check in variants]}
