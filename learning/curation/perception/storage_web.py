@@ -116,7 +116,10 @@ class StorageWeb:
             future.add_done_callback(done)
 
     def post(self, handler, path, body):
-        if self._post_setup(handler, path, body): return True
+        try:
+            if self._post_setup(handler, path, body): return True
+        except OSError:
+            raise ValueError('storage setup files are unavailable; existing data was retained') from None
         if not (path == PREFIX + 'jobs' or path == PREFIX + 'cache/reclaim'
                 or path.startswith(PREFIX + 'jobs/')):
             return False

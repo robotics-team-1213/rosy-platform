@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · Learning 저장 설정 UI와 준비 파이프라인 closure (D-884)
 - 2026-10-26 · 07943e133d · Learning 저장 입력과 복구의 최종 source 검증 (D-884)
 - 2026-10-26 · uncommitted · Learning 저장 모듈의 배포 포함 검사 (D-884)
 - 2026-10-25 · a401f49f6d · 서명된 GPT 이미지의 SD 준비 경로
 - 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
-- 2026-10-25 · 055f40747f · signing 설치 closure와 provenance 회귀 통과

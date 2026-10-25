@@ -3480,3 +3480,10 @@
 - 증거: 배포 archive 누락 부정 시험을 포함한 release 235 passed; 최종 pool/jobs/hub/source와 문서 하네스 72 passed/0 skipped/NEW0, browser·화면·API 계약 21 passed/0 skipped/NEW0. 상세 revision 및 FULL 원시 실패·후속 확인은 learning/curation/perception/docs/storage-pool.md의 착지 전 검증 기록을 따른다.
 - gate 변화: 소스 closure 증거만 추가한다. 실제 HF 왕복·Isaac SDK·signed artifact 설치·운영 자료 삭제·장치 수용은 수행하지 않았고 운영 서비스는 활성화하지 않았다.
 - CE: 해당 없음 — 복구 판단은 구현·회귀 시험·D-884와 운영 안내로 확인할 수 있다.
+
+## 2026-10-26 · uncommitted · Learning 저장 설정 UI와 준비 파이프라인 closure (D-884)
+
+- 변경: storage_setup·storage_prepare·storage-settings.js를 model-code 필수 입력에 포함한다. 기존 계정·저장소 UI에서 측정 quota/cache 설정, 실제 소량 private 쓰기·읽기 proof, 활성화, 완료 폴더·Isaac 결과 준비와 기존 회수/복원으로 이어진다. 파일 JSON 편집은 초기 seed 대안이며 UI 정본은 workspace SQLite CAS다.
+- 증거: no-JSON HTTP 흐름과 양 테마/폭의 전체 브라우저 흐름, 별도 신규 파일 누락 부정 시험의 RED/GREEN을 확인했다. 독립 리뷰의 과거 복원·취소·부분 export 및 원자적 manifest 지적을 회귀 시험으로 수정했다. 최종 committed revision의 영향 시험/브라우저 결과는 후속 검증 기록에 남긴다.
+- gate 변화: host source closure에 한한다. 운영 계정 사용, 실제 HF 전송, SDK/모델 실행, signed artifact 설치·장치 수용을 수행하지 않았다.
+- CE: 해당 없음 — 복구 근거는 D-884·운영 안내·실제 파일/SQLite 회귀에 보존한다.

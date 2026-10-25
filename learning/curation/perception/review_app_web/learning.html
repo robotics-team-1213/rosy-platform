@@ -64,14 +64,14 @@
 <div class="ui-form learning-form">
 <label class="ui-field-label">로컬 여유분 GiB <input id="storage-local-reserve" class="ui-field" type="number" min="0" max="8000000" step="any" value="1" required></label>
 <label class="ui-field-label">작업 캐시 한도 GiB <input id="storage-cache-limit" class="ui-field" type="number" min="0" max="8000000" step="any" value="10" required></label>
-<label class="ui-check"><input id="storage-cache-enabled" type="checkbox">오래된 검증 캐시를 필요할 때 자동 회수</label>
+<label class="ui-check"><input id="storage-cache-enabled" class="ui-field" type="checkbox">오래된 검증 캐시를 필요할 때 자동 회수</label>
 </div>
 <ui-button id="storage-settings-save" kind="primary" type="submit">저장 설정 저장</ui-button>
 </form>
 </details>
 <div class="storage-setup-checks">
 <p id="storage-check-reason" class="quiet">설정을 저장한 뒤 소량 전송으로 비공개 보관·읽기를 확인하세요.</p>
-<label class="ui-check"><input id="storage-check-consent" type="checkbox">작은 검증 파일을 각 비공개 저장소에 보관하는 데 동의합니다.</label>
+<label class="ui-check"><input id="storage-check-consent" class="ui-field" type="checkbox">작은 검증 파일을 각 비공개 저장소에 보관하는 데 동의합니다.</label>
 <ui-actions><ui-button id="storage-verify" kind="quiet" disabled>소량 전송으로 연결 검증</ui-button><ui-button id="storage-activate" kind="primary" disabled>새 보관 활성화</ui-button></ui-actions>
 </div>
 <details id="storage-preparation"><summary>완료 자료 준비하고 보관</summary>
@@ -86,7 +86,8 @@
 </div>
 <label id="storage-isaac-fields" class="ui-field-label" hidden>종료된 SIM 실행 <select id="storage-prepare-run" class="ui-field"></select></label>
 <p id="storage-source-help" class="quiet"></p>
-<label class="ui-check"><input id="storage-completed-consent" type="checkbox">선택한 자료의 쓰기가 끝났고 출처와 보관 범위를 확인했습니다.</label>
+<a class="workspace-link" href="/learning/sim">SIM 실험과 실행기 상태 확인</a>
+<label class="ui-check"><input id="storage-completed-consent" class="ui-field" type="checkbox">선택한 자료의 쓰기가 끝났고 출처와 보관 범위를 확인했습니다.</label>
 <ui-actions><ui-button id="storage-prepare-submit" kind="primary" type="submit" disabled>준비하고 보관</ui-button></ui-actions>
 </form>
 </details>

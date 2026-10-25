@@ -190,8 +190,9 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
               right:e.getBoundingClientRect().right,width:e.getBoundingClientRect().width,
               parent:e.parentElement.id||e.parentElement.tagName,
               parentWidth:e.parentElement.getBoundingClientRect().width})).slice(0,12)''')
-            if overflow: print('overflow: ' + json.dumps(overflow))
-            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), overflow
+            fits = page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            if not fits: print('overflow: ' + json.dumps(overflow))
+            assert fits, overflow
             for identifier in ('storage-settings-save', 'storage-verify', 'storage-activate', 'storage-prepare-submit'):
                 button = page.locator('#' + identifier)
                 if button.is_visible(): assert button.bounding_box()['height'] >= 44

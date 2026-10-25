@@ -4,6 +4,14 @@ const text=(parent,tag,value)=>{const node=document.createElement(tag);node.text
 const localDate=seconds=>{const date=new Date(seconds*1000);return new Date(date-date.getTimezoneOffset()*60000).toISOString().slice(0,16);};
 const bytes=input=>Math.ceil(Number(input.value)*GiB);
 function error(message){$('storage-setup-error').textContent=message;$('storage-setup-error').hidden=false;}
+function failureMessage(failure){
+  if(failure.status===401)return '로그인이 만료되었습니다. 계정 화면에서 다시 로그인한 뒤 확인하세요.';
+  if(failure.status===403)return '이 프로젝트의 게시·관리 권한과 계정 연결의 허용 범위를 확인하세요.';
+  if(/revision|settings changed/.test(failure.message||''))return '저장 설정이 바뀌었습니다. 현재 입력을 확인한 뒤 저장 현황을 다시 불러오세요.';
+  if(/quota|capacity|space/.test(failure.message||''))return '잔여 용량·측정 시각·유효기간과 로컬 여유 공간을 확인하세요.';
+  if(/verification|private/.test(failure.message||''))return '연결의 쓰기·읽기 권한과 저장소 비공개 설정을 확인하고 소량 전송 검증을 다시 실행하세요.';
+  return '설정 또는 자료를 확인하지 못했습니다. 입력과 서버 연결을 확인한 뒤 다시 시도하세요.';
+}
 function field(parent,label,key,value,type='text'){
   const holder=text(parent,'label',label);holder.className='ui-field-label';
   const input=document.createElement('input');input.className='ui-field';input.type=type;input.dataset.field=key;
@@ -65,7 +73,7 @@ function renderTargets(){
     if(!target.connection_id){
       text(row,'p','연결에 접근할 수 없습니다. 기존 설정을 보존하며 원하면 이 대상의 새 배정만 중지할 수 있습니다.');
       const holder=text(row,'label','기존 새 배정 설정 유지');holder.className='ui-check';
-      const enabled=document.createElement('input');enabled.type='checkbox';enabled.dataset.field='enabled';enabled.checked=target.enabled;holder.prepend(enabled);
+      const enabled=document.createElement('input');enabled.className='ui-field';enabled.type='checkbox';enabled.dataset.field='enabled';enabled.checked=target.enabled;holder.prepend(enabled);
       $('storage-settings-targets').append(row);continue;
     }
     const fields=document.createElement('div');fields.className='ui-form learning-form';row.append(fields);
@@ -74,7 +82,7 @@ function renderTargets(){
     select(fields,'저장소 종류','repo_type',[['dataset','데이터셋'],['model','모델']],target.repo_type);
     field(fields,'비공개 저장소 이름','repo_id',target.repo_id).placeholder='계정 또는 조직/저장소';
     const holder=text(fields,'label','새 자료 배정에 사용');holder.className='ui-check';
-    const enabled=document.createElement('input');enabled.type='checkbox';enabled.dataset.field='enabled';enabled.checked=target.enabled;holder.prepend(enabled);
+    const enabled=document.createElement('input');enabled.className='ui-field';enabled.type='checkbox';enabled.dataset.field='enabled';enabled.checked=target.enabled;holder.prepend(enabled);
     const status={verified:'소량 전송·읽기 검증 완료',needs_verification:'소량 전송·읽기 검증 필요',unavailable:'연결 권한 확인 필요'};
     text(row,'p',status[target.status]||'저장 후 연결을 검증하세요.');
     const actions=document.createElement('ui-actions');row.append(actions);
@@ -130,13 +138,13 @@ async function refresh(current){
 }
 async function poll(current){
   try{const before=state?.operation;await refresh(current);if(current===generation&&before&&!state.operation)changed?.();}
-  catch(failure){if(current===generation)error(failure.message||'진행 상황을 확인하지 못했습니다. 저장 현황을 다시 확인하세요.');}
+  catch(failure){if(current===generation)error(failureMessage(failure));}
 }
 export function storageSetupDirty(){return dirty;}
 export function clearStorageSetup(){generation++;clearTimeout(timer);state=null;draft=[];quotas={};dirty=false;$('storage-setup').hidden=true;}
 export async function loadStorageSetup(request,onChanged){
   send=request;changed=onChanged;const current=generation;
-  try{await refresh(current);}catch(failure){if(current===generation){$('storage-setup').hidden=false;error(failure.message||'저장 설정을 확인하지 못했습니다. 다시 확인하세요.');}}
+  try{await refresh(current);}catch(failure){if(current===generation){$('storage-setup').hidden=false;error(failureMessage(failure));}}
 }
 async function action(path,body){
   if(busy||!send)return;busy=true;controls();$('storage-setup-error').hidden=true;
@@ -145,7 +153,7 @@ async function action(path,body){
     await send('/api/learning/storage/'+path,body);if(current!==generation)return;
     if(path==='settings')dirty=false;
     await refresh(current);if(!state.operation)changed?.();
-  }catch(failure){if(current===generation)error(failure.message||'설정 또는 보관 작업을 마치지 못했습니다. 입력과 권한을 확인하세요.');}
+  }catch(failure){if(current===generation)error(failureMessage(failure));}
   finally{busy=false;if(current===generation)controls();}
 }
 $('storage-target-add').addEventListener('click',()=>{
@@ -176,7 +184,7 @@ async function sources(){
     $('storage-source-help').textContent=isaac&&!data.configured?'SIM 실행 연결이 필요합니다. SIM 실험 화면에서 실행기 상태를 확인하세요.':
       !rows.length?'준비할 완료 자료가 없습니다. 등록된 완료 자료 위치 또는 SIM 실험의 종료 결과를 확인하세요.':
         '파일의 쓰기가 끝난 자료만 선택하세요. 이미 준비한 목록은 다시 작성하지 않습니다.';
-  }catch(failure){if(current===generation)error(failure.message||'완료 자료를 불러오지 못했습니다. 다시 확인하세요.');}
+  }catch(failure){if(current===generation)error(failureMessage(failure));}
 }
 $('storage-sources-refresh').addEventListener('click',sources);$('storage-prepare-kind').onchange=sources;
 $('storage-prepare-form').onsubmit=event=>{
