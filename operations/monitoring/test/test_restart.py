@@ -104,3 +104,19 @@ def test_history_ignores_polling_age_and_is_site_scoped(runtime, tmp_path):
     events = cache.store.events('site-a', after=0, limit=100)
     assert len(events) == 1 and events[0]['item_id'] == value.id
     assert cache.store.events('site-b', after=0, limit=100) == []
+
+
+def test_removed_configuration_cannot_bypass_durable_anchor_budget(runtime, tmp_path, monkeypatch):
+    import rosy.monitoring.store as storage
+    original, clock = runtime
+    path = tmp_path / 'monitoring.sqlite3'
+    monkeypatch.setattr(storage, 'MAX_ANCHORS', 1)
+    first = reopen(original, clock, path)
+    first.update_local('pc-a', nodes=(observed_node(),))
+    source = original.config.sources[0].model_copy(update={'id': 'pc-new'})
+    config = original.config.model_copy(update={'sources': (source, original.config.sources[1])})
+    second = ObservationCache(config, monotonic=clock.monotonic, utcnow=clock.utcnow,
+                              store=MonitoringStore(path, config.collector_id))
+    with pytest.raises(StoreUnavailable):
+        second.update_local('pc-new', nodes=(observed_node(source='pc-new'),))
+    assert find(second, 'site-a:host:pc-new').freshness == 'unknown'
