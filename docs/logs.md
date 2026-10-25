@@ -9783,3 +9783,9 @@ osy-d395-s1d\`.
 - 변경: `omx_autoupdate.py` 재시작 뒤 `is-active`를 유닛마다 따로 확인한다. `systemctl is-active a b`는 하나만 active여도 0을 낸다. `sequential: true`이면 역순으로 하나씩 stop한 뒤 순서대로 start한다. 예시 설정에 넣었다.
 - 증거: 관제 PC 2026-10-25 20:33 첫 전환에서 카메라와 camera-readiness를 함께 restart했다. readiness의 정지 복원이 카메라 재개방과 겹쳐 `camera restore incomplete`, 재시작은 `camera settings changed since baseline; refusing overwrite`로 실패했는데 업데이터는 `switched`로 기록했다. 복원이 끝난 뒤 readiness를 손으로 다시 시작하자 READY였다(top·front 120회 확인). 원격 시험(아래 PR).
 - gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · D-871 학습 센터 자동 업데이트
+
+- 변경: `deploy/model_pc/learning_center_update.py`가 2026-10-23 교훈의 수동 절차를 자동화한다. 동작 조건은 CI 통과 + 후손 커밋, 센터 enabled·active, `experiment_*` 작업과 자식 프로세스 없음이다. 새 커밋을 `source/<sha>`에 받고, 새 설치기 `prepare()`로 유닛을 만든다. 백업 → 정지 → 쓰기 → `--apply` → active·새 sha·HTTP 200을 확인하고, 실패하면 백업 유닛으로 복구한다. `rosy-learning-center-update.{service,timer}`(D-805 관문), services.yaml model·ai 항목을 `autoupdate`로 바꾸고 업데이터를 추가했다.
+- 증거: 원격 시험(아래 PR). 모델 PC 센터는 10/25 현재 사람이 멈추고 disabled 상태라 `idle`로 남는다.
+- gate 변화: 없음.
