@@ -10380,6 +10380,12 @@ osy-d395-s1d\`.
 - 증거: private Hub 고정 commit의6파일 SHA, fresh-process ACTInference 숫자 출력1회, 원래 fixture/정규화/출력 일치, 원격·회수 EXIT0·잠금 해제. 두 pre-write 중단과 미제출 요청도 보존했다.
 - gate 변화: 실제 모델 전달·숫자 재적재 수용. 정책 task 성공·실물/양팔/주행·서비스 배포는 별도다. CE 새 교훈 기록; 추가 학습·로봇 명령 없음.
 
+## 2026-10-24 · uncommitted · 공급암 S 셀 점검·상한 복구·카메라 재시도 코드화
+
+- 변경: `cell_check.py`(읽기 전용 단암 셀 판정, 실패마다 고칠 명령)와 `commissioning_limits.py --baseline`을 추가했다. `joint_tune.py`·`record_session.py`의 거부 문구가 `--baseline`을 안내하고, `rosy-omx-camera-readiness.service`를 `Restart=on-failure`(15 s, 300 s에 3회)로 바꿨다. `services.yaml`의 관제 PC 관측기 arm_a/b를 `off`로 고쳤다(이 PC는 단암 S 셀).
+- 증거: 관제 PC 실측 — 팔로워 6개 PWM 300/전류 500이 남아 joint_tune이 거부했다. 수동 상한 복구 뒤 ID 15가 +40/50으로 이동했다. 부팅 거부 뒤 restore는 성공했지만 재시작이 없어 50분 동안 미준비였고, 수동 restart로 READY가 됐다. 새 시험 `test_omx_cell_check.py`, `--baseline` 시험, 유닛 재시도 단언을 추가했다. 1틱 떨림 거부는 의도된 안전 계약이라 바꾸지 않았다.
+- gate 변화: 없음. 실물 동작을 승인하지 않는다. CE: 새 교훈 `omx-follower-caps-left-raised-in-eeprom-2026-10-24.md`, 기존 교훈 갱신 `omx-camera-readiness-…-2026-10-23.md`(세 번째 실패).
+
 ## 2026-10-25 · 7d0cfcd6e9 · Isaac 정지 적재면·컨베이어 접촉 왕복
 
 - 변경: [왕복 검증 기록](validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md), 실행 안내와 [혼합 drive 방식 교훈](solutions/runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md)을 추가했다.
@@ -10466,68 +10472,17 @@ osy-d395-s1d\`.
 
 ## 2026-10-25 · uncommitted · feat(policy-runner): D-864 반정밀도 지연 재측정
 
-<<<<<<< HEAD
 - 변경: 측정 도구 `--amp`(CUDA autocast), [재측정 기록](validation/policy-latency-smolvla-2026-10-25/result.md).
 - 증거: AI PC GPU 연산 단독, 카메라 2대 480×640, 1000걸음씩 fp32·amp·fp32. 추론 p50 95/106/96ms, 종단 p99 182/181/182ms. 단일 카메라 Gazebo 회귀는 단독 실행에서 통과.
 - gate 변화: 없음. autocast로는 10Hz 한 걸음 추론이 안 되고 3b가 필요하다는 판단이 그대로다.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
-=======
-- 변경: `read_current_state`가 POSIX에서 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 `mode & 0o077 == 0`일 때만 읽는다(오류 문구에 경로 없음, Windows는 검사 없음). DB 헤더가 WAL이면 거절하고, `..`·정규화되지 않은 경로를 거절한다. review-app 문서에 배포 단계 `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`와 심볼릭 링크 홈 거절을 적고, D-742 addendum에 D-757 관계와 "D-742를 뒤집지 않는 같은 PC state 출처"임을 적었다.
-- 증거: 검토(APPROVE WITH FIXES)가 권한 주장을 강제로 바꾸라고 지적했다. 운영 모델 PC state는 0755·DB 0644이므로 배포 시 권한 변경이 필요하다. 원격 시험은 0755/0644·journal 0644 거절, 0700/0600 성공, WAL 거절, `..` 거절을 확인한다.
-- gate 변화: 없음. 모델 PC 권한 변경·bridge 설정 교체·운영 수용은 별도다.
-
-## 2026-10-24 · uncommitted · 공급암 S 셀 점검·상한 복구·카메라 재시도 코드화
-
-- 변경: `cell_check.py`(읽기 전용 단암 셀 판정, 실패마다 고칠 명령)와 `commissioning_limits.py --baseline`을 추가했다. `joint_tune.py`·`record_session.py`의 거부 문구가 `--baseline`을 안내하고, `rosy-omx-camera-readiness.service`를 `Restart=on-failure`(15 s, 300 s에 3회)로 바꿨다. `services.yaml`의 관제 PC 관측기 arm_a/b를 `off`로 고쳤다(이 PC는 단암 S 셀).
-- 증거: 관제 PC 실측 — 팔로워 6개 PWM 300/전류 500이 남아 joint_tune이 거부했다. 수동 상한 복구 뒤 ID 15가 +40/50으로 이동했다. 부팅 거부 뒤 restore는 성공했지만 재시작이 없어 50분 동안 미준비였고, 수동 restart로 READY가 됐다. 새 시험 `test_omx_cell_check.py`, `--baseline` 시험, 유닛 재시도 단언을 추가했다. 1틱 떨림 거부는 의도된 안전 계약이라 바꾸지 않았다.
-- gate 변화: 없음. 실물 동작을 승인하지 않는다. CE: 새 교훈 `omx-follower-caps-left-raised-in-eeprom-2026-10-24.md`, 기존 교훈 갱신 `omx-camera-readiness-…-2026-10-23.md`(세 번째 실패).
-<<<<<<< HEAD
->>>>>>> 14c8eabf82 (fix(omx): one-arm cell check, baseline cap restore, camera readiness retry)
-=======
-
-## 2026-10-24 · uncommitted · Rosy Learning #185 후속 (정답 메뉴 초점 순서·VLM 읽기 무기록·휴대폰 상단 바)
-
-- 변경: `/`·`/pixels`의 정답 하위 메뉴를 DOM에서 `.ui-pathbar` 바로 뒤로 옮겨 Tab이 편집기보다 먼저 닿게 했다(WCAG 2.4.3, 배치는 그대로). 평가 state가 아닌 예전 학습 state에 VLM 표가 있으면 읽기(`queue`·`evaluation`·`export`·`disputes`·`_ready`)가 표를 만들거나 평가셋을 고정하지 않고 같은 평가셋을 계산만 한다. 30rem 미만 상단 바에서 「로그인·계정」은 아이콘만, 테마 선택은 「화면」 글자를 접근 이름에만 남겨 한 줄로 유지한다. `unpause` 403 HTTP 시험과 초점 순서 브라우저 시험을 더했다. D-446 릴리스를 `install_review_release.py`로 설치하는 원천 규칙을 기존 교훈과 `deploy/model_pc/README.md`에 적었다.
-- 증거: 시험 PC 측정 사진 위쪽 — 메뉴 이동만: origin과 같음(390×800 `/` 372.6·`/pixels` 367.0 px, 1280×720 281.6·284.0 px). 상단 바 수정 후: 휴대폰 상단 바 117→64 px, 390×800 319.6·314.0 px(40% 기준 320 이내), 1280×720 그대로. VLM·셸 자리 시험 38 passed, NEW 0.
-- gate 변화: 없음. 실물·운영 설치 수용은 아니다. CE 기존 교훈 갱신 — `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`.
-
-## 2026-10-24 · uncommitted · Rosy Learning #185 후속 검토 반영 (제목 칸 분리·휴대폰 여유·계정 링크 툴팁)
-
-- 변경: 40rem 이상에서 `/`·`/pixels`의 정답 메뉴를 제목과 다른 격자 칸에 두어 제목을 덮지 않게 하고 768 px 비겹침 브라우저 시험을 더했다. 30rem 미만 편집기 제목 줄의 위아래 여백을 없애고 줄 높이를 줄였다. 휴대폰 「로그인·계정」 아이콘에 `title` 툴팁을 달고 D-741 끝에 그 규칙(D-683 참조) 부기를 더했다. review-app.md에 휴대폰의 보이는 순서와 초점 순서 차이를 적고, 교훈의 `curl -w` 예를 한 줄로 고쳤다.
-- 증거: 시험 PC 측정 사진 위쪽 390×800 `/` 307.6·`/pixels` 302.0 px(이전 319.6·314.0), 1280×720 281.6·284.0 px 그대로.
-- gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 판단이 없다.
-
-## 2026-10-24 · uncommitted · Rosy Learning 센터의 작업 공간 목록 (D-857 §2)
-
-- 변경: `review_app.py --workspace-links <private-json>`(`rosy.learning.workspace-links/1`)을 더했다. 검사는 `workspace_links.py`가 시작할 때 한다(schema·20개·id·label·note·kind·http(s) url·일반 파일 64 KiB). 하나라도 어긋나면 시작하지 않는다. `GET /api/learning/workspaces`는 `{configured, workspaces}`를 주고 협업 모드에서는 `view`가 필요하다. 자료 하위 메뉴에 「작업 공간」 `/learning/workspaces`를 더했다. 이 화면은 이 센터를 맨 앞에 두고, 연결한 작업 공간마다 종류 표지·메모·같은 탭 「열기」 링크를 보인다. `review-app.md`에 설정 예와 bridge 설정 변경 시 새 `--out`이 필요하다는 문장을 더했다.
-- 증거: 원격 시험 PC에서 집중 시험(브라우저 포함, 1280·390 px) 97개가 통과했다. affected 계층은 2799 passed, 315 skipped였고 known_failures 비교는 0 NEW다. 첫 affected 실행은 `review_app.py` 600줄 한도(D-766 2)에 걸렸고, 검사를 별도 모듈로 옮겨 고쳤다.
-- gate 변화: 없음. 모델 PC의 비공개 링크 파일 작성과 운영 센터 재시작은 별도다. CE 해당 없음 — 평범한 기능 추가이고 줄 수 한도는 시험이 이미 잡는다.
-
-## 2026-10-24 · uncommitted · Rosy Learning 작업 공간 목록 검토 반영
-
-- 변경: 작업 공간 url에 `\`가 있으면 거절한다(브라우저가 `/`로 읽는다). 대소문자 섞인 scheme 시험을 더했다. OMX owner-status 레일 순회 시험의 기대 집합에 `/learning/workspaces`를 넣었고, `browser_scope.py`가 `catalog.html`·`camera.html`·`workspaces.html` 변경에 그 순회 시험과 단계 시험을 고르게 했다.
-- 증거: 원격 시험 PC에서 레일·하위 메뉴 순회 브라우저 시험과 단위 시험 129개가 통과했고, affected 계층은 2940 passed, 315 skipped였다. known_failures 비교는 0 NEW다.
-- gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 판단이 없다.
-
-## 2026-10-24 · uncommitted · 센터 설치기가 작업 공간 목록 옵션을 유지
-
-- 변경: `deploy/model_pc/install_review_release.py`가 state 옆 `workspace-links.json`이 있고 대상 앱이 `--workspace-links`를 지원하면 ExecStart에 붙이고, 지원하지 않는 예전 릴리스로 되돌릴 때는 뺀다(`--omx-center-config`와 같은 방식). `test/test_model_review_release.py` 왕복 시험에 추가.
-- 증거: 원격 시험(아래 PR). 이 옵션이 없으면 센터를 설치할 때마다 작업 공간 목록(#190)이 빠진다.
-- gate 변화: 없음.
-
-## 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
-
-- 변경: 검토 지적 반영 — `review-app.md`·`deploy/model_pc/README.md`가 목록 파일을 state 폴더 안 `<state>/workspace-links.json`으로 요구(설치기가 그 위치만 유지). 설치기가 붙이기 전에 일반 파일·스키마를 확인(`check_workspace_links`), 거절 시험 3종 추가.
-- 증거: 원격 시험(아래 PR).
-- gate 변화: 없음.
 
 ## 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
 
 - 변경: `deploy/robot/omx/`에 청크 실행기(`chunk_runner.py`: 토크 유지, 멈춤·과열·추종 오차 정지, 위치+전류 집기 판정, 들고 돌고 내리는 `goto`/`park`, `live.json`), top-down 계획기(`grasp_planner.py`), 탐침 기반 손목 보정(`grasp_servo.py`), 그림자 상자 검출과 놓기 확인(`cell_perception.py`), scripted_teacher 봉인(`record_seal.py`), Fleet 관측 송신기(`arm_status_bridge.py`), 판단 자리(`judge_seat.py`)를 더했다.
 - 증거: 관제 PC 실물 — 가르친 위치 사이클 성공, 보정 뒤 집기 성공(잡음 ~200 mA, 빈 집게 ~74 mA), `park` 2회. 결정 모델 오프라인 평가 6/30(수치 포함), 1/30(이미지만), 상자 없이 grasp 선택 → 측정 거부권 설계. 원격 시험: `test_omx_arm_status_bridge.py`+`test_omx_chunk_runner.py` 24 passed, `test_omx_judge_seat.py` 7 passed, 거부권 제거 변이에서 실패 확인.
 - gate 변화: 없음. Fleet 송신은 S용 source·토큰 발급 전까지 보내지 않는다. 시뮬 실험은 로컬 main 병합 뒤. 실물 영점·카메라→팔 좌표 보정은 현장 필요. ADR 초안 `Rosy/docs/workspace-records/2026-10-25/adr-draft-arm-s-platform-integration.md`.
->>>>>>> 84431d5725 (docs(logs): arm S teacher-cell tools, 2026-10-25)
 
 ## 2026-10-25 · uncommitted · 공급암 S 교사 셀을 로컬 main에 착지, 교사 경로를 guard 안으로
 
