@@ -11410,3 +11410,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. origin PR 내용의 흡수이며 새 기능 활성화·배포·장치 동작 변경이 아니다. 통합은 머지 커밋으로 하고 public history는 rebase하지 않는다(D-127 방침).
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
+
+- 변경: Windows에서 다른 프로세스가 cwd로 잡은 워크트리 폴더는 `git worktree remove`가 등록만 지우고 폴더를 남기며, 그 안의 git 명령이 main 체크아웃의 `.git`으로 올라가 main에 작용했다(오늘 공유 main 체크아웃의 우발 병합 원인). `tools/worktree_rules.py` `leave_tombstone`이 남은 폴더를 비었으면 rmdir하고, 아니면 존재할 수 없는 gitdir(`.git/removed-worktree-<name>-delete-this-folder`)을 가리키는 `.git` 파일을 쓴다. `tools/worktrees.py` `_remove`(실패·성공 뒤 남은 폴더)와 `clear_orphan` 실패(WinError 32)에서 부른다. 묘비 `.git`은 보존할 내용으로 세지 않아 다음 prune이 대기 없이 폴더를 지우고, scan은 고아로만 본다. `new`는 묘비만 남은 폴더를 치우거나, 잡혀 있으면 이유를 들어 거절한다(`clear_tombstone`). `tools/land.py`는 같은 `worktrees.sweep`을 써서 따로 고칠 곳이 없다.
+- 증거: 커밋 0210c973b8. 실제 git으로 묘비 폴더 안 `git rev-parse` → 128, "gitfile does not point to a valid repository", 부모로 넘어가지 않음. `remote_pytest.py -- test/test_worktrees_tool.py test/test_land.py -q` 148 passed(AI PC, 0210c973b8). 새 시험 4개: 잡힌 폴더 묘비·git 실패·다음 prune 삭제·scan 고아, 빈 폴더 rmdir, 고아 정리 실패 묘비, `new` 정리·거절. 기존 keep/remove 판정 시험은 그대로 통과.
+- gate 변화: 없음. 개발 도구 변경이다.
+- 결정: 없음.
+- 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.
