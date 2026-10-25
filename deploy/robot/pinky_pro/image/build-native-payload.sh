@@ -176,6 +176,11 @@ mkdir -p "$OVERLAY/opt/rosy" "$OVERLAY/opt/rosy/deploy" \
 "$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$OVERLAY/opt/rosy/native-runtime"
 cp -a "$FIRST_BOOT_SOURCE" "$OVERLAY/opt/rosy/first-boot"
 cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
+# Early A/B admission must survive an interrupted application image-layer sync.
+mkdir -p "$OVERLAY/opt/rosy/os-bootstrap"
+for helper in os_state_storage.py os_state_firstboot.py os_state_layout.py first_boot_runtime.py; do
+    cp "$NATIVE_RUNTIME_SOURCE/$helper" "$OVERLAY/opt/rosy/os-bootstrap/"
+done
 # The native units address the motor bus as /dev/rosy-motor; the image must
 # carry the rule so a freshly flashed device has the alias on first boot.
 cp "$UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"

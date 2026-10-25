@@ -235,7 +235,8 @@ def lamp_driver_findings(root: Path) -> list[str]:
 
 STORAGE_CONSUMERS = ("NetworkManager.service", "ssh.service", "ssh.socket", "tailscaled.service",
                      "rosy-ssh-access-boot.service", "rosy-first-boot.service", "rosy-first-boot-retry.service")
-STORAGE_HELPERS = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py")
+BOOTSTRAP_HELPERS = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py")
+STORAGE_HELPERS = (*BOOTSTRAP_HELPERS, "os_storage_dispatch.py")
 
 
 def storage_gate_findings(root: Path) -> list[str]:
@@ -247,6 +248,10 @@ def storage_gate_findings(root: Path) -> list[str]:
         helper = root / "opt/rosy/native-runtime" / name
         if helper.is_symlink() or not helper.is_file():
             findings.append(f"missing storage admission helper: {name}")
+    for name in BOOTSTRAP_HELPERS:
+        helper = root / "opt/rosy/os-bootstrap" / name
+        if helper.is_symlink() or not helper.is_file():
+            findings.append(f"missing OS-owned bootstrap helper: {name}")
     for consumer in STORAGE_CONSUMERS:
         link = root / "etc/systemd/system" / (consumer + ".requires") / unit.name
         if not link.is_symlink():

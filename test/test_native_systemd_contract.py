@@ -488,7 +488,7 @@ DECLARED_READS = {
         "/var/lib/rosy/provisioning", "/var/lib/rosy/core", "/var/lib/rosy/ssh",
         "/etc/NetworkManager/system-connections", "/home/rosy/.ssh",
         "/run/rosy-provision-boot", "/proc/1/mountinfo", "/proc/self/mountinfo",
-        "/proc/1/root/dev/disk/by-partuuid", "/sys/dev/block", "/opt/rosy/native-runtime",
+        "/proc/1/root/dev/disk/by-partuuid", "/sys/dev/block", "/opt/rosy/native-runtime", "/opt/rosy/os-bootstrap",
     },
     "rosy-network-agent.service": NETWORK_EVIDENCE_READS | {
         # Imported generic transport default; the entrypoint overrides it with
@@ -581,7 +581,8 @@ NETWORK_SOURCES = [
 
 # Program sources scanned for write roots, per unit.
 PROGRAM_SOURCES = {
-    "rosy-os-storage.service": ["deploy/robot/pinky_pro/native/os_state_storage.py",
+    "rosy-os-storage.service": ["deploy/robot/pinky_pro/native/os_storage_dispatch.py",
+                                "deploy/robot/pinky_pro/native/os_state_storage.py",
                                 "deploy/robot/pinky_pro/native/os_state_layout.py",
                                 "deploy/robot/pinky_pro/native/os_state_firstboot.py",
                                 "deploy/robot/pinky_pro/native/first_boot_runtime.py"],

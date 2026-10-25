@@ -65,6 +65,10 @@ def test_inspect_passes_with_valid_image(tmp_path):
         path = root / "etc/systemd/system" / (consumer + ".requires") / "rosy-os-storage.service"
         path.parent.mkdir(parents=True)
         path.symlink_to("../rosy-os-storage.service")
+    for name in verify_mounted_image.BOOTSTRAP_HELPERS:
+        path = root / "opt/rosy/os-bootstrap" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("mock", encoding="utf-8")
         
     # Inventory
     (release_dir / "required-ros-packages.txt").write_text("pkg_a", encoding="utf-8")
