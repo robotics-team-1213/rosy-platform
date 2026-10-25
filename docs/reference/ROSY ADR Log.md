@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-875 | Swarm owner-local API separates planning from safety lifecycle | Accepted for implementation (2026-10-25) |
 | D-870 | 군집 원본 자세 시각과 수신측 단조 시계 만료 | Accepted for implementation (2026-10-25) |
 | D-869 | 원본 이벤트 ID 재전송과 실행 receipt에 결속된 자동 후처리 | Accepted for implementation (2026-10-25) |
 | D-866 | VLA 주 시뮬레이터는 Isaac Sim, Gazebo는 실행 계약 회귀용. 모델 PC와 AI PC는 역할을 나누되 오프라인 일괄 작업은 병렬로 처리 | Proposed (2026-10-25) |
