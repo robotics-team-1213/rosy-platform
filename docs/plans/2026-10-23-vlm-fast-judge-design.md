@@ -2,6 +2,8 @@
 
 **상태:** 설계 제안(2026-10-23). 코드·모델 설치·AI PC 활성화·사진 보관을 승인하지 않는다. 권한 경계는 [D-516](../adr/D-516-offline-decision-model-replay-boundary.md), 켜는 관문은 [D-610](../adr/D-610-ai-first-problem-resolution.md), 모델 출력 범위는 [D-492](../adr/D-492-d438-vision-tier-local-qwen-ai-pc-gated.md)를 따른다. 로봇암은 [D-794](../adr/D-794-omx-camera-roles-top-fixed-front-wrist.md) 카메라 역할과 rosy-vault V-021 배치 증거 계약을 따른다. 실행 순서는 [실험 계획](2026-10-23-vlm-fast-judge-experiment.md)이다.
 
+> **2026-10-25 정정:** rosy-vault 저장소와 그 `device_core` 서비스는 2026-10-24에 은퇴했다(D-858). 이 계획이 rosy-vault 소유로 적은 로봇암 배치 관측기(`PlacementEvidence`, V-021)는 그 저장소에서 구현되지 않았고, 이제 구현 위치와 소유는 플랫폼에서 다시 정한다. 실물 팔 실행 경로는 OMX owner다. 아래 본문은 2026-10-23 당시 판단으로 남긴다.
+
 ## 왜 바꾸는가
 
 지금 [`Vlm.judge`](../../operations/situation/rosy_situation/incidents/vision.py)는 Qwen3-VL-8B에 사진마다 설명을 생성시키고(최대 96토큰 × 사진 수), 다시 판단·이유·평가를 JSON으로 생성시킨다. 모델 PC에서 사진 한 장에 1.5–3 s다(D-492). 필요한 답은 `WAIT`·`RESUME` 같은 닫힌 단어 하나인데 글을 생성하느라 느리다.

@@ -384,7 +384,7 @@ def apply_cyclone_and_reboot(
     reboot = _relay(
         reply,
         absent_detail=(
-            "오버레이에 Cyclone을 저장했습니다. Host Agent가 없어 재부팅하지 못했습니다. "
+            "오버레이에 Cyclone을 저장했습니다. 호스트 에이전트가 없어 재부팅하지 못했습니다. "
             "systemctl restart rosy-runtime.service 로 런타임을 다시 띄우세요."
         ),
     )

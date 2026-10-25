@@ -311,7 +311,7 @@ function updateAdminControls() {
   setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요");
   const networkCard = document.getElementById("network-card");
   const networkOn = isAdmin() && networkCard?.dataset.available === "true";
-  const networkReason = !isAdmin() ? "관리자 권한 필요" : "Host Agent 없음";
+  const networkReason = !isAdmin() ? "관리자 권한 필요" : "호스트 에이전트 없음";
   for (const id of ["network-apply", "network-ap-off", "network-ap-on", "network-connect"]) setEnabled(id, networkOn, networkReason);
 }
 
@@ -853,7 +853,7 @@ async function runNetwork(button, path, body, prompt, success, failure, eligible
         idempotency_key: crypto.randomUUID ? crypto.randomUUID() : String(Date.now())})});
       if (!active()) return;
       clearSecret();
-      setText("network-note", payload.available === false ? (payload.detail || "Host Agent가 없어 적용하지 못했습니다.") : payload.ok ? success : (payload.detail || "적용이 거부되었습니다."));
+      setText("network-note", payload.available === false ? (payload.detail || "호스트 에이전트가 없어 적용하지 못했습니다.") : payload.ok ? success : (payload.detail || "적용이 거부되었습니다."));
       if (payload.available === false || !active()) return;
       const status = await api("/api/v1/host/network", {signal: owner.signal});
       if (active()) renderHostNetwork(status);
