@@ -11269,3 +11269,9 @@ osy-d395-s1d\`.
 - gate 변화: P1 끝난 기준(Gazebo 적합성 통과) 충족. P2 Isaac 백엔드는 같은 도구로 판정한다.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
+
+- 변경: `sim_chunk_plan.py`가 `grasp_planner` 청크와 `transit_path` 이동을 sim 셀의 집기·놓기 목표에 맞춰 SIM teacher의 approach/grasp/transfer/release로 바꾼다. `--plan chunks`가 teacher·demonstrations·prepare·job·`remote_omx_native.py`를 지난다. 놓기는 측정한 집게 위치부터 연다(`open_from`). 앞의 착지 merge 커밋 `5ceabe6015`이 작업 트리의 추적 파일 변경(실험 연결부)을 함께 담았고, 새 파일은 이 커밋에서 들어간다.
+- 증거: AI 시험 호스트 native SIM 2회. 1회 FAIL(release 첫 목표가 상자에 막힌 집게를 더 닫으라고 함), 수정 뒤 2회 **PASS** — xy 0.12 mm, 들기 102 mm, 2.25 s 정지, RGB 2,060장. `docs/validation/omx-arm-s-chunks-sim-2026-10-25/result.md`.
+- gate 변화: 없음. sim 셀은 S 셀 좌표가 아니고, B 구간·판단 자리·실물 guard 속도는 별도다.
