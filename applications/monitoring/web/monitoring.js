@@ -92,7 +92,7 @@ async function refresh() {
 function cell(...children) { const node = el('td'); node.append(...children); return node; }
 function healthNode(item) {
   const known = evidence(item) === 'fresh';
-  return el('span', (HEALTH[item.reported_health] || HEALTH.UNKNOWN) + (known ? '' : ' · 마지막 판정'),
+  return el('span', (HEALTH[item.reported_health] || HEALTH.UNKNOWN) + (known || !item.sampled_at ? '' : ' · 마지막 판정'),
     known && item.reported_health === 'ERROR' ? 'danger' : known && item.reported_health === 'WARNING' ? 'caution' : '');
 }
 function render() {
