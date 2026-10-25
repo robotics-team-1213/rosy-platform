@@ -1,11 +1,11 @@
 """Fixed loopback inference for D-728; no tools, credentials or execution handles."""
-import json
 import math
 import time
 
 from rosy.decision.conversation.codec import ConversationInput, Profile, semantic_answer, answer_schema
 from rosy.decision.deliberation import canonical
 from rosy.decision.conversation.preprocessing import DISCORD_REVISION, InferenceUsage, prepare
+from rosy.decision.structured_output import ollama_chat, ollama_reply
 from .deliberation_ollama import exchange, loaded
 
 
@@ -144,22 +144,16 @@ def execute(question, profile, remaining):
 
     loaded(exchange('/api/ps', None, available()))
     instructions = preprocessing_instruction() if preprocessing else instruction()
-    request = {'model':profile.model_id, 'messages':[{'role':'system', 'content':instructions},
+    request = ollama_chat(profile.model_id, [{'role':'system', 'content':instructions},
         {'role':'user','content':'UNTRUSTED CONTEXT:\n'+(prepared.prompt_json if prepared else canonical(question.model_dump()))+
          '\nLATEST USER MESSAGE:\n'+(prepared.normalized if prepared else question.question)}],
-        'format':answer_schema(), 'stream':False,
-        'options':{'num_predict':1024, 'temperature':0, 'num_ctx':8192}}
+        answer_schema(), temperature=0, num_ctx=8192)
     value = exchange('/api/chat', request, available())
     loaded(exchange('/api/ps', None, available()))
-    if (value.get('model') != profile.model_id or value.get('done') is not True
-            or value.get('done_reason') != 'stop' or type(value.get('eval_count')) is not int
-            or not 0 < value['eval_count'] <= 1024 or type(value.get('prompt_eval_count')) is not int
-            or not 0 <= value['prompt_eval_count'] <= 8192):
-        raise ValueError('INVALID_CONVERSATION_LOCAL_RESULT')
-    raw = json.loads(value['message']['content'])
+    raw, counts = ollama_reply(value, profile.model_id, 'INVALID_CONVERSATION_LOCAL_RESULT', max_input=8192)
     answer = semantic_answer(raw, question, preprocessing=preprocessing).model_dump()
     if preprocessing:
-        usage = InferenceUsage(input_tokens=value['prompt_eval_count'], output_tokens=value['eval_count'],
+        usage = InferenceUsage(input_tokens=counts['input_tokens'], output_tokens=counts['output_tokens'],
             elapsed_ms=(time.monotonic()-started)*1000, preparation_hash=prepared.digest)
         answer['usage'] = usage.model_dump()
     return answer

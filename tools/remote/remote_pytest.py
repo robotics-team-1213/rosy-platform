@@ -328,8 +328,9 @@ def deps(repo: Path, sha: str, test_tools: str | None = None) -> tuple[str, list
     install = VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
     key = hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16]
     if test_tools:
-        blob = git(repo, "rev-parse", f"{sha}:{remote_test_tools.RAW_REQUIREMENTS}")
-        key = remote_test_tools.identity(key, blob)
+        blob = "\n".join(git(repo, "rev-parse", f"{sha}:{path}")
+                         for path in remote_test_tools.inputs(test_tools))
+        key = remote_test_tools.identity(key, blob, profile=test_tools)
     return key, dirs
 
 
@@ -454,8 +455,10 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         ship(repo, host, sha, name)
         deps_sha, dirs = deps(repo, sha, test_tools=test_tools) if test_tools else deps(repo, sha)
         if test_tools:
-            blob = git(repo, "rev-parse", f"{sha}:{remote_test_tools.RAW_REQUIREMENTS}")
-            print(f"[remote-pytest] test-tools={test_tools} tested={sha} deps={deps_sha} raw-blob={blob}", flush=True)
+            blobs = ",".join(git(repo, "rev-parse", f"{sha}:{path}")
+                             for path in remote_test_tools.inputs(test_tools))
+            field = "raw-blob" if test_tools == remote_test_tools.PROFILE else "input-blobs"
+            print(f"[remote-pytest] test-tools={test_tools} tested={sha} deps={deps_sha} {field}={blobs}", flush=True)
         recipe = remote_test_tools.render_setup(VENV, test_tools)
         if remote(host, recipe, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"]).returncode != 0:
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
@@ -544,7 +547,8 @@ def default_log_dir(sha: str) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--sha", default="HEAD", help="commit to test (default HEAD)")
-    parser.add_argument("--test-tools", choices=[remote_test_tools.PROFILE], help="optional native test dependency profile")
+    parser.add_argument("--test-tools", choices=[remote_test_tools.PROFILE, remote_test_tools.SD_PROFILE],
+                        help="optional native test dependency profile")
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--affected-json", help="`rosy_harness.py affected --json` output file, or -")
     parser.add_argument("--skip", action="append", default=[], help="drop this path from the affected set")

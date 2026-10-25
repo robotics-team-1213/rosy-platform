@@ -14,6 +14,7 @@ import time
 import urllib.request
 
 from rosy.decision.deliberation import Problem, canonical, identifier, opinion
+from rosy.decision.structured_output import openai_chat, openai_reply
 from .deliberation_smoke_budget import claim
 
 MODEL = 'glm-5.3-flash'
@@ -81,13 +82,9 @@ def upstream(body, token, remaining):
 
 
 def checked_response(problem, response, *, body=None):
-    choice, = response['choices']
-    message = choice['message']
+    payload = openai_reply(response, MODEL, 'INVALID_UPSTREAM_RESULT')
     usage = {key: response['usage'][key] for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
-    if (response.get('model') != MODEL or message.get('role') != 'assistant'
-            or choice['finish_reason'] != 'stop' or message.get('tool_calls')
-            or message.get('function_call') or type(message['content']) is not str
-            or any(type(value) is not int or value < 0 for value in usage.values())
+    if (any(type(value) is not int or value < 0 for value in usage.values())
             or usage['completion_tokens'] > 1024
             or usage['total_tokens'] != usage['prompt_tokens'] + usage['completion_tokens']):
         raise ValueError('INVALID_UPSTREAM_RESULT')
@@ -97,7 +94,6 @@ def checked_response(problem, response, *, body=None):
         if type(count) is not int or not 0 <= count <= usage['completion_tokens']:
             raise ValueError('INVALID_REASONING_USAGE')
         usage['completion_tokens_details'] = {'reasoning_tokens': count}
-    payload = json.loads(message['content'])
     if body is not None and 'schema' in json.loads(body):
         from . import deliberation_glm_judgment as versioned
         payload = versioned.result(problem, body, payload)
@@ -144,11 +140,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     or any(item.get('tool_calls') or item.get('function_call')
                            or item.get('role') in {'tool', 'function'} for item in incoming['messages'])):
                 raise ValueError('REQUEST_REFUSED')
-            request = {'model': MODEL, 'messages': [
+            # shortcut: json_object until a z.ai json_schema probe passes (D-878 §3), then pass the job schema.
+            request = openai_chat(MODEL, [
                 {'role': 'system', 'content': 'Return only the requested bound JSON opinion. No tools.'},
-                {'role': 'user', 'content': server.body}], 'max_tokens': 1024, 'stream': False,
-                'thinking': {'type': 'enabled'}, 'reasoning_effort': 'low',
-                'response_format': {'type': 'json_object'}}
+                {'role': 'user', 'content': server.body}],
+                thinking={'type': 'enabled'}, reasoning_effort='low')
             claim(server.body)
             server.calls = 1
             provider_response = upstream(request, server.token, max(0.01, server.deadline - time.monotonic()))
