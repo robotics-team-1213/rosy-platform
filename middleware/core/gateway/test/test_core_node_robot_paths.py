@@ -188,3 +188,17 @@ def test_device_consumes_the_validated_snapshot(node_module, installed_rasptank,
     assert profile.model == "RaspTank Metal"
     assert profile.max_linear_velocity == 0.0
     assert capabilities["teleop"] is False
+
+
+def test_device_rejects_pinky_files_inside_rasptank_package(node_module, installed_rasptank):
+    other = SRC.parent / "middleware/devices/pinky/profile/config"
+    shutil.copytree(other, installed_rasptank, dirs_exist_ok=True)
+    with pytest.raises(ConfigError, match="rasptank_metal"):
+        node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
+
+
+def test_device_rejects_capabilities_mixed_inside_installed_package(node_module, installed_rasptank):
+    other = SRC.parent / "middleware/devices/pinky/profile/config/capabilities.yaml"
+    shutil.copyfile(other, installed_rasptank / "capabilities.yaml")
+    with pytest.raises(ConfigError, match="capabilities"):
+        node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
