@@ -9717,3 +9717,9 @@ osy-d395-s1d\`.
 - 변경: `validate`를 모든 키·값 형식의 허용 목록으로 바꿨다(HF 비율·학습 기록의 끼워 넣은 키, bool 장수, NaN·무한 IoU 거절). 평가셋은 `--learning-control` 학습 설정의 저장소 `evalsets/` 아래에 있는 `review_eval_bootstrap` 공개본(프레임마다 `approval_sha256`)이어야 하고, 학습 기록 `ready` 행의 `eval_set`과 content_sha가 같아야 한다(`learning_cycle`이 기록). 저장소 밖에서 `human_reviewed_eval`을 주장하는 평가셋은 거절된다. 쓰기는 잠금과 uuid 임시 이름을 쓰고, 만든 시각만 다른 같은 요청은 처음 해시를 돌려준다. GET은 경로·크기·mtime_ns가 같으면 해시를 재사용하고 POST는 모두 다시 해시한다.
 - 증거: 원격 시험 PC 대상 57 passed, 브라우저(1440·390px) 10 passed, affected 2790 passed·known_failures 0 NEW.
 - gate 변화: 없음. 학습 실행기가 연결되지 않은 작업대는 승격 요청을 만들 수 없다. CE 해당 없음 — 검토 반영이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · 승격 요청 학습 기록 행을 결과 폴더·파일에 묶기 (D-874)
+
+- 변경: 재검토 반영. 학습 기록 행은 요청 폴더가 주장하는 revision만으로 고르지 않고, 그 폴더를 공개한 행(`result.location`이 같은 실제 경로)이며 기록한 모델 파일 sha256이 봉인할 파일과 같아야 한다. `learning_cycle`이 `ready` 행에 공개 폴더의 `eval_set`과 `files`를 남긴다. 그 기록이 없는 예전 행은 거절된다. 시험 추가: 실제 `eval_set`·`files` 기록, `evalsets/` 안의 밖을 가리키는 링크와 `..` 경로 거절, GET 캐시가 있어도 POST가 다시 해시해 같은 크기·mtime의 바뀐 파일을 거절, 다른 폴더·다른 파일의 같은 revision 행 거절.
+- 증거: 원격 시험 PC 대상 54 passed, 브라우저(1440·390px) 10 passed, affected 2794 passed·known_failures 0 NEW.
+- gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 장애가 없다.
