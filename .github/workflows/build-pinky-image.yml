@@ -46,7 +46,8 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            bmap-tools build-essential cloud-guest-utils cmake curl gpg python3-yaml xz-utils
+            bmap-tools build-essential cloud-guest-utils cmake curl gpg python3-yaml xz-utils \
+            fdisk dosfstools rsync e2fsprogs
           ros_source=/tmp/ros2-apt-source.deb
           curl --fail --location --proto '=https' --proto-redir '=https' \
             --output "$ros_source" \
@@ -109,7 +110,20 @@ jobs:
           test -f "$release/rosy-os-pinky-pro-$RELEASE_ID-arm64.img.xz"
           test -f "$release/manifest.json"
           test -f "$release/SHA256SUMS"
+          test -f "$release/rosy-os-pinky-pro-$RELEASE_ID-arm64.capacity.json"
           test ! -e "$release/SHA256SUMS.sig"
+          python3 - "$release" <<'PY'
+          import json, sys
+          from pathlib import Path
+          folder = Path(sys.argv[1])
+          manifest = json.loads((folder / "manifest.json").read_text())
+          assert manifest["schema_version"] == 2
+          capacity = json.loads(next(folder.glob("*.capacity.json")).read_text())
+          assert capacity["raw_size_bytes"] == manifest["layout"]["raw_size_bytes"]
+          assert set(capacity["roots"]) == {"a", "b"}
+          for root in capacity["roots"].values():
+              assert root["available_bytes"] >= root["reserve_required_bytes"]
+          PY
           xz --test "$release/rosy-os-pinky-pro-$RELEASE_ID-arm64.img.xz"
           (cd "$release" && sha256sum --check SHA256SUMS)
 

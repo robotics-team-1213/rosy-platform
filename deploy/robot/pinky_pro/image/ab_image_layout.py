@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import stat
 import sys
 import uuid
 
@@ -152,12 +153,30 @@ def capacity_report(free_bytes: int, payload_bytes: int) -> dict:
     return dict(available_bytes=free_bytes, baseline_payload_bytes=payload_bytes, reserve_required_bytes=required)
 
 
+def filesystem_plan(raw: Path, layout: dict) -> list[tuple[int, str]]:
+    layout = validate_layout(layout)
+    descriptor = os.open(raw, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as handle:
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size != layout["raw_size_bytes"]:
+            raise ValueError("GPT raw image type/size differs")
+        def read_at(offset, length):
+            handle.seek(offset)
+            return handle.read(length)
+        if parse_gpt(read_at, info.st_size) != layout:
+            raise ValueError("GPT differs from the assembly snapshot")
+    return [(part["number"], "vfat" if part["number"] <= 3 else "ext4") for part in layout["partitions"]]
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("plan")
     table = commands.add_parser("sfdisk")
     table.add_argument("--layout", type=Path, required=True)
+    filesystems = commands.add_parser("filesystems")
+    filesystems.add_argument("--raw-image", type=Path, required=True)
+    filesystems.add_argument("--layout", type=Path, required=True)
     data = commands.add_parser("initialize-data")
     data.add_argument("--directory", type=Path, required=True)
     data.add_argument("--factory-id", required=True)
@@ -175,6 +194,9 @@ def main(argv=None) -> int:
         layout = json.loads(args.layout.read_text(encoding="utf-8"))
         if args.command == "sfdisk":
             print(sfdisk_script(layout), end="")
+        elif args.command == "filesystems":
+            for number, filesystem in filesystem_plan(args.raw_image, layout):
+                print(number, filesystem)
         else:
             configure_slot(args.root, args.boot, layout, args.slot)
     return 0

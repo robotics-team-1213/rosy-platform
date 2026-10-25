@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# Build a ROSY OS release image from the pinned Ubuntu Server 24.04 LTS arm64
-# Raspberry Pi base image on a native ARM64 host.
-#
-# This has never been run. Every input it depends on is in inputs.lock.yaml,
-# and the ones marked `verified: false` there are assumptions nobody has
-# checked — run `verify-inputs.sh` first. Producing an image is not BUILD_GO;
-# `verify-artifacts.sh` is.
+# Build an unsigned GPT A/B image from the pinned Ubuntu Raspberry Pi base.
+# Native ARM64 artifact and boot/update acceptance are separate gates; v2
+# production BUILD_GO stays closed until that complete path is verified.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -85,6 +81,8 @@ EXPAND_MIB="$(awk '
     in_artifact && $1 == "rootfs_expansion_mib:" { print $2; exit }
 ' "$LOCK" | tr -d '\r')"
 RAW_IMAGE="$OUT/rosy-os-pinky-pro-$RELEASE_ID-arm64.img"
+PREPARED_IMAGE="$OUT/.prepared-$RELEASE_ID.img"
+LAYOUT_FILE="${RAW_IMAGE%.img}.layout.json"
 CUSTOMIZER="$SCRIPT_DIR/customize-rootfs.sh"
 
 # D-427: the image rosdep scope covers every colcon root in the manifest.
@@ -95,7 +93,7 @@ is ready but no raw product image may be published before Task 4"
 
 "$SCRIPT_DIR/image-workspace.sh" \
     --base-image "$BASE_IMAGE" \
-    --output-image "$RAW_IMAGE" \
+    --output-image "$PREPARED_IMAGE" \
     --work-root "$IMAGE_WORK_ROOT" \
     --expand-mib "$EXPAND_MIB" \
     -- "$CUSTOMIZER" \
@@ -106,16 +104,25 @@ is ready but no raw product image may be published before Task 4"
         --release-id "$RELEASE_ID" \
         --source-revision "$SOURCE_REVISION"
 
+python3 "$SCRIPT_DIR/assemble-ab-image.py" \
+    --source-image "$PREPARED_IMAGE" \
+    --output-image "$RAW_IMAGE" \
+    --work-root "$IMAGE_WORK_ROOT" \
+    --release-id "$RELEASE_ID"
+rm -f -- "$PREPARED_IMAGE"
+
 COMPRESSED_IMAGE="$OUT/rosy-os-pinky-pro-$RELEASE_ID-arm64.img.xz"
 "$SCRIPT_DIR/finalize-image.sh" \
     --raw-image "$RAW_IMAGE" \
-    --output "$COMPRESSED_IMAGE"
+    --output "$COMPRESSED_IMAGE" \
+    --layout-file "$LAYOUT_FILE"
 python3 "$SCRIPT_DIR/create-image-manifest.py" \
     --dist "$OUT" \
     --payload "$PAYLOAD_ROOT" \
     --lock "$LOCK" \
     --release-id "$RELEASE_ID" \
-    --source-revision "$SOURCE_REVISION"
+    --source-revision "$SOURCE_REVISION" \
+    --layout-file "$LAYOUT_FILE"
 IMAGE_WORK_ROOT_REAL="$(realpath -e "$IMAGE_WORK_ROOT")"
 PAYLOAD_ROOT_REAL="$(realpath -e "$PAYLOAD_ROOT")"
 case "$PAYLOAD_ROOT_REAL" in
