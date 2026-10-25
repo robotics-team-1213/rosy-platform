@@ -18,6 +18,9 @@ An owner-local `fleet.swarm.api` root contains existing data types, enums, excep
 | D-429 section 4 | Owner-local API root follows the existing port-ownership pattern; imports only contracts/API |
 | D-430 | Actual safety implementation remains tagged, Decision uses actual public entrypoints, no new frozen violation |
 
+
+The formation purity guard permits only the exact neutral declaration leaves `fleet.swarm.api.types` and `fleet.swarm.api.ports`. It statically inspects both leaf files and their `fleet`, `fleet.swarm` and `fleet.swarm.api` parent initializers, resolving member and relative import spellings. This finite declaration exception does not admit package-wide prefixes, transport, relay, scheduling or I/O; every existing forbidden-import policy remains in force.
+
 ### Verification and limits
 
 Verify API purity and reexport identity, unchanged planning order/count and planner-independent stop, all safety separation/anchor/API-root constraints, and formation/session/relay/transport/CLI/receipt regressions remotely against committed revisions. Review the implementation independently before its Safety-Review trailer. C2/C3 and later native/MotorHealth preps need source-owner-aware integration; older session.py must not overwrite the new lifecycle owner. No HTTP or envelope change, API version bump, landing, deployment or field acceptance is part of this ownership correction.

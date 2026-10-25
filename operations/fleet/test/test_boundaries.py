@@ -2,6 +2,7 @@
 import 하면 순수 함수가 아니게 되고 Windows pytest 도 깨진다."""
 
 import ast
+from importlib.util import resolve_name
 from pathlib import Path
 
 import pytest
@@ -25,11 +26,40 @@ def _imports(path: Path) -> set[str]:
     return names
 
 
+FORMATION_API_LEAVES = frozenset({"fleet.swarm.api.types", "fleet.swarm.api.ports"})
+
+
+def _formation_import_names(path: Path, package: str) -> set[str]:
+    names = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            module = (resolve_name("." * node.level + (node.module or ""), package)
+                      if node.level else node.module or "")
+            if module in FORMATION_API_LEAVES or any(alias.name == "*" for alias in node.names):
+                names.add(module)
+            else:
+                names.update(f"{module}.{alias.name}" for alias in node.names)
+    return names
+
+
+def _assert_formation_import_boundary(path: Path, fleet_root: Path) -> None:
+    checks = [(path, "fleet.formation"),
+              (fleet_root / "swarm/api/types.py", "fleet.swarm.api"),
+              (fleet_root / "swarm/api/ports.py", "fleet.swarm.api"),
+              (fleet_root / "__init__.py", "fleet"),
+              (fleet_root / "swarm/__init__.py", "fleet.swarm"),
+              (fleet_root / "swarm/api/__init__.py", "fleet.swarm.api")]
+    for checked, package in checks:
+        for name in _formation_import_names(checked, package):
+            assert name in FORMATION_API_LEAVES or not name.startswith(FORBIDDEN), (
+                f"{checked.relative_to(fleet_root)} imports {name}")
+
+
 @pytest.mark.parametrize("module", sorted(p.name for p in FORMATION_DIR.glob("*.py")))
 def test_formation_modules_import_no_transport(module):
-    names = _imports(FORMATION_DIR / module)
-    for name in names:
-        assert not name.startswith(FORBIDDEN), f"{module} imports {name}"
+    _assert_formation_import_boundary(FORMATION_DIR / module, FORMATION_DIR.parent)
 
 
 def test_arming_stays_pure_so_the_plan_can_run_before_the_relay_is_touched():
