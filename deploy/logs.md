@@ -3479,3 +3479,10 @@
 - 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
 - gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
 - CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
+
+## 2026-10-26 · b3044a5b6d · A/B payload와 offline factory의 호환성 검사
+
+- 변경: 서명된 후보의 literal boot ABI·state reader/writer 범위와 필수 SDK 파일을 activation·rollback 전에 검사한다. offline root assembler도 같은 검사로 미지원 factory를 거부한다. 기존 legacy 최소 verifier와 CAPABILITIES 형식은 보존한다.
+- 증거: 공식 원격 runner의 ABI·legacy closure 회귀 124 passed, offline factory 포함 회귀 365 passed, 각각 known_failures 0 NEW. 두 결과는 겹치므로 합산하지 않는다. main GPT 소비자 통합 커밋은 21c8e443d1이다.
+- gate 변화: 새 ARM64 A/B 이미지·OS engine·실물 부팅·SD 기록 수용은 아직 없음. 기존 카드를 유지한다.
+- CE: 해당 없음 — 호환성 경계와 legacy 재현 조건을 소스·회귀 시험·D-881에 기록했다.

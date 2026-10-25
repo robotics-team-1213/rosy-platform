@@ -11655,3 +11655,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_robot_cd.py`, `test/test_deployment_targets.py`, `test/test_tool_script_names.py`, `test/test_update_status.py`. 새 시험은 옛 이름이 있으면 실패한다.
 - gate 변화: main의 `test_robot_cd` 2건이 다시 녹색이 된다.
 - 교훈: CE 해당 없음 — 재발 방지가 이름 검사 시험에 있다.
+
+## 2026-10-26 · b3044a5b6d · D-881의 payload·OS 호환 경계 구체화
+
+- 변경: 실행하지 않는 literal ABI 해석, 현재 공통 state와 같은 writer만 허용하는 정책, 필수 SDK closure, legacy 최소 verifier 보존을 Proposed D-881에 추가한다.
+- 증거: 공식 원격 회귀 124 passed와 offline assembly 포함 365 passed, 각각 0 NEW. OS bundle backend 및 실제 부팅 수용을 이 결과로 주장하지 않는다.
+- gate 변화: 없음. 전체 이미지·trial/commit/fallback·SD 기록은 계속 진행 중이다.
+- CE: 해당 없음 — 판단과 반례가 ADR·소스·시험에 남아 있다.

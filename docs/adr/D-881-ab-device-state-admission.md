@@ -66,6 +66,12 @@ A/B firstboot는 일회용 join 요청을 공통 `/tailscale/join/request.json`�
 
 다른 보드에서 A/B firstboot를 반복해도 공통 canonical pointer·완료 기록·현장 Wi-Fi는 보존하고, 하나의 임시 등록 identity로 SETUP 안내를 유지한다. 이전 hostname을 live 적용하거나 tailnet 권한을 이전하지 않는다. 등록 대기 기록이 있으면 원래 보드로 카드를 돌려놔도 tailnet daemon/join을 승인하지 않는다. 새 기체 등록은 기존 안내대로 새 서명 이미지 카드를 준비하는 경로를 지원한다. root-local archive 도구는 A/B marker가 있으면 파일 이동 전에 거부한다. 이 도구로 공통 generation이나 machine credential을 재등록하지 않는다. legacy single-root 재등록도 CORE·하드웨어·tailnet daemon/join의 정지를 확인한 뒤에만 진행한다. 실제 반복 부팅·서비스 관리자·복구 페이지 접근 수용은 별도다.
 
+### Payload와 OS의 호환 경계
+
+A/B root의 native payload admission은 서명·전체 inventory 검증을 마친 뒤 `image_layer_boot.py`의 literal `OS_COMPATIBILITY`를 읽는다. 후보 Python을 실행하지 않고 boot ABI 범위·공통 state 읽기 범위·쓰기 schema를 검사한다. 현재 boot ABI는1, 공통 state는1이며 writer schema는 현재 공통 schema와 같아야 한다. schema migration은 이 구현의 지원 범위에 없고, 되돌아갈 root가 읽지 못하는 writer를 활성화하지 않는다. 필수 A/B reader·writer·검증 모듈이 `ENGINE_FILES`에 선언되고 실제 파일로 존재해야 한다. 미지원 후보는 activation·rollback의 journal·runtime·link 변경 전에 `OS_PAYLOAD_INCOMPATIBLE`로 거부한다. offline root configurer도 같은 검사를 root별 descriptor·override 쓰기 전에 적용한다.
+
+기존 legacy의 `CAPABILITIES` 두 항목과 최소 `native_release.py`·`signing.py` verifier closure는 유지한다. A/B marker가 있는 root만 새 검사 helper를 요구하며 helper 누락을 legacy로 처리하지 않는다. 이는 payload·offline assembly admission 구현이고, OS bundle engine의 admission·trial·commit·fallback 구현 완료를 뜻하지 않는다. ABI 회귀와 실제 isolated legacy verifier, 미지원 factory의 offline 거부를 원격 시험으로 확인했다. 실제 다른 OS 버전의 부팅 수용은 별도다.
+
 ### Ownership and existing decisions
 
 | 기준 | 관계 |
