@@ -3465,3 +3465,4 @@
 - 변경: `rosy-host-guard-remote health`가 `~/rosy-test`·`/` 여유와 GPU 메모리를 덧붙인다. `rosy-host-guard`는 30GiB/90% 기준의 `disk-low`를 보고만 하고 복구 단계를 진행시키지 않는다. `rosy-host-control`의 ai·model `clean-storage`는 `rosy-test-storage.service`를 한 번 시작한다(없으면 exit 5).
 - 증거: `test/test_host_guard.py`, `operations/fleet/test/test_host_control.py` 원격 실행.
 - gate 변화: 없음. PC별 재설치와 실제 정리 수용은 미완료다.
+- 검토 수정: `install-host-control.sh`가 `units-user`를 ai에만 써서 모델 PC의 `clean-storage`가 늘 거부됐다. ai·model에 쓰도록 고치고 dry-run 시험으로 RED→GREEN을 확인했다.
