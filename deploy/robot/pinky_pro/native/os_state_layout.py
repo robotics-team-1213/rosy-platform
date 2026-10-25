@@ -155,6 +155,7 @@ def mount_facts(root: Path, layout: dict) -> list[dict]:
         raise ValueError("too many partition aliases")
     result = []
     identities = set()
+    disk = None
     for role, point, filesystem in MOUNTS:
         actual = _one_mount(host, point, filesystem, True)
         visible = _one_mount(local, point, filesystem, False)
@@ -173,6 +174,16 @@ def mount_facts(root: Path, layout: dict) -> list[dict]:
         identity = f"{os.major(partition.st_rdev)}:{os.minor(partition.st_rdev)}"
         if identity != actual["device"] or identity in identities:
             raise ValueError("mounted PARTUUID differs or is duplicated")
+        partition_dir = (root / "sys/dev/block" / identity).resolve(strict=True)
+        if not partition_dir.is_relative_to(root / "sys"):
+            raise ValueError("partition sysfs path escapes sysfs")
+        number = _read(partition_dir / "partition", 64).decode("ascii").strip()
+        expected = {"root": 4 if layout["slot"] == "a" else 5, "data": 6, "provision": 2}[role]
+        if number != str(expected):
+            raise ValueError("partition role differs from A/B slot")
+        if disk is not None and partition_dir.parent != disk:
+            raise ValueError("slot partitions belong to different physical disks")
+        disk = partition_dir.parent
         identities.add(identity)
         result.append(dict(role=role, **actual))
     return result

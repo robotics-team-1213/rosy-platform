@@ -10,7 +10,7 @@
 
 1. 각 root의 `/opt/rosy`, `/var/lib/rosy/releases`, `/var/lib/rosy/updates`와 image-layer inverse는 슬롯에 남긴다. applying/staged/status/history·activation journal을 다른 root에 replay하지 않는다.
 2. 공통 data는 `/var/lib/rosy-device`에 둔다. updater config/Hold만 공통 policy 경로에 직접 접근한다. atomic replace/unlink를 깨뜨리는 개별 파일 bind mount는 사용하지 않는다.
-3. image-owned `/etc/rosy/os-slot.json`과 `rosy.os_layout=ab-v1` kernel marker는 함께 필요하다. descriptor schema/state_schema·slot·root/data/provision PARTUUID는 strict하게 검증한다. 둘 다 없는 legacy만 기존 경로를 사용하며 AB 오류에서 legacy로 fallback하지 않는다.
+3. image-owned `/etc/rosy/os-slot.json`과 `rosy.os_layout=ab-v1` kernel marker는 함께 필요하다. descriptor schema/state_schema·slot·root/data/provision PARTUUID는 strict하게 검증한다. D-879의 파티션 역할에 따라 root A는4, root B는5, 공통 data는6, provision boot_a는2이며 실제 sysfs 파티션 번호와 동일 physical disk parent를 확인한다. 둘 다 없는 legacy만 기존 경로를 사용하며 AB 오류에서 legacy로 fallback하지 않는다.
 4. 두 admission 단계를 둔다. storage 단계는 root/data/provision의 실제 device·mount root/subpath·옵션과 공통 schema를 검사한다. firstboot 초기화/투영 뒤 state 단계가 boot/slot/descriptor/canonical generation과 결속된 root projection을 확인하고 payload recovery·updater·runtime을 허용한다. 소비자 admission에서 mount를 다시 검사한다.
 5. builder가 명시적으로 만든 FACTORY_EMPTY, INITIALIZING, COMMITTED, PROJECTED, NEW_DEVICE_SETUP, HOLD를 구분한다. 누락·부패·미지원 schema를 초기 공장 상태로 추정하지 않는다. `Requires`와 `After`를 통해 실제 boot gate를 연결하고 NetworkManager·SSH socket·tailscaled의 선행 활성화와 dependency cycle을 시험한다.
 6. mutable CORE HOME·NM profile·SSH key/registry는 기존 소유자가 공유 정본을 계속 갱신한다. 남는 privileged device 설정은 canonical generation commit 경로를 사용한다. 삭제·revoke는 A→B→A에서 보존되며 firstboot snapshot으로 되살리지 않는다. 전체 `/etc`·계정 DB·payload code는 공유하지 않는다.
