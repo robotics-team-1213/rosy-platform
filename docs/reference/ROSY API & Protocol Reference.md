@@ -3856,6 +3856,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.318 | 2026-10-25 | D-876: passive Fleet connection cache wire, strict bounded observations, preserved cache/source ages and D-535 reasons; no raw body or control fields. Handler and independent Monitoring runtime remain unimplemented; envelope1.0 unchanged. |
 | v1.316 | 2026-10-25 | D-870: optional strict source sampled_at UTC, conservative100ms clock-bound lifetime, receiver monotonic expiry and implementation-derived swarm.reference_freshness; mixed peer and field UTC acceptance stay explicit, envelope1.0 unchanged. |
 | v1.315 | 2026-10-25 | D-869: replay unacknowledged events by immutable event_id/content; WELCOME watermark0 for unscoped legacy producers, memory/durable identity conflict parity. No new wire fields or envelope1.0 change; no durable outbox guarantee. |
 | v1.314 | 2026-10-25 | D-865: policy admission scope readback/toggle and bounded audit under `/api/fleet/policy-admission`; Fleet owns admission, the human-defined scope never relaxes rulebook law, and apps never self-approve. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
