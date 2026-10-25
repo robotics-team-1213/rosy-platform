@@ -26,7 +26,7 @@ FPS = 10
 
 
 def demo(seconds=5):
-    return [[float(i), -60.0, 50.0, 45.0, 10.0, 46.6] for i in range(seconds * FPS)]
+    return [[i * 0.5, -60.0, 50.0, 45.0, 10.0, 46.6] for i in range(seconds * FPS)]  # 5 units/s: guard speed
 
 
 def test_a_taught_cycle_splits_into_equal_episodes_around_a_held_reset(tmp_path):
@@ -35,8 +35,8 @@ def test_a_taught_cycle_splits_into_equal_episodes_around_a_held_reset(tmp_path)
     assert seg == {"A": [0, 30], "reset": [30, 40], "B": [40, 70]}
     frames = trajectory["frames"]
     assert frames[29] == frames[30] == frames[39]  # torque stays on at A's last pose through the reset
-    assert frames[40][0] == 30.0  # B starts where the demonstration continued
-    assert frames[49][0] == 39.0 and frames[69] == frames[49]  # B (10 frames) padded with its last pose
+    assert frames[40][0] == 15.0  # B starts where the demonstration continued
+    assert frames[49][0] == 19.5 and frames[69] == frames[49]  # B (10 frames) padded with its last pose
     path = tmp_path / "cycle.json"
     path.write_text(json.dumps(trajectory))
     assert t.load(path, fps=FPS)["sha256"]
@@ -46,6 +46,7 @@ def test_a_taught_cycle_splits_into_equal_episodes_around_a_held_reset(tmp_path)
     (lambda d: d.update(fps=30), "fps"),
     (lambda d: d["frames"][5].__setitem__(1, 140.0), "within"),
     (lambda d: d["frames"][5].__setitem__(1, float("nan")), "finite"),
+    (lambda d: d["frames"][5].__setitem__(1, d["frames"][4][1] + 2), "faster"),
     (lambda d: d["segments"].update(B=[40, 69]), "segments"),
     (lambda d: d.update(names=d["names"][:5]), "names"),
 ])
@@ -109,3 +110,12 @@ def test_the_replay_plugin_is_discoverable_by_its_dist_info_name():
     meta = (plugins / "lerobot_teleoperator_rosy_replay-0.1.0.dist-info/METADATA").read_text()
     assert "Name: lerobot_teleoperator_rosy_replay" in meta  # LeRobot imports dists named lerobot_teleoperator_*
     assert (plugins / "lerobot_teleoperator_rosy_replay.py").exists()
+
+
+def test_a_fast_hand_demonstration_is_slowed_to_the_guard_speed_on_the_same_path():
+    fast = [[i * 4.0, -60.0, 50.0, 45.0, 10.0, 46.6] for i in range(11)]  # 40 units/s
+    trajectory = t.compose(fast, FPS, split_s=0.5, end_s=1.1, reset_s=1, source={})
+    frames = trajectory["frames"]
+    assert not t.too_fast(frames, FPS)
+    a, b = trajectory["segments"]["A"], trajectory["segments"]["B"]
+    assert frames[a[1] - 1][0] == 16.0 and frames[b[0]][0] == 16.5 and max(f[0] for f in frames) == 40.0

@@ -270,9 +270,19 @@ def test_a_blocked_arm_stops_the_runner():
 
 def test_the_library_contract_is_enforced(tmp_path):
     import json
-    bad = library()
+    bad = {**library(), "fps": 2}  # 2 units per frame is within the guard speed at 2 fps
     bad["chunks"]["grasp_pinky"][0][1] = 130.0
     path = tmp_path / "lib.json"
     path.write_text(json.dumps(bad))
     with pytest.raises(SystemExit, match="within"):
         m.load_library(path)
+
+
+def test_a_library_faster_than_the_guard_streams_is_refused(tmp_path):
+    import json
+    path = tmp_path / "lib.json"
+    path.write_text(json.dumps({**library(), "fps": 30}))  # 2 units per frame at 30 fps = 60 units/s
+    with pytest.raises(SystemExit, match="faster than the guard"):
+        m.load_library(path)
+    path.write_text(json.dumps({**library(), "fps": 2}))
+    assert m.load_library(path)["fps"] == 2
