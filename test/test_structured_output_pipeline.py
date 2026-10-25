@@ -53,10 +53,9 @@ def test_deliberation_v2_judgment():
     from rosy.decision.deliberation.judgment import judgment_schema
     from rosy.decision.deliberation.profiles import BoundProfile
 
-    def body(facts):
-        problem = Problem('synthetic-no-robot', 'pipeline-' + facts, 'g1', 'line_follow', 1, ('e1',),
-                          ('human', 'reobserve'), 'INTERVENE', facts_json=json.dumps({'state': facts}),
-                          fleet_choice='human')
+    def body(case):
+        problem = Problem('synthetic-no-robot', 'pipeline-' + case, 'g1', 'line_follow', 1, ('e1',),
+                          ('human', 'reobserve'), 'INTERVENE')
         bound = BoundProfile(ollama.model_profile('p1'), problem.digest)
         return canonical({'problem': {**asdict(problem), 'input_hash': problem.digest}, 'profile_revision': 'p1',
                           'schema': judgment_schema(problem, bound), 'prior': [],
@@ -133,14 +132,21 @@ def test_qwen_review_completion_schema_against_plain_json(monkeypatch):
     import qwen_review_completion as completion
     endpoint = 'http://127.0.0.1:11434'
 
+    post, raw = completion.qwen_points._post, []
+    monkeypatch.setattr(completion.qwen_points, '_post', lambda *a, **k: raw.append(post(*a, **k)) or raw[-1])
+
     def proposed(seed):
         photo, mask = frame(seed)
-        points = completion.ask(photo, mask, 5, endpoint)
+        try:
+            points = completion.ask(photo, mask, 5, endpoint)
+        except ValueError as error:
+            raise ValueError(f"{error}; raw={raw[-1]['message']['content'][:200]}") from None
         return {name: len(values) for name, values in points.items()}
     seeds = [(f'seed-{s}', s) for s in range(3)]
-    run('qwen_completion_schema', seeds, proposed, lambda name, got: sum(got.values()) > 0)
-    monkeypatch.setattr(completion, 'SCHEMA', 'json')  # the previous wire, for comparison only
+    monkeypatch.setattr(completion, 'SCHEMA', 'json')  # the previous wire first, for comparison only
     try:
         run('qwen_completion_plain_json', seeds, proposed, lambda name, got: sum(got.values()) > 0)
     except AssertionError:
-        pass  # the comparison arm may break; only the schema arm is the product
+        pass
+    monkeypatch.undo()
+    run('qwen_completion_schema', seeds, proposed, lambda name, got: sum(got.values()) > 0)
