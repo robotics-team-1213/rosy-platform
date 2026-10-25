@@ -11505,3 +11505,9 @@ osy-d395-s1d\`.
 - 변경: `land.merge`가 착지된 ADR 공백 줄을 병합 커밋 안에서 지운다(pretest·차례 공통). `land_full.restore`는 병합 커밋이 git 병합과 자동 정리 기록만 다르면 FULL 통과를 유지한다. 대기 중 main 변화분이 이미 착지한 하네스 파일 때문에만 FULL로 오르면 guard와 매핑 시험만 돈다. 다른 착지가 차례를 쥐면 `--no-queue`를 거부한다.
 - 증거: `test/test_land.py`·`test_land_queue.py`·`test_land_record.py` 원격 통과(109 passed). 원인 근거는 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 6절.
 - gate 변화: 없음. 잠금 밖 시험·준비 순서 대기열은 다음 단계.
+
+## 2026-10-26 · uncommitted · fix(land): 다시 시도하면 실패한 시험 묶음만 다시 돈다
+
+- 변경: `run_tests`가 첫 NEW 실패에서 멈추지 않고 모든 invocation을 판정한 뒤 통과분을 `land_cache`에 남기고 실패를 모아 멈춘다. 한 invocation의 호스트가 끊겨도 나머지의 통과는 기록한다. LOAD-FLAKY 통과는 계속 기록하지 않는다.
+- 증거: `test/test_land.py` 원격 통과. 근거는 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 6절.
+- gate 변화: 없음.

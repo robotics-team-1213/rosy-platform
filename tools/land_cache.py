@@ -2,8 +2,8 @@
 
 On 2026-10-18 one large merge was landed in five tries (a network drop, a one-line fix of a NEW
 failure, main moving); each try re-ran the whole ~11,000-test FULL tier. Each invocation that
-passes (test/known_failures.py: 0 NEW, no LOAD-FLAKY rerun, every invocation of that run finished
-with usable evidence and no host lost) is appended to ``<git-common-dir>/rosy-land-cache.jsonl``,
+passes (test/known_failures.py: 0 NEW, no LOAD-FLAKY rerun, its own evidence usable: finished, host
+not lost) is appended, also when another invocation of the run failed or lost its host, to ``<git-common-dir>/rosy-land-cache.jsonl``,
 which every worktree of the clone shares. A later run skips an invocation when
 
 * exact: the same argv passed on the same git tree with the same test environment (the hash of

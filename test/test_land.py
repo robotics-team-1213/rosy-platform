@@ -900,7 +900,17 @@ def test_cache_never_keeps_a_failure_or_a_partial_run(cached, monkeypatch):
     monkeypatch.setattr(land.remote_pytest, "run", lost)  # the second invocation's host was lost
     with pytest.raises(land.Stop, match="exited 255"):
         run([["pkg/test"], ["pkg/test/test_a.py"]])
-    assert land.land_cache.entries(wt) == [], "the first invocation passed, but the run was partial"
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["pkg/test"]], "only the lost invocation reruns"
+
+
+def test_a_new_failure_still_keeps_the_invocations_that_passed_beside_it(cached):
+    """2026-10-25: a stop on the first NEW failure dropped every pass after it; the fix then reran them all."""
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red elsewhere")
+    with pytest.raises(land.Stop, match="NEW failure in other/test"):
+        run([["other/test"], ["pkg/test"]])
+    # the fix changes the tree; the selector's narrow reuse (ancestor..fix) then skips pkg/test
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["pkg/test"]]
 
 
 def test_cache_ignores_corrupt_lines_and_no_cache_reruns(cached, capsys):

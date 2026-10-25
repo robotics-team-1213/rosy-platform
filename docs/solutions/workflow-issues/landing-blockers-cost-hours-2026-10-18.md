@@ -167,6 +167,12 @@ took hours to land. Four separate things blocked it.
   `::test_a_merge_that_only_dropped_gap_lines_keeps_the_full_pass`,
   `::test_main_delta_escalated_only_by_landed_harness_files_runs_its_mapped_suites`,
   `::test_no_queue_is_refused_while_a_lander_holds_its_turn`.
+- **Retries rerun only what failed (2026-10-26):** `run_tests` stopped on the first NEW failure, so the passes
+  after it were never kept, and it kept nothing when any invocation lost its host. One fixed failure then reran
+  every invocation. Now every invocation is judged, each clean pass of its own usable evidence is kept
+  (`land_cache`), and the stop lists every failure at the end. LOAD-FLAKY passes are still not kept. Tests:
+  `test/test_land.py::test_a_new_failure_still_keeps_the_invocations_that_passed_beside_it`,
+  `::test_cache_never_keeps_a_failure_or_a_partial_run`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

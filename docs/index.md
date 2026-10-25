@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · fix(land): 다시 시도하면 실패한 시험 묶음만 다시 돈다
 - 2026-10-26 · uncommitted · fix(land): FULL를 다시 돌지 않는 차례, pretest 공백 정리, 차례 중 우회 거부
 - 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
 - 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
 - 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
-- 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인

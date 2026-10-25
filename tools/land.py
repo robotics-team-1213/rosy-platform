@@ -316,25 +316,31 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     if len(codes) != len(todo):
         raise Stop("incomplete remote results; not landing")
     print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
-    whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
-    for inv, log, code in zip(todo, logs, codes):
+    # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
+    # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
+    stops = []
+    for n, (inv, log, code) in enumerate(zip(todo, logs, codes), 1):
         if out(wt, "rev-parse", "HEAD") != head:
             raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
         if why := land_cache.unusable(code, log):
-            raise Stop(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
+            stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
+            continue
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
         print(check.stdout, end="")
         flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
-            wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run,
+            wt, inv, log, check.stdout, logdir, f"{round_no}-{n}", python, remote_pytest.run,
             tested_sha=head)
         if out(wt, "rev-parse", "HEAD") != head:
             raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
         if check.returncode != 0 and not flaky:
-            raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
-        if check.returncode == 0 and whole:
+            stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+            continue
+        if check.returncode == 0:
             keep(inv, log)
         done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
+    if stops:
+        raise Stop("\n".join(stops))
     if args.node:
         mjs = sorted(str(p.relative_to(wt).as_posix()) for inv in invocations for t in inv
                      if _test_dir(t) for p in (wt / _test_dir(t) / "web").glob("**/*.mjs"))
