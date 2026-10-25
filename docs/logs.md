@@ -11521,6 +11521,12 @@ osy-d395-s1d\`.
 - 증거: 모델 PC 실제 모델 — deliberation 0/3(HTTP 400) → 1/3 → 3/3, conversation 46/46, operator 26/26, judge seat 4/4, qwen 3/3. 관련 단위 시험 원격 583 passed.
 - gate 변화: 없음(AI PC 재배포·수용은 별도). CE 새 교훈 기록 — `docs/solutions/runtime-errors/ollama-refused-empty-enum-and-judgment-schema-allowed-steps-the-validator-refuses-2026-10-25.md`.
 
+## 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
+
+- 변경: ADR D-883(D-876 §5·D-524 보충)과 Log 행. API reference v1.320에 guard `resources.disk`/`disk_low`/`gpu`, `disk-low` 상태, Service Control `clean-storage`(ai·model만)를 등록했다.
+- 증거: 원격 시험으로 확인한다. 실제 PC 재설치·정리 실행은 하지 않았다.
+- gate 변화: 없음. 각 PC의 guard-remote·helper 재설치 전에는 값이 null이고 정리 요청은 거부된다. CE: 해당 없음 — 원인(정리 주기보다 빠른 디스크 소모)은 기존 기록과 `fix/test-host-disk`가 다룬다.
+
 ## 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
 
 - 변경: `tools/hooks/pre-push`가 `git config rosy.publishOnly true`인 clone에서 `publish/main-*` 밖의 브랜치 push를 거절한다(삭제는 통과, 사고 대응은 `ROSY_PUSH_REASON`). 팀원 clone은 설정이 없어 영향이 없다. `git-workflow.md`의 옛 `git push origin main` 순서와 `rosy-release-push` 1단계를 D-868 게시 절차로 고쳤다.

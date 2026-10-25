@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+- 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
 - 2026-10-25 · uncommitted · 구조화 출력 공통 어댑터와 실제 모델 파이프라인 시험 (D-878)
 - 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
 - 2026-10-25 · a401f49f6d · D-879 GPT media prototype 경계
-- 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
