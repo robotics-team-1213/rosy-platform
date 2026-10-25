@@ -3,10 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 import re
 import threading
 
-from storage_jobs import StorageJobs
-from storage_pool import StoragePool
-
-
 PREFIX = '/api/learning/storage/'
 
 
@@ -17,6 +13,8 @@ class StorageWeb:
             raise ValueError('invalid optional storage pool configuration')
         if jobs is None and config is not None and config.get('enabled', True):
             if accounts is None: raise ValueError('storage pool requires collaboration accounts')
+            from storage_jobs import StorageJobs
+            from storage_pool import StoragePool
             pool = StoragePool(db, dict(config, project_id=storage.project_id), accounts)
             jobs = StorageJobs(storage, pool, accounts)
         if jobs is not None and (accounts is None or jobs.project_id != accounts.project_id
