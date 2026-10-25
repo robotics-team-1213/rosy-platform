@@ -221,3 +221,23 @@ def test_cli_check_rejects_a_bundle_on_the_other_boot_before_network(tmp_path, m
                          "--hardware-serial", SERIAL, "--network", "check"]) == 1
     assert calls == []
     assert "OS_STATE_HOLD" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("change", ["missing_factory", "invalid_factory", "invalid_initialization"])
+def test_cli_check_validates_common_phase_before_network(tmp_path, monkeypatch, capsys, change):
+    root_a, _, common, _ = shared_roots(tmp_path, monkeypatch)
+    if change == "missing_factory":
+        (common / "state/factory.json").unlink()
+    elif change == "invalid_factory":
+        (common / "state/factory.json").write_text("{}", encoding="ascii")
+    else:
+        (common / "state/initializing.json").write_text("{}", encoding="ascii")
+    profile = root_a / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection"
+    profile.write_text("[connection]\nid=rosy-site-sta\n", encoding="ascii")
+    module = _module()
+    calls = []
+    monkeypatch.setattr(module, "_nmcli", lambda *args: calls.append(args) or (0, ""))
+    monkeypatch.setattr(module, "site_wifi_up", lambda _: False)
+    assert module._main(["--root", str(root_a), "--hardware-serial", SERIAL, "--network", "check"]) == 1
+    assert calls == []
+    assert "OS_STATE_HOLD" in capsys.readouterr().out
