@@ -6,12 +6,12 @@
 
 | PR | 공개 merge commit | 새로 실행한 검사와 실제 결과 |
 |---|---|---|
-| [201](https://github.com/robotics-team-1213/rosy-platform/pull/201) · Learning 산출물·private SIM 설정 보존 | `bcad6a076ed1d0d42ee2b211b232a11e85653264` | API·명시 Chromium 26 PASS, 설치기 48 PASS. 최종 pre-push 519 + 9,300 PASS / 1,148 SKIP / 0 NEW. PR CI 40178085593 및 merge CI 40178966788 성공 |
-| [202](https://github.com/robotics-team-1213/rosy-platform/pull/202) · import 보고서 | `02c80a7c20cc10819fc25f0effe51c52192cc334` | 원격 289 PASS / xacro 1 SKIP. 최종 pre-push 519 + 334 PASS / 1 SKIP / 0 NEW. PR CI 40179621531 성공 |
-| [203](https://github.com/robotics-team-1213/rosy-platform/pull/203) · bounded run manager | `e231f97b06766661a96cd0e3530a7864fe928fd9` | 원격 359 PASS / 1 SKIP. 최종 pre-push 519 + 421 PASS / 1 SKIP / 0 NEW. PR CI 40180166004 및 merge 전체 CI 40183287809의 20개 잡 모두 성공 |
-| [204](https://github.com/robotics-team-1213/rosy-platform/pull/204) · Fleet 비동기 화면 관측 | `e7870d279ba918d3c6f7ac211d46a72b65cd0cac` | 최종 head 명시 Chromium 23 PASS / 0 SKIP / 0 NEW. pre-push 519 + 4,320 + 6,202 PASS / 516 SKIP / 5 subtest PASS / 0 NEW. PR CI 40182103687 성공 |
-| [205](https://github.com/robotics-team-1213/rosy-platform/pull/205) · contact producer·판정기·기존 증거 | `f2868aab3281dc0f071595f0e7257959a740a25a` | 원격 365 PASS / 1 SKIP. 최종 pre-push 519 + 613 PASS / 1 SKIP / 0 NEW. PR CI 40183526370 및 merge 전체 CI 40184154647의 20개 잡 모두 성공 |
-| [206](https://github.com/robotics-team-1213/rosy-platform/pull/206) · remote receipt·snapshot CLI | `9cbc1f0598496b72807d92ec9c7f8d81b9b4ed09` | 원격 CLI·Isaac·HTTP 399 PASS / 1 SKIP. 최종 pre-push 519 + 630 PASS / 1 SKIP / 0 NEW. PR CI 40184423341 및 merge 전체 CI 40184908139의 20개 잡 모두 성공 |
+| [201](https://github.com/robotics-team-1213/rosy-platform/pull/201) · Learning 산출물·private SIM 설정 보존 | commit `bcad6a076ed1d0d42ee2b211b232a11e85653264` | API·명시 Chromium 26 PASS, 설치기 48 PASS. 최종 pre-push 519 + 9,300 PASS / 1,148 SKIP / 0 NEW. PR CI 40178085593 및 merge CI 40178966788 성공 |
+| [202](https://github.com/robotics-team-1213/rosy-platform/pull/202) · import 보고서 | commit `02c80a7c20cc10819fc25f0effe51c52192cc334` | 원격 289 PASS / xacro 1 SKIP. 최종 pre-push 519 + 334 PASS / 1 SKIP / 0 NEW. PR CI 40179621531 성공 |
+| [203](https://github.com/robotics-team-1213/rosy-platform/pull/203) · bounded run manager | commit `e231f97b06766661a96cd0e3530a7864fe928fd9` | 원격 359 PASS / 1 SKIP. 최종 pre-push 519 + 421 PASS / 1 SKIP / 0 NEW. PR CI 40180166004 및 merge 전체 CI 40183287809의 20개 잡 모두 성공 |
+| [204](https://github.com/robotics-team-1213/rosy-platform/pull/204) · Fleet 비동기 화면 관측 | commit `e7870d279ba918d3c6f7ac211d46a72b65cd0cac` | 최종 head 명시 Chromium 23 PASS / 0 SKIP / 0 NEW. pre-push 519 + 4,320 + 6,202 PASS / 516 SKIP / 5 subtest PASS / 0 NEW. PR CI 40182103687 성공 |
+| [205](https://github.com/robotics-team-1213/rosy-platform/pull/205) · contact producer·판정기·기존 증거 | commit `f2868aab3281dc0f071595f0e7257959a740a25a` | 원격 365 PASS / 1 SKIP. 최종 pre-push 519 + 613 PASS / 1 SKIP / 0 NEW. PR CI 40183526370 및 merge 전체 CI 40184154647의 20개 잡 모두 성공 |
+| [206](https://github.com/robotics-team-1213/rosy-platform/pull/206) · remote receipt·snapshot CLI | commit `9cbc1f0598496b72807d92ec9c7f8d81b9b4ed09` | 원격 CLI·Isaac·HTTP 399 PASS / 1 SKIP. 최종 pre-push 519 + 630 PASS / 1 SKIP / 0 NEW. PR CI 40184423341 및 merge 전체 CI 40184908139의 20개 잡 모두 성공 |
 
 각 PR은 작성자와 다른 읽기 전용 에이전트가 최종 base/head를 검토했고, 게시 head 변경 때 재검토했다. 원격 시험은 커밋된 SHA에서 실행하고 각 로그를 `test/known_failures.py`와 비교했다. SKIP은 실행 성공으로 계산하지 않았다. 기존 a46 소스·시험·동결 기록은 좁은 변경으로 공개 main에 반영했으며, 로컬 main 전체를 공개 main이나 운영 payload에 합치지 않았다. 사용자 승인과 서버 설정에 따라 merge commit으로 병합했다.
 
