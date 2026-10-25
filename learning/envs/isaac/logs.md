@@ -320,3 +320,9 @@
 - 변경: 기존 개발 기준 a46daee90b7의 import_report·선택적 import_omx 보고서·회귀를 공개 accepted source에 그대로 옮겼다. 기존 벤더 자산과 importer를 유지한다. 보고서는 정상 SDK 정리 뒤 배타적으로 생성하며 모델·관절·자산·프레임 증거를 별도 검증한다.
 - 증거: 원래 소스와 세 파일의 canonical Git blob 일치를 확인하고 이 포트의 커밋된 SHA에 대한 원격 검사·독립 검토·CI를 별도로 결속한다. 과거 SDK 성공을 새 포트의 실행 성공으로 바꾸지 않는다.
 - gate 변화: 없음. 새 SDK 실행·접촉 과제·학습 정책 평가·실물 제어는 수행하지 않았다.
+
+## 2026-10-25 · uncommitted · 고정 Isaac 실행 관리자의 공개 소스 포트
+
+- 변경: 개발 기준 a46daee90b7의 run admission·binding·catalog·control·store·system·worker와 다섯 회귀 파일을 공개 소스에 연결했다. contact producer·verifier가 아직 없으므로 접촉 시나리오만 일시 비활성화하고 거절 회귀를 추가했다. 나머지 원래 검증·잠금·소유권·불변 증거·복구 동작을 유지한다.
+- 검증: 커밋 SHA에 결속한 원격 Isaac 패키지와 선택된 guard, 독립 base/head 검토 및 CI를 확인한다. 기존 SDK 실행은 이 새 공개 SHA의 실행으로 재명명하지 않는다.
+- gate 변화: 없음. 이 단계의 실행 가능 시나리오는 모델 import뿐이며 SDK 신규 실행·학습·실물 명령을 수행하지 않았다.
