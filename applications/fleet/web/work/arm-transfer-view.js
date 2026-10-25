@@ -18,7 +18,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
     state = node("p"), detail = node("dl", "", "work-detail");
   panel.id = "arm-transfer-work"; heading.id = "arm-transfer-heading";
   panel.setAttribute("aria-labelledby", heading.id); panel.hidden = !active;
-  input.id = "arm-transfer-id"; input.name = "mission_id"; input.required = true; input.maxLength = 160;
+  input.id = "arm-transfer-id"; input.name = "mission_id"; input.required = true; input.maxLength = 192;
   label.htmlFor = input.id; label.append(input);
   read.id = "arm-transfer-read"; admit.id = "arm-transfer-admit";
   for (const button of [read, admit]) button.setAttribute("type", "button");
@@ -59,7 +59,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
     if (!active || busy) return;
     const id = input.value.trim();
     version++; job = null; control = null; attempted = false; show();
-    if (!id || id.length > 160) { state.textContent = "인계받은 작업 식별자를 입력하세요."; return; }
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$/.test(id)) { state.textContent = "인계받은 작업 식별자를 확인하세요."; return; }
     const current = version, life = scope.capture(); busy = true; paint(); state.textContent = "원본 조회 중";
     try {
       const result = await call(`/api/fleet/arm-transfers/jobs/${encodeURIComponent(id)}`); life.check();

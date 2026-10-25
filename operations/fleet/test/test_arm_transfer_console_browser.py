@@ -111,6 +111,7 @@ def test_real_http_console_admits_external_proposal_with_independent_identity(ar
     import threading
     import time
     import uvicorn
+    from urllib.parse import quote
     from browser_harness import launch_options, safe_listener
     from playwright.sync_api import expect, sync_playwright
 
@@ -137,8 +138,12 @@ def test_real_http_console_admits_external_proposal_with_independent_identity(ar
                 errors, posts = [], []
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.on("request", lambda request: posts.append(request.url) if request.method == "POST" else None)
+                handoff = "/console?view=work&arm_transfer=" + proposal["mission_id"]
+                page.goto(origin + handoff)
+                expect(page.locator("#fleet-login")).to_have_attribute("href", "/console/login?return=" + quote(handoff, safe=""))
+                assert not posts and port.calls == []
                 page.add_init_script("sessionStorage.setItem('rosy-console-token', 'operator-secret')")
-                page.goto(origin + "/console?view=work&arm_transfer=" + proposal["mission_id"])
+                page.reload()
                 admit = page.locator("#arm-transfer-admit")
                 expect(admit).to_be_visible()
                 expect(admit).to_be_enabled()
