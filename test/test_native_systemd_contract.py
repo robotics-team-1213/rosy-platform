@@ -367,7 +367,7 @@ DECLARED_WRITES = {
         # SymlinkStore.set: temporary ".<name>.new" link, then os.replace.
         "/opt/rosy/current", "/opt/rosy/previous", "/opt/rosy/.current.new",
     },
-    "rosy-sd-provision.service": set(),
+    "rosy-sd-provision.service": {"/run/rosy-os-state", "/var/lib/rosy-device/state/config.lock"},
     "rosy-core.service": {
         # core_common/config.py LOCAL_CONFIG_PATH / overlay_path (API writes).
         "$HOME/.rosy/rosy.yaml",
@@ -668,10 +668,16 @@ PROGRAM_SOURCES = {
 
 DECLARED_READS["rosy-os-tailnet.service"] = DECLARED_READS["rosy-os-storage.service"]
 DECLARED_READS["rosy-sd-provision.service"] = DECLARED_READS["rosy-os-storage.service"]
+DECLARED_READS["rosy-sd-provision.service"] |= {"/proc/sys/kernel/hostname", "/proc/sys/kernel/random/boot_id",
+    "/etc/timezone", "/usr/share/zoneinfo", "/etc/localtime"}
 DECLARED_READS["rosy-tailscale-join.service"] = DECLARED_READS["rosy-os-storage.service"]
 PROGRAM_SOURCES["rosy-os-tailnet.service"] = [*PROGRAM_SOURCES["rosy-os-storage.service"],
                                            "deploy/robot/pinky_pro/native/os_state_config.py"]
-PROGRAM_SOURCES["rosy-sd-provision.service"] = PROGRAM_SOURCES["rosy-os-storage.service"]
+PROGRAM_SOURCES["rosy-sd-provision.service"] = [*PROGRAM_SOURCES["rosy-os-storage.service"],
+    "deploy/robot/pinky_pro/native/os_state_config.py", "deploy/robot/pinky_pro/native/os_state_ready.py"]
+PROGRAM_SOURCES["rosy-auto-update.service"] += PROGRAM_SOURCES["rosy-sd-provision.service"]
+DECLARED_READS["rosy-auto-update.service"] |= DECLARED_READS["rosy-sd-provision.service"]
+DECLARED_WRITES["rosy-auto-update.service"].add("/var/lib/rosy-device/state/config.lock")
 PROGRAM_SOURCES["rosy-tailscale-join.service"] += PROGRAM_SOURCES["rosy-os-tailnet.service"]
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
