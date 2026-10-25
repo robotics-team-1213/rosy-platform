@@ -52,3 +52,11 @@ Learning 홈의 **원격 보관과 로컬 사본**에서 등록 위치, 그 안�
 - 재연결로 generation이 바뀌거나 권한이 철회되면 다른 자격증명으로 이어가지 않는다. 이력과 자료를 보존하고 기존 권한 경계에서 운영 복구 범위를 정한다.
 
 host 회귀, 실제 HF 왕복, Isaac SDK 실행, 모델 평가와 실물 수용은 각각 별도 증거로 기록한다.
+
+## 착지 전 소스 검증 · 2026-10-26
+
+- `07943e133d`: pool/jobs/hub/source 및 세 문서 하네스 시험 원격 72 passed, 0 skipped, NEW0. 같은 revision에서 실제 브라우저·화면 구조·API 버전 계약 21 passed, 0 skipped, NEW0. 취소 원자성, 다중 사용자 캐시 예산, 늦게 추가된 파일, 디렉터리 교체, 불명확한 묶음 복구와 학습·독립 평가의 소비자 lease를 포함한다.
+- `cf7ad3f529`: 저장 모듈·OMX 전체 host suite·Isaac worker 497 passed / 20 skipped, NEW0. 이후 `4030c29401`에서 독립 평가 경로 보호를 추가하고 관련 저장·OMX·하네스 시험을 재실행했다. 의존성별 실제 학습 시험의 skip은 통과로 계산하지 않는다.
+- FULL 선택을 축소하지 않고 `1e30ca7d1c`의 24개 invocation을 모두 원격 실행했다. 원시 결과는 33,776 passed / 2,222 skipped / 7 failed다. 이번 변경의 6개 실패는 SQLite descriptor 해제·로그/ADR/생성 index·화면 button 의미·API changelog 행을 수정한 뒤 위 72/21 시험으로 확인했다. 남은 G1 timing은 기존 quarantine 항목이며 `4030c29401` 단독 실행의 최초 실패 뒤 공식 1회 rerun에서 통과했다(NEW0 / FLAKY1). 원시 FULL 전체 통과로 표시하지 않는다.
+- 독립 전체 리뷰와 후속 수정 리뷰에서 중대한 미해결 지적은 없다. 실제 HF 왕복·Isaac SDK·모델 fit·운영 데이터 회수·서명 artifact 설치·장치 수용은 수행하지 않았다. 운영 설정은 꺼진 예제를 제공하며, 실제 활성화는 별도 운영 작업이다.
+- CE: 해당 없음 — 복구·권한·소비자 수명 판단은 D-884, 이 안내와 회귀 시험에 보존한다.

@@ -3473,3 +3473,10 @@
 - 증거: source `bc9d3f81c0`의 보관·회수·Isaac disk guard 원격 57건 통과, UI/복구 `49d3c2bc9a` 원격 63건 통과. 별도 누락 모듈 부정 시험 5건의 RED를 확인했으며, 이번 필수 목록의 최종 검증은 후속 committed-SHA 시험 기록에 남긴다.
 - gate 변화: source 입력의 완결성을 검증하는 변경이다. signed artifact 설치·실제 HF 왕복·Isaac SDK 실행·실물 수용으로 계산하지 않는다.
 - CE: 해당 없음 — 규칙과 근거는 D-884·회귀·운영 안내에 보존한다.
+
+## 2026-10-26 · 07943e133d · Learning 저장 입력과 복구의 최종 source 검증 (D-884)
+
+- 변경: model-code 필수 storage 입력, optional HF dependency pin 및 꺼진 설정 예제를 제공하고 취소·묶음 복구·소비자 lease·공유 cache 경계를 보완했다.
+- 증거: 배포 archive 누락 부정 시험을 포함한 release 235 passed; 최종 pool/jobs/hub/source와 문서 하네스 72 passed/0 skipped/NEW0, browser·화면·API 계약 21 passed/0 skipped/NEW0. 상세 revision 및 FULL 원시 실패·후속 확인은 learning/curation/perception/docs/storage-pool.md의 착지 전 검증 기록을 따른다.
+- gate 변화: 소스 closure 증거만 추가한다. 실제 HF 왕복·Isaac SDK·signed artifact 설치·운영 자료 삭제·장치 수용은 수행하지 않았고 운영 서비스는 활성화하지 않았다.
+- CE: 해당 없음 — 복구 판단은 구현·회귀 시험·D-884와 운영 안내로 확인할 수 있다.
