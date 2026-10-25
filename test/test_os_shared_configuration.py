@@ -14,6 +14,10 @@ def _card(root, text):
     path = root / "run/rosy-provision-boot/rosy-config.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("schema_version: 1\n" + text, encoding="utf-8")
+    # Older roots may retain their own boot file; it must not override the shared input on fallback.
+    legacy = root / "boot/firmware/rosy-config.yaml"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_bytes(path.read_bytes())
     return path
 
 
