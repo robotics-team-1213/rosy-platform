@@ -4761,3 +4761,10 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · c5b4bcf1b3 · D-875 최신 main 통합 검증
+
+- 변경: 최신 main의 motor_health API 선언을 정본 port에 보존하고 양쪽 기록·안전 등록·기존 크기 축소를 유지했다. D-868 착지 뒤 임시 gap을 제거했다.
+- 증거: 독립 안전 소스 리뷰 승인, 원격 architecture와 Fleet 15개 suite 590 passed, 5 skipped, NEW0/known0/flaky0. [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 원본 로그 위치와 커밋을 남겼다.
+- gate 변화: 없음. 공식 FULL·착지·배포·실물 수용은 별도다.
+- 교훈: 기존 구조 검사 선행 교훈에 반영된 D-875 경계 판단을 유지한다.

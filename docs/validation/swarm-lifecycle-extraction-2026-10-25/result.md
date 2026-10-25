@@ -35,3 +35,13 @@ Logs: `%LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt`, `green-final
 Static generate/lint passed (0 errors, 34 existing warnings); staged diff/syntax and size-range passed. Official dry-run exit0 selects FULL; actual FULL/landing remain pending. All 22 nonconstructor lifecycle method ASTs equal source `9f9fc5846d`, and CORE manager/reference_stream/test_swarm Git blobs equal original prepared C1 source `2bea6f4d1e`. External `source-preservation.json` records the exact blob IDs. Independent implementation review approved the actual final tree and is recorded in its Safety-Review trailer; it does not attest tests or field behavior.
 
 CE: existing lesson update coordinated with root's separate queued-FULL guard tooling unit. Verified C1 case facts are supplied outside Git in `ce-case-draft.md`; this branch does not duplicate or concurrently edit that lesson. No deployment, clock convergence, robot motion or field acceptance.
+
+## Latest main integration
+
+Merged verified local main commit `ced1e7681e` into source commit `c5b4bcf1b3`. The separate landing-tool correction has already landed locally; its latest FULL had 24 invocations with NEW0, including one existing quarantined timing failure that passed on rerun. That tooling round had no browser opt-in invocation and is not C1 FULL evidence.
+
+The incoming `RobotClient.motor_health()` declaration is preserved at the D-875 canonical API port. The other critical C1 source blobs match prepared commit `f289daf3e3`; incoming station/anchor implementations are retained. Both parent journals retain every nonempty line. Main's existing size shrink values remain, with only the two C1 manager/session ratchet rows removed. The already-landed D-868 gap is removed; absent reserved ADRs remain gaps.
+
+Independent source review approved commit `c5b4bcf1b3`. On that exact committed source, the entire architecture suite and the same 15 Fleet suites passed remotely: **590 PASS, 5 SKIP, NEW0/known0/flaky0**, runner exit0. Raw logs: `rosy-c1-boundary/current-main-green/run-1.txt`, `current-main-green-runner.txt` and `current-main-known.txt` outside Git. Generate/lint reported 0 errors; the final run retained 35 warnings. The 11-commit size range passed. Parent-to-parent whitespace diagnostics inherited unchanged main files are not new merge edits.
+
+Official C1 FULL and landing follow separately. No device, clock-precision, browser or field acceptance is inferred. CE: existing structural-guard lesson already records this boundary correction; the new merge and test evidence extends this verification record.
