@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 공급암 S 교사 셀을 로컬 main에 착지, 교사 경로를 guard 안으로
+- 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
 - 2026-10-25 · uncommitted · queued FULL pretest 구조 검사 우선
 - 2026-10-25 · uncommitted · feat(policy-runner): D-864 반정밀도 지연 재측정
 - 2026-10-25 · uncommitted · docs(plans): D-865 P2 분리 표시
-- 2026-10-25 · uncommitted · 시간 측정·배포 검증의 소스 귀속 교훈
-- 2026-10-25 · uncommitted · docs(reference): v1.314 변경 이력 표행 추가
