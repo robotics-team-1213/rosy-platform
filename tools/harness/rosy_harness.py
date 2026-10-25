@@ -30,6 +30,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling sim2real (D-480), perception_gaps, also when loaded by path
 import perception_gaps  # noqa: E402
 import sim2real  # noqa: E402
+from generated_records import _normalize, check as _check_records, write as _write_records  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import worktrees  # noqa: E402  (D-761: tools/worktrees.py, the .worktrees/ cap warning)
 from adr_gaps import (  # noqa: E402,F401
@@ -149,10 +150,6 @@ GENERATED_MARK = (
 
 class HarnessError(ValueError):
     """A harness record cannot be read at all."""
-
-
-def _normalize(text: str) -> str:
-    return text.removeprefix("﻿").replace("\r\n", "\n")
 
 
 def _adr_number(adr_id: str) -> int:
@@ -584,23 +581,11 @@ def check_generated(repo: Path) -> list[str]:
         targets = generated_targets(repo)
     except (ValueError, OSError, yaml.YAMLError) as exc:
         return [f"cannot render: {exc}"]
-    problems = []
-    for path, content in targets.items():
-        rel = path.relative_to(repo).as_posix()
-        if not path.is_file():
-            problems.append(f"{rel}: missing")
-        elif _normalize(path.read_text(encoding="utf-8")) != content:
-            problems.append(f"{rel}: stale")
-    return problems
+    return _check_records(repo, targets)
 
 
 def generate(repo: Path) -> list[Path]:
-    written = []
-    for path, content in generated_targets(repo).items():
-        if not path.is_file() or _normalize(path.read_text(encoding="utf-8")) != content:
-            path.write_text(content, encoding="utf-8", newline="\n")
-            written.append(path)
-    return written
+    return _write_records(repo, generated_targets(repo))
 
 
 # --- lint ------------------------------------------------------------------

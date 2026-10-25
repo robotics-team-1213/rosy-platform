@@ -8,6 +8,7 @@ Standard library only.
 from __future__ import annotations
 
 import difflib
+import json
 import os
 import re
 import subprocess
@@ -21,6 +22,49 @@ ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; abse
 ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
 GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
 ENV = {**os.environ, "PYTHONUTF8": "1"}
+
+
+def generate_records(wt: Path, python: str, harness: str) -> list[str]:
+    """Use this checkout's renderer; return only its declared, written paths."""
+    root = wt.resolve()
+    script = (wt / harness).resolve()
+    if not script.is_relative_to(root) or ".git" in script.relative_to(root).parts:
+        raise ValueError("harness must belong to the worktree")
+    program = """
+import json, runpy, sys
+from pathlib import Path
+repo, script = Path(sys.argv[1]).resolve(), Path(sys.argv[2])
+sys.path.insert(0, str(script.parent))
+namespace = runpy.run_path(str(script))
+targets = namespace["generated_targets"](repo)
+for path in targets:
+    resolved = path.resolve()
+    if (resolved == repo or not resolved.is_relative_to(repo)
+            or ".git" in resolved.relative_to(repo).parts
+            or (resolved.exists() and not resolved.is_file())):
+        raise ValueError("unsafe generated target: " + str(path))
+written = namespace["generate"](repo)
+print(json.dumps({"targets": [p.resolve().relative_to(repo).as_posix() for p in targets],
+                  "written": [p.resolve().relative_to(repo).as_posix() for p in written]}))
+"""
+    result = subprocess.run([python, "-c", program, str(root), str(script)], cwd=wt,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
+    if result.returncode:
+        raise ValueError(f"canonical generation failed:\n{(result.stdout + result.stderr)[-3000:]}")
+    data = json.loads(result.stdout)
+    targets, written = data["targets"], data["written"]
+    if not isinstance(targets, list) or not isinstance(written, list):
+        raise ValueError("invalid canonical generation result")
+    for rel in targets + written:
+        if not isinstance(rel, str) or not rel:
+            raise ValueError("invalid generated path")
+        path = (root / rel).resolve()
+        if path == root or not path.is_relative_to(root) or ".git" in path.relative_to(root).parts:
+            raise ValueError(f"unsafe generated path: {rel}")
+    if not set(written).issubset(targets):
+        raise ValueError("generator wrote undeclared targets")
+    print(f"[generate] {len(written)} canonical record(s)", flush=True)
+    return written
 
 
 def resolver(path: str) -> str | None:
