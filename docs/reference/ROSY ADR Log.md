@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-874 | Learning 승격 요청 묶음 — 확정 정답 평가 근거를 봉인해 넘기고, 승인은 Fleet에 둔다 (D-857 보충) | Proposed (2026-10-25) |
 | D-868 | 로컬 main에 먼저 착지하고, 공개 main에는 그 로컬 main을 merge commit으로 올린다 | Accepted (2026-10-25) |
 | D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
 | D-870 | 군집 원본 자세 시각과 수신측 단조 시계 만료 | Accepted for implementation (2026-10-25) |

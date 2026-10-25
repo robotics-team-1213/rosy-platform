@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'training/omx'))
+import camera_reference
 import collection_intake as intake
 import native_cycle as cycle
 import native_review as native
@@ -128,10 +129,14 @@ def main():
     preparation.add_argument('--completed-only', action='store_true')
     preparation.add_argument('--camera-reference', action='append', default=[], metavar='ROLE=PATH',
                              help='D-792 camera setup reference JSON per camera role; adds shadow checks')
-    native_prep = commands.add_parser('prepare-native', help='sealed leader recording to a prepared intake (D-848)')
+    native_prep = commands.add_parser('prepare-native', help='sealed leader or replay-teacher recordings to a prepared intake (D-848)')
     native_prep.add_argument('collections', nargs='+', type=Path)
     native_prep.add_argument('--out', type=Path, required=True)
     native_prep.add_argument('--repo-id', required=True)
+    native_prep.add_argument('--rig-revision', help='scripted_teacher only: the bench layout the operator names')
+    native_prep.add_argument('--calibration-revision', help='scripted_teacher only: the calibration the operator names')
+    native_prep.add_argument('--camera-reference', action='append', metavar='ROLE=PATH',
+                             help='D-792 approved <state>/camera-setup/<revision>.json for one camera role; repeat per role')
     training = commands.add_parser('train')
     training.add_argument('prepared', type=Path)
     training.add_argument('--decisions', type=Path, required=True)
@@ -148,9 +153,12 @@ def main():
     try:
         if args.command == 'prepare':
             result = prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only,
-                             camera_references=intake.camera_references(args.camera_reference))
+                             camera_references=camera_reference.parse(args.camera_reference))
         elif args.command == 'prepare-native':
-            receipt = intake.prepare_native(args.collections, args.out, args.repo_id)
+            receipt = intake.prepare_native(args.collections, args.out, args.repo_id,
+                                            rig_revision=args.rig_revision,
+                                            calibration_revision=args.calibration_revision,
+                                            camera_references=camera_reference.parse(args.camera_reference))
             result = dict(prepared_root=str(args.out.resolve()), episodes=len(receipt['episodes']),
                           reader_verified=receipt['reader_verified'], review_required=True,
                           uploaded=False, device_execution=False)

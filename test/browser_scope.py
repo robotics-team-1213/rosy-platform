@@ -77,7 +77,8 @@ SIM = ["test/learning/perception/test_sim_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
 ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py"]
 TASKS = ["test/learning/perception/test_learning_tasks_browser.py"]
-STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/learning/perception/test_vlm_judge_browser.py"]
+STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/learning/perception/test_vlm_judge_browser.py",
+          "test/learning/perception/test_promotion_request_browser.py"]
 LEARNING = OMX_LEARNING + CAMERA + SIM + PIPELINE + ACCOUNTS + TASKS + STAGES
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
@@ -119,7 +120,7 @@ SCOPE: dict[str, list[str]] = {
     **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS
        for name in ("learning.html", "learning.js")},
     **{f"learning/curation/perception/{name}": STAGES for name in
-       ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
+       ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "promotion_request.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
         "review_app_web/vlm.css", "review_app_web/evaluate.html", "review_app_web/evaluate.js",
         "review_app_web/workspaces.js")},
     "learning/curation/perception/review_app_web/workspaces.html": OMX_LEARNING + STAGES,

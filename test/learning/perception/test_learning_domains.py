@@ -73,6 +73,22 @@ def test_object_omx_sim_and_vlm_count_only_what_exists():
     assert failed['blocked'] == 'SIM 실행 연결을 확인하세요.'
 
 
+def test_truth_tiers_cap_the_confirm_queue_and_omx_has_no_provisional():
+    rows = by_id(domains(pipeline=progress(), pixel_counts={'approved': 1, 'pending': 3, 'excluded': 0},
+                         drafts={'object': list(range(5, 60)), 'pixel': [7]},
+                         **dict(EMPTY, counts={'approved': 2, 'pending': 60, 'excluded': 0},
+                                items=[{'id': 'a', 'kind': 'omx'}, {'id': 'b', 'kind': 'omx'}], omx_reviewed=['a'],
+                                vlm_counts={'total': 4, 'labelled': 1, 'excluded': 1, 'provisional': 2})))
+    assert rows['object']['truth'] == {'confirmed': 2, 'provisional': 50, 'waiting': 10, 'over_cap': 5,
+                                       'href': '/?filter=pending&frame=5', 'reason': None}
+    assert rows['lane']['truth'] == {'confirmed': 1, 'provisional': 1, 'waiting': 2, 'over_cap': 0,
+                                     'href': '/pixels?filter=pending&frame=7', 'reason': None}
+    omx = rows['omx']['truth']
+    assert (omx['confirmed'], omx['provisional'], omx['waiting'], omx['href']) == (1, 0, 1, None) and omx['reason']
+    assert rows['vlm']['truth']['provisional'] == 2 and rows['vlm']['truth']['waiting'] == 0  # audited, not capped
+    assert rows['sim']['truth'] is None and rows['decision']['truth'] is None
+
+
 def test_sim_row_shows_the_latest_run_stage_evidence_and_opens_that_run():
     run_id = 'e' * 32
     sim = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [
