@@ -37,6 +37,7 @@ from learning_tasks import Tasks
 from review_ai_jobs import Jobs
 from review_store import Conflict, ReviewStore
 from review_decisions import make_decisions_server, serve_review
+from storage_web import StorageWeb
 from learning_control import Control, ControlConflict
 
 STATIC = Path(__file__).with_name('review_app_web')
@@ -85,7 +86,7 @@ def check_link(url):
     return url
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None):
     check_bind_host(host)
     if workspace_links is not None:
         workspace_links = check_workspace_links({'schema': WORKSPACE_LINKS_SCHEMA, 'workspaces': workspace_links})
@@ -105,6 +106,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
         omx_center.tasks = tasks
     if storage and storage.project_id != project:
         raise ValueError('storage project must match workspace project')
+    storage_web = StorageWeb(storage, accounts, storage_jobs, store.db)
     if accounts:
         from learning_collaboration import Collaboration
         if not ipaddress.ip_address(host).is_loopback:
@@ -166,6 +168,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
             try:
                 if collaboration and collaboration.get(self, path, token):
                     return
+                if storage_web.get(self, path): return
                 if learning_tasks_web.get(self, path, tasks, omx_center, token):
                     return
                 if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
@@ -388,6 +391,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     raise ValueError('AI cancellation accepts an empty object only')
                 if collaboration and collaboration.post(self, path, body, token):
                     return
+                if storage_web.post(self, path, body): return
                 if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration):
                     return
                 if omx_center_web.post(self, path, body, omx_center, learning):
@@ -475,6 +479,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
 
     class Server(ThreadingHTTPServer):
         def server_close(self):
+            storage_web.close()
             ai_jobs.close()
             if collaboration:
                 collaboration.shutdown()
@@ -483,6 +488,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     try:
         return Server((host, port), Handler)
     except Exception:
+        storage_web.close()
         ai_jobs.close()
         if collaboration:
             collaboration.shutdown()
