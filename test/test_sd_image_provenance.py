@@ -54,7 +54,7 @@ def signed_image(tmp_path):
         (dist / "SHA256SUMS").write_text(sums, encoding="ascii")
         signature = dist / "SHA256SUMS.sig"
         signature.unlink(missing_ok=True)
-        sign_checksums(dist / "SHA256SUMS", private, signature)
+        signature.write_text(sign_checksums(sums.encode("ascii"), private), encoding="ascii")
 
     seal()
     return dist, public, image, seal
