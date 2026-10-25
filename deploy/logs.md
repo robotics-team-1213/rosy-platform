@@ -3459,3 +3459,9 @@
 - 증거: canonical 본문은 merge의 main parent와 첫 docstring 행 외 동일하다. 독립 contract review 승인. committed e732c6bd2c 원격 signing·legacy/dynamic·SD provenance·installed layout·updater resync84 PASS/NEW0. 후속 assertion 및 정상 전체 착지는 별도다.
 - gate 변화: source 병합 호환만 검증했다. A/B media/OS 엔진·native ARM64 artifact·실기 powercut 수용은 미완료다.
 - 교훈: CE 해당 없음 — 구현 동등성·소비자 경로·회귀 시험에 근거를 보존했다.
+
+## 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
+
+- 변경: `rosy-host-guard-remote health`가 `~/rosy-test`·`/` 여유와 GPU 메모리를 덧붙인다. `rosy-host-guard`는 30GiB/90% 기준의 `disk-low`를 보고만 하고 복구 단계를 진행시키지 않는다. `rosy-host-control`의 ai·model `clean-storage`는 `rosy-test-storage.service`를 한 번 시작한다(없으면 exit 5).
+- 증거: `test/test_host_guard.py`, `operations/fleet/test/test_host_control.py` 원격 실행.
+- gate 변화: 없음. PC별 재설치와 실제 정리 수용은 미완료다.

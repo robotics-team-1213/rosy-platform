@@ -3,6 +3,7 @@ const STATE_LABEL = {
   ok: "정상",
   bad: "나쁨",
   "load-high": "부하 높음",
+  "disk-low": "디스크 부족",
   unreachable: "응답 없음",
   quiet: "새벽 창",
   error: "확인 실패",
@@ -28,6 +29,12 @@ export function resourceText(resources) {
   }
   if (Number.isFinite(resources.uptime_s)) parts.push(`가동 ${resources.uptime_s}초`);
   if (Array.isArray(resources.down) && resources.down.length) parts.push(`멈춘 유닛 ${resources.down.join(", ")}`);
+  const disk = resources.disk;
+  if (disk && Number.isFinite(disk.test_free_gb) && Number.isFinite(disk.root_free_gb)) {
+    parts.push(`시험 디스크 여유 ${disk.test_free_gb}GB(${disk.test_use_pct}%) · 루트 ${disk.root_free_gb}GB(${disk.root_use_pct}%)`);
+  }
+  const gpu = resources.gpu;
+  if (gpu && Number.isFinite(gpu.used_mib) && Number.isFinite(gpu.total_mib)) parts.push(`GPU 메모리 ${gpu.used_mib}/${gpu.total_mib}MiB`);
   return parts.length ? parts.join(" · ") : "여유 수치 없음";
 }
 

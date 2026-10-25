@@ -43,7 +43,8 @@ def test_catalogue_is_the_three_ubuntu_hosts():
     hosts = {row["host"]: row for row in catalogue()["hosts"]}
     assert set(hosts) == {"site", "ai", "model"}
     assert hosts["model"]["units"] == []
-    assert hosts["model"]["actions"] == ["reboot", "cancel-reboot"]
+    assert hosts["model"]["actions"] == ["reboot", "cancel-reboot", "clean-storage"]
+    assert hosts["ai"]["actions"][:3] == ["reboot", "cancel-reboot", "clean-storage"]
     assert hosts["site"]["actions"] == ["reboot", "cancel-reboot", "restart-unit"]
     assert hosts["site"]["stoppable_units"] == []
     assert "docker.service" in hosts["site"]["units"]
@@ -70,6 +71,13 @@ def test_only_an_allowlisted_unit_on_that_host_can_stop():
                        # D-795: cross-host DDS units (AI PC Nav2, rosbridge) are gone.
                        ("ai", "pinky-nav2.service"), ("ai", "pinky-rosbridge-d12.service")):
         assert _code(lambda: decide(host, "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
+
+
+def test_only_the_lab_pcs_clean_storage_and_never_with_a_unit():
+    for host in ("ai", "model"):
+        assert decide(host, "clean-storage", None, confirmed=True)["argv"] == ("clean-storage",)
+        assert _code(lambda: decide(host, "clean-storage", "docker.service", confirmed=True)) == "UNIT_NOT_ALLOWED"
+    assert _code(lambda: decide("site", "clean-storage", None, confirmed=True)) == "ACTION_NOT_ALLOWED"
 
 
 def test_reboot_rejects_a_unit_and_an_unconfirmed_call():
@@ -190,12 +198,12 @@ def test_ssh_helper_uses_an_argument_list_and_a_fixed_ssh(monkeypatch, tmp_path)
 
 
 def test_helper_exit_codes_become_api_codes(monkeypatch, tmp_path):
-    codes = iter([3, 4, 255])
+    codes = iter([3, 4, 5, 255])
     monkeypatch.setattr(subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(
         argv, next(codes), stdout="", stderr=""))
     helper = helper_from_config(_config(tmp_path, "model rosy@model-pc.local\n"))
-    assert [helper.run("model", ("reboot",))["code"] for _ in range(3)] == [
-        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "HOST_HELPER_FAILED"]
+    assert [helper.run("model", ("reboot",))["code"] for _ in range(4)] == [
+        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "NO_STORAGE_SERVICE", "HOST_HELPER_FAILED"]
 
 
 def test_missing_or_bad_config_stays_unavailable(tmp_path):
@@ -295,6 +303,7 @@ def test_install_task_shows_host_headroom_and_has_no_process_kill():
     assert 'id="host-services"' in page and "호스트 서비스" in page
     assert "pkill" not in script and "kill" not in script
     assert "10분 뒤 재부팅" in script and "operator_confirmed: true" in script
+    assert '.includes("clean-storage")' in script  # only hosts whose catalogue offers it get the button
     assert 'id: "hosts"' in install and 'from "./host-services.js"' in install
     assert assets['host-services.js']['path'] == 'installation/host-services.js'
 
@@ -356,6 +365,25 @@ def test_helper_refuses_a_second_reboot_and_cancels_only_its_own(tmp_path):
     assert helper("reboot") == 3
     assert helper("cancel-reboot") == 4
     assert (tmp_path / "calls").read_text().splitlines().count("cancel") == 1
+
+
+@posix
+def test_helper_starts_only_the_lab_storage_service_and_refuses_the_site(tmp_path):
+    helper = _helper_copy(tmp_path, "model")
+    assert helper("clean-storage") == 0
+    calls = (tmp_path / "calls").read_text()
+    assert "systemctl --user --machine=pinky@ --no-block start rosy-test-storage.service" in calls
+    assert helper("clean-storage", "x.service") == 2
+    (tmp_path / "bin" / "systemctl").write_text(  # a PC where rosy-ops never linked the unit
+        f'#!/bin/sh
+echo "systemctl $*" >> {tmp_path}/calls
+case "$*" in *" cat "*) exit 1;; esac
+')
+    assert helper("clean-storage") == 5
+    (tmp_path / "conf" / "role").write_text("site
+")
+    assert helper("clean-storage") == 2
+    assert (tmp_path / "calls").read_text().count(" start rosy-test-storage.service") == 1
 
 
 @posix

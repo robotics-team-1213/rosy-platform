@@ -24,6 +24,7 @@ case "$1" in
   health)
     [ $# -eq 1 ] || refuse
     # avail% swap_used% load1 cores uptime_s down_units(comma list or -)
+    # then (D-883) free_kb use% of ~/rosy-test (else $HOME) and of /, GPU used_mib total_mib (or - -)
     awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} /^SwapTotal:/{st=$2} /^SwapFree:/{sf=$2}
          END {printf "%d %d ", 100*a/t, (st ? 100*(st-sf)/st : 0)}' /proc/meminfo
     down=""
@@ -33,7 +34,13 @@ case "$1" in
       done
     fi
     down=${down#,}
-    printf '%s %s %s %s\n' "$(cut -d' ' -f1 /proc/loadavg)" "$(nproc)" "$(cut -d. -f1 /proc/uptime)" "${down:--}"
+    test_dir=$HOME/rosy-test
+    [ -d "$test_dir" ] || test_dir=$HOME
+    disk() { df -Pk "$1" 2>/dev/null | awk 'NR==2 {sub("%", "", $5); print $4, $5; ok=1} END {if (!ok) print "- -"}'; }
+    gpu=$(nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null |
+          awk -F', *' '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ {u+=$1; t+=$2; n++} END {print (n ? u " " t : "- -")}') || gpu="- -"
+    printf '%s %s %s %s %s %s %s\n' "$(cut -d' ' -f1 /proc/loadavg)" "$(nproc)" "$(cut -d. -f1 /proc/uptime)" "${down:--}" \
+      "$(disk "$test_dir")" "$(disk /)" "${gpu:-- -}"
     ;;
   restart)
     [ $# -eq 2 ] && [ -f "$UNITS" ] && grep -v '^#' "$UNITS" | grep -qxF -- "$2" || refuse

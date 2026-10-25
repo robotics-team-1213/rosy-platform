@@ -11499,3 +11499,9 @@ osy-d395-s1d\`.
 - 변경: `motion_profile.py`(동기 사다리꼴, 모서리 이어 돌기, 정확한 정지점, `retime`). `chunk_runner.transit_path`는 올라가며 돌기 시작하는 한 흐름(겹침 0.6 s, 높이 1 unit 이내에서만 회전), `grasp_planner`의 수직 내려가기·들기는 같은 경로에 부드러운 가감속. `cell_record.py`와 `--stage record`(A/B 한 사이클 녹화, 녹화된 집게로 held/empty 판정, 원위치 확인). native SIM 시나리오 `pick-place-chunks-offset`·`-yaw-site`·`-yaw-box`(상자 이동·회전, 관측한 상자 위치로 계획).
 - 증거: 원격 시험 통과. 매끄러운 동작으로 Gazebo `pick-place-chunks` PASS(xy 0.26 mm, 들기 102 mm). 시나리오 결과는 이어서 기록한다.
 - gate 변화: 없음. 실물의 매끄러운 동작·녹화는 실물 실행에서 확인한다.
+
+## 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
+
+- 변경: ADR D-883(D-876 §5·D-524 보충)과 Log 행. API reference v1.320에 guard `resources.disk`/`disk_low`/`gpu`, `disk-low` 상태, Service Control `clean-storage`(ai·model만)를 등록했다.
+- 증거: 원격 시험으로 확인한다. 실제 PC 재설치·정리 실행은 하지 않았다.
+- gate 변화: 없음. 각 PC의 guard-remote·helper 재설치 전에는 값이 null이고 정리 요청은 거부된다. CE: 해당 없음 — 원인(정리 주기보다 빠른 디스크 소모)은 기존 기록과 `fix/test-host-disk`가 다룬다.
