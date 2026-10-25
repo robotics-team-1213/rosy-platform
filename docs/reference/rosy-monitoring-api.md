@@ -55,6 +55,8 @@ peer는 등록된 ID와 사이트 전체가 일치해야 한다. generation/sequ
 
 CORE는 viewer `GET /api/v1/system/info`와 `/api/v1/diagnostics`, Fleet은
 수동 캐시 `GET /api/fleet/monitoring`, 호스트는 기존 status.json을 읽는다.
+Fleet의 `sampled_at=null`은 캐시 미구축이다. 이전 로봇 관측을 보존하고 기존 수명대로
+만료시키며, 유효한 캐시가 빈 목록을 보고했을 때 실제 빈 집합으로 바꾼다.
 CORE 명령·Fleet 운영 gather·host-guard 복구 루프를 호출하거나 복제하지 않는다.
 HTTPS 인증서를 검증하며 loopback HTTP만 예외로 허용한다. redirect와 환경 proxy는
 따르지 않는다. reader 자격과 원천별 upstream 자격은 별도로 등록한다.

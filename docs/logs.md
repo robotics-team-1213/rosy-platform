@@ -11505,3 +11505,9 @@ osy-d395-s1d\`.
 - 변경: 독립 Monitoring에 기존 CORE/Fleet/host 출력을 읽는 제한 수집기, 사이트별 reader API, 정규화 SQLite 관측·anchor·peer cursor·제한 이력을 구현했다. 캐시 GET은 운영 gather와 원천 polling을 호출하지 않는다. 쓰기 전용 lease와 게시 전 durable commit, 복구 시 stale 보고 경로, 고정 오류 코드 및 원천 JSON 제한을 적용했다.
 - 증거: `5a5355aa69` 원격89시험과 구조/harness/affected247시험이 모두 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 재시작/역순/동시 writer/응답 aging/task 종료/원천 손상/이력 만료 RED와 수정을 확인했고, 최종 SHA 독립 재검토에서 추가 차단 없음이 확인됐다.
 - gate 변화: Monitoring의 CLI·독립 프로세스·브라우저·native 묶음·실제 PC/LAN/TLS/장치 수용은 HOLD다. 공유 기반/등록을 먼저 착지한 뒤 이 서비스를 병합한다. CE: 해당 없음 — 새 구현의 계약과 회귀로 기록했다.
+
+## 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
+
+- 변경: 설치 wheel의 독립 CLI, loopback/비공개 상태 경로/단일 worker, 플랫폼 권한 미보장 시 시작 거부를 구현했다. Fleet 캐시 미구축에서 과거 관측을 만료까지 보존하고 peer 수신의 로컬 거절 사유를 Collector로 전달한다.
+- 증거: `6b0f7568f5` 원격98시험과 구조/harness/affected247시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 실제 개별·중앙 집계·중앙 직접 수집 subprocess와 중앙 단절 독립성·프로세스 간 writer 배타성을 확인했다. 최종 독립 재검토 차단 없음.
+- gate 변화: Monitoring SOURCE GO, 화면/배포/실제 PC 수용은 HOLD다. CE: 해당 없음 — 새 기능의 코드·회귀가 판단 근거를 보존한다.
