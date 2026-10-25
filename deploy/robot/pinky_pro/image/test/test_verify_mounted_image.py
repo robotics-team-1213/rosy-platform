@@ -24,9 +24,28 @@ def test_inspect_rejects_a_missing_storage_requirement_for_ssh_socket(tmp_path):
     findings = verify_mounted_image.inspect(tmp_path, "2026.10.26-001")
     assert any("ssh.socket" in item and "storage" in item for item in findings)
 
+
+@pytest.mark.parametrize("state", ["missing", "symlink", "writable", "populated"])
+def test_factory_image_rejects_missing_unsafe_or_populated_tls(tmp_path, state):
+    target = tmp_path / "etc/rosy/tls"
+    target.parent.mkdir(parents=True)
+    if state == "symlink":
+        outside = tmp_path / "external-tls"
+        outside.mkdir(mode=0o750)
+        target.symlink_to(outside, target_is_directory=True)
+    elif state != "missing":
+        target.mkdir(mode=0o750)
+        if state == "writable":
+            target.chmod(0o777)
+        else:
+            (target / "ca.key").write_bytes(b"synthetic key fixture")
+    findings = verify_mounted_image.inspect(tmp_path, "2026.10.26-001")
+    assert any("tls" in item.lower() for item in findings), state
+
 def test_inspect_passes_with_valid_image(tmp_path):
     root = tmp_path / "root"
     root.mkdir()
+    (root / "etc/rosy/tls").mkdir(parents=True, mode=0o750)
     release_id = "2026.01.01-001"
     release_dir = root / "opt/rosy/releases" / release_id
     release_dir.mkdir(parents=True)
