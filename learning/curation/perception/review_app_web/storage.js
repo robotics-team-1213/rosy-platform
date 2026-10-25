@@ -144,7 +144,8 @@ async function refreshPool(current=epoch){
     showJobs(listing.jobs);
     if(pool.cache_operation)$('storage-pool-message').textContent=operations[pool.cache_operation];
     else if(pool.cache_error)poolError(new Error('캐시 공간을 확보하지 못했습니다. 사용 중인 자료와 연결 권한을 확인하세요.'));
-    else if(pool.cache_result)$('storage-pool-message').textContent=`회수한 캐시 ${bytes(pool.cache_result.reclaimed_bytes)}`;
+    else if(pool.cache_result)$('storage-pool-message').textContent=pool.cache_result.status==='disabled'?'자동 캐시 회수 정책이 꺼져 있습니다.':
+      `${pool.cache_result.status==='blocked'?'공간 부족 · 다른 사용자의 자료나 고정·사용 중인 자료를 확인하세요. ':''}회수한 캐시 ${bytes(pool.cache_result.reclaimed_bytes)}`;
     if(pool.cache_operation||listing.jobs.some(job=>job.operation))poolTimer=setTimeout(()=>refreshPool(current),1000);
   }catch(error){
     if(current!==epoch)return;

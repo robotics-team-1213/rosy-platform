@@ -174,7 +174,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 #pipeline-records p { overflow-wrap: anywhere; }
 .heading-links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .learning-form { padding-block: var(--space-4); }
-.storage-job, .storage-target, #storage-confirm-description { overflow-wrap: anywhere; }
+.storage-job, .storage-target, #storage-confirm-description, #storage-reconcile-description { overflow-wrap: anywhere; }
 .storage-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .learning-form > label:last-of-type { flex: 1; min-width: min(100%, 24rem); }
 .learning-form > p { width: 100%; font-size: var(--text-label); }
