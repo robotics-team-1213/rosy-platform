@@ -88,16 +88,20 @@ def refresh_ready(root: Path, shared) -> None:
         _json_atomic(_path(root, READY), projection_facts(root, shared), 0o600)
 
 
+def verify_ready_locked(root: Path, shared) -> dict:
+    expected = projection_facts(root, shared)
+    path = _path(root, READY)
+    info = path.stat()
+    if info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
+        raise ValueError("projection receipt permissions differ")
+    actual = _object(_read(path, 32768, root.stat().st_uid), RECEIPT_FIELDS)
+    if actual != expected:
+        raise ValueError("projection receipt differs from current root/boot/generation")
+    return actual
+
+
 @_hold
 def verify_ready(root: Path) -> dict:
     root = Path(root).absolute()
     with common_lock(root) as shared:
-        expected = projection_facts(root, shared)
-        path = _path(root, READY)
-        info = path.stat()
-        if info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != 0o600:
-            raise ValueError("projection receipt permissions differ")
-        actual = _object(_read(path, 32768, root.stat().st_uid), RECEIPT_FIELDS)
-        if actual != expected:
-            raise ValueError("projection receipt differs from current root/boot/generation")
-        return actual
+        return verify_ready_locked(root, shared)

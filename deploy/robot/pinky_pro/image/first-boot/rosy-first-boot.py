@@ -464,6 +464,8 @@ class FirstBootProvisioner:
         # D-191: validate_provision_bundle already refused a bundle without one.
         self._core_api(payload["core_api"]["record"], payload["fleet"])
         factory = self._factory_signature(payload.get("factory_release"))
+        if shared is not None and factory is not None and factory.get("signed"):
+            _native_helper("os_factory_release").cache_signature(self.root, payload["factory_release"])
         if "tailscale" in payload:
             # D-477: rosy-tailscale-join.service spends this key once (0600).
             _json_atomic(
