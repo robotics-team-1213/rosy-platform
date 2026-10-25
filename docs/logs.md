@@ -10498,6 +10498,22 @@ osy-d395-s1d\`.
 - 증거: 원격 OMX 시험 전체 통과(exit 0). 변이(집게 예외를 모든 관절로, 속도 거부 제거)에서 새 시험이 실패함을 확인.
 - gate 변화: 없음. 실물 재생·청크 실행은 guard 속도로 다시 확인해야 한다(사이클이 사람 시연보다 길어진다). 실물 동작은 전원 스위치 옆에 사람이 있을 때만.
 
+## 2026-10-25 · uncommitted · docs(spec): MSN-008 계약 줄 v1.314 확정
+
+- 변경: [FLEET SRS](spec/ROSY FLEET SRS.md) MSN-008 계약 줄을 API Ref v1.314로 확정(설계 문구 제거).
+- 증거: 미실행 — 문서 변경.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · feat(sim): D-866 P1 OMX 시뮬레이터 백엔드 적합성 시험
+
+- 변경: `tools/sim/omx_backend_conformance.py`(ROS 없는 판정 + ROS 기록기), Gazebo 실행기 `omx_backend_conformance_gazebo.py`, 시험 `test/test_omx_backend_conformance.py`, [검증 기록](validation/omx-backend-conformance-2026-10-25/result.md).
+- 증거: AI PC Gazebo 통과(관절 1401건, 카메라 각 70프레임, 취소 전 0.068rad·뒤 0.0rad). 원격 pytest 2 passed.
+- gate 변화: P1 끝난 기준(Gazebo 적합성 통과) 충족. P2 Isaac 백엔드는 같은 도구로 판정한다.
+- 결정: 없음.
+- 교훈: 없음.
+
 ## 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
 
 - 변경: `sim_chunk_plan.py`가 `grasp_planner` 청크와 `transit_path` 이동을 sim 셀의 집기·놓기 목표에 맞춰 SIM teacher의 approach/grasp/transfer/release로 바꾼다. `--plan chunks`가 teacher·demonstrations·prepare·job·`remote_omx_native.py`를 지난다. 놓기는 측정한 집게 위치부터 연다(`open_from`). 앞의 착지 merge 커밋 `5ceabe6015`이 작업 트리의 추적 파일 변경(실험 연결부)을 함께 담았고, 새 파일은 이 커밋에서 들어간다.
