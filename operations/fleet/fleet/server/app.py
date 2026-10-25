@@ -118,7 +118,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                omx_instances: Optional[Mapping[str, str]] = None,
                omx_socket_root: Path | str = "/run/rosy/omx",
                omx_stop_transport=None,
-               enable_mission_dispatcher: bool = False,
+               enable_mission_dispatcher: bool = False, policy_admission_core=None,
                omx_action_transport=None,
                enrollment=None,
                robot_credential_key: Optional[str] = None,
@@ -840,12 +840,12 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     proposal_create = proposal_resolve = mission_admit = None
     if mission_service is not None:
         proposal_create, proposal_resolve, mission_admit = install_mission_routes(
-            app, mission_service=mission_service, proposal_store=proposal_store,
-            cell_job_store=cell_job_store, cell_job_resolver=cell_job_resolver,
+            app, policy_admission_core=policy_admission_core, mission_service=mission_service,
+            proposal_store=proposal_store, cell_job_store=cell_job_store, cell_job_resolver=cell_job_resolver,
             goal_evidence_service=goal_evidence_service, mission_progress=mission_progress,
-            candidate_resolver=candidate_resolver, require_viewer=require_viewer,
-            require_operator=require_operator, require_named_operator=require_named_operator,
-            require_proposer=require_proposer, read_guard=read_guard, operator_guard=operator_guard)
+            candidate_resolver=candidate_resolver, require_viewer=require_viewer, require_operator=require_operator,
+            require_named_operator=require_named_operator, require_proposer=require_proposer,
+            read_guard=read_guard, operator_guard=operator_guard)
         from fleet.server.cell_job_routes import install_cell_job_routes
 
         install_cell_job_routes(app, cell_job_store=cell_job_store, proposal_store=proposal_store,
