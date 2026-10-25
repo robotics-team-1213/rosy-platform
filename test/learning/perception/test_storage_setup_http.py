@@ -118,6 +118,17 @@ def test_setup_routes_preserve_roles_csrf_and_fenced_updates(setup_server, accou
         assert not (folder.parent / 'private').exists()
 
 
+def test_setup_filesystem_failure_does_not_expose_host_paths(setup_server, accounts, monkeypatch):
+    from storage_setup import StorageSetup
+    running, body, remote, folder, now = setup_server
+    def unavailable(*args): raise OSError('private-host-path-must-not-leak')
+    monkeypatch.setattr(StorageSetup, '_directories', unavailable)
+    with running() as url:
+        session, token = session_for(url, accounts)
+        status, result = request(url, '/api/learning/storage/settings', session, body, token)
+        assert status == 400 and 'private-host-path-must-not-leak' not in json.dumps(result)
+
+
 @pytest.mark.parametrize('width,theme', [(320, 'light'), (1440, 'dark')])
 def test_setup_browser_completes_first_use_without_json(setup_server, accounts, width, theme):
     from browser_harness import browser_tests_enabled, open_page, save_temp_screenshot
