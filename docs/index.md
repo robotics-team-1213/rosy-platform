@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
+- 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
+- 2026-10-25 · a401f49f6d · D-879 GPT media prototype 경계
 - 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
 - 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
-- 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
-- 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인

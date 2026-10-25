@@ -11500,6 +11500,21 @@ osy-d395-s1d\`.
 - 증거: 원격 시험 통과. 매끄러운 동작으로 Gazebo `pick-place-chunks` PASS(xy 0.26 mm, 들기 102 mm). 시나리오 결과는 이어서 기록한다.
 - gate 변화: 없음. 실물의 매끄러운 동작·녹화는 실물 실행에서 확인한다.
 
+## 2026-10-25 · a401f49f6d · D-879 GPT media prototype 경계
+
+- 변경: D-879 Proposed와 ADR index에 signed six-role GPT·boot_a 개인화·원본 GPT 유지·production BUILD_GO 보류를 기록했다. 구현은 image verifier/readback/SD 준비/producer와 연결된다.
+- 증거: 새 Python/image/gateway 원격303 passed,3 skipped; 실제 PowerShell GPT·resume·Storage mock17 passed; 독립 전체 및 후속 검토에서 중대한 결함 없음. 전체 PS Windows 수용과 native ARM64/SD/boot 증거는 없다.
+- gate 변화: 제안과 source prototype의 완료 범위이며 전체 OS 업데이트 제품 수용은 아니다.
+- 교훈: CE 해당 없음 — 구현 계약과 회귀 시험이 판단을 보존한다.
+
+## 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
+
+- 변경: Windows에서 다른 프로세스가 cwd로 잡은 워크트리 폴더는 `git worktree remove`가 등록만 지우고 폴더를 남기며, 그 안의 git 명령이 main 체크아웃의 `.git`으로 올라가 main에 작용했다(오늘 공유 main 체크아웃의 우발 병합 원인). `tools/worktree_rules.py` `leave_tombstone`이 남은 폴더를 비었으면 rmdir하고, 아니면 존재할 수 없는 gitdir(`.git/removed-worktree-<name>-delete-this-folder`)을 가리키는 `.git` 파일을 쓴다. `tools/worktrees.py` `_remove`(실패·성공 뒤 남은 폴더)와 `clear_orphan` 실패(WinError 32)에서 부른다. 묘비 `.git`은 보존할 내용으로 세지 않아 다음 prune이 대기 없이 폴더를 지우고, scan은 고아로만 본다. `new`는 묘비만 남은 폴더를 치우거나, 잡혀 있으면 이유를 들어 거절한다(`clear_tombstone`). `tools/land.py`는 같은 `worktrees.sweep`을 써서 따로 고칠 곳이 없다.
+- 증거: 커밋 0210c973b8. 실제 git으로 묘비 폴더 안 `git rev-parse` → 128, "gitfile does not point to a valid repository", 부모로 넘어가지 않음. `remote_pytest.py -- test/test_worktrees_tool.py test/test_land.py -q` 148 passed(AI PC, 0210c973b8). 새 시험 4개: 잡힌 폴더 묘비·git 실패·다음 prune 삭제·scan 고아, 빈 폴더 rmdir, 고아 정리 실패 묘비, `new` 정리·거절. 기존 keep/remove 판정 시험은 그대로 통과.
+- gate 변화: 없음. 개발 도구 변경이다.
+- 결정: 없음.
+- 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.
+
 ## 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
 
 - 변경: 합성 fixture의 free_space 관측을10 GiB로 고정하고 UI 잔여값을 검증한다. 실제 storage/data 동작은 바꾸지 않았다.
