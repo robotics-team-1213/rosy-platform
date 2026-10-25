@@ -13,16 +13,19 @@ export function armAdmissionReason(job, control, actor, roleReason = "") {
 export function createArmTransferView({scope, call, anchor, active, approveReason, principal, confirm}) {
   const panel = node("section", "", "arm-transfer-work"), heading = node("h2", "외부 앱 ARM 제안"),
     form = node("form", "", "ui-form"), label = node("label", "작업 식별자", "ui-field-label"),
-    input = node("input", "", "ui-field"), actions = node("div", "", "ui-actions"),
-    read = node("ui-button", "작업 조회"), admit = node("ui-button", "독립 운영자로 실행 승인"),
+    actions = node("div", "", "ui-actions"),
     state = node("p"), detail = node("dl", "", "work-detail");
+  const input = document.createElement("input");
+  input.className = "ui-field";
+  const read = node("ui-button", "작업 조회");
+  read.setAttribute("kind", "quiet"); read.setAttribute("type", "button");
+  const admit = node("ui-button", "독립 운영자로 실행 승인");
+  admit.setAttribute("kind", "primary"); admit.setAttribute("type", "button"); admit.hidden = true;
   panel.id = "arm-transfer-work"; heading.id = "arm-transfer-heading";
   panel.setAttribute("aria-labelledby", heading.id); panel.hidden = !active;
   input.id = "arm-transfer-id"; input.name = "mission_id"; input.required = true; input.maxLength = 192;
   label.htmlFor = input.id; label.append(input);
   read.id = "arm-transfer-read"; admit.id = "arm-transfer-admit";
-  for (const button of [read, admit]) button.setAttribute("type", "button");
-  read.setAttribute("kind", "quiet"); admit.setAttribute("kind", "primary"); admit.hidden = true;
   state.id = "arm-transfer-state"; state.setAttribute("role", "status"); state.setAttribute("aria-live", "polite");
   admit.setAttribute("aria-describedby", state.id);
   actions.append(read, admit); form.append(label, actions);
