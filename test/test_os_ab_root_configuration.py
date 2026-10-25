@@ -34,6 +34,9 @@ def test_offline_root_installs_frozen_boot_and_recovery_with_its_factory_binding
     assert "After=rosy-sd-provision.service" in recover
     assert "Requires=rosy-sd-provision.service" not in recover
     assert "ProtectHome=read-only" in recover
+    for text in (first, recover):
+        assert "Type=oneshot" in text
+        assert "RemainAfterExit=yes" in text
     _configurer().configure(root, FACTORY_ID)  # Identical assembly is idempotent.
 
 
