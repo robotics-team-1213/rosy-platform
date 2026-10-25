@@ -41,7 +41,7 @@ class StorageWeb:
             if revision == self.settings_revision or self.pending: return
             from storage_inventory import StorageInventory
             self.inventory = StorageInventory(self.setup.db, config, self.setup.project_id)
-            self.jobs = self.setup.jobs() if config['pool']['targets'] else None
+            self.jobs = self.setup.jobs()
             self.enabled, self.settings_revision = config['pool']['enabled'], revision
 
     def _actor(self, handler, capability='view'):

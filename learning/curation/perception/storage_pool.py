@@ -16,12 +16,12 @@ SHA = re.compile(r'[0-9a-f]{40}')
 
 
 class StoragePool:
-    def __init__(self, db, config, accounts, *, clock=time.time):
+    def __init__(self, db, config, accounts, *, clock=time.time, allow_empty=False):
         if not isinstance(config, dict) or config.get('project_id') != accounts.project_id:
             raise ValueError('storage pool project mismatch')
         self.config, self.accounts = copy.deepcopy(config), accounts
         self.project_id, self.db, self.clock = accounts.project_id, Path(db), clock
-        self._validate()
+        if not (allow_empty and self.config.get('targets') == [] and self.config.get('quotas') == {}): self._validate()
         if self.db.is_symlink():
             raise ValueError('storage pool DB must not be linked')
         with self.connect() as conn:

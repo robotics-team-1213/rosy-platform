@@ -12,16 +12,34 @@ import re
 from pathlib import Path
 import sys
 
-from storage_files import SOURCE, PROFILES, allowed, claim, entry, file_open, names
+from storage_files import SOURCE, PROFILES, allowed, claim, directory, entry, file_open, names, parts
 from storage_inventory import free_space, open_root
 
 
-def _json(fd, name, value):
-    raw = (json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False) + '\n').encode()
-    if len(raw) > 1024 ** 2: raise ValueError('source metadata exceeds 1 MiB')
-    with os.fdopen(os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd), 'wb') as output:
+def _generated(fd, name, raw, *, resume=False):
+    try:
+        output = file_open(fd, name, write=True)
+    except FileExistsError:
+        if not resume: raise
+        with file_open(fd, name) as previous: prefix = previous.read(len(raw) + 1)
+        if not raw.startswith(prefix): raise ValueError('changed partial export is preserved')
+        if prefix == raw: return
+        with directory(fd, parts(name)[:-1]) as parent:
+            descriptor = os.open(parts(name)[-1], os.O_WRONLY | os.O_NOFOLLOW, dir_fd=parent)
+        output = os.fdopen(descriptor, 'wb')
+        info = os.fstat(output.fileno())
+        if info.st_size != len(prefix) or info.st_nlink != 1:
+            output.close(); raise ValueError('partial export identity changed')
+        output.seek(len(prefix)); raw = raw[len(prefix):]
+    with output:
         output.write(raw); output.flush(); os.fsync(output.fileno())
     os.fsync(fd)
+
+
+def _json(fd, name, value, *, resume=False):
+    raw = (json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False) + '\n').encode()
+    if len(raw) > 1024 ** 2: raise ValueError('source metadata exceeds 1 MiB')
+    _generated(fd, name, raw, resume=resume)
 
 
 def seal(root, profile, provenance):
@@ -57,7 +75,7 @@ def export_isaac_run(store, run_id, output):
     return export_isaac_snapshot(lambda: store.get(run_id), lambda item_id: store.artifact(run_id, item_id), run_id, output)
 
 
-def export_isaac_snapshot(get, artifact, run_id, output):
+def export_isaac_snapshot(get, artifact, run_id, output, *, resume=False):
     row = get()
     if (row.get('snapshot') != 'FINAL' or row.get('status') not in ('SUCCEEDED', 'FAILED', 'STOPPED')
             or row.get('result', {}).get('cleanup') not in ('OWNED_PROCESSES_EXITED_GPU_RELEASED', 'SDK_NOT_STARTED')):
@@ -71,20 +89,23 @@ def export_isaac_snapshot(get, artifact, run_id, output):
     try:
         if free_space(parent) < sum(item['bytes'] for item in items) + 1024 ** 3:
             raise ValueError('insufficient local space for Isaac artifact export')
-        os.mkdir(output.name, 0o700, dir_fd=parent)
+        try: os.mkdir(output.name, 0o700, dir_fd=parent)
+        except FileExistsError:
+            if not resume: raise
     finally: os.close(parent)
     fd = open_root(str(output))
     try:
-        _json(fd, 'observation.json', row)
+        expected = {'observation.json', 'snapshot.json', *(item['name'] for item in items)}
+        if resume and not names(fd) <= expected: raise ValueError('unregistered files in partial export are preserved')
+        _json(fd, 'observation.json', row, resume=resume)
         for item in items:
             allowed(item['name'], 'isaac')
             blob = artifact(item['id'])
             data = blob['data']
             if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
                 raise ValueError('Isaac owner artifact changed during export')
-            with file_open(fd, item['name'], write=True) as stream:
-                stream.write(data); stream.flush(); os.fsync(stream.fileno())
-        _json(fd, 'snapshot.json', dict(snapshot='FINAL', run_id=run_id, files=items))
+            _generated(fd, item['name'], data, resume=resume)
+        _json(fd, 'snapshot.json', dict(snapshot='FINAL', run_id=run_id, files=items), resume=resume)
     finally: os.close(fd)
     current = get()
     if current.get('result_sha256') != row.get('result_sha256') or current.get('artifacts_sha256') != row.get('artifacts_sha256'):

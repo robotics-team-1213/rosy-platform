@@ -94,13 +94,14 @@ class StorageSetup:
         if not isinstance(body['targets'], list) or not isinstance(body['quotas'], dict):
             raise ValueError('storage targets and quotas must be a list and object')
         for target in body['targets']:
-            if isinstance(target, dict) and target.get('id') in hidden:
+            if isinstance(target, dict) and isinstance(target.get('id'), str) and target['id'] in hidden:
                 if set(target) != {'id', 'enabled'} or target['enabled'] is not False:
                     raise PermissionError('unavailable target can only be disabled')
                 hidden[target['id']] = dict(hidden[target['id']], enabled=False)
                 continue
             if (not isinstance(target, dict) or set(target) != {'id', 'connection_id', 'repo_id', 'repo_type',
-                    'quota_owner', 'priority', 'enabled'} or target['connection_id'] not in visible):
+                    'quota_owner', 'priority', 'enabled'} or not isinstance(target['connection_id'], str)
+                    or target['connection_id'] not in visible):
                 raise ValueError('choose an available account connection and explicit repository target')
             targets.append(copy.deepcopy(target))
         targets.extend(hidden.values())
@@ -134,7 +135,7 @@ class StorageSetup:
                     settings_probe=probe_target is not None)
         if probe_target is not None: pool['targets'] = [probe_target]
         return StorageJobs(StorageInventory(self.db, config, self.project_id, clock=self.clock),
-            StoragePool(self.db, pool, self.accounts, clock=self.clock), self.accounts, transport=self.transport)
+            StoragePool(self.db, pool, self.accounts, clock=self.clock, allow_empty=True), self.accounts, transport=self.transport)
 
     def _proof(self, actor, target):
         from storage_pool import StoragePool
@@ -183,10 +184,11 @@ class StorageSetup:
                     (path / 'connection-check.json').write_text(json.dumps(dict(purpose='storage-roundtrip', target=target['id'])))
                     profile = 'model' if target['repo_type'] == 'model' else 'dataset'
                     seal(path, profile, dict(purpose='connection_check', target_id=target['id']))
-                    job = service.create(actor, dict(source_id='exports', artifact_id=folder, profile=profile))
+                    source_key = hashlib.sha256((actor['user_id'] + ':' + proof).encode()).hexdigest()
+                    job = service.create(actor, dict(source_id='exports', artifact_id=folder, profile=profile), source_key=source_key)
                     job_id = job['id']
                     with self.connect() as db, db:
-                        db.execute('INSERT INTO storage_checks VALUES(?,?,?,?,?)',
+                        db.execute('INSERT OR IGNORE INTO storage_checks VALUES(?,?,?,?,?)',
                             (self.project_id, actor['user_id'], target['id'], proof, job_id))
                 job = service.run(actor, job_id)
                 if job['bytes_verified']:

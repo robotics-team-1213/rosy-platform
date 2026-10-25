@@ -93,9 +93,15 @@ class StoragePrepare:
                 if len(raw) != blob['bytes'] or hashlib.sha256(raw).hexdigest() != blob['sha256']:
                     raise ValueError('Isaac owner artifact changed')
                 return dict(data=raw)
-            if not (path / SOURCE).is_file(): export_isaac_snapshot(get, artifact, run_id, path)
+            if not (path / SOURCE).is_file(): export_isaac_snapshot(get, artifact, run_id, path, resume=True)
             profile = 'isaac'
         manifest = service.files.manifest(location, profile)
+        if body['kind'] == 'isaac':
+            row = get()
+            if (manifest['provenance'].get('run_id') != run_id
+                    or manifest['provenance'].get('result_sha256') != row.get('result_sha256')
+                    or manifest['provenance'].get('source_revision') != row['input']['source_sha']):
+                raise ValueError('prepared Isaac source differs from the owner result')
         if not body['archive']: return dict(status='prepared', artifact_id=name, profile=profile)
         key = hashlib.sha256(json.dumps([name, manifest['identity'], manifest['files']], sort_keys=True).encode()).hexdigest()
         job = service.create(actor, dict(source_id='exports', artifact_id=name, profile=profile), source_key=key)

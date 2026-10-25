@@ -114,7 +114,8 @@ class StorageJobs:
                 db.execute('BEGIN IMMEDIATE')
                 if source_key is not None:
                     previous = db.execute('''SELECT document FROM storage_jobs WHERE project=?
-                        AND json_extract(document, '$.requester_id')=? AND json_extract(document, '$.source_key')=?''',
+                        AND json_extract(document, '$.requester_id')=? AND json_extract(document, '$.source_key')=?
+                        AND json_extract(document, '$.status') != 'cancelled' ''',
                         (self.project_id, actor['user_id'], source_key)).fetchone()
                     if previous: return self._public(json.loads(previous[0]))
                     job['source_key'] = source_key

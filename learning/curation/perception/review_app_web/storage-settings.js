@@ -23,12 +23,12 @@ function button(parent,label,call){
 function readTargets(){
   return [...$('storage-settings-targets').children].map((row,index)=>{
     const previous=draft[index];
-    if(!previous.connection_id)return {id:previous.id,enabled:false};
+    if(!previous.connection_id)return row.querySelector('[data-field=enabled]').checked?null:{id:previous.id,enabled:false};
     const result={id:previous.id,priority:index};
     for(const key of ['connection_id','repo_type','repo_id'])result[key]=row.querySelector(`[data-field=${key}]`).value.trim();
     result.enabled=row.querySelector('[data-field=enabled]').checked;
     result.quota_owner=result.repo_id.split('/')[0].toLowerCase();return result;
-  });
+  }).filter(Boolean);
 }
 function readQuotas(){
   const result={};
@@ -62,7 +62,12 @@ function renderTargets(){
   for(const [index,target] of draft.entries()){
     const row=document.createElement('fieldset');row.className='storage-settings-target';
     text(row,'legend',`저장 대상 ${index+1}`);
-    if(!target.connection_id){text(row,'p','연결에 접근할 수 없습니다. 계정·권한을 확인하거나 이 대상을 중지하세요.');$('storage-settings-targets').append(row);continue;}
+    if(!target.connection_id){
+      text(row,'p','연결에 접근할 수 없습니다. 기존 설정을 보존하며 원하면 이 대상의 새 배정만 중지할 수 있습니다.');
+      const holder=text(row,'label','기존 새 배정 설정 유지');holder.className='ui-check';
+      const enabled=document.createElement('input');enabled.type='checkbox';enabled.dataset.field='enabled';enabled.checked=target.enabled;holder.prepend(enabled);
+      $('storage-settings-targets').append(row);continue;
+    }
     const fields=document.createElement('div');fields.className='ui-form learning-form';row.append(fields);
     select(fields,'HF 계정 연결','connection_id',state.connections.map(item=>[item.connection_id,
       `${item.username||'HF 계정'} · ${item.sharing==='project'?'프로젝트 연결':'개인 연결'}`]),target.connection_id);
@@ -72,7 +77,7 @@ function renderTargets(){
     const enabled=document.createElement('input');enabled.type='checkbox';enabled.dataset.field='enabled';enabled.checked=target.enabled;holder.prepend(enabled);
     const status={verified:'소량 전송·읽기 검증 완료',needs_verification:'소량 전송·읽기 검증 필요',unavailable:'연결 권한 확인 필요'};
     text(row,'p',status[target.status]||'저장 후 연결을 검증하세요.');
-    const actions=document.createElement('div');actions.className='ui-actions';row.append(actions);
+    const actions=document.createElement('ui-actions');row.append(actions);
     button(actions,'대상 제거',()=>{draft=readTargets();quotas=readQuotas();draft.splice(index,1);renderTargets();showQuotas();});
     if(index>0)button(actions,'우선순위 올리기',()=>{draft=readTargets();quotas=readQuotas();[draft[index-1],draft[index]]=[draft[index],draft[index-1]];renderTargets();showQuotas();});
     row.addEventListener('change',event=>{if(event.target.dataset.field==='repo_id')showQuotas();});
@@ -90,6 +95,7 @@ function controls(){
   $('storage-prepare-submit').disabled=Boolean(pending)||!enabled||!$('storage-completed-consent').checked;
   $('storage-check-reason').textContent=pending?'보관 작업 처리 중입니다. 끝나면 다음 작업을 할 수 있습니다.':
     !saved?'계정 연결과 실제 용량을 선택하고 저장 설정을 저장하세요.':!targets.length?'새 자료를 받을 저장 대상을 하나 이상 선택하세요.':
+      enabled?'새 보관이 활성화되어 있습니다. 아래에서 완료 자료를 준비하고 보관하세요.':
       !verified?'소량 전송과 읽기 검증 후 새 보관을 활성화할 수 있습니다.':'연결 검증을 마쳤습니다. 새 보관 활성화 후 완료 자료를 준비하세요.';
 }
 function result(data){
