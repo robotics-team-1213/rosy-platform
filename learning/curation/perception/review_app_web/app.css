@@ -13,10 +13,7 @@ h3 { font-size: var(--text-body); margin: 0; }
 p { line-height: var(--leading-copy); }
 .quiet, #source-info, #counts { color: var(--text-secondary); }
 a { color: var(--text-primary); text-underline-offset: var(--space-1); }
-/* D-741: the app bar holds the app and the theme; the four screens are the shared rail (app-shell.css). */
-ui-topbar { min-height: var(--appbar-height); }
-.theme-label { display: flex; align-items: center; gap: var(--space-2); }
-.workspace { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 78rem; margin-inline: auto; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 78rem; }
 .photo-sidebar { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-4); min-width: 0; padding: var(--space-3) var(--space-6); border-bottom: 1px solid var(--surface-line); }
 .photo-sidebar h2, .photo-sidebar #counts { margin: 0; }
 .photo-sidebar > label { justify-self: end; max-width: 16rem; }
@@ -104,16 +101,13 @@ summary { cursor: pointer; }
 #save-status { font-size: var(--text-label); }
 .preparation { border-top: 1px solid var(--surface-line); margin-top: var(--space-6); padding-top: var(--space-5); }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondary); font-size: var(--text-label); }
-.learning-main { width: 100%; max-width: 78rem; margin-inline: auto; }
+.learning-main { width: 100%; max-width: 78rem; }  /* 셸 안에서는 레일 옆에 붙인다: 화면을 옮겨도 본문 왼쪽 끝이 같다 */
 #catalog-main { container-type: inline-size; }
 #catalog-main .ui-form > .ui-field-label, #catalog-main .ui-form > ui-button { flex: 1 1 10rem; min-width: 0; max-width: 30rem; }
 #catalog-main .ui-form .ui-field { width: 100%; }
 @container (width < 22rem) {
   #catalog-main .ui-form > .ui-field-label, #catalog-main .ui-form > ui-button { flex: none; max-width: none; }
 }
-.workspace-heading { display: flex; justify-content: space-between; gap: var(--space-5); align-items: center; margin-block: var(--space-2) var(--space-4); }
-.workspace-heading p { color: var(--text-secondary); margin-bottom: 0; max-width: 70ch; }
-.workspace-heading h2 { font-size: var(--text-title); }
 .learning-section { margin-top: var(--space-4); }
 ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 /* D-741 §5 one-row app bar: below 30rem the account link shows only its icon and the theme select drops its visible
@@ -121,7 +115,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 [data-learning-account-entry] > .ui-icon { display: none; }
 @media (width < 30rem) {
   [data-learning-account-entry] > .ui-icon { display: inline-block; }
-  [data-learning-account-entry] > .ui-icon-label, .theme-label > span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  [data-learning-account-entry] > .ui-icon-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 .learning-panel { min-width: 0; padding: var(--space-4); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-flat); }
 #journey-goal { overflow-wrap: anywhere; font-weight: var(--weight-medium); }
@@ -145,7 +139,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
   .learning-step-menu h2 { grid-column: 1 / -1; }
 }
 /* Account pages compose shared sections and fields; only placement lives here. */
-#accounts-main { max-width: 64rem; container-type: inline-size; }
+#accounts-main { container-type: inline-size; }
 #accounts-main ui-section > p { margin: 0; }
 #accounts-main #login-panel { max-width: 30rem; }
 .account-form { display: grid; gap: var(--gap-form); min-width: 0; }
@@ -173,6 +167,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 #pipeline-evidence, #pipeline-setup { margin-top: var(--space-3); }
 #pipeline-records p { overflow-wrap: anywhere; }
 .heading-links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.learning-lede { margin: 0 0 var(--space-4); color: var(--text-secondary); max-width: 70ch; }
 .learning-form { padding-block: var(--space-4); }
 .learning-form > label:last-of-type { flex: 1; min-width: min(100%, 24rem); }
 .learning-form > p { width: 100%; font-size: var(--text-label); }
@@ -263,8 +258,8 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 }
 @media (width < 64rem) { .review-layout, .pixel-layout { grid-template-columns: 1fr; } .review-stage, .pixel-editor-column { display: block; } .review-editor-tools, .pixel-quick-tools { position: static; max-height: none; overflow: visible; padding: 0; margin-bottom: var(--space-3); } .review-editor-tools .review-view-bar, .pixel-quick-tools .review-view-bar { display: flex; } .review-editor-tools .review-viewport-controls ui-button span, .pixel-quick-tools .review-viewport-controls ui-button span { display: inline; } .review-editor-tools .review-class-row, .pixel-quick-classes { display: flex; grid-template-columns: none; flex-wrap: nowrap; max-height: none; overflow-x: auto; } .review-editor-tools ui-actions { display: flex !important; flex-wrap: wrap; } .review-editor-tools ui-actions > * { width: auto; } .pixel-ribbon-nav { grid-template-columns: repeat(2, minmax(0,1fr)); } .pixel-quick-tools .ui-workspace-bar { display: flex; } .label-inspector, .pixel-review-column { border-left: 0; padding-left: 0; border-top: 1px solid var(--surface-line); padding-top: var(--space-4); } }
 @media (width < 90rem) { .workspace { grid-template-columns: 1fr; } .photo-sidebar { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-4); min-width: 0; padding: var(--space-3) var(--space-4); border-right: 0; border-bottom: 1px solid var(--surface-line); } .photo-sidebar h2, .photo-sidebar #counts, .scope p { margin: 0; } .photo-sidebar > label { justify-self: end; max-width: 16rem; } #frames { grid-column: 1 / -1; flex-direction: row; overflow-x: auto; scroll-snap-type: x proximity; margin: 0; padding-bottom: var(--space-2); } #frames ui-button { flex: 0 0 10rem; width: auto; scroll-snap-align: start; } .scope { grid-column: 1 / -1; padding-top: var(--space-2); } .scope h3 { display: none; } main { padding: var(--space-5); } }
-@media (width < 40rem) { .review-layout { grid-template-columns: 1fr; } .label-inspector { border-left: 0; padding-left: 0; } .photo-sidebar { grid-template-columns: 1fr auto; } .photo-sidebar #counts { grid-column: 1 / -1; } .photo-sidebar > label { grid-column: 2; grid-row: 1; max-width: none; } .photo-sidebar > label > select { width: 100%; } .workspace-heading, .review-summary { flex-wrap: wrap; } .work-filters label { flex: 1; } .work-filters .search-field { flex-basis: 100%; } .review-viewport-controls ui-button span { display: none; } }
-@media (width < 30rem) { main, .photo-sidebar { padding: var(--space-4); } h1 { font-size: var(--text-body); } .frame-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; } .frame-navigation #next-pending { grid-column: 1 / -1; } .frame-navigation ui-button { width: 100%; } .frame-navigation [data-spacer] { display: none; } .workspace-heading { margin-top: 0; } #show-all, #catalog-retry { width: 100%; } }
+@media (width < 40rem) { .review-layout { grid-template-columns: 1fr; } .label-inspector { border-left: 0; padding-left: 0; } .photo-sidebar { grid-template-columns: 1fr auto; } .photo-sidebar #counts { grid-column: 1 / -1; } .photo-sidebar > label { grid-column: 2; grid-row: 1; max-width: none; } .photo-sidebar > label > select { width: 100%; } .review-summary { flex-wrap: wrap; } .work-filters label { flex: 1; } .work-filters .search-field { flex-basis: 100%; } .review-viewport-controls ui-button span { display: none; } }
+@media (width < 30rem) { main, .photo-sidebar { padding: var(--space-4); } h1 { font-size: var(--text-body); } .frame-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; } .frame-navigation #next-pending { grid-column: 1 / -1; } .frame-navigation ui-button { width: 100%; } .frame-navigation [data-spacer] { display: none; } #show-all, #catalog-retry { width: 100%; } }
 @media (width < 30rem) {
   ui-topbar { padding: var(--space-1) var(--space-3); }
   .preparation > ui-button { width: 100%; }

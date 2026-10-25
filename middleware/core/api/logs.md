@@ -1292,3 +1292,8 @@
 - 변경: 예약 도구로 API reference v1.318과 CORE app의 계약 설명을 맞췄다. CORE route·권한·명령·WS envelope 동작은 바꾸지 않았다.
 - 증거: 버전 고정값은 `api_reserve.py bump`로 함께 갱신했다. 원격 버전 정렬 시험으로 확인한다.
 - gate 변화: 없음. Fleet 캐시 읽기 wire의 계약 표시 변경이며 CORE·장치 수용을 주장하지 않는다. CE: 해당 없음.
+
+## 2026-10-26 · uiux-shell · 모터 관측 없음 사유를 한국어로
+
+- 변경: `support_reason`이 화면에 그대로 나오던 영어 문장을 표면 대체 문구와 같은 한국어로 바꿨다. 응답 모양·상태값은 같다.
+- gate 변화: 없음.
