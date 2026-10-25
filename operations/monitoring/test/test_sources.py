@@ -60,6 +60,25 @@ def test_fleet_legacy_tls_refused_preserves_owner_auth_failure():
     assert reported.reason_code == 'PAIRING_REQUIRED' and reported.last_success_at is None
 
 
+def test_fleet_restart_without_a_cache_retains_last_observations_as_stale():
+    cfg, cache, credentials, clock = setup({'kind': 'fleet', 'url': 'https://fleet.invalid'})
+    body = {'sampled_at': clock.utcnow().isoformat(), 'cache_age_s': 0.0,
+            'robots': [{'robot_id': 'robot1', 'link': 'up', 'reachable': True,
+                        'reason_code': None, 'state_age_s': 0.0}]}
+    def answer(request):
+        return httpx.Response(200, stream=httpx.ByteStream(json.dumps(body).encode()))
+    reader = SourceReader(cache, credentials, transport=httpx.MockTransport(answer))
+    asyncio.run(reader.poll(cfg.sources[0]))
+    clock.advance(16)
+    body = {'sampled_at': None, 'cache_age_s': None, 'robots': []}
+    asyncio.run(reader.poll(cfg.sources[0]))
+    snapshot = cache.snapshot(frozenset({'site-a'}))
+    robot = next(node for node in snapshot.nodes if node.kind == 'robot')
+    reported = next(link for link in snapshot.links if link.kind == 'reported')
+    assert robot.freshness == 'stale' and reported.freshness == 'stale'
+    assert next(link for link in snapshot.links if link.kind == 'probe').reachable is True
+
+
 def test_core_reads_only_identity_and_owner_diagnostics():
     cfg, cache, creds, clock = setup({'kind': 'core', 'url': 'https://core.invalid', 'token_env': 'UPSTREAM'})
     requests = []
