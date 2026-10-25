@@ -11,7 +11,7 @@ from test_rosy_config_apply import _module as config_module
 
 
 def _card(root, text):
-    path = root / "boot/firmware/rosy-config.yaml"
+    path = root / "run/rosy-provision-boot/rosy-config.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("schema_version: 1\n" + text, encoding="utf-8")
     return path
@@ -36,6 +36,7 @@ def test_actual_config_changes_and_applied_digest_survive_b_and_return_to_a(tmp_
     assert card_a.exists()
     assert (root_a / "var/lib/rosy/config/applied.json").read_bytes() == (
         root_b / "var/lib/rosy/config/applied.json").read_bytes()
+    assert config_module().apply(root_a, lambda _: "")["state"] == "unchanged"
 
 
 def test_config_during_initialization_is_not_overwritten_by_the_first_bundle(tmp_path, monkeypatch):
