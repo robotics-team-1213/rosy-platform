@@ -53,11 +53,12 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/installation/camera-peer.js": 2,
     "applications/fleet/web/cell/cell.js": 1,
     "applications/fleet/web/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
+    "applications/fleet/web/work/arm-transfer-view.js": 1,  # Explicit independent ARM admission.
     "applications/fleet/web/work/policy-page.js": 1,  # D-793 incident lock release
     "applications/fleet/web/confirmed-action.js": 1,
     "applications/fleet/web/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
     # 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision). D-798 3.2 split the shell:
-    "applications/fleet/web/console.js": 1,  # the channel review bridge to the same confirmedAction owner
+    "applications/fleet/web/console.js": 2,  # Channel and neutral ARM review use the same confirmedAction owner.
     "applications/fleet/web/console-goal.js": 2,  # map goal send; D-593 operator pin asks first
     "applications/fleet/web/console-refresh.js": 1,  # dispatch rearm
     "applications/fleet/web/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
