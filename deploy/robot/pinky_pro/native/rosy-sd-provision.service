@@ -5,12 +5,15 @@ Requires=rosy-first-boot.service
 After=rosy-first-boot.service
 AssertPathExists=/var/lib/rosy/provisioning/complete.json
 Before=rosy-core.service rosy-runtime.target
+# CORE maintenance stops must invalidate this cached admission too.
+PartOf=rosy-core.service
 
 [Service]
 Type=oneshot
+ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/native-runtime/os_storage_dispatch.py --no-pending-maintenance
 ExecStart=/usr/bin/test -s /var/lib/rosy/provisioning/complete.json
 RemainAfterExit=yes
 NoNewPrivileges=true
 PrivateDevices=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only

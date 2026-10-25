@@ -207,6 +207,7 @@ def test_runtime_completion_unit_requires_the_os_bootstrap_maintenance_check():
     pre = [line for line in text.splitlines() if line.startswith("ExecStartPre=")]
     assert any("os_storage_dispatch.py --no-pending-maintenance" in line for line in pre)
     assert "ProtectHome=read-only" in text
+    assert "PartOf=rosy-core.service" in text
 
 
 def test_tls_can_restore_all_local_files_when_canonical_pointer_was_not_published(device, tmp_path, monkeypatch):

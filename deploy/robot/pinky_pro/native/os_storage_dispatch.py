@@ -44,11 +44,15 @@ def bootstrap_entry() -> Path:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("/"))
+    parser.add_argument("--no-pending-maintenance", action="store_true")
     args = parser.parse_args(argv)
     try:
         if marked(args.root):
             entry = bootstrap_entry()
-            os.execv(sys.executable, [sys.executable, "-I", "-B", str(entry), "--root", str(args.root)])
+            command = [sys.executable, "-I", "-B", str(entry), "--root", str(args.root)]
+            if args.no_pending_maintenance:
+                command.append("--no-pending-maintenance")
+            os.execv(sys.executable, command)
         print(json.dumps({"schema_version": 1, "phase": "LEGACY"}, sort_keys=True))
         return 0
     except (OSError, ValueError):
