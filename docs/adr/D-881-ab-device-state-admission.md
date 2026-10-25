@@ -22,6 +22,8 @@ storage admission 코드는 OS 이미지 소유 `/opt/rosy/os-bootstrap`에 고�
 
 `rosy-os-storage.service`의 `RequiredBy` enable 링크와 `Before` 순서가 NetworkManager, ssh.service, ssh.socket, tailscaled, SSH boot cleanup 및 firstboot/retry에 실제 필수 의존성을 만든다. SSH socket보다 앞서므로 `DefaultDependencies=no`와 local-fs 이후 순서를 유지한다. mounted-image 검사는 helper 사본과 필수 링크를 확인하고, native image build는 chroot 안의 실제 vendor unit graph를 `systemd-analyze verify`로 검사한다. 오프라인 링크 설치·소스 시험을 실제 mount namespace나 장치 부팅 수용으로 보고하지 않는다.
 
+공유 HOME을 다른 root가 chown하지 않도록 native 이미지의 로컬 UID/primary GID를 CORE960, I/O961, display962, camera963, operator1001로 고정한다. builder는 operator 계정도 비밀번호 없이 미리 만들고 모든 예약 ID·동일 ID의 다른 계정/그룹 alias·operator home/shell을 검사한다. A/B storage admission은 각 root의 실제 passwd/group과 공유 CORE/operator directory의 owner/group/권한을 검사한 뒤에만 firstboot 쓰기를 허용한다. data formatter는 이 소유권으로 공장 directory를 준비해야 한다. 잘못된 소유권을 부팅 중 임의 chown으로 고쳐 이전 root의 접근을 깨뜨리지 않는다. 기존 legacy 이미지의 계정 번호를 이 경로에서 강제로 바꾸지 않는다.
+
 ### Ownership and existing decisions
 
 | 기준 | 관계 |

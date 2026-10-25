@@ -264,3 +264,35 @@ def test_account_mismatch_is_refused_before_shared_home_or_identity_changes(tmp_
     assert not (root_a / "etc/rosy/device-identity.json").exists()
     assert not (common / "core/.rosy").exists()
     assert bundle.exists()
+
+
+@pytest.mark.parametrize("change", ["uid", "gid", "permissions"])
+def test_foreign_shared_home_is_not_reowned_by_firstboot(tmp_path, monkeypatch, change):
+    import os
+    from types import SimpleNamespace
+
+    root_a, _, common, _ = shared_roots(tmp_path, monkeypatch)
+    target = root_a / "var/lib/rosy/core"
+    if change == "permissions":
+        target.chmod(0o777)
+    else:
+        original = os.stat
+
+        def foreign_home(path, *args, **kwargs):
+            info = original(path, *args, **kwargs)
+            if not isinstance(path, int) and os.fspath(path) == str(target):
+                fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+                fields["st_" + change] = 970
+                return SimpleNamespace(**fields)
+            return info
+
+        monkeypatch.setattr(os, "stat", foreign_home)
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
+    bundle.parent.mkdir()
+    bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
+    with pytest.raises(ValueError, match="OS_STATE_HOLD"):
+        _module().FirstBootProvisioner(root=root_a, network_activate=lambda _: True).apply(
+            bundle=bundle, hardware_serial=SERIAL)
+    assert not (common / "core/.rosy").exists()
+    assert not (common / "state/current.json").exists()
+    assert bundle.exists()
