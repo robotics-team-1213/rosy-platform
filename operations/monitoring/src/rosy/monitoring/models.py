@@ -49,6 +49,13 @@ class Observation(MonitoringModel):
     freshness: Literal["fresh", "stale", "unknown"]
     reason_code: Annotated[str, Field(strict=True, max_length=96)] | None = None
 
+    @field_validator("valid_for_s", mode="before")
+    @classmethod
+    def strict_source_lifetime(cls, value):
+        if type(value) is not int:
+            raise ValueError("source lifetime must be an integer")
+        return value
+
     @field_validator("reason_code")
     @classmethod
     def reason_is_public(cls, value):
@@ -115,7 +122,7 @@ class MonitoringLink(Observation):
 
 
 class MonitoringSnapshot(MonitoringModel):
-    schema_version: Annotated[int, Field(strict=True, ge=1, le=1)] = 1
+    schema_version: Annotated[int, Field(strict=True, ge=1, le=1)]
     collector_id: Name
     generation: Annotated[str, StringConstraints(strict=True, pattern=r"^[a-f0-9]{32}$")]
     sequence: Annotated[int, Field(strict=True, ge=0, le=2**63 - 1)]

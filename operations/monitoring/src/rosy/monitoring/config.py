@@ -55,9 +55,10 @@ class SourceConfig(MonitoringModel):
                 except ValueError:
                     loopback = False
                 valid = (target.scheme == "https" or target.scheme == "http" and loopback)
-                valid = (valid and bool(target.hostname) and not target.username and not target.password
+                valid = (valid and bool(target.hostname) and target.username is None and target.password is None
                          and not target.query and not target.fragment and "?" not in self.url
-                         and "#" not in self.url and not any(c.isspace() for c in self.url)
+                         and "#" not in self.url and self.url.isprintable()
+                         and not any(c.isspace() for c in self.url)
                          and (port is None or 1 <= port <= 65535))
                 if self.kind != "http" and target.path not in {"", "/"}:
                     valid = False
