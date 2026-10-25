@@ -7,6 +7,7 @@ import json
 import pytest
 
 from storage_inventory import StorageInventory
+from test_learning_accounts import accounts  # noqa: F401
 from test_storage_pool import pool_setup  # noqa: F401
 
 
