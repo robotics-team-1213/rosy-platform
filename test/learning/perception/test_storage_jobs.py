@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from storage_inventory import StorageInventory
-from test_learning_accounts import accounts  # noqa: F401
+from test_learning_accounts import accounts, sign_in  # noqa: F401
 from test_storage_pool import pool_setup  # noqa: F401
 
 
@@ -424,3 +424,17 @@ def test_revoked_connection_stops_later_upload_source_reads(jobs_setup, accounts
     outcome = service.run(actor, job['id'])
     assert len(sent) == 1 and outcome['bytes_verified'] is False
     assert artifact.exists()
+
+
+def test_project_cache_limit_counts_other_members_copies(jobs_setup, accounts):
+    build, alice, remote, artifact, cache, inventory = jobs_setup
+    config = json.loads(accounts.config_path.read_text())
+    config['users'][1]['memberships']['one'] += ['publish', 'manage']
+    accounts.config_path.write_text(json.dumps(config))
+    _, bob = sign_in(accounts, 'bob')
+    first, second = create(build, alice), create(build, bob)
+    build().run(alice, first['id']); build().run(bob, second['id'])
+    build().reclaim(alice, first['id'], first['id']); build().restore(alice, first['id'])
+    inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=first['upload_bytes'])
+    with pytest.raises(ValueError, match='space'): build().restore(bob, second['id'])
+    assert (cache / first['id']).is_dir() and not (cache / second['id']).exists()
