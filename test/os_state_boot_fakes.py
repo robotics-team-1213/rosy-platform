@@ -5,14 +5,14 @@ from pathlib import Path
 import stat
 from types import SimpleNamespace
 
-from os_state_fakes import projected_device
+from os_state_fakes import mount_device
 
 
-def shared_roots(tmp_path, monkeypatch):
-    roots = [tmp_path / "root-a", tmp_path / "root-b"]
+def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a"):
+    roots = [root_a or tmp_path / "root-a", tmp_path / "root-b"]
     tables = []
-    for root, slot in zip(roots, ("a", "b")):
-        (root / "etc/rosy").mkdir(parents=True)
+    for root, slot in zip(roots, (root_slot, "b" if root_slot == "a" else "a")):
+        (root / "etc/rosy").mkdir(parents=True, exist_ok=True)
         accounts = [("rosy-core", 960), ("rosy-io", 961), ("rosy-display", 962), ("rosy-camera", 963), ("rosy", 1001)]
         (root / "etc/passwd").write_text("".join(
             f"{name}:x:{uid}:{uid}::{('/home/rosy' if name == 'rosy' else '/nonexistent')}:"
@@ -22,9 +22,9 @@ def shared_roots(tmp_path, monkeypatch):
         zone.parent.mkdir(parents=True)
         zone.write_bytes(b"TZif synthetic UTC payload")
         boot = root / "proc/sys/kernel/random/boot_id"
-        boot.parent.mkdir(parents=True)
+        boot.parent.mkdir(parents=True, exist_ok=True)
         boot.write_text("fixture")
-        tables.append(projected_device(root, monkeypatch, slot=slot))
+        tables.append(mount_device(root, monkeypatch, slot=slot))
     common = tmp_path / "data"
     for root, destination in zip(roots, (common, tmp_path / "unused-b-factory")):
         original = root / "var/lib/rosy-device"

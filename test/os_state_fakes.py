@@ -12,7 +12,7 @@ GENERATION = "a87be39d-02d8-4a95-9208-570ed7506cd2"
 BOOT = "a8f1b6c8-678f-43fe-bdfc-a93d2465a1c8"
 
 
-def projected_device(root, monkeypatch, *, slot="a", split_disk=False):
+def mount_device(root, monkeypatch, *, slot="a", split_disk=False):
     layout = dict(DESCRIPTOR, slot=slot)
     if slot == "b":
         layout["root_partuuid"] = "c26f0d91-9c91-48fe-a1c2-fcb14ec3ed5c"
@@ -78,3 +78,24 @@ def projected_device(root, monkeypatch, *, slot="a", split_disk=False):
 
     monkeypatch.setattr(os, "stat", fake_stat)
     return common, host_mountinfo, self_mountinfo
+
+
+def projected_device(root, monkeypatch, *, slot="a", split_disk=False):
+    # Invalid physical media is a negative fixture; it cannot publish readiness.
+    if split_disk:
+        return mount_device(root, monkeypatch, slot=slot, split_disk=True)
+    from os_state_boot_fakes import shared_roots
+    from test_first_boot_provisioning import _bundle, _module
+    root, _, common, _ = shared_roots(root, monkeypatch, root_a=root, root_slot=slot)
+    bundle = root / "run/rosy-provision-boot/rosy-provision/provision.json"
+    bundle.parent.mkdir()
+    bundle.write_text(json.dumps(_bundle()))
+    first = _module()
+    assert first.FirstBootProvisioner(root=root, network_activate=lambda _: True).apply(
+        bundle=bundle, hardware_serial="10000000abcdef01")["ok"]
+    serial = root / "proc/device-tree/serial-number"
+    serial.parent.mkdir(parents=True)
+    serial.write_bytes(b"10000000abcdef01\0")
+    (root / "proc/sys/kernel/hostname").write_text("rosy-pinky-k7m4\n")
+    first._native_helper("os_state_ready").publish_ready(root)
+    return common, root / "proc/1/mountinfo", root / "proc/self/mountinfo"

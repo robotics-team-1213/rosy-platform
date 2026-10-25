@@ -104,7 +104,7 @@ def test_image_builder_checks_actual_vendor_units_before_mounted_image_acceptanc
 
 
 @pytest.mark.parametrize("marked", [False, True])
-@pytest.mark.parametrize("flag", [None, "--no-pending-maintenance", "--tailnet"])
+@pytest.mark.parametrize("flag", [None, "--no-pending-maintenance", "--tailnet", "--projected"])
 def test_early_dispatcher_needs_no_payload_helpers_and_never_falls_back_for_ab(tmp_path, marked, flag):
     runtime = tmp_path / "opt/rosy/native-runtime"
     runtime.mkdir(parents=True)
@@ -122,7 +122,7 @@ def test_early_dispatcher_needs_no_payload_helpers_and_never_falls_back_for_ab(t
     assert report["phase"] == ("HOLD" if marked else "LEGACY")
 
 
-@pytest.mark.parametrize("flag", ["--no-pending-maintenance", "--tailnet"])
+@pytest.mark.parametrize("flag", ["--no-pending-maintenance", "--tailnet", "--projected"])
 def test_isolated_dispatch_forwards_maintenance_admission_to_the_os_entrypoint(tmp_path, flag):
     prefix = tmp_path / "opt/rosy"
     runtime, bootstrap = prefix / "native-runtime", prefix / "os-bootstrap"

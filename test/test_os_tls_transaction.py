@@ -205,7 +205,7 @@ def test_runtime_completion_unit_requires_the_os_bootstrap_maintenance_check():
     native = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/native"
     text = (native / "rosy-sd-provision.service").read_text()
     pre = [line for line in text.splitlines() if line.startswith("ExecStartPre=")]
-    assert any("os_storage_dispatch.py --no-pending-maintenance" in line for line in pre)
+    assert any("os_storage_dispatch.py --projected" in line for line in pre)
     assert "ProtectHome=read-only" in text
     assert "PartOf=rosy-core.service" in text
 

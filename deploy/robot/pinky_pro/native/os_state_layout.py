@@ -235,28 +235,8 @@ def policy_directory(root: Path) -> Path:
         loaded = _layout(root)
         if loaded is None:
             return root / "var/lib/rosy/updates"
-        layout, descriptor_sha = loaded
-        if _path(root, TLS_PENDING).exists():
-            raise ValueError("TLS transaction pending")
-        owner = root.stat().st_uid
-        schema = _object(_read(_path(root, COMMON + "/state/schema.json"), 8192, owner),
-                         {"schema_version", "state_schema"})
-        current = _object(_read(_path(root, COMMON + "/state/current.json"), 8192, owner),
-                          {"schema_version", "state_schema", "generation", "manifest_sha256"})
-        _guid(current["generation"])
-        _digest(current["manifest_sha256"])
-        ready = _object(_read(_path(root, READY), 32768, owner),
-                        {"schema_version", "phase", "boot_id", "slot", "descriptor_sha256",
-                         "generation", "projection_sha256", "mounts"})
-        boot = _read(root / "proc/sys/kernel/random/boot_id", 128).decode("ascii").strip()
-        _guid(boot)
-        if (ready["phase"] != "PROJECTED" or ready["boot_id"] != boot or ready["slot"] != layout["slot"]
-                or ready["descriptor_sha256"] != descriptor_sha or ready["generation"] != current["generation"]
-                or ready["projection_sha256"] != current["manifest_sha256"]):
-            raise ValueError("projection readiness differs from current boot/slot/generation")
-        facts = mount_facts(root, layout)
-        if json.dumps(ready["mounts"], sort_keys=True) != json.dumps(facts, sort_keys=True):
-            raise ValueError("mount identity changed after readiness")
+        from os_state_ready import verify_ready
+        verify_ready(root)
         policy = _path(root, COMMON + "/policy/updates")
         if not policy.is_dir():
             raise ValueError("shared policy directory missing")

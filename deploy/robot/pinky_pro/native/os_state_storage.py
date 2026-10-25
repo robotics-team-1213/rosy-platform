@@ -27,10 +27,15 @@ def main(argv=None) -> int:
     parser.add_argument("--root", type=Path, default=Path("/"))
     parser.add_argument("--no-pending-maintenance", action="store_true")
     parser.add_argument("--tailnet", action="store_true")
+    parser.add_argument("--projected", action="store_true")
     args = parser.parse_args(argv)
     try:
-        report = (admit_tailnet(args.root, bind_machine=True) if args.tailnet else
-                  admit_storage(args.root, require_no_pending=args.no_pending_maintenance))
+        if args.projected:
+            from os_state_ready import publish_ready
+            report = publish_ready(args.root)
+        else:
+            report = (admit_tailnet(args.root, bind_machine=True) if args.tailnet else
+                      admit_storage(args.root, require_no_pending=args.no_pending_maintenance))
     except (OSError, ValueError, KeyError, TypeError):
         print(json.dumps({"schema_version": 1, "phase": "HOLD", "reason": "OS_STATE_HOLD"}))
         return 1
