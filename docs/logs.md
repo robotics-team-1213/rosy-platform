@@ -10497,3 +10497,9 @@ osy-d395-s1d\`.
 - 변경: PR #189의 자기 커밋 31개를 로컬 main 위로 옮겼다(origin 병합분 제외, `deploy/hosts/services.yaml` 변경은 로컬 main에 파일이 없어 빼고 origin 병합 때 들어온다). 로컬 main의 `record_session.py`(쌍 세션, `hardware_faults`)와 합칠 때 리더 경보 재부팅은 1암 셀에만 두고, 끝 정리는 `note_fault` 기록 뒤에 재부팅한다. 사용자 결정(2026-10-25)으로 교사 경로를 guard 안으로 옮겼다: `guarded_native.py record --teacher`(리더 없이 동작이 목표, 6관절 1→10 deg/s·10 deg/s² 흐름, 집게만 추종 오차 제외), `chunk_runner.py`도 passive connect와 같은 guard로 보낸다. `teach_trajectory.GUARD_UNITS_PER_S = 5`로 궤적·청크·계획기·park를 늦추고 더 빠른 파일은 거부한다.
 - 증거: 원격 OMX 시험 전체 통과(exit 0). 변이(집게 예외를 모든 관절로, 속도 거부 제거)에서 새 시험이 실패함을 확인.
 - gate 변화: 없음. 실물 재생·청크 실행은 guard 속도로 다시 확인해야 한다(사이클이 사람 시연보다 길어진다). 실물 동작은 전원 스위치 옆에 사람이 있을 때만.
+
+## 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
+
+- 변경: `sim_chunk_plan.py`가 `grasp_planner` 청크와 `transit_path` 이동을 sim 셀의 집기·놓기 목표에 맞춰 SIM teacher의 approach/grasp/transfer/release로 바꾼다. `--plan chunks`가 teacher·demonstrations·prepare·job·`remote_omx_native.py`를 지난다. 놓기는 측정한 집게 위치부터 연다(`open_from`). 앞의 착지 merge 커밋 `5ceabe6015`이 작업 트리의 추적 파일 변경(실험 연결부)을 함께 담았고, 새 파일은 이 커밋에서 들어간다.
+- 증거: AI 시험 호스트 native SIM 2회. 1회 FAIL(release 첫 목표가 상자에 막힌 집게를 더 닫으라고 함), 수정 뒤 2회 **PASS** — xy 0.12 mm, 들기 102 mm, 2.25 s 정지, RGB 2,060장. `docs/validation/omx-arm-s-chunks-sim-2026-10-25/result.md`.
+- gate 변화: 없음. sim 셀은 S 셀 좌표가 아니고, B 구간·판단 자리·실물 guard 속도는 별도다.
