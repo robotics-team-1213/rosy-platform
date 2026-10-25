@@ -35,6 +35,27 @@ def test_committed_identity_and_runtime_are_projected_before_b_is_already_provis
     assert not bundle.exists(), "B must recover from committed state without a new card bundle"
 
 
+def test_projected_b_applies_its_committed_live_hostname_before_already_provisioned(tmp_path, monkeypatch):
+    module, _, root_b, _, bundle = _provision_a(tmp_path, monkeypatch)
+    applied = []
+    result = module.FirstBootProvisioner(root=root_b, hostname_apply=applied.append).apply(
+        bundle=bundle, hardware_serial=SERIAL)
+    assert result["state"] == "ALREADY_PROVISIONED"
+    identity = json.loads((root_b / "etc/rosy/device-identity.json").read_text())
+    assert applied == [identity["hostname"]]
+
+
+def test_a_matching_live_hostname_does_not_restart_avahi(tmp_path, monkeypatch):
+    runtime = _module()._native_helper("first_boot_runtime")
+    monkeypatch.setattr(runtime.socket, "gethostname", lambda: "fixture-robot")
+
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("matching hostname must not invoke host commands")
+
+    monkeypatch.setattr(runtime.subprocess, "run", unexpected)
+    runtime._default_hostname_apply("fixture-robot")
+
+
 def test_common_completion_without_its_committed_generation_is_a_hold(tmp_path, monkeypatch):
     module, _, root_b, common, bundle = _provision_a(tmp_path, monkeypatch)
     (common / "state/current.json").unlink(missing_ok=True)
