@@ -33,6 +33,16 @@ def test_registered_composite_graph_ids_fit_before_collecting(kind):
                                    'kind': kind, 'url': 'https://example.invalid'}])
 
 
+def test_long_valid_source_alias_can_create_initial_inventory():
+    cfg, cache, credentials, clock = setup({'kind': 'http', 'url': 'https://example.invalid'})
+    raw = cfg.model_dump(mode='json')
+    raw['sources'][0]['id'] = 't' * 96
+    validated = MonitoringConfig.model_validate(raw)
+    inventory = ObservationCache(validated).snapshot(frozenset({'site-a'}))
+    target = next(node for node in inventory.nodes if node.kind == 'service')
+    assert target.id.endswith('t' * 96) and target.label == 't' * 80
+
+
 def test_fleet_legacy_tls_refused_preserves_owner_auth_failure():
     cfg, cache, creds, clock = setup({'kind': 'fleet', 'url': 'https://fleet.invalid'})
     paths = []
