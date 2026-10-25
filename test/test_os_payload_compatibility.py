@@ -36,6 +36,8 @@ def _candidate(tmp_path, monkeypatch, contract, *, missing_closure=False):
     if contract is not None:
         lines.append("\nOS_COMPATIBILITY = " + repr(contract) + "\n")
     engine.write_text("".join(lines))
+    for name in ("manifest.json", "SHA256SUMS", "SHA256SUMS.sig"):
+        (release / name).unlink(missing_ok=True)
     seal_release(release, CANDIDATE)
     (release / "SHA256SUMS.sig").write_text(sign_checksums((release / "SHA256SUMS").read_bytes(), private) + "\n")
     current = root / "opt/rosy/current"
