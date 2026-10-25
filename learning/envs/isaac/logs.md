@@ -326,3 +326,9 @@
 - 변경: 개발 기준 a46daee90b7의 run admission·binding·catalog·control·store·system·worker와 다섯 회귀 파일을 공개 소스에 연결했다. contact producer·verifier가 아직 없으므로 접촉 시나리오만 일시 비활성화하고 거절 회귀를 추가했다. 나머지 원래 검증·잠금·소유권·불변 증거·복구 동작을 유지한다.
 - 검증: 커밋 SHA에 결속한 원격 Isaac 패키지와 선택된 guard, 독립 base/head 검토 및 CI를 확인한다. 기존 SDK 실행은 이 새 공개 SHA의 실행으로 재명명하지 않는다.
 - gate 변화: 없음. 이 단계의 실행 가능 시나리오는 모델 import뿐이며 SDK 신규 실행·학습·실물 명령을 수행하지 않았다.
+
+## 2026-10-25 · uncommitted · 접촉 왕복 producer·판정기의 공개 소스 포트
+
+- 변경: a46daee90b7의 conveyor fixture·report·task·회귀를 그대로 보존하고 catalog를 원본과 같이 활성화했다. 단계 PNG와 보고서는 기존 실행 원장의 크기·해시 검증을 거쳐 Learning 소비 경로에 연결된다.
+- 증거: 원래 source7d0cfcd6e94f/run36041b241ee25366986bb3a6262ba0be의 frozen 검증·실패·drive-mode 교훈을 보존한다. 이번 공개 SHA의 원격 호스트 회귀·독립 검토·CI는 새 SDK 실행과 구분한다.
+- gate 변화: 기존 단일 합성 접촉 스모크의 소스가 공개된다. 새 SDK 실행·동기화 Episode 수집·학습 정책 평가·실물 명령은 수행하지 않았다. CE는 기존 교훈을 재사용하며 새 해결 기록을 늘리지 않는다.

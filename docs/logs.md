@@ -9747,3 +9747,9 @@ osy-d395-s1d\`.
 - 변경: `collection_pipeline.py prepare-native --camera-reference ROLE=PATH`(역할마다 한 번)와 `prepare_native(camera_references=)`. 새 `learning/curation/omx/camera_reference.py`가 계약 `validate_reference`로 읽고 파일 이름=revision, 역할 중복·불일치, dataset `observation.images.*`와 다른 역할 집합, 합친 `meta/info.json`의 폭·높이(축 이름으로 읽음)·fps 불일치를 거절한다. `{역할: revision}`만 `inspection.json`·`capture.json`의 `camera_setup`에 남기고 `camera_identity`·경로는 남기지 않는다. 분할·구간 재검사는 같은 값을 넘겨 보고서를 그대로 비교한다. 옵션이 없으면 출력은 같다. 프레임 비교와 `camera-setup.json`은 아직 없다.
 - 증거: 원격 시험 PC 대상 시험 11 passed, 모델 PC learner venv(LeRobot 0.4.4) 실제 intake에서 revision 기록·fps 거절·식별자 미기록 1 passed, affected 계층 791 passed·known_failures 0 NEW.
 - gate 변화: 없음. CE 해당 없음 — 계획된 조각 구현이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · 기존 Isaac 접촉 관측과 교훈의 공개 보존
+
+- 변경: 개발 기준 a46daee90b7의 정지 Pinky proxy↔컨베이어 단일 스모크 검증 기록과 imported drive-mode 교훈을 원문 그대로 공개 보존한다. source7d0cfcd6e94f/run36041b241ee25366986bb3a6262ba0be와 frozen 지문을 유지한다.
+- 증거: producer·판정기·회귀·문서의 canonical blob을 원본과 대조하고 이번 공개 커밋의 원격 검사·독립 검토·CI를 별도로 결속한다. 원래 문서의 SDK·브라우저 검사 수치를 이번 공개 포트의 새 실행으로 바꾸지 않는다.
+- gate 변화: 없음. 소스 공개와 증거 보존이며 운영 서명 활성화·동기화 Episode·학습 정책·실물 수용은 별도다. CE 해당 없음 — 기존 교훈의 보존·재사용이며 새 해결 교훈을 작성하지 않았다.
