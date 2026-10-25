@@ -339,6 +339,7 @@ ROOT_ONLY_STATE = (
 # What each ProtectSystem=strict unit's program writes, derived from the code.
 # "$HOME" is the unit's Environment=HOME. Keep this next to the code references.
 DECLARED_WRITES = {
+    "rosy-os-storage.service": set(),
     "rosy-network-agent.service": {
         "/var/lib/rosy/network", "/etc/NetworkManager/system-connections",
         "/run/rosy-network", "/run/rosy-claim", "/run/rosy-claim.lock", "/run/rosy-claim.stale.x",
@@ -480,6 +481,14 @@ NETWORK_EVIDENCE_READS = {
 }
 
 DECLARED_READS = {
+    # Only the admission methods are called: none of firstboot's writers run here.
+    "rosy-os-storage.service": {
+        "/var/lib/rosy-device", "/etc/rosy", "/etc/hostname", "/etc/hosts",
+        "/var/lib/rosy/provisioning", "/var/lib/rosy/core", "/var/lib/rosy/ssh",
+        "/etc/NetworkManager/system-connections", "/home/rosy/.ssh",
+        "/run/rosy-provision-boot", "/proc/1/mountinfo", "/proc/self/mountinfo",
+        "/proc/1/root/dev/disk/by-partuuid", "/sys/dev/block", "/opt/rosy/native-runtime",
+    },
     "rosy-network-agent.service": NETWORK_EVIDENCE_READS | {
         # Imported generic transport default; the entrypoint overrides it with
         # both dedicated sockets. This name is never opened by this service.
@@ -571,6 +580,10 @@ NETWORK_SOURCES = [
 
 # Program sources scanned for write roots, per unit.
 PROGRAM_SOURCES = {
+    "rosy-os-storage.service": ["deploy/robot/pinky_pro/native/os_state_storage.py",
+                                "deploy/robot/pinky_pro/native/os_state_layout.py",
+                                "deploy/robot/pinky_pro/native/os_state_firstboot.py",
+                                "deploy/robot/pinky_pro/native/first_boot_runtime.py"],
     "rosy-network-agent.service": NETWORK_SOURCES + [
         "deploy/robot/pinky_pro/native/rosy-network-agent.py",
         "deploy/robot/pinky_pro/native/network_agent.py",
