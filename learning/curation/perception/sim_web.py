@@ -89,6 +89,14 @@ def public(row):
     return result
 
 
+def guarded(row):
+    """public(row), or None when the adapter returned a malformed row."""
+    try:
+        return public(row)
+    except (AttributeError, KeyError, TypeError):
+        return None
+
+
 def get(handler, path, runs):
     if path in {'/learning/sim', '/sim.js'}:
         file = STATIC / ('sim.html' if path == '/learning/sim' else 'sim.js')
@@ -100,9 +108,15 @@ def get(handler, path, runs):
     elif path == PREFIX + 'catalog':
         handler.send({'scenarios': runs.call({'action': 'catalog'}), 'source_sha': runs.source_sha})
     elif path == PREFIX + 'runs':
-        handler.send({'runs': [public(row) for row in runs.call({'action': 'list'})]})
+        rows = runs.call({'action': 'list'})
+        shown = [row for row in map(guarded, rows) if row is not None]
+        handler.send({'runs': shown, 'skipped': len(rows) - len(shown)})
     elif match := re.fullmatch(PREFIX + 'runs/(' + ID + ')', path):
-        handler.send(public(runs.call({'action': 'status', 'run_id': match[1]})))
+        row = guarded(runs.call({'action': 'status', 'run_id': match[1]}))
+        if row is None:
+            handler.send({'error': 'SIM 실행 기록 형식을 확인하세요. 같은 run을 다시 조회하세요.'}, 502)
+        else:
+            handler.send(row)
     elif match := re.fullmatch(PREFIX + 'runs/(' + ID + ')/artifacts/(' + '|'.join(ARTIFACT_TYPES) + ')', path):
         blob = runs.call({'action': 'artifact', 'run_id': match[1], 'artifact_id': match[2]})
         media_type = ARTIFACT_TYPES[match[2]]
