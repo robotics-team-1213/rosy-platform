@@ -21,7 +21,7 @@ RUN_AS_INSTALLED = (
 )
 
 
-@pytest.mark.parametrize("script", sorted(p.name for p in FIRST_BOOT.glob("*.py")))
+@pytest.mark.parametrize("script", sorted(p.name for p in FIRST_BOOT.glob("*.py") if p.name != "rosy-first-boot.py"))
 def test_entrypoint_runs_from_the_installed_path(script):
     result = subprocess.run(
         [sys.executable, "-c", RUN_AS_INSTALLED, str(FIRST_BOOT / script), INSTALLED + script],

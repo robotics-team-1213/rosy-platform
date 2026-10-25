@@ -8,7 +8,6 @@
 15914 control
 748 core/events/core_events/events/audit.py
 873 core/gateway/core/bridge/ros_bridge.py
-804 deploy/robot/pinky_pro/image/first-boot/rosy-first-boot.py
 1235 deploy/robot/pinky_pro/native/rosy-face.py
 641 deploy/robot/pinky_pro/native/rosy-hw-probe.py
 862 deploy/robot/pinky_pro/native/rosy-ssh-access.py
