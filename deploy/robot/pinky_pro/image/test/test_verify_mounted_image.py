@@ -19,6 +19,11 @@ def test_package_names(tmp_path):
     names = verify_mounted_image.package_names(f)
     assert names == {"pkg_a", "pkg_b"}
 
+
+def test_inspect_rejects_a_missing_storage_requirement_for_ssh_socket(tmp_path):
+    findings = verify_mounted_image.inspect(tmp_path, "2026.10.26-001")
+    assert any("ssh.socket" in item and "storage" in item for item in findings)
+
 def test_inspect_passes_with_valid_image(tmp_path):
     root = tmp_path / "root"
     root.mkdir()
