@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+from pathlib import Path
 import shutil
 
 import pytest
@@ -146,3 +147,28 @@ def test_unsafe_existing_signature_is_not_adopted_or_replaced(tmp_path, monkeypa
     with pytest.raises(ValueError):
         first._native_helper("os_factory_release").prepare_factory(other)
     assert target.read_bytes() == before
+
+
+def test_signature_staging_orphan_cannot_poison_the_signed_payload_inventory(tmp_path, monkeypatch):
+    first, _, other, _, _, _, _ = _device(tmp_path, monkeypatch)
+    target = other / "opt/rosy/releases" / FACTORY_ID / "SHA256SUMS.sig"
+    original = os.replace
+    staged = []
+
+    def interrupted(source, destination):
+        if Path(destination) == target:
+            staged.append(Path(source))
+            raise RuntimeError("fixture interruption before signature rename")
+        return original(source, destination)
+
+    helper = first._native_helper("os_factory_release")
+    with monkeypatch.context() as scoped:
+        scoped.setattr(os, "replace", interrupted)
+        with pytest.raises(RuntimeError, match="interruption"):
+            helper.prepare_factory(other)
+    assert len(staged) == 1
+    assert staged[0].parent == other / "var/lib/rosy/releases"
+    # Model a process-loss orphan; this is not an actual power-cut test.
+    staged[0].write_bytes(b"orphan signature fixture")
+    assert helper.prepare_factory(other)["phase"] == "FACTORY_VERIFIED"
+    assert staged[0].exists()
