@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import shlex
 import threading
@@ -184,6 +185,32 @@ def test_probe_parser_reads_only_the_rosyprobe_line():
     assert p["nproc"] == 8 and p["avail_gb"] == 4 and p["pytest"] and not p["sim"] and p["lock_gb"] == 6 and p["site"]
     assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6 0\n") is None
     assert rp.parse_probe("ROSYPROBE 8 0.5\n") is None
+    assert "disk_free_gb" not in p  # an older probe: disk unknown, never a refusal
+    # ~/rosy-test then /tmp: the fuller filesystem counts
+    disk = rp.parse_probe(f"{line} 52428800 40 2726297 100 \n")
+    assert disk["disk_free_gb"] == 2726297 / 2**20 and disk["disk_use"] == 100 and disk["nproc"] == 8
+
+
+def _probe(**disk):
+    return {"nproc": 8, "load1": 0.0, "avail_gb": 16.0, "total_gb": 32.0, "pytest": True, "sim": True,
+            "busy": False, "lock_cores": 0, "lock_gb": 0, "site": False, **disk}
+
+
+def test_place_refuses_a_host_below_the_disk_floor_and_keeps_unmeasured_ones(monkeypatch):
+    """2026-10-26: a 100% full AI PC still got jobs, and a SQLite fsync stall failed a timing test."""
+    monkeypatch.setattr(rp, "SITES", set())
+    hosts = ["full@1", "edge@2", "pct@3", "old@4"]
+    probes = [_probe(disk_free_gb=2.6, disk_use=100), _probe(disk_free_gb=19.9, disk_use=80),
+              _probe(disk_free_gb=56.0, disk_use=95), _probe()]
+    chosen, notes = rp.place("pytest", hosts, probes)
+    assert sorted(chosen) == ["old@4", "pct@3"]  # 95% use with 56 GB free is healthy: no percent rule
+    assert notes[0] == "full@1: 8.0 cores, 16.0 GB free, disk 2.6 GB free (100%) - below disk floor 20 GB"
+    assert notes[1].endswith("below disk floor 20 GB") and notes[2].endswith(" - ok") and notes[3].endswith(" - ok")
+    # the no-host-above-floor fallback must not send the gate to a full disk either
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    monkeypatch.setenv("ROSY_TEST_HOSTS", "full@1")
+    monkeypatch.setattr(rp, "probe", lambda host: probes[0])
+    assert rp.placed_hosts("pytest") == []
 
 
 def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
@@ -205,7 +232,7 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
     finally:
         live.kill()
-    assert len(fields) == 11 and fields[-3:] == ["4", "12", "0"]
+    assert len(fields) == 15 and fields[8:11] == ["4", "12", "0"]  # then df free_kb use% of ~/rosy-test, /tmp
     assert (jobs / "soon.resv").exists() and not (jobs / "old.resv").exists() and not (jobs / "junk.resv").exists()
     assert rp.parse_probe(" ".join(fields))["lock_gb"] == 12
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
@@ -617,7 +644,9 @@ def _poll_until_done(env, k="0"):
 def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path):
     if not shutil.which("setsid") or sys.platform == "win32":
         pytest.skip("Linux setsid/timeout/ionice are required")
-    home, env = _job_env(tmp_path, 'echo out; echo err >&2; sleep 2; echo "args $*"; exit 3\n')
+    # $4 is the basetemp: leave a read-only dir in it, as release/rollback tests do
+    home, env = _job_env(tmp_path, 'echo out; echo err >&2; mkdir "$4/ro"; touch "$4/ro/f"; chmod 555 "$4/ro"\n'
+                                   'sleep 2; echo "args $* mode $(stat -c %a "$4")"; exit 3\n')
     start = _sh(rj.START, env, "r", "d", "", "0", "60", rj.JOB, "test/x.py", "-q")
     assert start.returncode == 0, start.stderr
     lock, jobs = home / "rosy-jobs" / "r.lock", home / "rosy-test" / "runs" / "r.jobs"
@@ -628,7 +657,9 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
     assert _poll_until_done(env) == 3
     assert not lock.exists() and not (jobs / "0.rc.tmp").exists() and (jobs / "0.rc").read_text() == "3\n"
     out = (jobs / "0.log").read_bytes()
-    assert out.startswith(b"out\nerr\n") and out.endswith(b"args -m pytest test/x.py -q\n")
+    # a short private tmp_path root per job (not /tmp/pytest-of-<user>), gone with the job despite read-only dirs
+    base = re.search(rb"args -m pytest --basetemp (/tmp/rosy-pytest-\w{6}) test/x.py -q mode 700\n$", out)
+    assert out.startswith(b"out\nerr\n") and base and not Path(base.group(1).decode()).exists()
     _skip_unreaped(pid)
     assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "4").stdout) == (3, False, out[4:])  # offset 4: after "out\n"
 
@@ -716,6 +747,28 @@ def test_killed_job_shows_no_live_pid_and_no_code_and_start_does_not_rerun_a_fin
     assert (jobs / "0.log").read_bytes() == b"done\n"  # an existing exit code: nothing started
 
 
+def _read_only_tree(path):
+    """A dir without u+w holding a file, as release/rollback tests leave (rm -rf alone cannot empty it)."""
+    path.mkdir(parents=True)
+    (path / "f").write_text("x")
+    path.chmod(0o555)
+
+
+def test_run_cleanup_removes_read_only_dirs_first(tmp_path):
+    """2026-10-26: read-only dirs kept runs/ (37 GB) and pytest garbage-* dirs from ever being deleted."""
+    ship = rp.SHIP.index('chmod -R u+rwX -- "$R/runs/$NAME"')
+    assert ship < rp.SHIP.index('git worktree remove -f -f "$R/runs/$NAME"')  # a retried ship
+    if not shutil.which("bash") or sys.platform == "win32" or os.geteuid() == 0:
+        pytest.skip("POSIX bash as a non-root user is required")
+    home = tmp_path / "home"
+    runs = home / "rosy-test" / "runs"
+    _read_only_tree(runs / "r" / "store")
+    _read_only_tree(runs / "r.jobs" / "0.tmp" / "store")
+    subprocess.run(["bash", "-c", rp.CLEANUP, "remote", "r"], env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+                   capture_output=True, timeout=30)
+    assert not (runs / "r").exists() and not (runs / "r.jobs").exists()
+
+
 def test_sweep_removes_only_old_finished_runs_of_this_runner(tmp_path):
     if not shutil.which("bash") or sys.platform == "win32":
         pytest.skip("POSIX bash is required")
@@ -727,7 +780,7 @@ def test_sweep_removes_only_old_finished_runs_of_this_runner(tmp_path):
     _git(tmp_path, "init", "-q", "-b", "main", str(repo))
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "0")
     live = subprocess.Popen(["sleep", "30"])
-    old = time.time() - 13 * 3600
+    old = time.time() - 3 * 3600  # past the 2 h sweep age (was 12 h: a full disk kept them)
     names = {"land-1-a1b2c3": "old", "land-2-d4e5f6": "live", "abcdef0123-0a0b0c": "fresh",
              "land-3-0f0f0f": "running", "sim-0123456789-abcdef": "sim", "other": "other"}
     try:
@@ -739,6 +792,9 @@ def test_sweep_removes_only_old_finished_runs_of_this_runner(tmp_path):
             if kind != "running":
                 (j / "0.rc").write_text("1\n")
             (j / "0.pid").write_text(f"{live.pid if kind in ('live', 'running') else 999999999}\n")
+            if kind == "old":  # read-only dirs from release tests, in the checkout and in the job dir
+                _read_only_tree(runs / name / "store")
+                _read_only_tree(j / "0.tmp" / "store")
             if kind != "fresh":
                 os.utime(j, (old, old))
         (runs / "land-2-d4e5f6.jobs" / "0.pid").write_text("999999999\n")
@@ -804,7 +860,8 @@ def test_leading_rosy_words_are_the_job_environment_and_browser_jobs_get_chromiu
     assert start.returncode == 0, start.stderr
     assert _poll_until_done(env) == 0
     out = (home / "rosy-test" / "runs" / "r.jobs" / "0.log").read_text()
-    assert out.endswith(f"browser={'1' if install else ''} args -m pytest test/x_browser.py -q\n")
+    assert re.search(f"browser={'1' if install else ''} args -m pytest --basetemp /tmp/rosy-pytest-\\w{{6}} test/x_browser.py -q\n$",
+                     out)
     installed = home / "installed"
     assert installed.exists() == install
     assert not install or installed.read_text() == "-m playwright install chromium\n"
