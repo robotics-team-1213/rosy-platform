@@ -4752,3 +4752,11 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · fix(fleet): 가짜 저장소가 list_resolved 지원 시 그대로 쓰기
+
+- 변경: proposal_queries.list_resolved 이 store 에 list_resolved 메서드가 있으면 그 값을 그대로 쓰게 — 착지 회차 NEW 7건 전부 FakeProposals 에 purge_expired 가 없어 AttributeError. 실제 ProposalStore 는 SQL 경로, 가짜는 메서드 경로.
+- 증거: 착지 로그 AttributeError 로 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음

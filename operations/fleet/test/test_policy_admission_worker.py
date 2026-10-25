@@ -19,6 +19,15 @@ class FakeProposals:
     def list_resolved(self, *, limit=20):
         return self._proposals[:limit]
 
+    def purge_expired(self):
+        return 0
+
+    def _connect(self):
+        raise AssertionError("FakeProposals does not open connections")
+
+    def _row(self, row):
+        return dict(row)
+
 
 class FakeMissions:
     def __init__(self, records=None, admit_error=None):
