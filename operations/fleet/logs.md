@@ -4768,3 +4768,10 @@
 - 증거: 독립 안전 소스 리뷰 승인, 원격 architecture와 Fleet 15개 suite 590 passed, 5 skipped, NEW0/known0/flaky0. [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 원본 로그 위치와 커밋을 남겼다.
 - gate 변화: 없음. 공식 FULL·착지·배포·실물 수용은 별도다.
 - 교훈: 기존 구조 검사 선행 교훈에 반영된 D-875 경계 판단을 유지한다.
+
+## 2026-10-25 · 99a7d5c663 · D-875 exact formation API guard
+
+- Change: formation guard admits only two neutral API leaves, checks their required parent files and resolves relative/member spellings; existing prohibitions and other guards remain exact. No production source changes.
+- Evidence: tests-only75bff0bce4 remote RED43FAIL46PASS; reviewed correction99a7d5c663 remote93PASS0SKIP, then expanded679PASS5SKIP; each GREEN NEW0/known0/flaky0, runnerexit0. Exact logs in %LOCALAPPDATA%/Temp/rosy-formation-api-boundary/.
+- Gate: per-commit source size and generate/lint/diff passed (lint0errors35warnings). Actual main merge, independent whole-branch review, FULL/landing and field acceptance pending root.
+- CE: verified case facts supplied outside Git for root-owned existing structural-guards lesson update.

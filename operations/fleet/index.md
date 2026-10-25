@@ -102,8 +102,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · 99a7d5c663 · D-875 exact formation API guard
 - 2026-10-25 · c5b4bcf1b3 · D-875 최신 main 통합 검증
 - 2026-10-25 · uncommitted · fix(fleet): 정책 승인 라우트의 가드 dependencies 형태 수정
 - 2026-10-25 · uncommitted · feat(fleet): D-865 P2b policy admission HTTP surface
 - 2026-10-25 · cc237b02c1 · D-875 committed verification
-- 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
