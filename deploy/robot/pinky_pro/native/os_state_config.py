@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import hashlib
+import json
 import os
 from pathlib import Path
 import stat
@@ -101,9 +102,13 @@ class ConfigurationUpdate:
         values = {**self.values, **self.changes}
         validate_projection(self.root, values)
         if self.pointer is None:
-            _json_atomic(_path(self.root, INITIAL), dict(schema_version=1, state_schema=1,
+            record = dict(schema_version=1, state_schema=1,
                 factory_id=self.factory_id,
-                changes={key: value.decode("utf-8") if value is not None else None for key, value in values.items()}), 0o600)
+                changes={key: value.decode("utf-8") if value is not None else None for key, value in values.items()})
+            encoded = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+            if len(encoded) > 64 * 1024:
+                raise ValueError("initial configuration record exceeds reader limit")
+            _json_atomic(_path(self.root, INITIAL), record, 0o600)
             project_files(self.root, values)
         else:
             current = load_record(self.root, COMMON + "/state/current.json", POINTER_FIELDS)
