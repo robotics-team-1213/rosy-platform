@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
+| D-878 | 모델 구조화 출력 — 스키마 정본은 하나, 전송 형식은 어댑터에서, 파싱 실패는 무효 답과 같다 (D-392 §6 보충) | Proposed (2026-10-25) |
 | D-876 | ROSY Monitoring — 사이트 독립 감시와 통합 집계 | Accepted (2026-10-25) |
 | D-874 | Learning 승격 요청 묶음 — 확정 정답 평가 근거를 봉인해 넘기고, 승인은 Fleet에 둔다 (D-857 보충) | Proposed (2026-10-25) |
 | D-868 | 로컬 main에 먼저 착지하고, 공개 main에는 그 로컬 main을 merge commit으로 올린다 | Accepted (2026-10-25) |

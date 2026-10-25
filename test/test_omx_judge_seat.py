@@ -45,6 +45,21 @@ def test_a_reply_outside_the_allowed_choices_is_vetoed_to_abort():
     assert row["decision"] == "abort" and row["by"] == "veto" and rows == [row]
 
 
+def _broken_json(prompt, images, schema):
+    return m.json.loads("{\"decision\": \"proceed\"")
+
+
+def _timeout(prompt, images, schema):
+    raise TimeoutError
+
+
+@pytest.mark.parametrize("backend", [_broken_json, _timeout, lambda *a: ["proceed"]])
+def test_no_parseable_object_reply_is_vetoed_to_abort(backend):
+    rows = []
+    row = m.Seat(backend, log=rows.append).decide({"box_found": True, "next": "grasp", "aligned": True})
+    assert row["decision"] == "abort" and row["by"] == "veto" and rows == [row]
+
+
 def test_the_model_chooses_when_the_measurement_allows_it():
     row = m.Seat(Model("proceed")).decide({"box_found": True, "next": "grasp", "aligned": True})
     assert row["decision"] == "proceed" and row["by"] == "model"
