@@ -11242,6 +11242,19 @@ osy-d395-s1d\`.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
 
+## 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
+
+- Change: owner-local API holds existing declarations, the Decision facade supplies existing planning choices, and actual lifecycle/arming/relay safety behavior stays in tagged owners. No frozen violation growth or wire change.
+- Evidence: official source9f9fc5846d two separation failures versus main6abf6a8a7e two passes; new sourcecac7a23477 API/planning guards RED3 and emergency guard PASS1 remotely. All22 nonconstructor lifecycle method ASTs and original CORE C1 blobs remain identical. Independent implementation review and committed GREEN follow separately.
+- gate 변화: pending implementation verification; no landing/device/field claim. Existing structural-guard lesson will be updated only after GREEN.
+
+## 2026-10-25 · cc237b02c1 · D-875 committed verification
+
+- Change: independently reviewed owner-local API and actual Safety lifecycle separation; legacy exports/planner/default construction preserved, no frozen violation growth.
+- Evidence: committed remote architecture plus15 focused Fleet suites 578PASS5SKIP, NEW0/known0/flaky0, runnerexit0. Original22 lifecycle method ASTs and prepared2bea CORE3 Git blobs exact. Logs: %LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt and known-final.txt.
+- Gate: generate/lint/diff/syntax/size and official dry-run PASS; actual FULL/landing/device/field pending. Initial afba candidate sole CLI size failure retained externally; root-authorized own amendment removed one blankline, independently confirmed, then finalSHA rerun.
+- CE: root owns existing structural-guards lesson update with separate queued-FULL tooling unit; verified case draft supplied outside Git. Prior pending entry is superseded by this evidence.
+
 ## 2026-10-25 · uncommitted · queued FULL pretest 구조 검사 우선
 
 - 변경: 대기 중 FULL pretest에도 기존 구조 검사 runner를 먼저 호출하고 검사 뒤 HEAD를 다시 확인한다. FIFO·기존 main 기준·캐시·FULL 기록 규칙은 유지한다.
@@ -11372,6 +11385,13 @@ osy-d395-s1d\`.
 - 증거: 유효한 fixture를 새 Python에서 import한 뒤 기존 구현 RED 1건을 재현했다. 수정 커밋 원격 관련 회귀 507 passed, skip0, NEW0/known0/flaky0; 독립 소스 리뷰 승인. [검증 기록](validation/affected-import-pack-restoration-2026-10-25/result.md).
 - gate 변화: 없음. 공식 FULL·착지·게시·배포는 별도 확인한다. 보존한 C1 후보는 이 수정에 포함하지 않는다.
 - 교훈: 기존 [실제 커밋 검증 교훈](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)에 통합 과정의 호출 경로·회귀 시험 보존을 추가했다.
+
+## 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
+
+- 변경: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 Fleet owner가 이미 지정한 boundary 시험의 누락과 검증된 exact-leaf API 검사 수정을 추가했다.
+- 증거: tests-only RED 43 failed/46 passed, 수정 93 passed, 최신 main 통합 원격 확장 679 passed/5 skipped/NEW0. [검증 기록](validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 소스와 실패한 FULL을 별도로 남겼다.
+- gate 변화: 없음. 최신 후보의 공식 FULL·착지·배포는 별도 확인한다.
+- 교훈: 범용 플랫폼 guard와 변경 소유자의 기존 계약 시험을 함께 선택한다.
 
 ## 2026-10-25 · uncommitted · 공급암 S 셀 파이프라인: 원위치·보정·사이클, 경쟁 후보 장부, 접촉 대응
 
