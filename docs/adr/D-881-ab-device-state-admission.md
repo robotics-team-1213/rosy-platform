@@ -38,7 +38,11 @@ TLS 파일은 `/etc/rosy/tls` 디렉터리 전체를 공통 data의 `/tls`에 �
 
 TLS 파일과 CORE YAML의 readback 뒤 runtime.env를 canonical generation으로 게시한다. pointer가 게시되기 전에는 기존 파일 묶음으로 복구할 수 있지만, pointer가 바뀐 뒤에는 로컬 파일만 되돌리지 않고 중지 상태를 유지한다. 명시적 maintenance 도구 재실행은 같은 CA와 기록된 쓰기 집합으로 완료하며 다른 root에서도 복구할 수 있다. 미게시 generation 디렉터리는 재사용하거나 지우지 않고 새 ID를 기록해 재시도한다. 이 경로는 자동 부팅 복구나 전체 OS trial 수용을 뜻하지 않는다.
 
-TLS pending 동안 일반 canonical writer와 updater를 차단한다. 초기 storage 검사는 복구용 NetworkManager·SSH 접근을 허용하지만, CORE가 요구하는 `rosy-sd-provision.service`는 OS bootstrap dispatcher의 `--no-pending-maintenance` 검사도 통과해야 한다. 해당 gate는 `PartOf=rosy-core.service`로 CORE 정지 때 캐시된 admission을 해제하고 다음 시작 때 다시 검사한다([systemd dependency semantics](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html)). 이 root 검사만 operator mount metadata를 읽을 수 있도록 ProtectHome을 read-only로 두며 CORE 프로세스의 권한은 늘리지 않는다. 별도의 실제 PROJECTED producer와 나머지 owner의 완성·수용은 여전히 필요하다.
+TLS pending 동안 일반 canonical writer와 updater를 차단한다. 초기 storage 검사는 복구용 NetworkManager·SSH 접근을 허용하지만, CORE가 요구하는 `rosy-sd-provision.service`는 OS bootstrap dispatcher의 `--projected` 검사도 통과해야 한다. 해당 gate는 `PartOf=rosy-core.service`로 CORE 정지 때 캐시된 admission과 runtime directory를 해제하고 다음 시작 때 다시 검사한다([systemd dependency semantics](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html)). root 검사와 updater만 operator mount metadata를 읽을 수 있도록 ProtectHome을 read-only로 두며 CORE 프로세스의 권한은 늘리지 않는다.
+
+`os_state_ready.py`는 공통 설정 lock 안에서 실제 root의 정본 파일 내용·정확한 mode·단일 link와 삭제 표시, 파생 timezone 파일/link, live hostname, 커널 보드 serial, canonical completion의 게시 완료와 모든 공통 directory mount를 확인한다. 파일을 고쳐서 성공시키지 않는다. 확인 후 root 전용0600 runtime receipt를 현재 boot ID·slot·descriptor digest·generation·manifest digest·root/data/provision 및 공통 directory mount 사실에 결속한다. 부분 완료 게시, TLS pending, 새 기체 등록 대기, 잘못된 보드나 root 설정에서는 발행하지 않는다. 기존 early dispatcher/builder/verifier의 독립 OS bootstrap closure는 이 모듈을 포함한 여덟 개의 표준 라이브러리 state 모듈로 구성한다.
+
+updater는 매 정책 접근에서 receipt와 함께 현재 실제 파일·보드·공통 마운트를 다시 확인한다. privilege writer가 canonical generation을 commit한 뒤에는 이미 발행된 receipt도 같은 공통 lock 안에서 갱신한다. TLS transaction은 pending을 지우고 fsync한 뒤에만 갱신하며, lock을 다시 획득하지 않는다. 아직 receipt가 없는 초기 설정에서 runtime 승인을 임의 생성하지 않는다. 이 receipt는 설정 투영 증거다. 슬롯별 factory release 서명, payload recovery 순서, OS trial/health/fallback과 실제 boot/powercut 수용은 별도 검증이 필요하다.
 
 새 root에 hostname 파일을 투영하는 것만으로 실행 중인 hostname이 바뀌지는 않는다. 같은 기체의 기존 완료 기록을 확인한 A/B firstboot는 committed hostname도 적용한 뒤 ALREADY_PROVISIONED로 돌아온다. 이미 같은 이름이면 hostnamectl·avahi 재시작을 하지 않는다. 다른 board의 완료 기록에서 이전 hostname을 적용하지 않는다.
 
@@ -48,7 +52,7 @@ tailnet gate는 firstboot를 Wants/After로 기다리되 legacy 복구 경로까
 
 A/B firstboot는 일회용 join 요청을 공통 `/tailscale/join/request.json`에 쓴다. join owner는 공통 request lock과 기체 binding을 확인하고 키를 권한0600 임시 파일로 전달한다. 고정 버전의 [auth-key file 입력](https://github.com/tailscale/tailscale/blob/v1.102.5/cmd/tailscale/cli/up.go)을 사용하며 명령행에 키를 넣지 않는다. 성공 후 durable한 키 없는 소비 기록으로 교체하고, 다른 root의 과거 요청은 사용하지 않는다. 이미 소비한 요청은 CLI를 호출하지 않고 완료 처리한다. 실패하면 요청을 보존하고 진단에서 키를 지운다.
 
-다른 보드에서 A/B firstboot를 반복해도 공통 canonical pointer·완료 기록·현장 Wi-Fi는 보존하고, 하나의 임시 등록 identity로 SETUP 안내를 유지한다. 이전 hostname을 live 적용하거나 tailnet 권한을 이전하지 않는다. 새 기체 등록은 기존 안내대로 새 서명 이미지 카드를 준비하는 경로를 지원한다. root-local archive 도구는 A/B marker가 있으면 파일 이동 전에 거부한다. 이 도구로 공통 generation이나 machine credential을 재등록하지 않는다. legacy single-root 재등록도 CORE·하드웨어·tailnet daemon/join의 정지를 확인한 뒤에만 진행한다. 실제 반복 부팅·서비스 관리자·복구 페이지 접근 수용은 별도다.
+다른 보드에서 A/B firstboot를 반복해도 공통 canonical pointer·완료 기록·현장 Wi-Fi는 보존하고, 하나의 임시 등록 identity로 SETUP 안내를 유지한다. 이전 hostname을 live 적용하거나 tailnet 권한을 이전하지 않는다. 등록 대기 기록이 있으면 원래 보드로 카드를 돌려놔도 tailnet daemon/join을 승인하지 않는다. 새 기체 등록은 기존 안내대로 새 서명 이미지 카드를 준비하는 경로를 지원한다. root-local archive 도구는 A/B marker가 있으면 파일 이동 전에 거부한다. 이 도구로 공통 generation이나 machine credential을 재등록하지 않는다. legacy single-root 재등록도 CORE·하드웨어·tailnet daemon/join의 정지를 확인한 뒤에만 진행한다. 실제 반복 부팅·서비스 관리자·복구 페이지 접근 수용은 별도다.
 
 ### Ownership and existing decisions
 
