@@ -1,5 +1,8 @@
 """Tailnet identity may cross slots, never the hardware binding of a moved card."""
 import json
+from pathlib import Path
+import shutil
+import subprocess
 
 import pytest
 
@@ -72,3 +75,27 @@ def test_missing_machine_bind_is_rejected_before_network_storage_admission(tmp_p
                                   if " /var/lib/tailscale " not in line) + "\n")
     with pytest.raises(ValueError, match="OS_STATE_HOLD"):
         _module()._native_helper("os_state_storage").admit_storage(root)
+
+
+def test_offline_enable_requires_tailnet_gate_for_daemon_and_join(tmp_path):
+    native = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/native"
+    directory = tmp_path / "etc/systemd/system"
+    directory.mkdir(parents=True)
+    unit = "rosy-os-tailnet.service"
+    shutil.copy2(native / unit, directory / unit)
+    result = subprocess.run(["systemctl", "--root", str(tmp_path), "enable", unit],
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    for consumer in ("tailscaled.service", "rosy-tailscale-join.service"):
+        assert (directory / (consumer + ".requires") / unit).is_symlink()
+    text = (directory / unit).read_text()
+    assert "Before=tailscaled.service rosy-tailscale-join.service" in text
+    assert "--tailnet" in text and "PartOf=tailscaled.service" in text
+    assert "Requires=rosy-os-storage.service" in text
+    assert "Wants=rosy-first-boot.service" in text
+
+
+def test_successful_firstboot_retries_tailnet_without_waiting_on_its_dependents():
+    source = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/image/first-boot"
+    text = (source / "rosy-first-boot.service").read_text()
+    assert "ExecStartPost=-/usr/bin/systemctl start --no-block tailscaled.service rosy-tailscale-join.service" in text
