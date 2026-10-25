@@ -11242,6 +11242,14 @@ osy-d395-s1d\`.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
 
+## 2026-10-25 · uncommitted · queued FULL pretest 구조 검사 우선
+
+- 변경: 대기 중 FULL pretest에도 기존 구조 검사 runner를 먼저 호출하고 검사 뒤 HEAD를 다시 확인한다. FIFO·기존 main 기준·캐시·FULL 기록 규칙은 유지한다.
+- 증거: [검증 기록](validation/land-pretest-guards-2026-10-25/result.md). 커밋된 RED 세 사례 실패 후 land·queue·record 원격 회귀 98개 통과, skip0/NEW0. 잘못된 최초 selector의 exit4는 통과 근거에서 제외했다.
+- gate 변화: 소스 집중 검증 완료. 공식 selector·FULL·착지·게시·운영 수용은 별도다.
+- 결정: D-803의 기존 guard-first 원칙을 queued 경로까지 적용한다. 새로운 예외나 검사 완화는 없다.
+- 교훈: [기존 구조 검사 우선 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)을 갱신했다. 파일 전체 Safety 분류의 import 파급과 queued 우회 경로를 구분하고, 26개 사실을 검증했다.
+
 ## 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
 
 - 변경: `deploy/robot/omx/`에 청크 실행기(`chunk_runner.py`: 토크 유지, 멈춤·과열·추종 오차 정지, 위치+전류 집기 판정, 들고 돌고 내리는 `goto`/`park`, `live.json`), top-down 계획기(`grasp_planner.py`), 탐침 기반 손목 보정(`grasp_servo.py`), 그림자 상자 검출과 놓기 확인(`cell_perception.py`), scripted_teacher 봉인(`record_seal.py`), Fleet 관측 송신기(`arm_status_bridge.py`), 판단 자리(`judge_seat.py`)를 더했다.
@@ -11269,6 +11277,13 @@ osy-d395-s1d\`.
 - gate 변화: P1 끝난 기준(Gazebo 적합성 통과) 충족. P2 Isaac 백엔드는 같은 도구로 판정한다.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-10-25 · uncommitted · 병합 입력으로 생성물 갱신과 취소 거부 보존
+
+- 변경: 충돌 없는 main 병합도 병합 커밋 전에 정본 생성물을 갱신한다. 생성 대상 전체를 쓰기 전에 검증하고 선언된 출력만 스테이징한다. Git이 부분 생성 뒤 병합 취소를 거부하면 변경·인덱스·진행 중 병합을 보존하고 복구 필요를 명시한다. 생성물 I/O 분리로 harness 크기 상한은 858→843으로 줄였다.
+- 증거: `18c09b384e` 원격 land/queue/record/harness 207 passed, skip 0, NEW 0. 독립 소스 리뷰 승인. 먼저 실패한 6개 생성물 사례와 2개 취소 진단 사례 및 중간 실패 3개도 [검증 기록](validation/land-pretest-guards-2026-10-25/result.md)에 보존했다.
+- gate 변화: 없음. 최신 소스의 공식 FULL·착지·게시·배포는 별도 확인한다.
+- 교훈: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 병합 생성 시점과 취소 실패 보존 근거를 갱신했다.
 
 ## 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
 
