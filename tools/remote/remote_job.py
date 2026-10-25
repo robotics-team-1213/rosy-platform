@@ -46,8 +46,9 @@ echo "$$ pytest $C $M" > "$L"
 [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
 umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 files
+# tmp_path under the run's job dir, removed with the run; /tmp/pytest-of-<user> filled a host disk (2026-10-26).
 timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=${M}G ${CPU:+-p CPUQuota=$CPU} -- \
-  nice -n 15 ionice -c3 "$V/bin/python" -m pytest "$@"
+  nice -n 15 ionice -c3 "$V/bin/python" -m pytest --basetemp "$D/$K.tmp" "$@"
 """
 
 # Job k is alive while the pid in <k>.pid (the lock's pid, but k-specific) answers kill -0.
@@ -72,10 +73,11 @@ POLL = r"""D=~/rosy-test/runs/$1.jobs; K=$2; rc=; [ -f "$D/$2.rc" ] && rc=$(cat 
 echo "ROSYJOB ${rc:--} $alive"; tail -c +$(($3 + 1)) "$D/$2.log"
 """
 
-# SHIP: runs left behind after lost contact (an exit code, no live job, untouched for 12 h).
+# SHIP: runs left behind after lost contact (an exit code, no live job, untouched for 2 h; the laptop
+# fetches the log as the job ends, so a finished run holds nothing it still needs).
 # Only <label>-<6 hex> runs that have a <run>.jobs dir, i.e. this runner's; never sim-* or anything else.
 SWEEP = r"""for J in "$R"/runs/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].jobs; do
-  [ -d "$J" ] && compgen -G "$J/*.rc" > /dev/null && [ -n "$(find "$J" -maxdepth 0 -mmin +720)" ] || continue
+  [ -d "$J" ] && compgen -G "$J/*.rc" > /dev/null && [ -n "$(find "$J" -maxdepth 0 -mmin +120)" ] || continue
   n=$(basename "$J" .jobs); live=0
   case $n in sim-*) continue;; esac  # remote_sim.py runs clean up themselves
   for p in "$J"/*.pid ~/rosy-jobs/"$n".lock; do
@@ -83,6 +85,7 @@ SWEEP = r"""for J in "$R"/runs/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f
   done
   [ $live = 0 ] || continue
   echo "[remote] removing $n, left after lost contact" >&2
+  chmod -R u+rwX -- "$R/runs/$n" "$J" 2>/dev/null || true  # tests leave read-only dirs; rm -rf cannot enter them
   git worktree remove -f -f "$R/runs/$n" 2>/dev/null || rm -rf "$R/runs/$n"
   git update-ref -d "refs/remote-pytest/$n" 2>/dev/null || true
   rm -rf "$J"

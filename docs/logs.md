@@ -11514,3 +11514,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 개발 도구 변경이다.
 - 결정: 없음.
 - 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.
+
+## 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
+
+- 변경: `tools/remote/remote_job.py` JOB이 pytest에 `--basetemp "$D/$K.tmp"`를 줘 tmp_path가 실행 디렉터리와 함께 지워진다. SWEEP은 연락이 끊긴 채 끝난 실행을 12시간이 아니라 2시간 뒤에 치운다. SWEEP·CLEANUP·SHIP 재시도는 실행·job 디렉터리를 지우기 전에 `chmod -R u+rwX`를 한다(릴리스·롤백 시험이 만드는 읽기 전용 디렉터리는 제품 동작이라 시험은 그대로 둠). 새 `tools/remote/host_probe.py`(`remote_pytest.py`에서 PROBE와 파서를 옮겨 D-766 600줄 아래로 유지)의 PROBE가 `~/rosy-test`와 `/tmp` 파일시스템의 남은 공간을 재고, `place()`는 남은 공간이 20 GB 미만인 호스트를 고르지 않는다(바닥 아래 대체 선택에도 적용). 사용률 기준은 두지 않는다: 434-468 GB 디스크에서 90%여도 45 GB가 남아 멀쩡한 호스트를 뺀다. 디스크 값이 없는 예전 probe는 알 수 없음으로 보고 통과시킨다. 시험 `test/test_remote_pytest.py`.
+- 증거: 2026-10-26 AI PC 루트 디스크 100%, `/tmp/pytest-of-ai` 19 GB(지우지 못한 `garbage-*` 약 40개), `~/rosy-test/runs` 37 GB/229개. 디스크가 찬 PC로 시험이 가서 `test_platform_g1_timing`이 SQLite fsync 지연으로 거짓 실패했다. 원격 pytest 122 passed, known_failures NEW 0. 새 시험은 변이(바닥 해제, `--basetemp` 제거, 720분 복구, chmod 제거)에서 빨간색을 확인했다. 실행 중 probe가 AI PC를 `disk 26.4 GB free (95%) - below disk floor`로 제외했다.
+- gate 변화: 디스크 바닥 아래 시험 PC는 pytest를 받지 않는다. 두 PC가 모두 바닥 아래면 기다린 뒤 "no test host reachable"로 끝난다. 이미 쌓인 `/tmp/pytest-of-*/garbage-*`는 이 변경이 지우지 않는다. CE: 해당 없음(원인과 규칙은 코드 주석과 시험에 남김).
+
