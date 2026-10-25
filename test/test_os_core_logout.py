@@ -38,5 +38,5 @@ def test_core_logout_does_not_restore_a_browser_token_on_slot_return(tmp_path, m
         loaded = yaml.safe_load((root / relative).read_text())
         with pytest.raises(ApiError) as refused:
             deps.authenticate(loaded, "Bearer " + token, None)
-        assert refused.value.status_code == 401
+        assert refused.value.http_status == 401
         assert record["id"] not in {item["id"] for item in deps.auth_entries(loaded)}
