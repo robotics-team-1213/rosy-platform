@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 from types import SimpleNamespace
 
@@ -166,3 +167,80 @@ def test_failed_assembly_only_removes_workspace_after_resources_close(tmp_path, 
     assert bool(list(tmp_path.glob("output.img.part.*"))) is cleanup_fails
     assert not output.exists()
     assert source.read_bytes() == b"fixture source"
+
+
+@pytest.mark.skipif(shutil.which("sfdisk") is None, reason="sfdisk constructs the real GPT table")
+def test_orchestration_executes_real_slot_configurers_before_publishing(tmp_path, monkeypatch):
+    """Loop/mount/fsck/rsync are models; GPT and installed configurers are real."""
+    from test_os_factory_release import _factory, _keys, FACTORY_ID
+    from test_os_frozen_firstboot import _prefix, _stage
+
+    m = module()
+    source_root, source_boot = tmp_path / "root-tree", tmp_path / "boot-tree"
+    source_root.mkdir()
+    source_boot.mkdir()
+    private, public = _keys(tmp_path / "offline", "fixture")
+    _factory(source_root, FACTORY_ID, private, public)
+    _stage(_prefix(source_root))
+    (source_root / "etc/fstab").write_text(
+        "LABEL=writable / ext4 defaults 0 1\nLABEL=system-boot /boot/firmware vfat defaults 0 1\n")
+    users = [("rosy-core", 960), ("rosy-io", 961), ("rosy-display", 962), ("rosy-camera", 963), ("rosy", 1001)]
+    (source_root / "etc/passwd").write_text("".join(
+        f"{name}:x:{uid}:{uid}::{('/home/rosy' if name == 'rosy' else '/nonexistent')}:"
+        f"{('/bin/bash' if name == 'rosy' else '/usr/sbin/nologin')}\n" for name, uid in users))
+    (source_root / "etc/group").write_text("".join(f"{name}:x:{uid}:\n" for name, uid in users))
+    (source_boot / "cmdline.txt").write_text("root=LABEL=writable rootwait\n")
+    (source_boot / "config.txt").write_text("# model boot assets\n")
+    source, output = tmp_path / "source.img", tmp_path / "assembled.img"
+    source.write_bytes(b"model source disk")
+    captures, commands = {}, []
+
+    class Resources:
+        def loop(self, image, **kwargs):
+            return "/dev/loop17" if image == source else "/dev/loop18"
+
+        def mount(self, device, target, **kwargs):
+            target.mkdir()
+            tree = source_root if device == "/dev/loop17p2" else source_boot if device == "/dev/loop17p1" else None
+            if tree:
+                shutil.copytree(tree, target, dirs_exist_ok=True, symlinks=True)
+            captures[target.name] = target
+
+        def unmount_all(self):
+            for slot in ("a", "b"):
+                root = captures["root_" + slot]
+                captures["descriptor_" + slot] = json.loads((root / "etc/rosy/os-slot.json").read_text())
+                captures["factory_" + slot] = json.loads((root / "etc/rosy/os-factory-release.json").read_text())
+                captures["ssh_" + slot] = (root / "etc/systemd/system/rosy-os-storage.service.d/10-rosy-os.conf").read_text()
+
+        def close(self):
+            pass
+
+    actual_run = m._run
+
+    def run(command, **kwargs):
+        commands.append(command)
+        if command[0] in ("sfdisk", "du", m.sys.executable):
+            return actual_run(command, **kwargs)
+        if command[0] == "blkid":
+            return SimpleNamespace(stdout="vfat" if command[-1].endswith("p1") else "ext4")
+        if command[0] == "rsync":
+            shutil.copytree(Path(command[-2]), Path(command[-1]), dirs_exist_ok=True, symlinks=True)
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setattr(m, "_require_native", lambda: None)
+    monkeypatch.setattr(m, "ImageResources", Resources)
+    monkeypatch.setattr(m, "_run", run)
+    monkeypatch.setattr(m.shutil, "which", lambda command: "/fixture/tool")
+    monkeypatch.setattr(m.ab.os, "chown", lambda *args: None)
+    result = m.assemble(source, output, tmp_path, FACTORY_ID)
+    layout = json.loads(Path(result["layout"]).read_text())
+    assert m.ab.filesystem_plan(output, layout)[-1] == (6, "ext4")
+    assert captures["descriptor_a"]["root_partuuid"] != captures["descriptor_b"]["root_partuuid"]
+    assert captures["descriptor_a"]["data_partuuid"] == captures["descriptor_b"]["data_partuuid"]
+    assert captures["factory_a"] == captures["factory_b"]
+    assert "os_ssh_hostkeys.py" in captures["ssh_a"] and "os_ssh_hostkeys.py" in captures["ssh_b"]
+    assert sum(command[0] == "fsck.vfat" for command in commands) == 3
+    assert sum(command[0] == "e2fsck" for command in commands) == 3
+    assert source.read_bytes() == b"model source disk"
+    assert not list(tmp_path.glob("rosy-ab-image.*"))
