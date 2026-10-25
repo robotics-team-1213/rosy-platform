@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from rosy.monitoring.config import MonitoringConfig, load_config, load_credentials
-from rosy.monitoring.models import MonitoringNode, MonitoringSnapshot
+from rosy.monitoring.models import MonitoringLink, MonitoringNode, MonitoringSnapshot
 
 
 STAMP = "2026-10-25T00:00:00Z"
@@ -43,6 +43,14 @@ def test_source_validity_does_not_imply_recent_collection_path():
                                                report_remaining_s=0.0, freshness="stale"))
     assert value.reported_health == "OK" and value.freshness == "stale"
     assert value.remaining_s == 800 and value.report_remaining_s == 0
+
+
+def test_existing_host_guard_connection_reports_keep_their_source_window():
+    value = observation(age_s=100.0, valid_for_s=900, remaining_s=800.0)
+    value.update(id="site-a:reported:pc-a", source_id="site-a:collector:collector-a",
+                 target_id="site-a:host:pc-a", kind="reported", expected=True,
+                 reachable=True, failure_stage="none", duration_ms=None)
+    assert MonitoringLink.model_validate(value).remaining_s == 800
 
 
 @pytest.mark.parametrize("changes", [
