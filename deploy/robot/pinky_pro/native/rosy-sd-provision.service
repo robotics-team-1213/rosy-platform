@@ -10,6 +10,8 @@ PartOf=rosy-core.service
 
 [Service]
 Type=oneshot
+RuntimeDirectory=rosy-os-state
+RuntimeDirectoryMode=0700
 ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/native-runtime/os_storage_dispatch.py --projected
 ExecStart=/usr/bin/test -s /var/lib/rosy/provisioning/complete.json
 RemainAfterExit=yes

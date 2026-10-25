@@ -7,6 +7,7 @@ from pathlib import Path
 import stat
 
 from os_state_config import common_lock
+from os_state_firstboot import _hold
 from os_state_files import ROOT_FILES, _timezone, validate_projection
 from os_state_io import SERIAL, _json_atomic
 from os_state_layout import (
@@ -65,6 +66,7 @@ def projection_facts(root: Path, shared) -> dict:
                 projection_sha256=pointer["manifest_sha256"], mounts=shared_mount_facts(root, layout))
 
 
+@_hold
 def publish_ready(root: Path) -> dict:
     root = Path(root).absolute()
     with common_lock(root) as shared:
@@ -78,6 +80,7 @@ def publish_ready(root: Path) -> dict:
         return report
 
 
+@_hold
 def verify_ready(root: Path) -> dict:
     root = Path(root).absolute()
     with common_lock(root) as shared:
