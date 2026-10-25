@@ -97,3 +97,25 @@ def teacher_dataset(root, *, marker=None):
     for name, text in (marker or {}).items():
         (Path(root)/name).write_text(text)
     return root
+
+
+CAMERA_IDENTITY = 'usb-FAKE_SERIAL_CAM-video-index0'
+
+
+def camera_reference(root, role='top', width=32, height=24, fps=10, **changes):
+    """A sealed D-792 features reference written as ``<root>/<revision>.json``; ``changes`` land after sealing."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[4]/'contracts/learning/src'))
+    from rosy.contracts.learning.artifacts import seal
+    from rosy.contracts.learning.camera_setup import MOUNT
+    document = seal(dict(
+        schema='rosy.camera-setup-reference/1', camera_role=role, camera_identity=CAMERA_IDENTITY,
+        width=width, height=height, fps=fps,
+        intrinsics=dict(camera_info_sha256='c'*64, revision='cal-1', k=[30.0, 30.0, 16.0, 12.0], dist=[0.0]*5),
+        method='features', marker_dictionary=None, markers=[], mount=dict(measured=dict.fromkeys(MOUNT), estimated=None),
+        check_pose=None, reference_still='d'*64, guides=[], created_at='2026-10-25T00:00:00+00:00', created_by='operator'))
+    document.update(changes)
+    path = Path(root)/f"{document['revision']}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document), encoding='utf-8')
+    return path

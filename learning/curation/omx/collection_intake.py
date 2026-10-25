@@ -12,6 +12,7 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import camera_reference
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA, redacted as _redacted
 from native_environment import _events, seal_environment
 from native_review import (JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset,
@@ -482,7 +483,7 @@ def _source_episodes(root, repo_id):
     return inspect_frames(dataset.meta.info, (dataset[i] for i in range(len(dataset))))['episodes']
 
 
-def prepare_native(collections, output, repo_id, *, rig_revision=None, calibration_revision=None):
+def prepare_native(collections, output, repo_id, *, rig_revision=None, calibration_revision=None, camera_references=None):
     """D-848: sealed leader or replay-teacher recordings -> one prepared intake; one session per recording,
     one cycle per episode. Replay-teacher intakes take the operator's rig and calibration revisions.
 
@@ -491,6 +492,7 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
     """
     import shutil
     from lerobot.datasets.aggregate import aggregate_datasets
+    references = camera_reference.load(camera_references) if camera_references else None
     collections = [Path(path).absolute() for path in collections]
     _require(bool(collections) and len({c.name for c in collections}) == len(collections),
              'distinct sealed collections required')
@@ -526,6 +528,7 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
             groups.append((manifest['session_id'], f"{manifest['session_id']}-ep{episode['episode_index']:04d}"))
     aggregate_datasets([f"local/{m['session_id']}" for _, m, _ in sealed], repo_id,
                        roots=[c/'dataset' for c, _, _ in sealed], aggr_root=output)
+    setup = references and camera_reference.bind(references, json.loads((output/'meta'/'info.json').read_text(encoding='utf-8')))
     if thresholds:
         write_json(output/'static_episodes.json', dict(episodes=len(expected), static=static, threshold=max(thresholds)))
     for i, (collection, manifest, digest) in enumerate(sealed):
@@ -553,7 +556,7 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
     capture = dict(schema=CAPTURE_SCHEMA, source_mode=mode, action_semantics=ACTION,
                    body_units='normalized_-100_100', gripper_units='normalized_0_100',
                    rig_revision=first['rig_revision'], calibration_revision=first['calibration_revision'],
-                   **lineage,
+                   **lineage, **(dict(camera_setup=setup) if setup else {}),
                    collection_manifests=[dict(session_id=m['session_id'], manifest_sha256=d,
                                               **{k: m[k] for k in ('session_id_origin', 'revision_origin') if k in m})
                                          for _, m, d in sealed],
@@ -561,7 +564,7 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
                                           for i, (session, cycle) in enumerate(groups)])
     report = inspect_dataset(output, repo_id, body_units='normalized_-100_100', rig_revision=first['rig_revision'],
                              calibration_revision=first['calibration_revision'],
-                             source_mode=mode, capture_provenance=capture)
+                             source_mode=mode, capture_provenance=capture, camera_setup=setup)
     _require([e['content_sha256'] for e in report['episodes']] == expected,
              'aggregated episodes differ from their sealed recordings')
     _require([_sealed_collection(c, operator)[1] for c, _, _ in sealed] == digests, 'source changed during intake')

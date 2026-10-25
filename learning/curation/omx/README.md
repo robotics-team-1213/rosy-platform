@@ -223,6 +223,13 @@ dataset의 action은 guard가 실제로 보낸 명령이고 `teacher/trajectory.
 리더·교사 모두 `rosy_provenance/*/`의 session.json·record-config.json·manifest.json 사본에서 현장 PC 절대 경로를 지운다.
 지우는 값은 `replay.path`·`config`, `dataset.root`, `/dev/serial` 포트, `/dev/v4l` 카메라다. `teacher.source.dataset`은 basename만 남긴다.
 원본 sha256은 같은 폴더의 `redactions.json`(`redacted_from_sha256`)에 남는다. 리더의 `capture.json` 내용은 바뀌지 않는다.
+
+`prepare-native`에 `--camera-reference ROLE=PATH`(카메라 역할마다 한 번)를 주면 리뷰 앱이 승인해 둔
+`<state>/camera-setup/<revision>.json`(D-792)을 계약의 `validate_reference`로 읽는다. 파일 이름이 `revision`과 다르거나 봉인이 깨졌거나,
+역할이 두 번 나오거나 기준의 역할이 ROLE과 다르거나, 역할 집합이 dataset의 `observation.images.*`와 다르거나,
+합친 dataset `meta/info.json`의 폭·높이(이름 붙은 축으로 읽음)·fps와 다르면 거절한다. 통과하면 `{역할: revision}`만
+`inspection.json`·`capture.json`의 `camera_setup`에 남긴다. `camera_identity`(시리얼일 수 있음)와 경로는 남기지 않는다.
+이 첫 조각은 프레임을 기준과 비교하지 않으며 `camera-setup.json`도 쓰지 않는다. 옵션이 없으면 출력은 예전과 같다.
 정적 episode·`DO_NOT_TRAIN.txt` 규칙은 리더 녹화와 같다.
 
 ## 학습센터에서 파지 구간 검수
