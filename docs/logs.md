@@ -10462,6 +10462,14 @@ osy-d395-s1d\`.
 - 결정: 없음.
 - 교훈: 없음
 
+## 2026-10-25 · uncommitted · 시간 측정·배포 검증의 소스 귀속 교훈
+
+- 변경: [격리 chronyd 초기 관측 창](solutions/workflow-issues/clockless-chronyd-candidates-need-a-convergence-window-2026-10-25.md)을 새로 기록하고 [배포할 소스 검증](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)에 실제 서명 후보와 helper revision을 함께 고정하는 진단을 반영했다. 과거 사건의 사실은 보존하고 현재 절차와 구분했다.
+- 증거: [D-870 검증 준비](validation/swarm-reference-contract-2026-10-25/result.md). 두 순차 CE 실행의 parser·기계 검사와 첫 교훈의 독립 16개 사실 검증을 완료했다. 운영 시계·서비스는 바꾸지 않았다.
+- gate 변화: 없음. 통합 commit 74496b1e0c의 FULL 원격 검증·새 배포·Pinky 현장 수용은 남아 있다.
+- 결정: 추가 ADR 없음; 기존 D-859·D-870의 수용 경계를 유지한다.
+- 교훈: 새 기록 1개, 기존 갱신 1개. 단순 테스트 성공 기록을 중복 교훈으로 만들지 않았다.
+
 ## 2026-10-25 · uncommitted · docs(plans): D-865 P2 분리 표시
 
 - 변경: [D-865 실행 설계](plans/2026-10-25-fleet-policy-admission-design.md) P2를 P2a(판정 core, 이번 착지)와 P2b(루트·루프·설정 조립·지속화·SRS 계약 줄)로 분리 기록.
