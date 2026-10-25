@@ -21,6 +21,10 @@ PROFILES = {
 }
 
 
+class BusyArtifact(ValueError):
+    """A live native reader owns the artifact; other candidates may be tried."""
+
+
 @contextmanager
 def claim(fd, *, exclusive=False):
     import fcntl
@@ -28,7 +32,7 @@ def claim(fd, *, exclusive=False):
         fcntl.flock(fd, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
     except OSError as error:
         if error.errno not in (errno.EAGAIN, errno.EACCES): raise
-        raise ValueError('managed artifact is in use') from None
+        raise BusyArtifact('managed artifact is in use') from None
     try: yield
     finally: fcntl.flock(fd, fcntl.LOCK_UN)
 
@@ -41,7 +45,7 @@ def consumer(root):
         return
     fd = open_root(str(Path(root).absolute()))
     try:
-        with claim(fd): yield
+        with claim(fd): yield fd
     finally: os.close(fd)
 
 

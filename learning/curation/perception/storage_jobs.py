@@ -6,7 +6,7 @@ import os
 import re
 import uuid
 
-from storage_files import Files, consume, parts
+from storage_files import BusyArtifact, Files, consume, parts
 from storage_hub import StorageHub
 from storage_inventory import size
 
@@ -87,8 +87,9 @@ class StorageJobs:
     def list(self, actor):
         self.accounts.require(actor, 'view')
         with self.pool.connect() as db:
-            rows = db.execute('SELECT document FROM storage_jobs WHERE project=? ORDER BY rowid DESC LIMIT 200',
-                              (self.project_id,)).fetchall()
+            rows = db.execute('''SELECT document FROM storage_jobs
+                WHERE project=? AND json_extract(document, '$.requester_id')=? ORDER BY rowid DESC LIMIT 200''',
+                (self.project_id, actor['user_id'])).fetchall()
         return [self._public(job) for row in rows if (job := json.loads(row[0]))['requester_id'] == actor['user_id']]
 
     def create(self, actor, body):
@@ -137,6 +138,8 @@ class StorageJobs:
 
     def _upload(self, actor, job):
         allocation = self.pool.assignment(actor, job['id'])
+        if allocation['status'] not in ('reserved', 'uploading'):
+            raise ValueError('upload requires an active capacity reservation')
         completed = job.get('uploaded_files', [])
         if allocation['status'] == 'uploading' and (job.get('pending_files') or not completed):
             self._save(job, status='hold', error='upload_outcome_unknown')
@@ -185,8 +188,10 @@ class StorageJobs:
             job = self._load(job_id)
             self._check(actor, job)
             if job['status'] != 'cancelled':
-                self.pool.release(actor, job_id)
-                self._save(job, status='cancelled', error=None)
+                with self.pool.connect() as db:
+                    db.execute('BEGIN IMMEDIATE')
+                    self.pool.release(actor, job_id, connection=db)
+                    self._save(job, connection=db, status='cancelled', error=None)
             return self._public(job)
 
     def reconcile(self, actor, job_id, revision):
@@ -293,18 +298,20 @@ class StorageJobs:
     def reclaim_cache(self, actor, *, required_bytes=0):
         size(required_bytes)
         if not self.policy['enabled']: return dict(status='disabled', reclaimed_bytes=0)
-        self.accounts.require(actor, 'manage')
         cached = self._cached()
         total = sum(job['upload_bytes'] for job in cached)
         reclaimed = 0
         def enough():
             return (total + required_bytes <= self.policy['max_bytes']
                     and self.files.available() >= required_bytes + self.inventory.reserve)
+        if enough(): return dict(status='ready', reclaimed_bytes=0)
+        self.accounts.require(actor, 'manage')
         for job in sorted(cached, key=lambda row: (row.get('last_used_at', row['created_at']), row['id'])):
             if enough(): break
             if job['requester_id'] != actor['user_id']: continue
             if job['pinned'] or not job['bytes_verified'] or job['status'] != 'verified': continue
-            result = self.reclaim(actor, job['id'], job['id'])
+            try: result = self.reclaim(actor, job['id'], job['id'])
+            except BusyArtifact: continue
             if result['local_present'] is False:
                 total -= job['upload_bytes']; reclaimed += job['upload_bytes']
         return dict(status='ready' if enough() else 'blocked', reclaimed_bytes=reclaimed)

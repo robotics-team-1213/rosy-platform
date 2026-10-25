@@ -3467,7 +3467,7 @@
 - gate 변화: SOURCE prototype이며 native ARM64 artifact·실물 SD·부팅·OS 자동 갱신·powercut 수용은 HOLD다. 기존 작업 브랜치는 보존하고 현재 main에서 완결된 source snapshot을 새 착지 브랜치로 검증한다.
 - 교훈: CE 해당 없음 — 수정 근거는 회귀 시험과 기존 설치/검증 교훈에 명시된다. Linux 전체 PS 한계는 작업 기록에 미해결로 남긴다.
 
-## 2026-10-26 · Learning 저장 모듈의 배포 포함 검사 (D-884)
+## 2026-10-26 · uncommitted · Learning 저장 모듈의 배포 포함 검사 (D-884)
 
 - 변경: 새 저장 pool/jobs/files/hub/web/source와 기존 inventory·저장 화면을 model-code 필수 입력에 포함한다. 선택적 HF host 의존성은 기존 OMX cell과 같은 0.35.3 pin으로 선언한다. 자동 설치·운영 재시작·원격 자료 삭제는 수행하지 않는다.
 - 증거: source `bc9d3f81c0`의 보관·회수·Isaac disk guard 원격 57건 통과, UI/복구 `49d3c2bc9a` 원격 63건 통과. 별도 누락 모듈 부정 시험 5건의 RED를 확인했으며, 이번 필수 목록의 최종 검증은 후속 committed-SHA 시험 기록에 남긴다.

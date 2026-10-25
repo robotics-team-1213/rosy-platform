@@ -172,9 +172,9 @@ class StoragePool:
             job = self._load(conn, job_id)
         return self._authorize(actor, job, scope)
 
-    def _transition(self, actor, job_id, status, revision=None):
-        with self.connect() as conn:
-            conn.execute('BEGIN IMMEDIATE')
+    def _transition(self, actor, job_id, status, revision=None, *, connection=None):
+        with (self.connect() if connection is None else nullcontext(connection)) as conn:
+            if connection is None: conn.execute('BEGIN IMMEDIATE')
             job = self._load(conn, job_id)
             self._authorize(actor, job)
             if status == 'released' and job['status'] != 'reserved':
@@ -199,5 +199,5 @@ class StoragePool:
     def mark_uploaded(self, actor, job_id, revision):
         return self._transition(actor, job_id, 'uploaded', revision)
 
-    def release(self, actor, job_id):
-        return self._transition(actor, job_id, 'released')
+    def release(self, actor, job_id, *, connection=None):
+        return self._transition(actor, job_id, 'released', connection=connection)

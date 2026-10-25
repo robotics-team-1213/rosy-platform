@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'curation/omx'))
 import native_review as native
+from experiment_dataset import dataset_lease
 
 
 def validate_split(root):
@@ -68,10 +69,11 @@ def policy_revision(artifact_files):
     return 'act-' + hashlib.sha256(canonical).hexdigest()[:16]
 
 
-def _invoke(command, output, environment, timeout):
+def _invoke(command, output, environment, timeout, *, lease_fd=None):
     with output.open('x', encoding='utf-8') as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT,
-                                env=environment, timeout=timeout)
+                                env=environment, timeout=timeout,
+                                pass_fds=() if lease_fd is None else (lease_fd,))
     if result.returncode:
         tail = output.read_text(encoding='utf-8', errors='replace')[-5000:]
         raise ValueError(f'pipeline process failed ({result.returncode}): {tail}')
@@ -128,6 +130,12 @@ def _evaluate(model, splits, repo_id, output):
 
 
 def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=5400):
+    with dataset_lease(splits) as lease_fd:
+        return _run_cycle(splits, output, steps=steps, batch_size=batch_size,
+                          device=device, timeout=timeout, lease_fd=lease_fd)
+
+
+def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd):
     splits = Path(splits).resolve()
     output = native._new_output(output, splits)
     if (type(steps) is not int or steps < 1 or type(batch_size) is not int or batch_size < 1
@@ -155,14 +163,15 @@ def run_cycle(splits, output, *, steps=100, batch_size=8, device='cpu', timeout=
                                          for name in ('lerobot', 'torch', 'torchvision', 'av', 'datasets')}))
         _invoke([sys.executable, '-m', 'lerobot.scripts.lerobot_train',
                  f'--config_path={output / "train-config.json"}'],
-                output / 'train.log', environment, timeout)
+                output / 'train.log', environment, timeout, lease_fd=lease_fd)
         model = (output / 'trainer/checkpoints/last/pretrained_model').resolve()
         if not model.is_relative_to(output):
             raise ValueError('trainer model resolved outside the new run')
         before = _artifact_files(model)
         _invoke([sys.executable, str(Path(__file__).resolve()), 'verify', '--model', str(model),
                  '--splits', str(splits), '--repo-id', receipt['source']['repo_id'],
-                 '--out', str(output / 'evaluation.json')], output / 'reload.log', environment, timeout)
+                 '--out', str(output / 'evaluation.json')], output / 'reload.log', environment, timeout,
+                lease_fd=lease_fd)
         if (validate_split(splits) != receipt
                 or hashlib.sha256((splits / 'split-receipt.json').read_bytes()).hexdigest() != receipt_hash
                 or _artifact_files(model) != before):
