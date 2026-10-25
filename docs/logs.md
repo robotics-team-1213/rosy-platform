@@ -10471,3 +10471,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. autocast로는 10Hz 한 걸음 추론이 안 되고 3b가 필요하다는 판단이 그대로다.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
+
+## 2026-10-25 · uncommitted · feat(sim): D-866 P1 OMX 시뮬레이터 백엔드 적합성 시험
+
+- 변경: `tools/sim/omx_backend_conformance.py`(ROS 없는 판정 + ROS 기록기), Gazebo 실행기 `omx_backend_conformance_gazebo.py`, 시험 `test/test_omx_backend_conformance.py`, [검증 기록](validation/omx-backend-conformance-2026-10-25/result.md).
+- 증거: AI PC Gazebo 통과(관절 1401건, 카메라 각 70프레임, 취소 전 0.068rad·뒤 0.0rad). 원격 pytest 2 passed.
+- gate 변화: P1 끝난 기준(Gazebo 적합성 통과) 충족. P2 Isaac 백엔드는 같은 도구로 판정한다.
+- 결정: 없음.
+- 교훈: 없음.
