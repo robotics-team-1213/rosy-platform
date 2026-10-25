@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import stat
 import uuid
 
 from first_boot_runtime import _json_atomic, _write_atomic
@@ -13,10 +12,10 @@ from os_state_layout import (
     COMMON, StateError, _digest, _guid, _layout, _object, _pairs, _path, _read, shared_mount_facts,
 )
 from os_state_accounts import validate_local_accounts, validate_shared_owners
+from os_state_files import (BASE_FILES, ROOT_FILES, clear_transition, initial_changes,
+                            project_files, transition, validate_projection)
 
 # Live CORE tokens, NetworkManager profiles and consumable join secrets are never projected.
-ROOT_FILES = {"etc/rosy/device-identity.json": 0o644, "etc/rosy/runtime.env": 0o640,
-              "etc/hostname": 0o644, "etc/hosts": 0o644}
 PENDING_FIELDS = {"schema_version", "state_schema", "generation", "device_uid",
                   "hardware_serial", "bundle_checksum", "factory_id"}
 MANIFEST_FIELDS = {"schema_version", "state_schema", "generation", "device_uid",
@@ -111,11 +110,13 @@ class FirstBootState:
             if binding.exists() and _load(binding, self.owner) != {
                     "device_uid": pending["device_uid"], "hardware_serial": pending["hardware_serial"]}:
                 raise ValueError("hardware binding differs from initialization")
+            initial_changes(self.root, pending["factory_id"])
             return "INITIALIZING"
         factory = _load(self.factory, self.owner, {"schema_version", "state_schema", "factory_id"})
         _guid(factory["factory_id"])
         if identity.exists() or binding.exists():
             raise ValueError("factory device contains a cached device binding")
+        initial_changes(self.root, factory["factory_id"])
         return "FACTORY_EMPTY"
 
     def _pending(self) -> dict:
@@ -145,6 +146,9 @@ class FirstBootState:
         content = {}
         for relative, mode in ROOT_FILES.items():
             entry = manifest["files"][relative]
+            if entry is None and relative not in BASE_FILES:
+                content[relative] = None
+                continue
             if not isinstance(entry, dict) or set(entry) != {"sha256", "mode"}:
                 raise ValueError("invalid generation file entry")
             if type(entry["mode"]) is not int or entry["mode"] != mode:
@@ -172,8 +176,8 @@ class FirstBootState:
         if binding != {"device_uid": manifest["device_uid"], "hardware_serial": manifest["hardware_serial"]}:
             raise ValueError("hardware binding differs from generation")
         if self.complete.exists():
-            if _load(self.complete, self.owner) != expected:
-                raise ValueError("completion differs from committed generation")
+            raw = _read(self.complete, 64 * 1024, self.owner)
+            transition(self.root, pointer, _load(self.complete, self.owner), raw, expected)
         else:
             pending = self._pending()
             if (pending["generation"] != pointer["generation"]
@@ -194,17 +198,10 @@ class FirstBootState:
                 raise ValueError("completion has no committed generation")
             return
         content, expected = self._committed()
-        # Validate every source before writing any target. Service-owned live state is excluded.
-        targets = {relative: _path(self.root, relative) for relative in ROOT_FILES}
-        for relative, target in targets.items():
-            if target.exists():
-                _read(target, 64 * 1024, self.owner)
-        for relative, target in targets.items():
-            if (not target.exists() or _read(target, 64 * 1024, self.owner) != content[relative]
-                    or stat.S_IMODE(target.stat().st_mode) != ROOT_FILES[relative]):
-                _write_atomic(target, content[relative].decode("utf-8"), ROOT_FILES[relative])
-        if not self.complete.exists():
+        project_files(self.root, content)
+        if not self.complete.exists() or _load(self.complete, self.owner) != expected:
             _json_atomic(self.complete, expected, 0o640)
+        clear_transition(self.root)
 
     @_hold
     def begin(self, payload: dict, hardware_serial: str, bundle: Path) -> None:
@@ -240,31 +237,47 @@ class FirstBootState:
     def commit(self, complete: dict) -> dict:
         if self.record is None or self._pending() != self.record:
             raise ValueError("initialization changed before commit")
+        project_files(self.root, initial_changes(self.root, self.record["factory_id"]))
+        values = {}
+        for relative in ROOT_FILES:
+            path = _path(self.root, relative)
+            values[relative] = (_read(path, 64 * 1024, self.owner)
+                                if path.exists() or relative in BASE_FILES else None)
+        pointer = self.stage_generation(self.record["generation"], complete, values)
+        _json_atomic(self.current, pointer, 0o600)
+        return dict(complete, os_state={"generation": pointer["generation"],
+                                       "manifest_sha256": pointer["manifest_sha256"]})
+
+    def stage_generation(self, generation: str, complete: dict, values: dict) -> dict:
+        _guid(generation)
+        if set(values) != set(ROOT_FILES):
+            raise ValueError("generation publication file set differs")
+        validate_projection(self.root, values)
         generations = _path(self.root, COMMON + "/state/generations")
         _mkdir(generations)
         # An abandoned partial directory never becomes the committed generation.
-        generation = self.record["generation"]
         location = generations / generation
         if location.exists():
             raise ValueError("generation publication needs recovery of its previous attempt")
         _mkdir(location)
         files = {}
         for relative, mode in ROOT_FILES.items():
-            data = _read(_path(self.root, relative), 64 * 1024, self.owner)
+            data = values[relative]
+            if data is None:
+                files[relative] = None
+                continue
             data.decode("utf-8")
             target = location / relative.replace("/", "__")
             _write_atomic(target, data.decode("utf-8"), 0o600)
             files[relative] = dict(sha256=hashlib.sha256(data).hexdigest(), mode=mode)
         manifest = dict(schema_version=1, state_schema=1, generation=generation,
-                        device_uid=self.record["device_uid"], hardware_serial=self.record["hardware_serial"],
+                        device_uid=complete["device_uid"], hardware_serial=complete["hardware_serial"],
                         files=files, completion=complete)
         _json_atomic(location / "manifest.json", manifest, 0o600)
         _sync(location)
         _sync(generations)
         digest = hashlib.sha256(_read(location / "manifest.json", 64 * 1024, self.owner)).hexdigest()
-        _json_atomic(self.current, dict(schema_version=1, state_schema=1,
-                                      generation=generation, manifest_sha256=digest), 0o600)
-        return dict(complete, os_state={"generation": generation, "manifest_sha256": digest})
+        return dict(schema_version=1, state_schema=1, generation=generation, manifest_sha256=digest)
 
     @_hold
     def consume_bundle(self, bundle: Path) -> None:

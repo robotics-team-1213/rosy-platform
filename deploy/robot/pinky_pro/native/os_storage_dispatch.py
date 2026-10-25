@@ -9,7 +9,7 @@ import stat
 import sys
 
 BOOTSTRAP_FILES = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py",
-                   "os_state_accounts.py")
+                   "os_state_accounts.py", "os_state_files.py")
 
 
 def marked(root: Path) -> bool:

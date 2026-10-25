@@ -24,6 +24,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rosy_config  # noqa: E402
 from rosy_config import APPLIED, ConfigError  # noqa: E402
+from os_state_config import configuration_update
 
 try:
     from deploy.robot.pinky_pro.sd.personalization import derive_wpa_psk
@@ -161,7 +162,19 @@ def _scrub_card(card: Path, text: str, config: dict) -> None:
 
 
 def apply(root: Path, run: Runner) -> dict:
-    card = root / CARD_FILE
+    root = Path(root).absolute()
+    with configuration_update(root) as updates:
+        return _apply(root, run, updates)
+
+
+def _apply(root: Path, run: Runner, updates) -> dict:
+    def write(path, content, mode):
+        if updates.handles(path):
+            updates.stage(path.relative_to(root).as_posix(), content.encode("utf-8"), mode)
+        else:
+            _write(path, content, mode)
+
+    card = updates.card
     if not card.is_file():
         return {"state": "absent"}
     text = card.read_text(encoding="utf-8", errors="replace")
@@ -169,7 +182,7 @@ def apply(root: Path, run: Runner) -> dict:
         config = rosy_config.parse(text)
     except ConfigError as exc:
         result = {"state": "invalid", "error": str(exc)}
-        _write(root / STATUS, json.dumps(result, sort_keys=True) + "\n", 0o600)
+        write(root / STATUS, json.dumps(result, sort_keys=True) + "\n", 0o600)
         return result
 
     view = rosy_config.scrubbed(config)
@@ -196,10 +209,10 @@ def apply(root: Path, run: Runner) -> dict:
               "hold_seconds": ap.get("hold_seconds", 600), "country": merged.get("country", "KR")}
     if "ssid" in ap:
         policy["ssid"] = ap["ssid"]
-    _write(root / "etc/rosy/network-policy.json", json.dumps(policy, sort_keys=True) + "\n", 0o600)
+    write(root / "etc/rosy/network-policy.json", json.dumps(policy, sort_keys=True) + "\n", 0o600)
     # D-193 8: the boot login code policy for rosy-login-code (root-only, like the AP policy).
     login_policy = {"boot_code": merged.get("login", {}).get("boot_code", "operator")}
-    _write(root / "etc/rosy/login-policy.json", json.dumps(login_policy, sort_keys=True) + "\n", 0o600)
+    write(root / "etc/rosy/login-policy.json", json.dumps(login_policy, sort_keys=True) + "\n", 0o600)
     if ap.get("password") not in (None, APPLIED):
         credentials_path = root / "etc/rosy/ap-credentials.json"
         try:
@@ -209,7 +222,7 @@ def apply(root: Path, run: Runner) -> dict:
         credentials["password"] = ap["password"]
         if "ssid" in ap:
             credentials["ssid"] = ap["ssid"]
-        _write(credentials_path, json.dumps(credentials, sort_keys=True) + "\n", 0o600)
+        write(credentials_path, json.dumps(credentials, sort_keys=True) + "\n", 0o600)
 
     if config.get("fleet"):
         fleet_path = root / "etc/rosy/fleet-bootstrap.json"
@@ -218,7 +231,7 @@ def apply(root: Path, run: Runner) -> dict:
         except (OSError, ValueError):
             fleet = {"pairing_required": False}
         fleet.update(config["fleet"])
-        _write(fleet_path, json.dumps(fleet, sort_keys=True) + "\n", 0o600)
+        write(fleet_path, json.dumps(fleet, sort_keys=True) + "\n", 0o600)
 
     if config.get("operator_ssh_keys"):
         keys_path = root / "home/rosy/.ssh/authorized_keys"
@@ -228,9 +241,16 @@ def apply(root: Path, run: Runner) -> dict:
             except OSError:
                 existing = []
             merged_keys = existing + [key for key in config["operator_ssh_keys"] if key not in existing]
-            _write(keys_path, "\n".join(merged_keys) + "\n", 0o600)
+            write(keys_path, "\n".join(merged_keys) + "\n", 0o600)
         else:
             notes.append("operator_ssh_keys: the rosy account does not exist; keys not installed")
+
+    if updates.shared is not None:
+        write(state_path, json.dumps({"digest": digest}, sort_keys=True) + "\n", 0o600)
+        if "timezone" in config:
+            write(root / "etc/rosy/timezone.json", json.dumps(
+                {"schema_version": 1, "timezone": config["timezone"]}, sort_keys=True) + "\n", 0o600)
+        updates.commit()
 
     if "timezone" in config:
         run(["timedatectl", "set-timezone", config["timezone"]])
@@ -238,9 +258,10 @@ def apply(root: Path, run: Runner) -> dict:
         run(["nmcli", "connection", "reload"])
     if plaintext:
         _scrub_card(card, text, config)
-    _write(state_path, json.dumps({"digest": digest}, sort_keys=True) + "\n", 0o600)
+    if updates.shared is None:
+        write(state_path, json.dumps({"digest": digest}, sort_keys=True) + "\n", 0o600)
     result = {"state": "applied", "notes": notes, "wifi_changed": wifi_changed}
-    _write(root / STATUS, json.dumps(result, sort_keys=True) + "\n", 0o600)
+    write(root / STATUS, json.dumps(result, sort_keys=True) + "\n", 0o600)
     return result
 
 

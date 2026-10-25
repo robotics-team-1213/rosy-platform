@@ -398,7 +398,8 @@ class FirstBootProvisioner:
 
     def apply(self, *, bundle: Path, hardware_serial: str) -> dict:
         with _handoff().first_boot_network(self.root):
-            return self._apply_locked(bundle=bundle, hardware_serial=hardware_serial)
+            with _native_helper("os_state_config").common_lock(self.root):
+                return self._apply_locked(bundle=bundle, hardware_serial=hardware_serial)
 
     def _apply_locked(self, *, bundle: Path, hardware_serial: str) -> dict:
         hardware_serial = hardware_serial.strip().lower()
