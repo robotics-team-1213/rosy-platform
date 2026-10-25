@@ -11556,3 +11556,11 @@ osy-d395-s1d\`.
 - 증거: `test/test_remote_pytest.py::test_the_pytest_job_is_best_effort_lowest_io_not_idle`, `test/test_host_services_manifest.py`. g1이 실제로 통과하는지는 이 착지 뒤 AI PC에서 다시 확인한다(아직 가설).
 - gate 변화: 없음.
 - 교훈: CE 미해결 — g1 원인은 착지 뒤 재현 실험으로 확정한다.
+
+## 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
+
+- 변경: 새 교훈 `docs/solutions/workflow-issues/copied-or-declared-artifacts-drift-silently-and-disable-gates-2026-10-26.md`(설치된 pre-push 10-11 복사본으로 2주간 게이트 미실행, services.yaml site 역할의 정비 unit 누락과 침묵한 update_status.py, 정비 도구 옛 버전). 같은 부류의 열린 항목 세 개(원격 시험 환경 id의 미고정 패키지, fetch 안 된 origin/main 비교, robot_cd 스냅숏 낡음 미검사)를 적음.
+- 증거: 수정 커밋 `58b1456a7d`(`test/test_pre_push_hook.py::test_a_stale_installed_copy_refuses_the_push`)와 `a4a357a416`(`test/test_host_services_manifest.py`). 열린 항목은 코드 읽기만 했다.
+- gate 변화: 없음. 문서만이다.
+- 결정: 없음.
+- 교훈: CE 새 교훈 기록 — 위 경로.
