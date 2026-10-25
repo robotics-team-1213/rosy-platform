@@ -77,6 +77,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert all(item["image_id"].startswith("sha256:") for item in manifest["images"].values())
     assert all(item["sbom_sha256"] for item in manifest["images"].values())
     assert manifest["image_archive_sha256"]
+    assert manifest["site_users_tool_required"] is True
     assert (output / "deploy/site/site_users.py").read_bytes() == (site / "site_users.py").read_bytes()
     assert manifest["deployment_file_sha256"]["site_users.py"] == sha256(
         (site / "site_users.py").read_bytes()).hexdigest()

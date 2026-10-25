@@ -152,6 +152,7 @@ def candidate(tmp_path):
     })
     manifest = {
         "manifest_version": 1,
+        "site_users_tool_required": True,
         "source_commit": COMMIT,
         "image_tag": COMMIT,
         "platform": "linux/amd64",
@@ -309,6 +310,61 @@ def test_rejects_candidate_without_site_users_tool(candidate):
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(_load_verifier().CandidateVerificationError, match="required deployment"):
         _verify(candidate)
+
+
+def test_legacy_candidate_without_site_users_marker_or_tool_remains_verifiable(candidate):
+    root = candidate[0]
+    manifest_path = root / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["site_users_tool_required"]
+    del manifest["deployment_file_sha256"]["site_users.py"]
+    (root / "deploy/site/site_users.py").unlink()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert _verify(candidate)["source_commit"] == COMMIT
+
+
+@pytest.mark.parametrize("marker", [False, None, 0, 1, "true", [], {}])
+def test_site_users_requirement_marker_must_be_literal_true_when_present(candidate, marker):
+    manifest_path = candidate[0] / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["site_users_tool_required"] = marker
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="site_users_tool_required"):
+        _verify(candidate)
+
+
+def test_legacy_candidate_listing_site_users_tool_still_checks_its_hash(candidate):
+    root = candidate[0]
+    manifest_path = root / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["site_users_tool_required"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert _verify(candidate)["source_commit"] == COMMIT
+    (root / "deploy/site/site_users.py").write_text("changed\n", encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file hash mismatch"):
+        _verify(candidate)
+
+
+def test_site_users_requirement_marker_is_bound_by_the_real_signature(candidate):
+    from deploy.site.candidate_signing import sign_manifest_bytes
+
+    root = candidate[0]
+    private = root / "site-test.key"
+    public = root / "site-test.pub.pem"
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
+                   check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                   check=True, capture_output=True)
+    manifest_path = root / "release.json"
+    envelope = sign_manifest_bytes(manifest_path.read_bytes(), key_id=TEST_KEY_ID,
+                                   private_key=private, public_key=public)
+    (root / "release.json.sig").write_bytes(envelope)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["site_users_tool_required"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="signature"):
+        _load_verifier().verify_candidate(
+            root, trusted_key_id=TEST_KEY_ID, trusted_public_key=public, inspect_loaded_images=False)
 
 
 @pytest.mark.parametrize("damage", ["missing", "changed"])
