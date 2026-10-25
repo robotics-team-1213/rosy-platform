@@ -66,7 +66,7 @@ def test_factory_data_is_explicit_and_has_existing_service_directory_ownership(t
     assert json.loads((tmp_path / "policy/updates/config.json").read_text())["enabled"] is True
 
 
-@pytest.mark.parametrize("case", ["nonempty", "symlink", "invalid_factory"])
+@pytest.mark.parametrize("case", ["nonempty", "symlink", "ancestor_symlink", "world_writable", "invalid_factory"])
 def test_data_initialization_refuses_existing_state_before_writes(tmp_path, monkeypatch, case):
     m = module()
     root = tmp_path / "data"
@@ -78,6 +78,14 @@ def test_data_initialization_refuses_existing_state_before_writes(tmp_path, monk
         alias = tmp_path / "alias"
         alias.symlink_to(root, target_is_directory=True)
         root = alias
+    elif case == "ancestor_symlink":
+        child = root / "child"
+        child.mkdir()
+        alias = tmp_path / "alias"
+        alias.symlink_to(root, target_is_directory=True)
+        root = alias / "child"
+    elif case == "world_writable":
+        root.chmod(0o777)
     else:
         factory = "not-a-guid"
     monkeypatch.setattr(m.os, "chown", lambda *args: pytest.fail("must preflight before ownership mutation"))
@@ -106,6 +114,9 @@ def test_each_slot_uses_its_root_boot_and_the_shared_data_and_provision(tmp_path
         assert f"PARTUUID={parts['boot_' + slot]['unique_guid']} /boot/firmware vfat" in fstab
         assert "/var/lib/rosy-device/maps /var/lib/rosy/maps none bind" in fstab
         assert "rosy.os_layout=ab-v1" in (boot / "cmdline.txt").read_text()
+        import yaml
+        fixed = yaml.safe_load((root / "etc/cloud/cloud.cfg.d/99-rosy-fixed-layout.cfg").read_text())
+        assert fixed == {"growpart": {"mode": "off"}, "resize_rootfs": False}
 
 
 @pytest.mark.parametrize("case", ["fstab_extra", "root_missing", "root_duplicate", "already_ab", "slot"])
