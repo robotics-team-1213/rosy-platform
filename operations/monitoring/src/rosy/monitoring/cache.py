@@ -301,6 +301,7 @@ class ObservationCache:
             now, wall = self._now(), self._wall()
             for key, records in self._groups.items():
                 self.store.save(key, [record.value(now) for record in records.values()], wall=wall)
+            self.store.prune(wall)
 
     def collection_failure(self, source_id, reason=None):
         self._source(source_id)

@@ -1,7 +1,7 @@
 """Owned SQLite observations, replay anchors and bounded public state-change history."""
 
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -159,9 +159,14 @@ class MonitoringStore:
         if type(after) is not int or after < 0 or type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError('invalid event cursor')
         with self._connection() as db:
-            rows = db.execute('select seq,time,payload from events where site=? and seq>? order by seq limit ?',
-                              (site, after, limit)).fetchall()
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+            rows = db.execute('''select seq,time,payload from events where site=? and seq>?
+                              and time>=? order by seq limit ?''', (site, after, cutoff, limit)).fetchall()
         try:
             return [{'sequence': seq, 'time': wall, **json.loads(payload)} for seq, wall, payload in rows]
         except (ValueError, TypeError):
             raise StoreUnavailable() from None
+
+    def prune(self, wall):
+        with self._connection() as db:
+            db.execute('delete from events where time < ?', ((wall - timedelta(days=7)).isoformat(),))

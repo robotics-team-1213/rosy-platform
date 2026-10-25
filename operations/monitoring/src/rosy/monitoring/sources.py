@@ -40,7 +40,19 @@ def decode(data):
         raise SourceFailure('protocol')
     def invalid(_):
         raise SourceFailure('protocol')
-    return json.loads(data, object_pairs_hook=_unique, parse_constant=invalid)
+    def finite(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise SourceFailure('protocol')
+        return number
+    try:
+        value = json.loads(data.decode('utf-8'), object_pairs_hook=_unique,
+                           parse_constant=invalid, parse_float=finite)
+    except RecursionError:
+        raise SourceFailure('protocol') from None
+    if not isinstance(value, dict):
+        raise SourceFailure('protocol')
+    return value
 
 
 def _read_file(path):
@@ -85,6 +97,7 @@ class SourceReader:
             if len(self._files) >= 8:
                 raise SourceFailure('timeout')
             task = asyncio.create_task(asyncio.to_thread(_read_file, source.path))
+            task.add_done_callback(lambda done: None if done.cancelled() else done.exception())
             self._files[source.id] = task
         try:
             return await asyncio.shield(task)
@@ -105,10 +118,7 @@ class SourceReader:
                 data.extend(chunk)
                 if len(data) > BODY_LIMIT:
                     raise SourceFailure('protocol')
-            value = decode(data)
-            if not isinstance(value, dict):
-                raise SourceFailure('protocol')
-            return value
+            return decode(data)
 
     def _metadata(self, source, *, captured=None, ttl=15, age=0.0):
         wall = self.cache._wall()
@@ -152,6 +162,8 @@ class SourceReader:
             health = 'ERROR' if row['errors'] else 'WARNING' if row['drift'] or row['awaiting_approval'] else 'OK'
             return [self._node(source, health, metadata)], []
         verdict = row.get('state')
+        if not isinstance(verdict, str):
+            raise SourceFailure('protocol')
         health = {'ok': 'OK', 'load-high': 'WARNING', 'bad': 'ERROR', 'error': 'ERROR',
                   'quiet': 'UNKNOWN', 'unreachable': 'UNKNOWN'}.get(verdict)
         if health is None:
@@ -216,9 +228,11 @@ class SourceReader:
                         elif source.kind == 'core':
                             identity = await self._get(client, base + '/api/v1/system/info')
                             data = await self._get(client, base + '/api/v1/diagnostics')
-                            if identity.get('robot_id') != source.id or data.get('health') not in {'OK', 'WARNING', 'ERROR', 'UNKNOWN'}:
+                            health = data.get('health')
+                            if (identity.get('robot_id') != source.id or not isinstance(health, str)
+                                    or health not in {'OK', 'WARNING', 'ERROR', 'UNKNOWN'}):
                                 raise SourceFailure('protocol')
-                            nodes = [self._node(source, data['health'], self._metadata(source))]
+                            nodes = [self._node(source, health, self._metadata(source))]
                         elif source.kind == 'fleet':
                             nodes, links = self._fleet(source, await self._get(client, base + '/api/fleet/monitoring'))
                         else:
