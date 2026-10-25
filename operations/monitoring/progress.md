@@ -15,7 +15,7 @@ gates:
     state: N/A
   ARTIFACT:
     state: HOLD
-    blocker: CLI 포함 wheel 설치는 검증했으며 화면·native 서비스·TLS 프록시 배포 묶음이 남아 있다.
+    blocker: CLI wheel·고정 UI 묶음 구성과 byte 일치·native unit/3프로필/프록시 입력은 검증했다. 대상 OS의 systemd-analyze verify와 실제 TLS 프록시 수용은 수행하지 않았다.
   DEVICE:
     state: HOLD
     blocker: 실제 관제 PC의 네이티브 설치·프로세스 수명 검증을 수행하지 않았다.
@@ -39,8 +39,8 @@ ROS-free HTTP 감시 프로필이므로 ROS-SIM은 N/A다. 로봇·호스트의 
 ## 다음 gate
 
 1. source/wheel/test 기반과 이 등록을 먼저 착지한다.
-2. 별도 상태 화면과 기존 관제 진입점을 실제 backend·브라우저로 검증한다.
-3. native·TLS 프록시 배포 묶음을 검증하고 실제 PC/네트워크 수용을 구분한다.
+2. 상태 화면 LOCAL 검증과 배포 입력 SOURCE 검증을 공식 절차로 착지한다.
+3. 대상 OS에서 unit 검사와 실제 PC 설치·LAN/TLS·중앙/사이트 단절·복구를 수용한다.
 
 ## 현재 유효한 금지사항
 
