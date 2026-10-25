@@ -59,7 +59,7 @@ def shared_roots(tmp_path, monkeypatch):
                 with host_table.open("a", encoding="ascii") as handle:
                     handle.write(f"{300 + len(mountpoints)} 106 8:6 {subpath} /{relative} rw - ext4 /dev/sda6 rw\n")
         local_table.write_text(host_table.read_text(), encoding="ascii")
-    original_lstat, original_stat, original_open = os.lstat, os.stat, os.open
+    original_lstat, original_stat, original_open, original_fstat = os.lstat, os.stat, os.open, os.fstat
 
     def mount_key(path, dir_fd=None):
         if isinstance(path, int):
@@ -97,11 +97,22 @@ def shared_roots(tmp_path, monkeypatch):
             return SimpleNamespace(**fields)
         return original_lstat(path, *args, **kwargs)
 
+    def bind_fstat(descriptor):
+        info = original_fstat(descriptor)
+        path = os.readlink(f"/proc/self/fd/{descriptor}")
+        identity = {str(common / "core"): 960, str(common / "operator-ssh"): 1001}.get(path)
+        if identity is None:
+            return info
+        fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+        fields.update(st_uid=identity, st_gid=identity, st_dev=os.makedev(8, 6))
+        return SimpleNamespace(**fields)
+
     # Real binds look like directories to lstat. Only the explicitly modeled
     # mountpoints get this metadata; arbitrary symlinks keep their real type.
     monkeypatch.setattr(os, "lstat", bind_lstat)
     monkeypatch.setattr(os, "stat", bind_stat)
     monkeypatch.setattr(os, "open", bind_open)
+    monkeypatch.setattr(os, "fstat", bind_fstat)
     capabilities = set(os.supports_dir_fd)
     if original_open in capabilities:
         capabilities.add(bind_open)
