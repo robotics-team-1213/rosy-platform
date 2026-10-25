@@ -9711,3 +9711,9 @@ osy-d395-s1d\`.
 - 변경: `promotion_request.py`가 등록된 인식 학습 결과에서 `rosy.learning.promotion-request/1` 묶음을 만든다. 담는 것은 모델 파일 sha256, 데이터셋 content_sha와 HF 비율(`train_only`), 평가셋 content_sha·mIoU, 학습 commit·Python·torch(기록된 경우), 요청자, 시각, `state: requested`이고, `<state>/promotion-requests/<sha>.json`에 한 번만 쓴다. 승인·단계·권한 키, LiDAR·궤적 자동 라벨·HF 평가 사진, 확정 평가 없음은 거절하고 한국어 이유를 낸다. `POST/GET /api/learning/promotion-requests`(`manage`+CSRF / `view`). 평가·승격 화면은 요청 가능한 후보가 있을 때만 버튼을 켜고, 요청 뒤 해시와 「Fleet에서 승인권자가 이 해시로 제안을 만든다(D-793)」를 보인다. `learning_cycle.py` 행에 `provenance`(commit·python·torch).
 - 증거: 원격 시험 PC 대상 시험, 브라우저 시험(1440·390px, `ROSY_RUN_BROWSER_TESTS=1`) 10 passed, affected 계층 2735 passed·known_failures 0 NEW. 실제 모델 PC 센터 수용은 하지 않았다. 지금 확정 정답 평가를 가진 모델은 없을 것으로 본다.
 - gate 변화: 없음. Fleet 쪽 인식 후보 대기열은 만들지 않았다. CE 새 교훈 — 읽지 않은 fetch 응답 본문이 networkidle을 막았다(`docs/solutions/runtime-errors/unread-fetch-body-blocks-playwright-networkidle-2026-10-25.md`).
+
+## 2026-10-25 · uncommitted · 승격 요청 독립 검토 반영 (D-874)
+
+- 변경: `validate`를 모든 키·값 형식의 허용 목록으로 바꿨다(HF 비율·학습 기록의 끼워 넣은 키, bool 장수, NaN·무한 IoU 거절). 평가셋은 `--learning-control` 학습 설정의 저장소 `evalsets/` 아래에 있는 `review_eval_bootstrap` 공개본(프레임마다 `approval_sha256`)이어야 하고, 학습 기록 `ready` 행의 `eval_set`과 content_sha가 같아야 한다(`learning_cycle`이 기록). 저장소 밖에서 `human_reviewed_eval`을 주장하는 평가셋은 거절된다. 쓰기는 잠금과 uuid 임시 이름을 쓰고, 만든 시각만 다른 같은 요청은 처음 해시를 돌려준다. GET은 경로·크기·mtime_ns가 같으면 해시를 재사용하고 POST는 모두 다시 해시한다.
+- 증거: 원격 시험 PC 대상 57 passed, 브라우저(1440·390px) 10 passed, affected 2790 passed·known_failures 0 NEW.
+- gate 변화: 없음. 학습 실행기가 연결되지 않은 작업대는 승격 요청을 만들 수 없다. CE 해당 없음 — 검토 반영이며 새 장애가 없다.

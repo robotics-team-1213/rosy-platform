@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 승격 요청 독립 검토 반영 (D-874)
 - 2026-10-25 · uncommitted · 평가·승격 「승격 요청」 묶음 (D-874, Learning F)
 - 2026-10-25 · uncommitted · 객체·픽셀·OMX 정답 두 단계 표시 (D-857 §4–5)
 - 2026-10-25 · uncommitted · HF 학습 사진 검토 반영 (own_forced_train)
 - 2026-10-25 · uncommitted · 승인한 HF 사진을 학습 데이터셋에만 (D-857)
-- 2026-10-25 · uncommitted · HF 가져오기를 검수 대기열로 보내기 (D-857 P1)
