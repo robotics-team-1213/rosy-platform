@@ -148,3 +148,32 @@ def test_bad_startup_never_echoes_config_or_creates_state(tmp_path):
                              '--state-dir', str(state)], capture_output=True, text=True, timeout=20)
     assert result.returncode == 1 and 'MONITORING_STARTUP_FAILED' in result.stderr
     assert 'do-not-echo' not in result.stdout + result.stderr and not state.exists()
+
+
+def test_platform_without_posix_permissions_is_rejected_before_creating_state(tmp_path, monkeypatch, capsys):
+    from types import SimpleNamespace
+    from rosy.monitoring import __main__ as cli
+    path = tmp_path / 'site.yaml'
+    path.write_text(json.dumps(configuration('collector-a', 'site-a')))
+    state = tmp_path / 'not-created'
+    calls = []
+    monkeypatch.setattr(cli, 'os', SimpleNamespace(name='nt', environ={'READ': READER}))
+    monkeypatch.setattr(cli.uvicorn, 'run', lambda *args, **kwargs: calls.append(True))
+    result = cli.main(['--config', str(path), '--state-dir', str(state)])
+    assert result == 1 and 'MONITORING_STARTUP_FAILED' in capsys.readouterr().err
+    assert not calls and not state.exists()
+
+
+def test_existing_shared_state_directory_is_rejected(tmp_path, monkeypatch, capsys):
+    from rosy.monitoring import __main__ as cli
+    path = tmp_path / 'site.yaml'
+    path.write_text(json.dumps(configuration('collector-a', 'site-a')))
+    state = tmp_path / 'shared'
+    state.mkdir()
+    state.chmod(0o755)
+    calls = []
+    monkeypatch.setenv('READ', READER)
+    monkeypatch.setattr(cli.uvicorn, 'run', lambda *args, **kwargs: calls.append(True))
+    assert cli.main(['--config', str(path), '--state-dir', str(state)]) == 1
+    assert 'MONITORING_STARTUP_FAILED' in capsys.readouterr().err
+    assert not calls and not (state / 'monitoring.sqlite3').exists()
