@@ -133,7 +133,7 @@ def _previous(root: Path) -> str | None:
 
 def _engine_contract(native: Path) -> tuple[tuple[str, ...], bytes]:
     path = _safe(native, "image_layer_boot.py")
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     with os.fdopen(descriptor, "rb") as handle:
         if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
             raise ValueError("BOOT_BRIDGE_REQUIRED: engine metadata is not a regular file")
@@ -153,9 +153,16 @@ def _engine_contract(native: Path) -> tuple[tuple[str, ...], bytes]:
     return files, raw
 
 
-def _engine_matches(native: Path, installed: Path, files: tuple[str, ...]) -> bool:
-    return all(_safe(native, name).is_file() and _safe(installed, name).is_file()
-               and _sha256(native / name) == _sha256(installed / name) for name in files)
+def _engine_snapshot(native: Path, installed: Path, files: tuple[str, ...]) -> dict[str, str] | None:
+    result = {}
+    for name in files:
+        if not _safe(native, name).is_file() or not _safe(installed, name).is_file():
+            return None
+        digest = _sha256(native / name)
+        if _sha256(installed / name) != digest:
+            return None
+        result[name] = digest
+    return result
 
 
 def require_bridge(root: Path, release_id: str, verify) -> str:
@@ -167,12 +174,13 @@ def require_bridge(root: Path, release_id: str, verify) -> str:
         installed = root / "opt/rosy/native-runtime"
         try:
             files, snapshot = _engine_contract(native)
-            if not _engine_matches(native, installed, files):
+            before = _engine_snapshot(native, installed, files)
+            if before is None:
                 continue
             verify(candidate)
             # The closure declaration and installed bytes must still be the
             # same snapshot after the caller verified the signed release.
-            if _engine_contract(native)[1] == snapshot and _engine_matches(native, installed, files):
+            if _engine_contract(native)[1] == snapshot and _engine_snapshot(native, installed, files) == before:
                 return _previous(root) or candidate
         except (OSError, ValueError, SyntaxError, StopIteration, TypeError, KeyError):
             continue
