@@ -59,18 +59,29 @@ def _robot_file_paths(config: dict[str, Any]) -> tuple[Path, Path]:
             robot_dir = profile_module.robot_config_dir(model)
         return robot_dir / name
 
-    paths = resolve("profile", "profile.yaml"), resolve("capabilities", "capabilities.yaml")
-    if product:
-        import yaml
+    return resolve("profile", "profile.yaml"), resolve("capabilities", "capabilities.yaml")
 
-        for key, path in zip(("profile", "capabilities"), paths):
-            try:
-                expected = yaml.safe_load((robot_dir / f"{key}.yaml").read_text(encoding="utf-8"))
-                actual = yaml.safe_load(path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeError, yaml.YAMLError) as exc:
-                raise ConfigError(f"{model} {key}: cannot read static configuration") from exc
-            if not isinstance(expected, dict) or not isinstance(actual, dict):
-                raise ConfigError(f"{model} {key}: static configuration must be a mapping")
+
+def _load_robot_settings(config: dict[str, Any]):
+    """Load and validate one snapshot before services gain access to configuration."""
+    import yaml
+    from core_common.config import ConfigError
+    from core_common.profile import DEFAULT_ROBOT, RobotProfile
+
+    paths = _robot_file_paths(config)
+    model = str(config.get("robot", {}).get("model") or DEFAULT_ROBOT)
+    product = os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device"
+    canonical = _robot_file_paths({"robot": {"model": model}}) if product else paths
+    settings = []
+    for key, path, reference in zip(("profile", "capabilities"), paths, canonical):
+        try:
+            actual = yaml.safe_load(path.read_text(encoding="utf-8"))
+            expected = actual if path == reference else yaml.safe_load(reference.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            raise ConfigError(f"{model} {key}: cannot read static configuration") from exc
+        if not isinstance(expected, dict) or not isinstance(actual, dict):
+            raise ConfigError(f"{model} {key}: static configuration must be a mapping")
+        if product:
             if key == "profile":
                 identity = expected.get("profile")
                 if not isinstance(identity, dict) or not isinstance(identity.get("model"), str) or not identity["model"].strip():
@@ -78,7 +89,8 @@ def _robot_file_paths(config: dict[str, Any]) -> tuple[Path, Path]:
             # Compare typed YAML values: Python equality alone treats false == 0.
             if yaml.safe_dump(actual, sort_keys=True) != yaml.safe_dump(expected, sort_keys=True):
                 raise ConfigError(f"{model} {key}: differs from the installed robot package")
-    return paths
+        settings.append(actual)
+    return RobotProfile(settings[0]), settings[1]
 
 
 class RosyCoreNode(Node):
@@ -90,12 +102,7 @@ class RosyCoreNode(Node):
         self._api_thread: Optional[threading.Thread] = None
         self._api_server = None
 
-        from core_common.profile import RobotProfile
-        import yaml
-
-        profile_path, capability_path = _robot_file_paths(config)
-        profile = RobotProfile.load(profile_path)
-        capability_data = yaml.safe_load(capability_path.read_text(encoding="utf-8"))
+        profile, capability_data = _load_robot_settings(config)
 
         waypoints_path = Path.home() / ".rosy" / "waypoints.json"
         self.core = CoreServices.build(config, profile, capability_data, waypoints_path)

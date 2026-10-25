@@ -132,6 +132,9 @@ def test_device_accepts_matching_absolute_overlay(node_module, installed_rasptan
               "capabilities": str(overlay / "capabilities.yaml")}
     assert node_module._robot_file_paths(config) == (
         overlay / "profile.yaml", overlay / "capabilities.yaml")
+    profile, capabilities = node_module._load_robot_settings(config)
+    assert profile.model == "RaspTank Metal"
+    assert capabilities["teleop"] is False
 
 
 def test_device_rejects_source_only_model(node_module, no_ament_share, monkeypatch):
@@ -155,7 +158,7 @@ def test_device_rejects_other_robot_overlay(node_module, installed_rasptank, key
     other = SRC.parent / "middleware/devices/pinky/profile/config" / f"{key}.yaml"
     config = {"robot": {"model": "rasptank_metal"}, key: str(other)}
     with pytest.raises(ConfigError, match=key):
-        node_module._robot_file_paths(config)
+        node_module._load_robot_settings(config)
 
 
 @pytest.mark.parametrize("contents", ["[]", "null", "profile: [", "profile: {}"])
@@ -164,7 +167,7 @@ def test_device_rejects_invalid_profile(node_module, installed_rasptank, tmp_pat
     overlay.write_text(contents, encoding="utf-8")
     config = {"robot": {"model": "rasptank_metal", "profile": str(overlay)}}
     with pytest.raises(ConfigError, match="profile"):
-        node_module._robot_file_paths(config)
+        node_module._load_robot_settings(config)
 
 
 def test_device_consumes_the_validated_snapshot(node_module, installed_rasptank, monkeypatch, tmp_path):
