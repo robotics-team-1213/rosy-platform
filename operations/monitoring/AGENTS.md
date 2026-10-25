@@ -15,6 +15,8 @@ HTTP API, UI and deployment are not implemented yet. See [README.md](README.md).
   Never add repair commands or copy raw source bodies, URLs, credentials or exception text into graphs.
 - Reader authorization belongs at the service boundary. Cache filtering enforces registered scopes,
   not the caller's principal. Keep reader and upstream credentials separate.
+- Serialize cache reads and updates in one owner, the collector event loop. Preserve anchors when
+  observations disappear or become unknown; reaching the retention budget rejects new identities.
 - `pyproject.toml` owns only `rosy.monitoring*`; do not add `rosy/__init__.py`.
 
 Run committed revisions through the repository remote pytest workflow with

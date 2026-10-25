@@ -1,7 +1,7 @@
 # operations
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-14
+**Generated:** 2026-10-07 · **Updated:** 2026-10-26
 
 ## Purpose
 

@@ -11,6 +11,9 @@ from .config import MonitoringConfig
 from .models import MonitoringLink, MonitoringNode, MonitoringSnapshot
 
 
+MAX_REMEMBERED = 8192
+
+
 class ObservationRejected(ValueError):
     def __init__(self, reason_code="MONITORING_PROTOCOL"):
         self.reason_code = reason_code
@@ -53,6 +56,8 @@ class ObservationCache:
                                     | {site for s in config.sources for site in s.peer_sites})
         self.generation, self._sequence = uuid4().hex, 0
         self._groups = {}
+        # shortcut: keep at most 8192 identities until restart; use durable bounded anchors for larger inventory churn.
+        self._latest = {}
         self._peers = {}
         self._retired = {source.id: deque(maxlen=64) for source in config.sources if source.kind == "peer"}
         now = self._now()
@@ -95,6 +100,8 @@ class ObservationCache:
     def _record(self, item, old, now, wall, budget, envelope, *, peer):
         if item.age_s is None:
             return _Record(item, now, None, now, now)
+        if old is not None and old.item.sampled_at is not None and item.sampled_at < old.item.sampled_at:
+            raise ObservationRejected("MONITORING_REPLAY")
         wall_age = (wall - item.sampled_at).total_seconds()
         if wall_age < -1:
             raise ObservationRejected("MONITORING_CLOCK")
@@ -106,9 +113,11 @@ class ObservationCache:
                 and item.origin_source == old.item.origin_source):
             if _fact(item) != _fact(old.item):
                 raise ObservationRejected()
+        if old is not None and item.sampled_at == old.item.sampled_at:
             source_until = min(source_until, old.source_until)
             if old.age is not None:
                 age = max(age, old.age + now - old.at)
+            source_until = min(source_until, now + max(0.0, item.valid_for_s - age))
         return _Record(item, now, age, source_until, report_until)
 
     def _compose(self, groups, sites, now, wall, sequence):
@@ -140,9 +149,14 @@ class ObservationCache:
                                   links=tuple(sorted(links, key=lambda item: item.id)))
 
     def _commit(self, key, records, now, wall):
+        remembered = self._latest | {(key, record.item.id): record for record in records.values()
+                                     if record.item.sample_id is not None}
+        if len(remembered) > MAX_REMEMBERED:
+            raise ObservationRejected("MONITORING_CAPACITY")
         proposed = self._groups | {key: records}
         self._compose(proposed, self.scope_sites, now, wall, self._sequence)
         self._groups = proposed
+        self._latest = remembered
 
     def update_local(self, source_id, *, nodes=(), links=(), complete=True):
         source = self._source(source_id)
@@ -162,7 +176,8 @@ class ObservationCache:
                 raise ObservationRejected()
             if source.kind == "peer" and (not isinstance(item, MonitoringLink) or item.kind != "probe"):
                 raise ObservationRejected()
-            records[item.id] = self._record(item, old.get(item.id), now, wall, 0.0, 15.0, peer=False)
+            anchor = self._latest.get((key, item.id), old.get(item.id))
+            records[item.id] = self._record(item, anchor, now, wall, 0.0, 15.0, peer=False)
         self._commit(key, records, now, wall)
 
     def receive_peer(self, source_id, snapshot: MonitoringSnapshot, *, request_started_at, elapsed_s):
@@ -191,7 +206,8 @@ class ObservationCache:
             if (item.origin_collector == self.config.collector_id or item.site_id not in source.peer_sites
                     or item.id == f"{item.site_id}:collector:{self.config.collector_id}"):
                 raise ObservationRejected()
-            records[item.id] = self._record(item, old.get(item.id), now, wall, elapsed_s + 1.0,
+            anchor = self._latest.get((key, item.id), old.get(item.id))
+            records[item.id] = self._record(item, anchor, now, wall, elapsed_s + 1.0,
                                             snapshot.remaining_s, peer=True)
         self._commit(key, records, now, wall)
         if previous and snapshot.generation != previous[0]:
