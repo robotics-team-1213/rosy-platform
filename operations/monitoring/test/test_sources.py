@@ -105,8 +105,10 @@ def test_peer_local_rejection_is_not_misreported_as_a_remote_protocol_error(runt
         return httpx.Response(200, stream=httpx.ByteStream(message.model_dump_json().encode()))
     credentials = load_credentials(original.config, {'READ': 'r' * 32})
     reader = SourceReader(cache, credentials, transport=httpx.MockTransport(answer))
-    with pytest.raises(StoreUnavailable if failure == 'storage' else ObservationRejected):
+    with pytest.raises(StoreUnavailable if failure == 'storage' else ObservationRejected) as rejected:
         asyncio.run(reader.poll(original.config.sources[1]))
+    if failure == 'clock':
+        assert rejected.value.reason_code == 'MONITORING_CLOCK'
     assert not cache._peers
     message = peer(clock)
     asyncio.run(reader.poll(original.config.sources[1]))

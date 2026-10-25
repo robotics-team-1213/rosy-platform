@@ -14,7 +14,9 @@ from urllib.parse import urlsplit
 import httpx
 from core_common.protocol.monitoring import FleetMonitoringRead
 
+from .cache import ObservationRejected
 from .models import MonitoringLink, MonitoringNode, MonitoringSnapshot
+from .store import StoreUnavailable
 
 
 BODY_LIMIT = 1024 * 1024
@@ -259,6 +261,8 @@ class SourceReader:
                             nodes = [self._node(source, 'UNKNOWN', self._metadata(source))]
                 if source.kind not in {'peer', 'fleet'}:
                     complete = True
+        except (StoreUnavailable, ObservationRejected):
+            raise  # The collector owns local storage, clock and replay diagnostics.
         except (SourceFailure, httpx.HTTPError, OSError, ValueError, OverflowError, TimeoutError) as error:
             stage = _stage(error)
             nodes, links = [], []
