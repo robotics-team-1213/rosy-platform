@@ -171,9 +171,12 @@ def test_ab_dispatch_executes_the_os_copy_with_a_partial_native_runtime(tmp_path
     assert "interrupted payload helper" not in result.stderr
 
 
-def test_payload_sync_refuses_the_os_bootstrap_directory():
+@pytest.mark.parametrize("destination", ["opt/rosy/os-bootstrap/os_state_storage.py",
+    "etc/systemd/system/rosy-first-boot.service.d/10-rosy-os.conf",
+    "etc/systemd/system/rosy-release-recover.service.d/10-rosy-os.conf"])
+def test_payload_sync_refuses_the_os_bootstrap_directory(destination):
     spec = importlib.util.spec_from_file_location("sync_for_storage", NATIVE / "sync-image-layer.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     with pytest.raises(ValueError, match="IMAGE_LAYER_DESTINATION"):
-        module.check_destination("opt/rosy/os-bootstrap/os_state_storage.py")
+        module.check_destination(destination)

@@ -21,7 +21,7 @@ def _dispatch():
 
 def _prefix(tmp_path):
     prefix = tmp_path / "opt/rosy"
-    prefix.mkdir(parents=True)
+    prefix.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(["bash", str(BASE / "native/install-native-runtime.sh"),
                              str(prefix / "native-runtime")], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
