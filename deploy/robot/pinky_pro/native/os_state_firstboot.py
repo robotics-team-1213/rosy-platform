@@ -61,7 +61,7 @@ class FirstBootState:
         self.root, self.layout = root, layout
         self.owner = root.stat().st_uid
         mount_facts(root, layout)
-        schema = _load(_path(root, COMMON + "/schema.json"), self.owner,
+        schema = _load(_path(root, COMMON + "/state/schema.json"), self.owner,
                        {"schema_version", "state_schema"})
         if schema != {"schema_version": 1, "state_schema": 1}:
             raise ValueError("unsupported common schema")
