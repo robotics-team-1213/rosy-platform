@@ -126,6 +126,7 @@ def test_published_tls_revision_is_finished_without_rolling_back_local_files(dev
     assert b"ROSY_API_TLS=required\n" in (store.root / tls.ENV).read_bytes()
     assert yaml.safe_load((store.root / tls.CONFIG).read_text())["network"]["tls"]
     monkeypatch.setattr(state, "_json_atomic", atomic)
+    store.root = other
     assert _apply(store, tmp_path)["recovered"]
     assert (common / "state/current.json").read_bytes() == current
     assert (common / "tls/ca.pem").read_bytes() == ca
@@ -162,6 +163,7 @@ def test_a_pending_tls_transaction_blocks_an_otherwise_admitted_updater(tmp_path
     from os_state_fakes import projected_device
     from test_first_boot_provisioning import _module
 
+    (tmp_path / "proc/sys/kernel/random").mkdir(parents=True)
     projected_device(tmp_path, monkeypatch)
     layout = _module()._native_helper("os_state_layout")
     assert layout.policy_directory(tmp_path).name == "updates"
