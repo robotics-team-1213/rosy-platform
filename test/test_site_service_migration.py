@@ -126,7 +126,7 @@ def enable_omx(host):
 
 def test_staged_overlay_paths_and_content_are_target_bound_without_mutating_current(host):
     enable_omx(host)
-    machine = InventoryHost(host.paths)
+    machine = InventoryHost(host.paths, CURRENT)
     old = host.paths.candidates / OLD
     (old / "deploy/site/compose.omx.yaml").write_text(json.dumps({
         "services": {"fleet": {"environment": {"FIXTURE_GENERATION": "OLD"}}}}))
@@ -150,7 +150,7 @@ def test_staged_overlay_paths_and_content_are_target_bound_without_mutating_curr
 @pytest.mark.parametrize("failure", ["missing", "unverified"])
 def test_target_overlay_requires_its_own_verified_file_before_loading(host, failure):
     enable_omx(host)
-    machine = InventoryHost(host.paths)
+    machine = InventoryHost(host.paths, CURRENT)
     overlays = {"omx": None} if failure == "missing" else None
     if failure == "unverified":
         machine.proof_patch = lambda result: result.update(omx=False) if result["source_commit"] == NEW else None
