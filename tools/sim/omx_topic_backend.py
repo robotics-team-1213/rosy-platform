@@ -69,10 +69,16 @@ def main():
                                         '--ros-args', '--params-file', str(rsp)])
         manager = start('ros2_control_node', ['ros2', 'run', 'controller_manager', 'ros2_control_node', *sim_time,
                                               '--params-file', str(config/'hardware_controller_manager.yaml')])
-        # Same order and constraints as the vendor Gazebo launch (omx_f_follower_ai_gazebo.launch.py).
-        for name, extra in (('joint_state_broadcaster', []),
-                            ('arm_controller', ['--param-file', str(config/'gazebo_arm_controller_constraints.yaml')])):
-            spawner = subprocess.run(['ros2', 'run', 'controller_manager', 'spawner', name, *extra, *sim_time],
+        # Same order and constraints as the vendor Gazebo launch (omx_f_follower_ai_gazebo.launch.py). gz_ros2_control
+        # puts controllers on simulation time itself; here each controller gets use_sim_time in its own parameter
+        # file, or the trajectory controller stamps goals in wall time and never advances on the simulator clock.
+        constraints = yaml.safe_load((config/'gazebo_arm_controller_constraints.yaml').read_text())
+        for name in ('joint_state_broadcaster', 'arm_controller'):
+            params = constraints.get(name, {}).get('ros__parameters', {}) | {'use_sim_time': True}
+            param_file = args.out/f'{name}.yaml'
+            param_file.write_text(yaml.safe_dump({name: {'ros__parameters': params}}))
+            spawner = subprocess.run(['ros2', 'run', 'controller_manager', 'spawner', name,
+                                      '--param-file', str(param_file), *sim_time],
                                      capture_output=True, text=True, timeout=120)
             (args.out/f'spawner-{name}.log').write_text(spawner.stdout+spawner.stderr)
             if spawner.returncode:
