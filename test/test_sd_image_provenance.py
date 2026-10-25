@@ -109,20 +109,55 @@ def test_unsigned_source_edit_is_rejected(verifier, signed_image):
         verifier.verify_image_release(dist, public, image, RELEASE)
 
 
-def test_changed_checksum_list_is_not_reused(verifier, signed_image, monkeypatch):
+def test_aba_checksum_replacement_cannot_authenticate_a_different_snapshot(verifier, signed_image, monkeypatch):
     dist, public, image, _ = signed_image
-    original_verify = verifier.verify_release_files
+    trusted = {p.name: p.read_bytes() for p in dist.iterdir()}
+    image.write_bytes(b"unsigned replacement image")
+    source = "b" * 40
+    (dist / "source-revision.txt").write_text(source, encoding="ascii")
+    path = dist / "build-provenance.json"
+    data = json.loads(path.read_text())
+    data["source_revision"] = source
+    path.write_text(json.dumps(data), encoding="utf-8")
+    path = dist / "manifest.json"
+    data = json.loads(path.read_text())
+    data["image"]["sha256"] = hashlib.sha256(image.read_bytes()).hexdigest()
+    path.write_text(json.dumps(data), encoding="utf-8")
+    sums = dist / "SHA256SUMS"
+    names = sorted(name for name in trusted if name not in {"SHA256SUMS", "SHA256SUMS.sig"})
+    sums.write_text("".join(f"{hashlib.sha256((dist / name).read_bytes()).hexdigest()}  {name}\n"
+                            for name in names), encoding="ascii")
+    forged = {p.name: p.read_bytes() for p in dist.iterdir()}
+    original_read = Path.read_bytes
+    reads = 0
 
-    def change_after_verification(root, key):
-        result = original_verify(root, key)
-        assert not result
-        sums = root / "SHA256SUMS"
-        sums.write_bytes(sums.read_bytes() + b"\n")
-        return result
+    def swap_at_checksum_read(path):
+        nonlocal reads
+        if path == sums:
+            reads += 1
+            snapshot = trusted if reads == 2 else forged if reads == 3 else None
+            if snapshot:
+                for name, content in snapshot.items():
+                    (dist / name).write_bytes(content)
+        return original_read(path)
 
-    monkeypatch.setattr(verifier, "verify_release_files", change_after_verification)
-    with pytest.raises(ValueError, match="CHECKSUMS_CHANGED"):
-        verifier.verify_image_release(dist, public, image, RELEASE)
+    monkeypatch.setattr(Path, "read_bytes", swap_at_checksum_read)
+    with pytest.raises(ValueError, match="SIGNATURE|CHECKSUM"):
+        verifier.verify_image_release(dist, public, image, RELEASE, source)
+
+
+@pytest.mark.parametrize("broken", ["signature", "image"])
+def test_shared_verifier_never_returns_unverified_entries(signed_image, broken):
+    import signing
+
+    dist, public, image, _ = signed_image
+    if broken == "signature":
+        (dist / "SHA256SUMS.sig").write_text("invalid signature", encoding="ascii")
+    else:
+        image.write_bytes(b"unsigned changes")
+    entries, rejections = signing.verify_release_checksums(dist, public)
+    assert rejections
+    assert entries == {}
 
 
 def test_cli_checks_the_expected_source_and_reports_it(signed_image):
