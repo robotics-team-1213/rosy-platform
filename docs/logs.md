@@ -11564,3 +11564,10 @@ osy-d395-s1d\`.
 - 증거: `test/test_update_status.py::test_ref_state_names_the_ref_and_ages_the_last_fetch_not_the_tip_commit`, `::test_repo_digest_reads_only_the_named_ref`, `test/test_robot_cd.py::test_snapshot_drift_lists_snapshot_files_that_differ_from_origin_main`. 실제 PC에서 `update_status.py`를 돌린 확인은 아니다.
 - gate 변화: 없음.
 - 교훈: 해당 없음 — 새 검사 추가, 장애 해결 아님.
+## 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
+
+- 변경: 새 교훈 `docs/solutions/workflow-issues/copied-or-declared-artifacts-drift-silently-and-disable-gates-2026-10-26.md`(설치된 pre-push 10-11 복사본으로 2주간 게이트 미실행, services.yaml site 역할의 정비 unit 누락과 침묵한 update_status.py, 정비 도구 옛 버전). 같은 부류의 열린 항목 세 개(원격 시험 환경 id의 미고정 패키지, fetch 안 된 origin/main 비교, robot_cd 스냅숏 낡음 미검사)를 적음.
+- 증거: 수정 커밋 `58b1456a7d`(`test/test_pre_push_hook.py::test_a_stale_installed_copy_refuses_the_push`)와 `a4a357a416`(`test/test_host_services_manifest.py`). 열린 항목은 코드 읽기만 했다.
+- gate 변화: 없음. 문서만이다.
+- 결정: 없음.
+- 교훈: CE 새 교훈 기록 — 위 경로.
