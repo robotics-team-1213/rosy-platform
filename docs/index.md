@@ -342,8 +342,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 자동 교사 intake 재검토 반영: 문장 속 경로 가리기 (D-848)
 - 2026-10-25 · uncommitted · 자동 교사 intake: 현장 봉인 형식·경로 제거·검토 반영 (D-848)
 - 2026-10-25 · uncommitted · 봉인한 자동 교사 녹화의 Learning intake (D-848)
 - 2026-10-25 · uncommitted · 승격 요청 학습 기록 행을 결과 폴더·파일에 묶기 (D-874)
 - 2026-10-25 · uncommitted · 승격 요청 독립 검토 반영 (D-874)
-- 2026-10-25 · uncommitted · 평가·승격 「승격 요청」 묶음 (D-874, Learning F)

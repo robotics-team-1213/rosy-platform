@@ -9735,3 +9735,9 @@ osy-d395-s1d\`.
 - 변경: robot-47 답변과 독립 검토 반영. reset은 1 frame 이상이고, manifest 구간이 궤적의 구간·frame 수, session `replay.sha256`·`segments`와 같아야 한다. 현장 local main의 `record_seal`은 session·리그·보정 revision을 쓰지 않으므로 폴더 이름을 session으로 쓰고 `prepare-native --rig-revision --calibration-revision`(교사 intake 전용)을 받는다. 봉인본에 값이 있으면 같아야 하며 `capture.json`에 값마다 출처(seal/operator)를 남긴다. `teacher_sha256`은 하나의 교사만 뜻하므로 다른 교사의 녹화는 한 intake에서 거절한다. 리더·교사 모두 provenance 사본에서 현장 절대 경로·장치 by-id를 지우고 `teacher.source.dataset`은 basename만 남기며 `redactions.json`에 원본 sha256을 둔다. 리더 `capture.json` 내용은 그대로다. `teacher.source` 목록 한도는 1000개·16 KiB.
 - 증거: 원격 시험 PC `learning/curation/omx/test/` 전체, 모델 PC learner venv(LeRobot 0.4.4) 실제 봉인→prepared intake 왕복 1 passed(경로 문자열 없음·정적 제외·DO_NOT_TRAIN 거절 포함), affected 계층 known_failures 0 NEW. 실제 Fleet PC 봉인본의 수용은 하지 않았다.
 - gate 변화: 없음. CE 해당 없음 — 형식 합의·검토 반영이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · 자동 교사 intake 재검토 반영: 문장 속 경로 가리기 (D-848)
+
+- 변경: provenance 사본의 모든 문자열에서 `/home/…`, `/dev/serial/by-id/…`, `/dev/v4l/by-id/…`, `/dev/tty*` 부분을 `<redacted-path>`로 바꾼다(session.json의 오류 문장 등). basename을 남길 때도 `/dev` 이름은 장치 serial이라 버린다. `capture.json`의 `collection_manifests[].session_id_origin`이 session을 봉인본(seal)과 폴더 이름(folder) 중 어디서 얻었는지 남긴다.
+- 증거: 원격 시험 PC `learning/curation/omx/test/` 전체, 모델 PC learner venv 실제 왕복(경로 문자열 검사 포함) 1 passed, affected 계층 905 passed·known_failures 0 NEW.
+- gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 장애가 없다.
