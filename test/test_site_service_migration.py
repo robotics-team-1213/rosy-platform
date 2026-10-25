@@ -321,7 +321,9 @@ def test_migration_flag_alone_cannot_bypass_normal_outgoing_authentication(host)
     cold.save_state(state)
     assert cold.run() == upd.EXIT_FAILED
     assert host.paths.link.resolve() == target
-    assert "switch" in cold.load_state()
+    assert json.loads(host.paths.state.read_text())["switch"] == state["switch"]
+    with pytest.raises(upd.Refused, match="physical relocation journal"):
+        cold.load_state()
     assert not any(e[0] in ("stop", "remove") for e in machine.events)
 
 

@@ -427,6 +427,10 @@ class SiteUpdater(SiteRuntimeIO):
                 state.pop('previous', None)  # never invent rollback history for a manual switch
                 log('adopted-current', commit=current)
             release = self.select(self.list_releases(), current, state)
+        except Refused as error:
+            log('refused', reason=str(error))
+            state['last_run']['result'] = 'refused'
+            return EXIT_FAILED
         except Rejected as error:
             log('refused', reason=f'running candidate verification failed: {error}')
             state['last_run']['result'] = 'refused'

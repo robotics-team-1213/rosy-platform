@@ -665,9 +665,12 @@ def test_pre_omx_rollback_uses_backup_overlay_requirements(host, enabled):
             stream.write('ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.omx.yaml\n')
     target = host.paths.candidates / NEW
     target.mkdir()
+    (target / 'release.json').write_text(json.dumps({'source_commit': NEW}))
+    (target / 'release.json.sig').write_text('signed')
     upd.write_env_tag(host.paths.site_env, NEW)
     upd.swap_link(host.paths.link, target)
-    state = {'failed': {}, 'switch': {'previous': str(old), 'current': OLD}}
+    state = {'failed': {}, 'switch': {'previous': str(old), 'current': OLD,
+                                     'commit': NEW, 'tag': _tag(NEW)}}
     fake = FakeHost(host.paths)
     updater = _updater(host, FakeHttp([], {}), fake)
     if enabled:
