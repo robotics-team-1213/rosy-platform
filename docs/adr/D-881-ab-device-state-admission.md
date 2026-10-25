@@ -28,6 +28,8 @@ storage admission 코드는 OS 이미지 소유 `/opt/rosy/os-bootstrap`에 고�
 
 firstboot와 canonical 설정 writer는 공통 lock으로 직렬화한다. 첫 bundle 적용 전 설정은 factory ID에 결속한 bounded 초기 설정 기록에 보존한다. 완료된 기체의 수정은 직전 generation을 확인하고 새 generation·directory entries를 fsync한 뒤, 이전/새 pointer와 이전 completion hash를 가진 publication journal, current pointer, completion 순으로 게시한다. 중단 후에는 그 journal과 동일한 기록만 복구한다. 이전 기체의 completion이나 stale writer를 이용해 새 정본을 덮어쓰지 못한다. 카드의 비밀번호 scrub과 성공 표시는 canonical commit 뒤에만 수행한다. 공통 private state와 boot_a 입력은 진단 수집에서 읽지 않는다.
 
+모터 commissioning 도구의 runtime.env 변경과 실패 시 복구도 완료된 기체의 canonical generation을 갱신한다. 공통 lock을 잡은 뒤 예상한 이전 runtime bytes와 정본을 비교하며, 미초기화 기체의 runtime 교체나 runtime 삭제는 허용하지 않는다. 복구 중 현재 값이 도구가 설정한 값 또는 원래 값과 다르면 다른 변경을 덮지 않고 중지 상태에서 운영자 복구를 요구한다. 이 저장 경로는 기존 commissioning 승인·torque-free preflight·E-Stop·단일 cmd_vel 검사나 drive 활성화 조건을 대신하지 않는다.
+
 ### Ownership and existing decisions
 
 | 기준 | 관계 |
