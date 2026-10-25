@@ -101,3 +101,15 @@ def test_an_unchanged_config_does_not_rewrite_derived_timezone_files(tmp_path, m
     assert module.apply(root_a, lambda _: "")["state"] == "unchanged"
     after = [(p.lstat().st_ino, p.lstat().st_mtime_ns, p.lstat().st_ctime_ns) for p in paths]
     assert after == before
+
+
+def test_initial_configuration_cannot_publish_a_record_larger_than_its_reader_limit(tmp_path, monkeypatch):
+    root_a, _, common, _ = shared_roots(tmp_path, monkeypatch)
+    module = firstboot_module()._native_helper("os_state_config")
+    with pytest.raises(ValueError, match="record exceeds"):
+        with module.configuration_update(root_a) as update:
+            for path in ("etc/rosy/network-policy.json", "etc/rosy/login-policy.json"):
+                update.stage(path, json.dumps({"padding": "x" * 40000}).encode("utf-8"), 0o600)
+            update.commit()
+    assert not (common / "state/config-initializing.json").exists()
+    assert not (root_a / "etc/rosy/network-policy.json").exists()
