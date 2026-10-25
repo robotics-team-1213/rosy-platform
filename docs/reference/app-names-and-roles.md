@@ -21,7 +21,7 @@ ROSY 제품 앱이 아닌 외부 업무 앱은 플랫폼 Python·DB·ROS를 쓰�
 
 | 앱 | 하는 일 | 저장소 |
 |---|---|---|
-| **Harbor** (HarborLogi) | 항만 모형 야드의 회수 순위·방해 화물 처리 제안, 업무 장부, 업무 완료 판정. Fleet HTTP로 제안·조회만 하고 로봇을 직접 움직리거나 승인하지 않는다 | 공개 팀 저장소 [kernel-robot-8th/kernel-robot-repo-2](https://github.com/kernel-robot-8th/kernel-robot-repo-2)의 `harborlogi/` |
+| **Harbor** (HarborLogi) | 항만 모형 야드의 반출 순위·재취급 화물 처리 제안, 업무 장부, 업무 완료 판정. Fleet HTTP로 제안·조회만 하고 로봇을 직접 움직이거나 승인하지 않는다 | 공개 팀 저장소 [kernel-robot-8th/kernel-robot-repo-2](https://github.com/kernel-robot-8th/kernel-robot-repo-2)의 `harborlogi/` |
 
 ## 상위 앱 안의 기능과 화면
 

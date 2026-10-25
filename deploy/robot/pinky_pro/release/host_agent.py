@@ -242,7 +242,7 @@ class HostAgent:
             return refuse(
                 "HOST_AGENT_SCHEMA_UNKNOWN",
                 f"request schema {request.get('schema_version')!r} is not implemented",
-                "CORE 와 Host Agent 의 버전이 맞는지 확인하십시오.",
+                "CORE 와 호스트 에이전트의 버전이 맞는지 확인하십시오.",
             )
 
         if not isinstance(request_id, str) or not _IDENTIFIER.match(request_id):

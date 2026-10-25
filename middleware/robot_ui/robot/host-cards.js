@@ -30,13 +30,13 @@ export function createHostCards({
     const status = document.getElementById("host-agent-status");
     if (status) {
       setTagState(status, "status", payload.available ? "OK" : "UNAVAILABLE");
-      status.textContent = payload.available ? "Host Agent 연결됨" : "Host Agent 없음";
+      status.textContent = payload.available ? "호스트 에이전트 연결됨" : "호스트 에이전트 없음";
     }
 
     if (!payload.available) {
       setChip("network-mode", "UNKNOWN");
       setCardUnavailable("network-card", "network-note", payload);
-      for (const id of ["network-apply", "network-ap-off", "network-ap-on", "network-connect"]) setEnabled(id, false, "Host Agent 없음");
+      for (const id of ["network-apply", "network-ap-off", "network-ap-on", "network-connect"]) setEnabled(id, false, "호스트 에이전트 없음");
       return;
     }
 
@@ -71,7 +71,7 @@ export function createHostCards({
       ssidInput.value = data.ssid;
     }
     const adminOn = isAdmin() && payload.available === true;
-    const reason = !isAdmin() ? "관리자 권한 필요" : "Host Agent 없음";
+    const reason = !isAdmin() ? "관리자 권한 필요" : "호스트 에이전트 없음";
     for (const id of ["network-apply", "network-ap-off", "network-ap-on", "network-connect"]) setEnabled(id, adminOn, reason);
   }
 

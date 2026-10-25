@@ -23,7 +23,7 @@ from typing import Callable, Optional, Sequence
 from fleet.server.console_builders import build_pairing as _build_pairing
 from fleet.server.context_options import activate_from_args, add_cli_arguments
 from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled, _realign_config
-from fleet.console_site_config import (_build_site_map, _goal_lease_ttl_s,
+from fleet.console_site_config import (_build_site_map, _goal_lease_ttl_s, _policy_admission_core,
                                        _lane_compliance_config, _map_pose_config, _trip_config)
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
@@ -696,7 +696,7 @@ def run_console(args: argparse.Namespace) -> None:
                      ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
                      ai_first=_ai_first(args),
                      autonomous_robots=_stuck_resolver_enrolled(args, "autonomous_robots"),
-                     central_registry=central_registry,
+                     policy_admission_core=_policy_admission_core(args), central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),

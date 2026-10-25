@@ -108,3 +108,24 @@ def _lane_compliance_config(args):
         return LaneComplianceConfig.from_mapping((site_config.get("fleet") or {}).get("lane_compliance"))
     except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
         sys.exit(f"lane_compliance config: {exc}")
+
+
+def _policy_admission_core(args):
+    """D-865: ``fleet.policy_admission`` of ``--site-config`` → core (disabled when absent)."""
+    import yaml
+    from datetime import datetime, timezone
+
+    from fleet.server.missions.policy_admission import (
+        PolicyAdmissionCore, PolicyAdmissionSettings)
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(
+                Path(args.site_config).read_text(encoding="utf-8")) or {}
+        settings = PolicyAdmissionSettings.from_config(
+            (site_config.get("fleet") or {}).get("policy_admission"))
+    except (OSError, TypeError, AttributeError, ValueError, yaml.YAMLError) as exc:
+        sys.exit(f"policy_admission config: {exc}")
+    return PolicyAdmissionCore(
+        settings, now=lambda: datetime.now(timezone.utc).isoformat())
