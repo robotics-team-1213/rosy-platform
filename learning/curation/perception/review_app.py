@@ -289,7 +289,8 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     domains = learning_domains.domains(
                         pipeline=pipeline, counts=counts, preparation=preparation, items=items,
                         omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts,
-                        vlm_eval_url=vlm_eval_url, tasks=task_count)
+                        vlm_eval_url=vlm_eval_url, tasks=task_count, pixel_counts=pixel_counts,
+                        drafts={'object': object_draft_indices, 'pixel': pixel_candidate_indices})
                     return self.send({'workflows': WORKFLOWS, 'items': items, 'token': token,
                                       'pipeline': pipeline, 'domains': domains, 'vlm_eval_url': vlm_eval_url,
                                       'preparation': preparation,
