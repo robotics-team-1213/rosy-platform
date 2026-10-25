@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · uncommitted · feat(policy-runner): D-864 반정밀도 지연 재측정
-- 2026-10-25 · uncommitted · docs(plans): D-865 P2 분리 표시
-- 2026-10-25 · uncommitted · docs(reference): v1.314 변경 이력 표행 추가
-- 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
-- 2026-10-25 · uncommitted · 통합관제 구현 main 착지와 I6 소프트웨어 수용
+- 2026-10-25 · uncommitted · 공급암 S 교사 셀을 로컬 main에 착지, 교사 경로를 guard 안으로
+- 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
+- 2026-10-24 · uncommitted · 작업 공간 목록 파일 위치와 설치 전 검사
+- 2026-10-24 · uncommitted · 센터 설치기가 작업 공간 목록 옵션을 유지
+- 2026-10-24 · uncommitted · Rosy Learning 작업 공간 목록 검토 반영

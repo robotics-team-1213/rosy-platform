@@ -10528,3 +10528,9 @@ osy-d395-s1d\`.
 - 증거: 관제 PC 실물 — 가르친 위치 사이클 성공, 보정 뒤 집기 성공(잡음 ~200 mA, 빈 집게 ~74 mA), `park` 2회. 결정 모델 오프라인 평가 6/30(수치 포함), 1/30(이미지만), 상자 없이 grasp 선택 → 측정 거부권 설계. 원격 시험: `test_omx_arm_status_bridge.py`+`test_omx_chunk_runner.py` 24 passed, `test_omx_judge_seat.py` 7 passed, 거부권 제거 변이에서 실패 확인.
 - gate 변화: 없음. Fleet 송신은 S용 source·토큰 발급 전까지 보내지 않는다. 시뮬 실험은 로컬 main 병합 뒤. 실물 영점·카메라→팔 좌표 보정은 현장 필요. ADR 초안 `Rosy/docs/workspace-records/2026-10-25/adr-draft-arm-s-platform-integration.md`.
 >>>>>>> 84431d5725 (docs(logs): arm S teacher-cell tools, 2026-10-25)
+
+## 2026-10-25 · uncommitted · 공급암 S 교사 셀을 로컬 main에 착지, 교사 경로를 guard 안으로
+
+- 변경: PR #189의 자기 커밋 31개를 로컬 main 위로 옮겼다(origin 병합분 제외, `deploy/hosts/services.yaml` 변경은 로컬 main에 파일이 없어 빼고 origin 병합 때 들어온다). 로컬 main의 `record_session.py`(쌍 세션, `hardware_faults`)와 합칠 때 리더 경보 재부팅은 1암 셀에만 두고, 끝 정리는 `note_fault` 기록 뒤에 재부팅한다. 사용자 결정(2026-10-25)으로 교사 경로를 guard 안으로 옮겼다: `guarded_native.py record --teacher`(리더 없이 동작이 목표, 6관절 1→10 deg/s·10 deg/s² 흐름, 집게만 추종 오차 제외), `chunk_runner.py`도 passive connect와 같은 guard로 보낸다. `teach_trajectory.GUARD_UNITS_PER_S = 5`로 궤적·청크·계획기·park를 늦추고 더 빠른 파일은 거부한다.
+- 증거: 원격 OMX 시험 전체 통과(exit 0). 변이(집게 예외를 모든 관절로, 속도 거부 제거)에서 새 시험이 실패함을 확인.
+- gate 변화: 없음. 실물 재생·청크 실행은 guard 속도로 다시 확인해야 한다(사이클이 사람 시연보다 길어진다). 실물 동작은 전원 스위치 옆에 사람이 있을 때만.

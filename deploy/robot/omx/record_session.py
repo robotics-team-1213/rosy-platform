@@ -11,7 +11,8 @@ commissioning caps (PWM 20, Current 50) keep the follower from following. This w
    with torque OFF, reading each back;
 3. stops the active camera services, because the recorder opens the V4L devices itself (D-770 §3:
    never two openers);
-4. runs `lerobot-record` (or `lerobot-teleoperate` with --teleop-only, for a dry run without data);
+4. runs `guarded_native.py record` (or `teleoperate` with --teleop-only, for a dry run without data;
+   `record --teacher` for a --replay trajectory, `chunk_runner.py` for --chunks, both inside the guard);
 5. always, however the command ends (Ctrl-C, SIGTERM, a dropped SSH session's SIGHUP): the recorder
    gets SIGINT and 10 s to finish its episode before it is killed; then, with further interrupts
    ignored, torque OFF on follower 11-16 (retried for up to 30 s, reopening the port after a USB
