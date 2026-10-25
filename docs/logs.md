@@ -11514,3 +11514,17 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 개발 도구 변경이다.
 - 결정: 없음.
 - 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.
+
+## 2026-10-25 · uncommitted · 구조화 출력 공통 어댑터와 실제 모델 파이프라인 시험 (D-878)
+
+- 변경: `rosy.decision.structured_output`(Ollama·OpenAI 호환 전송 형식과 응답 봉투 검사)을 deliberation·conversation·operator broker와 GLM·free 게이트웨이가 쓴다(전송 바이트 동일). `judgment_schema()`가 빈 enum 대신 `maxItems: 0`을 내고, 판정별 `anyOf` 변형으로 단계 짝을 강제한다(`$ref`·`$defs`로 16 KiB 이내). `qwen_review_completion`은 닫힌 스키마로 요청한다. opt-in `test/test_structured_output_pipeline.py` 추가.
+- 증거: 모델 PC 실제 모델 — deliberation 0/3(HTTP 400) → 1/3 → 3/3, conversation 46/46, operator 26/26, judge seat 4/4, qwen 3/3. 관련 단위 시험 원격 583 passed.
+- gate 변화: 없음(AI PC 재배포·수용은 별도). CE 새 교훈 기록 — `docs/solutions/runtime-errors/ollama-refused-empty-enum-and-judgment-schema-allowed-steps-the-validator-refuses-2026-10-25.md`.
+
+## 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+
+- 변경: `tools/hooks/pre-push`가 `git config rosy.publishOnly true`인 clone에서 `publish/main-*` 밖의 브랜치 push를 거절한다(삭제는 통과, 사고 대응은 `ROSY_PUSH_REASON`). 팀원 clone은 설정이 없어 영향이 없다. `git-workflow.md`의 옛 `git push origin main` 순서와 `rosy-release-push` 1단계를 D-868 게시 절차로 고쳤다.
+- 이유: D-868 동결 중 에이전트 세션이 origin에 직접 PR #192~#209를 병합해 동기화 FULL이 반복됐다(로컬 기록 `Rosy/docs/workspace-records/2026-10-25/local-main-landing-speed.md`). 문서 규칙만으로는 막지 못했다.
+- 증거: `test/test_pre_push_hook.py::test_publish_only_clone_pushes_publish_branches_only` 5개 경우. bash로 같은 구간을 돌려 게시 0·주제 1·이유 0·설정 없음 0을 확인하고, 허용 분기를 거절로 바꾼 변형이 1로 바뀌는 것을 확인했다.
+- gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
+- 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
