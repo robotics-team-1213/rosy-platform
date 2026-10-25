@@ -174,16 +174,48 @@ def test_isaac_preparation_reads_final_owner_artifacts_without_starting_sdk(setu
     request = dict(kind='isaac', run_id=row['run_id'], confirm_completed=True, archive=True)
     with pytest.raises(ValueError, match='final'): prepare.prepare(actor, request)
     row = store.update(row['run_id'], 0, dict(status='RUNNING'))
-    raw = b'{"completed_frames":12}'
+    raw = b'{"completed_frames":120}'
     (store.root / 'runs' / row['run_id'] / 'import-report.json').write_bytes(raw)
     store.finish(row['run_id'], row['revision'], dict(status='SUCCEEDED', stage='model_import', import_verified=True,
-        completed_frames=12, task_success=None, cleanup='OWNED_PROCESSES_EXITED_GPU_RELEASED'),
+        completed_frames=120, task_success=None, cleanup='OWNED_PROCESSES_EXITED_GPU_RELEASED'),
         [dict(id='import-report', name='import-report.json', media_type='application/json',
               bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())])
     assert prepare.sim_sources(actor)['runs'][0]['run_id'] == row['run_id']
     result = prepare.prepare(actor, request)
     assert result['bytes_verified'] and result['provenance']['seed'] == 42
     assert set(calls) == {'list', 'status', 'artifact'}
+
+
+def test_removing_all_targets_retains_historic_job_recovery(setup_case):
+    build, actor, body, now, artifact, remote = setup_case
+    for quota in body['quotas'].values(): quota['remaining_bytes'] = 1048576
+    build().save(actor, body); build().verify(actor, 1); build().activate(actor, 1)
+    service = build().jobs()
+    job = service.create(actor, dict(source_id='raw', artifact_id='run-one', profile='isaac'))
+    service.run(actor, job['id']); service.reclaim(actor, job['id'], job['id'])
+    build().save(actor, dict(body, revision=2, targets=[], quotas={}))
+    assert build().jobs().get(actor, job['id'])['bytes_verified']
+    assert build().jobs().restore(actor, job['id'])['local_present'] is True
+
+
+def test_cancelled_preparation_can_start_a_fresh_confirmed_allocation(setup_case, monkeypatch):
+    from storage_prepare import StoragePrepare
+    build, actor, body, now, artifact, remote = setup_case
+    for quota in body['quotas'].values(): quota['remaining_bytes'] = 1048576
+    build().save(actor, body); build().verify(actor, 1); build().activate(actor, 1)
+    _, config = build().configuration()
+    root = Path(next(row['path'] for row in config['roots'] if row['id'] == 'exports'))
+    folder = root / 'episode'; folder.mkdir(); (folder / 'frame.json').write_text('{}')
+    request = dict(kind='folder', artifact_id='episode', profile='dataset', provenance={}, confirm_completed=True, archive=True)
+    info = remote.info
+    def unavailable(*args): raise OSError('temporary provider failure')
+    monkeypatch.setattr(remote, 'info', unavailable)
+    first = StoragePrepare(build()).prepare(actor, request)
+    assert first['status'] == 'failed'
+    build().jobs().cancel(actor, first['id'])
+    monkeypatch.setattr(remote, 'info', info)
+    second = StoragePrepare(build()).prepare(actor, request)
+    assert second['id'] != first['id'] and second['bytes_verified'] and remote.commits == 3
 
 
 @pytest.mark.parametrize('field,value', [('id', {}), ('connection_id', [])])

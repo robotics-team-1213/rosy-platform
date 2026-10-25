@@ -31,7 +31,8 @@ def test_current_checkout_satisfies_signed_source_inventory():
     assert not [name for name in (*m.SPLIT_REQUIRED, *m.LEARNING_REQUIRED) if not (root / name).is_file()]
 
 
-@pytest.mark.parametrize('name', ['storage_pool.py', 'storage_jobs.py', 'storage_files.py', 'storage_web.py', 'storage_hub.py'])
+@pytest.mark.parametrize('name', ['storage_pool.py', 'storage_jobs.py', 'storage_files.py', 'storage_web.py', 'storage_hub.py',
+                                'storage_setup.py', 'storage_prepare.py', 'review_app_web/storage-settings.js'])
 def test_incomplete_learning_storage_release_is_rejected(tmp_path, name):
     m = module()
     archive = tmp_path / 'missing-storage.tar'
