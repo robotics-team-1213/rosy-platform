@@ -105,6 +105,7 @@ function result(data){
 async function refresh(current){
   const data=await send('/api/learning/storage/settings');if(current!==generation)return;
   const redraw=!state||state.revision!==data.revision;
+  if(data.enabled&&!state?.enabled){$('storage-settings').open=false;$('storage-preparation').open=true;}
   state=data;$('storage-setup').hidden=false;$('storage-manager').hidden=!data.can_manage;
   $('storage-setup-status').textContent=!data.can_manage?'저장 대상 설정은 프로젝트의 게시·관리 권한이 필요합니다.':
     data.enabled?'새 보관 활성화됨 · 완료 자료를 준비하거나 기존 자료를 복원하세요.':

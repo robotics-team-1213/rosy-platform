@@ -35,4 +35,6 @@
 
 ## 검증
 
+2026-10-26 UI 확장: 사용자는 계정 연결부터 대상·측정 quota·cache 설정, 실제 소량 private 쓰기/읽기 검증, 활성화와 완료 자료 준비를 화면에서 처리하도록 요청했다. UI 설정은 host path 권한을 늘리지 않는 프로젝트 SQLite CAS 원장이 소유하고, 기존 JSON은 seed다. 설정 편집은 신규 배정을 중지하며 신규 reservation은 같은 transaction에서 설정 revision을 검사한다. 기존 job의 자격증명·고정 revision과 복원은 보존한다. 전용 exports만 UI에서 finalize할 수 있고 Isaac은 기존 pinned owner의 FINAL 결과·artifact 읽기를 사용한다. SDK 시작/패키지 설치 명령은 받지 않는다. 외부 비밀값은 기존 Accounts가 계속 소유한다. 세부 wire는 API v1.321의 settings/sources 경로를 따른다.
+
 동일 조직의 중복 연결, 동시 예약, quota 갱신/만료, 권한·generation 철회, commit 후 429와 불확실한 결과, 원본 교체·추가 파일·symlink, 활성 lease·pin, 회수/복원 중 재시작과 ENOSPC를 원격 회귀로 확인한다. UI/API 권한·CSRF·반응형 회귀와 실제 배포 소스 포함을 별도로 확인한다. host 시험은 실제 HF 저장 성공이나 Isaac 생성 실행·실물 수용을 증명하지 않는다.
