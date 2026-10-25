@@ -80,6 +80,22 @@ def test_incomplete_review_refuses_before_source_proof(tmp_path, monkeypatch):
     assert not calls
 
 
+def test_provisional_model_draft_is_refused_until_a_person_confirms_it(tmp_path, monkeypatch):
+    # D-857 §4: a model draft (임시) never reaches evaluation; a person's 「맞음」 makes it 확정.
+    registry, review, calls = fixture(tmp_path, monkeypatch)
+    boxes = [dict(label='person', bbox_xyxy=[1, 1, 9, 9])]
+    with review.connect() as db:
+        db.execute('INSERT INTO object_drafts VALUES (?,?,?,?,?)', (0, 'd' * 64, json.dumps(boxes), 'model', 'e' * 64))
+    review.update(0, dict(version=review.get(0)['version'], action='apply_object_draft', draft_sha256='d' * 64))
+    assert review.get(0)['review']['review_origin'] == 'model_draft_pending_human'
+    with pytest.raises(ValueError, match='complete approved object review'):
+        bootstrap.ready(registry.root, review.state, tmp_path / 'scratch', target='objects')
+    assert not calls
+    review.update(0, dict(version=review.get(0)['version'], action='approve', complete_frame_review=True))
+    result = bootstrap.publish(registry.root, review.state, 'confirmed', tmp_path / 'scratch', target='objects')
+    assert read_fixed_manifest(result['path'])['frames'][0]['review']['boxes'] == boxes
+
+
 def test_object_publication_preserves_default_pixel_gate(tmp_path, monkeypatch):
     registry, review, _ = fixture(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match='pixel classes'):
