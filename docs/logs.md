@@ -9705,3 +9705,9 @@ osy-d395-s1d\`.
 - 변경: `learning_domains.truth`가 도메인 줄에 확정·임시·대기 수를 더한다. 확정은 사람 결정(객체·픽셀 승인, 저장한 OMX 구간 검수, VLM 사람 정답), 임시는 아직 결정하지 않은 모델 초안(`object_drafts`·LiDAR 후보 상자, `pixel_drafts`)이다. 「맞음/고침」 확인 대기열은 도메인당 50건, 가장 오래된 사진부터 열고 넘치는 초안은 대기로 센다. OMX는 구간을 만드는 모델이 없어 임시 「없음」이다. 홈의 도메인 줄과 정답 칸에 보인다. 평가셋 공개와 데이터셋 준비는 이미 승인 행만 읽으므로 새 경로를 만들지 않고, 모델 초안을 적용한 사진이 평가셋 공개에서 거절되고 사람이 승인한 뒤에만 들어가는 시험을 더했다.
 - 증거: 원격 시험 PC 대상 시험과 affected 계층, known_failures 비교.
 - gate 변화: 없음. 평가 결과의 확정 프레임 수·해시 기록과 build.py 자동 평가셋(LiDAR·궤적)의 단계 구분은 평가 보고 계약을 바꾸므로 이 조각에 넣지 않았다. CE 해당 없음 — 새 장애나 반복 원인이 없다.
+
+## 2026-10-25 · uncommitted · 평가·승격 「승격 요청」 묶음 (D-874, Learning F)
+
+- 변경: `promotion_request.py`가 등록된 인식 학습 결과에서 `rosy.learning.promotion-request/1` 묶음을 만든다. 담는 것은 모델 파일 sha256, 데이터셋 content_sha와 HF 비율(`train_only`), 평가셋 content_sha·mIoU, 학습 commit·Python·torch(기록된 경우), 요청자, 시각, `state: requested`이고, `<state>/promotion-requests/<sha>.json`에 한 번만 쓴다. 승인·단계·권한 키, LiDAR·궤적 자동 라벨·HF 평가 사진, 확정 평가 없음은 거절하고 한국어 이유를 낸다. `POST/GET /api/learning/promotion-requests`(`manage`+CSRF / `view`). 평가·승격 화면은 요청 가능한 후보가 있을 때만 버튼을 켜고, 요청 뒤 해시와 「Fleet에서 승인권자가 이 해시로 제안을 만든다(D-793)」를 보인다. `learning_cycle.py` 행에 `provenance`(commit·python·torch).
+- 증거: 원격 시험 PC 대상 시험, 브라우저 시험(1440·390px, `ROSY_RUN_BROWSER_TESTS=1`) 10 passed, affected 계층 2735 passed·known_failures 0 NEW. 실제 모델 PC 센터 수용은 하지 않았다. 지금 확정 정답 평가를 가진 모델은 없을 것으로 본다.
+- gate 변화: 없음. Fleet 쪽 인식 후보 대기열은 만들지 않았다. CE 새 교훈 — 읽지 않은 fetch 응답 본문이 networkidle을 막았다(`docs/solutions/runtime-errors/unread-fetch-body-blocks-playwright-networkidle-2026-10-25.md`).
