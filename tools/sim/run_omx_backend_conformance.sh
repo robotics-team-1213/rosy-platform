@@ -20,6 +20,11 @@ case "$backend" in
     MUJOCO_GL=egl "${SIM_MUJOCO_PYTHON:-$HOME/rosy-test/venvs/sim-mujoco/bin/python}" "$here/omx_mujoco_backend.py" \
       --urdf "$OUT/layer/omx_f_topic.urdf" --shape "$shape" --camera-hz "$camera_hz" >"$OUT/backend.log" 2>&1 &
     pids+=($!) ;;
+  isaac)
+    # Isaac 5.1 is Python 3.11 with its own Jazzy libraries: a clean environment, never the system ROS one.
+    sdk="${ISAAC_SDK_VENV:-$(cat "$HOME/rosy-isaac-ready/sdk-path.txt")}"
+    (cd "$here/../../learning/envs/isaac" && /usr/bin/env -i HOME="$HOME" USER="${USER:-}" PATH=/usr/bin:/bin       XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1       ROS_DOMAIN_ID="$ROS_DOMAIN_ID" ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_DISTRO=jazzy       RMW_IMPLEMENTATION=rmw_fastrtps_cpp       LD_LIBRARY_PATH="$sdk/lib/python3.11/site-packages/isaacsim/exts/isaacsim.ros2.bridge/jazzy/lib"       "$sdk/bin/python" run_omx_backend.py --output-dir "$OUT/isaac" --shape "$shape" --camera-hz "$camera_hz"       >"$OUT/backend.log" 2>&1) &
+    pids+=($!) ;;
   *) echo "unknown backend $backend" >&2; exit 2 ;;
 esac
 for _ in $(seq 240); do grep -q OMX_TOPIC_BACKEND_READY "$OUT/layer.log" && break; sleep 0.5; done
@@ -30,4 +35,4 @@ for topic in joint_commands joint_states; do
   pids+=($!)
 done
 python3 "$here/omx_backend_conformance.py" --shape "$shape" --camera-hz "$(python3 -c "print($camera_hz*.9)")" \
-  --out "$OUT/conformance.json"
+  --ready-s "${CONFORMANCE_READY_S:-300}" --out "$OUT/conformance.json"
