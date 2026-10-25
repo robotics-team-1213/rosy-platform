@@ -1,10 +1,10 @@
 # web_common logs
 
-## 2026-10-26 · Monitoring mount registration
+## 2026-10-26 · 181f670b45 · Monitoring mount registration
 
 - Monitoring의 읽기 전용 표면·포트·계약을 UI 구현 전에 등록했다. 기준선과 G2/G3는 후속 UI 검증까지 보류한다.
 - 공용 control 모듈의 상대 import로 접두 경로에서도 같은 canonical 파일을 사용한다. 테마 검사는 `/common/`과 `./common/`의 동일 mount 쌍만 허용한다.
-- 검증: 상대 경로·잘못된 테마 mount 회귀 단언을 추가했다. 원격 시험 결과는 후속 기록에 남긴다. 기존 제품·실물 gate는 올리지 않는다.
+- 검증: 원격 181f670b45의 registry·shared controls·typography 59 PASS, 0 SKIP, known_failures NEW 0. 상대 경로·잘못된 테마 mount 회귀 단언을 포함한다. 기존 제품·실물 gate는 올리지 않는다.
 
 추가만 한다. 형식: [module harness 설계](../../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-22 이전 이력은 `git log -- src/core/web_common`를 본다.
