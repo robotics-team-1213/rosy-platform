@@ -11344,3 +11344,34 @@ osy-d395-s1d\`.
 - 변경: `chunk_runner.py`가 모터 상태를 1초에 한 번(`HEALTH_PERIOD_S`)만 읽고, 집기 판정 때 한 번 새로 읽는다. 전에는 3틱마다 PWM·전류·온도를 읽어 guard의 표본(초당 약 5회)과 같은 USB 버스 거래가 두 배였다.
 - 증거: 관제 PC 실물 — 상자 위 15 mm에서 대기 중 guard 표본 간격이 11분 동안 0.234 s로 일정하다가 0.28→0.43→0.62 s로 튀고 0.5 s 기준을 넘어 토크 OFF(팔이 상자에 얹힘). 원격 시험 통과, 주기를 3틱으로 되돌린 변이에서 새 시험 실패. 복구는 고친 도구로 원격(현 자세 시드 → 집게 연 채 15 mm 상승 → park), `safe_end` True, 상자 제자리.
 - gate 변화: 없음. guard 규칙(오래된 표본 = 고장 = 토크 OFF)은 그대로이고, 허브 지연 자체는 남는다. CE: 새 교훈 `docs/solutions/runtime-errors/omx-guard-stale-health-sample-drops-held-arm-2026-10-25.md`.
+## 2026-10-25 · uncommitted · 기존 Isaac 접촉 관측과 교훈의 공개 보존
+
+- 변경: 개발 기준 a46daee90b7의 정지 Pinky proxy↔컨베이어 단일 스모크 검증 기록과 imported drive-mode 교훈을 원문 그대로 공개 보존한다. source7d0cfcd6e94f/run36041b241ee25366986bb3a6262ba0be와 frozen 지문을 유지한다.
+- 증거: producer·판정기·회귀·문서의 canonical blob을 원본과 대조하고 이번 공개 커밋의 원격 검사·독립 검토·CI를 별도로 결속한다. 원래 문서의 SDK·브라우저 검사 수치를 이번 공개 포트의 새 실행으로 바꾸지 않는다.
+- gate 변화: 없음. 소스 공개와 증거 보존이며 운영 서명 활성화·동기화 Episode·학습 정책·실물 수용은 별도다. CE 해당 없음 — 기존 교훈의 보존·재사용이며 새 해결 교훈을 작성하지 않았다.
+
+## 2026-10-25 · uncommitted · Isaac 원격 receipt·회수 진입의 공개 소스 포트
+
+- 변경: a46daee90b7의 remote_isaac와 receipt·응답 유실·해시 검증 회귀, 운영 안내를 공개한다. 미공개 OMX 도구 전체 대신 기존13행의 명시적 역할 호스트 검증만 CLI 안에 보존하고 model 선택·중복·사이트·명령 주입 거절을 시험한다. 안내의 공개 산출물 설명에 PNG 다섯 개를 포함한다.
+- 검증: 공개 SHA의 원격 CLI·Isaac·소비 경로 회귀, 고정 base/head 독립 검토와 CI를 결속한다. 원래 SDK source7d0/run36041의 증거와 새 호스트 검사를 구분한다.
+- gate 변화: 없음. SDK 설치·업그레이드·새 실험·운영 활성화·로봇 명령·Episode 생성·정책 승격은 수행하지 않았다. CE 해당 없음 — 기존 경계와 회귀를 보존하는 소스 포트다.
+
+## 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
+
+- 변경: D-871(모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면) 기록. `omx_autoupdate.py`에 `kind: service`의 `idle_gate: cell`(셀 잠금·버스·토크 OFF 유휴 규칙), 재시작 전 잠금 해제, `restart_running_only`(손으로 멈춘 관측기는 그대로), `system_site_packages`를 더함. 카메라·관측기·브리지용 `omx-devices-autoupdate.json.example`, `requirements-observation.lock`, `rosy-omx-devices-autoupdate.{service,timer}`. 관측기 템플릿이 health 파일을 `%i`로 정하고 브리지는 `ROSY_OBSERVATION_ARM_HEALTH`를 기본값으로 읽음(SHA 박힌 drop-in 대체). services.yaml의 해당 유닛을 `autoupdate`로.
+- 증거: 원격 시험(아래 PR). 관제 PC 적용은 별도(관측기는 10/24부터 옛 OpenRB 시리얼로 멈춤).
+- gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · Learning 서명 sequence41 실제 활성화 검증
+
+- 변경: [Learning·Isaac 실제 배포](validation/learning-conveyor-deployment-2026-10-25/result.md)에 PR201–206 공개 source·원격 검사·기존 SDK 증거 재사용·실제 signed sequence41/sourcee231 서비스 활성화와 독립 readback을 구분했다.
+- 증거: 운영 로그인 화면과 동기화 Episode·learned policy·실물 수용은 확인하지 않았다. 복사 상태 화면은 계정 바인딩 보호로 시작이 거절됐으며 우회하지 않았다. 별개 G1 지연 bound 초과와 동일 소스 후속 CI 통과를 함께 보존했다.
+- gate 변화: 모델 PC 코드·Learning 실제 활성화를 확인. 데이터·정책·현장 gate를 승격하지 않는다. CE 해당 없음 — 기존 교훈 보존·재사용, G1 원인은 미해결이다.
+
+## 2026-10-25 · uncommitted · chore(sync): merge origin/main #201-#207 into local main
+
+- 변경: origin/main(61addd5695, PR #201-#207, 28커밋)을 로컬 main에 병합했다. 충돌 14파일 가운데 add/add 4건(tools/remote/remote_isaac.py, test/test_remote_isaac.py, docs/deployment/isaac-experiment-runs.md, test/learning/perception/test_sim_browser.py)은 main 내용을 포함한 origin 최신판(inline choose_target, free_port, 접촉 왕복 PNG 문구)을 채택했고, 추가 전용 logs 5파일은 main 본문을 그대로 두고 origin 전용 블록 10건을 날짜 위치에 덧붙여 풀었다.
+- 증거: rosy_harness.py lint 0 errors(35 warnings, 기존 상태). ADR Log의 행 중복 9건과 D-857 이중 행(본문에 없는 (8768) 표기)을 정리했고, adr_gaps.txt에서 이미 쓰인 갭 38행을 tools/land_merge.py landed_gaps 규칙과 같게 제거했다. 회귀는 이어지는 land 회차가 검증한다.
+- gate 변화: 없음. origin PR 내용의 흡수이며 새 기능 활성화·배포·장치 동작 변경이 아니다. 통합은 머지 커밋으로 하고 public history는 rebase하지 않는다(D-127 방침).
+- 결정: 없음.
+- 교훈: 없음

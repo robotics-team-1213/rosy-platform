@@ -4,7 +4,7 @@ import threading
 import uuid
 
 import pytest
-from browser_harness import browser_tests_enabled
+from browser_harness import browser_tests_enabled, free_port
 from review_app import make_server
 from test_learning_collaboration import Accounts
 from test_review_app import open_store
@@ -60,7 +60,7 @@ def test_contact_run_exposes_report_and_phase_evidence_without_promotion(tmp_pat
     row['result'].update(stage='contact_roundtrip', task_success=True)
     artifact_ids = ['contact-report', 'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle']
     row['artifacts'] = {'files': [{'id': name} for name in [*artifact_ids, 'unknown-artifact']]}
-    server = make_server(open_store(tmp_path), 0, accounts=Accounts(), sim_runs=runs)
+    server = make_server(open_store(tmp_path), free_port(), accounts=Accounts(), sim_runs=runs)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     base = f'http://127.0.0.1:{server.server_port}'
