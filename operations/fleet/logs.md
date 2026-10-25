@@ -4444,3 +4444,10 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+## 2026-10-25 · uncommitted · feat(fleet): D-865 P2b policy admission HTTP surface
+
+- 변경: missions/policy_admission_routes.py 신설(GET/POST /api/fleet/policy-admission, GET /audit), app.py 조립(policy_admission_core 주입), cli.py 사이트 설정 fleet.policy_admission 해석, test/test_policy_admission_routes.py 추가, FLEET SRS MSN-008 계약 줄 v1.314 확정.
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. 자동 admit 루프·상한 지속화는 P2c 별도 조립이다.
+- gate 변화: 없음. 설정 없이는 core가 비활성이고 어떤 승인 경로도 바뀌지 않는다.
+- 결정: D-865 P2b 산출물.
+- 교훈: 없음

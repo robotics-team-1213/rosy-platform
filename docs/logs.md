@@ -10463,3 +10463,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+## 2026-10-25 · uncommitted · docs(spec): MSN-008 계약 줄 v1.314 확정
+
+- 변경: [FLEET SRS](spec/ROSY FLEET SRS.md) MSN-008 계약 줄을 API Ref v1.314로 확정(설계 문구 제거).
+- 증거: 미실행 — 문서 변경.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
