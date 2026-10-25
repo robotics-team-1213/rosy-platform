@@ -11505,3 +11505,9 @@ osy-d395-s1d\`.
 - 변경: Fleet의 캐시 전용 연결 관측 응답과 목표 읽기 경로를 API 정본에 등록했다. handler와 독립 Monitoring 런타임은 아직 구현되지 않았음을 명시했다. 기존 API 설명·시험 버전 고정값을 예약 도구로 함께 갱신했다.
 - 증거: 새 계약 시험의 미구현 import 실패를 원격에서 확인한 뒤 스키마를 추가했다. 후속 원격 검증과 독립 계약 검토로 확인한다.
 - gate 변화: 없음. ADR D-876의 첫 wire 계약이며 운영 활성화는 아니다. CE: 해당 없음.
+
+## 2026-10-25 · uncommitted · D-871 학습 센터 자동 업데이트
+
+- 변경: `deploy/model_pc/learning_center_update.py`가 2026-10-23 교훈의 수동 절차를 자동화한다. 동작 조건은 CI 통과 + 후손 커밋, 센터 enabled·active, `experiment_*` 작업과 자식 프로세스 없음이다. 새 커밋을 `source/<sha>`에 받고, 새 설치기 `prepare()`로 유닛을 만든다. 백업 → 정지 → 쓰기 → `--apply` → active·새 sha·HTTP 200을 확인하고, 실패하면 백업 유닛으로 복구한다. `rosy-learning-center-update.{service,timer}`(D-805 관문), services.yaml model·ai 항목을 `autoupdate`로 바꾸고 업데이터를 추가했다.
+- 증거: 원격 시험(아래 PR). 모델 PC 센터는 10/25 현재 사람이 멈추고 disabled 상태라 `idle`로 남는다.
+- gate 변화: 없음.
