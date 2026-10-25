@@ -49,9 +49,13 @@ Task 정책 경로(`policy_evidence`, `POLICY_DISPATCH_ENABLED`)는 이미 만�
 
 ### P0 — SRS 보완안
 
+**상태:** 착지(2026-10-25) — MSN-008 신설, MSN-006·MSN-007·UI-WORK-001 보강.
+
 **Owner:** 이 계획 담당 · **산출물:** MSN-006(정책 승인 경로), MSN-007(범위와 lease의 관계 불변), UI-WORK-001(자동 승인 표시) 보강 초안 · **Exit:** SRS 편집이 계약 위반이 아닌지 `docs/spec` 기준 확인.
 
 ### P1 — API·스키마
+
+**상태:** 착지(2026-10-25) — v1.314 선점, `protocol/policy_admission.py`·스키마 시험·API Ref v1.314 절. SRS MSN-008 계약 줄의 v1.314 갱신은 P0 착지 뒤 P2 브랜치에서 반영한다.
 
 **산출물:** API reference 버전 선점(`api_reserve.py`) 후 범위 readback/감사 경로·스키마 추가. `core_common.protocol` 신규 모듈(범위 상태·감사 이벤트). · **Files:** `docs/reference/ROSY API & Protocol Reference.md`, `contracts/foundation/core_common/protocol/` · **Exit:** protocol 정렬 시험 통과(`test_protocol_version_alignment.py`).
 

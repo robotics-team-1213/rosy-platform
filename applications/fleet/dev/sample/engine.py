@@ -37,8 +37,8 @@ class SampleEngine:
             self.scenario_id = scenario_id
             self.sessions = Sessions(self.epoch, 'viewer' if scenario_id == 'viewer' else 'operator')
             self.work = Work()
-            self.control_units = ControlUnits(self.work)
             self.spatial = Spatial()
+            self.control_units = ControlUnits(self.work, self.spatial, self._state)
             self.governance = Governance()
             self.assistant = Assistant()
             self.vision = Vision()
@@ -102,8 +102,13 @@ class SampleEngine:
             return response
         if method != 'GET' and role == 'viewer':
             return error(403, 'FORBIDDEN')
+        if (method, path) == ('POST', '/dispatch/rearm') and self.control_units.local_stop_pending():
+            return error(409, 'CONTROL_STOP_UNRESOLVED')
         response = self.work.handle(method, path, payload, headers, ['sample-robot', *self.installation.robots])
         if response is not None:
+            if path in ('/estop', '/dispatch-control') and self.control_units.local_stop_pending():
+                self.work.dispatch['rearm_available'] = False
+                return reply(self.work.dispatch)
             return response
         response = self.governance.handle(method, path, payload, actor)
         if response is not None:
@@ -124,22 +129,7 @@ class SampleEngine:
             if response is not None:
                 return response
         if (method, path) == ('GET', '/state'):
-            robot = {'robot_id': 'sample-robot', 'online': True, 'state_age_s': 0, 'error': None,
-                     'goal': None, 'queued': None, 'held': None, 'yielding': None,
-                     'capabilities': {'navigation': {'goal_navigation': True}, 'swarm': {'lead': True, 'follow': True}},
-                     'state': {'robot_id': 'sample-robot', 'mode': 'IDLE', 'map_id': 'sample-site',
-                               'safety': {'estop': not self.work.dispatch['dispatch_enabled']},
-                               'pose': {'x': 1, 'y': 1, 'yaw': 0}, 'battery': {'percent': 83},
-                               'localization': {'state': 'LOCALIZED', 'pose_frame': 'map'}},
-                     'localization': {'state': 'LOCALIZED', 'source': 'robot'}}
-            robots = [robot]
-            for identifier in self.installation.robots:
-                from copy import deepcopy
-                added = deepcopy(robot)
-                added['robot_id'] = added['state']['robot_id'] = identifier
-                robots.append(added)
-            return reply({'fleet': {'name': '샘플 현장', 'online': len(robots), 'total': len(robots)},
-                          'robots': robots, 'signals': {}, 'alarms': [], 'ts': 1792454400})
+            return reply(self._state())
         if method == 'GET' and f'GET {path}' in self.reads:
             return reply(self.reads[f'GET {path}'])
         match = re.fullmatch('/robots/([^/]+)/path', path)
@@ -149,3 +139,22 @@ class SampleEngine:
             return reply({'robot_id': match[1], 'points': [], 'path': []})
         self.unhandled.append((method, target))
         return error(501, 'SAMPLE_REQUEST_NOT_IMPLEMENTED', f'{method} {path}')
+
+    def _state(self):
+        robot = {'robot_id': 'sample-robot', 'online': True, 'state_age_s': 0, 'error': None,
+                 'goal': None, 'queued': None, 'held': None, 'yielding': None,
+                 'capabilities': {'navigation': {'goal_navigation': True}, 'swarm': {'lead': True, 'follow': True}},
+                 'state': {'robot_id': 'sample-robot', 'mode': 'IDLE', 'map_id': 'sample-site',
+                           'safety': {'estop': not self.work.dispatch['dispatch_enabled']},
+                           'pose': {'x': 1, 'y': 1, 'yaw': 0}, 'battery': {'percent': 83},
+                           'localization': {'state': 'LOCALIZED', 'pose_frame': 'map'},
+                           'evidence': {kind: {'evidence': 'fresh'} for kind in ('pose', 'battery', 'safety')}},
+                 'localization': {'state': 'LOCALIZED', 'source': 'robot'}}
+        robots = [robot]
+        for identifier in self.installation.robots:
+            from copy import deepcopy
+            added = deepcopy(robot)
+            added['robot_id'] = added['state']['robot_id'] = identifier
+            robots.append(added)
+        return {'fleet': {'name': '샘플 현장', 'online': len(robots), 'total': len(robots)},
+                'robots': robots, 'signals': {}, 'alarms': [], 'ts': 1792454400}
