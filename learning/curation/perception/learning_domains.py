@@ -28,7 +28,7 @@ def truth(confirmed, pending, drafted, href=None, reason=None, cap=QUEUE):
     still undecided, at most `cap` oldest first in the 「맞음/고침」 queue (cap=None: VLM consensus, audited
     instead). 대기: every other undecided row, including model answers past the cap."""
     queue = drafted if cap is None else min(drafted, cap)
-    return {'confirmed': confirmed, 'provisional': queue, 'waiting': pending - queue, 'over_cap': drafted - queue,
+    return {'confirmed': confirmed, 'provisional': queue, 'waiting': max(pending - queue, 0), 'over_cap': drafted - queue,
             'href': href if queue else None, 'reason': reason}
 
 

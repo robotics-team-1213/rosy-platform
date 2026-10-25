@@ -44,7 +44,7 @@ function renderDomains() {
     text(item,'h3',domain.name);
     const chips=text(item,'ol','','domain-stages');chips.setAttribute('aria-label',`${domain.name} 단계`);
     // D-857 §4: 확정 is human-decided and the only truth evaluation reads; 임시 is a model answer awaiting 「맞음/고침」.
-    const t=domain.truth,truthText=t&&`확정 ${t.confirmed} · 임시 ${t.provisional} · 대기 ${t.waiting}${t.over_cap?` (확인 ${t.over_cap}건은 대기열이 비면)`:''}${t.reason?` · 임시 없음: ${t.reason}`:''}`;
+    const t=domain.truth,truthText=t&&`확정 ${t.confirmed} · 임시 ${t.provisional} · 대기 ${t.waiting}${t.over_cap?` (임시 ${t.over_cap}건은 확인 대기열이 비면 들어감)`:''}${t.reason?` · 임시 없음: ${t.reason}`:''}`;
     for(const stage of domain.stages) {
       const evidence=stage.stage==='label'&&truthText?`${stage.evidence} · ${truthText}`:stage.evidence;
       const chip=text(chips,'li','','domain-stage');chip.dataset.stage=stage.stage;chip.dataset.state=stage.state;chip.title=evidence;
