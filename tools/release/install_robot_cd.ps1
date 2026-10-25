@@ -22,6 +22,7 @@ $files = @(
     "tools/release/publish_payload_release.py",
     "tools/release/download_artifact.py",
     "deploy/robot/pinky_pro/release/signing.py",
+    "deploy/hosts/common/release/signing.py",
     "deploy/robot/pinky_pro/release/sign_image_release.py",
     "deploy/robot/pinky_pro/release/build_payload_release.py"
 )

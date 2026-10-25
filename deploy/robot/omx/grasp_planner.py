@@ -23,6 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # chunk_runner, teach_trajectory
 from teach_trajectory import GUARD_UNITS_PER_S, slow, too_fast  # noqa: E402
+from motion_profile import retime  # noqa: E402
 
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
          "gripper.pos"]
@@ -103,9 +104,11 @@ class Planner:
         up, q5 = self.line((x, y, z), lifted, p["lift_m_s"], yaw, grip_out, q5)
         # A joint can turn faster than the Cartesian speed suggests near the wrist; the guard streams at
         # GUARD_UNITS_PER_S, so each chunk is slowed to that from where the previous one ended.
-        down = [[round(v, 3) for v in f] for f in slow(down, self.fps, start=pre)]
+        # the vertical lines ease out of and into rest (the same IK path, a trapezoid speed); the jaws'
+        # close/open keeps its own pace
+        down = [[round(v, 3) for v in f] for f in retime(down, self.fps, 0.85 * GUARD_UNITS_PER_S, start=pre)]
         act = [[round(v, 3) for v in f] for f in slow(act, self.fps, start=down[-1])]
-        up = [[round(v, 3) for v in f] for f in slow(up, self.fps, start=act[-1])]
+        up = [[round(v, 3) for v in f] for f in retime(up, self.fps, 0.85 * GUARD_UNITS_PER_S, start=act[-1])]
         return {f"above_{name}": [pre], f"descend_{name}": down, f"{verb}_{name}": act, f"lift_{name}": up}, q5
 
     def library(self):

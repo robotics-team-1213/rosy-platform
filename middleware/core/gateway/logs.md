@@ -1978,3 +1978,16 @@
 - 변경: 새 시험이 Fleet journal과 실제 Console/HttpRobotClient를 거쳐 기존 CORE safety HTTP에 도달하는지 확인한다. 정상 응답과 응답 유실, 중복 identity, Fleet 재무장 후 CORE latch 보존을 검증하며 물리 정지는 UNVERIFIED다.
 - 증거: 기존 core_client와 합성 actuator를 사용한다. CORE 제품 route/최종 명령 권한은 변경하지 않았다. 구현 source의 공식 원격 회귀는 다음 단계다.
 - gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
+
+## 2026-10-25 · uncommitted · 제품 기종 설정 결속과 snapshot 소비
+
+- 변경: device 모드에서 선택 모델의 installed ament share와 타입을 포함한 정적 profile/capability 일치를 요구한다. 개발 절대경로 overlay는 유지하며 제품 서비스는 검증한 snapshot을 재읽기 없이 소비한다.
+- 증거: `8632a9f1f3` 원격 RED8, `f71c52a76a` 관련 GREEN36. snapshot 반례 RED 뒤 `eb616252ea` 결합 회귀213 통과(기종 설정·선택·RaspTank·공통 서명·설치본·배포 dispatcher). 독립 검토에서 snapshot 보완 확인. 전체 착지 회귀는 별도다.
+- gate 변화: ARTIFACT/DEVICE/FIELD 변화 없음. native 기존 수동 정적 override의 마이그레이션은 `docs/deployment/deployment-tools.md`를 따른다.
+- 교훈: 해당 없음 — 검증된 객체를 소비하는 조건을 코드와 반례 시험에 보존했다.
+
+## 2026-10-25 · 4fdf8c9fee · installed package 내용과 기종 결속
+
+- 변경: signed package의 binding schema/model과 canonical snapshot digest를 검증한다. 설치 디렉터리 이름만 맞고 다른 기종의 설정이 들어간 경우도 서비스 조립 전에 거절한다.
+- 증거: 새 package-mix/shape 반례9개 RED 후 관련153 PASS/NEW0, source 독립 검토 승인. 앞선 전체 CORE/공통 계약 묶음7585 PASS/91 SKIP는 이 보완 전 revision이며 최신 전체 착지는 별도로 검증한다.
+- gate 변화: 기존 ARTIFACT/DEVICE/FIELD 변화 없음. 이전 profile package에 binding이 없으면 새 CORE와 호환 릴리스로 함께 갱신해야 한다.

@@ -18,7 +18,7 @@ Release packaging and the privileged Host Agent. Modules are scripts (not an ins
 | `host_agent_server.py` | Unix-socket server, peer credential check, privileged actions |
 | `manifest.py` | Release manifest read/write |
 | `manifest.schema.json` | Manifest JSON schema |
-| `signing.py` | OpenSSL 3 raw Ed25519 sign/verify |
+| `signing.py` | Compatibility module alias to `deploy/hosts/common/release/signing.py`; native installers copy that self-contained implementation, not this alias |
 | `sign_image_release.py` | Offline image checksum verification and fail-closed Ed25519 signing CLI |
 | `storage.py` | On-disk release store |
 | `updater.py` | Activate / rollback a signed release |

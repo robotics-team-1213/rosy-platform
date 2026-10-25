@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # teach_trajectory, guarded_native, motor_health
 from teach_trajectory import GUARD_UNITS_PER_S, too_fast  # noqa: E402
+from motion_profile import smooth  # noqa: E402
 
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
          "gripper.pos"]
@@ -81,11 +82,11 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     waypoints.append([goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
     waypoints.append(list(goal[:5]) + [grip_transit])
     waypoints.append(list(goal[:6]))
-    step, frames = PARK_SPEED / fps, []
-    for a, b in zip(waypoints, waypoints[1:]):
-        n = max(1, math.ceil(max(abs(y - x) for x, y in zip(a, b)) / step))
-        frames += [[x + (y - x) * k / n for x, y in zip(a, b)] for k in range(1, n + 1)]
-    return frames
+    # One flowing move: the turn starts as the rise ends and the descent as the turn ends (blended corners);
+    # the jaws' changes and the goal are reached at rest. 85 % of the guard speed leaves room for the moment
+    # two blended segments overlap on one joint.
+    # The overlap is capped at 0.6 s: the rise has at most 0.5 * 5 * 0.6^2 = 0.9 units left when the turn begins.
+    return smooth(waypoints, fps, 0.85 * PARK_SPEED, blend=[False, False, True, True, False, False], blend_s=0.6)
 
 
 def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None) -> list:
