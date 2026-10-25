@@ -1270,7 +1270,8 @@ beside the reviewed verifier from a reviewed checkout, never from a candidate:
 sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
   /usr/local/lib/rosy-site/rosy_site_autoupdate.py
 sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py \
-  deploy/site/candidate_signing.py deploy/site/site_update_io.py /usr/local/lib/rosy-site/
+  deploy/site/candidate_signing.py deploy/site/site_update_io.py \
+  deploy/site/site_update_runtime.py /usr/local/lib/rosy-site/
 sudo install -o root -g root -m 0644 deploy/site/rosy-site-autoupdate.service \
   deploy/site/rosy-site-autoupdate.timer /etc/systemd/system/
 sudoedit /etc/rosy/site/autoupdate.conf   # JSON below, mode 0644, owner root
@@ -1339,9 +1340,9 @@ After fixing the cause of a failed tag, allow it again with
 This command takes the updater lock. An unreadable or malformed state file
 blocks changes and is preserved for operator recovery. Interrupted rollback
 requires the backup environment and signed previous candidate to match the journal.
-When `verify_candidate.py`, `candidate_signing.py`, or `site_update_io.py` change on `main`, the
-administrator reinstalls them by the same reviewed path; the updater never
-copies them from a candidate.
+When the updater, verifier, signing helper, I/O helper or `site_update_runtime.py`
+changes on `main`, the administrator reinstalls the complete five-file unit from the
+same reviewed commit by the path above; the updater never copies them from a candidate.
 
 ### Local maintenance and manual installation (D-441 follow-up)
 

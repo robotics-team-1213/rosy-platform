@@ -3,7 +3,7 @@ import json
 from dataclasses import replace
 
 from rosy.decision.deliberation import Problem, canonical
-from rosy.decision.deliberation.judgment import judgment, judgment_schema
+from rosy.decision.deliberation.judgment import judgment, judgment_schema, schema_missing_allowlist
 from rosy.decision.deliberation.profiles import BoundProfile, ModelProfile
 from rosy.decision.deliberation.versioned_request import prepare_request
 from .deliberation_ollama import model_profile as primary_profile
@@ -35,7 +35,7 @@ def request(data):
         raise ValueError('INVALID_VERSIONED_GLM_BINDING')
     bound = BoundProfile((status_model_profile if problem.domain == 'fleet_status' else model_profile)(
         data['profile_revision']), problem.digest)
-    missing = data['schema']['properties']['missing_evidence']['items']['enum']
+    missing = schema_missing_allowlist(data['schema'])
     if type(missing) is not list or len(missing) > 16 or len(set(missing)) != len(missing):
         raise ValueError('INVALID_VERSIONED_GLM_SCHEMA')
     schema = judgment_schema(problem, bound, missing_allowlist=missing)

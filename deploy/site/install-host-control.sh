@@ -9,7 +9,8 @@
 #   /usr/local/sbin/rosy-host-control         the allowlisted helper
 #   /usr/local/sbin/rosy-host-control-remote  the forced command for the Fleet key
 #   /etc/rosy/host-control/role               the role; the helper reads it, not the env
-#   /etc/rosy/host-control/units-user         ai only: owner of the Pinky user units
+#   /etc/rosy/host-control/units-user         ai and model: owner of the Pinky user units and of the
+#                                             rosy-ops rosy-test-storage.service (D-883)
 #                                             (--units-user, default the login user)
 #   /etc/sudoers.d/rosy-host-control          "<login user> ALL=(root) NOPASSWD: <helper>"
 # With --fleet-key (and the required --from, an sshd `from=` pattern list: the site PC's
@@ -65,7 +66,7 @@ run install -o root -g root -m 0755 "$HERE/rosy-host-control" /usr/local/sbin/ro
 run install -o root -g root -m 0755 "$HERE/rosy-host-control-remote" /usr/local/sbin/rosy-host-control-remote
 run install -d -o root -g root -m 0755 /etc/rosy /etc/rosy/host-control
 put /etc/rosy/host-control/role 0644 "$ROLE"
-[ "$ROLE" != ai ] || put /etc/rosy/host-control/units-user 0644 "${UNITS_USER:-$USER_NAME}"
+[ "$ROLE" = site ] || put /etc/rosy/host-control/units-user 0644 "${UNITS_USER:-$USER_NAME}"
 put /etc/sudoers.d/rosy-host-control 0440 "$USER_NAME ALL=(root) NOPASSWD: /usr/local/sbin/rosy-host-control"
 [ "$DRY" = 1 ] || visudo -cf /etc/sudoers.d/rosy-host-control >/dev/null
 
