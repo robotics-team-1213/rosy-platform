@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a new green OMX camera and observer release every 10 minutes
+
+[Timer]
+OnBootSec=4min
+OnUnitActiveSec=10min
+RandomizedDelaySec=60s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

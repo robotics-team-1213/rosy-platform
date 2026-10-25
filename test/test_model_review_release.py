@@ -85,16 +85,44 @@ def test_refuses_state_inside_release_source(tmp_path):
         release.check_source(source, tmp_path / "root", source / "state")
 
 
+@pytest.mark.skipif(os.name == 'nt', reason='Linux private operator configuration')
+@pytest.mark.parametrize('unsafe', [None, 'permissions', 'symlink'])
+def test_new_unit_binds_only_private_regular_sim_config(tmp_path, unsafe):
+    source = tmp_path / 'source'
+    source_tree(source)
+    (source / release.APP).write_text("parser.add_argument('--sim-config')")
+    state = tmp_path / 'state'
+    state.mkdir()
+    binding = state / 'sim-config.json'
+    binding.write_text('{}')
+    binding.chmod(0o600)
+    if unsafe == 'permissions':
+        binding.chmod(0o644)
+    elif unsafe == 'symlink':
+        target = state / 'operator.json'
+        binding.rename(target)
+        binding.symlink_to(target)
+    def contents():
+        return release.unit_contents(source, state, Path('/usr/bin/python3'), '127.0.0.1', 8768)
+    if unsafe:
+        with pytest.raises(ValueError, match='SIM'):
+            contents()
+    else:
+        assert f'--sim-config {binding}' in contents()
+
+
 @pytest.mark.skipif(os.name == 'nt', reason='Linux retained release symlinks')
 def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     root=tmp_path/'root'; state=tmp_path/'state'; state.mkdir()
     (state/'learning-control.json').write_text('{}')
     (state/'review-ai.json').write_text('{}')
+    (state/'sim-config.json').write_text('{}')
+    (state/'sim-config.json').chmod(0o600)
     (state/'workspace-links.json').write_text('{"schema": "rosy.learning.workspace-links/1", "workspaces": []}')
     center_config(state)
     old=root/'releases/old'; new=root/'releases/new'
     source_tree(old); source_tree(new)
-    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config'); parser.add_argument('--omx-center-config'); parser.add_argument('--workspace-links')")
+    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config'); parser.add_argument('--omx-center-config'); parser.add_argument('--workspace-links'); parser.add_argument('--sim-config')")
     (root/'current').symlink_to(new)
     unit=tmp_path/'unit'
     unit.write_text(release.unit_contents(root/'current',state,Path('/usr/bin/python3'),'127.0.0.1',8774))
@@ -106,12 +134,14 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     assert '--review-ai-config' not in unit.read_text()
     assert '--omx-center-config' not in unit.read_text()
     assert '--workspace-links' not in unit.read_text()
+    assert '--sim-config' not in unit.read_text()
     release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
     assert f'--learning-control {state}/learning-control.json' in unit.read_text()
     assert '--decisions-port 18774' in unit.read_text()
     assert f'--review-ai-config {state}/review-ai.json' in unit.read_text()
     assert f'--omx-center-config {state}/omx-center.json' in unit.read_text()
     assert f'--workspace-links {state}/workspace-links.json' in unit.read_text()
+    assert f'--sim-config {state}/sim-config.json' in unit.read_text()
     before = unit.read_text()
     (state/'workspace-links.json').write_text('{"schema": "other"}')
     with pytest.raises(ValueError):

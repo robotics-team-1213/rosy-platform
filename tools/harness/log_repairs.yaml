@@ -2,6 +2,9 @@
 # not a general permission to rewrite logs or change execution evidence.
 # Originals and corrections remain in the corresponding immutable git commits.
 
+# 2ac60703ff RaspTank journal: add the required gate label from its existing SOURCE/LOCAL/HOLD evidence; no result changed.
+"c935715a1e15057e8d2199470250ddcbcac2f9ae1b844d85ac58a2bb6c580e56": "9d0a51814e2eea7d3ead4a8d3c77f994e747701f3730a1c4afcdeb23ea6d2720"
+
 # 8669ef8db native callback heading/field repair; body evidence unchanged.
 "ed55535bed54123338dad2db22c24fc159009907552540b7a3beb83274365973": "95d2f5a14fc08506ecb646845926ac48bdcb839609a7ef50929111d71be5921d"
 # c2425 OMX heading/field repair; body evidence unchanged.

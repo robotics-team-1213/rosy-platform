@@ -128,6 +128,29 @@ Apply this extension when an installed artifact and the current checkout can
 have different schemas or deployment layouts. A newer helper also needs
 revision matching; its age alone does not establish compatibility.
 
+## Integration guard follow-up, 2026-10-25
+
+The same mismatch can exist between a reviewed preparation branch and actual integration main.
+Baseline commit `7594dfe72201` had canonical pytest packing, transitive sibling-helper traversal
+and a regression for helper-module collisions. Main commit `f4d06e4543` lacked all three while
+the original helper file still existed. A correct file being present did not mean its caller
+used it, and a missing regression could not protect later integrations.
+
+Compare the implementation path and its genuine regression at the candidate that will land;
+passing counts or a reviewed fix on another branch are insufficient. Restore a bounded source
+correction against current main, preserving newer selection/CI code, rather than assuming a
+historical preparation branch represents that tree. Do not repair this by weakening guards,
+rewriting old receipts or adding known-failure allowances.
+
+Tests-only commit `7e02ab3ec5` failed at the expected grouping assertion after its fixture imported
+successfully in a fresh interpreter. Corrected source commit `ce056c8fb4` passed 507 remote
+selection/CI/landing/harness/architecture tests without skips or NEW failures. The terminal fixture
+also removes a historical circular import; historical identity alone was not validation of that
+example. See the [verification record](../../validation/affected-import-pack-restoration-2026-10-25/result.md).
+
+These results bind the focused correction to its committed source. Official FULL, publication and
+deployment remain separate evidence. The corrective unit leaves product behavior unchanged.
+
 ## Related
 
 - D-346 (the pre-push fast gate - correct design, shared-tree blind spot),

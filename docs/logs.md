@@ -11366,6 +11366,120 @@ osy-d395-s1d\`.
 - 증거: `test/test_omx_judge_seat.py` 세 실패 경우 추가, 원격 시험 결과는 착지 기록 참조.
 - gate 변화: 없음. CE 해당 없음 — 조사 결과의 원칙 기록과 작은 fail-closed 보강이며 장애 해결이 아니다.
 
+## 2026-10-25 · ce056c8fb4 · pytest helper 전이 import 격리 복원
+
+- 변경: 정본 affected_pack 호출과 Repo.test_import_names를 복원했다. 같은 helper 소유자는 함께 묶고 다른 디렉터리의 동명 helper는 분리하며, 기존 CI 순서·명령 길이·시험 누락 방지 검사는 유지한다.
+- 증거: 유효한 fixture를 새 Python에서 import한 뒤 기존 구현 RED 1건을 재현했다. 수정 커밋 원격 관련 회귀 507 passed, skip0, NEW0/known0/flaky0; 독립 소스 리뷰 승인. [검증 기록](validation/affected-import-pack-restoration-2026-10-25/result.md).
+- gate 변화: 없음. 공식 FULL·착지·게시·배포는 별도 확인한다. 보존한 C1 후보는 이 수정에 포함하지 않는다.
+- 교훈: 기존 [실제 커밋 검증 교훈](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)에 통합 과정의 호출 경로·회귀 시험 보존을 추가했다.
+
+## 2026-10-25 · uncommitted · 공급암 S 셀 파이프라인: 원위치·보정·사이클, 경쟁 후보 장부, 접촉 대응
+
+- 변경: `cell_pipeline.py`(run = 원위치 → 받침·벨트 보정 → A/B, 단계마다 판단 자리와 사례 기록, recover), `cell_calibration.py`(면별 아핀 지도, 집게 손가락으로 대략 지도, 시차), `cell_choices.py`(가르친·측정·시뮬 값의 경쟁 후보와 실제 결과). `chunk_runner.py`: `load`, 부드러운 접촉 정지와 `retreat`, `grip` 하한. 고정 카메라 여러 대 합침(top, rosy cam), 손목 위 확인.
+- 증거: 관제 PC 실물 — 대략 지도 5점, 자율 집기 3번(189·201 mA), 원위치 복귀, 원격 복구 4번(전부 safe_end). guard 정지 3번(대기 중 오래된 표본, 받침 밖 상자 가장자리, 25° 회전)은 각각 코드·시험으로 고쳤다. 원격 시험 통과, 변이(접촉 감지 끔, 고장 뒤 park, 읽기 주기) 실패 확인. 기록 `docs/validation/omx-arm-s-real-cell-pipeline-2026-10-25/`.
+- gate 변화: 없음. 실물 전체 보정과 A/B 사이클, 부드러운 접촉 정지의 실물 확인은 남았다. CE: 새 교훈 `docs/solutions/logic-errors/omx-taught-values-belong-to-their-plan-2026-10-25.md`, `docs/solutions/runtime-errors/omx-contact-on-descent-becomes-guard-torque-off-2026-10-25.md`.
+
+## 2026-10-25 · uncommitted · 기존 Isaac 접촉 관측과 교훈의 공개 보존
+
+- 변경: 개발 기준 a46daee90b7의 정지 Pinky proxy↔컨베이어 단일 스모크 검증 기록과 imported drive-mode 교훈을 원문 그대로 공개 보존한다. source7d0cfcd6e94f/run36041b241ee25366986bb3a6262ba0be와 frozen 지문을 유지한다.
+- 증거: producer·판정기·회귀·문서의 canonical blob을 원본과 대조하고 이번 공개 커밋의 원격 검사·독립 검토·CI를 별도로 결속한다. 원래 문서의 SDK·브라우저 검사 수치를 이번 공개 포트의 새 실행으로 바꾸지 않는다.
+- gate 변화: 없음. 소스 공개와 증거 보존이며 운영 서명 활성화·동기화 Episode·학습 정책·실물 수용은 별도다. CE 해당 없음 — 기존 교훈의 보존·재사용이며 새 해결 교훈을 작성하지 않았다.
+
+## 2026-10-25 · uncommitted · Isaac 원격 receipt·회수 진입의 공개 소스 포트
+
+- 변경: a46daee90b7의 remote_isaac와 receipt·응답 유실·해시 검증 회귀, 운영 안내를 공개한다. 미공개 OMX 도구 전체 대신 기존13행의 명시적 역할 호스트 검증만 CLI 안에 보존하고 model 선택·중복·사이트·명령 주입 거절을 시험한다. 안내의 공개 산출물 설명에 PNG 다섯 개를 포함한다.
+- 검증: 공개 SHA의 원격 CLI·Isaac·소비 경로 회귀, 고정 base/head 독립 검토와 CI를 결속한다. 원래 SDK source7d0/run36041의 증거와 새 호스트 검사를 구분한다.
+- gate 변화: 없음. SDK 설치·업그레이드·새 실험·운영 활성화·로봇 명령·Episode 생성·정책 승격은 수행하지 않았다. CE 해당 없음 — 기존 경계와 회귀를 보존하는 소스 포트다.
+
+## 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
+
+- 변경: D-871(모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면) 기록. `omx_autoupdate.py`에 `kind: service`의 `idle_gate: cell`(셀 잠금·버스·토크 OFF 유휴 규칙), 재시작 전 잠금 해제, `restart_running_only`(손으로 멈춘 관측기는 그대로), `system_site_packages`를 더함. 카메라·관측기·브리지용 `omx-devices-autoupdate.json.example`, `requirements-observation.lock`, `rosy-omx-devices-autoupdate.{service,timer}`. 관측기 템플릿이 health 파일을 `%i`로 정하고 브리지는 `ROSY_OBSERVATION_ARM_HEALTH`를 기본값으로 읽음(SHA 박힌 drop-in 대체). services.yaml의 해당 유닛을 `autoupdate`로.
+- 증거: 원격 시험(아래 PR). 관제 PC 적용은 별도(관측기는 10/24부터 옛 OpenRB 시리얼로 멈춤).
+- gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · Learning 서명 sequence41 실제 활성화 검증
+
+- 변경: [Learning·Isaac 실제 배포](validation/learning-conveyor-deployment-2026-10-25/result.md)에 PR201–206 공개 source·원격 검사·기존 SDK 증거 재사용·실제 signed sequence41/sourcee231 서비스 활성화와 독립 readback을 구분했다.
+- 증거: 운영 로그인 화면과 동기화 Episode·learned policy·실물 수용은 확인하지 않았다. 복사 상태 화면은 계정 바인딩 보호로 시작이 거절됐으며 우회하지 않았다. 별개 G1 지연 bound 초과와 동일 소스 후속 CI 통과를 함께 보존했다.
+- gate 변화: 모델 PC 코드·Learning 실제 활성화를 확인. 데이터·정책·현장 gate를 승격하지 않는다. CE 해당 없음 — 기존 교훈 보존·재사용, G1 원인은 미해결이다.
+
+## 2026-10-25 · uncommitted · chore(sync): merge origin/main #201-#207 into local main
+
+- 변경: origin/main(61addd5695, PR #201-#207, 28커밋)을 로컬 main에 병합했다. 충돌 14파일 가운데 add/add 4건(tools/remote/remote_isaac.py, test/test_remote_isaac.py, docs/deployment/isaac-experiment-runs.md, test/learning/perception/test_sim_browser.py)은 main 내용을 포함한 origin 최신판(inline choose_target, free_port, 접촉 왕복 PNG 문구)을 채택했고, 추가 전용 logs 5파일은 main 본문을 그대로 두고 origin 전용 블록 10건을 날짜 위치에 덧붙여 풀었다.
+- 증거: rosy_harness.py lint 0 errors(35 warnings, 기존 상태). ADR Log의 행 중복 9건과 D-857 이중 행(본문에 없는 (8768) 표기)을 정리했고, adr_gaps.txt에서 이미 쓰인 갭 38행을 tools/land_merge.py landed_gaps 규칙과 같게 제거했다. 회귀는 이어지는 land 회차가 검증한다.
+- gate 변화: 없음. origin PR 내용의 흡수이며 새 기능 활성화·배포·장치 동작 변경이 아니다. 통합은 머지 커밋으로 하고 public history는 rebase하지 않는다(D-127 방침).
+- 결정: 없음.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · Learning 배포 후 전체 CI와 G1 원인 분리 조사
+
+- 변경: [후속 검증 기록](validation/learning-conveyor-followup-2026-10-25/result.md)에 문서 병합 후 전체 CI20잡 성공, 원래 G1 실패 SHA의 공식 원격 단독 검사와 실제 SQLite 계측 반례, 운영 payload 동일성을 보존했다.
+- 증거: G1 node 1PASS/0SKIP/0NEW와 고정 source 합성 DB 잠금 교차3쌍을 독립 검토했다. CPU·BEGIN·commit·사후 jitter 관측은 원래 CI 원인으로 소급하지 않는다. 운영41/publicd0d signed payload732개 동일·21:47:29 정상 readback으로 추가 배포할 제품 차이가 없음을 확인했다.
+- gate 변화: 문서 병합 후 전체 CI의 최종 성공을 확인했다. 로그인 화면·Episode·학습·정책·물리 gate는 미확인이다. CE 미해결 — 원래 G1 지연 원인을 확정하지 않아 해결 교훈을 추가하지 않았다.
+
+## 2026-10-25 · uncommitted · docs: RaspTank 지원 후보와 공통 ROSY 통합 조건
+
+- 변경: README에서 [로봇 호환 목록](reference/robot-compatibility.md)을 연결하고, RaspTank Metal / Pi 4B 4GB를 실행 미지원 후보로 기록했다. [통합 설계](plans/2026-10-25-rasptank-multi-robot-design.md)는 기존 Profile/Adapter·CORE·Fleet·장치 owner 경계, 절대경로 overlay 결속, 독립 정지·팔 피드백·기체별 이미지 조건을 정리한다.
+- 증거: 설계 v2 독립 architecture/critic 2회 검토. 순정 Ubuntu·Bookworm 이미지와 제조사 자료의 로컬 무결성 검사는 ROSY 통합 이미지·장치 시험과 구분한다. 이 커밋의 문서 lint·harness·원격 계약 검증은 완료 보고에 별도로 결속한다.
+- gate 변화: 없음. RaspTank profile·driver·제어 광고·통합 이미지·실물 수용은 미구현/미수행이다.
+- 결정: 기존 HWA/CAP·D-14·D-161·D-856 경계를 유지하는 설계 제안이며 새 ADR/API를 만들지 않았다.
+- 교훈: 미해결 — 모델/프로파일 결속과 실물 수용 조건은 후속 구현이며 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-25 · uncommitted · RaspTank 무구동 설정 패키지와 소유권 준비
+
+- 변경: `middleware/devices/rasptank/profile`의 `rasptank_metal` 패키지, 필수 빈 `core.yaml`, 물리 기능 false·0 속도 프로파일, 실제 모델 선택·TaskKind 거절 시험과 하네스 등록을 준비했다. 호환 목록은 소스 준비와 실행 미지원을 구분한다.
+- 증거: 테스트 정의를 먼저 커밋했고, 원격 실행은 시험 PC 디스크 기준·별도 사용 예약으로 대기 중이다. 실제 원격 결과 없이 모든 모듈 게이트는 HOLD로 유지한다.
+- gate 변화: 없음. driver·서비스·preset·이미지 selector·물리 출력은 추가하지 않았다.
+- 교훈: 미해결 — 원격 검증과 기체 수용은 이후 근거가 필요하다.
+
+## 2026-10-25 · uncommitted · RaspTank Pi 4 SD·센서 준비서
+
+- 변경: 부품 수량·조건, 동봉 카메라/초음파/IR/ADC/OLED/구동 장치의 제조사 인터페이스 조사값, 목표 Ubuntu와 비교용 Bookworm 이미지 구분, SD·기체 도착 후 수용 순서를 배포 준비서에 기록했다.
+- 증거: 고정 제조사 ZIP 소스 대조. 저장소 밖 순정 이미지의 기존 SHA256·Ubuntu 서명·XZ/파티션 검사 기록을 연결했다. ROSY 통합 이미지 생성·SD 쓰기·native 설치·실물 시험은 미수행이다.
+- gate 변화: 없음. 무구동 설정 소스만 준비 상태를 유지한다. 원격 시험은 호스트 저장 공간 기준과 사용 예약으로 막혀 있다.
+- 교훈: 미해결 — 실물 배선/전원/카메라와 제품 이미지 수용 근거가 필요하다.
+
+## 2026-10-25 · uncommitted · 다기종 배포·DJI SDK 연결 준비
+
+- 변경: 직접 설치형/외부 SDK 호스트 연결형을 구분한 기종 접수표와 P0~P4 배포 준비 설계를 추가했다. 호환 목록에 DJI Neo 2의 공식 SDK 미지원 상태와 재검토 조건을 기록했다.
+- 증거: 2026-10-25 DJI 공식 SDK 호환표·Mobile SDK 제품 목록·공식 저장소 문의 #684를 확인했다. Pinky image board 고정·SD model const·CORE 절대경로 overlay 경로를 대조했다. SDK 설치·장치 연결·관측·비행·새 runtime 구현은 수행하지 않았다.
+- gate 변화: 없음. RaspTank와 다기종 runtime/산출물/실물 검증은 별도 보류다. Neo 2를 제어 가능한 profile로 추가하지 않았다.
+- 교훈: 해당 없음 — 공식 지원 조사·설계 준비이며 해결된 실행 장애는 없다.
+
+## 2026-10-25 · uncommitted · 다기종 배포 도구와 제품 설정 검증 구현
+
+- 변경: 공통 signing 구현·Pinky 제품 정책·직접 설치/SDK host descriptor·운영 CLI를 분리하고 기존 push/rollback executor를 재사용한다. 제품 CORE는 installed model 설정의 검증 snapshot을 소비하며 개발 overlay는 유지한다. 배포 도구 문서에 책임·명령·제한과 canonical native 설정 migration을 기록했다.
+- 증거: 독립 설계2회 및 코드 검토. 기대 RED 뒤 결합213 PASS/NEW0, offline readback 회귀 RED 재현·보완 후 관련323 PASS/215 SKIP/NEW0. skip·ARTIFACT/DEVICE/FIELD를 소스 통과와 구분한다. 최종 committed tree의 하네스·착지 검증은 별도다.
+- gate 변화: RaspTank SOURCE/LOCAL만 원격 근거로 갱신. 실제 I/O·native 이미지·SD 쓰기·SDK/비행·현장 수용 상태는 유지한다.
+- 교훈: 해당 없음 — 기존 installed-layout 교훈을 회귀에 적용했고 새 조건은 코드/시험/배포 안내에 보존했다.
+
+## 2026-10-25 · uncommitted · 설치 내용 결속 보완과 전 계층 자동 업데이트 목표
+
+- 변경: package binding과 legacy dynamic signing 소비자 호환을 보완하고 [전 계층 자동 갱신 완료 기준](plans/2026-10-25-rosy-layered-automatic-updates-design.md)을 기록했다. 사용자 요구는 배포된 ROSY 자체의 앱·OS·커널·부팅·전체 이미지 업데이트 연속성과 복구까지 포함한다.
+- 증거: FULL 중 발견한 learned-signature 회귀9건과 잘못 포장된 기종 내용/metadata 반례를 원격 RED로 확인한 뒤 관련153 PASS/NEW0. independent source 검토 승인. 기존 D-387/D-412 소스와 실제 완료 범위를 구분했다.
+- gate 변화: 소스 보완이며 OS 전체 자동 업데이트·ARM64 이미지·현재 연결 기체의 timer 활성/배포/복구는 미수용이다. 전체 source 착지는 재검증한다.
+- 교훈: 해당 없음 — 잘못된 package 내용과 동적 import는 코드/시험/안내에 보존했고 추가 OS 목표는 미완료로 기록한다.
+
+## 2026-10-25 · 3dca62ed05 · RaspTank 패키지 구조 정합성
+
+- 변경: 신규 config-only package 이름·폴더 이름 대응표를 명시 등록하고 이미 정위치인 루트의 migration wave를 none으로 정렬했다. 기존 package/경계 검사의 동등성 조건은 유지한다.
+- 증거: 정상 착지 사전 검사에서 3 NEW, 같은 main의 반례3 PASS를 확인한 뒤 수정했다. 승인 원격 architecture/harness287 PASS/NEW0. 최신 전체 착지 검증은 별도다.
+- gate 변화: 소스 등록 정합성만 보완했다. 사용자 정정에 따라 현재 기체는 미연결이며 새 이미지 준비 단계다. 실기 조회·SD 기록·장치 배포를 수행하지 않았다.
+
+## 2026-10-25 · 9f0df4f99b · RaspTank 평가 기준선과 공개 무결성 값 등록
+
+- 변경: D-178의 package 집합 기준선과 평가표에 config-only RaspTank를 잠정 88 A로 등록했다. 기존 분포·등급·시험 조건을 바꾸지 않았다. 문서의 공개 체크섬·source revision 및 deployment binding/기존 journal repair digest는 정확한 경로·행 hash·값으로만 provenance inventory에 등록했다.
+- 증거: 정상 착지 FULL 공통 묶음 3 FAIL/10727 PASS/1185 SKIP. 세 실패가 각각 단독 재현되었고 같은 main에서는 3 PASS여서 이 브랜치의 실패로 처리했다. 수정 후 원격 검증은 별도 기록한다.
+- gate 변화: 전체 source 착지는 아직 미완료다. 새 A/B 이미지의 media consumer·OS 전환·ARM64 artifact·실기 복구 수용을 주장하지 않는다.
+- 교훈: CE 해당 없음 — 재현 시험·기준선·정확한 provenance 정책에 판단 근거를 보존하며 별도 교훈 문서를 늘리지 않는다.
+
+## 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인
+
+- 변경: RaspTank baseline·정확한 공개 digest inventory·설치형 updater fixture의 수정 검증을 기록한다.
+- 증거: 승인 원격 `python tools/remote/remote_pytest.py --log-dir <scratch>/landing-fixes-green -- test/test_module_scorecard.py test/test_release_boundary_guards.py test/test_secret_public_provenance.py test/test_rosy_auto_update_resync.py test/test_shared_release_signing.py test/test_native_runtime_installed_layout.py` — 125 PASS, known_failures NEW0. 독립 리뷰는 profile digest4개 재계산·provenance11행 결속·설치기 fixture 일치를 확인했다.
+- gate 변화: 관련 source 회귀 통과이며 전체 정상 착지는 다시 수행한다. OS 전체 자동 업데이트·이미지 artifact·실기 수용은 미완료다.
+- 교훈: CE 해당 없음 — 원인/복구와 반례는 시험 및 기존 정책에 보존했다.
+
 ## 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
 
 - 변경: ADR D-877, `tools/sim/omx_topic_backend.py`(벤더 OMX-F + `topic_based_ros2_control`), `tools/sim/omx_mujoco_backend.py`, `tools/sim/run_omx_backend_conformance.sh`, `tools/sim/build_topic_based_ros2_control.sh`, Isaac 어댑터 `learning/envs/isaac/run_omx_backend.py`, 시험 `test/test_omx_sim_backends.py`, [검증 기록](validation/omx-mujoco-backend-2026-10-25/result.md).
