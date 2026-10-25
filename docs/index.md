@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 공급암 S 셀 파이프라인: 원위치·보정·사이클, 경쟁 후보 장부, 접촉 대응
 - 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
 - 2026-10-25 · ce056c8fb4 · pytest helper 전이 import 격리 복원
 - 2026-10-25 · uncommitted · 모델 구조화 출력 원칙과 OMX judge seat 파싱 실패 거부 (D-878)
 - 2026-10-25 · uncommitted · D-876 ROSY Monitoring
-- 2026-10-25 · f80019b842 · fix(learning): SIM 실행 목록 행 방어와 Learning 첫 화면 픽셀 검수 일괄 읽기

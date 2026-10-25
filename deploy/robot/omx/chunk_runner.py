@@ -56,6 +56,12 @@ PARK_SPEED = GUARD_UNITS_PER_S  # units per second for every joint: what the gua
 # these three every 3 ticks as well doubled the traffic, and on 2026-10-25 a bus read stalled the loop past
 # the guard's 0.5 s sample bound while the arm held over the box, so the guard turned torque off.
 HEALTH_PERIOD_S = 1.0
+# Soft contact: during a chunk that can touch something (descend, grasp, release), a body joint that lags the
+# command the guard actually sent by CONTACT_LAG units for CONTACT_TICKS ticks is pressing on something.
+# The runner holds where it is, with torque on, before the guard's 5 degree bound turns torque off and the
+# extended arm drops (three times on 2026-10-25). A body unit is at most 1.8 degrees: 1.5 units <= 2.7.
+CONTACT_LAG, CONTACT_TICKS = 1.5, 2
+CONTACT_CHUNKS = ("descend", "grasp", "release")
 # Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
 # At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
@@ -124,6 +130,7 @@ class Runner:
         self.last_grip = None
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
+        self.played, self.retreat_frames, self.contact_ticks = [], [], 0
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
         self.health_present = None
 
@@ -159,8 +166,10 @@ class Runner:
                 return False
             if self.chunk is not None:
                 raise ValueError(f"chunk {self.chunk} is still running")
-            if self.fault and verb not in ("park", "state"):
-                raise ValueError(f"fault ({self.fault}): only park, state or stop")
+            soft = (self.fault or "").startswith("contact")
+            if self.fault and verb not in ("park", "state") and not (soft and verb in ("retreat", "jog")):
+                raise ValueError(f"fault ({self.fault}): only park, state or stop"
+                                 + (", or retreat/jog after a contact" if soft else ""))
             if verb == "run" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
                 frames = self.library["chunks"].get(words[1])
                 if frames is None:
@@ -175,7 +184,7 @@ class Runner:
                 if gap > JOG_MAX * 2:  # chunks chain end to start; a big jump means the wrong order
                     raise ValueError(f"chunk {words[1]} starts {gap:.1f} away from the held target")
                 self.queue = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
-                self.chunk, self.settle_since = words[1], None
+                self.chunk, self.settle_since, self.played, self.contact_ticks = words[1], None, [], 0
                 return True
             if verb == "jog" and len(words) >= 3 and len(words) % 2 == 1:
                 # jog <joint> <delta> [<joint> <delta> ...]: one coordinated step (e.g. a forward reach),
@@ -209,9 +218,27 @@ class Runner:
                 self.chunk, self.settle_since = "park", None
                 return True
             elif verb == "grip" and len(words) == 2:
-                self.target[5] = max(0.0, min(100.0, float(words[1])))
+                # never below the taught closed value: past the jaws' stop the gripper only pushes at its PWM
+                # cap, and the guard's teacher mode does not bound the gripper (2026-10-25: 40 asked, stuck at 48.4)
+                self.target[5] = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
+            elif verb == "retreat" and len(words) == 1:
+                if not self.retreat_frames:
+                    raise ValueError("nothing to retreat along")
+                self.queue, self.retreat_frames = self.retreat_frames, []
+                self.chunk, self.settle_since, self.played = "retreat", None, []
+                return True
+            elif verb == "load" and len(words) == 2:
+                # a new plan (cell_pipeline: the box was found elsewhere) without ending the session and
+                # folding the arm; the held target stays, and the library is checked before it replaces the old one
+                try:
+                    library = load_library(Path(words[1]))
+                except SystemExit as exc:
+                    raise ValueError(str(exc)) from None
+                if library["fps"] != self.fps:
+                    raise ValueError(f"library fps {library['fps']} differs from the runner fps {self.fps}")
+                self.library = library
             elif verb != "state":
-                raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | park | state | stop")
+                raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | state | stop")
             self.report(command=line, ok=True)
         except ValueError as error:
             self.report(command=line, ok=False, error=str(error))
@@ -220,8 +247,22 @@ class Runner:
     def tick(self) -> None:
         if self.queue:
             self.target = self.queue.pop(0)
-        self.robot.send_action(dict(zip(NAMES, self.target)))
+            if self.chunk is not None:
+                self.played.append(list(self.target))
+        sent = self.robot.send_action(dict(zip(NAMES, self.target)))
         present = self.present()
+        if (isinstance(sent, dict) and not self.fault and self.chunk is not None
+                and self.chunk.startswith(CONTACT_CHUNKS)):
+            lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent), default=0.0)
+            self.contact_ticks = self.contact_ticks + 1 if lag > CONTACT_LAG else 0
+            if self.contact_ticks >= CONTACT_TICKS:
+                chunk = self.chunk
+                self.queue, self.retreat_frames = [], self.played[::-1]
+                self.target = list(present[:5]) + [self.target[5]]  # hold here: the lag closes, torque stays on
+                self.fault = f"contact in {chunk}: a joint lagged the command by {lag:.1f} units"
+                self.chunk, self.played = None, []
+                self.report(command=f"run {chunk}", ok=False, error=self.fault, contact=True)
+                return
         error = max(abs(a - b) for a, b in zip(present[:5], self.target[:5]))
         # Load-bearing joints only: the taught wrist roll lagged its leader by 66 units (2026-10-24 teach r2).
         loaded = max(abs(a - b) for a, b in zip(present[:4], self.target[:4]))
@@ -262,6 +303,8 @@ class Runner:
             self.last_grip = present[5]
             if (error <= SETTLE_TOL and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
                 fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL)
+                if self.chunk == "park" and (self.fault or "").startswith("contact"):
+                    self.fault = None  # folded home after a soft contact: the next attempt may start
                 if grasp:  # jaws stopped short of this chunk's closed target: something is between them
                     by_position = present[5] > self.target[5] + EMPTY_MARGIN
                     fields["holding"] = by_position
