@@ -185,6 +185,27 @@ def test_new_sample_id_cannot_renew_unchanged_capture_time(runtime):
     assert find(cache, host.id, "site-b").remaining_s <= first.remaining_s - 2.0
 
 
+@pytest.mark.parametrize("publisher", ["local", "peer"])
+def test_same_capture_cannot_change_health_by_renaming_sample(runtime, publisher):
+    cache, clock = runtime
+    if publisher == "local":
+        latest = observed_node(health="ERROR", sample="first-name")
+        cache.update_local("pc-a", nodes=(latest,))
+    else:
+        value = peer(clock, health="ERROR")
+        latest = value.nodes[1]
+        receive(cache, clock, value)
+    clock.advance(1)
+    renamed = latest.model_copy(update={"sample_id": "second-name", "reported_health": "OK"})
+    with pytest.raises(ValueError):
+        if publisher == "local":
+            cache.update_local("pc-a", nodes=(renamed,))
+        else:
+            value = peer(clock, sequence=2)
+            receive(cache, clock, value.model_copy(update={"nodes": (value.nodes[0], renamed)}))
+    assert find(cache, latest.id, latest.site_id).reported_health == "ERROR"
+
+
 @pytest.mark.parametrize("replacement", ["missing", "unknown"])
 def test_disappearing_fact_cannot_reset_its_original_deadline(runtime, replacement):
     cache, clock = runtime
