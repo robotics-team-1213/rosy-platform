@@ -956,7 +956,8 @@ def test_interrupted_directory_migration_is_recoverable(host, monkeypatch):
 
 
 def test_installed_cli_loads_only_its_reviewed_modules(tmp_path):
-    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'verify_candidate.py',
+    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'site_update_runtime.py',
+                 'verify_candidate.py',
                  'candidate_signing.py'):
         shutil.copy2(SITE / name, tmp_path / name)
     command = [sys.executable, '-I', str(tmp_path / 'rosy_site_autoupdate.py'), '--help']

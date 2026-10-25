@@ -3466,3 +3466,10 @@
 - 증거: a401f49f6d 원격 실제 PowerShell GPT·resume·Storage cmdlet mock 17 passed; af08bd9987 원격 image/GPT/gateway 303 passed, 3 skipped, NEW0. 독립 전체 및 resume delta 검토에 중대한 지적 없음. Storage mock은 실제 Windows mount 수용이 아니다. Linux PS 전체의24 실패는 변경 전 c74ce311a9에서도 동일한24 id로 재현됐다(현재160 passed/5 skipped, 변경 전154 passed/5 skipped); 전체 Windows 회귀 통과로 표시하지 않는다.
 - gate 변화: SOURCE prototype이며 native ARM64 artifact·실물 SD·부팅·OS 자동 갱신·powercut 수용은 HOLD다. 기존 작업 브랜치는 보존하고 현재 main에서 완결된 source snapshot을 새 착지 브랜치로 검증한다.
 - 교훈: CE 해당 없음 — 수정 근거는 회귀 시험과 기존 설치/검증 교훈에 명시된다. Linux 전체 PS 한계는 작업 기록에 미해결로 남긴다.
+
+## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
+
+- 변경: relocate only six existing runtime/verification methods to site_update_runtime; updater590 to516lines, helper110. Keep switch/rollback/order and public import bindings; update reviewed five-file administrator install closure.
+- 증거: all23 method ASTs, unchanged I/O/verifier/builder and global import targets verified statically. Tests-only d50e67e208 actualCLIclosure RED1FAIL/0skip, NEW1; committed source regression GREEN/review pending. See site-updater-runtime-split validation record/external proofs.
+- gate 변화: none; three/four-image compatibility waits for a separate feature unit after this pure split lands. No host/site/deployment/FIELD acceptance.
+- CE: no new lesson; source/tests/README and existing installer lessons explain this routine split.

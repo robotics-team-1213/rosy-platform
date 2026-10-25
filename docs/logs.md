@@ -11528,3 +11528,10 @@ osy-d395-s1d\`.
 - 증거: `test/test_pre_push_hook.py::test_publish_only_clone_pushes_publish_branches_only` 5개 경우. bash로 같은 구간을 돌려 게시 0·주제 1·이유 0·설정 없음 0을 확인하고, 허용 분기를 거절로 바꾼 변형이 1로 바뀌는 것을 확인했다.
 - gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
 - 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
+
+## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
+
+- 변경: relocate only six existing runtime/verification methods to site_update_runtime; updater590 to516lines, helper110. Keep switch/rollback/order and public import bindings; update reviewed five-file administrator install closure.
+- 증거: all23 method ASTs, unchanged I/O/verifier/builder and global import targets verified statically. Tests-only d50e67e208 actualCLIclosure RED1FAIL/0skip, NEW1; committed source regression GREEN/review pending. See site-updater-runtime-split validation record/external proofs.
+- gate 변화: none; three/four-image compatibility waits for a separate feature unit after this pure split lands. No host/site/deployment/FIELD acceptance.
+- CE: no new lesson; source/tests/README and existing installer lessons explain this routine split.
