@@ -26,6 +26,10 @@ The local contract and control boundary of one robot or workcell. It validates a
 
 The site mission coordinator and durable task ledger. It selects and sequences admitted device actions through device APIs, records handoffs and evidence, and distinguishes acceptance from completion. It does not publish final base velocity or arm trajectory (D-12, D-290, D-293, D-296).
 
+### Drawing reference, map draft, active site map
+
+A drawing reference records the source design and its explicit alignment with site coordinates. It is background evidence, not a surveyed robot pose or permission to drive. A map draft contains editable roads, destinations and areas. An active site map is the separately reviewed version selected for operation. Replacing a drawing or copying a template does not establish field calibration or activate the draft (D-825).
+
 ### Fleet Mission, Mission Step, Device Action, Local Transaction
 
 A Fleet Mission owns site order, priority, handoffs and result history. Its Mission Steps request bounded Device Actions through device APIs. A Local Transaction sequences work inside one accepted action, such as approach, grasp and place; it does not own final actuator commands or a second site Mission DSL. An Episode records observed execution evidence. General cross-device sequencing remains a target. The current `/api/fleet/tasks/*` tracks navigation requests and the current Mission ledger supports fixed-workcell `PICK_PLACE`. D-664's common read view preserves these two source identities and states; it does not connect them into a multi-device execution.

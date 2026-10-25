@@ -1,0 +1,9 @@
+{
+  "schema": "rosy.omx.center-config/1",
+  "host_id": "model",
+  "root": "/absolute/private/learning-center",
+  "python": {
+    "act": "/absolute/pinned/learner/bin/python",
+    "hilserl": "/absolute/pinned/learner/bin/python"
+  }
+}

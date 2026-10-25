@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 PERCEPTION = Path(__file__).resolve().parents[3] / 'learning/registry/perception'
 ROOT = Path(__file__).resolve().parents[3]
 for path in (PERCEPTION, Path(__file__).resolve().parents[3] / 'learning/curation/perception', ROOT / "middleware/perception",
-             ROOT / "contracts/foundation"):
+             ROOT / "contracts/foundation", ROOT / 'learning/evaluation/perception'):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -281,12 +281,14 @@ def _run(config, out, indexed_review, admission_stack):
                                       dataset_doc["classes"]) if drivable_head else None)
     source_files = [HERE / name for name in
                     ("train_job.py", "job_state.py", "rosy_lane_model.py", "recipes.py", "export_cell.py")]
-    source_files += [Path(__file__).resolve().parents[3] / 'learning/registry/perception' / name for name in ("intake.py", "intake_eval_gate.py")]
+    source_files += [PERCEPTION / "intake.py"]
+    source_files += [ROOT / 'learning/evaluation/perception' / name
+                     for name in ("intake_evaluation.py", "intake_eval_gate.py")]
     source_files += [PERCEPTION / "store.py"]
     if indexed:
-        source_files += [HERE / name for name in ("review_admission.py", "review_dataset.py",
-                                                  "review_provenance.py", "review_authority.py",
-                                                  "review_eval_companion.py")]
+        source_files += [HERE / "review_admission.py"]
+        source_files += [ROOT / 'learning/curation/perception' / name for name in
+                         ("review_dataset.py", "review_provenance.py", "review_authority.py", "review_eval_companion.py")]
         source_files += [Path(__file__).resolve().parents[3] / 'learning/curation/perception/build.py']
     if drivable_head:
         source_files += [HERE / "drivable_head.py"]

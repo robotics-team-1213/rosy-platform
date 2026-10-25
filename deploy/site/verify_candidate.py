@@ -31,10 +31,12 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
-    "compose.pairing.yaml", "compose.omx.yaml", "pairing-sync-token.template.txt",
+    "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
+    "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
+ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
 SERVICES = ("fleet", "vision", "proxy", "postgres")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]
@@ -102,6 +104,13 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
     if not isinstance(hashes, dict):
         raise CandidateVerificationError("deployment file hashes are missing")
     required = set(REQUIRED_DEPLOYMENT_FILES) | set(REQUIRED_DOCUMENT_FILES)
+    # Preserve verification/rollback of earlier signed candidates; the new pair is indivisible.
+    if not set(hashes) & set(ACCOUNT_DEPLOYMENT_FILES):
+        required.difference_update(ACCOUNT_DEPLOYMENT_FILES)
+    if "compose.omx.yaml" not in hashes:
+        required.discard("compose.omx.yaml")
+    if "compose.workcell.yaml" not in hashes:
+        required.discard("compose.workcell.yaml")
     unsupported = set(hashes) - required
     if unsupported:
         raise CandidateVerificationError("unsupported deployment file path")
@@ -159,6 +168,9 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "verified_images": list(SERVICES),
         "image_ids": image_ids,
         "deployment_files": len(hashes),
+        "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
+        "omx": "compose.omx.yaml" in hashes,
+        "workcell": "compose.workcell.yaml" in hashes,
         "image_archive_sha256": archive_hash,
     }
 
@@ -319,6 +331,9 @@ def verify_candidate(
             "source_commit": summary["source_commit"],
             "platform": summary["platform"],
             "deployment_files": summary["deployment_files"],
+            "account_https": summary["account_https"],
+            "omx": summary["omx"],
+            "workcell": summary["workcell"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
         }

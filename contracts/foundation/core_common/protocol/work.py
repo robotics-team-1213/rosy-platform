@@ -1,5 +1,6 @@
 """D-664 common read projection; execution state remains owned by each ledger."""
 
+import enum
 from typing import Literal
 import enum
 

@@ -120,3 +120,11 @@ is called by this validator or export.
 검증한다. exporter·recording binder·독립 평가가 같은 JSON 검사를 사용한다.
 출처 인증·독립 정답·실제 모델 호출·운영 수용을 승인하지 않는다.
 
+## 수치 추론 결과
+
+`inference.InferenceResult`는 원본 `InferenceObservation`의 관절 수와 같은 유한
+출력 벡터를 복사해 고정한다. 관측·생성·반환의 시간 순서, 정수 chunk 식별자와
+명시적 bool 소비 표시도 검사한다. 큐 행동의 출처와 생성 시각은 원래 입력에
+남는다. 이는 로컬 Python 데이터 계약이며 실제 모델 소비 인증이나 owner 입장
+허가를 발급하지 않는다. [검증 범위](../../docs/validation/model-control-evidence-2026-10-23/result.md).
+

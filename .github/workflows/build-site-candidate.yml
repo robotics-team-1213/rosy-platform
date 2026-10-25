@@ -33,11 +33,15 @@ on:
       - operations/site_execution/src/**
       - operations/situation/rosy_situation/__init__.py
       - operations/situation/rosy_situation/assessment.py
+      - operations/situation/rosy_situation/fact_rules.py
       - operations/situation/rosy_situation/snapshot_assessment.py
+      - operations/situation/rosy_situation/wait_graph.py
       - operations/overhead/**
       - operations/apps/games/**
       - contracts/foundation/core_common/**
       - contracts/learning/src/**
+      - contracts/skill/src/**
+      - operations/processes/palletizing/src/**
       - applications/fleet/gateway/**
       - shared/web/**
       - middleware/perception/map/map_v2_fleet/lane_graph.yaml

@@ -1,0 +1,10 @@
+[Unit]
+Description=Check and renew the site Account TLS certificate
+
+[Service]
+Type=oneshot
+# Code from a release (ROSY_ACCOUNT_TLS_SOURCE); certificates stay in their data folder (D-852).
+EnvironmentFile=%h/.config/rosy/account-tls.env
+ExecStart=/usr/bin/python3 ${ROSY_ACCOUNT_TLS_SOURCE} --certs ${ROSY_ACCOUNT_TLS_CERTS} --domain ${ROSY_ACCOUNT_TLS_DOMAIN}
+TimeoutStartSec=240
+UMask=0077

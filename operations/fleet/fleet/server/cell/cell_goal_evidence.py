@@ -47,7 +47,8 @@ def make_cell_job_resolver(compiler, item_pose_tolerance):
     """Compose canonical Cell submission with optional independent goal predicates."""
     if compiler is None:
         return None
-    from rosy.execution.site.cell_submission import compile_cell_submission
+    if not callable(getattr(compiler, "compile_submission", None)):
+        raise ValueError("cell compiler must provide compile_submission")
 
     from .cell_mixed_submission import compile_mixed_submission, is_mixed
 
@@ -59,9 +60,8 @@ def make_cell_job_resolver(compiler, item_pose_tolerance):
                 attach_arm_goal_predicates(submission, compiler.item_geometry(candidate["recipe"]),
                                            item_pose_tolerance)
             return submission
-        submission = compile_cell_submission(
-            candidate, compiler=compiler, workcell_id=workcell_id, instance_id=instance_id)
-        document = submission.as_store_document()
+        document = compiler.compile_submission(
+            candidate, workcell_id=workcell_id, instance_id=instance_id)
         if item_pose_tolerance is not None:
             attach_goal_predicates(document, compiler.item_geometry(candidate["recipe"]), item_pose_tolerance)
         return document

@@ -34,5 +34,5 @@
 - 2026-10-25 · uncommitted · 호스트 에이전트 중계 문구 표기 정렬
 - 2026-10-24 · c60d6046bb · network-only 호스트 작업 중계
 - 2026-10-24 · uncommitted · D-862 공통 reference 버전 pin 정렬
-- 2026-10-19 · 560a2ff27 · (origin #92 2026-10-16) v1.255 정확한 항법 인계와 경합 회귀 검증
-- 2026-10-19 · uncommitted · (origin #92 2026-10-16) 정확한 완료 항법의 수동적 IDLE 인계
+- 2026-10-22 · 79a11a4a54 · 모터 상태 API와 공용 출처 검증
+- 2026-10-19 · uncommitted · OMX SIM CORE 준비와 안전한 내부 port 연결

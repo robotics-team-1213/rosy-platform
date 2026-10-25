@@ -26,6 +26,7 @@ def _in_checkout(path) -> bool:
     return any((p / '.git').exists() for p in (path, *path.parents))
 
 
+# Format pinned: retained rule export digests include the size bound; test_canonical_hash_formats.
 def digest(value):
     raw = json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
     if len(raw) > MAX_EXPORT_BYTES: raise ValueError('RULE_EXPORT_LIMIT')

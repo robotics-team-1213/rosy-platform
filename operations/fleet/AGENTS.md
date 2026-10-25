@@ -80,6 +80,7 @@ Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 li
 
 | Unit | Responsibility |
 |------|----------------|
+| `fleet/fleet/server/site_observation` | Server holder: derived camera sightings, tracking calibration/readback and versioned station installation; no motor writer. Canonical `fleet.server.*` imports stay unchanged |
 | `fleet/fleet/server/auth` | Server holder (`SERVER_HOLDERS`, no `__init__.py`): robot enrollment and TLS, pairing, site accounts and users, password and development sessions |
 | `fleet/fleet/server/console` | Server holder: the Fleet console page builders, view, routes and static asset routes (D-430 safety file `console.py`) |
 | `fleet/fleet/server/cell` | Server holder: Rosy Cell app and job store, compiler, goal evidence registry and routes |

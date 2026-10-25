@@ -26,3 +26,6 @@
 # Correct Windows pipeline field-label encoding; execution evidence unchanged.
 "74e277809efbc05da1528a6673746788f587f7f3b06e683df18420e3c58b0c30": "25e011c426331a111a09da10af80cd1a24567a7e84a7253a9f4b91e77c205692"
 "75c57419447018f9e086f872e3687bb21972a37af0967530020da498fdba6f23": "ecd49ddac92dc41e76f4cc1ad50eeb8643bfd9ec7fb43d2831244e641e6b607f"
+# The #179 squash published an earlier draft of a local docs/logs.md entry; joining
+# origin/main into local main keeps the local text under the one heading (D-868).
+"e31abcc5329c5fef808fa07d4b39d186dd748afaa1a84ffb2ed0abbe9e63c8cb": "04add7a64764b4e9428ec40beb0b4c997760e803e9112a04191fd2361a96b525"

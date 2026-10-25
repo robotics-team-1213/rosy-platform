@@ -19,6 +19,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `index.html` | Shell; loads shared `/common/` tokens, theme, components and `ui.js`, then `console.js` |
 | `shared/` | Shared read assets served at `/console/assets/<name>` (D-518). D-766 size unit (`test/architecture/size_units.txt`). |
 | `shared/styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
+| `shared/fleet-client.js`, `shared/request.js` | Console transport and Fleet response interpretation. New imports use `/console/assets/`; Fleet retains only the two exact former `/common/` URLs as compatibility aliases. |
 | `work/work.css`, `shared/power-action.js`, `shared/area-nav.js` | D-766 splits: the work-area sheet, the robot card sleep/wake button (D-440 6, out of `roster.js`), the address-view area selection (D-741 6·7, out of `console.js`) |
 | `console.js` | Shell: auth state, `call()`, render, polling cadence; composes the modules below |
 | `console-auth.js`, `console-goal.js`, `console-refresh.js` | D-798 3.2 splits of `console.js`: lock/unlock, session, token and password login, development mode; roster keys, click-to-goal and the operator pin; dispatch band and rearm, site path, state poll, cancel-all |
@@ -37,7 +38,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `signals.js` | Traffic-signal cards |
 | `site-layer.js` | Ceiling-camera sightings layer (pure; display and cross-check only) |
 | `shared/vision-view.js`, `field-view.js`, `field-layers.js` | Camera preview, field proposal/rectified view, layer toggles |
-| `site-map.html`, `site-map.js`, `shared/site-map-model.js`, `site-map.css` | D-488 `/console/site-map`: 활성 지도·초안 보기, 장소·차로 초안 편집과 활성화, D-490 경로 미리보기, D-494 5 운행 칸(시작·취소·바뀐 경로 확인, 1 s 조회), D-494 6 지도 가르치기 칸(`site-map-teach.js`, 1 s 조회). 순수 계산은 `shared/site-map-model.js` |
+| `maps/`, `shared/site-map-model.js`, `shared/site-map-edit.js` | D-825 지도 문서와 편집 자산 holder. 공개 주소는 기존 `/console/site-map`·`/console/assets/<basename>`이며 매핑은 Fleet `console/static_routes.py`를 본다. 기하·이력은 도메인 독립 함수, `map-editor.js`는 Fleet DTO 어댑터, `map-authoring.js`는 화면 조립이다. 기존 경로 미리보기·가르치기는 유지한다. |
 | `shared/map-fit.js`, `map-fit-view.js` | D-375 lane-paint map fit proposal (pure math / view) |
 | `shared/field-warp.js` | Shared `warpImage` read (D-518). The install proposal screen stays in `field-view.js` |
 | `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |

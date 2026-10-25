@@ -12,6 +12,7 @@ import math
 from dataclasses import dataclass
 
 from fleet.meet.scene import Action, Door, Edge, Order, Pin, Robot, Room, Scene
+from rosy.world.state.projections.map_pose import wrap_angle as _wrap
 
 MAX_OFF_M = 0.08
 ROOM_AT_M = 0.12
@@ -25,10 +26,6 @@ _ROOMS = (
     ("west_spot", (-1.0, 0.0), 0.27, "west", (-1.2696, 0.0)),
     ("east_room", (0.65, 0.30), 0.32, "east", (0.327, 0.301)),
 )
-
-
-def _wrap(angle: float) -> float:
-    return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
 
 @dataclass(frozen=True)

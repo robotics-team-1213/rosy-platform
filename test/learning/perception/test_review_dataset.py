@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/training/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 import review_dataset as target
 from test_review_authority import current, digest, seal_bundle
 
@@ -179,7 +179,9 @@ def test_whole_video_connects_adjacent_frames_even_different_group_aliases():
     assert target.source_components(rows, {}) == [[0, 1]]
 
 
-def build_fixture(tmp_path, shared_group=False, with_drivable=False):
+def build_fixture(tmp_path, shared_group=False, with_drivable=False, hf=(), own=2):
+    """`own` own-camera frames; `hf`: one upstream change per extra HF still frame (None drops that field,
+    `_pixels` reuses an own frame's pixel value)."""
     from test_review_authority import encoded, refs, reseal
     from build import load_classes, content_sha
     from store import Store
@@ -192,7 +194,31 @@ def build_fixture(tmp_path, shared_group=False, with_drivable=False):
     class_sha = hashlib.sha256(classes_raw).hexdigest()
     signature = hashlib.sha256(json.dumps(classes, sort_keys=True).encode()).hexdigest()
     workspace = 'd' * 32; proofs = []; frames = []; sources = []; humans = []; app = []
-    for i in range(3):
+    def add(i, source, image_raw, identity):
+        image_sha = source['image_sha256']
+        review = dict(index=i, image_sha256=image_sha, boxes=[], review_status='approved', complete_frame_review=True)
+        human = dict(review, video=source['video'], video_frame=source['video_frame'])
+        mask_pixels = np.full((16, 16), 1, np.uint8)
+        if with_drivable:
+            mask_pixels[:, :8], mask_pixels[:, 8:] = 2, 0
+        ok, mask = cv2.imencode('.png', mask_pixels); assert ok
+        mask_raw = mask.tobytes(); mask_sha = hashlib.sha256(mask_raw).hexdigest()
+        approval = dict(image_sha256=image_sha, mask_sha256=mask_sha, mask_version=1, width=16, height=16,
+                        classes_sha256=class_sha, classes_signature=signature, ignore_index=255,
+                        complete_frame_review=True, background_reviewed=True)
+        frame = dict(frame=i, review_uid=f'{workspace}:{i}', identity=identity, image_sha256=image_sha,
+                     source_session=source['source_session'], capture_group=source['capture_group'], source_video_sha256=source['source_video_sha256'],
+                     original_video_verified=False, video_frame=source['video_frame'], fixed_eval_overlap=False,
+                     object_version=1, object_decision='approved', mask_version=1, mask_decision='approved', mask_sha256=mask_sha,
+                     map_revision=None, map_pose=None, width=16, height=16, source_sha256=hashlib.sha256(encoded(source)).hexdigest(),
+                     object_review_sha256=hashlib.sha256(encoded(human)).hexdigest(),
+                     representations_sha256=hashlib.sha256(encoded([source])).hexdigest(), frame_excluded=False,
+                     complete_frame_review=True, background_reviewed=True, pixel_approval=approval)
+        frames.append(frame); sources.append(source); humans.append(human)
+        app.append(dict(index=i, source=source, review=review, status='approved', version=1))
+        for relative, raw in [(f'inputs/images/{i:06d}.png', image_raw), (f'pixel-masks/{i:06d}.png', mask_raw)]:
+            path = bundle / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
+    for i in range(own + 1):
         pixels = np.full((16, 16, 3), 40 + i * 40, np.uint8)
         video_path = tmp_path / ('video' + str(i) + '.avi')
         writer = cv2.VideoWriter(str(video_path), cv2.VideoWriter_fourcc(*'FFV1'), 5, (16, 16))
@@ -206,38 +232,29 @@ def build_fixture(tmp_path, shared_group=False, with_drivable=False):
         proof_path.write_text(json.dumps(dict(schema='rosy.pinky-review-source-proof/1', source_session='session' + str(i),
                                              capture_group='group' + str(0 if shared_group and i < 2 else i), video_path=str(video_path), video_sha256=video_sha)))
         proofs.append(proof_path)
-        if i == 2:
+        if i == own:
             stage = store.evalsets_dir / 'held' / 'stage'; stage.mkdir(parents=True)
             (stage / 'image.png').write_bytes(image_raw)
             (stage / 'manifest.json').write_text(json.dumps(dict(purpose='eval', frames=[dict(
-                session='session2', capture_group='group2', source_video_sha256=video_sha, video_frame=0, image='image.png')])))
+                session=f'session{i}', capture_group=f'group{i}', source_video_sha256=video_sha, video_frame=0, image='image.png')])))
             eval_root = stage.with_name(content_sha(stage)); stage.rename(eval_root)
             break
         source = dict(index=i, image=f'images/{i:06d}.png', image_sha256=image_sha, width=16, height=16,
                       source_session='session' + str(i), capture_group='group' + str(0 if shared_group else i), source_video_sha256=video_sha,
                       video=video_path.name, video_frame=0, fixed_eval_overlap=False, objects=[])
-        review = dict(index=i, image_sha256=image_sha, boxes=[], review_status='approved', complete_frame_review=True)
-        human = dict(review, video=source['video'], video_frame=0)
-        mask_pixels = np.full((16, 16), 1, np.uint8)
-        if with_drivable:
-            mask_pixels[:, :8], mask_pixels[:, 8:] = 2, 0
-        ok, mask = cv2.imencode('.png', mask_pixels); assert ok
-        mask_raw = mask.tobytes(); mask_sha = hashlib.sha256(mask_raw).hexdigest()
-        approval = dict(image_sha256=image_sha, mask_sha256=mask_sha, mask_version=1, width=16, height=16,
-                        classes_sha256=class_sha, classes_signature=signature, ignore_index=255,
-                        complete_frame_review=True, background_reviewed=True)
-        frame = dict(frame=i, review_uid=f'{workspace}:{i}', identity=f'video:{video_sha}:0', image_sha256=image_sha,
-                     source_session=source['source_session'], capture_group=source['capture_group'], source_video_sha256=video_sha,
-                     original_video_verified=False, video_frame=0, fixed_eval_overlap=False,
-                     object_version=1, object_decision='approved', mask_version=1, mask_decision='approved', mask_sha256=mask_sha,
-                     map_revision=None, map_pose=None, width=16, height=16, source_sha256=hashlib.sha256(encoded(source)).hexdigest(),
-                     object_review_sha256=hashlib.sha256(encoded(human)).hexdigest(),
-                     representations_sha256=hashlib.sha256(encoded([source])).hexdigest(), frame_excluded=False,
-                     complete_frame_review=True, background_reviewed=True, pixel_approval=approval)
-        frames.append(frame); sources.append(source); humans.append(human)
-        app.append(dict(index=i, source=source, review=review, status='approved', version=1))
-        for relative, raw in [(f'inputs/images/{i:06d}.png', image_raw), (f'pixel-masks/{i:06d}.png', mask_raw)]:
-            path = bundle / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
+        add(i, source, image_raw, f'video:{video_sha}:0')
+    for k, change in enumerate(hf):
+        change = dict(change); value = change.pop('_pixels', 200 + k * 10)
+        ok, image = cv2.imencode('.png', np.full((16, 16, 3), value, np.uint8)); assert ok
+        image_raw = image.tobytes(); image_sha = hashlib.sha256(image_raw).hexdigest()
+        up = {key: value for key, value in dict(dict(provider='huggingface', repo_type='dataset', repo_id='org/data',
+              revision='a' * 40, path=f'img/{k}.png', sha256=image_sha), **change).items() if value is not None}
+        group = f"hf:{up.get('repo_type')}/{up.get('repo_id')}@{up.get('revision')}"
+        i = len(frames)
+        source = dict(index=i, image=f'images/{i:06d}.png', image_sha256=image_sha, width=16, height=16,
+                      source_session=group, capture_group=group, source_video_sha256=None, video=None, video_frame=None,
+                      fixed_eval_overlap=False, objects=[], source_kind='huggingface', upstream=up)
+        add(i, source, image_raw, f'image:{group}:None:{image_sha}')
     authority = digest(dict(schema='rosy.pinky-review-decisions/1', workspace_id=workspace, generation=1,
                             map_reference_sha256=None, pixel_classes_sha256=class_sha, classes_signature=signature,
                             ignore_index=255, frames=frames))
@@ -252,11 +269,11 @@ def build_fixture(tmp_path, shared_group=False, with_drivable=False):
     legacy = dict(schema='rosy.object-review-return/1', files=refs(bundle),
                   source_sha256=hashlib.sha256(payloads['inputs/source.jsonl']).hexdigest(),
                   human_sha256=hashlib.sha256(payloads['inputs/human.jsonl']).hexdigest(),
-                  groups=[dict(exported_indices=[0, 1])])
+                  groups=[dict(exported_indices=[f['frame'] for f in frames])])
     raw = encoded(legacy); (bundle / 'manifest.json').write_bytes(raw)
     (bundle / 'COMPLETE').write_text(hashlib.sha256(raw).hexdigest())
     doc = dict(schema='rosy.pinky-review-export/2', export_id='synthetic', authority=authority,
-               pixel_approved_frames=2, current_decisions_required=True, training_dataset_qualified=False,
+               pixel_approved_frames=len(frames), current_decisions_required=True, training_dataset_qualified=False,
                pixel_projection_verified=False, files=refs(bundle))
     reseal(bundle, doc)
     return dict(export_root=bundle, fetch_current=lambda: delivery(authority), workspace_id=workspace,
@@ -450,7 +467,7 @@ def test_windows_outside_scratch_root_holds(tmp_path):
     assert not forbidden.exists()
     args['staging_parent'] = forbidden
     result = target.build_dataset(**args)
-    assert result['status'] == 'HOLD' and 'within ROSY_SCRATCH' in result['blockers'][0]
+    assert result['status'] == 'HOLD' and 'within X:/DevTemp' in result['blockers'][0]
     assert not forbidden.exists() and not args['store'].datasets_dir.exists()
 
 
@@ -708,3 +725,66 @@ def test_companion_resealed_other_valid_label_cannot_rebind_eval_image(tmp_path)
     doc['frames'][0].update(sample_index=2,video_frame=1);seal_companion(bundle,doc)
     with pytest.raises(ValueError,match='selected label index'):
         target.validate_eval_companions([root],[bundle])
+
+
+def test_approved_hf_frames_train_only_with_visible_share(tmp_path):
+    from build import assign_splits
+    args, _ = build_fixture(tmp_path, hf=[{}, {}, {'revision': 'b' * 40}])
+    report = target.inspect_candidates(args['export_root'], fetch_current=args['fetch_current'],
+                                       workspace_id=args['workspace_id'], eval_folders=args['eval_folders'], now=args['now'])
+    hf_blockers = {b for row in report['frames'][2:] for b in row['blockers']}
+    assert not hf_blockers & {'source_video_hash_unknown', 'source_video_frame_unknown', 'original_video_unverified'}
+    result = target.build_dataset(**args)
+    assert result['status'] == 'PUBLISHED_CONTENT_NOT_ADMITTED', result
+    manifest = json.loads((Path(result['dataset_path']) / 'manifest.json').read_bytes())
+    groups = ['hf:dataset/org/data@' + 'a' * 40, 'hf:dataset/org/data@' + 'b' * 40]
+    share = dict(huggingface_frames=3, percent=60.0, groups=groups, split='train_only', own_forced_train=0)
+    assert manifest['external_sources'] == share and result['external_sources'] == share
+    own, external = manifest['frames'][:2], manifest['frames'][2:]
+    assert {f['split'] for f in external} == {'train'}   # never val, eval or promotion (D-857)
+    assert len({f['source_component'] for f in external}) == 2   # one group per HF revision
+    assert {f['split'] for f in own} == {'train', 'val'}
+    # Our own frames are split by their own components alone; HF groups never move them.
+    assert {f['source_component']: f['split'] for f in own} == assign_splits(f['source_component'] for f in own)
+    assert [s['upstream']['revision'] for s in manifest['sources'][2:]] == ['a' * 40, 'a' * 40, 'b' * 40]
+    assert all(s['source_proof'] is None and s['group_basis'] == 'huggingface_revision' for s in manifest['sources'][2:])
+
+
+@pytest.mark.parametrize('change', [{'revision': None}, {'sha256': None}, {'sha256': 'f' * 64}])
+def test_hf_frame_without_full_provenance_keeps_the_video_refusal(tmp_path, change):
+    args, _ = build_fixture(tmp_path, hf=[change])
+    report = target.inspect_candidates(args['export_root'], fetch_current=args['fetch_current'],
+                                       workspace_id=args['workspace_id'], eval_folders=args['eval_folders'], now=args['now'])
+    assert 'source_video_hash_unknown' in report['frames'][2]['blockers']
+    result = target.build_dataset(**args)
+    assert result['status'] == 'HOLD' and result['blockers'] == ['source component provenance UNKNOWN']
+    assert args['store'].datasets() == {}
+
+
+def test_own_only_dataset_has_no_external_share_field(tmp_path):
+    args, _ = build_fixture(tmp_path)
+    result = target.build_dataset(**args)
+    manifest = json.loads((Path(result['dataset_path']) / 'manifest.json').read_bytes())
+    assert 'external_sources' not in manifest
+    assert result['external_sources'] == dict(huggingface_frames=0, percent=0.0, groups=[], split='train_only', own_forced_train=0)
+
+
+def test_hf_only_dataset_is_refused(tmp_path):
+    args, _ = build_fixture(tmp_path, own=0, hf=[{}, {'revision': 'b' * 40}])
+    result = target.build_dataset(**args)
+    assert result['status'] == 'HOLD'
+    assert result['blockers'] == ['at least two disconnected source components required']
+    assert args['store'].datasets() == {}
+
+
+def test_own_frame_linked_to_an_hf_frame_is_forced_into_train_and_counted(tmp_path):
+    args, _ = build_fixture(tmp_path, own=3, hf=[{'_pixels': 40}])   # same bytes as own frame 0
+    result = target.build_dataset(**args)
+    assert result['status'] == 'PUBLISHED_CONTENT_NOT_ADMITTED', result
+    manifest = json.loads((Path(result['dataset_path']) / 'manifest.json').read_bytes())
+    frames = {int(f['image'][7:13]): f for f in manifest['frames']}   # entries follow components, not indices
+    assert frames[0]['source_component'] == frames[3]['source_component']
+    assert frames[0]['split'] == frames[3]['split'] == 'train'
+    assert {frames[1]['split'], frames[2]['split']} == {'train', 'val'}
+    assert manifest['external_sources']['own_forced_train'] == 1
+    assert result['external_sources']['own_forced_train'] == 1

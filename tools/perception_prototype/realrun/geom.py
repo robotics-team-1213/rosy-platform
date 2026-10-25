@@ -1,5 +1,5 @@
 import os, sys, math, numpy as np
-sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","..","..","src","core","control"))
+sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","..","..","middleware","perception"))
 from control.sensing.perception.camera_ground import simulation_ground_plane
 from control.sensing.perception.lane_bev import BirdsEye, BEV_CELL_M
 for name,(w,h,ch,p,hf,xo) in {"real":(320,240,0.067,0.1396,2*math.atan(160/281.6),0.034),

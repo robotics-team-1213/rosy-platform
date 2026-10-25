@@ -103,10 +103,46 @@ def test_refresh_rotation_replay_revokes_family(authority):
     assert instance.introspect(rotated['access_token']) == {'active': False}
 
 
+def test_db_restore_cannot_make_consumed_refresh_reusable(authority, tmp_path):
+    from deploy.site.site_db import DatabaseError, backup_database, restore_database
+
+    instance, context, _ = authority
+    tokens = json.loads(exchange(instance, get_code(instance, context))[1])
+    backup = tmp_path / 'unspent-refresh.sqlite3'
+    backup_database(instance.path, backup)
+    form = urlencode({'grant_type': 'refresh_token', 'client_id': 'robot-app',
+                      'refresh_token': tokens['refresh_token']})
+    assert instance.token(form)[2] == 200
+
+    with pytest.raises(DatabaseError, match='Account security state'):
+        restore_database(backup, instance.path, replace=True, assume_stopped=True)
+
+    assert instance.token(form)[2] == 400
+
+
 def test_revision_change_and_family_logout_invalidate_access(authority):
     instance, context, families = authority
     tokens = json.loads(exchange(instance, get_code(instance, context))[1])
     families['family-1']['revision'] = 2
+    assert instance.introspect(tokens['access_token']) == {'active': False}
+
+
+@pytest.mark.parametrize('capability', ['vault.read', 'vault.operate', 'vault.manage'])
+def test_vault_site_grant_survives_exchange_and_revocation(authority, capability):
+    from core_common.protocol.account_access import verify_access
+    instance, context, families = authority
+    instance.clients['robot-app']['resources'] = ['site:test']
+    context['grants'] = [{'resource': 'site:test', 'capabilities': [capability]}]
+    families['family-1'] = deepcopy(context)
+    location = authorize(instance, context, scope='site:test')[0]['Location']
+    code = parse_qs(urlsplit(location).query)['code'][0]
+    tokens = json.loads(exchange(instance, code)[1])
+    state = instance.introspect(tokens['access_token'])
+    assert state['active'] and state['aud'] == 'site:test'
+    claims = verify_access(tokens['access_token'], instance.public_keys, issuer=ISSUER,
+                           audience='site:test', now=1000)
+    assert [grant.model_dump() for grant in claims.grants] == context['grants']
+    families['family-1']['revision'] += 1
     assert instance.introspect(tokens['access_token']) == {'active': False}
 
 

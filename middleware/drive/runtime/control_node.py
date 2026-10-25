@@ -15,8 +15,7 @@ def yaw_from_quat(q) -> float:
     return math.atan2(siny_cosp, cosy_cosp)
 
 
-def wrap_pi(a: float) -> float:
-    return math.atan2(math.sin(a), math.cos(a))
+from control.sensing.localization import wrap as wrap_pi
 
 
 class ControlNode(Node):

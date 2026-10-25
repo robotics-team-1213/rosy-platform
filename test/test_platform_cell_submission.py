@@ -1,4 +1,4 @@
-"""Cell Job submissions cross the execution boundary without importing the process."""
+"""Palletizing owns Cell submission validation and preserves the Fleet document."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 for relative in (
     "contracts/skill/src",
     "operations/site_execution/src",
+    "operations/processes/palletizing/src",
     "middleware/skills/api/src",
 ):
     path = str(ROOT / relative)
@@ -19,7 +20,7 @@ for relative in (
         sys.path.insert(0, path)
 
 from rosy.execution.api import PlanBundle, PlanStep
-from rosy.execution.site.cell_submission import (
+from rosy.processes.palletizing.submission import (
     CellJobCompilation,
     compile_cell_submission,
 )

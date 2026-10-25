@@ -1,4 +1,5 @@
 // D-488 site map geometry, editing and trip request helpers (no DOM).
+import {DRAWING_ERROR_LABEL} from './drawing-errors.js';
 import {ACTION_LABEL, RESOLVER_DECISION_LABEL, TRIP_ERROR_LABEL, startCheckText, tripErrorText} from './trip-display.js';
 export {routeAttention} from './route-attention.js';
 
@@ -15,7 +16,7 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_ROUTE_ACTIVE: '운행·대형·지도 기록이 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
   SITE_MAP_SURVEY_UNREVIEWED: '조사 좌표 기준과 축척 근거를 먼저 검토하세요',
-  SITE_MAP_ROAD_UNREVIEWED: '관측·추정 도로를 검토하고 근거를 남기세요',
+  SITE_MAP_ROAD_UNREVIEWED: '관측·추정한 도로·시설을 검토하고 근거를 남기세요',
   SITE_MAP_EXCLUSION_OVERLAP: '금지 구역과 겹치는 주행 차로를 수정하세요',
   SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
@@ -42,9 +43,8 @@ export function siteMapErrorText(error) {
   if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
   if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
   if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';
-  if (!error.status && /Failed to fetch|NetworkError|ERR_/.test(error.message || ''))
-    return '관제 연결이 끊겼습니다 · 네트워크를 확인하고 다시 접속하세요';
-  const base = SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
+  if (!error.status && /Failed to fetch|NetworkError|ERR_/.test(error.message || '')) return '관제 연결이 끊겼습니다 · 네트워크를 확인하고 다시 접속하세요';
+  const base = DRAWING_ERROR_LABEL[error.code] || SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
   const fields = (error.detail?.errors || []).map(item => `${(item.loc || []).join('.')}: ${item.msg}`);
   return fields.length ? `${base} — ${fields.join(' · ')}` : base;
 }

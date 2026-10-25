@@ -69,3 +69,9 @@
 - 변경: `mixed_submission.transfer_inputs`가 팔마다의 입력에 Step의 `sku`를 넣는다. `SUBMISSION_VERSION`을 `/2`로 올렸으므로 recipe/3 Job id가 바뀐다. recipe/3 로더는 sku를 grant 식별자 규칙(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$`)으로 받는다. recipe/1·/2는 바뀌지 않았다.
 - 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
 - gate 변화: 없음.
+
+## 2026-10-23 · 97d225c050 · refactor(palletizing): 공정 제출 검증의 단일 정본 이동 (D-849)
+
+- 변경: 기존 `rosy.execution.site.cell_submission`의 타입·재컴파일·입력·marker·checkpoint 검증과 저장 문서를 `rosy.processes.palletizing.submission`으로 옮겼다. Fleet/gateway compiler의 `compile_submission`이 이를 연결하고 Fleet resolver는 주입된 제출 port를 소비한다. 옛 모듈·검증 사본은 제거하고 wire·원장·승인·장치 권한은 유지했다.
+- 증거: `24002a33cb`의 새 경계 시험 RED 3 failed/기존 13 passed 뒤 `48b843e0ab` 대상 회귀 347 passed. 독립 리뷰가 지적한 설치 Fleet 증거 공백은 `46e730cf51`에서 wheel/sdist RED 2 failed를 확인하고 `97d225c050`에서 설치 Fleet/gateway·기존 설치 probe·compiler 22 passed로 보완했다. 첫 FULL의 샘플 digest와 축소 size unit 회귀를 고친 최종 `a5ab652723` FULL은 11170 passed/545 skipped, 5 subtests passed이며 두 로그 모두 NEW/known/flaky 0이다. [검증 기록](../../../docs/validation/process-submission-ownership-2026-10-23/result.md)에 원본 로그 hash와 적용 범위를 둔다.
+- gate 변화: 없음. host 소스·설치 증거이며 ROS/Gazebo 동작·artifact·실물·현장 수용과 main 착지·push는 포함하지 않는다.

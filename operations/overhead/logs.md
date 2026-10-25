@@ -396,6 +396,7 @@
 - 변경: main이 v1.166(D-531 굽이 단계)을 먼저 가져가 D-560 S1은 API Reference v1.167이다(위 항목의 v1.166은 v1.167로 읽는다). `X-Frame-Plane`의 `max_x`·`min_y`를 반올림한 영상 크기에서 다시 정해 사각형이 영상 크기 / `px_per_m`와 같다. `MapPlane`이 펴기에 쓴 행렬을 싣고, 헤더 식과 1e-9 m로 맞는지 시험한다. 보정 revision은 `[A-Za-z0-9._:-]{1,96}`만 받는다(헤더로 나간다). 공유 펴기 작업이 자기 실패를 회수한다. 평면은 그 source에 `--track`이 켜져 있어야 나온다는 문장을 §10.6.1과 ADR S1에 넣었다
 - 증거: 원격 pytest 결과는 이 브랜치 보고에 남긴다. 실프레임 평면 1244×624 다시 확인(X:/DevTemp/cam-map-plane-s1/plane-lanes.png)
 - gate 변화: 없음
+
 ## 2026-10-09 · uncommitted · feat(vision): D-564 장소 마커 투영과 전송
 - 변경: `place_markers` 설정(공유 검사), `project_place_markers`(로봇 마커와 같은 호모그래피·`heading_edge`, 높이 보정 없음), 워커가 0.5 s에 한 번 이하로 `/api/fleet/place-markers`에 보내고 실패는 유형만 로그.
 - 증거: `test_vision_place_markers.py`, `test_vision_config.py` 포함 vision 전체, 모델 PC exit 0, 신규 실패 0.
@@ -498,11 +499,42 @@
 - 증거: 원격 AI PC ai@100.108.76.123, 커밋 d780942b9, Vision·버전 핀 294 passed, exit 0, known_failures NEW 0. 로그 X:/DevTemp/cam-standby/pytest/run-1.txt.
 - gate 변화: SOURCE/원격. 실기 대기 전류와 첫 프레임 지연은 측정하지 않았다.
 
+## 2026-10-16 · 22288420c · D-772 스테이션 전용 카메라 구성 검증
+
+- 변경: create_station_worker가 source 자격으로 현재 세션 범위를 가져오고 설치된 robot-marker 평면 교정과 영상 변환으로 상대 관측을 만든다. 전역 지도 투영 없이 카메라 전용 worker를 구성한다.
+- 증거: b0f03d38f 구성 부재 RED 뒤 독립 안전 검토를 거친 22288420c에서 전체 overhead·관련 Fleet·구조/안전 719개 시험 통과, NEW 0. 27427874e의 이미지·HTTP·제어기 SIM 및 정상 종단 포함 40개 시험 통과, NEW 0. 로그 C:/DevTemp/station-charge/task-3-factory-green/run-1.txt 및 task-3-normal-pipeline/run-1.txt.
+- gate 변화: 소프트웨어 통합 증거 추가. 광학·접촉/BMS는 합성이다. CLI 설치·절대 좌표 재발견·전체 충전 사이클·실기 수용은 미완료다.
+
+## 2026-10-16 · 3621458a6 · 고정 지도 카메라의 독립 표식과 스테이션 재발견
+
+- 변경: 승인된 station-marker 높이 교정으로 위치 후보를 생성하고 매 영상에서 네 독립 고정 landmark의 등록 pixel quad·ID·coverage를 대조한다. 카메라 이동·표식 누락/교환·반사·불량 숫자/기하는 candidate 전송을 차단한다. 원본 UTC/monotonic 수명·순번을 보존하고 Fleet이 확정을 소유한다. 상대 접안 기하는 공용 leaf로 보존했다.
+- 증거: e81c69307 camera-bump RED가 실제 잘못된 POST를 재현했다. 독립 Safety-Review scoped PASS 후 3621458a6 task-13-anchors-order 원격 245 PASS/0 skip/NEW 0/exit 0. 기존 상대 worker/publisher와 실제 인증 Fleet/CORE/최종 출력의 3회 충전·재투입, 작업 사이 스테이션 이동→새 revision 및 복귀 중 이동→HOLD·출력 0·claim 유지도 포함한다. 로그 C:/DevTemp/station-charge/task-13-anchors-order/run-1.txt.
+- gate 변화: 관련 source/SIM 근거 추가. 정적 H에만 의존했던 경로를 보강했다. 운영 CLI/설치 프로필·실시간 lifespan/재시작 장애·실측 교정/충전기/BMS·DEVICE/FIELD는 미완료다. 전체 module last_verified와 현장 gate는 승격하지 않는다.
+
+## 2026-10-16 · c376863dd · D-772 최신 JPEG의 스테이션 상대 관측
+
+- 변경: 선택적인 StationFrameProcessor를 기존 VisionWorker에 결합한다. 작업자·교정의 카메라 source를 일치시키고 명시적인 측정 영상 변환 뒤 기존 ArUco 기하로 상대 관측을 만든다. 프레임 원본 시각과 순번, 처리 전후의 현재 세션 범위, 만료를 확인하며 표식 손실은 visible=false로 전달한다. 환경 프록시에 source 토큰을 보내지 않는다.
+- 증거: 75eeab99f/c376863dd에서 신규 처리 모듈 부재 RED를 확인했다. 독립 안전 검토에서 다른 카메라 영상의 재라벨링 가능성을 발견해 첫 구성 커밋 전에 source 결속을 추가했다. 원격 GREEN은 후속 기록한다.
+- gate 변화: 없음. 선택적 소프트웨어 구성이고 CLI/bootstrap·실기 교정/정밀도·전체 충전 사이클 수용은 미완료다.
+
+## 2026-10-16 · 0b816554c · 설치 프로필의 카메라 측정 실행과 종료
+
+- 변경: D-774 station-vision 명령이 strict JSON의 상대/지도 카메라·승인 lens/marker 교정·source/epoch/revision·별도 phone/source 자격증명을 검증하고 기존 worker를 조립한다. 전용 측정 source만 실행 중 기존 demand를 요청한다. 일반 preview/추적의 대기는 유지한다. 소비 task 종료·취소·demand-off 오류에도 WebSocket/HTTP 정리를 시도한다. 크기 제한을 올리지 않고 기존 preview/proposal 응답을 343행 leaf로 옮겨 ingest를 575행으로 줄였다.
+- 증거: c2b1c2a8c RED 15건 후 e5771fa8c 전체 원격 780 PASS/1 FAIL(ingest 크기). 독립 안전 검토를 거친 0b816554c task-14-install-final 전체 overhead·구조·안전 원격 781 PASS/0 skip/NEW 0/exit 0. 실제 WebSocket demand/config·JPEG→인증 HTTP·비영 렌즈 보정 corner·취소/오류 cleanup과 기존 preview/연결 교체를 포함한다. 로그 C:/DevTemp/station-charge/task-14-install-final/run-1.txt.
+- gate 변화: 해당 설치·host lifespan 근거 추가. source credential의 실제 카메라 결속/capture 고정·실측 광학·Fleet/CORE 전체 lifespan/장애·DEVICE/FIELD는 미완료다. 전체 브랜치 CI·착지·push·실기 활성화는 수행하지 않았다.
+
 ## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
 
 - 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
 - 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
 - gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-17 · uncommitted · station measured preview merge integration
+
+- 변경: station의 ingest_preview sibling에 main의 measured-status·measured frame 분기를 보존하고 map plane은 main preview_plane helper로 위임한다. 두 구현의 관측/인증 경로와 기존 source identity를 유지한다.
+- 증거: 독립 정적 검토에서 합성 preview 함수 AST가 main과 일치함을 확인했다. 통합 원격 시험은 merge 커밋 후 수행하며 현재 장치/영상 수용을 주장하지 않는다.
+- gate 변화: 없음. 실제 기동·FIELD 및 배포는 별도다.
+
 ## 2026-10-19 · c376863dd · (origin #92 2026-10-16) D-772 최신 JPEG의 스테이션 상대 관측
 
 - 변경: 선택적인 StationFrameProcessor를 기존 VisionWorker에 결합한다. 작업자·교정의 카메라 source를 일치시키고 명시적인 측정 영상 변환 뒤 기존 ArUco 기하로 상대 관측을 만든다. 프레임 원본 시각과 순번, 처리 전후의 현재 세션 범위, 만료를 확인하며 표식 손실은 visible=false로 전달한다. 환경 프록시에 source 토큰을 보내지 않는다.
@@ -532,3 +564,9 @@
 - 변경: station의 ingest_preview sibling에 main의 measured-status·measured frame 분기를 보존하고 map plane은 main preview_plane helper로 위임한다. 두 구현의 관측/인증 경로와 기존 source identity를 유지한다.
 - 증거: 독립 정적 검토에서 합성 preview 함수 AST가 main과 일치함을 확인했다. 통합 원격 시험은 merge 커밋 후 수행하며 현재 장치/영상 수용을 주장하지 않는다.
 - gate 변화: 없음. 실제 기동·FIELD 및 배포는 별도다.
+
+## 2026-10-22 · uncommitted · 작업 셀 카메라 preview-only 등록 (D-837)
+
+- Change: an explicit private workcell manifest adds camera ingress credentials without calibrated tracking workers or map sightings. Verify camera token fingerprints and reserve every manifest producer fingerprint against paired credentials without reading arm secrets.
+- Evidence: c25dce219d remote CLI, manifest, pairing and architecture checks: 101 passed. Independent source review confirms the prior cross-role credential collision finding is resolved.
+- Gate: unchanged. Real camera ingress through the deployed site origin and optical calibration remain unverified.

@@ -33,61 +33,11 @@ D-677 allocated outside this branch and absent from main; remove when its ADR la
 D-677 released unused: mandatory OpenCode local Qwen gateway was replaced by conditional GLM review
 D-771 reserved on branch docs/integrated-learning-plan (refs/adr/D-771), not yet on main; remove when it lands
 
-D-808 Reserved on another topic branch; not part of the D-822 application holder move.
-D-809 Reserved on another topic branch; not part of the D-822 application holder move.
-D-811 Reserved on another topic branch; not part of the D-822 application holder move.
-D-812 Reserved on another topic branch; not part of the D-822 application holder move.
-D-813 Reserved on another topic branch; not part of the D-822 application holder move.
-D-814 Reserved on another topic branch; not part of the D-822 application holder move.
-D-815 Reserved on another topic branch; not part of the D-822 application holder move.
-D-816 Reserved on another topic branch; not part of the D-822 application holder move.
-D-817 Reserved on another topic branch; not part of the D-822 application holder move.
-D-818 Reserved on another topic branch; not part of the D-822 application holder move.
-D-819 Reserved on another topic branch; not part of the D-822 application holder move.
-D-820 Reserved on another topic branch; not part of the D-822 application holder move.
-D-808 allocated outside this branch (refs/adr/D-808), absent from its base; remove when its ADR is merged
-D-809 allocated outside this branch (refs/adr/D-809), absent from its base; remove when its ADR is merged
-D-811 allocated outside this branch (refs/adr/D-811), absent from its base; remove when its ADR is merged
-D-812 allocated outside this branch (refs/adr/D-812), absent from its base; remove when its ADR is merged
-D-813 allocated outside this branch (refs/adr/D-813), absent from its base; remove when its ADR is merged
-D-814 allocated outside this branch (refs/adr/D-814), absent from its base; remove when its ADR is merged
-D-815 allocated outside this branch (refs/adr/D-815), absent from its base; remove when its ADR is merged
-D-816 allocated outside this branch (refs/adr/D-816), absent from its base; remove when its ADR is merged
-D-817 allocated outside this branch (refs/adr/D-817), absent from its base; remove when its ADR is merged
-D-818 allocated outside this branch (refs/adr/D-818), absent from its base; remove when its ADR is merged
-D-819 allocated outside this branch (refs/adr/D-819), absent from its base; remove when its ADR is merged
-D-820 allocated outside this branch (refs/adr/D-820), absent from its base; remove when its ADR is merged
-D-808 reserved by another session for Vault explicit site capabilities (refs/adr/D-808), not present in this base; remove when its ADR lands
-D-809 reserved by another session for Legacy 937 Learning Account boundary and attributed review audit (refs/adr/D-809), not present in this base; remove when its ADR lands
-D-811 reserved in another session (refs/adr/D-811), absent from this base; remove when its ADR lands
-D-812 reserved in another session (refs/adr/D-812), absent from this base; remove when its ADR lands
-D-813 reserved in another session (refs/adr/D-813), absent from this base; remove when its ADR lands
-D-814 reserved in another session (refs/adr/D-814), absent from this base; remove when its ADR lands
-D-815 reserved in another session (refs/adr/D-815), absent from this base; remove when its ADR lands
-D-816 reserved in another session (refs/adr/D-816), absent from this base; remove when its ADR lands
-D-817 reserved in another session (refs/adr/D-817), absent from this base; remove when its ADR lands
-D-818 reserved in another session (refs/adr/D-818), absent from this base; remove when its ADR lands
-D-819 reserved in another session (refs/adr/D-819), absent from this base; remove when its ADR lands
-D-820 reserved in another session (refs/adr/D-820), absent from this base; remove when its ADR lands
-D-825 reserved in another session (refs/adr/D-825), absent from this base; remove when its ADR lands
-D-832 reserved outside this branch (refs/adr/D-832), absent from this base; remove when its ADR lands
-D-832 reserved on peer branch feat/omx-learning-flow (8967d9484b), absent from this branch; remove when its ADR lands
-D-835 reserved in another session (refs/adr/D-835), absent from this branch; remove when its ADR lands
-D-837 absent from this base while peer work is in flight; remove when its ADR lands
 D-838 reserved in another session (refs/adr/D-838), absent from this branch; remove when its ADR lands
 D-839 reserved in another session (refs/adr/D-839), absent from this branch; remove when its ADR lands
-D-840 reserved in another session (refs/adr/D-840), absent from this branch; remove when its ADR lands
-D-837 reserved outside this branch; remove when its ADR lands
 D-838 reserved outside this branch; remove when its ADR lands
 D-839 reserved outside this branch; remove when its ADR lands
-D-840 reserved outside this branch; remove when its ADR lands
 D-842 reserved outside this branch; remove when its ADR lands
 D-843 reserved outside this branch; remove when its ADR lands
 D-844 reserved outside this branch; remove when its ADR lands
-D-848 reserved outside this branch; remove when its ADR lands
-D-849 reserved outside this branch; remove when its ADR lands
-D-852 reserved outside this branch (refs/adr/D-852); remove when its ADR lands
-D-852 reserved outside this branch; remove when its ADR lands
-D-858 reserved by another session outside this branch; remove when its ADR lands
 D-860 reserved by another session outside this branch; remove when its ADR lands
-D-868 reserved outside this branch (refs/adr/D-868); remove when its ADR lands

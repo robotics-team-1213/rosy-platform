@@ -98,12 +98,36 @@ def test_ament_marker_repair_reaches_nested_product_packages(tmp_path):
         assert (workspace / relative / "resource" / name).is_file(), relative
 
 
-def test_validation_shells_stay_inside_evidence():
-    outside = []
-    for path in (ROOT / "docs" / "validation").rglob("*.sh"):
-        if "evidence" not in path.parts:
-            outside.append(path.relative_to(ROOT).as_posix())
-    assert outside == []
+_FROZEN_VALIDATION_PYTHON = {
+    'ai-pc-lane-ring-replay-2026-10-09/replay.py',
+    'lane-goal-sim-2026-10-08/analyze_bend_memory.py',
+    'lane-goal-sim-2026-10-08/analyze_edge.py',
+    'lane-goal-sim-2026-10-08/analyze_map_bend.py',
+    'lane-ground-debug-ros-smoke-2026-10-08/probe.py',
+    'map-v2-fleet-keep-2026-09-30/keep_run.py',
+    'map-v2-fleet-keep-2026-09-30/make_video.py',
+    'map-v2-fleet-real-profile-2026-09-30/capture_frames.py',
+    'map-v2-fleet-real-profile-2026-09-30/sheet.py',
+}
+
+
+def _validation_scripts_outside_evidence(root):
+    return sorted(path.relative_to(root).as_posix()
+                  for pattern in ('*.sh', '*.py') for path in root.rglob(pattern)
+                  if 'evidence' not in path.relative_to(root).parts
+                  and path.relative_to(root).as_posix() not in _FROZEN_VALIDATION_PYTHON)
+
+
+def test_validation_scripts_stay_inside_evidence():
+    assert _validation_scripts_outside_evidence(ROOT / 'docs/validation') == []
+
+
+def test_validation_guard_rejects_new_python_outside_evidence(tmp_path):
+    (tmp_path / 'new.py').write_text('print(1)\n', encoding='utf-8')
+    evidence = tmp_path / 'evidence'
+    evidence.mkdir()
+    (evidence / 'allowed.py').write_text('print(1)\n', encoding='utf-8')
+    assert _validation_scripts_outside_evidence(tmp_path) == ['new.py']
 
 
 def test_module_gate_markdown_stays_on_the_module():

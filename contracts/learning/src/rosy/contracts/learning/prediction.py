@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
-import re
+from .digest import is_sha256_hex
 
 ARTIFACT_SCHEMA = 'rosy.world-model-artifact.v1'
 VERDICTS = ('NO_OBJECTION', 'HOLD', 'REJECT', 'ABSTAIN')
@@ -30,7 +30,7 @@ def _text(value):
 
 
 def _hash(value):
-    return isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value) is not None
+    return is_sha256_hex(value)
 
 
 def _ns(value):

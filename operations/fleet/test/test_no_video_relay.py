@@ -1,7 +1,8 @@
 """D-136 T1: Fleet은 영상을 중계하지 않는다.
 
 - gather/scatter 경로에 이미지 바이트 혼입 금지: fleet 패키지 생산 코드가
-  영상 라이브러리·ROS 이미지 메시지를 import하지 않는다.
+  영상 라이브러리·ROS 이미지 메시지를 import하지 않는다. D-835의 정적 도면
+  워커 두 개만 Pillow/OpenCV를 지연 로드한다.
 - 서버에 영상 프록시/중계 라우트 없음: 라우트 표를 열거해 비디오·스트림·
   카메라·프리뷰·프록시·릴레이 경로가 없음을 단언한다.
 """
@@ -18,6 +19,10 @@ from fleet.swarm.robots import RobotEndpoint
 SRC = Path(__file__).resolve().parents[1]
 
 FORBIDDEN_IMPORTS = frozenset({"cv2", "sensor_msgs", "ffmpeg", "av", "picamera2", "PIL"})
+DRAWING_IMPORTS = {
+    "fleet/server/sitemap/site_map_raster.py": {"PIL", "cv2"},
+    "fleet/server/sitemap/site_map_extract.py": {"PIL", "cv2"},
+}
 
 FORBIDDEN_ROUTE = re.compile(r"video|stream|camera|preview|proxy|relay|mjpeg|jpeg|image",
                              re.IGNORECASE)
@@ -31,8 +36,10 @@ def _prod_files():
         yield path
 
 
-def _imported_top_names(path: Path) -> set[str]:
+def _imported_top_names(path: Path, *, top_level=False) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
+    if top_level:
+        tree.body = [node for node in tree.body if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
     names = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -46,7 +53,11 @@ def test_fleet_production_imports_no_video_libraries():
     """D-136 T1: gather/scatter 경로에 이미지 바이트의 입구가 없다."""
     violations = {}
     for path in _prod_files():
-        hit = _imported_top_names(path) & FORBIDDEN_IMPORTS
+        relative = path.relative_to(SRC).as_posix()
+        allowed = DRAWING_IMPORTS.get(relative, set())
+        if allowed:
+            assert not (_imported_top_names(path, top_level=True) & FORBIDDEN_IMPORTS), relative
+        hit = _imported_top_names(path) & (FORBIDDEN_IMPORTS - allowed)
         if hit:
             violations[str(path.relative_to(SRC))] = sorted(hit)
     assert not violations, f"fleet production imports video libraries: {violations}"

@@ -8,10 +8,16 @@ from contextlib import contextmanager
 import pytest
 
 import vlm_judge
+import vlm_judge_report
 from review_app import make_server
-from review_store import Conflict
+from review_store import Conflict, ReviewStore
 from test_learning_collaboration import Accounts, request
-from test_review_app import open_store
+from test_review_app import open_store as training_store
+
+
+def open_store(tmp_path):
+    """VLM truth lives in a separate evaluation state (review_app.py --empty-eval, D-853 §4)."""
+    return ReviewStore(tmp_path / 'vlm-state', empty_eval=True)
 
 QUESTIONS = {'wrist': {'wrist.object_in_gripper': ['Is an object held between the gripper fingers?', ['yes', 'no', 'unclear']],
                        'wrist.gripper_empty': ['Is the gripper empty?', ['yes', 'no', 'unclear']]},
@@ -103,7 +109,7 @@ def test_evaluation_counts_labelled_photos_only(tmp_path):
     label(store, 1, **{'wrist.object_in_gripper': 'yes', 'wrist.gripper_empty': 'no'})
     label(store, 2, **{'wrist.object_in_gripper': 'no', 'wrist.gripper_empty': 'unclear'})
     label(store, 3, 'excluded', **{'wrist.object_in_gripper': None, 'wrist.gripper_empty': None})
-    result = vlm_judge.evaluation(store)
+    result = vlm_judge_report.evaluation(store)
     assert result['labelled'] == 2
     hf = next(m for m in result['models'] if m['runtime'] == 'transformers')
     assert hf['contradictions'] == 1  # photo 1 only; photo 3's yes/no is excluded and photo 2 is no/yes
@@ -120,7 +126,7 @@ def test_evaluation_counts_labelled_photos_only(tmp_path):
     human = {row['question']: row for row in result['human']}
     assert human['wrist.gripper_empty']['unclear_rate'] == 0.5
     label(store, 4, **{'front.lane_tape': 'left'})
-    tape = {q['question']: q for m in vlm_judge.evaluation(store)['models'] for q in m['questions']}['front.lane_tape']
+    tape = {q['question']: q for m in vlm_judge_report.evaluation(store)['models'] for q in m['questions']}['front.lane_tape']
     assert tape['balanced_accuracy'] == 0.0 and tape['n'] == 1
 
 
@@ -128,7 +134,7 @@ def test_export_hash_and_image_hash_check(tmp_path):
     store = open_store(tmp_path)
     vlm_judge.import_rows(store, bench(tmp_path, ROWS))
     label(store, 2, **{'wrist.object_in_gripper': 'no', 'wrist.gripper_empty': 'yes'})
-    exported = vlm_judge.export(store)
+    exported = vlm_judge_report.export(store)
     assert exported['count'] == 1 and hashlib.sha256(exported['jsonl'].encode()).hexdigest() == exported['sha256']
     row = json.loads(exported['jsonl'])
     assert set(row) == {'image_sha256', 'view', 'question_set', 'answers', 'status', 'tiers', 'actor', 'version'}
@@ -179,7 +185,10 @@ def test_http_permissions_conflict_and_hidden_model_answers(tmp_path):
         assert request(base, '/api/learning/vlm/items?status=done', 'reader')[0] == 400
         code, evaluation = request(base, '/api/learning/vlm/evaluation', 'reader')
         assert code == 200 and evaluation['labelled'] == 1
-        code, exported = request(base, '/api/learning/vlm/export', 'reader')
+        # The export carries provisional answers, so it needs manage like other project exports.
+        assert request(base, '/api/learning/vlm/export', 'reader')[0] == 403
+        assert request(base, '/api/learning/vlm/export', 'editor')[0] == 403
+        code, exported = request(base, '/api/learning/vlm/export', 'reviewer')
         assert code == 200 and exported['count'] == 1
         req = urllib.request.Request(base + '/api/learning/vlm/images/1', headers={'Cookie': 'rosy_learning_session=reader'})
         with urllib.request.urlopen(req) as response:
@@ -198,7 +207,7 @@ def test_local_mode_has_no_actor_and_serves_the_page(tmp_path):
                               token=summary['token'])
         assert code == 200 and saved['actor'] is None
         for path, marker in [('/learning/vlm', 'Rosy Learning — VLM 판단'), ('/vlm.js', '/api/learning/vlm/'),
-                             ('/vlm.css', '.vlm-work'), ('/learning-shell.js', '/learning/vlm'),
+                             ('/vlm.css', '.vlm-work'), ('/', 'href="/learning/vlm"'),
                              ('/learning/evaluate', 'Rosy Learning — 평가·승격'), ('/evaluate.js', '/api/learning/vlm/evaluation')]:
             with urllib.request.urlopen(base + path) as response:
                 assert marker in response.read().decode('utf-8')
@@ -311,8 +320,8 @@ def test_evaluation_set_is_30_photos_per_view_frozen_and_topped_up_after_exclusi
 def test_audits_confirm_or_fix_and_pause_a_question(tmp_path, monkeypatch):
     monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W43')
     store = consensus_store(tmp_path, 120)
-    exported = [json.loads(line) for line in vlm_judge.export(store)['jsonl'].splitlines()]
-    assert len(exported) == 120 and {row['status'] for row in exported} == {'provisional'}
+    exported = [json.loads(line) for line in vlm_judge_report.export(store)['jsonl'].splitlines()]
+    assert len(exported) == 90 and {row['status'] for row in exported} == {'provisional'}  # the 30 blind ones stay out
     assert {row['tiers'][HELD] for row in exported} == {'provisional'}
 
     def audit(fix):
@@ -326,16 +335,105 @@ def test_audits_confirm_or_fix_and_pause_a_question(tmp_path, monkeypatch):
         assert audit(fix)['status'] == 'labelled'
     excluded = next(row['id'] for row in vlm_judge.queue(store)['items'] if row['kind'] == 'audit')
     label(store, excluded, 'excluded', **{HELD: None})  # an exclusion is not an audit
-    assert vlm_judge.queue(store)['paused'] == [] and vlm_judge.evaluation(store)['audits'][0]['n'] == 4
+    assert vlm_judge.queue(store)['paused'] == [] and vlm_judge_report.evaluation(store)['audits'][0]['n'] == 4
     audit(True)  # 2 of 5 wrong: 40% > 10%
-    queue, result = vlm_judge.queue(store), vlm_judge.evaluation(store)
+    queue, result = vlm_judge.queue(store), vlm_judge_report.evaluation(store)
     assert queue['paused'] == [HELD] and queue['counts']['wrist']['audit'] == 0
     assert result['audits'] == [{'question': HELD, 'n': 5, 'errors': 2, 'rate': 0.4, 'paused': True}]
     assert result['paused'] == [HELD] and result['provisional'][0]['provisional'] == 0
     assert result['labelled'] == 5  # confirmed answers include the confirmed and the fixed audits
-    rows = [json.loads(line) for line in vlm_judge.export(store)['jsonl'].splitlines()]
+    assert result['eval_set'] == {'labelled': 0, 'models': []}  # audits were answered with the consensus shown
+    rows = [json.loads(line) for line in vlm_judge_report.export(store)['jsonl'].splitlines()]
     assert {row['status'] for row in rows} == {'labelled', 'excluded'}  # paused provisional answers are not used
     assert {row['tiers'][HELD] for row in rows} == {'confirmed', None}
+    with pytest.raises(ValueError, match='question id'):
+        vlm_judge.unpause(store, 'bad question')
+    assert vlm_judge.unpause(store, HELD, actor='lee') == {'question': HELD, 'actor': 'lee'}
+    assert vlm_judge.queue(store)['paused'] == [] and vlm_judge_report.evaluation(store)['audits'] == []  # count restarts
+    with store.connect() as db:
+        assert [tuple(row) for row in db.execute('SELECT question, actor, ts IS NOT NULL FROM vlm_unpauses')] == [
+            (HELD, 'lee', 1)]
+        assert db.execute('SELECT COUNT(*) FROM vlm_audits').fetchone()[0] == 5  # history is kept
+    with pytest.raises(ValueError, match='not paused'):
+        vlm_judge.unpause(store, HELD, actor='lee')
+
+
+def test_export_keeps_the_evaluation_set_and_disputed_photos_blind(tmp_path, monkeypatch):
+    monkeypatch.setattr(vlm_judge, 'week', lambda: '2026-W43')
+    store = consensus_store(tmp_path, 40)
+    vlm_judge.queue(store)  # freezes the evaluation set (the export does the same before choosing)
+    with store.connect() as db:
+        frozen = {row[0] for row in db.execute('SELECT item FROM vlm_eval_set')}
+        outside = sorted(set(range(1, 41)) - frozen)
+        for number in outside[:3]:  # a third model dissents: these photos are disputed
+            put(db, number, 'm3', 'transformers', 'unclear', 0.6)
+        sha = {row[0]: row[1] for row in db.execute('SELECT id, image_sha256 FROM vlm_items')}
+    rows = [json.loads(line) for line in vlm_judge_report.export(store)['jsonl'].splitlines()]
+    shown = {row['image_sha256'] for row in rows if 'provisional' in row['tiers'].values()}
+    assert shown == {sha[number] for number in outside[3:]} and len(frozen) == 30
+    assert not shown & {sha[number] for number in frozen | set(outside[:3])}
+
+
+def test_vlm_writes_need_an_evaluation_state_and_reads_create_nothing(tmp_path):
+    store = training_store(tmp_path)
+    assert vlm_judge.items(store) == [] and vlm_judge.disputes(store) == []
+    assert vlm_judge.summary(store)['total'] == 0 and vlm_judge_report.export(store)['count'] == 0
+    assert vlm_judge_report.evaluation(store)['labelled'] == 0 and vlm_judge.queue(store)['items'] == []
+    with pytest.raises(ValueError, match='not found'):
+        vlm_judge.item(store, 1)
+    with store.connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'vlm_%'").fetchone()[0] == 0
+    (tmp_path / 'bench').mkdir()
+    with pytest.raises(ValueError, match='empty-eval'):
+        vlm_judge.import_rows(store, bench(tmp_path / 'bench', ROWS))
+    with pytest.raises(ValueError, match='empty-eval'):
+        vlm_judge.save(store, 1, {'version': 0, 'status': 'excluded', 'answers': {}}, Conflict)
+    with store.connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'vlm_%'").fetchone()[0] == 0
+
+
+def test_reads_of_an_older_training_state_with_vlm_tables_write_nothing(tmp_path):
+    store = training_store(tmp_path)
+    vlm_judge.configure(store)  # an older state that took VLM rows before D-853 §4, without the later tables
+    question = json.dumps([{'id': HELD, 'text': 'held?', 'options': ['yes', 'no', 'unclear']}])
+    with store.connect() as db:
+        for table in ('vlm_eval_set', 'vlm_audits', 'vlm_unpauses'):
+            db.execute('DROP TABLE ' + table)
+        for number in range(1, 41):
+            db.execute('INSERT INTO vlm_items (view, image_sha256, image_name, question_set, questions, source) '
+                       'VALUES (?,?,?,?,?,?)', ('wrist', f'{number:064x}', f'{number}.jpg', 'v2', question, '{}'))
+            for model, p in (('m1', 0.9), ('m2', 0.85)):
+                put(db, number, model, 'transformers', 'yes' if number % 2 else 'no', p)
+
+    def schema():
+        with store.connect() as db:
+            return [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE name LIKE 'vlm_%' ORDER BY name")]
+
+    before = schema()
+    first = vlm_judge.queue(store)
+    assert first['counts']['wrist']['eval_size'] == 30 and vlm_judge.queue(store) == first
+    assert vlm_judge.item(store, first['items'][0]['id'])['kind'] == 'eval'
+    assert vlm_judge.disputes(store) == []  # every photo outside the blind set has a consensus
+    assert vlm_judge_report.export(store)['count'] == 10  # the 30 computed blind photos stay out
+    assert vlm_judge_report.evaluation(store)['labelled'] == 0
+    assert schema() == before and 'vlm_eval_set' not in before
+
+
+def test_http_unpause_needs_manage(tmp_path):
+    with running(tmp_path) as (base, store, body):
+        vlm_judge.import_rows(store, body)
+        with store.connect() as db:  # five wrong audits pause the question (D-857 §5)
+            db.executemany('INSERT INTO vlm_audits (item, question, week, provisional, answer) VALUES (?,?,?,?,?)',
+                           [(number, HELD, '2026-W43', 'yes', 'no') for number in range(1, 6)])
+        unpause = {'question': HELD}
+        for user in ('reader', 'editor'):
+            _, session = request(base, '/api/learning/vlm/summary', user)
+            assert request(base, '/api/learning/vlm/unpause', user, unpause, session['token'])[0] == 403
+        assert vlm_judge.queue(store)['paused'] == [HELD]
+        _, manager = request(base, '/api/learning/vlm/summary', 'reviewer')
+        code, result = request(base, '/api/learning/vlm/unpause', 'reviewer', unpause, manager['token'])
+        assert code == 200 and result == {'question': HELD, 'actor': 'reviewer'}
+        assert vlm_judge.queue(store)['paused'] == []
 
 
 def test_http_queue_audit_payload_and_eval_link(tmp_path, monkeypatch):
@@ -344,7 +442,7 @@ def test_http_queue_audit_payload_and_eval_link(tmp_path, monkeypatch):
     store = consensus_store(tmp_path, 3)
     with pytest.raises(ValueError, match='http'):
         make_server(store, 0, vlm_eval_url='file:///etc/passwd')
-    server = make_server(store, 0, vlm_eval_url='https://model-pc.example:9445/learning/vlm')
+    server = make_server(store, 0, vlm_eval_url='https://eval.example/learning/vlm')
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     base = f'http://127.0.0.1:{server.server_port}'
@@ -357,7 +455,7 @@ def test_http_queue_audit_payload_and_eval_link(tmp_path, monkeypatch):
         assert 'provisional' not in request(base, '/api/learning/vlm/items/%d' % kinds['eval'])[1]
         assert set(request(base, '/api/learning/vlm/items/%d' % kinds['audit'])[1]['provisional']) == {HELD}
         code, workspace = request(base, '/api/learning')
-        assert workspace['vlm_eval_url'] == 'https://model-pc.example:9445/learning/vlm'
+        assert workspace['vlm_eval_url'] == 'https://eval.example/learning/vlm'
         vlm = next(row for row in workspace['domains'] if row['id'] == 'vlm')
         assert vlm['stages'][1]['evidence'] == '확정 0 · 미확정 3 (임시 정답 3)'
     finally:
@@ -397,7 +495,7 @@ def test_debate_import_replaces_the_same_models_runtimes_and_never_adds_a_model(
 
     def argue(model, value, extra=None):
         rows = tmp_path / 'debate.jsonl'
-        p = {'yes': [0.9, 0.05, 0.05], 'no': [0.05, 0.9, 0.05]}[value]
+        p = {'yes': [0.9, 0.05, 0.05], 'no': [0.05, 0.9, 0.05], 'none_in_top': [0.0, 0.0, 0.0]}[value]
         rows.write_text(json.dumps({'frame': str(photo), 'view': 'wrist', 'long_side': 0, 'debate_round': 1,
                                     'debate': {empty: {'answer': value, 'p': p}, **(extra or {})}}) + '\n')
         return vlm_judge.import_rows(store, dict(body, rows_path=str(rows), model=model))
@@ -416,6 +514,10 @@ def test_debate_import_replaces_the_same_models_runtimes_and_never_adds_a_model(
     debated = set()
     with store.connect() as db:
         assert vlm_judge.provisional(db, debated)[1] == {empty: 'no'} and debated == {(1, empty)}
+    argue('other-model', 'none_in_top')  # a debate with no option replaces that model's earlier answers
+    with store.connect() as db:
+        assert vlm_judge._picks(db)[(1, empty)]['other-model'][1:3] == ('debate', None)
+        assert empty not in vlm_judge.provisional(db).get(1, {})  # its stale transformers 'yes' never counts again
     with pytest.raises(ValueError, match='question set'):
         argue('other-model', 'no', {'front.lane_tape': {'answer': 'both', 'p': [1, 0, 0, 0]}})
     with pytest.raises(ValueError, match='no earlier answer'):
@@ -439,7 +541,7 @@ def test_debate_consensus_moves_a_photo_out_of_the_disputed_queue(tmp_path, monk
     assert [row['id'] for row in after['items'] if row['kind'] == 'disputed'] == disputed[1:]
     assert any(row['id'] == disputed[0] for row in after['items'] if row['kind'] == 'audit') or \
         disputed[0] not in [row['id'] for row in after['items']]
-    coverage = vlm_judge.evaluation(store)['provisional'][0]
+    coverage = vlm_judge_report.evaluation(store)['provisional'][0]
     assert (coverage['provisional'], coverage['debate']) == (1, 1)
 
 
