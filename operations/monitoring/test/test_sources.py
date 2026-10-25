@@ -7,10 +7,11 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from rosy.monitoring.cache import ObservationCache
+from rosy.monitoring.cache import ObservationCache, ObservationRejected
 from rosy.monitoring.config import MonitoringConfig, load_credentials
 from rosy.monitoring.sources import SourceReader
-from test_cache import Clock
+from rosy.monitoring.store import MonitoringStore, StoreUnavailable
+from test_cache import Clock, runtime, peer
 
 
 def setup(source):
@@ -81,6 +82,36 @@ def test_fleet_restart_without_a_cache_retains_last_observations_as_stale():
     body = {'sampled_at': clock.utcnow().isoformat(), 'cache_age_s': 0.0, 'robots': []}
     asyncio.run(reader.poll(cfg.sources[0]))
     assert not any(node.kind == 'robot' for node in cache.snapshot(frozenset({'site-a'})).nodes)
+
+
+@pytest.mark.parametrize('failure', ['storage', 'clock'])
+def test_peer_local_rejection_is_not_misreported_as_a_remote_protocol_error(runtime, tmp_path, monkeypatch, failure):
+    from datetime import timedelta
+    original, clock = runtime
+    store = MonitoringStore(tmp_path / 'monitoring.sqlite3', original.config.collector_id)
+    cache = ObservationCache(original.config, monotonic=clock.monotonic, utcnow=clock.utcnow, store=store)
+    message = peer(clock)
+    if failure == 'clock':
+        message = message.model_copy(update={'produced_at': clock.utcnow() - timedelta(seconds=5)})
+    save = store.save
+    pending_failure = [failure == 'storage']
+    def unavailable(key, *args, **kwargs):
+        if key[0] == 'peer' and pending_failure[0]:
+            pending_failure[0] = False
+            raise StoreUnavailable()
+        return save(key, *args, **kwargs)
+    monkeypatch.setattr(store, 'save', unavailable)
+    def answer(request):
+        return httpx.Response(200, stream=httpx.ByteStream(message.model_dump_json().encode()))
+    credentials = load_credentials(original.config, {'READ': 'r' * 32})
+    reader = SourceReader(cache, credentials, transport=httpx.MockTransport(answer))
+    with pytest.raises(StoreUnavailable if failure == 'storage' else ObservationRejected):
+        asyncio.run(reader.poll(original.config.sources[1]))
+    assert not cache._peers
+    message = peer(clock)
+    asyncio.run(reader.poll(original.config.sources[1]))
+    snapshot = cache.snapshot(frozenset({'site-b'}))
+    assert next(node for node in snapshot.nodes if node.kind == 'host').reported_health == 'OK'
 
 
 def test_core_reads_only_identity_and_owner_diagnostics():
