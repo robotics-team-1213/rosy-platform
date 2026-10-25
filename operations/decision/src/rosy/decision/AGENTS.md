@@ -21,6 +21,7 @@ Actual proposal implementation under `operations/decision/src/rosy/decision`, ca
 | `fleet.server.model_feedback_dispatch` (Fleet holder) | D-657 store/journal/fence adapter consumes these contracts; no Decision implementation or old module shim |
 | `selector_bridge.py` | Resolves ER 2 image selectors against candidates from the same camera frame |
 | `vision_observation_source.py` | Trusted, bounded reads of the source-scoped Vision preview API |
+| `structured_output.py` | D-878 wire per provider family (Ollama `format`, OpenAI-compatible `response_format`) and one reply-envelope check; callers keep schema, error code and semantic validation |
 | `decision_pipeline.py` | D-523 parsers: identity fact or allowlisted choice. No stuck answer and no network |
 | `deliberation/` | D-640 bounded advisory supervisor and fixed CLI translator; Fleet owns durable records and activation |
 
