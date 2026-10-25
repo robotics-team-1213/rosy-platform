@@ -50,7 +50,8 @@ class StorageWeb:
             result = self.jobs.pool.snapshot(actor)
             result.update(status='ready', sources=[{key: root[key] for key in ('id', 'label', 'role')}
                 for root in self.jobs.files.roots.values()],
-                capabilities={key: key in actor['capabilities'] for key in ('publish', 'manage')},
+                capabilities=dict(publish='publish' in actor['capabilities'],
+                                  manage=all(key in actor['capabilities'] for key in ('publish', 'manage'))),
                 cache_operation=operations.get('cache'), cache_error=errors.get('cache'),
                 cache_result=results.get('cache'))
             handler.send(result)
@@ -70,7 +71,7 @@ class StorageWeb:
                 with self.lock:
                     if completed.cancelled() or completed.exception() is not None:
                         self.errors[key] = 'storage_operation_failed'
-                    else:
+                    elif key == 'cache':
                         self.results[key] = completed.result()
                     self.pending.pop(key, None)
             future.add_done_callback(done)
@@ -90,16 +91,28 @@ class StorageWeb:
                 self._submit('cache', 'cache_reclaim', lambda: self.jobs.reclaim_cache(actor))
                 handler.send(dict(accepted=True, operation='cache_reclaim'), 202)
                 return True
-            match = re.fullmatch(PREFIX + r'jobs/([0-9a-f]{32})/(run|restore|reclaim|pin)', path)
+            match = re.fullmatch(PREFIX + r'jobs/([0-9a-f]{32})/(run|restore|reclaim|pin|cancel|reconcile)', path)
             if not match: raise ValueError('invalid storage action')
             job_id, action = match.groups()
-            self.jobs.get(actor, job_id)
+            job = self.jobs.get(actor, job_id)
             if action in ('reclaim', 'pin'): self.accounts.require(actor, 'manage')
             if action == 'pin':
                 if set(body) != {'pinned'}: raise ValueError('pin accepts only a boolean')
                 handler.send(self.jobs.pin(actor, job_id, body['pinned']))
                 return True
-            if action == 'reclaim':
+            self.jobs.pool.credential(actor, job_id, scope='read-repos' if action in ('restore', 'reclaim', 'reconcile') else 'write-repos')
+            if action == 'cancel':
+                if body: raise ValueError('cancel accepts an empty object')
+                with self.lock:
+                    if job_id in self.pending: raise ValueError('storage operation is still in progress')
+                    handler.send(self.jobs.cancel(actor, job_id))
+                return True
+            if action == 'reconcile':
+                if (set(body) != {'revision'} or not isinstance(body['revision'], str)
+                        or not re.fullmatch(r'[0-9a-f]{40}', body['revision']) or job['status'] != 'hold'):
+                    raise ValueError('held upload and full existing commit required')
+                call = lambda: self.jobs.reconcile(actor, job_id, body['revision'])
+            elif action == 'reclaim':
                 if set(body) != {'confirm'} or body['confirm'] != job_id:
                     raise ValueError('confirm the exact storage job ID')
                 call = lambda: self.jobs.reclaim(actor, job_id, body['confirm'])

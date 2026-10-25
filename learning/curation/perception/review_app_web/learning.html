@@ -80,6 +80,12 @@
 <ui-button id="storage-confirm-submit" kind="irreversible" type="submit" disabled>확인한 로컬 사본 정리</ui-button>
 <ui-button id="storage-confirm-cancel" kind="quiet">취소</ui-button>
 </form>
+<form id="storage-reconciliation" class="ui-form learning-form" hidden>
+<h4>기존 원격 버전 확인</h4><p id="storage-reconcile-description"></p>
+<p>HF 저장소에서 이 작업의 커밋을 찾고 전체 버전 ID를 입력하세요. 새 업로드 없이 기존 버전의 모든 파일을 검증합니다.</p>
+<label class="ui-field-label">기존 커밋 ID (40자리) <input id="storage-existing-revision" class="ui-field" pattern="[0-9a-f]{40}" minlength="40" maxlength="40" autocomplete="off" required></label>
+<ui-button kind="primary" type="submit">기존 버전 검증</ui-button><ui-button id="storage-reconcile-cancel" kind="quiet">닫기</ui-button>
+</form>
 </div>
 </section>
 <details id="connection-panel" class="learning-section"><summary>기존 결과 폴더 연결</summary>

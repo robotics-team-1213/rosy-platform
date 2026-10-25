@@ -5,10 +5,11 @@ let send, busy=false, epoch=0;
 function line(parent,value){const p=document.createElement('p');p.textContent=value;parent.append(p);}
 function fail(error){$('storage-error').textContent=error.message||'저장 현황을 확인할 수 없습니다.';$('storage-error').hidden=false;}
 export function clearStorage(){
-  clearTimeout(poolTimer);lastJobs='';confirmJob=null;
+  clearTimeout(poolTimer);lastJobs='';confirmJob=null;reconcileJob=null;
   $('storage-pool').hidden=true;$('storage-targets').replaceChildren();$('storage-jobs').replaceChildren();
   $('storage-source').replaceChildren();$('storage-artifact').value='';
   $('storage-confirmation').hidden=true;$('storage-pool-error').hidden=true;
+  $('storage-reconciliation').hidden=true;$('storage-existing-revision').value='';
   epoch+=1;
   $('storage-status').textContent='저장 현황 미확인';
   $('storage-roots').replaceChildren();$('storage-destination').replaceChildren();
@@ -60,9 +61,9 @@ $('storage-preflight').onsubmit=async event=>{
   finally{busy=false;button.disabled=false;}
 };
 
-let poolTimer, poolBusy=false, lastJobs='', confirmJob=null, capabilities={};
+let poolTimer, poolBusy=false, lastJobs='', confirmJob=null, reconcileJob=null, capabilities={};
 const jobStates={queued:'전송 대기',uploading:'업로드 중',uploaded:'원격 커밋 기록됨',verifying:'원격 검증 중',
-  verified:'원격 검증 완료',failed:'전송·검증 실패',hold:'원격 결과 확인 필요',reclaiming:'로컬 정리 확인 필요'};
+  verified:'원격 검증 완료',failed:'전송·검증 실패',hold:'원격 결과 확인 필요',reclaiming:'로컬 정리 확인 필요',cancelled:'취소됨'};
 const operations={run:'전송·검증 중',restore:'복원 중',reclaim:'로컬 정리 중',cache_reclaim:'캐시 공간 확보 중'};
 function poolError(error){
   $('storage-pool-error').textContent=error.message||'보관 작업을 확인하지 못했습니다. 다시 확인하세요.';
@@ -88,14 +89,22 @@ function showJobs(rows){
     else if(job.error||job.operation_error)line(article,'작업을 마치지 못했습니다. 원격 권한·공간과 현재 자료 상태를 확인한 뒤 같은 작업으로 재시도하세요.');
     const actions=document.createElement('div');actions.className='storage-actions';article.append(actions);
     const pending=Boolean(job.operation);
-    if(capabilities.publish&&!job.bytes_verified&&job.status!=='hold')
+    if(capabilities.publish&&!job.bytes_verified&&['queued','failed','uploading','uploaded','verifying'].includes(job.status))
       actionButton(actions,'전송·검증',()=>operate(job.id,'run'),pending);
+    if(capabilities.publish&&['queued','failed'].includes(job.status)&&!job.revision)
+      actionButton(actions,'대기 취소',()=>operate(job.id,'cancel'),pending);
+    if(capabilities.publish&&job.status==='hold')actionButton(actions,'기존 커밋 확인',()=>{
+      reconcileJob=job;$('storage-reconciliation').hidden=false;$('storage-confirmation').hidden=true;confirmJob=null;
+      $('storage-reconcile-description').textContent=`${job.repo_id} · 작업 ID ${job.id}`;
+      $('storage-existing-revision').value='';$('storage-existing-revision').focus();
+    },pending);
     if(capabilities.publish&&job.bytes_verified&&job.local_present===false&&job.status==='verified')
       actionButton(actions,'필요 자료 복원',()=>operate(job.id,'restore'),pending);
     if(capabilities.manage&&job.bytes_verified){
       actionButton(actions,job.pinned?'고정 보관 해제':'고정 보관',()=>operate(job.id,'pin',{pinned:!job.pinned}),pending);
       if(job.reclaimable||job.status==='reclaiming')actionButton(actions,'로컬 정리',()=>{
         confirmJob=job;$('storage-confirmation').hidden=false;
+        $('storage-reconciliation').hidden=true;reconcileJob=null;
         $('storage-confirm-description').textContent=`정리할 자료: ${job.provenance?.run_id||job.id} · ${bytes(job.upload_bytes)}. 아래에 작업 ID ${job.id}를 입력하세요.`;
         $('storage-confirm-id').value='';$('storage-confirm-submit').disabled=true;$('storage-confirm-id').focus();
       },pending);
@@ -150,6 +159,7 @@ async function operate(id,action,body={}){
     if(current!==epoch)return;
     $('storage-pool-message').textContent='작업을 접수했습니다. 아래에서 결과를 확인하세요.';
     if(action==='reclaim'){$('storage-confirmation').hidden=true;confirmJob=null;}
+    if(action==='reconcile'){$('storage-reconciliation').hidden=true;reconcileJob=null;}
     await refreshPool(current);
   }catch(error){if(current===epoch)poolError(error);}
   finally{poolBusy=false;}
@@ -170,4 +180,8 @@ $('storage-confirm-id').oninput=()=>{$('storage-confirm-submit').disabled=!confi
 $('storage-confirm-cancel').addEventListener('click',()=>{$('storage-confirmation').hidden=true;confirmJob=null;});
 $('storage-confirmation').onsubmit=event=>{
   event.preventDefault();if(confirmJob&&$('storage-confirm-id').value===confirmJob.id)operate(confirmJob.id,'reclaim',{confirm:confirmJob.id});
+};
+$('storage-reconcile-cancel').addEventListener('click',()=>{$('storage-reconciliation').hidden=true;reconcileJob=null;});
+$('storage-reconciliation').onsubmit=event=>{
+  event.preventDefault();if(reconcileJob)operate(reconcileJob.id,'reconcile',{revision:$('storage-existing-revision').value});
 };

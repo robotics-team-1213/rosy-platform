@@ -21,6 +21,8 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 | `GET /api/learning/storage/jobs` | 요청자가 만든 최근 200개 작업. id, profile, status, 대상/저장소, 고정 revision, bytes_verified, provenance, upload_bytes, local_present, reclaimable, pinned와 오류 코드. 원격 보관 검증은 학습·실물 수용이 아니다. |
 | `POST /api/learning/storage/jobs` | `source_id`, `artifact_id`, `profile`. source_id는 등록 root ID, artifact_id는 그 root 안 완료된 자료의 상대 폴더이며 절대·상위·숨김·링크 경로는 거부한다. profile은 isaac/dataset/model이다. 작업을 등록하며 전송은 아래 run으로 시작한다. |
 | `POST /api/learning/storage/jobs/<id>/run` | 빈 객체. 같은 연결·대상·manifest의 전송 또는 고정 revision 검증을 실행한다. 이미 commit된 작업은 다시 쓰지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/cancel` | 빈 객체. 아직 업로드를 시작하지 않은 예약만 해제하고 cancelled로 기록한다(200). 원본은 보존하며 시작된/불확실한 예약은 해제하지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/reconcile` | `revision`: 기존 원격 commit의 소문자 40자리 SHA. hold 작업의 전체 파일을 읽어 검증한 뒤에만 해당 commit과 예약 사용량을 확정한다(202). 새 commit은 만들지 않는다. |
 | `POST /api/learning/storage/jobs/<id>/restore` | 빈 객체. 해당 고정 revision만 검증하며 관리 cache로 복원한다. |
 | `POST /api/learning/storage/jobs/<id>/reclaim` | `confirm`이 작업 id와 같아야 한다. 검증·권한·정확한 로컬 파일 집합·identity·사용 lease·pin을 다시 확인한다. 원격 자료를 삭제하지 않는다. |
 | `POST /api/learning/storage/jobs/<id>/pin` | `pinned`: boolean. 로컬 회수로부터 보호하거나 해제한다. |
