@@ -8,8 +8,9 @@ gates:
     evidence: 독립 수집·집계·읽기 API와 POSIX CLI의 원격98시험 및247구조검사 통과. UI와 native 배포는 별도 gate다.
     cmd: python tools/remote/remote_pytest.py --log-dir "$env:TEMP/rosy-monitoring-launcher-accepted-green" -- operations/monitoring/test -q
   LOCAL:
-    state: HOLD
-    blocker: 개별·중앙·중앙 단독 프로세스와 프로세스 간 lease는 검증했으며 실제 backend 상태 화면의 브라우저 수용이 남아 있다.
+    state: GO
+    evidence: 실제 backend Chromium16+G1 총151 PASS, scope 거부 상태6 PASS, G2 40셀 캡처와 G3 대표 검토 차단 없음. docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md 참조.
+    cmd: python tools/remote/remote_pytest.py --log-dir "$env:TEMP/rosy-monitoring-ui-canonical-green" -- ROSY_RUN_BROWSER_TESTS=1 test/test_monitoring_browser.py shared/web/test/test_surface_registry.py shared/web/test/test_shared_controls.py shared/web/test/test_surface_typography_focus_contracts.py shared/web/test/test_ui_token_contracts.py shared/web/test/test_palette_gates.py -q
   ROS-SIM:
     state: N/A
   ARTIFACT:
@@ -31,7 +32,7 @@ adrs: [D-876]
 기존 원천의 읽기 전용 수집, scoped HTTP API와 독립 CLI가 있다. 계약은 [Monitoring API](../../docs/reference/rosy-monitoring-api.md)다.
 `6b0f7568f5` 원격98시험(설치 wheel·실제 독립 프로세스 포함)과 구조/harness/affected247시험이 통과했으며 두 비교는 NEW/KNOWN/FLAKY0이다.
 개별·peer 통합·peer 없는 중앙 직접 수집, 중앙 종료 후 현장 수집 지속, 별도 프로세스 writer 거부를 검증했다.
-독립 재검토에서 기존 지적 해결·추가 차단 없음이 확인됐다. 상태 화면·native 배포와 실제 PC 수용은 남아 있다.
+독립 재검토에서 기존 지적 해결·추가 차단 없음이 확인됐다. 상태 화면의 LOCAL 수용은 완료했으며 native 배포와 실제 PC 수용은 별도다.
 
 ROS-free HTTP 감시 프로필이므로 ROS-SIM은 N/A다. 로봇·호스트의 제어·안전·복구 권한은 기존 소유자에게 남긴다.
 
