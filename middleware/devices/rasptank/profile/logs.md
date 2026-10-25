@@ -18,3 +18,8 @@
 - 변경: 설정/기능 광고는 그대로 유지한다. source selection·load_config·TaskKind 거절과 신규 기종 설정 결속을 승인 시험 호스트에서 실행했다.
 - 증거: `p1-green` 관련36, `restructure-green` 결합213에서 패키지 시험 통과, NEW0. 결과는 작업 공간 `rasptank-platform` 검증 기록에 보관한다. 실제 native ament 설치·기체 부팅은 수행하지 않았다.
 - gate 변화: SOURCE/LOCAL에 원격 근거 추가. ROS-SIM/ARTIFACT/DEVICE/FIELD는 HOLD 유지.
+
+## 2026-10-25 · 4fdf8c9fee · 잘못 포장된 기종 파일 거절
+
+- 변경: release-owned `deployment-binding.yaml`을 추가해 installed package 안의 모델 ID와 정적 설정 digest를 결속했다. capability 광고·속도·장치 I/O는 바꾸지 않았다.
+- 증거: complete Pinky copy·capability-only copy·binding version/model/shape/digest·누락 반례 RED 후 관련153 PASS/NEW0. SOURCE/LOCAL만 갱신하며 실제 native 설치·기체 수용과 구분한다.

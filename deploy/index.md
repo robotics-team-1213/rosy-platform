@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · 4fdf8c9fee · 동적 서명 소비자 호환과 추가 회귀
 - 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
 - 2026-10-25 · uncommitted · 호스트 에이전트 복구 문구 표기 정렬
 - 2026-10-25 · uncommitted · 여러 Pinky 카드의 사전 용량 확인과 결과 보존
 - 2026-10-25 · uncommitted · D-862 opt-in 관제 설정 mount
-- 2026-10-24 · c60d6046bb · 장치 Wi-Fi 복구와 서명 boot 계층 연속성

@@ -3420,3 +3420,9 @@
 - 교훈: 해당 없음 — 기존 installed-layout 회귀를 적용했고 동적 import 보완은 코드와 기존 readback 반례로 설명된다.
 
 - 추가 검증: `b6a7ad60fe`의 readback·CD·native/systemd·first-boot·SD writer 관련 원격 회귀는 PASS323/SKIP215/NEW0. skip을 통과로 계산하지 않으며 PowerShell/장치 의존 범위는 미확인이다. 실제 장치 배포는 수행하지 않았다.
+
+## 2026-10-25 · 4fdf8c9fee · 동적 서명 소비자 호환과 추가 회귀
+
+- 변경: legacy signing facade의 `__getattr__`가 원래 spec module 객체를 유지하는 소비자에도 공통 API를 제공한다. 기존 alias identity와 설치된 독립 signing 구현은 유지한다.
+- 증거: 정상 착지 FULL 중 perception learned-signature9 FAIL을 확인해 착지를 취소했다. retained module 객체 반례 RED 뒤 binding/signing 관련153 PASS/NEW0, 기존 learned signature 사례 포함. 최종 FULL 재착지는 별도다.
+- gate 변화: source 호환 보완. 실제 배포·서명 key 사용·SDK/firmware/OS 전체 갱신 수용 없음. CE 해당 없음 — 기존 소비자와 반례에 원인/해결을 보존했다.

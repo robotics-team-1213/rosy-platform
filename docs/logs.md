@@ -11326,3 +11326,10 @@ osy-d395-s1d\`.
 - 증거: 독립 설계2회 및 코드 검토. 기대 RED 뒤 결합213 PASS/NEW0, offline readback 회귀 RED 재현·보완 후 관련323 PASS/215 SKIP/NEW0. skip·ARTIFACT/DEVICE/FIELD를 소스 통과와 구분한다. 최종 committed tree의 하네스·착지 검증은 별도다.
 - gate 변화: RaspTank SOURCE/LOCAL만 원격 근거로 갱신. 실제 I/O·native 이미지·SD 쓰기·SDK/비행·현장 수용 상태는 유지한다.
 - 교훈: 해당 없음 — 기존 installed-layout 교훈을 회귀에 적용했고 새 조건은 코드/시험/배포 안내에 보존했다.
+
+## 2026-10-25 · uncommitted · 설치 내용 결속 보완과 전 계층 자동 업데이트 목표
+
+- 변경: package binding과 legacy dynamic signing 소비자 호환을 보완하고 [전 계층 자동 갱신 완료 기준](plans/2026-10-25-rosy-layered-automatic-updates-design.md)을 기록했다. 사용자 요구는 배포된 ROSY 자체의 앱·OS·커널·부팅·전체 이미지 업데이트 연속성과 복구까지 포함한다.
+- 증거: FULL 중 발견한 learned-signature 회귀9건과 잘못 포장된 기종 내용/metadata 반례를 원격 RED로 확인한 뒤 관련153 PASS/NEW0. independent source 검토 승인. 기존 D-387/D-412 소스와 실제 완료 범위를 구분했다.
+- gate 변화: 소스 보완이며 OS 전체 자동 업데이트·ARM64 이미지·현재 연결 기체의 timer 활성/배포/복구는 미수용이다. 전체 source 착지는 재검증한다.
+- 교훈: 해당 없음 — 잘못된 package 내용과 동적 import는 코드/시험/안내에 보존했고 추가 OS 목표는 미완료로 기록한다.

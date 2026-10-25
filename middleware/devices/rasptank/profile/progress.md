@@ -2,15 +2,15 @@
 module: rasptank_metal
 logical_modules: []
 owner: 로봇 통합
-last_verified: {commit: "eb616252ea", date: 2026-10-25}
+last_verified: {commit: "4fdf8c9fee", date: 2026-10-25}
 gates:
   SOURCE:
     state: GO
-    evidence: "eb616252ea 승인 원격 호스트의 설정·capability·TaskKind·기종 결속 결합 회귀 통과. 설정 전용이며 드라이버/실행 지원 아님"
+    evidence: "4fdf8c9fee 원격153 PASS/NEW0. package model ID·설정 digest와 기종 혼입 거절 포함. 설정 전용이며 드라이버/실행 지원 아님"
     cmd: "python tools/remote/remote_pytest.py -- middleware/devices/rasptank/profile/test middleware/core/gateway/test/test_core_node_robot_paths.py -q"
   LOCAL:
     state: GO
-    evidence: "승인 원격 source 계약 실행, 결합213 PASS/NEW0. native ament 설치 검증과 구분"
+    evidence: "승인 원격 source 계약 실행, 이전 결합213 및 binding/signing153 PASS/NEW0. native ament 설치 검증과 구분"
     cmd: "python tools/remote/remote_pytest.py -- middleware/devices/rasptank/profile/test contracts/foundation/test/test_robot_selection.py -q"
   ROS-SIM:
     state: HOLD

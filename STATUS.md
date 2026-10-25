@@ -43,7 +43,7 @@
 | [interfaces](contracts/ros_idl/progress.md) | 장치 | 8058c3676 (2026-10-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](middleware/devices/pinky/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](middleware/devices/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [rasptank_metal](middleware/devices/rasptank/profile/progress.md) | 로봇 통합 | eb616252ea (2026-10-25) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [rasptank_metal](middleware/devices/rasptank/profile/progress.md) | 로봇 통합 | 4fdf8c9fee (2026-10-25) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [description](middleware/devices/pinky/description/progress.md) | 로봇 통합 | c0bb0393c (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |

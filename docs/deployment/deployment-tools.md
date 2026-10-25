@@ -63,6 +63,17 @@ JSON의 `executed`는 executor 호출 여부이며 설치나 물리 동작 성�
 설치 package의 정적 기본 설정과 타입을 포함해 일치해야 하며, 검증한 snapshot을 그대로 소비한다.
 다른 기종 파일·미설치 모델·잘못된 YAML은 서비스 조립 전에 거절한다.
 
+각 모델 package의 `config/deployment-binding.yaml`은 내부 배포 계약이다.
+정수 schema_version 1, package model ID, `profile.yaml`/`capabilities.yaml`의 승인된 digest를 포함한다.
+digest는 파싱한 YAML 값을 `json.dumps(data, sort_keys=True, separators=(",", ":"), allow_nan=False)`로
+정규화한 UTF-8 바이트의 SHA256이다. CORE가 실제 소비할 canonical snapshot과 검증하므로
+설치된 RaspTank 패키지 안에 Pinky 설정 전체 또는 capability만 잘못 복사한 경우도 거절한다.
+이는 승인 파일의 일관성 검사이며 물리 센서·보정·기능 수용 증거가 아니다.
+
+binding은 source 검토·서명 릴리스에 포함하는 release-owned 정보다. 시작/설치 때 현 파일로
+자동 재생성해서 오류를 덮지 않는다. CORE와 모델 profile package를 같은 호환 릴리스로 갱신해야 하며,
+binding이 없는 예전 package는 제품 시작에서 거절한다. `install(DIRECTORY config ...)`가 이 파일도 설치한다.
+
 개발 모드의 절대경로 overlay와 기존 Compose core/motor/hardware variants는 유지한다.
 `Pinky Pro Pi5 Lite` 개발 profile이나 제한된 개발 capability를 native 제품 overlay로 복사하는 것은
 허용하지 않는다. 기존 native 운영자가 정적 profile/capability를 수동 수정했다면 다음을 검토한다.
@@ -85,3 +96,6 @@ native 기본 생산자는 `rosy-core.service`와 first-boot의 CORE HOME overla
 
 기종 접수와 공식 SDK 근거는 [다기종 배포 준비](multi-device-onboarding.md),
 RaspTank 부품·SD 입력은 [Pi 4 준비서](rasptank-pi4-preparation.md)를 따른다.
+
+새 이미지의 전 계층 자동 갱신 요구는 [자동 OS 업데이트 완료 기준](../plans/2026-10-25-rosy-layered-automatic-updates-design.md)을 따른다.
+현재 target CLI와 payload updater 소스 존재만으로 OS 전체 자동 업데이트가 완료되지는 않는다.
