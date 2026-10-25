@@ -63,11 +63,11 @@ class PolicyAdmissionWorker:
         resources = [tuple(item) for item in
                      (proposal.get("resolution") or {}).get("resources") or []]
         robots = sorted({rid for kind, rid in resources if kind == ROBOT_KIND})
-        reason = self._core.hold_reason(
-            robot_id=robots[0] if len(robots) == 1 else "",
-            approval_rule=rule)
-        if reason is None and len(robots) != 1:
-            reason = "ROBOT_UNBOUND"  # 로봇이 없거나 여럿이면 사람 승인으로
+        if len(robots) != 1:  # 로봇이 없거나 여럿이면 사람 승인으로
+            return self._admitted(mission_id, -1, "ROBOT_UNBOUND",
+                                  at, scope_revision)
+        reason = self._core.hold_reason(robot_id=robots[0],
+                                        approval_rule=rule)
         if reason is not None:
             return self._admitted(mission_id, -1, reason, at, scope_revision)
         generation = proposal.get("source_dispatch_generation")

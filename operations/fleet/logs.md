@@ -4760,3 +4760,11 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · fix(fleet): worker 상한 연결·로봇 묶음 우선 검사 순서 수정
+
+- 변경: worker._consider 가 (1) robots!=1 검사를 hold_reason 앞으로 옮겨 ROBOT_UNBOUND 가 정확히 기록되게, (2) 시험 _worker 가 core 에 audit.issued_count 를 연결해 SQLite 상한이 core 에 반영되게. 착지 회차 NEW 2건의 원인.
+- 증거: 단독 재실행 로그로 IndexError(로봇 없는 제안)·assert 3!=2(상한 미반영) 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
