@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import pytest
 
-from rosy.decision.deliberation.judgment import judgment, judgment_schema
+from rosy.decision.deliberation.judgment import judgment, judgment_schema, schema_missing_allowlist
 from test_judgment_profiles import adapter, bind_profile, problem, profile
 
 
@@ -105,6 +105,21 @@ def test_candidate_is_non_executable_and_success_is_only_declared():
     assert judgment(p, bound(p), raw).action_admissible is False
     raw.update(verdict='abstain', next_step=None, success_check=None)
     assert judgment(p, bound(p), raw).choice is None
+
+
+def test_empty_missing_allowlist_has_no_empty_enum_and_round_trips():
+    """2026-10-25 Model PC: Ollama 0.35.1 refused `enum: []` with HTTP 400, so every default local job failed."""
+    p, b = problem(), bound(problem())
+    def enums(node):
+        if isinstance(node, dict):
+            return ([node['enum']] if 'enum' in node else []) + [e for v in node.values() for e in enums(v)]
+        return [e for v in node for e in enums(v)] if isinstance(node, list) else []
+    schema = judgment_schema(p, b)
+    assert all(enums(schema)) and schema['properties']['missing_evidence'] == {'type': 'array', 'maxItems': 0}
+    assert schema_missing_allowlist(schema) == []
+    assert schema_missing_allowlist(judgment_schema(p, b, missing_allowlist=('camera',))) == ['camera']
+    with pytest.raises(ValueError):
+        judgment(p, b, payload(p, missing_evidence=['camera']))
 
 
 def test_schema_is_fresh_closed_and_bound_to_problem_and_revision():

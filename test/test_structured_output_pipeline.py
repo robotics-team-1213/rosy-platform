@@ -151,3 +151,53 @@ def test_qwen_review_completion_schema_against_plain_json(monkeypatch):
         pass
     monkeypatch.undo()
     run('qwen_completion_schema', seeds, proposed, lambda name, got: sum(got.values()) > 0)
+
+
+def big_frame(seed):
+    """320x240 like the review frames: wall rows 0-71, white tape at x 40-51 and 268-279, floor between."""
+    rng = np.random.default_rng(seed)
+    photo = np.full((240, 320, 3), 120, np.uint8)
+    photo[:72] = (40, 50, 60)
+    photo[72:, 40:52] = photo[72:, 268:280] = 235
+    photo = np.clip(photo.astype(int) + rng.integers(-6, 7, photo.shape), 0, 255).astype(np.uint8)
+    mask = np.full((240, 320), 255, np.uint8)
+    mask[:24] = 0
+    mask[180:, 100:160] = 5
+    return photo, mask
+
+
+def region_score(answer, h, w, scale):
+    """Points in the right region under each reading of the numbers: view pixels or 0-1000 relative."""
+    def right(name, x, y):
+        return y < 72 if name == 'background' else (y >= 72 and 52 <= x < 268)
+    score = {}
+    for reading, to_px in (('pixel', lambda v: (v[0] // scale, v[1] // scale)),
+                           ('relative', lambda v: (v[0] * w // 1000, v[1] * h // 1000))):
+        hits = total = 0
+        for name, values in answer.items():
+            for v in values:
+                total += 1
+                x, y = to_px(v)
+                hits += 0 <= x < w and 0 <= y < h and right(name, x, y)
+        score[reading] = f'{hits}/{total}'
+    return score
+
+
+def test_qwen_coordinate_convention_probe(monkeypatch):
+    sys.path.insert(0, str(ROOT / 'learning/curation/perception'))
+    import qwen_review_completion as completion
+    relative = completion.PROMPT.replace('arrays of [x,y] in the {w}x{h} view',
+                                         'arrays of [x,y] as 0-1000 relative coordinates of the view')
+    assert relative != completion.PROMPT
+    post, raw = completion.qwen_points._post, []
+    monkeypatch.setattr(completion.qwen_points, '_post', lambda *a, **k: raw.append(post(*a, **k)) or raw[-1])
+    monkeypatch.setattr(completion, 'points', lambda answer, mask: answer)
+    rows = {}
+    for label, text in (('ask_pixel', completion.PROMPT), ('ask_relative', relative)):
+        monkeypatch.setattr(completion, 'PROMPT', text)
+        for seed in range(4):
+            photo, mask = big_frame(seed)
+            answer = completion.ask(photo, mask, 5, 'http://127.0.0.1:11434')
+            rows[f'{label}-{seed}'] = {'answer': answer, 'score': region_score(answer, 240, 320, 3)}
+    RESULTS['qwen_coordinate_probe'] = {'cases': len(rows), 'structural_failures': 0, 'semantic_matches': 0,
+                                        'rows': [{'case': k, **v} for k, v in rows.items()]}

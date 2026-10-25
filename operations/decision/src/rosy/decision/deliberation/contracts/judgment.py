@@ -115,10 +115,16 @@ def judgment(problem, bound, payload, *, missing_allowlist=()):
     return Judgment(canonical(payload), winners[0] if active and len(winners) == 1 else None)
 
 
+def schema_missing_allowlist(schema):
+    """The missing-evidence allowlist a received judgment_schema() was built with; rebuild and compare after."""
+    return schema['properties']['missing_evidence'].get('items', {}).get('enum', [])
+
+
 def judgment_schema(problem, bound, *, missing_allowlist=()):
     bound.validate(problem)
-    array = lambda values: {'type': 'array', 'items': {'type': 'string', 'enum': list(values)},
-                             'uniqueItems': True, 'maxItems': 16}
+    # An empty allowlist is an always-empty array: Ollama refuses `enum: []` with HTTP 400 (D-878).
+    array = lambda values: ({'type': 'array', 'items': {'type': 'string', 'enum': list(values)},
+                             'uniqueItems': True, 'maxItems': 16} if values else {'type': 'array', 'maxItems': 0})
     properties = {key: {'const': getattr(problem, key)} for key in ('subject_id', 'case_id', 'generation')}
     properties.update(schema_version={'const': 2}, profile_revision={'const': bound.profile.profile_revision},
                       input_hash={'const': problem.digest},

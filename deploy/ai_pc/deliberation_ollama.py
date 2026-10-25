@@ -10,7 +10,7 @@ import urllib.request
 
 from deploy.site.deliberation_sandbox import bounded_process
 from rosy.decision.deliberation import Problem, canonical, identifier
-from rosy.decision.deliberation.judgment import judgment, judgment_schema
+from rosy.decision.deliberation.judgment import judgment, judgment_schema, schema_missing_allowlist
 from rosy.decision.deliberation.profiles import AdapterCapabilities, BoundProfile, ModelProfile
 from rosy.decision.structured_output import ollama_chat, ollama_reply
 
@@ -81,7 +81,7 @@ def execute(raw, remaining):
         raise ValueError('INVALID_LOCAL_JOB')
     profile = (status_model_profile if problem.domain == 'fleet_status' else model_profile)(body['profile_revision'])
     bound = BoundProfile(profile, problem.digest)
-    missing = body['schema']['properties']['missing_evidence']['items']['enum']
+    missing = schema_missing_allowlist(body['schema'])
     if len(missing) > 16 or len(set(missing)) != len(missing):
         raise ValueError('INVALID_LOCAL_JOB')
     schema = judgment_schema(problem, bound, missing_allowlist=missing)
