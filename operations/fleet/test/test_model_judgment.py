@@ -118,8 +118,10 @@ def test_empty_missing_allowlist_has_no_empty_enum_and_round_trips():
     assert all(enums(schema)) and schema['properties']['missing_evidence'] == {'type': 'array', 'maxItems': 0}
     assert schema_missing_allowlist(schema) == []
     assert schema_missing_allowlist(judgment_schema(p, b, missing_allowlist=('camera',))) == ['camera']
+    raw = payload(p)
+    raw['missing_evidence'] = ['camera']
     with pytest.raises(ValueError):
-        judgment(p, b, payload(p, missing_evidence=['camera']))
+        judgment(p, b, raw)
 
 
 @pytest.mark.parametrize('domain', ['line_follow', 'door', 'arm_target'])
@@ -127,16 +129,19 @@ def test_schema_variants_pair_each_verdict_with_the_steps_judgment_requires(doma
     """2026-10-25 Model PC: 2 of 3 real judgments were reobserve with next_step null, refused after decoding."""
     from rosy.decision.model_tool_catalog import MODEL_TOOL_CATALOG, ToolEffectClass
     p = problem(domain)
-    variants = {tuple(v['properties']['verdict']['enum']): v['properties'] for v in judgment_schema(p, bound(p))['anyOf']}
+    schema = judgment_schema(p, bound(p))
+    tool = lambda ref: schema['$defs'][ref['$ref'].removeprefix('#/$defs/')]['properties']['tool_name']['const']
+    variants = {tuple(v['properties']['verdict']['enum']): v['properties'] for v in schema['anyOf']}
     assert set(variants) == {('abstain',), ('reobserve',), ('candidate',)}  # INTERVENE: do_not_intervene conflicts
     assert variants[('abstain',)]['next_step'] == variants[('abstain',)]['success_check'] == {'type': 'null'}
     for names, props in variants.items():
         if names != ('abstain',):
             assert {'type': 'null'} not in props['next_step']['anyOf'] + props['success_check']['anyOf']
-    reads = [e['properties']['tool_name']['const'] for e in variants[('reobserve',)]['next_step']['anyOf']]
+    reads = [tool(ref) for ref in variants[('reobserve',)]['next_step']['anyOf']]
     assert reads and all(MODEL_TOOL_CATALOG[n].effect_class == ToolEffectClass.READ_ONLY for n in reads)
-    for entry in judgment_schema(p, bound(p))['properties']['next_step']['anyOf'][1:]:
-        assert not MODEL_TOOL_CATALOG[entry['properties']['tool_name']['const']].device_action_api
+    assert not any(MODEL_TOOL_CATALOG[tool(ref)].device_action_api for ref in schema['properties']['next_step']['anyOf'][1:])
+    for ref in [r for v in schema['anyOf'] for r in v['properties'].values() if '$ref' in r]:
+        assert ref['$ref'].removeprefix('#/properties/') in schema['properties']  # no array-index pointers
 
 
 def test_schema_is_fresh_closed_and_bound_to_problem_and_revision():

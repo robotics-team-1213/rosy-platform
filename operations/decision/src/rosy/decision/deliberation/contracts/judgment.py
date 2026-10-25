@@ -136,9 +136,8 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                                               'required': ['choice', 'probability'], 'properties': {
                                                   'choice': {'enum': list(problem.choices)},
                                                   'probability': {'type': 'number', 'minimum': 0, 'maximum': 1}}}})
-    read_steps = []
+    defs, refs_of = {}, {'next_step': [], 'success_check': [], 'read_step': []}
     for field in ('next_step', 'success_check'):
-        entries = []
         scope = ('channel' if problem.domain == 'fleet_status' else
                  'incident' if problem.domain in {'line_follow', 'door'} else 'mission')
         for definition in MODEL_TOOL_CATALOG.values():
@@ -148,34 +147,40 @@ def judgment_schema(problem, bound, *, missing_allowlist=()):
                     or (field == 'success_check' or problem.domain == 'fleet_status')
                     and definition.effect_class != ToolEffectClass.READ_ONLY):
                 continue
-            entries.append({'type': 'object', 'additionalProperties': False,
-                            'required': ['tool_name', 'arguments', 'evidence_ids'], 'properties': {
-                                'tool_name': {'const': definition.name}, 'arguments': definition.parameters,
-                                'evidence_ids': {**array(problem.evidence_ids), 'minItems': 1}}})
+            entry = {'type': 'object', 'additionalProperties': False,
+                     'required': ['tool_name', 'arguments', 'evidence_ids'], 'properties': {
+                         'tool_name': {'const': definition.name}, 'arguments': definition.parameters,
+                         'evidence_ids': {**array(problem.evidence_ids), 'minItems': 1}}}
             if field == 'success_check':
                 states = {'fleet_status': ['unknown', 'offline', 'online', 'mixed', 'empty'],
                           'line_follow': ['unknown', 'blocked', 'normal'], 'door': ['unknown', 'open', 'closed'],
                           'arm_target': ['unknown', 'present', 'missing']}[problem.domain]
                 fact_keys = ['state'] + ({'door': ['door_state'], 'arm_target': ['target_state']}.get(problem.domain, []))
-                entries[-1]['required'].append('expected_facts')
-                entries[-1]['properties']['expected_facts'] = {
+                entry['required'].append('expected_facts')
+                entry['properties']['expected_facts'] = {
                     'type': 'object', 'minProperties': 1, 'additionalProperties': False,
                     'properties': {key: {'type': 'string', 'enum': states} for key in fact_keys}}
-            elif definition.effect_class == ToolEffectClass.READ_ONLY:
-                read_steps.append(entries[-1])
-        properties[field] = {'anyOf': [{'type': 'null'}, *entries]}
+            defs[f'{field}.{definition.name}'] = entry
+            ref = {'$ref': f'#/$defs/{field}.{definition.name}'}
+            refs_of[field].append(ref)
+            if field == 'next_step' and definition.effect_class == ToolEffectClass.READ_ONLY:
+                refs_of['read_step'].append(ref)
+        properties[field] = {'anyOf': [{'type': 'null'}, *refs_of[field]]}
     base = {'type': 'object', 'additionalProperties': False, 'required': list(FIELDS)}
     # Root properties keep the readers' view; the variants carry judgment()'s verdict/step pairing so a
     # constrained decoder cannot emit an acting verdict without its steps (D-878, 2026-10-25 pipeline run).
+    # Variants point at root properties and named $defs (llama.cpp resolves object keys, not array indexes),
+    # so the job stays inside the 16 KiB canonical budget.
     acting = problem.necessity == ('READ_ONLY_QUERY' if problem.domain == 'fleet_status' else 'INTERVENE')
     resting = [v for v in properties['verdict']['enum'] if v == 'abstain' or v == 'do_not_intervene'
                and (problem.domain == 'fleet_status' or problem.necessity == 'DO_NOT_INTERVENE')]
     variants = [(resting, {'type': 'null'}, {'type': 'null'})]
-    checks = {'anyOf': properties['success_check']['anyOf'][1:]}
-    if acting and read_steps and checks['anyOf']:
-        variants.append((['reobserve'], {'anyOf': read_steps}, checks))
-    if acting and problem.domain != 'fleet_status' and properties['next_step']['anyOf'][1:] and checks['anyOf']:
-        variants.append((['candidate'], {'anyOf': properties['next_step']['anyOf'][1:]}, checks))
-    return {**base, 'properties': properties, 'anyOf': [
-        {**base, 'properties': {**properties, 'verdict': {'enum': names}, 'next_step': planned, 'success_check': check}}
+    checks = {'anyOf': refs_of['success_check']}
+    if acting and refs_of['read_step'] and refs_of['success_check']:
+        variants.append((['reobserve'], {'anyOf': refs_of['read_step']}, checks))
+    if acting and problem.domain != 'fleet_status' and refs_of['next_step'] and refs_of['success_check']:
+        variants.append((['candidate'], {'anyOf': refs_of['next_step']}, checks))
+    shared = {key: {'$ref': f'#/properties/{key}'} for key in FIELDS}
+    return {**base, 'properties': properties, '$defs': defs, 'anyOf': [
+        {**base, 'properties': {**shared, 'verdict': {'enum': names}, 'next_step': planned, 'success_check': check}}
         for names, planned, check in variants]}
