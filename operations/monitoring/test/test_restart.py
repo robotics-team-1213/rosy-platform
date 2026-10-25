@@ -15,6 +15,16 @@ def reopen(cache, clock, path):
                             store=MonitoringStore(path, cache.config.collector_id))
 
 
+def test_second_writer_cannot_open_the_same_owned_store(tmp_path):
+    path = tmp_path / 'monitoring.sqlite3'
+    first = MonitoringStore(path, 'collector-a')
+    with pytest.raises(StoreUnavailable):
+        MonitoringStore(path, 'collector-a')
+    first.close()
+    second = MonitoringStore(path, 'collector-a')
+    second.close()
+
+
 def test_restart_retains_health_age_and_shortened_deadline(runtime, tmp_path):
     original, clock = runtime
     path = tmp_path / 'monitoring.sqlite3'
