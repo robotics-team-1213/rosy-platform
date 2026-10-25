@@ -4,10 +4,10 @@
     $ConfigPath = [IO.Path]::GetFullPath($ConfigPath)
     $fields = @{
         release_dir="ReleaseDir"; wifi_profile="WifiProfile"; wifi_ssid="WifiSsid";
-        registry_path="RegistryJson"; rpi_imager="RpiImager"; card_count="CardCount"
+        registry_path="RegistryJson"; rpi_imager="RpiImager"; card_count="CardCount"; expected_image_revision="ExpectedImageRevision"
     }
     $settings = @{
-        ConfigPath=$ConfigPath; ReleaseDir=""; WifiProfile=""; WifiSsid=""; CardCount=1;
+        ConfigPath=$ConfigPath; ReleaseDir=""; WifiProfile=""; WifiSsid=""; CardCount=1; ExpectedImageRevision="";
         RegistryJson=(Join-Path $env:LOCALAPPDATA "Rosy\device-registry.json");
         RpiImager="C:\Program Files\Raspberry Pi Ltd\Imager\rpi-imager.exe"
     }
@@ -36,8 +36,11 @@
             $settings[$fields[$property.Name]] = $property.Value
         }
     }
-    foreach ($key in @("ReleaseDir", "WifiProfile", "RpiImager", "CardCount")) {
+    foreach ($key in @("ReleaseDir", "WifiProfile", "RpiImager", "CardCount", "ExpectedImageRevision")) {
         if ($Overrides.ContainsKey($key)) { $settings[$key] = $Overrides[$key] }
+    }
+    if ($settings.ExpectedImageRevision -and $settings.ExpectedImageRevision -cnotmatch '^[0-9a-f]{40}$') {
+        Stop-Setup "expected_image_revision은 비어 있거나 소문자 40자리 Git commit이어야 합니다. HEAD 같은 별칭은 사용할 수 없습니다."
     }
     foreach ($key in @("ReleaseDir", "RegistryJson", "RpiImager")) {
         if (-not $settings[$key]) { continue }
@@ -115,7 +118,8 @@ function Initialize-SdSetupSettings([string]$ConfigPath, [Collections.IDictionar
     Test-SdSetupRegistry $settings.RegistryJson
     if (-not $ReadOnly) {
         $config = [ordered]@{schema_version=1;release_dir=$settings.ReleaseDir;wifi_profile=$settings.WifiProfile;
-            wifi_ssid=$settings.WifiSsid;registry_path=$settings.RegistryJson;rpi_imager=$settings.RpiImager;card_count=$settings.CardCount}
+            wifi_ssid=$settings.WifiSsid;registry_path=$settings.RegistryJson;rpi_imager=$settings.RpiImager;card_count=$settings.CardCount;
+            expected_image_revision=$settings.ExpectedImageRevision}
         $temporary = $settings.ConfigPath + ".tmp-" + [guid]::NewGuid().ToString("N")
         try {
             $config | ConvertTo-Json | Set-Content -LiteralPath $temporary -Encoding utf8

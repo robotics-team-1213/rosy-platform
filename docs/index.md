@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
-- 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
-- 2026-10-25 · uncommitted · 병합 입력으로 생성물 갱신과 취소 거부 보존
-- 2026-10-25 · uncommitted · feat(sim): D-866 P1 OMX 시뮬레이터 백엔드 적합성 시험
-- 2026-10-25 · uncommitted · docs(spec): MSN-008 계약 줄 v1.314 확정
+- 2026-10-25 · uncommitted · D-876 ROSY Monitoring
+- 2026-10-25 · f80019b842 · fix(learning): SIM 실행 목록 행 방어와 Learning 첫 화면 픽셀 검수 일괄 읽기
+- 2026-10-25 · uncommitted · guard 교사 모드 첫 실물: 대기 중 오래된 모터 상태 표본으로 토크 OFF
+- 2026-10-25 · uncommitted · OMX intake가 승인된 카메라 촬영 기준을 직접 읽는다 (D-792 S3 첫 조각)
