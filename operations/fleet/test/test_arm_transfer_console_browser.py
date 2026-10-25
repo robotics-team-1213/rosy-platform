@@ -31,6 +31,7 @@ def test_deep_link_reads_and_explicit_confirmation_admits_saved_contract(site, s
         try:
             page.goto(site + "/console?view=work&arm_transfer=arm-example")
             admit = page.locator("#arm-transfer-admit")
+            expect(admit).to_be_visible()
             expect(admit).to_be_enabled()
             assert not posts
             expect(page.locator("#arm-transfer-work")).to_contain_text("object-1")
@@ -54,7 +55,7 @@ def test_deep_link_reads_and_explicit_confirmation_admits_saved_contract(site, s
             expect(page.locator("#arm-transfer-state")).to_contain_text("실행 준비")
             assert len(posts) == 1 and not errors
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-            _shot(page, "arm-transfer-handoff", size[0])
+            _shot(page, f"arm-transfer-handoff-{size[0]}.png")
         finally:
             browser.close()
 
@@ -70,6 +71,7 @@ def test_rejection_and_unknown_response_require_read_without_automatic_retry(sit
         try:
             page.goto(site + "/console?view=work&arm_transfer=arm-example")
             admit = page.locator("#arm-transfer-admit")
+            expect(admit).to_be_visible()
             expect(admit).to_be_enabled()
             admit.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()

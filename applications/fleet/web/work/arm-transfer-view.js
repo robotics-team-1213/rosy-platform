@@ -34,7 +34,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
   let job = null, control = null, version = 0, busy = false, attempted = false, initial = false;
   function paint() {
     admit.hidden = !job;
-    const reason = busy ? "요청 처리 중입니다" : attempted ? "승인 요청 후 원본을 다시 조회하세요" :
+    const reason = busy ? "요청 처리 중입니다" : !job ? "작업을 먼저 조회하세요" : attempted ? "승인 요청 후 원본을 다시 조회하세요" :
       armAdmissionReason(job, control, principal(), approveReason());
     admit.disabled = Boolean(reason); read.disabled = busy; input.readOnly = busy;
     if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
