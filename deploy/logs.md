@@ -3466,3 +3466,10 @@
 - 증거: a401f49f6d 원격 실제 PowerShell GPT·resume·Storage cmdlet mock 17 passed; af08bd9987 원격 image/GPT/gateway 303 passed, 3 skipped, NEW0. 독립 전체 및 resume delta 검토에 중대한 지적 없음. Storage mock은 실제 Windows mount 수용이 아니다. Linux PS 전체의24 실패는 변경 전 c74ce311a9에서도 동일한24 id로 재현됐다(현재160 passed/5 skipped, 변경 전154 passed/5 skipped); 전체 Windows 회귀 통과로 표시하지 않는다.
 - gate 변화: SOURCE prototype이며 native ARM64 artifact·실물 SD·부팅·OS 자동 갱신·powercut 수용은 HOLD다. 기존 작업 브랜치는 보존하고 현재 main에서 완결된 source snapshot을 새 착지 브랜치로 검증한다.
 - 교훈: CE 해당 없음 — 수정 근거는 회귀 시험과 기존 설치/검증 교훈에 명시된다. Linux 전체 PS 한계는 작업 기록에 미해결로 남긴다.
+
+## 2026-10-26 · Learning 저장 모듈의 배포 포함 검사 (D-884)
+
+- 변경: 새 저장 pool/jobs/files/hub/web/source와 기존 inventory·저장 화면을 model-code 필수 입력에 포함한다. 선택적 HF host 의존성은 기존 OMX cell과 같은 0.35.3 pin으로 선언한다. 자동 설치·운영 재시작·원격 자료 삭제는 수행하지 않는다.
+- 증거: source `bc9d3f81c0`의 보관·회수·Isaac disk guard 원격 57건 통과, UI/복구 `49d3c2bc9a` 원격 63건 통과. 별도 누락 모듈 부정 시험 5건의 RED를 확인했으며, 이번 필수 목록의 최종 검증은 후속 committed-SHA 시험 기록에 남긴다.
+- gate 변화: source 입력의 완결성을 검증하는 변경이다. signed artifact 설치·실제 HF 왕복·Isaac SDK 실행·실물 수용으로 계산하지 않는다.
+- CE: 해당 없음 — 규칙과 근거는 D-884·회귀·운영 안내에 보존한다.

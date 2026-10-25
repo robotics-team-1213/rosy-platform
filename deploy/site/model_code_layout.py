@@ -16,6 +16,9 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                      *("learning/curation/perception/" + name for name in
                        ("omx_web.py", "omx_center_web.py", "camera_setup.py", "camera_setup_web.py",
                         "learning_pipeline.py", "learning_tasks.py", "learning_tasks_web.py",
+                        "storage_inventory.py", "storage_pool.py", "storage_jobs.py", "storage_files.py",
+                        "storage_hub.py", "storage_web.py", "storage_source.py",
+                        "review_app_web/learning.html", "review_app_web/storage.js",
                         "review_app_web/tasks.html", "review_app_web/tasks.js",
                         "review_app_web/omx.html", "review_app_web/omx.js",
                         "review_app_web/omx-review.js", "review_app_web/omx-profiles.js",
