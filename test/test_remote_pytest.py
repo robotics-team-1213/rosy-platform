@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
@@ -664,10 +665,52 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
     assert not lock.exists() and not (jobs / "0.rc.tmp").exists() and (jobs / "0.rc").read_text() == "3\n"
     out = (jobs / "0.log").read_bytes()
     # a short private tmp_path root per job (not /tmp/pytest-of-<user>), gone with the job despite read-only dirs
-    base = re.search(rb"args -m pytest --basetemp (/tmp/rosy-pytest-\w{6}) test/x.py -q mode 700\n$", out)
-    assert out.startswith(b"out\nerr\n") and base and not Path(base.group(1).decode()).exists()
+    base = re.search(rb"args -m pytest --basetemp (/tmp/rosy-pytest-\w{6})/p test/x.py -q mode 700$", out, re.M)  # leak lines may follow
+    env_line, rest = out.split(b"\n", 1)
+    assert re.fullmatch(rb"\[remote-pytest\] env d freeze [0-9a-f]{16}", env_line) and rest.startswith(b"out\nerr\n")
+    assert base and not Path(base.group(1).decode()).exists()
     _skip_unreaped(pid)
-    assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", "4").stdout) == (3, False, out[4:])  # offset 4: after "out\n"
+    n = out.index(b"err")  # an offset just after "out\n"
+    assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", str(n)).stdout) == (3, False, out[n:])
+
+
+def test_job_tmpdir_is_private_and_what_it_leaks_into_tmp_is_listed_without_changing_the_code(tmp_path):
+    if not shutil.which("setsid") or sys.platform == "win32":
+        pytest.skip("Linux setsid/timeout/ionice are required")
+    tag = f"rosy-leak-probe-{os.getpid()}-{time.monotonic_ns()}"
+    home, env = _job_env(tmp_path, 'echo "tmp $TMPDIR $TEMP $TMP"; touch "$TMPDIR/inside"\n'
+                                   'for i in $(seq 25); do mkdir "/tmp/$TAG-$i"; done; exit 5\n')
+    try:
+        assert _sh(rj.START, {**env, "TAG": tag}, "r", "d", "", "0", "60", rj.JOB, "x.py").returncode == 0
+        assert _poll_until_done(env) == 5  # a warning, never the exit code
+        out = (home / "rosy-test" / "runs" / "r.jobs" / "0.log").read_text()
+        tmp = re.search(r"^tmp (/tmp/rosy-pytest-\w{6}/t) (\S+) (\S+)$", out, re.M)
+        assert tmp and tmp.group(1) == tmp.group(2) == tmp.group(3)  # beside the basetemp $B/p, removed with it
+        leaked = re.findall(r"^\[remote-pytest\] leaked into /tmp: (\S+)$", out, re.M)
+        assert len(leaked) == 20 and not [p for p in leaked if "rosy-pytest-" in p]  # capped; never its own dir
+        assert [p for p in leaked if p.startswith(f"/tmp/{tag}-")]  # other host users' entries may share the list
+    finally:
+        for p in Path("/tmp").glob(f"{tag}-*"):
+            p.rmdir()
+
+
+def test_job_logs_a_fingerprint_of_what_the_venv_actually_installed(tmp_path):
+    if not shutil.which("setsid") or sys.platform == "win32":
+        pytest.skip("Linux setsid/timeout/ionice are required")
+    home, env = _job_env(tmp_path, "exit 0\n")
+    site = home / "rosy-test" / "venvs" / "d" / "lib" / "python3.12" / "site-packages"
+    seen = set()
+    for k, version in enumerate(("1.0", "1.1")):  # same deps hash, a different unpinned pick
+        dist = site / f"jsonschema-{version}.dist-info"
+        dist.mkdir(parents=True)
+        assert _sh(rj.START, env, "r", "d", "", str(k), "60", rj.JOB, "x.py").returncode == 0
+        assert _poll_until_done(env, str(k)) == 0
+        log = (home / "rosy-test" / "runs" / "r.jobs" / f"{k}.log").read_text()
+        freeze = hashlib.sha256(f"lib/python3.12/site-packages/{dist.name}\n".encode()).hexdigest()[:16]
+        assert f"[remote-pytest] env d freeze {freeze}\n" in log
+        seen.add(freeze)
+        dist.rmdir()
+    assert len(seen) == 2
 
 
 def test_kill_stops_the_detached_job_and_its_trap_still_runs(tmp_path):
@@ -866,8 +909,8 @@ def test_leading_rosy_words_are_the_job_environment_and_browser_jobs_get_chromiu
     assert start.returncode == 0, start.stderr
     assert _poll_until_done(env) == 0
     out = (home / "rosy-test" / "runs" / "r.jobs" / "0.log").read_text()
-    assert re.search(f"browser={'1' if install else ''} args -m pytest --basetemp /tmp/rosy-pytest-\\w{{6}} test/x_browser.py -q\n$",
-                     out)
+    assert re.search(f"browser={'1' if install else ''} args -m pytest --basetemp /tmp/rosy-pytest-\\w{{6}}/p test/x_browser.py -q$",
+                     out, re.M)  # leak lines may follow
     installed = home / "installed"
     assert installed.exists() == install
     assert not install or installed.read_text() == "-m playwright install chromium\n"
@@ -1047,7 +1090,7 @@ def test_job_records_its_xdist_budget_in_the_lock_and_caps_memory(tmp_path, word
     assert start.returncode == 0, start.stderr
     assert _poll_until_done(env) == 0
     out = (home / "rosy-test" / "runs" / "r.jobs" / "0.log").read_text()
-    assert out.split()[1:] == ["pytest", *lock.split()]
+    assert out.splitlines()[1].split()[1:] == ["pytest", *lock.split()]  # after the env line
     assert f"MemoryMax={mem}" in (home / "scope").read_text()
     bad = _sh(rj.START, env, "r", "d", "", "1", "60", rj.JOB, "ROSY_JOB_CORES=$(id)", "x.py")
     assert bad.returncode == 0 and _poll_until_done(env, "1") == 2

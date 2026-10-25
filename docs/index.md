@@ -350,8 +350,4 @@
 
 ## 최근 기록
 
-- 2026-10-26 · 5acb6bbb94 · 시험 job의 I/O 등급과 현장 PC 정리 타이머 선언
-- 2026-10-26 · uncommitted · docs(solutions): read-only test dirs filled the lab test-PC disks
-- 2026-10-26 · 3733f72b5d · 낡은 설치본 pre-push는 게시 push를 멈춘다
-- 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
-- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+- 없음
