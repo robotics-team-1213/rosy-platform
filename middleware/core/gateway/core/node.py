@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -27,15 +28,23 @@ API_JOIN_TIMEOUT_S = 5.0
 def _robot_file_paths(config: dict[str, Any]) -> tuple[Path, Path]:
     """(profile, capabilities) paths CORE loads (D-196).
 
-    An absolute path (the `/etc/rosy/*.yaml` overlay) is used as is. A missing key reads
-    the robot package's default file, and a relative name is looked up inside that package.
-    The package named by `robot.model` is looked up only when one of the two needs it, so
-    an overlay that names both files boots without the robot package installed.
+    Development absolute overlays remain usable without a robot package. Product
+    startup requires the installed model's typed static profile and capabilities;
+    commissioning/runtime limits belong to their existing separate configuration.
     """
     from core_common import profile as profile_module
 
     robot = config.get("robot", {})
     robot_dir: Optional[Path] = None
+    product = os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device"
+    model = str(robot.get("model") or profile_module.DEFAULT_ROBOT)
+    if product:
+        from core_common.config import ConfigError
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            robot_dir = Path(get_package_share_directory(model)) / "config"
+        except (ImportError, LookupError, OSError) as exc:
+            raise ConfigError(f"installed robot package {model!r} is required on a device") from exc
 
     def resolve(key: str, default_name: str) -> Path:
         nonlocal robot_dir
@@ -47,10 +56,29 @@ def _robot_file_paths(config: dict[str, Any]) -> tuple[Path, Path]:
                 return candidate
             name = candidate.name
         if robot_dir is None:
-            robot_dir = profile_module.robot_config_dir(str(robot.get("model") or profile_module.DEFAULT_ROBOT))
+            robot_dir = profile_module.robot_config_dir(model)
         return robot_dir / name
 
-    return resolve("profile", "profile.yaml"), resolve("capabilities", "capabilities.yaml")
+    paths = resolve("profile", "profile.yaml"), resolve("capabilities", "capabilities.yaml")
+    if product:
+        import yaml
+
+        for key, path in zip(("profile", "capabilities"), paths):
+            try:
+                expected = yaml.safe_load((robot_dir / f"{key}.yaml").read_text(encoding="utf-8"))
+                actual = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, yaml.YAMLError) as exc:
+                raise ConfigError(f"{model} {key}: cannot read static configuration") from exc
+            if not isinstance(expected, dict) or not isinstance(actual, dict):
+                raise ConfigError(f"{model} {key}: static configuration must be a mapping")
+            if key == "profile":
+                identity = expected.get("profile")
+                if not isinstance(identity, dict) or not isinstance(identity.get("model"), str) or not identity["model"].strip():
+                    raise ConfigError(f"{model} profile: installed package has no model identity")
+            # Compare typed YAML values: Python equality alone treats false == 0.
+            if yaml.safe_dump(actual, sort_keys=True) != yaml.safe_dump(expected, sort_keys=True):
+                raise ConfigError(f"{model} {key}: differs from the installed robot package")
+    return paths
 
 
 class RosyCoreNode(Node):
