@@ -37,3 +37,43 @@ def test_commissioning_enable_and_rollback_survive_slot_change(tmp_path, monkeyp
     assert (root_b / "etc/rosy/runtime.env").read_bytes() == expected
     assert first.FirstBootProvisioner(root=root_a).apply(bundle=bundle, hardware_serial=SERIAL)["ok"]
     assert (root_a / "etc/rosy/runtime.env").read_bytes() == expected
+
+
+def test_commissioning_rollback_refuses_to_erase_a_later_runtime_change(tmp_path, monkeypatch):
+    first, root, _, common, _ = _provision_a(tmp_path, monkeypatch)
+    target = root / "etc/rosy/runtime.env"
+    original = target.read_bytes()
+    uid = json.loads((root / "etc/rosy/device-identity.json").read_text())["device_uid"]
+    _run_block("edit", root, uid, original)
+    enabled = target.read_bytes()
+    later = enabled + b"ROSY_API_TLS=required\n"
+    first._native_helper("os_state_config").commit_runtime(root, later, expected=enabled)
+    pointer = (common / "state/current.json").read_bytes()
+    with pytest.raises(SystemExit, match="runtime changed before rollback"):
+        _run_block("restore", root, uid, original)
+    assert target.read_bytes() == later
+    assert (common / "state/current.json").read_bytes() == pointer
+
+
+def test_stale_runtime_publication_does_not_replace_the_current_generation(tmp_path, monkeypatch):
+    first, root, _, common, _ = _provision_a(tmp_path, monkeypatch)
+    original = (root / "etc/rosy/runtime.env").read_bytes()
+    writer = first._native_helper("os_state_config")
+    writer.commit_runtime(root, original + b"ROSY_API_TLS=required\n", expected=original)
+    pointer = (common / "state/current.json").read_bytes()
+    with pytest.raises(ValueError, match="runtime changed before publication"):
+        writer.commit_runtime(root, original, expected=original)
+    assert (common / "state/current.json").read_bytes() == pointer
+
+
+def test_legacy_commissioning_keeps_its_existing_write_and_restore_path(tmp_path):
+    target = tmp_path / "etc/rosy/runtime.env"
+    target.parent.mkdir(parents=True)
+    (tmp_path / "proc").mkdir()
+    (tmp_path / "proc/cmdline").write_text("root=LABEL=writable\n")
+    original = b"ROSY_DEVICE_UID=fixture-uid\nROSY_RUNTIME_MODE=core\n"
+    target.write_bytes(original)
+    _run_block("edit", tmp_path, "fixture-uid", original)
+    assert b"ROSY_IO_DRIVE_ENABLED=true\n" in target.read_bytes()
+    _run_block("restore", tmp_path, "fixture-uid", original)
+    assert target.read_bytes() == original
