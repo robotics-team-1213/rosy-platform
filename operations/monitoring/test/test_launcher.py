@@ -40,7 +40,8 @@ def launch(tmp_path, config, *, state=None, extra_env=None):
     path = tmp_path / (config['collector_id'] + '.yaml')
     path.write_text(json.dumps(config))
     state = state or tmp_path / (config['collector_id'] + '-state')
-    environ = dict(os.environ, READ=READER, **(extra_env or {}))
+    environ = dict(os.environ, READ=READER)
+    environ.update(extra_env or {})
     log = tmp_path / (config['collector_id'] + f'-{port}.log')
     with log.open('w+') as stream:
         process = subprocess.Popen([sys.executable, '-m', 'rosy.monitoring', '--config', str(path),
