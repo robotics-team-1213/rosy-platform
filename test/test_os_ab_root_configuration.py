@@ -42,6 +42,14 @@ def test_offline_root_installs_frozen_boot_and_recovery_with_its_factory_binding
         text = (units / (unit + ".service.d/10-rosy-os.conf")).read_text()
         assert "/opt/rosy/native-runtime/" not in text
         assert "/opt/rosy/os-bootstrap/" in text
+    storage = (units / "rosy-os-storage.service.d/10-rosy-os.conf").read_text()
+    assert "ExecStartPost=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/os_ssh_hostkeys.py" in storage
+    assert (root / "opt/rosy/os-bootstrap/os_ssh_hostkeys.py").is_file()
+    import yaml
+    cloud = yaml.safe_load((root / "etc/cloud/cloud.cfg.d/99-rosy-ssh-hostkeys.cfg").read_text())
+    assert cloud == {"ssh_deletekeys": False, "ssh_genkeytypes": []}
+    assert (root / "etc/ssh/sshd_config.d/01-rosy-hostkey.conf").read_text().split() == [
+        "HostKey", "/etc/ssh/ssh_host_ed25519_key"]
     _configurer().configure(root, FACTORY_ID)  # Identical assembly is idempotent.
 
 

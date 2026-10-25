@@ -1,6 +1,9 @@
 """Real OpenSSH keys, modeled A/B mounts; no SSH daemon or device is started."""
 import importlib.util
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -70,3 +73,38 @@ def test_missing_keys_on_committed_device_do_not_silently_rotate_identity(tmp_pa
 def test_legacy_root_is_not_modified(tmp_path):
     assert _module().prepare(tmp_path) == "LEGACY"
     assert not list(tmp_path.iterdir())
+
+
+def test_published_pair_is_reused_after_parent_sync_error(tmp_path, monkeypatch):
+    root, _, common, _ = shared_roots(tmp_path, monkeypatch)
+    helper = _module()
+    sync = helper._sync
+
+    def fail_parent(path):
+        if path == root / "var/lib/rosy-device":
+            raise OSError("injected parent sync failure")
+        sync(path)
+
+    monkeypatch.setattr(helper, "_sync", fail_parent)
+    with pytest.raises(OSError, match="injected"):
+        helper.prepare(root)
+    key = (common / "ssh-hostkeys/ssh_host_ed25519_key").read_bytes()
+    assert not (root / "etc/ssh/ssh_host_ed25519_key").exists()
+    monkeypatch.setattr(helper, "_sync", sync)
+    helper.prepare(root)
+    assert (root / "etc/ssh/ssh_host_ed25519_key").read_bytes() == key
+
+
+def test_installed_os_key_helper_does_not_import_mutable_runtime(tmp_path):
+    from test_os_frozen_firstboot import _prefix, _stage
+
+    prefix = _prefix(tmp_path)
+    _stage(prefix)
+    (prefix / "native-runtime/os_state_config.py").write_text("raise RuntimeError('mutable poison')\n")
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    result = subprocess.run([sys.executable, "-I", "-B", str(prefix / "os-bootstrap/os_ssh_hostkeys.py"),
+                             "--root", str(legacy)], env=dict(os.environ, PYTHONPATH=str(prefix / "native-runtime")),
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "LEGACY"
