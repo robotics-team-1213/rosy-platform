@@ -438,3 +438,72 @@ def test_project_cache_limit_counts_other_members_copies(jobs_setup, accounts):
     inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=first['upload_bytes'])
     with pytest.raises(ValueError, match='space'): build().restore(bob, second['id'])
     assert (cache / first['id']).is_dir() and not (cache / second['id']).exists()
+
+
+def test_cancel_process_death_keeps_job_and_reservation_consistent(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    service = build(); job = create(build, actor)
+    pid = os.fork()
+    if pid == 0:
+        service._save = lambda *args, **kwargs: os._exit(23)
+        service.cancel(actor, job['id'])
+        os._exit(99)
+    _, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 23
+    assert build().pool.assignment(actor, job['id'])['status'] == 'reserved'
+    assert build().run(actor, job['id'])['bytes_verified'] is True
+
+
+def test_released_allocation_never_writes_remote_bytes(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); build().pool.release(actor, job['id'])
+    assert build().run(actor, job['id'])['bytes_verified'] is False
+    assert remote.commits == 0
+
+
+def test_publish_only_restore_with_cache_policy_and_sufficient_space(jobs_setup, accounts):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); build().run(actor, job['id'])
+    build().reclaim(actor, job['id'], job['id'])
+    config = json.loads(accounts.config_path.read_text())
+    config['users'][0]['memberships']['one'].remove('manage')
+    accounts.config_path.write_text(json.dumps(config))
+    inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=job['upload_bytes'])
+    assert build().restore(actor, job['id'])['local_present'] is True
+
+
+def test_cache_reclaim_skips_busy_oldest_copy(jobs_setup):
+    from storage_files import consumer
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    first, second = create(build, actor), create(build, actor)
+    build().run(actor, first['id']); build().run(actor, second['id'])
+    build().reclaim(actor, first['id'], first['id'])
+    build().restore(actor, first['id']); build().restore(actor, second['id'])
+    inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=first['upload_bytes'])
+    with consumer(cache / first['id']):
+        result = build().reclaim_cache(actor)
+    assert result == dict(status='ready', reclaimed_bytes=second['upload_bytes'])
+    assert (cache / first['id']).exists() and not (cache / second['id']).exists()
+
+
+def test_job_listing_limits_only_requesters_history(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    service = build(); job = create(build, actor)
+    other = service._load(job['id'])
+    for index in range(201):
+        service._save(dict(other, id=f'{index:032x}', requester_id='bob'))
+    assert [row['id'] for row in service.list(actor)] == [job['id']]
+
+
+def test_official_native_cycle_holds_managed_inputs(jobs_setup, monkeypatch, tmp_path):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); build().run(actor, job['id'])
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / 'learning/training/omx'))
+    import native_cycle
+    def validate(root):
+        with pytest.raises(ValueError, match='use'):
+            build().reclaim(actor, job['id'], job['id'])
+        raise RuntimeError('stop before training')
+    monkeypatch.setattr(native_cycle, 'validate_split', validate)
+    with pytest.raises(RuntimeError, match='stop before training'):
+        native_cycle.run_cycle(artifact, tmp_path / 'cycle')
