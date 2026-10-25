@@ -18,6 +18,10 @@
 8. canonical generation의 file contents/mode와 directory entries를 durable하게 게시한 뒤, 해당 generation을 참조하는 completion을 durable commit한다. 그 뒤에만 provision bundle을 삭제하고 parent directory를 fsync한다. 예외 주입뿐 아니라 rename/directory persistence 손실·재정렬을 모델링하고, 실제 powercut 수용은 별도로 남긴다.
 9. boot_a의 provision PARTUUID mount를 양 root가 사용한다. factory native signature는 동일 release/checksum에만 결속한다. SSH host keys는 factory에 넣지 않으며 전용 공통 저장소·ordering으로 host identity를 보존한다.
 
+storage admission 코드는 OS 이미지 소유 `/opt/rosy/os-bootstrap`에 고정한다. payload image-layer sync는 이 경로를 쓰지 못한다. 초기 부팅 dispatcher는 다른 payload helper를 import하지 않고 legacy 여부만 판별하며, A/B이면 해당 root의 보호된 OS bootstrap으로 exec한다. A/B marker·descriptor가 있으면 bootstrap 누락이나 부패를 legacy로 우회하지 않는다. 이 경계는 app helper의 중단된 교체가 NetworkManager·SSH 시작 전 검증 코드의 ABI를 바꾸지 못하게 한다. OS artifact 서명은 이 사본을 포함하며, schema 전환은 이전 root의 bootstrap이 읽을 수 있는 범위에서만 허용한다.
+
+`rosy-os-storage.service`의 `RequiredBy` enable 링크와 `Before` 순서가 NetworkManager, ssh.service, ssh.socket, tailscaled, SSH boot cleanup 및 firstboot/retry에 실제 필수 의존성을 만든다. SSH socket보다 앞서므로 `DefaultDependencies=no`와 local-fs 이후 순서를 유지한다. mounted-image 검사는 helper 사본과 필수 링크를 확인하고, native image build는 chroot 안의 실제 vendor unit graph를 `systemd-analyze verify`로 검사한다. 오프라인 링크 설치·소스 시험을 실제 mount namespace나 장치 부팅 수용으로 보고하지 않는다.
+
 ### Ownership and existing decisions
 
 | 기준 | 관계 |

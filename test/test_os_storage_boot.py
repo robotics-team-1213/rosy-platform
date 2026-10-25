@@ -143,5 +143,5 @@ def test_payload_sync_refuses_the_os_bootstrap_directory():
     spec = importlib.util.spec_from_file_location("sync_for_storage", NATIVE / "sync-image-layer.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    with pytest.raises(ValueError, match="FORBIDDEN"):
+    with pytest.raises(ValueError, match="IMAGE_LAYER_DESTINATION"):
         module.check_destination("opt/rosy/os-bootstrap/os_state_storage.py")
