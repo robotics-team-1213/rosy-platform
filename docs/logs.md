@@ -11499,3 +11499,9 @@ osy-d395-s1d\`.
 - 변경: `motion_profile.py`(동기 사다리꼴, 모서리 이어 돌기, 정확한 정지점, `retime`). `chunk_runner.transit_path`는 올라가며 돌기 시작하는 한 흐름(겹침 0.6 s, 높이 1 unit 이내에서만 회전), `grasp_planner`의 수직 내려가기·들기는 같은 경로에 부드러운 가감속. `cell_record.py`와 `--stage record`(A/B 한 사이클 녹화, 녹화된 집게로 held/empty 판정, 원위치 확인). native SIM 시나리오 `pick-place-chunks-offset`·`-yaw-site`·`-yaw-box`(상자 이동·회전, 관측한 상자 위치로 계획).
 - 증거: 원격 시험 통과. 매끄러운 동작으로 Gazebo `pick-place-chunks` PASS(xy 0.26 mm, 들기 102 mm). 시나리오 결과는 이어서 기록한다.
 - gate 변화: 없음. 실물의 매끄러운 동작·녹화는 실물 실행에서 확인한다.
+
+## 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+
+- 변경: `learning/envs/isaac/arm_s_cell_fixture.py`·`arm_s_cell_task.py`·`arm_s_cell_report.py`, `deploy/robot/omx/isaac_cell_frames.py`. 실행 관리자에 `arm-s-cell-nominal`·`-overhang`·`-wrong-yaw`(run_catalog·run_store·run_worker·remote_isaac).
+- 증거: 원격 시험 통과. Isaac 6회 실행 결과는 `docs/validation/omx-arm-s-isaac-cell-2026-10-25/result.md`. overhang은 frame_contact로 기대와 맞고, nominal은 집게가 상자를 옆으로 흘려 15.6 mm 어긋남(미해결).
+- gate 변화: 없음. 집게 결합과 관측 카메라 자세는 미해결.

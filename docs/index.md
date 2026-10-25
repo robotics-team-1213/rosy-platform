@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
 - 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
 - 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
 - 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
 - 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인
-- 2026-10-25 · 9f0df4f99b · RaspTank 평가 기준선과 공개 무결성 값 등록
