@@ -140,7 +140,7 @@ def _load_signature_verifier(root: Path):
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
-        return module
+        return sys.modules[module_name]
     return None
 
 

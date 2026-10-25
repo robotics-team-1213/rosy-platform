@@ -345,3 +345,20 @@
 - 변경: 고정 합성 fixture와 CAD IK·접촉 관측·독립 판정을 공통 catalog/runner/CLI에 연결했다. 기존 import와 실행 잠금·상한·종료 검증을 유지한다.
 - 증거: run36041b241ee25366986bb3a6262ba0be의3,624 physics step·양방향 접촉 lift/이송·해제 후 안정·FINAL6파일·GPU 해제. 독립 검토와 원격377 PASS/1 SKIP, NEW0. 앞선4개 SDK 실패를 보존했다.
 - gate 변화: Pinky 정지 tray proxy·컨베이어 proxy의 단일 SIM 스모크 수용이다. full Pinky·실측 카메라 정합·주행·learned AI·실물 수용이 아니다. 상세는 docs/validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md. CE 구동 방식 교훈 새 기록.
+## 2026-10-25 · uncommitted · OMX import 보고서의 공개 소스 포트
+
+- 변경: 기존 개발 기준 a46daee90b7의 import_report·선택적 import_omx 보고서·회귀를 공개 accepted source에 그대로 옮겼다. 기존 벤더 자산과 importer를 유지한다. 보고서는 정상 SDK 정리 뒤 배타적으로 생성하며 모델·관절·자산·프레임 증거를 별도 검증한다.
+- 증거: 원래 소스와 세 파일의 canonical Git blob 일치를 확인하고 이 포트의 커밋된 SHA에 대한 원격 검사·독립 검토·CI를 별도로 결속한다. 과거 SDK 성공을 새 포트의 실행 성공으로 바꾸지 않는다.
+- gate 변화: 없음. 새 SDK 실행·접촉 과제·학습 정책 평가·실물 제어는 수행하지 않았다.
+
+## 2026-10-25 · uncommitted · 고정 Isaac 실행 관리자의 공개 소스 포트
+
+- 변경: 개발 기준 a46daee90b7의 run admission·binding·catalog·control·store·system·worker와 다섯 회귀 파일을 공개 소스에 연결했다. contact producer·verifier가 아직 없으므로 접촉 시나리오만 일시 비활성화하고 거절 회귀를 추가했다. 나머지 원래 검증·잠금·소유권·불변 증거·복구 동작을 유지한다.
+- 검증: 커밋 SHA에 결속한 원격 Isaac 패키지와 선택된 guard, 독립 base/head 검토 및 CI를 확인한다. 기존 SDK 실행은 이 새 공개 SHA의 실행으로 재명명하지 않는다.
+- gate 변화: 없음. 이 단계의 실행 가능 시나리오는 모델 import뿐이며 SDK 신규 실행·학습·실물 명령을 수행하지 않았다.
+
+## 2026-10-25 · uncommitted · 접촉 왕복 producer·판정기의 공개 소스 포트
+
+- 변경: a46daee90b7의 conveyor fixture·report·task·회귀를 그대로 보존하고 catalog를 원본과 같이 활성화했다. 단계 PNG와 보고서는 기존 실행 원장의 크기·해시 검증을 거쳐 Learning 소비 경로에 연결된다.
+- 증거: 원래 source7d0cfcd6e94f/run36041b241ee25366986bb3a6262ba0be의 frozen 검증·실패·drive-mode 교훈을 보존한다. 이번 공개 SHA의 원격 호스트 회귀·독립 검토·CI는 새 SDK 실행과 구분한다.
+- gate 변화: 기존 단일 합성 접촉 스모크의 소스가 공개된다. 새 SDK 실행·동기화 Episode 수집·학습 정책 평가·실물 명령은 수행하지 않았다. CE는 기존 교훈을 재사용하며 새 해결 기록을 늘리지 않는다.
