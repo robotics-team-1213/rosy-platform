@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 from pathlib import Path
 import sys
 
@@ -21,14 +22,17 @@ def _generated(fd, name, raw, *, resume=False):
         output = file_open(fd, name, write=True)
     except FileExistsError:
         if not resume: raise
-        with file_open(fd, name) as previous: prefix = previous.read(len(raw) + 1)
+        with file_open(fd, name) as previous:
+            before = os.fstat(previous.fileno())
+            prefix = previous.read(len(raw) + 1)
         if not raw.startswith(prefix): raise ValueError('changed partial export is preserved')
         if prefix == raw: return
         with directory(fd, parts(name)[:-1]) as parent:
-            descriptor = os.open(parts(name)[-1], os.O_WRONLY | os.O_NOFOLLOW, dir_fd=parent)
+            descriptor = os.open(parts(name)[-1], os.O_WRONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         output = os.fdopen(descriptor, 'wb')
         info = os.fstat(output.fileno())
-        if info.st_size != len(prefix) or info.st_nlink != 1:
+        if (not stat.S_ISREG(info.st_mode) or (info.st_dev, info.st_ino) != (before.st_dev, before.st_ino)
+                or info.st_size != len(prefix) or info.st_nlink != 1):
             output.close(); raise ValueError('partial export identity changed')
         output.seek(len(prefix)); raw = raw[len(prefix):]
     with output:
@@ -40,9 +44,10 @@ def _json(fd, name, value, *, resume=False):
     raw = (json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False) + '\n').encode()
     if len(raw) > 1024 ** 2: raise ValueError('source metadata exceeds 1 MiB')
     _generated(fd, name, raw, resume=resume)
+    return dict(bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
 
 
-def seal(root, profile, provenance):
+def seal(root, profile, provenance, *, expected_files=None):
     root = Path(root).absolute()
     if any((parent / '.git').exists() for parent in (root, *root.parents)):
         raise ValueError('archive data belongs outside a source checkout')
@@ -61,6 +66,8 @@ def seal(root, profile, provenance):
             if free_space(fd) < 1024 ** 2: raise ValueError('insufficient space for source metadata')
             for name in selected: allowed(name, profile)
             files = {name: entry(fd, name) for name in sorted(selected)}
+            if expected_files is not None and files != expected_files:
+                raise ValueError('Isaac export bytes or file set changed before finalization')
             result = dict(schema='rosy.storage-source/1', status='completed', profile=profile,
                           files=files, provenance=provenance)
             _json(fd, SOURCE, result)
@@ -97,7 +104,7 @@ def export_isaac_snapshot(get, artifact, run_id, output, *, resume=False):
     try:
         expected = {'observation.json', 'snapshot.json', *(item['name'] for item in items)}
         if resume and not names(fd) <= expected: raise ValueError('unregistered files in partial export are preserved')
-        _json(fd, 'observation.json', row, resume=resume)
+        expected_files = {'observation.json': _json(fd, 'observation.json', row, resume=resume)}
         for item in items:
             allowed(item['name'], 'isaac')
             blob = artifact(item['id'])
@@ -105,7 +112,8 @@ def export_isaac_snapshot(get, artifact, run_id, output, *, resume=False):
             if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
                 raise ValueError('Isaac owner artifact changed during export')
             _generated(fd, item['name'], data, resume=resume)
-        _json(fd, 'snapshot.json', dict(snapshot='FINAL', run_id=run_id, files=items), resume=resume)
+            expected_files[item['name']] = dict(bytes=item['bytes'], sha256=item['sha256'])
+        expected_files['snapshot.json'] = _json(fd, 'snapshot.json', dict(snapshot='FINAL', run_id=run_id, files=items), resume=resume)
     finally: os.close(fd)
     current = get()
     if current.get('result_sha256') != row.get('result_sha256') or current.get('artifacts_sha256') != row.get('artifacts_sha256'):
@@ -114,7 +122,7 @@ def export_isaac_snapshot(get, artifact, run_id, output, *, resume=False):
     return seal(output, 'isaac', dict(run_id=run_id, seed=source['config']['seed'],
         source_revision=source['source_sha'], assets_sha256=source['assets_sha256'],
         verifier_sha256=source['verifier_sha256'], input_sha256=row['input_sha256'],
-        completion_status=row['status'], result_sha256=row['result_sha256']))
+        completion_status=row['status'], result_sha256=row['result_sha256']), expected_files=expected_files)
 
 
 def main():

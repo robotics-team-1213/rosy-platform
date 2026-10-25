@@ -1,4 +1,4 @@
-import {clearStorageSetup,loadStorageSetup} from '/storage-settings.js';
+import {clearStorageSetup,loadStorageSetup,storageSetupDirty} from '/storage-settings.js';
 const $=id=>document.getElementById(id);
 const bytes=value=>value==null?'미확인':`${(value/1024**3).toLocaleString('ko-KR',{maximumFractionDigits:3})} GiB`;
 const roles={raw:'수집 원본',derived:'파생 자료',cache:'작업 캐시',pending:'전송 대기'};
@@ -19,6 +19,7 @@ export function clearStorage(){
 }
 export async function loadStorage(request){
   if(busy)return;
+  if(storageSetupDirty()&&!confirm('저장하지 않은 설정이 있습니다. 입력을 버리고 저장 현황을 다시 불러올까요?'))return;
   send=request;busy=true;$('storage-refresh').disabled=true;$('storage-error').hidden=true;
   clearStorage();
   const current=epoch;
