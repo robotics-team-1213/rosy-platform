@@ -22,7 +22,7 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                         "review_app_web/camera.html", "review_app_web/camera.js")),
                      *("learning/curation/omx/" + name for name in
                        ("native_review.py", "native_capture.py", "native_environment.py", "native_segments.py",
-                        "collection_intake.py", "collection_pipeline.py")),
+                        "collection_intake.py", "collection_pipeline.py", "camera_reference.py")),
                      "learning/training/omx/native_cycle.py",
                      *("learning/training/omx/experiment_" + name + ".py" for name in
                        ("artifact", "catalog", "center", "dataset", "evaluation", "export", "inbox", "io",

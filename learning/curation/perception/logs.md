@@ -145,3 +145,9 @@
 - 변경: preview와 과제 회귀의 보조 함수 이름을 구형 nose 초기화 이름과 구분했다. fixture 내용·실제 검사·기존 CI guard는 유지한다.
 - 증거: PR #151의 CI39720000886에서 구형 pytest가 setup 보조 함수를 자동 호출하는 오류를 확인했다. 18f0277fba 관련 251건과 기존 CI 의존 guard 29건이 원격에서 통과했다. 최종 PR CI는 새 head로 다시 확인한다.
 - gate 변화: 없음. 이전 CI 실패를 성공으로 바꾸어 기록하지 않으며 운영·사용자·실물 수용은 별도다.
+
+## 2026-10-25 · uncommitted · 공개 Learning의 접촉 왕복 증거 연결
+
+- 변경: 공개 화면·실행 상세 링크·평가 연결을 보존하며 접촉 보고서와 다섯 PNG의 제한된 조회와 재실행 scenario 복원을 옮겼다.
+- 증거: 28cbe5dc48에서 새 경로 아홉 건의 404를 재현했고 ebc1a89c52 명시적 원격 API/Chromium 26개가 통과했다. [검증 기록](../../../docs/validation/learning-conveyor-release-2026-10-25/result.md).
+- gate 변화: 없음. 최종 SHA CI·운영 조회·학습 데이터·정책 평가·실물 수용은 각각 별도 확인한다.

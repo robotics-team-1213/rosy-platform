@@ -3,6 +3,8 @@
 Read-only. A stage nothing here can see is ``not_available`` with a Korean reason; no count is invented and
 nothing is approved or promoted (D-514 §5, D-793). ⑦ 배포 is outside Learning and has no row.
 """
+import re
+
 STAGES = (('collect', '수집'), ('label', '정답'), ('dataset', '데이터셋'), ('train', '학습'),
           ('evaluate', '평가'), ('promote', '승격 기록'))
 NOT_CONNECTED = 'Learning에 연결 전'
@@ -13,17 +15,28 @@ LANE = {'collect': ('data',), 'label': ('review',), 'dataset': ('preparation', '
         'train': ('training',), 'evaluate': ('evaluation',), 'promote': ('application',)}
 LANE_STATE = {'done': 'done', 'running': 'active', 'waiting': 'waiting', 'attention': 'blocked', 'connection': 'blocked'}
 SIM_TERMINAL = {'SUCCEEDED': 'done', 'STOPPED': 'done', 'FAILED': 'blocked', 'UNKNOWN': 'blocked'}
+QUEUE = 50  # D-857 §5: human 「맞음/고침」 queue per domain
+OMX_NO_MODEL = '구간을 만드는 모델이 없습니다. 모든 구간은 사람이 정합니다.'
 
 
 def go(label, href):
     return {'label': label, 'href': href}
 
 
-def row(key, name, stages):
+def truth(confirmed, pending, drafted, href=None, reason=None, cap=QUEUE):
+    """D-857 §4 tiers. 확정: a human decision, the only rows evaluation and promotion read. 임시: a model answer
+    still undecided, at most `cap` oldest first in the 「맞음/고침」 queue (cap=None: VLM consensus, audited
+    instead). 대기: every other undecided row, including model answers past the cap."""
+    queue = drafted if cap is None else min(drafted, cap)
+    return {'confirmed': confirmed, 'provisional': queue, 'waiting': max(pending - queue, 0), 'over_cap': drafted - queue,
+            'href': href if queue else None, 'reason': reason}
+
+
+def row(key, name, stages, tiers=None):
     """stages: {stage: (state, evidence, next)}; a stage left out is not_available."""
     rows = [dict(stage=stage, label=label, **dict(zip(('state', 'evidence', 'next'),
                  stages.get(stage, ('not_available', NOT_CONNECTED, None))))) for stage, label in STAGES]
-    return {'id': key, 'name': name, 'stages': rows,
+    return {'id': key, 'name': name, 'stages': rows, 'truth': tiers,
             'next': next((stage['next'] for stage in rows if stage['next']), None),
             'blocked': next((stage['evidence'] for stage in rows if stage['state'] in ('blocked', 'not_available')), None)}
 
@@ -93,17 +106,31 @@ def omx(items, reviewed, tasks=0):
 
 
 def sim(runs):
-    """runs: None when not configured, {'error': ...} when the adapter failed, else {'runs': [...]}."""
+    """runs: None when not configured, {'error': ...} when the adapter failed, else {'runs': [sim_web.public rows]}.
+    A SIM verdict or task_success is evidence only, never approval or promotion (D-793, D-857)."""
     if runs is None:
-        return {'collect': ('not_available', 'SIM 실행 연결이 설정되지 않았습니다.', None)}
+        reason = 'SIM 실행 연결이 설정되지 않았습니다.'
+        return {'collect': ('not_available', reason, None), 'evaluate': ('not_available', reason, None)}
     if 'error' in runs:
         return {'collect': ('blocked', 'SIM 실행 연결을 확인하세요.', go('SIM 실험', '/learning/sim'))}
     if not runs['runs']:
         return {'collect': ('active', 'SIM 실험 기록이 없습니다.', go('SIM 실험 시작', '/learning/sim'))}
     latest = max(runs['runs'], key=lambda run: str(run.get('updated_at') or run.get('created_at') or ''))
     status = str(latest.get('status', ''))[:40]
-    return {'collect': (SIM_TERMINAL.get(status, 'active'), f"실험 {len(runs['runs'])}회 · 최근 {status or '상태 없음'}",
-                        go('SIM 결과 확인', '/learning/sim'))}
+    run_id = str(latest.get('run_id', ''))
+    href = '/learning/sim?run=' + run_id if re.fullmatch('[0-9a-f]{32}', run_id) else '/learning/sim'
+    stages = {'collect': (SIM_TERMINAL.get(status, 'active'), f"실험 {len(runs['runs'])}회 · 최근 {status or '상태 없음'}",
+                          go('SIM 결과 확인', href))}
+    result = latest.get('result')
+    if isinstance(result, dict):
+        success = {True: '성공', False: '실패'}.get(result.get('task_success'), '기록 없음')
+        failed = result.get('task_success') is False or str(result.get('status', '')).lower() == 'failed'
+        stages['evaluate'] = ('blocked' if failed else 'done', f"최근 단계 {str(result.get('stage') or '없음')[:40]} · 과제 성공 {success} · "
+                              f"판정 {str(result.get('status') or '없음')[:40]} (근거일 뿐 승인 아님)",
+                              go('SIM 평가 근거', '/learning/evaluate?domain=sim'))
+    else:
+        stages['evaluate'] = ('waiting', '최근 실험 결과가 나오면 평가 근거로 보입니다.', None)
+    return stages
 
 
 def vlm(counts, eval_url=None):
@@ -123,10 +150,25 @@ def vlm(counts, eval_url=None):
             if labelled else ('waiting', '확정 정답이 생기면 평가합니다.', None)}
 
 
-def domains(*, pipeline, counts, preparation, items, omx_reviewed, sim_runs, vlm_counts, vlm_eval_url=None, tasks=0):
+def domains(*, pipeline, counts, preparation, items, omx_reviewed, sim_runs, vlm_counts, vlm_eval_url=None, tasks=0,
+            pixel_counts=None, drafts=None):
+    """drafts: {'object'|'pixel': pending frame indices holding a model draft, oldest first}."""
     sources = {'lane': lane(pipeline), 'object': objects(counts, preparation), 'omx': omx(items, omx_reviewed, tasks),
                'sim': sim(sim_runs), 'vlm': vlm(vlm_counts, vlm_eval_url), 'decision': {}}
-    return [row(key, name, sources[key]) for key, name in DOMAINS]
+    drafts = drafts or {}
+
+    def reviewed(decided, kind, page):
+        frames = drafts.get(kind) or []
+        return truth(decided.get('approved', 0), decided.get('pending', 0), len(frames),
+                     f'{page}?filter=pending&frame={frames[0]}' if frames else None)
+    sets = {item['id'] for item in items if item['kind'] == 'omx'}
+    done = len(sets & set(omx_reviewed))
+    tiers = {'lane': reviewed(pixel_counts or {}, 'pixel', '/pixels'), 'object': reviewed(counts, 'object', '/'),
+             'omx': truth(done, len(sets) - done, 0, reason=OMX_NO_MODEL)}
+    if vlm_counts and vlm_counts['total']:
+        tiers['vlm'] = truth(vlm_counts['labelled'], vlm_counts['total'] - vlm_counts['labelled'] - vlm_counts['excluded'],
+                             vlm_counts['provisional'], cap=None)
+    return [row(key, name, sources[key], tiers.get(key)) for key, name in DOMAINS]
 
 
 def stored(db):

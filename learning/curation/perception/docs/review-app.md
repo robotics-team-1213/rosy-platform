@@ -81,9 +81,11 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera`, 작업 공간 `/learning/workspaces` |
 | 정답 | 객체 검수 `/`, 픽셀 검수 `/pixels`, 로봇암 시범 검수 `/learning/omx`, VLM 판단 `/learning/vlm` |
 | 학습 | 학습 과제 `/learning/tasks`, 인식 학습 `/learning#pipeline`(홈의 학습 흐름 구역), SIM 실험 `/learning/sim` |
-| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 다음 조각까지 비활성이다 |
+| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답, 최근 SIM 실험 10개의 상태·단계·과제 성공·판정과 그 run을 여는 `/learning/sim?run=<run_id>` 링크, 화면을 열 때마다 실험 목록을 한 번 읽는다). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 아래 「승격 요청 묶음」 |
 
 로그인·계정과 Hugging Face 가져오기는 메뉴가 아니라 상단 막대의 「로그인·계정」 `/accounts`에 있다. 수집·저장 공간은 아직 홈의 구역이다. 로봇암 화면(`/learning/omx`)은 시범 검수 밖에 학습·비교 구역도 품지만 한 화면이라 정답 단계에 둔다. 인식 학습은 별도 화면 없이 홈의 학습 흐름 구역으로 간다.
+
+**승격 요청 묶음(D-874).** `GET /api/learning/promotion-requests`(`view`)는 등록된 인식 학습 결과(`perception`)마다 요청 가능 여부와 거절 이유, 지금까지 봉인한 요청을 준다. `POST`(`manage`, CSRF, 본문은 `{"id": <결과 id>}`만)는 `promotion_request.build`가 그 폴더의 `intake_report.json`(통과·파일 해시)·`model_manifest.json`·평가셋·학습 데이터셋을 디스크에서 다시 확인한 뒤 `rosy.learning.promotion-request/1` 묶음을 `<state>/promotion-requests/<sha256>.json`에 한 번만 쓴다. 평가셋과 보고의 채점 출처가 모두 `human_reviewed_eval`이어야 하고, LiDAR·궤적 자동 라벨(build.py 평가셋)이나 HF 사진이 한 장이라도 있으면 거절한다. 평가셋은 `--learning-control` 학습 설정의 데이터셋 저장소 `evalsets/` 아래에 있는 `review_eval_bootstrap` 공개본이어야 하고, 그 학습 기록(`state.json`)에서 같은 모델의 `ready` 행 `eval_set`과 content_sha가 같아야 한다. GET은 크기·mtime이 같은 파일의 해시를 다시 계산하지 않고, POST는 모두 다시 해시한다. 같은 모델의 같은 요청은 처음 해시를 돌려준다. 묶음은 `state: requested`뿐이며 승인·단계·권한 키를 쓰면 거절한다. Fleet에서 승인권자가 이 해시로 제안을 만든다. Learning은 Fleet을 부르지 않는다.
 
 **홈의 도메인 줄.** `/api/learning`은 기존 키를 그대로 두고 `domains`와 `vlm_eval_url`을 더한다(`learning_domains.py`). 도메인마다 루프 여섯 칸(수집·정답·데이터셋·학습·평가·승격 기록, ⑦ 배포는 Learning 밖이라 없음)을 `{stage, label, state, evidence, next}`로 주고, `state`는 `done`·`active`·`blocked`·`waiting`·`not_available`이다. 도메인마다 `next`(`{label, href}` 하나)와 `blocked`(처음 막히거나 없는 칸의 이유)가 있다. 이 작업대가 이미 가진 자료만 읽는다.
 
@@ -92,11 +94,13 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | `lane` | 기존 `project()` 단계를 여섯 칸에 맞춘다(자료→수집, 픽셀 검수→정답, 준비+데이터셋→데이터셋, 학습, 평가, 적용 검토→승격 기록) |
 | `object` | 객체 승인·대기·제외 수와 최신 준비본(`exports`). 학습·평가는 학습기가 없어 `not_available` |
 | `omx` | `learning_links`의 OMX 결과 폴더와 `omx_segment_reviews`가 있는 폴더 수. 학습 칸은 학습 과제 화면의 OMX 과제 수(`learning_task_records`의 `task` 중 `adapter`가 `omx`) |
-| `sim` | `--sim-config`가 없으면 `not_available`. 있으면 실험 목록의 수와 최근 상태(홈은 1분에 한 번만 읽는다) |
+| `sim` | `--sim-config`가 없으면 `not_available`. 있으면 실험 목록의 수와 최근 상태, 평가 단계에 최근 run의 단계·과제 성공·판정(`sim_web.public()` 필드만, 승인 아님). 다음 할 일은 그 run을 여는 `/learning/sim?run=<run_id>`다(홈은 1분에 한 번만 읽는다) |
 | `vlm` | VLM 표가 있을 때 사진·확정·제외·임시 정답 수. 확정이 1장 이상이면 평가 칸이 열린다 |
 | `decision` | 모두 `not_available`(「Learning에 연결 전」) |
 
 모르는 칸은 숫자를 만들지 않고 이유를 적은 `not_available`이다. 표를 만들지 않고 읽으므로 홈을 열어도 VLM·OMX 표가 생기지 않는다. 홈은 도메인마다 한 줄(이름, 여섯 칸, 막힌 이유, 다음 할 일 하나)을 보이고 평가·승격 화면은 같은 `domains`의 평가·승격 기록 칸을 도메인별로 보인다. 390px에서는 줄이 세로로 쌓이고 가로 스크롤이 없다.
+
+**정답 두 단계(D-857 §4).** 도메인 줄의 `truth`는 `{confirmed, provisional, waiting, over_cap, href, reason}`이고, 홈의 줄과 정답 칸에 「확정 · 임시 · 대기」로 보인다. 확정은 사람이 내린 결정(객체·픽셀 승인, 저장한 OMX 구간 검수, VLM 사람 정답)이다. 사람이 모델 초안을 적용하고 승인하면 「맞음」, 고쳐서 승인하면 「고침」이고 둘 다 확정이다. 임시는 아직 결정하지 않은 모델 답이다. 객체는 `object_drafts`나 LiDAR 후보 상자가 있는 대기 사진, 픽셀은 `pixel_drafts` 초안이 있는 대기 사진이다. 확인 대기열은 도메인당 50건이고 가장 오래된 사진부터 열린다(`href`). 50건을 넘는 초안은 `over_cap`으로 세고 대기에 넣는다. VLM 임시 정답은 모델 합의라 대기열에 넣지 않고 점검으로 본다. OMX는 구간을 만드는 모델이 없어 임시가 「없음」이다. 평가셋 공개(`review_eval_bootstrap`)와 데이터셋 준비(`review_dataset`)는 승인 행만 읽으므로 임시 정답은 평가·승격 증거에 들어가지 않는다.
 
 ### 같은 센터의 작업 공간 (D-857 §2)
 
@@ -332,6 +336,8 @@ account_id는 거절한다. 학습 권한 없이 로그인한 사용자는 로�
 
 개인 연결은 소유자 작업에만 사용한다. 프로젝트 연결에는 `manage` 권한과 `dataset:namespace/repo` 또는 `model:namespace/repo` 형식의 자원 허용 목록이 필요하다. 프로젝트 관리자 권한은 호스트 파일시스템 관리자 권한이 아니다. 협업 HTTP에서 임의 서버 경로를 받는 기존 `/api/import`, `/api/cad`, `/api/learning/register`는 사용할 수 없다.
 
+끝난 HF 가져오기는 자료 화면(`/catalog`)의 「검수로 보내기」(`POST /api/learning/imports/review`, `{"id": ...}`, `import` 권한)로 정답 대기열에 들어간다. 서버 경로가 아니라 가져오기 id만 받으므로 협업 모드에서도 쓸 수 있다. 서버는 `completed` 작업의 공개 산출물 manifest·크기·SHA-256·media sidecar를 디스크에서 다시 검증하고, 작업 공간에 픽셀 클래스셋이 없거나 가져온 `classes.yaml`(원본 sha)·`data.yaml`(객체 클래스셋 sha)이 작업 공간 것과 다르면 거절한다(D-485). JPEG/PNG만 객체·픽셀 `pending`으로 등록하며 초안·승인은 만들지 않는다. 각 사진의 source에는 `source_kind: huggingface`와 `upstream`(저장소·고정 revision·경로·파일 해시·가져오기 id·요청자·보낸 사람)이 남고, 가져오기 작업에는 첫 등록 기록 `review`가 남는다. 다시 보내면 첫 기록을 돌려준다. 사람이 승인한 HF 사진은 `upstream`의 저장소·40자 revision·경로·sha256이 모두 있고 sha256이 사진 해시와 같을 때만 영상 증명 대신 그 파일 해시로 데이터셋에 들어간다(`review_dataset.hf_group`). 묶음은 `hf:<repo_type>/<repo_id>@<revision>`이고 늘 `train`에만 둔다. val·평가셋·승격 증거에는 넣지 않으며(D-857), val은 우리 카메라 묶음 둘 이상으로만 나눈다(HF 묶음뿐이면 거절). HF 사진과 같은 표현 해시로 묶인 우리 사진도 학습에만 들어가며 보고의 `own_forced_train`에 그 장수가 남는다. 카탈로그가 적은 `source_kind`·`upstream`은 버리므로 「검수로 보내기」를 거친 사진만 HF로 인정한다. 출처가 하나라도 빠지면 `source_video_hash_unknown`으로 막는다. manifest의 `external_sources`(HF가 있을 때만)와 빌드 보고에 장수·비율·묶음이 남고, 홈의 학습 흐름 기록에 「외부(HF) 사진 N장 · P% (학습에만)」이 보인다.
+
 운영 앱은 HTTPS reverse proxy 뒤의 loopback에 바인딩한다. `public_origin`은 경로와 끝 슬래시 없는 정확한 HTTPS origin이다. 프록시는 공개 Host를 보존하여 `127.0.0.1:<review-port>`로 전달하고 외부에서 backend에 직접 접근하게 만들지 않는다. Host·Origin과 `Secure; HttpOnly; SameSite=Lax` 쿠키를 함께 사용한다. 프록시 로그에도 callback code/state와 요청 본문을 기록하지 않는다.
 
 ```bash
@@ -506,7 +512,7 @@ Native export는 `execution_mode=native_export`로 학습과 구분한다. 화�
 
 SIM 웹 어댑터와 화면은 조건 확인·실행 요청을 위한 준비 경로다. 현재 공개 소스에는 실행에 필요한 `learning/envs/isaac/run_control.py`가 포함되어 있지 않다. 운영자가 검증된 외부 실행 소스·SDK·workspace binding을 준비하기 전에는 실행 연결 미설정으로 표시하고 실행을 허용하지 않는다. 이 화면의 추가나 모의 실행 시험을 실제 SIM 실행·로봇 학습 수용 근거로 쓰지 않는다.
 
-작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
+작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. `?run=<run_id>`로 열면 목록을 읽은 뒤 그 run을 클릭과 같은 방법으로 선택한다. SIM 판정과 과제 성공은 평가 근거일 뿐 승인·승격이 아니다(D-793, D-857). 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
 
 서버는 선택적 `--sim-config PRIVATE.json`을 사용한다. 설정이 없으면 SIM 연결 미설정으로 응답하고 기존 검수는 계속 동작한다. 이 파일은 현재 계정 소유·0600이며 검수 state의 workspace_id와 결속한다.
 

@@ -314,3 +314,9 @@
 - 후속 검증: CORE select 실패가 warning ZERO를 보낼 때 이전 실행 연결이 남는 문제를 원격 NEW1로 재현해 수정했다. 관련133 PASS, 최신 main 반영 후 Isaac 전체와 module_structure325 PASS/1 SKIP/NEW0. 독립 소스 검토는 f2697eab11ea1f095cba02a97553fb7e611851f7의 카메라 관측 주기 변경을 승인했다.
 - 실제 R42: 같은 SHA로 headless 학습6회·baseline4회·eval3회가 종료됐다. 구간 raw reward 합계와 Q 갱신1,165회(종료6회)를 독립 재계산해 저장 정책과 정확히 일치했다. 동일 관측 행동 유지44,551회, 산출물91개 hash, 영상7개 프레임 수를 검증했다. 정지 receipt16개를 확인했으나 성공 정지 구간 전체 raw sample은 저장되지 않아 연속 정지 독립 검증과 구분한다.
 - gate 변화: 전체13회 모두 camera_lane_lost로 완주0, SDK exit1, 후보 미채택이다. 진행량 증가는 완주나 안정적인 곡선 추종 증거가 아니다. 병렬 환경·신호·횡단보도·Fleet·ROS-SIM·실물 수용은 미완료다. 원본과 독립 verifier는 private/isaac/media/2026-10-12-r42-camera-cadence에 보관했다.
+
+## 2026-10-25 · uncommitted · OMX import 보고서의 공개 소스 포트
+
+- 변경: 기존 개발 기준 a46daee90b7의 import_report·선택적 import_omx 보고서·회귀를 공개 accepted source에 그대로 옮겼다. 기존 벤더 자산과 importer를 유지한다. 보고서는 정상 SDK 정리 뒤 배타적으로 생성하며 모델·관절·자산·프레임 증거를 별도 검증한다.
+- 증거: 원래 소스와 세 파일의 canonical Git blob 일치를 확인하고 이 포트의 커밋된 SHA에 대한 원격 검사·독립 검토·CI를 별도로 결속한다. 과거 SDK 성공을 새 포트의 실행 성공으로 바꾸지 않는다.
+- gate 변화: 없음. 새 SDK 실행·접촉 과제·학습 정책 평가·실물 제어는 수행하지 않았다.

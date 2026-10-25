@@ -9646,6 +9646,108 @@ osy-d395-s1d\`.
 - 증거: 원격 시험(아래 PR).
 - gate 변화: 없음.
 
+## 2026-10-24 · uncommitted · 센터 설치 교훈: 서명 릴리스에 없는 것들
+
+- 변경: [설치 교훈](solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md)에 서명 꾸러미에 설치기(`deploy/model_pc`)가 없어 모델 PC의 `~/rosy-ml/bin` 사본을 같은 커밋 판으로 바꿔야 하는 점, 환경 지문이 바뀌면 같은 커밋을 새 환경·더 큰 sequence로 다시 서명하는 점, bridge 설정을 바꾸면 새 `--out` 작업 폴더가 필요한 점을 더했다.
+- 증거: 2026-10-24/25 sequence 33(환경 거절)·34(적용)·35(설치기 교체 뒤 센터 설치, `--workspace-links` 유지), bridge `--out` 이동 뒤 복구.
+- gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · 교훈: LeRobot은 센터 학습 venv에 있다
+
+- 변경: [교훈](solutions/workflow-issues/lerobot-lives-in-the-center-learner-venv-not-the-test-venv-2026-10-25.md) 추가 — 원격 시험 venv에 `lerobot`이 없어 건너뛴 시험을 "ROSY에 LeRobot 없음"으로 잘못 판단한 일. 모델 PC 센터의 OMX 학습 venv(`~/.local/share/rosy-learning-center/venv-cpu`)에 `lerobot 0.4.4`가 있고, LeRobot 시험은 `test_experiment_tasks_pinned.py`처럼 명시 플래그와 그 Python 하위 프로세스로 돌린다.
+- 증거: 2026-10-25 모델 PC에서 시험 venv들은 `ModuleNotFoundError`, 학습 venv는 `lerobot 0.4.4`·`torch 2.10.0+cpu`·pytest 없음.
+- gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · SIM 실험 결과를 평가·승격과 홈에 연결 (D-857 P1)
+
+- 변경: `/learning/evaluate`가 최근 SIM 실험 10개를 상태·단계·과제 성공·판정(`sim_web.public()`의 `status`·`result.stage`·`result.task_success`·`result.status`만)으로 보이고, 각 줄이 `/learning/sim?run=<run_id>`로 그 run을 연다. `sim.js`는 목록을 읽은 뒤 `?run=`의 run을 클릭과 같은 방법으로 선택한다. 홈 SIM 행은 `public()` 행만 읽고(1분 읽기 제한 유지) 평가 단계에 최근 run의 단계 근거를, 다음 할 일에 그 run 링크를 둔다. 연결 미설정이면 평가 단계도 `not_available`(「SIM 실행 연결이 설정되지 않았습니다.」). 화면 문구가 SIM 판정·과제 성공은 근거일 뿐 승인·승격이 아니라고 밝힌다(D-793, D-857). `review-app.md` 갱신.
+- 증거: 원격 시험 PC에서 대상 시험 25 passed(브라우저 포함, 1280·390px), affected 계층 2508 passed, 317 skipped. known_failures 비교 둘 다 0 NEW. SIM은 가짜 run으로만 시험했고 실제 SDK 실행은 별도 증거다.
+- gate 변화: 없음. CE 해당 없음 — 기존 화면 연결이며 새 판단이 없다.
+
+## 2026-10-25 · uncommitted · OMX 데이터셋 단계가 저장된 구간 검수를 DB에서 읽음
+
+- 변경: D-857 P0 2번. `omx_web.py export-segments --db <state>/reviews.sqlite3 --id <등록 id> --out <새 폴더>`가 `/learning/omx`에 저장된 최신 구간 검수 버전을 DB에서 읽어 `native_segments.export_segments`에 그대로 넘긴다(JSON 내려받기·수동 전달 불필요, 내려받기는 남김). `native_review.refuse_untrainable`이 `DO_NOT_TRAIN.txt`·`static_episodes.json` 표시 녹화를 intake(`prepare_native`)·분할(`split_reviewed`)·구간 내보내기에서 거절한다. 학습에는 여전히 사람이 성공·무개입으로 확인한 구간만 들어간다.
+- 증거: 원격 시험 PC에서 대상 시험 233 passed, 9 skipped, affected 계층 2478 passed, 324 skipped, known_failures 0 NEW. DB 경로가 내려받은 JSON과 같은 입력을 export에 넘기는 시험은 통과했다. 두 경로의 receipt·dataset 바이트를 비교하는 LeRobot 왕복 시험은 시험 PC에 lerobot이 없어 건너뛰었다(미검증).
+- gate 변화: 없음. CE 해당 없음 — 새 장치·환경 판단이 없다.
+
+## 2026-10-25 · uncommitted · 정지 episode 제외 규칙과 검수 DB 읽기 전용
+
+- 변경: robot-47 답변에 따라 `DO_NOT_TRAIN.txt`는 dataset 전체 거절, `static_episodes.json`은 적힌 episode만 제외로 바꿨다. 파일이 깨졌거나 남는 episode가 없으면 전체 거절. 표시는 `record_session`이 LeRobot dataset root에 쓰고 `record_seal`이 `collection/dataset/`으로 복사한다(fix/omx-arm-s-cell-check 읽기 확인). `prepare_native`가 aggregate 번호로 intake root에 옮겨 쓰고, `inspect_dataset`이 `excluded_episodes`(번호·이유)로 남기며, `reviewed_splits`·구간 선택이 그 episode를 뺀다. 이 변경 전에 준비한 intake는 봉인 manifest에 표시가 있으면 거절한다(다시 준비 필요). manifest 없는 예전 fixture intake는 확인하지 않는다. `export-segments`는 DB를 `mode=ro`로 열어 두 표를 직접 읽는다.
+- 증거: 원격 시험 PC에서 대상 247 passed, 9 skipped, affected 2684 passed, 324 skipped, known_failures 0 NEW. LeRobot 바이트 비교 시험은 시험 PC에 lerobot이 없어 여전히 건너뜀.
+- gate 변화: 없음. CE 해당 없음 — 규칙 변경이며 새 장치 판단이 없다.
+
+## 2026-10-25 · uncommitted · OMX 구간 DB 내보내기 바이트 비교를 센터 CPU venv에서 실행
+
+- 변경: 없음(검증 기록). pytest가 없는 모델 PC 센터 CPU venv(lerobot 0.4.4, Python 3.12.3)에서 1ce299ce22 사본과 독립 스크립트로 `test_db_export_is_byte_identical_to_the_downloaded_json_export`와 `test_real_lerobot_segment_readback`의 절차를 재현했다. venv·센터·state는 건드리지 않았고 임시 폴더는 지웠다.
+- 증거: DB `export-segments`와 내려받은 JSON 경로의 split-receipt.json이 바이트 동일, train·eval child 파일 12개 sha256 모두 일치, 내보내기 전후 DB 바이트 동일, 구간 readback 3프레임·action 2,3,4 확인.
+- gate 변화: 없음. CE 해당 없음 — 시험 PC에 lerobot이 없다는 사실은 기존 기록에 있다.
+
+## 2026-10-25 · uncommitted · HF 가져오기를 검수 대기열로 보내기 (D-857 P1)
+
+- 변경: 자료 화면(`/catalog`)이 협업 모드의 HF 가져오기를 보여 주고, 끝난 작업에 「검수로 보내기」(`POST /api/learning/imports/review`, `import` 권한)를 단다. 서버는 `LearningImports.verified`로 공개 산출물 manifest·크기·SHA-256·media sidecar를 디스크에서 다시 검증하고(`_recover`와 같은 검사 `_published`), `review_ingest.import_hf`가 작업 공간 픽셀 클래스셋이 없거나 가져온 `classes.yaml`·`data.yaml`이 다르면 거절한다(D-485). JPEG/PNG만 객체·픽셀 `pending`으로 들어가고 승인·초안은 만들지 않는다. 사진 source에 `upstream`(저장소·고정 revision·경로·해시·가져오기 id·요청자·보낸 사람)이, 가져오기 작업에 첫 `review` 기록이 남는다. `import_frames(upstream=)`는 서버가 검증한 출처만 받고 카탈로그 행의 선언은 쓰지 않는다.
+- 증거: 원격 시험 PC 단위·HTTP 시험과 브라우저 시험(1440·390px, 44px 누름 면, 가로 스크롤 없음), affected 계층. known_failures 비교 0 NEW. 실제 HF 저장소와 모델 PC 센터에서의 수용은 하지 않았다.
+- gate 변화: 없음. 영상 원본이 없는 사진이라 데이터셋 빌드는 `source_video_hash_unknown`으로 계속 막힌다. CE 해당 없음 — 새 장애나 반복 원인이 없다.
+
+## 2026-10-25 · uncommitted · 승인한 HF 사진을 학습 데이터셋에만 (D-857)
+
+- 변경: `review_dataset.hf_group`이 사람이 승인한 HF 사진의 출처(저장소·고정 revision·경로·sha256=사진 해시)를 검증된 묶음 `inputs/source.jsonl`에서 읽어 `hf:<repo_type>/<repo_id>@<revision>` 묶음을 준다. 그런 사진만 `source_video_hash_unknown`·영상 증명 요구를 건너뛰고, 다른 검사는 그대로다. HF 묶음은 늘 `train`이고 val은 우리 카메라 묶음만으로 `assign_splits`가 나눈다(우리 사진의 묶음·분할은 그대로). manifest `external_sources`(HF가 있을 때만, 우리 사진만의 데이터셋 내용은 그대로)와 빌드 보고에 장수·%·묶음, 홈 학습 기록에 「외부(HF) 사진 N장 · P% (학습에만)」.
+- 증거: 원격 시험 PC 대상 시험과 affected 계층, known_failures 0 NEW. 실제 HF 자료로 학습·평가까지 돈 수용은 하지 않았다.
+- gate 변화: 없음. HF 사진은 평가셋·승격 증거에 들어가지 않는다. CE 해당 없음 — 새 장애나 반복 원인이 없다.
+
+## 2026-10-25 · uncommitted · HF 학습 사진 검토 반영 (own_forced_train)
+
+- 변경: 독립 검토 지적 반영. HF 사진과 한 묶음이 된 우리 사진을 보고·manifest `external_sources.own_forced_train`으로 센다(학습에만 넣는 동작은 그대로). 시험 추가: HF만 있는 데이터셋 거절, sha256이 사진 해시와 다르면 거절, 카탈로그가 적은 `source_kind`·`upstream`은 버려 `hf_group`을 통과하지 못함, 평가 bootstrap이 HF 행을 거절, 표현 해시로 묶인 우리 사진의 학습 고정과 집계. `review-app.md`에 그 동작을 적었다.
+- 증거: 원격 시험 PC 대상 시험과 affected 계층, known_failures 0 NEW.
+- gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 판단이 없다.
+
+## 2026-10-25 · uncommitted · 객체·픽셀·OMX 정답 두 단계 표시 (D-857 §4–5)
+
+- 변경: `learning_domains.truth`가 도메인 줄에 확정·임시·대기 수를 더한다. 확정은 사람 결정(객체·픽셀 승인, 저장한 OMX 구간 검수, VLM 사람 정답), 임시는 아직 결정하지 않은 모델 초안(`object_drafts`·LiDAR 후보 상자, `pixel_drafts`)이다. 「맞음/고침」 확인 대기열은 도메인당 50건, 가장 오래된 사진부터 열고 넘치는 초안은 대기로 센다. OMX는 구간을 만드는 모델이 없어 임시 「없음」이다. 홈의 도메인 줄과 정답 칸에 보인다. 평가셋 공개와 데이터셋 준비는 이미 승인 행만 읽으므로 새 경로를 만들지 않고, 모델 초안을 적용한 사진이 평가셋 공개에서 거절되고 사람이 승인한 뒤에만 들어가는 시험을 더했다.
+- 증거: 원격 시험 PC 대상 시험과 affected 계층, known_failures 비교.
+- gate 변화: 없음. 평가 결과의 확정 프레임 수·해시 기록과 build.py 자동 평가셋(LiDAR·궤적)의 단계 구분은 평가 보고 계약을 바꾸므로 이 조각에 넣지 않았다. CE 해당 없음 — 새 장애나 반복 원인이 없다.
+
+## 2026-10-25 · uncommitted · 평가·승격 「승격 요청」 묶음 (D-874, Learning F)
+
+- 변경: `promotion_request.py`가 등록된 인식 학습 결과에서 `rosy.learning.promotion-request/1` 묶음을 만든다. 담는 것은 모델 파일 sha256, 데이터셋 content_sha와 HF 비율(`train_only`), 평가셋 content_sha·mIoU, 학습 commit·Python·torch(기록된 경우), 요청자, 시각, `state: requested`이고, `<state>/promotion-requests/<sha>.json`에 한 번만 쓴다. 승인·단계·권한 키, LiDAR·궤적 자동 라벨·HF 평가 사진, 확정 평가 없음은 거절하고 한국어 이유를 낸다. `POST/GET /api/learning/promotion-requests`(`manage`+CSRF / `view`). 평가·승격 화면은 요청 가능한 후보가 있을 때만 버튼을 켜고, 요청 뒤 해시와 「Fleet에서 승인권자가 이 해시로 제안을 만든다(D-793)」를 보인다. `learning_cycle.py` 행에 `provenance`(commit·python·torch).
+- 증거: 원격 시험 PC 대상 시험, 브라우저 시험(1440·390px, `ROSY_RUN_BROWSER_TESTS=1`) 10 passed, affected 계층 2735 passed·known_failures 0 NEW. 실제 모델 PC 센터 수용은 하지 않았다. 지금 확정 정답 평가를 가진 모델은 없을 것으로 본다.
+- gate 변화: 없음. Fleet 쪽 인식 후보 대기열은 만들지 않았다. CE 새 교훈 — 읽지 않은 fetch 응답 본문이 networkidle을 막았다(`docs/solutions/runtime-errors/unread-fetch-body-blocks-playwright-networkidle-2026-10-25.md`).
+
+## 2026-10-25 · uncommitted · 승격 요청 독립 검토 반영 (D-874)
+
+- 변경: `validate`를 모든 키·값 형식의 허용 목록으로 바꿨다(HF 비율·학습 기록의 끼워 넣은 키, bool 장수, NaN·무한 IoU 거절). 평가셋은 `--learning-control` 학습 설정의 저장소 `evalsets/` 아래에 있는 `review_eval_bootstrap` 공개본(프레임마다 `approval_sha256`)이어야 하고, 학습 기록 `ready` 행의 `eval_set`과 content_sha가 같아야 한다(`learning_cycle`이 기록). 저장소 밖에서 `human_reviewed_eval`을 주장하는 평가셋은 거절된다. 쓰기는 잠금과 uuid 임시 이름을 쓰고, 만든 시각만 다른 같은 요청은 처음 해시를 돌려준다. GET은 경로·크기·mtime_ns가 같으면 해시를 재사용하고 POST는 모두 다시 해시한다.
+- 증거: 원격 시험 PC 대상 57 passed, 브라우저(1440·390px) 10 passed, affected 2790 passed·known_failures 0 NEW.
+- gate 변화: 없음. 학습 실행기가 연결되지 않은 작업대는 승격 요청을 만들 수 없다. CE 해당 없음 — 검토 반영이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · 승격 요청 학습 기록 행을 결과 폴더·파일에 묶기 (D-874)
+
+- 변경: 재검토 반영. 학습 기록 행은 요청 폴더가 주장하는 revision만으로 고르지 않고, 그 폴더를 공개한 행(`result.location`이 같은 실제 경로)이며 기록한 모델 파일 sha256이 봉인할 파일과 같아야 한다. `learning_cycle`이 `ready` 행에 공개 폴더의 `eval_set`과 `files`를 남긴다. 그 기록이 없는 예전 행은 거절된다. 시험 추가: 실제 `eval_set`·`files` 기록, `evalsets/` 안의 밖을 가리키는 링크와 `..` 경로 거절, GET 캐시가 있어도 POST가 다시 해시해 같은 크기·mtime의 바뀐 파일을 거절, 다른 폴더·다른 파일의 같은 revision 행 거절.
+- 증거: 원격 시험 PC 대상 54 passed, 브라우저(1440·390px) 10 passed, affected 2794 passed·known_failures 0 NEW.
+- gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · 봉인한 자동 교사 녹화의 Learning intake (D-848)
+
+- 변경: `collection_intake.prepare_native`가 `record_session.py --replay`로 녹화해 `record_seal.py`로 봉인한 `source_mode=scripted_teacher` 녹화를 받는다. `teacher/trajectory.json`을 다시 해시해 manifest `teacher_sha256`(64-hex)과 대조하고, `kind=replay_trajectory`·`rosy.omx-replay-trajectory.v1`, 정수로 이어진 A·reset·B 구간(A·B 길이 같음), 작은 JSON `teacher.source`(4 KiB·깊이 3·목록 64개 이하), Episode 정확히 두 개를 요구한다. 리더 녹화와 한 intake에 섞으면 거절한다. `capture.json`은 리더 manifest 해시 대신 `teacher_sha256`과 녹화별 `teachers`(hash·kind·segments·source)를 담아 `native_capture`의 자동 교사 검사를 그대로 통과한다. 현장 PC 절대 경로 `replay.path`는 `rosy_provenance` session 사본에서 지운다. 정적 episode·`DO_NOT_TRAIN.txt`·Episode 번호 옮기기는 그대로다.
+- 증거: 원격 시험 PC 대상 시험(intake·segments·capture), 모델 PC 학습센터 learner venv(LeRobot 0.4.4)로 실제 봉인 녹화→prepared intake 왕복(`ROSY_RUN_PINNED_LEARNING=1`) 1 passed, affected 계층 487 passed·known_failures 0 NEW. 실제 Fleet PC 봉인본과 `deploy/robot/omx` 쪽 변경(PR #189)은 이 시험에 없다.
+- gate 변화: 없음. 판정은 모두 unknown/exclude로 시작하고 자동 교사 녹화도 사람 검수 뒤에만 학습에 들어간다. CE 해당 없음 — 합의한 형식의 구현이며 새 장애나 반복 원인이 없다.
+
+## 2026-10-25 · uncommitted · 자동 교사 intake: 현장 봉인 형식·경로 제거·검토 반영 (D-848)
+
+- 변경: robot-47 답변과 독립 검토 반영. reset은 1 frame 이상이고, manifest 구간이 궤적의 구간·frame 수, session `replay.sha256`·`segments`와 같아야 한다. 현장 local main의 `record_seal`은 session·리그·보정 revision을 쓰지 않으므로 폴더 이름을 session으로 쓰고 `prepare-native --rig-revision --calibration-revision`(교사 intake 전용)을 받는다. 봉인본에 값이 있으면 같아야 하며 `capture.json`에 값마다 출처(seal/operator)를 남긴다. `teacher_sha256`은 하나의 교사만 뜻하므로 다른 교사의 녹화는 한 intake에서 거절한다. 리더·교사 모두 provenance 사본에서 현장 절대 경로·장치 by-id를 지우고 `teacher.source.dataset`은 basename만 남기며 `redactions.json`에 원본 sha256을 둔다. 리더 `capture.json` 내용은 그대로다. `teacher.source` 목록 한도는 1000개·16 KiB.
+- 증거: 원격 시험 PC `learning/curation/omx/test/` 전체, 모델 PC learner venv(LeRobot 0.4.4) 실제 봉인→prepared intake 왕복 1 passed(경로 문자열 없음·정적 제외·DO_NOT_TRAIN 거절 포함), affected 계층 known_failures 0 NEW. 실제 Fleet PC 봉인본의 수용은 하지 않았다.
+- gate 변화: 없음. CE 해당 없음 — 형식 합의·검토 반영이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · 자동 교사 intake 재검토 반영: 문장 속 경로 가리기 (D-848)
+
+- 변경: provenance 사본의 모든 문자열에서 `/home/…`, `/dev/serial/by-id/…`, `/dev/v4l/by-id/…`, `/dev/tty*` 부분을 `<redacted-path>`로 바꾼다(session.json의 오류 문장 등). basename을 남길 때도 `/dev` 이름은 장치 serial이라 버린다. `capture.json`의 `collection_manifests[].session_id_origin`이 session을 봉인본(seal)과 폴더 이름(folder) 중 어디서 얻었는지 남긴다.
+- 증거: 원격 시험 PC `learning/curation/omx/test/` 전체, 모델 PC learner venv 실제 왕복(경로 문자열 검사 포함) 1 passed, affected 계층 905 passed·known_failures 0 NEW.
+- gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · OMX intake가 승인된 카메라 촬영 기준을 직접 읽는다 (D-792 S3 첫 조각)
+
+- 변경: `collection_pipeline.py prepare-native --camera-reference ROLE=PATH`(역할마다 한 번)와 `prepare_native(camera_references=)`. 새 `learning/curation/omx/camera_reference.py`가 계약 `validate_reference`로 읽고 파일 이름=revision, 역할 중복·불일치, dataset `observation.images.*`와 다른 역할 집합, 합친 `meta/info.json`의 폭·높이(축 이름으로 읽음)·fps 불일치를 거절한다. `{역할: revision}`만 `inspection.json`·`capture.json`의 `camera_setup`에 남기고 `camera_identity`·경로는 남기지 않는다. 분할·구간 재검사는 같은 값을 넘겨 보고서를 그대로 비교한다. 옵션이 없으면 출력은 같다. 프레임 비교와 `camera-setup.json`은 아직 없다.
+- 증거: 원격 시험 PC 대상 시험 11 passed, 모델 PC learner venv(LeRobot 0.4.4) 실제 intake에서 revision 기록·fps 거절·식별자 미기록 1 passed, affected 계층 791 passed·known_failures 0 NEW.
+- gate 변화: 없음. CE 해당 없음 — 계획된 조각 구현이며 새 장애가 없다.
+
 ## 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
 
 - 변경: D-871(모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면) 기록. `omx_autoupdate.py`에 `kind: service`의 `idle_gate: cell`(셀 잠금·버스·토크 OFF 유휴 규칙), 재시작 전 잠금 해제, `restart_running_only`(손으로 멈춘 관측기는 그대로), `system_site_packages`를 더함. 카메라·관측기·브리지용 `omx-devices-autoupdate.json.example`, `requirements-observation.lock`, `rosy-omx-devices-autoupdate.{service,timer}`. 관측기 템플릿이 health 파일을 `%i`로 정하고 브리지는 `ROSY_OBSERVATION_ARM_HEALTH`를 기본값으로 읽음(SHA 박힌 drop-in 대체). services.yaml의 해당 유닛을 `autoupdate`로.

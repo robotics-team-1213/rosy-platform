@@ -35,7 +35,9 @@ def test_every_domain_has_the_six_stages_and_unknowns_say_why():
     decision = by_id(rows)['decision']
     assert set(states(decision)) == {'not_available'} and decision['blocked'] == 'Learning에 연결 전'
     assert decision['next'] is None
-    assert states(by_id(rows)['sim'])[0] == 'not_available'
+    sim = by_id(rows)['sim']['stages']
+    assert [sim[i]['state'] for i in (0, 4)] == ['not_available'] * 2
+    assert sim[4]['evidence'] == 'SIM 실행 연결이 설정되지 않았습니다.'
     assert by_id(rows)['vlm']['stages'][0]['evidence'] == 'VLM 질문 자료가 없습니다.'
     assert by_id(rows)['object']['next'] == {'label': '자료 등록', 'href': '/catalog'}
 
@@ -69,6 +71,40 @@ def test_object_omx_sim_and_vlm_count_only_what_exists():
     assert rows['vlm']['stages'][4]['state'] == 'done'
     failed = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'error': 'x'})))['sim']
     assert failed['blocked'] == 'SIM 실행 연결을 확인하세요.'
+
+
+def test_truth_tiers_cap_the_confirm_queue_and_omx_has_no_provisional():
+    rows = by_id(domains(pipeline=progress(), pixel_counts={'approved': 1, 'pending': 3, 'excluded': 0},
+                         drafts={'object': list(range(5, 60)), 'pixel': [7]},
+                         **dict(EMPTY, counts={'approved': 2, 'pending': 60, 'excluded': 0},
+                                items=[{'id': 'a', 'kind': 'omx'}, {'id': 'b', 'kind': 'omx'}], omx_reviewed=['a'],
+                                vlm_counts={'total': 4, 'labelled': 1, 'excluded': 1, 'provisional': 2})))
+    assert rows['object']['truth'] == {'confirmed': 2, 'provisional': 50, 'waiting': 10, 'over_cap': 5,
+                                       'href': '/?filter=pending&frame=5', 'reason': None}
+    assert rows['lane']['truth'] == {'confirmed': 1, 'provisional': 1, 'waiting': 2, 'over_cap': 0,
+                                     'href': '/pixels?filter=pending&frame=7', 'reason': None}
+    omx = rows['omx']['truth']
+    assert (omx['confirmed'], omx['provisional'], omx['waiting'], omx['href']) == (1, 0, 1, None) and omx['reason']
+    assert rows['vlm']['truth']['provisional'] == 2 and rows['vlm']['truth']['waiting'] == 0  # audited, not capped
+    assert rows['sim']['truth'] is None and rows['decision']['truth'] is None
+
+
+def test_sim_row_shows_the_latest_run_stage_evidence_and_opens_that_run():
+    run_id = 'e' * 32
+    sim = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [
+        {'run_id': 'f' * 32, 'status': 'FAILED', 'updated_at': '2026-10-23T01:00:00'},
+        {'run_id': run_id, 'status': 'SUCCEEDED', 'updated_at': '2026-10-24T01:00:00',
+         'result': {'status': 'passed', 'stage': 'model_import', 'task_success': None}}]})))['sim']
+    assert sim['next'] == {'label': 'SIM 결과 확인', 'href': '/learning/sim?run=' + run_id}
+    evaluate = sim['stages'][4]
+    assert evaluate['evidence'] == '최근 단계 model_import · 과제 성공 기록 없음 · 판정 passed (근거일 뿐 승인 아님)'
+    assert evaluate['next']['href'] == '/learning/evaluate?domain=sim'
+    assert sim['stages'][5]['state'] == 'not_available'  # a SIM verdict is evidence, never a promotion record
+    failed = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [
+        {'run_id': run_id, 'status': 'SUCCEEDED', 'result': {'status': 'failed', 'task_success': False}}]})))['sim']
+    assert failed['stages'][4]['state'] == 'blocked'
+    waiting = by_id(domains(pipeline=progress(), **dict(EMPTY, sim_runs={'runs': [{'status': 'RUNNING'}]})))['sim']
+    assert waiting['stages'][4]['state'] == 'waiting' and waiting['next']['href'] == '/learning/sim'
 
 
 def test_stored_reads_without_creating_tables(tmp_path):
