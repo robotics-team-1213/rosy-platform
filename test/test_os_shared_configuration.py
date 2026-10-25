@@ -28,10 +28,10 @@ def test_actual_config_changes_and_applied_digest_survive_b_and_return_to_a(tmp_
         target = root_b / relative
         assert target.is_file(), f"config owner did not publish {relative} for B"
         assert target.read_bytes() == (root_a / relative).read_bytes()
-    _card(root_b, "ap:\n  mode: always\nlogin:\n  boot_code: operator\n")
+    _card(root_b, "ap:\n  mode: relay\nlogin:\n  boot_code: operator\n")
     assert config_module().apply(root_b, lambda _: "")["state"] == "applied"
     first.FirstBootProvisioner(root=root_a).apply(bundle=bundle, hardware_serial=SERIAL)
-    assert json.loads((root_a / "etc/rosy/network-policy.json").read_text())["mode"] == "always"
+    assert json.loads((root_a / "etc/rosy/network-policy.json").read_text())["mode"] == "relay"
     # The old card file is still present in A: the committed applied digest must be current too.
     assert card_a.exists()
     assert (root_a / "var/lib/rosy/config/applied.json").read_bytes() == (
