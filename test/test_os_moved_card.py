@@ -11,6 +11,16 @@ from test_rebind_board import _fresh_bundle, _rebind
 MOVED_SERIAL = "10000000abcdef02"
 
 
+def test_staged_registration_cannot_resume_old_tailnet_on_original_board(tmp_path, monkeypatch):
+    first, root, _, common, bundle = _provision_a(tmp_path, monkeypatch)
+    result = first.FirstBootProvisioner(root=root).apply(bundle=bundle, hardware_serial=MOVED_SERIAL)
+    assert result["state"] == "NEW_DEVICE_SETUP"
+    _serial(root, SERIAL)
+    with pytest.raises(ValueError, match="registration pending"):
+        first._native_helper("os_state_storage").admit_tailnet(root, bind_machine=True)
+    assert not (common / "tailscale/machine-binding.json").exists()
+
+
 def test_repeated_moved_boots_keep_setup_identity_and_shared_recovery_state(tmp_path, monkeypatch):
     first, root, other, common, bundle = _provision_a(tmp_path, monkeypatch)
     gate = first._native_helper("os_state_storage")

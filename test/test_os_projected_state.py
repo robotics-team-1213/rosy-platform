@@ -102,14 +102,14 @@ def test_committed_live_settings_refresh_the_current_boot_receipt(tmp_path, monk
 def test_publication_before_completion_cannot_issue_readiness(tmp_path, monkeypatch):
     first, root, _, _, _ = _device(tmp_path, monkeypatch)
     config = first._native_helper("os_state_config")
-    with config.configuration_update(root) as update:
-        update.stage("etc/rosy/login-policy.json", None, 0o600)
+    with pytest.raises(RuntimeError, match="power loss"):
+        with config.configuration_update(root) as update:
+            update.stage("etc/rosy/login-policy.json", None, 0o600)
 
-        def interrupted():
-            raise RuntimeError("fixture power loss after canonical pointer")
+            def interrupted():
+                raise RuntimeError("fixture power loss after canonical pointer")
 
-        monkeypatch.setattr(update.shared, "prepare_existing", interrupted)
-        with pytest.raises(RuntimeError, match="power loss"):
+            monkeypatch.setattr(update.shared, "prepare_existing", interrupted)
             update.commit()
     with pytest.raises(ValueError, match="completion"):
         first._native_helper("os_state_ready").publish_ready(root)
