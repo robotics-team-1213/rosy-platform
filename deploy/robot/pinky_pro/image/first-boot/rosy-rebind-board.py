@@ -20,7 +20,7 @@ import tempfile
 try:
     from deploy.robot.pinky_pro.sd.personalization import DeviceIdentity, validate_device_identity, validate_provision_bundle
 except ModuleNotFoundError:
-    sys.path.insert(0, "/opt/rosy")
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from deploy.sd.personalization import DeviceIdentity, validate_device_identity, validate_provision_bundle
 
 
