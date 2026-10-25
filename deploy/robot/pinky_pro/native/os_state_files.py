@@ -52,7 +52,7 @@ def initial_changes(root: Path, factory_id: str) -> dict[str, bytes | None]:
     return result
 
 
-def _timezone(root: Path, data: bytes | None) -> str | None:
+def _timezone(root: Path, data: bytes | None) -> str:
     value = "Etc/UTC" if data is None else _object(data, {"schema_version", "timezone"})["timezone"]
     if (not isinstance(value, str) or not value or value.startswith("/") or "\\" in value
             or any(part in ("", ".", "..") for part in value.split("/"))):
@@ -87,6 +87,9 @@ def project_files(root: Path, values: dict[str, bytes | None]) -> None:
     targets = validate_projection(root, values)
     timezone = _timezone(root, values["etc/rosy/timezone.json"]) if "etc/rosy/timezone.json" in values else None
     localtime = _path(root, "etc") / "localtime"
+    timezone_file = _path(root, "etc/timezone") if timezone is not None else None
+    if timezone_file is not None and timezone_file.exists():
+        _read(timezone_file, 64 * 1024, root.stat().st_uid)
     if timezone is not None and (localtime.exists() or localtime.is_symlink()):
         info = localtime.lstat()
         if info.st_uid != root.stat().st_uid or not (stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)):
@@ -101,14 +104,18 @@ def project_files(root: Path, values: dict[str, bytes | None]) -> None:
               or stat.S_IMODE(target.stat().st_mode) != ROOT_FILES[name]):
             _write_atomic(target, data.decode("utf-8"), ROOT_FILES[name])
     if timezone is not None:
-        temporary = localtime.with_name(".rosy-localtime-" + uuid.uuid4().hex)
-        try:
-            temporary.symlink_to("/usr/share/zoneinfo/" + timezone)
-            os.replace(temporary, localtime)
-            sync_directory(localtime.parent)
-        finally:
-            temporary.unlink(missing_ok=True)
-        _write_atomic(root / "etc/timezone", timezone + "\n", 0o644)
+        target = "/usr/share/zoneinfo/" + timezone
+        if not localtime.is_symlink() or os.readlink(localtime) != target:
+            temporary = localtime.with_name(".rosy-localtime-" + uuid.uuid4().hex)
+            try:
+                temporary.symlink_to(target)
+                os.replace(temporary, localtime)
+                sync_directory(localtime.parent)
+            finally:
+                temporary.unlink(missing_ok=True)
+        if (not timezone_file.exists() or _read(timezone_file, 64 * 1024, root.stat().st_uid) !=
+                (timezone + "\n").encode("utf-8") or stat.S_IMODE(timezone_file.stat().st_mode) != 0o644):
+            _write_atomic(timezone_file, timezone + "\n", 0o644)
 
 
 def transition(root: Path, pointer: dict, complete: dict, raw: bytes, expected: dict) -> None:
