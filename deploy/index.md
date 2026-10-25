@@ -80,4 +80,4 @@
 - 2026-10-25 · 9f0df4f99b · 설치형 updater 복구 시험과 공개 digest inventory
 - 2026-10-25 · 4fdf8c9fee · 동적 서명 소비자 호환과 추가 회귀
 - 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
-- 2026-10-25 · uncommitted · 호스트 에이전트 복구 문구 표기 정렬
+- 2026-10-25 · uncommitted · SD 이미지의 서명된 소스 검증과 버전 고정

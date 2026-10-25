@@ -3412,6 +3412,12 @@
 - 증거: 운용자 문구 규칙(CONCEPTS.md)에 맞춘 문자열 변경이며 계약·시험을 바꾸지 않는다. 원격 시험으로 회귀를 확인한다.
 - gate 변화: 없음. CE: 해당 없음.
 
+## 2026-10-25 · uncommitted · SD 이미지의 서명된 소스 검증과 버전 고정
+
+- 변경: 기존 서명 이미지 검증기가 source-revision.txt와 build-provenance.json의 서명된 source/release 일치를 검사한다. 선택한 빌드 SHA를 기대값으로 고정하면 다른 이미지는 카드 검색 전에 거부하고, 검증 출처를 카드·배치 증거에 남긴다. 이미 전체 검증한 이미지의 checksum을 재사용해 같은 호출에서 대용량 파일을 두 번 읽지 않는다.
+- 증거: 실제 Ed25519 fixture에서 출처 미검증과 이미지 2회 읽기를 먼저 재현했다. Windows 모의 카드 점검은 출처 설정 전달·불일치 사전 거부·단일 카드 증거·배치 출처와 기존 3장/실패/취소 흐름을 확인했다. 원격 최종 결과는 해당 커밋의 gateway 기록으로 확인한다.
+- gate 변화: SOURCE 도구 보강이며 native ARM64 이미지 재빌드·실물 쓰기·부팅·Wi-Fi/OTA 수용은 아니다. CE: 해당 없음 — 기존 검증 대상 일치·중복 검증 방지 교훈을 코드와 회귀에 적용한다.
+
 ## 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
 
 - 변경: 공통 서명 구현을 `hosts/common/release/signing.py`로 옮기고 Pinky 호환 import·native 독립 복사·CD snapshot 의존 목록을 연결했다. 제품/SDK host target descriptor와 list/plan/apply/rollback CLI를 추가하고, 실행은 기존 Pinky executor만 허용한다. RaspTank와 Neo 2는 명시적으로 실행 차단 상태다.
