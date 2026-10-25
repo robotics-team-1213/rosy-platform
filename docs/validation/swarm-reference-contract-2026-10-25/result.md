@@ -18,3 +18,14 @@ API v1.316·app·관련 시험 pin은 공식 도구로 함께 갱신했다. D-87
 추출·새 consumer·capability·모노 시계 통합의 증거는 다음 기록으로 분리한다. NTP50ms·radio·재부팅·실물 정지·FIELD는 계속 미수용이다.
 
 CE: 해당 없음 — 시계 전제·수식·호환성은 D-870과 경계 회귀에 직접 보존했다. 새 해결 교훈 문서를 중복 생성하지 않는다.
+
+## 후속 검증 준비 · 2026-10-25
+
+독립 검토한 통합 commit `74496b1e0c`는 D-870의 schema/helper를 보존하면서 최신 이벤트·정책 계약을 병합했다. API v1.316과 D-870/D-869/D-865 기록을 함께 유지했다. lint 0 errors/33 warnings이며, 이 통합 커밋의 FULL 원격 착지 검증은 아직 시작 전이다.
+
+위 CE 판단은 계약 구현 자체에 대한 것이다. 별도로 검증된 환경 진단은 순차적으로 기록했다.
+
+- CE 새 교훈: [격리 chronyd 초기 추정의 관측 창](../../solutions/workflow-issues/clockless-chronyd-candidates-need-a-convergence-window-2026-10-25.md). 원래 70초 실패와 별도 205초 관측을 보존하며, 운영 source·장치 수용을 주장하지 않는다. Full CE의 parser/3개 링크/비밀정보 사전 점검과 독립 16개 사실 검증을 통과했다.
+- CE 기존 교훈 갱신: [배포 소스와 검증 소스의 일치](../../solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md). 이전 작업 브랜치의 helper가 실제 서명 후보를 오판한 사례와 복구 방법을 추가했다. Lightweight CE의 parser 검사를 통과했고, 원래 이력의 커밋 3개와 당시 운영 커밋 1개의 reachability 경고는 역사·관측 시점을 명시해 판정했다. 별도 semantic subagent는 실행하지 않았다.
+
+이 문서 점검은 pytest·이미지 빌드·배포·FIELD 수용을 대신하지 않는다. Pinky 두 대는 사용자가 현재 전원 OFF라고 확인했으므로 설치·동기 상태·실물 통신 수용이 남아 있다.
