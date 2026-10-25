@@ -1,5 +1,5 @@
 """Project HF destinations with namespace-wide, durable capacity reservations."""
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import copy
 import json
 from pathlib import Path
@@ -116,15 +116,15 @@ class StoragePool:
                 rows.append(row)
         return dict(project_id=self.project_id, targets=rows)
 
-    def reserve(self, actor, job_id, upload_bytes):
+    def reserve(self, actor, job_id, upload_bytes, *, connection=None):
         self.accounts.require(actor, 'publish')
         if not isinstance(job_id, str) or not IDENTIFIER.fullmatch(job_id):
             raise ValueError('invalid storage job ID')
         size(upload_bytes)
         if upload_bytes == 0:
             raise ValueError('upload must contain bytes')
-        with self.connect() as conn:
-            conn.execute('BEGIN IMMEDIATE')
+        with (self.connect() if connection is None else nullcontext(connection)) as conn:
+            if not conn.in_transaction: conn.execute('BEGIN IMMEDIATE')
             existing = conn.execute('SELECT document FROM storage_allocations WHERE project=? AND id=?',
                                     (self.project_id, job_id)).fetchone()
             if existing:

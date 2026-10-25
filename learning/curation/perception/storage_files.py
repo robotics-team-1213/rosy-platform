@@ -15,7 +15,7 @@ SOURCE = 'storage-source.json'
 PROFILES = {
     'isaac': {'.json', '.jsonl', '.png', '.jpg', '.jpeg', '.mp4', '.npz', '.npy', '.parquet',
               '.yaml', '.yml', '.csv', '.txt', '.md', '.safetensors'},
-    'dataset': {'.json', '.jsonl', '.png', '.jpg', '.jpeg', '.mp4', '.parquet', '.md'},
+    'dataset': {'.json', '.jsonl', '.png', '.jpg', '.jpeg', '.mp4', '.parquet', '.npz', '.npy', '.yaml', '.md'},
     'model': {'.json', '.safetensors', '.md'},
 }
 
@@ -50,6 +50,13 @@ def parts(value, *, internal=False):
             or any(p in ('', '.', '..') or (p.startswith('.') and not internal) for p in value.split('/'))):
         raise ValueError('relative managed artifact path required')
     return value.split('/')
+
+
+def allowed(name, profile):
+    path = PurePosixPath('/'.join(parts(name)))
+    if (profile not in PROFILES or path.suffix.lower() not in PROFILES[profile]
+            or any(p.lower() in ('private', 'secrets', 'tokens', 'credentials') for p in path.parts)):
+        raise ValueError('artifact file is outside its profile')
 
 
 @contextmanager
@@ -171,10 +178,8 @@ class Files:
                     or not re.fullmatch(r'[0-9a-f]{40}', source['provenance'].get('source_revision', ''))):
                 raise ValueError('Isaac run, seed and source revision required')
             for name, expected in files.items():
-                path = PurePosixPath('/'.join(parts(name)))
-                if (path.suffix.lower() not in PROFILES[profile]
-                        or any(p.lower() in ('private', 'secrets', 'tokens', 'credentials') for p in path.parts)
-                        or not isinstance(expected, dict) or set(expected) != {'bytes', 'sha256'}
+                allowed(name, profile)
+                if (not isinstance(expected, dict) or set(expected) != {'bytes', 'sha256'}
                         or not isinstance(expected['sha256'], str) or not re.fullmatch(r'[0-9a-f]{64}', expected['sha256'])):
                     raise ValueError('artifact file is outside its profile')
                 size(expected['bytes'])
@@ -214,13 +219,16 @@ class Files:
 
     def delete(self, location, files):
         self.verify(location, files, subset=True)
-        def clear(fd):
+        def clear(fd, prefix=''):
             with os.scandir(fd) as entries:
                 for item in entries:
                     if item.is_dir(follow_symlinks=False):
-                        with directory(fd, [item.name]) as child: clear(child)
+                        with directory(fd, [item.name]) as child: clear(child, prefix + item.name + '/')
                         os.rmdir(item.name, dir_fd=fd)
                     else:
+                        expected = files.get(prefix + item.name)
+                        if expected is None or entry(fd, item.name) != expected:
+                            raise ValueError('cleanup file changed after verification')
                         os.unlink(item.name, dir_fd=fd)
         with self.open(location) as fd: clear(fd)
         path = parts(location['relative'], internal=True)

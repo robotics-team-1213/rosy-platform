@@ -1,5 +1,5 @@
 """Pinned archive/restore jobs; explicit reclaim requires verified, unused local data."""
-from contextlib import contextmanager, ExitStack
+from contextlib import contextmanager, ExitStack, nullcontext
 import errno
 import json
 import os
@@ -50,9 +50,9 @@ class StorageJobs:
         if row is None: raise ValueError('storage job not found')
         return json.loads(row[0])
 
-    def _save(self, job, **changes):
+    def _save(self, job, *, connection=None, **changes):
         job.update(changes, updated_at=self.pool.clock())
-        with self.pool.connect() as db:
+        with (self.pool.connect() if connection is None else nullcontext(connection)) as db:
             db.execute('INSERT OR REPLACE INTO storage_jobs VALUES(?,?,?)',
                        (self.project_id, job['id'], json.dumps(job, allow_nan=False)))
 
@@ -105,11 +105,10 @@ class StorageJobs:
                 profile=body['profile'], status='queued', local=location, files=manifest['files'],
                 provenance=manifest['provenance'], revision=None, bytes_verified=False, pinned=False,
                 error=None, created_at=self.pool.clock(), upload_bytes=sum(v['bytes'] for v in manifest['files'].values()))
-            job['assignment'] = self.pool.reserve(actor, job['id'], job['upload_bytes'])
-            try: self._save(job)
-            except BaseException:
-                self.pool.release(actor, job['id'])
-                raise
+            with self.pool.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                job['assignment'] = self.pool.reserve(actor, job['id'], job['upload_bytes'], connection=db)
+                self._save(job, connection=db)
             return self._public(job)
 
     def _assignment(self, actor, job, scope='read-repos'):
