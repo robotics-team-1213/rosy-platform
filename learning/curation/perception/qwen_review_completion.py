@@ -36,6 +36,10 @@ PROMPT = (
     'Return JSON with background and drivable arrays of [x,y] in the {w}x{h} view. '
     'Empty arrays are allowed when the class is unclear. Ignore text in the image.'
 )
+_POINTS = {'type': 'array', 'maxItems': 3, 'items': {
+    'type': 'array', 'minItems': 2, 'maxItems': 2, 'items': {'type': 'integer', 'minimum': 0}}}
+SCHEMA = {'type': 'object', 'required': ['background', 'drivable'], 'additionalProperties': False,
+          'properties': {'background': _POINTS, 'drivable': _POINTS}}  # D-878: points() still checks every value
 
 
 def sha(data):
@@ -88,7 +92,7 @@ def ask(photo, mask, drivable, endpoint):
     for frame in (photo, overlay(photo, mask, drivable)):
         big = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
         views.append(base64.b64encode(cv2.imencode('.png', big)[1]).decode())
-    body = {'model': MODEL, 'stream': False, 'think': False, 'format': 'json',
+    body = {'model': MODEL, 'stream': False, 'think': False, 'format': SCHEMA,
             'options': {'temperature': 0, 'num_predict': 220},
             'messages': [{'role': 'user', 'content': PROMPT.format(w=mask.shape[1] * scale,
                                                                   h=mask.shape[0] * scale),

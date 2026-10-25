@@ -11515,9 +11515,22 @@ osy-d395-s1d\`.
 - 결정: 없음.
 - 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.
 
+## 2026-10-25 · uncommitted · 구조화 출력 공통 어댑터와 실제 모델 파이프라인 시험 (D-878)
+
+- 변경: `rosy.decision.structured_output`(Ollama·OpenAI 호환 전송 형식과 응답 봉투 검사)을 deliberation·conversation·operator broker와 GLM·free 게이트웨이가 쓴다(전송 바이트 동일). `judgment_schema()`가 빈 enum 대신 `maxItems: 0`을 내고, 판정별 `anyOf` 변형으로 단계 짝을 강제한다(`$ref`·`$defs`로 16 KiB 이내). `qwen_review_completion`은 닫힌 스키마로 요청한다. opt-in `test/test_structured_output_pipeline.py` 추가.
+- 증거: 모델 PC 실제 모델 — deliberation 0/3(HTTP 400) → 1/3 → 3/3, conversation 46/46, operator 26/26, judge seat 4/4, qwen 3/3. 관련 단위 시험 원격 583 passed.
+- gate 변화: 없음(AI PC 재배포·수용은 별도). CE 새 교훈 기록 — `docs/solutions/runtime-errors/ollama-refused-empty-enum-and-judgment-schema-allowed-steps-the-validator-refuses-2026-10-25.md`.
+
+## 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+
+- 변경: `tools/hooks/pre-push`가 `git config rosy.publishOnly true`인 clone에서 `publish/main-*` 밖의 브랜치 push를 거절한다(삭제는 통과, 사고 대응은 `ROSY_PUSH_REASON`). 팀원 clone은 설정이 없어 영향이 없다. `git-workflow.md`의 옛 `git push origin main` 순서와 `rosy-release-push` 1단계를 D-868 게시 절차로 고쳤다.
+- 이유: D-868 동결 중 에이전트 세션이 origin에 직접 PR #192~#209를 병합해 동기화 FULL이 반복됐다(로컬 기록 `Rosy/docs/workspace-records/2026-10-25/local-main-landing-speed.md`). 문서 규칙만으로는 막지 못했다.
+- 증거: `test/test_pre_push_hook.py::test_publish_only_clone_pushes_publish_branches_only` 5개 경우. bash로 같은 구간을 돌려 게시 0·주제 1·이유 0·설정 없음 0을 확인하고, 허용 분기를 거절로 바꾼 변형이 1로 바뀌는 것을 확인했다.
+- gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
+- 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
+
 ## 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
 
 - 변경: `tools/remote/remote_job.py` JOB이 pytest에 job마다 `mktemp -d /tmp/rosy-pytest-XXXXXX`를 `--basetemp`로 주고 EXIT trap이 지운다. 처음엔 실행 디렉터리 아래(`$D/$K.tmp`)에 뒀으나 land 전체 시험에서 Fleet TLS 시험 59개가 깨졌다: 로그인 umask 0002로 실행 디렉터리가 0775라 TLS 파일 조상 권한 검사가 거절했고, 경로가 길어 AF_UNIX 108바이트를 넘었다. land의 MAIN-RED 재확인은 노트북 쪽 JOB(같은 `--basetemp`)으로 main을 돌려 이를 main 고장으로 잘못 보였다. SWEEP은 연락이 끊긴 채 끝난 실행을 12시간이 아니라 2시간 뒤에 치운다. SWEEP·CLEANUP·SHIP 재시도는 실행·job 디렉터리를 지우기 전에 `chmod -R u+rwX`를 한다(릴리스·롤백 시험이 만드는 읽기 전용 디렉터리는 제품 동작이라 시험은 그대로 둠). 새 `tools/remote/host_probe.py`(`remote_pytest.py`에서 PROBE와 파서를 옮겨 D-766 600줄 아래로 유지)의 PROBE가 `~/rosy-test`와 `/tmp` 파일시스템의 남은 공간을 재고, `place()`는 남은 공간이 20 GB 미만인 호스트를 고르지 않는다(바닥 아래 대체 선택에도 적용). 사용률 기준은 두지 않는다: 434-468 GB 디스크에서 90%여도 45 GB가 남아 멀쩡한 호스트를 뺀다. 디스크 값이 없는 예전 probe는 알 수 없음으로 보고 통과시킨다. 시험 `test/test_remote_pytest.py`.
 - 증거: 2026-10-26 AI PC 루트 디스크 100%, `/tmp/pytest-of-ai` 19 GB(지우지 못한 `garbage-*` 약 40개), `~/rosy-test/runs` 37 GB/229개. 디스크가 찬 PC로 시험이 가서 `test_platform_g1_timing`이 SQLite fsync 지연으로 거짓 실패했다. 원격 pytest 122 passed, known_failures NEW 0. 새 시험은 변이(바닥 해제, `--basetemp` 제거, 720분 복구, chmod 제거)에서 빨간색을 확인했다. 실행 중 probe가 AI PC를 `disk 26.4 GB free (95%) - below disk floor`로 제외했다.
 - gate 변화: 디스크 바닥 아래 시험 PC는 pytest를 받지 않는다. 두 PC가 모두 바닥 아래면 기다린 뒤 "no test host reachable"로 끝난다. 이미 쌓인 `/tmp/pytest-of-*/garbage-*`는 이 변경이 지우지 않는다. CE: 해당 없음(원인과 규칙은 코드 주석과 시험에 남김).
-

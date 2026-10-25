@@ -5,6 +5,7 @@ from rosy.decision.deliberation import Problem, canonical
 from rosy.decision.deliberation.judgment import judgment
 from rosy.decision.deliberation.profiles import BoundProfile, ModelProfile
 from rosy.decision.deliberation.versioned_request import prepare_request
+from rosy.decision.structured_output import openai_reply
 from .deliberation_glm_receipt import usage
 
 MODEL = 'mimo-v2.6-flash-free'
@@ -28,17 +29,12 @@ def trusted_body(raw):
 
 
 def checked_response(response):
-    choice, = response['choices']
-    message = choice['message']
-    if (response.get('model') != MODEL or choice.get('finish_reason') != 'stop'
-            or message.get('role') != 'assistant' or message.get('tool_calls')
-            or message.get('function_call') or type(message.get('content')) is not str):
-        raise ValueError('FREE_RESULT_NOT_BOUND')
+    raw = openai_reply(response, MODEL, 'FREE_RESULT_NOT_BOUND')
     counts = {key: response['usage'][key] for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
     if 'completion_tokens_details' in response['usage']:
         counts['completion_tokens_details'] = response['usage']['completion_tokens_details']
     usage(counts)
-    payload = judgment(PROBLEM, BOUND, json.loads(message['content'])).payload
+    payload = judgment(PROBLEM, BOUND, raw).payload
     return dict(id='rosy-free-one-shot', object='chat.completion', model=MODEL,
         choices=[dict(index=0, message=dict(role='assistant', content=canonical(payload)), finish_reason='stop')],
         usage=counts)
