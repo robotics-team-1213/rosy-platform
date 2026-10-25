@@ -715,10 +715,11 @@ def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noq
         page.set_viewport_size({"width": 1366, "height": 768})
         api["/api/fleet/work"] = {**API["/api/fleet/work"], "kinds": ["CELL_TRANSFER"]}
         page.clock.run_for(5000)  # the work poll (MAP_MS)
-        assert page.locator("#work-new-move-item").is_hidden() and page.locator("#work-move").is_hidden()
+        expect(page.locator("#work-new-move-item")).to_be_hidden()
+        expect(page.locator("#work-move")).to_be_hidden()
         page.route("**/api/fleet/work", lambda route: route.fulfill(status=503, json={"detail": "offline"}))
         page.clock.run_for(5000)  # the work poll (MAP_MS)
-        assert page.locator("#work-new-cell-item").is_hidden()  # no answer: no kind
+        expect(page.locator("#work-new-cell-item")).to_be_hidden()  # no answer: no kind
         page.unroute("**/api/fleet/work")
         page.clock.run_for(5000)  # the work poll (MAP_MS)
         cell.click()
