@@ -9,7 +9,7 @@ import uuid
 
 from first_boot_runtime import _json_atomic, _write_atomic
 from os_state_layout import (
-    COMMON, StateError, _digest, _guid, _layout, _object, _pairs, _path, _read, mount_facts,
+    COMMON, StateError, _digest, _guid, _layout, _object, _pairs, _path, _read, shared_mount_facts,
 )
 
 # Live CORE tokens, NetworkManager profiles and consumable join secrets are never projected.
@@ -60,7 +60,7 @@ class FirstBootState:
     def __init__(self, root: Path, layout: dict):
         self.root, self.layout = root, layout
         self.owner = root.stat().st_uid
-        mount_facts(root, layout)
+        shared_mount_facts(root, layout)
         schema = _load(_path(root, COMMON + "/state/schema.json"), self.owner,
                        {"schema_version", "state_schema"})
         if schema != {"schema_version": 1, "state_schema": 1}:

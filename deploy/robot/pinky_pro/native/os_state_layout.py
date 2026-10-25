@@ -15,6 +15,11 @@ READY = "run/rosy-os-state/ready.json"
 LAYOUT_FIELDS = {"schema_version", "state_schema", "slot", "root_partuuid", "data_partuuid", "provision_partuuid"}
 MOUNTS = (("root", "/", "ext4"), ("data", "/" + COMMON, "ext4"),
           ("provision", "/run/rosy-provision-boot", "vfat"))
+SHARED_BINDINGS = {
+    "var/lib/rosy/provisioning": "/provisioning", "var/lib/rosy/core": "/core",
+    "etc/NetworkManager/system-connections": "/network/system-connections",
+    "var/lib/rosy/ssh": "/ssh", "home/rosy/.ssh": "/operator-ssh",
+}
 
 
 class StateError(ValueError):
@@ -187,6 +192,38 @@ def mount_facts(root: Path, layout: dict) -> list[dict]:
         identities.add(identity)
         result.append(dict(role=role, **actual))
     return result
+
+
+def shared_mount_facts(root: Path, layout: dict) -> list[dict]:
+    """Exact directory binds, including caller-visible devices, before firstboot writes."""
+    facts = mount_facts(root, layout)
+    data_device = next(row["device"] for row in facts if row["role"] == "data")
+    host = _mount_table(root, "proc/1/mountinfo")
+    caller = _mount_table(root, "proc/self/mountinfo")
+    for relative, subpath in SHARED_BINDINGS.items():
+        point = "/" + relative
+        views = []
+        for table, writable in ((host, True), (caller, False)):
+            rows = table.get(point, [])
+            if len(rows) != 1:
+                raise ValueError("shared directory mount missing or ambiguous")
+            row = rows[0]
+            if (row["device"] != data_device or row["root"] != subpath
+                    or row["filesystem"] != "ext4"
+                    or "rw" not in row["super_options"] or "ro" in row["super_options"]
+                    or writable and ("rw" not in row["options"] or "ro" in row["options"])):
+                raise ValueError("shared directory mount device/subpath/permissions differ")
+            views.append(row)
+        target = root
+        for component in relative.split("/"):
+            target /= component
+            if target.is_symlink():
+                raise ValueError("symlink in shared directory mount path")
+        info = target.stat()
+        if not stat.S_ISDIR(info.st_mode) or f"{os.major(info.st_dev)}:{os.minor(info.st_dev)}" != data_device:
+            raise ValueError("visible shared directory device differs")
+        facts.append(dict(role="shared:" + relative, **views[0]))
+    return facts
 
 
 def policy_directory(root: Path) -> Path:

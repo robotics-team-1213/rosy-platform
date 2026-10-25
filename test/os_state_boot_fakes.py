@@ -60,9 +60,15 @@ def shared_roots(tmp_path, monkeypatch):
         return os.path.abspath(name)
 
     def bind_stat(path, *args, **kwargs):
-        if mount_key(path, kwargs.get("dir_fd")) in mountpoints:
+        key = mount_key(path, kwargs.get("dir_fd"))
+        if key in mountpoints:
             kwargs = {**kwargs, "follow_symlinks": True}
-        return original_stat(path, *args, **kwargs)
+        info = original_stat(path, *args, **kwargs)
+        if key in mountpoints and not key.endswith("/run/rosy-provision-boot"):
+            fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+            fields["st_dev"] = os.makedev(8, 6)
+            return SimpleNamespace(**fields)
+        return info
 
     def bind_open(path, flags, *args, **kwargs):
         if mount_key(path, kwargs.get("dir_fd")) in mountpoints:
