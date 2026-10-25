@@ -180,3 +180,44 @@ def test_projection_repairs_a_cached_runtime_file_with_excessive_read_permission
     report = module.FirstBootProvisioner(root=root_b).apply(bundle=bundle, hardware_serial=SERIAL)
     assert report["ok"] is True
     assert target.stat().st_mode & 0o777 == 0o640
+
+
+def test_cli_default_selects_the_admitted_boot_a_bundle(tmp_path, monkeypatch, capsys):
+    root_a, _, _, _ = shared_roots(tmp_path, monkeypatch)
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
+    bundle.parent.mkdir()
+    bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
+    module = _module()
+    monkeypatch.setattr(module, "_default_network_activate", lambda _: True)
+    code = module._main(["--root", str(root_a), "--hardware-serial", SERIAL])
+    assert code == 0, capsys.readouterr().out
+    assert not bundle.exists()
+
+
+def test_cli_check_rejects_bad_storage_before_loading_cached_network(tmp_path, monkeypatch, capsys):
+    root_a, _, _, _ = shared_roots(tmp_path, monkeypatch)
+    (root_a / "etc/rosy/os-slot.json").write_text("{}", encoding="ascii")
+    profile = root_a / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection"
+    profile.write_text("[connection]\nid=rosy-site-sta\n", encoding="ascii")
+    module = _module()
+    calls = []
+    monkeypatch.setattr(module, "_nmcli", lambda *args: calls.append(args) or (0, ""))
+    monkeypatch.setattr(module, "site_wifi_up", lambda _: False)
+    assert module._main(["--root", str(root_a), "--hardware-serial", SERIAL, "--network", "check"]) == 1
+    assert calls == [], "invalid storage must not load a cached profile"
+    assert "OS_STATE_HOLD" in capsys.readouterr().out
+
+
+def test_cli_check_rejects_a_bundle_on_the_other_boot_before_network(tmp_path, monkeypatch, capsys):
+    root_a, _, _, _ = shared_roots(tmp_path, monkeypatch)
+    profile = root_a / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection"
+    profile.write_text("[connection]\nid=rosy-site-sta\n", encoding="ascii")
+    module = _module()
+    calls = []
+    monkeypatch.setattr(module, "_nmcli", lambda *args: calls.append(args) or (0, ""))
+    monkeypatch.setattr(module, "site_wifi_up", lambda _: False)
+    wrong = root_a / "boot/firmware/rosy-provision/provision.json"
+    assert module._main(["--root", str(root_a), "--bundle", str(wrong),
+                         "--hardware-serial", SERIAL, "--network", "check"]) == 1
+    assert calls == []
+    assert "OS_STATE_HOLD" in capsys.readouterr().out
