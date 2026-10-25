@@ -191,7 +191,7 @@ class StorageSetup:
                 job = service.run(actor, job_id)
                 if job['bytes_verified']:
                     service._verify_remote(actor, service._load(job_id))
-                result.append(dict(target_id=target['id'], **job))
+                result.append(dict(job, target_id=target['id']))
             except (ValueError, OSError, PermissionError, ImportError):
                 result.append(dict(target_id=target['id'], bytes_verified=False, error='verification_failed'))
         return dict(status='verified' if all(row['bytes_verified'] for row in result) else 'blocked', jobs=result)
