@@ -81,7 +81,39 @@ class FirstBootState:
     @_hold
     def admit(cls, root: Path):
         found = _layout(root)
-        return cls(root, found[0]) if found is not None else None
+        if found is None:
+            return None
+        shared = cls(root, found[0])
+        shared.validate_storage_state()
+        return shared
+
+    def validate_storage_state(self) -> str:
+        if self.current.exists():
+            if self.factory.exists():
+                raise ValueError("committed device still has a factory marker")
+            self._committed()
+            return "COMMITTED"
+        if self.complete.exists():
+            raise ValueError("completion has no committed generation")
+        identity = _path(self.root, "etc/rosy/device-identity.json")
+        binding = _path(self.root, "var/lib/rosy/provisioning/hardware-binding.json")
+        if self.pending.exists():
+            pending = self._pending()
+            if self.factory.exists():
+                factory = _load(self.factory, self.owner, {"schema_version", "state_schema", "factory_id"})
+                if factory["factory_id"] != pending["factory_id"]:
+                    raise ValueError("factory marker differs from initialization")
+            if identity.exists() and _load(identity, self.owner).get("device_uid") != pending["device_uid"]:
+                raise ValueError("cached identity differs from initialization")
+            if binding.exists() and _load(binding, self.owner) != {
+                    "device_uid": pending["device_uid"], "hardware_serial": pending["hardware_serial"]}:
+                raise ValueError("hardware binding differs from initialization")
+            return "INITIALIZING"
+        factory = _load(self.factory, self.owner, {"schema_version", "state_schema", "factory_id"})
+        _guid(factory["factory_id"])
+        if identity.exists() or binding.exists():
+            raise ValueError("factory device contains a cached device binding")
+        return "FACTORY_EMPTY"
 
     def _pending(self) -> dict:
         record = _load(self.pending, self.owner, PENDING_FIELDS)
@@ -129,12 +161,7 @@ class FirstBootState:
             raise ValueError("canonical identity/completion binding differs")
         return pointer, manifest, content
 
-    @_hold
-    def prepare_existing(self) -> None:
-        if not self.current.exists():
-            if self.complete.exists():
-                raise ValueError("completion has no committed generation")
-            return
+    def _committed(self):
         pointer, manifest, content = self._generation()
         expected = dict(manifest["completion"], os_state={
             "generation": pointer["generation"], "manifest_sha256": pointer["manifest_sha256"]})
@@ -155,6 +182,15 @@ class FirstBootState:
         if identity_path.exists() and _load(identity_path, self.owner) != json.loads(
                 content["etc/rosy/device-identity.json"]):
             raise ValueError("root identity differs from committed generation")
+        return content, expected
+
+    @_hold
+    def prepare_existing(self) -> None:
+        if not self.current.exists():
+            if self.complete.exists():
+                raise ValueError("completion has no committed generation")
+            return
+        content, expected = self._committed()
         # Validate every source before writing any target. Service-owned live state is excluded.
         targets = {relative: _path(self.root, relative) for relative in ROOT_FILES}
         for relative, target in targets.items():
