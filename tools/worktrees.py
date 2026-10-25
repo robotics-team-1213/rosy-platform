@@ -248,6 +248,8 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
         row["note"], row["keep"], newest = rules.orphan_content(row["path"], lambda rel: _is_cache(row["path"], rel))
         row["changed"], row["last"] = row["keep"], max(row["last"], newest)
         row["idle_h"], row["wait_h"] = max(0.0, (now - row["last"]) / 3600), rules.LANDED_IDLE_HOURS
+        if not row["keep"] and rules.is_tombstone(row["path"]):  # a hazard with nothing to lose: no wait
+            row["wait_h"] = 0.0
         row["verdict"] = "orphan"
         return
     landed = bool(row["branch"] and row["merged"] and row["branch"] != "main" and _landed(row))
@@ -344,8 +346,9 @@ def _remove(root: Path, row: dict, day: str, now: float, say=print) -> str:
     result = git(root, "worktree", "remove", *force, str(path))
     if result.returncode != 0:
         if path.exists() and all(r["orphan"] for r in scan(root)[1] if r["path"].resolve() == path.resolve()):
-            say(f"ORPHAN  {path}")  # git dropped it but the directory is still there (open handle, long path)
+            say(f"ORPHAN  {path}{rules.leave_tombstone(path)}")  # git dropped it; the folder stays (open handle)
         raise RuntimeError(f"git worktree remove failed, branch kept: {result.stderr.strip()}")
+    note += rules.leave_tombstone(path) if path.exists() else ""
     branch = row["branch"]
     # Exact sha: `update-ref -d` fails if the branch moved, so no commit that is not on main is dropped.
     if (branch and row["merged"]
@@ -474,6 +477,7 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
             base: str = "main", owner: str | None = None) -> int:
     kind, _, topic = branch.partition("/")
     root, _ = scan(cwd)
+    held = rules.clear_tombstone(root / ".worktrees", name)  # a removed worktree's folder left by an open handle
     known = git(root, "rev-parse", "-q", "--verify", f"{base}^{{commit}}").returncode == 0
     problem = (
         f"branch must be <type>/<topic> with <type> one of {', '.join(TYPES)} (D-372): {branch!r}"
@@ -481,7 +485,7 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
         else f"short name must be one path component of letters, digits, '.', '_', '-', not ending in '.': {name!r}"
         if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?", name)
         else '--force-over-cap needs a reason: --force-over-cap "<reason>"' if reason is not None and not reason.strip()
-        else f"{root / '.worktrees' / name} already exists" if (root / ".worktrees" / name).exists()
+        else f"{root / '.worktrees' / name} already exists{held}" if (root / ".worktrees" / name).exists()
         else f"branch {branch} already exists"
         if git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0
         else f"--from {base}: not a commit" if not known
