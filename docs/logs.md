@@ -11556,3 +11556,12 @@ osy-d395-s1d\`.
 - 증거: `test/test_remote_pytest.py::test_the_pytest_job_is_best_effort_lowest_io_not_idle`, `test/test_host_services_manifest.py`. g1이 실제로 통과하는지는 이 착지 뒤 AI PC에서 다시 확인한다(아직 가설).
 - gate 변화: 없음.
 - 교훈: CE 미해결 — g1 원인은 착지 뒤 재현 실험으로 확정한다.
+
+## 2026-10-26 · uncommitted · 원격 pytest job의 /tmp 누수 경고와 설치 환경 지문
+
+- 변경: `tools/remote/remote_job.py` JOB이 job 전용 `/tmp/rosy-pytest-XXXXXX` 아래 `p`를 `--basetemp`로, 형제 `t`를 `TMPDIR`/`TEMP`/`TMP`로 준다(pytest가 시작할 때 basetemp를 지우므로 안이 아니라 옆). pytest가 끝나면 `/tmp` 바로 아래에서 사용자 소유이고 lock보다 새로운 항목(`rosy-pytest-*` 제외)을 최대 20줄 `[remote-pytest] leaked into /tmp: <path>`로 알린다. 경고만 하고 종료 코드는 pytest 것 그대로다. pytest 전에 `[remote-pytest] env <deps-sha> freeze <16자리>`를 남긴다. freeze는 venv에 설치된 `*.dist-info` 이름 목록의 sha256이다.
+- 이유: `TEMP`가 없으면 `/tmp`로 떨어지는 브라우저 시험 4곳(`test/browser_harness.py` `save_temp_screenshot` 등)이 시험 PC `/tmp`에 파일을 남겼다. VENV는 pytest·setuptools·wheel·flake8·jsonschema·ext4·playwright를 고정 없이 설치하는데, `.deps-sha`와 land 캐시 env는 설치 입력의 해시라 같은 해시의 venv가 호스트·빌드 시점마다 다른 버전일 수 있다.
+- 결정: freeze를 VENV에서 `.freeze-sha` 파일로 쓰지 않고 job마다 dist-info 이름으로 계산한다. VENV 문구를 바꾸면 고정 해시 시험(`test_default_recipe_and_hash_remain_identical`)과 기존 venv가 모두 바뀌고, 이미 있는 venv는 파일이 없어 값을 못 남긴다. land 캐시 키에는 넣지 않는다: env id는 실행 전에 노트북에서 커밋만으로 계산하고, freeze는 실행한 호스트에서만 알 수 있으며 호스트마다 다를 수 있어 넣으면 캐시가 사실상 꺼진다. 버전 고정도 하지 않는다(CI 설치와 갈라짐).
+- 증거: 원격 `test/test_remote_pytest.py test/test_remote_test_tools.py` 102 passed, known_failures NEW 0. 새 시험 2개는 변이 6개(find 제거, `rosy-pytest-*` 제외 제거, `exit $c` 제거, 20줄 상한 99로, TMPDIR export 제거, freeze를 venv 밖에서 계산)에서 각각 빨간색이었다. 첫 실행에서 시험 PC 실제 누수 줄이 나왔다(`/tmp/g1udsgax_ixxe`, 두 번째는 기존 `/tmp/pytest-of-ai` 갱신). 같은 사용자의 동시 job이 만든 것도 잡히므로 경고로만 두고, job 로그 끝을 고정하던 기존 시험 3개는 뒤에 누수 줄이 붙어도 통과하게 고쳤다.
+- gate 변화: 없음(경고와 로그 줄만 추가).
+- 교훈: CE 해당 없음 — 이유는 코드 주석과 이 기록에 있다.

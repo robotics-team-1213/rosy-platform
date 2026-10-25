@@ -51,10 +51,19 @@ umask 022  # tests assume the robot umask; a host login umask 0002 makes 0664 fi
 # Short and 0700 under /tmp, not the run dir: AF_UNIX paths stop at 108 bytes and TLS file checks refuse
 # group-writable ancestors (login umask 0002 makes the run dir 0775).
 B=$(mktemp -d /tmp/rosy-pytest-XXXXXX) || exit 1
+# TMPDIR beside the basetemp, not in it (pytest wipes --basetemp at start): TEMP-or-/tmp tests leak otherwise.
+mkdir -m 700 "$B/p" "$B/t"; export TMPDIR=$B/t TEMP=$B/t TMP=$B/t
+# The deps hash names the inputs, not what unpinned pip picked; installed dist-info names do (one per run).
+echo "[remote-pytest] env ${V##*/} freeze $(cd "$V" && ls -d lib/python3*/site-packages/*.dist-info \
+  receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16)"
 # Best-effort lowest, not idle (-c3): idle gets no disk time while any other process writes, so a timing
 # test's SQLite fsync stalled for seconds on a busy AI PC (g1 contact gap p99 4.7-5.7 s, 2026-10-26).
 timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=${M}G ${CPU:+-p CPUQuota=$CPU} -- \
-  nice -n 15 ionice -c2 -n7 "$V/bin/python" -m pytest --basetemp "$B" "$@"
+  nice -n 15 ionice -c2 -n7 "$V/bin/python" -m pytest --basetemp "$B/p" "$@"
+c=$?  # warning only: what the job left directly in /tmp (the four TEMP-fallback browser tests did)
+find /tmp -mindepth 1 -maxdepth 1 -user "$(id -u)" -newer "$L" ! -name 'rosy-pytest-*' \
+  -printf '[remote-pytest] leaked into /tmp: %p\n' 2>/dev/null | head -n 20
+exit $c
 """
 
 # Job k is alive while the pid in <k>.pid (the lock's pid, but k-specific) answers kill -0.

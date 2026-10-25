@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · 원격 pytest job의 /tmp 누수 경고와 설치 환경 지문
 - 2026-10-26 · 5acb6bbb94 · 시험 job의 I/O 등급과 현장 PC 정리 타이머 선언
 - 2026-10-26 · uncommitted · docs(solutions): read-only test dirs filled the lab test-PC disks
 - 2026-10-26 · 3733f72b5d · 낡은 설치본 pre-push는 게시 push를 멈춘다
 - 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
-- 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
