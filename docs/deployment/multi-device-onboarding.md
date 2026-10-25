@@ -22,8 +22,8 @@ SDK가 없으면 연결 가능한 것처럼 보이는 빈 드라이버·가짜 t
   `deploy/robot/pinky_pro/sd/provision.schema.json`도 모델을 `pinky_pro`로 제한한다.
   이 제한을 풀기만 해서는 RaspTank 또는 SDK 호스트용 이미지가 되지 않는다.
 - `contracts/foundation/core_common/profile.py`의 모델 조회를 재사용하되,
-  `middleware/core/gateway/core/node.py`의 절대경로 overlay는 모델 조회를 우회할 수 있다.
-  제품 시작 시 선택 기종·설치 package·실제로 읽힌 설정·capability의 결속 검증이 선행되어야 한다.
+  `middleware/core/gateway/core/node.py`의 제품 시작은 installed ament share와 정적 설정 snapshot을 결속한다.
+  개발 절대경로 overlay는 기존 동작을 유지한다. [배포 도구와 마이그레이션](deployment-tools.md)을 따른다.
 - 서명·digest·의존 목록·설치 readback·롤백 규칙은 기존 릴리스 경계를 따른다.
   공통 처리 추출은 두 번째 실제 소비자가 확인된 부분부터 하며 기존 Pinky 패키지를 일괄 이동하지 않는다.
 - SDK 호스트용 산출물은 그 호스트의 플랫폼에 맞게 별도로 설계한다. Android 앱을 Pi 이미지로
@@ -53,6 +53,9 @@ SDK가 없으면 연결 가능한 것처럼 보이는 빈 드라이버·가짜 t
 사실을 기체의 조작 가능·작업 완료 근거로 사용하지 않는다.
 
 ## SDK 어댑터 준비 순서
+
+현재 `python tools/release/deploy.py list`로 직접 설치형과 SDK-host target의 상태를 조회할 수 있다.
+실제 apply/rollback은 기존 Pinky executor만 연결되어 있으며 SDK adapter를 제공하는 것은 아니다.
 
 1. 공식 지원표와 해당 SDK 문서로 기종/조종기/펌웨어 조합을 확인한다. 미지원이면 제어 구현을 중단하고
    차단 이유·확인일·재검토 조건을 기록한다. 관측용 경로도 제공된다고 가정하지 않는다.

@@ -12,3 +12,9 @@
 - 변경: 계약 시험을 패키지 안으로 옮기고 source contract용 test 의존성과 경로를 선언했다. 정확한 devices family/role 경로와 모듈 기록 링크를 등록했다.
 - 증거: 독립 diff 검토에서 기존 package role·패키지별 시험·AGENTS 기록 링크 계약의 누락을 정적으로 확인했다. 원격 실행 결과는 아직 없다.
 - gate 변화: 없음. 구조 점검 보완이며 모든 게이트 HOLD 유지.
+
+## 2026-10-25 · eb616252ea · 원격 source 계약 실행
+
+- 변경: 설정/기능 광고는 그대로 유지한다. source selection·load_config·TaskKind 거절과 신규 기종 설정 결속을 승인 시험 호스트에서 실행했다.
+- 증거: `p1-green` 관련36, `restructure-green` 결합213에서 패키지 시험 통과, NEW0. 결과는 작업 공간 `rasptank-platform` 검증 기록에 보관한다. 실제 native ament 설치·기체 부팅은 수행하지 않았다.
+- gate 변화: SOURCE/LOCAL에 원격 근거 추가. ROS-SIM/ARTIFACT/DEVICE/FIELD는 HOLD 유지.

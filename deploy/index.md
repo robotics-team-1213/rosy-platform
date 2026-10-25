@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
 - 2026-10-24 · c60d6046bb · 장치 Wi-Fi 복구와 서명 boot 계층 연속성
 - 2026-10-24 · uncommitted · 서명된 review payload의 OMX action-space 의존성 포함
 - 2026-10-24 · fe0519eea1 · 공용·내부 NTP polling과 Windows 최신성
 - 2026-10-24 · c50c268c1410 · 공통 NTP 시간원 선택과 정밀도 수용 분리
-- 2026-10-24 · 528962cb8d · 공통 NTP Windows 실제 적용과 workgroup 트리거

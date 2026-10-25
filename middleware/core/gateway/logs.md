@@ -1589,3 +1589,10 @@
 - 변경: boot/run/correlation이 현재 owner와 일치할 때만 잠금 안에서 취소하는 별도 경로를 추가했다. 기존 trip lease의 수명을 바꾸지 않아 취소 직후 새 owner가 들어오는 경쟁에서도 새 실행을 보존한다.
 - 증거: receiver·lease·Fleet sender/transport201 PASS, 별도 실제 Fleet dispatch→CORE→native 완료/취소 재조정2 PASS. odometry·localization·actuator는 합성이고 실제 정지 증거가 아니다. [검증 기록](../../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
 - gate 변화: 기존 장치/FIELD gate는 유지한다. 최종 통합 검사와 공식 착지는 대기한다. CE 해당 없음: 경쟁과 receipt 범위를 회귀로 보존했다.
+
+## 2026-10-25 · uncommitted · 제품 기종 설정 결속과 snapshot 소비
+
+- 변경: device 모드에서 선택 모델의 installed ament share와 타입을 포함한 정적 profile/capability 일치를 요구한다. 개발 절대경로 overlay는 유지하며 제품 서비스는 검증한 snapshot을 재읽기 없이 소비한다.
+- 증거: `8632a9f1f3` 원격 RED8, `f71c52a76a` 관련 GREEN36. snapshot 반례 RED 뒤 `eb616252ea` 결합 회귀213 통과(기종 설정·선택·RaspTank·공통 서명·설치본·배포 dispatcher). 독립 검토에서 snapshot 보완 확인. 전체 착지 회귀는 별도다.
+- gate 변화: ARTIFACT/DEVICE/FIELD 변화 없음. native 기존 수동 정적 override의 마이그레이션은 `docs/deployment/deployment-tools.md`를 따른다.
+- 교훈: 해당 없음 — 검증된 객체를 소비하는 조건을 코드와 반례 시험에 보존했다.

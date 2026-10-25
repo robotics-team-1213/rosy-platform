@@ -10416,3 +10416,10 @@ osy-d395-s1d\`.
 - 증거: 2026-10-25 DJI 공식 SDK 호환표·Mobile SDK 제품 목록·공식 저장소 문의 #684를 확인했다. Pinky image board 고정·SD model const·CORE 절대경로 overlay 경로를 대조했다. SDK 설치·장치 연결·관측·비행·새 runtime 구현은 수행하지 않았다.
 - gate 변화: 없음. RaspTank와 다기종 runtime/산출물/실물 검증은 별도 보류다. Neo 2를 제어 가능한 profile로 추가하지 않았다.
 - 교훈: 해당 없음 — 공식 지원 조사·설계 준비이며 해결된 실행 장애는 없다.
+
+## 2026-10-25 · uncommitted · 다기종 배포 도구와 제품 설정 검증 구현
+
+- 변경: 공통 signing 구현·Pinky 제품 정책·직접 설치/SDK host descriptor·운영 CLI를 분리하고 기존 push/rollback executor를 재사용한다. 제품 CORE는 installed model 설정의 검증 snapshot을 소비하며 개발 overlay는 유지한다. 배포 도구 문서에 책임·명령·제한과 canonical native 설정 migration을 기록했다.
+- 증거: 독립 설계2회 및 코드 검토. 기대 RED 뒤 결합213 PASS/NEW0, offline readback 회귀 RED 재현·보완 후 관련323 PASS/215 SKIP/NEW0. skip·ARTIFACT/DEVICE/FIELD를 소스 통과와 구분한다. 최종 committed tree의 하네스·착지 검증은 별도다.
+- gate 변화: RaspTank SOURCE/LOCAL만 원격 근거로 갱신. 실제 I/O·native 이미지·SD 쓰기·SDK/비행·현장 수용 상태는 유지한다.
+- 교훈: 해당 없음 — 기존 installed-layout 교훈을 회귀에 적용했고 새 조건은 코드/시험/배포 안내에 보존했다.

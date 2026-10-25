@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 다기종 배포 도구와 제품 설정 검증 구현
 - 2026-10-25 · uncommitted · 다기종 배포·DJI SDK 연결 준비
 - 2026-10-25 · uncommitted · RaspTank Pi 4 SD·센서 준비서
 - 2026-10-25 · uncommitted · RaspTank 무구동 설정 패키지와 소유권 준비
 - 2026-10-25 · uncommitted · docs: RaspTank 지원 후보와 공통 ROSY 통합 조건
-- 2026-10-25 · uncommitted · docs(adr): Fleet 정책 승인 방향 확정과 업무 앱 경계 보강

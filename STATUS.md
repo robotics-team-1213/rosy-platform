@@ -43,7 +43,7 @@
 | [interfaces](contracts/ros_idl/progress.md) | 장치 | 8058c3676 (2026-10-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](middleware/devices/pinky/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](middleware/devices/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
-| [rasptank_metal](middleware/devices/rasptank/profile/progress.md) | 로봇 통합 | uncommitted (2026-10-25) | HOLD | HOLD | HOLD | HOLD | HOLD | HOLD |
+| [rasptank_metal](middleware/devices/rasptank/profile/progress.md) | 로봇 통합 | eb616252ea (2026-10-25) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [description](middleware/devices/pinky/description/progress.md) | 로봇 통합 | c0bb0393c (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
@@ -130,8 +130,6 @@
 - pinky_pro DEVICE: 새 이미지에서 CORE_READY와 GET /system/capabilities readback 증거 없음
 - omx ROS-SIM: Two isolated AI follower Gazebo instances, action/cancel, and restart were observed; native single-command ownership, target-workstation timing, timeout HOLD policy, and camera stream remain unverified (docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md)
 - omx ARTIFACT: No OMX workstation image digest or package inventory
-- rasptank_metal SOURCE: 설정 전용 후보. 원격 프로파일·capability 계약 시험 결과 미확인
-- rasptank_metal LOCAL: 승인 시험 PC 자원 대기; 로컬 pytest로 대체하지 않음
 - rasptank_metal ROS-SIM: ament install/share와 ROS 실행 검증 미수행
 - rasptank_metal ARTIFACT: Pi 4 native payload와 서명된 ROSY 통합 이미지 없음
 - rasptank_metal DEVICE: 기체 미도착. 모델 결속·I/O·전원·독립 정지·보정·실물 수용 미수행

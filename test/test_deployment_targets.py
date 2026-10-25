@@ -76,6 +76,26 @@ def test_descriptor_cannot_select_a_program(targets, tmp_path):
         targets.load_targets(tmp_path)
 
 
+def test_metadata_cannot_unlock_unimplemented_executor(targets, tmp_path):
+    data = dict(targets.load_targets()["rasptank_metal"])
+    data.update(status="existing_implementation", operations=["apply"])
+    path = tmp_path / "deploy/robot/rasptank_metal/deployment-target.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(targets.DeploymentError, match="executor"):
+        targets.load_targets(tmp_path)
+
+
+def test_duplicate_target_id_is_rejected(targets, tmp_path):
+    data = targets.load_targets()["pinky_pro"]
+    for parent in ("deploy/robot/pinky_pro", "deploy/hosts/sdk/pinky_pro"):
+        path = tmp_path / parent / "deployment-target.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(targets.DeploymentError, match="duplicated"):
+        targets.load_targets(tmp_path)
+
+
 def test_deploy_cli_lists_and_refuses_without_network():
     entry = ROOT / "tools/release/deploy.py"
     listed = subprocess.run([sys.executable, str(entry), "list"], capture_output=True, text=True)

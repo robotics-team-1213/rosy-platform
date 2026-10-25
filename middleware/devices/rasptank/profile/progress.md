@@ -2,14 +2,14 @@
 module: rasptank_metal
 logical_modules: []
 owner: 로봇 통합
-last_verified: {commit: "uncommitted", date: 2026-10-25}
+last_verified: {commit: "eb616252ea", date: 2026-10-25}
 gates:
   SOURCE:
-    state: HOLD
-    blocker: "설정 전용 후보. 원격 프로파일·capability 계약 시험 결과 미확인"
+    state: GO
+    evidence: "eb616252ea 승인 원격 호스트의 설정·capability·TaskKind·기종 결속 결합 회귀 통과. 설정 전용이며 드라이버/실행 지원 아님"
   LOCAL:
-    state: HOLD
-    blocker: "승인 시험 PC 자원 대기; 로컬 pytest로 대체하지 않음"
+    state: GO
+    evidence: "승인 원격 source 계약 실행, 결합213 PASS/NEW0. native ament 설치 검증과 구분"
   ROS-SIM:
     state: HOLD
     blocker: "ament install/share와 ROS 실행 검증 미수행"

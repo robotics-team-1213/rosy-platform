@@ -26,6 +26,7 @@ safety plan (D-246).
 | `arm64-build-notes.md` | Current ARM64/Pi build and runtime boundary notes |
 | `rasptank-pi4-preparation.md` | RaspTank Pi 4 parts, sensor/camera interfaces, downloaded OS inputs and unverified SD/runtime gates |
 | `multi-device-onboarding.md` | Native vs SDK-host deployment intake, evidence gates and DJI Neo 2 SDK limitation |
+| `deployment-tools.md` | Shared trust code, target descriptors, deployment CLI and product profile binding migration |
 | `legacy-arm64-guide.md` | Historical upstream instructions kept for provenance; do not use for deployment |
 | `pi5-acceptance-checklist.md` | Physical acceptance tests |
 | `power-bench-verification.md` | Power/idle/standby bench |

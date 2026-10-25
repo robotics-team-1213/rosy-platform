@@ -3248,3 +3248,12 @@
 - 변경: D-863 network-only agent·AP HTTPS 복구·장치 결속 첫 부팅 인계, bridge/기능 릴리스 discovery와 signed boot catalog/inverse를 연결했다. 전역 claim과 radio lock, 실제 연결 관측, 비밀 없는 재접속 작업 조회를 사용한다.
 - 증거: [검증 기록](../docs/validation/device-network-recovery-2026-10-24/result.md). 경계 332, 업데이트/화면 680, 설치 격리 41, opt-in 브라우저 10 passed. 선택별 중복이 있어 합산하지 않는다. 원격 skip 60은 미검증이며 PowerShell inverse 실패 중단은 별도 mock 실행했다. 독립 검토의 deferred reconcile·fallback claim·부팅 복구 오류 전파를 회귀로 보완한다.
 - gate 변화: SOURCE 근거 추가. signed ARM64 산출물·Pinky 무선/TLS 등록·정전/재부팅·OTA DEVICE/FIELD 수용은 미실시이며 배포하지 않았다. CE: 기존 첫 부팅 Wi-Fi 교훈 갱신, 호스트 회귀와 실물을 구분했다.
+
+## 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
+
+- 변경: 공통 서명 구현을 `hosts/common/release/signing.py`로 옮기고 Pinky 호환 import·native 독립 복사·CD snapshot 의존 목록을 연결했다. 제품/SDK host target descriptor와 list/plan/apply/rollback CLI를 추가하고, 실행은 기존 Pinky executor만 허용한다. RaspTank와 Neo 2는 명시적으로 실행 차단 상태다.
+- 증거: 공통 signing RED2, dispatcher 미구현 RED 뒤 `eb616252ea` 결합 회귀213 통과. 리뷰에서 찾은 offline readback 동적 import 문제는 기존 원격 반례로 재현한 뒤 `b6a7ad60fe`에서 resolved module identity를 반환하도록 보완했다. 이 보완의 GREEN과 전체 착지는 후속 검증이다.
+- gate 변화: signed ARM64 산출물·SD/장치·SDK/비행 수용 변화 없음. 서명 바이트 형식·신뢰 anchor·manifest schema와 기존 executor의 SSH/서명/복구 경계 유지.
+- 교훈: 해당 없음 — 기존 installed-layout 회귀를 적용했고 동적 import 보완은 코드와 기존 readback 반례로 설명된다.
+
+- 추가 검증: `b6a7ad60fe`의 readback·CD·native/systemd·first-boot·SD writer 관련 원격 회귀는 PASS323/SKIP215/NEW0. skip을 통과로 계산하지 않으며 PowerShell/장치 의존 범위는 미확인이다. 실제 장치 배포는 수행하지 않았다.

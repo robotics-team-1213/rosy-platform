@@ -29,7 +29,7 @@ RaspTank의 Pi 5 장착도 제조사 지원 범위지만 ROSY의 Pi 5 조합 수
 - **기체별 프로파일:** 장치 구성, 설치 패키지, 확인된 센서, 좌표계·실측 치수·보정값·속도/관절 범위.
 - **기체별 어댑터:** 실제 버스·드라이버·출력 변환·관측과 정지. Pinky의 Dynamixel과 RaspTank의 DC 모터/서보 PWM을 동일한 하드웨어로 취급하지 않는다.
 
-CORE의 [프로파일 로더](../../contracts/foundation/core_common/profile.py)는 모델 기반으로 기체 설정을 찾는다. 그러나 [CORE의 경로 선택](../../middleware/core/gateway/core/node.py)은 절대경로 profile/capability가 있으면 모델 조회를 우회하며 기존 시험도 이 동작을 보존한다. RaspTank 제품 활성화 전에는 선택 모델·설치 package·프로파일·기능 선언의 일치를 별도로 검증해야 한다. 후보 이름만 바꾸고 Pinky의 절대경로 파일이나 capability를 재사용하지 않는다. Base 최종 명령은 CORE의 단일 소유권을 유지한다. 팔·집게의 동작 owner는 기존 장치 Action/Arbiter 경계와 [D-856](../adr/D-856-application-action-boundary.md)을 따라 별도로 통합해야 한다.
+CORE의 [프로파일 로더](../../contracts/foundation/core_common/profile.py)는 모델 기반으로 기체 설정을 찾는다. [제품 시작](../../middleware/core/gateway/core/node.py)은 installed ament share와 profile/capability의 타입을 포함한 정적 설정을 검증하고 그 snapshot을 소비한다. 개발 절대경로 overlay의 기존 동작은 유지한다. [배포 도구·마이그레이션](../deployment/deployment-tools.md)을 따르며, 이 소스 검증이 RaspTank native 설치·이미지·실물 수용을 대신하지 않는다. 후보 이름만 바꾸고 Pinky 설정을 재사용하지 않는다. Base 최종 명령은 CORE의 단일 소유권을 유지한다. 팔·집게의 동작 owner는 기존 장치 Action/Arbiter 경계와 [D-856](../adr/D-856-application-action-boundary.md)을 따라 별도로 통합해야 한다.
 
 [rosy.controls/1](../../contracts/foundation/core_common/protocol/controls.py)은 제어 종류·단위·제한을 공통으로 표현한다. 같은 UI를 쓴다는 것은 실제 제공하는 제어만 표시한다는 뜻이다. 검증되지 않은 주행·지도 이동·팔·집기 기능을 숨기고, 미지원 호출은 명확히 거절한다. 모델별 예외 분기를 관제 화면에 늘리는 방식으로 어댑터를 대신하지 않는다.
 
