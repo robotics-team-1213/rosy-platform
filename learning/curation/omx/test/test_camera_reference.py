@@ -34,6 +34,8 @@ def intake(tmp_path, monkeypatch):
     def aggregate(*args, aggr_root, **kwargs):
         (aggr_root/'meta').mkdir(parents=True)
         (aggr_root/'meta/info.json').write_text(json.dumps(INFO))
+        (aggr_root/'data').mkdir()
+        (aggr_root/'data/part.parquet').write_bytes(b'data')
     monkeypatch.setitem(sys.modules, 'lerobot.datasets.aggregate', SimpleNamespace(aggregate_datasets=aggregate))
     seen = {}
     class Inspected(Exception):
@@ -76,10 +78,10 @@ def test_without_references_capture_and_inspection_are_unchanged(intake):
 
 @pytest.mark.parametrize('fault, match', [
     ('stem', 'file name differs'), ('seal', 'canonical revision'), ('role', 'reference is for role front'),
-    ('json', 'Expecting value')])
+    ('json', 'Expecting property name')])
 def test_tampered_or_misnamed_reference_is_refused_before_any_output(intake, tmp_path, fault, match):
     path = reference(tmp_path/'refs', role='front' if fault == 'role' else 'top',
-                     **(dict(fps=12) if fault == 'seal' else {}))
+                     **(dict(created_by='someone else') if fault == 'seal' else {}))
     if fault == 'stem':
         path = path.rename(path.with_name('f'*64 + '.json'))
     if fault == 'json':
