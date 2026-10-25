@@ -70,21 +70,21 @@ def _safety(wt: Path, python: str, ids: list[str]) -> list[str]:
 
 
 def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
-               run) -> tuple[list[str], str]:
+               run, *, tested_sha: str) -> tuple[list[str], str]:
     """Rerun the NEW ids of one invocation alone; ``(load-flaky ids, "")`` or ``([], why it stops)``.
 
     ``verdict`` is test/known_failures.py's output for ``log``; ``run`` is ``remote_pytest.run``.
     A stop also says whether the ids fail on main too (``main_red``).
     """
-    ids, why = _rerun_alone(wt, inv, log, verdict, logdir, tag, python, run)
-    if ids:
+    ids, why = _rerun_alone(wt, inv, log, verdict, logdir, tag, python, run, tested_sha=tested_sha)
+    if ids or why.startswith("HEAD changed"):
         return ids, why
     where = main_red(wt, inv, verdict, logdir, tag, python, run)
     return [], f"{why}; {where}" if where else why
 
 
 def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
-                 run) -> tuple[list[str], str]:
+                 run, *, tested_sha: str) -> tuple[list[str], str]:
     ids = [m.group(1).strip() for line in verdict.splitlines() if (m := NEW_LINE.match(line.strip()))]
     if not ids or len(ids) > MAX_RERUN:
         return [], f"{len(ids)} NEW id(s); a rerun alone is tried only for 1 to {MAX_RERUN}"
@@ -94,11 +94,15 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
     env = [token for token in inv if ENV_TOKEN.match(token)]
     logs = [logdir / f"alone-{tag}-{i}.txt" for i in range(1, len(ids) + 1)]
     print(f"[land] {len(ids)} NEW failure(s) in {log.name}: rerunning each alone once (D-790)", flush=True)
-    codes = run([[*env, nodeid] for nodeid in ids], logs, "HEAD", repo=wt, label=f"land-alone-{tag}")
+    codes = run([[*env, nodeid] for nodeid in ids], logs, tested_sha, repo=wt, label=f"land-alone-{tag}")
+    if len(codes) != len(ids):
+        return [], "incomplete isolated rerun results"
+    if _git(wt, "rev-parse", "HEAD").stdout.strip() != tested_sha:
+        return [], "HEAD changed during isolated checks; retry the landing"
     again = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code != 0]
     if again:
         return [], "failed again when run alone: " + "; ".join(again)
-    sha = _git(wt, "rev-parse", "HEAD").stdout.strip()
+    sha = tested_sha
     common = Path(_git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
     day = time.strftime("%Y-%m-%d")
     with open(common / CANDIDATES, "a", encoding="utf-8") as out:

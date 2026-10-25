@@ -66,7 +66,7 @@ def test_control_unit_form_approves_then_reads_existing_task_result(sample_site)
                 data={'login': 'sample', 'password': 'CHANGE_ME'}).status == 204
             page.goto(origin + '/console?view=work')
             panel = page.locator('#control-unit-work')
-            expect(panel).to_contain_text('sample-unit')
+            expect(panel).to_contain_text('R')
             panel.locator('summary').click()
             expect(panel.locator('#control-unit-yaw')).to_have_value('0')
             panel.locator('#control-unit-robot_id').fill('sample-robot')

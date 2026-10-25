@@ -4395,6 +4395,34 @@
 - gate 변화: 없음. 이번 변경은 공유 계약의 버전 pin이며 새 runtime·배포·장치 활성화가 아니다.
 - CE: 해당 없음 — 공식 버전 도구와 계약 회귀로 직접 설명되는 정렬이다.
 
+## 2026-10-24 · uncommitted · TaskStore의 dispatch 통제·queue 책임 분리
+
+- 변경: 기존 dispatch 통제/자원 claim/정지 세대11개 메서드와 queue/lease/traffic wait5개 메서드를 같은 FleetTaskStore의 sibling mixin으로 옮겼다. 예외·시계 helper는 작은 leaf에 두고 canonical imports를 유지했다. TaskStore955→505줄로 줄여 초과 ratchet 행을 제거하고 실제 SQL 작성 위치에 맞춰 기존 writer 검사를 정렬했다.
+- 증거: 이동 전후39개 함수/메서드/예외 AST가 모두 같고 트랜잭션·SQL·메서드 서명이 변하지 않음을 확인했다. 기존 caller/import/monkeypatch를 검색했고 query-position 상수의 기존 import를 유지했다. 동작 회귀·구조 검사는 커밋된 source로 공식 원격 실행한다.
+- gate 변화: 없음. 새 정지 요청·rearm guard·장치 동작을 추가하지 않은 선행 책임 분리다.
+- CE: 해당 없음 — 동작 보존의 근거를 AST·기존 회귀·writer 소유 검사로 직접 남긴다.
+
+
+## 2026-10-25 · uncommitted · D-862 통합 정보 수집과 조건부 하위 정지 결속
+
+- 변경: SharedGather·직접 소유 SQL·최소 지도 projection과 직계 자식 collector/routes를 연결했다. 전용 자격의 일반 API 우회를 막고 CA·방향별 자격·deadline·byte cap을 적용했다. 정지 journal/latch/rearm guard·owned 작업과 기존 Console/OMX callback을 결속했다.
+- 증거: source0fe4d9825e의 공식 원격 RED: 자격 범위8 FAIL, 미구현 정보/정지/collector3 import ERROR. 기존 pure split은 a400의 AST39 일치·집중255 PASS·독립 검토 근거를 유지한다. 현재 구현 source의 원격 GREEN과 실제 helper/safety 검토는 다음 단계다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
+
+## 2026-10-25 · uncommitted · 통합관제 경계 등록의 전체 회귀 보완
+
+- 변경: 새 통합 화면을 Console 문서 OWN에 등록하고 install 금지-import mutation을 기존 사례와 함께 검사한다. 실제 호출하는 공유 정지 helper를 정확한 공개 safety anchor로 등록하며 커진 work 단위의 obsolete small 예외를 제거한다. 공개 source 해시7줄은 exact-line provenance로 결속하고 HTTP fixture의 동적 헤더 읽기 지역명만 명확히 했다.
+- 증거: source42e079ef48 첫 FULL에서 Fleet2 FAIL/6388 PASS/362 SKIP, root4 FAIL/10027 PASS/1139 SKIP을 확인했다. 문서 소유 누락과 구조/출처 누락을 고치며 timing 실패는 별도로 판별한다. sourced73aede28c의 문서 경계3건은 SKIP0·NEW0이고 독립 검토는 경계 완화가 없음을 확인했다. 나머지 수정과 최종 FULL은 후속 검증이다.
+- gate 변화: 검사 규칙·known failures·시간 기준은 유지한다. 실물·현장 수용을 승격하지 않는다. CE 해당 없음 — 등록 누락과 복구 조건은 manifest·회귀·정확한 출처 결속에 직접 남긴다.
+
+## 2026-10-25 · uncommitted · refactor(fleet): cli 사이트 설정 helper를 console_site_config로 이동
+
+- 변경: cli.py(레칫 872)의 사이트 설정 helper 5건(_goal_lease_ttl_s·_trip_config·_build_site_map·_map_pose_config·_lane_compliance_config)을 fleet/console_site_config.py로 그대로 이동(cli_config import 패턴). cli.py 872→773.
+- 증거: split_check AST 동일 통과. D-766 4 나누기 — 뒤따르는 D-865 P2b가 cli.py/app.py에 줄을 더하지 않고 착지되게 한다.
+- gate 변화: 없음. 동작 불변 순수 이동.
+- 결정: D-766 4 적용.
+- 교훈: 없음
+
 ## 2026-10-25 · 85838e52ea · 재접속 scalar 대신 원본 이벤트 확인
 
 - 변경: WELCOME0으로 구 Agent의 새 부팅 버퍼 삭제를 방지하고, 메모리 Hub도 기존 durable store와 같은 ID·본문 충돌 규칙으로 재전송을 처리한다. 최대 seq는 진단값만 유지한다. D-869/APIv1.315에 호환성과 한계를 기록했다.

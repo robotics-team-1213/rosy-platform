@@ -1,6 +1,6 @@
 # D-869 이벤트 재접속·재전송 검증
 
-기준 main `bbc9fae1316b494b2572c5d3bf7e2307b20704da`, RED `49915942fc`, 구현 `85838e52ea`.
+기준 main `bbc9fae1316`, RED `49915942fc`, 구현 `85838e52ea`.
 
 Agent는 WELCOME의 producer scope 없는 최대 seq로 미응답 이벤트를 삭제하지 않는다. 원래 event_id·내용·seq를 유지한 재전송과 기존 durable 중복 제거를 사용한다. 새 Hub의 WELCOME0은 구 Agent도 보호하며 registry의 최대 seq 진단값을 바꾸지 않는다. 메모리 Hub는 기존 history에서 동일 ID·본문 중복을 한 번만 기록하고 본문 충돌을 거절한다. 새 stream UUID·schema 필드·envelope 버전 협상을 추가하지 않았다.
 

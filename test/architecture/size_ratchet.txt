@@ -22,13 +22,12 @@
 822 drive/behaviors/line_follow/manager.py
 630 drive/behaviors/traffic_policy/manager.py
 842 drive/motion_limits/adapter/node.py
-872 fleet/fleet/cli.py
+773 fleet/fleet/cli.py
 908 fleet/fleet/server/app.py
 847 fleet/fleet/server/auth/enrollment.py
 943 fleet/fleet/server/cell/cell_job_store.py
 1325 fleet/fleet/server/console/console.py
 797 fleet/fleet/server/evidence/proposal_store.py
-955 fleet/fleet/server/ledger/task_store.py
 936 fleet/fleet/server/missions/mission_store.py
 755 fleet/web/line-stuck.js
 606 fleet/web/shared/site-map-model.js

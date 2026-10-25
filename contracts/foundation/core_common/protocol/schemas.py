@@ -9,6 +9,11 @@ from __future__ import annotations
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
 from .trip_jobs import (TripJobRequest, TripJobStep, TripJobSnapshot, TripJobStepSnapshot,
                         TripJobReadResponse, TripRequestKey)  # noqa: F401
+from .policy_admission import (  # noqa: F401
+    POLICY_ADMISSION_PRINCIPAL, PolicyAdmissionAuditEntry, PolicyAdmissionAuditResponse,
+    PolicyAdmissionReadResponse, PolicyAdmissionScope, PolicyAdmissionStatus,
+    PolicyAdmissionToggleRequest,
+)
 from .control_units import (  # noqa: F401
     ControlGoal, ControlNavigationCandidate, ControlWorkRequest, ControlIngressRequest,
     ControlApproveRequest, ControlDelegationState, ControlDelegationSnapshot, ControlUnitReply,

@@ -1181,6 +1181,7 @@ safety_anchors:
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
+  - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
   - {symbol: fleet.server.tether_watch.TetherWatch, public: true}
   - {symbol: fleet.server.tether_watch.map_pose, public: true}

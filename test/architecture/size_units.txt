@@ -45,7 +45,7 @@ perception/front_camera/perception/drivable
 fleet/web
 fleet/web/devices
 fleet/fleet/server/ledger
-fleet/web/work small
+fleet/web/work
 fleet/fleet/server/missions
 fleet/fleet/server/work small
 fleet/fleet/server/trips

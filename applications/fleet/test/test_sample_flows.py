@@ -295,14 +295,14 @@ def test_control_unit_review_keeps_identity_task_and_terminal_readbacks():
     login = '/api/fleet/auth/login'
     call(engine, 'POST', login, {'login': 'sample', 'password': 'CHANGE_ME'})
     prefix = '/api/fleet/control-unit'
-    assert call(engine, 'GET', prefix)[1]['unit_id'] == 'sample-unit'
-    body = {'delegation_id': 'sample-intent', 'target_unit': 'sample-unit', 'robot_id': 'sample-robot',
+    assert call(engine, 'GET', prefix)[1]['unit_id'] == 'R'
+    body = {'delegation_id': 'sample-intent', 'target_unit': 'R', 'robot_id': 'sample-robot',
             'goal': {'x': 1, 'y': 2, 'yaw': 0}}
     status, submitted = call(engine, 'POST', prefix + '/delegations', body)
     assert status == 200 and submitted['delegation']['status'] == 'PENDING'
     assert call(engine, 'POST', prefix + '/delegations', body)[1] == submitted
     assert call(engine, 'POST', prefix + '/delegations', body | {'goal': {'x': 3, 'y': 2, 'yaw': 0}})[0] == 409
-    path = prefix + '/delegations/sample-unit/sample-intent'
+    path = prefix + '/delegations/R/sample-intent'
     assert call(engine, 'GET', path)[1] == submitted
     assert call(engine, 'POST', path + '/approve', {'expected_revision': 2})[0] == 409
     status, approved = call(engine, 'POST', path + '/approve',
@@ -319,7 +319,7 @@ def test_control_unit_review_keeps_identity_task_and_terminal_readbacks():
     assert call(engine, 'POST', prefix + '/delegations', body)[1] == completed
     cancel_body = body | {'delegation_id': 'sample-cancel'}
     assert call(engine, 'POST', prefix + '/delegations', cancel_body)[0] == 200
-    cancel_path = prefix + '/delegations/sample-unit/sample-cancel'
+    cancel_path = prefix + '/delegations/R/sample-cancel'
     assert call(engine, 'POST', cancel_path + '/cancel', {})[1]['delegation']['status'] == 'CANCELED'
     assert call(engine, 'POST', cancel_path + '/approve', {'expected_revision': 2})[0] == 409
     engine.reset('viewer')
@@ -332,13 +332,13 @@ def test_control_unit_sample_refuses_bad_candidates_and_cancels_the_bound_task()
     engine = load_engine()
     call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
     prefix = '/api/fleet/control-unit/delegations'
-    body = {'delegation_id': 'bound-cancel', 'target_unit': 'sample-unit', 'robot_id': 'sample-robot',
+    body = {'delegation_id': 'bound-cancel', 'target_unit': 'R', 'robot_id': 'sample-robot',
             'goal': {'x': 1, 'y': 2, 'yaw': 0}}
     assert call(engine, 'POST', prefix, body | {'actor_id': 'other'})[0] == 422
     assert call(engine, 'POST', prefix, body | {'goal': {'x': True, 'y': 2, 'yaw': 0}})[0] == 422
     assert call(engine, 'POST', prefix, body | {'target_unit': 'other'})[0] == 409
     _, submitted = call(engine, 'POST', prefix, body)
-    path = prefix + '/sample-unit/bound-cancel'
+    path = prefix + '/R/bound-cancel'
     _, approved = call(engine, 'POST', path + '/approve',
                        {'expected_revision': submitted['delegation']['revision']})
     task_id = approved['delegation']['local_task_id']

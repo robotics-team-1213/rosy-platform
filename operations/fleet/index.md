@@ -106,3 +106,7 @@
 - 2026-10-24 · uncommitted · D-862 공통 API reference 버전 정렬
 - 2026-10-24 · afb218aed1 · 표시 추출과 최신 main 오류 코드 통합
 - 2026-10-24 · uncommitted · D-856 중립 운송 snapshot과 요청 대조
+- 2026-10-25 · uncommitted · refactor(fleet): cli 사이트 설정 helper를 console_site_config로 이동
+- 2026-10-25 · uncommitted · 통합관제 경계 등록의 전체 회귀 보완
+- 2026-10-25 · uncommitted · D-862 통합 정보 수집과 조건부 하위 정지 결속
+- 2026-10-24 · uncommitted · TaskStore의 dispatch 통제·queue 책임 분리

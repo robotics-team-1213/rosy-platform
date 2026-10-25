@@ -1,4 +1,4 @@
-# core_common logs
+﻿# core_common logs
 
 추가만 한다. 형식: [module harness 설계](../../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-22 이전 이력은 `git log -- src/core/core_common`를 본다.
@@ -904,3 +904,10 @@
 - 변경: PoseSample.sampled_at을 strict finite UTC 선택 필드로 추가하고 공유 순수 helper가 별도 수용된 양 끝 UTC±50ms 전제 아래 remaining을 보수적으로 계산한다. 실제 시계 품질·로봇 작동을 만들어내지 않는다. APIv1.316·pin과 기존 envelope1.0 지침을 정렬했다.
 - 증거: [공유 계약 검증](../../docs/validation/swarm-reference-contract-2026-10-25/result.md). schema20 RED와 helper 미구현 collectionerror 뒤 신규58개+기존 계약을 합쳐 원격86개 통과, skip0. 안전 태그·독립 제한 범위 검토와 source trailer 포함. FULL 착지 gate는 별도다.
 - gate 변화: 공유 계약 회귀만 확인했다. consumer·혼합 peer 관문·실물 UTC/운행은 다음 단계다. CE 해당 없음: 근거는 D-870·helper·회귀로 복원된다.
+## 2026-10-25 · uncommitted · feat(contracts): D-865 policy admission wire schemas v1.314
+
+- 변경: core_common/protocol/policy_admission.py 신설(범위·상태·감사·전환 형태), schemas.py canonical 재수출, test/test_policy_admission_contract.py 추가.
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. API Ref v1.314 절과 같은 변경(D-18).
+- gate 변화: 없음. 계약 등록이며 구현·활성화가 아니다.
+- 결정: D-865 P1 산출물.
+- 교훈: 없음

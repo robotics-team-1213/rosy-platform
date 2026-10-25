@@ -286,16 +286,25 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(todo) + 1)]
     began = time.monotonic()
     codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
+    if out(wt, "rev-parse", "HEAD") != head:
+        raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
+    if len(codes) != len(todo):
+        raise Stop("incomplete remote results; not landing")
     print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
     whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
     for inv, log, code in zip(todo, logs, codes):
+        if out(wt, "rev-parse", "HEAD") != head:
+            raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
         if why := land_cache.unusable(code, log):
             raise Stop(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
         print(check.stdout, end="")
         flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
-            wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run)
+            wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run,
+            tested_sha=head)
+        if out(wt, "rev-parse", "HEAD") != head:
+            raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
         if check.returncode != 0 and not flaky:
             raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
         if check.returncode == 0 and whole:
@@ -315,6 +324,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
             done.append(f"node --test {len(mjs)} file(s) ok")
         else:
             done.append("node skipped: no web/*.mjs under the selected test dirs")
+    if out(wt, "rev-parse", "HEAD") != head:
+        raise Stop(f"HEAD changed during checks; {head[:10]} was tested; retry the landing")
     return done
 
 
@@ -347,6 +358,8 @@ def pretest(wt: Path, branch: str, args, python: str) -> None:
         return
     print(f"[land] FULL tier while waiting in the queue (main {main_sha[:10]})", flush=True)
     run_tests(wt, args, invocations, tmp_dir(branch), "pre")   # a NEW failure stops here, before the wait
+    if out(wt, "rev-parse", "HEAD") != candidate:
+        raise Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     land_full.save(wt, branch, candidate, main_sha)
 
 
@@ -450,11 +463,15 @@ def land(args) -> int:
         elif args.tests == "none":
             summary.append(f"round {round_no}: tests skipped (--tests none)")
         summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
+        if out(wt, "rev-parse", "HEAD") != candidate:
+            raise Stop(f"HEAD changed during guards; {candidate[:10]} was tested; retry the landing")
         if guarded and out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved during the guard round; merging again")
             continue
         began = time.monotonic()
         tested = run_tests(wt, args, invocations, logdir, round_no)
+        if out(wt, "rev-parse", "HEAD") != candidate:
+            raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
         # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
         reusable = reusable and not any("LOAD-FLAKY" in line or land_cache.NARROW in line for line in tested)
         summary += [f"round {round_no}: {s}" for s in tested]
