@@ -110,3 +110,66 @@ def test_setup_routes_preserve_roles_csrf_and_fenced_updates(setup_server, accou
         bad = dict(kind='folder', artifact_id='../private', profile='dataset', provenance={}, confirm_completed=True, archive=True)
         assert request(url, '/api/learning/storage/sources/prepare', session, bad, token)[0] == 400
         assert not (folder.parent / 'private').exists()
+
+
+@pytest.mark.parametrize('width,theme', [(320, 'light'), (1440, 'dark')])
+def test_setup_browser_completes_first_use_without_json(setup_server, accounts, width, theme):
+    from browser_harness import browser_tests_enabled, open_page, save_temp_screenshot
+    if not browser_tests_enabled(): pytest.skip('requires explicit Chromium browser run')
+    playwright = pytest.importorskip('playwright.sync_api')
+    running, body, remote, folder, now = setup_server
+    now[0] = int(time.time())
+    with running() as url, playwright.sync_playwright() as runtime:
+        browser, page, errors = open_page(runtime, width, 900, url=url)
+        try:
+            session, _ = session_for(url, accounts)
+            page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
+            page.goto(url + '/learning', wait_until='networkidle')
+            page.locator('#theme').select_option(theme)
+            expect = playwright.expect
+            expect(page.locator('#storage-setup')).to_be_visible()
+            page.locator('#storage-settings-open').click()
+            for target in body['targets']:
+                page.get_by_role('button', name='저장 대상 추가', exact=True).click()
+                row = page.locator('.storage-settings-target').last
+                row.locator('[data-field=connection_id]').select_option(target['connection_id'])
+                row.locator('[data-field=repo_id]').fill(target['repo_id'])
+                row.locator('[data-field=repo_id]').press('Tab')
+            for row in page.locator('.storage-quota').all():
+                row.locator('[data-field=remaining_bytes]').fill('1')
+                row.locator('[data-field=reserve_bytes]').fill('0')
+            page.get_by_role('button', name='저장 설정 저장', exact=True).click()
+            expect(page.locator('#storage-setup-status')).to_contain_text('검증')
+            page.locator('#storage-check-consent').check()
+            page.get_by_role('button', name='소량 전송으로 연결 검증', exact=True).click()
+            expect(page.locator('#storage-setup-result')).to_contain_text('검증 완료', timeout=15000)
+            page.get_by_role('button', name='새 보관 활성화', exact=True).click()
+            expect(page.locator('#storage-setup-status')).to_contain_text('활성화')
+            data = folder / 'storage-data/exports/episode-ui'; data.mkdir()
+            (data / 'episode.json').write_text('{"frames":5}')
+            page.get_by_role('button', name='준비할 자료 새로 확인', exact=True).click()
+            page.locator('#storage-prepare-folder').select_option('episode-ui')
+            page.locator('#storage-prepare-profile').select_option('dataset')
+            page.locator('#storage-source-revision').fill('c' * 40)
+            page.locator('#storage-completed-consent').check()
+            page.get_by_role('button', name='준비하고 보관', exact=True).click()
+            expect(page.locator('#storage-setup-result')).to_contain_text('원격 검증 완료', timeout=15000)
+            state = idle(url, session); job_id = state['result']['id']
+            row = page.locator('[data-job="' + job_id + '"]')
+            expect(row).to_contain_text('원격 검증 완료')
+            row.get_by_role('button', name='로컬 정리', exact=True).click()
+            page.locator('#storage-confirm-id').fill(job_id)
+            page.get_by_role('button', name='확인한 로컬 사본 정리', exact=True).click()
+            expect(row).to_contain_text('로컬 사본 없음')
+            row.get_by_role('button', name='필요 자료 복원', exact=True).click()
+            expect(row).to_contain_text('로컬 사본 있음')
+            assert remote.commits == 3 and not errors
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            for identifier in ('storage-settings-save', 'storage-verify', 'storage-activate', 'storage-prepare-submit'):
+                button = page.locator('#' + identifier)
+                if button.is_visible(): assert button.bounding_box()['height'] >= 44
+            page.locator('#storage-setup').scroll_into_view_if_needed()
+            save_temp_screenshot(page, f'learning-storage-setup-{width}-{theme}.png')
+            page.reload(wait_until='networkidle')
+            expect(page.locator('#storage-setup-status')).to_contain_text('활성화')
+        finally: browser.close()
