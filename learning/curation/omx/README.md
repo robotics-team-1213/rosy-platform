@@ -237,6 +237,31 @@ prepared intake를 만든다. 봉인 manifest와 보정 revision을 다시 해�
 녹화 하나가 세션 하나라서 그 Episode들은 한 분할에만 들어간다. 학습·평가를 나누려면 녹화가 둘 이상 필요하다.
 판정은 모두 `unknown`/`exclude`로 시작하며 사람 검수 뒤 학습센터 ‘등록된 검수 시연’과 기존 export·학습 경로를 따른다.
 
+`record_session.py --replay`로 녹화하고 봉인한 자동 교사(`source_mode=scripted_teacher`) 녹화도 같은 명령에
+`--rig-revision <리그> --calibration-revision <보정>`을 더해 쓴다. 현장 봉인본에는 session·리그·보정 revision이 없을 수 있다.
+그러면 폴더 이름이 session이고 운영자가 적은 값을 쓴다. 봉인본에 값이 있으면 운영자 값과 같아야 한다.
+`capture.json`의 `collection_manifests[].revision_origin`이 값마다 `seal`/`operator`를 남긴다.
+`teacher/trajectory.json`을 다시 해시해 manifest `teacher_sha256`·session `replay.sha256`과 대조한다.
+`kind=replay_trajectory`·`rosy.omx-replay-trajectory.v1`과 manifest·궤적·session이 같은 구간을 요구한다.
+구간은 A=[0,N], reset=[N,N+R](R≥1), B=[N+R,2N+R]이고 B 끝이 궤적 frame 수다. B는 A를 뒤집은 것이 아니라 따로 가르친 복귀 구간이다.
+`source`는 작은 JSON(16 KiB·깊이 3·목록 1000개 이하)이고 Episode는 정확히 두 개(A=0, B=1)다.
+리더 녹화와 섞거나 다른 교사의 녹화를 한 intake에 넣지 않는다. `capture.json`에는 `teacher_sha256`과 녹화별 `teachers`(hash·kind·segments·source)만 남긴다.
+녹화는 guard 교사 모드(10 deg/s)로 재생하고 궤적은 5 units/s로 늦춰서 Episode가 길다.
+dataset의 action은 guard가 실제로 보낸 명령이고 `teacher/trajectory.json`은 계획이다. 궤적을 action으로 쓰지 않는다.
+
+리더·교사 모두 `rosy_provenance/*/`의 session.json·record-config.json·manifest.json 사본에서 현장 PC 절대 경로를 지운다.
+지우는 값은 `replay.path`·`config`, `dataset.root`, `/dev/serial` 포트, `/dev/v4l` 카메라다. `teacher.source.dataset`은 basename만 남긴다.
+원본 sha256은 같은 폴더의 `redactions.json`(`redacted_from_sha256`)에 남는다. 리더의 `capture.json` 내용은 바뀌지 않는다.
+
+`prepare-native`에 `--camera-reference ROLE=PATH`(카메라 역할마다 한 번)를 주면 리뷰 앱이 승인해 둔
+`<state>/camera-setup/<revision>.json`(D-792)을 계약의 `validate_reference`로 읽는다. 파일 이름이 `revision`과 다르거나 봉인이 깨졌거나,
+역할이 두 번 나오거나 기준의 역할이 ROLE과 다르거나, 역할 집합이 dataset의 `observation.images.*`와 다르거나,
+합친 dataset `meta/info.json`의 폭·높이(이름 붙은 축으로 읽음)·fps와 다르면 거절한다. 통과하면 `{역할: revision}`만
+`inspection.json`·`capture.json`의 `camera_setup`에 남긴다. `camera_identity`(시리얼일 수 있음)와 경로는 남기지 않는다.
+이 첫 조각은 프레임을 기준과 비교하지 않으며 `camera-setup.json`도 쓰지 않는다. 옵션이 없으면 출력은 예전과 같다.
+같은 옵션을 LeRobot 세션용 `prepare`에 주면 뜻이 다르다: 사진(`.jpg`)이 있는 기준 JSON으로 프레임을 섀도 비교해 `camera-setup.json`을 쓰고, 거절하지 않는다(`camera_setup_intake.py`).
+정적 episode·`DO_NOT_TRAIN.txt` 규칙은 리더 녹화와 같다.
+
 ## 학습센터에서 파지 구간 검수
 
 학습센터 `/learning/omx`에서 자료 등록에 연결한 prepared intake를 선택한다.

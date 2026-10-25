@@ -51,7 +51,7 @@ import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, orig
 import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
-                        resolver)
+                        generate_records, resolver)
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
 HARNESS = "tools/harness/rosy_harness.py"
@@ -94,35 +94,45 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
         if manual:
             raise Stop("merge would conflict outside the auto-resolvable set:\n  " + "\n  ".join(manual))
         return sorted(resolved)
-    result = git(wt, "merge", "--no-edit", "-m", f"Merge branch 'main' into {branch}", main_sha, check=False)
-    if result.returncode == 0:
+    result = git(wt, "merge", "--no-edit", "--no-commit", "-m",
+                 f"Merge branch 'main' into {branch}", main_sha, check=False)
+    if result.returncode == 0 and git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0:
         return []
-    try:
-        conflicts = conflict_stages(out(wt, "ls-files", "-u"))
-        resolved, manual = plan(wt, conflicts)
-    except (Stop, OSError, subprocess.CalledProcessError) as exc:
-        git(wt, "merge", "--abort", check=False)
-        raise Stop(f"reading the conflict stages failed, merge aborted:\n{exc}") from exc
-    if not conflicts or manual:
-        git(wt, "merge", "--abort", check=False)
-        raise Stop("merge aborted; resolve by hand in the worktree:\n  "
-                   + "\n  ".join(manual or [result.stdout + result.stderr]))
+    resolved = {}
+    if result.returncode != 0:
+        try:
+            conflicts = conflict_stages(out(wt, "ls-files", "-u"))
+            resolved, manual = plan(wt, conflicts)
+        except (Stop, OSError, subprocess.CalledProcessError) as exc:
+            git(wt, "merge", "--abort", check=False)
+            raise Stop(f"reading the conflict stages failed, merge aborted:\n{exc}") from exc
+        if not conflicts or manual:
+            git(wt, "merge", "--abort", check=False)
+            raise Stop("merge aborted; resolve by hand in the worktree:\n  "
+                       + "\n  ".join(manual or [result.stdout + result.stderr]))
     try:
         for path, data in resolved.items():
             (wt / path).write_bytes(data)
             git(wt, "add", "--", path)
-        if any(resolver(p) == "generated" for p in resolved) and (wt / HARNESS).is_file():
-            step(wt, [python, HARNESS, "generate"], None, "generate")
-            # The worktree was clean before the merge, so every unstaged change is generate's.
-            changed = lines(wt, "diff", "--name-only")
-            if changed:
-                git(wt, "add", "--", *changed)
+        if (wt / HARNESS).is_file():
+            existing_untracked = set(lines(wt, "ls-files", "--others", "--exclude-standard"))
+            written = generate_records(wt, python, HARNESS)
+            changed = set(lines(wt, "diff", "--name-only")) | set(
+                lines(wt, "ls-files", "--others", "--exclude-standard")) - existing_untracked
+            unexpected = changed - set(written)
+            if unexpected:
+                raise Stop(f"changes outside canonical generation targets: {sorted(unexpected)}")
+            if written:
+                git(wt, "add", "--", *written)
         git(wt, "commit", "--no-edit")
-    except (Stop, OSError, subprocess.CalledProcessError) as exc:
-        git(wt, "merge", "--abort", check=False)
+    except (Stop, ValueError, KeyError, OSError, subprocess.CalledProcessError) as exc:
+        abort = git(wt, "merge", "--abort", check=False)
         # `merge --abort` leaves files generate created; list them, never delete them.
         left = lines(wt, "ls-files", "--others", "--exclude-standard")
-        raise Stop(f"auto-resolve of {sorted(resolved)} failed, merge aborted:\n{exc}"
+        recovery = ("merge aborted" if abort.returncode == 0 else
+                    "abort failed; merge, index and worktree preserved for manual recovery:\n"
+                    + abort.stdout + abort.stderr)
+        raise Stop(f"auto-resolve of {sorted(resolved)} failed, {recovery}:\n{exc}"
                    + (f"\nuntracked files left in the worktree (not deleted): {left}" if left else "")) from exc
     print(f"[merge] auto-resolved {sorted(resolved)}")
     return sorted(resolved)
@@ -357,7 +367,11 @@ def pretest(wt: Path, branch: str, args, python: str) -> None:
     if not note:
         return
     print(f"[land] FULL tier while waiting in the queue (main {main_sha[:10]})", flush=True)
-    run_tests(wt, args, invocations, tmp_dir(branch), "pre")   # a NEW failure stops here, before the wait
+    logdir = tmp_dir(branch)
+    land_guards.first(wt, args, invocations, logdir, "pre", run_tests)
+    if out(wt, "rev-parse", "HEAD") != candidate:
+        raise Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
+    run_tests(wt, args, invocations, logdir, "pre")   # a NEW failure stops here, before the wait
     if out(wt, "rev-parse", "HEAD") != candidate:
         raise Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     land_full.save(wt, branch, candidate, main_sha)

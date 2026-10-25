@@ -490,6 +490,10 @@ def test_untrailered_safety_commit_already_on_main_does_not_block_a_landing(repo
 
 
 FULL_THEN_DELTA = """import json, sys
+def generated_targets(repo):
+    return {}
+def generate(repo):
+    return []
 if sys.argv[1] == 'affected':
     if '--head' in sys.argv:
         print(json.dumps({"mode": "affected", "escalations": [], "invocations": [["pkg/test/test_a.py"]]}))
@@ -742,7 +746,7 @@ def test_head_move_cannot_publish_full_record(repos, monkeypatch, waiting):
     monkeypatch.setattr(land.land_full, "save", lambda *a: pytest.fail("published an obsolete FULL record"))
     if waiting:
         with pytest.raises(land.Stop, match="HEAD changed"):
-            land.pretest(wt, "feat/x", land.argparse.Namespace(), sys.executable)
+            land.pretest(wt, "feat/x", land.argparse.Namespace(tests="auto"), sys.executable)
     else:
         before = git(main, "rev-parse", "HEAD")
         assert land.main(["--tests", "auto"]) == 1
@@ -966,14 +970,50 @@ def test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout(repos, mo
 def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos, monkeypatch, capsys):
     """2026-10-19: five landers ahead, each with its FULL tier inside the queue, held a landing 100+ min."""
     main, wt = repos
-    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    commit(wt, {"pkg/a.py": "x = 2\n", "test/architecture/test_guard.py": "def test_guard(): pass\n"}, "branch")
     land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")      # a live lander ahead
     real_select, rounds = land.select, []
     monkeypatch.setattr(land, "select", lambda *a, **k: (real_select(*a, **k)[0], "FULL tier (test)"))
     monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append(round_no) or [])
+    real_save = land.land_full.save
+
+    def save(*args):
+        rounds.append("save")
+        return real_save(*args)
+
+    monkeypatch.setattr(land.land_full, "save", save)
     assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1                # the peer never leaves
-    assert rounds == ["pre"] and "FULL tier while waiting" in capsys.readouterr().out
+    assert rounds == ["gpre", "pre", "save"] and "FULL tier while waiting" in capsys.readouterr().out
     assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
+
+
+@pytest.mark.parametrize("guard_outcome", ["failure", "head_move"])
+def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeypatch, capsys, guard_outcome):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n", "test/architecture/test_guard.py": "def test_guard(): pass\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    qdir = main / ".git" / land.land_queue.QUEUE
+    peer = land.land_queue.take(qdir, "feat/peer")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL tier (test)"))
+    phases, saved = [], []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        phases.append(round_no)
+        if round_no == "gpre":
+            assert invocations == [["test/architecture"]] and args.node is False
+            if guard_outcome == "failure":
+                raise land.Stop("structural guard failed")
+            commit(wt, {"pkg/a.py": "x = 3\n"}, "changed during guard")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    monkeypatch.setattr(land.land_full, "save", lambda *a: saved.append(a))
+    assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1
+    assert phases == ["gpre"] and saved == []
+    assert git(main, "rev-parse", "HEAD") == before
+    assert sorted(qdir.glob("*.json")) == [peer]
+    expected = "structural guard failed" if guard_outcome == "failure" else "HEAD changed"
+    assert expected in capsys.readouterr().err
 
 
 def test_no_pretest_without_anyone_ahead(repos, monkeypatch):
@@ -1074,3 +1114,101 @@ def test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge(repos, c
     assert (main / gaps).read_text() == "D-4 reserved in another worktree\n"
     assert "drop adr_gaps lines of landed D-3" in git(main, "log", "-1", "--format=%s")
     assert "dropped ['D-3']" in capsys.readouterr().out
+
+
+_CANONICAL_GENERATOR = r'''from pathlib import Path
+
+def generated_targets(repo):
+    a = int((repo / "a.txt").read_text())
+    b = int((repo / "b.txt").read_text())
+    left = "".join(f"gap-a-{n}\n" for n in range(8))
+    right = "".join(f"gap-b-{n}\n" for n in range(8))
+    content = f"a={a}\n{left}b={b}\n{right}both={int(bool(a and b))}\n"
+    return {repo / "docs/index.md": content}
+
+def generate(repo):
+    mode = (repo / "mode.txt").read_text() if (repo / "mode.txt").exists() else ""
+    if mode == "failure":
+        (repo / "left-behind.md").write_text("partial\n")
+        raise RuntimeError("generation failed")
+    targets = generated_targets(repo)
+    for path, content in targets.items():
+        path.write_text(content)
+    if mode == "partial":
+        raise RuntimeError("generation failed after tracked output")
+    if mode == "unexpected":
+        (repo / "pkg/a.py").write_text("unexpected = True\n")
+    return list(targets)
+
+if __name__ == "__main__":
+    repo = Path.cwd()
+    for path in generate(repo):
+        print("wrote", path.relative_to(repo).as_posix())
+'''
+
+
+def _canonical_index(a, b):
+    left = "".join(f"gap-a-{n}\n" for n in range(8))
+    right = "".join(f"gap-b-{n}\n" for n in range(8))
+    return f"a={a}\n{left}b={b}\n{right}both={int(bool(a and b))}\n"
+
+
+def _canonical_merge_case(repos, mode=""):
+    main, wt = repos
+    commit(main, {land.HARNESS: _CANONICAL_GENERATOR, "a.txt": "0", "b.txt": "0",
+                  "docs/index.md": _canonical_index(0, 0)}, "canonical base")
+    git(wt, "merge", "--ff-only", "main")
+    commit(wt, {"a.txt": "1", "docs/index.md": _canonical_index(1, 0),
+                "mode.txt": mode}, "branch input")
+    commit(main, {"b.txt": "1", "docs/index.md": _canonical_index(0, 1)}, "main input")
+    return main, wt
+
+
+def test_clean_main_merge_generates_inside_its_original_merge_commit(repos):
+    main, wt = _canonical_merge_case(repos)
+    before, incoming = git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")
+    raw = git(wt, "merge-tree", "--write-tree", "--no-messages", before, incoming).splitlines()[0]
+    assert git(wt, "show", f"{raw}:docs/index.md").endswith("both=0")
+    assert land.merge(wt, incoming, "feat/x", sys.executable, False) == []
+    assert (wt / "docs/index.md").read_text() == _canonical_index(1, 1)
+    assert git(wt, "rev-list", "--parents", "-n", "1", "HEAD").split()[1:] == [before, incoming]
+    assert git(wt, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("mode", ["failure", "unexpected", "partial"])
+def test_clean_merge_aborts_when_generation_cannot_be_staged_safely(repos, mode):
+    main, wt = _canonical_merge_case(repos, mode)
+    before, incoming = git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")
+    with pytest.raises(land.Stop) as error:
+        land.merge(wt, incoming, "feat/x", sys.executable, False)
+    assert git(wt, "rev-parse", "HEAD") == before
+    assert git(main, "rev-parse", "HEAD") == incoming
+    if mode == "failure":
+        assert land.git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0
+        assert git(wt, "diff", "--cached", "--name-only") == ""
+        assert "left-behind.md" in str(error.value)
+        assert (wt / "left-behind.md").read_text() == "partial\n"
+    else:
+        assert "abort failed" in str(error.value)
+        assert "preserved for manual recovery" in str(error.value)
+        assert git(wt, "rev-parse", "MERGE_HEAD") == incoming
+        assert "b.txt" in git(wt, "diff", "--cached", "--name-only")
+        assert (wt / "docs/index.md").read_text() == _canonical_index(1, 1)
+        if mode == "unexpected":
+            assert "pkg/a.py" in str(error.value)
+            assert (wt / "pkg/a.py").read_text() == "unexpected = True\n"
+        else:
+            assert "generation failed after tracked output" in str(error.value)
+
+
+@pytest.mark.parametrize("already_current", [False, True])
+def test_fast_forward_or_current_main_does_not_generate_or_add_a_commit(repos, already_current):
+    main, wt = repos
+    commit(main, {land.HARNESS: _CANONICAL_GENERATOR, "a.txt": "0", "b.txt": "0",
+                  "mode.txt": "failure", "docs/index.md": _canonical_index(0, 0)}, "main")
+    incoming = git(main, "rev-parse", "HEAD")
+    if already_current:
+        git(wt, "merge", "--ff-only", "main")
+    assert land.merge(wt, incoming, "feat/x", sys.executable, False) == []
+    assert git(wt, "rev-parse", "HEAD") == incoming
+    assert not (wt / "left-behind.md").exists()
