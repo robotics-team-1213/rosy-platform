@@ -1,4 +1,4 @@
-import {createFleetClient} from '/console/assets/fleet-client.js';
+import {createFleetClient} from '/common/fleet-client.js';
 import {canManageAccounts, canViewAccountSetup, CAPABILITIES} from '/console/assets/account-permissions.js';
 
 const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';

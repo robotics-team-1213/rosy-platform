@@ -1,4 +1,4 @@
-import {createFleetClient} from '/console/assets/fleet-client.js';
+import {createFleetClient} from '/common/fleet-client.js';
 import {loginHref, loginReturn} from '/console/assets/login-return.js';
 import {roleLabel} from '/console/assets/fleet-header.js';
 import {CAPABILITIES} from '/console/assets/account-permissions.js';
