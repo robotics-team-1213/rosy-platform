@@ -23,3 +23,4 @@
 
 - 변경: release-owned `deployment-binding.yaml`을 추가해 installed package 안의 모델 ID와 정적 설정 digest를 결속했다. capability 광고·속도·장치 I/O는 바꾸지 않았다.
 - 증거: complete Pinky copy·capability-only copy·binding version/model/shape/digest·누락 반례 RED 후 관련153 PASS/NEW0. SOURCE/LOCAL만 갱신하며 실제 native 설치·기체 수용과 구분한다.
+- gate 변화: SOURCE/LOCAL 검증 근거 갱신. ROS-SIM/ARTIFACT/DEVICE/FIELD는 HOLD 유지.
