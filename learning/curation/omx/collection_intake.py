@@ -459,6 +459,7 @@ def _sealed_collection(root, operator=None):
     if teacher:
         _require(isinstance(operator, dict) and all(_text(operator.get(k)) for k in REVISIONS),
                  'a scripted_teacher intake needs the operator --rig-revision and --calibration-revision')
+        manifest['session_id_origin'] = 'seal' if 'session_id' in manifest else 'folder'
         manifest.setdefault('session_id', root.name)
         manifest['revision_origin'] = {k: 'seal' if k in manifest else 'operator' for k in REVISIONS}
         for key in REVISIONS:
@@ -554,7 +555,7 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
                    rig_revision=first['rig_revision'], calibration_revision=first['calibration_revision'],
                    **lineage,
                    collection_manifests=[dict(session_id=m['session_id'], manifest_sha256=d,
-                                              **({'revision_origin': m['revision_origin']} if 'revision_origin' in m else {}))
+                                              **{k: m[k] for k in ('session_id_origin', 'revision_origin') if k in m})
                                          for _, m, d in sealed],
                    files=files, episodes=[dict(episode_index=i, session_id=session, cycle_id=cycle)
                                           for i, (session, cycle) in enumerate(groups)])

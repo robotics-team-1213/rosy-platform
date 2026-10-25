@@ -344,6 +344,7 @@ def test_sealed_scripted_teacher_collection_is_accepted_with_its_trajectory_hash
     assert {k: manifest[k] for k in module.REVISIONS} == operator
     origin = 'seal' if revisions else 'operator'
     assert manifest['revision_origin'] == dict(rig_revision=origin, calibration_revision=origin)
+    assert manifest['session_id_origin'] == ('seal' if revisions else 'folder')
     assert manifest['teacher_sha256'] == hashlib.sha256((root/'teacher/trajectory.json').read_bytes()).hexdigest()
 
 
@@ -434,6 +435,10 @@ def test_site_paths_are_dropped_and_teacher_dataset_keeps_its_basename(module):
         top=dict(width=32), side=dict(index_or_path=2))))
     assert module._redacted(dict(fixture.SOURCE), keep_name=True)['dataset'] == 'arm-s-demos'
     assert module._redacted(dict(dataset='local/omx-pick'), keep_name=True) == dict(dataset='local/omx-pick')
+    error = "error: [Errno 2] could not open port /dev/serial/by-id/usb-FAKE_SERIAL-if00: 'No such file' (/dev/ttyACM0)"
+    assert module._redacted(dict(initial_torque_off=error)) == dict(initial_torque_off=(
+        "error: [Errno 2] could not open port <redacted-path> 'No such file' (<redacted-path>)"))  # the path pattern takes the colon
+    assert module._redacted(dict(port='/dev/serial/by-id/usb-FAKE_SERIAL-if00', root='/home/u/run'), keep_name=True) == dict(root='run')
 
 
 PINNED_DRIVER = r'''
@@ -471,6 +476,7 @@ print(json.dumps(dict(
     teacher=capture['teacher_sha256'] == json.loads((plain/'manifest.json').read_text())['teacher_sha256'],
     teachers=[sorted(t) for t in capture['teachers']], dataset=capture['teachers'][0]['source']['dataset'],
     origin=capture['collection_manifests'][0]['revision_origin'],
+    session_origin=capture['collection_manifests'][0]['session_id_origin'],
     revisions=[capture['rig_revision'], capture['calibration_revision']] == list(fixture.OPERATOR.values()),
     leader_key='collection_manifest_sha256' in capture, in_report=report['capture_provenance'] == capture,
     leaked=leaked, redactions=all(redactions[n]['redacted_from_sha256'] == files[n]
@@ -501,6 +507,7 @@ def test_pinned_real_scripted_teacher_collection_becomes_a_prepared_intake(tmp_p
     assert proof['teachers'] == [['kind', 'segments', 'session_id', 'source', 'teacher_sha256']]
     assert proof['dataset'] == 'arm-s-demos'
     assert proof['origin'] == dict(rig_revision='operator', calibration_revision='operator')
+    assert proof['session_origin'] == 'folder'
     assert proof['leaked'] == [] and proof['redactions']
     assert [row['episode_index'] for row in proof['static']] == [1]
     assert 'DO_NOT_TRAIN' in proof['refused'] and proof['stopped_output'] is False

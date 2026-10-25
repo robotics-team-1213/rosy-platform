@@ -51,6 +51,7 @@ def seal_teacher(collections, name, dataset=None, *, source=SOURCE, segments=SEG
     (root/'session.json').write_text(json.dumps(dict(
         config='/home/operator/rosy-test/omx-runs/record.json', teleop_only=False, exit_code=0, safe_end=True,
         source_mode='scripted_teacher', replay=dict(path=REPLAY_PATH, sha256=sha, segments=segments, source=source),
+        leader_rebooted_after='error: no reply on /dev/serial/by-id/usb-FAKE_LEADER-if00 after 3 tries',
         episode_outcomes=[dict(episode=0, segment='A', outcome='unknown'),
                           dict(episode=1, segment='B', outcome='unknown')])))
     (root/'record-config.json').write_text(json.dumps(dict(

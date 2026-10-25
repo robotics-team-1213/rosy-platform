@@ -376,6 +376,7 @@ def test_intake_binds_one_teacher_drops_site_paths_and_carries_static_episodes(t
     monkeypatch.setitem(TEACHER, 'source', dict(TEACHER['source'], dataset='/home/operator/omx-data/arm-s-demos'))
     for collection in (first, second):
         (collection/'session.json').write_text(json.dumps(dict(source_mode=mode, config='/home/operator/record.json',
+            initial_torque_off=f"error: could not open port {SITE['serial']}: 'Errno 16' (/dev/ttyACM0)",
             replay=dict(path=SITE['home'], sha256='0'*64, segments=TEACHER['segments']))))
         (collection/'record-config.json').write_text(json.dumps(dict(
             dataset=dict(root='/home/operator/omx-data/run', fps=10), teleop=dict(port=SITE['serial']),
