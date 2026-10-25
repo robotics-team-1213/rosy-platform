@@ -3418,6 +3418,12 @@
 - 증거: 실제 Ed25519 fixture에서 출처 미검증과 이미지 2회 읽기를 먼저 재현했다. Windows 모의 카드 점검은 출처 설정 전달·불일치 사전 거부·단일 카드 증거·배치 출처와 기존 3장/실패/취소 흐름을 확인했다. 원격 최종 결과는 해당 커밋의 gateway 기록으로 확인한다.
 - gate 변화: SOURCE 도구 보강이며 native ARM64 이미지 재빌드·실물 쓰기·부팅·Wi-Fi/OTA 수용은 아니다. CE: 해당 없음 — 기존 검증 대상 일치·중복 검증 방지 교훈을 코드와 회귀에 적용한다.
 
+## 2026-10-25 · uncommitted · 검수 release의 private SIM 연결 보존
+
+- 변경: 기존 설치기는 state의 소유자 전용 일반 SIM 설정을 대상 CLI에 맞춰 연결하고 구버전 복귀·재진입에서 보존한다. 기존 collaboration·center·workspace와 rollback 경로를 유지한다.
+- 증거: b1f990bbd8에서 네 건의 연결 누락을 재현했고 e24bb3ea58 원격 설치기·자동 갱신기 48개가 통과했다. [검증 기록](../docs/validation/learning-conveyor-release-2026-10-25/result.md).
+- gate 변화: 없음. 서명된 코드 승인과 실제 서비스 전환·인증된 조회는 별도 수용이다.
+
 ## 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
 
 - 변경: 공통 서명 구현을 `hosts/common/release/signing.py`로 옮기고 Pinky 호환 import·native 독립 복사·CD snapshot 의존 목록을 연결했다. 제품/SDK host target descriptor와 list/plan/apply/rollback CLI를 추가하고, 실행은 기존 Pinky executor만 허용한다. RaspTank와 Neo 2는 명시적으로 실행 차단 상태다.
