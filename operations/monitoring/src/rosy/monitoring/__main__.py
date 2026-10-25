@@ -23,13 +23,15 @@ def main(argv=None):
         parser.error('port must be between 1 and 65535')
     store = None
     try:
+        if os.name != 'posix':
+            raise ValueError()
         config = load_config(options.config)
         credentials = load_credentials(config, os.environ)
         state = options.state_dir
         if not state.is_absolute() or state.is_symlink():
             raise ValueError()
         state.mkdir(mode=0o700, exist_ok=True)
-        if not state.is_dir() or os.name != 'nt' and state.stat().st_mode & 0o077:
+        if not state.is_dir() or state.stat().st_mode & 0o077:
             raise ValueError()
         store = MonitoringStore(state / 'monitoring.sqlite3', config.collector_id)
         collector = Collector(config, credentials, store)
