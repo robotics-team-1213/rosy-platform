@@ -51,7 +51,7 @@ def bridge(root):
     installed = root / "opt/rosy/native-runtime"
     old = root / "opt/rosy/releases" / OLD / "deploy/robot/native"
     for name in ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
-                 "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py",
+                 "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py", "os_state_layout.py",
                  "rosy_auto_update.py", "rosy_claim.py",
                  "image_layer_boot.py", "image_layer_files.py"):
         source = NATIVE / name
@@ -85,6 +85,40 @@ def test_feature_refuses_old_installed_engine_before_any_image_write(tmp_path):
         sync(tmp_path)
     assert (tmp_path / BOOT).read_text() == "old first boot"
     assert not (tmp_path / UNIT).exists()
+
+
+def test_bridge_accepts_the_previous_engine_declared_closure_without_a_new_helper(tmp_path):
+    payload(tmp_path)
+    bridge(tmp_path)
+    for native in (tmp_path / "opt/rosy/native-runtime", tmp_path / "opt/rosy/releases" / OLD / "deploy/robot/native"):
+        metadata = native / "image_layer_boot.py"
+        metadata.write_text(metadata.read_text().replace(', "os_state_layout.py"', ''), encoding="utf-8")
+        (native / "os_state_layout.py").unlink()
+    verified = []
+    assert module("image_layer_boot").require_bridge(tmp_path, NEW, verified.append) == OLD
+    assert verified == [OLD]
+
+
+def test_new_bridge_does_not_accept_a_missing_declared_helper(tmp_path):
+    payload(tmp_path)
+    bridge(tmp_path)
+    (tmp_path / "opt/rosy/native-runtime/os_state_layout.py").unlink()
+    with pytest.raises(ValueError, match="BRIDGE_REQUIRED"):
+        sync(tmp_path)
+    assert not (tmp_path / UNIT).exists()
+
+
+@pytest.mark.parametrize("remove", [False, True])
+def test_candidate_cannot_expand_paths_or_drop_the_base_bridge_contract(tmp_path, remove):
+    payload(tmp_path)
+    bridge(tmp_path)
+    for native in (tmp_path / "opt/rosy/native-runtime", tmp_path / "opt/rosy/releases" / OLD / "deploy/robot/native"):
+        path = native / "image_layer_boot.py"
+        text = path.read_text()
+        text = text.replace('"auto_update_host.py", ', '') if remove else text.replace('ENGINE_FILES = (', 'ENGINE_FILES = ("../escape.py", ')
+        path.write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="BRIDGE_REQUIRED"):
+        sync(tmp_path)
 
 
 def test_signed_catalog_reaches_boot_and_preserves_device_data(tmp_path):
