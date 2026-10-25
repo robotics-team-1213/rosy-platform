@@ -19,7 +19,11 @@
 <section class="learning-section" aria-labelledby="promote-title">
 <h2 id="promote-title">승격 요청</h2>
 <p>승격 승인과 배포는 Fleet에서 승인권자가 합니다(D-793). Learning은 확정 정답 평가 근거를 모아 넘기는 데까지입니다.</p>
-<ui-button id="promote-request" kind="quiet" disabled reason="승격 요청은 아직 연결되지 않았습니다.">승격 요청</ui-button>
-<p class="quiet">승격 요청 연결은 다음 조각입니다.</p>
+<p id="promote-status" role="status">승격 요청 후보를 확인하는 중입니다.</p>
+<ul id="promote-candidates" class="evaluate-runs"></ul>
+<label id="promote-pick" hidden>후보 <select id="promote-candidate" class="ui-field"></select></label>
+<ui-button id="promote-request" kind="quiet" disabled reason="승격 요청 후보를 확인하는 중입니다.">승격 요청</ui-button>
+<p id="promote-result" role="status" hidden></p>
+<h3>보낸 승격 요청</h3><ul id="promote-requests" class="evaluate-runs"></ul>
 </section>
 </main></div></div></ui-shell></body></html>

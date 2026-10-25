@@ -147,6 +147,7 @@ S1과 S2는 실시간 스트림이 없어도 된다. 사진 한 장으로 판정
 #### S3·S4 구현 범위 (2026-10-18)
 
 - S3는 녹화 PC가 아니라 모델 PC의 intake에서 판정한다. 촬영 기준은 리뷰 앱 상태(`<state>/camera-setup/`)에만 있어 녹화 PC가 닿지 않기 때문이다. 녹화 PC는 샘플 행에 실제 관절 각도 `joint_positions_rad`(profile 관절 순서)만 더 남긴다. `collection_intake.py prepare`·`collection_pipeline.py prepare`의 `--camera-reference ROLE=PATH`가 Episode마다 첫 프레임(before)·마지막 프레임(after)을 판정해 `camera-setup.json`(`rosy.omx-camera-setup-intake/1`)으로 남긴다. 한 번의 prepare는 역할마다 기준 하나만 받으므로 "역할당 revision 하나" 규칙은 그 자체로 지켜진다. 역할별 `camera_info` 지문도 같은 파일에 남겨 기준을 만들 때 그대로 복사하게 한다. 실물 OMX 데이터는 `rosy.dataset-manifest/1`을 만들지 않으므로(시뮬레이션·Pinky 전용) §4-5의 manifest 규칙은 실물에서는 이 파일이 맡는다.
+- S3 첫 조각(2026-10-25)은 `collection_pipeline.py prepare-native --camera-reference ROLE=PATH`에서 기준을 거절·기록만 한다. 봉인·파일 이름·역할·폭·높이·fps가 dataset과 맞지 않으면 거절하고, 맞으면 `{역할: revision}`만 `inspection.json`·`capture.json`의 `camera_setup`에 남긴다. 프레임 비교와 `camera-setup.json`은 아직 없다.
 - S4 첫 조각은 읽기 전용이다. `/learning/omx`는 `omx` 학습 행으로 연결한 intake 폴더를 읽어 Episode별 검수 결정, 학습이 쓰는 `reviewed_splits` 규칙으로 본 학습 가능 여부, S3 카메라 판정을 보여 준다. 응답에 서버 절대 경로를 넣지 않는다. keep/drop 쓰기, ACT 시작·중지(현재 `learning_control`은 perception 파이프라인만 묶는다), 승격(D-793에 따라 Fleet 소유)은 아직 만들지 않는다.
 
 ## 기존 결정과 관계
