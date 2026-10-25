@@ -33,7 +33,7 @@ def with_topic_hardware(urdf):
     out, count = re.subn(r'<hardware>.*?</hardware>', HARDWARE, urdf, flags=re.S)
     if count != 1:
         raise ValueError('expected exactly one vendor <hardware> block')
-    out = re.sub(r'<gpio.*?</gpio>', '', out, flags=re.S)
+    out = re.sub(r'<gpio[ >].*?</gpio>', '', out, flags=re.S)
     return re.sub(r'(<ros2_control[^>]*?)is_async="true"', r'\1is_async="false"', out)
 
 
