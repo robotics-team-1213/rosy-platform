@@ -404,8 +404,13 @@ class FirstBootProvisioner:
         hardware_serial = hardware_serial.strip().lower()
         if not SERIAL.fullmatch(hardware_serial):
             raise ValueError("hardware serial is unavailable or malformed")
+        shared = _native_helper("os_state_firstboot").FirstBootState.admit(self.root)
+        if shared is not None:
+            shared.prepare_existing()
         existing = self._existing(hardware_serial)
         if existing is not None:
+            if shared is not None and existing.get("ok"):
+                shared.finish_existing(Path(bundle))
             return existing
         bundle = Path(bundle)
         try:
@@ -413,6 +418,8 @@ class FirstBootProvisioner:
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError("one-time provisioning bundle is unreadable") from exc
         validate_provision_bundle(payload)
+        if shared is not None:
+            shared.begin(payload, hardware_serial, Path(bundle))
         identity = payload["device_identity"]
         self._claim_hardware(
             hardware_serial=hardware_serial,
@@ -501,11 +508,16 @@ class FirstBootProvisioner:
                 "tags": payload["tailscale"]["tags"],
                 "hostname": identity["hostname"],
             }
+        if shared is not None:
+            complete = shared.commit(complete)
         _json_atomic(self.complete, complete, 0o640)
         _json_atomic(self.state, {"state": "PROVISIONED"}, 0o600)
         if recovered is not None:
             _handoff().consume_override(self.root)
-        bundle.unlink()
+        if shared is not None:
+            shared.consume_bundle(bundle)
+        else:
+            bundle.unlink()
         return {"ok": True, "state": "PROVISIONED", "device_name": identity["device_name"]}
 
 

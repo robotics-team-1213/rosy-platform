@@ -65,9 +65,15 @@ def _write_atomic(path: Path, content: str, mode: int) -> None:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
             handle.flush()
+            os.chmod(temporary, mode)
             os.fsync(handle.fileno())
-        os.chmod(temporary, mode)
         os.replace(temporary, path)
+        if os.name == "posix":
+            parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                os.fsync(parent)
+            finally:
+                os.close(parent)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise
