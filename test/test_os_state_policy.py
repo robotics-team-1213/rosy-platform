@@ -60,3 +60,42 @@ def test_actual_updater_rejects_bad_or_replaced_mount_readiness(device, host, hu
         ready_path.write_text(json.dumps(ready))
     with pytest.raises(upd.UpdateError, match="OS_STATE_HOLD"):
         updater(host, hub)._config()
+
+
+@pytest.mark.parametrize("name", ["config.json", "hold.json"])
+def test_shared_policy_rejects_writable_by_other_users(device, host, hub, monkeypatch, name):
+    common, _, _ = projected_device(device, monkeypatch)
+    policy = common / "policy/updates" / name
+    if not policy.exists():
+        policy.write_text("{}", encoding="ascii")
+    policy.chmod(0o666)
+    worker = updater(host, hub)
+    with pytest.raises(upd.UpdateError, match="OS_STATE_HOLD"):
+        worker._config() if name == "config.json" else worker._hold()
+
+
+def test_missing_ab_policy_does_not_reenable_updates_by_legacy_default(device, host, hub, monkeypatch):
+    common, _, _ = projected_device(device, monkeypatch)
+    (common / "policy/updates/config.json").unlink()
+    with pytest.raises(upd.UpdateError, match="OS_STATE_HOLD"):
+        updater(host, hub)._config()
+
+
+def test_same_updater_rechecks_mounts_after_earlier_success(device, host, hub, monkeypatch):
+    _, host_table, _ = projected_device(device, monkeypatch)
+    worker = updater(host, hub)
+    assert worker._config()["enabled"] is False
+    host_table.write_text(host_table.read_text().replace("106 0", "206 0"))
+    with pytest.raises(upd.UpdateError, match="OS_STATE_HOLD"):
+        worker._config()
+
+
+def test_applying_journal_cannot_bypass_slot_admission(device, host, hub, monkeypatch):
+    projected_device(device, monkeypatch)
+    worker = updater(host, hub)
+    worker._save_state(dict(applying="fixture interrupted release"))
+    (device / "etc/rosy/os-slot.json").unlink()
+    report = worker.run()
+    assert report["phase"] == "error"
+    assert "OS_STATE_HOLD" in report["reason"]
+    assert host.calls == []
