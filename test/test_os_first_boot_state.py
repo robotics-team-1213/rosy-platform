@@ -241,3 +241,26 @@ def test_cli_check_validates_common_phase_before_network(tmp_path, monkeypatch, 
     assert module._main(["--root", str(root_a), "--hardware-serial", SERIAL, "--network", "check"]) == 1
     assert calls == []
     assert "OS_STATE_HOLD" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("change", ["core_uid", "operator_gid", "alias_uid", "missing_group"])
+def test_account_mismatch_is_refused_before_shared_home_or_identity_changes(tmp_path, monkeypatch, change):
+    root_a, _, common, _ = shared_roots(tmp_path, monkeypatch)
+    passwd, group = root_a / "etc/passwd", root_a / "etc/group"
+    if change == "core_uid":
+        passwd.write_text(passwd.read_text().replace("rosy-core:x:960:", "rosy-core:x:970:"), encoding="ascii")
+    elif change == "operator_gid":
+        passwd.write_text(passwd.read_text().replace("rosy:x:1001:1001:", "rosy:x:1001:1002:"), encoding="ascii")
+    elif change == "alias_uid":
+        passwd.write_text(passwd.read_text() + "foreign:x:960:1005::/nonexistent:/bin/false\n", encoding="ascii")
+    else:
+        group.write_text(group.read_text().replace("rosy-core:x:960:\n", ""), encoding="ascii")
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
+    bundle.parent.mkdir()
+    bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
+    with pytest.raises(ValueError, match="OS_STATE_HOLD"):
+        _module().FirstBootProvisioner(root=root_a, network_activate=lambda _: True).apply(
+            bundle=bundle, hardware_serial=SERIAL)
+    assert not (root_a / "etc/rosy/device-identity.json").exists()
+    assert not (common / "core/.rosy").exists()
+    assert bundle.exists()

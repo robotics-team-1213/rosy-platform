@@ -13,6 +13,11 @@ def shared_roots(tmp_path, monkeypatch):
     tables = []
     for root, slot in zip(roots, ("a", "b")):
         (root / "etc/rosy").mkdir(parents=True)
+        accounts = [("rosy-core", 960), ("rosy-io", 961), ("rosy-display", 962), ("rosy-camera", 963), ("rosy", 1001)]
+        (root / "etc/passwd").write_text("".join(
+            f"{name}:x:{uid}:{uid}::{('/home/rosy' if name == 'rosy' else '/nonexistent')}:"
+            f"{('/bin/bash' if name == 'rosy' else '/usr/sbin/nologin')}\n" for name, uid in accounts), encoding="ascii")
+        (root / "etc/group").write_text("".join(f"{name}:x:{uid}:\n" for name, uid in accounts), encoding="ascii")
         boot = root / "proc/sys/kernel/random/boot_id"
         boot.parent.mkdir(parents=True)
         boot.write_text("fixture")
@@ -38,6 +43,8 @@ def shared_roots(tmp_path, monkeypatch):
         (root / "run/rosy-os-state/ready.json").unlink()
         for relative, backing in bindings.items():
             backing.mkdir(parents=True, exist_ok=True)
+            if relative in ("var/lib/rosy/core", "home/rosy/.ssh"):
+                backing.chmod(0o750 if relative == "var/lib/rosy/core" else 0o700)
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.is_dir():
@@ -67,6 +74,10 @@ def shared_roots(tmp_path, monkeypatch):
         if key in mountpoints and not key.endswith("/run/rosy-provision-boot"):
             fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
             fields["st_dev"] = os.makedev(8, 6)
+            if key.endswith("/var/lib/rosy/core"):
+                fields.update(st_uid=960, st_gid=960)
+            elif key.endswith("/home/rosy/.ssh"):
+                fields.update(st_uid=1001, st_gid=1001)
             return SimpleNamespace(**fields)
         return info
 
