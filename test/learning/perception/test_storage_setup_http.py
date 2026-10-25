@@ -39,7 +39,7 @@ def setup_server(tmp_path, accounts, pool_setup, monkeypatch):
             server.shutdown(); server.server_close(); thread.join(timeout=5)
     body = dict(revision=0, targets=config['targets'], quotas=config['quotas'], reserve_bytes=0,
                 cache_policy=dict(enabled=False, max_bytes=1048576))
-    return running, body, remote, folder, now
+    return running, body, remote, store.db.parent, now
 
 
 def session_for(url, accounts, name='alice'):

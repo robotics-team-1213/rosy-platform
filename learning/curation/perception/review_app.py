@@ -106,7 +106,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
         omx_center.tasks = tasks
     if storage and storage.project_id != project:
         raise ValueError('storage project must match workspace project')
-    storage_web = StorageWeb(storage, accounts, storage_jobs, store.db)
+    storage_web = StorageWeb(storage, accounts, storage_jobs, store.db, sim_runs=sim_runs)
     if accounts:
         from learning_collaboration import Collaboration
         if not ipaddress.ip_address(host).is_loopback:
@@ -202,7 +202,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/workspaces':
                     return self.send({'configured': workspace_links is not None, 'workspaces': workspace_links or []})
                 if path == '/api/learning/storage':
-                    return self.send(storage.snapshot() if storage else {'status': 'not_configured', 'roots': []})
+                    return self.send(storage_web.inventory.snapshot() if storage_web.inventory else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
                     frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
                               for row in store.list_frames()]
@@ -433,9 +433,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                             accounts.require(self.learning_principal, 'manage')
                         return self.send(ai_jobs.cancel(match[1], actor or 'local-unidentified'))
                 if path == '/api/learning/storage/preflight':
-                    if not storage:
+                    if not storage_web.inventory:
                         raise ValueError('storage is not configured')
-                    return self.send(storage.preflight(body))
+                    return self.send(storage_web.inventory.preflight(body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
                 if path == '/api/import':

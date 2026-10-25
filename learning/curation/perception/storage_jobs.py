@@ -92,7 +92,7 @@ class StorageJobs:
                 (self.project_id, actor['user_id'])).fetchall()
         return [self._public(job) for row in rows if (job := json.loads(row[0]))['requester_id'] == actor['user_id']]
 
-    def create(self, actor, body):
+    def create(self, actor, body, *, source_key=None):
         self.accounts.require(actor, 'publish')
         if not isinstance(body, dict) or set(body) != {'source_id', 'artifact_id', 'profile'}:
             raise ValueError('source ID, relative artifact ID and profile required')
@@ -112,6 +112,12 @@ class StorageJobs:
                 error=None, created_at=self.pool.clock(), upload_bytes=sum(v['bytes'] for v in manifest['files'].values()))
             with self.pool.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
+                if source_key is not None:
+                    previous = db.execute('''SELECT document FROM storage_jobs WHERE project=?
+                        AND json_extract(document, '$.requester_id')=? AND json_extract(document, '$.source_key')=?''',
+                        (self.project_id, actor['user_id'], source_key)).fetchone()
+                    if previous: return self._public(json.loads(previous[0]))
+                    job['source_key'] = source_key
                 job['assignment'] = self.pool.reserve(actor, job['id'], job['upload_bytes'], connection=db,
                     repo_type='model' if body['profile'] == 'model' else 'dataset')
                 self._save(job, connection=db)

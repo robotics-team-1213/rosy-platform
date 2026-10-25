@@ -51,13 +51,19 @@ def seal(root, profile, provenance):
 
 
 def export_isaac_run(store, run_id, output):
-    row = store.get(run_id)
+    output = Path(output).absolute()
+    if output.is_relative_to(store.root) or store.root.is_relative_to(output):
+        raise ValueError('new export outside the owner store required')
+    return export_isaac_snapshot(lambda: store.get(run_id), lambda item_id: store.artifact(run_id, item_id), run_id, output)
+
+
+def export_isaac_snapshot(get, artifact, run_id, output):
+    row = get()
     if (row.get('snapshot') != 'FINAL' or row.get('status') not in ('SUCCEEDED', 'FAILED', 'STOPPED')
             or row.get('result', {}).get('cleanup') not in ('OWNED_PROCESSES_EXITED_GPU_RELEASED', 'SDK_NOT_STARTED')):
         raise ValueError('final Isaac owner result and confirmed cleanup required')
     output = Path(output).absolute()
-    if (output.is_relative_to(store.root) or store.root.is_relative_to(output)
-            or any((parent / '.git').exists() for parent in (output, *output.parents))):
+    if any((parent / '.git').exists() for parent in (output, *output.parents)):
         raise ValueError('new export outside the owner store and source checkout required')
     items = row.get('artifacts', {}).get('files', [])
     if len(items) > 256: raise ValueError('Isaac export exceeds owner artifact limit')
@@ -72,7 +78,7 @@ def export_isaac_run(store, run_id, output):
         _json(fd, 'observation.json', row)
         for item in items:
             allowed(item['name'], 'isaac')
-            blob = store.artifact(run_id, item['id'])
+            blob = artifact(item['id'])
             data = blob['data']
             if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
                 raise ValueError('Isaac owner artifact changed during export')
@@ -80,7 +86,7 @@ def export_isaac_run(store, run_id, output):
                 stream.write(data); stream.flush(); os.fsync(stream.fileno())
         _json(fd, 'snapshot.json', dict(snapshot='FINAL', run_id=run_id, files=items))
     finally: os.close(fd)
-    current = store.get(run_id)
+    current = get()
     if current.get('result_sha256') != row.get('result_sha256') or current.get('artifacts_sha256') != row.get('artifacts_sha256'):
         raise ValueError('Isaac completion changed during export')
     source = row['input']
