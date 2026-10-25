@@ -84,7 +84,10 @@ took hours to land. Four separate things blocked it.
   split candidate next to `fleet` and `site_ui/console`.
 - **Symptom (infra):** two runs lost host contact for more than 600 s (exit 255).
   `test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds`
-  was flagged LOAD-FLAKY twice under load.
+  was flagged LOAD-FLAKY twice. Correction 2026-10-26: the cause is not suite load. It failed 3/3
+  first tries on the AI PC after its disk was freed (0/2 on the model PC); the likely cause is AI PC
+  disk I/O contention (io pressure full avg10 up to 57%, a continuous foreign WAL writer), not proven.
+  See [read-only-test-dirs-fill-lab-disks-2026-10-26.md](read-only-test-dirs-fill-lab-disks-2026-10-26.md).
 - **Root cause:** there is no landing order or queue. A wide branch selects the full tier, so every
   move of `main` during a round costs a full rerun.
 
