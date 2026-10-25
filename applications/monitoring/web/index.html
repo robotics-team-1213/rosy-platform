@@ -11,28 +11,30 @@
   <link rel="stylesheet" href="./common/app-shell.css">
   <link rel="stylesheet" href="./monitoring.css">
   <script type="module" src="./monitoring.js"></script>
+  <script type="module" src="./common/ui.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">본문으로 이동</a>
-  <header class="topbar">
+  <ui-shell grammar="exception">
+  <ui-topbar class="topbar">
     <div><p class="brand">ROSY Monitoring</p><h1>시스템 상태</h1></div>
     <label class="theme-field">화면 테마 <select id="theme" class="ui-field" aria-label="화면 테마"></select></label>
-  </header>
+  </ui-topbar>
   <main id="main" tabindex="-1">
     <section class="connection" aria-labelledby="connection-heading">
       <div><h2 id="connection-heading">조회 연결</h2><p id="connection-status" role="status" aria-live="polite">등록된 조회 키로 시작하세요.</p></div>
       <form id="login" autocomplete="off">
         <label for="reader-key">조회 키</label>
-        <div class="login-fields"><input id="reader-key" class="ui-field" type="password" autocomplete="off" spellcheck="false" required minlength="32" maxlength="4096" aria-describedby="key-hint"><button class="ui-button" type="submit">조회 시작</button></div>
+        <div class="login-fields"><input id="reader-key" class="ui-field" type="password" autocomplete="off" spellcheck="false" required minlength="32" maxlength="4096" aria-describedby="key-hint"><ui-button kind="primary" type="submit">조회 시작</ui-button></div>
         <p id="key-hint" class="quiet">이 창에서만 사용합니다. 새로 열면 다시 입력하세요.</p>
       </form>
-      <button id="logout" class="ui-button" type="button" disabled>로그아웃</button>
+      <ui-button id="logout" kind="quiet" type="button" disabled>로그아웃</ui-button>
     </section>
     <div id="workspace" hidden>
       <section class="toolbar" aria-label="조회 범위">
         <label>사이트 <select id="scope-select" class="ui-field"></select></label>
         <label class="search-field">항목 검색 <input id="search" class="ui-field" type="search" placeholder="이름 또는 원천 ID"></label>
-        <button id="refresh" class="ui-button" type="button">다시 조회</button>
+        <ui-button id="refresh" kind="quiet" type="button">다시 조회</ui-button>
       </section>
       <p id="summary" class="summary"></p><p id="received" class="quiet"></p>
       <section aria-labelledby="graph-heading">
@@ -44,7 +46,7 @@
         <div class="section-heading"><h2 id="observations-heading">관측 항목</h2><p class="quiet">원천 판정과 보고 신선도를 함께 확인하세요.</p></div>
         <p id="node-empty" class="ui-empty" hidden>표시할 관측 항목이 없습니다. 등록 범위와 검색어를 확인하세요.</p>
         <table id="node-table"><thead><tr><th scope="col">항목</th><th scope="col">판정·보고</th><th scope="col">원천·시각</th></tr></thead><tbody id="observation-rows"></tbody></table>
-        <div class="pager"><button id="previous" type="button" class="ui-button">이전 항목</button><span id="page-number"></span><button id="next" type="button" class="ui-button">다음 항목</button></div>
+        <div class="pager"><ui-button id="previous" type="button" kind="quiet">이전 항목</ui-button><span id="page-number"></span><ui-button id="next" type="button" kind="quiet">다음 항목</ui-button></div>
       </section>
       <section aria-labelledby="links-heading">
         <div class="section-heading"><h2 id="links-heading">연결 근거</h2><p class="quiet">직접 조회와 원천 보고를 구별합니다.</p></div>
@@ -54,10 +56,11 @@
       <section aria-labelledby="history-heading">
         <div class="section-heading"><h2 id="history-heading">변경 기록</h2><p class="quiet">사이트별 이전 기록부터 200건씩 조회합니다.</p></div>
         <p id="history-note" class="ui-empty">사이트를 선택하면 기록을 확인할 수 있습니다.</p><ol id="history-rows"></ol>
-        <button id="history-next" class="ui-button" type="button" hidden>다음 기록</button>
+        <ui-button id="history-next" kind="quiet" type="button" hidden>다음 기록</ui-button>
       </section>
     </div>
     <footer><p>판정은 CORE·Fleet·호스트의 보고입니다. 설정·복구는 기존 담당 관제의 확인 경로에서 진행하세요.</p></footer>
   </main>
+  </ui-shell>
 </body>
 </html>

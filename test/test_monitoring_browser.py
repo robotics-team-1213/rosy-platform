@@ -36,7 +36,8 @@ def monitoring_backend(tmp_path, request):
             source = ROOT / 'applications/monitoring/web' / name
             assert source.is_file(), f'Monitoring UI asset missing: {name}'
             shutil.copy2(source, web_root / name)
-        for name in ('tokens.css', 'components.css', 'app-shell.css', 'theme.js', 'core_ui_logic.js'):
+        for name in ('tokens.css', 'components.css', 'app-shell.css', 'theme.js', 'core_ui_logic.js',
+                     'ui.js', 'ui-wiring.js', 'confirmation.js', 'live-dialog-geometry.js'):
             shutil.copy2(ROOT / 'shared/web' / name, web_root / 'common' / name)
     sources, paths = [], {}
     for site in ('a', 'b'):
