@@ -25,6 +25,7 @@ from core_common.protocol.power_health import PowerHealthResponse
 from core_common.protocol.motor_health import MotorHealthResponse
 from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
+from fleet.server.monitoring_routes import cached_projection, install_monitoring_routes
 from fleet.server.http_errors import http_error
 from fleet.server.identity import IdentityError, IdentityService
 from fleet.stuck.board import LineStuckBoard
@@ -105,8 +106,13 @@ class SharedGather:
         self._snapshot: Optional[dict] = None
         self._at = 0.0
         self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
+        self._monitoring_cache = None
         self.observations = None
         self.recording_status = {"state": "disabled", "reason": "durable_database_not_configured"}
+
+    def cached_monitoring(self):
+        return cached_projection(self._monitoring_cache, now=self._clock(),
+                                 state_now=getattr(self._console, "_clock", time.monotonic)())
 
     def _observed_at(self, robots) -> dict:
         """Each row's own read time (D-493 ``_state_mono``, console clock) on the tracking clock."""
@@ -136,6 +142,8 @@ class SharedGather:
                 await asyncio.to_thread(self._board.flush)   # episode SQLite off the loop
                 self._snapshot, self._at = snapshot, self._clock()
                 self.gathered_at = time.time()
+                # One publication keeps body and capture clocks from different gathers apart.
+                self._monitoring_cache = snapshot, self._at, self.gathered_at
             return self._snapshot
 
 
@@ -151,6 +159,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
+    install_monitoring_routes(app, gather, read_guard=read_guard)
     journal = getattr(getattr(console, "hub", None), "event_store", None)
     observation_path = answer_log_path or (journal.path if journal is not None else None)
     if observation_path is not None:

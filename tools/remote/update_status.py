@@ -18,13 +18,22 @@ UNDECLARED; a declared unit that is absent is MISSING; a unit that should run bu
 an `off` unit that is enabled or running is UNEXPECTED; a unit file, copied file, code path or
 drop-in that differs from its declaration is DRIFT. Any of these exits 1. `adhoc` entries are listed,
 and a DRIFT the entry explains in `known_drift` is reported as KNOWN with its reason.
+
+Repo copies are read from each checkout's local origin/main (rosy-platform and rosy-ops), which this
+tool does not fetch unless given `--fetch`. Each checkout's line names the ref and how long ago it was
+last fetched; a checkout with no origin/main (read HEAD instead) or a fetch older than
+`--ref-stale-hours` (default 12) is STALE-REF and exits 1. When a robot CD snapshot is installed on
+this PC (`%LOCALAPPDATA%/Rosy/robot-cd`), the snapshot files that differ from that ref are listed as a
+WARN, which does not change the exit code.
 """
 from __future__ import annotations
 
 import argparse
 from fnmatch import fnmatch
 import hashlib
+import importlib.util
 import json
+import os
 import subprocess
 import sys
 import time
@@ -32,6 +41,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lab_hosts
+# by file, not sys.path: putting tools/release on sys.path lets any script there shadow a repo package
+# (tools/release/deploy.py did, 2026-10-26; renamed deploy_cli.py, test_no_tool_script_shadows_a_repo_package)
+_spec = importlib.util.spec_from_file_location('robot_cd', Path(__file__).resolve().parents[1] / 'release/robot_cd.py')
+robot_cd = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(robot_cd)
 
 SSH = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15']
 PROBE = r'''
@@ -181,14 +195,51 @@ def roles(config: dict) -> dict:
     return found
 
 
-def repo_digest(spec: str, platform: Path, ops: Path) -> str | None:
-    """sha256 (CR removed) of origin/main's copy of a repo file; `rosy-ops:<path>` reads the ops checkout."""
+def ref_state(root: Path, now: float, stale_hours: float) -> dict:
+    """The ref a checkout's repo files are read from, and how long ago that checkout last fetched.
+
+    The ref tip's commit time says nothing about when origin was last asked. A fetch rewrites
+    FETCH_HEAD (per worktree) and appends to the origin/main reflog when the ref moves (shared), so
+    the newer mtime of those is the last fetch; with neither, the age is unknown and counted stale.
+    """
+    def git(*args):
+        done = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True)
+        return done.stdout.strip() if done.returncode == 0 else ''
+    dirs = git('rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir').splitlines()
+    ref = 'origin/main' if git('rev-parse', '--verify', '-q', 'origin/main^{commit}') else 'HEAD'
+    times = [mark.stat().st_mtime for d in dirs for mark in (Path(d) / 'FETCH_HEAD', Path(d) / 'logs/refs/remotes/origin/main')
+             if mark.is_file()]
+    age = round((now - max(times)) / 3600, 1) if times else None
+    if not dirs:
+        problem = f'{root} is not a git checkout'
+    elif ref == 'HEAD':
+        problem = 'no origin/main; compared against HEAD'
+    elif age is None:
+        problem = 'no record of a fetch'
+    elif age > stale_hours:
+        problem = f'last fetch {age}h ago (> {stale_hours:g}h)'
+    else:
+        problem = None
+    return dict(ref=ref, tip=git('rev-parse', '--short=12', ref) or 'unknown', fetched_h=age,
+                verdict='STALE-REF' if problem else 'ok', problem=problem)
+
+
+def repo_digest(spec: str, platform: Path, ops: Path, refs: dict | None = None) -> str | None:
+    """sha256 (CR removed) of a repo file at its checkout's ref (`ref_state`, default origin/main);
+    `rosy-ops:<path>` reads the ops checkout."""
     root, path = (ops, spec.split(':', 1)[1]) if spec.startswith('rosy-ops:') else (platform, spec)
-    for ref in ('origin/main', 'HEAD'):
-        done = subprocess.run(['git', '-C', str(root), 'show', f'{ref}:{path}'], capture_output=True)
-        if done.returncode == 0:
-            return hashlib.sha256(done.stdout.replace(b'\r', b'')).hexdigest()
-    return None
+    ref = (refs or {}).get(root, 'origin/main')
+    done = subprocess.run(['git', '-C', str(root), 'show', f'{ref}:{path}'], capture_output=True)
+    return hashlib.sha256(done.stdout.replace(b'\r', b'')).hexdigest() if done.returncode == 0 else None
+
+
+def robot_cd_root() -> Path | None:
+    """The installed robot CD snapshot on this PC (install_robot_cd.ps1), or None."""
+    base = os.environ.get('LOCALAPPDATA')
+    config = Path(base) / 'Rosy/robot-cd/config.json' if base else None
+    if config is None or not config.is_file():
+        return None
+    return Path(json.loads(config.read_text(encoding='utf-8'))['trusted_root'])
 
 
 def _code_path_matches(path: str, pattern: str) -> bool:
@@ -255,19 +306,40 @@ def audit(declared: dict, host: dict, digest) -> list:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--stale-hours', type=float, default=6.0)
+    parser.add_argument('--ref-stale-hours', type=float, default=12.0)
+    parser.add_argument('--fetch', action='store_true', help='git fetch origin main in both checkouts first')
     args = parser.parse_args()
-    head = subprocess.run(['git', 'rev-parse', '--short=12', 'origin/main'], capture_output=True, text=True).stdout.strip()
-    print(f'origin/main {head or "unknown (git fetch first)"}')
     stuck = False
     inventory = load_inventory()
     role_of = roles(lab_hosts.load())
     platform = Path(__file__).resolve().parents[2]
     ops = lab_hosts.main_checkout().parent / 'rosy-ops'
+    refs = {}
+    for name, root in (('rosy-platform', platform), ('rosy-ops', ops)):
+        if args.fetch:
+            done = subprocess.run(['git', '-C', str(root), 'fetch', 'origin', 'main'], capture_output=True, text=True)
+            if done.returncode:
+                print(f'{name}: git fetch failed ({done.stderr.strip()[-120:]})')
+        state = ref_state(root, time.time(), args.ref_stale_hours)
+        refs[root] = state['ref']
+        print(f'{state["verdict"]:9} {name}: {state["ref"]} {state["tip"]} fetched={state["fetched_h"]}h ago'
+              + (f' ({state["problem"]}; rerun with --fetch)' if state['problem'] else ''))
+        stuck |= state['verdict'] != 'ok'
+    try:
+        snapshot = robot_cd_root()
+        differ = snapshot and robot_cd.snapshot_drift(snapshot, platform, refs[platform])
+    except (OSError, ValueError, KeyError) as error:
+        snapshot, differ = None, None
+        print(f'note      robot-cd snapshot unreadable: {type(error).__name__}: {error}')
+    if snapshot:
+        print(f'WARN      robot-cd snapshot {snapshot.name[:12]}: {len(differ)} files differ from {refs[platform]}: '
+              f'{", ".join(differ)} (reinstall with install_robot_cd.ps1 after review)' if differ
+              else f'ok        robot-cd snapshot {snapshot.name[:12]}: matches {refs[platform]}')
     digests = {}
 
     def digest(spec):
         if spec not in digests:
-            digests[spec] = repo_digest(spec, platform, ops)
+            digests[spec] = repo_digest(spec, platform, ops, refs)
         return digests[spec]
     for target in dict.fromkeys(lab_hosts.test_hosts() + [lab_hosts.site_host()]):
         if not target:

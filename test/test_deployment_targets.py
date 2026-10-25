@@ -97,7 +97,7 @@ def test_duplicate_target_id_is_rejected(targets, tmp_path):
 
 
 def test_deploy_cli_lists_and_refuses_without_network():
-    entry = ROOT / "tools/release/deploy.py"
+    entry = ROOT / "tools/release/deploy_cli.py"
     listed = subprocess.run([sys.executable, str(entry), "list"], capture_output=True, text=True)
     assert listed.returncode == 0, listed.stderr
     assert "dji_neo_2" in {row["id"] for row in json.loads(listed.stdout)}

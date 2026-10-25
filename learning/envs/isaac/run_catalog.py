@@ -13,6 +13,18 @@ _CATALOG = [
      'seed_effect': 'NOT_USED_BY_FIXED_FIXTURE', 'timeout_seconds': 180,
      'requirements': ['승인 SDK·GPU·학습 잠금', '실측 좌표가 아닌 고정 SIM tray proxy'],
      'reason': '정지한 지지면과 CAD 집게의 접촉 왕복이며 학습 정책·실물 수용이 아닙니다.'},
+    {'id': 'arm-s-cell-nominal', 'name': '공급암 S 셀: 상자를 벨트에 놓기', 'implemented': True, 'stage': 'arm_s_cell',
+     'seed_effect': 'NOT_USED_BY_FIXED_FIXTURE', 'timeout_seconds': 600,
+     'requirements': ['승인 SDK·GPU·학습 잠금', '실물 집기의 순기구학 좌표(카메라 정합 아님)'],
+     'reason': '공급암 S 실물 청크 프레임을 받침·벨트·Pinky 프레임에 재생합니다. 학습 정책·실물 수용이 아닙니다.'},
+    {'id': 'arm-s-cell-overhang', 'name': '공급암 S 셀: 상자 가장자리가 Pinky 프레임에 걸리는 놓기', 'implemented': True, 'stage': 'arm_s_cell',
+     'seed_effect': 'NOT_USED_BY_FIXED_FIXTURE', 'timeout_seconds': 600,
+     'requirements': ['승인 SDK·GPU·학습 잠금', '실물 집기의 순기구학 좌표(카메라 정합 아님)'],
+     'reason': '공급암 S 실물 청크 프레임을 받침·벨트·Pinky 프레임에 재생합니다. 학습 정책·실물 수용이 아닙니다.'},
+    {'id': 'arm-s-cell-wrong-yaw', 'name': '공급암 S 셀: 돌아간 상자를 사이트 각도로 집기', 'implemented': True, 'stage': 'arm_s_cell',
+     'seed_effect': 'NOT_USED_BY_FIXED_FIXTURE', 'timeout_seconds': 600,
+     'requirements': ['승인 SDK·GPU·학습 잠금', '실물 집기의 순기구학 좌표(카메라 정합 아님)'],
+     'reason': '공급암 S 실물 청크 프레임을 받침·벨트·Pinky 프레임에 재생합니다. 학습 정책·실물 수용이 아닙니다.'},
     {'id': 'port-e0-pick-place', 'name': '항만 E0 한 상자 집기·놓기',
      'implemented': False, 'stage': 'planned',
      'reason': 'source tray·제어기·그리퍼·독립 파지 판정 연결이 필요합니다.'},
@@ -42,4 +54,7 @@ def normalize(scenario_id: str, config: dict) -> dict:
     if scenario_id == 'pinky-conveyor-roundtrip':
         return {'model': 'omx_f', 'headless': True, 'frames': 4800, 'seed': config['seed'],
                 'fixture': 'stationary-proxy-v3'}
+    if scenario_id.startswith('arm-s-cell-'):
+        return {'model': 'omx_f', 'headless': True, 'seed': config['seed'], 'fixture': 'arm-s-cell-v1',
+                'scenario': scenario_id.removeprefix('arm-s-cell-')}
     return {'model': 'omx_f', 'headless': True, 'frames': 120, 'seed': config['seed']}

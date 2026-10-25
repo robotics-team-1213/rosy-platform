@@ -14,7 +14,6 @@
 1014 deploy/robot/pinky_pro/native/sync-image-layer.py
 815 deploy/robot/pinky_pro/release/secret_scan.py
 686 deploy/robot/pinky_pro/release/updater.py
-806 deploy/robot/pinky_pro/sd/verify-media-readback.py
 1141 devices/omx/adapter/omx_adapter/action_store.py
 728 devices/omx/adapter/omx_adapter/pose_plan.py
 771 drive/behaviors/docking/manager.py
@@ -56,7 +55,7 @@
 3049 test/test_dashboard_browser.py
 3835 test/test_fleet_console_browser.py
 2484 test/test_rosy_face.py
-2725 test/test_sd_writer_contract.py
+2720 test/test_sd_writer_contract.py
 609 tools/device_test/run.py
 703 tools/device_twin/scenarios.py
 843 tools/harness/rosy_harness.py

@@ -12,6 +12,7 @@ import sys
 import time
 
 import pytest
+from sd_writer_fixture import make_writer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,13 +79,7 @@ def writer_case(tmp_path: Path):
         json.dumps({"robot_numbers": [], "device_names": [], "device_uids": []}),
         encoding="utf-8",
     )
-    marker = tmp_path / "writer-called.txt"
-    writer_args = tmp_path / "writer-args.txt"
-    fake_writer = tmp_path / "fake-writer.cmd"
-    fake_writer.write_text(
-        f'@echo off\n> "{marker}" echo called\n> "{writer_args}" echo %*\nexit /b 0\n',
-        encoding="utf-8",
-    )
+    fake_writer, marker, writer_args = make_writer(tmp_path)
     local_app_data = tmp_path / "local-app-data"
     credential_dir = local_app_data / "Rosy" / "credentials"
     credential_dir.mkdir(parents=True)

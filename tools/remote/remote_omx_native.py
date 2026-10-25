@@ -247,6 +247,7 @@ def deploy(args, repo, runner):
     host = choose_target(runner._LAB, args.host)
     experiment = getattr(args, 'experiment', 'g2')
     if experiment not in ('g2', 'pick-place', 'pick-place-demonstrations', 'pick-place-chunks',
+                           'pick-place-chunks-offset', 'pick-place-chunks-yaw-site', 'pick-place-chunks-yaw-box',
                            'pick-place-policy','pick-place-policy-calibration','pick-place-policy-contact'):
         raise ValueError('unknown native simulation experiment')
     episodes = getattr(args, 'episodes', 1)
@@ -385,6 +386,7 @@ def main():
     shipping.add_argument('--log-dir', type=Path, required=True)
     shipping.add_argument('--sha', default='HEAD')
     shipping.add_argument('--experiment', choices=['g2', 'pick-place', 'pick-place-demonstrations', 'pick-place-chunks',
+        'pick-place-chunks-offset', 'pick-place-chunks-yaw-site', 'pick-place-chunks-yaw-box',
         'pick-place-policy','pick-place-policy-calibration','pick-place-policy-contact'], default='g2')
     shipping.add_argument('--episodes', type=int, choices=(1, 2, 3), default=1)
     shipping.add_argument('--approve-host-provisioning', action='store_true')

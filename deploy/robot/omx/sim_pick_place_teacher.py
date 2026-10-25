@@ -73,7 +73,7 @@ def release_clearance_evidence(observation,tcp,box,goal):
                 object_bottom_z_m=bottom,support_surface_z_m=surface,clearance_m=clearance)
 
 
-def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic'):
+def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic', box_turn_deg=0.0):
     isolation_guard(ROOT)
     configure_imports()
     sys.path.insert(0, str(ROOT/'operations/processes/cell'))
@@ -285,9 +285,13 @@ def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic
             from sim_chunk_plan import phases as chunk_phases, sim_plan
             carry = TopDownPose(cell.home.x, cell.home.y, job.carry_z, cell.home.yaw)
             limits = profile.ik_limits()
+            # aim at the box where the observer sees it (the real pipeline locates it with the top camera);
+            # the yaw is the site's, or turned by the box when the scenario asks for that candidate
+            seen = observe()['model_pose_base']
+            pick_pose = (seen['x_m'], seen['y_m'], request.pick.z, request.pick.yaw + math.radians(box_turn_deg))
             arm_plan = sim_plan(home_q=[home_q[n] for n in ARM_JOINTS],
                 transit_q=kin.solve_top_down(carry, limits, reference_q5=home_q[ARM_JOINTS[4]]).joints,
-                pick=(request.pick.x, request.pick.y, request.pick.z, request.pick.yaw),
+                pick=pick_pose,
                 place=(request.place.x, request.place.y, request.place.z, request.place.yaw),
                 approach_m=request.pick_approach_z-request.pick.z, grip_open=profile.gripper_open,
                 grip_close=profile.gripper_close_for_width(recipe.box.width),
@@ -297,7 +301,8 @@ def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic
                         'singularity_radius_m': limits.singularity_radius_m})
             plan_phases = chunk_phases(Planner(arm_plan), config.joint_names, profile.gripper_joint,
                                        TEACHER_STEP_RAD)
-            receipt['motion_strategy']['plan'] = {'type': 'arm_s_chunks_v1', 'grasp_plan': arm_plan}
+            receipt['motion_strategy']['plan'] = {'type': 'arm_s_chunks_v1', 'grasp_plan': arm_plan,
+                                                  'box_seen': seen, 'box_turn_deg': box_turn_deg}
         else:
             plan_phases = planner.plan_transfer(request, profile, snapshot).phases
         initial = observe()
@@ -394,6 +399,7 @@ if __name__ == '__main__':
     parser.add_argument('--observer', type=Path, required=True)
     parser.add_argument('--home-only', action='store_true')
     parser.add_argument('--plan', choices=('analytic', 'chunks'), default='analytic')
+    parser.add_argument('--box-turn-deg', type=float, default=0.0)
     args = parser.parse_args()
     raise SystemExit(run(args.evidence, args.world, args.observer, home_only=args.home_only,
-                         plan_kind=args.plan))
+                         plan_kind=args.plan, box_turn_deg=args.box_turn_deg))
