@@ -17,13 +17,6 @@ import subprocess
 import sys
 import tempfile
 
-for native in (Path(__file__).resolve().parents[1] / "native-runtime",
-               Path(__file__).resolve().parents[2] / "native"):
-    if (native / "os_storage_dispatch.py").is_file():
-        sys.path.insert(0, str(native))
-        break
-from os_storage_dispatch import marked
-
 try:
     from deploy.robot.pinky_pro.sd.personalization import DeviceIdentity, validate_device_identity, validate_provision_bundle
 except ModuleNotFoundError:
@@ -87,6 +80,13 @@ def _archive_for(root: Path, fresh_uid: str, serial: str) -> Path | None:
 
 def quarantine_previous(root: Path, bundle: Path, hardware_serial: str) -> Path:
     """Move old identity and CORE data aside; safe to retry after a partial move."""
+    for native in (Path(__file__).resolve().parents[1] / "native-runtime",
+                   Path(__file__).resolve().parents[2] / "native"):
+        if (native / "os_storage_dispatch.py").is_file():
+            sys.path.insert(0, str(native))
+            break
+    from os_storage_dispatch import marked
+
     root = Path(root)
     # Root-local moves cannot retire shared A/B generations and machine identity.
     if marked(root):
