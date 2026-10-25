@@ -116,11 +116,12 @@ class StoragePool:
                 rows.append(row)
         return dict(project_id=self.project_id, targets=rows)
 
-    def reserve(self, actor, job_id, upload_bytes, *, connection=None):
+    def reserve(self, actor, job_id, upload_bytes, *, connection=None, repo_type=None):
         self.accounts.require(actor, 'publish')
         if not isinstance(job_id, str) or not IDENTIFIER.fullmatch(job_id):
             raise ValueError('invalid storage job ID')
         size(upload_bytes)
+        if repo_type not in (None, 'dataset', 'model'): raise ValueError('invalid repository type')
         if upload_bytes == 0:
             raise ValueError('upload must contain bytes')
         with (self.connect() if connection is None else nullcontext(connection)) as conn:
@@ -130,11 +131,13 @@ class StoragePool:
             if existing:
                 job = json.loads(existing[0])
                 self._authorize(actor, job)
-                if job['upload_bytes'] != upload_bytes or job['status'] == 'released':
+                if (job['upload_bytes'] != upload_bytes or job['status'] == 'released'
+                        or repo_type is not None and job['repo_type'] != repo_type):
                     raise ValueError('job already has a different allocation')
                 return job
             ordered = sorted(self.config['targets'], key=lambda row: (row.get('priority', 0), row['id']))
             for target in ordered:
+                if repo_type is not None and target['repo_type'] != repo_type: continue
                 if not target.get('enabled', True):
                     continue
                 try:

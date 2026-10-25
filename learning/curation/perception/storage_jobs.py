@@ -93,6 +93,7 @@ class StorageJobs:
         self.accounts.require(actor, 'publish')
         if not isinstance(body, dict) or set(body) != {'source_id', 'artifact_id', 'profile'}:
             raise ValueError('source ID, relative artifact ID and profile required')
+        if not isinstance(body['source_id'], str): raise ValueError('registered source ID must be text')
         parts(body['artifact_id'])
         if body['source_id'] not in self.files.roots: raise ValueError('unknown source root')
         location = dict(root_id=body['source_id'], relative=body['artifact_id'])
@@ -107,7 +108,8 @@ class StorageJobs:
                 error=None, created_at=self.pool.clock(), upload_bytes=sum(v['bytes'] for v in manifest['files'].values()))
             with self.pool.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
-                job['assignment'] = self.pool.reserve(actor, job['id'], job['upload_bytes'], connection=db)
+                job['assignment'] = self.pool.reserve(actor, job['id'], job['upload_bytes'], connection=db,
+                    repo_type='model' if body['profile'] == 'model' else 'dataset')
                 self._save(job, connection=db)
             return self._public(job)
 
@@ -133,7 +135,7 @@ class StorageJobs:
         with self._lease():
             job = self._load(job_id)
             self._check(actor, job)
-            if job['status'] in ('hold', 'reclaiming') or job['bytes_verified']:
+            if job['status'] in ('hold', 'reclaiming', 'cancelled') or job['bytes_verified']:
                 return self._public(job)
             try:
                 allocation = self.pool.assignment(actor, job_id)
@@ -160,6 +162,31 @@ class StorageJobs:
                 unknown = job['status'] == 'uploading' and not job['revision']
                 self._save(job, status='hold' if unknown else 'failed', bytes_verified=False,
                            error='upload_outcome_unknown' if unknown else 'transfer_failed')
+            return self._public(job)
+
+    def cancel(self, actor, job_id):
+        with self._lease():
+            job = self._load(job_id)
+            self._check(actor, job)
+            if job['status'] != 'cancelled':
+                self.pool.release(actor, job_id)
+                self._save(job, status='cancelled', error=None)
+            return self._public(job)
+
+    def reconcile(self, actor, job_id, revision):
+        if not isinstance(revision, str) or not re.fullmatch(r'[0-9a-f]{40}', revision):
+            raise ValueError('full existing immutable commit required')
+        with self._lease():
+            job = self._load(job_id)
+            self._check(actor, job)
+            if job['status'] != 'hold' or job['revision'] is not None:
+                raise ValueError('only an uncertain upload can reconcile an existing commit')
+            candidate = dict(job, revision=revision)
+            try: self._verify_remote(actor, candidate)
+            except PermissionError: raise
+            except Exception: raise ValueError('existing commit does not verify this artifact manifest') from None
+            self.pool.mark_uploaded(actor, job_id, revision)
+            self._save(job, revision=revision, status='verified', bytes_verified=True, error=None)
             return self._public(job)
 
     def pin(self, actor, job_id, value):

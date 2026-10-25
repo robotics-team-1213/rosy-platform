@@ -91,6 +91,56 @@ def test_storage_http_unconfigured_pool_preserves_existing_inventory(tmp_path, j
         assert request(url, '/api/learning/storage/jobs', session, {}, token)[0] == 400
 
 
+def test_storage_http_cancel_and_existing_commit_recovery(tmp_path, jobs_setup, accounts):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    with running(tmp_path, accounts, inventory, build()) as url:
+        session, _ = sign_in(accounts, 'alice')
+        token = request(url, '/api/accounts/session', session)[1]['token']
+        body = dict(source_id='raw', artifact_id='run-one', profile='isaac')
+        job = request(url, '/api/learning/storage/jobs', session, body, token)[1]
+        prefix = '/api/learning/storage/jobs/' + job['id']
+        assert request(url, prefix + '/cancel', session, {}, token)[0] == 200
+        job = request(url, '/api/learning/storage/jobs', session, body, token)[1]
+        prefix = '/api/learning/storage/jobs/' + job['id']
+        remote.unknown_commit = True
+        assert request(url, prefix + '/run', session, {}, token)[0] == 202
+        assert finished(url, session, job['id'])['status'] == 'hold'
+        assert request(url, prefix + '/reconcile', session, {'revision': 'b' * 40}, token)[0] == 202
+        assert finished(url, session, job['id'])['bytes_verified'] is True
+        assert remote.commits == 1 and artifact.exists()
+
+
+def test_storage_browser_cancel_and_existing_commit_recovery(tmp_path, jobs_setup, accounts):
+    from browser_harness import browser_tests_enabled, open_page
+    if not browser_tests_enabled(): pytest.skip('requires explicit Chromium browser run')
+    playwright = pytest.importorskip('playwright.sync_api')
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    with running(tmp_path, accounts, inventory, build()) as url:
+        with playwright.sync_playwright() as runtime:
+            browser, page, errors = open_page(runtime, 320, 900, url=url)
+            try:
+                session, _ = sign_in(accounts, 'alice')
+                page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
+                page.goto(url + '/learning', wait_until='networkidle')
+                expect = playwright.expect
+                for attempt in (0, 1):
+                    page.locator('#storage-artifact').fill('run-one')
+                    page.get_by_role('button', name='보관 작업 등록', exact=True).click()
+                    expect(page.locator('#storage-jobs')).to_contain_text('전송 대기')
+                    if attempt == 0:
+                        page.get_by_role('button', name='대기 취소', exact=True).click()
+                        expect(page.locator('#storage-jobs')).to_contain_text('취소됨')
+                remote.unknown_commit = True
+                page.get_by_role('button', name='전송·검증', exact=True).click()
+                expect(page.locator('#storage-jobs')).to_contain_text('원격 결과 확인 필요')
+                page.get_by_role('button', name='기존 커밋 확인', exact=True).click()
+                page.locator('#storage-existing-revision').fill('b' * 40)
+                page.get_by_role('button', name='기존 버전 검증', exact=True).click()
+                expect(page.locator('#storage-jobs')).to_contain_text('원격 검증 완료')
+                assert remote.commits == 1 and not errors
+            finally: browser.close()
+
+
 @pytest.mark.parametrize('width', [1440, 320])
 def test_storage_browser_capacity_archive_reclaim_restore(tmp_path, jobs_setup, accounts, width):
     from browser_harness import browser_tests_enabled, open_page, save_temp_screenshot

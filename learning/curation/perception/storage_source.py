@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sys
 
@@ -31,7 +32,7 @@ def seal(root, profile, provenance):
         raise ValueError('explicit data profile and provenance required')
     if profile == 'isaac' and (not isinstance(provenance.get('run_id'), str)
             or type(provenance.get('seed')) is not int or not isinstance(provenance.get('source_revision'), str)
-            or len(provenance['source_revision']) != 40):
+            or not re.fullmatch(r'[0-9a-f]{40}', provenance['source_revision'])):
         raise ValueError('Isaac run, seed and source revision required')
     fd = open_root(str(root))
     try:
