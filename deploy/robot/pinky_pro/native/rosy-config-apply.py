@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import rosy_config  # noqa: E402
 from rosy_config import APPLIED, ConfigError  # noqa: E402
 from os_state_config import configuration_update
+from operator_keys import merge_operator_keys
 
 try:
     from deploy.robot.pinky_pro.sd.personalization import derive_wpa_psk
@@ -235,12 +236,7 @@ def _apply(root: Path, run: Runner, updates) -> dict:
     if config.get("operator_ssh_keys"):
         keys_path = root / "home/rosy/.ssh/authorized_keys"
         if keys_path.parent.is_dir():
-            try:
-                existing = [line for line in keys_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-            except OSError:
-                existing = []
-            merged_keys = existing + [key for key in config["operator_ssh_keys"] if key not in existing]
-            write(keys_path, "\n".join(merged_keys) + "\n", 0o600)
+            merge_operator_keys(root, config["operator_ssh_keys"])
         else:
             notes.append("operator_ssh_keys: the rosy account does not exist; keys not installed")
 
