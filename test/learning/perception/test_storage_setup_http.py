@@ -156,6 +156,9 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
             for row in page.locator('.storage-quota').all():
                 row.locator('[data-field=remaining_bytes]').fill('1')
                 row.locator('[data-field=reserve_bytes]').fill('0')
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            page.locator('#storage-settings-open').scroll_into_view_if_needed()
+            save_temp_screenshot(page, f'learning-storage-settings-{width}-{theme}.png')
             page.get_by_role('button', name='저장 설정 저장', exact=True).click()
             expect(page.locator('#storage-setup-status')).to_contain_text('검증')
             page.locator('#storage-check-consent').check()
