@@ -4277,3 +4277,9 @@
 - 변경: 앞선 '학습 진입 카드 상태 토큰' 항목 머리글의 c17c221de7은 리베이스 전 커밋 번호다. 실제 게시 브랜치 커밋은 bc2fcd5f79·616a2372ca이며 최종 반영은 PR 스퀴시 SHA로 남는다(독립 검토 지적).
 - 증거: 본 정정 커밋과 PR 기록.
 - gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · 작업 종류 poll의 실제 화면 반영을 기다린다
+
+- 원인: 공개 main02c80a7c20의 CI40179928359 Fleet2of5에서 종류 제거 후 즉시 is_hidden 판정이 실패했다. 가상 timer 진행은 Python route 응답과 refresh DOM 반영 완료를 보장하지 않는다. 동일 종류 추가는 이미 Playwright expect로 기다리고 있었다.
+- 변경: 제거·503 응답의 동일 숨김 조건을 제한 시간 안에 관측하는 expect로 검사한다. 제품 동작·종류 권한·poll 주기·기대 조건은 그대로이며 임의 sleep·quarantine·pytest 재시도를 추가하지 않는다.
+- 검증: 기존 실패 job121128749941은1FAILED1407PASS5SKIP였다. 커밋된 수정 SHA의 명시적 원격 Chromium과 pre-push/CI를 별도로 결속한다. 새 정책·SDK·로봇 명령은 없다.
