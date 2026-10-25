@@ -38,6 +38,7 @@
 - 판단 모델을 하나 더 붙일 때 바뀌는 곳은 전송 형식 변환과 응답 봉투 검사뿐이다. 스키마·의미 검증·fail-closed 결과는 그대로다.
 - `judgment_schema()`와 `judgment()`는 따로 있다. 확률 합·카탈로그 대조처럼 스키마로 표현할 수 없는 검사가 있어 손 검증을 유지한다. jsonschema 의존성은 더하지 않는다.
 - 이 ADR과 함께: `deploy/robot/omx/judge_seat.py`는 호출 실패·깨진 JSON·객체 아닌 답을 `abort` 거부로 받는다. 스키마에 `additionalProperties: false`를 더한다. `test/test_omx_judge_seat.py`가 세 경우를 고정한다.
+- 2026-10-25 구현: §6의 공통 어댑터는 새 제공자를 기다리지 않고 `rosy.decision.structured_output`으로 먼저 만들었다. Ollama broker 셋(deliberation, conversation, operator)과 GLM·free 게이트웨이가 쓴다. 전송 바이트는 바뀌지 않는다. 클라우드 두 곳은 json_schema 탐침 전까지 `json_object`로 둔다.
 - 수용 근거가 아닌 것: 어댑터 시험·문서 확인은 제공자 수용, AI PC 배포, 실물 팔 수용을 대신하지 않는다.
 
 **References:** [D-392](D-392-provider-neutral-model-tool-contract.md), [D-358](D-358-er2-feedback-outbox-and-replan-fencing.md), [D-640](D-640-fleet-deliberation-and-incident-improvement.md), [D-831](D-831-operator-command-preprocessing.md), [OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs), [OpenRouter provider routing](https://openrouter.ai/docs/guides/routing/provider-selection), [OpenRouter response healing](https://openrouter.ai/docs/guides/features/plugins/response-healing).
