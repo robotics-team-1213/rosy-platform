@@ -88,3 +88,12 @@ def test_storage_entrypoint_imports_from_the_staged_image_in_isolation(tmp_path)
                             capture_output=True, text=True, check=False, timeout=30)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {"schema_version": 1, "phase": "LEGACY"}
+
+
+def test_image_builder_checks_actual_vendor_units_before_mounted_image_acceptance():
+    source = (NATIVE.parent / "image/customize-rootfs.sh").read_text(encoding="utf-8")
+    command = 'chroot "$ROOT" /usr/bin/systemd-analyze --man=no verify'
+    assert command in source
+    block = source.split(command, 1)[1].split('python3 "$(dirname "$0")/verify-mounted-image.py"', 1)[0]
+    for unit in CONSUMERS | {UNIT}:
+        assert unit in block

@@ -543,5 +543,9 @@ python3 "$(dirname "$0")/../release/build_payload_release.py" seal \
 mkdir -p "$FACTORY_EXPORT"
 cp -- "$RELEASE/manifest.json" "$RELEASE/SHA256SUMS" "$FACTORY_EXPORT/"
 
+# Parse the actual image's vendor units and required links, including early SSH socket ordering.
+chroot "$ROOT" /usr/bin/systemd-analyze --man=no verify \
+    rosy-os-storage.service NetworkManager.service ssh.service ssh.socket tailscaled.service \
+    rosy-first-boot.service rosy-first-boot-retry.service rosy-ssh-access-boot.service
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
 echo "ROOTFS_CUSTOMIZED $RELEASE_ID"
