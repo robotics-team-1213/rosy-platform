@@ -15,6 +15,8 @@ from image_layer_files import _install, _mode, _sha256
 
 
 CAPABILITIES = ("boot_catalog_v1", "inverse_before_legacy_sync_v1")
+OS_COMPATIBILITY = {"schema_version": 1, "boot_abi": {"min": 1, "max": 1},
+                    "state_schema": {"read_min": 1, "read_max": 1, "write": 1}}
 BOOT_FILES = {"rosy-first-boot.py": 0o644, "rosy-first-boot.sh": 0o755}
 BOOT_DIRECTORY = "opt/rosy/first-boot"
 CATALOG = "image-layer/boot/catalog.json"
@@ -25,7 +27,7 @@ ENGINE_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_
                 "first_boot_runtime.py", "first_boot_support.py", "os_state_firstboot.py", "os_state_storage.py", "os_storage_dispatch.py", "os_state_accounts.py",
                 "os_state_files.py", "os_state_config.py", "operator_keys.py", "os_state_tls.py", "os_state_io.py", "os_state_ready.py", "os_factory_release.py",
                 "rosy_auto_update.py", "rosy_claim.py",
-                "image_layer_boot.py", "image_layer_files.py")
+                "image_layer_boot.py", "image_layer_files.py", "native_release.py", "signing.py", "os_payload_compatibility.py")
 # The signed bridge-v1 baseline stays valid when later engines add helpers.
 BRIDGE_V1_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
                    "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py",

@@ -298,6 +298,8 @@ class NativeReleaseManager:
             path = release / relative
             if path.is_symlink() or sha256_file(path) != digest:
                 raise ValueError(f"NATIVE_MANIFEST_PAYLOAD: digest mismatch for {relative}")
+        from os_payload_compatibility import require_ab_payload
+        require_ab_payload(self.root, release)
         return manifest
 
     def check_python_runtime(self, release_id: str) -> str:

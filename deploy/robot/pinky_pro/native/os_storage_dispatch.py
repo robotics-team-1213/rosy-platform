@@ -15,7 +15,7 @@ FIRST_BOOT_NATIVE = (*BOOTSTRAP_FILES, "first_boot_runtime.py", "first_boot_supp
                      "nm_network.py", "rosy_claim.py", "rosy-os-firstboot.conf", "os_factory_release.py",
                      "os_boot_recover.py", "image-layer-reconcile.py", "sync-image-layer.py",
                      "image_layer_boot.py", "image_layer_files.py", "rosy-os-recover.conf",
-                     "rosy-os-storage.conf", "rosy-os-projection.conf", "rosy-os-tailnet.conf")
+                     "rosy-os-storage.conf", "rosy-os-projection.conf", "rosy-os-tailnet.conf", "os_payload_compatibility.py")
 FIRST_BOOT_FILES = ("first-boot/rosy-first-boot.py", "first-boot/rosy-first-boot.sh", "deploy/sd/personalization.py",
                     *("native-runtime/" + name for name in FIRST_BOOT_NATIVE))
 
