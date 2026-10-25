@@ -96,7 +96,8 @@ def test_record_session_swaps_only_the_teleop_and_episode_timing_for_a_replay(tm
                                   "teleop": {"type": "omx_leader", "port": "/dev/serial/by-id/leader"},
                                   "dataset": {"fps": FPS, "num_episodes": 5, "episode_time_s": 40, "reset_time_s": 10}}))
     command = session.Session.command(config, teleop_only=False, replay=replay)
-    written = json.loads(Path(command[1].split("=", 1)[1]).read_text())
+    assert command[2:4] == ["record", "--teacher"]  # the guard's teacher mode streams the replay
+    written = json.loads(Path(command[-1].split("=", 1)[1]).read_text())
     assert written["teleop"] == {"type": "rosy_replay", "id": "rosy_replay", "trajectory": str(path)}
     assert written["dataset"] == {"fps": FPS, "num_episodes": 2, "episode_time_s": 3.0, "reset_time_s": 1.0}
     assert written["robot"] == {"type": "omx_follower", "max_relative_target": 5}  # the same clip as a hand

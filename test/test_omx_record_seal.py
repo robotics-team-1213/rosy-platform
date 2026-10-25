@@ -102,7 +102,7 @@ def scripted(tmp_path, *, tamper=False):
 
 def test_a_scripted_teacher_recording_carries_its_trajectory_and_passes_the_transfer(seal, transfer, tmp_path):
     run, _ = scripted(tmp_path)
-    result = sealed(seal, run, 'arm-s-replay-1', tmp_path/'collections')
+    result = seal.seal(run, 'arm-s-replay-1', tmp_path/'collections')
     collection = Path(result['collection'])
     manifest = json.loads((collection/'manifest.json').read_text())
     assert manifest['source_mode'] == 'scripted_teacher'
@@ -120,5 +120,5 @@ def test_a_teacher_recording_without_its_exact_trajectory_is_refused(seal, tmp_p
         mode = 'scripted_teacher' if case == 'no_replay' else 'sim_teacher'
         run, _ = recording(tmp_path, source_mode=mode)
     with pytest.raises(ValueError, match='replay|differs|leader_native'):
-        sealed(seal, run, 'refused', tmp_path/'collections')
+        seal.seal(run, 'refused', tmp_path/'collections')
     assert not (tmp_path/'collections'/'refused').exists()
