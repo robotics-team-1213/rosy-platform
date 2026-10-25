@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -36,7 +37,7 @@ def test_offline_root_installs_frozen_boot_and_recovery_with_its_factory_binding
     _configurer().configure(root, FACTORY_ID)  # Identical assembly is idempotent.
 
 
-@pytest.mark.parametrize("change", ["foreign_override", "invalid_slot", "duplicate_partuuid"])
+@pytest.mark.parametrize("change", ["foreign_override", "invalid_slot", "duplicate_partuuid", "hardlink_descriptor"])
 def test_offline_root_refuses_conflicting_or_invalid_boot_configuration(tmp_path, monkeypatch, change):
     _, root, _, _, _, _, _ = _device(tmp_path, monkeypatch)
     _stage(_prefix(root))
@@ -44,6 +45,8 @@ def test_offline_root_refuses_conflicting_or_invalid_boot_configuration(tmp_path
         path = root / "etc/systemd/system/rosy-release-recover.service.d/10-rosy-os.conf"
         path.parent.mkdir(parents=True)
         path.write_text("[Service]\nExecStart=/foreign/command\n")
+    elif change == "hardlink_descriptor":
+        os.link(root / "etc/rosy/os-factory-release.json", root / "factory-descriptor-alias")
     else:
         path = root / "etc/rosy/os-slot.json"
         value = json.loads(path.read_text())

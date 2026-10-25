@@ -131,3 +131,18 @@ def test_updater_pruning_keeps_the_root_factory_after_payload_updates(tmp_path, 
     upd.Updater(host)._prune({})
     assert release.is_dir(), "the OS factory remains the root-local fallback"
     assert not obsolete.exists()
+
+
+@pytest.mark.parametrize("change", ["hardlink", "writable"])
+def test_unsafe_existing_signature_is_not_adopted_or_replaced(tmp_path, monkeypatch, change):
+    first, _, other, _, _, _, release = _device(tmp_path, monkeypatch)
+    target = other / "opt/rosy/releases" / FACTORY_ID / "SHA256SUMS.sig"
+    target.write_bytes((release / "SHA256SUMS.sig").read_bytes())
+    if change == "hardlink":
+        os.link(target, other / "signature-alias")
+    else:
+        target.chmod(0o666)
+    before = target.read_bytes()
+    with pytest.raises(ValueError):
+        first._native_helper("os_factory_release").prepare_factory(other)
+    assert target.read_bytes() == before
