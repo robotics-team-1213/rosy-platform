@@ -36,6 +36,7 @@ def test_no_cache_is_explicit_and_empty():
 @pytest.mark.parametrize("changes", [
     {"sampled_at": None}, {"cache_age_s": None},
     {"sampled_at": "2026-10-25T00:00:00"},
+    {"sampled_at": True}, {"sampled_at": 1},
     {"schema_version": 2}, {"schema_version": True},
     {"cache_age_s": -1.0}, {"cache_age_s": float("nan")},
     {"cache_age_s": float("inf")}, {"cache_age_s": True}, {"cache_age_s": "1"},

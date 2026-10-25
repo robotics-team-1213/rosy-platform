@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
 - 2026-10-25 · uncommitted · D-876 ROSY Monitoring
 - 2026-10-25 · f80019b842 · fix(learning): SIM 실행 목록 행 방어와 Learning 첫 화면 픽셀 검수 일괄 읽기
 - 2026-10-25 · uncommitted · guard 교사 모드 첫 실물: 대기 중 오래된 모터 상태 표본으로 토크 OFF
 - 2026-10-25 · uncommitted · OMX intake가 승인된 카메라 촬영 기준을 직접 읽는다 (D-792 S3 첫 조각)
-- 2026-10-25 · uncommitted · 자동 교사 intake 재검토 반영: 문장 속 경로 가리기 (D-848)
