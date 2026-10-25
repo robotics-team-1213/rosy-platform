@@ -494,5 +494,5 @@
 ## 2026-10-26 · 916a6b79bd · 독립 Monitoring 화면 진입
 
 - 변경: 관제 utility 영역에 `/monitoring/` 새 창 링크를 추가했다. Fleet 자격 전달·추가 polling·명령은 없다. 같은 TLS site의 독립 Monitoring proxy 경로가 배포 전제다.
-- 증거: 고정 topbar·5영역·정지 배선은 변경하지 않았다. 관련 계약 원격 검증은 후속 결과를 따른다.
+- 증거: 고정 topbar·5영역·정지 배선은 변경하지 않았다. b6e8620373의 Fleet header·grammar·shared controls 원격44 PASS/0 SKIP, NEW/KNOWN/FLAKY0이다. 별도 Monitoring의 실제 prefixed UI는 Chromium에서 독립 검증했다.
 - gate 변화: 기존 관제·장치 수용을 올리지 않는다. CE 해당 없음 — 단순 링크이며 별도 판단을 숨기지 않는다.
