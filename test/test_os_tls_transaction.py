@@ -192,6 +192,23 @@ def test_a_pending_tls_transaction_blocks_an_otherwise_admitted_updater(tmp_path
         layout.policy_directory(tmp_path)
 
 
+def test_early_network_admission_stays_open_but_runtime_waits_for_tls_recovery(device, tmp_path):
+    first, store, _, _, _ = device
+    _interrupt_after_ca_key(store, tmp_path)
+    storage = first._native_helper("os_state_storage")
+    assert storage.admit_storage(store.root)["phase"] == "COMMITTED"
+    with pytest.raises(ValueError, match="TLS transaction pending"):
+        storage.admit_storage(store.root, require_no_pending=True)
+
+
+def test_runtime_completion_unit_requires_the_os_bootstrap_maintenance_check():
+    native = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/native"
+    text = (native / "rosy-sd-provision.service").read_text()
+    pre = [line for line in text.splitlines() if line.startswith("ExecStartPre=")]
+    assert any("os_storage_dispatch.py --no-pending-maintenance" in line for line in pre)
+    assert "ProtectHome=read-only" in text
+
+
 def test_tls_can_restore_all_local_files_when_canonical_pointer_was_not_published(device, tmp_path, monkeypatch):
     first, store, _, common, _ = device
     config = first._native_helper("os_state_config")
