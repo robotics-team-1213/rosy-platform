@@ -33,12 +33,16 @@
 5. **프롬프트의 스키마 중복.** 새 경로는 스키마 객체를 본문 데이터로 넘기거나 속성 `description`에 설명을 둔다. 기존 다섯 곳은 실제 모델 응답을 비교한 뒤에만 고친다. Qwen은 스키마 프롬프트에서 빈 결과를 낸 기록이 있다([2026-10-06 설계](../plans/2026-10-06-qwen-point-sam3-lane-drafts-design.md)).
 6. **공통 어댑터는 새 제공자와 함께.** 새 제공자를 붙이는 첫 변경에서 OpenAI 호환 응답 검사(choice 하나, model 일치, `finish_reason == 'stop'`, tool call 없음, content 문자열)를 공통 함수로 뽑고 GLM·free 게이트웨이를 옮긴다. 그 전에는 수용된 게이트웨이를 리팩터링하지 않는다. 오류 코드·호출 1회·크기 상한은 각 게이트웨이 시험이 지금처럼 고정한다.
 
+7. **스키마는 검증기의 구조 조건까지 담는다.** 검증기가 요구하는 구조 조건(판정과 단계의 짝, 읽기 전용 제한, 항상 거부하는 도구)은 스키마 변형(`anyOf`)으로도 표현해 생성 단계에서 막는다. 빈 `enum`을 내지 않고, `$ref`는 객체 키 경로만 쓰며, deliberation 작업 본문은 16 KiB 안에 둔다. 스키마를 바꾸면 모델 PC에서 실제 모델 파이프라인 시험(`test/test_structured_output_pipeline.py`, opt-in)을 돌린다.
+
 ### Consequences
 
 - 판단 모델을 하나 더 붙일 때 바뀌는 곳은 전송 형식 변환과 응답 봉투 검사뿐이다. 스키마·의미 검증·fail-closed 결과는 그대로다.
 - `judgment_schema()`와 `judgment()`는 따로 있다. 확률 합·카탈로그 대조처럼 스키마로 표현할 수 없는 검사가 있어 손 검증을 유지한다. jsonschema 의존성은 더하지 않는다.
 - 이 ADR과 함께: `deploy/robot/omx/judge_seat.py`는 호출 실패·깨진 JSON·객체 아닌 답을 `abort` 거부로 받는다. 스키마에 `additionalProperties: false`를 더한다. `test/test_omx_judge_seat.py`가 세 경우를 고정한다.
 - 2026-10-25 구현: §6의 공통 어댑터는 새 제공자를 기다리지 않고 `rosy.decision.structured_output`으로 먼저 만들었다. Ollama broker 셋(deliberation, conversation, operator)과 GLM·free 게이트웨이가 쓴다. 전송 바이트는 바뀌지 않는다. 클라우드 두 곳은 json_schema 탐침 전까지 `json_object`로 둔다.
+- 2026-10-25 실제 모델 파이프라인(모델 PC, qwen3-vl:8b-instruct, Ollama 0.35.1): `judgment_schema()`의 빈 `enum`이 HTTP 400을 내 기본 로컬 v2 작업이 모두 실패했고, 고친 뒤에도 판정 3건 중 2건이 스키마 틈(`reobserve`에 단계 `null`)으로 거부됐다. 둘 다 고친 뒤 deliberation 3/3, conversation 46/46, operator 26/26, judge seat 4/4, qwen 완성 3/3. 교훈: [solutions](../solutions/runtime-errors/ollama-refused-empty-enum-and-judgment-schema-allowed-steps-the-validator-refuses-2026-10-25.md).
+- §5 결과: 다섯 프롬프트의 "중복"은 대부분 분류 규칙과 few-shot 예시다. 현재 프롬프트로 conversation·operator가 전부 맞으므로 지우지 않는다. qwen 완성 좌표 규약(픽셀 대 0-1000)은 합성 프레임으로 판별되지 않아 실제 검수 프레임 비교 전까지 바꾸지 않는다.
 - 수용 근거가 아닌 것: 어댑터 시험·문서 확인은 제공자 수용, AI PC 배포, 실물 팔 수용을 대신하지 않는다.
 
 **References:** [D-392](D-392-provider-neutral-model-tool-contract.md), [D-358](D-358-er2-feedback-outbox-and-replan-fencing.md), [D-640](D-640-fleet-deliberation-and-incident-improvement.md), [D-831](D-831-operator-command-preprocessing.md), [OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs), [OpenRouter provider routing](https://openrouter.ai/docs/guides/routing/provider-selection), [OpenRouter response healing](https://openrouter.ai/docs/guides/features/plugins/response-healing).
