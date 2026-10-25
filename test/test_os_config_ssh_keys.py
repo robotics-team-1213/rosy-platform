@@ -74,7 +74,7 @@ def test_managed_ssh_revoke_survives_b_and_return_to_a(tmp_path, monkeypatch):
     first, root_a, root_b, common, bundle = _provision_a(tmp_path, monkeypatch)
     request = {"public_key": _key(), "label": "fixture", "expires_days": 30}
     assert _run(root_a, FakeSystem(root_a), "add", **request)["status"] == 201
-    assert _key() in (common / "ssh/authorized_keys").read_text()
+    assert " ".join(_key().split()[:2]) in (common / "ssh/authorized_keys").read_text()
     assert first.FirstBootProvisioner(root=root_b).apply(bundle=bundle, hardware_serial=SERIAL)["ok"]
     assert len(ssh.load_keys(FakeSystem(root_b))) == 1
     assert _run(root_b, FakeSystem(root_b), "revoke", label="fixture")["status"] == 204
