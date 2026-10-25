@@ -14,7 +14,7 @@ import rosy_claim
 from os_state_layout import StateError, policy_file
 from auto_update_host import (ANGULAR_EPS, API_BASE_URL, APPROVALS, BATTERY_MIN, CLAIM_HOLDER, DEFAULT_REPO,
     DOCKING_IDLE, FACE_UNIT, _finite, HISTORY_MAX_BYTES, LINE_FOLLOW_IDLE, LINEAR_EPS, MAX_HOLD_HOURS,
-    MAX_STATUS_INPUTS_BYTES, NAV_IDLE, NOT_NULL_INPUTS, _number, parse_z, PHASES, _read_json, _reason_class,
+    MAX_STATUS_INPUTS_BYTES, NAV_IDLE, NOT_NULL_INPUTS, _number, parse_z, PHASES, _read_json, _reason_class, _fsync_parent,
     RELEASE_ID, REPO, REQUIRED_INPUTS, RETIRED_DISPLAY_UNIT, SAMPLE_GAP_S, STATUS_INPUTS,
     STATUS_INPUTS_FRESH_S, _tail, UPDATE_DISPLAY, UpdateError, _write_json, _z)
 
@@ -210,6 +210,7 @@ class UpdaterRecords:
             path = self._policy_path("hold.json")
             existed = path.exists() or path.is_symlink()
             path.unlink(missing_ok=True)
+            _fsync_parent(path)
             state = self._load_state()
             cleared = sorted(state.get("apply_errors") or {})
             acknowledged = None
@@ -227,7 +228,9 @@ class UpdaterRecords:
     def _expire_hold(self) -> None:
         kind, detail = self._hold()
         if kind == "expired":
-            self._policy_path("hold.json").unlink(missing_ok=True)
+            path = self._policy_path("hold.json")
+            path.unlink(missing_ok=True)
+            _fsync_parent(path)
             self._history("hold_expired", None, detail)
 
     # eligibility ---------------------------------------------------------------------
