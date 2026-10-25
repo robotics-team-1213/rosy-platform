@@ -303,6 +303,24 @@ def test_interrupted_source_publication_is_not_exposed_and_can_resume(setup_case
     assert not (folder / 'storage-source.json.pending').exists()
 
 
+def test_published_marker_alias_is_recovered_without_losing_source_bytes(tmp_path, monkeypatch):
+    import storage_source
+    folder = tmp_path / 'episode'; folder.mkdir(); (folder / 'frame.json').write_bytes(b'{}')
+    unlink = storage_source.os.unlink
+    def interrupted(path, **kwargs):
+        if path == 'storage-source.json.pending': raise OSError('interrupted after atomic link')
+        return unlink(path, **kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(storage_source.os, 'unlink', interrupted)
+        with pytest.raises(OSError): storage_source.seal(folder, 'dataset', {})
+    before = (folder / 'storage-source.json').read_bytes()
+    assert (folder / 'storage-source.json').stat().st_nlink == 2
+    assert storage_source.recover_source(folder)
+    assert (folder / 'storage-source.json').stat().st_nlink == 1
+    assert (folder / 'storage-source.json').read_bytes() == before
+    assert (folder / 'frame.json').read_bytes() == b'{}'
+
+
 @pytest.mark.parametrize('field,value', [('id', {}), ('connection_id', [])])
 def test_invalid_json_target_types_are_validation_errors(setup_case, field, value):
     build, actor, body, now, artifact, remote = setup_case
