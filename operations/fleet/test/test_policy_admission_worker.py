@@ -61,10 +61,10 @@ def _worker(tmp_path, *, missions, proposals, enabled=True, robots=("rosy_01",),
         enabled=enabled, robots=frozenset(robots),
         step_approval_kinds=frozenset({"one_person"}),
         max_admits=max_admits, scope_revision="rev-1")
+    audit = PolicyAdmissionAuditLog(str(tmp_path / "audit.db"))
     core = PolicyAdmissionCore(
         settings, now=lambda: "2026-10-25T00:00:00Z",
         issued_provider=audit.issued_count)
-    audit = PolicyAdmissionAuditLog(str(tmp_path / "audit.db"))
     core.audit_log = audit
     return PolicyAdmissionWorker(core=core, proposal_store=proposals,
                                  mission_service=missions, audit_log=audit,
