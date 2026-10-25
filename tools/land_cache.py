@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
 import remote_pytest  # noqa: E402  (deps: the test-environment identity)
 
 CACHE = "rosy-land-cache.jsonl"
+FAILED = "rosy-land-failed.json"  # argv of invocations whose last run had a NEW failure
 MAX_LINES, KEEP = 2000, 1000
 NARROW_COMMITS = 3  # ancestor commits tried for narrow reuse: one selector call each
 NARROW = "reused across trees"  # land.py: a narrow reuse is not this candidate's own run (land record)
@@ -90,6 +91,29 @@ def record(wt: Path, commit: str, tree: str, env: str, inv: list[str], log: Path
         temporary = target.with_suffix(".new")
         temporary.write_text("".join(json.dumps(e) + "\n" for e in entries(wt)[-KEEP:]), encoding="utf-8")
         temporary.replace(target)
+
+
+def failed(wt: Path, inv: list[str], now: bool) -> None:
+    """Mark an invocation that had a NEW failure (now=True), or clear it once it passes."""
+    target = path(wt).with_name(FAILED)
+    try:
+        marked = set(json.loads(target.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        marked = set()
+    key = json.dumps(inv)
+    if (key in marked) != now:
+        (marked.add if now else marked.discard)(key)
+        # shortcut: a peer's write racing this one can drop a mark; that costs only the failed-first order once
+        target.write_text(json.dumps(sorted(marked)), encoding="utf-8")
+
+
+def failed_first(wt: Path, invocations: list[list[str]]) -> list[list[str]]:
+    """Those of ``invocations`` whose last run had a NEW failure (any branch of the clone)."""
+    try:
+        marked = set(json.loads(path(wt).with_name(FAILED).read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        return []
+    return [inv for inv in invocations if json.dumps(inv) in marked]
 
 
 def unusable(code: int | None, log: Path) -> str | None:

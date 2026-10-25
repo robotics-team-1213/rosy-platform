@@ -896,7 +896,8 @@ def test_cache_never_keeps_a_failure_or_a_partial_run(cached, monkeypatch):
     git(wt, "rm", "-q", "pkg/test/test_bad.py")
     git(wt, "commit", "-q", "-m", "green")
     real = land.remote_pytest.capture
-    lost = lambda inv, logs, *a, **k: [real([sys.executable, "-m", "pytest", "pkg/test"], logs[0], cwd=wt), 255]
+    lost = lambda invs, logs, *a, **k: [real([sys.executable, "-m", "pytest", *inv], log, cwd=wt)
+                                        if inv == ["pkg/test"] else 255 for inv, log in zip(invs, logs)]
     monkeypatch.setattr(land.remote_pytest, "run", lost)  # the second invocation's host was lost
     with pytest.raises(land.Stop, match="exited 255"):
         run([["pkg/test"], ["pkg/test/test_a.py"]])
@@ -911,6 +912,24 @@ def test_a_new_failure_still_keeps_the_invocations_that_passed_beside_it(cached)
         run([["other/test"], ["pkg/test"]])
     # the fix changes the tree; the selector's narrow reuse (ancestor..fix) then skips pkg/test
     assert [e["argv"] for e in land.land_cache.entries(wt)] == [["pkg/test"]]
+
+
+def test_what_failed_last_run_runs_alone_first_and_a_repeat_stops_before_the_rest(cached):
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red elsewhere")
+    with pytest.raises(land.Stop):
+        run([["other/test"], ["pkg/test"]])
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "not the fix")
+    calls.clear()
+    with pytest.raises(land.Stop, match="1 other invocation"):
+        run([["other/test"], ["pkg/test"]])
+    assert calls[0] == [["other/test"]] and [["pkg/test"]] not in calls, "the rest never reached a test PC"
+    git(wt, "rm", "-q", "other/test/test_bad.py")
+    git(wt, "commit", "-q", "-m", "fixed")
+    commit(wt, {"other/test/test_ok.py": "def test_ok():\n    assert True\n"}, "green")
+    calls.clear()
+    run([["other/test"], ["pkg/test"]])
+    assert calls == [[["other/test"]], [["pkg/test"]]] and land.land_cache.failed_first(wt, [["other/test"]]) == []
 
 
 def test_cache_ignores_corrupt_lines_and_no_cache_reruns(cached, capsys):

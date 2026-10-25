@@ -173,6 +173,10 @@ took hours to land. Four separate things blocked it.
   (`land_cache`), and the stop lists every failure at the end. LOAD-FLAKY passes are still not kept. Tests:
   `test/test_land.py::test_a_new_failure_still_keeps_the_invocations_that_passed_beside_it`,
   `::test_cache_never_keeps_a_failure_or_a_partial_run`.
+- **What failed last time runs first (2026-10-26):** an invocation with a NEW failure is marked in
+  `<git-common-dir>/rosy-land-failed.json` and cleared once it passes. The next run sends the marked ones to the
+  test PCs alone first; if they fail again the landing stops before the rest is spent. Test:
+  `test/test_land.py::test_what_failed_last_run_runs_alone_first_and_a_repeat_stops_before_the_rest`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

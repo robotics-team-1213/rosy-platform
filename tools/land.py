@@ -308,39 +308,54 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     head = out(wt, "rev-parse", "HEAD")
     reused, todo, keep = land_cache.split(wt, args, invocations, head, python, select)
     done += reused
-    logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(todo) + 1)]
-    began = time.monotonic()
-    codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
-    if out(wt, "rev-parse", "HEAD") != head:
-        raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
-    if len(codes) != len(todo):
-        raise Stop("incomplete remote results; not landing")
-    print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
-    # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
-    # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
-    stops = []
-    for n, (inv, log, code) in enumerate(zip(todo, logs, codes), 1):
+
+    def batch(part: list[tuple[int, list[str]]]) -> list[str]:
+        todo = [inv for _, inv in part]
+        logs = [logdir / f"run-{round_no}-{n}.txt" for n, _ in part]
+        began = time.monotonic()
+        codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
         if out(wt, "rev-parse", "HEAD") != head:
-            raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
-        if why := land_cache.unusable(code, log):
-            stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
-            continue
-        check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
-                               capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
-        print(check.stdout, end="")
-        flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
-            wt, inv, log, check.stdout, logdir, f"{round_no}-{n}", python, remote_pytest.run,
-            tested_sha=head)
-        if out(wt, "rev-parse", "HEAD") != head:
-            raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
-        if check.returncode != 0 and not flaky:
-            stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
-            continue
-        if check.returncode == 0:
-            keep(inv, log)
-        done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
-    if stops:
-        raise Stop("\n".join(stops))
+            raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
+        if len(codes) != len(todo):
+            raise Stop("incomplete remote results; not landing")
+        print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
+        # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
+        # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
+        stops = []
+        for (n, _), inv, log, code in zip(part, todo, logs, codes):
+            if out(wt, "rev-parse", "HEAD") != head:
+                raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
+            if why := land_cache.unusable(code, log):
+                stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
+                continue
+            check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
+            print(check.stdout, end="")
+            flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
+                wt, inv, log, check.stdout, logdir, f"{round_no}-{n}", python, remote_pytest.run,
+                tested_sha=head)
+            if out(wt, "rev-parse", "HEAD") != head:
+                raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
+            if check.returncode != 0 and not flaky:
+                stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+                land_cache.failed(wt, inv, True)
+                continue
+            land_cache.failed(wt, inv, False)
+            if check.returncode == 0:
+                keep(inv, log)
+            done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
+        return stops
+
+    # What failed last time runs alone first: failing again stops before the rest spends the test PCs.
+    numbered = list(enumerate(todo, 1))
+    first = land_cache.failed_first(wt, todo)
+    parts = ([[x for x in numbered if x[1] in first], [x for x in numbered if x[1] not in first]]
+             if first and len(first) < len(todo) else [numbered])
+    for i, part in enumerate(parts):
+        if stops := batch(part):
+            rest = sum(map(len, parts[i + 1:]))
+            raise Stop("\n".join(stops) + (f"\n(failed last run too; {rest} other invocation(s) not run)"
+                                           if rest else ""))
     if args.node:
         mjs = sorted(str(p.relative_to(wt).as_posix()) for inv in invocations for t in inv
                      if _test_dir(t) for p in (wt / _test_dir(t) / "web").glob("**/*.mjs"))

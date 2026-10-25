@@ -11511,3 +11511,9 @@ osy-d395-s1d\`.
 - 변경: `run_tests`가 첫 NEW 실패에서 멈추지 않고 모든 invocation을 판정한 뒤 통과분을 `land_cache`에 남기고 실패를 모아 멈춘다. 한 invocation의 호스트가 끊겨도 나머지의 통과는 기록한다. LOAD-FLAKY 통과는 계속 기록하지 않는다.
 - 증거: `test/test_land.py` 원격 통과. 근거는 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 6절.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 지난번 실패한 시험 묶음을 먼저 돌린다
+
+- 변경: NEW 실패가 난 invocation을 `<git-common-dir>/rosy-land-failed.json`에 표시하고 통과하면 지운다. 다음 실행은 표시된 것만 먼저 시험 PC에 보내고, 다시 실패하면 나머지를 돌리지 않고 멈춘다.
+- 증거: `test/test_land.py` 원격 통과.
+- gate 변화: 없음.
