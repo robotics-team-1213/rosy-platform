@@ -67,6 +67,7 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
         finally:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+            collector.store.close()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 

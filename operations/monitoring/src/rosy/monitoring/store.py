@@ -3,8 +3,10 @@
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 import json
+import os
 from pathlib import Path
 import sqlite3
+import stat
 
 from .models import MonitoringLink, MonitoringNode
 
@@ -25,9 +27,26 @@ def state(item):
 
 class MonitoringStore:
     def __init__(self, path: Path, collector_id: str):
+        self._lease = None
         self.path = Path(path)
-        exists = self.path.exists()
         try:
+            lock = self.path.with_name(self.path.name + '.lock')
+            if self.path.is_symlink() or lock.is_symlink():
+                raise StoreUnavailable()
+            flags = os.O_CREAT | os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0)
+            self._lease = os.fdopen(os.open(lock, flags, 0o600), 'r+b', buffering=0)
+            if not stat.S_ISREG(os.fstat(self._lease.fileno()).st_mode):
+                raise StoreUnavailable()
+            if os.name == 'nt':
+                import msvcrt
+                if os.fstat(self._lease.fileno()).st_size == 0:
+                    self._lease.write(b'\0')
+                self._lease.seek(0)
+                msvcrt.locking(self._lease.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self._lease.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            exists = self.path.exists()
             with self._connection() as db:
                 if exists:
                     if (db.execute('pragma application_id').fetchone()[0] != APPLICATION_ID
@@ -47,11 +66,22 @@ class MonitoringStore:
                     db.execute('create table counters (site text primary key, seq integer)')
                     db.execute('''create table events (site text, seq integer, time text, payload text,
                                 primary key(site, seq))''')
-        except (sqlite3.Error, OSError, TypeError, IndexError):
+        except (StoreUnavailable, sqlite3.Error, OSError, TypeError, IndexError):
+            self.close()
             raise StoreUnavailable() from None
+
+    def close(self):
+        if self._lease is not None:
+            self._lease.close()
+            self._lease = None
+
+    def __del__(self):
+        self.close()
 
     @contextmanager
     def _connection(self):
+        if self._lease is None:
+            raise StoreUnavailable()
         db = None
         try:
             db = sqlite3.connect(self.path, timeout=0.1)

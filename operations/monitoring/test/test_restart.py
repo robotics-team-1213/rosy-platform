@@ -11,6 +11,8 @@ from test_cache import find, observed_node, runtime, receive, peer
 
 
 def reopen(cache, clock, path):
+    if cache.store is not None:
+        cache.store.close()
     return ObservationCache(cache.config, monotonic=clock.monotonic, utcnow=clock.utcnow,
                             store=MonitoringStore(path, cache.config.collector_id))
 
@@ -32,7 +34,7 @@ def test_restart_retains_health_age_and_shortened_deadline(runtime, tmp_path):
     value = observed_node(health='ERROR').model_copy(update={'remaining_s': 10.0})
     cache.update_local('pc-a', nodes=(value,))
     clock.advance(4)
-    restored = reopen(original, clock, path)
+    restored = reopen(cache, clock, path)
     result = find(restored, value.id)
     assert result.reported_health == 'ERROR' and result.freshness == 'stale'
     assert result.age_s >= 104 and result.remaining_s <= 6
@@ -50,7 +52,7 @@ def test_missing_rows_do_not_erase_durable_anchor(runtime, tmp_path):
     value = observed_node(health='ERROR')
     cache.update_local('pc-a', nodes=(value,))
     cache.update_local('pc-a')
-    restored = reopen(original, clock, path)
+    restored = reopen(cache, clock, path)
     with pytest.raises(ObservationRejected):
         restored.update_local('pc-a', nodes=(value.model_copy(update={'reported_health': 'OK'}),))
 
@@ -61,7 +63,7 @@ def test_peer_cursor_survives_receiving_restart(runtime, tmp_path):
     cache = reopen(original, clock, path)
     message = peer(clock)
     receive(cache, clock, message)
-    restored = reopen(original, clock, path)
+    restored = reopen(cache, clock, path)
     with pytest.raises(ObservationRejected):
         receive(restored, clock, message)
 
@@ -100,7 +102,7 @@ def test_clock_rollback_fails_closed(runtime, tmp_path):
     cache.update_local('pc-a', nodes=(observed_node(),))
     clock.t = -10
     with pytest.raises(StoreUnavailable):
-        reopen(original, clock, path)
+        reopen(cache, clock, path)
 
 
 def test_history_ignores_polling_age_and_is_site_scoped(runtime, tmp_path):
@@ -127,6 +129,7 @@ def test_removed_configuration_cannot_bypass_durable_anchor_budget(runtime, tmp_
         first.update_local('pc-a', nodes=nodes)
     source = original.config.sources[0].model_copy(update={'id': 'pc-new'})
     config = original.config.model_copy(update={'sources': (source, original.config.sources[1])})
+    first.store.close()
     second = ObservationCache(config, monotonic=clock.monotonic, utcnow=clock.utcnow,
                               store=MonitoringStore(path, config.collector_id))
     with pytest.raises(StoreUnavailable):
