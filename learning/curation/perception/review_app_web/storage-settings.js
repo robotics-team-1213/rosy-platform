@@ -90,11 +90,12 @@ function controls(){
   const verified=targets.length>0&&targets.every(row=>row.status==='verified');
   $('storage-settings-save').disabled=Boolean(pending);
   $('storage-target-add').disabled=Boolean(pending)||!state?.connections?.length;
-  $('storage-verify').disabled=Boolean(pending)||dirty||!saved||!targets.length||!$('storage-check-consent').checked;
+  $('storage-verify').disabled=Boolean(pending)||dirty||state?.upload_available===false||!saved||!targets.length||!$('storage-check-consent').checked;
   $('storage-activate').disabled=Boolean(pending)||dirty||enabled||!verified;
   $('storage-prepare-submit').disabled=Boolean(pending)||dirty||!enabled||!$('storage-completed-consent').checked;
   $('storage-check-reason').textContent=pending?'보관 작업 처리 중입니다. 끝나면 다음 작업을 할 수 있습니다.':
     dirty?'저장하지 않은 변경이 있습니다. 저장 설정 저장을 눌러 반영한 뒤 다음 작업을 하세요.':
+    state?.upload_available===false?'보관 서버의 전송 기능이 아직 준비되지 않았습니다. 운영자에게 서버 구성을 요청하세요.':
     !saved?'계정 연결과 실제 용량을 선택하고 저장 설정을 저장하세요.':!targets.length?'새 자료를 받을 저장 대상을 하나 이상 선택하세요.':
       enabled?'새 보관이 활성화되어 있습니다. 아래에서 완료 자료를 준비하고 보관하세요.':
       !verified?'소량 전송과 읽기 검증 후 새 보관을 활성화할 수 있습니다.':'연결 검증을 마쳤습니다. 새 보관 활성화 후 완료 자료를 준비하세요.';

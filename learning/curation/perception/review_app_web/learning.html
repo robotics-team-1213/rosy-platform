@@ -77,9 +77,9 @@
 <details id="storage-preparation"><summary>완료 자료 준비하고 보관</summary>
 <p class="quiet">준비된 폴더를 재사용하거나 종료된 Isaac 결과를 별도 보관 자료로 만듭니다. 보관 검증은 학습·시뮬레이션의 성공 승인이 아닙니다.</p>
 <ui-button id="storage-sources-refresh" kind="quiet">준비할 자료 새로 확인</ui-button>
-<form id="storage-prepare-form" class="ui-form learning-form">
+<form id="storage-prepare-form" class="storage-prepare-form">
 <label class="ui-field-label">자료 가져올 곳 <select id="storage-prepare-kind" class="ui-field"><option value="folder">등록된 완료 자료 폴더</option><option value="isaac">종료된 Isaac Sim 결과</option></select></label>
-<div id="storage-folder-fields" class="storage-prepare-fields">
+<div id="storage-folder-fields" class="ui-form learning-form">
 <label class="ui-field-label">완료 자료 폴더 <select id="storage-prepare-folder" class="ui-field"></select></label>
 <label class="ui-field-label">자료 종류 <select id="storage-prepare-profile" class="ui-field"><option value="dataset">학습 데이터</option><option value="model">모델 파일</option></select></label>
 <label class="ui-field-label">출처 버전 <input id="storage-source-revision" class="ui-field" maxlength="160" autocomplete="off" placeholder="고정된 출처 버전 또는 기록 식별자"></label>
@@ -87,7 +87,7 @@
 <label id="storage-isaac-fields" class="ui-field-label" hidden>종료된 SIM 실행 <select id="storage-prepare-run" class="ui-field"></select></label>
 <p id="storage-source-help" class="quiet"></p>
 <label class="ui-check"><input id="storage-completed-consent" type="checkbox">선택한 자료의 쓰기가 끝났고 출처와 보관 범위를 확인했습니다.</label>
-<ui-button id="storage-prepare-submit" kind="primary" type="submit" disabled>준비하고 보관</ui-button>
+<ui-actions><ui-button id="storage-prepare-submit" kind="primary" type="submit" disabled>준비하고 보관</ui-button></ui-actions>
 </form>
 </details>
 </div>

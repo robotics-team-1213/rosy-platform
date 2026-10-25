@@ -2,6 +2,7 @@
 from contextlib import closing
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -173,6 +174,7 @@ class StorageSetup:
                 proof = self._proof(actor, target)
                 service = self.jobs(probe_target=target)
                 job_id = self._checked_job(actor, target, proof)
+                if job_id and service.get(actor, job_id)['status'] == 'cancelled': job_id = None
                 if job_id is None:
                     from storage_source import seal
                     folder = 'connection-check-' + uuid.uuid4().hex
@@ -188,7 +190,8 @@ class StorageSetup:
                     job = service.create(actor, dict(source_id='exports', artifact_id=folder, profile=profile), source_key=source_key)
                     job_id = job['id']
                     with self.connect() as db, db:
-                        db.execute('INSERT OR IGNORE INTO storage_checks VALUES(?,?,?,?,?)',
+                        db.execute('''INSERT INTO storage_checks VALUES(?,?,?,?,?)
+                            ON CONFLICT(project,requester,target,proof) DO UPDATE SET job_id=excluded.job_id''',
                             (self.project_id, actor['user_id'], target['id'], proof, job_id))
                 job = service.run(actor, job_id)
                 if job['bytes_verified']:
@@ -236,5 +239,6 @@ class StorageSetup:
             targets.append(row)
         result.update(targets=targets, quotas={key: config['pool']['quotas'][key] for key in owners},
             connections=connections, reserve_bytes=config['reserve_bytes'], cache_policy=config['pool']['cache_policy'],
+            upload_available=self.transport is not None or importlib.util.find_spec('huggingface_hub') is not None,
             roots=[{key: row[key] for key in ('id', 'label', 'role')} for row in config['roots']])
         return result
