@@ -3473,3 +3473,10 @@
 - 증거: all23 method ASTs, unchanged I/O/verifier/builder and global import targets verified statically. Tests-only d50e67e208 actualCLIclosure RED1FAIL/0skip, NEW1; committed source regression GREEN/review pending. See site-updater-runtime-split validation record/external proofs.
 - gate 변화: none; three/four-image compatibility waits for a separate feature unit after this pure split lands. No host/site/deployment/FIELD acceptance.
 - CE: no new lesson; source/tests/README and existing installer lessons explain this routine split.
+
+## 2026-10-26 · 9816e56bd9 · Site updater pure split verified
+
+- 변경: bind the independent source review and preserved 23 method ASTs/global imports to the six-method runtime extraction; keep complete five-file administrator install closure.
+- 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
+- gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
+- CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
