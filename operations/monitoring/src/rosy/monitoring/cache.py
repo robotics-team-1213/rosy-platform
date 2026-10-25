@@ -42,7 +42,7 @@ class _Record:
 
 def _fact(item):
     return item.model_dump(exclude={"age_s", "remaining_s", "report_remaining_s", "freshness",
-                                    "label", "expected"})
+                                    "label", "expected", "last_success_at"})
 
 
 class ObservationCache:
@@ -149,6 +149,12 @@ class ObservationCache:
             return _Record(item, now, None, now, now)
         if old is not None and old.item.sampled_at is not None and item.sampled_at < old.item.sampled_at:
             raise ObservationRejected("MONITORING_REPLAY")
+        if isinstance(item, MonitoringLink):
+            successes = [value for value in (item.last_success_at,
+                         old.item.last_success_at if old is not None else None,
+                         item.sampled_at if item.reachable is True else None) if value is not None]
+            if successes:
+                item = item.model_copy(update={"last_success_at": max(successes)})
         wall_age = (wall - item.sampled_at).total_seconds()
         if wall_age < -1:
             raise ObservationRejected("MONITORING_CLOCK")

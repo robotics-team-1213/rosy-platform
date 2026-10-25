@@ -30,7 +30,7 @@ class MonitoringModel(BaseModel):
     @field_validator("*", mode="before")
     @classmethod
     def timestamps_are_explicit(cls, value, info):
-        if info.field_name in {"sampled_at", "produced_at"} and value is not None:
+        if info.field_name in {"sampled_at", "produced_at", "last_success_at"} and value is not None:
             if not isinstance(value, (str, datetime)) or isinstance(value, str) and "T" not in value:
                 raise ValueError("an explicit timezone-aware timestamp is required")
         return value
@@ -110,9 +110,13 @@ class MonitoringLink(Observation):
     failure_stage: Literal["none", "dns", "connect", "tls", "auth", "http", "protocol",
                            "timeout", "source", "unknown"]
     duration_ms: Seconds | None
+    transport: Literal["http", "https", "file", "unknown"] = "unknown"
+    last_success_at: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def coherent_link(self) -> Self:
+        if self.last_success_at is not None and (self.sampled_at is None or self.last_success_at > self.sampled_at):
+            raise ValueError("last success cannot follow the current observation")
         if (not self.id.startswith(f"{self.site_id}:{self.kind}:")
                 or self.kind == "probe" and self.valid_for_s != 15):
             raise ValueError("link identity and lifetime must match its observation")
