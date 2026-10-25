@@ -9765,3 +9765,9 @@ osy-d395-s1d\`.
 - 변경: D-871(모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면) 기록. `omx_autoupdate.py`에 `kind: service`의 `idle_gate: cell`(셀 잠금·버스·토크 OFF 유휴 규칙), 재시작 전 잠금 해제, `restart_running_only`(손으로 멈춘 관측기는 그대로), `system_site_packages`를 더함. 카메라·관측기·브리지용 `omx-devices-autoupdate.json.example`, `requirements-observation.lock`, `rosy-omx-devices-autoupdate.{service,timer}`. 관측기 템플릿이 health 파일을 `%i`로 정하고 브리지는 `ROSY_OBSERVATION_ARM_HEALTH`를 기본값으로 읽음(SHA 박힌 drop-in 대체). services.yaml의 해당 유닛을 `autoupdate`로.
 - 증거: 원격 시험(아래 PR). 관제 PC 적용은 별도(관측기는 10/24부터 옛 OpenRB 시리얼로 멈춤).
 - gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · D-871 학습 센터 자동 업데이트
+
+- 변경: `deploy/model_pc/learning_center_update.py`가 2026-10-23 교훈의 수동 절차를 자동화한다. 동작 조건은 CI 통과 + 후손 커밋, 센터 enabled·active, `experiment_*` 작업과 자식 프로세스 없음이다. 새 커밋을 `source/<sha>`에 받고, 새 설치기 `prepare()`로 유닛을 만든다. 백업 → 정지 → 쓰기 → `--apply` → active·새 sha·HTTP 200을 확인하고, 실패하면 백업 유닛으로 복구한다. `rosy-learning-center-update.{service,timer}`(D-805 관문), services.yaml model·ai 항목을 `autoupdate`로 바꾸고 업데이터를 추가했다.
+- 증거: 원격 시험(아래 PR). 모델 PC 센터는 10/25 현재 사람이 멈추고 disabled 상태라 `idle`로 남는다.
+- gate 변화: 없음.
