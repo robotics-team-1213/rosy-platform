@@ -14,7 +14,7 @@ from first_boot_runtime import _json_atomic
 from os_state_firstboot import FirstBootState
 from os_state_files import (CONFIG_FILES, INITIAL, POINTER_FIELDS, PUBLICATION, initial_changes,
                             load_record, project_files, validate_projection)
-from os_state_layout import COMMON, StateError, _layout, _path, _read
+from os_state_layout import COMMON, TLS_PENDING, StateError, _guid, _layout, _path, _read
 
 
 @contextlib.contextmanager
@@ -96,7 +96,11 @@ class ConfigurationUpdate:
         validate_projection(self.root, {relative: data})
         self.changes[relative] = data
 
-    def commit(self) -> None:
+    def commit(self, *, generation: str | None = None) -> None:
+        if generation is not None:
+            _guid(generation)
+            if self.pointer is None:
+                raise ValueError("explicit generation requires a committed device")
         if self.committed:
             raise ValueError("configuration update already committed")
         if self.shared is None or not self.changes:
@@ -117,7 +121,7 @@ class ConfigurationUpdate:
             current = load_record(self.root, COMMON + "/state/current.json", POINTER_FIELDS)
             if current != self.pointer:
                 raise ValueError("canonical configuration revision changed")
-            pointer = self.shared.stage_generation(str(uuid.uuid4()), self.completion, values)
+            pointer = self.shared.stage_generation(generation or str(uuid.uuid4()), self.completion, values)
             prior = _read(self.shared.complete, 64 * 1024, self.root.stat().st_uid)
             _json_atomic(_path(self.root, PUBLICATION), dict(schema_version=1, state_schema=1,
                 previous=self.pointer, current=pointer, previous_completion_sha256=hashlib.sha256(prior).hexdigest()), 0o600)
@@ -131,6 +135,8 @@ class ConfigurationUpdate:
 def configuration_update(root: Path, *, expected_generation: str | None = None):
     root = Path(root).absolute()
     with common_lock(root) as shared:
+        if shared is not None and _path(root, TLS_PENDING).exists():
+            raise StateError("OS_STATE_HOLD: TLS transaction pending")
         update = ConfigurationUpdate(root, shared, expected_generation)
         yield update
         if update.changes and not update.committed:

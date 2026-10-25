@@ -12,6 +12,7 @@ import uuid
 DESCRIPTOR = "etc/rosy/os-slot.json"
 COMMON = "var/lib/rosy-device"
 READY = "run/rosy-os-state/ready.json"
+TLS_PENDING = COMMON + "/state/tls-pending.json"
 LAYOUT_FIELDS = {"schema_version", "state_schema", "slot", "root_partuuid", "data_partuuid", "provision_partuuid"}
 MOUNTS = (("root", "/", "ext4"), ("data", "/" + COMMON, "ext4"),
           ("provision", "/run/rosy-provision-boot", "vfat"))
