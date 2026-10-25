@@ -92,12 +92,18 @@ IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import|import\s+([A-Za-z
 
 
 
+UNMAPPED_HINT = ("name this path literally in the test that loads it"
+                 " (f-string/module-name-only references are invisible to the selector)")
+
+
 @dataclass
 class Selection:
     mode: str  # "affected" or "full"
     changed: list[str]
     reasons: dict[str, list[str]] = field(default_factory=dict)  # test path -> why
     escalations: list[str] = field(default_factory=list)
+    #: Changed paths behind an "unknown -> full" escalation: no module, import root or test names them.
+    unmapped: list[str] = field(default_factory=list)
     invocations: list[list[str]] = field(default_factory=list)
     #: What runs locally when the selection escalated: guards + directly affected suites.
     local_invocations: list[list[str]] = field(default_factory=list)
@@ -106,7 +112,7 @@ class Selection:
 
     def to_json(self) -> dict:
         return {"mode": self.mode, "changed": self.changed, "escalations": self.escalations,
-                "reasons": self.reasons, "invocations": self.invocations,
+                "unmapped": self.unmapped, "reasons": self.reasons, "invocations": self.invocations,
                 "local_invocations": self.local_invocations,
                 "full_invocations": self.full_invocations}
 
@@ -377,6 +383,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
             # node step and land.py --node only globs test/web), so FULL would add nothing.
             continue
         sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
+        sel.unmapped.append(path)
 
     # Direct reverse dependents (D-436 1): modules whose shipped (non-test) code
     # imports a touched module's prefix, plus any test file importing it. One
@@ -432,6 +439,10 @@ def render(sel: Selection) -> str:
     if sel.escalations:
         lines.append("escalated to FULL because:")
         lines += [f"  - {e}" for e in sel.escalations]
+        if sel.unmapped:
+            lines.append("unmapped paths (each alone makes this FULL):")
+            for path in sel.unmapped:
+                lines += [f"  {path}", f"      hint: {UNMAPPED_HINT}"]
     else:
         lines.append("selected:")
         for path in sorted(sel.reasons):
