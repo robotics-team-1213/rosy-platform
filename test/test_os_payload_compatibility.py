@@ -94,3 +94,14 @@ def test_legacy_standalone_verifier_still_needs_only_its_existing_signing_helper
         "--root", str(root), "--public-key", str(root / "etc/rosy/trusted-release-keys" / public.name),
         "verify", "--release-id", FACTORY_ID], cwd=tmp_path, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_explicit_rollback_cannot_reintroduce_a_legacy_sdk(tmp_path, monkeypatch):
+    manager, current, calls = _candidate(tmp_path, monkeypatch, None)
+    manager.links.set("previous", CANDIDATE)
+    before = current.resolve()
+    with pytest.raises(ValueError, match="OS_PAYLOAD_INCOMPATIBLE"):
+        manager.rollback()
+    assert current.resolve() == before
+    assert calls == []
+    assert not manager.journal.exists()

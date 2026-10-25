@@ -9,6 +9,7 @@ import pytest
 
 from test_os_factory_release import _device, FACTORY_ID
 from test_os_frozen_firstboot import _prefix, _stage, BASE
+from build_payload_release import seal_release
 
 
 def _configurer():
@@ -67,3 +68,21 @@ def test_offline_root_refuses_conflicting_or_invalid_boot_configuration(tmp_path
         _configurer().configure(root, FACTORY_ID)
     assert not (root / "etc/systemd/system/rosy-first-boot.service.d/10-rosy-os.conf").exists()
     assert (root / "etc/rosy/os-factory-release.json").read_bytes() == before
+
+
+def test_image_assembly_rejects_a_factory_that_would_migrate_shared_state(tmp_path, monkeypatch):
+    _, root, _, _, _, _, release = _device(tmp_path, monkeypatch)
+    _stage(_prefix(root))
+    engine = release / "deploy/robot/native/image_layer_boot.py"
+    text = engine.read_text()
+    changed = text.replace('"write": 1', '"write": 2', 1)
+    assert changed != text
+    engine.write_text(changed)
+    for name in ("manifest.json", "SHA256SUMS", "SHA256SUMS.sig"):
+        (release / name).unlink(missing_ok=True)
+    seal_release(release, FACTORY_ID)
+    (root / "etc/rosy/os-factory-release.json").unlink()
+    with pytest.raises(ValueError, match="shared state schema"):
+        _configurer().configure(root, FACTORY_ID)
+    assert not (root / "etc/systemd/system/rosy-first-boot.service.d/10-rosy-os.conf").exists()
+    assert not (root / "etc/rosy/os-factory-release.json").exists()
