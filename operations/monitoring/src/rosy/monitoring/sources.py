@@ -1,7 +1,7 @@
 """Read registered owner outputs; never call operational gather or repair endpoints."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 import math
 import os
@@ -10,12 +10,10 @@ import ssl
 import stat
 import time
 from urllib.parse import urlsplit
-from uuid import uuid4
 
 import httpx
 from core_common.protocol.monitoring import FleetMonitoringRead
 
-from .cache import ObservationRejected
 from .models import MonitoringLink, MonitoringNode, MonitoringSnapshot
 
 
@@ -179,11 +177,13 @@ class SourceReader:
                                       age=max(value.cache_age_s, row.state_age_s or 0.0))
             node = self._node(source, 'UNKNOWN', metadata, kind='robot', suffix=f'{source.id}:{row.robot_id}')
             nodes.append(node)
-            stage = {'tls-refused': 'tls', 'protocol': 'protocol'}.get(row.link, 'unknown')
+            # Fleet's legacy name means an HTTP 401, not a TLS handshake failure.
+            stage = {'tls-refused': 'auth', 'protocol': 'protocol'}.get(row.link, 'unknown')
             links.append(MonitoringLink(
                 id=f'{source.site_id}:reported:{self.cache.config.collector_id}:{source.id}:{row.robot_id}',
                 source_id=nodes[0].id, target_id=node.id, kind='reported', expected=True,
-                reachable=row.reachable, failure_stage='none' if row.reachable is True else stage,
+                reachable=row.reachable, failure_stage=stage if row.link == 'tls-refused' else
+                'none' if row.reachable is True else stage,
                 duration_ms=None, reason_code=row.reason_code, **metadata))
         return nodes, links
 

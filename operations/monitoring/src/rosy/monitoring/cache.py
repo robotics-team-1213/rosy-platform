@@ -58,6 +58,7 @@ class ObservationCache:
                                     | {site for s in config.sources for site in s.peer_sites})
         self.generation, self._sequence = uuid4().hex, 0
         self._groups = {}
+        self._failures = {}
         # shortcut: reject new identities at 8192; add verified expired-anchor pruning for larger inventory churn.
         self._latest = {}
         self._peers = {}
@@ -152,7 +153,8 @@ class ObservationCache:
         if isinstance(item, MonitoringLink):
             successes = [value for value in (item.last_success_at,
                          old.item.last_success_at if old is not None else None,
-                         item.sampled_at if item.reachable is True else None) if value is not None]
+                         item.sampled_at if item.reachable is True and item.failure_stage == 'none' else None)
+                         if value is not None]
             if successes:
                 item = item.model_copy(update={"last_success_at": max(successes)})
         wall_age = (wall - item.sampled_at).total_seconds()
@@ -193,12 +195,16 @@ class ObservationCache:
             own_id = f"{site}:collector:{self.config.collector_id}"
             if own_id in used:
                 raise ObservationRejected()
+            failures = [reason for source_id, reason in self._failures.items()
+                        if site in (self._sources[source_id].peer_sites if self._sources[source_id].kind == 'peer'
+                                    else (self._sources[source_id].site_id,))]
             nodes.append(MonitoringNode(
                 id=own_id, kind="collector", label="ROSY Monitoring", site_id=site,
                 origin_collector=self.config.collector_id, origin_source="collector",
                 sample_id=f"{self.generation}:{sequence}", sampled_at=wall, age_s=0.0,
                 valid_for_s=15, remaining_s=15.0, report_remaining_s=15.0,
-                freshness="fresh", reported_health="OK",
+                freshness="fresh", reported_health="WARNING" if failures else "OK",
+                reason_code=failures[0] if failures else None,
             ))
         return MonitoringSnapshot(schema_version=1, collector_id=self.config.collector_id,
                                   generation=self.generation, sequence=sequence, produced_at=wall,
@@ -295,3 +301,10 @@ class ObservationCache:
             now, wall = self._now(), self._wall()
             for key, records in self._groups.items():
                 self.store.save(key, [record.value(now) for record in records.values()], wall=wall)
+
+    def collection_failure(self, source_id, reason=None):
+        self._source(source_id)
+        if reason is None:
+            self._failures.pop(source_id, None)
+        else:
+            self._failures[source_id] = reason

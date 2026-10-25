@@ -23,6 +23,11 @@ class Collector:
         self.cache = ObservationCache(config, store=store)
         self.reader = SourceReader(self.cache, credentials)
         self.storage_failures = set()
+        self.task = None
+
+    @property
+    def unavailable(self):
+        return bool(self.storage_failures) or self.task is not None and self.task.done()
 
     async def poll_once(self):
         semaphore = asyncio.Semaphore(8)
@@ -31,10 +36,13 @@ class Collector:
                 try:
                     await self.reader.poll(source)
                     self.storage_failures.discard(source.id)
+                    self.cache.collection_failure(source.id)
                 except StoreUnavailable:
                     self.storage_failures.add(source.id)
-                except ObservationRejected:
-                    pass  # Prior evidence continues to expire; a malformed source cannot stop its peers.
+                except ObservationRejected as error:
+                    self.cache.collection_failure(source.id, error.reason_code)
+                except ValueError:
+                    self.cache.collection_failure(source.id, 'MONITORING_PROTOCOL')
         await asyncio.gather(*(poll(source) for source in self.config.sources))
         try:
             self.cache.checkpoint()
@@ -53,14 +61,12 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
     @asynccontextmanager
     async def lifespan(app):
         task = asyncio.create_task(collector.run())
+        collector.task = task
         try:
             yield
         finally:
             task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+            await asyncio.gather(task, return_exceptions=True)
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -81,8 +87,8 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
 
     @app.get('/health')
     async def health():
-        return JSONResponse({'status': 'unavailable' if collector.storage_failures else 'ready'},
-                            status_code=503 if collector.storage_failures else 200)
+        return JSONResponse({'status': 'unavailable' if collector.unavailable else 'ready'},
+                            status_code=503 if collector.unavailable else 200)
 
     @app.get('/api/monitoring/v1/snapshot')
     async def snapshot(request: Request):
@@ -96,6 +102,8 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
             return _error(403, 'MONITORING_SCOPE')
         if collector.storage_failures:
             return _error(503, 'MONITORING_STORAGE')
+        if collector.unavailable:
+            return _error(503, 'MONITORING_UNAVAILABLE')
         try:
             value = collector.cache.snapshot(sites)
         except (ObservationRejected, ValueError):

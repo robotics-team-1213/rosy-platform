@@ -120,7 +120,7 @@ class MonitoringLink(Observation):
         if (not self.id.startswith(f"{self.site_id}:{self.kind}:")
                 or self.kind == "probe" and self.valid_for_s != 15):
             raise ValueError("link identity and lifetime must match its observation")
-        if self.reachable is True and self.failure_stage != "none":
+        if self.kind == 'probe' and self.reachable is True and self.failure_stage != "none":
             raise ValueError("a successful probe cannot carry a failure stage")
         if self.freshness == "unknown" and (self.reachable is not None or self.duration_ms is not None):
             raise ValueError("unobserved links cannot report a probe result")
