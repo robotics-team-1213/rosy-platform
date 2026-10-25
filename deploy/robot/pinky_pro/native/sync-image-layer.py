@@ -62,8 +62,8 @@ ALLOWED_PREFIXES = (NATIVE_RUNTIME + "/", UNIT_DIR + "/", UDEV_DIR + "/", MODPRO
 # Never written, whatever the allowlist says (config.txt, kernel and modules,
 # the CORE Python runtime, device configuration, accounts and sudo).
 FORBIDDEN_PREFIXES = (
-    "boot/", "etc/rosy/", "opt/rosy/os-bootstrap/", "usr/local/", "lib/modules/", "usr/lib/modules/",
-    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow",
+    "boot/", "etc/rosy/", "opt/rosy/os-bootstrap/", "usr/local/", "lib/modules/", "usr/lib/modules/", "etc/systemd/system/rosy-first-boot.service.d/10-rosy-os.conf",
+    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow", "etc/systemd/system/rosy-release-recover.service.d/10-rosy-os.conf",
 )
 BACKUP_ROOT = "var/lib/rosy/image-layer-backup"
 BACKUP_MANIFEST = "backup-manifest.json"

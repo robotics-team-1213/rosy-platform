@@ -431,10 +431,16 @@ class NativeReleaseManager:
             self.journal.unlink(missing_ok=True)
             return {"ok": True, "release_id": candidate, "previous": old_current}
 
-    def recover(self) -> dict:
+    def recover(self, *, admit_current: bool = False) -> dict:
         with self._locked():
             if not self.journal.is_file():
-                return {"ok": True, "recovered": False, "release_id": self._link_id(self.current)}
+                active = self._link_id(self.current)
+                if admit_current:
+                    if active is None:
+                        raise ValueError("NATIVE_RECOVERY_HOLD: active payload is unavailable")
+                    self.verify(active)
+                    self.check_python_runtime(active)
+                return {"ok": True, "recovered": False, "release_id": active}
             try:
                 data = json.loads(self.journal.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -455,6 +461,10 @@ class NativeReleaseManager:
             candidate = data.get("candidate")
             if old_current is not None:
                 self.verify(old_current)
+                if admit_current:
+                    self.check_python_runtime(old_current)
+            elif admit_current:
+                raise ValueError("NATIVE_RECOVERY_HOLD: active payload is unavailable")
             self._restore(old_current, candidate)
             self.journal.unlink(missing_ok=True)
             return {"ok": True, "recovered": True, "release_id": old_current}
