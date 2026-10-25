@@ -1,4 +1,4 @@
-# core_common logs
+﻿# core_common logs
 
 추가만 한다. 형식: [module harness 설계](../../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 2026-09-22 이전 이력은 `git log -- src/core/core_common`를 본다.
@@ -994,3 +994,11 @@
 - 증거: 모델 미구현 commit09df122297에서 공식 원격 RED134건이 모두 같은 새 모듈 ImportError임을 확인했다. 모델과 public export 구현 후 strict 타입·관측 evidence·시간대·목록/크기·중복·정지 주장·복구 metadata를 원격 GREEN으로 검증한다. P0 분리의 실제 source/검증은 commit20af36c343 및 통합 commit8a80472a23의 별도 공식 실행 기록을 따른다.
 - gate 변화: 없음. 공유 계약 등록이며 collector/runtime·새 화면·배포·장치 수용을 완료하지 않는다. 기존 부모 자격의 정보/정지 권한은 자동 확대하지 않고 명시 설정으로 허용한다.
 - CE: 해당 없음 — 실행 경계와 receiver 불확실성의 근거를 D-862에 직접 기록하고 회귀로 검증한다.
+
+## 2026-10-25 · uncommitted · feat(contracts): D-865 policy admission wire schemas v1.314
+
+- 변경: core_common/protocol/policy_admission.py 신설(범위·상태·감사·전환 형태), schemas.py canonical 재수출, test/test_policy_admission_contract.py 추가.
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. API Ref v1.314 절과 같은 변경(D-18).
+- gate 변화: 없음. 계약 등록이며 구현·활성화가 아니다.
+- 결정: D-865 P1 산출물.
+- 교훈: 없음

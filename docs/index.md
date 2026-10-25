@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · docs(reference): v1.314 변경 이력 표행 추가
+- 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
 - 2026-10-25 · uncommitted · HF 학습 사진 검토 반영 (own_forced_train)
 - 2026-10-25 · uncommitted · 승인한 HF 사진을 학습 데이터셋에만 (D-857)
 - 2026-10-25 · uncommitted · HF 가져오기를 검수 대기열로 보내기 (D-857 P1)
-- 2026-10-25 · uncommitted · OMX 구간 DB 내보내기 바이트 비교를 센터 CPU venv에서 실행
-- 2026-10-25 · uncommitted · 정지 episode 제외 규칙과 검수 DB 읽기 전용

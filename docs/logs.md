@@ -11189,3 +11189,19 @@ osy-d395-s1d\`.
 - 변경: 독립 검토 지적 반영. HF 사진과 한 묶음이 된 우리 사진을 보고·manifest `external_sources.own_forced_train`으로 센다(학습에만 넣는 동작은 그대로). 시험 추가: HF만 있는 데이터셋 거절, sha256이 사진 해시와 다르면 거절, 카탈로그가 적은 `source_kind`·`upstream`은 버려 `hf_group`을 통과하지 못함, 평가 bootstrap이 HF 행을 거절, 표현 해시로 묶인 우리 사진의 학습 고정과 집계. `review-app.md`에 그 동작을 적었다.
 - 증거: 원격 시험 PC 대상 시험과 affected 계층, known_failures 0 NEW.
 - gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 판단이 없다.
+
+## 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
+
+- 변경: [API reference](reference/ROSY API & Protocol Reference.md) v1.314 절(경로·권한·의미), [D-865 실행 설계](plans/2026-10-25-fleet-policy-admission-design.md) P1 상태 표시.
+- 증거: 미실행 — 문서·계약 변경. 원격 회귀로 계약 시험 확인 예정.
+- gate 변화: 없음.
+- 결정: D-865 P1.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs(reference): v1.314 변경 이력 표행 추가
+
+- 변경: [API reference](reference/ROSY API & Protocol Reference.md) §11 변경 이력 표에 v1.314 행 추가. `### v1.314` 절만 두고 표행을 빠뜨려 test_changelog_has_a_row_for_the_live_version 가 실패했다(P1 첫 착지 중단 원인).
+- 증거: 진단 재실행으로 실패 식별(run-1.txt FAILED 1건) 후 수정. 재검증은 같은 시트 원격 재실행으로 확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
