@@ -1,0 +1,51 @@
+"""Moved A/B cards retain recovery access without transferring robot authority."""
+import json
+
+import pytest
+
+from test_os_first_boot_state import SERIAL, _provision_a
+from test_os_tailnet_state import _serial
+from test_rebind_board import _fresh_bundle, _rebind
+
+
+MOVED_SERIAL = "10000000abcdef02"
+
+
+def test_repeated_moved_boots_keep_setup_identity_and_shared_recovery_state(tmp_path, monkeypatch):
+    first, root, other, common, bundle = _provision_a(tmp_path, monkeypatch)
+    gate = first._native_helper("os_state_storage")
+    pointer = (common / "state/current.json").read_bytes()
+    completion = (root / "var/lib/rosy/provisioning/complete.json").read_bytes()
+    wifi = (root / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection").read_bytes()
+    setup_name = None
+    for target in (root, other, root, other):
+        _serial(target, MOVED_SERIAL)
+        applied = []
+        report = first.FirstBootProvisioner(root=target, hostname_apply=applied.append).apply(
+            bundle=bundle, hardware_serial=MOVED_SERIAL)
+        assert report["state"] == "NEW_DEVICE_SETUP"
+        assert report["ok"] is False
+        setup_name = setup_name or report["device_name"]
+        assert report["device_name"] == setup_name
+        assert applied == []
+        assert gate.admit_storage(target)["phase"] == "COMMITTED"
+        with pytest.raises(ValueError, match="hardware binding"):
+            gate.admit_tailnet(target, bind_machine=True)
+        assert (common / "state/current.json").read_bytes() == pointer
+        assert (target / "var/lib/rosy/provisioning/complete.json").read_bytes() == completion
+        assert (target / "etc/NetworkManager/system-connections/rosy-site-sta.nmconnection").read_bytes() == wifi
+    pending = (root / "var/lib/rosy/provisioning/new-device-setup.json").read_bytes()
+    with pytest.raises(ValueError, match="different board"):
+        first.FirstBootProvisioner(root=root).apply(bundle=bundle, hardware_serial=SERIAL)
+    assert (root / "var/lib/rosy/provisioning/new-device-setup.json").read_bytes() == pending
+    assert json.loads(pending)["hardware_serial"] == MOVED_SERIAL
+
+
+def test_legacy_rebind_cannot_partially_move_shared_ab_state(tmp_path, monkeypatch):
+    _, root, _, common, _ = _provision_a(tmp_path, monkeypatch)
+    fresh = _fresh_bundle(root)
+    before = {p.relative_to(common): p.read_bytes() for p in common.rglob("*") if p.is_file()}
+    with pytest.raises(ValueError, match="fresh.*card"):
+        _rebind().quarantine_previous(root, fresh, MOVED_SERIAL)
+    assert {p.relative_to(common): p.read_bytes() for p in common.rglob("*") if p.is_file()} == before
+    assert not (root / "var/lib/rosy/previous-devices").exists()
