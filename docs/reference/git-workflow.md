@@ -83,7 +83,7 @@ git push -u origin fix/<짧은-주제>
 
 실험실 PC 한 대의 체크아웃 하나와 git 인덱스 하나를 여러 세션이 같이 쓴다. 전문은 [같이 하는 깃](shared-checkout.md)과 루트 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」, 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다. 줄이면:
 
-1. **`main` 체크아웃에서 작업하지 않는다.** `python tools/worktrees.py new <짧은이름> <type>/<topic>`으로 `.worktrees/` 아래에 만든다. 상한 50개, 착지 뒤 `python tools/worktrees.py prune --apply`.
+1. **`main` 체크아웃에서 작업하지 않는다.** `python tools/worktrees.py new <짧은이름> <type>/<topic>`으로 `.worktrees/` 아래에 만든다. 상한은 main 포함 15개(D-886), 착지 뒤 `python tools/worktrees.py prune --apply`가 워크트리와 착지한 브랜치를 지운다. 브랜치 종류는 [「브랜치 이름과 수명」](shared-checkout.md#브랜치-이름과-수명).
 2. **자기 경로만 `git add`.** `git add -A`·`.`·디렉터리 add 금지. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash` 금지. 남의 미커밋은 지우지도 치우지도 않는다.
 3. **ADR·API 버전 번호는 도구로 선점한다** — `python tools/harness/adr_reserve.py next "<주제>"`, `python tools/harness/api_reserve.py next "<주제>"`.
 4. **시험은 기존 실패와 비교한다** — `tools/remote/remote_pytest.py` → `python test/known_failures.py <run.txt>`. `NEW`는 그 브랜치의 실패다.

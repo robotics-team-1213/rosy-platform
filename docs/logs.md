@@ -11565,3 +11565,9 @@ osy-d395-s1d\`.
 - 변경: 합성 fixture의 free_space 관측을10 GiB로 고정하고 UI 잔여값을 검증한다. 실제 storage/data 동작은 바꾸지 않았다.
 - 검증: commit d24d1abc64, 모델 호스트 디스크 점검 후 실제 opt-in 두 viewport 포함10 PASS/skip0/NEW0. 기존 MAIN-RED와 raw 로그를 보존했다.
 - gate 변화: 제품·기기 gate 변화 없음. docs/validation/learning-storage-browser-capacity-2026-10-26/result.md는 합성 시험 근거이며 실제 라벨·모델 수용을 뜻하지 않는다.
+
+## 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)
+
+- 변경: `tools/worktrees.py` `CAP` 50→14(main 포함 15), topic 소문자 kebab 48자 검사, 모든 prune이 `main`에 들어갔고 체크아웃되지 않은 로컬 브랜치를 정확한 sha로 정리(`main`·`archive/*` 제외). shared-checkout에 「브랜치 이름과 수명」 정본, AGENTS·git-workflow·명령 카드 상한 문구.
+- 근거: 같은 날 워크트리 22개, 로컬 브랜치 488개 중 132개가 이미 main에 있었다. 문서 예산 15와 도구 상한 50이 달랐다.
+- gate 변화: 없음. 정리될 때까지 일반 `new`가 거절된다.
