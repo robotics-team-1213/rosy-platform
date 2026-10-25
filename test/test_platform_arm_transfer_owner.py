@@ -17,7 +17,7 @@ from omx_adapter.action_api import ActionApi  # noqa: E402
 from omx_adapter.action_runner import action_grant_digest  # noqa: E402
 from omx_adapter.command_owner import TrajectoryCommand  # noqa: E402
 from omx_adapter.gripper_contract import GripperObservation  # noqa: E402
-from omx_adapter.pick_place_transaction import TransactionError  # noqa: E402
+from omx_adapter.pick_place.pick_place_transaction import TransactionError  # noqa: E402
 from omx_adapter.transfer_object_bindings import TransferObjectBindings  # noqa: E402
 from test_omx_action_api import _runner  # noqa: E402
 from test_omx_pick_place_runner import _event, _GoalPort  # noqa: E402

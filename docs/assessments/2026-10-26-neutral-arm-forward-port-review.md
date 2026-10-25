@@ -13,3 +13,9 @@ Static checks on the reviewed tree: 108 Python files parsed, 11 JSON files parse
 This is scoped independent **source review** under D-430 §5. Exact committed-revision remote affected/FULL/browser gates remain required before landing. Older validation records do not verify this merged tree. No tests were run by the reviewer, and neither this record nor its Safety-Review reference certifies device behavior or field safety.
 
 Runtime journal migration v8 can affect rollback even when physical activation is closed. Deployment still requires matched backup, restore/compatibility evidence and the supported production installation/provisioning work. No production account, service, device or deployment was changed during this review.
+
+## Canonical import follow-up
+
+The exact c0efaeb41e remote affected run exposed three NEW collection errors from the pre-main flat PickPlaceTransaction import. The explicit browser invocation passed25 tests with zero skips, but it did not discharge those failures or the FULL gate.
+
+The same independent reviewer inspected c0efaeb41e → staged source tree550ae7a55c9096bf78d752b721d35713dbda43e4: five import replacements in four files, resolving PickPlaceRunner/PickPlaceTransaction to main's existing `omx_adapter.pick_place` classes. No signatures, admission checks, fences, execution logic or assertions changed. No supported source finding remained. The reported static destination audit is implementer evidence, not a test executed by the reviewer. Corrected-commit remote verification remains required.

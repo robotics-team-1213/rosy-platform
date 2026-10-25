@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 
-from omx_adapter.pick_place_transaction import PickPlaceState, PickPlaceTransaction, TransactionError
+from omx_adapter.pick_place.pick_place_transaction import PickPlaceState, PickPlaceTransaction, TransactionError
 from test_arm_transfer_registration_gate import grant
 from test_omx_pick_place_transaction import arm_result, gripper
 

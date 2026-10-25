@@ -13,8 +13,8 @@ from omx_adapter.manipulation_plan import ExecutionStateSnapshot
 from omx_adapter.installed_transfer_factory import InstalledArmTransferFactory
 from omx_adapter.managed_transfer_port import _ManagedTransferPort
 from omx_adapter.phase_gate import PHASE_WAIT
-from omx_adapter.pick_place_runner import PickPlaceRunner
-from omx_adapter.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
+from omx_adapter.pick_place.pick_place_runner import PickPlaceRunner
+from omx_adapter.pick_place.pick_place_transaction import PickPlaceTransaction, PickPlaceWorkflowJournal
 from omx_adapter.transfer_motion import ArmPlanningProfile, TransferMotionRequest, validate_transfer_motion_plan
 from omx_adapter.transfer_object_bindings import TransferObjectBindings
 from omx_adapter.transfer_planner import AnalyticTransferPlanner

@@ -6,7 +6,7 @@ from core_common.protocol.schemas import FleetArmTransferGrant
 
 from .managed_transfer_scope import validate_transfer_owner
 from .phase_recorder import ActionPhaseRecorder
-from .pick_place_runner import PickPlaceRunner
+from .pick_place.pick_place_runner import PickPlaceRunner
 
 
 class _ManagedTransferPort:
