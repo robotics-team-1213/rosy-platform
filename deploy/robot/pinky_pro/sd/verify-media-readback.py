@@ -40,6 +40,13 @@ import sys
 import threading
 import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from media_layout import (HashingReader, LayoutCapture, hash_image, mbr_signature,
+                          raw_mbr_signature, sector_is_blank, xz_raw_size, validate_layout,
+                          primary_disk_guid, inspect_device)
+from media_fat import (Fat32, PartitionComparison, compare_boot_non_file_areas, compare_boot_partition,
+                       fat32_boot_partition, _first_difference)
+
 
 CHUNK_SIZE = 4 * 1024 * 1024
 DEVICE_CHUNK_SIZE = CHUNK_SIZE
@@ -69,27 +76,6 @@ class DeviceStallError(DeviceReadError):
     """The card produced no data for the stall limit (a wedged read)."""
 
 
-class HashingReader:
-    """File wrapper that SHA-256s every byte handed to its consumer."""
-
-    def __init__(self, raw) -> None:
-        self._raw = raw
-        self.sha256 = hashlib.sha256()
-
-    def readable(self) -> bool:
-        return True
-
-    def read(self, size: int = -1) -> bytes:
-        data = self._raw.read(size)
-        self.sha256.update(data)
-        return data
-
-    def drain(self) -> str:
-        """Hash whatever the decompressor left unread (e.g. bytes after the xz stream)."""
-        while True:
-            data = self.read(CHUNK_SIZE)
-            if not data:
-                return self.sha256.hexdigest()
 
 
 class Progress:
@@ -127,286 +113,20 @@ class Progress:
             print(f"MEDIA_READBACK_HEARTBEAT_NOT_WRITTEN: {exc}", file=sys.stderr)
 
 
-def _varint(data: bytes, pos: int) -> tuple[int, int]:
-    value = shift = 0
-    while True:
-        if pos >= len(data) or shift > 63:
-            raise ValueError("xz index is corrupt")
-        byte = data[pos]
-        pos += 1
-        value |= (byte & 0x7F) << shift
-        if not byte & 0x80:
-            return value, pos
-        shift += 7
 
 
-def xz_raw_size(image: Path) -> int:
-    """Uncompressed size from the xz stream indexes, without decompressing."""
-    total = 0
-    with open(image, "rb") as handle:
-        end = handle.seek(0, os.SEEK_END)
-        while end > 0:
-            handle.seek(end - 4)
-            if end >= 4 and handle.read(4) == b"\0\0\0\0":  # stream padding
-                end -= 4
-                continue
-            if end < 24:
-                raise ValueError("image is not an xz stream")
-            handle.seek(end - 12)
-            footer = handle.read(12)
-            if footer[10:12] != b"YZ":
-                raise ValueError("image does not end with an xz stream footer")
-            index_size = (struct.unpack_from("<I", footer, 4)[0] + 1) * 4
-            index_start = end - 12 - index_size
-            if index_start < 12:
-                raise ValueError("xz index is corrupt")
-            handle.seek(index_start)
-            index = handle.read(index_size)
-            if index[:1] != b"\0":
-                raise ValueError("xz index is corrupt")
-            count, pos = _varint(index, 1)
-            blocks = 0
-            for _ in range(count):
-                unpadded, pos = _varint(index, pos)
-                size, pos = _varint(index, pos)
-                total += size
-                blocks += (unpadded + 3) // 4 * 4
-            end = index_start - blocks - 12
-            if end < 0:
-                raise ValueError("xz index is corrupt")
-            handle.seek(end)
-            if handle.read(6) != XZ_HEADER_MAGIC:
-                raise ValueError("xz stream header is missing")
-    return total
 
 
-def hash_image(image: Path) -> dict[str, object]:
-    if image.suffix != ".xz":
-        raise ValueError("image must be an xz-compressed raw disk image")
-
-    image_hash = hashlib.sha256()
-    hashed = 0
-    with lzma.open(image, "rb") as expected:
-        while True:
-            chunk = expected.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            image_hash.update(chunk)
-            hashed += len(chunk)
-    return {
-        "bytes_hashed": hashed,
-        "image_raw_sha256": image_hash.hexdigest(),
-    }
 
 
-def fat32_boot_partition(head: bytes) -> tuple[int, int] | None:
-    """Return (byte offset, byte length) of the first FAT32 partition in the MBR."""
-    if len(head) < 512 or head[510:512] != b"\x55\xaa":
-        return None
-    for index in range(4):
-        entry = head[446 + 16 * index:462 + 16 * index]
-        if entry[4] not in FAT32_PARTITION_TYPES:
-            continue
-        start, sectors = struct.unpack_from("<II", entry, 8)
-        if start and sectors:
-            return start * 512, sectors * 512
-    return None
 
 
-class Fat32:
-    """Minimal read-only FAT32 reader over one partition's bytes."""
-
-    def __init__(self, data: bytes) -> None:
-        if len(data) < 512 or data[0x52:0x5A] != b"FAT32   " or data[510:512] != b"\x55\xaa":
-            raise ValueError("boot partition is not FAT32")
-        self.data = data
-        self.sector = struct.unpack_from("<H", data, 0x0B)[0]
-        self.cluster_sectors = data[0x0D]
-        reserved = struct.unpack_from("<H", data, 0x0E)[0]
-        fats = data[0x10]
-        fat_size = struct.unpack_from("<I", data, 0x24)[0]
-        self.root = struct.unpack_from("<I", data, 0x2C)[0]
-        if self.sector not in {512, 1024, 2048, 4096} or not self.cluster_sectors or not fats:
-            raise ValueError("boot partition has an invalid FAT32 BPB")
-        self.cluster_bytes = self.sector * self.cluster_sectors
-        self.fat_offset = reserved * self.sector
-        self.data_offset = (reserved + fats * fat_size) * self.sector
-        self.clusters = (len(data) - self.data_offset) // self.cluster_bytes + 2
-
-    def _next(self, cluster: int) -> int:
-        return struct.unpack_from("<I", self.data, self.fat_offset + 4 * cluster)[0] & 0x0FFFFFFF
-
-    def chain(self, cluster: int) -> list[int]:
-        chain: list[int] = []
-        while 2 <= cluster < END_OF_CHAIN:
-            if cluster >= self.clusters or len(chain) > self.clusters:
-                raise ValueError("FAT32 cluster chain is corrupt")
-            chain.append(cluster)
-            cluster = self._next(cluster)
-        return chain
-
-    def read(self, cluster: int, size: int | None = None) -> bytes:
-        parts = []
-        for item in self.chain(cluster):
-            start = self.data_offset + (item - 2) * self.cluster_bytes
-            parts.append(self.data[start:start + self.cluster_bytes])
-        content = b"".join(parts)
-        return content if size is None else content[:size]
-
-    def entries(self, cluster: int):
-        raw = self.read(cluster)
-        long_parts: list[str] = []
-        for offset in range(0, len(raw), 32):
-            entry = raw[offset:offset + 32]
-            if entry[0] == 0x00:
-                break
-            if entry[0] == 0xE5:
-                long_parts = []
-                continue
-            attributes = entry[11]
-            if attributes == 0x0F:
-                chars = entry[1:11] + entry[14:26] + entry[28:32]
-                long_parts.insert(0, chars.decode("utf-16-le", "replace").split("\x00")[0].rstrip("￿"))
-                continue
-            if attributes & 0x08:  # volume label
-                long_parts = []
-                continue
-            short = entry[0:8].decode("ascii", "replace").rstrip()
-            extension = entry[8:11].decode("ascii", "replace").rstrip()
-            name = "".join(long_parts) or (f"{short}.{extension}" if extension else short)
-            long_parts = []
-            if name in {".", ".."}:
-                continue
-            first = (struct.unpack_from("<H", entry, 20)[0] << 16) | struct.unpack_from("<H", entry, 26)[0]
-            size = struct.unpack_from("<I", entry, 28)[0]
-            yield name, bool(attributes & 0x10), first, size
-
-    def tree(self) -> dict[str, str]:
-        """Map path -> "dir" or "<sha256>:<size>" for every entry."""
-        result: dict[str, str] = {}
-        pending = [("", self.root)]
-        while pending:
-            prefix, cluster = pending.pop()
-            for name, is_dir, first, size in self.entries(cluster):
-                path = f"{prefix}/{name}" if prefix else name
-                if is_dir:
-                    result[path] = "dir"
-                    if first:
-                        pending.append((path, first))
-                else:
-                    content = self.read(first, size) if first else b""
-                    if len(content) != size:
-                        raise ValueError(f"boot partition file is truncated: {path}")
-                    result[path] = f"{hashlib.sha256(content).hexdigest()}:{size}"
-        return result
 
 
-def _first_difference(want: bytes, have: bytes, skip: set[int]) -> int | None:
-    if want == have:
-        return None
-    for index in range(min(len(want), len(have))):
-        if index not in skip and want[index] != have[index]:
-            return index
-    return None if len(want) == len(have) else min(len(want), len(have))
 
 
-def compare_boot_non_file_areas(expected: bytes, actual: bytes, base: int = 0) -> dict[str, object]:
-    """Byte-compare the FAT32 areas that hold no file (D-188, review MEDIUM-2).
-
-    Tolerated, and only these: the FSInfo free-cluster count and next-free hint
-    against the image, and the FAT[1] clean-shutdown and hard-error bits between
-    the two FAT copies. ``base`` is the partition's byte offset on the device,
-    used only to report device offsets.
-    """
-    image, card = Fat32(expected), Fat32(actual)
-    for field in ("sector", "fat_offset", "data_offset"):
-        if getattr(image, field) != getattr(card, field):
-            raise ValueError(f"boot partition layout differs from the image: {field}")
-    sector = card.sector
-    reserved = card.fat_offset
-    fats = actual[0x10]
-    fat_bytes = struct.unpack_from("<I", actual, 0x24)[0] * sector
-
-    # 1. Backup boot sector against the primary, on the card.
-    backup = struct.unpack_from("<H", actual, 0x32)[0]
-    backup_sector = None
-    if 0 < backup < 0xFFFF and (backup + 1) * sector <= reserved:
-        backup_sector = backup
-        at = _first_difference(actual[:sector], actual[backup * sector:(backup + 1) * sector], set())
-        if at is not None:
-            raise ValueError(
-                f"boot partition backup boot sector differs from the primary at byte offset "
-                f"{base + backup * sector + at}"
-            )
-
-    # 2. Reserved region against the image, apart from the FSInfo hints.
-    info = struct.unpack_from("<H", actual, 0x30)[0]
-    skip: set[int] = set()
-    tolerated: list[str] = []
-    if 0 < info < 0xFFFF and (info + 1) * sector <= reserved:
-        for name, (offset, size) in FSINFO_TOLERATED.items():
-            start = info * sector + offset
-            skip.update(range(start, start + size))
-            if expected[start:start + size] != actual[start:start + size]:
-                tolerated.append(name)
-    at = _first_difference(expected[:reserved], actual[:reserved], skip)
-    if at is not None:
-        raise ValueError(f"boot partition reserved region differs at byte offset {base + at}")
-
-    # 3. Every further FAT copy against FAT copy 1, on the card. FAT 1 itself is
-    # not compared with the image: Windows allocates System Volume Information.
-    for fat in range(1, fats):
-        first = actual[reserved:reserved + fat_bytes]
-        other = actual[reserved + fat * fat_bytes:reserved + (fat + 1) * fat_bytes]
-        if len(first) >= 8 and len(other) >= 8:
-            a, b = struct.unpack_from("<I", first, 4)[0], struct.unpack_from("<I", other, 4)[0]
-            if (a ^ b) & ~FAT1_STATUS_BITS & 0xFFFFFFFF:
-                raise ValueError(
-                    f"boot partition FAT copy {fat + 1} differs from FAT copy 1 at byte offset "
-                    f"{base + reserved + fat * fat_bytes + 4}"
-                )
-            if a != b:
-                tolerated.append("fat[1].status_bits")
-        at = _first_difference(first, other, {4, 5, 6, 7})
-        if at is not None:
-            raise ValueError(
-                f"boot partition FAT copy {fat + 1} differs from FAT copy 1 at byte offset "
-                f"{base + reserved + fat * fat_bytes + at}"
-            )
-    return {
-        "reserved_bytes": reserved,
-        "fat_copies_compared": fats,
-        "fat_bytes": fat_bytes,
-        "backup_boot_sector": backup_sector,
-        "tolerated_fields": sorted(FSINFO_TOLERATED) + ["fat[1].status_bits"],
-        "tolerated_differences": sorted(set(tolerated)),
-    }
 
 
-def compare_boot_partition(expected: bytes, actual: bytes, base: int = 0,
-                           allowed_extras: frozenset[str] = frozenset()) -> dict[str, object]:
-    non_file = compare_boot_non_file_areas(expected, actual, base)
-    want = Fat32(expected).tree()
-    have = Fat32(actual).tree()
-    for path, value in sorted(want.items()):
-        if have.get(path) != value:
-            raise ValueError(f"boot partition file differs or is missing: {path}")
-    extras = sorted(path for path in have if path not in want)
-    provisioning = []
-    for path in extras:
-        top = path.split("/", 1)[0].lower()
-        if top in allowed_extras:
-            provisioning.append(path)
-        elif top not in WINDOWS_EXTRA_TREES:
-            raise ValueError(f"boot partition has an unexpected entry: {path}")
-    evidence: dict[str, object] = {"mode": "files", "entries_verified": len(want),
-                                   "windows_extras": [path for path in extras if path not in provisioning],
-                                   "non_file_areas": non_file}
-    if allowed_extras:
-        # D-389: a provisioned card (the emergency follow-up) also carries the
-        # bundle and settings file the writer added; they are named, not hidden.
-        evidence["provisioning_extras"] = provisioning
-    return evidence
 
 
 def _read_device(actual, size: int) -> bytes:
@@ -513,11 +233,12 @@ class _DeviceStream:
 
 def verify(image: Path, device: str, progress: Progress | None = None,
            stall_seconds: float | None = None,
-           allowed_extras: frozenset[str] = frozenset()) -> dict[str, object]:
+           allowed_extras: frozenset[str] = frozenset(), layout: dict | None = None) -> dict[str, object]:
     if image.suffix != ".xz":
         raise ValueError("image must be an xz-compressed raw disk image")
 
     progress = progress or Progress(None, 0)
+    layout_capture = LayoutCapture(layout) if layout is not None else None
 
     def device_stalled() -> DeviceStallError:
         return DeviceStallError(
@@ -534,7 +255,7 @@ def verify(image: Path, device: str, progress: Progress | None = None,
     stalled = False
     try:
         return _verify_open(image, actual_file, progress, stall_seconds, device_stalled, image_stalled,
-                            allowed_extras)
+                            allowed_extras, layout_capture)
     except DeviceStallError:
         stalled = True
         raise
@@ -545,14 +266,18 @@ def verify(image: Path, device: str, progress: Progress | None = None,
 
 
 def _verify_open(image: Path, actual, progress: Progress, stall_seconds, device_stalled,
-                 image_stalled, allowed_extras: frozenset[str] = frozenset()) -> dict[str, object]:
+                 image_stalled, allowed_extras: frozenset[str] = frozenset(),
+                 layout_capture: LayoutCapture | None = None) -> dict[str, object]:
     image_hash = hashlib.sha256()
     device_hash = hashlib.sha256()
     verified = 0
     boot: tuple[int, int] | None = None
     first_chunk = True
-    expected_boot = bytearray()
-    actual_boot = bytearray()
+    comparison = None
+    if layout_capture is not None:
+        parts = layout_capture.layout["partitions"][:3]
+        comparison = PartitionComparison([(p["role"], p["start_lba"] * 512, p["size_lba"] * 512)
+                                          for p in parts], allowed_extras, "boot_a")
     with open(image, "rb") as compressed:
         # The compressed bytes the comparison consumes are hashed on the way in,
         # so the evidence ties the compared image to the signed SHA256SUMS entry.
@@ -571,37 +296,21 @@ def _verify_open(image: Path, actual, progress: Progress, stall_seconds, device_
                     if not expected_chunk:
                         break
                     if first_chunk:
-                        boot = fat32_boot_partition(expected_chunk)
+                        if comparison is None:
+                            boot = fat32_boot_partition(expected_chunk)
+                            comparison = PartitionComparison([("boot", *boot)] if boot else [], allowed_extras)
                         first_chunk = False
                     actual_chunk = device_stream.take(len(expected_chunk))
                     if len(actual_chunk) != len(expected_chunk):
                         raise ValueError(
                             f"media is shorter than the image at byte offset {verified}"
                         )
-                    start, end = verified, verified + len(expected_chunk)
-                    inside_from = inside_to = start
-                    if boot is not None:
-                        inside_from = max(start, boot[0])
-                        inside_to = min(end, boot[0] + boot[1])
-                    if inside_to > inside_from:
-                        a, b = inside_from - start, inside_to - start
-                        expected_boot += expected_chunk[a:b]
-                        actual_boot += actual_chunk[a:b]
-                        outside = ((0, a), (b, len(expected_chunk)))
-                    else:
-                        outside = ((0, len(expected_chunk)),)
-                    for low, high in outside:
-                        if expected_chunk[low:high] != actual_chunk[low:high]:
-                            mismatch = next(
-                                index for index in range(low, high)
-                                if expected_chunk[index] != actual_chunk[index]
-                            )
-                            raise ValueError(
-                                f"media readback mismatch at byte offset {start + mismatch}"
-                            )
+                    if layout_capture is not None:
+                        layout_capture.feed(verified, expected_chunk)
+                    comparison.feed(verified, expected_chunk, actual_chunk)
                     image_hash.update(expected_chunk)
                     device_hash.update(actual_chunk)
-                    verified = end
+                    verified += len(expected_chunk)
                     progress.beat(verified)
             finally:
                 # Every path stops both workers, with a bounded wait, before the files close.
@@ -618,44 +327,26 @@ def _verify_open(image: Path, actual, progress: Progress, stall_seconds, device_
         "verified": True,
     }
     progress.beat(verified, force=True)
-    if boot is not None:
-        if expected_boot == actual_boot:
-            evidence["boot_partition"] = {"mode": "bytes"}
-        else:
-            evidence["boot_partition"] = compare_boot_partition(bytes(expected_boot), bytes(actual_boot), boot[0],
-                                                                allowed_extras)
+    results = comparison.finish() if comparison is not None else {}
+    if layout_capture is not None:
+        evidence["layout"] = layout_capture.finish()
+        evidence["verified_scope"] = "image_prefix"
+        evidence["boot_partitions"] = results
+    elif boot is not None:
+        evidence["boot_partition"] = results["boot"]
     elif evidence["device_sha256"] != evidence["image_raw_sha256"]:
         raise ValueError("media readback digest mismatch")
     return evidence
 
 
-def mbr_signature(sector: bytes) -> str | None:
-    """The MBR disk signature (bytes 440-443) as 8 hex digits, or None if absent."""
-    if len(sector) < 512 or sector[510:512] != b"\x55\xaa":
-        return None
-    value = struct.unpack_from("<I", sector, 440)[0]
-    return f"{value:08x}" if value else None
 
 
-def raw_mbr_signature(sector: bytes) -> str | None:
-    """Bytes 440-443 as 8 hex digits whenever the sector holds an MBR (0x55AA),
-    "00000000" included; None when it holds none (a blank or unpartitioned card).
-    Only meaningful when the sector was actually read (D-188 review)."""
-    if len(sector) < 512 or sector[510:512] != b"\x55\xaa":
-        return None
-    return f"{struct.unpack_from('<I', sector, 440)[0]:08x}"
 
 
-def sector_is_blank(sector: bytes) -> bool:
-    """True when a full first sector was read and every byte is zero.
-
-    2026-09-24: an interrupted Imager write left sector 0 all zeros, and Get-Disk
-    (which -PlanOnly reads) reports such a disk as MBR with signature 1.
-    """
-    return len(sector) >= 512 and not any(sector[:512])
 
 
-def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[str, object], bool]:
+def _probe_device(device: str, probe_bytes: int, timeout: float, layout: dict | None = None,
+                  check_layout: bool = False) -> tuple[dict[str, object], bool]:
     state: dict[str, object] = {"done": 0, "head": b""}
 
     def run() -> None:
@@ -664,17 +355,23 @@ def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[s
                 started = time.perf_counter()
                 done = 0
                 head = b""
-                while done < probe_bytes:
-                    chunk = handle.read(min(DEVICE_CHUNK_SIZE, probe_bytes - done))
+                head_size = 1024 if layout is not None else 512
+                read_size = max(probe_bytes, head_size) if layout is not None else probe_bytes
+                while done < read_size:
+                    chunk = handle.read(min(DEVICE_CHUNK_SIZE, read_size - done))
                     if not chunk:
                         break
-                    if len(head) < 512:
-                        head += chunk[:512 - len(head)]
+                    if len(head) < head_size:
+                        head += chunk[:head_size - len(head)]
                         state["head"] = head
                     done += len(chunk)
                     state["done"] = done
                 state["seconds"] = time.perf_counter() - started
-        except OSError as exc:
+                if layout is not None:
+                    state["guid"] = primary_disk_guid(head)
+                if check_layout:
+                    state["layout"] = inspect_device(handle, layout)
+        except (OSError, ValueError, struct.error) as exc:
             state["error"] = str(exc)
 
     worker = threading.Thread(target=run, name="probe-device", daemon=True)
@@ -689,8 +386,8 @@ def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[s
         "device_read_seconds": None if seconds is None else round(float(seconds), 3),
         "device_read_mbps": None,
         "device_mbr_read": len(head) >= 512,
-        "device_mbr_signature": raw_mbr_signature(head),
-        "device_mbr_blank": sector_is_blank(head),
+        "device_mbr_signature": raw_mbr_signature(head[:512]),
+        "device_mbr_blank": sector_is_blank(head[:512]),
     }
     if stalled:
         outcome["device_error"] = f"device read stalled: no data for {timeout:g} s after {done} bytes"
@@ -700,27 +397,42 @@ def _probe_device(device: str, probe_bytes: int, timeout: float) -> tuple[dict[s
         outcome["device_read_mbps"] = round(done / MB / timeout, 2) if timeout > 0 else 0.0
     elif "error" in state:
         outcome["device_error"] = f"device cannot be read: {state['error']}"
-    elif done < PROBE_MIN_TIMED_BYTES:
+    elif done < PROBE_MIN_TIMED_BYTES and not check_layout:
         # A few bytes time the open, not the card; report no rate rather than a wrong one.
         outcome["device_error"] = f"only {done} bytes could be read; too little to time"
-    elif seconds:
+    elif seconds and not check_layout:
         outcome["device_read_mbps"] = round(done / MB / float(seconds), 2)
+    if layout is not None:
+        outcome["device_disk_guid"] = state.get("guid")
+    if check_layout:
+        outcome["device_layout_verified"] = not stalled and "layout" in state and "error" not in state
+        outcome["device_read_mbps"] = None
+        if outcome["device_layout_verified"]:
+            outcome["device_layout"] = state["layout"]
     return outcome, stalled
 
 
 def probe(image: Path, device: str | None, probe_bytes: int = PROBE_BYTES,
-          timeout: float = 120.0) -> tuple[dict[str, object], bool]:
+          timeout: float = 120.0, layout: dict | None = None,
+          check_layout: bool = False) -> tuple[dict[str, object], bool]:
     """Pre-flight facts for the writer (D-188); never fails on the device."""
     result: dict[str, object] = {"image_raw_size": None, "image_mbr_signature": None}
+    if layout is not None:
+        layout = validate_layout(layout)
+        result["image_disk_guid"] = layout["disk_guid"]
+    if check_layout and (layout is None or not device):
+        raise ValueError("LAYOUT: --verify-layout requires --layout-file and --device")
     try:
         result["image_raw_size"] = xz_raw_size(image)
+        if layout is not None and result["image_raw_size"] != layout["raw_size_bytes"]:
+            raise ValueError("LAYOUT: image raw size differs")
         with lzma.open(image, "rb") as expected:
             result["image_mbr_signature"] = mbr_signature(expected.read(512))
     except (OSError, EOFError, lzma.LZMAError, ValueError) as exc:
         result["image_error"] = str(exc)
     stalled = False
     if device:
-        outcome, stalled = _probe_device(device, probe_bytes, timeout)
+        outcome, stalled = _probe_device(device, probe_bytes, timeout, layout, check_layout)
         result.update(outcome)
     return result, stalled
 
@@ -744,18 +456,22 @@ def main() -> int:
                         help="print raw size, MBR signatures and a timed read of the device start")
     parser.add_argument("--probe-bytes", type=int, default=PROBE_BYTES)
     parser.add_argument("--probe-seconds", type=float, default=120.0)
+    parser.add_argument("--layout-file", type=Path, help="validated layout snapshot from the signed release verifier")
+    parser.add_argument("--verify-layout", action="store_true", help="inspect both device GPT copies before personalization; metadata only")
     parser.add_argument("--allow-boot-extra", action="append", default=[], metavar="NAME",
                         help="a top-level boot-partition entry the writer added after the image "
                              "(rosy-provision, rosy-config.yaml); D-389 emergency follow-up only")
     args = parser.parse_args()
     progress = Progress(args.progress, args.progress_seconds)
-    if args.probe:
-        facts, stalled = probe(args.image, args.device, args.probe_bytes, args.probe_seconds)
-        print(json.dumps(facts, sort_keys=True, separators=(",", ":")), flush=True)
-        if stalled:
-            os._exit(0)  # a thread is wedged in a device read; do not wait for it
-        return 0
     try:
+        layout = validate_layout(json.loads(args.layout_file.read_text(encoding="utf-8-sig"))) if args.layout_file else None
+        if args.probe or args.verify_layout:
+            facts, stalled = probe(args.image, args.device, 0 if args.verify_layout else args.probe_bytes,
+                                   args.probe_seconds, layout, args.verify_layout)
+            print(json.dumps(facts, sort_keys=True, separators=(",", ":")), flush=True)
+            if stalled:
+                os._exit(0)  # a thread is wedged in a device read; do not wait for it
+            return 0
         if args.raw_size:
             evidence = {"image_raw_size": xz_raw_size(args.image)}
         elif args.image_only:
@@ -766,7 +482,7 @@ def main() -> int:
             if not args.device:
                 raise ValueError("--device is required unless --image-only is used")
             evidence = verify(args.image, args.device, progress, args.stall_seconds,
-                              frozenset(name.lower() for name in args.allow_boot_extra))
+                              frozenset(name.lower() for name in args.allow_boot_extra), layout=layout)
     except DeviceStallError as exc:
         print(f"MEDIA_READBACK_DEVICE_UNREADABLE: {exc}", file=sys.stderr, flush=True)
         _write_error(args.error_json, exc, "io", progress.done)

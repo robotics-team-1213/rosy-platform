@@ -59,6 +59,10 @@ $script:nextHint = ""
 $script:failureRecorded = $false
 $script:failureKind = ""
 $imageSignature = $null
+$imageLayout = $null
+$imageDiskGuid = $null
+$layoutSnapshotPath = $null
+. (Join-Path $PSScriptRoot "media-layout.ps1")
 $resumeNext = "re-run the same command with -ResumeAfterWrite (skips the write and re-reads the whole card)"
 $fullWriteNext = "re-run the full write (the same command without -ResumeAfterWrite)"
 # D-225 3.2: a stall this close to the end is cheaper to resolve with the
@@ -161,6 +165,7 @@ function Fail([string]$Message, [string]$Next) {
 # Errors that do not come through Fail (a missing tool, a file that cannot be
 # copied) get the same stage, card state and next step.
 trap {
+    if ($layoutSnapshotPath) { Remove-Item -LiteralPath $layoutSnapshotPath -Force -ErrorAction SilentlyContinue }
     if ($script:stage -and -not $script:failureRecorded) {
         throw (Format-Failure ([string]$_.Exception.Message) "")
     }
@@ -409,6 +414,7 @@ function Assert-PlannedCard([object]$Disk, [object]$Sector) {
     # a sector that was read and holds no signature, or 00000000, means none).
     if ($Sector -and $Sector.Read) {
         $found.Signature = $(if ($Sector.Signature -and $Sector.Signature -ne "00000000") { [string]$Sector.Signature } else { $null })
+        if ($imageLayout) { $found.Guid = $Sector.Guid }
         # 2026-09-24: Get-Disk reports an all-zero first sector (e.g. after an
         # interrupted Imager write) as MBR signature 1, and -PlanOnly records that.
         # Such a card has no identity of its own: it is the factory-blank case below.
@@ -432,7 +438,8 @@ function Assert-PlannedCard([object]$Disk, [object]$Sector) {
         }
         return
     }
-    if ($imageSignature -and $found.Signature -ceq $imageSignature) {
+    if (($imageSignature -and $found.Signature -ceq $imageSignature) -or
+            ($imageDiskGuid -and $found.Guid -ceq $imageDiskGuid)) {
         $bundle = Find-ExistingBundle
         if ($bundle) {
             Fail ("a different card is in the reader: it holds this release and a provisioning bundle ({0}), so it was written for a robot; the plan recorded {1}" -f $bundle, (& $describe $planned)) $otherCard
@@ -492,7 +499,8 @@ function Get-DiskFingerprint([object]$Disk) {
     } | ConvertTo-Json -Compress
 }
 
-function Resolve-BootMount([int]$Number, [string]$ExplicitPath, [bool]$FixtureMode) {
+function Resolve-BootMount([int]$Number, [string]$ExplicitPath, [bool]$FixtureMode, [bool]$ForProvision = $false) {
+    if ($ForProvision -and $imageLayout) { return Resolve-GptProvisionMount $Number $ExplicitPath $FixtureMode }
     if ($ExplicitPath) {
         if (-not (Test-Path -LiteralPath $ExplicitPath -PathType Container)) {
             Fail "boot mount path is unavailable"
@@ -898,6 +906,12 @@ $verification = & $PythonExe $releaseVerifier `
     --image $ImagePath `
     --release-id $ReleaseId
 if ($LASTEXITCODE -ne 0) { Fail "signed image release verification failed" }
+$signedRelease = ($verification | Out-String) | ConvertFrom-Json
+if ($signedRelease.PSObject.Properties["layout"]) {
+    $imageLayout = $signedRelease.layout
+    $imageDiskGuid = [string]$imageLayout.disk_guid
+    if ($Emergency) { Fail "GPT emergency writes are unsupported; use full media readback" }
+}
 $verification = $null
 # The release is proven; what can still fail here is the plan, registry or arguments.
 $script:nextHint = "correct the reported plan, registry or argument, then re-run"
@@ -963,6 +977,9 @@ if ($DiskSerial) {
     $DiskNumber = $bySerial
 }
 $firstDisk = Select-SafeDisk $firstInventory $DiskNumber
+if ($imageLayout -and [int64]$firstDisk.Size -lt [int64]$imageLayout.raw_size_bytes) {
+    Fail "target card is smaller than the signed image layout"
+}
 $physicalDrive = "\\.\PhysicalDrive$DiskNumber"
 $cardIdentity = Get-CardIdentity $firstDisk
 # D-746: the writer erases the whole card, so a provision.json already on it is
@@ -1077,9 +1094,15 @@ $readbackVerifier = Join-Path $PSScriptRoot "verify-media-readback.py"
 if (-not (Test-Path -LiteralPath $readbackVerifier -PathType Leaf)) { Fail "media readback verifier is missing" }
 $readbackTarget = $(if ($ReadbackDevice) { $ReadbackDevice } else { $physicalDrive })
 $invariant = [Globalization.CultureInfo]::InvariantCulture
+$layoutOptions = @()
+if ($imageLayout) {
+    $layoutSnapshotPath = Join-Path ([IO.Path]::GetTempPath()) ("rosy-layout-" + [guid]::NewGuid().ToString("N") + ".json")
+    $imageLayout | ConvertTo-Json -Depth 20 -Compress | Set-Content -LiteralPath $layoutSnapshotPath -Encoding UTF8
+    $layoutOptions = @("--layout-file", $layoutSnapshotPath)
+}
 Set-Stage "preflight" "untouched" ""
 function Invoke-Probe([int64]$Bytes, [double]$Seconds) {
-    $output = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget --probe --probe-bytes $Bytes --probe-seconds $Seconds.ToString($invariant)
+    $output = & $PythonExe $readbackVerifier --image $ImagePath --device $readbackTarget --probe --probe-bytes $Bytes --probe-seconds $Seconds.ToString($invariant) @layoutOptions
     if ($LASTEXITCODE -ne 0) { Fail "the card probe failed (verifier exit code $LASTEXITCODE)" }
     return (($output | Out-String) | ConvertFrom-Json)
 }
@@ -1088,10 +1111,12 @@ function Get-DeviceSector([object]$Facts) {
     $read = [bool]($Facts.PSObject.Properties["device_mbr_read"] -and $Facts.device_mbr_read)
     $signature = $(if ($Facts.PSObject.Properties["device_mbr_signature"] -and $Facts.device_mbr_signature) { [string]$Facts.device_mbr_signature } else { $null })
     $blank = [bool]($Facts.PSObject.Properties["device_mbr_blank"] -and $Facts.device_mbr_blank)
-    [pscustomobject]@{ Read = $read; Signature = $signature; Blank = $blank }
+    $guid = $(if ($Facts.PSObject.Properties["device_disk_guid"]) { $Facts.device_disk_guid } else { $null })
+    [pscustomobject]@{ Read = $read; Signature = $signature; Blank = $blank; Guid = $guid }
 }
 
 $probe = Invoke-Probe $ProbeBytes $ProbeSeconds
+if ($imageLayout -and $probe.PSObject.Properties["image_error"]) { Fail "image layout preflight failed: $($probe.image_error)" }
 function Get-ProbeValue([string]$Name) {
     if ($probe.PSObject.Properties[$Name]) { return $probe.$Name }
     return $null
@@ -1141,7 +1166,11 @@ if ($ResumeAfterWrite) {
     if ($Emergency) { Assert-CleanEarlierWrite }
     # A fast pre-check before an hour of readback: a card that holds this
     # release's image starts with the image's MBR disk signature.
-    if (-not $imageSignature) {
+    if ($imageLayout) {
+        if ($deviceSector.Guid -cne $imageDiskGuid) { Fail "resume card GPT GUID differs from the signed image" $fullWriteNext }
+        if (-not (Test-EarlierWriteOfThisPlan)) { Fail "GPT resume requires an earlier write of this plan" $fullWriteNext }
+    }
+    elseif (-not $imageSignature) {
         Write-Warning "the image has no MBR disk signature; the card cannot be pre-checked, the readback decides"
     }
     elseif (-not $deviceSector.Read) {
@@ -1457,7 +1486,7 @@ else {
     $readbackStallSeconds = $ReadbackStallMinutes * 60
     $beatSeconds = [Math]::Min($HeartbeatSeconds, $readbackStallSeconds / 4)
     $readbackOptions = @("--progress-seconds", $beatSeconds.ToString($invariant),
-        "--stall-seconds", (2 * $readbackStallSeconds).ToString($invariant))
+        "--stall-seconds", (2 * $readbackStallSeconds).ToString($invariant)) + $layoutOptions
     if ($ProgressPath) { $readbackOptions += @("--progress", $ProgressPath) }
     # Windows auto-mounts the freshly written FAT32 partition and rewrites a few
     # spec-defined fields; removable media cannot be set offline. The verifier
@@ -1573,6 +1602,7 @@ else {
         Fail "media readback evidence is invalid"
     }
     if (-not [bool]$mediaReadback.verified) { Fail "full media readback was not verified" }
+    if ($imageLayout) { Assert-SameMediaLayout $mediaReadback.layout }
     foreach ($digestField in @("image_raw_sha256", "device_sha256", "image_sha256")) {
         if (-not $mediaReadback.PSObject.Properties[$digestField] -or [string]$mediaReadback.$digestField -notmatch '^[0-9a-f]{64}$') {
             Fail "media readback evidence is invalid"
@@ -1644,7 +1674,8 @@ try {
     if ((Get-DiskFingerprint $firstDisk) -ne (Get-DiskFingerprint $bundleDisk)) {
         Fail "target disk changed between the readback and the bundle"
     }
-    $bootRoot = Resolve-BootMount $DiskNumber $BootMountPath ([bool]$DiskInventoryJson)
+    if ($imageLayout) { Assert-DeviceMediaLayout }
+    $bootRoot = Resolve-BootMount $bundleNumber $BootMountPath ([bool]$DiskInventoryJson) $true
     $bundleDirectory = Join-Path $bootRoot "rosy-provision"
     # D-187 review: from the first byte on the boot partition, a failure (card
     # pulled mid-copy) leaves a partial bundle that the readback would call a
@@ -1730,6 +1761,7 @@ else {
     Set-Stage "done" "complete" "" ([ordered]@{ next = "the card is ready: put it in the Pinky and power on; the receipt is $ReceiptPath; the CORE API credential is in `$env:LOCALAPPDATA\Rosy\api\$DeviceName.credential.xml (runbook: CORE API administrator credential)" })
 }
 Add-AttemptRecord "end" ""
+if ($layoutSnapshotPath) { Remove-Item -LiteralPath $layoutSnapshotPath -Force }
 # Shown once for the operator; not part of the JSON evidence on stdout.
 [Console]::Error.WriteLine("Fallback AP for ${DeviceName}: SSID $DeviceName password $apLogin (stored in your Rosy AP store)")
 [Console]::Error.WriteLine("CORE API administrator for ${DeviceName}: id $($coreApiLogin.Id) value $($coreApiLogin.Value) (stored in your Rosy API store)")
