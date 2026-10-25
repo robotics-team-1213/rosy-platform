@@ -48,6 +48,7 @@ def test_source_validity_does_not_imply_recent_collection_path():
 @pytest.mark.parametrize("changes", [
     {"age_s": float("nan")}, {"age_s": True}, {"remaining_s": float("inf")},
     {"report_remaining_s": 16.0}, {"remaining_s": -1.0}, {"age_s": 10.0},
+    {"valid_for_s": 15.0},
     {"sampled_at": "2026-10-25T00:00:00"}, {"sampled_at": 1},
     {"freshness": "fresh", "report_remaining_s": 0.0},
     {"id": "site-b:robot:robot-a"}, {"access_token": "must-not-cross"},
@@ -79,10 +80,19 @@ def test_graph_rejects_duplicates_outside_scopes_and_dangling_links():
         MonitoringSnapshot.model_validate(snapshot(links=[link]))
 
 
+def test_peer_snapshots_must_declare_their_schema_version():
+    value = snapshot()
+    del value["schema_version"]
+    with pytest.raises(ValidationError):
+        MonitoringSnapshot.model_validate(value)
+
+
 @pytest.mark.parametrize("url", ["http://remote.example.invalid", "ftp://robot.example.invalid",
                                   "https://user:private@robot.example.invalid",
                                   "https://robot.example.invalid/?token=private",
-                                  "https://robot.example.invalid/#private"])
+                                  "https://robot.example.invalid/#private",
+                                  "https://@robot.example.invalid",
+                                  "https://robot.example.invalid/\x00"])
 def test_sources_are_registered_read_targets_with_tls_or_literal_loopback(url):
     value = configuration()
     value["sources"][0]["url"] = url
