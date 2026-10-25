@@ -207,7 +207,8 @@ def freeze_image(store, raw, suffix):
     return file.relative_to(store.state).as_posix()
 
 
-def import_frames(store, body):
+def import_frames(store, body, upstream=None):
+    """`upstream` maps image path to server-verified provider provenance; catalogs never declare it."""
     relative = body.get('catalog_relative', False)
     if type(relative) is not bool:
         raise ValueError('catalog_relative must be bool')
