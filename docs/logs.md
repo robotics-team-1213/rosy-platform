@@ -9748,6 +9748,18 @@ osy-d395-s1d\`.
 - 증거: 원격 시험 PC 대상 시험 11 passed, 모델 PC learner venv(LeRobot 0.4.4) 실제 intake에서 revision 기록·fps 거절·식별자 미기록 1 passed, affected 계층 791 passed·known_failures 0 NEW.
 - gate 변화: 없음. CE 해당 없음 — 계획된 조각 구현이며 새 장애가 없다.
 
+## 2026-10-25 · uncommitted · 기존 Isaac 접촉 관측과 교훈의 공개 보존
+
+- 변경: 개발 기준 a46daee90b7의 정지 Pinky proxy↔컨베이어 단일 스모크 검증 기록과 imported drive-mode 교훈을 원문 그대로 공개 보존한다. source7d0cfcd6e94f/run36041b241ee25366986bb3a6262ba0be와 frozen 지문을 유지한다.
+- 증거: producer·판정기·회귀·문서의 canonical blob을 원본과 대조하고 이번 공개 커밋의 원격 검사·독립 검토·CI를 별도로 결속한다. 원래 문서의 SDK·브라우저 검사 수치를 이번 공개 포트의 새 실행으로 바꾸지 않는다.
+- gate 변화: 없음. 소스 공개와 증거 보존이며 운영 서명 활성화·동기화 Episode·학습 정책·실물 수용은 별도다. CE 해당 없음 — 기존 교훈의 보존·재사용이며 새 해결 교훈을 작성하지 않았다.
+
+## 2026-10-25 · uncommitted · Isaac 원격 receipt·회수 진입의 공개 소스 포트
+
+- 변경: a46daee90b7의 remote_isaac와 receipt·응답 유실·해시 검증 회귀, 운영 안내를 공개한다. 미공개 OMX 도구 전체 대신 기존13행의 명시적 역할 호스트 검증만 CLI 안에 보존하고 model 선택·중복·사이트·명령 주입 거절을 시험한다. 안내의 공개 산출물 설명에 PNG 다섯 개를 포함한다.
+- 검증: 공개 SHA의 원격 CLI·Isaac·소비 경로 회귀, 고정 base/head 독립 검토와 CI를 결속한다. 원래 SDK source7d0/run36041의 증거와 새 호스트 검사를 구분한다.
+- gate 변화: 없음. SDK 설치·업그레이드·새 실험·운영 활성화·로봇 명령·Episode 생성·정책 승격은 수행하지 않았다. CE 해당 없음 — 기존 경계와 회귀를 보존하는 소스 포트다.
+
 ## 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
 
 - 변경: D-871(모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면) 기록. `omx_autoupdate.py`에 `kind: service`의 `idle_gate: cell`(셀 잠금·버스·토크 OFF 유휴 규칙), 재시작 전 잠금 해제, `restart_running_only`(손으로 멈춘 관측기는 그대로), `system_site_packages`를 더함. 카메라·관측기·브리지용 `omx-devices-autoupdate.json.example`, `requirements-observation.lock`, `rosy-omx-devices-autoupdate.{service,timer}`. 관측기 템플릿이 health 파일을 `%i`로 정하고 브리지는 `ROSY_OBSERVATION_ARM_HEALTH`를 기본값으로 읽음(SHA 박힌 drop-in 대체). services.yaml의 해당 유닛을 `autoupdate`로.

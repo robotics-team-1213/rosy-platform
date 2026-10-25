@@ -6,6 +6,16 @@ D-434 keeps the model PC on Isaac Sim 5.1. Its bounded diagnostic runs headless 
 
 ## Requirements
 
+개발 PC의 receipt·재조회·회수 진입은 `tools/remote/remote_isaac.py`다. 명시적인 model 역할 한 대만 선택하며 사이트 PC나 test host로 fallback하지 않는다. 운영 binding·요청·중지·산출물 회수 절차는 [Isaac 실행 안내](../../../docs/deployment/isaac-experiment-runs.md)를 따른다.
+
+고정 실행 관리의 모델 PC 진입은 `/usr/bin/python3 SOURCE/learning/envs/isaac/run_control.py --binding BINDING.json`이며 stdin JSON의 `catalog`, `check`, `start`, `list`, `status`, `stop`, `artifact`만 받는다. `omx-f-import`와 `pinky-conveyor-roundtrip`의 고정 시나리오를 제공하며 요청으로 경로·임의 명령·호스트·프레임 수를 지정할 수 없다.
+
+접촉 왕복은 OMX-F CAD 집게와 동적 물체가 정지 Pinky 적재면 proxy ↔ 정지 컨베이어 proxy를 오가는 합성 배치다. 실제 접촉·자유 lift·집게 해제 후 안착을 독립 판정하며 보고서 1개와 단계 PNG 5개를 같은 run의 bounded artifact로 보존한다. Learning SIM 화면은 이 등록된 결과를 조회한다. 원래 SDK 실행의 source·run·지문과 실패 기록은 [검증 기록](../../../docs/validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md)에 보존했다. 공개 포트의 호스트 회귀와 과거 SDK 관측은 별개다. 실제 카메라 정합·전체 Pinky·이동 벨트·학습 정책·동기화 Episode·실물 수용은 포함하지 않는다.
+
+운영 binding은 같은 계정 소유의 쓰기 제한된 JSON이다. `uid`, 깨끗한 checkout의 절대 `source_root`와 전체 `source_sha`, 기존 `sdk_python`의 절대 경로·`sdk_python_sha256`·`sdk_version`, 설치 설정과 일치하는 `model_code_root`, 미리 만든 외부 `data_root`를 지정한다. 실행기는 SDK 설치나 서비스 enable을 하지 않는다. check는 SDK metadata·GPU 관찰·work/gpu 잠금을 확인하며 SimulationApp을 시작하지 않는다. start는 check의 `input_sha256`을 `expected_input_sha256`으로 고정하고 새 32자리 hex `request_id`를 사용한다. 동일 요청은 같은 run으로 복원한다.
+
+worker는 두 잠금을 SDK child에 상속하고 실행 165초, 로그 16MiB, 관측 파일 합계 256MiB·256개를 감시한다. transient user unit은 180초·12G 상한이다. 종료 코드만으로 성공하지 않으며 보고서와 소유 프로세스·GPU 정리를 확인한다. stop은 현재 revision과 boot·InvocationID·cgroup·PID 시작 시각을 대조하고 pidfd로 소유 worker에만 요청한다. 소유권이나 정리가 불명확하면 `UNKNOWN`으로 남기며 자동 재실행하지 않는다. 입력·최종 결과·artifact manifest를 덮어쓰지 않는다. 원시 SDK 로그는 내부 경로가 있을 수 있어 공개 artifact에 포함하지 않는다. host 회귀는 새 SDK 실행이나 실물 수용의 증거가 아니다.
+
 `import_omx.py`의 선택적 `--report <새 JSON 경로>`는 정상 SDK 정리 후 모델·관절·자산 지문·관측 프레임 수를 기록한다. 기존 파일은 덮어쓰지 않는다. `import_report.verify_report`는 일반 파일·크기·SDK 버전·자산 지문·필수 관절과 프레임 수를 다시 검사한다. 이 보고서는 모델 import 증거이며 `task_success`는 null이다. 물체 파지·정책 평가·실물 수용을 뜻하지 않는다. 고정 시나리오 원격 실행 관리와 접촉 왕복은 별도 공개 단위로 연결한다.
 
 - Ubuntu 24.04 with ROS 2 Jazzy `xacro` and the separately managed Isaac Sim SDK on a supported NVIDIA GPU host. See [D-434](../../../docs/adr/D-434-model-pc-and-site-pc-roles.md) for the accepted host/version/resource boundary. The GPU runtime is not part of this repository or the Pinky Pi image.

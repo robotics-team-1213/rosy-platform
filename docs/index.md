@@ -343,7 +343,7 @@
 ## 최근 기록
 
 - 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
+- 2026-10-25 · uncommitted · Isaac 원격 receipt·회수 진입의 공개 소스 포트
+- 2026-10-25 · uncommitted · 기존 Isaac 접촉 관측과 교훈의 공개 보존
 - 2026-10-25 · uncommitted · OMX intake가 승인된 카메라 촬영 기준을 직접 읽는다 (D-792 S3 첫 조각)
 - 2026-10-25 · uncommitted · 자동 교사 intake 재검토 반영: 문장 속 경로 가리기 (D-848)
-- 2026-10-25 · uncommitted · 자동 교사 intake: 현장 봉인 형식·경로 제거·검토 반영 (D-848)
-- 2026-10-25 · uncommitted · 봉인한 자동 교사 녹화의 Learning intake (D-848)
