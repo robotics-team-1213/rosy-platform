@@ -29,7 +29,7 @@ def monitoring_backend(tmp_path, request):
 
     mode = getattr(request, 'param', None)
     web_root = None
-    if mode in {'web', 'xss', 'delayed', 'unavailable', 'empty', 'error', 'disconnected'}:
+    if mode in {'web', 'xss', 'delayed', 'unavailable', 'empty', 'error', 'disconnected', 'prefix'}:
         web_root = tmp_path / 'web'
         (web_root / 'common').mkdir(parents=True)
         for name in ('index.html', 'monitoring.css', 'monitoring.js'):
@@ -69,7 +69,17 @@ def monitoring_backend(tmp_path, request):
         return response
     listener = safe_listener()
     origin = f'http://127.0.0.1:{listener.getsockname()[1]}'
-    server = uvicorn.Server(uvicorn.Config(app, log_level='error', access_log=False,
+    async def prefix_gateway(scope, receive, send):
+        from starlette.responses import Response
+        if scope['type'] != 'http':
+            return await app(scope, receive, send)
+        path = scope['path']
+        if path.startswith('/monitoring/'):
+            scope = {**scope, 'path': path[len('/monitoring'):]}
+        elif not path.startswith('/api/monitoring/') and path != '/health':
+            return await Response(status_code=404)(scope, receive, send)
+        await app(scope, receive, send)
+    server = uvicorn.Server(uvicorn.Config(prefix_gateway if mode == 'prefix' else app, log_level='error', access_log=False,
                                          proxy_headers=False, timeout_graceful_shutdown=3))
     worker = threading.Thread(target=server.run, kwargs={'sockets': [listener]}, daemon=True)
     worker.start()
@@ -171,6 +181,7 @@ def test_api_outage_expires_previous_evidence_in_the_actual_ui(monitoring_backen
     monitoring_backend.worker.join(10)
     expect(page.locator('#connection-status')).to_contain_text('조회 연결 끊김', timeout=12000)
     expect(page.locator('#observation-rows [data-evidence=fresh]')).to_have_count(0)
+    capture(page, 'api-disconnected')
 
 
 @pytest.mark.parametrize('monitoring_backend', ['xss'], indirect=True)
@@ -233,3 +244,15 @@ def test_declared_g2_evidence_states_use_the_actual_backend(monitoring_backend, 
         if mode == 'error':
             expect(page.locator('#observation-rows .danger')).to_contain_text('오류')
     capture(page, 'fresh' if mode == 'web' else mode)
+
+
+@pytest.mark.parametrize('monitoring_backend', ['prefix'], indirect=True)
+def test_prefixed_ui_assets_do_not_depend_on_fleet_common_routes(monitoring_backend, monitoring_page):
+    from playwright.sync_api import expect
+    page = monitoring_page
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.goto(monitoring_backend.origin + '/monitoring/')
+    login(page, KEY_A)
+    expect(page.locator('#observation-rows')).to_contain_text('host-a')
+    assert errors == []
