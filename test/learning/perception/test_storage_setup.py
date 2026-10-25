@@ -161,13 +161,16 @@ def test_isaac_preparation_reads_final_owner_artifacts_without_starting_sdk(setu
     from run_store import RunStore
     store = RunStore(tmp_path / 'owner')
     row = store.create(uuid.uuid4().hex, 'omx-f-import', {'seed': 42}, 'c' * 40)
-    calls = []
+    calls, fail = [], [True]
     class Runs:
         def call(self, request):
             calls.append(request['action'])
             if request['action'] == 'list': return store.list()
             if request['action'] == 'status': return store.get(request['run_id'])
             assert request['action'] == 'artifact'
+            if fail[0]:
+                fail[0] = False
+                raise OSError('owner artifact temporarily unavailable')
             result = store.artifact(request['run_id'], request['artifact_id'])
             return dict(result, data_base64=base64.b64encode(result['data']).decode())
     prepare = StoragePrepare(build(), Runs())
@@ -181,6 +184,7 @@ def test_isaac_preparation_reads_final_owner_artifacts_without_starting_sdk(setu
         [dict(id='import-report', name='import-report.json', media_type='application/json',
               bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())])
     assert prepare.sim_sources(actor)['runs'][0]['run_id'] == row['run_id']
+    with pytest.raises(OSError): prepare.prepare(actor, request)
     result = prepare.prepare(actor, request)
     assert result['bytes_verified'] and result['provenance']['seed'] == 42
     assert set(calls) == {'list', 'status', 'artifact'}
