@@ -10,6 +10,11 @@ import sys
 
 BOOTSTRAP_FILES = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "os_state_io.py",
                    "os_state_accounts.py", "os_state_files.py", "os_state_config.py", "os_state_ready.py")
+FIRST_BOOT_NATIVE = (*BOOTSTRAP_FILES, "first_boot_runtime.py", "network_handoff.py", "operator_keys.py",
+                     "native_release.py", "signing.py", "network_transaction.py", "network.py",
+                     "nm_network.py", "rosy_claim.py", "rosy-os-firstboot.conf")
+FIRST_BOOT_FILES = ("first-boot/rosy-first-boot.py", "first-boot/rosy-first-boot.sh", "deploy/sd/personalization.py",
+                    *("native-runtime/" + name for name in FIRST_BOOT_NATIVE))
 
 
 def marked(root: Path) -> bool:
@@ -29,16 +34,30 @@ def marked(root: Path) -> bool:
     return any(word.startswith("rosy.os_layout=") for word in raw.decode("ascii").split())
 
 
+def trusted_files(directory: Path, names, owner: int) -> None:
+    for name in ("", *names):
+        parts = Path(name).parts
+        for index in range(len(parts) + 1):
+            path = directory.joinpath(*parts[:index])
+            info = path.lstat()
+            final_file = bool(parts) and index == len(parts)
+            valid = stat.S_ISREG(info.st_mode) if final_file else stat.S_ISDIR(info.st_mode)
+            if not valid or info.st_uid != owner or info.st_mode & 0o022:
+                raise ValueError("OS bootstrap owner/type/permissions differ")
+
+
 def bootstrap_entry() -> Path:
     prefix = Path(__file__).absolute().parent.parent
     directory = prefix / "os-bootstrap"
-    owner = prefix.stat().st_uid
-    for path in (directory, *(directory / name for name in BOOTSTRAP_FILES)):
-        info = path.lstat()
-        valid = stat.S_ISDIR(info.st_mode) if path == directory else stat.S_ISREG(info.st_mode)
-        if not valid or info.st_uid != owner or info.st_mode & 0o022:
-            raise ValueError("OS bootstrap owner/type/permissions differ")
+    trusted_files(directory, BOOTSTRAP_FILES, prefix.stat().st_uid)
     return directory / "os_state_storage.py"
+
+
+def first_boot_entry() -> Path:
+    prefix = Path(__file__).absolute().parent.parent
+    directory = prefix / "os-bootstrap"
+    trusted_files(directory, FIRST_BOOT_FILES, prefix.stat().st_uid)
+    return directory / "first-boot/rosy-first-boot.sh"
 
 
 def main(argv=None) -> int:
@@ -47,8 +66,15 @@ def main(argv=None) -> int:
     parser.add_argument("--no-pending-maintenance", action="store_true")
     parser.add_argument("--tailnet", action="store_true")
     parser.add_argument("--projected", action="store_true")
+    parser.add_argument("--first-boot", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if args.first_boot:
+            if (not marked(args.root) or args.tailnet or args.projected or args.no_pending_maintenance):
+                raise ValueError("firstboot dispatch requires an unambiguous A/B identity")
+            entry = first_boot_entry()
+            os.environ["ROSY_ROOT"] = str(args.root)
+            os.execv(str(entry), [str(entry)])
         if marked(args.root):
             entry = bootstrap_entry()
             command = [sys.executable, "-I", "-B", str(entry), "--root", str(args.root)]

@@ -181,6 +181,7 @@ mkdir -p "$OVERLAY/opt/rosy/os-bootstrap"
 for helper in os_state_storage.py os_state_firstboot.py os_state_layout.py os_state_io.py os_state_accounts.py os_state_files.py os_state_config.py os_state_ready.py; do
     cp "$NATIVE_RUNTIME_SOURCE/$helper" "$OVERLAY/opt/rosy/os-bootstrap/"
 done
+python3 "$SCRIPT_DIR/stage-os-firstboot.py" --prefix "$OVERLAY/opt/rosy"
 # The native units address the motor bus as /dev/rosy-motor; the image must
 # carry the rule so a freshly flashed device has the alias on first boot.
 cp "$UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"

@@ -49,6 +49,34 @@ def test_frozen_firstboot_imports_without_mutable_native_or_sd_sdk(tmp_path):
     assert "--hardware-serial" in result.stdout
 
 
+def test_frozen_firstboot_actually_personalizes_without_application_helpers(tmp_path):
+    from test_first_boot_provisioning import _bundle
+    prefix = _prefix(tmp_path)
+    _stage(prefix)
+    for folder in (prefix / "native-runtime", prefix / "deploy/sd"):
+        for path in folder.glob("*.py"):
+            path.write_text('raise RuntimeError("partial application runtime")\n')
+    root = tmp_path / "device"
+    bundle = root / "boot/firmware/rosy-provision/provision.json"
+    bundle.parent.mkdir(parents=True)
+    bundle.write_text(json.dumps(_bundle()))
+    code = """
+import json, runpy, sys
+from pathlib import Path
+module = runpy.run_path(sys.argv[1])
+root, bundle = Path(sys.argv[2]), Path(sys.argv[3])
+owner = module['FirstBootProvisioner'](root=root, network_activate=lambda _: True)
+print(json.dumps(owner.apply(bundle=bundle, hardware_serial='10000000abcdef01')))
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code,
+                             str(prefix / "os-bootstrap/first-boot/rosy-first-boot.py"), str(root), str(bundle)],
+                            cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["state"] == "PROVISIONED"
+    assert not bundle.exists()
+    assert json.loads((root / "etc/rosy/device-identity.json").read_text()) == _bundle()["device_identity"]
+
+
 @pytest.mark.parametrize("change", ["missing", "symlink", "writable", "directory_link"])
 def test_frozen_entry_rejects_partial_or_replaceable_boot_support(tmp_path, change):
     prefix = _prefix(tmp_path)
