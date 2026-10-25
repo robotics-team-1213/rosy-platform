@@ -31,6 +31,19 @@ def test_current_checkout_satisfies_signed_source_inventory():
     assert not [name for name in (*m.SPLIT_REQUIRED, *m.LEARNING_REQUIRED) if not (root / name).is_file()]
 
 
+def test_committed_review_archive_starts_without_checkout_imports(tmp_path):
+    m = module()
+    archive = tmp_path / 'review.tar'
+    subprocess.run(['git', '-C', str(SCRIPT.parents[2]), 'archive', '--format=tar',
+                    '--output', str(archive), 'HEAD', *m.CODE_PREFIXES], check=True)
+    source = tmp_path / 'source'
+    m.unpack(archive, source)
+    result = subprocess.run(m.bootstrap_command(sys.executable, source,
+        source / 'learning/curation/perception/review_app.py', ['--help']),
+        cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.parametrize('name', ['storage_pool.py', 'storage_jobs.py', 'storage_files.py', 'storage_web.py', 'storage_hub.py',
                                 'storage_setup.py', 'storage_prepare.py', 'review_app_web/storage-settings.js'])
 def test_incomplete_learning_storage_release_is_rejected(tmp_path, name):
