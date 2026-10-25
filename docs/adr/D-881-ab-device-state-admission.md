@@ -20,6 +20,8 @@
 
 storage admission 코드는 OS 이미지 소유 `/opt/rosy/os-bootstrap`에 고정한다. payload image-layer sync는 이 경로를 쓰지 못한다. 초기 부팅 dispatcher는 다른 payload helper를 import하지 않고 legacy 여부만 판별하며, A/B이면 해당 root의 보호된 OS bootstrap으로 exec한다. A/B marker·descriptor가 있으면 bootstrap 누락이나 부패를 legacy로 우회하지 않는다. 이 경계는 app helper의 중단된 교체가 NetworkManager·SSH 시작 전 검증 코드의 ABI를 바꾸지 못하게 한다. OS artifact 서명은 이 사본을 포함하며, schema 전환은 이전 root의 bootstrap이 읽을 수 있는 범위에서만 허용한다.
 
+이 경계는 직접 import뿐 아니라 전이 의존성까지 포함한다. 일반 firstboot runtime은 SD 개인화 라이브러리를 import하므로 초기 admission에서 재사용하지 않는다. 표준 라이브러리만 쓰는 `os_state_io.py`가 atomic 파일 쓰기와 serial 형식을 제공하고, storage·firstboot state·configuration은 그 함수를 공유한다. OS bootstrap은 이 IO 모듈과 state 모듈 일곱 개의 보호된 집합을 사용한다. 앱 SD 라이브러리와 Native helper를 함께 손상시킨 설치 경로 subprocess 시험으로 초기 admission이 이들을 불러오지 않는지 확인한다. 앱 firstboot는 계속 자기 runtime을 사용하며 해당 runtime도 이미지에서 별도로 검사한다.
+
 `rosy-os-storage.service`의 `RequiredBy` enable 링크와 `Before` 순서가 NetworkManager, ssh.service, ssh.socket, tailscaled, SSH boot cleanup 및 firstboot/retry에 실제 필수 의존성을 만든다. SSH socket보다 앞서므로 `DefaultDependencies=no`와 local-fs 이후 순서를 유지한다. mounted-image 검사는 helper 사본과 필수 링크를 확인하고, native image build는 chroot 안의 실제 vendor unit graph를 `systemd-analyze verify`로 검사한다. 오프라인 링크 설치·소스 시험을 실제 mount namespace나 장치 부팅 수용으로 보고하지 않는다.
 
 공유 HOME을 다른 root가 chown하지 않도록 native 이미지의 로컬 UID/primary GID를 CORE960, I/O961, display962, camera963, operator1001로 고정한다. builder는 operator 계정도 비밀번호 없이 미리 만들고 모든 예약 ID·동일 ID의 다른 계정/그룹 alias·operator home/shell을 검사한다. A/B storage admission은 각 root의 실제 passwd/group과 공유 CORE/operator directory의 owner/group/권한을 검사한 뒤에만 firstboot 쓰기를 허용한다. data formatter는 이 소유권으로 공장 directory를 준비해야 한다. 잘못된 소유권을 부팅 중 임의 chown으로 고쳐 이전 root의 접근을 깨뜨리지 않는다. 기존 legacy 이미지의 계정 번호를 이 경로에서 강제로 바꾸지 않는다.
@@ -39,6 +41,10 @@ TLS 파일과 CORE YAML의 readback 뒤 runtime.env를 canonical generation으�
 TLS pending 동안 일반 canonical writer와 updater를 차단한다. 초기 storage 검사는 복구용 NetworkManager·SSH 접근을 허용하지만, CORE가 요구하는 `rosy-sd-provision.service`는 OS bootstrap dispatcher의 `--no-pending-maintenance` 검사도 통과해야 한다. 해당 gate는 `PartOf=rosy-core.service`로 CORE 정지 때 캐시된 admission을 해제하고 다음 시작 때 다시 검사한다([systemd dependency semantics](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html)). 이 root 검사만 operator mount metadata를 읽을 수 있도록 ProtectHome을 read-only로 두며 CORE 프로세스의 권한은 늘리지 않는다. 별도의 실제 PROJECTED producer와 나머지 owner의 완성·수용은 여전히 필요하다.
 
 새 root에 hostname 파일을 투영하는 것만으로 실행 중인 hostname이 바뀌지는 않는다. 같은 기체의 기존 완료 기록을 확인한 A/B firstboot는 committed hostname도 적용한 뒤 ALREADY_PROVISIONED로 돌아온다. 이미 같은 이름이면 hostnamectl·avahi 재시작을 하지 않는다. 다른 board의 완료 기록에서 이전 hostname을 적용하지 않는다.
+
+Tailscale daemon의 `/var/lib/tailscale`은 공통 data의 `/tailscale/machine`에 연결하고 root 소유 0700으로 제한한다. 고정된 1.102.5의 [upstream 서비스](https://github.com/tailscale/tailscale/blob/v1.102.5/cmd/tailscaled/tailscaled.service)도 이 state 경로와 mode를 사용한다. 새 `rosy-os-tailnet.service`는 실제 daemon·join unit의 required dependency이며, 첫 provisioning 이후 커널 device-tree serial과 committed 기체 binding을 대조한다. 기체 UID·hardware serial에 결속된 root0600 machine-binding 기록을 daemon보다 먼저 durable하게 만든다. 기록이 없으면 비어 있는 machine 저장소만 초기화하며 기존 key/state를 임의 채택하지 않는다. 다른 보드나 다른 UID이면 기존 파일을 지우거나 remote logout하지 않고 daemon 시작을 차단한다. LAN/SSH를 제공하는 초기 storage 단계와 이 tailnet authority 검사를 구분한다.
+
+tailnet gate는 firstboot를 Wants/After로 기다리되 legacy 복구 경로까지 firstboot 성공에 결속하지 않는다. 초기 Wi-Fi 실패 후 성공한 firstboot 재실행은 tailnet daemon·join을 no-block으로 다시 요청한다. gate는 daemon 정지 때 해제되어 다음 시작에서 다시 검사한다. 공장 이미지는 tailnet state가 비어 있어야 하며 verifier는 실제 required 링크와 비어 있는 0700 디렉터리를 검사한다. 이 구현은 동일 패키지 baseline의 A/B file-state 시험이다. 실제 daemon/network, 패키지 버전 간 state 호환과 moved-card 전체 재설정 수용을 대신하지 않는다. join key 소비 경로의 공통 저장소 이전과 rebind owner의 정리는 추가로 필요하다.
 
 ### Ownership and existing decisions
 
