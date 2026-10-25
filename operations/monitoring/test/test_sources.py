@@ -92,3 +92,42 @@ def test_file_failure_preserves_previous_report_until_stale(tmp_path):
     asyncio.run(reader.poll(cfg.sources[0]))
     host = next(n for n in cache.snapshot(frozenset({'site-a'})).nodes if n.kind == 'host')
     assert host.reported_health == 'ERROR' and host.freshness == 'stale'
+
+
+def test_real_http_stream_and_stopped_upstream_preserve_owner_verdict():
+    from http.server import BaseHTTPRequestHandler
+    from threading import Thread
+    from browser_harness import safe_http_server
+
+    paths = []
+    class Owner(BaseHTTPRequestHandler):
+        def do_GET(self):
+            paths.append(self.path)
+            body = json.dumps({'robot_id': 'target'} if self.path.endswith('/info') else {'health': 'ERROR'}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = safe_http_server(Owner)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    cfg, cache, creds, clock = setup({'kind': 'core', 'url': f'http://127.0.0.1:{server.server_port}'})
+    reader = SourceReader(cache, creds)
+    try:
+        asyncio.run(reader.poll(cfg.sources[0]))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+    assert paths == ['/api/v1/system/info', '/api/v1/diagnostics']
+    clock.advance(16)
+    asyncio.run(reader.poll(cfg.sources[0]))
+    value = cache.snapshot(frozenset({'site-a'}))
+    robot = next(n for n in value.nodes if n.kind == 'robot')
+    assert robot.reported_health == 'ERROR' and robot.freshness == 'stale'
+    assert value.links[0].failure_stage == 'connect'
