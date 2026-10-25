@@ -69,7 +69,7 @@ class StoragePrepare:
 
     def prepare(self, actor, body):
         self.setup._manager(actor); self.validate(body)
-        from storage_source import seal, export_isaac_snapshot
+        from storage_source import seal, export_isaac_snapshot, recover_source
         service = self.setup.jobs()
         _, config = self.setup.configuration()
         if body['archive'] and not config['pool']['enabled']: raise ValueError('activate storage before new archive assignments')
@@ -79,8 +79,7 @@ class StoragePrepare:
         path = Path(root['path']).joinpath(*parts(name))
         if body['kind'] == 'folder':
             with service.files.open(location) as fd:
-                try: os.stat(SOURCE, dir_fd=fd, follow_symlinks=False)
-                except FileNotFoundError: seal(path, body['profile'], body['provenance'])
+                if not recover_source(path): seal(path, body['profile'], body['provenance'])
             profile = body['profile']
         else:
             run_id = body['run_id']
@@ -93,7 +92,7 @@ class StoragePrepare:
                 if len(raw) != blob['bytes'] or hashlib.sha256(raw).hexdigest() != blob['sha256']:
                     raise ValueError('Isaac owner artifact changed')
                 return dict(data=raw)
-            if not (path / SOURCE).is_file(): export_isaac_snapshot(get, artifact, run_id, path, resume=True)
+            if not recover_source(path): export_isaac_snapshot(get, artifact, run_id, path, resume=True)
             profile = 'isaac'
         manifest = service.files.manifest(location, profile)
         if body['kind'] == 'isaac':

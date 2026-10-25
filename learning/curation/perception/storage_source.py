@@ -16,10 +16,36 @@ import sys
 from storage_files import SOURCE, PROFILES, allowed, claim, directory, entry, file_open, names, parts
 from storage_inventory import free_space, open_root
 
+SOURCE_PENDING = SOURCE + '.pending'
+
+
+def _finish_publication(fd):
+    try: source = os.stat(SOURCE, dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError: return False
+    if not stat.S_ISREG(source.st_mode): raise ValueError('source marker is not a regular file')
+    try: pending = os.stat(SOURCE_PENDING, dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError: return True
+    if (not stat.S_ISREG(pending.st_mode) or source.st_nlink != 2
+            or (source.st_dev, source.st_ino) != (pending.st_dev, pending.st_ino)):
+        raise ValueError('conflicting source publication files are preserved')
+    os.unlink(SOURCE_PENDING, dir_fd=fd); os.fsync(fd)
+    return True
+
+
+def recover_source(root):
+    try: fd = open_root(str(Path(root).absolute()))
+    except FileNotFoundError: return False
+    try:
+        with claim(fd, exclusive=True): return _finish_publication(fd)
+    finally: os.close(fd)
+
 
 def _generated(fd, name, raw, *, resume=False):
     try:
-        output = file_open(fd, name, write=True)
+        with directory(fd, parts(name)[:-1], create=True) as parent:
+            descriptor = os.open(parts(name)[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                 0o600, dir_fd=parent)
+        output = os.fdopen(descriptor, 'wb')
     except FileExistsError:
         if not resume: raise
         with file_open(fd, name) as previous:
@@ -60,7 +86,8 @@ def seal(root, profile, provenance, *, expected_files=None):
     fd = open_root(str(root))
     try:
         with claim(fd, exclusive=True):
-            selected = names(fd)
+            _finish_publication(fd)
+            selected = names(fd) - {SOURCE_PENDING}
             if SOURCE in selected: raise ValueError('source is already finalized')
             if not selected or len(selected) > 9999: raise ValueError('select 1..9999 artifact files')
             if free_space(fd) < 1024 ** 2: raise ValueError('insufficient space for source metadata')
@@ -70,7 +97,10 @@ def seal(root, profile, provenance, *, expected_files=None):
                 raise ValueError('Isaac export bytes or file set changed before finalization')
             result = dict(schema='rosy.storage-source/1', status='completed', profile=profile,
                           files=files, provenance=provenance)
-            _json(fd, SOURCE, result)
+            _json(fd, SOURCE_PENDING, result, resume=True)
+            os.link(SOURCE_PENDING, SOURCE, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+            os.fsync(fd)
+            _finish_publication(fd)
             return result
     finally: os.close(fd)
 
@@ -103,7 +133,7 @@ def export_isaac_snapshot(get, artifact, run_id, output, *, resume=False):
     fd = open_root(str(output))
     try:
         expected = {'observation.json', 'snapshot.json', *(item['name'] for item in items)}
-        if resume and not names(fd) <= expected: raise ValueError('unregistered files in partial export are preserved')
+        if resume and not names(fd) <= expected | {SOURCE_PENDING}: raise ValueError('unregistered files in partial export are preserved')
         expected_files = {'observation.json': _json(fd, 'observation.json', row, resume=resume)}
         for item in items:
             allowed(item['name'], 'isaac')
