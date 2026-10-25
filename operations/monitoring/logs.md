@@ -17,3 +17,9 @@
 - 변경: `rosy-monitoring` CLI를 wheel에 등록하고 loopback/단일 worker/비공개 state-dir를 고정했다. POSIX 권한을 보장할 수 없는 환경은 시작을 거부한다. Fleet 캐시 미구축과 실제 빈 목록을 구별하며, peer 수신의 로컬 저장·시계·재전송 거절을 Collector에 보존한다.
 - 증거: `6b0f7568f5` 원격98 PASS/0 SKIP, 구조/harness/affected247 PASS/0 SKIP, 두 비교 NEW/KNOWN/FLAKY0. 실제 subprocess의 개별·peer 집계·중앙 직접 수집·중앙 종료 후 현장 지속·중복 writer 거부·재시작 수명 비증가와 private-state RED/수정을 확인했다. 최종 독립 재검토 차단 없음.
 - gate 변화: SOURCE GO, LOCAL/ARTIFACT/DEVICE/FIELD HOLD. 화면·native/TLS 묶음·실제 PC 수용을 포함하지 않는다. CE: 해당 없음 — 새 실행 경계와 회귀에 직접 기록했다.
+
+## 2026-10-26 · uncommitted · 독립 앱 경계와 실제 backend 브라우저 경로 등록
+
+- 변경: `applications/monitoring`의 소유·표면·상태/뷰포트 기준을 기록하고 source part·측정·browser scope·CI 실행 경로를 등록했다. 원격 Chromium은 실제 독립 backend의 인증·사이트 범위·이력 API를 읽으며 API를 가로채지 않는다.
+- 증거: `1a9cd5b164` 실제 Chromium3 PASS/0 SKIP, 구조/harness/affected/browser-scope262 PASS/0 SKIP, 두 비교 NEW/KNOWN/FLAKY0. 화면 HTML/JS·G1/G2/G3는 아직 구현/수용하지 않았다.
+- gate 변화: 없음. UI와 배포·DEVICE/FIELD HOLD를 유지한다. CE: 해당 없음 — 등록과 실제 경로 시험에 직접 기록했다.

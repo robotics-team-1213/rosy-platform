@@ -11511,3 +11511,9 @@ osy-d395-s1d\`.
 - 변경: 설치 wheel의 독립 CLI, loopback/비공개 상태 경로/단일 worker, 플랫폼 권한 미보장 시 시작 거부를 구현했다. Fleet 캐시 미구축에서 과거 관측을 만료까지 보존하고 peer 수신의 로컬 거절 사유를 Collector로 전달한다.
 - 증거: `6b0f7568f5` 원격98시험과 구조/harness/affected247시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 실제 개별·중앙 집계·중앙 직접 수집 subprocess와 중앙 단절 독립성·프로세스 간 writer 배타성을 확인했다. 최종 독립 재검토 차단 없음.
 - gate 변화: Monitoring SOURCE GO, 화면/배포/실제 PC 수용은 HOLD다. CE: 해당 없음 — 새 기능의 코드·회귀가 판단 근거를 보존한다.
+
+## 2026-10-26 · uncommitted · Monitoring 앱 소유·공유 검증 등록
+
+- 변경: 독립 상태 앱의 소유/표면 기준과 source part·크기 측정·browser scope·CI를 등록했다. 기존 원격 구조/브라우저 게이트를 약화하지 않고 실제 backend 조회를 검증한다.
+- 증거: `1a9cd5b164` 실제 Chromium3시험과 구조/harness/affected/browser-scope262시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). API 브라우저 경로의 증거이며 화면 완성·G1/G2/G3·native 배포·현장 수용은 아니다.
+- gate 변화: UI·배포·실제 PC HOLD 유지. CE: 해당 없음 — 소유/등록/회귀로 기록했다.

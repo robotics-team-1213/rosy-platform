@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · Monitoring 앱 소유·공유 검증 등록
 - 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
 - 2026-10-26 · uncommitted · Monitoring 기존 원천 수집·durable 집계·읽기 API
 - 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
 - 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
-- 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드

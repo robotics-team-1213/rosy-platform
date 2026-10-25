@@ -25,6 +25,7 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · 독립 앱 경계와 실제 backend 브라우저 경로 등록
 - 2026-10-26 · uncommitted · 독립 실행기와 프로세스 경계
 - 2026-10-26 · uncommitted · 기존 원천 수집과 독립 읽기 API
 - 2026-10-26 · uncommitted · 독립 관측 기반과 모듈 등록
