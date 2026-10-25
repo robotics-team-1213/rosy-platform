@@ -165,3 +165,23 @@ def test_device_rejects_invalid_profile(node_module, installed_rasptank, tmp_pat
     config = {"robot": {"model": "rasptank_metal", "profile": str(overlay)}}
     with pytest.raises(ConfigError, match="profile"):
         node_module._robot_file_paths(config)
+
+
+def test_device_consumes_the_validated_snapshot(node_module, installed_rasptank, monkeypatch, tmp_path):
+    overlay = tmp_path / "profile.yaml"
+    overlay.write_bytes((installed_rasptank / "profile.yaml").read_bytes())
+    read_text = Path.read_text
+    replacement = "profile:\n  model: Pinky Pro\n  max_linear_velocity: 3.0\n"
+
+    def replace_after_read(path, *args, **kwargs):
+        text = read_text(path, *args, **kwargs)
+        if path == overlay:
+            path.write_text(replacement, encoding="utf-8")
+        return text
+
+    monkeypatch.setattr(Path, "read_text", replace_after_read)
+    profile, capabilities = node_module._load_robot_settings(
+        {"robot": {"model": "rasptank_metal", "profile": str(overlay)}})
+    assert profile.model == "RaspTank Metal"
+    assert profile.max_linear_velocity == 0.0
+    assert capabilities["teleop"] is False
