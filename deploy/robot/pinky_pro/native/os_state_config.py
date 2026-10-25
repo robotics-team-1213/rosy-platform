@@ -88,7 +88,10 @@ class ConfigurationUpdate:
     def stage(self, relative: str, data: bytes | None, mode: int) -> None:
         if self.shared is None or self.committed:
             raise ValueError("configuration update is not open")
-        if relative not in CONFIG_FILES or type(mode) is not int or mode != CONFIG_FILES[relative]:
+        supported = {**CONFIG_FILES, "etc/rosy/runtime.env": 0o640}
+        if relative == "etc/rosy/runtime.env" and (self.pointer is None or data is None):
+            raise ValueError("runtime changes require a committed device identity")
+        if relative not in supported or type(mode) is not int or mode != supported[relative]:
             raise ValueError("configuration file or mode is unsupported")
         validate_projection(self.root, {relative: data})
         self.changes[relative] = data
@@ -132,3 +135,14 @@ def configuration_update(root: Path, *, expected_generation: str | None = None):
         yield update
         if update.changes and not update.committed:
             raise ValueError("canonical configuration changes were not committed")
+
+
+def commit_runtime(root: Path, data: bytes, *, expected: bytes) -> None:
+    """Publish a privileged runtime edit without losing a concurrent settings change."""
+    with configuration_update(root) as update:
+        if update.shared is None or update.pointer is None:
+            raise ValueError("runtime publication requires a provisioned A/B device")
+        if update.values["etc/rosy/runtime.env"] != expected:
+            raise ValueError("canonical runtime changed before publication")
+        update.stage("etc/rosy/runtime.env", data, 0o640)
+        update.commit()

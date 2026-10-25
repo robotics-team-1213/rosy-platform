@@ -1,5 +1,6 @@
 """Run the actual commissioning writer/rollback over modeled A/B device roots."""
 import base64
+import json
 from pathlib import Path
 import re
 
@@ -25,7 +26,7 @@ def _run_block(name, root, uid, backup):
 def test_commissioning_enable_and_rollback_survive_slot_change(tmp_path, monkeypatch, restore):
     first, root_a, root_b, _, bundle = _provision_a(tmp_path, monkeypatch)
     original = (root_a / "etc/rosy/runtime.env").read_bytes()
-    identity = __import__("json").loads((root_a / "etc/rosy/device-identity.json").read_text())
+    identity = json.loads((root_a / "etc/rosy/device-identity.json").read_text())
     _run_block("edit", root_a, identity["device_uid"], original)
     enabled = (root_a / "etc/rosy/runtime.env").read_bytes()
     assert b"ROSY_RUNTIME_MODE=motor\n" in enabled
