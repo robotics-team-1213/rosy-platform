@@ -1,0 +1,8 @@
+{
+  "id": "pinky_pro",
+  "deployment": "native",
+  "install_target": "Pinky Pro native Raspberry Pi runtime",
+  "status": "existing_implementation",
+  "operations": ["apply", "rollback"],
+  "reason": "Existing signed-release executor; deployment and device acceptance remain separate."
+}

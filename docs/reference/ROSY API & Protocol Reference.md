@@ -5,9 +5,33 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.316
+**Version:** v1.318
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.318 Fleet 캐시 전용 모니터링 읽기 (D-876)
+
+**단계:** wire 계약 등록. 이 변경만으로 아래 Fleet handler나 독립 Monitoring 서비스가 구현·배포된 것은 아니다. 실제 producer는 후속 구현·회귀에서 확인한다.
+
+`GET /api/fleet/monitoring`은 기존 `fleet.read` 권한으로 Fleet이 이미 보유한 연결 관측만 조회하는 목표 경로다. 원천은 `SharedGather`의 마지막 캐시이며 조회가 gather·교통·인계·배차·원격 로봇 요청을 실행해서는 안 된다. CORE·호스트의 제어 권한이나 새로운 peer 권한을 만들지 않는다.
+
+공유 스키마는 `core_common.protocol.monitoring.FleetLinkObservation`, `FleetMonitoringRead`이며 `core_common.protocol.schemas`가 canonical export한다. 독립 Monitoring 전용 snapshot·event 모델은 해당 소유 모듈에서 구현한다. 기존 WS envelope와 `PROTOCOL_VERSION=1.0`은 바꾸지 않는다.
+
+| 응답 필드 | 의미 |
+|---|---|
+| `schema_version` | strict 정수 `1`. 다른 버전과 bool은 거부한다 |
+| `sampled_at` | 마지막 gather의 timezone-aware ISO 시각 또는 null. 조회 시각으로 다시 쓰지 않는다 |
+| `cache_age_s` | 해당 캐시 생성 이후 단조 시계로 계산한 유한·음수 아닌 초 또는 null |
+| `robots` | 최대 256개의 중복 없는 연결 관측. 업무·센서 본문·실주소·자격은 포함하지 않는다 |
+| `robots[].robot_id` | 1–96자 `[A-Za-z0-9][A-Za-z0-9_.:-]*` 식별자 |
+| `robots[].link` | 기존 `up`, `degraded`, `unreachable`, `moved`, `tls-refused`, `protocol` 또는 `unknown` |
+| `robots[].reachable` | 실제 도달 여부를 원천에서 확인한 bool 또는 확인 불가 null |
+| `robots[].reason_code` | 기존 D-535 `connect_reason.REASONS`의 코드 또는 null. 원본 오류 message를 전달하지 않는다 |
+| `robots[].state_age_s` | 원천 로봇 상태의 나이 또는 null. 캐시 나이와 다르며 새 조회로 초기화하지 않는다 |
+
+캐시가 없으면 `sampled_at=null`, `cache_age_s=null`, `robots=[]`이다. 시각·나이 중 하나만 없거나 표본 없이 robots를 제공하는 응답은 거부한다. 오래된 캐시의 나이와 기존 실패 상태를 그대로 보존하고 이를 정상·장치 운전 가능으로 바꾸지 않는다. `tls-refused`는 기존 HTTP 401 인증 거부 이름이며 TLS 인증서 검증 실패와 구분한다.
+
+성공은 `FleetMonitoringRead` 자체를 반환한다. 기존 인증 실패는 401/403을 유지하며, 캐시 projection을 검증할 수 없으면 503 `detail.code=FLEET_MONITORING_UNAVAILABLE`을 반환한다. 요청 실패의 원문·토큰·예외 repr을 넣지 않는다. 무응답 표본은 200의 명시적 빈 캐시로 표현한다.
 
 ### v1.316 군집 원본 자세 시각과 만료 (D-870)
 
@@ -3832,6 +3856,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.318 | 2026-10-25 | D-876: passive Fleet connection cache wire, strict bounded observations, preserved cache/source ages and D-535 reasons; no raw body or control fields. Handler and independent Monitoring runtime remain unimplemented; envelope1.0 unchanged. |
 | v1.316 | 2026-10-25 | D-870: optional strict source sampled_at UTC, conservative100ms clock-bound lifetime, receiver monotonic expiry and implementation-derived swarm.reference_freshness; mixed peer and field UTC acceptance stay explicit, envelope1.0 unchanged. |
 | v1.315 | 2026-10-25 | D-869: replay unacknowledged events by immutable event_id/content; WELCOME watermark0 for unscoped legacy producers, memory/durable identity conflict parity. No new wire fields or envelope1.0 change; no durable outbox guarantee. |
 | v1.314 | 2026-10-25 | D-865: policy admission scope readback/toggle and bounded audit under `/api/fleet/policy-admission`; Fleet owns admission, the human-defined scope never relaxes rulebook law, and apps never self-approve. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |

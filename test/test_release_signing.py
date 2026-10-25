@@ -416,7 +416,7 @@ def test_every_signing_rejection_code_is_asserted_somewhere():
     """
     import re as _re
 
-    source = (ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "signing.py").read_text(encoding="utf-8")
+    source = (ROOT / "deploy" / "hosts" / "common" / "release" / "signing.py").read_text(encoding="utf-8")
     emitted = set(_re.findall(r'Rejection\(\s*\n?\s*"([A-Z0-9_]+)"', source))
     assert emitted, "no rejection codes found; the pattern needs updating"
 
