@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from .config import MonitoringConfig
 from .models import MonitoringLink, MonitoringNode, MonitoringSnapshot
+from .store import StoreUnavailable
 
 
 MAX_REMEMBERED = 8192
@@ -46,8 +47,9 @@ def _fact(item):
 
 class ObservationCache:
     def __init__(self, config: MonitoringConfig, *, monotonic=time.monotonic,
-                 utcnow=lambda: datetime.now(timezone.utc)):
+                 utcnow=lambda: datetime.now(timezone.utc), store=None):
         self.config = config
+        self.store = store
         self._monotonic, self._utcnow = monotonic, utcnow
         self._last_now = -math.inf
         self._sources = {source.id: source for source in config.sources}
@@ -56,7 +58,7 @@ class ObservationCache:
                                     | {site for s in config.sources for site in s.peer_sites})
         self.generation, self._sequence = uuid4().hex, 0
         self._groups = {}
-        # shortcut: keep at most 8192 identities until restart; use durable bounded anchors for larger inventory churn.
+        # shortcut: reject new identities at 8192; add verified expired-anchor pruning for larger inventory churn.
         self._latest = {}
         self._peers = {}
         self._retired = {source.id: deque(maxlen=64) for source in config.sources if source.kind == "peer"}
@@ -78,6 +80,51 @@ class ObservationCache:
                 )
                 rows[item.id] = _Record(item, now, None, now, now)
             self._groups[("peer" if peer else "local", source.id)] = rows
+        if store is not None:
+            self._restore(now, self._wall())
+
+    def _restore(self, now, wall):
+        saved = self.store.load()
+        groups, anchors = {}, {}
+        try:
+            for table in ('visible', 'anchors'):
+                for key, item, captured in saved[table]:
+                    elapsed = (wall - captured).total_seconds()
+                    if elapsed < 0:
+                        raise StoreUnavailable()
+                    source = self._sources.get(key[1])
+                    if source is None:
+                        continue
+                    scopes = source.peer_sites if key[0] == 'peer' else (source.site_id,)
+                    if (item.site_id not in scopes or key[0] == 'peer' and source.kind != 'peer'
+                            or key[0] == 'local' and item.origin_collector != self.config.collector_id):
+                        raise StoreUnavailable()
+                    age = None if item.age_s is None else item.age_s + elapsed + 2.0
+                    record = _Record(item, now, age,
+                                     now + max(0.0, item.remaining_s - elapsed - 2.0), now)
+                    if table == 'visible':
+                        groups.setdefault(key, {})[item.id] = record
+                    else:
+                        anchors[(key, item.id)] = record
+            peers, retired = {}, dict(self._retired)
+            for source, cursor in saved['peers'].items():
+                if source not in self._retired:
+                    continue
+                generation, sequence, history = cursor
+                if (not isinstance(generation, str) or len(generation) != 32
+                        or any(c not in '0123456789abcdef' for c in generation)
+                        or type(sequence) is not int or not 0 <= sequence <= 2**63 - 1
+                        or not isinstance(history, list) or len(history) > 64
+                        or any(not isinstance(g, str) or len(g) != 32
+                               or any(c not in '0123456789abcdef' for c in g) for g in history)):
+                    raise StoreUnavailable()
+                peers[source] = (generation, sequence)
+                retired[source] = deque(history, maxlen=64)
+            proposed = self._groups | groups
+            self._compose(proposed, self.scope_sites, now, wall, 0)
+        except (ValueError, TypeError, KeyError):
+            raise StoreUnavailable() from None
+        self._groups, self._latest, self._peers, self._retired = proposed, anchors, peers, retired
 
     def _now(self):
         now = self._monotonic()
@@ -153,13 +200,16 @@ class ObservationCache:
                                   nodes=tuple(sorted(nodes, key=lambda item: item.id)),
                                   links=tuple(sorted(links, key=lambda item: item.id)))
 
-    def _commit(self, key, records, now, wall):
+    def _commit(self, key, records, now, wall, *, peer_cursor=None):
         remembered = self._latest | {(key, record.item.id): record for record in records.values()
                                      if record.item.sample_id is not None}
         if len(remembered) > MAX_REMEMBERED:
             raise ObservationRejected("MONITORING_CAPACITY")
         proposed = self._groups | {key: records}
         self._compose(proposed, self.scope_sites, now, wall, self._sequence)
+        if self.store is not None:
+            self.store.save(key, [record.value(now) for record in records.values()],
+                            wall=wall, peer_cursor=peer_cursor)
         self._groups = proposed
         self._latest = remembered
 
@@ -214,9 +264,12 @@ class ObservationCache:
             anchor = self._latest.get((key, item.id), old.get(item.id))
             records[item.id] = self._record(item, anchor, now, wall, elapsed_s + 1.0,
                                             snapshot.remaining_s, peer=True)
-        self._commit(key, records, now, wall)
+        retired = deque(self._retired[source_id], maxlen=64)
         if previous and snapshot.generation != previous[0]:
-            self._retired[source_id].append(previous[0])
+            retired.append(previous[0])
+        cursor = (snapshot.generation, snapshot.sequence, list(retired))
+        self._commit(key, records, now, wall, peer_cursor=cursor)
+        self._retired[source_id] = retired
         self._peers[source_id] = (snapshot.generation, snapshot.sequence)
 
     def snapshot(self, sites: frozenset[str]) -> MonitoringSnapshot:
