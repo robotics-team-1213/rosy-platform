@@ -191,6 +191,7 @@ cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.service" "$OVERLAY/etc/systemd/syst
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.timer" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-os-storage.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-host-agent.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-pairing.service" "$OVERLAY/etc/systemd/system/"

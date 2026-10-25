@@ -84,7 +84,7 @@ STATE_CONFIG = BACKUP_ROOT + "/state-directories.conf"
 
 # Native units plus the signed boot catalog share the fresh-image inventory.
 UNITS = (
-    "rosy-release-recover.service",
+    "rosy-release-recover.service", "rosy-os-storage.service",
     "rosy-sd-provision.service",
     "rosy-core.service",
     "rosy-host-agent.service",
@@ -121,7 +121,7 @@ UNITS = (
 # Of those, the ones customize-rootfs.sh enables. A unit the sync adds is
 # enabled only if it is here, as a fresh image would have it.
 ENABLED_UNITS = frozenset({
-    "rosy-host-agent.service",
+    "rosy-host-agent.service", "rosy-os-storage.service",
     "rosy-release-recover.service",
     "rosy-runtime.target",
     "rosy-boot-status.service",
@@ -158,7 +158,7 @@ RETIRED_UNITS = frozenset({"rosy-boot-display.service"})
 # restarting network/config can drop the SSH session that runs the push.
 # Their new definition takes effect at the next boot.
 NEXT_BOOT_ONLY = frozenset({
-    "rosy-release-recover.service",
+    "rosy-release-recover.service", "rosy-os-storage.service",
     "rosy-sd-provision.service",
     "rosy-network.service",
     "rosy-config.service",

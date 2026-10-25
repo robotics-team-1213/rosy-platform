@@ -96,7 +96,7 @@ def test_bridge_accepts_the_previous_engine_declared_closure_without_a_new_helpe
     assert verified == [OLD]
 
 
-@pytest.mark.parametrize("helper", ["os_state_layout.py", "first_boot_runtime.py", "os_state_firstboot.py"])
+@pytest.mark.parametrize("helper", ["os_state_layout.py", "first_boot_runtime.py", "os_state_firstboot.py", "os_state_storage.py"])
 def test_new_bridge_does_not_accept_a_missing_declared_helper(tmp_path, helper):
     payload(tmp_path)
     bridge(tmp_path)
