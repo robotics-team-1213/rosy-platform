@@ -1110,3 +1110,91 @@ def test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge(repos, c
     assert (main / gaps).read_text() == "D-4 reserved in another worktree\n"
     assert "drop adr_gaps lines of landed D-3" in git(main, "log", "-1", "--format=%s")
     assert "dropped ['D-3']" in capsys.readouterr().out
+
+
+_CANONICAL_GENERATOR = r'''from pathlib import Path
+
+def generated_targets(repo):
+    a = int((repo / "a.txt").read_text())
+    b = int((repo / "b.txt").read_text())
+    left = "".join(f"gap-a-{n}\n" for n in range(8))
+    right = "".join(f"gap-b-{n}\n" for n in range(8))
+    content = f"a={a}\n{left}b={b}\n{right}both={int(bool(a and b))}\n"
+    return {repo / "docs/index.md": content}
+
+def generate(repo):
+    mode = (repo / "mode.txt").read_text() if (repo / "mode.txt").exists() else ""
+    if mode == "failure":
+        (repo / "left-behind.md").write_text("partial\n")
+        raise RuntimeError("generation failed")
+    targets = generated_targets(repo)
+    for path, content in targets.items():
+        path.write_text(content)
+    if mode == "unexpected":
+        (repo / "pkg/a.py").write_text("unexpected = True\n")
+    return list(targets)
+
+if __name__ == "__main__":
+    repo = Path.cwd()
+    for path in generate(repo):
+        print("wrote", path.relative_to(repo).as_posix())
+'''
+
+
+def _canonical_index(a, b):
+    left = "".join(f"gap-a-{n}\n" for n in range(8))
+    right = "".join(f"gap-b-{n}\n" for n in range(8))
+    return f"a={a}\n{left}b={b}\n{right}both={int(bool(a and b))}\n"
+
+
+def _canonical_merge_case(repos, mode=""):
+    main, wt = repos
+    commit(main, {land.HARNESS: _CANONICAL_GENERATOR, "a.txt": "0", "b.txt": "0",
+                  "docs/index.md": _canonical_index(0, 0)}, "canonical base")
+    git(wt, "merge", "--ff-only", "main")
+    commit(wt, {"a.txt": "1", "docs/index.md": _canonical_index(1, 0),
+                "mode.txt": mode}, "branch input")
+    commit(main, {"b.txt": "1", "docs/index.md": _canonical_index(0, 1)}, "main input")
+    return main, wt
+
+
+def test_clean_main_merge_generates_inside_its_original_merge_commit(repos):
+    main, wt = _canonical_merge_case(repos)
+    before, incoming = git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")
+    raw = git(wt, "merge-tree", "--write-tree", "--no-messages", before, incoming).splitlines()[0]
+    assert git(wt, "show", f"{raw}:docs/index.md").endswith("both=0")
+    assert land.merge(wt, incoming, "feat/x", sys.executable, False) == []
+    assert (wt / "docs/index.md").read_text() == _canonical_index(1, 1)
+    assert git(wt, "rev-list", "--parents", "-n", "1", "HEAD").split()[1:] == [before, incoming]
+    assert git(wt, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("mode", ["failure", "unexpected"])
+def test_clean_merge_aborts_when_generation_cannot_be_staged_safely(repos, mode):
+    main, wt = _canonical_merge_case(repos, mode)
+    before, incoming = git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")
+    with pytest.raises(land.Stop) as error:
+        land.merge(wt, incoming, "feat/x", sys.executable, False)
+    assert git(wt, "rev-parse", "HEAD") == before
+    assert git(main, "rev-parse", "HEAD") == incoming
+    assert land.git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0
+    assert git(wt, "diff", "--cached", "--name-only") == ""
+    if mode == "failure":
+        assert "left-behind.md" in str(error.value)
+        assert (wt / "left-behind.md").read_text() == "partial\n"
+    else:
+        assert "pkg/a.py" in str(error.value)
+        assert "pkg/a.py" in git(wt, "diff", "--name-only")
+
+
+@pytest.mark.parametrize("already_current", [False, True])
+def test_fast_forward_or_current_main_does_not_generate_or_add_a_commit(repos, already_current):
+    main, wt = repos
+    commit(main, {land.HARNESS: _CANONICAL_GENERATOR, "a.txt": "0", "b.txt": "0",
+                  "mode.txt": "failure", "docs/index.md": _canonical_index(0, 0)}, "main")
+    incoming = git(main, "rev-parse", "HEAD")
+    if already_current:
+        git(wt, "merge", "--ff-only", "main")
+    assert land.merge(wt, incoming, "feat/x", sys.executable, False) == []
+    assert git(wt, "rev-parse", "HEAD") == incoming
+    assert not (wt / "left-behind.md").exists()
