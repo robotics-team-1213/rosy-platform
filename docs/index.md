@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
-- 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
-- 2026-10-25 · a401f49f6d · D-879 GPT media prototype 경계
-- 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
-- 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
+- 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
+- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+- 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+- 2026-10-25 · uncommitted · 교훈: 빈 워크트리 폴더와 squash로 갈라진 이력 합치기

@@ -11403,6 +11403,18 @@ osy-d395-s1d\`.
 - 증거: 운영 로그인 화면과 동기화 Episode·learned policy·실물 수용은 확인하지 않았다. 복사 상태 화면은 계정 바인딩 보호로 시작이 거절됐으며 우회하지 않았다. 별개 G1 지연 bound 초과와 동일 소스 후속 CI 통과를 함께 보존했다.
 - gate 변화: 모델 PC 코드·Learning 실제 활성화를 확인. 데이터·정책·현장 gate를 승격하지 않는다. CE 해당 없음 — 기존 교훈 보존·재사용, G1 원인은 미해결이다.
 
+## 2026-10-25 · uncommitted · D-871 관측 env를 uv로 만들기
+
+- 변경: `omx_autoupdate.py`의 `uv` 설정이 있으면 venv와 lock 설치를 uv로 한다(`uv venv --python <base> [--system-site-packages]`, `uv pip install`). 관제 PC 첫 적용에서 시스템 Python 3.14에 `ensurepip`(python3.14-venv)이 없어 `python -m venv`가 실패했다. sudo가 없어 패키지를 설치할 수 없고, 기존 관측 venv도 uv로 만든 것이다. `omx-devices-autoupdate.json.example`에 `uv`를 넣었다.
+- 증거: 관제 PC 2026-10-25 20:24 `run`이 `ensurepip is not available`로 준비 단계에서 멈췄다(유닛 변화 없음). 원격 시험(아래 PR).
+- gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · D-871 여러 유닛 재시작: 하나씩 확인, 순서대로
+
+- 변경: `omx_autoupdate.py` 재시작 뒤 `is-active`를 유닛마다 따로 확인한다. `systemctl is-active a b`는 하나만 active여도 0을 낸다. `sequential: true`이면 역순으로 하나씩 stop한 뒤 순서대로 start한다. 예시 설정에 넣었다.
+- 증거: 관제 PC 2026-10-25 20:33 첫 전환에서 카메라와 camera-readiness를 함께 restart했다. readiness의 정지 복원이 카메라 재개방과 겹쳐 `camera restore incomplete`, 재시작은 `camera settings changed since baseline; refusing overwrite`로 실패했는데 업데이터는 `switched`로 기록했다. 복원이 끝난 뒤 readiness를 손으로 다시 시작하자 READY였다(top·front 120회 확인). 원격 시험(아래 PR).
+- gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · chore(sync): merge origin/main #201-#207 into local main
 
 - 변경: origin/main(61addd5695, PR #201-#207, 28커밋)을 로컬 main에 병합했다. 충돌 14파일 가운데 add/add 4건(tools/remote/remote_isaac.py, test/test_remote_isaac.py, docs/deployment/isaac-experiment-runs.md, test/learning/perception/test_sim_browser.py)은 main 내용을 포함한 origin 최신판(inline choose_target, free_port, 접촉 왕복 PNG 문구)을 채택했고, 추가 전용 logs 5파일은 main 본문을 그대로 두고 origin 전용 블록 10건을 날짜 위치에 덧붙여 풀었다.
@@ -11494,6 +11506,12 @@ osy-d395-s1d\`.
 - 증거: 새 계약 시험의 미구현 import 실패를 원격에서 확인한 뒤 스키마를 추가했다. 후속 원격 검증과 독립 계약 검토로 확인한다.
 - gate 변화: 없음. ADR D-876의 첫 wire 계약이며 운영 활성화는 아니다. CE: 해당 없음.
 
+## 2026-10-25 · uncommitted · D-871 학습 센터 자동 업데이트
+
+- 변경: `deploy/model_pc/learning_center_update.py`가 2026-10-23 교훈의 수동 절차를 자동화한다. 동작 조건은 CI 통과 + 후손 커밋, 센터 enabled·active, `experiment_*` 작업과 자식 프로세스 없음이다. 새 커밋을 `source/<sha>`에 받고, 새 설치기 `prepare()`로 유닛을 만든다. 백업 → 정지 → 쓰기 → `--apply` → active·새 sha·HTTP 200을 확인하고, 실패하면 백업 유닛으로 복구한다. `rosy-learning-center-update.{service,timer}`(D-805 관문), services.yaml model·ai 항목을 `autoupdate`로 바꾸고 업데이터를 추가했다.
+- 증거: 원격 시험(아래 PR). 모델 PC 센터는 10/25 현재 사람이 멈추고 disabled 상태라 `idle`로 남는다.
+- gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
 
 - 변경: `motion_profile.py`(동기 사다리꼴, 모서리 이어 돌기, 정확한 정지점, `retime`). `chunk_runner.transit_path`는 올라가며 돌기 시작하는 한 흐름(겹침 0.6 s, 높이 1 unit 이내에서만 회전), `grasp_planner`의 수직 내려가기·들기는 같은 경로에 부드러운 가감속. `cell_record.py`와 `--stage record`(A/B 한 사이클 녹화, 녹화된 집게로 held/empty 판정, 원위치 확인). native SIM 시나리오 `pick-place-chunks-offset`·`-yaw-site`·`-yaw-box`(상자 이동·회전, 관측한 상자 위치로 계획).
@@ -11514,6 +11532,39 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 개발 도구 변경이다.
 - 결정: 없음.
 - 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.
+
+## 2026-10-25 · uncommitted · 구조화 출력 공통 어댑터와 실제 모델 파이프라인 시험 (D-878)
+
+- 변경: `rosy.decision.structured_output`(Ollama·OpenAI 호환 전송 형식과 응답 봉투 검사)을 deliberation·conversation·operator broker와 GLM·free 게이트웨이가 쓴다(전송 바이트 동일). `judgment_schema()`가 빈 enum 대신 `maxItems: 0`을 내고, 판정별 `anyOf` 변형으로 단계 짝을 강제한다(`$ref`·`$defs`로 16 KiB 이내). `qwen_review_completion`은 닫힌 스키마로 요청한다. opt-in `test/test_structured_output_pipeline.py` 추가.
+- 증거: 모델 PC 실제 모델 — deliberation 0/3(HTTP 400) → 1/3 → 3/3, conversation 46/46, operator 26/26, judge seat 4/4, qwen 3/3. 관련 단위 시험 원격 583 passed.
+- gate 변화: 없음(AI PC 재배포·수용은 별도). CE 새 교훈 기록 — `docs/solutions/runtime-errors/ollama-refused-empty-enum-and-judgment-schema-allowed-steps-the-validator-refuses-2026-10-25.md`.
+
+## 2026-10-25 · uncommitted · 교훈: 빈 워크트리 폴더와 squash로 갈라진 이력 합치기
+
+- 변경: docs/solutions/workflow-issues에 교훈 둘을 더했다. 지워진 워크트리의 빈 폴더에서 git이 공유 main에서 동작한 사고(구조 수정 0210c973b8), 그리고 로컬 main과 origin/main을 합칠 때 충돌 없는 자동 병합이 반대쪽 시험·배치를 섞은 원인과 병합 순서(D-868).
+- 증거: 2026-10-25 동기화의 land.py 16회 정지 기록, 공유 main에서 병합 abort 뒤 HEAD 0c426b70e8 그대로, robot-0d 독립 검토의 size_range 빈틈 확인.
+- gate 변화: 없음. 문서 교훈이다.
+- 교훈: 위 두 문서
+
+## 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+
+- 변경: `tools/hooks/pre-push`가 `git config rosy.publishOnly true`인 clone에서 `publish/main-*` 밖의 브랜치 push를 거절한다(삭제는 통과, 사고 대응은 `ROSY_PUSH_REASON`). 팀원 clone은 설정이 없어 영향이 없다. `git-workflow.md`의 옛 `git push origin main` 순서와 `rosy-release-push` 1단계를 D-868 게시 절차로 고쳤다.
+- 이유: D-868 동결 중 에이전트 세션이 origin에 직접 PR #192~#209를 병합해 동기화 FULL이 반복됐다(로컬 기록 `Rosy/docs/workspace-records/2026-10-25/local-main-landing-speed.md`). 문서 규칙만으로는 막지 못했다.
+- 증거: `test/test_pre_push_hook.py::test_publish_only_clone_pushes_publish_branches_only` 5개 경우. bash로 같은 구간을 돌려 게시 0·주제 1·이유 0·설정 없음 0을 확인하고, 허용 분기를 거절로 바꾼 변형이 1로 바뀌는 것을 확인했다.
+- gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
+- 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
+
+## 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+
+- 변경: `learning/envs/isaac/arm_s_cell_fixture.py`·`arm_s_cell_task.py`·`arm_s_cell_report.py`, `deploy/robot/omx/isaac_cell_frames.py`. 실행 관리자에 `arm-s-cell-nominal`·`-overhang`·`-wrong-yaw`(run_catalog·run_store·run_worker·remote_isaac).
+- 증거: 원격 시험 통과. Isaac 6회 실행 결과는 `docs/validation/omx-arm-s-isaac-cell-2026-10-25/result.md`. overhang은 frame_contact로 기대와 맞고, nominal은 집게가 상자를 옆으로 흘려 15.6 mm 어긋남(미해결).
+- gate 변화: 없음. 집게 결합과 관측 카메라 자세는 미해결.
+
+## 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
+
+- 변경: 합성 fixture의 free_space 관측을10 GiB로 고정하고 UI 잔여값을 검증한다. 실제 storage/data 동작은 바꾸지 않았다.
+- 검증: commit d24d1abc64, 모델 호스트 디스크 점검 후 실제 opt-in 두 viewport 포함10 PASS/skip0/NEW0. 기존 MAIN-RED와 raw 로그를 보존했다.
+- gate 변화: 제품·기기 gate 변화 없음. docs/validation/learning-storage-browser-capacity-2026-10-26/result.md는 합성 시험 근거이며 실제 라벨·모델 수용을 뜻하지 않는다.
 
 ## 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
 
