@@ -34,12 +34,13 @@ def device(tmp_path, monkeypatch):
             if record is None:
                 return None
             data, meta = record
-            uid, gid = ownership.get(str((self.root / relative).resolve()), (0, 0))
+            uid, gid = ownership.get(meta[:2], (0, 0))
             return data, (*meta[:2], uid, gid, *meta[4:])
 
         def atomic(self, relative, data, uid, gid, mode):
             super().atomic(relative, data, uid, gid, mode)
-            ownership[str((self.root / relative).resolve())] = uid, gid
+            info = (self.root / relative).stat()
+            ownership[(info.st_dev, info.st_ino)] = uid, gid
 
         def ensure_tls_directory(self):
             info = (self.root / tls.TLS).stat()

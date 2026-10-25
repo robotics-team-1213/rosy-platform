@@ -54,6 +54,8 @@ class TLSPublication:
         _guid(previous["generation"])
         _digest(previous["manifest_sha256"])
         _guid(record["generation"])
+        if record["generation"] == previous["generation"]:
+            raise ValueError("TLS recovery generation must advance")
         _, manifest, _ = self.shared._generation()
         if (record["device_uid"] != manifest["device_uid"]
                 or record["hardware_serial"] != manifest["hardware_serial"]
@@ -68,7 +70,7 @@ class TLSPublication:
             raise ValueError("TLS recovery write set differs")
         targets = {}
         for path, entry in entries.items():
-            if not isinstance(entry, dict) or set(entry) != {"before", "data", "uid", "gid", "mode"}:
+            if not isinstance(entry, dict) or set(entry) != {"before", "data", "sha256", "uid", "gid", "mode"}:
                 raise ValueError("TLS recovery entry differs")
             if any(type(entry[key]) is not int for key in ("uid", "gid", "mode")):
                 raise ValueError("TLS recovery owner/mode type differs")
@@ -81,6 +83,10 @@ class TLSPublication:
             if not isinstance(entry["data"], str) or len(entry["data"]) > 180000:
                 raise ValueError("TLS recovery content exceeds limit")
             data = base64.b64decode(entry["data"], validate=True)
+            _digest(entry["sha256"])
+            if _hash(data) != entry["sha256"]:
+                raise ValueError("TLS recovery content checksum differs")
+            data.decode("utf-8")
             if len(data) > (64 * 1024 if path == ENV else 128 * 1024):
                 raise ValueError("TLS recovery content exceeds limit")
             before = entry["before"]
@@ -147,7 +153,7 @@ class TLSPublication:
         entries = {}
         for path, (data, uid, gid, mode) in targets.items():
             before = originals[path]
-            entries[path] = dict(data=base64.b64encode(data).decode("ascii"), uid=uid, gid=gid, mode=mode,
+            entries[path] = dict(data=base64.b64encode(data).decode("ascii"), sha256=_hash(data), uid=uid, gid=gid, mode=mode,
                 before=(dict(sha256=_hash(before[0]), uid=before[1][2], gid=before[1][3], mode=before[1][4])
                         if before is not None else None))
         self.record = dict(schema_version=1, state_schema=1, previous=self.update.pointer,

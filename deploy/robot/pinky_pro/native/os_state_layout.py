@@ -235,6 +235,8 @@ def policy_directory(root: Path) -> Path:
         if loaded is None:
             return root / "var/lib/rosy/updates"
         layout, descriptor_sha = loaded
+        if _path(root, TLS_PENDING).exists():
+            raise ValueError("TLS transaction pending")
         owner = root.stat().st_uid
         schema = _object(_read(_path(root, COMMON + "/state/schema.json"), 8192, owner),
                          {"schema_version", "state_schema"})
