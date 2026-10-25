@@ -172,6 +172,19 @@ def test_newer_peer_envelope_cannot_make_an_older_source_fact_current(runtime):
     assert find(cache, "site-b:host:pc-b", "site-b").reported_health == "ERROR"
 
 
+def test_new_sample_id_cannot_renew_unchanged_capture_time(runtime):
+    cache, clock = runtime
+    value = peer(clock)
+    host = value.nodes[1].model_copy(update={"remaining_s": 10.0})
+    receive(cache, clock, value.model_copy(update={"nodes": (value.nodes[0], host)}))
+    first = find(cache, host.id, "site-b")
+    clock.advance(2)
+    value = peer(clock, sequence=2)
+    renamed = value.nodes[1].model_copy(update={"sample_id": "another-name", "remaining_s": 10.0})
+    receive(cache, clock, value.model_copy(update={"nodes": (value.nodes[0], renamed)}))
+    assert find(cache, host.id, "site-b").remaining_s <= first.remaining_s - 2.0
+
+
 @pytest.mark.parametrize("replacement", ["missing", "unknown"])
 def test_disappearing_fact_cannot_reset_its_original_deadline(runtime, replacement):
     cache, clock = runtime
