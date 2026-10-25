@@ -97,7 +97,7 @@ python3 ~/rosy-ml/bin/install_review_release.py <release-id> \
 - 확인: `is-active`, 새 sha, `http://127.0.0.1:<port>/` 200. 실패하면 백업 유닛으로 되돌리고, 그 커밋은 main이 움직일 때까지 다시 시도하지 않는다.
 - 설치:
   1. `learning-center-update.json.example`을 `~/.config/rosy/learning-center-update.json`에 복사하고 `<owner>`를 채운다.
-  2. 첫 실행은 이 업데이터가 있는 main 사본에서 한다(예: `~/rosy-test/repo`): `python3 deploy/model_pc/learning_center_update.py run --dry-run`으로 판정을 본 뒤 `run`을 실행한다. 전환하면 `current` 링크가 생긴다. 지금 설치된 소스가 이 업데이터보다 오래되었기 때문이다.
+  2. 첫 실행은 이 업데이터가 있는 main 사본에서 한다(예: `~/rosy-test/repo`): `python3 deploy/model_pc/learning_center_update.py run --dry-run`으로 판정을 본 뒤 `run`을 실행한다. 이 업데이터가 들어 있는 체크아웃으로 전환하면 `current` 링크가 생긴다. 지금 설치된 소스가 이 업데이터보다 오래되었기 때문이다. `switched`가 나오기 전에는 `current`가 없어 타이머가 실행되지 않으므로, 그때까지는 이 명령을 손으로 다시 실행한다.
   3. 업데이터 유닛 두 개를 `~/.config/systemd/user/`에 복사하고 `systemctl --user enable --now rosy-learning-center-update.timer`.
 - 범위 밖: D-446 서명 릴리스로 설치하는 보호 센터(`install_review_release.py`)는 이 경로가 아니다.
 

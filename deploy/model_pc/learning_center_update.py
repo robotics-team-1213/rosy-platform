@@ -37,6 +37,7 @@ import urllib.request
 
 SERVICE = "rosy-learning-center.service"
 INSTALLER = Path("deploy/model_pc/install_learning_center.py")
+UPDATER = Path("deploy/model_pc/learning_center_update.py")
 JOBS = ("experiment_train", "experiment_online", "experiment_export")
 KEEP_FLAGS = ("--state", "--center-config", "--python", "--port", "--collaboration")
 
@@ -187,10 +188,17 @@ class Updater:
         tmp.write_text(json.dumps(state, indent=2))
         os.replace(tmp, self.state_path)
 
+    def restore(self, unit: str) -> None:
+        """The backed-up unit, byte for byte, and a restart: the new code may already be running under it."""
+        self.host.write_unit(unit)
+        self.host.systemctl("daemon-reload")
+        self.host.systemctl("restart", SERVICE)
+
     def point_current(self, sha: str) -> None:
         """`current` names the installed checkout, so the timer runs this updater from the live commit."""
         link, target = self.sources.parent / "current", f"{self.sources.name}/{sha}"
-        if (self.sources / sha).is_dir() and (not link.is_symlink() or os.readlink(link) != target):
+        # an older checkout without this updater would leave the timer with nothing to run
+        if (self.sources / sha / UPDATER).is_file() and (not link.is_symlink() or os.readlink(link) != target):
             tmp = link.with_name("current.tmp")
             if tmp.is_symlink():
                 tmp.unlink()
@@ -210,7 +218,8 @@ class Updater:
             return self.finish(state, "not_installed")
         args = installer_args(unit)
         installed = args["--commit"]
-        self.point_current(installed)
+        if not dry_run:
+            self.point_current(installed)
         if not self.host.running_center():  # stopped or disabled by hand: never start it from here
             # "idle", not "held": nothing to move, so update_status does not report it STUCK
             return self.finish(state, "idle", reason="center_not_running", release=installed[:12])
@@ -234,24 +243,31 @@ class Updater:
             return self.finish(state, "would_switch", release=sha[:12])
         source = self.sources / sha
         if not source.exists():
-            self.host.fetch(sha, source)
+            try:
+                self.host.fetch(sha, source)
+            except (OSError, subprocess.SubprocessError) as error:  # network or git: retried next run
+                return self.finish(state, "fetch_failed", release=sha[:12], error=str(error))
         try:
             new_unit = self.host.render(source, args, sha)
-        except (ValueError, KeyError, OSError) as error:  # the new installer refuses this center's setup
+        except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:  # the new installer refuses
             state["failed"] = sha
             return self.finish(state, "render_failed", release=sha[:12], error=str(error))
         backup = self.host.unit_path.with_name(f"{SERVICE}.bak-{installed[:10]}-{time.strftime('%Y%m%d%H%M%S')}")
         backup.write_text(unit, encoding="utf-8")
-        self.host.systemctl("stop", SERVICE)
-        self.host.write_unit(new_unit)
-        if self.host.apply(source, args, sha) and self.host.healthy(sha, int(args.get("--port", 8769))):
+        if self.host.systemctl("stop", SERVICE) != 0:  # the old process would answer the health check
+            return self.finish(state, "held", reason="stop_failed", release=sha[:12])
+        try:
+            switched = (self.host.write_unit(new_unit) is None and self.host.apply(source, args, sha)
+                        and self.host.healthy(sha, int(args.get("--port", 8769))))
+        except BaseException:
+            self.restore(unit)
+            raise
+        if switched:
             state["history"] = (state["history"] + [{"release": sha[:12], "result": "active", "at": time.time()}])[-50:]
             state.update(current=sha, previous=installed)
             self.point_current(sha)
             return self.finish(state, "switched", release=sha[:12], previous=installed[:12])
-        self.host.write_unit(unit)  # the backed-up unit, byte for byte
-        self.host.systemctl("daemon-reload")
-        self.host.systemctl("start", SERVICE)
+        self.restore(unit)
         state["failed"] = sha
         state["history"] = (state["history"] + [{"release": sha[:12], "result": "rolled_back", "at": time.time()}])[-50:]
         return self.finish(state, "rolled_back", release=sha[:12], to=installed[:12])

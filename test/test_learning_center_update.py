@@ -27,6 +27,7 @@ class FakeHost:
         self.unit_path.write_text(unit(OLD))
         self.head, self.check_runs, self.descendant = NEW, dict(GREEN), True
         self.running, self.job = True, None
+        self.stop_rc, self.raise_in = 0, None
         self.apply_ok = self.health_ok = True
         self.calls = []
 
@@ -40,7 +41,7 @@ class FakeHost:
 
     def systemctl(self, *args):
         self.calls.append(("systemctl", *args))
-        return 0
+        return self.stop_rc if args[0] == "stop" else 0
 
     def fetch(self, sha, target):
         self.calls.append(("fetch", sha))
@@ -52,6 +53,8 @@ class FakeHost:
 
     def apply(self, source, args, sha):
         self.calls.append(("apply", sha, self.unit_path.read_text() == unit(sha)))
+        if self.raise_in == "apply":
+            raise m.subprocess.TimeoutExpired("installer", 600)
         return self.apply_ok
 
     def healthy(self, sha, port):
@@ -98,7 +101,8 @@ def test_a_failed_install_or_health_check_restores_the_backup_unit_and_is_not_re
     u = updater(tmp_path, host)
     assert u.run() == "rolled_back"
     assert host.unit_path.read_text() == unit(OLD)
-    assert host.calls[-2:] == [("systemctl", "daemon-reload"), ("systemctl", "start", m.SERVICE)]
+    # restart, not start: the installer may already have started the new code under the restored unit
+    assert host.calls[-2:] == [("systemctl", "daemon-reload"), ("systemctl", "restart", m.SERVICE)]
     host.calls.clear()
     assert u.run() == "known_bad" and host.calls == []
     host.head = "c" * 40
@@ -138,13 +142,55 @@ def test_the_real_install_passes_only_the_installers_flags_and_the_namespace_mat
     assert namespace.port == 8769 and namespace.commit == NEW and namespace.collaboration is None
 
 
+def with_updater(path):
+    (path / m.UPDATER).parent.mkdir(parents=True)
+    (path / m.UPDATER).write_text("")
+
+
 def test_current_follows_the_installed_checkout_for_the_timer(tmp_path):
     host = FakeHost(tmp_path)
     (tmp_path / "src" / OLD).mkdir(parents=True)
     u = updater(tmp_path, host)
     host.head = OLD
     u.run()
+    assert not (tmp_path / "current").is_symlink()  # an old checkout without the updater: the timer would fail
+    with_updater(tmp_path / "src" / OLD)
+    host.head = NEW
+    u.run(dry_run=True)
+    assert not (tmp_path / "current").is_symlink()  # a dry run changes nothing
+    host.head = OLD
+    u.run()
     assert str((tmp_path / "current").readlink()) == f"src/{OLD}"
-    (tmp_path / "src" / NEW).mkdir()
+    with_updater(tmp_path / "src" / NEW)
     host.head = NEW
     assert u.run() == "switched" and str((tmp_path / "current").readlink()) == f"src/{NEW}"
+
+
+def test_a_center_that_does_not_stop_is_left_running_on_its_old_unit(tmp_path):
+    host = FakeHost(tmp_path)
+    host.stop_rc = 1
+    assert updater(tmp_path, host).run() == "held"
+    assert host.unit_path.read_text() == unit(OLD) and not [c for c in host.calls if c[0] == "apply"]
+
+
+def test_an_error_after_the_stop_restores_and_restarts_the_old_unit(tmp_path):
+    host = FakeHost(tmp_path)
+    host.raise_in = "apply"
+    with pytest.raises(m.subprocess.TimeoutExpired):
+        updater(tmp_path, host).run()
+    assert host.unit_path.read_text() == unit(OLD) and host.calls[-1] == ("systemctl", "restart", m.SERVICE)
+
+
+def test_a_failed_fetch_is_retried_and_a_failed_render_is_not(tmp_path):
+    host = FakeHost(tmp_path)
+    def fetch(sha, target):
+        raise m.subprocess.CalledProcessError(128, "git fetch")
+    host.fetch = fetch
+    u = updater(tmp_path, host)
+    assert u.run() == "fetch_failed" and u.run() == "fetch_failed"  # a network blip is not the commit's fault
+    host.fetch = lambda sha, target: target.mkdir(parents=True)
+    def render(source, args, sha):
+        raise m.subprocess.CalledProcessError(1, "git rev-parse")
+    host.render = render
+    assert u.run() == "render_failed" and u.run() == "known_bad"
+    assert host.unit_path.read_text() == unit(OLD) and not [c for c in host.calls if c[1:2] == ("stop",)]
