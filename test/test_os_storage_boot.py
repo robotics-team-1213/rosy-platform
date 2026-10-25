@@ -104,8 +104,8 @@ def test_image_builder_checks_actual_vendor_units_before_mounted_image_acceptanc
 
 
 @pytest.mark.parametrize("marked", [False, True])
-@pytest.mark.parametrize("maintenance", [False, True])
-def test_early_dispatcher_needs_no_payload_helpers_and_never_falls_back_for_ab(tmp_path, marked, maintenance):
+@pytest.mark.parametrize("flag", [None, "--no-pending-maintenance", "--tailnet"])
+def test_early_dispatcher_needs_no_payload_helpers_and_never_falls_back_for_ab(tmp_path, marked, flag):
     runtime = tmp_path / "opt/rosy/native-runtime"
     runtime.mkdir(parents=True)
     shutil.copy2(NATIVE / "os_storage_dispatch.py", runtime / "os_storage_dispatch.py")
@@ -113,7 +113,7 @@ def test_early_dispatcher_needs_no_payload_helpers_and_never_falls_back_for_ab(t
     (root / "etc/rosy").mkdir(parents=True)
     if marked:
         (root / "etc/rosy/os-slot.json").write_text("{}", encoding="ascii")
-    extra = ["--no-pending-maintenance"] if maintenance else []
+    extra = [flag] if flag else []
     result = subprocess.run([sys.executable, "-I", "-B", str(runtime / "os_storage_dispatch.py"),
                              "--root", str(root), *extra], cwd=tmp_path,
                             capture_output=True, text=True, check=False, timeout=30)
@@ -122,7 +122,8 @@ def test_early_dispatcher_needs_no_payload_helpers_and_never_falls_back_for_ab(t
     assert report["phase"] == ("HOLD" if marked else "LEGACY")
 
 
-def test_isolated_dispatch_forwards_maintenance_admission_to_the_os_entrypoint(tmp_path):
+@pytest.mark.parametrize("flag", ["--no-pending-maintenance", "--tailnet"])
+def test_isolated_dispatch_forwards_maintenance_admission_to_the_os_entrypoint(tmp_path, flag):
     prefix = tmp_path / "opt/rosy"
     runtime, bootstrap = prefix / "native-runtime", prefix / "os-bootstrap"
     runtime.mkdir(parents=True)
@@ -134,15 +135,15 @@ def test_isolated_dispatch_forwards_maintenance_admission_to_the_os_entrypoint(t
     for name in dispatch.BOOTSTRAP_FILES:
         (bootstrap / name).write_text("# protected OS helper fixture\n")
     (bootstrap / "os_state_storage.py").write_text(
-        'import sys, json\nprint(json.dumps({"maintenance": "--no-pending-maintenance" in sys.argv}))\n')
+        'import sys, json\nprint(json.dumps({"flag": sys.argv[-1]}))\n')
     root = tmp_path / "device"
     (root / "etc/rosy").mkdir(parents=True)
     (root / "etc/rosy/os-slot.json").write_text("{}")
     result = subprocess.run([sys.executable, "-I", "-B", str(runtime / "os_storage_dispatch.py"),
-                             "--root", str(root), "--no-pending-maintenance"], cwd=tmp_path,
+                             "--root", str(root), flag], cwd=tmp_path,
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"maintenance": True}
+    assert json.loads(result.stdout) == {"flag": flag}
 
 
 def test_ab_dispatch_executes_the_os_copy_with_a_partial_native_runtime(tmp_path):

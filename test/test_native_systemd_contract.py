@@ -484,7 +484,6 @@ NETWORK_EVIDENCE_READS = {
 DECLARED_READS = {
     # Only the admission methods are called: none of firstboot's writers run here.
     "rosy-os-storage.service": {
-        "$HOME",  # CORE's default is documented in the imported helper; admission never reads it.
         "/var/lib/rosy-device", "/etc/rosy", "/etc/hostname", "/etc/hosts",
         "/etc/passwd", "/etc/group", "/var/lib/tailscale", "/proc/device-tree/serial-number",
         "/var/lib/rosy/provisioning", "/var/lib/rosy/core", "/var/lib/rosy/ssh",

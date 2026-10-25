@@ -679,7 +679,7 @@ def test_atomic_writes_use_unique_temporaries(tmp_path):
     assert target.read_text(encoding="utf-8") == "A=1\n"
     assert sorted(path.name for path in target.parent.iterdir()) == [".runtime.env.tmp", "runtime.env"]
     source = (FIRST_BOOT / "rosy-first-boot.py").read_text(encoding="utf-8")
-    helper_source = Path(module._runtime.__file__).read_text(encoding="utf-8")
+    helper_source = Path(sys.modules[module._write_atomic.__module__].__file__).read_text(encoding="utf-8")
     assert "tempfile.mkstemp(dir=path.parent" in helper_source
 
 
