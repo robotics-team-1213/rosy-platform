@@ -10,7 +10,7 @@ A Control Unit coordinates work within its own scope. It can operate independent
 
 ### App names and supporting surfaces
 
-Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device live in the separate `rosy-vault` repository. Cell is Fleet's palletizing preparation workspace; Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
+Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device were work applications in the separate `rosy-vault` repository, which was retired on 2026-10-24; the real arm path is the OMX owner, not its device-core service (D-858). Cell is Fleet's palletizing preparation workspace; Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
 
 ### ROSY Platform
 
@@ -236,6 +236,14 @@ The result of comparing one camera frame against a camera setup reference: match
 ### OMX cameras
 
 `top` is the camera fixed above the workcell: it sees both arms, the mat and where objects lie. `front` is the wrist camera on the follower gripper: it moves with the arm and sees the grasp up close (D-794). `front` is being renamed `wrist` in stages; until then readers treat the two names as the same wrist role. A wrist camera is checked against its camera setup reference only at the reference's check pose (D-792).
+
+## Port vocabulary (Harbor)
+
+Harbor, the first domain application (`harborlogi/`), fixes its own port business words; the canon is that repository's `CONTEXT.md` (confirmed 2026-10-24, ADR 0005 decision 10), and this glossary does not override it. The platform keeps its own neutral words and reads the port words through the 「업무 앱 용어 대응 (Harbor)」 table in [application-contract-support](docs/reference/application-contract-support.md) rather than repeating it here.
+
+- A dated record — an ADR, plan or validation entry — keeps the words of its time. D-823, D-826, D-856 and the like read through that mapping, not as current usage.
+- `적층암 A·B` · `공급암 S` · `적층 작업대` are names, not activities; the activities are 장치 (stacking), 반출 (taking cargo out), 재취급 (rehandling) and 이송 (transport).
+- A port word that also lives in the platform with a different meaning — 회수 (session or token recovery), 장치 (a board or part) — is resolved by the 「같은 말이 두 뜻인 것」 section of the team glossary (rosy-docs `설계/8 용어집.md`), not by aliasing it here.
 
 ## Flagged ambiguities
 
