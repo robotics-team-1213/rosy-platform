@@ -19,10 +19,11 @@
 | `915a46da52` | `arm-console-real-http-fixed` | 브라우저 8 passed, skip0, 공식0 NEW. 실제 HTTP·SQLite의 독립 승인 포함. 최초 API-only fixture의 공유 정적 자산 누락은 `arm-console-real-http`의 1실패/7통과로 보존했다. |
 | `4599f29734` | `arm-console-login-final` | 브라우저 9 passed, skip0, 공식0 NEW. 로그인 인계 보존과 기존 비밀번호 로그인 회귀 포함. |
 | `4e3f9bc40c` | `arm-console-contract-final` | 계약 matrix·자산·실제 ARM API·설치 패키지·palette 62 passed, skip0, 공식0 NEW. |
-| `bfa3872d0c` | `arm-console-controls-final` | 공유 controls·크기 경계·계약 matrix 87 passed, skip0. 광역 선택에서 발견한 네 source guard 실패의 보완이다. |
+| `bfa3872d0c` | `arm-console-controls-final` | 공유 controls·크기 경계·계약 matrix 87 passed, skip0, 공식0 NEW. 광역 선택에서 발견한 네 source guard 실패의 보완이다. |
 | `bfa3872d0c` | `arm-console-browser-final` | 최종 UI의 ARM·실제 HTTP·로그인 브라우저 9 passed, skip0, 공식0 NEW. |
 | `f3a818e997` | `arm-console-owner-final` | 문서별 import 경계·공유 확인 소유자 핀 4 passed, skip0, 공식0 NEW. |
 | `f3a818e997` | `arm-console-g1-strict` | 기존 G1 timing strict 별도 실행 2 failed, 2 passed, skip0. 아래 미해결 경계에 속한다. |
+| main `f4d06e4543` | `arm-console-g1-main` | 같은 timing 두 실패를 변경하지 않은 main에서도 재현했다. 최초 2 failed/5 passed, main의 기존 quarantine 자동 재실행 2 passed. 해당 main의 공식 분류 0 NEW/2 FLAKY. |
 
 Node 전체는 기존 두 URL loader를 사용해 365 passed, skip0였다. 독립 승인 identity 조건을 반전한 mutation이 실제 diff에 들어간 상태에서 단위 시험이 실패했고, 복원 후 통과했다. Node만으로 팩토리 시작 순서를 검증했다고 주장하지 않는다.
 
@@ -30,11 +31,11 @@ Node 전체는 기존 두 URL loader를 사용해 365 passed, skip0였다. 독�
 
 광역 선택은 이 작업 직전 `f4a934657ff72fd3d274860c8e6bb524292f6e77`을 기준으로 계산했다. mode는 affected, escalation은 없고 두 invocation을 모두 실행했다. `3bf85c7b06`의 `arm-console-affected-fixed/run-1.txt`는 4 failed/4801 passed/248 skipped/879.04초, run-2는 4 failed/6717 passed/343 skipped/1209.38초다. 공식 분류는 각각 4 NEW다. 앞의 네 실패는 API matrix 미등록·공유 버튼 선언·입력 class 선언·work unit의 small 표시였으며 62/87 focused 범위에서 보완을 검증했다. 뒤의 import allowlist와 확인 소유자 핀 두 실패도 4 focused 범위에서 검증했다. import는 Console OWN에만 추가했고 확인 핀은 추가한 두 호출 위치의 정확한 수만 바꿨다. guard를 제거하거나 범위를 넓혀 면제하지 않았다.
 
-나머지 두 실패는 기존 `test_platform_g1_timing.py`의 tight-segment coordinator liveness와 실제 UDS round-trip bound다. 별도 serial strict 실행에서도 2 failed/2 passed로 재현됐다. UI 작업에서 이 시험·G1 하네스·OMX owner를 바꾸지 않았지만, 이 사실만으로 known failure나 환경 문제라고 확정하지 않는다. 한계를 완화하거나 flaky 목록을 바꾸지 않았다. 전체 affected는 GREEN이 아니며 이 기록은 전역 통과를 주장하지 않는다. 중간 실패·skip·겹치는 suite 수치를 통과로 합산하지 않는다. 최초 `900f5e7e4b` 광역 실행은 소스가 대체된 뒤 정확한 두 owned job을 공식 종료 템플릿으로 TERM해 두 invocation exit143으로 보존했고 수용 근거에서 제외했다.
+나머지 두 실패는 기존 `test_platform_g1_timing.py`의 tight-segment coordinator liveness와 실제 UDS round-trip bound다. 별도 serial strict 실행에서도 2 failed/2 passed로 재현됐다. UI 작업은 이 시험·G1 하네스·OMX owner를 바꾸지 않았다. 추가로 변경하지 않은 main `f4d06e45438de90e473dea2ef7fad37bdc857ef6`을 공식 runner의 `--sha`로 지정해 같은 파일을 실행했다. 그 main은 최초 2 failed/5 passed/11.92초 뒤 기존 quarantine에 해당하는 두 항목을 자동 재실행해 2 passed/4.59초, runner exit0이었다. main HEAD가 전후 같은 것을 확인하고 그 main의 `known_failures.py`로 원본을 분류한 결과 0 NEW/2 FLAKY였다. 오래된 topic baseline에서는 여전히 원본 두 항목이 NEW로 분류되므로 원본 분류를 바꾸지 않는다. 이로써 여섯 UI integration guard의 보완과 기존 main에서도 재현되는 timing 불안정을 구별한다. timing 원인 해결을 주장하지 않으며 한계·quarantine을 바꾸지 않았다. 전체 affected는 GREEN이 아니며 최종 전체 선택을 재실행했다고 주장하지 않는다. 중간 실패·skip·겹치는 suite 수치를 통과로 합산하지 않는다. 최초 `900f5e7e4b` 광역 실행은 소스가 대체된 뒤 정확한 두 owned job을 공식 종료 템플릿으로 TERM해 두 invocation exit143으로 보존했고 수용 근거에서 제외했다.
 
 ## 착지와 운영 경계
 
-작업은 기존 `feat/neutral-arm-actions` continuation에 보존했다. `tools/land.py --tests auto --dry-run --no-prune`은 실제 merge 충돌을 보고하고 exit1로 끝났다. 당시 main은 이 브랜치의 조상이 아니었으며 main..topic은 140개 커밋, merge-base부터 175개 파일이었다. 충돌에는 work UI·manifest뿐 아니라 protocol·Fleet app/dispatch·OMX owner·API 정본이 포함됐다. 이 UI 변경의 검토·시험을 전체 기존 주제의 충돌 해결이나 main 착지 근거로 확장하지 않는다. main·다른 세션 파일·실물 서비스는 바꾸지 않았고 push하지 않았다.
+작업은 기존 `feat/neutral-arm-actions` continuation에 보존했다. 깨끗한 topic `ea49206cbfedbee6982a0e48ec8e948d9f67ffab`에서 `tools/land.py --tests auto --dry-run --no-prune`을 실행했으며, 전후 main은 모두 `f4d06e45438de90e473dea2ef7fad37bdc857ef6`였다. 도구는 이 main을 병합하면 자동 해결 범위 밖의 충돌이 난다고 STOP했다. 해당 main은 topic의 조상이 아니었으며 그 시점 main..topic은 145개 커밋, merge-base부터 181개 파일이었다. 충돌에는 work UI·manifest뿐 아니라 protocol·Fleet app/dispatch·OMX owner·API 정본이 포함됐다. 이 UI 변경의 검토·시험을 전체 기존 주제의 충돌 해결이나 main 착지 근거로 확장하지 않는다. 초기 조사에서 읽은 과거 main `46f7a88240`의 API 유무를 현재 main의 기능으로 일반화하지 않는다. main·다른 세션 파일·실물 서비스는 바꾸지 않았고 push하지 않았다.
 
 외부 앱이 이 ARM 화면을 승인 목적지로 안내하려면 이 UI가 설치된 Fleet 배포인지 별도로 선언해야 한다. 설정 origin이나 health 응답만으로 호환성을 판단하지 않는다. ACTION_SUCCEEDED는 물리 근거 대기이며 GOAL_CONFIRMED도 외부 앱의 업무 완료와 별개다. 실물 보정·장치 수용·현장 운영은 이 화면 시험의 범위 밖이다.
 
