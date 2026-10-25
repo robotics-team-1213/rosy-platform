@@ -39,7 +39,7 @@ def test_duplicate_request_and_restart_do_not_retrain_ready(setup):
     assert all(row["status"] == "ready" for row in state["cycles"].values())
     # D-874: the commit/runtime that trained each row, for the promotion request bundle.
     assert all(set(row["provenance"]) == {"source_commit", "python", "torch"} and row["provenance"]["python"]
-               for row in state["cycles"].values())
+               and row["eval_set"] is None for row in state["cycles"].values())  # this fake trainer publishes nothing
 
 
 def test_candidate_result_remains_candidate_across_cycle_restart(setup):

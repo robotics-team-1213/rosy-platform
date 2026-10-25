@@ -16,8 +16,9 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires ex
 def test_request_button_follows_server_qualification(tmp_path, width):
     store = open_store(tmp_path)
     links = Workspace(store.db)
-    links.register({'kind': 'perception', 'name': '자동 평가', 'path': str(candidate(tmp_path, 'auto', sources=['lidar']))})
-    with serve(store) as (page, _, expect):
+    auto, control = candidate(tmp_path, 'auto', sources=['lidar'])
+    links.register({'kind': 'perception', 'name': '자동 평가', 'path': str(auto)})
+    with serve(store, control) as (page, _, expect):
         url = '{0.scheme}://{0.netloc}/learning/evaluate'.format(urlsplit(page.url))
         page.set_viewport_size({'width': width, 'height': 900})
         page.goto(url, wait_until='networkidle')
@@ -25,7 +26,7 @@ def test_request_button_follows_server_qualification(tmp_path, width):
         expect(page.locator('#promote-status')).to_contain_text('확정 정답 평가를 통과한 후보가 없습니다')
         expect(page.locator('#promote-candidates li')).to_contain_text('자동 라벨(LiDAR·궤적)')
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        links.register({'kind': 'perception', 'name': '사람 평가', 'path': str(candidate(tmp_path))})
+        links.register({'kind': 'perception', 'name': '사람 평가', 'path': str(candidate(tmp_path)[0])})
         page.goto(url, wait_until='networkidle')
         expect(page.locator('#promote-request')).to_be_enabled()
         expect(page.locator('#promote-candidate option')).to_have_count(1)

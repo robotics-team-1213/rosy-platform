@@ -97,6 +97,15 @@ def code_provenance():
     return {"source_commit": commit or None, "python": platform.python_version(), "torch": torch}
 
 
+def evaluated_set(result):
+    """The fixed eval set content_sha this attempt's own intake scored, read from the READY folder it published."""
+    try:
+        report = json.loads((Path(result["location"]) / "intake_report.json").read_text(encoding="utf-8"))
+        return report["eval"]["set"]["content_sha"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 def validate_config(config):
     expected = {"trainer", "recipes", "requests_dir", "reviews_dir", "interval_s", "max_attempts"}
     if set(config) - {"authority"} != expected or not isinstance(config["trainer"], dict):
@@ -333,7 +342,7 @@ def run_once(config, out, *, trainer_fn=None, review_pipeline=None):
                     else:
                         if result.get("status") == "candidate":
                             raise JobError("only drivable_head may return a candidate")
-                        row.update(status="ready", result=result)
+                        row.update(status="ready", result=result, eval_set=evaluated_set(result))
                 except Rejected as error:
                     row.update(status="rejected", error=str(error))
                 except Exception as error:

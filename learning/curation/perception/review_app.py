@@ -250,7 +250,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/control':
                     return self.send(control.status() if control else {'available': False})
                 if path == '/api/learning/promotion-requests':
-                    return self.send(promotion_request.listing(store.state, learning.list()))
+                    return self.send(promotion_request.listing(store.state, learning.list(), control))
                 if path == '/api/learning':
                     frames = store.list_frames()
                     pixel_reviews = [review_masks.get(store, f['index']) for f in frames
@@ -459,7 +459,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                                  and set(body) == {'id'} and row['id'] == body['id']), None)
                     if item is None:
                         raise ValueError('승격 요청은 등록된 인식 학습 결과의 id 하나만 받습니다.')
-                    bundle = promotion_request.build(item['path'], actor or 'local-unidentified')
+                    bundle = promotion_request.build(item['path'], actor or 'local-unidentified', control)
                     return self.send(promotion_request.write(store.state, bundle))
                 if path in ('/api/learning/register', '/api/learning/remove', '/api/learning/control'):
                     return self.send(learning.action(path, body, control, Conflict))
