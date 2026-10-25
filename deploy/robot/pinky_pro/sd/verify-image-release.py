@@ -14,7 +14,7 @@ import sys
 PRODUCT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PRODUCT_ROOT / "release"))
 
-from signing import parse_sha256sums, verify_release_files  # noqa: E402
+from signing import verify_release_checksums  # noqa: E402
 
 
 def verify_image_release(
@@ -32,14 +32,7 @@ def verify_image_release(
     if image.parent != release_root:
         raise ValueError("IMAGE_LOCATION: image must be a direct child of the release directory")
 
-    sums_path = release_root / "SHA256SUMS"
-    sums = sums_path.read_bytes() if sums_path.is_file() else b""
-    rejections = verify_release_files(release_root, public_key)
-    if rejections:
-        raise ValueError("; ".join(str(item) for item in rejections))
-    if sums_path.read_bytes() != sums:
-        raise ValueError("CHECKSUMS_CHANGED: release checksum list changed during verification")
-    checksums, rejections = parse_sha256sums(sums)
+    checksums, rejections = verify_release_checksums(release_root, public_key)
     if rejections:
         raise ValueError("; ".join(str(item) for item in rejections))
 
