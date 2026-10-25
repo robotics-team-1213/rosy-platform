@@ -10449,3 +10449,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · feat(policy-runner): D-864 반정밀도 지연 재측정
+
+- 변경: 측정 도구 `--amp`(CUDA autocast), [재측정 기록](validation/policy-latency-smolvla-2026-10-25/result.md).
+- 증거: AI PC GPU 연산 단독, 카메라 2대 480×640, 1000걸음씩 fp32·amp·fp32. 추론 p50 95/106/96ms, 종단 p99 182/181/182ms. 단일 카메라 Gazebo 회귀는 단독 실행에서 통과.
+- gate 변화: 없음. autocast로는 10Hz 한 걸음 추론이 안 되고 3b가 필요하다는 판단이 그대로다.
+- 결정: 없음.
+- 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
