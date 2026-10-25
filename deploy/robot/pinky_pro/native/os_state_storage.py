@@ -53,6 +53,8 @@ def admit_tailnet(root: Path, *, bind_machine: bool = False) -> dict:
             return {"schema_version": 1, "phase": "LEGACY"}
         if not shared.current.exists():
             raise ValueError("tailnet requires a committed device identity")
+        if _path(root, "var/lib/rosy/provisioning/new-device-setup.json").exists():
+            raise ValueError("new-device registration pending")
         _, manifest, values = shared._generation()
         live = _read(root / "proc/device-tree/serial-number", 128, root.stat().st_uid).decode("ascii").strip("\0\r\n ").lower()
         if not SERIAL.fullmatch(live) or live != manifest["hardware_serial"]:

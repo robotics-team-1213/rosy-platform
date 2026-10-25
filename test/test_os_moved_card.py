@@ -39,7 +39,7 @@ def test_repeated_moved_boots_keep_setup_identity_and_shared_recovery_state(tmp_
         assert report["device_name"] == setup_name
         assert applied == []
         assert gate.admit_storage(target)["phase"] == "COMMITTED"
-        with pytest.raises(ValueError, match="hardware binding"):
+        with pytest.raises(ValueError, match="registration pending"):
             gate.admit_tailnet(target, bind_machine=True)
         assert (common / "state/current.json").read_bytes() == pointer
         assert (target / "var/lib/rosy/provisioning/complete.json").read_bytes() == completion
