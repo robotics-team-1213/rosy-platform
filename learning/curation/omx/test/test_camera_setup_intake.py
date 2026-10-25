@@ -14,6 +14,7 @@ sys.path[:0] = [str(ROOT / 'learning/curation/omx'), str(ROOT / 'learning/curati
 import camera_setup  # noqa: E402
 import camera_setup_intake  # noqa: E402
 import collection_intake  # noqa: E402
+import camera_reference  # noqa: E402
 from test_camera_setup import COMMON, K, WRIST_POSE, rotate, scene  # noqa: E402
 
 
@@ -80,11 +81,11 @@ def test_a_tampered_still_or_unknown_role_is_refused(tmp_path):
 
 
 def test_reference_options_are_one_path_per_role():
-    assert collection_intake.camera_references(['top=/a.json', 'front=/b.json']) == {
+    assert camera_reference.parse(['top=/a.json', 'front=/b.json']) == {
         'top': Path('/a.json'), 'front': Path('/b.json')}
     for bad in (['top'], ['top=/a', 'top=/b'], ['=/a']):
         with pytest.raises(ValueError):
-            collection_intake.camera_references(bad)
+            camera_reference.parse(bad)
 
 
 @pytest.mark.parametrize('role', ['front', 'wrist'])

@@ -259,6 +259,7 @@ dataset의 action은 guard가 실제로 보낸 명령이고 `teacher/trajectory.
 합친 dataset `meta/info.json`의 폭·높이(이름 붙은 축으로 읽음)·fps와 다르면 거절한다. 통과하면 `{역할: revision}`만
 `inspection.json`·`capture.json`의 `camera_setup`에 남긴다. `camera_identity`(시리얼일 수 있음)와 경로는 남기지 않는다.
 이 첫 조각은 프레임을 기준과 비교하지 않으며 `camera-setup.json`도 쓰지 않는다. 옵션이 없으면 출력은 예전과 같다.
+같은 옵션을 LeRobot 세션용 `prepare`에 주면 뜻이 다르다: 사진(`.jpg`)이 있는 기준 JSON으로 프레임을 섀도 비교해 `camera-setup.json`을 쓰고, 거절하지 않는다(`camera_setup_intake.py`).
 정적 episode·`DO_NOT_TRAIN.txt` 규칙은 리더 녹화와 같다.
 
 ## 학습센터에서 파지 구간 검수

@@ -153,7 +153,7 @@ def main():
     try:
         if args.command == 'prepare':
             result = prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only,
-                             camera_references=intake.camera_references(args.camera_reference))
+                             camera_references=camera_reference.parse(args.camera_reference))
         elif args.command == 'prepare-native':
             receipt = intake.prepare_native(args.collections, args.out, args.repo_id,
                                             rig_revision=args.rig_revision,

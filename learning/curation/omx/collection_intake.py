@@ -1,7 +1,6 @@
 """Offline, closed OMX collection sessions into inspected native LeRobot datasets."""
 from __future__ import annotations
 
-import argparse
 import hashlib
 import importlib.metadata
 import json
@@ -393,16 +392,6 @@ def prepare(sessions, output, repo_id, *, completed_only=False, camera_reference
     return receipt
 
 
-def camera_references(pairs):
-    """``ROLE=PATH`` options as a role -> path map; one reference per role."""
-    result = {}
-    for pair in pairs:
-        role, sep, path = pair.partition('=')
-        _require(sep and role and path and role not in result, 'camera reference must be ROLE=PATH once per role')
-        result[role] = Path(path)
-    return result
-
-
 TEACHER_FILE = 'teacher/trajectory.json'
 TEACHER_SCHEMA = 'rosy.omx-replay-trajectory.v1'
 
@@ -598,22 +587,8 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
     return receipt
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    commands = parser.add_subparsers(dest='command', required=True)
-    command = commands.add_parser('prepare')
-    command.add_argument('sessions', nargs='+', type=Path)
-    command.add_argument('--out', type=Path, required=True)
-    command.add_argument('--repo-id', required=True)
-    command.add_argument('--completed-only', action='store_true')
-    command.add_argument('--camera-reference', action='append', default=[], metavar='ROLE=PATH',
-                         help='D-792 camera setup reference JSON per camera role; adds shadow checks')
-    args = parser.parse_args()
-    try:
-        prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only,
-                camera_references=camera_references(args.camera_reference))
-    except (ValueError, OSError, ImportError) as exc:
-        parser.exit(2, f'refused: {exc}\n')
-    print(f'Written: {args.out}; review required, no upload or device action performed.')
+    import collection_pipeline  # one CLI: its `prepare` takes the same arguments
+    collection_pipeline.main()
 
 
 if __name__ == '__main__':
