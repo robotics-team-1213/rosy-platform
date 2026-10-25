@@ -355,4 +355,3 @@
 - 2026-10-25 · uncommitted · 시간 측정·배포 검증의 소스 귀속 교훈
 - 2026-10-25 · uncommitted · docs(reference): v1.314 변경 이력 표행 추가
 - 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
-- 2026-10-25 · uncommitted · 통합관제 구현 main 착지와 I6 소프트웨어 수용
