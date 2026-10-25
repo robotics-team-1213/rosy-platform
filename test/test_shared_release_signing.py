@@ -24,8 +24,10 @@ def test_canonical_signing_runs_without_repository(tmp_path):
     destination.write_bytes(COMMON.read_bytes())
     result = subprocess.run(
         [sys.executable, "-I", "-B", "-c",
-         "import sys; sys.path.insert(0, sys.argv[1]); import signing; "
+         "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import signing; "
          "assert signing.parse_sha256sums(b'')[0] == {}; "
+         "entries,rejections=signing.verify_release_checksums(Path('.'),Path('unused.pem')); "
+         "assert entries == {} and rejections[0].code == 'SHA256SUMS_MISSING'; "
          "assert signing.SIGNATURE_LENGTH == 64", str(tmp_path)],
         cwd=tmp_path, capture_output=True, text=True,
     )
@@ -41,4 +43,5 @@ def test_dynamic_legacy_loader_can_use_its_original_module_object():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert module.verify_release_files is signing.verify_release_files
+    assert module.verify_release_checksums is signing.verify_release_checksums
     assert module.SigningToolMissing is signing.SigningToolMissing
