@@ -115,9 +115,10 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
             (wt / path).write_bytes(data)
             git(wt, "add", "--", path)
         if (wt / HARNESS).is_file():
+            existing_untracked = set(lines(wt, "ls-files", "--others", "--exclude-standard"))
             written = generate_records(wt, python, HARNESS)
             changed = set(lines(wt, "diff", "--name-only")) | set(
-                lines(wt, "ls-files", "--others", "--exclude-standard"))
+                lines(wt, "ls-files", "--others", "--exclude-standard")) - existing_untracked
             unexpected = changed - set(written)
             if unexpected:
                 raise Stop(f"changes outside canonical generation targets: {sorted(unexpected)}")
@@ -125,10 +126,13 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
                 git(wt, "add", "--", *written)
         git(wt, "commit", "--no-edit")
     except (Stop, ValueError, KeyError, OSError, subprocess.CalledProcessError) as exc:
-        git(wt, "merge", "--abort", check=False)
+        abort = git(wt, "merge", "--abort", check=False)
         # `merge --abort` leaves files generate created; list them, never delete them.
         left = lines(wt, "ls-files", "--others", "--exclude-standard")
-        raise Stop(f"auto-resolve of {sorted(resolved)} failed, merge aborted:\n{exc}"
+        recovery = ("merge aborted" if abort.returncode == 0 else
+                    "abort failed; merge, index and worktree preserved for manual recovery:\n"
+                    + abort.stdout + abort.stderr)
+        raise Stop(f"auto-resolve of {sorted(resolved)} failed, {recovery}:\n{exc}"
                    + (f"\nuntracked files left in the worktree (not deleted): {left}" if left else "")) from exc
     print(f"[merge] auto-resolved {sorted(resolved)}")
     return sorted(resolved)
