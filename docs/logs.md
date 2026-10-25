@@ -11416,3 +11416,10 @@ osy-d395-s1d\`.
 - 변경: [후속 검증 기록](validation/learning-conveyor-followup-2026-10-25/result.md)에 문서 병합 후 전체 CI20잡 성공, 원래 G1 실패 SHA의 공식 원격 단독 검사와 실제 SQLite 계측 반례, 운영 payload 동일성을 보존했다.
 - 증거: G1 node 1PASS/0SKIP/0NEW와 고정 source 합성 DB 잠금 교차3쌍을 독립 검토했다. CPU·BEGIN·commit·사후 jitter 관측은 원래 CI 원인으로 소급하지 않는다. 운영41/publicd0d signed payload732개 동일·21:47:29 정상 readback으로 추가 배포할 제품 차이가 없음을 확인했다.
 - gate 변화: 문서 병합 후 전체 CI의 최종 성공을 확인했다. 로그인 화면·Episode·학습·정책·물리 gate는 미확인이다. CE 미해결 — 원래 G1 지연 원인을 확정하지 않아 해결 교훈을 추가하지 않았다.
+
+## 2026-10-25 · a401f49f6d · D-879 GPT media prototype 경계
+
+- 변경: D-879 Proposed와 ADR index에 signed six-role GPT·boot_a 개인화·원본 GPT 유지·production BUILD_GO 보류를 기록했다. 구현은 image verifier/readback/SD 준비/producer와 연결된다.
+- 증거: 새 Python/image/gateway 원격303 passed,3 skipped; 실제 PowerShell GPT·resume·Storage mock17 passed; 독립 전체 및 후속 검토에서 중대한 결함 없음. 전체 PS Windows 수용과 native ARM64/SD/boot 증거는 없다.
+- gate 변화: 제안과 source prototype의 완료 범위이며 전체 OS 업데이트 제품 수용은 아니다.
+- 교훈: CE 해당 없음 — 구현 계약과 회귀 시험이 판단을 보존한다.

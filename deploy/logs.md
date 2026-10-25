@@ -3420,3 +3420,10 @@
 - 변경: 기존 설치기는 state의 소유자 전용 일반 SIM 설정을 대상 CLI에 맞춰 연결하고 구버전 복귀·재진입에서 보존한다. 기존 collaboration·center·workspace와 rollback 경로를 유지한다.
 - 증거: b1f990bbd8에서 네 건의 연결 누락을 재현했고 e24bb3ea58 원격 설치기·자동 갱신기 48개가 통과했다. [검증 기록](../docs/validation/learning-conveyor-release-2026-10-25/result.md).
 - gate 변화: 없음. 서명된 코드 승인과 실제 서비스 전환·인증된 조회는 별도 수용이다.
+
+## 2026-10-25 · a401f49f6d · 서명된 GPT 이미지의 SD 준비 경로
+
+- 변경: 실험용 image manifest v2의 여섯 파티션 역할·GUID·범위와 primary/backup GPT를 검증한다. SD 도구는 서명 검증 결과의 snapshot을 받아 boot_a에만 개인화하며 full readback과 기록 직전 GPT 재검사를 유지한다. MBR v1은 기존 경로를 유지하고 GPT emergency는 거절한다. producer는 실제 image를 검사하며 v2 production BUILD_GO는 명시적으로 차단한다.
+- 증거: a401f49f6d 원격 실제 PowerShell GPT·resume·Storage cmdlet mock 17 passed; af08bd9987 원격 image/GPT/gateway 303 passed, 3 skipped, NEW0. 독립 전체 및 resume delta 검토에 중대한 지적 없음. Storage mock은 실제 Windows mount 수용이 아니다. Linux PS 전체의24 실패는 변경 전 c74ce311a9에서도 동일한24 id로 재현됐다(현재160 passed/5 skipped, 변경 전154 passed/5 skipped); 전체 Windows 회귀 통과로 표시하지 않는다.
+- gate 변화: SOURCE prototype이며 native ARM64 artifact·실물 SD·부팅·OS 자동 갱신·powercut 수용은 HOLD다. 기존 작업 브랜치는 보존하고 현재 main에서 완결된 source snapshot을 새 착지 브랜치로 검증한다.
+- 교훈: CE 해당 없음 — 수정 근거는 회귀 시험과 기존 설치/검증 교훈에 명시된다. Linux 전체 PS 한계는 작업 기록에 미해결로 남긴다.
