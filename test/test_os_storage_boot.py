@@ -115,3 +115,33 @@ def test_early_dispatcher_needs_no_payload_helpers_and_never_falls_back_for_ab(t
     report = json.loads(result.stdout)
     assert result.returncode == (1 if marked else 0), result.stderr
     assert report["phase"] == ("HOLD" if marked else "LEGACY")
+
+
+def test_ab_dispatch_executes_the_os_copy_with_a_partial_native_runtime(tmp_path):
+    prefix = tmp_path / "opt/rosy"
+    runtime = prefix / "native-runtime"
+    runtime.mkdir(parents=True)
+    shutil.copy2(NATIVE / "os_storage_dispatch.py", runtime / "os_storage_dispatch.py")
+    bootstrap = prefix / "os-bootstrap"
+    bootstrap.mkdir()
+    for name in ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "first_boot_runtime.py"):
+        shutil.copy2(NATIVE / name, bootstrap / name)
+        (runtime / name).write_text('raise RuntimeError("interrupted payload helper")\n', encoding="ascii")
+    shutil.copytree(NATIVE.parent / "sd", prefix / "deploy/sd")
+    root = tmp_path / "root"
+    (root / "etc/rosy").mkdir(parents=True)
+    (root / "etc/rosy/os-slot.json").write_text("{}", encoding="ascii")
+    result = subprocess.run([sys.executable, "-I", "-B", str(runtime / "os_storage_dispatch.py"),
+                             "--root", str(root)], cwd=tmp_path,
+                            capture_output=True, text=True, check=False, timeout=30)
+    assert result.returncode == 1
+    assert json.loads(result.stdout)["phase"] == "HOLD"
+    assert "interrupted payload helper" not in result.stderr
+
+
+def test_payload_sync_refuses_the_os_bootstrap_directory():
+    spec = importlib.util.spec_from_file_location("sync_for_storage", NATIVE / "sync-image-layer.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with pytest.raises(ValueError, match="FORBIDDEN"):
+        module.check_destination("opt/rosy/os-bootstrap/os_state_storage.py")
