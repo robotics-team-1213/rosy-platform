@@ -11534,3 +11534,9 @@ osy-d395-s1d\`.
 - 증거: `test/test_pre_push_hook.py::test_publish_only_clone_pushes_publish_branches_only` 5개 경우. bash로 같은 구간을 돌려 게시 0·주제 1·이유 0·설정 없음 0을 확인하고, 허용 분기를 거절로 바꾼 변형이 1로 바뀌는 것을 확인했다.
 - gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
 - 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
+
+## 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
+
+- 변경: ADR D-885와 Log 행. D-879 gap 행 제거(착지), D-884 gap 선언.
+- 증거: 원격 시험으로 확인한다.
+- gate 변화: 없음. PC 재설치 전에는 자동 요청이 거절로 기록된다. CE: 해당 없음 — 원인(venv 48시간 보존)은 rosy-ops PR #4와 기존 교훈 메모가 다룬다.

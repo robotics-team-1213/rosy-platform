@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · guard 자동 `clean-storage` 요청, 관제 PC 자기 자원, `units-user` desired state (D-885)
 - 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
 - 2026-10-25 · a401f49f6d · 서명된 GPT 이미지의 SD 준비 경로
 - 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
 - 2026-10-25 · 055f40747f · signing 설치 closure와 provenance 회귀 통과
-- 2026-10-25 · 9f0df4f99b · 설치형 updater 복구 시험과 공개 digest inventory

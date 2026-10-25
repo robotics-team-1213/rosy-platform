@@ -55,7 +55,9 @@ def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-0
     (tmp_path / "hosts.conf").write_text(conf)
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "GUARD_STATE": str(tmp_path / "state"),
            "GUARD_CONFIG": str(tmp_path / "hosts.conf"), "GUARD_NOW": now,
-           "GUARD_LOCAL_STATUS": str(tmp_path / "local-status.json"), **(env_extra or {})}
+           "GUARD_LOCAL_STATUS": str(tmp_path / "local-status.json"),
+           # a test PC has the real forced command installed; never read its own headroom by accident
+           "GUARD_LOCAL_HEALTH": str(tmp_path / "no-local-health"), **(env_extra or {})}
     for _ in range(runs):
         subprocess.run([sys.executable, str(GUARD)], env=env, check=True, capture_output=True, timeout=60)
     return [line for line in calls.read_text().splitlines() if line != "recovery"] if calls.exists() else []
@@ -99,12 +101,34 @@ def test_low_ram_is_a_report_only_warning_before_the_memory_ladder(tmp_path):
 
 
 @pytest.mark.parametrize("answer", [DISK_FULL, f"{HEALTHY} {200 * GIB} 95 {100 * GIB} 50 {NO_GPU} {RAM}"])
-def test_a_low_disk_is_reported_and_never_restarts_or_reboots(tmp_path, answer):
-    """2026-10-26: a 100% full AI PC; a reboot frees nothing, clean-storage is the operator's call."""
-    assert _guard(tmp_path, answer, runs=7, conf="ai pc op@ai 05:50-06:20\n") == ["health"] * 7
-    row = json.loads((tmp_path / "state/status.json").read_text())["ai"]
+def test_a_low_disk_never_restarts_or_reboots(tmp_path, answer):
+    """2026-10-26: a 100% full AI PC; a reboot frees nothing. A PC outside the lab gets no cleaning."""
+    assert _guard(tmp_path, answer, runs=7) == ["health"] * 7
+    row = json.loads((tmp_path / "state/status.json").read_text())["pc1"]
     assert row["state"] == "disk-low" and row["bad"] == 0 and row["resources"]["disk_low"] is True
     assert row["resources"]["gpu"] is None and _actions(tmp_path) == []
+
+
+@pytest.mark.parametrize("name", ["ai", "model"])
+def test_a_low_lab_disk_gets_one_clean_request_per_gap(tmp_path, name):
+    """D-885: ask the lab PC's rosy-ops storage service once, then wait GUARD_CLEAN_GAP_S."""
+    conf = f"{name} pc op@{name} 05:50-06:20\n"
+    assert _guard(tmp_path, DISK_FULL, runs=4, conf=conf) == ["health", "clean-storage"] + ["health"] * 3
+    row = json.loads((tmp_path / "state/status.json").read_text())[name]
+    assert row["state"] == "disk-low" and row["bad"] == 0 and row["last_clean_request"] > 0
+    assert _actions(tmp_path) == ["clean-storage"]
+    again = _guard(tmp_path, DISK_FULL, conf=conf, env_extra={"GUARD_CLEAN_GAP_S": "0"})
+    assert again.count("clean-storage") == 2  # the stub's call log accumulates across runs
+
+
+def test_a_refused_clean_request_waits_the_gap_and_never_reboots(tmp_path):
+    calls = _guard(tmp_path, DISK_FULL, runs=5, conf="ai pc op@ai 05:50-06:20\n", action_rc=2)
+    assert calls == ["health", "clean-storage"] + ["health"] * 4
+    assert _actions(tmp_path) == ["clean-storage refused"]
+
+
+def test_a_healthy_lab_disk_is_never_cleaned(tmp_path):
+    assert _guard(tmp_path, DISK_OK, runs=3, conf="ai pc op@ai 05:50-06:20\n") == ["health"] * 3
 
 
 def test_a_low_disk_with_low_memory_keeps_the_memory_ladder(tmp_path):
@@ -286,6 +310,14 @@ def test_the_forced_command_restarts_only_listed_user_units(tmp_path):
         assert calls == [], bad
 
 
+def test_the_forced_command_cleans_storage_only_through_the_d524_helper(tmp_path):
+    result, calls = _remote(tmp_path, "clean-storage")
+    assert result.returncode == 0 and calls == ["sudo -n /usr/local/sbin/rosy-host-control clean-storage"]
+    (tmp_path / "x").mkdir()
+    result, calls = _remote(tmp_path / "x", "clean-storage now")
+    assert result.returncode == 2 and calls == []
+
+
 def test_the_forced_command_reboots_only_through_the_d524_helper(tmp_path):
     result, calls = _remote(tmp_path, "reboot")
     assert result.returncode == 0 and calls == ["sudo -n /usr/local/sbin/rosy-host-control reboot"]
@@ -326,6 +358,21 @@ def test_guard_collects_its_own_pc_and_removes_a_missing_local_report(tmp_path):
     path.unlink()
     _guard(tmp_path, HEALTHY)
     assert "site" not in _status(tmp_path)
+
+
+def test_the_site_pc_adds_its_own_headroom_from_the_same_forced_command(tmp_path):
+    report = {**_recovery("site"), "resources": {"load": 2, "mem_total_bytes": 1}}
+    (tmp_path / "local-status.json").write_text(json.dumps({"recovery": report}))
+    health = tmp_path / "local-health"
+    health.write_text(f'#!/bin/sh\n[ "$SSH_ORIGINAL_COMMAND" = health ] || exit 2\necho "{DISK_OK}"\n')
+    health.chmod(0o755)
+    _guard(tmp_path, HEALTHY, env_extra={"GUARD_LOCAL_HEALTH": str(health)})
+    row = _status(tmp_path)["site"]
+    assert row["resources"]["disk"]["test_free_gb"] == 200.0 and row["resources"]["cpu"]["temp_c"] == 48
+    assert row["resources"]["mem_total_bytes"] == 1 and row["recovery"] == report  # recovery values kept
+    health.write_text("#!/bin/sh\necho garbage\n")
+    _guard(tmp_path, HEALTHY, env_extra={"GUARD_LOCAL_HEALTH": str(health)})
+    assert _status(tmp_path)["site"]["resources"] == report["resources"]  # malformed: report values only
 
 
 @pytest.mark.parametrize("change", [{"role": "ai"}, {"time": "now"}, {"watchdog": None}])
