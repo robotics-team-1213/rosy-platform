@@ -65,6 +65,9 @@ def _robot_file_paths(config: dict[str, Any]) -> tuple[Path, Path]:
 def _load_robot_settings(config: dict[str, Any]):
     """Load and validate one snapshot before services gain access to configuration."""
     import yaml
+    import hashlib
+    import json
+    import re
     from core_common.config import ConfigError
     from core_common.profile import DEFAULT_ROBOT, RobotProfile
 
@@ -72,6 +75,20 @@ def _load_robot_settings(config: dict[str, Any]):
     model = str(config.get("robot", {}).get("model") or DEFAULT_ROBOT)
     product = os.environ.get("ROSY_DEPLOYMENT", "").strip() == "device"
     canonical = _robot_file_paths({"robot": {"model": model}}) if product else paths
+    if product:
+        try:
+            binding = yaml.safe_load((canonical[0].parent / "deployment-binding.yaml").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, yaml.YAMLError) as exc:
+            raise ConfigError(f"{model} binding: cannot read installed package binding") from exc
+        if (not isinstance(binding, dict) or set(binding) != {"schema_version", "model", "files"}
+                or type(binding["schema_version"]) is not int or binding["schema_version"] != 1
+                or binding["model"] != model):
+            raise ConfigError(f"{model} binding: schema or model mismatch")
+        hashes = binding["files"]
+        if (not isinstance(hashes, dict) or set(hashes) != {"profile.yaml", "capabilities.yaml"}
+                or any(not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+                       for value in hashes.values())):
+            raise ConfigError(f"{model} binding: invalid static file digests")
     settings = []
     for key, path, reference in zip(("profile", "capabilities"), paths, canonical):
         try:
@@ -82,6 +99,12 @@ def _load_robot_settings(config: dict[str, Any]):
         if not isinstance(expected, dict) or not isinstance(actual, dict):
             raise ConfigError(f"{model} {key}: static configuration must be a mapping")
         if product:
+            try:
+                normalized = json.dumps(expected, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            except (TypeError, ValueError) as exc:
+                raise ConfigError(f"{model} {key}: cannot normalize package configuration") from exc
+            if hashlib.sha256(normalized.encode("utf-8")).hexdigest() != hashes[f"{key}.yaml"]:
+                raise ConfigError(f"{model} {key}: package binding digest mismatch")
             if key == "profile":
                 identity = expected.get("profile")
                 if not isinstance(identity, dict) or not isinstance(identity.get("model"), str) or not identity["model"].strip():
