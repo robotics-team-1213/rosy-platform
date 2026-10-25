@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import hashlib
 import importlib
 import json
+import shutil
 
 import pytest
 
@@ -190,3 +191,64 @@ def test_archive_rejects_absolute_and_escaping_source_paths(jobs_setup, relative
     build, actor, remote, artifact, cache, inventory = jobs_setup
     with pytest.raises(ValueError):
         build().create(actor, dict(source_id='raw', artifact_id=relative, profile='isaac'))
+
+
+def test_replaced_directory_is_not_the_registered_local_source(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); build().run(actor, job['id'])
+    preserved = artifact.with_name('preserved-original')
+    artifact.rename(preserved); shutil.copytree(preserved, artifact)
+    with pytest.raises(ValueError, match='identity'):
+        build().reclaim(actor, job['id'], job['id'])
+    assert artifact.exists() and preserved.exists()
+
+
+def test_cleanup_restart_after_directory_removal_commits_missing_local_state(jobs_setup, monkeypatch):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    service = build(); job = create(build, actor); service.run(actor, job['id'])
+    save = service._save
+    def crash(record, **changes):
+        if changes.get('local', 'unchanged') is None:
+            raise OSError('process failed after directory removal')
+        return save(record, **changes)
+    monkeypatch.setattr(service, '_save', crash)
+    with pytest.raises(OSError): service.reclaim(actor, job['id'], job['id'])
+    assert not artifact.exists()
+    assert build().reclaim(actor, job['id'], job['id'])['local_present'] is False
+
+
+def test_restore_restart_recognizes_already_published_verified_directory(jobs_setup, monkeypatch):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); service = build()
+    service.run(actor, job['id']); service.reclaim(actor, job['id'], job['id'])
+    save = service._save
+    def crash(record, **changes):
+        if changes.get('local'): raise OSError('process failed after restoration publish')
+        return save(record, **changes)
+    monkeypatch.setattr(service, '_save', crash)
+    with pytest.raises(OSError): service.restore(actor, job['id'])
+    assert (cache / job['id'] / 'images/frame.png').read_bytes() == b'frame-bytes'
+    assert build().restore(actor, job['id'])['local_present'] is True
+
+
+def test_cache_policy_reclaims_only_unpinned_managed_cache_copies(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); build().run(actor, job['id'])
+    inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=0)
+    assert build().reclaim_cache(actor)['reclaimed_bytes'] == 0
+    assert artifact.exists(), 'automatic policy must never delete source outputs'
+    build().reclaim(actor, job['id'], job['id']); build().restore(actor, job['id'])
+    build().pin(actor, job['id'], True)
+    assert build().reclaim_cache(actor)['reclaimed_bytes'] == 0
+    build().pin(actor, job['id'], False)
+    result = build().reclaim_cache(actor)
+    assert result['reclaimed_bytes'] > 0 and not (cache / job['id']).exists()
+
+
+def test_consumer_lease_survives_other_service_startup(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); build().run(actor, job['id'])
+    with build().use(actor, job['id']):
+        with pytest.raises(ValueError, match='use'):
+            build().reclaim(actor, job['id'], job['id'])
+    assert artifact.exists()
