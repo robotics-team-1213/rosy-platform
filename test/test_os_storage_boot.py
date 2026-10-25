@@ -156,6 +156,8 @@ def test_ab_dispatch_executes_the_os_copy_with_a_partial_native_runtime(tmp_path
         shutil.copy2(NATIVE / name, bootstrap / name)
         (runtime / name).write_text('raise RuntimeError("interrupted payload helper")\n', encoding="ascii")
     shutil.copytree(NATIVE.parent / "sd", prefix / "deploy/sd")
+    (prefix / "deploy/sd/personalization.py").write_text(
+        'raise RuntimeError("application SD helper must not load during early admission")\n')
     root = tmp_path / "root"
     (root / "etc/rosy").mkdir(parents=True)
     (root / "etc/rosy/os-slot.json").write_text("{}", encoding="ascii")
