@@ -9760,6 +9760,12 @@ osy-d395-s1d\`.
 - 검증: 공개 SHA의 원격 CLI·Isaac·소비 경로 회귀, 고정 base/head 독립 검토와 CI를 결속한다. 원래 SDK source7d0/run36041의 증거와 새 호스트 검사를 구분한다.
 - gate 변화: 없음. SDK 설치·업그레이드·새 실험·운영 활성화·로봇 명령·Episode 생성·정책 승격은 수행하지 않았다. CE 해당 없음 — 기존 경계와 회귀를 보존하는 소스 포트다.
 
+## 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
+
+- 변경: D-871(모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면) 기록. `omx_autoupdate.py`에 `kind: service`의 `idle_gate: cell`(셀 잠금·버스·토크 OFF 유휴 규칙), 재시작 전 잠금 해제, `restart_running_only`(손으로 멈춘 관측기는 그대로), `system_site_packages`를 더함. 카메라·관측기·브리지용 `omx-devices-autoupdate.json.example`, `requirements-observation.lock`, `rosy-omx-devices-autoupdate.{service,timer}`. 관측기 템플릿이 health 파일을 `%i`로 정하고 브리지는 `ROSY_OBSERVATION_ARM_HEALTH`를 기본값으로 읽음(SHA 박힌 drop-in 대체). services.yaml의 해당 유닛을 `autoupdate`로.
+- 증거: 원격 시험(아래 PR). 관제 PC 적용은 별도(관측기는 10/24부터 옛 OpenRB 시리얼로 멈춤).
+- gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · Learning 서명 sequence41 실제 활성화 검증
 
 - 변경: [Learning·Isaac 실제 배포](validation/learning-conveyor-deployment-2026-10-25/result.md)에 PR201–206 공개 source·원격 검사·기존 SDK 증거 재사용·실제 signed sequence41/sourcee231 서비스 활성화와 독립 readback을 구분했다.
