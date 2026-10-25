@@ -13,6 +13,7 @@ from pathlib import Path
 import shutil
 
 import pytest
+import yaml
 
 from core_common import profile as profile_module
 from core_common.config import ConfigError
@@ -202,3 +203,37 @@ def test_device_rejects_capabilities_mixed_inside_installed_package(node_module,
     shutil.copyfile(other, installed_rasptank / "capabilities.yaml")
     with pytest.raises(ConfigError, match="capabilities"):
         node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
+
+
+@pytest.mark.parametrize("mutation", ["version", "model", "missing", "extra", "malformed", "stale"])
+def test_device_rejects_invalid_package_binding(node_module, installed_rasptank, mutation):
+    binding = {"schema_version": 1, "model": "rasptank_metal", "files": {
+        "profile.yaml": "850f14cd72e8a518a80b47658e42a8f20b44b81e90906f3c73517ef3e7754fdb",
+        "capabilities.yaml": "3bb025b8d3e460cc1b74e8443e904e0b0268c5d64f643582811617ed07cf1dd8"}}
+    if mutation == "version":
+        binding["schema_version"] = True
+    elif mutation == "model":
+        binding["model"] = "pinky_pro"
+    elif mutation == "missing":
+        del binding["files"]["capabilities.yaml"]
+    elif mutation == "extra":
+        binding["files"]["unexpected.yaml"] = "0" * 64
+    else:
+        binding["files"]["capabilities.yaml"] = "bad" if mutation == "malformed" else "0" * 64
+    (installed_rasptank / "deployment-binding.yaml").write_text(yaml.safe_dump(binding), encoding="utf-8")
+    with pytest.raises(ConfigError, match="binding|capabilities"):
+        node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
+
+
+def test_device_rejects_package_without_binding(node_module, installed_rasptank):
+    (installed_rasptank / "deployment-binding.yaml").unlink(missing_ok=True)
+    with pytest.raises(ConfigError, match="binding"):
+        node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
+
+
+def test_device_accepts_current_pinky_package(node_module, installed_rasptank, monkeypatch):
+    share = SRC.parent / "middleware/devices/pinky/profile"
+    monkeypatch.setattr(sys.modules["ament_index_python.packages"], "get_package_share_directory", lambda _: str(share))
+    profile, capabilities = node_module._load_robot_settings({"robot": {"model": "pinky_pro"}})
+    assert profile.model == "Pinky Pro"
+    assert capabilities["teleop"] is True
