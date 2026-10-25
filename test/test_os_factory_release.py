@@ -1,6 +1,7 @@
 """Real signed factories may cross slots only when release, checksum and key match."""
 import hashlib
 import json
+import os
 import shutil
 
 import pytest
@@ -97,3 +98,36 @@ def test_old_or_corrupt_signatures_cannot_authorize_a_root(tmp_path, monkeypatch
     with pytest.raises(ValueError):
         first._native_helper("os_factory_release").prepare_factory(other)
     assert not (release / "SHA256SUMS.sig").exists()
+
+
+def test_signature_cache_failure_does_not_consume_the_one_time_bundle(tmp_path, monkeypatch):
+    helper = _module()._native_helper("os_factory_release")
+
+    def failed_cache(*_args):
+        raise OSError("fixture signature cache write failed")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(helper, "cache_signature", failed_cache)
+        with pytest.raises(OSError, match="cache write failed"):
+            _device(tmp_path, monkeypatch)
+    root = tmp_path / "root-a"
+    bundle = root / "run/rosy-provision-boot/rosy-provision/provision.json"
+    assert bundle.exists()
+    assert not (root / "var/lib/rosy/provisioning/complete.json").exists()
+    assert _module().FirstBootProvisioner(root=root, network_activate=lambda _: True).apply(
+        bundle=bundle, hardware_serial=SERIAL)["ok"]
+    assert not bundle.exists()
+
+
+def test_updater_pruning_keeps_the_root_factory_after_payload_updates(tmp_path, monkeypatch):
+    from auto_update_fakes import FakeHost, upd
+    _, root, _, _, _, _, release = _device(tmp_path, monkeypatch)
+    host = FakeHost(root, current="2026.10.26-003")
+    host.links["previous"] = "2026.10.26-002"
+    obsolete = root / "opt/rosy/releases/2026.09.24-001"
+    for path in (release, obsolete, release.parent / host.links["current"], release.parent / host.links["previous"]):
+        path.mkdir(exist_ok=True)
+        os.utime(path, (0, 0))
+    upd.Updater(host)._prune({})
+    assert release.is_dir(), "the OS factory remains the root-local fallback"
+    assert not obsolete.exists()
