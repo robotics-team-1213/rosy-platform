@@ -29,6 +29,12 @@ class ImageResources:
 
     def __init__(self):
         self.loops, self.mounts = [], []
+        self.images = {}
+
+    def _bound(self, loop: str) -> None:
+        rows = json.loads(_run(["losetup", "--json", "--output", "NAME,BACK-FILE", loop]).stdout)["loopdevices"]
+        if len(rows) != 1 or rows[0]["name"] != loop or not os.path.samefile(rows[0]["back-file"], self.images[loop]):
+            raise ValueError("loop device is not bound to the owned image")
 
     def loop(self, image: Path, *, readonly=False) -> str:
         options = ["--read-only"] if readonly else []
@@ -36,15 +42,16 @@ class ImageResources:
         if not re.fullmatch(r"/dev/loop[0-9]+", loop):
             raise ValueError("losetup returned an unexpected device")
         self.loops.append(loop)
-        rows = json.loads(_run(["losetup", "--json", "--output", "NAME,BACK-FILE", loop]).stdout)["loopdevices"]
-        if len(rows) != 1 or rows[0]["name"] != loop or not os.path.samefile(rows[0]["back-file"], image):
-            raise ValueError("loop device is not bound to the owned image")
+        self.images[loop] = image
+        self._bound(loop)
         _run(["udevadm", "settle"])
         return loop
 
     def mount(self, device: str, target: Path, *, readonly=False, filesystem="ext4") -> None:
         target.mkdir(mode=0o700)
         options = "ro,noload" if readonly and filesystem == "ext4" else "ro" if readonly else "rw,nodev,nosuid"
+        if filesystem == "vfat":
+            options += ",fmask=0133,dmask=0022"
         _run(["mount", "-t", filesystem, "-o", options, device, str(target)])
         self.mounts.append(target)
 
@@ -64,8 +71,9 @@ class ImageResources:
         remaining = []
         for loop in reversed(self.loops):
             try:
+                self._bound(loop)
                 _run(["losetup", "--detach", loop])
-            except (OSError, subprocess.SubprocessError):
+            except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
                 remaining.append(loop)
         self.loops = list(reversed(remaining))
         if self.loops:
@@ -103,6 +111,7 @@ def _json_sidecar(destination: Path, value: dict) -> None:
         json.dump(value, handle, sort_keys=True)
         handle.write("\n")
         handle.flush()
+        os.fchmod(handle.fileno(), 0o644)
         os.fsync(handle.fileno())
     _publish(temporary, destination)
 
@@ -183,9 +192,9 @@ def assemble(source: Path, output: Path, work: Path, release_id: str) -> dict:
             if ab.parse_gpt(read_at, partial.stat().st_size) != layout:
                 raise ValueError("assembled GPT differs from the planned snapshot")
         resources.close()
+        partial.chmod(0o644)
         with partial.open("rb") as handle:
             os.fsync(handle.fileno())
-        partial.chmod(0o644)
         _json_sidecar(output.with_suffix(".layout.json"), layout)
         _json_sidecar(output.with_suffix(".capacity.json"), capacity)
         _publish(partial, output)

@@ -62,11 +62,20 @@ def test_failed_unmount_never_detaches_the_loop_or_reports_clean(tmp_path, monke
     assert not any(command[0] == "losetup" for command in calls)
 
 
-def test_failed_detach_remains_owned_for_recovery(monkeypatch):
+def test_failed_detach_remains_owned_for_recovery(tmp_path, monkeypatch):
     m = module()
-    monkeypatch.setattr(m, "_run", lambda command, **kwargs: (_ for _ in ()).throw(subprocess.CalledProcessError(1, command)))
+    image = tmp_path / "owned.img"
+    image.write_bytes(b"fixture")
+
+    def run(command, **kwargs):
+        if "--json" in command:
+            return SimpleNamespace(stdout=json.dumps({"loopdevices": [{"name": "/dev/loop17", "back-file": str(image)}]}))
+        raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(m, "_run", run)
     resources = m.ImageResources()
     resources.loops = ["/dev/loop17"]
+    resources.images = {"/dev/loop17": image}
     with pytest.raises(OSError, match="detach"):
         resources.close()
     assert resources.loops == ["/dev/loop17"]
