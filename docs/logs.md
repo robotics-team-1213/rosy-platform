@@ -11556,3 +11556,11 @@ osy-d395-s1d\`.
 - 증거: `test/test_remote_pytest.py::test_the_pytest_job_is_best_effort_lowest_io_not_idle`, `test/test_host_services_manifest.py`. g1이 실제로 통과하는지는 이 착지 뒤 AI PC에서 다시 확인한다(아직 가설).
 - gate 변화: 없음.
 - 교훈: CE 미해결 — g1 원인은 착지 뒤 재현 실험으로 확정한다.
+
+## 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
+
+- 변경: `update_status.py`가 rosy-platform·rosy-ops 각각 비교한 ref, 그 끝 커밋, 마지막 fetch 뒤 시간(FETCH_HEAD·origin/main reflog 파일 mtime 중 늦은 것)을 찍는다. origin/main이 없어 HEAD를 읽었거나, fetch 기록이 없거나, `--ref-stale-hours`(기본 12)보다 오래되면 `STALE-REF`로 exit 1. 파일별 HEAD 대체 읽기를 없앴다(origin/main에 없는 파일은 `note cannot read`). `--fetch`는 먼저 `git fetch origin main`을 돌린다(기본 꺼짐, 읽기 전용 유지). 이 PC에 robot CD가 설치돼 있으면 `robot_cd.snapshot_drift`로 스냅숏 파일 중 같은 ref와 다른 파일을 `WARN`으로 나열한다(exit 코드는 그대로).
+- 이유: 로컬 origin/main을 fetch 없이 읽어 오래된 기준과 비교한 DRIFT·통과가 구별되지 않았고, 설치된 서명 스냅숏이 main보다 뒤처져도 알 길이 없었다.
+- 증거: `test/test_update_status.py::test_ref_state_names_the_ref_and_ages_the_last_fetch_not_the_tip_commit`, `::test_repo_digest_reads_only_the_named_ref`, `test/test_robot_cd.py::test_snapshot_drift_lists_snapshot_files_that_differ_from_origin_main`. 실제 PC에서 `update_status.py`를 돌린 확인은 아니다.
+- gate 변화: 없음.
+- 교훈: 해당 없음 — 새 검사 추가, 장애 해결 아님.
