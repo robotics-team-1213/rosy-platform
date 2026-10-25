@@ -155,10 +155,11 @@ def main():
     parser.add_argument('--shape', required=True, metavar='HxW', help='installed camera size')
     parser.add_argument('--camera-hz', type=float, required=True, help='minimum camera rate on stamps')
     parser.add_argument('--seconds', type=float, default=10.0)
+    parser.add_argument('--ready-s', type=float, default=120.0, help='wait for every interface before recording')
     parser.add_argument('--out', required=True)
     args = parser.parse_args()
     shape = tuple(int(v) for v in args.shape.lower().split('x'))
-    samples = collect(seconds=args.seconds)
+    samples = collect(seconds=args.seconds, ready_s=args.ready_s)
     failures = check(samples, shape=shape, camera_hz=args.camera_hz)
     summary = dict(failures=failures, shape=shape, camera_hz=args.camera_hz,
                    joint_messages=len(samples['joint_states']), camera_frames={k: len(v) for k, v in samples['cameras'].items()},

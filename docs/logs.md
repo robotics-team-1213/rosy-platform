@@ -11416,3 +11416,101 @@ osy-d395-s1d\`.
 - 변경: [후속 검증 기록](validation/learning-conveyor-followup-2026-10-25/result.md)에 문서 병합 후 전체 CI20잡 성공, 원래 G1 실패 SHA의 공식 원격 단독 검사와 실제 SQLite 계측 반례, 운영 payload 동일성을 보존했다.
 - 증거: G1 node 1PASS/0SKIP/0NEW와 고정 source 합성 DB 잠금 교차3쌍을 독립 검토했다. CPU·BEGIN·commit·사후 jitter 관측은 원래 CI 원인으로 소급하지 않는다. 운영41/publicd0d signed payload732개 동일·21:47:29 정상 readback으로 추가 배포할 제품 차이가 없음을 확인했다.
 - gate 변화: 문서 병합 후 전체 CI의 최종 성공을 확인했다. 로그인 화면·Episode·학습·정책·물리 gate는 미확인이다. CE 미해결 — 원래 G1 지연 원인을 확정하지 않아 해결 교훈을 추가하지 않았다.
+
+## 2026-10-25 · uncommitted · docs: RaspTank 지원 후보와 공통 ROSY 통합 조건
+
+- 변경: README에서 [로봇 호환 목록](reference/robot-compatibility.md)을 연결하고, RaspTank Metal / Pi 4B 4GB를 실행 미지원 후보로 기록했다. [통합 설계](plans/2026-10-25-rasptank-multi-robot-design.md)는 기존 Profile/Adapter·CORE·Fleet·장치 owner 경계, 절대경로 overlay 결속, 독립 정지·팔 피드백·기체별 이미지 조건을 정리한다.
+- 증거: 설계 v2 독립 architecture/critic 2회 검토. 순정 Ubuntu·Bookworm 이미지와 제조사 자료의 로컬 무결성 검사는 ROSY 통합 이미지·장치 시험과 구분한다. 이 커밋의 문서 lint·harness·원격 계약 검증은 완료 보고에 별도로 결속한다.
+- gate 변화: 없음. RaspTank profile·driver·제어 광고·통합 이미지·실물 수용은 미구현/미수행이다.
+- 결정: 기존 HWA/CAP·D-14·D-161·D-856 경계를 유지하는 설계 제안이며 새 ADR/API를 만들지 않았다.
+- 교훈: 미해결 — 모델/프로파일 결속과 실물 수용 조건은 후속 구현이며 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-25 · uncommitted · RaspTank 무구동 설정 패키지와 소유권 준비
+
+- 변경: `middleware/devices/rasptank/profile`의 `rasptank_metal` 패키지, 필수 빈 `core.yaml`, 물리 기능 false·0 속도 프로파일, 실제 모델 선택·TaskKind 거절 시험과 하네스 등록을 준비했다. 호환 목록은 소스 준비와 실행 미지원을 구분한다.
+- 증거: 테스트 정의를 먼저 커밋했고, 원격 실행은 시험 PC 디스크 기준·별도 사용 예약으로 대기 중이다. 실제 원격 결과 없이 모든 모듈 게이트는 HOLD로 유지한다.
+- gate 변화: 없음. driver·서비스·preset·이미지 selector·물리 출력은 추가하지 않았다.
+- 교훈: 미해결 — 원격 검증과 기체 수용은 이후 근거가 필요하다.
+
+## 2026-10-25 · uncommitted · RaspTank Pi 4 SD·센서 준비서
+
+- 변경: 부품 수량·조건, 동봉 카메라/초음파/IR/ADC/OLED/구동 장치의 제조사 인터페이스 조사값, 목표 Ubuntu와 비교용 Bookworm 이미지 구분, SD·기체 도착 후 수용 순서를 배포 준비서에 기록했다.
+- 증거: 고정 제조사 ZIP 소스 대조. 저장소 밖 순정 이미지의 기존 SHA256·Ubuntu 서명·XZ/파티션 검사 기록을 연결했다. ROSY 통합 이미지 생성·SD 쓰기·native 설치·실물 시험은 미수행이다.
+- gate 변화: 없음. 무구동 설정 소스만 준비 상태를 유지한다. 원격 시험은 호스트 저장 공간 기준과 사용 예약으로 막혀 있다.
+- 교훈: 미해결 — 실물 배선/전원/카메라와 제품 이미지 수용 근거가 필요하다.
+
+## 2026-10-25 · uncommitted · 다기종 배포·DJI SDK 연결 준비
+
+- 변경: 직접 설치형/외부 SDK 호스트 연결형을 구분한 기종 접수표와 P0~P4 배포 준비 설계를 추가했다. 호환 목록에 DJI Neo 2의 공식 SDK 미지원 상태와 재검토 조건을 기록했다.
+- 증거: 2026-10-25 DJI 공식 SDK 호환표·Mobile SDK 제품 목록·공식 저장소 문의 #684를 확인했다. Pinky image board 고정·SD model const·CORE 절대경로 overlay 경로를 대조했다. SDK 설치·장치 연결·관측·비행·새 runtime 구현은 수행하지 않았다.
+- gate 변화: 없음. RaspTank와 다기종 runtime/산출물/실물 검증은 별도 보류다. Neo 2를 제어 가능한 profile로 추가하지 않았다.
+- 교훈: 해당 없음 — 공식 지원 조사·설계 준비이며 해결된 실행 장애는 없다.
+
+## 2026-10-25 · uncommitted · 다기종 배포 도구와 제품 설정 검증 구현
+
+- 변경: 공통 signing 구현·Pinky 제품 정책·직접 설치/SDK host descriptor·운영 CLI를 분리하고 기존 push/rollback executor를 재사용한다. 제품 CORE는 installed model 설정의 검증 snapshot을 소비하며 개발 overlay는 유지한다. 배포 도구 문서에 책임·명령·제한과 canonical native 설정 migration을 기록했다.
+- 증거: 독립 설계2회 및 코드 검토. 기대 RED 뒤 결합213 PASS/NEW0, offline readback 회귀 RED 재현·보완 후 관련323 PASS/215 SKIP/NEW0. skip·ARTIFACT/DEVICE/FIELD를 소스 통과와 구분한다. 최종 committed tree의 하네스·착지 검증은 별도다.
+- gate 변화: RaspTank SOURCE/LOCAL만 원격 근거로 갱신. 실제 I/O·native 이미지·SD 쓰기·SDK/비행·현장 수용 상태는 유지한다.
+- 교훈: 해당 없음 — 기존 installed-layout 교훈을 회귀에 적용했고 새 조건은 코드/시험/배포 안내에 보존했다.
+
+## 2026-10-25 · uncommitted · 설치 내용 결속 보완과 전 계층 자동 업데이트 목표
+
+- 변경: package binding과 legacy dynamic signing 소비자 호환을 보완하고 [전 계층 자동 갱신 완료 기준](plans/2026-10-25-rosy-layered-automatic-updates-design.md)을 기록했다. 사용자 요구는 배포된 ROSY 자체의 앱·OS·커널·부팅·전체 이미지 업데이트 연속성과 복구까지 포함한다.
+- 증거: FULL 중 발견한 learned-signature 회귀9건과 잘못 포장된 기종 내용/metadata 반례를 원격 RED로 확인한 뒤 관련153 PASS/NEW0. independent source 검토 승인. 기존 D-387/D-412 소스와 실제 완료 범위를 구분했다.
+- gate 변화: 소스 보완이며 OS 전체 자동 업데이트·ARM64 이미지·현재 연결 기체의 timer 활성/배포/복구는 미수용이다. 전체 source 착지는 재검증한다.
+- 교훈: 해당 없음 — 잘못된 package 내용과 동적 import는 코드/시험/안내에 보존했고 추가 OS 목표는 미완료로 기록한다.
+
+## 2026-10-25 · 3dca62ed05 · RaspTank 패키지 구조 정합성
+
+- 변경: 신규 config-only package 이름·폴더 이름 대응표를 명시 등록하고 이미 정위치인 루트의 migration wave를 none으로 정렬했다. 기존 package/경계 검사의 동등성 조건은 유지한다.
+- 증거: 정상 착지 사전 검사에서 3 NEW, 같은 main의 반례3 PASS를 확인한 뒤 수정했다. 승인 원격 architecture/harness287 PASS/NEW0. 최신 전체 착지 검증은 별도다.
+- gate 변화: 소스 등록 정합성만 보완했다. 사용자 정정에 따라 현재 기체는 미연결이며 새 이미지 준비 단계다. 실기 조회·SD 기록·장치 배포를 수행하지 않았다.
+
+## 2026-10-25 · 9f0df4f99b · RaspTank 평가 기준선과 공개 무결성 값 등록
+
+- 변경: D-178의 package 집합 기준선과 평가표에 config-only RaspTank를 잠정 88 A로 등록했다. 기존 분포·등급·시험 조건을 바꾸지 않았다. 문서의 공개 체크섬·source revision 및 deployment binding/기존 journal repair digest는 정확한 경로·행 hash·값으로만 provenance inventory에 등록했다.
+- 증거: 정상 착지 FULL 공통 묶음 3 FAIL/10727 PASS/1185 SKIP. 세 실패가 각각 단독 재현되었고 같은 main에서는 3 PASS여서 이 브랜치의 실패로 처리했다. 수정 후 원격 검증은 별도 기록한다.
+- gate 변화: 전체 source 착지는 아직 미완료다. 새 A/B 이미지의 media consumer·OS 전환·ARM64 artifact·실기 복구 수용을 주장하지 않는다.
+- 교훈: CE 해당 없음 — 재현 시험·기준선·정확한 provenance 정책에 판단 근거를 보존하며 별도 교훈 문서를 늘리지 않는다.
+
+## 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인
+
+- 변경: RaspTank baseline·정확한 공개 digest inventory·설치형 updater fixture의 수정 검증을 기록한다.
+- 증거: 승인 원격 `python tools/remote/remote_pytest.py --log-dir <scratch>/landing-fixes-green -- test/test_module_scorecard.py test/test_release_boundary_guards.py test/test_secret_public_provenance.py test/test_rosy_auto_update_resync.py test/test_shared_release_signing.py test/test_native_runtime_installed_layout.py` — 125 PASS, known_failures NEW0. 독립 리뷰는 profile digest4개 재계산·provenance11행 결속·설치기 fixture 일치를 확인했다.
+- gate 변화: 관련 source 회귀 통과이며 전체 정상 착지는 다시 수행한다. OS 전체 자동 업데이트·이미지 artifact·실기 수용은 미완료다.
+- 교훈: CE 해당 없음 — 원인/복구와 반례는 시험 및 기존 정책에 보존했다.
+
+## 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
+
+- 변경: ADR D-877, `tools/sim/omx_topic_backend.py`(벤더 OMX-F + `topic_based_ros2_control`), `tools/sim/omx_mujoco_backend.py`, `tools/sim/run_omx_backend_conformance.sh`, `tools/sim/build_topic_based_ros2_control.sh`, Isaac 어댑터 `learning/envs/isaac/run_omx_backend.py`, 시험 `test/test_omx_sim_backends.py`, [검증 기록](validation/omx-mujoco-backend-2026-10-25/result.md).
+- 증거: AI PC에서 MuJoCo 적합성 통과(취소 전 0.051rad, 뒤 0.00007rad). 원격 pytest 통과.
+- gate 변화: Gazebo, MuJoCo, Isaac Sim 5.1이 같은 계약을 통과([Isaac 기록](validation/omx-isaac-backend-2026-10-25/result.md)). Isaac 전환 조건(10Hz·실시간 배율·파지·렌더링 비교)은 아직이다.
+- 결정: D-877 Accepted.
+- 교훈: 없음(벤더 gpio·메시 겹침은 코드 주석과 검증 기록에 남김).
+
+## 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
+
+- 변경: Fleet의 캐시 전용 연결 관측 응답과 목표 읽기 경로를 API 정본에 등록했다. handler와 독립 Monitoring 런타임은 아직 구현되지 않았음을 명시했다. 기존 API 설명·시험 버전 고정값을 예약 도구로 함께 갱신했다.
+- 증거: 새 계약 시험의 미구현 import 실패를 원격에서 확인한 뒤 스키마를 추가했다. 후속 원격 검증과 독립 계약 검토로 확인한다.
+- gate 변화: 없음. ADR D-876의 첫 wire 계약이며 운영 활성화는 아니다. CE: 해당 없음.
+
+## 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
+
+- 변경: `motion_profile.py`(동기 사다리꼴, 모서리 이어 돌기, 정확한 정지점, `retime`). `chunk_runner.transit_path`는 올라가며 돌기 시작하는 한 흐름(겹침 0.6 s, 높이 1 unit 이내에서만 회전), `grasp_planner`의 수직 내려가기·들기는 같은 경로에 부드러운 가감속. `cell_record.py`와 `--stage record`(A/B 한 사이클 녹화, 녹화된 집게로 held/empty 판정, 원위치 확인). native SIM 시나리오 `pick-place-chunks-offset`·`-yaw-site`·`-yaw-box`(상자 이동·회전, 관측한 상자 위치로 계획).
+- 증거: 원격 시험 통과. 매끄러운 동작으로 Gazebo `pick-place-chunks` PASS(xy 0.26 mm, 들기 102 mm). 시나리오 결과는 이어서 기록한다.
+- gate 변화: 없음. 실물의 매끄러운 동작·녹화는 실물 실행에서 확인한다.
+
+## 2026-10-25 · a401f49f6d · D-879 GPT media prototype 경계
+
+- 변경: D-879 Proposed와 ADR index에 signed six-role GPT·boot_a 개인화·원본 GPT 유지·production BUILD_GO 보류를 기록했다. 구현은 image verifier/readback/SD 준비/producer와 연결된다.
+- 증거: 새 Python/image/gateway 원격303 passed,3 skipped; 실제 PowerShell GPT·resume·Storage mock17 passed; 독립 전체 및 후속 검토에서 중대한 결함 없음. 전체 PS Windows 수용과 native ARM64/SD/boot 증거는 없다.
+- gate 변화: 제안과 source prototype의 완료 범위이며 전체 OS 업데이트 제품 수용은 아니다.
+- 교훈: CE 해당 없음 — 구현 계약과 회귀 시험이 판단을 보존한다.
+
+## 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
+
+- 변경: Windows에서 다른 프로세스가 cwd로 잡은 워크트리 폴더는 `git worktree remove`가 등록만 지우고 폴더를 남기며, 그 안의 git 명령이 main 체크아웃의 `.git`으로 올라가 main에 작용했다(오늘 공유 main 체크아웃의 우발 병합 원인). `tools/worktree_rules.py` `leave_tombstone`이 남은 폴더를 비었으면 rmdir하고, 아니면 존재할 수 없는 gitdir(`.git/removed-worktree-<name>-delete-this-folder`)을 가리키는 `.git` 파일을 쓴다. `tools/worktrees.py` `_remove`(실패·성공 뒤 남은 폴더)와 `clear_orphan` 실패(WinError 32)에서 부른다. 묘비 `.git`은 보존할 내용으로 세지 않아 다음 prune이 대기 없이 폴더를 지우고, scan은 고아로만 본다. `new`는 묘비만 남은 폴더를 치우거나, 잡혀 있으면 이유를 들어 거절한다(`clear_tombstone`). `tools/land.py`는 같은 `worktrees.sweep`을 써서 따로 고칠 곳이 없다.
+- 증거: 커밋 0210c973b8. 실제 git으로 묘비 폴더 안 `git rev-parse` → 128, "gitfile does not point to a valid repository", 부모로 넘어가지 않음. `remote_pytest.py -- test/test_worktrees_tool.py test/test_land.py -q` 148 passed(AI PC, 0210c973b8). 새 시험 4개: 잡힌 폴더 묘비·git 실패·다음 prune 삭제·scan 고아, 빈 폴더 rmdir, 고아 정리 실패 묘비, `new` 정리·거절. 기존 keep/remove 판정 시험은 그대로 통과.
+- gate 변화: 없음. 개발 도구 변경이다.
+- 결정: 없음.
+- 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.

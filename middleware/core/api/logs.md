@@ -1286,3 +1286,9 @@
 - 변경: host·system 라우터가 돌려주는 한국어 detail/reason의 `Host Agent`를 화면 말 `호스트 에이전트`로 바꾸고, SSH 페어링 안내 영어 문장을 같은 한국어 평문으로 옮겼다. 경로·역할·available·evidence 판단은 그대로다.
 - 증거: 패널이 `result.detail`을 우선 표시하므로 CORE 반환 문구도 운용자 문구다(CONCEPTS.md, DESIGN.md 운용자 말). 이 문구를 단언하는 시험은 없으며 원격 시험으로 회귀를 확인한다.
 - gate 변화: 없음. 표기 변경이며 CORE 실행·장치 수용은 바꾸지 않는다. CE: 해당 없음.
+
+## 2026-10-25 · uncommitted · D-876 API reference v1.318 표시 정렬
+
+- 변경: 예약 도구로 API reference v1.318과 CORE app의 계약 설명을 맞췄다. CORE route·권한·명령·WS envelope 동작은 바꾸지 않았다.
+- 증거: 버전 고정값은 `api_reserve.py bump`로 함께 갱신했다. 원격 버전 정렬 시험으로 확인한다.
+- gate 변화: 없음. Fleet 캐시 읽기 wire의 계약 표시 변경이며 CORE·장치 수용을 주장하지 않는다. CE: 해당 없음.

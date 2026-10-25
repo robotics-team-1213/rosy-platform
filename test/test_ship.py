@@ -152,7 +152,7 @@ def device(tmp_path: Path):
     native = ROOT / "deploy/robot/pinky_pro/native"
     for name in ("native_release.py", "activate-release.sh"):
         shutil.copy2(native / name, runtime / name)
-    shutil.copy2(ROOT / "deploy/robot/pinky_pro/release/signing.py", runtime / "signing.py")
+    shutil.copy2(ROOT / "deploy/hosts/common/release/signing.py", runtime / "signing.py")
     (runtime / "wait-core-ready.py").write_text("print('ready stub')\n")
     # The new release, then only its delta members, packed the way make_delta_release does.
     new = tmp_path / "new"

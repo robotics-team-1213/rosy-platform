@@ -24,6 +24,7 @@ Isaac Sim assets and Python probes (D-322). Not a buildable package — marker o
 | `run_rosy.py` | URDFImporter → USD + ROS 2 OmniGraph runner (single robot) |
 | `model_checks.py` | Asset hash and URDF mesh/joint preflight; `run_rosy.py` refuses to start without it |
 | `import_omx.py` | OMX URDF → USD import and articulation check |
+| `run_omx_backend.py` | D-877 OMX backend on the shared sim layer: `/clock`, `/sim/joint_states`, `/sim/joint_commands`, top/front cameras (`tools/sim/run_omx_backend_conformance.sh isaac`) |
 | `assets/` | `open_manipulator_description` (vendored reference) |
 | `test/` | Host pytest: `test_graph_contract.py`, `test_model_checks.py`, `test_prepare_urdf.py` |
 

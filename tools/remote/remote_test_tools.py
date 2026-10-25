@@ -6,10 +6,12 @@ import hashlib
 
 PROFILE = "pinky-raw"
 RAW_REQUIREMENTS = "learning/curation/pinky/requirements-raw.txt"
+SD_PROFILE = "sd-writer"
+SD_INPUTS = ("tools/remote/powershell-test-tool.json", "tools/remote/sd_test_tools.py")
 
 
 def validate(profile: str | None) -> None:
-    if profile not in (None, PROFILE):
+    if profile not in (None, PROFILE, SD_PROFILE):
         raise SystemExit(f"[remote-pytest] unknown test-tools profile: {profile!r}")
 
 
@@ -75,14 +77,42 @@ export PYTHONPATH="$V/raw-tools:$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}"
 '''
 
 
-def identity(base: str, blob: str) -> str:
-    return hashlib.sha256("\n".join([base, PROFILE, blob, PROFILE_SETUP, PROFILE_JOB]).encode()).hexdigest()[:16]
+SD_SETUP = r'''
+"$N/bin/python" -I tools/remote/sd_test_tools.py install "$N" tools/remote/powershell-test-tool.json
+echo sd-writer > "$N/.test-tools"
+'''
+
+SD_JOB = r'''
+[ "$(cat "$V/.test-tools" 2>/dev/null)" = sd-writer ] && \
+  [ "$(cat "$V/.deps-sha" 2>/dev/null)" = "$2" ] || { echo "[remote] test-tools context mismatch" >&2; exit 1; }
+"$V/bin/python" -I tools/remote/sd_test_tools.py ready "$V" tools/remote/powershell-test-tool.json || exit 1
+export PATH="$V/bin:$V/sd-tools:$PATH"
+export POWERSHELL_TELEMETRY_OPTOUT=1 POWERSHELL_DIAGNOSTICS_OPTOUT=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
+export XDG_CACHE_HOME="$V/sd-state/cache" XDG_CONFIG_HOME="$V/sd-state/config" XDG_DATA_HOME="$V/sd-state/data"
+export PSModuleAnalysisCachePath="$V/sd-state/ModuleAnalysisCache"
+'''
+
+
+def inputs(profile: str) -> tuple[str, ...]:
+    validate(profile)
+    if profile == PROFILE:
+        return (RAW_REQUIREMENTS,)
+    if profile == SD_PROFILE:
+        return SD_INPUTS
+    raise SystemExit("[remote-pytest] selected test-tools profile required")
+
+
+def identity(base: str, blob: str, profile: str = PROFILE) -> str:
+    inputs(profile)
+    setup, job = (PROFILE_SETUP, PROFILE_JOB) if profile == PROFILE else (SD_SETUP, SD_JOB)
+    return hashlib.sha256("\n".join([base, profile, blob, setup, job]).encode()).hexdigest()[:16]
 
 
 def render_setup(base_recipe: str, profile: str | None) -> str:
     validate(profile)
+    setup = SD_SETUP if profile == SD_PROFILE else PROFILE_SETUP
     return base_recipe if profile is None else base_recipe.replace(
-        'echo "$DEPS" > "$N/.deps-sha"', PROFILE_SETUP + '\necho "$DEPS" > "$N/.deps-sha"', 1)
+        'echo "$DEPS" > "$N/.deps-sha"', setup + '\necho "$DEPS" > "$N/.deps-sha"', 1)
 
 
 def render_job(base_job: str, profile: str | None) -> str:
@@ -91,6 +121,8 @@ def render_job(base_job: str, profile: str | None) -> str:
     boundary = DEFAULT_CONTEXT
     if profile is None:
         return base_job
+    if profile == SD_PROFILE:
+        return base_job.replace(boundary, SD_JOB, 1)
     return base_job.replace(boundary, PROFILE_JOB, 1).replace(
         'export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1',
         'export PYTHONUTF8=1', 1)

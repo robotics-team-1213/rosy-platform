@@ -1,0 +1,5 @@
+schema_version: 1
+model: rasptank_metal
+files:
+  profile.yaml: 850f14cd72e8a518a80b47658e42a8f20b44b81e90906f3c73517ef3e7754fdb
+  capabilities.yaml: 3bb025b8d3e460cc1b74e8443e904e0b0268c5d64f643582811617ed07cf1dd8

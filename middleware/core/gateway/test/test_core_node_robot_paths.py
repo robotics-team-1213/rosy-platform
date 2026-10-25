@@ -10,8 +10,10 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
+import shutil
 
 import pytest
+import yaml
 
 from core_common import profile as profile_module
 from core_common.config import ConfigError
@@ -22,6 +24,7 @@ SRC = (Path(__file__).resolve().parents[4] / "src")
 @pytest.fixture
 def node_module(monkeypatch):
     """Same fake-rclpy load as test_core_node_teardown: core.node reads without ROS."""
+    monkeypatch.delenv("ROSY_DEPLOYMENT", raising=False)
     rclpy = types.ModuleType("rclpy")
     executors = types.ModuleType("rclpy.executors")
     node = types.ModuleType("rclpy.node")
@@ -97,3 +100,140 @@ def test_a_missing_robot_package_fails_with_the_config_error(node_module, no_ame
 
     with pytest.raises(ConfigError, match="not_installed"):
         node_module._robot_file_paths(config)
+
+
+@pytest.fixture
+def installed_rasptank(node_module, no_ament_share, monkeypatch, tmp_path):
+    """Product lookup uses an installed share, never the source-checkout fallback."""
+    source = SRC.parent / "middleware/devices/rasptank/profile/config"
+    share = tmp_path / "install/share/rasptank_metal"
+    shutil.copytree(source, share / "config")
+    packages = sys.modules["ament_index_python.packages"]
+
+    def installed(name):
+        if name != "rasptank_metal":
+            raise packages.PackageNotFoundError(name)
+        return str(share)
+
+    monkeypatch.setattr(packages, "get_package_share_directory", installed)
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
+    return share / "config"
+
+
+def test_device_defaults_use_installed_model(node_module, installed_rasptank):
+    assert node_module._robot_file_paths({"robot": {"model": "rasptank_metal"}}) == (
+        installed_rasptank / "profile.yaml", installed_rasptank / "capabilities.yaml")
+
+
+def test_device_accepts_matching_absolute_overlay(node_module, installed_rasptank, tmp_path):
+    overlay = tmp_path / "operator"
+    shutil.copytree(installed_rasptank, overlay)
+    config = {"robot": {"model": "rasptank_metal"},
+              "profile": str(overlay / "profile.yaml"),
+              "capabilities": str(overlay / "capabilities.yaml")}
+    assert node_module._robot_file_paths(config) == (
+        overlay / "profile.yaml", overlay / "capabilities.yaml")
+    profile, capabilities = node_module._load_robot_settings(config)
+    assert profile.model == "RaspTank Metal"
+    assert capabilities["teleop"] is False
+
+
+def test_device_rejects_source_only_model(node_module, no_ament_share, monkeypatch):
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
+    with pytest.raises(ConfigError, match="rasptank_metal"):
+        node_module._robot_file_paths({"robot": {"model": "rasptank_metal"}})
+
+
+def test_device_absolute_overlays_still_require_installed_package(
+        node_module, no_ament_share, monkeypatch, tmp_path):
+    monkeypatch.setenv("ROSY_DEPLOYMENT", "device")
+    config = {"robot": {"model": "not_installed"},
+              "profile": str(tmp_path / "profile.yaml"),
+              "capabilities": str(tmp_path / "capabilities.yaml")}
+    with pytest.raises(ConfigError, match="not_installed"):
+        node_module._robot_file_paths(config)
+
+
+@pytest.mark.parametrize("key", ["profile", "capabilities"])
+def test_device_rejects_other_robot_overlay(node_module, installed_rasptank, key):
+    other = SRC.parent / "middleware/devices/pinky/profile/config" / f"{key}.yaml"
+    config = {"robot": {"model": "rasptank_metal"}, key: str(other)}
+    with pytest.raises(ConfigError, match=key):
+        node_module._load_robot_settings(config)
+
+
+@pytest.mark.parametrize("contents", ["[]", "null", "profile: [", "profile: {}"])
+def test_device_rejects_invalid_profile(node_module, installed_rasptank, tmp_path, contents):
+    overlay = tmp_path / "profile.yaml"
+    overlay.write_text(contents, encoding="utf-8")
+    config = {"robot": {"model": "rasptank_metal", "profile": str(overlay)}}
+    with pytest.raises(ConfigError, match="profile"):
+        node_module._load_robot_settings(config)
+
+
+def test_device_consumes_the_validated_snapshot(node_module, installed_rasptank, monkeypatch, tmp_path):
+    overlay = tmp_path / "profile.yaml"
+    overlay.write_bytes((installed_rasptank / "profile.yaml").read_bytes())
+    read_text = Path.read_text
+    replacement = "profile:\n  model: Pinky Pro\n  max_linear_velocity: 3.0\n"
+
+    def replace_after_read(path, *args, **kwargs):
+        text = read_text(path, *args, **kwargs)
+        if path == overlay:
+            path.write_text(replacement, encoding="utf-8")
+        return text
+
+    monkeypatch.setattr(Path, "read_text", replace_after_read)
+    profile, capabilities = node_module._load_robot_settings(
+        {"robot": {"model": "rasptank_metal", "profile": str(overlay)}})
+    assert profile.model == "RaspTank Metal"
+    assert profile.max_linear_velocity == 0.0
+    assert capabilities["teleop"] is False
+
+
+def test_device_rejects_pinky_files_inside_rasptank_package(node_module, installed_rasptank):
+    other = SRC.parent / "middleware/devices/pinky/profile/config"
+    shutil.copytree(other, installed_rasptank, dirs_exist_ok=True)
+    with pytest.raises(ConfigError, match="rasptank_metal"):
+        node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
+
+
+def test_device_rejects_capabilities_mixed_inside_installed_package(node_module, installed_rasptank):
+    other = SRC.parent / "middleware/devices/pinky/profile/config/capabilities.yaml"
+    shutil.copyfile(other, installed_rasptank / "capabilities.yaml")
+    with pytest.raises(ConfigError, match="capabilities"):
+        node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
+
+
+@pytest.mark.parametrize("mutation", ["version", "model", "missing", "extra", "malformed", "stale"])
+def test_device_rejects_invalid_package_binding(node_module, installed_rasptank, mutation):
+    binding = {"schema_version": 1, "model": "rasptank_metal", "files": {
+        "profile.yaml": "850f14cd72e8a518a80b47658e42a8f20b44b81e90906f3c73517ef3e7754fdb",
+        "capabilities.yaml": "3bb025b8d3e460cc1b74e8443e904e0b0268c5d64f643582811617ed07cf1dd8"}}
+    if mutation == "version":
+        binding["schema_version"] = True
+    elif mutation == "model":
+        binding["model"] = "pinky_pro"
+    elif mutation == "missing":
+        del binding["files"]["capabilities.yaml"]
+    elif mutation == "extra":
+        binding["files"]["unexpected.yaml"] = "0" * 64
+    else:
+        binding["files"]["capabilities.yaml"] = "bad" if mutation == "malformed" else "0" * 64
+    (installed_rasptank / "deployment-binding.yaml").write_text(yaml.safe_dump(binding), encoding="utf-8")
+    with pytest.raises(ConfigError, match="binding|capabilities"):
+        node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
+
+
+def test_device_rejects_package_without_binding(node_module, installed_rasptank):
+    (installed_rasptank / "deployment-binding.yaml").unlink(missing_ok=True)
+    with pytest.raises(ConfigError, match="binding"):
+        node_module._load_robot_settings({"robot": {"model": "rasptank_metal"}})
+
+
+def test_device_accepts_current_pinky_package(node_module, installed_rasptank, monkeypatch):
+    share = SRC.parent / "middleware/devices/pinky/profile"
+    monkeypatch.setattr(sys.modules["ament_index_python.packages"], "get_package_share_directory", lambda _: str(share))
+    profile, capabilities = node_module._load_robot_settings({"robot": {"model": "pinky_pro"}})
+    assert profile.model == "Pinky Pro"
+    assert capabilities["teleop"] is True
