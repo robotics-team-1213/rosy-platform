@@ -161,9 +161,10 @@ class Bus:
                        "Present_Temperature": dict.fromkeys(names, 35)}
         for key, extra in (("Present_PWM", pwm), ("Present_Current", current), ("Present_Temperature", temp)):
             self.values[key].update(extra or {})
+        self.reads = 0
 
     def sync_read(self, name):
-        self.reads = getattr(self, "reads", 0) + 1
+        self.reads += 1
         return dict(self.values[name])
 
 
@@ -191,7 +192,8 @@ def test_a_stalled_or_hot_arm_stops_where_it_is_and_only_parks(blocked, bus, rea
     robot = Robot(blocked=blocked)
     robot.bus = bus
     # a still-blocked joint cannot park (the following-error stop would end the run), so park only when free
-    commands = ["run approach_pinky", "run grasp_pinky"] + ([] if blocked else ["park"]) + ["stop"]
+    # health is sampled once a second: hold long enough for a sample before the next chunk
+    commands = ["run approach_pinky"] + ["state"] * 40 + ["run grasp_pinky"] + ([] if blocked else ["park"]) + ["stop"]
     status = run_with(robot, lifting_library(), commands)
     fault = next(s for s in status if s["ok"] is False and reason in s.get("error", ""))
     assert fault["fault"] and fault["health"]
@@ -292,7 +294,7 @@ def test_a_library_faster_than_the_guard_streams_is_refused(tmp_path):
 def test_the_runner_reads_motor_health_about_once_a_second_beside_the_guard():
     robot = Robot()
     robot.bus = Bus()
-    status = run_with(robot, library(), ["run approach_pinky"] + ["state"] * 3 + ["stop"])
+    status = run_with(robot, library(), ["run approach_pinky"] + ["state"] * 90 + ["stop"])
     ticks = len(robot.sent)
-    assert robot.bus.reads <= 3 * (ticks // 30 + 1)  # three registers per second, not every third tick
+    assert ticks >= 90 and 3 <= robot.bus.reads <= 3 * (ticks // 30 + 1)  # three registers a second, not every 3rd tick
     assert status[-1]["command"] == "stop"
