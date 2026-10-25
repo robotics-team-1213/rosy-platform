@@ -42,7 +42,7 @@ TLS pending 동안 일반 canonical writer와 updater를 차단한다. 초기 st
 
 `os_state_ready.py`는 공통 설정 lock 안에서 실제 root의 정본 파일 내용·정확한 mode·단일 link와 삭제 표시, 파생 timezone 파일/link, live hostname, 커널 보드 serial, canonical completion의 게시 완료와 모든 공통 directory mount를 확인한다. 파일을 고쳐서 성공시키지 않는다. 확인 후 root 전용0600 runtime receipt를 현재 boot ID·slot·descriptor digest·generation·manifest digest·root/data/provision 및 공통 directory mount 사실에 결속한다. 부분 완료 게시, TLS pending, 새 기체 등록 대기, 잘못된 보드나 root 설정에서는 발행하지 않는다. 기존 early dispatcher/builder/verifier의 독립 OS bootstrap closure는 이 모듈을 포함한 여덟 개의 표준 라이브러리 state 모듈로 구성한다.
 
-updater는 매 정책 접근에서 receipt와 함께 현재 실제 파일·보드·공통 마운트를 다시 확인한다. privilege writer가 canonical generation을 commit한 뒤에는 이미 발행된 receipt도 같은 공통 lock 안에서 갱신한다. TLS transaction은 pending을 지우고 fsync한 뒤에만 갱신하며, lock을 다시 획득하지 않는다. 아직 receipt가 없는 초기 설정에서 runtime 승인을 임의 생성하지 않는다. 이 receipt는 설정 투영 증거다. 슬롯별 factory release 서명, payload recovery 순서, OS trial/health/fallback과 실제 boot/powercut 수용은 별도 검증이 필요하다.
+updater는 매 정책 접근에서 receipt와 함께 현재 실제 파일·보드·공통 마운트를 다시 확인한다. privilege writer가 canonical generation을 commit한 뒤에는 이미 발행된 receipt도 같은 공통 lock 안에서 갱신한다. TLS transaction은 pending을 지우고 fsync한 뒤에만 갱신하며, lock을 다시 획득하지 않는다. 아직 receipt가 없는 초기 설정에서 runtime 승인을 임의 생성하지 않는다. 이 receipt는 설정 투영 증거다. 슬롯별 factory 서명과 payload 복구는 아래의 별도 gate에서 확인한다. OS trial/health/fallback과 실제 boot/powercut 수용은 별도 검증이 필요하다.
 
 ### OS-owned firstboot, factory and recovery
 
