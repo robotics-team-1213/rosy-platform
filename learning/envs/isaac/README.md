@@ -6,6 +6,8 @@ D-434 keeps the model PC on Isaac Sim 5.1. Its bounded diagnostic runs headless 
 
 ## Requirements
 
+`import_omx.py`의 선택적 `--report <새 JSON 경로>`는 정상 SDK 정리 후 모델·관절·자산 지문·관측 프레임 수를 기록한다. 기존 파일은 덮어쓰지 않는다. `import_report.verify_report`는 일반 파일·크기·SDK 버전·자산 지문·필수 관절과 프레임 수를 다시 검사한다. 이 보고서는 모델 import 증거이며 `task_success`는 null이다. 물체 파지·정책 평가·실물 수용을 뜻하지 않는다. 고정 시나리오 원격 실행 관리와 접촉 왕복은 별도 공개 단위로 연결한다.
+
 - Ubuntu 24.04 with ROS 2 Jazzy `xacro` and the separately managed Isaac Sim SDK on a supported NVIDIA GPU host. See [D-434](../../../docs/adr/D-434-model-pc-and-site-pc-roles.md) for the accepted host/version/resource boundary. The GPU runtime is not part of this repository or the Pinky Pi image.
 - Source the ROSY Jazzy workspace for `xacro` package lookup. Before running Isaac Sim, configure its ROS 2 bridge. Set `ROS_DOMAIN_ID=41` for `rosy_01`; CORE retains its configured CycloneDDS transport, and the SDK's bridge transport must interoperate with it.
 - Choose an output directory outside the repository. On this Windows workspace, generated files belong only under `X:\DevTemp\`; on the Linux GPU host, use a scratch directory outside the checkout.
