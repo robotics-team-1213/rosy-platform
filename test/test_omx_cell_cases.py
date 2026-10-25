@@ -1,4 +1,5 @@
-"""Arm S cell problem cases become Isaac scenarios, and the suite says which still match the real outcome."""
+"""Arm S cell problem cases become Isaac scenarios (deploy/robot/omx/cell_cases.py), and the suite
+(deploy/robot/omx/cell_case_suite.py) says which still match the real outcome."""
 import importlib.util
 import json
 from pathlib import Path
