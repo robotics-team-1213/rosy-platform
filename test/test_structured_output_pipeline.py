@@ -40,7 +40,8 @@ def run(path, cases, call, expected):
             got = call(value)
             rows.append({'case': name, 'got': got, 'match': expected(name, got)})
         except Exception as error:  # the row records which refusal; the test asserts none happened
-            rows.append({'case': name, 'structural': f'{type(error).__name__}: {error}'[:160]})
+            detail = error.read()[:300].decode(errors='replace') if hasattr(error, 'read') else ''
+            rows.append({'case': name, 'structural': f'{type(error).__name__}: {error} {detail}'[:400]})
         rows[-1]['seconds'] = round(time.monotonic() - started, 1)
     RESULTS[path] = {'cases': len(rows), 'structural_failures': sum('structural' in r for r in rows),
                      'semantic_matches': sum(bool(r.get('match')) for r in rows), 'rows': rows}
