@@ -212,7 +212,11 @@ class ObservationCache:
         if len(remembered) > MAX_REMEMBERED:
             raise ObservationRejected("MONITORING_CAPACITY")
         proposed = self._groups | {key: records}
-        self._compose(proposed, self.scope_sites, now, wall, self._sequence)
+        snapshot = self._compose(proposed, self.scope_sites, now, wall, self._sequence)
+        # Aging floats, UTC fractions and a growing sequence must fit without another source update.
+        size = len(snapshot.model_dump_json().encode('utf-8'))
+        if size + 64 * (len(snapshot.nodes) + len(snapshot.links)) > 1024 * 1024:
+            raise ObservationRejected('MONITORING_CAPACITY')
         if self.store is not None:
             self.store.save(key, [record.value(now) for record in records.values()],
                             wall=wall, peer_cursor=peer_cursor)
