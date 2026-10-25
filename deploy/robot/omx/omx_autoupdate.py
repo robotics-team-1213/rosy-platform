@@ -33,7 +33,8 @@ A service may also need the idle cell (D-871: cameras, torque-OFF observers and 
 `session_lock` (default `~/rosy-omx/session.lock`) and switches only under the same idle rule as step 5.
 The lock is released after the smoke check and before the restart, because the observer's own start
 guard takes it. `"system_site_packages": true` builds the lock's venv over the host Python's packages
-(the observers need the system ROS `rclpy`).
+(the observers need the system ROS `rclpy`); `"uv": "~/.local/bin/uv"` builds it with uv for a host Python
+without `ensurepip`.
 
 Every step is one JSON line on stdout and the state is in `state.json`. Stopping updates:
 `systemctl --user disable --now rosy-omx-autoupdate.timer`. Release signing (D-441) remains a later step: until then trust rests on
@@ -106,6 +107,12 @@ class Host:
                            check=True, timeout=300)
             return
         system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
+        if self.cfg.get("uv"):  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
+            subprocess.run([os.path.expanduser(self.cfg["uv"]), "venv", "-q", "--python", self.cfg["base_python"],
+                            *system, str(target)], check=True, timeout=300)
+            subprocess.run([os.path.expanduser(self.cfg["uv"]), "pip", "install", "-q", "--python",
+                            str(target / "bin" / "python"), "-r", str(lock)], check=True, timeout=3000)
+            return
         subprocess.run([self.cfg["base_python"], "-m", "venv", *system, str(target)], check=True, timeout=300)
         subprocess.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)],
                        check=True, timeout=3000)

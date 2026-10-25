@@ -524,3 +524,16 @@ def test_a_session_that_starts_during_the_restart_defers_instead_of_condemning_t
     assert current(tmp_path) == str(Path("releases") / ("a" * 12))
     host.healthy = True
     assert u.run() == "switched"  # retried, not known_bad
+
+
+def test_a_host_python_without_ensurepip_builds_the_env_with_uv(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: calls.append(args))
+    lock = tmp_path / "lock"
+    lock.write_text("pyserial==3.5\n")
+    m.Host({"base_python": "/usr/bin/python3", "system_site_packages": True, "uv": "/opt/uv"}).build_env(
+        lock, tmp_path / "env")
+    assert calls[0] == ["/opt/uv", "venv", "-q", "--python", "/usr/bin/python3", "--system-site-packages",
+                        str(tmp_path / "env")]
+    assert calls[1] == ["/opt/uv", "pip", "install", "-q", "--python", str(tmp_path / "env" / "bin" / "python"),
+                        "-r", str(lock)]

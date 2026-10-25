@@ -9771,3 +9771,9 @@ osy-d395-s1d\`.
 - 변경: [Learning·Isaac 실제 배포](validation/learning-conveyor-deployment-2026-10-25/result.md)에 PR201–206 공개 source·원격 검사·기존 SDK 증거 재사용·실제 signed sequence41/sourcee231 서비스 활성화와 독립 readback을 구분했다.
 - 증거: 운영 로그인 화면과 동기화 Episode·learned policy·실물 수용은 확인하지 않았다. 복사 상태 화면은 계정 바인딩 보호로 시작이 거절됐으며 우회하지 않았다. 별개 G1 지연 bound 초과와 동일 소스 후속 CI 통과를 함께 보존했다.
 - gate 변화: 모델 PC 코드·Learning 실제 활성화를 확인. 데이터·정책·현장 gate를 승격하지 않는다. CE 해당 없음 — 기존 교훈 보존·재사용, G1 원인은 미해결이다.
+
+## 2026-10-25 · uncommitted · D-871 관측 env를 uv로 만들기
+
+- 변경: `omx_autoupdate.py`의 `uv` 설정이 있으면 venv와 lock 설치를 uv로 한다(`uv venv --python <base> [--system-site-packages]`, `uv pip install`). 관제 PC 첫 적용에서 시스템 Python 3.14에 `ensurepip`(python3.14-venv)이 없어 `python -m venv`가 실패했다. sudo가 없어 패키지를 설치할 수 없고, 기존 관측 venv도 uv로 만든 것이다. `omx-devices-autoupdate.json.example`에 `uv`를 넣었다.
+- 증거: 관제 PC 2026-10-25 20:24 `run`이 `ensurepip is not available`로 준비 단계에서 멈췄다(유닛 변화 없음). 원격 시험(아래 PR).
+- gate 변화: 없음.
