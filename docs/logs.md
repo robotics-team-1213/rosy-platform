@@ -10380,6 +10380,12 @@ osy-d395-s1d\`.
 - 증거: private Hub 고정 commit의6파일 SHA, fresh-process ACTInference 숫자 출력1회, 원래 fixture/정규화/출력 일치, 원격·회수 EXIT0·잠금 해제. 두 pre-write 중단과 미제출 요청도 보존했다.
 - gate 변화: 실제 모델 전달·숫자 재적재 수용. 정책 task 성공·실물/양팔/주행·서비스 배포는 별도다. CE 새 교훈 기록; 추가 학습·로봇 명령 없음.
 
+## 2026-10-25 · 7d0cfcd6e9 · Isaac 정지 적재면·컨베이어 접촉 왕복
+
+- 변경: [왕복 검증 기록](validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md), 실행 안내와 [혼합 drive 방식 교훈](solutions/runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md)을 추가했다.
+- 증거: 실제 SDK의 양방향 접촉 파지·이송·안착과 소유 GPU 해제, FINAL6파일 해시·원격377 PASS/1 SKIP·독립 이미지 검토. 이전4개 SDK 실패를 유지했다.
+- gate 변화: 합성 정지 지지면 간 단일 물리 SIM 스모크 수용이다. 실제 카메라 맵·Pinky 전체·learned AI·실물 수용은 미검증. CE 새 교훈 기록.
+
 ## 2026-10-25 · uncommitted · D-862 실제 통합관제 구현과 수용 경계 연결
 
 - 변경: 전용 service의 namespace 경계와 실제 직접 장치 소유 검사·worker 종료/재시운전 제약을 D-862/API에 명시했다. 기존 D-855 navigation 위임과 새 정보/정지 경로의 책임을 구분한다.
@@ -10446,6 +10452,14 @@ osy-d395-s1d\`.
 
 - 변경: [API reference](reference/ROSY API & Protocol Reference.md) §11 변경 이력 표에 v1.314 행 추가. `### v1.314` 절만 두고 표행을 빠뜨려 test_changelog_has_a_row_for_the_live_version 가 실패했다(P1 첫 착지 중단 원인).
 - 증거: 진단 재실행으로 실패 식별(run-1.txt FAILED 1건) 후 수정. 재검증은 같은 시트 원격 재실행으로 확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs(plans): D-865 P2 분리 표시
+
+- 변경: [D-865 실행 설계](plans/2026-10-25-fleet-policy-admission-design.md) P2를 P2a(판정 core, 이번 착지)와 P2b(루트·루프·설정 조립·지속화·SRS 계약 줄)로 분리 기록.
+- 증거: 미실행 — 문서 변경.
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음

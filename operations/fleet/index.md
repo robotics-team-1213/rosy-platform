@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
+- 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
+- 2026-10-25 · 85838e52ea · 재접속 scalar 대신 원본 이벤트 확인
 - 2026-10-25 · uncommitted · refactor(fleet): cli 사이트 설정 helper를 console_site_config로 이동
 - 2026-10-25 · uncommitted · 통합관제 경계 등록의 전체 회귀 보완
-- 2026-10-25 · uncommitted · D-862 통합 정보 수집과 조건부 하위 정지 결속
-- 2026-10-24 · uncommitted · TaskStore의 dispatch 통제·queue 책임 분리
-- 2026-10-24 · uncommitted · D-862 공통 API reference 버전 정렬

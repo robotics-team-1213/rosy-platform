@@ -1526,3 +1526,9 @@
 - 변경: 인식의 기존 pivot 후보도 CORE의 관찰 대기·사람 감지·관측 불명 대기에서 두 축 모두 정지하는지 검증한다. 사람·불명은 정상 clear window가 지난 뒤 원인까지 확인한다.
 - 증거: 독립 계약 검토에서 인식 전방 정지 수정의 권한 변경은 발견되지 않았다. 원격 회귀 결과는 별도 기록한다.
 - gate 변화: 없음. CORE 실행 코드는 바꾸지 않는다.
+
+## 2026-10-25 · 85838e52ea · 미응답 이벤트의 원본 ID 재전송
+
+- 변경: Agent는 producer scope 없는 WELCOME 최대 seq로 버퍼를 삭제하지 않는다. 원래 event_id·내용·seq를 보존한 기존 미응답 재큐잉을 사용한다(D-869).
+- 증거: [검증 기록](../../../docs/validation/event-reconnect-replay-2026-10-25/result.md). 새 CORE·재접속 RED2건 뒤 Agent/Hub/API 관련 원격 회귀98개 통과, skip0/NEW0. 독립 소스 검토 차단점 없음.
+- gate 변화: SOURCE 회귀만 확인했다. 영속 outbox·실물 재부팅·현장 수용은 수행하지 않았다. CE 해당 없음: 판단은 ADR·주석·회귀에 있다.
