@@ -50,10 +50,7 @@ def payload(root, release=NEW):
 def bridge(root):
     installed = root / "opt/rosy/native-runtime"
     old = root / "opt/rosy/releases" / OLD / "deploy/robot/native"
-    for name in ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
-                 "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py", "os_state_layout.py",
-                 "rosy_auto_update.py", "rosy_claim.py",
-                 "image_layer_boot.py", "image_layer_files.py"):
+    for name in module("image_layer_boot").ENGINE_FILES:
         source = NATIVE / name
         text = source.read_text(encoding="utf-8") if source.exists() else "# missing bridge implementation\n"
         write(installed / name, text)
@@ -99,10 +96,11 @@ def test_bridge_accepts_the_previous_engine_declared_closure_without_a_new_helpe
     assert verified == [OLD]
 
 
-def test_new_bridge_does_not_accept_a_missing_declared_helper(tmp_path):
+@pytest.mark.parametrize("helper", ["os_state_layout.py", "first_boot_runtime.py", "os_state_firstboot.py"])
+def test_new_bridge_does_not_accept_a_missing_declared_helper(tmp_path, helper):
     payload(tmp_path)
     bridge(tmp_path)
-    (tmp_path / "opt/rosy/native-runtime/os_state_layout.py").unlink()
+    (tmp_path / "opt/rosy/native-runtime" / helper).unlink()
     with pytest.raises(ValueError, match="BRIDGE_REQUIRED"):
         sync(tmp_path)
     assert not (tmp_path / UNIT).exists()
