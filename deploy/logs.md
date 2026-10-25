@@ -3472,3 +3472,10 @@
 - 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
 - gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
 - CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
+
+## 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+
+- Change: authenticate exactly legacy3/current4; bind current/staged/rollback Compose and loaded proof, retire only identity-proven outgoing PostgreSQL without force/volume deletion; retain separate same-commit physical relocation.
+- Evidence: real-signature source bc61f16ea9 RED3/8 controls; canonical-inventory source77d8b34bac RED38/13 controls; overlay source9e8e86575f RED2/1 control; forged physical journal source8e856f02a9 RED1. Raw logs remain outside Git; independent implementation review and committed GREEN pending. Initial42 failures used a corrected-later manual selector and are not uniform migration-cause proof.
+- Gate: source preparation only; no install/site/FIELD or deployment acceptance.
+- CE: existing whole-configuration and identical-external-helper lessons applied; solved lesson decision awaits actual GREEN.

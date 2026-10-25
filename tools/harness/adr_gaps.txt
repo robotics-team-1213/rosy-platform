@@ -56,3 +56,6 @@ D-873 reserved in another in-flight branch (refs/adr/D-873), absent from origin/
 D-880 reserved in another in-flight branch (refs/adr/D-880, fix/comm-admission-fence), absent from main at D-883; remove when its ADR lands
 D-881 reserved in another in-flight branch (refs/adr/D-881, feat/rosy-ab-state), absent from main at D-883; remove when its ADR lands
 D-882 reserved in another in-flight branch (refs/adr/D-882, fix/comm-freshness-current-main), absent from main at D-883; remove when its ADR lands
+D-884 reserved in another in-flight branch (refs/adr/D-884), absent from this pinned main; remove when its ADR lands
+D-885 reserved in another in-flight branch (refs/adr/D-885), absent from this pinned main; remove when its ADR lands
+D-886 reserved in another in-flight branch (refs/adr/D-886), absent from this pinned main; remove when its ADR lands
