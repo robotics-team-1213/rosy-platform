@@ -24,6 +24,10 @@ ENGINE_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_
                 "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py", "os_state_layout.py",
                 "rosy_auto_update.py", "rosy_claim.py",
                 "image_layer_boot.py", "image_layer_files.py")
+# The signed bridge-v1 baseline stays valid when later engines add helpers.
+BRIDGE_V1_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
+                   "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py",
+                   "rosy_auto_update.py", "rosy_claim.py", "image_layer_boot.py", "image_layer_files.py")
 BACKUPS = "var/lib/rosy/image-layer-backup"
 JOURNAL = BACKUPS + "/boot-transition.json"
 RELEASE_ID = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}")
@@ -127,6 +131,33 @@ def _previous(root: Path) -> str | None:
     return target.name
 
 
+def _engine_contract(native: Path) -> tuple[tuple[str, ...], bytes]:
+    path = _safe(native, "image_layer_boot.py")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise ValueError("BOOT_BRIDGE_REQUIRED: engine metadata is not a regular file")
+        raw = handle.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
+        raise ValueError("BOOT_BRIDGE_REQUIRED: engine metadata exceeds size limit")
+    tree = ast.parse(raw)
+    declared = {target.id: ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
+                for target in node.targets if isinstance(target, ast.Name)
+                and target.id in ("ENGINE_FILES", "CAPABILITIES")}
+    files = declared["ENGINE_FILES"]
+    if (not isinstance(files, tuple) or not len(BRIDGE_V1_FILES) <= len(files) <= 64
+            or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*\.py", name) for name in files)
+            or len(set(files)) != len(files) or not set(BRIDGE_V1_FILES) <= set(files)
+            or not set(CAPABILITIES) <= set(declared["CAPABILITIES"])):
+        raise ValueError("BOOT_BRIDGE_REQUIRED: invalid engine closure or capabilities")
+    return files, raw
+
+
+def _engine_matches(native: Path, installed: Path, files: tuple[str, ...]) -> bool:
+    return all(_safe(native, name).is_file() and _safe(installed, name).is_file()
+               and _sha256(native / name) == _sha256(installed / name) for name in files)
+
+
 def require_bridge(root: Path, release_id: str, verify) -> str:
     """Capabilities come from installed bytes matching a verified signed release."""
     for candidate in dict.fromkeys([release_id, _previous(root)]):
@@ -135,17 +166,15 @@ def require_bridge(root: Path, release_id: str, verify) -> str:
         native = root / "opt/rosy/releases" / candidate / "deploy/robot/native"
         installed = root / "opt/rosy/native-runtime"
         try:
-            if not all(_safe(native, name).is_file() and _safe(installed, name).is_file()
-                       and _sha256(native / name) == _sha256(installed / name) for name in ENGINE_FILES):
+            files, snapshot = _engine_contract(native)
+            if not _engine_matches(native, installed, files):
                 continue
             verify(candidate)
-            tree = ast.parse((native / "image_layer_boot.py").read_text(encoding="utf-8"))
-            declared = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
-                            and any(isinstance(target, ast.Name) and target.id == "CAPABILITIES"
-                                    for target in node.targets))
-            if set(CAPABILITIES) <= set(declared):
+            # The closure declaration and installed bytes must still be the
+            # same snapshot after the caller verified the signed release.
+            if _engine_contract(native)[1] == snapshot and _engine_matches(native, installed, files):
                 return _previous(root) or candidate
-        except (OSError, ValueError, SyntaxError, StopIteration, TypeError):
+        except (OSError, ValueError, SyntaxError, StopIteration, TypeError, KeyError):
             continue
     raise ValueError("BOOT_BRIDGE_REQUIRED: install the signed continuity bridge first")
 
