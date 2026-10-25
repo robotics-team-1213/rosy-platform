@@ -8,7 +8,7 @@ if [[ -n "${ROSY_PROVISION_BUNDLE:-}" ]]; then
 fi
 # One run at a time: the boot unit, the retry timer and a manual start share
 # the same files. 200 s outlasts a full run (120 s Wi-Fi budget plus file work).
-exec flock -w 200 /run/rosy-first-boot.lock python3 "$SCRIPT_DIR/rosy-first-boot.py" \
+exec flock -w 200 /run/rosy-first-boot.lock python3 -I -B "$SCRIPT_DIR/rosy-first-boot.py" \
   --root "${ROSY_ROOT:-/}" \
   "${bundle_args[@]}" \
   "$@"

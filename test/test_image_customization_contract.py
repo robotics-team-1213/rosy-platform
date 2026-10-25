@@ -7,6 +7,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import runpy
 import subprocess
 import sys
 
@@ -289,6 +290,23 @@ def _valid_root(tmp_path: Path) -> Path:
     defaults.parent.mkdir(parents=True, exist_ok=True)
     defaults.write_text((ROOT / "contracts/foundation/config/rosy_default.yaml").read_text(encoding="utf-8"),
                         encoding="utf-8")
+    # Model current factory storage prerequisites as well as the legacy runtime files.
+    contract = runpy.run_path(str(VERIFY))
+    for directory, names in (("opt/rosy/native-runtime", contract["STORAGE_HELPERS"]),
+                             ("opt/rosy/os-bootstrap", contract["BOOTSTRAP_HELPERS"])):
+        for name in names:
+            path = root / directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                path.write_text("# image helper fixture\n")
+    for unit in ("rosy-os-storage.service", "rosy-os-tailnet.service"):
+        (root / "etc/systemd/system" / unit).write_text("[Unit]\n")
+    for unit, consumers in (("rosy-os-storage.service", contract["STORAGE_CONSUMERS"]),
+                            ("rosy-os-tailnet.service", ("tailscaled.service", "rosy-tailscale-join.service"))):
+        for consumer in consumers:
+            _link(root / "etc/systemd/system" / (consumer + ".requires") / unit, "../" + unit)
+    (root / "etc/rosy/tls").mkdir(mode=0o750, exist_ok=True)
+    (root / "var/lib/tailscale").mkdir(parents=True, mode=0o700, exist_ok=True)
     return root
 
 
