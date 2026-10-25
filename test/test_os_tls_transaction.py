@@ -1,5 +1,6 @@
 """Real TLS CLI body/OpenSSL/IO; root ownership and outer privilege locks are modeled."""
 import contextlib
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -68,8 +69,7 @@ def test_actual_tls_owner_publishes_runtime_for_b_and_return_to_a(device, tmp_pa
         assert (root / tls.TLS / "ca.pem").read_bytes() == ca
 
 
-def test_tls_interrupted_file_write_can_resume_without_reissuing_the_ca(device, tmp_path):
-    first, store, other, common, bundle = device
+def _interrupt_after_ca_key(store, tmp_path):
     atomic = store.atomic
     lost = False
 
@@ -87,6 +87,12 @@ def test_tls_interrupted_file_write_can_resume_without_reissuing_the_ca(device, 
     store.atomic = interrupted
     with pytest.raises(tls.Hold):
         _apply(store, tmp_path, fence)
+    store.atomic = atomic
+
+
+def test_tls_interrupted_file_write_can_resume_without_reissuing_the_ca(device, tmp_path):
+    first, store, other, common, bundle = device
+    _interrupt_after_ca_key(store, tmp_path)
     pending = common / "state/tls-pending.json"
     assert pending.is_file(), "incomplete TLS changes need a durable recovery record"
     ca = (common / "tls/ca.pem").read_bytes()
@@ -94,9 +100,71 @@ def test_tls_interrupted_file_write_can_resume_without_reissuing_the_ca(device, 
     with pytest.raises(ValueError, match="TLS.*pending"):
         with writer.configuration_update(store.root):
             pass
-    store.atomic = atomic
     assert _apply(store, tmp_path)["ok"]
     assert not pending.exists()
     assert (common / "tls/ca.pem").read_bytes() == ca
     assert first.FirstBootProvisioner(root=other).apply(bundle=bundle, hardware_serial=SERIAL)["ok"]
     assert b"ROSY_API_TLS=required\n" in (other / tls.ENV).read_bytes()
+
+
+def test_published_tls_revision_is_finished_without_rolling_back_local_files(device, tmp_path, monkeypatch):
+    first, store, other, common, bundle = device
+    state = first._native_helper("os_state_firstboot")
+    atomic = state._json_atomic
+    complete = store.root / "var/lib/rosy/provisioning/complete.json"
+
+    def interrupted(path, *args):
+        if path == complete:
+            raise OSError("modeled completion interruption after current pointer")
+        return atomic(path, *args)
+
+    monkeypatch.setattr(state, "_json_atomic", interrupted)
+    with pytest.raises(tls.Hold, match="PUBLICATION_UNCERTAIN"):
+        _apply(store, tmp_path)
+    current = (common / "state/current.json").read_bytes()
+    ca = (common / "tls/ca.pem").read_bytes()
+    assert b"ROSY_API_TLS=required\n" in (store.root / tls.ENV).read_bytes()
+    assert yaml.safe_load((store.root / tls.CONFIG).read_text())["network"]["tls"]
+    monkeypatch.setattr(state, "_json_atomic", atomic)
+    assert _apply(store, tmp_path)["recovered"]
+    assert (common / "state/current.json").read_bytes() == current
+    assert (common / "tls/ca.pem").read_bytes() == ca
+    assert not (common / "state/tls-pending.json").exists()
+    assert first.FirstBootProvisioner(root=other).apply(bundle=bundle, hardware_serial=SERIAL)["ok"]
+    assert b"ROSY_API_TLS=required\n" in (other / tls.ENV).read_bytes()
+
+
+def test_tls_recovery_does_not_overwrite_a_foreign_core_auth_change(device, tmp_path):
+    _, store, _, common, _ = device
+    _interrupt_after_ca_key(store, tmp_path)
+    target = store.root / tls.CONFIG
+    foreign = target.read_bytes() + b"fixture_foreign_auth_change: true\n"
+    target.write_bytes(foreign)
+    with pytest.raises(ValueError, match="foreign file change"):
+        _apply(store, tmp_path)
+    assert target.read_bytes() == foreign
+    assert (common / "state/tls-pending.json").is_file()
+
+
+def test_tls_recovery_refuses_a_forged_write_set(device, tmp_path):
+    _, store, _, common, _ = device
+    _interrupt_after_ca_key(store, tmp_path)
+    pending = common / "state/tls-pending.json"
+    record = json.loads(pending.read_text())
+    record["targets"]["../escape"] = record["targets"].pop(tls.CONFIG)
+    pending.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="write set differs"):
+        _apply(store, tmp_path)
+    assert not (common / "escape").exists()
+
+
+def test_a_pending_tls_transaction_blocks_an_otherwise_admitted_updater(tmp_path, monkeypatch):
+    from os_state_fakes import projected_device
+    from test_first_boot_provisioning import _module
+
+    projected_device(tmp_path, monkeypatch)
+    layout = _module()._native_helper("os_state_layout")
+    assert layout.policy_directory(tmp_path).name == "updates"
+    (tmp_path / layout.TLS_PENDING).write_text("{}")
+    with pytest.raises(ValueError, match="TLS transaction pending"):
+        layout.policy_directory(tmp_path)
