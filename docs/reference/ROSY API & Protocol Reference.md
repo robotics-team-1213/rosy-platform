@@ -3881,6 +3881,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.321 | 2026-10-26 | D-884: project-scoped HF storage pool, namespace capacity reservations, pinned archive/reconciliation, verified local reclaim/restore and managed cache; existing publish/manage authority and envelope1.0 preserved. Host source verification is separate from live HF/Isaac acceptance. |
 | v1.318 | 2026-10-25 | D-876: passive Fleet connection cache wire, strict bounded observations, preserved cache/source ages and D-535 reasons; no raw body or control fields. Handler and independent Monitoring runtime remain unimplemented; envelope1.0 unchanged. |
 | v1.316 | 2026-10-25 | D-870: optional strict source sampled_at UTC, conservative100ms clock-bound lifetime, receiver monotonic expiry and implementation-derived swarm.reference_freshness; mixed peer and field UTC acceptance stay explicit, envelope1.0 unchanged. |
 | v1.315 | 2026-10-25 | D-869: replay unacknowledged events by immutable event_id/content; WELCOME watermark0 for unscoped legacy producers, memory/durable identity conflict parity. No new wire fields or envelope1.0 change; no durable outbox guarantee. |
