@@ -35,6 +35,7 @@ def validate_selection(report, document, *, require_splits=True):
     if not isinstance(rows, list) or len(rows) > 10000:
         raise ValueError('bounded segment list required')
     splits, groups, seen = {'train': [], 'eval': []}, {}, set()
+    excluded = native.excluded_indexes(report)
     if any(isinstance(row, dict) and row.get('split') == 'test' for row in rows):
         splits['test'] = []
     for index, row in enumerate(rows):
@@ -63,7 +64,7 @@ def validate_selection(report, document, *, require_splits=True):
         for key in ('reviewer', 'reason', 'object'):
             if not isinstance(row[key], str) or not row[key].strip() or len(row[key]) > 1000:
                 raise ValueError(f'segment {key} required (1..1000 characters)')
-        if row['split'] == 'exclude':
+        if row['split'] == 'exclude' or episode in excluded:
             continue
         if row['outcome'] != 'success' or row['intervention']:
             raise ValueError('included segments require human-confirmed success without intervention')
@@ -85,8 +86,9 @@ def parent_decisions(report, document):
     rows = copy.deepcopy(report['episodes'])
     for row in rows:
         row['split'] = 'exclude'
+    excluded = native.excluded_indexes(report)
     for segment in document['segments']:
-        if segment['split'] != 'exclude':
+        if segment['split'] != 'exclude' and segment['episode_index'] not in excluded:
             rows[segment['episode_index']]['split'] = segment['split']
     return rows
 
@@ -122,7 +124,8 @@ def verified_source(root, report):
     current = native.inspect_dataset(root, report['repo_id'], body_units=report['body_units'],
         rig_revision=report['rig_revision'], calibration_revision=report['calibration_revision'],
         source_mode=report['source_mode'], capture_provenance=report.get('capture_provenance'),
-        environment_evidence=report.get('environment_evidence'))
+        environment_evidence=report.get('environment_evidence'), action_space=report.get('action_space'),
+        camera_setup=report.get('camera_setup'))
     if current != report:
         raise ValueError('original source inspection changed')
     return native.load_dataset(root, report['repo_id'])
@@ -143,6 +146,7 @@ def frame_at(dataset, report, episode, frame):
 
 def export_segments(root, report, document, output):
     output = native._new_output(output, root)
+    native.static_episodes(root, len(report['episodes']))
     splits = validate_selection(report, document)
     dataset = verified_source(root, report)
     from lerobot.datasets.lerobot_dataset import LeRobotDataset

@@ -1,51 +1,11 @@
-// D-488 site map page — pure helpers (no DOM) so node tests cover them.
+// D-488 site map geometry, editing and trip request helpers (no DOM).
+import {DRAWING_ERROR_LABEL} from './drawing-errors.js';
+import {ACTION_LABEL, RESOLVER_DECISION_LABEL, TRIP_ERROR_LABEL, startCheckText, tripErrorText} from './trip-display.js';
+export {routeAttention} from './route-attention.js';
 
 export const PLACE_KINDS = ['junction', 'park', 'charge', 'stop', 'turnaround', 'start'];
 export const PLACE_KIND_LABEL = {
   junction: '교차', park: '주차', charge: '충전', stop: '정차', turnaround: '회차', start: '출발',
-};
-export const ACTION_LABEL = {straight: '직진', left: '좌회전', right: '우회전', uturn: '회차', stop: '정지'};
-/** D-517 5 (M4) Fleet resolver decisions for a wait cycle. */
-export const RESOLVER_DECISION_LABEL = {replan: '다른 길 계획', wait: '다른 로봇 대기', human: '운영자 판단'};
-/** D-577 3 AI PC fact kinds (shadow: shown, never acted on here). */
-export const AI_FACT_LABEL = {
-  trip_route_check: 'AI 경로 편차 확인',
-  wait_cycle_confirmed: '교착 확인 (모두 멈춤)', wait_cycle_stale_input: '낡은 입력의 교착일 수 있음',
-  waiting_but_moving: '대기인데 움직임', livelock: '움직이지만 진행 없음', stalled: '권한이 있는데 멈춤',
-  unknown_occupancy_long: '위치 불명 점유 30초 넘음', rear_blocked: '뒤가 막힘', path_blocked_by_robot: '앞에 로봇',
-  incident_context: '사건 원인 초안',
-};
-
-export {routeAttention} from './route-attention.js';
-import {TRIP_ERROR_LABEL} from './trip-error-labels.js';
-export {TRIP_ERROR_LABEL};
-/** D-541 5/7: why CORE ended the trip lease (``detail.lease_reason``). */
-const LEASE_END_LABEL = {
-  taken_over: '로봇 화면·Pilot에서 넘겨받음', expired: '점유가 만료됨(관제 연결이 끊겼던 듯)',
-  mode_left: '로봇이 운행 모드를 떠남(멈춤·수동·도킹·막힘 중단)', estop: '비상 정지', released: '점유를 놓음',
-  core_restarted: '로봇 CORE가 다시 시작됨', leased: '다른 운행이 로봇을 쥠', renew_timeout: '점유 갱신 응답이 없음',
-};
-export const TRIP_STATE_LABEL = {
-  started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨', link_wait: '연결 대기',
-};
-const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
-export const TRIP_REASON_LABEL = {
-  pose: '위치를 믿을 수 없어 멈췄습니다',
-  junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
-  JUNCTION_ODOM_STALE: '로봇 odom이 낡아 교차로 지시를 다음 주기에 다시 보냅니다',
-  junction_unexpected: '지도에 없는 자리에서 교차로를 봐 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
-  junction_corner_hold: '지시한 교차로 바로 앞에서 차선 모서리로 돌지 않게 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
-  junction_no_window: '교차로 위치를 확인할 기대 창이 없어 좌·우 회전 지시를 보내지 않고 멈췄습니다 · 차선 주행을 껐습니다',
-  stall: '경로를 따라 나아가지 않아 멈췄습니다 · 현장을 확인하세요',
-  lane_arc: '회전교차로 호를 달리던 로봇이 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
-  TRIP_LOOP_ERROR: '관제 운행 처리에 오류가 나 멈췄습니다 · 로봇 정지를 확인하고 관리자에게 알리세요',
-  restart: '관제 서버가 다시 시작돼 멈췄습니다 · 자동으로 다시 출발하지 않습니다',
-  TRIP_ROBOT_JUNCTION_UNSUPPORTED: '로봇 CORE가 교차로 지시를 모릅니다 · 새 이미지가 필요합니다',
-  TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
-  TRIP_GOAL_REFUSED: '로봇이 목적지 지시를 거절해 멈췄습니다 · 현장을 확인하세요',
-  LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행이 켜져 있지 않습니다',
-  lease_lost: '운행 끝 · 다시 몰려면 새 운행을 시작하세요',
-  TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',
 };
 export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_NOT_ACTIVE: '활성 지도가 없습니다',
@@ -56,7 +16,7 @@ export const SITE_MAP_ERROR_LABEL = {
   SITE_MAP_ROUTE_ACTIVE: '운행·대형·지도 기록이 진행 중입니다 · 끝난 뒤 활성화하세요',
   SITE_MAP_UNPLANNABLE: '경로 계산에 쓸 수 없는 지도입니다',
   SITE_MAP_SURVEY_UNREVIEWED: '조사 좌표 기준과 축척 근거를 먼저 검토하세요',
-  SITE_MAP_ROAD_UNREVIEWED: '관측·추정 도로를 검토하고 근거를 남기세요',
+  SITE_MAP_ROAD_UNREVIEWED: '관측·추정한 도로·시설을 검토하고 근거를 남기세요',
   SITE_MAP_EXCLUSION_OVERLAP: '금지 구역과 겹치는 주행 차로를 수정하세요',
   SITE_MAP_START_INVALID: '출발 자리가 차로 위에 없거나 차로 방향과 다르게 놓였습니다',
   SITE_MAP_TOO_LARGE: '지도가 너무 큽니다',
@@ -83,9 +43,8 @@ export function siteMapErrorText(error) {
   if (error.status === 401) return '관제 토큰을 확인하고 다시 접속하세요';
   if (error.status === 403) return '운영자 권한이 필요합니다 · 계정을 확인하세요';
   if (error.status >= 500) return '관제 서버 응답을 확인할 수 없습니다 · 잠시 뒤 다시 접속하세요';
-  if (!error.status && /Failed to fetch|NetworkError|ERR_/.test(error.message || ''))
-    return '관제 연결이 끊겼습니다 · 네트워크를 확인하고 다시 접속하세요';
-  const base = SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
+  if (!error.status && /Failed to fetch|NetworkError|ERR_/.test(error.message || '')) return '관제 연결이 끊겼습니다 · 네트워크를 확인하고 다시 접속하세요';
+  const base = DRAWING_ERROR_LABEL[error.code] || SITE_MAP_ERROR_LABEL[error.code] || error.message || String(error);
   const fields = (error.detail?.errors || []).map(item => `${(item.loc || []).join('.')}: ${item.msg}`);
   return fields.length ? `${base} — ${fields.join(' · ')}` : base;
 }
@@ -101,38 +60,14 @@ export function planIsCurrent(plan, active) {
   return Boolean(plan && active && plan.map_version === active.version);
 }
 
-/** D-601 D: "출발 가능" / "방향 반대(178°)" / "차선 밖 5 cm" from a plan's ``start_check``. */
-export function startCheckText(check) {
-  if (!check?.code) return '출발 가능';
-  if (check.auto_align) return `${startCheckText({...check, auto_align: false})} · 출발 때 자동 정렬`;
-  if (check.code === 'TRIP_START_OFF_LANE') return `차선 밖 ${Math.round((check.off_lane_m || 0) * 100)} cm`;
-  const err = Math.abs(check.heading_err_deg ?? NaN);
-  if (!Number.isFinite(err)) return '방향 모름';
-  return `${err > 90 ? '방향 반대' : '방향 어긋남'}(${err.toFixed(0)}°)`;
-}
 
-export function tripErrorText(code, detail = {}) {
-  const base = TRIP_ERROR_LABEL[code] || `경로 계획 거절 (${code || '알 수 없음'})`;
-  if (/HEADING_CONFLICT|START_HEADING_MISMATCH/.test(code || '') && detail?.heading_err_deg != null)
-    return `${base} · ${startCheckText({...detail, code: 'heading'})}`;
-  if (/START_OFF_(LANE|MAP)/.test(code || '') && detail?.off_lane_m != null)
-    return `${base} · ${startCheckText({...detail, code: 'TRIP_START_OFF_LANE'})}`;
-  if (code?.endsWith('LOOP_FULL') && Number.isInteger(detail.robots) && Number.isInteger(detail.capacity))
-    return `${base} · 고리 ${detail.robots}/${detail.capacity}대`;  // robots counts this one too
-  if (code === 'TRIP_UNKNOWN_EDGE' && typeof detail.edge === 'string' && detail.edge)
-    return `${base} · ${detail.edge}`;
-  if (code !== 'TRIP_NO_ROUTE') return base;
-  const leg = Number.isInteger(detail.segment) ? ` · ${detail.segment + 1}번째 구간` : '';
-  return base + leg + (detail.unblock_would_help ? ' · 막은 차로를 풀면 길이 있습니다' : '');
-}
 
 /** Map metres <-> SVG pixels; map y goes up, SVG y goes down. ``turn`` (0/90/180/270) turns the
  * whole view clockwise on screen (D-513 7) so the map reads the way the turned camera picture does.
  * ``discs`` ({x, y, r} metres, D-540 4 robot rings) are kept inside the view too. */
 export function fitView(map, width, height, pad = 24, turn = 0, discs = []) {
   const q = turn * Math.PI / 180, c = Math.round(Math.cos(q)), s = Math.round(Math.sin(q));
-  const rot = (x, y) => [x * c + y * s, -x * s + y * c];
-  const xs = [], ys = [];
+  const rot = (x, y) => [x * c + y * s, -x * s + y * c], xs = [], ys = [];
   const add = (x, y) => { const [rx, ry] = rot(x, y); xs.push(rx); ys.push(ry); };
   for (const place of map.places) add(place.x, place.y);
   for (const edge of map.edges) for (const [x, y] of edge.polyline) add(x, y);
@@ -242,58 +177,9 @@ export function editViewTurn(map, turn) {
   return {...copy(map), view_turn_deg: value};
 }
 
-/** D-541 7: e.g. "로봇 화면·Pilot에서 넘겨받음(kim-tablet)". */
-function leaseEndText(trip) {
-  const why = LEASE_END_LABEL[trip.detail?.lease_reason] || trip.detail?.lease_reason || '점유를 잃음';
-  return trip.detail?.lease_by ? `${why}(${trip.detail.lease_by})` : why;
-}
 
-/** D-540 (d): why a trip stopped or failed, for the card line and the queue; '' for any other state. */
-export function tripEndText(trip) {
-  if (trip?.state !== 'stopped' && trip?.state !== 'failed') return '';
-  const why = trip.reason === 'lease_lost' ? leaseEndText(trip) : TRIP_REASON_LABEL[trip.reason] || trip.reason;
-  return [`운행 ${TRIP_STATE_LABEL[trip.state]}`, why].filter(Boolean).join(' · ');
-}
 
-const WAIT_LABEL = {signal: '신호', authority: '통행권', link_wait: '연결', crosswalk_look: '횡단보도', crosswalk_wait: '횡단보도', crosswalk_held: '횡단보도'};
-export function tripWaitText(trip, wait = trip?.wait) {  // D-763 8 (v1.231): Fleet's one waiting predicate; past its bound, D-622 (rev 2 Q7)
-  return wait?.waiting || wait?.over_bound ? `${wait.waiting ? '대기' : '대기 상한 넘음'} · ${WAIT_LABEL[wait.reason] || wait.reason}` : '';
-}
 
-/** One line for the trip panel: state, current lane, next place and action, pose source. */
-export function tripStatusText(trip, map) {
-  if (!trip) return '진행 중인 운행 없음';
-  const names = new Map((map?.places || []).map(place => [place.id, place.name]));
-  const parts = [`${TRIP_STATE_LABEL[trip.state] || trip.state} · ${trip.robot_id}`];
-  if (trip.current_edge) parts.push(`차로 ${trip.current_edge}`);
-  if (trip.next_place) parts.push(`다음 ${names.get(trip.next_place) || trip.next_place} ${ACTION_LABEL[trip.next_action] || trip.next_action || ''}`.trim());
-  if (trip.pose) parts.push(`자세 ${TRIP_POSE_STATE_LABEL[trip.pose.state] || trip.pose.state} · ${trip.pose.source === 'sighting' ? 'Rosy Cam' : trip.pose.source === 'bridged' ? 'odom 다리' : trip.pose.source}`);
-  if (trip.hold) parts.push('바뀐 경로 확인 대기 · 장소에서 서 있음');
-  if (['started', 'running', 'link_wait'].includes(trip.state) && tripWaitText(trip)) parts.push(tripWaitText(trip));  // open only
-  if (trip.stop_moved) {  // D-517 3 (2026-10-09 "다음 지점까지 가서 섬"): never stands inside a zone
-    const {from, to} = trip.stop_moved;
-    parts.push(`목적지 ${names.get(from) || from || '좌표'} → ${names.get(to) || to} · 교차로 안에 서지 않도록 다음 지점에서 섭니다`);
-  }
-  if (trip.reason === 'stall' && Number.isFinite(trip.detail?.stall_s)) {
-    parts.push(`${trip.detail.stall_s}초 넘게 ${TRIP_REASON_LABEL.stall}`);
-  } else if (trip.reason) {
-    parts.push(TRIP_REASON_LABEL[trip.reason] || trip.reason);
-  }
-  if (trip.reason === 'lease_lost') parts.push(leaseEndText(trip));
-  else if (trip.lease?.state === 'held') parts.push('CORE 점유 중');
-  if (trip.detail?.junction_retry) parts.push(TRIP_REASON_LABEL[trip.detail.junction_retry] || trip.detail.junction_retry);
-  if (trip.detail?.junction_fields_dropped) parts.push('활성 지도가 바뀌어 교차로 기대 값을 보내지 않았습니다');
-  if (trip.reason === 'lane_arc' && trip.detail?.arc_reason) parts.push(`사유 ${trip.detail.arc_reason}`);  // D-520 2
-  if (trip.detail?.junction_reason === 'arc_mismatch') parts.push('호 끝 장소와 다른 장소의 지시라 로봇이 버렸습니다');
-  if (trip.detail?.arc_end_unarmed) parts.push('호 끝에 다음 지시가 없어 로봇이 일반 차선 추종으로 돌아갔습니다');
-  if (trip.reason === 'junction_unexpected') {  // D-507 3: where it stopped and why CORE held
-    const {x, y} = trip.pose || {};
-    if (Number.isFinite(x) && Number.isFinite(y)) parts.push(`지도 자세 (${x.toFixed(2)}, ${y.toFixed(2)})`);
-    const why = trip.detail?.junction_reason || trip.detail?.line_reason;
-    if (why) parts.push(`사유 ${why}`);
-  }
-  return parts.join(' · ');
-}
 
 /** D-517 2: a lap over the start places, beginning and ending at ``start`` (the robot's own place). */
 export function repeatTripBody(map, start, leader = '') {

@@ -56,9 +56,9 @@ class AccountSessionTest {
     }
     private val privateKey = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(java.security.SecureRandom())
     private fun encoded(bytes: ByteArray) = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-    private fun signed(now: Long, resource: String = "site:test", subject: String = "alice"): String {
+    private fun signed(now: Long, resource: String = "site:test", subject: String = "alice", capabilities: List<String> = listOf("camera.manage")): String {
         val header = encoded("""{"alg":"Ed25519","typ":"at+jwt","kid":"key"}""".toByteArray())
-        val payload = encoded("""{"iss":"https://account.example.test","aud":"$resource","sub":"$subject","sid":"family","jti":"test-jti-123456789","rev":1,"iat":$now,"exp":${now+300},"grants":[{"resource":"$resource","capabilities":["camera.manage"]}]}""".toByteArray())
+        val payload = encoded("""{"iss":"https://account.example.test","aud":"$resource","sub":"$subject","sid":"family","jti":"test-jti-123456789","rev":1,"iat":$now,"exp":${now+300},"grants":[{"resource":"$resource","capabilities":${org.json.JSONArray(capabilities)}}]}""".toByteArray())
         val bytes = "$header.$payload".toByteArray()
         val signer = org.bouncycastle.crypto.signers.Ed25519Signer(); signer.init(true, privateKey); signer.update(bytes, 0, bytes.size)
         return "$header.$payload.${encoded(signer.generateSignature())}"
@@ -67,6 +67,20 @@ class AccountSessionTest {
     private fun callback(begin: String): String {
         val state = begin.toHttpUrl().queryParameter("state")
         return "https://apps.example.test/cam/callback?code=code&state=$state"
+    }
+    @Test fun vaultSiteGrantsDoNotRejectCamTokensOrGrantCameraAccess() {
+        for (camera in listOf(false, true)) {
+            val caps = listOf("vault.read", "vault.operate", "vault.manage") + if (camera) listOf("camera.manage") else emptyList()
+            val session = AccountSession(trusted(), MemoryStore(), { endpoint, _ ->
+                if (endpoint == "token") org.json.JSONObject().put("token_type", "Bearer")
+                    .put("access_token", signed(1000, capabilities = caps)).put("refresh_token", "f".repeat(40))
+                else org.json.JSONObject().put("active", true).put("sub", "alice").put("aud", "site:test")
+            }, {1000})
+            session.complete(callback(session.begin("site:test")))
+            assertEquals(camera, session.permits("site:test", "camera.manage"))
+            assertTrue(session.permits("site:test", "vault.read"))
+            assertFalse(session.permits("site:test", "accounts.manage"))
+        }
     }
     @Test fun signedExchangeRefreshAndRevokeUseCurrentIdentity() {
         var now = 1000L; var refreshes = 0; var active = true; val store = MemoryStore()

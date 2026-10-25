@@ -86,7 +86,7 @@ def test_pixel_unsaved_gesture_blocks_ai_and_result_reload(tmp_path):
         page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
         expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
         expect(page.locator('#review-ai-mask_check')).to_be_enabled()
-        page.get_by_role('button', name='배경 클래스 선택', exact=True).click()
+        page.locator('#pixel-class').select_option('0')
         page.locator('#pixel-canvas').focus(); page.keyboard.press('t')
         page.keyboard.down('Space'); page.keyboard.press('Alt+ArrowRight'); page.keyboard.up('Space')
         expect(page.locator('#pixel-draft')).to_contain_text('1획')

@@ -220,3 +220,294 @@ def test_real_lerobot_roundtrip_keeps_independent_capture_groups(module, tmp_pat
     from native_review import reviewed_splits
     with pytest.raises(ValueError, match='nonempty'):
         reviewed_splits(report, decisions)
+
+
+def sealed_two_arm_recording(tmp_path, episodes=2, name='bench-two-arm-001', offset=0):
+    """A real bi_omx_follower LeRobot v3 recording sealed by deploy/robot/omx/record_seal.py."""
+    import numpy as np
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
+    names = [f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in
+             ('shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos',
+              'wrist_flex.pos', 'wrist_roll.pos', 'gripper.pos')]
+    features = {key: dict(dtype='float32', shape=(12,), names=names) for key in ('observation.state', 'action')}
+    features['observation.images.top'] = dict(dtype='video', shape=(32, 32, 3), names=['height', 'width', 'channels'])
+    root = tmp_path/'recordings'/name
+    dataset = LeRobotDataset.create(repo_id='local/two-arm', fps=10, root=root, robot_type='bi_omx_follower',
+                                    features=features, use_videos=True, video_backend='pyav', vcodec='h264',
+                                    batch_encoding_size=1)
+    try:
+        for episode in range(episodes):
+            for frame in range(3):
+                dataset.add_frame({'observation.state': np.full(12, offset + episode + frame, np.float32),
+                                   'action': np.full(12, offset + episode + frame + .5, np.float32),
+                                   'observation.images.top': np.full((32, 32, 3), 40 * frame, np.uint8),
+                                   'task': 'Hand the block over'})
+            dataset.save_episode(parallel_encoding=False)
+    finally:
+        dataset.finalize()
+    run = tmp_path/('run-' + name)
+    run.mkdir()
+    (run/'record.json').write_text(json.dumps(dict(dataset=dict(root=str(root)))))
+    (run/'session.json').write_text(json.dumps(dict(config='record.json', teleop_only=False,
+                                                    exit_code=0, safe_end=True)))
+    calibration = tmp_path/'arm_a_follower.json'
+    calibration.write_text('{"shoulder_pan": {"homing_offset": 0}}')
+    spec = importlib.util.spec_from_file_location(
+        'record_seal', Path(__file__).resolve().parents[4]/'deploy/robot/omx/record_seal.py')
+    seal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(seal)
+    seal.seal(run, name, tmp_path/'collections', rig_revision='bench-a-b-r1', calibrations=[calibration])
+    return tmp_path/'collections'/name
+
+
+def test_real_sealed_leader_recording_becomes_a_prepared_intake_with_one_session(module, tmp_path):
+    pytest.importorskip('lerobot', reason='real LeRobot 0.4.4 roundtrip requires export environment')
+    collection = sealed_two_arm_recording(tmp_path)
+    output = tmp_path/'prepared'
+    receipt = module.prepare_native([collection], output, 'local/two-arm')
+    report = json.loads((output/'inspection.json').read_text())
+    decisions = json.loads((output/'decisions.json').read_text())
+    assert receipt['reader_verified'] is True and receipt['fixture_only'] is False
+    assert report['robot_type'] == 'bi_omx_follower' and report['source_mode'] == 'leader_native'
+    assert [(e['session_id'], e['cycle_id']) for e in report['episodes']] == [
+        ('bench-two-arm-001', 'bench-two-arm-001-ep0000'), ('bench-two-arm-001', 'bench-two-arm-001-ep0001')]
+    assert all(e['outcome'] == 'unknown' and e['split'] == 'exclude' for e in decisions)
+    for name in ('intake-receipt.json', 'inspection.json', 'capture.json', 'environment.json', 'decisions.json'):
+        assert (output/name).is_file()
+    from native_capture import check_capture_groups
+    with pytest.raises(ValueError, match='session_id crosses'):
+        check_capture_groups(report['episodes'], [dict(split='train'), dict(split='eval')])
+
+
+@pytest.mark.parametrize('fault', ['bytes', 'calibration', 'name'])
+def test_altered_or_renamed_sealed_collection_is_refused_before_output(module, tmp_path, fault):
+    pytest.importorskip('lerobot', reason='real LeRobot 0.4.4 roundtrip requires export environment')
+    collection = sealed_two_arm_recording(tmp_path, episodes=1)
+    if fault == 'bytes':
+        (collection/'session.json').write_text('{}')
+    elif fault == 'calibration':
+        (collection/'calibration'/'arm_a_follower.json').write_text('{}')
+    else:
+        collection = collection.rename(collection.with_name('other-name'))
+    with pytest.raises(ValueError):
+        module.prepare_native([collection], tmp_path/'prepared', 'local/two-arm')
+    assert not (tmp_path/'prepared').exists()
+
+
+def test_two_real_recordings_reach_independent_splits_and_center_conversion(module, tmp_path):
+    """Seal -> prepare-native -> human review -> sealed split -> Learning Center ACT arrays."""
+    pytest.importorskip('lerobot', reason='real LeRobot 0.4.4 roundtrip requires export environment')
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]/'training'/'omx'))
+    import experiment_native
+    from native_review import split_reviewed
+    first = sealed_two_arm_recording(tmp_path, name='bench-two-arm-001')
+    second = sealed_two_arm_recording(tmp_path, episodes=1, name='bench-two-arm-002', offset=20)
+    output = tmp_path/'prepared'
+    module.prepare_native([first, second], output, 'local/two-arm')
+    report = json.loads((output/'inspection.json').read_text())
+    assert [e['session_id'] for e in report['episodes']] == ['bench-two-arm-001'] * 2 + ['bench-two-arm-002']
+    decisions = json.loads((output/'decisions.json').read_text())
+    for decision, split in zip(decisions, ('train', 'train', 'eval')):
+        decision.update(split=split, outcome='success', object_result='moved_as_intended',
+                        reviewer='bench operator', reason='watched full episode')
+    splits = tmp_path/'splits'
+    split_reviewed(output, report, decisions, splits)
+    profile = dict(schema='rosy.omx.learning-profile/1', name='Two-arm bench', mode='independent',
+                   task='Hand the block over',
+                   arms=[dict(id=arm, joint_names=module.JOINTS[:], units='normalized_-100_100') for arm in ('arm_a', 'arm_b')],
+                   cameras=[dict(id='top', input_key='observation.images.top', arm_id=None, role='top',
+                                 source_identity='camera-by-id-top', placement='overhead-650mm',
+                                 shape=[3, 32, 32], purposes=['policy', 'record'])])
+    result = experiment_native.convert_native(splits, tmp_path/'center-upload', profile=profile)
+    assert [row['split'] for row in result['episodes']] == ['train', 'train', 'eval']
+    assert result['act_only'] is True and result['physical_acceptance'] is False
+
+
+def teacher_fixture():
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import teacher_fixture as fixture
+    return fixture
+
+
+@pytest.mark.parametrize('revisions', [False, True])
+def test_sealed_scripted_teacher_collection_is_accepted_with_its_trajectory_hash(module, tmp_path, revisions):
+    fixture = teacher_fixture()
+    root = fixture.seal_teacher(tmp_path, 'arm-s-replay-1', revisions=revisions)
+    operator = dict(fixture.OPERATOR)
+    if revisions:  # the origin seal names the calibration digest itself; the operator repeats it
+        operator['calibration_revision'] = json.loads((root/'manifest.json').read_text())['calibration_revision']
+    manifest, digest = module._sealed_collection(root, operator)
+    assert manifest['source_mode'] == 'scripted_teacher' and module._hash(digest)
+    assert manifest['session_id'] == 'arm-s-replay-1'
+    assert {k: manifest[k] for k in module.REVISIONS} == operator
+    origin = 'seal' if revisions else 'operator'
+    assert manifest['revision_origin'] == dict(rig_revision=origin, calibration_revision=origin)
+    assert manifest['session_id_origin'] == ('seal' if revisions else 'folder')
+    assert manifest['teacher_sha256'] == hashlib.sha256((root/'teacher/trajectory.json').read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize('fault', ['no_operator', 'leader_operator', 'rig_differs', 'calibration_differs'])
+def test_teacher_revisions_come_from_the_operator_and_must_match_a_seal(module, tmp_path, fault):
+    fixture = teacher_fixture()
+    root = fixture.seal_teacher(tmp_path, 'arm-s-replay-1', revisions=fault != 'no_operator')
+    manifest = json.loads((root/'manifest.json').read_text())
+    operator = dict(rig_revision=manifest.get('rig_revision'), calibration_revision=manifest.get('calibration_revision'))
+    if fault == 'no_operator':
+        operator = None
+    elif fault == 'leader_operator':
+        manifest['source_mode'] = 'leader_native'
+        (root/'manifest.json').write_text(json.dumps(manifest))
+    else:
+        operator[fault.replace('_differs', '_revision')] = 'operator-says-other'
+    with pytest.raises(ValueError, match='operator'):
+        module._sealed_collection(root, operator)
+
+
+@pytest.mark.parametrize('fault', ['tampered', 'missing', 'uncovered', 'kind', 'schema', 'file', 'sha_format',
+                                   'trajectory_schema', 'trajectory_segments', 'frames', 'session_sha',
+                                   'session_segments', 'oversized', 'deep', 'long_list', 'not_object',
+                                   'gap', 'bool', 'keys', 'unequal', 'no_reset', 'episodes'])
+def test_scripted_teacher_collection_without_its_exact_small_teacher_is_refused(module, tmp_path, fault):
+    fixture = teacher_fixture()
+    source = dict(oversized=dict(note='x'*17000), deep=dict(a=dict(b=dict(c=[1]))),
+                  long_list=dict(dataset='local/omx-pick', method='median', episodes=list(range(1001)), dwell_s=1),
+                  not_object=[1, 2]).get(fault, fixture.SOURCE)
+    segments = dict(gap=dict(A=[0, 3], reset=[4, 5], B=[5, 8]), bool=dict(A=[0, True], reset=[1, 2], B=[2, 3]),
+                    unequal=dict(A=[0, 3], reset=[3, 4], B=[4, 6]),
+                    no_reset=dict(A=[0, 3], reset=[3, 3], B=[3, 6])).get(fault, fixture.SEGMENTS)
+    teacher = dict(kind=dict(kind='leader'), schema=dict(schema='rosy.omx-replay-trajectory.v0'),
+                   file=dict(file='teacher/other.json'), keys=dict(segments=dict(A=[0, 3], B=[3, 6]))).get(fault)
+    root = fixture.seal_teacher(tmp_path, 'arm-s-replay-1', source=source, segments=segments, teacher=teacher)
+    manifest = json.loads((root/'manifest.json').read_text())
+    path = root/'teacher/trajectory.json'
+
+    def rewrite(document):
+        path.write_text(json.dumps(document))
+        manifest['teacher_sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+        session = json.loads((root/'session.json').read_text())
+        session['replay']['sha256'] = manifest['teacher_sha256']
+        (root/'session.json').write_text(json.dumps(session))
+        fixture.write_manifest(root, manifest)
+    if fault == 'tampered':
+        path.write_text('{"schema": "rosy.omx-replay-trajectory.v1"}')
+        fixture.write_manifest(root, manifest)  # files cover the new bytes; teacher_sha256 still names the old
+    elif fault in ('missing', 'uncovered'):
+        path.unlink()
+        if fault == 'uncovered':
+            fixture.write_manifest(root, manifest)
+    elif fault == 'sha_format':
+        manifest['teacher_sha256'] = manifest['teacher_sha256'].upper()
+    elif fault == 'trajectory_schema':
+        rewrite(dict(fixture.trajectory(), schema='other'))
+    elif fault == 'trajectory_segments':
+        rewrite(dict(fixture.trajectory(), segments=dict(A=[0, 2], reset=[2, 3], B=[3, 5])))
+    elif fault == 'frames':
+        rewrite(dict(fixture.trajectory(), frames=[[0.0]*6]*6))
+    elif fault in ('session_sha', 'session_segments'):
+        session = json.loads((root/'session.json').read_text())
+        if fault == 'session_sha':
+            session['replay']['sha256'] = '0'*64
+        else:
+            session['replay']['segments'] = dict(A=[0, 2], reset=[2, 3], B=[3, 5])
+        (root/'session.json').write_text(json.dumps(session))
+        fixture.write_manifest(root, manifest)
+    elif fault == 'episodes':
+        manifest['total_episodes'] = 3
+    (root/'manifest.json').write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match='teacher|replay'):
+        module._sealed_collection(root, fixture.OPERATOR)
+
+
+def test_teacher_source_within_bounds_and_a_median_episode_list_are_accepted(module, tmp_path):
+    fixture = teacher_fixture()
+    source = dict(dataset='local/omx-pick', method='median', episodes=list(range(1000)), dwell_s=1.0)
+    root = fixture.seal_teacher(tmp_path, 'arm-s-replay-1', source=source)
+    assert module._sealed_collection(root, fixture.OPERATOR)[0]['teacher']['source'] == source
+
+
+def test_site_paths_are_dropped_and_teacher_dataset_keeps_its_basename(module):
+    fixture = teacher_fixture()
+    config = dict(dataset=dict(root='/home/u/x', fps=10), robot=dict(port='/dev/serial/by-id/s', cameras=dict(
+        top=dict(index_or_path='/dev/v4l/by-id/c', width=32), side=dict(index_or_path=2))))
+    assert module._redacted(config) == dict(dataset=dict(fps=10), robot=dict(cameras=dict(
+        top=dict(width=32), side=dict(index_or_path=2))))
+    assert module._redacted(dict(fixture.SOURCE), keep_name=True)['dataset'] == 'arm-s-demos'
+    assert module._redacted(dict(dataset='local/omx-pick'), keep_name=True) == dict(dataset='local/omx-pick')
+    error = "error: [Errno 2] could not open port /dev/serial/by-id/usb-FAKE_SERIAL-if00: 'No such file' (/dev/ttyACM0)"
+    assert module._redacted(dict(initial_torque_off=error)) == dict(initial_torque_off=(
+        "error: [Errno 2] could not open port <redacted-path> 'No such file' (<redacted-path>)"))  # the path pattern takes the colon
+    assert module._redacted(dict(port='/dev/serial/by-id/usb-FAKE_SERIAL-if00', root='/home/u/run'), keep_name=True) == dict(root='run')
+
+
+PINNED_DRIVER = r'''
+import json, pathlib, sys
+source, tmp = map(pathlib.Path, sys.argv[1:])
+sys.path[:0] = [str(source/'learning/curation/omx'), str(source/'learning/curation/omx/test')]
+import collection_intake, teacher_fixture as fixture
+recordings, collections = tmp/'recordings', tmp/'collections'
+def prepare(chosen, name):
+    return collection_intake.prepare_native(chosen, tmp/name, 'local/'+name, **fixture.OPERATOR)
+plain = fixture.seal_teacher(collections, 'arm-s-replay-1', fixture.teacher_dataset(recordings/'one'))
+static = fixture.seal_teacher(collections, 'arm-s-replay-2', fixture.teacher_dataset(
+    recordings/'two', marker={'static_episodes.json': json.dumps(dict(episodes=2, static=[1], threshold=1.0))}))
+stopped = fixture.seal_teacher(collections, 'arm-s-replay-3', fixture.teacher_dataset(
+    recordings/'three', marker={'DO_NOT_TRAIN.txt': 'leader never moved\n'}))
+receipt = prepare([plain], 'prepared')
+out = tmp/'prepared'
+report = json.loads((out/'inspection.json').read_text())
+capture = json.loads((out/'capture.json').read_text())
+leaked = sorted(str(p.relative_to(out)) for p in out.rglob('*') if p.is_file()
+                and any(s.encode() in p.read_bytes() for s in fixture.SITE_STRINGS))
+redactions = json.loads((out/'rosy_provenance/session-000000/redactions.json').read_text())
+files = json.loads((plain/'manifest.json').read_text())['files']
+prepare([static], 'prepared-static')
+static_report = json.loads((tmp/'prepared-static'/'inspection.json').read_text())
+try:
+    prepare([stopped], 'prepared-stopped')
+    refused = None
+except ValueError as exc:
+    refused = str(exc)
+print(json.dumps(dict(
+    receipt_mode=receipt['source_mode'], reader=report['reader_verified'], mode=report['source_mode'],
+    cycles=[(e['session_id'], e['cycle_id']) for e in report['episodes']],
+    outcomes=sorted({(e['outcome'], e['split']) for e in report['episodes']}),
+    teacher=capture['teacher_sha256'] == json.loads((plain/'manifest.json').read_text())['teacher_sha256'],
+    teachers=[sorted(t) for t in capture['teachers']], dataset=capture['teachers'][0]['source']['dataset'],
+    origin=capture['collection_manifests'][0]['revision_origin'],
+    session_origin=capture['collection_manifests'][0]['session_id_origin'],
+    revisions=[capture['rig_revision'], capture['calibration_revision']] == list(fixture.OPERATOR.values()),
+    leader_key='collection_manifest_sha256' in capture, in_report=report['capture_provenance'] == capture,
+    leaked=leaked, redactions=all(redactions[n]['redacted_from_sha256'] == files[n]
+                                  for n in ('session.json', 'record-config.json')),
+    static=static_report.get('excluded_episodes'), refused=refused,
+    stopped_output=(tmp/'prepared-stopped').exists())))
+'''
+
+
+def test_pinned_real_scripted_teacher_collection_becomes_a_prepared_intake(tmp_path):
+    """Real LeRobot 0.4.4 in the Learning center learner venv (see docs/solutions lerobot-lives-in...)."""
+    import os
+    import subprocess
+    if os.environ.get('ROSY_RUN_PINNED_LEARNING') != '1':
+        pytest.skip('explicit existing isolated learner environment required')
+    python = Path.home()/'.local/share/rosy-learning-center/venv-cpu/bin/python'
+    assert python.is_file(), 'existing pinned learner Python is unavailable'
+    env = {key: os.environ[key] for key in ('HOME', 'PATH', 'USER', 'LOGNAME') if key in os.environ}
+    env.update(HF_HUB_OFFLINE='1', HF_DATASETS_OFFLINE='1', CUDA_VISIBLE_DEVICES='', OMP_NUM_THREADS='2')
+    result = subprocess.run([str(python), '-I', '-B', '-c', PINNED_DRIVER, str(Path(__file__).resolve().parents[4]),
+                             str(tmp_path)], capture_output=True, text=True, env=env, timeout=300, check=False)
+    assert result.returncode == 0, result.stderr[-4000:]
+    proof = json.loads(result.stdout.splitlines()[-1])
+    assert proof['receipt_mode'] == proof['mode'] == 'scripted_teacher' and proof['reader'] is True
+    assert proof['cycles'] == [['arm-s-replay-1', 'arm-s-replay-1-ep0000'], ['arm-s-replay-1', 'arm-s-replay-1-ep0001']]
+    assert proof['outcomes'] == [['unknown', 'exclude']]
+    assert proof['teacher'] and proof['in_report'] and not proof['leader_key'] and proof['revisions']
+    assert proof['teachers'] == [['kind', 'segments', 'session_id', 'source', 'teacher_sha256']]
+    assert proof['dataset'] == 'arm-s-demos'
+    assert proof['origin'] == dict(rig_revision='operator', calibration_revision='operator')
+    assert proof['session_origin'] == 'folder'
+    assert proof['leaked'] == [] and proof['redactions']
+    assert [row['episode_index'] for row in proof['static']] == [1]
+    assert 'DO_NOT_TRAIN' in proof['refused'] and proof['stopped_output'] is False

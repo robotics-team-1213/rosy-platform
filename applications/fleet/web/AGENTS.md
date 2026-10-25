@@ -19,6 +19,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `index.html` | Shell; loads shared `/common/` tokens, theme, components and `ui.js`, then `console.js` |
 | `shared/` | Shared read assets served at `/console/assets/<name>` (D-518). D-766 size unit (`test/architecture/size_units.txt`). |
 | `shared/styles.css` | Console styles (shared tokens come from `/common/tokens.css`, not this folder) |
+| `shared/fleet-client.js`, `shared/request.js` | Console transport and Fleet response interpretation. New imports use `/console/assets/`; Fleet retains only the two exact former `/common/` URLs as compatibility aliases. |
 | `work/work.css`, `shared/power-action.js`, `shared/area-nav.js` | D-766 splits: the work-area sheet, the robot card sleep/wake button (D-440 6, out of `roster.js`), the address-view area selection (D-741 6·7, out of `console.js`) |
 | `console.js` | Shell: auth state, `call()`, render, polling cadence; composes the modules below |
 | `console-auth.js`, `console-goal.js`, `console-refresh.js` | D-798 3.2 splits of `console.js`: lock/unlock, session, token and password login, development mode; roster keys, click-to-goal and the operator pin; dispatch band and rearm, site path, state poll, cancel-all |
@@ -26,7 +27,9 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `map-overlays.js`, `map-polling.js` | D-798 3.2 splits of `map-view.js`: chips, formation, mediation, sightings, camera tracking and site overlays; site-map, grid, traffic, guide and sightings polling and the traffic toggle |
 | `camera-backdrop.js` | D-513 7 / D-515 / D-560 camera picture path: Vision's map plane (`shared/vision-view.js` `createPlaneFeed`) drawn on `toPx`, the D-515 top-down warp (`camera-warp.js` math) only as the fallback, large view/thumbnail turn, Vision frame binding. `map-view.js` passes its draw hook and `toPx` |
 | `traffic-view.js` | D-517 10 traffic layer drawing (bands, zones, grant ticks). Polling and the toggle live in `map-polling.js` |
-| `roster.js` | Robot cards and attention/intervention queues |
+| `roster.js` | Robot workspace and trip-form lifetime; composes summary, cards and attention queues. Console uses its task methods instead of its private trip object. |
+| `roster-presentation.js`, `roster.css` | Robot list presentation, shared robot labels/DOM helpers, and roster/workspace-only styles. Shared installation headings and formation actions remain in `shared/styles.css`. |
+| `shared/trip-display.js` | Trip/action/AI display vocabulary and explanations, without DOM, geometry or requests. Map and trip consumers import the display owner directly. |
 | `devices/` | Device connection/approval UI and read-only discovery/address/app-directory adapters. Own size unit (D-766); enrollment and camera pairing keep their existing public asset URLs and API owners. `device-discovery.js` consumes injected Fleet reads and lifetime; it does not import registration writes. |
 | `inbox.js` | D-632 notification view; transport and polling remain in the Console shell |
 | `work/work-view.js`, `work/channel-request-view.js` | Work area, its own size unit `fleet/web/work` (docs/plans/2026-10-15-fleet-console-work-unit.md); `channel-request-view.js` is the D-680 대화 요청 review. D-664 source-scoped Task/Mission/trip/Cell Job read view at `/console?view=work` (D-741 7: `show=pending|done` filters the same answer by status in the browser; D-763 4: rows read the server's `visible_state` and trip wait, `show=new` shows only the server's `kinds`); owner scope remains server-side, source status/identity is preserved, no direct dispatch; selected PROPOSED Missions use the existing admit route with named-operator checks and current dispatch generation |
@@ -35,7 +38,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `signals.js` | Traffic-signal cards |
 | `site-layer.js` | Ceiling-camera sightings layer (pure; display and cross-check only) |
 | `shared/vision-view.js`, `field-view.js`, `field-layers.js` | Camera preview, field proposal/rectified view, layer toggles |
-| `site-map.html`, `site-map.js`, `shared/site-map-model.js`, `site-map.css` | D-488 `/console/site-map`: 활성 지도·초안 보기, 장소·차로 초안 편집과 활성화, D-490 경로 미리보기, D-494 5 운행 칸(시작·취소·바뀐 경로 확인, 1 s 조회), D-494 6 지도 가르치기 칸(`site-map-teach.js`, 1 s 조회). 순수 계산은 `shared/site-map-model.js` |
+| `maps/`, `shared/site-map-model.js`, `shared/site-map-edit.js` | D-825 지도 문서와 편집 자산 holder. 공개 주소는 기존 `/console/site-map`·`/console/assets/<basename>`이며 매핑은 Fleet `console/static_routes.py`를 본다. 기하·이력은 도메인 독립 함수, `map-editor.js`는 Fleet DTO 어댑터, `map-authoring.js`는 화면 조립이다. 기존 경로 미리보기·가르치기는 유지한다. |
 | `shared/map-fit.js`, `map-fit-view.js` | D-375 lane-paint map fit proposal (pure math / view) |
 | `shared/field-warp.js` | Shared `warpImage` read (D-518). The install proposal screen stays in `field-view.js` |
 | `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |

@@ -465,3 +465,39 @@
 - 변경: 기존 788줄 site-map-model에 라벨을 추가하는 대신 표를 trip-error-labels.js로 옮기고 기존 export를 유지했다. 자산 manifest를 등록하고 source ratchet을 720줄로 낮췄다. 구버전 표의 다른 코드 맵을 포함하는 coverage와 공유 문서 import 경계를 함께 연결했다.
 - 증거: 34ff5f55c1의 원격 라벨 coverage·문서 import·서버 자산·모듈 구조 회귀 94 passed, skip0, 0 NEW다. 기존 node 모델 소비자 6개 suite는 63 tests/exit0이며 f3d7d3fba5..34ff5f55c1 크기 검사 8 commits가 통과했다. 추출 소스의 독립 검토를 받았다.
 - gate 변화: 공개 import·자산 제공을 보존했다. 전체 FULL은 이전 f3의 실패 기록이며 수정 범위의 GREEN과 구별한다. CE 해당 없음: 모듈·manifest·기존 coverage로 변경 판단을 복원할 수 있다.
+## 2026-10-24 · e1e69f32c7 · 관제 UI 표시·수명·스타일 경계 분리
+
+- 변경: 운행 표시를 trip-display, 목록 표현을 roster-presentation, 로스터 전용 스타일을 roster.css로 분리했다. 셸은 로스터 공개 과업 동작을 쓰고 기존 권한·요청·폴링·초점을 유지한다. 실제 소비자·자산 registry·문서 로드를 함께 갱신했다.
+- 증거: 원격 집중44 passed/2 warnings/0 NEW, 4폭×2테마의 계산 스타일 일치. [검증 기록](../../../docs/validation/fleet-ui-boundaries-2026-10-24/result.md). 최종 완결 커밋의 공식 착지 검증은 별도다.
+- gate 변화: 없음. 합성 호스트 UI 검증이며 장치·사용자 G3·현장 수용은 미실시다. CE: 부모 Python stdout의 UTF-8 복구 교훈을 docs/solutions에 기록했다.
+
+## 2026-10-24 · afb218aed1 · 최신 운행 오류 문구의 표시 소유 보존
+
+- 변경: main의 TRIP_JOB_NOT_FOUND 문구를 새 trip-display 소유로 통합했다. 지도 fitView 선언 정리를 유지하고 지도 ratchet을606으로 낮췄다. 문구 반환 Node 단언을 추가한다.
+- 증거: [통합 기록](../../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md). 고정 커밋의 오류 어휘·Node·소유·8화면 집중 검증과 공식 착지 결과는 후속 보고로 구분한다.
+- gate 변화: 없음. 동료 실행 계약·권한·문구는 유지한다. CE 해당 없음: 기존 소유 설계와 회귀에 판단을 남겼다.
+
+
+## 2026-10-25 · uncommitted · D-862 관제별 정보·지도·정지 요청 화면
+
+- 변경: 기존 delegation 화면에 통합 tree/detail/evidence/task와 소유 단위별 읽기 전용 지도를 연결했다. 하위 정지와 단위별 UNVERIFIED 결과·조회 이력·명시 로컬 재시운전 확인을 표시하며 auth/lifecycle reset을 유지한다.
+- 증거: 준비 patch의 JS/JSON/Python 구문과 독립 범위 검토를 확인했다. 실제 browser·Node와 backend HTTP의 새 source 증거는 원격 GREEN 후 기록한다. feature matrix의 verified 등록도 실제 HTTP 통과 후 수행한다.
+- gate 변화: 새 기능의 SOURCE/원격 검증을 진행하며 배포·장치·FIELD 승격은 없다. CE 해당 없음 — 현재 판단은 ADR·소스·회귀에 남기고 검증 전 해결 교훈을 쓰지 않는다.
+
+## 2026-10-25 · uncommitted · viewer의 관제·지도·정지 이력 조회 유지
+
+- 변경: 통합 화면의 읽기 버튼에 기존 data-work-read 표기를 적용했다. 공통 operatorControls가 동적 버튼을 운영 조작으로 잠그던 원인을 수정하며 정지 쓰기·재시운전 버튼의 운영자 제한은 유지한다.
+- 증거: source10fc372212 실제 Chromium에서 UNKNOWN/PARTIAL viewer2건이 이력 버튼의 운영자 잠금으로 실패했다. 해당 시험에 viewer의 관제 선택·지도·같은 정지 기록 조회와 쓰기 금지를 함께 추가해 수정 source를 원격 검증한다.
+- gate 변화: 읽기 권한과 운영 조작을 구분하는 UI 수정이며 backend 권한·실제 장치 수용은 바꾸지 않는다. CE 해당 없음 — 원인을 코드의 공통 잠금 표기와 실제 browser 회귀에 직접 남긴다.
+
+## 2026-10-25 · uncommitted · 정지 응답이 overview보다 먼저 갱신되는 경우의 로컬 세대 선택
+
+- 변경: 신선한 overview를 전제로 같은 authority epoch의 더 최신 로컬 정지 응답 세대를 재시운전 확인에 사용한다. 이전 응답으로 세대를 내리거나 다른 epoch·오래된 overview를 통과시키지 않으며 원래 정지 body와 자동 전송 정책은 유지한다.
+- 증거: source0b30c65d59의 실제 standalone sample browser가 정지 직후 이전 overview 세대를 보내 복구 결과를 갱신하지 못했다. 직접 API 회귀39건과 CORE 연계21건은 별도 source에서 통과했으며, UI에 최신 응답/이전 응답/다른 epoch/stale overview4회귀를 추가했다. 수정 source의 실제 sample/browser 통과는 후속 실행이다.
+- gate 변화: 재시운전 확인은 현재 backend generation 검사와 사람의 두 확인·근거를 계속 요구한다. 물리 정지나 자동 재무장 증거가 아니다. CE 해당 없음 — 원인을 코드 주석과 실제 sample/browser 회귀에 남긴다.
+
+## 2026-10-25 · uncommitted · 통합 재시운전 확인 입력의 공유 UI 적용
+
+- 변경: checkbox label에 기존 ui-check를 적용하고 textarea의 ui-field 설정을 생성 위치로 옮겼다. 입력 의미·기명 권한·원장 처분은 유지한다.
+- 증거: source42e079ef48 FULL의 공유 입력 검사1 FAIL을 source79ff20cc96에서 수정했고 해당 원격 회귀1 PASS·SKIP0·NEW0이다. 기존 sourcebbffbf8577의 집중 Chromium/Node33건과 source42e079ef48의 명시 Chromium4그룹은 각각 통과했다. 최종 수정 source의 공식 FULL은 후속 실행이다.
+- gate 변화: 공통 입력 표현을 맞추며 장치·현장 수용을 승격하지 않는다. CE 해당 없음 — 원인과 수정 조건이 기존 공유 UI 검사에 직접 남는다.

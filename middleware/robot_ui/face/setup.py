@@ -22,7 +22,6 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            "emotion=emotion.emotion:main",
             "emotion_server=emotion.emotion_server:main"
         ],
     },

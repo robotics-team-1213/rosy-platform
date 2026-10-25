@@ -28,6 +28,7 @@ FOLDER_TO_PACKAGE = {
     "middleware/drivers/pinky_adc": "sensor_adc",
     "middleware/drivers/pinky_lamp": "lamp_control",
     "middleware/devices/pinky/profile": "pinky_pro",
+    "middleware/devices/rasptank/profile": "rasptank_metal",
     "middleware/core/api": "core_api_web",
     "middleware/core/events": "core_events",
     "middleware/core/gateway": "core",

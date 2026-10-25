@@ -1,7 +1,7 @@
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
 import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
-import { cssColor, canvasFont, actionIcon } from '/common/ui.js';
+import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory, resetHistory } from '/history.js';
 import {reviewViewport} from '/viewport.js';
@@ -9,13 +9,24 @@ import '/commands.js';
 const font = (role, family) => canvasFont(role, family);
 
 const $ = id => document.getElementById(id);
-const modeBadge=$('object-workspace-mode');
+const modeBadge=document.createElement('ui-status');
+modeBadge.id='object-workspace-mode';
+modeBadge.setAttribute('role','status');
+$('frame-progress').after(modeBadge);
 const inputPurpose=()=>workspace?.workspace_kind==='evaluation'?'고정 평가 · 학습 제외':'학습 후보 · 승인 후 수용 확인';
 reviewViewport(document.querySelector('.image-stage'),$('canvas'),document.querySelector('.review-view-bar'),()=>!gesture);
-const objectResult=$('object-result');
+document.querySelector('.review-editor-tools').prepend(document.querySelector('.review-tool-ribbon'));
+document.querySelector('.review-editor-tools').append($('reload'));
+const objectCanvasColumn=document.querySelector('.review-editor-canvas');
+objectCanvasColumn.querySelector('.image-stage').after($('candidate-details'));
+document.querySelector('.review-stage').append(document.querySelector('.review-editor-tools'));
+const objectResult=document.createElement('p');
+objectResult.id='object-result';objectResult.className='review-result';objectResult.setAttribute('role','status');
+objectCanvasColumn.querySelector('.image-stage').after(objectResult);
+objectResult.after(document.querySelector('.review-view-bar'),document.querySelector('.frame-navigation'),$('object-quick-classes'));
 for(const [id,key] of [['prev-frame','ArrowLeft'],['next-frame','ArrowRight'],['next-pending','N'],['undo','Control+Z Meta+Z']])$(id).setAttribute('aria-keyshortcuts',key);
 $('undo').title='마지막 저장 라벨 수정 되돌리기 · Ctrl+Z';
-for(const [id,label,key] of [['prev-frame','이전 사진','←'],['next-frame','다음 사진','→'],['next-pending','다음 검수 대기','N']]){$(id).setAttribute('aria-label',label);$(id).title=`${label} · ${key}`;}
+for(const [id,label] of [['prev-frame','이전 사진'],['next-frame','다음 사진'],['next-pending','다음 검수 대기']]){$(id).setAttribute('aria-label',label);$(id).title=label;}
 for(const button of document.querySelectorAll('.review-editor-tools .toolbar ui-button'))button.setAttribute('aria-label',button.title);
 // Filled from the workspace's bound class set (D-485), in class index order.
 let names = {'':'클래스 선택 필요'}, classOptions = [['','클래스 선택 필요']], classColors = {};
@@ -78,9 +89,9 @@ function enable() {
   $('reopen').disabled = locked;
   $('draw').disabled = $('add').disabled = locked || frame?.status === 'excluded';
   $('delete-selected').disabled = locked || frame?.status === 'excluded' || selected===null;
-  for (const button of $('object-quick-classes').querySelectorAll('ui-button')) {
+  for (const button of $('object-quick-classes').querySelectorAll('button')) {
     button.disabled = locked || frame?.status === 'excluded' || selected===null;
-    button.setAttribute('aria-pressed', String(selected!==null && frame.review.boxes[selected]?.label===button.getAttribute('value')));
+    button.setAttribute('aria-pressed', String(selected!==null && frame.review.boxes[selected]?.label===button.value));
   }
   $('candidates').disabled = locked || frame?.status === 'excluded' || !sourceCandidates().length;
   $('source-preview').disabled = !ready || !sourceCandidates().length;
@@ -311,8 +322,8 @@ function quickClasses() {
   const row=$('object-quick-classes'); row.replaceChildren();
   const icons={robot:'robot',obstacle_box:'box',cone:'cone',traffic_light:'traffic-light',sign:'sign',person:'person',obstacle:'obstacle'};
   for (const cls of workspace.object_class_set.classes) {
-    const button=document.createElement('ui-button'), icon=document.createElement('span'), label=document.createElement('span'), key=document.createElement('kbd');
-    button.setAttribute('kind','toggle'); button.setAttribute('value',cls.name); button.className='review-class-chip';
+    const button=document.createElement('button'), icon=document.createElement('span'), label=document.createElement('span'), key=document.createElement('kbd');
+    button.type='button'; button.value=cls.name; button.className='review-class-chip';
     button.setAttribute('aria-label',`${cls.display} 클래스 지정${cls.hotkey ? ` · ${cls.hotkey.toUpperCase()}` : ''}`);
     icon.setAttribute('aria-hidden','true');
     actionIcon(icon,icons[cls.name]||'box');
@@ -484,7 +495,8 @@ function nextPending(index) {
 }
 $('next-pending').onclick=()=> {const next=nextPending(frame.index);if(next) {$('filter').value='pending';select(next.index);}};
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
-document.addEventListener('rosy:theme', paint);
+$('theme').value=document.documentElement.dataset.theme || 'dark';
+$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value; try {localStorage.setItem('rosy.theme',$('theme').value);} catch {} clearPalette(); document.dispatchEvent(new CustomEvent('rosy:theme')); paint();};
 function receipt(value, historical=false) {
   $('export-result').textContent=`${historical?'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ':'이번 준비 결과 · '}승인 ${value.exported_frames}장 준비 완료 · 미승인 ${value.queued_frames}장 유지. 학습 반영은 학습 세션의 세션 분리·고정 평가 제외 확인 후 진행합니다.`;
   $('export-details').textContent=JSON.stringify(value,null,2);

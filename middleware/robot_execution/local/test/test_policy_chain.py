@@ -39,8 +39,8 @@ def test_worker_renews_before_round_trip_cost_exhausts_current_lease():
 
 
 @contextmanager
-def chain_setup(tmp_path, *, enabled=True):
-    seed, driver, clock, _, _ = setup_session(tmp_path, camera=True)
+def chain_setup(tmp_path, *, enabled=True, camera=True):
+    seed, driver, clock, _, _ = setup_session(tmp_path, camera=camera)
     runtime = runtime_methods(seed, driver)
     policy = seed.policy
     with approved_fleet(tmp_path/'fleet', workcell_id=seed.owner.config.workcell_id,
@@ -49,12 +49,19 @@ def chain_setup(tmp_path, *, enabled=True):
             seed.owner.session_id, fleet.window['window_id'], fleet.rig_revision,
             fleet.calibration_revision, fleet.scope)
         consumer = FleetLeaseConsumer(scope, request=fleet.device, monotonic=runtime.monotonic)
-        rgb = bytes(range(12))
-        def camera():
-            return CameraSnapshot('front','cam-front','a'*64,(3,2,2), int(clock[0]*1e9), sha256(rgb).hexdigest())
+        rgb, top = bytes(range(12)), bytes(range(12, 24))
+        def cameras():
+            stamp = int(clock[0]*1e9)
+            front = CameraSnapshot('front','cam-front','a'*64,(3,2,2), stamp, sha256(rgb).hexdigest())
+            if camera != 2:
+                return (front,)
+            return front, CameraSnapshot('top','cam-top','b'*64,(3,2,2), stamp, sha256(top).hexdigest())
+        def capture():
+            snapshots = cameras()
+            return nullcontext((rgb, snapshots[0]) if len(snapshots) == 1 else tuple(zip((rgb, top), snapshots)))
         options = dict(policy=policy, runtime=runtime, fence=seed.fence, consumer=consumer,
             journal=PolicyExecutionJournal(tmp_path/'execution.sqlite3'), owner_identity=seed._identity,
-            camera_current=lambda:(camera(),), capture=lambda:nullcontext((rgb,camera())), principal='sim-sdk',
+            camera_current=cameras, capture=capture, principal='sim-sdk',
             installed_rig_revision='sim-rig', enabled=enabled)
         if not enabled:
             yield options, fleet
@@ -103,6 +110,23 @@ def test_real_fleet_renewal_then_stop_cancels_exact_session_goal(tmp_path, fault
         assert driver.handles[-1].cancel_calls == 1
         with pytest.raises(PermissionError): chain.consumer.acquire()
         assert not chain.consumer.authority(renewed)
+
+
+def test_two_installed_cameras_chain_and_bind_both_frames(tmp_path):
+    with chain_setup(tmp_path, camera=2) as (chain, fleet, runtime, driver, clock):
+        source = chain.port.observation('sim-sdk', chain.session.lease.policy_revision)
+        assert [c['name'] for c in source['cameras']] == ['front', 'top']
+        result = chain.port.submit('sim-sdk', observation_id=source['observation_id'],
+            policy_revision=source['policy_revision'], positions={'joint_1':.101,'joint_2':.001})
+        assert result['accepted'] and driver.commands[-1].command_id == result['command_id']
+
+
+def test_policy_without_installed_camera_is_refused_before_issuance(tmp_path):
+    with chain_setup(tmp_path, enabled=False, camera=False) as (options, fleet):
+        options['enabled'] = True
+        with pytest.raises(ValueError): SimPolicyChain(**options)
+        with sqlite3.connect(fleet.db) as db:
+            assert db.execute('SELECT count(*) FROM fleet_policy_lease').fetchone()[0] == 0
 
 
 @pytest.mark.parametrize('field', ['owner_session_id', 'rig_revision', 'calibration_revision'])

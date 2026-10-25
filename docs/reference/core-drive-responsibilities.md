@@ -25,10 +25,10 @@ middleware/
 │  ├─ tracking/wander
 │  ├─ recovery/
 │  ├─ calibration/
-│  └─ safety/adapter
+│  └─ motion_limits/adapter
 ├─ perception/
 │  ├─ sensors/sensing (control.sensing)
-│  ├─ vision/perception (control.sensing.perception)
+│  ├─ front_camera/perception (control.sensing.perception)
 │  └─ control/ (기존 node 조립·compatibility)
 └─ devices/
    ├─ pinky/{bringup,profile,description}
@@ -44,11 +44,11 @@ middleware/
 | 공통 power/battery | `core/system/power.py`, `core_features.power` | 기존 parser fallback·validation·data path와 power→battery 생성 순서. shutdown sentinel은 요청이며 host unit이 halt 소유 |
 | Drive planning backend | `middleware/drive/planning/nav2`, `planning/grid` | ROS `navigation`과 기존 `control.planning` identity. CORE goal facade·취소 generation·backend 입출력 구분 |
 | 차선·군집·localization 실행 | `middleware/drive/behaviors`의 해당 구현 | D-649로 소스 이전. 설치 identity는 기존 `core_features.*`, 새 library/process 없음 |
-| 기존 Control Drive 알고리즘 | `middleware/drive/{tracking,recovery,calibration,safety}` | ROS `control` 배포의 기존 `control.control.*`, `control.wander`, `control.safety` identity. sensor-only adapter 유지 |
+| 기존 Control Drive 알고리즘 | `middleware/drive/{tracking,recovery,calibration,motion_limits}` | ROS `control` 배포의 기존 `control.control.*`, `control.wander`, `control.safety` identity. sensor-only adapter 유지 |
 | 공통 Base 명령/Safety | `core_features.command`, `core_features.safety`, `core.bridge` | CORE 최종 command 선택과 ROS publisher. E-stop/readiness/deadman·policy·세대 검증 |
 | Drive 기하·운동 proof | `line_follow/{clearance,body_stop}`, recovery sweep, Drive envelope·floor/body 검사 | 현재 후보의 곡률·전진·후진·pivot 근거. CORE 공통 Safety를 대체하지 않음 |
 | Arm 실행/Safety | `middleware/devices/omx/adapter/omx_adapter` | joint/action owner, limits·fresh feedback·stop/rearm/HOLD. Base cmd_vel slot에 합치지 않음 |
-| 센서·vision evidence | `middleware/perception/{sensors/sensing,vision/perception}` | 기존 provider/import·model/resource identity. operational final writer 추가 없음 |
+| 센서·vision evidence | `middleware/perception/{sensors/sensing,front_camera/perception}` | 기존 provider/import·model/resource identity. operational final writer 추가 없음 |
 
 US005 조립 추출은 기존 네 parser의 본문과 constructor 인자를 유지한다. `core.services`의 `_battery_config`, `_power_config`, `_traffic_policy_config`, `_signal_observer_binding`, `SHUTDOWN_SENTINEL_NAME` import는 계속 제공한다. signal observer는 명시적 binding과 policy map/scene 검증 뒤에 기존 위치에서 start한다. line recovery/envelope provider 연결은 기존 순서에 남는다.
 

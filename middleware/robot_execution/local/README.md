@@ -78,6 +78,15 @@ final freshness/lease checks; failed storage cannot dispatch. Composition must
 also supply `journal.observe` to the actual ROS transport event sink. Without
 that wiring, an intent alone supplies no accepted goal or result evidence.
 
+Pending submits are serialized separately. Durable intent I/O holds neither the
+session lock nor the stop-fence lock, so observation, polling, lease renewal and
+stop can proceed. After commit the session reacquires its lock and the final
+stop fence, then rechecks the original candidate and command against all live
+admission boundaries. Both the recorded grant and current lease must remain
+valid through native transport; renewal does not revive an expired intent.
+Pre-transport rejection removes an unused callback sink. Once transport starts,
+its sink remains available for original late goal and cancellation facts.
+
 The WAL/FULL journal records original callback UUIDs, sequences, times and result
 facts; unknown commands, changed goal/phase, duplicate/out-of-order events and
 events after terminal are rejected transactionally. Readback uses one snapshot.

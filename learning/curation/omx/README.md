@@ -79,6 +79,11 @@ python learning/curation/omx/native_review.py inspect <dataset-root> --repo-id l
 출처를 생략한 검사는 `unverified_native`를 기록하며 학습용 분할을 거절한다.
 검토 명령은 body 단위를 변환하지 않는다. 선언한 rig/보정은 실물 검증 증거가 아니다.
 
+`--calibration <follower.json>`(양팔은 `arm_a=<a.json> arm_b=<b.json>`)을 주면 [D-854](../../../docs/adr/D-854-omx-policy-runner-and-action-space.md)
+행동 단위 선언 `action_space`(`lerobot_norm_v1`, omx_follower 모터 순서, 보정 range digest)를 `inspection.json`에 남긴다.
+정규화 데이터만 선언할 수 있고, 분할과 구간 선택은 선언을 그대로 다시 확인한다. 선언 없는 보고서는 지금처럼 동작한다.
+VLA 학습 입구에서 선언을 필수로 하는 일은 D-854 정책 실행기 단계에서 한다. SIM rad 데이터셋은 변환하지 않는다.
+
 ```text
 python learning/curation/omx/native_review.py split <dataset-root> --report <review-directory>/inspection.json --decisions <review-directory>/decisions.json --out <new-split-directory>
 ```
@@ -222,3 +227,64 @@ session/cycle 분할 뒤 ACT 학습과 별도 process model/pre/post 재적재�
 기본 unknown/exclude는 학습할 수 없다. 실패·중단 원본은 보존하며 `--completed-only`는 명시적으로만 사용한다.
 rehearsal 데이터는 실물 intake가 거부한다. [Fleet 수집·전송·검토·학습 절차](../../../docs/plans/2026-10-17-omx-next-day-collection.md).
 물리 시연 수집과 학습 정책의 실물 평가는 각각 현장 수용 후 진행한다.
+
+## 봉인한 리더 녹화의 intake (D-848)
+
+현장 PC에서 `record_seal.py`로 봉인하고 `omx_collection_transfer.py`로 옮긴 1팔·2팔 리더 녹화는
+`collection_pipeline.py prepare-native <collections/<이름1>> <collections/<이름2>>... --out <새 prepared 폴더> --repo-id <local/id>`로
+prepared intake를 만든다. 봉인 manifest와 보정 revision을 다시 해시하고, 같은 리그·보정의 녹화만 공식 LeRobot
+`aggregate_datasets`로 합친 뒤 실제 reader로 Episode 내용 해시를 원본과 대조한다.
+녹화 하나가 세션 하나라서 그 Episode들은 한 분할에만 들어간다. 학습·평가를 나누려면 녹화가 둘 이상 필요하다.
+판정은 모두 `unknown`/`exclude`로 시작하며 사람 검수 뒤 학습센터 ‘등록된 검수 시연’과 기존 export·학습 경로를 따른다.
+
+`record_session.py --replay`로 녹화하고 봉인한 자동 교사(`source_mode=scripted_teacher`) 녹화도 같은 명령에
+`--rig-revision <리그> --calibration-revision <보정>`을 더해 쓴다. 현장 봉인본에는 session·리그·보정 revision이 없을 수 있다.
+그러면 폴더 이름이 session이고 운영자가 적은 값을 쓴다. 봉인본에 값이 있으면 운영자 값과 같아야 한다.
+`capture.json`의 `collection_manifests[].revision_origin`이 값마다 `seal`/`operator`를 남긴다.
+`teacher/trajectory.json`을 다시 해시해 manifest `teacher_sha256`·session `replay.sha256`과 대조한다.
+`kind=replay_trajectory`·`rosy.omx-replay-trajectory.v1`과 manifest·궤적·session이 같은 구간을 요구한다.
+구간은 A=[0,N], reset=[N,N+R](R≥1), B=[N+R,2N+R]이고 B 끝이 궤적 frame 수다. B는 A를 뒤집은 것이 아니라 따로 가르친 복귀 구간이다.
+`source`는 작은 JSON(16 KiB·깊이 3·목록 1000개 이하)이고 Episode는 정확히 두 개(A=0, B=1)다.
+리더 녹화와 섞거나 다른 교사의 녹화를 한 intake에 넣지 않는다. `capture.json`에는 `teacher_sha256`과 녹화별 `teachers`(hash·kind·segments·source)만 남긴다.
+녹화는 guard 교사 모드(10 deg/s)로 재생하고 궤적은 5 units/s로 늦춰서 Episode가 길다.
+dataset의 action은 guard가 실제로 보낸 명령이고 `teacher/trajectory.json`은 계획이다. 궤적을 action으로 쓰지 않는다.
+
+리더·교사 모두 `rosy_provenance/*/`의 session.json·record-config.json·manifest.json 사본에서 현장 PC 절대 경로를 지운다.
+지우는 값은 `replay.path`·`config`, `dataset.root`, `/dev/serial` 포트, `/dev/v4l` 카메라다. `teacher.source.dataset`은 basename만 남긴다.
+원본 sha256은 같은 폴더의 `redactions.json`(`redacted_from_sha256`)에 남는다. 리더의 `capture.json` 내용은 바뀌지 않는다.
+
+`prepare-native`에 `--camera-reference ROLE=PATH`(카메라 역할마다 한 번)를 주면 리뷰 앱이 승인해 둔
+`<state>/camera-setup/<revision>.json`(D-792)을 계약의 `validate_reference`로 읽는다. 파일 이름이 `revision`과 다르거나 봉인이 깨졌거나,
+역할이 두 번 나오거나 기준의 역할이 ROLE과 다르거나, 역할 집합이 dataset의 `observation.images.*`와 다르거나,
+합친 dataset `meta/info.json`의 폭·높이(이름 붙은 축으로 읽음)·fps와 다르면 거절한다. 통과하면 `{역할: revision}`만
+`inspection.json`·`capture.json`의 `camera_setup`에 남긴다. `camera_identity`(시리얼일 수 있음)와 경로는 남기지 않는다.
+이 첫 조각은 프레임을 기준과 비교하지 않으며 `camera-setup.json`도 쓰지 않는다. 옵션이 없으면 출력은 예전과 같다.
+같은 옵션을 LeRobot 세션용 `prepare`에 주면 뜻이 다르다: 사진(`.jpg`)이 있는 기준 JSON으로 프레임을 섀도 비교해 `camera-setup.json`을 쓰고, 거절하지 않는다(`camera_setup_intake.py`).
+정적 episode·`DO_NOT_TRAIN.txt` 규칙은 리더 녹화와 같다.
+
+## 학습센터에서 파지 구간 검수
+
+학습센터 `/learning/omx`에서 자료 등록에 연결한 prepared intake를 선택한다.
+원본 Episode와 확인 프레임을 골라 사진을 확인하고, 시작·끝 프레임과 물체·성공 여부·검토자를 기록한다.
+끝 프레임은 범위에서 제외한다. 성공이 확인되지 않은 구간은 `unknown` 또는 `failure`로 보존하고
+학습 분할에서 제외한다. 저장은 검수 버전을 추가하며 원본 Episode 판정을 덮어쓰지 않는다.
+다른 검수자가 먼저 저장하면 다시 불러와 충돌을 해결한다. 입력이 남아 있으면 새로고침·이탈 시 확인한다.
+데이터셋 단계는 내려받기 없이 저장된 최신 검수 버전을 DB에서 바로 읽는다(D-857 P0).
+`python learning/curation/perception/omx_web.py export-segments --db <검수 state>/reviews.sqlite3 --id <등록 id> --out <new-segment-splits>`는
+내려받은 JSON을 위 `native_segments.py` CLI에 넣은 것과 같은 바이트를 쓴다. 내려받기는 보관용으로 남는다.
+`record_session`이 녹화 dataset root에 남기는 표시를 따른다. `DO_NOT_TRAIN.txt`가 있으면 dataset 전체를 거절한다. `static_episodes.json`에 적힌 episode(리더가 움직이지 않음)만 빼며, intake가 aggregate 번호로 옮겨 적고 `inspection.json`의 `excluded_episodes`에 번호와 이유를 남긴다. 분할·구간 내보내기는 그 episode를 학습에 넣지 않는다. 파일이 깨졌거나 남는 episode가 없으면 전체를 거절한다. 이 규칙 전에 준비한 intake는 봉인 manifest에 표시가 있으면 거절되니 다시 준비한다.
+이 화면은 학습 작업이나 로봇 동작을 시작하지 않는다.
+
+### 검토한 수집 자료를 학습센터로 가져오기
+
+학습센터의 폴더 업로드는 native LeRobot 디렉터리를 직접 읽지 않는다. 생산 수집 intake를 준비하고 사람이 `inspection.json`과 영상을 검토해 별도 결정 파일에 성공·독립 session/cycle 분할을 기록한 다음 아래 명령을 사용한다. 기본 unknown/exclude나 fixture_only intake는 출력 생성 전에 거절된다.
+
+```text
+python learning/curation/omx/collection_pipeline.py export-experiment <prepared-intake> --decisions <human-review.json> --profile <learning-profile.json> --out <new-export-directory>
+```
+
+LeRobot 0.4.4/PyAV가 있는 학습 호스트의 전용 Python으로 실행한다. 기존 native 분할/reader 검증 후 실제 배열을 변환하고 `experiment-export-receipt.json`에 원본·검토·프로필·분할·변환 해시를 기록한다. 검토 증거는 실행 폴더에 복사하며 원본을 수정하지 않는다. 출력의 `dataset/` 폴더만 작업 PC로 복사한 뒤 `/learning/omx`에서 올린다. 상위 export 폴더 전체를 선택하면 평면 업로드 검증에서 거절된다. 이 명령은 학습·업로드·정책 활성화를 실행하지 않는다.
+
+현재 native 변환은 정확한 순서의 여섯 관절을 가진 단일 팔, normalized_-100_100 body/normalized_0_100 gripper와 원본 metadata의 정확한 키·영상 크기에 일치하는 카메라 프로필을 요구한다. 추가 카메라 키도 변환하며 역할·배치·용도는 명시한 프로필을 보존한다. wrist 역할은 팔 소속을 요구하고 과거 키의 별칭 재작성은 하지 않는다. 예제 프로필의 카메라 identity/placement를 추측해서 채우지 않는다. 여러 팔의 원본을 합치거나 보상·다음 상태·개입을 생성하지 않으며 HIL-SERL 전이로 사용할 수 없다. 이 변환 지원은 기존 raw 수집기의 카메라 설정 범위를 확대하지 않는다.
+
+생산 intake를 Learning 작업 목록에 OMX 자료로 등록한 경우 `/learning/omx`의 ‘검수 열기’에서 원본 프레임과 판정을 확인하고 별도 검토 버전을 저장할 수 있다. 원래 수집 판정은 덮어쓰지 않는다. 명시 선택한 검토 버전과 프로필 JSON으로 분할/변환 작업을 실행한다. 원본 경로를 변환 요청에 직접 넣지 않는다. 작업은 단일 호스트 실행 슬롯을 학습과 공유하고 검증/변환·중단·재접속 상태를 보존한다. 완료 후 실제 배열·revision 검증을 거쳐 데이터 목록에 자동 등록한다. 기존 raw-session 준비는 위 CLI 절차를 따른다. 현재 화면의 프레임 검토와 명시 확인은 실제 사람의 전체 영상 관찰·물체 성공·다중 카메라 시각 정합을 자동 입증하지 않는다.

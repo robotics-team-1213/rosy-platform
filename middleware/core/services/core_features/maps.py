@@ -17,7 +17,7 @@ _COSTMAP_SCOPES = frozenset({"global", "local"})
 
 @dataclass(frozen=True)
 class GridFrame:
-    """World-frame occupancy / cost grid. Origin yaw is stored but sampling is axis-aligned."""
+    """World-frame occupancy / cost grid sampled relative to its origin pose."""
 
     width: int
     height: int
@@ -67,8 +67,10 @@ class GridFrame:
     def world_to_cell(self, x: float, y: float) -> Optional[tuple[int, int]]:
         if self.resolution <= 0 or self.width <= 0 or self.height <= 0:
             return None
-        column = math.floor((float(x) - self.origin_x) / self.resolution)
-        row = math.floor((float(y) - self.origin_y) / self.resolution)
+        dx, dy = float(x) - self.origin_x, float(y) - self.origin_y
+        cosine, sine = math.cos(self.origin_yaw), math.sin(self.origin_yaw)
+        column = math.floor((cosine * dx + sine * dy) / self.resolution)
+        row = math.floor((-sine * dx + cosine * dy) / self.resolution)
         if 0 <= column < self.width and 0 <= row < self.height:
             return column, row
         return None

@@ -36,8 +36,9 @@ SHARED = {
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
+    "trip-display.js",  # DOM-free trip vocabulary shared by map and Console consumers.
     "route-attention.js",
-    "trip-error-labels.js",
+    "drawing-errors.js",
 }
 
 OWN = {
@@ -48,6 +49,7 @@ OWN = {
         "channel-request-view.js",  # D-680: named review and existing navigation submission
         "control-unit-view.js",  # D-855: delegation review belongs to Console.
         "arm-transfer-view.js",  # Neutral ARM admission belongs to Console, never install or Cell.
+        "integrated-control-view.js",  # D-862: unit information and stop requests belong to Console.
         "inbox.js",  # D-632: console notification and context view owner
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
         "connection-view.js",
@@ -59,6 +61,9 @@ OWN = {
         "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
         "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
+        "roster-cards.js",  # Retains focused cards only within the robot workspace.
+        "motor-health-view.js",  # Fleet robot rows adapt shared read-only motor evidence.
+        "roster-presentation.js",
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
@@ -99,8 +104,11 @@ OWN = {
     },
     "cell.js": {
         "cell-document-editor.js",
+        "cell-observation.js",
     },
     "site-map.js": {
+        "map-authoring.js", "map-editor.js", "drawing-import.js", "geometry-edit.js", "edit-history.js",
+        "map-topology.js", "extraction-review.js",
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",

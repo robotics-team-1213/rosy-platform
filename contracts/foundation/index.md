@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-10-24 · bb38fdcdd0 · D-856 v1.312 raw physical observation contract
-- 2026-10-24 · 58f7cc7b14 · D-856 중립 ARM 작업 HTTP 계약
-- 2026-10-24 · 76a173b5fd · D-856 공유 자원 키의 contract leaf
-- 2026-10-24 · 1258314f51 · 중립 팔 grant 소비자 검증
-- 2026-10-24 · uncommitted · D-856 중립 팔 실행 grant 모델
+- 2026-10-25 · uncommitted · D-876 Fleet 캐시 전용 모니터링 계약
+- 2026-10-25 · uncommitted · feat(contracts): D-865 policy admission wire schemas v1.314
+- 2026-10-25 · 6d79c46bf8 · D-870 군집 원본 시각과 수명 계약
+- 2026-10-24 · uncommitted · D-862 통합관제 정보·정지 요청 공유 계약
+- 2026-10-24 · 73fc8b2b09 · 공통 Action·상태 구성 모델의 소유 분리

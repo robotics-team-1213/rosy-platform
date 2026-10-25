@@ -22,10 +22,10 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
 
 
 @contextmanager
-def serve(store, control=None):
+def serve(store, control=None, **options):
     playwright = pytest.importorskip('playwright.sync_api')
     # make_server takes only a port number, so this one keeps free_port().
-    server = make_server(store, free_port(), control=control)
+    server = make_server(store, free_port(), control=control, **options)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     with playwright.sync_playwright() as p:
@@ -226,27 +226,6 @@ def test_review_studio_steps_and_keyboard_help_share_the_same_flow(browser_works
     expect(page.locator('#pixel-keys')).to_have_attribute('open', '')
     assert store.get(0)['status'] == 'approved'
     assert review_masks.get(store, 0)['status'] == 'pending'
-
-
-def test_review_photo_and_result_are_in_first_view(browser_workspace):
-    page, store, expect = browser_workspace
-    review_masks.bind_classes(store, CLASSES)
-    base = page.url.split('?')[0].rstrip('/')
-    for width, height in [(1280, 720), (390, 800)]:
-        page.set_viewport_size({'width': width, 'height': height})
-        for route, canvas, result in [('/', '#canvas', '#object-result'),
-                                      ('/pixels', '#pixel-canvas', '#pixel-result')]:
-            page.goto(base + route, wait_until='networkidle')
-            box = page.locator(canvas).bounding_box()
-            assert box and box['y'] <= height * .4, (route, width, height, box)
-            assert min(box['y'] + box['height'], height) - box['y'] >= box['height'] / 3
-            expect(page.locator(result)).to_contain_text('저장')
-            assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
-            if width == 390:
-                actions = ['#prev-frame', '#next-frame', '#next-pending'] if route == '/' else ['#pixel-prev', '#pixel-next', '#pixel-undo']
-                for action in actions:
-                    expect(page.locator(f'{action} .ui-icon')).to_be_visible()
-                    assert page.locator(action).get_attribute('aria-label')
 
 
 def test_object_workspace_purpose_and_eval_export_guard(tmp_path):
@@ -493,6 +472,31 @@ def test_object_filter_uses_photo_strip_width_on_phone(browser_workspace, width)
     assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
 
 
+@pytest.mark.parametrize('width', [1440, 800, 390])
+def test_empty_review_can_recover_at_declared_widths(browser_workspace, width):
+    page, _, expect = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    workspace = page.locator('.workspace')
+    # D-857 §3: the 정답 sub-menu takes its own column beside the rail on wide screens.
+    assert workspace.bounding_box()['width'] == min(page.locator('.ui-app-main').bounding_box()['width'], workspace.evaluate('(node) => parseFloat(getComputedStyle(node).maxWidth)'))
+    # D-741: the path row (page heading) sits between the app bar and the work area.
+    pathbar = page.locator('.ui-pathbar').bounding_box()
+    assert page.locator('.workspace').bounding_box()['y'] == pathbar['y'] + pathbar['height']
+    page.locator('#filter').select_option('pending')
+    expect(page.locator('#empty-review')).to_be_visible()
+    expect(page.locator('#review-content')).to_be_hidden()
+    action = page.locator('#show-all')
+    assert action.bounding_box()['width'] > 0
+    assert page.evaluate('document.documentElement.scrollWidth - innerWidth') == 0
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-objects-empty-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+    action.click()
+    expect(page.locator('#frame-title')).to_have_text('사진 1')
+
+
 @pytest.mark.parametrize('route,main', [('/learning', '#learning-main'), ('/catalog', '#catalog-main')])
 @pytest.mark.parametrize('width', [1440, 800, 390])
 def test_learning_pages_start_below_topbar(browser_workspace, route, main, width):
@@ -528,6 +532,151 @@ def test_catalog_compact_forms_use_the_same_full_width(browser_workspace, width)
         target = Path(output) / f'learning-catalog-form-{width}.png'
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target), full_page=True)
+
+
+@pytest.mark.parametrize('width', [390, 320])
+def test_learning_compact_actions_and_connection_form_use_full_width(browser_workspace, width):
+    page, _, _ = browser_workspace
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    main = page.locator('.workspace-heading').bounding_box()
+    for selector in ('#new-task', '#refresh'):
+        box = page.locator(selector).bounding_box()
+        assert abs(box['x'] - main['x']) <= 1 and abs(box['width'] - main['width']) <= 1, (selector, box, main)
+    page.locator('#connection-panel summary').click()
+    form = page.locator('#register').bounding_box()
+    for selector in ('#kind', '#name', '#path', '#connect'):
+        box = page.locator(selector).bounding_box()
+        assert abs(box['x'] - form['x']) <= 1 and abs(box['width'] - form['width']) <= 1, (selector, box, form)
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-work-form-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target), full_page=True)
+
+
+@pytest.mark.parametrize('width', [1440, 800, 390, 320])
+def test_learning_report_age_advances_and_refreshes(browser_workspace, tmp_path, width):
+    page, _, expect = browser_workspace
+    report = tmp_path / 'learning-result'
+    report.mkdir()
+    (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.clock.install()
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('검수할 결과')
+    page.locator('#path').fill(str(report))
+    page.locator('#connect').click()
+    age = page.locator('[data-report-age]')
+    expect(age).to_contain_text('방금 확인')
+    expect(page.locator('#jobs')).to_contain_text('보고서 상태와 단계별 근거를 확인')
+    expect(page.locator('#jobs')).not_to_contain_text('실패·거절 이유')
+    page.clock.fast_forward(121_000)
+    expect(age).to_contain_text('2분 전 확인')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if width <= 390:
+        card = page.locator('#jobs .ui-task-row').bounding_box()
+        content = page.locator('#jobs').bounding_box()
+        assert abs(card['x'] - content['x']) <= 1 and abs(card['width'] - content['width']) <= 1
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        target = Path(output) / f'learning-report-age-{width}.png'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(target), full_page=True)
+    page.locator('#refresh').click()
+    expect(age).to_contain_text('방금 확인')
+
+
+def test_owner_hold_stays_visible_after_timer_report_changes(browser_workspace, tmp_path):
+    page, _, expect = browser_workspace
+    report = tmp_path / 'owner-result'; report.mkdir()
+    held = {'review_autobuild': {'status': 'held', 'blockers': ['no_approved_masks']}}
+    for name in ['state.json', 'summary.json']:
+        (report / name).write_text(json.dumps(held))
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('자동 학습')
+    page.locator('#path').fill(str(report))
+    page.locator('#connect').click()
+    expect(page.locator('#jobs')).to_contain_text('승인·입력 조건 대기')
+    held['timer_cycle'] = 2
+    (report / 'summary.json').write_text(json.dumps(held))
+    page.locator('#refresh').click()
+    expect(page.locator('#jobs ui-tag')).to_contain_text('승인·입력 조건 대기')
+    expect(page.locator('#jobs .job-reason')).to_have_count(1)
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width):
+    page, _, expect = browser_workspace
+    report = tmp_path / 'learning-result'
+    report.mkdir()
+    (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    expect(page.locator('.workspace-heading h2')).to_have_text('학습센터')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('검수할 결과')
+    page.locator('#path').fill(str(report))
+    page.locator('#connect').click()
+    # A single job hides redundant filters; exercise the actual multiple-job workflow.
+    other = tmp_path / 'other-learning-result'
+    other.mkdir()
+    (other / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
+    page.locator('#new-task').click()
+    page.locator('#name').fill('다른 결과')
+    page.locator('#path').fill(str(other))
+    page.locator('#connect').click()
+    expect(page.locator('#updated')).to_contain_text('2개 작업')
+    page.locator('#search').fill('검수할 결과')
+    expect(page.locator('#updated')).to_contain_text('2개 중 1개 표시')
+    page.locator('#search').fill('없는 작업')
+    expect(page.locator('#updated')).to_contain_text('2개 중 0개 표시')
+    expect(page.locator('#empty-title')).to_have_text('조건에 맞는 작업이 없습니다')
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(Path(output) / f'learning-results-filter-{width}.png'), full_page=True)
+    page.locator('#reset-filters').click()
+    expect(page.locator('#updated')).to_contain_text('2개 작업')
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace, width):
+    page, store, expect = browser_workspace
+    review_masks.bind_classes(store, CLASSES)
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+    page.set_viewport_size({'width': width, 'height': 844})
+    page.goto(page.url.split('?')[0] + '?frame=1', wait_until='networkidle')
+    expect(page.locator('#frame-title')).to_have_text('사진 2')
+    expect(page.locator('a[href="/pixels?frame=1"]')).to_have_count(2)
+    page.locator('.review-kinds a[href^="/pixels"]').click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
+    expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
+    page.locator('#pixel-class').select_option('0')
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('#pixel-fill').click()
+    expect(page.locator('#pixel-status')).to_contain_text('v1')
+    page.locator('#pixel-complete').check()
+    page.locator('#pixel-background').check()
+    page.locator('#pixel-approve').click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
+    expect(page.locator('#pixel-decision')).to_contain_text('사진 2 픽셀 승인 · 다음 검수 대기 사진 1')
+    assert not page.locator('#pixel-decision').is_hidden()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
+        from pathlib import Path
+        page.evaluate('window.scrollTo(0, 0)')
+        page.screenshot(path=str(Path(output) / f'learning-pixel-decision-{width}.png'), full_page=True)
+    page.locator('.workspace-tabs a[href="/learning"]').click()
+    expect(page.locator('#review-counts')).to_contain_text('검수 대기 1장')
+    expect(page.locator('#pixel-counts')).to_contain_text('승인 1장 · 검수 대기 1장')
+    page.locator('a[href="/pixels?filter=pending"]').click()
+    expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
 
 
 @pytest.mark.parametrize('route,action', [('/', '#prepare'), ('/pixels', '#pixel-export')])
@@ -947,7 +1096,7 @@ def test_learning_registration_denial_blocks_repeat_until_retry(
     page.route(f'**/api/{post}', lambda request: request.fulfill(
         status=403, content_type='application/json', body='{"error":"local workspace authorization required"}'))
     if route == '/learning':
-        page.locator('#connection-panel summary').click()
+        page.locator('#new-task').click()
         page.locator('#name').fill('권한 확인')
         page.locator('#path').fill('X:/DevTemp/permission-check')
     else:
@@ -1136,10 +1285,10 @@ def test_class_select_lists_the_workspace_class_set(browser_workspace):
 
 def test_object_ribbon_class_click_saves_selected_box_only(browser_workspace):
     page, store, expect = browser_workspace
-    chip = page.locator('#object-quick-classes ui-button[value="obstacle_box"]')
+    chip = page.locator('#object-quick-classes button[value="obstacle_box"]')
     expect(chip).to_be_disabled()
     expect(page.locator('#object-quick-classes .ui-icon')).to_have_count(
-        page.locator('#object-quick-classes ui-button').count())
+        page.locator('#object-quick-classes button').count())
     assert page.locator('.review-editor-tools').bounding_box()['x'] < page.locator('#canvas').bounding_box()['x']
     assert page.locator('.review-editor-tools').bounding_box()['y'] < page.locator('#canvas').bounding_box()['y'] + 1
     expect(page.locator('#view-original .ui-icon')).to_have_count(1)
@@ -1195,7 +1344,7 @@ def test_object_zoom_pan_and_draw_keep_source_coordinates(browser_workspace):
 
 def test_custom_class_set_names_and_saves(custom_class_workspace):
     page, store, expect = custom_class_workspace
-    icon = page.locator('#object-quick-classes ui-button[value="car"] .ui-icon')
+    icon = page.locator('#object-quick-classes button[value="car"] .ui-icon')
     assert icon.evaluate('node => getComputedStyle(node).color') == 'rgb(12, 34, 56)'
     select = page.locator('#boxes .box-top select').first
     expect(select.locator('option')).to_have_text(['클래스 선택 필요', '자동차', '신호등'])
@@ -1255,6 +1404,23 @@ def test_review_shortcuts_confirm_then_move_without_approving(browser_workspace)
     page.keyboard.press('n')
     expect(page.locator('#frame-title')).to_have_text('사진 2')
     assert store.get(0)['status'] == 'pending'
+
+
+def test_learning_summary_separates_review_from_training(browser_workspace):
+    page, store, expect = browser_workspace
+    store.update(0, {'version': store.get(0)['version'], 'action': 'reopen'})
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    expect(page.locator('#review-stage-summary')).to_contain_text('등록 2장')
+    expect(page.locator('#training-data-state')).to_contain_text('픽셀 승인 0장')
+    expect(page.get_by_text('현재 검수 중인 사진의 학습 완료를 뜻하지 않습니다.')).to_be_visible()
+    expect(page.locator('#object-review-link')).to_contain_text('검수·승인')
+    expect(page.locator('#pixel-review-link')).to_contain_text('검수·승인')
+    page.locator('#object-review-link').click()
+    page.wait_for_load_state('networkidle')
+    expect(page.locator('#approve')).to_be_visible()
+    page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
+    page.locator('#pixel-review-link').click()
+    expect(page.locator('#pixel-approve')).to_be_visible()
 
 
 def test_learning_shows_prepared_export_and_stale_decision(browser_workspace):

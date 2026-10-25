@@ -8,7 +8,7 @@
 
 ## Purpose
 
-ROS-native OMX-AI profile boundary. Validates the selected model and emits the standard `ros2_control` / MoveIt controller contract (joint-state broadcaster + `JointTrajectoryController`). It must not open a serial port, publish base `cmd_vel`, bypass CORE safety, or advertise an arm capability while the hardware revision, driver, mount, power, hand-eye calibration, payload, and recovery procedure are unaccepted.
+ROS-native OMX-AI profile boundary. Validates the selected model and emits the standard `ros2_control` / MoveIt controller contract (joint-state broadcaster + `JointTrajectoryController`). It must not open a serial port outside the D-858 real bus port (`omx_adapter/real/dynamixel_port.py` over `real/dynamixel_bus.py`, not composed until S4), publish base `cmd_vel`, bypass CORE safety, or advertise an arm capability while the hardware revision, driver, mount, power, hand-eye calibration, payload, and recovery procedure are unaccepted.
 
 ## Key Files
 
@@ -60,6 +60,6 @@ The CLI on the disabled profile must print `{}`.
 
 ### External
 
-- PyYAML (CLI). No Dynamixel SDK / serial I/O in this package yet.
+- PyYAML (CLI). `dynamixel_sdk` and `pyserial` are optional: only `omx_adapter/real/dynamixel_bus.py` `SdkBus` imports them, at construction. It is not composed anywhere yet (D-858 S1, owner stays `enabled=False`).
 
 <!-- MANUAL: -->

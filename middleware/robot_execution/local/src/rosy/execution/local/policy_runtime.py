@@ -49,7 +49,8 @@ class PolicyRuntimeBinding:
 
     def check_command(self, command):
         candidate = getattr(self._local, 'candidate', None)
-        if (getattr(self._local, 'command', None) is not command or candidate is None
+        lease = getattr(self._local, 'lease', None)
+        if (getattr(self._local, 'command', None) is not command or candidate is None or lease is None
                 or self._fault.is_set() or self.session.hold_reason or not self._current()):
             return False
         try:
@@ -57,7 +58,11 @@ class PolicyRuntimeBinding:
             if type(now) not in (int, float) or not math.isfinite(now):
                 return False
             ns = int(now*1e9)
-            return (self.session.lease.issued_at_ns <= ns < self.session.lease.expires_at_ns
+            current = self.session.lease
+            return ((lease.lease_id,lease.episode_id,lease.identity)==
+                    (current.lease_id,current.episode_id,current.identity)
+                    and lease.issued_at_ns <= ns < lease.expires_at_ns
+                    and current.issued_at_ns <= ns < current.expires_at_ns
                     and 0 <= ns-candidate.observed_at_ns <= self._timing['max_observation_age_ns']
                     and 0 <= ns-candidate.produced_at_ns <= self._timing['max_action_age_ns'])
         except Exception:
@@ -108,13 +113,13 @@ class PolicyRuntimeBinding:
             self._fault.set()
             raise
 
-    def submit(self, command, candidate):
+    def submit(self, command, candidate, lease):
         self.guard()
-        self._local.command, self._local.candidate = command, candidate
+        self._local.command, self._local.candidate, self._local.lease = command, candidate, lease
         try:
             return self.runtime._submit_policy(command, self)
         finally:
-            self._local.command = self._local.candidate = None
+            self._local.command = self._local.candidate = self._local.lease = None
 
     def observe(self, snapshot):
         self.guard()

@@ -4,8 +4,10 @@ import json
 import math
 from pathlib import Path, PurePosixPath
 import re
+from .digest import file_sha256, is_sha256_hex
 
 
+# Format pinned: artifact manifest revisions use these bytes; test_canonical_hash_formats.
 def _json(doc):
     return json.dumps(doc, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
                       allow_nan=False).encode("utf-8")
@@ -40,7 +42,7 @@ def _text(value):
 
 
 def _hash(value):
-    if not isinstance(value, str) or not re.fullmatch("[0-9a-f]{64}", value):
+    if not is_sha256_hex(value):
         raise ValueError("sha256 revision required")
 
 

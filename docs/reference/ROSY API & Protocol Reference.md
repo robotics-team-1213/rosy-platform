@@ -5,10 +5,209 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.312
+**Version:** v1.320
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
+### v1.318 Fleet 캐시 전용 모니터링 읽기 (D-876)
+
+**단계:** wire 계약 등록. 이 변경만으로 아래 Fleet handler나 독립 Monitoring 서비스가 구현·배포된 것은 아니다. 실제 producer는 후속 구현·회귀에서 확인한다.
+
+`GET /api/fleet/monitoring`은 기존 `fleet.read` 권한으로 Fleet이 이미 보유한 연결 관측만 조회하는 목표 경로다. 원천은 `SharedGather`의 마지막 캐시이며 조회가 gather·교통·인계·배차·원격 로봇 요청을 실행해서는 안 된다. CORE·호스트의 제어 권한이나 새로운 peer 권한을 만들지 않는다.
+
+공유 스키마는 `core_common.protocol.monitoring.FleetLinkObservation`, `FleetMonitoringRead`이며 `core_common.protocol.schemas`가 canonical export한다. 독립 Monitoring 전용 snapshot·event 모델은 해당 소유 모듈에서 구현한다. 기존 WS envelope와 `PROTOCOL_VERSION=1.0`은 바꾸지 않는다.
+
+| 응답 필드 | 의미 |
+|---|---|
+| `schema_version` | strict 정수 `1`. 다른 버전과 bool은 거부한다 |
+| `sampled_at` | 마지막 gather의 timezone-aware ISO 시각 또는 null. 조회 시각으로 다시 쓰지 않는다 |
+| `cache_age_s` | 해당 캐시 생성 이후 단조 시계로 계산한 유한·음수 아닌 초 또는 null |
+| `robots` | 최대 256개의 중복 없는 연결 관측. 업무·센서 본문·실주소·자격은 포함하지 않는다 |
+| `robots[].robot_id` | 1–96자 `[A-Za-z0-9][A-Za-z0-9_.:-]*` 식별자 |
+| `robots[].link` | 기존 `up`, `degraded`, `unreachable`, `moved`, `tls-refused`, `protocol` 또는 `unknown` |
+| `robots[].reachable` | 실제 도달 여부를 원천에서 확인한 bool 또는 확인 불가 null |
+| `robots[].reason_code` | 기존 D-535 `connect_reason.REASONS`의 코드 또는 null. 원본 오류 message를 전달하지 않는다 |
+| `robots[].state_age_s` | 원천 로봇 상태의 나이 또는 null. 캐시 나이와 다르며 새 조회로 초기화하지 않는다 |
+
+캐시가 없으면 `sampled_at=null`, `cache_age_s=null`, `robots=[]`이다. 시각·나이 중 하나만 없거나 표본 없이 robots를 제공하는 응답은 거부한다. 오래된 캐시의 나이와 기존 실패 상태를 그대로 보존하고 이를 정상·장치 운전 가능으로 바꾸지 않는다. `tls-refused`는 기존 HTTP 401 인증 거부 이름이며 TLS 인증서 검증 실패와 구분한다.
+
+성공은 `FleetMonitoringRead` 자체를 반환한다. 기존 인증 실패는 401/403을 유지하며, 캐시 projection을 검증할 수 없으면 503 `detail.code=FLEET_MONITORING_UNAVAILABLE`을 반환한다. 요청 실패의 원문·토큰·예외 repr을 넣지 않는다. 무응답 표본은 200의 명시적 빈 캐시로 표현한다.
+
+### v1.316 군집 원본 자세 시각과 만료 (D-870)
+
+PoseSample에 선택 strict positive finite UTC epoch `sampled_at`을 추가한다. 원본 capture를 재전송/anchor 변환 때 보존하고 수신측은 새 표본의 남은 수명만 단조 시계 만료로 고정한다. `swarm.reference_freshness`는 실제 구현 지원이며 시계 품질이 아니다. 구형/누락 peer는 freshness-required Fleet 무장 전에 거절한다. D-859 UTC 수용은 별도이며 envelope1.0은 유지한다.
+
+### v1.315 이벤트 ID 재전송과 안전한 WELCOME watermark (D-869)
+
+PRT-005 재전송은 원본 event_id·내용·seq를 유지하며 개별 EVENT 응답으로 확인한다. WELCOME의 producer scope 없는 last_event_seq로 버퍼를 삭제하지 않는다. 새 Hub는 구 Agent 보호를 위해 이 필드에0을 반환한다. 같은 ID의 같은 본문은 중복 제거하고 다른 본문은 거절한다. 메모리 버퍼를 영속 outbox로 승격하거나 envelope1.0/wire 필드를 변경하지 않는다.
+
+### v1.314 정책 승인 범위 readback·전환·감사 (D-865)
+
+[D-865](../adr/D-865-fleet-policy-admission.md)의 additive wire 계약이다. 정의는 `protocol/policy_admission.py`, canonical export는 `core_common.protocol.schemas`다. 승인(admit) 권한은 Fleet이 소유하며 업무 앱은 이 경로를 쓰지 않는다. 이 계약 등록은 구현·활성화·현장 수용 완료를 뜻하지 않는다.
+
+모든 경로는 `/api/fleet/policy-admission` 아래다. `GET /`는 viewer가 `PolicyAdmissionReadResponse`를 읽는다. scope는 사람이 정한 승인 범위로 `enabled`·`robots`(최대 32, 중복 금지)·`step_approval_kinds`(v1은 `one_person`만)·`max_admits`(1 이상)·`valid_until`·`scope_revision`을 담는다. 활성 scope는 로봇·승인 종류를 최소 하나씩 명시해야 하고, 비활성 scope는 빈 목록과 `admits_remaining` 0으로 닫힌다. 상한 소진·만료는 초기화하지 않고 `reason`으로 구분해 남긴다.
+
+`POST /`는 기명 운영자의 `PolicyAdmissionToggleRequest`(`enabled`)만 받는다. 전환은 스위치만 바꾸고 범위 내용(로봇·종류·상한)은 사이트 설정만 정한다. 해제는 새 자동 승인만 막고 진행 중 lease·claim을 소급 해제하지 않는다. `GET /audit`는 viewer가 최근 감사 항목(최대 100, `cursor`)을 읽는다. 항목은 `mission_id`·`decided_at`·`principal`(`fleet-policy-admission`)·`scope_revision`·`outcome`(ADMITTED/HELD)·`generation`·`reason`이며 사람 승인 행위와 구분해 기록한다.
+
+자동 승인은 사람 승인과 같은 admission 검사(승인 등록부·정지 세대·자원·전송 직전 재검사)를 전부 통과한 뒤에만 되고 규칙집 law(FL-*)는 이 경로로 해제하지 않는다. bad credentials 401, 권한 거절 403, malformed 422, 저장소 실패 503이며 부분 실패를 성공으로 덮지 않는다.
+### v1.313 통합관제 정보와 관제별 정지 요청 (D-862)
+
+[D-862](../adr/D-862-integrated-control-information-and-stop-requests.md)의 additive wire 계약이다. canonical export는 `core_common.protocol.schemas`, 정의는 `protocol/integrated_control.py`다. Envelope protocol_version은1.0이다. 이 계약 등록은 runtime·배포·장치·현장 수용 완료를 뜻하지 않는다.
+
+모든 경로는 `/api/fleet/control-unit` 아래다. `GET /overview`는 ControlOverview, `GET /units/{unit_id}`는 ControlUnitDetail, `GET /units/{unit_id}/map`은 ControlMapSnapshot을 반환한다. 로컬 viewer와 명시적으로 정보 공유를 허용받은 직계 부모 service만 자기 subtree를 읽는다. 부모 service의 전체 원장 조회·sibling/임의 URL 조회는 허용하지 않는다. `share_information_with_parent` 기본false, `accept_parent_stop` 기본false로 기존 자격의 권한을 자동 확대하지 않는다.
+
+ControlOverview는 `unit_id,config_revision,units`이며 unit 최대64개·중복 금지다. ControlUnitSummary는 `unit_id,parent,availability,sampled_at,age_s,robots_total,robots_online,tasks_active,map,dispatch,error,stop_pending`이다. availability는 AVAILABLE/STALE/UNAVAILABLE, age는 유한한 비음수 또는 null, timestamp는 timezone-aware다. stale 기준은5초이며 reported age에 수신 후 monotonic 경과를 반영한다. 연결 실패는 관제별 unavailable/stale로 유지한다. dispatch는 기존 authority_epoch/generation 두 정수만 담고 장치 권한·재무장을 부여하지 않는다.
+
+ControlUnitDetail은 같은 owner/config/availability/time와 직접 `robots` 최대256개·`tasks` 최대100개·`tasks_truncated,map,dispatch`를 담는다. ControlRobotInfo는 robot_id/online/state_age_s/mode/battery_percent/estop/pose/evidence만 공유한다. evidence는 pose/battery/safety의 fresh/delayed/disconnected/unavailable/unknown이며 메시지 나이가 센서 신선도를 대신하지 않는다. 미관측/default 값을 실측으로 만들지 않는다. ControlRobotPose의 x/y/yaw는 유한 수치이고 map_id/source/frame(map/odom/unknown)을 보존한다. Task는 task_id/robot_id/status/aware updated_at만 공유하며 actor/request/evidence/reason·개인 Mission/Cell Job은 제외한다. overview/detail/stop snapshot은 유한 JSON128KiB 이하로 제한한다.
+
+ControlMapRef는 `map_id,version,frame:unit_local`이며 version>=1이다. map ID는 기존 SiteMap의 `[A-Za-z0-9_.-]{1,64}`, place/lane ID는 같은 문자 집합1–32자를 사용한다. ControlMapSnapshot은 `unit_id,config_revision,map,places,lanes`이고 place는 id/label/x/y, lane은 id/points(x/y)만 포함한다. 최대500 places·1000 lanes·전체20000 points·2MiB다. 관제·map ID·version을 함께 표시하고 근거 없는 관제 간 좌표 overlay를 하지 않는다. survey·승인자·증거 metadata는 전송하지 않는다.
+
+`POST /stops`는 로컬 기명 운영자의 ControlStopRequest(`stop_id,target_unit,config_revision,expected_controls`)를 받는다. expected_controls는 대상 unit별 ControlDispatchFence(authority_epoch/generation>=0)이며1–64개다. `POST /stop-inbox`는 직계 부모 service의 ControlStopIngress(같은 필드+origin_id)만 받으며 명시적 accept_parent_stop과 ancestor/target 범위를 검증한다. 서버가 actor를 정하고 caller actor/URL/token 필드는 거절한다. identity는 origin+stop_id, 본문/fence는 immutable이다. 같은 SQLite transaction에서 journal·expected fence·기존 latch를 결속하고 같은 요청을 다시 실행하지 않는다. 본문 충돌·구성 변경은409다. 관제별 과거 fence는 STALE_FENCE 결과와 해당 관제의 미실행으로 보존하며, 독립된 최신 fence의 관제는 계속 처리한다. 결과 dispatch는 관제의 처리 시점 fence이며 로컬 latch를 소비했다면 소비 후 generation이다.
+
+`GET /stops/{origin}/{stop_id}`는 ControlStopSnapshot(`unit_id,origin_id,stop_id,target_unit,config_revision,results,revision`)이다. 결과 unit 최대64개·중복 금지이며 PENDING/SENDING/ACKNOWLEDGED/PARTIAL/UNKNOWN/STALE_FENCE/NOT_REACHED/SUPERSEDED_BY_OPERATOR_RECOMMISSIONING, 원래 dispatch fence, acknowledged_robots/unknown_robots, OMX 응답 상태, 제한된 오류 code를 보존한다. physical_stop은 UNVERIFIED로 고정한다. HTTP200·stopped:true·LOCAL_LATCHED를 물리 정지 증거로 바꾸지 않는다. polling·재시작은 stop을 자동 POST하지 않는다. 활성 send/불확실성은 기존 rearm transaction에서 거절한다.
+
+`GET /stops`는 로컬 사람 viewer 전용 ControlStopHistory(`unit_id,config_revision,stops`)다. 최대100개 ControlStopReference에 origin/stop/target/config/revision, incomplete/local_reconciliation_required, aware updated_at만 포함한다. 중복 origin+stop은 금지하며 actor·재시운전 근거·raw receipt는 노출하지 않는다. 부모 service는 전체 목록을 읽을 수 없다. 활성 최대64개 기록을 먼저 조회해 미해결 결과가 최근 종단 이력 뒤로 사라지지 않게 한다.
+
+`POST /stops/{origin}/{stop_id}/reconcile`는 해당 관제의 로컬 기명 운영자만 ControlStopReconcile로 확인한다. 현행 expected_generation과 receiver_channels_terminated:true, receivers_recommissioned:true, 제한된 evidence, 해당 관제의 affected_units를 요구하며 bool을 숫자로 대체할 수 없다. 살아 있는 send는 override할 수 없다. 원래 UNKNOWN과 확인 근거를 보존하고 해당 불확실성 guard만 처분한다. 부모가 하위의 사람 확인·CORE release·OMX recovery·Fleet rearm을 대신하지 않는다.
+
+typed 정지는 journal/fence를 확보하지 못하면 새 fanout 없이503 JOURNAL_UNAVAILABLE/UNKNOWN이다. 기존 `/api/fleet/estop`의 새 로컬 사람 긴급 정지는 DB 장애에도 원래 best-effort fanout을 유지한다. bad credentials401, 범위/권한 거절403, 없는 unit/map/record404, revision/identity/fence 충돌409, malformed422, 저장소/producer/transport 실패503이며 부분 연결 실패를 전체 성공으로 덮지 않는다. peer CA는 명시 tls_ca_file로 연결하고 hostname/체인 검증·redirect 거절·환경 proxy 미사용을 유지한다.
+
+정지 body의 불변성은 관제별 최초 배정 projection을 기준으로 한다. origin/stop/config는 유지하되 target이 자기이면 자식 target과 해당 subtree fence로 제한하고, 더 깊은 target이면 next hop으로 중계한다. 최초 child target/fence를 저장한 뒤 재시도·조회에서 바꾸지 않으며 자식 응답도 그 범위로 검증한다. 빈 fence projection에는 POST하지 않고 미전달/미확인으로 남긴다. sibling fence/결과를 다른 자식에게 공개하지 않는다.
+
+`control-unit:<이웃>` service 자격은 모든 method에서 정확한 이 namespace로 제한한다. 일반 Task/state/work/proposal API를 통한 원장·개인 metadata 접근은 거절한다. 일반 service와 사람의 기존 권한은 유지한다. 송신 토큰은 이웃별로 고유하며 로컬 수신·Console·로봇 REST·CORE Agent pairing 토큰과 재사용하지 않는다. peer는 명시 CA·hostname 검증을 유지하고 identity encoding만 받으며 전체 요청3초·기존 byte 상한을 적용한다.
+
+typed stop의 직접 장치는 실제 Console roster와 manifest `robot:` 목록을 대조한다. configured OMX workcell은 local `workcell:<id>`, 신호등은 local `signal:<id>` 소유여야 하며 누락·타 관제 소유는 시작 시 거절한다. `signal:`은 topology 소유 표기만 정의한다. 조건부 journal 실패에는 새 fanout을 하지 않으며, 로컬 E-stop의 기존 best-effort 처리는 유지한다. owned claim/send/reconciliation의 실제 thread 종료 전에는 재시운전 확인과 shutdown drain을 완료로 처리하지 않는다.
+### v1.311 Device network recovery jobs (D-863)
+
+CORE keeps administrator authentication and explicit `confirmed: true` for
+`POST /api/v1/host/network/connect` (`ssid`, secret `psk`, stable `idempotency_key`).
+SSID is printable UTF-8, 1–32 bytes; supported WPA2 passphrases are 8–63 characters.
+Only network status/connect use the dedicated `/run/rosy-network-agent/core.sock`
+(configuration `network_agent.socket_path`). Existing lane authority is unchanged.
+
+A `prepared` response acknowledges a job, not a connected network. CORE sends
+`network.start` only after the HTTP response body. `GET /api/v1/host/network?request_id=...`
+lets a viewer reconcile the same job after transport loss. States include prepared,
+activating, committing, committed, rolling_back, rolled_back, held, rejected and
+needs_resubmit. Committed requires observed candidate UUID, SSID, interface and IPv4;
+internet access is optional. Unknown/stale/disconnected evidence is never success.
+The browser retains only job ID and SSID; losing an in-memory PSK requires explicit re-entry.
+
+Initial boot failure recovery uses a separate AP-bound HTTPS listener on port 8443,
+physical code and certificate-fingerprint enrollment. It grants only network commands,
+never a CORE token. An image lacking first-boot handoff support exposes diagnostics
+only and reports image_required for writes. See [Host Agent contract](rosy-host-agent-contract.md)
+and [recovery operations](../deployment/network-recovery-and-updates.md).
+### v1.304 읽기 전용 모터 상태
+
+`GET /api/v1/motors/health`는 기존 CORE viewer 인증을 요구하고
+`rosy.motor-health.v1`을 반환한다. 서버가 지정한 절대 파일 경로와 소유자만
+읽으며 HTTP 입력으로 파일·장치·소유자를 바꾸지 않는다. 파일 부재·검증 실패는
+`evidence:unavailable,status:unavailable`이며 모터 값을 추정하지 않는다.
+
+응답은 `{schema_version,evidence,status,owner_id,session_id,sample_age_s,
+stale_after_s:2,motors,stop_reasons,support_reason}`이다. 모터 행에는
+`{group,joint,id,sample_age_s,command_raw,present_raw,error_deg,pwm,pwm_limit,
+pwm_utilization,temperature_c,temperature_limit_c,voltage_v,min_voltage_v,
+max_voltage_v,warnings}`가 있다. 선택적 `hardware_error`(0..255), `fault`,
+`torque_enabled`는 실제 읽은 오류 코드·관절 고장·토크 상태이며 누락값은 모름이다.
+PWM 비율은 설정 상한 대비 사용률이며 물리
+토크가 아니다. 관측 나이·전체 모터 범위·소유자·세션을 검증해야 실시간이다.
+고장·종료 기록은 `evidence:disconnected,status:fault|ended`로 보존하고
+현재 정상 상태로 간주하지 않는다. 장치 경로와 원시 SDK 예외는 공개하지 않는다.
+
+Fleet 로봇 상태 행은 선택적 `motor_health`와 `motor_health_age_s`를 제공한다.
+CORE→Fleet 조회 시작부터의 경과 시간과 브라우저 HTTP 전송 시간을 보수적으로
+더한다. 통합 관제 요약과 로봇별 상세는 같은 공용 표시기를 사용하며 확인 불가를
+정상으로 표시하지 않는다. 조회 실패는 다른 로봇의 조회를 중단시키지 않는다.
+이 정보는 표시 전용이며 torque·고장 해제·명령 admission을 부여하지 않는다.
+
+D-837의 `ArmObservation`은 선택적 `motor_health`를 같은 출처 인증으로
+받고 GET의 해당 팔에 반환한다. 소유자·그룹은 등록 `arm_id`, 관절은 정확한
+등록 관절 집합에 결속한다. 표준 OMX follower는 joint1..joint5,
+gripper_joint_1과 모터 11..16의 순서를 검증한다. source·receipt 경과 시간은
+원래 모터 표본의 나이에 더하며 재전송으로 신선해지지 않는다.
+`positions:null`은 결속된 `status:fault|ended` 모터 기록이 있을 때만 허용한다.
+이때 위치는 항상 확인 불가이며 고장 전 위치를 현재 위치로 만들지 않는다.
+고장 시각과 모터 측정 시각을 구분하고 기존 2초 capture·epoch·sequence·크기
+검사와 출처별 인증을 유지한다. 비공개 bridge 인수
+`--arm-health-file SOURCE_ID=/absolute/file`은 등록 출처의 명시적 파일만 읽는다.
+관측기 `--health-file`·`--health-owner`는 기존 단일 버스 소유자가 이미 읽은
+레지스터 블록을 기록하며 두 번째 직렬 포트 독자를 만들지 않는다.
+
+### v1.302 Fleet workcell observation (D-837)
+
+Additive read-only observation boundary; [D-837](../adr/D-837-workcell-observation.md)
+defines the source manifest, bounded latest cache, source identity and freshness.
+It does not enable a physical owner, command, calibration or motion admission.
+
+| Method/path | Authentication and body | Response |
+|---|---|---|
+| `GET /api/fleet/workcell-observations` | Existing Fleet viewer authentication | `{read_only:true,physical_acceptance:false,workcells:[{workcell_id,label,arms,cameras}]}`; no-store. Each arm has `{source_id,arm_id,label,units:"encoder_rad",fresh,epoch,sequence,captured_at,source_age_s,receipt_age_s,positions}`; cameras have `{source_id,label,role,arm_id}`. Missing samples have null data/age/epoch, sequence0. Stale positions are null. No producer secret or serial selector. |
+| `POST /api/fleet/workcell-observations/arms/{source_id}` | Source-bound `X-Workcell-Observation-Token`; strict `ArmObservation` `{epoch,sequence,captured_at,positions}`; actual body limit16KiB | 202 `{accepted:true}`; 401 bad/unknown source credential; 409 replay, nonadvancing capture, expired/future capture; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 invalid structure; 503 unconfigured. Identity comes from the registered source, never the payload. |
+
+Epoch is lowercase UUID hex32; sequence is a positive strict integer. Original
+UNIX capture seconds and exact registered joint→number positions are finite JSON
+numbers excluding bool/string. New epoch starts at sequence1; capture time
+advances even across epoch changes. Ingest capture age is -0.25..2s. Display
+requires source and server-monotonic receipt ages both within2s. Latest-only
+memory and64 retired epochs do not provide durable replay history across server
+restart; original age checks remain mandatory. Rejected updates preserve prior
+valid observations. Each source expires separately and logout clears the UI.
+Preview-only camera IDs reuse existing authenticated Vision ingestion and frame
+leases, with no map/sighting/calibration registration. ID/credential collisions
+with existing sources are rejected before merge.
+
+Private manifest arm/camera entries also require globally unique
+`credential_sha256` (lowercase hex64). Each server verifies its own raw producer
+secret against that fingerprint; other-role secrets are not shared. Fleet checks
+all fingerprints against existing site credentials and Vision reserves all of
+them against dynamic paired credential reuse. Rotation mismatch refuses startup.
+Fingerprints are excluded from GET responses.
+
+### v1.301 이미지 도면 등록과 범용 추출 후보 (D-835)
+
+기존 STL 입력·변환·해시는 유지한다. `POST /api/fleet/site-map/drawings`는 추가로 `Content-Type: image/png|image/jpeg` raw bytes를 받고 실제 format과 일치하는 단일 프레임 PNG/JPEG만 허용한다. 응답은 `{asset_sha256,format:png|jpeg,width_px,height_px}`다. 원본 bytes는 보존하며 EXIF 방향을 적용하고 투명 배경을 흰색에 합성한 별도 RGB PNG를 표시/추출 기준으로 사용한다. width_px/height_px는 정규화 후 크기다. SVG/HTML/외부 URL/다중 프레임은 거절한다.
+
+기존 projection POST는 `RasterDrawingTransform`도 받는다. 필수 `source_origin_px:[x,y]`, `map_origin_m:[x,y]`, `heading_rad∈[-2π,2π]`, 양수 `meters_per_pixel`이며 모든 수는 유한하다. 원본 픽셀 원점은 정규화 자료의 좌상단, x 오른쪽/y 아래다. 등록 원점은 이미지 경계 안이어야 한다. `p_map=map_origin_m+R(heading_rad)*[px-source_x,source_y-py]*meters_per_pixel`. 이 변환은 원근을 보정하지 않는다. 기존 DrawingTransform과 혼합하거나 다른 source 종류에 적용하면 422다.
+
+Raster projection은 기존 응답에 `kind:raster,format,width_px,height_px,render_sha256`을 추가하고 segments는 빈 배열이다. bounds_m은 변환한 네 모서리의 경계다. hash는 converter version `rosy.raster_projection/1`과 원본/렌더 hash·변환·크기를 포함한 canonical JSON으로 결속한다. `GET /api/fleet/site-map/drawing-projections/{projection_sha256}/render`는 기존 read guard 뒤에서 PNG를 제공하고 `nosniff, Cache-Control: private, no-store`를 설정한다. 원본 GET은 계속 named operator 전용 attachment다.
+
+Raster 원본과 정규화 PNG는 각각 16 MiB 이하, 축별 8192 px 이하·전체 16,000,000 px 이하다. 업로드 60초, worker 10초/512 MiB, 동시 1개·보관 합계 1 GiB이며 기존 drawing error code를 재사용한다. STL의 5초/256 MiB 한도는 바꾸지 않는다. 지도 revision·새 map_id·검토 해제·CAS/활성화 경계는 D-825와 같다. 새 입력은 지도 저장·활성화나 로봇 명령을 발생시키지 않는다.
+
+`POST /api/fleet/site-map/drawing-projections/{projection_sha256}/extractions`는 named operator·기존 CSRF 뒤에서 `DrawingExtractionRequest`를 받는다. `crop_px:[x0,y0,x1,y1]`는 정규화 이미지 경계 안의 양수 크기 정수 사각형, `method=lines|contours`다. 선택 settings는 extra forbid이며 `canny_low=50, canny_high=150`(0…255, low<high), `threshold=20`(1…8192), `min_line_length_px=30`(2…8192), `max_gap_px=3`(0…64), `tolerance_px=1`(0…10, 유한)이다. 정수 설정은 bool·문자열·소수를 거절한다. 입력/출력은 원본 픽셀 좌표이고 ROI offset을 복원한다. 직선은 Canny/HoughLinesP, 윤곽은 반전 Otsu/contour tree와 명시한 허용 오차의 단순화를 사용한다.
+
+응답은 `{extraction_sha256,asset_sha256,projection_sha256,render_sha256,crop_px,method,settings,extractor_version,library_version,candidates}`다. candidate는 `{candidate_id,geometry_px,closed,is_hole}`이며 도로 의미·안전 점수를 포함하지 않는다. 빈 배열은 정상적으로 후보를 찾지 못한 경우이고 잘못된 자료/실행 실패와 구별한다. 후보 ≤2000개·합계 꼭짓점 ≤50,000개·응답 ≤8 MiB를 초과하면 413이며 일부를 몰래 버리지 않는다. 기존 drawing slot/worker/저장량을 공유한다. canonical result에서 extraction_sha256을 뺀 body의 SHA-256으로 보관하며, source/projection/settings/라이브러리 버전을 결속한다. read guard 뒤의 `GET /api/fleet/site-map/drawing-extractions/{extraction_sha256}`로 같은 결과를 읽는다. 결과 생성/읽기는 초안·활성 지도·운행 명령을 바꾸지 않는다.
+
+`POST /api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate`는 named operator·기존 CSRF 뒤에서 기존 DraftRequest의 `{map,expected_revision?}`을 최대 2 MiB·수신 10초로 검증하고 `{map}` canonical body만 반환한다. 저장·CAS·revision 발행·활성화는 하지 않는다. 도형·참조는 기존 SiteMap validator를 사용하며 drawing/survey는 추출의 source/projection과 일치해야 한다. 후보 추출 POST도 같은 2 MiB/10초 수신 한도를 사용한다. 잘못된 요청/도형은 `SITE_MAP_DRAWING_INVALID` 422다. 응답 수락 전 브라우저는 초안 identity·계정 epoch·원본/projection·요청 세대를 다시 검사한다.
+
+선택 `SiteFacility.evidence`는 기존 RoadEvidence와 같은 `{source,status,reference_revision,note}` 형식을 쓰고, 없으면 기존 지도 body에서 생략한다. 후보의 도로/시설에는 운영자가 지정한 용도와 수정한 geometry를 저장하고 note에 `extraction:<sha256> candidate:<id>`를 남긴다. immutable 추출 원본과 저장된 geometry를 대조할 수 있으며 이는 운영자 출처 기록이지 AI 정확도 보증이 아니다. 시설 근거도 survey revision과 일치해야 하며 검토 전 활성화는 기존 `SITE_MAP_ROAD_UNREVIEWED`로 거절한다. 직접 수정·도면 교체·템플릿 복사는 시설 근거도 미검토로 돌리고, 명시적 조사 검토는 해당 근거를 함께 검토한다.
+
+### v1.300 STL 도면 참조와 Fleet 평면 지도 편집 (D-825)
+
+선택 `SiteMap.drawing={asset_sha256,projection_sha256}`의 두 값은 소문자 SHA-256 64자리다. 정본 DTO는 `core_common.protocol.site_drawing`이며 CORE snapshot/envelope를 확장하지 않는다. 도면 지도의 `survey.revision`은 projection 해시와 같아야 한다. 선택 `SiteEdge.name`은 ID와 분리된 1–64자 표시 이름이고 공백만인 값을 거절한다. 없는 두 선택 필드는 기존 지도 body/hash에서 생략한다. 기존 지도 JSON 제한은 2 MiB다.
+
+| Method | Path | Guard | Body / Result |
+|---|---|---|---|
+| POST | `/api/fleet/site-map/drawings` | named operator + 기존 CSRF | raw STL bytes → `{asset_sha256,format,triangle_count,bounds_3d}`; format은 `binary_stl` 또는 `ascii_stl`, bounds_3d는 원본 단위의 `[min_xyz,max_xyz]` |
+| POST | `/api/fleet/site-map/drawings/{asset_sha256}/projections` | named operator + 기존 CSRF | `DrawingTransform` → `{projection_sha256,asset_sha256,transform,bounds_m,segments}` |
+| GET | `/api/fleet/site-map/drawing-projections/{projection_sha256}` | 기존 지도 read guard | 저장한 projection JSON; bounds_m은 `[min_xy,max_xy]`, segments는 `[[[x1,y1],[x2,y2]],…]` 미터 좌표 |
+| GET | `/api/fleet/site-map/drawings/{asset_sha256}/source` | named operator | 원본 bytes; attachment, application/octet-stream, nosniff |
+
+`DrawingTransform`은 필수 `plane=xy|xz|yz`, `unit=m|cm|mm`, 원본 평면의 `source_origin:[x,y]`, 미터 `map_origin_m:[x,y]`, `heading_rad∈[-2π,2π]`, 양수 `scale`이다. 모든 수는 유한해야 한다. 지도 좌표는 기존 ±1000 m 범위다. 평면의 좌표 순서는 각각 (x,y)/(x,z)/(y,z)이며 `p_map=map_origin_m+R(heading_rad)*(p_source-source_origin)*unit_m*scale`이다. 등록은 단위·축을 추정하지 않는다. 사용자가 두 점의 실측 거리를 확인하고 survey의 measured 근거를 기록한다.
+
+원본 16 MiB, 삼각형 200,000개, 중복 제거 투영 선분 50,000개, projection JSON 8 MiB, DB별 보관 합계 1 GiB다. 업로드 수신은 60초, 변환은 동시 1개·wall 5초·자식 메모리 256 MiB로 제한한다. 성공한 원본/변환은 내용 해시로 영속 보관하며 자동 삭제하지 않는다. 같은 요청의 재시도는 같은 해시를 재사용한다. `--tasks-db`가 없으면 도면 보관만 비활성화하고 기존 메모리 지도는 유지한다. 파일 경로·외부 URL·임의 SVG/HTML은 입력이 아니다.
+
+| HTTP | Code | 의미 |
+|---|---|---|
+| 413 | `SITE_MAP_DRAWING_LIMIT` | bytes/삼각형/선분/출력 예산 초과 |
+| 422 | `SITE_MAP_DRAWING_INVALID` | 잘못된 STL·변환·참조 또는 유효하지 않은 미터 좌표 |
+| 429 | `SITE_MAP_DRAWING_BUSY` | 업로드/변환 슬롯 사용 중 |
+| 503 | `SITE_MAP_DRAWING_UNAVAILABLE` | 비영속 설정, worker 장애/시간 초과, 수신 기한 초과 |
+| 507 | `SITE_MAP_DRAWING_STORAGE` | 저장소 예산·디스크 부족 |
+| 404 | `SITE_MAP_DRAWING_NOT_FOUND` | 존재하지 않는 유효한 해시 |
+
+도면 생성/변환은 지도 저장이나 활성화를 하지 않는다. 잘못된 참조는 저장·활성화 전에 거절한다. 교체·템플릿 복사는 검토 완료와 교정 근거를 자동 계승하지 않는다. 기존 revision/CAS·named operator·trip/formation/teach busy 거절을 유지한다. 편집/저장/복사는 이동 명령을 보내지 않는다. 활성화와 실제 주행·현장 교정 수용은 별도다.
 ### v1.312 Physical observations and execution receipts (D-856)
 
 An explicitly installed simulation physical profile may additionally bind one
@@ -564,8 +763,8 @@ port supports an explicitly installed SIM session only.
 
 | Method/path | Request | Response |
 |---|---|---|
-| `GET /api/v1/arm/policy` | none | `policy_revision`, `simulation: true`, ordered `joint_names`, `units: rad`, `camera: {name, shape}` (CHW) |
-| `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `camera: {name, shape, rgb_base64}`; bytes are interleaved RGB uint8 HWC |
+| `GET /api/v1/arm/policy` | none | `policy_revision`, `simulation: true`, ordered `joint_names`, `units: rad`, `cameras: [{name, shape}]` (CHW, installed order, 1..N); a one-camera policy also returns that entry as `camera` (D-854) |
+| `POST /api/v1/arm/observations` | `{policy_revision}` | opaque `observation_id`, same revision, `positions` (joint→rad), `cameras: [{name, shape, rgb_base64, received_at_ns, frame_sha256}]` (owner-monotonic receipt time, SHA-256 of the RGB bytes) in installed order over one joint snapshot (one-camera policy also `camera`); bytes are interleaved RGB uint8 HWC. Every frame binds the action and its age |
 | `POST /api/v1/arm/actions` | `{policy_revision, observation_id, positions}` | 202 owner decision `{accepted, state, reason, command_id, cancel_outcome}`; admission is not completion |
 | `POST /api/v1/arm/stop` | none | `local_stop`, `hold_reason`, `physical_stop_verified: false` |
 
@@ -715,6 +914,18 @@ messages are rejected by this runtime subscription; the legacy pure replay parse
   a guide. Capability opt-in must cover the deployed consumer's deadline/invalidation
   behavior, not just request schema support. Legacy unversioned diagnostic input is not
   evidence of this capability. Direction never establishes visible floor or pivot permission.
+
+### v1.264 두 팔 제안 경로와 팔별 목표 술어 (D-781 §2·§5)
+
+Additive. recipe/3 Step은 팔마다 `goal_predicates`(그 팔 `robot_base`)를 저장하고, 목표 증거는 Step을 실제로 실행한 팔(첫 주 배정 팔 또는 대체 팔)의 술어로 판정한다. 그 팔 술어가 없으면 409 `CELL_GOAL_PREDICATE_MISSING`. `cell_transfer.sku`는 선택 필드이고 없으면 recipe/1·2 grant 직렬화와 digest가 이전과 같다. `POST /api/fleet/cell-app/compile`은 recipe/3를 `summary.multi_arm`으로 미리 본다. 자세한 내용은 변경 이력 v1.264 행.
+
+### v1.263 두 팔 Cell Job의 Step 목표 증거와 팔 하나 재개 (D-779 §3·§6)
+
+Additive. 새 경로 하나와 기존 Cell 목표 증거 ingress의 두 팔 Job 판정이다. envelope 1.0과 한 팔 Job의 동작은 그대로다.
+
+- **팔 하나 재개.** `POST /api/fleet/cell-jobs/{mission_id}/arms/{arm_role}/resume`, 이름 있는 운영자, 본문 `{expected_generation}`. 두 팔 Job에서 `HOLD`·`OFFLINE`인 팔 하나만 지금의 fence 아래에서 `READY`로 돌리고, 그 팔이 잡은 `HELD` 팔·구역 claim을 놓는다. 그 팔의 마지막 장치 결과가 성공이면 Action은 `ACTION_SUCCEEDED`로 남고 다시 보내지 않는다. 거절은 409 `CELL_JOB_RECOVERY_REFUSED`다: 한 팔 Job, 없는 팔이나 잡히지 않은 팔, 취소된 Job, 정지·권한 세대가 바뀐 경우(Job 전체 재개를 쓴다), 그 팔의 claim이 `DISPATCHING`·`UNKNOWN`인 경우(readback 먼저), 그리고 `TIGHT_PARTNER_HELD`로 잡힌 팔의 단단한 결합 짝이 아직 `HOLD`·`OFFLINE`인 경우(짝을 먼저 재개하거나 Job 전체 재개). 없는 Job은 404 `CELL_JOB_NOT_FOUND`.
+- **두 팔 Job의 목표 증거.** `POST /api/fleet/cell-goal-evidence`는 두 팔 Job을 `current_step_index`가 아니라 Step 단위로 판정한다. 증거는 저장된 `item_at_pose` 술어가 컴파일된 팔(그 Step 배치의 첫 주 배정 팔)의 Action을 가리켜야 하고, producer는 Job의 cell `workcell_id`와 그 팔의 `instance_id`로 등록되어 있어야 한다. 협조 Step은 배정된 모든 팔 Action의 마지막 장치 결과가 그 시도의 `SUCCEEDED`일 때만 `GOAL_CONFIRMED`가 되며, 관측은 마지막 성공 뒤에, 첫 관측은 모든 grant 발행 뒤이자 첫 성공 전에 있어야 한다. 대체 팔이 실행한 Step은 그 팔 좌표의 술어가 없으면 거절한다(fail closed). v1.264부터 술어는 팔마다(`goal_predicates`) 저장되고 대체 팔 Step도 그 팔 술어로 판정한다. 확인된 Step은 `depends_on`을 풀고, 모든 Step이 확인되면 Job은 `GOAL_CONFIRMED`가 된다(D-779 §1).
+- **협조 Step의 재전송.** 협조 Step은 모든 팔 Action이 함께 시작할 수 있을 때만 다시 낸다. 한 팔만 성공하고 다른 팔이 재개된 협조 Step은 한 팔만 다시 보내지 않는다. 그 Step은 `HOLD`·`PAIR_PARTIALLY_SUCCEEDED`로 읽히고 취소로만 끝난다.
 
 ### v1.242 작업의 운행 단계: 한 사람이 시작하는 trip 단계 작업 (D-763 조각 7, simulation 프로필만)
 
@@ -1960,7 +2171,7 @@ CORE journal에는 요청 ID별 질의, 답 변화, 우측 선택을 기록한�
 
 ## 7.4 이벤트 전달
 
-로봇은 내부 이벤트(EVT-001)를 `type: "event"`로 Fleet에 실시간 forward한다. 재접속 시 로봇은 미전송 이벤트를 `since_seq` 기준으로 재전송한다(PRT-005).
+로봇은 내부 이벤트(EVT-001)를 `type: "event"`로 Fleet에 실시간 forward한다. 재접속 시 미응답 이벤트의 원본 `event_id`·내용·seq를 유지해 재전송한다(PRT-005, D-869). 개별 EVENT의 정상 응답이 확인 근거이며, producer scope가 없는 WELCOME의 `last_event_seq`는 버퍼 삭제 근거가 아니다. 새 Hub는 구 Agent 보호를 위해 이 필드에0을 반환한다. durable/메모리 Hub는 같은 로봇의 동일 event_id·동일 본문을 한 번만 기록하고 같은 ID의 본문 충돌은 `EVENT_NOT_AUDITABLE`로 거절한다. 저장·projection 실패와 기존 이벤트 재시도 한도는 유지한다. 메모리 버퍼의 프로세스 종료 전 유실이나 메모리 Hub 재시작 뒤 중복 기억의 영속성을 보장하지 않는다.
 
 ## 7.5 명령 및 추적 (PRT-004)
 
@@ -1988,7 +2199,7 @@ Fleet 추적 타임아웃(기본 10초) 내 ack 없으면 Fleet 기록에 `COMMA
 
 - Exponential backoff: 1s → 2s → 4s → ... 최대 30s
 - `fleet.discovery`를 설정한 로봇은 재접속마다 예상 `.local` 호스트의 `_rosy-fleet._tcp` 광고를 조회하고 별도 설치된 사이트 CA로 TLS health를 확인한다. mDNS 광고만으로 토큰을 발급하거나 연결 대상을 바꾸지 않는다. 승인된 `fleet.pairing_token`이 없으면 Agent를 시작하지 않는다.
-- 재접속 즉시 `hello` → 마지막 전송 `seq` 이후 이벤트 재전송
+- 재접속 즉시 `hello` → 개별 정상 응답을 받지 못한 이벤트를 원본 ID·내용·seq로 재전송한다(D-869). 큰 seq가 더 작은 seq의 저장 성공을 증명하지 않으며, WELCOME scalar로 버퍼를 삭제하지 않는다.
 - 접속 단절 시 SAF-003 정책 적용 (D-419, v1.86): Agent 가 돌고 있고, 링크가 끊긴 순간 Fleet 주행 목표(`correlation_id` 가 있는 `POST /navigation/goal`)가 진행 중이었으며, 그 목표가 그대로인 채로 `safety.fleet_loss_timeout_s` 동안 계속 끊겨 있으면 한 번 적용한다. 로컬 목표·teleop·swarm follow(SWM-004 가 따로 지킴)·끊긴 뒤 들어온 목표는 대상이 아니다. `STOP` 은 그 목표 취소(e-stop 아님), `HOLD` 는 같은 정지에 재개용 목표 기록(자동 재개 없음), `RETURN_HOME` 은 취소 뒤 `__home__` 귀환(home 이 없거나 `LOCALIZED` 가 아니면 선 채로 `applied: STOP`), `CONTINUE` 는 이벤트만. 재접속은 아무것도 재개하지 않는다. 링크가 살아 있다는 것은 허브 `welcome` 을 받은 뒤이고 마지막 허브 수신이 링크 신선도(1 s 하트비트 주기 + `fleet.heartbeat_reply_timeout_s` + 0.5 s) 이내라는 뜻이다 — 판정 시간과 따로다(설정 여부는 기동 설정으로 정하고, 뒤에 Agent 가 hello 거부·중지로 꺼져도 끊긴 링크로 본다). 하트비트 답이 `fleet.heartbeat_reply_timeout_s`(기본 2 s) 안에 오지 않으면 로봇이 소켓을 끊는다(반쯤 열린 TCP). 하트비트에 대한 `error` 답(예: `TASK_PROJECTION_UNAVAILABLE`)도 답이라 링크를 유지하고, `PAIRING_INVALID`·`SESSION_NOT_PAIRED`·`DUPLICATE_IDENTITY`·`IDENTITY_DRIFT`·`PROTOCOL_UNSUPPORTED` 가 하트비트에 대한 답이면 세션을 즉시 끝낸다(`PAIRING_INVALID` 는 언제나). `event` 에 대한 `error` 는 이벤트 거부로 기록하고 세션을 유지한다. SAF-003 은 허브 건강이 아니라 링크 생존을 판정한다. hello 답 시한은 D-407 의 5 s(링크는 `welcome` 전까지 끊긴 것이라 SAF-003 판정에 영향 없음). `event` 에 대한 `error` 는 D-407 규칙대로 `EVENT_NOT_AUDITABLE` 이면 버리고, 다른 코드면 최대 3 번까지 다시 보낸다. 답을 기다리는 `event` 는 한 번에 8 개까지만 보낸다 — 재접속 뒤 밀린 이벤트가 하트비트 답을 시한 밖으로 밀어내지 않게. 단절은 마지막 허브 수신부터 잰다 — 답 하나를 놓친 기본 설정에서 정책은 마지막 수신 뒤 5 s. 재접속 backoff 는 세션이 하트비트 답 3 개를 받은 뒤에만 1 s 로 돌아간다. 취소가 그 목표를 찾지 못하면 `applied: NONE`·`reason: goal_changed`
 
 ## 7.7 프로토콜 버저닝 (PRT-006)
@@ -2003,10 +2214,14 @@ Leader 로봇 → Fleet ≥10 Hz, Fleet → Follower 릴레이 ≥5 Hz. envelope
 { "protocol_version": "1.0", "msg_id": "...", "type": "pose",
   "ts": "2026-08-29T12:00:00.123Z",
   "payload": { "robot_id": "rosy_01", "pose": { "x": 1.1, "y": 0.5, "yaw": 0.2 }, "seq": 8123,
-               "map_id": "site_a", "frame": "map" } }
+               "map_id": "site_a", "frame": "map", "sampled_at": 1788004800.1 } }
 ```
 
-Follower의 rosy_core은 스트림 수신 여부를 `stream_timeout_ms`(기본 1000 ms)로 감시하고 단절 시 SWM-004 정책(HOLD)을 적용한다.
+Follower의 rosy_core은 `stream_timeout_ms`(기본1000ms) 안의 유효 원본 표본을 감시하고 만료 시 SWM-004 정책(HOLD)을 적용한다(D-870). `sampled_at`은 원본 자세가 갱신된 UTC epoch 초이며 양수·finite 숫자만 허용하고 bool·문자열을 강제 변환하지 않는다. 모델의 legacy 누락 값은None이지만 freshness-required 추종의 이동 근거로 사용하지 않는다. Envelope.ts는 송신 시각이다.
+
+원본 capture와 monotonic age는 좌표·frame·map_id와 같은 잠금에서 읽으며 source 미수신/만료를 현재 시각으로 보완하지 않는다. D-859의 양쪽 UTC 오차 상한 각50ms 수용을 전제로 `age=max(0,now-sampled_at)+0.1`, `remaining=timeout_s-age`가 양수일 때만 유효하다. 0.1초 넘는 미래 시각·잘못된 시각/기한은 사용 불가다. 같은/이전 원본 stamp는 수명을 연장하지 않으며 remaining은 새 표본 수용 때 한 번만 수신측 monotonic deadline으로 바꾼다. 재접속·재전송·anchor 변환은 원본 stamp를 보존하고 만료한 pending 목표를 보내지 않는다.
+
+`GET /api/v1/system/capabilities`의 `swarm.reference_freshness`는 실제 설치된 서비스가 이 원본 신선도 계약을 집행하는지의 boolean이다. 기존 lead/follow·runtime withholding은 유지한다. Fleet은 이 지원을 전원에서 확인하고 첫 유효 표본을 받은 뒤 무장한다. 이 광고는 UTC 품질·현재 이동 가능 상태가 아니며, D-859 check 실패/미확인 실물의 시간 의존 운용/재개는 운영 수용에서 보류한다. 자동 NTP 품질 측정이나 전체 애플리케이션 admission gate를 추가했다는 의미가 아니다.
 
 `frame` 은 v1.170 additive 다(D-559): `map` 또는 `odom`. 리더의 map TF 가 2 s 넘게 끊기면 보고 pose 는
 odom 으로 떨어지는데, 그 좌표는 맵의 장소가 아니다. trail 팔로워는 `odom` 표본을 자취에 넣지 않고 멈춘다
@@ -3927,6 +4142,20 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.320 | 2026-10-26 | D-883: Service Control `clean-storage` for ai/model only (400 `ACTION_NOT_ALLOWED` on site, 409 `NO_STORAGE_SERVICE`), guard `resources.disk`/`disk_low`/`gpu`/`memory`/`memory_low`/`cpu` and the report-only `disk-low`/`memory-low` states. Fleet route shape and envelope1.0 unchanged. |
+| v1.318 | 2026-10-25 | D-876: passive Fleet connection cache wire, strict bounded observations, preserved cache/source ages and D-535 reasons; no raw body or control fields. Handler and independent Monitoring runtime remain unimplemented; envelope1.0 unchanged. |
+| v1.316 | 2026-10-25 | D-870: optional strict source sampled_at UTC, conservative100ms clock-bound lifetime, receiver monotonic expiry and implementation-derived swarm.reference_freshness; mixed peer and field UTC acceptance stay explicit, envelope1.0 unchanged. |
+| v1.315 | 2026-10-25 | D-869: replay unacknowledged events by immutable event_id/content; WELCOME watermark0 for unscoped legacy producers, memory/durable identity conflict parity. No new wire fields or envelope1.0 change; no durable outbox guarantee. |
+| v1.314 | 2026-10-25 | D-865: policy admission scope readback/toggle and bounded audit under `/api/fleet/policy-admission`; Fleet owns admission, the human-defined scope never relaxes rulebook law, and apps never self-approve. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
+| v1.313 | 2026-10-24 | D-862: bounded owner-scoped control-unit information/maps, immutable subtree stop assignments and local uncertainty reconciliation; explicit parent sharing/stop consent and peer CA. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
+| v1.310 | 2026-10-24 | Additive (D-854, feat/arm-policy-cameras): CORE arm policy `cameras` list (1..N installed cameras, installed order) on `/policy` and `/observations`; one-camera policies keep `camera`. Each observation camera adds `received_at_ns` and `frame_sha256`. All frames bind the action; owner freshness and causality checks apply per camera. Default unbound, SIM-only. |
+| v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
+| v1.311 | 2026-10-24 | D-863: network-only native authority, prepared jobs, response-before-start acknowledgement and job reconciliation; AP recovery and signed boot-layer continuity. |
+| v1.310 | 2026-10-24 | Additive (D-854, feat/arm-policy-cameras): CORE arm policy `cameras` list (1..N installed cameras, installed order) on `/policy` and `/observations`; one-camera policies keep `camera`. Each observation camera adds `received_at_ns` and `frame_sha256`. All frames bind the action; owner freshness and causality checks apply per camera. Default unbound, SIM-only. |
+| v1.304 | 2026-10-24 | (origin #152 v1.296, 2026-10-24 port) Read-only source-bound motor health in CORE, Fleet and Cell; preserve original measurement age and registered motor identity, including terminal hardware faults without fabricated positions. No torque, fault-clear or motion authority. |
+| v1.302 | 2026-10-24 | (origin #148 v1.295, 2026-10-24 port) D-837 source-bound workcell arm observations and preview-only camera registration; native Fleet intake and existing Cell UI are implementation/deployment work, not motion admission. |
+| v1.301 | 2026-10-24 | (origin #135 v1.293, 2026-10-24 port) Additive (D-835): measured PNG/JPEG registration, bounded immutable line/contour candidates, non-writing candidate map validation and optional facility evidence. Existing STL hashes and envelope 1.0 unchanged. |
+| v1.300 | 2026-10-24 | (origin #133 v1.291, 2026-10-24 port) Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
 | v1.312 | 2026-10-24 | D-856: opt-in independent physical-observer HTTP, simulation execution monitoring/cancel and immutable physical receipt read; two-sample pre/post checks, original claim release and application-owned business completion. |
 | v1.307 | 2026-10-24 | D-856: closed simulation ARM job proposal/read/two-person admission HTTP, host-read current capabilities and scoped idempotency; dispatcher/observer/physical closure remain closed. |
 | v1.306 | 2026-10-24 | D-856: Fleet-authenticated live managed transfer capability, mandatory ARM target journal/session, canonical receipt matching and fenced 404 reconciliation; no physical producer or claim release. |
@@ -4350,10 +4579,10 @@ context는 request, receiver-challenge, session-request로 분리한다. 공개 
 (site-users 자격, 로그인 세션, 개발 세션)만 호출한다. 이름 없는 `site-console`은 403
 `OPERATOR_IDENTITY_REQUIRED`이고, site-users와 로그인이 둘 다 없으면 Fleet은 도우미를 만들지 않는다.
 `host`는 `site`, `ai`, `model`이다. GET 행은 `{host, actions, units, stoppable_units, reboot_delay_min}`이다.
-GET 본문은 그 목록과 함께 읽기 전용 `guard`(관제 PC `/var/lib/rosy-host-guard/status.json`)와 `drift`(관제 PC `/var/lib/rosy-host-state/status.json`)를 붙인다(D-530). 파일이 없거나 객체가 아니면 그 필드는 null이고, 수치를 만들지 않는다. PC 가드 항목의 `resources`는 `{avail_pct, swap_pct, load, cores, uptime_s, down}`이다.
-PC별 `guard[host].recovery`와 관제 PC `drift.recovery`는 D-530의 2026-10-18 실행값 감시 보고다(`time`, `role`, `state`, `issues`, `resources`, `watchdog`, `kernel`, `ssh`, `swap`). 구버전·접속 불가·해석 실패는 null/부재이며 정상으로 추정하지 않는다. 가드 자신의 행은 `source=local`이고 원래 보고 시각을 유지한다. 화면은 원격 호스트 보고 15분, 로컬/복구 보고 35분 초과를 점검 지연으로 표시한다. 새 제어 동작이나 설치 API는 추가하지 않는다.
+GET 본문은 그 목록과 함께 읽기 전용 `guard`(관제 PC `/var/lib/rosy-host-guard/status.json`)와 `drift`(관제 PC `/var/lib/rosy-host-state/status.json`)를 붙인다(D-530). 파일이 없거나 객체가 아니면 그 필드는 null이고, 수치를 만들지 않는다. PC 가드 항목의 `resources`는 `{avail_pct, swap_pct, load, cores, uptime_s, down, disk, disk_low, gpu, memory, memory_low, cpu}`이다. D-883의 `disk`는 `{test_free_gb, test_use_pct, root_free_gb, root_use_pct}`(`~/rosy-test` 또는 홈, `/`), `gpu`는 `{used_mib, total_mib, util_pct, temp_c}`(여러 GPU는 메모리 합계·최대 사용률·최고 온도), `memory`는 `{total_gb, avail_gb}`, `cpu`는 `{busy_pct, temp_c}`(1초 `/proc/stat` 차이, 가장 뜨거운 thermal zone, 읽지 못하면 각 null)이며, 값을 보내지 않는 예전 PC는 `disk`·`disk_low`·`gpu`·`memory`·`cpu`가 null이다. CPU·GPU 온도와 사용률은 표시 전용이며 상태를 바꾸지 않는다. `memory_low`는 `avail_pct` 10% 미만이며 예전 PC에도 계산한다. 여유 30GiB 미만 또는 사용률 90% 이상이면 `disk_low=true`이고 다른 문제가 없으면 `state=disk-low`, 그 다음으로 `memory_low`이면 `state=memory-low`다. 두 상태는 보고 전용이며 재시작·재부팅을 일으키지 않는다.
+PC별 `guard[host].recovery`와 관제 PC `drift.recovery`는 D-530의 2026-10-18 실행값 감시 보고다(`time`, `role`, `state`, `issues`, `resources`, `watchdog`, `kernel`, `ssh`, `swap`). 구버전·접속 불가·해석 실패는 null/부재이며 정상으로 추정하지 않는다. 가드 자신의 행은 `source=local`이고 원래 보고 시각을 유지한다. 화면은 원격 호스트 보고 15분, 로컬/복구 보고 35분 초과를 점검 지연으로 표시한다. D-883의 `clean-storage` 외에 새 제어 동작이나 설치 API는 추가하지 않는다.
 POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 거절한다. `action`은 `reboot`,
-`cancel-reboot`, `restart-unit`, `stop-unit`만이다. `pkill`, 시그널, 셸, 프로세스 이름은 400
+`cancel-reboot`, `restart-unit`, `stop-unit`, `clean-storage`만이다. `clean-storage`(D-883)는 `ai`·`model`에서 `unit` 없이만 받고, 그 PC의 rosy-ops `rosy-test-storage.service`를 한 번 시작한다. `site`는 400 `ACTION_NOT_ALLOWED`, 그 서비스가 없으면 409 `NO_STORAGE_SERVICE`다. 성공은 접수일 뿐이며 회수 결과는 다음 guard 보고의 `disk`로 확인한다. `pkill`, 시그널, 셸, 프로세스 이름은 400
 `UNKNOWN_ACTION`이다. `unit`은 그 호스트의 허용 목록에 있고 그 동작이 허용될 때만 받는다(사이트 유닛은
 `restart-unit`만, 아니면 400 `UNIT_NOT_ALLOWED`). 재부팅은 `shutdown -r +10`이다. 이미 예약된 재부팅이
 있으면 409 `REBOOT_ALREADY_SCHEDULED`이다. `cancel-reboot`는 이 도우미가 예약한 재부팅만 `shutdown -c`로

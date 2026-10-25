@@ -170,6 +170,9 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
                                 release_id)
         try:
             # Review H2: a journal that reached rollback is only ever rolled back further.
+            network = self._network_problems()
+            if network:
+                return self._finish(state, "ineligible", "; ".join(network), release_id)
             if step == "rollback":
                 return self._roll_back(state, release_id, applying.get("why") or "interrupted rollback",
                                        mark_failed=applying.get("mark_failed", True))
@@ -186,6 +189,9 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
                                     "switched; retrying after a backoff", release_id)
             # Boot recovery (or the activator) already restored the old release.
             problems = self._rollback_tail(release_id) if step != "activate" else []
+            if any("BOOT_INVERSE" in problem for problem in problems):
+                applying["step"] = "rollback"
+                return self._finish(state, "held", "; ".join(problems), release_id)
             why = "; ".join(filter(None, ["interrupted; the previous release is current", applying.get("note")]))
             state["applying"] = None
             self._mark_failed(state, release_id, why)

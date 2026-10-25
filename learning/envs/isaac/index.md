@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · 접촉 왕복 producer·판정기의 공개 소스 포트
+- 2026-10-25 · uncommitted · 고정 Isaac 실행 관리자의 공개 소스 포트
+- 2026-10-25 · uncommitted · OMX import 보고서의 공개 소스 포트
+- 2026-10-25 · 7d0cfcd6e9 · 정지 적재면·컨베이어 접촉 왕복
 - 2026-10-21 · uncommitted · 공통 SIM 무점유 성공·실제 중지
-- 2026-10-21 · uncommitted · 공통 SIM 실제 SDK·교차 조회
-- 2026-10-21 · uncommitted · 제한된 공통 Isaac 실행기
-- 2026-10-21 · uncommitted · 공통 실험 catalog·run 기록
-- 2026-10-12 · ba1347294 · 카메라 관측 구간 학습

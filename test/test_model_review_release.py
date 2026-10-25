@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import shutil
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -16,12 +17,24 @@ release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release)
 
 
+def test_current_checkout_satisfies_review_source_inventory():
+    root = SCRIPT.parents[2]
+    assert not [name for name in release.SPLIT_REQUIRED if not (root / name).is_file()]
+
+
 def source_tree(path):
     for name in (release.APP, release.WEB / "index.html", release.WEB / "pixels.html",
                  Path("shared/web/shared-assets.json")):
         file = path / name
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(name.as_posix(), encoding="utf-8")
+
+
+def center_config(state):
+    root = state.parent / 'learning-center'
+    root.mkdir(exist_ok=True)
+    (state / 'omx-center.json').write_text(json.dumps({'root': str(root)}))
+    return root / 'center.sqlite'
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Windows account cannot create POSIX symlinks")
@@ -72,14 +85,44 @@ def test_refuses_state_inside_release_source(tmp_path):
         release.check_source(source, tmp_path / "root", source / "state")
 
 
+@pytest.mark.skipif(os.name == 'nt', reason='Linux private operator configuration')
+@pytest.mark.parametrize('unsafe', [None, 'permissions', 'symlink'])
+def test_new_unit_binds_only_private_regular_sim_config(tmp_path, unsafe):
+    source = tmp_path / 'source'
+    source_tree(source)
+    (source / release.APP).write_text("parser.add_argument('--sim-config')")
+    state = tmp_path / 'state'
+    state.mkdir()
+    binding = state / 'sim-config.json'
+    binding.write_text('{}')
+    binding.chmod(0o600)
+    if unsafe == 'permissions':
+        binding.chmod(0o644)
+    elif unsafe == 'symlink':
+        target = state / 'operator.json'
+        binding.rename(target)
+        binding.symlink_to(target)
+    def contents():
+        return release.unit_contents(source, state, Path('/usr/bin/python3'), '127.0.0.1', 8768)
+    if unsafe:
+        with pytest.raises(ValueError, match='SIM'):
+            contents()
+    else:
+        assert f'--sim-config {binding}' in contents()
+
+
 @pytest.mark.skipif(os.name == 'nt', reason='Linux retained release symlinks')
 def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     root=tmp_path/'root'; state=tmp_path/'state'; state.mkdir()
     (state/'learning-control.json').write_text('{}')
     (state/'review-ai.json').write_text('{}')
+    (state/'sim-config.json').write_text('{}')
+    (state/'sim-config.json').chmod(0o600)
+    (state/'workspace-links.json').write_text('{"schema": "rosy.learning.workspace-links/1", "workspaces": []}')
+    center_config(state)
     old=root/'releases/old'; new=root/'releases/new'
     source_tree(old); source_tree(new)
-    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config')")
+    (new/release.APP).write_text("parser.add_argument('--learning-control'); parser.add_argument('--decisions-port'); parser.add_argument('--review-ai-config'); parser.add_argument('--omx-center-config'); parser.add_argument('--workspace-links'); parser.add_argument('--sim-config')")
     (root/'current').symlink_to(new)
     unit=tmp_path/'unit'
     unit.write_text(release.unit_contents(root/'current',state,Path('/usr/bin/python3'),'127.0.0.1',8774))
@@ -89,10 +132,50 @@ def test_retained_release_control_flag_matches_its_cli(tmp_path, monkeypatch):
     assert '--learning-control' not in unit.read_text()
     assert '--decisions-port' not in unit.read_text()
     assert '--review-ai-config' not in unit.read_text()
+    assert '--omx-center-config' not in unit.read_text()
+    assert '--workspace-links' not in unit.read_text()
+    assert '--sim-config' not in unit.read_text()
     release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
     assert f'--learning-control {state}/learning-control.json' in unit.read_text()
     assert '--decisions-port 18774' in unit.read_text()
     assert f'--review-ai-config {state}/review-ai.json' in unit.read_text()
+    assert f'--omx-center-config {state}/omx-center.json' in unit.read_text()
+    assert f'--workspace-links {state}/workspace-links.json' in unit.read_text()
+    assert f'--sim-config {state}/sim-config.json' in unit.read_text()
+    before = unit.read_text()
+    (state/'workspace-links.json').write_text('{"schema": "other"}')
+    with pytest.raises(ValueError):
+        release.install(None,'new',root,None,None,'127.0.0.1',8774,unit)
+    assert unit.read_text() == before  # a bad file stops the install; the unit is not rewritten without it
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux retained release symlinks')
+@pytest.mark.parametrize('prior_release', [False, True])
+@pytest.mark.parametrize('supports_center', [False, True])
+def test_new_release_uses_target_cli_for_center_binding(tmp_path, monkeypatch, prior_release, supports_center):
+    source = tmp_path/'source'
+    source_tree(source)
+    (source/release.APP).write_text("parser.add_argument('--omx-center-config')" if supports_center else 'pass')
+    root = tmp_path/'root'
+    root.mkdir()
+    state = tmp_path/'state'
+    state.mkdir()
+    (state/'reviews.sqlite3').touch()
+    center_config(state)
+    if prior_release:
+        old = root/'releases/old'
+        source_tree(old)
+        (old/release.APP).write_text('pass' if supports_center else "parser.add_argument('--omx-center-config')")
+        (root/'current').symlink_to(old)
+    unit = tmp_path/'review.service'
+    unit.write_text('[Service]\nExecStart=/existing/review\n')
+    monkeypatch.setattr(release, 'run_systemctl', lambda *args: None)
+    monkeypatch.setattr(release, 'check_live', lambda *args: None)
+    monkeypatch.setattr(release.subprocess, 'run', lambda *args, **kwargs: None)
+    release.install(source, 'new', root, state, Path(sys.executable), '127.0.0.1', 8774, unit)
+    assert ('--omx-center-config' in unit.read_text()) is supports_center
+    assert str(root/'current'/release.APP) in unit.read_text()
+    assert str(source/release.APP) not in unit.read_text()
 
 
 def test_split_source_requires_drive_closure_and_hashes_it(tmp_path):
@@ -194,3 +277,185 @@ def test_generated_unit_can_opt_in_to_private_owner_controls(tmp_path):
     text = release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '127.0.0.1', 8774)
     assert f'--learning-control {state / "learning-control.json"}' in text
     assert f'--review-ai-config {state / "review-ai.json"}' in text
+
+
+def test_collaboration_unit_is_loopback_and_has_no_unprotected_decisions_port(tmp_path):
+    state = tmp_path / 'state'; state.mkdir()
+    (state / 'learning-collaboration.json').write_text('{}')
+    text = release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '127.0.0.1', 8774)
+    assert f'--collaboration {state / "learning-collaboration.json"}' in text
+    assert '--decisions-port' not in text
+    with pytest.raises(ValueError, match='loopback'):
+        release.unit_contents(tmp_path / 'current', state, Path('/usr/bin/python3'), '100.100.1.2', 8774)
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux managed release symlinks')
+@pytest.mark.parametrize('supports_center', [False, True])
+def test_collaboration_survives_update_and_retained_roundtrip(tmp_path, monkeypatch, supports_center):
+    source = tmp_path / 'source'; source_tree(source)
+    cli = "parser.add_argument('--collaboration')"
+    if supports_center:
+        cli += "; parser.add_argument('--omx-center-config')"
+    (source / release.APP).write_text(cli)
+    state = tmp_path / 'state'; state.mkdir()
+    (state / 'reviews.sqlite3').write_bytes(b'human decisions')
+    (state / 'learning-collaboration.json').write_text('{}')
+    center_config(state)
+    root = tmp_path / 'root'; unit = tmp_path / 'rosy-edge-review.service'
+    unit.write_text('original unit')
+    calls = []
+    monkeypatch.setattr(release.subprocess, 'run', lambda *a, **kw: None)
+    monkeypatch.setattr(release, 'run_systemctl', lambda *a: calls.append(a))
+    monkeypatch.setattr(release, 'check_live', lambda *a: None)
+    service = 'rosy-edge-review.service'
+    for name in ('first', 'second'):
+        release.install(source, name, root, state, Path(sys.executable), '127.0.0.1', 8768, unit, service)
+    text = unit.read_text()
+    release.install(None, 'first', root, None, None, '127.0.0.1', 8768, unit, service)
+    assert unit.read_text() == text
+    assert '--collaboration' in text and '--decisions-port' not in text
+    assert ('--omx-center-config' in text) is supports_center
+    assert ('restart', service) in calls
+    assert (root / (service + '.before-managed')).read_text() == 'original unit'
+    old = root / 'releases/old'; source_tree(old)
+    with pytest.raises(ValueError, match='collaboration'):
+        release.install(None, 'old', root, None, None, '127.0.0.1', 8768, unit, service)
+    assert (root / 'current').resolve().name == 'first'
+    assert (state / 'reviews.sqlite3').read_bytes() == b'human decisions'
+
+
+@pytest.mark.parametrize('service', ['../other.service', 'bad name.service', 'bad;name.service', '--other.service', 'other'])
+def test_service_name_rejects_unsafe_names(service):
+    with pytest.raises(ValueError, match='service'):
+        release.validate_service(service)
+
+
+def test_collaboration_health_requires_denial_options_and_accounts(tmp_path, monkeypatch):
+    import io
+    import urllib.error
+    from types import SimpleNamespace
+    seen = []
+    public_workspace = False
+    def open_url(url, timeout):
+        seen.append(url)
+        path = url.split(':8774')[-1]
+        if path == '/api/workspace' and not public_workspace:
+            raise urllib.error.HTTPError(url, 401, 'login required', {}, io.BytesIO(b'{}'))
+        payload = (b'{"enabled":true,"rosy_account":true,"project_id":"alpha"}' if path.endswith('options')
+                   else b'{}' if path == '/api/workspace' else b'accounts page')
+        response = io.BytesIO(payload)
+        response.status = 200
+        return response
+    monkeypatch.setattr(release.urllib.request, 'build_opener', lambda *a: SimpleNamespace(open=open_url))
+    monkeypatch.setattr(release, 'run_systemctl', lambda *a: None)
+    monkeypatch.setattr(release.time, 'sleep', lambda *a: None)
+    release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'alpha', 'account_client_file': '/private/client.json'})
+    assert [url.split(':8774')[-1] for url in seen] == ['/api/workspace', '/api/accounts/options', '/accounts']
+    with pytest.raises(RuntimeError):
+        release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'wrong'})
+    public_workspace = True
+    with pytest.raises(RuntimeError):
+        release.check_live('127.0.0.1', 8774, 'rosy-edge-review.service', {'project_id': 'alpha', 'account_client_file': '/private/client.json'})
+
+
+def test_bound_central_account_refuses_source_without_account_bridge(tmp_path):
+    app = tmp_path / 'review_app.py'
+    app.write_text("parser.add_argument('--collaboration')")
+    binding = tmp_path / 'learning-collaboration.json'
+    binding.write_text('{"account_client_file":"/private/client.json"}')
+    with pytest.raises(ValueError, match='central Account'):
+        release.check_collaboration(app, binding, '127.0.0.1')
+    (tmp_path / 'learning_rosy_accounts.py').write_text('bridge')
+    assert release.check_collaboration(app, binding, '127.0.0.1')['account_client_file'] == '/private/client.json'
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux managed release symlinks')
+@pytest.mark.parametrize('retained', [False, True])
+@pytest.mark.parametrize('status', ['launching', 'running', 'stopping'])
+def test_active_learning_refuses_update_and_rollback_before_any_switch(tmp_path, monkeypatch, retained, status):
+    source = tmp_path / 'source'
+    source_tree(source)
+    root = tmp_path / 'root'
+    active = root / 'releases/active'
+    older = root / 'releases/older'
+    source_tree(active)
+    source_tree(older)
+    (root / 'current').symlink_to(active)
+    state = tmp_path / 'state'
+    state.mkdir()
+    (state / 'reviews.sqlite3').write_bytes(b'human decisions')
+    database = center_config(state)
+    with sqlite3.connect(database) as db:
+        db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+        db.execute('INSERT INTO runs VALUES (?)', (json.dumps({'status': status,
+            'execution_mode': 'online_experience', 'learning_task': {'task_id': 'bound-task'}}),))
+    unit = tmp_path / 'review.service'
+    unit.write_text(release.unit_contents(root / 'current', state, Path(sys.executable), '127.0.0.1', 8774))
+    old_unit = unit.read_bytes()
+    calls = []
+    monkeypatch.setattr(release, 'run_systemctl', lambda *a: calls.append(a))
+    monkeypatch.setattr(release, 'check_live', lambda *a: None)
+    monkeypatch.setattr(release.subprocess, 'run', lambda *a, **kw: calls.append(a))
+    with pytest.raises(ValueError, match='learning|learner'):
+        release.install(None if retained else source, 'older' if retained else 'new', root,
+            None if retained else state, None if retained else Path(sys.executable), '127.0.0.1', 8774, unit)
+    assert (root / 'current').resolve() == active
+    assert unit.read_bytes() == old_unit and calls == []
+    assert not (root / 'releases/new').exists()
+    assert not (root / (release.SERVICE + '.before-managed')).exists()
+    assert (state / 'reviews.sqlite3').read_bytes() == b'human decisions'
+
+
+@pytest.mark.parametrize('fault', ['config_json', 'config_root', 'config_oversized', 'database', 'run_json', 'run_status'])
+def test_corrupt_learning_state_fails_closed_without_creating_or_changing_files(tmp_path, fault):
+    state = tmp_path / 'state'
+    state.mkdir()
+    database = center_config(state)
+    config = state / 'omx-center.json'
+    if fault == 'config_json':
+        config.write_text('{')
+    elif fault == 'config_root':
+        config.write_text('{"root":"relative"}')
+    elif fault == 'config_oversized':
+        config.write_text(' ' * (1024 * 1024 + 1))
+    elif fault == 'database':
+        database.write_bytes(b'corrupt SQLite')
+    else:
+        with sqlite3.connect(database) as db:
+            db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+            db.execute('INSERT INTO runs VALUES (?)', ('{' if fault == 'run_json' else '{}',))
+    before = database.read_bytes() if database.exists() else None
+    with pytest.raises(ValueError, match='learning|learner'):
+        release.check_learning_idle(config)
+    assert (database.read_bytes() if database.exists() else None) == before
+
+
+def test_finished_learning_and_missing_center_database_allow_switch_check_read_only(tmp_path):
+    state = tmp_path / 'state'
+    state.mkdir()
+    database = center_config(state)
+    release.check_learning_idle(state / 'omx-center.json')
+    assert not database.exists()
+    with sqlite3.connect(database) as db:
+        db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+        for status in ('succeeded', 'failed', 'cancelled', 'interrupted'):
+            db.execute('INSERT INTO runs VALUES (?)', (json.dumps({'status': status}),))
+    before = database.read_bytes()
+    release.check_learning_idle(state / 'omx-center.json')
+    assert database.read_bytes() == before
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux symlink semantics')
+@pytest.mark.parametrize('bad', ['wrong-schema', 'symlink', 'not-json'])
+def test_workspace_links_are_checked_before_the_unit_changes(tmp_path, bad):
+    state = tmp_path/'state'
+    state.mkdir()
+    links = state/'workspace-links.json'
+    if bad == 'symlink':
+        target = tmp_path/'elsewhere.json'
+        target.write_text('{"schema": "rosy.learning.workspace-links/1", "workspaces": []}')
+        links.symlink_to(target)
+    else:
+        links.write_text('{"schema": "other"}' if bad == 'wrong-schema' else 'not json')
+    with pytest.raises(ValueError):
+        release.check_workspace_links(links)

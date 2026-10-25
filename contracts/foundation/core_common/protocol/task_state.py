@@ -1,17 +1,4 @@
-"""Fleet task lifecycle, canonically re-exported by schemas."""
-import enum
+"""Compatibility export; the common work projection owns the task lifecycle enum."""
+from .work import FleetTaskStatus
 
-
-class FleetTaskStatus(str, enum.Enum):
-    """Site Fleet task lifecycle; separate from a robot command ACK."""
-
-    REQUESTED = "REQUESTED"
-    QUEUED = "QUEUED"
-    ACCEPTED = "ACCEPTED"
-    RUNNING = "RUNNING"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-    UNKNOWN = "UNKNOWN"
-    HOLD = "HOLD"
-    CANCELED = "CANCELED"
-    EXPIRED = "EXPIRED"
+__all__ = ["FleetTaskStatus"]

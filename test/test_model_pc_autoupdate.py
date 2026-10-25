@@ -9,6 +9,7 @@ import tarfile
 import io
 import re
 import shutil
+import shlex
 
 import pytest
 
@@ -22,6 +23,25 @@ def module():
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m
+
+
+def test_current_checkout_satisfies_signed_source_inventory():
+    root = SCRIPT.parents[2]
+    m = module()
+    assert not [name for name in (*m.SPLIT_REQUIRED, *m.LEARNING_REQUIRED) if not (root / name).is_file()]
+
+
+def test_installed_model_controller_has_its_complete_import_closure(tmp_path):
+    installer = SCRIPT.with_name("install-model-code.sh").read_text(encoding="utf-8")
+    line = next(line for line in installer.splitlines() if line.startswith("install -m 0644")
+                and '"$HERE/rosy_model_code.py"' in line)
+    for source in shlex.split(line)[3:-1]:
+        assert source.startswith("$HERE/")
+        file = SCRIPT.parent / source.removeprefix("$HERE/")
+        shutil.copyfile(file, tmp_path / file.name)
+    result = subprocess.run([sys.executable, "-I", "-B", str(tmp_path / SCRIPT.name), "--help"],
+                            cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.fixture
@@ -69,16 +89,6 @@ def test_module_is_available():
     assert hasattr(module(), "Updater")
 
 
-@pytest.mark.parametrize('dependency', ['review_store.py', 'sim_web.py',
-                                      'review_app_web/sim.html', 'review_app_web/sim.js'])
-def test_review_store_dependency_cannot_be_omitted(tmp_path, keys, dependency):
-    m = module()
-    folder = candidate(m, tmp_path, keys,
-                       omit_files=('learning/curation/perception/' + dependency,))
-    with pytest.raises(ValueError, match='missing model-code entry point or dependency'):
-        m.unpack(folder / 'code.tar', tmp_path / 'incomplete')
-
-
 def test_camera_map_dependencies_are_signed_and_imported_from_the_release(tmp_path, keys):
     m = module()
     repo = SCRIPT.parents[2]
@@ -102,6 +112,24 @@ def test_camera_map_job_refuses_a_missing_dependency(tmp_path, keys):
     folder = candidate(m, tmp_path, keys, extra_files={m.CAMERA_MAP_ENTRY: b"pass\n"})
     with pytest.raises(ValueError, match="missing camera-map dependency"):
         m.unpack(folder / "code.tar", tmp_path / "release")
+
+
+def test_omx_contract_and_capture_imports_use_signed_release(tmp_path, keys):
+    m = module()
+    repo = SCRIPT.parents[2]
+    names = ["learning/curation/omx/native_capture.py", *("contracts/learning/src/rosy/contracts/learning/" + name
+             for name in ("__init__.py", "artifacts.py", "digest.py", "camera_setup.py"))]
+    files = {name: (repo / name).read_bytes() for name in names}
+    files[m.PREFIX + "probe.py"] = (b"import native_capture\n"
+        b"from rosy.contracts.learning import camera_setup\n"
+        b"print(native_capture.__file__)\nprint(camera_setup.__file__)\n")
+    folder = candidate(m, tmp_path, keys, extra_files=files, omit_files=names)
+    release = tmp_path / "release"
+    m.unpack(folder / "code.tar", release)
+    result = subprocess.run(m.bootstrap_command(sys.executable, release, release / m.PREFIX / "probe.py", []),
+                            capture_output=True, text=True, check=True)
+    assert [Path(line).resolve() for line in result.stdout.splitlines()] == [
+        (release / name).resolve() for name in (names[0], names[-1])]
 
 
 def test_split_perception_archive_requires_its_declared_drive_closure(tmp_path, keys):
@@ -150,6 +178,16 @@ def test_model_archive_refuses_undeclared_control_holders(tmp_path, keys, path):
     "learning/training/perception/train_job.py",
     "learning/evaluation/perception/road_replay.py",
     "tools/perception/operator_ssh.py",
+    "learning/training/omx/experiment_center.py",
+    "learning/training/omx/experiment_preview.py",
+    "learning/curation/omx/collection_pipeline.py",
+    "learning/curation/perception/camera_setup_web.py",
+    "learning/curation/perception/learning_tasks.py",
+    "learning/curation/perception/learning_tasks_web.py",
+    "learning/curation/perception/review_app_web/tasks.html",
+    "learning/curation/perception/review_app_web/tasks.js",
+    "learning/curation/perception/review_app_web/omx.html",
+    "contracts/learning/src/rosy/contracts/learning/camera_setup.py",
 ])
 def test_learning_archive_refuses_missing_owner_dependency(tmp_path, keys, missing):
     m = module()
@@ -160,7 +198,7 @@ def test_learning_archive_refuses_missing_owner_dependency(tmp_path, keys, missi
     assert (folder / "release.json").read_bytes() == before
 
 
-@pytest.mark.parametrize("path", ["learning/curation/omx/tool.py", "learning/registry/policy/tool.py",
+@pytest.mark.parametrize("path", ["learning/curation/unknown/tool.py", "learning/registry/policy/tool.py",
                                    "learning/evaluation/unknown/tool.py", "tools/remote/tool.py"])
 def test_learning_archive_refuses_undeclared_owner(tmp_path, keys, path):
     m = module()
@@ -204,6 +242,56 @@ def test_retained_signed_release_keeps_its_original_job_paths_and_bytes(tmp_path
     assert resolved.read_bytes() == b"ORIGINAL_SIGNED_BYTES = True\n"
     with pytest.raises((ValueError, OSError)):
         m.job_entry(source, "../../outside.py")
+
+
+@pytest.mark.parametrize("entry,old_holder,new_holder,alias", [
+    *((entry, "training", "curation", "training") for entry in (
+        "review_authority", "review_bridge", "review_dataset", "review_eval_companion",
+        "review_eval_package", "review_provenance")),
+    ("intake_eval_gate", "registry", "evaluation", "model"),
+])
+@pytest.mark.parametrize("layout", ["old", "new", "both"])
+def test_learning_job_resolves_the_exact_retained_or_current_signed_layout(
+        tmp_path, entry, old_holder, new_holder, alias, layout):
+    m = module()
+    source = tmp_path / "release"
+    watch = source / "learning/registry/perception/watch.py"
+    watch.parent.mkdir(parents=True)
+    watch.write_bytes(b"SIGNED_WATCH = True\n")
+    for kind, holder in (("old", old_holder), ("new", new_holder)):
+        if layout in (kind, "both"):
+            file = source / f"learning/{holder}/perception/{entry}.py"
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(holder.encode())
+    before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*.py")}
+    holder = old_holder if layout == "old" else new_holder
+    path = f"learning/{holder}/perception/{entry}.py"
+    assert m.job_entry(source, f"{alias}/{entry}.py") == (
+        (source / path).resolve(), source.resolve(), path, path)
+    assert {p.relative_to(source): p.read_bytes() for p in source.rglob("*.py")} == before
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Linux signed-release symlinks")
+@pytest.mark.parametrize("exists", [False, True])
+@pytest.mark.parametrize("job,old_holder,new_holder", [
+    ("training/review_bridge.py", "training", "curation"),
+    ("model/intake_eval_gate.py", "registry", "evaluation"),
+])
+def test_learning_job_symlink_cannot_select_a_retained_fallback(tmp_path, exists, job, old_holder, new_holder):
+    m = module()
+    source = tmp_path / "release"
+    for path in ("learning/registry/perception/watch.py", f"learning/{old_holder}/perception/{Path(job).name}"):
+        file = source / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"SIGNED = True\n")
+    outside = tmp_path / "outside.py"
+    if exists:
+        outside.write_bytes(b"UNSIGNED = True\n")
+    link = source / f"learning/{new_holder}/perception/{Path(job).name}"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside)
+    with pytest.raises((ValueError, OSError)):
+        m.job_entry(source, job)
 
 
 def test_job_entry_maps_only_the_exact_camera_map_name(tmp_path):
@@ -328,6 +416,9 @@ def test_restart_recovers_pending_before_observing_new_candidates(tmp_path, keys
 
 @pytest.mark.parametrize("name,link", [("../escape", False), ("learning/training/perception/x", True),
                                       ("private/key", False), ("learning/training/perception/data/key", False),
+                                      ("learning/training/omx/secrets/key", False),
+                                      ("learning/curation/omx/data/episode.json", False),
+                                      ("contracts/learning/src/.env.production", False),
                                       ("middleware/devices/pinky/profile/config/camera_nominal.yaml.extra", False),
                                       ("operations/overhead/rosy_vision/cli.py", False),
                                       ("operations/overhead/rosy_vision/lane_map.py.extra", False)])
@@ -508,19 +599,26 @@ def test_unrelated_sandboxed_process_does_not_block_updates(tmp_path, monkeypatc
     assert m.legacy_busy([str(tmp_path)], proc=proc) is None
 
 
-def test_review_ui_does_not_block_code_update_but_training_does(tmp_path, monkeypatch):
+@pytest.mark.parametrize('argv', [
+    ['python', '/app/learning/training/perception/dataset/review_app.py'],
+    ['python', '/app/learning/curation/perception/legacy_review_account.py'],
+    ['python', '-I', '-B', '/app/learning/curation/perception/legacy_review_account.py'],
+])
+def test_review_ui_does_not_block_code_update_but_training_does(tmp_path, monkeypatch, argv):
     m = module()
     proc = tmp_path / "proc"
     entry = proc / "999999"
     entry.mkdir(parents=True)
     (entry / "comm").write_text("python", encoding="utf-8")
-    (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/dataset/review_app.py\x00")
+    (entry / "cmdline").write_bytes(('\x00'.join(argv) + '\x00').encode())
     monkeypatch.setattr(m.os, "getuid", lambda: entry.stat().st_uid, raising=False)
     original = Path.resolve
     monkeypatch.setattr(Path, "resolve", lambda path, *a, **kw:
                         tmp_path if path == entry / "cwd" else original(path, *a, **kw))
     assert m.legacy_busy([str(tmp_path)], proc=proc) is None
     (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/training/train_job.py\x00")
+    assert m.legacy_busy([str(tmp_path)], proc=proc) == "legacy work pid 999999"
+    (entry / "cmdline").write_bytes(b"python\x00/app/learning/training/perception/training/train_job.py\x00--input\x00/app/legacy_review_account.py\x00")
     assert m.legacy_busy([str(tmp_path)], proc=proc) == "legacy work pid 999999"
 
 

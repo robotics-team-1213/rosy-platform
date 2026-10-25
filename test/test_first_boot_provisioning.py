@@ -99,6 +99,36 @@ def test_valid_bundle_personalizes_ubuntu_and_is_consumed_once(tmp_path):
     assert not (root / "etc/rosy/tailscale-join.json").exists()
 
 
+def test_recovered_wifi_survives_first_boot_retry_and_records_actual_ssid(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / 'deploy/robot/pinky_pro/native'))
+    import network_handoff
+    module = _module()
+    root, bundle = _case(tmp_path)
+    serial = '10000000abcdef01'
+    module.FirstBootProvisioner(root=root, network_activate=lambda _profile: False).apply(
+        bundle=bundle, hardware_serial=serial)
+    payload = json.loads(bundle.read_text())
+    observed = {'uuid': 'verified-candidate', 'ssid': 'recovered-site', 'ipv4': '192.0.2.2',
+                'active': True, 'interface': 'wlan0'}
+    changed = {'request_id': 'recovered-first-boot', 'profile_uuid': observed['uuid'],
+               'ssid': observed['ssid'], 'observation': observed}
+    network_handoff.write_override(root, device_uid=payload['device_identity']['device_uid'],
+        hardware_serial=serial, bundle_checksum=payload['payload_checksum'], transaction=changed)
+    journal = root / 'var/lib/rosy/network/transaction.json'
+    journal.write_text(json.dumps({**changed, 'state': 'committed'}))
+    journal.chmod(0o600)
+    network = root / module.SITE_PROFILE_PATH
+    original = network.read_bytes()
+    provisioner = module.FirstBootProvisioner(root=root,
+        network_activate=lambda _profile: pytest.fail('must not reactivate the old bundle profile'),
+        network_observe=lambda _uuid: observed)
+    assert provisioner.apply(bundle=bundle, hardware_serial=serial)['ok'] is True
+    assert network.read_bytes() == original
+    complete = json.loads(provisioner.complete.read_text())
+    assert complete['network']['ssid'] == 'recovered-site'
+    assert not (root / network_handoff.OVERRIDE).exists()
+
+
 def test_a_bundle_with_a_tailnet_key_writes_the_one_time_join_file(tmp_path):
     # D-477: first boot hands the key to rosy-tailscale-join.service (0600) and
     # keeps only membership facts in the completion record.

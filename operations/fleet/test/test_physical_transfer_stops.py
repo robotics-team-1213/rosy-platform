@@ -33,14 +33,14 @@ class StopPort:
         return {"state": "UNKNOWN" if scope["instance_id"] == self.failed_rearm else "OPEN"}
 
 
-def client(tmp_path, installation, *, transport, legacy=None):
+def client(tmp_path, installation, *, transport, legacy=None, control_unit_config=None):
     path = tmp_path / "fleet.sqlite3"
     tasks = FleetTaskStore(path)
     app = create_app(FleetConsole([], []), task_service=FleetTaskService(tasks, robot_ids=()),
         mission_service=MissionService(MissionStore(path)), proposal_store=ProposalStore(path),
         site_users={sha256(b"operator-secret").hexdigest(): {"principal_id": "operator", "role": "operator"}},
         deployment_profile="simulation", arm_transfer_installation=installation,
-        omx_instances=legacy or {}, omx_stop_transport=transport)
+        omx_instances=legacy or {}, omx_stop_transport=transport, control_unit_config=control_unit_config)
     return TestClient(app), tasks
 
 
@@ -89,3 +89,30 @@ def test_missing_control_or_transport_reports_every_physical_target_as_unknown()
                                   targets=(("w-1", "arm-1"), ("w-1", "arm-2")))
     assert result["state"] == "UNKNOWN"
     assert [(s["workcell_id"], s["instance_id"]) for s in result["instances"]] == [("w-1", "arm-1"), ("w-1", "arm-2")]
+
+
+@pytest.mark.parametrize("declared", [False, True])
+def test_typed_control_stop_requires_and_stops_installed_arm_owners(tmp_path, installation, declared):
+    import yaml
+
+    path = tmp_path / "control.yaml"
+    path.write_text(yaml.safe_dump({"unit_id": "R", "peers": {}, "manifest": {
+        "revision": "v1", "units": [{"id": "R", "resources": ["workcell:w-1"] if declared else []}],
+    }}), encoding="utf-8")
+    port = StopPort()
+    if not declared:
+        with pytest.raises(ValueError, match="CONTROL_UNIT_LOCAL_OMX_OWNER_MISMATCH"):
+            client(tmp_path, installation, transport=port, control_unit_config=path)
+        assert port.stops == []
+        return
+    app, tasks = client(tmp_path, installation, transport=port, control_unit_config=path)
+    control = tasks.dispatch_control()
+    response = app.post("/api/fleet/control-unit/stops", headers=HEADERS, json={
+        "stop_id": "stop-both", "target_unit": "R", "config_revision": "v1",
+        "expected_controls": {"R": {"authority_epoch": control["authority_epoch"],
+                                     "generation": control["generation"]}},
+    })
+    assert response.status_code == 200, response.text
+    assert [(s["workcell_id"], s["instance_id"]) for s in port.stops] == [("w-1", "arm-1"), ("w-1", "arm-2")]
+    assert response.json()["results"][0]["omx_state"] == "LOCAL_LATCHED"
+    assert tasks.dispatch_control()["dispatch_enabled"] is False

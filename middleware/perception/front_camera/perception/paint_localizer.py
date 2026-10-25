@@ -42,7 +42,7 @@ import cv2
 import numpy as np
 
 from .lane import _BRIGHT
-from .lane_bev import BirdsEye
+from .lane_bev import BirdsEye, cached_birds_eye
 
 #: Paint raster. The STL's paint edges are exact; 2 mm keeps a 25 mm line
 #: 12 cells wide, finer than the 2.5 mm bird's-eye cell it is matched with.
@@ -253,13 +253,7 @@ class PaintLocalizer:
         self._gap_since = None
         self.last = None
 
-    def _birds_eye(self, ground, shape) -> BirdsEye:
-        key = (ground.height_m, ground.pitch_rad, ground.focal_px, ground.principal_x,
-               ground.principal_y, ground.max_range_m, shape[0], shape[1], self._camera_x)
-        if key != self._view_key:
-            self._view = BirdsEye(ground, shape[1], shape[0], self._camera_x)
-            self._view_key = key
-        return self._view
+    _birds_eye = cached_birds_eye
 
     def update(self, now_s: float, odom_pose, bgr: np.ndarray, ground, *,
                bright_threshold: int = _BRIGHT, **_lane_kwargs) -> Estimate | None:

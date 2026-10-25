@@ -20,6 +20,7 @@ drive/behaviors/docking
 drive/behaviors/swarm small
 fleet/fleet/traffic
 fleet/fleet/observe small
+fleet/fleet/server
 fleet/fleet/server/channel
 fleet/fleet/server/channel/health small
 fleet/fleet/server/channel/conversation small
@@ -79,5 +80,4 @@ fleet/fleet/server/pose
 fleet/fleet/server/recognition
 fleet/fleet/server/rightofway
 situation
-site_execution
 devices/omx/adapter/omx_adapter/contracts

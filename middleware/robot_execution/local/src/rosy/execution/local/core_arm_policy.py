@@ -7,7 +7,19 @@ import secrets
 import threading
 
 from core_common.protocol.schemas import LocalStopRequest, StopRequestSource
-from .omx_policy import OwnerPolicySession, PolicyCandidate
+from .omx_policy import CameraSnapshot, OwnerPolicySession, PolicyCandidate
+
+
+def _frames(captured):
+    """One ``(rgb, CameraSnapshot)`` pair, or the installed cameras' pairs in order (D-854)."""
+    if isinstance(captured, tuple) and len(captured) == 2 and type(captured[1]) is CameraSnapshot:
+        return (captured,)
+    return tuple(captured)
+
+
+def _single(cameras):
+    # A one-camera policy keeps the D-800 ``camera`` field beside ``cameras`` for existing clients.
+    return dict(camera=cameras[0]) if len(cameras) == 1 else {}
 
 
 class CoreArmPolicyPort:
@@ -27,12 +39,11 @@ class CoreArmPolicyPort:
         self._authorize(principal)
         self.session.poll()
         doc = self.session.policy.recheck()
-        if len(doc['cameras']) != 1:
-            raise ValueError('one installed RGB camera required')
-        camera = doc['cameras'][0]
+        if not doc['cameras']:
+            raise ValueError('an installed RGB camera required')
+        cameras = [dict(name=c['name'], shape=c['source_shape']) for c in doc['cameras']]
         return dict(policy_revision=doc['revision'], simulation=True,
-                    joint_names=doc['joint_names'], units='rad',
-                    camera=dict(name=camera['name'], shape=camera['source_shape']))
+                    joint_names=doc['joint_names'], units='rad', cameras=cameras, **_single(cameras))
 
     def observation(self, principal, policy_revision):
         with self._lock:
@@ -43,14 +54,18 @@ class CoreArmPolicyPort:
             self.session.poll()
             if self.session.owner.state != 'ready':
                 raise BlockingIOError('previous arm goal is still active')
-            with self.capture() as (rgb, camera):
-                source = self.session.capture_inference_input(rgb, camera)
+            with self.capture() as captured:
+                frames = _frames(captured)
+                sources = self.session.capture_inference_inputs(frames)
             observation_id = secrets.token_urlsafe(24)
-            self._pending = (observation_id, source, policy_revision)
+            self._pending = (observation_id, sources, policy_revision)
+            cameras = [dict(name=camera.name, shape=list(source.camera_shape),
+                            rgb_base64=base64.b64encode(source.rgb).decode('ascii'),
+                            received_at_ns=source.camera_received_at_ns, frame_sha256=source.frame_sha256)
+                       for (_, camera), source in zip(frames, sources)]
             return dict(observation_id=observation_id, policy_revision=policy_revision,
-                        positions=dict(zip(source.joint_names, source.positions)),
-                        camera=dict(name=camera.name, shape=list(source.camera_shape),
-                                    rgb_base64=base64.b64encode(source.rgb).decode('ascii')))
+                        positions=dict(zip(sources[0].joint_names, sources[0].positions)),
+                        cameras=cameras, **_single(cameras))
 
     def submit(self, principal, *, observation_id, policy_revision, positions):
         with self._lock:
@@ -58,16 +73,17 @@ class CoreArmPolicyPort:
             pending, self._pending = self._pending, None
             if pending is None or (observation_id, policy_revision) != (pending[0], pending[2]):
                 raise ValueError('unknown, replaced or consumed observation')
-            source = pending[1]
+            sources = pending[1]
+            source = sources[0]
             if (set(positions) != set(source.joint_names)
                     or any(type(v) not in (int, float) or not math.isfinite(v) for v in positions.values())):
                 raise ValueError('exact installed joint names and finite rad targets required')
             # Capture time conservatively charges inference and network delay to action age.
             candidate = PolicyCandidate(source.lease_id, source.episode_id, policy_revision,
                 source.sequence, source.observed_at_ns,
-                max(source.observed_at_ns, source.camera_received_at_ns),
+                max(source.observed_at_ns, *(s.camera_received_at_ns for s in sources)),
                 tuple(positions[name] for name in source.joint_names),
-                (source.frame_sha256,), (source.camera_received_at_ns,))
+                tuple(s.frame_sha256 for s in sources), tuple(s.camera_received_at_ns for s in sources))
             return asdict(self.session.submit(candidate))
 
     def stop(self):

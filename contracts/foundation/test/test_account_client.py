@@ -1,4 +1,5 @@
 import pytest
+from http.client import BadStatusLine, IncompleteRead, LineTooLong
 from cryptography.fernet import Fernet
 
 from core_common.protocol.account_client import AccountClient, AccountUnavailable, AccountDenied
@@ -266,3 +267,66 @@ def test_profile_transport_timeout_is_shorter_than_auth(receiver, monkeypatch):
         with pytest.raises(AccountUnavailable):
             client._post(endpoint, {'token':'test'})
     assert timeouts == [1, 3, 3]
+
+
+@pytest.fixture(params=[IncompleteRead, BadStatusLine, LineTooLong])
+def broken_http(request, monkeypatch):
+    from core_common.protocol import account_client
+    calls = []
+    class Response:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def read(self, limit):
+            raise IncompleteRead(b'refresh-token-secret', 100)
+    class Opener:
+        def open(self, req, *, timeout):
+            calls.append(req.full_url)
+            if request.param is IncompleteRead:
+                return Response()
+            raise request.param('refresh-token-secret')
+    monkeypatch.setattr(account_client, 'build_opener', lambda *args: Opener())
+    return calls
+
+
+@pytest.mark.parametrize('endpoint', ['token', 'introspect', 'revoke', 'userinfo'])
+def test_http_protocol_failure_is_sanitized_unavailable(receiver, broken_http, endpoint):
+    client, _, _, _ = receiver
+    with pytest.raises(AccountUnavailable) as error:
+        client._post(endpoint, {'token': 'refresh-token-secret'})
+    assert error.value.args == ()
+    assert error.value.__suppress_context__
+
+
+def test_uncertain_http_refresh_erases_session_without_reusing_refresh(receiver, broken_http):
+    client, clock, _, _ = receiver
+    cookie = session(client)
+    clock[0] += 270
+    client.post = client._post
+    assert client.resolve(cookie) is None
+    with client.transaction() as db:
+        assert db.execute('SELECT count(*) FROM app_account_sessions').fetchone()[0] == 0
+    assert client.resolve(cookie) is None
+    assert broken_http == [client.issuer + '/api/fleet/auth/token']
+
+
+def test_http_revoke_failure_preserves_pending_retry_until_recovery(receiver, broken_http):
+    client, _, calls, _ = receiver
+    cookie = session(client)
+    original = client.post
+    client.post = client._post
+    with pytest.raises(AccountUnavailable):
+        client.logout(cookie)
+    assert client.resolve(cookie) is None
+    with client.transaction() as db:
+        pending = tuple(db.execute('SELECT * FROM app_account_revocations').fetchone())
+    with pytest.raises(AccountUnavailable):
+        client.retry_revocations()
+    with client.transaction() as db:
+        assert tuple(db.execute('SELECT * FROM app_account_revocations').fetchone()) == pending
+    client.post = original
+    client.retry_revocations()
+    assert calls[-1][0] == 'revoke'
+    with client.transaction() as db:
+        assert db.execute('SELECT count(*) FROM app_account_revocations').fetchone()[0] == 0

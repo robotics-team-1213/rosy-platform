@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosy Learning — 작업 공간</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<script type="module" src="/workspaces.js"></script></head>
+<body><a class="skip-link" href="#workspaces-main">작업 공간으로 이동</a>
+<ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a class="workspace-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<label class="theme-label"><span>화면</span> <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
+<div class="ui-app-body"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록" aria-current="true">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a></nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="자료 하위 메뉴"><span class="ui-subnav-head">자료</span><a class="ui-subnav-item" href="/catalog">자료 등록</a><a class="ui-subnav-item" href="/learning/camera">카메라 맞춤</a><a class="ui-subnav-item" href="/learning/workspaces" aria-current="page">작업 공간</a></nav></div>
+<div class="ui-app-main"><div class="ui-pathbar"><h1>작업 공간</h1></div>
+<main id="workspaces-main" class="learning-main" tabindex="-1">
+<div class="workspace-heading"><div><h2>같은 센터의 작업 공간</h2><p>아래 작업 공간은 이 센터와 같은 Rosy Learning 센터에 속한 별도 작업 공간입니다. 같은 계정으로 로그인합니다. 작업 공간마다 클래스셋이 달라 검수 자료는 서로 나누지 않습니다.</p></div></div>
+<ui-status id="workspaces-status" state="pending" role="status">작업 공간 목록을 읽는 중입니다.</ui-status>
+<ul id="workspaces" class="workspace-list" aria-label="작업 공간 목록"></ul>
+</main></div></div></ui-shell></body></html>

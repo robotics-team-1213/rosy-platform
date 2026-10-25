@@ -12,3 +12,16 @@
 #fleet-main > .console-primary > .work-overview { flex-shrink: 0; }
 .arm-transfer-work { display: grid; gap: var(--space-3); padding-block: var(--space-4); border-block-start: 1px solid var(--border-subtle); }
 .arm-transfer-work > :is(h2, p) { margin: 0; overflow-wrap: anywhere; }
+
+
+#integrated-control { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 1px solid var(--border-subtle); min-width: 0; }
+#integrated-control :is(h2, h3, p) { margin: 0; overflow-wrap: break-word; }
+#integrated-control .work-list > li { display: grid; gap: var(--space-2); }
+#integrated-control-detail { display: grid; gap: var(--space-2); }
+.integrated-map { min-width: 0; }
+.integrated-map svg { display: block; width: 100%; height: auto; background: var(--surface-recessed); }
+.integrated-map polyline { fill: none; stroke: var(--series-primary); stroke-width: 2; }
+.integrated-map circle { fill: var(--series-primary); }
+.integrated-map text { fill: var(--text-primary); font-size: var(--text-label); font-family: var(--body); }
+#integrated-reconcile label { min-height: var(--target-secondary); display: flex; align-items: center; gap: var(--space-2); }
+#integrated-control .integrated-branches { padding-inline-start: var(--space-4); }

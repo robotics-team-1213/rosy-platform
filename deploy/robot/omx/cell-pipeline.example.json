@@ -1,0 +1,20 @@
+{
+  "profile_path": "~/.config/rosy/omx-cell-s.json",
+  "plan_path": "grasp-plan.example.json",
+  "calibration_path": "~/.config/rosy/omx-cell-s-calibration.json",
+  "io": "chunk-io",
+  "cameras": {
+    "top": {"url": "http://127.0.0.1:8767/frame/top.jpg", "height_m": 0.65, "center_px": [320, 240]},
+    "wrist": {"url": "http://127.0.0.1:8767/frame/front.jpg"}
+  },
+  "work_dir": "cell-pipeline",
+  "record": {"config": "record-config.json", "caps": "caps.json"},
+  "coarse": {"z_view": 0.10, "grip_open": 56, "grip_closed": 47,
+             "points": [[0.072, 0.106], [0.097, 0.106], [0.072, 0.131], [0.047, 0.106], [0.072, 0.081]]},
+  "sites": {
+    "pinky": {"z": 0.060, "yaw_deg": -67.8, "place_dz": 0.004, "start": [0.072, 0.106], "place": [0.072, 0.106],
+              "grid_spacing_m": 0.010, "grid_n": 3, "flat_px": [125, 195, 205, 300], "box_half_px": 20},
+    "belt": {"z": 0.064, "yaw_deg": -14.4, "place_dz": 0.004, "place": [0.150, 0.000],
+             "grid_spacing_m": 0.015, "grid_n": 3}
+  }
+}

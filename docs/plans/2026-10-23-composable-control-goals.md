@@ -6,7 +6,22 @@
 
 **상세화:** [최종 목표와 상세 설계](2026-10-23-composable-control-design.md)에 G1–G5의 기본안과 P0–P5 실행·수용 기준을 기록했다. [D-851](../adr/D-851-control-unit-delegation-and-recovery.md)은 세부 계약의 Proposed 설계다. 독립 검토를 마쳤으며, 설계 기록·병합과 세부 결정 승인·기능 수용은 구분한다. 아래 체크박스는 승인·구현·수용 근거 없이 닫지 않는다.
 
-## 2026-10-24 현재 현황과 다음 목표
+## 2026-10-25 소프트웨어 구현 현황과 남은 수용
+
+### 새 구현 목표: 관제 정보를 실제로 모으는 통합관제
+
+사용자의 추가 구현 지시에 따라 기존 유한 navigation 위임을 넘어 [D-862](../adr/D-862-integrated-control-information-and-stop-requests.md)를 적용한다. 문서 등록·기존 회귀 통과와 새 기능 완료를 구분하고 아래 항목을 실제 source/증거로 닫는다.
+
+- [x] **I1 공유 계약:** D-862/API v1.313을 등록하고 strict/bounded 회귀·독립 검토 후 commit `7a3d0dc892`로 로컬 main에 반영했다. FULL27호출의 G1 timing LOAD-FLAKY 격리 통과와 원래 실패는 구분한다.
+- [x] **I2 정보 수집:** SharedGather·직접 소유 SQL·활성 지도와 R/A/B/A1 수집·신선도·부분 단절·권한/개인정보 거절을 구현했다. source `aaaf7ed3f2`의 실제 backend HTTP·SQLite·TLS 집중 회귀는 NEW0이다. 최종 병합은 I6에서 확인한다.
+- [x] **I3 통합 화면:** 관제별 연결/상태/작업·지도 출처·정지 결과를 연결했다. source `bbffbf8577`의 Chromium/Node33건과 `45d1f72ac0`의 실제 Fleet HTTP 무가로채기 Chromium1건이 통과했다. 좌표 융합·물리 정지 완료를 주장하지 않는다.
+- [x] **I4 정지 요청:** immutable identity/fence·같은 transaction latch·활성 send/미확인 rearm guard·기명 로컬 재시운전 처분과 중복/DB/재시작 경합을 구현·회귀했다. backend source `aaaf7ed3f2`와 CORE 연계 source `10fc372212`는 각각 NEW0이며 소스 독립 검토를 받았다. 기존 로컬 긴급 정지는 보존하고 물리 정지는 UNVERIFIED다.
+- [x] **I5 TLS·배치:** 명시 peer CA와 opt-in 설정/token/CA mount를 연결했다. source `aaaf7ed3f2`의 TCP/TLS 회귀와 `ef6dc95958`의 배치/증거 수집기2건이 NEW0이다. 부모 정보 공유와 정지 수신은 각각 기본false이며 실제 PC 설치 수용은 N1–N3으로 남긴다.
+- [x] **I6 소프트웨어 수용:** 실제 생산자→수집→화면과 기존 owner 정지 경로를 원격 회귀·Chromium·독립 계약/안전 검토로 확인하고 commit `9b10086126`으로 로컬 main에 반영했다. [최종 착지 기록](../validation/integrated-control-information-2026-10-25c/result.md)에 선행 FULL27, 최신 main 기준 guard273·기본 FULL23과 기존 timing2건의 동일 SHA 재실행 통과를 구분했다. 실물·현장 수용은 N1–N3으로 유지한다.
+
+선행 구조 정리는 schema1170→569줄의 기존 모델 소유 분리이며 FULL23호출·통합892 PASS/6 SKIP·NEW0으로 로컬 main에 반영했다. 이 작업을 I1–I6 전체 구현 완료로 세지 않는다.
+
+runtime은 `9b10086126`으로 로컬 main에 착지했다. 실제 sample/browser가 발견한 viewer 읽기 잠금과 정지 응답/overview 세대 차이를 수정했고, 최종 검증은 I6의 착지 기록에서 확인한다. [선행 집중 검증](../validation/integrated-control-information-2026-10-25/result.md)과 [첫 FULL 실패·수집기 보완](../validation/integrated-control-information-2026-10-25b/result.md)도 보존했다. 실제 PC 배포·장치 수용은 N1–N3으로 유지한다.
 
 **최종 목표:** 각 관제가 자기 자원·원장·운영자와 실행 책임을 가지고 독립 운영하며, 동일한 관제가 하위 관제를 포함하거나 상위 통합관제에 참여할 수 있게 한다. 각 PC의 배치와 네트워크 연결은 이 논리 책임에 맞추고, 상위의 요청 접수가 하위 승인이나 장치 실행 권한으로 바뀌지 않게 한다.
 

@@ -9,6 +9,7 @@ device-readback gates remain owned by their existing release procedures.
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.util
 import json
 import subprocess
@@ -77,6 +78,17 @@ class ImpactSelectionError(RuntimeError):
     """The requested revision diff could not be proven."""
 
 
+def _ota_units() -> set[str]:
+    native = Path(__file__).resolve().parent.parent / 'native'
+    units = set()
+    for filename, variable in (('sync-image-layer.py', 'UNITS'), ('image_layer_boot.py', 'FEATURE_UNITS')):
+        tree = ast.parse((native / filename).read_text(encoding='utf-8'))
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == variable for t in node.targets):
+                units.update(item.value for item in node.value.elts if isinstance(item, ast.Constant))
+    return units
+
+
 def _classify_path(path: str) -> PathImpact:
     normalized = path.replace("\\", "/").removeprefix("./")
     if not normalized or normalized.startswith("/") or "../" in normalized:
@@ -89,6 +101,13 @@ def _classify_path(path: str) -> PathImpact:
         return PathImpact(path, "none", "documentation, tests, CI, or a separate product/site surface")
     if normalized.startswith(COLCON_ROOT_PREFIXES):
         return PathImpact(path, "native-payload", "workspace source is built into the native payload")
+    if normalized in {'deploy/robot/pinky_pro/image/first-boot/' + name
+                      for name in ('rosy-first-boot.py', 'rosy-first-boot.sh')}:
+        return PathImpact(path, 'native-payload', 'signed boot catalog; bridge capability and compatibility gates required')
+    if normalized.startswith('deploy/robot/pinky_pro/native/'):
+        if name.endswith(('.service', '.timer', '.path', '.target')) and name not in _ota_units():
+            return PathImpact(path, 'review', 'unit has no installed image-layer destination')
+        return PathImpact(path, 'native-payload', 'signed native runtime; installed-image compatibility gates required')
     if normalized.startswith(IMAGE_PREFIXES):
         return PathImpact(path, "flashable-image", "Pinky image, host-service, or board configuration input")
     if normalized.startswith("deploy/robot/pinky_pro/release/public-keys/"):

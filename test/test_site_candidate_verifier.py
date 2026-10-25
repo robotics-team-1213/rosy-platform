@@ -222,6 +222,76 @@ def test_content_check_uses_the_exact_manifest_bytes_that_were_verified(candidat
     assert result["source_commit"] == COMMIT
 
 
+@pytest.mark.parametrize("removed", [("compose.account.yaml",), ("Caddyfile.account",),
+                                    ("compose.account.yaml", "Caddyfile.account")])
+def test_account_signed_assets_are_paired_and_legacy_candidate_remains_verifiable(candidate, removed):
+    root = candidate[0]
+    manifest = json.loads((root / "release.json").read_text())
+    for name in removed:
+        del manifest["deployment_file_sha256"][name]
+        (root / "deploy/site" / name).unlink()
+    (root / "release.json").write_text(json.dumps(manifest))
+    if len(removed) == 2:
+        assert _verify(candidate)["account_https"] is False
+    else:
+        with pytest.raises(_load_verifier().CandidateVerificationError, match="required deployment"):
+            _verify(candidate)
+
+
+@pytest.mark.parametrize("name", ["compose.account.yaml", "Caddyfile.account"])
+def test_account_asset_tampering_is_rejected(candidate, name):
+    (candidate[0] / "deploy/site" / name).write_text("changed\n")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file hash mismatch"):
+        _verify(candidate)
+
+
+@pytest.mark.parametrize("account", [False, True])
+def test_pre_omx_candidate_remains_verifiable(candidate, account):
+    root = candidate[0]
+    manifest = json.loads((root / "release.json").read_text())
+    removed = ["compose.omx.yaml"]
+    if not account:
+        removed += ["compose.account.yaml", "Caddyfile.account"]
+    for name in removed:
+        del manifest["deployment_file_sha256"][name]
+        (root / "deploy/site" / name).unlink()
+    (root / "release.json").write_text(json.dumps(manifest))
+    assert _verify(candidate)["omx"] is False
+
+
+@pytest.mark.parametrize("damage", ["missing", "changed"])
+def test_signed_omx_asset_must_exist_and_match(candidate, damage):
+    overlay = candidate[0] / "deploy/site/compose.omx.yaml"
+    if damage == "missing":
+        overlay.unlink()
+    else:
+        overlay.write_text("changed\n")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file"):
+        _verify(candidate)
+
+
+def test_workcell_overlay_has_signed_coverage(candidate):
+    root = candidate[0]
+    manifest = json.loads((root / "release.json").read_text())
+    path = root / "deploy/site/compose.workcell.yaml"
+    path.write_text("services: {}\n", encoding="utf-8")
+    manifest["deployment_file_sha256"]["compose.workcell.yaml"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    (root / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
+    assert _verify(candidate)["workcell"] is True
+    path.write_text("tampered", encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file hash mismatch"):
+        _verify(candidate)
+
+
+def test_pre_workcell_candidate_remains_verifiable(candidate):
+    root = candidate[0]
+    manifest = json.loads((root / "release.json").read_text())
+    manifest["deployment_file_sha256"].pop("compose.workcell.yaml", None)
+    (root / "deploy/site/compose.workcell.yaml").unlink(missing_ok=True)
+    (root / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
+    assert _verify(candidate)["workcell"] is False
+
+
 def test_rejects_changed_deployment_file(candidate):
     root, _, _, _ = candidate
     (root / "deploy/site/compose.yaml").write_text("changed\n", encoding="utf-8")

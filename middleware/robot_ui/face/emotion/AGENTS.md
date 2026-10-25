@@ -17,8 +17,7 @@ Installed to `share/emotion/emotion`; runtime lookup is
 | File | Description |
 |------|-------------|
 | `__init__.py` | Package marker |
-| `emotion.py` | `RosyEmotion` node; `set_emotion` → GIF (`emotion=emotion.emotion:main`) |
-| `emotion_server.py` | Alternate/entry service wrapper (`emotion_server=emotion.emotion_server:main`) |
+| `emotion_server.py` | LCD service and display/info node (`emotion_server=emotion.emotion_server:main`) |
 | `rosy_lcd.py` | Hardware LCD helper (SPI, RPi.GPIO — device only) |
 | `info_screen.py` | PIL renderer for `display/info` JSON (320×240, ROS-free) |
 | `*.gif` | hello, basic, angry, bored, fun, happy, interest, sad |

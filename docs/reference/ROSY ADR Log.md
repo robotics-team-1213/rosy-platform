@@ -10,30 +10,70 @@
 
 | ID | 제목 | Status |
 |---|---|---|
-| D-856 | 업무 공정 해석과 로봇 동작 실행의 분리 | Accepted (2026-10-24) |
-| D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
-| D-855 | 관제 위임 요청과 실행 시도에 결속된 취소 계약 | Accepted for implementation (2026-10-23) |
+| D-883 | Monitoring 호스트 자원 감시와 시험 PC 저장소 정리 요청 (D-876 §5·D-524 보충) | Accepted for implementation (2026-10-26) |
+| D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
 | D-854 | OMX 학습 정책 실행기 하나로 — 정책 종류를 갈아 끼우는 AI PC 정책 실행기와 행동 단위 변환 | Proposed (2026-10-23) |
+| D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
+| D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |
+| D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 | Accepted for implementation (2026-10-21) |
+| D-834 | 웹·CLI 공통 Isaac 실험 run과 소유 실행 경계 | Proposed |
+| D-832 | OMX 학습 작업공간과 다중 팔·다중 카메라 프로필 | Accepted for implementation (2026-10-21) |
+| D-849 | 팔레타이징 제출 검증은 공정이 소유하고 Fleet은 주입된 제출 경계를 소비한다 | Accepted for implementation (2026-10-23) |
+| D-833 | 원본 계보를 보존한 native OMX 파지 구간 검수와 학습 | Accepted for implementation (2026-10-21) |
+| D-848 | 봉인한 리더 녹화의 세션·사이클 계보 | Accepted for implementation (2026-10-23) |
+| D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나, 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
+| D-878 | 모델 구조화 출력 — 스키마 정본은 하나, 전송 형식은 어댑터에서, 파싱 실패는 무효 답과 같다 (D-392 §6 보충) | Proposed (2026-10-25) |
+| D-879 | 서명된 GPT A/B 이미지의 파티션 역할을 SD 도구가 함께 검증한다 | Proposed |
+| D-876 | ROSY Monitoring — 사이트 독립 감시와 통합 집계 | Accepted (2026-10-25) |
+| D-874 | Learning 승격 요청 묶음 — 확정 정답 평가 근거를 봉인해 넘기고, 승인은 Fleet에 둔다 (D-857 보충) | Proposed (2026-10-25) |
+| D-871 | 모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면 | Accepted for implementation (2026-10-25) |
+| D-868 | 로컬 main에 먼저 착지하고, 공개 main에는 그 로컬 main을 merge commit으로 올린다 | Accepted (2026-10-25) |
+| D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
+| D-870 | 군집 원본 자세 시각과 수신측 단조 시계 만료 | Accepted for implementation (2026-10-25) |
+| D-869 | 원본 이벤트 ID 재전송과 실행 receipt에 결속된 자동 후처리 | Accepted for implementation (2026-10-25) |
+| D-866 | VLA 주 시뮬레이터는 Isaac Sim, Gazebo는 실행 계약 회귀용. 모델 PC와 AI PC는 역할을 나누되 오프라인 일괄 작업은 병렬로 처리 | Proposed (2026-10-25) |
+| D-865 | Fleet 정책 승인 — 사람이 정한 승인 범위 안 작업 자동 승인 | Proposed (2026-10-25) |
+| D-867 | 시뮬레이션 실행 상한을 올린다: AI PC 12코어·10GB, 모델 PC 16코어·10GB | Accepted (2026-10-25) |
+| D-862 | 관제 정보 집계와 관제별 결과를 보존하는 정지 요청 | Accepted for implementation (2026-10-24) |
+| D-863 | 장치 네트워크 복구와 서명 업데이트 연속성 | Accepted for implementation (2026-10-24) |
+| D-864 | D-854 보완 — 공통 행동 단위 ros_joint_rad, 목표 묶음은 궤적 하나, Isaac은 학습 데이터·Gazebo는 실행 확인 | Proposed (2026-10-24) |
+| D-861 | 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다 | Accepted (2026-10-24) |
+| D-859 | 현장 NTP 계층과 공통 UTC 시간 동기화 | Accepted (2026-10-24) |
+| D-856 | 업무 공정 해석과 로봇 동작 실행의 분리 | Accepted (2026-10-24) |
+| D-855 | 관제 위임 요청과 실행 시도에 결속된 취소 계약 | Accepted for implementation (2026-10-23) |
 | D-853 | Learning VLM 판단은 닫힌 질문의 사람 정답과 모델 비교를 평가 전용으로 둔다 | Proposed (2026-10-23) |
+| D-852 | 실험실 PC 사용자 서비스 목록과 대조 | Accepted for implementation (2026-10-23) |
 | D-851 | 독립·상하위 관제의 상태 소유권과 위임·복구 계약 | Proposed (2026-10-23) |
 | D-850 | 독립 운영과 하위 구성을 지원하는 관제 단위 | Accepted (2026-10-23) |
 | D-846 | OMX Leader를 코드 구동 기준으로 삼는 두팔 파이프라인 | Accepted for implementation (2026-10-22) |
 | D-847 | OMX 팔로워 PWM 캡은 관절별로 둔다 | Accepted for implementation (2026-10-23) |
 | D-841 | 공통 모듈 재사용과 독립 앱의 계약 검증 범위를 정한다 | Accepted for implementation (2026-10-22) |
 | D-845 | 공통 HTTP 전송 안에서 화면의 응답 해석을 유지한다 | Accepted for implementation (2026-10-22) |
-| D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 | Accepted for implementation (2026-10-21) |
+| D-835 | 도메인 독립 지도 따라 그리기와 검토 가능한 선·영역 추출 | Accepted (2026-10-21) |
 | D-830 | Fleet 프런트 개발은 샘플·실제 API 공급과 앱 소유 자산 목록으로 분리한다 | Accepted (2026-10-21) |
 | D-831 | 관제 자연어 전처리·명령 후보 검증·토큰 예산 | Accepted (2026-10-21) |
-| D-833 | 원본 계보를 보존한 native OMX 파지 구간 검수와 학습 | Accepted for implementation (2026-10-21) |
 | D-827 | 도메인 중립 플랫폼·재사용 공정·업무 앱의 책임을 분리한다 | Proposed (2026-10-21) |
 | D-828 | 작업 접수·진행·물리 완료·인계 근거를 구분한다 | Proposed (2026-10-21) |
 | D-829 | 업무 목표·제약과 공통 자원 배정·물리 점유를 분리한다 | Proposed (2026-10-21) |
 | D-826 | 3×3×3 혼합 화물 야드는 실행 기준선·입출고 계획·장애 복구를 분리해 실험한다 | Proposed (2026-10-21) |
+| D-825 | STL 도면 참조와 Fleet 평면 지도 편집 | Accepted (2026-10-21) |
 | D-822 | Fleet 화면과 실행 조합은 applications/fleet에 모으고 플랫폼 서비스 소유권은 유지한다 | Accepted (2026-10-20) |
 | D-824 | 워크트리 기본 상한을 50개로 낮추고 기존 작업과 명시적 예외를 보존한다 | Accepted (2026-10-20) |
 | D-823 | OMX Leader를 통한 자동 운용 중 수동 개입·복구·자동 복귀 | Proposed (2026-10-20) |
 | D-821 | 관제 AI 보호 배포·명시적 이동 연결·다국어 평가 | Accepted for implementation (2026-10-20) |
+| D-820 | Discord 알림과 답글 전송의 공통 소유권 | Proposed |
+| D-819 | local action과 stop 전송의 공통 구현 | Proposed |
+| D-818 | 모델 PC guard 설치 스크립트의 존치 | Proposed |
+| D-817 | 움직임을 요청하는 보정 노드의 holder | Proposed |
+| D-816 | Isaac 시뮬레이션 holder의 소유권 | Proposed |
+| D-815 | Gazebo scripts의 manifest와 책임 문서 일치 | Proposed |
+| D-814 | Fleet localization 자세 판정의 소유권 | Proposed |
+| D-813 | CORE와 Fleet peer 암호·TLS 사본의 소유권 | Proposed |
+| D-812 | learning의 실행 코드 의존과 부트스트랩 경계 | Proposed |
+| D-811 | contracts의 동작 코드 소유권 | Proposed |
 | D-810 | 통합관제 운영자 AI 대화의 출처와 조회 권한 | Accepted for implementation (2026-10-20) |
+| D-809 | Legacy 937 Learning Account boundary and protected human audit | Accepted (2026-10-20) |
+| D-808 | Vault 권한은 명시적 site grant로 부여한다 | Accepted (2026-10-20) |
 | D-806 | 앱 표시 이름은 현재 구현한 제품 역할을 따른다 — 웹 앱 이름·설치 신원·하위 기능 구분 | Accepted (2026-10-19) |
 | D-783 | Native adopted-map readback with finite parent evidence | Accepted (2026-10-17) |
 | D-776 | Installed station charge facts preserve source/time and durable replay fences | Accepted (2026-10-16) |
@@ -841,7 +881,6 @@
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 | Accepted |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Accepted |
 | D-805 | 호스트 업데이트: 장치 owner는 네이티브, 나머지는 컨테이너 — 역할별 두 경로와 현장 전체 동결 관문 | Proposed |
-| D-834 | 웹·CLI 공통 Isaac 실험 run과 소유 실행 경계 | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -1225,6 +1264,45 @@ Details: docs/adr/D-745-learning-center-owner-controls.md.
 Dedicated D-772 measurement sources request the existing demand while their installed owner runs. Ordinary D-691 preview behavior is unchanged. Details: [D-774](../adr/D-774-station-measurement-camera-lifespan.md).
 
 
+## D-861 — 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다
+
+**Status:** Accepted (2026-10-24)
+
+모든 Linux·Windows·로봇·모바일/MCU에 동일한 현장 NTP endpoint 하나를 적용한다. 개별 공용 pool·DHCP·복수 fallback을 금지하며 미적용 기기는 미완료로 보존한다. [D-861](../adr/D-861-one-identical-ntp-endpoint-for-all-devices.md).
+
+## D-859 — 현장 NTP 계층과 공통 UTC 시간 동기화
+
+**Status:** Accepted (2026-10-24)
+
+관제 chrony를 현장 시간 기준으로 삼고 Linux 클라이언트·Windows 개발 PC를 같은 계층에 연결한다. 유지보수 중 보정, UTC 오차·표본 나이 검사, 단절·모바일 수용 범위는 [D-859](../adr/D-859-shared-utc-time-synchronization.md)를 따른다.
+
 ## D-776 - Installed station charge facts
 
 Approved local measurement facts preserve original source/time and durable replay fences. Fleet owns selected-work route budgets; existing CORE authority and hardware acceptance remain. Details: [D-776](../adr/D-776-installed-station-charge-facts.md).
+
+## D-809 - Legacy 937 Learning Account boundary
+
+The existing dataset review writer keeps its original human results behind a loopback-only Account boundary. Project grants and a protected server-attributed audit bind review writes; uncertain writes are never retried automatically. Details: [D-809](../adr/D-809-legacy-learning-account-boundary.md).
+
+## D-840 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다
+
+**Status:** Accepted for implementation (2026-10-22).
+
+기존 중앙 Account 프로젝트에서 로봇·참여 구성·과제·학습 방식·계산 자원을 구분한다. Fleet의 공통 Learning 진입은 보호된 `/learning`으로 연결하며 OMX는 첫 지원 어댑터다. 전문은 [D-840](../adr/D-840-shared-multi-robot-learning-center.md).
+## D-863 장치 네트워크 복구와 서명 업데이트 연속성
+
+**Status:** Accepted for implementation (2026-10-24). 실물 장치·ARM64 산출물 수용은 별도다.
+
+전용 network authority, 응답 후 실행되는 Wi-Fi 복구 작업, 첫 부팅 인계와 서명 boot catalog를 정의한다. 전문은 [D-863](../adr/D-863-device-network-recovery-and-update-continuity.md).
+
+## D-869 원본 이벤트 ID 재전송과 실행 receipt에 결속된 자동 후처리
+
+**Status:** Accepted for implementation (2026-10-25). 소스·시험·배포·실물 수용은 별도다.
+
+재접속에서 미응답 이벤트를 원래 event_id·내용·seq로 재전송하고, producer scope 없는 WELCOME 최대 seq를 삭제 근거로 사용하지 않는다. 늦은 명령 후처리는 원래 실행의 승인 receipt에만 결속한다. 영속 outbox나 구형·임대 없는 목표의 정지를 보증하지 않는다. 전문은 [D-869](../adr/D-869-original-identity-for-event-replay-and-command-cleanup.md).
+
+## D-870 군집 원본 자세 시각과 수신측 단조 시계 만료
+
+**Status:** Accepted for implementation (2026-10-25). 계약·소스·시험·배포·실물 수용은 별도다.
+
+원본 pose capture를 보존하고 수신측 remaining을 단조 시계 만료로 고정한다. 누락·지연·중복·역순 표본과 혼합 구형 peer를 이동 근거로 사용하지 않는다. D-859의 UTC 품질 수용은 별도 운영 전제이며 기능 광고로 대체하지 않는다. 전문은 [D-870](../adr/D-870-original-swarm-pose-time-and-monotonic-expiry.md).

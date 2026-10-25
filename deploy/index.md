@@ -38,6 +38,8 @@
 | D-472 | Rosy Cam 현장 영상을 지도에 표시하고 후면 LED 점멸로 로봇 신원을 대조한다 |
 | D-679 | Fleet·Qwen 불일치와 제한된 GLM 재평가 |
 | D-681 | 교체 가능한 판정 모델과 모델 주도 사건 종결 |
+| D-859 | 현장 NTP 계층과 공통 UTC 시간 동기화 |
+| D-861 | 모든 기기는 동일한 현장 NTP 서버 하나를 사용한다 |
 
 ## 계획·결과 문서
 
@@ -74,8 +76,8 @@
 
 ## 최근 기록
 
-- 2026-10-24 · 8d119665da8f · 고정 정책 engineering 실패와 종료 정리
-- 2026-10-24 · 8d119665da8f · MODEL 고정 예산 복구 학습 완료 관측
-- 2026-10-24 · a7aaaed472 · 독립·중첩 관제의 격리 설정 예제
-- 2026-10-24 · 8d119665da8f · native teacher 진단 실행과 정리 확인
-- 2026-10-23 · dec8962001 · teacher 그리퍼 진단 회귀 검증
+- 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
+- 2026-10-25 · a401f49f6d · 서명된 GPT 이미지의 SD 준비 경로
+- 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
+- 2026-10-25 · 055f40747f · signing 설치 closure와 provenance 회귀 통과
+- 2026-10-25 · 9f0df4f99b · 설치형 updater 복구 시험과 공개 digest inventory

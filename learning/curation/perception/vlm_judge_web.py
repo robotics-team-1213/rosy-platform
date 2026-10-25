@@ -1,13 +1,15 @@
 """/learning/vlm routes for review_app.py: human VLM question truth, its small queue and evaluation; never approves.
 
-Collaboration: labels need `edit` and actor is the signed-in user; import reads server paths, so like `/api/import`
-it is refused there (use the CLI on the server). Local mode keeps the app's unidentified editor (actor null, D-478).
+Collaboration: labels need `edit` and actor is the signed-in user; the export (it carries provisional answers)
+and unpause need `manage`; import reads server paths, so like `/api/import` it is refused there (use the CLI on
+the server). Local mode keeps the app's unidentified editor (actor null, D-478).
 """
 import re
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import vlm_judge
+import vlm_judge_report
 
 STATIC = Path(__file__).with_name('review_app_web')
 PREFIX = '/api/learning/vlm/'
@@ -16,7 +18,7 @@ PAGES = {'/learning/vlm': ('vlm.html', 'text/html; charset=utf-8'),
          '/vlm.css': ('vlm.css', 'text/css; charset=utf-8')}
 
 
-def get(handler, path, store, token):
+def get(handler, path, store, token, collaboration=None):
     if path in PAGES:
         name, mime = PAGES[path]
         handler.send((STATIC / name).read_bytes(), mime=mime)
@@ -50,9 +52,11 @@ def get(handler, path, store, token):
         else:
             handler.send(data, mime=mime, etag=etag, cache='no-cache')
     elif path == PREFIX + 'evaluation':
-        handler.send(vlm_judge.evaluation(store))
+        handler.send(vlm_judge_report.evaluation(store))
     elif path == PREFIX + 'export':
-        handler.send(vlm_judge.export(store))
+        if collaboration:
+            collaboration.accounts.require(handler.learning_principal, 'manage')
+        handler.send(vlm_judge_report.export(store))
     else:
         handler.send({'error': 'VLM 경로를 확인하세요.'}, 404)
     return True
@@ -66,6 +70,12 @@ def post(handler, path, body, store, collaboration, conflict):
         if collaboration:  # authorize_write refuses it first; kept so the plugin never depends on that order
             raise PermissionError('project users cannot import arbitrary server filesystem paths')
         handler.send(vlm_judge.import_rows(store, body))
+    elif path == PREFIX + 'unpause':
+        if collaboration:  # authorize_write already asks manage for /api/learning/; kept explicit here
+            collaboration.accounts.require(principal, 'manage')
+        if set(body) != {'question'}:
+            raise ValueError('unpause accepts one question id')
+        handler.send(vlm_judge.unpause(store, body['question'], actor=principal['user_id'] if principal else None))
     elif match := re.fullmatch(PREFIX + r'items/(\d{1,9})', path):
         if collaboration:
             collaboration.accounts.require(principal, 'edit')

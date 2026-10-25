@@ -1,0 +1,31 @@
+[Unit]
+Description=ROSY local HTTPS network recovery
+Requires=rosy-network-users.service rosy-network-agent.service
+After=rosy-network-users.service rosy-network-agent.service rosy-network.service
+ConditionPathIsDirectory=/run/rosy-boot
+
+[Service]
+Type=simple
+User=rosy-recovery
+Group=rosy-recovery
+Environment=HOME=/run/rosy-network-recovery/auth
+Environment=PYTHONNOUSERSITE=1
+ExecCondition=+/usr/bin/python3 -I /opt/rosy/native-runtime/rosy-network-recovery.py eligible
+ExecStartPre=+/usr/bin/python3 -I /opt/rosy/native-runtime/rosy-network-recovery.py issue
+ExecStart=/usr/bin/python3 -I /opt/rosy/native-runtime/rosy-network-recovery.py serve
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/rosy/network-recovery /run/rosy-network-recovery /run/rosy-boot
+
+[Install]
+WantedBy=multi-user.target

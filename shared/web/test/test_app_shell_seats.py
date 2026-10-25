@@ -94,30 +94,58 @@ def test_collapsed_seats_do_not_stretch_or_overflow():
 
 
 def test_review_documents_share_the_app_bar_and_the_screen_rail():
-    """Learning supplies the shared seats; one module owns their navigation."""
+    """D-741 3, 6, D-833 and D-857 §3: app/theme in the bar, the five loop stages in the rail, the stage's
+    pages in the sub-menu, heading in the path row."""
     web = WEB.parents[1] / 'learning/curation/perception/review_app_web'
-    for name in ['learning.html', 'index.html', 'pixels.html', 'catalog.html',
-                 'camera.html', 'omx.html', 'sim.html', 'vlm.html', 'accounts.html', 'evaluate.html']:
+    stages = [('list', '/learning', '홈', '홈'), ('folder', '/catalog', '자료 등록', '자료'),
+              ('pencil', '/', '정답 달기', '정답'), ('robot', '/learning/tasks', '학습 실행', '학습'),
+              ('check', '/learning/evaluate', '평가·승격', '평가·승격')]
+    subs = {'/learning': None, '/catalog': ['/catalog', '/learning/camera', '/learning/workspaces'],
+            '/': ['/', '/pixels', '/learning/omx', '/learning/vlm'],
+            '/learning/tasks': ['/learning/tasks', '/learning#pipeline', '/learning/sim'], '/learning/evaluate': None}
+    rails = set()
+    for name, stage, here in [('learning.html', '/learning', None), ('index.html', '/', '/'),
+                              ('pixels.html', '/', '/pixels'), ('omx.html', '/', '/learning/omx'),
+                              ('vlm.html', '/', '/learning/vlm'), ('catalog.html', '/catalog', '/catalog'),
+                              ('camera.html', '/catalog', '/learning/camera'),
+                              ('workspaces.html', '/catalog', '/learning/workspaces'), ('tasks.html', '/learning/tasks', '/learning/tasks'),
+                              ('sim.html', '/learning/tasks', '/learning/sim'), ('evaluate.html', '/learning/evaluate', None)]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
-        assert html.index('/app.css') < html.index('/learning-shell.css')
-        assert html.count('<script type="module" src="/learning-shell.js"></script>') == 1
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html
         bar = re.search(r'<ui-topbar role="banner">(.*?)</ui-topbar>', html, re.S).group(1)
         assert bar.startswith('<ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand>')
-        assert '<h1' not in bar and '<nav' not in bar and 'data-theme-cycle=""' in bar
+        assert '<h1' not in bar and '<nav' not in bar and 'class="theme-label"' in bar
+        assert 'data-learning-account-entry href="/accounts"' in bar, 'accounts stay in the top bar (D-857 §3)'
         assert 'kind="irreversible"' not in html, 'this tool commands no robot, so it has no stop'
         body = html.split('</ui-topbar>', 1)[1]
-        assert '<div class="ui-app-body" data-seats="rail"><div class="ui-rail"></div>' in body
-        assert 'workspace-tabs' not in html, 'page templates must not duplicate shell navigation'
-        assert re.search(r'<div class="ui-app-main">\s*<div class="ui-pathbar"><h1(?: [^>]*)?>[^<]+</h1>', body)
+        # D-542 §2: the two editors carry the 정답 pages in one nav right after the title (shown in the title row on
+        # wide screens and after the editor on phones), not in an extra sub-menu row above the photo.
+        merged = name in ('index.html', 'pixels.html')
+        seats = ' data-seats="rail"' if subs[stage] is None or merged else ''
+        rail = re.search(rf'<div class="ui-app-body"{seats}><div class="ui-rail">'
+                         r'<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면">(.*?)</nav></div>', body, re.S).group(1)
+        items = re.findall(r'<a class="ui-rail-item" data-action-icon="(\w+)" href="([^"]+)" aria-label="([^"]+)"'
+                           r'(?: aria-current="(page|true)")?>([^<]+)</a>', rail)
+        assert [(icon, href, full, short) for icon, href, full, _, short in items] == stages, name
+        # "page" only on the link to this very page; a stage that merely holds it is "true".
+        assert [(href, current) for _, href, _, current, _ in items if current] == [
+            (stage, 'page' if here in (None, stage) else 'true')], name
+        assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
+        sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1></div>'
+                         r'<nav class="review-kinds" aria-label="정답 하위 메뉴">(.*?)</nav>', body, re.S) if merged else
+               re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
+                         r'<span class="ui-subnav-head">[^<]+</span>(.*?)</nav></div>', body, re.S))
+        assert (sub is None) == (subs[stage] is None), name
+        assert merged or '<div class="ui-subnav">' in body or subs[stage] is None, name
+        if sub:
+            links = re.findall(r'<a class="ui-subnav-item" href="([^"]+)"( aria-current="page")?>[^<]+</a>', sub.group(1))
+            assert [href for href, _ in links] == subs[stage], name
+            assert [href for href, current in links if current] == [here], name
+        assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
+        assert not merged or '<div class="ui-subnav">' not in body, name
         assert html.count('<h1') == 1
-    shell = (web / 'learning-shell.js').read_text(encoding='utf-8')
-    assert "from '/common/ui.js'" in shell
-    assert "import {mountLearningConnections} from '/learning-connections.js'" in shell
-    destinations = shell.split('const destinations = [', 1)[1].split('];', 1)[0]
-    assert re.findall(r"\['([^']+)', '([^']+)', '([^']+)'", destinations) == [
-        ('home', '홈', '/learning'), ('data', '자료', '/catalog'), ('truth', '정답', '/'),
-        ('training', '학습', '/learning?view=training'), ('evaluate', '평가·승격', '/learning/evaluate')]
+        rails.add(re.sub(r' aria-current="(?:page|true)"', '', rail))
+    assert len(rails) == 1, 'the rail is the same in every document'
     css = (web / 'app.css').read_text(encoding='utf-8')
     assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'

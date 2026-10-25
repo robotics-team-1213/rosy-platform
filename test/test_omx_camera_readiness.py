@@ -203,10 +203,14 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     assert start[start.index('--state-dir')+1] == stop[stop.index('--state-dir')+1]
     assert unit['Service']['NoNewPrivileges'] == 'true'
     assert 'rosy-omx-camera-view.service' in unit['Unit']['Requires']
+    # A boot-time refusal restores the originals in ExecStopPost; only a bounded retry reaches READY.
+    assert unit['Service']['Restart'] == 'on-failure'
+    assert int(unit['Unit']['StartLimitBurst']) <= 3
     # systemd permits repeated EnvironmentFile entries; ConfigParser defaults do not.
     view = configparser.ConfigParser(interpolation=None, strict=False)
     view.read(REPO / 'deploy/robot/omx/rosy-omx-camera-view.service')
     assert 'commissioning_view.py' in view['Service']['ExecStart']
+    assert 'FASTDDS_DEFAULT_PROFILES_FILE="$ROSY_CAMERA_PIPELINE_ROOT/camera-view-receive.xml"' in view['Service']['ExecStart']
     assert 'rosy-omx-camera@top.service' in view['Unit']['After']
     assert 'rosy-omx-camera@front.service' in view['Unit']['After']
 
@@ -244,3 +248,31 @@ def test_producer_still_refuses_a_missing_or_shared_owner_after_the_wait(monkeyp
     _producer_world(runtime, monkeypatch, [owners])
     with pytest.raises(RuntimeError, match='sole camera owner'):
         runtime.producer('top', '/dev/video0', wait_s=2.0)
+
+
+def test_a_reused_baseline_guards_the_current_preview_not_the_one_that_recorded_it(monkeypatch, tmp_path):
+    import json
+    runtime = load('camera_readiness')
+    original = {'gain': 4}
+    old = {'ActiveState': 'active', 'MainPID': '2153151', 'InvocationID': 'a'*32}
+    now = {'ActiveState': 'active', 'MainPID': '2463', 'InvocationID': 'f'*32}
+    (tmp_path/'baseline.json').write_text(json.dumps(dict(profile_sha256='p', recorded_ns=1, cameras={
+        'top': dict(device='/dev/video0', identity={'rdev': 1}, producer=old, original=original)})))
+    monkeypatch.setattr(runtime, 'identity', lambda device: {'rdev': 1})
+    monkeypatch.setattr(runtime, 'producer', lambda role, device, wait_s=15.0: now)
+    monkeypatch.setattr(runtime, 'get_controls', lambda device, names: dict(original))
+    baseline = runtime.prepare({}, tmp_path, 'p')
+    assert baseline['cameras']['top']['producer'] == now
+    assert json.loads((tmp_path/'baseline.json').read_text())['cameras']['top']['producer'] == old  # file unchanged
+
+
+def test_viewer_receive_profile_is_the_measured_4mib_udp_buffer_only():
+    import xml.etree.ElementTree as ET
+    ns = {'p': 'http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles'}
+    root = ET.parse(REPO / 'deploy/robot/omx/camera-view-receive.xml').getroot()
+    transport = root.find('p:transport_descriptors/p:transport_descriptor', ns)
+    assert transport.find('p:type', ns).text == 'UDPv4'
+    assert int(transport.find('p:receiveBufferSize', ns).text) == 4 * 1024 * 1024
+    participant = root.find('p:participant', ns)
+    assert participant.get('is_default_profile') == 'true'
+    assert participant.find('p:rtps/p:userTransports/p:transport_id', ns).text == transport.find('p:transport_id', ns).text

@@ -14,7 +14,14 @@ TEACHER_STEP_RAD = .03
 TEACHER_READBACK_LIMIT_RAD = .035
 
 
-def camera_world(source, camera, output):
+# pick-place-chunks scenarios (D-872): the box moved (x, y in m, world frame) or turned (deg), and which grasp
+# yaw the chunk plan takes: the site's own, or turned by the box (the candidates the choices ledger compares)
+SCENARIOS = {"nominal": (0.0, 0.0, 0.0, "site"), "offset": (0.012, -0.008, 0.0, "site"),
+             "yaw-site": (0.0, 0.0, 20.0, "site"), "yaw-box": (0.0, 0.0, 20.0, "box")}
+
+
+def camera_world(source, camera, output, box=None):
+    """`box`: (dx, dy, dyaw_deg) applied to the infeed block's pose in the world file."""
     tree, pilot = ET.parse(source), ET.parse(camera)
     world = tree.getroot().find('world')
     if world.attrib.get('name') != 'omx_cell_workcell':
@@ -26,6 +33,12 @@ def camera_world(source, camera, output):
         if node is None:
             raise ValueError('pinned camera source missing')
         world.append(copy.deepcopy(node))
+    if box and any(box):
+        pose = world.find("model[@name='infeed_block']/pose")
+        if pose is None:
+            raise ValueError('infeed block pose missing')
+        x, y, z, roll, pitch, yaw = (float(v) for v in pose.text.split())
+        pose.text = ' '.join(repr(v) for v in (x + box[0], y + box[1], z, roll, pitch, yaw + math.radians(box[2])))
     with Path(output).open('xb') as stream:
         tree.write(stream, encoding='utf-8', xml_declaration=True)
     return {key: hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -73,21 +86,23 @@ def dispatch_readback_target(desired, read_positions, send):
     raise RuntimeError('bounded_readback_step_limit')
 
 
-def episode(directory):
+def episode(directory, plan='analytic', scenario='nominal'):
     from g2_common import ROOT, controller_readiness
     from g2_ports import isolation_guard, write_json
     from g2_runner import Children
     isolation_guard(ROOT)
     directory.mkdir(mode=0o700)
     children = Children(directory)
-    result = {'experiment': 'pick-place-demonstrations', 'attempts': 0, 'successes': 0,
+    result = {'experiment': 'pick-place-demonstrations', 'plan': plan, 'attempts': 0, 'successes': 0,
               'sim_aid': True, 'training': 'NOT_RUN', 'policy_evaluation': 'NOT_RUN'}
     started, error, code = time.monotonic(), None, 1
     try:
         worlds = ROOT / 'integrations/simulation/gazebo/worlds'
         world = directory / 'camera-world.sdf'
+        dx, dy, dyaw, grasp_yaw = SCENARIOS[scenario]
         binding = camera_world(worlds/'omx_cell_workcell_sim_aid.sdf',
-                               worlds/'omx_pilot_workcell.sdf', world)
+                               worlds/'omx_pilot_workcell.sdf', world, box=(dx, dy, dyaw))
+        binding['scenario'] = {'name': scenario, 'box_offset_m': [dx, dy], 'box_turn_deg': dyaw, 'grasp_yaw': grasp_yaw}
         write_json(directory/'world-binding.json', binding)
         domain = os.environ.setdefault('ROS_DOMAIN_ID', '77')
         env = dict(os.environ, ROSY_SIM_REPO=str(ROOT), ROS_DOMAIN_ID=domain,
@@ -104,7 +119,8 @@ def episode(directory):
         children.assert_alive()
         teacher = children.start('teacher', ['/usr/bin/python3',
             str(ROOT/'deploy/robot/omx/sim_pick_place_teacher.py'), '--evidence', str(directory),
-            '--world', str(world), '--observer', str(observer)], env=env)
+            '--world', str(world), '--observer', str(observer), '--plan', plan,
+            '--box-turn-deg', str(dyaw if grasp_yaw == 'box' else 0.0)], env=env)
         result['attempts'] = 1
         code = teacher.wait(timeout=900)
         receipt = json.loads((directory/'teacher-result.json').read_text())
@@ -120,7 +136,7 @@ def episode(directory):
     return 0 if result['result'] == 'PASS' else 1
 
 
-def run(directory, *, episodes=1):
+def run(directory, *, episodes=1, plan='analytic', scenario='nominal'):
     from g2_ports import write_json
     if type(episodes) is not int or not 1 <= episodes <= 3:
         raise ValueError('one to three episodes per bounded archive required')
@@ -128,12 +144,12 @@ def run(directory, *, episodes=1):
     results = []
     for index in range(episodes):
         path = directory / f'episode-{index+1}'
-        code = episode(path)
+        code = episode(path, plan, scenario)
         results.append(json.loads((path/'result.json').read_text()))
         if code:
             break
     success = len(results) == episodes and all(r['result'] == 'PASS' for r in results)
-    write_json(directory/'result.json', {'experiment': 'pick-place-demonstrations',
+    write_json(directory/'result.json', {'experiment': 'pick-place-demonstrations', 'plan': plan,
         'requested_episodes': episodes, 'episodes': results,
         'attempts': sum(r['attempts'] for r in results), 'successes': sum(r['successes'] for r in results),
         'cleanup_verified': all(r['cleanup_verified'] for r in results),
@@ -145,9 +161,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--evidence', type=Path, required=True)
     parser.add_argument('--episodes', type=int, choices=(1, 2, 3), default=1)
+    parser.add_argument('--plan', choices=('analytic', 'chunks'), default='analytic')
+    parser.add_argument('--scenario', choices=tuple(SCENARIOS), default='nominal')
     parser.add_argument('--approve-isolated-simulation', action='store_true')
     parser.add_argument('--approve-startup-home', action='store_true')
     args = parser.parse_args()
     if not (args.approve_isolated_simulation and args.approve_startup_home):
         raise PermissionError('isolated SIM and bounded startup-home approvals required')
-    raise SystemExit(run(args.evidence, episodes=args.episodes))
+    raise SystemExit(run(args.evidence, episodes=args.episodes, plan=args.plan, scenario=args.scenario))

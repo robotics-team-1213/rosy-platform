@@ -290,3 +290,29 @@ print('OFFICIAL_CONFIG_READER_SPLIT_PASS')
                             capture_output=True, text=True, env=env, timeout=360)
     assert result.returncode == 0, result.stdout + '\n' + result.stderr
     assert 'OFFICIAL_CONFIG_READER_SPLIT_PASS' in result.stdout
+
+
+@pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 CPU environment not configured')
+def test_rosy_omx_extra_cameras_decode_in_installed_order():
+    script = r'''
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1])/'integrations/robots/omx/src'))
+import draccus
+from lerobot.robots import RobotConfig
+import lerobot_robot_rosy_omx
+base = dict(type='rosy_omx', url='http://localhost:8080', token_file='/not-read', policy_revision='a'*64,
+            joint_names=['joint1'], camera_height=2, camera_width=2)
+config = draccus.decode(RobotConfig, dict(base, extra_cameras={'top': [4, 6]}))
+robot = lerobot_robot_rosy_omx.RosyOmx(config)
+assert list(robot.cameras) == ['front', 'top']
+assert robot.observation_features == {'joint1.pos': float, 'front': (2, 2, 3), 'top': (4, 6, 3)}
+for bad in ({'top': [4]}, {'front': [2, 2]}, {'top': [0, 6]}):
+    try:
+        lerobot_robot_rosy_omx.RosyOmxConfig(**{k: v for k, v in base.items() if k != 'type'}, extra_cameras=bad)
+    except ValueError:
+        continue
+    raise AssertionError(bad)
+'''
+    result = subprocess.run([str(PYTHON), '-c', script, str(ROOT)], capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr[-3000:]

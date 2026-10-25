@@ -186,6 +186,9 @@ def _verifier(calls):
         if not (Path(folder) / "release.json.sig").is_file():
             raise upd.CandidateVerificationError("release signature is missing or unsafe")
         manifest = json.loads((Path(folder) / 'release.json').read_text())
+        manifest.setdefault('account_https', True)
+        manifest.setdefault('omx', True)
+        manifest.setdefault('workcell', True)
         manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
         return manifest
     return verify
@@ -567,12 +570,113 @@ def test_pairing_overlay_from_the_candidate_is_allowed(host):
 @pytest.mark.parametrize("overlay", [
     "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml",
     "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.omx.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.account.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
+    "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.omx.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
 ])
 def test_omx_overlay_from_the_candidate_is_allowed(host, overlay):
     with host.paths.site_env.open("a", encoding="utf-8") as stream:
         stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize("pairing", [False, True])
+@pytest.mark.parametrize("omx", [False, True])
+@pytest.mark.parametrize("account", [False, True])
+def test_signed_workcell_overlay_composes_with_existing_optional_overlays(host, pairing, omx, account):
+    names = (["pairing"] if pairing else []) + (["omx"] if omx else []) + ["workcell"]
+    names += ["account"] if account else []
+    overlay = " ".join(f"-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml" for name in names)
+    with host.paths.site_env.open("a", encoding="utf-8") as stream:
+        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
+    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_legacy_candidate_cannot_enable_unsigned_workcell_overlay(host, loaded):
+    old = host.paths.candidates / OLD
+    (old / "release.json").write_text(json.dumps({"source_commit": OLD, "workcell": False}))
+    (old / "deploy/site/compose.workcell.yaml").write_text("services: {}\n")
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    env = {"ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.workcell.yaml"}
+    with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
+        updater._verify(old, loaded=loaded, env=env)
+
+
+def test_legacy_candidate_cannot_enable_unsigned_account_overlay(host):
+    old = host.paths.candidates / OLD
+    (old / "release.json").write_text(json.dumps({"source_commit": OLD, "account_https": False}))
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    assert updater._verify(old, loaded=True)["account_https"] is False
+    with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
+        updater._verify(old, loaded=True, env={
+            "ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.account.yaml"})
+
+
+@pytest.mark.parametrize("loaded", [False, True])
+def test_legacy_candidate_cannot_enable_unsigned_omx_overlay(host, loaded):
+    old = host.paths.candidates / OLD
+    (old / "release.json").write_text(json.dumps({"source_commit": OLD, "omx": False}))
+    # An injected file is not permission to run an unsigned overlay.
+    (old / "deploy/site/compose.omx.yaml").write_text("services: {}\n")
+    updater = _updater(host, FakeHttp([], {}), FakeHost(host.paths))
+    assert updater._verify(old, loaded=loaded)["omx"] is False
+    env = {"ROSY_SITE_PAIRING_COMPOSE": "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml"}
+    with pytest.raises(upd.Rejected, match="not covered by this signed candidate"):
+        updater._verify(old, loaded=loaded, env=env)
+
+
+@pytest.mark.parametrize("phase", ["current", "staged", "loaded"])
+def test_unsigned_omx_overlay_is_refused_before_switch(host, phase):
+    with host.paths.site_env.open("a") as stream:
+        stream.write("ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.omx.yaml\n")
+    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
+    http, fake = FakeHttp(releases, blobs), FakeHost(host.paths)
+    updater = _updater(host, http, fake)
+    original = updater.verifier
+    def verifier(folder, **kwargs):
+        manifest = original(folder, **kwargs)
+        current = manifest['source_commit'] == OLD
+        if ((phase == 'current' and current) or
+                (not current and kwargs['inspect_loaded_images'] == (phase == 'loaded'))):
+            manifest['omx'] = False
+        return manifest
+    updater.verifier = verifier
+    assert updater.run() == upd.EXIT_FAILED
+    assert host.paths.link.resolve() == host.paths.candidates / OLD
+    assert not any(call[:2] == ['systemctl', 'restart'] for call in fake.calls)
+    if phase == 'current':
+        assert not http.downloads
+    assert any(call[:3] == ['docker', 'image', 'load'] for call in fake.calls) == (phase == 'loaded')
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_pre_omx_rollback_uses_backup_overlay_requirements(host, enabled):
+    old = host.paths.candidates / OLD
+    (old / 'release.json').write_text(json.dumps({'source_commit': OLD, 'omx': False}))
+    (old / 'deploy/site/compose.omx.yaml').write_text('services: {}\n')
+    shutil.copy2(host.paths.site_env, host.paths.env_backup)
+    if enabled:
+        with host.paths.env_backup.open('a') as stream:
+            stream.write('ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.omx.yaml\n')
+    target = host.paths.candidates / NEW
+    target.mkdir()
+    upd.write_env_tag(host.paths.site_env, NEW)
+    upd.swap_link(host.paths.link, target)
+    state = {'failed': {}, 'switch': {'previous': str(old), 'current': OLD}}
+    fake = FakeHost(host.paths)
+    updater = _updater(host, FakeHttp([], {}), fake)
+    if enabled:
+        with pytest.raises(upd.Rejected, match='not covered by this signed candidate'):
+            updater.rollback(state)
+        assert host.paths.link.resolve() == target and 'switch' in state
+        assert not fake.calls
+    else:
+        updater.rollback(state)
+        assert host.paths.link.resolve() == old and 'switch' not in state
 
 
 def test_real_candidate_directory_is_migrated_once_to_a_symlink(host):

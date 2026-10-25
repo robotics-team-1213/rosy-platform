@@ -12,7 +12,11 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
+from rosy.contracts.learning import action_space as units  # noqa: E402
 from omx_output_paths import in_source_checkout
+_in_checkout = in_source_checkout  # origin #151/#154 callers use this name
+import camera_reference
 from native_capture import bind_capture, check_capture_groups
 from native_environment import bind_environment, seal_environment, split_coverage, validate_environment
 
@@ -32,6 +36,37 @@ def joint_layout(info):
         if feature.get('names') != names or tuple(feature.get('shape', ())) != (len(names),):
             raise ValueError('native OMX joint order and position feature count must match the robot type')
     return names[:]
+
+
+def bind_action_space(info, body_units, declaration):
+    """D-854 unit declaration for this layout: one per arm, lerobot_norm_v1 only; None stays undeclared."""
+    if declaration is None:
+        return None
+    names = joint_layout(info)
+    if body_units != 'normalized_-100_100':
+        raise ValueError('only normalized native data declares the lerobot_norm_v1 action space')
+    arms = ['arm_a', 'arm_b'] if len(names) > len(JOINTS) else [None]
+    given = {None: declaration} if arms == [None] else declaration
+    if not isinstance(given, dict) or set(given) != set(arms):
+        raise ValueError('one action space declaration per arm is required')
+    bound = {arm: units.validate_declaration(given[arm]) for arm in arms}
+    if any(value['unit'] != units.NORM for value in bound.values()):
+        raise ValueError('native normalized data must declare lerobot_norm_v1')
+    return bound[None] if arms == [None] else bound
+
+
+def declaration_from_calibration(paths):
+    """``PATH`` for one arm, or ``arm_a=PATH arm_b=PATH``: LeRobot calibration JSON -> declaration(s)."""
+    def one(path):
+        calibration = json.loads(Path(path).read_text(encoding='utf-8'))
+        return {'unit': units.NORM, 'motor_order': list(units.MOTORS),
+                'calibration_sha256': units.calibration_sha256(calibration)}
+    if len(paths) == 1 and '=' not in paths[0]:
+        return one(paths[0])
+    pairs = dict(item.split('=', 1) for item in paths)
+    if len(pairs) != len(paths):
+        raise ValueError('each arm calibration once')
+    return {arm: one(path) for arm, path in pairs.items()}
 
 
 def _integer(value, name):
@@ -107,7 +142,7 @@ def reviewed_splits(report, decisions):
         raise ValueError('capture source must be explicitly declared before training')
     if not isinstance(decisions, list) or len(decisions) != len(report['episodes']):
         raise ValueError('review must cover every episode exactly once')
-    splits, content_splits = {'train': [], 'eval': []}, {}
+    splits, content_splits, excluded = {'train': [], 'eval': []}, {}, excluded_indexes(report)
     if any(decision.get('split') == 'test' for decision in decisions):
         splits['test'] = []
     for source, decision in zip(report['episodes'], decisions):
@@ -123,7 +158,7 @@ def reviewed_splits(report, decisions):
         # Human-observed object effect, kept for action-outcome (world model) labels; not a split rule.
         if decision.get('object_result', 'unknown') not in OBJECT_RESULTS:
             raise ValueError('object_result must be one of ' + ', '.join(OBJECT_RESULTS))
-        if split == 'exclude':
+        if split == 'exclude' or source['episode_index'] in excluded:
             continue
         if decision['outcome'] != 'success':
             raise ValueError('included demonstrations require operator-confirmed success')
@@ -137,7 +172,8 @@ def reviewed_splits(report, decisions):
         splits[split].append(source['episode_index'])
     if not all(splits.values()):
         raise ValueError('nonempty independent train and eval splits are required')
-    check_capture_groups(report['episodes'], decisions)
+    check_capture_groups(report['episodes'], [dict(decision, split='exclude') if source['episode_index'] in excluded
+                                              else decision for source, decision in zip(report['episodes'], decisions)])
     if 'files' in report:
         validate_environment(report)
     return splits
@@ -171,7 +207,8 @@ def load_dataset(root, repo_id):
 
 
 def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revision,
-                    source_mode=None, capture_provenance=None, environment_evidence=None):
+                    source_mode=None, capture_provenance=None, environment_evidence=None, action_space=None, camera_setup=None):
+    """``camera_setup`` is the D-792 ``{role: revision}`` an intake checked; absent keeps the report unchanged."""
     root = Path(root).resolve()
     if body_units not in ('degrees', 'normalized_-100_100') or not all(
             isinstance(value, str) and value.strip() for value in (rig_revision, calibration_revision)):
@@ -179,6 +216,7 @@ def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revi
     before = dataset_files(root)
     dataset = load_dataset(root, repo_id)
     report = inspect_frames(dataset.meta.info, (dataset[i] for i in range(len(dataset))))
+    declared = bind_action_space(dataset.meta.info, body_units, action_space)
     if dataset_files(root) != before:
         raise ValueError('dataset changed during inspection')
     report.update(repo_id=repo_id, files=before, body_units=body_units, gripper_units='normalized_0_100',
@@ -192,7 +230,58 @@ def inspect_dataset(root, repo_id, *, body_units, rig_revision, calibration_revi
         calibration_revision=calibration_revision, evidence=environment_evidence)
     if environment_evidence is not None:
         report['environment_evidence'] = copy.deepcopy(environment_evidence)
+    if declared is not None:
+        report['action_space'] = declared
+    if camera_setup is not None or (capture_provenance or {}).get('camera_setup') is not None:
+        report['camera_setup'] = camera_reference.recorded(camera_setup, report['camera_keys'])
+        if (capture_provenance or {}).get('camera_setup', camera_setup) != camera_setup:
+            raise ValueError('capture provenance names other camera references')
+    static = static_episodes(root, len(report['episodes']))
+    if static:
+        report['excluded_episodes'] = [dict(episode_index=i, reason=STATIC_REASON) for i in static]
     return report
+
+
+STATIC_REASON = 'static_episodes.json: the leader never moved in this episode'
+
+
+def static_episodes(root, total):
+    """record_session leader-never-moved markers at a dataset root -> sorted static indexes to exclude.
+
+    DO_NOT_TRAIN.txt, an unreadable or malformed static_episodes.json, or no episode left refuses the
+    whole dataset. A prepared intake whose sealed recordings carried a marker it lacks is refused too.
+    """
+    root = Path(root)
+    lists = {}
+    for manifest in sorted((root/'rosy_provenance').glob('session-*/manifest.json')):
+        files = json.loads(manifest.read_text(encoding='utf-8')).get('files', {})
+        lists.update({name: True for name in ('DO_NOT_TRAIN.txt', 'static_episodes.json') if 'dataset/'+name in files})
+    if os.path.lexists(root/'DO_NOT_TRAIN.txt') or 'DO_NOT_TRAIN.txt' in lists:
+        raise ValueError('dataset is marked DO_NOT_TRAIN.txt (leader never moved); refused')
+    path = root/'static_episodes.json'
+    if not os.path.lexists(path):
+        if lists:
+            raise ValueError('intake was prepared before static episode exclusion; prepare it again')
+        return []
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 1024*1024:
+            raise ValueError('bounded regular file required')
+        marker = json.loads(path.read_bytes().decode('utf-8'))
+        static = marker['static']
+        if (set(marker) != {'episodes', 'static', 'threshold'} or type(marker['episodes']) is not int
+                or marker['episodes'] != total or type(marker['threshold']) not in (int, float)
+                or not math.isfinite(marker['threshold']) or not isinstance(static, list)
+                or any(type(i) is not int or not 0 <= i < total for i in static) or len(set(static)) != len(static)):
+            raise ValueError('episodes, static indexes or threshold differ from the dataset')
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise ValueError(f'static_episodes.json unreadable or malformed ({exc}); dataset refused') from exc
+    if len(static) == total:
+        raise ValueError('every episode is static (leader never moved); dataset refused')
+    return sorted(static)
+
+
+def excluded_indexes(report):
+    return {row['episode_index'] for row in report.get('excluded_episodes', [])}
 
 
 def _new_output(path, source):
@@ -214,12 +303,15 @@ def write_json(path, document):
 
 def split_reviewed(root, report, decisions, output):
     output = _new_output(output, root)
+    static_episodes(root, len(report['episodes']))
     current = inspect_dataset(root, report['repo_id'], body_units=report['body_units'],
                               rig_revision=report['rig_revision'],
                               calibration_revision=report['calibration_revision'],
                               source_mode=report['source_mode'] if report['source_mode'] != 'unverified_native' else None,
                               capture_provenance=report.get('capture_provenance'),
-                              environment_evidence=report.get('environment_evidence'))
+                              environment_evidence=report.get('environment_evidence'),
+                              action_space=report.get('action_space'),
+                              camera_setup=report.get('camera_setup'))
     current = copy.deepcopy(current)
     current.setdefault('environment_summary', validate_environment(current))
     expected = copy.deepcopy(report)
@@ -259,6 +351,8 @@ def main():
                          help='byte-bound scripted teacher capture manifest; not device acceptance')
     inspect.add_argument('--environment-evidence', type=Path,
                          help='sealed original environment log and host-clock episode windows')
+    inspect.add_argument('--calibration', nargs='+', metavar='[ARM=]PATH',
+                         help='D-854: LeRobot calibration JSON per arm; declares lerobot_norm_v1')
     inspect.add_argument('--out', type=Path, required=True)
     split = commands.add_parser('split')
     split.add_argument('root', type=Path)
@@ -291,7 +385,9 @@ def main():
                                      capture_provenance=json.loads(args.capture_provenance.read_text(encoding='utf-8'))
                                      if args.capture_provenance else None,
                                      environment_evidence=json.loads(args.environment_evidence.read_text(encoding='utf-8'))
-                                     if args.environment_evidence else None)
+                                     if args.environment_evidence else None,
+                                     action_space=declaration_from_calibration(args.calibration)
+                                     if args.calibration else None)
             write_json(output / 'inspection.json', report)
             write_json(output / 'decisions.json', report['episodes'])
         else:

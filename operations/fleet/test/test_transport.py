@@ -151,6 +151,16 @@ def test_power_health_uses_authenticated_read_only_route():
                     "auth": "Bearer op-token"}
 
 
+def test_motor_health_uses_authenticated_read_only_route():
+    seen = {}
+    def handler(request):
+        seen.update(method=request.method, path=request.url.path,
+                    auth=request.headers.get('authorization'))
+        return httpx.Response(200, json={'status': 'unavailable'})
+    assert run(_client(handler).motor_health())['status'] == 'unavailable'
+    assert seen == {'method': 'GET', 'path': '/api/v1/motors/health', 'auth': 'Bearer op-token'}
+
+
 def test_follow_posts_the_params_with_a_bearer_token():
     seen = {}
 

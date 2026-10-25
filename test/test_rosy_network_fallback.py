@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -33,6 +34,39 @@ def _state(module, **values):
 
 def _activated(command: list[str]) -> str:
     return "GENERAL.STATE:activated\n" if "GENERAL.STATE" in command else ""
+
+
+def test_timer_does_not_mutate_radio_while_network_change_owns_lock(tmp_path):
+    module = _module()
+    from network_transaction import change_lock
+    calls = []
+    state = _state(module, ap_active=True, ap_since=0)
+    with change_lock(tmp_path) as acquired:
+        assert acquired
+        following = module.step(state, 1000, {'mode': 'off'}, False, tmp_path,
+                                lambda argv: calls.append(argv) or '')
+    assert calls == [] and following == state
+
+
+def test_ap_scope_changes_when_the_ap_reopens(tmp_path):
+    module = _module()
+    module._status(tmp_path, 'ap', 'fixture-ap')
+    first = json.loads((tmp_path / module.STATUS).read_text())
+    module._status(tmp_path, 'sta')
+    module._status(tmp_path, 'ap', 'fixture-ap')
+    second = json.loads((tmp_path / module.STATUS).read_text())
+    assert first['epoch'] and second['epoch'] != first['epoch']
+
+
+def test_controller_restart_does_not_close_a_radio_owned_by_another_change(tmp_path, monkeypatch):
+    module = _module()
+    from network_transaction import change_lock
+    calls = []
+    monkeypatch.setattr(module, '_run', lambda argv: calls.append(argv) or '')
+    with change_lock(tmp_path):
+        assert module.main(['--root', str(tmp_path), '--once']) == 0
+    assert not any(argv[1:3] in (['connection', 'down'], ['connection', 'up'], ['device', 'connect'])
+                   for argv in calls)
 
 
 def test_uplink_keeps_the_ap_closed():
@@ -113,7 +147,9 @@ def test_opening_writes_a_root_only_ap_profile_and_a_secret_free_status(tmp_path
     assert ["nmcli", "connection", "up", "rosy-fallback-ap"] in calls
     status_text = (root / "run/rosy-boot/network.json").read_text(encoding="utf-8")
     status = json.loads(status_text)
-    assert status == {"mode": "ap", "ssid": "rosy-pinky-e4us", "address": "10.42.0.1"}
+    assert {key: status[key] for key in ('mode', 'ssid', 'address')} == {
+        "mode": "ap", "ssid": "rosy-pinky-e4us", "address": "10.42.0.1"}
+    assert status['epoch']
     assert AP_VALUE not in status_text
 
 
@@ -210,3 +246,74 @@ def test_closing_asks_networkmanager_to_retry_the_site_wifi(tmp_path):
     module.perform(root, "close", lambda command: calls.append(command) or "")
 
     assert ["nmcli", "device", "connect", "wlan0"] in calls
+
+
+def test_update_claim_defers_fallback_step_without_taking_radio_lock(tmp_path, monkeypatch):
+    module = _module()
+    import rosy_claim
+
+    rosy_claim.acquire(tmp_path, "rosy-auto-update", "fixture update", 300, lock_wait_s=0)
+    calls = []
+    def forbidden_lock(*args, **kwargs):
+        pytest.fail("fallback took the radio lock while the update claim was held")
+    monkeypatch.setattr(module, "change_lock", forbidden_lock)
+    state = module.LinkState(ap_active=True, ap_since=0)
+    try:
+        assert module.step(state, 1000, {"mode": "off"}, False, tmp_path,
+                           lambda argv: calls.append(argv) or "") == state
+        assert calls == []
+        assert rosy_claim.check(tmp_path)["holder"] == "rosy-auto-update"
+    finally:
+        rosy_claim.release(tmp_path, "rosy-auto-update")
+
+
+def test_update_claim_defers_startup_down_and_nm_observations(tmp_path, monkeypatch):
+    module = _module()
+    import rosy_claim
+
+    rosy_claim.acquire(tmp_path, "rosy-auto-update", "fixture update", 300, lock_wait_s=0)
+    display = tmp_path / module.DISPLAY_AP
+    display.parent.mkdir(parents=True)
+    display.write_text("existing AP display", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(module, "_run", lambda argv: calls.append(argv) or "")
+    try:
+        assert module.main(["--root", str(tmp_path), "--once"]) == 0
+        assert calls == []
+        assert display.read_text() == "existing AP display"
+        assert rosy_claim.check(tmp_path)["holder"] == "rosy-auto-update"
+    finally:
+        rosy_claim.release(tmp_path, "rosy-auto-update")
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_fallback_holds_claim_before_radio_lock_and_releases_it(tmp_path, monkeypatch, fail):
+    module = _module()
+    import rosy_claim
+
+    holders = []
+    @contextmanager
+    def radio_lock(root, *, blocking=False):
+        claim = rosy_claim.check(root)
+        assert claim is not None, "radio lock must be acquired after the global claim"
+        holders.append(claim["holder"])
+        assert claim["holder"] != "rosy-auto-update"
+        yield True
+    monkeypatch.setattr(module, "change_lock", radio_lock)
+    calls = []
+    def run(argv):
+        assert rosy_claim.check(tmp_path)["holder"] == holders[-1]
+        calls.append(argv)
+        if fail:
+            raise ValueError("fixture NM failure")
+        return ""
+    state = module.LinkState(ap_active=True, ap_since=0)
+    if fail:
+        with pytest.raises(ValueError, match="fixture NM failure"):
+            module.step(state, 1000, {"mode": "off"}, False, tmp_path, run)
+    else:
+        assert not module.step(state, 1000, {"mode": "off"}, False, tmp_path, run).ap_active
+        module.step(state, 1000, {"mode": "off"}, False, tmp_path, run)
+        assert holders[0] != holders[1], "each radio ownership must use a unique claim holder"
+    assert calls
+    assert rosy_claim.check(tmp_path) is None

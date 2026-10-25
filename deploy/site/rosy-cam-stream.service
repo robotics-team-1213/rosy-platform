@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep the paired Rosy Cam ceiling phone streaming (user unit)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Idempotent: a running camera is only read (no wake, no tap). A stopped one is
+# started through the app's own button after serial/model, focus and keyguard checks.
+ExecStart=/usr/bin/python3 %h/.local/share/rosy/cam-screen/rosy_cam_screen.py stream-start --config %h/.local/share/rosy/cam-screen/cam-screen.json
+NoNewPrivileges=yes

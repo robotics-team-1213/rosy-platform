@@ -139,13 +139,15 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
     if (statePollInFlight) return;
     statePollInFlight = true;
     let fleetAnswered = false;
+    const motorHealthRequestedAtMs = Date.now();
     try {
       const snapshot = await call("/api/fleet/state");
       life.check();
       pathSample.fleet = { finished: true, status: 200 };
       fleetAnswered = true;
       paintSitePath();
-      view.robots = snapshot.robots;
+      const motorHealthReceivedAtMs = Date.now();
+      view.robots = snapshot.robots.map(robot => ({...robot, motorHealthRequestedAtMs, motorHealthReceivedAtMs}));
       view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
       if (requestedRobotFocus) openCard(requestedRobotFocus);
       view.stateUnavailable = false;

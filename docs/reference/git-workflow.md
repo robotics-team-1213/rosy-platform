@@ -10,7 +10,7 @@
 |---|---|---|
 | 작업 위치 | 자기 clone의 주제 브랜치 | 공유 체크아웃의 `.worktrees/<짧은이름>` |
 | 브랜치 이름 | `<type>/<topic>` — `feat` `fix` `refactor` `docs` `uiux` | 같다 |
-| `main`에 넣는 법 | PR → CI 녹색 확인 → **Squash and merge** | `tools/land.py`로 로컬 `main`에 `--ff-only` 착지 |
+| `main`에 넣는 법 | PR → CI 녹색 확인 → **Create a merge commit**(squash 금지, D-868) | `tools/land.py`로 로컬 `main`에 `--ff-only` 착지 |
 | `origin`에 올리는 사람 | 본인(브랜치만. `main`은 PR로만) | 관리자 계정이 로컬 `main`을 push |
 | 시험 | 자기 PC에서 돌려도 된다(D-584 개정) | 실험실 시험 PC로 보낸다. 노트북에서 pytest 금지 |
 | 절차 전문 | [CONTRIBUTING](../../.github/CONTRIBUTING.md) | [같이 하는 깃](shared-checkout.md) · 루트 [AGENTS.md](../../AGENTS.md) |
@@ -94,14 +94,7 @@ git push -u origin fix/<짧은-주제>
 
 **로컬 `main`이 `origin/main`보다 앞서 있으면 그 커밋들에는 CI 증거가 없다.** 새 팀원은 `origin`만 본다. 착지한 일은 미루지 않고 push한다.
 
-로컬 `main`을 push하는 순서(D-427 4항, D-762 단계 5까지 유효):
-
-```bash
-git fetch origin
-git rebase origin/main          # main 체크아웃에서, 미커밋 변경이 없을 때만
-python tools/harness/rosy_harness.py generate   # STATUS.md, docs/index.md 등이 바뀌면 그 변경을 커밋
-git push origin main            # pre-push 훅 통과 필수. --no-verify, force-push 금지
-```
+로컬 `main`을 올리는 순서는 [D-868](../adr/D-868-local-main-first-merge-commit-publish.md)이다. 로컬 `main`의 끝을 `publish/main-<YYYYMMDD>`로 push해 PR을 열고, `ci-result`가 녹색이면 merge commit으로 병합한 뒤 `git merge --ff-only origin/main`. 전문은 `AGENTS.md` 「같이 하는 깃」 6번이다. 공유 에이전트 clone은 `git config rosy.publishOnly true`로 두어 pre-push가 `publish/main-*` 밖의 push를 거절한다(사고 대응만 `ROSY_PUSH_REASON="<이유>"`). 팀원의 clone은 이 설정을 두지 않는다.
 
 push 뒤 CI 확인:
 

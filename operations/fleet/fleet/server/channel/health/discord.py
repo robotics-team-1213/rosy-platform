@@ -7,6 +7,9 @@ import httpx
 
 class BareDiscordPublisher:
     def __init__(self, *, guild_id, channel_id, bot_id, token, http):
+        if any(type(value) is not str or re.fullmatch(r"[0-9]{17,20}", value) is None
+               for value in (channel_id, bot_id)):
+            raise ValueError("invalid fixed Discord destination")
         self.scope = (guild_id, channel_id, bot_id)
         self.channel_id, self.bot_id, self.token, self.http = channel_id, bot_id, token, http
 

@@ -3,6 +3,7 @@ from base64 import urlsafe_b64encode
 from contextlib import contextmanager
 from collections import OrderedDict
 from hashlib import sha256
+from http.client import HTTPException
 import hmac
 import json
 import os
@@ -99,7 +100,7 @@ class AccountClient:
             if exc.code >= 500:
                 raise AccountUnavailable() from None
             raise AccountDenied('Account request refused') from None
-        except (URLError, TimeoutError, OSError):
+        except (URLError, TimeoutError, OSError, HTTPException):
             raise AccountUnavailable() from None
         except (ValueError, UnicodeDecodeError):
             raise AccountDenied('Invalid Account response') from None

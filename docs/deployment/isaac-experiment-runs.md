@@ -2,6 +2,8 @@
 
 모델 PC의 기존 Isaac SDK와 동일 계정의 학습 잠금을 사용한다. D-834는 Proposed이며 최초 시나리오는 `omx-f-import`의 모델·관절·120프레임 검사다. 항만 집기·적층·회수·협응 복구는 D-826의 후속 물리 검증 전까지 비활성이다.
 
+`pinky-conveyor-roundtrip`은 별도의 고정 접촉 실험이다. 정지한 Pinky 적재면 proxy에서 컨베이어 proxy로 한 물체를 옮긴 뒤 원위치로 되돌린다. OMX-F CAD 집게와 동적 물체를 사용하며, 실제 카메라 좌표 정합·Pinky 전체 모델·주행·학습 정책 수용은 포함하지 않는다. 실행 가능한 코드와 실제 과제 성공은 별개이며, 실행 결과의 `task_success`와 실패 근거를 확인한다.
+
 ## 운영 binding
 
 실험 요청에는 경로·명령·호스트를 넣지 않는다. 운영자가 별도 JSON binding으로 승인 source checkout, SDK Python, 설치된 model-code root와 외부 run 데이터 루트를 고정한다. 모든 경로는 해당 모델 PC의 값이며 공개 문서에는 실제 계정·주소를 쓰지 않는다.
@@ -45,7 +47,7 @@ python tools/remote/remote_isaac.py fetch --receipt receipt.json
 }
 ```
 
-fetch는 receipt 옆 `snapshots/`에 매번 새 복사본을 만든다. run ID와 입력 지문을 receipt와 대조한 뒤 등록된 파일을 하나씩 크기·SHA-256·이식 가능한 이름으로 검증하므로 archive 추출 경로를 받지 않는다. 이번 시나리오의 공개 산출물은 1MiB 이하 JSON 보고서이며 원시 SDK 로그·USD는 포함하지 않는다. 파일 데이터를 fsync한 뒤 마지막 `snapshot.json`을 게시하며 이 파일이 없으면 불완전한 복사본이다. 실행 중 관찰은 `OBSERVATION_NOT_ATOMIC`, 최종 기록은 `FINAL`을 보존한다. POSIX에서는 게시 디렉터리도 fsync한다. Windows에서는 파일 데이터의 flush와 원자적 게시를 제공하며 전원 장애 때 디렉터리 항목의 영속성까지 보장하지 않는다.
+fetch는 receipt 옆 `snapshots/`에 매번 새 복사본을 만든다. run ID와 입력 지문을 receipt와 대조한 뒤 등록된 파일을 하나씩 크기·SHA-256·이식 가능한 이름으로 검증하므로 archive 추출 경로를 받지 않는다. 공개 산출물은 파일마다 1MiB 이하인 JSON 보고서이며, 접촉 왕복은 단계별 PNG 다섯 개도 같은 manifest에 등록한다. 원시 SDK 로그·USD는 포함하지 않는다. 파일 데이터를 fsync한 뒤 마지막 `snapshot.json`을 게시하며 이 파일이 없으면 불완전한 복사본이다. 실행 중 관찰은 `OBSERVATION_NOT_ATOMIC`, 최종 기록은 `FINAL`을 보존한다. POSIX에서는 게시 디렉터리도 fsync한다. Windows에서는 파일 데이터의 flush와 원자적 게시를 제공하며 전원 장애 때 디렉터리 항목의 영속성까지 보장하지 않는다.
 
 로컬 공통 진입은 `/usr/bin/python3 SOURCE/learning/envs/isaac/run_control.py --binding BINDING.json`의 stdin JSON이다. `catalog`, `check`, `start`, `list`, `status`, `stop`, `artifact`만 처리한다. `check`는 SDK 배포 metadata·GPU 관찰과 두 잠금을 확인하며 SimulationApp을 시작하지 않는다.
 
@@ -63,3 +65,17 @@ SDK supervisor는 실행165초, 원시 로그16MiB, 관찰 output 합계256MiB·
 receipt의 run을 다시 조회한다. `UNKNOWN`은 unit 소유권·결과·cleanup을 확인할 수 없다는 뜻이며 자동 재실행하지 않는다. 같은 run ID의 systemd unit을 reset/reuse하지 않는다. 중지 전에 unit·InvocationID·boot ID·cgroup·worker PID 시작 시각을 대조하며, 다르면 신호를 보내지 않는다. 일치하면 열린 pidfd로 해당 worker에만 SIGUSR1을 보내고 worker가 소유 SDK를 종료한다. 확인 뒤 unit/PID가 바뀌어도 다른 프로세스로 신호가 향하지 않는다. 강제 종료·재부팅 후 결과가 없으면 실패나 성공을 추정하지 않는다.
 
 SDK 원시 로그는 run 디렉터리의 `sdk.log`이며 내부 경로가 포함될 수 있다. 외부 공유 전 별도 검토한다. 불변 input·최종 result·artifact manifest는 덮어쓰지 않는다. 실제 SDK 실행·웹/CLI 교차 조회 증거는 별도 실험 기록으로 남긴다. host pytest는 실물 집기·학습 적합·정책 승격의 증거가 아니다.
+
+## 정지 적재면 ↔ 컨베이어 접촉 왕복
+
+같은 check/start/status/fetch에 `scenario_id=pinky-conveyor-roundtrip`과 `config={"seed":0}`을 사용한다. 경로·자유 명령·속도·임의 프레임 수를 받지 않는다. seed는 고정 배치에서 사용하지 않는다. `conveyor_fixture.py`의 `stationary-proxy-v3`는 미터 단위의 **합성 배치**이며 실제 영상으로 재구성한 맵이 아니다.
+
+Learning의 `/learning/sim`에서 해당 실행을 선택하면 접촉 보고서와 다섯 단계 PNG를 같은 run에서 열 수 있다. 재실행은 선택한 run의 시나리오·seed를 복원하고 새 run으로 이전 run을 참조한다. 이 화면의 실행 완료는 policy 승격이 아니다. 희소 접촉 보고서를 학습 Episode로 사용하지 않으며, 동기화된 시연 수집·독립 정책 평가의 남은 연결은 [검증 기록](../validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md#학습-파이프라인과의-연결)에 둔다.
+
+- 팔 기준 원점에서 지지면 중심은 Pinky `(0.14,-0.07,0.09)`, 컨베이어 `(0.14,0.07,0.09)` m다. 물체는 18 mm 정육면체·0.05 kg, 두 지지면과 벨트는 정지한다.
+- 기존 ROBOTIS OMX-F URDF·STL을 사용한다. CAD 수직 파지 IK는 도달 불가를 거절하고, 실제 관절·TCP를 읽어 명령 및 FK와 대조한다. controller는 결정론적 제어기이며 HF 학습 정책을 실행하지 않는다.
+- 물체는 중력·충돌·마찰로만 움직인다. 초기 배치 이후 pose 쓰기·부착·외력 보조가 없다. 120 Hz, 최대 4,800 physics step과 기존 165/180초 실행 상한을 유지한다.
+- 양쪽 집게 접촉·지지면에서 20 mm 이상 들어 올림·이송 중 접촉·목표 위치를 관측한다. 컨베이어와 원래 Pinky 위치에서 집게를 물체로부터 40 mm 이상 뗀 뒤 1초간 지지 접촉·안정성을 확인한다. XY 15 mm, 높이 5 mm, 기울기 10도, 선속도 0.01 m/s 이하를 요구한다.
+- `contact-report.json`에 측정값과 독립 판정을 보존한다. 초기·양방향 lift·컨베이어 안착·최종 안착의 PNG를 등록해 같은 fetch가 크기·해시를 검증한다. 영상 파일은 만들지 않는다. 물리 과제 실패도 `FAILED`와 회수 가능한 부분 증거로 남기며 SDK 종료 코드만으로 성공을 선언하지 않는다.
+
+실제 카메라 맵으로 옮기려면 렌즈/영상 크기에 맞는 내부 보정, 카메라↔팔 기준 변환, Pinky 적재면·컨베이어의 실측 높이와 위치가 필요하다. 현재 합성 좌표를 현장 이동 목표로 재사용하지 않는다.

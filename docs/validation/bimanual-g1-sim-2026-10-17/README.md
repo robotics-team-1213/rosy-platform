@@ -119,3 +119,15 @@ G1 작업대: base 0.33 m, 마주 봄, 0.20×0.15 m 팔레트 중심 (0.165, 0),
 - owner의 cell/3 수락은 후속 과제다(이 기록은 시험에서 대체했다). sku별 물체 정보(`item_key` `box:<sku>`)와 팔별 goal predicate는 recipe/3 후속 작업으로 들어갔고, 이 시험은 그 키와 같은 모양을 쓴다.
 - 계획기 station 점검(z 0)이 IK reach를 거절한다. pilot home 0.12 m와 base 0.30 m는 보수적 간격 검사에서 겹친다. 컴파일 fixture(`operations/processes/palletizing/test/fixtures/mixed_two_arm/cell.yaml`)의 home은 바꾸지 않았다.
 - G2(ROS-SIM 혼합 적재, MuJoCo 밀기), 물리 무너짐, py3dbp 비교, 실제 UID/systemd 조율자, 공유 E-stop은 하지 않았다.
+
+## 2026-10-21 · CI 연락 간격 집계 보정
+
+source commit a4e40b8cbbfc의 [CI](https://github.com/robotics-team-1213/rosy-platform/actions/runs/39588488804)에서 G1 연락 간격 p99가 0.536276 s로 0.5 s 기준을 넘었다. 같은 SHA의 별도 CI에서는 해당 root shard가 통과했다. 기존 집계는 완료한 짝의 마지막 연락과 다음 짝의 첫 연락을 연결해, 그 사이의 동기 계획·DB 준비 시간도 포함했다. 원래 실패 표본의 양 끝 시각은 남지 않아 그 표본이 짝 경계였다고 단정하지 않는다.
+
+짝마다 시작 인덱스부터의 연락 간격을 모으고 전체 원시 시각·짝별 Action ID/인덱스·전체 간격도 진단 근거로 보존한다. 회귀 시험은 짝 사이의 4.9 s를 분리하면서 짝 내부의 0.9 s 지연은 그대로 남기는지 확인한다. 0.5 s·UDS RTT·watchdog·barrier 상한과 실제 UDS 시험은 바꾸지 않았다. source commit 0279cfe66e3e의 원격 회귀 시험은 시작 인덱스 미지원으로 실패했다. 수정 SHA의 실제 타이밍·전체 CI는 별도로 확인하며 이 보정으로 장치나 현장 수용을 올리지 않는다.
+
+## 2026-10-21 · HOLD 완료와 조회 시각 분리
+
+source commit 1ff627307dce의 전체 게시 검사에서 코디네이터 종료 후 HOLD 조회가 1.310487 s로 1.25 s 상한을 넘었다. 같은 SHA의 별도 집중 시험 5건은 통과했다. 기존 시각은 두 팔의 순차 tick과 DB 상태 조회 뒤 기록하므로 먼저 HOLD한 팔에도 상대 팔 처리·조회 시간을 더했다. 실패 표본의 실제 완료 시각은 없어 이 초과의 원인이 조회 지연이었다고 단정하지 않는다.
+
+시험에서 원래 `hold_owner`를 그대로 호출하고 성공적으로 반환한 직후 완료 시각을 남긴다. latch·취소·Action HOLD 원장 쓰기 시간은 포함하며, 진입 시각을 완료로 쓰지 않는다. 조회 시각도 별도로 보존한다. 회귀 시험은 callback 실행 시간을 포함하고 후속 조회 지연은 제외하며 예외 시 완료를 기록하지 않는지 확인한다. 1.25 s 상한·최종 Action HOLD·goal 취소 검증과 실제 owner 구현은 유지한다. 이 변경은 장치 실시간 수용 근거가 아니다.

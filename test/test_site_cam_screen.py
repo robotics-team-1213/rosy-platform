@@ -608,3 +608,136 @@ def test_visible_label_outside_clickable_ancestor_refused():
     with pytest.raises(module.ScreenError):
         module.execute(CONFIG, 'light-request', runner)
     assert runner.tap_count == 0
+
+
+START, STOP, ROUTE = '\uce74\uba54\ub77c \ucf1c\uae30', '\uce74\uba54\ub77c \ub044\uae30', '\uc5f0\uacb0 \uae30\ub85d \u00b7 \ucd2c\uc601 \ud654\uba74'
+
+
+class StreamCommands(LightCommands):
+    """The app opens on its receiver list; stream screen has one start/stop button."""
+    def __init__(self, running=False, screen='list', starts=True):
+        super().__init__({**STATE, 'running': running})
+        self.screen = 'stream' if running else screen
+        self.starts = starts
+
+    def label(self):
+        if self.screen == 'list':
+            return ROUTE
+        return STOP if self.state['running'] else START
+
+    def __call__(self, args, **kwargs):
+        shell = args[3:]
+        if shell[:3] == ['shell', 'dumpsys', 'activity'] and not self.state['running']:
+            self.calls.append(args)
+            out = 'No services match: ' + shell[-1] + '\nUse -h for help.\n'
+            return subprocess.CompletedProcess(args, 0, out, '')
+        if shell[:2] == ['shell', 'cat']:
+            self.xml = ui(text=self.label())
+        if shell[:3] == ['shell', 'input', 'tap']:
+            self.calls.append(args)
+            self.tap_count += 1
+            if self.screen == 'list':
+                self.screen = 'stream'
+            elif self.starts or self.state['running']:
+                self.state['running'] = not self.state['running']
+            return subprocess.CompletedProcess(args, 0, '', '')
+        if shell[:2] in (['shell', 'screencap'], ['shell', 'rm']) or args[3:4] == ['pull']:
+            self.calls.append(args)
+            return subprocess.CompletedProcess(args, 0, '', '')
+        return super().__call__(args, **kwargs)
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    module = load()
+    monkeypatch.setattr(module.time, 'sleep', lambda s: None)
+    return module
+
+
+def test_stream_status_is_read_only():
+    runner = StreamCommands()
+    assert load().execute(CONFIG, 'stream-status', runner) == {'status': 'connected', 'running': False}
+    assert not any('keyevent' in c or 'tap' in c or 'start' in c for c in runner.calls)
+
+
+def test_stream_start_routes_from_receiver_list_then_confirms(no_sleep):
+    runner = StreamCommands()
+    assert no_sleep.execute(CONFIG, 'stream-start', runner) == {'status': 'started', 'running': True}
+    assert runner.tap_count == 2  # route, then start
+
+
+def test_stream_stop_taps_stop_once(no_sleep):
+    runner = StreamCommands(running=True)
+    assert no_sleep.execute(CONFIG, 'stream-stop', runner) == {'status': 'stopped', 'running': False}
+    assert runner.tap_count == 1
+
+
+@pytest.mark.parametrize('action,running', [('stream-start', True), ('stream-stop', False)])
+def test_stream_already_in_state_never_touches_ui(action, running):
+    runner = StreamCommands(running=running)
+    assert load().execute(CONFIG, action, runner)['status'] == 'unchanged'
+    assert runner.tap_count == 0
+    assert not any('KEYCODE_WAKEUP' in c for c in runner.calls)
+
+
+def test_stream_stop_never_routes_through_receiver_list(no_sleep):
+    runner = StreamCommands(running=True)
+    runner.screen = 'list'
+    with pytest.raises(no_sleep.ScreenError):
+        no_sleep.execute(CONFIG, 'stream-stop', runner)
+    assert runner.tap_count == 0
+
+
+def test_unconfirmed_stream_start_is_refused(no_sleep):
+    runner = StreamCommands(screen='stream', starts=False)
+    with pytest.raises(no_sleep.ScreenError):
+        no_sleep.execute(CONFIG, 'stream-start', runner)
+    assert runner.tap_count == 1
+
+
+def test_stream_start_refuses_secure_keyguard():
+    runner = StreamCommands()
+    runner.showing = runner.secure = True
+    module = load()
+    with pytest.raises(module.ScreenError):
+        module.execute(CONFIG, 'stream-start', runner)
+    assert runner.tap_count == 0
+
+
+def test_unknown_service_dump_is_not_read_as_stopped():
+    module = load()
+    runner = StreamCommands(running=True)
+    def garbled(args, **kwargs):
+        if args[3:6] == ['shell', 'dumpsys', 'activity']:
+            return subprocess.CompletedProcess(args, 0, 'SERVICE something else\n', '')
+        return runner(args, **kwargs)
+    with pytest.raises(module.ScreenError):
+        module.execute(CONFIG, 'stream-status', garbled)
+
+
+def test_snapshot_pulls_then_removes_remote_file(tmp_path):
+    runner = StreamCommands(running=True)
+    out = tmp_path / 'shot.png'
+    assert load().execute(CONFIG, 'snapshot', runner, out=out) == {'status': 'saved', 'running': True}
+    pull = next(c for c in runner.calls if c[3:4] == ['pull'])
+    assert pull[-1] == str(out)
+    assert runner.calls.index(pull) < next(i for i, c in enumerate(runner.calls) if c[3:5] == ['shell', 'rm'] and pull[4] in c)
+
+
+def test_snapshot_without_out_refused():
+    module = load()
+    with pytest.raises(module.ScreenError):
+        module.execute(CONFIG, 'snapshot', StreamCommands())
+
+
+def test_stream_started_elsewhere_before_tap_is_not_toggled_off(no_sleep):
+    runner = StreamCommands(screen='stream')
+    reads = 0
+    def started_by_hand(args, **kwargs):
+        nonlocal reads
+        if args[3:6] == ['shell', 'dumpsys', 'activity']:
+            reads += 1
+            if reads == 2: runner.state['running'] = True
+        return runner(args, **kwargs)
+    assert no_sleep.execute(CONFIG, 'stream-start', started_by_hand)['status'] == 'unchanged'
+    assert runner.tap_count == 0

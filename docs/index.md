@@ -351,8 +351,8 @@
 
 ## 최근 기록
 
-- 2026-10-24 · 45173e6f92 · D-856 설치된 owner phase 실행과 client 연결
-- 2026-10-24 · 11486ce7cd · D-856 owner transaction 물체·복구 결속
-- 2026-10-24 · dda08892c9 · D-856 원장 migration 구현과 선행 FULL 결과
-- 2026-10-24 · uncommitted · D-856 중립 원장 migration 설계
-- 2026-10-24 · 1258314f51 · D-856 비활성 중립 팔 grant 계약
+- 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
+- 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
+- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+- 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+- 2026-10-25 · uncommitted · 교훈: 빈 워크트리 폴더와 squash로 갈라진 이력 합치기

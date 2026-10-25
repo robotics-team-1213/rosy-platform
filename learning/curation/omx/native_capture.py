@@ -20,9 +20,9 @@ def bind_capture(episodes, files, *, source_mode, body_units, rig_revision,
     """
     if source_mode not in (None, 'leader_native', 'scripted_teacher'):
         raise ValueError('unsupported native source mode')
-    if source_mode != 'scripted_teacher':
+    if source_mode is None or (source_mode == 'leader_native' and provenance is None):
         if provenance is not None:
-            raise ValueError('capture provenance requires an explicit scripted_teacher source mode')
+            raise ValueError('capture provenance requires an explicit source mode')
         return dict(source_mode=source_mode or 'unverified_native', episodes=copy.deepcopy(episodes))
     if not isinstance(provenance, dict):
         raise ValueError('scripted_teacher requires capture provenance')
@@ -30,13 +30,17 @@ def bind_capture(episodes, files, *, source_mode, body_units, rig_revision,
                     body_units=body_units, gripper_units='normalized_0_100',
                     rig_revision=rig_revision, calibration_revision=calibration_revision)
     if body_units != 'normalized_-100_100':
-        raise ValueError('scripted teacher actions require normalized native units')
+        raise ValueError('bound native captures require normalized native units')
     for key, value in expected.items():
         if provenance.get(key) != value:
             raise ValueError(f'capture provenance differs: {key}')
     teacher = provenance.get('teacher_sha256')
-    if not isinstance(teacher, str) or not re.fullmatch('[0-9a-f]{64}', teacher):
+    # D-848: a sealed leader recording has no teacher; its lineage is the sealed session instead.
+    if source_mode == 'scripted_teacher' and (not isinstance(teacher, str) or not re.fullmatch('[0-9a-f]{64}', teacher)):
         raise ValueError('capture teacher_sha256 must identify a fixed teacher')
+    if source_mode == 'leader_native' and (teacher is not None or not re.fullmatch(
+            '[0-9a-f]{64}', str(provenance.get('collection_manifest_sha256', '')))):
+        raise ValueError('leader capture must name its sealed collection manifest, not a teacher')
     if provenance.get('files') != files:
         raise ValueError('capture provenance no longer matches dataset bytes')
     groups = provenance.get('episodes')
@@ -70,3 +74,25 @@ def check_capture_groups(episodes, decisions):
             if group in groups and groups[group] != split:
                 raise ValueError(f'capture {key} crosses dataset splits')
             groups[group] = split
+
+
+def _local_path(value):
+    return isinstance(value, str) and (value.startswith(('/', '~')) or re.match('[A-Za-z]:[\\\\/]', value) is not None)
+
+
+SITE_TEXT = re.compile(r'''/home/[^\s'"]+|/dev/serial/by-id/[^\s'"]+|/dev/v4l/by-id/[^\s'"]+|/dev/tty[A-Za-z0-9]+''')
+
+
+def redacted(value, keep_name=False):
+    """Drop absolute site-PC paths (dataset root, /dev/serial ports, /dev/v4l cameras, replay.path) from copies
+    and mask them inside free text such as error messages. keep_name keeps only the basename instead
+    (teacher.source.dataset), never for /dev names: a by-id basename is the device serial."""
+    def drop(item):
+        return _local_path(item) and (not keep_name or item.startswith('/dev/'))
+    if isinstance(value, dict):
+        return {k: redacted(v, keep_name) for k, v in value.items() if not drop(v)}
+    if isinstance(value, list):
+        return [redacted(v, keep_name) for v in value if not drop(v)]
+    if _local_path(value) and keep_name and not value.startswith('/dev/'):
+        value = re.split(r'[\\/]', value.rstrip('\\/'))[-1]
+    return SITE_TEXT.sub('<redacted-path>', value) if isinstance(value, str) else value

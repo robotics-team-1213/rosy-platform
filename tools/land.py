@@ -51,7 +51,7 @@ import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, orig
 import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
-                        resolver)
+                        generate_records, resolver)
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
 HARNESS = "tools/harness/rosy_harness.py"
@@ -94,35 +94,45 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
         if manual:
             raise Stop("merge would conflict outside the auto-resolvable set:\n  " + "\n  ".join(manual))
         return sorted(resolved)
-    result = git(wt, "merge", "--no-edit", "-m", f"Merge branch 'main' into {branch}", main_sha, check=False)
-    if result.returncode == 0:
+    result = git(wt, "merge", "--no-edit", "--no-commit", "-m",
+                 f"Merge branch 'main' into {branch}", main_sha, check=False)
+    if result.returncode == 0 and git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0:
         return []
-    try:
-        conflicts = conflict_stages(out(wt, "ls-files", "-u"))
-        resolved, manual = plan(wt, conflicts)
-    except (Stop, OSError, subprocess.CalledProcessError) as exc:
-        git(wt, "merge", "--abort", check=False)
-        raise Stop(f"reading the conflict stages failed, merge aborted:\n{exc}") from exc
-    if not conflicts or manual:
-        git(wt, "merge", "--abort", check=False)
-        raise Stop("merge aborted; resolve by hand in the worktree:\n  "
-                   + "\n  ".join(manual or [result.stdout + result.stderr]))
+    resolved = {}
+    if result.returncode != 0:
+        try:
+            conflicts = conflict_stages(out(wt, "ls-files", "-u"))
+            resolved, manual = plan(wt, conflicts)
+        except (Stop, OSError, subprocess.CalledProcessError) as exc:
+            git(wt, "merge", "--abort", check=False)
+            raise Stop(f"reading the conflict stages failed, merge aborted:\n{exc}") from exc
+        if not conflicts or manual:
+            git(wt, "merge", "--abort", check=False)
+            raise Stop("merge aborted; resolve by hand in the worktree:\n  "
+                       + "\n  ".join(manual or [result.stdout + result.stderr]))
     try:
         for path, data in resolved.items():
             (wt / path).write_bytes(data)
             git(wt, "add", "--", path)
-        if any(resolver(p) == "generated" for p in resolved) and (wt / HARNESS).is_file():
-            step(wt, [python, HARNESS, "generate"], None, "generate")
-            # The worktree was clean before the merge, so every unstaged change is generate's.
-            changed = lines(wt, "diff", "--name-only")
-            if changed:
-                git(wt, "add", "--", *changed)
+        if (wt / HARNESS).is_file():
+            existing_untracked = set(lines(wt, "ls-files", "--others", "--exclude-standard"))
+            written = generate_records(wt, python, HARNESS)
+            changed = set(lines(wt, "diff", "--name-only")) | set(
+                lines(wt, "ls-files", "--others", "--exclude-standard")) - existing_untracked
+            unexpected = changed - set(written)
+            if unexpected:
+                raise Stop(f"changes outside canonical generation targets: {sorted(unexpected)}")
+            if written:
+                git(wt, "add", "--", *written)
         git(wt, "commit", "--no-edit")
-    except (Stop, OSError, subprocess.CalledProcessError) as exc:
-        git(wt, "merge", "--abort", check=False)
+    except (Stop, ValueError, KeyError, OSError, subprocess.CalledProcessError) as exc:
+        abort = git(wt, "merge", "--abort", check=False)
         # `merge --abort` leaves files generate created; list them, never delete them.
         left = lines(wt, "ls-files", "--others", "--exclude-standard")
-        raise Stop(f"auto-resolve of {sorted(resolved)} failed, merge aborted:\n{exc}"
+        recovery = ("merge aborted" if abort.returncode == 0 else
+                    "abort failed; merge, index and worktree preserved for manual recovery:\n"
+                    + abort.stdout + abort.stderr)
+        raise Stop(f"auto-resolve of {sorted(resolved)} failed, {recovery}:\n{exc}"
                    + (f"\nuntracked files left in the worktree (not deleted): {left}" if left else "")) from exc
     print(f"[merge] auto-resolved {sorted(resolved)}")
     return sorted(resolved)
@@ -286,16 +296,25 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(todo) + 1)]
     began = time.monotonic()
     codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
+    if out(wt, "rev-parse", "HEAD") != head:
+        raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
+    if len(codes) != len(todo):
+        raise Stop("incomplete remote results; not landing")
     print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
     whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
     for inv, log, code in zip(todo, logs, codes):
+        if out(wt, "rev-parse", "HEAD") != head:
+            raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
         if why := land_cache.unusable(code, log):
             raise Stop(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
         check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
         print(check.stdout, end="")
         flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
-            wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run)
+            wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run,
+            tested_sha=head)
+        if out(wt, "rev-parse", "HEAD") != head:
+            raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
         if check.returncode != 0 and not flaky:
             raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
         if check.returncode == 0 and whole:
@@ -315,6 +334,8 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
             done.append(f"node --test {len(mjs)} file(s) ok")
         else:
             done.append("node skipped: no web/*.mjs under the selected test dirs")
+    if out(wt, "rev-parse", "HEAD") != head:
+        raise Stop(f"HEAD changed during checks; {head[:10]} was tested; retry the landing")
     return done
 
 
@@ -346,7 +367,13 @@ def pretest(wt: Path, branch: str, args, python: str) -> None:
     if not note:
         return
     print(f"[land] FULL tier while waiting in the queue (main {main_sha[:10]})", flush=True)
-    run_tests(wt, args, invocations, tmp_dir(branch), "pre")   # a NEW failure stops here, before the wait
+    logdir = tmp_dir(branch)
+    land_guards.first(wt, args, invocations, logdir, "pre", run_tests)
+    if out(wt, "rev-parse", "HEAD") != candidate:
+        raise Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
+    run_tests(wt, args, invocations, logdir, "pre")   # a NEW failure stops here, before the wait
+    if out(wt, "rev-parse", "HEAD") != candidate:
+        raise Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     land_full.save(wt, branch, candidate, main_sha)
 
 
@@ -450,11 +477,15 @@ def land(args) -> int:
         elif args.tests == "none":
             summary.append(f"round {round_no}: tests skipped (--tests none)")
         summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
+        if out(wt, "rev-parse", "HEAD") != candidate:
+            raise Stop(f"HEAD changed during guards; {candidate[:10]} was tested; retry the landing")
         if guarded and out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved during the guard round; merging again")
             continue
         began = time.monotonic()
         tested = run_tests(wt, args, invocations, logdir, round_no)
+        if out(wt, "rev-parse", "HEAD") != candidate:
+            raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
         # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
         reusable = reusable and not any("LOAD-FLAKY" in line or land_cache.NARROW in line for line in tested)
         summary += [f"round {round_no}: {s}" for s in tested]

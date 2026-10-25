@@ -81,7 +81,7 @@ def verify_helper(helper, value):
 def start_prepared(value, directory, remote, *, approve_sim=False, approve_startup=False,approve_study=False):
     if not (approve_sim and approve_startup):
         raise PermissionError('isolated SIM and startup-home approvals are both required')
-    study=value.get('experiment') in {'pick-place-policy','pick-place-policy-calibration'}
+    study=value.get('experiment') in {'pick-place-policy','pick-place-policy-calibration','pick-place-policy-contact'}
     if study and approve_study is not True:
         raise PermissionError('explicit isolated policy study approval required')
     validate_receipt(value)
@@ -246,8 +246,9 @@ def activate(value, directory, remote):
 def deploy(args, repo, runner):
     host = choose_target(runner._LAB, args.host)
     experiment = getattr(args, 'experiment', 'g2')
-    if experiment not in ('g2', 'pick-place', 'pick-place-demonstrations',
-                           'pick-place-policy','pick-place-policy-calibration'):
+    if experiment not in ('g2', 'pick-place', 'pick-place-demonstrations', 'pick-place-chunks',
+                           'pick-place-chunks-offset', 'pick-place-chunks-yaw-site', 'pick-place-chunks-yaw-box',
+                           'pick-place-policy','pick-place-policy-calibration','pick-place-policy-contact'):
         raise ValueError('unknown native simulation experiment')
     episodes = getattr(args, 'episodes', 1)
     if (type(episodes) is not int or not 1 <= episodes <= 3
@@ -384,8 +385,9 @@ def main():
     shipping.add_argument('--config', type=Path, required=True)
     shipping.add_argument('--log-dir', type=Path, required=True)
     shipping.add_argument('--sha', default='HEAD')
-    shipping.add_argument('--experiment', choices=['g2', 'pick-place', 'pick-place-demonstrations',
-        'pick-place-policy','pick-place-policy-calibration'], default='g2')
+    shipping.add_argument('--experiment', choices=['g2', 'pick-place', 'pick-place-demonstrations', 'pick-place-chunks',
+        'pick-place-chunks-offset', 'pick-place-chunks-yaw-site', 'pick-place-chunks-yaw-box',
+        'pick-place-policy','pick-place-policy-calibration','pick-place-policy-contact'], default='g2')
     shipping.add_argument('--episodes', type=int, choices=(1, 2, 3), default=1)
     shipping.add_argument('--approve-host-provisioning', action='store_true')
     for action in ['provision', 'start', 'status', 'fetch']:

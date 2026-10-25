@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from typing import Optional
+from rosy.world.state.projections.map_pose import wrap_angle as _wrap
 
 STEP_M = 0.01
 #: A corner: the lap heading turns more than this within CORNER_WINDOW_M (deg, m).
@@ -24,10 +25,6 @@ STRAIGHT_DEG = 20.0
 AHEAD_M = 0.25
 #: A turn spot counts on the lap when the lap passes within this of it (m).
 SPOT_ON_LAP_M = 0.05
-
-
-def _wrap(a: float) -> float:
-    return (a + math.pi) % (2.0 * math.pi) - math.pi
 
 
 def _turn(delta: float) -> str:

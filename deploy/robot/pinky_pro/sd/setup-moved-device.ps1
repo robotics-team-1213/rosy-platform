@@ -6,6 +6,7 @@ param(
     [string]$RpiImager = "C:\Program Files\Raspberry Pi Ltd\Imager\rpi-imager.exe",
     [int]$DiskNumber,
     [string]$ConfigPath,
+    [string]$ExpectedImageRevision,
     [ValidateRange(1, 10)][int]$CardCount = 1,
     [switch]$Configure,
     [switch]$PrepareOnly
@@ -20,6 +21,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "sd-setup-settings.ps1")
 . (Join-Path $PSScriptRoot "sd-card-completion.ps1")
+. (Join-Path $PSScriptRoot "sd-batch-state.ps1")
+$batch = $null
 
 function Stop-Setup([string]$Message) {
     throw $Message
@@ -228,11 +231,23 @@ try {
 
     $verifyArguments = @((Join-Path $PSScriptRoot "verify-image-release.py"), "--release-root", $ReleaseDir,
         "--public-key", $publicKey, "--image", $imagePath, "--release-id", $releaseId)
-    $null = @(& python @verifyArguments 2>&1)
-    if ($LASTEXITCODE -ne 0) { Stop-Setup "SD 이미지의 서명·checksum 검증에 실패했습니다. 카드에는 기록하지 않았습니다." }
+    if ($settings.ExpectedImageRevision) { $verifyArguments += @("--expected-source-revision", $settings.ExpectedImageRevision) }
+    $verifiedOutput = @(& python @verifyArguments 2>&1)
+    if ($LASTEXITCODE -ne 0) { Stop-Setup "SD 이미지의 서명·checksum·소스 버전 검증에 실패했습니다. 기대 소스 설정과 서명된 릴리스를 확인하세요. 카드에는 기록하지 않았습니다." }
+    try {
+        $verifiedImage = ($verifiedOutput -join [Environment]::NewLine) | ConvertFrom-Json
+        if ([string]$verifiedImage.ok -cne "true" -or [string]$verifiedImage.release_id -cne $releaseId -or
+            [string]$verifiedImage.image -cne $imageName -or [string]$verifiedImage.sha256 -cne $hashes[0] -or
+            [string]$verifiedImage.source_revision -cnotmatch '^[0-9a-f]{40}$') { throw "invalid verified metadata" }
+    }
+    catch { Stop-Setup "이미지 검증 결과가 선택한 릴리스와 일치하지 않습니다. 카드에는 기록하지 않았습니다." }
+    Write-Host ("검증된 이미지 source revision: " + $verifiedImage.source_revision)
     $scratchRoot = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [IO.Path]::GetTempPath() }
     if (-not (Test-Path -LiteralPath $scratchRoot -PathType Container)) {
         Stop-Setup "임시 폴더 $scratchRoot 를 사용할 수 없습니다. ROSY_SCRATCH를 확인한 뒤 다시 시도하세요. 변경된 항목은 없습니다."
+    }
+    if ($CardCount -gt 1) {
+        $batch = New-SdBatch -RegistryJson $registry -CardCount $CardCount -ScratchRoot $scratchRoot -ReleaseId $releaseId -ImageSha256 $hashes[0] -SourceRevision $verifiedImage.source_revision
     }
     for ($cardIndex = 1; $cardIndex -le $CardCount; $cardIndex++) {
         Write-Host ("카드 {0}/{1}" -f $cardIndex, $CardCount)
@@ -245,8 +260,12 @@ try {
         if ($disk.Count -ne 1) { Stop-Setup "선택한 디스크가 바뀌었거나 더 이상 사용할 수 없습니다. 변경된 항목은 없습니다. 카드를 다시 연결한 뒤 시도하세요." }
 
         $sessionName = "rosy-device-setup-{0}" -f (Get-Date -Format "yyyyMMddTHHmmssfff")
-        $session = Join-Path $scratchRoot $sessionName
+        $sessionRoot = if ($batch) { Split-Path -Parent $batch.Path } else { $scratchRoot }
+        $session = Join-Path $sessionRoot $sessionName
         New-Item -ItemType Directory -Path $session -ErrorAction Stop | Out-Null
+        [ordered]@{release_id=$releaseId;image=$imageName;sha256=$hashes[0];source_revision=$verifiedImage.source_revision;
+            expected_source_revision=$settings.ExpectedImageRevision} | ConvertTo-Json |
+            Set-Content -LiteralPath (Join-Path $session "verified-image.json") -Encoding utf8
         $planPath = Join-Path $session "plan.json"
         $receiptPath = Join-Path $session "receipt.json"
         $preparePath = Join-Path $PSScriptRoot "prepare-rosy-sd.ps1"
@@ -280,12 +299,18 @@ try {
             [int]$plan.disk_number -ne $DiskNumber) {
             Stop-Setup "생성된 계획이 선택한 릴리스 또는 디스크와 일치하지 않습니다. 카드에는 기록하지 않았습니다."
         }
+        $logPath = Join-Path $session "write.log"
+        $verifiedReceipt = Join-Path $session ("receipt-{0}-{1}.json" -f $releaseId, $plan.device_name)
+        if ($batch) {
+            Set-SdBatchCard -Batch $batch -Plan $plan -RegistryJson $registry -PlanPath $planPath -ReceiptPath $verifiedReceipt -LogPath $logPath
+        }
 
         Write-Host ""
         Write-Host "3/4: 새 등록 정보를 확인하세요 (아직 카드에 기록하지 않았습니다):"
         [pscustomobject]@{
             Robot = $RobotAddress
             Release = $plan.release_id
+            ImageSourceRevision = $verifiedImage.source_revision
             DeviceName = $plan.device_name
             RobotNumber = $plan.robot_number
             Namespace = $plan.namespace
@@ -319,7 +344,6 @@ try {
             "-EvidenceDir", $session,
             "-Detach"
         )
-        $logPath = Join-Path $session "write.log"
         if ($CardCount -gt 1) { $writeArguments += @("-LogPath", $logPath) }
         if (Test-Path -LiteralPath $operatorKey -PathType Leaf) {
             $writeArguments += @("-OperatorPublicKey", $operatorKey)
@@ -327,8 +351,8 @@ try {
         $writerOutput = Invoke-ChildPowerShell $writeArguments
         $writerOutput | ForEach-Object { Write-Host ([string]$_) }
         if ($CardCount -gt 1) {
-            $verifiedReceipt = Join-Path $session ("receipt-{0}-{1}.json" -f $releaseId, $plan.device_name)
             Wait-SdCardCompletion -LogPath $logPath -ReceiptPath $verifiedReceipt -Plan $plan -RegistryJson $registry
+            Complete-SdBatchCard $batch
         }
         if ((Test-Path -LiteralPath $operatorKey -PathType Leaf) -and
             (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $operatorKey) "rosy-operator-ed25519") -PathType Leaf)) {
@@ -367,6 +391,10 @@ try {
     if ($CardCount -gt 1) { Write-Host ("총 {0}장 기록·전체 readback·등록부 갱신을 확인했습니다." -f $CardCount) }
 }
 catch {
+    if ($batch) {
+        try { Stop-SdBatch $batch }
+        catch { Write-Warning ("연속 기록 결과 저장에 실패했습니다. 카드별 plan.json과 영수증을 직접 확인하세요: {0}" -f $batch.Path) }
+    }
     Write-Error $_
     exit 1
 }

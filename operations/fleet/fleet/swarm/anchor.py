@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Iterable, Optional
 
 from rosy.world.state.projections.map_pose import LOCALIZED, UNKNOWN, Pose, compose, relative
+from rosy.world.state.projections.map_pose import wrap_angle as _wrap
 from fleet.swarm.relay import Relay
 
 log = logging.getLogger(__name__)
@@ -74,10 +75,6 @@ LEADER_ODOM_MPS = 0.5
 LEADER_ODOM_MARGIN_M = 0.10
 #: An odom refresh (robot REST read) gives up after this (s).
 REFRESH_TIMEOUT_S = 2.0
-
-
-def _wrap(angle: float) -> float:
-    return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
 
 @dataclass

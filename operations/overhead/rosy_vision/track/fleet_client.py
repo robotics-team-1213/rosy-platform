@@ -76,7 +76,8 @@ class TrackClient:
         return _body(response, 'PREVIEW_STATUS_HTTP_ERROR', 'BAD_RESPONSE')
 
 
-def _body(response: httpx.Response, error_code: str, bad_code: str) -> dict[str, Any]:
+def _body(response: httpx.Response, error_code: str, bad_code: str, *,
+          error_type=TrackPublishError, rejection_message="Fleet rejected the request") -> dict[str, Any]:
     if not response.is_success:
         try:
             detail = response.json().get("detail", {})
@@ -84,12 +85,12 @@ def _body(response: httpx.Response, error_code: str, bad_code: str) -> dict[str,
             detail = {}
         if not isinstance(detail, dict):
             detail = {}
-        raise TrackPublishError(response.status_code, str(detail.get("code", error_code)),
-                                str(detail.get("message", "Fleet rejected the request")))
+        raise error_type(response.status_code, str(detail.get("code", error_code)),
+                         str(detail.get("message", rejection_message)))
     try:
         body = response.json()
     except ValueError:
         body = None
     if not isinstance(body, dict):
-        raise TrackPublishError(response.status_code, bad_code, "Fleet returned a non-object response")
+        raise error_type(response.status_code, bad_code, "Fleet returned a non-object response")
     return body

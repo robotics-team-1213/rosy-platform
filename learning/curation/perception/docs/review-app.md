@@ -7,15 +7,14 @@ Python 3.10 이상과 기존 receiver 의존성 `numpy`, `opencv-python`이 필�
 첫 실행은 저장소 루트에서 한다. `--images`는 source JSONL의 상대 image 경로가 시작하는 디렉터리다. 아래 경로는 자신의 저장 위치로 바꾼다. 실험실 PC의 일회성 상태·로그·증거는 X 드라이브에 둔다.
 
 ```powershell
-$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
 $env:PYTHONDONTWRITEBYTECODE = '1'
-python learning/curation/perception/review_app.py --state $RosyScratch/pinky-review-state --source <source.jsonl> --human <human.jsonl> --images <image-root> --port 8767
+python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-review-state --source <source.jsonl> --human <human.jsonl> --images <image-root> --port 8767
 ```
 
 브라우저에서 `http://127.0.0.1:8767`를 연다. 종료는 실행 터미널에서 Ctrl+C다. 재실행에는 초기 입력을 반복하지 않는다.
 
 ```powershell
-python learning/curation/perception/review_app.py --state $RosyScratch/pinky-review-state --port 8767
+python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-review-state --port 8767
 ```
 
 사진을 선택하고 박스를 그리거나 좌표·클래스·신호를 바꾼다. 유효한 수정은 자동 저장되고 `서버 저장됨 · vN`이 표시된다. 수정한 사진은 검수 대기로 돌아간다. 전체 사진과 모든 박스를 확인한 후 체크하고 승인한다. 제외 사진은 재검수로 돌린 후에만 편집할 수 있다. 신호가 불확실하면 `알 수 없음`을 유지한다.
@@ -52,7 +51,7 @@ SAM 주행 영역 초안이 보이는 좌·우 차선 밖을 침범하면 가져
 기본은 loopback이다. 검수자가 SSH 터널 없이 모델 PC의 앱을 Tailscale로 열어야 할 때만 `--host`로 그 주소를 지정한다.
 
 ```powershell
-python learning/curation/perception/review_app.py --state $RosyScratch/pinky-review-state --port 8768 --host <model-pc>
+python learning/curation/perception/review_app.py --state X:/DevTemp/pinky-review-state --port 8768 --host <model-pc>
 ```
 
 검수자는 `http://<model-pc>:8768/pixels`를 연다. 받는 값은 loopback·사설(RFC1918)·link-local·Tailscale(100.64.0.0/10) 리터럴 IPv4뿐이다. `0.0.0.0`, 공인 주소, 호스트 이름은 시작 때 거부된다. HTTP만 쓰며 tailnet 구간은 이미 암호화된다.
@@ -63,8 +62,8 @@ python learning/curation/perception/review_app.py --state $RosyScratch/pinky-rev
 
 ```powershell
 $env:PYTHONIOENCODING = 'utf-8'
-python -m pytest test/learning/perception/test_review_app.py test/learning/perception/test_review_return.py test/learning/perception/test_object_boxes.py test/learning/perception/test_review_pack.py -q -rfE -p no:cacheprovider --basetemp $RosyScratch/pinky-review-tests | Out-File -Encoding utf8 $RosyScratch/pinky-review-run.txt
-python test/known_failures.py $RosyScratch/pinky-review-run.txt
+python -m pytest test/learning/perception/test_review_app.py test/learning/perception/test_review_return.py test/learning/perception/test_object_boxes.py test/learning/perception/test_review_pack.py -q -rfE -p no:cacheprovider --basetemp X:/DevTemp/pinky-review-tests | Out-File -Encoding utf8 X:/DevTemp/pinky-review-run.txt
+python test/known_failures.py X:/DevTemp/pinky-review-run.txt
 ```
 
 Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 출력으로 남긴다. pytest의 종료 코드와 출력의 실패 요약도 함께 확인한다.
@@ -72,42 +71,60 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 개발용 순수 좌표 기하 시험은 Node 24 이상에서 `node --test test/learning/perception/review_box_geometry.test.mjs`로 실행한다. Node는 앱 실행 의존성이 아니다.
 ### 다섯 단계 메뉴 (D-857)
 
-주 메뉴는 학습 루프의 단계다: **홈** `/learning` · **자료** `/catalog` · **정답** `/` · **학습** `/learning?view=training` · **평가·승격** `/learning/evaluate`. 도메인(차로·객체·OMX·SIM·VLM·판단 모델)은 메뉴가 아니라 `?domain=` 필터다(값 `lane`·`object`·`omx`·`sim`·`vlm`·`decision`). 여러 도메인을 나열하는 홈과 평가·승격만 이 값을 따르고 다른 화면은 무시한다. 화면이 여럿인 단계는 경로 줄에 작은 하위 메뉴를 보인다. 모든 기존 화면은 주 메뉴 한 번과 하위 메뉴 한 번 안에 닿고, 기존 URL은 그대로다.
+모든 화면의 왼쪽 레일(전화에서는 위 한 줄)은 학습 루프의 단계다: **홈** `/learning` · **자료** `/catalog` · **정답** `/` · **학습** `/learning/tasks` · **평가·승격** `/learning/evaluate`. 화면이 여럿인 단계는 레일 옆(전화에서는 그 아래 한 줄)에 공용 하위 메뉴(`ui-subnav`)를 보인다. 모든 기존 화면은 레일 한 번과 하위 메뉴 한 번 안에 닿고, 기존 URL은 그대로다. 자료 칸의 접근 이름은 기능 검색이 찾는 「자료 등록」이다. 레일 칸은 지금 화면 자체일 때만 `aria-current="page"`이고, 지금 화면을 품은 단계일 때는 `aria-current="true"`다. 전화에서 하위 메뉴 줄은 위아래 여백 없이 48px 누름 칸만 차지한다. 객체·픽셀 검수 화면은 사진이 첫 화면에서 밀리지 않도록(D-542 §2) 따로 하위 메뉴 줄을 두지 않고, 같은 정답 화면 링크를 넓은 화면에서는 제목 줄 오른쪽에, 전화(40rem 미만)에서는 편집기 아래에 둔다. 도메인(차로·객체·OMX·SIM·VLM·판단 모델)은 메뉴가 아니라 `?domain=` 필터다(값 `lane`·`object`·`omx`·`sim`·`vlm`·`decision`). 여러 도메인을 나열하는 홈과 평가·승격만 이 값을 따른다.
+
+`/`·`/pixels`의 정답 메뉴는 DOM에서 제목 바로 뒤라 초점 순서는 편집기보다 먼저다. 40rem 이상에서는 제목 옆 자기 칸에, 40rem 미만에서는 편집기 뒤에 보인다. 휴대폰에서 보이는 순서와 초점 순서가 다른 것은 지금은 받아들인다.
 
 | 단계 | 화면 |
 |---|---|
-| 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera`. Hugging Face 가져오기는 상단 **설정 › 계정과 외부 자료** `/accounts` |
-| 정답 | 객체 검수 `/`, 픽셀 검수 `/pixels`, OMX 구간 `/learning/omx`, VLM 판단 `/learning/vlm` |
-| 학습 | 학습 실행 `/learning?view=training`, SIM 실험 `/learning/sim` |
-| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 실행기의 평가 단계, VLM 모델 대 확정 정답). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 다음 조각까지 비활성이다 |
+| 홈 | 학습센터 `/learning`: 도메인별 진행, 현재 인식 자료의 학습 흐름, 현재 검수 작업, 실행·평가 결과, 수집·저장 공간 |
+| 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera`, 작업 공간 `/learning/workspaces` |
+| 정답 | 객체 검수 `/`, 픽셀 검수 `/pixels`, 로봇암 시범 검수 `/learning/omx`, VLM 판단 `/learning/vlm` |
+| 학습 | 학습 과제 `/learning/tasks`, 인식 학습 `/learning#pipeline`(홈의 학습 흐름 구역), SIM 실험 `/learning/sim` |
+| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답, 최근 SIM 실험 10개의 상태·단계·과제 성공·판정과 그 run을 여는 `/learning/sim?run=<run_id>` 링크, 화면을 열 때마다 실험 목록을 한 번 읽는다). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 아래 「승격 요청 묶음」 |
 
-계정과 저장 공간은 메뉴가 아니라 상단 **설정**에 있다(`/accounts`, `/learning#storage-panel`). 화면 제목은 `Rosy Learning — <화면>`이다.
+로그인·계정과 Hugging Face 가져오기는 메뉴가 아니라 상단 막대의 「로그인·계정」 `/accounts`에 있다. 수집·저장 공간은 아직 홈의 구역이다. 로봇암 화면(`/learning/omx`)은 시범 검수 밖에 학습·비교 구역도 품지만 한 화면이라 정답 단계에 둔다. 인식 학습은 별도 화면 없이 홈의 학습 흐름 구역으로 간다.
 
-**홈의 도메인 줄.** `/api/learning`은 기존 키를 그대로 두고 `domains`를 더한다(`learning_domains.py`). 도메인마다 루프 여섯 칸(수집·정답·데이터셋·학습·평가·승격 기록, ⑦ 배포는 Learning 밖이라 없음)을 `{stage, label, state, evidence, next}`로 주고, `state`는 `done`·`active`·`blocked`·`waiting`·`not_available`이다. 도메인마다 `next`(`{label, href}` 하나)와 `blocked`(처음 막히거나 없는 칸의 이유)가 있다. 이 작업대가 이미 가진 자료만 읽는다.
+**승격 요청 묶음(D-874).** `GET /api/learning/promotion-requests`(`view`)는 등록된 인식 학습 결과(`perception`)마다 요청 가능 여부와 거절 이유, 지금까지 봉인한 요청을 준다. `POST`(`manage`, CSRF, 본문은 `{"id": <결과 id>}`만)는 `promotion_request.build`가 그 폴더의 `intake_report.json`(통과·파일 해시)·`model_manifest.json`·평가셋·학습 데이터셋을 디스크에서 다시 확인한 뒤 `rosy.learning.promotion-request/1` 묶음을 `<state>/promotion-requests/<sha256>.json`에 한 번만 쓴다. 평가셋과 보고의 채점 출처가 모두 `human_reviewed_eval`이어야 하고, LiDAR·궤적 자동 라벨(build.py 평가셋)이나 HF 사진이 한 장이라도 있으면 거절한다. 평가셋은 `--learning-control` 학습 설정의 데이터셋 저장소 `evalsets/` 아래에 있는 `review_eval_bootstrap` 공개본이어야 하고, 그 학습 기록(`state.json`)에서 같은 모델의 `ready` 행 `eval_set`과 content_sha가 같아야 한다. GET은 크기·mtime이 같은 파일의 해시를 다시 계산하지 않고, POST는 모두 다시 해시한다. 같은 모델의 같은 요청은 처음 해시를 돌려준다. 묶음은 `state: requested`뿐이며 승인·단계·권한 키를 쓰면 거절한다. Fleet에서 승인권자가 이 해시로 제안을 만든다. Learning은 Fleet을 부르지 않는다.
+
+**홈의 도메인 줄.** `/api/learning`은 기존 키를 그대로 두고 `domains`와 `vlm_eval_url`을 더한다(`learning_domains.py`). 도메인마다 루프 여섯 칸(수집·정답·데이터셋·학습·평가·승격 기록, ⑦ 배포는 Learning 밖이라 없음)을 `{stage, label, state, evidence, next}`로 주고, `state`는 `done`·`active`·`blocked`·`waiting`·`not_available`이다. 도메인마다 `next`(`{label, href}` 하나)와 `blocked`(처음 막히거나 없는 칸의 이유)가 있다. 이 작업대가 이미 가진 자료만 읽는다.
 
 | 도메인 | 근거 |
 |---|---|
 | `lane` | 기존 `project()` 단계를 여섯 칸에 맞춘다(자료→수집, 픽셀 검수→정답, 준비+데이터셋→데이터셋, 학습, 평가, 적용 검토→승격 기록) |
 | `object` | 객체 승인·대기·제외 수와 최신 준비본(`exports`). 학습·평가는 학습기가 없어 `not_available` |
-| `omx` | `learning_links`의 OMX 결과 폴더와 `omx_segment_reviews`가 있는 폴더 수 |
-| `sim` | `--sim-config`가 없으면 `not_available`. 있으면 실험 목록의 수와 최근 상태(홈은 1분에 한 번만 읽는다) |
-| `vlm` | VLM 표가 있을 때 사진·확정·제외 수. 확정이 1장 이상이면 평가 칸이 열린다 |
+| `omx` | `learning_links`의 OMX 결과 폴더와 `omx_segment_reviews`가 있는 폴더 수. 학습 칸은 학습 과제 화면의 OMX 과제 수(`learning_task_records`의 `task` 중 `adapter`가 `omx`) |
+| `sim` | `--sim-config`가 없으면 `not_available`. 있으면 실험 목록의 수와 최근 상태, 평가 단계에 최근 run의 단계·과제 성공·판정(`sim_web.public()` 필드만, 승인 아님). 다음 할 일은 그 run을 여는 `/learning/sim?run=<run_id>`다(홈은 1분에 한 번만 읽는다) |
+| `vlm` | VLM 표가 있을 때 사진·확정·제외·임시 정답 수. 확정이 1장 이상이면 평가 칸이 열린다 |
 | `decision` | 모두 `not_available`(「Learning에 연결 전」) |
 
-모르는 칸은 숫자를 만들지 않고 이유를 적은 `not_available`이다. 표를 만들지 않고 읽으므로 홈을 열어도 VLM·OMX 표가 생기지 않는다. 홈(`/learning`)은 현재 작업 아래에 도메인마다 한 줄(이름, 여섯 칸, 막힌 이유, 다음 할 일 하나)을 보이고 `?domain=`을 따른다. 평가·승격 화면은 같은 `domains`의 평가·승격 기록 칸을 도메인별로 보인다. 390px에서는 줄이 세로로 쌓이고 가로 스크롤이 없다.
+모르는 칸은 숫자를 만들지 않고 이유를 적은 `not_available`이다. 표를 만들지 않고 읽으므로 홈을 열어도 VLM·OMX 표가 생기지 않는다. 홈은 도메인마다 한 줄(이름, 여섯 칸, 막힌 이유, 다음 할 일 하나)을 보이고 평가·승격 화면은 같은 `domains`의 평가·승격 기록 칸을 도메인별로 보인다. 390px에서는 줄이 세로로 쌓이고 가로 스크롤이 없다.
+
+**정답 두 단계(D-857 §4).** 도메인 줄의 `truth`는 `{confirmed, provisional, waiting, over_cap, href, reason}`이고, 홈의 줄과 정답 칸에 「확정 · 임시 · 대기」로 보인다. 확정은 사람이 내린 결정(객체·픽셀 승인, 저장한 OMX 구간 검수, VLM 사람 정답)이다. 사람이 모델 초안을 적용하고 승인하면 「맞음」, 고쳐서 승인하면 「고침」이고 둘 다 확정이다. 임시는 아직 결정하지 않은 모델 답이다. 객체는 `object_drafts`나 LiDAR 후보 상자가 있는 대기 사진, 픽셀은 `pixel_drafts` 초안이 있는 대기 사진이다. 확인 대기열은 도메인당 50건이고 가장 오래된 사진부터 열린다(`href`). 50건을 넘는 초안은 `over_cap`으로 세고 대기에 넣는다. VLM 임시 정답은 모델 합의라 대기열에 넣지 않고 점검으로 본다. OMX는 구간을 만드는 모델이 없어 임시가 「없음」이다. 평가셋 공개(`review_eval_bootstrap`)와 데이터셋 준비(`review_dataset`)는 승인 행만 읽으므로 임시 정답은 평가·승격 증거에 들어가지 않는다.
+
+### 같은 센터의 작업 공간 (D-857 §2)
+
+모델 PC는 센터 밖에도 검수 작업 공간을 별도 인스턴스로 돌린다(예: 인식 학습 루프가 묶인 v13 주행 학습, v13 평가, v12 장애물, 데이터셋 검수). D-485에 따라 작업 공간마다 클래스셋이 하나라 검수 DB를 합치지 않는다. 대신 센터가 그 목록을 보여 주어 들어가는 문은 센터 하나로 남는다. 자료 단계의 하위 메뉴 「작업 공간」 `/learning/workspaces`는 이 센터를 「이 센터」로 맨 앞에 두고, 연결한 작업 공간마다 이름·종류(학습·평가·검수)·메모와 같은 탭에서 여는 「열기」 링크를 보인다. 링크만 보이며 다른 작업 공간의 자료를 읽거나 옮기지 않는다. 같은 계정으로 로그인하지만 검수 자료는 작업 공간끼리 나누지 않는다.
+
+목록은 `--workspace-links <private-json>`으로 준다. 이 파일은 Git 밖의 private 파일로 **state 폴더 안 `<state>/workspace-links.json`**에 두고 소유 사용자 전용 권한(`chmod 600`)으로 둔다. 모델 PC 설치기는 이 위치에 파일이 있을 때만 `--workspace-links`를 서비스에 붙이고 설치마다 유지한다(다른 위치는 다음 설치 때 빠진다). 주소는 내부 망 이름이라 저장소에 넣지 않는다. 시작할 때 검사하고 하나라도 어긋나면 시작하지 않는다: `schema` 정확히 일치, 최상위 키는 `schema`·`workspaces`뿐, 20개 이하, `id`는 서로 다른 `[a-z0-9-]{1,40}`, `label` 1~60자, `note` 160자 이하(선택), `kind`는 `training`·`evaluation`·`review`, `url`은 host가 있는 `http(s)`이고 자격 증명·fragment·공백·`\`(브라우저가 `/`로 읽는다)가 없으며 300자 이하, 파일은 링크가 아닌 일반 파일이고 64 KiB 이하.
+
+```json
+{
+  "schema": "rosy.learning.workspace-links/1",
+  "workspaces": [
+    {"id": "v13-drivable-train", "label": "v13 주행 영역 학습", "url": "https://<host-tailscale-name>:<port>/learning",
+     "kind": "training", "note": "인식 학습 루프가 이 작업 공간에 묶여 있습니다."},
+    {"id": "v13-eval", "label": "v13 평가", "url": "https://<host-tailscale-name>:<port>/learning", "kind": "evaluation"},
+    {"id": "v12-obstacle", "label": "v12 장애물", "url": "https://<host-tailscale-name>:<port>/learning", "kind": "review"}
+  ]
+}
+```
+
+`GET /api/learning/workspaces`는 `{"configured": bool, "workspaces": [...]}`를 준다. 플래그가 없으면 `{"configured": false, "workspaces": []}`다. 협업 모드에서는 다른 GET과 같이 `view` 권한이 필요하다.
 
 ### 공통 학습 작업 화면 (D-458)
 
-같은 서버의 `/learning`에서 현재 자료의 검수 → 승인 자료 준비 → 데이터셋 생성 → 학습 → 평가 → 적용 검토를 이어간다.
-상단의 `다음 작업`으로 필요한 검수 화면을 열거나 이 화면에서 승인 자료를 준비한다.
-소유 실행기를 `--learning-control <binding.json>`으로 연결한 작업대는 결과 폴더를 수동 등록하지 않아도
-현재 검수 결정과 연결된 데이터셋·학습 시도·모델 버전을 표시하고 시작·중지·재시도를 요청할 수 있다.
-실행기 연결이 없으면 연결 안내를 표시한다. binding 설정은 기존 소유 실행기 설치 절차를 따른다.
-작업대 ID·검수 generation·decision digest를 대조하며, 현재 선택된 학습 시도의 데이터셋도 일치해야 한다.
-검수 결정을 바꾸면 이전 결과를 현재 완료로 표시하지 않는다. 후보 생성과 평가·READY 기록은 별도로 표시한다.
-화면은 5초마다 현황을 확인하고, 조회·권한 실패 시 완료 표시를 지우고 변경 요청을 막는다.
-현재 자료·모델의 연결 근거를 펼쳐 검수 버전·데이터셋·모델·실패 이유를 확인한다.
-저장 공간 점검과 과거 결과 연결은 별도 펼침 영역에서 사용한다.
+같은 서버의 `/learning`에서 사진 검수 상태와 기존 학습 도구의 결과를 확인한다.
 객체·픽셀 검수 건수와 각 대기 목록은 따로 표시한다. 객체 사진에서 픽셀 검수로 이동하면 같은 사진을 연다.
 작업 종류·이름·결과 폴더 전체 경로를 입력하면 SQLite에 연결 목록을 저장한다.
 지원 JSON 파일은 종류 선택 시 표시한다. JSONL 다운로드나 수동 파일 이동 없이
@@ -115,8 +132,7 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 
 Perception 단계 job, Pinky 원본 검증·행동 비교, OMX ACT, 영역 검수 반환,
 정책 산출물과 Isaac 환경을 구분한다. 보고서의 선언 상태·SHA와 등록 후 변경 여부만 확인한다.
-수동 연결한 보고서의 선언만으로 원본 closure나 승인 receipt를 검증하지 않는다.
-학습 수용은 기존 소유 실행기가 확인하며, 이 화면의 완료 표시는 정책 승격·로봇 활성화를 허가하지 않는다.
+이 화면은 원본 closure나 승인 receipt를 검증하지 않으며, 학습 시작·정책 승격·로봇 활성화 기능은 없다.
 새 결과 버전의 기준을 등록하려면 기존 연결을 해제하고 새 이름으로 연결한다.
 ### 작업 화면 사용 (D-461)
 
@@ -241,7 +257,7 @@ AI 보조의 현재 기능과 후속 방법, 의미/현재성 제한은 [AI 검�
 정규분포 가정이나 흐림 필터는 쓰지 않는다.
 
 ```powershell
-python learning/curation/perception/review_quality.py --state $RosyScratch/<name>/state --threshold 0.15 > $RosyScratch/<name>/exposure-preview.json
+python learning/curation/perception/review_quality.py --state X:/DevTemp/<name>/state --threshold 0.15 > X:/DevTemp/<name>/exposure-preview.json
 ```
 
 모델 PC에서 로컬 Qwen 영상 모델의 **참고 의견**을 만들려면 다음을 실행한다.
@@ -266,7 +282,7 @@ Ollama `qwen3-vl:8b-instruct`는 모델 PC의 `127.0.0.1:11434`에서만 사용�
 객체 클래스는 첫 실행의 `--object-classes <data.yaml>`로 정한다. 파일은 Ultralytics `data.yaml`의 `names`(목록 또는 번호 사전)를 읽고, 선택 항목 `display`(이름별 표시 문구)와 `colors`(이름별 `[r, g, b]`)를 받는다. 생략하면 D-423의 기본 6개 클래스다. 한 작업 공간은 객체 클래스셋 하나와 픽셀 클래스셋 하나에 묶인다. 다른 모델의 클래스로 검수하려면 다른 `--state`로 새 작업 공간을 만든다.
 
 ```powershell
-python learning/curation/perception/review_app.py --state $RosyScratch/<name>/state --source <source.jsonl> --human <human.jsonl> --images <image-root> --object-classes <data.yaml> --port 8767
+python learning/curation/perception/review_app.py --state X:/DevTemp/<name>/state --source <source.jsonl> --human <human.jsonl> --images <image-root> --object-classes <data.yaml> --port 8767
 ```
 
 픽셀 `classes.yaml`은 항목마다 선택 항목 `display`를 둘 수 있다. 차선 모델(왼쪽/오른쪽 차선, 횡단보도, 과속방지턱)용 파일은 `learning/curation/perception/classes/lane_lr5.yaml`이다. `/catalog`의 「클래스 파일 경로 (classes.yaml)」 칸에 이 파일 경로를 넣는다. 이 칸은 `/api/import` 요청 본문의 `classes`로 간다. 칸을 비우면 초안 마스크 zip 옆이나 카탈로그 옆의 `classes.yaml`을 쓴다. 초안 마스크가 없는 카탈로그도 작업 공간에 아직 픽셀 클래스가 없으면 카탈로그 옆 `classes.yaml`로 묶는다. 이미 픽셀 클래스가 묶인 작업 공간에서는 빈 칸이 기존 클래스를 그대로 쓴다. 초안 마스크는 같은 클래스셋으로 만든 것만 가져올 수 있다. labelmap 이름이나 indexed 초안의 classes sha가 묶을 클래스셋과 다르면 등록 전체를 거부하고, 화면은 「초안 마스크가 다른 클래스셋으로 만들어졌습니다」라고 알린다. 이때는 초안 없이 가져오거나 초안과 같은 `classes.yaml`을 지정한다.
@@ -295,6 +311,8 @@ python learning/registry/perception/export_class_names.py best.pt --out data.yam
 
 `--collaboration <private-config.json>`은 기존 검수 작업공간에 Rosy Account 로그인과 프로젝트 권한을 적용한다. 사람의 로그인은 모든 앱과 같은 Rosy Account 하나뿐이며(D-757), 이 앱은 자체 아이디·비밀번호나 HF 로그인을 받지 않는다. `/accounts`에서 Rosy Account 로그인, 개인별 복수 HF 연결, 계정 선택, dataset/model 가져오기와 같은 고정 버전 재시도를 수행한다. 기존 단일 사용자 이력은 신원 미확인으로 남는다. 협업 모드의 새 객체·픽셀 이벤트는 인증된 사용자와 revision을 기록하며 요청 본문에 적은 검수자 이름은 신원으로 쓰지 않는다.
 
+중앙 Account 모드의 세션·PKCE·HF 쿠키 이름은 설정의 프로젝트와 공개 HTTPS origin별로 구분한다. 같은 DNS 이름의 다른 포트에서도 서로 덮어쓰지 않는다. 기존 고정 이름의 중앙 앱 쿠키는 읽지 않으므로 업데이트 후 한 번 다시 로그인한다. 관리 설치기는 `state/learning-collaboration.json`을 코드 업데이트와 지원되는 보관 릴리스 전환에서 유지하며, loopback·HTTPS 프록시와 무인증 decisions-port 제외를 요구한다. 서비스별 설치 방법은 [Model PC 배포 설명](../../../../deploy/model_pc/README.md#account-프로젝트별-설치-d-757)을 따른다.
+
 설정 예제는 [`learning-collaboration.example.json`](../learning-collaboration.example.json)이다. 실제 설정·DB·키·OAuth 비밀·가져온 자료는 Git 밖의 private 경로에 둔다. `account_client_file`이 없는 설정은 시작을 거절한다. 모델 PC의 검수 앱 환경에서 다음을 준비한다.
 
 ```bash
@@ -318,9 +336,9 @@ account_id는 거절한다. 학습 권한 없이 로그인한 사용자는 로�
 
 개인 연결은 소유자 작업에만 사용한다. 프로젝트 연결에는 `manage` 권한과 `dataset:namespace/repo` 또는 `model:namespace/repo` 형식의 자원 허용 목록이 필요하다. 프로젝트 관리자 권한은 호스트 파일시스템 관리자 권한이 아니다. 협업 HTTP에서 임의 서버 경로를 받는 기존 `/api/import`, `/api/cad`, `/api/learning/register`는 사용할 수 없다.
 
-운영 앱은 HTTPS reverse proxy 뒤의 loopback에 바인딩한다. `public_origin`은 경로와 끝 슬래시 없는 정확한 HTTPS origin이다. 프록시는 공개 Host를 보존하여 `127.0.0.1:<review-port>`로 전달하고 외부에서 backend에 직접 접근하게 만들지 않는다. Host·Origin과 `Secure; HttpOnly; SameSite=Lax` 쿠키를 함께 사용한다. 프록시 로그에도 callback code/state와 요청 본문을 기록하지 않는다.
+끝난 HF 가져오기는 자료 화면(`/catalog`)의 「검수로 보내기」(`POST /api/learning/imports/review`, `{"id": ...}`, `import` 권한)로 정답 대기열에 들어간다. 서버 경로가 아니라 가져오기 id만 받으므로 협업 모드에서도 쓸 수 있다. 서버는 `completed` 작업의 공개 산출물 manifest·크기·SHA-256·media sidecar를 디스크에서 다시 검증하고, 작업 공간에 픽셀 클래스셋이 없거나 가져온 `classes.yaml`(원본 sha)·`data.yaml`(객체 클래스셋 sha)이 작업 공간 것과 다르면 거절한다(D-485). JPEG/PNG만 객체·픽셀 `pending`으로 등록하며 초안·승인은 만들지 않는다. 각 사진의 source에는 `source_kind: huggingface`와 `upstream`(저장소·고정 revision·경로·파일 해시·가져오기 id·요청자·보낸 사람)이 남고, 가져오기 작업에는 첫 등록 기록 `review`가 남는다. 다시 보내면 첫 기록을 돌려준다. 사람이 승인한 HF 사진은 `upstream`의 저장소·40자 revision·경로·sha256이 모두 있고 sha256이 사진 해시와 같을 때만 영상 증명 대신 그 파일 해시로 데이터셋에 들어간다(`review_dataset.hf_group`). 묶음은 `hf:<repo_type>/<repo_id>@<revision>`이고 늘 `train`에만 둔다. val·평가셋·승격 증거에는 넣지 않으며(D-857), val은 우리 카메라 묶음 둘 이상으로만 나눈다(HF 묶음뿐이면 거절). HF 사진과 같은 표현 해시로 묶인 우리 사진도 학습에만 들어가며 보고의 `own_forced_train`에 그 장수가 남는다. 카탈로그가 적은 `source_kind`·`upstream`은 버리므로 「검수로 보내기」를 거친 사진만 HF로 인정한다. 출처가 하나라도 빠지면 `source_video_hash_unknown`으로 막는다. manifest의 `external_sources`(HF가 있을 때만)와 빌드 보고에 장수·비율·묶음이 남고, 홈의 학습 흐름 기록에 「외부(HF) 사진 N장 · P% (학습에만)」이 보인다.
 
-중앙 Account 수신 모드의 Learning 세션·Account 로그인 바인딩·HF 연결 바인딩 쿠키는 `project_id`와 `public_origin`의 해시 접미사를 쓴다. 브라우저 쿠키는 포트로 격리되지 않으므로 같은 호스트의 다른 Learning 포트도 서로 다른 이름을 가져야 한다. 중앙 Account의 공통 SSO 쿠키는 바꾸지 않는다. 접미사 없는 예전 Learning 쿠키는 중앙 수신 모드에서 읽지 않으며, 적용 후 기존 브라우저는 다시 로그인한다. 중앙 수신기를 쓰지 않는 시험·개발 모드는 기존 쿠키 이름을 유지한다.
+운영 앱은 HTTPS reverse proxy 뒤의 loopback에 바인딩한다. `public_origin`은 경로와 끝 슬래시 없는 정확한 HTTPS origin이다. 프록시는 공개 Host를 보존하여 `127.0.0.1:<review-port>`로 전달하고 외부에서 backend에 직접 접근하게 만들지 않는다. Host·Origin과 `Secure; HttpOnly; SameSite=Lax` 쿠키를 함께 사용한다. 프록시 로그에도 callback code/state와 요청 본문을 기록하지 않는다.
 
 ```bash
 python learning/curation/perception/review_app.py \
@@ -328,7 +346,23 @@ python learning/curation/perception/review_app.py \
   --collaboration /private/learning/learning-collaboration.json
 ```
 
-위 예는 초기화된 작업공간이다. 신규 작업공간은 기존 초기화 인자 또는 `--empty-training`을 사용한다. 협업 모드에서 `--decisions-port`는 인증 없는 우회 경로라 함께 사용할 수 없다. 기존 자동화가 그 포트를 쓴다면 인증된 소비 경로를 마련하기 전까지 운영 협업 전환을 활성화하지 않는다.
+위 예는 초기화된 작업공간이다. 신규 작업공간은 기존 초기화 인자 또는 `--empty-training`을 사용한다. 협업 모드에서 `--decisions-port`는 인증 없는 우회 경로라 함께 사용할 수 없다. 그 포트를 쓰던 같은 PC bridge는 아래의 `authority.state` 경로로 바꾼다. state 폴더와 DB가 소유 사용자 전용 권한일 때만 읽으므로, 이 조건을 맞추기 전에는 운영 협업 전환을 활성화하지 않는다.
+
+같은 PC의 `review_bridge.py`는 협업 모드에서 `authority.endpoint` 대신 `authority.state`를 쓴다. 검수 state의 `reviews.sqlite3`를 SQLite `mode=ro`로 열어 `/api/decisions`와 같은 문서(`review_evidence.decisions`)를 읽고, 표를 만들거나 쓰지 않는다. `endpoint`와 `state` 중 정확히 하나만 둔다. `state`는 링크·`..` 없는 정규 절대 경로여야 하고, DB의 `workspace_id`가 설정값과 다르면 거절한다. 홈 폴더가 심볼릭 링크를 거쳐 닿는 경로도 안전 쪽으로 거절하므로 실제 경로를 쓴다. WAL 모드 DB는 읽기 전용 연결도 `-wal`/`-shm`을 만들 수 있어 거절한다. 무인증 loopback 포트는 같은 PC의 모든 사용자에게 열리지만, state 읽기는 파일 권한으로 소유 사용자에게만 허용되므로 범위가 더 좁다. 그래서 POSIX에서 bridge는 state 폴더·DB·있는 `-journal`/`-wal`/`-shm`이 현재 사용자 소유이고 group/other 권한이 없을 때만 읽는다(Windows는 이 검사 없이 기존 ACL을 따른다). 배포 단계: `chmod 700 <state>; chmod 600 <state>/reviews.sqlite3`. bridge 설정을 바꾸면(예: `authority.endpoint`에서 `authority.state`로 전환) 새 `--out` 작업 폴더로 시작한다. 작업 상태가 입력 서명에 묶여 있어 기존 폴더는 `job inputs changed; use a new job directory`로 거절된다.
+
+```json
+{
+  "source": "~/review-state/exports",
+  "peer": "local",
+  "transport": "local",
+  "remote_reviews": "~/rosy-ml/reviews",
+  "interval_s": 60,
+  "max_attempts": 3,
+  "authority": {"state": "~/review-state", "workspace_id": "<review-workspace-id>"}
+}
+```
+
+`~/...`는 자리표시다. 실제 설정에는 확장된 절대 경로를 쓴다.
 
 HF OAuth는 등록된 앱과 실제 HTTPS callback이 있어야 한다. 준비되지 않았으면 `oauth: null`을 유지한다. Rosy Account 로그인 후 제한된 HF 읽기 토큰을 데이터 연결로 등록할 수 있다. HF OAuth와 PAT는 데이터 연결 수단이며 로그인 수단이 아니다. OAuth를 구성할 때 private 설정의 `oauth`를 다음 모양으로 바꾼다.
 
@@ -379,11 +413,9 @@ private 협업 설정의 `import_limits`는 `max_file_bytes`, `max_total_bytes`,
 
 `rights`는 `internal_use: true`와 비어 있지 않은 `evidence`를 요구한다. gated 팀 이용은 `gated_team_use: true`, `team_use_evidence`를 별도로 기록한다. 사용자 선언은 검수·학습 권리 승인으로 승격되지 않는다. 기존 검수 version 충돌은 409, 인증·권한 실패는 401/403, 입력 오류는 400이다.
 
-데이터 연결 해제는 해당 토큰을 철회하며, 검증된 HF 신원이 그 사람에게 묶인 기록은 남겨 다른 사람에게 넘어가지 않게 한다. 사람의 탈퇴·권한 변경은 Rosy Account 계정 관리에서 한다.
+데이터 연결 해제는 해당 토큰을 철회하며 이미 연결된 HF 로그인 신원까지 제거하지 않는다. 내부 사용자 탈퇴·권한 변경은 private 설정에서 관리하고 로그인 수단 제거는 별도 신원 절차로 처리한다.
 
 계정 화면은 현재 권한에 맞춰 연결·가져오기·해제 버튼을 표시한다. 프로젝트 연결 해제는 관리자, 작업 취소·재시도는 가져오기 권한을 가진 요청자에게만 표시하며 서버에서도 같은 조건을 검사한다. 세션 만료·철회가 다음 요청이나 상태 조회에서 확인되면 사용자·작업 목록과 입력 중인 토큰·자료 요청을 지우고 로그인 화면으로 돌아간다. 서버의 일시적 오류는 로그아웃으로 처리하지 않으며 `최신 상태 확인`으로 재시도한다.
-
-Auth에서 앱 접근이 거부되면 공통 로그인 화면에서 현재 계정·프로젝트 권한을 확인하거나 다른 계정으로 로그인한다. 기존 쿠키만으로 거부된 요청을 자동 반복하지 않는다. Learning callback이 만료되거나 연결에 실패하면 계정 화면에서 이유와 `Rosy Account로 로그인`·`로그인 상태 다시 확인`을 제공한다. 권한 거부는 로그인 성공과 구분하며 필요한 권한은 계정 관리자가 부여한다. 오류 복구가 사용자 권한을 늘리지는 않는다.
 
 OAuth 사용 시 `public_origin`과 `redirect_uri`의 `/oauth/huggingface/callback` 주소가 정확히 일치해야 한다. 누락·다른 호스트·다른 경로·HTTP callback은 작업공간에 협업 바인딩을 기록하기 전에 시작을 거부한다. 설정을 고친 뒤 다시 시작한다.
 
@@ -400,23 +432,6 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 공간 사전 점검은 목적지 ID와 다운로드·임시 복사·변환 추가 공간·업로드 예상 크기를 받는다. 로컬 세 항목은 같은 목적지 볼륨에 존재하는 사본으로 합산하고 reserve_bytes를 더한다. 공간을 예약하거나 전송하지 않는다. 실제 작업 시작 시 자원 재검사가 필요하다. 웹 경로 입력, 삭제, 외부 게시와 유료 증설을 제공하지 않는다.
 
 원격 quota는 미확인이 기본이다. 공식 quota API를 호출하지 않는다. 관리자가 수동 확인한 경우에만 remote_quota에 remaining_bytes, source(공개해도 되는 근거 설명), measured_at, expires_at(UTC epoch 초 정수)을 기록한다. 측정 전/만료 후에는 보류한다. 한 설정의 한 대상 quota이며 여러 계정 용량을 더하지 않는다. 업로드 요구량이 0이면 원격 quota는 점검하지 않는다. 최신 상태는 HTTP 401/403·오류가 발생하면 화면에서 지우고 재시도를 제공한다.
-### 카메라 맞춤 (D-792)
-
-`/learning/camera`는 모방학습 녹화 전에 카메라를 같은 자리로 되돌리는 화면이다. 움직이지 않는 배경이 밝게 보이는 사진 한 장, 내부 교정 값, 선택 실측값으로 촬영 기준(`rosy.camera-setup-reference/1`)을 만든다. 기본 `features`는 마커 없이 기준 사진의 배경 특징점으로 화면 이동·pan·tilt·roll·크기를 잰다. 선택 `markers`는 작업면 마커(ArUco `DICT_4X4_50`)와 마커 배치(작업대 원점 기준 cm)로 높이·거리까지 잰다. 기준은 `<state>/camera-setup/<revision>.json`과 같은 이름의 `.jpg`로 저장하고 덮어쓰지 않는다. 읽을 때마다 봉인 revision과 사진 SHA-256을 다시 검사하며, 어긋나면 400이다. 판정은 녹화를 막지 않는 조언이다(shadow).
-
-| 방법 | 경로 | 내용 |
-|---|---|---|
-| GET | `/api/learning/camera/references` | `references`: 최신순 촬영 기준 전체 |
-| GET | `/api/learning/camera/stills/<revision>` | 기준 사진 JPEG |
-| POST | `/api/learning/camera/reference` | `image_jpeg`(base64), `camera_role`, `camera_identity`, `fps`, `intrinsics`, `method`(`features`·`markers`), `layout`(`features`는 `[]`), `measured`, `guides`, `check_pose`(손목 카메라만, 나머지는 null); 협업 모드는 다른 `/api/learning/` 쓰기와 같이 `manage` 권한 |
-| POST | `/api/learning/camera/check` | `reference_revision`, `image_jpeg`, `camera_info_sha256`, `joints`(기준에 확인 자세가 있으면 관절 이름→rad, 아니면 null) → `check`(`ok`/`adjust`/`unmeasurable`과 차이 값), `features`는 `homography`(기준→지금 3×3), `markers`는 `detected`(마커 ID별 꼭짓점 픽셀) |
-
-화면은 기준의 안쪽 틀·가이드·마커를 점선으로, 같은 윤곽의 지금 위치(호모그래피로 옮긴 것 또는 검출한 마커)를 실선으로 그리고 기준에서 현재로 가는 화살표를 그린다. 맞춘 특징점이 150개 미만이면 측정 불가다. 기준 사진 겹치기 비율을 0–100%로 바꿀 수 있다. POST 본문은 다른 API와 같이 1 MiB JSON 이하이므로 큰 사진은 줄여서 올린다.
-
-### 모방학습 (D-792 S4)
-
-`/learning/omx`는 읽기 전용이다. `GET /api/learning/omx`는 `omx` 종류로 연결한 학습 행 가운데 `intake-receipt.json`이 있는 폴더만 `sets`로 돌려준다. 각 세트는 `id`, `name`, `trainable`(`reviewed_splits` 결과: `ok`와 `counts` 또는 `reason`), `episodes`(검수 결정 필드와 역할별 카메라 판정 `before`·`after`·`pose_error_rad`), `camera_setup`(`mode`, `references`, `camera_info_sha256`)을 가진다. 서버 경로는 넣지 않는다. 쓰기 API는 없다.
-
 # AI 실행과 저장 버전 조회 (D-764)
 
 객체/픽셀 화면의 **AI 초안과 확인**에서 저장된 사진 revision으로 새 초안을 요청한다.
@@ -461,9 +476,43 @@ SAM 두 필드는 픽셀 보완에만 필요하다. Qwen 모델 이름과 loopba
 pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROSY_RUN_BROWSER_TESTS=1이
 필요하다. 모의 모델 연결 시험은 실제 GPU 모델 실행이나 정답 기반 정확도를 증명하지 않는다.
 
+## 로봇 학습센터의 OMX 어댑터
+
+`/learning`은 로봇·과제별 자료와 학습을 연결하는 기존 Learning 프로젝트의 공통 진입점이며, `/learning/omx`는 첫 로봇암 어댑터다. Model PC와 AI PC는 같은 프로젝트의 계산 호스트이며 새 OMX 전용 프로젝트를 만들지 않는다. 다른 로봇의 학습에는 해당 어댑터와 실행기 준비가 필요하다.
+
+`--omx-center-config <private.json>`은 `/learning/omx`의 호스트 전용 오프라인·지속 학습을 활성화한다. 설정은 `schema=rosy.omx.center-config/1`, 소스·검수 상태와 겹치지 않는 절대 `root`, `python={act:<실행 파일>,hilserl:<실행 파일>}`다. 운영 설치·업데이트는 기존 보호된 검수 서비스의 `deploy/model_pc/install_review_release.py` 경로를 따른다. private 설정을 기존 `state/omx-center.json`에 두면 설치기가 대상 소스의 CLI 지원을 확인해 연결하며, 지원하지 않는 보관 릴리스로 전환할 때 플래그를 제거한다. 중앙 Account 협업 설정·loopback·HTTPS 보호와 기존 계정·라벨 DB는 유지한다. 처음 연결한 검수 프로젝트를 학습 root에 영속 바인딩하며 다른 프로젝트로 같은 root를 열면 거절한다.
+
+| 경로 | 계약 |
+|---|---|
+| GET `/api/learning/omx/center` | 데이터·실제 작업·실행기 상태. 미설정이면 `not_configured`. |
+| POST `…/upload` | UUID `upload_id`, 평면 `name`, 연속 `offset`, 256 KiB 이하 base64 `data`. 같은 offset/bytes의 재전송은 같은 끝 offset 반환, 다른 겹침은 거절. 부분 write의 일치 prefix 뒤만 append. 파일·디렉터리 sync 후 응답. 폴더당 512 MiB/1000개 파일 제한. 게시 후에는 같은 바이트 확인만 허용. |
+| POST `…/publish` | `upload_id`, 표시 `name`. 데이터 해시·배열·분할 검증 후 등록. 이동 후 SQL 전 중단은 재검증해 복구하며 이동 디렉터리 sync 후 commit. 같은 identity 재시도는 기존 등록을 반환하되 실제 폴더 누락은 거절. |
+| GET `…/profiles` | 현재 프로젝트 학습 root에 저장된 불변 팔·카메라 프로필 버전 목록. |
+| GET `…/profile/<UUID>` | 저장 당시의 정확한 프로필 JSON 다운로드. |
+| POST `…/profile` | 검증할 `profile`, 멱등 UUID `request_id`, 선택적 `parent_id`. 작성 신원은 서버가 바인딩하며 기존 버전을 수정하지 않음. |
+| POST `…/export` | 등록된 OMX `prepared_id`(32자리 소문자 hex), `name`, `profile` 객체, 멱등 UUID `request_id`, 선택적 `review_id`, `profile_id`. 저장 선택 시 같은 입력인지 확인하고 서버의 정확한 저장 JSON 사용. 등록 root와 선택한 불변 검토 버전만 해석해 고정 native 변환 worker를 실행. 생산 검토·원본 해시·단위/카메라 매핑이 맞아야 함. |
+| GET `…/review/<prepared-id>` | 원본 지문·episode identity·현재 검토 버전·판정·생산 학습 가능 여부. 원본 판정 파일은 변경하지 않음. |
+| GET `…/review-frame/<prepared-id>/<source-revision>/<episode>/<frame>/<camera-index>` | 현재 원본에 묶인 실제 RGB JPEG. episode 경계와 공식 reader 행 identity를 검증하고 변경·대체 프레임은 거절. |
+| GET `…/review-frame-set/<prepared-id>/<source-revision>/<episode>/<frame>/<camera-indices>` | 쉼표로 나열한 서로 다른 1~8개 카메라를 공식 reader의 한 기록 행에서 읽음. prepared_id/source_revision/episode_index/frame_index/index/timestamp_seconds/fps와 frames(camera_index,camera_key,jpeg_base64,width,height) 반환. 총 16M pixels/8MiB JPEG 제한, 누락·변경·잘못된 시각 거절. |
+| POST `…/review` | `prepared_id`, `source_revision`, 전체 episode 순서의 `decisions`(`episode_index,outcome,split,object_result,reason`), `reviewer`, `confirmed=true`, 멱등 `request_id`. 인증 모드 reviewer는 서버 신원으로 대체. 미완성 분할은 draft로 보존하며 학습 가능으로 표시하지 않음. |
+| POST `…/run` | `dataset_id`, `method=act\|hilserl`, `steps=1..100000`, `batch_size=1..64`, `device=cpu`, `seed`, 멱등 `request_id`, 선택적 `profile_id`, `arm_id`. 저장 프로필은 원래 전체 데이터와 비교. 독립 다중 팔은 `arm_id` 필수이며 선택 팔 정책을 학습, 공동 모드는 단일 팔 선택 거절. 고정된 worker만 실행. |
+| POST `…/online-run` | 같은 요청 형식, `method=hilserl`만 허용. schema 2의 고정 관절별 행동 범위 필요. `steps`는 입력 하나당 업데이트 예산이며 새 경험을 기다리는 같은 worker를 유지. |
+| POST `…/experience` | 실행 중 작업의 `id`, 등록된 `dataset_id`, 멱등 UUID `request_id`. 서버 경로·명령은 받지 않음. 영속 예약 후 연속 번호 큐로 전달. |
+| POST `…/stop` | `id`. 저장한 Linux 프로세스 시작 시각·boot·명령 인자를 확인한 소유 그룹만 중단. |
+| GET `…/artifact/<run-id>` | 완료·weights 해시를 검증한 모델·프로필·정규화·평가 ZIP. 지속 작업은 실행 중에도 마지막으로 완료한 immutable 버전을 제공. |
+
+POST는 기존 Host/Origin·토큰·본문 크기 검사를, 협업 모드는 `manage` 권한을 거친다. 데이터 업로드 출처는 사용자가 선언하며 합성 시험은 `synthetic_smoke`로 보존한다. 실제 팔 제어·운영 모델 승격·현장 경험 생성은 이 API에 없다. 실패한 작업은 새 요청 identity로 재요청하며 같은 요청 identity의 재시도는 같은 기록을 돌려준다. 지속 작업 화면은 대기/학습·정책 버전·입력별 queued/consumed/rejected를 표시한다. 최초 train 정규화와 eval을 고정하고 새 입력의 프로필·원본 분할·해시를 재검증한다. 누출·변경·중복 입력은 추가 업데이트를 일으키지 않는다.
+
+Native export는 `execution_mode=native_export`로 학습과 구분한다. 화면에서 등록 세트와 프로필 파일을 선택하고 실제 progress phase·오류·중단·완료 데이터 ID를 본다. 성공 시 배열과 변환 revision을 검증한 데이터만 자동 등록하며 이동 후 SQL commit 전 장애도 복원한다. 변환 결과에는 모델 ZIP이나 학습 평가가 없다. 현재 단일 native 팔을 요구하며 카메라는 원본 metadata의 정확한 키·크기와 프로필을 대조해 추가 키도 보존한다. raw-session 준비는 연결하지 않았다.
+
+검수 열기는 원본 지문과 세션/cycle·frame/camera를 표시하며 원래 판정을 기본값으로 유지한다. 저장은 별도 `reviews/<UUID>/decisions.json,review.json` 및 DB의 불변 버전을 만들고 기존 원본을 덮어쓰지 않는다. 로컬 이름은 `local_unverified`, 인증된 사용자는 `authenticated`로 구분한다. 최종 파일은 완성된 임시 파일에서 원자적으로 게시해 부분 쓰기 실패 후 같은 요청으로 복구한다. 원본이 바뀌면 다시 불러와야 한다. 일반 새로고침은 작성 중 판정을 지우지 않는다. 저장한 검토를 변환에 쓸 때 체크박스로 명시 선택하며, worker는 원본 지문·스냅샷 해시·생산 분할을 다시 검증한다. Fixture 자료는 볼 수 있어도 production 학습용으로 변환할 수 없다. 프레임 확인/명시 체크박스가 실제 사람의 전체 관찰이나 실물 성공을 자동 증명하지 않는다.
+
+여러 카메라 보기는 같은 원본·시도·프레임·기록 시각의 묶음을 한 번에 표시한다. 카메라가 8개를 넘으면 선택 카메라를 포함한 묶음으로 이동하며 원래 영상 비율을 유지한다. 자동 프레임 넘김은 직전 조회가 끝난 뒤 다음 행을 읽고 오류·마지막 프레임·자료/시도/보기 변경에서 멈춘다. 실제 재생 속도는 읽기 시간의 영향을 받는다. 표시 시각은 episode 상대 기록 행의 timestamp이며 촬영 장치의 물리 동기화 증거는 별도다. 검토 재생이 사람의 결과·교정 라벨을 자동 작성하지 않는다.
 ## SIM 실험 (D-834 Proposed)
 
-작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
+SIM 웹 어댑터와 화면은 조건 확인·실행 요청을 위한 준비 경로다. 현재 공개 소스에는 실행에 필요한 `learning/envs/isaac/run_control.py`가 포함되어 있지 않다. 운영자가 검증된 외부 실행 소스·SDK·workspace binding을 준비하기 전에는 실행 연결 미설정으로 표시하고 실행을 허용하지 않는다. 이 화면의 추가나 모의 실행 시험을 실제 SIM 실행·로봇 학습 수용 근거로 쓰지 않는다.
+
+작업 목록의 **SIM 실험**에서 조건 확인·실행·목록·상세·중지 요청·새 run 재실행을 사용한다. 기존 isaac 결과 폴더 연결과 `state.json`/`summary.json`·JPG 열람은 유지한다. 같은 모델 PC의 CLI와 불변 입력·run ID·결과·보고서를 공유한다. 모델 검사 통과를 물리 팔레타이징·학습 수용으로 표시하지 않는다. `?run=<run_id>`로 열면 목록을 읽은 뒤 그 run을 클릭과 같은 방법으로 선택한다. SIM 판정과 과제 성공은 평가 근거일 뿐 승인·승격이 아니다(D-793, D-857). 혼합 적층·회수·협응 복구는 선행 검증 사유와 함께 비활성이다.
 
 서버는 선택적 `--sim-config PRIVATE.json`을 사용한다. 설정이 없으면 SIM 연결 미설정으로 응답하고 기존 검수는 계속 동작한다. 이 파일은 현재 계정 소유·0600이며 검수 state의 workspace_id와 결속한다.
 
@@ -478,17 +527,57 @@ pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROS
 }
 ```
 
-웹 프로세스는 외부 source에서 모듈이나 SDK를 import하지 않는다. 고정 entrypoint를 별도 `/usr/bin/python3`로 실행해 bounded JSON 요청을 전달하며 source·binding 지문을 대조한다. 동일 workspace binding은 모델 PC CLI가 사용하는 외부 run root를 가리킨다. SDK 설치·고정 source 전송은 [공통 실행 절차](../../../../docs/deployment/isaac-experiment-runs.md)를 따른다. 서명된 웹 payload는 `sim_web.py`·SIM HTML/JS를 필수 포함한다.
+웹 프로세스는 외부 source에서 모듈이나 SDK를 import하지 않는다. 고정 entrypoint를 별도 `/usr/bin/python3`로 실행해 bounded JSON 요청을 전달하며 source·binding 지문을 대조한다. 동일 workspace binding은 모델 PC CLI가 사용하는 외부 run root를 가리킨다. 기존 Isaac SDK 준비는 [Isaac 환경 안내](../../../envs/isaac/README.md)를 참고하되, 웹 실행용 외부 소스와 binding은 별도 검증해야 한다. 서명된 웹 payload에는 `sim_web.py`·SIM HTML/JS를 포함해야 한다.
 
 조회는 view, check/start/stop은 manage 권한과 기존 CSRF·Origin 검사가 필요하다. 로컬 비협업 검수에서는 실행·중지를 허용하지 않는다. 브라우저는 accountFetch로 다른 탭의 신원 변경 뒤 응답 적용을 막는다. 응답이 유실되면 같은 start 요청을 sessionStorage에 보존하고 자동 재시작하지 않는다. 조건을 다시 확인한 뒤 같은 요청을 재전송하거나 목록의 run을 조회한다. **새 실험으로 다시 실행**은 새 요청/run과 parent_run_id를 만들고 원본을 보존한다.
 
 원시 SDK 로그·환경변수·private 경로는 웹으로 보내지 않는다. 최종 모델 검사 JSON만 manifest의 해시·크기를 확인해 제공하며 기본 검사는 영상이 없음을 표시한다. UNKNOWN·중지 요청·실제 종료·모델 검사 결과를 구분한다. `test_sim_web.py`, 명시적 `ROSY_RUN_BROWSER_TESTS=1`의 `test_sim_browser.py`와 공통 셸·서명 payload 누락 거절 시험으로 검증한다. 실제 SDK 실행은 별도 증거다.
 
+## 공통 로봇·과제 학습 (D-840)
+
+`/learning/tasks`는 학습 대상 등록 → 과제·참여 구성 → 자료·방법·실행 → 결과를 연결한다.
+등록은 기존 device ID에 대한 학습 참조이며 실제 장치 연결·보정·실행 권한을 만들지 않는다.
+여러 종류를 등록할 수 있고, 현재 실행 어댑터는 OMX다. 미지원 종류는 준비 사유를 표시한다.
+리더·게임패드, 여러 팔·카메라의 설정은 기존 OMX 프로필 화면에서 준비한다.
+
+| 경로 | 계약 |
+|---|---|
+| GET `/api/learning/tasks` | 현재 프로젝트의 robots/tasks, 저장 프로필, 자료, 작업, 실행기 가용 상태, 서버 `host_id`, CSRF token. |
+| POST `/api/learning/robots` | `request_id` UUID, `name`, `kind`, `model_revision`, `device_id`. 불변 학습 대상이며 `device_verified=false`. |
+| POST `/api/learning/tasks` | `request_id`, `name`, `objective`, `success`, `failure`, `reset`, `mode`, `adapter`, 순서 있는 `participants=[{robot_id,component_id,role}]`. OMX에는 서버가 읽을 `profile_id`가 필요하다. |
+| GET `/api/learning/tasks/export?id=<UUID>` | 같은 프로젝트 안에서 전달할 과제·참여 로봇·프로필 메타데이터. 단일 identity만 허용한다. |
+| POST `/api/learning/tasks/import` | `rosy.learning.task-transfer/1` 패키지. 프로젝트·과제 revision·실제 OMX 프로필 스키마·참여 구성을 검증한 뒤 원자적으로 반영한다. |
+
+조회는 기존 view, 생성·가져오기는 manage 권한을 요구한다. POST는 기존 세션·CSRF·Origin과
+1 MiB 본문 제한을 사용하며 작성자는 서버 신원이다. 비협업 loopback 작업은 `local_unverified`다.
+다른 사용자·프로젝트 신원, 실행 명령·소스 경로·자격을 입력해 권위를 만들 수 없다.
+전달 파일은 계정·세션·HF 연결·키를 포함하지 않으며 가져온 관리자의 로컬 신원을 기록한다.
+
+계산 호스트는 불변 과제가 아닌 각 실행의 속성이다. private `omx-center.json`의 선택적
+`host_id`를 `model` 또는 `ai`로 설정한다. 미설정이면 기존 과거 OMX 경로는 유지하되
+과제 결속 실행은 거절한다. 같은 과제를 다른 호스트에서 사용하려면 먼저 같은 프로젝트의
+보호된 원본에 과제 메타데이터와 검증된 자료를 명시적으로 전달한다. 자동 동기화는 없다.
+
+기존 run/online-run 요청에 `task_id`와 `compute_host`를 함께 넣으면 서버가 실제 호스트,
+전체 프로필 revision, 로봇/device/component/role 순서와 선택 팔을 검증한다. 자료 ID와
+revision은 한 과제에 결속하며 다른 참여 그룹으로 암묵적으로 재사용하지 않는다. 과거 자료를
+처음 연결할 때는 `historical_dataset_attachment`로 기록하며 원래 과제별 촬영 증거로 표시하지 않는다.
+같은 과제에서 ACT와 HIL-SERL을 비교하거나 독립 팔별로 학습하는 것은 허용한다.
+지속 경험의 추가 자료에도 같은 검사를 적용한다. 작업별 경험 추가와 중지는 host worker에만
+적용하며 저장된 결과를 보존한다. 실물 로봇 actor·사람 개입·보상·초기화 연결은 별도 수용이다.
+
+worker request, run, 평가 결과에 같은 과제 snapshot을 남긴다. 완료 모델 ZIP의
+`learning-task.json`은 과제·참여 구성·실제 호스트와 평가 파일 SHA256을 포함한다.
+평가·요청·완료 결과의 snapshot이 다르면 다운로드를 거절한다. 과제 없는 기존 작업은 그대로 읽는다.
+코드 전환 전에는 새 실행·추가 경험 게시를 중단하고 활성 학습 작업을 끝내거나 중지한다.
+공식 설치기는 활성 작업·손상된 학습 상태를 사전 검사하며, 이 검사가 동시 요청에 대한
+배포 잠금을 대신하지는 않는다. 구버전 rollback 중에는 과제 결속 지속 작업을 재개하지 않는다.
+
 ## VLM 판단 (D-853 Proposed)
 
 정답 메뉴의 **VLM 판단**(`/learning/vlm`)에서 닫힌 VLM 질문(`tools/vlm_question_bench.py`)의 정답을 다룬다(T1, `docs/plans/2026-10-23-vlm-fast-judge-design.md`).
 
-**정답 두 단계(D-857 §4–5).** 사진×질문의 정답은 **임시**(모델 합의)와 **확정**(사람)이다. 사람이 단 답과 점검에서 「맞음」·「고침」으로 저장한 답이 확정이다. 임시 정답은 저장하지 않고 읽을 때마다 모델 답에서 만든다. 합의 규칙(시작값, `vlm_judge.py` 맨 위 상수): 서로 다른 모델 2개 이상이 같은 답을 내고 각각 p ≥ 0.8이며, 답을 낸 어떤 모델도 다른 답을 내지 않아야 한다. 같은 모델의 Ollama·transformers 런타임과 `@<px>` 크기는 한 모델로 세고 가장 확신 높은 런타임을 쓴다. 합의는 승인·승격이 아니다(D-514 §5, D-853 §3).
+**정답 두 단계(D-857 §4–5).** 사진×질문의 정답은 **임시**(모델 합의)와 **확정**(사람)이다. 사람이 단 답과 점검에서 「맞음」·「고침」으로 저장한 답이 확정이다. 임시 정답은 저장하지 않고 읽을 때마다 모델 답에서 만든다. 합의 규칙(시작값, `vlm_judge.py` 맨 위 상수, 평가·내보내기는 `vlm_judge_report.py`): 서로 다른 모델 2개 이상이 같은 답을 내고 각각 p ≥ 0.8이며, 답을 낸 어떤 모델도 다른 답을 내지 않아야 한다. 같은 모델의 Ollama·transformers 런타임과 `@<px>` 크기는 한 모델로 세고 가장 확신 높은 런타임을 쓴다. 합의는 승인·승격이 아니다(D-514 §5, D-853 §3).
 
 사람은 대기열만 본다. 평가셋은 한 번 끝내는 일이고, 의견 갈림·점검은 계속 들어오는 일이다(의견 갈림은 보기마다 오래된 사진부터 50장까지만 열고 나머지는 「대기」로 센다. 점검은 열린 의견 갈림+점검이 50건 미만일 때만 더한다).
 
@@ -502,17 +591,17 @@ pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROS
 
 ```bash
 python learning/curation/perception/vlm_judge.py export-disputes --state <VLM_STATE> --out debate.jsonl
-python tools/vlm_question_bench.py --debate-input debate.jsonl --debate-as <가져온 모델 이름> --model <HF id> [--quant 4bit] [--long-side 448] [--debate-rounds 2] [--ollama http://127.0.0.1:11434] --out <dir>
+python tools/vlm_question_bench.py --debate-input debate.jsonl --debate-as <가져온 모델 이름> --model <HF id> [--quant 4bit] [--long-side 448] [--debate-rounds 2] [--ollama <loopback Ollama URL>] --out <dir>
 python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --rows <dir>/rows.jsonl --questions <questions.json> --model <같은 모델 이름>
 ```
 
-`export-disputes`는 대기 중이고 평가셋 밖이며 멈추지 않은 질문 중 합의가 없는 (사진, 질문)마다 상태 안 사진 경로, 보기, question_set, 질문 id·문장·선택지와 모든 모델의 지금 의견(모델, 런타임, 답, p)을 한 줄로 쓴다. 벤치의 토론 모드는 같은 사진과 닫힌 질문에 다른 모델의 답과 확률을 「model A/B」로 익명화한 짧은 메모를 붙여 다시 묻고, 선택지 확률은 지금처럼 읽는다(transformers prefix/suffix 또는 Ollama top_logprobs). 이 모델이 전에 답한 질문만 묻는다. 결과 행은 `frame`·`view`·`long_side`와 `debate:{질문: {answer, p}}`를 가진다. 기본 한 판, `--debate-rounds 2`는 둘째 판에 자기 첫 판 답을 보이고, 다른 모델의 토론 답은 다시 내보낸 `debate.jsonl`에서 「after debate」로 보인다. 가져오기는 이를 같은 모델 이름의 런타임 `debate`로 저장하고 뒤 판이 앞 판을 바꾼다. 그 모델이 그 질문에 답한 적이 없으면 거절한다. 합의에서 토론 답은 그 모델의 다른 런타임 답을 대신하므로 모델 수가 늘지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 그대로 따르고, 평가 탭은 토론으로 합의한 임시 정답 수를 따로 센다.
+`export-disputes`는 대기 중이고 평가셋 밖이며 멈추지 않은 질문 중 합의가 없는 (사진, 질문)마다 상태 안 사진 경로, 보기, question_set, 질문 id·문장·선택지와 모든 모델의 지금 의견(모델, 런타임, 답, p)을 한 줄로 쓴다. 벤치의 토론 모드는 같은 사진과 닫힌 질문에 다른 모델의 답과 확률을 「model A/B」로 익명화한 짧은 메모를 붙여 다시 묻고, 선택지 확률은 지금처럼 읽는다(transformers prefix/suffix 또는 Ollama top_logprobs). 이 모델이 전에 답한 질문만 묻는다. 결과 행은 `frame`·`view`·`long_side`와 `debate:{질문: {answer, p}}`를 가진다. 기본 한 판, `--debate-rounds 2`는 둘째 판에 자기 첫 판 답을 보이고, 다른 모델의 토론 답은 다시 내보낸 `debate.jsonl`에서 「after debate」로 보인다. 가져오기는 이를 같은 모델 이름의 런타임 `debate`로 저장하고 뒤 판이 앞 판을 바꾼다. 그 모델이 그 질문에 답한 적이 없으면 거절한다. 합의에서 토론 답은 그 모델의 다른 런타임 답을 대신하므로 모델 수가 늘지 않는다. 토론 답이 `none_in_top`(선택지 없음)이면 그 모델의 그 질문은 「답 없음」으로 바뀌어 합의를 막고, 앞 런타임의 답은 다시 세지 않는다. 토론 답도 임시 정답이며 점검·멈춤 규칙을 그대로 따르고, 평가 탭은 토론으로 합의한 임시 정답 수를 따로 센다.
 
 **질문 세트 v3.** v2 토론이 하나도 정하지 못한 세 질문은 뜻이 모호했다. v3는 `front.lane_tape`를 화면 왼쪽·오른쪽 절반의 테이프 `front.tape_left`·`front.tape_right`로, `front.lane_obstruction`을 화면 아래쪽 절반의 두 테이프 사이 물체 `front.object_between_tapes`로, `top.robots_close`를 `top.robot_count`(zero·one·two·many)로 바꾼다. 천장 프레임에는 프레임마다 ArUco 세계 좌표 하나(`poses.jsonl`)만 있고 로봇별 화면 위치가 없어, 설계의 로봇별 잘라 묻기(`top.robot_adjacent`·`top.ahead_space`)는 로봇별 위치가 생긴 뒤로 미룬다. 질문 문장이 바뀌면 새 question_set이므로 v3 정답은 새 state(`state-v3`)에 둔다. 손목 질문은 같아 v2 손목 행을 그대로 가져온다.
 
-점검 저장은 `vlm_audits`에 질문마다 임시 정답과 사람 답을 남긴다. 한 질문의 점검이 5건 이상이고 틀린 비율이 10%를 넘으면 그 질문의 임시 정답을 멈춘다(대기열·평가 탭에 표시, 범위·내보내기·점검에서 뺀다. 의견 갈림으로 보내지는 않는다). 대기열 밖의 합의된 사진은 정답 달기에 나오지 않는다. 대기열 고르기의 「정답 있음」으로 확정 정답을 다시 열어 고칠 수 있다. 평가 탭은 확정 정답만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 또 질문별 임시 정답 범위(대기 사진 중 임시 정답이 있는 비율), 점검 오류율, 멈춘 질문을 보인다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
+점검 저장은 `vlm_audits`에 질문마다 임시 정답과 사람 답을 남긴다. 한 질문의 점검이 5건 이상이고 틀린 비율이 10%를 넘으면 그 질문의 임시 정답을 멈춘다(대기열·평가 탭에 표시, 범위·내보내기·점검에서 뺀다. 의견 갈림으로 보내지는 않는다). 질문과 모델을 고친 뒤 관리자가 서버에서 `python learning/curation/perception/vlm_judge.py unpause --state <VLM_STATE> --question <질문 id> --actor <이름>` 또는 `POST /api/learning/vlm/unpause {question}`(협업은 manage)으로 다시 켠다. 누가·언제 켰는지 `vlm_unpauses`에 남고, 그 질문의 점검 수는 그 뒤 점검부터 다시 센다(이전 `vlm_audits`는 이력으로 남는다). 대기열 밖의 합의된 사진은 정답 달기에 나오지 않는다. 대기열 고르기의 「정답 있음」으로 확정 정답을 다시 열어 고칠 수 있다. 평가 탭은 확정 정답만으로 모델·런타임·질문별 n, 일치율, balanced accuracy, 혼동표, 모순 답 수(`wrist.object_in_gripper=yes`와 `wrist.gripper_empty=yes`), 사람 `unclear` 비율을 계산한다. 같은 비교를 고정 평가셋만으로도 따로 보인다(`eval_set`). 평가셋은 모델 답 없이 달았고, 점검은 임시 정답을 보고 달았기 때문이다. 또 질문별 임시 정답 범위(대기 사진 중 임시 정답이 있는 비율), 점검 오류율, 멈춘 질문을 보인다. 일치율은 측정값이며 승인이 아니다. 이 정답은 평가용이며 객체·픽셀 검수, export, 학습 자료로 들어가지 않는다.
 
-운영 검수 state와 섞지 않도록 별도 state를 만든다(D-853 §4). 센터(학습 검수 인스턴스)를 `--vlm-eval-url <https://…/learning/vlm>`으로 띄우면 평가·승격 화면과 홈의 VLM 줄이 그 별도 인스턴스로 가는 링크를 보인다(링크만, 자료를 읽지 않는다. http(s)·자격 증명 없는 주소만 받는다).
+운영 검수 state와 섞지 않도록 별도 state를 만든다(D-853 §4). 가져오기·정답 저장·다시 켜기는 `--empty-eval`이 만든 state(`metadata.workspace_kind=evaluation`)에서만 되고 다른 state에서는 거절한다. 읽기는 VLM 표가 없으면 빈 결과를 주고 표를 만들지 않는다. 이미 VLM 표가 있는 예전 학습 state에서도 읽기는 평가셋을 고정하거나 표를 만들지 않고, 같은 평가셋을 계산만 해서 결과를 준다. 센터(학습 검수 인스턴스)를 `--vlm-eval-url <https://…/learning/vlm>`으로 띄우면 평가·승격 화면과 홈의 VLM 줄이 그 별도 인스턴스로 가는 링크를 보인다(링크만, 자료를 읽지 않는다. http(s)·자격 증명 없는 주소만 받는다).
 
 ```bash
 python learning/curation/perception/review_app.py --state <VLM_STATE> --empty-eval --host <tailscale-ip> --port <port>   # 첫 시작
@@ -525,13 +614,14 @@ python learning/curation/perception/vlm_judge.py import --state <VLM_STATE> --ro
 | 경로 | 내용 |
 |---|---|
 | `GET /api/learning/vlm/summary` | view·상태별 수, question set, 정답 단 사람, POST용 token |
-| `GET /api/learning/vlm/queue?view=` | 사람 확인 대기열 `{items:[{id, view, image_name, question_set, kind}], counts:{view:{eval, disputed, audit, eval_size, eval_done}}, paused, week, cap}`. 첫 읽기가 평가셋을 고정한다 |
+| `GET /api/learning/vlm/queue?view=` | 사람 확인 대기열 `{items:[{id, view, image_name, question_set, kind}], counts:{view:{eval, disputed, audit, eval_size, eval_done, disputed_waiting}}, paused, week, cap}`. 첫 읽기가 평가셋을 고정한다 |
 | `GET /api/learning/vlm/items?view=&status=` | 사진 목록(질문·모델 답 없음) |
 | `GET /api/learning/vlm/items/<id>` | 질문과 현재 사람 정답, `version`, 대기열 `kind`. `kind=audit`일 때만 `provisional`(임시 정답)을 더한다 |
 | `GET /api/learning/vlm/images/<id>` | 매 요청 sha256 재확인 후 원본, ETag `no-cache`(D-469) |
-| `GET /api/learning/vlm/evaluation` | 확정 정답만의 비교와 `provisional`(범위), `audits`, `paused` |
-| `GET /api/learning/vlm/export` | JSONL과 그 sha256. `labelled`·`excluded` 사진(답 `tier` `confirmed`)과 멈추지 않은 임시 정답이 있는 대기 사진(`status`·`tier` `provisional`). 줄마다 `tiers:{질문: confirmed/provisional/null}` |
+| `GET /api/learning/vlm/evaluation` | 확정 정답만의 비교, 고정 평가셋만의 비교 `eval_set`, `provisional`(범위), `audits`, `paused` |
+| `GET /api/learning/vlm/export` | JSONL과 그 sha256. `labelled`·`excluded` 사진(답 `tier` `confirmed`)과, 고정 평가셋 밖에서 멈추지 않은 모든 질문이 합의된 대기 사진(`status`·`tier` `provisional`). 평가셋·의견 갈림 사진은 사람이 정할 때까지 빠진다(블라인드). 줄마다 `tiers:{질문: confirmed/provisional/null}`. 협업은 manage |
 | `POST /api/learning/vlm/items/<id>` | `{version, status, answers}`. `labelled`는 모든 질문 답 필요, `excluded`는 null 허용. 버전이 다르면 409. 점검 사진을 `labelled`로 저장하면 점검 기록이 남는다(서버가 판단) |
+| `POST /api/learning/vlm/unpause` | `{question}`. 멈춘 질문을 다시 켠다(협업 manage, actor 기록) |
 | `POST /api/learning/vlm/import` | `{rows_path, question_set, questions, model}`. 서버 파일 경로를 읽으므로 로컬 모드 전용(협업 403) |
 
-저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력), `vlm_audits`(점검), `vlm_eval_set`(고정 평가셋)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내, 점검 사진에서 `A`·`Enter` 맞음과 `E` 고침. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.
+저장소는 같은 `reviews.sqlite3`의 `vlm_items`, `vlm_model_answers`, `vlm_labels`(현재), `vlm_label_events`(이력), `vlm_audits`(점검), `vlm_eval_set`(고정 평가셋), `vlm_unpauses`(다시 켜기)와 `<state>/vlm/images/<sha256>.<ext>`다. 협업에서는 정답 저장에 edit가 필요하고 actor는 로그인 사용자다. 로컬 비협업 모드는 앱의 다른 저장처럼 actor가 null이다(D-478 bind 규칙). 단축키: `←/→` 이전·다음, `N` 다음 대기, `↑/↓` 질문 이동, `1–9` 선택지, `Enter` 저장하고 다음, `?` 안내, 점검 사진에서 `A`·`Enter` 맞음과 `E` 고침. 입력칸·IME 조합·Ctrl/Alt/Meta 중에는 동작하지 않는다(D-538 §5). 시험은 `test_vlm_judge.py`와 `ROSY_RUN_BROWSER_TESTS=1`의 `test_vlm_judge_browser.py`다. 실제 정답 품질과 모델 PC 운영은 별도 증거다.

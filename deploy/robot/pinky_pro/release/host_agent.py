@@ -76,6 +76,7 @@ ALLOWLIST: dict[str, CommandSpec] = {
         CommandSpec("network.apply_profile", Role.ADMINISTRATOR, True, frozenset({"profile_id"})),
         CommandSpec("network.set_mode", Role.ADMINISTRATOR, True, frozenset({"mode"})),
         CommandSpec("network.connect", Role.ADMINISTRATOR, True, frozenset({"ssid", "psk"})),
+        CommandSpec("network.start", Role.ADMINISTRATOR, True, frozenset({"request_id"})),
         CommandSpec("release.status", Role.VIEWER, False),
         CommandSpec("release.install", Role.ADMINISTRATOR, True, frozenset({"release_id"})),
         CommandSpec("release.rollback", Role.ADMINISTRATOR, True),
@@ -241,7 +242,7 @@ class HostAgent:
             return refuse(
                 "HOST_AGENT_SCHEMA_UNKNOWN",
                 f"request schema {request.get('schema_version')!r} is not implemented",
-                "CORE 와 Host Agent 의 버전이 맞는지 확인하십시오.",
+                "CORE 와 호스트 에이전트의 버전이 맞는지 확인하십시오.",
             )
 
         if not isinstance(request_id, str) or not _IDENTIFIER.match(request_id):
@@ -376,11 +377,12 @@ class HostAgent:
                     )
                 continue
             if name == "ssid":
-                if not isinstance(value, str) or not _SSID.match(value):
+                if (not isinstance(value, str) or not 1 <= len(value.encode('utf-8', errors='replace')) <= 32
+                        or not value.isprintable() or any(0xD800 <= ord(c) <= 0xDFFF for c in value)):
                     return (
                         "HOST_AGENT_PARAM_INVALID",
                         f"ssid is not a well-formed SSID: {value!r}",
-                        "SSID 는 1–32자의 인쇄 가능 문자입니다.",
+                        "SSID 는 1–32바이트의 인쇄 가능한 UTF-8 문자입니다.",
                     )
                 continue
             if name == "mode":
@@ -418,16 +420,17 @@ class HostAgent:
         actions: dict[str, Callable[[], dict]] = {
             "lane_perception.status": lambda: self._commands.lane_perception_status(),
             "lane_perception.set": lambda: self._commands.set_lane_perception(params["paint_source"]),
-            "network.status": self._commands.network_status,
+            "network.status": lambda: self._commands.network_status(),
             "network.apply_profile": lambda: self._commands.apply_network_profile(params["profile_id"]),
             "network.set_mode": lambda: self._commands.set_network_mode(params["mode"]),
             "network.connect": lambda: self._commands.connect_wifi(params["ssid"], params["psk"]),
-            "release.status": self._commands.release_status,
+            "network.start": lambda: self._commands.start_network(params['request_id']),
+            "release.status": lambda: self._commands.release_status(),
             "release.install": lambda: self._commands.install_release(params["release_id"]),
-            "release.rollback": self._commands.rollback_release,
-            "release.clear_hold": self._commands.clear_recovery_hold,
+            "release.rollback": lambda: self._commands.rollback_release(),
+            "release.clear_hold": lambda: self._commands.clear_recovery_hold(),
             "service.status": lambda: self._commands.service_status(params["unit"]),
-            "system.reboot": self._commands.reboot,
+            "system.reboot": lambda: self._commands.reboot(),
             'ssh.register_key': lambda: self._commands.register_ssh_key(params['public_key']),
         }
 

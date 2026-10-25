@@ -125,7 +125,9 @@ def test_every_gated_unit_and_drop_in_points_at_the_installed_gate():
     assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in dropin
     for unit in ("deploy/robot/omx/rosy-omx-autoupdate.service", "deploy/model_pc/rosy-review-release-update.service",
                  "deploy/site/rosy-model-code-update.service",
-                 "deploy/ai_pc/rosy-situation-autoupdate.service"):
+                 "deploy/ai_pc/rosy-situation-autoupdate.service",
+                 "deploy/robot/omx/rosy-omx-devices-autoupdate.service",
+                 "deploy/model_pc/rosy-learning-center-update.service"):
         assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in (ROOT / unit).read_text(), unit
     common = (ROOT / "deploy/hosts/common/host-state/manifest").read_text()
     assert "safe file /usr/local/bin/rosy-update-gate common/rosy-update-gate 0755" in common

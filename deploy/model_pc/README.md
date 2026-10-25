@@ -30,12 +30,12 @@ journalctl --user -u rosy-pilot-fetch@9dfk.service -n 80 --no-pager
 
 ## v13 검수 앱 코드 릴리스
 
-승인된 모델 코드 후보가 적용된 뒤에는 [D-561](../../docs/adr/D-561-model-review-ui-signed-code-follow.md)의 별도 사용자 타이머가 검수 UI도 버전별 릴리스로 전환한다. 모델 PC에서 설치된 D-446 `state.json`의 현재 sequence를 `MINIMUM_SEQUENCE`에 기록한다. 기존 화면보다 오래된 후보가 처음 실행될 때 활성화되지 않게 하는 기준이다. `REVIEW_HOST`는 현재 검수 서비스가 바인딩하는 사설 IPv4다. 먼저 타이머를 한 번 수동 실행해 `waiting for a newer accepted model-code release`를 확인한 뒤 활성화한다.
+승인된 모델 코드 후보가 적용된 뒤에는 [D-561](../../docs/adr/D-561-model-review-ui-signed-code-follow.md)의 별도 사용자 타이머가 검수 UI도 버전별 릴리스로 전환한다. 모델 PC에서 설치된 D-446 `state.json`의 현재 sequence를 `MINIMUM_SEQUENCE`에 기록한다. 기존 화면보다 오래된 후보가 처음 실행될 때 활성화되지 않게 하는 기준이다. `REVIEW_HOST`와 `REVIEW_PYTHON`은 현재 `rosy-review-v13.service`의 `--host`와 실행 Python이다. 상태 폴더에 `learning-collaboration.json`이 있으면(계정 연동) 검수 앱은 HTTPS 뒤 loopback으로만 열리므로 `REVIEW_HOST=127.0.0.1`이다. 값이 다르면 업데이터가 계정 연동이 빠진 서비스 파일을 쓰거나 거절한다. 활성화 전에 `install_review_release.unit_contents(...)`가 지금 서비스 파일과 같은 내용을 만드는지 확인한다. 먼저 타이머를 한 번 수동 실행해 `waiting for a newer accepted model-code release`를 확인한 뒤 활성화한다.
 
 ```bash
-install -m 0755 deploy/model_pc/auto_review_release.py ~/rosy-ml/bin/auto_review_release.py
+install -m 0755 deploy/model_pc/auto_review_release.py deploy/model_pc/install_review_release.py ~/rosy-ml/bin/
 install -m 0644 deploy/model_pc/rosy-review-release-update.{service,timer} ~/.config/systemd/user/
-printf 'REVIEW_HOST=%s\nMINIMUM_SEQUENCE=%s\n' '<model-pc-private-ip>' '<current-model-code-sequence>' > ~/.config/rosy/review-release.env
+printf 'REVIEW_HOST=%s\nREVIEW_PYTHON=%s\nMINIMUM_SEQUENCE=%s\n' '<current --host>' '<current review Python>' '<current-model-code-sequence>' > ~/.config/rosy/review-release.env
 chmod 600 ~/.config/rosy/review-release.env
 systemctl --user daemon-reload
 systemctl --user start rosy-review-release-update.service
@@ -65,7 +65,60 @@ python3 ~/rosy-ml/bin/install_review_release.py <previous-release-id> \
   --host <model-pc-private-ip> --port 8774
 ```
 
-설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다.
+설치기는 소스의 필수 파일, DB 분리, 복사본 해시, Python import를 확인한 뒤 링크와 서비스 유닛을 전환한다. `/api/workspace`와 `/pixels`가 응답하지 않으면 이전 링크와 서비스 유닛으로 되돌리고 오류를 반환한다. 첫 전환 전의 서비스 유닛은 `~/rosy-ml/review-v13-code/rosy-review-v13.service.before-managed`에 남긴다. `REVIEW_RELEASE.json`의 해시는 릴리스 입력 파일 묶음의 내용 해시이며 Git 커밋이나 학습 모델의 승인을 뜻하지 않는다. 릴리스와 검수 DB를 함께 지우거나, 이 절차 밖에서 `current` 링크를 덮어쓰지 않는다. state 안의 `learning-collaboration.json`·`omx-center.json`·`learning-control.json`·`review-ai.json`·`workspace-links.json`이 있으면 대상 앱이 지원하는 옵션만 서비스에 붙이고, 예전 릴리스로 되돌릴 때는 그 앱이 모르는 옵션을 뺀다. `workspace-links.json`은 설치 때 일반 파일·스키마를 먼저 확인한다.
+
+### Account 프로젝트별 설치 (D-757)
+
+두 설치 CLI는 `--service <safe-name.service>`를 받으며 기본값은 기존 `rosy-review-v13.service`다. 다른 표준 `review_app.py` 서비스는 고유 `--root`, `--state`, `--port`, `--service`를 함께 지정한다. 사용자 유닛 경로·재시작·최초 백업 이름은 지정한 서비스에 맞춘다. 별도 구현의 데이터셋 서버에는 이 설치기를 적용하지 않는다. 자동 갱신 CLI에도 같은 `--service`와 프로젝트 경로를 지정해야 하며 기존 v13 타이머 설정은 v13에만 적용된다.
+
+`state/learning-collaboration.json`이 있으면 새 릴리스와 보관 릴리스 전환 모두 `--collaboration`을 유지한다. 앱은 `--host 127.0.0.1`로 실행하고 정확한 공개 HTTPS origin은 기존 승인 프록시에서 제공한다. 이 모드에서는 무인증 `--decisions-port`를 만들지 않는다. 이미 결속한 설정 파일이 사라지거나 보관 코드가 collaboration/중앙 Account를 지원하지 않으면 전환을 거부한다. 인증을 끄는 rollback은 지원하지 않는다. Account DB·키·HF 연결·검수 DB는 코드 릴리스 밖의 기존 비공개 경로에 남긴다.
+
+```bash
+python3 ~/rosy-ml/bin/install_review_release.py <release-id> \
+  --source <accepted-code-directory> --root <project-code-root> \
+  --state <existing-project-state> --python <project-venv>/bin/python \
+  --host 127.0.0.1 --port <project-loopback-port> --service <project-service>.service
+```
+
+`--source`는 링크가 없고 `--root`·`--state` 밖에 있는 폴더여야 한다. 승인된 D-446 릴리스 폴더는 `data` 링크가 있어 그대로 쓰지 못하므로, `data`를 뺀 복사본을 `--root` 밖의 형제 폴더에 만든다([절차](../../docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md#installing-an-accepted-d-446-model-code-release-with-install_review_releasepy)).
+
+협업 readiness는 무자격 `/api/workspace`의 **401**, `/api/accounts/options`의 활성화·프로젝트 ID·중앙 Account 모드 일치, `/accounts`의 **200**을 확인한다. 실패하면 이전 링크와 유닛으로 복구한다. 이 검사는 사용자 로그인·권한·회수나 프록시 TLS 수용을 대신하지 않는다. 실제 자료를 바꾸지 않는 일관 복사 상태의 로그인/권한/회수/브라우저 검사와 공개 HTTPS 확인은 별도 기록한다.
+
+같은 DNS 이름의 서로 다른 HTTPS 포트에서 중앙 Account 프로젝트를 열 수 있다. 세션·Account PKCE·HF OAuth 쿠키는 신뢰 설정의 프로젝트와 공개 origin별 이름을 쓴다. 기존 고정 이름의 중앙 앱 쿠키는 읽지 않으므로 전환 후 한 번 다시 로그인한다. 중앙 Account를 사용하지 않는 기존 모드는 쿠키 이름을 유지한다. 상세 계약은 [Account protocol](../../docs/reference/rosy-account-protocol.md#앱-수신-세션)을 따른다.
+
+### Account 프로젝트별 설치 (D-757)
+
+두 설치 CLI는 `--service <safe-name.service>`를 받으며 기본값은 기존 `rosy-review-v13.service`다. 다른 표준 `review_app.py` 서비스는 고유 `--root`, `--state`, `--port`, `--service`를 함께 지정한다. 사용자 유닛 경로·재시작·최초 백업 이름은 지정한 서비스에 맞춘다. 별도 구현의 데이터셋 서버에는 이 설치기를 적용하지 않는다. 자동 갱신 CLI에도 같은 `--service`와 프로젝트 경로를 지정해야 하며 기존 v13 타이머 설정은 v13에만 적용된다.
+
+`state/learning-collaboration.json`이 있으면 새 릴리스와 보관 릴리스 전환 모두 `--collaboration`을 유지한다. 앱은 `--host 127.0.0.1`로 실행하고 정확한 공개 HTTPS origin은 기존 승인 프록시에서 제공한다. 이 모드에서는 무인증 `--decisions-port`를 만들지 않는다. 이미 결속한 설정 파일이 사라지거나 보관 코드가 collaboration/중앙 Account를 지원하지 않으면 전환을 거부한다. 인증을 끄는 rollback은 지원하지 않는다. Account DB·키·HF 연결·검수 DB는 코드 릴리스 밖의 기존 비공개 경로에 남긴다.
+
+```bash
+python3 ~/rosy-ml/bin/install_review_release.py <release-id> \
+  --source <accepted-code-directory> --root <project-code-root> \
+  --state <existing-project-state> --python <project-venv>/bin/python \
+  --host 127.0.0.1 --port <project-loopback-port> --service <project-service>.service
+```
+
+`--source`는 링크가 없고 `--root`·`--state` 밖에 있는 폴더여야 한다. 승인된 D-446 릴리스 폴더는 `data` 링크가 있어 그대로 쓰지 못하므로, `data`를 뺀 복사본을 `--root` 밖의 형제 폴더에 만든다([절차](../../docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md#installing-an-accepted-d-446-model-code-release-with-install_review_releasepy)).
+
+협업 readiness는 무자격 `/api/workspace`의 **401**, `/api/accounts/options`의 활성화·프로젝트 ID·중앙 Account 모드 일치, `/accounts`의 **200**을 확인한다. 실패하면 이전 링크와 유닛으로 복구한다. 이 검사는 사용자 로그인·권한·회수나 프록시 TLS 수용을 대신하지 않는다. 실제 자료를 바꾸지 않는 일관 복사 상태의 로그인/권한/회수/브라우저 검사와 공개 HTTPS 확인은 별도 기록한다.
+
+같은 DNS 이름의 서로 다른 HTTPS 포트에서 중앙 Account 프로젝트를 열 수 있다. 세션·Account PKCE·HF OAuth 쿠키는 신뢰 설정의 프로젝트와 공개 origin별 이름을 쓴다. 기존 고정 이름의 중앙 앱 쿠키는 읽지 않으므로 전환 후 한 번 다시 로그인한다. 중앙 Account를 사용하지 않는 기존 모드는 쿠키 이름을 유지한다. 상세 계약은 [Account protocol](../../docs/reference/rosy-account-protocol.md#앱-수신-세션)을 따른다.
+
+## 학습 센터 자동 업데이트 (D-871)
+
+`install_learning_center.py`로 설치한 `rosy-learning-center.service`(모델 PC 8769, AI PC 8770)를 30분마다 확인한다. 바뀌는 조건은 세 가지다. CI를 통과한 main이어야 하고, 센터가 켜져 있어야 하며, 센터 작업이 없어야 한다. 이때 [2026-10-23 절차](../../docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md)를 `rosy-learning-center-update.timer`가 그대로 수행한다.
+
+- 바꾸지 않는 경우:
+  - 손으로 멈췄거나 끈 센터는 그대로 둔다(`idle`).
+  - `experiment_*` 작업이나 review 앱 외의 자식 프로세스가 있으면 `held`.
+- 바꾸는 절차: 새 커밋을 `source/<sha>`에 받는다. 새 설치기의 `prepare()`로 같은 state, 설정, 포트의 유닛을 만든다. 백업한 뒤 서비스를 멈추고, 유닛을 쓰고 `--apply`한다.
+- 확인: `is-active`, 새 sha, `http://127.0.0.1:<port>/` 200. 실패하면 백업 유닛으로 되돌리고, 그 커밋은 main이 움직일 때까지 다시 시도하지 않는다.
+- 설치:
+  1. `learning-center-update.json.example`을 `~/.config/rosy/learning-center-update.json`에 복사하고 `<owner>`를 채운다.
+  2. 첫 실행은 이 업데이터가 있는 main 사본에서 한다(예: `~/rosy-test/repo`): `python3 deploy/model_pc/learning_center_update.py run --dry-run`으로 판정을 본 뒤 `run`을 실행한다. 이 업데이터가 들어 있는 체크아웃으로 전환하면 `current` 링크가 생긴다. 지금 설치된 소스가 이 업데이터보다 오래되었기 때문이다. `switched`가 나오기 전에는 `current`가 없어 타이머가 실행되지 않으므로, 그때까지는 이 명령을 손으로 다시 실행한다.
+  3. 업데이터 유닛 두 개를 `~/.config/systemd/user/`에 복사하고 `systemctl --user enable --now rosy-learning-center-update.timer`.
+- 범위 밖: D-446 서명 릴리스로 설치하는 보호 센터(`install_review_release.py`)는 이 경로가 아니다.
 
 ## 검수에서 학습 owner로 연결 (D-742)
 
@@ -100,6 +153,12 @@ private config는 `~/.config/rosy/review-pipeline/bridge.json` 및 `pipeline.jso
 먼저 기존 pipeline service/timer를 설치하고 daemon-reload한다. 서비스는 템플릿의 단일 서명 ExecStart, `KillMode=control-group`을 사용하며 추가 실행 명령이나 drop-in은 허용하지 않는다. UI는 적재된 unit과 private binding/config 원본을 재확인한다. 설정이 바뀌면 운영자가 명시적으로 다시 연결한다.
 
 Perception 결과로 out_path를 연결하면 시작·중지·재시도 버튼이 나타난다. Ctrl+K에서 같은 이름으로 실행할 수 있다. 시작은 자동 확인을 켜고, 중지는 해당 실행기의 자식 프로세스까지 중지하며, 재시도는 자동 확인을 켜지 않고 한 번 실행한다. 완료·품질 거절·시도 한도 원장은 초기화하지 않는다. 원장 읽기 오류가 있어도 검증된 실행기의 중지는 가능하다. 화면은 실제 서비스 상태와 현재 학습 결과를 다시 읽으며 요청 접수를 완료로 표시하지 않는다.
+
+## Learning SIM 실행 연결
+
+기존 검수 state의 `sim-config.json`을 소유자 전용 일반 파일(0600)로 마련하면 설치기는 대상 앱의 CLI 지원 여부를 확인해 `--sim-config`를 연결한다. 이전 앱으로 복귀하면 지원하지 않는 인자는 제거하고, 지원하는 앱으로 돌아오면 같은 state의 연결을 복원한다. 잘못된 파일 권한이나 링크는 서비스 전환 전에 거절한다.
+
+설정은 기존 `sim_web.LocalRuns`의 정확한 여섯 필드(`workspace_id`, `source_sha`, `source_root`, `binding_file`, `binding_sha256`, `entry_sha256`)를 사용한다. 실제 workspace와 별도로 설치된 clean Git 실행 소스·binding·entry 지문을 결속한다. SDK 실행 소스를 검수 release에 복제하지 않는다. 앱 시작과 독립 운영 조회에서 실제 결속을 검증하며, 페이지 HTTP 200만으로 실행 연결을 수용하지 않는다. 기존 실행의 보고서·단계별 PNG를 조회해 검증하고 신규 실행은 별도로 판단한다.
 
 ## 헤드리스 Gazebo 준비 (D-571)
 

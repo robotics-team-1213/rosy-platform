@@ -266,7 +266,9 @@ private fun StatusPanel(
             if (site != null && CornerGuide.reportsMarkers(site)) markersReported = true
         }
         if (state.running && link.state == LinkState.STREAMING && site != null) {
-            if (markersReported || CornerGuide.reportsMarkers(site)) {
+            if (CornerGuide.usesFieldBoundary(site)) {
+                FieldGuide(site.fieldState, CornerGuide.from(site))
+            } else if (markersReported || CornerGuide.reportsMarkers(site)) {
                 val guide = CornerGuide.from(site)
                 InstallGuide(guide)
                 if (LensAdvice.suggestWide(state.lens, state.wideAvailable, guide, markersReported = true)) {
@@ -345,6 +347,26 @@ private fun HealthPanel(health: DeviceHealth) {
     health.warnings.forEach { w ->
         Text(HealthText.warning(res, w, health), color = RosyColors.StatusWarn, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+/** D-484 field-boundary install guide: is the whole floor boundary in view, and which robots are seen. */
+@Composable
+private fun FieldGuide(fieldState: String?, guide: CornerGuide) {
+    Text(
+        stringResource(
+            when (fieldState) {
+                "calibrated" -> R.string.guide_field_calibrated
+                "orientation_pending" -> R.string.guide_field_orientation
+                "stale" -> R.string.guide_field_stale
+                else -> R.string.guide_field_none
+            },
+        ),
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Text(
+        if (guide.robots.isEmpty()) stringResource(R.string.guide_robots_none) else stringResource(R.string.guide_robots, guide.robotIds),
+        style = MaterialTheme.typography.bodySmall,
+    )
 }
 
 /** Corner markers as dots: filled = seen, ring = not seen. Shape carries the meaning, not colour (D-82). */

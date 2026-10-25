@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/motor-health.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/cell.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
@@ -73,6 +74,7 @@
     <a class="ui-subnav-item" href="/console?view=work&amp;show=pending">승인 대기</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=new" aria-current="page">새 작업</a>
+    <a class="ui-subnav-item" href="/console/learning">학습</a>
     <span class="ui-subnav-head">Cell 적재 단계</span>
     <a class="ui-subnav-item" href="#recipe-heading">레시피</a>
     <a class="ui-subnav-item" href="#cell-heading">셀 설정</a>
@@ -89,6 +91,11 @@
       <ui-text id="cell-purpose">레시피와 작업대 설정으로 적재 계획을 미리 보고 Fleet에 작업을 제안합니다. 승인·진행은 그 단계에서, 로봇 상태·예외 확인은 관제에서 합니다.</ui-text>
     </div>
     <ui-text id="notice" role="status" aria-live="polite">운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.</ui-text>
+    <ui-section aria-labelledby="observation-heading">
+      <ui-head><h2 class="ui-section-heading" id="observation-heading">작업 셀 실제 관측</h2></ui-head>
+      <ui-text>읽기 전용 · 엔코더 각도와 원본 영상입니다. 팔과 카메라의 대응은 설정 기준이며 보정·동작 수용과 별개입니다.</ui-text>
+      <div id="workcell-observations"></div>
+    </ui-section>
     <div class="documents">
       <ui-section aria-labelledby="recipe-heading">
         <ui-head><h2 class="ui-section-heading" id="recipe-heading">레시피</h2></ui-head>

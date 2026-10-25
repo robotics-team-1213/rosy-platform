@@ -18,6 +18,7 @@ from job_state import Job, JobError, Rejected, sha
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/registry/perception'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 from store import Store, content_sha, parse_dataset_ref  # noqa: E402
 
 
@@ -77,6 +78,33 @@ def verified_export(folder):
         raise JobError("review approved count differs")
     return {"manifest_sha": hashlib.sha256(raw).hexdigest(), "frames": rows,
             "training_dataset_qualified": False}
+
+
+def code_provenance():
+    """Commit and runtime of the code running this cycle; None where a payload or venv cannot say."""
+    import platform
+    import subprocess
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        done = subprocess.run(["git", "rev-parse", "HEAD"], cwd=HERE, capture_output=True, text=True, timeout=10)
+        commit = done.stdout.strip() if done.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        commit = None
+    try:
+        torch = version("torch")
+    except PackageNotFoundError:
+        torch = None
+    return {"source_commit": commit or None, "python": platform.python_version(), "torch": torch}
+
+
+def published(result):
+    """Eval set content_sha and model file hashes this attempt's own intake recorded in its READY folder."""
+    try:
+        report = json.loads((Path(result["location"]) / "intake_report.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, KeyError, TypeError):
+        report = {}
+    evaluation = report.get("eval") if isinstance(report.get("eval"), dict) else {}
+    return {"eval_set": (evaluation.get("set") or {}).get("content_sha"), "files": report.get("files")}
 
 
 def validate_config(config):
@@ -252,6 +280,7 @@ def run_once(config, out, *, trainer_fn=None, review_pipeline=None):
     if trainer_fn is None:
         from train_job import run as trainer_fn
     inputs = config if review_pipeline is None else dict(config, owner_review_pipeline=review_pipeline.signature)
+    provenance = code_provenance()
     with Job(out, inputs) as job:
         scan_reviews(config, job)
         if review_pipeline is not None:
@@ -296,7 +325,7 @@ def run_once(config, out, *, trainer_fn=None, review_pipeline=None):
                     row.update(status="gave_up", error="interrupted attempt limit reached")
                     job._save()
                     continue
-                row.update(status="running", attempts=row["attempts"] + 1)
+                row.update(status="running", attempts=row["attempts"] + 1, provenance=provenance)
                 row['dataset'] = request['dataset']
                 job._save()
                 try:
@@ -314,7 +343,7 @@ def run_once(config, out, *, trainer_fn=None, review_pipeline=None):
                     else:
                         if result.get("status") == "candidate":
                             raise JobError("only drivable_head may return a candidate")
-                        row.update(status="ready", result=result)
+                        row.update(status="ready", result=result, **published(result))
                 except Rejected as error:
                     row.update(status="rejected", error=str(error))
                 except Exception as error:

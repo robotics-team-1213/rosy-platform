@@ -29,6 +29,8 @@ def test_registry_preserves_pages_and_existing_aliases():
     }
     assert {entry["path"] for entry in registry["pages"].values()} == {
         path.relative_to(WEB).as_posix() for path in WEB.rglob("*.html")
+        # learning.html is the Learning entry template that learning_entry.py fills and serves itself.
+        if path.name != "learning.html"
     }
     assert api["resolve_entry"](WEB, registry["assets"], "assistant.js") == (
         (WEB / "assistant/panel.js").resolve(), "application/javascript"

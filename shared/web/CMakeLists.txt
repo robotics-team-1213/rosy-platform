@@ -25,6 +25,8 @@ install(FILES
   evidence.js
   webrtc.js
   request.js
+  motor-health.js
+  motor-health.css
   scope.js
   fleet-client.js
   account-profile.js

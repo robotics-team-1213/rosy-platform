@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import math
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Mapping
 
@@ -12,21 +12,9 @@ import yaml
 
 from core_common.protocol.place_markers import check_place_marker_ids
 from core_common.protocol.sightings import check_marker_yaw_offsets
+from core_common.protocol.sighting_sources import validate_sighting_config
 from fleet.server.sightings import SightingSource
 
-_REQUIRED = {
-    "source_id", "token_env", "robot_ids", "map_id",
-    "calibration_revision",
-}
-_ALLOWED = _REQUIRED | {
-    "phone_token_env", "fleet_base_url", "processor_revision",
-    "corner_marker_ids", "corner_world_m", "robot_markers", "heading_edge", "credential",
-    "calibration_source", "place_markers", "marker_yaw_offset_deg",
-    "auto_tune",  # D-589: Vision only; Fleet reads the same file and ignores it
-}
-CREDENTIAL_KINDS = ("static", "paired")
-CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
-_ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 #: D-580: `robot_ids: enrolled` = every robot on the live roster (robots.yaml + enrolled).
 ROSTER = "enrolled"
 
@@ -40,81 +28,25 @@ def load_sighting_sources(path: Path | str, *, environ: Mapping[str, str] | None
         config = yaml.safe_load(source_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         raise ValueError(f"cannot read sighting config {source_path}: {exc}") from exc
-    if (not isinstance(config, dict) or "sources" not in config or set(config) - {"sources", "identity"}
-            or not isinstance(config["sources"], list)):
-        raise ValueError("sighting config must contain a sources list and optionally identity")
-    if not config["sources"]:
-        raise ValueError("sighting config needs at least one source")
+    validate_sighting_config(config)
 
     env = os.environ if environ is None else environ
     sources = []
     for index, row in enumerate(config["sources"]):
-        if not isinstance(row, dict):
-            raise ValueError(f"sources[{index}] must be a mapping")
-        missing = _REQUIRED - row.keys()
-        unknown = row.keys() - _ALLOWED
-        if missing:
-            raise ValueError(f"sources[{index}] missing fields: {', '.join(sorted(missing))}")
-        if unknown:
-            raise ValueError(f"sources[{index}] has unknown fields: {', '.join(sorted(unknown))}")
         credential = row.get("credential", "static")
-        if credential not in CREDENTIAL_KINDS:
-            raise ValueError(f"sources[{index}].credential must be static or paired")
-        # D-341 6. Fleet never reads the phone token; an implicit static source keeps the
-        # pre-D-341 shape (Vision still requires its phone_token_env), an explicit one is checked.
-        if credential == "paired" and "phone_token_env" in row:
-            raise ValueError(f"sources[{index}] is paired and must not set phone_token_env")
-        if "credential" in row and credential == "static" and "phone_token_env" not in row:
-            raise ValueError(f"sources[{index}] is static and needs phone_token_env")
         env_name = row["token_env"]
-        if not isinstance(env_name, str) or not _ENV_NAME.fullmatch(env_name):
-            raise ValueError(f"sources[{index}].token_env must name an uppercase environment variable")
         token = env.get(env_name)
         if not isinstance(token, str) or not token:
             raise ValueError(f"sighting token environment variable {env_name} is required")
         robot_ids = row["robot_ids"]
         corner_ids = row.get("corner_marker_ids")
         calibration_source = row.get("calibration_source", "corner_markers")
-        if calibration_source not in CALIBRATION_SOURCES:
-            raise ValueError(f"sources[{index}].calibration_source must be "
-                             f"{' or '.join(CALIBRATION_SOURCES)}")
-        if calibration_source == "field_boundary" and corner_ids is not None:
-            raise ValueError(f"sources[{index}] is field_boundary and must not set corner_marker_ids")
-        if calibration_source == "field_boundary" and "corner_world_m" not in row:
-            raise ValueError(f"sources[{index}] is field_boundary and needs corner_world_m")
         follow = robot_ids == ROSTER  # D-580
-        if not follow and (not isinstance(robot_ids, list) or not robot_ids
-                           or any(not isinstance(robot_id, str) or not robot_id for robot_id in robot_ids)):
-            raise ValueError(f"sources[{index}].robot_ids must be a non-empty string list or {ROSTER!r}")
-        if calibration_source == "corner_markers" and (
-                not isinstance(corner_ids, list) or len(corner_ids) != 4
-                or any(type(marker_id) is not int or marker_id < 0 for marker_id in corner_ids)):
-            raise ValueError(f"sources[{index}].corner_marker_ids must contain four integer ids")
         corner_world_m = None
         if "corner_world_m" in row:
             corners = row["corner_world_m"]
-            if (not isinstance(corners, list) or len(corners) != 4
-                    or any(not isinstance(point, list) or len(point) != 2
-                           or any(isinstance(v, bool) or not isinstance(v, (int, float))
-                                  or not math.isfinite(v) for v in point)
-                           for point in corners)):
-                raise ValueError(f"sources[{index}].corner_world_m must contain four finite x/y pairs")
             corner_world_m = tuple((float(x), float(y)) for x, y in corners)
-            if len(set(corner_world_m)) != 4:
-                raise ValueError(f"sources[{index}].corner_world_m points must be distinct")
         markers = row.get("robot_markers", {})
-        if (not isinstance(markers, dict)
-                or any(not isinstance(robot_id, str) or not robot_id
-                       or type(marker_id) is not int or marker_id < 0
-                       for robot_id, marker_id in markers.items())):
-            raise ValueError(f"sources[{index}].robot_markers must map robot ids to marker ids")
-        if not follow and set(markers) - set(robot_ids):
-            raise ValueError(f"sources[{index}].robot_markers names robots outside robot_ids: "
-                             f"{', '.join(sorted(set(markers) - set(robot_ids)))}")
-        if len(set(markers.values())) != len(markers):
-            raise ValueError(f"sources[{index}].robot_markers must give each robot a distinct marker id")
-        if corner_ids is not None and set(markers.values()) & set(corner_ids):
-            raise ValueError(f"sources[{index}].robot_markers must not reuse corner_marker_ids")
         try:  # D-564
             place_markers = check_place_marker_ids(row.get("place_markers", []), corner_ids=corner_ids,
                                                    robot_marker_ids=markers.values())
@@ -166,3 +98,27 @@ def load_identity_config(path: Path | str):
     except TypeError as exc:
         raise ValueError(f"identity config: {exc}") from exc
 
+
+def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
+    """D-361 5: a mapping to an unenrolled/pending-logout robot is disabled with a warning;
+    an id never seen in robots.yaml or the register still refuses start (a typo)."""
+    from dataclasses import replace
+
+    kept = []
+    for source in sources:
+        if source.follow_roster:  # D-580: targets come from the roster, never a typo
+            kept.append(source)
+            continue
+        unknown = set(source.robot_ids) - known
+        if unknown - retired:
+            sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")
+        if unknown:
+            print(f"warning: sighting source {source.source_id!r}: mapping disabled for "
+                  f"unenrolled robots {sorted(unknown)}", file=sys.stderr)
+        robot_ids = tuple(rid for rid in source.robot_ids if rid not in unknown)
+        if robot_ids:
+            kept.append(replace(source, robot_ids=robot_ids))
+        else:
+            print(f"warning: sighting source {source.source_id!r} disabled: no enrolled targets",
+                  file=sys.stderr)
+    return kept

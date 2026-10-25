@@ -1,4 +1,4 @@
-"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.312."""
+"""core_api_web.api.app — FastAPI 팩토리 (P1-9, API-101). 계약: ROSY-API-REF-001 v1.320."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from core_api_web.api.v1.routes import (
     line_follow_router,
     localization_router,
     motion_router,
+    motors_router,
     host_router,
     intent_router,
     map_router,
@@ -119,7 +120,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app = FastAPI(
         title="ROSY CORE API",
         version="1.20.0",
-        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.312)",
+        description="로봇 미들웨어 API — 계약: ROSY-API-REF-001 (v1.320)",
     )
     app.state.core = services
     arm_policy = getattr(services, 'arm_policy', None)
@@ -208,6 +209,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
         "shell/mount.js": "application/javascript",
         "shell/shell.css": "text/css",
         "panels/setup/pose-evidence.js": "application/javascript",
+        "panels/console/motor-health.js": "application/javascript",
         **registry.assets(),
     }
 
@@ -230,6 +232,7 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     app.include_router(navigation_router)
     app.include_router(localization_router)
     app.include_router(motion_router)
+    app.include_router(motors_router)
     app.include_router(map_router)
     app.include_router(waypoints_router)
     app.include_router(rooms_router)

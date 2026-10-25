@@ -1,6 +1,6 @@
 """D-384 R0 replay: LaneKeeper + RoadStateEstimator over recorded D-356 sessions.
 
-  python learning/evaluation/perception/road_replay.py data/perception/raw/<session> --out $ROSY_SCRATCH/road-replay/<name>
+  python learning/evaluation/perception/road_replay.py data/perception/raw/<session> --out X:/DevTemp/road-replay/<name>
   python learning/evaluation/perception/road_replay.py <bag_to_video>.mp4 --out ... [--labels data/perception/labels/<session>]
   python learning/evaluation/perception/road_replay.py <bag_to_video>.mp4 --out ... --compare-boundary
 

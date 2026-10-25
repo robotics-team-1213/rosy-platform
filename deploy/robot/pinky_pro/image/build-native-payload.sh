@@ -45,17 +45,7 @@ ROSDEP_ROOTS=("${COLCON_ROOTS[@]/#/$WORKSPACE/}")
 [[ -f "/opt/ros/jazzy/setup.bash" ]] || fail "native ROS 2 Jazzy is not installed"
 [[ -f "$LOCK" ]] || fail "input lock is missing: $LOCK"
 
-lock_value() {
-    local section="$1" wanted="$2"
-    awk -v section="$section" -v wanted="$wanted" '
-        $0 ~ "^" section ":[[:space:]]*$" { inside=1; next }
-        inside && /^[^[:space:]]/ { exit }
-        inside {
-            key=$1; sub(/:$/, "", key)
-            if (key == wanted) { $1=""; sub(/^[[:space:]]+/, ""); sub(/\r$/, ""); print; exit }
-        }
-    ' "$LOCK"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/lib/lock.sh"
 
 # D-192 US-005: the RPLIDAR C1 driver the bringup launch includes. Not in the
 # repository and not an apt package: install-pinky-hardware-deps.sh fetched
@@ -224,6 +214,12 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-face.service" "$OVERLAY/etc/systemd/system/"
 # D-176: boot settings file and fallback AP, both root and outside CORE.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"
+if [[ "${ROSY_BOOT_SUPPORT:-feature}" != bridge ]]; then
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-users.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-agent.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-recovery.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-recovery.timer" "$OVERLAY/etc/systemd/system/"
+fi
 # D-193: the root login-code issuer (no network), enabled by the image.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"
 # D-247: the read-only root board device probe and CORE's refresh request watch.

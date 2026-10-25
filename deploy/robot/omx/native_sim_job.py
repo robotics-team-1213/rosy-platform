@@ -156,7 +156,7 @@ def run(state, *, launcher=subprocess.run):
     finally:
         (state / "budget.lock").unlink(missing_ok=True)
         (state / "budget.resv").unlink(missing_ok=True)
-        task = ("SEE_CANONICAL_PICK_PLACE_RESULT" if document.get("experiment", "g2") in {"pick-place", "pick-place-demonstrations"}|STUDY_EXPERIMENTS
+        task = ("SEE_CANONICAL_PICK_PLACE_RESULT" if document.get("experiment", "g2") in {"pick-place", "pick-place-demonstrations", "pick-place-chunks", "pick-place-chunks-offset", "pick-place-chunks-yaw-site", "pick-place-chunks-yaw-box"}|STUDY_EXPERIMENTS
                 else "SEE_CANONICAL_G2_RESULT")
         write_json(state / "exit.json", {"exit_code": code, "error": error, "ended_at": time.time(),
                                          "runtime": "EXITED", "task": task})
@@ -175,7 +175,7 @@ def status(state):
         if path.is_file():
             value[name] = read_json(path)
     task_result = state / "pick-place" / "result.json"
-    if document.get("experiment", "g2") in {"pick-place", "pick-place-demonstrations"}|STUDY_EXPERIMENTS and task_result.is_file():
+    if document.get("experiment", "g2") in {"pick-place", "pick-place-demonstrations", "pick-place-chunks", "pick-place-chunks-offset", "pick-place-chunks-yaw-site", "pick-place-chunks-yaw-box"}|STUDY_EXPERIMENTS and task_result.is_file():
         value["pick-place-result"] = read_json(task_result)
     return value
 
