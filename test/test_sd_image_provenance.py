@@ -7,6 +7,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -106,6 +107,34 @@ def test_unsigned_source_edit_is_rejected(verifier, signed_image):
     (dist / "source-revision.txt").write_text("b" * 40 + "\n", encoding="ascii")
     with pytest.raises(ValueError):
         verifier.verify_image_release(dist, public, image, RELEASE)
+
+
+def test_changed_checksum_list_is_not_reused(verifier, signed_image, monkeypatch):
+    dist, public, image, _ = signed_image
+    original_verify = verifier.verify_release_files
+
+    def change_after_verification(root, key):
+        result = original_verify(root, key)
+        assert not result
+        sums = root / "SHA256SUMS"
+        sums.write_bytes(sums.read_bytes() + b"\n")
+        return result
+
+    monkeypatch.setattr(verifier, "verify_release_files", change_after_verification)
+    with pytest.raises(ValueError, match="CHECKSUMS_CHANGED"):
+        verifier.verify_image_release(dist, public, image, RELEASE)
+
+
+def test_cli_checks_the_expected_source_and_reports_it(signed_image):
+    dist, public, image, _ = signed_image
+    command = [sys.executable, str(VERIFIER), "--release-root", str(dist), "--public-key", str(public),
+               "--image", str(image), "--release-id", RELEASE, "--expected-source-revision"]
+    good = subprocess.run([*command, REVISION], capture_output=True, text=True, timeout=30)
+    assert good.returncode == 0, good.stderr
+    assert json.loads(good.stdout)["source_revision"] == REVISION
+    stale = subprocess.run([*command, "b" * 40], capture_output=True, text=True, timeout=30)
+    assert stale.returncode == 1
+    assert "SOURCE_REVISION" in stale.stderr
 
 
 def test_image_is_read_once_and_tampering_still_fails(verifier, signed_image, monkeypatch):
