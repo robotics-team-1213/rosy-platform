@@ -1,0 +1,206 @@
+"""Monotonic evidence deadlines and bounded, scope-checked peer composition."""
+
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+import math
+import time
+from uuid import uuid4
+
+from .config import MonitoringConfig
+from .models import MonitoringLink, MonitoringNode, MonitoringSnapshot
+
+
+class ObservationRejected(ValueError):
+    def __init__(self, reason_code="MONITORING_PROTOCOL"):
+        self.reason_code = reason_code
+        super().__init__("monitoring observation rejected")
+
+
+@dataclass(frozen=True)
+class _Record:
+    item: MonitoringNode | MonitoringLink
+    at: float
+    age: float | None
+    source_until: float
+    report_until: float
+
+    def value(self, now):
+        if self.age is None:
+            return self.item
+        source = max(0.0, self.source_until - now)
+        report = max(0.0, self.report_until - now)
+        return self.item.model_copy(update={
+            "age_s": self.age + now - self.at, "remaining_s": source,
+            "report_remaining_s": report, "freshness": "fresh" if source and report else "stale",
+        })
+
+
+def _fact(item):
+    return item.model_dump(exclude={"age_s", "remaining_s", "report_remaining_s", "freshness",
+                                    "label", "expected"})
+
+
+class ObservationCache:
+    def __init__(self, config: MonitoringConfig, *, monotonic=time.monotonic,
+                 utcnow=lambda: datetime.now(timezone.utc)):
+        self.config = config
+        self._monotonic, self._utcnow = monotonic, utcnow
+        self._last_now = -math.inf
+        self._sources = {source.id: source for source in config.sources}
+        self.scope_sites = frozenset({config.site_id}
+                                    | {s.site_id for s in config.sources if s.kind != "peer"}
+                                    | {site for s in config.sources for site in s.peer_sites})
+        self.generation, self._sequence = uuid4().hex, 0
+        self._groups = {}
+        self._peers = {}
+        self._retired = {source.id: deque(maxlen=64) for source in config.sources if source.kind == "peer"}
+        now = self._now()
+        for source in config.sources:
+            peer = source.kind == "peer"
+            scopes = source.peer_sites if peer else (source.site_id,)
+            kind = {"core": "robot", "fleet": "fleet", "http": "service", "peer": "collector"}.get(
+                source.kind, "host")
+            rows = {}
+            for site in scopes:
+                item = MonitoringNode(
+                    id=f"{site}:{kind}:{source.id}", site_id=site, kind=kind,
+                    label=source.label or source.id,
+                    origin_collector=source.id if peer else config.collector_id, origin_source=source.id,
+                    sample_id=None, sampled_at=None, age_s=None,
+                    valid_for_s=900 if source.kind == "host_guard" else 2100 if source.kind == "host_state" else 15,
+                    remaining_s=0.0, report_remaining_s=0.0, freshness="unknown", reported_health="UNKNOWN",
+                )
+                rows[item.id] = _Record(item, now, None, now, now)
+            self._groups[("peer" if peer else "local", source.id)] = rows
+
+    def _now(self):
+        now = self._monotonic()
+        if type(now) not in (int, float) or not math.isfinite(now) or now < self._last_now:
+            raise ObservationRejected("MONITORING_CLOCK")
+        self._last_now = now
+        return now
+
+    def _wall(self):
+        value = self._utcnow()
+        if not isinstance(value, datetime) or value.utcoffset() is None:
+            raise ObservationRejected("MONITORING_CLOCK")
+        return value.astimezone(timezone.utc)
+
+    def _source(self, source_id):
+        if source_id not in self._sources:
+            raise ObservationRejected()
+        return self._sources[source_id]
+
+    def _record(self, item, old, now, wall, budget, envelope, *, peer):
+        if item.age_s is None:
+            return _Record(item, now, None, now, now)
+        wall_age = (wall - item.sampled_at).total_seconds()
+        if wall_age < -1:
+            raise ObservationRejected("MONITORING_CLOCK")
+        age = max(item.age_s + budget, max(0.0, wall_age - (1.0 if peer else 0.0)))
+        source_until = now + max(0.0, min(item.remaining_s - budget, item.valid_for_s - age))
+        report_until = now + max(0.0, min(item.report_remaining_s, envelope) - budget)
+        if (old is not None and item.sample_id is not None and item.sample_id == old.item.sample_id
+                and item.origin_collector == old.item.origin_collector
+                and item.origin_source == old.item.origin_source):
+            if _fact(item) != _fact(old.item):
+                raise ObservationRejected()
+            source_until = min(source_until, old.source_until)
+            if old.age is not None:
+                age = max(age, old.age + now - old.at)
+        return _Record(item, now, age, source_until, report_until)
+
+    def _compose(self, groups, sites, now, wall, sequence):
+        nodes, links, used = [], [], set()
+        for group in groups.values():
+            for record in group.values():
+                item = record.value(now)
+                if item.site_id not in sites:
+                    continue
+                if item.id in used:
+                    raise ObservationRejected()
+                used.add(item.id)
+                (nodes if isinstance(item, MonitoringNode) else links).append(item)
+        for site in sorted(sites):
+            own_id = f"{site}:collector:{self.config.collector_id}"
+            if own_id in used:
+                raise ObservationRejected()
+            nodes.append(MonitoringNode(
+                id=own_id, kind="collector", label="ROSY Monitoring", site_id=site,
+                origin_collector=self.config.collector_id, origin_source="collector",
+                sample_id=f"{self.generation}:{sequence}", sampled_at=wall, age_s=0.0,
+                valid_for_s=15, remaining_s=15.0, report_remaining_s=15.0,
+                freshness="fresh", reported_health="OK",
+            ))
+        return MonitoringSnapshot(schema_version=1, collector_id=self.config.collector_id,
+                                  generation=self.generation, sequence=sequence, produced_at=wall,
+                                  remaining_s=15.0, scope_sites=tuple(sorted(sites)),
+                                  nodes=tuple(sorted(nodes, key=lambda item: item.id)),
+                                  links=tuple(sorted(links, key=lambda item: item.id)))
+
+    def _commit(self, key, records, now, wall):
+        proposed = self._groups | {key: records}
+        self._compose(proposed, self.scope_sites, now, wall, self._sequence)
+        self._groups = proposed
+
+    def update_local(self, source_id, *, nodes=(), links=(), complete=True):
+        source = self._source(source_id)
+        now, wall = self._now(), self._wall()
+        scopes = set(source.peer_sites) if source.kind == "peer" else {source.site_id}
+        if source.kind == "peer" and nodes:
+            raise ObservationRejected()
+        key = ("local", source_id)
+        old = self._groups.get(key, {})
+        records = {} if complete else dict(old)
+        items = (*nodes, *links)
+        if len(items) > 6144 or len({item.id for item in items}) != len(items):
+            raise ObservationRejected()
+        for item in items:
+            if (item.site_id not in scopes or item.origin_collector != self.config.collector_id
+                    or item.origin_source != source_id):
+                raise ObservationRejected()
+            if source.kind == "peer" and (not isinstance(item, MonitoringLink) or item.kind != "probe"):
+                raise ObservationRejected()
+            records[item.id] = self._record(item, old.get(item.id), now, wall, 0.0, 15.0, peer=False)
+        self._commit(key, records, now, wall)
+
+    def receive_peer(self, source_id, snapshot: MonitoringSnapshot, *, request_started_at, elapsed_s):
+        source = self._source(source_id)
+        now, wall = self._now(), self._wall()
+        if (source.kind != "peer" or snapshot.collector_id != source.id
+                or set(snapshot.scope_sites) != set(source.peer_sites)):
+            raise ObservationRejected()
+        previous = self._peers.get(source_id)
+        if (snapshot.generation in self._retired[source_id]
+                or previous and snapshot.generation == previous[0] and snapshot.sequence <= previous[1]):
+            raise ObservationRejected("MONITORING_REPLAY")
+        if (type(elapsed_s) not in (int, float) or not math.isfinite(elapsed_s) or elapsed_s < 0
+                or not isinstance(request_started_at, datetime) or request_started_at.utcoffset() is None):
+            raise ObservationRejected("MONITORING_CLOCK")
+        if (abs((wall - request_started_at).total_seconds() - elapsed_s) > 1.0
+                or not request_started_at - timedelta(seconds=1) <= snapshot.produced_at <= wall + timedelta(seconds=1)):
+            raise ObservationRejected("MONITORING_CLOCK")
+        key = ("peer", source_id)
+        old, records = self._groups.get(key, {}), {}
+        items = (*snapshot.nodes, *snapshot.links)
+        required = {f"{site}:collector:{source_id}" for site in source.peer_sites}
+        if not required <= {node.id for node in snapshot.nodes}:
+            raise ObservationRejected()
+        for item in items:
+            if (item.origin_collector == self.config.collector_id or item.site_id not in source.peer_sites
+                    or item.id == f"{item.site_id}:collector:{self.config.collector_id}"):
+                raise ObservationRejected()
+            records[item.id] = self._record(item, old.get(item.id), now, wall, elapsed_s + 1.0,
+                                            snapshot.remaining_s, peer=True)
+        self._commit(key, records, now, wall)
+        if previous and snapshot.generation != previous[0]:
+            self._retired[source_id].append(previous[0])
+        self._peers[source_id] = (snapshot.generation, snapshot.sequence)
+
+    def snapshot(self, sites: frozenset[str]) -> MonitoringSnapshot:
+        if not sites or not sites <= self.scope_sites:
+            raise ObservationRejected()
+        now, wall = self._now(), self._wall()
+        self._sequence += 1
+        return self._compose(self._groups, sites, now, wall, self._sequence)

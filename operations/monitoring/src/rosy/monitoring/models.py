@@ -112,7 +112,8 @@ class MonitoringLink(Observation):
 
     @model_validator(mode="after")
     def coherent_link(self) -> Self:
-        if not self.id.startswith(f"{self.site_id}:{self.kind}:") or self.valid_for_s != 15:
+        if (not self.id.startswith(f"{self.site_id}:{self.kind}:")
+                or self.kind == "probe" and self.valid_for_s != 15):
             raise ValueError("link identity and lifetime must match its observation")
         if self.reachable is True and self.failure_stage != "none":
             raise ValueError("a successful probe cannot carry a failure stage")
