@@ -59,7 +59,7 @@ def test_ollama_input_cap_is_optional():
 @pytest.mark.parametrize('path, value', [
     (('model',), 'other'), (('choices',), []), (('choices', 0, 'finish_reason'), 'length'),
     (('choices', 0, 'message', 'role'), 'user'), (('choices', 0, 'message', 'tool_calls'), [{}]),
-    (('choices', 0, 'message', 'function_call'), {}), (('choices', 0, 'message', 'content'), '```json\n{}'),
+    (('choices', 0, 'message', 'function_call'), {'name': 'move'}), (('choices', 0, 'message', 'content'), '```json\n{}'),
     (('choices', 0, 'message', 'content'), None),
 ])
 def test_broken_openai_reply_is_the_callers_error(path, value):
