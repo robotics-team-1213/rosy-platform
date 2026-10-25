@@ -11,7 +11,7 @@ SERIAL = "10000000abcdef01"
 
 def _provision_a(tmp_path, monkeypatch):
     root_a, root_b, common, boot = shared_roots(tmp_path, monkeypatch)
-    bundle = boot / "rosy-provision/provision.json"
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
     bundle.parent.mkdir()
     bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
     module = _module()
@@ -58,7 +58,7 @@ def test_bind_fixture_does_not_allow_an_unmanaged_core_symlink(tmp_path, monkeyp
     external = tmp_path / "unmanaged-core"
     external.mkdir()
     (common / "core/.rosy").symlink_to(external, target_is_directory=True)
-    bundle = boot / "rosy-provision/provision.json"
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
     bundle.parent.mkdir()
     bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
     with pytest.raises(ValueError, match="symlink|not a directory|OS_STATE_HOLD"):
@@ -70,7 +70,7 @@ def test_bind_fixture_does_not_allow_an_unmanaged_core_symlink(tmp_path, monkeyp
 def test_missing_factory_marker_is_not_inferred_as_a_new_card(tmp_path, monkeypatch):
     root_a, _, common, boot = shared_roots(tmp_path, monkeypatch)
     (common / "state/factory.json").unlink()
-    bundle = boot / "rosy-provision/provision.json"
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
     bundle.parent.mkdir()
     bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
     with pytest.raises(ValueError, match="OS_STATE_HOLD"):
@@ -81,7 +81,7 @@ def test_missing_factory_marker_is_not_inferred_as_a_new_card(tmp_path, monkeypa
 
 def test_interruption_after_generation_commit_recovers_before_consuming_bundle(tmp_path, monkeypatch):
     root_a, root_b, common, boot = shared_roots(tmp_path, monkeypatch)
-    bundle = boot / "rosy-provision/provision.json"
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
     bundle.parent.mkdir()
     bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
     module = _module()
@@ -108,7 +108,7 @@ def test_interruption_after_generation_commit_recovers_before_consuming_bundle(t
 
 def test_interrupted_unpublished_generation_does_not_prevent_same_bundle_retry(tmp_path, monkeypatch):
     root_a, _, common, boot = shared_roots(tmp_path, monkeypatch)
-    bundle = boot / "rosy-provision/provision.json"
+    bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
     bundle.parent.mkdir()
     bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
     module = _module()
