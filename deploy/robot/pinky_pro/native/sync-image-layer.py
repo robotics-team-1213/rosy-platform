@@ -59,11 +59,12 @@ UNIT_DIR = "etc/systemd/system"
 UDEV_DIR = "etc/udev/rules.d"
 MODPROBE_DIR = "etc/modprobe.d"
 ALLOWED_PREFIXES = (NATIVE_RUNTIME + "/", UNIT_DIR + "/", UDEV_DIR + "/", MODPROBE_DIR + "/")
-# Never written, whatever the allowlist says (config.txt, kernel and modules,
-# the CORE Python runtime, device configuration, accounts and sudo).
+# OS boot/configuration and account state never belong to application sync.
 FORBIDDEN_PREFIXES = (
-    "boot/", "etc/rosy/", "opt/rosy/os-bootstrap/", "usr/local/", "lib/modules/", "usr/lib/modules/", "etc/systemd/system/rosy-first-boot.service.d/",
-    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow", "etc/systemd/system/rosy-release-recover.service.d/",
+    "boot/", "etc/rosy/", "opt/rosy/os-bootstrap/", "usr/local/", "lib/modules/", "usr/lib/modules/",
+    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow",
+    *(f"etc/systemd/system/{unit}.service.d/" for unit in (
+        "rosy-first-boot", "rosy-release-recover", "rosy-os-storage", "rosy-sd-provision", "rosy-os-tailnet")),
 )
 BACKUP_ROOT = "var/lib/rosy/image-layer-backup"
 BACKUP_MANIFEST = "backup-manifest.json"
@@ -85,8 +86,7 @@ STATE_CONFIG = BACKUP_ROOT + "/state-directories.conf"
 # Native units plus the signed boot catalog share the fresh-image inventory.
 UNITS = (
     "rosy-release-recover.service", "rosy-os-storage.service", "rosy-os-tailnet.service",
-    "rosy-sd-provision.service",
-    "rosy-core.service",
+    "rosy-sd-provision.service", "rosy-core.service",
     "rosy-host-agent.service",
     "rosy-runtime.target",
     "rosy-io.service",

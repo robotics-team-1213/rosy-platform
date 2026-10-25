@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage the image-owned firstboot closure before the root filesystem is sealed."""
+"""Stage independent OS admission and boot support before sealing the root filesystem."""
 from __future__ import annotations
 
 import argparse
@@ -8,19 +8,21 @@ import shutil
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "native"))
-from os_storage_dispatch import FIRST_BOOT_FILES, trusted_files
+from os_storage_dispatch import BOOTSTRAP_FILES, FIRST_BOOT_FILES, trusted_files
 
 
 def stage(prefix: Path) -> None:
     prefix = Path(prefix).absolute()
     owner = prefix.stat().st_uid
     trusted_files(prefix, FIRST_BOOT_FILES, owner)
+    copies = {name: prefix / "native-runtime" / name for name in BOOTSTRAP_FILES}
+    copies.update({name: prefix / name for name in FIRST_BOOT_FILES})
     destination = prefix / "os-bootstrap"
     if destination.is_symlink():
         raise ValueError("OS bootstrap directory is a symlink")
     if destination.exists():
         trusted_files(destination, (), owner)
-    for name in FIRST_BOOT_FILES:
+    for name in copies:
         target = destination / name
         if target.exists() or target.is_symlink():
             raise ValueError("firstboot staging destination already exists")
@@ -30,10 +32,10 @@ def stage(prefix: Path) -> None:
             if parent.is_symlink() or parent.exists() and (
                     not parent.is_dir() or parent.stat().st_uid != owner or parent.stat().st_mode & 0o022):
                 raise ValueError("firstboot staging parent is unsafe")
-    for name in FIRST_BOOT_FILES:
+    for name, source in copies.items():
         target = destination / name
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
-        shutil.copyfile(prefix / name, target)
+        shutil.copyfile(source, target)
         target.chmod(0o755 if name.endswith(".sh") else 0o644)
 
 

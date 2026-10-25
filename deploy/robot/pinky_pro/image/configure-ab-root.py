@@ -12,10 +12,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "native"))
 from os_state_io import _write_atomic
 from os_state_layout import LAYOUT_FIELDS, _guid, _object, _path, _read
-from os_storage_dispatch import FIRST_BOOT_FILES, trusted_files
+from os_storage_dispatch import BOOTSTRAP_FILES, FIRST_BOOT_FILES, trusted_files
 
 OVERRIDES = {"rosy-os-firstboot.conf": "rosy-first-boot.service.d/10-rosy-os.conf",
-             "rosy-os-recover.conf": "rosy-release-recover.service.d/10-rosy-os.conf"}
+             "rosy-os-recover.conf": "rosy-release-recover.service.d/10-rosy-os.conf",
+             "rosy-os-storage.conf": "rosy-os-storage.service.d/10-rosy-os.conf",
+             "rosy-os-projection.conf": "rosy-sd-provision.service.d/10-rosy-os.conf",
+             "rosy-os-tailnet.conf": "rosy-os-tailnet.service.d/10-rosy-os.conf"}
 
 
 def configure(root: Path, release_id: str) -> None:
@@ -30,6 +33,7 @@ def configure(root: Path, release_id: str) -> None:
     if not isinstance(release_id, str) or not re.fullmatch(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}", release_id):
         raise ValueError("invalid factory release identity")
     prefix = root / "opt/rosy/os-bootstrap"
+    trusted_files(prefix, BOOTSTRAP_FILES, owner)
     trusted_files(prefix, FIRST_BOOT_FILES, owner)
     sums = _read(_path(root, "opt/rosy/releases/" + release_id + "/SHA256SUMS"), 16 * 1024 * 1024, owner)
     record = dict(schema_version=1, release_id=release_id, checksums_sha256=hashlib.sha256(sums).hexdigest())
