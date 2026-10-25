@@ -322,3 +322,116 @@ def test_two_real_recordings_reach_independent_splits_and_center_conversion(modu
     result = experiment_native.convert_native(splits, tmp_path/'center-upload', profile=profile)
     assert [row['split'] for row in result['episodes']] == ['train', 'train', 'eval']
     assert result['act_only'] is True and result['physical_acceptance'] is False
+
+
+def teacher_fixture():
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import teacher_fixture as fixture
+    return fixture
+
+
+def test_sealed_scripted_teacher_collection_is_accepted_with_its_trajectory_hash(module, tmp_path):
+    fixture = teacher_fixture()
+    root = fixture.seal_teacher(tmp_path, 'arm-s-replay-1')
+    manifest, digest = module._sealed_collection(root)
+    assert manifest['source_mode'] == 'scripted_teacher' and module._hash(digest)
+    assert manifest['teacher_sha256'] == hashlib.sha256((root/'teacher/trajectory.json').read_bytes()).hexdigest()
+    assert 'teacher/trajectory.json' in manifest['files']
+
+
+@pytest.mark.parametrize('fault', ['tampered', 'missing', 'uncovered', 'kind', 'schema', 'file', 'sha_format',
+                                   'trajectory_schema', 'oversized', 'deep', 'long_list', 'not_object',
+                                   'gap', 'bool', 'keys', 'unequal', 'episodes'])
+def test_scripted_teacher_collection_without_its_exact_small_teacher_is_refused(module, tmp_path, fault):
+    fixture = teacher_fixture()
+    source = dict(oversized=dict(note='x'*5000), deep=dict(a=dict(b=dict(c=[1]))),
+                  long_list=dict(dataset='local/omx-pick', method='dwell', episodes=list(range(65)), dwell_s=1),
+                  not_object=[1, 2]).get(fault, fixture.SOURCE)
+    teacher = dict(kind=dict(kind='leader'), schema=dict(schema='rosy.omx-replay-trajectory.v0'),
+                   file=dict(file='teacher/other.json'),
+                   gap=dict(segments=dict(A=[0, 3], reset=[4, 5], B=[5, 8])),
+                   bool=dict(segments=dict(A=[0, True], reset=[1, 2], B=[2, 3])),
+                   keys=dict(segments=dict(A=[0, 3], B=[3, 6])),
+                   unequal=dict(segments=dict(A=[0, 3], reset=[3, 4], B=[4, 6]))).get(fault)
+    root = fixture.seal_teacher(tmp_path, 'arm-s-replay-1', source=source, teacher=teacher)
+    manifest = json.loads((root/'manifest.json').read_text())
+    if fault == 'tampered':
+        (root/'teacher/trajectory.json').write_text('{"schema": "rosy.omx-replay-trajectory.v1"}')
+        fixture.write_manifest(root, manifest)  # files cover the new bytes; teacher_sha256 still names the old
+    elif fault in ('missing', 'uncovered'):
+        (root/'teacher/trajectory.json').unlink()
+        if fault == 'uncovered':
+            manifest = fixture.write_manifest(root, manifest)
+    elif fault == 'sha_format':
+        manifest['teacher_sha256'] = manifest['teacher_sha256'].upper()
+    elif fault == 'trajectory_schema':
+        (root/'teacher/trajectory.json').write_text(json.dumps(dict(schema='other', source=fixture.SOURCE)))
+        manifest['teacher_sha256'] = hashlib.sha256((root/'teacher/trajectory.json').read_bytes()).hexdigest()
+        fixture.write_manifest(root, manifest)
+    elif fault == 'episodes':
+        manifest['total_episodes'] = 3
+    (root/'manifest.json').write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match='teacher|replay'):
+        module._sealed_collection(root)
+
+
+PINNED_DRIVER = r'''
+import json, pathlib, sys
+source, tmp = map(pathlib.Path, sys.argv[1:])
+sys.path[:0] = [str(source/'learning/curation/omx'), str(source/'learning/curation/omx/test')]
+import collection_intake, teacher_fixture as fixture
+from native_capture import bind_capture
+recordings, collections = tmp/'recordings', tmp/'collections'
+plain = fixture.seal_teacher(collections, 'arm-s-replay-1', fixture.teacher_dataset(recordings/'one'))
+static = fixture.seal_teacher(collections, 'arm-s-replay-2', fixture.teacher_dataset(
+    recordings/'two', marker={'static_episodes.json': json.dumps(dict(episodes=2, static=[1], threshold=1.0))}))
+stopped = fixture.seal_teacher(collections, 'arm-s-replay-3', fixture.teacher_dataset(
+    recordings/'three', marker={'DO_NOT_TRAIN.txt': 'leader never moved\n'}))
+receipt = collection_intake.prepare_native([plain], tmp/'prepared', 'local/arm-s')
+out = tmp/'prepared'
+report = json.loads((out/'inspection.json').read_text())
+capture = json.loads((out/'capture.json').read_text())
+leaked = sorted(str(p.relative_to(out)) for p in out.rglob('*') if p.is_file()
+                and fixture.REPLAY_PATH.encode() in p.read_bytes())
+collection_intake.prepare_native([static], tmp/'prepared-static', 'local/arm-s-static')
+static_report = json.loads((tmp/'prepared-static'/'inspection.json').read_text())
+try:
+    collection_intake.prepare_native([stopped], tmp/'prepared-stopped', 'local/arm-s-stopped')
+    refused = None
+except ValueError as exc:
+    refused = str(exc)
+print(json.dumps(dict(
+    receipt_mode=receipt['source_mode'], reader=report['reader_verified'], mode=report['source_mode'],
+    cycles=[(e['session_id'], e['cycle_id']) for e in report['episodes']],
+    outcomes=sorted({(e['outcome'], e['split']) for e in report['episodes']}),
+    teacher=capture['teacher_sha256'] == json.loads((plain/'manifest.json').read_text())['teacher_sha256'],
+    teachers=[sorted(t) for t in capture['teachers']], leader_key='collection_manifest_sha256' in capture,
+    in_report=report['capture_provenance'] == capture, leaked=leaked,
+    static=static_report.get('excluded_episodes'), refused=refused,
+    stopped_output=(tmp/'prepared-stopped').exists())))
+'''
+
+
+def test_pinned_real_scripted_teacher_collection_becomes_a_prepared_intake(tmp_path):
+    """Real LeRobot 0.4.4 in the Learning center learner venv (see docs/solutions lerobot-lives-in...)."""
+    import os
+    import subprocess
+    if os.environ.get('ROSY_RUN_PINNED_LEARNING') != '1':
+        pytest.skip('explicit existing isolated learner environment required')
+    python = Path.home()/'.local/share/rosy-learning-center/venv-cpu/bin/python'
+    assert python.is_file(), 'existing pinned learner Python is unavailable'
+    env = {key: os.environ[key] for key in ('HOME', 'PATH', 'USER', 'LOGNAME') if key in os.environ}
+    env.update(HF_HUB_OFFLINE='1', HF_DATASETS_OFFLINE='1', CUDA_VISIBLE_DEVICES='', OMP_NUM_THREADS='2')
+    result = subprocess.run([str(python), '-I', '-B', '-c', PINNED_DRIVER, str(Path(__file__).resolve().parents[4]),
+                             str(tmp_path)], capture_output=True, text=True, env=env, timeout=300, check=False)
+    assert result.returncode == 0, result.stderr[-4000:]
+    proof = json.loads(result.stdout.splitlines()[-1])
+    assert proof['receipt_mode'] == proof['mode'] == 'scripted_teacher' and proof['reader'] is True
+    assert proof['cycles'] == [['arm-s-replay-1', 'arm-s-replay-1-ep0000'], ['arm-s-replay-1', 'arm-s-replay-1-ep0001']]
+    assert proof['outcomes'] == [['unknown', 'exclude']]
+    assert proof['teacher'] and proof['in_report'] and not proof['leader_key']
+    assert proof['teachers'] == [['kind', 'segments', 'session_id', 'source', 'teacher_sha256']]
+    assert proof['leaked'] == []
+    assert [row['episode_index'] for row in proof['static']] == [1]
+    assert 'DO_NOT_TRAIN' in proof['refused'] and proof['stopped_output'] is False

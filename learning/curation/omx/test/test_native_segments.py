@@ -217,7 +217,11 @@ def intake_module():
     return intake
 
 
-def stub_intake(intake, monkeypatch, collections, sizes):
+TEACHER = dict(kind='replay_trajectory', segments=dict(A=[0, 3], reset=[3, 4], B=[4, 7]),
+               source=dict(dataset='local/omx-pick', episode=3, split_s=2.0, end_s=4.5))
+
+
+def stub_intake(intake, monkeypatch, collections, sizes, modes=None):
     """prepare_native without LeRobot: sealed manifests, source episodes and the aggregate are stubs."""
     import sys
     def aggregate(*args, aggr_root, **kwargs):
@@ -226,8 +230,11 @@ def stub_intake(intake, monkeypatch, collections, sizes):
         (aggr_root/'meta/info.json').write_text('{}')
         (aggr_root/'data/part.parquet').write_bytes(b'data')
     monkeypatch.setitem(sys.modules, 'lerobot.datasets.aggregate', SimpleNamespace(aggregate_datasets=aggregate))
-    manifests = {c: dict(session_id=c.name, rig_revision='rig', calibration_revision='cal', sealed_ns=i)
-                 for i, c in enumerate(collections)}
+    modes = modes or ['leader_native'] * len(collections)
+    manifests = {c: dict(session_id=c.name, rig_revision='rig', calibration_revision='cal', sealed_ns=i,
+                         source_mode=mode, **(dict(teacher_sha256=f'{i}'*64, teacher=TEACHER)
+                                              if mode == 'scripted_teacher' else {}))
+                 for i, (c, mode) in enumerate(zip(collections, modes))}
     monkeypatch.setattr(intake, '_sealed_collection', lambda c: (manifests[Path(c)], 'f'*64))
     monkeypatch.setattr(intake, '_source_episodes', lambda root, repo: [
         dict(episode_index=i, content_sha256=f'{root.parent.name}{i}') for i in range(sizes[root.parent.name])])
@@ -319,3 +326,63 @@ def test_intake_prepared_before_exclusion_is_refused_from_its_sealed_manifests(m
     (provenance/'manifest.json').write_text(json.dumps(dict(files={'dataset/static_episodes.json': 'a'*64})))
     with pytest.raises(ValueError, match='prepare it again'):
         module.native.static_episodes(tmp_path, 3)
+
+
+def test_intake_refuses_leader_and_teacher_recordings_together(tmp_path, monkeypatch):
+    first, second = tmp_path/'first', tmp_path/'second'
+    intake = intake_module()
+    stub_intake(intake, monkeypatch, [first, second], {'first': 2, 'second': 2},
+                modes=['leader_native', 'scripted_teacher'])
+    with pytest.raises(ValueError, match='cannot share one intake'):
+        intake.prepare_native([first, second], tmp_path/'prepared', 'local/native')
+    assert not (tmp_path/'prepared').exists()
+
+
+@pytest.mark.parametrize('fault', ['do_not_train', 'three_episodes'])
+def test_teacher_intake_keeps_the_do_not_train_rule_and_episodes_a_and_b(tmp_path, monkeypatch, fault):
+    source = tmp_path/'source'
+    intake = intake_module()
+    stub_intake(intake, monkeypatch, [source], {'source': 3 if fault == 'three_episodes' else 2},
+                modes=['scripted_teacher'])
+    if fault == 'do_not_train':
+        (source/'dataset'/'DO_NOT_TRAIN.txt').write_text('leader never moved\n')
+    with pytest.raises(ValueError, match='DO_NOT_TRAIN' if fault == 'do_not_train' else 'episodes A and B'):
+        intake.prepare_native([source], tmp_path/'prepared', 'local/native')
+    assert not (tmp_path/'prepared').exists()
+
+
+def test_teacher_intake_binds_the_teacher_not_its_site_path_and_carries_static_episodes(tmp_path, monkeypatch):
+    import hashlib
+    first, second = tmp_path/'first', tmp_path/'second'
+    intake = intake_module()
+    stub_intake(intake, monkeypatch, [first, second], {'first': 2, 'second': 2}, modes=['scripted_teacher'] * 2)
+    marker(second/'dataset', episodes=2, static=[1], threshold=1.0)
+    site_path = '/home/operator/omx-replays/arm-s-cycle.json'
+    for collection in (first, second):
+        (collection/'session.json').write_text(json.dumps(dict(source_mode='scripted_teacher', replay=dict(
+            path=site_path, sha256='0'*64, segments=TEACHER['segments'], source=TEACHER['source']))))
+    seen = {}
+    class Inspected(Exception):
+        pass
+    def inspect(output, repo_id, **kwargs):
+        seen.update(kwargs, static=json.loads((Path(output)/'static_episodes.json').read_text()))
+        raise Inspected
+    monkeypatch.setattr(intake, 'inspect_dataset', inspect)
+    with pytest.raises(Inspected):
+        intake.prepare_native([first, second], tmp_path/'prepared', 'local/native')
+    capture = seen['capture_provenance']
+    assert seen['source_mode'] == capture['source_mode'] == 'scripted_teacher'
+    assert 'collection_manifest_sha256' not in capture
+    assert capture['teacher_sha256'] == hashlib.sha256(json.dumps(['0'*64, '1'*64]).encode()).hexdigest()
+    assert capture['teachers'] == [dict(session_id=c.name, teacher_sha256=f'{i}'*64, **TEACHER)
+                                   for i, c in enumerate((first, second))]
+    assert seen['static'] == dict(episodes=4, static=[3], threshold=1.0)
+    copied = json.loads((tmp_path/'prepared/rosy_provenance/session-000000/session.json').read_text())
+    assert copied['replay'] == dict(sha256='0'*64, segments=TEACHER['segments'], source=TEACHER['source'])
+    assert site_path not in json.dumps(capture)
+    assert not any(site_path.encode() in p.read_bytes() for p in (tmp_path/'prepared').rglob('*') if p.is_file())
+    from native_capture import bind_capture
+    bound = bind_capture([dict(episode_index=i) for i in range(4)], capture['files'], source_mode='scripted_teacher',
+                         body_units='normalized_-100_100', rig_revision='rig', calibration_revision='cal',
+                         provenance=capture)
+    assert [e['cycle_id'] for e in bound['episodes']] == ['first-ep0000', 'first-ep0001', 'second-ep0000', 'second-ep0001']

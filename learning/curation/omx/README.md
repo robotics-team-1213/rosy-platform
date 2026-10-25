@@ -208,6 +208,13 @@ prepared intake를 만든다. 봉인 manifest와 보정 revision을 다시 해�
 녹화 하나가 세션 하나라서 그 Episode들은 한 분할에만 들어간다. 학습·평가를 나누려면 녹화가 둘 이상 필요하다.
 판정은 모두 `unknown`/`exclude`로 시작하며 사람 검수 뒤 학습센터 ‘등록된 검수 시연’과 기존 export·학습 경로를 따른다.
 
+`record_session.py --replay`로 녹화하고 봉인한 자동 교사(`source_mode=scripted_teacher`) 녹화도 같은 명령을 쓴다.
+`teacher/trajectory.json`을 다시 해시해 manifest `teacher_sha256`과 대조하고, `kind=replay_trajectory`·`rosy.omx-replay-trajectory.v1`,
+이어진 정수 구간 A·reset·B, 작은 JSON `source`(4 KiB·깊이 3·목록 64개 이하), Episode 정확히 두 개(A=0, B=1)를 요구한다.
+리더 녹화와 한 intake에 섞을 수 없다. `capture.json`에는 `teacher_sha256`과 녹화별 `teachers`(hash·kind·segments·source)만 남긴다.
+현장 PC 절대 경로인 `replay.path`는 `rosy_provenance/*/session.json` 사본에서 지우며 다른 출력에도 쓰지 않는다.
+원본 session.json은 봉인 `manifest_sha256`으로 묶여 있다. 정적 episode·`DO_NOT_TRAIN.txt` 규칙은 리더 녹화와 같다.
+
 ## 학습센터에서 파지 구간 검수
 
 학습센터 `/learning/omx`에서 자료 등록에 연결한 prepared intake를 선택한다.
