@@ -34,7 +34,8 @@ A service may also need the idle cell (D-871: cameras, torque-OFF observers and 
 The lock is released after the smoke check and before the restart, because the observer's own start
 guard takes it. `"system_site_packages": true` builds the lock's venv over the host Python's packages
 (the observers need the system ROS `rclpy`); `"uv": "~/.local/bin/uv"` builds it with uv for a host Python
-without `ensurepip`.
+without `ensurepip`. `"sequential": true` stops the units one by one in reverse order and starts them in
+order (camera readiness restores its controls only after the cameras settle).
 
 Every step is one JSON line on stdout and the state is in `state.json`. Stopping updates:
 `systemctl --user disable --now rosy-omx-autoupdate.timer`. Release signing (D-441) remains a later step: until then trust rests on
@@ -143,11 +144,21 @@ class Host:
                     complete = False
             if not units:
                 return complete
-            if subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
+            if self.cfg.get("sequential"):
+                # One at a time: stop in reverse order, then start in order. Restarted together, camera
+                # readiness restored its V4L2 controls while the cameras reopened, then refused to start
+                # (Fleet PC 2026-10-25).
+                for verb, ordered in (("stop", reversed(units)), ("start", units)):
+                    for unit in ordered:
+                        if subprocess.run(["systemctl", "--user", verb, unit], timeout=120).returncode != 0:
+                            return False
+            elif subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
                 return False
             time.sleep(self.cfg.get("settle", 10))
-            active = subprocess.run(["systemctl", "--user", "is-active", "--quiet", *units], timeout=30)
-            return complete and active.returncode == 0  # forward: a release missing its unit file fails
+            # one by one: `is-active` with several units succeeds when any one of them is active
+            active = all(subprocess.run(["systemctl", "--user", "is-active", "--quiet", unit],
+                                        timeout=30).returncode == 0 for unit in units)
+            return complete and active  # forward: a release missing its unit file fails
         except (OSError, subprocess.SubprocessError):  # systemctl missing or timed out
             return False
 

@@ -537,3 +537,30 @@ def test_a_host_python_without_ensurepip_builds_the_env_with_uv(tmp_path, monkey
                         str(tmp_path / "env")]
     assert calls[1] == ["/opt/uv", "pip", "install", "-q", "--python", str(tmp_path / "env" / "bin" / "python"),
                         "-r", str(lock)]
+
+
+def fake_systemctl(tmp_path, monkeypatch, failing=""):
+    (tmp_path / "bin").mkdir()
+    calls = tmp_path / "calls"
+    fake = tmp_path / "bin" / "systemctl"
+    fake.write_text('#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in "--user is-active --quiet %s") exit 3;; esac\nexit 0\n'
+                    % (calls, failing))
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
+    return calls
+
+
+def test_one_failed_unit_among_several_fails_the_restart(tmp_path, monkeypatch):
+    # systemctl is-active with several units succeeds when any one is active (Fleet PC 2026-10-25)
+    fake_systemctl(tmp_path, monkeypatch, failing="rosy-omx-camera-readiness.service")
+    host = m.Host({"root": str(tmp_path), "settle": 0})
+    assert not host.restart(["rosy-omx-camera@top.service", "rosy-omx-camera-readiness.service"])
+    assert host.restart(["rosy-omx-camera@top.service"])
+
+
+def test_a_sequential_restart_stops_in_reverse_then_starts_in_order(tmp_path, monkeypatch):
+    calls = fake_systemctl(tmp_path, monkeypatch)
+    units = ["rosy-omx-camera@top.service", "rosy-omx-camera-view.service", "rosy-omx-camera-readiness.service"]
+    assert m.Host({"root": str(tmp_path), "settle": 0, "sequential": True}).restart(units)
+    verbs = [line for line in calls.read_text().splitlines() if " is-active " not in line]
+    assert verbs == [f"--user stop {u}" for u in reversed(units)] + [f"--user start {u}" for u in units]

@@ -30,6 +30,7 @@
                  "deploy/robot/omx/rosy-omx-devices-autoupdate.service",
                  "deploy/robot/omx/rosy-omx-devices-autoupdate.timer"],
   "restart_running_only": true,
+  "sequential": true,
   "settle": 20,
   "require_verified_commit": false,
   "keep": 3
