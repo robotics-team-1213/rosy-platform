@@ -81,9 +81,11 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | 자료 | 자료 등록 `/catalog`, 카메라 맞춤 `/learning/camera`, 작업 공간 `/learning/workspaces` |
 | 정답 | 객체 검수 `/`, 픽셀 검수 `/pixels`, 로봇암 시범 검수 `/learning/omx`, VLM 판단 `/learning/vlm` |
 | 학습 | 학습 과제 `/learning/tasks`, 인식 학습 `/learning#pipeline`(홈의 학습 흐름 구역), SIM 실험 `/learning/sim` |
-| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답, 최근 SIM 실험 10개의 상태·단계·과제 성공·판정과 그 run을 여는 `/learning/sim?run=<run_id>` 링크, 화면을 열 때마다 실험 목록을 한 번 읽는다). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 다음 조각까지 비활성이다 |
+| 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답, 최근 SIM 실험 10개의 상태·단계·과제 성공·판정과 그 run을 여는 `/learning/sim?run=<run_id>` 링크, 화면을 열 때마다 실험 목록을 한 번 읽는다). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 아래 「승격 요청 묶음」 |
 
 로그인·계정과 Hugging Face 가져오기는 메뉴가 아니라 상단 막대의 「로그인·계정」 `/accounts`에 있다. 수집·저장 공간은 아직 홈의 구역이다. 로봇암 화면(`/learning/omx`)은 시범 검수 밖에 학습·비교 구역도 품지만 한 화면이라 정답 단계에 둔다. 인식 학습은 별도 화면 없이 홈의 학습 흐름 구역으로 간다.
+
+**승격 요청 묶음(D-874).** `GET /api/learning/promotion-requests`(`view`)는 등록된 인식 학습 결과(`perception`)마다 요청 가능 여부와 거절 이유, 지금까지 봉인한 요청을 준다. `POST`(`manage`, CSRF, 본문은 `{"id": <결과 id>}`만)는 `promotion_request.build`가 그 폴더의 `intake_report.json`(통과·파일 해시)·`model_manifest.json`·평가셋·학습 데이터셋을 디스크에서 다시 확인한 뒤 `rosy.learning.promotion-request/1` 묶음을 `<state>/promotion-requests/<sha256>.json`에 한 번만 쓴다. 평가셋과 보고의 채점 출처가 모두 `human_reviewed_eval`이어야 하고, LiDAR·궤적 자동 라벨(build.py 평가셋)이나 HF 사진이 한 장이라도 있으면 거절한다. 평가셋은 `--learning-control` 학습 설정의 데이터셋 저장소 `evalsets/` 아래에 있는 `review_eval_bootstrap` 공개본이어야 하고, 그 학습 기록(`state.json`)에서 같은 모델의 `ready` 행 `eval_set`과 content_sha가 같아야 한다. GET은 크기·mtime이 같은 파일의 해시를 다시 계산하지 않고, POST는 모두 다시 해시한다. 같은 모델의 같은 요청은 처음 해시를 돌려준다. 묶음은 `state: requested`뿐이며 승인·단계·권한 키를 쓰면 거절한다. Fleet에서 승인권자가 이 해시로 제안을 만든다. Learning은 Fleet을 부르지 않는다.
 
 **홈의 도메인 줄.** `/api/learning`은 기존 키를 그대로 두고 `domains`와 `vlm_eval_url`을 더한다(`learning_domains.py`). 도메인마다 루프 여섯 칸(수집·정답·데이터셋·학습·평가·승격 기록, ⑦ 배포는 Learning 밖이라 없음)을 `{stage, label, state, evidence, next}`로 주고, `state`는 `done`·`active`·`blocked`·`waiting`·`not_available`이다. 도메인마다 `next`(`{label, href}` 하나)와 `blocked`(처음 막히거나 없는 칸의 이유)가 있다. 이 작업대가 이미 가진 자료만 읽는다.
 
