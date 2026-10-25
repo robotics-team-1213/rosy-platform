@@ -11411,6 +11411,12 @@ osy-d395-s1d\`.
 - 결정: 없음.
 - 교훈: 없음
 
+## 2026-10-25 · uncommitted · Learning 배포 후 전체 CI와 G1 원인 분리 조사
+
+- 변경: [후속 검증 기록](validation/learning-conveyor-followup-2026-10-25/result.md)에 문서 병합 후 전체 CI20잡 성공, 원래 G1 실패 SHA의 공식 원격 단독 검사와 실제 SQLite 계측 반례, 운영 payload 동일성을 보존했다.
+- 증거: G1 node 1PASS/0SKIP/0NEW와 고정 source 합성 DB 잠금 교차3쌍을 독립 검토했다. CPU·BEGIN·commit·사후 jitter 관측은 원래 CI 원인으로 소급하지 않는다. 운영41/publicd0d signed payload732개 동일·21:47:29 정상 readback으로 추가 배포할 제품 차이가 없음을 확인했다.
+- gate 변화: 문서 병합 후 전체 CI의 최종 성공을 확인했다. 로그인 화면·Episode·학습·정책·물리 gate는 미확인이다. CE 미해결 — 원래 G1 지연 원인을 확정하지 않아 해결 교훈을 추가하지 않았다.
+
 ## 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
 
 - 변경: Windows에서 다른 프로세스가 cwd로 잡은 워크트리 폴더는 `git worktree remove`가 등록만 지우고 폴더를 남기며, 그 안의 git 명령이 main 체크아웃의 `.git`으로 올라가 main에 작용했다(오늘 공유 main 체크아웃의 우발 병합 원인). `tools/worktree_rules.py` `leave_tombstone`이 남은 폴더를 비었으면 rmdir하고, 아니면 존재할 수 없는 gitdir(`.git/removed-worktree-<name>-delete-this-folder`)을 가리키는 `.git` 파일을 쓴다. `tools/worktrees.py` `_remove`(실패·성공 뒤 남은 폴더)와 `clear_orphan` 실패(WinError 32)에서 부른다. 묘비 `.git`은 보존할 내용으로 세지 않아 다음 prune이 대기 없이 폴더를 지우고, scan은 고아로만 본다. `new`는 묘비만 남은 폴더를 치우거나, 잡혀 있으면 이유를 들어 거절한다(`clear_tombstone`). `tools/land.py`는 같은 `worktrees.sweep`을 써서 따로 고칠 곳이 없다.
