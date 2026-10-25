@@ -9759,3 +9759,9 @@ osy-d395-s1d\`.
 - 변경: a46daee90b7의 remote_isaac와 receipt·응답 유실·해시 검증 회귀, 운영 안내를 공개한다. 미공개 OMX 도구 전체 대신 기존13행의 명시적 역할 호스트 검증만 CLI 안에 보존하고 model 선택·중복·사이트·명령 주입 거절을 시험한다. 안내의 공개 산출물 설명에 PNG 다섯 개를 포함한다.
 - 검증: 공개 SHA의 원격 CLI·Isaac·소비 경로 회귀, 고정 base/head 독립 검토와 CI를 결속한다. 원래 SDK source7d0/run36041의 증거와 새 호스트 검사를 구분한다.
 - gate 변화: 없음. SDK 설치·업그레이드·새 실험·운영 활성화·로봇 명령·Episode 생성·정책 승격은 수행하지 않았다. CE 해당 없음 — 기존 경계와 회귀를 보존하는 소스 포트다.
+
+## 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
+
+- 변경: D-871(모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면) 기록. `omx_autoupdate.py`에 `kind: service`의 `idle_gate: cell`(셀 잠금·버스·토크 OFF 유휴 규칙), 재시작 전 잠금 해제, `restart_running_only`(손으로 멈춘 관측기는 그대로), `system_site_packages`를 더함. 카메라·관측기·브리지용 `omx-devices-autoupdate.json.example`, `requirements-observation.lock`, `rosy-omx-devices-autoupdate.{service,timer}`. 관측기 템플릿이 health 파일을 `%i`로 정하고 브리지는 `ROSY_OBSERVATION_ARM_HEALTH`를 기본값으로 읽음(SHA 박힌 drop-in 대체). services.yaml의 해당 유닛을 `autoupdate`로.
+- 증거: 원격 시험(아래 PR). 관제 PC 적용은 별도(관측기는 10/24부터 옛 OpenRB 시리얼로 멈춤).
+- gate 변화: 없음.
