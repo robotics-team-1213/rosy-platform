@@ -50,6 +50,27 @@ def test_output_limit_and_linked_outputs_refuse_success(tmp_path):
     assert row['reason'] == 'unsafe_output'
 
 
+def test_disk_preflight_keeps_output_budget_in_addition_to_reserve(tmp_path, monkeypatch):
+    import shutil
+    from types import SimpleNamespace
+    monkeypatch.setattr(shutil, 'disk_usage', lambda path: SimpleNamespace(free=1024 ** 3))
+    row = run(tmp_path, "from pathlib import Path;Path('launched').write_text('unexpected')")
+    assert row['reason'] == 'insufficient_space' and row['exit_code'] is None
+    assert not (tmp_path / 'launched').exists()
+
+
+def test_disk_pressure_reaps_only_the_owned_child(tmp_path, monkeypatch):
+    import shutil
+    from types import SimpleNamespace
+    measured = []
+    def available(path):
+        measured.append(path)
+        return SimpleNamespace(free=2 * 1024 ** 3 if len(measured) == 1 else 0)
+    monkeypatch.setattr(shutil, 'disk_usage', available)
+    row = run(tmp_path, 'import time; time.sleep(20)', timeout=.2)
+    assert row['reason'] == 'insufficient_space' and row['exit_code'] != 0
+
+
 @pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual', 'missing_residual'])
 def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, evidence):
     from contextlib import nullcontext

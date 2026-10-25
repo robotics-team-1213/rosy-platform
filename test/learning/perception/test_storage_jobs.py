@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib
 import json
+import os
 import shutil
 import threading
 from pathlib import Path
@@ -295,3 +296,32 @@ def test_cache_budget_is_rechecked_after_worker_admission(jobs_setup, monkeypatc
         try: later.result()
         except ValueError: pass
     assert sum(1 for path in cache.iterdir() if not path.name.startswith('.')) <= 1
+
+
+def test_process_death_cannot_leave_reservation_without_its_job(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    service = build()
+    before = service.pool.snapshot(actor)['targets'][0]['available_bytes']
+    pid = os.fork()
+    if pid == 0:
+        service._save = lambda *args, **kwargs: os._exit(23)
+        service.create(actor, dict(source_id='raw', artifact_id='run-one', profile='isaac'))
+        os._exit(99)
+    _, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 23
+    assert build().pool.snapshot(actor)['targets'][0]['available_bytes'] == before
+    assert build().list(actor) == []
+
+
+def test_file_added_after_cleanup_verification_is_never_deleted(jobs_setup, monkeypatch):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    service = build(); job = create(build, actor); service.run(actor, job['id'])
+    verify = service.files.verify
+    def inserted(location, expected, **kwargs):
+        verify(location, expected, **kwargs)
+        if kwargs.get('subset'):
+            (service.files.path(location) / 'unuploaded.json').write_bytes(b'keep-late-data')
+    monkeypatch.setattr(service.files, 'verify', inserted)
+    with pytest.raises(ValueError): service.reclaim(actor, job['id'], job['id'])
+    kept = list(artifact.parent.rglob('unuploaded.json'))
+    assert len(kept) == 1 and kept[0].read_bytes() == b'keep-late-data'
