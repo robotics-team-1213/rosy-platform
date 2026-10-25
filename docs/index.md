@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · guard 교사 모드 첫 실물: 대기 중 오래된 모터 상태 표본으로 토크 OFF
 - 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
 - 2026-10-25 · uncommitted · feat(sim): D-866 P1 OMX 시뮬레이터 백엔드 적합성 시험
 - 2026-10-25 · uncommitted · docs(spec): MSN-008 계약 줄 v1.314 확정
 - 2026-10-25 · uncommitted · 공급암 S 교사 셀을 로컬 main에 착지, 교사 경로를 guard 안으로
-- 2026-10-25 · e2c4a46c2b · 공급암 S 교사 셀 도구: 청크 실행·계획·보정·봉인·Fleet·판단 자리
