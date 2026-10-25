@@ -74,3 +74,19 @@ def check_capture_groups(episodes, decisions):
             if group in groups and groups[group] != split:
                 raise ValueError(f'capture {key} crosses dataset splits')
             groups[group] = split
+
+
+def _local_path(value):
+    return isinstance(value, str) and (value.startswith(('/', '~')) or re.match('[A-Za-z]:[\\\\/]', value) is not None)
+
+
+def redacted(value, keep_name=False):
+    """Drop absolute site-PC paths (dataset root, /dev/serial ports, /dev/v4l cameras, replay.path) from copies;
+    keep_name keeps only the basename instead (teacher.source.dataset)."""
+    if _local_path(value) and keep_name:
+        return re.split(r'[\\/]', value.rstrip('\\/'))[-1]
+    if isinstance(value, dict):
+        return {k: redacted(v, keep_name) for k, v in value.items() if keep_name or not _local_path(v)}
+    if isinstance(value, list):
+        return [redacted(v, keep_name) for v in value if keep_name or not _local_path(v)]
+    return value

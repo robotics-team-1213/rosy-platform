@@ -12,7 +12,7 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA
+from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA, redacted as _redacted
 from native_environment import _events, seal_environment
 from native_review import (JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset,
                            static_episodes, write_json)
@@ -431,22 +431,6 @@ def _sealed_teacher(root, manifest, actual):
 
 
 REVISIONS = ('rig_revision', 'calibration_revision')
-
-
-def _local_path(value):
-    return isinstance(value, str) and (value.startswith(('/', '~')) or re.match('[A-Za-z]:[\\\\/]', value) is not None)
-
-
-def _redacted(value, keep_name=False):
-    """Drop absolute site-PC paths (dataset root, /dev/serial ports, /dev/v4l cameras, replay.path) from copies;
-    keep_name keeps only the basename instead (teacher.source.dataset)."""
-    if _local_path(value) and keep_name:
-        return re.split(r'[\\/]', value.rstrip('\\/'))[-1]
-    if isinstance(value, dict):
-        return {k: _redacted(v, keep_name) for k, v in value.items() if keep_name or not _local_path(v)}
-    if isinstance(value, list):
-        return [_redacted(v, keep_name) for v in value if keep_name or not _local_path(v)]
-    return value
 
 
 def _sealed_collection(root, operator=None):
