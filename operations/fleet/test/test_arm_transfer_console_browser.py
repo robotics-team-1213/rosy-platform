@@ -2,7 +2,7 @@
 import pytest
 
 from browser_harness import browser_tests_enabled
-from test_console_queue_inline_browser import API, _open, _shot, site  # noqa: F401
+from test_console_queue_inline_browser import API, ROOT, _open, _shot, site  # noqa: F401
 from test_arm_transfer_job_api import rig as arm_api_rig, create, headers  # noqa: F401
 from test_physical_transfer_evidence import geometry, policy  # noqa: F401
 from test_physical_transfer_store import installation  # noqa: F401
@@ -115,6 +115,7 @@ def test_real_http_console_admits_external_proposal_with_independent_identity(ar
     from playwright.sync_api import expect, sync_playwright
 
     client, tasks, port, _ = arm_api_rig
+    client.app.state.web_common = ROOT / "shared" / "web"
     created = create(arm_api_rig)
     assert created.status_code == 200
     proposal = created.json()["job"]
