@@ -11623,3 +11623,12 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_remote_pytest_memory.py`, `test/test_remote_pytest.py`, `test/test_remote_test_tools.py`. 최고치 줄·기록·예약 선택·예약과 상한 분리를 변이로 확인했다.
 - gate 변화: 없음. 시험 PC 배치만 바뀐다. 실제 호스트에서 sim이 함께 배치되는지는 아직 보지 않았다.
 - 교훈: CE 해당 없음 — 규칙과 이유가 코드 주석과 시험에 있다.
+
+## 2026-10-26 · uncommitted · tools/doctor.py와 FULL 승격 경로 설명
+
+- 변경: `tools/doctor.py`를 추가한다. 착지·게시 전에 한 번 돌리는 읽기 전용 점검으로, 설치된 pre-push가 HEAD의 `tools/hooks/pre-push`와 같은지(다르면 FAIL, `bash tools/hooks/install.sh`), `rosy.publishOnly`, 워크트리 슬롯(main 포함 15)과 치울 수 있는 개수, 로컬 `main`과 `origin/main`의 앞섬·뒤처짐과 마지막 fetch 나이, 착지 대기열의 표·차례·죽은 표를 OK/WARN/FAIL 한 줄과 고칠 명령으로 보여 준다. `--hosts`는 시험 PC마다 `~/rosy-test/maintenance/last-report.json`의 남은 GiB와 `~/rosy-jobs/disk-low`를 ssh로 읽는다. 기존 `worktrees.scan`/`prune`(dry run), `update_status.ref_state`, `land_queue._stale`, `lab_hosts`를 그대로 쓴다. `tools/harness/affected_tests.py`는 어떤 모듈·import 루트·시험에도 안 잡혀 FULL이 된 경로를 `unmapped`(JSON 새 키)로 모으고, `--print`에 경로마다 "그 경로를 읽는 시험에 경로를 글자 그대로 적는다" 힌트를 찍는다. 기존 JSON 키는 바꾸지 않았다.
+- 이유: 착지 전 낡은 훅·뒤처진 main·죽은 대기표·가득 찬 시험 PC를 각각 다른 명령으로 찾아야 했고, FULL 승격 원인이 f-string 경로처럼 선택기에 안 보이는 참조일 때 무엇을 고칠지 출력에 없었다.
+- 증거: `test/test_doctor.py`(가짜 git 저장소, 네트워크 없음), `test/test_affected_tests.py::test_unknown_paths_are_listed_with_a_hint_in_json_and_print`. 원격 실행과 변이 증명은 보고에 적는다.
+- gate 변화: 없음. 도구는 읽기만 하고 `land.py`·CI는 바꾸지 않았다.
+- 결정: 없음.
+- 교훈: CE 해당 없음 — 새 도구와 시험이 내용을 담는다.

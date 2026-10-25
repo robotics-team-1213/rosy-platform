@@ -643,3 +643,15 @@ def test_modules_runner_gates_by_2026_11_15():
         assert not reporting, f"set gating for {reporting} (D-762 stage 1 deadline 2026-11-15)"
     else:
         assert reporting in ([], ["modules"]), reporting
+
+
+def test_unknown_paths_are_listed_with_a_hint_in_json_and_print(sample, capsys):
+    """An "unknown -> full" path is named in ``unmapped`` and printed with how to map it."""
+    sel = _select(sample, "tools/mystery/run.sh", "deploy/robot/run.sh")
+    assert sel.mode == "full"
+    assert sel.unmapped == ["tools/mystery/run.sh"], "only the path no module/test names"
+    assert sel.to_json()["unmapped"] == ["tools/mystery/run.sh"]
+    text = affected.render(sel)
+    assert "  tools/mystery/run.sh\n      hint: name this path literally in the test that loads it" in text
+    assert "deploy/robot/run.sh\n      hint" not in text
+    assert _select(sample, "deploy/robot/run.sh").unmapped == []
