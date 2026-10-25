@@ -73,7 +73,7 @@ class ObservationCache:
             for site in scopes:
                 item = MonitoringNode(
                     id=f"{site}:{kind}:{source.id}", site_id=site, kind=kind,
-                    label=source.label or source.id,
+                    label=(source.label or source.id)[:80],
                     origin_collector=source.id if peer else config.collector_id, origin_source=source.id,
                     sample_id=None, sampled_at=None, age_s=None,
                     valid_for_s=900 if source.kind == "host_guard" else 2100 if source.kind == "host_state" else 15,

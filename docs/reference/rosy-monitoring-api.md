@@ -29,6 +29,10 @@ host-guard 원천은 900초, host-state 원천은 2100초이며 그 외 원천�
 `reported_health`는 소유자 판정이다. `freshness=stale`인 OK는 과거 판정이다.
 링크는 방향·등록 기대 여부·관측 결과·transport·확인된 실패 단계·응답 시간과
 최근 성공 시각을 표현한다. `reported` 링크와 수집기의 `probe`는 별도 근거다.
+`reported.reachable=true`는 응답 도달의 근거이며 인증 성공을 보장하지 않는다.
+Fleet의 기존 `tls-refused`는 HTTP 401/`PAIRING_REQUIRED`이므로 `auth` 단계로 전달한다.
+실제 TLS handshake 실패는 수집 probe의 `tls`다. `last_success_at`은 성공적인 읽기 시각이며
+인증 거절로 갱신하지 않는다. 수집 작업이 종료되면 health/snapshot은 503을 반환한다.
 이는 논리적인 관측 경로이며 물리 LAN 연결이나 PC 개수의 증명이 아니다.
 
 peer는 등록된 ID와 사이트 전체가 일치해야 한다. generation/sequence와 원천 시각의
