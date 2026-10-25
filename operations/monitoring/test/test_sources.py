@@ -76,20 +76,23 @@ def test_core_reads_only_identity_and_owner_diagnostics():
     assert result.links[0].reachable is True and result.links[0].transport == 'https'
 
 
-def test_redirect_auth_and_malformed_sources_are_public_failure_codes():
-    for status, body, expected in [(302, b'private redirect', 'http'), (401, b'secret auth', 'auth'),
-                                    (200, b'{"health":"OK","health":"ERROR"}', 'protocol'),
-                                    (200, b'{"value":1e9999}', 'protocol'),
-                                    (200, b'{"value":' + b'[' * 1200 + b'0' + b']' * 1200 + b'}', 'protocol')]:
-        cfg, cache, creds, clock = setup({'kind': 'http', 'url': 'https://private.invalid/health'})
-        requests = []
-        def answer(request):
-            requests.append(request)
-            return httpx.Response(status, stream=httpx.ByteStream(body), headers={'location': 'https://another.invalid'})
-        asyncio.run(SourceReader(cache, creds, transport=httpx.MockTransport(answer)).poll(cfg.sources[0]))
-        value = cache.snapshot(frozenset({'site-a'}))
-        assert len(requests) == 1 and value.links[0].failure_stage == expected
-        assert not any(secret in value.model_dump_json() for secret in ('private.invalid', 'secret auth', 'private redirect'))
+@pytest.mark.parametrize(('status', 'body', 'expected'), [
+    (302, b'private redirect', 'http'), (401, b'secret auth', 'auth'),
+    (200, b'{"health":"OK","health":"ERROR"}', 'protocol'),
+    (200, b'{"value":1e9999}', 'protocol'),
+    (200, b'{"value":' + b'[' * 1200 + b'0' + b']' * 1200 + b'}', 'protocol'),
+    (200, '{"value":1}'.encode('utf-16'), 'protocol'),
+], ids=['redirect', 'auth', 'duplicate', 'nonfinite', 'depth', 'encoding'])
+def test_redirect_auth_and_malformed_sources_are_public_failure_codes(status, body, expected):
+    cfg, cache, creds, clock = setup({'kind': 'http', 'url': 'https://private.invalid/health'})
+    requests = []
+    def answer(request):
+        requests.append(request)
+        return httpx.Response(status, stream=httpx.ByteStream(body), headers={'location': 'https://another.invalid'})
+    asyncio.run(SourceReader(cache, creds, transport=httpx.MockTransport(answer)).poll(cfg.sources[0]))
+    value = cache.snapshot(frozenset({'site-a'}))
+    assert len(requests) == 1 and value.links[0].failure_stage == expected
+    assert not any(secret in value.model_dump_json() for secret in ('private.invalid', 'secret auth', 'private redirect'))
 
 
 @pytest.mark.parametrize('body', [[], {'ai': {'time': 1792886400, 'state': []}}])
