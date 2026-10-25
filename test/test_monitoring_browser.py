@@ -4,7 +4,6 @@ import json
 import asyncio
 import os
 from pathlib import Path
-import shutil
 import threading
 import time
 from types import SimpleNamespace
@@ -30,15 +29,9 @@ def monitoring_backend(tmp_path, request):
     mode = getattr(request, 'param', None)
     web_root = None
     if mode in {'web', 'xss', 'delayed', 'unavailable', 'empty', 'error', 'disconnected', 'prefix'}:
+        from rosy.monitoring.web_assets import build_web
         web_root = tmp_path / 'web'
-        (web_root / 'common').mkdir(parents=True)
-        for name in ('index.html', 'monitoring.css', 'monitoring.js'):
-            source = ROOT / 'applications/monitoring/web' / name
-            assert source.is_file(), f'Monitoring UI asset missing: {name}'
-            shutil.copy2(source, web_root / name)
-        for name in ('tokens.css', 'components.css', 'app-shell.css', 'theme.js', 'core_ui_logic.js',
-                     'ui.js', 'ui-wiring.js', 'confirmation.js', 'live-dialog-geometry.js'):
-            shutil.copy2(ROOT / 'shared/web' / name, web_root / 'common' / name)
+        build_web(ROOT, web_root)
     sources, paths = [], {}
     for site in ('a', 'b'):
         path = tmp_path / f'host-{site}.json'
