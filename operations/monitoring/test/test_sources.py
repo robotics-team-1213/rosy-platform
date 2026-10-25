@@ -78,7 +78,9 @@ def test_core_reads_only_identity_and_owner_diagnostics():
 
 def test_redirect_auth_and_malformed_sources_are_public_failure_codes():
     for status, body, expected in [(302, b'private redirect', 'http'), (401, b'secret auth', 'auth'),
-                                    (200, b'{"health":"OK","health":"ERROR"}', 'protocol')]:
+                                    (200, b'{"health":"OK","health":"ERROR"}', 'protocol'),
+                                    (200, b'{"value":1e9999}', 'protocol'),
+                                    (200, b'{"value":' + b'[' * 1200 + b'0' + b']' * 1200 + b'}', 'protocol')]:
         cfg, cache, creds, clock = setup({'kind': 'http', 'url': 'https://private.invalid/health'})
         requests = []
         def answer(request):
@@ -88,6 +90,25 @@ def test_redirect_auth_and_malformed_sources_are_public_failure_codes():
         value = cache.snapshot(frozenset({'site-a'}))
         assert len(requests) == 1 and value.links[0].failure_stage == expected
         assert not any(secret in value.model_dump_json() for secret in ('private.invalid', 'secret auth', 'private redirect'))
+
+
+@pytest.mark.parametrize('body', [[], {'ai': {'time': 1792886400, 'state': []}}])
+def test_malformed_host_report_cannot_raise_out_of_collection(tmp_path, body):
+    path = tmp_path / 'status.json'
+    cfg, cache, credentials, clock = setup({'kind': 'host_guard', 'path': str(path), 'selector': 'ai'})
+    path.write_text(json.dumps(body))
+    asyncio.run(SourceReader(cache, credentials).poll(cfg.sources[0]))
+    value = cache.snapshot(frozenset({'site-a'}))
+    assert value.links[0].failure_stage == 'protocol'
+
+
+def test_non_scalar_core_health_is_a_protocol_failure():
+    cfg, cache, credentials, clock = setup({'kind': 'core', 'url': 'https://core.invalid'})
+    def answer(request):
+        data = {'robot_id': 'target'} if request.url.path.endswith('/info') else {'health': []}
+        return httpx.Response(200, stream=httpx.ByteStream(json.dumps(data).encode()))
+    asyncio.run(SourceReader(cache, credentials, transport=httpx.MockTransport(answer)).poll(cfg.sources[0]))
+    assert cache.snapshot(frozenset({'site-a'})).links[0].failure_stage == 'protocol'
 
 
 def test_host_guard_retains_owner_capture_and_does_not_invent_network_stage(tmp_path):
