@@ -315,6 +315,12 @@ roots:
     legacy: src/products/pinky_pro/profile
     wave: "4c"
     concern: control
+  - path: middleware/devices/rasptank/profile
+    layout_target: middleware/devices/rasptank/profile
+    part: middleware
+    d427_target: middleware/devices/rasptank/profile
+    wave: "none"
+    concern: control
   - path: middleware/devices/omx/adapter
     layout_target: middleware/devices/omx/adapter
     part: middleware

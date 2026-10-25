@@ -115,6 +115,7 @@ def test_activation_is_content_addressed_and_survives_staging_removal(tmp_path):
     ('pick-place', 1, 'sim_pick_place_task.py'),
     ('pick-place-demonstrations', 3, 'sim_pick_place_demonstrations.py'),
     ('pick-place-chunks', 1, 'sim_pick_place_demonstrations.py'),
+    ('pick-place-chunks-yaw-box', 1, 'sim_pick_place_demonstrations.py'),
 ])
 def test_activation_preserves_named_object_task_and_status_accepts_its_outputs(tmp_path, experiment, episodes, entry):
     from native_sim_prepare import activate
@@ -131,7 +132,9 @@ def test_activation_preserves_named_object_task_and_status_accepts_its_outputs(t
     if experiment == 'pick-place-demonstrations':
         assert '--episodes 3' in script
     if experiment == 'pick-place-chunks':
-        assert '--episodes 1 --plan chunks' in script  # arm S's chunk plan, not plan_transfer
+        assert '--episodes 1 --plan chunks --scenario nominal' in script  # arm S's chunk plan, not plan_transfer
+    if experiment == 'pick-place-chunks-yaw-box':
+        assert '--plan chunks --scenario yaw-box' in script  # a turned box, the wrist turned with it
     (state / 'pick-place').mkdir()
     result = {'result': 'PASS', 'attempts': 1, 'successes': 1, 'training': 'NOT_RUN', 'full_g2': False}
     (state / 'pick-place/result.json').write_text(json.dumps(result))

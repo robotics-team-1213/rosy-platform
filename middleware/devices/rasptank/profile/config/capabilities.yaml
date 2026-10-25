@@ -1,0 +1,18 @@
+# HWA-003: keep the zero limits and empty accepted sensors aligned with profile.yaml.
+capability_version: 1
+navigation:
+  goal_navigation: false
+  return_home: false
+  max_linear_velocity: 0.0
+  max_angular_velocity: 0.0
+teleop: false
+slam: false
+swarm:
+  follow: false
+  lead: false
+docking:
+  supported: false
+sensors: []
+events: []
+api_versions: [v1]
+protocol_version: "1.0"

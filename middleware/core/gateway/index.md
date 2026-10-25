@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · 4fdf8c9fee · installed package 내용과 기종 결속
+- 2026-10-25 · uncommitted · 제품 기종 설정 결속과 snapshot 소비
 - 2026-10-25 · uncommitted · D-862 typed Fleet 정지의 기존 CORE 경로 회귀
 - 2026-10-24 · a7aaaed472 · 원래 실행에 한정한 관제 취소와 결과 종단
 - 2026-10-21 · ed405d1ecf · native map client cleanup
-- 2026-10-20 · uncommitted · composed SIM의 기존 readback probe 연결
-- 2026-10-20 · uncommitted · 출발 SIM의 숨겨진 예외 진단

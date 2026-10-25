@@ -1124,6 +1124,21 @@ Python은 호스트 ROS ABI와 맞아야 한다. Jazzy setup을 먼저 source하
 인증 후 팔별 freshness와 세 영상을 확인한다. Fleet/Vision 설정과 서명 절차는
 [사이트 배포 안내](../../site/README.md)를 따른다.
 
+**자동 업데이트 (D-871).** 카메라, 화질 뷰어·준비 서비스, 관측기, 브리지는 하나의 업데이터로 함께 움직인다. 이 업데이터는 `rosy-omx-devices-autoupdate.timer`(10분마다)이고, 쓰는 코드는 셀 도구와 같은 `omx_autoupdate.py`(`kind: service`, `idle_gate: cell`)다.
+
+- 하는 일: CI를 통과한 main을 `~/.local/share/rosy/omx-devices/releases/<sha12>`에 푼다. `current`를 바꾸고, 이전에 돌던 유닛만 다시 띄운다.
+- 바꾸는 조건: 셀이 쉴 때만 바꾼다. 셀이 쉰다는 것은 다음 셋을 모두 만족하는 것이다.
+  - 세션 잠금이 없다.
+  - 관측기 말고 버스를 연 프로세스가 없다.
+  - 관측기 health가 모든 모터 토크 OFF를 보고한다.
+- 설치:
+  1. `omx-devices-autoupdate.json.example`을 `~/.config/rosy/omx-devices-autoupdate.json`에 복사한다. 이 셀의 팔 수만큼 `devices`, `observers`, `units`를 채운다.
+  2. env 파일의 코드 경로를 `~/.local/share/rosy/omx-devices/current`와 `current-env`로 바꾼다(`observer.env.example`, `observation-bridge.env.example`). 카메라 env는 `ROSY_CAMERA_SOURCE=.../current/middleware/devices/omx/adapter/omx_adapter/camera_source.py`, `ROSY_CAMERA_PIPELINE_ROOT=.../current/deploy/robot/omx`로 바꾼다.
+  3. SHA가 이름에 박힌 drop-in(`95-motor-health-*.conf`)을 지운다. health 파일은 이제 템플릿과 `ROSY_OBSERVATION_ARM_HEALTH`가 정한다.
+  4. 첫 실행은 저장소 사본으로 `python3 deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/omx-devices-autoupdate.json run`.
+  5. 그 뒤 업데이터 유닛 두 개를 복사하고 `systemctl --user enable --now rosy-omx-devices-autoupdate.timer`.
+- 관측기가 멈춰 있으면 토크 근거가 없으므로 업데이트는 `follower_torque_not_off`로 보류된다.
+
 실제 owner로 전환할 때는 두 `rosy-omx-observer@arm_a/arm_b` 유닛을 중지하고
 각 포트의 FD/버스 해제를 확인한 뒤 별도로 수용된 CORE/OMX owner만 시작한다.
 관측 서비스 설치·활성화는 토크 ON, 정책 활성화, 파지 실행을 승인하지 않는다.

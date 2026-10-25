@@ -4717,6 +4717,7 @@
 - Change: merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-reference-stream-land without production-code conflicts.
 - Evidence: Git blob comparison and [integration record](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). Static integration checks only; no new remote pass for this integrated HEAD.
 - gate 변화: unchanged. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable.
+
 ## 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
 
 - 변경: fleet/server/missions/policy_admission.py 신설(설정 해석·운영자 전환·상한·감사 판정 core), test/test_policy_admission_core.py 추가, D-865 실행 설계 P2 상태(P2a/P2b 분리) 표시.
@@ -4782,3 +4783,10 @@
 - 증거: 독립 통합 소스 리뷰 승인, owner boundary를 포함한 architecture/Fleet 원격 679 passed, 5 skipped, NEW0/known0/flaky0. [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 이전 FULL 실패와 새 소스를 구분했다.
 - gate 변화: 없음. 최신 소스의 공식 FULL·착지·게시·배포·실물 수용은 별도다.
 - 교훈: 기존 구조 검사 선행 교훈에 이미 안내된 소유 모듈 시험 목록을 함께 실행해야 함을 반영했다.
+
+## 2026-10-25 · uncommitted · 작업 종류 poll의 실제 화면 반영을 기다린다
+
+- 원인: 공개 main02c80a7c20의 CI40179928359 Fleet2of5에서 종류 제거 후 즉시 is_hidden 판정이 실패했다. 가상 timer 진행은 Python route 응답과 refresh DOM 반영 완료를 보장하지 않는다. 동일 종류 추가는 이미 Playwright expect로 기다리고 있었다.
+- 변경: 제거·503 응답의 동일 숨김 조건을 제한 시간 안에 관측하는 expect로 검사한다. 제품 동작·종류 권한·poll 주기·기대 조건은 그대로이며 임의 sleep·quarantine·pytest 재시도를 추가하지 않는다.
+- 검증: 기존 실패 job121128749941은1FAILED1407PASS5SKIP였다. 커밋된 수정 SHA의 명시적 원격 Chromium과 pre-push/CI를 별도로 결속한다. 새 정책·SDK·로봇 명령은 없다.
+- gate 변화: 없음. CI의 동일 화면 기대 조건을 실제 비동기 반영 뒤에 검사한다. 기존 실패 SHA와 첫 수정 SHA의 원격 Chromium 파일 전체는 각각23 PASS였다. 첫 push는 이 로그의 필수 gate 변화 항목 누락으로 차단됐고 항목을 보완했다.

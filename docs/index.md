@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · uncommitted · 공급암 S 셀 파이프라인: 원위치·보정·사이클, 경쟁 후보 장부, 접촉 대응
-- 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
-- 2026-10-25 · ce056c8fb4 · pytest helper 전이 import 격리 복원
-- 2026-10-25 · uncommitted · 모델 구조화 출력 원칙과 OMX judge seat 파싱 실패 거부 (D-878)
-- 2026-10-25 · uncommitted · D-876 ROSY Monitoring
+- 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
+- 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
+- 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
+- 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인
+- 2026-10-25 · 9f0df4f99b · RaspTank 평가 기준선과 공개 무결성 값 등록

@@ -25,6 +25,23 @@ def request():
             'source_sha': SHA, 'expected_input_sha256': 'b' * 64}
 
 
+def test_explicit_model_target_is_selected_without_test_host_fallback():
+    lab = {'sim_hosts': ['fake@ai=ai', 'fake@model=model'], 'site_host': 'fake@site',
+           'test_hosts': ['fake@test']}
+    assert module().choose_target(lab, 'model') == 'fake@model'
+
+
+@pytest.mark.parametrize('lab', [
+    {'sim_hosts': []},
+    {'sim_hosts': ['fake@one=model', 'fake@two=model']},
+    {'sim_hosts': ['fake@site=model'], 'site_host': 'fake@site'},
+    {'sim_hosts': ['fake@bad;command=model']},
+])
+def test_model_target_refuses_missing_ambiguous_site_or_shell_target(lab):
+    with pytest.raises(ValueError):
+        module().choose_target(lab, 'model')
+
+
 class Remote:
     def __init__(self, receipt):
         self.receipt, self.calls, self.fail = receipt, [], True
