@@ -11497,5 +11497,5 @@ osy-d395-s1d\`.
 ## 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
 
 - 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
-- 증거: 모델·설정 경계와 캐시의 RED를 원격에서 재현한 뒤 `dd3a0cc37c`에서43시험이 통과했다. 별도 wheel 시험은 metadata 미구현 RED를 확인했으며 등록 후 원격 검증·독립 검토로 설치 결과를 확인한다.
+- 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
