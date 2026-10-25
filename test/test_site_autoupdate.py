@@ -967,6 +967,18 @@ def test_installed_cli_loads_only_its_reviewed_modules(tmp_path):
     assert subprocess.run(command, capture_output=True, cwd=tmp_path).returncode != 0
 
 
+def test_installed_cli_refuses_missing_runtime_helper(tmp_path):
+    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'verify_candidate.py',
+                 'candidate_signing.py'):
+        shutil.copy2(SITE / name, tmp_path / name)
+    # A partial administrator install must not borrow runtime code elsewhere.
+    result = subprocess.run(
+        [sys.executable, '-I', str(tmp_path / 'rosy_site_autoupdate.py'), '--help'],
+        capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode != 0
+    assert 'site_update_runtime' in result.stderr
+
+
 def test_running_newer_stack_is_not_downgraded_when_env_is_stale(host):
     releases, blobs = _world((NEW, '2026-10-04'))
     fake = FakeHost(host.paths)
