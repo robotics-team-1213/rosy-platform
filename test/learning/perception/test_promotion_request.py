@@ -39,7 +39,7 @@ def _fixed(stage, target_parent, doc, extra=None):
 
 
 def candidate(tmp_path, name='human', sources=('human_reviewed_eval',), source_kind='mcap', *,
-              evalsets=None, share=None, ledger_eval=None):
+              evalsets=None, share=None, ledger_eval=None, ledger_location=None, ledger_files=None):
     control = owner(tmp_path)
     store = tmp_path / 'store'
     frame = {'session': 's-eval', 'split': 'eval', 'sources': list(sources), 'source_kind': source_kind,
@@ -64,7 +64,8 @@ def candidate(tmp_path, name='human', sources=('human_reviewed_eval',), source_k
                        'iou': {'road': 0.71}, 'source_groups': [{'sources': list(sources), 'frames': 1}]}}
     (root / 'intake_report.json').write_text(json.dumps(report), encoding='utf-8')
     ledger = json.loads((control.out / 'state.json').read_text())
-    ledger['cycles'][name] = {'status': 'ready', 'result': {'revision': revision}, 'eval_set': ledger_eval or evalset.name,
+    ledger['cycles'][name] = {'status': 'ready', 'result': {'revision': revision, 'location': str(ledger_location or root)},
+                              'eval_set': ledger_eval or evalset.name, 'files': ledger_files or report['files'],
                               'provenance': {'source_commit': 'c' * 40, 'python': '3.12.3', 'torch': None}}
     (control.out / 'state.json').write_text(json.dumps(ledger))
     return root, control
@@ -161,6 +162,52 @@ def test_eval_set_must_match_the_cycle_ledger_and_an_owned_cycle_must_exist(tmp_
         pr.build(root, 'alice', control)
     with pytest.raises(ValueError, match='소유 학습 실행기'):
         pr.build(root, 'alice', None)
+
+
+def _eval_path(root, path):
+    report = json.loads((root / 'intake_report.json').read_text())
+    report['eval']['set']['path'] = str(path)
+    (root / 'intake_report.json').write_text(json.dumps(report))
+
+
+def test_symlink_or_dotdot_out_of_evalsets_is_refused(tmp_path):
+    root, control = candidate(tmp_path, evalsets=tmp_path / 'elsewhere' / 'evalsets')
+    outside = next((tmp_path / 'elsewhere' / 'evalsets' / 'human').iterdir())
+    link = tmp_path / 'store' / 'evalsets' / 'human' / outside.name
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside, target_is_directory=True)
+    for path in (link, tmp_path / 'store' / 'evalsets' / 'human' / '..' / '..' / '..' / 'elsewhere' / 'evalsets' / 'human' / outside.name):
+        _eval_path(root, path)
+        with pytest.raises(ValueError, match='저장소 밖'):
+            pr.build(root, 'alice', control)
+
+
+def test_post_rehashes_even_when_the_listing_cache_is_warm(tmp_path):
+    import os
+    root, control = candidate(tmp_path)
+    item = {'kind': 'perception', 'id': 'x', 'name': 'm', 'path': str(root)}
+    assert pr.listing(tmp_path, [item], control)['candidates'][0]['qualified'] is True
+    model = root / 'model.onnx'
+    before = model.stat()
+    model.write_bytes(b'ONNX-' + b'human')  # same size
+    os.utime(model, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert pr.listing(tmp_path, [item], control)['candidates'][0]['qualified'] is True  # GET trusts size+mtime
+    with pytest.raises(ValueError, match='모델 파일 해시'):
+        pr.build(root, 'alice', control)
+
+
+def test_another_models_ledger_row_cannot_be_borrowed(tmp_path):
+    root, control = candidate(tmp_path)
+    copy = tmp_path / 'copy'
+    shutil.copytree(root, copy)  # same revision string and files, but no cycle published this folder
+    with pytest.raises(ValueError, match='학습 기록'):
+        pr.build(copy, 'alice', control)
+    other, control = candidate(tmp_path, 'other', ledger_files=[{'name': 'model.onnx', 'sha256': 'd' * 64}])
+    with pytest.raises(ValueError, match='학습 기록'):
+        pr.build(other, 'alice', control)
+    moved, control = candidate(tmp_path, 'moved', ledger_location=tmp_path / 'somewhere')
+    with pytest.raises(ValueError, match='학습 기록'):
+        pr.build(moved, 'alice', control)
 
 
 def test_no_confirmed_eval_is_refused_with_its_reason(tmp_path):

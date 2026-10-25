@@ -117,11 +117,14 @@ def build(root, requester, control, *, fresh=True, now=None):
     if doc.get('builder') != BOOTSTRAP or not all(_SHA.fullmatch(str(f.get('approval_sha256'))) for f in frames):
         raise ValueError('사람 검수 승인으로 공개한 평가셋(review_eval_bootstrap)이 아닙니다(D-475).')
     cycles = _json(ledger, '이 작업대의 학습 기록(learning_cycle)을 읽을 수 없습니다.', 16 * 1024 * 1024).get('cycles')
+    sealed = [{'name': f['name'], 'sha256': f['sha256']} for f in files]
+    # The revision string is the requester's own; the row must have published this very folder and these bytes.
     rows = [row for row in (cycles.values() if isinstance(cycles, dict) else [])
             if isinstance(row, dict) and row.get('status') == 'ready' and isinstance(row.get('result'), dict)
-            and row['result'].get('revision') == revision]
+            and row['result'].get('revision') == revision and isinstance(row['result'].get('location'), str)
+            and Path(row['result']['location']).resolve() == root.resolve() and row.get('files') == sealed]
     if not rows:
-        raise ValueError('이 작업대의 학습 기록(learning_cycle)에 이 모델이 없습니다.')
+        raise ValueError('이 결과 폴더와 모델 파일을 만든 학습 기록(learning_cycle)이 이 작업대에 없습니다.')
     if rows[-1].get('eval_set') != digest:
         raise ValueError('학습 기록의 평가셋 해시와 수용 보고의 평가셋이 다릅니다.')
     try:
@@ -135,7 +138,7 @@ def build(root, requester, control, *, fresh=True, now=None):
     provenance = rows[-1].get('provenance')
     bundle = {'schema': SCHEMA, 'state': 'requested', 'requester': requester,
               'created_at': now or dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'),
-              'model': {'revision': revision, 'files': [{'name': f['name'], 'sha256': f['sha256']} for f in files]},
+              'model': {'revision': revision, 'files': sealed},
               'dataset': {'name': name, 'revision': dataset,
                           'external_sources': data.get('external_sources', NO_SHARE)},
               'evaluation': {'set': eval_dir.parent.name, 'content_sha': digest, 'sources': HUMAN,

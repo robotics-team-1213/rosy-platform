@@ -42,6 +42,16 @@ def test_duplicate_request_and_restart_do_not_retrain_ready(setup):
                and row["eval_set"] is None for row in state["cycles"].values())  # this fake trainer publishes nothing
 
 
+def test_ready_row_records_the_published_eval_set_and_files(setup, tmp_path):
+    config, out, _ = setup
+    ready = tmp_path / "ready"
+    ready.mkdir()
+    files = [{"name": "model.onnx", "sha256": "a" * 64}]
+    (ready / "intake_report.json").write_text(json.dumps({"files": files, "eval": {"set": {"content_sha": "b" * 64}}}))
+    state = cycle.run_once(config, out, trainer_fn=lambda cfg, path: {"revision": "r", "location": str(ready)})
+    assert [(row["eval_set"], row["files"]) for row in state["cycles"].values()] == [("b" * 64, files)] * 2
+
+
 def test_candidate_result_remains_candidate_across_cycle_restart(setup):
     config, out, _ = setup
     config['recipes'] = [{'recipe': 'drivable_head'}]
