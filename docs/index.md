@@ -350,4 +350,8 @@
 
 ## 최근 기록
 
-- 없음
+- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
+- 2026-10-26 · 5acb6bbb94 · 시험 job의 I/O 등급과 현장 PC 정리 타이머 선언
+- 2026-10-26 · uncommitted · docs(solutions): read-only test dirs filled the lab test-PC disks
+- 2026-10-26 · 3733f72b5d · 낡은 설치본 pre-push는 게시 push를 멈춘다
+- 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
