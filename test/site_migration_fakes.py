@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import shlex
 import subprocess
 import tarfile
 from types import SimpleNamespace
@@ -26,7 +27,7 @@ def manifest_for(commit, services):
         for s in services}, "account_https": True, "omx": True, "workcell": True}
 
 
-def candidate_files(commit, services, compose_services=None, image_override=None):
+def candidate_files(commit, services, compose_services=None, image_override=None, overlays=None):
     model = {"services": {s: {"image": f"rosy-site-{s}:${{ROSY_SITE_IMAGE_TAG}}"}
                           for s in (services if compose_services is None else compose_services)}}
     if image_override:
@@ -36,6 +37,12 @@ def candidate_files(commit, services, compose_services=None, image_override=None
              "deploy/site/compose.yaml": json.dumps(model).encode()}
     for overlay in ("pairing", "omx", "workcell", "account"):
         files[f"deploy/site/compose.{overlay}.yaml"] = b'{"services": {}}'
+    for name, model in (overlays or {}).items():
+        name = f"deploy/site/compose.{name}.yaml"
+        if model is None:
+            files.pop(name)
+        else:
+            files[name] = json.dumps(model).encode()
     return files
 
 
@@ -46,8 +53,8 @@ def write_candidate(folder, commit, services, compose_services=None):
         path.write_bytes(body)
 
 
-def release_world(commit, services, compose_services=None, image_override=None):
-    files = candidate_files(commit, services, compose_services, image_override)
+def release_world(commit, services, compose_services=None, image_override=None, overlays=None):
+    files = candidate_files(commit, services, compose_services, image_override, overlays)
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as archive:
         for name, body in files.items():
@@ -83,6 +90,7 @@ class InventoryHost:
     def __init__(self, paths, services=LEGACY, *, unhealthy=(), manual=True):
         self.paths, self.unhealthy = paths, set(unhealthy)
         self.calls, self.events, self.verifications = [], [], []
+        self.observations = []
         self.containers, self.image_ids = {}, {}
         self.volumes = {"postgres-data": object()}
         self.counter = 0
@@ -101,13 +109,23 @@ class InventoryHost:
             raise subprocess.CalledProcessError(code, "fixture command", stderr="fixture failure")
         return SimpleNamespace(returncode=code, stdout=stdout, stderr="fixture failure" if code else "")
 
-    def model(self, folder):
-        return json.loads((folder / "deploy/site/compose.yaml").read_text())["services"]
+    def model(self, folder, files=None):
+        if files is None:
+            overlays = shlex.split(upd.read_env(self.paths.site_env).get("ROSY_SITE_PAIRING_COMPOSE", ""))
+            files = [folder / "deploy/site/compose.yaml", *(
+                folder / "deploy/site" / Path(p).name for p in overlays if p != "-f")]
+        model = {}
+        for path in files:
+            path = self.paths.link / str(path).removeprefix("/opt/rosy/candidate/") if (
+                str(path).startswith("/opt/rosy/candidate/")) else Path(path)
+            for service, values in json.loads(path.read_text())["services"].items():
+                model.setdefault(service, {}).update(values)
+        return model
 
-    def hash_for(self, folder, commit, service, env_file=None):
+    def hash_for(self, folder, commit, service, env_file=None, model=None):
         values = upd.read_env(env_file or self.paths.site_env)
         values["ROSY_SITE_IMAGE_TAG"] = commit
-        body = {"service": self.model(folder)[service], "env": values}
+        body = {"service": (self.model(folder) if model is None else model)[service], "env": values}
         return hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
 
     def load_images(self, folder):
@@ -187,17 +205,20 @@ class InventoryHost:
             self.restart()
             return self.result(**kwargs)
         if args[:2] == ["docker", "compose"]:
-            base = Path(args[args.index("-f") + 1])
+            files = [Path(args[i + 1]) for i, a in enumerate(args) if a == "-f"]
+            base = files[0]
             folder = base.resolve().parents[2]
             env_file = Path(args[args.index("--env-file") + 1])
             tag = (kwargs.get("env") or {}).get("ROSY_SITE_IMAGE_TAG") or (
                 upd.read_env(env_file)["ROSY_SITE_IMAGE_TAG"])
-            model = self.model(folder)
+            model = self.model(folder, files)
             if "config" in args:
                 self.events.append(("config", folder, tag, env_file))
+                self.observations.append(("config", files, copy.deepcopy(model),
+                                          self.paths.link.resolve(), self.paths.site_env.read_bytes()))
                 if "--hash" in args:
                     return self.result("\n".join(
-                        f"{s} {self.hash_for(folder, tag, s, env_file)}" for s in model), **kwargs)
+                        f"{s} {self.hash_for(folder, tag, s, env_file, model)}" for s in model), **kwargs)
                 return self.result(json.dumps({"services": {s: {**v, "image": v["image"].replace(
                     "${ROSY_SITE_IMAGE_TAG}", tag)} for s, v in model.items()}}), **kwargs)
             if "ps" in args:
@@ -214,6 +235,8 @@ class InventoryHost:
             self.load_images(folder)
             self.loaded.append(folder)
             self.events.append(("load", folder))
+            self.observations.append(("load", folder, self.paths.link.resolve(),
+                                      self.paths.site_env.read_bytes()))
             return self.result(**kwargs)
         if args[:3] == ["docker", "image", "inspect"]:
             identity = self.image_ids.get(args[-1])

@@ -119,6 +119,48 @@ def test_target_image_pin_is_checked_before_load_or_switch(host):
     assert host.paths.link.resolve() == host.paths.candidates / OLD
 
 
+def enable_omx(host):
+    with host.paths.site_env.open("a") as stream:
+        stream.write("ROSY_SITE_PAIRING_COMPOSE='-f /opt/rosy/candidate/deploy/site/compose.omx.yaml'\n")
+
+
+def test_staged_overlay_paths_and_content_are_target_bound_without_mutating_current(host):
+    enable_omx(host)
+    machine = InventoryHost(host.paths)
+    old = host.paths.candidates / OLD
+    (old / "deploy/site/compose.omx.yaml").write_text(json.dumps({
+        "services": {"fleet": {"environment": {"FIXTURE_GENERATION": "OLD"}}}}))
+    machine.restart()
+    original_env = host.paths.site_env.read_bytes()
+    http = RecordingHttp(*release_world(NEW, CURRENT, overlays={"omx": {
+        "services": {"fleet": {"environment": {"FIXTURE_GENERATION": "NEW"}}}}}))
+    updater = updater_for(host, machine, http)
+    assert updater.run() == upd.EXIT_OK
+    target = host.paths.candidates / NEW
+    load = next(i for i, row in enumerate(machine.observations) if row[0] == "load")
+    staged = [row for row in machine.observations[:load] if row[0] == "config"
+              and row[1][0] == target / "deploy/site/compose.yaml"]
+    assert staged
+    assert all(row[1] == [target / "deploy/site/compose.yaml", target / "deploy/site/compose.omx.yaml"]
+               and row[2]["fleet"]["environment"]["FIXTURE_GENERATION"] == "NEW"
+               for row in staged)
+    assert all(row[-2:] == (old, original_env) for row in machine.observations[:load + 1])
+
+
+@pytest.mark.parametrize("failure", ["missing", "unverified"])
+def test_target_overlay_requires_its_own_verified_file_before_loading(host, failure):
+    enable_omx(host)
+    machine = InventoryHost(host.paths)
+    overlays = {"omx": None} if failure == "missing" else None
+    if failure == "unverified":
+        machine.proof_patch = lambda result: result.update(omx=False) if result["source_commit"] == NEW else None
+    updater = updater_for(host, machine, RecordingHttp(*release_world(NEW, CURRENT, overlays=overlays)))
+    assert updater.run() == upd.EXIT_FAILED
+    assert machine.loaded == []
+    assert host.paths.link.resolve() == host.paths.candidates / OLD
+    assert upd.read_env(host.paths.site_env)["ROSY_SITE_IMAGE_TAG"] == OLD
+
+
 @pytest.mark.parametrize("partial", [False, True], ids=["full-start", "partial-start"])
 def test_failed_four_service_health_removes_only_retired_postgres_before_legacy_restore(host, partial):
     machine = InventoryHost(host.paths, unhealthy={NEW})
