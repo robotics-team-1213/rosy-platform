@@ -9,6 +9,7 @@
   "base_python": "/usr/bin/python3",
   "lock": "deploy/robot/omx/requirements-observation.lock",
   "system_site_packages": true,
+  "uv": "~/.local/bin/uv",
   "paths": ["deploy/robot/omx", "middleware/devices/omx/adapter/omx_adapter/camera_source.py", "contracts/foundation",
             "operations/overhead"],
   "smoke": "import sys; sys.path[:0] = ['deploy/robot/omx', 'contracts/foundation', 'operations/overhead', 'middleware/devices/omx/adapter/omx_adapter']; import hardware_observer, register_probe, passive_motor_health, workcell_observation_bridge, camera_readiness, commissioning_view, camera_source, omx_autoupdate; print('smoke ok')",
@@ -29,6 +30,7 @@
                  "deploy/robot/omx/rosy-omx-devices-autoupdate.service",
                  "deploy/robot/omx/rosy-omx-devices-autoupdate.timer"],
   "restart_running_only": true,
+  "sequential": true,
   "settle": 20,
   "require_verified_commit": false,
   "keep": 3

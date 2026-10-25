@@ -101,8 +101,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
 - 2026-10-25 · uncommitted · fix(fleet): worker 상한 연결·로봇 묶음 우선 검사 순서 수정
 - 2026-10-25 · uncommitted · fix(fleet): 가짜 저장소가 list_resolved 지원 시 그대로 쓰기
 - 2026-10-25 · uncommitted · fix(fleet): 감사 저장소 append 의 reason 기본값 수정
 - 2026-10-25 · uncommitted · feat(fleet): D-865 P2c 정책 승인 자동 admit 루프·지속 상한·감사 저장소
-- 2026-10-25 · uncommitted · 작업 종류 poll의 실제 화면 반영을 기다린다
