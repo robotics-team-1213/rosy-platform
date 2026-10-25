@@ -11539,6 +11539,13 @@ osy-d395-s1d\`.
 - 증거: 모델 PC 실제 모델 — deliberation 0/3(HTTP 400) → 1/3 → 3/3, conversation 46/46, operator 26/26, judge seat 4/4, qwen 3/3. 관련 단위 시험 원격 583 passed.
 - gate 변화: 없음(AI PC 재배포·수용은 별도). CE 새 교훈 기록 — `docs/solutions/runtime-errors/ollama-refused-empty-enum-and-judgment-schema-allowed-steps-the-validator-refuses-2026-10-25.md`.
 
+## 2026-10-25 · uncommitted · 교훈: 빈 워크트리 폴더와 squash로 갈라진 이력 합치기
+
+- 변경: docs/solutions/workflow-issues에 교훈 둘을 더했다. 지워진 워크트리의 빈 폴더에서 git이 공유 main에서 동작한 사고(구조 수정 0210c973b8), 그리고 로컬 main과 origin/main을 합칠 때 충돌 없는 자동 병합이 반대쪽 시험·배치를 섞은 원인과 병합 순서(D-868).
+- 증거: 2026-10-25 동기화의 land.py 16회 정지 기록, 공유 main에서 병합 abort 뒤 HEAD 0c426b70e8 그대로, robot-0d 독립 검토의 size_range 빈틈 확인.
+- gate 변화: 없음. 문서 교훈이다.
+- 교훈: 위 두 문서
+
 ## 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
 
 - 변경: `tools/hooks/pre-push`가 `git config rosy.publishOnly true`인 clone에서 `publish/main-*` 밖의 브랜치 push를 거절한다(삭제는 통과, 사고 대응은 `ROSY_PUSH_REASON`). 팀원 clone은 설정이 없어 영향이 없다. `git-workflow.md`의 옛 `git push origin main` 순서와 `rosy-release-push` 1단계를 D-868 게시 절차로 고쳤다.
@@ -11552,6 +11559,32 @@ osy-d395-s1d\`.
 - 변경: `learning/envs/isaac/arm_s_cell_fixture.py`·`arm_s_cell_task.py`·`arm_s_cell_report.py`, `deploy/robot/omx/isaac_cell_frames.py`. 실행 관리자에 `arm-s-cell-nominal`·`-overhang`·`-wrong-yaw`(run_catalog·run_store·run_worker·remote_isaac).
 - 증거: 원격 시험 통과. Isaac 6회 실행 결과는 `docs/validation/omx-arm-s-isaac-cell-2026-10-25/result.md`. overhang은 frame_contact로 기대와 맞고, nominal은 집게가 상자를 옆으로 흘려 15.6 mm 어긋남(미해결).
 - gate 변화: 없음. 집게 결합과 관측 카메라 자세는 미해결.
+
+## 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
+
+- 변경: 합성 fixture의 free_space 관측을10 GiB로 고정하고 UI 잔여값을 검증한다. 실제 storage/data 동작은 바꾸지 않았다.
+- 검증: commit d24d1abc64, 모델 호스트 디스크 점검 후 실제 opt-in 두 viewport 포함10 PASS/skip0/NEW0. 기존 MAIN-RED와 raw 로그를 보존했다.
+- gate 변화: 제품·기기 gate 변화 없음. docs/validation/learning-storage-browser-capacity-2026-10-26/result.md는 합성 시험 근거이며 실제 라벨·모델 수용을 뜻하지 않는다.
+
+## 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
+
+- 변경: ADR D-883(D-876 §5·D-524 보충)과 Log 행. API reference v1.320에 guard `resources.disk`/`disk_low`/`gpu`, `disk-low` 상태, Service Control `clean-storage`(ai·model만)를 등록했다.
+- 증거: 원격 시험으로 확인한다. 실제 PC 재설치·정리 실행은 하지 않았다.
+- gate 변화: 없음. 각 PC의 guard-remote·helper 재설치 전에는 값이 null이고 정리 요청은 거부된다. CE: 해당 없음 — 원인(정리 주기보다 빠른 디스크 소모)은 기존 기록과 `fix/test-host-disk`가 다룬다.
+
+## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
+
+- 변경: relocate only six existing runtime/verification methods to site_update_runtime; updater590 to516lines, helper110. Keep switch/rollback/order and public import bindings; update reviewed five-file administrator install closure.
+- 증거: all23 method ASTs, unchanged I/O/verifier/builder and global import targets verified statically. Tests-only d50e67e208 actualCLIclosure RED1FAIL/0skip, NEW1; committed source regression GREEN/review pending. See site-updater-runtime-split validation record/external proofs.
+- gate 변화: none; three/four-image compatibility waits for a separate feature unit after this pure split lands. No host/site/deployment/FIELD acceptance.
+- CE: no new lesson; source/tests/README and existing installer lessons explain this routine split.
+
+## 2026-10-26 · 9816e56bd9 · Site updater pure split verified
+
+- 변경: bind the independent source review and preserved 23 method ASTs/global imports to the six-method runtime extraction; keep complete five-file administrator install closure.
+- 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
+- gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
+- CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
 
 ## 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
 
