@@ -11338,3 +11338,9 @@ osy-d395-s1d\`.
 - 변경: `collection_pipeline.py prepare-native --camera-reference ROLE=PATH`(역할마다 한 번)와 `prepare_native(camera_references=)`. 새 `learning/curation/omx/camera_reference.py`가 계약 `validate_reference`로 읽고 파일 이름=revision, 역할 중복·불일치, dataset `observation.images.*`와 다른 역할 집합, 합친 `meta/info.json`의 폭·높이(축 이름으로 읽음)·fps 불일치를 거절한다. `{역할: revision}`만 `inspection.json`·`capture.json`의 `camera_setup`에 남기고 `camera_identity`·경로는 남기지 않는다. 분할·구간 재검사는 같은 값을 넘겨 보고서를 그대로 비교한다. 옵션이 없으면 출력은 같다. 프레임 비교와 `camera-setup.json`은 아직 없다.
 - 증거: 원격 시험 PC 대상 시험 11 passed, 모델 PC learner venv(LeRobot 0.4.4) 실제 intake에서 revision 기록·fps 거절·식별자 미기록 1 passed, affected 계층 791 passed·known_failures 0 NEW.
 - gate 변화: 없음. CE 해당 없음 — 계획된 조각 구현이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · 모델 구조화 출력 원칙과 OMX judge seat 파싱 실패 거부 (D-878)
+
+- 변경: D-878(Proposed) — 출력 스키마 정본 한 곳, 전송 형식은 어댑터, 파싱 실패=무효 답, 라우터 조건, 판단 경로 JSON 수리 금지. `deploy/robot/omx/judge_seat.py`가 호출 실패·깨진 JSON·객체 아닌 답을 `abort` 거부로 받고 스키마에 `additionalProperties: false`를 더한다.
+- 증거: `test/test_omx_judge_seat.py` 세 실패 경우 추가, 원격 시험 결과는 착지 기록 참조.
+- gate 변화: 없음. CE 해당 없음 — 조사 결과의 원칙 기록과 작은 fail-closed 보강이며 장애 해결이 아니다.
