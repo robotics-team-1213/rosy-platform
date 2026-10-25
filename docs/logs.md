@@ -11344,3 +11344,9 @@ osy-d395-s1d\`.
 - 변경: `chunk_runner.py`가 모터 상태를 1초에 한 번(`HEALTH_PERIOD_S`)만 읽고, 집기 판정 때 한 번 새로 읽는다. 전에는 3틱마다 PWM·전류·온도를 읽어 guard의 표본(초당 약 5회)과 같은 USB 버스 거래가 두 배였다.
 - 증거: 관제 PC 실물 — 상자 위 15 mm에서 대기 중 guard 표본 간격이 11분 동안 0.234 s로 일정하다가 0.28→0.43→0.62 s로 튀고 0.5 s 기준을 넘어 토크 OFF(팔이 상자에 얹힘). 원격 시험 통과, 주기를 3틱으로 되돌린 변이에서 새 시험 실패. 복구는 고친 도구로 원격(현 자세 시드 → 집게 연 채 15 mm 상승 → park), `safe_end` True, 상자 제자리.
 - gate 변화: 없음. guard 규칙(오래된 표본 = 고장 = 토크 OFF)은 그대로이고, 허브 지연 자체는 남는다. CE: 새 교훈 `docs/solutions/runtime-errors/omx-guard-stale-health-sample-drops-held-arm-2026-10-25.md`.
+
+## 2026-10-25 · uncommitted · 공급암 S 셀 파이프라인: 원위치·보정·사이클, 경쟁 후보 장부, 접촉 대응
+
+- 변경: `cell_pipeline.py`(run = 원위치 → 받침·벨트 보정 → A/B, 단계마다 판단 자리와 사례 기록, recover), `cell_calibration.py`(면별 아핀 지도, 집게 손가락으로 대략 지도, 시차), `cell_choices.py`(가르친·측정·시뮬 값의 경쟁 후보와 실제 결과). `chunk_runner.py`: `load`, 부드러운 접촉 정지와 `retreat`, `grip` 하한. 고정 카메라 여러 대 합침(top, rosy cam), 손목 위 확인.
+- 증거: 관제 PC 실물 — 대략 지도 5점, 자율 집기 3번(189·201 mA), 원위치 복귀, 원격 복구 4번(전부 safe_end). guard 정지 3번(대기 중 오래된 표본, 받침 밖 상자 가장자리, 25° 회전)은 각각 코드·시험으로 고쳤다. 원격 시험 통과, 변이(접촉 감지 끔, 고장 뒤 park, 읽기 주기) 실패 확인. 기록 `docs/validation/omx-arm-s-real-cell-pipeline-2026-10-25/`.
+- gate 변화: 없음. 실물 전체 보정과 A/B 사이클, 부드러운 접촉 정지의 실물 확인은 남았다. CE: 새 교훈 `docs/solutions/logic-errors/omx-taught-values-belong-to-their-plan-2026-10-25.md`, `docs/solutions/runtime-errors/omx-contact-on-descent-becomes-guard-torque-off-2026-10-25.md`.
