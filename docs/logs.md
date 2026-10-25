@@ -11339,6 +11339,12 @@ osy-d395-s1d\`.
 - 증거: 원격 시험 PC 대상 시험 11 passed, 모델 PC learner venv(LeRobot 0.4.4) 실제 intake에서 revision 기록·fps 거절·식별자 미기록 1 passed, affected 계층 791 passed·known_failures 0 NEW.
 - gate 변화: 없음. CE 해당 없음 — 계획된 조각 구현이며 새 장애가 없다.
 
+## 2026-10-25 · uncommitted · guard 교사 모드 첫 실물: 대기 중 오래된 모터 상태 표본으로 토크 OFF
+
+- 변경: `chunk_runner.py`가 모터 상태를 1초에 한 번(`HEALTH_PERIOD_S`)만 읽고, 집기 판정 때 한 번 새로 읽는다. 전에는 3틱마다 PWM·전류·온도를 읽어 guard의 표본(초당 약 5회)과 같은 USB 버스 거래가 두 배였다.
+- 증거: 관제 PC 실물 — 상자 위 15 mm에서 대기 중 guard 표본 간격이 11분 동안 0.234 s로 일정하다가 0.28→0.43→0.62 s로 튀고 0.5 s 기준을 넘어 토크 OFF(팔이 상자에 얹힘). 원격 시험 통과, 주기를 3틱으로 되돌린 변이에서 새 시험 실패. 복구는 고친 도구로 원격(현 자세 시드 → 집게 연 채 15 mm 상승 → park), `safe_end` True, 상자 제자리.
+- gate 변화: 없음. guard 규칙(오래된 표본 = 고장 = 토크 OFF)은 그대로이고, 허브 지연 자체는 남는다. CE: 새 교훈 `docs/solutions/runtime-errors/omx-guard-stale-health-sample-drops-held-arm-2026-10-25.md`.
+
 ## 2026-10-25 · ce056c8fb4 · pytest helper 전이 import 격리 복원
 
 - 변경: 정본 affected_pack 호출과 Repo.test_import_names를 복원했다. 같은 helper 소유자는 함께 묶고 다른 디렉터리의 동명 helper는 분리하며, 기존 CI 순서·명령 길이·시험 누락 방지 검사는 유지한다.
