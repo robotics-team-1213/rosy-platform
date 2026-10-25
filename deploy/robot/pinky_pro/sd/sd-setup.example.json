@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "release_dir": "",
+  "expected_image_revision": "",
   "wifi_profile": "site",
   "wifi_ssid": "site-network",
   "registry_path": "%LOCALAPPDATA%\\Rosy\\device-registry.json",

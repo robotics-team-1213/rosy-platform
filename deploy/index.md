@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-25 · uncommitted · SD 이미지의 서명된 소스 검증과 버전 고정
 - 2026-10-25 · uncommitted · 호스트 에이전트 복구 문구 표기 정렬
 - 2026-10-25 · uncommitted · 여러 Pinky 카드의 사전 용량 확인과 결과 보존
 - 2026-10-25 · uncommitted · D-862 opt-in 관제 설정 mount
 - 2026-10-24 · c60d6046bb · 장치 Wi-Fi 복구와 서명 boot 계층 연속성
-- 2026-10-24 · uncommitted · 서명된 review payload의 OMX action-space 의존성 포함
