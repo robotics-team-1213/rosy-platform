@@ -4420,3 +4420,10 @@
 - 변경: WELCOME0으로 구 Agent의 새 부팅 버퍼 삭제를 방지하고, 메모리 Hub도 기존 durable store와 같은 ID·본문 충돌 규칙으로 재전송을 처리한다. 최대 seq는 진단값만 유지한다. D-869/APIv1.315에 호환성과 한계를 기록했다.
 - 증거: [검증 기록](../../docs/validation/event-reconnect-replay-2026-10-25/result.md). 신규 RED5건과 durable replay 보존 뒤 관련 원격98개 통과, skip0/NEW0. 원본 ID·내용·seq와 audit/projection 한 번 기록을 단언한다.
 - gate 변화: SOURCE 회귀만 확인했다. 구 peer·메모리 재시작·실물 수용과 영속 outbox는 보장하지 않는다. CE 해당 없음: 판단은 정본 ADR·회귀로 복원된다.
+## 2026-10-25 · uncommitted · refactor(fleet): cli 사이트 설정 helper를 console_site_config로 이동
+
+- 변경: cli.py(레칫 872)의 사이트 설정 helper 5건(_goal_lease_ttl_s·_trip_config·_build_site_map·_map_pose_config·_lane_compliance_config)을 fleet/console_site_config.py로 그대로 이동(cli_config import 패턴). cli.py 872→773.
+- 증거: split_check AST 동일 통과. D-766 4 나누기 — 뒤따르는 D-865 P2b가 cli.py/app.py에 줄을 더하지 않고 착지되게 한다.
+- gate 변화: 없음. 동작 불변 순수 이동.
+- 결정: D-766 4 적용.
+- 교훈: 없음
