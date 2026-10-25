@@ -6,6 +6,7 @@ parents exist at /opt/rosy/first-boot) passed here and failed the image build.
 """
 
 import subprocess
+import shutil
 import sys
 from pathlib import Path
 
@@ -26,3 +27,16 @@ def test_entrypoint_runs_from_the_installed_path(script):
         [sys.executable, "-c", RUN_AS_INSTALLED, str(FIRST_BOOT / script), INSTALLED + script],
         capture_output=True, text=True, timeout=60, check=False)
     assert result.returncode == 0, result.stderr[-2000:]
+
+
+def test_firstboot_imports_only_the_staged_image_helpers(tmp_path):
+    """The image must run without the checkout's deploy package on sys.path."""
+    prefix = tmp_path / "opt/rosy"
+    shutil.copytree(FIRST_BOOT, prefix / "first-boot")
+    shutil.copytree(FIRST_BOOT.parents[1] / "native", prefix / "native-runtime")
+    shutil.copytree(FIRST_BOOT.parents[1] / "sd", prefix / "deploy/sd")
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", str(prefix / "first-boot/rosy-first-boot.py"), "--help"],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60, check=False)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert "--hardware-serial" in result.stdout
