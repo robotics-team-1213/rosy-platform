@@ -1007,3 +1007,9 @@
 - gate 변화: 없음. 계약 등록이며 구현·활성화가 아니다.
 - 결정: D-865 P1 산출물.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · D-876 Fleet 캐시 전용 모니터링 계약
+
+- 변경: `FleetLinkObservation`·`FleetMonitoringRead`와 canonical export를 추가했다. 기존 link·D-535 이유와 원천 나이를 보존하고 중복·비유한 나이·결측 불일치·추가 본문을 거부한다. API Ref v1.318과 함께 등록한다.
+- 증거: RED 커밋 `4ec72e39f8`의 원격 시험에서 미구현 모델 import 실패를 확인했다. 구현 검증은 커밋 SHA의 원격 시험으로 확인한다.
+- gate 변화: 기존 모듈 gate를 올리지 않는다. 계약이며 Fleet handler·독립 수집·배포 수용은 별도다. CE: 해당 없음.

@@ -23,6 +23,16 @@ compgen -G "$DIST/*.img.xz" >/dev/null || fail "missing compressed image"
 compgen -G "$DIST/*.bmap" >/dev/null || fail "missing bmap"
 
 echo "==> manifest"
+# D-879: consumer support is not an accepted A/B builder or boot/update backend.
+"$PYTHON" - "$DIST/manifest.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if manifest.get("schema_version") == 2:
+    sys.exit("FAIL: A/B prototype has no production BUILD_GO; native builder and boot/update acceptance are pending")
+PY
 "$PYTHON" "$RELEASE_TOOLS/manifest.py" "$DIST/manifest.json" --json || fail "manifest rejected"
 
 echo "==> checksums and signature"
