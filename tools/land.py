@@ -357,7 +357,11 @@ def pretest(wt: Path, branch: str, args, python: str) -> None:
     if not note:
         return
     print(f"[land] FULL tier while waiting in the queue (main {main_sha[:10]})", flush=True)
-    run_tests(wt, args, invocations, tmp_dir(branch), "pre")   # a NEW failure stops here, before the wait
+    logdir = tmp_dir(branch)
+    land_guards.first(wt, args, invocations, logdir, "pre", run_tests)
+    if out(wt, "rev-parse", "HEAD") != candidate:
+        raise Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
+    run_tests(wt, args, invocations, logdir, "pre")   # a NEW failure stops here, before the wait
     if out(wt, "rev-parse", "HEAD") != candidate:
         raise Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     land_full.save(wt, branch, candidate, main_sha)
