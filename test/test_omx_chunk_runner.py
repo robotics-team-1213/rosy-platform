@@ -298,3 +298,80 @@ def test_the_runner_reads_motor_health_about_once_a_second_beside_the_guard():
     ticks = len(robot.sent)
     assert ticks >= 90 and 3 <= robot.bus.reads <= 3 * (ticks // 30 + 1)  # three registers a second, not every 3rd tick
     assert status[-1]["command"] == "stop"
+
+
+def test_a_new_library_loads_while_the_arm_holds_and_a_bad_one_is_refused(tmp_path):
+    import json
+    good = {**library(), "fps": 30}
+    good["chunks"] = {"approach_pinky": [[0.0, -60.0, 50.0, 45.0, 10.0, 46.6 + k * 0.1] for k in range(5)]}
+    fast = {**library(), "fps": 30}  # 2 units per frame: faster than the guard streams
+    other_fps = {**good, "fps": 10}
+    paths = {}
+    for name, lib in (("good", good), ("fast", fast), ("other_fps", other_fps)):
+        paths[name] = tmp_path / f"{name}.json"
+        paths[name].write_text(json.dumps(lib))
+    status = runner(Robot(), [f"load {paths['fast']}", f"load {paths['other_fps']}", f"load {paths['good']}",
+                              "run approach_pinky", "stop"])
+    loads = by_command(status, f"load {paths['fast']}") + by_command(status, f"load {paths['other_fps']}")
+    assert [s["ok"] for s in loads] == [False, False]
+    assert "faster than the guard" in loads[0]["error"] and "fps" in loads[1]["error"]
+    assert by_command(status, f"load {paths['good']}")[0]["ok"] is True
+    assert by_command(status, "run approach_pinky")[0]["ok"] is True  # the loaded library's chunk
+
+
+def test_a_grip_below_the_taught_closed_value_is_held_at_closed():
+    status = runner(Robot(), ["grip 40", "state", "stop"])
+    assert by_command(status, "grip 40")[0]["target"][5] == 46.6  # past the stop the jaws would only push
+
+
+class Pressing(Robot):
+    """Reports the commanded pose like the guard does; after `after` actions the lift joint stops following
+    (the box under the jaws), so the present pose lags the command."""
+
+    def __init__(self, after, **kw):
+        super().__init__(**kw)
+        self.after, self.count, self.stuck = after, 0, None
+
+    def send_action(self, action):
+        self.count += 1
+        if self.count == self.after:
+            self.stuck = self.pos[1]
+        super().send_action(action)
+        if self.stuck is not None:
+            self.pos[1] = self.stuck
+        return dict(action)
+
+
+def descend_library():
+    lib = library()
+    lib["chunks"]["descend_pick"] = [[0.0, -60.0 + k * 0.5, 50.0, 45.0, 10.0, 46.6] for k in range(20)]
+    lib["chunks"]["home"] = [HOME]
+    return lib
+
+
+def test_a_soft_contact_holds_with_torque_on_then_retreats_along_its_path_and_parks():
+    robot = Pressing(after=8)
+    status, clock, queue = [], [0.0], ["run descend_pick", "retreat", "park", "run descend_pick", "stop"]
+    r = m.Runner(robot, descend_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        if queue and not r.chunk:
+            if queue[0] == "retreat":
+                robot.stuck = None  # backing up the same path leaves the obstacle: the joint follows again
+            return [queue.pop(0)]
+        return []
+
+    r.run(lines)
+    contact = by_command(status, "run descend_pick")[0]
+    assert contact["ok"] is False and contact["contact"] is True and "contact" in contact["fault"]
+    assert abs(contact["target"][1] - contact["state"][1]) < 0.01  # held where it stopped, not pushed on
+    assert by_command(status, "run retreat")[0]["ok"] is True
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+    assert by_command(status, "run descend_pick")[1]["ok"] is True  # after park the next attempt may start
+
+
+def test_normal_following_lag_is_not_a_contact():
+    robot = Pressing(after=10**9)  # never stuck: the arm follows
+    status = run_with(robot, descend_library(), ["run descend_pick", "stop"])
+    assert by_command(status, "run descend_pick")[0]["ok"] is True

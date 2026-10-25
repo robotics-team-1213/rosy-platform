@@ -28,6 +28,13 @@ restarted and must stay active `settle` seconds, otherwise the previous release 
 Before each restart the `unit_files` (release paths) are copied from `current` into the user unit folder
 and systemd reloads them, so a unit edit on main reaches the host and a rollback brings the old unit back.
 
+A service may also need the idle cell (D-871: cameras, torque-OFF observers and the observation bridge):
+`"idle_gate": "cell"` with the cell's `devices`, `follower_device` and/or `observers` holds the cell's
+`session_lock` (default `~/rosy-omx/session.lock`) and switches only under the same idle rule as step 5.
+The lock is released after the smoke check and before the restart, because the observer's own start
+guard takes it. `"system_site_packages": true` builds the lock's venv over the host Python's packages
+(the observers need the system ROS `rclpy`).
+
 Every step is one JSON line on stdout and the state is in `state.json`. Stopping updates:
 `systemctl --user disable --now rosy-omx-autoupdate.timer`. Release signing (D-441) remains a later step: until then trust rests on
 branch protection of main, the Actions-reported checks and the ancestry rule.
@@ -98,14 +105,21 @@ class Host:
             subprocess.run([self.cfg["base_python"], "-m", "venv", "--system-site-packages", str(target)],
                            check=True, timeout=300)
             return
-        subprocess.run([self.cfg["base_python"], "-m", "venv", str(target)], check=True, timeout=300)
+        system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
+        subprocess.run([self.cfg["base_python"], "-m", "venv", *system, str(target)], check=True, timeout=300)
         subprocess.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)],
                        check=True, timeout=3000)
 
+    def running(self, units) -> list:
+        """The units to restart: all, or with `restart_running_only` the active ones, so a unit stopped by
+        hand (an observer stopped for the real owner) stays stopped."""
+        if not self.cfg.get("restart_running_only"):
+            return list(units)
+        return [u for u in units
+                if subprocess.run(["systemctl", "--user", "is-active", "--quiet", u], timeout=30).returncode == 0]
+
     def restart(self, units) -> bool:
         """Restart the service units and report whether all are still active after `settle` seconds."""
-        if not units:
-            return True
         complete = True
         try:
             if self.cfg.get("unit_files"):  # the live release's own unit files, so unit edits on main arrive too
@@ -120,6 +134,8 @@ class Host:
                     subprocess.run(["systemctl", "--user", "daemon-reload"], timeout=60)
                 except subprocess.SubprocessError:  # still restart on what systemd has
                     complete = False
+            if not units:
+                return complete
             if subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
                 return False
             time.sleep(self.cfg.get("settle", 10))
@@ -151,7 +167,7 @@ class Host:
     def hold_session(self):
         """Take the cell's session lock (the one joint_tune and record_session hold) and keep it for the
         whole switch, so no session can start between the idle check and the smoke check."""
-        lock = Path(self.cfg["root"]) / "session.lock"
+        lock = Path(self.cfg.get("session_lock") or Path(self.cfg["root"]) / "session.lock")
         lock.parent.mkdir(parents=True, exist_ok=True)
         handle = lock.open("a")
         try:
@@ -270,7 +286,8 @@ class Updater:
         return self.envs / env / "bin" / "python"
 
     def idle(self, release: Path, env: str) -> str | None:
-        if self.cfg.get("kind") == "service":  # no cell; the restart and its health check guard the switch
+        if self.cfg.get("kind") == "service" and self.cfg.get("idle_gate") != "cell":
+            # no cell; the restart and its health check guard the switch
             return None
         if self.host.device_in_use():
             return "device_in_use"
@@ -341,11 +358,11 @@ class Updater:
             log(step="deferred", release=name, reason="session_running")
             return "deferred"
         try:
-            return self.switch(state, sha, name, release, env, dry_run)
+            return self.switch(state, sha, name, release, env, dry_run, session)
         finally:
             session.close()
 
-    def switch(self, state, sha, name, release, env, dry_run) -> str:
+    def switch(self, state, sha, name, release, env, dry_run, session) -> str:
         busy = self.idle(release, env)
         if busy:
             log(step="deferred", release=name, reason=busy)
@@ -358,17 +375,26 @@ class Updater:
         before = {link: os.readlink(self.root / link) for link in ("current", "current-env")
                   if (self.root / link).is_symlink()}
         self.link(name, env)
-        units = self.cfg.get("units", [])
-        if not (self.host.smoke(self.root / "current", self.root / "current-env" / "bin" / "python")
-                and self.host.restart(units)):
-            if previous:
-                self.link(previous, previous_env)
-            else:  # first install: what was there before, or no current pointing at a broken release
-                self.unlink()
-                for link, target in before.items():
-                    (self.root / link).symlink_to(target)
+        smoked = self.host.smoke(self.root / "current", self.root / "current-env" / "bin" / "python")
+        if not smoked:  # still under the lock: no session sees the broken release in current
+            self.relink(previous, previous_env, before)
+        # Chosen after the smoke check, right before the restart, and reused by the rollback: a unit stopped
+        # by hand meanwhile stays stopped.
+        units = self.host.running(self.cfg.get("units", []))
+        released = self.cfg.get("idle_gate") == "cell"
+        if released:  # rosy-omx-observer@ refuses to start while anyone holds the cell lock, this updater included
+            session.close()
+        if not (smoked and self.host.restart(units)):
+            if smoked:
+                self.relink(previous, previous_env, before)
             self.host.restart(units)
             log(step="rolled_back", release=name, to=previous)
+            retaken = self.host.hold_session() if released and smoked else True
+            if retaken is None:  # a session started after the release: the release was not at fault
+                log(step="deferred", release=name, reason="session_started_during_restart")
+                return "deferred"
+            if released and smoked:
+                retaken.close()
             state["failed"] = name  # do not retry it every run until main moves on
             state["history"].append({"release": name, "result": "rolled_back", "at": time.time()})
             self.save(state)
@@ -379,6 +405,14 @@ class Updater:
         self.cleanup(state)
         log(step="switched", release=name, previous=previous)
         return "switched"
+
+    def relink(self, previous, previous_env, before) -> None:
+        if previous:
+            self.link(previous, previous_env)
+        else:  # first install: what was there before, or no current pointing at a broken release
+            self.unlink()
+            for link, target in before.items():
+                (self.root / link).symlink_to(target)
 
     def rollback(self) -> str:
         state = self.state()
@@ -393,10 +427,14 @@ class Updater:
             if busy:
                 log(step="deferred", reason=busy)
                 return "deferred"
+            units = self.host.running(self.cfg.get("units", []))
             self.link(state["previous"], state["previous_env"])
-            self.host.restart(self.cfg.get("units", []))
+            if self.cfg.get("idle_gate") != "cell":
+                self.host.restart(units)
         finally:
             session.close()
+        if self.cfg.get("idle_gate") == "cell":  # after the release, as in switch()
+            self.host.restart(units)
         # current_sha is dropped: after a manual rollback the next forward update is not refused as older
         state.update(current=state["previous"], previous=state["current"], env=state["previous_env"],
                      previous_env=state["env"], current_sha=None)
@@ -428,6 +466,14 @@ def load_config(path: Path) -> dict:
         missing = [k for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root")
                    if not cfg.get(k)]
         cfg.setdefault("lock", None)
+        if cfg.get("idle_gate") == "cell":  # the cell's own lock and idle evidence, not this root's
+            missing += [k for k in ("devices",) if not cfg.get(k)]
+            if not cfg.get("observers") and not cfg.get("follower_device"):
+                missing.append("observers or follower_device")
+            sessions = os.environ.get("ROSY_OMX_HOME") or os.path.join(os.path.expanduser("~"), "rosy-omx")
+            cfg.setdefault("session_lock", os.path.join(os.path.expanduser(sessions), "session.lock"))
+        elif cfg.get("idle_gate") is not None:
+            raise SystemExit("idle_gate must be \"cell\" or absent")
         if missing or not cfg["required_checks"] or cfg["keep"] < 2:
             raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
         return cfg

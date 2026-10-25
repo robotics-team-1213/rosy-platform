@@ -102,6 +102,7 @@
 | `web_common` | 4 | 5 | 4 | 5 | 5 | 91 | S | 시험 예외 (D-168 P2) |
 | `isaac_sim` | 4 | 5 | 4 | 4 | 5 | 88 | A | D-322 신규, 잠정 채점(2026-09-30) · Isaac Sim 자산·프로브 마커(신규는 package.xml·setup.py 등록뿐, 코드·시험은 기존) · 자기 시험 3건(호출 경로 미등록) · vendored `open_manipulator_description` |
 | `pinky_pro` | 5 | 5 | 4 | 3 | 4 | 87 | A | D-196 신규, 잠정 채점(2026-09-24) · config 전용 · deploy 모드별 프로필 부분 복제 · core 동적 조회(선언 없음, D-196) |
+| `rasptank_metal` | 4 | 5 | 4 | 5 | 4 | 88 | A | 2026-10-25 신규, 잠정 채점 · config 전용·자기 시험 8건·fan-out 0 · M1/M3/M5는 CORE 동적 선택·설치 결속 검사에 의존 · 실물 지원·주행 수용 점수가 아님 |
 | `core_common` | 4 | 5 | 4 | 5 | 3 | 85 | A | 역방향 1건 기록 |
 | `fleet` | 4 | 4 | 4 | 4 | 5 | 83 | A | — |
 | `lamp_control` | 3 | 5 | 3 | 5 | 5 | 82 | A | 기기 전용 ※ |

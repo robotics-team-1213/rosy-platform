@@ -72,7 +72,7 @@ def test_installed_runtime_does_not_reach_back_into_a_repository(tmp_path):
     runtime = tmp_path / "device/opt/rosy/native-runtime"
     _install(runtime)
 
-    assert (runtime / "signing.py").read_bytes() == (ROOT / "deploy/robot/pinky_pro/release/signing.py").read_bytes()
+    assert (runtime / "signing.py").read_bytes() == (ROOT / "deploy/hosts/common/release/signing.py").read_bytes()
     assert not (runtime / "install-native-runtime.sh").exists()
     assert not (runtime.parents[1] / "release").exists()
 
