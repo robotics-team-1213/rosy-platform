@@ -1,6 +1,6 @@
 """A receiving process restart must not erase chronology or renew evidence."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import sqlite3
 
 import pytest
@@ -135,3 +135,21 @@ def test_removed_configuration_cannot_bypass_durable_anchor_budget(runtime, tmp_
     with pytest.raises(StoreUnavailable):
         second.update_local('pc-new', nodes=(observed_node(source='pc-new'),))
     assert find(second, 'site-a:host:pc-new').freshness == 'unknown'
+
+
+def test_history_expires_even_after_all_sources_are_removed(runtime, tmp_path):
+    original, clock = runtime
+    path = tmp_path / 'monitoring.sqlite3'
+    store = MonitoringStore(path, original.config.collector_id)
+    old = datetime.now(timezone.utc) - timedelta(days=8)
+    value = observed_node(sampled_at=old)
+    store.save(('local', 'pc-a'), [value], wall=old)
+    assert store.events('site-a', after=0, limit=100) == []
+    raw = original.config.model_dump(mode='json')
+    raw['sources'] = []
+    raw['readers'][0]['sites'] = ['site-a']
+    config = original.config.model_validate(raw)
+    cache = ObservationCache(config, store=store)
+    cache.checkpoint()
+    with sqlite3.connect(path) as db:
+        assert db.execute('select count(*) from events').fetchone()[0] == 0
