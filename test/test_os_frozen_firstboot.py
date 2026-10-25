@@ -77,6 +77,25 @@ print(json.dumps(owner.apply(bundle=bundle, hardware_serial='10000000abcdef01'))
     assert json.loads((root / "etc/rosy/device-identity.json").read_text()) == _bundle()["device_identity"]
 
 
+def test_frozen_shell_ignores_application_pythonpath(tmp_path):
+    prefix = _prefix(tmp_path)
+    _stage(prefix)
+    poison = tmp_path / "application/deploy"
+    poison.mkdir(parents=True)
+    (poison / "__init__.py").write_text('raise RuntimeError("application import before recovery")\n')
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    lock = binaries / "flock"
+    # Model only the privileged /run lock; execute the real shell and Python interpreter.
+    lock.write_text('#!/bin/sh\nshift 3\nexec "$@"\n')
+    lock.chmod(0o755)
+    result = subprocess.run(["bash", str(prefix / "os-bootstrap/first-boot/rosy-first-boot.sh"), "--help"],
+        cwd=tmp_path, env=dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ["PATH"],
+                              PYTHONPATH=str(poison.parent)), capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert "--hardware-serial" in result.stdout
+
+
 @pytest.mark.parametrize("change", ["missing", "symlink", "writable", "directory_link"])
 def test_frozen_entry_rejects_partial_or_replaceable_boot_support(tmp_path, change):
     prefix = _prefix(tmp_path)
