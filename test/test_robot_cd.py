@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import tarfile
 import hashlib
 
@@ -103,6 +104,36 @@ def test_snapshot_rejects_changed_executable_code(tmp_path):
     (tmp_path / "tool.py").write_text("changed")
     with pytest.raises(ValueError):
         tool.verify_snapshot(tmp_path)
+
+
+def test_snapshot_drift_lists_snapshot_files_that_differ_from_origin_main(tmp_path):
+    tool = module()
+    repo, snap = tmp_path / "repo", tmp_path / "snap"
+    repo.mkdir()
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+                       check=True, capture_output=True)
+    git("init", "-q")
+    for root in (repo, snap):
+        (root / "tools").mkdir(parents=True)
+        (root / "keys").mkdir()
+        (root / "keys/k.pem").write_bytes(b"k\n")
+    (repo / "tools/a.py").write_bytes(b"a\n")
+    (snap / "tools/a.py").write_bytes(b"a\r\n")  # a CRLF checkout copy is the same file
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    tool.write_snapshot(snap, ["tools/a.py", "keys/k.pem"], SHA)
+    assert tool.snapshot_drift(snap, repo) == []
+    (repo / "tools/a.py").write_bytes(b"b\n")
+    git("commit", "-q", "-am", "main moved")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("rm", "-q", "keys/k.pem")
+    git("commit", "-q", "-m", "local only")
+    assert tool.snapshot_drift(snap, repo) == ["tools/a.py"]
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    assert tool.snapshot_drift(snap, repo) == ["keys/k.pem", "tools/a.py"]
 
 
 def test_dispatch_source_race_is_refused(tmp_path):

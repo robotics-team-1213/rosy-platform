@@ -1,6 +1,6 @@
 # 다기종 배포 도구
 
-저장소 루트에서 `python tools/release/deploy.py list`로 배포 대상과 차단 이유를 확인한다.
+저장소 루트에서 `python tools/release/deploy_cli.py list`로 배포 대상과 차단 이유를 확인한다.
 기체에 연결하기 전에는 `plan`을 사용한다. 계획 출력은 서명 검증·설치 허가·장치 수용 증거가 아니다.
 
 ## 책임과 파일 위치
@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 공통 release 서명·checksum | `deploy/hosts/common/release/signing.py` | 기존 Pinky signing import는 같은 모듈을 참조. native 설치본에는 정본을 독립 `signing.py`로 복사 |
 | 대상 선택·명령 조립 | `tools/release/deployment_targets.py` | target descriptor를 검증하고 검토된 executor만 선택 |
-| 운영 CLI | `tools/release/deploy.py` | list/plan/apply/rollback. 임의 shell 명령을 받지 않음 |
+| 운영 CLI | `tools/release/deploy_cli.py` | list/plan/apply/rollback. 임의 shell 명령을 받지 않음 |
 | Pinky 제품 정책 | `deploy/robot/pinky_pro/` | 이미지·native units·SD·manifest/updater·기존 push/rollback executor 유지 |
 | RaspTank 배포 상태 | `deploy/robot/rasptank_metal/deployment-target.json` | source-only, 실행 operation 없음. 실제 profile 소스는 `middleware/devices/rasptank/profile` |
 | 외부 SDK 호스트 상태 | `deploy/hosts/sdk/dji_neo_2/deployment-target.json` | 공식 SDK 미지원, 실행 operation 없음. 기체 firmware 배포 대상 아님 |
@@ -24,14 +24,14 @@ Pinky의 `existing_implementation`은 기존 도구 구현이 있다는 뜻으�
 다음은 검토용 예시다. 실제 주소·키·산출물은 개인 입력으로 공급한다.
 
 ```powershell
-python tools/release/deploy.py list
+python tools/release/deploy_cli.py list
 
-python tools/release/deploy.py plan --target pinky_pro --operation apply `
+python tools/release/deploy_cli.py plan --target pinky_pro --operation apply `
   --robot robot.example --tarball C:/releases/signed-release.tar.gz `
   --public-key C:/keys/release-public.pem
 
-python tools/release/deploy.py plan --target rasptank_metal --operation apply --robot robot.example
-python tools/release/deploy.py plan --target dji_neo_2 --operation apply --robot sdk-host.example
+python tools/release/deploy_cli.py plan --target rasptank_metal --operation apply --robot robot.example
+python tools/release/deploy_cli.py plan --target dji_neo_2 --operation apply --robot sdk-host.example
 ```
 
 차단된 target의 plan은 `blocked: true`, 빈 command와 이유를 출력하고 실행하지 않는다.
@@ -40,10 +40,10 @@ apply/rollback으로 요청하면 거절한다.
 검증된 Pinky 기체와 승인된 signed release를 실제 배포할 때는 다음 진입점을 사용할 수 있다.
 
 ```powershell
-python tools/release/deploy.py apply --target pinky_pro --robot robot.example `
+python tools/release/deploy_cli.py apply --target pinky_pro --robot robot.example `
   --tarball C:/releases/signed-release.tar.gz --public-key C:/keys/release-public.pem
 
-python tools/release/deploy.py rollback --target pinky_pro --robot robot.example
+python tools/release/deploy_cli.py rollback --target pinky_pro --robot robot.example
 ```
 
 이 두 명령은 네트워크 접속·설치/복구를 수행한다. CLI 소스 준비 자체가 실제 기체 배포 승인은 아니다.
