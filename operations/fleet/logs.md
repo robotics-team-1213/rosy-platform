@@ -4775,3 +4775,10 @@
 - Evidence: tests-only75bff0bce4 remote RED43FAIL46PASS; reviewed correction99a7d5c663 remote93PASS0SKIP, then expanded679PASS5SKIP; each GREEN NEW0/known0/flaky0, runnerexit0. Exact logs in %LOCALAPPDATA%/Temp/rosy-formation-api-boundary/.
 - Gate: per-commit source size and generate/lint/diff passed (lint0errors35warnings). Actual main merge, independent whole-branch review, FULL/landing and field acceptance pending root.
 - CE: verified case facts supplied outside Git for root-owned existing structural-guards lesson update.
+
+## 2026-10-25 · d0d02fe6e4 · D-875 소유 모듈 경계 검사까지 최신 main 검증
+
+- 변경: 검증된 main의 정책 구현·정본 시험 묶기와 C1 경계 수정을 통합했다. 실제 ADR이 있는 D-874·D-875 임시 gap만 정리했다.
+- 증거: 독립 통합 소스 리뷰 승인, owner boundary를 포함한 architecture/Fleet 원격 679 passed, 5 skipped, NEW0/known0/flaky0. [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 이전 FULL 실패와 새 소스를 구분했다.
+- gate 변화: 없음. 최신 소스의 공식 FULL·착지·게시·배포·실물 수용은 별도다.
+- 교훈: 기존 구조 검사 선행 교훈에 이미 안내된 소유 모듈 시험 목록을 함께 실행해야 함을 반영했다.

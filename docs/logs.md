@@ -11385,3 +11385,10 @@ osy-d395-s1d\`.
 - 증거: 유효한 fixture를 새 Python에서 import한 뒤 기존 구현 RED 1건을 재현했다. 수정 커밋 원격 관련 회귀 507 passed, skip0, NEW0/known0/flaky0; 독립 소스 리뷰 승인. [검증 기록](validation/affected-import-pack-restoration-2026-10-25/result.md).
 - gate 변화: 없음. 공식 FULL·착지·게시·배포는 별도 확인한다. 보존한 C1 후보는 이 수정에 포함하지 않는다.
 - 교훈: 기존 [실제 커밋 검증 교훈](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)에 통합 과정의 호출 경로·회귀 시험 보존을 추가했다.
+
+## 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
+
+- 변경: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 Fleet owner가 이미 지정한 boundary 시험의 누락과 검증된 exact-leaf API 검사 수정을 추가했다.
+- 증거: tests-only RED 43 failed/46 passed, 수정 93 passed, 최신 main 통합 원격 확장 679 passed/5 skipped/NEW0. [검증 기록](validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 소스와 실패한 FULL을 별도로 남겼다.
+- gate 변화: 없음. 최신 후보의 공식 FULL·착지·배포는 별도 확인한다.
+- 교훈: 범용 플랫폼 guard와 변경 소유자의 기존 계약 시험을 함께 선택한다.
