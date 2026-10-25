@@ -1,4 +1,4 @@
-import { EVIDENCE_LABEL, evidenceAgeText } from '/common/core_ui_logic.js';
+import { EVIDENCE_LABEL, evidenceAgeText } from './common/core_ui_logic.js';
 
 const $ = (id) => document.getElementById(id);
 const HEALTH = { OK: '정상', WARNING: '주의', ERROR: '오류', UNKNOWN: '판정 정보 없음' };
