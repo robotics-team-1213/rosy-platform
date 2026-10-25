@@ -21,10 +21,12 @@ import math
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # chunk_runner, teach_trajectory
+from teach_trajectory import GUARD_UNITS_PER_S, slow, too_fast  # noqa: E402
+
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
          "gripper.pos"]
 TICKS = 4096
-MAX_STEP = 4.0       # largest per-frame joint change (normalized units); the runner clips at max_relative_target
 TOOL_DOWN_TOL = math.radians(1.0)
 POS_TOL = 0.0015     # m between the requested and the FK position of every frame
 
@@ -99,6 +101,11 @@ class Planner:
         verb = "grasp" if grip_out < grip_in else "release"
         act = self.hold(down[-1], p["grip_s"], grip_in, grip_out) + self.hold(down[-1][:5] + [grip_out], p["settle_s"])
         up, q5 = self.line((x, y, z), lifted, p["lift_m_s"], yaw, grip_out, q5)
+        # A joint can turn faster than the Cartesian speed suggests near the wrist; the guard streams at
+        # GUARD_UNITS_PER_S, so each chunk is slowed to that from where the previous one ended.
+        down = [[round(v, 3) for v in f] for f in slow(down, self.fps, start=pre)]
+        act = [[round(v, 3) for v in f] for f in slow(act, self.fps, start=down[-1])]
+        up = [[round(v, 3) for v in f] for f in slow(up, self.fps, start=act[-1])]
         return {f"above_{name}": [pre], f"descend_{name}": down, f"{verb}_{name}": act, f"lift_{name}": up}, q5
 
     def library(self):
@@ -111,10 +118,8 @@ class Planner:
         chunks.update(place)
         chunks["home"] = [home]
         for name, frames in chunks.items():
-            for a, b in zip(frames, frames[1:]):
-                step = max(abs(u - v) for u, v in zip(a[:5], b[:5]))
-                if step > MAX_STEP:
-                    raise SystemExit(f"{name}: a frame step of {step:.2f} exceeds {MAX_STEP}; lower the speed")
+            if too_fast(frames, self.fps):
+                raise SystemExit(f"{name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s)")
         return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": self.fps, "chunks": chunks,
                 "gripper_closed": p["grip_closed"], "hold_current_ma": p.get("hold_current_ma"),
                 "transit": p.get("transit", {}),
@@ -159,7 +164,6 @@ def main(argv=None):
     args.out.write_text(json.dumps(library))
     print(json.dumps({"out": str(args.out), "chunks": {k: len(v) for k, v in library["chunks"].items()}}))
     if args.trajectory:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))  # chunk_runner, teach_trajectory
         trajectory = Planner(json.loads(args.plan.read_text()), args.kinematics_root).cycle_trajectory()
         args.trajectory.write_text(json.dumps(trajectory))
         print(json.dumps({"trajectory": str(args.trajectory), "segments": trajectory["segments"]}))

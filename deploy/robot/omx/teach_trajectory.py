@@ -4,8 +4,8 @@
 The taught cycle is split at --split seconds into A (load: Pinky to conveyor) and B (return: conveyor
 to Pinky and home). The trajectory holds A, a reset hold at A's last pose (torque stays on, so the
 extended arm never drops), then B; both episodes are padded to the same length because lerobot-record
-has one episode_time_s. Values stay in the leader's LeRobot units, so record_session --replay feeds
-them to the follower exactly as a hand on the leader would, under the same max_relative_target clip.
+has one episode_time_s. Values stay in the follower's LeRobot units and are slowed to the guard's
+teacher-mode speed (GUARD_UNITS_PER_S), so the replay takes longer than the hand did.
 
   teach_trajectory.py build --dataset <teach root> --split 28 --end 50 --reset 2 --out cycle.json
   teach_trajectory.py standard --dataset <root with several taught cycles> --dwell 1 --out cycle.json
@@ -19,15 +19,36 @@ import math
 from pathlib import Path
 
 SCHEMA = "rosy.omx-replay-trajectory.v1"
+#: The guard's teacher mode streams at most 10 deg/s (guarded_native.py). A body unit is at most 1.8
+#: degrees (200 units over a full 4096-tick range), so 5 units/s keeps every joint under 9 deg/s and
+#: the arm follows the frames instead of lagging behind the recorded episode time.
+GUARD_UNITS_PER_S = 5.0
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
          "gripper.pos"]
+
+
+def slow(frames: list, fps: int, start=None) -> list:
+    """The same path with frames inserted so no joint moves more than GUARD_UNITS_PER_S. With `start`
+    the first step is measured from that pose (the previous chunk's end) and it is not repeated."""
+    limit, out = GUARD_UNITS_PER_S / fps, [list(start if start is not None else frames[0])]
+    for frame in frames[0 if start is not None else 1:]:
+        previous = out[-1]
+        n = max(1, math.ceil(max(abs(a - b) for a, b in zip(frame, previous)) / limit - 1e-9))
+        out += [[p + (f - p) * k / n for p, f in zip(previous, frame)] for k in range(1, n + 1)]
+    return out[1:] if start is not None else out
+
+
+def too_fast(frames: list, fps: int) -> bool:
+    limit = GUARD_UNITS_PER_S / fps + 1e-3  # frames are stored rounded to 3 decimals
+    return any(abs(a - b) > limit for p, q in zip(frames, frames[1:]) for a, b in zip(p, q))
 
 
 def compose(actions: list, fps: int, split_s: float, end_s: float, reset_s: float, source: dict) -> dict:
     split, end, reset = round(split_s * fps), round(end_s * fps), round(reset_s * fps)
     if not 0 < split < end <= len(actions) or reset < 1:
         raise ValueError("need 0 < split < end <= demonstration length and a positive reset")
-    a, b = actions[:split], actions[split:end]
+    a = slow(actions[:split], fps)
+    b = slow(actions[split:end], fps, start=a[-1])
     length = max(len(a), len(b))
     a, b = a + [a[-1]] * (length - len(a)), b + [b[-1]] * (length - len(b))
     frames = a + [a[-1]] * reset + b
@@ -108,7 +129,8 @@ def chunk_library(actions: list, fps: int, cuts: list, source: dict) -> dict:
         start, end = round(start_s * fps), round(end_s * fps)
         if not 0 <= start < end <= len(actions) or (previous is not None and start != previous):
             raise ValueError(f"chunk {name}: cuts must be consecutive and inside the demonstration")
-        chunks[name], previous = [[round(v, 3) for v in f] for f in actions[start:end]], end
+        frames = slow(actions[start:end], fps, start=chunks[list(chunks)[-1]][-1] if chunks else None)
+        chunks[name], previous = [[round(v, 3) for v in f] for f in frames], end
     return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": fps, "chunks": chunks,
             "gripper_closed": min(f[GRIPPER] for f in actions), "source": source}
 
@@ -122,6 +144,9 @@ def load(path: Path, *, fps: int) -> dict:
     if not frames or any(len(f) != len(NAMES) or not all(isinstance(v, (int, float)) and math.isfinite(v)
                                                          and -100 <= v <= 100 for v in f) for f in frames):
         raise SystemExit("replay frames must be six finite values within -100..100")
+    if too_fast(frames, fps):
+        raise SystemExit(f"replay frames move faster than {GUARD_UNITS_PER_S} units/s, which the guard "
+                         "streams at; rebuild the trajectory with this teach_trajectory.py")
     (a0, a1), (r0, r1), (b0, b1) = (segments.get(k, [0, 0]) for k in ("A", "reset", "B"))
     if not (a0 == 0 < a1 == r0 < r1 == b0 < b1 == len(frames) and a1 - a0 == b1 - b0):
         raise SystemExit("replay segments must be A, reset, B of equal-length episodes covering every frame")

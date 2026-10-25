@@ -68,8 +68,7 @@ def test_the_grasp_chunk_is_judged_by_the_runner_and_steps_stay_small(planned):
     _, library = planned
     assert "grasp_pick" in library["chunks"] and library["hold_current_ma"] == PLAN["hold_current_ma"]
     for frames in library["chunks"].values():
-        for a, b in zip(frames, frames[1:]):
-            assert max(abs(u - v) for u, v in zip(a[:5], b[:5])) <= m.MAX_STEP
+        assert not m.too_fast(frames, PLAN["fps"])  # the guard streams at GUARD_UNITS_PER_S
 
 
 def test_the_cycle_trajectory_is_a_valid_recordable_a_b_replay(tmp_path):
@@ -85,7 +84,7 @@ def test_the_cycle_trajectory_is_a_valid_recordable_a_b_replay(tmp_path):
     a, reset, b = (loaded["segments"][k] for k in ("A", "reset", "B"))
     assert a[1] - a[0] == b[1] - b[0] and reset[1] > reset[0]
     frames = loaded["frames"]
-    assert max(max(abs(u - v) for u, v in zip(p[:5], q[:5])) for p, q in zip(frames, frames[1:])) <= m.MAX_STEP
+    assert not m.too_fast(frames, PLAN["fps"])
     assert frames[0][:5] == pytest.approx(PLAN["home"], abs=0.5) and frames[-1][:5] == pytest.approx(PLAN["home"], abs=0.01)
     assert loaded["source"]["planner"].startswith("grasp_planner")
 

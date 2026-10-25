@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run taught motion chunks on the follower one at a time, holding torque between them (scripted teacher).
 
-The follower is driven through LeRobot's OmxFollower in the leader's units, at the recorder's fps and
-under the same max_relative_target clip as a hand on the leader. Between chunks the last target is
+The follower is driven through the guard's teacher mode (guarded_native.py: passive connect, seeded
+torque, 10 deg/s streaming, following-error, effort and fault stops) in LeRobot units at the recorder's
+fps; chunk frames may not move faster than GUARD_UNITS_PER_S. Between chunks the last target is
 held, so an extended arm never drops. A judge (an operator, an agent watching the cameras, later a
 VLA) writes one command per line into the command FIFO and reads one JSON status per command:
 
@@ -32,8 +33,12 @@ import math
 import os
 import select
 import stat
+import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # teach_trajectory, guarded_native, motor_health
+from teach_trajectory import GUARD_UNITS_PER_S, too_fast  # noqa: E402
 
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
          "gripper.pos"]
@@ -45,7 +50,7 @@ REL_MAX = 20.0  # largest body-joint correction a relative chunk may carry
 # park: lift/elbow/wrist of the taught carry (high and clear) and a slow, even speed. Turning low first
 # scraped the jaws on the table on 2026-10-24.
 TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
-PARK_SPEED = 6.0  # units per second for every joint
+PARK_SPEED = GUARD_UNITS_PER_S  # units per second for every joint: what the guard's teacher mode streams
 # Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read every HEALTH_EVERY ticks.
 HEALTH_EVERY = 3
 # Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
@@ -86,6 +91,8 @@ def load_library(path: Path) -> dict:
     library = json.loads(Path(path).read_text())
     if library.get("schema") != SCHEMA or library.get("names") != NAMES:
         raise SystemExit(f"chunk library needs schema {SCHEMA} and the six follower names")
+    if not isinstance(library.get("fps"), int) or library["fps"] <= 0:
+        raise SystemExit("chunk library needs its fps")
     chunks = library.get("chunks")
     if not isinstance(chunks, dict) or not chunks:
         raise SystemExit("chunk library has no chunks")
@@ -93,6 +100,9 @@ def load_library(path: Path) -> dict:
         if not frames or any(len(f) != 6 or not all(isinstance(v, (int, float)) and math.isfinite(v)
                                                     and -100 <= v <= 100 for v in f) for f in frames):
             raise SystemExit(f"chunk {name}: frames must be six finite values within -100..100")
+        if too_fast(frames, library["fps"]):
+            raise SystemExit(f"chunk {name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s); "
+                             "regenerate the library with grasp_planner.py or teach_trajectory.py")
     if not isinstance(library.get("gripper_closed"), (int, float)):
         raise SystemExit("chunk library needs gripper_closed (the taught fully closed value)")
     return library
@@ -280,6 +290,19 @@ class Runner:
             self.sleep(max(0.0, period - (self.clock() - started)))
 
 
+class Guarded:
+    """The follower as Runner sees it, with every action sent through the guard."""
+
+    def __init__(self, robot, motion):
+        self.robot, self.motion, self.bus = robot, motion, robot.bus
+
+    def send_action(self, action):
+        return self.motion.send(action)
+
+    def get_observation(self):
+        return self.robot.get_observation()
+
+
 def fifo_lines(path: Path):
     if not path.exists():
         os.mkfifo(path, 0o600)
@@ -330,8 +353,15 @@ def main(argv=None):
             f.write(json.dumps(row) + "\n")
         print(json.dumps(row), flush=True)
 
+    from guarded_native import NativeJointMotion, close_device, connect_passive
+    from motor_health import MotorHealth
+
     lines = fifo_lines(args.io / "chunk-cmd")
-    robot.connect(calibrate=False)
+    # The guard owns the hardware lifecycle and every goal (D-872): passive connect (no vendor
+    # configure), seeded torque ON, 10 deg/s streaming, following-error, effort and fault stops.
+    connect_passive(robot, follower=True)
+    motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
+    guarded = Guarded(robot, motion)
     try:
         live_path = args.io / "live.json"
 
@@ -340,10 +370,14 @@ def main(argv=None):
             tmp.write_text(json.dumps(row))
             os.replace(tmp, live_path)
 
-        Runner(robot, library, fps=config["dataset"]["fps"], status=status, live=live).run(lines)
+        Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live).run(lines)
     finally:
         lines.close()
-        robot.disconnect()
+        try:
+            close_device(robot)  # torque OFF before the bus closes
+        finally:
+            if motion.monitor is not None:
+                motion.monitor.end()
 
 
 if __name__ == "__main__":
