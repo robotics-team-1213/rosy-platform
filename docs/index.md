@@ -352,6 +352,6 @@
 
 - 2026-10-25 · uncommitted · D-871 여러 유닛 재시작: 하나씩 확인, 순서대로
 - 2026-10-25 · uncommitted · D-871 관측 env를 uv로 만들기
-- 2026-10-25 · uncommitted · chore(sync): merge origin/main #201-#207 into local main
-- 2026-10-25 · uncommitted · Learning 서명 sequence41 실제 활성화 검증
-- 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
+- 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
+- 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
+- 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드

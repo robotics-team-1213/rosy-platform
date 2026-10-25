@@ -21,7 +21,7 @@ find "$DESTINATION" -name '__pycache__' -type d -prune -exec rm -rf {} +
 # Build-time only: it resolves ../release, which does not exist on a device.
 rm -f -- "$DESTINATION/install-native-runtime.sh"
 # native_release.py imports signing; it is standard-library only.
-cp "$RELEASE_TOOLS/signing.py" "$DESTINATION/signing.py"
+cp "$SCRIPT_DIR/../../../hosts/common/release/signing.py" "$DESTINATION/signing.py"
 for helper in host_agent.py host_agent_server.py host_lane_perception.py ssh_pairing.py network.py network_transaction.py nm_network.py; do
     cp "$RELEASE_TOOLS/$helper" "$DESTINATION/$helper"
 done

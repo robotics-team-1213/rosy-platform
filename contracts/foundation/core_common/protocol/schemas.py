@@ -7,6 +7,7 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 from __future__ import annotations
 
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
+from .monitoring import FleetLinkObservation, FleetMonitoringRead  # noqa: F401
 from .trip_jobs import (TripJobRequest, TripJobStep, TripJobSnapshot, TripJobStepSnapshot,
                         TripJobReadResponse, TripRequestKey)  # noqa: F401
 from .policy_admission import (  # noqa: F401

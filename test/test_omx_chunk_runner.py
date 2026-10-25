@@ -119,20 +119,23 @@ def test_park_closes_rises_turns_then_descends_slowly():
     step = m.PARK_SPEED / 30 + 1e-9
     assert all(max(abs(b - a) for a, b in zip(p, q)) <= step for p, q in zip([start] + path, path))
     closed = next(i for i, f in enumerate(path) if f[5] == pytest.approx(46.6))
-    risen = next(i for i, f in enumerate(path) if f[1] == pytest.approx(-27.0) and f[2] == pytest.approx(18.0))
+    turning = next(i for i, f in enumerate(path) if abs(f[0] - start[0]) > 1e-6)
     turned = next(i for i, f in enumerate(path) if f[0] == pytest.approx(HOME[0]) and f[4] == pytest.approx(HOME[4]))
-    assert closed < risen < turned  # never turn while low with open jaws (the head scraped the table)
-    assert all(f[0] == start[0] for f in path[:risen + 1])  # no pan until risen
+    assert closed < turning < turned  # the jaws close before anything turns
+    # never turn while low (the head scraped the table on 2026-10-24): the turn may begin only as the rise
+    # ends, with lift and elbow within a unit of the transit height (the blended corner)
+    assert all(f[1] >= -28.0 and f[2] <= 19.0 for f in path[turning:turned + 1])
     assert path[-1][:5] == pytest.approx(HOME[:5])
 
 
 def test_goto_reaches_a_chunk_start_by_rising_turning_and_descending():
     goal = [-3.0, -16.0, 9.0, 48.0, 5.0, 55.0]  # over the belt, jaws open
     path = m.transit_path(HOME, goal, 46.6, fps=30)
-    risen = next(i for i, f in enumerate(path) if f[1] == pytest.approx(-27.0) and f[2] == pytest.approx(18.0))
-    assert all(f[0] == HOME[0] for f in path[:risen + 1])  # no turn while low
+    turning = next(i for i, f in enumerate(path) if abs(f[0] - HOME[0]) > 1e-6)
+    assert path[turning][1] >= -28.0 and path[turning][2] <= 19.0  # no turn while low: only as the rise ends
     arrived = next(f for f in path if f[:5] == pytest.approx(goal[:5]))
-    assert arrived[5] == pytest.approx(46.6) and path[-1] == pytest.approx(goal)  # jaws open only at the goal
+    # jaws open only at the goal (sampled at 30 fps, the arrival frame may hold the opening's first 0.001)
+    assert arrived[5] == pytest.approx(46.6, abs=0.01) and path[-1] == pytest.approx(goal)
     lib = library()
     status = run_with(Robot(), lib, ["goto grasp_pinky", "run grasp_pinky", "stop"])
     assert by_command(status, "run goto grasp_pinky")[0]["settled"]
