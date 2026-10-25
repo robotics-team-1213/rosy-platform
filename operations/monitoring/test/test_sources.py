@@ -82,7 +82,8 @@ def test_core_reads_only_identity_and_owner_diagnostics():
     (200, b'{"value":1e9999}', 'protocol'),
     (200, b'{"value":' + b'[' * 1200 + b'0' + b']' * 1200 + b'}', 'protocol'),
     (200, '{"value":1}'.encode('utf-16'), 'protocol'),
-], ids=['redirect', 'auth', 'duplicate', 'nonfinite', 'depth', 'encoding'])
+    (200, b'{"value":"' + b'[' * 1200 + b'"}', 'none'),
+], ids=['redirect', 'auth', 'duplicate', 'nonfinite', 'depth', 'encoding', 'quoted-brackets'])
 def test_redirect_auth_and_malformed_sources_are_public_failure_codes(status, body, expected):
     cfg, cache, creds, clock = setup({'kind': 'http', 'url': 'https://private.invalid/health'})
     requests = []

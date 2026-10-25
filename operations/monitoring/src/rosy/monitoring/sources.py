@@ -45,8 +45,26 @@ def decode(data):
         if not math.isfinite(number):
             raise SourceFailure('protocol')
         return number
+    text = data.decode('utf-8')
+    depth, quoted, escaped = 0, False, False
+    for character in text:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif character == '\\':
+                escaped = True
+            elif character == '"':
+                quoted = False
+        elif character == '"':
+            quoted = True
+        elif character in '[{':
+            depth += 1
+            if depth > 64:
+                raise SourceFailure('protocol')
+        elif character in ']}':
+            depth -= 1
     try:
-        value = json.loads(data.decode('utf-8'), object_pairs_hook=_unique,
+        value = json.loads(text, object_pairs_hook=_unique,
                            parse_constant=invalid, parse_float=finite)
     except RecursionError:
         raise SourceFailure('protocol') from None
