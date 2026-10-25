@@ -221,7 +221,7 @@ TEACHER = dict(kind='replay_trajectory', segments=dict(A=[0, 3], reset=[3, 4], B
                source=dict(dataset='local/omx-pick', episode=3, split_s=2.0, end_s=4.5))
 
 
-def stub_intake(intake, monkeypatch, collections, sizes, modes=None):
+def stub_intake(intake, monkeypatch, collections, sizes, modes=None, teachers=None):
     """prepare_native without LeRobot: sealed manifests, source episodes and the aggregate are stubs."""
     import sys
     def aggregate(*args, aggr_root, **kwargs):
@@ -231,11 +231,13 @@ def stub_intake(intake, monkeypatch, collections, sizes, modes=None):
         (aggr_root/'data/part.parquet').write_bytes(b'data')
     monkeypatch.setitem(sys.modules, 'lerobot.datasets.aggregate', SimpleNamespace(aggregate_datasets=aggregate))
     modes = modes or ['leader_native'] * len(collections)
+    teachers = teachers or ['0'*64] * len(collections)
+    files = {name: name[0]*64 for name in ('session.json', 'record-config.json')}
     manifests = {c: dict(session_id=c.name, rig_revision='rig', calibration_revision='cal', sealed_ns=i,
-                         source_mode=mode, **(dict(teacher_sha256=f'{i}'*64, teacher=TEACHER)
-                                              if mode == 'scripted_teacher' else {}))
-                 for i, (c, mode) in enumerate(zip(collections, modes))}
-    monkeypatch.setattr(intake, '_sealed_collection', lambda c: (manifests[Path(c)], 'f'*64))
+                         source_mode=mode, files=files, **(dict(teacher_sha256=sha, teacher=TEACHER)
+                                                           if mode == 'scripted_teacher' else {}))
+                 for i, (c, mode, sha) in enumerate(zip(collections, modes, teachers))}
+    monkeypatch.setattr(intake, '_sealed_collection', lambda c, operator=None: (manifests[Path(c)], 'f'*64))
     monkeypatch.setattr(intake, '_source_episodes', lambda root, repo: [
         dict(episode_index=i, content_sha256=f'{root.parent.name}{i}') for i in range(sizes[root.parent.name])])
     for c in collections:
@@ -351,16 +353,33 @@ def test_teacher_intake_keeps_the_do_not_train_rule_and_episodes_a_and_b(tmp_pat
     assert not (tmp_path/'prepared').exists()
 
 
-def test_teacher_intake_binds_the_teacher_not_its_site_path_and_carries_static_episodes(tmp_path, monkeypatch):
-    import hashlib
+def test_intake_refuses_recordings_of_different_teachers(tmp_path, monkeypatch):
     first, second = tmp_path/'first', tmp_path/'second'
     intake = intake_module()
-    stub_intake(intake, monkeypatch, [first, second], {'first': 2, 'second': 2}, modes=['scripted_teacher'] * 2)
+    stub_intake(intake, monkeypatch, [first, second], {'first': 2, 'second': 2},
+                modes=['scripted_teacher'] * 2, teachers=['0'*64, '1'*64])
+    with pytest.raises(ValueError, match='different teachers'):
+        intake.prepare_native([first, second], tmp_path/'prepared', 'local/native')
+    assert not (tmp_path/'prepared').exists()
+
+
+SITE = dict(home='/home/operator/omx-replays/arm-s-cycle.json', serial='/dev/serial/by-id/usb-FAKE-if00',
+            camera='/dev/v4l/by-id/usb-FAKE_CAM-video-index0')
+
+
+@pytest.mark.parametrize('mode', ['scripted_teacher', 'leader_native'])
+def test_intake_binds_one_teacher_drops_site_paths_and_carries_static_episodes(tmp_path, monkeypatch, mode):
+    first, second = tmp_path/'first', tmp_path/'second'
+    intake = intake_module()
+    stub_intake(intake, monkeypatch, [first, second], {'first': 2, 'second': 2}, modes=[mode] * 2)
     marker(second/'dataset', episodes=2, static=[1], threshold=1.0)
-    site_path = '/home/operator/omx-replays/arm-s-cycle.json'
+    monkeypatch.setitem(TEACHER, 'source', dict(TEACHER['source'], dataset='/home/operator/omx-data/arm-s-demos'))
     for collection in (first, second):
-        (collection/'session.json').write_text(json.dumps(dict(source_mode='scripted_teacher', replay=dict(
-            path=site_path, sha256='0'*64, segments=TEACHER['segments'], source=TEACHER['source']))))
+        (collection/'session.json').write_text(json.dumps(dict(source_mode=mode, config='/home/operator/record.json',
+            replay=dict(path=SITE['home'], sha256='0'*64, segments=TEACHER['segments']))))
+        (collection/'record-config.json').write_text(json.dumps(dict(
+            dataset=dict(root='/home/operator/omx-data/run', fps=10), teleop=dict(port=SITE['serial']),
+            robot=dict(port=SITE['serial'], cameras=dict(top=dict(index_or_path=SITE['camera'], fps=30))))))
     seen = {}
     class Inspected(Exception):
         pass
@@ -371,16 +390,23 @@ def test_teacher_intake_binds_the_teacher_not_its_site_path_and_carries_static_e
     with pytest.raises(Inspected):
         intake.prepare_native([first, second], tmp_path/'prepared', 'local/native')
     capture = seen['capture_provenance']
-    assert seen['source_mode'] == capture['source_mode'] == 'scripted_teacher'
-    assert 'collection_manifest_sha256' not in capture
-    assert capture['teacher_sha256'] == hashlib.sha256(json.dumps(['0'*64, '1'*64]).encode()).hexdigest()
-    assert capture['teachers'] == [dict(session_id=c.name, teacher_sha256=f'{i}'*64, **TEACHER)
-                                   for i, c in enumerate((first, second))]
+    assert seen['source_mode'] == capture['source_mode'] == mode
     assert seen['static'] == dict(episodes=4, static=[3], threshold=1.0)
-    copied = json.loads((tmp_path/'prepared/rosy_provenance/session-000000/session.json').read_text())
-    assert copied['replay'] == dict(sha256='0'*64, segments=TEACHER['segments'], source=TEACHER['source'])
-    assert site_path not in json.dumps(capture)
-    assert not any(site_path.encode() in p.read_bytes() for p in (tmp_path/'prepared').rglob('*') if p.is_file())
+    provenance = tmp_path/'prepared/rosy_provenance/session-000000'
+    assert json.loads((provenance/'record-config.json').read_text()) == dict(
+        dataset=dict(fps=10), teleop={}, robot=dict(cameras=dict(top=dict(fps=30))))
+    assert json.loads((provenance/'redactions.json').read_text())['record-config.json'] == dict(redacted_from_sha256='r'*64)
+    outputs = [json.dumps(capture).encode()] + [p.read_bytes() for p in (tmp_path/'prepared').rglob('*') if p.is_file()]
+    assert not any(s.encode() in blob for s in ('/home/', '/dev/serial', '/dev/v4l') for blob in outputs)
+    if mode == 'leader_native':  # leader capture keys and values are those of origin/main
+        assert sorted(capture) == sorted(['schema', 'source_mode', 'action_semantics', 'body_units', 'gripper_units',
+                                          'rig_revision', 'calibration_revision', 'collection_manifest_sha256',
+                                          'collection_manifests', 'files', 'episodes'])
+        return
+    assert 'collection_manifest_sha256' not in capture and capture['teacher_sha256'] == '0'*64
+    assert capture['teachers'] == [dict(session_id=c.name, teacher_sha256='0'*64, kind=TEACHER['kind'],
+                                        segments=TEACHER['segments'], source=dict(TEACHER['source'], dataset='arm-s-demos'))
+                                   for c in (first, second)]
     from native_capture import bind_capture
     bound = bind_capture([dict(episode_index=i) for i in range(4)], capture['files'], source_mode='scripted_teacher',
                          body_units='normalized_-100_100', rig_revision='rig', calibration_revision='cal',
