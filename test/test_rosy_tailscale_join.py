@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -211,6 +212,25 @@ def test_a_consumed_request_is_idempotent_without_invoking_the_cli(env_root, mon
     assert module.main() == 0
     assert recorder.calls == []
     assert _result(env_root)["status"] == "already_consumed"
+
+
+@pytest.mark.parametrize("change", ["permissions", "symlink", "hardlink"])
+def test_unsafe_request_is_refused_before_cli_or_consumption(env_root, monkeypatch, change):
+    module = _load()
+    join = _join_file(env_root)
+    outside = env_root / "untouched-request.json"
+    if change == "permissions":
+        join.chmod(0o644)
+    elif change == "symlink":
+        join.rename(outside)
+        join.symlink_to(outside)
+    else:
+        os.link(join, outside)
+    calls = []
+    monkeypatch.setattr(module, "_invoke", lambda *args: calls.append(args))
+    assert module.main() == 1
+    assert calls == []
+    assert KEY in join.read_text()
 
 
 # --- the unit and its lockstep wiring ---------------------------------------

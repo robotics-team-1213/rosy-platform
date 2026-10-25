@@ -465,10 +465,10 @@ DECLARED_WRITES = {
         # lgpio's notification files in LG_WD (the unit's own runtime directory).
         "/run/rosy-hw-test/.lgd-nfy0",
     },
-    # D-477: the one-shot tailnet join. The spent key leaves the provisioned
-    # file by an in-place rewrite, and the outcome lands in its StateDirectory.
+    # Legacy rewrites the leaf in place; A/B atomically consumes a shared channel.
     "rosy-tailscale-join.service": {
         "/etc/rosy/tailscale-join.json", "/var/lib/rosy/tailscale/join-result.json",
+        "/var/lib/rosy-device/tailscale/join", "/var/lib/rosy-device/state/config.lock",
     },
 }
 
@@ -668,9 +668,11 @@ PROGRAM_SOURCES = {
 
 DECLARED_READS["rosy-os-tailnet.service"] = DECLARED_READS["rosy-os-storage.service"]
 DECLARED_READS["rosy-sd-provision.service"] = DECLARED_READS["rosy-os-storage.service"]
+DECLARED_READS["rosy-tailscale-join.service"] = DECLARED_READS["rosy-os-storage.service"]
 PROGRAM_SOURCES["rosy-os-tailnet.service"] = [*PROGRAM_SOURCES["rosy-os-storage.service"],
                                            "deploy/robot/pinky_pro/native/os_state_config.py"]
 PROGRAM_SOURCES["rosy-sd-provision.service"] = PROGRAM_SOURCES["rosy-os-storage.service"]
+PROGRAM_SOURCES["rosy-tailscale-join.service"] += PROGRAM_SOURCES["rosy-os-tailnet.service"]
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
 SEGMENT_CHAIN = re.compile(r"""["'](var|opt|run|etc)["'](?:\s*/\s*["'][^"'/]+["'])+""")
