@@ -34,6 +34,13 @@ def test_source_writer_refuses_unverified_asset_closure_and_private_files(tmp_pa
     assert not (root / 'storage-source.json').exists()
 
 
+def test_source_writer_rejects_invalid_isaac_source_revision(tmp_path):
+    root = tmp_path / 'data'; root.mkdir(); (root / 'data.json').write_text('{}')
+    with pytest.raises(ValueError):
+        source_module().seal(root, 'isaac', dict(run_id='run-one', seed=0, source_revision='z' * 40))
+    assert not (root / 'storage-source.json').exists()
+
+
 @pytest.mark.parametrize('final', [False, True])
 def test_isaac_export_uses_final_run_store_bytes_and_preserves_provenance(jobs_setup, monkeypatch, tmp_path, final):
     build, actor, remote, artifact, cache, inventory = jobs_setup

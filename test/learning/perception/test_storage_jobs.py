@@ -325,3 +325,31 @@ def test_file_added_after_cleanup_verification_is_never_deleted(jobs_setup, monk
     with pytest.raises(ValueError): service.reclaim(actor, job['id'], job['id'])
     kept = list(artifact.parent.rglob('unuploaded.json'))
     assert len(kept) == 1 and kept[0].read_bytes() == b'keep-late-data'
+
+
+def test_cancel_unstarted_job_returns_capacity_but_keeps_source(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    service = build(); before = service.pool.snapshot(actor)['targets'][0]['available_bytes']
+    job = create(build, actor)
+    assert service.cancel(actor, job['id'])['status'] == 'cancelled'
+    assert build().pool.snapshot(actor)['targets'][0]['available_bytes'] == before
+    assert build().run(actor, job['id'])['status'] == 'cancelled'
+    assert artifact.exists() and remote.commits == 0
+
+
+def test_known_commit_reconciles_unknown_outcome_without_reupload(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); remote.unknown_commit = True
+    assert build().run(actor, job['id'])['status'] == 'hold'
+    with pytest.raises(ValueError): build().cancel(actor, job['id'])
+    with pytest.raises(ValueError): build().reconcile(actor, job['id'], 'c' * 40)
+    verified = build().reconcile(actor, job['id'], 'b' * 40)
+    assert verified['bytes_verified'] is True and verified['status'] == 'verified'
+    assert remote.commits == 1 and artifact.exists()
+
+
+@pytest.mark.parametrize('bad_id', [None, [], {}, 1])
+def test_non_string_source_id_is_a_validation_error(jobs_setup, bad_id):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    with pytest.raises(ValueError):
+        build().create(actor, dict(source_id=bad_id, artifact_id='run-one', profile='isaac'))

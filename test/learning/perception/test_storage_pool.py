@@ -132,3 +132,12 @@ def test_project_and_connection_visibility_are_not_bypassed(pool_setup, accounts
     assert build().snapshot(actor)['targets'][0]['status'] == 'unavailable'
     config['project_id'] = 'two'
     with pytest.raises(ValueError, match='project'): build()
+
+
+def test_model_allocation_does_not_use_a_dataset_repository(pool_setup, accounts):
+    build, actor, config, now = pool_setup
+    connection = accounts.connect_token(actor, 'hf_model', sharing='project',
+        resources=['model:first/policy'], transport=identified('write'))
+    config['targets'].append(dict(id='model', repo_id='first/policy', repo_type='model', quota_owner='first',
+        connection_id=connection['connection_id'], enabled=True, priority=20))
+    assert build().reserve(actor, 'model-one', 20, repo_type='model')['repo_id'] == 'first/policy'
