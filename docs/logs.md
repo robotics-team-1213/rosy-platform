@@ -9766,6 +9766,24 @@ osy-d395-s1d\`.
 - 증거: 원격 시험(아래 PR). 관제 PC 적용은 별도(관측기는 10/24부터 옛 OpenRB 시리얼로 멈춤).
 - gate 변화: 없음.
 
+## 2026-10-25 · uncommitted · Learning 서명 sequence41 실제 활성화 검증
+
+- 변경: [Learning·Isaac 실제 배포](validation/learning-conveyor-deployment-2026-10-25/result.md)에 PR201–206 공개 source·원격 검사·기존 SDK 증거 재사용·실제 signed sequence41/sourcee231 서비스 활성화와 독립 readback을 구분했다.
+- 증거: 운영 로그인 화면과 동기화 Episode·learned policy·실물 수용은 확인하지 않았다. 복사 상태 화면은 계정 바인딩 보호로 시작이 거절됐으며 우회하지 않았다. 별개 G1 지연 bound 초과와 동일 소스 후속 CI 통과를 함께 보존했다.
+- gate 변화: 모델 PC 코드·Learning 실제 활성화를 확인. 데이터·정책·현장 gate를 승격하지 않는다. CE 해당 없음 — 기존 교훈 보존·재사용, G1 원인은 미해결이다.
+
+## 2026-10-25 · uncommitted · D-871 관측 env를 uv로 만들기
+
+- 변경: `omx_autoupdate.py`의 `uv` 설정이 있으면 venv와 lock 설치를 uv로 한다(`uv venv --python <base> [--system-site-packages]`, `uv pip install`). 관제 PC 첫 적용에서 시스템 Python 3.14에 `ensurepip`(python3.14-venv)이 없어 `python -m venv`가 실패했다. sudo가 없어 패키지를 설치할 수 없고, 기존 관측 venv도 uv로 만든 것이다. `omx-devices-autoupdate.json.example`에 `uv`를 넣었다.
+- 증거: 관제 PC 2026-10-25 20:24 `run`이 `ensurepip is not available`로 준비 단계에서 멈췄다(유닛 변화 없음). 원격 시험(아래 PR).
+- gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · D-871 여러 유닛 재시작: 하나씩 확인, 순서대로
+
+- 변경: `omx_autoupdate.py` 재시작 뒤 `is-active`를 유닛마다 따로 확인한다. `systemctl is-active a b`는 하나만 active여도 0을 낸다. `sequential: true`이면 역순으로 하나씩 stop한 뒤 순서대로 start한다. 예시 설정에 넣었다.
+- 증거: 관제 PC 2026-10-25 20:33 첫 전환에서 카메라와 camera-readiness를 함께 restart했다. readiness의 정지 복원이 카메라 재개방과 겹쳐 `camera restore incomplete`, 재시작은 `camera settings changed since baseline; refusing overwrite`로 실패했는데 업데이터는 `switched`로 기록했다. 복원이 끝난 뒤 readiness를 손으로 다시 시작하자 READY였다(top·front 120회 확인). 원격 시험(아래 PR).
+- gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · D-871 학습 센터 자동 업데이트
 
 - 변경: `deploy/model_pc/learning_center_update.py`가 2026-10-23 교훈의 수동 절차를 자동화한다. 동작 조건은 CI 통과 + 후손 커밋, 센터 enabled·active, `experiment_*` 작업과 자식 프로세스 없음이다. 새 커밋을 `source/<sha>`에 받고, 새 설치기 `prepare()`로 유닛을 만든다. 백업 → 정지 → 쓰기 → `--apply` → active·새 sha·HTTP 200을 확인하고, 실패하면 백업 유닛으로 복구한다. `rosy-learning-center-update.{service,timer}`(D-805 관문), services.yaml model·ai 항목을 `autoupdate`로 바꾸고 업데이터를 추가했다.
