@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-25 · uncommitted · 구조화 출력 공통 어댑터와 실제 모델 파이프라인 시험 (D-878)
+- 2026-10-25 · uncommitted · Learning 배포 후 전체 CI와 G1 원인 분리 조사
 - 2026-10-25 · uncommitted · chore(sync): merge origin/main #201-#207 into local main
 - 2026-10-25 · uncommitted · Learning 서명 sequence41 실제 활성화 검증
 - 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
-- 2026-10-25 · uncommitted · Isaac 원격 receipt·회수 진입의 공개 소스 포트
