@@ -11669,3 +11669,10 @@ osy-d395-s1d\`.
 - 증거: 통합878 passed/16 skipped 및 마지막 공개키 단일 record 보강11 passed, 각0 NEW. 실제 부팅/서비스 manager와 전원 차단은 검증하지 않았다.
 - gate 변화: 없음. 전체 이미지·OS trial/commit/fallback·SD 기록은 남았다.
 - CE: 해당 없음 — 판단은 ADR·소스·반례 시험으로 재현할 수 있다.
+
+## 2026-10-26 · 2b65ad60f0 · D-879의 이미지 조립 구현과 수용 경계 기록
+
+- 변경:29GiB factory GPT, 슬롯 metadata/data 초기화, baseline update 용량, loop ownership/cleanup, 기존 카드 OS update의 UUID rebase 요구를 Proposed D-879에 추가한다.
+- 증거: 공식 원격939 passed/16 skipped/5 warnings,0 NEW. 실제 일반 파일 GPT와 installed configurer 실행을 포함하지만 loop/format/rsync는 모의이며 ARM64 artifact나 부팅 증거가 아니다.
+- gate 변화: 없음. production BUILD_GO 차단과 전체 OS·SD 후속 목표를 유지한다.
+- CE: 해당 없음 — 재현 조건과 한계는 ADR·소스·시험에 남겼다.

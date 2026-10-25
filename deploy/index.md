@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 2b65ad60f0 · native 빌더에 GPT A/B 조립 경로 연결
 - 2026-10-26 · e2860d4e5f · A/B 지속 데이터와 SSH host identity 보존
 - 2026-10-26 · b3044a5b6d · A/B payload와 offline factory의 호환성 검사
 - 2026-10-26 · a3518e509c · A/B 슬롯 admission과 공통 업데이트 정책 구현 중
 - 2026-10-26 · 9816e56bd9 · Site updater pure split verified
-- 2026-10-26 · uncommitted · Site updater runtime extraction before migration

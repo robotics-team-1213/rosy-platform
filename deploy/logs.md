@@ -3493,3 +3493,10 @@
 - 증거: 데이터 admission 반례15 failed/1 passed 뒤 774 passed/16 skipped, SSH 초기8 failed와 실제 keygen 댓글 비교 오류6 failed/59 passed 뒤 집중83 passed. 통합 updater apply/resume 포함878 passed/16 skipped/5 warnings(115.98s, f822424f6a), 마지막 single-record 보강11 passed(1.00s, e2860d4e5f), 각 확인 실행0 NEW. 파일 IO·실제 OpenSSH와 modeled mount 시험이며 실물 부팅·daemon/namespace·powercut 수용은 아니다. 중복 수치를 합산하지 않는다.
 - gate 변화: SOURCE 보강. GPT 조립·OS update backend·새 ARM64 이미지·SD 기록은 아직 미완료다.
 - CE: 해당 없음 — 경계와 재시도 조건은 소스·회귀 시험·D-881에 기록했다.
+
+## 2026-10-26 · 2b65ad60f0 · native 빌더에 GPT A/B 조립 경로 연결
+
+- 변경: 고정29GiB GPT 계획, data factory/소유권 초기화, root별 fstab/cmdline/descriptor, loop backing 확인과 실패 시 작업 공간 보존, baseline payload4배+512MiB reserve를 구현했다. 기존 customization 결과를 읽기 전용으로 복제하고 OS root configurer를 실행한다. finalizer는 실제 GPT snapshot과 FAT3/ext4 3개를 확인하며 manifest/unsigned native CI에 같은 layout과 capacity report를 연결한다.
+- 증거: 실제 sfdisk 일반 파일 GPT roundtrip, root/data metadata와 모의 loop/format/rsync orchestration에서 실제 installed configurer 실행을 확인했다. 최종 공식 원격939 passed/16 skipped/5 warnings(115.62s,2b65ad60f0),0 NEW. 변경 Bash 및 workflow6개 run block 구문과 내장 Python AST 확인0. source/model 결과이며 privileged loop/format/fsck, 실제 native ARM64 이미지·32GB 수용·부팅·OS OTA를 검증한 것은 아니다.
+- gate 변화: production BUILD_GO HOLD 유지. OS update engine, 기존 카드 GUID rebase, trial/health/commit/fallback, 실제 산출물·서명·SD 기록이 남았다.
+- CE: 해당 없음 — geometry/cleanup/rebase 경계는 소스·시험·D-879에 기록했다.

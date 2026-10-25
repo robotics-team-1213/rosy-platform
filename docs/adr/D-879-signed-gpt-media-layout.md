@@ -70,6 +70,14 @@ GPT 이미지를 기록하면서 그 선택 규칙을 유지하면 다른 boot �
    GPT disk GUID와 partition snapshot을 유지한다. GPT emergency write는 이 단위에서 명시적으로 거절한다.
    기존 MBR emergency의 확인·receipt 제한은 유지한다.
 
+### Builder implementation status (2026-10-26)
+
+native 빌더는 기존 Ubuntu customization 결과를 읽기 전용 source로 삼아 새 GPT A/B 이미지를 조립한다. 고정 계획은29GiB raw, bootstrap64MiB, boot A/B 각각512MiB, root A/B 각각11GiB, 나머지 약6GiB data다. 일반 파일에 실제 sfdisk로 만든 GPT를 기존 bounded parser로 다시 읽는 시험을 통과했다. root별 fstab·cmdline·D-881 descriptor는 실제 PARTUUID를 사용하며 data/provision UUID만 공유한다. cloud-init의 partition grow/resize를 끄고, 공통 data에 명시적 factory schema·기존 서비스 uid/gid/mode를 초기화한다. 기체 identity·SSH private key·tailnet state는 이미지에 만들지 않는다.
+
+조립기는 새로 할당한 loop와 backing file을 대조하고 detach 전에도 다시 확인한다. unmount/detach 실패 시 작업 공간과 image를 보존하고 발행을 거절한다. 두 root에 실제 설치된 native payload의 allocation/apparent size 중 큰 값의4배+512MiB를 추가 여유로 요구한다. 이미 복사한 pinned factory 외에 current/previous/staging과 내려받는 archive를 위한 baseline 예산이다. 용량 보고서는 artifact에 포함하며, 실제 새 ARM64 산출물의 용량 증거를 대신하지 않는다.
+
+finalizer는 snapshot과 actual GPT를 대조한 뒤 FAT 세 개와 ext4 세 개를 검사한다. manifest producer에는 같은 snapshot을 전달한다. native ARM64 workflow는 unsigned 경계를 유지한다. 후속 OS bundle 설치는 대상 카드의 기존 GPT UUID에 root·boot metadata를 맞춰야 한다. 새 SD용 factory snapshot의 UUID를 기존 카드에 그대로 적용하면 D-881 admission에서 거절된다. 이 설치 단계는 아직 구현하지 않았다. 이 구현 상태는 privileged loop/filesystem 실행, ARM64 artifact, firmware boot 또는 OS trial/commit/fallback 수용을 뜻하지 않는다. production BUILD_GO 차단은 유지한다.
+
 ### Verification and consequences
 
 실제 signed verifier/readback/PowerShell fixture를 통한 positive/negative 회귀, legacy MBR 및 installed closure를 확인한다.
