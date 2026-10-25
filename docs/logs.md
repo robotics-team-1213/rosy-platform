@@ -11553,6 +11553,12 @@ osy-d395-s1d\`.
 - 증거: 원격 시험 통과. Isaac 6회 실행 결과는 `docs/validation/omx-arm-s-isaac-cell-2026-10-25/result.md`. overhang은 frame_contact로 기대와 맞고, nominal은 집게가 상자를 옆으로 흘려 15.6 mm 어긋남(미해결).
 - gate 변화: 없음. 집게 결합과 관측 카메라 자세는 미해결.
 
+## 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
+
+- 변경: 합성 fixture의 free_space 관측을10 GiB로 고정하고 UI 잔여값을 검증한다. 실제 storage/data 동작은 바꾸지 않았다.
+- 검증: commit d24d1abc64, 모델 호스트 디스크 점검 후 실제 opt-in 두 viewport 포함10 PASS/skip0/NEW0. 기존 MAIN-RED와 raw 로그를 보존했다.
+- gate 변화: 제품·기기 gate 변화 없음. docs/validation/learning-storage-browser-capacity-2026-10-26/result.md는 합성 시험 근거이며 실제 라벨·모델 수용을 뜻하지 않는다.
+
 ## 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
 
 - 변경: `tools/remote/remote_job.py` JOB이 pytest에 job마다 `mktemp -d /tmp/rosy-pytest-XXXXXX`를 `--basetemp`로 주고 EXIT trap이 지운다. 처음엔 실행 디렉터리 아래(`$D/$K.tmp`)에 뒀으나 land 전체 시험에서 Fleet TLS 시험 59개가 깨졌다: 로그인 umask 0002로 실행 디렉터리가 0775라 TLS 파일 조상 권한 검사가 거절했고, 경로가 길어 AF_UNIX 108바이트를 넘었다. land의 MAIN-RED 재확인은 노트북 쪽 JOB(같은 `--basetemp`)으로 main을 돌려 이를 main 고장으로 잘못 보였다. SWEEP은 연락이 끊긴 채 끝난 실행을 12시간이 아니라 2시간 뒤에 치운다. SWEEP·CLEANUP·SHIP 재시도는 실행·job 디렉터리를 지우기 전에 `chmod -R u+rwX`를 한다(릴리스·롤백 시험이 만드는 읽기 전용 디렉터리는 제품 동작이라 시험은 그대로 둠). 새 `tools/remote/host_probe.py`(`remote_pytest.py`에서 PROBE와 파서를 옮겨 D-766 600줄 아래로 유지)의 PROBE가 `~/rosy-test`와 `/tmp` 파일시스템의 남은 공간을 재고, `place()`는 남은 공간이 20 GB 미만인 호스트를 고르지 않는다(바닥 아래 대체 선택에도 적용). 사용률 기준은 두지 않는다: 434-468 GB 디스크에서 90%여도 45 GB가 남아 멀쩡한 호스트를 뺀다. 디스크 값이 없는 예전 probe는 알 수 없음으로 보고 통과시킨다. 시험 `test/test_remote_pytest.py`.
