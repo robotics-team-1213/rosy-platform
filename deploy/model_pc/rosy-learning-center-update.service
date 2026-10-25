@@ -1,0 +1,12 @@
+[Unit]
+Description=ROSY Learning center: move to the newest green main while no center job runs (D-871)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# D-805: skipped while updates are frozen
+ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'
+# Runs from the installed checkout (`current`), so the updater moves with the center.
+ExecStart=/usr/bin/python3 %h/.local/share/rosy-learning-center/current/deploy/model_pc/learning_center_update.py --config %h/.config/rosy/learning-center-update.json run
+TimeoutStartSec=1800
+Nice=10

@@ -1,0 +1,8 @@
+{
+  "repo_url": "https://github.com/<owner>/rosy-platform.git",
+  "github_repo": "<owner>/rosy-platform",
+  "branch": "main",
+  "required_checks": ["ci-result"],
+  "source_root": "~/.local/share/rosy-learning-center/source",
+  "settle": 60
+}
