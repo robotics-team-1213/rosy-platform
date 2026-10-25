@@ -25,6 +25,10 @@ Isaac Sim assets and Python probes (D-322). Not a buildable package — marker o
 | `model_checks.py` | Asset hash and URDF mesh/joint preflight; `run_rosy.py` refuses to start without it |
 | `import_omx.py` | OMX URDF → USD import and articulation check |
 | `run_omx_backend.py` | D-877 OMX backend on the shared sim layer: `/clock`, `/sim/joint_states`, `/sim/joint_commands`, top/front cameras (`tools/sim/run_omx_backend_conformance.sh isaac`) |
+| `arm_s_cell_fixture.py` | Arm S cell scene (tray, belt, Pinky frame, box square to the jaws), the nominal/overhang/wrong-yaw scenarios and the judgement from measured samples only; Isaac-free |
+| `arm_s_cell_task.py` | Isaac script: replays `deploy/robot/omx/isaac_cell_frames.py` frames against that scene, samples box, finger contact and joint lag, writes `rosy.arm-s-cell-report/1` |
+| `run_catalog.py` `arm-s-cell-case` | A real-cell case (`arm_s_cell_fixture.check_case`: box on the tray, place point, jaw turn, expected outcome) as a run beside the seed |
+| `arm_s_cell_report.py` | Verifies an arm S cell report (schema, frames hash, SDK version) for the run worker |
 | `assets/` | `open_manipulator_description` (vendored reference) |
 | `test/` | Host pytest: `test_graph_contract.py`, `test_model_checks.py`, `test_prepare_urdf.py` |
 

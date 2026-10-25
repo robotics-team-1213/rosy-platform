@@ -13,7 +13,7 @@ from import_report import verify_report
 from prepare_omx_urdf import prepare
 from run_admission import acquire, gpu_state
 from run_binding import load_binding, sdk_check
-from run_store import RunConflict, TERMINAL, input_snapshot
+from run_store import RunConflict, TERMINAL, input_snapshot, requested
 from run_system import System
 
 
@@ -125,8 +125,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
     row = store.get(run_id)
     if row['status'] in TERMINAL:
         return 0
-    expected = input_snapshot(row['input']['scenario_id'],
-                              {'seed': row['input']['config']['seed']}, binding['source_sha'])
+    expected = input_snapshot(row['input']['scenario_id'], requested(row['input']['config']), binding['source_sha'])
     if expected['input_sha256'] != row['input_sha256']:
         raise ValueError('Worker source and immutable input differ')
     owner = System().observe('rosy-isaac-' + run_id + '.service')
@@ -167,7 +166,23 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                             '--model', 'omx_f', '--urdf', str(urdf), '--output-dir', str(directory / 'usd'),
                             '--headless', '--frames', '120', '--report', str(directory / 'import-report.json')]
                     contact_task = row['input']['scenario_id'] == 'pinky-conveyor-roundtrip'
-                    report_path = directory / ('contact-report.json' if contact_task else 'import-report.json')
+                    arm_task = row['input']['scenario_id'].startswith('arm-s-cell-')
+                    report_path = directory / ('contact-report.json' if contact_task else
+                                               'arm-s-cell-report.json' if arm_task else 'import-report.json')
+                    if arm_task:  # the real cell's chunk frames for this scenario (system python: the planner)
+                        frames = directory / 'frames.json'
+                        repo = Path(__file__).resolve().parents[3]
+                        which = ['--scenario', row['input']['config']['scenario']]
+                        if 'case' in row['input']['config']:
+                            (directory / 'case.json').write_text(json.dumps(row['input']['config']['case']))
+                            which = ['--case', str(directory / 'case.json')]
+                        subprocess.run(['/usr/bin/python3', str(repo / 'deploy/robot/omx/isaac_cell_frames.py'),
+                                        *which, '--out', str(frames)],
+                                       cwd=directory, env=env, check=True, timeout=120, capture_output=True)
+                        argv = [binding['sdk_python'], str(Path(__file__).with_name('arm_s_cell_task.py')),
+                                '--urdf', str(urdf), '--frames', str(frames), '--output-dir', str(directory/'usd'),
+                                '--report', str(report_path), '--steps-per-frame', '1']  # ~3,800 steps: 4x real speed
+                                # inside the run's 165 s supervision, like the contact task's 4,800
                     if contact_task:
                         argv = [binding['sdk_python'], str(Path(__file__).with_name('conveyor_task.py')),
                                 '--urdf', str(urdf), '--output-dir', str(directory/'usd'),
@@ -178,6 +193,12 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         if contact_task:
                             from conveyor_report import verify_report as verify_contact_report
                             report = verify_contact_report(report_path, sdk_version=binding['sdk_version'])
+                        elif arm_task:
+                            from arm_s_cell_report import verify_report as verify_arm_report
+                            config = row['input']['config']
+                            report = verify_arm_report(report_path, scenario=config.get('case', config['scenario']),
+                                frames_sha256=hashlib.sha256(frames.read_bytes()).hexdigest(),
+                                sdk_version=binding['sdk_version'])
                         else:
                             report = verify_report(report_path, model='omx_f', frames=120,
                                                    sdk_version=binding['sdk_version'])
@@ -226,10 +247,13 @@ def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
             cleanup='OWNED_PROCESSES_EXITED_GPU_RELEASED'):
     current = store.get(run_id)
     contact_task = current['input']['scenario_id'] == 'pinky-conveyor-roundtrip'
-    passed = report is not None and (not contact_task or report['task_success'] is True)
+    arm_task = current['input']['scenario_id'].startswith('arm-s-cell-')
+    passed = report is not None and (not (contact_task or arm_task) or report['task_success'] is True)
     status = 'STOPPED' if stopped else ('SUCCEEDED' if passed else 'FAILED')
     result = dict(outcome, status=status, stage='model_import', task_success=None,
-                  import_verified=report is not None, completed_frames=report['completed_frames'] if report else None,
+                  import_verified=report is not None,  # the arm S report counts physics steps, not import frames (KeyError
+                  # here turned every finished arm S run into UNKNOWN until 2026-10-26)
+                  completed_frames=report.get('completed_frames') if report else None,
                   cleanup=cleanup, gpu=gpu, video_unavailable_reason='model_import_does_not_record_video')
     if contact_task:
         result.update(stage='contact_roundtrip', task_success=bool(report and report['task_success']),
@@ -237,6 +261,12 @@ def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
             failures=report['judgement']['failures'] if report else [outcome['reason']],
             coordinate_scope='SYNTHETIC_NOT_CAMERA_REGISTERED', controller='DETERMINISTIC_CAD_IK_NOT_LEARNED_POLICY',
             video_unavailable_reason='phase_pngs_only_no_video')
+    if arm_task:
+        judgement = report['judgement'] if report else {'result': outcome['reason']}
+        result.update(stage='arm_s_cell', task_success=bool(report and report['task_success']),
+            evidence_class='ARM_S_CELL_' + str(judgement.get('result')).upper(), judgement=judgement,
+            coordinate_scope='ARM_FK_FROM_REAL_GRASPS_NOT_CAMERA_REGISTERED',
+            controller='ARM_S_CHUNK_FRAMES_NOT_LEARNED_POLICY', video_unavailable_reason='phase_pngs_only_no_video')
     try:
         store.finish(run_id, current['revision'], result, artifacts)
     except RunConflict:

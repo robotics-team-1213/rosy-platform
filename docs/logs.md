@@ -11500,6 +11500,18 @@ osy-d395-s1d\`.
 - 증거: 원격 시험 통과. 매끄러운 동작으로 Gazebo `pick-place-chunks` PASS(xy 0.26 mm, 들기 102 mm). 시나리오 결과는 이어서 기록한다.
 - gate 변화: 없음. 실물의 매끄러운 동작·녹화는 실물 실행에서 확인한다.
 
+## 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+
+- 변경: `learning/envs/isaac/arm_s_cell_fixture.py`·`arm_s_cell_task.py`·`arm_s_cell_report.py`, `deploy/robot/omx/isaac_cell_frames.py`. 실행 관리자에 `arm-s-cell-nominal`·`-overhang`·`-wrong-yaw`(run_catalog·run_store·run_worker·remote_isaac).
+- 증거: 원격 시험 통과. Isaac 6회 실행 결과는 `docs/validation/omx-arm-s-isaac-cell-2026-10-25/result.md`. overhang은 frame_contact로 기대와 맞고, nominal은 집게가 상자를 옆으로 흘려 15.6 mm 어긋남(미해결).
+- gate 변화: 없음. 집게 결합과 관측 카메라 자세는 미해결.
+
+## 2026-10-26 · uncommitted · 공급암 S: 실물 사례를 모델 PC Isaac에서 재현하는 사례 파이프라인
+
+- 변경: `cell_pipeline`의 `cases.jsonl`이 시도마다 장면(상자 위치·회전, 집게 각도, 놓을 곳, 결과)을 남긴다. `cell_cases.py`(실물 정지 6건과 장면이 있는 사례 → 시뮬레이터 사례), `cell_case_suite.py`(모델 PC Isaac `arm-s-cell-case` 실행으로 재현·판정, 알려진 Isaac 차이 구분). 실행 관리자가 사례를 받는다(run_catalog·run_store·run_worker·remote_isaac). worker가 공급암 S 실행마다 KeyError로 죽어 UNKNOWN이 되던 것과 사례 실행의 입력 재구성 오류를 고쳤다.
+- 증거: 원격 시험 통과. 모델 PC 실행 결과는 `docs/validation/omx-arm-s-cell-cases-2026-10-26/result.md`(사례 4 일치, 3·5는 알려진 Isaac 집게 차이).
+- gate 변화: 없음. Gazebo 사례 입력과 Isaac 집게 결합은 미해결.
+
 ## 2026-10-26 · uncommitted · fix(land): FULL를 다시 돌지 않는 차례, pretest 공백 정리, 차례 중 우회 거부
 
 - 변경: `land.merge`가 착지된 ADR 공백 줄을 병합 커밋 안에서 지운다(pretest·차례 공통). `land_full.restore`는 병합 커밋이 git 병합과 자동 정리 기록만 다르면 FULL 통과를 유지한다. 대기 중 main 변화분이 이미 착지한 하네스 파일 때문에만 FULL로 오르면 guard와 매핑 시험만 돈다. 다른 착지가 차례를 쥐면 `--no-queue`를 거부한다.
