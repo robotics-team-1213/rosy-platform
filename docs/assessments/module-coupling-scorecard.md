@@ -101,6 +101,7 @@
 | `hmi/web` | 4 | 5 | 4 | 5 | 5 | **91** | S | 0 fan-out 공용 자산 + 소비자 계약 테스트 4종 + 600/10k 예산 |
 | `sim/isaac_sim` | 4 | 5 | 4 | 4 | 5 | **88** | A | D-322 신규(2026-09-30 잠정): Isaac Sim 자산·프로브 — 신규는 package.xml·setup.py 마커 등록뿐이고 코드·자기 시험 3건은 기존 것. M1 — 실행 검증 대상(Isaac Sim)은 외부. M3 — 자기 시험 있으나 호출 경로 미등록. M4 — vendored `open_manipulator_description`는 문서화된 참조 트리 |
 | `products/pinky_pro` | 5 | 5 | 4 | 3 | 4 | **87** | A | D-196 신규(2026-09-24 잠정): config 전용·자기 시험 보유·fan-out 0. M4 — `deploy/robot/pinky_pro/config/profile.*.yaml`이 속도 상한을 부분 복제(`test_nav2_profile_limits`가 일치 고정). M5 — core가 `robot.model`로 동적 조회(선언 없음, D-126과 같은 종류) |
+| `middleware/devices/rasptank/profile` | 4 | 5 | 4 | 5 | 4 | **88** | A | 2026-10-25 잠정: `rasptank_metal` config 전용·자기 시험 8건·fan-out 0. M1/M3/M5 — CORE의 동적 model 선택·설치 결속 검사를 함께 유지. 실물 지원·주행 수용 점수가 아니며 기존 분포·평균에 포함하지 않음 |
 | `contracts/foundation` | 4 | 5 | 4 | 5 | 3 | **85** | A | fan-in 5의 공용 스키마, 그러나 기록된 역방향 1건 |
 | `runtime/api_web` | 4 | 4 | 4 | 5 | 3 | **80** | A | `deps` 파사드 + v1 직접 import 금지 게이트로 전파 반경 봉쇄, 과잉선언 1건 (`core_events` — 생산 코드 0회) |
 | `site/fleet` | 4 | 4 | 4 | 4 | 5 | **83** | A | 자기 시험 27개, `fleet.bench` 공개면으로 gz_sim과 분리 |

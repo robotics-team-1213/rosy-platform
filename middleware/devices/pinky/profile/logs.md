@@ -43,3 +43,9 @@
 - 변경: D-626 devices/pinky/profile으로 이동하며 pinky_pro package/share identity와 numeric profile/geometry를 유지했다. 일반 source profile 탐색 경로를 devices로 정렬했다.
 - 증거: Pinky 통합 원격 885 성공·2 skip 중 profile/robot-selection 계약 포함, 독립 source 리뷰와 known_failures 0 NEW/0 known. 로그는 R100 이동 후 증거를 추가했다.
 - gate 변화: 없음. 기존 ROS evidence는 과거 후보이며 새 colcon/image/device 수용을 주장하지 않는다.
+
+## 2026-10-25 · 4fdf8c9fee · 기종 설정의 release 결속
+
+- 변경: profile/capability 값은 유지하고 package model ID와 normalized JSON SHA256을 담은 `deployment-binding.yaml`을 추가했다. 기존 config 디렉터리 설치에 포함된다.
+- 증거: 다른 기종 전체/부분 파일 복사·잘못된 binding RED 후 관련153 PASS/NEW0. 현재 Pinky package를 product 설정으로 읽는 positive control 포함. 독립 source 검토 승인. 전체 착지 회귀는 별도다.
+- gate 변화: 소스 계약 근거 추가. 기존 장치 보정·이미지·실물 수용 상태를 승격하지 않는다.

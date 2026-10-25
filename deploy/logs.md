@@ -3407,3 +3407,39 @@
 - 변경: 기존 설치기는 state의 소유자 전용 일반 SIM 설정을 대상 CLI에 맞춰 연결하고 구버전 복귀·재진입에서 보존한다. 기존 collaboration·center·workspace와 rollback 경로를 유지한다.
 - 증거: b1f990bbd8에서 네 건의 연결 누락을 재현했고 e24bb3ea58 원격 설치기·자동 갱신기 48개가 통과했다. [검증 기록](../docs/validation/learning-conveyor-release-2026-10-25/result.md).
 - gate 변화: 없음. 서명된 코드 승인과 실제 서비스 전환·인증된 조회는 별도 수용이다.
+
+## 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
+
+- 변경: 공통 서명 구현을 `hosts/common/release/signing.py`로 옮기고 Pinky 호환 import·native 독립 복사·CD snapshot 의존 목록을 연결했다. 제품/SDK host target descriptor와 list/plan/apply/rollback CLI를 추가하고, 실행은 기존 Pinky executor만 허용한다. RaspTank와 Neo 2는 명시적으로 실행 차단 상태다.
+- 증거: 공통 signing RED2, dispatcher 미구현 RED 뒤 `eb616252ea` 결합 회귀213 통과. 리뷰에서 찾은 offline readback 동적 import 문제는 기존 원격 반례로 재현한 뒤 `b6a7ad60fe`에서 resolved module identity를 반환하도록 보완했다. 이 보완의 GREEN과 전체 착지는 후속 검증이다.
+- gate 변화: signed ARM64 산출물·SD/장치·SDK/비행 수용 변화 없음. 서명 바이트 형식·신뢰 anchor·manifest schema와 기존 executor의 SSH/서명/복구 경계 유지.
+- 교훈: 해당 없음 — 기존 installed-layout 회귀를 적용했고 동적 import 보완은 코드와 기존 readback 반례로 설명된다.
+
+- 추가 검증: `b6a7ad60fe`의 readback·CD·native/systemd·first-boot·SD writer 관련 원격 회귀는 PASS323/SKIP215/NEW0. skip을 통과로 계산하지 않으며 PowerShell/장치 의존 범위는 미확인이다. 실제 장치 배포는 수행하지 않았다.
+
+## 2026-10-25 · 4fdf8c9fee · 동적 서명 소비자 호환과 추가 회귀
+
+- 변경: legacy signing facade의 `__getattr__`가 원래 spec module 객체를 유지하는 소비자에도 공통 API를 제공한다. 기존 alias identity와 설치된 독립 signing 구현은 유지한다.
+- 증거: 정상 착지 FULL 중 perception learned-signature9 FAIL을 확인해 착지를 취소했다. retained module 객체 반례 RED 뒤 binding/signing 관련153 PASS/NEW0, 기존 learned signature 사례 포함. 최종 FULL 재착지는 별도다.
+- gate 변화: source 호환 보완. 실제 배포·서명 key 사용·SDK/firmware/OS 전체 갱신 수용 없음. CE 해당 없음 — 기존 소비자와 반례에 원인/해결을 보존했다.
+
+## 2026-10-25 · 9f0df4f99b · 설치형 updater 복구 시험과 공개 digest inventory
+
+- 변경: 설치기와 같이 독립 공통 signing 구현을 복사하도록 updater resync fixture를 맞췄다. secret scanner 규칙은 유지하고 공개 image checksum·source commit·정규화된 profile/capability digest·기존 journal repair digest 11개 행을 exact provenance에 등록했다.
+- 증거: 기존 fixture는 원격 RED 1 FAIL/3 PASS로 ModuleNotFoundError를 재현했다. 정상 FULL도 같은 실패와 inventory/scorecard 실패를 검출했고 같은 main의 3개 반례는 PASS였다. 수정 후 원격 GREEN은 별도 기록한다.
+- gate 변화: source 회귀 보완 중이며 실제 설치·SD 기록·OS/펌웨어 갱신·기체 부팅 검증은 수행하지 않았다.
+- 교훈: CE 해당 없음 — 실제 설치 closure와 복구 회귀 시험으로 이유를 남겼다.
+
+## 2026-10-25 · 055f40747f · signing 설치 closure와 provenance 회귀 통과
+
+- 변경: 설치형 resync fixture와 공개 digest inventory 보완 결과를 기록한다. scanner/시험 assertion은 유지했다.
+- 증거: `landing-fixes-green` 승인 원격 committed SHA 검증 125 PASS/NEW0. 범위는 module scorecard·release boundary·public provenance·updater resync·shared signing·실제 installed layout이며 docs logs에 실행 명령을 남겼다. 독립 리뷰 승인.
+- gate 변화: 이 source 회귀만 통과했다. 정상 전체 착지·SD/부팅·OS/펌웨어 갱신은 별도다.
+- 교훈: CE 해당 없음 — 설치기와 복구 반례가 판단을 직접 보존한다.
+
+## 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
+
+- 변경: main의 `verify_release_checksums` 구현을 공통 정본으로 반영하고 기존 legacy facade/standalone 설치 경로를 유지했다. journal 충돌은 기존 append_blocks로 합치고 index를 재생성했다. 후속 시험은 신규 API의 dynamic/isolated 호출도 직접 확인한다.
+- 증거: canonical 본문은 merge의 main parent와 첫 docstring 행 외 동일하다. 독립 contract review 승인. committed e732c6bd2c 원격 signing·legacy/dynamic·SD provenance·installed layout·updater resync84 PASS/NEW0. 후속 assertion 및 정상 전체 착지는 별도다.
+- gate 변화: source 병합 호환만 검증했다. A/B media/OS 엔진·native ARM64 artifact·실기 powercut 수용은 미완료다.
+- 교훈: CE 해당 없음 — 구현 동등성·소비자 경로·회귀 시험에 근거를 보존했다.
