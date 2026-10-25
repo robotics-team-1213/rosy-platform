@@ -41,7 +41,9 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a"):
                 "var/lib/rosy/core": common / "core",
                 "etc/NetworkManager/system-connections": common / "network/system-connections",
                 "var/lib/rosy/ssh": common / "ssh", "home/rosy/.ssh": common / "operator-ssh",
-                "etc/rosy/tls": common / "tls", "var/lib/tailscale": common / "tailscale/machine"}
+                "etc/rosy/tls": common / "tls", "var/lib/tailscale": common / "tailscale/machine",
+                "var/lib/rosy/maps": common / "maps", "var/lib/rosy/models": common / "models",
+                "var/lib/rosy/pilot-recordings": common / "pilot-recordings"}
     (common / "tailscale/join").mkdir(parents=True, mode=0o700)
     mountpoints = set()
     for root, (_, host_table, local_table) in zip(roots, tables):
@@ -54,6 +56,10 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a"):
                 backing.chmod(0o750)
             elif relative == "var/lib/tailscale":
                 backing.chmod(0o700)
+            elif relative in ("var/lib/rosy/maps", "var/lib/rosy/pilot-recordings"):
+                backing.chmod(0o2750)
+            elif relative == "var/lib/rosy/models":
+                backing.chmod(0o750)
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.is_dir():
@@ -89,6 +95,12 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a"):
                 fields.update(st_uid=1001, st_gid=1001)
             elif key.endswith("/etc/rosy/tls"):
                 fields.update(st_gid=960)
+            elif key.endswith("/var/lib/rosy/maps"):
+                fields.update(st_uid=961, st_gid=960)
+            elif key.endswith("/var/lib/rosy/models"):
+                fields.update(st_gid=963)
+            elif key.endswith("/var/lib/rosy/pilot-recordings"):
+                fields.update(st_uid=963, st_gid=960)
             return SimpleNamespace(**fields)
         return info
 
@@ -109,7 +121,10 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a"):
         info = original_fstat(descriptor)
         path = os.readlink(f"/proc/self/fd/{descriptor}")
         identity = {str(common / "core"): (960, 960), str(common / "operator-ssh"): (1001, 1001),
-                    str(common / "tls"): (common.stat().st_uid, 960)}.get(path)
+                    str(common / "tls"): (common.stat().st_uid, 960),
+                    str(common / "maps"): (961, 960),
+                    str(common / "models"): (common.stat().st_uid, 963),
+                    str(common / "pilot-recordings"): (963, 960)}.get(path)
         if identity is None:
             return info
         fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
