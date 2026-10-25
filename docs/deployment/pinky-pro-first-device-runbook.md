@@ -164,6 +164,26 @@ JSON의 상대 경로는 그 파일이 있는 폴더를 기준으로 하고, 명
 이미지는 [산출물 선택 절차](pinky-release-artifact-selection.md)에 따라 고르고,
 설치할 source revision과 release ID를 확인한다.
 
+안내 도구는 이미지 전체의 서명·checksum 검증에 더해, 같은 서명 목록에 들어 있는
+`source-revision.txt`와 `build-provenance.json`의 source/release 일치를 확인한다.
+출처 파일이 없거나 서로 다르면 카드 검색 전에 중단한다. 현재 체크아웃의 커밋을
+이미지에 들어 있는 커밋으로 간주하지 않는다. 검증된 소스는 화면과 카드별
+`verified-image.json`, 여러 장 작업의 `batch.json`에 기록한다.
+
+특정 빌드 커밋의 이미지만 허용하려면 로컬 JSON의 `expected_image_revision`에 해당
+소문자 40자리 SHA를 저장하거나 다음처럼 지정한다. 명령줄 값이 JSON보다 우선한다.
+
+```powershell
+.\deploy\robot\pinky_pro\sd\setup-moved-device.ps1 -ExpectedImageRevision '<빌드에 지정한 40자리 source SHA>'
+```
+
+기대값은 실제로 선택한 이미지 빌드의 커밋이다. 운영 도구·문서만 바뀐 최신 HEAD를
+자동으로 쓰지 않는다. 값이 비어 있으면 특정 버전을 고정하지 않으며, 서명된 출처 일치
+검증은 계속 수행한다. 새 기능이 들어 있는 이미지를 요구할 때는 기대값을 고정한다.
+이 옵션은 이미지를 새로 빌드하거나 업데이트를 배포하지 않는다. 오래된 이미지가 거부되면
+그 SHA로 빌드·오프라인 서명한 이미지 폴더를 준비해야 하며, 기존 이미지의 출처 파일을
+수정하거나 기대값을 지워 통과시키지 않는다.
+
 Wi-Fi 프로필은 안내 중 저장하거나 다음 명령으로 한 번 저장한다. 비밀번호는 보안 프롬프트에
 입력하며 명령 인수에 넣지 않는다. 다른 운영 PC의 DPAPI 프로필을 복사하지 않는다.
 

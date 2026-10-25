@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-25 · uncommitted · guard 교사 모드 첫 실물: 대기 중 오래된 모터 상태 표본으로 토크 OFF
-- 2026-10-25 · uncommitted · 공급암 S 청크 계획의 native SIM 실험 `pick-place-chunks`
-- 2026-10-25 · uncommitted · 병합 입력으로 생성물 갱신과 취소 거부 보존
-- 2026-10-25 · uncommitted · feat(sim): D-866 P1 OMX 시뮬레이터 백엔드 적합성 시험
-- 2026-10-25 · uncommitted · docs(spec): MSN-008 계약 줄 v1.314 확정
+- 2026-10-25 · uncommitted · OMX intake가 승인된 카메라 촬영 기준을 직접 읽는다 (D-792 S3 첫 조각)
+- 2026-10-25 · uncommitted · 자동 교사 intake 재검토 반영: 문장 속 경로 가리기 (D-848)
+- 2026-10-25 · uncommitted · 자동 교사 intake: 현장 봉인 형식·경로 제거·검토 반영 (D-848)
+- 2026-10-25 · uncommitted · 봉인한 자동 교사 녹화의 Learning intake (D-848)
