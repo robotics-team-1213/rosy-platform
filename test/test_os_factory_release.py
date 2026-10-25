@@ -19,10 +19,9 @@ def _factory(root, release_id, private, public, *, signed=False):
     _payload(release, release_id)
     shutil.rmtree(release / "image-overlay")
     seal_release(release, release_id)
-    sign_checksums(release, private)
-    signature = (release / "SHA256SUMS.sig").read_text().strip()
-    if not signed:
-        (release / "SHA256SUMS.sig").unlink()
+    signature = sign_checksums((release / "SHA256SUMS").read_bytes(), private)
+    if signed:
+        (release / "SHA256SUMS.sig").write_text(signature + "\n")
     key = root / "etc/rosy/trusted-release-keys" / public.name
     key.parent.mkdir(parents=True, exist_ok=True)
     key.write_bytes(public.read_bytes())
