@@ -180,6 +180,11 @@ def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
              'assets_sha256': hashlib.sha256((ASSETS / 'manifest.json').read_bytes()).hexdigest(),
              'verifier_sha256': hashlib.sha256(Path(__file__).with_name('import_omx.py').read_bytes()).hexdigest(),
              'scene': None, 'scene_not_applicable_reason': 'model_import_has_no_cargo_scene'}
+    if scenario_id.startswith('arm-s-cell-'):
+        from arm_s_cell_fixture import FIXTURE as ARM_S_CELL
+        scene = json.loads(json.dumps(ARM_S_CELL))
+        value.update(scene=scene, scene_sha256=hashlib.sha256(_bytes(scene)).hexdigest(), scene_not_applicable_reason=None,
+            verifier_sha256=hashlib.sha256(Path(__file__).with_name('arm_s_cell_report.py').read_bytes()).hexdigest())
     if scenario_id == 'pinky-conveyor-roundtrip':
         from conveyor_fixture import FIXTURE, fixture_sha256
         value.update(scene=FIXTURE, scene_sha256=fixture_sha256(), scene_not_applicable_reason=None,
@@ -375,6 +380,12 @@ class RunStore:
                             or result.get('coordinate_scope') != 'SYNTHETIC_NOT_CAMERA_REGISTERED'
                             or not required <= {item.get('id') for item in artifacts}):
                         raise ValueError('SDK exit alone is not verified contact roundtrip')
+                elif row['input']['scenario_id'].startswith('arm-s-cell-'):
+                    if (result.get('stage') != 'arm_s_cell' or result.get('import_verified') is not True
+                            or result.get('task_success') is not True
+                            or result.get('cleanup') != 'OWNED_PROCESSES_EXITED_GPU_RELEASED'
+                            or 'arm-s-cell-report' not in {item.get('id') for item in artifacts}):
+                        raise ValueError('SDK exit alone is not a verified arm S cell scenario')
                 elif (result.get('stage') != 'model_import' or result.get('import_verified') is not True
                       or result.get('completed_frames') != 120 or result.get('task_success') is not None):
                     raise ValueError('SDK exit alone is not verified model import')
