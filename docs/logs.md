@@ -10520,3 +10520,10 @@ osy-d395-s1d\`.
 - gate 변화: P1 끝난 기준(Gazebo 적합성 통과) 충족. P2 Isaac 백엔드는 같은 도구로 판정한다.
 - 결정: 없음.
 - 교훈: 없음.
+
+## 2026-10-25 · uncommitted · 병합 입력으로 생성물 갱신과 취소 거부 보존
+
+- 변경: 충돌 없는 main 병합도 병합 커밋 전에 정본 생성물을 갱신한다. 생성 대상 전체를 쓰기 전에 검증하고 선언된 출력만 스테이징한다. Git이 부분 생성 뒤 병합 취소를 거부하면 변경·인덱스·진행 중 병합을 보존하고 복구 필요를 명시한다. 생성물 I/O 분리로 harness 크기 상한은 858→843으로 줄였다.
+- 증거: `18c09b384e` 원격 land/queue/record/harness 207 passed, skip 0, NEW 0. 독립 소스 리뷰 승인. 먼저 실패한 6개 생성물 사례와 2개 취소 진단 사례 및 중간 실패 3개도 [검증 기록](validation/land-pretest-guards-2026-10-25/result.md)에 보존했다.
+- gate 변화: 없음. 최신 소스의 공식 FULL·착지·게시·배포는 별도 확인한다.
+- 교훈: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 병합 생성 시점과 취소 실패 보존 근거를 갱신했다.

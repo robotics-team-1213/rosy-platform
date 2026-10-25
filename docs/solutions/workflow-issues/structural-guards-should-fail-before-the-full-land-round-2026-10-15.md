@@ -79,6 +79,17 @@ caller ticket and preservation of the peer ticket. See the [source verification 
 These are committed-source test results as of 2026-10-25. Official landing, publication and device
 acceptance are separate evidence; no deployment claim follows from these tests.
 
+## Moving-main generation and recovery
+
+The subsequent landing attempt exposed a second ordering constraint: even a conflict-free merge
+of individually current indexes can leave generated records stale. Regenerate from merged inputs
+before creating that merge commit, rather than weakening the lint guard or changing FULL receipts.
+If generation partially changes tracked output, Git may refuse `merge --abort`. Check its exit
+status and preserve the pending merge, index and worktree with an explicit recovery diagnostic;
+never report successful rollback or force-reset unexpected edits. Source `18c09b384e` passed 207
+remote land/queue/record/harness tests, including partial-output and abort-refusal cases (NEW 0).
+The verification record above retains the preceding failing runs and exact source review.
+
 ## Applicability
 Any change to `tools/harness/platform_parts.yaml`, size verdicts, or other repository-structure
 contracts that only `test/architecture` enforces.
