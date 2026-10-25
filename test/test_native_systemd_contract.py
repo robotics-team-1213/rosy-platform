@@ -667,7 +667,7 @@ PROGRAM_SOURCES = {
 }
 
 DECLARED_READS["rosy-os-tailnet.service"] = DECLARED_READS["rosy-os-storage.service"]
-DECLARED_READS["rosy-sd-provision.service"] = DECLARED_READS["rosy-os-storage.service"]
+DECLARED_READS["rosy-sd-provision.service"] = set(DECLARED_READS["rosy-os-storage.service"])
 DECLARED_READS["rosy-sd-provision.service"] |= {"/proc/sys/kernel/hostname", "/proc/sys/kernel/random/boot_id",
     "/etc/timezone", "/usr/share/zoneinfo", "/etc/localtime"}
 DECLARED_READS["rosy-tailscale-join.service"] = DECLARED_READS["rosy-os-storage.service"]

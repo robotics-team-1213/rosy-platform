@@ -195,6 +195,8 @@ class TLSPublication:
             raise ValueError("TLS recovery record changed before completion")
         self.path.unlink()
         sync_directory(self.path.parent)
+        from os_state_ready import refresh_ready
+        refresh_ready(self.root, self.shared)
 
     def abort(self):
         if self.record is not None:

@@ -128,6 +128,8 @@ class ConfigurationUpdate:
             _json_atomic(self.shared.current, pointer, 0o600)
             self.shared.prepare_existing()
             self.pointer = pointer
+            from os_state_ready import refresh_ready
+            refresh_ready(self.root, self.shared)
         self.committed = True
 
 

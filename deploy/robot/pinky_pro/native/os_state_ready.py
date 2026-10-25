@@ -11,7 +11,7 @@ from os_state_firstboot import _hold
 from os_state_files import ROOT_FILES, _timezone, validate_projection
 from os_state_io import SERIAL, _json_atomic
 from os_state_layout import (
-    READY, TLS_PENDING, _guid, _layout, _object, _path, _read, shared_mount_facts,
+    READY, TLS_PENDING, _guid, _layout, _object, _pairs, _path, _read, shared_mount_facts,
 )
 
 RECEIPT_FIELDS = {"schema_version", "phase", "boot_id", "slot", "descriptor_sha256",
@@ -29,8 +29,10 @@ def projection_facts(root: Path, shared) -> dict:
     loaded = _layout(root)
     layout, descriptor_sha = loaded
     pointer, manifest, values = shared._generation()
-    shared._committed()
+    _, completion = shared._committed()
     owner = root.stat().st_uid
+    if json.loads(_read(shared.complete, 64 * 1024, owner), object_pairs_hook=_pairs) != completion:
+        raise ValueError("canonical completion publication is incomplete")
     live = _read(root / "proc/device-tree/serial-number", 128, owner).decode("ascii").strip("\0\r\n ").lower()
     if not SERIAL.fullmatch(live) or live != manifest["hardware_serial"]:
         raise ValueError("projection hardware binding differs")
@@ -78,6 +80,12 @@ def publish_ready(root: Path) -> dict:
         _path(root, READY)
         _json_atomic(target, report, 0o600)
         return report
+
+
+def refresh_ready(root: Path, shared) -> None:
+    """Existing owner already holds the common lock; never reacquire it here."""
+    if _path(root, READY).exists() and not _path(root, TLS_PENDING).exists():
+        _json_atomic(_path(root, READY), projection_facts(root, shared), 0o600)
 
 
 @_hold
