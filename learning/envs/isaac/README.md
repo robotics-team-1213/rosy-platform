@@ -6,6 +6,8 @@ D-434 keeps the model PC on Isaac Sim 5.1. Its bounded diagnostic runs headless 
 
 ## Requirements
 
+개발 PC의 receipt·재조회·회수 진입은 `tools/remote/remote_isaac.py`다. 명시적인 model 역할 한 대만 선택하며 사이트 PC나 test host로 fallback하지 않는다. 운영 binding·요청·중지·산출물 회수 절차는 [Isaac 실행 안내](../../../docs/deployment/isaac-experiment-runs.md)를 따른다.
+
 고정 실행 관리의 모델 PC 진입은 `/usr/bin/python3 SOURCE/learning/envs/isaac/run_control.py --binding BINDING.json`이며 stdin JSON의 `catalog`, `check`, `start`, `list`, `status`, `stop`, `artifact`만 받는다. `omx-f-import`와 `pinky-conveyor-roundtrip`의 고정 시나리오를 제공하며 요청으로 경로·임의 명령·호스트·프레임 수를 지정할 수 없다.
 
 접촉 왕복은 OMX-F CAD 집게와 동적 물체가 정지 Pinky 적재면 proxy ↔ 정지 컨베이어 proxy를 오가는 합성 배치다. 실제 접촉·자유 lift·집게 해제 후 안착을 독립 판정하며 보고서 1개와 단계 PNG 5개를 같은 run의 bounded artifact로 보존한다. Learning SIM 화면은 이 등록된 결과를 조회한다. 원래 SDK 실행의 source·run·지문과 실패 기록은 [검증 기록](../../../docs/validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md)에 보존했다. 공개 포트의 호스트 회귀와 과거 SDK 관측은 별개다. 실제 카메라 정합·전체 Pinky·이동 벨트·학습 정책·동기화 Episode·실물 수용은 포함하지 않는다.
