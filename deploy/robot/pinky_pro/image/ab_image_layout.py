@@ -54,8 +54,12 @@ def sfdisk_script(layout: dict) -> str:
 
 def _offline_directory(path: Path) -> Path:
     path = Path(path).absolute()
-    if path == Path(path.anchor) or path.is_symlink() or not path.is_dir():
+    if (path == Path(path.anchor) or ".." in path.parts or not path.is_dir()
+            or any(parent.is_symlink() for parent in (path, *path.parents))):
         raise ValueError("an offline directory is required")
+    info = path.stat()
+    if info.st_uid != os.geteuid() or info.st_mode & 0o022:
+        raise ValueError("offline directory owner or permissions differ")
     return path
 
 
