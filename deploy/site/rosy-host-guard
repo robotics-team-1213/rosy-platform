@@ -6,6 +6,7 @@ see host-guard.conf.example) lists one host per line:
 
   <name> pc <ssh-target> <quiet HH:MM-HH:MM or ->
   <name> robot <host>:<port>
+  <name> updates <ssh-target>           (D-871: only `updates`, e.g. the site PC's own user; no ladder)
 
 A pc answers `health` through its forced command (rosy-host-guard-remote); restart and reboot run
 the D-524 Service Control helper there (reboot = shutdown -r +10). Recovery ladder:
@@ -121,8 +122,22 @@ def recovery_report(value):
     return value
 
 
+def update_report(text: str | None) -> dict | None:
+    """A PC's update channels (D-871). Anything else is no evidence; it never affects the recovery ladder."""
+    try:
+        value = json.loads(text or "null")
+    except ValueError:
+        return None
+    if (not isinstance(value, dict) or value.get("schema") != "rosy.update-report/1"
+            or value.get("gate") not in ("open", "frozen", "missing") or not isinstance(value.get("updaters"), list)
+            or type(value.get("time")) is not int):
+        return None
+    return value
+
+
 def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
     entry["recovery"] = None
+    entry["updates"] = None
     answer = ssh(target, "health")
     if answer is None:
         entry["state"] = "unreachable"
@@ -142,6 +157,7 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
             entry["recovery"] = recovery
     except (ValueError, TypeError):
         pass  # Older hosts may not provide recovery yet; resource recovery keeps its existing policy.
+    entry["updates"] = update_report(ssh(target, "updates"))  # older hosts: None, shown as unknown
     reasons = []
     if avail < MIN_AVAIL_PCT and swap > MAX_SWAP_PCT:
         reasons.append(f"memory avail {avail}% swap {swap}%")
@@ -196,9 +212,16 @@ def main() -> int:
     status = {name: row for name, row in status.items()
               if isinstance(row, dict) and row.get("source") != "local"}
     now = now_hhmm()
+    updates_only = {}
     for raw in CONFIG.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].split()
         if not line:
+            continue
+        if line[1:2] == ["updates"]:  # D-871: update channels only (the site PC itself); never the ladder
+            try:
+                updates_only[line[0]] = update_report(ssh(line[2], "updates"))
+            except Exception as exc:  # noqa: BLE001 - like the other lines, one bad line never stops the rest
+                print(f"{line[0]}: updates failed: {exc!r}", flush=True)
             continue
         entry = status.setdefault(line[0], {})
         entry["recovery"] = None
@@ -230,6 +253,8 @@ def main() -> int:
             }
     except (OSError, ValueError, AttributeError):
         pass  # A missing local report is shown as unverified by Fleet, never synthesized as healthy.
+    for name, report in updates_only.items():  # after the local report, which replaces the site row
+        status.setdefault(name, {"source": "local"})["updates"] = report  # rebuilt every run, like the local row
     tmp = status_file.with_suffix(".tmp")
     tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, status_file)

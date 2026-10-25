@@ -898,7 +898,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-524: without site-users or logins every caller is `site-console`, so no host control.
     install_host_control_routes(
         app, require_operator=require_operator, require_named_operator=require_named_operator,
-        helper=(helper_from_config() if principals or password_sessions is not None
+        require_viewer=require_viewer, helper=(helper_from_config() if principals or password_sessions is not None
                 else UnavailableHostHelper()))
 
     install_static_routes(app)

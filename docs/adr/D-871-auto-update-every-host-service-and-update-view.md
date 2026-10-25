@@ -63,4 +63,11 @@
 - SOURCE: `test/test_omx_workcell_observation_bridge.py`: env의 health 목록. `test/test_update_gate.py`: 새 업데이트 유닛의 관문. `test/test_update_status.py`: services.yaml.
 - DEVICE: 관제 PC 적용 기록은 적용한 뒤 이 문서에 덧붙인다.
 
+### 개정 2026-10-26 (화면, 사용자 결정)
+
+- **현장 동결은 화면에 표시만 한다.** Fleet 서버에 GitHub 토큰을 두지 않는다. 동결은 지금처럼 `ops-update-freeze` 태그나 로컬 동결 파일로 건다. 화면은 PC별 관문 상태(허용·동결·관문 없음)만 보여 준다. 그래서 Decision 5의 "policy-admin: 동결 걸기·풀기"는 화면 동작에서 뺀다.
+- **viewer는 요약을 본다.** `/api/fleet/updates`(`require_viewer`)는 PC별 상태(정상·멈춤·꺼짐·동결·미확인)와 릴리스만 준다. 마지막 단계와 사유 코드는 운영자용 `/api/fleet/hosts`에만 있다.
+- **수집.** 각 PC의 `rosy-update-report`가 보고하고, 가드가 강제 명령 `updates`로 모은다. 관제 PC 자신은 `updates` 줄로 읽는다. 이 줄은 복구 사다리를 돌리지 않는다.
+- **트리.** 화면은 가드가 보고한 PC를 모두 그린다(셀 관제 PC N대). 운영자 동작("지금 확인"·"이전 버전으로")은 특권 helper 허용 목록을 바꾸는 일이라 별도 변경으로 남긴다.
+
 **References:** D-805, D-852, D-530, D-441, D-446, D-454, D-270, D-757, D-785.

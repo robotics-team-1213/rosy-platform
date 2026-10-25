@@ -2,7 +2,7 @@
 // 가드가 이미 읽은 메모리 여유·부하를 보여주고, 닫힌 서비스 제어만 보낸다.
 // 프로세스 종료와 로봇 재부팅은 이 화면의 동작이 아니다.
 
-import {HOST_LABEL, stateLabel, resourceText, driftText, gib, hostHealth} from "/console/assets/host-health.js";
+import {HOST_LABEL, stateLabel, resourceText, driftText, gib, hostHealth, updateLines} from "/console/assets/host-health.js";
 
 function node(tag, className, text) {
   const el = document.createElement(tag);
@@ -11,8 +11,19 @@ function node(tag, className, text) {
   return el;
 }
 
+// D-871: every PC the guard reports (one control PC per OMX cell is allowed), the three known ones first.
+// A PC row carries `updates` (null when unreported); robot rows never do and are not PCs.
+function hostNames(guard) {
+  const pcs = Object.entries(guard || {}).filter(([, row]) => row && "updates" in row).map(([name]) => name);
+  return [...new Set([...Object.keys(HOST_LABEL), ...pcs])];
+}
+
+function hostLabel(name) {
+  return HOST_LABEL[name] || name;
+}
+
 function reportRows(body) {
-  return Object.keys(HOST_LABEL).map((name) => {
+  return hostNames(body.guard).map((name) => {
     let row = body.guard?.[name];
     if (name === "site" && !row && body.drift?.recovery) {
       row = {time: body.drift.time, source: "local", state: body.drift.recovery.state,
@@ -27,7 +38,7 @@ function reportRows(body) {
     const head = node("div", "robot-head");
     const tag = node("ui-tag", "", label);
     tag.setAttribute("status", healthy ? "ok" : "warn");
-    head.append(node("h3", "", HOST_LABEL[name]), tag);
+    head.append(node("h3", "", hostLabel(name)), tag);
     card.append(head);
     const received = Number.isFinite(row.time) ? new Date(row.time * 1000).toLocaleString() : "없음";
     card.append(node("p", "hint", `마지막 호스트 점검 ${received}`));
@@ -46,6 +57,7 @@ function reportRows(body) {
     } else {
       card.append(node("p", "hint", "최신 복구 설정을 확인할 수 없습니다."));
     }
+    for (const line of updateLines(row.updates, {reasons: true})) card.append(node("p", "hint", line));
     return card;
   });
 }
@@ -65,7 +77,8 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
 
   function paint(body) {
     const rows = reportRows(body);
-    report.replaceChildren(node("p", "hint", driftText(body.drift)), ...rows);
+    report.replaceChildren(node("p", "hint", driftText(body.drift)),
+      node("p", "hint", `현장 관제 아래 PC ${rows.length}대`), ...rows);
     const hosts = body.hosts || [];
     const key = JSON.stringify(hosts);
     if (key !== commandKey) {
@@ -74,7 +87,7 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
       onPaint?.();
     }
     const allHealthy = rows.every((row) => row.dataset.state === "ok");
-    status.textContent = allHealthy ? "PC 3대 정상" : "PC별 점검 결과를 확인하세요";
+    status.textContent = allHealthy ? `PC ${rows.length}대 정상` : "PC별 점검 결과를 확인하세요";
     status.setAttribute("status", allHealthy ? "ok" : "warn");
   }
 
@@ -132,10 +145,38 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
     }
   }
 
+  // A viewer may not read /api/fleet/hosts; it still sees each PC's update state and release (D-871).
+  function paintSummary(body) {
+    const cards = (body.hosts || []).map((host) => {
+      const card = node("section", "install-step");
+      card.dataset.host = host.host;
+      card.dataset.state = host.state;
+      const head = node("div", "robot-head");
+      const tag = node("ui-tag", "", host.state === "ok" ? "업데이트 정상" : host.state === "frozen" ? "업데이트 동결" : "확인 필요");
+      tag.setAttribute("status", host.state === "ok" ? "ok" : "warn");
+      head.append(node("h3", "", hostLabel(host.host)), tag);
+      card.append(head);
+      for (const line of updateLines(host)) card.append(node("p", "hint", line));
+      return card;
+    });
+    report.replaceChildren(node("p", "hint", `현장 관제 아래 PC ${cards.length}대 · 업데이트 요약`), ...cards);
+    const allOk = cards.every((card) => card.dataset.state === "ok");
+    status.textContent = allOk ? `업데이트 PC ${cards.length}대 정상` : "PC별 업데이트 상태를 확인하세요";
+    status.setAttribute("status", allOk ? "ok" : "warn");
+  }
+
   async function refresh() {
     try {
       paint(await call("/api/fleet/hosts"));
     } catch (error) {
+      if (error.status === 403) {
+        try {
+          paintSummary(await call("/api/fleet/updates"));
+          return;
+        } catch {
+          // fall through to the connection message
+        }
+      }
       status.textContent = "호스트 점검 결과를 읽지 못했습니다";
       status.setAttribute("status", "warn");
       report.replaceChildren(node("p", "hint", "연결 실패 · 최신 PC 상태를 확인할 수 없습니다."));

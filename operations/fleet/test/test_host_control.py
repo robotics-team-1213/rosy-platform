@@ -22,6 +22,7 @@ from fleet.host_control import (
     catalogue,
     decide,
     helper_from_config,
+    update_summary,
 )
 from fleet.server.host_control_routes import install_host_control_routes
 
@@ -217,7 +218,10 @@ def _client(helper, *, named=True):
             raise HTTPException(status_code=403, detail={"code": "OPERATOR_IDENTITY_REQUIRED"})
         return operator()
 
-    install_host_control_routes(app, require_operator=operator,
+    def viewer():
+        return SimpleNamespace(principal_id="viewer-1", role="viewer")
+
+    install_host_control_routes(app, require_operator=operator, require_viewer=viewer,
                                 require_named_operator=named_operator, helper=helper)
     return TestClient(app)
 
@@ -439,3 +443,51 @@ def test_site_config_install_copies_checks_and_backs_up(tmp_path):
 def test_fleet_key_cannot_install_site_config():
     env = {**os.environ, "SSH_ORIGINAL_COMMAND": "install-site-config fleet-site.yaml"}
     assert subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, timeout=10).returncode == 2
+
+
+NOW = 2_000_000_000.0
+
+
+def _report(*updaters, gate="open", **extra):
+    return {"schema": "rosy.update-report/1", "time": int(NOW), "gate": gate, "updaters": list(updaters), **extra}
+
+
+def _updater(unit, *, timer="enabled", healthy=NOW - 60, step="up_to_date", release="c47d7c3e78c9", reason=None):
+    return {"unit": unit, "timer": timer, "healthy_at": healthy,
+            "last": {"step": step, "release": release, "reason": reason, "at": NOW - 30}}
+
+
+def test_update_summary_names_each_channel_ok_off_or_stuck_and_never_guesses_a_silent_pc():
+    guard = {
+        "site": {"updates": _report(_updater("rosy-omx-devices-autoupdate.service"),
+                                    site_stack={"current": "site-221aedf1bdd5", "result": "idle"})},
+        "model": {"updates": _report(_updater("rosy-learning-center-update.service", timer="disabled"),
+                                     _updater("rosy-model-code-update.service", healthy=NOW - 7 * 3600,
+                                              step="held", reason="work_lock_busy"))},
+        "ai": {"state": "ok", "updates": None},  # an older forced command: no report
+        "robot-a": {"state": "ok"},  # robots are probed, not updated here
+        "cell-c": {"updates": _report({"unit": "../../etc/passwd", "timer": "enabled"},
+                                      _updater("rosy-omx-autoupdate.service", release="<script>"), gate="open; rm")},
+        "cell-b": {"updates": _report(_updater("rosy-omx-autoupdate.service"), gate="frozen")},
+    }
+    hosts = {h["host"]: h for h in update_summary(guard, NOW)["hosts"]}
+    assert hosts["site"]["state"] == "ok"
+    assert [c["release"] for c in hosts["site"]["channels"]] == ["c47d7c3e78c9", "site-221aedf1bdd5"]
+    assert [c["state"] for c in hosts["model"]["channels"]] == ["off", "stuck"] and hosts["model"]["state"] == "stuck"
+    assert hosts["ai"] == {"host": "ai", "state": "unknown", "gate": None, "channels": []}
+    assert hosts["cell-b"]["state"] == "frozen"  # more than three PCs: one per OMX cell
+    assert "robot-a" not in hosts
+    assert [c["unit"] for c in hosts["cell-c"]["channels"]] == ["rosy-omx-autoupdate.service"]
+    assert hosts["cell-c"]["channels"][0]["release"] is None and hosts["cell-c"]["gate"] is None
+    assert "work_lock_busy" not in json.dumps(hosts)  # reasons are for operators (/api/fleet/hosts)
+
+
+def test_every_signed_in_role_reads_the_update_summary(tmp_path, monkeypatch):
+    import fleet.server.host_control_routes as routes
+
+    guard = tmp_path / "guard.json"
+    guard.write_text(json.dumps({"ai": {"updates": _report(_updater("rosy-situation-autoupdate.service"))}}),
+                     encoding="utf-8")
+    monkeypatch.setattr(routes, "GUARD_STATUS", guard)
+    body = _client(UnavailableHostHelper()).get("/api/fleet/updates").json()
+    assert body["hosts"][0]["host"] == "ai" and body["hosts"][0]["channels"][0]["unit"] == "rosy-situation-autoupdate.service"
