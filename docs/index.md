@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · d4a0e5b968 · D-887 source migration verified
 - 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
 - 2026-10-26 · 9816e56bd9 · Site updater pure split verified
 - 2026-10-26 · uncommitted · Site updater runtime extraction before migration
 - 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
-- 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정

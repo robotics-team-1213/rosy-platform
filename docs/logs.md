@@ -11592,3 +11592,10 @@ osy-d395-s1d\`.
 - Evidence: real-signature source bc61f16ea9 RED3/8 controls; canonical-inventory source77d8b34bac RED38/13 controls; overlay source9e8e86575f RED2/1 control; forged physical journal source8e856f02a9 RED1. Raw logs remain outside Git; independent implementation review and committed GREEN pending. Initial42 failures used a corrected-later manual selector and are not uniform migration-cause proof.
 - Gate: source preparation only; no install/site/FIELD or deployment acceptance.
 - CE: existing whole-configuration and identical-external-helper lessons applied; solved lesson decision awaits actual GREEN.
+
+## 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+
+- Change: bind exact authenticated legacy3/current4 to candidate-local Compose/overlay and loaded identities; exact-ID retired PostgreSQL cleanup precedes normal rollback restoration, while consistent physical relocation remains separate. Builder/signing blobs remain base-exact.
+- Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
+- Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
+- CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
