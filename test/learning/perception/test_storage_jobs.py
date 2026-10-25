@@ -6,7 +6,10 @@ import importlib
 import json
 import os
 import shutil
+import signal
+import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -507,3 +510,38 @@ def test_official_native_cycle_holds_managed_inputs(jobs_setup, monkeypatch, tmp
     monkeypatch.setattr(native_cycle, 'validate_split', validate)
     with pytest.raises(RuntimeError, match='stop before training'):
         native_cycle.run_cycle(artifact, tmp_path / 'cycle')
+
+
+def test_native_child_retains_lease_after_supervisor_death(jobs_setup, monkeypatch, tmp_path):
+    from storage_files import consumer
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); build().run(actor, job['id'])
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / 'learning/training/omx'))
+    import native_cycle
+    ready, release = tmp_path / 'child-ready', tmp_path / 'child-release'
+    command = [sys.executable, '-c',
+               'import pathlib,sys,time;pathlib.Path(sys.argv[1]).touch();'
+               '\nwhile not pathlib.Path(sys.argv[2]).exists(): time.sleep(.01)', str(ready), str(release)]
+    pid = os.fork()
+    if pid == 0:
+        with consumer(artifact) as fd:
+            native_cycle._invoke(command, tmp_path / 'child.log', os.environ.copy(), 15, lease_fd=fd)
+        os._exit(0)
+    reaped = False
+    try:
+        deadline = time.monotonic() + 10
+        while not ready.exists() and time.monotonic() < deadline: time.sleep(.01)
+        assert ready.exists()
+        os.kill(pid, signal.SIGKILL); os.waitpid(pid, 0); reaped = True
+        with pytest.raises(ValueError, match='use'):
+            build().reclaim(actor, job['id'], job['id'])
+    finally:
+        release.touch()
+        if not reaped: os.waitpid(pid, 0)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            assert build().reclaim(actor, job['id'], job['id'])['local_present'] is False
+            break
+        except ValueError: time.sleep(.01)
+    else: pytest.fail('native child did not release its inherited input lease')
