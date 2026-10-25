@@ -19,6 +19,7 @@ SHARED_BINDINGS = {
     "var/lib/rosy/provisioning": "/provisioning", "var/lib/rosy/core": "/core",
     "etc/NetworkManager/system-connections": "/network/system-connections",
     "var/lib/rosy/ssh": "/ssh", "home/rosy/.ssh": "/operator-ssh",
+    "etc/rosy/tls": "/tls",
 }
 
 

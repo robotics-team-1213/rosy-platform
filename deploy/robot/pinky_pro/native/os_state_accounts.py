@@ -48,6 +48,10 @@ def validate_shared_owners(root: Path) -> None:
         if (info.st_uid != ACCOUNT_IDS[name] or info.st_gid != ACCOUNT_IDS[name]
                 or info.st_mode & forbidden):
             raise ValueError("shared home owner/group/permissions differ")
+    tls = (root / "etc/rosy/tls").stat()
+    if (tls.st_uid != root.stat().st_uid or tls.st_gid != ACCOUNT_IDS["rosy-core"]
+            or tls.st_mode & 0o7777 != 0o750):
+        raise ValueError("shared TLS owner/group/permissions differ")
 
 
 def main(argv=None) -> int:

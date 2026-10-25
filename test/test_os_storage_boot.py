@@ -70,6 +70,9 @@ def test_offline_enable_creates_required_edges_for_network_and_ssh_sockets(tmp_p
     before = {unit for line in text.splitlines() if line.startswith("Before=")
               for unit in line.partition("=")[2].split()}
     assert CONSUMERS <= before
+    mounts = {path for line in text.splitlines() if line.startswith("RequiresMountsFor=")
+              for path in line.split("=", 1)[1].split()}
+    assert "/etc/rosy/tls" in mounts
     assert "DefaultDependencies=no" in text
     assert "After=local-fs.target" in text
     assert "After=rosy-first-boot" not in text

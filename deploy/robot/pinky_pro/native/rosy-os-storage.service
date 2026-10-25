@@ -8,6 +8,7 @@ Before=rosy-ssh-access-boot.service rosy-first-boot.service rosy-first-boot-retr
 Conflicts=shutdown.target
 RequiresMountsFor=/var/lib/rosy-device /run/rosy-provision-boot /var/lib/rosy/provisioning
 RequiresMountsFor=/var/lib/rosy/core /etc/NetworkManager/system-connections /var/lib/rosy/ssh /home/rosy/.ssh
+RequiresMountsFor=/etc/rosy/tls
 
 [Service]
 Type=oneshot

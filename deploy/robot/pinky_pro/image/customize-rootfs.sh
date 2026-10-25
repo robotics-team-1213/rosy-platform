@@ -398,6 +398,7 @@ chroot "$ROOT" install -d -m 2750 -o rosy-camera -g rosy-core /var/lib/rosy/pilo
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 chroot "$ROOT" /usr/bin/python3 -I -B /opt/rosy/native-runtime/os_state_accounts.py
+chroot "$ROOT" install -d -m 0750 -o root -g rosy-core /etc/rosy/tls
 rm -rf -- "$RELEASE/image-overlay"
 # D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
 # Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
