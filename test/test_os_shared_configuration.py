@@ -89,3 +89,15 @@ def test_card_password_is_not_scrubbed_when_canonical_publication_fails(tmp_path
         config_module().apply(root_a, lambda _: "")
     assert AP_VALUE in card.read_text(), "the only source of a new password must survive failed publication"
     assert (common / "state/current.json").read_bytes() == previous
+
+
+def test_an_unchanged_config_does_not_rewrite_derived_timezone_files(tmp_path, monkeypatch):
+    _, root_a, _, _, _ = _provision_a(tmp_path, monkeypatch)
+    _card(root_a, "ap:\n  mode: off\n")
+    module = config_module()
+    assert module.apply(root_a, lambda _: "")["state"] == "applied"
+    paths = [root_a / "etc/localtime", root_a / "etc/timezone"]
+    before = [(p.lstat().st_ino, p.lstat().st_mtime_ns, p.lstat().st_ctime_ns) for p in paths]
+    assert module.apply(root_a, lambda _: "")["state"] == "unchanged"
+    after = [(p.lstat().st_ino, p.lstat().st_mtime_ns, p.lstat().st_ctime_ns) for p in paths]
+    assert after == before
