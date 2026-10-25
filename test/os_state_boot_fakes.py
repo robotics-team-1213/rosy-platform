@@ -49,7 +49,25 @@ def shared_roots(tmp_path, monkeypatch):
                 with host_table.open("a", encoding="ascii") as handle:
                     handle.write(f"{300 + len(mountpoints)} 106 8:6 {subpath} /{relative} rw - ext4 /dev/sda6 rw\n")
         local_table.write_text(host_table.read_text(), encoding="ascii")
-    original_lstat = os.lstat
+    original_lstat, original_stat, original_open = os.lstat, os.stat, os.open
+
+    def mount_key(path, dir_fd=None):
+        if isinstance(path, int):
+            return None
+        name = os.fsdecode(path)
+        if dir_fd is not None and not os.path.isabs(name):
+            name = os.path.join(os.readlink(f"/proc/self/fd/{dir_fd}"), name)
+        return os.path.abspath(name)
+
+    def bind_stat(path, *args, **kwargs):
+        if mount_key(path, kwargs.get("dir_fd")) in mountpoints:
+            kwargs = {**kwargs, "follow_symlinks": True}
+        return original_stat(path, *args, **kwargs)
+
+    def bind_open(path, flags, *args, **kwargs):
+        if mount_key(path, kwargs.get("dir_fd")) in mountpoints:
+            flags &= ~getattr(os, "O_NOFOLLOW", 0)
+        return original_open(path, flags, *args, **kwargs)
 
     def bind_lstat(path, *args, **kwargs):
         if not isinstance(path, int) and os.fspath(path) in mountpoints:
@@ -62,4 +80,12 @@ def shared_roots(tmp_path, monkeypatch):
     # Real binds look like directories to lstat. Only the explicitly modeled
     # mountpoints get this metadata; arbitrary symlinks keep their real type.
     monkeypatch.setattr(os, "lstat", bind_lstat)
+    monkeypatch.setattr(os, "stat", bind_stat)
+    monkeypatch.setattr(os, "open", bind_open)
+    capabilities = set(os.supports_dir_fd)
+    if original_open in capabilities:
+        capabilities.add(bind_open)
+    if original_stat in capabilities:
+        capabilities.add(bind_stat)
+    monkeypatch.setattr(os, "supports_dir_fd", capabilities)
     return roots[0], roots[1], common, boot_volume

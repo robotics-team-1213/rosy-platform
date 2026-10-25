@@ -51,3 +51,17 @@ def test_another_identity_cached_in_b_does_not_gain_common_completion(tmp_path, 
     with pytest.raises(ValueError, match="OS_STATE_HOLD"):
         module.FirstBootProvisioner(root=root_b, network_activate=lambda _: True).apply(
             bundle=bundle, hardware_serial=SERIAL)
+
+
+def test_bind_fixture_does_not_allow_an_unmanaged_core_symlink(tmp_path, monkeypatch):
+    root_a, _, common, boot = shared_roots(tmp_path, monkeypatch)
+    external = tmp_path / "unmanaged-core"
+    external.mkdir()
+    (common / "core/.rosy").symlink_to(external, target_is_directory=True)
+    bundle = boot / "rosy-provision/provision.json"
+    bundle.parent.mkdir()
+    bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
+    with pytest.raises(ValueError, match="symlink|not a directory|OS_STATE_HOLD"):
+        _module().FirstBootProvisioner(root=root_a, network_activate=lambda _: True).apply(
+            bundle=bundle, hardware_serial=SERIAL)
+    assert list(external.iterdir()) == []
