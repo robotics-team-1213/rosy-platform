@@ -127,6 +127,6 @@ def test_storage_browser_capacity_archive_reclaim_restore(tmp_path, jobs_setup, 
                 expect(page.locator('#storage-jobs')).to_contain_text('로컬 사본 있음')
                 assert (cache / job_id / 'images/frame.png').read_bytes() == b'frame-bytes'
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
-                save_temp_screenshot(page, f'learning-storage-pool-{width}')
+                save_temp_screenshot(page, f'learning-storage-pool-{width}.png')
                 assert not errors
             finally: browser.close()
