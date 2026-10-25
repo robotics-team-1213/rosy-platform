@@ -29,7 +29,8 @@ def test_tls_bind_is_required_before_firstboot_mutation(tmp_path, monkeypatch, c
     bundle.parent.mkdir()
     bundle.write_text(json.dumps(_bundle()))
     with pytest.raises(ValueError, match="OS_STATE_HOLD"):
-        _module().FirstBootProvisioner(root=root).apply(bundle=bundle, hardware_serial=SERIAL)
+        _module().FirstBootProvisioner(root=root, network_activate=lambda _: True).apply(
+            bundle=bundle, hardware_serial=SERIAL)
     assert not (root / "etc/rosy/device-identity.json").exists()
     assert not (common / "state/current.json").exists()
     assert bundle.exists()
@@ -51,7 +52,7 @@ def test_foreign_tls_directory_is_not_reowned_or_used(tmp_path, monkeypatch, cha
 
     monkeypatch.setattr(os, "stat", changed)
     with pytest.raises(ValueError, match="OS_STATE_HOLD"):
-        _module().FirstBootProvisioner(root=root).apply(
+        _module().FirstBootProvisioner(root=root, network_activate=lambda _: True).apply(
             bundle=root / "run/rosy-provision-boot/rosy-provision/provision.json", hardware_serial=SERIAL)
     assert not (common / "state/current.json").exists()
     assert not (root / "etc/rosy/device-identity.json").exists()
