@@ -44,6 +44,12 @@ def test_sfdisk_output_roundtrips_the_existing_bounded_gpt_parser(tmp_path):
             handle.seek(offset)
             return handle.read(length)
         assert m.parse_gpt(read_at, image.stat().st_size) == layout
+    assert m.filesystem_plan(image, layout) == [(1, "vfat"), (2, "vfat"), (3, "vfat"),
+                                               (4, "ext4"), (5, "ext4"), (6, "ext4")]
+    changed = json.loads(json.dumps(layout))
+    changed["partitions"][3]["unique_guid"] = "06641603-f85c-46ea-886c-c64e7a5edc26"
+    with pytest.raises(ValueError, match="GPT"):
+        m.filesystem_plan(image, changed)
 
 
 def test_factory_data_is_explicit_and_has_existing_service_directory_ownership(tmp_path, monkeypatch):
