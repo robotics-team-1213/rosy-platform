@@ -55,7 +55,7 @@ def test_a_trajectory_outside_the_contract_is_refused(tmp_path, change, message)
     change(trajectory)
     path = tmp_path / "cycle.json"
     path.write_text(json.dumps(trajectory))
-    with pytest.raises(SystemExit, match="schema|six|segments"):
+    with pytest.raises(SystemExit, match=message):
         t.load(path, fps=FPS)
 
 
