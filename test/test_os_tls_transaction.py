@@ -1,5 +1,6 @@
 """Real TLS CLI body/OpenSSL/IO; root ownership and outer privilege locks are modeled."""
 import contextlib
+import base64
 import json
 import os
 from pathlib import Path
@@ -157,6 +158,24 @@ def test_tls_recovery_refuses_a_forged_write_set(device, tmp_path):
     with pytest.raises(ValueError, match="write set differs"):
         _apply(store, tmp_path)
     assert not (common / "escape").exists()
+
+
+@pytest.mark.parametrize("corruption", ["content", "generation"])
+def test_tls_recovery_rejects_corrupted_unwritten_material_before_replay(device, tmp_path, corruption):
+    _, store, _, common, _ = device
+    _interrupt_after_ca_key(store, tmp_path)
+    pending = common / "state/tls-pending.json"
+    record = json.loads(pending.read_text())
+    leaf = common / "tls/leaf.key"
+    assert not leaf.exists()
+    if corruption == "content":
+        record["targets"][tls.TLS + "/leaf.key"]["data"] = base64.b64encode(b"corrupted key").decode()
+    else:
+        record["generation"] = record["previous"]["generation"]
+    pending.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="checksum|generation"):
+        _apply(store, tmp_path)
+    assert not leaf.exists()
 
 
 def test_a_pending_tls_transaction_blocks_an_otherwise_admitted_updater(tmp_path, monkeypatch):
