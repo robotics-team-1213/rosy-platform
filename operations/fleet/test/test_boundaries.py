@@ -224,3 +224,86 @@ def test_map_pose_and_trip_modules_never_read_the_led_identity_binding():
         if "confirmed_track_pose" in text:
             offenders.append(f"{rel} reads confirmed_track_pose")
     assert offenders == []
+
+
+@pytest.fixture
+def formation_api_tree(tmp_path, monkeypatch):
+    root = tmp_path / "fleet"
+    files = {
+        "__init__.py": "",
+        "formation/__init__.py": "",
+        "formation/geometry.py": "import math\n",
+        "swarm/__init__.py": "",
+        "swarm/api/__init__.py": "",
+        "swarm/api/types.py": "class Point: pass\n",
+        "swarm/api/ports.py": "from .types import Point\nclass RobotClient: pass\n",
+    }
+    for relative, source in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+    monkeypatch.setitem(globals(), "FORMATION_DIR", root / "formation")
+    return root
+
+
+@pytest.mark.parametrize("source", [
+    "from fleet.swarm.api.types import Point as Position\n",
+    "import fleet.swarm.api.ports as contracts\n",
+    "from fleet.swarm.api import types as data, ports as contracts\n",
+    "from ..swarm.api.types import Point\n",
+    "from ..swarm.api import ports as contracts\n",
+    "from fleet.swarm.api.ports import RobotClient\n",
+])
+def test_formation_boundary_accepts_only_neutral_api_leaves(formation_api_tree, source):
+    (formation_api_tree / "formation/geometry.py").write_text(source, encoding="utf-8")
+    test_formation_modules_import_no_transport("geometry.py")
+
+
+@pytest.mark.parametrize("relative", [
+    "formation/geometry.py", "swarm/api/types.py", "swarm/api/ports.py",
+    "__init__.py", "swarm/__init__.py", "swarm/api/__init__.py",
+])
+@pytest.mark.parametrize("source", [
+    "import httpx as client\n",
+    "from websockets import connect as connect_socket\n",
+    "import rclpy as ros\n",
+    "from asyncio import create_task as schedule\n",
+    "from fleet.swarm import relay as delivery\n",
+])
+def test_formation_boundary_rejects_forbidden_imports_in_each_fixed_file(
+        formation_api_tree, relative, source):
+    (formation_api_tree / relative).write_text(source, encoding="utf-8")
+    with pytest.raises(AssertionError):
+        test_formation_modules_import_no_transport("geometry.py")
+
+
+@pytest.mark.parametrize("relative, source", [
+    ("formation/geometry.py", "from fleet import swarm as network\n"),
+    ("formation/geometry.py", "from fleet.swarm import transport as wire\n"),
+    ("formation/geometry.py", "from ..swarm import transport as wire\n"),
+    ("formation/geometry.py", "import fleet.swarm.api_extra as extra\n"),
+    ("formation/geometry.py", "from fleet.swarm.api_extra import types\n"),
+    ("formation/geometry.py", "import fleet.swarm.api\n"),
+    ("formation/geometry.py", "from fleet.swarm import api\n"),
+    ("formation/geometry.py", "from fleet.swarm.api import *\n"),
+    ("swarm/api/types.py", "from .. import relay as delivery\n"),
+    ("swarm/api/ports.py", "from . import relay as delivery\n"),
+    ("__init__.py", "from .swarm import transport as wire\n"),
+    ("swarm/__init__.py", "from . import transport as wire\n"),
+    ("swarm/api/__init__.py", "from .. import transport as wire\n"),
+])
+def test_formation_boundary_resolves_members_relatives_and_exact_leaf_names(
+        formation_api_tree, relative, source):
+    (formation_api_tree / relative).write_text(source, encoding="utf-8")
+    with pytest.raises(AssertionError):
+        test_formation_modules_import_no_transport("geometry.py")
+
+
+@pytest.mark.parametrize("relative", [
+    "swarm/api/types.py", "swarm/api/ports.py", "__init__.py",
+    "swarm/__init__.py", "swarm/api/__init__.py",
+])
+def test_formation_boundary_requires_every_fixed_api_file(formation_api_tree, relative):
+    (formation_api_tree / relative).unlink()
+    with pytest.raises(OSError):
+        test_formation_modules_import_no_transport("geometry.py")
