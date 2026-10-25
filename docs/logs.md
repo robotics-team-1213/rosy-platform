@@ -11528,3 +11528,11 @@ osy-d395-s1d\`.
 - 증거: `test/test_pre_push_hook.py::test_publish_only_clone_pushes_publish_branches_only` 5개 경우. bash로 같은 구간을 돌려 게시 0·주제 1·이유 0·설정 없음 0을 확인하고, 허용 분기를 거절로 바꾼 변형이 1로 바뀌는 것을 확인했다.
 - gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
 - 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
+
+## 2026-10-26 · 3733f72b5d · 낡은 설치본 pre-push는 게시 push를 멈춘다
+
+- 변경: `rosy.publishOnly` clone에서 설치된 `.git/hooks/pre-push`가 push하는 커밋의 `tools/hooks/pre-push`와 다르면 `bash tools/hooks/install.sh`를 안내하고 멈춘다.
+- 이유: 공유 clone이 10-11 복사본으로 2주 동안 push했다. 그 뒤 게이트(착지 기록 재사용, Safety-Review, 게시 전용 검사)가 실제 push에서 하나도 돌지 않았다. 10-26에 재설치했다.
+- 증거: `test/test_pre_push_hook.py::test_a_stale_installed_copy_refuses_the_push` 같음·다름 두 경우. bash로 같은 구간을 돌려 같음 0, 다름 1을 확인했다.
+- gate 변화: 공유 clone의 게시 push에만 적용된다. 팀원 clone은 설정이 없어 영향이 없다.
+- 교훈: CE 해당 없음 — 원인과 재발 방지가 이 검사와 시험에 있다.
