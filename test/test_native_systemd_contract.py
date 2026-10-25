@@ -633,7 +633,7 @@ PROGRAM_SOURCES = {
     # D-412: the updater, its claim, and the programs it runs as children.
     "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
                                  "deploy/robot/pinky_pro/native/auto_update_host.py",
-                                 "deploy/robot/pinky_pro/native/auto_update_records.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_records.py", "deploy/robot/pinky_pro/native/os_state_layout.py",
                                  "deploy/robot/pinky_pro/native/auto_update_stage.py",
                                  "deploy/robot/pinky_pro/native/auto_update_apply.py",
                                  "deploy/robot/pinky_pro/native/rosy_claim.py",

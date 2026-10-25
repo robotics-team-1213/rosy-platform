@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 
 import rosy_claim
-from os_state_layout import StateError, policy_directory
+from os_state_layout import StateError, policy_file
 from auto_update_host import (ANGULAR_EPS, API_BASE_URL, APPROVALS, BATTERY_MIN, CLAIM_HOLDER, DEFAULT_REPO,
     DOCKING_IDLE, FACE_UNIT, _finite, HISTORY_MAX_BYTES, LINE_FOLLOW_IDLE, LINEAR_EPS, MAX_HOLD_HOURS,
     MAX_STATUS_INPUTS_BYTES, NAV_IDLE, NOT_NULL_INPUTS, _number, parse_z, PHASES, _read_json, _reason_class,
@@ -26,7 +26,7 @@ class UpdaterRecords:
 
     def _policy_path(self, name: str) -> Path:
         try:
-            return policy_directory(self.root) / name
+            return policy_file(self.root, name)
         except StateError as exc:
             raise UpdateError(str(exc)) from exc
 

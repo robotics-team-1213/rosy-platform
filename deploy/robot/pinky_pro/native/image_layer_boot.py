@@ -21,7 +21,7 @@ CATALOG = "image-layer/boot/catalog.json"
 FEATURE_UNITS = ("rosy-network-users.service", "rosy-network-agent.service",
                  "rosy-network-recovery.service", "rosy-network-recovery.timer")
 ENGINE_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
-                "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py",
+                "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py", "os_state_layout.py",
                 "rosy_auto_update.py", "rosy_claim.py",
                 "image_layer_boot.py", "image_layer_files.py")
 BACKUPS = "var/lib/rosy/image-layer-backup"

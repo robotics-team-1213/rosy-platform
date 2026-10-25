@@ -210,3 +210,20 @@ def policy_directory(root: Path) -> Path:
         return policy
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise StateError(f"OS_STATE_HOLD: {exc}") from exc
+
+
+def policy_file(root: Path, name: str) -> Path:
+    directory = policy_directory(root)
+    if directory == root / "var/lib/rosy/updates":
+        return directory / name
+    try:
+        if name not in ("config.json", "hold.json"):
+            raise ValueError("unsupported shared policy file")
+        path = _path(root, COMMON + "/policy/updates/" + name)
+        if path.exists():
+            _read(path, 64 * 1024, root.stat().st_uid)
+        elif name == "config.json":
+            raise ValueError("committed shared updater config is missing")
+        return path
+    except (OSError, ValueError) as exc:
+        raise StateError(f"OS_STATE_HOLD: {exc}") from exc
