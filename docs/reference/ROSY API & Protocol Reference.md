@@ -13,6 +13,15 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 PRT-005 재전송은 원본 event_id·내용·seq를 유지하며 개별 EVENT 응답으로 확인한다. WELCOME의 producer scope 없는 last_event_seq로 버퍼를 삭제하지 않는다. 새 Hub는 구 Agent 보호를 위해 이 필드에0을 반환한다. 같은 ID의 같은 본문은 중복 제거하고 다른 본문은 거절한다. 메모리 버퍼를 영속 outbox로 승격하거나 envelope1.0/wire 필드를 변경하지 않는다.
 
+### v1.314 정책 승인 범위 readback·전환·감사 (D-865)
+
+[D-865](../adr/D-865-fleet-policy-admission.md)의 additive wire 계약이다. 정의는 `protocol/policy_admission.py`, canonical export는 `core_common.protocol.schemas`다. 승인(admit) 권한은 Fleet이 소유하며 업무 앱은 이 경로를 쓰지 않는다. 이 계약 등록은 구현·활성화·현장 수용 완료를 뜻하지 않는다.
+
+모든 경로는 `/api/fleet/policy-admission` 아래다. `GET /`는 viewer가 `PolicyAdmissionReadResponse`를 읽는다. scope는 사람이 정한 승인 범위로 `enabled`·`robots`(최대 32, 중복 금지)·`step_approval_kinds`(v1은 `one_person`만)·`max_admits`(1 이상)·`valid_until`·`scope_revision`을 담는다. 활성 scope는 로봇·승인 종류를 최소 하나씩 명시해야 하고, 비활성 scope는 빈 목록과 `admits_remaining` 0으로 닫힌다. 상한 소진·만료는 초기화하지 않고 `reason`으로 구분해 남긴다.
+
+`POST /`는 기명 운영자의 `PolicyAdmissionToggleRequest`(`enabled`)만 받는다. 전환은 스위치만 바꾸고 범위 내용(로봇·종류·상한)은 사이트 설정만 정한다. 해제는 새 자동 승인만 막고 진행 중 lease·claim을 소급 해제하지 않는다. `GET /audit`는 viewer가 최근 감사 항목(최대 100, `cursor`)을 읽는다. 항목은 `mission_id`·`decided_at`·`principal`(`fleet-policy-admission`)·`scope_revision`·`outcome`(ADMITTED/HELD)·`generation`·`reason`이며 사람 승인 행위와 구분해 기록한다.
+
+자동 승인은 사람 승인과 같은 admission 검사(승인 등록부·정지 세대·자원·전송 직전 재검사)를 전부 통과한 뒤에만 되고 규칙집 law(FL-*)는 이 경로로 해제하지 않는다. bad credentials 401, 권한 거절 403, malformed 422, 저장소 실패 503이며 부분 실패를 성공으로 덮지 않는다.
 ### v1.313 통합관제 정보와 관제별 정지 요청 (D-862)
 
 [D-862](../adr/D-862-integrated-control-information-and-stop-requests.md)의 additive wire 계약이다. canonical export는 `core_common.protocol.schemas`, 정의는 `protocol/integrated_control.py`다. Envelope protocol_version은1.0이다. 이 계약 등록은 runtime·배포·장치·현장 수용 완료를 뜻하지 않는다.
@@ -3692,6 +3701,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.315 | 2026-10-25 | D-869: replay unacknowledged events by immutable event_id/content; WELCOME watermark0 for unscoped legacy producers, memory/durable identity conflict parity. No new wire fields or envelope1.0 change; no durable outbox guarantee. |
+| v1.314 | 2026-10-25 | D-865: policy admission scope readback/toggle and bounded audit under `/api/fleet/policy-admission`; Fleet owns admission, the human-defined scope never relaxes rulebook law, and apps never self-approve. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
 | v1.313 | 2026-10-24 | D-862: bounded owner-scoped control-unit information/maps, immutable subtree stop assignments and local uncertainty reconciliation; explicit parent sharing/stop consent and peer CA. Wire only; runtime/device acceptance remains separate, envelope 1.0 unchanged. |
 | v1.310 | 2026-10-24 | Additive (D-854, feat/arm-policy-cameras): CORE arm policy `cameras` list (1..N installed cameras, installed order) on `/policy` and `/observations`; one-camera policies keep `camera`. Each observation camera adds `received_at_ns` and `frame_sha256`. All frames bind the action; owner freshness and causality checks apply per camera. Default unbound, SIM-only. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |

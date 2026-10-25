@@ -10433,3 +10433,19 @@ osy-d395-s1d\`.
 - 변경: 통합관제 runtime이 main9b10086126에 착지해 I1–I6 소프트웨어 목표를 닫았다. 최종 동결 기록에 선행 Chromium 포함 FULL27과 최신 main 기준 guard273·기본 FULL23, 동일 SHA quarantine 재실행2건을 구분했다.
 - 증거: 공식 land exit0·main ancestry 확인. sourcee7cdace7f6의 Chromium118/181/121/143건은 SKIP0이며 source9b10086126의 모든 기본23로그·재실행1로그 비교는 NEW0이다. 원래 root2 FAIL/10036 PASS/1139 SKIP과 동일 source 재실행2 PASS는 별도로 보존했다.
 - gate 변화: 소프트웨어 구현·회귀·로컬 착지 수용이다. N1–N3 실제 PC/장치·FIELD·push는 미실시다. CE 해당 없음 — 판단과 재발 방지는 해당 코드·회귀·동결 근거에 직접 남는다.
+
+## 2026-10-25 · uncommitted · docs(reference): API Ref v1.314 정책 승인 계약 절
+
+- 변경: [API reference](reference/ROSY API & Protocol Reference.md) v1.314 절(경로·권한·의미), [D-865 실행 설계](plans/2026-10-25-fleet-policy-admission-design.md) P1 상태 표시.
+- 증거: 미실행 — 문서·계약 변경. 원격 회귀로 계약 시험 확인 예정.
+- gate 변화: 없음.
+- 결정: D-865 P1.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · docs(reference): v1.314 변경 이력 표행 추가
+
+- 변경: [API reference](reference/ROSY API & Protocol Reference.md) §11 변경 이력 표에 v1.314 행 추가. `### v1.314` 절만 두고 표행을 빠뜨려 test_changelog_has_a_row_for_the_live_version 가 실패했다(P1 첫 착지 중단 원인).
+- 증거: 진단 재실행으로 실패 식별(run-1.txt FAILED 1건) 후 수정. 재검증은 같은 시트 원격 재실행으로 확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
