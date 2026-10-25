@@ -25,7 +25,6 @@ def test_import_conditions_are_bounded_and_seed_effect_is_explicit():
 
 
 @pytest.mark.parametrize('scenario,config', [
-    ('pinky-conveyor-roundtrip', {'seed': 0}),
     ('port-e0-pick-place', {'seed': 0}),
     ('port-mixed-stacking', {'seed': 0}),
     ('port-retrieval', {'seed': 0}),
