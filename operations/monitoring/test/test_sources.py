@@ -77,6 +77,10 @@ def test_fleet_restart_without_a_cache_retains_last_observations_as_stale():
     reported = next(link for link in snapshot.links if link.kind == 'reported')
     assert robot.freshness == 'stale' and reported.freshness == 'stale'
     assert next(link for link in snapshot.links if link.kind == 'probe').reachable is True
+    clock.advance(1)
+    body = {'sampled_at': clock.utcnow().isoformat(), 'cache_age_s': 0.0, 'robots': []}
+    asyncio.run(reader.poll(cfg.sources[0]))
+    assert not any(node.kind == 'robot' for node in cache.snapshot(frozenset({'site-a'})).nodes)
 
 
 def test_core_reads_only_identity_and_owner_diagnostics():
