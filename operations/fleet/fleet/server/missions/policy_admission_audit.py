@@ -40,7 +40,8 @@ class PolicyAdmissionAuditLog:
         return connection
 
     def append(self, *, at: str, mission_id: str, outcome: str,
-               scope_revision: str, generation: int, reason: str | None) -> None:
+               scope_revision: str, generation: int,
+               reason: str | None = None) -> None:
         with closing(self._connect()) as connection:
             connection.execute(
                 "INSERT INTO fleet_policy_admission_audit "

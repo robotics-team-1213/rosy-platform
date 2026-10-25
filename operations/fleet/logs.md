@@ -4744,3 +4744,11 @@
 - gate 변화: 없음. 설정 없으면 루프·상한 모두 비활성이고 현행 승인 동작 불변.
 - 결정: D-865 P2c 산출물.
 - 교훈: docs/solutions/workflow-issues/ 에 BOM 상태 보존·스쿼시 후 main-diff 경로 검사 2건 기록(같은 커밋).
+
+## 2026-10-25 · uncommitted · fix(fleet): 감사 저장소 append 의 reason 기본값 수정
+
+- 변경: policy_admission_audit.append 의 reason 을 선택 인자로(Default None) — ADMITTED 판정은 사유가 없다. 착지 회차 NEW 10건 전부 이 TypeError 였다.
+- 증거: 착지 로그 run-1-2.txt 의 TypeError 로 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
