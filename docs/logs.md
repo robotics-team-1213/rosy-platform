@@ -9741,3 +9741,9 @@ osy-d395-s1d\`.
 - 변경: provenance 사본의 모든 문자열에서 `/home/…`, `/dev/serial/by-id/…`, `/dev/v4l/by-id/…`, `/dev/tty*` 부분을 `<redacted-path>`로 바꾼다(session.json의 오류 문장 등). basename을 남길 때도 `/dev` 이름은 장치 serial이라 버린다. `capture.json`의 `collection_manifests[].session_id_origin`이 session을 봉인본(seal)과 폴더 이름(folder) 중 어디서 얻었는지 남긴다.
 - 증거: 원격 시험 PC `learning/curation/omx/test/` 전체, 모델 PC learner venv 실제 왕복(경로 문자열 검사 포함) 1 passed, affected 계층 905 passed·known_failures 0 NEW.
 - gate 변화: 없음. CE 해당 없음 — 검토 반영이며 새 장애가 없다.
+
+## 2026-10-25 · uncommitted · OMX intake가 승인된 카메라 촬영 기준을 직접 읽는다 (D-792 S3 첫 조각)
+
+- 변경: `collection_pipeline.py prepare-native --camera-reference ROLE=PATH`(역할마다 한 번)와 `prepare_native(camera_references=)`. 새 `learning/curation/omx/camera_reference.py`가 계약 `validate_reference`로 읽고 파일 이름=revision, 역할 중복·불일치, dataset `observation.images.*`와 다른 역할 집합, 합친 `meta/info.json`의 폭·높이(축 이름으로 읽음)·fps 불일치를 거절한다. `{역할: revision}`만 `inspection.json`·`capture.json`의 `camera_setup`에 남기고 `camera_identity`·경로는 남기지 않는다. 분할·구간 재검사는 같은 값을 넘겨 보고서를 그대로 비교한다. 옵션이 없으면 출력은 같다. 프레임 비교와 `camera-setup.json`은 아직 없다.
+- 증거: 원격 시험 PC 대상 시험 11 passed, 모델 PC learner venv(LeRobot 0.4.4) 실제 intake에서 revision 기록·fps 거절·식별자 미기록 1 passed, affected 계층 791 passed·known_failures 0 NEW.
+- gate 변화: 없음. CE 해당 없음 — 계획된 조각 구현이며 새 장애가 없다.
