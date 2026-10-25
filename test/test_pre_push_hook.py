@@ -119,6 +119,32 @@ def test_pytest_runs_through_the_remote_runner_on_the_pushed_commit():
     assert pushed.stdout.strip() == "1" * 40, pushed.stderr
 
 
+@pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
+@pytest.mark.parametrize("refs, config, reason, allowed", [
+    (["publish/main-20261026"], "true", "", True),
+    (["feat/x"], "true", "", False),
+    (["publish/main-20261026", "main"], "true", "", False),  # one ungated ref refuses the push
+    (["feat/x"], "true", "incident 42", True),
+    (["feat/x"], None, "", True),                            # teammates' clones are not gated
+])
+def test_publish_only_clone_pushes_publish_branches_only(tmp_path, refs, config, reason, allowed):
+    """D-868: the shared agent clone reaches origin only through publish/main-* PRs."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "ROSY_PUSH_REASON"}
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=env)
+    if config:
+        subprocess.run(["git", "-C", str(tmp_path), "config", "rosy.publishOnly", config], check=True, env=env)
+    text = SCRIPT.read_text(encoding="utf-8")
+    stdin_part = text.split("# Git exports repository-local", 1)[0].split("set -euo pipefail", 1)[1]
+    probe = stdin_part.replace('cd "$(git rev-parse --show-toplevel)"', "")
+    lines = f"refs/heads/gone {'0' * 40} refs/heads/gone abc\n"  # a deletion is never gated
+    lines += "".join(f"refs/heads/b {'1' * 40} refs/heads/{ref} {'0' * 40}\n" for ref in refs)
+    pushed = subprocess.run([BASH, "-c", probe, "hook", "origin", "url"], input=lines, capture_output=True,
+                            text=True, cwd=tmp_path, env={**env, "ROSY_PUSH_REASON": reason})
+    assert (pushed.returncode == 0) == allowed, pushed.stderr
+    if not allowed:
+        assert "ROSY_PUSH_REASON" in pushed.stderr
+
+
 def _safety_step_repo(tmp_path, manifest="roots:\n  - path: safe\n    concern: safety\n"):
     """A throwaway clone layout: the real safety_review.py (BASELINE = its root commit) and a safety root."""
     def git(*args):

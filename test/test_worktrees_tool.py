@@ -727,3 +727,91 @@ def test_new_records_the_owner_override_and_status_names_unknown_owners(main, ca
     line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
     assert line["mine"].endswith("[dispatcher lane 3]")
     assert line["bare"].endswith("[unknown]") and line["noname"].endswith("[unknown]")
+
+
+def _git_fails_inside(folder: Path, main: Path) -> None:
+    """A real git in the tombstoned folder stops there: no fall-through to the parent repository."""
+    run = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=folder, capture_output=True, text=True)
+    assert run.returncode == 128 and str(main) not in run.stdout, (run.stdout, run.stderr)
+
+
+def _held(monkeypatch, wt: Path) -> None:
+    """What a process with ``wt`` as its cwd does on Windows: the folder itself cannot be deleted."""
+    real = Path.rmdir
+
+    def rmdir(self):
+        if self == wt:
+            raise PermissionError(32, "The process cannot access the file", str(self))
+        real(self)
+
+    monkeypatch.setattr(Path, "rmdir", rmdir)
+    monkeypatch.setattr(worktrees.rules.shutil, "rmtree",
+                        lambda path, **kw: (_ for _ in ()).throw(PermissionError(32, "in use", str(path))))
+
+
+def test_held_folder_after_removal_gets_a_tombstone_and_the_next_prune_deletes_it(main, monkeypatch, capsys):
+    wt = add(main, "held", commit=True, merge=True)
+
+    def half_remove(real, cwd, args):
+        if args[:2] != ("worktree", "remove"):
+            return None
+        for item in wt.iterdir():  # git deleted the files; the open handle keeps the empty folder
+            shutil.rmtree(item) if item.is_dir() else item.unlink()
+        real(cwd, "worktree", "prune")
+        return subprocess.CompletedProcess(args, 1, "", "error: failed to delete: Permission denied")
+
+    wrap_git(monkeypatch, half_remove)
+    with monkeypatch.context() as held:
+        _held(held, wt)
+        assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert "ORPHAN  " in out and "tombstone" in out and "FAIL    held" in out
+    assert [p.name for p in wt.iterdir()] == [".git"] and worktrees.rules.is_tombstone(wt)
+    _git_fails_inside(wt, main)
+    assert str(wt) not in git(main, "worktree", "list", "--porcelain")
+    root, rows = worktrees.scan(main)
+    assert [(r["name"], r["orphan"]) for r in rows] == [("held", True)]  # never a live worktree
+    assert worktrees.main(["status"], now=LATER) == 0
+    assert "only caches" in [line for line in capsys.readouterr().out.splitlines() if line.startswith("held ")][0]
+    assert worktrees.prune(main, apply=True, now=time.time()) == 1  # nothing to lose: no idle wait
+    assert not wt.exists()
+
+
+def test_empty_leftover_folder_is_removed_not_tombstoned(main, monkeypatch, capsys):
+    wt = add(main, "gone", commit=True, merge=True)
+
+    def half_remove(real, cwd, args):
+        if args[:2] != ("worktree", "remove"):
+            return None
+        for item in wt.iterdir():
+            shutil.rmtree(item) if item.is_dir() else item.unlink()
+        real(cwd, "worktree", "prune")
+        return subprocess.CompletedProcess(args, 1, "", "error: failed to delete: Permission denied")
+
+    wrap_git(monkeypatch, half_remove)
+    assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    assert "empty folder removed" in capsys.readouterr().out and not wt.exists()
+
+
+def test_orphan_that_cannot_be_cleared_gets_a_tombstone(main, monkeypatch, capsys):
+    orphan = main / ".worktrees" / "stuck" / "__pycache__"
+    orphan.mkdir(parents=True)
+    (orphan / "m.pyc").write_text("c", encoding="utf-8")
+    with monkeypatch.context() as held:
+        _held(held, orphan.parent)
+        assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    assert "FAIL    stuck [orphan]" in capsys.readouterr().out
+    _git_fails_inside(orphan.parent, main)
+    assert worktrees.prune(main, apply=True, now=LATER) == 1 and not orphan.parent.exists()
+
+
+def test_new_clears_a_tombstone_folder_or_refuses_while_it_is_held(main, monkeypatch, capsys):
+    folder = main / ".worktrees" / "again"
+    folder.mkdir(parents=True)
+    with monkeypatch.context() as held:
+        _held(held, folder)
+        assert "tombstone" in worktrees.rules.leave_tombstone(folder)
+        assert worktrees.main(["new", "again", "feat/again"]) == 1
+        assert "could not be cleared" in capsys.readouterr().err
+    assert worktrees.main(["new", "again", "feat/again"]) == 0
+    assert git(folder, "rev-parse", "--abbrev-ref", "HEAD") == "feat/again"

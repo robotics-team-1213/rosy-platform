@@ -1,0 +1,90 @@
+## D-879 서명된 GPT A/B 이미지의 파티션 역할을 SD 도구가 함께 검증한다
+
+**Status:** Proposed
+
+### Context
+
+사용자는 기체가 연결되지 않은 상태에서 새 ROSY 이미지를 준비하고, 이후 OS 전체를 자동 갱신할 수 있는 배포 구조를 요청했다.
+D-387 P4의 bootstrap/boot A/boot B/root A/root B/data 배치를 SD 도구가 알아야 한다.
+현재 image manifest v1과 readback은 MBR의 첫 FAT32 파티션을 전제로 한다.
+GPT 이미지를 기록하면서 그 선택 규칙을 유지하면 다른 boot 파티션에 개인화 정보를 쓸 수 있다.
+
+### Decision
+
+1. **기존 v1 MBR 경로를 유지하고, 실험용 image manifest v2에 `layout`을 추가한다.**
+   기존 release identity와 image filename/SHA 검증은 유지한다. payload manifest schema를 늘리지 않는다.
+   v2 도구 수용은 native ARM64 이미지·부팅·OS 업데이트의 GO가 아니다.
+   완성된 builder/firstboot/OS 슬롯 엔진을 검증하기 전 v2는 production `BUILD_GO`를 받을 수 없다.
+
+2. **`layout`은 정확한 키와 타입을 가진다.**
+
+   | 필드 | 의미 |
+   |---|---|
+   | `schema_version` | 정수 1 |
+   | `scheme`, `sector_size` | `gpt`, 정수 512 |
+   | `disk_guid`, `raw_size_bytes` | source GPT의 nonzero GUID와 sector 정렬된 image 전체 길이 |
+   | `provision_role` | 이 단위에서는 `boot_a`만 허용 |
+   | `partitions` | 아래 여섯 역할의 정확한 목록 |
+
+   각 partition의 키는 `role`, `number`, `start_lba`, `size_lba`, `type_guid`, `unique_guid`다.
+   정수 자리에 bool/float/string을 받지 않는다. 알 수 없는 키·중복·겹침·범위 밖 값은 거절한다.
+
+   | 번호 | 역할 | GPT type |
+   |---:|---|---|
+   | 1 | `bootstrap` | Microsoft Basic Data, FAT32 예정 |
+   | 2 | `boot_a` | Microsoft Basic Data, FAT32 예정 |
+   | 3 | `boot_b` | Microsoft Basic Data, FAT32 예정 |
+   | 4 | `root_a` | Linux filesystem |
+   | 5 | `root_b` | Linux filesystem |
+   | 6 | `data` | Linux filesystem |
+
+   이 배치는 아직 부팅 수용된 제품 형식이 아니다. GPT 구조 검증과 filesystem/부팅 검증은 구분한다.
+   prototype의 boot FAT는 각각 최대 512 MiB로 제한한다. 더 큰 배치는 readback 메모리 예산과 함께 재검토한다.
+
+3. **서명된 snapshot과 실제 source image를 결속한다.**
+   Ed25519 서명 → 전체 checksum 검증의 인증된 map → manifest bytes SHA 확인 → JSON 해석 순서다.
+   metadata를 다시 읽어 의미를 바꾸지 않고 검증된 snapshot을 소비자에 전달한다.
+   GPT 확인 때문에 image를 추가로 읽으면 그 pass에서 소비한 compressed bytes도 인증된 SHA와 대조하고 trailing bytes를 포함한다.
+   기존 v1의 image 단일 hash-read 동작은 유지한다.
+
+4. **GPT 파싱은 제한된 크기로 수행한다.**
+   protective MBR, GPT 1.0 primary/backup header, header/array CRC, 128-byte entries와 최대 128개 entry,
+   mirrored arrays, GPT name/역할/번호/GUID/범위를 검증한다. 불일치는 보정하지 않고 거절한다.
+   primary array는 LBA 2, backup array는 backup header 바로 앞이며 이 prototype의 entry attributes는 0이다.
+   backup GPT 위치와 LBA 범위의 기준은 image raw 길이다. 큰 카드에서도 원본 table을 유지한다.
+   자동 GPT relocation/repair/grow는 이 단위에 포함하지 않는다.
+
+5. **기록 전·후의 확인 대상을 구분한다.**
+   기록 전에는 signed source와 대상 serial/용량/bus/plan identity를 확인한다. 기존 카드의 MBR/GPT 배치가 다른 것은 정상이다.
+   기록 후 개인화 전에 actual GPT를 source snapshot과 대조한다. 작은 카드·잘림·변경된 backup GPT를 거절한다.
+   같은 크기·큰 카드의 검증 범위는 image prefix이며 이후 공간은 검증했다고 표시하지 않는다.
+
+6. **개인화는 지정 역할의 FAT32 volume에만 쓴다.**
+   partition number/GUID/offset/size와 physical disk가 모두 맞아야 한다. enumeration 순서와 drive letter를 identity로 쓰지 않는다.
+   명시적 `BootMountPath`도 이 조건을 우회할 수 없다. secrets는 기록 후 layout 검증 전에 쓰지 않는다.
+   readback의 기존 Windows FSInfo/status/SVI 허용은 유지하고 provisioning extras는 `boot_a`에서만 허용한다.
+   다른 FAT의 kernel/config/autoboot 파일, root/data/table/gap 변경은 거절한다.
+   완료한 FAT buffer는 해제하여 세 FAT를 동시에 모으지 않는다.
+
+7. **probe/reprobe/resume도 같은 GPT identity를 사용한다.**
+   GPT disk GUID와 partition snapshot을 유지한다. GPT emergency write는 이 단위에서 명시적으로 거절한다.
+   기존 MBR emergency의 확인·receipt 제한은 유지한다.
+
+### Verification and consequences
+
+실제 signed verifier/readback/PowerShell fixture를 통한 positive/negative 회귀, legacy MBR 및 installed closure를 확인한다.
+PowerShell을 실행하지 못한 skip을 통과로 계산하지 않는다. 시험 PC의 별도 pinned test-tools 환경을 사용한다.
+실제 카드 기록·Pi 부팅·watchdog·전원 차단·OS trial/health/fallback·공유 데이터 schema rollback은 후속 수용이다.
+source 시험만으로 해당 결과를 주장하지 않는다.
+
+### Alternatives
+
+첫 FAT 추측은 세 FAT 중 개인화 대상과 bootstrap을 구분하지 못한다.
+unsigned layout override는 서명된 이미지와 선택 의미를 분리한다.
+기존 카드 배치를 source와 기록 전에 비교하면 정상 재이미징을 거절한다.
+위 대안 대신 서명된 역할과 실제 기록 후 배치를 결속한다.
+
+### References
+
+- [D-387](D-387-robot-updates-operator-approved-rollout.md), [D-412](D-412-robots-self-update-from-signed-github-releases-when-idle.md)
+- [SD personalization instructions](../../deploy/robot/pinky_pro/sd/AGENTS.md)

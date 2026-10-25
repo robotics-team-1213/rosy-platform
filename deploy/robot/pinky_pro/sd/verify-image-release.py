@@ -13,8 +13,10 @@ import sys
 
 PRODUCT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PRODUCT_ROOT / "release"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from signing import verify_release_checksums  # noqa: E402
+from media_layout import inspect_image  # noqa: E402
 
 
 def verify_image_release(
@@ -23,7 +25,7 @@ def verify_image_release(
     image: Path,
     release_id: str,
     expected_source_revision: str | None = None,
-) -> dict[str, str]:
+) -> dict:
     if expected_source_revision is not None and not re.fullmatch(r"[0-9a-f]{40}", expected_source_revision):
         raise ValueError("SOURCE_REVISION: expected source must be a full lowercase Git commit")
     release_root = release_root.resolve()
@@ -38,17 +40,25 @@ def verify_image_release(
 
     manifest_path = release_root / "manifest.json"
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_bytes = manifest_path.read_bytes()
+        if checksums.get("manifest.json") != hashlib.sha256(manifest_bytes).hexdigest():
+            raise ValueError("MANIFEST_CHECKSUM: manifest differs from authenticated snapshot")
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"MANIFEST_UNREADABLE: {exc}") from exc
 
     expected = {
         "schema_version", "release_id", "product", "board", "architecture", "image"
     }
-    if not isinstance(manifest, dict) or set(manifest) != expected:
+    if not isinstance(manifest, dict):
         raise ValueError("MANIFEST_FIELDS: image manifest shape is not supported")
-    if manifest["schema_version"] != 1:
-        raise ValueError("MANIFEST_SCHEMA: schema_version must be 1")
+    version = manifest.get("schema_version")
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError("MANIFEST_SCHEMA: schema_version must be 1 or 2")
+    if version == 2:
+        expected.add("layout")
+    if set(manifest) != expected:
+        raise ValueError("MANIFEST_FIELDS: image manifest shape is not supported")
     identity = {
         "release_id": release_id,
         "product": "rosy-os",
@@ -90,8 +100,11 @@ def verify_image_release(
     if expected_source_revision is not None and revision != expected_source_revision:
         raise ValueError(f"SOURCE_REVISION: expected {expected_source_revision}, signed image contains {revision}")
 
-    return {"ok": "true", "release_id": release_id, "image": image.name, "sha256": actual,
-            "source_revision": revision}
+    result = {"ok": "true", "release_id": release_id, "image": image.name, "sha256": actual,
+              "source_revision": revision}
+    if version == 2:
+        result["layout"] = inspect_image(image, manifest["layout"], actual)
+    return result
 
 
 def main() -> int:
