@@ -11479,3 +11479,10 @@ osy-d395-s1d\`.
 - 증거: 승인 원격 `python tools/remote/remote_pytest.py --log-dir <scratch>/landing-fixes-green -- test/test_module_scorecard.py test/test_release_boundary_guards.py test/test_secret_public_provenance.py test/test_rosy_auto_update_resync.py test/test_shared_release_signing.py test/test_native_runtime_installed_layout.py` — 125 PASS, known_failures NEW0. 독립 리뷰는 profile digest4개 재계산·provenance11행 결속·설치기 fixture 일치를 확인했다.
 - gate 변화: 관련 source 회귀 통과이며 전체 정상 착지는 다시 수행한다. OS 전체 자동 업데이트·이미지 artifact·실기 수용은 미완료다.
 - 교훈: CE 해당 없음 — 원인/복구와 반례는 시험 및 기존 정책에 보존했다.
+
+## 2026-10-26 · 11121c33eb · D-881 A/B 기체 상태와 슬롯 기록 분리 제안
+
+- 변경: gateway에서 예약한 D-881 Proposed와 동일 제목·상태의 ADR index 행을 함께 기록했다. root-local journal/inverse와 공통 정책·identity를 분리하고, storage/projection 두 단계 admission·live writer의 revoke/delete 보존·directory durability·기존 moved-board handoff를 요구한다.
+- 증거: 상태/firstboot 계획은 독립 architecture/critic 두 차례 검토 후 승인됐고, 실제 updater에서 잘못된 AB 조건을 legacy 정책으로 처리하는8개 반례를 먼저 원격 재현했다. 이후 소비자 구현과 정상·실패 회귀를 진행 중이다.
+- gate 변화: 계획·source prototype이며 firstboot/generation producer와 ARM64/SD/장치 수용이 완료된 것은 아니다.
+- 교훈: CE 해당 없음 — 검증되지 않은 부팅·전원 차단을 해결 교훈으로 기록하지 않는다.

@@ -3459,3 +3459,10 @@
 - 증거: canonical 본문은 merge의 main parent와 첫 docstring 행 외 동일하다. 독립 contract review 승인. committed e732c6bd2c 원격 signing·legacy/dynamic·SD provenance·installed layout·updater resync84 PASS/NEW0. 후속 assertion 및 정상 전체 착지는 별도다.
 - gate 변화: source 병합 호환만 검증했다. A/B media/OS 엔진·native ARM64 artifact·실기 powercut 수용은 미완료다.
 - 교훈: CE 해당 없음 — 구현 동등성·소비자 경로·회귀 시험에 근거를 보존했다.
+
+## 2026-10-26 · a3518e509c · A/B 슬롯 admission과 공통 업데이트 정책 구현 중
+
+- 변경: image-owned descriptor와 kernel marker, host/caller mount, 실제 PARTUUID·파티션 번호·동일 disk parent, 부팅/슬롯/generation receipt를 확인하는 updater 소비자를 추가했다. config/Hold만 공통 policy를 사용하고 applying/state/history/lock은 각 root에 유지한다. 누락된 공통 config와 다른 사용자가 쓸 수 있는 파일은 거절하며 보류 생성·해제·만료에 directory fsync를 적용한다.
+- 증거: 실제 updater 신규 반례와 legacy control의 RED를 확인한 뒤 정상 A/B·namespace·설치 resync·systemd 계약 256 passed(ed9df76398), 보류 durability·기존 eligibility 포함146 passed(a3518e509c)를 확인했다. 일부 source namespace는 file/stat 모의이며 실제 privileged sandbox·mount·powercut 수용은 아니다.
+- gate 변화: state/firstboot 단위 구현 중이다. 실제 storage/state oneshot, canonical generation publisher/projector, firstboot·live writer 통합과 native ARM64 이미지·SD·boot·전체 OS OTA는 남았다. 시험 receipt를 실제 readiness producer로 표시하지 않는다.
+- 교훈: CE 해당 없음 — 기존 installed-layout/실제 소비자 교훈을 적용했고 구현 판단은 ADR·회귀 시험·실행 기록에 보존한다.
