@@ -24,16 +24,22 @@ class Remote:
         self.unknown_commit = False
         self.corrupt = False
         self.private = True
+        self.fail_on_commit = None
+        self.latest = None
 
     def info(self, assignment, token):
         return dict(private=self.private, sha='a' * 40)
 
     def commit(self, assignment, streams, token):
         self.commits += 1
-        self.revisions['b' * 40] = {name: stream.read() for name, stream in streams.items()}
-        if self.unknown_commit:
+        revision = 'b' * 40 if self.commits == 1 else f'{self.commits:040x}'
+        content = dict(self.revisions[self.latest]) if self.latest else {}
+        content.update({name: stream.read() for name, stream in streams.items()})
+        self.revisions[revision] = content
+        self.latest = revision
+        if self.unknown_commit or self.fail_on_commit == self.commits:
             raise TimeoutError('secret hf_token must not enter job error')
-        return 'b' * 40
+        return revision
 
     def chunks(self, assignment, name, token):
         if self.break_read:
@@ -353,3 +359,68 @@ def test_non_string_source_id_is_a_validation_error(jobs_setup, bad_id):
     build, actor, remote, artifact, cache, inventory = jobs_setup
     with pytest.raises(ValueError):
         build().create(actor, dict(source_id=bad_id, artifact_id='run-one', profile='isaac'))
+
+
+def many_files(artifact):
+    source = json.loads((artifact / 'storage-source.json').read_text())
+    for number in range(96):
+        name = f'images/extra-{number:03}.png'
+        raw = f'frame-{number}'.encode(); (artifact / name).write_bytes(raw)
+        source['files'][name] = dict(bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+    (artifact / 'storage-source.json').write_text(json.dumps(source))
+
+
+def test_many_files_upload_in_bounded_descriptor_batches(jobs_setup, monkeypatch):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    many_files(artifact); baseline = len(os.listdir('/proc/self/fd')); commit = remote.commit
+    def bounded(assignment, streams, token):
+        if len(os.listdir('/proc/self/fd')) > baseline + 48:
+            raise ValueError('all source files were opened at once')
+        return commit(assignment, streams, token)
+    monkeypatch.setattr(remote, 'commit', bounded)
+    job = create(build, actor)
+    verified = build().run(actor, job['id'])
+    assert verified['status'] == 'verified' and remote.commits == 4
+    assert verified['files_uploaded'] == verified['files_total'] == 99
+
+
+def test_restart_continues_confirmed_batches_without_rewriting_them(jobs_setup, monkeypatch):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    many_files(artifact); service = build(); job = create(build, actor); save = service._save
+    def interrupted(record, **changes):
+        save(record, **changes)
+        if len(changes.get('uploaded_files', [])) == 32:
+            raise KeyboardInterrupt('worker exited after a confirmed batch')
+    monkeypatch.setattr(service, '_save', interrupted)
+    with pytest.raises(KeyboardInterrupt): service.run(actor, job['id'])
+    assert build().get(actor, job['id'])['files_uploaded'] == 32
+    assert build().run(actor, job['id'])['status'] == 'verified'
+    assert remote.commits == 4
+
+
+def test_uncertain_middle_batch_reconciles_then_finishes_same_target(jobs_setup):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    many_files(artifact); remote.fail_on_commit = 2
+    job = create(build, actor)
+    assert build().run(actor, job['id'])['status'] == 'hold'
+    partial = build().reconcile(actor, job['id'], f'{2:040x}')
+    assert partial['files_uploaded'] == 64 and partial['bytes_verified'] is False
+    verified = build().run(actor, job['id'])
+    assert verified['status'] == 'verified' and verified['target_id'] == job['target_id']
+    assert remote.commits == 4
+
+
+def test_revoked_connection_stops_later_upload_source_reads(jobs_setup, accounts, monkeypatch):
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    job = create(build, actor); service = build()
+    connection = service.pool.assignment(actor, job['id'])['connection_id']; sent = []
+    def upload(assignment, streams, token):
+        first, *later = list(streams.values())
+        sent.append(first.read())
+        accounts.disconnect(actor, connection)
+        for stream in later: sent.append(stream.read())
+        return 'b' * 40
+    monkeypatch.setattr(remote, 'commit', upload)
+    outcome = service.run(actor, job['id'])
+    assert len(sent) == 1 and outcome['bytes_verified'] is False
+    assert artifact.exists()
