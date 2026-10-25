@@ -31,3 +31,9 @@ The reviewer inspected tests for Fleet loader compatibility, secret-free output,
 ## Public revision provenance follow-up
 
 The same independent reviewer inspected the provenance-only delta against implementation commit4c4aef6e9a. All227 prior records were unchanged; four additions bind six locally verified public Git commit/tree objects to exact document paths, UTF-8 line hashes and values. No supported finding remained. The scanner still exempts only those exact tuples from the bare-token check; credential-specific checks remain active. No scanner rule or assertion was weakened. Local object inspection and source review do not establish remote publication or execution-test acceptance.
+
+## Current-main updater integration
+
+The same independent reviewer inspected staged tree5de638b130a5, integrating main f0af5a8ea3 into da5c219777. No supported material finding remained in the ten-file integration. There was no ARM source or API delta. The machine bootstrap, builder and verifier remained byte-identical; all six methods moved into `SiteRuntimeIO` retained identical ASTs. Current-candidate and verification-before-rollback checks remain in the trusted updater path.
+
+The README installs all five trusted updater modules from one reviewed commit, including the new runtime helper; tests cover complete installed CLI loading and refusal for missing runtime/I/O helpers. The log conflict retained both histories. The root corrected only its own unlanded malformed bootstrap heading and regenerated the index after this source review. Exact committed FULL verification remains required; earlier upstream or focused passes do not verify the composed merge. No installed host tool or operating service was changed.

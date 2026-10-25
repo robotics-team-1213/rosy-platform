@@ -3459,7 +3459,7 @@
 - 검토 수정: `install-host-control.sh`가 `units-user`를 ai에만 써서 모델 PC의 `clean-storage`가 늘 거부됐다. ai·model에 쓰도록 고치고 dry-run 시험으로 RED→GREEN을 확인했다.
 - 추가(사용자 요청): `health`에 RAM 전체·여유 용량, GPU 사용률·온도, CPU 사용률(1초 `/proc/stat`)·최고 thermal zone 온도를 더했다. 방식은 CORE `runtime.py`와 같다. RAM 10% 미만은 보고 전용 `memory-low`, 온도·사용률은 표시 전용이다.
 
-## 2026-10-26 · service bootstrap · machine 계정 도구와 서명된 전달 경로
+## 2026-10-26 · 4c4aef6e9a · machine 계정 도구와 서명된 전달 경로
 
 - 변경: `site_users.py add-service`는 기존 service 역할의 bearer만 stdin으로 받아 기존 원자적 registry publication을 재사용한다. 사람용 add/login 제한은 유지한다. 새 candidate는 도구와 hash 및 서명된 `site_users_tool_required: true`를 포함한다. 갱신한 verifier는 새 필수 도구 누락을 거절하면서 marker 없는 과거 candidate의 확인·rollback을 유지한다.
 - 전환: updater가 candidate 내부 코드를 신뢰하지 않으므로 기존 관리자 경로로 독립 verifier를 먼저 갱신한다. 운영 중·보존한 rollback·신규 candidate를 각각 검증하는 순서와 matrix를 site README에 명시했다. 실제 verifier 교체·계정 생성·운영 배포는 아직 하지 않았다.
@@ -3467,3 +3467,16 @@
 - gate 변화: source 구현·검증 진행이다. 운영 서비스 신원·ARM 설치 binding·관측·실물 장치 수용을 열지 않는다.
 - 교훈: CE 해당 없음 — 기존 committed-state 교훈을 적용했으며 원자적 저장·서명 전환의 판단은 구현·회귀 시험·운영 절차에 보존했다.
 - 후속 GREEN: 독립 소스 리뷰 후 커밋 `4c4aef6e9a`를 비현장 승인 원격에서 검증했다. CLI·candidate builder/verifier·실제 signing·updater/rollback·workflow·fetch 일곱 파일237 PASS/skip0/NEW0/known0/flaky0이며 모든 run을 분류했다. 신뢰 verifier 교체·서명된 candidate 설치·운영 principal 발급·실제 연결은 수행하지 않았다. 플랫폼 전체 착지 검증은 별도다.
+## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
+
+- 변경: relocate only six existing runtime/verification methods to site_update_runtime; updater590 to516lines, helper110. Keep switch/rollback/order and public import bindings; update reviewed five-file administrator install closure.
+- 증거: all23 method ASTs, unchanged I/O/verifier/builder and global import targets verified statically. Tests-only d50e67e208 actualCLIclosure RED1FAIL/0skip, NEW1; committed source regression GREEN/review pending. See site-updater-runtime-split validation record/external proofs.
+- gate 변화: none; three/four-image compatibility waits for a separate feature unit after this pure split lands. No host/site/deployment/FIELD acceptance.
+- CE: no new lesson; source/tests/README and existing installer lessons explain this routine split.
+
+## 2026-10-26 · 9816e56bd9 · Site updater pure split verified
+
+- 변경: bind the independent source review and preserved 23 method ASTs/global imports to the six-method runtime extraction; keep complete five-file administrator install closure.
+- 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
+- gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
+- CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
