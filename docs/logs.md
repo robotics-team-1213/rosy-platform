@@ -11275,3 +11275,10 @@ osy-d395-s1d\`.
 - 변경: `sim_chunk_plan.py`가 `grasp_planner` 청크와 `transit_path` 이동을 sim 셀의 집기·놓기 목표에 맞춰 SIM teacher의 approach/grasp/transfer/release로 바꾼다. `--plan chunks`가 teacher·demonstrations·prepare·job·`remote_omx_native.py`를 지난다. 놓기는 측정한 집게 위치부터 연다(`open_from`). 앞의 착지 merge 커밋 `5ceabe6015`이 작업 트리의 추적 파일 변경(실험 연결부)을 함께 담았고, 새 파일은 이 커밋에서 들어간다.
 - 증거: AI 시험 호스트 native SIM 2회. 1회 FAIL(release 첫 목표가 상자에 막힌 집게를 더 닫으라고 함), 수정 뒤 2회 **PASS** — xy 0.12 mm, 들기 102 mm, 2.25 s 정지, RGB 2,060장. `docs/validation/omx-arm-s-chunks-sim-2026-10-25/result.md`.
 - gate 변화: 없음. sim 셀은 S 셀 좌표가 아니고, B 구간·판단 자리·실물 guard 속도는 별도다.
+
+## 2026-10-25 · uncommitted · D-876 ROSY Monitoring
+
+- 변경: ROSY Monitoring(`rosy-monitoring`)의 사이트 독립 감시·통합 집계, 기존 CORE·host-guard·watchdog 재사용, Fleet 독립 실행·조회, 읽기 권한과 복구 소유권을 ADR D-876과 ADR Log에 등록했다. Grafana는 도입 후보로 유지한다.
+- 증거: 기존 producer·consumer 소스와 관련 ADR을 대조했다. 문서 lint·원격 계약 검사 결과는 커밋 SHA와 실행 로그로 확인한다.
+- gate 변화: 구조 결정 수용만 기록했다. 런타임·패키지·배포·장치·현장 수용 상태를 변경하지 않았다. 문서 lint·원격 계약 검사 결과는 커밋 SHA와 실행 로그로 별도 확인한다.
+- CE: 해당 없음 — 새 장애 해결 교훈이 아닌 구조·명칭 결정이다.

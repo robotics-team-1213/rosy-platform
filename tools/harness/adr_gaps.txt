@@ -41,3 +41,8 @@ D-842 reserved outside this branch; remove when its ADR lands
 D-843 reserved outside this branch; remove when its ADR lands
 D-844 reserved outside this branch; remove when its ADR lands
 D-860 reserved by another session outside this branch; remove when its ADR lands
+D-871 reserved by another session outside this branch; remove when its ADR lands
+D-872 reserved by another session outside this branch; remove when its ADR lands
+D-873 reserved by another session outside this branch; remove when its ADR lands
+D-874 reserved by another session outside this branch; remove when its ADR lands
+D-875 reserved by another session outside this branch; remove when its ADR lands
