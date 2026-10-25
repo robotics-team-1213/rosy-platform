@@ -11293,8 +11293,8 @@ osy-d395-s1d\`.
 
 ## 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
 
-- 변경: ADR D-877, `tools/sim/omx_topic_backend.py`(벤더 OMX-F + `topic_based_ros2_control`), `tools/sim/omx_mujoco_backend.py`, `tools/sim/run_omx_backend_conformance.sh`, `tools/sim/build_topic_based_ros2_control.sh`, 시험 `test/test_omx_sim_backends.py`, [검증 기록](validation/omx-mujoco-backend-2026-10-25/result.md).
+- 변경: ADR D-877, `tools/sim/omx_topic_backend.py`(벤더 OMX-F + `topic_based_ros2_control`), `tools/sim/omx_mujoco_backend.py`, `tools/sim/run_omx_backend_conformance.sh`, `tools/sim/build_topic_based_ros2_control.sh`, Isaac 어댑터 `learning/envs/isaac/run_omx_backend.py`, 시험 `test/test_omx_sim_backends.py`, [검증 기록](validation/omx-mujoco-backend-2026-10-25/result.md).
 - 증거: AI PC에서 MuJoCo 적합성 통과(취소 전 0.051rad, 뒤 0.00007rad). 원격 pytest 통과.
-- gate 변화: Gazebo에 이어 MuJoCo가 같은 계약을 통과. Isaac은 같은 층에 붙일 차례다.
+- gate 변화: Gazebo, MuJoCo, Isaac Sim 5.1이 같은 계약을 통과([Isaac 기록](validation/omx-isaac-backend-2026-10-25/result.md)). Isaac 전환 조건(10Hz·실시간 배율·파지·렌더링 비교)은 아직이다.
 - 결정: D-877 Accepted.
 - 교훈: 없음(벤더 gpio·메시 겹침은 코드 주석과 검증 기록에 남김).
