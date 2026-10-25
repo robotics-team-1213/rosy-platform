@@ -5,14 +5,16 @@ import os
 import stat
 from types import SimpleNamespace
 
-from auto_update_fakes import BOOT, REPO, write_json
+from auto_update_fakes import REPO, write_json
 from test_os_state_admission import DESCRIPTOR
 
 GENERATION = "a87be39d-02d8-4a95-9208-570ed7506cd2"
+BOOT = "a8f1b6c8-678f-43fe-bdfc-a93d2465a1c8"
 
 
 def projected_device(root, monkeypatch):
     descriptor = root / "etc/rosy/os-slot.json"
+    (root / "proc/sys/kernel/random/boot_id").write_text(BOOT + "\n", encoding="ascii")
     write_json(descriptor, DESCRIPTOR)
     (root / "proc/cmdline").write_text(
         f"root=PARTUUID={DESCRIPTOR['root_partuuid']} rosy.os_layout=ab-v1\n", encoding="ascii")
@@ -26,7 +28,7 @@ def projected_device(root, monkeypatch):
     ]:
         mount_id = 100 + number
         mounts.append(dict(role=role, mount_id=mount_id, device=device, root="/", mountpoint=mountpoint,
-                           filesystem=filesystem, options=["rw", "relatime"], super_options=["rw"]))
+                           filesystem=filesystem, options=["relatime", "rw"], super_options=["rw"]))
         lines.append(f"{mount_id} 0 {device} / {mountpoint} rw,relatime - {filesystem} /dev/sda{number} rw\n")
         target = root / mountpoint.lstrip("/")
         target.mkdir(parents=True, exist_ok=True)

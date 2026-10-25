@@ -260,6 +260,7 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
                     "reason": str(exc), "last_result": None}
 
     def _run(self, state: dict) -> dict:
+        self._policy_path("config.json")  # Resume must pass slot admission before touching a journal.
         # Review L9: an apply in flight is finished (or rolled back) even when disabled.
         if state.get("applying"):
             return self._resume(state)
