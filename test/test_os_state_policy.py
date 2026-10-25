@@ -1,4 +1,5 @@
 """Actual updater policy must follow admitted common state, not a root snapshot."""
+import hashlib
 import json
 
 import pytest
@@ -7,8 +8,9 @@ from auto_update_fakes import device, host, hub, keys, upd, updater
 from os_state_fakes import projected_device
 
 
-def test_projected_ab_uses_common_policy_despite_sandbox_read_only_mounts(device, host, hub, monkeypatch):
-    common, _, _ = projected_device(device, monkeypatch)
+@pytest.mark.parametrize("slot", ["a", "b"])
+def test_projected_ab_uses_common_policy_despite_sandbox_read_only_mounts(device, host, hub, monkeypatch, slot):
+    common, _, _ = projected_device(device, monkeypatch, slot=slot)
     worker = updater(host, hub)
     assert worker._config()["enabled"] is False
     worker._save_state(dict(applying="slot-a-release"))
@@ -99,3 +101,23 @@ def test_applying_journal_cannot_bypass_slot_admission(device, host, hub, monkey
     assert report["phase"] == "error"
     assert "OS_STATE_HOLD" in report["reason"]
     assert host.calls == []
+
+
+@pytest.mark.parametrize("change", ["different_disk", "wrong_partition", "missing_partition", "wrong_slot"])
+def test_partition_roles_must_belong_to_one_disk_and_the_actual_slot(device, host, hub, monkeypatch, change):
+    projected_device(device, monkeypatch, split_disk=change == "different_disk")
+    if change == "wrong_partition":
+        (device / "sys/dev/block/8:6/partition").write_text("7\n", encoding="ascii")
+    elif change == "missing_partition":
+        (device / "sys/dev/block/8:6/partition").unlink()
+    elif change == "wrong_slot":
+        descriptor = device / "etc/rosy/os-slot.json"
+        layout = json.loads(descriptor.read_text())
+        layout["slot"] = "b"
+        descriptor.write_text(json.dumps(layout))
+        path = device / "run/rosy-os-state/ready.json"
+        ready = json.loads(path.read_text())
+        ready.update(slot="b", descriptor_sha256=hashlib.sha256(descriptor.read_bytes()).hexdigest())
+        path.write_text(json.dumps(ready))
+    with pytest.raises(upd.UpdateError, match="OS_STATE_HOLD"):
+        updater(host, hub)._config()
