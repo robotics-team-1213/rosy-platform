@@ -20,6 +20,7 @@
 | D-833 | 원본 계보를 보존한 native OMX 파지 구간 검수와 학습 | Accepted for implementation (2026-10-21) |
 | D-848 | 봉인한 리더 녹화의 세션·사이클 계보 | Accepted for implementation (2026-10-23) |
 | D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나, 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
+| D-874 | Learning 승격 요청 묶음 — 확정 정답 평가 근거를 봉인해 넘기고, 승인은 Fleet에 둔다 (D-857 보충) | Proposed (2026-10-25) |
 | D-853 | Learning VLM 판단은 닫힌 질문의 사람 정답과 모델 비교를 평가 전용으로 둔다 | Proposed (2026-10-23) |
 | D-852 | 실험실 PC 사용자 서비스 목록과 대조 | Accepted for implementation (2026-10-23) |
 | D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
