@@ -485,6 +485,7 @@ DECLARED_READS = {
     "rosy-os-storage.service": {
         "$HOME",  # CORE's default is documented in the imported helper; admission never reads it.
         "/var/lib/rosy-device", "/etc/rosy", "/etc/hostname", "/etc/hosts",
+        "/etc/passwd", "/etc/group",
         "/var/lib/rosy/provisioning", "/var/lib/rosy/core", "/var/lib/rosy/ssh",
         "/etc/NetworkManager/system-connections", "/home/rosy/.ssh",
         "/run/rosy-provision-boot", "/proc/1/mountinfo", "/proc/self/mountinfo",
@@ -584,6 +585,7 @@ PROGRAM_SOURCES = {
     "rosy-os-storage.service": ["deploy/robot/pinky_pro/native/os_storage_dispatch.py",
                                 "deploy/robot/pinky_pro/native/os_state_storage.py",
                                 "deploy/robot/pinky_pro/native/os_state_layout.py",
+                                "deploy/robot/pinky_pro/native/os_state_accounts.py",
                                 "deploy/robot/pinky_pro/native/os_state_firstboot.py",
                                 "deploy/robot/pinky_pro/native/first_boot_runtime.py"],
     "rosy-network-agent.service": NETWORK_SOURCES + [
