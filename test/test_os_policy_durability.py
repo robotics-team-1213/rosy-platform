@@ -20,15 +20,15 @@ def _trace(monkeypatch):
         return fsync(fd)
 
     def traced_replace(source, target):
-        events.append(("replace", str(Path(target).resolve())))
+        events.append(("replace", str(target)))
         return replace(source, target)
 
     def traced_chmod(path, mode, *args, **kwargs):
-        events.append(("mode", str(Path(path).resolve())))
+        events.append(("mode", str(path)))
         return chmod(path, mode, *args, **kwargs)
 
     def traced_unlink(path, *args, **kwargs):
-        events.append(("unlink", str(path.resolve())))
+        events.append(("unlink", str(path)))
         return unlink(path, *args, **kwargs)
 
     monkeypatch.setattr(os, "fsync", traced_fsync)
@@ -43,7 +43,7 @@ def test_hold_mode_and_contents_are_synced_before_publish_then_parent(device, ho
     worker = updater(host, hub)
     events = _trace(monkeypatch)
     worker.hold("fixture", "fixture maintenance", 1)
-    path = common / "policy/updates/hold.json"
+    path = device / "var/lib/rosy-device/policy/updates/hold.json"
     mode = events.index(("mode", str(path.with_name(".hold.json.tmp"))))
     content = events.index(("file", path.stat().st_ino))
     publish = events.index(("replace", str(path)))
@@ -60,7 +60,7 @@ def test_hold_deletion_is_durable_for_release_and_expiry(device, host, hub, monk
         host.t += dt.timedelta(hours=2)
     events = _trace(monkeypatch)
     worker._expire_hold() if expired else worker.release_hold()
-    path = common / "policy/updates/hold.json"
+    path = device / "var/lib/rosy-device/policy/updates/hold.json"
     assert not path.exists()
     deleted = events.index(("unlink", str(path)))
     synced = events.index(("dir", path.parent.stat().st_ino))
