@@ -30,6 +30,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
+from affected_pack import IGNORED_BASENAMES, MAX_INVOCATION_CHARS, SelectionError, pack
+
 import yaml
 import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
 from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, FULL_SUITES,  # noqa: F401
@@ -83,17 +85,11 @@ NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
 # A module whose `tests` is the whole root suite is too broad to select by
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
 BROAD_TESTS = frozenset({"test"})
-# Keep path arguments below SSH/Tailscale's remote command limit. The remote
-# runner adds its script and options after this budget.
-MAX_INVOCATION_CHARS = 3000
 TEST_FILE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")
 IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import|import\s+([A-Za-z_][\w.]*(?:\s*,\s*[A-Za-z_][\w.]*)*))",
                     re.MULTILINE)
-IGNORED_BASENAMES = frozenset({"__init__.py", "conftest.py"})
 
 
-class SelectionError(RuntimeError):
-    pass
 
 
 @dataclass
@@ -241,6 +237,24 @@ class Repo:
             return [path]
         return [t for t in self.test_files if _under(t, path)]
 
+    def test_import_names(self, path: str) -> dict[str, str]:
+        """Include sibling helper imports that also populate pytest's module cache."""
+        pending = list(self.test_files_under(path))
+        visited: set[str] = set()
+        names: dict[str, str] = {}
+        while pending:
+            test = pending.pop()
+            if test in visited:
+                continue
+            visited.add(test)
+            names[PurePosixPath(test).name] = test
+            for name in self.imports(test):
+                sibling = str(PurePosixPath(test).parent / (name.split('.')[0] + '.py'))
+                if sibling in self.test_files and sibling not in visited:
+                    pending.append(sibling)
+        return {name: source for name, source in names.items() if name not in IGNORED_BASENAMES}
+
+
     def basename_unique(self, path: str) -> bool:
         name = PurePosixPath(path).name
         return sum(1 for t in self.tracked if PurePosixPath(t).name == name) == 1
@@ -302,22 +316,6 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
     return [p for p in dict.fromkeys(paths) if not any(_under(p, c) for c in covered)]
 
 
-def pack(repo: Repo, paths: list[str]) -> list[list[str]]:
-    """Group tests without duplicate basenames or oversized remote commands."""
-    kept = [p for p in paths if not any(o != p and _under(p, o) for o in paths)]
-    groups: list[tuple[list[str], set[str]]] = []
-    for path in kept:
-        if len(path) + 1 > MAX_INVOCATION_CHARS:
-            raise SelectionError(f"test path exceeds remote command budget: {path}")
-        names = {PurePosixPath(t).name for t in repo.test_files_under(path)} - IGNORED_BASENAMES
-        for members, seen in groups:
-            if not names & seen and sum(len(p) + 1 for p in members) + len(path) + 1 <= MAX_INVOCATION_CHARS:
-                members.append(path)
-                seen |= names
-                break
-        else:
-            groups.append(([path], set(names)))
-    return [members for members, _ in groups]
 
 
 def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
