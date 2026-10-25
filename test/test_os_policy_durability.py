@@ -20,15 +20,15 @@ def _trace(monkeypatch):
         return fsync(fd)
 
     def traced_replace(source, target):
-        events.append(("replace", str(target)))
+        events.append(("replace", str(Path(target).resolve())))
         return replace(source, target)
 
     def traced_chmod(path, mode, *args, **kwargs):
-        events.append(("mode", str(path)))
+        events.append(("mode", str(Path(path).resolve())))
         return chmod(path, mode, *args, **kwargs)
 
     def traced_unlink(path, *args, **kwargs):
-        events.append(("unlink", str(path)))
+        events.append(("unlink", str(path.resolve())))
         return unlink(path, *args, **kwargs)
 
     monkeypatch.setattr(os, "fsync", traced_fsync)
