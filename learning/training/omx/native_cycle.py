@@ -87,7 +87,11 @@ def evaluation_joints(train_info, eval_info):
 
 
 def _evaluate(model, splits, repo_id, output):
-    # This function runs only in a fresh child process after the official trainer exited.
+    with dataset_lease(splits):
+        return _evaluate_inputs(model, splits, repo_id, output)
+
+
+def _evaluate_inputs(model, splits, repo_id, output):
     receipt = validate_split(splits)
     if receipt['source']['repo_id'] != repo_id:
         raise ValueError('evaluation repo identity differs from reviewed source')
