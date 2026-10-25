@@ -490,6 +490,10 @@ def test_untrailered_safety_commit_already_on_main_does_not_block_a_landing(repo
 
 
 FULL_THEN_DELTA = """import json, sys
+def generated_targets(repo):
+    return {}
+def generate(repo):
+    return []
 if sys.argv[1] == 'affected':
     if '--head' in sys.argv:
         print(json.dumps({"mode": "affected", "escalations": [], "invocations": [["pkg/test/test_a.py"]]}))
@@ -1130,6 +1134,8 @@ def generate(repo):
     targets = generated_targets(repo)
     for path, content in targets.items():
         path.write_text(content)
+    if mode == "partial":
+        raise RuntimeError("generation failed after tracked output")
     if mode == "unexpected":
         (repo / "pkg/a.py").write_text("unexpected = True\n")
     return list(targets)
@@ -1169,7 +1175,7 @@ def test_clean_main_merge_generates_inside_its_original_merge_commit(repos):
     assert git(wt, "status", "--porcelain") == ""
 
 
-@pytest.mark.parametrize("mode", ["failure", "unexpected"])
+@pytest.mark.parametrize("mode", ["failure", "unexpected", "partial"])
 def test_clean_merge_aborts_when_generation_cannot_be_staged_safely(repos, mode):
     main, wt = _canonical_merge_case(repos, mode)
     before, incoming = git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")
@@ -1177,14 +1183,22 @@ def test_clean_merge_aborts_when_generation_cannot_be_staged_safely(repos, mode)
         land.merge(wt, incoming, "feat/x", sys.executable, False)
     assert git(wt, "rev-parse", "HEAD") == before
     assert git(main, "rev-parse", "HEAD") == incoming
-    assert land.git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0
-    assert git(wt, "diff", "--cached", "--name-only") == ""
     if mode == "failure":
+        assert land.git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0
+        assert git(wt, "diff", "--cached", "--name-only") == ""
         assert "left-behind.md" in str(error.value)
         assert (wt / "left-behind.md").read_text() == "partial\n"
     else:
-        assert "pkg/a.py" in str(error.value)
-        assert "pkg/a.py" in git(wt, "diff", "--name-only")
+        assert "abort failed" in str(error.value)
+        assert "preserved for manual recovery" in str(error.value)
+        assert git(wt, "rev-parse", "MERGE_HEAD") == incoming
+        assert "b.txt" in git(wt, "diff", "--cached", "--name-only")
+        assert (wt / "docs/index.md").read_text() == _canonical_index(1, 1)
+        if mode == "unexpected":
+            assert "pkg/a.py" in str(error.value)
+            assert (wt / "pkg/a.py").read_text() == "unexpected = True\n"
+        else:
+            assert "generation failed after tracked output" in str(error.value)
 
 
 @pytest.mark.parametrize("already_current", [False, True])
