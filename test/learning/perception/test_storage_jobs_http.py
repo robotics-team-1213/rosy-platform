@@ -89,3 +89,44 @@ def test_storage_http_unconfigured_pool_preserves_existing_inventory(tmp_path, j
         assert request(url, '/api/learning/storage', session)[1]['roots']
         assert request(url, '/api/learning/storage/pool', session)[1]['status'] == 'not_configured'
         assert request(url, '/api/learning/storage/jobs', session, {}, token)[0] == 400
+
+
+@pytest.mark.parametrize('width', [1440, 320])
+def test_storage_browser_capacity_archive_reclaim_restore(tmp_path, jobs_setup, accounts, width):
+    from browser_harness import browser_tests_enabled, open_page, save_temp_screenshot
+    if not browser_tests_enabled(): pytest.skip('requires explicit Chromium browser run')
+    playwright = pytest.importorskip('playwright.sync_api')
+    build, actor, remote, artifact, cache, inventory = jobs_setup
+    service = build()
+    service.pool.config['quotas']['first']['remaining_bytes'] = 0
+    with running(tmp_path, accounts, inventory, service) as url:
+        with playwright.sync_playwright() as runtime:
+            browser, page, errors = open_page(runtime, width, 900, url=url)
+            try:
+                session, _ = sign_in(accounts, 'alice')
+                page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
+                page.goto(url + '/learning', wait_until='networkidle')
+                expect = playwright.expect
+                expect(page.locator('#storage-targets')).to_contain_text('first')
+                expect(page.locator('#storage-targets')).to_contain_text('second')
+                page.locator('#storage-source').select_option('raw')
+                page.locator('#storage-artifact').fill('run-one')
+                page.locator('#storage-profile').select_option('isaac')
+                page.get_by_role('button', name='보관 작업 등록', exact=True).click()
+                expect(page.locator('#storage-jobs')).to_contain_text('전송 대기')
+                page.get_by_role('button', name='전송·검증', exact=True).click()
+                expect(page.locator('#storage-jobs')).to_contain_text('원격 검증 완료')
+                expect(page.locator('#storage-jobs')).to_contain_text('second/episodes')
+                page.get_by_role('button', name='로컬 정리', exact=True).click()
+                job_id = service.list(actor)[0]['id']
+                expect(page.locator('#storage-confirmation')).to_be_visible()
+                page.locator('#storage-confirm-id').fill(job_id)
+                page.get_by_role('button', name='확인한 로컬 사본 정리', exact=True).click()
+                expect(page.locator('#storage-jobs')).to_contain_text('로컬 사본 없음')
+                page.get_by_role('button', name='필요 자료 복원', exact=True).click()
+                expect(page.locator('#storage-jobs')).to_contain_text('로컬 사본 있음')
+                assert (cache / job_id / 'images/frame.png').read_bytes() == b'frame-bytes'
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
+                save_temp_screenshot(page, f'learning-storage-pool-{width}')
+                assert not errors
+            finally: browser.close()
