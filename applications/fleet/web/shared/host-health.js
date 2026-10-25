@@ -4,6 +4,7 @@ const STATE_LABEL = {
   bad: "나쁨",
   "load-high": "부하 높음",
   "disk-low": "디스크 부족",
+  "memory-low": "메모리 부족",
   unreachable: "응답 없음",
   quiet: "새벽 창",
   error: "확인 실패",
@@ -22,7 +23,10 @@ export function stateLabel(state) {
 export function resourceText(resources) {
   if (!resources || typeof resources !== "object") return "여유 수치 없음";
   const parts = [];
-  if (Number.isFinite(resources.avail_pct)) parts.push(`메모리 여유 ${resources.avail_pct}%`);
+  const memory = resources.memory;
+  if (memory && Number.isFinite(memory.avail_gb) && Number.isFinite(memory.total_gb)) {
+    parts.push(`메모리 여유 ${memory.avail_gb}/${memory.total_gb}GB(${resources.avail_pct}%)`);
+  } else if (Number.isFinite(resources.avail_pct)) parts.push(`메모리 여유 ${resources.avail_pct}%`);
   if (Number.isFinite(resources.swap_pct)) parts.push(`스왑 ${resources.swap_pct}%`);
   if (Number.isFinite(resources.load) && Number.isFinite(resources.cores)) {
     parts.push(`부하 ${resources.load}/${resources.cores}코어`);
@@ -34,7 +38,12 @@ export function resourceText(resources) {
     parts.push(`시험 디스크 여유 ${disk.test_free_gb}GB(${disk.test_use_pct}%) · 루트 ${disk.root_free_gb}GB(${disk.root_use_pct}%)`);
   }
   const gpu = resources.gpu;
-  if (gpu && Number.isFinite(gpu.used_mib) && Number.isFinite(gpu.total_mib)) parts.push(`GPU 메모리 ${gpu.used_mib}/${gpu.total_mib}MiB`);
+  if (gpu && Number.isFinite(gpu.used_mib) && Number.isFinite(gpu.total_mib)) {
+    parts.push(`GPU 메모리 ${gpu.used_mib}/${gpu.total_mib}MiB · 사용률 ${gpu.util_pct}% · ${gpu.temp_c}°C`);
+  }
+  const cpu = resources.cpu;
+  if (cpu && Number.isFinite(cpu.busy_pct)) parts.push(`CPU 사용 ${cpu.busy_pct}%`);
+  if (cpu && Number.isFinite(cpu.temp_c)) parts.push(`CPU 온도 ${cpu.temp_c}°C`);
   return parts.length ? parts.join(" · ") : "여유 수치 없음";
 }
 

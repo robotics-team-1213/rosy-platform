@@ -3466,3 +3466,4 @@
 - 증거: `test/test_host_guard.py`, `operations/fleet/test/test_host_control.py` 원격 실행.
 - gate 변화: 없음. PC별 재설치와 실제 정리 수용은 미완료다.
 - 검토 수정: `install-host-control.sh`가 `units-user`를 ai에만 써서 모델 PC의 `clean-storage`가 늘 거부됐다. ai·model에 쓰도록 고치고 dry-run 시험으로 RED→GREEN을 확인했다.
+- 추가(사용자 요청): `health`에 RAM 전체·여유 용량, GPU 사용률·온도, CPU 사용률(1초 `/proc/stat`)·최고 thermal zone 온도를 더했다. 방식은 CORE `runtime.py`와 같다. RAM 10% 미만은 보고 전용 `memory-low`, 온도·사용률은 표시 전용이다.

@@ -8,8 +8,8 @@
 
 ### Decision
 
-1. **수집:** `rosy-host-guard-remote health`가 기존 필드 뒤에 `~/rosy-test`(없으면 홈)와 `/`의 여유 용량·사용률, `nvidia-smi`가 있을 때 GPU 메모리를 덧붙인다. 사이트 guard는 이를 `status.json`의 `resources`에 기록한다. Prometheus exporter·Grafana는 설치하지 않는다(D-876 §4 유지).
-2. **판정:** 여유 30GiB 미만 또는 사용률 90% 이상이면 `disk-low`로 보고한다. 기준은 rosy-ops 시험 저장소 운영 규칙과 같다. 디스크 부족은 보고 전용이며 restart·reboot 단계를 진행시키지 않는다. 재부팅은 디스크를 비우지 않는다. 값을 보내지 않는 예전 PC는 확인 불가이며 정상으로 표시하지 않는다.
+1. **수집:** `rosy-host-guard-remote health`가 기존 필드 뒤에 `~/rosy-test`(없으면 홈)와 `/`의 여유 용량·사용률, `nvidia-smi`가 있을 때 GPU 메모리·사용률·온도, 전체·사용 가능 RAM 용량, CPU 사용률(1초)·가장 뜨거운 thermal zone 온도를 덧붙인다(2026-10-26 사용자 추가 요청). CPU 측정 방식은 로봇 CORE `runtime.py`와 같다. 온도·사용률은 근거 있는 기준이 생길 때까지 표시 전용이다. 사이트 guard는 이를 `status.json`의 `resources`에 기록한다. Prometheus exporter·Grafana는 설치하지 않는다(D-876 §4 유지).
+2. **판정:** 여유 30GiB 미만 또는 사용률 90% 이상이면 `disk-low`로 보고한다. 기준은 rosy-ops 시험 저장소 운영 규칙과 같다. 디스크 부족은 보고 전용이며 restart·reboot 단계를 진행시키지 않는다. 재부팅은 디스크를 비우지 않는다. 사용 가능 RAM이 10% 미만이면 `memory-low`로 보고만 한다. 기존 메모리 3%·스왑 80% 복구 단계는 그대로다. 값을 보내지 않는 예전 PC는 확인 불가이며 정상으로 표시하지 않는다.
 3. **대상:** 모델 PC·AI PC도 Monitoring 대상이다. guard에 등록된 PC는 역할과 관계없이 자원을 보고한다.
 4. **정리 요청:** D-524 Service Control에 `clean-storage` 동작을 추가한다. ai·model 역할만 허용하고 site는 거부한다(제품 DB·장치 보정이 있다). 동작은 해당 PC의 기존 `rosy-test-storage.service`를 한 번 시작하는 것뿐이다. 무엇을 지우고 무엇을 보존하는지, busy 잠금과 사용 중 환경 보호는 rosy-ops `host_storage.py`가 소유한다. Fleet 응답은 요청 수락까지만 뜻하고, 회수 결과는 다음 guard 보고의 여유 용량으로 확인한다.
 5. **화면과 권한 (D-876 §5 보충):** Monitoring 화면은 기존 D-524 경로(`POST /api/fleet/hosts/{host}/control`, 기명 operator, `operator_confirmed`, 감사 기록)를 호출하는 버튼만 둘 수 있다. Monitoring 수집 자격은 계속 읽기 전용이며 제어 자격을 받지 않는다. Fleet이 꺼져 있으면 버튼을 쓰지 않고 수동 명령을 안내한다. 재시작·재부팅·네트워크·안전 해제를 Monitoring에 추가하지 않는다.
