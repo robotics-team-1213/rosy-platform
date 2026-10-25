@@ -1,12 +1,16 @@
 """A valid signature alone cannot make a legacy SDK safe for A/B shared state."""
 import ast
 import copy
+import shutil
+import subprocess
+import sys
 
 import pytest
 
 from build_payload_release import seal_release
 from signing import sign_checksums
 from test_os_factory_release import _device, _factory, FACTORY_ID
+from test_factory_release_signature import _keys, ROOT
 
 
 CONTRACT = {"schema_version": 1, "boot_abi": {"min": 1, "max": 1},
@@ -76,3 +80,17 @@ def test_incompatible_signed_sdk_is_refused_before_activation_mutates_state(tmp_
     assert current.resolve() == before
     assert calls == []
     assert not manager.journal.exists()
+
+
+def test_legacy_standalone_verifier_still_needs_only_its_existing_signing_helper(tmp_path):
+    private, public = _keys(tmp_path / "offline", "fixture")
+    root = tmp_path / "legacy"
+    _factory(root, FACTORY_ID, private, public, signed=True)
+    runtime = tmp_path / "standalone"
+    runtime.mkdir()
+    shutil.copy2(ROOT / "deploy/robot/pinky_pro/native/native_release.py", runtime / "native_release.py")
+    shutil.copy2(ROOT / "deploy/hosts/common/release/signing.py", runtime / "signing.py")
+    result = subprocess.run([sys.executable, "-E", "-s", "-B", str(runtime / "native_release.py"),
+        "--root", str(root), "--public-key", str(root / "etc/rosy/trusted-release-keys" / public.name),
+        "verify", "--release-id", FACTORY_ID], cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
