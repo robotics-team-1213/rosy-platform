@@ -255,6 +255,8 @@ class Updater:
         backup = self.host.unit_path.with_name(f"{SERVICE}.bak-{installed[:10]}-{time.strftime('%Y%m%d%H%M%S')}")
         backup.write_text(unit, encoding="utf-8")
         if self.host.systemctl("stop", SERVICE) != 0:  # the old process would answer the health check
+            # A timed-out stop is still killed: start the unchanged unit, a no-op if the old process lives on.
+            self.host.systemctl("start", SERVICE)
             return self.finish(state, "held", reason="stop_failed", release=sha[:12])
         try:
             switched = (self.host.write_unit(new_unit) is None and self.host.apply(source, args, sha)

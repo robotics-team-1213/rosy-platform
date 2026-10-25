@@ -171,6 +171,7 @@ def test_a_center_that_does_not_stop_is_left_running_on_its_old_unit(tmp_path):
     host.stop_rc = 1
     assert updater(tmp_path, host).run() == "held"
     assert host.unit_path.read_text() == unit(OLD) and not [c for c in host.calls if c[0] == "apply"]
+    assert host.calls[-1] == ("systemctl", "start", m.SERVICE)  # a timed-out stop still killed it
 
 
 def test_an_error_after_the_stop_restores_and_restarts_the_old_unit(tmp_path):
