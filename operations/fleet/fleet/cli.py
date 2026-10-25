@@ -23,6 +23,8 @@ from typing import Callable, Optional, Sequence
 from fleet.server.console_builders import build_pairing as _build_pairing
 from fleet.server.context_options import activate_from_args, add_cli_arguments
 from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled, _realign_config
+from fleet.console_site_config import (_build_site_map, _goal_lease_ttl_s,
+                                       _lane_compliance_config, _map_pose_config, _trip_config)
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -720,107 +722,6 @@ def _omx_instances() -> dict[str, str]:
     if any(len(p) != 2 or not all(x and x == x.strip() for x in p) for p in pairs) or len(dict(pairs)) != len(pairs):
         raise SystemExit(f"ROSY_FLEET_OMX_INSTANCES needs unique WORKCELL=INSTANCE pairs, got {pairs}")
     return dict(pairs)
-
-
-def _goal_lease_ttl_s(args) -> float:
-    """D-550 10: ``fleet.goal_lease_ttl_s`` of ``--site-config``; 0 (default) = no goal lease.
-    Otherwise floor..5 s: CORE takes at most 5 s; the floor is 2 x ``fleet.trip.port_timeout_s`` +
-    ``period_s`` (3.5 s by default), so a trip step that times out once on its pose read and once
-    on its renewal still renews before the lease runs out."""
-    import yaml
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        value = (site_config.get("fleet") or {}).get("goal_lease_ttl_s", 0)
-    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"goal lease config: {exc}")
-    trip = _trip_config(args)
-    floor = 2 * trip.port_timeout_s + trip.period_s
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
-            value == 0 or floor <= value <= 5):
-        sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
-    return float(value)
-
-
-def _trip_config(args):
-    """D-494 5: the trip loop's ``fleet.trip`` section of ``--site-config`` (e.g. ``stall_s``)."""
-    import yaml
-
-    from fleet.server.trip_runner import TripConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        trip = (site_config.get("fleet") or {}).get("trip") if isinstance(site_config, dict) else None
-        return TripConfig.from_mapping(trip)
-    except (OSError, ValueError, TypeError, yaml.YAMLError) as exc:
-        sys.exit(f"trip config: {exc}")
-
-
-def _build_site_map(args, tasks_db):
-    """D-488/D-490: site map store (+ first import) and the planner's ``fleet.routing`` costs."""
-    import yaml
-
-    from fleet.routing.cost import RoutingConfig
-    from fleet.server.site_map_store import SiteMapStore
-    from fleet.site_map import from_lane_graph
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        routing = ((site_config.get("fleet") or {}).get("routing") if isinstance(site_config, dict) else None)
-        routing_config = RoutingConfig.from_mapping(routing)
-        site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
-        source = getattr(args, "site_map_import", None)
-        if source is not None:
-            site_maps.import_source = Path(source)
-            # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
-            # report; the default "site" would filter every sighting (map pose UNKNOWN).
-            site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
-                                      source=Path(source).name)
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"site map / routing config: {exc}")
-    if tasks_db is None:
-        print("warning: no --tasks-db; the D-488 site map lives in memory and is lost on restart",
-              file=sys.stderr, flush=True)
-    if site_maps.active() is None:
-        print("warning: no active D-488 site map; /route and /trip are refused until one is "
-              "imported (--site-map-import) or activated", file=sys.stderr, flush=True)
-    return site_maps, routing_config
-
-
-def _map_pose_config(args):
-    """D-494 3: the site YAML's ``fleet.map_pose`` limits; defaults without a site config."""
-    import yaml
-
-    from rosy.world.state.projections.map_pose import MapPoseConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return MapPoseConfig.from_mapping((site_config.get("fleet") or {}).get("map_pose"))
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"map_pose config: {exc}")
-
-
-def _lane_compliance_config(args):
-    """D-511 2: the site YAML's ``fleet.lane_compliance`` thresholds; provisional defaults without."""
-    import yaml
-
-    from fleet.localization.lane_compliance import LaneComplianceConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return LaneComplianceConfig.from_mapping((site_config.get("fleet") or {}).get("lane_compliance"))
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"lane_compliance config: {exc}")
 
 
 def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
