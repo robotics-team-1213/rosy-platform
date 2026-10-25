@@ -1,5 +1,5 @@
 """Project HF destinations with namespace-wide, durable capacity reservations."""
-from contextlib import contextmanager, nullcontext
+from contextlib import closing, contextmanager, nullcontext
 import copy
 import json
 from pathlib import Path
@@ -57,7 +57,7 @@ class StoragePool:
 
     @contextmanager
     def connect(self):
-        with sqlite3.connect(self.db, timeout=30) as conn:
+        with closing(sqlite3.connect(self.db, timeout=30)) as conn, conn:
             conn.row_factory = sqlite3.Row
             yield conn
 

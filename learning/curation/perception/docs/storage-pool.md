@@ -37,8 +37,8 @@ Learning 홈의 **원격 보관과 로컬 사본**에서 등록 위치, 그 안�
 
 - **로컬 정리:** remote 전체 SHA와 현재 권한을 재확인하고 작업 ID를 입력한다. cache 외 source는 `reclaimable: true`도 필요하다. 원격과 이력은 남는다. 추가·변경된 파일이나 바뀐 디렉터리는 삭제하지 않는다.
 - **필요 자료 복원:** 같은 연결 세대·저장소·고정 revision만 읽는다. partial에 검증한 뒤 cache 사본을 게시한다. 부족한 공간·실패한 부분 자료를 학습 입력으로 노출하지 않는다.
-- **고정 보관:** 사용 예정 자료를 회수에서 제외한다. native experiment trainer는 완료 marker가 있는 입력 디렉터리의 공유 lease를 잡고 정리는 배타 lease를 요구한다. 별도 소비자는 `storage_files.consumer(path)` 또는 인증된 `StorageJobs.use(actor, id)`의 수명 안에서 읽는다. 수동 외부 소비자는 먼저 고정 보관한다.
-- **캐시 공간 확보:** 활성 정책에 따라 오래된 검증 cache만 회수한다. source root·pin·사용 중 자료는 자동 회수하지 않는다. 공간 부족이면 막힌 상태를 남기며 복원은 worker 잠금 안에서 용량을 다시 점검한다.
+- **고정 보관:** 사용 예정 자료를 회수에서 제외한다. native experiment trainer와 공식 native cycle은 완료 marker가 있는 입력 디렉터리의 공유 lease를 잡고 정리는 배타 lease를 요구한다. 공식 trainer·평가 자식도 lease를 상속하므로 감독 프로세스 종료 뒤 읽는 동안 보호한다. 별도 소비자는 `storage_files.consumer(path)` 또는 인증된 `StorageJobs.use(actor, id)`의 수명 안에서 읽는다. 수동 외부 소비자는 먼저 고정 보관한다.
+- **캐시 공간 확보:** 프로젝트 전체 cache 크기를 합산하고 요청자 자신의 오래된 검증 cache만 회수한다. source root·pin·사용 중 자료는 건너뛴다. 공간 부족이면 막힌 상태를 남기며 복원은 worker 잠금 안에서 용량을 다시 점검한다. 게시 권한으로 여유 공간에 복원할 수 있고, 다른 사본의 실제 회수에는 관리 권한이 필요하다.
 
 원격 단일 사본은 독립 백업과 다르다. 계정이나 원격 자료를 잃으면 복원을 보장할 수 없으므로 원본 정리 화면에서 확인한다. 검수 DB·사람 정답·보정 원본은 별도로 유지한다.
 

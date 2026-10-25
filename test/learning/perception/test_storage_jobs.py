@@ -471,6 +471,7 @@ def test_publish_only_restore_with_cache_policy_and_sufficient_space(jobs_setup,
     config = json.loads(accounts.config_path.read_text())
     config['users'][0]['memberships']['one'].remove('manage')
     accounts.config_path.write_text(json.dumps(config))
+    _, actor = sign_in(accounts, 'alice')
     inventory.config['pool']['cache_policy'] = dict(enabled=True, max_bytes=job['upload_bytes'])
     assert build().restore(actor, job['id'])['local_present'] is True
 
