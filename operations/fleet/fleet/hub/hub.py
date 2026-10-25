@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import sqlite3
 import time
@@ -221,7 +222,8 @@ class SiteHub:
         welcome = WelcomePayload(
             robot_id=hello.robot_id,
             fleet_name=self._fleet_name,
-            last_event_seq=row.last_event_seq,
+            # HELLO has no producer scope; replay is deduplicated by event_id.
+            last_event_seq=0,
         )
         return Envelope(type=EnvelopeType.WELCOME, payload=welcome.model_dump())
 
@@ -268,6 +270,7 @@ class SiteHub:
             return _error("SESSION_NOT_PAIRED", "hello first")
         if not self._bound(event.robot_id, session):
             return _error("PAIRING_INVALID", "robot mismatch")
+        row = self.registry.record(event.robot_id)
         is_new = True
         if self.event_store is not None:
             try:
@@ -276,9 +279,20 @@ class SiteHub:
                 return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
             except (OSError, sqlite3.Error):
                 return _error("EVENT_STORAGE_UNAVAILABLE", "event was not durably accepted")
+        else:
+            # Match CoreEventStore's normalized JSON comparison, including data value types.
+            encode = json.JSONEncoder(ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode
+            for previous in row.events:
+                if previous.event_id == event.event_id:
+                    try:
+                        if encode(previous.model_dump(mode="json")) != encode(event.model_dump(mode="json")):
+                            return _error("EVENT_NOT_AUDITABLE", "event identity was reused with different content")
+                    except (TypeError, ValueError):
+                        return _error("EVENT_NOT_AUDITABLE", "event is outside the safe audit contract")
+                    is_new = False
+                    break
         if self.event_callback is not None and not self._recover_event_projections():
             return _error("TASK_PROJECTION_UNAVAILABLE", "event task projection is pending")
-        row = self.registry.record(event.robot_id)
         if is_new:
             row.events.append(event)
         row.last_event_seq = max(row.last_event_seq, event.seq)

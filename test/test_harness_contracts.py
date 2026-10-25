@@ -870,3 +870,29 @@ def test_adr_reserve_stops_when_update_ref_fails_for_another_reason(tmp_path, mo
     monkeypatch.setattr(adr_reserve, "used_numbers", lambda: {})
     assert adr_reserve.main(["next", "t"]) == 1
     assert "git update-ref refs/adr/D-1 failed" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("kind", ["outside", "git", "symlink"])
+def test_generate_rejects_unsafe_targets_before_writing_any_output(tmp_path, monkeypatch, kind):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    first = repo / "STATUS.md"
+    first.write_text("original\n", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    if kind == "outside":
+        unsafe = outside / "index.md"
+    elif kind == "git":
+        (repo / ".git").mkdir()
+        unsafe = repo / ".git/index.md"
+    else:
+        try:
+            (repo / "linked").symlink_to(outside, target_is_directory=True)
+        except OSError:
+            pytest.skip("symlinks unavailable")
+        unsafe = repo / "linked/index.md"
+    monkeypatch.setattr(harness, "generated_targets", lambda _: {first: "changed\n", unsafe: "unsafe\n"})
+    with pytest.raises(ValueError):
+        harness.generate(repo)
+    assert first.read_text(encoding="utf-8") == "original\n"
+    assert not unsafe.exists()

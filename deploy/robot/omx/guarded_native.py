@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Native LeRobot manual/record child: passive leader, seeded follower and bounded motion."""
+"""Native LeRobot manual/record child: passive leader, seeded follower and bounded motion.
+
+`record --teacher` (scripted teacher, D-872): no leader; the follower target is the teleop's action
+(rosy_replay trajectory). It streams with the body-only profile (1 deg/s until aligned, then
+10 deg/s, 10 deg/s^2) over all six joints under the same seed, following-error, effort, hardware
+and monitor rules. The gripper is current-limited (mode 5) and stops on the box by design, so it is
+the one joint without a following-error bound."""
 from __future__ import annotations
 
 import importlib
@@ -100,9 +106,11 @@ def normalized(bus, raw):
 
 class NativeJointMotion:
     def __init__(self, follower, leader, *, clock=time.monotonic, body_only=False, label="follower", monitor=None,
-                 offsets=None):
+                 offsets=None, teacher=False):
+        if teacher != (leader is None) or (teacher and body_only):
+            raise ValueError("teacher mode streams all six joints and has no leader")
         self.follower, self.leader, self.clock = follower, leader, clock
-        self.body_only = body_only
+        self.body_only, self.teacher = body_only, teacher
         self.active = BODY if body_only else NAMES
         self.label = label
         #: An explicit per-joint seed makes the Follower copy the Leader's *relative* motion
@@ -153,33 +161,41 @@ class NativeJointMotion:
         started = self.clock()
         if self.last_time is not None and not 0 <= started - self.last_time <= MAX_GAP_S:
             raise ValueError("stale control loop (>0.5 seconds)")
-        leader = self.leader.sync_read("Present_Position", normalize=False)
+        if self.teacher:
+            ids = {self.follower.motors[n].id: n for n in NAMES}
+            raw = self.follower._unnormalize({self.follower.motors[n].id: action[n + ".pos"] for n in NAMES})
+            leader = {ids[i]: v for i, v in raw.items()}  # the teacher's target, in follower ticks
+        else:
+            leader = self.leader.sync_read("Present_Position", normalize=False)
         current = self.follower.sync_read("Present_Position", normalize=False)
         finite_values(leader, NAMES)
         finite_values(current, NAMES)
         if self.body_only and self.follower.read("Torque_Enable", "gripper"):
             raise ValueError("passive gripper torque must remain OFF")
         if self.command is not None:
-            for name in self.active:
+            for name in BODY if self.teacher else self.active:
                 sent = int(self.command[name])  # the bus serialized the previous fractional target as integer ticks
                 if abs(current[name] - sent) > 5 * TICKS_PER_DEGREE + 1e-9:
                     raise ValueError(f"{name}: following error >5 motor degrees; command={sent}, current={current[name]}")
         if self.offsets is None:
-            self.offsets = {n: TURN * round((current[n] - leader[n]) / TURN) for n in BODY}
+            self.offsets = (dict.fromkeys(BODY, 0) if self.teacher
+                            else {n: TURN * round((current[n] - leader[n]) / TURN) for n in BODY})
         target = {n: leader[n] + self.offsets[n] for n in BODY}
         for name in BODY:
             if abs(target[name] - current[name]) >= 100 * TICKS_PER_DEGREE - 1e-9:
                 raise ValueError(f"{name}: difference >=100 degrees; leader={leader[name]}, "
                                  f"target={target[name]}, current={current[name]}, offset={self.offsets[name]}, "
                                  f"previous_command={self.command}; align manually with torque OFF")
-        for bus, values in ((self.leader, {**target, "gripper": leader["gripper"]}),
-                            (self.follower, current)):
+        for bus, values in (() if self.teacher else ((self.leader, {**target, "gripper": leader["gripper"]}),)) + (
+                (self.follower, current),):
             for name, value in values.items():
                 calibration = bus.calibration[name]
                 if not calibration.range_min <= value <= calibration.range_max:
                     raise ValueError(f"{name}: outside calibrated range")
         # Use the installed SDK's calibrated gripper conversion, including drive inversion.
-        if not self.body_only:
+        if self.teacher:
+            target["gripper"] = leader["gripper"]
+        elif not self.body_only:
             grip = normalized(self.leader, {"gripper": leader["gripper"]})["gripper.pos"]
             grip_id = self.follower.motors["gripper"].id
             target["gripper"] = self.follower._unnormalize({grip_id: grip})[grip_id]
@@ -218,7 +234,7 @@ class NativeJointMotion:
             current = self._seed({n: current[n] for n in self.active}, target, started)
             return {"started": started, "seed": current, "alignment_deadline": deadline}
         elapsed = min(now - self.last_time, MAX_STEP_S)
-        if self.body_only:
+        if self.body_only or self.teacher:
             command, state = self._body_command(target, current, elapsed, now)
             return {"started": started, "command": command, "time": now, "body_state": state}
         step = elapsed * TICKS_PER_DEGREE  # one degree/second, independent of loop frequency
@@ -258,8 +274,8 @@ class NativeJointMotion:
         if not tracking and (self.last_alignment_report is None or now - self.last_alignment_report >= 1):
             actual_joint = max(self.active, key=lambda n: abs(current[n] - target[n]))
             command_joint = max(self.active, key=lambda n: abs(self.command[n] - target[n]))
-            present_pwm = self.effort_pwm[actual_joint]
-            pwm_limit = self.pwm_limits[actual_joint]
+            present_pwm = self.effort_pwm.get(actual_joint)  # the gripper (teacher mode) has no effort sample
+            pwm_limit = self.pwm_limits.get(actual_joint)
             print(f"{self.label}: phase=aligning; actual_joint={actual_joint} actual={current[actual_joint]} "
                   f"target={target[actual_joint]} error_deg={abs(current[actual_joint] - target[actual_joint]) / TICKS_PER_DEGREE:.2f} "
                   f"Present_PWM={present_pwm} PWM_Limit={pwm_limit}; "
@@ -353,11 +369,13 @@ class NativeJointMotion:
         raise ValueError(detail)
 
 
-def run_native(module, follower_type, leader_type, *, body_only=False):
+def run_native(module, follower_type, leader_type, *, body_only=False, teacher=False):
     """Keep native factories/recording; replace only hardware lifecycle and action guard."""
     devices = []
     if body_only and hasattr(module, "record"):
         raise ValueError("body-only mode is manual teleoperation only")
+    if teacher and not hasattr(module, "record"):
+        raise ValueError("teacher mode is a recording")
     shared = {}
     original_robot = module.make_robot_from_config
     original_teleop = module.make_teleoperator_from_config
@@ -369,8 +387,8 @@ def run_native(module, follower_type, leader_type, *, body_only=False):
         def send_action(self, action):
             if "motion" not in shared:
                 from motor_health import MotorHealth
-                shared["motion"] = NativeJointMotion(self.bus, shared["leader"].bus, body_only=body_only,
-                                                 monitor=MotorHealth())
+                shared["motion"] = NativeJointMotion(self.bus, None if teacher else shared["leader"].bus,
+                                                     body_only=body_only, teacher=teacher, monitor=MotorHealth())
             sent = shared["motion"].send(action)
             shared["sent"] = sent
             return sent
@@ -395,6 +413,10 @@ def run_native(module, follower_type, leader_type, *, body_only=False):
 
     def teleop_factory(config):
         device = original_teleop(config)
+        if teacher:
+            if isinstance(device, leader_type):
+                raise ValueError("teacher mode replays a trajectory, not a leader")
+            return device  # no motor bus: LeRobot's own disconnect is enough
         if not isinstance(device, leader_type):
             raise ValueError("guard requires OMX leader")
         device.__class__ = Leader
@@ -441,6 +463,11 @@ def run_native(module, follower_type, leader_type, *, body_only=False):
 
 def main():
     mode = sys.argv.pop(1)
+    teacher = "--teacher" in sys.argv
+    if teacher:
+        sys.argv.remove("--teacher")
+        if mode != "record":
+            raise SystemExit("teacher mode is a recording")
     body_only = "--body-only" in sys.argv
     if body_only:
         sys.argv.remove("--body-only")
@@ -451,7 +478,7 @@ def main():
     from lerobot.robots.omx_follower.omx_follower import OmxFollower
     from lerobot.teleoperators.omx_leader.omx_leader import OmxLeader
     module = importlib.import_module("lerobot.scripts.lerobot_" + mode)
-    run_native(module, OmxFollower, OmxLeader, body_only=body_only)
+    run_native(module, OmxFollower, OmxLeader, body_only=body_only, teacher=teacher)
 
 
 if __name__ == "__main__":

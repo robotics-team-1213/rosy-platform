@@ -8,6 +8,13 @@ from control.sensing.localization import MapAgreement, Confidence, lease_ready, 
 
 
 class LocalizationTests(unittest.TestCase):
+    def test_angle_helpers_keep_signed_pi_endpoints(self):
+        from control.sensing.localization import wrap
+        for angle, expected in ((0., 0.), (math.pi, math.pi), (-math.pi, -math.pi),
+                                (3 * math.pi, math.pi)):
+            self.assertAlmostEqual(wrap(angle), expected)
+            self.assertAlmostEqual(planar_yaw(0., 0., math.sin(angle / 2), math.cos(angle / 2)), expected)
+
     def test_recorded_gazebo_corner_is_not_lost_between_coarse_candidates(self):
         d = np.load(Path(__file__).parent / 'fixtures/gazebo_localization_corner.npz')
         m = MapAgreement(d['grid'], float(d['resolution']), d['origin'])

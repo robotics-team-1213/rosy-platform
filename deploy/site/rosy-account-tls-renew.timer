@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Account TLS validity daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+Unit=rosy-account-tls-renew.service
+
+[Install]
+WantedBy=timers.target

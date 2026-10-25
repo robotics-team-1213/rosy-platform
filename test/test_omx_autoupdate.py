@@ -54,6 +54,8 @@ class FakeHost:
         self.envs_built.append(lock.read_text() if lock else None)
         (target / "bin").mkdir(parents=True)
         (target / "bin" / "python").write_text("")
+        # what pip writes into a venv built at the staging path
+        (target / "bin" / "lerobot-teleoperate").write_text(f"#!{target}/bin/python\nimport lerobot\n")
 
     def smoke(self, release, python):
         assert Path(os.path.realpath(python)).exists() or str(python).endswith("python")
@@ -137,6 +139,8 @@ def test_the_environment_is_built_once_per_lock_and_rebuilt_when_it_changes(tmp_
     host.head = "b" * 40
     u.run()
     assert len(host.envs_built) == 1  # same lock: reused
+    env = tmp_path / "envs" / u.state()["env"]
+    assert (env / "bin" / "lerobot-teleoperate").read_text().splitlines()[0] == f"#!{env}/bin/python"
     host.head, host.lock_text = "c" * 40, "lerobot==0.4.5\n"
     u.run()
     assert len(host.envs_built) == 2 and u.state()["env"] != u.state()["previous_env"]
@@ -381,3 +385,31 @@ def test_a_missing_follower_board_defers_with_its_own_reason(tmp_path, capsys):
     host.follower_missing = lambda: True
     assert updater(tmp_path, host).run() == "deferred"
     assert "follower_device_missing" in capsys.readouterr().out
+
+
+def test_a_killed_fetch_lock_in_the_mirror_does_not_block_the_next_archive(tmp_path):
+    import subprocess as sp
+    source = tmp_path / "source"
+    (source / "deploy").mkdir(parents=True)
+    (source / "deploy" / "tool.py").write_text("print(1)\n")
+    git = ["git", "-C", str(source), "-c", "user.email=t@t", "-c", "user.name=t"]
+    sp.run(["git", "init", "-q", str(source)], check=True)
+    sp.run(git + ["add", "."], check=True)
+    sp.run(git + ["commit", "-qm", "c"], check=True)
+    sp.run(git + ["config", "uploadpack.allowReachableSHA1InWant", "true"], check=True)
+    sha = sp.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    root = tmp_path / "root"
+    root.mkdir()
+    sp.run(["git", "init", "--bare", "-q", str(root / "mirror.git")], check=True)
+    (root / "mirror.git" / "shallow.lock").write_text("left by a killed fetch")
+    target = tmp_path / "release"
+    target.mkdir()
+    m.Host({"root": str(root), "repo_url": "file://" + str(source)}).archive(sha, ["deploy"], target)
+    assert (target / "deploy" / "tool.py").read_text() == "print(1)\n"
+
+
+def test_failed_preparations_of_older_releases_are_removed(tmp_path):
+    host = FakeHost()
+    (tmp_path / "releases" / "0123456789ab.tmp").mkdir(parents=True)
+    assert updater(tmp_path, host).run() == "switched"
+    assert not list((tmp_path / "releases").glob("*.tmp"))

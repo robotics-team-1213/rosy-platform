@@ -531,3 +531,37 @@ def test_other_labelmap_errors_keep_their_own_text(tmp_path):
     with pytest.raises(ValueError, match='duplicate label') as refused:
         review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
     assert '다른 클래스셋' not in str(refused.value)
+
+
+def test_catalog_cannot_declare_hf_provenance(tmp_path):
+    """Only the server-verified HF send sets source_kind/upstream; a catalog declaration is dropped."""
+    import review_dataset
+    store = open_store(tmp_path)
+    folder, classes, rows = catalog(tmp_path)
+    group = 'hf:dataset/org/data@' + 'a' * 40
+    for row in rows:
+        row.update(source_kind='huggingface', source_session=group, capture_group=group,
+                   upstream=dict(provider='huggingface', repo_type='dataset', repo_id='org/data', revision='a' * 40,
+                                 path='a.png', sha256=row['image_sha256']))
+    (folder / 'verified-inputs.jsonl').write_text('\n'.join(json.dumps(r) for r in rows), encoding='utf-8')
+    review_ingest.import_frames(store, {'path': str(folder), 'classes': str(classes)})
+    frames = review_evidence.decisions(store)['frames']
+    with store.connect() as db:
+        stored = {row[0]: json.loads(row[1]) for row in db.execute('SELECT id, source FROM frames')}
+    assert all('upstream' not in source and 'source_kind' not in source for source in stored.values())
+    assert all(review_dataset.hf_group(frame, stored[frame['frame']]) is None for frame in frames)
+
+
+def test_eval_bootstrap_refuses_hf_frames(tmp_path):
+    import review_eval_bootstrap
+    group = 'hf:dataset/org/data@' + 'a' * 40
+    catalog_path = tmp_path / 'eval.jsonl'
+    catalog_path.write_text(json.dumps(dict(source_kind='huggingface', fixed_eval_overlap=True, source_session=group,
+                                            capture_group=group, upstream={'repo_id': 'org/data'})), encoding='utf-8')
+    classes = tmp_path / 'classes.yaml'; classes.write_bytes(CLASSES)
+    with pytest.raises(ValueError, match='reserved MCAP frames'):
+        review_eval_bootstrap.start(tmp_path / 'store', tmp_path / 'state', catalog_path, classes,
+                                    catalog_sha256=hashlib.sha256(catalog_path.read_bytes()).hexdigest(),
+                                    classes_sha256=hashlib.sha256(CLASSES).hexdigest())
+    assert not (tmp_path / 'state').exists() and not (tmp_path / 'store').exists()
+

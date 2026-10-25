@@ -33,7 +33,8 @@ CLIS = [
     "learning/registry/perception/intake.py",
     "learning/registry/perception/sign_model.py",
     "learning/evaluation/perception/road_replay.py",
-    "learning/training/perception/review_eval_package.py",
+    "learning/curation/perception/review_bridge.py",
+    "learning/curation/perception/review_eval_package.py",
     "tools/lane_replay.py",
 ]
 
@@ -54,14 +55,14 @@ def test_cli_help_with_clean_pythonpath(cli):
 
 @pytest.mark.parametrize("entry", ["review_dataset", "review_eval_companion", "review_eval_package"])
 def test_review_source_imports_resolve_canonical_holders_without_suite_paths(entry):
-    # Only the entry's trainer directory is supplied. Each production module
+    # Only the entry's curation directory is supplied. Each production module
     # must establish its own curation/registry dependencies before lazy calls.
-    trainer = ROOT / "learning/training/perception"
+    curation = ROOT / "learning/curation/perception"
     expected = {name: str(ROOT / holder / (name + ".py")) for name, holder in (
         ("build", "learning/curation/perception"), ("mcap_proof", "learning/curation/perception"),
         ("review_evidence", "learning/curation/perception"), ("store", "learning/registry/perception"),
     )}
-    code = ("import sys,pathlib;sys.path.insert(0," + repr(str(trainer)) + ");"
+    code = ("import sys,pathlib;sys.path.insert(0," + repr(str(curation)) + ");"
             "__import__(" + repr(entry) + ");"
             "expected=" + repr(expected) + ";"
             "assert all(str(pathlib.Path(__import__(name).__file__).resolve())==path "

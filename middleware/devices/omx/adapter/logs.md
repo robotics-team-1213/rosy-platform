@@ -517,6 +517,30 @@
 - 증거: 확대 착지의 신규3실패를 보완, 정책 host22와 실제 Jazzy runtime8·정책 transport4 통과. 물리 장치를 사용하지 않았다.
 - gate 변화: 없음. D-770의 작은 이동 기반 국소 측정 절차를 구체화하되 초기화 자동복구 쓰기·실제 feedback/stop 수용은 미완료다.
 
+## 2026-10-16 · uncommitted · fix(ci): isolate native ROS fixture processes
+
+- Change: Run the two native ROS action fixture files separately using the existing native wrapper DDS/plugin environment, preserve directory and explicit node selection, and fail on skipped native fixtures. Other module environments are unchanged.
+- Evidence: Run 38916624138 fixed Fleet stamps but showed publication gaps of 0.755 s and owner age of 1.174 s in the combined modules process; native host wrappers passed. Two new selection regressions fail against the old workflow. Isolation is a controlled environment correction, not a proven plugin root cause.
+- Gate: No change; final cloud verification is required. Production timing and safety policy are unchanged.
+
+## 2026-10-16 · uncommitted · test(ci): repair native ROS fixture inputs and scheduling
+
+- Change: Stamp Fleet JointState publications. Use a 0.5 s fixture freshness allowance and explicitly hold feedback for 3x that interval while asserting owner state advances and stays fresh. Native opt-in verification now includes both Fleet parameters. Correct this unpublished entry's heading and fields after independent review caught its malformed format.
+- Evidence: Cloud run 38914855479 exposed zero-stamped fixture inputs and a 0.200655 s publication gap against a 0.2 s test allowance. Native remote verification at 17a72fb6f passed all three wrapper parameters, including both Fleet cases; final revision verification follows the formatting repair.
+- Gate: No change. Production freshness validation and physical acceptance remain unchanged.
+
+## 2026-10-16 · uncommitted · test(ci): 새로 수집된 ROS 시험 실패의 관측 정보
+
+- 변경: Fleet ROS fixture가 사용하는 controller_manager_msgs도 CI에 설치한다. 느린 feedback 시험 실패에 발행 간격·intake 결과·owner sequence와 age·느린 sink 시각을 기록해 원인을 구분한다. 0.2초 freshness와 0.6초 느린 callback 조건은 유지한다.
+- 근거: PR #55 CI 38912405039에서 기존 수집 오류가 해소된 뒤 controller_manager_msgs 수집 오류 하나와 joint_state_stale 회귀 하나가 드러났다. 실행 경로와 독립 리뷰만으로는 생산 코드 결함인지 시험 환경인지 판단할 수 없어 진단 정보를 먼저 추가했다.
+- gate 변화: 없음. 실제 로봇을 사용하지 않으며 native ROS fixture는 원격 시험 PC의 localhost에서 검증한다.
+
+## 2026-10-16 · uncommitted · fix(ci): modules 수집 의존성과 기구학 시험 격리
+
+- 변경: CI 공통 시험 도구에 Playwright SDK와 adapter의 control_msgs 의존성을 추가했다. Chromium 설치와 브라우저 시험 활성화 범위는 기존 전용 단계가 맡는다. geometry 누락 시험은 ament_index_python의 부모와 packages 하위 모듈 캐시를 모두 차단해 설치된 ROS overlay의 geometry를 잘못 찾지 않게 했다.
+- 근거: 문서 병합 b501846ca의 CI 38884946663 modules 잡에 Playwright·control_msgs 수집 오류와 missing geometry 시험 실패가 있었다. 변경 전 main 810ea9bbe의 CI에도 같은 실패가 있다. 시험 결과는 이 수정 브랜치의 원격 로그와 PR CI에서 확인한다.
+- gate 변화: 없음. 실제 장치를 사용하지 않으며 geometry resolver의 제품 동작이나 modules의 gating 설정은 바꾸지 않는다.
+
 ## 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
 
 - 변경: `PickPlaceRunner`의 phase gate가 세 값(허용, `PHASE_WAIT`, 거부)을 받는다. `PHASE_WAIT`이면 phase를 내지 않고 돌아간다(`omx_adapter/phase_gate.py`). `ActionApi`는 선택 `coordinator_api`로 연산별 peer 역할을 나누고, `LocalStopApi`는 조율자 정지 이유 4종만 받으며, 정지 래치 표의 출처 CHECK에 `coordinator`를 더해 기존 표를 한 번 옮긴다. barrier 기록·감독·UDS 연산은 `rosy_agent`(owner 조립)에 둔다. 조율자 UID가 없는 owner는 지금 경로 그대로다.
@@ -541,6 +565,66 @@
 - 변경: UnixActionServer가 listen 성공 뒤와 teardown 때 serving Event를 관리하고, 기존 stop Event가 설정되면 즉시 false인 read-only is_serving을 제공한다. 인증·socket 권한·Action admission·취소 계약은 유지한다.
 - 증거: 실제 UDS를 포함한 startup 통합과 정지 중 listener 상실을 재현한 원격 집중 묶음 66 passed. 독립 Safety-Review APPROVE는 docs/validation/omx-native-startup-2026-10-17/safety-review.md.
 - gate 변화: 소스·호스트 검증. 이 값은 listener 수명이며 요청 응답성·물리 정지·장치 수용 증거가 아니다.
+
+## 2026-10-17 · uncommitted · fix: 느린 액션 이벤트를 owner executor에서 분리
+
+- 변경: 같은 context·namespace와 owner에서 해석한 액션 이름으로 전용 SingleThreadedExecutor를 구성했다. handle의 동기식 이벤트 순서·durable terminal 처리와 단일 owner·freshness·HOLD 기준은 유지한다. 생성 실패와 종료 시 전용 executor·스레드·노드를 정리하며 종료 실패를 성공으로 숨기지 않는다.
+- 증거: GitHub RED run39010304643에서 owner1/4 worker 조건 모두 실패했고 해당 native 묶음은 2 failed / 7 passed였다. 외부 발행 간격 약10ms에 owner age는 약1.51s/1.05s로0.5s 기준을 넘었다. 완료된 watchdog poll 관측을 추가했고 상대·private 액션 이름과 remap·반복 종료도 검증한다. 최종 head의 독립 검토와 GitHub GREEN은 PR #83에 기록한다.
+- gate 변화: 없음. 노트북 pytest·원격 시험 PC·vendor Gazebo·실물 장치·DEVICE/FIELD는 미실행이다. 실제 owner 정책·stop/cancel 수용을 이 호스트 시험으로 대신하지 않는다.
+
+## 2026-10-17 · uncommitted · test: 수신 지연의 실행 경계 진단과 이동한 계약 시험 경로 수정
+
+- 변경: 실제 handle 메서드를 추출하는 policy event-order 시험이 새 소스 파일을 읽도록 고쳤다. native feedback 회귀에는 제한된 poll·intake·cancel 기록과 timeout 중 thread stack·설치된 MTE 구현을 실패 때만 출력하는 진단을 추가했다.
+- 증거: run39012627359에서 host 3 failed / 1546 passed / 17 skipped, native 2 failed / 13 passed, Fleet native 2 passed. host 실패는 이동 전 AST 경로였다. native에서는 기존 cancel 관측과 추가 4-worker timeout freshness 실패를 관찰했으며 원인은 아직 확정하지 않았다.
+- gate 변화: 없음. 제품 코드·0.5s 기준·시험 포함 범위는 그대로 두고 다음 GitHub 실행에서 실제 대기 위치를 확인한다. GREEN·staging·장치 수용을 주장하지 않는다.
+
+## 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
+
+- Change: Use a spawned, localhost-only test peer with its own ROS context for the vendor and 100 Hz state source. Keep owner MTE4, 40 feedback messages, 0.5 s freshness, blocked sink and completion assertions unchanged. Bound peer startup/shutdown and stop it if its parent disappears. Freeze the synthetic readback clock only in the lost-reply admission unit test.
+- Evidence: The separate-executor trial above passed initially but failed again at 275e14dc46, so it is insufficient. The same pre-push run exposed readback expiry during SQLite setup before the lost-reply test could exercise its intended send failure. No production threshold is changed. Final verification is recorded in PR #69.
+- Gate: No change. This remains a hardware-free test correction.
+
+## 2026-10-17 · uncommitted · fix: 수집 client 식별 연결과 계측 없는 최종 회귀
+
+- 변경: 액션 노드의 고정 이름·namespace를 수집 경로에 제공하고 실제 소유한 client만 허용한다. 임시 trace를 제거하되 freshness·watchdog 완료·HOLD 검사는 유지했다. 수정 대상인 OMX timeout quarantine 한 항목만 제거해 자동 재시도 없이 검증한다.
+- 증거: 후보 commit `09c2451ac3e432f8e7aea8e20fbd68d326c31df0`의 run39014273721은 native 18 passed, Fleet native 2 passed, browser 9 passed. host는 의도한 수집 identity RED 한 건만 실패했다(1 failed / 1564 passed / 17 skipped). 후속 최종 head 검토와 CI는 PR #83에 기록한다.
+- gate 변화: 없음. stock MTE1·실물 정지·vendor Gazebo·staging 배포는 미검증이다. 별도 Fleet quarantine은 유지한다.
+
+## 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD
+
+- Change: Record accepted/rejected intake, vendor execution boundaries and the first owner HOLD before terminal-event delivery can block its observation.
+- Evidence: Issue #68 records two main CI failures of the same native regression. This diagnostic revision keeps the existing executor, 0.5 s freshness allowance and 1.5 s blocked feedback interval to distinguish source scheduling from intake/owner delay.
+- Gate: No change. No physical devices or production policy changes.
+
+## 2026-10-17 · uncommitted · test(omx): keep timeout input independent of owner scheduling
+
+- Change: Reuse the spawned vendor peer for the timeout regression, including its original 30 ms state period and 1.2 s delayed result. A second peer worker handles cancel requests; the synthetic peer yields between readiness checks. Owner timing, HOLD latch, cancel ACK and terminal CANCELED assertions are unchanged.
+- Evidence: CI 38944470403 passed slow-feedback but the timeout fixture reached joint_state_stale before action_timeout. Its state source still shared the owner interpreter. This extends the same external-input boundary to that fixture; final verification is recorded in PR #69.
+- Gate: No change. No production executor or safety threshold changes.
+
+## 2026-10-17 · uncommitted · fix: OMX owner 실행 루프에 worker 실행 기회 보완
+
+- 변경: OMX 전용 MTE subclass가 부모 spin hook의 인자·반환·예외를 유지하고 성공한 회차 뒤 sleep(0)으로 실행 기회를 넘긴다. 실제 owner 진입점·정책/시뮬/Fleet 회귀가 같은 helper를 쓰며 worker 수·poll 주기·0.5s 기준은 유지한다. spin·spin_once·future 대기와 종료 검증을 추가했다.
+- 증거: 진단 run39013248730은 host 1549 passed / 17 skipped, native 1 failed / 14 passed, Fleet native 2 passed. rclpy7.1.12에는 명시적 yield가 없었다. poll 사이 약0.577s 공백과 idle worker를 관찰했고 cancel은 약0.165ms에 반환했다. GIL 원인을 확정하지 않고 scheduling 보완의 효과를 같은 회귀로 검증한다.
+- gate 변화: 없음. 분리된 액션 노드가 새 collection의 단일 client 검사에 걸리는 경로도 확인해 exact owned identity의 RED 계약을 추가했다. 해당 통합 수정과 최종 GREEN 전에는 병합하지 않는다. 장치·실제 배포는 미실행이다.
+
+## 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
+
+- Change: Give the synthetic vendor ActionServer its own executor, matching the external vendor boundary. Keep the owner executor at four workers, all callback groups, 40 feedback messages, 0.5 s freshness, at least 1.5 s blocked sink and completed/ready assertions. Remove investigative switches, affinity changes and callback instrumentation.
+- Evidence: CI 38939987985 at 4932c2c177 recorded a 0.5956 s source-publication gap, stale source rejection and owner HOLD at age 0.6059 s. The owner correctly enforced its policy. Native wrappers passed with separated vendor scheduling at 636d102c5c. A callback-group mutation at c282f6729d kept publications advancing (maximum gap 0.2013 s) but stopped owner sequence at 4 and failed freshness at age 1.6698 s, proving the regression still detects excluded intake. Final SHA and cloud results are recorded in PR #69.
+- Gate: No change. This corrects the test boundary; it does not establish a GIL defect, physical stop or hardware acceptance.
+
+## 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약
+
+- 변경: timeout의 실패 상태와 owner HOLD는 즉시 적용하고 미확정 기록만 전용 executor에서 전달한다. cancel 호출 예외 통지도 같은 경로를 쓰며 예약 실패에 owner 스레드 sink 호출로 대체하지 않는다. 이미 결과를 관측했다면 뒤늦은 미확정 기록을 덧붙이지 않는다. 600행 제한에 맞춰 액션 전달은 ros_trajectory_action.py로 분리하고 기존 import 경로를 유지한다.
+- 증거: RED run39011139939의 native 묶음은 3 failed / 10 passed. 4-worker timeout은 fresh 상태에서도 last_terminal_decision 게시가 지연됐다. 추가한 1-worker MTE는 freshness·admission도 실패했으며 원인을 확정하지 않았다. Jazzy의 권고에 따라 직렬 회귀는 SingleThreadedExecutor로 구성하고 기존 4-worker MTE와 0.5s 기준을 보존한다. MTE1 해결을 주장하지 않는다.
+- gate 변화: 없음. 늦은 SUCCEEDED 뒤에도 owner HOLD·새 명령 거절과 순차 이벤트 전달을 검증한다. 최종 SHA 독립 검토와 GitHub CI는 PR #83에 남기며 장치 정지·복구 수용을 대신하지 않는다.
+
+## 2026-10-17 · uncommitted · test(omx): restore intake isolation after the external-peer negative control
+
+- Change: Remove the two-line callback-group mutation; retain the spawned vendor peer.
+- Evidence: Native, admission and secret guards passed 105 at 91536e1588. Mutation 0e518ae7ba failed the intended owner-sequence assertion with 165 publications and a maximum 0.01096 s gap, while owner sequence remained 2. The other seven native runtime tests passed.
+- Gate: No change. Final native, pre-push and cloud results belong to the restored commit in PR #69.
 
 ## 2026-10-18 · 4b97b23ac7 · test(omx): native feedback 진단과 Gazebo 이동 검증
 
@@ -585,6 +669,12 @@
 - 증거: 기본 callback group의 관절 수신 차단을 실제 ROS에서 RED 1 failed/1 passed로 재현했고 분리 후 2 passed다. batch 4 첫 시연의 원본 2650 RGB를 모델 PC에서 export/readback했다.
 - gate 변화: 명시적 보조 SIM의 시연·원본 기록·별도 callback 수신 범위다. 새 수집 재검증·학습·독립 정책 20회·DEVICE/FIELD는 미완료다.
 
+## 2026-10-21 · uncommitted · 동일 일련번호 손목 카메라의 포트 구분
+
+- Change: the preview source accepts persistent by-path symlinks as well as by-id, preserving symlink/character-device checks and rejecting numeric selectors. Capture, retry and watchdog behavior are unchanged.
+- Evidence: committed tests failed 4/20 before the change; all 20 passed remotely at a694060ead. Two physical Innomaker cameras sharing SN0001 produced separate fresh previews through different USB port paths on Fleet.
+- Gate: unchanged. Preview identity does not establish CameraInfo, arm pairing calibration or physical command authority.
+
 ## 2026-10-23 · a3a75e6fd2 · 긴 교사 시연의 원본 시각 기반 5fps 기록
 
 - 변경: 고정 10Hz 카메라에서 교사 시연만 5fps로 선택하고 원본 capture/state 시각과 명령을 보존한다. 기본 Pilot은 10fps이며 3,000프레임 한도·선택 프레임 간격·과거 state 대응·실패 이벤트 검사는 유지한다.
@@ -608,3 +698,34 @@
 - 변경: 최초 runtime 게시 지연안은 확장 검사에서 기존 policy attach/coalescing 의존성을 깨뜨려 착지하지 않았다. native intake 선게시를 복원하고 readonly owner.joint_state를 Pilot 읽기 5곳에서 사용한다. command transaction과 기존 순번·freshness·seat 검사는 유지한다. 시험용 owner도 같은 명시적 계약을 제공한다.
 - 증거: 기존 policy assertion을 유지한 HTTP/Pilot/owner/정책 검사 173 passed, 0 NEW. 실제 Jazzy pending/admitted·source stamp·watchdog 3 passed/0 skipped. 최초 transaction producer의 보조 교사 시연은 PASS/1,586프레임이며 MODEL 독립 truth·전체 RGB·377명령·718지원 chunk를 확인했다. 세부 source별 범위는 docs/validation/omx-pilot-readback-2026-10-23/result.md를 따른다.
 - gate 변화: SOURCE·원격 ROS 회귀와 명시적 교사 SIM 원본 범위다. 최종 landing 확장 검사, 새 25개 수집·학습·독립 정책 평가·실물 수용은 미완료다. 교사 source와 최종 정책 runtime을 혼동하지 않는다.
+
+## 2026-10-24 · uncommitted · feat(omx): D-858 S1 실물 Dynamixel port와 가짜 버스 시험
+
+- 변경: `omx_adapter/dynamixel_port.py`에 `LocalActionPort` 실물 구현을 두었다. 은퇴한 device-core(rosy-vault 9a744a3)의 시작 HOLD, 정지 래치와 현 위치 버팀, RAM 쓰기만(EEPROM 없음), 추종 오차·하드웨어 오류·포즈 미도달·빈손 파지 HOLD를 옮기고, 관절 위치·속도 한계는 `ArmCommandConfig`에서 읽는다. 래치 해제는 `local_stop` 펜스가 그 세대에서 열려 있을 때만 한다. D-858 §4 관문(측정 한계·그리퍼 실측·정지 시험)과 정책 기술 거부를 둔다. 같은 팔 인스턴스·같은 시리얼 장치의 두 번째 writer를 거부한다. safety_modules에 등록했다.
+- 증거: 가짜 버스 시험 `test/test_omx_dynamixel_port.py`. 실물 팔·SDK·시리얼은 쓰지 않았다.
+- gate 변화: 없음. owner는 `enabled=False`·`goals_enabled: false` 그대로이고 port는 어디에도 연결되지 않았다(S4). DEVICE 수용이 아니다.
+
+## 2026-10-24 · uncommitted · fix(omx): D-858 S1 재검토 지적 반영 (N1-N4, 재-trip)
+
+- 변경: port는 `_state_lock`을 잡은 채 펜스(`is_open`·`snapshot`·`trip`)를 부르지 않는다(`run_if_open`이 펜스 잠금을 잡고 `submit`을 부르는 순서와 맞춤). 시작 시 펜스 세대를 래치 세대로 기록해 시작 HOLD도 사람 rearm(더 새 세대)으로만 풀린다. 펜스가 이미 닫혀 있으면 다시 trip하지 않아 원래 정지 기록을 남긴다. submit은 정지 요청 플래그를 덮지 않고, rearm 도중 들어온 정지는 정지 카운터로 잡아 래치를 유지한다.
+- 증거: 실제 `LocalStopController`·실제 스레드 교착 회귀 시험 두 개가 수정 전 커밋에서 join 시간 초과로 실패하고 수정 후 통과한다(원격). 실물 팔은 쓰지 않았다.
+- gate 변화: 없음. 재검토 대기(D-430 §5).
+
+## 2026-10-24 · uncommitted · feat(omx): D-858 S3 커미셔닝 기록·정지 시험 관문·저장 뒤 HOLD
+
+- 변경: `commissioning_record.py`가 팔 인스턴스별 실측 기록(관절 한계·그리퍼 열림/닫힘·작업 공간 상자·정지 시험, 항목별 측정 시각·측정자)을 원자적으로 저장하고(임시 파일·fsync·rename), 저장마다 전체 기록을 history에 남기며, 내용 해시를 revision으로 쓴다. `load_motion_evidence`가 기록에서 `MotionEvidence`를 만든다. 정지 시험 관문은 V-016 수치(500 ms·joint1 ±0.1 rad·0.1 rad/s)를 다시 검사하고, 기록과 정지 시험이 port 설정 `calibration_revision`에 묶이지 않으면 닫힌다. port는 기록 revision이 바뀌면(submit·단계마다·rearm) HOLD하고 기록 다시 읽기와 사람 rearm을 요구한다. `dynamixel_stop_test.py`는 측정 모드(정지 시험 항목만 뺀 관문, 느린 joint1 왕복)에서 정지를 걸고 정지 시간·편차·속도를 잰다. 커미셔닝 뷰어에 팔별 관문 상태를 읽기 전용으로 보인다.
+- 증거: 가짜 버스·가짜 시계 시험 `test/test_omx_commissioning_record.py`, `test/test_omx_dynamixel_stop_test.py`, `test/test_omx_commissioning_view.py`. 실물 팔은 쓰지 않았다(KAN-30은 사람 몫). 독립 검토 대기(D-430 §5).
+- 구조: 실물 팔 경로(S1 `dynamixel_*`와 S3 모듈)를 `omx_adapter/real/`로 옮겨 D-766 크기 단위로 등록했다(패키지 1만 줄 상한). 내용 변경 없는 이동이다.
+- gate 변화: 없음. owner는 `enabled=False`(S4).
+
+## 2026-10-24 · uncommitted · fix(omx): D-858 S1 독립 안전 검토 지적 반영 (H1, M1-M6)
+
+- 변경: port의 모든 HOLD·정지·cancel이 주입된 `LocalStopController.trip`을 불러 플랫폼 펜스를 닫는다. `rearm`은 래치 세대보다 엄격히 새 세대, 그 세대에서 열린 펜스, HW 오류 없음을 모두 요구하고 토크 레지스터를 다시 읽는다. `stop()`은 잠금 없이 래치를 먼저 세우고, planner는 state 잠금 밖에서 돈다. 동작 중 매 주기 펜스를 다시 읽는다. 플랫폼 FK로 끝단 작업 공간 상자를 계획과 매 명령에서 검사하고, 상자가 없으면 §4 관문에서 거부한다. 그리퍼 값은 (-π, π)·서로 다름을 요구하고, 쓰기 전 HW 오류와 변화량을 확인한다. 정지 때 관절만 버티고 그리퍼 목표는 유지한다. `SdkBus`도 RAM 주소만 쓰고, TIOCEXCL 실패 시 포트를 닫는다.
+- 증거: 가짜 버스·가짜 SDK 시험 `test/test_omx_dynamixel_port.py`. 실물 팔·SDK·시리얼은 쓰지 않았다. 재검토 대기(D-430 §5).
+- gate 변화: 없음. port는 여전히 어디에도 연결되지 않았다(S4).
+
+## 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
+
+- 변경: 정지 시험 속도를 0.15~0.2 rad/s로 강제하고, 정지 직전 joint1 실측 속도(0.12 rad/s 이상)를 기록·관문에서 재검사한다. 정지 시점은 소프트웨어 STOPPED가 아니라 실측 속도가 0.03 rad/s 아래로 떨어진 때다. 뷰어 JS 문자열의 실제 줄바꿈을 고치고 `node --check`·따옴표 검사 시험을 넣었다. 기록 항목마다 측정 당시 `config_revision`을 남기고, 항목끼리 또는 port 설정과 다르면 관문이 닫힌다. `submit_stop_test`는 joint1만, 진폭 0.2 rad 이내, 20단계 이하만 받는다. CLI는 같은 인스턴스 owner 소켓이 살아 있으면 거부하고, rearm 사유를 `BENCH_COMMISSIONING_REARM`으로 남기며, 끝나면 port를 정지해 펜스를 닫아 둔다. port는 store에서 직접 evidence를 읽고 `reload_evidence()`는 인자 없이 다시 읽는다.
+- 증거: 가짜 버스·가짜 시계 시험(정지 쓰기를 무시하고 계속 미끄러지는 가짜 장치는 불합격). 실물 팔은 쓰지 않았다. 재검토 대기(D-430 §5).
+- gate 변화: 없음. owner는 `enabled=False`(S4).

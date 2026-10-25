@@ -26,8 +26,8 @@
 
 ## 최근 기록
 
-- 2026-10-22 · aa784c548f · fix: Rosy Account 로그인 실패의 재시도
-- 2026-10-22 · 7ef2366474 · 학습 계정의 비밀번호·HF 로그인 잔재 삭제와 공통 확인 대화상자
-- 2026-10-21 · fa16d35617 · 학습 앱 로그인을 Rosy Account 하나로
-- 2026-10-21 · uncommitted · 화면 사진 검토 후 학습 화면 다듬기
-- 2026-10-21 · uncommitted · 학습 화면 구조 정리
+- 2026-10-25 · 3130321ba9 · SIM 접촉 왕복의 결과 소비 경로 연결
+- 2026-10-22 · uncommitted · Published-source Learning Center port
+- 2026-10-22 · 0f3084afcf · fix: 열람 권한 부족과 로그아웃 구분
+- 2026-10-22 · uncommitted · 게시 소스의 원격 학습센터 회귀
+- 2026-10-22 · ff01e057a6 · fix: Learning Account callback 오류에서 로그인 복구

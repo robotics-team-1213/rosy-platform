@@ -897,3 +897,73 @@ def test_monitor_fault_logging_failure_preserves_original_guard_error(guard, fai
     with pytest.raises(ValueError, match='difference >=100'):
         motion.send(action(leader))
     assert not any(follower.torque.values())
+
+
+def teacher(guard):
+    follower, clock = Bus(), [10.0]
+    motion = guard.NativeJointMotion(follower, None, teacher=True, clock=lambda: clock[0])
+    here = {n + ".pos": v for n, v in follower.norm(follower.raw).items()}
+    return motion, follower, clock, here
+
+
+def test_teacher_mode_follows_the_action_at_the_guard_speed(guard):
+    motion, follower, clock, here = teacher(guard)
+    motion.send(here)  # seed at the present pose, torque on
+    assert all(follower.torque.values())
+    for _ in range(14):  # the replay starts where the arm is: aligned, then tracking
+        clock[0] += 0.05
+        motion.send(here)
+    assert motion.tracking
+    goal = {**here, "shoulder_pan.pos": here["shoulder_pan.pos"] + 10}  # about 18 degrees away
+    start = follower.goals["shoulder_pan"]
+    for _ in range(40):
+        clock[0] += 0.05
+        motion.send(goal)
+        follower.raw.update({n: int(v) for n, v in follower.goals.items()})
+    speed = (follower.goals["shoulder_pan"] - start) / guard.TICKS_PER_DEGREE / 2.0
+    assert 5 < speed <= 10 + 0.1  # accelerates to, and never passes, 10 deg/s (2 s window; ticks are integers)
+
+
+def test_teacher_mode_lets_the_gripper_stop_on_the_box_but_not_a_body_joint(guard):
+    motion, follower, clock, here = teacher(guard)
+    motion.send(here)
+    follower.raw["gripper"] += 300  # the jaws held open by the box: about 26 degrees from the command
+    clock[0] += 0.05
+    motion.send(here)
+    follower.raw["elbow_flex"] += 57  # a body joint more than 5 degrees off is still a stop
+    clock[0] += 0.05
+    with pytest.raises(ValueError, match="elbow_flex: following error"):
+        motion.send(here)
+    assert not any(follower.torque.values())
+
+
+@pytest.mark.parametrize("kwargs", [dict(teacher=True, leader=Bus(leader=True)), dict(teacher=True, body_only=True),
+                                    dict(teacher=False)])
+def test_teacher_mode_has_no_leader_and_a_leader_mode_needs_one(guard, kwargs):
+    leader = kwargs.pop("leader", None)
+    with pytest.raises(ValueError, match="teacher mode"):
+        guard.NativeJointMotion(Bus(), leader, **kwargs)
+
+
+def test_teacher_recording_refuses_a_leader_teleop_and_a_non_recording(guard):
+    class Follower:
+        pass
+
+    class Leader:
+        def __init__(self):
+            self.bus = Bus(leader=True)
+
+    calls = []
+    record = SimpleNamespace(record=None, make_robot_from_config=None, ACTION="action",
+                             make_teleoperator_from_config=lambda config: Leader())
+
+    def main():
+        record.make_teleoperator_from_config(None)
+        calls.append("made")
+
+    record.main = main
+    with pytest.raises(ValueError, match="not a leader"):
+        guard.run_native(record, Follower, Leader, teacher=True)
+    with pytest.raises(ValueError, match="recording"):
+        guard.run_native(SimpleNamespace(), Follower, Leader, teacher=True)
+    assert calls == []

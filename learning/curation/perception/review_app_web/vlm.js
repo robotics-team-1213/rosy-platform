@@ -1,5 +1,7 @@
 import {accountFetch} from '/account-session.js';
+import '/common/ui.js';
 const $=id=>document.getElementById(id);
+$('theme').value=document.documentElement.dataset.theme||'dark';$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{}document.dispatchEvent(new CustomEvent('rosy:theme'));};
 const API='/api/learning/vlm/';
 let token='', editor=true, manager=true, busy=false, list=[], current=null, choices={}, focus=0, imageReady=false, summary=null, revising=false;
 const KINDS={eval:'평가셋',disputed:'의견 갈림',audit:'점검'};
@@ -125,6 +127,9 @@ const percent=value=>value==null?'—':`${(value*100).toFixed(1)}%`;
 async function evaluate(){
   const data=await api('evaluation');const box=$('vlm-eval');box.replaceChildren();$('vlm-confusion').hidden=true;
   const count=document.createElement('p');count.textContent=`정답 있는 사진 ${data.labelled}장 기준`;box.append(count);
+  // Audits were answered with the consensus shown; the frozen evaluation set was answered blind.
+  const blind=document.createElement('h2');blind.textContent=`고정 평가셋만(모델 답 없이 단 ${data.eval_set.labelled}장)`;box.append(blind);
+  box.append(table(['모델','런타임','질문','n','일치율','balanced accuracy'],data.eval_set.models.flatMap(model=>model.questions.map(row=>[model.model,model.runtime,row.question,String(row.n),percent(row.agreement),percent(row.balanced_accuracy)]))));
   const tiers=document.createElement('h2');tiers.textContent='임시 정답 범위(대기 사진)';box.append(tiers);
   box.append(table(['질문','대기','임시 정답','토론으로 합의','범위'],data.provisional.map(row=>[row.question,String(row.pending),String(row.provisional),String(row.debate),percent(row.coverage)])));
   const audit=document.createElement('h2');audit.textContent='임시 정답 점검';box.append(audit);
@@ -210,6 +215,7 @@ work(async()=>{
   const account=await session.json();  // read the local-mode 404 too; an unread body stays an open request
   if(session.ok){editor=account.capabilities.includes('edit');manager=false;}
   $('tab-import').hidden=!manager;
+  $('vlm-export').hidden=session.ok&&!account.capabilities.includes('manage');  // the export carries provisional answers
   await load(null);
   if(location.hash==='#eval')tab('eval');  // the 평가·승격 page links here
   for(const view of Object.keys(summary.views).sort())$('vlm-view').append(new Option(view,view));

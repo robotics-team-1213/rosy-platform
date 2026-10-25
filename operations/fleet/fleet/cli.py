@@ -22,7 +22,10 @@ from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
 from fleet.server.context_options import activate_from_args, add_cli_arguments
+from fleet.server.sightings_config import _relax_retired_sighting_targets
 from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled, _realign_config
+from fleet.console_site_config import (_build_site_map, _goal_lease_ttl_s, _policy_admission_core,
+                                       _lane_compliance_config, _map_pose_config, _trip_config)
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -118,6 +121,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     console.add_argument("--tls-key", default=None, type=Path, help="HTTPS private key; mount as a runtime secret")
     console.add_argument("--sightings-config", default=None, type=Path,
                          help="source/map/calibration sighting config (secret values stay in env)")
+    console.add_argument("--workcell-observations", default=os.environ.get("ROSY_WORKCELL_OBSERVATIONS") or None, type=Path,
+                         help="read-only workcell source manifest; producer credentials stay in env")
     console.add_argument("--site-lane-graph", action="append", default=None, metavar="[MAP_ID=]PATH",
                          help="lane_graph.yaml drawn over the ceiling camera by the D-375 map-fit "
                               "view; without MAP_ID it applies to every map. Display only")
@@ -152,7 +157,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for durable CORE Agent event history")
     console.add_argument("--tasks-db", default=None, type=Path,
                          help="SQLite path for durable operator and policy task history")
-    console.add_argument("--control-unit-config", default=None, type=Path,
+    console.add_argument("--control-unit-config", default=os.environ.get("ROSY_CONTROL_UNIT_CONFIG") or None, type=Path,
                          help="optional static control-unit ownership and direct-neighbor configuration")
     add_cli_arguments(console)
     console.add_argument("--robot-credential-key-file", default=None, type=Path,
@@ -670,8 +675,14 @@ def run_console(args: argparse.Namespace) -> None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
     activate_from_args(args)
+    workcell_observations = None
+    observation_config = getattr(args, "workcell_observations", None)
+    if observation_config is not None:
+        from fleet.server.workcell_observation_config import load_workcell_observations
+        workcell_observations = load_workcell_observations(observation_config)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
                      control_unit_config=getattr(args, "control_unit_config", None),
+                     workcell_observations=workcell_observations,
                      hub=hub, sightings=sighting_service, tracking=tracking_service,
                      calibration_drift_watch=calibration_drift_watch, task_service=task_service,
                      mission_service=mission_service, proposal_store=proposal_store,
@@ -694,7 +705,7 @@ def run_console(args: argparse.Namespace) -> None:
                      ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
                      ai_first=_ai_first(args),
                      autonomous_robots=_stuck_resolver_enrolled(args, "autonomous_robots"),
-                     central_registry=central_registry,
+                     policy_admission_core=_policy_admission_core(args), central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
@@ -720,132 +731,6 @@ def _omx_instances() -> dict[str, str]:
     if any(len(p) != 2 or not all(x and x == x.strip() for x in p) for p in pairs) or len(dict(pairs)) != len(pairs):
         raise SystemExit(f"ROSY_FLEET_OMX_INSTANCES needs unique WORKCELL=INSTANCE pairs, got {pairs}")
     return dict(pairs)
-
-
-def _goal_lease_ttl_s(args) -> float:
-    """D-550 10: ``fleet.goal_lease_ttl_s`` of ``--site-config``; 0 (default) = no goal lease.
-    Otherwise floor..5 s: CORE takes at most 5 s; the floor is 2 x ``fleet.trip.port_timeout_s`` +
-    ``period_s`` (3.5 s by default), so a trip step that times out once on its pose read and once
-    on its renewal still renews before the lease runs out."""
-    import yaml
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        value = (site_config.get("fleet") or {}).get("goal_lease_ttl_s", 0)
-    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"goal lease config: {exc}")
-    trip = _trip_config(args)
-    floor = 2 * trip.port_timeout_s + trip.period_s
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
-            value == 0 or floor <= value <= 5):
-        sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
-    return float(value)
-
-
-def _trip_config(args):
-    """D-494 5: the trip loop's ``fleet.trip`` section of ``--site-config`` (e.g. ``stall_s``)."""
-    import yaml
-
-    from fleet.server.trip_runner import TripConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        trip = (site_config.get("fleet") or {}).get("trip") if isinstance(site_config, dict) else None
-        return TripConfig.from_mapping(trip)
-    except (OSError, ValueError, TypeError, yaml.YAMLError) as exc:
-        sys.exit(f"trip config: {exc}")
-
-
-def _build_site_map(args, tasks_db):
-    """D-488/D-490: site map store (+ first import) and the planner's ``fleet.routing`` costs."""
-    import yaml
-
-    from fleet.routing.cost import RoutingConfig
-    from fleet.server.site_map_store import SiteMapStore
-    from fleet.site_map import from_lane_graph
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        routing = ((site_config.get("fleet") or {}).get("routing") if isinstance(site_config, dict) else None)
-        routing_config = RoutingConfig.from_mapping(routing)
-        site_maps = SiteMapStore(tasks_db, routing_config=routing_config)
-        source = getattr(args, "site_map_import", None)
-        if source is not None:
-            site_maps.import_source = Path(source)
-            # map/<map_id>/lane_graph.yaml: the folder names the map frame the sighting sources
-            # report; the default "site" would filter every sighting (map pose UNKNOWN).
-            site_maps.import_if_empty(from_lane_graph(source, map_id=Path(source).parent.name),
-                                      source=Path(source).name)
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"site map / routing config: {exc}")
-    if tasks_db is None:
-        print("warning: no --tasks-db; the D-488 site map lives in memory and is lost on restart",
-              file=sys.stderr, flush=True)
-    if site_maps.active() is None:
-        print("warning: no active D-488 site map; /route and /trip are refused until one is "
-              "imported (--site-map-import) or activated", file=sys.stderr, flush=True)
-    return site_maps, routing_config
-
-
-def _map_pose_config(args):
-    """D-494 3: the site YAML's ``fleet.map_pose`` limits; defaults without a site config."""
-    import yaml
-
-    from rosy.world.state.projections.map_pose import MapPoseConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return MapPoseConfig.from_mapping((site_config.get("fleet") or {}).get("map_pose"))
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"map_pose config: {exc}")
-
-
-def _lane_compliance_config(args):
-    """D-511 2: the site YAML's ``fleet.lane_compliance`` thresholds; provisional defaults without."""
-    import yaml
-
-    from fleet.localization.lane_compliance import LaneComplianceConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return LaneComplianceConfig.from_mapping((site_config.get("fleet") or {}).get("lane_compliance"))
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"lane_compliance config: {exc}")
-
-
-def _relax_retired_sighting_targets(sources, *, known: set, retired: set):
-    """D-361 5: a mapping to an unenrolled/pending-logout robot is disabled with a warning;
-    an id never seen in robots.yaml or the register still refuses start (a typo)."""
-    from dataclasses import replace
-
-    kept = []
-    for source in sources:
-        if source.follow_roster:  # D-580: targets come from the roster, never a typo
-            kept.append(source)
-            continue
-        unknown = set(source.robot_ids) - known
-        if unknown - retired:
-            sys.exit(f"sighting source {source.source_id!r} has an unknown robot target")
-        if unknown:
-            print(f"warning: sighting source {source.source_id!r}: mapping disabled for "
-                  f"unenrolled robots {sorted(unknown)}", file=sys.stderr)
-        robot_ids = tuple(rid for rid in source.robot_ids if rid not in unknown)
-        if robot_ids:
-            kept.append(replace(source, robot_ids=robot_ids))
-        else:
-            print(f"warning: sighting source {source.source_id!r} disabled: no enrolled targets",
-                  file=sys.stderr)
-    return kept
 
 
 def run(argv: Optional[Sequence[str]] = None) -> None:

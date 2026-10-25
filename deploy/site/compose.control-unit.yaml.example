@@ -1,0 +1,11 @@
+# Opt in after creating an approved private unit directory outside this checkout.
+# docker compose -f compose.yaml -f compose.control-unit.yaml.example config
+services:
+  fleet:
+    environment:
+      ROSY_CONTROL_UNIT_CONFIG: /etc/rosy/control-unit/control-unit.yaml
+    volumes:
+      - type: bind
+        source: ${ROSY_CONTROL_UNIT_DIR:?Set the approved private control-unit directory}
+        target: /etc/rosy/control-unit
+        read_only: true

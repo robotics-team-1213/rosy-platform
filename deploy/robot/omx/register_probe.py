@@ -46,6 +46,8 @@ def decode_registers(model, data):
         "profile_acceleration_raw": value(108, 4), "profile_velocity_raw": value(112, 4),
         "current_limit_raw": value(38, 2) if model == 1200 else None,
         "pwm_limit_raw": value(36, 2),
+        "present_pwm_raw": value(124, 2, True), "temperature_limit": value(31),
+        "min_voltage_raw": value(34, 2), "max_voltage_raw": value(32, 2),
         "bus_watchdog_raw": value(98, 1, True), "position_p_gain_raw": value(84, 2),
         "position_i_gain_raw": value(82, 2), "position_d_gain_raw": value(80, 2),
         "voltage_raw": value(144, 2), "temperature": value(146),
@@ -91,20 +93,25 @@ def open_readonly_port(device):
         port.ser.close()
 
 
-def read_motors(port):
+def read_motors(port, *, allow_fault=False):
     from dynamixel_sdk import PacketHandler, COMM_SUCCESS
     packet = PacketHandler(2.0)
     rows = []
     for motor_id in range(11, 17):
         model, comm, error = packet.ping(port, motor_id)
-        if comm != COMM_SUCCESS or error:
+        ping_alert = error == 128 and allow_fault
+        if comm != COMM_SUCCESS or (error and not ping_alert):
             raise RuntimeError(f"Motor {motor_id}: ping failed ({comm}, {error})")
         if model not in (1060, 1200):
             raise ValueError(f"Motor {motor_id}: unsupported model {model}")
         data, comm, error = packet.readTxRx(port, motor_id, 0, 147)
-        if comm != COMM_SUCCESS or error:
+        read_alert = error == 128 and allow_fault
+        if comm != COMM_SUCCESS or (error and not read_alert):
             raise RuntimeError(f"Motor {motor_id}: read failed ({comm}, {error})")
-        rows.append({"id": motor_id, "model_number": model, **decode_registers(model, data)})
+        row = {"id": motor_id, "model_number": model, **decode_registers(model, data)}
+        if (ping_alert or read_alert) and (model != 1060 or not row['hardware_error']):
+            raise RuntimeError(f'Motor {motor_id}: unconfirmed hardware alert')
+        rows.append(row)
     return rows
 
 

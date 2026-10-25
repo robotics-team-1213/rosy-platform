@@ -45,7 +45,7 @@ perception/front_camera/perception/drivable
 fleet/web
 fleet/web/devices
 fleet/fleet/server/ledger
-fleet/web/work small
+fleet/web/work
 fleet/fleet/server/missions
 fleet/fleet/server/work small
 fleet/fleet/server/trips
@@ -80,5 +80,4 @@ fleet/fleet/server/pose
 fleet/fleet/server/recognition
 fleet/fleet/server/rightofway
 situation
-site_execution
 devices/omx/adapter/omx_adapter/contracts

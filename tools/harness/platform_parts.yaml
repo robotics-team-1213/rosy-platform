@@ -886,6 +886,7 @@ roots:
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
 # roots above are the directory form.
 safety_modules:
+  - contracts/foundation/core_common/protocol/swarm_freshness.py  # D-870 source-time expiry bound
   - operations/fleet/fleet/server/channel/execution/outcomes/handover.py
   - operations/fleet/fleet/server/channel/execution/outcomes/evidence.py
   - operations/fleet/fleet/swarm/dispatch_guard.py
@@ -983,6 +984,11 @@ safety_modules:
   - middleware/devices/omx/adapter/omx_adapter/action_api.py
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
   - middleware/devices/omx/adapter/omx_adapter/action_store_readback.py
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_port.py  # D-858 S1 real bus port: HOLD, stop latch, gate
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_bus.py  # D-858 S1 RAM-only writes, exclusive SDK bus, one-writer claim
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_gates.py  # D-858 S1 §4 motion gate evidence, tracking bounds
+  - middleware/devices/omx/adapter/omx_adapter/real/commissioning_record.py  # D-858 S3 measured record, MotionEvidence loader, revision
+  - middleware/devices/omx/adapter/omx_adapter/real/dynamixel_stop_test.py  # D-858 S3 V-016 timed stop test and its CLI
   - middleware/devices/omx/agent/src/rosy_agent/barrier_supervisor.py  # D-780 barrier timeout, coordinator liveness HOLD
   - middleware/devices/omx/agent/src/rosy_agent/barrier_journal.py  # D-780 PHASE_WAIT/release journal
   - middleware/devices/omx/agent/src/rosy_agent/coordinator_api.py  # D-780 coordinator peer roles, ReleaseBarrier
@@ -1008,6 +1014,7 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: core_common.protocol.swarm_freshness.remaining_reference_s, public: true}  # D-870 pure lifetime check
   - {symbol: core_features.command._execution_fence.Fence}
   - {symbol: core_features.command._execution_fence.install}
   - {symbol: core_features.command._execution_ledger.Ledger}
@@ -1140,6 +1147,12 @@ safety_anchors:
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
   - {symbol: omx_adapter.contracts.command_types.ArmCommandConfig}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
+  - {symbol: omx_adapter.real.dynamixel_port.DynamixelPort}
+  - {symbol: omx_adapter.real.dynamixel_bus.SdkBus}
+  - {symbol: omx_adapter.real.dynamixel_gates.MotionEvidence}
+  - {symbol: omx_adapter.real.commissioning_record.load_motion_evidence}
+  - {symbol: omx_adapter.real.commissioning_record.CommissioningStore.save}
+  - {symbol: omx_adapter.real.dynamixel_stop_test.run_stop_test}
   - {symbol: omx_adapter.action_api.LocalStopApi.dispatch}
   - {symbol: omx_adapter.owner_recovery_api.OwnerRecoveryApi.dispatch}
   - {symbol: omx_adapter.action_store_readback.ActionStoreReadback.run_if_no_unresolved}
@@ -1175,6 +1188,7 @@ safety_anchors:
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
+  - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
   - {symbol: fleet.server.tether_watch.TetherWatch, public: true}
   - {symbol: fleet.server.tether_watch.map_pose, public: true}

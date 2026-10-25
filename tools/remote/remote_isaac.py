@@ -236,7 +236,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='action', required=True)
     check = commands.add_parser('check')
-    check.add_argument('--scenario', required=True, choices=['omx-f-import'])
+    check.add_argument('--scenario', required=True, choices=['omx-f-import', 'pinky-conveyor-roundtrip'])
     check.add_argument('--config', required=True, type=Path)
     check.add_argument('--sha', required=True)
     start_command = commands.add_parser('start')

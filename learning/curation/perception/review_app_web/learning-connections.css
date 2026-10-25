@@ -1,4 +1,0 @@
-.learning-connections { display: inline-flex; min-width: 0; }
-.learning-connections-dialog { width: 100%; max-height: calc(100dvh - 2 * var(--space-4)); overflow: auto; }
-.learning-connections-dialog [data-connection-content] { display: grid; gap: var(--gap-dialog); overflow-wrap: break-word; }
-.learning-connections-dialog p { margin: 0; }

@@ -473,6 +473,7 @@ host HTTP tests are not Gazebo or physical acceptance.
 native runner는 보정된 passive leader·follower를 확인하고 현재 자세에서 seed한 뒤 최대 1도/초로 모든 12관절을 전달한다. 데이터의 action은 실제 보낸 값이며, 한 팔의 상태 지연·추종 오차·지속 부하·열/전압 오류가 발생하면 양쪽 leader와 follower 모두 torque OFF를 시도한다. 부모 세션은 오류가 난 장치도 확인 가능한 정상 통신 응답에 한해 OFF와 검증된 baseline cap 복구를 시도하고, 미확인 상태를 안전 종료로 기록하지 않는다. [설정·bus 회귀](../../../docs/validation/omx-paired-recording-2026-10-23/result.md)와 [실제 SDK 녹화 루프·RGB 재읽기](../../../docs/validation/omx-paired-sdk-record-loop-2026-10-23/result.md)의 검증 범위를 본다. 후자는 합성 장치를 사용하며 실물 보정·정지·카메라 시간 및 작업 성공 수용은 별도다.
 
 `record_session.py`로 녹화를 마친 뒤에는 현장 PC에서 `python record_seal.py --session-dir <녹화를 실행한 폴더> --name <새 이름>`을 실행한다. 이 명령은 안전 종료(`safe_end`)·녹화 모드·종료 코드 0인 세션만 받는다. 1팔(`omx_follower`)·2팔(`bi_omx_follower`) LeRobot v3 데이터셋을 `~/rosy-test/omx-collections/<이름>/`에 해시 목록과 함께 복사하고, 원본 녹화는 건드리지 않는다. 그다음 개발 PC에서 `python tools/remote/omx_collection_transfer.py --session <이름>`으로 모델 PC의 `~/rosy-test/omx-il-data/collections/`에 옮긴다. 이 단계는 장치를 움직이지 않고 Hub에 올리지 않는다.
+`record_session.py`로 녹화를 마친 뒤에는 현장 PC에서 `python record_seal.py --session-dir <녹화를 실행한 폴더> --name <새 이름> --rig-revision <작업대 배치 이름> --calibration <사용한 보정 JSON>...`을 실행한다. 이름이 세션 ID가 되고 Episode마다 독립 사이클 ID가 붙는다(D-848). 이 명령은 안전 종료(`safe_end`)·녹화 모드·종료 코드 0인 세션만 받는다. 1팔(`omx_follower`)·2팔(`bi_omx_follower`) LeRobot v3 데이터셋을 `~/rosy-test/omx-collections/<이름>/`에 해시 목록과 함께 복사하고, 원본 녹화는 건드리지 않는다. 그다음 개발 PC에서 `python tools/remote/omx_collection_transfer.py --session <이름>`으로 모델 PC의 `~/rosy-test/omx-il-data/collections/`에 옮긴다. 이 단계는 장치를 움직이지 않고 Hub에 올리지 않는다.
 
 ## 재현 가능한 Pilot SIM 준비
 
@@ -668,6 +669,29 @@ commissioning joint topic, opens no devices, and issues no actuator commands.
 Source/receipt age, decoded picture expiry and disconnected joint feedback are
 checked independently. See the [observation evidence](../../../docs/validation/omx-observation-web-2026-10-16.md).
 
+For two followers, run one bounded `hardware_observer.py` process per confirmed
+USB serial, with separate `--joint-topic /omx_commissioning/arm_a/joint_states`
+and `--joint-topic /omx_commissioning/arm_b/joint_states`. Both retain exclusive
+serial access, torque-OFF checks and the duration limit. Names such as `arm_a`
+are diagnostic labels; they do not assign physical left/right or calibration.
+The viewer subscribes to both streams and three cameras:
+
+```bash
+python3 deploy/robot/omx/commissioning_view.py \
+  --arm-topic arm_a=/omx_commissioning/arm_a/joint_states \
+  --arm-topic arm_b=/omx_commissioning/arm_b/joint_states \
+  --camera-topic top=/top_camera/image_raw \
+  --camera-topic arm_a_wrist=/arm_a_wrist_camera/image_raw \
+  --camera-topic arm_b_wrist=/front_camera/image_raw
+```
+
+Each source expires independently; one arm cannot refresh the other arm's
+feedback. Shared joint names remain in separate panels. The overhead camera is
+shared, with one wrist camera per follower. Cameras with duplicate USB serials
+need distinct persistent USB port paths rather than their colliding `by-id`
+alias. Keep an explicit device-to-topic manifest and verify the actual images
+before assigning physical arm names. This viewer does not admit CORE motion.
+
 ### Prepare an initialization-description candidate
 
 ```bash
@@ -736,11 +760,22 @@ without those fields require migration. Native PTY rejection and torque-off read
 evidence, including an unresolved one-tick goal-register change that failed the
 preservation check, are recorded in [measured-status validation](../../../docs/validation/omx-measured-status-2026-10-16/result.md).
 
+### One-arm cell check before motion
+
+`cell_check.py --follower <by-id> --leader <by-id>` reads the follower through
+`register_probe.py` and the camera readiness state, writes nothing, and prints one
+JSON verdict. Each failed check names its fix: a missing board, a busy bus, torque
+or a hardware error, voltage out of range, caps left raised (`commissioning_limits.py
+--baseline`), or camera readiness not READY. The leader is checked for presence only.
+Run it before `joint_tune.py` or `record_session.py`.
+
 ### Torque-off commissioning limits
 
 `commissioning_limits.py` is a separate exclusive configuration procedure. It
 requires the confirmed follower, six known motors, existing modes and torque/error
-zero. An explicit JSON input supplies positive raw PWM/current/profile caps. Only
+zero. An explicit JSON input supplies positive raw PWM/current/profile caps;
+`--baseline` supplies the resting caps (PWM 20, Current 50, profiles 1) that
+`joint_tune.py` and `record_session.py` require when an earlier session left them raised. Only
 non-increasing supported caps may change, with durable original/intent records,
 one exact unicast write, acknowledgment and full readback before each next write.
 It never writes goals, torque, modes or offsets and never retries or rolls back an
@@ -795,8 +830,13 @@ existing camera configuration's persistent paths. The candidates are examples
 for the measured cameras, not universal camera defaults. The tuner checks the
 actual control ranges. Put `ROSY_CAMERA_PIPELINE_ROOT=<absolute-source-directory>`
 in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain
-`commissioning_view.py`, `camera_quality.py`, `camera_environment.py`, and `camera_readiness.py` from the
-same revision. Keep the existing two preview environment files and producers.
+`commissioning_view.py`, `camera_quality.py`, `camera_environment.py`, `camera_readiness.py` and
+`camera-view-receive.xml` from the same revision. Use a release directory such as
+`~/.local/share/rosy/omx-camera-pipeline/releases/<full sha>/`, not a `~/rosy-test` copy:
+`tools/remote/update_status.py` reports a `~/rosy-test` source as `ADHOC`. The viewer loads
+`camera-view-receive.xml`, a Fast DDS profile with a 4 MiB UDP receive buffer. On 2026-10-17 it
+kept 236 of 236 top/front samples fresh (maximum source age 0.107 s) without any device command.
+Keep the existing two preview environment files and producers.
 
 Install the two user units in `~/.config/systemd/user/`, then run:
 
@@ -1050,3 +1090,76 @@ Learning 네이티브 검사와 ACT 평가 경로는 기존 단일 팔 6개 또�
 `arm_a.*` 6개 다음 `arm_b.*` 6개인 정확한 양팔 순서를 허용한다. 사람 검토와
 실제 장치 수용은 별도로 수행한다. 녹화 기능만으로 Learning 화면의 양팔
 프로필 내보내기나 정책의 장치 실행까지 검증됐다고 보지 않는다.
+
+설치 후 연결되는 일치 장치는 `root:plugdev`, `0660`으로 생성된다. 이미 연결된 장치는
+관리자가 VID/PID를 확인한 개별 tty sysfs 경로에 `udevadm trigger --action=change <sysfs-path>`를
+적용하고 `udevadm settle --timeout=10` 뒤 운영자 계정의 실제 읽기·쓰기 권한을 확인한다.
+이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
+시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
+
+## Fleet PC의 상시 관측과 기존 Cell 화면
+
+두 팔의 관절 읽기와 세 카메라의 ROS 구독은 Fleet PC에서 실행한다.
+`hardware_observer.py --persistent`는 명시적으로 선택한 토크 OFF 관측이다.
+기존 `--duration 1..300`은 시간 제한을 유지한다. 관측 실패·토크 ON·모터 오류가
+발견되면 종료하며 `rosy-omx-observer@.service`는 자동 재시작하지 않는다.
+`observer.env.example`을 팔마다 다른 by-id 장치와 commissioning 토픽에 결속한다.
+이 관절값은 원시 엔코더 변환이며, 보정된 제어 좌표나 실물 구동 수용 증거가 아니다.
+
+`workcell_observation_bridge.py`는 같은 호스트의 관측 토픽만 구독한다.
+원본 capture 시간과 source별 최신값을 Fleet HTTPS와 기존 Vision WSS에 보낸다.
+설정은 `observation-bridge.env.example`, source 결속은
+`../../site/workcell-observations.yaml.example`을 참고한다. 예제 장치와 digest는
+자리 표시자다. private manifest의 다섯 토큰은 서로 달라야 하며 실제 SHA-256과
+일치해야 한다. 별도 로컬 뷰어나 SSH 포트 전달은 이 제품 경로에 필요하지 않다.
+
+Python은 호스트 ROS ABI와 맞아야 한다. Jazzy setup을 먼저 source하고, 해당 Python의
+격리 환경에서 시스템 `rclpy`, `sensor_msgs`, OpenCV와 canonical
+`core_common.protocol.workcell_observations`, `rosy_vision.protocol`을 확인한다.
+기존 사이트 pin의 `websockets==17.0.1`, SDK `dynamixel-sdk==3.8.4`를 사용한다.
+다른 Python minor 버전의 compiled site-packages를 통째로 연결하지 않는다.
+
+서버에는 서명·검증된 `compose.workcell.yaml`이 적용된 Fleet/Vision 이미지와
+역할별 private 파일이 먼저 필요하다. 정상 사이트 origin의 `/console/cell`에서
+인증 후 팔별 freshness와 세 영상을 확인한다. Fleet/Vision 설정과 서명 절차는
+[사이트 배포 안내](../../site/README.md)를 따른다.
+
+실제 owner로 전환할 때는 두 `rosy-omx-observer@arm_a/arm_b` 유닛을 중지하고
+각 포트의 FD/버스 해제를 확인한 뒤 별도로 수용된 CORE/OMX owner만 시작한다.
+관측 서비스 설치·활성화는 토크 ON, 정책 활성화, 파지 실행을 승인하지 않는다.
+
+## 낮은 출력의 첫 관절 시운전
+
+`joint_tune.py`는 기존 owner/controller를 정지한 뒤 사람이 지켜보며 한 관절씩 사용하는
+시운전 도구다. 기본 raw 값은 PWM Limit 20, Current Limit 50(XL330), Goal Current 50,
+Profile Velocity/Acceleration 1/1이다. 출력 자동 증가는 없으며 더 높은 값은 명시해야 한다.
+XL430에는 Current Limit을 적용하지 않는다. 이 기본값은 `record_session.py`의 별도 cap 파일을
+대신하지 않으며, 실측된 안전 토크나 힘을 뜻하지 않는다.
+
+시간 기반 프로파일과 목표값 쓰기로 토크가 켜지는 Drive Mode를 거부한다. 설정 readback,
+설정 후 현재 위치 재확인, 토크 ON 후 처짐·연속 정지 확인을 통과해야 다음 목표를 쓴다.
+정지 시간 초과, 비정상 시계, 0.25초를 넘는 피드백 공백은 중단 사유다. 카메라 캡처 뒤에도
+관절 상태를 다시 확인한다. 이 Python 검사와 카메라 I/O는 물리 정지의 최대 지연을 보장하지 않는다.
+
+종료 시 토크 OFF를 readback으로 확인한 뒤에만 설정을 복원한다. 확인에 실패하면 복원을
+건너뛰고 unsafe end를 보고한다. 낮은 출력이나 토크 OFF 때 하중 관절이 처질 수 있으므로
+실물 첫 구동에는 관절 지지, 외부 정지 수단, 관절별 실측 수용이 필요하다.
+
+## OpenRB USB 접근 권한
+
+기존 `plugdev` 운영자에게 OpenRB USB serial(USB VID/PID `2f5d:2202`) 접근을 부여한다.
+보드별 일회성 ACL과 달리 교체·추가·재연결에도 적용한다. 다른 USB 제품에는 적용하지 않는다.
+실행 계정이 이미 `plugdev`에 속하는지 확인한 뒤 관리자가 한 번 설치한다.
+
+```bash
+id -nG
+udevadm verify deploy/robot/omx/99-rosy-openrb-access.rules
+sudo install -o root -g root -m 0644 deploy/robot/omx/99-rosy-openrb-access.rules /etc/udev/rules.d/99-rosy-openrb-access.rules
+sudo udevadm control --reload-rules
+```
+
+설치 후 연결되는 일치 장치는 `root:plugdev`, `0660`으로 생성된다. 이미 연결된 장치는
+관리자가 VID/PID를 확인한 개별 tty sysfs 경로에 `udevadm trigger --action=change <sysfs-path>`를
+적용하고 `udevadm settle --timeout=10` 뒤 운영자 계정의 실제 읽기·쓰기 권한을 확인한다.
+이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
+시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.

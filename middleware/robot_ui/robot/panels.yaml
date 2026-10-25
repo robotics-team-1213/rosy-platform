@@ -16,6 +16,13 @@ panels:
     order: 10
     module: panels/console/overview.js
     css: [panels/surface-panels.css]
+  - id: console.motor_health
+    title: 모터 상태
+    surface: console
+    slot: sense
+    order: 20
+    module: panels/console/motor-health.js
+    css: [panels/surface-panels.css]
   - id: console.map
     title: 지도 및 위치
     surface: console

@@ -143,6 +143,53 @@ and the actual installed APK signing certificate SHA256 fingerprints. Never use
 a debug/test signing identity for the production registration. Verify the exact
 callback host and Android app-link verification before activating the clients.
 
+For an existing tailnet, the signed `compose.account.yaml` overlay adds port443
+to the same proxy. Append `-f /opt/rosy/candidate/deploy/site/compose.account.yaml`
+after any pairing/OMX overlays in `ROSY_SITE_PAIRING_COMPOSE`. Set the approved
+DNS hostname in `ROSY_ACCOUNT_HTTPS_HOST` and the authority path in
+`ROSY_ACCOUNT_CONFIG`. Install the frontend chain/key as
+`/etc/rosy/account-tls/account-frontend.crt` and `account-frontend.key`, readable
+only by the proxy runtime UID10001. These keys are separate from site backend
+TLS and Account signing keys. The candidate's `Caddyfile.account` retains
+verified Fleet backend TLS and serves the existing public app-link statements.
+
+The daily `rosy-account-tls-renew.timer` keeps that pair valid. It runs
+`account_tls_renew.py` from a release folder
+(`~/.local/share/rosy/account-tls/releases/<sha>/`), never from a preparation copy. The
+certificate folder (keys, `backups/`) is data and stays where it was prepared.
+`~/.config/rosy/account-tls.env` sets `ROSY_ACCOUNT_TLS_SOURCE` (the release script),
+`ROSY_ACCOUNT_TLS_CERTS` (that folder) and `ROSY_ACCOUNT_TLS_DOMAIN` (the approved
+hostname). tailscale issues a new pair only below 30 days of validity. A changed pair
+reloads the Account proxy and recreates the Vault proxy.
+
+On the existing `site_edge` network, the proxy also owns the approved Account
+hostname as a Docker DNS alias. Approved container clients on that network use
+the same HTTPS issuer and certificate verification without routing through the
+host's tailnet listener. Attach only the receiving service to this network;
+do not add a static proxy IP or relax the host firewall. The alias follows proxy
+recreation and keeps Fleet on its existing backend network.
+
+The firewall reconciles both listeners together: the existing site port keeps
+its configured LAN interfaces, while443 admits only loopback and `tailscale0`.
+The wildcard is IPv4 only; no literal host address or public ingress is needed.
+Discovery continues advertising the primary site port. Before activation,
+install the matching reviewed verifier/updater, verify the signed assets,
+apply both firewall policies, and run `site-firewall.py check --verify-certs`.
+The frontend chain/key/hostname must pass system trust verification as well as
+the existing site CA checks. Confirm both8443 and443 from their intended clients
+and deny443 from LAN. Certificate renewal must reload the same proxy only after
+validating the replacement pair (`caddy reload --force` when the config is
+unchanged). Mount the certificate directory, keep that directory in place, and
+atomically replace its two files; file-only binds retain old certificate inodes.
+Preflight verifies the files in that same read-only directory bind.
+An optional frontend is still subject to the
+same maintenance, backup, signature and user acceptance gates.
+To disable this frontend, stop the proxy before removing the Account overlay,
+apply the primary-only firewall, then recreate the proxy. The firewall refuses
+to remove its443 protection while Docker still publishes443. The verifier
+continues accepting the previous signed format for rollback; an Account-enabled
+environment requires both new frontend assets in its verified manifest.
+
 | Role | Installation and current responsibility |
 |---|---|
 | Ubuntu site host | Runs this Compose stack: Caddy, Fleet `/console` and task SQLite, and Vision. It is the current site control server. |
@@ -1442,6 +1489,26 @@ so it receives a different named `sighting_data` volume. The installed site
 configuration and secret files must be available to Compose, but this one-off
 command does not start the services or contact robots:
 
+The empty-volume example below applies only to databases without Account or
+Console credential tables. Account-bearing restores require a readable current
+database whose complete credential schemas and rows match the backup. The tool
+compares `rosy_account*`, `account_oauth_*` and `fleet_console_*` tables, their
+indexes and triggers using read-only SQLite snapshots, including committed WAL
+data. Differences are refused before archiving or replacing the destination.
+This includes consumed codes/refresh tokens, revoked families, changed passwords,
+disabled accounts and profiles. Even harmless differences such as session touch
+timestamps require retaining the current database; there is no override flag.
+
+For an isolated Account restore drill, first seed the test volume with a separate,
+fresh consistent copy of the current authority database, then test the chosen
+backup against that reference. Do not seed it from the backup being evaluated:
+that would compare the same old state to itself. Keep the copied keys and
+configuration isolated and do not start robot connections. A successful recovery
+must preserve current passwords, profiles, account status and revocation state.
+If the current security state is missing or corrupt, ordinary restore refuses;
+retain the evidence and arrange a reviewed offline Account recovery. This utility
+does not reconstruct the latest authority state from an older backup.
+
 ```sh
 restore_test() { docker compose --project-name rosy-site-restore-test --env-file /etc/rosy/site/site.env -f deploy/site/compose.yaml "$@"; }
 restore_test run --rm --no-deps --user 10001:10001 \
@@ -1775,6 +1842,26 @@ python3 deploy/site/rosy_cam_screen.py wake --config /private/path/cam-screen.js
 python3 deploy/site/rosy_cam_screen.py light-status --config /private/path/cam-screen.json
 python3 deploy/site/rosy_cam_screen.py light-request --config /private/path/cam-screen.json
 python3 deploy/site/rosy_cam_screen.py light-cancel --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py stream-status --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py stream-start --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py stream-stop --config /private/path/cam-screen.json
+python3 deploy/site/rosy_cam_screen.py snapshot --out /tmp/rosy-cam.png --config /private/path/cam-screen.json
+```
+
+`stream-start`·`stream-stop`은 앱의 `카메라 켜기`·`카메라 끄기` 버튼만 누른다. 앱이 수신기
+목록 화면에서 열리면 저장된 페어링의 `연결 기록 · 촬영 화면`을 한 번 거친다(켜기만).
+이미 원하는 상태면 화면을 깨우지도 누르지도 않고 `unchanged`를 돌려준다. 누르기 직전
+serial·model·포커스·잠금·상태를 다시 읽고, 서비스 상태가 바뀐 것이 확인될 때만
+`started`/`stopped`다. 이 상태는 카메라 세션이며 Vision의 프레임 수신 증거가 아니다.
+`snapshot`은 폰 화면(미리보기·상태 문구)을 PNG로 받아 화각을 원격으로 확인할 때 쓴다.
+
+멈춘 송출을 사람 없이 다시 켜려면 관제 PC 사용자 계정에 타이머를 둔다. 스크립트와
+개인 설정은 `~/.local/share/rosy/cam-screen/`에 있어야 한다. 일부러 끄는 동안에는
+타이머를 먼저 멈춘다(`systemctl --user stop rosy-cam-stream.timer`).
+
+```bash
+install -m 0644 deploy/site/rosy-cam-stream.service deploy/site/rosy-cam-stream.timer ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now rosy-cam-stream.timer
 ```
 
 CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
@@ -1925,6 +2012,44 @@ docker compose --env-file <site env> -f deploy/site/compose.media.yaml -p rosy-m
 - 관제 콘솔 로봇 영상(D-801): `/etc/rosy/fleet-media/`에 사이트 전용 Ed25519 키와 `fleet-media.json`
   (`fleet-media.example.json` 형식)을 두고 `ROSY_FLEET_MEDIA_CONFIG=/run/rosy-fleet-media/fleet-media.json`을 준다.
   미디어 권한 서비스 설정에 같은 키의 공개키를 `site_issuer`로 넣는다. 로봇은 CORE `vision.media.enabled: false`로 거부할 수 있다.
+
+## Workcell observations
+
+작업대 팔 상태와 카메라 미리보기는 사이트 PC의 Fleet·Vision에서 받는다.
+`compose.workcell.yaml`은 선택 오버레이이며 기존 서비스 명령과 pairing 자격 증명을 유지한다.
+팔 토큰은 Fleet에만, 카메라 토큰은 Vision에만 마운트한다. 관측과 미리보기는
+팔 명령 권한이나 지도 교정을 만들지 않는다.
+
+사이트 관리자는 `ROSY_SITE_CONFIG_DIR` 밖에 아래 입력을 준비한다. 예를 들어
+`/etc/rosy/workcell/` 아래 manifest와 서로 다른 두 secret 디렉터리를 둔다.
+
+| 입력 | 파일/환경 변수 |
+|---|---|
+| 공유 manifest | `ROSY_SITE_WORKCELL_MANIFEST`: 엄격한 `rosy.workcell-observations/1` YAML |
+| Fleet 전용 디렉터리 | `ROSY_SITE_WORKCELL_ARM_SECRETS_DIR`: `arm_a_token`, `arm_b_token` |
+| Vision 전용 디렉터리 | `ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR`: `overhead_token`, `wrist_a_token`, `wrist_b_token` |
+
+Manifest의 토큰 환경 변수는 팔 `ROSY_ARM_A_TOKEN`, `ROSY_ARM_B_TOKEN`, 카메라
+`ROSY_CAMERA_OVERHEAD_TOKEN`, `ROSY_CAMERA_WRIST_A_TOKEN`, `ROSY_CAMERA_WRIST_B_TOKEN`으로 맞춘다.
+각 `credential_sha256`는 해당 토큰 값의 SHA256이며 모두 달라야 한다. 토큰 파일의
+끝 개행은 bootstrap이 제거하므로 digest 계산에 포함하지 않는다. Manifest에는 원문 토큰을 쓰지 않는다.
+Secret 디렉터리와 파일은 root 소유 0700/0600으로 관리하고 manifest는 앱 UID 10001이
+읽을 수 있게 둔다. 두 secret 디렉터리를 합치거나 기존 config 디렉터리 안에 두지 않는다.
+Manifest와 secret이 없으면 시작을 거절한다.
+
+`/etc/rosy/site/site.env`의 세 경로를 채우고 `ROSY_SITE_PAIRING_COMPOSE`에
+`-f /opt/rosy/candidate/deploy/site/compose.workcell.yaml`을 추가한다. 순서는
+pairing → omx → workcell → Account이며 사용하지 않는 항목은 생략한다.
+오버레이는 `ROSY_WORKCELL_OBSERVATIONS`로 두 CLI의 manifest 경로를 지정하고,
+`ROSY_ADDITIONAL_CREDENTIAL_PATHS`로 역할별 토큰 파일을 기존 secret bootstrap에 추가한다.
+기존 자격 증명 이름을 덮어쓰는 추가 매핑은 거절한다.
+
+이 기능에는 변경 소스로 다시 빌드한 Fleet·Vision 이미지와 오버레이 해시를 포함한
+새 서명 candidate가 필요하다. 새 오버레이와 서명 coverage를 지원하는 host verifier·updater를
+신뢰한 관리 경로로 먼저 갱신한다. 기존 candidate 안의 파일이나 이미지를 직접 수정하지 않는다.
+자동 갱신은 현재·staged·loaded candidate의 서명 coverage를 확인하며 이전 candidate 검증은
+유지한다. 기능 도입 전 candidate로 되돌릴 때는 백업된 site.env에서도 오버레이가 꺼져 있어야 한다.
+실제 장비 관측과 브라우저 미리보기 확인은 별도 검증 기록으로 남긴다.
 
 ## 시뮬레이션은 돌리지 않는다 (D-571)
 

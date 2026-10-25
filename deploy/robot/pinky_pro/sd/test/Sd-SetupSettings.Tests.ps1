@@ -11,7 +11,7 @@ foreach ($path in @($sd, $release, "$sandbox\release\public-keys", "$local\Rosy\
 }
 function Save([string]$Path, [string]$Text) { [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($true))) }
 Copy-Item -LiteralPath $Source -Destination "$sd\setup-moved-device.ps1"
-foreach ($helper in @("sd-setup-settings.ps1", "sd-card-completion.ps1")) {
+foreach ($helper in @("sd-setup-settings.ps1", "sd-card-completion.ps1", "sd-batch-state.ps1")) {
     $path = Join-Path (Split-Path -Parent $Source) $helper
     if (Test-Path -LiteralPath $path) { Copy-Item -LiteralPath $path -Destination $sd }
 }
@@ -44,11 +44,15 @@ if ($SetWifiCredential) {
 if (-not $PlanOnly -or $Preset -cne "core") { throw "expected a no-write core plan" }
 $registry = Get-Content -LiteralPath $RegistryJson -Raw | ConvertFrom-Json
 $number = 40 + @($registry.robot_numbers).Count
+if ($env:SD_CASE -eq "duplicate-number") { $number = 40 }
 Add-Content -LiteralPath $env:SD_EVENTS -Value "plan:$number"
 $plan = @{mode="PLAN_ONLY";release_id=$ReleaseId;disk_number=$DiskNumber;
     device_name="rosy-pinky-test$number";device_uid="fixture-uid-$number";robot_number=$number;
     namespace="rosy_$number";wifi_ssid="fixture-site";disk_model="fixture";
     disk_serial="FIXTURE-7";disk_size=34359738368;image_sha256=$ImageSha256;registry_path=$RegistryJson}
+if ($env:SD_CASE -eq "duplicate-name") { $plan.device_name = "rosy-pinky-test40" }
+if ($env:SD_CASE -eq "duplicate-uid") { $plan.device_uid = "fixture-uid-40" }
+if ($env:SD_CASE -eq "image-drift" -and $number -eq 41) { $plan.image_sha256 = "b" * 64 }
 $plan | ConvertTo-Json | Set-Content -LiteralPath $PlanPath
 $plan | ConvertTo-Json
 '@
@@ -114,6 +118,10 @@ $env:SD_EVENTS = "$sandbox\events.txt"
 $registry = "$local\Rosy\device-registry.json"
 $configPath = "$sandbox\sd-setup.local.json"
 function Reset-Fixture {
+    foreach ($directory in @(Get-ChildItem -LiteralPath "$sandbox\scratch" -Directory)) {
+        if (-not $directory.FullName.StartsWith(([IO.Path]::GetFullPath($sandbox) + "\"), [StringComparison]::OrdinalIgnoreCase)) { throw "fixture cleanup escaped sandbox" }
+        Remove-Item -LiteralPath $directory.FullName -Recurse -Force
+    }
     Save $registry '{"robot_numbers":[],"device_names":[],"device_uids":[]}'
     $secure = ConvertTo-SecureString "fixture only" -AsPlainText -Force
     New-Object Management.Automation.PSCredential("fixture-site", $secure) |
@@ -130,13 +138,46 @@ function Run-Fixture([string[]]$Extra = @()) {
     [pscustomobject]@{Code=$LASTEXITCODE;Text=($output | Out-String)}
 }
 function Assert([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
+function Read-BatchReport {
+    $reports = @(Get-ChildItem -LiteralPath "$sandbox\scratch" -Filter batch.json -Recurse)
+    Assert ($reports.Count -eq 1) "one batch report must survive the run"
+    $text = Get-Content -LiteralPath $reports[0].FullName -Raw
+    Assert ($text -notmatch 'fixture only|fixture-site|password|credential|FIXTURE-7') "batch report must only contain identity and evidence references"
+    $text | ConvertFrom-Json
+}
+Reset-Fixture
+Save $registry '{"robot_numbers":[40,41,42,43,44,45,46,47],"device_names":[],"device_uids":[]}'
+$result = Run-Fixture
+Assert ($result.Code -ne 0) "three cards with only two free numbers must fail"
+Assert (-not ((Get-Content -LiteralPath $env:SD_EVENTS) -match '^disk$|^write$')) "capacity shortage must stop before discovering or writing any card"
+Write-Output "PASS: batch capacity is checked before any media access"
+Reset-Fixture
+Save $registry '{"robot_numbers":[40,41,42,43,44,45,46,47],"device_names":[],"device_uids":[]}'
+$result = Run-Fixture @("-CardCount", "2")
+Assert ($result.Code -eq 0) ("exact available capacity must work: " + $result.Text)
+$report = Read-BatchReport
+Assert (($report.cards.robot_number -join ',') -ceq '48,49') "batch must preserve the available automatic-number range"
 Reset-Fixture
 $result = Run-Fixture
 Assert ($result.Code -eq 0) ("root settings must prepare three cards: " + $result.Text)
 $events = @(Get-Content -LiteralPath $env:SD_EVENTS | Where-Object { $_ -match '^(plan|wait):' })
 Assert (($events -join ',') -ceq 'plan:40,wait:40,plan:41,wait:41,plan:42,wait:42') "each next plan must wait for verified completion and registry update"
 Assert (@(Get-Content -LiteralPath $env:SD_EVENTS | Where-Object { $_ })[0] -ceq "verify") "signature verification must precede disk discovery"
+$report = Read-BatchReport
+Assert ($report.status -ceq "completed" -and $report.completed_count -eq 3 -and $report.remaining_count -eq 0) "batch report must account for all verified cards"
+Assert (($report.cards.robot_number -join ',') -ceq '40,41,42') "report must bind each verified card to its identity"
+foreach ($card in $report.cards) { Assert (Test-Path -LiteralPath $card.receipt_path) "verified card evidence must exist" }
 Write-Output "PASS: root settings resolve relative paths and register three distinct cards in order"
+foreach ($failure in @("duplicate-number", "duplicate-name", "duplicate-uid", "image-drift")) {
+    Reset-Fixture
+    $env:SD_CASE = $failure
+    $result = Run-Fixture
+    Assert ($result.Code -ne 0) "$failure must fail the batch"
+    Assert (@(Get-Content -LiteralPath $env:SD_EVENTS | Where-Object { $_ -eq 'write' }).Count -eq 1) "$failure must stop before the second writer"
+    $report = Read-BatchReport
+    Assert ($report.status -ceq "stopped" -and $report.completed_count -eq 1 -and $report.remaining_count -eq 2) "duplicate failure must preserve first-card success"
+}
+Write-Output "PASS: repeated identities stop before another writer"
 foreach ($failure in @("writer", "readback", "identity", "registry")) {
     Reset-Fixture
     $env:SD_CASE = $failure
@@ -144,6 +185,9 @@ foreach ($failure in @("writer", "readback", "identity", "registry")) {
     Assert ($result.Code -ne 0) "$failure must fail the batch"
     $plans = @(Get-Content -LiteralPath $env:SD_EVENTS | Where-Object { $_ -match '^plan:' })
     Assert ($plans.Count -eq 1) "$failure must stop before planning card two"
+    $report = Read-BatchReport
+    Assert ($report.status -ceq "stopped" -and $report.completed_count -eq 0 -and $report.remaining_count -eq 3) "unverified media must never count as completed"
+    Assert (Test-Path -LiteralPath $report.active_card.plan_path) "interrupted card must retain a plan reference for investigation"
 }
 Write-Output "PASS: writer, readback, identity and registry failures stop before the next card"
 foreach ($bad in @(@{password="<fixture-secret-not-allowed>"}, @{card_count=2.5}, @{card_count=0}, @{schema_version=2})) {
@@ -194,6 +238,8 @@ $env:SD_CASE = "cancel-card-two"
 $result = Run-Fixture
 Assert ($result.Code -ne 0) "cancelling card two must not report batch success"
 Assert (@(Get-Content -LiteralPath $env:SD_EVENTS | Where-Object { $_ -eq 'write' }).Count -eq 1) "cancelled card two must not launch its writer"
+$report = Read-BatchReport
+Assert ($report.status -ceq "stopped" -and $report.completed_count -eq 1 -and $report.remaining_count -eq 2) "cancellation must preserve verified progress"
 Reset-Fixture
 $configText = Get-Content -LiteralPath $configPath -Raw
 Save $configPath ("[" + $configText + "]")

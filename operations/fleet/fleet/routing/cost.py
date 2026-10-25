@@ -46,6 +46,7 @@ class RoutingConfig:
 
 
 def wrap(angle: float) -> float:
+    # Routing remains stdlib-only; test_routing fixes this dependency boundary.
     return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
 

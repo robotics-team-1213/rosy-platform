@@ -3,6 +3,8 @@
 Read-only. A stage nothing here can see is ``not_available`` with a Korean reason; no count is invented and
 nothing is approved or promoted (D-514 §5, D-793). ⑦ 배포 is outside Learning and has no row.
 """
+import re
+
 STAGES = (('collect', '수집'), ('label', '정답'), ('dataset', '데이터셋'), ('train', '학습'),
           ('evaluate', '평가'), ('promote', '승격 기록'))
 NOT_CONNECTED = 'Learning에 연결 전'
@@ -30,10 +32,10 @@ def row(key, name, stages):
 
 def _lane_next(step):
     if step.get('href', '').startswith('#'):
-        return go(step['label'], ('/learning' if step['href'] == '#pipeline-evidence' else '/learning?view=training') + step['href'])
+        return go(step['label'], '/learning' + step['href'])
     if step.get('href'):
         return go(step['label'], step['href'])
-    return go(step['label'], '/pixels#pixel-preparation' if step.get('action') == 'prepare' else '/learning?view=training')
+    return go(step['label'], '/pixels#pixel-preparation' if step.get('action') == 'prepare' else '/learning#pipeline')
 
 
 def lane(pipeline):
@@ -76,32 +78,48 @@ def objects(counts, preparation):
     return stages
 
 
-def omx(items, reviewed):
-    """items: linked results (learning_links); reviewed: linked ids with a saved segment review."""
+def omx(items, reviewed, tasks=0):
+    """items: linked results (learning_links); reviewed: linked ids with a saved segment review;
+    tasks: OMX-adapter task records of the task page (learning_tasks), where OMX policy training starts."""
     sets = {item['id'] for item in items if item['kind'] == 'omx'}
+    train = (('active', f'OMX 학습 과제 {tasks}개', go('학습 과제', '/learning/tasks')) if tasks
+             else ('waiting', '등록한 OMX 학습 과제가 없습니다.', go('학습 과제 등록', '/learning/tasks')))
     if not sets:
         return {'collect': ('active', '연결한 OMX 결과 폴더가 없습니다.', go('OMX 구간 검수', '/learning/omx')),
-                'label': ('waiting', 'OMX 결과를 연결하면 구간을 검수합니다.', None)}
+                'label': ('waiting', 'OMX 결과를 연결하면 구간을 검수합니다.', None), 'train': train}
     done = len(sets & set(reviewed))
     return {'collect': ('done', f'OMX 결과 폴더 {len(sets)}개', None),
             'label': ('done' if done == len(sets) else 'active', f'구간 검수 {done}/{len(sets)}',
                       None if done == len(sets) else go('OMX 구간 검수', '/learning/omx')),
-            'dataset': ('not_available', '구간 JSON은 아직 CLI로 넘깁니다.', None),
-            'train': ('not_available', 'native_cycle은 아직 CLI로 실행합니다.', None)}
+            'dataset': ('not_available', '구간 JSON은 아직 CLI로 넘깁니다.', None), 'train': train}
 
 
 def sim(runs):
-    """runs: None when not configured, {'error': ...} when the adapter failed, else {'runs': [...]}."""
+    """runs: None when not configured, {'error': ...} when the adapter failed, else {'runs': [sim_web.public rows]}.
+    A SIM verdict or task_success is evidence only, never approval or promotion (D-793, D-857)."""
     if runs is None:
-        return {'collect': ('not_available', 'SIM 실행 연결이 설정되지 않았습니다.', None)}
+        reason = 'SIM 실행 연결이 설정되지 않았습니다.'
+        return {'collect': ('not_available', reason, None), 'evaluate': ('not_available', reason, None)}
     if 'error' in runs:
         return {'collect': ('blocked', 'SIM 실행 연결을 확인하세요.', go('SIM 실험', '/learning/sim'))}
     if not runs['runs']:
         return {'collect': ('active', 'SIM 실험 기록이 없습니다.', go('SIM 실험 시작', '/learning/sim'))}
     latest = max(runs['runs'], key=lambda run: str(run.get('updated_at') or run.get('created_at') or ''))
     status = str(latest.get('status', ''))[:40]
-    return {'collect': (SIM_TERMINAL.get(status, 'active'), f"실험 {len(runs['runs'])}회 · 최근 {status or '상태 없음'}",
-                        go('SIM 결과 확인', '/learning/sim'))}
+    run_id = str(latest.get('run_id', ''))
+    href = '/learning/sim?run=' + run_id if re.fullmatch('[0-9a-f]{32}', run_id) else '/learning/sim'
+    stages = {'collect': (SIM_TERMINAL.get(status, 'active'), f"실험 {len(runs['runs'])}회 · 최근 {status or '상태 없음'}",
+                          go('SIM 결과 확인', href))}
+    result = latest.get('result')
+    if isinstance(result, dict):
+        success = {True: '성공', False: '실패'}.get(result.get('task_success'), '기록 없음')
+        failed = result.get('task_success') is False or str(result.get('status', '')).lower() == 'failed'
+        stages['evaluate'] = ('blocked' if failed else 'done', f"최근 단계 {str(result.get('stage') or '없음')[:40]} · 과제 성공 {success} · "
+                              f"판정 {str(result.get('status') or '없음')[:40]} (근거일 뿐 승인 아님)",
+                              go('SIM 평가 근거', '/learning/evaluate?domain=sim'))
+    else:
+        stages['evaluate'] = ('waiting', '최근 실험 결과가 나오면 평가 근거로 보입니다.', None)
+    return stages
 
 
 def vlm(counts, eval_url=None):
@@ -121,19 +139,23 @@ def vlm(counts, eval_url=None):
             if labelled else ('waiting', '확정 정답이 생기면 평가합니다.', None)}
 
 
-def domains(*, pipeline, counts, preparation, items, omx_reviewed, sim_runs, vlm_counts, vlm_eval_url=None):
-    sources = {'lane': lane(pipeline), 'object': objects(counts, preparation), 'omx': omx(items, omx_reviewed),
+def domains(*, pipeline, counts, preparation, items, omx_reviewed, sim_runs, vlm_counts, vlm_eval_url=None, tasks=0):
+    sources = {'lane': lane(pipeline), 'object': objects(counts, preparation), 'omx': omx(items, omx_reviewed, tasks),
                'sim': sim(sim_runs), 'vlm': vlm(vlm_counts, vlm_eval_url), 'decision': {}}
     return [row(key, name, sources[key]) for key, name in DOMAINS]
 
 
 def stored(db):
-    """(OMX ids with a segment review, VLM counts or None) from tables this database already has; creates none."""
+    """(OMX ids with a segment review, VLM counts or None, learning task count) from tables this database
+    already has; creates none."""
     tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     reviewed = ([row[0] for row in db.execute('SELECT DISTINCT id FROM omx_segment_reviews')]
                 if 'omx_segment_reviews' in tables else [])
+    tasks = (db.execute("SELECT COUNT(*) FROM learning_task_records WHERE kind='task' "
+                        "AND json_extract(body, '$.adapter')='omx'").fetchone()[0]
+             if 'learning_task_records' in tables else 0)
     if 'vlm_items' not in tables:
-        return reviewed, None
+        return reviewed, None, tasks
     status = ({row[0]: row[1] for row in db.execute('SELECT status, COUNT(*) FROM vlm_labels GROUP BY status')}
               if 'vlm_labels' in tables else {})
     provisional = 0
@@ -144,4 +166,4 @@ def stored(db):
         provisional = sum(1 for item, answers in vlm_judge.provisional(db).items()
                           if item not in decided and set(answers) - paused)
     return reviewed, {'total': db.execute('SELECT COUNT(*) FROM vlm_items').fetchone()[0], 'provisional': provisional,
-                      'labelled': status.get('labelled', 0), 'excluded': status.get('excluded', 0)}
+                      'labelled': status.get('labelled', 0), 'excluded': status.get('excluded', 0)}, tasks

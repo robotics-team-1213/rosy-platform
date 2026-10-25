@@ -13,12 +13,14 @@ import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';
 import {createCameraMapPanel} from '/console/assets/site-map-camera.js';
+import {createMapAuthoring} from '/console/assets/map-authoring.js';
+import {drawFacilities, svgElement as el} from '/console/assets/map-editor.js';
+import {copyMapTemplate} from '/console/assets/drawing-import.js';
 import {warpImage} from '/console/assets/field-warp.js';
 import {fieldToMap, multiply3, lensesMatch} from '/console/assets/map-fit.js';
 import {parseLensHeader, fetchMapPlane, planeFitsImage} from '/console/assets/vision-view.js';
 
 const $ = id => document.getElementById(id);
-const SVG = 'http://www.w3.org/2000/svg';
 const W = 800, H = 480;
 
 // Read once: a token typed while the page starts is the person's own 접속, not a stored session.
@@ -44,6 +46,12 @@ const cameraMap = createCameraMapPanel({request, guarded, reason: () => operator
   context: () => [state.working, state.sessionEpoch],
   draft: () => state.draft, dirty: () => state.dirty, notice,
   reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
+const authoring = createMapAuthoring({request, svg: $('site-map-svg'), map: shown, draft: () => state.working,
+  source: () => $('map-source').value, view: () => state.view, reason: operatorReason, dirty: () => state.dirty,
+  begin: () => { survey.cancel(); clearPlane(); $('trip-pick').checked = false; state.band = null; },
+  changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft';
+    state.selected = null; state.band = null; updatePlaneSources(); clearPlan(); },
+  render, notice, epoch: () => state.sessionEpoch});
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
 
@@ -62,14 +70,8 @@ function shown() {
 }
 function operatorReason() { return state.role === 'operator' ? '' : state.role ? OPERATOR_REASON : '관제 접속이 필요합니다'; }
 
-function el(name, attrs, parent) {
-  const node = document.createElementNS(SVG, name);
-  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-  parent.append(node);
-  return node;
-}
-
 function render() {
+  authoring.sync();
   survey.sync();
   const svg = $('site-map-svg');
   svg.replaceChildren();
@@ -89,7 +91,7 @@ function render() {
   const background = plane?.mapId === map.map_id ? plane : null;
   svg.classList.toggle('has-plane', Boolean(background));
   $('map-view-turn').value = String(viewTurnOf(map));
-  const view = background?.view || fitView(map, W, H, LABEL_PAD, viewTurnOf(map));
+  const view = background?.view || fitView(map, W, H, LABEL_PAD, viewTurnOf(map), authoring.discs());
   state.view = view;
   if (background) {
     el('image', {...background.field, href: background.url, preserveAspectRatio: 'none'}, svg);
@@ -141,15 +143,7 @@ function render() {
     }
     el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = index + 1;
   }
-  for (const facility of map.facilities || []) {
-    const points = facility.geometry.map(([x, y]) => view.toPx(x, y));
-    const mark = facility.kind === 'exclusion'
-      ? el('polygon', {points: points.map(p => p.join(',')).join(' '), class: 'facility exclusion'}, svg)
-      : facility.kind === 'stop_line'
-        ? el('polyline', {points: points.map(p => p.join(',')).join(' '), class: 'facility stop-line'}, svg)
-        : el('circle', {cx: points[0][0], cy: points[0][1], r: 6, class: `facility ${facility.kind}`}, svg);
-    el('title', {}, mark).textContent = facility.name;
-  }
+  drawFacilities(svg, map, view);
   if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
   svg.classList.toggle('picking', survey.picking() || $('trip-pick').checked);
   if (state.point && $('map-source').value === 'active') {
@@ -161,6 +155,7 @@ function render() {
     el('circle', {cx: px, cy: py, r: 6, class: 'target'}, svg);
   }
   drawRobots();
+  authoring.paint();
 }
 
 // D-595: the fit depends only on the map and its view turn, never on robot poses or their uncertainty
@@ -239,6 +234,7 @@ function select(selection) {
 }
 
 function syncButtons() {
+  authoring.sync();
   cameraMap.sync();
   survey.sync();
   const reason = operatorReason();
@@ -459,7 +455,7 @@ $('map-profile').addEventListener('change', () => {
 });
 for (const id of ['profile-id', 'profile-name', 'profile-rules']) $(id).addEventListener('input', syncButtons);
 $('profile-kind').addEventListener('change', () => { $('profile-soccer').hidden = $('profile-kind').value !== 'soccer'; });
-$('profile-copy').addEventListener('click', () => profileInputs(shown(), crypto.randomUUID(), '',
+$('profile-copy').addEventListener('click', () => profileInputs(copyMapTemplate(shown()), crypto.randomUUID(), '',
   $('map-source').value === 'profile' ? selectedProfile() : {}));
 $('profile-new').addEventListener('click', () => guarded(async () => {
   const id = crypto.randomUUID();

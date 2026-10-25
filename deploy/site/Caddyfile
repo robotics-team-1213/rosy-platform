@@ -2,6 +2,9 @@
 	admin localhost:2019
 }
 
+# The signed optional Account overlay mounts its frontend here.
+import /etc/caddy/account/*.caddy
+
 :{$ROSY_SITE_HTTPS_PORT} {
 	tls /run/secrets/site_cert /run/secrets/site_key
 

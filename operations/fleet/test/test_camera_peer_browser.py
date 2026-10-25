@@ -16,11 +16,11 @@ window.gets=[];window.failStatus=0;window.writes=[];window.alive=true;window.own
 window.request={profile:'rosy.camera-peer/1',audience:'fleet-camera-ingest',device_kind:'overhead-camera',source_role:'camera',
 request_id:'A'.repeat(32),state:'pending',revision:2,display_code:'4F7K',label:'긴 카메라 이름을 가진 천장 카메라',client_key_sha256:'a'.repeat(64)};
 window.fetch=async(path,options={})=>{
- if(!options.method || options.method==='GET'){window.gets.push(path);if(window.failStatus)return {ok:false,status:window.failStatus};}
- if(options.method==='POST'){window.writes.push({path,body:options.body?JSON.parse(options.body):null});window.request=null;return {ok:true,json:async()=>({})};}
+ if(!options.method || options.method==='GET'){window.gets.push(path);if(window.failStatus)return new Response('{}',{status:window.failStatus});}
+ if(options.method==='POST'){window.writes.push({path,body:options.body?JSON.parse(options.body):null});window.request=null;return new Response('{}',{status:200});}
  const data=path.endsWith('/pending')?(path.includes('/v2/')?(window.request?[window.request]:[]):{paired_sources:[{source_id:'ceiling_north',has_credential:false}]}):
  path.endsWith('/identity')?{tls_ca_sha256:'b'.repeat(64)}:[];
- return {ok:true,json:async()=>data};};
+ return new Response(JSON.stringify(data),{status:200});};
 const scope={capture:()=>({current:()=>window.alive,check:()=>{if(!window.alive)throw new DOMException('closed','AbortError');},signal:window.abort.signal}),
  guard:fn=>(...args)=>{if(window.alive)return fn(...args);},interval:()=>{},onDispose:fn=>window.cleanup.push(fn)};
 window.panel=createCameraPeerPanel({scope,headers:()=>({Authorization:'Bearer '+window.auth}),identity:()=>({role:'operator',principal_id:window.owner}),locked:()=>window.locked,dialogs:{confirmIrreversible},onUnauthorized:()=>{window.locked=true}});
@@ -45,7 +45,9 @@ def page(browser,width=390):
     def reply(route):
         path=route.request.url.split('receiver.fixture',1)[1]
         if path=='/':route.fulfill(status=200,content_type='text/html',body=HTML);return
-        file=COMMON/path[len('/common/'):] if path.startswith('/common/') else WEB/path.lstrip('/')
+        file=(WEB/'shared'/path.rsplit('/',1)[-1] if path in (
+              '/console/assets/device-request.js','/console/assets/request.js') else
+              COMMON/path[len('/common/'):] if path.startswith('/common/') else WEB/path.lstrip('/'))
         if not file.is_file():route.fulfill(status=404,body='');return
         route.fulfill(status=200,content_type='text/css' if file.suffix=='.css' else 'application/javascript',body=file.read_bytes())
     result.route('https://receiver.fixture/**',reply)
@@ -66,6 +68,8 @@ def test_real_confirmation_cancel_and_owner_change_submit_nothing(browser):
 
 
 def test_real_component_desktop_mobile_and_explicit_remember_submit_once(browser,tmp_path):
+    from playwright.sync_api import expect
+
     for width in [390,1366]:
         current=page(browser,width)
         assert current.evaluate('document.documentElement.scrollWidth')<=width
@@ -75,7 +79,7 @@ def test_real_component_desktop_mobile_and_explicit_remember_submit_once(browser
         current.locator('dialog ui-button').filter(has_text='연결 승인').click()
         current.wait_for_function('window.writes.length===1')
         assert current.evaluate('window.writes[0].body')=={'action':'approve','revision':2,'source_id':'ceiling_north','persist_requested':True}
-        assert '마무리' in current.locator('#camera-peer-status').inner_text()
+        expect(current.locator('#camera-peer-status')).to_contain_text('마무리')
         current.close()
 
 

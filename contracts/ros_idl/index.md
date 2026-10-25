@@ -32,4 +32,4 @@
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) 생성된 Python bounded string 표기 검사 수정
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) 내부 MapAdoption wire 및 실제 생성 검증 경로
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) 내부 native 지도 readback 계약 RED 준비
-- 2026-10-04 · uncommitted · interfaces: additive typed recording start options
+- 2026-10-17 · uncommitted · 내부 native 지도 readback 계약 RED 준비

@@ -47,8 +47,8 @@
 
 ## 최근 기록
 
-- 2026-10-23 · 187d5b758b · Pilot admitted readback와 policy pending intake 분리
-- 2026-10-23 · db4d8f87ca · Pilot readback와 제출의 owner transaction
-- 2026-10-23 · a3a75e6fd2 · 5fps 보조 SIM 교사 시연 종료
-- 2026-10-23 · a3a75e6fd2 · 긴 교사 시연의 원본 시각 기반 5fps 기록
-- 2026-10-21 · uncommitted · 영상 처리와 관절 기록 수신 분리
+- 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
+- 2026-10-24 · uncommitted · fix(omx): D-858 S1 독립 안전 검토 지적 반영 (H1, M1-M6)
+- 2026-10-24 · uncommitted · feat(omx): D-858 S3 커미셔닝 기록·정지 시험 관문·저장 뒤 HOLD
+- 2026-10-24 · uncommitted · fix(omx): D-858 S1 재검토 지적 반영 (N1-N4, 재-trip)
+- 2026-10-24 · uncommitted · feat(omx): D-858 S1 실물 Dynamixel port와 가짜 버스 시험

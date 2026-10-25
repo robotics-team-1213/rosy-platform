@@ -1,6 +1,7 @@
 // Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
 import {tripWaitText} from "/console/assets/trip-display.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
+import { createIntegratedControlView } from "/console/assets/integrated-control-view.js";
 const states = {REQUESTED: "요청 접수", UNKNOWN: "실행 결과 미확인", PROPOSED: "승인 전", READY: "실행 준비", QUEUED: "대기", DISPATCHING: "전달 중",
   ACCEPTED: "장치 수락", RUNNING: "실행 중", ACTION_SUCCEEDED: "동작 성공 · 목표 확인 대기",
   GOAL_CONFIRMED: "목표 확인 완료", COMPLETED: "주행 완료", FAILED: "실패", HOLD: "보류",
@@ -20,13 +21,21 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
   let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
+  const newStatus = Object.assign(document.createElement("p"), {id: "work-new-status", role: "status",
+    textContent: "만들 수 있는 작업을 확인하고 있습니다."});
+  el("work-new").querySelector("ul").before(newStatus);
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
   const units = createControlUnitView({scope, call, anchor: el("channel-requests-heading"), active, approveReason, principal});
+  const integrated = createIntegratedControlView({scope, call, anchor: el("channel-requests-heading"), active,
+    approveReason, principal, taskStatus: workStatus});
   const clear = () => { detail.replaceChildren(); admit.hidden = true; };
   // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
   function showKinds(kinds = []) {
     el("work-new-move-item").hidden = !kinds.includes("trip");
     el("work-new-cell-item").hidden = !kinds.includes("CELL_TRANSFER");
+    newStatus.textContent = kinds.includes("trip") || kinds.includes("CELL_TRANSFER")
+      ? "작업 종류를 선택하세요. 실행 전 장치 상태와 권한을 다시 확인합니다."
+      : "현재 만들 수 있는 작업이 없습니다. 장치 연결과 작업 설정을 확인하세요.";
   }
   el("work-overview").hidden = !active;
   // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다.
@@ -41,10 +50,11 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
   }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.", preserveUnits = false) {
-    if (!preserveUnits) units.reset();
+    if (!preserveUnits) { units.reset(); integrated.reset(); }
     channelRequestView.reset();
     rows = []; selected = null; detailVersion++;
     showKinds();
+    newStatus.textContent = message;
     list.replaceChildren(); clear();
     el("channel-requests").replaceChildren();
     el("channel-requests-state").textContent = message;
@@ -137,7 +147,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     if (!area || inFlight) return;
     const life = scope.capture(); inFlight = true;
     try {
-      await units.refresh();
+      await Promise.all([units.refresh(), integrated.refresh()]);
       const result = await call("/api/fleet/work"); life.check();
       showKinds(result.kinds);
       if (fresh) return;

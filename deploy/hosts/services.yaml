@@ -1,0 +1,92 @@
+# D-852: the rosy/pinky user units each lab PC role runs and where each one's code comes from.
+# tools/remote/update_status.py compares every lab PC against this file. Add, change or retire a unit
+# on a lab PC in the same change that edits its entry here.
+#
+# run:      active (a service that stays up) | timer (an enabled, active timer) | oneshot (started by a
+#           timer or by hand) | off (kept on disk, must be neither enabled nor active)
+# channel:  autoupdate (CI-green main through an updater unit, D-805) | updater (the updater unit itself)
+#           | signed (D-446 signed model-code release) | snapshot (a reviewed source snapshot installed
+#           by hand; update together with its acceptance) | installer (a commit-pinned repo installer)
+#           | copy (repo files copied onto the host) | host (no repository code) | external (code
+#           outside this repository) | adhoc (a temporary copy that must move into a release) | retired
+# source:   glob, relative to the user's home, that the unit's code path must match
+# template: repo unit file the installed unit file must equal byte for byte (CR ignored)
+# copies:   installed path (relative to home) -> repo path (or "<repo>:<path>" for another repository)
+# dropins:  drop-in file names the unit may carry; any other drop-in is reported
+# known_drift: why the installed unit or copy may differ for now; reported as KNOWN, not a failure
+schema: rosy.host-services/1
+roles:
+  model:
+    rosy-dataset-review-account.service: {run: active, channel: snapshot, source: "rosy-ml/legacy-review-account-code/releases/*", doc: docs/adr/D-809-legacy-learning-account-boundary.md}
+    rosy-dataset-review.service: {run: active, channel: external, source: "dataset-review-937*", dropins: [90-account-loopback.conf], doc: docs/adr/D-809-legacy-learning-account-boundary.md}
+    rosy-edge-review.service: {run: active, channel: signed, source: "rosy-ml/edge-capture/review-code/current", doc: docs/adr/D-545-model-pc-review-versioned-release.md}
+    rosy-learning-center.service: {run: active, channel: installer, source: ".local/share/rosy-learning-center/source/*", doc: docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md}
+    rosy-learning-redesign.service: {run: "off", channel: installer, note: "earlier Learning candidate (ac50d6330e)", doc: deploy/model_pc/README.md}
+    rosy-learning-cycle-20261004.service: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-model-advertise.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-model-code-update.service: {run: oneshot, channel: updater, doc: docs/adr/D-446-model-pc-code-auto-update.md}
+    rosy-model-code-update.timer: {run: timer, channel: updater, doc: docs/adr/D-446-model-pc-code-auto-update.md}
+    rosy-model-code-watch.service: {run: "off", channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
+    rosy-model-code-watch.timer: {run: "off", channel: retired, doc: docs/adr/D-446-model-pc-code-auto-update.md}
+    rosy-ollama.service: {run: active, channel: host, doc: deploy/model_pc/README.md}
+    rosy-pilot-fetch@.service: {run: oneshot, channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.service, copies: {rosy-ml/bin/fetch_http.py: learning/curation/perception/fetch_http.py}, note: "modules from the signed model-code release", doc: deploy/model_pc/README.md}
+    rosy-pilot-fetch@.timer: {run: timer, instances: [9dfk], channel: copy, template: deploy/model_pc/rosy-pilot-fetch@.timer, doc: deploy/model_pc/README.md}
+    rosy-review-bridge.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-bridge.service, doc: deploy/model_pc/README.md}
+    rosy-review-bridge.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-bridge.timer, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline.service: {run: oneshot, channel: signed, template: deploy/model_pc/rosy-review-pipeline.service, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline.timer: {run: timer, channel: signed, template: deploy/model_pc/rosy-review-pipeline.timer, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline-e2e-49cb36.service: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline-e2e-49cb36.timer: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline-e2e49cb36.service: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-review-pipeline-e2e49cb36.timer: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
+    rosy-review-release-update.service:
+      run: oneshot
+      channel: updater
+      template: deploy/model_pc/rosy-review-release-update.service
+      copies: {rosy-ml/bin/auto_review_release.py: deploy/model_pc/auto_review_release.py, rosy-ml/bin/install_review_release.py: deploy/model_pc/install_review_release.py}
+      doc: deploy/model_pc/README.md
+    rosy-review-release-update.timer: {run: timer, channel: updater, template: deploy/model_pc/rosy-review-release-update.timer, doc: deploy/model_pc/README.md}
+    rosy-review-v12.service: {run: active, channel: snapshot, source: "rosy-ml/review-v12-code/current", doc: docs/adr/D-545-model-pc-review-versioned-release.md}
+    rosy-review-v13-eval.service: {run: active, channel: snapshot, source: "rosy-ml/review-v13-eval-code/current", doc: docs/adr/D-545-model-pc-review-versioned-release.md}
+    rosy-review-v13.service: {run: active, channel: signed, source: "rosy-ml/review-v13-code/current", doc: docs/adr/D-561-model-review-ui-signed-code-follow.md}
+    rosy-tensorboard.service: {run: active, channel: host, dropins: [retry.conf], doc: deploy/model_pc/README.md}
+    rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
+    rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
+  ai:
+    pinky-backend.service: {run: active, channel: external, note: "Pinky stack from ~/.local/bin, outside this repository", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-nav2.service: {run: "off", channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-ai-gpu-watchdog.service: {run: oneshot, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.service, doc: deploy/ai_pc/README.md}
+    rosy-ai-gpu-watchdog.timer: {run: timer, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.timer, doc: deploy/ai_pc/README.md}
+    rosy-decision-laya.service: {run: "off", channel: copy, doc: deploy/ai_pc/README.md}
+    rosy-learning-center.service: {run: active, channel: installer, source: ".local/share/rosy-learning-center/source/*", doc: docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md}
+    rosy-ollama.service: {run: active, channel: host, dropins: [warm.conf], note: "warm.conf keeps the vision model loaded", doc: deploy/ai_pc/README.md}
+    rosy-situation.service: {run: active, channel: autoupdate, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-situation-autoupdate.service: {run: oneshot, channel: updater, dropins: [bootstrap.conf], note: "bootstrap.conf falls back to ~/rosy-situation/bootstrap before the first switch; harmless afterwards", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-situation-autoupdate.timer: {run: timer, channel: updater, template: deploy/ai_pc/rosy-situation-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-situation-model-tunnel.service: {run: "off", channel: retired, doc: deploy/ai_pc/README.md}
+    rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
+    rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
+    rosy-v11-sam-worker.service: {run: active, channel: external, dropins: [autostart.conf], note: "SAM benchmark worker outside this repository", doc: deploy/ai_pc/README.md}
+  site:
+    rosy-account-tls-renew.service: {run: oneshot, channel: snapshot, template: deploy/site/rosy-account-tls-renew.service, source: ".local/share/rosy/account-tls/releases/*", note: "certificates stay in their data folder", doc: deploy/site/README.md}
+    rosy-account-tls-renew.timer: {run: timer, channel: snapshot, template: deploy/site/rosy-account-tls-renew.timer, doc: deploy/site/README.md}
+    rosy-cam-stream.service: {run: oneshot, channel: snapshot, template: deploy/site/rosy-cam-stream.service, source: ".local/share/rosy/cam-screen", doc: deploy/site/README.md}
+    rosy-cam-stream.timer: {run: timer, channel: snapshot, template: deploy/site/rosy-cam-stream.timer, doc: deploy/site/README.md}
+    rosy-omx-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.service, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-omx-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-omx-camera-readiness.service: {run: active, channel: snapshot, template: deploy/robot/omx/rosy-omx-camera-readiness.service, source: ".local/share/rosy/omx-camera-pipeline/releases/*", doc: deploy/robot/omx/README.md}
+    rosy-omx-camera-view.service: {run: active, channel: snapshot, template: deploy/robot/omx/rosy-omx-camera-view.service, source: ".local/share/rosy/omx-camera-pipeline/releases/*", doc: deploy/robot/omx/README.md}
+    rosy-omx-camera@.service: {run: active, instances: [top, front, arm_a_wrist], channel: snapshot, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-camera/releases/*", doc: deploy/robot/omx/README.md}
+    rosy-omx-collection.service: {run: "off", channel: snapshot, template: deploy/robot/omx/rosy-omx-collection.service, doc: docs/plans/2026-10-17-omx-next-day-collection.md}
+    rosy-omx-observation-bridge.service: {run: active, channel: snapshot, template: deploy/robot/omx/rosy-omx-observation-bridge.service, source: ".local/share/rosy/omx-observation/releases/*", dropins: [95-motor-health-d227b0c2c50a.conf], doc: deploy/robot/omx/README.md}
+    rosy-omx-observer@.service: {run: active, instances: [arm_a, arm_b], channel: snapshot, template: deploy/robot/omx/rosy-omx-observer@.service, source: ".local/share/rosy/omx-observation/releases/*", dropins: [95-motor-health-d227b0c2c50a.conf], doc: deploy/robot/omx/README.md}
+    rosy-site-config-reload.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-site-fleet-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-site-overhead-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-user-fleet-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
+    rosy-user-overhead-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
+    rosy-user-mdns-bridge.service: {run: oneshot, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
+    rosy-user-mdns-bridge.timer: {run: timer, channel: snapshot, doc: deploy/site/README.md}

@@ -10,7 +10,7 @@
 .ui-rail { min-width: 0; background: var(--surface-chrome); border-inline-end: 1px solid var(--border-default); }
 .ui-rail-nav { display: flex; flex-direction: column; align-items: center; gap: var(--gap-rail); padding: var(--inset-rail); }
 .ui-rail-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--gap-rail); align-self: stretch; min-block-size: var(--target-secondary); border-radius: var(--radius-button); color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); text-decoration: none; text-align: center; }
-.ui-rail-item[aria-current="page"] { background: var(--brand-rose-wash); color: var(--brand-rose); }
+.ui-rail-item[aria-current="page"], .ui-rail-item[aria-current="true"] { background: var(--brand-rose-wash); color: var(--brand-rose); }
 
 .ui-subnav { min-width: 0; background: var(--surface-chrome); border-inline-end: 1px solid var(--border-default); }
 .ui-subnav-nav { display: flex; flex-direction: column; gap: var(--gap-rail); padding: var(--inset-subnav); }

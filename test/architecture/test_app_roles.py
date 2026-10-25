@@ -198,17 +198,15 @@ def test_pilot_stays_a_one_robot_surface():
 def test_shared_transport_and_controls_do_not_choose_operational_endpoints():
     """D-425: service adapters can name their contract; transport/UI cannot choose one."""
     shared = ROOT / "shared/web"
-    adapters = {"core-client.js", "fleet-client.js"}
     # Evidence labels can name a route without issuing a request to it.
     dispatch = re.compile(r"\b(?:fetch|api|postJson|request)\s*\(\s*['\"`]/api/(?:v1|fleet)/")
     hits = []
     for path in sorted(shared.glob("*.js")):
-        if path.name not in adapters:
-            hits.extend([
-                f"{path.relative_to(ROOT).as_posix()}:{number}: operational endpoint"
-                for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
-                if dispatch.search(line)
-            ])
+        hits.extend([
+            f"{path.relative_to(ROOT).as_posix()}:{number}: operational endpoint"
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+            if dispatch.search(line)
+        ])
     assert hits == []
 
 

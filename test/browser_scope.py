@@ -20,10 +20,13 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET = [
+    "test/test_integrated_control_backend_browser.py",
     "applications/fleet/test/test_sample_browser.py",
     "applications/fleet/test/test_feature_browser_flows.py",
     "applications/fleet/test/test_browser_adapters.py",
     "test/test_measured_calibration_browser.py",
+    "test/test_motor_health_ui_browser.py",
+    "test/test_fleet_workcell_observation_browser.py",
     "test/test_fleet_console_browser.py",
     "test/test_console_lifetime_browser.py",
     "test/test_console_session_browser.py",
@@ -34,6 +37,7 @@ FLEET = [
     "operations/fleet/test/*_browser.py",
 ]
 ROBOT = [
+    "test/test_motor_health_ui_browser.py",
     "test/test_dashboard_browser.py",
     "test/test_role_menu_panels_browser.py",
     "test/test_role_surface_states_browser.py",
@@ -63,15 +67,22 @@ REVIEW = [
     "test/learning/perception/test_storage_inventory_http.py",
     "test/learning/perception/test_review_flow_browser.py",
     "test/learning/perception/test_learning_pipeline_browser.py",
-    "test/learning/perception/test_learning_connections_browser.py",
-    "test/learning/perception/test_learning_shell_browser.py",
-    "test/learning/perception/test_learning_workspace_browser.py",
     "test/learning/perception/test_pixel_review_browser.py",
     "test/learning/perception/test_review_app_smoke.py",
 ]
+OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for name in
+                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments")]
+CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
+SIM = ["test/learning/perception/test_sim_browser.py"]
+PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
+ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py"]
+TASKS = ["test/learning/perception/test_learning_tasks_browser.py"]
+STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/learning/perception/test_vlm_judge_browser.py"]
+LEARNING = OMX_LEARNING + CAMERA + SIM + PIPELINE + ACCOUNTS + TASKS + STAGES
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + GAZEBO + SHARED
+COMMISSIONING = ["test/test_omx_commissioning_view.py"]
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING
 
 SCOPE: dict[str, list[str]] = {
     "applications/fleet/dev/": FLEET,
@@ -84,9 +95,41 @@ SCOPE: dict[str, list[str]] = {
     "middleware/devices/omx/adapter/": PILOT[2:],
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
+    "learning/curation/perception/review_app.py": LEARNING,
+    "learning/curation/perception/review_app_web/app.css": LEARNING,
+    "learning/curation/perception/review_app_web/commands.js": LEARNING,
+    "learning/curation/perception/review_app_web/account-session.js": LEARNING,
+    **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING for name in
+       ("omx.html", "omx.js", "omx-profiles.js", "omx-review.js")},
+    # Their rail and sub-menu are walked by the OMX owner-status and stage browser tests.
+    **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STAGES for name in
+       ("catalog.html", "camera.html")},
+    "learning/curation/perception/omx_web.py": OMX_LEARNING,
+    "learning/curation/perception/omx_center_web.py": OMX_LEARNING,
+    "learning/training/omx/": OMX_LEARNING + TASKS,
+    **{f"learning/curation/perception/{name}": TASKS for name in
+       ("learning_tasks.py", "learning_tasks_web.py", "review_app_web/tasks.html", "review_app_web/tasks.js")},
+    **{f"learning/curation/perception/{name}": CAMERA for name in
+       ("camera_setup.py", "camera_setup_web.py", "review_app_web/camera.html", "review_app_web/camera.js")},
+    "contracts/learning/src/rosy/contracts/learning/camera_setup.py": CAMERA,
+    **{f"learning/curation/perception/{name}": SIM for name in
+       ("sim_web.py", "review_app_web/sim.html", "review_app_web/sim.js")},
+    **{f"learning/curation/perception/{name}": PIPELINE for name in
+       ("learning_control.py", "learning_pipeline.py")},
+    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS
+       for name in ("learning.html", "learning.js")},
+    **{f"learning/curation/perception/{name}": STAGES for name in
+       ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
+        "review_app_web/vlm.css", "review_app_web/evaluate.html", "review_app_web/evaluate.js",
+        "review_app_web/workspaces.js")},
+    "learning/curation/perception/review_app_web/workspaces.html": OMX_LEARNING + STAGES,
+    **{f"learning/curation/perception/{name}": ACCOUNTS for name in
+       ("learning_accounts.py", "learning_collaboration.py", "learning_oauth.py", "learning_rosy_accounts.py",
+        "review_app_web/accounts.html", "review_app_web/accounts.js")},
     "integrations/simulation/gazebo/scripts/": GAZEBO,
+    "deploy/robot/omx/commissioning_view.py": COMMISSIONING,
     # Every surface loads /common (ui.js, components.css, tokens.css).
-    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW,
+    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING,
     "test/browser_harness.py": EVERYTHING,
 }
 

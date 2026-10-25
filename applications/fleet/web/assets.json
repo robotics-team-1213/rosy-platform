@@ -51,6 +51,22 @@
       "path": "cell/cell.js",
       "media_type": "application/javascript"
     },
+    "cell-observation.js": {
+      "path": "cell/cell-observation.js",
+      "media_type": "application/javascript"
+    },
+    "motor-health-view.js": {
+      "path": "motor-health-view.js",
+      "media_type": "application/javascript"
+    },
+    "roster-cards.js": {
+      "path": "roster-cards.js",
+      "media_type": "application/javascript"
+    },
+    "learning.css": {
+      "path": "learning.css",
+      "media_type": "text/css"
+    },
     "cell-document-editor.js": {
       "path": "cell/cell-document-editor.js",
       "media_type": "application/javascript"
@@ -97,6 +113,10 @@
     },
     "work-view.js": {
       "path": "work/work-view.js",
+      "media_type": "application/javascript"
+    },
+    "integrated-control-view.js": {
+      "path": "work/integrated-control-view.js",
       "media_type": "application/javascript"
     },
     "control-unit-view.js": {
@@ -357,6 +377,42 @@
     },
     "site-map-camera.js": {
       "path": "sitemap/site-map-camera.js",
+      "media_type": "application/javascript"
+    },
+    "edit-history.js": {
+      "path": "sitemap/edit-history.js",
+      "media_type": "application/javascript"
+    },
+    "geometry-edit.js": {
+      "path": "sitemap/geometry-edit.js",
+      "media_type": "application/javascript"
+    },
+    "drawing-import.js": {
+      "path": "sitemap/drawing-import.js",
+      "media_type": "application/javascript"
+    },
+    "map-editor.js": {
+      "path": "sitemap/map-editor.js",
+      "media_type": "application/javascript"
+    },
+    "map-authoring.js": {
+      "path": "sitemap/map-authoring.js",
+      "media_type": "application/javascript"
+    },
+    "map-editor.css": {
+      "path": "sitemap/map-editor.css",
+      "media_type": "text/css"
+    },
+    "map-topology.js": {
+      "path": "sitemap/map-topology.js",
+      "media_type": "application/javascript"
+    },
+    "extraction-review.js": {
+      "path": "sitemap/extraction-review.js",
+      "media_type": "application/javascript"
+    },
+    "drawing-errors.js": {
+      "path": "shared/drawing-errors.js",
       "media_type": "application/javascript"
     },
     "site-layer.js": {
