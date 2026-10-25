@@ -26,8 +26,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
 - 2026-10-25 · uncommitted · 공개 Learning의 접촉 왕복 증거 연결
 - 2026-10-25 · 3130321ba9 · SIM 접촉 왕복의 결과 소비 경로 연결
 - 2026-10-22 · uncommitted · Published-source Learning Center port
 - 2026-10-22 · 0f3084afcf · fix: 열람 권한 부족과 로그아웃 구분
-- 2026-10-22 · uncommitted · 게시 소스의 원격 학습센터 회귀
