@@ -22,12 +22,10 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 
 ## Steps
 
-1. **Commit and push.** The runner builds the pushed commit on origin. It must be a clean
-   tree on `main`. Local uncommitted files from other sessions do not matter; only the
-   pushed commit does.
-   ```bash
-   git push origin main
-   ```
+1. **Get the commit onto origin/main.** The runner builds origin's `main`. Since D-868 it
+   moves only through the publish PR (`AGENTS.md` 「같이 하는 깃」 6), never `git push origin main`;
+   the shared clone's pre-push refuses that (`rosy.publishOnly`). Local uncommitted files from
+   other sessions do not matter; only the merged commit does.
 2. **Pick the release id and build.** The format is `YYYY.MM.DD-NNN`. `NNN` continues
    across dates (012 → 013 → 014). Check `/opt/rosy/releases/` on the robot and the
    existing tags. Never reuse an id: an existing id is only re-checked, never overwritten.

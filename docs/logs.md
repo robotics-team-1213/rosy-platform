@@ -11403,6 +11403,18 @@ osy-d395-s1d\`.
 - 증거: 운영 로그인 화면과 동기화 Episode·learned policy·실물 수용은 확인하지 않았다. 복사 상태 화면은 계정 바인딩 보호로 시작이 거절됐으며 우회하지 않았다. 별개 G1 지연 bound 초과와 동일 소스 후속 CI 통과를 함께 보존했다.
 - gate 변화: 모델 PC 코드·Learning 실제 활성화를 확인. 데이터·정책·현장 gate를 승격하지 않는다. CE 해당 없음 — 기존 교훈 보존·재사용, G1 원인은 미해결이다.
 
+## 2026-10-25 · uncommitted · D-871 관측 env를 uv로 만들기
+
+- 변경: `omx_autoupdate.py`의 `uv` 설정이 있으면 venv와 lock 설치를 uv로 한다(`uv venv --python <base> [--system-site-packages]`, `uv pip install`). 관제 PC 첫 적용에서 시스템 Python 3.14에 `ensurepip`(python3.14-venv)이 없어 `python -m venv`가 실패했다. sudo가 없어 패키지를 설치할 수 없고, 기존 관측 venv도 uv로 만든 것이다. `omx-devices-autoupdate.json.example`에 `uv`를 넣었다.
+- 증거: 관제 PC 2026-10-25 20:24 `run`이 `ensurepip is not available`로 준비 단계에서 멈췄다(유닛 변화 없음). 원격 시험(아래 PR).
+- gate 변화: 없음.
+
+## 2026-10-25 · uncommitted · D-871 여러 유닛 재시작: 하나씩 확인, 순서대로
+
+- 변경: `omx_autoupdate.py` 재시작 뒤 `is-active`를 유닛마다 따로 확인한다. `systemctl is-active a b`는 하나만 active여도 0을 낸다. `sequential: true`이면 역순으로 하나씩 stop한 뒤 순서대로 start한다. 예시 설정에 넣었다.
+- 증거: 관제 PC 2026-10-25 20:33 첫 전환에서 카메라와 camera-readiness를 함께 restart했다. readiness의 정지 복원이 카메라 재개방과 겹쳐 `camera restore incomplete`, 재시작은 `camera settings changed since baseline; refusing overwrite`로 실패했는데 업데이터는 `switched`로 기록했다. 복원이 끝난 뒤 readiness를 손으로 다시 시작하자 READY였다(top·front 120회 확인). 원격 시험(아래 PR).
+- gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · chore(sync): merge origin/main #201-#207 into local main
 
 - 변경: origin/main(61addd5695, PR #201-#207, 28커밋)을 로컬 main에 병합했다. 충돌 14파일 가운데 add/add 4건(tools/remote/remote_isaac.py, test/test_remote_isaac.py, docs/deployment/isaac-experiment-runs.md, test/learning/perception/test_sim_browser.py)은 main 내용을 포함한 origin 최신판(inline choose_target, free_port, 접촉 왕복 PNG 문구)을 채택했고, 추가 전용 logs 5파일은 main 본문을 그대로 두고 origin 전용 블록 10건을 날짜 위치에 덧붙여 풀었다.
@@ -11494,11 +11506,46 @@ osy-d395-s1d\`.
 - 증거: 새 계약 시험의 미구현 import 실패를 원격에서 확인한 뒤 스키마를 추가했다. 후속 원격 검증과 독립 계약 검토로 확인한다.
 - gate 변화: 없음. ADR D-876의 첫 wire 계약이며 운영 활성화는 아니다. CE: 해당 없음.
 
+## 2026-10-25 · uncommitted · D-871 학습 센터 자동 업데이트
+
+- 변경: `deploy/model_pc/learning_center_update.py`가 2026-10-23 교훈의 수동 절차를 자동화한다. 동작 조건은 CI 통과 + 후손 커밋, 센터 enabled·active, `experiment_*` 작업과 자식 프로세스 없음이다. 새 커밋을 `source/<sha>`에 받고, 새 설치기 `prepare()`로 유닛을 만든다. 백업 → 정지 → 쓰기 → `--apply` → active·새 sha·HTTP 200을 확인하고, 실패하면 백업 유닛으로 복구한다. `rosy-learning-center-update.{service,timer}`(D-805 관문), services.yaml model·ai 항목을 `autoupdate`로 바꾸고 업데이터를 추가했다.
+- 증거: 원격 시험(아래 PR). 모델 PC 센터는 10/25 현재 사람이 멈추고 disabled 상태라 `idle`로 남는다.
+- gate 변화: 없음.
+
 ## 2026-10-25 · uncommitted · 공급암 S: 매끄러운 동작, 사이클 녹화, Gazebo 시나리오
 
 - 변경: `motion_profile.py`(동기 사다리꼴, 모서리 이어 돌기, 정확한 정지점, `retime`). `chunk_runner.transit_path`는 올라가며 돌기 시작하는 한 흐름(겹침 0.6 s, 높이 1 unit 이내에서만 회전), `grasp_planner`의 수직 내려가기·들기는 같은 경로에 부드러운 가감속. `cell_record.py`와 `--stage record`(A/B 한 사이클 녹화, 녹화된 집게로 held/empty 판정, 원위치 확인). native SIM 시나리오 `pick-place-chunks-offset`·`-yaw-site`·`-yaw-box`(상자 이동·회전, 관측한 상자 위치로 계획).
 - 증거: 원격 시험 통과. 매끄러운 동작으로 Gazebo `pick-place-chunks` PASS(xy 0.26 mm, 들기 102 mm). 시나리오 결과는 이어서 기록한다.
 - gate 변화: 없음. 실물의 매끄러운 동작·녹화는 실물 실행에서 확인한다.
+
+## 2026-10-25 · a401f49f6d · D-879 GPT media prototype 경계
+
+- 변경: D-879 Proposed와 ADR index에 signed six-role GPT·boot_a 개인화·원본 GPT 유지·production BUILD_GO 보류를 기록했다. 구현은 image verifier/readback/SD 준비/producer와 연결된다.
+- 증거: 새 Python/image/gateway 원격303 passed,3 skipped; 실제 PowerShell GPT·resume·Storage mock17 passed; 독립 전체 및 후속 검토에서 중대한 결함 없음. 전체 PS Windows 수용과 native ARM64/SD/boot 증거는 없다.
+- gate 변화: 제안과 source prototype의 완료 범위이며 전체 OS 업데이트 제품 수용은 아니다.
+- 교훈: CE 해당 없음 — 구현 계약과 회귀 시험이 판단을 보존한다.
+
+## 2026-10-25 · 0210c973b8 · fix(worktrees): tombstone a removed worktree's held folder
+
+- 변경: Windows에서 다른 프로세스가 cwd로 잡은 워크트리 폴더는 `git worktree remove`가 등록만 지우고 폴더를 남기며, 그 안의 git 명령이 main 체크아웃의 `.git`으로 올라가 main에 작용했다(오늘 공유 main 체크아웃의 우발 병합 원인). `tools/worktree_rules.py` `leave_tombstone`이 남은 폴더를 비었으면 rmdir하고, 아니면 존재할 수 없는 gitdir(`.git/removed-worktree-<name>-delete-this-folder`)을 가리키는 `.git` 파일을 쓴다. `tools/worktrees.py` `_remove`(실패·성공 뒤 남은 폴더)와 `clear_orphan` 실패(WinError 32)에서 부른다. 묘비 `.git`은 보존할 내용으로 세지 않아 다음 prune이 대기 없이 폴더를 지우고, scan은 고아로만 본다. `new`는 묘비만 남은 폴더를 치우거나, 잡혀 있으면 이유를 들어 거절한다(`clear_tombstone`). `tools/land.py`는 같은 `worktrees.sweep`을 써서 따로 고칠 곳이 없다.
+- 증거: 커밋 0210c973b8. 실제 git으로 묘비 폴더 안 `git rev-parse` → 128, "gitfile does not point to a valid repository", 부모로 넘어가지 않음. `remote_pytest.py -- test/test_worktrees_tool.py test/test_land.py -q` 148 passed(AI PC, 0210c973b8). 새 시험 4개: 잡힌 폴더 묘비·git 실패·다음 prune 삭제·scan 고아, 빈 폴더 rmdir, 고아 정리 실패 묘비, `new` 정리·거절. 기존 keep/remove 판정 시험은 그대로 통과.
+- gate 변화: 없음. 개발 도구 변경이다.
+- 결정: 없음.
+- 교훈: 없음. 사고 교훈은 다른 세션(robot-4d)이 쓰고 이 수정을 가리킨다.
+
+## 2026-10-25 · uncommitted · 구조화 출력 공통 어댑터와 실제 모델 파이프라인 시험 (D-878)
+
+- 변경: `rosy.decision.structured_output`(Ollama·OpenAI 호환 전송 형식과 응답 봉투 검사)을 deliberation·conversation·operator broker와 GLM·free 게이트웨이가 쓴다(전송 바이트 동일). `judgment_schema()`가 빈 enum 대신 `maxItems: 0`을 내고, 판정별 `anyOf` 변형으로 단계 짝을 강제한다(`$ref`·`$defs`로 16 KiB 이내). `qwen_review_completion`은 닫힌 스키마로 요청한다. opt-in `test/test_structured_output_pipeline.py` 추가.
+- 증거: 모델 PC 실제 모델 — deliberation 0/3(HTTP 400) → 1/3 → 3/3, conversation 46/46, operator 26/26, judge seat 4/4, qwen 3/3. 관련 단위 시험 원격 583 passed.
+- gate 변화: 없음(AI PC 재배포·수용은 별도). CE 새 교훈 기록 — `docs/solutions/runtime-errors/ollama-refused-empty-enum-and-judgment-schema-allowed-steps-the-validator-refuses-2026-10-25.md`.
+
+## 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+
+- 변경: `tools/hooks/pre-push`가 `git config rosy.publishOnly true`인 clone에서 `publish/main-*` 밖의 브랜치 push를 거절한다(삭제는 통과, 사고 대응은 `ROSY_PUSH_REASON`). 팀원 clone은 설정이 없어 영향이 없다. `git-workflow.md`의 옛 `git push origin main` 순서와 `rosy-release-push` 1단계를 D-868 게시 절차로 고쳤다.
+- 이유: D-868 동결 중 에이전트 세션이 origin에 직접 PR #192~#209를 병합해 동기화 FULL이 반복됐다(로컬 기록 `Rosy/docs/workspace-records/2026-10-25/local-main-landing-speed.md`). 문서 규칙만으로는 막지 못했다.
+- 증거: `test/test_pre_push_hook.py::test_publish_only_clone_pushes_publish_branches_only` 5개 경우. bash로 같은 구간을 돌려 게시 0·주제 1·이유 0·설정 없음 0을 확인하고, 허용 분기를 거절로 바꾼 변형이 1로 바뀌는 것을 확인했다.
+- gate 변화: 없음. 공유 clone의 설정 적용은 착지 뒤 따로 한다.
+- 교훈: CE 해당 없음 — 원인과 결정은 D-868과 위 작업 기록에 있다.
 
 ## 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
 

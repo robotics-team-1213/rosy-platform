@@ -11,7 +11,6 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
-| D-871 | 모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면 | Accepted for implementation (2026-10-25) |
 | D-854 | OMX 학습 정책 실행기 하나로 — 정책 종류를 갈아 끼우는 AI PC 정책 실행기와 행동 단위 변환 | Proposed (2026-10-23) |
 | D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |
@@ -23,8 +22,10 @@
 | D-848 | 봉인한 리더 녹화의 세션·사이클 계보 | Accepted for implementation (2026-10-23) |
 | D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나, 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
 | D-878 | 모델 구조화 출력 — 스키마 정본은 하나, 전송 형식은 어댑터에서, 파싱 실패는 무효 답과 같다 (D-392 §6 보충) | Proposed (2026-10-25) |
+| D-879 | 서명된 GPT A/B 이미지의 파티션 역할을 SD 도구가 함께 검증한다 | Proposed |
 | D-876 | ROSY Monitoring — 사이트 독립 감시와 통합 집계 | Accepted (2026-10-25) |
 | D-874 | Learning 승격 요청 묶음 — 확정 정답 평가 근거를 봉인해 넘기고, 승인은 Fleet에 둔다 (D-857 보충) | Proposed (2026-10-25) |
+| D-871 | 모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면 | Accepted for implementation (2026-10-25) |
 | D-868 | 로컬 main에 먼저 착지하고, 공개 main에는 그 로컬 main을 merge commit으로 올린다 | Accepted (2026-10-25) |
 | D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
 | D-870 | 군집 원본 자세 시각과 수신측 단조 시계 만료 | Accepted for implementation (2026-10-25) |
