@@ -334,15 +334,15 @@ def test_ab_produced_blackbox_is_collected_without_slot_logs_or_provision_secret
     stale.parent.mkdir(parents=True)
     stale.write_text("STALE_SLOT_BLACKBOX")
     provision = root / "run/rosy-provision-boot"
-    secrets = [provision / "rosy-config.yaml", provision / "rosy-diag/rosy-config.yaml"]
+    blocked_paths = [provision / "rosy-config.yaml", provision / "rosy-diag/rosy-config.yaml"]
     _boot(root, FAILED_CARD_UNITS)
-    for path in secrets:
+    for path in blocked_paths:
         path.write_text(DENIED_MARK)
-    (provision / "rosy-diag/boot-000099-abcdef01.json").symlink_to(secrets[0])
+    (provision / "rosy-diag/boot-000099-abcdef01.json").symlink_to(blocked_paths[0])
     original = os_state_layout._read
 
     def guarded(path, *args):
-        assert path not in secrets, "collector opened provisioning secrets"
+        assert path not in blocked_paths, "collector opened provisioning secrets"
         return original(path, *args)
 
     monkeypatch.setattr(os_state_layout, "_read", guarded)

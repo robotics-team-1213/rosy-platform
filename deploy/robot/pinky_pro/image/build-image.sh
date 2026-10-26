@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build an unsigned GPT A/B image from the pinned Ubuntu Raspberry Pi base.
+# Build an unsigned Ubuntu Server 24.04 arm64 GPT A/B image from its pinned Raspberry Pi base.
 # Native ARM64 artifact and boot/update acceptance are separate gates; v2
 # production BUILD_GO stays closed until that complete path is verified.
 set -euo pipefail
