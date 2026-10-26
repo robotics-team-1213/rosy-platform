@@ -18,17 +18,19 @@ import land_isolation
 GUARDS = ("test/architecture", "test/test_harness_contracts.py")
 
 
-def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int | str, run_tests) -> list[str]:
-    """Run the guards through land's own run_tests; summary lines, or [] when skipped.
+def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int | str, run_tests,
+          isolated: bool = False) -> list[str]:
+    """Run the guards and the collection gate through land's own run_tests; summary lines, or [] when skipped.
 
     Skipped for explicit --tests; the guards are left out when every selected path already is a guard.
+    ``isolated`` (land_prepare, outside the lock) adds land_isolation's files run alone.
     """
     if args.tests != "auto":
         return []
     guards = [g for g in GUARDS if (wt / g).exists()]
     paths = [p.rstrip("/") for inv in invocations for p in inv]
     batch = [] if not guards or all(any(p == g or p.startswith(g + "/") for g in guards) for p in paths) else [guards]
-    if not (batch := batch + land_isolation.invocations(wt, invocations)):
+    if not (batch := batch + land_isolation.invocations(wt, invocations, isolated)):
         return []
     quick = argparse.Namespace(**{**vars(args), "node": False})
     # "g<n>" keeps these logs out of land_record's run-<n>-*.txt glob.

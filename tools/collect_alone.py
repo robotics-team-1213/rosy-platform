@@ -2,7 +2,7 @@
 
 Job words: ``ROSY_COLLECT_PATHS`` (comma-separated selection paths), optional ``ROSY_COLLECT_BUDGET_S`` (wall cap,
 default 600) and ``ROSY_COLLECT_ROOT`` (the tree, default this checkout). Each tracked test file under the paths
-gets ``pytest --collect-only`` in its own process, as many at once as the job's xdist workers (2 when serial).
+gets ``pytest --collect-only`` in its own process, as many at once as the job's ``ROSY_JOB_CORES`` (else 2).
 A file that does not collect alone fails its own id; one not reached within the budget skips.
 Not a test_*.py file: pytest collects it only when named, so no folder run picks it up.
 """
@@ -25,7 +25,7 @@ FILES = land_isolation.tracked_tests(ROOT, PATHS)
 
 @pytest.fixture(scope="module")
 def collected():
-    workers = int(os.environ.get("PYTEST_XDIST_WORKER_COUNT") or 2)
+    workers = int(os.environ.get("ROSY_JOB_CORES") or 2)
     return land_isolation.collect_alone(ROOT, FILES, workers, float(os.environ.get("ROSY_COLLECT_BUDGET_S") or 600))
 
 

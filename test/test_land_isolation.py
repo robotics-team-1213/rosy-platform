@@ -77,14 +77,16 @@ def test_collect_alone_reports_only_the_masked_file(pair):
 
 
 def test_guard_round_carries_the_gate_and_the_safety_tests_alone(monkeypatch):
-    """Wiring: land_guards.first sends the gate with the guards; safety tests and reference tests go alone."""
+    """Wiring: land_guards.first sends the gate with the guards; in prepare safety and reference tests go alone."""
     monkeypatch.setattr(land_isolation, "alone", lambda wt, inv: [["middleware/drive/safety/test/test_x.py"]])
     batches = []
     selection = [["pkg/test", "test/test_y.py"]]
-    land_guards.first(ROOT, argparse.Namespace(tests="auto", node=True), selection, Path("."), 1,
-                      lambda wt, args, inv, logdir, round_no: batches.append(inv) or [])
-    assert batches == [[list(land_guards.GUARDS), ["ROSY_COLLECT_PATHS=pkg/test,test/test_y.py", land_isolation.GATE],
-                        ["middleware/drive/safety/test/test_x.py"]]]
+    gate = [f"ROSY_JOB_CORES={land_isolation.GATE_CORES}", "ROSY_COLLECT_PATHS=pkg/test,test/test_y.py", land_isolation.GATE]
+    for isolated in (True, False):  # the turn (False) runs the gate only: alone runs stay outside the lock
+        land_guards.first(ROOT, argparse.Namespace(tests="auto", node=True), selection, Path("."), 1,
+                          lambda wt, args, inv, logdir, round_no: batches.append(inv) or [], isolated=isolated)
+    assert batches == [[list(land_guards.GUARDS), gate, ["middleware/drive/safety/test/test_x.py"]],
+                       [list(land_guards.GUARDS), gate]]
 
 
 def test_alone_caps_reference_tests_and_keeps_safety_tests(monkeypatch, tmp_path):

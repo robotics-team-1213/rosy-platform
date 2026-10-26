@@ -77,7 +77,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     print(f"[land] {'FULL' if note else 'affected'} tier before the turn, ticket preparing (main {main_sha[:10]})",
           flush=True)
     logdir, began = land.tmp_dir(branch), time.monotonic()
-    land.land_guards.first(wt, args, invocations, logdir, "pre", land.run_tests)
+    land.land_guards.first(wt, args, invocations, logdir, "pre", land.run_tests, isolated=True)  # alone runs: here only
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
     land.run_tests(wt, args, invocations, logdir, "pre")

@@ -33,7 +33,7 @@ def pytest_make_collect_report(collector):
     yield
     if before is not None:
         own = _own_dir(Path(collector.path))
-        if added := [p for p in sys.path if p not in before and p != own]:
+        if added := list(dict.fromkeys(p for p in sys.path if p not in before and p != own)):
             root = str(collector.config.rootpath)
             _ADDED[collector.nodeid] = [os.path.relpath(p, root) if p.startswith(root) else p for p in added]
 

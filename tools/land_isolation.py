@@ -7,7 +7,7 @@ sys.modules while pytest collected them; alone the file did not import
 
 - ``gate``: one invocation of ``tools/collect_alone.py`` that runs ``pytest --collect-only`` for every selected
   test file in its own process, so such an import fails under the file's own id before the long round.
-- ``alone``: test files that reference a changed file (the D-436 selector's ``references X`` edge), at most
+- ``alone`` (land_prepare only, outside the lock: the turn has a 10 min cap): test files that reference a changed file (the D-436 selector's ``references X`` edge), at most
   ``CAP`` (past that only those that load modules with ``spec_from_file_location``), plus every selected test
   under a safety root, each as its own invocation.
 
@@ -27,6 +27,9 @@ from pathlib import Path
 
 GATE = "tools/collect_alone.py"
 CAP = 10
+# The gate is serial under xdist_plan (tools/ in serial_suites.txt); its pool takes this budget instead. 2 workers
+# took 347 s for a FULL selection's 2,123 files (2026-10-26); a collect-only process peaked under 200 MiB.
+GATE_CORES = 6
 TEST_FILE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")  # = affected_tests.TEST_FILE
 ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # remote_pytest.PYTEST_TAIL's options for one file; xdist off: each file already has its own process.
@@ -74,7 +77,8 @@ def collect_alone(root: Path, files: list[str], workers: int = 2, budget_s: floa
 
 def gate(wt: Path, invocations: list[list[str]]) -> list[list[str]]:
     paths = selected_paths(invocations)
-    return [[f"ROSY_COLLECT_PATHS={','.join(paths)}", GATE]] if paths and (wt / GATE).is_file() else []
+    return ([[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_COLLECT_PATHS={','.join(paths)}", GATE]]
+            if paths and (wt / GATE).is_file() else [])
 
 
 def alone(wt: Path, invocations: list[list[str]], base: str = "main") -> list[list[str]]:
@@ -99,6 +103,6 @@ def alone(wt: Path, invocations: list[list[str]], base: str = "main") -> list[li
     return [[t] for t in sorted(set(refs) | safety) if [t] not in invocations]
 
 
-def invocations(wt: Path, selection: list[list[str]]) -> list[list[str]]:
-    """The gate and the files to run alone for this selection; [] when the tree has no gate."""
-    return gate(wt, selection) + alone(wt, selection)
+def invocations(wt: Path, selection: list[list[str]], isolated: bool) -> list[list[str]]:
+    """The gate, and with ``isolated`` the files to run alone, for this selection; [] when the tree has no gate."""
+    return gate(wt, selection) + (alone(wt, selection) if isolated else [])
