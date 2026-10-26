@@ -2,7 +2,7 @@
 
 Run from a topic worktree (never the shared main checkout)::
 
-    python tools/land.py [--main-checkout PATH] [--tests auto|none|"<pytest args>"]
+    python tools/land.py [--main-checkout PATH] [--tests auto|"<extra pytest args>"]
                          [--node] [--max-rounds N] [--dry-run] [--prune | --no-prune] [--no-cache]
                          [--queue-timeout MIN | --no-queue]
 
@@ -67,6 +67,10 @@ ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
 TURN_CAP_S = 600  # D-889: a turn's delta tests past this move outside the lock (land_prepare.again)
+# 2026-10-27: a landing with a hand-picked --tests skipped its selection, guards and pretest and left main red
+# (3125704e24). A real landing always runs the selection; --tests "<args>" only adds EXTRA, "none" is refused.
+FIXTURE_ENV = "ROSY_LAND_FIXTURE"  # land.py's own test fixtures only: --tests none/"<args>" replace the selection
+EXTRA: list[list[str]] = []
 
 
 class Stop(Exception):
@@ -196,7 +200,8 @@ def pack(wt: Path, paths: list[str]) -> list[list[str]]:
 
 def select(wt: Path, base: str, python: str, head: str | None = None,
            landed: bool = False) -> tuple[list[list[str]], str | None]:
-    return land_selection.select(sys.modules[__name__], wt, base, python, head, landed)
+    invocations, note = land_selection.select(sys.modules[__name__], wt, base, python, head, landed)
+    return invocations + [inv for inv in ([] if landed else EXTRA) if inv not in invocations], note
 
 
 def browser_tier(wt: Path, base: str, head: str | None = None) -> list[list[str]]:
@@ -516,7 +521,9 @@ def land(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--main-checkout", help="path of the worktree that has main checked out")
-    parser.add_argument("--tests", default="auto", help='auto | none | "<pytest args>"')
+    parser.add_argument("--tests", default="auto", help='auto | "<pytest args>" run on top of the selection | none'
+                        ' (with --skip-reason)')
+    parser.add_argument("--skip-reason", default="", help="the user's explicit words that allow --tests none")
     parser.add_argument("--node", action="store_true", help="also node --test the selected test dirs' web/*.mjs")
     parser.add_argument("--max-rounds", type=int, default=5)
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
@@ -526,6 +533,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--queue-timeout", type=float, default=0, help="minutes to wait in the queue (0: no limit)")
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
+    EXTRA.clear()
+    if args.tests not in ("auto", "none") and os.environ.get(FIXTURE_ENV) != "1":
+        EXTRA.append(shlex.split(args.tests))
+        args.tests = "auto"
+    if args.tests == "none" and not args.skip_reason.strip() and os.environ.get(FIXTURE_ENV) != "1":
+        print("[land] STOP: --tests none lands with no test, guard or pretest; only on the user's explicit words,"
+              ' as --skip-reason "<their words>" (docs/solutions first-field-result-...-2026-10-10.md 4)',
+              file=sys.stderr)
+        return 2
     try:
         wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
         code = land_checks.landed_copy(Path(args.main_checkout) if args.main_checkout else main_checkout(wt),
@@ -533,6 +549,8 @@ def main(argv: list[str] | None = None) -> int:
         if code is not None:
             return code
         land_events.bind(wt, out(wt, "rev-parse", "--abbrev-ref", "HEAD"))
+        if args.tests == "none":
+            land_events.emit("skip", reason=args.skip_reason.strip()[:300])
         if (code := land(args)) == 0 and not args.dry_run:
             land_events.emit("landed", sha=out(wt, "rev-parse", "HEAD"))
         return code

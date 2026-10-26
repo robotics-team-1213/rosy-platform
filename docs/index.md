@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-27 · 6ffe52ae26 · docs: D-895 단일 이송 복구 후손과 원본 증거 보존
-- 2026-10-27 · uncommitted · feat(sim): D-877 물체 위치 평가 사실, 탐침 PASS 순서
-- 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
-- 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
-- 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
+- 2026-10-27 · uncommitted · fix(land): 손으로 고른 --tests가 선택 시험을 대신하지 못하게
+- 2026-10-27 · uncommitted · perf(land): 사전 시험의 관문 라운드를 선택 시험과 함께 돌린다
+- 2026-10-27 · uncommitted · fix(doctor): 대기열의 반복 준비·무활동 착지를 경고
+- 2026-10-27 · uncommitted · fix(land): 크기 규칙을 대기·준비 단계에서 미리 본다
