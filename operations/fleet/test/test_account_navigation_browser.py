@@ -30,6 +30,8 @@ def test_account_entry_uses_shared_heading_and_readable_layout(account_page, acc
     assert heading.evaluate('(node) => getComputedStyle(node).fontSize') == '20px'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     expect(page.locator('#login-back')).to_be_visible()
+    expect(page.locator('#login-site')).to_contain_text(origin.split('://', 1)[1])
+    expect(page.get_by_text('계정이 없거나 비밀번호를 잊었다면 현장 관리자에게 문의하세요.')).to_be_visible()
     capture(page, f'login-{account_backend}-{width}.png')
 
 
