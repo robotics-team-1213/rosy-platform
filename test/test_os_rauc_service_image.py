@@ -34,4 +34,4 @@ def test_os_service_is_frozen_and_installed_only_on_protocol2(tmp_path, monkeypa
     "etc/systemd/system/rosy-os-rauc.service.d/override.conf", "etc/dbus-1/system.d/90-rosy-rauc.conf"])
 def test_application_backup_or_sync_cannot_write_os_daemon_namespaces(target):
     with pytest.raises(ValueError, match="IMAGE_LAYER_DESTINATION"):
-        sync_mod._validate_destination(target)
+        sync_mod.check_destination(target)
