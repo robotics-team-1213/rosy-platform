@@ -11999,5 +11999,5 @@ osy-d395-s1d\`.
 ## 2026-10-26 · uncommitted · fix(land): 단독 실행 시간 상한·기록, 묵은 단독 재실행, 안전 간선
 
 - 변경: robot-0d 토론 결과 반영. 참조 시험 단독 실행을 개수 10 대신 시간 상한(600 s, 작업자 6)으로 바꾸고 원격 한 잡(`tools/collect_alone.py` `ROSY_ALONE_FILES`)에서 돌린다. 못 돈 파일은 버리지 않고 `<git-common-dir>/rosy-land-isolation.jsonl`에 `incomplete`로 남기며 차례 요약에 `isolation incomplete: <files>`를 찍는다(보고 줄이 없으면 전부 못 돈 것으로 친다). 준비 뒤 main이 움직여 그 시험들이 참조하는 파일을 바꾸면 차례에서 그 시험만 다시 단독 실행한다. 수집 게이트는 준비 단계만 돈다. 안전 규칙은 시험 경로의 `is_safety` 대신 `is_safety` 원본을 참조하는 시험(개수 상한 없음, 같은 시간 상한)으로 바꿨다. 교훈 `shared-pytest-process-masks-path-dependent-import-2026-10-26.md`에 collect-only가 픽스처 시점 로드를 못 잡는다는 절을 더했다. `tools/land.py`·`land_prepare.py`·`land_full.py`는 이번에 고치지 않았다.
-- 증거: 아래 원격 실행 결과를 따른다.
+- 증거: 원격 `test/test_land_isolation.py` 13 passed, `test/test_land.py test/test_land_events.py test/test_land_queue.py test/test_land_record.py test/test_remote_pytest.py` 217 passed(exit 0). 변이 6개(보고 줄 항상 complete, 보고 없음→전부 미실행 폴백 제거, 묵은 재실행 끔, 안전 우선 순위 제거, 차례에 수집 게이트, 한 프로세스 실행) 모두 해당 시험 실패. 사고 재현(6a07a06b0f 이전 `native_cycle.py`): 단독 잡이 참조 시험 8개를 9.5 s에 돌려 `test_native_cycle.py`·`test_register_policy.py`를 빨강으로 잡음(HEAD에서는 둘 다 통과), 수집 게이트는 같은 폴더에서 초록.
 - gate 변화: 준비 단계에 수집 게이트 1잡과 단독 실행 1잡, 차례에는 묵은 단독 재실행만.
