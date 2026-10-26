@@ -92,8 +92,10 @@ def _cleanup(root, state, run, host):
     result = run(["/usr/bin/systemctl", "stop", "rosy-os-trial-deadline.timer", "rosy-os-trial-deadline.service"], timeout=30)
     if result.returncode != 0:
         raise ValueError("committed boot deadline cleanup failed")
-    if (intent is not None and intent["target_slot"] == facts["slot"]
-            and intent["release_id"] == current["committed"]["release_id"] and intent["trial_boot_id"] == facts["boot_id"]):
+    completed = intent is not None and (
+        intent["target_slot"] == facts["slot"] and intent["release_id"] == current["committed"]["release_id"]
+        or intent["target_slot"] != facts["slot"] and intent["release_id"] in current["failed_versions"])
+    if completed:
         claim = rosy_claim.check(root, now=host.now())
         holder = "os-update:" + intent["transaction_id"]
         if claim is not None and claim["holder"] == holder:
@@ -130,6 +132,11 @@ def _commit(root, transaction_id, host, run):
         pending = state["pending"]
     else:
         _intent(root, pending)
+    _media(root, pending, facts)
+    _controls(root, pending, facts, host)
+    health.read_health(root, pending)
+    if _snapshot(root) != (facts, state, default):
+        raise ValueError("trial changed during durable intent publication")
     _write_atomic(_path(root, BOOTSTRAP), autoboot(pending["target_slot"]), 0o644)
     if _read(_path(root, BOOTSTRAP), 256, root.stat().st_uid) != autoboot(pending["target_slot"]):
         raise ValueError("persistent firmware default readback differs")
