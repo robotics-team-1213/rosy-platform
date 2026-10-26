@@ -206,6 +206,14 @@ took hours to land. Four separate things blocked it.
   D-436 selector only a FULL tier prepares. Tests:
   `test/test_land.py::test_an_affected_landing_prepares_outside_the_lock_and_its_turn_runs_mains_delta_only`,
   `test/test_land_queue.py::test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one`.
+- **First confirmed failure stops the round; the turn has a time cap (2026-10-26):** a round ran 19 more min
+  after its first real failure. `run_tests` now judges each invocation as it finishes (`remote_pytest.run`
+  `on_done`, `land_checks.verdict`: known_failures, then the rerun alone) and cancels the rest on a confirmed
+  NEW failure; cancelled invocations are neither kept nor failures of their own. In a turn, tests past
+  `TURN_CAP_S` (600 s) cancel the rest as `Overtime`, and `land_prepare.again` runs them outside the lock
+  before the ticket waits again. Tests:
+  `test/test_land.py::test_a_confirmed_new_failure_cancels_the_rest_and_the_cancelled_are_neither_kept_nor_failures`,
+  `::test_the_turns_time_cap_cancels_the_rest_as_overtime_and_a_prepare_round_has_no_cap`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

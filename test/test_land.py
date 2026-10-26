@@ -965,6 +965,50 @@ def test_what_failed_last_run_runs_alone_first_and_a_repeat_stops_before_the_res
     assert calls == [[["other/test"]], [["pkg/test"]]] and land.land_cache.failed_first(wt, [["other/test"]]) == []
 
 
+def _runner(results):
+    """remote_pytest.run that writes each invocation's log, asks on_done after each, and cancels the rest."""
+    def run(invocations, logs, *args, on_done=None, **kwargs):
+        codes, stop = [], False
+        for inv, log in zip(invocations, logs):
+            if stop:
+                codes.append(land.remote_pytest.CANCELLED)
+                continue
+            code, text = results[inv[0]]
+            log.parent.mkdir(parents=True, exist_ok=True)
+            log.write_text(text, encoding="utf-8")
+            codes.append(code)
+            stop = bool(on_done and on_done(inv, log))
+        return codes
+    return run
+
+
+RED = (1, "F [100%]\nFAILED other/test/test_bad.py::test_bad - assert False\n1 failed\n")
+GREEN = (0, "1 passed\n")
+
+
+def test_a_confirmed_new_failure_cancels_the_rest_and_the_cancelled_are_neither_kept_nor_failures(cached, monkeypatch):
+    """D-889: a round ran 19 more minutes after its first real failure (2026-10-26)."""
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red")
+    monkeypatch.setattr(land.remote_pytest, "run", _runner({"other/test": RED, "pkg/test": GREEN,
+                                                            "other/test/test_bad.py::test_bad": RED}))
+    with pytest.raises(land.Stop) as stop:
+        run([["other/test"], ["pkg/test"]])
+    assert "NEW failure in other/test" in str(stop.value) and "1 invocation(s) not run" in str(stop.value)
+    assert land.land_cache.entries(wt) == [], "the cancelled pkg/test never passed here"
+
+
+def test_the_turns_time_cap_cancels_the_rest_as_overtime_and_a_prepare_round_has_no_cap(cached, monkeypatch):
+    wt, run, calls = cached
+    monkeypatch.setattr(land, "TURN_CAP_S", -1)
+    monkeypatch.setattr(land.remote_pytest, "run", _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}))
+    with pytest.raises(land.Overtime):
+        land.run_tests(wt, land.argparse.Namespace(tests="auto", node=False, no_cache=False),
+                       [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", 1)
+    assert land.run_tests(wt, land.argparse.Namespace(tests="auto", node=False, no_cache=False),
+                          [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", "pre")
+
+
 def test_cache_ignores_corrupt_lines_and_no_cache_reruns(cached, capsys):
     wt, run, calls = cached
     assert land.main(["--no-cache", "--dry-run"]) == 0  # the flag parses (before pytest leaves __pycache__)

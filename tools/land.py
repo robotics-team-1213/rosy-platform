@@ -64,8 +64,14 @@ SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job en
 ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
+TURN_CAP_S = 600  # D-889: a turn's delta tests past this move outside the lock (land_prepare.again)
+
+
 class Stop(Exception):
     """A step failed; the message says why. Exit 1."""
+
+
+class Overtime(Stop): """The turn's tests ran past TURN_CAP_S, the rest cancelled: land() prepares them outside."""
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -314,8 +320,13 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     def batch(part: list[tuple[int, list[str]]]) -> list[str]:
         todo = [inv for _, inv in part]
         logs = [logdir / f"run-{round_no}-{n}.txt" for n, _ in part]
-        began = time.monotonic()
-        codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
+        began, seen = time.monotonic(), {}
+
+        def on_done(inv, log):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
+            seen[str(log)] = v = land_checks.verdict(wt, inv, Path(log), logdir, f"{round_no}-{Path(log).stem[4:]}",
+                                                     python, remote_pytest.run, head)
+            return bool(v[0] and not v[1]) or (isinstance(round_no, int) and time.monotonic() - began > TURN_CAP_S)
+        codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}", on_done=on_done)
         if out(wt, "rev-parse", "HEAD") != head:
             raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
         if len(codes) != len(todo):
@@ -323,33 +334,35 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
         print(f"[pytest] {(secs := round(time.monotonic() - began))}s", flush=True)
         # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
         # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
-        stops = []
+        stops, cancelled = [], []
         for (n, _), inv, log, code in zip(part, todo, logs, codes):
             if out(wt, "rev-parse", "HEAD") != head:
                 raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
+            if code == remote_pytest.CANCELLED:  # never ran to a verdict: not kept, not a failure of its own
+                cancelled.append(inv)
+                land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs)
+                continue
             if why := land_cache.unusable(code, log):
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
                 land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs)
                 continue
-            check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
-                                   capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
-            print(check.stdout, end="")
-            flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
-                wt, inv, log, check.stdout, logdir, f"{round_no}-{n}", python, remote_pytest.run,
-                tested_sha=head)
+            failed, flaky, why = seen.get(str(log)) or land_checks.verdict(
+                wt, inv, log, logdir, f"{round_no}-{n}", python, remote_pytest.run, head)
             if out(wt, "rev-parse", "HEAD") != head:
                 raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
-            if check.returncode != 0 and not flaky:
+            if failed and not flaky:
                 stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
                 land_cache.failed(wt, inv, True)
                 land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs)
                 continue
             land_cache.failed(wt, inv, False)
             land_events.emit("tests", round=round_no, argv=inv, verdict="flaky" if flaky else "pass", seconds=secs)
-            if check.returncode == 0:
+            if not failed:
                 keep(inv, log)
             done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
-        return stops
+        if cancelled and not stops:
+            raise Overtime(f"{len(cancelled)} invocation(s) past the turn's {TURN_CAP_S // 60} min: tested outside the lock")
+        return stops + ([f"{len(cancelled)} invocation(s) not run: cancelled after the failure above"] if cancelled else [])
 
     # What failed last time runs alone first: failing again stops before the rest spends the test PCs.
     numbered = list(enumerate(todo, 1))
@@ -478,9 +491,7 @@ def land(args) -> int:
             if note and note not in summary:
                 summary.append(note)
             if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
-                land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
-                land_queue.wait(qdir, ticket, args.queue_timeout * 60)
-                full_main = land_full.restore(wt, branch)
+                full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
                 continue
         else:
             invocations = [shlex.split(args.tests)]
@@ -507,7 +518,11 @@ def land(args) -> int:
             print("[land] main moved during the guard round; merging again")
             continue
         began = time.monotonic()
-        tested = run_tests(wt, args, invocations, logdir, round_no)
+        try:
+            tested = run_tests(wt, args, invocations, logdir, round_no)
+        except Overtime if ticket is not None else ():  # without a ticket (--no-queue) it stops like any Stop
+            full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
+            continue
         if out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
         # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree

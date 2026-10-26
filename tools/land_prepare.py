@@ -32,6 +32,14 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep) -> None:
     land_queue.set_status(ticket, "preparing")
 
 
+def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, invocations, note) -> str | None:
+    """Mid-turn work too long for the lock (a FULL delta, or the turn's time cap): prepare it outside, wait again,
+    and give back the main it now passed over."""
+    prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
+    land_queue.wait(qdir, ticket, args.queue_timeout * 60)
+    return land.land_full.restore(wt, branch)
+
+
 def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
             invocations: list[list[str]] | None = None, note: str | None = None) -> None:
     """Merge main, run this branch's selection (or the given FULL ``invocations`` of main's delta), record it.

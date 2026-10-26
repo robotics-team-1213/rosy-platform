@@ -11819,3 +11819,9 @@ osy-d395-s1d\`.
 - 변경: `land_prepare.py`. auto 착지는 차례 전에 자기 선택을 돌리고(동시 준비 최대 3, 표 `pending`→`preparing`, 둘 다 아무도 막지 않음) 통과한 단계를 기록한다. 차례에서는 그 main 이후 변화분만 후보 트리에서 고른다. 변화분이 FULL로 오르면 잠금 밖에서 다시 준비하고 다시 기다린다. 선택기가 없으면 FULL만 준비한다. `pretest`를 `land.py`에서 옮겼다.
 - 증거: `test/test_land.py`, `test/test_land_queue.py`, harness 계약·architecture 원격 통과(407 passed).
 - gate 변화: 없음. 차례 안 변화분 시험의 시간 상한(10분)은 early-stop 연결과 함께 다음에.
+
+## 2026-10-26 · uncommitted · feat(land): 확정된 첫 실패에서 회차 취소, 차례 시간 상한 10분, 대기열 상태 표시
+
+- 변경: `run_tests`가 invocation이 끝날 때마다 판정한다(`remote_pytest.run`의 `on_done`, `land_checks.verdict`: known_failures 후 단독 재실행). 확정된 NEW면 나머지를 취소하고, 취소된 것은 캐시에 남기지 않으며 실패로도 세지 않는다. 차례 안 시험이 600초를 넘으면 나머지를 취소(`Overtime`)하고 잠금 밖에서 준비한 뒤 다시 기다린다(`land_prepare.again`). 앞선 표 표시에 상태(preparing 등)를 넣었다.
+- 증거: `test/test_land.py`, `test/test_land_queue.py`, `test/test_remote_pytest.py` 원격 통과(211 passed).
+- gate 변화: 없음.

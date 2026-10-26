@@ -108,3 +108,9 @@ def test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one(
 
     land_prepare.slot(tmp_path, mine, sleep=nap)
     assert len(naps) == 1 and json.loads(mine.read_text())["status"] == "preparing"
+
+
+def test_who_is_ahead_shows_each_tickets_status(tmp_path):
+    queue.take(tmp_path, "feat/full", status="preparing")
+    mine = queue.take(tmp_path, "feat/mine")
+    assert "feat/full (preparing," in queue.describe(queue.ahead(tmp_path, mine))

@@ -138,8 +138,8 @@ def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
 
 
 def describe(rows: list[dict]) -> str:
-    return ", ".join(f"{r.get('branch', '?')} (pid {r.get('pid', '?')} on {r.get('host', '?')}, "
-                     f"{r['age'] / 60:.0f} min)" for r in rows)
+    return ", ".join(f"{r.get('branch', '?')} ({r.get('status', 'waiting')}, pid {r.get('pid', '?')} on "
+                     f"{r.get('host', '?')}, {r['age'] / 60:.0f} min)" for r in rows)
 
 
 def touch(ticket: Path | None = None) -> None:
