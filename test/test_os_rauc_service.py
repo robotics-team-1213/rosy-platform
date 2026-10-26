@@ -334,3 +334,17 @@ def test_parent_exit_does_not_revoke_files_while_any_cgroup_child_is_alive(tmp_p
     assert not manager.active  # Parent is gone, but the kernel still reports a live child.
     assert (root / m.RUNTIME / "request.json").exists()
     assert (journal.read_bytes(), config.read_bytes()) == before
+
+
+def test_recovery_removes_only_known_empty_finalizer_mountpoints_after_stop(tmp_path, monkeypatch):
+    m, root, bundle, raw, signature, manager, _, _ = _case(tmp_path, monkeypatch, "stop")
+    with pytest.raises(ValueError):
+        m.install(root, bundle, raw, signature, run=manager, authorize=lambda: None)
+    from os_update_install import WORK
+    work = root / WORK
+    for name in ("root", "boot"):
+        (work / name).mkdir(parents=True, mode=0o700)
+    work.chmod(0o700)
+    manager.fault = None
+    m.recover(root, run=manager)
+    assert not (root / m.RUNTIME).exists()

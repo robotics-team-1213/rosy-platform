@@ -170,3 +170,44 @@ def test_fixture_root_never_runs_host_mount_or_fsck(tmp_path, monkeypatch):
     m, root, *_ = _installer(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="real root"):
         m.finalize(root)
+
+
+def test_receipt_nested_schema_bool_is_not_an_integer(tmp_path, monkeypatch):
+    m, root, *rest = _installer(tmp_path, monkeypatch)
+    m.finalize(root, run=rest[-2])
+    path = m.report_path(root)
+    value = json.loads(path.read_text())
+    value["native_factory"]["schema_version"] = True
+    path.write_text(json.dumps(value))
+    with pytest.raises(ValueError):
+        m.read_report(root)
+
+
+def test_frozen_finalizer_entrypoint_and_receipt_reader_need_no_mutable_sdk(tmp_path, monkeypatch):
+    import sys
+    from test_os_frozen_firstboot import _prefix, _stage
+    m, root, *rest = _installer(tmp_path / "device", monkeypatch)
+    m.finalize(root, run=rest[-2])
+    prefix = _prefix(tmp_path / "installed")
+    _stage(prefix)
+    for folder in (prefix / "native-runtime", prefix / "deploy/sd"):
+        for path in folder.glob("*.py"):
+            path.write_text("raise RuntimeError('mutable SDK imported')\n")
+    frozen = prefix / "os-bootstrap/native-runtime"
+    entry = frozen / "rosy-os-finalize"
+    assert os.access(entry, os.X_OK)
+    result = subprocess.run([str(entry), "--help"], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    code = """
+import sys
+from pathlib import Path
+frozen=Path(sys.argv[1]);sys.path[:0]=[str(frozen),str(frozen.parent.parent/'native-runtime')]
+import os_update_state,os_update_install
+os_update_state.mount_facts=lambda *args: []
+assert os_update_install.read_report(Path(sys.argv[2]))['transaction_id']==sys.argv[3]
+for name in ('os_update_install','os_installed_factory','native_release','signing','os_slot_metadata','os_bootloader'):
+    assert Path(sys.modules[name].__file__).is_relative_to(frozen)
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(frozen), str(root), TRANSACTION],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
