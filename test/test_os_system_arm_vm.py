@@ -50,3 +50,14 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path):
         assert installed["receipt"]["target_slot"] == "b"
         assert installed["device_policy"]["probes"]["root_b"] is True
         assert installed["device_policy"]["probes"]["root_a"] is False
+        # Fault injection: select an installed but unarmed trial. Independent PID1 deadline must recover.
+        root_b = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_b")
+        guest.restart_slot(root_b, "b", trial=True)
+        assert guest.run("findmnt -n -o SOURCE /").strip() == "/dev/vdc5"
+        assert guest.run("od -An -tx1 /proc/device-tree/chosen/bootloader/tryboot").split() == ["00", "00", "00", "01"]
+        assert guest.run("systemctl is-active rosy-os-trial-deadline.timer").strip() == "active"
+        assert "OnBootSec=180s" in guest.run("systemctl cat rosy-os-trial-deadline.timer")
+        assert guest.process.wait(timeout=240) == 0  # QEMU -no-reboot exits on the guest's reboot request.
+        console = (tmp_path / "guest-console.log").read_text(errors="replace")
+        assert "rosy-os-trial-deadline.service" in console
+        assert "reboot: Restarting system" in console
