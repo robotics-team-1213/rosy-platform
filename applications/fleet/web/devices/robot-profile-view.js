@@ -11,7 +11,7 @@ export function analysisText(analysis, elapsedS = 0) {
     + (analysis.reasons.length ? ` · ${analysis.reasons.join(', ')}` : '');
 }
 
-export function paintProfile(root, profile, {elapsedS = 0, unavailable = false} = {}) {
+export function paintProfile(root, profile, {elapsedS = 0, unavailable = false, historyOpen = false} = {}) {
   root.replaceChildren(node('h4', '로봇 프로필 · 주의사항'));
   if (unavailable) root.append(node('p', '프로필을 읽지 못했습니다. 현재 상태는 실시간 관측에서 확인하세요.'));
   if (!profile) {
@@ -27,6 +27,7 @@ export function paintProfile(root, profile, {elapsedS = 0, unavailable = false} 
       node('p', '분석은 점검 권고입니다. 명령 연결과 실제 정지·복구는 확인되지 않았습니다.'));
     if (profile.events.length) {
       const history = node('details'), list = node('ul');
+      history.open = historyOpen;
       history.append(node('summary', `최근 기록 ${profile.events.length}건`));
       for (const event of profile.events) {
         const label = {fault: '고장 관찰', caution: '주의', maintenance: '정비', analysis: '분석 주의'}[event.kind];
@@ -59,7 +60,9 @@ export function createRobotProfiles({call, scope, render = () => {}}) {
         .finally(() => { entry.pending = false; if (!disposed) render(); });
     }
     paintProfile(root, entry.profile, {elapsedS: (performance.now() - entry.received) / 1000,
-      unavailable: entry.unavailable});
+      unavailable: entry.unavailable, historyOpen: entry.historyOpen});
+    const history = root.querySelector('details');
+    history?.addEventListener('toggle', () => { entry.historyOpen = history.open; });
     return root;
   }
   return {detail};
