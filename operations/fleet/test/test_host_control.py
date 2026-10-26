@@ -381,14 +381,25 @@ def test_helper_refuses_a_second_reboot_and_cancels_only_its_own(tmp_path):
 
 
 @posix
+def _systemd_like(tmp_path, load_state):
+    """systemd 255 refuses `cat` over --machine ("Cannot remotely cat units.") and answers
+    `show -p LoadState --value` with loaded or not-found; the plain stub accepted both."""
+    (tmp_path / "bin" / "systemctl").write_text(
+        f'#!/bin/sh\necho "systemctl $*" >> {tmp_path}/calls\n'
+        'case "$*" in *--machine=*" cat "*) echo "Cannot remotely cat units." >&2; exit 1;;\n'
+        f'  *"show -p LoadState --value"*) echo {load_state};; esac\n')
+
+
+@posix
 def test_helper_starts_only_the_lab_storage_service_and_refuses_the_site(tmp_path):
+    """2026-10-26 on the model PC: the linked unit was refused with exit 5 by a remote `cat`."""
     helper = _helper_copy(tmp_path, "model")
+    _systemd_like(tmp_path, "loaded")
     assert helper("clean-storage") == 0
     calls = (tmp_path / "calls").read_text()
     assert "systemctl --user --machine=pinky@ --no-block start rosy-test-storage.service" in calls
     assert helper("clean-storage", "x.service") == 2
-    (tmp_path / "bin" / "systemctl").write_text(  # a PC where rosy-ops never linked the unit
-        f'#!/bin/sh\necho "systemctl $*" >> {tmp_path}/calls\ncase "$*" in *" cat "*) exit 1;; esac\n')
+    _systemd_like(tmp_path, "not-found")  # a PC where rosy-ops never linked the unit
     assert helper("clean-storage") == 5
     (tmp_path / "conf" / "role").write_text("site\n")
     assert helper("clean-storage") == 2
