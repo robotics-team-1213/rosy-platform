@@ -177,6 +177,16 @@ def mount_facts(root: Path, layout: dict) -> list[dict]:
     # Preserve this proc-root magic-link traversal: realpath would return the
     # caller's private /dev after flattening the path back to an absolute name.
     devices = root / "proc/1/root/dev/disk/by-partuuid"
+    host_dev, local_dev = host.get("/dev", []), local.get("/dev", [])
+    if (len(host_dev) == len(local_dev) == 1 and host_dev[0]["filesystem"] == "devtmpfs"
+            and host_dev[0]["root"] == "/"
+            and all(host_dev[0][key] == local_dev[0][key] for key in ("device", "root", "filesystem"))):
+        # Shared devtmpfs needs no ptrace access to PID1; PrivateDevices still uses the host view.
+        info = (root / "dev").stat()
+        if (not stat.S_ISDIR(info.st_mode)
+                or f"{os.major(info.st_dev)}:{os.minor(info.st_dev)}" != host_dev[0]["device"]):
+            raise ValueError("visible /dev mount differs from PID1 devtmpfs")
+        devices = root / "dev/disk/by-partuuid"
     names = os.listdir(devices)
     if len(names) > 4096:
         raise ValueError("too many partition aliases")
