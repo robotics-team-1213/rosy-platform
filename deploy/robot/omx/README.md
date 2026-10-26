@@ -1126,6 +1126,22 @@ Python은 호스트 ROS ABI와 맞아야 한다. Jazzy setup을 먼저 source하
 
 **자동 업데이트 (D-871).** 카메라, 화질 뷰어·준비 서비스, 관측기, 브리지는 하나의 업데이터로 함께 움직인다. 이 업데이터는 `rosy-omx-devices-autoupdate.timer`(10분마다)이고, 쓰는 코드는 셀 도구와 같은 `omx_autoupdate.py`(`kind: service`, `idle_gate: cell`)다.
 
+chunk 파서·transit/park 경로·motion profile의 정본은 설치 패키지의
+`omx_adapter.chunk_library`와 `omx_adapter.motion_profile`이다. 기존
+`chunk_runner`, `teach_trajectory`, `motion_profile` import는 같은 함수를 내보낸다.
+네이티브 배포는 갱신된 예제의 `paths`와 `smoke`를 개인 설정에 반영해야 한다.
+예제는 패키지의 기존 `__init__`에 필요한 최소 import 의존 파일도 포함한다.
+이 변경은 버스·실행자·토크 동작을 바꾸거나 실물 수용을 뜻하지 않는다.
+
+릴리스에서 스크립트 또는 `record_session.py --chunks`를 실행하는 환경에는
+adapter **부모** 경로가 필요하다. 소스 체크아웃에서는 같은 상대 경로를 쓴다.
+기존 녹화 중에는 릴리스·환경을 교체하지 않는다.
+
+```bash
+release="$HOME/.local/share/rosy/omx-devices/current"
+export PYTHONPATH="$release/middleware/devices/omx/adapter:$release/contracts/foundation${PYTHONPATH:+:$PYTHONPATH}"
+```
+
 - 하는 일: CI를 통과한 main을 `~/.local/share/rosy/omx-devices/releases/<sha12>`에 푼다. `current`를 바꾸고, 이전에 돌던 유닛만 다시 띄운다.
 - 바꾸는 조건: 셀이 쉴 때만 바꾼다. 셀이 쉰다는 것은 다음 셋을 모두 만족하는 것이다.
   - 세션 잠금이 없다.
