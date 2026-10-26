@@ -5,9 +5,48 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.320
+**Version:** v1.321
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.321 Learning 저장 대상 풀과 자료 회수 (D-884)
+
+아래 경로는 협업 계정이 활성화된 Learning Center 전용이며 CORE 경로가 아니다. 설정 전 pool 읽기는 `not_configured`다. 관리자는 settings 경로로 JSON 편집 없이 설정할 수 있다. private storage 파일은 최초 seed이며 UI 설정 이후 프로젝트 SQLite revision이 정본이다. 기존 `/api/learning/storage`와 정확한 `/storage/preflight` 입력·순간 추정 의미는 유지한다. 새 작업만 용량을 예약하며 기존 HF CLI는 바꾸지 않는다.
+
+설정·자료 준비의 추가 경로는 다음과 같다. 모든 POST는 기존 Origin/CSRF와 현재 publish+manage 권한을 요구한다. settings GET의 비관리자는 enabled/revision/can_manage 요약만 받는다. 관리자도 접근할 수 없는 개인 연결은 id/상태만 보이며 저장에서 보존한다.
+
+| 경로 | 입력·결과 |
+|---|---|
+| `GET /api/learning/storage/settings` | revision, 활성 여부, 접근 가능한 연결·대상·namespace quota, cache 정책, 등록 위치 id/label/role, 요청자별 operation/error/result. 비밀값·절대 경로 제외. |
+| `POST /api/learning/storage/settings` | 정확히 revision/targets/quotas/reserve_bytes/cache_policy. CAS 저장 후 새 배정 중지. 호스트 root 경로·project_id·실행 명령 변경 불가. |
+| `POST /api/learning/storage/settings/verify` | revision 및 confirm=true. 202; enabled 대상마다 작은 실제 private archive를 쓰고 고정 revision 전체를 다시 읽는다. 불확실한 결과는 기존 job을 재사용한다. |
+| `POST /api/learning/storage/settings/activate` | revision. 현재 연결 세대, fresh quota, 요청자의 대상별 실제 private 읽기/쓰기 proof를 재검증한 뒤 활성화. |
+| `GET /api/learning/storage/sources` | 관리자 전용 bounded 등록 폴더 목록. 내부 내용·임의 파일 탐색 제외. |
+| `GET /api/learning/storage/sim-sources` | 기존 pinned SIM owner의 FINAL 결과 목록 요약. SDK 시작 없음. |
+| `POST /api/learning/storage/sources/prepare` | kind=folder이면 artifact_id/profile/provenance, kind=isaac이면 run_id. 공통 confirm_completed=true 및 archive boolean. 202; 전용 exports에서 seal 또는 FINAL 결과 export 후 archive=true이면 기존 job 전송·검증을 잇는다. 같은 source identity/manifest의 재시도는 같은 job을 사용. |
+
+설정 revision은 신규 reservation transaction에서도 검사한다. 변경은 기존 job의 연결·고정 revision이나 복원을 바꾸지 않는다. 전용 exports/cache는 호스트 workspace 기준으로 생성하며 HTTP가 임의 경로나 SDK/패키지 설치 명령을 받지 않는다.
+
+모든 읽기는 현재 프로젝트 view와 요청자 범위를 확인한다. 새 보관·전송·복원은 publish, 로컬 회수·고정 보관·관리 cache 정책 실행은 manage도 요구한다. 모든 POST는 기존 Origin·X-Pinky-Token 검사를 통과해야 한다. 서버에서 actor를 정하고 토큰·절대 경로·provider 오류 본문을 반환하지 않는다.
+
+| 경로 | 정확한 입력과 반환 |
+|---|---|
+| `GET /api/learning/storage/pool` | 대상별 `id`, 상태, namespace별 `available_bytes`와 quota 측정 근거를 반환한다. 접근 불가 연결은 unavailable이며 그 연결의 저장소 정보를 숨긴다. `sources`에는 등록 root ID·label만, `capabilities`에는 현재 사용자의 수행 가능 행위를 반환한다. |
+| `GET /api/learning/storage/jobs` | 요청자가 만든 최근 200개 작업. id, profile, status, 대상/저장소, 고정 revision, bytes_verified, provenance, upload_bytes, local_present, reclaimable, pinned와 오류 코드. 원격 보관 검증은 학습·실물 수용이 아니다. |
+| `POST /api/learning/storage/jobs` | `source_id`, `artifact_id`, `profile`. source_id는 등록 root ID, artifact_id는 그 root 안 완료된 자료의 상대 폴더이며 절대·상위·숨김·링크 경로는 거부한다. profile은 isaac/dataset/model이다. 작업을 등록하며 전송은 아래 run으로 시작한다. |
+| `POST /api/learning/storage/jobs/<id>/run` | 빈 객체. 같은 연결·대상·manifest의 전송 또는 고정 revision 검증을 실행한다. 이미 commit된 작업은 다시 쓰지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/cancel` | 빈 객체. 아직 업로드를 시작하지 않은 예약만 해제하고 cancelled로 기록한다(200). 원본은 보존하며 시작된/불확실한 예약은 해제하지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/reconcile` | `revision`: 기존 원격 commit의 소문자 40자리 SHA. hold 작업의 전체 파일을 읽어 검증한 뒤에만 해당 commit과 예약 사용량을 확정한다(202). 새 commit은 만들지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/restore` | 빈 객체. 해당 고정 revision만 검증하며 관리 cache로 복원한다. |
+| `POST /api/learning/storage/jobs/<id>/reclaim` | `confirm`이 작업 id와 같아야 한다. 검증·권한·정확한 로컬 파일 집합·identity·사용 lease·pin을 다시 확인한다. 원격 자료를 삭제하지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/pin` | `pinned`: boolean. 로컬 회수로부터 보호하거나 해제한다. |
+| `POST /api/learning/storage/cache/reclaim` | 빈 객체. 관리자가 활성화한 cache 정책의 용량 상한과 최소 여유에 맞게 사용이 오래된 검증 cache를 회수한다. source root는 자동 회수하지 않는다. |
+
+작업 변경은 비동기 실행을 수락하면 202이며 GET으로 갱신 상태와 `operation`/`operation_error`를 확인한다. 중복 실행은 하나로 합치고 작업 중인 같은 자료의 다른 변경은 거절한다. 잘못된 입력·용량 부족·미검증·사용 중은 400, 접근 거부는 기존 401/403 규칙이다. 미확인 commit 결과는 `hold/upload_outcome_unknown`, 전송·검증 실패는 `failed/transfer_failed`로 남기며 로컬과 예약을 보존한다. 서버 재시작은 계정 교체나 재업로드 근거가 아니다.
+
+source manifest는 `storage-source.json`의 `rosy.storage-source/1`이며 completed 상태, profile, 파일별 bytes/SHA-256, provenance를 포함한다. 파일 집합 전체를 검증하고 출처가 검증되지 않은 파일을 자동으로 추가하지 않는다. Isaac 출처는 run_id·seed·source_revision을 보존한다. manifest 완료 표시는 파일 보관 범위의 선언이며 시뮬레이션 성공을 증명하지 않는다. 고정 revision과 자료 이력은 로컬 회수 뒤에도 남는다.
+
+큰 파일 집합은 32개 파일씩 같은 저장소에 기록하며 `files_uploaded`/`files_total`은 확인된 전송 기록이다. 부분 전송의 중간 commit을 reconcile하면 확인한 prefix만 확정하고 queued로 돌아가 남은 묶음을 같은 대상에 이어 쓴다. 전체 전송 후 final revision을 고정해 모든 bytes를 검증하기 전에는 bytes_verified나 reclaimable을 true로 표시하지 않는다.
 
 ### v1.318 Fleet 캐시 전용 모니터링 읽기 (D-876)
 
@@ -3856,6 +3895,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.321 | 2026-10-26 | D-884: project-scoped HF storage pool, namespace capacity reservations, pinned archive/reconciliation, verified local reclaim/restore and managed cache; existing publish/manage authority and envelope1.0 preserved. Host source verification is separate from live HF/Isaac acceptance. |
 | v1.320 | 2026-10-26 | D-883: Service Control `clean-storage` for ai/model only (400 `ACTION_NOT_ALLOWED` on site, 409 `NO_STORAGE_SERVICE`), guard `resources.disk`/`disk_low`/`gpu`/`memory`/`memory_low`/`cpu` and the report-only `disk-low`/`memory-low` states. Fleet route shape and envelope1.0 unchanged. |
 | v1.318 | 2026-10-25 | D-876: passive Fleet connection cache wire, strict bounded observations, preserved cache/source ages and D-535 reasons; no raw body or control fields. Handler and independent Monitoring runtime remain unimplemented; envelope1.0 unchanged. |
 | v1.316 | 2026-10-25 | D-870: optional strict source sampled_at UTC, conservative100ms clock-bound lifetime, receiver monotonic expiry and implementation-derived swarm.reference_freshness; mixed peer and field UTC acceptance stay explicit, envelope1.0 unchanged. |

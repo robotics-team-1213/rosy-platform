@@ -165,6 +165,8 @@ def test_an_empty_grasp_is_decided_by_the_seat_retried_and_kept_as_a_case(tmp_pa
     assert moved["decisions"][0]["decision"] == "retry"
     rows = [json.loads(line) for line in (tmp_path / "cases.jsonl").read_text().splitlines()]
     assert rows[0]["facts"]["holding"] is False and rows[-1]["outcome"] == "placed"
+    replay = rows[0]["scene"]  # enough for cell_cases.from_row to replay it in a simulator
+    assert replay["outcome"] == "empty" and replay["place"] == "belt" and len(replay["box_m"]) == 2
 
 
 def test_a_wrist_view_off_the_learned_hover_stops_before_the_descent(tmp_path):

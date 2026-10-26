@@ -5,6 +5,8 @@
 `rosy.monitoring` owns the independent D-876 observation models, scoped read configuration,
 and monotonic aggregation cache. The current wheel is a Python foundation; its collector,
 HTTP API, UI and deployment are not implemented yet. See [README.md](README.md).
+Current acceptance gates live in [progress.md](progress.md); record changes and verification
+in [logs.md](logs.md), then regenerate the harness index.
 
 - Keep this wheel ROS-free and independent of the Fleet distribution. Fleet owns its passive
   `/api/fleet/monitoring` producer; CORE/host owners retain their diagnostics and repair logic.
