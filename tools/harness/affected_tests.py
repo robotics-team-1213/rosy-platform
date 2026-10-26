@@ -54,6 +54,14 @@ FULL_TRIGGERS = (
     ("contracts/foundation/**", "shared foundation (core_common)"),
     ("contracts/ros_idl/**", "shared ROS interfaces"),
     ("tools/harness/**", "harness configuration or the selector itself"),
+    # Rule 8 (design 0.7): the landing/test gate tools never test themselves with a selection they made;
+    # leaf tools under tools/ select the tests that name them. Same reason text: land.py's HARNESS_TRIGGER.
+    # The remote_pytest entries are what it imports (2026-10-26); a new gate import belongs here.
+    *((gate, "harness configuration or the selector itself") for gate in (
+        "tools/land*.py", "tools/worktrees.py", "tools/worktree_rules.py", "tools/hooks/**",
+        "test/known_failures.py", *(f"tools/remote/{name}.py" for name in (
+            "remote_pytest", "remote_job", "host_probe", "lab_hosts", "memory_history",
+            "remote_test_tools", "xdist_plan", "work_queue")))),
     (".github/workflows/**", "CI workflow"),
     ("**/conftest.py", "pytest conftest"),
     ("**/pyproject.toml", "packaging / pytest configuration"),
@@ -181,8 +189,6 @@ def moves(repo: Path, base: str, head: str | None = None) -> list[str]:
         elif status == "D" and paths[0].endswith(".py") and not TEST_FILE.search(paths[0]):
             found.append(f"{paths[0]}: Python module removed")
     return found
-
-
 
 
 def _full_paths(repo: Repo) -> list[str]:
@@ -389,7 +395,12 @@ def run(repo_root: Path, sel: Selection, allow_full: bool = False,
 def main(repo_root: Path, base: str, mode: str, as_json: bool,
          matrix: bool = False, allow_full: bool = False, skip: tuple[str, ...] = (),
          head: str | None = None) -> int:
-    repo = Repo.load(repo_root)
+    # With --head the files are read at head: from a checkout of another branch, a leaf tool's new
+    # test exists only there (feat/publish-automation from main was "unknown -> full", 2026-10-26).
+    try:
+        repo = Repo.load(repo_root, head)
+    except SelectionError:  # an unknown head: the diff below fails too and the selection is FULL
+        repo = Repo.load(repo_root)
     try:
         changed = changed_files(repo_root, base, head)
         texts = None

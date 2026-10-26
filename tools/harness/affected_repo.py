@@ -52,30 +52,56 @@ class Repo:
     test_files: list[str]
     safety_roots: list[dict] = field(default_factory=list)
     safety_modules: set[str] = field(default_factory=set)
+    #: Read files at this revision instead of the working tree (``--head``: the pushed or landed commit).
+    rev: str | None = None
     _texts: dict[str, str] = field(default_factory=dict)
     _imports: dict[str, set[str]] = field(default_factory=dict)
     _tokens: dict[str, set[str]] = field(default_factory=dict)
+    _cat: list = field(default_factory=list)  # one `git cat-file --batch` process for `rev`
 
     @classmethod
-    def load(cls, root: Path) -> Repo:
-        harness = yaml.safe_load((root / HARNESS / "harness.yaml").read_text(encoding="utf-8"))
-        parts = yaml.safe_load((root / HARNESS / "platform_parts.yaml").read_text(encoding="utf-8"))
-        owners = [(r["path"], tuple(r.get("import_prefix") or ())) for r in parts.get("roots") or []]
-        tracked = sorted(set(_git(root, "ls-files").splitlines()))
-        tests = [p for p in tracked if TEST_FILE.search(p)]
-        return cls(root, list(harness.get("modules") or []), owners, tracked, tests,
-                   list(parts.get("roots") or []), set(parts.get("safety_modules") or ()))
+    def load(cls, root: Path, rev: str | None = None) -> Repo:
+        listing = _git(root, "ls-tree", "-r", "--name-only", rev) if rev else _git(root, "ls-files")
+        tracked = sorted(set(listing.splitlines()))
+        bare = cls(root, [], [], tracked, [p for p in tracked if TEST_FILE.search(p)], rev=rev)
+        harness = yaml.safe_load(bare.text(f"{HARNESS}/harness.yaml"))
+        parts = yaml.safe_load(bare.text(f"{HARNESS}/platform_parts.yaml"))
+        bare.modules = list(harness.get("modules") or [])
+        bare.owners = [(r["path"], tuple(r.get("import_prefix") or ())) for r in parts.get("roots") or []]
+        bare.safety_roots, bare.safety_modules = list(parts.get("roots") or []), set(parts.get("safety_modules") or ())
+        return bare
 
     def text(self, path: str) -> str:
         if path not in self._texts:
-            try:
-                self._texts[path] = (self.root / path).read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                self._texts[path] = ""
+            self._texts[path] = self._blob(path) if self.rev else self._file(path)
         return self._texts[path]
 
+    def _file(self, path: str) -> str:
+        try:
+            return (self.root / path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+
+    def _blob(self, path: str) -> str:
+        if not self._cat:
+            self._cat.append(subprocess.Popen(["git", "-C", str(self.root), "cat-file", "--batch"],
+                                              stdin=subprocess.PIPE, stdout=subprocess.PIPE))
+        proc = self._cat[0]
+        proc.stdin.write(f"{self.rev}:{path}\n".encode("utf-8"))
+        proc.stdin.flush()
+        header = proc.stdout.readline()
+        if header.rstrip().endswith((b" missing", b" ambiguous")):  # "<rev:path> missing" may hold spaces
+            return ""
+        _sha, kind, size = header.split()
+        data = proc.stdout.read(int(size) + 1)[:-1]  # the batch output ends each object with a newline
+        return data.decode("utf-8", errors="replace") if kind == b"blob" else ""  # a directory reads empty
+
     def exists(self, path: str) -> bool:
-        return (self.root / path).exists()
+        if not self.rev:
+            return (self.root / path).exists()
+        if "_paths" not in vars(self):  # every tracked file and its parent directories
+            self._paths = {*self.tracked, *(str(d) for p in self.tracked for d in PurePosixPath(p).parents)}
+        return path in self._paths
 
     def module_for(self, path: str) -> dict | None:
         best = None
