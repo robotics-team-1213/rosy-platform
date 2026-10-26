@@ -84,6 +84,7 @@ def _effective(run, prepared):
     actual = list(zip(words[::2], words[1::2]))
     expected = [tuple(line.removeprefix("DeviceAllow=").split()) for line in prepared["device_dropin"].splitlines()
                 if line.startswith("DeviceAllow=") and line != "DeviceAllow="]
+    expected.append(("char-rtc", "r"))  # systemd 255 adds this read-only grant for the pinned ProtectClock=yes unit.
     if len(words) % 2 or len(actual) != len(expected) or set(actual) != set(expected):
         raise ValueError("effective RAUC device grants differ")
     if set(shlex.split(_value(run, "ReadWritePaths"))) != {"/" + RUNTIME, "/" + COMMON + "/os-update/rauc"}:
