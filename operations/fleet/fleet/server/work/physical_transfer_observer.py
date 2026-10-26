@@ -11,6 +11,7 @@ from .physical_transfer_evidence import TransferEvidenceContext
 from .physical_transfer_io import physical_io
 from .physical_transfer_observations import evidence_document, world_observations
 from .physical_transfer_outcomes import record_transfer_outcome
+from .physical_transfer_recovery import CREATED
 from .physical_transfer_store import PhysicalTransferRequest
 
 
@@ -69,6 +70,9 @@ class PhysicalObservationService:
                 "JOIN fleet_cell_jobs j ON j.mission_id=a.mission_id "
                 "WHERE j.provenance_kind='physical' AND j.status!='GOAL_CONFIRMED' ORDER BY a.prepared_at_ns DESC").fetchall()
             for row in rows:
+                if connection.execute("SELECT 1 FROM fleet_cell_events WHERE mission_id=? AND event_type=?",
+                                      (row["mission_id"], CREATED)).fetchone() is not None:
+                    continue
                 try:
                     self._job(connection, row["mission_id"])
                 except PermissionError:

@@ -127,6 +127,70 @@ def _request(parent_id, proposer, actor, expected_request_digest, expected_recei
         producer_id=producer, evidence=evidence)
 
 
+def _lineage_record(store, connection, mission_id):
+    created, origin = _event(connection, mission_id, CREATED), _event(connection, mission_id, ORIGIN)
+    if created is None and origin is None:
+        return None
+    if created is not None and origin is not None:
+        raise MissionConflict("a recovery child cannot create another child")
+    detail = created if created is not None else origin
+    parent_id, child_id = detail["parent_mission_id"], detail["child_mission_id"]
+    parent, child = _job(store, connection, parent_id), _job(store, connection, child_id)
+    left, right = _event(connection, parent_id, CREATED), _event(connection, child_id, ORIGIN)
+    evidence = detail["evidence"]
+    request = _request(parent_id, detail["proposed_by"], detail["approved_by"], detail["parent_request_digest"],
+        detail["source_receipt_event_id"], detail["source_assessment_digest"], detail["dispatch_generation"],
+        detail["producer_id"], evidence)
+    if (detail["schema"] != "rosy.transfer-recovery/1" or detail["root_mission_id"] != parent_id
+            or parent_id == child_id or mission_id not in {parent_id, child_id}
+            or left is None or right is None or left["event_id"] != "physical-transfer-recovery"
+            or right["event_id"] != "physical-transfer-recovery-origin"
+            or {k: v for k, v in left.items() if k != "event_id"}
+                != {k: v for k, v in right.items() if k != "event_id"}
+            or _digest(request) != detail["recovery_request_digest"]
+            or _digest(evidence) != detail["evidence_digest"]
+            or detail["producer_id"] != store.installation.policy.producer_id
+            or child["proposal_principal_id"] != detail["proposed_by"] or child["approved_by"] != detail["approved_by"]
+            or child["request"] != parent["request"] or child["installation"] != parent["installation"]
+            or _event(connection, parent_id, ORIGIN) is not None or _event(connection, child_id, CREATED) is not None):
+        raise MissionConflict("retained recovery lineage changed")
+    row = connection.execute("SELECT grant_json FROM fleet_physical_transfer_attempts WHERE mission_id=?",
+                             (parent_id,)).fetchone()
+    if row is None:
+        raise MissionConflict("recovery lost its original attempt")
+    grant = FleetArmTransferGrant.model_validate_json(row[0])
+    context = TransferEvidenceContext.model_validate_json(_json(evidence["context"]))
+    if (detail["parent_request_digest"] != grant.request_digest or context.action_id != grant.action_id
+            or context.attempt_id != grant.attempt_id or context.phase != "PRE_DISPATCH"):
+        raise MissionConflict("recovery evidence targets another original attempt")
+    receipts = [json.loads(row[0])["receipt"] for row in connection.execute(
+        "SELECT detail_json FROM fleet_cell_events WHERE mission_id=? AND event_type='PHYSICAL_TRANSFER_RECEIPT'",
+        (parent_id,))]
+    receipts = [receipt for receipt in receipts if receipt["journal_event_id"] == detail["source_receipt_event_id"]]
+    if len(receipts) != 1 or _digest(receipts[0]) != detail["source_receipt_digest"]:
+        raise MissionConflict("recovery lost its original receipt")
+    verify_phase_receipt(grant, receipts[0], phase_ids=("approach", "grasp", "transfer", "release"))
+    return detail
+
+
+def recovery_lineage(store, connection, mission_id):
+    detail = _lineage_record(store, connection, mission_id)
+    return dict(root_mission_id=mission_id if detail is None else detail["root_mission_id"],
+        parent_mission_id=None if detail is None else detail["parent_mission_id"],
+        child_mission_id=None if detail is None else detail["child_mission_id"],
+        attempt_index=int(detail is not None and mission_id == detail["child_mission_id"]), recovery_limit=1)
+
+
+def validate_recovery_preconditions(store, connection, mission_id, observations):
+    detail = _lineage_record(store, connection, mission_id)
+    if detail is None or mission_id != detail["child_mission_id"]:
+        return
+    prior = detail["evidence"]["samples"]
+    if ({sample.evidence_id for sample in observations} & {sample["evidence_id"] for sample in prior}
+            or observations[0].sequence <= max(sample["sequence"] for sample in prior)):
+        raise MissionConflict("child submission requires new observations after recovery approval")
+
+
 def recover_transfer(execution, parent_id, *, proposer, principal, expected_request_digest,
                      expected_receipt_event_id, expected_assessment_digest, expected_generation,
                      observations, authenticated_producer_id, capabilities, capabilities_observed_at_ns):
@@ -159,18 +223,10 @@ def recover_transfer(execution, parent_id, *, proposer, principal, expected_requ
             expected_assessment_digest, expected_generation, authenticated_producer_id, evidence)
         request_digest = _digest(request)
         if prior is not None:
-            child = _job(store, connection, prior["child_mission_id"])
-            origin = _event(connection, child["mission_id"], ORIGIN)
-            if (prior["schema"] != "rosy.transfer-recovery/1" or prior["root_mission_id"] != parent_id
-                    or prior["parent_mission_id"] != parent_id or child["mission_id"] == parent_id
-                    or prior["recovery_request_digest"] != request_digest
-                    or prior["evidence_digest"] != _digest(prior["evidence"])
-                    or child["proposal_principal_id"] != proposed_by or child["approved_by"] != actor
-                    or child["request"] != parent["request"] or child["installation"] != parent["installation"]
-                    or origin is None or {k: v for k, v in origin.items() if k != "event_id"}
-                    != {k: v for k, v in prior.items() if k != "event_id"}):
-                raise MissionConflict("recovery request or retained lineage changed")
-            return child
+            prior = _lineage_record(store, connection, parent_id)
+            if prior["recovery_request_digest"] != request_digest:
+                raise MissionConflict("recovery request changed")
+            return _job(store, connection, prior["child_mission_id"])
         if (grant.request_digest != expected_request_digest
                 or latest["receipt"]["journal_event_id"] != expected_receipt_event_id
                 or (None if assessment is None else _digest(assessment)) != expected_assessment_digest):
