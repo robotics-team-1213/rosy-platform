@@ -11674,3 +11674,11 @@ osy-d395-s1d\`.
 - 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
 - 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · busy 표시 만료와 GitHub Actions 커밋 고정
+
+- 변경: `tools/remote/host_probe.py` PROBE가 `~/rosy-jobs/busy`의 첫 단어가 10자리 이상 epoch면 그 시각까지만, 아니면 이번 부팅 뒤에 만든 표시만 busy로 센다(2 = 부팅 전, 3 = 만료). `place()`는 `busy marker pre-boot (ignored)`/`expired (ignored)`를 덧붙인다. `deploy/robot/omx/native_sim_job.py`의 두 busy 검사도 같은 규칙(`marked_busy`)을 쓴다. 저장소 안에 busy를 쓰는 코드는 없어, `deploy/ai_pc/README.md`의 소유자 명령을 `<만료 epoch> <소유자> <pid>` 형식으로 바꿨다. `.github/workflows/*.yml`의 태그 고정 `uses:` 17줄을 태그가 가리키는 커밋 SHA로 고정했다(checkout v4.4.0, setup-java v4.9.1, upload-artifact v4.6.2, setup-python v5.6.0).
+- 이유: 만료도 pid도 없는 표시(현장 PC, 2026-10-24)가 호스트를 영원히 막았다. 움직이는 태그는 검토 없이 새 코드를 돌린다.
+- 증거: 원격 `test/test_remote_pytest.py`, `test/test_native_sim_job.py`, `test/test_site_candidate_workflow.py`, `test/test_flashable_image_layout.py` 136 통과, known_failures NEW 0. 변이(부팅 전 규칙, 만료 규칙, place 문구, `marked_busy`, 태그 하나 되돌림) 각각 해당 새 시험이 빨개졌다.
+- gate 변화: 모든 워크플로 `uses:`가 40자리 SHA와 `# vX.Y.Z (pinned commit)`이어야 한다(로컬 `./` 재사용 워크플로 제외).
+- 교훈: CE 해당 없음 — 규칙과 이유가 PROBE 주석과 시험에 있다.

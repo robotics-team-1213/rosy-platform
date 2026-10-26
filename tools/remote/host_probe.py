@@ -26,7 +26,12 @@ done
 py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
   "$p" -c 'import sys; sys.exit(sys.version_info[:2] != (3, 12))' 2>/dev/null && py=1 && break; done
 s=0; [ -f /opt/ros/jazzy/share/ros_gz_sim/package.xml ] && [ -f /opt/ros/jazzy/share/nav2_bringup/package.xml ] && s=1
-b=0; [ -e "$J/busy" ] && b=1
+b=0; if [ -e "$J/busy" ]; then  # "<expiry epoch> <owner> <pid>" or a bare touch; 2 = pre-boot, 3 = expired
+  b=1; t=; read -r t _ < "$J/busy" 2>/dev/null || true
+  case "$t" in ''|*[!0-9]*) e=0;; *) e=${#t};; esac
+  if [ "$e" -ge 10 ]; then [ "$t" -gt "$now" ] 2>/dev/null || b=3  # an explicit expiry wins over a reboot
+  elif [ "$(stat -c %Y "$J/busy")" -lt "$(awk '/^btime /{print $2}' /proc/stat)" ]; then b=2; fi
+fi
 st=0; [ -e "$J/site" ] && st=1
 d=~/rosy-test; [ -d "$d" ] || d=~
 echo "ROSYPROBE $(nproc) $(cut -d' ' -f1 /proc/loadavg)" \
@@ -42,6 +47,7 @@ def parse_probe(out: str) -> dict | None:
         n, load, avail, total, py, sim, busy, cores, gb, site, *disk = line.split()[1:]
         p = {"nproc": int(n), "load1": float(load), "avail_gb": int(avail) / 2**20,
              "total_gb": int(total) / 2**20, "pytest": py == "1", "sim": sim == "1", "busy": busy == "1",
+             "busy_ignored": {"2": "pre-boot", "3": "expired"}.get(busy),
              "lock_cores": int(cores), "lock_gb": int(gb), "site": site == "1"}
         free, use = [int(x) for x in disk[0::2]], [int(x) for x in disk[1::2]]
         if free and use:  # the fuller of the two filesystems; an older probe has none (unknown = ok)
