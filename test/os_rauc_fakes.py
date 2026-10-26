@@ -11,10 +11,10 @@ import pytest
 
 RELEASE = "2026.10.26-011"
 PACKAGES = {
-    "x86_64": ("https://archive.ubuntu.com/ubuntu/pool/universe/r/rauc/rauc_1.11.3-2_amd64.deb",
-               160646, "78770edfa1d65325e62970ff889a135b67896d1364d607996418fdbc89b7fad7"),
-    "aarch64": ("https://ports.ubuntu.com/ubuntu-ports/pool/universe/r/rauc/rauc_1.11.3-2_arm64.deb",
-                157612, "33fa200e0ed18efd59b699beb9a58646006953477221cfe0fe48e290227ea390"),
+    "x86_64": dict(url="https://archive.ubuntu.com/ubuntu/pool/universe/r/rauc/rauc_1.11.3-2_amd64.deb",
+                   size_bytes=160646, sha256="78770edfa1d65325e62970ff889a135b67896d1364d607996418fdbc89b7fad7"),
+    "aarch64": dict(url="https://ports.ubuntu.com/ubuntu-ports/pool/universe/r/rauc/rauc_1.11.3-2_arm64.deb",
+                    size_bytes=157612, sha256="33fa200e0ed18efd59b699beb9a58646006953477221cfe0fe48e290227ea390"),
 }
 
 
@@ -30,10 +30,10 @@ def rauc_tool(tmp_path_factory):
         pytest.skip("actual RAUC boundaries require native Linux")
     assert platform.machine() in PACKAGES, "no verified native RAUC test package for this architecture"
     assert shutil.which("dpkg-deb") and shutil.which("mksquashfs") and shutil.which("openssl")
-    url, size, digest = PACKAGES[platform.machine()]
-    with urlopen(url, timeout=30) as response:
-        package = response.read(size + 1)
-    assert len(package) == size and hashlib.sha256(package).hexdigest() == digest
+    pin = PACKAGES[platform.machine()]
+    with urlopen(pin["url"], timeout=30) as response:
+        package = response.read(pin["size_bytes"] + 1)
+    assert len(package) == pin["size_bytes"] and hashlib.sha256(package).hexdigest() == pin["sha256"]
     directory = tmp_path_factory.mktemp("isolated-rauc")
     archive = directory / "rauc.deb"
     archive.write_bytes(package)
