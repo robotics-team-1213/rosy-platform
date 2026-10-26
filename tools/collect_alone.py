@@ -31,22 +31,28 @@ BUDGET = float(os.environ.get("ROSY_COLLECT_BUDGET_S") or land_isolation.BUDGET_
 SERIAL = tuple(xdist_plan.load_serial(xdist_plan.SERIAL_FILE.read_text(encoding="utf-8")))
 
 
+def _report(request, *lines: str) -> None:
+    """Lines at the end of the run; the workers line shows the pool equals the cores the job word reserved."""
+    class Report:
+        @staticmethod
+        def pytest_terminal_summary(terminalreporter):
+            for line in (f"[isolation] workers {WORKERS} (ROSY_JOB_CORES {os.environ.get('ROSY_JOB_CORES', '-')})", *lines):
+                terminalreporter.write_line(line)
+
+    if not request.config.pluginmanager.has_plugin("rosy-isolation-report"):
+        request.config.pluginmanager.register(Report(), "rosy-isolation-report")
+
+
 @pytest.fixture(scope="module")
-def collected():
+def collected(request):
+    _report(request)
     return land_isolation.each_alone(ROOT, FILES, land_isolation.COLLECT, WORKERS, BUDGET)
 
 
 @pytest.fixture(scope="module")
 def ran(request):
     done = land_isolation.each_alone(ROOT, ALONE, land_isolation.TAIL, WORKERS, BUDGET, SERIAL)
-    line = land_isolation.report_line(ALONE, done)
-
-    class Report:
-        @staticmethod
-        def pytest_terminal_summary(terminalreporter):
-            terminalreporter.write_line(line)
-
-    request.config.pluginmanager.register(Report(), "rosy-isolation-report")
+    _report(request, land_isolation.report_line(ALONE, done))
     return done
 
 

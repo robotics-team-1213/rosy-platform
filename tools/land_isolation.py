@@ -12,15 +12,21 @@ within ``BUDGET_S``:
 - ``alone_files`` (prepare only): every test on the D-436 selector's ``references X`` edge of this branch's changed
   files, those of safety-tagged files first, then spec_from_file_location loaders. No count cap: the budget cuts.
   Files the budget did not reach are never dropped silently: ``record`` appends them to
-  ``<git-common-dir>/rosy-land-isolation.jsonl`` (``incomplete``, for the nightly per-file run) and the turn's
-  summary prints ``isolation incomplete: <files>``.
-- ``stale`` (the turn): when main moved since prepare and its delta touches a file an alone-run test references,
-  those tests run alone again before the fast-forward.
-Off when the tree has no ``tools/collect_alone.py``. Standard library at import; the selector loads lazily.
+  ``<git-common-dir>/rosy-land-isolation.jsonl`` (``incomplete``) and the turn's summary prints
+  ``isolation incomplete: <files>``. A safety one unreached stops the landing. A job without its report line (it
+  died) is a failed gate: once more without the cache, then the landing stops; the files are recorded either way.
+- the turn: ``--no-queue`` (no prepare) records ``skipped`` with the files and says ``isolation gate skipped``;
+  otherwise, when main moved since prepare and its delta touches a file an alone-run test references, those tests
+  join the turn's own round, under its time cap and Overtime path.
+Records still open after a night (landed, files never run alone since) are a FAIL in ``tools/doctor.py`` and a
+line in the turn's summary; a later alone run on a descendant closes them (``python tools/land_isolation.py
+close <files>`` until a nightly consumer exists). Off when the tree has no ``tools/collect_alone.py``. Standard
+library at import; the selector loads lazily.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -38,6 +44,7 @@ GATE = "tools/collect_alone.py"
 GATE_CORES = 6
 BUDGET_S = 600
 RECORD = "rosy-land-isolation.jsonl"
+OPEN_AFTER_S = 24 * 3600  # doctor and the turn flag records still open after a night
 TEST_FILE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")  # = affected_tests.TEST_FILE
 ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 REPORT = re.compile(r"^\[isolation\] (complete|incomplete): ?(.*)$", re.MULTILINE)
@@ -130,16 +137,17 @@ def _selector(wt: Path):
         lambda p: safety_review.is_safety(p, repo.safety_roots, repo.safety_modules)
 
 
-def alone_files(wt: Path, selection: list[list[str]], base: str = "main") -> list[str]:
-    """Selected tests referencing this branch's changes: safety-tagged sources' first, then spec loaders."""
+def alone_files(wt: Path, selection: list[list[str]], base: str = "main") -> tuple[list[str], set[str]]:
+    """(selected tests referencing this branch's changes, safety-tagged sources' first, then spec loaders;
+    the safety ones)."""
     if not (wt / GATE).is_file() or not (selected := set(tracked_tests(wt, selected_paths(selection)))):
-        return []
+        return [], set()
     repo, at, refs, safety = _selector(wt)
     changed = at.changed_files(wt, base, "HEAD")
     first = {t for p in changed if safety(p) for t in refs(p)} & selected
     rest = {t for p in changed for t in refs(p)} & selected - first
     rank = lambda t: (t not in first, "spec_from_file_location" not in repo.text(t), t)  # noqa: E731
-    return sorted(first | rest, key=rank)
+    return sorted(first | rest, key=rank), first
 
 
 def _common(wt: Path) -> Path:
@@ -151,15 +159,15 @@ def _git(wt: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(wt), *args], capture_output=True, text=True, encoding="utf-8").stdout.strip()
 
 
-def unreached(wt: Path, inv: list[str], files: list[str], logs: list[Path]) -> list[str]:
-    """Files of an alone job that did not run alone to a verdict, from its report line; with no report (a reused
-    pass whose log is gone, a job that died) every file counts as not run."""
+def unreached(wt: Path, inv: list[str], logs: list[Path]) -> list[str] | None:
+    """Files of an alone job the budget did not reach, from its report line; ``None`` without a report (the job
+    died, or a reused pass whose log is gone): a failed job, not overflow."""
     cached = [Path(e["log"]) for e in _cache_entries(wt) if e.get("argv") == inv and e.get("log")]
     for log in [*logs, *reversed(cached)]:
         text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
         if m := REPORT.search(text):
             return [] if m[1] == "complete" else [f for f in m[2].split(",") if f]
-    return list(files)
+    return None
 
 
 def _cache_entries(wt: Path) -> list[dict]:
@@ -171,32 +179,65 @@ def _fresh(logdir: Path, round_no: str, since: float) -> list[Path]:
     return [p for p in sorted(logdir.glob(f"run-g{round_no}-*.txt")) if p.stat().st_mtime >= since]
 
 
-def record(wt: Path, branch: str, kind: str, files: list[str], incomplete: list[str]) -> list[str]:
-    """Append this alone run to the shared record; summary lines (``isolation incomplete: ...``) when cut."""
-    line = {"at": time.strftime("%Y-%m-%dT%H:%M:%S"), "branch": branch, "kind": kind,
+def record(wt: Path, branch: str, kind: str, files: list[str], incomplete: list[str], **extra) -> list[str]:
+    """Append one line to the shared record (and land_events); summary lines when files were not run alone.
+
+    kind: ``prepare`` (this branch's alone job), ``skipped`` (--no-queue: nothing ran alone), ``done`` (a later
+    alone job, ``python tools/land_isolation.py close``)."""
+    line = {"t": round(time.time()), "at": time.strftime("%Y-%m-%dT%H:%M:%S"), "branch": branch, "kind": kind,
             "candidate": _git(wt, "rev-parse", "HEAD"), "main": _git(wt, "rev-parse", "main"),
-            "alone": files, "incomplete": incomplete}
+            "alone": files, "incomplete": incomplete, **extra}
     with open(_common(wt) / RECORD, "a", encoding="utf-8") as out:
         out.write(json.dumps(line) + "\n")
-    return [f"isolation incomplete: {', '.join(incomplete)}"] if incomplete else []
+    import land_events
+    land_events.emit("isolation", **{k: v for k, v in line.items() if k not in ("t", "branch")})
+    return [f"isolation incomplete: {', '.join(incomplete)}"] if incomplete and kind != "skipped" else []
 
 
-def last(wt: Path, branch: str) -> dict | None:
-    """This branch's newest prepare record whose candidate HEAD still contains."""
+def rows(wt: Path) -> list[dict]:
     try:
-        rows = (_common(wt) / RECORD).read_text(encoding="utf-8").splitlines()
+        text = (_common(wt) / RECORD).read_text(encoding="utf-8")
     except OSError:
-        return None
-    for row in reversed(rows):
+        return []
+    found = []
+    for row in text.splitlines():
         try:
             rec = json.loads(row)
         except ValueError:
             continue
+        if isinstance(rec, dict) and isinstance(rec.get("candidate"), str):
+            found.append(rec)
+    return found
+
+
+def _ancestor(wt: Path, a: str, b: str) -> bool:
+    return subprocess.run(["git", "-C", str(wt), "merge-base", "--is-ancestor", a, b], capture_output=True).returncode == 0
+
+
+def last(wt: Path, branch: str) -> dict | None:
+    """This branch's newest prepare record whose candidate HEAD still contains."""
+    for rec in reversed(rows(wt)):
         if rec.get("branch") == branch and rec.get("kind") == "prepare":
-            ok = subprocess.run(["git", "-C", str(wt), "merge-base", "--is-ancestor", rec["candidate"], "HEAD"],
-                                capture_output=True).returncode == 0
-            return rec if ok else None
+            return rec if _ancestor(wt, rec["candidate"], "HEAD") else None
     return None
+
+
+def open_entries(wt: Path, now: float, age_s: float = OPEN_AFTER_S) -> list[tuple[dict, list[str]]]:
+    """Landed records (candidate in main) older than ``age_s`` with files never run alone since.
+
+    A file closes when a later ``prepare`` or ``done`` line on a descendant commit ran it alone to a verdict, so
+    closing needs no edit of old lines: the next landing that runs it, or ``close``, appends the evidence."""
+    found, all_rows = [], rows(wt)
+    for i, rec in enumerate(all_rows):
+        left = list(rec.get("incomplete") or [])
+        if not left or now - rec.get("t", now) < age_s or not _ancestor(wt, rec["candidate"], "main"):
+            continue
+        for later in all_rows[i + 1:]:
+            if later.get("kind") in ("prepare", "done") and _ancestor(wt, rec["candidate"], later["candidate"]):
+                left = [f for f in left if f not in later.get("alone", []) or f in later.get("incomplete", [])]
+        if left:
+            found.append((rec, left))
+    return found
 
 
 def stale(wt: Path, rec: dict | None) -> list[str]:
@@ -211,19 +252,89 @@ def stale(wt: Path, rec: dict | None) -> list[str]:
     return [t for t in rec["alone"] if t in hit]
 
 
-def run(wt: Path, branch: str, selection: list[list[str]], args, logdir: Path, round_no: str, run_tests,
-        guards: list[list[str]], prepare: bool) -> list[str]:
-    """One guard-round batch: the guards, plus the gate and alone job (prepare) or the stale reruns (turn)."""
+class IsolationStop(RuntimeError):
+    """Raised when the caller's run_tests carries no ``Stop`` (tests); land.py's own Stop otherwise."""
+
+
+def _prepare(wt, branch, selection, args, logdir, round_no, run_tests, guards, stop) -> list[str]:
+    files, safety = alone_files(wt, selection)
     since = time.time() - 1
-    rec = None if prepare else last(wt, branch)
-    files = alone_files(wt, selection) if prepare else stale(wt, rec)
-    batch = guards + (gate(wt, selection) if prepare else []) + job(files)
-    done = run_tests(wt, args, batch, logdir, f"g{round_no}") if batch else []
-    notes = [] if prepare or not rec else ([f"isolation incomplete: {', '.join(rec['incomplete'])}"]
-                                          if rec.get("incomplete") else [])
-    if files or (prepare and (wt / GATE).is_file()):  # an empty prepare record still ends the previous one
-        cut = unreached(wt, job(files)[0], files, _fresh(logdir, round_no, since)) if files else []
-        notes += record(wt, branch, "prepare" if prepare else "stale", files, cut)
+    try:
+        batch = guards + gate(wt, selection) + job(files)
+        done = run_tests(wt, args, batch, logdir, f"g{round_no}") if batch else []
+    except BaseException:
+        if files:  # a NEW failure or a dead job stops the landing; the files still never ran alone to a pass
+            record(wt, branch, "prepare", files, files, error="the round stopped")
+        raise
+    cut = unreached(wt, job(files)[0], _fresh(logdir, round_no, since)) if files else []
+    if cut is None:  # a job without its report failed; once more without the cache, then stop
+        retry = argparse.Namespace(**{**vars(args), "no_cache": True})
+        done += run_tests(wt, retry, job(files), logdir, f"g{round_no}r")
+        cut = unreached(wt, job(files)[0], _fresh(logdir, f"{round_no}r", since))
+        if cut is None:
+            record(wt, branch, "prepare", files, files, error="no [isolation] report twice")
+            raise stop("isolation: the alone job ended twice without its [isolation] report; not landing")
+    notes = record(wt, branch, "prepare", files, cut)  # an empty one still ends the previous record
+    if unsafe := [f for f in cut if f in safety]:
+        raise stop(f"isolation: {len(unsafe)} test(s) of safety-tagged sources not run alone within {BUDGET_S} s"
+                   f" ({', '.join(unsafe)}); safety never lands as isolation incomplete")
+    return done + notes
+
+
+def _turn(wt, branch, selection, args, logdir, round_no, run_tests, guards) -> list[str]:
+    notes = []
+    if getattr(args, "no_queue", False):
+        notes.append("isolation gate skipped (--no-queue)")
+        head = _git(wt, "rev-parse", "HEAD")
+        if not any(r.get("kind") == "skipped" and r["candidate"] == head for r in rows(wt)):
+            files = alone_files(wt, selection)[0]
+            record(wt, branch, "skipped", files, files)
+    else:
+        rec = last(wt, branch)
+        if rec and rec.get("incomplete"):
+            notes.append(f"isolation incomplete: {', '.join(rec['incomplete'])}")
+        # In the turn's own round, not here: TURN_CAP_S and Overtime -> land_prepare.again apply to them as to
+        # the delta selection. ``selection`` is land.py's list, extended in place.
+        selection.extend([t] for t in stale(wt, rec) if [t] not in selection)
+    if found := open_entries(wt, time.time()):
+        notes.append(f"isolation open: {len(found)} record(s) older than a night with files never run alone"
+                     " (python tools/doctor.py)")
+    done = run_tests(wt, args, guards, logdir, f"g{round_no}") if guards else []
     for note in notes:
         print(f"[land] {note}", flush=True)
     return done + notes
+
+
+def run(wt: Path, branch: str, selection: list[list[str]], args, logdir: Path, round_no: str, run_tests,
+        guards: list[list[str]], prepare: bool) -> list[str]:
+    """One guard-round batch: the guards, plus the gate and the alone job (prepare) or the turn's checks."""
+    if not (wt / GATE).is_file():
+        return run_tests(wt, args, guards, logdir, f"g{round_no}") if guards else []
+    if prepare:  # land.py's Stop: the class its main catches (run_tests is land.run_tests)
+        return _prepare(wt, branch, selection, args, logdir, round_no, run_tests, guards,
+                        run_tests.__globals__.get("Stop", IsolationStop))
+    return _turn(wt, branch, selection, args, logdir, round_no, run_tests, guards)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``close <files>``: run them alone (one remote job on HEAD) and append a ``done`` line when all ran."""
+    parser = argparse.ArgumentParser(description="Run test files alone on a test host and record them done.")
+    parser.add_argument("command", choices=["close"])
+    parser.add_argument("files", nargs="+")
+    ns = parser.parse_args(argv)
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
+    import remote_pytest
+    wt, inv = Path.cwd(), job(ns.files)[0]
+    log = Path(tempfile.mkdtemp(prefix="rosy-isolation-")) / "alone.txt"
+    code = remote_pytest.run([inv], [log], _git(wt, "rev-parse", "HEAD"), repo=wt, label="isolation")[0]
+    cut = unreached(wt, inv, [log])
+    if code != 0 or cut is None:
+        print(f"[isolation] alone job failed (exit {code}, log {log}); nothing recorded")
+        return 1
+    record(wt, _git(wt, "rev-parse", "--abbrev-ref", "HEAD"), "done", ns.files, cut)
+    print(f"[isolation] done: {len(ns.files) - len(cut)} file(s) ran alone" + (f"; still not run: {cut}" if cut else ""))
+    return 0 if not cut else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

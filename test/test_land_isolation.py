@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import land_guards  # noqa: E402
 import land_isolation  # noqa: E402
+from test_land import GREEN, _runner, commit, repos  # noqa: E402,F401  (land.py's fixture repos)
 
 PAIR = {
     "helpers/hidden_mod.py": "VALUE = 1\n",
@@ -97,48 +98,122 @@ def test_each_alone_reports_only_the_masked_file(pair):
     assert land_isolation.each_alone(pair, files, land_isolation.COLLECT, budget_s=-1) == {}
 
 
-def fake_round(logs: dict[str, str], calls: list):
+def test_alone_job_workers_equal_the_cores_its_job_word_reserves(pair):
+    """remote_job.JOB writes ROSY_JOB_CORES to the job's lock; the pool must use exactly that many."""
+    for words in ({"ROSY_ALONE_FILES": "test_a_inserts.py"}, {"ROSY_COLLECT_PATHS": "."}):
+        assert "[isolation] workers 3 (ROSY_JOB_CORES 3)" in runner(pair, ROSY_JOB_CORES="3", **words)
+    for inv in land_isolation.job(["a"]) + land_isolation.gate(ROOT, [["test"]]):
+        assert inv[0] == f"ROSY_JOB_CORES={land_isolation.GATE_CORES}"
+
+
+def fake_round(logs: dict[str, dict[str, str]], calls: list):
+    """run_tests that records each batch and writes the logs given for its round label."""
     def run_tests(wt, args, batch, logdir, round_no):
         calls.append((round_no, batch))
-        for name, text in logs.items():
+        for name, text in logs.get(round_no, {}).items():
             (logdir / name).write_text(text, encoding="utf-8")
         return []
     return run_tests
 
 
-@pytest.mark.parametrize("log, cut", [
-    ("[isolation] incomplete: m/test/test_b.py\n", ["m/test/test_b.py"]),
-    ("[isolation] complete: 2\n", []),
-    ("job died before its report\n", ["m/test/test_a.py", "m/test/test_b.py"]),  # no evidence: none counts as run
-])
-def test_prepare_records_alone_files_the_budget_cut(pair, monkeypatch, tmp_path, log, cut):
-    monkeypatch.setattr(land_isolation, "alone_files", lambda wt, sel: ["m/test/test_a.py", "m/test/test_b.py"])
-    monkeypatch.setattr(land_isolation, "gate", lambda wt, sel: [])
-    monkeypatch.setattr(land_isolation, "_cache_entries", lambda wt: [])
+@pytest.fixture
+def prepared(pair, monkeypatch, tmp_path):
+    """A committed fixture tree with the gate present; alone_files picks a.py and b.py, b.py of a safety source."""
     git(pair, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init")
     (pair / "tools").mkdir()
     (pair / land_isolation.GATE).write_text("", encoding="utf-8")
-    logdir, calls = tmp_path / "logs", []
-    logdir.mkdir()
-    lines = land_isolation.run(pair, "fix/x", [["m/test"]], None, logdir, "pre", fake_round({"run-gpre-1.txt": log}, calls),
-                               [], prepare=True)
-    assert calls == [("gpre", land_isolation.job(["m/test/test_a.py", "m/test/test_b.py"]))]
+    monkeypatch.setattr(land_isolation, "gate", lambda wt, sel: [])
+    monkeypatch.setattr(land_isolation, "_cache_entries", lambda wt: [])
+    monkeypatch.setattr(land_isolation, "alone_files", lambda wt, sel: (["m/test/test_a.py", "m/test/test_b.py"], set()))
+    (logdir := tmp_path / "logs").mkdir()
+    args = argparse.Namespace(tests="auto", node=False, no_cache=False, no_queue=False)
+    return pair, logdir, args
+
+
+FILES = ["m/test/test_a.py", "m/test/test_b.py"]
+
+
+@pytest.mark.parametrize("log, cut", [("[isolation] incomplete: m/test/test_b.py\n", ["m/test/test_b.py"]),
+                                      ("[isolation] complete: 2\n", [])])
+def test_prepare_records_alone_files_the_budget_cut(prepared, log, cut):
+    pair, logdir, args = prepared
+    calls = []
+    lines = land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "pre",
+                               fake_round({"gpre": {"run-gpre-1.txt": log}}, calls), [], prepare=True)
+    assert calls == [("gpre", land_isolation.job(FILES))]
     assert lines == ([f"isolation incomplete: {', '.join(cut)}"] if cut else [])
     rec = land_isolation.last(pair, "fix/x")
-    assert rec["alone"] == ["m/test/test_a.py", "m/test/test_b.py"] and rec["incomplete"] == cut
-    # The turn's summary carries the cut again; nothing reruns while main has not moved.
+    assert rec["alone"] == FILES and rec["incomplete"] == cut
+    calls.clear()  # the turn's summary carries the cut again; nothing reruns while main has not moved
+    turn = land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "1", fake_round({}, calls), [], prepare=False)
+    assert calls == [] and turn == lines
+
+
+def test_a_job_without_its_report_is_retried_once_then_stops(prepared):
+    pair, logdir, args = prepared
+    calls = []
+    retried = fake_round({"gpre": {"run-gpre-1.txt": "killed\n"}, "gprer": {"run-gprer-1.txt": "[isolation] complete: 2\n"}},
+                         calls)
+    assert land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "pre", retried, [], prepare=True) == []
+    assert [c[0] for c in calls] == ["gpre", "gprer"]
     calls.clear()
-    turn = land_isolation.run(pair, "fix/x", [["m/test"]], None, logdir, "1", fake_round({}, calls), [], prepare=False)
-    assert calls == [] and turn == ([f"isolation incomplete: {', '.join(cut)}"] if cut else [])
+    (fresh := logdir.parent / "logs2").mkdir()
+    with pytest.raises(land_isolation.IsolationStop, match="without its \\[isolation\\] report"):
+        land_isolation.run(pair, "fix/x", [["m/test"]], args, fresh, "pre", fake_round({}, calls), [], prepare=True)
+    assert [c[0] for c in calls] == ["gpre", "gprer"]
+    rec = land_isolation.rows(pair)[-1]
+    assert rec["incomplete"] == FILES and rec["error"], "the files are recorded as not run alone"
 
 
-def test_turn_reruns_alone_only_tests_whose_referenced_file_main_changed(pair, monkeypatch, tmp_path):
+def test_safety_test_unreached_at_the_cap_stops_the_landing(prepared, monkeypatch):
+    pair, logdir, args = prepared
+    monkeypatch.setattr(land_isolation, "alone_files", lambda wt, sel: (FILES, {"m/test/test_b.py"}))
+    cut = fake_round({"gpre": {"run-gpre-1.txt": "[isolation] incomplete: m/test/test_b.py\n"}}, [])
+    with pytest.raises(land_isolation.IsolationStop, match="safety never lands as isolation incomplete"):
+        land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "pre", cut, [], prepare=True)
+    assert land_isolation.rows(pair)[-1]["incomplete"] == ["m/test/test_b.py"]
+    other = fake_round({"gpre": {"run-gpre-1.txt": "[isolation] incomplete: m/test/test_a.py\n"}}, [])
+    assert land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "pre", other, [], prepare=True) == [
+        "isolation incomplete: m/test/test_a.py"]  # a non-safety cut is recorded, not a stop
+
+
+def test_no_queue_records_skipped_once_and_doctor_fails_it_after_a_night(prepared):
+    import doctor
+
+    pair, logdir, args = prepared
+    args.no_queue = True
+    for _ in range(2):  # two rounds of one landing: one record
+        lines = land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "1", fake_round({}, []), [], prepare=False)
+        assert lines == ["isolation gate skipped (--no-queue)"]
+    assert [r["kind"] for r in land_isolation.rows(pair)] == ["skipped"]
+    now = land_isolation.rows(pair)[0]["t"]
+    assert doctor.check_isolation(pair, now)[0][0] == "OK", "not yet a night old"
+    (level, text, fix), = doctor.check_isolation(pair, now + land_isolation.OPEN_AFTER_S + 1)
+    assert level == "FAIL" and "skipped fix/x" in text and fix.endswith("close m/test/test_a.py m/test/test_b.py")
+
+
+def test_doctor_open_records_close_by_a_later_alone_run_on_a_descendant(prepared):
+    import doctor
+
+    pair, logdir, args = prepared
+    cut = fake_round({"gpre": {"run-gpre-1.txt": "[isolation] incomplete: m/test/test_b.py\n"}}, [])
+    land_isolation.run(pair, "fix/x", [["m/test"]], args, logdir, "pre", cut, [], prepare=True)
+    later = land_isolation.rows(pair)[0]["t"] + land_isolation.OPEN_AFTER_S + 1
+    assert doctor.check_isolation(pair, later)[0][0] == "FAIL"
+    git(pair, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "next")
+    land_isolation.record(pair, "fix/y", "done", ["m/test/test_b.py"], [])
+    assert doctor.check_isolation(pair, later)[0][0] == "OK"
+    out = []
+    assert doctor.run(pair, now=later, out=out.append) in (0, 1) and any("isolation:" in o for o in out)
+
+
+def test_turn_reruns_alone_only_tests_whose_referenced_file_main_changed(pair, monkeypatch):
     ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
     git(pair, *ident, "commit", "-q", "-m", "init")
-    prepared = git(pair, "rev-parse", "HEAD")
+    prepared_main = git(pair, "rev-parse", "HEAD")
     refs = {"src/used.py": ["m/test/test_used.py"], "src/other.py": ["m/test/test_other.py"]}
     monkeypatch.setattr(land_isolation, "_selector", lambda wt: (None, None, lambda p: refs.get(p, []), None))
-    rec = {"main": prepared, "alone": ["m/test/test_used.py", "m/test/test_spare.py"]}
+    rec = {"main": prepared_main, "alone": ["m/test/test_used.py", "m/test/test_spare.py"]}
     for path, expected in (("src/unrelated.py", []), ("src/used.py", ["m/test/test_used.py"])):
         (pair / path).parent.mkdir(exist_ok=True)
         (pair / path).write_text("x = 1\n", encoding="utf-8")
@@ -146,15 +221,28 @@ def test_turn_reruns_alone_only_tests_whose_referenced_file_main_changed(pair, m
         git(pair, *ident, "commit", "-q", "-m", path)
         assert land_isolation.stale(pair, rec) == expected
     assert land_isolation.stale(pair, {**rec, "main": git(pair, "rev-parse", "HEAD")}) == []  # main did not move
-    (pair / "tools").mkdir()
-    (pair / land_isolation.GATE).write_text("", encoding="utf-8")
-    monkeypatch.setattr(land_isolation, "last", lambda wt, branch: rec)
-    monkeypatch.setattr(land_isolation, "_cache_entries", lambda wt: [])
-    logdir, calls = tmp_path / "logs", []
-    logdir.mkdir()
-    land_isolation.run(pair, "fix/x", [["m/test"]], None, logdir, "2",
-                       fake_round({"run-g2-1.txt": "[isolation] complete: 1\n"}, calls), [["test/architecture"]], False)
-    assert calls == [("g2", [["test/architecture"], *land_isolation.job(["m/test/test_used.py"])])]  # no gate in the turn
+
+
+def test_turn_stale_reruns_ride_the_turns_round_its_cap_and_overtime_path(repos, monkeypatch):
+    """The stale reruns join land.py's turn invocations, so TURN_CAP_S cancels them as Overtime and
+    land_prepare.again tests them outside the lock, as for the delta selection."""
+    import land
+
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n", land_isolation.GATE: ""}, "branch")
+    monkeypatch.setattr(land_isolation, "last", lambda wt_, branch: {"main": "0" * 40, "alone": ["pkg/test/test_a.py"]})
+    stale = iter([["pkg/test/test_a.py"]])
+    monkeypatch.setattr(land_isolation, "stale", lambda wt_, rec: next(stale, []))
+    monkeypatch.setattr(land_isolation, "alone_files", lambda wt_, sel: ([], set()))
+    monkeypatch.setattr(land_isolation, "gate", lambda wt_, sel: [])
+    monkeypatch.setattr(land, "TURN_CAP_S", -1)
+    real, calls, again = _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}), [], []
+    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append([list(i) for i in inv]) or real(inv, *a, **k))
+    real_again = land.land_prepare.again
+    monkeypatch.setattr(land.land_prepare, "again", lambda *a: again.append(a[-2]) or real_again(*a))
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls[0][0][0] == "pkg/test" and calls[0][1:] == [["pkg/test/test_a.py"]], "in the turn's own round"
+    assert again and ["pkg/test/test_a.py"] in again[0], "past the cap it went outside the lock"
 
 
 def test_alone_files_put_safety_references_first_with_no_count_cap(monkeypatch, tmp_path):
@@ -176,8 +264,9 @@ def test_alone_files_put_safety_references_first_with_no_count_cap(monkeypatch, 
     monkeypatch.setattr(land_isolation, "tracked_tests", lambda root, paths: [*many, "s/test/test_brake.py"])
     monkeypatch.setattr(land_isolation, "_selector",
                         lambda wt: (Repo, At, lambda p: refs.get(p, []), lambda p: p.startswith("safe/")))
-    picked = land_isolation.alone_files(tmp_path, [["m/test", "s/test"]])
+    picked, safety = land_isolation.alone_files(tmp_path, [["m/test", "s/test"]])
     assert picked == ["s/test/test_brake.py", many[7], *[t for t in many if t != many[7]]]
+    assert safety == {"s/test/test_brake.py"}
 
 
 def test_guard_round_wiring(monkeypatch):
