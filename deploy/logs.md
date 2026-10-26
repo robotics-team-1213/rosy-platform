@@ -3536,3 +3536,14 @@
 - CE: 해당 없음 — lock 수명·불확실한 fsync·복구 예외의 판단을 소스·반례·D-888에 보존한다.
 
 - 최종 공식 원격: 57e7fdb090, os-update-state-final2, 1465 passed/32 skipped/49 warnings, 298.04s, 0 NEW. runner13549 terminal0. frozen 실제 게시·pending/만료 claim·직접 SDK와 native recovery·기존 updater의 40%/충전 정책을 포함한다. 앞의 개별 수와 중복되므로 합산하지 않는다. 32개 PowerShell skip은 여전히 미검증이다.
+
+## 2026-10-26 · bbef5d4bae · frozen firmware callback과 비활성 trial 준비
+
+- 변경: 실제 raw BE32 DT·boot ID·descriptor/kernel slot과 journal/default를 대조하는 os_bootloader와 isolated 실행 파일을 추가한다. factory assembler와 canonical autoboot codec을 공유한다. set-primary는 같은 verified source boot/current claim·15초 안의 root permit·fresh media를 확인하고 RAUC arm만 기록한다. set-state good은 현재 boot/manifest ACK만 기록하고 bad는 arm을 해제한다. callback은 bootstrap·reboot·OS journal phase를 바꾸지 않는다. 정상 reset에서 옛 arm/ACK를 재사용하지 않으며 commit 직후 current/default/committed가 같은 trial 조회는 허용한다.
+- 설치 경로: helper는 signed SDK와 OS frozen closure에, 실행 파일은 frozen closure/755에 둔다. mutable SDK를 손상시킨 설치 경로에서 실제 callback CLI의 preboot good과 isolated shebang help를 실행한다. codec은 release signing이나 Linux state import 없이 실행된다. callback/commit owner의 짧은 boot lock은 RAUC 디렉터리에 있어 실제 daemon의 common write 권한을 그 범위로 제한할 수 있다.
+- 장치 접근: 전체 parent는 namespace의 /dev/block에서 열고 block rdev/GPT 검사를 유지한다. /proc/1/root의 ptrace gate를 거칠 필요를 없앤다. 일반 파일 GPT+모델 kernel topology의 namespace-only 반례3개를 먼저 확인했다. 실제 제한 cgroup/namespace나 Pi firmware 시험은 아직 아니다.
+- 증거: 초기 callback/state55 passed/1.13s, 설치 CLI·assembly·closure 통합103 passed/13.05s, 각각 공식 원격0NEW. e1306a9281 첫 전체 os-bootloader-final 1496 passed/32 skipped/49 warnings/292.98s,0NEW. 추가 commit 직후 조회 반례1failed/1passed를 확인하고 bbef로 수정했다. 최신 최종 회귀는 별도 후속 결과로 기록한다. 개별 집계는 중복되므로 합산하지 않는다.
+- gate 변화: 없음. actual daemon·permit producer의 policy/inhibition/watchdog·health/commit/fallback 연결, SYSTEM·native ARM64 artifact·서명·SD가 남았다. kernel/firmware 값·mount는 모델이고 bootstrap publication은 commit owner 모델이며 실제 powercut 수용이 아니다. 제품 키·공개 push·카드 쓰기는 하지 않았다.
+- CE: 해당 없음 — raw DT·같은 boot의 commit·ptrace 경계와 반례를 코드·시험·D-888에 남긴다.
+
+- 최종 공식 원격: bbef5d4bae, os-bootloader-final2, 1498 passed/32 skipped/49 warnings,298.19s,0NEW; runner15899 terminal0. 같은 boot commit 뒤 조회·미등록 다른 slot 거절·namespace-only parent/DT alias·기존 updater/closure/factory/SDK까지 포함한다. 앞의 개별 집계와 중복되므로 합산하지 않는다. 32개 PowerShell skip은 미검증이다.

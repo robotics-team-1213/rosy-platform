@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · bbef5d4bae · D-888 firmware callback과 commit owner 분리 기록
 - 2026-10-26 · 57e7fdb090 · D-888 OS journal과 pending fence 경계 기록
 - 2026-10-26 · 35eeffe31f · D-888의 배포 metadata·CMS·설치 설정 경계 기록
 - 2026-10-26 · 4676189d86 · D-888의 media 수용과 metadata 변환 경계 기록
 - 2026-10-26 · b0dcb657e2 · D-888 bootstrap과 RAUC CMS 경계 기록
-- 2026-10-26 · 2b65ad60f0 · D-879의 이미지 조립 구현과 수용 경계 기록

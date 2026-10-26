@@ -64,6 +64,16 @@ OS journal은 공통 store의 기존 schema 1을 엄격하게 읽는다. 누락�
 
 native activate·명시적 rollback은 native release.lock 안에서 영속 pending fence를 확인한다. OS owner도 같은 짧은 lock 안에서 pending을 게시해야 경합 사이로 native 변경이 들어오지 않는다. OS owner가 CORE를 재시작하는 동안 이 lock을 유지하지 않는다. claim TTL이 끝나도 pending은 유효하며 자동 updater의 resume·apply·최종 precheck도 journal 복구·SDK inverse/sync 전에 차단한다. ABI 2를 주장하는 서명된 SDK라도 pending fence의 필수 파일을 빼면 거절한다. boot recovery는 별도 경로로 남겨 maintenance 상태에서도 기존 CORE 복구가 가능하게 한다. legacy MBR·protocol 1과 최소 두 파일짜리 standalone verifier 경로는 유지한다.
 
+firmware adapter는 [공식 autoboot 문서](https://www.raspberrypi.com/documentation/computers/config_txt.html#autoboot-txt)의 raw big-endian u32 `partition`·`tryboot`를 읽고 descriptor·kernel RAUC slot·boot ID와 대조한다. `/proc/device-tree` alias는 실제 kernel sysfs tree만 허용한다. factory assembler와 callback은 같은 두 canonical autoboot 표현을 쓰며 중복·추가 설정을 추측하여 수정하지 않는다. 설치·trial callback은 bootstrap을 쓰거나 reboot를 실행하지 않는다.
+
+`set-primary`는 같은 source boot의 VERIFIED/ARMED journal, 현재 claim, 같은 transaction·manifest·layout에 결속된 root 전용 arm permit을 요구한다. permit은 monotonic 기준 15초 안의 유효기간으로 제한하며 실제 장치를 다시 capture한 뒤 RAUC 하위 디렉터리에 arm 기록만 남긴다. 실제 policy·inhibition·watchdog·60% battery를 검사해 이 permit을 만드는 controller는 별도다. source boot가 바뀌면 이전 arm으로 재시작하지 않는다. 현재 trial도 firmware flag·target·journal·arm 기록이 일치해야 primary로 보고한다. 정상 reset은 기존 autoboot default로 남는다.
+
+`set-state good`은 현재 transaction·boot·manifest에 묶인 ACK만 기록한다. 설치 전 good과 trial good은 boot ID로 구분하며 어느 쪽도 기본 슬롯을 바꾸지 않는다. bad는 arm을 해제한다. commit owner는 동일 boot의 실제 health와 GOOD_ACK를 확인해야 한다. callback과 commit owner는 RAUC 하위 디렉터리의 짧은 boot lock을 공유하며 state lock을 잡은 채 callback을 부르지 않는다. 실행 파일은 `-I` Python과 frozen helper 경로를 쓰고, mutable SDK를 손상시킨 설치 경로에서 실제 CLI의 preboot good을 검증한다. 이 결과는 모델 DT/mount이며 Pi firmware 관측이나 commit/powercut 수용이 아니다.
+
+media capture는 현재 namespace의 `/dev/block/<major>:<minor>`를 열고 기존 block 형식·rdev·GPT 검사를 유지한다. [Linux proc link lookup](https://raw.githubusercontent.com/torvalds/linux/v6.8/fs/proc/base.c)은 `/proc/1/root` 접근을 ptrace 검사로 보호하므로, 장치 검증을 위해 그 우회 경로를 따르거나 daemon에 ptrace 권한을 더하지 않는다. PID1 mountinfo 읽기는 유지한다([kernel 구현](https://raw.githubusercontent.com/torvalds/linux/v6.8/fs/proc_namespace.c)). 실제 제한된 service의 namespace/cgroup 검증은 SYSTEM 단계에 남는다.
+
+commit 뒤 같은 boot의 DT `tryboot=1`이 남아도 현재 슬롯·영속 default·committed 슬롯이 모두 같으면 정상 조회를 허용한다. pending을 지운 뒤 이 상태를 미등록 trial로 오인해 다시 HOLD하지 않는다. 다른 슬롯의 미등록 trial은 계속 거절한다. 이는 별도 commit owner를 모델로 수행한 전이 회귀이며 실제 firmware commit 수용이 아니다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.

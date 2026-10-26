@@ -11708,3 +11708,12 @@ osy-d395-s1d\`.
 - CE: 해당 없음 — 원인과 재개 조건을 기존 ADR·소스·시험에 보존한다.
 
 - 최종 공식 원격: 57e7fdb090, os-update-state-final2, 1465 passed/32 skipped/49 warnings, 298.04s, 0 NEW. 실제 파일 IO/frozen import와 모델 mount/오류 주입의 SOURCE 증거이며 native ARM64·SYSTEM·SD·DEVICE 수용을 뜻하지 않는다.
+
+## 2026-10-26 · bbef5d4bae · D-888 firmware callback과 commit owner 분리 기록
+
+- 변경: 공식 Pi의 raw BE32·autoboot 표현, source/current claim·짧은 arm permit·fresh media, boot-bound ACK와 arm 취소, frozen 실행 경로를 Proposed D-888에 기록한다. callback이 default를 쓰지 않고 별도 health/commit owner가 승격을 담당한다. 같은 boot의 commit 뒤 DT flag가 남는 경우도 current/default/committed 일치로 처리한다. namespace-local devnode를 정확한 rdev/GPT로 검증하여 PID1 root link의 ptrace 권한을 추가하지 않는 이유를 Linux 원본과 함께 남긴다.
+- 증거: 공식 원격55 passed 및103 passed 각각0NEW, 첫 전체 e1306a9281 1496 passed/32 skipped/49 warnings/292.98s0NEW. 추가 same-boot commit 모델 반례1fail/1pass 수정은 bbef5d4bae다. 실제 callback CLI·file IO·GPT와 모델 DT/mount/commit을 actual daemon·SYSTEM·Pi firmware·powercut 수용과 구분한다.
+- gate 변화: 없음. 실제 updater/daemon/health/commit/fallback 연결과 signed image·SD 목표를 유지한다.
+- CE: 해당 없음 — 판단과 검증 조건은 기존 ADR·소스·반례에 보존한다.
+
+- 최종 공식 원격: bbef5d4bae, os-bootloader-final2,1498 passed/32 skipped/49 warnings,298.19s,0NEW. frozen CLI와 모델 firmware/mount/commit SOURCE 증거이며 actual daemon·SYSTEM·ARM artifact·SD·Pi 수용을 뜻하지 않는다.
