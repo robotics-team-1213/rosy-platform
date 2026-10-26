@@ -9,7 +9,7 @@ from core_common.protocol.motor_health import MotorHealthResponse
 
 from .hardware_profile import _number
 from .load_assessment import assess_candidates, command_positions
-from .motion_characteristics import _canonical, _text, validate_characteristics
+from .motion_characteristics import _canonical, _text, document_digest, validate_characteristics
 
 
 class LoadMonitor:
@@ -30,6 +30,8 @@ class LoadMonitor:
         self.envelope = next(e for e in self.profile['envelopes'] if e['id'] == match['matched_envelope_id'])
         self.last_capture = self.last_now = None
         self.last_joint_capture = {}
+        self.last_joint_receipt = {}
+        self.last_joint_signature = {}
         self.latched = set()
         self.error_since = {}
         self.history = {name: deque(maxlen=4096) for name in self.profile['joints']}
@@ -38,6 +40,10 @@ class LoadMonitor:
         """Record lost inputs without inventing a capture time or joint measurement."""
         _text(reason, 'reason')
         return self._report({reason}, {}, None, _number(now, 'now', positive=True))
+
+    def feedback_due(self, now):
+        return any(now - stamp > self.profile['monitor']['max_gap_s'] + 1e-9
+                   for stamp in self.last_joint_receipt.values())
 
     def _report(self, reasons, errors, captured, now):
         self.latched.update(reasons)
@@ -55,6 +61,7 @@ class LoadMonitor:
                 'source_sequence': self.request['source_sequence'], 'task_id': self.request['task_id'],
                 'scene_revision': self.request['scene_revision'], 'session_id': self.session_id,
                 'captured_at': captured, 'assessed_at': now,
+                'joint_captured_at': dict(self.last_joint_capture), 'new_joint_samples': sorted(errors),
                 'motion_admitted': False, 'automatic_recovery_enabled': False}
 
     def observe(self, health, *, captured_at, now, context):
@@ -82,7 +89,7 @@ class LoadMonitor:
             reasons.add('owner_changed')
         if health.session_id != self.session_id:
             reasons.add('session_changed')
-        if health.status != 'active' or health.evidence != 'fresh':
+        if health.status != 'active' or health.evidence not in ('fresh', 'delayed'):
             reasons.add('source_not_active')
         if (health.sample_age_s is None or abs(health.sample_age_s - (now - captured)) > 1e-6
                 or now - captured > self.profile['monitor']['max_age_s']):
@@ -119,11 +126,20 @@ class LoadMonitor:
             if motor.sample_age_s > self.profile['monitor']['max_age_s'] or stamp > captured + 1e-6:
                 reasons.add(f'stale_feedback:{name}')
                 continue
-            if previous is not None and (
-                    stamp <= previous or stamp - previous > self.profile['monitor']['max_gap_s'] + 1e-9):
-                reasons.add(f'feedback_gap:{name}')
-                continue
+            signature = document_digest(motor.model_dump(exclude={'sample_age_s'}))
+            if previous is not None:
+                if abs(stamp - previous) <= 1e-6:
+                    if signature != self.last_joint_signature[name]:
+                        reasons.add(f'sample_changed_without_timestamp:{name}')
+                    if now - self.last_joint_receipt[name] > self.profile['monitor']['max_gap_s'] + 1e-9:
+                        reasons.add(f'feedback_gap:{name}')
+                    continue  # Another group can advance the source without advancing this motor.
+                if stamp < previous or stamp - previous > self.profile['monitor']['max_gap_s'] + 1e-9:
+                    reasons.add(f'feedback_gap:{name}')
+                    continue
             self.last_joint_capture[name] = stamp
+            self.last_joint_receipt[name] = now
+            self.last_joint_signature[name] = signature
             try:
                 desired = command_positions(self.request, self.candidate_id, stamp - self.started_at)
                 actual = _number((motor.present_raw - joint['raw_zero']) * joint['rad_per_raw'], 'position_rad')

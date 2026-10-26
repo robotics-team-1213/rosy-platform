@@ -158,6 +158,14 @@ def test_other_group_updates_do_not_reconsume_selected_group_samples():
     assert any('feedback_gap' in reason for reason in out['reasons'])
 
 
+def test_other_group_age_does_not_hide_or_invalidate_selected_fresh_sample():
+    p, r = characteristics(), request()
+    h = health(p)
+    h.motors.extend([motor.model_copy(update={'group': 'other-arm', 'sample_age_s': 3.}) for motor in h.motors])
+    h.evidence = 'delayed'
+    assert monitor(p, r).observe(h, captured_at=100., now=100., context=r['context'])['status'] == 'observing'
+
+
 def test_native_producer_through_real_snapshot_reader_supports_named_group(tmp_path, monkeypatch):
     import importlib.util
     from pathlib import Path

@@ -48,7 +48,7 @@ def _watch(args, profile, request):
                 health, captured = read_motor_health_snapshot(
                     Path(args.health).absolute(), profile['binding']['owner_id'], now=now)
                 signature = document_digest(health.model_dump(
-                    exclude={'sample_age_s': True, 'motors': {'__all__': {'sample_age_s'}}}))
+                    exclude={'sample_age_s': True, 'evidence': True, 'motors': {'__all__': {'sample_age_s'}}}))
                 # Polling the same capture cannot renew freshness or count as a new oscillation sample.
                 duplicate = (signature == last_signature and captured == monitor.last_capture
                              and monitor.last_now is not None
@@ -56,9 +56,10 @@ def _watch(args, profile, request):
                              and health.sample_age_s is not None
                              and health.sample_age_s <= profile['monitor']['max_age_s'])
                 if duplicate:
-                    if now - monitor.last_now > profile['monitor']['max_gap_s'] + 1e-9:
+                    if monitor.feedback_due(now):
                         report = monitor.unavailable('feedback_gap', now=now)
-                    elif any(m.sample_age_s > profile['monitor']['max_age_s'] for m in health.motors):
+                    elif any(m.sample_age_s > profile['monitor']['max_age_s'] for m in health.motors
+                             if m.group == profile['binding']['motor_group']):
                         report = monitor.unavailable('stale_feedback', now=now)
                     else:
                         report = None

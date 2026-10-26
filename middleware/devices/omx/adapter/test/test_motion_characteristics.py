@@ -91,6 +91,7 @@ def test_atomic_write_failure_preserves_previous_profile(tmp_path, monkeypatch):
     save_characteristics(path, p)
     changed = deepcopy(p)
     changed['revision'] = 'v2'
+
     def fail(*args):
         raise OSError('simulated replacement failure')
     monkeypatch.setattr('omx_adapter.motion_characteristics.os.replace', fail)
