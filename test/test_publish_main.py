@@ -86,7 +86,7 @@ def _baseline(local: Path, *hits: tuple[str, str, str]) -> None:
             for c, p, r in hits]
     path = local / tool.BASELINE
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"schema": "rosy.publish-secret-baseline/1", "records": rows}), encoding="utf-8")
+    path.write_text(json.dumps({"schema": "rosy.publish-secret-baseline/1", "reviewer": "agent review 2026-10-26", "records": rows}), encoding="utf-8")
 
 
 def test_a_reviewed_baseline_hit_passes_but_the_same_path_in_a_new_commit_stops(repo, capsys):
@@ -115,6 +115,23 @@ def test_a_baseline_row_carrying_anything_but_the_triple_and_verdict_is_refused(
     path.write_text(json.dumps(doc), encoding="utf-8")
     assert _run(local) == 1
     assert "malformed" in capsys.readouterr().err
+
+
+def test_a_baseline_without_the_agent_reviewer_note_is_refused(repo, capsys):
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    _baseline(local, (sha, "app.py", "credential"))
+    path = local / tool.BASELINE
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    del doc["reviewer"]
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    assert _run(local) == 1
+    assert "malformed" in capsys.readouterr().err
+
+
+def test_the_tracked_baseline_names_an_agent_review_and_loads():
+    assert len(tool.load_baseline(ROOT)) >= 109
 
 
 def test_a_secret_only_a_merge_commit_adds_is_caught(repo, capsys):
@@ -258,7 +275,7 @@ def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(re
     create = calls[-1]
     assert create[:2] == ("pr", "create") and "publish/main-20261026-12" in create
     body = create[create.index("--body") + 1]
-    for fact in (sha, "`origin/main..SHA` 커밋 수: 1", "이 PR에 없는 착지 1건", "origin/main is ancestor: yes",
+    for fact in (sha, "`origin/main..SHA` 커밋 수: 1", "이 PR에 없는 착지 1건", "origin/main is ancestor: yes", "IP·호스트 규칙 미검사 (secret_scan에 규칙 없음)",
                  "1 commits checked, 0 missing", "D-868", f"--match-head-commit {sha}"):
         assert fact in body
     assert body.endswith(tool.GENERATED_BY)

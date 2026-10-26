@@ -203,7 +203,8 @@ def load_baseline(repo: Path) -> frozenset[tuple[str, str, str]]:
         return frozenset()
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
-        assert doc["schema"] == "rosy.publish-secret-baseline/1"
+        assert doc["schema"] == "rosy.publish-secret-baseline/1" and set(doc) == {"schema", "reviewer", "records"}
+        assert isinstance(doc["reviewer"], str) and doc["reviewer"].startswith("agent review")  # who reviewed, not a sign-off
         entries = set()
         for row in doc["records"]:
             assert set(row) == {"commit", "path", "rule", "verdict", "reviewed"}
@@ -266,6 +267,7 @@ def pr_body(repo: Path, sha: str, why: str, safety: str) -> str:
         f"- `origin/main..SHA` 커밋 수: {count(f'origin/main..{sha}')}",
         f"- 지연(lag): 이 SHA 뒤 main에 착지했지만 이 PR에 없는 착지 {landings}건 (커밋 {count(f'{sha}..main')}개)",
         "- origin/main is ancestor: yes",
+        "- IP·호스트 규칙 미검사 (secret_scan에 규칙 없음)",
         f"- Safety-Review 범위 (`safety_review.py origin/main {sha[:10]}`): {safety}", "",
         "## 병합", "",
         f"`ci-result`가 녹색일 때만 merge commit으로 병합한다 (squash·rebase 금지): "
