@@ -1,0 +1,14 @@
+[Unit]
+Description=Resume ROSY whole OS transactions after boot and interrupted runs
+DefaultDependencies=no
+Before=local-fs.target shutdown.target
+Conflicts=shutdown.target
+
+[Timer]
+OnBootSec=10s
+OnUnitInactiveSec=60s
+AccuracySec=1s
+Unit=rosy-os-update.service
+
+[Install]
+WantedBy=timers.target

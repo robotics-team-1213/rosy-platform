@@ -15,6 +15,9 @@ OS_UPDATE_ASSETS = (*{"rosy-os-rauc.service": "etc/systemd/system/rosy-os-rauc.s
                        for unit in ("core", "io", "navigation")},
                     "rosy-os-trial-deadline.timer": "etc/systemd/system/rosy-os-trial-deadline.timer",
                     "rosy-os-trial-deadline.service": "etc/systemd/system/rosy-os-trial-deadline.service",
+                    "rosy-os-update.service": "etc/systemd/system/rosy-os-update.service",
+                    "rosy-os-update.timer": "etc/systemd/system/rosy-os-update.timer",
+                    "rosy-os-update-boot.conf": "etc/systemd/system/sysinit.target.d/20-rosy-os-update.conf",
                     "rosy-os-deadline.conf": "etc/systemd/system/sysinit.target.d/10-rosy-os-deadline.conf"}.items(),
                     ("rosy-os-watchdog.conf", "etc/systemd/system.conf.d/90-rosy-os-watchdog.conf"),
                     *(("rosy-os-no-apt.conf", f"etc/systemd/system/{unit}.d/90-rosy-os.conf") for unit in (
@@ -37,7 +40,8 @@ FIRST_BOOT_NATIVE = (*BOOTSTRAP_FILES, "first_boot_runtime.py", "first_boot_supp
                      "rosy-os-io-guard.conf", "rosy-os-navigation-guard.conf", "os_trial_deadline.py",
                      "rosy-os-trial-deadline.timer", "rosy-os-trial-deadline.service", "rosy-os-deadline.conf",
                      "os_update_watchdog.py", "rosy-os-watchdog.conf", "rosy-os-no-apt.conf", "os_installed_factory.py",
-                     "os_update_install.py", "rosy-os-finalize", "os_update_health.py", "os_update_commit.py", "os_update_controller.py")
+                     "os_update_install.py", "rosy-os-finalize", "os_update_health.py", "os_update_commit.py", "os_update_controller.py",
+                     "rosy-os-update.service", "rosy-os-update.timer", "rosy-os-update-boot.conf")
 FIRST_BOOT_FILES = ("first-boot/rosy-first-boot.py", "first-boot/rosy-first-boot.sh", "deploy/sd/personalization.py",
                     *("native-runtime/" + name for name in FIRST_BOOT_NATIVE))
 

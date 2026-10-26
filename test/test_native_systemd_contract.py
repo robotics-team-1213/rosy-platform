@@ -339,6 +339,10 @@ ROOT_ONLY_STATE = (
 # What each ProtectSystem=strict unit's program writes, derived from the code.
 # "$HOME" is the unit's Environment=HOME. Keep this next to the code references.
 DECLARED_WRITES = {
+    "rosy-os-update.service": {"/var/lib/rosy-device/os-update", "/var/lib/rosy/updates/.run.lock",
+        "/var/lib/rosy/releases/native-release.lock", "/var/lib/rosy-device/state/config.lock",
+        "/run/rosy-os-update", "/run/systemd/system/rosy-os-rauc.service.d",
+        "/run/rosy-claim", "/run/rosy-claim.lock", "/run/rosy-claim.stale.x", "/run/rosy-provision-boot/autoboot.txt"},
     "rosy-os-rauc.service": {"/run/rosy-os-update/rauc", "/var/lib/rosy-device/os-update/rauc"},
     "rosy-os-motion-guard.service": {"/run/rosy-os-update"},
     "rosy-os-trial-deadline.service": set(),
@@ -485,6 +489,9 @@ NETWORK_EVIDENCE_READS = {
 }
 
 DECLARED_READS = {
+    "rosy-os-update.service": {"/etc/rosy", "/etc/rauc", "/etc/systemd", "/etc/dbus-1", "/opt/rosy",
+        "/var/lib/rosy-device", "/var/lib/rosy/releases", "/var/lib/rosy/updates", "/run/rosy",
+        "/sys", "/dev", "/proc", "/usr/local/share/rosy", "/boot/firmware"},
     # These entrypoints only read journal/bootstrap/media; controller writers are separate.
     "rosy-os-motion-guard.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
     "rosy-os-trial-deadline.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
@@ -591,6 +598,10 @@ NETWORK_SOURCES = [
 
 # Program sources scanned for write roots, per unit.
 PROGRAM_SOURCES = {
+    "rosy-os-update.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_update_controller", "os_update_commit", "os_update_health", "os_update_policy", "os_update_watchdog",
+         "os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout",
+         "os_update_install", "os_installed_factory", "native_release", "os_motion_guard", "auto_update_host", "auto_update_records")],
     "rosy-os-motion-guard.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
         ("os_motion_guard", "os_bootloader", "os_update_state", "os_state_layout", "os_state_io")],
     "rosy-os-trial-deadline.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in

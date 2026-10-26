@@ -1,0 +1,41 @@
+[Unit]
+Description=ROSY frozen whole OS transaction lifecycle
+Requires=rosy-os-storage.service
+Wants=rosy-os-motion-guard.service rosy-release-recover.service rosy-core.service rosy-io.service
+After=rosy-os-storage.service rosy-os-motion-guard.service rosy-first-boot.service rosy-sd-provision.service
+After=rosy-release-recover.service rosy-core.service rosy-io.service
+ConditionPathExists=/etc/rosy/os-slot.json
+ConditionPathIsDirectory=/var/lib/rosy-device/os-update
+ConditionPathIsDirectory=/run/rosy-provision-boot
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/rosy/runtime.env
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_update_controller.py resume
+TimeoutStartSec=70min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# CORE's actual cwd validates the running signed release; no PID1-root traversal.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+# Only read the SD parent for actual GPT identity; raw installation belongs to RAUC.
+DevicePolicy=closed
+DeviceAllow=block-mmc r
+StateDirectory=rosy/updates
+StateDirectoryMode=0755
+ReadWritePaths=/var/lib/rosy-device/os-update /run/rosy-provision-boot /run /var/lib/rosy/updates
+ReadWritePaths=-/var/lib/rosy/releases/native-release.lock -/var/lib/rosy-device/state/config.lock
