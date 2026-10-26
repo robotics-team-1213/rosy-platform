@@ -6,32 +6,38 @@
 Publish mode:
 1. ``git fetch origin``. If origin/main is not an ancestor of local main, ``git merge-tree`` (no checkout
    is touched) decides: conflicts only in ``SYNC_RECORDS`` (content conflicts) -> exit 4 and the sync
-   landing to run; anything else (code, add/add, rename/delete) -> exit 3 "sync needs robot-4d". This
-   version never performs the sync landing itself.
-2. Publish SHA: the newest commit of ``--ancestry-path origin/main..main`` (contains origin/main, is in
-   local main) with a green FULL land record. **Green FULL** = ``tools/hooks/land_record.py`` holds a
-   record for exactly that SHA (land.py writes one only after a fast-forward of that very candidate with
-   0 NEW, no LOAD-FLAKY and no pass borrowed from another tree), its base is an ancestor of the SHA, and
-   one invocation is exactly ``["test"]`` (root test/ whole: only ``lab_full_invocations``, the FULL tier,
-   runs it; the affected tier names root test files one by one). Records do not say FULL themselves.
-   Not ``--first-parent``: a land.py landing is a merge with the topic branch as first parent, so the
-   main tips that hold records sit on second parents.
+   landing commands; anything else (code, add/add, rename/delete) -> exit 3 "sync needs robot-4d". This
+   version never performs a sync landing itself.
+2. Publish SHA: the newest commit of ``--topo-order --ancestry-path origin/main..main`` (contains
+   origin/main, is in local main) with a green FULL land record. Not ``--first-parent``: a land.py landing
+   is a merge with the topic branch as first parent, so the main tips that hold records sit on second
+   parents. **Green FULL** = ``tools/hooks/land_record.py`` holds a record for exactly that SHA (land.py
+   writes one only after a fast-forward of that very candidate with 0 NEW, no LOAD-FLAKY and no pass
+   borrowed from another tree), its base is an ancestor of the SHA, and its tier is ``full``: the
+   record's ``tier`` field when present, else (older records) one invocation exactly ``["test"]`` (root
+   test/ whole: only ``lab_full_invocations``, the FULL tier, runs it; the affected tier names root test
+   files one by one). If records exist in the range but none has a ``tier`` string or an ``invocations``
+   list of lists, the format is unknown: exit 8, never a silent "nothing to publish".
 3. Due when the last publish (newest ``origin/publish/main-YYYYMMDD[-HH]`` by name; with --apply also
    merged ``publish/main-`` PRs from gh) is older than --min-hours, or ``--force-blocked`` names a waiting PR.
-4. --apply: refuse if a publish PR is open; push ``<sha>:refs/heads/publish/main-YYYYMMDD-HH`` (UTC) from
-   a temporary detached worktree at that SHA under ``<git-common-dir>/rosy-publish/`` so pre-push selects
-   from the pushed tree (it reads the working tree), never --no-verify or force; ``gh pr create``; remove
-   the worktree.
+4. --apply: refuse if a publish PR is open; check the Safety-Review range (``safety_review.py origin/main
+   <sha>`` at that SHA) and push ``<sha>:refs/heads/publish/main-YYYYMMDD-HH`` (UTC) from a temporary
+   detached worktree at that SHA under ``<git-common-dir>/rosy-publish/`` (pre-push selects tests from the
+   working tree), never --no-verify or force; ``gh pr create`` with the publish facts (lag = landings on
+   main after the SHA that this PR leaves out); remove the worktree (``worktree_rules`` tombstone when a
+   held handle keeps the folder).
 
 Merge mode (``--merge-when-green``): the PR must be an open ``publish/main-`` PR whose head still has a
 green FULL record, ``mergeable`` MERGEABLE, ``mergeStateStatus`` not DIRTY/BEHIND, and check ``ci-result``
-SUCCESS; --apply then runs ``gh pr merge --merge --match-head-commit <head>``. PRs are never closed,
-reopened or force-pushed.
+SUCCESS; --apply then runs ``gh pr merge --merge --match-head-commit <head>``, fetches, and prints the
+sync-back: origin/main is now M(old origin, SHA) and local main has usually moved past the SHA, so a
+fast-forward is impossible; ``git merge origin/main`` in a fresh worktree and ``land.py`` (exit 3 instead
+when merge-tree finds code conflicts). PRs are never closed, reopened or force-pushed.
 
-Exit codes: 0 done, planned (dry run), nothing to publish or not due | 1 git/gh failure, ci-result
-failed or a refusal (branch exists, PR not a publish PR) | 2 usage | 3 sync needs robot-4d |
-4 clean sync landing needed first | 5 not ready yet (ci-result pending, mergeable UNKNOWN) |
-6 PR not mergeable: sync needed | 7 a publish PR is already open.
+Exit codes: 0 done, planned (dry run), nothing to publish or not due | 1 git/gh failure, Safety-Review
+range red, ci-result failed or a refusal (branch exists, PR not a publish PR) | 2 usage | 3 sync needs
+robot-4d | 4 clean sync landing needed first | 5 not ready yet (ci-result pending, mergeable UNKNOWN) |
+6 PR not mergeable: sync needed | 7 a publish PR is already open | 8 land record format not recognised.
 """
 
 from __future__ import annotations
@@ -44,12 +50,17 @@ import re
 import subprocess
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "hooks"))
+TOOLS = Path(__file__).resolve().parent
+sys.path.insert(0, str(TOOLS / "hooks"))
 import land_record  # noqa: E402  (green land.py results per landed commit)
+sys.path.insert(0, str(TOOLS))
+import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
 
 SYNC_RECORDS = frozenset({"docs/logs.md", "docs/index.md", "tools/harness/adr_gaps.txt"})
 PREFIX = "publish/main-"
 STAMP = re.compile(r"publish/main-(\d{8})(?:-(\d{2}))?")
+D868 = "docs/adr/D-868-local-main-first-merge-commit-publish.md"
+GENERATED_BY = "🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 
 
 class Stop(Exception):
@@ -92,15 +103,41 @@ def sync_conflicts(repo: Path) -> list[str] | None:
     return sorted(set(blocking)) or None
 
 
+def sync_commands(now: datetime) -> str:
+    name = f"sync-origin-{now:%Y%m%d-%H}"
+    return ("\n  python tools/worktrees.py new {0} fix/{0}\n  cd .worktrees/{0}\n  git merge origin/main"
+            "   # clean or records only: logs.md/adr_gaps.txt union, index.md by rosy_harness.py generate\n"
+            "  python tools/land.py --tests auto").format(name)
+
+
+def tier(record: dict) -> str | None:
+    """The record's tier, or None when neither the ``tier`` field nor the invocations can tell."""
+    if isinstance(record.get("tier"), str):
+        return record["tier"]
+    invocations = record.get("invocations")
+    if isinstance(invocations, list) and all(isinstance(inv, list) for inv in invocations):
+        return "full" if ["test"] in invocations else "affected"
+    return None
+
+
 def green_full(repo: Path, sha: str) -> bool:
     record = land_record.read(repo, sha)
-    return bool(record) and ["test"] in record.get("invocations", []) and ancestor(repo, record["base"], sha)
+    return bool(record) and tier(record) == "full" and ancestor(repo, record["base"], sha)
 
 
 def publish_sha(repo: Path) -> str | None:
+    seen = known = 0
     for sha in git(repo, "rev-list", "--topo-order", "--ancestry-path", "origin/main..main").stdout.split():
+        record = land_record.read(repo, sha)
+        if record is None:
+            continue
+        seen += 1
+        known += tier(record) is not None
         if green_full(repo, sha):
             return sha
+    if seen and not known:
+        raise Stop(8, f"{seen} land record(s) past origin/main, none with a known format (tier field or"
+                      " invocations): fix publish_main.tier before publishing")
     return None
 
 
@@ -121,14 +158,45 @@ def last_publish(repo: Path, apply: bool) -> datetime | None:
     return max(times, default=None)
 
 
+def safety_range(worktree: Path, sha: str) -> str:
+    """The Safety-Review check of origin/main..sha with that SHA's own script; Stop when a trailer is missing."""
+    run = subprocess.run([sys.executable, "tools/harness/safety_review.py", "origin/main", sha], cwd=worktree,
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if run.returncode != 0:
+        raise Stop(1, f"Safety-Review range origin/main..{sha[:10]} is red:\n{run.stdout}{run.stderr}".rstrip())
+    checked = re.search(r"(\d+) commit\(s\) checked", run.stdout)
+    return f"{checked[1] if checked else '?'} commits checked, 0 missing"
+
+
+def pr_body(repo: Path, sha: str, why: str, safety: str) -> str:
+    count = lambda rng: git(repo, "rev-list", "--count", rng).stdout.strip()  # noqa: E731
+    landings = sum(land_record.read(repo, c) is not None for c in git(repo, "rev-list", f"{sha}..main").stdout.split())
+    remote = git(repo, "remote", "get-url", "origin").stdout.strip().removesuffix(".git")
+    link = f"{remote}/blob/main/{D868}" if remote.startswith("https://") else D868
+    return "\n".join([
+        "## 무엇을, 왜", "",
+        f"D-868 게시: 로컬 main의 녹색 FULL 착지 커밋을 merge commit으로 올린다 ({why}). [D-868]({link})", "",
+        "## 게시 사실", "",
+        f"- 게시 SHA: `{sha}` (FULL 착지 기록 {land_record.read(repo, sha)['at']})",
+        f"- `origin/main..SHA` 커밋 수: {count(f'origin/main..{sha}')}",
+        f"- 지연(lag): 이 SHA 뒤 main에 착지했지만 이 PR에 없는 착지 {landings}건 (커밋 {count(f'{sha}..main')}개)",
+        "- origin/main is ancestor: yes",
+        f"- Safety-Review 범위 (`safety_review.py origin/main {sha[:10]}`): {safety}", "",
+        "## 병합", "",
+        f"`ci-result`가 녹색일 때만 merge commit으로 병합한다 (squash·rebase 금지): "
+        f"`gh pr merge <PR> --merge --match-head-commit {sha}` 또는 "
+        "`python tools/publish_main.py --merge-when-green <PR> --apply`.", "",
+        GENERATED_BY])
+
+
 def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     git(repo, "fetch", "origin")
     if not ancestor(repo, "origin/main", "main"):
         blocking = sync_conflicts(repo)
         if blocking:
             raise Stop(3, "sync needs robot-4d: " + ", ".join(blocking))
-        raise Stop(4, "origin/main is not in local main; the merge is clean or records-only. From a worktree:"
-                      " git merge origin/main, then python tools/land.py --tests auto")
+        raise Stop(4, "origin/main is not in local main; the merge is clean or records-only. Sync first:"
+                      + sync_commands(now))
     sha = publish_sha(repo)
     if sha is None:
         return "nothing to publish: no commit past origin/main has a green FULL land record"
@@ -146,24 +214,28 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
         raise Stop(7, "a publish PR is already open: use --merge-when-green <PR>")
     if git(repo, "rev-parse", "--verify", "-q", f"refs/remotes/origin/{branch}", check=False).returncode == 0:
         raise Stop(1, f"origin already has {branch}; never force-pushed, try next hour")
-    common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
-    temp = common / "rosy-publish" / branch.replace("/", "-")
+    holder = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()) / "rosy-publish"
+    name = branch.replace("/", "-")
+    worktree_rules.clear_tombstone(holder, name)  # an earlier run's folder a handle kept
+    temp = holder / name
     git(repo, "worktree", "add", "--detach", str(temp), sha)
     try:
+        safety = safety_range(temp, sha)
         push = git(temp, "push", "origin", f"{sha}:refs/heads/{branch}", check=False)
         if push.returncode != 0:
             raise Stop(1, f"push refused (pre-push or remote):\n{push.stdout}{push.stderr}".rstrip())
     finally:
         git(repo, "worktree", "remove", "--force", str(temp), check=False)
+        note = worktree_rules.leave_tombstone(temp) if temp.exists() else ""
+        if note:
+            print(f"[publish] {temp}:{note}", file=sys.stderr)
     url = run_gh(repo, "pr", "create", "--base", "main", "--head", branch,
                  "--title", f"publish: local main {sha[:10]} ({now:%Y-%m-%d %H} UTC)",
-                 "--body", f"D-868 publish of local main `{sha}` (green FULL land record; {why}).\n"
-                           "Merge with a merge commit only: `python tools/publish_main.py --merge-when-green"
-                           " <PR> --apply`.").strip()
+                 "--body", pr_body(repo, sha, why, safety)).strip()
     return f"pushed {sha} to {branch}; PR {url}"
 
 
-def merge_when_green(repo: Path, pr: str, apply: bool) -> str:
+def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
     view = json.loads(run_gh(repo, "pr", "view", pr, "--json",
                              "state,headRefName,headRefOid,mergeable,mergeStateStatus,statusCheckRollup"))
     head = view["headRefOid"]
@@ -184,8 +256,15 @@ def merge_when_green(repo: Path, pr: str, apply: bool) -> str:
     if not apply:
         return f"dry run: PR {pr} is mergeable and ci-result is green; would merge {head[:10]} with --apply"
     run_gh(repo, "pr", "merge", pr, "--merge", "--match-head-commit", head)
-    return (f"merged PR {pr} at {head[:10]} (merge commit). Next, in the main checkout:"
-            " git fetch origin && git merge --ff-only origin/main")
+    git(repo, "fetch", "origin")
+    merged = f"merged PR {pr} at {head[:10]} (merge commit)"
+    if ancestor(repo, "origin/main", "main"):
+        return f"{merged}; local main already contains origin/main"
+    blocking = sync_conflicts(repo)
+    if blocking:
+        raise Stop(3, f"{merged}; sync needs robot-4d: " + ", ".join(blocking))
+    return f"{merged}. Sync origin/main back into local main (no fast-forward: main moved past the SHA):" \
+           + sync_commands(now)
 
 
 def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
@@ -196,11 +275,12 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     parser.add_argument("--merge-when-green", metavar="PR")
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    now = now or datetime.now(timezone.utc)
     try:
         if args.merge_when_green:
-            message = merge_when_green(args.repo, args.merge_when_green, args.apply)
+            message = merge_when_green(args.repo, args.merge_when_green, args.apply, now)
         else:
-            message = publish(args.repo, args, now or datetime.now(timezone.utc))
+            message = publish(args.repo, args, now)
     except Stop as stop:
         print(f"[publish] {stop}", file=sys.stderr)
         return stop.code

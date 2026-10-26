@@ -148,20 +148,51 @@ def test_dry_run_changes_no_ref_worktree_or_origin(repo, tmp_path):
     assert (_refs(local), _refs(tmp_path / "origin.git"), _git(local, "worktree", "list")) == before
 
 
+def _record(local: Path, sha: str, **fields) -> None:
+    """A land record as a future or foreign land.py may write it (land_record.write fixes the fields)."""
+    folder = tool.land_record.folder(local)
+    folder.mkdir(parents=True, exist_ok=True)
+    record = {"sha": sha, "base": _git(local, "rev-parse", f"{sha}^"), "at": "2026-10-26T01:00:00+00:00", **fields}
+    (folder / f"{sha}.json").write_text(json.dumps(record), encoding="utf-8")
+
+
+def test_a_tier_field_wins_over_the_invocation_fallback(repo):
+    local, _ = repo
+    full, affected = (_commit(local, "app.py", str(i)) for i in (1, 2))
+    _record(local, full, tier="full", invocations=[["pkg/test"]])
+    _record(local, affected, tier="affected", invocations=FULL)  # runs root test/ but says affected
+    assert tool.publish_sha(local) == full
+
+
+def test_records_of_an_unknown_format_stop_instead_of_nothing_to_publish(repo, capsys):
+    local, _ = repo
+    _record(local, _commit(local, "app.py", "1"), suites="test")  # neither tier nor invocations
+    assert _run(local) == 8
+    assert "none with a known format" in capsys.readouterr().err
+
+
 def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(repo, tmp_path, monkeypatch):
     local, _ = repo
     sha = _commit(local, "app.py", "1")
     tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
-    _commit(local, "app.py", "2")  # main moved on past the green FULL commit
+    after = _commit(local, "app.py", "2")  # main moved on past the green FULL commit: one landing of lag
+    tool.land_record.write(local, after, sha, AFFECTED, [])
     calls = []
 
     def gh(repo_path, *args):
         calls.append(args)
         return "[]" if args[:2] == ("pr", "list") else "https://example.invalid/pull/1"
     monkeypatch.setattr(tool, "run_gh", gh)
+    monkeypatch.setattr(tool, "safety_range", lambda wt, s: "1 commits checked, 0 missing")
     assert _run(local, "--apply") == 0
     assert _git(tmp_path / "origin.git", "rev-parse", "refs/heads/publish/main-20261026-12") == sha
-    assert ("pr", "create") == calls[-1][:2] and "publish/main-20261026-12" in calls[-1]
+    create = calls[-1]
+    assert create[:2] == ("pr", "create") and "publish/main-20261026-12" in create
+    body = create[create.index("--body") + 1]
+    for fact in (sha, "`origin/main..SHA` 커밋 수: 1", "이 PR에 없는 착지 1건", "origin/main is ancestor: yes",
+                 "1 commits checked, 0 missing", "D-868", f"--match-head-commit {sha}"):
+        assert fact in body
+    assert body.endswith(tool.GENERATED_BY)
     assert _git(local, "worktree", "list").count("\n") == 0  # the temporary worktree is gone
 
 
@@ -172,22 +203,52 @@ def _view(local: Path, sha: str, **over) -> str:
     return json.dumps({**view, **over})
 
 
+def _merge_gh(local: Path, sha: str, calls: list, **over):
+    """gh whose `pr merge` makes origin/main the merge commit M(old origin/main, sha), as GitHub does."""
+    def gh(repo_path, *args):
+        calls.append(args)
+        if args[:2] == ("pr", "merge"):
+            _git(local, "checkout", "-q", "--detach", "origin/main")
+            _git(local, "merge", "-q", "--no-ff", "--no-edit", sha)
+            _git(local, "push", "-q", "origin", "HEAD:main")
+            _git(local, "checkout", "-q", "main")
+        return _view(local, sha, **over) if args[:2] == ("pr", "view") else ""
+    return gh
+
+
 @pytest.mark.parametrize("over,code", [
     ({}, 0),
     ({"mergeable": "CONFLICTING", "mergeStateStatus": "DIRTY"}, 6),
     ({"statusCheckRollup": [{"name": "ci-result", "status": "IN_PROGRESS", "conclusion": ""}]}, 5),
     ({"statusCheckRollup": [{"name": "ci-result", "status": "COMPLETED", "conclusion": "FAILURE"}]}, 1),
 ])
-def test_merge_when_green_merges_only_a_mergeable_green_pr_at_its_head(repo, monkeypatch, over, code):
+def test_merge_when_green_merges_only_a_mergeable_green_pr_at_its_head(repo, monkeypatch, capsys, over, code):
     local, _ = repo
     sha = _commit(local, "app.py", "1")
     tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    _commit(local, "app.py", "2")  # local main moved past the published SHA
     calls = []
-
-    def gh(repo_path, *args):
-        calls.append(args)
-        return _view(local, sha, **over) if args[:2] == ("pr", "view") else ""
-    monkeypatch.setattr(tool, "run_gh", gh)
+    monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls, **over))
     assert _run(local, "--merge-when-green", "7", "--apply") == code
     merges = [c for c in calls if c[:2] == ("pr", "merge")]
     assert merges == ([("pr", "merge", "7", "--merge", "--match-head-commit", sha)] if code == 0 else [])
+    if code == 0:  # no fast-forward is possible now: sync origin/main back through a worktree and land.py
+        out = capsys.readouterr().out
+        assert "git merge origin/main" in out and "tools/land.py" in out and "ff-only" not in out
+
+
+def test_after_the_merge_a_direct_code_push_to_origin_stops_the_sync_back(repo, monkeypatch, capsys):
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    published = _git(local, "rev-parse", "origin/main")
+    _git(local, "checkout", "-q", "-b", "direct", published)
+    _commit(local, "lib.py", "origin")  # a teammate pushed straight to origin
+    _git(local, "push", "-q", "origin", "direct:main")
+    _git(local, "fetch", "-q", "origin")
+    _git(local, "checkout", "-q", "main")
+    _commit(local, "lib.py", "local")
+    calls = []
+    monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls))
+    assert _run(local, "--merge-when-green", "7", "--apply") == 3
+    assert "sync needs robot-4d:" in capsys.readouterr().err
