@@ -65,6 +65,7 @@ def test_control_unit_form_approves_then_reads_existing_task_result(sample_site)
             assert page.request.post(origin + '/api/fleet/auth/login', headers={'Origin': origin},
                 data={'login': 'sample', 'password': 'CHANGE_ME'}).status == 204
             page.goto(origin + '/console?view=work')
+            page.locator('#work-integrations > summary').click()
             panel = page.locator('#control-unit-work')
             expect(panel).to_contain_text('R')
             panel.locator('summary').click()
@@ -158,6 +159,7 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             assert response.status == 403
             with page.expect_navigation(wait_until='load'):
                 page.get_by_role('button', name='검토자로 로그인', exact=True).click()
+            page.locator('.ui-subnav a[href="#mission-heading"]').click()
             page.locator('#mission-id').fill('sample-cell-job-1')
             page.locator('#read-job').click()
             expect(page.locator('#job-summary')).to_contain_text('승인 대기')
@@ -172,6 +174,7 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             page.locator('#read-job').click()
             expect(page.locator('#job-summary')).to_contain_text('목표 확인 완료')
             page.reload()
+            page.locator('.ui-subnav a[href="#mission-heading"]').click()
             page.locator('#mission-id').fill('sample-cell-job-1')
             page.locator('#read-job').click()
             expect(page.locator('#job-summary')).to_contain_text('목표 확인 완료')
