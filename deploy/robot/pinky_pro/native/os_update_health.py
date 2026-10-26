@@ -215,3 +215,19 @@ def check(root: Path, transaction_id: str, *, host: Host | None = None, run=_run
         return report
     except (OSError, ValueError, TypeError, KeyError, http.client.HTTPException, subprocess.SubprocessError) as exc:
         raise ValueError(f"OS_HEALTH_HOLD: {exc}") from exc
+
+
+def revalidate(root: Path, pending: dict, *, run=_run) -> dict:
+    """Commit admission repeats live observations without restarting I/O or extending receipt lifetime."""
+    if Path(root) != Path("/") and run is _run:
+        raise ValueError("a fake root requires an explicit test runner")
+    report = read_health(root, pending)
+    if (verify_ready(root) != report["projection"] or observe_watchdog(root, run=run) != report["watchdog"]
+            or verify_current(root, pending["verified"]["metadata"]) != report["native_factory"]
+            or any(_service(run, unit) != value for unit, value in report["services"].items())):
+        raise ValueError("live trial health changed before commit")
+    _io_guard(root, report["native_factory"])
+    _probe()
+    if read_health(root, pending) != report:
+        raise ValueError("health evidence changed during revalidation")
+    return report

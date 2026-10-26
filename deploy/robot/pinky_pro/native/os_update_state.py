@@ -202,6 +202,17 @@ class _Store:
         failed = [*self._state["failed_versions"], pending["verified"]["metadata"]["release_id"]]
         self._save(dict(self.state, pending=None, failed_versions=failed))
 
+    def abandon_commit(self, transaction_id, boot_id, current_slot):
+        """Commit owner proved old canonical default and normal fresh source firmware boot."""
+        pending = self._pending(transaction_id)
+        _guid(boot_id)
+        if (pending["phase"] != "COMMIT_INTENT" or current_slot != pending["source_slot"]
+                or _layout(self.root)[0]["slot"] != current_slot
+                or boot_id in (pending["source_boot_id"], pending["trial_boot_id"])):
+            raise ValueError("abandoning commit requires a fresh preserved-source boot")
+        failed = [*self._state["failed_versions"], pending["verified"]["metadata"]["release_id"]]
+        self._save(dict(self.state, pending=None, failed_versions=failed))
+
 
 @contextmanager
 def locked(root: Path = Path("/")):
