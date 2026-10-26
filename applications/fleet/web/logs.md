@@ -491,7 +491,7 @@
 - 증거: source42e079ef48 FULL의 공유 입력 검사1 FAIL을 source79ff20cc96에서 수정했고 해당 원격 회귀1 PASS·SKIP0·NEW0이다. 기존 sourcebbffbf8577의 집중 Chromium/Node33건과 source42e079ef48의 명시 Chromium4그룹은 각각 통과했다. 최종 수정 source의 공식 FULL은 후속 실행이다.
 - gate 변화: 공통 입력 표현을 맞추며 장치·현장 수용을 승격하지 않는다. CE 해당 없음 — 원인과 수정 조건이 기존 공유 UI 검사에 직접 남는다.
 
-## 2026-10-26 · uiux-shell · 앱 바 높이 덧쓰기 정리
+## 2026-10-26 · 62173b9899 · 앱 바 높이 덧쓰기 정리
 
 - 변경: 공용 `ui-topbar`가 D-741 앱 바 높이(64px)를 기본으로 갖게 되어 이 표면의 같은 값 덧쓰기를 지웠다(Pilot은 두 줄 머리 높이를 명시로 유지).
 - gate 변화: 없음.
