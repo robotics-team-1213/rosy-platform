@@ -11674,3 +11674,10 @@ osy-d395-s1d\`.
 - 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
 - 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
+
+- 변경: AGENTS.md 「같이 하는 깃」 6번, shared-checkout.md, git-workflow.md, 착지 명령 카드의 게시 마지막 단계를 `git merge --ff-only origin/main`에서 역동기화(로컬 main에서 만든 워크트리에서 `git merge origin/main`을 land.py로 착지)로 바꿨다. 우산 Rosy/AGENTS.md(git 밖)도 같이 고쳤다. 규칙 결정은 D-889(Proposed, 별도 브랜치)가 D-868 5단계를 고친다.
+- 증거: 게시 PR이 병합될 즈음 로컬 main은 게시 SHA보다 앞서 있어(시간당 약 1착지) origin/main의 조상이 아니므로 ff-only가 실패한다. 게시 스크립트 검토에서 확인.
+- gate 변화: 없음. 절차 문서다.
+- 교훈: 없음
