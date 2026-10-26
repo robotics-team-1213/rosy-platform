@@ -50,3 +50,18 @@ def test_a_box_never_lifted_was_not_held():
     judged = f.evaluate([sample(4, 'grasp', still, error=math.radians(5)), sample(8, 'transfer', still)], 'wrong-yaw')
     assert judged['result'] == 'not_held' and judged['matches_expectation']
     assert judged['first_soft_contact_tick'] == 4  # the grasp pushed a joint past the soft-contact bound
+
+
+def test_a_real_cell_case_is_checked_and_judged_like_a_named_scenario():
+    case = {'box': [0.01, -0.01, 25], 'place': 'belt', 'grasp_turn': 10, 'expect': None}
+    assert f.check_case(case) == {'box': [0.01, -0.01, 25.0], 'place': 'belt', 'grasp_turn': 10.0, 'expect': None}
+    assert f.box_start(case)[0][:2] == (f.TRAY['center'][0] + 0.01, f.TRAY['center'][1] - 0.01)
+    still = (.082, .096, f.TRAY['top'] + f.BOX / 2)
+    assert f.evaluate([sample(4, 'grasp', still)], case)['matches_expectation'] is None  # measured only
+    for bad in (dict(case, box=[0.05, 0, 0]), dict(case, place=[0.5, 0]), dict(case, expect='maybe'),
+                dict(case, extra=1), dict(case, grasp_turn=float('nan'))):
+        try:
+            f.check_case(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f'accepted {bad}')

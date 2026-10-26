@@ -1,4 +1,4 @@
-"""tools/land.py (+ land_checks.py, land_queue.py, land_full.py, land_merge.py) on throwaway repos: main and a worktree."""
+"""tools/land.py (+ land_checks.py, land_queue.py, land_full.py, land_merge.py, land_cache.py) on throwaway repos: main and a worktree."""
 
 from __future__ import annotations
 
@@ -619,6 +619,20 @@ def test_logs_md_side_reordering_base_entries_refuses():
     assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
 
 
+def test_logs_md_this_branch_reordering_mains_entries_keeps_mains_order():
+    """2026-10-26: a hand-fitted merge left main's entries in another order on the branch; the turn stopped
+    "a side changed existing lines". Nothing was edited or dropped, so main's order wins."""
+    a, b = dated("2026-10-13", "a"), dated("2026-10-14", "b")
+    base = "# docs logs\n" + a + b
+    ours = "# docs logs\n" + b + a + dated("2026-10-15", "branch")
+    for theirs, tail in ((base + dated("2026-10-16", "peer"), dated("2026-10-15", "branch") + dated("2026-10-16", "peer")),
+                         (base, dated("2026-10-15", "branch"))):
+        merged = land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode()
+        assert merged.rstrip() == (base + tail).rstrip()
+    edited = ours.replace("- 증거: 없음", "- 증거: 있음", 1)  # reordered and edited: still a human's call
+    assert land.append_blocks(base.encode(), edited.encode(), base.encode()) is None
+
+
 def test_logs_md_same_new_entry_on_both_sides_is_written_once():
     base = "# docs logs\n" + dated("2026-10-13", "base")
     picked = dated("2026-10-14", "picked")
@@ -896,11 +910,40 @@ def test_cache_never_keeps_a_failure_or_a_partial_run(cached, monkeypatch):
     git(wt, "rm", "-q", "pkg/test/test_bad.py")
     git(wt, "commit", "-q", "-m", "green")
     real = land.remote_pytest.capture
-    lost = lambda inv, logs, *a, **k: [real([sys.executable, "-m", "pytest", "pkg/test"], logs[0], cwd=wt), 255]
+    lost = lambda invs, logs, *a, **k: [real([sys.executable, "-m", "pytest", *inv], log, cwd=wt)
+                                        if inv == ["pkg/test"] else 255 for inv, log in zip(invs, logs)]
     monkeypatch.setattr(land.remote_pytest, "run", lost)  # the second invocation's host was lost
     with pytest.raises(land.Stop, match="exited 255"):
         run([["pkg/test"], ["pkg/test/test_a.py"]])
-    assert land.land_cache.entries(wt) == [], "the first invocation passed, but the run was partial"
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["pkg/test"]], "only the lost invocation reruns"
+
+
+def test_a_new_failure_still_keeps_the_invocations_that_passed_beside_it(cached):
+    """2026-10-25: a stop on the first NEW failure dropped every pass after it; the fix then reran them all."""
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red elsewhere")
+    with pytest.raises(land.Stop, match="NEW failure in other/test"):
+        run([["other/test"], ["pkg/test"]])
+    # the fix changes the tree; the selector's narrow reuse (ancestor..fix) then skips pkg/test
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["pkg/test"]]
+
+
+def test_what_failed_last_run_runs_alone_first_and_a_repeat_stops_before_the_rest(cached):
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red elsewhere")
+    with pytest.raises(land.Stop):
+        run([["other/test"], ["pkg/test"]])
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "not the fix")
+    calls.clear()
+    with pytest.raises(land.Stop, match="1 other invocation"):
+        run([["other/test"], ["pkg/test"]])
+    assert calls[0] == [["other/test"]] and [["pkg/test"]] not in calls, "the rest never reached a test PC"
+    git(wt, "rm", "-q", "other/test/test_bad.py")
+    git(wt, "commit", "-q", "-m", "fixed")
+    commit(wt, {"other/test/test_ok.py": "def test_ok():\n    assert True\n"}, "green")
+    calls.clear()
+    run([["other/test"], ["pkg/test"]])
+    assert calls == [[["other/test"]], [["pkg/test"]]] and land.land_cache.failed_first(wt, [["other/test"]]) == []
 
 
 def test_cache_ignores_corrupt_lines_and_no_cache_reruns(cached, capsys):
@@ -1047,12 +1090,39 @@ def test_the_ticket_is_released_after_a_stop_and_after_ctrl_c(repos, monkeypatch
     assert queued(main) == []
 
 
+def test_a_branch_with_older_landing_code_lands_with_mains_copy(repos, monkeypatch):
+    """2026-10-26: land.py ran from the landing branch's own copy, so an old branch landed with old rules."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    stub = main / "tools" / "land.py"
+    stub.parent.mkdir()
+    stub.write_text("import os, pathlib, sys\n"
+                    "pathlib.Path('reexec.txt').write_text(' '.join(sys.argv[1:]) + os.environ['ROSY_LAND_OWN_COPY'])\n"
+                    "sys.exit(7)\n")
+    assert land.main(["--tests", "none"]) == 7
+    assert (wt / "reexec.txt").read_text() == "--tests none1", "same arguments, run in the branch's worktree"
+    (wt / "reexec.txt").unlink()
+    monkeypatch.setenv(land.land_checks.OWN_COPY, "1")  # the landed copy itself: lands, never re-runs
+    assert land.main(["--tests", "none"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
 def test_no_queue_lands_without_a_ticket(repos, monkeypatch):
     main, wt = repos
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
-    land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # would block a queued run
     assert land.main(["--tests", "none", "--no-queue"]) == 0
     assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+    assert queued(main) == []
+
+
+def test_no_queue_is_refused_while_a_lander_holds_its_turn(repos, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # this live pid: holds its turn
+    assert land.main(["--tests", "none", "--no-queue"]) == 1
+    assert "--no-queue refused: feat/peer" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
 
 
 def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
@@ -1060,7 +1130,7 @@ def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
     calls = []
 
-    def select(wt_, base, python, head=None):
+    def select(wt_, base, python, head=None, landed=False):
         calls.append(head)
         return [["pkg/test"]], (None if head else "selector escalated to FULL")
 
@@ -1112,8 +1182,54 @@ def test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge(repos, c
     commit(main, {"docs/adr/D-3-peer.md": "## D-3 peer\n"}, "peer lands D-3")
     assert land.main(["--tests", "none"]) == 0
     assert (main / gaps).read_text() == "D-4 reserved in another worktree\n"
-    assert "drop adr_gaps lines of landed D-3" in git(main, "log", "-1", "--format=%s")
+    assert git(main, "log", "-1", "--format=%s").startswith("Merge branch 'main'"), "in the merge commit"
     assert "dropped ['D-3']" in capsys.readouterr().out
+
+
+def test_a_gap_main_declared_for_an_adr_this_branch_adds_is_dropped_by_the_pretest_merge(repos):
+    """D-877, 2026-10-25: a peer declared the gap while the branch waited; the pretest's merge drops it too."""
+    main, wt = repos
+    gaps = "tools/harness/adr_gaps.txt"
+    commit(wt, {"docs/adr/D-3-mine.md": "## D-3 mine\n"}, "branch adds D-3")
+    commit(main, {gaps: "D-3 reserved in another worktree\n"}, "peer declares D-3 as a gap")
+    land.merge(wt, git(main, "rev-parse", "HEAD"), "feat/x", sys.executable, False)
+    assert (wt / gaps).read_text() == ""
+    assert len(git(wt, "log", "-1", "--format=%P").split()) == 2
+
+
+def test_a_merge_that_only_dropped_gap_lines_keeps_the_full_pass(repos, monkeypatch):
+    main, wt = repos
+    gaps = "tools/harness/adr_gaps.txt"
+    commit(wt, {gaps: "D-3 reserved in another worktree\n"}, "declare a peer's gap")
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(main, {"docs/adr/D-3-peer.md": "## D-3 peer\n"}, "peer lands D-3")
+    peer_main = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [peer_main], "delta selection only: the gap drop is a record, not a change of the branch"
+    assert (main / gaps).read_text() == ""
+
+
+HARNESS_ONLY = """import json, sys
+def generated_targets(repo):
+    return {}
+def generate(repo):
+    return []
+if sys.argv[1] == 'affected':
+    print(json.dumps({"mode": "full", "escalations": ["tools/harness/x.py: harness configuration or the selector itself"],
+                      "invocations": [], "local_invocations": [["pkg/test/test_a.py"]], "full_invocations": [["pkg/test"]]}))
+"""
+
+
+@pytest.mark.parametrize("landed", [True, False])
+def test_main_delta_escalated_only_by_landed_harness_files_runs_its_mapped_suites(repos, landed):
+    """2026-10-25: a selector edit on main held every lander behind it for a FULL tier of its own."""
+    main, wt = repos
+    commit(wt, {"tools/harness/rosy_harness.py": HARNESS_ONLY, "tools/harness/affected_tests.py": ""}, "harness")
+    invocations, note = land.select(wt, "main", sys.executable, head="HEAD", landed=landed)
+    if landed:
+        assert (invocations, note) == ([["pkg/test/test_a.py"]], None)
+    else:
+        assert invocations == [["pkg/test"]] and note.startswith("selector escalated to FULL")
 
 
 _CANONICAL_GENERATOR = r'''from pathlib import Path

@@ -17,6 +17,7 @@ sessions. Does not own Nav2, sockets, or formation geometry.
 |------|-------------|
 | `poses.py` | `ReferencePose`, `follow_goal` |
 | `manager.py` | `SwarmManager` session, 2 Hz, HOLD |
+| `reference_stream.py` | Manager-owned reference admission and trail sampling |
 
 ## Testing Requirements
 

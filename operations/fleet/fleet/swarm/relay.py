@@ -24,7 +24,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Optional, Sequence
 
-from fleet.swarm.transport import RobotApiError, RobotClient
+from fleet.swarm.api.ports import RobotApiError, RobotClient
 
 log = logging.getLogger(__name__)
 
