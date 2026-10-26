@@ -141,7 +141,7 @@ def check_isolation(repo: Path, now: float) -> list[tuple]:
         return [("OK", "isolation: no landed test files left unrun alone past a night", None)]
     return [("FAIL", f"isolation: {rec['kind']} {rec.get('branch', '?')} {rec['candidate'][:10]} ({rec.get('at', '?')}):"
              f" {len(left)} file(s) never run alone: {', '.join(left[:5])}{' ...' if len(left) > 5 else ''}",
-             f"python tools/land_isolation.py close {' '.join(left)}") for rec, left in found]
+             f"python tools/land_isolation.py close {' '.join(left)} --reason \"<why>\"") for rec, left in found]
 
 
 def run(repo: Path, hosts: bool = False, now: float | None = None, out=print) -> int:

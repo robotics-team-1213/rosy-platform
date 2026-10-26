@@ -20,13 +20,15 @@ within ``BUDGET_S``:
   join the turn's own round, under its time cap and Overtime path.
 Records still open after a night (landed, files never run alone since) are a FAIL in ``tools/doctor.py`` and a
 line in the turn's summary; a later alone run on a descendant closes them (``python tools/land_isolation.py
-close <files>`` until a nightly consumer exists). Off when the tree has no ``tools/collect_alone.py``. Standard
+close <files> --reason ...`` until a nightly consumer exists). This record and land_events have no backup: a
+known single point of loss until a copy mechanism lands. Off when the tree has no ``tools/collect_alone.py``. Standard
 library at import; the selector loads lazily.
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import re
@@ -317,11 +319,15 @@ def run(wt: Path, branch: str, selection: list[list[str]], args, logdir: Path, r
 
 
 def main(argv: list[str] | None = None) -> int:
-    """``close <files>``: run them alone (one remote job on HEAD) and append a ``done`` line when all ran."""
+    """``close <files> --reason TEXT``: run them alone (one remote job on HEAD) and append a ``done`` line with
+    the reason, who (git user.email, else the OS user) and when."""
     parser = argparse.ArgumentParser(description="Run test files alone on a test host and record them done.")
     parser.add_argument("command", choices=["close"])
     parser.add_argument("files", nargs="+")
+    parser.add_argument("--reason", required=True, help="why these files are closed by hand")
     ns = parser.parse_args(argv)
+    if not ns.reason.strip():
+        parser.error("--reason must say why")
     sys.path.insert(0, str(Path(__file__).resolve().parent / "remote"))
     import remote_pytest
     wt, inv = Path.cwd(), job(ns.files)[0]
@@ -331,7 +337,8 @@ def main(argv: list[str] | None = None) -> int:
     if code != 0 or cut is None:
         print(f"[isolation] alone job failed (exit {code}, log {log}); nothing recorded")
         return 1
-    record(wt, _git(wt, "rev-parse", "--abbrev-ref", "HEAD"), "done", ns.files, cut)
+    who = _git(wt, "config", "user.email") or getpass.getuser()
+    record(wt, _git(wt, "rev-parse", "--abbrev-ref", "HEAD"), "done", ns.files, cut, reason=ns.reason.strip(), by=who)
     print(f"[isolation] done: {len(ns.files) - len(cut)} file(s) ran alone" + (f"; still not run: {cut}" if cut else ""))
     return 0 if not cut else 1
 

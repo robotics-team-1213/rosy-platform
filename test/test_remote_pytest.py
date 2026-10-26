@@ -135,7 +135,7 @@ def test_local_flag_rejected_and_require_host_is_a_noop(monkeypatch):
 def test_no_host_retries_until_the_deadline_then_fails_without_running_pytest(monkeypatch, tmp_path):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     now, probes = [0.0], []
-    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None: probes.append(now[0]) or [])
+    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: probes.append(now[0]) or [])
     monkeypatch.setattr(rp, "capture", lambda *a, **kw: pytest.fail("pytest must not run on this machine"))
     with pytest.raises(SystemExit, match=r"no test host reachable \(D-584\)"):
         rp.run([["test/x.py"]], [tmp_path / "1.txt"], repo=ROOT, wait=600, poll=30,
@@ -146,7 +146,7 @@ def test_no_host_retries_until_the_deadline_then_fails_without_running_pytest(mo
 def test_host_appearing_during_the_wait_runs_there(monkeypatch, tmp_path):
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     now, answers = [0.0], [[], [], ["a@1"]]
-    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None: answers.pop(0))
+    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: answers.pop(0))
     monkeypatch.setattr(rp, "run_on", lambda host, inv, logs, sha, repo, label: [0] * len(inv))
     codes = rp.run([["test/x.py"]], [tmp_path / "1.txt"], repo=ROOT, wait=600, poll=30,
                    sleep=lambda s: now.__setitem__(0, now[0] + s), clock=lambda: now[0])
@@ -1221,3 +1221,20 @@ def test_job_records_its_xdist_budget_in_the_lock_and_caps_memory(tmp_path, word
     assert f"MemoryMax={mem}" in (home / "scope").read_text()
     bad = _sh(rj.START, env, "r", "d", "", "1", "60", rj.JOB, "ROSY_JOB_CORES=$(id)", "x.py")
     assert bad.returncode == 0 and _poll_until_done(env, "1") == 2
+
+
+def test_a_jobs_own_core_reservation_is_its_placement_floor(monkeypatch, tmp_path):
+    """land_isolation's jobs reserve ROSY_JOB_CORES=6 in their lock; a host must have those 6 free, not 2."""
+    four = host(nproc=8, load1=4.0)  # 4 cores free: above the pytest floor, below the job's
+    assert rp.place("pytest", ["a@1"], [four])[0] == ["a@1"]
+    chosen, notes = rp.place("pytest", ["a@1"], [four], cores=6)
+    assert chosen == [] and "below pytest floor 6 cores" in notes[0]
+    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
+    monkeypatch.setattr(rp, "probe", lambda h: four)
+    assert rp.placed_hosts("pytest", ["a@1"], cores=6) == [], "no floor-less fallback for a job's own need: it waits"
+    asked = []
+    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: asked.append(cores) or [])
+    with pytest.raises(SystemExit, match="no test host reachable"):
+        rp.run([["test/x.py"], ["ROSY_JOB_CORES=6", "ROSY_ALONE_FILES=a.py", "tools/collect_alone.py"]],
+               [tmp_path / "1.txt", tmp_path / "2.txt"], repo=ROOT, wait=0, poll=1, sleep=lambda s: None)
+    assert asked == [6]

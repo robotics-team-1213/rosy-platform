@@ -189,7 +189,7 @@ def test_no_queue_records_skipped_once_and_doctor_fails_it_after_a_night(prepare
     now = land_isolation.rows(pair)[0]["t"]
     assert doctor.check_isolation(pair, now)[0][0] == "OK", "not yet a night old"
     (level, text, fix), = doctor.check_isolation(pair, now + land_isolation.OPEN_AFTER_S + 1)
-    assert level == "FAIL" and "skipped fix/x" in text and fix.endswith("close m/test/test_a.py m/test/test_b.py")
+    assert level == "FAIL" and "skipped fix/x" in text and "close m/test/test_a.py m/test/test_b.py --reason" in fix
 
 
 def test_doctor_open_records_close_by_a_later_alone_run_on_a_descendant(prepared):
@@ -284,3 +284,25 @@ def test_selector_edge_on_this_repo_selects_the_incident_test():
     found = refs("learning/training/omx/native_cycle.py")
     assert "learning/training/omx/test/test_native_cycle.py" in found
     assert "spec_from_file_location" in repo.text("learning/training/omx/test/test_native_cycle.py")
+
+
+def test_close_needs_a_reason_and_records_who_and_when(prepared, monkeypatch, capsys):
+    import remote_pytest
+
+    pair, _, _ = prepared
+    monkeypatch.chdir(pair)
+    git(pair, "config", "user.email", "closer@example.invalid")
+    for argv in (["close", "m/test/test_b.py"], ["close", "m/test/test_b.py", "--reason", "  "]):
+        with pytest.raises(SystemExit):
+            land_isolation.main(argv)
+    assert land_isolation.rows(pair) == [], "refused: nothing recorded, nothing run"
+
+    def ran(invs, logs, sha, **kw):
+        logs[0].write_text("[isolation] complete: 1\n", encoding="utf-8")
+        return [0]
+    monkeypatch.setattr(remote_pytest, "run", ran)
+    assert land_isolation.main(["close", "m/test/test_b.py", "--reason", "nightly not built yet"]) == 0
+    rec, = land_isolation.rows(pair)
+    assert (rec["kind"], rec["reason"], rec["by"], rec["alone"]) == ("done", "nightly not built yet",
+                                                                  "closer@example.invalid", ["m/test/test_b.py"])
+    assert rec["at"] and rec["t"]
