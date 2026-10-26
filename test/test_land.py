@@ -1120,7 +1120,9 @@ def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos,
 
     monkeypatch.setattr(land.land_full, "save", save)
     assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1                # the peer never leaves
-    assert rounds == ["gpre", "pre", "save"] and "FULL tier before the turn" in capsys.readouterr().out
+    # the guard round runs beside the selection, so their order is free; both finish before the record
+    assert sorted(rounds[:2]) == ["gpre", "pre"] and rounds[2:] == ["save"]
+    assert "FULL tier before the turn" in capsys.readouterr().out
     assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
 
 
@@ -1161,7 +1163,8 @@ def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeyp
     monkeypatch.setattr(land, "run_tests", run_tests)
     monkeypatch.setattr(land.land_full, "save", lambda *a: saved.append(a))
     assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1
-    assert phases == ["gpre"] and saved == []
+    # the selection ran beside the guards (2026-10-27); a failed guard still records nothing and lands nothing
+    assert sorted(phases) == ["gpre", "pre"] and saved == []
     assert git(main, "rev-parse", "HEAD") == before
     assert sorted(qdir.glob("*.json")) == [peer]
     expected = "structural guard failed" if guard_outcome == "failure" else "HEAD changed"

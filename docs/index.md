@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · perf(land): 사전 시험의 관문 라운드를 선택 시험과 함께 돌린다
+- 2026-10-27 · uncommitted · fix(doctor): 대기열의 반복 준비·무활동 착지를 경고
+- 2026-10-27 · uncommitted · fix(land): 크기 규칙을 대기·준비 단계에서 미리 본다
 - 2026-10-27 · uncommitted · perf(core): 충전소 카메라 파이프라인 시험의 느린 경우를 파일로 나눔
 - 2026-10-27 · uncommitted · perf(land): 착지한 FULL 변화분 뒤에서 FULL을 다시 돌지 않음
-- 2026-10-27 · uncommitted · perf(remote): 직렬 묶음 13개를 xdist로
-- 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
-- 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
