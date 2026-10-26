@@ -32,7 +32,7 @@ def launch(tmp_path, *, overlay_exists=True, site=False, launch_exit=0):
     ros2.write_text(
         "#!/bin/bash\n"
         "printf '%s\\n' \"$@\" > \"$CAPTURE\"\n"
-        "env > \"$CAPTURE.env\"\n"
+        "env -0 > \"$CAPTURE.env\"\n"
         "echo native-sim-launch\n"
         f"exit {launch_exit}\n"
     )
@@ -47,13 +47,17 @@ def launch(tmp_path, *, overlay_exists=True, site=False, launch_exit=0):
     return result, capture
 
 
-def test_native_overlay_world_and_allocated_domain_reach_simulation_launch(tmp_path):
+def test_native_overlay_world_and_allocated_domain_reach_simulation_launch(tmp_path, monkeypatch):
+    multiline = "first\r\nnot-a-key-value\nlast=part"
+    monkeypatch.setenv("ROSY_TEST_MULTILINE", multiline)
     result, capture = launch(tmp_path)
     assert result.returncode == 0, result.stderr
     args = capture.read_text().splitlines()
     assert args[:3] == ["launch", "open_manipulator_bringup", "omx_f_follower_ai_gazebo.launch.py"]
     assert args[3] == "world:=" + str(tmp_path / "selected world")
-    env = dict(line.split("=", 1) for line in capture.with_suffix(".env").read_text().splitlines())
+    env = dict(os.fsdecode(record).split("=", 1)
+               for record in capture.with_suffix(".env").read_bytes().split(b"\0") if record)
+    assert env["ROSY_TEST_MULTILINE"] == multiline
     assert env["NATIVE_ROS_LOADED"] == env["NATIVE_OVERLAY_LOADED"] == "yes"
     assert env["ROS_DOMAIN_ID"] == "17"
     assert env["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST"

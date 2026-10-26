@@ -699,6 +699,60 @@
 - 증거: 기존 policy assertion을 유지한 HTTP/Pilot/owner/정책 검사 173 passed, 0 NEW. 실제 Jazzy pending/admitted·source stamp·watchdog 3 passed/0 skipped. 최초 transaction producer의 보조 교사 시연은 PASS/1,586프레임이며 MODEL 독립 truth·전체 RGB·377명령·718지원 chunk를 확인했다. 세부 source별 범위는 docs/validation/omx-pilot-readback-2026-10-23/result.md를 따른다.
 - gate 변화: SOURCE·원격 ROS 회귀와 명시적 교사 SIM 원본 범위다. 최종 landing 확장 검사, 새 25개 수집·학습·독립 정책 평가·실물 수용은 미완료다. 교사 source와 최종 정책 runtime을 혼동하지 않는다.
 
+## 2026-10-24 · uncommitted · D-856 물리 이송 계획과 Cell provenance 분리
+
+- 변경: pose_plan의 승인 recipe/cell 검증은 호환 adapter에 남기고 물리 입력/profile/기하/plan을 transfer_motion, 궤적 계산을 transfer_planner로 나눴다. 새 요청은 home/pick/place와 접근·운반 높이만 가지며 job·recipe·pallet·layer·업무 완료를 해석하지 않는다. 기존 import/type alias, profile 파일·hash, callback 순서, owner/그리퍼/fence 검증을 유지한다.
+- 증거: commit 67389d0a03의 새 중립 API 시험 10개 RED 후 구현했다. 첫 회귀에서 옮긴 단계 상수 import 누락을 확인해 수정했다. commit 613c6b1b20의 공식 원격 물리/기존 Cell/owner/레이아웃 회귀는 135 passed, skip 0이다. 크기 검사는 통과했고 기존 728줄 예외는 제거했다. 코드 검토·최종 metadata 검증은 후속 결과와 구분한다.
+- gate 변화: simulation 내부 순수 계산 분리다. 충돌 장면·비대칭 물체·실물·새 wire/dispatch를 열지 않는다. 등록 기하를 승인하는 책임은 owner 측 binding에 남으며 후속 중립 preflight/실행 계약이 필요하다. CE 해당 없음: 코드·회귀 시험에서 판단을 복원할 수 있는 구조 분리다.
+
+## 2026-10-24 · uncommitted · D-856 owner 물리 catalog와 사전검사
+
+- 변경: 불변 물리 catalog에 설치 scope·revision·자세/접근 높이·물체 기하를 결속하고 중립 check_transfer 서비스를 추가했다. owner가 admission한 측정 상태와 같은 monotonic clock을 주입받아 계산 전후 freshness·revision·계획 출력을 검증하며 궤적·permit·업무 완료를 반환하지 않는다. submit·claim·journal·driver 포트는 없다.
+- 증거: a1a6b6cb19의 새 API 시험 17개 RED 후 구현했다. 독립 계약 검토의 중간 clock 역행 지적은 a62a360ce2의 정확한 sequence에서 RED 1개로 재현하고 d8e20d980e에서 수정했다. 최종 관련 원격 회귀 117 passed, skip 0, 0 NEW이며 재검토의 필수 finding은 닫혔다.
+- gate 변화: 내부 simulation 계산 서비스만 검증했다. owner 조립·인증된 공개 HTTP/UDS·중립 grant·Harbor 공정 변환은 미완료이며 기존 Cell 실행 경로와 실물 capability는 바꾸지 않았다. CE 해당 없음: clock 조건과 회귀가 판단을 직접 보존한다.
+
+## 2026-10-24 · uncommitted · D-856 인증된 owner 사전검사 읽기 연결
+
+- 변경: 선택적인 v2 CheckTransfer와 peer UID/scope 검사, admitted joint_state 조립 helper를 추가했다. transform은 owner 설치 설정과 catalog를 대조하고 calibration은 측정 snapshot의 값을 보존한다. helper는 adapter에 두어 agent/palletizing 필수 의존성을 피했다. 기존 Cell owner는 선택적 catalog가 없으면 이전 경로를 유지한다.
+- 증거: 설치 transform 누락과 v1 거절 envelope RED 후 수정했다. 기존 ActionApi·Cell runner/owner를 포함한 원격 213 passed/skip0/0 NEW와 실제 HTTP/UDS를 확인했다. 독립 리뷰의 transform finding은 닫혔고 ActionApi 안전 태그의 Safety-Review trailer를 이력에 보완했다. 정확한 SHA는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md를 따른다.
+- gate 변화: simulation 읽기만 연결했다. 새 grant/dispatch·실물 capability는 없다. 공정 독립성은 import 차단, 상태는 합성 fixture이며 UDS stop 지연·설치 wheel·장치 수용은 미확인이다. CE 해당 없음: 경계와 회귀가 판단을 보존한다.
+
+## 2026-10-24 · 11486ce7cd · 중립 grant의 물리 transaction과 재시작 복구
+
+- 변경: 전체 ARM_TRANSFER grant/object_ref를 transaction에 결속하고 관측·Cell 필드 없이 snapshot을 만든다. 새 snapshot은 엄격한 identity/generation 대조 뒤 HOLD로 복구하며 태그를 모두 지워 legacy 완료 복구로 우회하지 못하게 한다.
+- 증거: 누락 consumer RED16·태그 삭제 RED1 뒤 신규·기존 Cell/PICK/transfer provider 원격 74 passed/skip0/0 NEW. 독립 재검토 finding 해소. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md를 따른다.
+- gate 변화: 내부 transaction만 연결했다. factory·실제 parent journal·phase-only runtime/권한·claim 종료·Harbor 연결은 후속이다. CE 해당 없음: source와 거절 회귀에 판단 근거가 남는다.
+
+## 2026-10-24 · 45173e6f92 · D-856 설치된 중립 팔의 phase-only IPC
+
+- 변경: ARM의 typed parse·phase-only/shared control·v2·camera-blind 저장·durable workflow 완료를 연결했다. 설치 factory가 없으면 journal 전에 거절하고 direct driver 종류를 유지한다. Store의 workflow metadata를 leaf로 옮겨 ratchet을 낮췄다.
+- 증거: 새 factory RED9 후 구현하고 합성 goal/gripper port의 실제 planner/journal·기존 API/store/stop/runner/transaction/provider 원격 153 passed/skip0/0 NEW를 확인했다. 최종 feature SHA 독립 검토와 Safety-Review trailer를 기록했다. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md를 따른다.
+- gate 변화: 명시적 설치를 위한 owner library 경로다. 실제 device/ROS·admitted-state 조립·Fleet producer·물리 claim 종료·Harbor 연결은 후속이다. CE 해당 없음: source·회귀·검토 기록이 판단 근거를 보존한다.
+
+## 2026-10-24 · 69607b2b0d · D-856 managed transfer의 영속 owner 권한
+
+- 변경: 새 opt-in profile의 owner/policy/journal을 schema3에 결속하고 Pilot/raw motion을 제한했다. 검증된 phase의 durable intent·정확한 command/thread·같은 최종 owner와 유효 grant만 동기 제출한다. 예외 후 context를 지우고 최종 writer에서도 만료를 검사한다. 기본 Cell/PICK/Pilot profile은 유지한다.
+- 증거: admission RED4 뒤 구현, 독립 검토의 schema 초기화 경합과 delegate-owner 누락 수정, 유효한 final-writer 만료 RED1 뒤 보강. 최종 planner/journal/final owner·기존 회귀 원격 119 passed/skip0/0 NEW. size/safety 4 commits exit0와 fixed-SHA 소스 재검토 확인. docs/validation/harbor-managed-arm-2026-10-24/result.md 참조.
+- gate 변화: host 집중 검증이며 affected 최초 실행은 1729 passed/36 skipped/1 NEW(nose 호환 setup helper)였다. 두 helper와 호출부를 _setup으로 변경하고 전체 선택 재실행을 준비했다. 실제 ROS module은 앞선 실행에서 rclpy 부재로 skip됐다. Fleet physical producer·claim 해제·Harbor ARM·실물 배포는 후속이다. CE 미해결: 이전 e26 G1 timing 2 NEW는 별도 재현 통과했으나 원인 미확정이다.
+- 후속 확인: test/docs commit 21217e4ea8의 전체 affected(64 targets)는 공식 원격 1754 passed/34 skipped/0 NEW, exit0였다. 중간 목차·소스 commit 표기 guard 실패도 수정했으며 원본 이력은 validation에 보존했다. production 코드는 69607b2b0d 이후 동일하다. 34 skips·CI FULL·실제 ROS/장치 수용을 이 결과로 대체하지 않는다.
+
+## 2026-10-24 · 46f56d6b48 · D-856 실제 managed capability와 대상 owner 결속
+
+- 변경: v2 Fleet-auth GetTransferCapability가 실제 등록 factory/admission/store/final owner와 canonical journal/session을 읽는다. ARM grant는 대상 journal/session을 완전 digest에 포함해 접수/phase 전에 대조한다. receipt는 실제 snapshot journal을 사용하고 static identity가 덮지 않는다. 읽기는 identity를 만들지 않는다.
+- 증거: RED35 뒤 관련 contract·adapter 전체·SDK·actual UDS/owner/provider 원격 790 passed/7 skipped/0 NEW, fixed SHA 독립 검토 no material finding, size/safety exit0. docs/validation/harbor-managed-capability-2026-10-24/result.md 참조.
+- gate 변화: source/host 검증이며 FULL23개 목록은 진행 중이다. 설치 설명이 admission·물리 완료·claim 해제를 승인하지 않는다. 기존 Cell/TRIP 형식과 과거 Action 조회를 유지한다. physical producer·Harbor ARM·실물/배포는 후속이다. CE 미해결: 기존 e26 G1 timing 원인 미확정.
+
+## 2026-10-24 · ebba429c4c · D-856 FULL 이력 표 guard 수정
+
+- 변경: 빠진 v1.306 변경 이력 표 행을 추가했다. production Python은46 이후 동일하다.
+- 증거: 23개 로그 분류에서 entry9의 API 이력 표 행 누락1 NEW, 다른22개0 NEW였다. doc commit ebba429c4c에서 표를 보완했고 같은 entry9 전체를 공식 원격 재실행 중이다. 원래 FULL 실패와790 집중 결과를 구분한다.
+- gate 변화: FULL 통과 판정 전이다. physical producer/claim/Harbor ARM·실물은 계속 후속이다.
+
+## 2026-10-24 · ebba429c4c · D-856 이력 표 수정 재검증 완료
+
+- 변경: 수정 후 재검증과 원본 FULL 실패를 validation/plan에 함께 기록했다.
+- 증거: 실패 entry9의 원래7 targets 전체가7371 passed/91 skipped/0 NEW, runner exit0였다. 원본46의 다른22개는0 NEW이며 한 SHA에서23개를 재실행했다고 주장하지 않는다.
+- gate 변화: 설치/owner/receipt의 host 검증 근거다. 물리 관측·producer/claim·Harbor ARM·장치/현장은 후속이다. CE 미해결: 기존 G1 timing 원인 미확정.
 ## 2026-10-24 · uncommitted · feat(omx): D-858 S1 실물 Dynamixel port와 가짜 버스 시험
 
 - 변경: `omx_adapter/dynamixel_port.py`에 `LocalActionPort` 실물 구현을 두었다. 은퇴한 device-core(rosy-vault 9a744a3)의 시작 HOLD, 정지 래치와 현 위치 버팀, RAM 쓰기만(EEPROM 없음), 추종 오차·하드웨어 오류·포즈 미도달·빈손 파지 HOLD를 옮기고, 관절 위치·속도 한계는 `ArmCommandConfig`에서 읽는다. 래치 해제는 `local_stop` 펜스가 그 세대에서 열려 있을 때만 한다. D-858 §4 관문(측정 한계·그리퍼 실측·정지 시험)과 정책 기술 거부를 둔다. 같은 팔 인스턴스·같은 시리얼 장치의 두 번째 writer를 거부한다. safety_modules에 등록했다.
@@ -729,3 +783,9 @@
 - 변경: 정지 시험 속도를 0.15~0.2 rad/s로 강제하고, 정지 직전 joint1 실측 속도(0.12 rad/s 이상)를 기록·관문에서 재검사한다. 정지 시점은 소프트웨어 STOPPED가 아니라 실측 속도가 0.03 rad/s 아래로 떨어진 때다. 뷰어 JS 문자열의 실제 줄바꿈을 고치고 `node --check`·따옴표 검사 시험을 넣었다. 기록 항목마다 측정 당시 `config_revision`을 남기고, 항목끼리 또는 port 설정과 다르면 관문이 닫힌다. `submit_stop_test`는 joint1만, 진폭 0.2 rad 이내, 20단계 이하만 받는다. CLI는 같은 인스턴스 owner 소켓이 살아 있으면 거부하고, rearm 사유를 `BENCH_COMMISSIONING_REARM`으로 남기며, 끝나면 port를 정지해 펜스를 닫아 둔다. port는 store에서 직접 evidence를 읽고 `reload_evidence()`는 인자 없이 다시 읽는다.
 - 증거: 가짜 버스·가짜 시계 시험(정지 쓰기를 무시하고 계속 미끄러지는 가짜 장치는 불합격). 실물 팔은 쓰지 않았다. 재검토 대기(D-430 §5).
 - gate 변화: 없음. owner는 `enabled=False`(S4).
+
+## 2026-10-26 · uncommitted · neutral ARM forward-port contracts holder
+
+- 변경: Adapted neutral phase-runner imports to main's pick_place package. Moved the physical transfer DTO/profile implementation into the existing contracts holder with explicit compatibility exports; combined package size stays below D-766 without a new ratchet exception.
+- 증거: static syntax and measured size only. Remote legacy Cell/neutral owner regression and independent safety review remain required. No runtime or hardware activation.
+- gate 변화: None. No new runtime, device or field acceptance. CE: no new learning; the compatibility imports and measured size retain the integration reasoning.

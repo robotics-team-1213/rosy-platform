@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .action_store_readback import ActionStoreReadback, _nonempty
+from .managed_transfer_scope import initialize_journal
+from .workflow_states import (_PICK_PLACE_PHASES, _WORKFLOW_STATES,
+                              _WORKFLOW_EVIDENCE_KEYS, _COMPLETION_BY_KIND)
 
 
 class ActionConflict(ValueError):
@@ -28,14 +31,6 @@ class InvalidActionTransition(ValueError):
 
 
 _TERMINAL = {"SUCCEEDED", "FAILED"}
-_PICK_PLACE_PHASES = ("approach", "grasp", "transfer", "release")
-_WORKFLOW_STATES = frozenset({"APPROACH", "GRASP", "VERIFY_HOLD", "TRANSFER", "RELEASE",
-                              "VERIFY_RELEASE", "ACTION_SUCCEEDED", "HOLD"})
-_WORKFLOW_EVIDENCE_KEYS = frozenset({
-    "phase_result_id", "gripper_hold_sequence", "gripper_release_sequence", "hold_reason"})
-# Completion is journaled under the completed kind; PICK_PLACE names stay as historic rows have them.
-_COMPLETION_BY_KIND = {"PICK_PLACE": ("pick-place-workflow", "PICK_PLACE_ACTION_COMPLETED"),
-                       "CELL_TRANSFER": ("cell-transfer-workflow", "CELL_TRANSFER_ACTION_COMPLETED")}
 
 
 def _utc_now() -> str:
@@ -60,10 +55,7 @@ class ActionStore(ActionStoreReadback):
             if str(mode).lower() != "wal":
                 raise RuntimeError(f"SQLite WAL mode is required, got {mode!r}")
             connection.execute("PRAGMA synchronous=FULL")
-            version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version > 2:
-                raise RuntimeError(f"unsupported Action database schema version {version}")
-            connection.executescript(
+            initialize_journal(connection,
                 """
                 CREATE TABLE IF NOT EXISTS omx_actions (
                     action_id TEXT PRIMARY KEY,
@@ -130,7 +122,6 @@ class ActionStore(ActionStoreReadback):
                 );
                 CREATE INDEX IF NOT EXISTS omx_action_phases_state
                     ON omx_action_phases(action_id, attempt_id, state, ordinal);
-                PRAGMA user_version=2;
                 """
             )
 
@@ -178,12 +169,12 @@ class ActionStore(ActionStoreReadback):
         request_key = _nonempty("request_key", request_key, maximum=160)
         action_kind = _nonempty("action_kind", action_kind, maximum=48)
         configuration_revision = _nonempty("configuration_revision", configuration_revision)
-        if action_kind == "CELL_TRANSFER":
+        if action_kind in {"CELL_TRANSFER", "ARM_TRANSFER"}:
             # This tagged action is camera blind; its durable request has no
             # observation revision. Keep the existing NOT NULL column without
             # inventing an observation identifier.
             if observation_id != "":
-                raise ValueError("CELL_TRANSFER observation_id must be empty")
+                raise ValueError(f"{action_kind} observation_id must be empty")
         else:
             observation_id = _nonempty("observation_id", observation_id)
         if type(owner_generation) is not int or owner_generation < 0:

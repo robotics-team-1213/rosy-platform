@@ -39,7 +39,10 @@ def folder(repo: Path) -> Path:
     return (common if common.is_absolute() else repo / common) / "rosy-land"
 
 
-def write(repo: Path, sha: str, base: str, invocations: list[list[str]], logs: list[str]) -> Path:
+def write(repo: Path, sha: str, base: str, invocations: list[list[str]], logs: list[str],
+          tier: str | None = None) -> Path:
+    """``tier``: the selection the landing ran ("full", "affected" or "records"); the publish script finds a
+    green FULL landing by it instead of guessing from the invocations."""
     if not (SHA.fullmatch(sha) and SHA.fullmatch(base)):
         raise ValueError("land record needs full commit ids")
     target = folder(repo)
@@ -47,7 +50,7 @@ def write(repo: Path, sha: str, base: str, invocations: list[list[str]], logs: l
     path = target / f"{sha}.json"
     temporary = path.with_suffix(".new")
     temporary.write_text(json.dumps({
-        "sha": sha, "base": base, "invocations": invocations, "logs": logs,
+        "sha": sha, "base": base, "invocations": invocations, "logs": logs, **({"tier": tier} if tier else {}),
         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }, indent=2) + "\n", encoding="utf-8")
     temporary.replace(path)

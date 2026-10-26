@@ -37,6 +37,13 @@ RECIPE_4 = G1_FIXTURE / "recipe_4sku.yaml"
 
 
 JITTER_LIMIT_S = 0.05  # a 5 ms nap overshooting by more than this means the host cannot give timing evidence
+# A healthy disk syncs 4 KiB in a few ms; the 2026-10-25 AI PC miss (95% full disk) took 40-55 ms per SQLite fsync.
+FSYNC_LIMIT_S = 0.02
+# Secondary only: that miss showed some avg60 6.3% while full avg10 was 0.36%, so full avg10 misses real cases.
+IO_SOME_AVG60_LIMIT_PCT = 5.0
+IO_PRESSURE = Path("/proc/pressure/io")
+MOUNTINFO = Path("/proc/self/mountinfo")
+MEMORY_FS = {"tmpfs", "ramfs"}  # fsync there is ~0 ms and says nothing about the disk the journals hit
 
 
 def scheduling_jitter_s(samples=40, nap_s=0.005):
@@ -49,12 +56,74 @@ def scheduling_jitter_s(samples=40, nap_s=0.005):
     return worst
 
 
+def mount_of(directory):
+    """(fstype, mount point) holding `directory`, from /proc/self/mountinfo; None off Linux."""
+    try:
+        lines = MOUNTINFO.read_text().splitlines()
+    except OSError:
+        return None
+    path, best = os.path.realpath(directory), None
+    for line in lines:  # shortcut: octal escapes (\040) in mount points are not decoded; fine for lab hosts
+        left, _, right = line.partition(" - ")
+        mount, fstype = left.split()[4], right.split()[0]
+        inside = path == mount or path.startswith(mount.rstrip("/") + "/")
+        if inside and (best is None or len(mount) >= len(best[1])):  # deepest, later over-mount wins
+            best = (fstype, mount)
+    return best
+
+
+def disk_probe_dir():
+    """Where the fsync probe writes and how the skip reason names it.
+
+    The remote runner puts TMPDIR beside --basetemp (tools/remote/remote_job.py), so the temp dir sits on
+    the filesystem of tmp_path, where the owners' owner.sqlite3 journals live. If it is in memory, the
+    working dir (the run checkout on disk) is measured instead.
+    """
+    def label(mount):
+        return f"{mount[0]} ({mount[1]})" if mount else "unknown fs"
+    tmp = tempfile.gettempdir()
+    mount = mount_of(tmp)
+    if mount and mount[0] in MEMORY_FS:
+        work = os.getcwd()
+        return work, f"{label(mount_of(work))} in the working dir (temp dir is on {mount[0]})"
+    return tmp, label(mount)
+
+
+def fsync_p90_s(samples=5, directory=None):
+    """p90 wall time of a 4 KiB write+fsync in a fresh dir under `directory`."""
+    times = []
+    with tempfile.TemporaryDirectory(dir=directory) as scratch, open(Path(scratch) / "probe", "wb") as probe:
+        for _ in range(samples):
+            start = time.monotonic()
+            probe.write(b"\0" * 4096)
+            probe.flush()
+            os.fsync(probe.fileno())
+            times.append(time.monotonic() - start)
+    return quantiles(times)["p90"]
+
+
+def io_some_avg60(path=None):
+    """Linux PSI `some avg60` for I/O (percent); None where the file is absent (not Linux, no PSI)."""
+    try:
+        text = Path(path or IO_PRESSURE).read_text()
+    except OSError:
+        return None
+    for line in text.splitlines():
+        kind, *fields = line.split() or [""]
+        if kind == "some":
+            values = dict(field.split("=", 1) for field in fields)
+            return float(values["avg60"]) if "avg60" in values else None
+    return None
+
+
 def assert_timing(ok, detail):
     """Proposed D-780 bounds are measured with real threads and sockets.
 
     A miss on a lab PC busy with other jobs (2026-10-23: pre-push failures that passed alone on the same
     sha) is not evidence about the design, so it skips with the measured jitter. A miss on a host that
-    still wakes threads on time fails as before. Functional assertions never go through this.
+    still wakes threads on time fails as before. A slow disk (2026-10-25/26 AI PC: SQLite fsync 40-55 ms,
+    contact gap p99 2.6-5.7 s) leaves wake-ups on time, so fsync is measured directly and PSI io
+    `some avg60` is a secondary trigger. Functional assertions never go through this.
     """
     if ok:
         return
@@ -62,6 +131,15 @@ def assert_timing(ok, detail):
     if jitter > JITTER_LIMIT_S:
         pytest.skip(f"timing bound missed on a contended host (5 ms nap overshoot {jitter * 1000:.0f} ms "
                     f"> {JITTER_LIMIT_S * 1000:.0f} ms); not timing evidence: {detail}")
+    directory, where = disk_probe_dir()
+    fsync_p90 = fsync_p90_s(directory=directory)
+    if fsync_p90 > FSYNC_LIMIT_S:
+        pytest.skip(f"host disk I/O slow: write+fsync p90={fsync_p90 * 1000:.1f} ms on {where} > "
+                    f"{FSYNC_LIMIT_S * 1000:.0f} ms; not timing evidence: {detail}")
+    io_some = io_some_avg60()
+    if io_some is not None and io_some > IO_SOME_AVG60_LIMIT_PCT:
+        pytest.skip(f"host disk I/O contended: io some avg60={io_some:.1f}% > {IO_SOME_AVG60_LIMIT_PCT:.0f}%; "
+                    f"not timing evidence: {detail}")
     raise AssertionError(detail)
 
 
@@ -334,8 +412,79 @@ def test_a_missed_timing_bound_fails_on_a_quiet_host_and_skips_only_when_contend
     assert_timing(True, "never measured")
     module = assert_timing.__globals__
     monkeypatch.setitem(module, "scheduling_jitter_s", lambda: 0.001)
+    monkeypatch.setitem(module, "fsync_p90_s", lambda directory=None: 0.001)
+    monkeypatch.setitem(module, "io_some_avg60", lambda: None)
     with pytest.raises(AssertionError, match="quiet"):
         assert_timing(False, "quiet host miss")
     monkeypatch.setitem(module, "scheduling_jitter_s", lambda: 0.2)
     with pytest.raises(pytest.skip.Exception, match="contended host"):
         assert_timing(False, "busy host miss")
+
+
+# Shape of the 2026-10-25 AI PC miss: only some avg60 is above 5%, full avg10 is 0.36%.
+PSI_IO = ("some avg10=1.00 avg60={some} avg300=0.90 total=912345678\n"
+          "full avg10=0.36 avg60=2.00 avg300=0.50 total=876543210\n")
+
+
+def test_io_pressure_reads_some_avg60_and_none_without_psi(tmp_path):
+    psi = tmp_path / "io"
+    psi.write_text(PSI_IO.format(some="6.30"))
+    assert io_some_avg60(psi) == 6.3
+    psi.write_text("full avg10=3.00 avg60=1.00 avg300=0.50 total=10\n")
+    assert io_some_avg60(psi) is None
+    assert io_some_avg60(tmp_path / "absent") is None
+
+
+def test_fsync_probe_times_each_sync(monkeypatch):
+    real_fsync = os.fsync
+    monkeypatch.setattr(os, "fsync", lambda fd: (time.sleep(0.03), real_fsync(fd)))
+    assert fsync_p90_s() >= 0.03
+
+
+MOUNTS = ("22 1 8:2 / / rw,relatime shared:1 - ext4 /dev/sda2 rw\n"
+          "30 22 0:26 / /rosy-fake/tmp rw,nosuid shared:5 - tmpfs tmpfs rw,size=1g\n")
+
+
+def test_mount_of_picks_the_deepest_mount_holding_the_path(monkeypatch, tmp_path):
+    info = tmp_path / "mountinfo"
+    info.write_text(MOUNTS)
+    monkeypatch.setitem(mount_of.__globals__, "MOUNTINFO", info)
+    assert mount_of("/rosy-fake/tmp/rosy-pytest-x/t") == ("tmpfs", "/rosy-fake/tmp")
+    assert mount_of("/rosy-fake/tmpx") == ("ext4", "/")  # a name prefix is not a mount prefix
+    monkeypatch.setitem(mount_of.__globals__, "MOUNTINFO", tmp_path / "absent")
+    assert mount_of("/rosy-fake/tmp") is None
+
+
+def test_fsync_probe_leaves_a_tmpfs_temp_dir_for_the_working_dir(monkeypatch, tmp_path):
+    info = tmp_path / "mountinfo"
+    info.write_text(MOUNTS)
+    monkeypatch.setitem(disk_probe_dir.__globals__, "MOUNTINFO", info)
+    monkeypatch.setattr(os, "getcwd", lambda: "/rosy-fake/work")
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: "/rosy-fake/tmp/rosy-pytest-x/t")
+    assert disk_probe_dir() == ("/rosy-fake/work", "ext4 (/) in the working dir (temp dir is on tmpfs)")
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: "/rosy-fake/disk/rosy-pytest-x/t")
+    assert disk_probe_dir() == ("/rosy-fake/disk/rosy-pytest-x/t", "ext4 (/)")
+
+
+def test_a_timing_miss_skips_on_slow_fsync_or_io_pressure_only_above_the_limits(monkeypatch, tmp_path):
+    module = assert_timing.__globals__
+    monkeypatch.setitem(module, "scheduling_jitter_s", lambda: 0.001)  # wake-ups on time: only I/O decides
+    psi = tmp_path / "io"
+    monkeypatch.setitem(module, "IO_PRESSURE", psi)
+    psi.write_text(PSI_IO.format(some="0.50"))
+    probed = []
+    monkeypatch.setitem(module, "disk_probe_dir", lambda: ("/rosy-fake/runs", "ext4 (/)"))
+    monkeypatch.setitem(module, "fsync_p90_s", lambda directory=None: probed.append(directory) or 0.045)
+    with pytest.raises(pytest.skip.Exception, match=r"disk I/O slow: write\+fsync p90=45.0 ms on ext4 \(/\) > 20 ms"):
+        assert_timing(False, "lease miss")
+    assert probed == ["/rosy-fake/runs"]
+    monkeypatch.setitem(module, "fsync_p90_s", lambda directory=None: 0.015)
+    psi.write_text(PSI_IO.format(some="6.30"))
+    with pytest.raises(pytest.skip.Exception, match=r"disk I/O contended: io some avg60=6.3% > 5%"):
+        assert_timing(False, "lease miss")
+    psi.write_text(PSI_IO.format(some="4.90"))
+    with pytest.raises(AssertionError, match="lease miss"):
+        assert_timing(False, "lease miss")
+    psi.unlink()
+    with pytest.raises(AssertionError, match="lease miss"):
+        assert_timing(False, "lease miss")

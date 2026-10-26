@@ -63,3 +63,11 @@ def test_the_hook_falls_back_when_the_helper_says_not_covered():
     reuse = hook.index("land_record.py owed")
     assert reuse < hook.index('AFFECTED_BASE="$(git merge-base')
     assert "exit 0" in hook[reuse:hook.index('AFFECTED_BASE="$(git merge-base')]
+
+
+def test_a_record_names_the_tier_the_landing_ran(repo):
+    """The publish script finds a green FULL landing by this field, not by guessing from the invocations."""
+    root, commits = repo
+    tool.write(root, commits[1], commits[0], [["test"]], [], "full")
+    tool.write(root, commits[2], commits[1], [["pkg/test"]], [])
+    assert tool.read(root, commits[1])["tier"] == "full" and "tier" not in tool.read(root, commits[2])

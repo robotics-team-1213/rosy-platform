@@ -1,5 +1,4 @@
-"""Existing local Action and stop contracts; canonical exports remain in schemas."""
-
+"""Local device Action and stop DTOs; schemas.py retains canonical exports."""
 from __future__ import annotations
 
 import enum

@@ -158,7 +158,7 @@ class ControlUnitPeers:
 
 def install_control_unit(app, path, *, tasks, console, principals, named_logins,
                          console_token, authorize, require_viewer, require_named_operator,
-                         map_snapshot=None, configured_omx=None, stop_transport=None):
+                         map_snapshot=None, configured_omx=None, stop_transport=None, stop_targets=()):
     from fleet.server.control_unit_observation_runtime import install_control_information
     from fleet.server.control_unit_routes import install_control_unit_routes
     from fleet.server.control_unit_service import ControlUnitService
@@ -183,7 +183,7 @@ def install_control_unit(app, path, *, tasks, console, principals, named_logins,
             raise ValueError("CONTROL_UNIT_SERVICE_CREDENTIAL_NOT_ISOLATED")
     configured_omx = configured_omx or {}
     signal_ids = validate_control_stop_owners(config, console=console, configured_omx=configured_omx,
-                                             signals=console._signals)
+                                             signals=console._signals, stop_targets=stop_targets)
     store = ControlUnitStore(tasks.store.path, unit_id=config.unit_id)
     service = ControlUnitService(config.topology, store, tasks, console, peer=None)
     http = httpx.AsyncClient(verify=config.tls_context or True, trust_env=False,
@@ -193,7 +193,7 @@ def install_control_unit(app, path, *, tasks, console, principals, named_logins,
     install_control_unit_routes(app, service, authorize=authorize, require_viewer=require_viewer,
                                 require_named_operator=require_named_operator)
     install_control_stops(app, config, tasks=tasks, console=console, configured_omx=configured_omx,
-                          stop_transport=stop_transport, signal_ids=signal_ids, authorize=authorize,
+                          stop_transport=stop_transport, signal_ids=signal_ids, authorize=authorize, stop_targets=stop_targets,
                           require_viewer=require_viewer, require_named_operator=require_named_operator)
     install_control_information(app, config, tasks=tasks, console=console,
                                  map_snapshot=map_snapshot or (lambda: None),

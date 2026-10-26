@@ -191,6 +191,39 @@ took hours to land. Four separate things blocked it.
   same arguments, in the branch's worktree, whenever the branch's `tools/land*.py` differ from main's
   (`ROSY_LAND_OWN_COPY` stops a second re-run). Test:
   `test/test_land.py::test_a_branch_with_older_landing_code_lands_with_mains_copy`.
+- **A FULL tier at the front held everyone (2026-10-26):** the pretest ran only when someone was ahead, so a
+  FULL lander first in line ran its tier inside the lock (`feat/monitoring-registration`, 40+ min, 10 batches).
+  Tickets now carry a status: `preparing` (the FULL tier before the turn: keeps its place, blocks no one),
+  `waiting`, `turn`. A turn starts when no ticket is in its turn and no earlier ticket is waiting
+  (`land_queue.blockers`). The pretest runs for every auto landing without a FULL record. Tests:
+  `test/test_land_queue.py::test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_everyone`,
+  `test/test_land.py::test_harness_selector`.
+- **Every tier prepares outside the lock (2026-10-26, D-889 A'):** `land_prepare.prepare` runs each auto
+  landing's own selection before its turn (ticket `pending` until fewer than three prepare, then
+  `preparing`; neither blocks anyone) and records the tier that passed. The turn selects main's delta since
+  that main on the candidate, so overlap is judged by the selector, not by a separate area model; a delta
+  that escalates to FULL is prepared outside the lock again and the ticket waits once more. Without the
+  D-436 selector only a FULL tier prepares. Tests:
+  `test/test_land.py::test_an_affected_landing_prepares_outside_the_lock_and_its_turn_runs_mains_delta_only`,
+  `test/test_land_queue.py::test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one`.
+- **First confirmed failure stops the round; the turn has a time cap (2026-10-26):** a round ran 19 more min
+  after its first real failure. `run_tests` now judges each invocation as it finishes (`remote_pytest.run`
+  `on_done`, `land_checks.verdict`: known_failures, then the rerun alone) and cancels the rest on a confirmed
+  NEW failure; cancelled invocations are neither kept nor failures of their own. In a turn, tests past
+  `TURN_CAP_S` (600 s) cancel the rest as `Overtime`, and `land_prepare.again` runs them outside the lock
+  before the ticket waits again. Tests:
+  `test/test_land.py::test_a_confirmed_new_failure_cancels_the_rest_and_the_cancelled_are_neither_kept_nor_failures`,
+  `::test_the_turns_time_cap_cancels_the_rest_as_overtime_and_a_prepare_round_has_no_cap`.
+- **Queue time lost to a conflict found only at the turn (2026-10-26):** two landings waited 121 and 149 min, then
+  stopped on `tools/AGENTS.md`, where each side had edited a different table row. `land_merge.table_rows` now
+  merges AGENTS.md tables row by row (first cell as key; the same row changed on both sides, or dropped on one
+  and edited on the other, still needs a person), and `land_prepare.watch` previews the merge with
+  `git merge-tree` each time main moves during the wait, stopping at once on a conflict land.py cannot resolve.
+  `--queue-timeout` defaults to 0 (no limit): dead tickets are reclaimed by PID and refresh age, and a live
+  landing gained nothing from being dropped (robot-91 lost its prepared tier that way). Tests:
+  `test/test_land.py::test_agents_md_rows_edited_on_different_sides_merge_by_first_cell`,
+  `::test_agents_md_same_row_on_both_sides_needs_a_human`,
+  `test/test_land_queue.py::test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_limit`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

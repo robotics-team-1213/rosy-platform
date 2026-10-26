@@ -3,6 +3,11 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f",
+      "result": "8 passed, 0 skipped; includes actual HTTP console admission with independent operator, real SQLite and synthetic capability port. No device or physical evidence.",
+      "pytest_root": "operations/fleet"
+    },
+    {
       "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7",
       "result": "5 passed, 0 skipped; actual producer/collector HTTP, scoped stop fanout, restart and local reconciliation; synthetic device transports",
       "pytest_root": "operations/fleet"
@@ -1491,6 +1496,22 @@
         "test_read_requires_viewer_and_disables_caching"
       ],
       "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "GET:/api/fleet/arm-transfers/jobs/{mission_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_arm_transfer_console_browser.py",
+        "test_real_http_console_admits_external_proposal_with_independent_identity"
+      ],
+      "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"
+    },
+    "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_arm_transfer_console_browser.py",
+        "test_real_http_console_admits_external_proposal_with_independent_identity"
+      ],
+      "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"
     }
   }
 }

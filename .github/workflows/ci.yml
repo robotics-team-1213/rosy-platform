@@ -41,7 +41,7 @@ jobs:
       # 전체 이력: 모듈 logs.md 의 append-only 검사가 PR base / push 이전 커밋과 비교한다.
       # 얕은 clone 이면 HEAD 만 비교되어 이미 커밋된 기록의 수정을 잡지 못한다 (D-61).
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
           fetch-depth: 0
 
@@ -112,7 +112,7 @@ jobs:
       # 전체 이력: 모듈 logs.md 의 append-only 검사가 PR base / push 이전 커밋과 비교한다.
       # 얕은 clone 이면 HEAD 만 비교되어 이미 커밋된 기록의 수정을 잡지 못한다 (D-61).
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
           fetch-depth: 0
 
