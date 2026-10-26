@@ -11745,3 +11745,10 @@ osy-d395-s1d\`.
 - 증거: 공식8dc0b91774 os-watchdog-final1647passed/32skipped/49warnings301.57s0NEW. actual systemd condition과 frozen import/admission, modeled firmware/sysfs/PID1이며 실제 watchdog 장치를 열지 않는다. 소스·parser 증거로 실물 reset/부팅 수용을 주장하지 않는다.
 - gate 변화: 없음. 실제 controller·rebase/health/commit/fallback·SYSTEM·ARM 이미지·서명·SD 기록과 전체 읽기 목표는 미완료다. 별도 독립 리뷰나 main 착지는 수행하지 않았다.
 - CE: 해당 없음 — source·반례·ADR이 판단과 다음 수용 조건을 보존한다.
+
+## 2026-10-26 · 2b8ff14ee8 · D-888 installed finalization과 kernel stop 증거 범위
+
+- 변경: current-code 고정 RAUC post-handler의 inactive image readback·네 파일 보정·signed factory/Python pin 검증·private receipt를 D-888에 기록한다. client 성공/receipt/journal/arm의 역할을 나누고 parent 종료와 전체 cgroup 종료를 구분한다. empty workspace 회수와 frozen 실행 모드도 명시한다.
+- 증거: de194 broad1929pass/32skip/49warn+fixture1fail377.49s 후 da363 관련306pass13.56s0NEW로 fixture를 바로잡았다. 최종2b8ff Python pin 반례 수정·관련55pass14.77s0NEW. 집계는 겹치며 합산하지 않는다. actual crypto/frozen CLI/파일 I/O와 modeled kernel/fsck 증거를 구분한다.
+- gate 변화: 없음. 실제 SYSTEM/ARM 이미지·서명·SD·기체 수용과 전체 controller/health/commit/fallback은 미완료다. 독립 리뷰/main 착지/public push는 수행하지 않았다.
+- CE: 해당 없음 — 판단과 반례는 구현·시험·기존 ADR에 보존한다.
