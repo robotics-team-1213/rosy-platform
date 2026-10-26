@@ -27,6 +27,10 @@ def _health(tmp_path, monkeypatch):
     dropin = root / "etc/systemd/system/rosy-io.service.d/zz-rosy-os-guard.conf"
     dropin.parent.mkdir(parents=True)
     dropin.write_bytes(frozen.read_bytes())
+    source = root / "opt/rosy/releases" / factory["release_id"] / "deploy/robot/native/rosy-io.service"
+    source.parent.mkdir(parents=True)
+    source.write_bytes((m.Path(m.__file__).parent / "rosy-io.service").read_bytes())
+    (root / "etc/systemd/system/rosy-io.service").write_bytes(source.read_bytes())
     data = dict(ActiveState="active", SubState="running", MainPID="123", InvocationID="a" * 32,
                 Result="success", EnvironmentFiles=m.IO_ENVIRONMENT_FILES,
                 DropInPaths="/etc/systemd/system/rosy-io.service.d/zz-rosy-os-guard.conf")

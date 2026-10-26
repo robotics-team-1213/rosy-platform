@@ -90,10 +90,10 @@ def _effective(run, prepared):
         raise ValueError("effective RAUC writable paths differ")
 
 
-def _empty_cgroup(root, group):
+def _empty_cgroup(root, group, *, service=SERVICE):
     if not group:
         return
-    if (not group.startswith("/") or Path(group).name != SERVICE
+    if (not group.startswith("/") or Path(group).name != service
             or any(part in {"..", "."} for part in group.split("/")) or len(group) > 1024):
         raise ValueError("RAUC cgroup identity differs")
     _read(_path(root, "sys/fs/cgroup/cgroup.controllers"), 4096, root.stat().st_uid)
