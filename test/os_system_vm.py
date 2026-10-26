@@ -171,8 +171,9 @@ class Guest:
         seed = self.directory / "seed"
         seed.mkdir(mode=0o700)
         public = (self.directory / "guest-key.pub").read_text().strip()
-        (seed / "user-data").write_text("#cloud-config\ndisable_root: false\nssh_pwauth: false\nusers:\n"
-            f"  - name: root\n    lock_passwd: true\n    ssh_authorized_keys:\n      - {public}\n")
+        config = dict(disable_root=False, ssh_pwauth=False,
+                      users=[dict(name="root", lock_passwd=True, ssh_authorized_keys=[public])])
+        (seed / "user-data").write_text("#cloud-config\n" + json.dumps(config))
         (seed / "meta-data").write_text(f"instance-id: {self.instance_id}\nlocal-hostname: rosy-system-guest\n")
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(_Seed, directory=str(seed)))
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
