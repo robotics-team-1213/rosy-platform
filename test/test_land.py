@@ -1090,6 +1090,23 @@ def test_the_ticket_is_released_after_a_stop_and_after_ctrl_c(repos, monkeypatch
     assert queued(main) == []
 
 
+def test_a_branch_with_older_landing_code_lands_with_mains_copy(repos, monkeypatch):
+    """2026-10-26: land.py ran from the landing branch's own copy, so an old branch landed with old rules."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    stub = main / "tools" / "land.py"
+    stub.parent.mkdir()
+    stub.write_text("import os, pathlib, sys\n"
+                    "pathlib.Path('reexec.txt').write_text(' '.join(sys.argv[1:]) + os.environ['ROSY_LAND_OWN_COPY'])\n"
+                    "sys.exit(7)\n")
+    assert land.main(["--tests", "none"]) == 7
+    assert (wt / "reexec.txt").read_text() == "--tests none1", "same arguments, run in the branch's worktree"
+    (wt / "reexec.txt").unlink()
+    monkeypatch.setenv(land.land_checks.OWN_COPY, "1")  # the landed copy itself: lands, never re-runs
+    assert land.main(["--tests", "none"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
 def test_no_queue_lands_without_a_ticket(repos, monkeypatch):
     main, wt = repos
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")

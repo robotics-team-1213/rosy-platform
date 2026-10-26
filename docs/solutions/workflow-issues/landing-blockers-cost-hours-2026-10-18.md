@@ -182,6 +182,12 @@ took hours to land. Four separate things blocked it.
   `land_logs.append_blocks` now keeps main's order when the branch only reordered (nothing edited or dropped)
   and inserts the branch's new entries by date; main reordering, or an edit, still stops. Test:
   `test/test_land.py::test_logs_md_this_branch_reordering_mains_entries_keeps_mains_order`.
+- **Old branches landed with old landing code (2026-10-26):** `land.py` ran from the landing branch's own copy,
+  so a branch made before a landing fix still landed with the old rules (robot-71's turn stopped on a log merge
+  that main's `land_logs` already accepts). `land_checks.landed_copy` now re-runs main's `tools/land.py` with the
+  same arguments, in the branch's worktree, whenever the branch's `tools/land*.py` differ from main's
+  (`ROSY_LAND_OWN_COPY` stops a second re-run). Test:
+  `test/test_land.py::test_a_branch_with_older_landing_code_lands_with_mains_copy`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

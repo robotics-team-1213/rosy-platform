@@ -573,6 +573,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
     try:
+        wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
+        code = land_checks.landed_copy(Path(args.main_checkout) if args.main_checkout else main_checkout(wt),
+                                       sys.argv[1:] if argv is None else argv)
+        if code is not None:
+            return code
         return land(args)
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)
