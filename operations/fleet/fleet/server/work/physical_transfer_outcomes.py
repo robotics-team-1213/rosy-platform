@@ -9,7 +9,7 @@ import tempfile
 
 from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from .mission_store import MissionConflict, _json
-from .physical_transfer_observations import evidence_document
+from .physical_transfer_observations import evidence_document, validate_post_action_order
 from .physical_transfer_outcome import assess_transfer_outcome
 from .physical_transfer_store import PhysicalTransferRequest
 
@@ -34,6 +34,7 @@ def record_transfer_outcome(execution, mission_id, expected_request_digest, obse
         context = TransferEvidenceContext.model_validate_json(_json(state["context"]))
         outcome = assess_transfer_outcome(store.installation.policy, context, observations,
             action_state="SUCCEEDED", now_ns=store._now_ns(), authenticated_producer_id=authenticated_producer_id)
+        validate_post_action_order(connection, mission_id, observations)
         document = evidence_document(context, observations)
         digest = sha256(document.encode()).hexdigest()
         detail = dict(schema="rosy.transfer-outcome/1", scope="observation_assessment_only",
