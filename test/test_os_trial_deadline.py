@@ -117,3 +117,75 @@ def test_deadline_is_frozen_and_early_only_on_new_images(tmp_path, monkeypatch, 
     assert "Wants=rosy-os-trial-deadline.timer" in (frozen / "rosy-os-deadline.conf").read_text()
     assert not any(x in service for x in ("Requires=", "After=local-fs", "RequiresMountsFor=", "rosy-os-storage"))
     assert "os_trial_deadline.py expire" in service
+
+
+def test_actual_stalled_child_is_bounded_and_reaped_only_by_test_cleanup(tmp_path, monkeypatch):
+    import time
+    module = importlib.import_module("os_trial_deadline")
+    script = tmp_path / "stalled-probe.py"
+    script.write_text("import time\ntime.sleep(60)\n")
+    monkeypatch.setattr(module, "__file__", str(script))
+    spawn, children = subprocess.Popen, []
+    def tracked(*args, **kwargs):
+        child = spawn(*args, **kwargs)
+        children.append(child)
+        return child
+    monkeypatch.setattr(module.subprocess, "Popen", tracked)
+    started = time.monotonic()
+    try:
+        assert module.probe_committed(tmp_path) is False
+        assert time.monotonic() - started < 8
+    finally:
+        for child in children:
+            child.kill()
+            child.wait(timeout=3)
+
+
+def test_real_systemd_parser_accepts_deadline_without_localfs_dependency(tmp_path):
+    import shutil
+    base = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/native"
+    units = tmp_path / "etc/systemd/system"
+    units.mkdir(parents=True)
+    for name in ("rosy-os-trial-deadline.service", "rosy-os-trial-deadline.timer"):
+        shutil.copyfile(base / name, units / name)
+    for name in ("sysinit.target", "basic.target", "shutdown.target", "timers.target", "local-fs.target"):
+        (units / name).write_text("[Unit]\nDefaultDependencies=no\n")
+    dropin = units / "sysinit.target.d"
+    dropin.mkdir()
+    shutil.copyfile(base / "rosy-os-deadline.conf", dropin / "10-rosy-os-deadline.conf")
+    binary = tmp_path / "usr/bin/python3"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    analyze = shutil.which("systemd-analyze")
+    assert analyze
+    result = subprocess.run([analyze, "verify", "--man=no", "--root=" + str(tmp_path),
+        "sysinit.target", "rosy-os-trial-deadline.timer", "rosy-os-trial-deadline.service"],
+        capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+
+
+def test_committed_probe_runs_from_frozen_install_with_poisoned_mutable_sdk(tmp_path, monkeypatch):
+    import sys
+    from test_os_frozen_firstboot import _prefix, _stage
+    _, _, root, _, _ = _boot(tmp_path / "device", monkeypatch)
+    prefix = _prefix(tmp_path / "installed")
+    _stage(prefix)
+    for folder in (prefix / "native-runtime", prefix / "deploy/sd"):
+        for path in folder.glob("*.py"):
+            path.write_text("raise RuntimeError('mutable SDK imported')\n")
+    # Kernel mounts are modeled; actual frozen boot/state parsing and CLI execute.
+    code = """
+import sys
+from pathlib import Path
+frozen=Path(sys.argv[1])/'os-bootstrap/native-runtime'
+sys.path[:0]=[str(frozen),str(Path(sys.argv[1])/'native-runtime')]
+import os_update_state,os_trial_deadline
+os_update_state.mount_facts=lambda *args: []
+assert os_trial_deadline.main(['committed','--root',sys.argv[2]]) == 1
+for name in ('os_trial_deadline','os_bootloader','os_update_state','os_state_layout','os_update_manifest','media_layout'):
+    assert Path(sys.modules[name].__file__).is_relative_to(frozen)
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(prefix), str(root)],
+        capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
