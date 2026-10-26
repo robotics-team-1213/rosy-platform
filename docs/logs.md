@@ -12120,3 +12120,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_selection.py test/test_land.py` 결과는 착지 기록에 남긴다.
 - gate 변화: 착지 차례의 FULL 재시험을 좁힌다. 남는 위험은 두 변경 모두 직접 건드리지 않은 곳의 상호작용이며, 다음 FULL 착지와 게시 전 녹색 FULL 요구(D-889 5항)가 받친다. 사용자 결정(2026-10-27).
 - CE: 미정 — 몰림 때 재준비 시간으로 판단.
+
+## 2026-10-27 · uncommitted · perf(core): 충전소 카메라 파이프라인 시험의 느린 경우를 파일로 나눔
+
+- 변경: `middleware/core/gateway/test/test_station_camera_pipeline.py`의 `lifespan`·`shutdown_UNDOCKING`을 `test_station_camera_pipeline_lifespan.py`로, `continuous`를 `test_station_camera_pipeline_continuous.py`로 옮겼다. 두 파일은 매개변수만 두고 원래 시험 함수를 부른다. `composed`·`shutdown_CHARGING`은 `test/flaky_quarantine.txt` node id가 있어 원래 파일에 남겼다.
+- 근거: xdist `--dist loadfile`은 파일 하나를 워커 하나에 준다. FULL의 gateway·events·services·shared/web·foundation 묶음 576초 가운데 이 파일이 511초였다(모델 PC `--durations`, main c2e21981ec). 나눈 뒤 가장 긴 파일은 약 210초로 예상한다.
+- 증거: 원격 결과는 착지 기록에 남긴다.
+- gate 변화: 없음(같은 시험, 같은 매개변수).
+- CE: 해당 없음 — 시험 배치 변경이다.

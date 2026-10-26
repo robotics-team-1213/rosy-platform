@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · perf(core): 충전소 카메라 파이프라인 시험의 느린 경우를 파일로 나눔
 - 2026-10-27 · uncommitted · perf(land): 착지한 FULL 변화분 뒤에서 FULL을 다시 돌지 않음
 - 2026-10-27 · uncommitted · perf(remote): 직렬 묶음 13개를 xdist로
 - 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 - 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
-- 2026-10-26 · b82af1ec31 · pure landing selection extraction
