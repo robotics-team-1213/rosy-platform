@@ -82,6 +82,12 @@ installer는 같은 source boot의 INSTALLING 상태·claim·검증된 bundle/im
 
 서명된 JSON은 staging에도 원본 bytes로 게시한다. verifier가 허용한 UTF-16 JSON을 실제 Ed25519/CMS로 검증한 반례에서 ASCII 재인코딩 실패를 확인한 뒤 atomic IO에 bytes 게시를 추가했다. 기존 UTF-8 문자열 writer의 fsync/권한/rename 순서는 유지한다. frozen preflight를 poisoned mutable SDK 없이 실행하는 실제 crypto와 systemd의 offline parser 시험은 SOURCE 증거이며 실제 daemon/PID1·cgroup deny·block 설치 수용은 아니다.
 
+`os_update_policy.authorize`는 기존 native updater의 공통 enabled/Hold·seal·network·idle 판정을 읽기 전용으로 재사용한다. OS 배터리는 충전 여부와 관계없이 유한한 60~100%와 bool 충전 상태를 요구한다. 현재 transaction의 live claim, 같은 source boot의 pending을 확인하고 12초 간격의 서로 다른 fresh status 두 번을 읽은 뒤 공통 정책·claim·pending을 다시 확인한다. 정책·journal·history는 쓰지 않으며 CORE 부재를 면제하지 않는다. native의 기존 40%/충전 예외는 변경하지 않는다. 실제 배포 controller의 호출과 signed withdrawal 대조는 별도다.
+
+protocol2의 frozen motion guard는 storage admission 뒤 CORE/I/O/navigation보다 먼저 pending과 firmware/default/committed 일치를 읽는다. pending이면 root 전용 `/run/rosy-os-update/motion.env`에 drive=false를 남긴다. I/O의 OS 소유 최종 EnvironmentFile은 operator runtime.env 뒤에 적용하며 매 I/O 재시작 전 privileged precondition으로 복원한다. navigation은 시작할 때마다 frozen ExecCondition으로 pending 부재를 요구한다. 읽기 실패는 false를 유지하고 guard 실패로 runtime 시작을 막는다. pending이 없는 일치한 committed boot에서만 자신이 만든 false 파일을 지우며 operator 설정은 쓰지 않는다. commit 후 같은 boot에 남은 tryboot flag만으로 주행을 계속 막지 않는다.
+
+RAUC unit은 guard를 요구하고 I/O·navigation과 Conflicts/After를 지정해 둘의 정지 뒤 시작한다. ExecStartPre는 pending과 false 파일을 읽기 전용으로 확인한 다음 서명·media 검사를 실행한다. daemon은 두 RAUC 디렉터리 밖에 쓸 수 없으므로 false 파일 게시·복원은 controller와 early/I/O guard가 맡는다. 앱 SDK sync/backup은 guard unit과 CORE/I/O/navigation의 전체 drop-in namespace를 쓰지 못한다. 이 source 경로는 실제 PID1의 정지 순서·EnvironmentFile 효과·모터 torque 수용을 증명하지 않으며 controller의 상태 게시·재시작·health/commit 소유권을 대신하지 않는다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.

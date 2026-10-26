@@ -11724,3 +11724,10 @@ osy-d395-s1d\`.
 - 증거: 공식 원격0a7b6bb462, os-rauc-service-final,1551 passed/32 skipped/49 warnings,316.91s,0NEW. 실제 Ed/CMS/verity·poisoned SDK의 frozen preflight·systemd offline parser이며 manager/mount와 block install은 모델이다. crypto 통과를 실제 장치·kernel 권한 수용으로 표시하지 않는다.
 - gate 변화: 없음. 전체 SD 이미지·자동 OS controller·SYSTEM·ARM artifact·서명·기록 목표는 계속 남는다.
 - CE: 해당 없음 — 판단과 재현 조건을 기존 ADR·source·시험에 보존한다.
+
+## 2026-10-26 · cfbe016caf · D-888 공통 정책과 motion guard 책임 기록
+
+- 변경: 기존 native 정책을 재사용하는 OS60 admission, 두 fresh sample 뒤 최종 gate 재확인, pending 기반 최종 EnvironmentFile·navigation 차단, guard의 자기 파일만 복구하는 책임을 D-888에 기록한다. RAUC의 두 RW 디렉터리 밖 false 파일은 controller/early/I/O guard가 게시하고 daemon은 읽기 전용으로 확인한다.
+- 증거: 공식 원격5fc52b58fd1594passed/32skipped/49warnings318.88s0NEW와 이후cfbe016caf의 readonly 변경65passed7.50s0NEW. 실제 frozen import·systemd offline parser이며 DT/mount/CORE/manager는 모델이다. 집계는 겹쳐 합산하지 않는다.
+- gate 변화: 없음. 전체 SD 이미지·trial/watchdog/controller/health/commit/fallback·SYSTEM·ARM artifact·서명·기록 목표는 계속 남는다. 실제 PID1/motor 수용이나 새 독립 리뷰를 주장하지 않는다.
+- CE: 해당 없음 — source·시험·기존 ADR이 판단과 한계를 보존한다.

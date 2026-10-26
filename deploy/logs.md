@@ -3556,3 +3556,12 @@
 - 최종 공식 원격: 0a7b6bb462, os-rauc-service-final,1551 passed/32 skipped/49 warnings,316.91s,0NEW; runner50198 terminal0. 첫 부팅·projection·TLS·SSH·SDK·기존 updater 경로까지 포함한다. 실제 crypto/frozen subprocess·systemd parser와 모델 manager/mount는 SOURCE이며 실제 PID1/cgroup deny·블록 설치·ARM artifact·SD·기체 수용은 아니다. 32개 PowerShell skip은 미검증이다.
 - gate 변화: 없음. actual policy/no-motion/watchdog/deadline/health/commit/fallback과 incoming root metadata writer, producer/feed/offline signing, SYSTEM·native ARM64·서명·SD full readback은 남아 있다. 제품 키·게시·카드·main 착지는 수행하지 않았다.
 - CE: 해당 없음 — 파일 회수/정지 실패/늦은 최종 승인/원본 bytes 보존은 소스·반례·D-888에 남긴다.
+
+## 2026-10-26 · cfbe016caf · D-888 공통 OS 정책과 재부팅 후 주행 차단
+
+- 변경: 기존 updater의 공통 enabled/Hold·seal·network·idle을 읽기 전용으로 재사용하는 OS admission을 추가한다. 충전 중에도 유한한 배터리60~100%와 bool 충전 상태를 요구하며 같은 transaction claim/source boot, 12초 간격의 서로 다른 fresh sample 뒤 정책·claim·pending을 재확인한다. native40%/충전 예외는 유지한다.
+- 경계: protocol2 frozen guard는 storage 뒤 CORE/I/O/navigation 전에 pending·firmware/default/committed를 확인한다. final EnvironmentFile drive=false와 I/O 재시작 precondition, navigation ExecCondition으로 차단을 복원한다. unknown state는 false/HOLD, committed/no-pending은 자기 false 파일만 제거하며 operator runtime.env는 유지한다. SDK sync/backup은 guard unit 및 세 runtime dropin namespace를 쓰지 못한다. frozen56/early10, sync1014lines 유지.
+- 설치: RAUC는 guard를 요구하고 I/O/navigation 정지 후 시작한다. 두 RAUC 디렉터리 밖을 쓰지 못하므로 ExecStartPre는 pending/false 파일을 읽기 전용으로 검사한다. false 게시·복원은 controller/early/I/O guard의 책임이다. 실제 controller의 policy 호출·withdrawal·arm·health·commit은 별도다.
+- 검증: 공식 원격5fc52b58fd os-motion-policy-final1594passed/32skipped/49warnings318.88s0NEW, runner66178 terminal0. 이후 readonly precondition 변경의 공식 cfbe016caf os-motion-policy-readonly-final65passed7.50s0NEW, runner14418 terminal0. 실제 frozen import와 offline systemd parser를 포함하며 mount/DT/CORE/manager는 모델이다. 두 집계를 합산하지 않는다. 앞선 정책140pass/guard135pass도 겹치는 회귀이며 모두0NEW; malformed-config3fail 및 readonly-method1fail 반례를 수정했다.
+- gate 변화: 없음. 실제 PID1의 정지/EnvironmentFile 효과·cgroup·모터, deadline/watchdog/controller/rebase/health/commit/fallback, producer/feed/signing/capacity, SYSTEM/nativeARM/서명/SD readback은 미완료다. 제품 키·게시·main 착지·SD 기록은 수행하지 않았다. 32개 PowerShell skip은 미검증이다.
+- CE: 해당 없음 — 공통 정책 재사용과 sandbox 밖 차단 파일의 writer/reader 분리는 소스·시험·D-888에 보존한다.

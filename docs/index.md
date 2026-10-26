@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · cfbe016caf · D-888 공통 정책과 motion guard 책임 기록
 - 2026-10-26 · 0a7b6bb462 · D-888 RAUC daemon lifecycle과 검증 범위 기록
 - 2026-10-26 · bbef5d4bae · D-888 firmware callback과 commit owner 분리 기록
 - 2026-10-26 · 57e7fdb090 · D-888 OS journal과 pending fence 경계 기록
 - 2026-10-26 · 35eeffe31f · D-888의 배포 metadata·CMS·설치 설정 경계 기록
-- 2026-10-26 · 4676189d86 · D-888의 media 수용과 metadata 변환 경계 기록
