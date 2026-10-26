@@ -4941,3 +4941,10 @@
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-27 · feat/policy-admission-console · D-865 P3 콘솔 표시 회귀
+
+- 변경: 없음(코드 변경은 `applications/fleet/web` 참조). 이 모듈에서는 콘솔 계약 시험을 확장했다 — `test_work_overview_browser.py`에 범위 readback·배지·기명 운영자 전환·409 사유·보기 전용 잠금 시험 추가, `test/web/work-view.test.mjs`에 순수 판정·문구 시험 추가.
+- 증거: 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1` `test_work_overview_browser.py` 36 통과(신규 3건 포함)·known_failures NEW 0. `test_server_app`·`test_remaining_platform_installed` 50 통과 NEW 0. 전체 affected/FULL 통과를 뜻하지 않는다.
+- Gate: 기존 gate 유지. P4 원격 회귀·착지와 P5 현장 수용은 이 브랜치 밖의 별도 단계다.
+- CE: 해당 없음 — 새 판단은 없고 시험·코드가 근거를 담는다.
