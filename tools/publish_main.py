@@ -6,7 +6,7 @@
 Publish mode:
 1. ``git fetch origin``. If origin/main is not an ancestor of local main, ``git merge-tree`` (no checkout
    is touched) decides: conflicts only in ``SYNC_RECORDS`` (content conflicts) -> exit 4 and the sync
-   landing commands; anything else (code, add/add, rename/delete) -> exit 3 "sync needs robot-4d". This
+   landing commands; anything else (code, add/add, rename/delete) -> exit 3 "sync needs 동기화·게시 담당". This
    version never performs a sync landing itself.
 2. Publish SHA: the newest commit of ``--topo-order --ancestry-path origin/main..main`` (contains
    origin/main, is in local main) with a green FULL land record. Not ``--first-parent``: a land.py landing
@@ -36,8 +36,15 @@ when merge-tree finds code conflicts). PRs are never closed, reopened or force-p
 
 Exit codes: 0 done, planned (dry run), nothing to publish or not due | 1 git/gh failure, Safety-Review
 range red, ci-result failed or a refusal (branch exists, PR not a publish PR) | 2 usage | 3 sync needs
-robot-4d | 4 clean sync landing needed first | 5 not ready yet (ci-result pending, mergeable UNKNOWN) |
-6 PR not mergeable: sync needed | 7 a publish PR is already open | 8 land record format not recognised.
+동기화·게시 담당 | 4 clean sync landing needed first | 5 not ready yet (ci-result pending, mergeable UNKNOWN) |
+6 PR not mergeable: sync needed | 7 a publish PR is already open | 8 land record format not recognised |
+9 secret scan hit in origin/main..SHA (commit, path and rule printed, never the value).
+
+Secret scan (D-889 5): a merge-commit publish ships every commit, so before planning a publish the lines
+each commit in origin/main..SHA adds (``git log -p --cc -U0``: plain diffs, and lines a merge adds that
+no parent has) go through the repository scanner ``deploy/robot/pinky_pro/release/secret_scan.py``
+(``scan_text`` with ``public_provenance.json`` and the ``scan_files`` fixture/prose excuses). A value added
+and removed inside the range is still caught; the tip tree alone would miss it.
 """
 
 from __future__ import annotations
@@ -55,6 +62,9 @@ sys.path.insert(0, str(TOOLS / "hooks"))
 import land_record  # noqa: E402  (green land.py results per landed commit)
 sys.path.insert(0, str(TOOLS))
 import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a handle still holds)
+SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
+sys.path.insert(0, str(SCANNER))
+import secret_scan  # noqa: E402  (the one repository secret scanner: tokens, keys, PSKs, SHA-256 rows)
 
 SYNC_RECORDS = frozenset({"docs/logs.md", "docs/index.md", "tools/harness/adr_gaps.txt"})
 PREFIX = "publish/main-"
@@ -141,6 +151,58 @@ def publish_sha(repo: Path) -> str | None:
     return None
 
 
+def _scan_file(commit: str, path: str, added: list[str], provenance) -> list[tuple[str, str, str]]:
+    name = path.rsplit("/", 1)[-1]
+    if not added or name in secret_scan.DEFAULT_EXCLUDED_NAMES \
+            or "." + name.rsplit(".", 1)[-1].lower() in secret_scan.DEFAULT_EXCLUDED_SUFFIXES:
+        return []
+    in_fixtures = path.startswith(secret_scan.FIXTURE_ROOT) or "/test/" in f"/{path}"  # as scan_files
+    quotes = secret_scan.KNOWN_PROSE_QUOTES.get(path, frozenset())
+    return [(commit, path, f.kind) for f in secret_scan.scan_text(path, "\n".join(added), public_provenance=provenance)
+            if not (in_fixtures and any(v in f.excerpt for v in secret_scan.KNOWN_FIXTURES))
+            and not any(q in f.excerpt for q in quotes)]
+
+
+def scan_range(repo: Path, base: str, head: str) -> tuple[int, list[tuple[str, str, str]]]:
+    """(commits read, hits as (commit, path, rule)) over the lines every commit in base..head adds."""
+    policy = repo / "deploy/robot/pinky_pro/release/public_provenance.json"
+    provenance = secret_scan.load_public_provenance(policy) if policy.is_file() else frozenset()
+    proc = subprocess.Popen(["git", "-C", str(repo), "-c", "core.quotePath=false", "log", "-p", "--cc", "-U0",
+                             "--no-color", "--no-ext-diff", "--format=%x00%H", f"{base}..{head}"],
+                            stdout=subprocess.PIPE, encoding="utf-8", errors="replace")
+    commits, hits = 0, []
+    commit = path = ""
+    width, added, hunk = 1, [], False
+    for line in proc.stdout:  # streamed: the first publish reads ~2,700 commits
+        line = line.rstrip("\n")
+        if line.startswith("\0") or line.startswith("diff --"):
+            hits += _scan_file(commit, path, added, provenance)
+            path, added, hunk = "", [], False
+            if line.startswith("\0"):
+                commit, commits = line[1:], commits + 1
+            else:
+                width = 1 if line.startswith("diff --git") else 2
+        elif line.startswith("@@"):
+            width, hunk = len(line) - len(line.lstrip("@")) - 1, True  # @@ plain, @@@ two parents, ...
+        elif line.startswith("+++ ") and not hunk:
+            path = line[6:] if line.startswith("+++ b/") else ""
+        elif path and line[:width] == "+" * width:  # every parent lacks it: new in this commit
+            added.append(line[width:])
+    hits += _scan_file(commit, path, added, provenance)
+    if proc.wait() != 0:
+        raise Stop(1, f"git log -p {base}..{head} failed ({proc.returncode})")
+    return commits, hits
+
+
+def secret_gate(repo: Path, sha: str) -> str:
+    commits, hits = scan_range(repo, "origin/main", sha)
+    if hits:
+        shown = "\n".join(f"  {c[:10]} {p} [{rule}]" for c, p, rule in hits[:50])
+        raise Stop(9, f"secret scan: {len(hits)} hit(s) in origin/main..{sha[:10]} (values redacted); not"
+                      f" publishing:\n{shown}" + ("\n  ..." if len(hits) > 50 else ""))
+    return f"secret scan: {commits} commits' added lines clean"
+
+
 def _stamp(name: str) -> datetime | None:
     match = STAMP.search(name)
     if not match:
@@ -194,7 +256,7 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     if not ancestor(repo, "origin/main", "main"):
         blocking = sync_conflicts(repo)
         if blocking:
-            raise Stop(3, "sync needs robot-4d: " + ", ".join(blocking))
+            raise Stop(3, "sync needs 동기화·게시 담당: " + ", ".join(blocking))
         raise Stop(4, "origin/main is not in local main; the merge is clean or records-only. Sync first:"
                       + sync_commands(now))
     sha = publish_sha(repo)
@@ -205,10 +267,11 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     when = last.isoformat(timespec="minutes") if last else "never"
     if not due and not args.force_blocked:
         return f"not due: last publish {when}, --min-hours {args.min_hours}; would publish {sha[:10]}"
+    scanned = secret_gate(repo, sha)
     branch = PREFIX + now.strftime("%Y%m%d-%H")
     why = f"forced: {args.force_blocked}" if args.force_blocked else f"last publish {when}"
     if not args.apply:
-        return f"dry run: would push {sha} to {branch} and open a PR ({why}); rerun with --apply"
+        return f"dry run: would push {sha} to {branch} and open a PR ({why}; {scanned}); rerun with --apply"
     if json.loads(run_gh(repo, "pr", "list", "--state", "open", "--search", f"head:{PREFIX}",
                          "--json", "number") or "[]"):
         raise Stop(7, "a publish PR is already open: use --merge-when-green <PR>")
@@ -262,7 +325,7 @@ def merge_when_green(repo: Path, pr: str, apply: bool, now: datetime) -> str:
         return f"{merged}; local main already contains origin/main"
     blocking = sync_conflicts(repo)
     if blocking:
-        raise Stop(3, f"{merged}; sync needs robot-4d: " + ", ".join(blocking))
+        raise Stop(3, f"{merged}; sync needs 동기화·게시 담당: " + ", ".join(blocking))
     return f"{merged}. Sync origin/main back into local main (no fast-forward: main moved past the SHA):" \
            + sync_commands(now)
 

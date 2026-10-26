@@ -61,7 +61,40 @@ def test_newest_commit_with_a_green_full_record_is_published(repo, capsys):
     tool.land_record.write(local, affected, full, AFFECTED, [])  # newer, but not FULL
     assert tool.publish_sha(local) == full
     assert _run(local) == 0
-    assert f"would push {full}" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert f"would push {full}" in out and "secret scan: 1 commits' added lines clean" in out
+
+
+# Assembled at runtime so no credential assignment literal sits in this source.
+LEAK = "pass" + "word = " + json.dumps("unexpected-live-credential-92817")
+
+
+def test_a_secret_added_and_removed_inside_the_range_still_stops_the_publish(repo, capsys):
+    local, _ = repo
+    added = _commit(local, "config/site.env", LEAK + "\n")
+    _commit(local, "config/site.env", "# removed\n")  # gone from the tip tree, still in the history
+    sha = _commit(local, "app.py", "1")
+    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    assert _run(local) == 9
+    err = capsys.readouterr().err
+    assert f"{added[:10]} config/site.env [credential]" in err
+    assert "unexpected-live-credential" not in err  # the value is never printed
+
+
+def test_a_secret_only_a_merge_commit_adds_is_caught(repo, capsys):
+    local, base = repo
+    _git(local, "checkout", "-q", "-b", "side", base)
+    _commit(local, "side.py", "side")
+    _git(local, "checkout", "-q", "main")
+    _commit(local, "app.py", "1")
+    _git(local, "merge", "-q", "--no-commit", "side")
+    (local / "merged.env").write_text(LEAK + "\n")  # an evil merge: in neither parent
+    _git(local, "add", "merged.env")
+    _git(local, "commit", "-q", "-m", "merge side")
+    merge = _git(local, "rev-parse", "HEAD")
+    tool.land_record.write(local, merge, _git(local, "rev-parse", f"{merge}^"), FULL, [])
+    assert _run(local) == 9
+    assert f"{merge[:10]} merged.env [credential]" in capsys.readouterr().err
 
 
 def test_the_full_marker_is_what_the_lab_full_tier_runs(tmp_path):
@@ -111,13 +144,13 @@ def test_records_only_conflict_is_a_clean_sync_left_to_land_py(repo, capsys):
     (("app.py", "origin"), ("app.py", "local"), "app.py"),
     (("docs/index.md", "origin"), ("docs/index.md", "local"), "add/add"),  # a records path, but add/add
 ])
-def test_code_or_add_add_conflict_stops_for_robot_4d(repo, capsys, origin_side, local_side, blocked):
+def test_code_or_add_add_conflict_stops_for_the_sync_owner(repo, capsys, origin_side, local_side, blocked):
     local, _ = repo
     _diverge(local, origin_side, local_side)
     main_before = _git(local, "rev-parse", "main")
     assert _run(local) == 3
     err = capsys.readouterr().err
-    assert "sync needs robot-4d:" in err and blocked in err
+    assert "sync needs 동기화·게시 담당:" in err and blocked in err
     assert _git(local, "rev-parse", "main") == main_before  # merge-tree touched no branch or checkout
     assert _git(local, "status", "--porcelain") == ""
 
@@ -251,4 +284,4 @@ def test_after_the_merge_a_direct_code_push_to_origin_stops_the_sync_back(repo, 
     calls = []
     monkeypatch.setattr(tool, "run_gh", _merge_gh(local, sha, calls))
     assert _run(local, "--merge-when-green", "7", "--apply") == 3
-    assert "sync needs robot-4d:" in capsys.readouterr().err
+    assert "sync needs 동기화·게시 담당:" in capsys.readouterr().err

@@ -11681,3 +11681,10 @@ osy-d395-s1d\`.
 - 이유: 0.3 게시 자동화 명세. main 끝에는 녹색 FULL이 거의 없고, pre-push가 main 체크아웃 작업 트리로 시험을 골라 10-26에 exit 4가 두 번 났다.
 - 증거: `test/test_publish_main.py`(bare origin 고정 저장소, gh는 대역) 원격 실행. SHA 선택 규칙과 충돌 관문은 변형을 넣어 시험이 빨개지는 것을 확인했다.
 - gate 변화: 없음. GitHub에 대해 실행하지 않았고 첫 실제 게시는 robot-4d 검토 뒤다. CE: 해당 없음 — 새 도구와 그 시험이며 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · tools/publish_main.py: 게시 전 비밀 검사(D-889 5)와 역할 이름
+
+- 변경: 게시 계획 전에 `origin/main..SHA`의 커밋마다 추가한 줄(merge commit이 부모 어디에도 없이 더한 줄 포함, `git log -p --cc -U0`을 흘려 읽는다)을 저장소 검사기 `deploy/robot/pinky_pro/release/secret_scan.py`의 `scan_text`(public provenance, `scan_files`의 fixture·prose 예외 그대로)로 검사한다. 걸리면 커밋·경로·규칙만 찍고 값은 가린 채 exit 9로 멈춘다. 멈춤 문구의 세션 이름은 역할 "동기화·게시 담당"으로 바꾼다.
+- 이유: merge commit 게시는 이력 전체를 내보내므로 중간 커밋에서 들어갔다 지워진 비밀도 공개된다. 끝 트리만 보는 `test_no_secrets_in_tracked_files`로는 못 막는다.
+- 증거: 실제 범위 `origin/main..main`(2,783커밋)을 14초에 읽었고 323건(커밋·경로 쌍 109개, 경로 84개)이 걸렸다. 대부분 문서의 40자리 커밋 id와 64자리 digest이고, 시험 파일의 credential·wifi-psk 모양 줄이 섞여 있다. 걸린 84개 경로를 지금 main 끝 트리로 같은 방식으로 검사하면 0건이다(끝 트리만 보면 놓친다). 첫 게시 전에 동기화·게시 담당이 검토해야 한다. 시험은 중간에 넣었다 지운 값과 merge commit만 더한 값을 잡고, 끝 트리만 검사하는 변형에서 빨개진다.
+- gate 변화: 없음(도구만). CE: 해당 없음 — 새 관문과 그 시험이며 장애 해결이 아니다.
