@@ -77,7 +77,7 @@
 ## 최근 기록
 
 - 2026-10-27 · cec31dcf9d · ARM SYSTEM 양방향 비활성 OS 설치와 독립 복구 검증
+- 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
 - 2026-10-26 · 0a88b44f94 · disposable SYSTEM guest와 실제 offline root preparation
 - 2026-10-26 · 75e832c640 · public CMS build trust와 offline OS signing bridge
 - 2026-10-26 · 0b370fcc7b · unsigned OS bundle inputs producer
-- 2026-10-26 · 9fe8daa1e2 · OS signed feed와 private staging 연결

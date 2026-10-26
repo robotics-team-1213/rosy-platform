@@ -107,5 +107,8 @@ def test_app_bar_folds_by_the_shell_container_not_the_viewport():
     assert ".fleet-shell { container-type: inline-size;" in tabs_sheet
     assert tabs_sheet.count("container-type") == 1
     assert re.findall(r"@media ([^{]+?)\s*\{", tabs_sheet) == ["(width >= 64rem) and (height >= 40rem)"]
-    assert "min-height: var(--appbar-height);" in header_sheet
+    # The shared ui-topbar carries the D-741 app bar height; Fleet does not restate it.
+    shared = (WEB.parents[2] / "shared/web/components.css").read_text(encoding="utf-8")
+    assert "min-height: var(--appbar-height);" in shared.split("ui-topbar {", 1)[1].split("}", 1)[0]
+    assert "min-height" not in header_sheet.split("ui-topbar {", 1)[1].split("}", 1)[0]
     assert "var(--rail-track)" in tabs_sheet

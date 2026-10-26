@@ -7,6 +7,10 @@ Type=oneshot
 # D-805: skipped while updates are frozen
 ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'
 EnvironmentFile=%h/.config/rosy/review-release.env
+# D-871: the v12 and v13-eval review apps follow the same accepted release first ('-': one does not block
+# the next); v13 runs last and its failure still fails the unit
+ExecStart=-/usr/bin/python3 -I %h/rosy-ml/bin/auto_review_release.py --model-code-root %h/.local/share/rosy/model-code --review-root %h/rosy-ml/review-v12-code --state %h/rosy-ml/review-v12-vision-obstacle/state --python ${REVIEW_PYTHON} --host ${REVIEW_HOST} --port 8773 --service rosy-review-v12.service --minimum-sequence ${MINIMUM_SEQUENCE}
+ExecStart=-/usr/bin/python3 -I %h/rosy-ml/bin/auto_review_release.py --model-code-root %h/.local/share/rosy/model-code --review-root %h/rosy-ml/review-v13-eval-code --state %h/rosy-ml/review-v13-drivable/eval-20261008T163945Z --python ${REVIEW_PYTHON} --host ${REVIEW_HOST} --port 8775 --service rosy-review-v13-eval.service --minimum-sequence ${MINIMUM_SEQUENCE}
 ExecStart=/usr/bin/python3 -I %h/rosy-ml/bin/auto_review_release.py --model-code-root %h/.local/share/rosy/model-code --review-root %h/rosy-ml/review-v13-code --state %h/rosy-ml/review-v13-drivable/state --python ${REVIEW_PYTHON} --host ${REVIEW_HOST} --minimum-sequence ${MINIMUM_SEQUENCE}
-TimeoutStartSec=2min
+TimeoutStartSec=6min
 NoNewPrivileges=yes

@@ -25,6 +25,10 @@ _CATALOG = [
      'seed_effect': 'NOT_USED_BY_FIXED_FIXTURE', 'timeout_seconds': 600,
      'requirements': ['승인 SDK·GPU·학습 잠금', '실물 집기의 순기구학 좌표(카메라 정합 아님)'],
      'reason': '공급암 S 실물 청크 프레임을 받침·벨트·Pinky 프레임에 재생합니다. 학습 정책·실물 수용이 아닙니다.'},
+    {'id': 'arm-s-cell-case', 'name': '공급암 S 셀: 실물 사례 재현', 'implemented': True, 'stage': 'arm_s_cell',
+     'seed_effect': 'NOT_USED_BY_FIXED_FIXTURE', 'timeout_seconds': 600,
+     'requirements': ['승인 SDK·GPU·학습 잠금', 'deploy/robot/omx/cell_cases.py 사례(상자 위치·회전, 놓을 곳, 집게 각도)'],
+     'reason': '실물 셀에서 멈춘 사례를 같은 청크 프레임으로 재현합니다. 학습 정책·실물 수용이 아닙니다.'},
     {'id': 'port-e0-pick-place', 'name': '항만 E0 한 상자 집기·놓기',
      'implemented': False, 'stage': 'planned',
      'reason': 'source tray·제어기·그리퍼·독립 파지 판정 연결이 필요합니다.'},
@@ -48,9 +52,15 @@ def normalize(scenario_id: str, config: dict) -> dict:
     entry = next((row for row in _CATALOG if row['id'] == scenario_id), None)
     if entry is None or not entry['implemented']:
         raise ValueError('scenario is unavailable' if entry is None else entry['reason'])
-    if (not isinstance(config, dict) or set(config) != {'seed'}
+    keys = {'seed', 'case'} if scenario_id == 'arm-s-cell-case' else {'seed'}
+    if (not isinstance(config, dict) or set(config) != keys
             or type(config['seed']) is not int or not 0 <= config['seed'] <= 2147483647):
-        raise ValueError('settings require only an integer seed in 0..2147483647')
+        raise ValueError('settings require an integer seed in 0..2147483647'
+                         + (' and a case' if scenario_id == 'arm-s-cell-case' else ' only'))
+    if scenario_id == 'arm-s-cell-case':
+        from arm_s_cell_fixture import check_case
+        return {'model': 'omx_f', 'headless': True, 'seed': config['seed'], 'fixture': 'arm-s-cell-v1',
+                'scenario': 'case', 'case': check_case(config['case'])}
     if scenario_id == 'pinky-conveyor-roundtrip':
         return {'model': 'omx_f', 'headless': True, 'frames': 4800, 'seed': config['seed'],
                 'fixture': 'stationary-proxy-v3'}

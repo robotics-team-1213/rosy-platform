@@ -49,6 +49,10 @@ def install_work_routes(app, *, task_service, mission_service, require_viewer, r
         install_policy_governance_routes(app, store=app.state.policy_governance, configured_omx=app.state.omx_instances,
                                          stop_transport=app.state.omx_stop_transport, require_viewer=require_viewer,
                                          require_named_operator=require_named[1])
+        # D-891: perception promotion decisions share the governance file and roles; approval deploys nothing.
+        from fleet.server.perception_promotion import PerceptionPromotionStore, install_perception_promotion_routes
+        install_perception_promotion_routes(app, store=PerceptionPromotionStore(app.state.policy_governance),
+                                            require_viewer=require_viewer)
 
     def named(principal) -> bool:
         try:

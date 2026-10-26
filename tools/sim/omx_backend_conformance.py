@@ -120,7 +120,12 @@ def collect(*, seconds=10.0, ready_s=120.0, settle_s=1.0, probe_joint='joint1', 
         samples['joint_states'].clear(); samples['clock'].clear()
         for frames in samples['cameras'].values():
             frames.clear()
+        began = time.monotonic()
         spin_for(seconds)
+        # Simulation seconds per wall second over the recording window; reported, not judged (D-866 §2 switch
+        # conditions ask for >= 1 separately from conformance).
+        clock = samples['clock']
+        samples['real_time_factor'] = ((clock[-1]-clock[0])/1e9/(time.monotonic()-began) if len(clock) > 1 else None)
         stop = dict(accepted=False, cancel_acknowledged=False)
         if samples['joint_states'] and client.wait_for_server(timeout_sec=10):
             _, names, positions = samples['joint_states'][-1]
@@ -163,7 +168,8 @@ def main():
     failures = check(samples, shape=shape, camera_hz=args.camera_hz)
     summary = dict(failures=failures, shape=shape, camera_hz=args.camera_hz,
                    joint_messages=len(samples['joint_states']), camera_frames={k: len(v) for k, v in samples['cameras'].items()},
-                   clock_messages=len(samples['clock']), stop=samples['stop'])
+                   clock_messages=len(samples['clock']), real_time_factor=samples.get('real_time_factor'),
+                   stop=samples['stop'])
     with open(args.out, 'x', encoding='utf-8') as stream:
         json.dump(summary, stream, indent=2)
     print('OMX_BACKEND_CONFORMANCE_'+('PASS' if not failures else 'FAIL')+'='+json.dumps(summary), flush=True)

@@ -336,11 +336,14 @@
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 - [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
+- [2026-10-24-neutral-arm-planning-design.md](plans/2026-10-24-neutral-arm-planning-design.md)
 
 ## 교훈 (docs/solutions)
 
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
+- [모듈 logs.md 의 BOM 상태가 제각각이라 append 만 해도 append-only 검사가 깨진다](solutions/workflow-issues/logs-md-bom-states-vary-preserve-per-file-2026-10-25.md)
 - [PowerShell 한글 저널 append가 UTF-8을 망가뜨린다 (2026-10-04, 4회)](solutions/workflow-issues/powershell-utf8-append-mangles-korean-journals.md)
+- [병합 해결 중 main이 움직이면 스쿼시 커밋이 동료 착지를 되돌릴 수 있다](solutions/workflow-issues/squash-after-stale-merge-can-revert-concurrent-landings-2026-10-25.md)
 - [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험
@@ -350,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
+- 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 - 2026-10-26 · 0a88b44f94 · D-888 actual guest-kernel root evidence
 - 2026-10-26 · 75e832c640 · D-888 offline signing evidence
 - 2026-10-26 · 0b370fcc7b · D-888 unsigned OS producer evidence
-- 2026-10-26 · 9fe8daa1e2 · D-888 OS feed source evidence
-- 2026-10-26 · 4ef7a2ec33 · D-888 boot lifecycle caller와 검증 범위

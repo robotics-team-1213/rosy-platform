@@ -3451,6 +3451,35 @@
 - gate 변화: SOURCE prototype이며 native ARM64 artifact·실물 SD·부팅·OS 자동 갱신·powercut 수용은 HOLD다. 기존 작업 브랜치는 보존하고 현재 main에서 완결된 source snapshot을 새 착지 브랜치로 검증한다.
 - 교훈: CE 해당 없음 — 수정 근거는 회귀 시험과 기존 설치/검증 교훈에 명시된다. Linux 전체 PS 한계는 작업 기록에 미해결로 남긴다.
 
+## 2026-10-26 · uncommitted · Learning 저장 모듈의 배포 포함 검사 (D-884)
+
+- 변경: 새 저장 pool/jobs/files/hub/web/source와 기존 inventory·저장 화면을 model-code 필수 입력에 포함한다. 선택적 HF host 의존성은 기존 OMX cell과 같은 0.35.3 pin으로 선언한다. 자동 설치·운영 재시작·원격 자료 삭제는 수행하지 않는다.
+- 증거: source `bc9d3f81c0`의 보관·회수·Isaac disk guard 원격 57건 통과, UI/복구 `49d3c2bc9a` 원격 63건 통과. 별도 누락 모듈 부정 시험 5건의 RED를 확인했으며, 이번 필수 목록의 최종 검증은 후속 committed-SHA 시험 기록에 남긴다.
+- gate 변화: source 입력의 완결성을 검증하는 변경이다. signed artifact 설치·실제 HF 왕복·Isaac SDK 실행·실물 수용으로 계산하지 않는다.
+- CE: 해당 없음 — 규칙과 근거는 D-884·회귀·운영 안내에 보존한다.
+
+## 2026-10-26 · 07943e133d · Learning 저장 입력과 복구의 최종 source 검증 (D-884)
+
+- 변경: model-code 필수 storage 입력, optional HF dependency pin 및 꺼진 설정 예제를 제공하고 취소·묶음 복구·소비자 lease·공유 cache 경계를 보완했다.
+- 증거: 배포 archive 누락 부정 시험을 포함한 release 235 passed; 최종 pool/jobs/hub/source와 문서 하네스 72 passed/0 skipped/NEW0, browser·화면·API 계약 21 passed/0 skipped/NEW0. 상세 revision 및 FULL 원시 실패·후속 확인은 learning/curation/perception/docs/storage-pool.md의 착지 전 검증 기록을 따른다.
+- gate 변화: 소스 closure 증거만 추가한다. 실제 HF 왕복·Isaac SDK·signed artifact 설치·운영 자료 삭제·장치 수용은 수행하지 않았고 운영 서비스는 활성화하지 않았다.
+- CE: 해당 없음 — 복구 판단은 구현·회귀 시험·D-884와 운영 안내로 확인할 수 있다.
+
+## 2026-10-26 · uncommitted · Learning 저장 설정 UI와 준비 파이프라인 closure (D-884)
+
+- 변경: storage_setup·storage_prepare·storage-settings.js를 model-code 필수 입력에 포함한다. 기존 계정·저장소 UI에서 측정 quota/cache 설정, 실제 소량 private 쓰기·읽기 proof, 활성화, 완료 폴더·Isaac 결과 준비와 기존 회수/복원으로 이어진다. 파일 JSON 편집은 초기 seed 대안이며 UI 정본은 workspace SQLite CAS다.
+- 증거: no-JSON HTTP 흐름과 양 테마/폭의 전체 브라우저 흐름, 별도 신규 파일 누락 부정 시험의 RED/GREEN을 확인했다. 독립 리뷰의 과거 복원·취소·부분 export 및 원자적 manifest 지적을 회귀 시험으로 수정했다. 최종 committed revision의 영향 시험/브라우저 결과는 후속 검증 기록에 남긴다.
+- gate 변화: host source closure에 한한다. 운영 계정 사용, 실제 HF 전송, SDK/모델 실행, signed artifact 설치·장치 수용을 수행하지 않았다.
+- CE: 해당 없음 — 복구 근거는 D-884·운영 안내·실제 파일/SQLite 회귀에 보존한다.
+
+## 2026-10-26 · 007e6c3b5a · Learning UI 설정·보관 흐름 source 검증 완료 (D-884)
+
+- 변경: 저장 설정부터 완료 자료 준비·보관·회수·복원까지 기존 Learning UI와 계정 권한으로 연결하고, 신규 모듈·자산의 배포 포함과 복구 경계를 마감했다.
+- 증거: 영향 선택 affected/no escalation, `00e54f4c82` 원격 3,563 passed / 326 skipped / NEW0. 신규 setup/prepare/JS 필수 archive 입력과 기존 계정·검수·API·하네스 회귀를 포함한다. source guard92/0, 명시적 browser·HTTP·공용 control47/0, 펼친 설정 양 폭/테마2/0은 각각 NEW0다. 커밋별 근거는 learning/curation/perception/docs/storage-pool.md의 UI 확장 검증을 따른다.
+- 검토: 별도 전체 read-only 리뷰의 복원·취소·부분 export·바이트 보존·완료 목록 원자성 지적을 재현 후 수정했고 후속 리뷰에서 닫았다. 모바일 기존 percentage flex-basis와 공용 column 배치의 충돌은 실제 computed geometry로 확인해 신규 그룹에 공용 폼만 적용했다.
+- gate 변화: source closure만 검증했다. 운영 SDK/환경 설치, 실제 HF 왕복, signed artifact 설치·서비스 활성화·장치/현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 결정의 근거와 복구 조건은 구현·회귀·주석·운영 안내에 보존한다.
+
 ## 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
 
 - 변경: `rosy-host-guard-remote health`가 `~/rosy-test`·`/` 여유와 GPU 메모리를 덧붙인다. `rosy-host-guard`는 30GiB/90% 기준의 `disk-low`를 보고만 하고 복구 단계를 진행시키지 않는다. `rosy-host-control`의 ai·model `clean-storage`는 `rosy-test-storage.service`를 한 번 시작한다(없으면 exit 5).
@@ -3458,6 +3487,15 @@
 - gate 변화: 없음. PC별 재설치와 실제 정리 수용은 미완료다.
 - 검토 수정: `install-host-control.sh`가 `units-user`를 ai에만 써서 모델 PC의 `clean-storage`가 늘 거부됐다. ai·model에 쓰도록 고치고 dry-run 시험으로 RED→GREEN을 확인했다.
 - 추가(사용자 요청): `health`에 RAM 전체·여유 용량, GPU 사용률·온도, CPU 사용률(1초 `/proc/stat`)·최고 thermal zone 온도를 더했다. 방식은 CORE `runtime.py`와 같다. RAM 10% 미만은 보고 전용 `memory-low`, 온도·사용률은 표시 전용이다.
+
+## 2026-10-26 · 4c4aef6e9a · machine 계정 도구와 서명된 전달 경로
+
+- 변경: `site_users.py add-service`는 기존 service 역할의 bearer만 stdin으로 받아 기존 원자적 registry publication을 재사용한다. 사람용 add/login 제한은 유지한다. 새 candidate는 도구와 hash 및 서명된 `site_users_tool_required: true`를 포함한다. 갱신한 verifier는 새 필수 도구 누락을 거절하면서 marker 없는 과거 candidate의 확인·rollback을 유지한다.
+- 전환: updater가 candidate 내부 코드를 신뢰하지 않으므로 기존 관리자 경로로 독립 verifier를 먼저 갱신한다. 운영 중·보존한 rollback·신규 candidate를 각각 검증하는 순서와 matrix를 site README에 명시했다. 실제 verifier 교체·계정 생성·운영 배포는 아직 하지 않았다.
+- 증거: 공식 비현장 원격 RED `c7bf2535b3`는98실행/62통과/36NEW/skip0, marker 시험 RED `a0ac3b1102`는108실행/64통과/44NEW/skip0이다. 각 run을 known_failures로 분류했으며 known/flaky0이다. 후자는 과거 marker·도구 미포함 허용과 실제 Ed25519 서명 변조 거절도 확인했다. 구현 후 GREEN·전체 착지 검증은 별도이며 이 RED를 통과 증거로 쓰지 않는다.
+- gate 변화: source 구현·검증 진행이다. 운영 서비스 신원·ARM 설치 binding·관측·실물 장치 수용을 열지 않는다.
+- 교훈: CE 해당 없음 — 기존 committed-state 교훈을 적용했으며 원자적 저장·서명 전환의 판단은 구현·회귀 시험·운영 절차에 보존했다.
+- 후속 GREEN: 독립 소스 리뷰 후 커밋 `4c4aef6e9a`를 비현장 승인 원격에서 검증했다. CLI·candidate builder/verifier·실제 signing·updater/rollback·workflow·fetch 일곱 파일237 PASS/skip0/NEW0/known0/flaky0이며 모든 run을 분류했다. 신뢰 verifier 교체·서명된 candidate 설치·운영 principal 발급·실제 연결은 수행하지 않았다. 플랫폼 전체 착지 검증은 별도다.
 
 ## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
 
@@ -3472,6 +3510,34 @@
 - 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
 - gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
 - CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
+
+## 2026-10-26 · uncommitted · guard 자동 `clean-storage` 요청, 관제 PC 자기 자원, `units-user` desired state (D-885)
+
+- 변경: `rosy-host-guard`는 `parse_health`로 원격·로컬 응답을 한 번에 해석한다. ai·model의 `disk-low`에 6시간마다 `clean-storage`를 요청한다. 관제 PC 자기 행에 로컬 `health` 값을 더한다. guard-remote에 `clean-storage` 명령을 더했다. ai_pc·model_pc manifest에 `units-user`(@LOGIN@)를 넣었다.
+- 증거: `test/test_host_guard.py`, `test/test_host_state.py`, `test/test_host_recovery_browser.py` 원격 실행.
+- gate 변화: 없음. PC별 재설치는 별도다.
+
+## 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+
+- Change: authenticate exactly legacy3/current4; bind current/staged/rollback Compose and loaded proof, retire only identity-proven outgoing PostgreSQL without force/volume deletion; retain separate same-commit physical relocation.
+- Evidence: real-signature source bc61f16ea9 RED3/8 controls; canonical-inventory source77d8b34bac RED38/13 controls; overlay source9e8e86575f RED2/1 control; forged physical journal source8e856f02a9 RED1. Raw logs remain outside Git; independent implementation review and committed GREEN pending. Initial42 failures used a corrected-later manual selector and are not uniform migration-cause proof.
+- Gate: source preparation only; no install/site/FIELD or deployment acceptance.
+- CE: existing whole-configuration and identical-external-helper lessons applied; solved lesson decision awaits actual GREEN.
+
+## 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+
+- Change: bind exact authenticated legacy3/current4 to candidate-local Compose/overlay and loaded identities; exact-ID retired PostgreSQL cleanup precedes normal rollback restoration, while consistent physical relocation remains separate. Builder/signing blobs remain base-exact.
+- Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
+- Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
+- CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
+
+## 2026-10-26 · uncommitted · clean-storage helper가 원격 `cat` 대신 LoadState로 유닛 확인
+
+- 원인: systemd 255는 `systemctl --machine=<user>@ cat`을 "Cannot remotely cat units."로 거부한다. 그래서 유닛이 연결돼 있어도 모든 시험 PC에서 exit 5(NO_STORAGE_SERVICE)였다. 모델 PC 설치 뒤 guard 강제 명령으로 재현했다.
+- 변경: `deploy/site/rosy-host-control`이 `show -p LoadState --value`가 `loaded`인지 본다. 시험의 systemctl 가짜를 실제처럼 `--machine` `cat`을 거부하게 바꿨다(RED→GREEN).
+- 증거: 모델 PC에서 `cat` rc 1, `show` → loaded/not-found. 원격 host control·guard·host-state 시험 NEW 0.
+- gate 변화: 없음. AI·모델 PC에 helper 재설치가 필요하다.
+- 교훈: CE 새 교훈 기록 — `docs/solutions/runtime-errors/systemctl-machine-refuses-cat-so-clean-storage-always-refused-2026-10-26.md`.
 
 ## 2026-10-26 · a3518e509c · A/B 슬롯 admission과 공통 업데이트 정책 구현 중
 
@@ -3645,6 +3711,14 @@
 - 증거: exact0a88b44f94 official os-system-root-final22passed269.81s,0NEW; outer22 중1개가 guest 안의 실제 kernel 시험1개를 호출하며 합산하지 않는다. 최초414129 실제 VM boot6passed678.35s도 중복이다. VM RED3→firstgreen2fail1pass281.22s, range RED2/cache RED1/provision RED1/diagnostic RED1, source handoff CSS 누락 및 native identity namespace 실패를 관측·수정했다. native-ID model RED1fail1pass0.24s→해당 회귀 포함 최종22. root 음성 시험은 fresh workspace로 바꿔 실제 rejection/cleanup까지 통과했다. metadata/native payload는 합성이며 fsck/mount/loop/UID0/PID1은 실제 guest kernel이다. /tmp transient warning은 read-only audit에서 omx_01_control 항목이 있는0700 directory였고 이 작업과의 연관을 입증하지 못해 보존했다.
 - gate 변화: 없음. 실제 RAUC daemon namespace/cgroup/DeviceAllow·inactive block 양방향 설치·PID1 deadline/order, 최종 리뷰/정식 localmain, 제품 CMS/publication 승인/native ARM artifact/실측 capacity·SD write/full readback·DEVICE는 남는다. 호스트 root/apt/서비스·제품 키·공개 push·SD 작업은 하지 않았다.
 - CE: 해당 없음 — namespace 선택과 fresh workspace 조건은 코드·회귀 시험·D-888에 보존된다. guest kernel 증거를 실제 기체/운영 수용으로 기록하지 않는다.
+
+## 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
+
+- 변경: 기존 셀 등록 파일과 `ROSY_OBSERVATION_WORKCELL` 선택에서 관측기 인스턴스를 읽는다. 연결된 USB 개수는 팔 구성을 바꾸지 않는다.
+- 선택된 팔의 장치 미연결(DISCONNECTED), 서비스 중지(DOWN), 설정 오류(CONFIGURATION), 선택 밖 관측기 실행(UNEXPECTED)을 구분하고 모두 실패로 유지한다.
+- 근거: 원격 집중 시험 21 passed, NEW 0. 초기 고정 두 팔 목록에서 4개 회귀 시험 실패를 확인했다. 실제 등록된 두 팔은 선택을 보존한 채 DISCONNECTED로 보고했다.
+- gate 변화: 없음. 카메라·팔 실물 연결과 실제 동작 수용은 이 점검 수정의 통과 조건으로 대체하지 않는다.
+- CE: 해당 없음 — 설정 정본과 보고 동작은 코드·시험 및 기존 복사본 drift 교훈으로 설명된다.
 
 ## 2026-10-27 · cec31dcf9d · ARM SYSTEM 양방향 비활성 OS 설치와 독립 복구 검증
 

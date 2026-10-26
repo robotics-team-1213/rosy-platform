@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from experiment_dataset import chunk_indices, load_dataset
+from experiment_dataset import chunk_indices, load_dataset, dataset_lease
 from experiment_profile import action_names, policy_cameras, profile_revision
 from experiment_jobs import check_learning_task
 
@@ -70,13 +70,14 @@ def train(dataset_root: Path, output: Path, *, method='act', steps=40, batch_siz
             or dataset_root.is_relative_to(output)
             or any((parent / '.git').exists() for parent in (output, *output.parents))):
         raise ValueError('new output directory outside dataset and source checkout required')
-    dataset = load_dataset(dataset_root, method=method)
-    if learning_task is not None:
-        from experiment_scope import select_dataset
-        _, scope = select_dataset(dataset, arm_id, method=method)
-        check_learning_task(learning_task, dataset, scope)
-    return train_dataset(dataset, output, method=method, steps=steps, batch_size=batch_size,
-                         device=device, seed=seed, progress=progress, arm_id=arm_id, learning_task=learning_task)
+    with dataset_lease(dataset_root):
+        dataset = load_dataset(dataset_root, method=method)
+        if learning_task is not None:
+            from experiment_scope import select_dataset
+            _, scope = select_dataset(dataset, arm_id, method=method)
+            check_learning_task(learning_task, dataset, scope)
+        return train_dataset(dataset, output, method=method, steps=steps, batch_size=batch_size,
+                             device=device, seed=seed, progress=progress, arm_id=arm_id, learning_task=learning_task)
 
 
 def train_dataset(dataset, output, *, method, steps, batch_size, device, seed,

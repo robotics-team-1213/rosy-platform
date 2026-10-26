@@ -14,6 +14,7 @@ from core_api_web.api.v1.control import TeleopRequest, teleop
 from core_api_web.api.v1.docking import DockCommand, docking_dock, docking_undock
 from core_api_web.api.v1.navigation import (
     GoalRequest,
+    HomeRequest,
     navigation_cancel,
     navigation_goal,
     navigation_home,
@@ -45,7 +46,7 @@ def _run(call, auth: AuthContext, svc: CoreServicesLike):
     if call.verb == "navigate":
         return navigation_goal(GoalRequest(**call.body), auth, svc)
     if call.verb == "home":
-        return navigation_home(auth, svc)
+        return navigation_home(auth, svc, HomeRequest(**call.body))
     if call.verb == "cancel":
         return navigation_cancel(auth, svc)
     if call.verb == "stop":

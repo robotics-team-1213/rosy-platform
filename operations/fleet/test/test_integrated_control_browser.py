@@ -62,6 +62,7 @@ def test_integrated_units_owned_evidence_and_readonly_map_keep_local_stop_visibl
             page.goto(site + "/console?view=work")
             page.evaluate("theme => window.RosyTheme.set(theme)", theme)
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             panel = page.locator("#integrated-control")
             expect(panel).to_be_visible()
             expect(panel).to_contain_text("직접 상위 A")
@@ -117,6 +118,7 @@ def test_selected_subtree_stop_uses_only_its_fresh_fences_and_polling_never_repo
         try:
             page.goto(site + "/console?view=work")
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             panel = page.locator("#integrated-control")
             panel.get_by_role("button", name="B · 직접 상위 R", exact=True).click()
             expect(page.locator("#integrated-stop")).to_be_disabled()
@@ -159,6 +161,7 @@ def test_unknown_stop_reply_is_read_only_on_manual_check_and_storage_free_reload
         try:
             page.goto(site + "/console?view=work")
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             page.locator("#integrated-stop").click()
             panel = page.locator("#integrated-control")
             expect(panel).to_contain_text("정지 요청 결과 미확인")
@@ -169,6 +172,7 @@ def test_unknown_stop_reply_is_read_only_on_manual_check_and_storage_free_reload
             page.evaluate("sessionStorage.clear(); localStorage.clear()")
             page.reload()
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             page.locator("#integrated-control summary").filter(has_text="이 관제의 정지 요청 기록").click()
             page.locator("#integrated-stop-history").get_by_role("button").click()
             expect(page.locator("#integrated-stop-results")).to_contain_text("전달 결과 미확인")
@@ -196,6 +200,7 @@ def test_local_history_reconciliation_requires_named_operator_and_both_typed_att
         try:
             page.goto(site + "/console?view=work")
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             page.locator("#integrated-control summary").filter(has_text="이 관제의 정지 요청 기록").click()
             if role == "viewer":
                 panel = page.locator("#integrated-control")
@@ -256,6 +261,7 @@ def test_local_reconciliation_uses_observed_generation_without_crossing_authorit
         try:
             page.goto(site + "/console?view=work")
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             page.locator("#integrated-control summary").filter(has_text="이 관제의 정지 요청 기록").click()
             page.locator("#integrated-stop-history").get_by_role("button").click()
             form = page.locator("#integrated-reconcile")
@@ -285,6 +291,7 @@ def test_pagehide_clears_owned_details_and_does_not_restart_a_write(site):
         try:
             page.goto(site + "/console?view=work")
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             panel = page.locator("#integrated-control")
             panel.get_by_role("button", name="A1 · 직접 상위 A", exact=True).click()
             expect(page.locator("#integrated-control-detail")).to_contain_text("owned-task")

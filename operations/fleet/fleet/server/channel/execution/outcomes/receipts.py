@@ -1,7 +1,7 @@
 """Documented owner responses prove RPC acknowledgement, never physical success."""
 import re
 from core_common.protocol.schemas import DockingStatus, NavigationState, SwarmRole, RobotMode
-from fleet.swarm.session import SessionState
+from fleet.swarm.api.types import SessionState
 from core_common.protocol.native.operation import NativeOperation
 from .evidence import KINDS
 

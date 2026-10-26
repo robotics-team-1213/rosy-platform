@@ -17,6 +17,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from omx_topic_backend import SIM_COMMANDS, SIM_STATES  # noqa: E402
 from omx_backend_conformance import CAMERAS, JOINTS  # noqa: E402
+from omx_cell_world import boxes, quaternion  # noqa: E402
 
 TIMESTEP_S, STATE_PERIOD_S = .002, .01
 KP, DAMPING, ARMATURE = 40.0, .3, .01  # Position servo and joint damping; stable at 2 ms, not tuned to the real arm.
@@ -44,7 +45,16 @@ def build(urdf, mesh_root, shape):
     spec.option.timestep = TIMESTEP_S
     spec.visual.global_.offwidth, spec.visual.global_.offheight = shape[1], shape[0]
     world = spec.worldbody
-    world.add_geom(type=mujoco.mjtGeom.mjGEOM_PLANE, size=[1, 1, .1], rgba=[.6, .6, .6, 1], pos=[0, 0, 0])
+    world.add_geom(type=mujoco.mjtGeom.mjGEOM_PLANE, size=[1, 1, .1], rgba=[.6, .6, .6, 1], pos=[0, 0, -.02])
+    for box in boxes():  # The same work scene as Gazebo's omx_cell_workcell.sdf (D-877).
+        geom = dict(type=mujoco.mjtGeom.mjGEOM_BOX, size=[s/2 for s in box['size']],
+                    friction=[box['friction'], .005, .0001], rgba=[.7, .6, .4, 1])
+        if box['static']:
+            world.add_geom(name=box['name'], pos=box['pos'], quat=quaternion(box['rpy']), **geom)
+        else:
+            body = world.add_body(name=box['name'], pos=box['pos'], quat=quaternion(box['rpy']))
+            body.add_freejoint()
+            body.add_geom(name=box['name'], mass=box['mass'], **geom)
     world.add_light(pos=[0, 0, 1.5], dir=[0, 0, -1], diffuse=[.8, .8, .8])
     world.add_camera(name='top', pos=list(TOP_CAMERA_POS), xyaxes=[0, -1, 0, 1, 0, 0], fovy=60)
     spec.body('link5').add_camera(name='front', pos=[.05, 0, .03], xyaxes=[0, -1, 0, 0, 0, 1], fovy=70)
@@ -88,7 +98,8 @@ def main():
     model = build(args.urdf.read_text(), mesh_root, shape)
     data = mujoco.MjData(model)
     renderers = {name: mujoco.Renderer(model, *shape) for name in CAMERAS}
-    joints = [model.joint(i).name for i in range(model.njnt)]
+    # Arm joints only; the movable work-scene boxes have free joints, which are not joint states.
+    joints = [model.joint(i).name for i in range(model.njnt) if model.jnt_type[i] != mujoco.mjtJoint.mjJNT_FREE]
     qpos = {name: model.joint(name).qposadr[0] for name in joints}
     qvel = {name: model.joint(name).dofadr[0] for name in joints}
     actuator = {name: model.actuator(name).id for name in JOINTS}

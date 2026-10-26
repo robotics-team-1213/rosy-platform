@@ -495,8 +495,7 @@ function nextPending(index) {
 }
 $('next-pending').onclick=()=> {const next=nextPending(frame.index);if(next) {$('filter').value='pending';select(next.index);}};
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
-$('theme').value=document.documentElement.dataset.theme || 'dark';
-$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value; try {localStorage.setItem('rosy.theme',$('theme').value);} catch {} clearPalette(); document.dispatchEvent(new CustomEvent('rosy:theme')); paint();};
+document.addEventListener('rosy:theme',()=>{paint();});
 function receipt(value, historical=false) {
   $('export-result').textContent=`${historical?'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ':'이번 준비 결과 · '}승인 ${value.exported_frames}장 준비 완료 · 미승인 ${value.queued_frames}장 유지. 학습 반영은 학습 세션의 세션 분리·고정 평가 제외 확인 후 진행합니다.`;
   $('export-details').textContent=JSON.stringify(value,null,2);

@@ -7,7 +7,8 @@ import math
 import os
 from pathlib import Path
 
-from arm_s_cell_fixture import BELT, BOX, FIXTURE, FRAME, SCENARIOS, SOFT_CONTACT_RAD, TRAY, box_start, evaluate
+from arm_s_cell_fixture import (BELT, BOX, FIXTURE, FRAME, SCENARIOS, SOFT_CONTACT_RAD, TRAY, box_start, check_case,
+                                evaluate)
 from importer_compat import import_model, reference_model
 from model_checks import ASSETS, check_urdf, check_vendor_manifest
 
@@ -23,9 +24,9 @@ def main():
     parser.add_argument('--steps-per-frame', type=int, default=round(1 / DT / FIXTURE['frame_fps']))
     args = parser.parse_args()
     plan = json.loads(args.frames.read_text())
-    if plan.get('schema') != 'rosy.omx-isaac-cell-frames.v1' or plan.get('scenario') not in SCENARIOS:
-        raise SystemExit('frames must come from isaac_cell_frames.py for a known scenario')
-    scenario = plan['scenario']
+    if plan.get('schema') != 'rosy.omx-isaac-cell-frames.v1' or plan.get('scenario') not in (*SCENARIOS, 'case'):
+        raise SystemExit('frames must come from isaac_cell_frames.py for a known scenario or a case')
+    scenario = check_case(plan.get('case')) if plan['scenario'] == 'case' else plan['scenario']
     check_vendor_manifest()
     check_urdf(args.urdf, 'omx_f', allow_package=False)
     args.output_dir.mkdir()

@@ -270,3 +270,40 @@ def test_installer_uses_the_hooks_path_git_uses_from_a_linked_worktree(tmp_path,
     assert (linked / ".git").is_file()
     assert (parent / ".git/config").read_bytes() == config_before
     assert git(parent, "show-ref") == refs_before
+
+
+@pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
+@pytest.mark.parametrize("checkout", ["moved", "staged", "same"])
+def test_selection_reads_the_pushed_commit_not_the_checkout(tmp_path, checkout):
+    """robot-4d 2026-10-26: main moved past PUSH_SHA, the selector read the checkout and sent tests absent
+    from the pushed commit (pytest exit 4). The selector's test list (Repo.load) comes from PUSH_SHA."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, env=env,
+                                    capture_output=True, text=True).stdout.strip()
+    git("init", "-q", "-b", "main")
+    for name, text in {"tools/harness/harness.yaml": "modules: []\n",
+                       "tools/harness/platform_parts.yaml": "roots: []\n", "test/test_old.py": ""}.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    commit = lambda m: git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", m)
+    git("add", ".")
+    commit("pushed")
+    pushed = git("rev-parse", "HEAD")
+    (tmp_path / "test/test_extra.py").write_text("", encoding="utf-8")
+    git("add", "test/test_extra.py")
+    if checkout != "staged":
+        commit("main moved on")
+    if checkout == "same":
+        pushed = git("rev-parse", "HEAD")
+    step = SCRIPT.read_text(encoding="utf-8").split("done < <(git rev-parse --local-env-vars)", 1)[1].split('PY=""', 1)[0]
+    probe = (f'set -euo pipefail\nPUSH_SHA={pushed}\n{step}\n"$PY" -c "import sys; sys.path.insert(0, sys.argv[1]);'
+             f' import affected_tests as a, pathlib; print(a.Repo.load(pathlib.Path(\'.\')).test_files)"'
+             f' {(ROOT / "tools/harness").as_posix()}\npwd -W 2>/dev/null || pwd\n')
+    result = subprocess.run([BASH, "-c", probe], cwd=tmp_path, capture_output=True, text=True,
+                            env={**env, "PY": sys.executable})
+    assert result.returncode == 0, result.stderr
+    selected, where = result.stdout.strip().splitlines()[-2:]
+    assert ("test_extra.py" in selected) == (checkout == "same"), result.stdout
+    assert "test/test_old.py" in selected
+    assert (Path(where).resolve() == tmp_path.resolve()) == (checkout == "same")
+    assert len(git("worktree", "list").splitlines()) == 1, "the detached copy is removed on exit"

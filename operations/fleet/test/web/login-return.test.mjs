@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 import {loginReturn, loginHref} from '../../../../applications/fleet/web/shared/login-return.js';
 
 const origin = 'https://fleet.test';
+test('neutral ARM login handoff preserves exactly one bounded job ID in the work document', () => {
+  const id = 'arm:' + 'x'.repeat(188);
+  const target = '/console?view=work&arm_transfer=' + encodeURIComponent(id);
+  assert.equal(loginReturn(target, origin), target);
+  assert.equal(loginHref({origin, href: origin + target}), '/console/login?return=' + encodeURIComponent(target));
+  for (const suffix of ['arm_transfer=x&arm_transfer=y', 'arm_transfer=../secret', 'arm_transfer=' + id + 'x']) {
+    assert.equal(loginReturn('/console?view=work&' + suffix, origin), '/console?view=work');
+  }
+  assert.equal(loginReturn('/console?view=records&arm_transfer=x', origin), '/console?view=records');
+});
 test('Account authorization returns preserve only bounded protocol fields on this origin', () => {
   const target = '/api/fleet/auth/authorize?response_type=code&client_id=pilot&redirect_uri=https%3A%2F%2Frobot.test%2Fcallback&scope=robot%3Ar1&state=s&code_challenge=' + 'x'.repeat(43) + '&code_challenge_method=S256';
   assert.equal(loginReturn(target, origin), target);

@@ -15,6 +15,17 @@ if TYPE_CHECKING:
 _LOG = logging.getLogger(__name__)
 
 
+def start_notification_worker(app, config):
+    if config is None:
+        return None, None
+    import httpx
+    from fleet.incidents.notifications import NotificationWorker
+    client = httpx.AsyncClient(trust_env=False)
+    task = asyncio.create_task(NotificationWorker(app.state.line_stuck._log.notifications, config, client,
+        board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
+    return client, task
+
+
 async def control_unit_loop(service):
     while True:
         try:

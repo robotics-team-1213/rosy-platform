@@ -12,7 +12,9 @@ from pathlib import Path
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
-from fleet.host_control import HostControlError, catalogue, decide, read_json_object
+import time
+
+from fleet.host_control import HostControlError, catalogue, decide, read_json_object, update_summary
 
 # D-530. The site guard and the site's own drift check write these. Fleet only reads them.
 GUARD_STATUS = Path("/var/lib/rosy-host-guard/status.json")
@@ -53,7 +55,7 @@ def _fail(code: str) -> HTTPException:
                          detail={"code": code})
 
 
-def install_host_control_routes(app, *, require_operator, require_named_operator, helper) -> None:
+def install_host_control_routes(app, *, require_operator, require_named_operator, helper, require_viewer=None) -> None:
     @app.get("/api/fleet/hosts", tags=["fleet"])
     def host_catalogue(principal=Depends(require_operator)):
         body = catalogue()
@@ -61,6 +63,12 @@ def install_host_control_routes(app, *, require_operator, require_named_operator
         body["drift"] = read_json_object(DRIFT_STATUS)
         body["requested_by"] = principal.principal_id
         return body
+
+    if require_viewer is not None:
+        @app.get("/api/fleet/updates", tags=["fleet"])
+        def update_overview(principal=Depends(require_viewer)):
+            # D-871: every role sees each PC's update state and release; reasons stay in /api/fleet/hosts
+            return update_summary(read_json_object(GUARD_STATUS), time.time())
 
     @app.post("/api/fleet/hosts/{host_id}/control", tags=["fleet"])
     def control_host(host_id: str, body: HostControlRequest,
