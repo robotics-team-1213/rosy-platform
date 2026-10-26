@@ -35,7 +35,9 @@ def _guest():
         raise ValueError("SYSTEM card already has mounted filesystems")
 
 
-def prepare_card(work: Path) -> dict:
+def prepare_card(work: Path, *, initial_slot="a") -> dict:
+    if initial_slot not in ("a", "b"):
+        raise ValueError("invalid SYSTEM initial slot")
     _guest()  # Before looking at or writing any supplied work/device path.
     work = Path(work).absolute()
     if work.exists() or work.is_symlink() or not work.is_relative_to(Path("/work")):
@@ -78,6 +80,12 @@ def prepare_card(work: Path) -> dict:
             resources.mount(device, target, filesystem="vfat" if part["number"] <= 3 else "ext4")
             volumes[part["role"]] = target
         ab.initialize_data(volumes["data"], str(uuid.uuid4()), CURRENT)
+        # A synthetic B baseline exercises reverse writes; it does not prove a healthy A→B commit.
+        state_path = volumes["data"] / "os-update/state.json"
+        initial = json.loads(state_path.read_bytes())
+        initial["committed"]["slot"] = initial_slot
+        from os_update_state import _validate
+        ab._json_atomic(state_path, _validate(initial), 0o600)
         # Pin the owned guest's existing SSH identity before storage projects the common pair.
         host_keys = volumes["data"] / "ssh-hostkeys"
         host_keys.mkdir(mode=0o700)
@@ -121,7 +129,7 @@ def prepare_card(work: Path) -> dict:
                 shutil.copyfile(prefix / "native-runtime" / name, destination)
             _configurer().configure(root, CURRENT)
             run([sys.executable, "-I", "-B", str(ab.BASE / "native/os_state_accounts.py"), "--root", root])
-        ab._write_atomic(volumes["bootstrap"] / "autoboot.txt", autoboot("a").decode(), 0o644)
+        ab._write_atomic(volumes["bootstrap"] / "autoboot.txt", autoboot(initial_slot).decode(), 0o644)
         ab._write_atomic(volumes["bootstrap"] / "config.txt", "# synthetic ARM SYSTEM firmware\n", 0o644)
         resources.close()
     finally:
@@ -139,5 +147,6 @@ def prepare_card(work: Path) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work", type=Path, required=True)
+    parser.add_argument("--initial-slot", choices=("a", "b"), default="a")
     args = parser.parse_args()
-    print(json.dumps(prepare_card(args.work), sort_keys=True))
+    print(json.dumps(prepare_card(args.work, initial_slot=args.initial_slot), sort_keys=True))

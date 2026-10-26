@@ -40,7 +40,7 @@ def admit(instance):
     ADMITTED = True
 
 
-def snapshot(instance):
+def snapshot(instance, source_slot="a"):
     admit(instance)
     from os_system_card import _guest
     _guest()  # The original cloud boot, with the six-GPT card entirely unmounted.
@@ -56,7 +56,7 @@ def snapshot(instance):
     WORK.mkdir(mode=0o700)
     source = WORK / "source"
     source.mkdir(mode=0o700)
-    for role, filename in (("root_a", "rootfs.ext4"), ("boot_a", "boot.vfat")):
+    for role, filename in (("root_" + source_slot, "rootfs.ext4"), ("boot_" + source_slot, "boot.vfat")):
         part = next(p for p in layout["partitions"] if p["role"] == role)
         destination = source / filename
         run(["dd", "if=/dev/vdc" + str(part["number"]), "of=" + str(destination),
@@ -103,6 +103,9 @@ def _bundle():
 def _device_policy(media):
     """Open only: probe the real daemon cgroup without modifying any block bytes."""
     target = "b" if media["slot"] == "a" else "a"
+    mounted = set(run(["findmnt", "-rn", "-o", "MAJ:MIN"]).decode().split())
+    assert {media["partitions"][role]["device"] for role in ("bootstrap", "data", "boot_" + media["slot"])} <= mounted
+    assert not {media["partitions"][role]["device"] for role in ("root_" + target, "boot_" + target)} & mounted
     probes = [("disk_read", "/dev/block/" + media["disk_device"], os.O_RDONLY, True),
               ("disk_write", "/dev/block/" + media["disk_device"], os.O_WRONLY, False)]
     for role, part in media["partitions"].items():
@@ -125,7 +128,7 @@ def _device_policy(media):
                     observed[name] = False
                 if observed[name] != allowed:
                     raise ValueError("device grant differs for " + name)
-            result = dict(probes=observed)
+            result = dict(probes=observed, mounted_devices=sorted(mounted))
         except Exception as exc:
             result = dict(error=str(exc))
         os.write(writer, json.dumps(result).encode())
@@ -142,7 +145,7 @@ def _device_policy(media):
     return result
 
 
-def install(instance):
+def install(instance, source_slot="a"):
     admit(instance)
     from os_media import capture
     from os_rauc import verify_bundle
@@ -154,8 +157,10 @@ def install(instance):
     import rosy_claim
     root = Path("/")
     media = capture(root)
-    if media["slot"] != "a" or run(["findmnt", "-n", "-o", "SOURCE", "/"]).strip() != b"/dev/vdc4":
-        raise ValueError("SYSTEM installer requires its prepared card root A")
+    expected_root = b"/dev/vdc4" if source_slot == "a" else b"/dev/vdc5"
+    if media["slot"] != source_slot or run(["findmnt", "-n", "-o", "SOURCE", "/"]).strip() != expected_root:
+        raise ValueError("SYSTEM installer requires its prepared source slot")
+    target_slot = "b" if source_slot == "a" else "a"
     bundle, raw, signature = _bundle()
     verified = verify_bundle(root, bundle, raw, signature)
     transaction, boot = str(uuid.uuid4()), boot_facts(root)["boot_id"]
@@ -178,7 +183,7 @@ def install(instance):
                 observations.update(_device_policy(media))
             report = os_rauc_service.install(root, bundle, raw, signature, authorize=authorize)
             assert report["installed"] is True
-            assert report["report"]["target_slot"] == "b"
+            assert report["report"]["target_slot"] == target_slot
             assert run(["sha256sum", bootstrap]).split()[0] == before
             assert capture(root) == media
             assert read_state(root)["pending"]["phase"] == "INSTALLING"
@@ -194,6 +199,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("snapshot", "install"))
     parser.add_argument("--instance-id", required=True)
+    parser.add_argument("--source-slot", choices=("a", "b"), default="a")
     args = parser.parse_args()
     source = Path(__file__).resolve().parents[1]
     for relative in ("", "test", "deploy/robot/pinky_pro/native", "deploy/robot/pinky_pro/release"):
@@ -201,7 +207,7 @@ if __name__ == "__main__":
     if args.command == "install":
         sys.path.insert(0, "/opt/rosy/os-bootstrap/native-runtime")
     try:
-        result = snapshot(args.instance_id) if args.command == "snapshot" else install(args.instance_id)
+        result = snapshot(args.instance_id, args.source_slot) if args.command == "snapshot" else install(args.instance_id, args.source_slot)
     except Exception:
         if args.command == "install" and ADMITTED:
             diagnostic = subprocess.run(["journalctl", "-b", "--no-pager", "-n", "45",

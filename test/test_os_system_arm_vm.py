@@ -25,7 +25,8 @@ def test_arm_guest_has_owned_virtio_card_and_kernel_nocloud_without_host_devices
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable ARM SYSTEM guest opt-in")
-def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path):
+@pytest.mark.parametrize("source_slot", ["a", "b"])
+def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path, source_slot):
     """Actual kernel/PID1/card/RAUC boundaries; DT, policy and native application are fixtures."""
     with module().ArmGuest(tmp_path) as guest:
         assert guest.run("uname -m").strip() == "aarch64"
@@ -35,25 +36,30 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path):
         assert guest.run("od -An -tx1 /proc/device-tree/chosen/bootloader/tryboot").split() == ["00", "00", "00", "00"]
         assert "virtio" in guest.run("readlink -f /sys/class/block/vdc/device")
         guest.provision_source(Path(__file__).resolve().parents[1])
-        layout = json.loads(guest.run("cd /work/source && ROSY_OS_GUEST=1 python3 test/os_system_card.py --work /work/card", timeout=1800))
+        layout = json.loads(guest.run("cd /work/source && ROSY_OS_GUEST=1 python3 test/os_system_card.py "
+                                     "--work /work/card --initial-slot " + source_slot, timeout=1800))
         scenario = ("cd /work/source && ROSY_OS_GUEST=1 python3 test/os_system_install.py "
-                    "{command} --instance-id " + shlex.quote(guest.instance_id))
+                    "{command} --source-slot " + source_slot + " --instance-id " + shlex.quote(guest.instance_id))
         assert json.loads(guest.run(scenario.format(command="snapshot"), timeout=1800))["snapshot"] is True
-        root_uuid = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_a")
-        guest.restart_slot(root_uuid, "a")
-        assert guest.run("findmnt -n -o SOURCE /").strip() == "/dev/vdc4"
+        root_uuid = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_" + source_slot)
+        guest.restart_slot(root_uuid, source_slot)
+        assert guest.run("findmnt -n -o SOURCE /").strip() == ("/dev/vdc4" if source_slot == "a" else "/dev/vdc5")
         facts = guest.run("python3 -c \"import sys,json;sys.path.insert(0,'/opt/rosy/os-bootstrap/native-runtime');from os_media import capture;print(json.dumps(capture()))\"")
         media = json.loads(facts)
-        assert media["slot"] == "a" and media["layout"] == layout
+        assert media["slot"] == source_slot and media["layout"] == layout
+        target_slot = "b" if source_slot == "a" else "a"
         installed = json.loads(guest.run(scenario.format(command="install"), timeout=5400))
         assert installed["installed"] is True
-        assert installed["receipt"]["target_slot"] == "b"
-        assert installed["device_policy"]["probes"]["root_b"] is True
-        assert installed["device_policy"]["probes"]["root_a"] is False
+        assert installed["receipt"]["target_slot"] == target_slot
+        assert installed["device_policy"]["probes"]["root_" + target_slot] is True
+        assert installed["device_policy"]["probes"]["root_" + source_slot] is False
+        mounted = installed["device_policy"]["mounted_devices"]
+        assert media["partitions"]["boot_" + target_slot]["device"] not in mounted
+        assert all(media["partitions"][role]["device"] in mounted for role in ("bootstrap", "data"))
         # Fault injection: select an installed but unarmed trial. Independent PID1 deadline must recover.
-        root_b = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_b")
-        guest.restart_slot(root_b, "b", trial=True)
-        assert guest.run("findmnt -n -o SOURCE /").strip() == "/dev/vdc5"
+        target_root = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_" + target_slot)
+        guest.restart_slot(target_root, target_slot, trial=True)
+        assert guest.run("findmnt -n -o SOURCE /").strip() == ("/dev/vdc5" if target_slot == "b" else "/dev/vdc4")
         assert guest.run("od -An -tx1 /proc/device-tree/chosen/bootloader/tryboot").split() == ["00", "00", "00", "01"]
         assert guest.run("systemctl is-active rosy-os-trial-deadline.timer").strip() == "active"
         assert "OnBootSec=180s" in guest.run("systemctl cat rosy-os-trial-deadline.timer")
