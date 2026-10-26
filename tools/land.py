@@ -49,6 +49,7 @@ import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
 import land_full  # noqa: E402  (a green FULL tier outlives the run that passed it)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
 import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
+import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
                         generate_records, resolver)
@@ -318,7 +319,7 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
             raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
         if len(codes) != len(todo):
             raise Stop("incomplete remote results; not landing")
-        print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
+        print(f"[pytest] {(secs := round(time.monotonic() - began))}s", flush=True)
         # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
         # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
         stops = []
@@ -327,6 +328,7 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
                 raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
             if why := land_cache.unusable(code, log):
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
+                land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs)
                 continue
             check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
                                    capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
@@ -339,8 +341,10 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
             if check.returncode != 0 and not flaky:
                 stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
                 land_cache.failed(wt, inv, True)
+                land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs)
                 continue
             land_cache.failed(wt, inv, False)
+            land_events.emit("tests", round=round_no, argv=inv, verdict="flaky" if flaky else "pass", seconds=secs)
             if check.returncode == 0:
                 keep(inv, log)
             done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
@@ -462,6 +466,7 @@ def land(args) -> int:
         reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
         main_sha = out(wt, "rev-parse", "main")
         print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
+        land_events.emit("round", round=round_no, main=main_sha)
         if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
             resolved = merge(wt, main_sha, branch, python, args.dry_run)
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
@@ -578,9 +583,13 @@ def main(argv: list[str] | None = None) -> int:
                                        sys.argv[1:] if argv is None else argv)
         if code is not None:
             return code
-        return land(args)
+        land_events.bind(wt, out(wt, "rev-parse", "--abbrev-ref", "HEAD"))
+        if (code := land(args)) == 0 and not args.dry_run:
+            land_events.emit("landed", sha=out(wt, "rev-parse", "HEAD"))
+        return code
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)
+        land_events.emit("stop", reason=str(exc).splitlines()[0][:300])
         return 1
     finally:
         land_queue.leave()  # also on Ctrl-C; a killed process's ticket is reclaimed by PID

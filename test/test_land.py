@@ -1107,6 +1107,17 @@ def test_a_branch_with_older_landing_code_lands_with_mains_copy(repos, monkeypat
     assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
 
 
+def test_a_landing_leaves_its_queue_turn_round_tests_and_landed_events(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    monkeypatch.setattr(land.land_cache, "env_id", lambda wt_, sha: None)
+    assert land.main(["--tests", "pkg/test"]) == 0
+    rows = land.land_events.read(main / ".git" / land.land_events.EVENTS)
+    assert [r["event"] for r in rows] == ["queue", "turn", "round", "tests", "landed"]
+    assert rows[3]["verdict"] == "pass" and rows[-1]["sha"] == git(main, "rev-parse", "HEAD")
+    assert {r["branch"] for r in rows} == {"feat/x"}
+
+
 def test_no_queue_lands_without_a_ticket(repos, monkeypatch):
     main, wt = repos
     commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")

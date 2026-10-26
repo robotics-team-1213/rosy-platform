@@ -20,6 +20,8 @@ import os
 import socket
 import subprocess
 import time
+
+import land_events  # rosy-land-events.jsonl (queue and turn lines)
 from pathlib import Path
 
 QUEUE = "rosy-land-queue"
@@ -135,6 +137,7 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         if not rows:
             if said is not None:
                 print(f"[queue] first in line after {(clock() - began) / 60:.0f} min", flush=True)
+            land_events.emit("turn", waited_s=round(clock() - began))
             return
         if len(rows) != said or clock() - last >= REPORT_EVERY:
             print(f"[queue] position {len(rows) + 1}; ahead: {describe(rows)}", flush=True)
@@ -154,6 +157,7 @@ def enter(wt: Path, branch: str) -> tuple[Path, Path]:
     _held.append(ticket)
     atexit.register(leave)
     print(f"[queue] ticket {ticket.name} in {qdir}", flush=True)
+    land_events.emit("queue", ticket=ticket.name, position=len(ahead(qdir, ticket)) + 1)
     return qdir, ticket
 
 

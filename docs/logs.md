@@ -11621,3 +11621,9 @@ osy-d395-s1d\`.
 - 변경: `land.py`가 시작할 때 브랜치의 `tools/land*.py`가 main 체크아웃과 다르면 main의 `tools/land.py`를 같은 인자로, 브랜치 워크트리에서 다시 실행한다(`land_checks.landed_copy`, `ROSY_LAND_OWN_COPY`로 재실행 한 번만). 오래된 브랜치가 옛 규칙으로 멈추던 빈틈.
 - 증거: `test/test_land.py` 원격 통과.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · feat(land): 착지마다 사건 기록을 남기고 하루 숫자를 뽑는다
+
+- 변경: `land.py`·`land_queue.py`가 대기열 진입, 차례, 회차, invocation별 판정(pass/flaky/new/unusable), 착지, 정지를 `<git-common-dir>/rosy-land-events.jsonl`에 한 줄씩 남긴다(`land_events.py`, 줄 단위 O_APPEND). `land_stats.py`가 날마다 착지·정지 수, 대기·차례 p50/p90, 새 실패·LOAD-FLAKY·판정 불가 비율을 보여 준다. 묶음 착지는 새 실패 비율이 10% 이하로 유지될 때 켠다.
+- 증거: `test/test_land_events.py`, `test/test_land.py` 원격 통과.
+- gate 변화: 없음.
