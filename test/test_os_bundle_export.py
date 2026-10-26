@@ -4,6 +4,9 @@ import importlib.util
 import json
 import lzma
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -94,3 +97,51 @@ def test_native_builder_exports_before_raw_deletion_and_outer_sums_cover_inputs(
     assert '--factory "$PAYLOAD_ROOT/factory-release"' in build
     manifest = (IMAGE / "create-image-manifest.py").read_text()
     assert "os-bundle-inputs/" in manifest
+
+
+def test_real_manifest_command_covers_exported_archives_in_outer_checksums(tmp_path):
+    m = module()
+    raw, layout, source, factory = inputs(tmp_path)
+    dist, payload = tmp_path / "dist", tmp_path / "payload"
+    dist.mkdir()
+    payload.mkdir()
+    m.export(source, layout, dist / "os-bundle-inputs", factory, RELEASE_ID, "a" * 40)
+    (dist / f"rosy-os-pinky-pro-{RELEASE_ID}-arm64.img.xz").write_bytes(lzma.compress(raw))
+    snapshot = tmp_path / "layout.json"
+    snapshot.write_text(json.dumps(layout))
+    lock = tmp_path / "lock.yaml"
+    lock.write_text("fixture: true\n")
+    shutil.copytree(factory, payload / "factory-release")
+    for name in ("deb-packages.txt", "rosy-packages.txt", "required-ros-packages.txt", "source-revision.txt"):
+        (payload / name).write_text("fixture\n")
+    result = subprocess.run([sys.executable, str(IMAGE / "create-image-manifest.py"), "--dist", str(dist),
+        "--payload", str(payload), "--lock", str(lock), "--release-id", RELEASE_ID,
+        "--source-revision", "a" * 40, "--layout-file", str(snapshot)], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    for name in ("inputs.json", "rootfs.ext4.xz", "boot.vfat.xz"):
+        path = "os-bundle-inputs/" + name
+        assert hashlib.sha256((dist / path).read_bytes()).hexdigest() + "  " + path in (dist / "SHA256SUMS").read_text()
+
+
+def test_source_mutation_during_export_refuses_publication(tmp_path, monkeypatch):
+    m = module()
+    raw, layout, source, factory = inputs(tmp_path)
+    original = m._extract
+    def change(*args):
+        result = original(*args)
+        with source.open("r+b") as stream:
+            stream.seek(1000)
+            stream.write(b"changed")
+        return result
+    monkeypatch.setattr(m, "_extract", change)
+    with pytest.raises(ValueError, match="changed"):
+        m.export(source, layout, tmp_path / "os-bundle-inputs", factory, RELEASE_ID, "a" * 40)
+    assert not (tmp_path / "os-bundle-inputs").exists()
+    assert not list(tmp_path.glob(".os-bundle-inputs-*"))
+
+
+def test_hosted_workflow_verifies_unsigned_bundle_handoff_before_upload():
+    workflow = (IMAGE.parents[3] / ".github/workflows/build-pinky-image.yml").read_text()
+    for value in ("os-bundle-inputs/inputs.json", "os-bundle-inputs/rootfs.ext4.xz", "os-bundle-inputs/boot.vfat.xz"):
+        assert value in workflow
+    assert 'inputs["source_revision"] == manifest_revision' in workflow
