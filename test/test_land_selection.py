@@ -320,11 +320,20 @@ def test_explicit_full_flaky_preparation_stops_before_save_or_ff(full_case, wher
 def test_explicit_full_preserves_isolation_tracking_and_stopping_policy(full_case, report, safety, expected):
     case = full_case; case.report = report
     case.safety = {"pkg/test/test_a.py"} if safety else set()
+    if report == "missing":
+        old = case.main.parent / "old-isolation.txt"
+        old.write_text("[isolation] complete: 1\n", encoding="utf-8")
+        ancestor = git(case.wt, "rev-parse", "HEAD^")
+        land.land_cache.record(case.wt, ancestor, git(case.wt, "rev-parse", ancestor + "^{tree}"), "stale-env",
+                               land.land_guards.land_isolation.job(["pkg/test/test_a.py"])[0], old)
     before = git(case.main, "rev-parse", "HEAD")
     assert land.main(["--tests", "full"]) == expected
     rows = land.land_guards.land_isolation.rows(case.wt)
     assert rows and rows[-1]["incomplete"] == ["pkg/test/test_a.py"]
     assert (git(case.main, "rev-parse", "HEAD") == before) is bool(expected)
+    if expected:
+        assert land.land_record.read(case.main, git(case.wt, "rev-parse", "HEAD")) is None
+        assert not land.land_full._path(case.wt, "feat/x").exists()
 
 
 def test_absent_environment_cannot_create_explicit_full_witness(full_case, monkeypatch):

@@ -316,9 +316,10 @@ def test_full_current_report_cannot_fall_back_to_historical_cache_complete(prepa
     pair, logdir, args = prepared
     args.tests = mode
     candidate = git(pair, "rev-parse", "HEAD")
+    commit(pair, {"current.py": "VALUE = 1\n"}, "different current candidate")
     old = tmp_path / "historical-complete.txt"
     old.write_text("[isolation] complete: 2\n", encoding="utf-8")
-    land_cache.record(pair, candidate, git(pair, "rev-parse", "HEAD^{tree}"), "fixture-env",
+    land_cache.record(pair, candidate, git(pair, "rev-parse", candidate + "^{tree}"), "old-env",
                       land_isolation.job(FILES)[0], old)
     calls = []
     report = "[isolation] complete: 2\n" if fresh else "1 passed\n"
