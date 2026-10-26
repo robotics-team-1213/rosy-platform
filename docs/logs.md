@@ -11759,3 +11759,10 @@ osy-d395-s1d\`.
 - 증거: `c57db7561c` 관련 원격 417 passed/16.83s, `48064a6e56`의 실제 local HTTP/TLS·hostname/CA 거절·frozen import 포함 health 29 passed/4.31s, 0 NEW. committed480 확장 회귀는 1972 passed, 32 skipped, 49 warnings/342.02s, 0 NEW다. 각 subset은 중복되어 합산하지 않는다. 잘못된 path로 실행되지 않은 첫 회귀 호출은 exit4이며 통과 증거가 아니다.
 - gate 변화: 없음. D-888은 Proposed를 유지한다. helper의 source 증거이며 실제 controller/commit/fallback·SYSTEM/native ARM/image/signing/SD/device 수용을 증명하지 않는다. 32 skipped는 미검증이며 main merge/public push/제품 키·SD 작업은 수행하지 않았다.
 - CE: 해당 없음 — 판단과 반례는 구현·시험·D-888에 보존한다.
+
+## 2026-10-26 · 127eab6a88 · D-888 commit/intent 복구와 FAT source 경계
+
+- 변경: durable intent와 canonical default의 실제 값에 따라 정상 확정·target 복구·fresh source 실패 정리를 구분했다. 일반 commit은 건강 영수증의 same-boot TTL과 live 정책/서비스를 재검사하고 장기 intent 복구는 기존 trial proof를 별도로 대조한다. COMMITTED 뒤 자기 guard/claim·deadline만 정리한다. unknown bootstrap은 offline repair를 요구한다.
+- 증거: committed572의 관련 원격 148passed13.72s,0NEW; 지연 중 정책/TTL/media 변경과 source claim 회수 RED4, 두 FAT mode 경계 RED2가 수정 전 실패했다. exact127의 확장 원격 시험은 1999passed,32skipped,49warnings/306.46s,0NEW이며 skips는 미검증이다. subset 수치는 중복된다. Linux6.8 FAT source를 확인한 계약 모델과 실제 mounted FAT/전원 차단 시험을 구분해 D-888에 기록했다.
+- gate 변화: 없음. frozen callable source이며 실제 controller 연결·SYSTEM/native ARM/image/signing/SD/device 수용을 증명하지 않는다. main merge/public push/제품 키·SD 작업은 수행하지 않았다.
+- CE: 해당 없음 — 구현·시험·D-888이 판단을 보존하며 실제 장치 수용과 혼동하지 않는다.

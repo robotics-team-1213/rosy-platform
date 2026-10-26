@@ -3600,3 +3600,11 @@
 - 확장 회귀: `48064a6e56`의 `os-trial-health-broad` 1972 passed, 32 skipped, 49 warnings/342.02s, 0 NEW. 32 skips는 미검증이며 subset과 합산하지 않는다.
 - gate 변화: 없음. service/firmware/watchdog/projection/signature 결합 health 시험의 외부 관측은 모델이며 별도 factory 시험은 실제 Ed25519, readiness 시험은 실제 local HTTP/TLS다. 실제 PID1/namespace/cgroup/RAUC SYSTEM, controller/sourcehealth/arm/commit/fallback/COMMIT_INTENT recovery, producer/feed/offline signer/capacity/native ARM/SD full readback·기체 수용은 남는다. controller unit은 검증된 runtime.env를 상속하고 commit 직전 정책/실제 서비스를 다시 확인해야 한다. main 착지/public push/제품 키/ARM artifact/SD 쓰기는 수행하지 않았다.
 - CE: 해당 없음 — 구현·반례 시험·D-888에 판단이 보존되며 실물·운영 장애를 해결한 것으로 기록하지 않는다.
+
+## 2026-10-26 · 127eab6a88 · A/B commit owner와 중단된 intent 복구
+
+- 변경: frozen commit owner가 exact-byte health SHA·HEALTHY GOOD_ACK·live health·공통 정책·GPT/boot를 확인하고 private commit.json → COMMIT_INTENT → canonical autoboot atomic/fsync/readback → COMMITTED → own guard/claim·deadline 정리 순서를 구현했다. intent fsync 뒤에도 TTL/정책/media를 재검사한다. 새 default/target 복구와 이전 default/fresh normal source의 failed-version 처리를 별도 역할로 나누며 unknown bootstrap은 HOLD한다. 완료 후 cleanup 중단도 재개하며 다른 holder는 해제하지 않는다.
+- 변경: Linux FAT mode 계약에 맞춰 autoboot와 inactive boot cmdline에서 기존 safe mount-derived mode를 보존한다. ext4 metadata 모드는 유지한다. 이 두 경계의 FAT EPERM은 kernel 계약 모델로 재현했으며 실제 mounted FAT/전원 차단 수용은 남는다.
+- 증거: 202ac RED16failed1.22s →965 green77passed4.88s;2eaa fsync-delay/claim RED4failed17passed1.70s →476 green132passed9.74s;500 FAT RED2failed1.04s →572 green148passed13.72s, 모두 terminal/classified. subset은 중복되어 합산하지 않는다.127에는 persisted proof의 동일 JSON/다른 bytes 거절과 poisoned mutable SDK frozen import가 추가됐다. exact127 확장 원격 `os-commit-owner-final`은 1999passed,32skipped,49warnings/306.46s,0NEW다. 32 skips는 미검증이다.
+- gate 변화: 없음. 실제 systemd/GPT/firmware/전원 차단/FAT mount는 SOURCE 모델이며 production BUILD_GO·DEVICE 수용을 주장하지 않는다. controller/sourcehealth/arm/일반 fallback·producer/feed/signer/capacity·disposable SYSTEM/native ARM/image/SD 전체 readback은 남는다. main 착지/public push/제품 키/ARM build/SD 쓰기는 수행하지 않았다.
+- CE: 해당 없음 — 판단과 kernel 계약 반례를 구현·시험·D-888에 보존했다. 실제 FAT 실행으로 해결된 장치 장애로 기록하지 않는다.

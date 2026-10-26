@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 127eab6a88 · A/B commit owner와 중단된 intent 복구
 - 2026-10-26 · 48064a6e56 · A/B trial health의 source 구현
 - 2026-10-26 · 2b8ff14ee8 · D-888 current-code inactive finalization과 receipt
 - 2026-10-26 · 8dc0b91774 · D-888 watchdog 관측 admission과 A/B apt 정책
 - 2026-10-26 · 82ccb2e22b · D-888 독립 trial deadline
-- 2026-10-26 · cfbe016caf · D-888 공통 OS 정책과 재부팅 후 주행 차단
