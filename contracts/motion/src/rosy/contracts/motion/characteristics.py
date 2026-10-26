@@ -193,3 +193,26 @@ def _validate_envelope(e, joints):
 
 def characteristics_digest(document):
     return document_digest(validate_characteristics(document))
+
+
+def _unique_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f'duplicate JSON field: {key}')
+        result[key] = value
+    return result
+
+
+def _reject_constant(value):
+    raise ValueError(f'nonfinite JSON value: {value}')
+
+
+def parse_json(raw):
+    """Parse the original bounded JSON, retaining duplicate and nonfinite rejection."""
+    if not isinstance(raw, (str, bytes)) or len(raw.encode('utf-8') if isinstance(raw, str) else raw) > MAX_BYTES:
+        raise ValueError('JSON exceeds size limit')
+    try:
+        return json.loads(raw, object_pairs_hook=_unique_pairs, parse_constant=_reject_constant)
+    except (RecursionError, UnicodeError) as exc:
+        raise ValueError('invalid JSON encoding or nesting') from exc

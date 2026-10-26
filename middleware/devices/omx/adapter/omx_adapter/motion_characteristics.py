@@ -1,26 +1,12 @@
 """Compatibility imports and atomic file storage for measured motion characteristics."""
-import json
 import os
 from pathlib import Path
 import tempfile
 
 from rosy.contracts.motion.characteristics import (  # noqa: F401
-    SCHEMA, BINDING_FIELDS, MAX_BYTES, _canonical, _text, _bounds, _count,
+    SCHEMA, BINDING_FIELDS, MAX_BYTES, _canonical, _text, _bounds, _count, parse_json,
     _joint_map, document_digest, characteristics_digest, validate_characteristics,
 )
-
-
-def _unique_pairs(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f'duplicate JSON field: {key}')
-        result[key] = value
-    return result
-
-
-def _reject_constant(value):
-    raise ValueError(f'nonfinite JSON value: {value}')
 
 
 def load_json(path):
@@ -32,10 +18,7 @@ def load_json(path):
         raw = handle.read(MAX_BYTES + 1)
     if len(raw) > MAX_BYTES:
         raise ValueError('JSON file exceeds size limit')
-    try:
-        return json.loads(raw, object_pairs_hook=_unique_pairs, parse_constant=_reject_constant)
-    except (RecursionError, UnicodeError) as exc:
-        raise ValueError('invalid JSON encoding or nesting') from exc
+    return parse_json(raw)
 
 
 def write_json(path, document):

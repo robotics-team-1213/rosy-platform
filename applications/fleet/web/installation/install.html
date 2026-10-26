@@ -165,6 +165,26 @@
             <p id="device-profile-composition-help" class="hint">팔 수는 실제 구성을 확인해 입력하세요. USB 장치나 식별값 개수로 정하지 않습니다. 식별값은 연결·신원 확인을 뜻하지 않습니다.</p>
             <ui-actions><ui-button kind="primary" type="button" data-profile="save">장치 정보 저장</ui-button></ui-actions>
             <p class="hint" data-profile="status" role="status" aria-live="polite"></p>
+            <h3>운용 기록 · 특성 JSON</h3>
+            <p class="hint">로봇 상세에서 먼저 보이는 정보입니다. 기록은 실시간 고장 해제나 운용 승인을 뜻하지 않습니다.</p>
+            <div class="ui-form">
+              <label class="ui-field-label">로봇·팔 관측원 연결<select class="ui-field" data-care="source"><option value="">연결 안 함</option></select></label>
+              <label class="ui-field-label">항상 표시할 주의사항<textarea class="ui-field" data-care="caution" maxlength="2000" rows="3"></textarea></label>
+              <label class="ui-field-label">측정 특성 JSON 가져오기<input class="ui-field" data-care="file" type="file" accept="application/json,.json"></label>
+            </div>
+            <p class="hint" data-care="document">특성 JSON 미등록</p>
+            <ui-actions>
+              <ui-button kind="quiet" type="button" data-care="export">특성 JSON 내보내기</ui-button>
+              <ui-button kind="quiet" type="button" data-care="remove">특성 등록 비우기</ui-button>
+              <ui-button kind="primary" type="button" data-care="save">연결·주의사항·특성 저장</ui-button>
+            </ui-actions>
+            <div class="ui-form">
+              <label class="ui-field-label">기록 종류<select class="ui-field" data-care="kind"><option value="fault">고장 관찰</option><option value="caution">주의</option><option value="maintenance">정비</option></select></label>
+              <label class="ui-field-label">관찰·조치 내용<textarea class="ui-field" data-care="text" maxlength="2000" rows="3"></textarea></label>
+            </div>
+            <ui-button kind="quiet" type="button" data-care="add">기록 추가</ui-button>
+            <p class="hint" data-care="status" role="status" aria-live="polite">장치 정보를 먼저 선택하세요.</p>
+            <section data-care="history" aria-label="저장된 로봇 운용 기록"></section>
           </section>
           <!-- D-341 3–5·11: 콘솔은 6자리 코드를 모른다. 운영자가 폰 화면의 코드를 입력하고,
                설치자가 폰과 이 화면의 사이트 지문·자격 ID를 맞춰 본다. -->

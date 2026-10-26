@@ -13,13 +13,15 @@ export function profilePayload(values) {
   return {...result, arm_count: count ? Number(count) : null, hardware_ids};
 }
 
-export function createDeviceProfiles({root, scope, call, identity}) {
+export function createDeviceProfiles({root, scope, call, identity, care = null}) {
   const el = key => root.querySelector(`[data-profile="${key}"]`);
   const gate = createPollGate();
   let selected = '', dirty = false, busy = false, loading = false;
+  let initial = new URLSearchParams(root.ownerDocument.defaultView?.location?.search || '').get('profile');
   const canEdit = () => identity()?.role === 'operator' && Boolean(identity()?.principal_id)
     && identity().principal_id !== 'site-console';
   function updateAuthorization() {
+    care?.authorization();
     const allowed = canEdit();
     for (const key of FIELDS) el(key).disabled = busy || !allowed || (key === 'device_id' && Boolean(selected));
     el('save').disabled = busy || !allowed;
@@ -38,6 +40,7 @@ export function createDeviceProfiles({root, scope, call, identity}) {
       ? `${row.display_name} · ${row.manufacturer || '제조사 미입력'} · ${row.model || '모델 미입력'} · 팔 ${row.arm_count ?? '미입력'} · 연결 미확인 · 운용 권한 없음`
       : '저장된 장치 정보를 선택하거나 새 정보를 입력하세요.';
     dirty = false;
+    void care?.select(row);
     updateAuthorization();
   }
   async function refresh() {
@@ -55,6 +58,10 @@ export function createDeviceProfiles({root, scope, call, identity}) {
       });
       el('list').replaceChildren(option, ...options);
       el('list').value = selected;
+      if (initial && profiles.some(row => row.device_id === initial)) {
+        const id = initial; initial = null;
+        if (!dirty && !care?.isDirty()) fill(await call(`/api/fleet/device-profiles/${encodeURIComponent(id)}`));
+      }
       // Polling refreshes the chooser, never the user's editable draft.
     } catch (error) {
       if (error.name === 'AbortError') return;
@@ -65,7 +72,7 @@ export function createDeviceProfiles({root, scope, call, identity}) {
   }
   scope.listen(el('list'), 'change', async () => {
     if (busy) return;
-    if (dirty) {
+    if (dirty || care?.isDirty()) {
       el('list').value = selected;
       el('status').textContent = '수정 내용을 저장하거나 입력 지우기를 누른 뒤 다른 장치를 선택하세요.';
       return;

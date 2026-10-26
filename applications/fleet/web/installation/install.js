@@ -22,6 +22,7 @@ import { createFleetClient } from "/common/fleet-client.js";
 import { createPasswordLogin } from "./password-login.js";
 import { createPageScope } from "/common/scope.js";
 import { createTaskChooser } from "/common/task-chooser.js";
+import {createDeviceCare} from '/console/assets/device-care.js';
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 import { bindEstop, bindTopbarToggle, showSession, showSignedOut, stopNotice, tickClock, watchFleet } from "/console/assets/fleet-header.js";
 
@@ -123,7 +124,9 @@ const hostServices = createHostServices({
   confirmIrreversible,
   onPaint: () => applyRole(),
 });
-deviceProfiles = createDeviceProfiles({root: el('device-profiles'), scope: pageScope, call,
+const deviceCare = createDeviceCare({root: el('device-profiles'), scope: pageScope, call,
+  identity: () => ({role: auth.role, principal_id: auth.principal})});
+deviceProfiles = createDeviceProfiles({root: el('device-profiles'), scope: pageScope, call, care: deviceCare,
   identity: () => ({role: auth.role, principal_id: auth.principal})});
 
 // Task navigation preserves mounted owners and drafts across auth/page epochs.
@@ -141,6 +144,7 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
 ]});
 el("install-chooser").append(taskChooser.element);
 taskChooser.setReady();
+if (location.hash === '#device-profiles') void taskChooser.choose('device-profiles');
 pageScope.subscribe(() => {
   taskChooser.resume();
   return () => { void taskChooser.pause().then(() => { if (pageScope.capture().current()) taskChooser.resume(); }); };
