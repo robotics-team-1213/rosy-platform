@@ -11688,3 +11688,11 @@ osy-d395-s1d\`.
 - 증거: 원격 AI PC에서 단위 시험(some avg60 파싱, 파일·줄 없음은 None, fsync 측정, 45 ms는 건너뜀, 15 ms와 some avg60 6.3%는 건너뜀, 4.9%와 PSI 없음은 실패) 통과. 변이 세 개(`FSYNC_LIMIT_S` 0.02→0.05, `some`→`full`, `avg60`→`avg10`) 모두 빨강. 같은 내용으로 파일 전체 3회 모두 10 통과(건너뜀·실패 없음, 그때 경계 미달이 없어 판정은 실제로 불리지 않음).
 - gate 변화: 없음. 건너뜀은 시간 증거가 아니고 깨끗한 호스트의 통과를 대신하지 않는다.
 - 교훈: CE 해당 없음 — 측정 근거가 상수 주석과 시험에 있다.
+
+## 2026-10-26 · uncommitted · G1 시간 시험의 fsync 측정이 tmpfs를 피하고 파일시스템을 밝힌다
+
+- 변경: `disk_probe_dir`가 `/proc/self/mountinfo`에서 임시 디렉터리의 파일시스템과 마운트를 찾는다. 원격 실행기는 TMPDIR를 `--basetemp` 옆(`/tmp/rosy-pytest-*`)에 두므로 그곳은 `tmp_path`의 `owner.sqlite3`와 같은 파일시스템이다. tmpfs·ramfs면 작업 디렉터리에서 잰다. 건너뛰기 이유에 `p90=<x> ms on ext4 (/)`처럼, 작업 디렉터리로 옮겼으면 `in the working dir (temp dir is on tmpfs)`까지 적는다.
+- 이유: tmpfs의 fsync는 약 0 ms라 늘 통과한다. 10-25에 느렸던 곳은 SQLite가 쓰는 실행 디렉터리의 루트 디스크(95% 참)였다.
+- 증거: AI PC `/tmp`는 ext4 `/`(현재 73%). 원격 AI PC 단위 시험 통과, 변이 세 개(tmpfs 대체 제거, 마운트 접두 경계 제거, 측정 디렉터리 전달 제거) 모두 빨강. 파일 전체 1회 12 통과.
+- gate 변화: 없음.
+- 교훈: CE 해당 없음 — 근거가 docstring과 시험에 있다.
