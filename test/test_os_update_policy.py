@@ -122,3 +122,25 @@ def test_installed_frozen_engine_contains_all_policy_imports(tmp_path, monkeypat
     for name in ("os_update_policy.py", "auto_update_records.py", "auto_update_host.py", "rosy_transfer.py"):
         with pytest.raises(ValueError, match="IMAGE_LAYER_DESTINATION"):
             sync_mod.check_destination("opt/rosy/os-bootstrap/native-runtime/" + name)
+
+
+@pytest.mark.parametrize("configuration", ["{", '{"enabled":"true"}', '{"repo":false}'])
+def test_invalid_common_policy_is_a_deferral_without_mutation(tmp_path, monkeypatch, configuration):
+    m, _, root, journal, _, _, directory, host = _policy(tmp_path, monkeypatch)
+    config = directory / "config.json"
+    config.write_text(configuration)
+    before = journal.read_bytes()
+    with pytest.raises(ValueError, match="OS_UPDATE_POLICY"):
+        m.authorize(root, TRANSACTION, host=host)
+    assert config.read_text() == configuration and journal.read_bytes() == before
+
+
+@pytest.mark.parametrize("change", ["transaction_id", "source_boot_id"])
+def test_another_transaction_or_source_boot_is_never_authorized(tmp_path, monkeypatch, change):
+    m, state, root, journal, verified, facts, _, host = _policy(tmp_path, monkeypatch)
+    _begin(state, root, verified, facts)
+    value = json.loads(journal.read_text())
+    value["pending"][change] = "44444444-4444-4444-8444-444444444444"
+    journal.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match="OS_UPDATE_POLICY"):
+        m.authorize(root, TRANSACTION, host=host)

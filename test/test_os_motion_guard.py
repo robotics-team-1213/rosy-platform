@@ -116,3 +116,35 @@ def test_image_owns_guard_and_final_environmentfile_after_operator_environment(t
     assert "After=rosy-os-storage.service" in unit
     assert "Before=rosy-core.service rosy-io.service rosy-navigation.service" in unit
     assert "os_motion_guard.py reconcile" in unit
+
+
+def test_guard_units_and_privileged_preconditions_parse_with_real_systemd(tmp_path):
+    import shutil
+    import subprocess
+    from pathlib import Path
+    base = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/native"
+    units = tmp_path / "etc/systemd/system"
+    units.mkdir(parents=True)
+    shutil.copyfile(base / "rosy-os-motion-guard.service", units / "rosy-os-motion-guard.service")
+    for name in ("sysinit.target", "basic.target", "shutdown.target", "sockets.target", "local-fs.target"):
+        (units / name).write_text("[Unit]\nDefaultDependencies=no\n")
+    (units / "rosy-os-storage.service").write_text(
+        "[Unit]\nDefaultDependencies=no\nAfter=local-fs.target\n[Service]\nType=oneshot\nExecStart=/usr/bin/true\n")
+    for name in ("core", "io", "navigation"):
+        unit = f"rosy-{name}.service"
+        (units / unit).write_text("[Service]\nExecStart=/usr/bin/true\nEnvironmentFile=-/etc/rosy/runtime.env\n")
+        dropin = units / (unit + ".d")
+        dropin.mkdir()
+        shutil.copyfile(base / f"rosy-os-{name}-guard.conf", dropin / "zz-rosy-os-guard.conf")
+    binaries = tmp_path / "usr/bin"
+    binaries.mkdir(parents=True)
+    for name in ("python3", "true"):
+        path = binaries / name
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755)
+    analyze = shutil.which("systemd-analyze")
+    assert analyze, "systemd parser is required in the Ubuntu test environment"
+    result = subprocess.run([analyze, "verify", "--man=no", "--root=" + str(tmp_path),
+        "rosy-os-motion-guard.service", "rosy-core.service", "rosy-io.service", "rosy-navigation.service"],
+        capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
