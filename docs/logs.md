@@ -11242,6 +11242,19 @@ osy-d395-s1d\`.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
 
+## 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
+
+- Change: owner-local API holds existing declarations, the Decision facade supplies existing planning choices, and actual lifecycle/arming/relay safety behavior stays in tagged owners. No frozen violation growth or wire change.
+- Evidence: official source9f9fc5846d two separation failures versus main6abf6a8a7e two passes; new sourcecac7a23477 API/planning guards RED3 and emergency guard PASS1 remotely. All22 nonconstructor lifecycle method ASTs and original CORE C1 blobs remain identical. Independent implementation review and committed GREEN follow separately.
+- gate 변화: pending implementation verification; no landing/device/field claim. Existing structural-guard lesson will be updated only after GREEN.
+
+## 2026-10-25 · cc237b02c1 · D-875 committed verification
+
+- Change: independently reviewed owner-local API and actual Safety lifecycle separation; legacy exports/planner/default construction preserved, no frozen violation growth.
+- Evidence: committed remote architecture plus15 focused Fleet suites 578PASS5SKIP, NEW0/known0/flaky0, runnerexit0. Original22 lifecycle method ASTs and prepared2bea CORE3 Git blobs exact. Logs: %LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt and known-final.txt.
+- Gate: generate/lint/diff/syntax/size and official dry-run PASS; actual FULL/landing/device/field pending. Initial afba candidate sole CLI size failure retained externally; root-authorized own amendment removed one blankline, independently confirmed, then finalSHA rerun.
+- CE: root owns existing structural-guards lesson update with separate queued-FULL tooling unit; verified case draft supplied outside Git. Prior pending entry is superseded by this evidence.
+
 ## 2026-10-25 · uncommitted · queued FULL pretest 구조 검사 우선
 
 - 변경: 대기 중 FULL pretest에도 기존 구조 검사 runner를 먼저 호출하고 검사 뒤 HEAD를 다시 확인한다. FIFO·기존 main 기준·캐시·FULL 기록 규칙은 유지한다.
@@ -11372,6 +11385,13 @@ osy-d395-s1d\`.
 - 증거: 유효한 fixture를 새 Python에서 import한 뒤 기존 구현 RED 1건을 재현했다. 수정 커밋 원격 관련 회귀 507 passed, skip0, NEW0/known0/flaky0; 독립 소스 리뷰 승인. [검증 기록](validation/affected-import-pack-restoration-2026-10-25/result.md).
 - gate 변화: 없음. 공식 FULL·착지·게시·배포는 별도 확인한다. 보존한 C1 후보는 이 수정에 포함하지 않는다.
 - 교훈: 기존 [실제 커밋 검증 교훈](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)에 통합 과정의 호출 경로·회귀 시험 보존을 추가했다.
+
+## 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
+
+- 변경: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 Fleet owner가 이미 지정한 boundary 시험의 누락과 검증된 exact-leaf API 검사 수정을 추가했다.
+- 증거: tests-only RED 43 failed/46 passed, 수정 93 passed, 최신 main 통합 원격 확장 679 passed/5 skipped/NEW0. [검증 기록](validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 소스와 실패한 FULL을 별도로 남겼다.
+- gate 변화: 없음. 최신 후보의 공식 FULL·착지·배포는 별도 확인한다.
+- 교훈: 범용 플랫폼 guard와 변경 소유자의 기존 계약 시험을 함께 선택한다.
 
 ## 2026-10-25 · uncommitted · 공급암 S 셀 파이프라인: 원위치·보정·사이클, 경쟁 후보 장부, 접촉 대응
 
@@ -11585,6 +11605,7 @@ osy-d395-s1d\`.
 - 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
 - gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
 - CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
+
 ## 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
 
 - 변경: `tools/remote/remote_job.py` JOB이 pytest에 job마다 `mktemp -d /tmp/rosy-pytest-XXXXXX`를 `--basetemp`로 주고 EXIT trap이 지운다. 처음엔 실행 디렉터리 아래(`$D/$K.tmp`)에 뒀으나 land 전체 시험에서 Fleet TLS 시험 59개가 깨졌다: 로그인 umask 0002로 실행 디렉터리가 0775라 TLS 파일 조상 권한 검사가 거절했고, 경로가 길어 AF_UNIX 108바이트를 넘었다. land의 MAIN-RED 재확인은 노트북 쪽 JOB(같은 `--basetemp`)으로 main을 돌려 이를 main 고장으로 잘못 보였다. SWEEP은 연락이 끊긴 채 끝난 실행을 12시간이 아니라 2시간 뒤에 치운다. SWEEP·CLEANUP·SHIP 재시도는 실행·job 디렉터리를 지우기 전에 `chmod -R u+rwX`를 한다(릴리스·롤백 시험이 만드는 읽기 전용 디렉터리는 제품 동작이라 시험은 그대로 둠). 새 `tools/remote/host_probe.py`(`remote_pytest.py`에서 PROBE와 파서를 옮겨 D-766 600줄 아래로 유지)의 PROBE가 `~/rosy-test`와 `/tmp` 파일시스템의 남은 공간을 재고, `place()`는 남은 공간이 20 GB 미만인 호스트를 고르지 않는다(바닥 아래 대체 선택에도 적용). 사용률 기준은 두지 않는다: 434-468 GB 디스크에서 90%여도 45 GB가 남아 멀쩡한 호스트를 뺀다. 디스크 값이 없는 예전 probe는 알 수 없음으로 보고 통과시킨다. 시험 `test/test_remote_pytest.py`.
@@ -11648,6 +11669,12 @@ osy-d395-s1d\`.
 - gate 변화: main의 `test_robot_cd` 2건이 다시 녹색이 된다.
 - 교훈: CE 해당 없음 — 재발 방지가 이름 검사 시험에 있다.
 
+## 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
+
+- 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
+- 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
+- gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
 ## 2026-10-26 · ef0600c636 · pytest 작업마다 메모리 최고치를 재고, 기록에 따라 예약을 줄인다
 
 - 변경: `tools/remote/remote_job.py`의 JOB이 pytest가 끝난 뒤 scope cgroup의 `memory.peak`를 읽어 `[remote-pytest] memory peak <MiB> MiB`를 찍는다. scope 안의 감시 프로세스가 읽으므로 pytest는 그대로 exec되어 timeout의 TERM/KILL을 직접 받는다. 잠금 예산은 새 `ROSY_JOB_RESERVE_GB`(기본값은 `MemoryMax` GB)로 따로 두고 `MemoryMax`는 `ROSY_JOB_MEM_GB`(기본 6)를 유지한다. 새 `tools/remote/memory_history.py`가 노트북에서 그 줄을 `<git-common-dir>/rosy-pytest-memory.jsonl`에 쌓고, 같은 argv의 기록이 있고 모두 4 GiB 이하면 3 GB를 예약한다. 기록이 없거나 하나라도 4 GiB를 넘으면 6 GB이다. 가벼운 호스트는 기존처럼 자기 상한을 예약한다.
@@ -11704,32 +11731,6 @@ osy-d395-s1d\`.
 - 증거: 시험 PC에서 `middleware/robot_execution/local/test test/ applications/fleet/test/ --collect-only -p no:xdist`를 `--rootdir` 없이/있이 비교: rootdir `…/middleware/robot_execution/local`·configfile `pyproject.toml` → rootdir 실행 디렉터리·configfile 없음, 둘 다 12568개·모듈 662개, 항목 이름 차이는 시각·경로 매개변수 2개뿐. 새 시험 `test_pytest_tail_keeps_failed_ids_repo_relative_when_the_first_path_has_a_pyproject`는 `--rootdir` 변이에서 `pkg/test_b.py::test_b`로 빨강, 복원 후 `test/test_remote_pytest.py test/test_land.py` 180 통과, known_failures 0 new.
 - gate 변화: 없음. land_checks의 id 되돌리기·exit 4/5 처리는 robot-47 몫.
 - 교훈: CE 해당 없음 — 원인은 코드 주석과 회귀 시험에 있다.
-
-## 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
-
-- Change: owner-local API holds existing declarations, the Decision facade supplies existing planning choices, and actual lifecycle/arming/relay safety behavior stays in tagged owners. No frozen violation growth or wire change.
-- Evidence: official source9f9fc5846d two separation failures versus main6abf6a8a7e two passes; new sourcecac7a23477 API/planning guards RED3 and emergency guard PASS1 remotely. All22 nonconstructor lifecycle method ASTs and original CORE C1 blobs remain identical. Independent implementation review and committed GREEN follow separately.
-- gate 변화: pending implementation verification; no landing/device/field claim. Existing structural-guard lesson will be updated only after GREEN.
-
-## 2026-10-25 · cc237b02c1 · D-875 committed verification
-
-- Change: independently reviewed owner-local API and actual Safety lifecycle separation; legacy exports/planner/default construction preserved, no frozen violation growth.
-- Evidence: committed remote architecture plus15 focused Fleet suites 578PASS5SKIP, NEW0/known0/flaky0, runnerexit0. Original22 lifecycle method ASTs and prepared2bea CORE3 Git blobs exact. Logs: %LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt and known-final.txt.
-- Gate: generate/lint/diff/syntax/size and official dry-run PASS; actual FULL/landing/device/field pending. Initial afba candidate sole CLI size failure retained externally; root-authorized own amendment removed one blankline, independently confirmed, then finalSHA rerun.
-- CE: root owns existing structural-guards lesson update with separate queued-FULL tooling unit; verified case draft supplied outside Git. Prior pending entry is superseded by this evidence.
-
-## 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
-
-- 변경: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 Fleet owner가 이미 지정한 boundary 시험의 누락과 검증된 exact-leaf API 검사 수정을 추가했다.
-- 증거: tests-only RED 43 failed/46 passed, 수정 93 passed, 최신 main 통합 원격 확장 679 passed/5 skipped/NEW0. [검증 기록](validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 소스와 실패한 FULL을 별도로 남겼다.
-- gate 변화: 없음. 최신 후보의 공식 FULL·착지·배포는 별도 확인한다.
-- 교훈: 범용 플랫폼 guard와 변경 소유자의 기존 계약 시험을 함께 선택한다.
-
-## 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
-
-- 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
-- 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
-- gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
 
 ## 2026-10-26 · uncommitted · busy 표시 만료와 GitHub Actions 커밋 고정
 

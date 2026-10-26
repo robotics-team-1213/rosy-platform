@@ -354,4 +354,4 @@
 - 2026-10-26 · uncommitted · fix(hooks): pre-push가 밀어 올리는 커밋의 트리로 판정
 - 2026-10-26 · 8ecbd7e41e · 현장 PC의 busy 보류는 재부팅이 풀지 않는다
 - 2026-10-26 · uncommitted · busy 표시 만료와 GitHub Actions 커밋 고정
-- 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
+- 2026-10-26 · uncommitted · 원격 pytest의 실패 id가 저장소 기준 경로로 나온다
