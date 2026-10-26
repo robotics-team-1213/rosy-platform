@@ -34,23 +34,24 @@ SOURCE = 'fixture-profile-observation'
 
 @pytest.fixture
 def persisted_cell(tmp_path):
+    arm = {'source_id': 'source-one', 'arm_id': 'fixture-owner', 'label': '검증용 팔',
+           'board_id': 'EXAMPLE-BOARD', 'joint_topic': '/omx_commissioning/fixture_owner/joint_states',
+           'joint_names': ['joint2', 'joint3'], 'token_env': 'EXAMPLE_PROFILE_SOURCE',
+           'credential_sha256': sha256(SOURCE.encode()).hexdigest()}
+    camera = {'source_id': 'fixture-top', 'label': '미연결 검증 카메라', 'role': 'overhead', 'arm_id': None,
+              'image_topic': '/fixture_top/image_raw', 'device_path': '/dev/v4l/by-id/example-only',
+              'token_env': 'EXAMPLE_PROFILE_CAMERA', 'credential_sha256': sha256(b'fixture-camera').hexdigest()}
     manifest = WorkcellObservationManifest.model_validate({
         'schema': 'rosy.workcell-observations/1', 'workcells': [{
-            'workcell_id': 'fixture-cell', 'label': '검증용 셀', 'arms': [{
-                'source_id': 'source-one', 'arm_id': 'fixture-owner', 'label': '검증용 팔',
-                'board_id': 'EXAMPLE-BOARD', 'joint_topic': '/omx_commissioning/fixture_owner/joint_states',
-                'joint_names': ['joint2', 'joint3'], 'token_env': 'EXAMPLE_PROFILE_SOURCE',
-                'credential_sha256': sha256(SOURCE.encode()).hexdigest()}], 'cameras': [{
-                'source_id': 'fixture-top', 'label': '미연결 검증 카메라', 'role': 'overhead', 'arm_id': None,
-                'image_topic': '/fixture_top/image_raw', 'device_path': '/dev/v4l/by-id/example-only',
-                'token_env': 'EXAMPLE_PROFILE_CAMERA', 'credential_sha256': sha256(b'fixture-camera').hexdigest()}]}]})
+            'workcell_id': 'fixture-cell', 'label': '검증용 셀', 'arms': [arm], 'cameras': [camera]}]})
     path = tmp_path / 'tasks.sqlite3'
 
     def application():
         users = {sha256(token.encode()).hexdigest(): {'principal_id': f'fixture-{role}', 'role': role}
                  for token, role in ((OPERATOR, 'operator'), (VIEWER, 'viewer'))}
+        observations = WorkcellObservations(manifest, {'source-one': SOURCE})
         return create_app(FleetConsole([], []), task_service=FleetTaskService(FleetTaskStore(path), robot_ids=()),
-                          site_users=users, workcell_observations=WorkcellObservations(manifest, {'source-one': SOURCE}),
+                          site_users=users, workcell_observations=observations,
                           web_common=ROOT / 'shared/web')
 
     document, report = monitor_report(stamp=time.time(), attention=True)
