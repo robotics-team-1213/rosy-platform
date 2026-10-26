@@ -220,3 +220,19 @@ for name in ('os_update_feed','os_update_stage','os_update_rollout','os_update_c
     result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(frozen), str(root)],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_completed_bundle_readonly_mode_is_fsynced_before_cache_publication(feed, monkeypatch):
+    import os
+    import stat
+    m, hub, host, root, _, _, private, _ = feed
+    _, body, _ = publish(hub, private)
+    fsync = os.fsync
+    modes = []
+    def observe(fd):
+        info = os.fstat(fd)
+        if stat.S_ISREG(info.st_mode) and info.st_size == len(body): modes.append(stat.S_IMODE(info.st_mode))
+        return fsync(fd)
+    monkeypatch.setattr(os, "fsync", observe)
+    assert m.Feed(root, host=host).poll(apply=False)["outcome"] == "staged"
+    assert modes[-1] == 0o400
