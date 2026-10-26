@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import json
 import lzma
+import os
 from pathlib import Path
 import shutil
 
@@ -27,6 +28,12 @@ def module():
 def distribution(tmp_path):
     m = module()
     raw, layout, source, factory = inputs(tmp_path)
+    # RAUC requires squashfs >4KiB; zero-filled GPT fixtures otherwise compress below that boundary.
+    for part in layout["partitions"]:
+        if part["role"] in {"root_a", "boot_a"}:
+            start = part["start_lba"] * 512
+            raw[start:start + 8192] = os.urandom(8192)
+    source.write_bytes(raw)
     dist = tmp_path / "signed-image"
     dist.mkdir()
     exporter().export(source, layout, dist / "os-bundle-inputs", factory, RELEASE_ID, "a" * 40)
@@ -60,8 +67,8 @@ def test_refuses_untrusted_inputs_without_mutating_distribution(tmp_path, change
     if change == "factory_signature":
         # Even an outer signature does not replace the native factory signature.
         from signing import build_sha256sums
-        entries = [p.relative_to(dist).as_posix() for p in dist.rglob("*") if p.is_file() and p.name not in {"SHA256SUMS.sig", "SHA256SUMS"}]
-        entries.append(f"factory-release/{RELEASE_ID}/SHA256SUMS")
+        entries = [p.relative_to(dist).as_posix() for p in dist.rglob("*") if p.is_file()
+                   and p.relative_to(dist).as_posix() not in {"SHA256SUMS.sig", "SHA256SUMS"}]
         (dist / "SHA256SUMS").write_bytes(build_sha256sums(dist, entries))
         (dist / "SHA256SUMS.sig").write_text(sign_checksums((dist / "SHA256SUMS").read_bytes(), private))
     before = {p.relative_to(dist).as_posix(): p.read_bytes() for p in dist.rglob("*") if p.is_file()}
