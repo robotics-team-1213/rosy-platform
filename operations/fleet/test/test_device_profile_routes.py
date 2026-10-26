@@ -124,6 +124,10 @@ def test_real_app_profiles_persist_without_enrollment_or_control(tmp_path):
     browser = TestClient(app)
     assert browser.get("/api/fleet/device-profiles").status_code == 401
     assert app.state.device_profiles.path == tasks.store.path
+    catalog = browser.get('/api/fleet/device-profile-sources', headers=headers)
+    assert catalog.status_code == 200
+    assert catalog.json()['sources'] == [
+        {'source_kind': 'robot', 'source_id': 'seed', 'label': 'seed', 'owner_id': None}]
     response = browser.put("/api/fleet/device-profiles/unconnected-arm", headers=headers,
                            json={"display_name": "한글 🙂", "device_kind": "manipulator", "arm_count": 2})
     assert response.status_code == 200

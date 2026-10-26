@@ -6,15 +6,29 @@ from pathlib import Path
 import ssl
 import sys
 import time
-from urllib.parse import quote
-from urllib.request import HTTPSHandler, Request, build_opener
+from urllib.parse import quote, urlsplit
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 
-from deploy.robot.omx.workcell_observation_bridge import _NoRedirect, _verified, secure_url
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _origin(value):
+    url = urlsplit(value)
+    if (any(char.isspace() or ord(char) < 32 for char in value)
+            or url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment
+            or url.path not in ('', '/')):
+        raise ValueError('explicit HTTPS Fleet origin required')
+    url.port
+    return value.rstrip('/')
 
 
 def publish(raw, *, fleet_url, device_id, source_id, token, context, opener=None):
-    origin = secure_url(fleet_url, 'https')
-    _verified(context)
+    origin = _origin(fleet_url)
+    if not context.check_hostname or context.verify_mode != ssl.CERT_REQUIRED:
+        raise ValueError('verified TLS required')
     if not isinstance(token, str) or not token or any(ord(c) < 33 or ord(c) > 126 for c in token):
         raise ValueError('explicit source credential required')
     if len(raw) > 65536:
@@ -26,7 +40,7 @@ def publish(raw, *, fleet_url, device_id, source_id, token, context, opener=None
            + '/load-reports/' + quote(source_id, safe=''))
     request = Request(url, data=raw, method='POST', headers={
         'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token})
-    transport = opener or build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect())
+    transport = opener or build_opener(HTTPSHandler(context=context), _NoRedirect())
     with transport.open(request, timeout=2) as response:
         if response.status != 202:
             raise ValueError('report was not accepted')
@@ -44,7 +58,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     context = ssl.create_default_context(cafile=args.ca_file)
     token = os.environ.get(args.token_env)
-    secure_url(args.fleet_url, 'https')
+    _origin(args.fleet_url)
     if not token:
         parser.error('source credential environment variable is empty')
     previous = None

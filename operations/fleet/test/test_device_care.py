@@ -53,8 +53,9 @@ def test_persistence_and_source_uniqueness(tmp_path):
     assert store.get('arm-two')['source_id'] is None
 
 
-@pytest.mark.parametrize('change', [{'caution': []}, {'source_kind': 'camera'},
-                                   {'source_id': '../arm'}, {'characteristics': {'schema': 'wrong'}}])
+@pytest.mark.parametrize('change', [
+    {'caution': []}, {'source_kind': 'camera'},
+    {'source_id': '../arm'}, {'characteristics': {'schema': 'wrong'}}])
 def test_invalid_replacement_preserves_previous(tmp_path, change):
     _, store = setup(tmp_path)
     store.put('arm-one', care(), actor='alice')

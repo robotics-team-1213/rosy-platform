@@ -97,3 +97,12 @@ def test_bounded_strict_import_and_known_source(site):
     document['binding']['owner_id'] = 'different-owner'
     assert client.put(path, json=care() | {'characteristics': document}, headers=headers).status_code == 422
     assert store.get('arm-one')['source_id'] is None
+
+
+@pytest.mark.parametrize('origin', ['http://fleet.example', 'https://user:pass@fleet.example',
+                                   'https://fleet.example/path', 'https://fleet.example?token=hidden'])
+def test_bridge_refuses_untrusted_origin_before_transport(origin):
+    from deploy.robot.omx.load_report_bridge import publish
+    with pytest.raises(ValueError):
+        publish(b'{}', fleet_url=origin, device_id='arm-one', source_id='source-one', token='fixture',
+                context=ssl.create_default_context())

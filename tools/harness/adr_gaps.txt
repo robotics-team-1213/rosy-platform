@@ -40,7 +40,6 @@ D-839 reserved outside this branch; remove when its ADR lands
 D-842 reserved outside this branch; remove when its ADR lands
 D-843 reserved outside this branch; remove when its ADR lands
 D-844 reserved outside this branch; remove when its ADR lands
-D-860 reserved by another session outside this branch; remove when its ADR lands
 D-872 reserved on preserved communication preparation branches outside this branch; remove when its ADR lands
 D-873 reserved on preserved communication preparation branches outside this branch; remove when its ADR lands
 D-872 reserved by another session outside this branch; remove when its ADR lands
@@ -53,7 +52,6 @@ D-839 reserved in another in-flight branch (refs/adr/D-839); remove when its ADR
 D-842 reserved in another in-flight branch (refs/adr/D-842), absent from origin/main at D-848; remove when its ADR lands
 D-843 reserved in another in-flight branch (refs/adr/D-843), absent from origin/main at D-848; remove when its ADR lands
 D-844 reserved in another in-flight branch (refs/adr/D-844), absent from origin/main at D-848; remove when its ADR lands
-D-860 reserved in another in-flight branch (refs/adr/D-860), absent from origin/main at D-874; remove when its ADR lands
 D-872 reserved by another session outside this branch; remove when its ADR lands
 D-873 reserved by another session outside this branch; remove when its ADR lands
 D-872 reserved in another in-flight branch (refs/adr/D-872), absent from origin/main at D-874; remove when its ADR lands
@@ -69,9 +67,3 @@ D-881 reserved in another in-flight branch (refs/adr/D-881, feat/rosy-ab-state),
 D-882 reserved in another in-flight branch (refs/adr/D-882, fix/comm-freshness-current-main), absent from main at D-883; remove when its ADR lands
 D-888 reserved in another in-flight branch (refs/adr/D-888), absent from this D-890 branch; remove when its ADR lands
 D-888 reserved in another in-flight branch (refs/adr/D-888, feat/rosy-ab-state), absent from main at D-883; remove when its ADR lands
-D-848 reserved outside this branch; remove when its ADR lands
-D-849 reserved outside this branch; remove when its ADR lands
-D-852 reserved outside this branch (refs/adr/D-852); remove when its ADR lands
-D-852 reserved outside this branch; remove when its ADR lands
-D-858 reserved outside this branch; remove when its ADR lands
-D-859 reserved outside this branch; remove when its ADR lands
