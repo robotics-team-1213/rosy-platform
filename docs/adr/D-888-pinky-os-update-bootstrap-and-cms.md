@@ -58,6 +58,12 @@ media admission은 현재 descriptor·mount·kernel RAUC slot, 전체 디스크 
 
 독립 검토와 실제 Linux 읽기 시험에서 sysfs text attribute의 표시 크기를 작은 일반 파일처럼 취급하면 정상 장치를 거절함을 확인했다. [Linux v6.8 구현](https://raw.githubusercontent.com/torvalds/linux/v6.8/fs/sysfs/file.c)은 이 크기를 PAGE_SIZE로 게시한다. sysfs 안의 소유권·형식이 맞는 attribute만 별도 helper로 최대 65바이트 읽어 실제 64바이트 제한을 확인한다. 저장된 JSON·서명 metadata의 엄격한 일반 파일 크기 검사는 유지한다. page 크기를 재현하는 모델과 실제 sysfs 회귀를 함께 두며, 이는 Pi 부팅이나 block 쓰기 수용이 아니다.
 
+OS journal은 공통 store의 기존 schema 1을 엄격하게 읽는다. 누락·중복 키·손상·예상 밖 필드나 넓은 권한을 idle로 초기화하지 않는다. 단일 link인 0600 state와 root 0700 디렉터리를 요구하고, 긴 OS transaction lock과 다른 짧은 비차단 state flock 안에서 fsync·replace·parent fsync로 게시한다. transaction/source boot/trial boot, 기존 카드 layout digest, 검증된 bundle·image metadata와 health digest를 유지한다. 단계는 PREPARED→INSTALLING→INSTALLED→VERIFIED→ARMED→TRIAL→HEALTHY→COMMIT_INTENT이며 역행·건너뛰기·다른 부팅의 health를 거절한다. 같은 상태 객체라도 lock context 종료 또는 게시 중 오류 뒤에는 다시 쓸 수 없다. parent fsync 오류가 성공한 rename 뒤에 생길 수 있으므로 메모리의 이전 상태로 계속 쓰지 않고 다시 열어 디스크를 확인한다. 이 시험은 실제 파일 IO와 오류 주입이며 전원 차단 수용이 아니다.
+
+상태 helper는 firmware·motion·health의 관측 권한을 대신하지 않는다. commit owner가 같은 trial의 GOOD_ACK·실제 health·autoboot 게시/readback을 확인한 뒤에만 journal commit을 호출한다. source 복귀 관측 뒤 실패 버전을 기록해 자동 재시도를 막고, COMMIT_INTENT의 실패는 commit owner가 실제 old/new 설정을 읽어 해소해야 한다. 실패 이력은 최대 128개이며 넘치면 쓰기를 거절하고 사람의 점검을 요구한다. 관측 owner와 실제 daemon/boot controller 연결은 아직 남아 있다.
+
+native activate·명시적 rollback은 native release.lock 안에서 영속 pending fence를 확인한다. OS owner도 같은 짧은 lock 안에서 pending을 게시해야 경합 사이로 native 변경이 들어오지 않는다. OS owner가 CORE를 재시작하는 동안 이 lock을 유지하지 않는다. claim TTL이 끝나도 pending은 유효하며 자동 updater의 resume·apply·최종 precheck도 journal 복구·SDK inverse/sync 전에 차단한다. ABI 2를 주장하는 서명된 SDK라도 pending fence의 필수 파일을 빼면 거절한다. boot recovery는 별도 경로로 남겨 maintenance 상태에서도 기존 CORE 복구가 가능하게 한다. legacy MBR·protocol 1과 최소 두 파일짜리 standalone verifier 경로는 유지한다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.

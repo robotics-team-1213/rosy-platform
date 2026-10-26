@@ -3526,3 +3526,13 @@
 - CE: 해당 없음 — parser 순서와 fixture/consumer 경계의 비직관적인 판단은 소스·반례·D-888에 남긴다.
 
 - 최종 runtime 포함 회귀: 35eeffe31f 공식 원격 os-rauc-runtime-final, 1166 passed/32 skipped/49 warnings, 165.15s. 앞의 개별 집계와 중복되므로 합산하지 않는다.
+
+## 2026-10-26 · 57e7fdb090 · 영속 OS transaction과 native 유지보수 fence
+
+- 변경: factory가 만든 schema 1을 읽는 OS journal을 추가한다. 누락·손상·잘못된 권한은 HOLD이며 boot protocol 2/실제 common mount, root0700·단일 link0600을 요구한다. 짧은 비차단 state flock과 atomic fsync 게시, source/trial boot·검증된 metadata·layout·health 결속, 순차 단계·실패 버전 보존을 구현한다. parent fsync 실패 뒤에는 rename이 끝났을 수 있으므로 writer를 무효화하고 재개 시 디스크를 다시 읽는다. frozen/SDK closure에 함께 넣는다.
+- fence: native activate·명시적 rollback, 자동 updater resume·apply·precheck·eligibility, 직접 SDK sync·manual inverse를 영속 pending으로 차단한다. claim 만료로 해제되지 않는다. ABI2를 주장하더라도 fence 필수 SDK 파일이 없으면 거절한다. 기존 release.lock 안에서 SDK/native fence를 확인하며, OS controller도 짧게 같은 lock을 잡아 pending을 게시해야 한다. boot recovery/reconcile용 직접 inverse는 유지하고 CORE 재시작 동안 OS owner가 release.lock을 잡지 않는다. sync1014lines 유지, native manager567lines.
+- 증거: 초기 state/frozen52 passed/8.62s와 native activation/rollback/recovery75 passed/13.01s는 각각 공식 원격0NEW다. SDK 손상 후 frozen state subprocess 실제 게시1 passed/0.53s를 확인했다. 실패 버전·writer lifetime·parent fsync 주입·claim 만료 반례를 먼저 실행했다. 첫 broad1461 passed/1 NEW/32 skipped/49 warnings에서 기존 OS_STATE_HOLD 오류 계약의 변경을 찾아 원래 assertion을 유지한 채 수정했다. frozen fixture는 실제 installer로 SDK/firstboot/SD 전체를 준비하도록 고쳤다. 최신 broad는 별도 후속 결과로 기록한다.
+- gate 변화: 없음. journal helper는 firmware/health/GOOD_ACK/autoboot readback 권한을 대신하지 않는다. 실제 daemon·boot/health/controller 연결·SYSTEM·native ARM64 artifact·서명·SD·기체 수용이 남아 있다. 파일 IO/flock/subprocess와 모델 mount·오류 주입은 실제 전원 차단 시험이 아니다. 공개 게시·제품 키·카드 변경은 수행하지 않았다.
+- CE: 해당 없음 — lock 수명·불확실한 fsync·복구 예외의 판단을 소스·반례·D-888에 보존한다.
+
+- 최종 공식 원격: 57e7fdb090, os-update-state-final2, 1465 passed/32 skipped/49 warnings, 298.04s, 0 NEW. runner13549 terminal0. frozen 실제 게시·pending/만료 claim·직접 SDK와 native recovery·기존 updater의 40%/충전 정책을 포함한다. 앞의 개별 수와 중복되므로 합산하지 않는다. 32개 PowerShell skip은 여전히 미검증이다.

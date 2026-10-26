@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 57e7fdb090 · 영속 OS transaction과 native 유지보수 fence
 - 2026-10-26 · 35eeffe31f · OS metadata와 실제 RAUC/CMS 검증 및 설치 설정 준비
 - 2026-10-26 · 4676189d86 · 기존 카드 media admission과 비활성 OS metadata 변환
 - 2026-10-26 · b0dcb657e2 · bootstrap 영속 입력과 boot ABI 2 연결
 - 2026-10-26 · 2b65ad60f0 · native 빌더에 GPT A/B 조립 경로 연결
-- 2026-10-26 · e2860d4e5f · A/B 지속 데이터와 SSH host identity 보존

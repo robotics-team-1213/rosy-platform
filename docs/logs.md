@@ -11699,3 +11699,12 @@ osy-d395-s1d\`.
 - CE: 해당 없음 — 판단과 재현 조건을 코드·반례·기존 ADR에 보존한다.
 
 - 최종 runtime 포함 회귀: 35eeffe31f 공식 원격 os-rauc-runtime-final, 1166 passed/32 skipped/49 warnings, 165.15s. 개별 시험 수와 합산하지 않는다.
+
+## 2026-10-26 · 57e7fdb090 · D-888 OS journal과 pending fence 경계 기록
+
+- 변경: 명시적인 schema 1 journal, 짧은 state lock, source/trial/health 결속, 실패 버전·COMMIT_INTENT 해소 owner, parent fsync 불확실성 뒤 writer 무효화를 Proposed D-888에 기록한다. native·자동 updater·직접 SDK 유지보수는 pending으로 차단하고 boot recovery는 유지한다. 실제 controller가 같은 짧은 native release.lock으로 pending을 게시해야 한다는 경합 경계를 명시한다.
+- 증거: 초기 공식 원격52 passed와75 passed 각각0NEW; 완전한 설치 SDK를 사용한 frozen state isolated subprocess1 passed/0.53s. 첫 broad1461 passed/1NEW/32 skipped는 기존 오류 코드 계약을 찾아 수정했고 assertion은 유지했다. 실제 journal·flock·fsync와 모델 mount/오류 주입을 SYSTEM·전원 차단·실물 수용과 구분한다.
+- gate 변화: 없음. actual daemon/boot/controller와 최종 이미지·서명·SD 목표는 계속 남아 있다.
+- CE: 해당 없음 — 원인과 재개 조건을 기존 ADR·소스·시험에 보존한다.
+
+- 최종 공식 원격: 57e7fdb090, os-update-state-final2, 1465 passed/32 skipped/49 warnings, 298.04s, 0 NEW. 실제 파일 IO/frozen import와 모델 mount/오류 주입의 SOURCE 증거이며 native ARM64·SYSTEM·SD·DEVICE 수용을 뜻하지 않는다.
