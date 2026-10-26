@@ -12,6 +12,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy/robot/pinky_pro/native"
@@ -97,6 +98,31 @@ def test_the_first_card_failure_is_readable_from_the_boot_partition(tmp_path):
     assert report["boot_id"] == "23fe37a5e32a4462bd07ec95dc392a06"
     assert ["journalctl", "-b", "-u", "rosy-release-recover.service", "-n", "60",
             "--no-pager", "-o", "short-monotonic"] in calls
+
+
+@pytest.mark.parametrize("protocol", [1, 2])
+def test_ab_blackbox_uses_admitted_persistent_provision_mount(tmp_path, monkeypatch, protocol):
+    from os_state_boot_fakes import shared_roots
+    root, _, _, _ = shared_roots(tmp_path, monkeypatch, root_slot="b")
+    slot_path = root / "etc/rosy/os-slot.json"
+    layout = dict(json.loads(slot_path.read_text()), schema_version=protocol)
+    slot_path.write_text(json.dumps(layout))
+    (root / "proc/cmdline").write_text(
+        f"root=PARTUUID={layout['root_partuuid']} rosy.os_layout=ab-v{protocol}\n")
+    (root / "sys/devices/platform/fixture/block/sda/sda2/partition").write_text("1" if protocol == 2 else "2")
+    (root / "boot/firmware").mkdir(parents=True)
+    errors, _ = _boot(root, FAILED_CARD_UNITS)
+    assert not [error for error in errors if error.startswith("blackbox")]
+    assert (root / "run/rosy-provision-boot/rosy-diag/latest.txt").is_file()
+    assert not (root / "boot/firmware/rosy-diag").exists()
+
+
+def test_bad_ab_descriptor_does_not_redirect_blackbox_into_a_boot_slot(tmp_path):
+    root = _device(tmp_path)
+    (root / "etc/rosy/os-slot.json").write_text("{}")
+    errors, _ = _boot(root, FAILED_CARD_UNITS)
+    assert any(error.startswith("blackbox") for error in errors)
+    assert not (root / "boot/firmware/rosy-diag").exists()
 
 
 def test_black_box_output_is_redacted_and_scanner_clean(tmp_path):

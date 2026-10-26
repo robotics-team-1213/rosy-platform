@@ -59,6 +59,25 @@ def test_signed_compatible_sdk_can_activate_on_ab(tmp_path, monkeypatch):
     assert calls == ["stop", "start"]
 
 
+@pytest.mark.parametrize("maximum", [1, 2])
+def test_protocol2_requires_a_signed_sdk_that_preserves_boot_abi2(tmp_path, monkeypatch, maximum):
+    from os_payload_compatibility import require_ab_payload
+    contract = copy.deepcopy(CONTRACT)
+    contract["boot_abi"]["max"] = maximum
+    _, current, _ = _candidate(tmp_path, monkeypatch, contract)
+    root = current.parents[2]
+    path = root / "etc/rosy/os-slot.json"
+    layout = dict(json.loads(path.read_text()), schema_version=2)
+    path.write_text(json.dumps(layout))
+    (root / "proc/cmdline").write_text(f"root=PARTUUID={layout['root_partuuid']} rosy.os_layout=ab-v2\n")
+    candidate = root / "opt/rosy/releases" / CANDIDATE
+    if maximum == 1:
+        with pytest.raises(ValueError, match="OS_PAYLOAD_INCOMPATIBLE.*boot ABI"):
+            require_ab_payload(root, candidate)
+    else:
+        require_ab_payload(root, candidate)
+
+
 @pytest.mark.parametrize("change", ["legacy", "boolean_schema", "boot_abi", "reader", "writer", "closure"])
 def test_incompatible_signed_sdk_is_refused_before_activation_mutates_state(tmp_path, monkeypatch, change):
     contract = copy.deepcopy(CONTRACT)
