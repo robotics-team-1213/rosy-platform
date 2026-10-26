@@ -18,6 +18,16 @@ def fd_count():
     return len(list(Path('/proc/self/fd').iterdir()))
 
 
+def fd_snapshot():
+    descriptors = {}
+    for path in list(Path('/proc/self/fd').iterdir()):
+        try:
+            descriptors[path.name] = os.readlink(path)
+        except FileNotFoundError:
+            continue
+    return descriptors
+
+
 def _fifo_import_worker(sender, store, folder):
     """Run the genuine importer; report both refusal and owned-FD cleanup."""
     baseline = fd_count()
@@ -107,12 +117,14 @@ def test_selected_or_internal_links_never_read_target_bytes(tmp_path, monkeypatc
         if identity(real_fstat(fd)) in protected:
             reads.append(len(raw))
         return raw
-    before, baseline = snapshot(store), fd_count()
+    before, baseline = snapshot(store), fd_snapshot()
     monkeypatch.setattr(os, 'read', observe)
     with pytest.raises(ValueError, match='link|path|regular|catalog|directory|capture'):
         review_ingest.import_frames(store, body)
     assert not reads, 'linked selected content was read through an actual target FD'
-    assert snapshot(store) == before and fd_count() == baseline
+    assert snapshot(store) == before
+    current = fd_snapshot()
+    assert current == baseline, dict(before=baseline, after=current)
 
 
 def test_directory_replacement_after_parent_open_never_reads_outside_and_rejects_stale_binding(tmp_path, monkeypatch):
