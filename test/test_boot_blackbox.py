@@ -103,13 +103,7 @@ def test_the_first_card_failure_is_readable_from_the_boot_partition(tmp_path):
 @pytest.mark.parametrize("protocol", [1, 2])
 def test_ab_blackbox_uses_admitted_persistent_provision_mount(tmp_path, monkeypatch, protocol):
     from os_state_boot_fakes import shared_roots
-    root, _, _, _ = shared_roots(tmp_path, monkeypatch, root_slot="b")
-    slot_path = root / "etc/rosy/os-slot.json"
-    layout = dict(json.loads(slot_path.read_text()), schema_version=protocol)
-    slot_path.write_text(json.dumps(layout))
-    (root / "proc/cmdline").write_text(
-        f"root=PARTUUID={layout['root_partuuid']} rosy.os_layout=ab-v{protocol}\n")
-    (root / "sys/devices/platform/fixture/block/sda/sda2/partition").write_text("1" if protocol == 2 else "2")
+    root, _, _, _ = shared_roots(tmp_path, monkeypatch, root_slot="b", protocol=protocol)
     (root / "boot/firmware").mkdir(parents=True)
     errors, _ = _boot(root, FAILED_CARD_UNITS)
     assert not [error for error in errors if error.startswith("blackbox")]

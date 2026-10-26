@@ -10,8 +10,8 @@ from test_first_boot_provisioning import _bundle, _module
 SERIAL = "10000000abcdef01"
 
 
-def _provision_a(tmp_path, monkeypatch):
-    root_a, root_b, common, boot = shared_roots(tmp_path, monkeypatch)
+def _provision_a(tmp_path, monkeypatch, protocol=1):
+    root_a, root_b, common, boot = shared_roots(tmp_path, monkeypatch, protocol=protocol)
     bundle = root_a / "run/rosy-provision-boot/rosy-provision/provision.json"
     bundle.parent.mkdir()
     bundle.write_text(json.dumps(_bundle()), encoding="utf-8")
@@ -24,8 +24,9 @@ def _provision_a(tmp_path, monkeypatch):
     return module, root_a, root_b, common, bundle
 
 
-def test_committed_identity_and_runtime_are_projected_before_b_is_already_provisioned(tmp_path, monkeypatch):
-    module, root_a, root_b, _, bundle = _provision_a(tmp_path, monkeypatch)
+@pytest.mark.parametrize("protocol", [1, 2])
+def test_committed_identity_and_runtime_are_projected_before_b_is_already_provisioned(tmp_path, monkeypatch, protocol):
+    module, root_a, root_b, _, bundle = _provision_a(tmp_path, monkeypatch, protocol)
     report = module.FirstBootProvisioner(root=root_b, network_activate=lambda _: True).apply(
         bundle=bundle, hardware_serial=SERIAL)
     assert report["ok"] is True, report

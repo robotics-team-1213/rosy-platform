@@ -310,6 +310,15 @@ def _valid_root(tmp_path: Path) -> Path:
     return root
 
 
+def test_factory_storage_verifier_checks_the_complete_frozen_bootstrap(tmp_path):
+    contract = runpy.run_path(str(VERIFY))
+    root = _valid_root(tmp_path)
+    helper = root / "opt/rosy/os-bootstrap/os_ssh_hostkeys.py"
+    assert helper.is_file()
+    helper.unlink()
+    assert any("os_ssh_hostkeys.py" in finding for finding in contract["storage_gate_findings"](root))
+
+
 def _link(path: Path, target: str) -> None:
     """A symlink where the host allows one; a placeholder file on Windows without the privilege."""
     path.parent.mkdir(parents=True, exist_ok=True)

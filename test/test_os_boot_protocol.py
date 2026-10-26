@@ -47,9 +47,9 @@ def test_slot_protocol_does_not_expand_shared_state_schema():
 
 @pytest.mark.parametrize("protocol,number", [(1, 2), (2, 1), (1, 1), (2, 2)])
 def test_mount_admission_requires_the_protocols_exact_provision_partition(tmp_path, monkeypatch, protocol, number):
-    root, _, _, _ = shared_roots(tmp_path, monkeypatch)
-    _slot(root, protocol, f"ab-v{protocol}")
-    (root / "sys/devices/platform/fixture/block/sda/sda2/partition").write_text(str(number))
+    root, _, _, _ = shared_roots(tmp_path, monkeypatch, protocol=protocol)
+    provision_number = 1 if protocol == 2 else 2
+    (root / f"sys/devices/platform/fixture/block/sda/sda{provision_number}/partition").write_text(str(number))
     if (protocol, number) in ((1, 2), (2, 1)):
         assert next(row for row in mount_facts(root, _layout(root)[0]) if row["role"] == "provision")
     else:

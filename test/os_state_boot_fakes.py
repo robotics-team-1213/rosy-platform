@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from os_state_fakes import mount_device
 
 
-def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a"):
+def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a", protocol=1):
     roots = [root_a or tmp_path / "root-a", tmp_path / "root-b"]
     tables = []
     for root, slot in zip(roots, (root_slot, "b" if root_slot == "a" else "a")):
@@ -24,7 +24,7 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a"):
         boot = root / "proc/sys/kernel/random/boot_id"
         boot.parent.mkdir(parents=True, exist_ok=True)
         boot.write_text("fixture")
-        tables.append(mount_device(root, monkeypatch, slot=slot))
+        tables.append(mount_device(root, monkeypatch, slot=slot, protocol=protocol))
     common = tmp_path / "data"
     for root, destination in zip(roots, (common, tmp_path / "unused-b-factory")):
         original = root / "var/lib/rosy-device"
@@ -34,7 +34,7 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a"):
     (common / "state/current.json").unlink()
     (common / "state/factory.json").write_text(json.dumps(dict(schema_version=1, state_schema=1,
         factory_id="d951d2aa-a022-4e72-8d56-82fdf428583c")), encoding="ascii")
-    boot_volume = tmp_path / "boot-a"
+    boot_volume = tmp_path / ("bootstrap" if protocol == 2 else "boot-a")
     boot_volume.mkdir()
     bindings = {"var/lib/rosy-device": common, "run/rosy-provision-boot": boot_volume,
                 "var/lib/rosy/provisioning": common / "provisioning",

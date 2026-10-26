@@ -12,22 +12,23 @@ GENERATION = "a87be39d-02d8-4a95-9208-570ed7506cd2"
 BOOT = "a8f1b6c8-678f-43fe-bdfc-a93d2465a1c8"
 
 
-def mount_device(root, monkeypatch, *, slot="a", split_disk=False):
-    layout = dict(DESCRIPTOR, slot=slot)
+def mount_device(root, monkeypatch, *, slot="a", split_disk=False, protocol=1):
+    layout = dict(DESCRIPTOR, slot=slot, schema_version=protocol)
     if slot == "b":
         layout["root_partuuid"] = "c26f0d91-9c91-48fe-a1c2-fcb14ec3ed5c"
     descriptor = root / "etc/rosy/os-slot.json"
     (root / "proc/sys/kernel/random/boot_id").write_text(BOOT + "\n", encoding="ascii")
     write_json(descriptor, layout)
     (root / "proc/cmdline").write_text(
-        f"root=PARTUUID={layout['root_partuuid']} rosy.os_layout=ab-v1\n", encoding="ascii")
+        f"root=PARTUUID={layout['root_partuuid']} rosy.os_layout=ab-v{protocol}\n", encoding="ascii")
     mounts = []
     lines = []
     device_stats = {}
     for role, mountpoint, device, guid, filesystem, number in [
         ("root", "/", "8:4" if slot == "a" else "8:5", layout["root_partuuid"], "ext4", 4 if slot == "a" else 5),
         ("data", "/var/lib/rosy-device", "8:22" if split_disk else "8:6", layout["data_partuuid"], "ext4", 6),
-        ("provision", "/run/rosy-provision-boot", "8:2", layout["provision_partuuid"], "vfat", 2),
+        ("provision", "/run/rosy-provision-boot", "8:1" if protocol == 2 else "8:2",
+         layout["provision_partuuid"], "vfat", 1 if protocol == 2 else 2),
     ]:
         mount_id = 100 + number
         mounts.append(dict(role=role, mount_id=mount_id, device=device, root="/", mountpoint=mountpoint,
