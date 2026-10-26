@@ -12105,3 +12105,10 @@ osy-d395-s1d\`.
 - 증거: 소스758f92b620 root6FAIL/11447PASS/1211SKIP,23invocation 취소. 같은6건 main 선택 통과를 전체 맥락 대조로 확대하지 않았다. root 수집을 포함한 AI 대조4회는 각각21PASS/수집7SKIP, 공식·outer·known0/NEW0이며 기존 실패 원인은 미해결이다. validation/land-selection-extraction-2026-10-27/result.md.
 - gate 변화: HOLD 유지. 원래 FULL 실패를 단독 선택 성공으로 바꾸지 않으며 다음 공식 전체 실행·착지·게시·실물 수용은 별도다.
 - CE: 미해결 — 종료 지연 원인과 해결을 입증하지 못해 해결 교훈을 쓰지 않았다.
+
+## 2026-10-27 · b36e441576 · 명시적 FULL의 현재 준비와 게시 적격성
+
+- 변경: literal full을 현재 candidate의 정본 normal FULL·ALL browser/chunk/ALONE으로 연결했다. 매 실행 정상 준비와 fresh guard/isolation, 기존 exact body-cache와 같은 실행의 witness/main-delta bridge를 유지한다. 두 save의 guarded+tested LOAD-FLAKY/NARROW는 auto tier=None, full은 save/FF 전에 중단한다. 과거 isolation cache report는 full 초기·retry에서 제외하고 기존 nonSafety 추적/Safety 중단 정책을 유지한다.
+- 증거: 독립 source tree ef757dad18와 Monitoring incoming 15경로를 보존한 통합 tree 09379a4fe6 승인. 로컬 commit 259605fb2c의 selector·실제 소유권 299P/0S와 생산 source 7개가 같은 b36e441576의 도구 8파일 234P/0S는 각 official/outer/known0·NEW0이다. 첫 fixture 오류·빈 -k 실행·10F/2F는 원본을 보존하고 새 SHA에서 보완했다. 실제 old-candidate/env cache report 반례 1F/3P는 수정 전 RED다. quiet progress 수와 범위·SHA·미실행 항목은 validation/land-explicit-full-2026-10-27/result.md에서 구분한다.
+- gate 변화: 집중 소스 검증만 완료. 실제 FULL·착지·push·게시·site/robot/UTC/FIELD 수용은 실행하지 않았다. main commit 3125704e24의 후속 UI 변경은 Root가 공식 착지 때 정상 통합하며 이 소스 PASS에 포함했다고 주장하지 않는다.
+- CE: 기존 land-record와 Windows UTF-8 교훈을 갱신했다. Root의 검증된 부분 worktree 복구 기록은 gateway 소스 수정과 구분한다. 새 교훈·dependency·제품 API·권한·ratchet 완화는 없다.
