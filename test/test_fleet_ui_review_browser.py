@@ -5,10 +5,15 @@ import pytest
 
 from browser_harness import browser_tests_enabled
 from console_browser_site import console_url  # noqa: F401
-from test_console_palette import contrast
 from test_fleet_console_browser import MAP_GRID, SNAPSHOT, _open_console
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chromium scenario")
+
+
+def luminance(color):
+    channels = [int(value) / 255 for value in re.findall(r"\d+", color)[:3]]
+    return sum(weight * (value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4)
+               for weight, value in zip((0.2126, 0.7152, 0.0722), channels))
 
 
 @pytest.mark.parametrize("width", [320, 390])
@@ -35,9 +40,8 @@ def test_mobile_robot_status_precedes_map_and_critical_text_is_readable(console_
                 const style = getComputedStyle(node);
                 return [style.color, style.backgroundColor];
             }""")
-            foreground, background = ["#" + "".join(f"{int(v):02x}" for v in re.findall(r"\d+", color)[:3])
-                                      for color in colors]
-            assert contrast(foreground, background) >= 4.5, colors
+            foreground, background = sorted(map(luminance, colors))
+            assert (background + 0.05) / (foreground + 0.05) >= 4.5, colors
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert not errors
         finally:
