@@ -148,7 +148,7 @@ def _snapshot(root):
     default = parse_autoboot(_read(_path(root, BOOTSTRAP), 256, root.stat().st_uid))
     pending = state["pending"]
     if pending is None:
-        if facts["tryboot"] or facts["slot"] != state["committed"]["slot"] or default != facts["slot"]:
+        if facts["slot"] != state["committed"]["slot"] or default != facts["slot"]:
             raise ValueError("untracked boot or persistent default")
         return facts, state, default
     media = json.loads(_read(_path(root, "etc/rosy/os-media.json"), 32768, root.stat().st_uid), object_pairs_hook=_pairs)
