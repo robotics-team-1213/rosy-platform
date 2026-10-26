@@ -35,3 +35,9 @@
 - 변경: 고정 allowlist의 새 UI 묶음 builder, 전용 사용자 systemd unit, 개별·peer집계·중앙직접 설정과 독립 TLS proxy 예시/운영 절차를 추가했다. 기존 출력 덮어쓰기와 누락 자산의 부분 게시를 거부한다.
 - 증거: 원격 Monitoring104 PASS/0 SKIP, NEW/KNOWN/FLAKY0. 3프로필의 scope·분리 자격과 bundle byte 일치·기존 출력 보호를 검사했다. 9174fdaeb5에서 실제 배포 builder로 만든 묶음의 Chromium16 PASS/0 SKIP, NEW/KNOWN/FLAKY0이다. 읽기 전용 계약 검토 차단 없음. 실제 설치·활성화·대상 systemd 검사·LAN/TLS는 수행하지 않았다.
 - gate 변화: SOURCE/LOCAL GO, ARTIFACT/DEVICE/FIELD HOLD. CE 해당 없음 — 경계와 한계는 코드·시험·배포 절차에 직접 남는다.
+
+## 2026-10-26 · 96f995a996 · native unit 파서 검증
+
+- 변경: 설치된 wheel 실행 파일로 경로만 치환한 unit을 실제 systemd-analyze verify로 검사한다. 서비스 설치·활성화는 하지 않는다. 실행 파일은 PATH 가정 대신 시험 Python 환경에서 찾아 설치 누락을 거부한다.
+- 증거: 원격 native unit1 PASS/0 SKIP, NEW/KNOWN/FLAKY0. 최초 PATH 조회 실패는 7c1c35d4a9의 RED로 보존했다. 설치 위치 검증과 systemd 오류 판정은 유지했다. 두 승인 시험 PC에 Caddy가 없어 Caddy 검증은 미수행이다.
+- gate 변화: 없음. 시험 PC의 parser 검증은 실제 PC 고정 경로·계정·권한·TLS·LAN 수용을 대신하지 않는다. CE 해당 없음 — 시험의 환경 선택은 해당 코드에 직접 드러난다.

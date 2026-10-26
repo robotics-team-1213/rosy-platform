@@ -32,6 +32,8 @@ host_state 경로는 기존 owner가 만드는 보고 파일로 바꾸고 전용
 
 `rosy-monitoring.service`를 `/etc/systemd/system/`에 설치하기 전에
 `systemd-analyze verify`로 대상 OS에서 검사한다. `StateDirectory`가 0700으로 생성되는지 확인한다.
+시험 PC에서는 설치된 wheel의 실행 파일 위치만 치환한 unit을 실제 systemd 파서로 검사한다
+(`test/test_native_artifact.py`). 이는 대상 PC의 고정 경로·사용자·권한이나 서비스 기동 수용을 대신하지 않는다.
 상태 DB와 lock은 이 서비스만 쓴다. Fleet를 unit 의존성에 추가하지 않는다.
 서비스 시작은 해당 호스트 운영 절차에서 별도로 수행한다.
 
