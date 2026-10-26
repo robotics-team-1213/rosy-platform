@@ -3547,3 +3547,12 @@
 - CE: 해당 없음 — raw DT·같은 boot의 commit·ptrace 경계와 반례를 코드·시험·D-888에 남긴다.
 
 - 최종 공식 원격: bbef5d4bae, os-bootloader-final2, 1498 passed/32 skipped/49 warnings,298.19s,0NEW; runner15899 terminal0. 같은 boot commit 뒤 조회·미등록 다른 slot 거절·namespace-only parent/DT alias·기존 updater/closure/factory/SDK까지 포함한다. 앞의 개별 집계와 중복되므로 합산하지 않는다. 32개 PowerShell skip은 미검증이다.
+
+## 2026-10-26 · 0a7b6bb462 · transaction별 RAUC daemon 권한과 설치 lifecycle
+
+- 변경: root-only D-Bus policy와 기본 DeviceAllow가 빈 static rosy-os-rauc.service, frozen preflight 및 install/recover lifecycle을 추가한다. 같은 source boot의 INSTALLING journal·현재 claim·signed metadata/images/manifest·fresh media와 frozen/live assets를 대조한 뒤 runtime/config와 장치 drop-in을 게시한다. manager의 실제 설정값을 확인하고 설치 직전에 필수 authorize를 호출한 뒤 claim/pending/media를 다시 확인한다. policy/no-motion을 공급하는 전체 controller는 별도다.
+- 경계: 서비스에 private mount namespace·ProtectSystem=strict, runtime/common RAUC 두 디렉터리 RW, UNIX socket 통신, 제한 capabilities를 둔다. daemon을 확실히 정지한 뒤에만 만든 파일의 내용·directory identity·mount 부재를 확인하여 권한을 회수한다. 정지 실패·unknown 내용은 보존/HOLD, 같은 boot의 알려진 runtime은 claim 만료 뒤에도 새 설치 없이 회수한다. 10분 startup/20분 daemon 한도, 15분 request는 긴 SD 검증용이며 최종 policy freshness를 대신하지 않는다. 서비스와 policy는 protocol2에서만 설치하고 앱 sync/backup namespace에서 제외한다. frozen47/early10, sync1014lines 유지.
+- 검증: 모델 manager/실제 파일·GPT lifecycle8pass, policy/이미지/기존 boot37pass, 실제 Ed25519·CMS·verity 및 offline systemd parser2pass, poisoned mutable SDK의 frozen preflight1pass를 각각 공식 원격0NEW로 확인했다. 실제 서명이 유효한 UTF16 raw JSON의 ASCII 변환 실패1fail1pass를 재현한 뒤 atomic IO에 bytes 게시를 추가해 서명 원문을 보존하고 기존 문자열의 fsync/권한 순서는 유지한다. 이 집계는 겹치므로 합산하지 않는다.
+- 최종 공식 원격: 0a7b6bb462, os-rauc-service-final,1551 passed/32 skipped/49 warnings,316.91s,0NEW; runner50198 terminal0. 첫 부팅·projection·TLS·SSH·SDK·기존 updater 경로까지 포함한다. 실제 crypto/frozen subprocess·systemd parser와 모델 manager/mount는 SOURCE이며 실제 PID1/cgroup deny·블록 설치·ARM artifact·SD·기체 수용은 아니다. 32개 PowerShell skip은 미검증이다.
+- gate 변화: 없음. actual policy/no-motion/watchdog/deadline/health/commit/fallback과 incoming root metadata writer, producer/feed/offline signing, SYSTEM·native ARM64·서명·SD full readback은 남아 있다. 제품 키·게시·카드·main 착지는 수행하지 않았다.
+- CE: 해당 없음 — 파일 회수/정지 실패/늦은 최종 승인/원본 bytes 보존은 소스·반례·D-888에 남긴다.

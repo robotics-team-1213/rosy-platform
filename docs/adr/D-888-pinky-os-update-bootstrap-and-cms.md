@@ -48,7 +48,7 @@ B에서 비활성 boot A를 교체하면 사용 중인 FAT를 덮어쓰고, 전�
 
 배포 metadata는 기존 Ed25519로 원본 JSON 바이트를 먼저 검증한 뒤 중복 키와 예상 밖 필드를 거절한다. bundle 이름·SHA256·크기, board/arch, compatible, native factory, boot ABI 2와 state reader/writer 1, CMS signer SPKI를 결속한다. verifier는 private staging의 0400 일반 파일과 소유권·단일 link·동일 inode를 확인하고 전체 hash를 대조한다. CMS footer 크기를 먼저 제한한 뒤 RAUC 1.11.3의 실제 검증을 실행한다. JSON2의 인증된 inner metadata와 외부 metadata를 대조하고 hook·custom handler·adaptive 설치를 거절한다. CMS에는 고정된 P-256 인증서 하나만 허용하며 현재 시간의 유효기간 검사를 유지한다.
 
-서명 검사에 사용하는 sealed slotless `bootloader=noop` 설정은 `info` 전용이다. 설치 설정은 fresh media capture로 현재 카드의 장치를 정하고 비활성 두 partition에 후보가 들어가는지 확인하여 별도로 생성한다. `bootloader=custom`, `activate-installed=false`, rootfs와 child boot의 A/B 묶음, 공통 RAUC data-directory를 사용한다. 동적으로 생성하는 DeviceAllow는 실제 daemon에 적용할 입력이며 비활성 root/boot rw와 parent r, loop/verity 장치만 포함한다. 설정 생성 자체는 설치 권한이 아니다. 실제 daemon의 root-only D-Bus·namespace·cgroup 적용과 transaction/boot controller 연결·SYSTEM 검증은 아직 남아 있다.
+서명 검사에 사용하는 sealed slotless `bootloader=noop` 설정은 `info` 전용이다. 설치 설정은 fresh media capture로 현재 카드의 장치를 정하고 비활성 두 partition에 후보가 들어가는지 확인하여 별도로 생성한다. `bootloader=custom`, `activate-installed=false`, rootfs와 child boot의 A/B 묶음, 공통 RAUC data-directory를 사용한다. 동적으로 생성하는 DeviceAllow는 daemon에 적용할 입력이며 비활성 root/boot rw와 parent r, loop/verity 장치만 포함한다. 설정 생성 자체는 설치 권한이 아니다. OS-owned unit·root-only D-Bus 정책·transaction별 시작/정지/권한 회수 경로는 구현했으며, 실제 PID1/cgroup의 SYSTEM 검증과 전체 controller 연결은 남아 있다.
 
 native image는 Noble `rauc=1.11.3-2` binary package와 실제 일반 binary 파일을 검사하고, 전역 제어를 여는 upstream `rauc-service` package를 거절한다. test tool은 공식 deb의 크기·SHA256을 확인해 pytest 임시 경로에만 추출하며 전역 package나 service를 설치하지 않는다. 임시 인증서와 실제 CMS/verity, frozen 설치 경로 실행 시험은 제품 인증서·ARM artifact·실물 설치 수용을 대신하지 않는다.
 
@@ -73,6 +73,14 @@ firmware adapter는 [공식 autoboot 문서](https://www.raspberrypi.com/documen
 media capture는 현재 namespace의 `/dev/block/<major>:<minor>`를 열고 기존 block 형식·rdev·GPT 검사를 유지한다. [Linux proc link lookup](https://raw.githubusercontent.com/torvalds/linux/v6.8/fs/proc/base.c)은 `/proc/1/root` 접근을 ptrace 검사로 보호하므로, 장치 검증을 위해 그 우회 경로를 따르거나 daemon에 ptrace 권한을 더하지 않는다. PID1 mountinfo 읽기는 유지한다([kernel 구현](https://raw.githubusercontent.com/torvalds/linux/v6.8/fs/proc_namespace.c)). 실제 제한된 service의 namespace/cgroup 검증은 SYSTEM 단계에 남는다.
 
 commit 뒤 같은 boot의 DT `tryboot=1`이 남아도 현재 슬롯·영속 default·committed 슬롯이 모두 같으면 정상 조회를 허용한다. pending을 지운 뒤 이 상태를 미등록 trial로 오인해 다시 HOLD하지 않는다. 다른 슬롯의 미등록 trial은 계속 거절한다. 이는 별도 commit owner를 모델로 수행한 전이 회귀이며 실제 firmware commit 수용이 아니다.
+
+`rosy-os-rauc.service`는 protocol 2 이미지에만 설치하는 static unit이며 enabled/자동 D-Bus activation을 만들지 않는다. 기본 DeviceAllow는 비어 있다. private mount namespace·ProtectSystem=strict와 RAUC runtime/common 하위 디렉터리 두 곳의 쓰기 허용을 사용하고 loop/verity용 권한과 제한된 capabilities만 지정한다. root만 RAUC bus name을 소유하거나 호출하도록 [D-Bus policy](https://dbus.freedesktop.org/doc/dbus-daemon.1.html)에서 default deny/user root allow를 지정한다. unit·policy·실행 helper는 frozen closure에 포함하고 앱 SDK sync/backup이 이 unit 및 drop-in namespace를 쓰지 못하게 한다.
+
+installer는 같은 source boot의 INSTALLING 상태·claim·검증된 bundle/image/manifest·실제 media를 대조하고, frozen 원본과 live unit/policy가 같은지 확인한다. daemon 정지를 확인한 뒤 root-only runtime metadata·config·request와 장치 drop-in을 게시한다. ExecStartPre는 서명·실제 media·request를 다시 확인한다. manager의 FragmentPath/DropInPaths·ProtectSystem·DevicePolicy/DeviceAllow·ReadWritePaths를 대조하고 실제 raw SD 쓰기를 요청하기 직전에 caller의 필수 authorize 함수를 실행한 뒤 claim/pending/media를 다시 확인한다. 이 함수에 실제 enabled/Hold·withdrawal·fresh idle/battery·no-motion 검사를 공급하는 controller는 별도다.
+
+큰 bundle 검증의 SD 읽기 시간을 고려해 startup 검증에는 최대 10분, 같은 transaction request에는 최대 15분을 허용한다. request 유효기간을 최종 policy의 freshness로 사용하지 않는다. 느린 검증 뒤 필수 authorize가 실행되어야 한다. daemon runtime은 20분으로 제한하며 종료 시 control group을 함께 정지한다. 정지가 확인된 뒤에만 현재 호출이 만든 파일을 검증·삭제하고 권한을 회수한다. unknown 파일·mount·내용 변경이나 정지 실패는 HOLD로 남긴다. 동일 boot의 검증된 runtime 회수는 claim 만료 후에도 가능하며 새 설치를 시작하지 않는다. 이 경로는 incoming rootfs의 metadata rebase나 boot arm/commit을 수행하지 않는다.
+
+서명된 JSON은 staging에도 원본 bytes로 게시한다. verifier가 허용한 UTF-16 JSON을 실제 Ed25519/CMS로 검증한 반례에서 ASCII 재인코딩 실패를 확인한 뒤 atomic IO에 bytes 게시를 추가했다. 기존 UTF-8 문자열 writer의 fsync/권한/rename 순서는 유지한다. frozen preflight를 poisoned mutable SDK 없이 실행하는 실제 crypto와 systemd의 offline parser 시험은 SOURCE 증거이며 실제 daemon/PID1·cgroup deny·block 설치 수용은 아니다.
 
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.

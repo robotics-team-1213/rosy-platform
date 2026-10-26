@@ -11717,3 +11717,10 @@ osy-d395-s1d\`.
 - CE: 해당 없음 — 판단과 검증 조건은 기존 ADR·소스·반례에 보존한다.
 
 - 최종 공식 원격: bbef5d4bae, os-bootloader-final2,1498 passed/32 skipped/49 warnings,298.19s,0NEW. frozen CLI와 모델 firmware/mount/commit SOURCE 증거이며 actual daemon·SYSTEM·ARM artifact·SD·Pi 수용을 뜻하지 않는다.
+
+## 2026-10-26 · 0a7b6bb462 · D-888 RAUC daemon lifecycle과 검증 범위 기록
+
+- 변경: protocol2 전용 static unit/root-only D-Bus, frozen preflight, transaction/runtime 게시·회수와 manager 설정 대조를 D-888에 반영한다. 느린 SD 검증 뒤 필수 최종 authorize, 다시 보는 claim/pending/media, 정지 실패 시 보존, claim 만료 뒤 회수, raw JSON bytes 보존을 명시한다. 실제 controller 연결과 실제 PID1/cgroup 검증은 여전히 남아 있다.
+- 증거: 공식 원격0a7b6bb462, os-rauc-service-final,1551 passed/32 skipped/49 warnings,316.91s,0NEW. 실제 Ed/CMS/verity·poisoned SDK의 frozen preflight·systemd offline parser이며 manager/mount와 block install은 모델이다. crypto 통과를 실제 장치·kernel 권한 수용으로 표시하지 않는다.
+- gate 변화: 없음. 전체 SD 이미지·자동 OS controller·SYSTEM·ARM artifact·서명·기록 목표는 계속 남는다.
+- CE: 해당 없음 — 판단과 재현 조건을 기존 ADR·source·시험에 보존한다.

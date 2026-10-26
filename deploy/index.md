@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 0a7b6bb462 · transaction별 RAUC daemon 권한과 설치 lifecycle
 - 2026-10-26 · bbef5d4bae · frozen firmware callback과 비활성 trial 준비
 - 2026-10-26 · 57e7fdb090 · 영속 OS transaction과 native 유지보수 fence
 - 2026-10-26 · 35eeffe31f · OS metadata와 실제 RAUC/CMS 검증 및 설치 설정 준비
 - 2026-10-26 · 4676189d86 · 기존 카드 media admission과 비활성 OS metadata 변환
-- 2026-10-26 · b0dcb657e2 · bootstrap 영속 입력과 boot ABI 2 연결
