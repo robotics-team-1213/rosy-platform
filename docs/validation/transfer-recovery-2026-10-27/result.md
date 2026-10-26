@@ -24,6 +24,8 @@
 
 최종 관련 회귀의 runner exit 0, known NEW 0·known 0·flaky 0을 확인했다. tests revision `73f2fe5a03`의 코드 내용은 `7f0a8a152a`와 같다. 위 RED·수정 중 2 failures는 해당 당시 실제 결과이며 baseline에 추가하지 않았다. 전체 영향 범위·착지 gate는 아직 완료로 보고하지 않는다.
 
+최초 문서 lint는 다른 세션이 선점한 D-893/D-894 미착지 공백과 로그 제목 형식으로 3 errors였다. refs/adr의 실제 예약을 확인해 기존 `adr_gaps.txt`에 pending을 명시하고 제목을 정본 형식으로 고쳤다. 검사기·허용 목록을 약화하거나 다른 예약을 해제하지 않았다. `f71f090ad9`에서 lint 0 errors/37 warnings, 기준 이후 11 commits size-range 통과를 확인했다. 정본 selector의 mode는 affected이며 선택된 시험 범위를 유지한다.
+
 ## 독립 검토와 수정
 
 읽기 전용 계약 검토에서 정확한 재조회가 owner SDK 조회와 현재 executor TTL에 의존하는 P2 두 건을 찾았다. 원래 task failed 판정의 full digest를 실제 보존된 이벤트와 대조하지 않는 원본 보존 검증 공백도 확인했다. 네 반례를 원격 RED로 재현했다.
