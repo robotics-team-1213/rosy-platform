@@ -28,22 +28,26 @@ def app(tmp_path):
     source, human, images = fixture_inputs(tmp_path)
     store = ReviewStore(tmp_path / 'state', source, human, images)
     server = make_server(store, 0)
+    server.daemon_threads = False
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    url = f'http://127.0.0.1:{server.server_port}'
-    token = json.load(urllib.request.urlopen(url + '/api/workspace'))['token']
+    try:
+        url = f'http://127.0.0.1:{server.server_port}'
+        with urllib.request.urlopen(url + '/api/workspace') as response:
+            token = json.load(response)['token']
 
-    def call(path, payload=None, token=token):
-        data = None if payload is None else json.dumps(payload).encode()
-        request = urllib.request.Request(url + path, data, headers={'X-Pinky-Token': token} if data else {})
-        with urllib.request.urlopen(request) as response:
-            raw = response.read()
-            return json.loads(raw) if response.headers.get_content_type() == 'application/json' else raw
+        def call(path, payload=None, token=token):
+            data = None if payload is None else json.dumps(payload).encode()
+            request = urllib.request.Request(url + path, data, headers={'X-Pinky-Token': token} if data else {})
+            with urllib.request.urlopen(request) as response:
+                raw = response.read()
+                return json.loads(raw) if response.headers.get_content_type() == 'application/json' else raw
 
-    yield call, store
-    server.shutdown()
-    server.server_close()
-    thread.join()
+        yield call, store
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
 
 
 def test_features_reference_check_and_still_round_trip(app):
@@ -71,7 +75,8 @@ def test_features_reference_check_and_still_round_trip(app):
     path.write_text(json.dumps({**doc, 'fps': 15}), encoding='utf-8')
     with pytest.raises(urllib.error.HTTPError) as error:
         call('/api/learning/camera/references')
-    assert error.value.code == 400
+    with error.value:
+        assert error.value.code == 400
 
 
 def test_markers_reference_reports_centimetres(app):
@@ -96,4 +101,5 @@ def test_reference_write_needs_the_token_and_a_jpeg(app):
                                  (body(image, layout=LAYOUT), None, 400)]:
         with pytest.raises(urllib.error.HTTPError) as error:
             call('/api/learning/camera/reference', payload, **({'token': token} if token else {}))
-        assert error.value.code == code
+        with error.value:
+            assert error.value.code == code

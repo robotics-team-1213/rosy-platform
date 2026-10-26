@@ -83,7 +83,7 @@ git push -u origin fix/<짧은-주제>
 
 실험실 PC 한 대의 체크아웃 하나와 git 인덱스 하나를 여러 세션이 같이 쓴다. 전문은 [같이 하는 깃](shared-checkout.md)과 루트 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」, 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다. 줄이면:
 
-1. **`main` 체크아웃에서 작업하지 않는다.** `python tools/worktrees.py new <짧은이름> <type>/<topic>`으로 `.worktrees/` 아래에 만든다. 상한 50개, 착지 뒤 `python tools/worktrees.py prune --apply`.
+1. **`main` 체크아웃에서 작업하지 않는다.** `python tools/worktrees.py new <짧은이름> <type>/<topic>`으로 `.worktrees/` 아래에 만든다. 상한은 main 포함 15개(D-886), 착지 뒤 `python tools/worktrees.py prune --apply`가 워크트리와 착지한 브랜치를 지운다. 브랜치 종류는 [「브랜치 이름과 수명」](shared-checkout.md#브랜치-이름과-수명).
 2. **자기 경로만 `git add`.** `git add -A`·`.`·디렉터리 add 금지. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash` 금지. 남의 미커밋은 지우지도 치우지도 않는다.
 3. **ADR·API 버전 번호는 도구로 선점한다** — `python tools/harness/adr_reserve.py next "<주제>"`, `python tools/harness/api_reserve.py next "<주제>"`.
 4. **시험은 기존 실패와 비교한다** — `tools/remote/remote_pytest.py` → `python test/known_failures.py <run.txt>`. `NEW`는 그 브랜치의 실패다.
@@ -94,14 +94,7 @@ git push -u origin fix/<짧은-주제>
 
 **로컬 `main`이 `origin/main`보다 앞서 있으면 그 커밋들에는 CI 증거가 없다.** 새 팀원은 `origin`만 본다. 착지한 일은 미루지 않고 push한다.
 
-로컬 `main`을 push하는 순서(D-427 4항, D-762 단계 5까지 유효):
-
-```bash
-git fetch origin
-git rebase origin/main          # main 체크아웃에서, 미커밋 변경이 없을 때만
-python tools/harness/rosy_harness.py generate   # STATUS.md, docs/index.md 등이 바뀌면 그 변경을 커밋
-git push origin main            # pre-push 훅 통과 필수. --no-verify, force-push 금지
-```
+로컬 `main`을 올리는 순서는 [D-868](../adr/D-868-local-main-first-merge-commit-publish.md)이다. 로컬 `main`의 끝을 `publish/main-<YYYYMMDD>`로 push해 PR을 열고, `ci-result`가 녹색이면 merge commit으로 병합하고, 워크트리에서 `git merge origin/main`을 `tools/land.py`로 착지한다(역동기화, `--ff-only` 아님). 전문은 `AGENTS.md` 「같이 하는 깃」 6번이다. 공유 에이전트 clone은 `git config rosy.publishOnly true`로 두어 pre-push가 `publish/main-*` 밖의 push를 거절한다(사고 대응만 `ROSY_PUSH_REASON="<이유>"`). 팀원의 clone은 이 설정을 두지 않는다.
 
 push 뒤 CI 확인:
 

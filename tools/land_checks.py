@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -69,6 +70,63 @@ def _safety(wt: Path, python: str, ids: list[str]) -> list[str]:
     return [line for line in done.stdout.splitlines() if line] if done.returncode == 0 else list(ids)
 
 
+def _ids(wt: Path, verdict: str) -> list[str]:
+    """The NEW node ids of a known_failures verdict, each path checked against the tree.
+
+    A run over several paths can print ids from another pytest rootdir (2026-10-26, feat/update-view:
+    ``middleware/robot_execution/local/test_feature_matrix.py`` for ``applications/fleet/test/...``), and the
+    reruns below then found no file. A path the tree lacks takes the one tracked test file of that name.
+    """
+    ids = []
+    for line in verdict.splitlines():
+        if not (m := NEW_LINE.match(line.strip())):
+            continue
+        nodeid = m.group(1).strip()
+        path, sep, rest = nodeid.partition("::")
+        if not (wt / path).is_file():
+            found = [p for p in _git(wt, "ls-files", "--", f"*{Path(path).name}").stdout.splitlines()
+                     if Path(p).name == Path(path).name]
+            if len(found) == 1:
+                nodeid = found[0] + sep + rest
+        ids.append(nodeid)
+    return ids
+
+
+def added_known(wt: Path, inv: list[str]) -> list[str]:
+    """Ids this landing adds to test/known_failures.txt (vs local main) whose test file `inv` runs."""
+    base = subprocess.run(["git", "-C", str(wt), "show", "main:test/known_failures.txt"], capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+    if base.returncode != 0:
+        return []
+
+    sys.path.append(str(Path(__file__).resolve().parents[1] / "test"))
+    from known_failures import load_known  # one parser, so the two cannot drift
+
+    def ids(text: str) -> set[str]:
+        return set(load_known(text))
+    head = (wt / "test/known_failures.txt").read_text(encoding="utf-8") if (wt / "test/known_failures.txt").is_file() else ""
+    return sorted(i for i in ids(head) - ids(base.stdout)
+                  if any(i.split("::")[0] == p or i.startswith(p.rstrip("/") + "/") for p in inv))
+
+
+def verdict(wt: Path, inv: list[str], log: Path, logdir: Path, tag: str, python: str, run,
+            tested_sha: str) -> tuple[int, list[str], str]:
+    """test/known_failures.py on ``log``, then the rerun alone for its NEW ids: (exit, load-flaky ids, why).
+
+    A NEW failure is confirmed (exit non-zero, no load-flaky ids) only after the rerun, so land.py's early stop
+    never cancels a round for a failure that passes alone."""
+    must = [arg for nodeid in added_known(wt, inv) for arg in ("--must-fail", nodeid)]
+    check = subprocess.run([python, "test/known_failures.py", str(log), *must], cwd=wt, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", env={**os.environ, "PYTHONUTF8": "1"})
+    print(check.stdout, end="")
+    if check.returncode == 0:
+        return 0, [], ""
+    passing = [line.split()[1] for line in check.stdout.splitlines() if line.startswith("MUST-FAIL ")]
+    if passing:  # not a failure to rerun: the listed test passes, so the new line hides nothing
+        return check.returncode, [], f"known_failures.txt adds id(s) that pass here: {', '.join(passing)}"
+    return (check.returncode, *load_flaky(wt, inv, log, check.stdout, logdir, tag, python, run, tested_sha=tested_sha))
+
+
 def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
                run, *, tested_sha: str) -> tuple[list[str], str]:
     """Rerun the NEW ids of one invocation alone; ``(load-flaky ids, "")`` or ``([], why it stops)``.
@@ -85,7 +143,7 @@ def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, 
 
 def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
                  run, *, tested_sha: str) -> tuple[list[str], str]:
-    ids = [m.group(1).strip() for line in verdict.splitlines() if (m := NEW_LINE.match(line.strip()))]
+    ids = _ids(wt, verdict)
     if not ids or len(ids) > MAX_RERUN:
         return [], f"{len(ids)} NEW id(s); a rerun alone is tried only for 1 to {MAX_RERUN}"
     safety = _safety(wt, python, ids)
@@ -99,6 +157,9 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
         return [], "incomplete isolated rerun results"
     if _git(wt, "rev-parse", "HEAD").stdout.strip() != tested_sha:
         return [], "HEAD changed during isolated checks; retry the landing"
+    lost = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code not in (0, 1)]
+    if lost:  # 4: no such file, 5: nothing collected, 255: host lost: no verdict, not a second failure
+        return [], "the rerun alone gave no verdict: " + "; ".join(lost)
     again = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code != 0]
     if again:
         return [], "failed again when run alone: " + "; ".join(again)
@@ -120,7 +181,7 @@ def main_red(wt: Path, inv: list[str], verdict: str, logdir: Path, tag: str, pyt
 
     Never lets a landing through: it only says whether the failure is main's or the branch's.
     """
-    ids = [m.group(1).strip() for line in verdict.splitlines() if (m := NEW_LINE.match(line.strip()))]
+    ids = _ids(wt, verdict)
     if not ids:
         return ""
     main = _git(wt, "rev-parse", "main").stdout.strip()
@@ -146,3 +207,24 @@ def main_red(wt: Path, inv: list[str], verdict: str, logdir: Path, tag: str, pyt
     return (f"MAIN-RED: {len(red)} of {len(ids)} NEW id(s) also fail on main {main[:10]} (log {log}). Main is"
             " broken, not this branch: fix main first in a small fix/ branch that changes only that, land it,"
             " then rerun land.py here (check that no peer is already fixing it)")
+
+
+OWN_COPY = "ROSY_LAND_OWN_COPY"  # set by the re-run below: the landed copy runs, never re-runs itself
+
+
+def landed_copy(main_co: Path, argv: list[str]) -> int | None:
+    """Run main's tools/land.py when this checkout's tools/land*.py differ from main's; its exit code, or None.
+
+    land.py ran from the landing branch's own copy, so a branch made before a land.py fix landed with the old
+    rules: a log merge main already accepted stopped "a side changed existing lines" (2026-10-26). The working
+    directory stays the branch's worktree; only the landing code is main's.
+    """
+    here, there = Path(__file__).resolve().parent, (main_co / "tools").resolve()
+    if os.environ.get(OWN_COPY) or there == here or not (there / "land.py").is_file():
+        return None
+    names = sorted({p.name for d in (here, there) for p in d.glob("land*.py")})
+    if all((here / n).is_file() and (there / n).is_file() and (here / n).read_bytes() == (there / n).read_bytes()
+           for n in names):
+        return None
+    print(f"[land] this branch's tools/land*.py differ from main's: landing with {there / 'land.py'}", flush=True)
+    return subprocess.run([sys.executable, str(there / "land.py"), *argv], env={**os.environ, OWN_COPY: "1"}).returncode

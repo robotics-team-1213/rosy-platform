@@ -10,18 +10,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-from core_common.protocol.schemas import FleetCellTransferGrant
-
 from .dispatch_admission import release as release_claims
 from .dispatch_admission import reserve as reserve_claims
 from .dispatch_admission import normalize_resources
 from .mission_store import MissionConflict, _json, _nonempty, _now
 from .sqlite_policy import configure_connection, enable_wal
-from .step_action_kinds import step_action_kind, step_grant_digest
+from .step_action_kinds import parse_step_grant, validate_step_grant, step_grant_digest
 from . import cell_arm_jobs as arm_jobs, cell_sheet_checkpoints as sheets, step_ledger_schema
 from . import cell_job_read_model as read_model
+from . import job_provenance_schema
+from . import physical_transfer_schema
+from .cell_job_completion import confirm_step_goal
 
-_MIGRATION_VERSION = 4  # 2: TRIP (D-763 7); 3: per-arm tables; 4: multi-arm marker/placement (D-779 2-4)
+_MIGRATION_VERSION = 8  # D-856: bound physical observations; old hosts must refuse this journal.
 _IDENTIFIER_HASH_FIELDS = ("recipe_digest", "cell_digest", "process_artifact_digest")
 # Claim phases (D-403 §4 보강 2026-10-03): a Cell Job holds its claims from admission until it is
 # terminal. CLAIMED = admitted and runnable; DISPATCHING = an Action is in flight; UNKNOWN = the
@@ -52,6 +53,8 @@ def hold_for_site_stop(connection: sqlite3.Connection, *, now: str, hold_reason:
     if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_cell_jobs'"
                           ).fetchone() is None:
         return
+    physical_transfer_schema.hold_for_site_stop(connection, now=now,
+        reason="SITE_AUTHORITY_CHANGED" if hold_reason is None else "SITE_STOP", event=CellJobStore._event)
     if hold_reason is not None:
         generation = connection.execute(
             "SELECT generation FROM fleet_dispatch_control WHERE control_id=1").fetchone()[0]
@@ -73,63 +76,10 @@ class CellJobStore:
         self._noted: set[tuple[str, str, str]] = set()  # device receipts already recorded
         with closing(self._connect()) as connection:
             enable_wal(connection)
-            connection.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS fleet_component_migrations (
-                    component TEXT NOT NULL,
-                    version INTEGER NOT NULL,
-                    applied_at TEXT NOT NULL,
-                    PRIMARY KEY(component, version)
-                );
-                CREATE TABLE IF NOT EXISTS fleet_cell_jobs (
-                    mission_id TEXT PRIMARY KEY,
-                    proposal_principal_id TEXT NOT NULL,
-                    request_key TEXT NOT NULL,
-                    request_digest TEXT NOT NULL,
-                    job_id TEXT NOT NULL,
-                    workcell_id TEXT NOT NULL,
-                    instance_id TEXT NOT NULL,
-                    recipe_digest TEXT NOT NULL,
-                    cell_digest TEXT NOT NULL,
-                    process_artifact_digest TEXT NOT NULL,
-                    job_json TEXT NOT NULL,
-                    resources_json TEXT NOT NULL,
-                    ledger_markers_json TEXT NOT NULL,
-                    status TEXT NOT NULL CHECK(status IN (
-                        'PROPOSED', 'READY', 'RUNNING', 'ACTION_SUCCEEDED',
-                        'GOAL_CONFIRMED', 'HOLD'
-                    )),
-                    current_step_index INTEGER NOT NULL DEFAULT 0 CHECK(current_step_index >= 0),
-                    authority_epoch INTEGER,
-                    dispatch_generation INTEGER,
-                    reason TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS fleet_cell_events (
-                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_key TEXT NOT NULL UNIQUE,
-                    mission_id TEXT NOT NULL REFERENCES fleet_cell_jobs(mission_id),
-                    step_index INTEGER,
-                    event_type TEXT NOT NULL,
-                    actor_id TEXT NOT NULL,
-                    detail_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                );
-                """
-            )
-            connection.execute(
-                "INSERT OR IGNORE INTO fleet_component_migrations(component, version, applied_at) "
-                "VALUES ('cell_jobs', ?, ?)", (_MIGRATION_VERSION, _now()),
-            )
-            applied = connection.execute(
-                "SELECT MAX(version) FROM fleet_component_migrations WHERE component='cell_jobs'",
-            ).fetchone()[0]
-            if applied > _MIGRATION_VERSION:
-                raise RuntimeError(f"unsupported Cell Job journal migration version {applied}")
-            step_ledger_schema.ensure(connection)  # D-763 7: the steps table and its registry kind CHECK
-            sheets.migrate(connection)
-            connection.commit()
+            with job_provenance_schema.initialize(connection, version=_MIGRATION_VERSION, now=_now()):
+                step_ledger_schema.ensure(connection)
+                sheets.migrate(connection)
+                physical_transfer_schema.ensure(connection)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)
@@ -239,7 +189,8 @@ class CellJobStore:
             ).fetchone()
             rows = connection.execute(
                 """SELECT mission_id, current_step_index, authority_epoch, dispatch_generation
-                   FROM fleet_cell_jobs WHERE status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')
+                   FROM fleet_cell_jobs WHERE provenance_kind='legacy'
+                     AND status IN ('READY', 'RUNNING', 'ACTION_SUCCEEDED')
                      AND (authority_epoch != ? OR dispatch_generation != ?)
                      AND mission_id NOT IN (SELECT mission_id FROM fleet_cell_arm_jobs)""",
                 (control["authority_epoch"], control["generation"])).fetchall()
@@ -278,7 +229,7 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             if job is None:
                 raise KeyError(mission_id)
@@ -330,18 +281,18 @@ class CellJobStore:
                    now: datetime | None = None, owner_journal_id: str | None = None) -> dict[str, Any]:
         action_id = _nonempty("action_id", action_id)
         attempt_id = _nonempty("attempt_id", attempt_id)
-        parsed = FleetCellTransferGrant.model_validate(dict(grant))
+        parsed = parse_step_grant(grant)
         canonical_grant = parsed.model_dump(mode="json")
         if step_grant_digest(parsed) != parsed.request_digest:
-            raise ValueError("CELL_TRANSFER request digest does not match the complete grant")
+            raise ValueError(f"{parsed.action_kind} request digest does not match the complete grant")
         now_dt = now or datetime.now(timezone.utc)  # the dispatcher passes its own clock (1b B4)
         if parsed.issued_at > now_dt or parsed.expires_at <= now_dt:
-            raise MissionConflict("CELL_TRANSFER grant is not current")
+            raise MissionConflict(f"{parsed.action_kind} grant is not current")
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             if job is None:
                 raise KeyError(mission_id)
@@ -378,21 +329,8 @@ class CellJobStore:
                 result = self._get(connection, mission_id)
                 connection.commit()
                 return result
-            if (parsed.mission_id != mission_id or parsed.step_id != step["step_id"]
-                    or parsed.action_id != action_id or parsed.attempt_id != attempt_id
-                    or parsed.workcell_id != job["workcell_id"]
-                    or parsed.instance_id != job["instance_id"]
-                    or parsed.cell_transfer.job_id != job["job_id"]
-                    or parsed.cell_transfer.step_index != step_index
-                    or parsed.cell_transfer.recipe_sha256 != job["recipe_digest"]
-                    or parsed.cell_transfer.cell_sha256 != job["cell_digest"]
-                    or parsed.authority_epoch != job["authority_epoch"]
-                    or parsed.dispatch_generation != job["dispatch_generation"]):
-                raise ValueError("CELL_TRANSFER grant does not match the current persisted step")
-            kind = step_action_kind(step["action_kind"])
-            expected_payload = kind.body(job, step_index, json.loads(step["step_json"])["inputs"])
-            if getattr(parsed, kind.body_field).model_dump(mode="json") != expected_payload:
-                raise ValueError("CELL_TRANSFER payload does not match the persisted PlanBundle step")
+            validate_step_grant(parsed, job, step, step_index=step_index,
+                                action_id=action_id, attempt_id=attempt_id)
             if not self._owns_runnable_claims(connection, job):
                 # Nothing was sent: a pre-send hold releases what is left (D-420 §4.5 row 1).
                 self._hold_in_transaction(
@@ -444,7 +382,7 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             step = connection.execute(
                 "SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
@@ -624,7 +562,7 @@ class CellJobStore:
 
     @staticmethod
     def _require(connection: sqlite3.Connection, mission_id: str) -> sqlite3.Row:
-        job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,)).fetchone()
+        job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,)).fetchone()
         if job is None:
             raise KeyError(mission_id)
         return job
@@ -651,7 +589,7 @@ class CellJobStore:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
+                "SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'", (mission_id,),
             ).fetchone()
             if job is None:
                 raise KeyError(mission_id)
@@ -824,98 +762,7 @@ class CellJobStore:
             raise MissionConflict("Cell Job event identity was reused with different evidence")
         return True
 
-    def confirm_step_goal(self, mission_id: str, *, step_index: int,
-                          action_id: str, attempt_id: str,
-                          evidence: Mapping[str, Any]) -> dict[str, Any]:
-        """Record already authenticated sim-model and post-action gripper evidence."""
-        required_evidence = {
-            "producer_id", "evidence_id", "evidence_source", "action_id", "attempt_id",
-            "satisfied", "gripper_state", "gripper_evidence_id",
-        }
-        if not isinstance(evidence, Mapping) or not required_evidence.issubset(evidence):
-            raise ValueError("Cell step goal confirmation requires independent producer and gripper evidence")
-        if (evidence["evidence_source"] != "sim_model_pose"
-                or evidence["action_id"] != action_id or evidence["attempt_id"] != attempt_id
-                or evidence["gripper_state"] != "OPEN"
-                or type(evidence["satisfied"]) is not bool):
-            raise MissionConflict("Cell step goal evidence does not match the current transfer attempt")
-        if evidence["satisfied"] is not True:
-            raise MissionConflict("unsatisfied Cell step goal evidence cannot advance the Job")
-        for field in ("producer_id", "evidence_id", "gripper_evidence_id"):  # from main 64b4b1faa
-            _nonempty(field, evidence[field], limit=192)
-        evidence_json = _json(dict(evidence))
-        event_id = f"goal:{step_index}:{_nonempty('evidence_id', evidence['evidence_id'])}"
-        detail = {**json.loads(evidence_json), "event_id": event_id}
-        now = _now()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            job = connection.execute(
-                "SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            step = connection.execute(
-                "SELECT * FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
-                (mission_id, step_index),
-            ).fetchone()
-            if job is None or step is None:
-                raise KeyError(mission_id if job is None else (mission_id, step_index))
-            final = connection.execute(
-                "SELECT MAX(step_index) FROM fleet_cell_steps WHERE mission_id=?", (mission_id,),
-            ).fetchone()[0] == step_index
-            event_type = "CELL_JOB_GOAL_CONFIRMED" if final else "CELL_STEP_GOAL_CONFIRMED"
-            if self._replayed(connection, mission_id, step_index, event_type, "goal-evidence",
-                              event_id, detail):
-                result = self._get(connection, mission_id)
-                connection.commit()
-                return result
-            if (job["status"] != "ACTION_SUCCEEDED" or step["status"] != "ACTION_SUCCEEDED"
-                    or job["current_step_index"] != step_index
-                    or step["action_id"] != action_id or step["attempt_id"] != attempt_id
-                    or not self._durable_success(connection, mission_id, step_index, action_id, attempt_id)):
-                raise MissionConflict("independent goal evidence requires this step's terminal Action success")
-            now = _now()
-            connection.execute(
-                "UPDATE fleet_cell_steps SET status='GOAL_CONFIRMED', goal_evidence_json=?, "
-                "reason=NULL, updated_at=? WHERE mission_id=? AND step_index=?",
-                (evidence_json, now, mission_id, step_index),
-            )
-            next_index = step_index + 1
-            next_step = connection.execute(
-                "SELECT step_index FROM fleet_cell_steps WHERE mission_id=? AND step_index=?",
-                (mission_id, next_index),
-            ).fetchone()
-            if next_step is not None:
-                # From main 64b4b1faa: the next step opens only under the current fence; otherwise
-                # the Job waits for re-approval with its claims parked HELD (D-403 보강).
-                can_continue = self._fence_current(connection, job)
-                if can_continue:
-                    connection.execute(
-                        "UPDATE fleet_cell_steps SET status='READY', updated_at=? "
-                        "WHERE mission_id=? AND step_index=? AND status='WAITING'",
-                        (now, mission_id, next_index),
-                    )
-                else:
-                    self._set_claims(connection, job, "HELD", strict=False, context="goal-advance")
-                connection.execute(
-                    "UPDATE fleet_cell_jobs SET status=?, current_step_index=?, "
-                    "reason=?, updated_at=? WHERE mission_id=?",
-                    ("READY" if can_continue else "HOLD", next_index,
-                     None if can_continue else "SITE_AUTHORITY_CHANGED", now, mission_id),
-                )
-                sheets.hold_due(connection, self._require(connection, mission_id), next_index, now, self._event)
-                event_type = "CELL_STEP_GOAL_CONFIRMED"
-            else:
-                connection.execute(
-                    "UPDATE fleet_cell_jobs SET status='GOAL_CONFIRMED', current_step_index=?, "
-                    "reason=NULL, updated_at=? WHERE mission_id=?",
-                    (next_index, now, mission_id),
-                )
-                release_claims(connection, owner_kind="mission", owner_id=mission_id,
-                               generation=job["dispatch_generation"])
-                event_type = "CELL_JOB_GOAL_CONFIRMED"
-            self._event(connection, mission_id, step_index, event_type, "goal-evidence", detail)
-            result = self._get(connection, mission_id)
-            connection.commit()
-        return result
+    confirm_step_goal = confirm_step_goal
 
     @staticmethod
     def _event(connection: sqlite3.Connection, mission_id: str, step_index: int | None,

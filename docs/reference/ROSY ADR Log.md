@@ -10,8 +10,16 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-891 | Fleet 인식 모델 승격 대기열 — 올린 D-874 묶음을 다시 검사하고 결정만 기록한다 | Proposed (2026-10-26) |
+| D-887 | Signed site service sets and identity-bound retirement | Accepted (2026-10-26) |
+| D-890 | Navigation intent epoch preservation | Accepted (2026-10-26) |
+| D-886 | 워크트리 도구 차단값을 15개 예산과 맞추고, 착지한 브랜치를 prune이 지운다 | Accepted (2026-10-26) |
+| D-885 | guard가 디스크 부족 시험 PC의 저장소 정리를 요청한다 (D-883 보충) | Accepted for implementation (2026-10-26) |
+| D-884 | Learning 저장 대상 풀과 검증된 로컬 자료 회수. [전문](../adr/D-884-learning-storage-pool-and-local-reclamation.md) | Accepted (2026-10-26) |
+| D-889 | CI/CD 흐름: 통합 열차·정기 게시·잠금 밖 FULL | Proposed (2026-10-26) |
+| D-875 | Swarm owner-local API separates planning from safety lifecycle | Accepted for implementation (2026-10-25) |
+| D-883 | Monitoring 호스트 자원 감시와 시험 PC 저장소 정리 요청 (D-876 §5·D-524 보충) | Accepted for implementation (2026-10-26) |
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
-| D-871 | 모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면 | Accepted for implementation (2026-10-25) |
 | D-854 | OMX 학습 정책 실행기 하나로 — 정책 종류를 갈아 끼우는 AI PC 정책 실행기와 행동 단위 변환 | Proposed (2026-10-23) |
 | D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |
@@ -23,8 +31,10 @@
 | D-848 | 봉인한 리더 녹화의 세션·사이클 계보 | Accepted for implementation (2026-10-23) |
 | D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나, 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
 | D-878 | 모델 구조화 출력 — 스키마 정본은 하나, 전송 형식은 어댑터에서, 파싱 실패는 무효 답과 같다 (D-392 §6 보충) | Proposed (2026-10-25) |
+| D-879 | 서명된 GPT A/B 이미지의 파티션 역할을 SD 도구가 함께 검증한다 | Proposed |
 | D-876 | ROSY Monitoring — 사이트 독립 감시와 통합 집계 | Accepted (2026-10-25) |
 | D-874 | Learning 승격 요청 묶음 — 확정 정답 평가 근거를 봉인해 넘기고, 승인은 Fleet에 둔다 (D-857 보충) | Proposed (2026-10-25) |
+| D-871 | 모든 호스트 서비스 자동 업데이트와 통합관제 업데이트 화면 | Accepted for implementation (2026-10-25) |
 | D-868 | 로컬 main에 먼저 착지하고, 공개 main에는 그 로컬 main을 merge commit으로 올린다 | Accepted (2026-10-25) |
 | D-858 | OMX 실물 팔 경로: device-core를 은퇴시키고 기존 OMX owner에 흡수 | Accepted (2026-10-24) |
 | D-870 | 군집 원본 자세 시각과 수신측 단조 시계 만료 | Accepted for implementation (2026-10-25) |
@@ -1304,3 +1314,9 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted for implementation (2026-10-25). 계약·소스·시험·배포·실물 수용은 별도다.
 
 원본 pose capture를 보존하고 수신측 remaining을 단조 시계 만료로 고정한다. 누락·지연·중복·역순 표본과 혼합 구형 peer를 이동 근거로 사용하지 않는다. D-859의 UTC 품질 수용은 별도 운영 전제이며 기능 광고로 대체하지 않는다. 전문은 [D-870](../adr/D-870-original-swarm-pose-time-and-monotonic-expiry.md).
+
+## D-884 Learning 저장 대상 풀과 검증된 로컬 자료 회수
+
+**Status:** Accepted (2026-10-26). 사용자 설계 승인·구현 지시이며 운영 활성화는 별도다.
+
+HF user/org별 용량 예약과 작업의 연결·고정 revision·SHA를 보존한다. 검증된 관리 자료만 명시적으로 회수·복원하며 활성 lease와 pin을 보호한다. 전문은 [D-884](../adr/D-884-learning-storage-pool-and-local-reclamation.md).

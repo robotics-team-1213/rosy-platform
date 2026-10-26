@@ -46,7 +46,8 @@ from fleet.swarm.session import (
     SessionState,
 )
 from fleet.swarm.robots import RobotEndpoint
-from fleet.swarm.transport import RobotApiError, RobotClient, require_capability
+from fleet.swarm.transport import RobotApiError, RobotClient
+from fleet.swarm.session_arming import require_capability
 
 #: A robot whose read fails within this many seconds of its last answer is shown as
 #: `degraded` (responding late), not `unreachable`; decisions still see online=False.
@@ -56,7 +57,6 @@ logger = logging.getLogger("fleet.console")
 #: 맵은 로봇마다 다시 받을 이유가 없다 — 한 사이트는 한 맵을 공유한다. 그래도 SLAM 으로
 #: 맵이 바뀔 수 있으므로 무한정 붙들지는 않는다.
 MAP_TTL_S = 10.0
-
 
 class FleetConsole(TripAware):
     """robots.yaml 한 장에 적힌 N대를 하나의 관제 표면으로 묶는다."""

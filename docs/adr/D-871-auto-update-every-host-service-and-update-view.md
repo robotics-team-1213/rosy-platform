@@ -63,4 +63,18 @@
 - SOURCE: `test/test_omx_workcell_observation_bridge.py`: env의 health 목록. `test/test_update_gate.py`: 새 업데이트 유닛의 관문. `test/test_update_status.py`: services.yaml.
 - DEVICE: 관제 PC 적용 기록은 적용한 뒤 이 문서에 덧붙인다.
 
+### 개정 2026-10-25 (3단계 구현)
+
+- **review v12·v13-eval:** `kind: service`가 아니라 기존 서명 경로(`rosy-review-release-update`, D-446·D-561)를 따른다. 두 앱은 v13과 같은 `install_review_release.py` 방식으로 설치됐다. 앱마다 루트, state, 포트, 서비스가 다르다. 설치기의 협업 확인, live HTTP 확인, 작업 잠금, 롤백을 그대로 쓰려면 같은 업데이터가 맞다. 그래서 같은 유닛이 v12, v13-eval, v13 순서로 실행한다. 앞의 두 앱은 실패해도 다음 앱을 막지 않고, v13이 실패하면 유닛이 실패한다. 서명된 model-code가 나오면 자동으로 따르고, 서명은 사람이 한다(D-446).
+- **관제 PC site-tools:** cam-stream과 account-tls 갱신 코드는 `omx_autoupdate.py` `kind: service` 설정 하나(`site-tools`, 루트 `~/.local/share/rosy/site-tools`)로 따른다. 휴대폰 설정, 인증서, 토큰은 기존 데이터 폴더에 남긴다. 다시 띄우는 것은 타이머만이다. 서비스를 바로 다시 띄우면 갱신이나 휴대폰 버튼 동작이 즉시 실행되기 때문이다. 관제 PC의 시스템 Python에는 `ensurepip`이 없어 venv는 `uv`로 만든다.
+- **site-discovery:** 실행 코드가 자기 폴더에서 설정, CA, 토큰을 읽는다. 그래서 코드와 비밀을 나누는 코드 변경이 먼저 필요하고, 별도 변경으로 한다.
+- **legacy 937 계정 래퍼**(`rosy-dataset-review-account`)는 이 결정의 대상이 아니다.
+
+### 개정 2026-10-26 (화면, 사용자 결정)
+
+- **현장 동결은 화면에 표시만 한다.** Fleet 서버에 GitHub 토큰을 두지 않는다. 동결은 지금처럼 `ops-update-freeze` 태그나 로컬 동결 파일로 건다. 화면은 PC별 관문 상태(허용·동결·관문 없음)만 보여 준다. 그래서 Decision 5의 "policy-admin: 동결 걸기·풀기"는 화면 동작에서 뺀다.
+- **viewer는 요약을 본다.** `/api/fleet/updates`(`require_viewer`)는 PC별 상태(정상·멈춤·꺼짐·동결·미확인)와 릴리스만 준다. 마지막 단계와 사유 코드는 운영자용 `/api/fleet/hosts`에만 있다.
+- **수집.** 각 PC의 `rosy-update-report`가 보고하고, 가드가 강제 명령 `updates`로 모은다. 관제 PC 자신은 `updates` 줄로 읽는다. 이 줄은 복구 사다리를 돌리지 않는다.
+- **트리.** 화면은 가드가 보고한 PC를 모두 그린다(셀 관제 PC N대). 운영자 동작("지금 확인"·"이전 버전으로")은 특권 helper 허용 목록을 바꾸는 일이라 별도 변경으로 남긴다.
+
 **References:** D-805, D-852, D-530, D-441, D-446, D-454, D-270, D-757, D-785.

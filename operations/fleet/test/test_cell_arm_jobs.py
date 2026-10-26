@@ -226,7 +226,7 @@ def test_a_stage_one_fleet_refuses_a_ledger_that_may_hold_multi_arm_jobs(tmp_pat
     path, _, _, _ = _stores(tmp_path)
     create_arm_job(CellJobStore(path))
     monkeypatch.setattr(store_module, "_MIGRATION_VERSION", 3)  # per-arm tables only, no multi-arm filter
-    with pytest.raises(RuntimeError, match="unsupported Cell Job journal migration version 4"):
+    with pytest.raises(RuntimeError, match="unsupported Cell Job journal migration version 8"):
         CellJobStore(path)
 
 

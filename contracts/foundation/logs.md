@@ -981,6 +981,43 @@
 
 구현 보완: oversized schemas.py의 SSH 모델을 독립 `protocol/ssh.py`로 옮기고 기존 canonical export·필드·검증을 유지했다. 루트 스키마의 크기 상한을 늘리거나 검사를 약하게 하지 않고 새 wire 모델을 추가하기 위한 책임 분리다. 중간 크기 위반 커밋은 보존하고 새 브랜치에서 모델 이동과 export를 같은 커밋으로 구성한다.
 
+## 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 공유 계약
+
+- 변경: API v1.299에 엄격한 물리 참조 요청·원래 요청에 결속한 검사 결과·지원 거절 모델을 등록했다. simulation/collision 명시값·유한 나이·revision·고정 code/reason을 검증하며 Envelope 1.0은 유지한다. UI DTO는 leaf로 그대로 옮겨 canonical export를 유지하고 facade 크기를 줄였다.
+- 증거: 신규 계약/owner/Fleet RED 36 failed 뒤 구현하고 고정 code/reason RED 3개를 추가해 수정했다. 최종 신규·기존 관련 원격 213 passed/skip0/0 NEW다. 정확한 시험 SHA·metadata 재작성·HTTP 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 결속했다.
+- gate 변화: 읽기 계약의 SOURCE·simulation 집중 검증이다. 중립 팔 grant·실행·장치 수용을 열지 않는다. CE 해당 없음: 검증 조건은 schema·회귀·검증 기록에 남는다.
+
+## 2026-10-24 · uncommitted · D-856 중립 팔 실행 grant 모델
+
+- 변경: 예약 v1.303에 설치 물리 참조 여섯 개와 공통 실행 envelope의 불변 grant DTO를 등록한다. 기존 Action/stop DTO 14개의 AST를 그대로 leaf에 옮기고 canonical export를 유지한다. schemas facade는 1142→811줄로 줄인다.
+- 증거: commit 93ec6212ea의 공식 원격 RED 31 failed는 신규 모델 누락이다. 모델·기존 digest/stop/receipt·API version·미설치 kind 거절의 최종 원격 결과는 후속 SHA에 결속한다.
+- gate 변화: DTO 등록만 진행한다. 새 kind의 Fleet registry·owner parser·phase/direct-driver·UDS submit은 계속 거절하며 실제 grant 발행·실행은 후속이다. CE 해당 없음: 계약과 회귀가 판단 근거를 보존한다.
+
+## 2026-10-24 · 1258314f51 · 중립 팔 grant 소비자 검증
+
+- 변경: 중립 팔 grant 등록과 DTO 이동의 검증 결과를 기록했다.
+- 증거: foundation 전체와 신규·기존 소비자 공식 원격 1385 passed/skip0/0 NEW, 독립 검토에서 material finding 없음. docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md를 따른다.
+- gate 변화: DTO 소비자 집중 검증이며 실제 runtime·원장·물리 종료와 Harbor 연결은 후속이다.
+
+## 2026-10-24 · 76a173b5fd · D-856 공유 자원 키의 contract leaf
+
+- 변경: 기존 순수 자원 정규화를 stdlib-only core_common.resource_keys로 옮겼다. safety와 decision 양쪽이 계약 leaf를 소비하며 Fleet의 기존 normalize_resources 재수출과 normalize/reserve/release AST는 유지한다. 새 wire shape·API version·writer·권한은 추가하지 않았다.
+- 증거: 공유 leaf 누락 RED7 뒤 Foundation 전체·Fleet 중립/Cell 원장·점유·writer/safety 구조의 공식 원격1292 passed/skip0/known0 NEW, source76 FULL23개 각각exit0/known0 NEW, 독립 안전 검토와 source9 commits size/safety exit0를 확인했다. 원본 실패와 skip 한계는 docs/validation/harbor-physical-proposals-2026-10-24/result.md를 따른다.
+- gate 변화: 라이브러리와 host 집중 검증이다. 실제 HTTP producer·장치 제출·관측 credential·물리 점유 해제·Harbor 연결은 후속이다. CE 해당 없음: 코드·회귀·기존 D-430 의존 규칙과 검증 문서가 판단 근거를 보존한다.
+
+
+## 2026-10-24 · 58f7cc7b14 · D-856 중립 ARM 작업 HTTP 계약
+
+- 변경: API v1.307 closed/frozen physical request·admit·snapshot/response를 정본 DTO로 추가하고 store/HTTP가 같은 타입을 소비한다. TaskStatus는 AST 동일 분리 후 facade 재수출을 유지하고 schemas 예산을800으로 낮췄다. 기존 live pins9곳과 reference의 version 표행을 함께 갱신했다.
+- 증거: 계약/라우트 RED35 NEW 뒤 b5 집중1205 passed/16 NEW를 보존했다. 최종 HTTP18 passed/skip0/known0 NEW, FULL23개 각각exit0/known0 NEW(공통entry9 7398 passed/91 skipped), 독립 계약·23로그 evidence 검토 추가 finding 없음이다. 상세는 docs/validation/harbor-arm-job-http-2026-10-24/result.md와 manifest를 따른다.
+- gate 변화: HTTP 제안·조회·승인 계약의 검증이다. 실제 제출·물리 종료·Harbor ARM 연결은 후속이며 skip을 수용으로 세지 않는다. 뒤의 schema7/8은 이 FULL58 검증에 합치지 않는다. CE 해당 없음: source·회귀·정본 계약이 수정 근거를 보존한다.
+
+
+## 2026-10-24 · bb38fdcdd0 · D-856 v1.312 raw physical observation contract
+
+- 변경: 13개 closed wire 모델을 facade에서 재수출한다. 기존5개 status enum은 AST 동일하게 leaf로 옮겨 facade767행 ratchet을 지켰다. 빈 raw coverage는 unknown으로 보존하며 evaluator의 완전 coverage gate는 유지한다. v1.312는 정식 선점했고 기존 pin의 header/assertion 문맥도 복구했다.
+- 증거: wire RED16, empty coverage/observer/store RED8NEW, source c4 Foundation/정합성/관련 Fleet1266passed/skip0/0NEW, 최종 bb38 auth/observer/release122passed/skip0/0NEW 및 독립 재검토. docs/validation/harbor-arm-observer-http-2026-10-24/result.md를 따른다.
+- gate 변화: 최신 bb38 FULL23개 모두exit0/official0NEW·독립 전체 증거 검토를 확인했다. 이전 dc FULL의2개 gate 실패를 보존하며 이전58 FULL에 합치지 않는다. 실제 HTTP/UDS의 raw facts도 synthetic이며 schema/통신 결과를 물리 수용으로 부르지 않는다. CE 미해결: 이전G1 timing 원인은 미확정, 이번 수정은 source·회귀·ADR로 복원 가능해 새 교훈 없음.
 ## 2026-10-24 · 73fc8b2b09 · 공통 Action·상태 구성 모델의 소유 분리
 
 - 변경: 기존 Action·국소 정지 모델14개를 `protocol/device_actions.py`, 상태 구성 모델20개를 `protocol/state_components.py`로 옮겼다. canonical `schemas` import·공개 필드·검증·Envelope1.0을 유지하고 schemas를1170줄에서569줄로 줄여 기존 초과 ratchet 행을 제거했다.
@@ -1013,3 +1050,10 @@
 - 변경: `FleetLinkObservation`·`FleetMonitoringRead`와 canonical export를 추가했다. 기존 link·D-535 이유와 원천 나이를 보존하고 중복·비유한 나이·결측 불일치·추가 본문을 거부한다. API Ref v1.318과 함께 등록한다.
 - 증거: RED 커밋 `4ec72e39f8`의 원격 시험에서 미구현 모델 import 실패를 확인했다. 구현 검증은 커밋 SHA의 원격 시험으로 확인한다.
 - gate 변화: 기존 모듈 gate를 올리지 않는다. 계약이며 Fleet handler·독립 수집·배포 수용은 별도다. CE: 해당 없음.
+
+## 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
+
+- 변경: optional navigate/home caller epoch 문법과 정본 상수, CORE Home 본문 전달, Fleet navigate의 실행 전 명시적 거절을 함께 보완했다. API v1.323과 공식 도구의 기존 version pins를 정렬했다.
+- 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
+- Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
+- CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.

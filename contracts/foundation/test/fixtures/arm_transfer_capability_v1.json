@@ -1,0 +1,13 @@
+{
+  "action_kind": "ARM_TRANSFER",
+  "control_mode": "fleet_managed",
+  "workcell_id": "workcell-1",
+  "instance_id": "arm-1",
+  "journal_id": "journal-1",
+  "owner_session_id": "session-1",
+  "catalog_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "bindings_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "resource_policy_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "capability_revision": "cap-1",
+  "config_revision": "config-1"
+}

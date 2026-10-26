@@ -1,7 +1,6 @@
 import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 const $=id=>document.getElementById(id);
-$('theme').value=document.documentElement.dataset.theme||'dark';$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{}document.dispatchEvent(new CustomEvent('rosy:theme'));};
 const API='/api/learning/vlm/';
 let token='', editor=true, manager=true, busy=false, list=[], current=null, choices={}, focus=0, imageReady=false, summary=null, revising=false;
 const KINDS={eval:'평가셋',disputed:'의견 갈림',audit:'점검'};

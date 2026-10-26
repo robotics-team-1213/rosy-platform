@@ -513,6 +513,16 @@ roots:
       fleet/server/recognition: fleet.server
       fleet/server/rightofway: fleet.server
     concern: decision
+  - path: operations/fleet/fleet/swarm/api
+    part: operations
+    d427_target: operations/fleet/fleet/swarm/api
+    wave: none
+    concern: contracts
+    api: true
+    import_prefix: [fleet.swarm.api]
+    source_packages: {"": fleet.swarm.api}
+    note: D-875 owner-local declarations only; no planning, admission or I/O.
+
   - path: operations/fleet/fleet/observe
     part: operations
     d427_target: operations/fleet/fleet/observe
@@ -902,7 +912,12 @@ roots:
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
 # roots above are the directory form.
 safety_modules:
+  - operations/fleet/fleet/swarm/session_lifecycle.py  # Actual lifecycle, stop, resume and epoch guards
+  - operations/fleet/fleet/swarm/session_arming.py  # Member checks and all-or-nothing arming
+  - operations/fleet/fleet/swarm/relay.py  # Reference delivery and readiness
   - contracts/foundation/core_common/protocol/swarm_freshness.py  # D-870 source-time expiry bound
+  - middleware/drive/behaviors/swarm/manager.py  # Swarm follow ownership, HOLD and timeout
+  - middleware/drive/behaviors/swarm/reference_stream.py  # Swarm reference admission and trail sampling
   - operations/fleet/fleet/server/channel/execution/outcomes/handover.py
   - operations/fleet/fleet/server/channel/execution/outcomes/evidence.py
   - operations/fleet/fleet/swarm/dispatch_guard.py
@@ -1030,7 +1045,16 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: fleet.swarm.session_lifecycle.FormationLifecycle, public: true}
+  - {symbol: fleet.swarm.session_lifecycle.EVENT_TYPES, public: true}
+  - {symbol: fleet.swarm.session_lifecycle.TRIGGERS, public: true}
+  - {symbol: fleet.swarm.session_arming.require_capability, public: true}
+  - {symbol: fleet.swarm.session_arming.check_leader_ready, public: true}
+  - {symbol: fleet.swarm.session_arming.SessionArming}
+  - {symbol: fleet.swarm.relay.Relay, public: true}
   - {symbol: core_common.protocol.swarm_freshness.remaining_reference_s, public: true}  # D-870 pure lifetime check
+  - {symbol: core_features.swarm.manager.SwarmManager, public: true}
+  - {symbol: core_features.swarm.reference_stream.SwarmReferenceStream}
   - {symbol: core_features.command._execution_fence.Fence}
   - {symbol: core_features.command._execution_fence.install}
   - {symbol: core_features.command._execution_ledger.Ledger}

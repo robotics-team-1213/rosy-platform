@@ -7,6 +7,7 @@ import os
 import socket
 import struct
 import threading
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -21,10 +22,12 @@ from core_common.protocol.workcell_barrier import CoordinatorStopReason
 
 from .action_runner import ActionRunner, action_grant_digest, parse_action_grant
 from .local_stop import LocalStopBlocked, LocalStopController
+from .installed_transfer_factory import InstalledArmTransferFactory
+from .journal_identity import existing_journal_identity
 
 # A phase-runner-only kind is never journaled from a v1 frame, whose reply drops the
 # ordered phase summaries Fleet needs to reconcile it (D-403 §2).
-MIN_SUBMIT_VERSION_BY_KIND = {"CELL_TRANSFER": 2}
+MIN_SUBMIT_VERSION_BY_KIND = {"CELL_TRANSFER": 2, "ARM_TRANSFER": 2}
 
 
 class ActionApi:
@@ -36,12 +39,14 @@ class ActionApi:
     def __init__(self, runner: ActionRunner, *, stop_api: Any | None = None,
                  recovery_api: Any | None = None,
                  identity: Mapping[str, Any] | None = None,
-                 coordinator_api: Any | None = None) -> None:
+                 coordinator_api: Any | None = None,
+                 transfer_preflight_api: Any | None = None) -> None:
         self.runner = runner
         self.stop_api = stop_api
         self.recovery_api = recovery_api
         # D-780 1: per-operation coordinator peer roles; None keeps every Fleet-only path as before.
         self.coordinator_api = coordinator_api
+        self.transfer_preflight_api = transfer_preflight_api
         # Read-only owner identity (D-390 §5): the simulation composition reports simulation=True;
         # an owner without one answers UNKNOWN_OPERATION, so Fleet never opens dispatch to it.
         self.identity = dict(identity) if identity is not None else None
@@ -62,7 +67,7 @@ class ActionApi:
 
     def _success(self, version: int, receipt: Mapping[str, Any]) -> dict[str, Any]:
         payload = dict(receipt)
-        if self.identity and self.identity.get("journal_id"):
+        if "journal_id" not in payload and self.identity and self.identity.get("journal_id"):
             payload["journal_id"] = self.identity["journal_id"]
         if version == 1:
             payload.pop("phase_summaries", None)
@@ -85,6 +90,24 @@ class ActionApi:
             if routed is not None:
                 return routed
         try:
+            if operation == "GetTransferCapability":
+                self.runner._principal(peer_uid)
+                if version != 2:
+                    return self._error("UNSUPPORTED_VERSION", "transfer capability requires v2",
+                                       status=400, version=version)
+                if set(request) != {"version", "operation"}:
+                    raise ValueError("GetTransferCapability contains unsupported fields")
+                try:
+                    factory = self.runner.phase_runner_factories.get("ARM_TRANSFER")
+                    if not isinstance(factory, InstalledArmTransferFactory):
+                        raise PermissionError("managed transfer factory is unavailable")
+                    capability = factory.describe(self.runner, self.identity)
+                except Exception:
+                    return self._error("ARM_TRANSFER_CAPABILITY_UNAVAILABLE",
+                                       "installed managed transfer owner is unavailable", status=503, version=version)
+                return {"version": 2, "status": 200, "capability": capability.model_dump(mode="json")}
+            if operation == "CheckTransfer" and self.transfer_preflight_api is not None:
+                return self.transfer_preflight_api.dispatch(request, peer_uid=peer_uid)
             if operation == "SubmitAction":
                 if set(request) != {"version", "operation", "grant"}:
                     raise ValueError("SubmitAction contains unsupported fields")
@@ -108,7 +131,11 @@ class ActionApi:
                 if receipt is None:
                     missing = self._error("ACTION_NOT_FOUND", "Action is unavailable",
                                           status=404, version=version)
-                    if self.identity and self.identity.get("journal_id"):
+                    with closing(self.runner.store._connect()) as connection:
+                        journal = existing_journal_identity(connection)
+                    if journal is not None:
+                        missing["journal_id"] = journal
+                    elif self.identity and self.identity.get("journal_id"):
                         missing["journal_id"] = self.identity["journal_id"]
                     return missing
                 return self._success(version, receipt)

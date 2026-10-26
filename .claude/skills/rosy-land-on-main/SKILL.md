@@ -32,7 +32,7 @@ python tools/worktrees.py status                              # every worktree w
   clean, merged into `main`, not locked, no ignored data, idle 1 h when its branch landed a commit of its own
   and 72 h otherwise (D-790), so nothing is left to lose; your own landed worktree needs no wait; orphan directories
   idle 1 h, their files zipped to `$ROSY_SCRATCH/worktree-orphans/` and verified first);
-  `new --prune` applies that first. It refuses at 50 directories under `.worktrees/` and names each worktree
+  `new --prune` applies that first. It refuses at 14 directories under `.worktrees/` (15 with main, D-886) and names each worktree
   removable now and by whom; `status` shows each row's owner (`unknown` when none; `new --owner "<who>"` sets it)
   and whether you may remove it. `landed-dirty` = the branch is in `main` but files are uncommitted: move the
   work to a new worktree. `stale-history` = a pre-rewrite branch: never merge or land it (`new --from` refuses it). `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
@@ -145,7 +145,8 @@ digraph land {
 5. Push only when the task says to push, in the D-868 order: land on local main first; if `origin/main`
    is not an ancestor, `git merge origin/main` in a worktree and land it; push local main's tip as
    `publish/main-<YYYYMMDD>`, open a PR, merge it with `gh pr merge <PR> --merge --match-head-commit <SHA>`
-   once `ci-result` is green, then `git merge --ff-only origin/main` on main. Never squash, rebase-merge
+   once `ci-result` is green, then sync back: `git merge origin/main` in a worktree off main and land it
+   with `tools/land.py` (not `--ff-only`: main has usually moved past the published SHA). Never squash, rebase-merge
    or force-push. Local main ahead of `origin/main` has no CI evidence.
 
 ## Red flags — stop

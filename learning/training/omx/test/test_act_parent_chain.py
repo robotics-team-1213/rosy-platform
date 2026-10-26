@@ -28,6 +28,8 @@ def test_original_inference_candidate_is_the_parent_submission(tmp_path, monkeyp
     engine._clock = session._clock  # Establish the same fixture clock before capture.
     if actual_cpu:
         monkeypatch.undo()
+        # Keep acquisition and observation on the declared fixed HOST fixture clock.
+        monkeypatch.setattr('sim_policy_inference.perf_counter_ns', lambda: int(session._clock() * 1e9))
         from act_cpu_fixture import install_cpu_fixture
         engine = install_cpu_fixture(session, root)
     session.bind_runtime(runtime)  # Freeze the final installed source, after fixture setup.

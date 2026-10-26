@@ -11,6 +11,7 @@ import time
 import urllib.request
 
 from rosy.decision.deliberation import canonical
+from rosy.decision.structured_output import openai_chat
 from . import deliberation_free_codec as codec
 from .deliberation_glm_gateway import Gateway, NoRedirect, stream_response
 from .deliberation_smoke_budget import claim
@@ -81,9 +82,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                            or item.get('role') in {'tool', 'function'} for item in incoming['messages'])):
                 raise ValueError('FREE_REQUEST_REFUSED')
             headers = client_headers(self.headers)
-            request = dict(model=codec.MODEL, max_tokens=1024, stream=False,
-                messages=[dict(role='system', content='Return only the requested schema v2 advisory JSON. No tools.'),
-                          dict(role='user', content=server.body)], response_format={'type': 'json_object'})
+            # shortcut: json_object until an opencode json_schema probe passes (D-878 §3).
+            request = openai_chat(codec.MODEL,
+                [dict(role='system', content='Return only the requested schema v2 advisory JSON. No tools.'),
+                 dict(role='user', content=server.body)])
             claim(server.body)
             server.calls = 1
             response = codec.checked_response(upstream(request, server.token,

@@ -1,6 +1,7 @@
 """Allowlisted service control for the site, AI, and model Ubuntu hosts.
 
-The control system accepts reboot, cancel-reboot, restart-unit, and stop-unit.
+The control system accepts reboot, cancel-reboot, restart-unit, stop-unit, and on the
+lab PCs clean-storage (D-883: start the rosy-ops storage service once).
 A process name, a signal, and a shell command are not actions. Fleet reaches
 every host, its own included, through one forced-command SSH key; the host's
 `rosy-host-control-remote` runs `sudo -n /usr/local/sbin/rosy-host-control`.
@@ -34,7 +35,9 @@ HOSTS: dict[str, dict[str, frozenset[str]]] = {
     "model": {},
 }
 
-ACTIONS = frozenset({"reboot", "cancel-reboot", "restart-unit", "stop-unit"})
+# Host-wide actions besides reboot; the site keeps product data, so it never cleans storage.
+HOST_ACTIONS: dict[str, frozenset[str]] = {host: frozenset({"clean-storage"}) for host in ("ai", "model")}
+ACTIONS = frozenset({"reboot", "cancel-reboot", "restart-unit", "stop-unit", "clean-storage"})
 UNIT_ACTIONS = RESTART_OR_STOP
 REBOOT_DELAY_MIN = 10
 CONFIG_DIR = Path("/run/rosy-fleet-host-control")  # host /etc/rosy/fleet-host-control, Fleet only
@@ -42,7 +45,7 @@ SSH = "/usr/bin/ssh"
 _LOG = logging.getLogger(__name__)
 _TARGET = re.compile(r"^[a-z_][a-z0-9_-]{0,31}@[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
 # Exit codes of deploy/site/rosy-host-control; anything else is HOST_HELPER_FAILED.
-_HELPER_EXIT = {3: "REBOOT_ALREADY_SCHEDULED", 4: "NO_HOST_CONTROL_REBOOT"}
+_HELPER_EXIT = {3: "REBOOT_ALREADY_SCHEDULED", 4: "NO_HOST_CONTROL_REBOOT", 5: "NO_STORAGE_SERVICE"}
 
 
 class HostControlError(Exception):
@@ -60,13 +63,61 @@ def read_json_object(path: Path) -> dict | None:
     return body if isinstance(body, dict) else None
 
 
+STUCK_AFTER_S = 6 * 3600  # the same bound as tools/remote/update_status.py
+_WORD = re.compile(r"^[A-Za-z0-9_.:@-]{1,80}$")
+
+
+def _word(value):
+    return value if isinstance(value, str) and _WORD.fullmatch(value) else None
+
+
+def _number(value):
+    return value if type(value) in (int, float) and value == value and abs(value) != float("inf") else None
+
+
+def update_summary(guard: dict | None, now: float) -> dict:
+    """D-871: each PC's update channels for every signed-in role: state and release only, no reasons.
+
+    `ok` = a healthy step within STUCK_AFTER_S, `off` = its timer is not enabled, `stuck` = otherwise.
+    A PC whose report is missing or malformed is `unknown`; nothing is inferred from silence."""
+    hosts = []
+    for name, row in sorted((guard or {}).items()):
+        if not isinstance(row, dict) or "updates" not in row:
+            continue  # robots and older guard rows are not update hosts
+        report = row["updates"]
+        if not isinstance(report, dict) or not isinstance(report.get("updaters"), list):
+            hosts.append({"host": name, "state": "unknown", "gate": None, "channels": []})
+            continue
+        channels = []
+        for item in report["updaters"]:
+            if not isinstance(item, dict) or not _word(item.get("unit")):
+                continue
+            last = item.get("last") if isinstance(item.get("last"), dict) else {}
+            healthy = _number(item.get("healthy_at"))
+            fresh = healthy is not None and now - healthy <= STUCK_AFTER_S
+            state = "off" if item.get("timer") != "enabled" else "ok" if fresh else "stuck"
+            channels.append({"unit": item["unit"], "state": state, "release": _word(last.get("release")),
+                             "at": _number(last.get("at"))})
+        stack = report.get("site_stack") if isinstance(report.get("site_stack"), dict) else None
+        if stack:
+            channels.append({"unit": "rosy-site-autoupdate", "state": "ok" if _word(stack.get("result")) else "unknown",
+                             "release": _word(stack.get("current")), "at": None})
+        worst = ("stuck" if any(c["state"] == "stuck" for c in channels)
+                 else "frozen" if report.get("gate") == "frozen" else "ok")
+        gate = report.get("gate") if report.get("gate") in ("open", "frozen", "missing") else None
+        hosts.append({"host": name, "state": worst, "gate": gate, "time": _number(report.get("time")),
+                      "channels": channels})
+    return {"hosts": hosts}
+
+
 def catalogue() -> dict:
     hosts = []
     for host, units in HOSTS.items():
         unit_actions = set().union(*units.values()) if units else set()
         hosts.append({
             "host": host,
-            "actions": ["reboot", "cancel-reboot", *sorted(unit_actions)],
+            "actions": ["reboot", "cancel-reboot", *sorted(HOST_ACTIONS.get(host, ())),
+                        *sorted(unit_actions)],
             "units": sorted(units),
             "stoppable_units": sorted(u for u, a in units.items() if "stop-unit" in a),
             "reboot_delay_min": REBOOT_DELAY_MIN,
@@ -86,6 +137,8 @@ def decide(host: str, action: str, unit: str | None, *, confirmed: bool) -> dict
             raise HostControlError("UNIT_NOT_ALLOWED")
     elif unit is not None:
         raise HostControlError("UNIT_NOT_ALLOWED")
+    elif action == "clean-storage" and action not in HOST_ACTIONS.get(host, ()):
+        raise HostControlError("ACTION_NOT_ALLOWED")
     argv = (action,) if unit is None else (action, unit)
     return {"host": host, "action": action, "unit": unit, "argv": argv}
 

@@ -26,12 +26,12 @@
   max-width: 100%;
   padding-inline: var(--space-3);
   border-radius: var(--radius-button);
-  color: var(--brand-rose);
+  color: var(--text-primary); /* 장미색은 워드마크와 현재 위치에만(D-277) */
   text-decoration: underline;
   text-underline-offset: 0.2em;
   overflow-wrap: anywhere;
 }
-.surface-link:hover { background: var(--brand-rose-wash); }
+.surface-link:hover { background: var(--surface-sheen); }
 .surface-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
 .surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--surface-recessed); outline-offset: 3px; }

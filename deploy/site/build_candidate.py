@@ -21,7 +21,7 @@ DEPLOY_FILES = (
     "rosy-site-stack.service", "site-firewall.py", "rosy-site-firewall.service",
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
-    "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
+    "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
     "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
@@ -228,6 +228,7 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
     config_hashes.update({name: _sha256(output / name) for name in DOC_FILES})
     manifest = {
         "manifest_version": 1,
+        "site_users_tool_required": True,
         "source_commit": commit,
         "image_tag": tag,
         "platform": "linux/amd64",

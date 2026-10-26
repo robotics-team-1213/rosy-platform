@@ -189,6 +189,7 @@ def _verifier(calls):
         manifest.setdefault('account_https', True)
         manifest.setdefault('omx', True)
         manifest.setdefault('workcell', True)
+        manifest['verified_images'] = list(upd.SERVICES)
         manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
         return manifest
     return verify
@@ -664,9 +665,12 @@ def test_pre_omx_rollback_uses_backup_overlay_requirements(host, enabled):
             stream.write('ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.omx.yaml\n')
     target = host.paths.candidates / NEW
     target.mkdir()
+    (target / 'release.json').write_text(json.dumps({'source_commit': NEW}))
+    (target / 'release.json.sig').write_text('signed')
     upd.write_env_tag(host.paths.site_env, NEW)
     upd.swap_link(host.paths.link, target)
-    state = {'failed': {}, 'switch': {'previous': str(old), 'current': OLD}}
+    state = {'failed': {}, 'switch': {'previous': str(old), 'current': OLD,
+                                     'commit': NEW, 'tag': _tag(NEW)}}
     fake = FakeHost(host.paths)
     updater = _updater(host, FakeHttp([], {}), fake)
     if enabled:
@@ -819,6 +823,8 @@ def test_interrupted_switch_is_undone_before_network_access(host, held):
     shutil.copy2(host.paths.site_env, host.paths.env_backup)
     target = host.paths.candidates / NEW
     target.mkdir()
+    (target / 'release.json').write_text(json.dumps({'source_commit': NEW}))
+    (target / 'release.json.sig').write_text('signed')
     upd.write_env_tag(host.paths.site_env, NEW)
     upd.swap_link(host.paths.link, target)
     state = {'failed': {}, 'switch': {'previous': str(host.paths.candidates / OLD),
@@ -956,7 +962,8 @@ def test_interrupted_directory_migration_is_recoverable(host, monkeypatch):
 
 
 def test_installed_cli_loads_only_its_reviewed_modules(tmp_path):
-    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'verify_candidate.py',
+    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'site_update_runtime.py',
+                 'verify_candidate.py',
                  'candidate_signing.py'):
         shutil.copy2(SITE / name, tmp_path / name)
     command = [sys.executable, '-I', str(tmp_path / 'rosy_site_autoupdate.py'), '--help']
@@ -965,6 +972,18 @@ def test_installed_cli_loads_only_its_reviewed_modules(tmp_path):
     (tmp_path / 'site_update_io.py').unlink()
     # Missing reviewed helper must fail; never fall back to checkout/candidate code.
     assert subprocess.run(command, capture_output=True, cwd=tmp_path).returncode != 0
+
+
+def test_installed_cli_refuses_missing_runtime_helper(tmp_path):
+    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'verify_candidate.py',
+                 'candidate_signing.py'):
+        shutil.copy2(SITE / name, tmp_path / name)
+    # A partial administrator install must not borrow runtime code elsewhere.
+    result = subprocess.run(
+        [sys.executable, '-I', str(tmp_path / 'rosy_site_autoupdate.py'), '--help'],
+        capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode != 0
+    assert 'site_update_runtime' in result.stderr
 
 
 def test_running_newer_stack_is_not_downgraded_when_env_is_stale(host):
