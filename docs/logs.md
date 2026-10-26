@@ -12007,3 +12007,9 @@ osy-d395-s1d\`.
 - 변경: robot-0d v2 검토 반영. `tools/doctor.py`가 main에 들어간 지 하룻밤이 지났는데 단독 실행 안 된 파일이 남은 `rosy-land-isolation.jsonl` 기록을 FAIL로, 차례 요약이 한 줄로 보인다. 닫기는 옛 줄을 고치지 않고 후손 커밋의 다음 `prepare`나 `done` 줄이 그 파일을 단독으로 끝까지 돌린 증거로 한다(야간 소비자가 생기기 전에는 `python tools/land_isolation.py close <files>`). 안전 태그 원본을 참조하는 시험이 시간 상한에 못 돌면 착지를 멈춘다. 보고 줄이 없는 단독 잡(죽은 잡)은 실패한 게이트로 보고 캐시 없이 한 번 다시 돌린 뒤 멈추며 파일은 기록한다. 실행기가 `ROSY_JOB_CORES`(잠금에 적히는 예약 코어)와 같은 수의 작업자를 쓰고 그 줄을 찍는다. `--no-queue`는 후보마다 `skipped` 한 줄을 남기고 요약에 `isolation gate skipped (--no-queue)`를 넣는다. 기록마다 `land_events`에 `isolation` 사건도 남긴다(land_events에는 복사·회전 장치가 없어 7항 백업은 따로 만들지 않았다). 묵은 단독 재실행은 가드 회차 대신 차례 자신의 회차에 붙어 `TURN_CAP_S`·`Overtime`→`land_prepare.again`을 그대로 탄다. `tools/land.py`는 고치지 않았다.
 - 증거: 원격 `test/test_land_isolation.py test/test_doctor.py` 25 passed, `test/test_land*.py test/test_remote_pytest.py` 217 passed. 변이 4개(안전 멈춤 제거, 보고 없음을 완료로, 작업자 2 고정, 묵은 재실행을 차례에 안 붙임) 각각 해당 시험 실패.
 - gate 변화: 안전 미실행·죽은 잡은 착지 멈춤, doctor에 isolation FAIL 줄.
+
+## 2026-10-26 · uncommitted · fix(remote): 잡의 예약 코어를 배치 바닥으로, close에 이유 필수
+
+- 변경: robot-0d 착지 승인 조건 두 가지. `remote_pytest.run`이 호출 가운데 가장 큰 `ROSY_JOB_CORES`(잠금 예약)만큼 빈 코어가 있는 시험 PC에만 배치하고, 그런 요구에는 바닥 없는 대체 배치를 쓰지 않고 기다린다. `land_isolation.py close`는 `--reason`이 없거나 비면 거절하고, done 줄에 이유·누가(git user.email, 없으면 OS 사용자)·언제를 남긴다. `rosy-land-isolation.jsonl`과 `land_events`에 백업이 없다는 점(알려진 단일 손실 지점)을 모듈 docstring과 `tools/AGENTS.md`에 적었다. robot-47 조건: 차례 목록을 제자리에서 늘리는 연결은 끝까지 착지 시험이 고정한다(`land.py`가 가드 회차에 복사본을 넘기면 그 시험이 실패).
+- 증거: 원격 `test/test_land_isolation.py test/test_doctor.py test/test_remote_pytest.py test/test_remote_test_tools.py` 137 passed, `test/test_land.py test/test_land_events.py test/test_land_queue.py test/test_land_record.py` 129 passed. 변이: 배치가 예약 코어를 무시 → 배치 시험 실패, `land.py`가 `list(invocations)`를 넘김 → 묵은 재실행 끝까지 시험 실패.
+- gate 변화: 6코어 잡은 6코어가 빈 시험 PC를 기다린다.
