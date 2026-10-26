@@ -12051,6 +12051,21 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_isolation.py test/test_doctor.py test/test_remote_pytest.py test/test_remote_test_tools.py` 137 passed, `test/test_land.py test/test_land_events.py test/test_land_queue.py test/test_land_record.py` 129 passed. 변이: 배치가 예약 코어를 무시 → 배치 시험 실패, `land.py`가 `list(invocations)`를 넘김 → 묵은 재실행 끝까지 시험 실패.
 - gate 변화: 6코어 잡은 6코어가 빈 시험 PC를 기다린다.
 
+## 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
+
+- 변경: D-874 묶음의 `SCHEMA`·`FORBIDDEN`·`validate`·정본 인코더를 `rosy-contracts-learning` 0.1.14 `promotion_request`로 옮겼다(Learning은 import, 바이트 동일). Fleet `missions/perception_promotion.py`가 policy-admin이 올린 묶음 바이트를 해시·정본 인코딩·공유 검증기로 다시 보고, 다른 policy-admin의 결정 하나만 `fleet_perception_proposal`에 기록한다. 본문 256 KiB 한도. `work_routes.py`에서 governance 옆에 마운트, `app.py`는 그대로.
+- 이유: Learning의 승격 요청을 사람이 결정할 Fleet 자리가 없었고, 기존 정책 제안 표는 OMX 작업대 모델이다.
+- 증거: 원격 `test_perception_promotion.py`·`test_learning_promotion_request_contract.py`·Learning `test_promotion_request.py` 51 passed, `operations/fleet/test` 7014 passed, `test/architecture`·harness·learning·robot_execution 3000 passed(a72a056ef8). `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음. 승인은 레지스트리·`models/accepted`·배포를 건드리지 않는다.
+- CE: 해당 없음 — 장애 해결이 아닌 새 기능이다.
+
+## 2026-10-26 · uncommitted · test(fleet): D-891 리뷰 후속
+
+- 변경: Content-Length 없는 스트림 본문이 256 KiB를 넘으면 413인 시험 추가, 비정규 바이트 경우마다 오류 코드 고정, D-890 gap의 브랜치 이름 정정(843e5e3e8f).
+- 증거: 원격 대상 시험 52 passed, NEW 0.
+- gate 변화: 강화(스트림 초과 분기 시험).
+- CE: 해당 없음 — 시험 보강이다.
+
 ## 2026-10-26 · uncommitted · D-889 추가 1: 구현 결과와 남은 개선
 
 - 변경: D-889에 "추가 1"을 덧붙였다. 로컬 main에 착지한 구성 요소와 SHA(사건 기록·잠금 밖 준비·early-stop·게시 스크립트·착지 기록 복구·선택기·브라우저 lane·Isaac 예약·격리 관문·CI scope 상한)를 적었다. 실측(차례 대기 2.7~5시간에서 0분, 차례 p50 2.3~2.8분, 브라우저 3,488초에서 1,163초)도 적었다. 계획과 달라진 점(열차보다 잠금 밖 준비를 먼저, 선택기 규칙 4·5 뺌, collect-only로는 부족)과, 담당이 정해진 남은 개선 12건을 표로 남겼다. Status는 Proposed 그대로다(열차·묶음 미구현).
