@@ -11750,3 +11750,10 @@ osy-d395-s1d\`.
 - 증거: 첫 통합 commit 7b2dbeb623의 관련 gate는 1 FAIL/1093 PASS/2 SKIP, 단독 실패·main 통과를 보존했다. 문서 수정 commit 6d493681e4에서 동일 원격 secret guard 1 PASS/runner·outer0/NEW0·known0·flaky0, scanner와 네 production 파일은 그대로다.
 - Gate: 공식 재착지·게시·site/DEVICE/FIELD는 아직 대기한다. 정밀 시각 수용을 주장하지 않는다.
 - CE: 기존 교훈 갱신; 새 중복 문서나 scanner 예외는 만들지 않았다.
+
+## 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
+
+- 변경: optional navigate/home caller epoch 문법과 정본 상수, CORE Home 본문 전달, Fleet navigate의 실행 전 명시적 거절을 함께 보완했다. API v1.323과 공식 도구의 기존 version pins를 정렬했다.
+- 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
+- Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
+- CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.

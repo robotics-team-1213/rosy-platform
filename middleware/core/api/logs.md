@@ -1292,3 +1292,10 @@
 - 변경: 예약 도구로 API reference v1.318과 CORE app의 계약 설명을 맞췄다. CORE route·권한·명령·WS envelope 동작은 바꾸지 않았다.
 - 증거: 버전 고정값은 `api_reserve.py bump`로 함께 갱신했다. 원격 버전 정렬 시험으로 확인한다.
 - gate 변화: 없음. Fleet 캐시 읽기 wire의 계약 표시 변경이며 CORE·장치 수용을 주장하지 않는다. CE: 해당 없음.
+
+## 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
+
+- 변경: optional navigate/home caller epoch 문법과 정본 상수, CORE Home 본문 전달, Fleet navigate의 실행 전 명시적 거절을 함께 보완했다. API v1.323과 공식 도구의 기존 version pins를 정렬했다.
+- 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
+- Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
+- CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
