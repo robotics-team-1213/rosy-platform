@@ -93,3 +93,23 @@ def test_an_unreachable_target_is_refused_before_any_chunk_exists():
     plan = dict(PLAN, pick=dict(PLAN["pick"], x=0.30, y=0.20))
     with pytest.raises(SystemExit, match="IK"):
         m.Planner(plan).library()
+
+
+def test_a_far_target_keeps_its_grasp_and_travel_ends_where_the_arm_still_has_margin():
+    """2026-10-26: a container 0.24 m out was graspable top-down; only the 7 cm lift point above it was not."""
+    far = dict(PLAN["pick"], x=0.078, y=0.229, z=0.050)
+    planner = m.Planner(dict(PLAN, pick=far))
+    library = planner.library()
+    reach = library["source"]["reach"]["pick"]
+    assert m.MIN_STANDOFF_M <= reach["approach_m"] < PLAN["approach_m"] + 1e-6 and reach["margin_m"] > 0
+    grasp = fk(planner, library["chunks"]["descend_pick"][-1])
+    assert math.dist((grasp.x, grasp.y, grasp.z), (far["x"], far["y"], far["z"])) < 0.002
+    lifted = fk(planner, library["chunks"]["lift_pick"][-1])
+    assert planner.reach_margin(lifted.x, lifted.y, lifted.z, far["yaw_deg"]) >= m.REACH_MARGIN_M - 1e-4
+    assert lifted.z - far["z"] >= m.MIN_STANDOFF_M - 0.002, "it still lifts clear of the tray"
+
+
+def test_a_path_past_the_keep_out_line_is_refused_before_any_chunk_exists():
+    with pytest.raises(SystemExit, match="keep_out"):
+        m.Planner(dict(PLAN, keep_out={"x_max_m": 0.10})).library()
+    assert m.Planner(dict(PLAN, keep_out={"x_max_m": 0.30})).library()["chunks"]

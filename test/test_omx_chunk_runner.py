@@ -229,7 +229,7 @@ def test_the_live_state_is_published_about_twice_a_second():
     r = m.Runner(Robot(), library(), fps=10, status=lambda row: None, clock=lambda: clock[0],
                  sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 10), live=rows.append)
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
-    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health"}
+    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health", "lag"}
     assert rows[-1]["state"][0] == 18.0  # held at the end of the approach chunk
 
 
@@ -377,4 +377,7 @@ def test_a_soft_contact_holds_with_torque_on_then_retreats_along_its_path_and_pa
 def test_normal_following_lag_is_not_a_contact():
     robot = Pressing(after=10**9)  # never stuck: the arm follows
     status = run_with(robot, descend_library(), ["run descend_pick", "stop"])
-    assert by_command(status, "run descend_pick")[0]["ok"] is True
+    done = by_command(status, "run descend_pick")[0]
+    assert done["ok"] is True
+    # the contact margin of the run: its largest lag behind the guard's sent command and ticks over the bound
+    assert 0 <= done["peak_lag"] <= m.CONTACT_LAG and done["over_ticks"] == 0

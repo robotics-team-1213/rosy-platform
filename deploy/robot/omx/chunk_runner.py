@@ -132,6 +132,9 @@ class Runner:
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
         self.played, self.retreat_frames, self.contact_ticks = [], [], 0
+        # per chunk: the largest lag behind the command the guard sent, and the ticks it spent over CONTACT_LAG;
+        # the contact margin a real run leaves, which live.json's chunk target does not show (2026-10-26)
+        self.lag, self.peak_lag, self.over_ticks = 0.0, 0.0, 0
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
         self.health_present = None
 
@@ -252,9 +255,13 @@ class Runner:
                 self.played.append(list(self.target))
         sent = self.robot.send_action(dict(zip(NAMES, self.target)))
         present = self.present()
+        if isinstance(sent, dict):
+            self.lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent), default=0.0)
+            if self.chunk is not None:
+                self.peak_lag, self.over_ticks = max(self.peak_lag, self.lag), self.over_ticks + (self.lag > CONTACT_LAG)
         if (isinstance(sent, dict) and not self.fault and self.chunk is not None
                 and self.chunk.startswith(CONTACT_CHUNKS)):
-            lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent), default=0.0)
+            lag = self.lag
             self.contact_ticks = self.contact_ticks + 1 if lag > CONTACT_LAG else 0
             if self.contact_ticks >= CONTACT_TICKS:
                 chunk = self.chunk
@@ -303,7 +310,9 @@ class Runner:
             gripper_still = self.last_grip is not None and abs(present[5] - self.last_grip) < 0.3
             self.last_grip = present[5]
             if (error <= SETTLE_TOL and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
-                fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL)
+                fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL,
+                              peak_lag=round(self.peak_lag, 2), over_ticks=self.over_ticks)
+                self.peak_lag, self.over_ticks = 0.0, 0
                 if self.chunk == "park" and (self.fault or "").startswith("contact"):
                     self.fault = None  # folded home after a soft contact: the next attempt may start
                 if grasp:  # jaws stopped short of this chunk's closed target: something is between them
@@ -335,6 +344,7 @@ class Runner:
             if self.live and self.ticks % max(1, self.fps // 2) == 0:
                 self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in self.present()],
                            "target": [round(v, 2) for v in self.target], "chunk": self.chunk,
+                           "lag": round(self.lag, 2),
                            "fault": self.fault, "health": self.health})
             self.sleep(max(0.0, period - (self.clock() - started)))
 

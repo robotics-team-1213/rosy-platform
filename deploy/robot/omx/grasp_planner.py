@@ -30,6 +30,8 @@ NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.
 TICKS = 4096
 TOOL_DOWN_TOL = math.radians(1.0)
 POS_TOL = 0.0015     # m between the requested and the FK position of every frame
+REACH_MARGIN_M = 0.008  # wrist distance kept inside l1 + l2 at the travel end points of a site
+MIN_STANDOFF_M = 0.02   # the shortest approach / lift a site may shrink to
 
 
 def rad_to_norm(rad: float, lo: float = 0, hi: float = 4095) -> float:
@@ -73,6 +75,23 @@ class Planner:
             raise SystemExit(f"FK check failed at ({x:.3f}, {y:.3f}, {z:.3f}): {fk}")
         return result.joints
 
+    def reach_margin(self, x, y, z, yaw_deg) -> float:
+        """How far inside l1 + l2 the wrist stands for a top-down TCP at (x, y, z): negative is out of reach."""
+        k = self.kin
+        wx, wy, wz = k.wrist_point(self.TopDownPose(x, y, z, math.radians(yaw_deg)))
+        r = math.hypot(wx - k.base_xy[0], wy - k.base_xy[1]) - k.shoulder_offset_m
+        return k.l1 + k.l2 - math.hypot(r, wz - k.shoulder_height_m)
+
+    def standoff(self, x, y, z, yaw_deg, wanted: float) -> float:
+        """The travel end point's height over the target: ``wanted``, shortened in 1 cm steps to at least
+        MIN_STANDOFF_M while the wrist would stand within REACH_MARGIN_M of full stretch. Moving and touching
+        are two jobs: travel ends where the arm still has margin, the touch is a short straight line from there
+        (2026-10-26: a container 0.24 m out was graspable top-down; only its 7 cm lift point was out of reach)."""
+        s = wanted
+        while s > MIN_STANDOFF_M and self.reach_margin(x, y, z + s, yaw_deg) < REACH_MARGIN_M:
+            s = max(MIN_STANDOFF_M, round(s - 0.01, 3))
+        return s
+
     def line(self, start, end, speed_m_s, yaw_deg, grip, reference_q5):
         """Frames along a straight Cartesian line at `speed_m_s`, one IK solve per frame."""
         n = max(1, math.ceil(math.dist(start, end) / (speed_m_s / self.fps)))
@@ -94,8 +113,8 @@ class Planner:
         """above (one frame, reached by goto) -> descend -> close/open -> lift."""
         p = self.plan
         x, y, z, yaw = target["x"], target["y"], target["z"], target["yaw_deg"]
-        above = (x, y, z + p["approach_m"])
-        lifted = (x, y, z + p["lift_m"])
+        above = (x, y, z + self.standoff(x, y, z, yaw, p["approach_m"]))
+        lifted = (x, y, z + self.standoff(x, y, z, yaw, p["lift_m"]))
         joints = self.solve(*above, yaw, q5)
         pre = [round(rad_to_norm(q), 3) for q in joints] + [grip_in]
         down, q5 = self.line(above, (x, y, z), p["descend_m_s"], yaw, grip_in, joints[4])
@@ -123,10 +142,37 @@ class Planner:
         for name, frames in chunks.items():
             if too_fast(frames, self.fps):
                 raise SystemExit(f"{name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s)")
+        self.keep_out(chunks)
         return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": self.fps, "chunks": chunks,
                 "gripper_closed": p["grip_closed"], "hold_current_ma": p.get("hold_current_ma"),
                 "transit": p.get("transit", {}),
-                "source": {"planner": "grasp_planner.py top-down v1", "pick": p["pick"], "place": p["place"]}}
+                "source": {"planner": "grasp_planner.py top-down v1", "pick": p["pick"], "place": p["place"],
+                           "reach": {site: {"approach_m": round(self.height(chunks[f"above_{site}"][0]) - p[site]["z"], 3),
+                               "margin_m": round(self.reach_margin(p[site]["x"], p[site]["y"], p[site]["z"],
+                                                                   p[site]["yaw_deg"]), 4)}
+                                     for site in ("pick", "place")}}}
+
+    def height(self, frame) -> float:
+        return self.kin.fk([norm_to_rad(v) for v in frame[:5]]).z
+
+    def keep_out(self, chunks) -> None:
+        """``keep_out`` {"x_max_m": ...} in the plan: no tool position past that line, in the chunks and on the
+        travel between them (chunk_runner's rise-turn-descend path), e.g. the wall behind the S cell's belt."""
+        bound = (self.plan.get("keep_out") or {}).get("x_max_m")
+        if bound is None:
+            return
+        from chunk_runner import transit_path
+
+        p = self.plan
+        transit = {NAMES.index(k): float(v) for k, v in p.get("transit", {}).items()} or None
+        home = list(p["home"]) + [p["grip_closed"]]
+        travel = (transit_path(home, chunks["above_pick"][0], p["grip_closed"], self.fps, transit)
+                  + transit_path(chunks["lift_pick"][-1], chunks["above_place"][0], p["grip_closed"], self.fps, transit)
+                  + transit_path(chunks["lift_place"][-1], home, p["grip_closed"], self.fps, transit))
+        for name, frames in [*chunks.items(), ("travel", travel)]:
+            worst = max(self.kin.fk([norm_to_rad(v) for v in f[:5]]).x for f in frames)
+            if worst > bound:
+                raise SystemExit(f"{name}: the tool reaches x {worst:.3f} m past keep_out x_max {bound} m")
 
 
     def leg(self, library):

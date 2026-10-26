@@ -199,6 +199,17 @@ def test_a_session_raises_the_caps_only_while_recording_and_restores_everything(
     assert ("stop", "rosy-omx-camera@front.service") not in calls  # was not running: left alone
 
 
+def test_a_session_gain_is_written_for_the_session_and_restored_to_the_value_found(tmp_path):
+    """2026-10-26: the wrist at its factory P 400 trailed 4.8 deg under load; the guard stops at 5."""
+    arm, leader = follower({14: {"p_gain": 380}}), leader_arm()
+    s, calls = session(arm, leader)
+    caps = {**CAPS, 14: {**CAPS[14], "p_gain": 800}}
+    record = s.execute(config(tmp_path), caps, teleop_only=False)
+    assert record["caps_restored"] is True and (14, "p_gain", 800) in arm.writes
+    assert arm.motors[14]["p_gain"] == 380, "back to what the motor had, not a constant"
+    assert arm.motors[13]["p_gain"] == 400 and (13, "p_gain", 400) not in arm.writes
+
+
 def test_chunk_mode_runs_the_chunk_runner_and_keeps_the_cameras_for_the_judge(tmp_path):
     seen = []
     arm, leader = follower(), leader_arm()
@@ -275,6 +286,7 @@ def test_teleop_only_runs_teleoperate_on_the_robot_and_teleop_part(tmp_path):
     {**CAPS_FILE, 15: {"pwm": 900}},                                 # above the PWM range
     {**CAPS_FILE, 11: {"pwm": 500}},                                 # above the first-session ceiling
     {**CAPS_FILE, 16: {"current": 250}},                             # no pwm
+    {**CAPS_FILE, 14: {"pwm": 300, "current": 250, "p": 5000}},      # a gain above its ceiling
 ])
 def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
     good = tmp_path / "good.json"

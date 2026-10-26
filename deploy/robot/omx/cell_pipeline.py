@@ -59,7 +59,7 @@ def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
 def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
     from grasp_planner import Planner
 
-    library = Planner(dict(config["plan"], pick=pick, place=place)).library()
+    library = Planner(dict(config["plan"], pick=pick, place=place, keep_out=config.get("keep_out"))).library()
     path.parent.mkdir(parents=True, exist_ok=True)  # the first run on a cell has no work folder yet
     path.write_text(json.dumps({k: v for k, v in library.items() if v is not None}))
     return path

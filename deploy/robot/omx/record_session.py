@@ -27,7 +27,9 @@ Run it inside tmux so a dropped connection does not even reach it.
 
   record_session.py --config record-config.json --caps caps.json [--task-card task-card.yaml] [--teleop-only]
 
-caps.json: {"11": {"pwm": 300}, ..., "16": {"pwm": 300, "current": 250}}  (all six IDs)
+caps.json: {"11": {"pwm": 300}, ..., "16": {"pwm": 300, "current": 250}}  (all six IDs); optional "p": a Position P
+  Gain for the session only, restored to the value found (2026-10-26: the arm S wrist at its factory 400 trailed
+  4.8 deg under load at 28 % PWM, and the guard stops at 5)
 Tasks plug in and out: the record config holds only what does not change with the task (devices,
 cameras, fps); a task card (tasks/<task>.yaml, schema rosy.omx-task-card.v1) holds the task text,
 episode timing, dataset name and its design (layout, phases, success and failure labels). With
@@ -57,6 +59,7 @@ SERVICES = ("rosy-omx-camera@top.service", "rosy-omx-camera@front.service",
 LEADER_GRIPPER = 6
 LEADER = range(1, 7)
 PWM_MAX = CURRENT_MAX = CAP_MAX  # first sessions stay well below the hardware maximum (885 / 1750)
+P_GAIN_MAX = 1600  # the elbow runs at 1500; higher gains need their own commissioning
 TORQUE_OFF_DEADLINE_S = 30.0
 
 
@@ -75,14 +78,16 @@ def load_caps(path: Path) -> dict:
         raise SystemExit(f"caps must name every follower ID {sorted(FOLLOWER)}")
     for motor, cap in caps.items():
         xl330 = FOLLOWER[motor][0] == 1200
-        allowed = {"pwm", "current"} if xl330 else {"pwm"}
+        allowed = {"pwm", "current", "p"} if xl330 else {"pwm", "p"}
         if not set(cap) <= allowed or "pwm" not in cap:
             raise SystemExit(f"motor {motor}: caps keys must be {sorted(allowed)} with pwm")
         if not (type(cap["pwm"]) is int and 1 <= cap["pwm"] <= PWM_MAX):
             raise SystemExit(f"motor {motor}: pwm 1..{PWM_MAX}")
         if "current" in cap and not (type(cap["current"]) is int and 1 <= cap["current"] <= CURRENT_MAX):
             raise SystemExit(f"motor {motor}: current 1..{CURRENT_MAX}")
-    names = {"pwm": "pwm_limit", "current": "current_limit"}  # caps-file keys -> register names
+        if "p" in cap and not (type(cap["p"]) is int and 1 <= cap["p"] <= P_GAIN_MAX):
+            raise SystemExit(f"motor {motor}: p 1..{P_GAIN_MAX}")
+    names = {"pwm": "pwm_limit", "current": "current_limit", "p": "p_gain"}  # caps-file keys -> register names
     return {motor: {names[key]: value for key, value in cap.items()} for motor, cap in caps.items()}
 
 
@@ -251,7 +256,10 @@ class Session:
             bus.close()
 
     def baseline(self) -> dict:
-        return {motor: {name: BASELINE[name] for name in self._cap_registers(motor)} for motor in FOLLOWER}
+        """What every session leaves: the commissioning caps, and any gain back to the value it found."""
+        found = getattr(self, "found_gains", {})
+        return {motor: {**{name: BASELINE[name] for name in self._cap_registers(motor)}, **found.get(motor, {})}
+                for motor in FOLLOWER}
 
     def write_caps(self, bus, caps) -> None:
         for motor, values in caps.items():
@@ -259,6 +267,9 @@ class Session:
             if bus.read("torque"):
                 raise RuntimeError(f"follower {motor} torque ON: EEPROM caps not written")
             for name, value in values.items():
+                if name == "p_gain":  # not a commissioning cap: restore exactly what the motor had
+                    self.found_gains = getattr(self, "found_gains", {})
+                    self.found_gains.setdefault(motor, {})[name] = bus.read(name)
                 bus.write(name, value)
                 after = bus.read(name)
                 self.log(step="cap", motor=motor, name=name, value=value, after=after)
