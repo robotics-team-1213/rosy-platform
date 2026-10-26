@@ -271,16 +271,17 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         (jobs / "evil.lock").write_text(f"{live.pid} sim a[$(touch {jobs}/pwned)] 1\n")
         now = int(time.time())
         (jobs / "soon.resv").write_text(f"{now + 600} pytest 2 6\n")  # reserved, not started yet
+        (jobs / "isaac.resv").write_text(f"{now + 600} gpu 0 0\n")  # a GPU run keeps browser lanes off too
         (jobs / "old.resv").write_text(f"{now - 1} pytest 2 6\n")
         (jobs / "junk.resv").write_text("soon pytest 2 6\n")
         script = rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
         fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
     finally:
         live.kill()
-    # site 0, sim_held 2 (the live sim locks), browser_jobs 1, then df free_kb use% of ~/rosy-test, /tmp
-    assert len(fields) == 17 and fields[8:13] == ["4", "12", "0", "2", "1"]
+    # site 0, sim_held 3 (the live sim locks + the gpu reservation), browser_jobs 1, then df free_kb use% of ~/rosy-test, /tmp
+    assert len(fields) == 17 and fields[8:13] == ["4", "12", "0", "3", "1"]
     assert (jobs / "soon.resv").exists() and not (jobs / "old.resv").exists() and not (jobs / "junk.resv").exists()
-    assert rp.parse_probe(" ".join(fields))["lock_gb"] == 12 and rp.parse_probe(" ".join(fields))["sim_held"] == 2
+    assert rp.parse_probe(" ".join(fields))["lock_gb"] == 12 and rp.parse_probe(" ".join(fields))["sim_held"] == 3
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
     assert not (jobs / "pwned").exists()
 
