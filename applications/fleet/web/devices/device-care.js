@@ -16,8 +16,8 @@ export function createDeviceCare({root, scope, call, identity}) {
   }
   function preview() {
     field('document').textContent = document
-      ? `${document.revision} · ${document.status} · 計算用 JSON (${Object.keys(document.joints || {}).length}関節)`
-      : '特性 JSON 未登録';
+      ? `${document.revision} · ${document.status} · 계산용 JSON (관절 ${Object.keys(document.joints || {}).length}개)`
+      : '특성 JSON 미등록';
   }
   async function select(row = {}) {
     if (selected && row.device_id === selected && (dirty || busy)) return;
@@ -26,9 +26,9 @@ export function createDeviceCare({root, scope, call, identity}) {
     selected = row.device_id || ''; saved = null; document = null; dirty = false;
     importedText = null;
     field('caution').value = ''; field('text').value = ''; field('file').value = '';
-    field('source').replaceChildren(new Option('未接続', ''));
+    field('source').replaceChildren(new Option('연결 안 함', ''));
     field('history').replaceChildren(); preview(); authorization();
-    if (!selected) { field('status').textContent = '先に装置情報を保存してください。'; return; }
+    if (!selected) { field('status').textContent = '장치 정보를 먼저 저장하세요.'; return; }
     busy = true; authorization();
     try {
       const [care, catalog] = await Promise.all([call(`/api/fleet/device-profiles/${encodeURIComponent(selected)}/care`),
@@ -38,14 +38,14 @@ export function createDeviceCare({root, scope, call, identity}) {
       for (const source of catalog.sources) field('source').append(new Option(
         `${source.label} (${source.source_kind}: ${source.source_id})`, JSON.stringify([source.source_kind, source.source_id])));
       if (care.source_id && !catalog.sources.some(s => s.source_kind === care.source_kind && s.source_id === care.source_id))
-        field('source').append(new Option(`登録から外れた観測元: ${care.source_id}`, JSON.stringify([care.source_kind, care.source_id])));
+        field('source').append(new Option(`등록에서 제외된 관측원: ${care.source_id}`, JSON.stringify([care.source_kind, care.source_id])));
       field('source').value = care.source_id ? JSON.stringify([care.source_kind, care.source_id]) : '';
       field('caution').value = care.caution;
       paintProfile(field('history'), {...row, ...care});
-      field('status').textContent = '保存済み記録を読みました。実時間の故障状態はロボット詳細で確認してください。';
+      field('status').textContent = '저장된 기록을 읽었습니다. 실시간 고장 상태는 로봇 상세에서 확인하세요.';
       preview();
     } catch (error) {
-      if (current === epoch) field('status').textContent = '記録を読み込めません。再選択してください。';
+      if (current === epoch) field('status').textContent = '기록을 읽지 못했습니다. 다시 선택하세요.';
     } finally { if (current === epoch) { busy = false; authorization(); } }
   }
   for (const key of ['source', 'caution', 'text', 'kind']) scope.listen(field(key), 'input', () => { dirty = true; });
@@ -57,8 +57,8 @@ export function createDeviceCare({root, scope, call, identity}) {
       const raw = await file.text(), imported = JSON.parse(raw);
       if (current !== epoch) return;
       document = imported; importedText = raw; dirty = true; preview();
-      field('status').textContent = 'JSONを読みました。保存時に計算器と同じ規則で検証します。';
-    } catch { field('status').textContent = '1 MB以下の有効な特性JSONを選んでください。'; }
+      field('status').textContent = 'JSON을 읽었습니다. 저장할 때 계산기와 같은 규칙으로 검증합니다.';
+    } catch { field('status').textContent = '1 MB 이하의 올바른 특성 JSON을 선택하세요.'; }
   });
   scope.listen(field('remove'), 'click', () => {
     if (!allowed() || busy) return;
@@ -87,10 +87,10 @@ export function createDeviceCare({root, scope, call, identity}) {
       if (event) field('text').value = '';
       dirty = event ? dirty : Boolean(field('text').value);
       paintProfile(field('history'), {...readback, display_name: selected});
-      field('status').textContent = '保存と再読込を確認しました。実時間の故障や運用権限は変わりません。';
+      field('status').textContent = '저장하고 다시 확인했습니다. 실시간 고장이나 운용 권한은 바뀌지 않습니다.';
     } catch (error) {
-      field('status').textContent = error.status === 422 ? '観測元・装置ID・特性JSONを確認してください。入力は保持しました。'
-        : '保存結果を確認できません。入力は保持しました。';
+      field('status').textContent = error.status === 422 ? '관측원·장치 ID·특성 JSON을 확인하세요. 입력을 유지했습니다.'
+        : '저장 결과를 확인하지 못했습니다. 입력을 유지했습니다.';
     } finally { busy = false; authorization(); }
   }
   scope.listen(field('save'), 'click', () => write(false));

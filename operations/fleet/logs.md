@@ -4953,3 +4953,10 @@
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-27 · uncommitted · feat: 로봇 상세의 지속 프로필과 하중 분석 파이프라인
+
+- 변경: D-860 설명 프로필에 별도 care 테이블을 연결했다. 등록 source 명시 결속, 주의사항·고장 관찰·정비 기록과 원본 특성 JSON, source-token 전용 모니터 출력 수신을 제공한다. 재바인딩과 수신을 쓰기 트랜잭션으로 직렬화하며 원본 capture 시각과 구성 해시로 신선도를 판정한다. 계산기 검증은 ROS-free motion 계약에서 공유한다. API v1.324.
+- 증거: 회귀 시험과 검증 기록은 `docs/validation/robot-profile-pipeline-2026-10-27/result.md`에서 확정한다. 실행 전 기록이며 원격 시험 결과로 갱신한다.
+- gate 변화: 구현·검증 중. 배포·장치 활성화·실물 하중 수용은 미수행이다. 조언은 명령 허가나 실제 정지·복구가 아니다.
+- CE: 해당 없음 — 판단은 코드와 회귀 시험에 직접 남기며 별도 해결 교훈으로 중복하지 않는다.

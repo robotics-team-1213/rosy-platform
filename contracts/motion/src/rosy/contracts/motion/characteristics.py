@@ -8,6 +8,7 @@ import re
 
 import math
 
+
 def _fields(value, names, label):
     if not isinstance(value, dict) or set(value) != set(names.split()):
         raise ValueError(f"{label}: expected fields {names}")
@@ -37,6 +38,7 @@ def _range(value, label):
     if low >= high:
         raise ValueError(f"{label}: minimum must be below maximum")
     return low, high
+
 
 SCHEMA = 'rosy.omx-motion-characteristics.v1'
 BINDING_FIELDS = ('device_id owner_id motor_group hardware_profile_revision calibration_revision robot_model_sha256 '

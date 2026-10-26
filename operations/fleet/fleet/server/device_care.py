@@ -44,7 +44,7 @@ class DeviceCareStore(DeviceProfileStore):
             events = db.execute('SELECT kind,text,actor,created_at FROM fleet_device_care_events '
                                 'WHERE device_id=? ORDER BY id DESC LIMIT 100', (device_id,)).fetchall()
         result = dict(row) if row else {'device_id': device_id, 'source_kind': None, 'source_id': None,
-                                       'caution': '', 'updated_by': None, 'updated_at': None}
+                                      'caution': '', 'updated_by': None, 'updated_at': None}
         document = json.loads(result.pop('characteristics_json', None) or 'null')
         report = json.loads(result.pop('report_json', None) or 'null')
         result['characteristics_summary'] = None if document is None else {

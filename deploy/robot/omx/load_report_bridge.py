@@ -22,7 +22,8 @@ def publish(raw, *, fleet_url, device_id, source_id, token, context, opener=None
     report = json.loads(raw)
     if not isinstance(report, dict) or report.get('schema') != 'rosy.omx-load-monitor.v1':
         raise ValueError('expected monitor output')
-    url = origin + '/api/fleet/device-profiles/' + quote(device_id, safe='') + '/load-reports/' + quote(source_id, safe='')
+    url = (origin + '/api/fleet/device-profiles/' + quote(device_id, safe='')
+           + '/load-reports/' + quote(source_id, safe=''))
     request = Request(url, data=raw, method='POST', headers={
         'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token})
     transport = opener or build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect())

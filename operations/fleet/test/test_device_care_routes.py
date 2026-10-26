@@ -36,7 +36,8 @@ def site(tmp_path):
         return principal
 
     app = FastAPI()
-    install_device_care_routes(app, tmp_path / 'tasks.sqlite3', console=SimpleNamespace(clients={'robot-one': None}),
+    install_device_care_routes(
+        app, tmp_path / 'tasks.sqlite3', console=SimpleNamespace(robot_ids=['robot-one']),
         observations=Observations(), require_viewer=viewer, require_named_operator=operator)
     app.state.device_care.put_profile('arm-one', {'display_name': '실습 팔', 'device_kind': 'manipulator'},
                                       updated_by='alice')
@@ -75,7 +76,8 @@ def test_bridge_real_producer_roundtrip_and_role_boundaries(site):
     assert 'characteristics' not in saved
     for headers in ({}, {'Authorization': 'operator'}, {'X-Workcell-Observation-Token': 'wrong'}):
         assert client.post(path + '/load-reports/source-one', content=raw, headers=headers).status_code == 401
-    assert client.post(path + '/load-reports/other-source', content=raw,
+    assert client.post(
+        path + '/load-reports/other-source', content=raw,
         headers={'X-Workcell-Observation-Token': 'observation-only-fixture'}).status_code == 401
     assert store.get('arm-one')['latest_analysis']['command_binding'] == 'caller_supplied_unverified'
 

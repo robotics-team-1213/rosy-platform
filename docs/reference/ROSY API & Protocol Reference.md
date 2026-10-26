@@ -13,6 +13,19 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 D-860 장치 설명 프로필을 재사용해 로봇 상세에서 현재 상태·주의사항·최근 진단을 먼저 보여 준다. 지속 관리 기록과 실측 특성 JSON은 기존 task SQLite에 보존하며, 특성 저장은 제어 허가나 고장 해제가 아니다. 상세 care·source 수집 계약은 아래 장치 정보 절의 후속 항목을 따른다. 관측 대상은 명시적으로 등록된 robot 또는 arm source에 결속하며, 새 실행·정지·복구 경로를 만들지 않는다.
 
+기존 task 저장소가 설정된 Fleet에 다음 경로를 함께 설치한다. 미설정 상태는 경로 부재이며 UI는 조회 불가로 표시한다. 저장 장애는 `503 DEVICE_PROFILE_STORAGE_UNAVAILABLE`, 입력 오류는 422다.
+
+| 경로 | 권한·입력·의미 |
+|---|---|
+| `GET /api/fleet/device-profile-sources` | Viewer 이상. 기존 console robot ID와 Workcell의 등록된 arm source 목록. 이름·모델·USB 식별값으로 자동 연결하지 않는다. |
+| `GET /api/fleet/device-profile-sources/{kind}/{source_id}` | Viewer 이상. 연결된 설명 프로필·주의사항·특성 요약·최근 분석·최근 기록 100건. 미연결은 `profile=null`. 원본 특성 JSON은 포함하지 않으며 `Cache-Control: no-store`. |
+| `GET /api/fleet/device-profiles/{device_id}/care` | Viewer 이상. 저장된 특성 원본을 포함한 기록 읽기. no-store. |
+| `PUT /api/fleet/device-profiles/{device_id}/care` | 이름 있는 Operator. 정확히 `source_kind`, `source_id`, `caution`, `characteristics`. null source 쌍은 연결 해제, 나머지는 등록된 robot/arm에 명시 결속하며 source 하나에 프로필 하나만 연결한다. 주의사항은 2,000자. 특성은 계산기와 동일한 `rosy.omx-motion-characteristics.v1` 객체 또는 엄격하게 파싱할 원본 JSON 문자열, 또는 null. 장치 ID·등록 arm owner를 대조하며 저장이 측정 수용을 뜻하지 않는다. 최대 본문 1,000,000 bytes. |
+| `POST /api/fleet/device-profiles/{device_id}/events` | 이름 있는 Operator. 정확히 `kind=fault|caution|maintenance`, `text`(비어 있지 않은 2,000자 이하). 관찰 기록을 추가하며 실시간 fault를 해제하지 않는다. 장치별 최신 100건을 SQLite에 보존한다. 최대 본문 16,384 bytes. |
+| `POST /api/fleet/device-profiles/{device_id}/load-reports/{source_id}` | 해당 Workcell arm의 전용 `X-Workcell-Observation-Token`만 허용. 사람·CORE 명령 토큰으로 대체할 수 없다. 기존 `rosy.omx-load-monitor.v1` 출력만 수신(최대 65,536 bytes), source·장치·특성 해시·revision·구성 binding 일치 검사. 202. |
+
+분석 수신은 원본 `assessed_at`, capture와 joint capture 시각을 보존한다. 같은 출력 재전송은 저장 시각·신선도를 갱신하지 않고, 같거나 과거 분석 시각의 다른 내용·미래 시각은 거절한다. 연결 또는 특성 변경 시 기존 최근 분석을 지우며 기록은 보존한다. 조회와 브라우저 경과 시간 모두 가장 오래된 근거의 나이를 반영한다. 만료·누락은 현재 상태 미확인이고 정상 판정이 아니다. 분석 주의 사유 변경은 중복을 억제해 기록하며 사람 기록과 구분한다. 모든 응답의 `motion_admitted`·`automatic_recovery_enabled`는 false이고 `command_binding=caller_supplied_unverified`를 승격하지 않는다. 네트워크 수신은 실제 owner 명령 결속·장치 정지·복구의 증거가 아니다.
+
 ### v1.323 Navigation intent epoch preservation (D-890)
 
 Intent 문법의 `navigate`/`home`만 optional `expected_boot_id`(UUID 문자열), `expected_owner_generation`(bool 제외 비음수 정수)을 받는다. 주어진 값은 그대로 유지하며 최종 pair 허용 여부는 기존 실행 owner가 판단한다. CORE `/api/v1/do` Home도 본문을 기존 `HomeRequest`로 전달한다. Fleet navigate는 어느 한 epoch key라도 있으면 자원·admission·Task 생성 전에 `COMMAND_REJECTED` / `FLEET_NAVIGATION_CALLER_EPOCH_UNSUPPORTED`로 거절한다. epoch 없는 기존 Fleet 경로와 Home 원본 전달은 유지한다.
@@ -4198,6 +4211,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.324 | 2026-10-27 | Robot detail care profiles, persistent fault/caution/maintenance observations, shared motion-characteristics JSON validation and source-token-only advisory load report ingestion; no new command authority. |
 | v1.323 | 2026-10-26 | D-890: optional strict navigate/home intent epochs; CORE Home body preservation and explicit pre-admission Fleet navigate caller-epoch rejection. Canonical fence version registration only; runtime qualification and envelope1.0 unchanged. |
 | v1.321 | 2026-10-26 | D-884: project-scoped HF storage pool, namespace capacity reservations, pinned archive/reconciliation, verified local reclaim/restore and managed cache; existing publish/manage authority and envelope1.0 preserved. Host source verification is separate from live HF/Isaac acceptance. |
 | v1.320 | 2026-10-26 | D-883: Service Control `clean-storage` for ai/model only (400 `ACTION_NOT_ALLOWED` on site, 409 `NO_STORAGE_SERVICE`), guard `resources.disk`/`disk_low`/`gpu`/`memory`/`memory_low`/`cpu` and the report-only `disk-low`/`memory-low` states. Fleet route shape and envelope1.0 unchanged. |

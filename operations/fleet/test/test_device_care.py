@@ -18,9 +18,10 @@ def monitor_report(*, stamp=100., attention=False):
     fixture = runpy.run_path(str(root / 'middleware/devices/omx/adapter/test/load_motion_fixtures.py'))
     document = fixture['characteristics']()
     document['binding']['device_id'] = 'arm-one'
-    monitor = LoadMonitor(document, fixture['request'](document),
-        accepted_digest=characteristics_digest(document), candidate_id='direct', command_id='command-fixture',
-        started_at=stamp, session_id='00000000-0000-4000-8000-000000000001')
+    monitor = LoadMonitor(
+        document, fixture['request'](document), accepted_digest=characteristics_digest(document),
+        candidate_id='direct', command_id='command-fixture', started_at=stamp,
+        session_id='00000000-0000-4000-8000-000000000001')
     report = (monitor.unavailable('feedback_gap', now=stamp + .01) if attention else
               monitor.observe(fixture['health'](document), captured_at=stamp + .01, now=stamp + .01,
                               context=document['binding']))
@@ -53,7 +54,7 @@ def test_persistence_and_source_uniqueness(tmp_path):
 
 
 @pytest.mark.parametrize('change', [{'caution': []}, {'source_kind': 'camera'},
-                                  {'source_id': '../arm'}, {'characteristics': {'schema': 'wrong'}}])
+                                   {'source_id': '../arm'}, {'characteristics': {'schema': 'wrong'}}])
 def test_invalid_replacement_preserves_previous(tmp_path, change):
     _, store = setup(tmp_path)
     store.put('arm-one', care(), actor='alice')
@@ -97,7 +98,8 @@ def test_real_monitor_output_duplicate_age_restart_and_rebind(tmp_path):
         store.ingest('arm-one', 'source-one', warning, now=103)
 
 
-@pytest.mark.parametrize('change', [{'context': {}}, {'characteristics_sha256': 'b' * 64},
+@pytest.mark.parametrize('change', [
+    {'context': {}}, {'characteristics_sha256': 'b' * 64},
     {'motion_admitted': True}, {'automatic_recovery_enabled': True}, {'assessed_at': 105},
     {'status': 'observing', 'reasons': ['feedback_gap']}, {'joint_captured_at': {}},
     {'errors_rad': {'unknown_joint': 0}}, {'request_sha256': 'bad'}, {'new_joint_samples': []}])

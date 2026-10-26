@@ -14,7 +14,7 @@ def install_device_care_routes(app, path, *, console, observations, require_view
 
     def sources():
         rows = [{'source_kind': 'robot', 'source_id': key, 'label': key, 'owner_id': None}
-                for key in console.clients] if console is not None else []
+                for key in console.robot_ids] if console is not None else []
         if observations is not None:
             rows.extend({'source_kind': 'arm', 'source_id': arm['source_id'], 'label': arm['label'],
                          'owner_id': arm['arm_id']}
@@ -77,8 +77,8 @@ def install_device_care_routes(app, path, *, console, observations, require_view
             if isinstance(document, str):
                 document = call(parse_json, document)
             if document is not None and (not isinstance(document, dict)
-                    or not isinstance(document.get('binding'), dict)
-                    or document['binding'].get('owner_id') != source['owner_id']):
+                                         or not isinstance(document.get('binding'), dict)
+                                         or document['binding'].get('owner_id') != source['owner_id']):
                 raise HTTPException(422, detail={'code': 'PROFILE_OWNER_MISMATCH'})
         return call(store.put, device_id, data, actor=principal.principal_id)
 
