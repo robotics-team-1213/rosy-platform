@@ -4955,3 +4955,10 @@
 - 증거: tests-only 26344ecf9b의 원격 16 failed/1 passed → 812b3b224c 156 passed. 독립 검토 TTL 반례 e231ff081a 2 failed → c86b3e51d5의 관련 통합 172 passed/0 skipped, runner exit 0·known NEW 0. 같은 source affected는 역의존·guard 4604 passed/190 skipped와 문서 검사 1 failed, Fleet 7070 passed/391 skipped와 기존 콘솔 계약 불일치 1 failed다. 문서 표기를 고친 a24f265097에서 해당 guard·문서 배치 9 passed/NEW 0. 전체 회귀 통과로 보고하지 않는다. `docs/validation/transfer-execution-review-2026-10-27/result.md` 참고.
 - Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
 - CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
+
+## 2026-10-27 · db6f4f8c02 · 승인된 단일 이송 복구 후손
+
+- 변경: 기존 부모 attempt·관측을 보존하고 현재 source/clearance·별도 운영자·fence/claims 조건을 만족한 새 자식 미션을 한 번 승인한다. 부모 자원을 원자적으로 이전하고, 자식을 명시 prepare한 뒤 새 관측과 기존 send/closure 경로를 사용한다. 중복 요청·재시작·준비 실패가 예산을 초기화하지 않는다. 검수 export에 root 계보를 보존한다.
+- 증거: 원격 승인 RED 21 failed → 관련 128 passed, 흐름 RED 3 failed → 통합 201 passed. 독립 검토 반례 4 failed와 첫/재조회 snapshot 차이 2 failed를 수정해 7f0a8a152a의 통합 214 passed, 추가 epoch/session 거절을 포함한 73f2fe5a03의 최종 216 passed/0 skipped·known NEW 0을 확인했다. 코드 7f0a8a152a의 독립 계약 재검토에서 추가 중요 발견 없음. `docs/validation/transfer-recovery-2026-10-27/result.md` 참고(저장소 루트 기준). 전체 영향 범위·착지 gate는 별도로 기록한다.
+- Gate: 기존 gate 변화 없음. 공개 복구 ingress·화면·무인 반복·Gazebo 과제·실물·모델 학습 수용은 별도다. 원래 미션은 HOLD로 유지한다.
+- CE: 해당 없음 — D-895·회귀 시험·검증 기록이 판단과 수정 이유를 보존한다.
