@@ -180,3 +180,18 @@ def test_preserved_source_recovery_releases_only_its_own_new_boot_claim(tmp_path
     rosy_claim.acquire(root, "os-update:" + TRANSACTION, "recovery fixture", 300, now=host.now())
     owner.recover(root, host=host, run=run)
     assert rosy_claim.check(root, now=host.now()) is None
+
+
+def test_bootstrap_write_preserves_fat_mount_permission_bits(tmp_path, monkeypatch):
+    import os
+    owner, _, _, boot, root, _, host, _, run, _, _ = _candidate(tmp_path, monkeypatch)
+    target = root / boot.BOOTSTRAP
+    target.chmod(0o755)
+    chmod = os.chmod
+    def fat_chmod(path, mode, *args, **kwargs):
+        if str(path).split("/")[-1].startswith(".autoboot.txt.") and mode != 0o755:
+            raise PermissionError("modeled Linux FAT rejects changing mount-derived read/execute bits")
+        return chmod(path, mode, *args, **kwargs)
+    monkeypatch.setattr(os, "chmod", fat_chmod)
+    assert owner.commit(root, TRANSACTION, host=host, run=run)["committed"]["slot"] == "b"
+    assert target.stat().st_mode & 0o777 == 0o755

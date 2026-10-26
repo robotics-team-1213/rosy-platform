@@ -205,6 +205,19 @@ def test_trial_receipt_decoder_preserves_source_guard_and_all_bindings(tmp_path,
         m.read_bound_report(root, pending)
 
 
+def test_boot_metadata_preserves_fat_mount_permission_bits(tmp_path, monkeypatch):
+    m, root, _, _, sources, _, _, _, _, run, _ = _installer(tmp_path, monkeypatch)
+    (sources["boot"] / "cmdline.txt").chmod(0o755)
+    chmod = os.chmod
+    def fat_chmod(path, mode, *args, **kwargs):
+        if Path(path).name.startswith(".cmdline.txt.") and mode != 0o755:
+            raise PermissionError("modeled Linux FAT rejects changing mount-derived read/execute bits")
+        return chmod(path, mode, *args, **kwargs)
+    monkeypatch.setattr(os, "chmod", fat_chmod)
+    assert m.finalize(root, run=run)["target_slot"] == "b"
+    assert (sources["boot"] / "cmdline.txt").stat().st_mode & 0o777 == 0o755
+
+
 def test_frozen_finalizer_entrypoint_and_receipt_reader_need_no_mutable_sdk(tmp_path, monkeypatch):
     import sys
     from test_os_frozen_firstboot import _prefix, _stage
