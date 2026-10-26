@@ -238,3 +238,18 @@ def test_source_observational_restart_settles_before_reauthorizing_arm(tmp_path,
         return run(argv, **kwargs)
     host.sleep = settling
     assert m.start(root, bundle, b"metadata", "sig", host=host, run=restarting)["pending"]["phase"] == "ARMED"
+
+
+def test_committed_trial_requests_one_normal_boot_for_future_automatic_updates(tmp_path, monkeypatch):
+    from test_os_update_health import _health
+    from test_os_update_commit import _normal
+    _, _, root, _, host, calls, run, _, _, _ = _health(tmp_path, monkeypatch)
+    m = importlib.import_module("os_update_controller")
+    monkeypatch.setattr(m.commit_owner, "capture", lambda r: dict(slot="b", layout=json.loads((r / "etc/rosy/os-media.json").read_text())))
+    assert m.resume(root, host=host, run=run)["pending"] is None
+    normal_reboot = ["/usr/bin/systemctl", "--no-block", "reboot"]
+    assert calls.count(normal_reboot) == 1
+    assert not any("--reboot-argument=0 tryboot" in command for command in calls)
+    _normal(root, "b")
+    assert m.resume(root, host=host, run=run)["pending"] is None
+    assert calls.count(normal_reboot) == 1
