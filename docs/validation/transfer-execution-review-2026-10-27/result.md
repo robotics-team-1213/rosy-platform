@@ -19,7 +19,9 @@
 
 최종 관련 통합은 새 execution-review suite, 기존 task outcome·recording·owner outcome·observer API·closure·evidence·stops·dispatcher·preparation suite다. official runner exit 0, known NEW 0·known 0·flaky 0을 확인했다.
 
-동일 `c86b3e51d5`의 affected 선택은 Fleet 전체와 역의존·guard 묶음을 실행했다. `rosy-transfer-review-affected/run-1.txt`는 4,604 passed, 190 skipped, 5 subtests passed와 문서 비밀값 검사 1 failed로 끝났다. 실패 위치는 이전 검증 기록의 `head:` 뒤 40자리 Git SHA였다. 실제 Git commit 객체임을 확인했고, 기존 scanner가 허용하는 `revision` 표기로 문맥을 명시했다. 값·검사기·허용 목록은 바꾸지 않았다. 수정 후 해당 guard를 별도 원격 재검사한다. Fleet 전체 `run-2.txt`는 진행 중이다.
+동일 `c86b3e51d5`의 affected 선택은 Fleet 전체와 역의존·guard 묶음을 실행했다. `rosy-transfer-review-affected/run-1.txt`는 4,604 passed, 190 skipped, 5 subtests passed와 문서 비밀값 검사 1 failed로 끝났다. 실패 위치는 이전 검증 기록의 `head:` 뒤 40자리 Git SHA였다. 실제 Git commit 객체임을 확인했고, 기존 scanner가 허용하는 `revision` 표기로 문맥을 명시했다. 값·검사기·허용 목록은 바꾸지 않았다. 문서 수정 revision `a24f265097`에서 해당 guard와 문서 배치 검사를 별도 원격 실행해 9 passed, NEW 0을 확인했다(`rosy-transfer-review-doc-guards/run-1.txt`).
+
+Fleet 전체 `run-2.txt`는 7,070 passed, 391 skipped, 1 failed다. 실패는 `test_console_queues_contract.py::test_the_queues_panel_heads_the_rail`이 `MAP_PANEL = 1`을 기대하지만 콘솔은 `MAP_PANEL = 2`인 소스 계약 불일치다. 해당 콘솔·스타일·시험 파일은 시작 revision 대비 변경이 없다. 시작 revision `7e61b45fc8`에서도 같은 시험을 공식 원격 runner로 실행해 동일한 1 failed를 재현했다(`rosy-transfer-review-baseline-queue/run-1.txt`). 이번 변경 전부터 존재한 실패지만 known-failure 목록에 없어 NEW 1로 분류되며, 전체 회귀가 통과했다고 보고하지 않는다. 두 affected invocation의 skip은 성공 수에 포함하지 않으며 브라우저 등 환경 의존 검증을 대체하지 않는다.
 
 ## 독립 검토와 수정
 

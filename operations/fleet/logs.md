@@ -4952,6 +4952,6 @@
 ## 2026-10-27 · c86b3e51d5 · owner 실행 단계와 복구 다음 확인
 
 - 변경: 보존된 네 단계 owner receipt의 명시적 FAILED·취소·불확실성을 검수 export v2에 연결했다. 종료 후 관측이 없는 Action 실패도 내보내고, 현재 HOLD를 유지한 채 대기·실행 대조·재관측·사람 검토 등 읽기 전용 다음 확인을 제안한다. 물리 실패 원인이나 새 실행 권한은 추정하지 않는다.
-- 증거: tests-only 26344ecf9b의 원격 16 failed/1 passed → 812b3b224c 156 passed. 독립 검토 TTL 반례 e231ff081a 2 failed → c86b3e51d5의 관련 통합 172 passed/0 skipped, runner exit 0·known NEW 0. 같은 source의 affected는 진행 중이다. `docs/validation/transfer-execution-review-2026-10-27/result.md` 참고.
+- 증거: tests-only 26344ecf9b의 원격 16 failed/1 passed → 812b3b224c 156 passed. 독립 검토 TTL 반례 e231ff081a 2 failed → c86b3e51d5의 관련 통합 172 passed/0 skipped, runner exit 0·known NEW 0. 같은 source affected는 역의존·guard 4604 passed/190 skipped와 문서 검사 1 failed, Fleet 7070 passed/391 skipped와 기존 콘솔 계약 불일치 1 failed다. 문서 표기를 고친 a24f265097에서 해당 guard·문서 배치 9 passed/NEW 0. 전체 회귀 통과로 보고하지 않는다. `docs/validation/transfer-execution-review-2026-10-27/result.md` 참고.
 - Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
 - CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
