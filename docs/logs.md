@@ -11674,3 +11674,9 @@ osy-d395-s1d\`.
 - 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
 - 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · fix(hooks): pre-push가 밀어 올리는 커밋의 트리로 판정
+
+- 변경: `tools/hooks/pre-push`는 체크아웃이 `PUSH_SHA`와 다르면(다른 HEAD, 추적·스테이징 변경) `<git-common-dir>/rosy-prepush/<pid>`에 그 커밋을 detached 워크트리로 꺼내 lint·생성 기록·Safety-Review·크기·affected 선택을 거기서 돌리고 끝날 때 지운다. 같으면 지금과 같다. robot-4d에서 고정한 SHA 뒤로 main이 움직여 그 커밋에 없는 시험 파일이 선택되고 pytest exit 4가 두 번 났다(`affected --head`는 diff만 PUSH_SHA로 보고 `Repo.load`는 작업 트리를 읽었다).
+- 증거: `test/test_pre_push_hook.py::test_selection_reads_the_pushed_commit_not_the_checkout`(moved·staged·same)가 훅의 해당 단계를 그대로 돌려 선택기의 시험 목록에 PUSH_SHA에 없는 파일이 없음을 본다. 변이 증명은 완료 보고에 적는다.
+- gate 변화: 체크아웃과 PUSH_SHA가 다를 때 판정 대상이 작업 트리에서 밀어 올리는 커밋으로 바뀐다. CE: 해당 없음 — 재발 방지가 회귀 시험에 있다.
