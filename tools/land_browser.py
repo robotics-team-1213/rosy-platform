@@ -73,7 +73,10 @@ def vacuous(inv: list[str], log: Path) -> str | None:
     text = log.read_text(encoding="utf-8", errors="replace").split(RERUN_MARKER)[0] if log.is_file() else ""
     summary = re.compile(r"\b(passed|failed|skipped|errors?|no tests ran)\b.* in [0-9.]+s")
     lines = [ln for ln in text.splitlines() if summary.search(ln)]
-    counts = {k: int(n) for n, k in re.findall(r"(\d+) (passed|skipped)", lines[-1])} if lines else {}
+    runs = [{k: int(n) for n, k in re.findall(r"(\d+) (passed|skipped)", ln)} for ln in lines]
+    # every summary counts: a later run appended to the same log must not replace an earlier "87 skipped"
+    counts = {"passed": min((r.get("passed", 0) for r in runs), default=0),
+              "skipped": sum(r.get("skipped", 0) for r in runs)}
     if not counts.get("passed") or counts.get("skipped"):
         return (f"ran no browser test for real ({counts.get('passed', 0)} passed, {counts.get('skipped', 0)} skipped;"
                 f" the opt-in or Chromium did not reach the job, or a guard skipped)")

@@ -95,6 +95,12 @@ def test_the_quarantine_rerun_does_not_hide_the_chunks_own_skips(tmp_path):
     assert "4 skipped" in land_browser.vacuous([land_browser.BROWSER_ENV, "t_browser.py"], log)
 
 
+def test_a_second_unmarked_run_in_the_same_log_does_not_hide_the_first_runs_skips(tmp_path):
+    log = tmp_path / "run.txt"
+    log.write_text("87 skipped in 9.00s\n1 passed in 0.10s\n", encoding="utf-8")
+    assert "87 skipped" in land_browser.vacuous([land_browser.BROWSER_ENV, "t_browser.py"], log)
+
+
 def test_a_chunk_built_without_the_opt_in_stops_the_tier():
     paths = ["a_browser.py", "b_browser.py"]
     with pytest.raises(RuntimeError, match="not opted in"):
