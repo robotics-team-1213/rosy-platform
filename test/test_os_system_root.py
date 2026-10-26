@@ -68,10 +68,14 @@ def test_actual_loop_fsck_mount_signature_injection_and_error_cleanup(tmp_path):
     assert not (release / "SHA256SUMS.sig").exists()
     assert hashlib.sha256(boot_image.read_bytes()).hexdigest() == boot_sha
     # Exercise rejection after the real RW mount; all owned loop/mount resources must still be released.
+    bad_images = tmp_path / "bad-signature-case/images"
+    bad_images.mkdir(parents=True)
+    for name in ("rootfs.ext4", "boot.vfat"):
+        shutil.copyfile(images / name, bad_images / name)
     (factory / "SHA256SUMS.sig").write_text("invalid supplied signature")
     with pytest.raises(ValueError, match="native signature"):
-        prepare(images, value, dist, public, raw_cert)
-    assert run(["debugfs", "-R", command, root_image]) == signature
+        prepare(bad_images, value, dist, public, raw_cert)
+    assert run(["debugfs", "-R", command, bad_images / "rootfs.ext4"]) == signature
     loops = json.loads(run(["losetup", "--json", "--output", "NAME,BACK-FILE"]))["loopdevices"]
-    assert not any(str(images) in (row.get("back-file") or "") for row in loops)
+    assert not any(str(tmp_path) in (row.get("back-file") or "") for row in loops)
     print("SYSTEM actual fsck/owned-loop/RW-injection/RO-readback and error cleanup; payload/layout synthetic")
