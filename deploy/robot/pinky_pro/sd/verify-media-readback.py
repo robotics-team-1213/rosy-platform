@@ -277,7 +277,7 @@ def _verify_open(image: Path, actual, progress: Progress, stall_seconds, device_
     if layout_capture is not None:
         parts = layout_capture.layout["partitions"][:3]
         comparison = PartitionComparison([(p["role"], p["start_lba"] * 512, p["size_lba"] * 512)
-                                          for p in parts], allowed_extras, layout["provision_role"])
+                                          for p in parts], allowed_extras, layout_capture.layout["provision_role"])
     with open(image, "rb") as compressed:
         # The compressed bytes the comparison consumes are hashed on the way in,
         # so the evidence ties the compared image to the signed SHA256SUMS entry.
