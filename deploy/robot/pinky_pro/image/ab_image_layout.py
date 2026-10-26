@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import sys
 import uuid
@@ -28,6 +29,7 @@ DATA_DIRECTORIES = {
     "ssh": (0o755, 0, 0), "operator-ssh": (0o700, 1001, 1001), "tls": (0o750, 0, 960),
     "tailscale": (0o700, 0, 0), "tailscale/machine": (0o700, 0, 0), "tailscale/join": (0o700, 0, 0),
     "maps": (0o2750, 961, 960), "models": (0o750, 0, 963), "pilot-recordings": (0o2750, 963, 960),
+    "os-update": (0o700, 0, 0), "os-update/rauc": (0o700, 0, 0), "os-update/staging": (0o700, 0, 0),
 }
 
 
@@ -65,8 +67,10 @@ def _offline_directory(path: Path) -> Path:
     return path
 
 
-def initialize_data(directory: Path, factory_id: str) -> None:
+def initialize_data(directory: Path, factory_id: str, release_id: str) -> None:
     factory_id = _guid(factory_id)
+    if not isinstance(release_id, str) or not re.fullmatch(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}", release_id):
+        raise ValueError("invalid factory OS release identity")
     directory = _offline_directory(directory)
     entries = list(directory.iterdir())
     if any(entry.name != "lost+found" or entry.is_symlink() or not entry.is_dir()
@@ -84,6 +88,8 @@ def initialize_data(directory: Path, factory_id: str) -> None:
                  dict(schema_version=1, state_schema=1, factory_id=factory_id), 0o600)
     _json_atomic(directory / "policy/updates/config.json",
                  dict(enabled=True, repo="robotics-team-1213/rosy-platform"), 0o644)
+    _json_atomic(directory / "os-update/state.json", dict(schema_version=1,
+                 committed=dict(slot="a", release_id=release_id), pending=None, failed_versions=[]), 0o600)
     for relative in sorted(DATA_DIRECTORIES, key=lambda name: name.count("/"), reverse=True):
         sync_directory(directory / relative)
     sync_directory(directory)
@@ -166,6 +172,7 @@ def main(argv=None) -> int:
     data = commands.add_parser("initialize-data")
     data.add_argument("--directory", type=Path, required=True)
     data.add_argument("--factory-id", required=True)
+    data.add_argument("--release-id", required=True)
     slot = commands.add_parser("configure-slot")
     slot.add_argument("--layout", type=Path, required=True)
     slot.add_argument("--root", type=Path, required=True)
@@ -175,7 +182,7 @@ def main(argv=None) -> int:
     if args.command == "plan":
         print(json.dumps(plan(), sort_keys=True))
     elif args.command == "initialize-data":
-        initialize_data(args.directory, args.factory_id)
+        initialize_data(args.directory, args.factory_id, args.release_id)
     else:
         layout = json.loads(args.layout.read_text(encoding="utf-8"))
         if args.command == "sfdisk":

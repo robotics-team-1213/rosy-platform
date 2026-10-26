@@ -169,7 +169,7 @@ def assemble(source: Path, output: Path, work: Path, release_id: str) -> dict:
             resources.mount(loop + f"p{part['number']}", target,
                             filesystem="vfat" if part["number"] <= 3 else "ext4")
             volumes[part["role"]] = target
-        ab.initialize_data(volumes["data"], str(uuid.uuid4()))
+        ab.initialize_data(volumes["data"], str(uuid.uuid4()), release_id)
         capacity = dict(schema_version=1, raw_size_bytes=layout["raw_size_bytes"], roots={})
         for slot in ("a", "b"):
             root, boot = volumes["root_" + slot], volumes["boot_" + slot]
