@@ -194,21 +194,7 @@ def load_inventory(path: Path | None = None) -> dict:
 
 def roles(config: dict) -> dict:
     """Host -> service roles; native OMX may share the site host, never a sim role."""
-    found = {}
-    raw = config.get('sim_hosts', [])
-    if not isinstance(raw, list):
-        raise SystemExit('lab-hosts.json sim_hosts must be a list')
-    for entry in raw:
-        if not isinstance(entry, str):
-            raise SystemExit('lab-hosts.json sim_hosts must contain SSH target strings')
-        target, separator, role = entry.partition('=')
-        target = lab_hosts.ssh_target(target, 'sim_hosts')
-        if not separator:
-            continue
-        role = role.strip()
-        if role not in {'model', 'ai'} or target in found:
-            raise SystemExit('lab-hosts.json sim_hosts has an unknown or duplicate role binding')
-        found[target] = {role}
+    found = {target: {role} for target, role in lab_hosts.sim_roles(config).items() if role}
     site = config.get('site_host', '')
     if site != '':
         site = lab_hosts.ssh_target(site, 'site_host')
@@ -216,8 +202,6 @@ def roles(config: dict) -> dict:
             raise SystemExit('lab-hosts.json site_host conflicts with a simulation role')
         found[site] = {'site'}
     for target in lab_hosts.omx_hosts(config):
-        if found.get(target, set()) & {'model', 'ai'}:
-            raise SystemExit('lab-hosts.json omx_hosts conflicts with a simulation role')
         found.setdefault(target, set()).add('omx')
     return found
 
