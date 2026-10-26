@@ -421,20 +421,45 @@ def test_the_follow_path_does_not_know_where_the_stream_comes_from():
     import ast
     from pathlib import Path
 
-    source = (Path(__file__).resolve().parents[4] / 'middleware/drive/behaviors'
-              / "swarm" / "manager.py").read_text(encoding="utf-8")
+    swarm = Path(__file__).resolve().parents[4] / 'middleware/drive/behaviors' / "swarm"
     imported: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Import):
-            imported.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module)
+    for filename in ("manager.py", "reference_stream.py"):
+        source = (swarm / filename).read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
 
     transports = ("fastapi", "starlette", "websockets", "httpx", "socket",
                   "core.fleet_agent", "core.api")
     assert not [name for name in imported
                 if any(name == t or name.startswith(t + ".") for t in transports)]
     assert not [name for name in imported if name.startswith("rclpy")]
+
+
+@pytest.mark.parametrize("transport", ["socket", "rclpy"])
+def test_reference_stream_boundary_guard_detects_import_mutation(monkeypatch, transport):
+    from pathlib import Path
+
+    stream = (Path(__file__).resolve().parents[4] / "middleware/drive/behaviors"
+              / "swarm/reference_stream.py")
+    original_read = Path.read_text
+    original_source = stream.read_text(encoding="utf-8")
+    injected_import = f"\nimport {transport}\n"
+
+    def mutated_read(path, *args, **kwargs):
+        source = original_read(path, *args, **kwargs)
+        return source + injected_import if path.resolve() == stream else source
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "read_text", mutated_read)
+        assert injected_import in stream.read_text(encoding="utf-8")
+        with pytest.raises(AssertionError):
+            test_the_follow_path_does_not_know_where_the_stream_comes_from()
+
+    assert stream.read_text(encoding="utf-8") == original_source
+    test_the_follow_path_does_not_know_where_the_stream_comes_from()
 
 
 # --- NavigationManager.moving_goal ---------------------------------------------
