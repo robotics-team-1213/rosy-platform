@@ -12106,6 +12106,12 @@ osy-d395-s1d\`.
 - gate 변화: HOLD 유지. 원래 FULL 실패를 단독 선택 성공으로 바꾸지 않으며 다음 공식 전체 실행·착지·게시·실물 수용은 별도다.
 - CE: 미해결 — 종료 지연 원인과 해결을 입증하지 못해 해결 교훈을 쓰지 않았다.
 
+## 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
+
+- 변경: D-629의 좁은 화면 순서만 D-892로 부분 대체한다. 이전 결정 본문은 보존하고 새 결정·색인·DESIGN 참조·반응형 DOM·회귀 시험을 함께 맞춘다.
+- 증거: ADR 번호는 관문에서 선점했으며 ADR Log의 UTF-8 BOM·CRLF를 유지했다. 문서·DOM 변경 뒤 공식 원격 재검증은 진행 중이다.
+- gate 변화: 없음. Accepted는 실물·현장 또는 제품 전체 UI/UX 수용을 뜻하지 않는다.
+
 ## 2026-10-27 · uncommitted · perf(remote): 직렬 묶음 13개를 xdist로
 
 - 변경: `tools/remote/serial_suites.txt`에서 13줄을 뺐다(D-799 3: 직렬과 `-n`의 실패가 같음을 시험 PC에서 본 뒤). root `test/`와 `operations/fleet/test`는 착지 사전 시험의 임계 경로였다(10-26 FULL 사전 시험 25~60분, 그중 순차 17분·18분). 직렬 경로 하나가 섞인 묶음도 통째로 순차였다(imu_bno055가 섞인 media·games·palletizing 묶음). Gazebo·Isaac은 재지 않아 남기고, `tools`는 land_isolation의 collect_alone 잡이 기대므로 남겼다. 워커마다 수집 id가 달라 xdist 수집이 멈추던 두 매개변수(`test_password_session.py` 무작위 salt 해시, `test_site_conversation_client.py` `time.time()`)에 고정 id를 줬다.

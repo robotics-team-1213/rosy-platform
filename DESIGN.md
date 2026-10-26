@@ -333,7 +333,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **패널 모서리** (`--radius-panel` 12px): 패널.
 - **깃발 모서리** (`--radius-flag` 999px): `ui-tag`, 점 표지.
 
-비상 정지를 포함한 모든 조작의 크기를 통일한다([D-629](docs/adr/D-629-control-sizing-and-console-hierarchy.md)).
+비상 정지를 포함한 모든 조작의 크기를 통일한다([D-629](docs/adr/D-629-control-sizing-and-console-hierarchy.md)). 좁은 Fleet 관제의 배치·읽기 순서는 [D-892](docs/adr/D-892-fleet-mobile-operator-priority.md)를 따른다.
 
 - `--target-secondary` 48px: 일반 버튼·필드·체크 라벨의 최소 높이.
 - `--target-primary` 48px: 주 명령.
