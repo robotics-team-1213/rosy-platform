@@ -238,20 +238,23 @@ class Guest:
     def __enter__(self):
         try:
             self._prepare()
-            deadline = time.monotonic() + 480
-            while time.monotonic() < deadline:
-                if self.process.poll() is not None:
-                    raise ValueError("private QEMU exited: " + (self.directory / "qemu-stderr.log").read_text()[-2000:])
-                try:
-                    if self._ssh("true", timeout=5).returncode == 0:
-                        return self
-                except subprocess.TimeoutExpired:
-                    pass
-                time.sleep(2)
-            raise ValueError("SYSTEM guest boot timeout: " + (self.directory / "guest-console.log").read_text(errors="replace")[-5000:])
+            return self.wait_boot()
         except BaseException:
             self.close()
             raise
+
+    def wait_boot(self):
+        deadline = time.monotonic() + 480
+        while time.monotonic() < deadline:
+            if self.process.poll() is not None:
+                raise ValueError("private QEMU exited: " + (self.directory / "qemu-stderr.log").read_text()[-2000:])
+            try:
+                if self._ssh("true", timeout=5).returncode == 0:
+                    return self
+            except subprocess.TimeoutExpired:
+                pass
+            time.sleep(2)
+        raise ValueError("SYSTEM guest boot timeout: " + (self.directory / "guest-console.log").read_text(errors="replace")[-5000:])
 
     def close(self):
         if self.process is not None and self.process.poll() is None:

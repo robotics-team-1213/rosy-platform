@@ -1,6 +1,8 @@
 """ARM SYSTEM firmware-input fixture; synthetic DT never represents Pi acceptance or a release build."""
 import importlib
 import os
+import json
+from pathlib import Path
 
 import pytest
 
@@ -30,3 +32,11 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path):
         assert guest.run("od -An -tx1 /proc/device-tree/chosen/bootloader/partition").split() == ["00", "00", "00", "02"]
         assert guest.run("od -An -tx1 /proc/device-tree/chosen/bootloader/tryboot").split() == ["00", "00", "00", "00"]
         assert "virtio" in guest.run("readlink -f /sys/class/block/vdc/device")
+        guest.provision_source(Path(__file__).resolve().parents[1])
+        layout = json.loads(guest.run("cd /work/source && ROSY_OS_GUEST=1 python3 test/os_system_card.py --work /work/card", timeout=1800))
+        root_uuid = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_a")
+        guest.restart_slot(root_uuid, "a")
+        assert guest.run("findmnt -n -o SOURCE /").strip() == "/dev/vdc4"
+        facts = guest.run("cd /work/source && python3 -c \"import sys,json;sys.path.insert(0,'deploy/robot/pinky_pro/native');from os_media import capture;print(json.dumps(capture()))\"")
+        media = json.loads(facts)
+        assert media["slot"] == "a" and media["layout"] == layout
