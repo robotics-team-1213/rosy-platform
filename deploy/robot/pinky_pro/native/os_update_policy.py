@@ -102,4 +102,7 @@ def authorize(root: Path, transaction_id: str, *, host: Host | None = None) -> N
 
 def authorize_trial(root: Path, transaction_id: str, *, host: Host | None = None) -> dict:
     """Return two fresh idle observations only for this transaction's actual trial boot."""
-    return _authorize(_TrialPolicy(root, host if host is not None else Host(root)), transaction_id)
+    try:
+        return _authorize(_TrialPolicy(root, host if host is not None else Host(root)), transaction_id)
+    except OSError as exc:
+        raise ValueError(f"OS_UPDATE_POLICY: trial observation unavailable: {exc}") from exc
