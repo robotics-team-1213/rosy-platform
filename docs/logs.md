@@ -11571,3 +11571,80 @@ osy-d395-s1d\`.
 - 변경: ADR D-883(D-876 §5·D-524 보충)과 Log 행. API reference v1.320에 guard `resources.disk`/`disk_low`/`gpu`, `disk-low` 상태, Service Control `clean-storage`(ai·model만)를 등록했다.
 - 증거: 원격 시험으로 확인한다. 실제 PC 재설치·정리 실행은 하지 않았다.
 - gate 변화: 없음. 각 PC의 guard-remote·helper 재설치 전에는 값이 null이고 정리 요청은 거부된다. CE: 해당 없음 — 원인(정리 주기보다 빠른 디스크 소모)은 기존 기록과 `fix/test-host-disk`가 다룬다.
+
+## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
+
+- 변경: relocate only six existing runtime/verification methods to site_update_runtime; updater590 to516lines, helper110. Keep switch/rollback/order and public import bindings; update reviewed five-file administrator install closure.
+- 증거: all23 method ASTs, unchanged I/O/verifier/builder and global import targets verified statically. Tests-only d50e67e208 actualCLIclosure RED1FAIL/0skip, NEW1; committed source regression GREEN/review pending. See site-updater-runtime-split validation record/external proofs.
+- gate 변화: none; three/four-image compatibility waits for a separate feature unit after this pure split lands. No host/site/deployment/FIELD acceptance.
+- CE: no new lesson; source/tests/README and existing installer lessons explain this routine split.
+
+## 2026-10-26 · 9816e56bd9 · Site updater pure split verified
+
+- 변경: bind the independent source review and preserved 23 method ASTs/global imports to the six-method runtime extraction; keep complete five-file administrator install closure.
+- 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
+- gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
+- CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
+
+## 2026-10-26 · uncommitted · 원격 pytest가 시험 PC 디스크를 채우지 않게
+
+- 변경: `tools/remote/remote_job.py` JOB이 pytest에 job마다 `mktemp -d /tmp/rosy-pytest-XXXXXX`를 `--basetemp`로 주고 EXIT trap이 지운다. 처음엔 실행 디렉터리 아래(`$D/$K.tmp`)에 뒀으나 land 전체 시험에서 Fleet TLS 시험 59개가 깨졌다: 로그인 umask 0002로 실행 디렉터리가 0775라 TLS 파일 조상 권한 검사가 거절했고, 경로가 길어 AF_UNIX 108바이트를 넘었다. land의 MAIN-RED 재확인은 노트북 쪽 JOB(같은 `--basetemp`)으로 main을 돌려 이를 main 고장으로 잘못 보였다. SWEEP은 연락이 끊긴 채 끝난 실행을 12시간이 아니라 2시간 뒤에 치운다. SWEEP·CLEANUP·SHIP 재시도는 실행·job 디렉터리를 지우기 전에 `chmod -R u+rwX`를 한다(릴리스·롤백 시험이 만드는 읽기 전용 디렉터리는 제품 동작이라 시험은 그대로 둠). 새 `tools/remote/host_probe.py`(`remote_pytest.py`에서 PROBE와 파서를 옮겨 D-766 600줄 아래로 유지)의 PROBE가 `~/rosy-test`와 `/tmp` 파일시스템의 남은 공간을 재고, `place()`는 남은 공간이 20 GB 미만인 호스트를 고르지 않는다(바닥 아래 대체 선택에도 적용). 사용률 기준은 두지 않는다: 434-468 GB 디스크에서 90%여도 45 GB가 남아 멀쩡한 호스트를 뺀다. 디스크 값이 없는 예전 probe는 알 수 없음으로 보고 통과시킨다. 시험 `test/test_remote_pytest.py`.
+- 증거: 2026-10-26 AI PC 루트 디스크 100%, `/tmp/pytest-of-ai` 19 GB(지우지 못한 `garbage-*` 약 40개), `~/rosy-test/runs` 37 GB/229개. 디스크가 찬 PC로 시험이 가서 `test_platform_g1_timing`이 SQLite fsync 지연으로 거짓 실패했다. 원격 pytest 122 passed, known_failures NEW 0. 새 시험은 변이(바닥 해제, `--basetemp` 제거, 720분 복구, chmod 제거)에서 빨간색을 확인했다. 실행 중 probe가 AI PC를 `disk 26.4 GB free (95%) - below disk floor`로 제외했다.
+- gate 변화: 디스크 바닥 아래 시험 PC는 pytest를 받지 않는다. 두 PC가 모두 바닥 아래면 기다린 뒤 "no test host reachable"로 끝난다. 이미 쌓인 `/tmp/pytest-of-*/garbage-*`는 이 변경이 지우지 않는다. CE: 해당 없음(원인과 규칙은 코드 주석과 시험에 남김).
+
+## 2026-10-26 · 3733f72b5d · 낡은 설치본 pre-push는 게시 push를 멈춘다
+
+- 변경: `rosy.publishOnly` clone에서 설치된 `.git/hooks/pre-push`가 push하는 커밋의 `tools/hooks/pre-push`와 다르면 `bash tools/hooks/install.sh`를 안내하고 멈춘다.
+- 이유: 공유 clone이 10-11 복사본으로 2주 동안 push했다. 그 뒤 게이트(착지 기록 재사용, Safety-Review, 게시 전용 검사)가 실제 push에서 하나도 돌지 않았다. 10-26에 재설치했다.
+- 증거: `test/test_pre_push_hook.py::test_a_stale_installed_copy_refuses_the_push` 같음·다름 두 경우. bash로 같은 구간을 돌려 같음 0, 다름 1을 확인했다.
+- gate 변화: 공유 clone의 게시 push에만 적용된다. 팀원 clone은 설정이 없어 영향이 없다.
+- 교훈: CE 해당 없음 — 원인과 재발 방지가 이 검사와 시험에 있다.
+
+## 2026-10-26 · uncommitted · docs(solutions): read-only test dirs filled the lab test-PC disks
+
+- 변경: 새 교훈 `docs/solutions/workflow-issues/read-only-test-dirs-fill-lab-disks-2026-10-26.md`(pytest `garbage-*`·고아 run 디렉터리·디스크를 안 보는 호스트 선택, chmod 후 회수 명령, 읽기 전용 시험은 고치지 않음). `landing-blockers-cost-hours-2026-10-18.md` §5의 g1 LOAD-FLAKY 줄을 부하가 아니라 AI PC 디스크 I/O 경합(증명 안 됨)으로 정정. `test/flaky_quarantine.txt` g1 3개 id의 사유 문구만 같은 사유로 바꿈(제거 조건·날짜·소유자 유지).
+- 증거: 2026-10-26 시험 PC 측정. AI PC 100%(1.4 GB 남음)·모델 PC 89% → 수동 회수 뒤 81%·82%. 정리 뒤 AI PC에서 g1 첫 시도 3/3 실패, 모델 PC 0/2 실패, io pressure full avg10 최대 57%. 수정은 rosy-platform `fix/test-host-disk-2`와 rosy-ops `ops/daily-host-maintenance`(9f907ab, e24736e, 5f88c77).
+- gate 변화: 없음. 문서와 격리 사유 정정이다.
+- 결정: 없음.
+- 교훈: CE 새 교훈 기록 — 위 경로.
+
+## 2026-10-26 · 5acb6bbb94 · 시험 job의 I/O 등급과 현장 PC 정리 타이머 선언
+
+- 변경: `remote_job.JOB`의 pytest를 `ionice -c3`(idle)에서 `-c2 -n7`(best-effort 최하위)로 바꾼다. 설치·복사·정리 단계는 idle 그대로다. `deploy/hosts/services.yaml`의 site 역할에 `rosy-test-storage.service/.timer`를 선언하고, AI PC `pinky-backend.service`를 `run: "off"`로 바꾼다(10-26 사용자 승인으로 중지).
+- 이유: idle 등급은 다른 쓰기가 있으면 디스크 시간을 받지 못해, g1 시간 제한 시험의 SQLite fsync가 수 초씩 멈췄다(AI PC contact gap p99 4.7~5.7초, 디스크 여유 87GB에서도 실패). site 역할에 선언이 없어서 현장 PC에 정리 도구가 없었는데도 `update_status.py`가 잡지 못했다.
+- 증거: `test/test_remote_pytest.py::test_the_pytest_job_is_best_effort_lowest_io_not_idle`, `test/test_host_services_manifest.py`. g1이 실제로 통과하는지는 이 착지 뒤 AI PC에서 다시 확인한다(아직 가설).
+- gate 변화: 없음.
+- 교훈: CE 미해결 — g1 원인은 착지 뒤 재현 실험으로 확정한다.
+
+## 2026-10-26 · uncommitted · 원격 pytest job의 /tmp 누수 경고와 설치 환경 지문
+
+- 변경: `tools/remote/remote_job.py` JOB이 job 전용 `/tmp/rosy-pytest-XXXXXX` 아래 `p`를 `--basetemp`로, 형제 `t`를 `TMPDIR`/`TEMP`/`TMP`로 준다(pytest가 시작할 때 basetemp를 지우므로 안이 아니라 옆). pytest가 끝나면 `/tmp` 바로 아래에서 사용자 소유이고 lock보다 새로운 항목(`rosy-pytest-*` 제외)을 최대 20줄 `[remote-pytest] leaked into /tmp: <path>`로 알린다. 경고만 하고 종료 코드는 pytest 것 그대로다. pytest 전에 `[remote-pytest] env <deps-sha> freeze <16자리>`를 남긴다. freeze는 venv에 설치된 `*.dist-info` 이름 목록의 sha256이다.
+- 이유: `TEMP`가 없으면 `/tmp`로 떨어지는 브라우저 시험 4곳(`test/browser_harness.py` `save_temp_screenshot` 등)이 시험 PC `/tmp`에 파일을 남겼다. VENV는 pytest·setuptools·wheel·flake8·jsonschema·ext4·playwright를 고정 없이 설치하는데, `.deps-sha`와 land 캐시 env는 설치 입력의 해시라 같은 해시의 venv가 호스트·빌드 시점마다 다른 버전일 수 있다.
+- 결정: freeze를 VENV에서 `.freeze-sha` 파일로 쓰지 않고 job마다 dist-info 이름으로 계산한다. VENV 문구를 바꾸면 고정 해시 시험(`test_default_recipe_and_hash_remain_identical`)과 기존 venv가 모두 바뀌고, 이미 있는 venv는 파일이 없어 값을 못 남긴다. land 캐시 키에는 넣지 않는다: env id는 실행 전에 노트북에서 커밋만으로 계산하고, freeze는 실행한 호스트에서만 알 수 있으며 호스트마다 다를 수 있어 넣으면 캐시가 사실상 꺼진다. 버전 고정도 하지 않는다(CI 설치와 갈라짐).
+- 증거: 원격 `test/test_remote_pytest.py test/test_remote_test_tools.py` 102 passed, known_failures NEW 0. 새 시험 2개는 변이 6개(find 제거, `rosy-pytest-*` 제외 제거, `exit $c` 제거, 20줄 상한 99로, TMPDIR export 제거, freeze를 venv 밖에서 계산)에서 각각 빨간색이었다. 첫 실행에서 시험 PC 실제 누수 줄이 나왔다(`/tmp/g1udsgax_ixxe`, 두 번째는 기존 `/tmp/pytest-of-ai` 갱신). 같은 사용자의 동시 job이 만든 것도 잡히므로 경고로만 두고, job 로그 끝을 고정하던 기존 시험 3개는 뒤에 누수 줄이 붙어도 통과하게 고쳤다.
+- gate 변화: 없음(경고와 로그 줄만 추가).
+- 교훈: CE 해당 없음 — 이유는 코드 주석과 이 기록에 있다.
+
+## 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
+
+- 변경: `update_status.py`가 rosy-platform·rosy-ops 각각 비교한 ref, 그 끝 커밋, 마지막 fetch 뒤 시간(FETCH_HEAD·origin/main reflog 파일 mtime 중 늦은 것)을 찍는다. origin/main이 없어 HEAD를 읽었거나, fetch 기록이 없거나, `--ref-stale-hours`(기본 12)보다 오래되면 `STALE-REF`로 exit 1. 파일별 HEAD 대체 읽기를 없앴다(origin/main에 없는 파일은 `note cannot read`). `--fetch`는 먼저 `git fetch origin main`을 돌린다(기본 꺼짐, 읽기 전용 유지). 이 PC에 robot CD가 설치돼 있으면 `robot_cd.snapshot_drift`로 스냅숏 파일 중 같은 ref와 다른 파일을 `WARN`으로 나열한다(exit 코드는 그대로).
+- 이유: 로컬 origin/main을 fetch 없이 읽어 오래된 기준과 비교한 DRIFT·통과가 구별되지 않았고, 설치된 서명 스냅숏이 main보다 뒤처져도 알 길이 없었다.
+- 증거: `test/test_update_status.py::test_ref_state_names_the_ref_and_ages_the_last_fetch_not_the_tip_commit`, `::test_repo_digest_reads_only_the_named_ref`, `test/test_robot_cd.py::test_snapshot_drift_lists_snapshot_files_that_differ_from_origin_main`. 실제 PC에서 `update_status.py`를 돌린 확인은 아니다.
+- gate 변화: 없음.
+- 교훈: 해당 없음 — 새 검사 추가, 장애 해결 아님.
+
+## 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
+
+- 변경: 새 교훈 `docs/solutions/workflow-issues/copied-or-declared-artifacts-drift-silently-and-disable-gates-2026-10-26.md`(설치된 pre-push 10-11 복사본으로 2주간 게이트 미실행, services.yaml site 역할의 정비 unit 누락과 침묵한 update_status.py, 정비 도구 옛 버전). 같은 부류의 열린 항목 세 개(원격 시험 환경 id의 미고정 패키지, fetch 안 된 origin/main 비교, robot_cd 스냅숏 낡음 미검사)를 적음.
+- 증거: 수정 커밋 `58b1456a7d`(`test/test_pre_push_hook.py::test_a_stale_installed_copy_refuses_the_push`)와 `a4a357a416`(`test/test_host_services_manifest.py`). 열린 항목은 코드 읽기만 했다.
+- gate 변화: 없음. 문서만이다.
+- 결정: 없음.
+- 교훈: CE 새 교훈 기록 — 위 경로.
+
+## 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
+
+- 변경: `tools/release/deploy.py`를 `tools/release/deploy_cli.py`로 옮기고, 시험 1곳과 문서 2개의 경로를 고친다. `test/test_tool_script_names.py`는 `tools/` 아래 스크립트 이름이 저장소 최상위 폴더 이름과 같으면 실패한다. 묶음 병합에서 빠졌던 `docs/logs.md` 항목도 되살린다.
+- 이유: `eb616252ea`(10-25)가 추가한 `deploy.py`가, `tools/release`가 sys.path 맨 앞에 오는 실행에서 `deploy` 패키지를 가렸다. 그래서 `test/test_robot_cd.py`의 2건이 깨끗한 main에서도 `No module named 'deploy.hosts'`로 실패했다(10-26 원격 실행: main, 묶음 브랜치, fix/test-host-disk-2에서 모두 2 failed).
+- 증거: 원격 `test/test_robot_cd.py`, `test/test_deployment_targets.py`, `test/test_tool_script_names.py`, `test/test_update_status.py`. 새 시험은 옛 이름이 있으면 실패한다.
+- gate 변화: main의 `test_robot_cd` 2건이 다시 녹색이 된다.
+- 교훈: CE 해당 없음 — 재발 방지가 이름 검사 시험에 있다.

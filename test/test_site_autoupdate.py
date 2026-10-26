@@ -956,7 +956,8 @@ def test_interrupted_directory_migration_is_recoverable(host, monkeypatch):
 
 
 def test_installed_cli_loads_only_its_reviewed_modules(tmp_path):
-    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'verify_candidate.py',
+    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'site_update_runtime.py',
+                 'verify_candidate.py',
                  'candidate_signing.py'):
         shutil.copy2(SITE / name, tmp_path / name)
     command = [sys.executable, '-I', str(tmp_path / 'rosy_site_autoupdate.py'), '--help']
@@ -965,6 +966,18 @@ def test_installed_cli_loads_only_its_reviewed_modules(tmp_path):
     (tmp_path / 'site_update_io.py').unlink()
     # Missing reviewed helper must fail; never fall back to checkout/candidate code.
     assert subprocess.run(command, capture_output=True, cwd=tmp_path).returncode != 0
+
+
+def test_installed_cli_refuses_missing_runtime_helper(tmp_path):
+    for name in ('rosy_site_autoupdate.py', 'site_update_io.py', 'verify_candidate.py',
+                 'candidate_signing.py'):
+        shutil.copy2(SITE / name, tmp_path / name)
+    # A partial administrator install must not borrow runtime code elsewhere.
+    result = subprocess.run(
+        [sys.executable, '-I', str(tmp_path / 'rosy_site_autoupdate.py'), '--help'],
+        capture_output=True, text=True, cwd=tmp_path)
+    assert result.returncode != 0
+    assert 'site_update_runtime' in result.stderr
 
 
 def test_running_newer_stack_is_not_downgraded_when_env_is_stale(host):
