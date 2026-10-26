@@ -3,8 +3,9 @@
 ROSY 시스템 모니터링의 독립 Python wheel은 `rosy-monitoring`, import는 `rosy.monitoring`이다.
 소유권과 배치 결정은 [D-876](../../docs/adr/D-876-rosy-monitoring-independent-site-and-aggregate.md)을 따른다.
 
-현재 구현은 관측 모델, 읽기 전용 설정·자격 검증, 사이트별 그래프 캐시다.
-HTTP 수집기·조회 API·상태 화면·native 배포는 후속 구현이다. 실행 중인 Fleet 프로세스나 ROS를 import하지 않는다.
+관측 모델·설정·자격·사이트별 캐시, 원천 수집과 읽기 API를 제공한다.
+실행 launcher·상태 화면·native 배포는 후속 단계다. 실행 중인 Fleet 프로세스나 ROS를 import하지 않는다.
+HTTP 경로·인증·시간 전달·보존 한도는 [Monitoring API](../../docs/reference/rosy-monitoring-api.md)가 정본이다.
 
 저장소 루트에서 wheel을 설치한다.
 
@@ -29,10 +30,24 @@ peer 중계는 전송 시간과 시계 여유를 빼고 단조 시계로 만료�
 
 항목이 누락되거나 `unknown`이 되어도 원래 표본 시각·만료 기한을 기억한다. 표본 이름만 바뀌어도 같은 관측 시각의 수명은 늘리지 않는다.
 같은 capture 시각의 사실 내용 변경도 거부한다. 원천 시각의 정밀도가 낮아 실제 표본을 구분할 수 없으면 더 새로운 capture 시각을 기다린다.
-한 프로세스에서 최대 8192개 관측 ID를 기억하며, 한도에서는 새 ID를 거부하고 기존 관측을 계속 처리한다.
-이보다 잦은 구성 요소 교체를 재시작 없이 지원하려면 영속화된 제한형 anchor가 필요하다.
+최대 8192개 관측 ID를 기억하며, 한도에서는 새 ID를 거부하고 기존 관측을 계속 처리한다.
+이보다 잦은 구성 요소 교체를 지원하려면 만료 anchor의 안전한 제거·운영 전환을 별도로 검증해야 한다.
 캐시 조회·갱신은 하나의 소유자에서 직렬 호출한다. 수집기의 이벤트 루프가 이 역할을 맡는다.
-현재 anchor 보존 범위는 캐시 인스턴스 수명이다. 수신 수집기 프로세스 재시작 후의 복구는 후속 SQLite·서비스 연동과 수용 시험이 필요하다.
+서비스의 `MonitoringStore`는 정규화 관측·anchor·peer cursor를 SQLite에 먼저 저장한 후 캐시에 게시한다.
+store를 열 때 OS 배타 writer lease를 획득하고 종료할 때 해제한다. 잠금 파일은 삭제하지 않는다.
+같은 state DB를 여러 프로세스가 동시에 쓰지 못한다. 저장소를 교체·재초기화해 한도를 우회하지 않는다.
+수신 프로세스 재시작은 원천 시각·판정을 유지하면서 경과 시간을 원천 수명에서 보수적으로 차감한다.
+복구된 보고 경로는 stale이다. 손상·다른 소유자의 DB·시각 역행을 새 정상 상태로 초기화하지 않는다.
+저장 실패 중에는 서비스의 비공개 snapshot이 고정 코드의 503을 반환한다.
+상태 변경 이력은 사이트별 최대 4096건/7일이다. 원천 본문·주소·비밀값은 저장하지 않는다.
+이전 등록까지 합해8192 anchor/64사이트 cursor를 보존한다. 더 큰 구성 전환은 운영 전환 검증이 필요하다.
+
+`Collector`의 원천 수집은 5초 간격, 최대 동시 8개, 원천 요청당 3초다. GET은 캐시만 읽는다.
+CORE는 viewer identity와 diagnostics, Fleet은 수동 monitoring 캐시, 호스트는 기존 status 파일을 읽는다.
+일반 HTTP 정상 응답은 통신 성공이며, 서비스 자체 건강 판정은 UNKNOWN으로 유지한다.
+파일 probe는 파일 조회 결과다. host-guard의 원격 연결 보고와 별도 링크로 표시한다.
+파일은 로컬 regular file이어야 한다. 막힌 파일 I/O는 최대 8개만 보류하며 다음 순회에서 쌓지 않는다.
+원격 파일시스템의 지연·프로세스 종료 영향은 실제 배포 환경에서 별도 수용해야 한다.
 
 원격 시험은 [개발 안내](../../docs/reference/developer-guide.md)의 절차로 `operations/monitoring/test`를 실행한다.
 설치 wheel 시험은 별도 임시 경로에서 빌드·설치하고 `python -I`로 namespace와 Fleet/ROS 비의존성을 확인한다.

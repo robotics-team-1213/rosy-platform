@@ -12,6 +12,25 @@ from rosy.monitoring.models import MonitoringNode, MonitoringSnapshot
 BASE = datetime(2026, 10, 25, tzinfo=timezone.utc)
 
 
+def test_cached_snapshot_stays_serializable_as_accepted_evidence_ages(runtime):
+    cache, clock = runtime
+    template = observed_node().model_copy(update={'label': 'x' * 80, 'sample_id': 's' * 128})
+    low, high, accepted = 1, 2045, 0
+    while low <= high:
+        count = (low + high) // 2
+        nodes = tuple(template.model_copy(update={'id': f'site-a:host:item-{i}'}) for i in range(count))
+        try:
+            cache.update_local('pc-a', nodes=nodes)
+        except ValueError:
+            high = count - 1
+        else:
+            accepted, low = count, count + 1
+    assert accepted > 100
+    clock.advance(0.123456789)
+    snapshot = cache.snapshot(frozenset({'site-a', 'site-b'}))
+    assert len(snapshot.model_dump_json().encode()) <= 1024 * 1024
+
+
 class Clock:
     t = 0.0
 
