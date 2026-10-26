@@ -4732,3 +4732,9 @@
 - 변경: `/api/fleet/monitoring`이 기존 읽기 권한으로 마지막 SharedGather 캐시만 projection한다. 완료된 gather의 본문·두 시각을 한 tuple로 게시하고 조회 중 gather·로봇 요청·교통·인계를 실행하지 않는다. 민감 본문을 제외하고 나이를 보존하며 검증 불가 시 공개 503 코드만 반환한다.
 - 증거: `09b50defff` 원격 RED에서 경로 미구현404 3건·getter 미구현11건을 확인했다. 실제 Fleet HTTP·금지된 gather·0기준 시계·부분 게시·비유한 시계·민감 필드 제외를 회귀로 고정했다. 독립 계약 검토에서 차단 사항이 없었다. GREEN 결과는 커밋 SHA의 원격 로그로 확인한다.
 - gate 변화: 기존 모듈 gate를 올리지 않는다. 독립 Monitoring 수집기·화면·배포·장치 수용은 별도다. CE: 해당 없음.
+
+## 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
+
+- 변경: `host_control`의 `HOST_ACTIONS`(ai·model `clean-storage`), `ACTION_NOT_ALLOWED`·`NO_STORAGE_SERVICE` 코드, 설치 화면의 [시험 저장소 정리] 버튼과 디스크·GPU 여유 표시.
+- 증거: `operations/fleet/test/test_host_control.py` 원격 실행.
+- gate 변화: 없음. 버튼은 catalogue가 그 동작을 내줄 때만 보인다.
