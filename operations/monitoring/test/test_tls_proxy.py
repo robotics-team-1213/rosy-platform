@@ -3,7 +3,6 @@
 from hashlib import sha256
 from io import BytesIO
 import os
-from pathlib import Path
 import platform
 import shutil
 import ssl

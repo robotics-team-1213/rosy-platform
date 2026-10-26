@@ -41,3 +41,9 @@
 - 변경: 설치된 wheel 실행 파일로 경로만 치환한 unit을 실제 systemd-analyze verify로 검사한다. 서비스 설치·활성화는 하지 않는다. 실행 파일은 PATH 가정 대신 시험 Python 환경에서 찾아 설치 누락을 거부한다.
 - 증거: 원격 native unit1 PASS/0 SKIP, NEW/KNOWN/FLAKY0. 최초 PATH 조회 실패는 7c1c35d4a9의 RED로 보존했다. 설치 위치 검증과 systemd 오류 판정은 유지했다. 두 승인 시험 PC에 Caddy가 없어 Caddy 검증은 미수행이다.
 - gate 변화: 없음. 시험 PC의 parser 검증은 실제 PC 고정 경로·계정·권한·TLS·LAN 수용을 대신하지 않는다. CE 해당 없음 — 시험의 환경 선택은 해당 코드에 직접 드러난다.
+
+## 2026-10-26 · c22e9bc8b3 · 격리 native HTTPS 경로 수용
+
+- 변경: 공식 Caddy 시험 도구의 크기·SHA256을 고정하고 실제 배포 예시의 UI/API 경로를 임시 loopback TLS 서버로 검증한다. 신뢰 저장소·실제 서비스는 변경하지 않으며 프로세스는 시험 종료 시 회수한다. 응답 지연 fixture는 명시적인 키가 설정된 경우에만 동작하게 고쳤다.
+- 증거: TLS flag·browser flag를 켠 원격18 PASS/0 SKIP(native proxy1·unit1·Chromium16), 비교 NEW/KNOWN/FLAKY0. 인증401·scope403·CA 검증·미신뢰 인증서의 CERTIFICATE_VERIFY_FAILED·canonical UI 자산과 API 전달·backend 중단502를 확인했다. 최초6eaf164261의 비인증 응답 지연 RED를 보존했다. 읽기 전용 검토 차단 없음.
+- gate 변화: SOURCE/LOCAL GO, ARTIFACT/DEVICE/FIELD HOLD. 대상 PC·운영 담당자가 지정되지 않아 실제 배포 경로·계정·권한·LAN/TLS는 확인하지 않았다. CE 해당 없음 — fixture 조건과 검증 범위는 코드·회귀·배포 안내에 직접 남는다.

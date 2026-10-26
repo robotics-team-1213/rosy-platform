@@ -52,6 +52,19 @@ Grafana는 향후 후보이며 이 배포에 설치하지 않는다.
 
 ## Acceptance and recovery
 
+배포 예시의 HTTPS 경로는 승인 시험 PC의 격리 환경에서 확인할 수 있다.
+
+```sh
+python tools/remote/remote_pytest.py --log-dir <external-log-directory> -- ROSY_RUN_BROWSER_TESTS=1 ROSY_MONITORING_TLS_TEST=1 operations/monitoring/test/test_tls_proxy.py operations/monitoring/test/test_native_artifact.py test/test_monitoring_browser.py -q
+```
+
+이 opt-in 시험은 [공식 Caddy v2.10.2 릴리스](https://github.com/caddyserver/caddy/releases/tag/v2.10.2)의
+Linux amd64 시험 도구를 크기·SHA256 검증 후 임시 경로에 내려받는다. 운영 Caddy 버전을 고정하는 설정은 아니다.
+시험 인증서·loopback 포트만 사용하고 admin·자동 HTTP redirect를 끈다. 서비스·시스템 신뢰 저장소는 변경하지 않는다.
+별도 CA를 신뢰시킨 클라이언트의 성공과 기본 신뢰 저장소의 인증서 검증 실패를 모두 검사한다.
+인증401·범위403·UI/API 전달과 시험 backend 중단502를 검증한다. 기본 시험은 이 다운로드/실행을 생략하므로
+실행 근거에는 위 flag를 켠 회차의 실제 실행·생략 수를 기록한다. 실제 PC 경로·계정·권한·LAN/TLS 수용은 별도다.
+
 외부 supervisor에서 PID와 `/monitoring-health`를 확인한다. 자신의 200 응답만으로 전체 정상 판정을 내리지 않는다.
 실제 사이트에서 인증 거부·scope 거부·중앙 단절·사이트 단절·TLS 실패를 확인하고
 화면의 원천 판정과 신선도가 서로 구별되는지 기록한다. host pytest·합성 브라우저는 이 수용을 대신하지 않는다.

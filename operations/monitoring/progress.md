@@ -15,7 +15,7 @@ gates:
     state: N/A
   ARTIFACT:
     state: HOLD
-    blocker: CLI wheel·UI 묶음 byte 일치·3프로필과 시험 PC의 실행 파일 경로만 치환한 실제 systemd unit 파서 검사는 통과했다. 대상 PC 고정 경로의 unit 검사·Caddy 설정 검사·실제 TLS 프록시 수용은 미수행이다.
+    blocker: CLI wheel·UI 묶음·3프로필·시험 PC unit 파서와 실제 Caddy 격리 HTTPS 검증은 통과했다. 배포 대상 PC 고정 경로·계정·권한 확인은 미수행이며 실제 설치·LAN/TLS 수용은 별도다.
   DEVICE:
     state: HOLD
     blocker: 실제 관제 PC의 네이티브 설치·프로세스 수명 검증을 수행하지 않았다.
