@@ -11,6 +11,7 @@ from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from .mission_store import MissionConflict, _json
 from .physical_transfer_observations import evidence_document, validate_post_action_order
 from .physical_transfer_outcome import assess_transfer_outcome
+from .physical_transfer_review import assess_transfer_execution
 from .physical_transfer_store import PhysicalTransferRequest
 
 EVENT = "PHYSICAL_TRANSFER_ASSESSED"
@@ -52,23 +53,36 @@ def export_transfer_outcomes(store, mission_id, output):
     """Export retained facts for review; not a demonstration or authenticated truth."""
     with closing(store._journal._connect()) as connection:
         connection.execute("BEGIN")
-        if store._read(connection, mission_id) is None:
+        job = store._read(connection, mission_id)
+        if job is None:
             raise KeyError(mission_id)
+        from .physical_transfer_execution import PhysicalTransferExecution
+        execution = PhysicalTransferExecution(store)
+        current = execution._state(connection, mission_id)
+        grant = FleetArmTransferGrant.model_validate(current["grant"])
+        prior = execution._last_receipt(connection, mission_id)
         rows = connection.execute("SELECT detail_json FROM fleet_cell_events WHERE mission_id=? "
             "AND event_type=? ORDER BY event_id", (mission_id, EVENT)).fetchall()
         outcomes = [json.loads(row[0]) for row in rows]
-        if not outcomes:
-            raise ValueError("no recorded transfer assessments")
+        if prior is None:
+            raise ValueError("no recorded transfer owner receipt")
         for detail in outcomes:
             evidence = detail["evidence"]
             if (detail["schema"] != "rosy.transfer-outcome/1" or detail["mission_id"] != mission_id
+                    or detail["action_id"] != grant.action_id or detail["attempt_id"] != grant.attempt_id
+                    or detail["request_digest"] != grant.request_digest
+                    or detail["policy_digest"] != store.installation.policy.digest
                     or sha256(_json(evidence).encode()).hexdigest() != detail["evidence_digest"]
                     or evidence["context"]["action_id"] != detail["action_id"]
                     or evidence["context"]["attempt_id"] != detail["attempt_id"]):
                 raise ValueError("transfer outcome evidence changed")
-        document = dict(schema="rosy.transfer-outcome-export/1", scope="unreviewed_metadata_only",
+        review = assess_transfer_execution(grant, prior["receipt"], job_status=job["status"],
+            task_outcome=outcomes[-1]["task_outcome"] if outcomes else "unknown")
+        review["receipt_digest"] = sha256(_json(prior["receipt"]).encode()).hexdigest()
+        review["source_assessment_digests"] = [item["evidence_digest"] for item in outcomes]
+        document = dict(schema="rosy.transfer-outcome-export/2", scope="unreviewed_metadata_only",
             mission_id=mission_id, raw_camera_bytes_available=False, behavior_training_eligible=False,
-            outcomes=outcomes)
+            outcomes=outcomes, execution_review=review)
     output = Path(output)
     fd, pending = tempfile.mkstemp(prefix=".transfer-outcomes-", dir=output.parent)
     try:
