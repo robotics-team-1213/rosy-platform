@@ -54,6 +54,13 @@ def _properties(run, unit, keys):
 
 def _service(run, unit):
     value = _properties(run, unit, SERVICE_KEYS)
+    _validate_service(value, unit)
+    return value
+
+
+def _validate_service(value, unit):
+    if not isinstance(value, dict) or set(value) != SERVICE_KEYS or any(type(v) is not str for v in value.values()):
+        raise ValueError("trial service receipt is malformed")
     if (value["ActiveState"] != "active" or value["SubState"] != "running" or value["Result"] != "success"
             or not re.fullmatch(r"[1-9][0-9]*", value["MainPID"])
             or not re.fullmatch(r"[0-9a-f]{32}", value["InvocationID"])):
@@ -62,7 +69,6 @@ def _service(run, unit):
             value["EnvironmentFiles"] != IO_ENVIRONMENT_FILES
             or value["DropInPaths"] != "/etc/systemd/system/rosy-io.service.d/zz-rosy-os-guard.conf"):
         raise ValueError("effective observational I/O environment or drop-ins differ")
-    return value
 
 
 def _probe():
@@ -130,6 +136,13 @@ def _report_path(root, pending):
 
 
 def read_health(root: Path, pending: dict) -> dict:
+    try:
+        return _read_health(root, pending)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise ValueError(f"OS_HEALTH_HOLD: {exc}") from exc
+
+
+def _read_health(root: Path, pending: dict) -> dict:
     facts, actual = _trial(root, pending["transaction_id"])
     if actual != pending:
         raise ValueError("health transaction changed")
@@ -140,8 +153,11 @@ def read_health(root: Path, pending: dict) -> dict:
     observed = value["observed_boottime_ns"]
     if type(observed) is not int or not 0 <= observed <= _deadline() <= observed + 30_000_000_000:
         raise ValueError("health receipt is expired or has an invalid clock")
+    if any(not isinstance(value[key], dict) for key in ("native_factory", "projection", "watchdog", "samples", "services")):
+        raise ValueError("health receipt observations must be objects")
     expected = dict(schema_version=1, **pending["verified"]["metadata"]["native_factory"])
-    if (value["native_factory"] != expected or value["projection"].get("boot_id") != facts["boot_id"]
+    if (value["native_factory"] != expected or type(value["native_factory"].get("schema_version")) is not int
+            or value["projection"].get("boot_id") != facts["boot_id"]
             or value["projection"].get("slot") != facts["slot"] or value["watchdog"].get("boot_id") != facts["boot_id"]):
         raise ValueError("health receipt observations differ from the trial")
     samples = value["samples"]
@@ -150,6 +166,8 @@ def read_health(root: Path, pending: dict) -> dict:
         raise ValueError("health receipt lacks distinct CORE samples")
     if set(value["services"]) != {"rosy-core.service", "rosy-io.service"}:
         raise ValueError("health receipt service inventory differs")
+    for unit, data in value["services"].items():
+        _validate_service(data, unit)
     return value
 
 
@@ -180,6 +198,8 @@ def check(root: Path, transaction_id: str, *, host: Host | None = None, run=_run
         _probe()
         samples = authorize_trial(root, transaction_id, host=host)
         _probe()
+        if observe_watchdog(root, run=run) != watchdog:
+            raise ValueError("watchdog changed during health observation")
         if any(_service(run, unit) != value for unit, value in services.items()):
             raise ValueError("runtime service restarted or changed during health observation")
         if _trial(root, transaction_id, checking=True) != (facts, pending) or verify_ready(root) != projection:
