@@ -2,22 +2,26 @@
 from __future__ import annotations
 
 import functools
+import fcntl
 import hashlib
 import http.server
 import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import signal
 import socket
 import stat
 import subprocess
 import threading
 import time
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 import uuid
 
 PINS = Path(__file__).with_name("os_system_vm_inputs.json")
+RANGE_BYTES = 8 * 1024**2
+RANGE_THRESHOLD = 32 * 1024**2
 
 
 def download(expected, target):
@@ -30,13 +34,25 @@ def download(expected, target):
         with partial.open("xb") as output:
             created = True
             digest, total = hashlib.sha256(), 0
-            with urlopen(expected["url"], timeout=240) as source:
-                while chunk := source.read(min(2 * 1024**2, expected["size_bytes"] - total + 1)):
-                    total += len(chunk)
-                    if total > expected["size_bytes"]:
-                        raise ValueError("guest input exceeds its pinned size")
-                    digest.update(chunk)
-                    output.write(chunk)
+            ranged = expected["size_bytes"] >= RANGE_THRESHOLD and expected["url"].startswith(("https://", "http://"))
+            step = RANGE_BYTES if ranged else expected["size_bytes"]
+            # Bulk cloud transfers stalled after32MiB; bound each response but retain the whole-file SHA authority.
+            for start in range(0, expected["size_bytes"], step):
+                end = min(start + step, expected["size_bytes"]) - 1
+                request = Request(expected["url"], headers={"Range": f"bytes={start}-{end}"}) if ranged else expected["url"]
+                with urlopen(request, timeout=30) as source:
+                    if ranged and (source.status != 206 or source.headers.get("Content-Range") != f"bytes {start}-{end}/{expected['size_bytes']}"):
+                        raise ValueError("guest upstream returned a different byte range")
+                    received = 0
+                    while chunk := source.read(min(2 * 1024**2, end - start + 2 - received)):
+                        received += len(chunk)
+                        if received > end - start + 1:
+                            raise ValueError("guest input exceeds its pinned size")
+                        digest.update(chunk)
+                        output.write(chunk)
+                    if received != end - start + 1:
+                        raise ValueError("guest input range ended early")
+                    total += received
             if total != expected["size_bytes"] or digest.hexdigest() != expected["sha256"]:
                 raise ValueError("guest input differs from its pinned bytes")
             output.flush()
@@ -45,6 +61,43 @@ def download(expected, target):
     finally:
         if created:
             partial.unlink(missing_ok=True)
+
+
+def cached_input(expected, target):
+    """Only public pinned bytes are cached; mutable guests always receive a new copy."""
+    base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache").absolute()
+    cache = base / "rosy-os-system-inputs"
+    cache.mkdir(parents=True, exist_ok=True, mode=0o700)
+    info = cache.stat()
+    if cache.resolve() != cache or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        raise ValueError("SYSTEM public cache is not privately owned")
+    digest = expected["sha256"]
+    if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+        raise ValueError("invalid SYSTEM input digest")
+    cached = cache / (digest + ".bin")
+    fd = os.open(cache / (digest + ".lock"), os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1:
+            raise ValueError("unsafe SYSTEM cache lock")
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        if not cached.exists() and not cached.is_symlink():
+            download(expected, cached)
+            cached.chmod(0o400)
+        info = cached.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1
+                or info.st_mode & 0o022 or info.st_size != expected["size_bytes"]):
+            raise ValueError("unsafe SYSTEM cached input")
+        digest = hashlib.sha256()
+        with cached.open("rb") as source:
+            while chunk := source.read(2 * 1024**2): digest.update(chunk)
+            if digest.hexdigest() != expected["sha256"]:
+                raise ValueError("SYSTEM cached input digest differs")
+            source.seek(0)
+            with Path(target).open("xb") as output:
+                shutil.copyfileobj(source, output, 2 * 1024**2)
+    finally:
+        os.close(fd)
 
 
 class _Seed(http.server.SimpleHTTPRequestHandler):
@@ -89,7 +142,7 @@ class Guest:
         self.root.mkdir(mode=0o700)
         for filename, size, sha in pins["debs"]:
             archive = self.directory / Path(filename).name
-            download(dict(url="https://archive.ubuntu.com/ubuntu/" + filename, size_bytes=size, sha256=sha), archive)
+            cached_input(dict(url="https://archive.ubuntu.com/ubuntu/" + filename, size_bytes=size, sha256=sha), archive)
             subprocess.run(["dpkg-deb", "-x", str(archive), str(self.root)], check=True, capture_output=True, timeout=60)
         self.env = dict(os.environ, LD_LIBRARY_PATH=":".join(str(self.root / p) for p in
             ("usr/lib/x86_64-linux-gnu", "lib/x86_64-linux-gnu")),
@@ -99,7 +152,7 @@ class Guest:
         if version.returncode or "version 8.2.2" not in version.stdout:
             raise ValueError("private QEMU cannot run: " + version.stderr[-2000:])
         for local, (name, size, sha) in pins["cloud"].items():
-            download(dict(url=pins["cloud_base"] + name, size_bytes=size, sha256=sha), self.directory / local)
+            cached_input(dict(url=pins["cloud_base"] + name, size_bytes=size, sha256=sha), self.directory / local)
         with (self.directory / "work.raw").open("xb") as handle:
             handle.truncate(16 * 1024**3)
         subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(self.directory / "guest-key")],
