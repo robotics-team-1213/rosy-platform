@@ -214,7 +214,8 @@ def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[s
                else f"below {cls} floor {need_c} cores/{floor_m} GB" if cores < need_c or mem < floor_m
                else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
         disk = f", disk {p['disk_free_gb']:.1f} GB free ({p['disk_use']}%)" if "disk_free_gb" in p else ""
-        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}")
+        stale = f"; busy marker {p['busy_ignored']} (ignored)" if p.get("busy_ignored") else ""
+        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}{stale}")
         if why == "ok" or why.startswith("light"):
             HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m}
             ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))

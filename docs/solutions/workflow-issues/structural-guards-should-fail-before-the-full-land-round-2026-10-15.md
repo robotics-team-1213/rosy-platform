@@ -90,6 +90,31 @@ never report successful rollback or force-reset unexpected edits. Source `18c09b
 remote land/queue/record/harness tests, including partial-output and abort-refusal cases (NEW 0).
 The verification record above retains the preceding failing runs and exact source review.
 
+## Changed-owner boundary follow-up, 2026-10-25
+
+Run the changed owner's contract tests alongside the generic platform guard set. The existing
+[Fleet owner guide](../../../operations/fleet/AGENTS.md) names `test/test_boundaries.py` for pure
+formation and arming code. Candidate commit `c85037b0a7` passed the 287-test generic guard round,
+and the earlier focused selection passed 590 tests with 5 skips, but that selection omitted this
+owner-local file. FULL then found two formation import failures; both reproduced alone and passed
+on main commit `f4d06e4543`.
+
+D-875 deliberately moved declarations into neutral API leaves under `fleet.swarm.api`. The older
+owner guard banned every `fleet.swarm` import. Its correction permits exactly `.types` and `.ports`
+and checks those files, the formation file and their three package initializers. Relative/member
+imports resolve before evaluation; missing required files fail. Existing transport, ROS, asyncio
+and swarm-implementation prohibitions and the other guard functions remain intact.
+
+Tests-only commit `75bff0bce4` produced 43 failures and 46 passes through the existing guard:
+valid declarations exposed the blanket ban, while hidden forbidden imports and missing files
+exposed the checks needed before permitting the leaves. Corrected source commit `99a7d5c663`
+passed 93 boundary/API tests without skips and 679 expanded architecture/Fleet tests with 5 skips,
+NEW0/known0/flaky0. The expanded selection explicitly includes the owner's boundary file. See the
+[source verification record](../../validation/swarm-lifecycle-extraction-2026-10-25/result.md).
+
+These are focused committed-source results. Latest-main FULL, landing and field acceptance remain
+separate evidence.
+
 ## Applicability
-Any change to `tools/harness/platform_parts.yaml`, size verdicts, or other repository-structure
-contracts that only `test/architecture` enforces.
+Repository-structure and dependency changes whose contracts live in platform guards or the changed
+owner's test suites, including ownership manifests, size verdicts and declaration extraction.

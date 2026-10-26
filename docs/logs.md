@@ -11704,3 +11704,45 @@ osy-d395-s1d\`.
 - 증거: 시험 PC에서 `middleware/robot_execution/local/test test/ applications/fleet/test/ --collect-only -p no:xdist`를 `--rootdir` 없이/있이 비교: rootdir `…/middleware/robot_execution/local`·configfile `pyproject.toml` → rootdir 실행 디렉터리·configfile 없음, 둘 다 12568개·모듈 662개, 항목 이름 차이는 시각·경로 매개변수 2개뿐. 새 시험 `test_pytest_tail_keeps_failed_ids_repo_relative_when_the_first_path_has_a_pyproject`는 `--rootdir` 변이에서 `pkg/test_b.py::test_b`로 빨강, 복원 후 `test/test_remote_pytest.py test/test_land.py` 180 통과, known_failures 0 new.
 - gate 변화: 없음. land_checks의 id 되돌리기·exit 4/5 처리는 robot-47 몫.
 - 교훈: CE 해당 없음 — 원인은 코드 주석과 회귀 시험에 있다.
+
+## 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
+
+- Change: owner-local API holds existing declarations, the Decision facade supplies existing planning choices, and actual lifecycle/arming/relay safety behavior stays in tagged owners. No frozen violation growth or wire change.
+- Evidence: official source9f9fc5846d two separation failures versus main6abf6a8a7e two passes; new sourcecac7a23477 API/planning guards RED3 and emergency guard PASS1 remotely. All22 nonconstructor lifecycle method ASTs and original CORE C1 blobs remain identical. Independent implementation review and committed GREEN follow separately.
+- gate 변화: pending implementation verification; no landing/device/field claim. Existing structural-guard lesson will be updated only after GREEN.
+
+## 2026-10-25 · cc237b02c1 · D-875 committed verification
+
+- Change: independently reviewed owner-local API and actual Safety lifecycle separation; legacy exports/planner/default construction preserved, no frozen violation growth.
+- Evidence: committed remote architecture plus15 focused Fleet suites 578PASS5SKIP, NEW0/known0/flaky0, runnerexit0. Original22 lifecycle method ASTs and prepared2bea CORE3 Git blobs exact. Logs: %LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt and known-final.txt.
+- Gate: generate/lint/diff/syntax/size and official dry-run PASS; actual FULL/landing/device/field pending. Initial afba candidate sole CLI size failure retained externally; root-authorized own amendment removed one blankline, independently confirmed, then finalSHA rerun.
+- CE: root owns existing structural-guards lesson update with separate queued-FULL tooling unit; verified case draft supplied outside Git. Prior pending entry is superseded by this evidence.
+
+## 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
+
+- 변경: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 Fleet owner가 이미 지정한 boundary 시험의 누락과 검증된 exact-leaf API 검사 수정을 추가했다.
+- 증거: tests-only RED 43 failed/46 passed, 수정 93 passed, 최신 main 통합 원격 확장 679 passed/5 skipped/NEW0. [검증 기록](validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 소스와 실패한 FULL을 별도로 남겼다.
+- gate 변화: 없음. 최신 후보의 공식 FULL·착지·배포는 별도 확인한다.
+- 교훈: 범용 플랫폼 guard와 변경 소유자의 기존 계약 시험을 함께 선택한다.
+
+## 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
+
+- 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
+- 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
+- gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · busy 표시 만료와 GitHub Actions 커밋 고정
+
+- 변경: `tools/remote/host_probe.py` PROBE가 `~/rosy-jobs/busy`의 첫 단어가 10자리 이상 epoch면 그 시각까지만, 아니면 이번 부팅 뒤에 만든 표시만 busy로 센다(2 = 부팅 전, 3 = 만료). `place()`는 `busy marker pre-boot (ignored)`/`expired (ignored)`를 덧붙인다. `deploy/robot/omx/native_sim_job.py`의 두 busy 검사도 같은 규칙(`marked_busy`)을 쓴다. 저장소 안에 busy를 쓰는 코드는 없어, `deploy/ai_pc/README.md`의 소유자 명령을 `<만료 epoch> <소유자> <pid>` 형식으로 바꿨다. `.github/workflows/*.yml`의 태그 고정 `uses:` 17줄을 태그가 가리키는 커밋 SHA로 고정했다(checkout v4.4.0, setup-java v4.9.1, upload-artifact v4.6.2, setup-python v5.6.0).
+- 이유: 만료도 pid도 없는 표시(현장 PC, 2026-10-24)가 호스트를 영원히 막았다. 움직이는 태그는 검토 없이 새 코드를 돌린다.
+- 증거: 원격 `test/test_remote_pytest.py`, `test/test_native_sim_job.py`, `test/test_site_candidate_workflow.py`, `test/test_flashable_image_layout.py` 136 통과, known_failures NEW 0. 변이(부팅 전 규칙, 만료 규칙, place 문구, `marked_busy`, 태그 하나 되돌림) 각각 해당 새 시험이 빨개졌다.
+- gate 변화: 모든 워크플로 `uses:`가 40자리 SHA와 `# vX.Y.Z (pinned commit)`이어야 한다(로컬 `./` 재사용 워크플로 제외).
+- 교훈: CE 해당 없음 — 규칙과 이유가 PROBE 주석과 시험에 있다.
+
+## 2026-10-26 · 8ecbd7e41e · 현장 PC의 busy 보류는 재부팅이 풀지 않는다
+
+- 변경: `host_probe.py`의 PROBE는 `~/rosy-jobs/site`가 있는 호스트에서 재부팅 전 busy 표식을 무시하지 않는다. 표식에 만료 epoch가 있으면 그 만료는 계속 따른다.
+- 이유: 토론(robot-4a). 현장 PC는 운영 전용이라(D-571), 그 PC의 busy는 시험 표식이 아니라 사람이 운영 장비 작업으로 건 보류일 수 있다. 10-24 `device-information-...` 표식의 주인과 이유는 기록이 없다. 정전이나 수동 재시작이라면 보류가 아직 유효할 수 있다. 모델 PC·AI PC는 그대로 무시한다.
+- 증거: `test/test_remote_pytest.py::test_probe_script_busy_marker_needs_a_live_expiry_or_this_boot`의 site 사례.
+- gate 변화: 없음.
+- 교훈: CE 해당 없음.

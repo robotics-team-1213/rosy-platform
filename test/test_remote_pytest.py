@@ -214,6 +214,48 @@ def test_place_refuses_a_host_below_the_disk_floor_and_keeps_unmeasured_ones(mon
     assert rp.placed_hosts("pytest") == []
 
 
+def test_place_ignores_a_pre_boot_or_expired_busy_marker_and_says_so(monkeypatch):
+    """2026-10-24: a bare busy marker left on the site PC would block it forever; the probe now reports 2/3."""
+    monkeypatch.setattr(rp, "SITES", set())
+    line = "ROSYPROBE 8 0.0 16777216 33554432 1 1 {} 0 0 0"
+    probes = [rp.parse_probe(line.format(b)) for b in "0123"]
+    assert [(p["busy"], p["busy_ignored"]) for p in probes] == [
+        (False, None), (True, None), (False, "pre-boot"), (False, "expired")]
+    chosen, notes = rp.place("pytest", ["a@1", "b@2", "c@3", "d@4"], probes)
+    assert sorted(chosen) == ["a@1", "c@3", "d@4"]
+    assert notes[0].endswith(" - ok") and notes[1].endswith("marked busy (~/rosy-jobs/busy)")
+    assert notes[2].endswith(" - ok; busy marker pre-boot (ignored)")
+    assert notes[3].endswith(" - ok; busy marker expired (ignored)")
+
+
+def test_probe_script_busy_marker_needs_a_live_expiry_or_this_boot(tmp_path):
+    if not shutil.which("bash") or sys.platform == "win32":
+        pytest.skip("POSIX bash with /proc is required")
+    jobs = tmp_path / "rosy-jobs"
+    jobs.mkdir()
+    now, script = int(time.time()), rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
+
+    def busy_field(text, mtime=None):
+        (jobs / "busy").write_text(text)
+        if mtime is not None:
+            os.utime(jobs / "busy", (mtime, mtime))
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()[7]
+
+    assert busy_field("") == "1"  # a bare touch this boot
+    (jobs / "site").touch()  # the site PC's hold may be a person's equipment work: a reboot never releases it
+    assert busy_field("device-information-id15-20261024T125225Z\n", mtime=1000) == "1"
+    assert busy_field(f"{(now - 1)} owner 4242\n", mtime=1000) == "3"  # an explicit expiry still applies there
+    (jobs / "site").unlink()
+    assert busy_field("", mtime=1000) == "2"  # a pre-boot marker on a test PC (model/AI) is stale
+    assert busy_field("12345 owner\n", mtime=1000) == "2"  # a pid-sized number is not an expiry
+    assert busy_field(f"{now + 3600} owner 4242\n", mtime=1000) == "1"  # an explicit expiry outlives a reboot
+    assert busy_field(f"{now - 1} owner 4242\n") == "3"
+    assert busy_field(f"{now + 3600}x$(touch {jobs}/pwned)\n") == "1"  # junk is never evaluated
+    assert not (jobs / "pwned").exists()
+    (jobs / "busy").unlink()
+    assert subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()[7] == "0"
+
+
 def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
     if not shutil.which("bash") or sys.platform == "win32":
         pytest.skip("POSIX bash with /proc is required")

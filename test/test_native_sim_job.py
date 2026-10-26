@@ -24,6 +24,23 @@ def test_policy_study_routes_to_explicit_single_trial_entry(experiment):
     with pytest.raises(ValueError):run_script(Path('/candidate'),experiment=experiment,episodes=2)
 
 
+def test_marked_busy_follows_the_probe_rule(tmp_path, monkeypatch):
+    import time
+    import native_sim_job as job
+    marker, now = tmp_path / "busy", int(time.time())
+    monkeypatch.setattr(job, "boot_time", lambda: now - 600)
+    assert not job.marked_busy(tmp_path)
+    marker.write_text("")
+    assert job.marked_busy(tmp_path)  # a bare touch this boot
+    os.utime(marker, (now - 3600, now - 3600))
+    assert not job.marked_busy(tmp_path)  # pre-boot, no expiry: stale
+    marker.write_text(f"{now + 60} owner 42\n")
+    os.utime(marker, (now - 3600, now - 3600))
+    assert job.marked_busy(tmp_path)  # an explicit expiry outlives a reboot
+    marker.write_text(f"{now - 1} owner 42\n")
+    assert not job.marked_busy(tmp_path)
+
+
 def test_capacity_ignores_own_advisory_lock_but_counts_visible_peer_budget(tmp_path, monkeypatch):
     import native_sim_job as job
     jobs = tmp_path / "jobs"

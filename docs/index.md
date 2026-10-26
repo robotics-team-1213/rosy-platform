@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-26 · uncommitted · 원격 pytest의 실패 id가 저장소 기준 경로로 나온다
-- 2026-10-26 · uncommitted · G1 시간 시험의 fsync 측정이 tmpfs를 피하고 파일시스템을 밝힌다
-- 2026-10-26 · uncommitted · G1 시간 시험의 디스크 판정을 fsync 직접 측정으로 바꾼다
-- 2026-10-26 · uncommitted · G1 시간 시험이 디스크 I/O 경합에서는 실패 대신 이유를 찍고 건너뛴다
-- 2026-10-26 · uncommitted · remote_pytest.run이 첫 실패에서 남은 호출을 멈출 수 있게 한다
+- 2026-10-26 · 8ecbd7e41e · 현장 PC의 busy 보류는 재부팅이 풀지 않는다
+- 2026-10-26 · uncommitted · busy 표시 만료와 GitHub Actions 커밋 고정
+- 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
+- 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
+- 2026-10-25 · cc237b02c1 · D-875 committed verification
