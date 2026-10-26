@@ -53,6 +53,8 @@ def test_robot_information_precedes_actions_and_failed_refresh_is_visible(site, 
             expect(info.locator('a')).to_have_attribute('href', '/console/install?profile=arm-one#device-profiles')
             expect(page.locator('#estop')).to_be_visible()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            assert card.locator(':scope > .robot-actions > ui-button').evaluate_all(
+                'buttons => buttons.length > 0 && buttons.every(button => button.getBoundingClientRect().width >= 110)')
             shot(page, f'robot-profile-{width}.png')
             del api['/api/fleet/device-profile-sources/robot/rosy_01']
             page.clock.run_for(2500)

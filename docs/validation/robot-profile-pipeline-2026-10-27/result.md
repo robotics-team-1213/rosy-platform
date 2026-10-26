@@ -9,11 +9,15 @@ Scope: persistent care records and shared load-characteristics validation, sourc
 - Independent contract review of commit `8979ce1a63`: no remaining supported material finding after fixing transaction atomicity, raw JSON import, draft preservation and browser evidence aging. Review did not execute tests or accept hardware.
 - Local harness lint: 0 errors, 36 existing freshness warnings. ADR index duplicates and obsolete declared gaps from the reused branch were reconciled; no ADR meaning or guard was weakened.
 
-## Pending verification
+## Browser acceptance and integration
 
-Installation editor behavior passed desktop/mobile and Viewer/Operator cases. The first information-order assertion had a Boolean/bit-mask expression error. After correcting it, Chromium exposed the earlier app/formation action row above the new profile. That row was moved after the profile along with the ordinary robot actions. The browser assertion continues to require the profile before the first action row. Retained history disclosure and the corrected placement require a fresh passing run.
+Commit `bf3470f9fe`: real Chromium passed all 10 desktop/mobile and Viewer/Operator cases (exit 0, NEW 0). Robot profiles precede the first app/formation action and ordinary robot controls; opened history survives polling; failed refresh is explicit; editing preserves care drafts across metadata saves; viewer writes are blocked; pages fit 1440px and 390px widths. API replies in browser scenarios are stubbed; the separate producer/API/database test supplies the backend evidence. Screenshots were retained outside the worktree for visual inspection.
 
-The size rule found a one-line growth in the frozen app composer. The isolated local implementation commit was corrected before landing, preserving the same arguments within the prior line count. Rewritten tip commit `be54620204` differs from tested commit `24c1d225b0` only in composer formatting; commit `0359b6981a` adds disclosure preservation and its browser assertion. Subsequent main refresh changed only a pre-existing map panel contract test. Final integration verification is required on the landing candidate.
+The first information-order assertion had a Boolean/bit-mask expression error. After correcting it, Chromium exposed the earlier app/formation action row above the new profile. That row was moved after the profile along with the ordinary robot actions. The assertion still checks the first action row, and the corrected scenario now passes.
+
+Visual inspection of desktop and mobile captures also exposed existing zero-basis action buttons compressing into unreadable narrow columns on mobile. The existing wrapping flex row now uses an 8rem basis; the browser case requires action widths of at least 110px while preserving page width.
+
+The size rule found a one-line growth in the frozen app composer. The isolated local implementation commit was corrected before landing, preserving the same arguments within the prior line count. Rewritten tip commit `be54620204` differs from tested commit `24c1d225b0` only in composer formatting; commit `0359b6981a` adds disclosure preservation and its browser assertion. Subsequent main refresh changed only a pre-existing map panel contract test. Final integration verification is enforced by the local landing gateway.
 
 ## Limits and recovery
 
