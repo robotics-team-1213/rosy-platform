@@ -84,6 +84,7 @@ def test_decompression_is_bounded_by_both_size_and_digest(tmp_path):
 
 
 def test_real_bundle_signing_is_accepted_by_existing_os_consumer(tmp_path, monkeypatch, rauc_tool):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)  # Ephemeral fixture keys only, never a product CI signer.
     m, dist, private, public = distribution(tmp_path)
     cms_private, certificate = signer(tmp_path / "cms")
     # These fixture ranges are not filesystems. Actual root preparation is a separate SYSTEM gate.

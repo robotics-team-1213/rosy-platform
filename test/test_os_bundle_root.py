@@ -21,6 +21,7 @@ def module():
 def test_injects_only_verified_supplied_native_signature_and_refuses_foreign_payload(tmp_path, damage):
     m = module()
     _, target, release, value, _, public = _installed(tmp_path)
+    value["source_revision"] = (release / "source-revision.txt").read_text().strip()
     factory = tmp_path / "signed-factory"
     factory.mkdir()
     for name in ("SHA256SUMS", "SHA256SUMS.sig", "manifest.json"):
