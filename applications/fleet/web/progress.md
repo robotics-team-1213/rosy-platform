@@ -26,6 +26,7 @@ gates:
     state: HOLD
     blocker: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 adrs:
+- D-892
 - D-775
 - D-801
 - D-637
