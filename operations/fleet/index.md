@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · d02b8d65e7 · 작업 큐 총 대기시간 계측 first_queued_at (계획 2026-10-27-fleet-queue-first-queued-at)
 - 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
 - 2026-10-26 · uncommitted · D-856 forward-port to local main
 - 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
 - 2026-10-25 · uncommitted · fix(fleet): worker 상한 연결·로봇 묶음 우선 검사 순서 수정
-- 2026-10-25 · uncommitted · fix(fleet): 가짜 저장소가 list_resolved 지원 시 그대로 쓰기
