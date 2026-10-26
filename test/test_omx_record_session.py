@@ -286,7 +286,8 @@ def test_teleop_only_runs_teleoperate_on_the_robot_and_teleop_part(tmp_path):
     {k: v for k, v in CAPS_FILE.items() if k != 13},                 # a motor missing
     {**CAPS_FILE, 12: {"pwm": 300, "current": 100}},                 # XL430 has no Current Limit
     {**CAPS_FILE, 15: {"pwm": 900}},                                 # above the PWM range
-    {**CAPS_FILE, 11: {"pwm": 500}},                                 # above the first-session ceiling
+    {**CAPS_FILE, 11: {"pwm": 700}},                                 # above the XL430 ceiling (600)
+    {**CAPS_FILE, 14: {"pwm": 500, "current": 250}},                 # above the XL330 ceiling (400)
     {**CAPS_FILE, 16: {"current": 250}},                             # no pwm
     {**CAPS_FILE, 14: {"pwm": 300, "current": 250, "p": 5000}},      # a gain above its ceiling
 ])
@@ -298,6 +299,12 @@ def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
     path.write_text(json.dumps({str(k): v for k, v in caps.items()}))
     with pytest.raises(SystemExit):
         m.load_caps(path)
+
+
+def test_the_xl430_shoulder_and_elbow_may_run_at_600_for_reach(tmp_path):
+    path = tmp_path / "caps.json"
+    path.write_text(json.dumps({str(k): (dict(v, pwm=600) if k in (12, 13) else v) for k, v in CAPS_FILE.items()}))
+    assert m.load_caps(path)[12]["pwm_limit"] == 600 and m.load_caps(path)[13]["pwm_limit"] == 600
 
 
 CARD = """schema: rosy.omx-task-card.v1

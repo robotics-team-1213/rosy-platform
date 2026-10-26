@@ -60,6 +60,9 @@ LEADER_GRIPPER = 6
 LEADER = range(1, 7)
 PWM_MAX = CURRENT_MAX = CAP_MAX  # first sessions stay well below the hardware maximum (885 / 1750)
 P_GAIN_MAX = 1600  # the elbow runs at 1500; higher gains need their own commissioning
+# The XL430 shoulder and elbow carry the arm at reach: at 0.23 m the shoulder used 78 % of PWM 300 and fell 5 deg
+# behind (2026-10-26, user decision: higher than 400). 600 is 68 % of their 885; the XL330 wrist keeps CAP_MAX.
+XL430_PWM_MAX = 600
 TORQUE_OFF_DEADLINE_S = 30.0
 
 
@@ -81,8 +84,9 @@ def load_caps(path: Path) -> dict:
         allowed = {"pwm", "current", "p"} if xl330 else {"pwm", "p"}
         if not set(cap) <= allowed or "pwm" not in cap:
             raise SystemExit(f"motor {motor}: caps keys must be {sorted(allowed)} with pwm")
-        if not (type(cap["pwm"]) is int and 1 <= cap["pwm"] <= PWM_MAX):
-            raise SystemExit(f"motor {motor}: pwm 1..{PWM_MAX}")
+        pwm_max = PWM_MAX if xl330 else XL430_PWM_MAX
+        if not (type(cap["pwm"]) is int and 1 <= cap["pwm"] <= pwm_max):
+            raise SystemExit(f"motor {motor}: pwm 1..{pwm_max}")
         if "current" in cap and not (type(cap["current"]) is int and 1 <= cap["current"] <= CURRENT_MAX):
             raise SystemExit(f"motor {motor}: current 1..{CURRENT_MAX}")
         if "p" in cap and not (type(cap["p"]) is int and 1 <= cap["p"] <= P_GAIN_MAX):
