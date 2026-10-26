@@ -231,6 +231,7 @@ def test_frozen_state_writer_works_with_poisoned_mutable_sdk(tmp_path, monkeypat
     from test_os_frozen_firstboot import _stage
     _, root, _, _, verified, facts = _state(tmp_path / "device", monkeypatch)
     prefix = tmp_path / "installed/opt/rosy"
+    prefix.mkdir(parents=True)
     _stage(prefix)
     mutable = prefix / "native-runtime"
     mutable.mkdir()

@@ -29,7 +29,7 @@ class UpdaterRecords:
             from os_payload_compatibility import require_native_maintenance
             require_native_maintenance(self.root)
         except (ImportError, OSError, ValueError) as exc:
-            return f"OS_MAINTENANCE_HOLD: {exc}"
+            return f"OS_STATE_HOLD: {exc}"
         return None
 
     def _policy_path(self, name: str) -> Path:
