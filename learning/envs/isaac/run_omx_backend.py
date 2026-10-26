@@ -8,10 +8,14 @@ and its bundled Jazzy libraries, never with the system ROS environment (Python 3
 
 import argparse
 from pathlib import Path
+import sys
 import time
 
 from prepare_omx_urdf import prepare
 from importer_compat import import_model, reference_model
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]/"tools/sim"))
+from omx_cell_world import boxes, quaternion  # noqa: E402  The same work scene as Gazebo (D-877).
 
 SIM_STATES, SIM_COMMANDS = "/sim/joint_states", "/sim/joint_commands"
 CAMERAS = {"top": "/top_camera/image_raw", "front": "/front_camera/image_raw"}
@@ -63,7 +67,19 @@ def main():
             raise RuntimeError(f"expected one OMX articulation and link5, found {roots} {links}")
         if not any(p.IsA(UsdPhysics.Scene) for p in stage.Traverse()):
             UsdPhysics.Scene.Define(stage, Sdf.Path("/World/physicsScene"))
-        PhysicsSchemaTools.addGroundPlane(stage, "/World/groundPlane", "Z", 1500, Gf.Vec3f(0, 0, 0), Gf.Vec3f(0.5))
+        PhysicsSchemaTools.addGroundPlane(stage, "/World/groundPlane", "Z", 1500, Gf.Vec3f(0, 0, -0.02), Gf.Vec3f(0.5))
+        # shortcut: Isaac's default physics material, not the SDF friction; set it when the grasp test needs it.
+        for box in boxes():
+            cube = UsdGeom.Cube.Define(stage, Sdf.Path(f"/World/Cell/{box['name']}"))
+            cube.GetSizeAttr().Set(1.0)
+            pose = UsdGeom.Xformable(cube)
+            pose.AddTranslateOp().Set(Gf.Vec3d(*box["pos"]))
+            pose.AddOrientOp().Set(Gf.Quatf(*quaternion(box["rpy"])))
+            pose.AddScaleOp().Set(Gf.Vec3f(*box["size"]))
+            UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+            if not box["static"]:
+                UsdPhysics.RigidBodyAPI.Apply(cube.GetPrim())
+                UsdPhysics.MassAPI.Apply(cube.GetPrim()).GetMassAttr().Set(box["mass"])
 
         cameras = {"top": "/World/top_camera", "front": links[0] + "/front_camera"}
         for name, path in cameras.items():
