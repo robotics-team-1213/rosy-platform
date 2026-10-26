@@ -133,13 +133,8 @@ def _outside(bounds, zone, margin):
                for low, high, low_zone, high_zone in zip(bounds.min_m, bounds.max_m, zone.min_m, zone.max_m))
 
 
-def validate_transfer_observations(policy, context, samples, *, now_ns, authenticated_producer_id):
-    """Check facts only; context time is READY acquisition or durable success.
-
-    All participant grippers must be empty/open in this first isolated profile;
-    carried objects and attachments have no reviewed bounds model here. The
-    authenticated identity comes from ingress credentials, never a body field.
-    """
+def validate_transfer_bindings(policy, context, samples, *, now_ns, authenticated_producer_id):
+    """Validate every sample's provenance before interpreting measured results."""
     try:
         policy = PhysicalTransferPolicy.model_validate(policy)
         context = TransferEvidenceContext.model_validate(context)
@@ -159,7 +154,6 @@ def validate_transfer_observations(policy, context, samples, *, now_ns, authenti
     if (first.evidence_id == second.evidence_id or first.sequence >= second.sequence
             or min(second.sample_times_ns) - max(first.sample_times_ns) < policy.min_separation_ns):
         raise PhysicalEvidenceRejected("PHYSICAL_ORDER_INVALID")
-    goal = policy.source_pose if context.phase == "PRE_DISPATCH" else policy.target_pose
     for sample in samples:
         if (any(t <= context.not_before_ns or t > now_ns or now_ns - t > policy.max_age_ns
                 for t in sample.sample_times_ns)):
@@ -172,8 +166,6 @@ def validate_transfer_observations(policy, context, samples, *, now_ns, authenti
                   sample.object_ref, sample.object_origin_id)
         if actual != expected:
             raise PhysicalEvidenceRejected("PHYSICAL_CONTEXT_MISMATCH")
-        if not _pose_matches(sample.object_pose, goal, policy):
-            raise PhysicalEvidenceRejected("PHYSICAL_POSE_MISMATCH")
         if {(owner.workcell_id, owner.instance_id) for owner in sample.owners} != set(participants):
             raise PhysicalEvidenceRejected("PHYSICAL_SCOPE_MISMATCH")
         for owner in sample.owners:
@@ -185,6 +177,13 @@ def validate_transfer_observations(policy, context, samples, *, now_ns, authenti
                 raise PhysicalEvidenceRejected("PHYSICAL_OWNER_MISMATCH")
             if set(owner.links) != installed.geometry.required_links:
                 raise PhysicalEvidenceRejected("PHYSICAL_COVERAGE_INCOMPLETE")
+    return policy, context
+
+
+def validate_transfer_clearance(policy, samples):
+    """Keep open/empty, rest and zone checks separate from object location."""
+    for sample in samples:
+        for owner in sample.owners:
             if owner.gripper_state != "OPEN" or owner.held_state != "NONE" or owner.held_object_ref is not None:
                 raise PhysicalEvidenceRejected("PHYSICAL_GRIPPER_UNCONFIRMED")
             for link in owner.links.values():
@@ -194,3 +193,13 @@ def validate_transfer_observations(policy, context, samples, *, now_ns, authenti
                     raise PhysicalEvidenceRejected("PHYSICAL_NOT_AT_REST")
                 if any(not _outside(link.bounds, zone, policy.zone_margin_m) for zone in policy.zones):
                     raise PhysicalEvidenceRejected("PHYSICAL_ZONE_OCCUPIED")
+
+
+def validate_transfer_observations(policy, context, samples, *, now_ns, authenticated_producer_id):
+    """Require bound facts, the goal pose and every original clearance check."""
+    policy, context = validate_transfer_bindings(policy, context, samples, now_ns=now_ns,
+                                                authenticated_producer_id=authenticated_producer_id)
+    goal = policy.source_pose if context.phase == "PRE_DISPATCH" else policy.target_pose
+    if any(not _pose_matches(sample.object_pose, goal, policy) for sample in samples):
+        raise PhysicalEvidenceRejected("PHYSICAL_POSE_MISMATCH")
+    validate_transfer_clearance(policy, samples)
