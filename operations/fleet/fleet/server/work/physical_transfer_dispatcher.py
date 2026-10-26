@@ -67,7 +67,8 @@ class PhysicalTransferDispatcher:
                     capabilities=capabilities, capabilities_observed_at_ns=observed_at_ns)
             prepared = retained_snapshot(self.execution, child["mission_id"])
             if prepared is None and child["status"] == "READY":
-                prepared = self.prepare(child["mission_id"])
+                self.prepare(child["mission_id"])
+                prepared = retained_snapshot(self.execution, child["mission_id"])
             return dict(job=child, execution=prepared)
 
     def submit(self, mission_id, *, observations, authenticated_producer_id):
