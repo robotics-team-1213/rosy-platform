@@ -381,3 +381,79 @@ def test_normal_following_lag_is_not_a_contact():
     assert done["ok"] is True
     # the contact margin of the run: its largest lag behind the guard's sent command and ticks over the bound
     assert 0 <= done["peak_lag"] <= m.CONTACT_LAG and done["over_ticks"] == 0
+
+
+def test_a_transit_eases_in_and_out_and_lifts_the_arm_no_faster_than_it_follows():
+    start = [38.36, 17.26, -26.35, 59.9, 26.2, 50.94]  # the far pick lifted, near full reach (2026-10-27)
+    path = [start] + m.transit_path(start, [-3.0, -16.0, 9.0, 48.0, 5.0, 55.0], 46.6, 30, {1: -40.0, 2: 25.0, 3: 46.0})
+    v = [[(b - a) * 30 for a, b in zip(p, q)] for p, q in zip(path, path[1:])]
+    acc = [[(b - a) * 30 for a, b in zip(p, q)] for p, q in zip(v, v[1:])]
+    assert max(-s[1] for s in v) <= m.RISE_SPEED + 1e-6  # the lift rising against the arm's weight
+    assert max(max(abs(x) for x in s[:5]) for s in v) <= 0.85 * m.PARK_SPEED + 1e-6
+    assert max(max(abs(x) for x in s[:5]) for s in acc) <= m.GUARD_ACCEL_UNITS_S2 + 0.05
+    # acceleration never jumps: a trapezoid's 0 -> 5 units/s^2 step in one tick was jerk 110 units/s^3
+    jerk = max(max(abs(b - a) * 30 for a, b in zip(p[:5], q[:5])) for p, q in zip(acc, acc[1:]))
+    assert jerk < 20
+
+
+class Straining(Robot):
+    """Reports the commanded pose like the guard does; the lift's lag behind it is `lag(n)` at action n, and the
+    guard's last PWM sample sits on `motion` the way NativeJointMotion keeps it."""
+
+    def __init__(self, lag, pwm=500):
+        super().__init__()
+        self.lag, self.count = lag, 0
+        self.motion = type("Motion", (), {"effort_pwm": {"shoulder_lift": -pwm}, "pwm_limits": {"shoulder_lift": 600}})()
+
+    def send_action(self, action):
+        self.count += 1
+        super().send_action(action)
+        self.pos[1] = action["shoulder_lift.pos"] - self.lag(self.count)
+        return dict(action)
+
+
+def goto_library():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    return lib
+
+
+def test_a_lag_that_keeps_rising_while_the_joint_pushes_holds_with_torque_on_then_retreats():
+    robot = Straining(lambda n: min(2.6, max(0.0, 0.05 * (n - 30))))  # 2.4 -> 4.7 deg in 0.7 s, like the shoulder
+    status, clock, queue = [], [0.0], ["goto approach_pinky", "retreat", "park", "stop"]
+    r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        if queue and not r.chunk:
+            if queue[0] == "retreat":
+                robot.lag = lambda n: 0.0  # backing off: the joint follows again
+            return [queue.pop(0)]
+        return []
+
+    r.run(lines)
+    held = by_command(status, "run goto approach_pinky")[0]
+    assert held["ok"] is False and held["contact"] is True and "shoulder_lift" in held["fault"]
+    assert held["target"][1] == pytest.approx(held["state"][1], abs=0.01)  # held where it was, not pushed on
+    assert by_command(status, "run retreat")[0]["ok"] is True
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+@pytest.mark.parametrize("lag, pwm", [
+    (lambda n: 2.0, 500),                                # a steady travel lag, even past STRAIN_LAG, is not strain
+    (lambda n: min(2.5, max(0.0, 0.05 * (n - 30))), 100),  # rising but hardly pushing: the guard's PWM is low
+])
+def test_travel_lag_without_a_rising_push_is_not_strain(lag, pwm):
+    status = run_with(Straining(lag, pwm), goto_library(), ["goto approach_pinky", "stop"])
+    done = by_command(status, "run goto approach_pinky")[0]
+    assert done["ok"] is True and done["fault"] is None
+
+
+def test_the_trace_gets_one_row_per_tick():
+    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(Pressing(after=10**9), library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.trace = rows.append
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert len(rows) == r.ticks
+    assert rows[1]["chunk"] == "approach_pinky" and len(rows[1]["sent"]) == 6 and len(rows[1]["present"]) == 6
