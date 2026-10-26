@@ -18,6 +18,7 @@ import uuid
 SCRIPT = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT))
 import ab_image_layout as ab
+from os_state_layout import COMMON, SHARED_BINDINGS
 
 
 def _run(command: list[str], *, timeout=180, **kwargs):
@@ -174,7 +175,7 @@ def assemble(source: Path, output: Path, work: Path, release_id: str) -> dict:
             root, boot = volumes["root_" + slot], volumes["boot_" + slot]
             _run(["rsync", "-aHAXx", "--numeric-ids", str(source_root) + "/", str(root) + "/"], timeout=1800)
             _run(["rsync", "-rt", "--no-perms", "--no-owner", "--no-group", str(source_boot) + "/", str(boot) + "/"], timeout=600)
-            for relative in (ab.COMMON, "boot/firmware", "run/rosy-provision-boot", *ab.SHARED_BINDINGS):
+            for relative in (COMMON, "boot/firmware", "run/rosy-provision-boot", *SHARED_BINDINGS):
                 (root / relative).mkdir(parents=True, exist_ok=True)
             ab.configure_slot(root, boot, layout, slot)
             _run([sys.executable, "-I", "-B", str(SCRIPT / "configure-ab-root.py"),
