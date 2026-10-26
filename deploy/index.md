@@ -79,5 +79,5 @@
 - 2026-10-26 · 9816e56bd9 · Site updater pure split verified
 - 2026-10-26 · uncommitted · Site updater runtime extraction before migration
 - 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
-- 2026-10-25 · a401f49f6d · 서명된 GPT 이미지의 SD 준비 경로
-- 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
+- 2026-10-26 · 007e6c3b5a · Learning UI 설정·보관 흐름 source 검증 완료 (D-884)
+- 2026-10-26 · uncommitted · Learning 저장 설정 UI와 준비 파이프라인 closure (D-884)

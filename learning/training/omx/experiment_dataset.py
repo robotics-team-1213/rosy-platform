@@ -5,9 +5,13 @@ from io import BytesIO
 import json
 from pathlib import Path
 import re
+import sys
 import zipfile
 
 import numpy as np
+
+sys.path.append(str(Path(__file__).resolve().parents[2] / 'curation/perception'))
+from storage_files import consumer as dataset_lease
 
 from experiment_profile import action_names, profile_revision, validate_profile
 

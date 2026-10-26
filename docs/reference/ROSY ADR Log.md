@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-884 | Learning 저장 대상 풀과 검증된 로컬 자료 회수. [전문](../adr/D-884-learning-storage-pool-and-local-reclamation.md) | Accepted (2026-10-26) |
 | D-875 | Swarm owner-local API separates planning from safety lifecycle | Accepted for implementation (2026-10-25) |
 | D-883 | Monitoring 호스트 자원 감시와 시험 PC 저장소 정리 요청 (D-876 §5·D-524 보충) | Accepted for implementation (2026-10-26) |
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
@@ -1307,3 +1308,9 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted for implementation (2026-10-25). 계약·소스·시험·배포·실물 수용은 별도다.
 
 원본 pose capture를 보존하고 수신측 remaining을 단조 시계 만료로 고정한다. 누락·지연·중복·역순 표본과 혼합 구형 peer를 이동 근거로 사용하지 않는다. D-859의 UTC 품질 수용은 별도 운영 전제이며 기능 광고로 대체하지 않는다. 전문은 [D-870](../adr/D-870-original-swarm-pose-time-and-monotonic-expiry.md).
+
+## D-884 Learning 저장 대상 풀과 검증된 로컬 자료 회수
+
+**Status:** Accepted (2026-10-26). 사용자 설계 승인·구현 지시이며 운영 활성화는 별도다.
+
+HF user/org별 용량 예약과 작업의 연결·고정 revision·SHA를 보존한다. 검증된 관리 자료만 명시적으로 회수·복원하며 활성 lease와 pin을 보호한다. 전문은 [D-884](../adr/D-884-learning-storage-pool-and-local-reclamation.md).
