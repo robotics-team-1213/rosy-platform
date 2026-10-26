@@ -99,9 +99,11 @@ def added_known(wt: Path, inv: list[str]) -> list[str]:
     if base.returncode != 0:
         return []
 
-    def ids(text: str) -> set[str]:  # parsed like known_failures.load_known
-        return {line.strip().partition("  # ")[0].strip() for line in text.splitlines()
-                if line.strip() and not line.strip().startswith("#")}
+    sys.path.append(str(Path(__file__).resolve().parents[1] / "test"))
+    from known_failures import load_known  # one parser, so the two cannot drift
+
+    def ids(text: str) -> set[str]:
+        return set(load_known(text))
     head = (wt / "test/known_failures.txt").read_text(encoding="utf-8") if (wt / "test/known_failures.txt").is_file() else ""
     return sorted(i for i in ids(head) - ids(base.stdout)
                   if any(i.split("::")[0] == p or i.startswith(p.rstrip("/") + "/") for p in inv))
