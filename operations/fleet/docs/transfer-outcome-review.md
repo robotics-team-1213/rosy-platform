@@ -42,9 +42,28 @@ export_transfer_outcomes(store, "<mission-id>", Path("<external-scratch>/outcome
 
 출력은 `unreviewed_metadata_only`다. `raw_camera_bytes_available=false`, `behavior_training_eligible=false`를 보존한다. 원본 RGB·상태·실제 적용 행동을 갖춘 ACT/VLA 시연이나 독립 정답으로 바로 사용하지 않는다. 첫 사용처는 사람의 결과 검수와 단계별 실패 데이터 요구사항 확인이다.
 
+## 실행 실패 단계와 복구 다음 행동
+
+출력 형식 `rosy.transfer-outcome-export/2`는 기존 `outcomes`와 함께 `execution_review`를 제공한다. 종료 후 물체 관측이 없어 `outcomes`가 비어 있어도, 같은 Action/attempt의 보존된 owner receipt가 있으면 실행 실패를 내보낼 수 있다. 새로운 실행 원장이나 phase 이벤트를 중복 저장하지 않는다.
+
+실제 실행 단계는 `approach`, `grasp`, `transfer`, `release`다. 일관된 phase prefix의 마지막 한 단계가 명시적으로 FAILED이고 Action도 FAILED일 때만 `failure_phase`를 지정한다. 취소·UNKNOWN·HOLD·controller 성공은 실패 단계로 바꾸지 않는다. 단계별 시각·event ID, 마지막 보고 단계와 owner의 원래 reason을 보존한다.
+
+`object_hold_unconfirmed`나 `ITEM_LOST_IN_TRANSIT`는 보고된 보유 확인 문제다. 독립 물체 관측 없이 헛잡음·낙하 또는 들기/운반 중 어느 지점의 실패인지 확정하지 않는다. `physical_failure_cause`는 null, scope는 `owner_reported_execution_only`다. 현재 gripper readback의 monotonic 수신 시각을 새 source UTC capture 시각이나 action/attempt 결속으로 변환하지 않는다.
+
+| 현재 확인된 상태 | recovery.next_step |
+|---|---|
+| 진행 중인 Action | `wait_for_action_result` |
+| 결과 불명·취소 요청 중 | `reconcile_action` |
+| 현재 작업 HOLD 또는 owner FAILED/HOLD | `operator_review` |
+| Action 성공, task 실패·미확인 | `reobserve_object` |
+| Action 성공, 관측상 성공이나 작업 완료 미확정 | `verify_completion` |
+| 기존 완료 경로가 GOAL_CONFIRMED를 기록했고 task 성공 | `none` |
+
+이 값은 읽기 전용 조언이다. `execution_authorized=false`, `automatic_retry_allowed=false`이며 실제 재조회·관측·동작을 자동 실행하지 않는다. 늦은 성공 receipt가 현재 HOLD를 해제하지 않는다. 현재 미션당 단일 attempt 원장과 물체·자원 조정 제약을 우회하지 않는다.
+
 ## 다음 구현과 검증
 
 - 파지·들기·운반 단계의 관측을 결속한 뒤 헛잡음·낙하를 구분한다.
 - 현 원장은 미션당 단일 attempt다. 반복 attempt의 이관·원본 보존·권한 재검증 없이 자동 재파지를 추가하지 않는다.
 - 검수된 결과 판정 자료, 복구 선택 자료, 사람 교정 시연은 용도와 원본 계보를 분리한다.
-- 시험은 `test_physical_transfer_outcome.py`, `test_transfer_outcome_recording.py`와 기존 physical-transfer evidence/observer/closure/outcomes/stops suite를 공식 원격 runner에서 수행한다. 실제 장치·현장 수용은 별도다.
+- 시험은 `test_physical_transfer_outcome.py`, `test_transfer_outcome_recording.py`, `test_transfer_execution_review.py`와 기존 physical-transfer evidence/observer/closure/outcomes/stops/dispatcher suite를 공식 원격 runner에서 수행한다. 실제 장치·현장 수용은 별도다.

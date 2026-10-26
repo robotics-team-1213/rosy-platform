@@ -57,7 +57,13 @@ def export_transfer_outcomes(store, mission_id, output):
         if job is None:
             raise KeyError(mission_id)
         from .physical_transfer_execution import PhysicalTransferExecution
-        execution = PhysicalTransferExecution(store)
+        attempt = connection.execute("SELECT grant_json FROM fleet_physical_transfer_attempts "
+            "WHERE mission_id=?", (mission_id,)).fetchone()
+        if attempt is None:
+            raise ValueError("no recorded transfer attempt")
+        recorded_grant = FleetArmTransferGrant.model_validate_json(attempt["grant_json"])
+        lifetime = (recorded_grant.expires_at - recorded_grant.issued_at).total_seconds()
+        execution = PhysicalTransferExecution(store, grant_ttl_s=lifetime)
         current = execution._state(connection, mission_id)
         grant = FleetArmTransferGrant.model_validate(current["grant"])
         prior = execution._last_receipt(connection, mission_id)
