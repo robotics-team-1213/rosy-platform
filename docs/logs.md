@@ -12105,3 +12105,11 @@ osy-d395-s1d\`.
 - 증거: 소스758f92b620 root6FAIL/11447PASS/1211SKIP,23invocation 취소. 같은6건 main 선택 통과를 전체 맥락 대조로 확대하지 않았다. root 수집을 포함한 AI 대조4회는 각각21PASS/수집7SKIP, 공식·outer·known0/NEW0이며 기존 실패 원인은 미해결이다. validation/land-selection-extraction-2026-10-27/result.md.
 - gate 변화: HOLD 유지. 원래 FULL 실패를 단독 선택 성공으로 바꾸지 않으며 다음 공식 전체 실행·착지·게시·실물 수용은 별도다.
 - CE: 미해결 — 종료 지연 원인과 해결을 입증하지 못해 해결 교훈을 쓰지 않았다.
+
+## 2026-10-27 · uncommitted · perf(core): 충전소 카메라 파이프라인 시험의 느린 경우를 파일로 나눔
+
+- 변경: `middleware/core/gateway/test/test_station_camera_pipeline.py`의 `lifespan`·`shutdown_UNDOCKING`을 `test_station_camera_pipeline_lifespan.py`로, `continuous`를 `test_station_camera_pipeline_continuous.py`로 옮겼다. 두 파일은 매개변수만 두고 원래 시험 함수를 부른다. `composed`·`shutdown_CHARGING`은 `test/flaky_quarantine.txt` node id가 있어 원래 파일에 남겼다.
+- 근거: xdist `--dist loadfile`은 파일 하나를 워커 하나에 준다. FULL의 gateway·events·services·shared/web·foundation 묶음 576초 가운데 이 파일이 511초였다(모델 PC `--durations`, main c2e21981ec). 나눈 뒤 가장 긴 파일은 약 210초로 예상한다.
+- 증거: 원격 결과는 착지 기록에 남긴다.
+- gate 변화: 없음(같은 시험, 같은 매개변수).
+- CE: 해당 없음 — 시험 배치 변경이다.
