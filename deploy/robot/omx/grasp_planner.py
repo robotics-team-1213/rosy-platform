@@ -91,9 +91,16 @@ class Planner:
         are two jobs: travel ends where the arm still has margin, the touch is a short straight line from there
         (2026-10-26: a container 0.24 m out was graspable top-down; only its 7 cm lift point was out of reach)."""
         s = wanted
-        while s > MIN_STANDOFF_M and self.reach_margin(x, y, z + s, yaw_deg) < REACH_MARGIN_M:
+        while s > MIN_STANDOFF_M and not self.fits(x, y, z + s, yaw_deg):
             s = max(MIN_STANDOFF_M, round(s - 0.01, 3))
         return s
+
+    def fits(self, x, y, z, yaw_deg) -> bool:
+        """Reach margin kept and every joint inside its limit. A higher top-down point bends the wrist further: arm
+        S's wrist stops at 1.89 rad (2026-10-27), so its lifts shorten here instead of failing at the guard."""
+        if self.reach_margin(x, y, z, yaw_deg) < REACH_MARGIN_M:
+            return False
+        return self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits).ok
 
     def line(self, start, end, speed_m_s, yaw_deg, grip, reference_q5):
         """Frames along a straight Cartesian line at `speed_m_s`, one IK solve per frame."""

@@ -122,3 +122,15 @@ def test_keep_out_counts_the_gripper_body_not_only_the_tool_tip():
     tip = max(fk(planner, f).x for frames in library["chunks"].values() for f in frames)
     with pytest.raises(SystemExit, match="wrist or gripper"):
         m.Planner(dict(PLAN, keep_out={"x_max_m": round(tip + m.BODY_MARGIN_M / 2, 3)})).library()
+
+
+def test_a_lift_the_wrist_cannot_reach_is_shortened_inside_the_joint_limit():
+    """2026-10-27: the arm S wrist stops at 1.89 rad; a 7 cm top-down lift needed more and ran into it."""
+    planner = m.Planner(PLAN)
+    library = planner.library()
+    top = PLAN["limits"]["joints_rad"]["joint4"][1]
+    q4 = [m.norm_to_rad(f[3]) for frames in library["chunks"].values() for f in frames]
+    assert max(q4) <= top + 1e-3
+    wide = m.Planner(dict(PLAN, limits=dict(PLAN["limits"], joints_rad=dict(PLAN["limits"]["joints_rad"], joint4=[-0.3, 2.3]))))
+    lifted = lambda p: p.height(p.library()["chunks"]["lift_pick"][-1])
+    assert lifted(planner) <= lifted(wide) + 1e-6
