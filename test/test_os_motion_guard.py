@@ -116,6 +116,13 @@ def test_image_owns_guard_and_final_environmentfile_after_operator_environment(t
     assert "After=rosy-os-storage.service" in unit
     assert "Before=rosy-core.service rosy-io.service rosy-navigation.service" in unit
     assert "os_motion_guard.py reconcile" in unit
+    installer = (frozen / "rosy-os-rauc.service").read_text()
+    assert "rosy-os-motion-guard.service" in next(line for line in installer.splitlines() if line.startswith("Requires="))
+    assert "Conflicts=rosy-io.service rosy-navigation.service" in installer
+    assert "After=rosy-io.service rosy-navigation.service" in installer
+    starts = [line for line in installer.splitlines() if line.startswith("ExecStartPre=")]
+    assert "os_motion_guard.py reconcile" in starts[0]
+    assert "os_rauc_service.py check" in starts[1]
 
 
 def test_guard_units_and_privileged_preconditions_parse_with_real_systemd(tmp_path):
