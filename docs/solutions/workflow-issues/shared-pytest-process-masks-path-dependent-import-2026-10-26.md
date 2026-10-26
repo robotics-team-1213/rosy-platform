@@ -30,6 +30,12 @@ FULL 계층(`full_invocations`)은 모듈 폴더 단위로 호출을 만들고, 
 
 이번 건은 `fix/native-cycle-import-path`가 원본 모듈이 자기 폴더를 `sys.path`에 넣게 해 고친다. 같은 부류를 막으려면 경로 지정 로드 대상 모듈이 맨 이름 형제 import를 하지 않거나 자기 폴더를 스스로 넣어야 한다.
 
+## collect-only로는 부족하다 (착지 게이트 설계, 2026-10-26)
+
+- 수집 게이트(선택된 시험 파일마다 따로 `pytest --collect-only`)는 이 사고를 잡지 못한다. `test_native_cycle.py`는 `native_cycle.py`를 픽스처 안에서 `spec_from_file_location`으로 읽으므로 import 실패가 수집이 아니라 실행 때 난다. 사고 재현(6a07a06b0f 이전 `native_cycle.py`, 원격): 폴더 실행 419 passed, 파일 단독 실행 ERROR 26, 수집 게이트 `learning/training/omx/test` 31 passed(초록).
+- 잡은 것은 바뀐 원본을 참조하는 시험(D-436 셀렉터의 `references X` 간선)을 파일마다 따로 끝까지 돌리는 단독 실행이다. `native_cycle.py`를 참조하는 시험은 7개이고 `test_native_cycle.py`가 그 안에 든다.
+- 그래서 `tools/land_isolation.py`는 착지 준비 단계에서 수집 게이트와 함께 참조 시험 단독 실행(안전 태그 원본의 참조 시험 먼저, 개수 상한 없이 시간 상한, 못 돈 파일은 `<git-common-dir>/rosy-land-isolation.jsonl`에 기록)을 돌린다. 수집 게이트만으로 충분하다고 다시 제안하지 않는다.
+
 ## 다음에 적용할 조건
 
 - 착지 뒤 main에서 파일 하나가 빨간데 착지 기록·캐시가 초록이면, 먼저 그 파일을 혼자 원격 실행하고 폴더 실행과 비교한다. 캐시나 known_failures부터 의심하지 않는다.

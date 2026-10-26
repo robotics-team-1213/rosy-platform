@@ -12026,3 +12026,27 @@ osy-d395-s1d\`.
 - 증거: 첫 공식 FULL은29묶음1FAIL/34989PASS/2235SKIP(묶음 간 중복 포함), 별도guard287PASS였다. 실패ID의 단독 재현1FAIL과 actualmain209dbf98b3의1PASS를 보존했다. 수정sourcee18c084879의 동일 guard+실제Home 회귀3PASS/0SKIP, official·outer·known0/NEW0·known0·flaky0이다. 새 결과: docs/validation/navigation-intent-epoch-prelude-2026-10-26b/result.md.
 - Gate: 첫 FULL은 실패이며 착지하지 않았다. 기존 집중 시험·첫 실패와 보완 검증을 구분하고 최신 main 통합·공식 재착지·CI·현장 수용은 아직 대기한다.
 - CE: 해당 없음 — 코드 분류 근거와 회귀·검증 기록으로 판단을 보존했다.
+
+## 2026-10-26 · uncommitted · fix(land): 공유 pytest 프로세스가 가린 import 착지 게이트
+
+- 변경: `tools/land_isolation.py`·`tools/collect_alone.py` 추가, `tools/land_guards.py`가 가드 회차에 수집 게이트(선택된 시험 파일마다 따로 `pytest --collect-only`)를 싣고, `tools/land_prepare.py`(잠금 밖)에서만 변경 파일을 직접 참조하는 시험(최대 10개)과 안전 루트 시험을 파일마다 따로 돌린다. 루트 `conftest.py`가 수집 중 `sys.path`를 늘린 시험 모듈을 보고만 한다(`.gitignore` 예외, 루트 파일 목록 추가). `tools/land.py`는 고치지 않았다.
+- 증거: 원격 `test/test_land_isolation.py test/test_land*.py test/test_remote_pytest.py test/architecture/test_document_placement.py` exit 0. FULL 선택 2,123파일 수집 게이트: 작업자 2개 347 s, 6개 150 s(메모리 최고 491 MiB), 실패 0. 변이(게이트 끔·한 프로세스 수집) 3 failed. 사고 재현(6a07a06b0f 이전 `native_cycle.py`): 폴더 419 passed, 단독 ERROR, 수집 게이트 31 passed(픽스처에서 `spec_from_file_location`으로 읽어 수집 때는 드러나지 않음) — 이 경우는 참조 시험 단독 실행(`test_native_cycle.py`가 참조 7개 안에 듦)이 잡는다.
+- gate 변화: 착지 가드 회차에 수집 게이트 1잡, 준비 단계에 단독 실행 최대 10잡+안전 시험.
+
+## 2026-10-26 · uncommitted · fix(land): 단독 실행 시간 상한·기록, 묵은 단독 재실행, 안전 간선
+
+- 변경: robot-0d 토론 결과 반영. 참조 시험 단독 실행을 개수 10 대신 시간 상한(600 s, 작업자 6)으로 바꾸고 원격 한 잡(`tools/collect_alone.py` `ROSY_ALONE_FILES`)에서 돌린다. 못 돈 파일은 버리지 않고 `<git-common-dir>/rosy-land-isolation.jsonl`에 `incomplete`로 남기며 차례 요약에 `isolation incomplete: <files>`를 찍는다(보고 줄이 없으면 전부 못 돈 것으로 친다). 준비 뒤 main이 움직여 그 시험들이 참조하는 파일을 바꾸면 차례에서 그 시험만 다시 단독 실행한다. 수집 게이트는 준비 단계만 돈다. 안전 규칙은 시험 경로의 `is_safety` 대신 `is_safety` 원본을 참조하는 시험(개수 상한 없음, 같은 시간 상한)으로 바꿨다. 교훈 `shared-pytest-process-masks-path-dependent-import-2026-10-26.md`에 collect-only가 픽스처 시점 로드를 못 잡는다는 절을 더했다. `tools/land.py`·`land_prepare.py`·`land_full.py`는 이번에 고치지 않았다.
+- 증거: 원격 `test/test_land_isolation.py` 13 passed, `test/test_land.py test/test_land_events.py test/test_land_queue.py test/test_land_record.py test/test_remote_pytest.py` 217 passed(exit 0). 변이 6개(보고 줄 항상 complete, 보고 없음→전부 미실행 폴백 제거, 묵은 재실행 끔, 안전 우선 순위 제거, 차례에 수집 게이트, 한 프로세스 실행) 모두 해당 시험 실패. 사고 재현(6a07a06b0f 이전 `native_cycle.py`): 단독 잡이 참조 시험 8개를 9.5 s에 돌려 `test_native_cycle.py`·`test_register_policy.py`를 빨강으로 잡음(HEAD에서는 둘 다 통과), 수집 게이트는 같은 폴더에서 초록.
+- gate 변화: 준비 단계에 수집 게이트 1잡과 단독 실행 1잡, 차례에는 묵은 단독 재실행만.
+
+## 2026-10-26 · uncommitted · fix(land): 단독 실행 기록의 소비·안전 멈춤·죽은 잡·--no-queue
+
+- 변경: robot-0d v2 검토 반영. `tools/doctor.py`가 main에 들어간 지 하룻밤이 지났는데 단독 실행 안 된 파일이 남은 `rosy-land-isolation.jsonl` 기록을 FAIL로, 차례 요약이 한 줄로 보인다. 닫기는 옛 줄을 고치지 않고 후손 커밋의 다음 `prepare`나 `done` 줄이 그 파일을 단독으로 끝까지 돌린 증거로 한다(야간 소비자가 생기기 전에는 `python tools/land_isolation.py close <files>`). 안전 태그 원본을 참조하는 시험이 시간 상한에 못 돌면 착지를 멈춘다. 보고 줄이 없는 단독 잡(죽은 잡)은 실패한 게이트로 보고 캐시 없이 한 번 다시 돌린 뒤 멈추며 파일은 기록한다. 실행기가 `ROSY_JOB_CORES`(잠금에 적히는 예약 코어)와 같은 수의 작업자를 쓰고 그 줄을 찍는다. `--no-queue`는 후보마다 `skipped` 한 줄을 남기고 요약에 `isolation gate skipped (--no-queue)`를 넣는다. 기록마다 `land_events`에 `isolation` 사건도 남긴다(land_events에는 복사·회전 장치가 없어 7항 백업은 따로 만들지 않았다). 묵은 단독 재실행은 가드 회차 대신 차례 자신의 회차에 붙어 `TURN_CAP_S`·`Overtime`→`land_prepare.again`을 그대로 탄다. `tools/land.py`는 고치지 않았다.
+- 증거: 원격 `test/test_land_isolation.py test/test_doctor.py` 25 passed, `test/test_land*.py test/test_remote_pytest.py` 217 passed. 변이 4개(안전 멈춤 제거, 보고 없음을 완료로, 작업자 2 고정, 묵은 재실행을 차례에 안 붙임) 각각 해당 시험 실패.
+- gate 변화: 안전 미실행·죽은 잡은 착지 멈춤, doctor에 isolation FAIL 줄.
+
+## 2026-10-26 · uncommitted · fix(remote): 잡의 예약 코어를 배치 바닥으로, close에 이유 필수
+
+- 변경: robot-0d 착지 승인 조건 두 가지. `remote_pytest.run`이 호출 가운데 가장 큰 `ROSY_JOB_CORES`(잠금 예약)만큼 빈 코어가 있는 시험 PC에만 배치하고, 그런 요구에는 바닥 없는 대체 배치를 쓰지 않고 기다린다. `land_isolation.py close`는 `--reason`이 없거나 비면 거절하고, done 줄에 이유·누가(git user.email, 없으면 OS 사용자)·언제를 남긴다. `rosy-land-isolation.jsonl`과 `land_events`에 백업이 없다는 점(알려진 단일 손실 지점)을 모듈 docstring과 `tools/AGENTS.md`에 적었다. robot-47 조건: 차례 목록을 제자리에서 늘리는 연결은 끝까지 착지 시험이 고정한다(`land.py`가 가드 회차에 복사본을 넘기면 그 시험이 실패).
+- 증거: 원격 `test/test_land_isolation.py test/test_doctor.py test/test_remote_pytest.py test/test_remote_test_tools.py` 137 passed, `test/test_land.py test/test_land_events.py test/test_land_queue.py test/test_land_record.py` 129 passed. 변이: 배치가 예약 코어를 무시 → 배치 시험 실패, `land.py`가 `list(invocations)`를 넘김 → 묵은 재실행 끝까지 시험 실패.
+- gate 변화: 6코어 잡은 6코어가 빈 시험 PC를 기다린다.
