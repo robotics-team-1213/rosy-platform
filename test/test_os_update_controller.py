@@ -198,3 +198,25 @@ def test_source_health_checks_real_signed_runtime_without_starting_or_restarting
     assert all("show" in command for command in commands)
     (release / "SHA256SUMS.sig").write_text("invalid signature")
     with pytest.raises(ValueError): observe(root, TRANSACTION, host=host, run=run)
+
+
+@pytest.mark.parametrize("trial", [False, True])
+def test_service_calls_never_run_under_native_release_or_state_lock(tmp_path, monkeypatch, trial):
+    from native_release import NativeReleaseManager
+    from os_factory_release import PUBLIC_KEY
+    if trial:
+        from test_os_update_health import _health
+        _, state, root, _, host, _, run, _, _, _ = _health(tmp_path, monkeypatch)
+        m = importlib.import_module("os_update_controller")
+        monkeypatch.setattr(m.commit_owner, "capture", lambda r: dict(slot="b", layout=json.loads((r / "etc/rosy/os-media.json").read_text())))
+    else:
+        m, state, _, root, _, _, host, _, run, bundle, _ = _source(tmp_path, monkeypatch)
+    commands = []
+    def unlocked(argv, **kwargs):
+        with NativeReleaseManager(root=root, public_key=root / PUBLIC_KEY)._locked(), state.locked(root):
+            pass
+        commands.append(argv)
+        return run(argv, **kwargs)
+    if trial: m.resume(root, host=host, run=unlocked)
+    else: m.start(root, bundle, b"metadata", "sig", host=host, run=unlocked)
+    assert commands
