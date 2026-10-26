@@ -95,16 +95,17 @@ def test_transfer_refuses_missing_or_ambiguous_native_source(module, monkeypatch
         module.transfer('session')
 
 
-@pytest.mark.parametrize('role', ['model', 'ai'])
+@pytest.mark.parametrize('role', ['model', 'ai', '', 'typo'])
 @pytest.mark.parametrize('explicit', [False, True])
 def test_transfer_refuses_simulation_native_overlap_before_transport(module, monkeypatch, role, explicit):
-    config = dict(site_host='compute@host', sim_hosts=[f'compute@host={role}'], test_hosts=['model@host'])
+    entry = f'compute@host={role}' if role else 'compute@host'
+    config = dict(site_host='compute@host', sim_hosts=[entry], test_hosts=['model@host'])
     if explicit:
         config.update(site_host='site@host', omx_hosts=['compute@host'])
     monkeypatch.setattr(module.lab_hosts, 'load', lambda: config)
     monkeypatch.setattr(module, '_remote', lambda *args: pytest.fail('remote transport invoked'))
     monkeypatch.setattr(module, '_copy', lambda *args: pytest.fail('copy transport invoked'))
-    with pytest.raises(SystemExit, match='simulation role'):
+    with pytest.raises(SystemExit, match='simulation role|role binding'):
         module.transfer('session')
 
 

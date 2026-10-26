@@ -87,13 +87,14 @@ def test_rejects_malformed_explicit_omx_placement(raw):
         lab_hosts.omx_hosts({'omx_hosts': raw})
 
 
-@pytest.mark.parametrize('role', ['model', 'ai'])
+@pytest.mark.parametrize('role', ['model', 'ai', '', 'typo'])
 @pytest.mark.parametrize('explicit', [False, True])
 def test_native_loader_rejects_simulation_role_overlap(role, explicit):
-    config = {'site_host': 'compute@lab', 'sim_hosts': [f' compute@lab ={role} ']}
+    entry = f' compute@lab ={role} ' if role else ' compute@lab '
+    config = {'site_host': 'compute@lab', 'sim_hosts': [entry]}
     if explicit:
         config.update(site_host='site@lab', omx_hosts=['compute@lab'])
-    with pytest.raises(SystemExit, match='simulation role'):
+    with pytest.raises(SystemExit, match='simulation role|role binding'):
         lab_hosts.omx_hosts(config)
 
 
