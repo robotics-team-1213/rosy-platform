@@ -11674,3 +11674,9 @@ osy-d395-s1d\`.
 - 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
 - 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · affected 선택기가 안전 경로 변경을 FULL로 올린다
+
+- 변경: `tools/harness/affected_tests.py`가 바뀐 경로마다 `safety_review.is_safety`(D-430 §5 판정, `platform_parts.yaml`의 `concern: safety` 루트와 `safety_modules`)를 불러, 안전 경로면 이유 `safety path (platform_parts concern: safety)`로 FULL에 올리고 foundation 좁히기도 하지 않는다. 접두를 `FULL_TRIGGERS`에 복사하지 않는다. `NOT_TRIGGERS`가 먼저라 안전 루트 아래 Markdown은 FULL이 아니다. 이전에는 안전 경로도 trailer만 요구하고 affected 범위로 시험됐다.
+- 증거: `test/test_affected_tests.py`에 안전 경로 FULL, 비안전·Markdown 비승격, 가장 깊은 루트 판정 시험을 더했고 `is_safety`를 False로 바꾸는 변이로 빨강을 확인했다. 원격 `test/test_affected_tests.py`, `test/test_harness_contracts.py`, `test/test_safety_review.py`.
+- gate 변화: 없음. 안전 경로(`test/flaky_quarantine.txt` 포함) 변경은 이제 FULL을 돈다. CE: 해당 없음 — 합의된 설계의 선택기 규칙이며 시험이 규칙을 지킨다.

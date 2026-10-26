@@ -34,6 +34,7 @@ from affected_pack import IGNORED_BASENAMES, MAX_INVOCATION_CHARS, SelectionErro
 
 import yaml
 import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
+import safety_review  # D-430 5 judge, reused so the selector and the trailer rule agree
 from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, FULL_SUITES,  # noqa: F401
                          ROOT_SHARDS, SUITE_SHARDS, ci_matrix)  # the CI full-run matrix, re-exported
 
@@ -79,6 +80,9 @@ FULL_TRIGGERS = (
 )
 # D-762 stage 0: records under a trigger change no rule, import or layout; the guards still run.
 # D-766 4: lowering a ratchet row or registering a size unit is data; test_module_structure still runs.
+#: A path ``safety_review.is_safety`` tags (``concern: safety`` roots, ``safety_modules``) is FULL and never
+#: narrowed; NOT_TRIGGERS still wins, so Markdown under a safety root is not FULL.
+SAFETY_TRIGGER = "safety path (platform_parts concern: safety)"
 NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
                 "test/architecture/size_ratchet.txt", "test/architecture/size_units.txt")
 
@@ -168,6 +172,8 @@ class Repo:
     owners: list[tuple[str, tuple[str, ...]]]  # (root path, import prefixes)
     tracked: list[str]
     test_files: list[str]
+    safety_roots: list[dict] = field(default_factory=list)
+    safety_modules: set[str] = field(default_factory=set)
     _texts: dict[str, str] = field(default_factory=dict)
     _imports: dict[str, set[str]] = field(default_factory=dict)
     _tokens: dict[str, set[str]] = field(default_factory=dict)
@@ -179,7 +185,8 @@ class Repo:
         owners = [(r["path"], tuple(r.get("import_prefix") or ())) for r in parts.get("roots") or []]
         tracked = sorted(set(_git(root, "ls-files").splitlines()))
         tests = [p for p in tracked if TEST_FILE.search(p)]
-        return cls(root, list(harness.get("modules") or []), owners, tracked, tests)
+        return cls(root, list(harness.get("modules") or []), owners, tracked, tests,
+                   list(parts.get("roots") or []), set(parts.get("safety_modules") or ()))
 
     def text(self, path: str) -> str:
         if path not in self._texts:
@@ -333,9 +340,13 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
     touched_modules: dict[str, dict] = {}
     broad_fallback_modules: dict[str, dict] = {}
     for path in changed:
-        trigger = None if any(_match(path, p) for p in NOT_TRIGGERS) else next(
-            (why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
-        if trigger and affected_narrow.add_readers(repo, path, trigger, add):
+        if any(_match(path, p) for p in NOT_TRIGGERS):
+            trigger = None
+        elif safety_review.is_safety(path, repo.safety_roots, repo.safety_modules):
+            trigger = SAFETY_TRIGGER
+        else:
+            trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
+        if trigger and trigger != SAFETY_TRIGGER and affected_narrow.add_readers(repo, path, trigger, add):
             continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
         if trigger:
             # Still map the path below: a FULL selection runs locally as the guards plus
