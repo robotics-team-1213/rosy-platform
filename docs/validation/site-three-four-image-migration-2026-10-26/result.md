@@ -28,8 +28,10 @@ Initial source commit 01d7ffdfd2f5727dddbb6cd2f81cc5d7f2968a53 ran all nine suit
 
 Final committed source ran through the official remote runner with the disk-qualified lab wrapper:
 
+The command example abbreviates the full tested commit above to an unambiguous revision; the original runner logs retain the execution record.
+
 ```text
---sha d4a0e5b96885b6fe4a14469c9177e03ee23b2619 --
+--sha d4a0e5b96885 --
 test/test_site_candidate.py test/test_site_candidate_signing.py
 test/test_site_candidate_verifier.py test/test_site_candidate_workflow.py
 test/test_site_candidate_fetch.py test/test_site_autoupdate.py
