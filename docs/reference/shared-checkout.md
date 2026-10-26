@@ -151,8 +151,8 @@ flowchart TD
    [D-868](../adr/D-868-local-main-first-merge-commit-publish.md)이다. 모든 변경은 로컬 `main`에 먼저
    착지한다. `origin/main`이 로컬 `main`의 조상이 아니면 워크트리에서 `git merge origin/main`으로 합쳐
    착지한다. `generate` 뒤 로컬 `main`의 끝을 `publish/main-<YYYYMMDD>` 브랜치로 push해 PR을 열고,
-   `ci-result`가 녹색이면 `gh pr merge <PR> --merge --match-head-commit <SHA>`로 merge commit 병합한 뒤
-   `main` 체크아웃에서 `git merge --ff-only origin/main`. squash·rebase 병합과 force-push는 하지 않는다.
+   `ci-result`가 녹색이면 `gh pr merge <PR> --merge --match-head-commit <SHA>`로 merge commit 병합한다.
+   병합 뒤에는 로컬 `main`에서 만든 워크트리에서 `git merge origin/main`을 하고 `tools/land.py`로 착지한다(역동기화). 그 사이 착지가 있으면 fast-forward가 되지 않으므로 `--ff-only`로 맞추지 않는다. squash·rebase 병합과 force-push는 하지 않는다.
    로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
 
 주제 브랜치는 `origin/main`이 아니라 로컬 `main`에서 만든다. 이미 게시한 브랜치는 `git merge`로 갱신하고 force-push하지 않는다. 공개 GitHub 게시·검토·병합은 [PR 파이프라인](pr-pipeline.md)을 따른다.
