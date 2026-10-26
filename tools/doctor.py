@@ -8,7 +8,7 @@ that fixes it. Exit 1 on any FAIL. Nothing is changed: the installed pre-push ho
 15 by docs/reference/shared-checkout.md) and how many ``tools/worktrees.py prune --apply`` would
 remove, local ``main`` against ``origin/main`` and the age of the last fetch (``update_status.ref_state``),
 and the ``tools/land.py`` queue (tickets, holder, dead or stale tickets; ``land_queue`` removes those
-on its next read, this tool does not). ``--hosts`` also reads each lab PC's
+on its next read, this tool does not), and ``land_isolation`` records still open after a night (FAIL). ``--hosts`` also reads each lab PC's
 ``~/rosy-test/maintenance/last-report.json`` and ``~/rosy-jobs/disk-low`` over ssh. Standard library only.
 """
 
@@ -25,6 +25,7 @@ TOOLS = Path(__file__).resolve().parent
 sys.path[:0] = [str(TOOLS), str(TOOLS / "remote")]
 
 import lab_hosts  # noqa: E402
+import land_isolation  # noqa: E402
 import land_queue  # noqa: E402
 import update_status  # noqa: E402
 import worktrees  # noqa: E402
@@ -133,10 +134,20 @@ def check_hosts(now: float) -> list[tuple]:
     return found
 
 
+def check_isolation(repo: Path, now: float) -> list[tuple]:
+    """Landed alone runs cut by the budget or skipped (--no-queue) whose files nothing ran alone since."""
+    found = land_isolation.open_entries(repo, now)
+    if not found:
+        return [("OK", "isolation: no landed test files left unrun alone past a night", None)]
+    return [("FAIL", f"isolation: {rec['kind']} {rec.get('branch', '?')} {rec['candidate'][:10]} ({rec.get('at', '?')}):"
+             f" {len(left)} file(s) never run alone: {', '.join(left[:5])}{' ...' if len(left) > 5 else ''}",
+             f"python tools/land_isolation.py close {' '.join(left)} --reason \"<why>\"") for rec, left in found]
+
+
 def run(repo: Path, hosts: bool = False, now: float | None = None, out=print) -> int:
     now = time.time() if now is None else now
     checks = [lambda: check_hook(repo), lambda: check_publish_only(repo), lambda: check_worktrees(repo),
-              lambda: check_main(repo, now), lambda: check_queue(repo, now)]
+              lambda: check_main(repo, now), lambda: check_queue(repo, now), lambda: check_isolation(repo, now)]
     if hosts:
         checks.append(lambda: check_hosts(now))
     failed = False

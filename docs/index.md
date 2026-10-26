@@ -355,6 +355,6 @@
 
 - 2026-10-26 · uncommitted · test(fleet): D-891 리뷰 후속
 - 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
-- 2026-10-26 · e18c084879 · D-890 public Home seam classification
-- 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
-- 2026-10-26 · uncommitted · tools/land_browser.py: 건너뛰기만 한 브라우저 조각은 통과가 아니다
+- 2026-10-26 · uncommitted · fix(remote): 잡의 예약 코어를 배치 바닥으로, close에 이유 필수
+- 2026-10-26 · uncommitted · fix(land): 단독 실행 기록의 소비·안전 멈춤·죽은 잡·--no-queue
+- 2026-10-26 · uncommitted · fix(land): 단독 실행 시간 상한·기록, 묵은 단독 재실행, 안전 간선
