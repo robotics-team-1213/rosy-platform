@@ -1,5 +1,4 @@
 """Durable OS transactions use real files/flock/fsync; mount identity is modeled."""
-import copy
 import importlib
 import json
 import os
@@ -149,3 +148,49 @@ def test_pre_publish_fsync_failure_keeps_old_state_and_retry_reads_disk(tmp_path
     monkeypatch.setattr(os, "fsync", original)
     _begin(m, root, verified, facts)
     assert m.read_state(root)["pending"]["phase"] == "PREPARED"
+
+
+def test_failed_candidate_is_recorded_only_on_source_and_never_automatically_retried(tmp_path, monkeypatch):
+    m, root, path, initial, verified, facts = _state(tmp_path, monkeypatch)
+    _begin(m, root, verified, facts)
+    _advance(m, root, "TRIAL")
+    before = path.read_bytes()
+    with pytest.raises(ValueError):
+        with m.locked(root) as store:
+            store.record_failure(TRANSACTION, TRIAL_BOOT, "b")
+    assert path.read_bytes() == before
+    with m.locked(root) as store:
+        store.record_failure(TRANSACTION, SOURCE_BOOT, "a")
+    failed = m.read_state(root)
+    assert failed == dict(initial, failed_versions=[verified["metadata"]["release_id"]])
+    before = path.read_bytes()
+    with pytest.raises(ValueError):
+        _begin(m, root, verified, facts)
+    assert path.read_bytes() == before
+
+
+def test_commit_intent_failure_requires_commit_owner_reconciliation(tmp_path, monkeypatch):
+    m, root, path, _, verified, facts = _state(tmp_path, monkeypatch)
+    _begin(m, root, verified, facts)
+    _advance(m, root, "COMMIT_INTENT")
+    before = path.read_bytes()
+    with pytest.raises(ValueError):
+        with m.locked(root) as store:
+            store.record_failure(TRANSACTION, SOURCE_BOOT, "a")
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("damage", ["same_slot", "early_health", "old_trial", "boolean_image", "duplicate_failed"])
+def test_corrupt_pending_bindings_are_never_read_as_idle(tmp_path, monkeypatch, damage):
+    m, root, path, _, verified, facts = _state(tmp_path, monkeypatch)
+    _begin(m, root, verified, facts)
+    value = json.loads(path.read_text())
+    pending = value["pending"]
+    if damage == "same_slot": pending["target_slot"] = pending["source_slot"]
+    elif damage == "early_health": pending["health_sha256"] = "b" * 64
+    elif damage == "old_trial": pending["phase"] = "TRIAL"; pending["trial_boot_id"] = SOURCE_BOOT
+    elif damage == "boolean_image": pending["verified"]["images"]["boot"]["size"] = True
+    elif damage == "duplicate_failed": value["failed_versions"] = ["2026.10.26-001"] * 2
+    path.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match="OS_UPDATE_STATE_HOLD"):
+        m.read_state(root)
