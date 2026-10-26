@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
 - 2026-10-26 · uncommitted · tools/land_browser.py: 건너뛰기만 한 브라우저 조각은 통과가 아니다
 - 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
 - 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 6·7·8 (설계 0.7), 규칙 4·5는 뺌
 - 2026-10-26 · uncommitted · fix(remote): Isaac supervisor 실행이 host probe에 gpu 예약으로 보인다
-- 2026-10-26 · uncommitted · 교훈 2건: 폴더 단위 pytest 초록, 착지 기록 끊김
