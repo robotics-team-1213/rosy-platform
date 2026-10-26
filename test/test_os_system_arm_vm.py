@@ -3,6 +3,7 @@ import importlib
 import os
 import json
 from pathlib import Path
+import shlex
 
 import pytest
 
@@ -25,6 +26,7 @@ def test_arm_guest_has_owned_virtio_card_and_kernel_nocloud_without_host_devices
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable ARM SYSTEM guest opt-in")
 def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path):
+    """Actual kernel/PID1/card/RAUC boundaries; DT, policy and native application are fixtures."""
     with module().ArmGuest(tmp_path) as guest:
         assert guest.run("uname -m").strip() == "aarch64"
         assert guest.run("cat /proc/1/comm").strip() == "systemd"
@@ -34,9 +36,17 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path):
         assert "virtio" in guest.run("readlink -f /sys/class/block/vdc/device")
         guest.provision_source(Path(__file__).resolve().parents[1])
         layout = json.loads(guest.run("cd /work/source && ROSY_OS_GUEST=1 python3 test/os_system_card.py --work /work/card", timeout=1800))
+        scenario = ("cd /work/source && ROSY_OS_GUEST=1 python3 test/os_system_install.py "
+                    "{command} --instance-id " + shlex.quote(guest.instance_id))
+        assert json.loads(guest.run(scenario.format(command="snapshot"), timeout=1800))["snapshot"] is True
         root_uuid = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_a")
         guest.restart_slot(root_uuid, "a")
         assert guest.run("findmnt -n -o SOURCE /").strip() == "/dev/vdc4"
         facts = guest.run("cd /work/source && python3 -c \"import sys,json;sys.path.insert(0,'deploy/robot/pinky_pro/native');from os_media import capture;print(json.dumps(capture()))\"")
         media = json.loads(facts)
         assert media["slot"] == "a" and media["layout"] == layout
+        installed = json.loads(guest.run(scenario.format(command="install"), timeout=5400))
+        assert installed["installed"] is True
+        assert installed["receipt"]["target_slot"] == "b"
+        assert installed["device_policy"]["probes"]["root_b"] is True
+        assert installed["device_policy"]["probes"]["root_a"] is False
