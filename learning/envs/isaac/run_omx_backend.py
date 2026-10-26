@@ -19,6 +19,7 @@ from omx_cell_world import boxes, quaternion  # noqa: E402  The same work scene 
 
 SIM_STATES, SIM_COMMANDS = "/sim/joint_states", "/sim/joint_commands"
 CAMERAS = {"top": "/top_camera/image_raw", "front": "/front_camera/image_raw"}
+OBJECTS = "/sim/object_tf"  # Evaluation facts (tools/sim/omx_backend_conformance.py OBJECTS), never a policy input.
 TOP_CAMERA_POS = (0.12, 0.0, 0.65)  # Above the work area, looking down (cell top camera ~650 mm, D-794).
 RENDER_HZ = 60.0
 
@@ -103,12 +104,17 @@ def main():
                  ("PublishClock", "isaacsim.ros2.bridge.ROS2PublishClock"),
                  ("PublishJoints", "isaacsim.ros2.bridge.ROS2PublishJointState"),
                  ("SubscribeJoints", "isaacsim.ros2.bridge.ROS2SubscribeJointState"),
-                 ("Articulation", "isaacsim.core.nodes.IsaacArticulationController")]
+                 ("Articulation", "isaacsim.core.nodes.IsaacArticulationController"),
+                 ("PublishObjects", "isaacsim.ros2.bridge.ROS2PublishTransformTree")]
         values = [("PublishClock.inputs:topicName", "clock"),
                   ("PublishJoints.inputs:topicName", SIM_STATES.lstrip("/")),
                   ("PublishJoints.inputs:targetPrim", [Sdf.Path(roots[0])]),
                   ("SubscribeJoints.inputs:topicName", SIM_COMMANDS.lstrip("/")),
-                  ("Articulation.inputs:targetPrim", [Sdf.Path(roots[0])])]
+                  ("Articulation.inputs:targetPrim", [Sdf.Path(roots[0])]),
+                  ("PublishObjects.inputs:topicName", OBJECTS.lstrip("/")),
+                  ("PublishObjects.inputs:parentPrim", [Sdf.Path("/World")]),
+                  ("PublishObjects.inputs:targetPrims",
+                   [Sdf.Path(f"/World/Cell/{box['name']}") for box in boxes() if not box["static"]])]
         connect = [("Tick.outputs:tick", "PublishClock.inputs:execIn"),
                    ("Tick.outputs:tick", "PublishJoints.inputs:execIn"),
                    ("Tick.outputs:tick", "SubscribeJoints.inputs:execIn"),
@@ -119,7 +125,10 @@ def main():
                    ("Time.outputs:simulationTime", "PublishJoints.inputs:timeStamp"),
                    ("Context.outputs:context", "PublishClock.inputs:context"),
                    ("Context.outputs:context", "PublishJoints.inputs:context"),
-                   ("Context.outputs:context", "SubscribeJoints.inputs:context")]
+                   ("Context.outputs:context", "SubscribeJoints.inputs:context"),
+                   ("Tick.outputs:tick", "PublishObjects.inputs:execIn"),
+                   ("Time.outputs:simulationTime", "PublishObjects.inputs:timeStamp"),
+                   ("Context.outputs:context", "PublishObjects.inputs:context")]
         skip = max(0, round(RENDER_HZ/args.camera_hz)-1)
         for name, path in cameras.items():
             product, helper = f"Render_{name}", f"Camera_{name}"
