@@ -3,6 +3,7 @@ import {loginReturn} from '/console/assets/login-return.js';
 
 const query = new URLSearchParams(location.search);
 const back = loginReturn(query.get('return'), location.origin);
+document.getElementById('login-site').textContent = `접속 서버: ${location.host}`;
 const failures = new Map([
   ['access_denied', ['forbidden', '현재 로그인 상태 또는 프로젝트 권한을 확인해야 합니다. 내 계정에서 권한을 확인하고, 필요한 권한은 관리자에게 요청하세요. 다른 계정으로도 로그인할 수 있습니다.']],
   ['invalid_request', ['error', '로그인 요청을 확인할 수 없습니다. 원래 앱에서 로그인을 다시 시작하세요.']],
