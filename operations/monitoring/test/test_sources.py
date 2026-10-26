@@ -62,7 +62,7 @@ def test_fleet_legacy_tls_refused_preserves_owner_auth_failure():
 
 
 def test_fleet_restart_without_a_cache_retains_last_observations_as_stale():
-    cfg, cache, credentials, clock = setup({'kind': 'fleet', 'url': 'https://fleet.invalid'})
+    cfg, cache, credentials, clock = source_context({'kind': 'fleet', 'url': 'https://fleet.invalid'})
     body = {'sampled_at': clock.utcnow().isoformat(), 'cache_age_s': 0.0,
             'robots': [{'robot_id': 'robot1', 'link': 'up', 'reachable': True,
                         'reason_code': None, 'state_age_s': 0.0}]}
