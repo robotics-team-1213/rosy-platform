@@ -898,7 +898,7 @@ def sync(
     root = Path(root)
     with _release_lock(root):
         release_id, release = resolve_current(root, is_link=is_link, readlink=readlink)
-        verify(release_id)
+        boot.verify_maintenance(root, release_id, verify)
         native = release / RELEASE_NATIVE
         if not native.is_dir():
             raise SyncError(f"IMAGE_LAYER_SOURCE: release {release_id} has no {RELEASE_NATIVE}")
@@ -964,7 +964,7 @@ def sync(
 
 def inverse_boot_layer(root: Path, target: str, *, verify, runner: Runner = _run, dry_run: bool = False) -> dict:
     with _release_lock(root):
-        return boot.inverse(root, target, verify, runner, install=_install, dry_run=dry_run)
+        return boot.inverse_maintenance(root, target, verify, runner, install=_install, dry_run=dry_run)
 
 
 def _verifier(root: Path, public_key: Path) -> Callable[[str], object]:

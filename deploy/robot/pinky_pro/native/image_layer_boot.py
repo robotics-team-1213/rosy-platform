@@ -280,6 +280,24 @@ def reconcile_forward(root: Path, target: str, verify, *, install=_install) -> N
         install(entry["source"], destination, entry["mode"])
 
 
+def _maintenance(root: Path) -> None:
+    from native_release import _ab_marked
+    if _ab_marked(root):
+        from os_payload_compatibility import require_native_maintenance
+        require_native_maintenance(root)
+
+
+def verify_maintenance(root: Path, target: str, verify):
+    _maintenance(root)
+    return verify(target)
+
+
+def inverse_maintenance(root: Path, target: str, verify, runner, *, install=_install, dry_run=False):
+    # Operator SDK changes are fenced; boot recovery deliberately uses inverse directly.
+    _maintenance(root)
+    return inverse(root, target, verify, runner, install=install, dry_run=dry_run)
+
+
 def inverse(root: Path, target: str, verify, runner, *, install=_install, dry_run: bool = False) -> dict:
     """Idempotently restore protected files before a legacy sync can downgrade us."""
     transitions = _transitions(root)
