@@ -8,6 +8,8 @@
 
 ### Decision
 
+아래 `ab-v1`·boot A 2 설명은 기존 실험 이미지의 호환 경로다. 새 factory의 bootstrap 1·schema 2·`ab-v2` 경계는 D-888과 항목 9를 따른다. 현재 frozen helper 목록의 정본은 `os_storage_dispatch.BOOTSTRAP_FILES`다.
+
 1. 각 root의 `/opt/rosy`, `/var/lib/rosy/releases`, `/var/lib/rosy/updates`와 image-layer inverse는 슬롯에 남긴다. applying/staged/status/history·activation journal을 다른 root에 replay하지 않는다.
 2. 공통 data는 `/var/lib/rosy-device`에 둔다. updater config/Hold만 공통 policy 경로에 직접 접근한다. atomic replace/unlink를 깨뜨리는 개별 파일 bind mount는 사용하지 않는다.
 3. image-owned `/etc/rosy/os-slot.json`과 `rosy.os_layout=ab-v1` kernel marker는 함께 필요하다. descriptor schema/state_schema·slot·root/data/provision PARTUUID는 strict하게 검증한다. D-879의 파티션 역할에 따라 root A는4, root B는5, 공통 data는6, provision boot_a는2이며 실제 sysfs 파티션 번호와 동일 physical disk parent를 확인한다. 둘 다 없는 legacy만 기존 경로를 사용하며 AB 오류에서 legacy로 fallback하지 않는다.

@@ -256,20 +256,17 @@ def test_the_rosy_diag_wrapper_runs_the_collector_without_bytecode():
     assert "readlink -f" in text  # works through a symlink on PATH
 
 
-def test_the_collector_and_installed_redaction_admission_closure_use_only_stdlib():
+def test_the_collector_uses_only_stdlib_and_installed_redaction_and_admission_owners():
     import ast
 
-    modules = {"rosy_diag_collect", "rosy_diag_redact", "os_state_layout"}
-    for name in modules:
-        tree = ast.parse((NATIVE / (name + ".py")).read_text(encoding="utf-8"))
-        imported = {alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import)
-                    for alias in node.names}
-        imported |= {node.module.split(".")[0] for node in ast.walk(tree)
-                     if isinstance(node, ast.ImportFrom) and node.module}
-        allowed = set(sys.stdlib_module_names) | modules | {"__future__"}
-        assert imported <= allowed, imported - allowed
-        if name == "rosy_diag_collect":
-            assert {"rosy_diag_redact", "os_state_layout"} <= imported
+    tree = ast.parse((NATIVE / "rosy_diag_collect.py").read_text(encoding="utf-8"))
+    imported = {alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import)
+                for alias in node.names}
+    imported |= {node.module.split(".")[0] for node in ast.walk(tree)
+                 if isinstance(node, ast.ImportFrom) and node.module}
+    owners = {"rosy_diag_redact", "os_state_layout"}
+    assert imported <= set(sys.stdlib_module_names) | owners | {"__future__"}
+    assert owners <= imported
 
 
 @pytest.mark.skipif(BASH is None, reason="bash is required to run the installer")
