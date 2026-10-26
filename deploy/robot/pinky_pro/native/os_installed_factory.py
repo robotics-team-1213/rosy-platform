@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from native_release import NativeReleaseManager
+from native_release import NativeReleaseManager, PYTHON_RUNTIME_IMAGE_FILE
 from os_factory_release import CHECKSUM_LIMIT, DESCRIPTOR, PUBLIC_KEY
 from os_payload_compatibility import verify_contract
 from os_state_layout import _object, _path, _read
@@ -40,6 +40,8 @@ def verify(current_root: Path, target_root: Path, metadata: dict) -> dict:
             raise ValueError("native factory checksum list differs")
         manager = NativeReleaseManager(root=target_root, public_key=_path(current_root, PUBLIC_KEY))
         manager.verify_payload(expected["release_id"])
+        _file(target_root, PYTHON_RUNTIME_IMAGE_FILE.as_posix(), 128)
+        manager.check_python_runtime(expected["release_id"])
         verify_contract(_path(target_root, prefix + "/deploy/robot/native"), state_schema=1, boot_abi=2)
         return descriptor
     except (OSError, ValueError, TypeError, KeyError) as exc:

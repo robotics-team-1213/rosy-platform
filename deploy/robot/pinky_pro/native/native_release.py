@@ -301,7 +301,7 @@ class NativeReleaseManager:
     def check_python_runtime(self, release_id: str) -> str:
         """Refuse a verified release whose Python runtime is not the image's.
 
-        Only activate and rollback call this. Recovery restores the release that
+        Activation, rollback and offline factory checks call this. Recovery restores the release that
         was already running and must never hold on it.
         """
         release = self._release(release_id)
