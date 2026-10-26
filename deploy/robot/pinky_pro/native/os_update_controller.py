@@ -18,7 +18,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from auto_update_host import Host, UPDATES
-from native_release import NativeReleaseManager
+from native_release import IO_SETTLE_S, NativeReleaseManager
 from os_bootloader import (PERMIT, PERMIT_FIELDS, RAUC_STATE, _binding, _snapshot, _write, invoke)
 from os_factory_release import PUBLIC_KEY
 from os_media import capture
@@ -188,6 +188,7 @@ def start(root: Path, bundle: Path, raw: bytes, signature: str, *, host: Host | 
                 _transition(root, transaction_id, "INSTALLED", facts["boot_id"])
                 _transition(root, transaction_id, "VERIFIED", facts["boot_id"])
                 _call(run, ["/usr/bin/systemctl", "restart", "rosy-io.service"])
+                host.sleep(IO_SETTLE_S)
                 return _arm(root, transaction_id, host, run)
             finally:
                 if read_state(root)["pending"] is None:
@@ -255,6 +256,7 @@ def resume(root: Path = Path("/"), *, host: Host | None = None, run=_run):
                 raise ValueError("unexpected source boot after trial")
             reconcile(root)
             _call(run, ["/usr/bin/systemctl", "restart", "rosy-io.service"])
+            host.sleep(IO_SETTLE_S)
             return _arm(root, transaction_id, host, run)
     except (OSError, ValueError, TypeError, KeyError, rosy_claim.ClaimBusy, subprocess.SubprocessError) as exc:
         raise ValueError(f"OS_CONTROLLER_HOLD: {exc}") from exc

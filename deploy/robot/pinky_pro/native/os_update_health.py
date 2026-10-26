@@ -12,6 +12,7 @@ import subprocess
 import time
 
 from auto_update_host import Host
+from native_release import IO_SETTLE_S
 from os_bootloader import BINDING, RAUC_STATE, _binding, _private, _snapshot
 from os_installed_factory import verify_current
 from os_motion_guard import require_inhibited
@@ -193,6 +194,9 @@ def check(root: Path, transaction_id: str, *, host: Host | None = None, run=_run
         for group in {navigation["ControlGroup"], "/system.slice/rosy-navigation.service"}:
             _empty_cgroup(root, group, service="rosy-navigation.service")
         _call(run, ["/usr/bin/systemctl", "restart", "rosy-io.service"])
+        host = host if host is not None else Host(root)
+        host.sleep(IO_SETTLE_S)
+        _deadline()
         services = {unit: _service(run, unit) for unit in ("rosy-core.service", "rosy-io.service")}
         watchdog = observe_watchdog(root, run=run)
         _probe()
