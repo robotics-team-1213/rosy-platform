@@ -123,7 +123,8 @@ def test_loader_accepts_token_only_login_only_and_both(tmp_path):
     _entry(principal_id="a", role="viewer", login="Alice", password_scrypt=HASH),
     "  - {principal_id: a, role: viewer, login: x}\n",
     "  - {principal_id: a, role: viewer}\n",
-])
+], ids=["service-login", "duplicate-login", "bad-hash", "plaintext", "uppercase-login", "login-without-hash",
+        "no-credential"])  # HASH has a random salt: ids from it differ per xdist worker and stop collection
 def test_loader_rejects_service_login_duplicate_login_bad_hash_and_missing_credential(tmp_path, body):
     with pytest.raises(ValueError):
         load_site_accounts(_write(tmp_path, body))

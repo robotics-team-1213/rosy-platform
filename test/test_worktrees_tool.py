@@ -566,6 +566,7 @@ def landing(main, tmp_path, monkeypatch):
     topic = add(main, "topic", commit=True)
     monkeypatch.chdir(topic)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
+    monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
     monkeypatch.setattr(land.remote_pytest, "run", lambda invocations, logs, *a, **kw: [])  # --tests none
     clock = types.SimpleNamespace(time=lambda: LATER, strftime=time.strftime, localtime=time.localtime)
     monkeypatch.setattr(worktrees, "time", clock)
