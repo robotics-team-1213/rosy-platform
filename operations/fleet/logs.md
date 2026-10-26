@@ -4942,6 +4942,20 @@
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
 
+## 2026-10-27 · e7093c177a · ARM transfer 결과 판정과 검수용 export
+
+- 변경: 기존 simulation observer의 POST_ACTION 관측에서 Action 결과와 task succeeded/failed/unknown을 분리하고, 원본 근거를 기존 Fleet 이벤트 원장에 보존한다. 검수 export는 metadata-only이며 완료·재시도 권한을 만들지 않는다. POST_ACTION 계보 검사를 기존 완료 경로와 공유한다.
+- 증거: tests-only RED와 구현 GREEN, 독립 검토 반례 RED/GREEN을 공식 원격 실행했다. 관련 통합은 81988c1eb0의 116 passed/0 skipped. e7093c177a affected는 역의존·guard 4607 passed/190 skipped, Fleet 7052 passed/389 skipped, 두 invocation exit 0·known NEW 0. 독립 계약 재검토에서 중요 발견 없음. `docs/validation/transfer-outcomes-2026-10-27/result.md`와 `operations/fleet/docs/transfer-outcome-review.md` 참고.
+- Gate: 기존 모듈 gate를 올리지 않는다. 실제 장치·모델 품질·자동 재파지·다중 attempt·현장 수용은 별도다. 착지·push 미수행.
+- CE: 해당 없음 — 판단과 회귀 증거가 코드·시험·검증 기록에 남아 있다.
+
+## 2026-10-27 · c86b3e51d5 · owner 실행 단계와 복구 다음 확인
+
+- 변경: 보존된 네 단계 owner receipt의 명시적 FAILED·취소·불확실성을 검수 export v2에 연결했다. 종료 후 관측이 없는 Action 실패도 내보내고, 현재 HOLD를 유지한 채 대기·실행 대조·재관측·사람 검토 등 읽기 전용 다음 확인을 제안한다. 물리 실패 원인이나 새 실행 권한은 추정하지 않는다.
+- 증거: tests-only 26344ecf9b의 원격 16 failed/1 passed → 812b3b224c 156 passed. 독립 검토 TTL 반례 e231ff081a 2 failed → c86b3e51d5의 관련 통합 172 passed/0 skipped, runner exit 0·known NEW 0. 같은 source affected는 역의존·guard 4604 passed/190 skipped와 문서 검사 1 failed, Fleet 7070 passed/391 skipped와 기존 콘솔 계약 불일치 1 failed다. 문서 표기를 고친 a24f265097에서 해당 guard·문서 배치 9 passed/NEW 0. 전체 회귀 통과로 보고하지 않는다. `docs/validation/transfer-execution-review-2026-10-27/result.md` 참고.
+- Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
+- CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
+
 ## 2026-10-27 · feat/policy-admission-console · D-865 P3 콘솔 표시 회귀
 
 - 변경: 없음(코드 변경은 `applications/fleet/web` 참조). 이 모듈에서는 콘솔 계약 시험을 확장했다 — `test_work_overview_browser.py`에 범위 readback·배지·기명 운영자 전환·409 사유·보기 전용 잠금 시험 추가, `test/web/work-view.test.mjs`에 순수 판정·문구 시험 추가.
