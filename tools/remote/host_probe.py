@@ -12,18 +12,18 @@ DISK_FLOOR_GB = 20
 # One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site sim_held browser_jobs,
 # then free_kb use% of ~/rosy-test's and /tmp's filesystems (df -Pk; absent from an older probe). Dead-pid
 # locks and expired reservations (<expiry epoch> <class> <cores> <GB>) go; both count toward the budget, and
-# sim_held counts the live ones of class sim (remote_sim, --pick sim, a hand-run Gazebo lock), browser_jobs the
+# sim_held counts the live ones of class sim or gpu (gpu: SwiftShader browsers are CPU-heavy, robot-4a; remote_sim, --pick sim, a hand-run Gazebo lock), browser_jobs the
 # live browser job locks of every run (remote_job.JOB), so lanes stay under the per-host cap across runs.
 PROBE = r"""J=~/rosy-jobs; c=0; m=0; g=0; w=0; now=$(date +%s)
 for f in "$J"/*.resv; do
   [ -e "$f" ] || continue; read -r t k fc fm < "$f" || true
   case "$t$fc$fm" in ''|*[!0-9]*) rm -f "$f"; continue;; esac
-  if [ "$t" -gt "$now" ]; then c=$((c+fc)); m=$((m+fm)); [ "$k" = sim ] && g=$((g+1)); else rm -f "$f"; fi
+  if [ "$t" -gt "$now" ]; then c=$((c+fc)); m=$((m+fm)); case "$k" in sim|gpu) g=$((g+1));; esac; else rm -f "$f"; fi
 done
 for f in "$J"/*.lock; do
   [ -e "$f" ] || continue; read -r pid k fc fm < "$f" || true
   case "$fc$fm" in ''|*[!0-9]*) fc=0 fm=0;; esac  # whole numbers only; never evaluate file text
-  if kill -0 "$pid" 2>/dev/null; then c=$((c+${fc:-0})); m=$((m+${fm:-0})); [ "$k" = sim ] && g=$((g+1)); [ "$k" = browser ] && w=$((w+1))
+  if kill -0 "$pid" 2>/dev/null; then c=$((c+${fc:-0})); m=$((m+${fm:-0})); case "$k" in sim|gpu) g=$((g+1));; esac; [ "$k" = browser ] && w=$((w+1))
   else rm -f "$f"; fi
 done
 py=0; for p in /usr/bin/python3 ~/.local/bin/python3.12; do
