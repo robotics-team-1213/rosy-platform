@@ -112,6 +112,10 @@ python3 "$SCRIPT_DIR/assemble-ab-image.py" \
 rm -f -- "$PREPARED_IMAGE"
 
 COMPRESSED_IMAGE="$OUT/rosy-os-pinky-pro-$RELEASE_ID-arm64.img.xz"
+python3 "$SCRIPT_DIR/export-os-bundle-inputs.py" \
+    --raw-image "$RAW_IMAGE" --layout "$LAYOUT_FILE" \
+    --output "$OUT/os-bundle-inputs" --factory "$PAYLOAD_ROOT/factory-release" \
+    --release-id "$RELEASE_ID" --source-revision "$SOURCE_REVISION"
 "$SCRIPT_DIR/finalize-image.sh" \
     --raw-image "$RAW_IMAGE" \
     --output "$COMPRESSED_IMAGE" \
