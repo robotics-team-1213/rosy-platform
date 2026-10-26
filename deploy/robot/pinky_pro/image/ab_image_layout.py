@@ -15,7 +15,8 @@ sys.path.insert(0, str(BASE / "native"))
 from media_layout import BASIC_DATA, LINUX_FS, ROLES, parse_gpt, validate_layout
 from os_state_files import sync_directory
 from os_state_io import _json_atomic, _write_atomic
-from os_state_layout import COMMON, SHARED_BINDINGS, _guid, _path, _read
+from os_state_layout import _guid, _path, _read
+from os_slot_metadata import render_files
 
 MIB = 1024**2
 RAW_MIB = 29 * 1024
@@ -94,17 +95,7 @@ def _fstab(layout: dict, slot: str, source: str) -> str:
     if (len(records) != 2 or any(len(row) != 6 for row in records)
             or {row[1]: row[2] for row in records} != expected):
         raise ValueError("unsupported source fstab")
-    parts = {part["role"]: part for part in layout["partitions"]}
-    lines = ["# Generated fixed A/B layout; no partition auto-grow."]
-    for role, point, filesystem, options, order in (
-            ("root_" + slot, "/", "ext4", "defaults", 1),
-            ("boot_" + slot, "/boot/firmware", "vfat", "defaults", 2),
-            ("data", "/" + COMMON, "ext4", "defaults,nodev,nosuid", 2),
-            (layout["provision_role"], "/run/rosy-provision-boot", "vfat", "defaults", 2)):
-        lines.append(f"PARTUUID={parts[role]['unique_guid']} {point} {filesystem} {options} 0 {order}")
-    for target, subpath in SHARED_BINDINGS.items():
-        lines.append(f"/{COMMON}{subpath} /{target} none bind,x-systemd.requires-mounts-for=/{COMMON} 0 0")
-    return "\n".join(lines) + "\n"
+    return render_files(layout, slot, "root=LABEL=writable")["etc/fstab"]
 
 
 def configure_slot(root: Path, boot: Path, layout: dict, slot: str) -> None:
@@ -121,16 +112,10 @@ def configure_slot(root: Path, boot: Path, layout: dict, slot: str) -> None:
             or sum(word.startswith("root=") for word in tokens) != 1
             or any(word.startswith(("rosy.os_layout=", "rauc.slot=")) for word in tokens)):
         raise ValueError("unsupported source kernel command line")
-    parts = {part["role"]: part for part in layout["partitions"]}
-    protocol = 2 if layout["provision_role"] == "bootstrap" else 1
-    descriptor = dict(schema_version=protocol, state_schema=1, slot=slot,
-        root_partuuid=parts["root_" + slot]["unique_guid"], data_partuuid=parts["data"]["unique_guid"],
-        provision_partuuid=parts[layout["provision_role"]]["unique_guid"])
-    tokens = ["root=PARTUUID=" + descriptor["root_partuuid"] if word.startswith("root=") else word for word in tokens]
-    tokens.append(f"rosy.os_layout=ab-v{protocol}")
-    changes = {"etc/fstab": fstab,
-               "etc/rosy/os-slot.json": json.dumps(descriptor, sort_keys=True) + "\n",
-               "etc/cloud/cloud.cfg.d/99-rosy-fixed-layout.cfg": "growpart: {mode: 'off'}\nresize_rootfs: false\n"}
+    changes = render_files(layout, slot, cmdline)
+    rendered_command = changes.pop("cmdline.txt")
+    changes["etc/fstab"] = fstab
+    changes["etc/cloud/cloud.cfg.d/99-rosy-fixed-layout.cfg"] = "growpart: {mode: 'off'}\nresize_rootfs: false\n"
     targets = {relative: _path(root, relative) for relative in changes}
     for relative, target in targets.items():
         if target.exists() and relative != "etc/fstab":
@@ -141,7 +126,7 @@ def configure_slot(root: Path, boot: Path, layout: dict, slot: str) -> None:
         raise ValueError("offline kernel command line is hard-linked")
     for relative, target in targets.items():
         _write_atomic(target, changes[relative], 0o644)
-    _write_atomic(cmdline_path, " ".join(tokens) + "\n", 0o644)
+    _write_atomic(cmdline_path, rendered_command, 0o644)
 
 
 def capacity_report(free_bytes: int, payload_bytes: int) -> dict:

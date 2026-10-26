@@ -27,7 +27,8 @@ ENGINE_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_
                 "first_boot_runtime.py", "first_boot_support.py", "os_state_firstboot.py", "os_state_storage.py", "os_storage_dispatch.py", "os_state_accounts.py",
                 "os_state_files.py", "os_state_config.py", "operator_keys.py", "os_state_tls.py", "os_state_io.py", "os_state_ready.py", "os_factory_release.py",
                 "rosy_auto_update.py", "rosy_claim.py",
-                "image_layer_boot.py", "image_layer_files.py", "native_release.py", "signing.py", "os_payload_compatibility.py")
+                "image_layer_boot.py", "image_layer_files.py", "native_release.py", "signing.py", "os_payload_compatibility.py",
+                "os_slot_metadata.py", "media_layout.py")
 # The signed bridge-v1 baseline stays valid when later engines add helpers.
 BRIDGE_V1_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
                    "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py",
