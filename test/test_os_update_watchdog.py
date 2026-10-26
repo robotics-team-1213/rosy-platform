@@ -186,3 +186,24 @@ for name in ('os_update_watchdog','os_bootloader','os_state_layout'):
     result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(prefix), str(root), SOURCE_BOOT],
         input=json.dumps(dict(properties=properties, logs=logs)), capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("damage", ["failed", "timeout", "oversize", "duplicate", "malformed"])
+def test_invalid_manager_observation_is_hold(tmp_path, monkeypatch, damage):
+    module, root, _, _, _, _ = _watchdog(tmp_path, monkeypatch)
+    def run(argv, **kwargs):
+        if damage == "timeout": raise subprocess.TimeoutExpired(argv, 10)
+        text = {"failed": "", "oversize": "x" * 4097, "duplicate": "Version=255\nVersion=255",
+                "malformed": "unbound value"}[damage]
+        return subprocess.CompletedProcess(argv, 1 if damage == "failed" else 0, text, "")
+    with pytest.raises(ValueError, match="OS_WATCHDOG_HOLD"):
+        module.admit(root, run=run)
+
+
+def test_trial_boot_cannot_supply_source_autoarm_evidence(tmp_path, monkeypatch):
+    from test_os_bootloader import _trial
+    module, root, _, _, calls, run = _watchdog(tmp_path, monkeypatch)
+    _trial(root)
+    with pytest.raises(ValueError, match="normal source boot"):
+        module.admit(root, run=run)
+    assert calls == []

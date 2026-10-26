@@ -24,7 +24,10 @@ def render_boot_config(raw: bytes) -> str:
         if text.endswith(BOOT_CONFIG) and text.count("# ROSY A/B kernel watchdog") == 1:
             return text
         raise ValueError("watchdog configuration already differs")
-    return text.rstrip("\n") + "\n" + BOOT_CONFIG
+    rendered = text.rstrip("\n") + "\n" + BOOT_CONFIG
+    if len(rendered.encode("utf-8")) > 65536:
+        raise ValueError("rendered watchdog boot configuration exceeds its runtime read limit")
+    return rendered
 
 
 def _run(argv, timeout=10):
