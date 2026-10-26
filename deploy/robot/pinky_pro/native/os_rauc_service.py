@@ -14,6 +14,7 @@ import time
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from os_bootloader import _binding, _claim, boot_facts
+from os_media import capture
 from os_rauc import RAUC
 from os_rauc_runtime import prepare
 from os_state_io import _write_atomic
@@ -126,7 +127,7 @@ def check(root=Path("/"), *, run=_run):
         request, pending, prepared, _ = _existing(root)
         _claim(root, pending)
         now, expiry = time.monotonic_ns(), request["expires_monotonic_ns"]
-        if type(expiry) is not int or not now < expiry <= now + 60_000_000_000:
+        if type(expiry) is not int or not now < expiry <= now + 900_000_000_000:
             raise ValueError("RAUC request expired")
         _effective(run, prepared)
         return prepared
@@ -172,7 +173,7 @@ def _cleanup(root, files, directories):
         path.rmdir()
 
 
-def install(root, bundle, raw, signature, *, run=_run):
+def install(root, bundle, raw, signature, *, authorize, run=_run):
     """Controller holds OS transaction/claim/native-run locks and maintenance before calling."""
     root = Path(root).absolute()
     files, directories = {}, {}
@@ -192,16 +193,21 @@ def install(root, bundle, raw, signature, *, run=_run):
                 path.mkdir(mode=mode)
                 info = path.stat()
                 directories[path] = (info.st_dev, info.st_ino)
-            request = dict(_binding(pending), expires_monotonic_ns=time.monotonic_ns() + 60_000_000_000)
+            request = dict(_binding(pending), expires_monotonic_ns=time.monotonic_ns() + 900_000_000_000)
             for relative, entry in _contents(prepared, raw, signature, request).items():
                 files[relative] = entry  # A failed parent fsync can follow a successful publication.
                 data, mode = entry
                 _write_atomic(_path(root, relative), data.decode("ascii"), mode)
             _call(run, ["systemctl", "daemon-reload"])
-            _call(run, ["systemctl", "start", SERVICE], timeout=240)
-            check(root, run=run)
+            _call(run, ["systemctl", "start", SERVICE], timeout=660)
+            _effective(run, prepared)
             if _value(run, "ActiveState") != "active" or not _value(run, "MainPID").isdigit() or int(_value(run, "MainPID")) <= 0:
                 raise ValueError("RAUC daemon is not active")
+            # Full bundle verification may take minutes on SD; policy must be sampled afterward.
+            authorize()
+            _claim(root, pending)
+            if read_state(root)["pending"] != pending or layout_digest(capture(root)["layout"]) != pending["layout_sha256"]:
+                raise ValueError("RAUC transaction or media changed before install")
             _call(run, [RAUC, "--conf", str(runtime / "system.conf"), "install", str(bundle)], timeout=900)
             return dict(installed=True, manifest_sha256=prepared["verified"]["manifest_sha256"])
         finally:

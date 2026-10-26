@@ -13,7 +13,7 @@ Group=root
 UMask=0077
 ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_rauc_service.py check
 ExecStart=/usr/bin/rauc --conf=/run/rosy-os-update/rauc/system.conf service
-TimeoutStartSec=3min
+TimeoutStartSec=10min
 TimeoutStopSec=30
 RuntimeMaxSec=20min
 KillMode=control-group
