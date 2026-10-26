@@ -1,0 +1,54 @@
+## D-888 Pinky 전체 OS 업데이트는 bootstrap 영속 입력과 별도 CMS 서명을 사용한다
+
+**Status:** Proposed
+
+### Context
+
+D-387의 RAUC 전체 OS 업데이트와 D-879·D-881의 GPT 실험 구현을 함께 검토했다.
+기존 실험 이미지는 양쪽 root에서 boot A를 등록·설정용으로 계속 마운트한다.
+B에서 비활성 boot A를 교체하면 사용 중인 FAT를 덮어쓰고, 전원 중단 후 B의 상태 수용까지 막을 수 있다.
+또한 Ubuntu 24.04의 OpenSSL 3.0.13에서 Ed25519 CMS 서명은 기본 digest 부재로 실패했다.
+동일 환경의 ECDSA P-256 CMS 서명·검증은 성공했다. 이는 암호 기능 시험이며 제품 서명이나 이미지 수용이 아니다.
+
+### Decision
+
+1. 새 factory 이미지는 bootstrap 1에 등록·설정·진단 입력을 유지한다.
+   boot A/B 2·3과 root A/B 4·5만 OS installer가 교체한다. 공통 data 6은 유지한다.
+   descriptor schema 2, kernel marker `ab-v2`, boot ABI 2로 이 경계를 명시한다.
+   새 SDK는 기존 schema 1/`ab-v1`과 새 프로토콜을 읽는다. 자동 OS 업데이트는 2만 허용한다.
+   물리 카드의 자동 변환은 하지 않는다. 기존 MBR과 boot A 실험 이미지의 읽기·준비 호환은 유지한다.
+   GPT 자체에는 등록 정책이 없으므로 서명된 layout의 `provision_role`을 실제 GPT 검증에 전달한다.
+
+2. 배포 JSON과 native payload의 기존 Ed25519 검증은 유지한다.
+   RAUC verity bundle의 CMS에는 별도로 고정한 ECDSA P-256 X.509 공개 인증서를 사용한다.
+   인증서 검증·유효기간을 우회하지 않는다. 개인 키는 hosted CI에 넣지 않는다.
+   기존 D-387의 동일 Ed25519 키 CMS 전제는 이 결정으로 정정한다.
+   제품 인증서·키 설정, 실제 서명과 공개 게시에는 별도 권한과 증거가 필요하다.
+
+3. Noble RAUC 1.11.3의 custom backend는 설치와 부팅 승격을 분리한다.
+   `activate-installed=false`로 설치 후 검증을 마치고 현재 코드가 tryboot를 요청한다.
+   실제 RAUC daemon에 비활성 root/boot만 쓰기 허용하고, bootstrap 변경은 별도 commit owner가 담당한다.
+   후보 bundle의 hook·custom installer를 실행하지 않는다.
+   영속 transaction과 motion inhibition을 재부팅 전후 유지하고, 최종 arm 직전에 새 상태로
+   배터리 60% 이상·정지를 확인한다. 충전 중에도 OS 배터리 기준을 낮추지 않는다.
+   native payload의 기존 정책은 별도로 유지한다.
+
+4. trial은 독립 deadline과 watchdog 증거를 요구한다.
+   동일 부팅의 trial·health·GOOD_ACK를 확인한 commit owner만 기본 슬롯을 바꾼다.
+   상태 손상·불명확한 증거는 HOLD다. 정상 부팅을 trial timeout으로 재부팅하지 않는다.
+   bootstrap FAT 손상으로 Linux 진입이 막히는 경우는 userspace 복구 보장에 포함하지 않는다.
+   식별한 카드의 data를 보존하는 오프라인 복구 절차와 전원 중단 실물 시험이 필요하다.
+
+5. OS feed는 payload feed와 이름·schema·버전 상태를 분리한다.
+   서명된 `os-update.json`과 `os-rollout.json`을 파싱 전에 검증하고 RAUC 인증 metadata와 대조한다.
+   실패·withdrawal·canary·승격 지연은 OS committed release를 기준으로 처리한다.
+   공통 상태 schema 1을 유지하며 후보 코드의 migration을 실행하지 않는다.
+
+### Consequences
+
+이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
+새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
+production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.
+
+관련 결정: [D-387](D-387-robot-updates-operator-approved-rollout.md),
+[D-879](D-879-signed-gpt-media-layout.md), [D-881](D-881-ab-device-state-admission.md).
