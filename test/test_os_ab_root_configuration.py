@@ -19,8 +19,11 @@ def _configurer():
     return module
 
 
-def test_offline_root_installs_frozen_boot_and_recovery_with_its_factory_binding(tmp_path, monkeypatch):
+@pytest.mark.parametrize("protocol", [1, 2])
+def test_offline_root_installs_frozen_boot_and_recovery_with_its_factory_binding(tmp_path, monkeypatch, protocol):
     _, root, _, _, _, _, release = _device(tmp_path, monkeypatch)
+    slot = root / "etc/rosy/os-slot.json"
+    slot.write_text(json.dumps(dict(json.loads(slot.read_text()), schema_version=protocol)))
     _stage(_prefix(root))
     _configurer().configure(root, FACTORY_ID)
     descriptor = json.loads((root / "etc/rosy/os-factory-release.json").read_text())

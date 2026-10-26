@@ -22,6 +22,7 @@ def module():
 def test_fixed_geometry_has_two_equal_roots_and_fits_the_32gb_card_class():
     m = module()
     layout = m.plan()
+    assert layout["provision_role"] == "bootstrap"
     assert layout["raw_size_bytes"] == 29 * 1024**3
     assert [p["role"] for p in layout["partitions"]] == ["bootstrap", "boot_a", "boot_b", "root_a", "root_b", "data"]
     assert layout["partitions"][3]["size_lba"] == layout["partitions"][4]["size_lba"]
@@ -43,7 +44,7 @@ def test_sfdisk_output_roundtrips_the_existing_bounded_gpt_parser(tmp_path):
         def read_at(offset, length):
             handle.seek(offset)
             return handle.read(length)
-        assert m.parse_gpt(read_at, image.stat().st_size) == layout
+        assert m.parse_gpt(read_at, image.stat().st_size, layout["provision_role"]) == layout
     assert m.filesystem_plan(image, layout) == [(1, "vfat"), (2, "vfat"), (3, "vfat"),
                                                (4, "ext4"), (5, "ext4"), (6, "ext4")]
     changed = json.loads(json.dumps(layout))
@@ -115,11 +116,13 @@ def test_each_slot_uses_its_root_boot_and_the_shared_data_and_provision(tmp_path
         descriptor = json.loads((root / "etc/rosy/os-slot.json").read_text())
         assert descriptor["root_partuuid"] == parts["root_" + slot]["unique_guid"]
         assert descriptor["data_partuuid"] == parts["data"]["unique_guid"]
-        assert descriptor["provision_partuuid"] == parts["boot_a"]["unique_guid"]
+        assert descriptor["schema_version"] == 2
+        assert descriptor["provision_partuuid"] == parts["bootstrap"]["unique_guid"]
         fstab = (root / "etc/fstab").read_text()
         assert f"PARTUUID={parts['boot_' + slot]['unique_guid']} /boot/firmware vfat" in fstab
         assert "/var/lib/rosy-device/maps /var/lib/rosy/maps none bind" in fstab
-        assert "rosy.os_layout=ab-v1" in (boot / "cmdline.txt").read_text()
+        assert f"PARTUUID={parts['bootstrap']['unique_guid']} /run/rosy-provision-boot vfat" in fstab
+        assert "rosy.os_layout=ab-v2" in (boot / "cmdline.txt").read_text()
         import yaml
         fixed = yaml.safe_load((root / "etc/cloud/cloud.cfg.d/99-rosy-fixed-layout.cfg").read_text())
         assert fixed == {"growpart": {"mode": "off"}, "resize_rootfs": False}

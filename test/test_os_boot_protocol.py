@@ -9,7 +9,9 @@ import pytest
 BASE = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro"
 sys.path.insert(0, str(BASE / "native"))
 sys.path.insert(0, str(BASE / "sd"))
-from os_state_layout import _layout, _object
+from os_state_layout import _layout, _object, mount_facts
+from os_state_boot_fakes import shared_roots
+from os_payload_compatibility import verify_contract
 from test_os_state_admission import DESCRIPTOR, ROOT_UUID
 from test_sd_gpt_layout import _table_image
 from media_layout import LayoutCapture, inspect_device, parse_gpt, validate_layout
@@ -41,6 +43,23 @@ def test_reader_rejects_mixed_or_unknown_boot_protocol(tmp_path, version, marker
 def test_slot_protocol_does_not_expand_shared_state_schema():
     with pytest.raises(ValueError, match="schema_version"):
         _object(b'{"schema_version":2,"state_schema":1}', {"schema_version", "state_schema"})
+
+
+@pytest.mark.parametrize("protocol,number", [(1, 2), (2, 1), (1, 1), (2, 2)])
+def test_mount_admission_requires_the_protocols_exact_provision_partition(tmp_path, monkeypatch, protocol, number):
+    root, _, _, _ = shared_roots(tmp_path, monkeypatch)
+    _slot(root, protocol, f"ab-v{protocol}")
+    (root / "sys/devices/platform/fixture/block/sda/sda2/partition").write_text(str(number))
+    if (protocol, number) in ((1, 2), (2, 1)):
+        assert next(row for row in mount_facts(root, _layout(root)[0]) if row["role"] == "provision")
+    else:
+        with pytest.raises(ValueError, match="partition role"):
+            mount_facts(root, _layout(root)[0])
+
+
+@pytest.mark.parametrize("protocol", [1, 2])
+def test_current_sdk_preserves_both_boot_abis(protocol):
+    verify_contract(BASE / "native", state_schema=1, boot_abi=protocol)
 
 
 @pytest.mark.parametrize("role", ["boot_a", "bootstrap"])
