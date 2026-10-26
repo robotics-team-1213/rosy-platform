@@ -11757,3 +11757,10 @@ osy-d395-s1d\`.
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-26 · e18c084879 · D-890 public Home seam classification
+
+- 변경: 실제 HTTP/CoreServices/native Home 통합 시험의 fixture import에 반응한 D-184 분류에 정확한 경로 한 개와 공개 계약 근거만 등록했다. 검사 정규식·탐색·집합 동일성·stale 검사는 유지한다.
+- 증거: 첫 공식 FULL은29묶음1FAIL/34989PASS/2235SKIP(묶음 간 중복 포함), 별도guard287PASS였다. 실패ID의 단독 재현1FAIL과 actualmain209dbf98b3의1PASS를 보존했다. 수정sourcee18c084879의 동일 guard+실제Home 회귀3PASS/0SKIP, official·outer·known0/NEW0·known0·flaky0이다. 새 결과: docs/validation/navigation-intent-epoch-prelude-2026-10-26b/result.md.
+- Gate: 첫 FULL은 실패이며 착지하지 않았다. 기존 집중 시험·첫 실패와 보완 검증을 구분하고 최신 main 통합·공식 재착지·CI·현장 수용은 아직 대기한다.
+- CE: 해당 없음 — 코드 분류 근거와 회귀·검증 기록으로 판단을 보존했다.
