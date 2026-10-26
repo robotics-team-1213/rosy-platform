@@ -107,3 +107,19 @@ def test_auto_updater_checks_pending_before_resuming_or_invoking_any_host_comman
         with pytest.raises(upd.UpdateError, match="OS_UPDATE_PENDING"):
             updater._run({"applying": {"step": "rollback"}}) if entry == "resume" else updater.apply(CANDIDATE, {})
     assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("entry", ["sync", "inverse"])
+def test_direct_sdk_sync_and_manual_inverse_are_fenced_under_release_lock(tmp_path, monkeypatch, entry):
+    _, manager, current, _, path = _pending_candidate(tmp_path, monkeypatch)
+    from test_image_layer_sync import sync_mod
+    verified = []
+    def verify(release): verified.append(release)
+    def forbidden(*args): pytest.fail("SDK maintenance reached a host command during OS pending")
+    before, target = path.read_bytes(), current.resolve()
+    with pytest.raises(ValueError, match="OS_UPDATE_PENDING"):
+        if entry == "sync":
+            sync_mod.sync(manager.root, dry_run=False, verify=verify, runner=forbidden)
+        else:
+            sync_mod.inverse_boot_layer(manager.root, CANDIDATE, verify=verify, runner=forbidden)
+    assert verified == [] and path.read_bytes() == before and current.resolve() == target
