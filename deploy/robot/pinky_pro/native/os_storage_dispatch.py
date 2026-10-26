@@ -8,6 +8,9 @@ from pathlib import Path
 import stat
 import sys
 
+OS_UPDATE_ASSETS = {"rosy-os-rauc.service": "etc/systemd/system/rosy-os-rauc.service",
+                    "rosy-rauc-dbus.conf": "etc/dbus-1/system.d/90-rosy-rauc.conf"}
+
 BOOTSTRAP_FILES = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "os_state_io.py",
                    "os_state_accounts.py", "os_state_files.py", "os_state_config.py", "os_state_ready.py", "os_storage_dispatch.py",
                    "os_ssh_hostkeys.py")
