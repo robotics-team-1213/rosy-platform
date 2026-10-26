@@ -12050,3 +12050,9 @@ osy-d395-s1d\`.
 - 변경: robot-0d 착지 승인 조건 두 가지. `remote_pytest.run`이 호출 가운데 가장 큰 `ROSY_JOB_CORES`(잠금 예약)만큼 빈 코어가 있는 시험 PC에만 배치하고, 그런 요구에는 바닥 없는 대체 배치를 쓰지 않고 기다린다. `land_isolation.py close`는 `--reason`이 없거나 비면 거절하고, done 줄에 이유·누가(git user.email, 없으면 OS 사용자)·언제를 남긴다. `rosy-land-isolation.jsonl`과 `land_events`에 백업이 없다는 점(알려진 단일 손실 지점)을 모듈 docstring과 `tools/AGENTS.md`에 적었다. robot-47 조건: 차례 목록을 제자리에서 늘리는 연결은 끝까지 착지 시험이 고정한다(`land.py`가 가드 회차에 복사본을 넘기면 그 시험이 실패).
 - 증거: 원격 `test/test_land_isolation.py test/test_doctor.py test/test_remote_pytest.py test/test_remote_test_tools.py` 137 passed, `test/test_land.py test/test_land_events.py test/test_land_queue.py test/test_land_record.py` 129 passed. 변이: 배치가 예약 코어를 무시 → 배치 시험 실패, `land.py`가 `list(invocations)`를 넘김 → 묵은 재실행 끝까지 시험 실패.
 - gate 변화: 6코어 잡은 6코어가 빈 시험 PC를 기다린다.
+
+## 2026-10-26 · uncommitted · D-889 추가 1: 구현 결과와 남은 개선
+
+- 변경: D-889에 "추가 1"을 덧붙였다. 로컬 main에 착지한 구성 요소와 SHA(사건 기록·잠금 밖 준비·early-stop·게시 스크립트·착지 기록 복구·선택기·브라우저 lane·Isaac 예약·격리 관문·CI scope 상한)를 적었다. 실측(차례 대기 2.7~5시간에서 0분, 차례 p50 2.3~2.8분, 브라우저 3,488초에서 1,163초)도 적었다. 계획과 달라진 점(열차보다 잠금 밖 준비를 먼저, 선택기 규칙 4·5 뺌, collect-only로는 부족)과, 담당이 정해진 남은 개선 12건을 표로 남겼다. Status는 Proposed 그대로다(열차·묶음 미구현).
+- 증거: `land_stats --days 1`(10-26), 착지 기록 `.git/rosy-land/*.json`, 설계 작업 계획 0.7~0.9절.
+- gate 변화: 없음.
