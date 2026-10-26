@@ -4,6 +4,8 @@ import importlib
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -61,6 +63,35 @@ def test_real_cms_verity_and_exact_outer_metadata_are_accepted(tmp_path, monkeyp
     assert facts["images"]["rootfs"]["size"] == 8192
     assert facts["images"]["boot"]["size"] == 512
     assert bundle.read_bytes() == before
+
+
+def test_frozen_verifier_works_after_the_mutable_sdk_is_poisoned(tmp_path, rauc_tool):
+    from test_os_frozen_firstboot import _prefix, _stage
+    root, bundle, raw, signature, _, _ = _case(tmp_path, rauc_tool)
+    prefix = _prefix(tmp_path / "isolated")
+    _stage(prefix)
+    for directory in (prefix / "native-runtime", prefix / "deploy/sd"):
+        for path in directory.glob("*.py"):
+            path.write_text('raise RuntimeError("poisoned mutable SDK")\n')
+    metadata_file, signature_file = bundle.parent / "os-update.json", bundle.parent / "os-update.json.sig"
+    metadata_file.write_bytes(raw)
+    signature_file.write_text(signature)
+    code = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import os_rauc, os_update_manifest, signing
+assert all(Path(m.__file__).resolve().is_relative_to(Path(sys.argv[1]).resolve())
+           for m in (os_rauc, os_update_manifest, signing))
+os_rauc.RAUC = sys.argv[2]
+result = os_rauc.verify_bundle(Path(sys.argv[3]), Path(sys.argv[4]),
+                              Path(sys.argv[5]).read_bytes(), Path(sys.argv[6]).read_text())
+assert result['images']['rootfs']['size'] == 8192
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code,
+        str(prefix / "os-bootstrap/native-runtime"), str(rauc_tool), str(root), str(bundle),
+        str(metadata_file), str(signature_file)], cwd=tmp_path, capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
 
 
 def test_cms_size_is_bounded_before_starting_a_parser(tmp_path, monkeypatch, rauc_tool):
