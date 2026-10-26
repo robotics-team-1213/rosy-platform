@@ -104,3 +104,70 @@ def test_health_with_a_fake_root_never_uses_the_real_service_manager(tmp_path):
     m = importlib.import_module("os_update_health")
     with pytest.raises(ValueError, match="explicit test runner"):
         m.check(tmp_path, TRANSACTION)
+
+
+@pytest.mark.parametrize("damage", ["samples", "projection", "factory_schema", "watchdog", "services", "service_pid"])
+def test_malformed_private_health_receipt_is_a_hold(tmp_path, monkeypatch, damage):
+    import json
+    m, state, root, _, host, _, run, _, _, _ = _health(tmp_path, monkeypatch)
+    m.check(root, TRANSACTION, host=host, run=run)
+    pending = state.read_state(root)["pending"]
+    target = m._report_path(root, pending)
+    value = json.loads(target.read_text())
+    if damage == "factory_schema": value["native_factory"]["schema_version"] = True
+    elif damage == "service_pid": value["services"]["rosy-io.service"]["MainPID"] = "0"
+    else: value[damage] = []
+    target.write_text(json.dumps(value))
+    with pytest.raises(ValueError):
+        m.read_health(root, pending)
+
+
+@pytest.mark.parametrize("status,accepted", [(200, True), (401, True), (503, False), (302, True)])
+def test_actual_loopback_probe_uses_existing_core_readiness_contract(monkeypatch, status, accepted):
+    import http.server
+    import threading
+    m = importlib.import_module("os_update_health")
+    paths = []
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            paths.append(self.path)
+            self.send_response(status)
+            self.end_headers()
+        def log_message(self, *args):
+            pass
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    monkeypatch.setenv("ROSY_API_PORT", str(server.server_port))
+    monkeypatch.setenv("ROSY_API_TLS", "none")
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:1")
+    worker.start()
+    try:
+        if accepted: m._probe()
+        else:
+            with pytest.raises(ValueError): m._probe()
+        assert paths == ["/api/v1"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
+
+
+def test_frozen_trial_health_import_does_not_depend_on_mutable_sdk(tmp_path):
+    import sys
+    from test_os_frozen_firstboot import _prefix, _stage
+    prefix = _prefix(tmp_path)
+    _stage(prefix)
+    for source in (prefix / "native-runtime").glob("*.py"):
+        source.write_text("raise RuntimeError('mutable SDK executed')\n")
+    frozen = prefix / "os-bootstrap/native-runtime"
+    code = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import os_update_health
+for name in ('os_update_health', 'os_update_policy', 'os_update_install', 'os_update_watchdog', 'os_rauc_service'):
+    assert Path(sys.modules[name].__file__).is_relative_to(Path(sys.argv[1]))
+assert Path(os_update_health.__file__).with_name('rosy-os-io-guard.conf').is_file()
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(frozen)], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
