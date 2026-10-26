@@ -12,7 +12,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "native"))
 from os_state_io import _write_atomic
 from os_state_layout import LAYOUT_FIELDS, _guid, _object, _path, _read
-from os_storage_dispatch import BOOTSTRAP_FILES, FIRST_BOOT_FILES, trusted_files
+from os_storage_dispatch import BOOTSTRAP_FILES, FIRST_BOOT_FILES, OS_UPDATE_ASSETS, trusted_files
 from os_payload_compatibility import verify_contract
 
 OVERRIDES = {"rosy-os-firstboot.conf": "rosy-first-boot.service.d/10-rosy-os.conf",
@@ -45,6 +45,9 @@ def configure(root: Path, release_id: str) -> None:
     changes["etc/ssh/sshd_config.d/01-rosy-hostkey.conf"] = b"HostKey /etc/ssh/ssh_host_ed25519_key\n"
     for source, destination in OVERRIDES.items():
         changes["etc/systemd/system/" + destination] = _read(prefix / "native-runtime" / source, 8192, owner)
+    if slot["schema_version"] == 2:
+        for source, destination in OS_UPDATE_ASSETS.items():
+            changes[destination] = _read(prefix / "native-runtime" / source, 8192, owner)
     targets = {}
     for relative, data in changes.items():
         target = _path(root, relative)

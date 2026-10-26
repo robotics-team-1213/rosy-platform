@@ -62,7 +62,7 @@ ALLOWED_PREFIXES = (NATIVE_RUNTIME + "/", UNIT_DIR + "/", UDEV_DIR + "/", MODPRO
 # OS boot/configuration and account state never belong to application sync.
 FORBIDDEN_PREFIXES = (
     "boot/", "etc/rosy/", "opt/rosy/os-bootstrap/", "usr/local/", "lib/modules/", "usr/lib/modules/",
-    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow",
+    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow", "etc/systemd/system/rosy-os-rauc",
     *(f"etc/systemd/system/{unit}.service.d/" for unit in (
         "rosy-first-boot", "rosy-release-recover", "rosy-os-storage", "rosy-sd-provision", "rosy-os-tailnet")),
 )
