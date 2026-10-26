@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-26 · b82af1ec31 · pure landing selection extraction
-- 2026-10-26 · e18c084879 · D-890 public Home seam classification
-- 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
-- 2026-10-26 · uncommitted · tools/land_browser.py: 건너뛰기만 한 브라우저 조각은 통과가 아니다
-- 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
+- 2026-10-26 · uncommitted · fix(remote): 잡의 예약 코어를 배치 바닥으로, close에 이유 필수
+- 2026-10-26 · uncommitted · fix(land): 단독 실행 기록의 소비·안전 멈춤·죽은 잡·--no-queue
+- 2026-10-26 · uncommitted · fix(land): 단독 실행 시간 상한·기록, 묵은 단독 재실행, 안전 간선
+- 2026-10-26 · uncommitted · fix(land): 공유 pytest 프로세스가 가린 import 착지 게이트

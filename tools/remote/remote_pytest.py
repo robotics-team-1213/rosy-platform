@@ -196,9 +196,10 @@ def probe(host: str) -> dict | None:
     return parse_probe(out)
 
 
-def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[str], list[str]]:
-    """(hosts above the cls floor, most headroom first, light ones after, the site PC only when no other fits; notes)."""
-    need_c, need_m = NEEDS[cls]
+def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0) -> tuple[list[str], list[str]]:
+    """(hosts above the cls floor, most headroom first, light ones after, the site PC only when no other fits; notes).
+    ``cores``: an invocation's own ``ROSY_JOB_CORES`` (its lock's reservation) raises the core floor to it."""
+    need_c, need_m = max(NEEDS[cls][0], cores), NEEDS[cls][1]
     floor_m = LIGHT_GB.get(cls, need_m)
     ranked, notes = [], []
     for i, (host, p) in enumerate(zip(hosts, probes)):
@@ -260,7 +261,7 @@ def check_tailscale_profile(expected: str | None = None, which=shutil.which, run
                          f" tailnet. Switch by hand: tailscale switch {expected}")
 
 
-def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[str]:
+def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None, cores: int = 0) -> list[str]:
     """Hosts for cls by measured headroom (D-568), printing why; empty when none fits."""
     refuse_local()
     check_tailscale_profile()
@@ -274,10 +275,10 @@ def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[st
     with ThreadPoolExecutor(len(hosts)) as pool:
         probes = list(pool.map(probe, hosts))
     SITES.update(h for h, p in zip(hosts, probes) if p and p.get("site"))
-    chosen, notes = place(cls, hosts, probes)
+    chosen, notes = place(cls, hosts, probes, cores)
     for note in notes:
         print(f"[remote-pytest] {note}", file=sys.stderr, flush=True)
-    if not chosen and cls == "pytest":
+    if not chosen and cls == "pytest" and cores <= NEEDS[cls][0]:  # a job's own core need waits instead
         # D-568 7: busy hosts must not stop the gate; the site PC and a full disk never take this fallback.
         chosen = [h for h, p in zip(hosts, probes)
                   if p and p["pytest"] and not p["busy"] and not disk_full(p) and h not in SITES]
@@ -374,14 +375,16 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     if not invocations:
         return []
     deadline = clock() + wait
-    hosts = placed_hosts("pytest")
+    cores = max((int(w[15:]) for inv in invocations for w in itertools.takewhile(ENV_ARG.match, inv)
+                 if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), default=0)
+    hosts = placed_hosts("pytest", cores=cores)
     while not hosts:
         if clock() + poll > deadline:
             raise SystemExit(f"[remote-pytest] no test host reachable (D-584) after {wait:.0f} s;"
                              " the tests did not run. Report them as not run; do not land or push.")
         print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
         sleep(poll)
-        hosts = placed_hosts("pytest")
+        hosts = placed_hosts("pytest", cores=cores)
     plan = workers(hosts[:len(invocations)], invocations, HEADROOM)  # (host, kind): browser lanes beside main
     if len(plan) == 1:
         codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
