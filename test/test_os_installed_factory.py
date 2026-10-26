@@ -47,7 +47,7 @@ def test_offline_factory_is_pinned_to_current_key_and_authenticated_os_baseline(
     assert not (target / "var").exists()
 
 
-@pytest.mark.parametrize("damage", ["signature", "sums", "factory_id", "factory_hash", "key", "native", "sdk"])
+@pytest.mark.parametrize("damage", ["signature", "sums", "factory_id", "factory_hash", "key", "native", "sdk", "python"])
 def test_installed_factory_mismatch_is_hold_without_signature_repair_or_candidate_execution(tmp_path, damage):
     current, target, release, value, _, _ = _installed(tmp_path)
     module = importlib.import_module("os_installed_factory")
@@ -59,7 +59,8 @@ def test_installed_factory_mismatch_is_hold_without_signature_repair_or_candidat
         _, other = _keys(tmp_path / "other", "fixture")
         (target / "etc/rosy/trusted-release-keys" / other.name).write_bytes(other.read_bytes())
     elif damage == "native": (release / "install/.rosy-release").write_text("tampered")
-    else: (release / "deploy/robot/native/image_layer_boot.py").write_text("raise RuntimeError('candidate executed')")
+    elif damage == "sdk": (release / "deploy/robot/native/image_layer_boot.py").write_text("raise RuntimeError('candidate executed')")
+    else: (target / "usr/local/share/rosy/python-runtime.sha256").write_text("f" * 64 + "\n")
     signature = release / "SHA256SUMS.sig"
     before = signature.read_bytes() if signature.exists() else None
     with pytest.raises(ValueError, match="OS_FACTORY_HOLD"):
