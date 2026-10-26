@@ -36,7 +36,7 @@ FastAPI surface for ROSY-API-REF-001. Factory builds the app, serves `/dashboard
 - Tokens are stored as `sha256` only (D-30). `AuthContext` carries `token_id`, never the secret — do not add a field that echoes a token or anything derived from one, including to the Host Agent.
 - `/metrics` is unauthenticated Prometheus text — do not put secrets there.
 - `/ws/swarm/reference` is the only inbound stream (D-31). It takes operator, and a malformed frame is dropped rather than closing the socket — closing would let one bad sample put the formation into HOLD.
-- Dashboard source is [middleware/robot_ui/robot](../../../../ui/robot/AGENTS.md). `app.py::_dashboard_root` prefers installed `share/dashboard` and falls back to that source holder. Do not add inline scripts (CSP `script-src 'self'`).
+- Dashboard source is [middleware/robot_ui/robot](../../../../robot_ui/robot/AGENTS.md). `app.py::_dashboard_root` prefers installed `share/dashboard` and falls back to that source holder. Do not add inline scripts (CSP `script-src 'self'`).
 - `app.state.core` is `CoreServices`. Routes must not touch rclpy.
 - Domain conflicts (`MODE_CONFLICT`, `EMERGENCY_ACTIVE`) map to HTTP 409.
 
