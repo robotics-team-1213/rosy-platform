@@ -3,6 +3,8 @@ import importlib
 import json
 import os
 import stat
+import subprocess
+import sys
 
 import pytest
 
@@ -223,3 +225,34 @@ def test_parent_fsync_failure_preserves_published_pending_and_invalidates_the_wr
     monkeypatch.setattr(os, "fsync", original)
     with m.locked(root) as reopened:
         assert reopened.state["pending"]["transaction_id"] == TRANSACTION
+
+
+def test_frozen_state_writer_works_with_poisoned_mutable_sdk(tmp_path, monkeypatch):
+    from test_os_frozen_firstboot import _stage
+    _, root, _, _, verified, facts = _state(tmp_path / "device", monkeypatch)
+    prefix = tmp_path / "installed/opt/rosy"
+    _stage(prefix)
+    mutable = prefix / "native-runtime"
+    mutable.mkdir()
+    names = ("os_update_state", "os_update_manifest", "os_state_layout", "os_state_io", "signing", "media_layout")
+    for name in names:
+        (mutable / (name + ".py")).write_text("raise RuntimeError('mutable SDK was imported')\n")
+    script = """
+import json, sys
+from pathlib import Path
+frozen = Path(sys.argv[1]) / 'os-bootstrap/native-runtime'
+sys.path[:0] = [str(frozen), str(Path(sys.argv[1]) / 'native-runtime')]
+import os_update_state as m
+payload = json.loads(sys.stdin.read())
+# Only kernel mount observation is modeled; journal/flock/fsync/imports are real.
+m.mount_facts = lambda *args: []
+with m.locked(Path(sys.argv[2])) as store:
+    store.begin(payload['verified'], payload['media'], payload['boot'], payload['transaction'])
+for name in payload['modules']:
+    assert Path(sys.modules[name].__file__).is_relative_to(frozen)
+assert m.read_state(Path(sys.argv[2]))['pending']['phase'] == 'PREPARED'
+"""
+    payload = dict(verified=verified, media=facts, boot=SOURCE_BOOT, transaction=TRANSACTION, modules=names)
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", script, str(prefix), str(root)],
+        input=json.dumps(payload), capture_output=True, text=True, timeout=30, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
