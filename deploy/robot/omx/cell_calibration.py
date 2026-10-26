@@ -7,7 +7,14 @@ heights, so one map would carry the parallax of the other. The leave-one-out err
 seen by the camera may be from where the arm will reach for it.
 
   rosy.omx-cell-calibration.v1: {"schema", "sites": {"<site>": {"homography": 3x3, "points": [...],
-                                 "loo_error_mm": {"max", "mean"}, "measured": "<utc>"}}}
+                                 "loo_error_mm": {"max", "mean"}, "measured": "<utc>"}},
+                                 "surfaces": {"<name>": {"kind": "fixture" | "object", "points": [[x, y, z]],
+                                 "measured": "<utc>"}}}
+
+The camera has no depth, so heights come from the arm too: closed jaws descend until the contact hold stops
+them, and the forward kinematics of that pose is the surface height there (2026-10-27). A fixture (Pinky
+tray, belt) keeps its heights between sessions; an object is measured again whenever it may have moved.
+Where nothing was measured, surface_z returns None and the caller probes there instead of guessing.
 """
 from __future__ import annotations
 
@@ -83,6 +90,32 @@ def load(path: Path) -> dict:
     if data.get("schema") != SCHEMA or not isinstance(data.get("sites"), dict):
         raise SystemExit(f"{path}: not a {SCHEMA} file")
     return data
+
+
+SURFACE_KINDS = ("fixture", "object")
+NEAR_M = 0.008  # a touch lands 3-9 mm from the commanded point; within this radius it tells the height
+
+
+def surface_record(points, kind: str, measured: str) -> dict:
+    if kind not in SURFACE_KINDS or not points:
+        raise ValueError(f"a surface needs a kind in {SURFACE_KINDS} and at least one touched point")
+    return {"kind": kind, "measured": measured, "points": [[round(float(v), 4) for v in p[:3]] for p in points]}
+
+
+def surface_z(data: dict, x: float, y: float, kinds=SURFACE_KINDS):
+    """(highest touched z within NEAR_M of x, y, surface name), or None where nothing was measured. The
+    highest, because that is what a descent there meets first."""
+    found = [(p[2], name) for name, s in (data.get("surfaces") or {}).items() if s["kind"] in kinds
+             for p in s["points"] if math.hypot(p[0] - x, p[1] - y) <= NEAR_M]
+    return max(found) if found else None
+
+
+def save_surface(path: Path, name: str, record: dict) -> None:
+    data = load(path) if Path(path).exists() else {"schema": SCHEMA, "sites": {}}
+    data.setdefault("surfaces", {})[name] = record
+    tmp = Path(path).with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=1))
+    tmp.replace(path)
 
 
 def save(path: Path, site: str, record: dict) -> None:
