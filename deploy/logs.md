@@ -3496,6 +3496,7 @@
 - gate 변화: source 구현·검증 진행이다. 운영 서비스 신원·ARM 설치 binding·관측·실물 장치 수용을 열지 않는다.
 - 교훈: CE 해당 없음 — 기존 committed-state 교훈을 적용했으며 원자적 저장·서명 전환의 판단은 구현·회귀 시험·운영 절차에 보존했다.
 - 후속 GREEN: 독립 소스 리뷰 후 커밋 `4c4aef6e9a`를 비현장 승인 원격에서 검증했다. CLI·candidate builder/verifier·실제 signing·updater/rollback·workflow·fetch 일곱 파일237 PASS/skip0/NEW0/known0/flaky0이며 모든 run을 분류했다. 신뢰 verifier 교체·서명된 candidate 설치·운영 principal 발급·실제 연결은 수행하지 않았다. 플랫폼 전체 착지 검증은 별도다.
+
 ## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
 
 - 변경: relocate only six existing runtime/verification methods to site_update_runtime; updater590 to516lines, helper110. Keep switch/rollback/order and public import bindings; update reviewed five-file administrator install closure.
@@ -3537,6 +3538,14 @@
 - 증거: 모델 PC에서 `cat` rc 1, `show` → loaded/not-found. 원격 host control·guard·host-state 시험 NEW 0.
 - gate 변화: 없음. AI·모델 PC에 helper 재설치가 필요하다.
 - 교훈: CE 새 교훈 기록 — `docs/solutions/runtime-errors/systemctl-machine-refuses-cat-so-clean-storage-always-refused-2026-10-26.md`.
+
+## 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
+
+- 변경: 기존 셀 등록 파일과 `ROSY_OBSERVATION_WORKCELL` 선택에서 관측기 인스턴스를 읽는다. 연결된 USB 개수는 팔 구성을 바꾸지 않는다.
+- 선택된 팔의 장치 미연결(DISCONNECTED), 서비스 중지(DOWN), 설정 오류(CONFIGURATION), 선택 밖 관측기 실행(UNEXPECTED)을 구분하고 모두 실패로 유지한다.
+- 근거: 원격 집중 시험 21 passed, NEW 0. 초기 고정 두 팔 목록에서 4개 회귀 시험 실패를 확인했다. 실제 등록된 두 팔은 선택을 보존한 채 DISCONNECTED로 보고했다.
+- gate 변화: 없음. 카메라·팔 실물 연결과 실제 동작 수용은 이 점검 수정의 통과 조건으로 대체하지 않는다.
+- CE: 해당 없음 — 설정 정본과 보고 동작은 코드·시험 및 기존 복사본 drift 교훈으로 설명된다.
 
 ## 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내
 
