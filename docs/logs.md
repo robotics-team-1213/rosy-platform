@@ -11990,6 +11990,13 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_remote_isaac.py test/test_omx_cell_cases.py` 25 passed(d7648f5e32, 모델 PC). 예약 제거를 건너뛴 변이는 새 시험 2건이 빨강. `rosy_harness.py lint` 0 errors, `size_range.py main HEAD` ok.
 - gate 변화: 없음.
 
+## 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 6·7·8 (설계 0.7), 규칙 4·5는 뺌
+
+- 변경: 규칙 8: 착지·시험 관문 파일(`tools/land*.py`, `worktrees.py`, `worktree_rules.py`, `tools/hooks/**`, `remote_pytest.py`와 그것이 import하거나 읽는 `tools/remote` 파일(`serial_suites.txt` 포함), `test/known_failures.py`, `test/browser_scope.py`)은 FULL이다. 말단 도구는 이미 자기를 부르는 시험을 골랐다. `--head`인데도 체크아웃의 파일을 읽던 것을 그 커밋의 파일을 읽게 고쳤다(`affected_repo.Repo` rev, 크기 한도 때문에 `Repo`를 순수 이동). 규칙 6: `test/architecture` 변경은 그 디렉터리 전체. 규칙 7: `known_failures.txt`에서 빠지거나 더해진 id의 시험 파일을 돌린다. 더한 id는 브랜치의 다른 변경을 선택기가 매핑한 결과가 그 시험을 고르거나, 안전 태그이거나, 파일이 없으면 FULL(사람 검토)이다. 더한 id가 그 회차에서 실제로 실패하지 않으면 `land_checks`가 `known_failures.py --must-fail`로 착지를 멈춘다. 규칙 4(foundation AST)와 5(모듈 삭제·이동)는 robot-0d 검토(안전하지 않은 좁힘)와 재실행에서 줄어든 FULL 0건 때문에 되돌렸다.
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py`, `test/architecture`, `test/test_known_failures.py`, `test/test_land.py` 원격 통과(578 passed, NEW 0). 규칙별 변이 커밋(`git commit-tree`)이 빨강. main 첫 부모 80커밋 재실행(각 커밋 파일 기준): FULL 13 → 15. 규칙 7로 1건 빠지고, 규칙 8의 관문 파일로 3건 늘었다(전에는 관문 파일이 FULL이 아니었다).
+- gate 변화: 관문 파일 변경은 이제 FULL. `known_failures.txt`에 더한 id가 통과하면 착지가 멈춘다. `test/flaky_quarantine.txt`는 안전 루트라 FULL 그대로.
+- 교훈: 없음 — `--head` 읽기 오류는 코드와 회귀 시험으로 고쳤다.
+
 ## 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
 
 - 변경: `remote/work_queue.py`가 여유 있는 실험실 PC(가벼운 PC·현장 PC·살아 있는 `sim` 잠금/예약이 있는 PC 제외)에 기존 한 번에 하나 작업자 옆으로 브라우저 전용 레인을 `BROWSER_PER_HOST`(2)개까지 둔다. 레인마다 별도 run(작업 폴더·잠금)이다. 브라우저 작업 잠금은 class `browser`로 쓰고 PROBE가 `sim_held`·`browser_jobs`를 세므로 다른 run의 브라우저 작업도 상한에 들어간다. `tools/land_browser.py`가 `land.py`의 브라우저 단계를 파일 단위 8조각(파일 크기 LPT, 이름순 동률)으로 나누고, 부하에서 LOAD-FLAKY였던 3파일은 `ROSY_BROWSER_ALONE=1` 한 조각으로 모아 그 run의 레인이 빌 때까지 기다렸다가 혼자 돈다. 조각이 파일을 잃거나 겹치거나 빈 조각이 생기면 예외로 멈춘다.

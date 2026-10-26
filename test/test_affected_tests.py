@@ -227,8 +227,12 @@ CASES = [
     # D-762 stage 0: source layout and guard rules escalate; records under a trigger do not.
     ("package manifest -> full", ["middleware/perception/package.xml"], "full", None),
     ("source layout -> full", ["middleware/perception/control/_source_layout.py"], "full", None),
-    ("architecture guard -> full", ["test/architecture/test_layout.py"], "full", None),
-    ("known failures list -> full", ["test/known_failures.txt"], "full", None),
+    # Rule 6 (design 0.7): a guard rule change runs the whole guard directory, not FULL.
+    ("architecture guard -> the whole test/architecture", ["test/architecture/test_module_structure.py"],
+     "affected", {"test/architecture"}),
+    ("architecture guard removed -> full", ["test/architecture/test_layout.py"], "full", None),
+    ("architecture conftest -> full", ["test/architecture/conftest.py"], "full", None),
+    ("known failures list without a base -> full", ["test/known_failures.txt"], "full", None),
     ("module record -> its readers, not the module suite", ["contracts/foundation/logs.md"], "affected", set()),
 ]
 
@@ -825,3 +829,104 @@ def test_module_note_markdown_selects_readers_not_the_module_suite():
 ])
 def test_contract_checked_markdown_keeps_its_selection(path, expected):
     assert expected in affected.select(affected.Repo.load(ROOT), [path]).reasons
+
+
+# --- Rule 8 (design 0.7): leaf tools select their tests; the gate tools stay FULL -------------------
+
+
+# The narrowed case is CASES' tools/ssh row (a leaf tool its test names); the unknown one tools/mystery.
+
+
+GATE_TOOLS = ["tools/land.py", "tools/land_queue.py", "tools/land_cache.py", "tools/worktrees.py",
+              "tools/worktree_rules.py", "tools/hooks/pre-push", "tools/hooks/land_record.py",
+              "tools/remote/remote_pytest.py", "tools/remote/remote_job.py", "tools/remote/host_probe.py",
+              "tools/remote/xdist_plan.py", "test/known_failures.py", "tools/harness/affected_tests.py",
+              "test/browser_scope.py", "tools/remote/serial_suites.txt"]
+
+
+@pytest.mark.parametrize("path", GATE_TOOLS)
+def test_real_repo_gate_tools_stay_full(path):
+    """A gate tool may not be tested by the narrow selection it would itself make."""
+    sel = affected.select(affected.Repo.load(ROOT), [path])
+    assert sel.mode == "full"
+    assert f"{path}: harness configuration or the selector itself" in sel.escalations, sel.escalations
+
+
+def test_real_repo_gate_tool_markdown_is_not_full():
+    assert affected.select(affected.Repo.load(ROOT), ["tools/hooks/AGENTS.md"]).mode == "affected"
+
+
+def test_head_files_are_read_at_head_not_from_the_checkout(sample, capsys):
+    """2026-10-26: --head feat/publish-automation from main was unknown -> full, its test being only on head."""
+    _git(sample, "checkout", "-q", "-b", "leaf")
+    try:
+        for rel, text in {"tools/sim/zz_leaf.sh": "echo leaf\n",
+                          "test/test_zz_leaf.py": "SCRIPT = 'tools/sim/zz_leaf.sh'\n"}.items():
+            (sample / rel).parent.mkdir(parents=True, exist_ok=True)
+            (sample / rel).write_text(text, encoding="utf-8")
+        _git(sample, "add", "tools/sim/zz_leaf.sh", "test/test_zz_leaf.py")
+        _git(sample, "commit", "-q", "-m", "leaf")
+        _git(sample, "checkout", "-q", "main")
+        assert harness.main(["affected", "--repo", str(sample), "--base", "main", "--head", "leaf", "--json"]) == 0
+        out = json.loads(capsys.readouterr().out)
+        assert out["mode"] == "affected", out["escalations"]
+        assert "test/test_zz_leaf.py" in out["reasons"]
+        repo = affected.Repo.load(sample, "leaf")
+        assert repo.exists("tools/sim") and repo.exists("test/test_zz_leaf.py") and not repo.exists("tools/zz")
+        # a directory and a missing path (with a space) read empty and keep the batch stream in step
+        assert repo.text("tools/sim") == "" and repo.text("zz missing.txt") == ""
+        assert repo.text("tools/sim/zz_leaf.sh") == "echo leaf\n"
+    finally:
+        _git(sample, "checkout", "-q", "main")
+        _git(sample, "branch", "-q", "-D", "leaf")
+
+
+# --- Rule 7 (design 0.7): a known_failures edit runs the ids it adds or removes ---------------------
+
+KF = "test/known_failures.txt"
+KF_HEADER = "# header\n"
+PLAIN = "test/test_unrelated.py::test_y"
+
+
+def _kf_select(head: str, base: str = KF_HEADER, changed=(KF,), repo=None):
+    repo = repo or affected.Repo.load(ROOT)
+    repo._texts[KF] = head
+    return affected.select(repo, list(changed), base_text=lambda path: base if path == KF else None)
+
+
+@pytest.mark.parametrize("base, head", [(f"{KF_HEADER}{PLAIN}  # r\n", KF_HEADER),
+                                        (KF_HEADER, f"{KF_HEADER}{PLAIN}  # flake\n")],
+                         ids=["removed", "added"])
+def test_known_failures_line_selects_that_test_not_full(sample, base, head):
+    sel = _kf_select(head, base, repo=affected.Repo.load(sample))
+    assert sel.mode == "affected", sel.escalations
+    assert set(sel.reasons) == GUARDS | {"test/test_unrelated.py"}
+    assert any(PLAIN in why for why in sel.reasons["test/test_unrelated.py"])
+
+
+def test_known_failures_reason_or_comment_edit_runs_only_guards_and_readers(sample):
+    sel = _kf_select(f"# new header\n{PLAIN}  # new reason\n", f"{KF_HEADER}{PLAIN}  # r\n",
+                     repo=affected.Repo.load(sample))
+    assert sel.mode == "affected" and set(sel.reasons) == GUARDS
+
+
+@pytest.mark.parametrize("head, changed, why, on_sample", [
+    (f"{KF_HEADER}{PLAIN}  # r\n", (KF, "test/test_unrelated.py"),
+     "other changes on this branch select test/test_unrelated.py", True),
+    # the source the test covers changed, not the test: the selector's own mapping decides
+    (f"{KF_HEADER}test/test_rosy_ssh_enroll.py::test_x  # r\n", (KF, "tools/ssh/rosy_ssh_enroll.py"),
+     "other changes on this branch select test/test_rosy_ssh_enroll.py", True),
+    (f"{KF_HEADER}middleware/devices/omx/adapter/omx_adapter/real/dynamixel_stop_test.py::test_x  # r\n", (KF,),
+     "adds safety-tagged", False),
+    (f"{KF_HEADER}test/test_zz_missing.py::test_x  # r\n", (KF,), "test file does not exist", False),
+], ids=["same-branch-test", "same-branch-source", "safety", "missing-file"])
+def test_known_failures_added_line_needing_a_person_stays_full(sample, head, changed, why, on_sample):
+    sel = _kf_select(head, changed=changed, repo=affected.Repo.load(sample) if on_sample else None)
+    assert sel.mode == "full"
+    [escalation] = [e for e in sel.escalations if e.startswith(KF)]
+    assert why in escalation and escalation.endswith(": known failures list"), escalation
+
+
+def test_flaky_quarantine_stays_full_as_a_safety_root():
+    sel = affected.select(affected.Repo.load(ROOT), ["test/flaky_quarantine.txt"], base_text=lambda path: "")
+    assert sel.mode == "full" and _safety_escalations(sel)
