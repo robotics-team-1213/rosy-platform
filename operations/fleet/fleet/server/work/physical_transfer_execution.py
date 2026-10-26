@@ -13,7 +13,7 @@ from .mission_store import MissionConflict, _json
 from .action_receipts import verify_phase_receipt
 from .dispatch_admission import release
 from .physical_transfer_evidence import TransferEvidenceContext, TransferOwnerTarget, validate_transfer_observations
-from .physical_transfer_observations import evidence_document, record
+from .physical_transfer_observations import evidence_document, record, validate_post_action_order
 from .physical_transfer_store import PhysicalTransferRequest
 from .step_action_kinds import step_grant_digest
 
@@ -170,11 +170,7 @@ class PhysicalTransferExecution:
             store._check_capabilities(capabilities, capabilities_observed_at_ns, now_ns)
             validate_transfer_observations(policy, context, observations, now_ns=now_ns,
                                            authenticated_producer_id=authenticated_producer_id)
-            pre = json.loads(connection.execute("SELECT evidence_json FROM fleet_physical_transfer_observations "
-                "WHERE mission_id=? AND phase='PRE_DISPATCH'", (mission_id,)).fetchone()[0])["samples"]
-            if ({s.evidence_id for s in observations} & {s["evidence_id"] for s in pre}
-                    or observations[0].sequence <= max(s["sequence"] for s in pre)):
-                raise MissionConflict("physical closure requires new ordered observations after the preconditions")
+            validate_post_action_order(connection, mission_id, observations)
             record(connection, mission_id=mission_id, grant=grant, context=context,
                    observations=observations, validated_at_ns=now_ns)
             final_ns = store._now_ns()
