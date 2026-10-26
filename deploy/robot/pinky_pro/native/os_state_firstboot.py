@@ -288,7 +288,7 @@ class FirstBootState:
 
     @_hold
     def validate_bundle_path(self, bundle: Path) -> None:
-        # The supplied bundle must be on the admitted boot_a provision mount.
+        # The supplied bundle must be on the admitted persistent provision mount.
         expected = self.root / "run/rosy-provision-boot/rosy-provision/provision.json"
         if bundle.absolute() != expected.absolute():
             raise ValueError("bundle is outside the provision mount")

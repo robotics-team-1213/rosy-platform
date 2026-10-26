@@ -1,6 +1,7 @@
 """A valid signature alone cannot make a legacy SDK safe for A/B shared state."""
 import ast
 import copy
+import json
 import shutil
 import subprocess
 import sys

@@ -21,7 +21,7 @@ MAX_LINE = 4096
 # Files that are never read into a diagnostic, whatever their content.
 DENIED_PATH_PARTS = (
     "/var/lib/rosy-device",  # canonical generations and initialization records may contain credentials
-    "/run/rosy-provision-boot",  # the admitted boot_a also carries one-time secrets before consumption
+    "/run/rosy-provision-boot",  # the provision mount carries one-time secrets before consumption
     "/etc/NetworkManager/system-connections",
     "/boot/firmware/rosy-provision",
     "/etc/rosy/fleet-bootstrap.json",
