@@ -272,7 +272,7 @@ def test_static_unit_is_accepted_by_the_actual_systemd_parser_in_an_offline_root
     # Only dependency fixtures: verify parses the real RAUC unit, never starts PID1 or a service.
     for target in ("sysinit.target", "basic.target", "shutdown.target", "sockets.target"):
         (units / target).write_text("[Unit]\nDescription=fixture\nDefaultDependencies=no\n")
-    for name in ("dbus.service", "rosy-os-storage.service"):
+    for name in ("dbus.service", "rosy-os-storage.service", "rosy-os-motion-guard.service", "rosy-io.service", "rosy-navigation.service"):
         (units / name).write_text("[Unit]\nDefaultDependencies=no\n[Service]\nType=oneshot\nExecStart=/usr/bin/true\n")
     (units / "dbus.socket").write_text("[Unit]\nDefaultDependencies=no\n[Socket]\nListenStream=/run/dbus/system_bus_socket\n")
     binaries = tmp_path / "usr/bin"

@@ -1,7 +1,9 @@
 [Unit]
 Description=ROSY transaction-scoped whole-OS installer
-Requires=dbus.service rosy-os-storage.service
-After=dbus.service rosy-os-storage.service
+Requires=dbus.service rosy-os-storage.service rosy-os-motion-guard.service
+After=dbus.service rosy-os-storage.service rosy-os-motion-guard.service
+Conflicts=rosy-io.service rosy-navigation.service
+After=rosy-io.service rosy-navigation.service
 ConditionPathExists=/run/rosy-os-update/rauc/request.json
 StartLimitIntervalSec=0
 
@@ -11,6 +13,7 @@ BusName=de.pengutronix.rauc
 User=root
 Group=root
 UMask=0077
+ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_motion_guard.py reconcile
 ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_rauc_service.py check
 ExecStart=/usr/bin/rauc --conf=/run/rosy-os-update/rauc/system.conf service
 TimeoutStartSec=10min
