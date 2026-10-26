@@ -74,7 +74,7 @@ def prepare(images, value, dist, public, certificate):
         source = {name: _read(_path(boot if name == "cmdline.txt" else root, name), 32768,
                   (boot if name == "cmdline.txt" else root).stat().st_uid).decode("utf-8") for name in FILES}
         rebase_files(source, value["layout"], value["layout"], "a")  # Validate the factory-A inputs without rebasing.
-        inject(root, dist / "factory-release" / value["release_id"], public, certificate, metadata)
+        inject(root, dist / "factory-release" / value["native_factory"]["release_id"], public, certificate, metadata)
         resources.close()
         assembler._run(["e2fsck", "-fn", str(root_image)], timeout=600)
         root.rmdir()
