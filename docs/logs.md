@@ -11959,3 +11959,11 @@ osy-d395-s1d\`.
 - 이유: 동기화·게시 담당 검토. 기준 목록이 사람의 승인으로 읽히지 않게 하고, 규칙이 생길 때까지 게시마다 공백이 보이게 한다.
 - 증거: 원격 `test/test_publish_main.py`(reviewer 없는 목록 거부, 저장소 목록 적재, PR 본문 줄).
 - gate 변화: 없음. CE: 해당 없음 — 검토 표기 보강이다.
+
+## 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
+
+- 변경: `remote/work_queue.py`가 여유 있는 실험실 PC(가벼운 PC·현장 PC·살아 있는 `sim` 잠금/예약이 있는 PC 제외)에 기존 한 번에 하나 작업자 옆으로 브라우저 전용 레인을 `BROWSER_PER_HOST`(2)개까지 둔다. 레인마다 별도 run(작업 폴더·잠금)이다. 브라우저 작업 잠금은 class `browser`로 쓰고 PROBE가 `sim_held`·`browser_jobs`를 세므로 다른 run의 브라우저 작업도 상한에 들어간다. `tools/land_browser.py`가 `land.py`의 브라우저 단계를 파일 단위 8조각(파일 크기 LPT, 이름순 동률)으로 나누고, 부하에서 LOAD-FLAKY였던 3파일은 `ROSY_BROWSER_ALONE=1` 한 조각으로 모아 그 run의 레인이 빌 때까지 기다렸다가 혼자 돈다. 조각이 파일을 잃거나 겹치거나 빈 조각이 생기면 예외로 멈춘다.
+- 이유: FULL 한 번에서 브라우저 4조각이 878/772/536/487 s를 썼고, 직렬 1코어 작업이 PC의 유일한 자리를 차지해 xdist 묶음 뒤에 줄을 섰다.
+- 증거: 모델 PC 한 대에 같은 3조각을 동시에 1/2/3개 → 벽시계 1053/632/449 s, 조각별 시간 1% 이내 동일, 실패 0, 조각당 최대 메모리 751 MiB. 3도 느려지지 않았지만 main의 xdist 작업과 준비 중 착지 최대 3개가 같이 돌기 때문에 2로 둔다. 전체 브라우저 96파일 9조각을 모델·AI PC에서 실행: 각 305/350/373/237/427/283/561/368/585 s(합 3488 s), 벽시계 1163 s(3.0배), 실패는 known 1건(`test_theme_browser.py` topbar). 헤드리스 Chromium은 두 PC 모두 WebGL 렌더러가 SwiftShader라 NVIDIA GPU를 쓰지 않아 `--disable-gpu`를 붙여도 바뀌지 않음(추가하지 않음). 원격 `test/test_land_browser.py test/test_remote_pytest.py test/test_land.py test/test_remote_sim.py test/test_land_events.py` NEW 0. 합집합 시험은 파일 하나를 버리는 변이에서 3건 실패.
+- gate 변화: 없음(같은 파일을 같은 직렬 조건으로 정확히 한 번 실행). sim이 한 PC를 잡고 있으면 FULL 조각을 받을 실험실 PC가 하나뿐이라 이득이 작다.
+- CE: 해당 없음 — 장애 해결이 아니라 측정 기반 성능 변경이며 측정값은 코드 주석과 이 기록에 있다.

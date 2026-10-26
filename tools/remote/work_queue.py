@@ -20,7 +20,10 @@ from pathlib import Path
 BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
 ALONE_ENV = "ROSY_BROWSER_ALONE=1"  # a timing-sensitive browser chunk: no lane job of its own run beside it
 ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
-# Concurrent browser jobs per host beside main (measured, see docs/logs.md 2026-10-26); env override to measure.
+# Browser jobs per host beside main. Measured 2026-10-26 on the model PC, 3 chunks, no other job: 1/2/3 at once
+# = 1053/632/449 s wall, each chunk within 1% of its serial time, 0 failures, peak <= 751 MiB each. 2, not 3: main's
+# xdist job and up to 3 preparing landings share the host, and load-flaky browser ids exist.
+# ROSY_BROWSER_PER_HOST overrides it to measure.
 BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
 
 
