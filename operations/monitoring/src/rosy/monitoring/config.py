@@ -100,6 +100,16 @@ class MonitoringConfig(MonitoringModel):
                 sites.update(incoming)
         if len(sites) > 64:
             raise ValueError("too many site scopes")
+        for source in self.sources:
+            for site in source.peer_sites if source.kind == 'peer' else (source.site_id,):
+                ids = [f'{site}:probe:{self.collector_id}:{source.id}']
+                if source.kind == 'host_guard':
+                    ids.append(f'{site}:reported:{self.collector_id}:{source.id}')
+                if source.kind == 'fleet':
+                    ids.extend((f'{site}:reported:{self.collector_id}:{source.id}:' + 'r' * 96,
+                                f'{site}:robot:{source.id}:' + 'r' * 96))
+                if any(len(value) > 256 for value in ids):
+                    raise ValueError('registered composite graph identities exceed the response schema')
         for reader in self.readers:
             if len(set(reader.sites)) != len(reader.sites) or not set(reader.sites) <= sites:
                 raise ValueError("reader scope must be unique and registered")
