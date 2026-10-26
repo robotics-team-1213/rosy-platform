@@ -1320,7 +1320,7 @@ Each eligible candidate:
    existing real directory there is moved once to
    `/opt/rosy/candidates/<its commit>`), and restarts
    `rosy-site-stack.service`;
-5. waits up to `health_timeout_s` for `healthz` 200 and all three containers
+5. waits up to `health_timeout_s` for `healthz` 200 and the authenticated service set
    running, healthy, and on the new image. Otherwise it restores the previous
    symlink and `site.env`, restarts, and records the tag as failed. A failed
    tag is never retried automatically. Any exception during switching also
@@ -1340,6 +1340,24 @@ After fixing the cause of a failed tag, allow it again with
 This command takes the updater lock. An unreadable or malformed state file
 blocks changes and is preserved for operator recovery. Interrupted rollback
 requires the backup environment and signed previous candidate to match the journal.
+
+D-887 preserves authentic legacy candidates with exactly Fleet, Vision and Proxy;
+new builds still contain those three services plus PostgreSQL. Verification reports
+the signed service set in both modes. Current, staged and rollback checks use each
+candidate's own Compose files and verified overlays without changing the active
+link or environment during staging. Normal cold rollback also freshly verifies
+the outgoing canonical candidate and loaded image references. Missing files or
+image proof keep recovery pending, even if cached identities remain.
+
+On four-to-three rollback, only PostgreSQL with the exact outgoing immutable
+container ID, signed image identity, project/service labels and Compose hash may
+be stopped and removed. No force or volume removal is used; hashless manual
+containers survive. Absence is rechecked before restoring the prior environment
+and link, and full incoming health must pass before the journal is cleared.
+The one-time physical-directory relocation is a separate same-commit journal;
+it verifies the original physical/previous directory and retires no service.
+Install the complete reviewed external helper set before a separately authorized
+operational migration; source tests do not establish site acceptance.
 When the updater, verifier, signing helper, I/O helper or `site_update_runtime.py`
 changes on `main`, the administrator reinstalls the complete five-file unit from the
 same reviewed commit by the path above; the updater never copies them from a candidate.

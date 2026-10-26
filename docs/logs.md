@@ -11729,3 +11729,24 @@ osy-d395-s1d\`.
 - 증거: 게시 PR이 병합될 즈음 로컬 main은 게시 SHA보다 앞서 있어(시간당 약 1착지) origin/main의 조상이 아니므로 ff-only가 실패한다. 게시 스크립트 검토에서 확인.
 - gate 변화: 없음. 절차 문서다.
 - 교훈: 없음
+
+## 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+
+- Change: authenticate exactly legacy3/current4; bind current/staged/rollback Compose and loaded proof, retire only identity-proven outgoing PostgreSQL without force/volume deletion; retain separate same-commit physical relocation.
+- Evidence: real-signature source bc61f16ea9 RED3/8 controls; canonical-inventory source77d8b34bac RED38/13 controls; overlay source9e8e86575f RED2/1 control; forged physical journal source8e856f02a9 RED1. Raw logs remain outside Git; independent implementation review and committed GREEN pending. Initial42 failures used a corrected-later manual selector and are not uniform migration-cause proof.
+- Gate: source preparation only; no install/site/FIELD or deployment acceptance.
+- CE: existing whole-configuration and identical-external-helper lessons applied; solved lesson decision awaits actual GREEN.
+
+## 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+
+- Change: bind exact authenticated legacy3/current4 to candidate-local Compose/overlay and loaded identities; exact-ID retired PostgreSQL cleanup precedes normal rollback restoration, while consistent physical relocation remains separate. Builder/signing blobs remain base-exact.
+- Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
+- Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
+- CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
+
+## 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
+
+- 변경: 실행 예시의 Git ID를 같은 commit으로 해석되는 짧은 revision으로 표기하고 전체 SHA는 본문에 유지했다. 기존 Git ID 교훈에 CLI 코드블록도 검사된다는 조건과 실제 실패·수정 검증을 보강했다.
+- 증거: 첫 통합 commit 7b2dbeb623의 관련 gate는 1 FAIL/1093 PASS/2 SKIP, 단독 실패·main 통과를 보존했다. 문서 수정 commit 6d493681e4에서 동일 원격 secret guard 1 PASS/runner·outer0/NEW0·known0·flaky0, scanner와 네 production 파일은 그대로다.
+- Gate: 공식 재착지·게시·site/DEVICE/FIELD는 아직 대기한다. 정밀 시각 수용을 주장하지 않는다.
+- CE: 기존 교훈 갱신; 새 중복 문서나 scanner 예외는 만들지 않았다.

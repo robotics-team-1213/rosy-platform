@@ -352,8 +352,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
+- 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+- 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
 - 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
 - 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)
-- 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
-- 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
-- 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다
