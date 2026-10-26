@@ -170,6 +170,11 @@ def _write(fd, name, value, *, exclusive=False):
             pass
 
 
+def requested(config: dict) -> dict:
+    """The request's settings back from a normalized config: the seed, and the case of an arm S case run."""
+    return {'seed': config['seed'], **({'case': config['case']} if 'case' in config else {})}
+
+
 def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
     if not isinstance(source_sha, str) or not re.fullmatch('[0-9a-f]{40}', source_sha):
         raise ValueError('source must be a full commit SHA')
