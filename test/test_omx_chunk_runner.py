@@ -374,6 +374,26 @@ def test_a_soft_contact_holds_with_torque_on_then_retreats_along_its_path_and_pa
     assert by_command(status, "run descend_pick")[1]["ok"] is True  # after park the next attempt may start
 
 
+
+def test_a_settled_retreat_clears_the_contact_so_the_next_point_needs_no_park():
+    robot = Pressing(after=8)
+    status, clock, queue = [], [0.0], ["run descend_pick", "retreat", "run descend_pick", "stop"]
+    r = m.Runner(robot, descend_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        if queue and not r.chunk:
+            if queue[0] == "retreat":
+                robot.stuck = None
+            return [queue.pop(0)]
+        return []
+
+    r.run(lines)
+    assert by_command(status, "run descend_pick")[0]["contact"] is True
+    assert by_command(status, "run retreat")[0]["ok"] is True and by_command(status, "run retreat")[0]["fault"] is None
+    assert by_command(status, "run descend_pick")[1]["ok"] is True
+
+
 def test_normal_following_lag_is_not_a_contact():
     robot = Pressing(after=10**9)  # never stuck: the arm follows
     status = run_with(robot, descend_library(), ["run descend_pick", "stop"])

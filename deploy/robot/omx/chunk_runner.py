@@ -14,6 +14,8 @@ VLA) writes one command per line into the command FIFO and reads one JSON status
   state                   report the current state
   goto <chunk>            the same rise-turn-descend path to a chunk's start pose (recovery, re-approach)
   park                    close the jaws, rise, turn at that height and descend into home, slowly
+  retreat                 after a contact hold, back out along the played path; settled at its start, the
+                          contact is cleared like a park
   stop                    end; torque goes OFF where the arm is, so park (or run home) first
 
 Commands apply one per control tick, and a jog may not put its target more than JOG_MAX + SETTLE_TOL
@@ -427,8 +429,11 @@ class Runner:
                 fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL,
                               peak_lag=round(self.peak_lag, 2), over_ticks=self.over_ticks)
                 self.peak_lag, self.over_ticks = 0.0, 0
-                if self.chunk == "park" and (self.fault or "").startswith("contact"):
-                    self.fault = None  # folded home after a soft contact: the next attempt may start
+                backed_out = self.chunk == "retreat" and error <= SETTLE_TOL
+                if (self.chunk == "park" or backed_out) and (self.fault or "").startswith("contact"):
+                    # folded home, or back where the held chunk began: the next attempt may start. A touch grid
+                    # otherwise parks between every point (2026-10-27).
+                    self.fault = None
                 if grasp:  # jaws stopped short of this chunk's closed target: something is between them
                     by_position = present[5] > self.target[5] + EMPTY_MARGIN
                     fields["holding"] = by_position
