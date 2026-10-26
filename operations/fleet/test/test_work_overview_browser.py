@@ -376,6 +376,119 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
 NAMED = "이름 있는 운영자 로그인이 필요합니다"
 
 
+@pytest.mark.parametrize("size", [(1366, 768), (390, 844)])
+def test_policy_admission_readback_badge_and_named_operator_switch(site, size):
+    """D-865 P3: 승인 대기 행에 범위 소속 배지, work 화면에 범위 readback과 기명 운영자 전환.
+    범위 밖 로봇·two_person·전환 뒤에는 배지가 없다(사람 승인). 전환은 스위치만 보낸다."""
+    from playwright.sync_api import expect, sync_playwright
+
+    def wait_row(source_id, device, approval):
+        return {"source": "mission", "source_id": source_id, "visible_state": "approval_pending",
+                "action_kind": "trip", "status": "PROPOSED", "device_id": device,
+                "workcell_id": None, "reason": None, "approval": approval, "wait": None,
+                "updated_at": "2026-10-27T00:00:00+00:00"}
+    rows = [wait_row("in-1", "rosy_01", "one_person"), wait_row("out-1", "rosy_02", "one_person"),
+            wait_row("arm-1", "omx", "two_person")]
+    scope_on = {"enabled": True, "robots": ["rosy_01"], "step_approval_kinds": ["one_person"],
+                "max_admits": 5, "valid_until": None, "scope_revision": "rev-7"}
+    status_on = {"status": {"scope": scope_on, "admits_issued": 3, "admits_remaining": 2, "reason": None}}
+    work = {"rows": rows, "observed_at": rows[0]["updated_at"], "tasks_available": True,
+            "missions_available": True, "truncated_sources": []}
+    api = {**API, "/api/fleet/session": {"principal_id": "bob", "role": "operator"},
+           "/api/fleet/work": work, "/api/fleet/policy-admission": status_on,
+           **{f"/api/fleet/missions/{row['source_id']}": {"mission": row, "history": []} for row in rows}}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts, answers={
+            "/api/fleet/policy-admission": (200, {"status": {"scope": {**scope_on, "enabled": False},
+                "admits_issued": 3, "admits_remaining": 0, "reason": "SWITCHED_OFF"}})}, size=size)
+        try:
+            page.goto(site + "/console?view=work")
+            page.clock.run_for(2000)
+            page.locator("#work-policy-admission summary").click()
+            status = page.locator("#work-policy-admission-status")
+            expect(status).to_contain_text("켜짐")
+            expect(status).to_contain_text("로봇 rosy_01")
+            expect(status).to_contain_text("잔여 2/5회")
+            expect(status).to_contain_text("rev-7")
+            # 범위 소속 배지는 범위 안의 승인 대기 행에만 붙는다(auto_admit 표기).
+            item = page.locator("#work-list > li").filter(has=page.locator(".work-auto-admit"))
+            expect(item).to_have_count(1)
+            assert "rosy_01" in item.locator("ui-button").inner_text()
+            page.locator("#work-list ui-button").filter(has_text="rosy_01").click()
+            terms = page.locator("#work-detail dt").all_inner_texts()
+            assert page.locator("#work-detail dd").nth(terms.index("자동 승인")).inner_text() == \
+                "범위 안 · 잔여 2회 · 범위 rev-7"
+            page.locator("#work-list ui-button").filter(has_text="omx").click()
+            terms = page.locator("#work-detail dt").all_inner_texts()
+            assert page.locator("#work-detail dd").nth(terms.index("자동 승인")).inner_text() == "범위 밖 · 사람 승인"
+
+            toggle = page.locator("#work-policy-admission-toggle")
+            expect(toggle).to_be_enabled()
+            expect(toggle).to_contain_text("자동 승인 끄기")
+            toggle.click()
+            for _ in range(50):
+                page.clock.run_for(100)
+                if posts:
+                    break
+            assert posts == [("/api/fleet/policy-admission", '{"enabled":false}')], posts
+            expect(status).to_contain_text("꺼짐")
+            expect(status).to_contain_text("SWITCHED_OFF")
+            expect(toggle).to_contain_text("자동 승인 켜기")
+            expect(page.locator("#work-list .work-auto-admit")).to_have_count(0)  # 끄면 배지도 없다
+
+            def conflict(route):
+                route.fulfill(status=409, json={"detail": {"code": "POLICY_ADMISSION_SCOPE_NOT_CONFIGURED"}})
+            page.route("**/api/fleet/policy-admission",
+                       lambda route: conflict(route) if route.request.method == "POST" else route.fallback())
+            posts.clear()
+            toggle.click()
+            for _ in range(50):
+                page.clock.run_for(100)
+                if posts:
+                    break
+            assert len(posts) == 1
+            expect(status).to_contain_text("범위가 설정되지 않아 전환하지 못했습니다")
+            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            _shot(page, f"work-policy-{size[0]}.png", full_page=True)
+            assert not errors
+        finally:
+            browser.close()
+
+
+def test_policy_admission_switch_is_named_operator_only(site):
+    """D-865 P3: 보기 전용 접속은 전환 단추가 막히고 이유를 적는다. 서버가 최종 권한을 가진다."""
+    from playwright.sync_api import expect, sync_playwright
+
+    row = {"source": "mission", "source_id": "wait-1", "visible_state": "approval_pending",
+           "action_kind": "trip", "status": "PROPOSED", "device_id": "rosy_01", "workcell_id": None,
+           "reason": None, "approval": "one_person", "wait": None, "updated_at": "2026-10-27T00:00:00+00:00"}
+    work = {"rows": [row], "observed_at": row["updated_at"], "tasks_available": True,
+            "missions_available": True, "truncated_sources": []}
+    api = {**API, "/api/fleet/session": {"principal_id": "eve", "role": "viewer"}, "/api/fleet/work": work,
+           "/api/fleet/policy-admission": {"status": {"scope": {"enabled": False, "robots": [], 
+               "step_approval_kinds": [], "max_admits": 1, "valid_until": None, "scope_revision": "rev-1"},
+               "admits_issued": 0, "admits_remaining": 1, "reason": "SWITCHED_OFF"}}}
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, api, posts, size=(1366, 768))
+        try:
+            page.goto(site + "/console?view=work")
+            page.clock.run_for(2000)
+            page.locator("#work-policy-admission summary").click()
+            toggle = page.locator("#work-policy-admission-toggle")
+            expect(toggle).to_be_disabled()
+            expect(toggle).to_have_attribute("reason", "운영자 권한이 필요합니다")
+            described = toggle.get_attribute("aria-describedby")
+            assert page.locator(f"#{described}").inner_text() == "운영자 권한이 필요합니다"
+            toggle.click(force=True)
+            assert not posts
+            assert page.locator("#work-list .work-auto-admit").count() == 0
+            assert not errors
+        finally:
+            browser.close()
+
+
 def test_late_approval_failure_does_not_disable_a_new_selection(site):
     from playwright.sync_api import expect, sync_playwright
     rows = [{"source": "mission", "source_id": key, "visible_state": "approval_pending",
