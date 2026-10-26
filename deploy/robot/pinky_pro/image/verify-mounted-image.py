@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "native"))
 from os_storage_dispatch import BOOTSTRAP_FILES
@@ -100,30 +101,37 @@ def default_config_tokens(text: str) -> bool | None:
     return bool(tokens) or "rosy-dev-" in text
 
 
-def installed_debs(root: Path) -> set[str]:
-    """Packages dpkg records as installed in the mounted root."""
+def _deb_records(root: Path) -> list[dict]:
     status = root / "var/lib/dpkg/status"
     if not status.is_file():
-        return set()
-    installed = set()
-    for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n"):
-        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
-        if fields.get("Status") == "install ok installed" and fields.get("Package"):
-            installed.add(fields["Package"])
-    return installed
+        return []
+    return [dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
+            for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n")]
+
+
+def installed_debs(root: Path) -> set[str]:
+    """Packages dpkg records as installed in the mounted root."""
+    return {row["Package"] for row in _deb_records(root)
+            if row.get("Status") == "install ok installed" and row.get("Package")}
 
 
 def package_states(root: Path) -> dict[str, str]:
     """Each package's dpkg Status line in the mounted root (e.g. "hold ok installed")."""
-    status = root / "var/lib/dpkg/status"
-    if not status.is_file():
-        return {}
-    states = {}
-    for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n"):
-        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
-        if fields.get("Package") and fields.get("Status"):
-            states[fields["Package"]] = fields["Status"]
-    return states
+    return {row["Package"]: row["Status"] for row in _deb_records(root) if row.get("Package") and row.get("Status")}
+
+
+def rauc_package_findings(root: Path) -> list[str]:
+    pin = yaml.safe_load(Path(__file__).with_name("inputs.lock.yaml").read_text())["os_updates"]["rauc_package_version"]
+    records = _deb_records(root)
+    versions = [row.get("Version") for row in records
+                if row.get("Package") == "rauc" and row.get("Status") == "install ok installed"]
+    findings = []
+    binary = root / "usr/bin/rauc"
+    if versions != [pin] or not binary.is_file() or binary.is_symlink():
+        findings.append("RAUC binary or installed version differs from the locked input")
+    if any(row.get("Package") == "rauc-service" for row in records):
+        findings.append("RAUC upstream service policy must not be installed in the product image")
+    return findings
 
 
 def module_vermagic(path: Path) -> str | None:
@@ -313,6 +321,7 @@ def inspect(root: Path, release_id: str) -> list[str]:
 
     if (root / "usr/bin/docker").exists() or (root / "usr/bin/dockerd").exists():
         findings.append("docker must not be installed in the product image")
+    findings.extend(rauc_package_findings(root))
     # CORE SRS §25: UTC ISO 8601 timestamps (evidence freshness, Fleet log
     # correlation) presume a synced clock — chrony ships enabled in the image.
     if not (root / "usr/sbin/chronyd").exists():

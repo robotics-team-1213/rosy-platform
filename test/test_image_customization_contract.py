@@ -271,6 +271,10 @@ def _valid_root(tmp_path: Path) -> Path:
         f"Package: {name}\nStatus: hold ok installed\nVersion: 1\n\n"
         for name in ("linux-image-6.8.0-1064-raspi", "linux-modules-6.8.0-1064-raspi", "linux-raspi")),
         encoding="utf-8")
+    with (root / "var/lib/dpkg/status").open("a", encoding="utf-8") as status:
+        status.write("Package: rauc\nStatus: install ok installed\nVersion: 1.11.3-2\n\n")
+    (root / "usr/bin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/bin/rauc").write_text("# fixture\n")
     # D-193: the login-code issuer (enabled), its banner link and command, and
     # CORE defaults without tokens.
     (root / "etc/systemd/system/rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
