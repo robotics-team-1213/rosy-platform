@@ -196,7 +196,7 @@ def scope_source(paths):
 @pytest.fixture
 def full_case(repos, monkeypatch):
     main, wt = repos
-    files = {"tools/harness/rosy_harness.py": CANONICAL, "tools/harness/affected_tests.py": "# selector\n",
+    files = {".gitignore": "__pycache__/\n", "tools/harness/rosy_harness.py": CANONICAL, "tools/harness/affected_tests.py": "# selector\n",
              "tools/land_selection.py": (ROOT / "tools/land_selection.py").read_text(),
              "tools/land_browser.py": (ROOT / "tools/land_browser.py").read_text()
                  + "\nALONE=frozenset({'ui/test/test_alone_browser.py'})\n",
@@ -418,10 +418,21 @@ def test_explicit_full_rejects_incomplete_body_and_vacuous_browser(full_case, ou
 
 def test_explicit_full_turn_guard_load_flaky_cannot_ff(full_case):
     case = full_case; case.flaky = "turn_guard"
+    mapped_delta = CANONICAL.replace("invocations=[] if '--head' in sys.argv else [['pkg/test']]",
+        "invocations=([['pkg/test']] if Path('pkg/util.py').is_file() else []) if '--head' in sys.argv else [['pkg/test']]")
+    commit(case.wt, {"tools/harness/rosy_harness.py": mapped_delta,
+                    "tools/harness/harness.yaml": "modules: [{id: fixture, path: pkg, tests: [pkg/test]}]\n",
+                    "tools/harness/platform_parts.yaml": "roots: [{path: pkg, import_prefix: [pkg], concern: other}]\n"},
+           "map a genuine peer delta")
+    case.mutate = lambda: commit(case.main, {"pkg/util.py": "VALUE = 1\n"}, "peer dependency change")
     before = git(case.main, "rev-parse", "HEAD")
     assert land.main(["--tests", "full"]) == 1
     assert_full_plan(body_calls(case))
-    assert git(case.main, "rev-parse", "HEAD") == before
+    assert any(label == "land-g1" and any(inv[0] == "test/architecture" for inv in invs)
+               for label, _, invs in case.remote)
+    assert git(case.main, "rev-parse", "HEAD") != before  # the peer is preserved
+    assert (case.main / "pkg/a.py").read_text() == "x = 1\n"  # our affected feature was not ff'd
+    assert land.land_record.read(case.main, git(case.wt, "rev-parse", "HEAD")) is None
 
 
 @pytest.mark.parametrize("fault", ["missing_harness", "empty_plan", "bad_json", "missing_browser_registry"])
