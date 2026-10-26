@@ -319,7 +319,7 @@ class Runner:
                 # folding the arm; the held target stays, and the library is checked before it replaces the old one
                 try:
                     library = load_library(Path(words[1]))
-                except SystemExit as exc:
+                except (SystemExit, OSError) as exc:  # a missing file ended the whole session (2026-10-27)
                     raise ValueError(str(exc)) from None
                 if library["fps"] != self.fps:
                     raise ValueError(f"library fps {library['fps']} differs from the runner fps {self.fps}")

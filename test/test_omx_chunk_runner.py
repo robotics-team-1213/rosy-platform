@@ -313,8 +313,10 @@ def test_a_new_library_loads_while_the_arm_holds_and_a_bad_one_is_refused(tmp_pa
     for name, lib in (("good", good), ("fast", fast), ("other_fps", other_fps)):
         paths[name] = tmp_path / f"{name}.json"
         paths[name].write_text(json.dumps(lib))
-    status = runner(Robot(), [f"load {paths['fast']}", f"load {paths['other_fps']}", f"load {paths['good']}",
-                              "run approach_pinky", "stop"])
+    missing = tmp_path / "gone.json"
+    status = runner(Robot(), [f"load {missing}", f"load {paths['fast']}", f"load {paths['other_fps']}",
+                              f"load {paths['good']}", "run approach_pinky", "stop"])
+    assert by_command(status, f"load {missing}")[0]["ok"] is False  # refused, the session goes on
     loads = by_command(status, f"load {paths['fast']}") + by_command(status, f"load {paths['other_fps']}")
     assert [s["ok"] for s in loads] == [False, False]
     assert "faster than the guard" in loads[0]["error"] and "fps" in loads[1]["error"]
