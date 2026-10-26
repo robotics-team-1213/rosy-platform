@@ -1,6 +1,10 @@
 """update_status flags a channel that has stopped being healthy, not one that is briefly waiting."""
+import hashlib
 import importlib.util
+import os
 from pathlib import Path
+import subprocess
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('update_status', ROOT / 'tools/remote/update_status.py')
@@ -9,6 +13,21 @@ spec.loader.exec_module(status)
 
 NOW = 1_000_000.0
 DAY = 86400
+
+
+def git_repo(path, files):
+    path.mkdir(parents=True, exist_ok=True)
+
+    def git(*args):
+        subprocess.run(['git', '-C', str(path), '-c', 'user.name=t', '-c', 'user.email=t@t', *args],
+                       check=True, capture_output=True)
+    git('init', '-q')
+    for name, data in files.items():
+        (path / name).parent.mkdir(parents=True, exist_ok=True)
+        (path / name).write_bytes(data)
+    git('add', '-A')
+    git('commit', '-q', '-m', 'base')
+    return git
 
 
 def channel(unit, result='success', timer='enabled', healthy=NOW - 60, last='{"step": "up_to_date", "release": "8e542e6b4221"}'):
@@ -124,3 +143,32 @@ def test_audit_reports_drift_in_unit_copies_dropins_and_code_path_unless_known()
     host['copies']['bin/tool.py'], host['files']['rosy-x@.service']['sha256'] = 'fresh', 'new'
     host['instances']['rosy-x@a.service']['dropins'] = ['ok.conf']
     assert findings({'rosy-x@.service': entry}, host, digests) == []
+
+
+def test_ref_state_names_the_ref_and_ages_the_last_fetch_not_the_tip_commit(tmp_path):
+    git = git_repo(tmp_path, {'a.txt': b'a'})
+    state = status.ref_state(tmp_path, time.time(), 12)
+    assert (state['ref'], state['verdict']) == ('HEAD', 'STALE-REF')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    reflog = tmp_path / '.git/logs/refs/remotes/origin/main'
+    now = time.time()
+    state = status.ref_state(tmp_path, now, 12)
+    assert (state['ref'], state['verdict']) == ('origin/main', 'ok') and state['fetched_h'] < 1
+    os.utime(reflog, (now - 20 * 3600, now - 20 * 3600))
+    state = status.ref_state(tmp_path, now, 12)
+    assert state['verdict'] == 'STALE-REF' and state['fetched_h'] == 20.0
+    (tmp_path / '.git/FETCH_HEAD').write_text('')  # a later fetch that did not move origin/main
+    assert status.ref_state(tmp_path, now, 12)['verdict'] == 'ok'
+    assert status.ref_state(tmp_path / 'absent', now, 12)['verdict'] == 'STALE-REF'
+
+
+def test_repo_digest_reads_only_the_named_ref(tmp_path):
+    git = git_repo(tmp_path, {'f': b'old\r\n'})
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    (tmp_path / 'f').write_bytes(b'new')
+    (tmp_path / 'g').write_bytes(b'g')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'unpublished')
+    assert status.repo_digest('f', tmp_path, tmp_path) == hashlib.sha256(b'old\n').hexdigest()
+    assert status.repo_digest('g', tmp_path, tmp_path) is None
+    assert status.repo_digest('g', tmp_path, tmp_path, {tmp_path: 'HEAD'}) == hashlib.sha256(b'g').hexdigest()

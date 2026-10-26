@@ -70,7 +70,7 @@ CI_FULL_MATRIX = (
     {"name": "app-fleet", "invocations": [["applications/fleet/test"]], "ros": "none"},
     {"name": "site-vision-cell", "invocations": [
         ["operations/overhead/test"], ["operations/processes/cell/test"], ["operations/situation/test"],
-        ["operations/world/test"],
+        ["operations/world/test"], ["operations/monitoring/test"],
         ["test/test_platform_palletizing_compat.py", "test/test_platform_cell_submission.py",
          "test/architecture/test_platform_dependency_boundaries.py"]], "ros": "none"},
     {"name": "gz-sim", "invocations": [["integrations/simulation/gazebo/test"]], "ros": "overlay"},

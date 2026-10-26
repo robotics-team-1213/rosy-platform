@@ -1,7 +1,7 @@
 # operations
 
 **Parent context:** `../AGENTS.md`
-**Generated:** 2026-10-07 · **Updated:** 2026-10-14
+**Generated:** 2026-10-07 · **Updated:** 2026-10-26
 
 ## Purpose
 
@@ -12,6 +12,7 @@ D-427 operations part and a `colcon_roots` entry. Site orchestration and ledgers
 | Directory | Purpose |
 |-----------|---------|
 | `fleet/` | Fleet server, formation, admission/dispatch and shared SQLite ledger; Console serving and the distribution that installs Decision (see `fleet/AGENTS.md`) |
+| `monitoring/` | Independent `rosy-monitoring` observation/configuration/cache wheel; collector/API/UI follow later (see `monitoring/AGENTS.md`, D-876) |
 | `decision/` | Existing ER2/tool proposals under `src/rosy/decision`, import `rosy.decision`; installed by the same Fleet distribution (see `decision/AGENTS.md`, D-637) |
 | `apps/` | Games ROS package; Fleet app composition moved to `applications/fleet/gateway` (see `apps/AGENTS.md`) |
 | `processes/` | Cell and palletizing processes (see `processes/AGENTS.md`) |

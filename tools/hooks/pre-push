@@ -43,6 +43,14 @@ if [ $# -ge 2 ]; then
   done
 fi
 PUSH_SHA="${PUSH_SHA:-$(git rev-parse HEAD)}"
+# 2026-10-26: the shared clone ran a 2026-10-11 copy of this hook for two weeks; every later gate was
+# skipped. An installed copy that differs from the pushed commit's hook refuses until reinstalled.
+if [ "$PUBLISH_ONLY" = "true" ] && [ -f "$0" ] \
+   && tracked=$(git show "$PUSH_SHA:tools/hooks/pre-push" 2>/dev/null) \
+   && [ "$(printf '%s\n' "$tracked" | sed 's/\r$//')" != "$(sed 's/\r$//' "$0")" ]; then
+  echo "[pre-push] $0 is not the pushed commit's tools/hooks/pre-push; run: bash tools/hooks/install.sh" >&2
+  exit 1
+fi
 # Git exports repository-local variables to hooks. Clear them after locating
 # this checkout: gate tests create foreign repositories, where inherited
 # GIT_DIR/GIT_COMMON_DIR override git -C and can mutate this repository.
