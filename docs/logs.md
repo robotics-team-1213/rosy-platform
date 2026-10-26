@@ -11766,3 +11766,10 @@ osy-d395-s1d\`.
 - 증거: committed572의 관련 원격 148passed13.72s,0NEW; 지연 중 정책/TTL/media 변경과 source claim 회수 RED4, 두 FAT mode 경계 RED2가 수정 전 실패했다. exact127의 확장 원격 시험은 1999passed,32skipped,49warnings/306.46s,0NEW이며 skips는 미검증이다. subset 수치는 중복된다. Linux6.8 FAT source를 확인한 계약 모델과 실제 mounted FAT/전원 차단 시험을 구분해 D-888에 기록했다.
 - gate 변화: 없음. frozen callable source이며 실제 controller 연결·SYSTEM/native ARM/image/signing/SD/device 수용을 증명하지 않는다. main merge/public push/제품 키·SD 작업은 수행하지 않았다.
 - CE: 해당 없음 — 구현·시험·D-888이 판단을 보존하며 실제 장치 수용과 혼동하지 않는다.
+
+## 2026-10-26 · 4ef7a2ec33 · D-888 boot lifecycle caller와 검증 범위
+
+- 변경: frozen controller가 staged install/tryboot/trial health/commit/observed fallback을 실제 호출하도록 하고 ABI2 boot service/timer를 연결했다. source preflight는 signed native runtime과 실제 CORE cwd를 확인하며 common pending과 native 유지보수 경계를 공유한다. callback/service 중 state/native release lock을 보유하지 않는다. intent 이후의 에러에서 GOOD_ACK를 보존한다. 새 unit/timer의 mutable SDK 권한을 차단하고 기존 native I/O 안정화20초를 재사용한다.
+- 증거: exact6f 확장 원격 2027passed32skipped49warnings317.14s,0NEW; b489 settle 원격400passed18.01s 및 최종4ef7a2ec33 normalize/health/controller/commit/policy/deadline/image/systemd 원격402passed16.32s,0NEW. subset은 중복되며 skips는 미검증이다. 자기 intent/current boot에만 정상 reboot를 요청하고 다른 boot·intent 없는 표식은 재부팅하지 않는다. actual signed source/CLI/flock/offline systemd와 synthetic firmware/CORE/services/RAUC 모델을 구분해 D-888에 기록했다.
+- gate 변화: 없음. D-888 Proposed 유지. OS feed/rollout·staging/producer/offline signer/capacity·SYSTEM·전체 최종 리뷰/정식 localmain 착지·native ARM image/서명/SD 전체 readback과 기체 수용은 남는다. 현재 설치·부팅 제어기 연결을 자동 release 선택 완료로 표시하지 않는다. main merge/public push/제품 키·SD 작업은 수행하지 않았다.
+- CE: 해당 없음 — 기존 모델 증거/예전 CORE release cwd 교훈과 구현·시험·D-888이 판단을 보존한다.
