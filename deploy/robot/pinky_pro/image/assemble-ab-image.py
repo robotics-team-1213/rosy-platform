@@ -193,7 +193,7 @@ def assemble(source: Path, output: Path, work: Path, release_id: str) -> dict:
             def read_at(offset, length):
                 handle.seek(offset)
                 return handle.read(length)
-            if ab.parse_gpt(read_at, partial.stat().st_size) != layout:
+            if ab.parse_gpt(read_at, partial.stat().st_size, layout["provision_role"]) != layout:
                 raise ValueError("assembled GPT differs from the planned snapshot")
         resources.close()
         partial.chmod(0o644)

@@ -59,10 +59,12 @@ def verify_contract(native: Path, *, state_schema: int, boot_abi: int = BOOT_ABI
 
 def require_ab_payload(root: Path, release: Path) -> None:
     try:
-        if _layout(root) is None:
+        admitted = _layout(root)
+        if admitted is None:
             return
         schema = _object(_read(_path(root, COMMON + "/state/schema.json"), 8192, root.stat().st_uid),
                          {"schema_version", "state_schema"})
-        verify_contract(release / "deploy/robot/native", state_schema=schema["state_schema"])
+        verify_contract(release / "deploy/robot/native", state_schema=schema["state_schema"],
+                        boot_abi=admitted[0]["schema_version"])
     except (OSError, ValueError, KeyError, TypeError, SyntaxError) as exc:
         raise ValueError(f"OS_PAYLOAD_INCOMPATIBLE: {exc}") from exc

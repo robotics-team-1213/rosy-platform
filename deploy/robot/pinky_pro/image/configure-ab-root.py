@@ -27,7 +27,7 @@ def configure(root: Path, release_id: str) -> None:
     if root.is_symlink() or root == Path(root.anchor):
         raise ValueError("an offline image root is required")
     owner = root.stat().st_uid
-    slot = _object(_read(_path(root, "etc/rosy/os-slot.json"), 8192, owner), LAYOUT_FIELDS)
+    slot = _object(_read(_path(root, "etc/rosy/os-slot.json"), 8192, owner), LAYOUT_FIELDS, schema_versions=(1, 2))
     guids = [_guid(slot[name]) for name in ("root_partuuid", "data_partuuid", "provision_partuuid")]
     if slot["slot"] not in ("a", "b") or len(set(guids)) != 3:
         raise ValueError("invalid offline A/B partition identity")
@@ -37,7 +37,7 @@ def configure(root: Path, release_id: str) -> None:
     trusted_files(prefix, BOOTSTRAP_FILES, owner)
     trusted_files(prefix, FIRST_BOOT_FILES, owner)
     verify_contract(_path(root, "opt/rosy/releases/" + release_id + "/deploy/robot/native"),
-                    state_schema=slot["state_schema"])
+                    state_schema=slot["state_schema"], boot_abi=slot["schema_version"])
     sums = _read(_path(root, "opt/rosy/releases/" + release_id + "/SHA256SUMS"), 16 * 1024 * 1024, owner)
     record = dict(schema_version=1, release_id=release_id, checksums_sha256=hashlib.sha256(sums).hexdigest())
     changes = {"etc/rosy/os-factory-release.json": (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")}

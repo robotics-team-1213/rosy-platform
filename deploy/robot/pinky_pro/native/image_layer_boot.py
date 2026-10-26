@@ -15,7 +15,7 @@ from image_layer_files import _install, _mode, _sha256
 
 
 CAPABILITIES = ("boot_catalog_v1", "inverse_before_legacy_sync_v1")
-OS_COMPATIBILITY = {"schema_version": 1, "boot_abi": {"min": 1, "max": 1},
+OS_COMPATIBILITY = {"schema_version": 1, "boot_abi": {"min": 1, "max": 2},
                     "state_schema": {"read_min": 1, "read_max": 1, "write": 1}}
 BOOT_FILES = {"rosy-first-boot.py": 0o644, "rosy-first-boot.sh": 0o755}
 BOOT_DIRECTORY = "opt/rosy/first-boot"

@@ -40,7 +40,7 @@ def plan() -> dict:
             type_guid=BASIC_DATA if number <= 3 else LINUX_FS, unique_guid=str(uuid.uuid4())))
         start += sectors
     return validate_layout(dict(schema_version=1, scheme="gpt", sector_size=512,
-        disk_guid=str(uuid.uuid4()), raw_size_bytes=RAW_MIB * MIB, provision_role="boot_a", partitions=partitions))
+        disk_guid=str(uuid.uuid4()), raw_size_bytes=RAW_MIB * MIB, provision_role="bootstrap", partitions=partitions))
 
 
 def sfdisk_script(layout: dict) -> str:
@@ -100,7 +100,7 @@ def _fstab(layout: dict, slot: str, source: str) -> str:
             ("root_" + slot, "/", "ext4", "defaults", 1),
             ("boot_" + slot, "/boot/firmware", "vfat", "defaults", 2),
             ("data", "/" + COMMON, "ext4", "defaults,nodev,nosuid", 2),
-            ("boot_a", "/run/rosy-provision-boot", "vfat", "defaults", 2)):
+            (layout["provision_role"], "/run/rosy-provision-boot", "vfat", "defaults", 2)):
         lines.append(f"PARTUUID={parts[role]['unique_guid']} {point} {filesystem} {options} 0 {order}")
     for target, subpath in SHARED_BINDINGS.items():
         lines.append(f"/{COMMON}{subpath} /{target} none bind,x-systemd.requires-mounts-for=/{COMMON} 0 0")
@@ -122,11 +122,12 @@ def configure_slot(root: Path, boot: Path, layout: dict, slot: str) -> None:
             or any(word.startswith(("rosy.os_layout=", "rauc.slot=")) for word in tokens)):
         raise ValueError("unsupported source kernel command line")
     parts = {part["role"]: part for part in layout["partitions"]}
-    descriptor = dict(schema_version=1, state_schema=1, slot=slot,
+    protocol = 2 if layout["provision_role"] == "bootstrap" else 1
+    descriptor = dict(schema_version=protocol, state_schema=1, slot=slot,
         root_partuuid=parts["root_" + slot]["unique_guid"], data_partuuid=parts["data"]["unique_guid"],
-        provision_partuuid=parts["boot_a"]["unique_guid"])
+        provision_partuuid=parts[layout["provision_role"]]["unique_guid"])
     tokens = ["root=PARTUUID=" + descriptor["root_partuuid"] if word.startswith("root=") else word for word in tokens]
-    tokens.append("rosy.os_layout=ab-v1")
+    tokens.append(f"rosy.os_layout=ab-v{protocol}")
     changes = {"etc/fstab": fstab,
                "etc/rosy/os-slot.json": json.dumps(descriptor, sort_keys=True) + "\n",
                "etc/cloud/cloud.cfg.d/99-rosy-fixed-layout.cfg": "growpart: {mode: 'off'}\nresize_rootfs: false\n"}
@@ -163,7 +164,7 @@ def filesystem_plan(raw: Path, layout: dict) -> list[tuple[int, str]]:
         def read_at(offset, length):
             handle.seek(offset)
             return handle.read(length)
-        if parse_gpt(read_at, info.st_size) != layout:
+        if parse_gpt(read_at, info.st_size, layout["provision_role"]) != layout:
             raise ValueError("GPT differs from the assembly snapshot")
     return [(part["number"], "vfat" if part["number"] <= 3 else "ext4") for part in layout["partitions"]]
 

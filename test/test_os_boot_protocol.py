@@ -58,8 +58,10 @@ def test_mount_admission_requires_the_protocols_exact_provision_partition(tmp_pa
 
 
 @pytest.mark.parametrize("protocol", [1, 2])
-def test_current_sdk_preserves_both_boot_abis(protocol):
-    verify_contract(BASE / "native", state_schema=1, boot_abi=protocol)
+def test_current_sdk_preserves_both_boot_abis(tmp_path, monkeypatch, protocol):
+    from test_os_factory_release import _device
+    _, _, _, _, _, _, release = _device(tmp_path, monkeypatch)
+    verify_contract(release / "deploy/robot/native", state_schema=1, boot_abi=protocol)
 
 
 @pytest.mark.parametrize("role", ["boot_a", "bootstrap"])
