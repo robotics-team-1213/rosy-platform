@@ -22,8 +22,8 @@ import ab_image_layout as ab
 from os_cms_trust import _validate as validate_certificate, verify as verify_cms, CERTIFICATE
 from os_rauc import _spki, verify_bundle
 from os_state_layout import _pairs, _path, _read
-from os_update_manifest import COMPATIBLE, _digest, _fields, _integer, release_id, validate_metadata
-from os_update_rollout import _shape as validate_rollout
+from os_update_manifest import COMPATIBLE, _digest, _fields, _integer, release_id, validate_metadata, verify_metadata
+from os_update_rollout import _shape as validate_rollout, verify as verify_rollout
 from signing import parse_sha256sums, sha256_file, sign_checksums, verify_release_files, verify_signature
 
 INPUT_FIELDS = {"schema_version", "kind", "board", "arch", "release_id", "source_revision", "boot_abi",
@@ -244,13 +244,53 @@ def sign(dist, output, private, public, cms_private, certificate, *, canary, rau
             shutil.rmtree(work)
 
 
+def update_rollout(directory, private, public, *, promote=False, withdraw=False):
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        raise ValueError("product rollout signing must not run in hosted CI")
+    if type(promote) is not bool or type(withdraw) is not bool or promote == withdraw:
+        raise ValueError("select exactly one rollout operation")
+    directory = ab._offline_directory(directory)
+    private = _private(private, (directory,))
+    def data(name, limit):
+        return _read(_path(directory, name), limit, directory.stat().st_uid)
+    metadata = verify_metadata(data("os-update.json", 16384), data("os-update.json.sig", 512).decode().strip(), public)
+    raw, signature = data("os-rollout.json", 16384), data("os-rollout.json.sig", 512)
+    value = verify_rollout(raw, signature.decode().strip(), public, metadata)
+    if promote:
+        if value["withdrawn"]:
+            raise ValueError("a withdrawn OS release cannot be promoted again")
+        value["canary_ok"] = True
+    else:
+        value["withdrawn"] = True
+    validate_rollout(value)
+    try:
+        _signed(directory / "os-rollout.json", value, private, public)
+    except BaseException:
+        ab._write_atomic(directory / "os-rollout.json", raw.decode("utf-8"), 0o644)
+        ab._write_atomic(directory / "os-rollout.json.sig", signature.decode("ascii"), 0o644)
+        raise
+    return value
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    build = commands.add_parser("sign")
     for name in ("dist", "output", "private-key", "public-key", "cms-private-key", "lock"):
-        parser.add_argument("--" + name, type=Path, required=True)
-    parser.add_argument("--source-tree", type=Path, default=BASE.parents[2])
-    parser.add_argument("--canary", action="append", required=True)
+        build.add_argument("--" + name, type=Path, required=True)
+    build.add_argument("--source-tree", type=Path, default=BASE.parents[2])
+    build.add_argument("--canary", action="append", required=True)
+    policy = commands.add_parser("rollout")
+    for name in ("directory", "private-key", "public-key"):
+        policy.add_argument("--" + name, type=Path, required=True)
+    operation = policy.add_mutually_exclusive_group(required=True)
+    operation.add_argument("--promote", action="store_true")
+    operation.add_argument("--withdraw", action="store_true")
     args = parser.parse_args(argv)
+    if args.command == "rollout":
+        update_rollout(args.directory, args.private_key, args.public_key, promote=args.promote, withdraw=args.withdraw)
+        print("OS_ROLLOUT_SIGNED")
+        return 0
     import yaml
     verify_cms(yaml.safe_load(args.lock.read_bytes())["os_updates"], args.source_tree)
     sign(args.dist, args.output, args.private_key, args.public_key, args.cms_private_key,
