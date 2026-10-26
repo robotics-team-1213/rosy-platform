@@ -6,7 +6,7 @@
 # Usage: tools/sim/build_omx_overlay.sh [prefix]   (default ~/rosy-test/overlays/omx-vendor-<rev10>-<patch10>)
 set -eo pipefail
 omx="$(cd "$(dirname "$0")/../../deploy/robot/omx" && pwd)"
-revision=$(tr -d "" < "$omx/stack.lock.yaml" | sed -n 's/^  revision: \([0-9a-f]\{40\}\)$/\1/p')
+revision=$(tr -d '\r' < "$omx/stack.lock.yaml" | sed -n 's/^  revision: \([0-9a-f]\{40\}\)$/\1/p')
 [[ ${#revision} == 40 ]] || { echo "no vendor revision in $omx/stack.lock.yaml" >&2; exit 1; }
 patches=(omx-f-gazebo-headless omx-ai-sim-gates omx-ai-sim-action-only)
 digest=$(cd "$omx/patches" && cat "${patches[@]/%/.patch}" | sha256sum | cut -c1-10)
