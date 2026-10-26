@@ -164,7 +164,10 @@ class NativeReleaseManager:
     @property
     def links(self) -> LinkStore:
         if self._links is None:
-            from native_release_links import SymlinkStore
+            if __package__:
+                from .native_release_links import SymlinkStore
+            else:
+                from native_release_links import SymlinkStore
             self._links = SymlinkStore(self.current.parent, self.releases)
         return self._links
 

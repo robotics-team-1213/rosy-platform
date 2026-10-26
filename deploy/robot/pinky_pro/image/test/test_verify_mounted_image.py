@@ -160,6 +160,14 @@ def test_inspect_passes_with_valid_image(tmp_path):
     _add_lamp_and_camera(root)
     _add_login_probe_and_defaults(root, release_dir)
 
+    lock = verify_mounted_image.yaml.safe_load(
+        Path(verify_mounted_image.__file__).with_name("inputs.lock.yaml").read_text(encoding="utf-8"))
+    with (root / "var/lib/dpkg/status").open("a", encoding="utf-8") as status:
+        status.write("Package: rauc\nStatus: install ok installed\n"
+                     f"Version: {lock['os_updates']['rauc_package_version']}\n\n")
+    (root / "usr/bin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/bin/rauc").write_text("mock", encoding="utf-8")
+
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings
 
