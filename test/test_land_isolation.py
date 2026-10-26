@@ -269,11 +269,12 @@ def test_alone_files_put_safety_references_first_with_no_count_cap(monkeypatch, 
     assert safety == {"s/test/test_brake.py"}
 
 
-def test_guard_round_wiring(monkeypatch):
+@pytest.mark.parametrize("mode", ["auto", "full"])
+def test_guard_round_wiring(monkeypatch, mode):
     seen = []
     monkeypatch.setattr(land_isolation, "run", lambda wt, branch, sel, args, logdir, rnd, rt, guards, prep:
                         seen.append((sel, rnd, guards, prep)) or ["x"])
-    out = land_guards.first(ROOT, argparse.Namespace(tests="auto", node=True), [["pkg/test"]], Path("."), "pre",
+    out = land_guards.first(ROOT, argparse.Namespace(tests=mode, node=True), [["pkg/test"]], Path("."), "pre",
                             None, isolated=True)
     assert seen == [([["pkg/test"]], "pre", [list(land_guards.GUARDS)], True)] and out == ["round pre: guard round first: x"]
 
