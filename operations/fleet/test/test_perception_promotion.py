@@ -17,6 +17,7 @@ from fleet.server.console import FleetConsole  # noqa: E402
 from fleet.server.site_users import hash_password  # noqa: E402
 from fleet.server.task_service import FleetTaskService  # noqa: E402
 from fleet.server.task_store import FleetTaskStore  # noqa: E402
+from test_password_session import TYPED as PASSWORD  # noqa: E402  shared fixture value
 
 TOKENS = {"admin-a": "policy-admin", "admin-b": "policy-admin", "operator-a": "operator", "viewer-a": "viewer"}
 URL = "/api/fleet/perception-promotions"
@@ -170,16 +171,15 @@ def test_the_same_bundle_is_queued_once(made):
 
 
 def test_cookie_upload_without_this_console_origin_is_refused(tmp_path):
-    password = "correct horse"
     logins = {"alice": {"principal_id": "alice", "role": "operator", "policy_admin": True,
-                        "password_scrypt": hash_password(password)}}
+                        "password_scrypt": hash_password(PASSWORD)}}
     db = tmp_path / "fleet.db"
     app = create_app(FleetConsole([], []), task_service=FleetTaskService(FleetTaskStore(db), robot_ids=()),
                      site_users={}, site_logins=logins, omx_instances={}, omx_stop_transport=object(),
                      start_task_dispatcher=False)
     client = TestClient(app, base_url=SITE)
     assert client.post("/api/fleet/auth/login", headers={"Origin": SITE},
-                       json={"login": "alice", "password": password, "remember": False}).status_code == 204
+                       json={"login": "alice", "password": PASSWORD, "remember": False}).status_code == 204
     raw = encoded(bundle())
     refused = upload(client, raw, who=None, headers={})
     assert (refused.status_code, code(refused)) == (403, "CSRF_REJECTED")
