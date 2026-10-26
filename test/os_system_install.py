@@ -40,7 +40,7 @@ def admit(instance):
     ADMITTED = True
 
 
-def snapshot(instance, source_slot="a"):
+def snapshot(instance):
     admit(instance)
     from os_system_card import _guest
     _guest()  # The original cloud boot, with the six-GPT card entirely unmounted.
@@ -56,7 +56,8 @@ def snapshot(instance, source_slot="a"):
     WORK.mkdir(mode=0o700)
     source = WORK / "source"
     source.mkdir(mode=0o700)
-    for role, filename in (("root_" + source_slot, "rootfs.ext4"), ("boot_" + source_slot, "boot.vfat")):
+    # The real producer always exports factory A, even when the consuming device runs B.
+    for role, filename in (("root_a", "rootfs.ext4"), ("boot_a", "boot.vfat")):
         part = next(p for p in layout["partitions"] if p["role"] == role)
         destination = source / filename
         run(["dd", "if=/dev/vdc" + str(part["number"]), "of=" + str(destination),
@@ -207,7 +208,7 @@ if __name__ == "__main__":
     if args.command == "install":
         sys.path.insert(0, "/opt/rosy/os-bootstrap/native-runtime")
     try:
-        result = snapshot(args.instance_id, args.source_slot) if args.command == "snapshot" else install(args.instance_id, args.source_slot)
+        result = snapshot(args.instance_id) if args.command == "snapshot" else install(args.instance_id, args.source_slot)
     except Exception:
         if args.command == "install" and ADMITTED:
             diagnostic = subprocess.run(["journalctl", "-b", "--no-pager", "-n", "45",
