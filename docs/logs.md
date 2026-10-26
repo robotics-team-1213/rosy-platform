@@ -12071,3 +12071,10 @@ osy-d395-s1d\`.
 - 변경: 독립 Monitoring에 기존 CORE/Fleet/host 출력을 읽는 제한 수집기, 사이트별 reader API, 정규화 SQLite 관측·anchor·peer cursor·제한 이력을 구현했다. 캐시 GET은 운영 gather와 원천 polling을 호출하지 않는다. 쓰기 전용 lease와 게시 전 durable commit, 복구 시 stale 보고 경로, 고정 오류 코드 및 원천 JSON 제한을 적용했다.
 - 증거: `5a5355aa69` 원격89시험과 구조/harness/affected247시험이 모두 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 재시작/역순/동시 writer/응답 aging/task 종료/원천 손상/이력 만료 RED와 수정을 확인했고, 최종 SHA 독립 재검토에서 추가 차단 없음이 확인됐다.
 - gate 변화: Monitoring의 CLI·독립 프로세스·브라우저·native 묶음·실제 PC/LAN/TLS/장치 수용은 HOLD다. 공유 기반/등록을 먼저 착지한 뒤 이 서비스를 병합한다. CE: 해당 없음 — 새 구현의 계약과 회귀로 기록했다.
+
+## 2026-10-27 · uncommitted · perf(remote): 직렬 묶음 13개를 xdist로
+
+- 변경: `tools/remote/serial_suites.txt`에서 13줄을 뺐다(D-799 3: 직렬과 `-n`의 실패가 같음을 시험 PC에서 본 뒤). root `test/`와 `operations/fleet/test`는 착지 사전 시험의 임계 경로였다(10-26 FULL 사전 시험 25~60분, 그중 순차 17분·18분). 직렬 경로 하나가 섞인 묶음도 통째로 순차였다(imu_bno055가 섞인 media·games·palletizing 묶음). Gazebo·Isaac은 재지 않아 남기고, `tools`는 land_isolation의 collect_alone 잡이 기대므로 남겼다. 워커마다 수집 id가 달라 xdist 수집이 멈추던 두 매개변수(`test_password_session.py` 무작위 salt 해시, `test_site_conversation_client.py` `time.time()`)에 고정 id를 줬다.
+- 증거: 모델 PC, `-n 6 --dist loadfile`, 6 GB 상한, 실패 0: Fleet 7024 passed 2분 50초(순차 18분 19초), root `test/` 11433 passed 3분 24초(순차 16분 54초), perception 3582 passed 45초(순차 2분 34초), overhead·situation·core/api·robot_ui robot/pilot·imu_bno055·robot_execution/local·omx adapter·training/omx·deploy 각 25초 이하. 고정 id 전에는 Fleet·`test/` 모두 "Different tests were collected between gw…"로 수집 단계에서 멈췄다. `xdist_plan`은 실행하는 체크아웃의 목록을 읽으므로 효과는 착지 뒤부터다.
+- gate 변화: 없음(같은 시험, 병렬 실행). rclpy·ROS_DOMAIN_ID 묶음은 한 번의 측정이라 부하성 실패가 나오면 D-790 재실행이 가른다.
+- CE: 미정 — 착지 뒤 실제 사전 시험 시간으로 판단.
