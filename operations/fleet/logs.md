@@ -4659,6 +4659,99 @@
 - 증거: RED commit 8cea2b26cb에서 새 시험 12개가 누락 route로 실패했다. commit 95664a6496의 공식 원격 관련 회귀는 77 passed, skip 0이다. 최초 회귀의 두 기존 호출자 시험은 새 읽기/기존 쓰기 경계를 구분하도록 보완했다. 공정 import 금지 subprocess에서도 읽기 동작을 확인했다. 최종 변경과 외부 앱 HTTP 검증은 후속 결과로 구분한다.
 - gate 변화: 실물·production dispatch 활성화 없음. 첫 TRIP 흐름이며 팔 동작 중립화·Harbor 도달 검증 계약은 남는다. CE 해당 없음: 기존 실행·조회 구조와 회귀 시험으로 판단을 복구할 수 있다.
 
+## 2026-10-24 · uncommitted · Fleet task worker 기동 이름 보존
+
+- 변경: worker 분리 병합 뒤 lifespan이 import하지 않은 task_dispatch_loop를 호출하던 오류를 실제 import인 _task_dispatch_loop로 교정했다. 기존 monkeypatch와 task dispatcher 구현은 유지한다.
+- 증거: 고정 f3d7d3fba5 전체 원격 회귀의 app ownership 시험 7개가 NameError로 실패했다. 수정 commit 477948a415에서 app ownership·CLI·link-address 기존 시험 76 passed, skip 0, 0 NEW다. 전체 회귀의 다른 run과 최종 head 증거는 별도로 분류한다.
+- gate 변화: 기동 회귀 수정이며 실행 권한·profile 변경은 없다. CE 해당 없음: 원인과 교정은 코드·기존 회귀 시험으로 복원할 수 있다.
+
+## 2026-10-24 · uncommitted · D-856 전체 회귀 발견 사항 교정
+
+- 변경: TRIP_JOB_NOT_FOUND를 운영자 오류 문구 표에 추가했다. 없는 요청과 권한 밖 요청을 같은 조회 불가 문구로 표현한다.
+- 증거: 고정 f3d7d3fba5 전체 회귀에서 worker NameError 34건과 문구 누락 1건을 분류했다. 수정 commit 52a9ccf6b5에서 해당 파일의 전체 suite와 기존 CLI/link-address/app ownership을 원격 실행해 261 passed, skip 0을 확인했다. 이는 수정 범위의 회귀이며 이전 FULL 실행 전체를 통과로 바꾸지 않는다.
+- gate 변화: dispatch/권한 변경 없음. CE 해당 없음: 오류 문구 coverage와 기존 기동 시험이 회귀를 검증한다.
+
+## 2026-10-24 · uncommitted · D-856 중립 팔 사전검사 HTTP
+
+- 변경: 기존 proposer 인증과 workcell→instance 설치 대응으로 simulation preflight만 전달한다. dispatcher·Cell compiler·새 원장을 요구하지 않으며 응답 version/status·요청 전체 결속·typed code/reason을 검증한다. Fleet 수신 시각과 owner의 계산 시점 상태 나이를 구별한다.
+- 증거: 신규 계약 RED 뒤 API v1.299를 구현했다. 전체 관련 원격 213 passed/skip0/0 NEW이며 독립 stdlib-only HTTP client→Fleet→UDS→owner admitted state를 검증했다. 최종 소스·이력 metadata 보완과 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 기록했다. 기존 충전 HTTP pipeline은 별도 34ff5f55c1에서 10 passed/skip0다.
+- gate 변화: 공개 simulation 읽기다. 기존 두 사람 승인·원장·claim·stop/rearm·출력 writer는 변경하지 않는다. 새 팔 실행·Harbor 공정 변환은 남는다. CE 해당 없음: 검증과 소스가 처리 조건을 보존한다.
+
+## 2026-10-24 · uncommitted · D-856 step grant의 종류별 검증 경계
+
+- 변경: Store의 고정 Cell 파싱과 직접 Cell 속성 검사를 registry의 typed 파싱·common identity/fence·전체 payload 대조로 분리했다. Cell body가 recipe/cell/job/step·자세·item·pallet/layer·선택 SKU를 계속 결속한다. DB 생성·등록 kind·승인/profile·owner dispatch·claim 상태 전이는 유지한다.
+- 증거: 경계 함수 누락 RED12 후 구현했다. 유효하게 재서명한 Cell payload 변조와 원장/claim 불변, 비활성 시험 kind의 Cell 없는 helper 검사를 포함해 commit f3213debe8 원격 184 passed/skip0/0 NEW다. commit 1b9ed965ab의 별도 dispatcher/transport/문서·release 회귀는 152 passed/skip0/0 NEW이며 중복 사례가 있다. 독립 검토의 material finding은 없었다. Store ratchet은 943→928줄로 낮췄다.
+- gate 변화: 중립 실행의 내부 선행 단계다. 새 kind·wire·DB producer·실행 권한을 열지 않았다. CE 해당 없음: 검증 책임과 거절 조건을 source·회귀·docs/plans/2026-10-24-step-grant-boundary-design.md에 남겼다.
+
+## 2026-10-24 · dda08892c9 · D-856 원장 provenance 분리
+
+- 변경: version5 parent schema가 legacy/physical 저장 형식을 구분하고 네 Cell 필수 provenance를 physical 행에서는 NULL로 강제한다. 기존 Cell 읽기·복구·checkpoint·정지 소비자의 물리 행 해석을 차단하며 root 연결의 FK ON 정책을 유지한다.
+- 증거: 원격 RED9와 약한 schema 수용 RED2 뒤 atomic migration·전체 SQL 제약 대조를 구현했다. 원장 69개, 추가 checkpoint/SQL 실패 13개, 기존 Cell/다중 팔/TRIP 소비자 244개 별도 원격 회귀가 각각 skip0/0 NEW로 통과했다. 독립 구현 재검토 finding 해소. 정확한 소스와 실패 이력은 docs/validation/harbor-neutral-arm-ledger-2026-10-24/result.md를 따른다.
+- gate 변화: schema 준비와 legacy 소비자 차단이다. 실제 physical 생성·승인·owner 실행·물리 자원 종료·Harbor 연결은 후속이다. CE 해당 없음: 코드·회귀에 보완 이유가 남는다.
+
+## 2026-10-24 · fc5d75eecd · D-856 중립 팔 v2 transport 호환
+
+- 변경: Fleet client의 ARM kind→v2 map·grant union·공통 receipt 타입을 연결했다. receipt identity·phase summaries·timeout·재시도 없는 경계를 유지한다.
+- 증거: kind 누락 RED6 후 관련 원격 15 passed/skip0/0 NEW와 독립 검토를 확인했다. 선행 migration affected source 635d1e226e도 두 그룹 4722/6270 passed, 187/336 skipped, 각각 0 NEW로 끝났다. owner와 migration 검증 기록의 소스 범위를 구분한다.
+- gate 변화: client 호환이며 실제 physical creator·등록 kind·claim 해제는 아직 없다. CE 해당 없음: source와 프레이밍 회귀에 조건이 남는다.
+
+## 2026-10-24 · 46f56d6b48 · D-856 canonical owner capability와 ARM 응답 검증
+
+- 변경: SDK가 실제 설치 capability를 v2 UDS로 한 번 조회하고 scope/closed DTO를 대조한다. ARM receipt는 grant의 canonical journal과 일치해야 하며 ARM404는 None 대신 fenced reconciliation이 필요한 unavailable다. Cell/TRIP 형식과 기존 조회를 유지한다.
+- 증거: 누락 DTO/API/owner binding·receipt/404 RED35 뒤 관련 원격 790 passed/7 skipped/0 NEW. 실제 adapter/UDS와 SDK를 함께 검증했고 fixed SHA 독립 검토와 size/safety exit0를 확인했다. docs/validation/harbor-managed-capability-2026-10-24/result.md를 따른다.
+- gate 변화: FULL23개 목록은 진행 중이다. registry·physical creator/two-person 승인·World 물리 종료 증거·claim 해제·Harbor ARM 연결은 아직 닫혀 있다. CE 미해결: 이전 e26 G1 timing의 원인은 미확정이다.
+
+## 2026-10-24 · ebba429c4c · D-856 FULL 이력 표 guard 수정
+
+- 변경: 빠진 v1.306 변경 이력 표 행을 추가했다. 원본 FULL summary JSON을 validation에 보존했다.
+- 증거: entry9의 API 이력 표 행 누락1 NEW, 다른22개0 NEW로 종료했다. Fleet entry12는6285 passed/336 skipped/0 NEW였다. doc commit ebba429c4c에서 표를 보완하고 entry9 전체를 재실행 중이다. source Python은46 이후 동일하다.
+- gate 변화: FULL 통과 판정 전이다. 기존 Cell/TRIP와 새 physical producer/claim 경계를 유지한다.
+
+## 2026-10-24 · ebba429c4c · D-856 이력 표 수정 재검증 완료
+
+- 변경: 수정 후 재검증과 원본 FULL 실패를 validation/plan에 함께 기록했다.
+- 증거: 실패 entry9 전체가7371 passed/91 skipped/0 NEW, runner exit0였다. 원본46의 다른22개는0 NEW다. 원본과 수정 SHA의 결과를 구분한다.
+- gate 변화: physical create/approval/World 관측/atomic claim 종료·Harbor ARM은 다음 승인된 계획의 실행 범위다. 이 host 결과를 실물 수용으로 사용하지 않는다.
+
+## 2026-10-24 · 205cd08767 · D-856 두 표본 물리 검사
+
+- 변경: World 사실을 설치 정책·durable attempt context와 대조하는 내부 pure validator. 모든 참가자의 전체9개 링크·속도/그리퍼·엄격한 expanded-zone 이탈, object-origin source/target pose, 두 관측의 순서/경계 이후/age를 검사한다. 원장/claim/dispatch 쓰기는 없다.
+- 증거: 최초 RED25 뒤 집중63 passed, 독립 검토의 quaternion norm/축소 descriptor 두 누락을 RED4로 재현하고 보완했다. source205 집중67 passed/skip0, affected 전체 두 묶음4587 passed/189 skipped와6312 passed/336 skipped, 각각exit0/known0 NEW·고정 SHA 독립 재검토 finding 없음, source size/safety exit0. 범위 중복과 skips는 합산/수용으로 세지 않는다. 상세는 docs/validation/harbor-physical-evaluator-2026-10-24/result.md다.
+- gate 변화: credential ingress·실제 current context/fence·physical create/approval·atomic claim 종료·Harbor ARM은 미완료다. CE 해당 없음: source·회귀·검증 문서가 두 검토 finding의 원인/수정을 보존한다. 과거 e26 G1 timing 원인 미확정은 별도다.
+
+## 2026-10-24 · 76a173b5fd · D-856 중립 물리 제안과 두 사람 승인
+
+- 변경: 같은 Fleet DB에 physical create/read/approval을 추가했다. 정책에 arm/zone/object 키를 결속하고 legacy owner workcell도 함께 claim한다. 정확한 proposal/설치/capability와 두 사람·dispatch control을 확인해 approval/READY/claims를 원자 기록한다. schema version6·old-host 거절, stop/startup HELD/UNKNOWN 보존, 무관 DB/권위 필드 덮어쓰기/역행 시각 거절을 포함한다. legacy 완료 메서드는 AST 동일 이동하고 기존 호출을 보존했다.
+- 증거: 초기 RED21, 검토 네 finding은 RED5 failed/24 passed 뒤 보완했다. 원본3c 회귀의 구조 검사2건·기존 version 기대값1건과9d FULL의 구조/G1 2 NEW를 보존했다. source76 집중1292 passed/skip0, FULL23개 각각exit0/known0 NEW(Fleet6343 passed/336 skipped, root9707 passed/1135 skipped), 동일source G1 timing4 passed/skip0와 독립 안전 검토, source9 commits size/safety exit0다. 기존 normalize/reserve/release AST는 유지했고 중복/skip은 합산·수용으로 세지 않는다. docs/validation/harbor-physical-proposals-2026-10-24/result.md를 따른다.
+- gate 변화: public HTTP/DTO·실제 capability 수집·prepared context/dispatcher·관측 ingress·물리 claim 종료·Harbor ARM은 미완료다. CE 미해결: 원본G1 접촉 간격 p99 0.525457s의 원인은 미확정이며 최신 strict 통과를 해결로 보지 않는다. 코드 검토 finding은 source·회귀·검증 기록에 남긴다.
+
+
+## 2026-10-24 · 58f7cc7b14 · D-856 중립 ARM 작업 HTTP 제안과 승인
+
+- 변경: simulation 설치 시 create/read-by-key/ID와 named-operator admit를 기존 auth/audit에 연결했다. 모든 owner의 실제 SDK capability를 transaction 밖에서 수집하고 기존 원장의 승인/CAS/fence/claims를 호출한다. present-Origin은 기존 same_origin helper로 검사한다. 앱은 물리 refs만 보내며 자원·capability·grant·업무 완료를 지정하지 못한다. 미설치는503이다.
+- 증거: b5 집중1205 passed/16 NEW(시험의 잘못된 자원 조회15건/Origin누락1건) 뒤 최종18 passed/skip0/known0 NEW다. 소스58 FULL23개 각각exit0/known0 NEW(Fleet6361 passed/336 skipped, root9710 passed/1132 skipped), 독립 계약·전체로그 evidence 검토 추가 finding 없음이다. docs/validation/harbor-arm-job-http-2026-10-24/result.md를 따른다. 원본 실패와 각SHA를 보존하고 중복/skip을 합산·수용으로 세지 않는다.
+- gate 변화: 제안/승인 HTTP만 연결했다. prepared context·장치 제출·관측 credential·physical receipt/claim 종료·Harbor ARM은 이 소스에서 미완료다. 뒤의 schema7/8 변경은 별도 검증한다. CE 미해결: 이전G1 timing 실패 원인은 미확정이며 이번 strict 통과는 원인 해결 근거가 아니다.
+
+
+## 2026-10-24 · 3b23a23bca · D-856 물리 준비·전송 의도·종료 원장
+
+- 변경: common migration7/8의 physical attempt·raw observation 기록, 고정 grant/context·최초 전송의 최종 시간/표본 snapshot 검사, owner receipt causality·HOLD 유지, 별도 POST_ACTION receipt/원래 owner·generation claim 해제를 구현했다. 기존 Cell resolver·recipe·완료 callback·_KINDS에 등록하지 않았다. 실제 SDK submit/get/cancel과 credential HTTP/Harbor는 아직 없다.
+- 증거: 준비74·최초 의도91·결과 보완229·물리 종료101의 각 고정 SHA 집중 원격은 skip0/known0 NEW다. 원본 RED와 affected 실패를 별도 보존하고, legacy version 기대값72/구조 small 표시46을 보완했다. 독립 계약 검토의 TTL·clock/list·receipt causality/HOLD finding은 RED 후 재검토했으며 source3b 물리 해제의 추가 finding은 없다. 958d→3b19커밋 size/safety 각각exit0. docs/validation/harbor-physical-execution-2026-10-24/result.md를 따른다.
+- gate 변화: synthetic World 사실과 원장 transaction의 집중 검증이다. sourcecf의 local_invocations 두 그룹은 FULL이 아니며 후속 구현을 고정한 최종23개 FULL은 대기 중이다. HTTP58 FULL과 합치지 않고 중복 수치를 합산하지 않는다. 실제 bounds/장치/현장 수용을 넓히지 않는다. CE 미해결: 이전G1 timing 원인은 미확정이다.
+
+
+## 2026-10-24 · 54f27e6fb7 · D-856 전체 stop 대상과 내부 SDK dispatcher
+
+- 변경: 같은 workcell의 모든 physical participant를 별도 stop/rearm target에 결속하고 legacy dispatcher/recovery mapping을 유지했다. SDK 클래스는 모든 owner의 fresh simulation identity/capability, 공통 journal의 process-safe RPC guard, control 조회 뒤 최종 proof/fence/claim/freshness 재검사를 거쳐 고정 grant로 한 번만 제출한다. refresh/cancel은 원래 grant만 사용하고 유실/404/restart/HOLD는 점유를 보존한다. app ingress에는 아직 연결하지 않았다.
+- 증거: stop RED7 뒤 source80dde 집중65 passed/skip0/0 NEW와 genuine safety review/trailer, SDK RED14 errors 뒤 겹친 dispatcher·늦은 control read RED4 failed/14 passed를 재현했다. source54 집중121 passed/skip0/0 NEW(실제 POSIX process guard 포함), 독립 재검토 추가 finding 없음이다. docs/validation/harbor-physical-execution-2026-10-24/result.md와 stop-source-review.md를 따른다.
+- gate 변화: Fake SDK/stop port와 transaction·동시성의 집중 증거다. native UDS/독립 TCP HTTP·관측 credential·Harbor ARM·최종 FULL23은 후속이며 HTTP58 FULL에 합치지 않는다. 물리/현장 gate를 넓히지 않는다. CE 미해결: 이전G1 timing 원인은 미확정이다.
+
+
+## 2026-10-24 · bb38fdcdd0 · D-856 independent observer and Harbor ARM HTTP
+
+- 변경: 독립 observer token/identity/expiry·audit, raw facts→immutable World 변환, context/observations/physical-receipt/cancel, 승인 뒤 고정 준비·단일 SDK send·Fleet-owned monitor를 조립했다. stop/unknown/HOLD와 원래 owner/generation 점유를 유지하고 업무 완료는 Harbor에 남긴다. app881행 ratchet과 기존 Cell route를 보존했다.
+- 증거: c4 집중1266passed, f1 추가38passed, Channel 자격 재사용 RED2 뒤 dc5 집중64passed, bb38 auth/observer/release122passed(각skip0/official0NEW). 독립 검토의 unknown P2·Channel P1·Header 순서 보완을 재검토했다. 양 끝 bb38/Harbor93e71 ARM1/Cell3/TRIP1 HTTP 각각skip0, ARM의두 진입은 각각 UDS Submit1/Get1·PRE/POST2이며 업무 WAITING을 유지했다. 상세 원본/범위는 docs/validation/harbor-arm-observer-http-2026-10-24/result.md다.
+- gate 변화: 최신 bb38 FULL23개 모두exit0/official0NEW·독립 전체 증거 검토를 확인했다. dc5 FULL의secret/auth2실패와743 집중잔여scanner1실패를 보존·분류했으며 성공으로 대체하지 않는다. 합성 bounds/zero speeds/poses를 physics·native actuator·실물/현장 수용으로 부르지 않는다. CE 미해결: 이전G1 timing 원인은 미확정, 이번 구현·하네스 수정에는 새 교훈 없음.
 ## 2026-10-24 · afb218aed1 · 표시 추출과 최신 main 오류 코드 통합
 
 - 변경: main에 추가된 TRIP_JOB_NOT_FOUND 표시를 추출 모듈에 보존하고 Node 단언으로 연결했다. 기존 전수 오류 코드 검사·문서 소유·금지 의존성 검사는 유지한다.
@@ -4834,3 +4927,9 @@
 - 변경: `host_control`의 `HOST_ACTIONS`(ai·model `clean-storage`), `ACTION_NOT_ALLOWED`·`NO_STORAGE_SERVICE` 코드, 설치 화면의 [시험 저장소 정리] 버튼과 디스크·GPU 여유 표시.
 - 증거: `operations/fleet/test/test_host_control.py` 원격 실행.
 - gate 변화: 없음. 버튼은 catalogue가 그 동작을 내줄 때만 보인다.
+
+## 2026-10-26 · uncommitted · D-856 forward-port to local main
+
+- 변경: Preserved integrated-control collection/lifecycle and neutral ARM simulation installation together. Shared local estop now carries every installed ARM participant; typed control-unit ownership also checks their workcells. Added HTTP regression for declaration refusal and both-owner fanout.
+- 증거: Python/JSON/JavaScript syntax and harness lint only at this stage. New remote execution and independent safety review are required before commit/landing; no physical activation or deployment.
+- gate 변화: None. CE: no new learning; the integration invariant is expressed in the shared path and regression, whose remote execution remains pending.

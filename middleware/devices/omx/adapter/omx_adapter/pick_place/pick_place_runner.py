@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 import threading
 import time
@@ -23,8 +21,10 @@ from ..manipulation_plan import (
     ResolvedPickPlacePlan,
 )
 from ..phase_gate import PHASE_WAIT
+from ..phase_command_digest import phase_command_digest
 from ..phase_recorder import ActionPhaseRecorder
-from ..pose_plan import CellPlanningProfile, CellTransferPlan, validate_cell_transfer_plan
+from ..transfer_motion import (ArmPlanningProfile as CellPlanningProfile, TransferMotionPlan as CellTransferPlan,
+                              validate_transfer_motion_plan as validate_cell_transfer_plan)
 from ..ros_goal_contract import RosGoalEvent
 
 
@@ -99,6 +99,7 @@ class PickPlaceRunner:
         self._current_command: TrajectoryCommand | None = None
         self._current_goal_id: str | None = None
         self._submitting = False
+        self._submission = threading.local()
         self._pending_events: list[RosGoalEvent] = []
         self._pending_overflow = False
         self._last_event_sequence = 0
@@ -185,32 +186,12 @@ class PickPlaceRunner:
     def _command_digest(self, command: TrajectoryCommand, phase: PlannedMotionPhase,
                         plan: ResolvedPickPlacePlan | CellTransferPlan,
                         state: ExecutionStateSnapshot) -> str:
-        document = {
-            "command_id": command.command_id,
-            "phase_id": phase.phase_id,
-            "ordinal": phase.ordinal,
-            "joint_names": command.joint_names,
-            "points": [
-                {
-                    "time_from_start_s": point.time_from_start_s,
-                    "positions": point.positions,
-                    "velocities": point.velocities,
-                    "accelerations": point.accelerations,
-                }
-                for point in command.trajectory_points
-            ],
-            "planned_source_state_sequence": phase.source_state_sequence,
-            "execution_state_sequence": state.sequence,
-            "execution_joint_positions": dict(state.joint_positions),
-            "start_state_positions": phase.start_state_positions,
-            "start_state_tolerances": self._tolerances(phase),
-            "calibration_revision": phase.calibration_revision,
-            "transform_revision": phase.transform_revision,
-            "planning_scene_revision": phase.planning_scene_revision,
-            "planner_revision": plan.planner_revision,
-        }
-        encoded = json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False)
-        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return phase_command_digest(command, phase, plan, state, self._tolerances(phase))
+
+    def current_submission_digest(self, command):
+        """Only the exact synchronous command on its submitting thread has this capability."""
+        current = getattr(self._submission, "current", None)
+        return current[1] if current is not None and current[0] is command else None
 
     def _build_command(
         self, phase: PlannedMotionPhase,
@@ -343,12 +324,15 @@ class PickPlaceRunner:
             raise
 
         def submit_and_record() -> dict[str, object]:
+            self._submission.current = (command, digest)
             try:
                 response = self.goal_port.submit(
                     command, on_goal_event=self.on_ros_goal_event,
                 )
             except Exception:
                 response = PhaseDispatch(dispatched=None)
+            finally:
+                del self._submission.current
             if not isinstance(response, PhaseDispatch):
                 response = PhaseDispatch(dispatched=None)
             if response.dispatched is not True:

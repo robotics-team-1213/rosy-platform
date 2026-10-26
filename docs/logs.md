@@ -10899,6 +10899,42 @@ osy-d395-s1d\`.
 - 증거: 문서 등록 f14d00748e의 원격 552 passed, 첫 읽기 회귀 95664a6496의 77 passed. Harbor는 별도 작업 브랜치에서 소비하며 기본 checkout의 동료 변경을 보존한다. 최신 전체 검증과 실제 HTTP는 별도 결과다.
 - gate 변화: 문서 승인과 첫 흐름 구현 진행이며 장치·배포·현장 수용은 열지 않는다. CE 해당 없음: 기능 추가와 기존 계약 재사용이다.
 
+## 2026-10-24 · d0d7f4616d · D-856 물체 참조와 owner 기하 결속
+
+- 변경: 설치 catalog의 기하와 물체 참조를 불변 map·별도 digest로 결속했다. requester가 기하를 바꾸거나 데이터 생성으로 실행 권한을 얻는 통로는 없다.
+- 증거: 누락 모듈 RED 14 failed 후 결속·사전검사·기존 pose/Cell acceptance 원격 112 passed, skip0, 0 NEW. 독립 계약 검토에서 material finding은 없었다.
+- gate 변화: 내부 데이터 경계만 검증했다. 중립 grant·실제 owner 소비·원장 migration·물리 자원 해제·Harbor 연결은 계속 진행한다. CE 해당 없음: 구현과 회귀가 판단 근거를 보존한다.
+
+## 2026-10-24 · 1258314f51 · D-856 비활성 중립 팔 grant 계약
+
+- 변경: v1.303에 물리 참조와 공통 권한 envelope만 받는 grant DTO를 등록했다. 기존 Action/stop DTO 14개는 AST를 그대로 옮겨 canonical export를 유지하고 facade 크기를 줄였다.
+- 증거: 공식 원격 1385 passed, skip0, 0 NEW. 독립 계약 검토와 size_range/safety_review 통과. 정확한 소스·시험·한계는 docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md를 따른다.
+- gate 변화: 실제 runtime 종류·submit은 아직 거절한다. 원장 provenance·owner phase/recovery·물리 자원 종료와 Harbor 업무 변환을 다음으로 연결한다. CE 해당 없음: 계약과 시험이 판단 근거를 보존한다.
+
+## 2026-10-24 · uncommitted · D-856 중립 원장 migration 설계
+
+- 변경: 기존 parent의 네 legacy provenance를 보존하고 새 물리 형식과 구분하는 최소 재구성·소비자 차단·원복/동시성 검증 계획을 작성했다.
+- 증거: 현재 schema version 4, FK·per-arm mirror·read projection·site-stop 해제 경로를 조사하고 독립 계약 검토를 받았다. source 8da8bb1593의 FULL 원격 실행은 진행 중이며 결과를 기다린다.
+- gate 변화: 다음 migration의 RED/SQL 구현 준비다. schema·물리 creator·새 runtime kind를 구현했다는 기록이 아니다. CE 해당 없음: 검증 전 설계이며 해결된 운영 장애가 아니다.
+
+## 2026-10-24 · dda08892c9 · D-856 원장 migration 구현과 선행 FULL 결과
+
+- 변경: legacy provenance를 보존하는 원장 version5와 기존 Cell 소비자의 physical 차단을 구현했다. 선행 grant 단계 FULL 결과도 해당 SHA에 결속해 기록했다.
+- 증거: migration 관련 원격 69/13/244개 별도 회귀가 skip0/0 NEW로 통과하고 독립 검토 지적을 수정·재검토했다. grant source 8da8bb1593의 FULL 세 그룹은 11932/4359/6257 passed와 543/117/336 skipped, 각각 0 NEW다. 서로 다른 소스·수용 범위를 docs/validation의 두 기록에서 구분한다.
+- gate 변화: migration 이후 affected 전체 검증과 실제 creator·owner 실행·자원 종료·Harbor 변환은 남는다. CE 해당 없음: 운영 장애 해결이 아닌 구현·시험 보완이다.
+
+## 2026-10-24 · 11486ce7cd · D-856 owner transaction 물체·복구 결속
+
+- 변경: 중립 grant/object_ref만으로 그리퍼 transaction과 별도 snapshot을 만들고, raw identity·generation을 대조해 재시작을 HOLD로 복구한다. 가짜 Cell/camera 자료를 만들지 않는다.
+- 증거: 누락 consumer RED16과 태그 삭제 우회 RED1 뒤 신규·기존 소비자 원격 74 passed/skip0/0 NEW, 독립 재검토 finding 해소. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md에 결속했다.
+- gate 변화: 내부 상태 기계 소비자다. 설치 factory·phase-only runtime·parent journal 대조·Fleet 물리 자원 종료와 Harbor 연결은 남는다. CE 해당 없음: 보완 근거는 source·시험에 남는다.
+
+## 2026-10-24 · 45173e6f92 · D-856 설치된 owner phase 실행과 client 연결
+
+- 변경: API v1.305의 설치 결속 factory와 기존 phase/그리퍼 workflow, v2/shared control/완료 기록을 연결했다. 기본 owner와 direct driver의 거절 경계를 유지한다.
+- 증거: owner 집중 회귀 153 passed/skip0/0 NEW, SDK 15 passed/skip0/0 NEW 및 독립 검토를 기록했다. 선행 migration affected 전체도 exit0으로 끝났다. 소스·합성 port·실물 미검증 한계는 owner/migration validation에 결속했다.
+- gate 변화: Fleet physical 생성/승인·actual owner-state/HTTP·물리 자원 종료와 Harbor 업무 변환은 남는다. CE 해당 없음: 정상 구현과 검증의 기록이다.
+
 ## 2026-10-24 · afb218aed1 · 최신 main과 UI 표시 추출의 충돌 통합
 
 - 변경: [추가 통합 기록](validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md)에 새 오류 문구 보존·지도 크기 기록 하향·양쪽 로그 보존 판단을 남겼다. 초기 동결 관측은 유지한다.
@@ -11729,3 +11765,52 @@ osy-d395-s1d\`.
 - 증거: 게시 PR이 병합될 즈음 로컬 main은 게시 SHA보다 앞서 있어(시간당 약 1착지) origin/main의 조상이 아니므로 ff-only가 실패한다. 게시 스크립트 검토에서 확인.
 - gate 변화: 없음. 절차 문서다.
 - 교훈: 없음
+
+## 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+
+- Change: authenticate exactly legacy3/current4; bind current/staged/rollback Compose and loaded proof, retire only identity-proven outgoing PostgreSQL without force/volume deletion; retain separate same-commit physical relocation.
+- Evidence: real-signature source bc61f16ea9 RED3/8 controls; canonical-inventory source77d8b34bac RED38/13 controls; overlay source9e8e86575f RED2/1 control; forged physical journal source8e856f02a9 RED1. Raw logs remain outside Git; independent implementation review and committed GREEN pending. Initial42 failures used a corrected-later manual selector and are not uniform migration-cause proof.
+- Gate: source preparation only; no install/site/FIELD or deployment acceptance.
+- CE: existing whole-configuration and identical-external-helper lessons applied; solved lesson decision awaits actual GREEN.
+
+## 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+
+- Change: bind exact authenticated legacy3/current4 to candidate-local Compose/overlay and loaded identities; exact-ID retired PostgreSQL cleanup precedes normal rollback restoration, while consistent physical relocation remains separate. Builder/signing blobs remain base-exact.
+- Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
+- Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
+- CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
+
+## 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
+
+- 변경: 실행 예시의 Git ID를 같은 commit으로 해석되는 짧은 revision으로 표기하고 전체 SHA는 본문에 유지했다. 기존 Git ID 교훈에 CLI 코드블록도 검사된다는 조건과 실제 실패·수정 검증을 보강했다.
+- 증거: 첫 통합 commit 7b2dbeb623의 관련 gate는 1 FAIL/1093 PASS/2 SKIP, 단독 실패·main 통과를 보존했다. 문서 수정 commit 6d493681e4에서 동일 원격 secret guard 1 PASS/runner·outer0/NEW0·known0·flaky0, scanner와 네 production 파일은 그대로다.
+- Gate: 공식 재착지·게시·site/DEVICE/FIELD는 아직 대기한다. 정밀 시각 수용을 주장하지 않는다.
+- CE: 기존 교훈 갱신; 새 중복 문서나 scanner 예외는 만들지 않았다.
+
+## 2026-10-26 · uncommitted · tools/publish_main.py: D-868 게시 자동화 초안(기본 dry run)
+
+- 변경: `tools/publish_main.py`를 추가한다. fetch 뒤 origin/main이 로컬 main의 조상이 아니면 `git merge-tree`로 판정해 기록 파일(`docs/logs.md`·`docs/index.md`·`adr_gaps.txt`)의 내용 충돌뿐이면 exit 4(동기화 착지 명령 안내), 그 밖이면 exit 3 "sync needs robot-4d"로 멈춘다. 동기화 착지는 스스로 하지 않는다. 게시 SHA는 `origin/main..main`의 ancestry-path에서 녹색 FULL 착지 기록이 있는 가장 새 커밋이다. 녹색 FULL은 그 SHA의 `land_record` 기록이 있고 base가 조상이며, invocation 가운데 정확히 `["test"]`(FULL 계층만 돌리는 루트 test/ 전체)가 있는 것이다. 마지막 게시가 `--min-hours`(6)보다 오래됐거나 `--force-blocked`일 때만 `--apply`에서 git common dir 아래 임시 분리 워크트리로 `publish/main-YYYYMMDD-HH`를 push하고 PR을 연다. `--merge-when-green`은 mergeable·ci-result 녹색일 때만 `--merge --match-head-commit`으로 병합하고, ff-only 대신 동기화 명령(새 워크트리에서 `git merge origin/main` + `land.py`)을 merge-tree 판정과 함께 출력한다. robot-4d 검토 반영: 기록의 `tier` 필드를 먼저 보고 없으면 `["test"]`로 판정하며, 범위의 기록이 둘 다 알아볼 수 없으면 exit 8로 멈춘다. PR 본문에 게시 SHA·FULL 기록 날짜·`origin/main..SHA` 커밋 수·빠진 착지 수(lag)·Safety-Review 범위 결과를 적는다. 임시 워크트리 폴더가 남으면 `worktree_rules` 묘비를 남긴다.
+- 이유: 0.3 게시 자동화 명세. main 끝에는 녹색 FULL이 거의 없고, pre-push가 main 체크아웃 작업 트리로 시험을 골라 10-26에 exit 4가 두 번 났다.
+- 증거: `test/test_publish_main.py`(bare origin 고정 저장소, gh는 대역) 원격 실행. SHA 선택 규칙과 충돌 관문은 변형을 넣어 시험이 빨개지는 것을 확인했다.
+- gate 변화: 없음. GitHub에 대해 실행하지 않았고 첫 실제 게시는 robot-4d 검토 뒤다. CE: 해당 없음 — 새 도구와 그 시험이며 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · tools/publish_main.py: 게시 전 비밀 검사(D-889 5)와 역할 이름
+
+- 변경: 게시 계획 전에 `origin/main..SHA`의 커밋마다 추가한 줄(merge commit이 부모 어디에도 없이 더한 줄 포함, `git log -p --cc -U0`을 흘려 읽는다)을 저장소 검사기 `deploy/robot/pinky_pro/release/secret_scan.py`의 `scan_text`(public provenance, `scan_files`의 fixture·prose 예외 그대로)로 검사한다. 걸리면 커밋·경로·규칙만 찍고 값은 가린 채 exit 9로 멈춘다. 멈춤 문구의 세션 이름은 역할 "동기화·게시 담당"으로 바꾼다.
+- 이유: merge commit 게시는 이력 전체를 내보내므로 중간 커밋에서 들어갔다 지워진 비밀도 공개된다. 끝 트리만 보는 `test_no_secrets_in_tracked_files`로는 못 막는다.
+- 증거: 실제 범위 `origin/main..main`(2,783커밋)을 14초에 읽었고 323건(커밋·경로 쌍 109개, 경로 84개)이 걸렸다. 대부분 문서의 40자리 커밋 id와 64자리 digest이고, 시험 파일의 credential·wifi-psk 모양 줄이 섞여 있다. 걸린 84개 경로를 지금 main 끝 트리로 같은 방식으로 검사하면 0건이다(끝 트리만 보면 놓친다). 첫 게시 전에 동기화·게시 담당이 검토해야 한다. 시험은 중간에 넣었다 지운 값과 merge commit만 더한 값을 잡고, 끝 트리만 검사하는 변형에서 빨개진다.
+- gate 변화: 없음(도구만). CE: 해당 없음 — 새 관문과 그 시험이며 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · tools/publish_main.py: 검토한 비밀 검사 기준 목록
+
+- 변경: `deploy/robot/pinky_pro/release/publish_secret_baseline.json`(109행)을 추가하고, 게시 비밀 검사가 (커밋, 경로, 규칙)이 정확히 이 목록에 있는 걸린 줄만 건너뛰게 한다. 행에는 값·발췌 없이 커밋·경로·규칙·판정("reviewed: not a secret")·검토일만 둔다. 다른 키가 있거나 형식이 틀리면 exit 1로 멈춘다. 새 커밋이나 다른 규칙은 그대로 exit 9다.
+- 이유: `origin/main..84e20380a2`(publish/main-20261025)의 323건을 값을 찍지 않고 검토했고 실제 비밀은 없었다(hex SHA·digest 약 250, 코드·헤더 이름 약 20, 시험·예시 상수 약 15, 문서의 브랜치 이름·경로·결과 표 약 35, 압축 시험 blob 1, 서비스 토큰 접두 0, 비공개 후보 22개와 sha256 일치 0). 검사는 새 커밋에 대해 계속 돌아야 한다.
+- 증거: 목록은 같은 범위의 현재 검사(2,585커밋, 323건 → 고유 109행)로 만들었다. 시험은 목록에 있는 걸린 줄은 통과하고 같은 경로의 새 커밋은 멈추며, 값이 든 행은 거부하는 것을 본다. 목록을 무시하거나 경로만 맞추는 변형에서 빨개진다.
+- gate 변화: 없음(도구만). CE: 해당 없음 — 검토 결과를 기준 목록으로 남긴 것이며 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · tools/publish_main.py: 기준 목록 검토자 표기와 IP·호스트 공백 표시
+
+- 변경: `publish_secret_baseline.json`에 최상위 `reviewer`를 두어 사람 승인이 아닌 에이전트 검토임과 검토 방법(값 미출력, 서비스 토큰 접두 0, 비공개 후보 22개와 sha256 일치 0)을 적는다. 검증기는 이 키를 요구하고 행의 다른 키(발췌·값)는 계속 거부한다. 게시 PR 본문에 "IP·호스트 규칙 미검사 (secret_scan에 규칙 없음)" 줄을 넣는다.
+- 이유: 동기화·게시 담당 검토. 기준 목록이 사람의 승인으로 읽히지 않게 하고, 규칙이 생길 때까지 게시마다 공백이 보이게 한다.
+- 증거: 원격 `test/test_publish_main.py`(reviewer 없는 목록 거부, 저장소 목록 적재, PR 본문 줄).
+- gate 변화: 없음. CE: 해당 없음 — 검토 표기 보강이다.

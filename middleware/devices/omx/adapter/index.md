@@ -36,6 +36,8 @@
 - [2026-10-02-rosy-cell-c3-gazebo.md](../../../../docs/plans/2026-10-02-rosy-cell-c3-gazebo.md)
 - [2026-10-04-d442-omx-preempt-recovery.md](../../../../docs/plans/2026-10-04-d442-omx-preempt-recovery.md)
 - [2026-10-15-omx-camera-recovery.md](../../../../docs/plans/2026-10-15-omx-camera-recovery.md)
+- [2026-10-24-managed-transfer-authority-design.md](../../../../docs/plans/2026-10-24-managed-transfer-authority-design.md)
+- [2026-10-24-managed-transfer-capability-design.md](../../../../docs/plans/2026-10-24-managed-transfer-capability-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -47,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · neutral ARM forward-port contracts holder
 - 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
 - 2026-10-24 · uncommitted · fix(omx): D-858 S1 독립 안전 검토 지적 반영 (H1, M1-M6)
 - 2026-10-24 · uncommitted · feat(omx): D-858 S3 커미셔닝 기록·정지 시험 관문·저장 뒤 HOLD
 - 2026-10-24 · uncommitted · fix(omx): D-858 S1 재검토 지적 반영 (N1-N4, 재-trip)
-- 2026-10-24 · uncommitted · feat(omx): D-858 S1 실물 Dynamixel port와 가짜 버스 시험
