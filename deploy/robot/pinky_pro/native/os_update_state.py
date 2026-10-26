@@ -22,6 +22,11 @@ PENDING_FIELDS = {"transaction_id", "source_boot_id", "trial_boot_id", "source_s
                   "phase", "verified", "layout_sha256", "health_sha256"}
 
 
+def layout_digest(layout):
+    raw = json.dumps(validate_layout(layout), sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+
 def _slot(value):
     if value not in ("a", "b"):
         raise ValueError("invalid OS slot")
@@ -146,7 +151,7 @@ class _Store:
                 or layout["provision_role"] != "bootstrap" or version <= value["committed"]["release_id"]
                 or version in value["failed_versions"]):
             raise ValueError("OS transaction is not a new committed-slot update")
-        digest = hashlib.sha256(json.dumps(layout, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        digest = layout_digest(layout)
         value["pending"] = dict(transaction_id=transaction_id, source_boot_id=boot_id, trial_boot_id=None,
             source_slot=current, target_slot="b" if current == "a" else "a", phase="PREPARED",
             verified=deepcopy(verified), layout_sha256=digest, health_sha256=None)
