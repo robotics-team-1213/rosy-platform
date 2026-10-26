@@ -12026,3 +12026,10 @@ osy-d395-s1d\`.
 - 증거: 첫 공식 FULL은29묶음1FAIL/34989PASS/2235SKIP(묶음 간 중복 포함), 별도guard287PASS였다. 실패ID의 단독 재현1FAIL과 actualmain209dbf98b3의1PASS를 보존했다. 수정sourcee18c084879의 동일 guard+실제Home 회귀3PASS/0SKIP, official·outer·known0/NEW0·known0·flaky0이다. 새 결과: docs/validation/navigation-intent-epoch-prelude-2026-10-26b/result.md.
 - Gate: 첫 FULL은 실패이며 착지하지 않았다. 기존 집중 시험·첫 실패와 보완 검증을 구분하고 최신 main 통합·공식 재착지·CI·현장 수용은 아직 대기한다.
 - CE: 해당 없음 — 코드 분류 근거와 회귀·검증 기록으로 판단을 보존했다.
+
+## 2026-10-26 · b82af1ec31 · pure landing selection extraction
+
+- Change: move only select/browser_tier to land_selection with caller-owned Stop/env/helper seams and unchanged public wrappers; land581->548, helper53. No explicit FULL/receipt/prepared policy change.
+- Evidence: independent source treec0f27b3c40 approval; committed standalone REDb41cbae63511FAIL/NEW11 at missing-leaf assertions; sourceb82af1ec31 five-file remote152PASS0skip, official/outer/known0/NEW0. AST bodies preserved after inverse dependency qualification; other gateway functions/classes unchanged. Browser tests cover chunks/selection, without Chromium opt-in.
+- Gate: source preparation only; official FULL/landing/publish/device acceptance pending Root. Raw capped /tmp pip warnings retained with unknown attribution/no cleanup. See validation/land-selection-extraction-2026-10-26/result.md and external source-bound evidence.
+- CE: not applicable; pure split and existing size/selection lessons, without a new solved runtime incident.
