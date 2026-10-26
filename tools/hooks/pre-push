@@ -133,7 +133,7 @@ git rev-parse --verify -q origin/main >/dev/null || {
 }
 # D-889 5: a publish push puts the whole range's history on a public repo. A plain git push to
 # publish/main-* skipped publish_main.py's per-commit scan (2026-10-27), so the hook runs it too.
-if [ -n "$PUBLISH_REF" ] && [ -f tools/publish_main.py ]; then
+if [ -n "${PUBLISH_REF:-}" ] && [ -f tools/publish_main.py ]; then
   echo "[pre-push] secret scan on origin/main..${PUSH_SHA:0:10}"
   "$PY" tools/publish_main.py --secret-scan "$PUSH_SHA" || exit 1
 fi
