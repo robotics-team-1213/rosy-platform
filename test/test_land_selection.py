@@ -227,6 +227,7 @@ def full_case(repos, monkeypatch):
                 codes.append(land.remote_pytest.CANCELLED)
                 continue
             code, text = GREEN
+            text = "1 passed in 0.01s\n"  # Browser gate requires a real pytest-summary shape.
             if "ROSY_ALONE_FILES=pkg/test/test_a.py" in inv:
                 text += ("[isolation] " + case.report + ": "
                          + ("pkg/test/test_a.py" if case.report == "incomplete" else "1") + "\n"
