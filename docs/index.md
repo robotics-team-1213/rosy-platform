@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 6·7·8 (설계 0.7), 규칙 4·5는 뺌
+- 2026-10-26 · uncommitted · fix(remote): Isaac supervisor 실행이 host probe에 gpu 예약으로 보인다
 - 2026-10-26 · uncommitted · 교훈 2건: 폴더 단위 pytest 초록, 착지 기록 끊김
 - 2026-10-26 · uncommitted · 교훈 갱신: 카메라 readiness와 여러 유닛 동시 재시작
 - 2026-10-26 · uncommitted · D-871 3단계: review v12·v13-eval, site-tools
-- 2026-10-26 · uncommitted · D-871 통합관제 업데이트 현황

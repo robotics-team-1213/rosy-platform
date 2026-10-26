@@ -11984,6 +11984,12 @@ osy-d395-s1d\`.
 - 증거: test_native_cycle.py는 혼자 실행하면 ERROR 26, 폴더 실행은 exit 0이었다(원격 5e162cca21). `.git/rosy-land` 마지막 기록은 16:21이었다. 새 끝에서 끝 시험은 원격 153 passed이고, 변이에서 2건이 빨강이 됐다.
 - gate 변화: 없음.
 
+## 2026-10-26 · uncommitted · fix(remote): Isaac supervisor 실행이 host probe에 gpu 예약으로 보인다
+
+- 변경: `tools/remote/remote_isaac.py`의 PREPARE는 준비가 끝나면 배치 예약 `~/rosy-jobs/<name>.resv`를 지운다. 그래서 supervisor가 돌리는 Isaac 실행은 `~/rosy-jobs`에 아무것도 남기지 않았고, `host_probe.py`는 모델 PC를 비었다고 보고 착지 시험과 브라우저 레인을 그 위에 놓았다. 이제 `start()`와 매 `observe()`가 실행이 살아 있는 동안 `~/rosy-jobs/isaac-<run id>.resv`(`<만료 epoch> gpu 6 8`, 만료 지금+2시간)를 다시 쓰고, 끝 상태(SUCCEEDED·FAILED·STOPPED)나 stop에서 지운다. 클라이언트가 죽으면 probe가 만료된 파일을 지운다. 예산은 Gazebo sim과 같은 6코어 8 GB다. `remote_sim.py`는 이미 sim lock을 잡고 있어 바꾸지 않았다(robot-4a 확인).
+- 증거: 원격 `test/test_remote_isaac.py test/test_omx_cell_cases.py` 25 passed(d7648f5e32, 모델 PC). 예약 제거를 건너뛴 변이는 새 시험 2건이 빨강. `rosy_harness.py lint` 0 errors, `size_range.py main HEAD` ok.
+- gate 변화: 없음.
+
 ## 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 6·7·8 (설계 0.7), 규칙 4·5는 뺌
 
 - 변경: 규칙 8: 착지·시험 관문 파일(`tools/land*.py`, `worktrees.py`, `worktree_rules.py`, `tools/hooks/**`, `remote_pytest.py`와 그것이 import하거나 읽는 `tools/remote` 파일(`serial_suites.txt` 포함), `test/known_failures.py`, `test/browser_scope.py`)은 FULL이다. 말단 도구는 이미 자기를 부르는 시험을 골랐다. `--head`인데도 체크아웃의 파일을 읽던 것을 그 커밋의 파일을 읽게 고쳤다(`affected_repo.Repo` rev, 크기 한도 때문에 `Repo`를 순수 이동). 규칙 6: `test/architecture` 변경은 그 디렉터리 전체. 규칙 7: `known_failures.txt`에서 빠지거나 더해진 id의 시험 파일을 돌린다. 더한 id는 브랜치의 다른 변경을 선택기가 매핑한 결과가 그 시험을 고르거나, 안전 태그이거나, 파일이 없으면 FULL(사람 검토)이다. 더한 id가 그 회차에서 실제로 실패하지 않으면 `land_checks`가 `known_failures.py --must-fail`로 착지를 멈춘다. 규칙 4(foundation AST)와 5(모듈 삭제·이동)는 robot-0d 검토(안전하지 않은 좁힘)와 재실행에서 줄어든 FULL 0건 때문에 되돌렸다.
