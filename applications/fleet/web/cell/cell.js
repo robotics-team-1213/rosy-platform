@@ -8,6 +8,11 @@ import {renderStructuredDocument} from '/console/assets/cell-document-editor.js'
 import {createCellObservation} from '/console/assets/cell-observation.js';
 
 const $ = id => document.getElementById(id);
+const revealStage = hash => $(hash.slice(1))?.closest('details')?.setAttribute('open', '');
+for (const link of document.querySelectorAll('.ui-subnav a[href^="#"]'))
+  link.addEventListener('click', () => revealStage(link.hash));
+window.addEventListener('hashchange', () => revealStage(location.hash));
+revealStage(location.hash);
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 let channelReceipt = null, channelReview = null;
@@ -350,7 +355,8 @@ $('token-save').addEventListener('click', () => action(async () => {
     $('cell-channel-original').textContent = channelReceipt.content;
     $('cell-channel-request').hidden = false;
     $('request-key').value = channelReview.request_key; $('request-key').readOnly = true;
-    if (channelReview.work_kind === 'cell_job') $('mission-id').value = channelReview.work_id;
+    if (channelReview.work_kind === 'cell_job') { $('mission-id').value = channelReview.work_id; $('mission-stage').open = true; }
+    $('proposal-stage').open = true;
   }
   $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
 }));
@@ -388,6 +394,7 @@ $('compile').addEventListener('click', () => action(async () => {
   renderLayout();
   if (!$('request-key').value) $('request-key').value = crypto.randomUUID();
   $('notice').textContent = '미리보기 완료 · 내용을 확인하고 작업 범위를 입력하세요.';
+  $('proposal-stage').open = true;
 }));
 $('propose').addEventListener('click', () => action(async () => {
   if (!previewRefs) throw new Error('미리보기를 먼저 확인하세요.');
@@ -405,6 +412,7 @@ $('propose').addEventListener('click', () => action(async () => {
   const proposalId = result.work_id || result.proposal.proposal_id;
   $('proposal').textContent = `제안 ${proposalId}\n상태 ${jobStatusLabel(result.work_status || result.mission?.status || result.proposal.state)}\n운영자 별도 승인 대기`;
   $('mission-id').value = proposalId;
+  $('mission-stage').open = true;
   clearJobSnapshot();
   $('notice').textContent = '제안 완료 · 승인·진행에서 운영자 승인과 진행 상태를 확인하세요.';
 }));

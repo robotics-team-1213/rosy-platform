@@ -26,9 +26,11 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     textContent: "만들 수 있는 작업을 확인하고 있습니다."});
   el("work-new").querySelector("ul").before(newStatus);
   const list = el("work-list"), detail = el("work-detail"), admit = el("work-admit");
-  const units = createControlUnitView({scope, call, anchor: el("channel-requests-heading"), active, approveReason, principal});
-  const arms = createArmTransferView({scope, call, anchor: el("channel-requests-heading"), active, approveReason, principal, confirm});
-  const integrated = createIntegratedControlView({scope, call, anchor: el("channel-requests-heading"), active,
+  const anchor = el("work-integrations-anchor");
+  el("work-integrations").open = query.has("arm_transfer");
+  const units = createControlUnitView({scope, call, anchor, active, approveReason, principal});
+  const arms = createArmTransferView({scope, call, anchor, active, approveReason, principal, confirm});
+  const integrated = createIntegratedControlView({scope, call, anchor, active,
     approveReason, principal, taskStatus: workStatus});
   const clear = () => { detail.replaceChildren(); admit.hidden = true; };
   // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
