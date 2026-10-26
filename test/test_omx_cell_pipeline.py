@@ -107,7 +107,8 @@ class Cell:
             u, v = m.cal.parallax(tray_pixel(*self.tcp[:2]), CONFIG["sites"]["pinky"]["z"], self.tcp[2],
                                   CONFIG["cameras"]["top"])
             for side in (-1, 1):
-                x = round(u + side * self.grip / 2)  # 47 -> 56 moves each finger ~4.5 px
+                x = round(u) + side * round(self.grip / 2)  # 47 -> 56 moves each finger ~4.5 px; symmetric
+                # about u, or rounding shifts the marked jaws by up to 4 px
                 cv2.rectangle(img, (x - 3, round(v) - 3), (x + 3, round(v) + 3), (20, 20, 20), -1)
         return img
 
@@ -292,3 +293,46 @@ def test_the_frames_a_decision_used_are_kept_with_the_receipts(tmp_path):
     finally:
         m.KEEP["dir"] = None
     assert Path(found["estimates"][0]["frame"]).is_file()
+
+
+def test_a_moved_box_outside_the_map_gets_a_remap_proposal_and_is_followed_once_a_person_is_at_the_switch(tmp_path):
+    calibration = calibrated(tmp_path)  # fine maps fitted around the start and the belt place
+    box = (0.080, 0.070)  # moved by hand 3.7 cm off the start, outside the points the tray map was fitted on
+    cell = Cell(box)
+    moved = m.move(cell, CONFIG, copy.deepcopy(calibration), "pinky", "belt", tmp_path / "a")
+    assert moved["result"].startswith("stopped: remap proposed")
+    assert not any(c.startswith(("load", "goto", "grip")) for c in cell.commands)  # a proposal moves nothing
+    row = json.loads((tmp_path / "a" / "cases.jsonl").read_text().splitlines()[0])
+    seen = row["detection"]["maps"][0]
+    assert row["decision"] == "remap" and row["facts"]["remap"] and seen["map"] == "pinky" and seen["outside_mm"] > 20
+    assert math.dist(row["detection"]["arm_m"], box) < 0.005
+
+    moved = m.move(cell, CONFIG, calibration, "pinky", "belt", tmp_path / "b", person_at_switch=True)
+    assert moved["result"] == "placed", json.dumps(moved["attempts"][1], default=str)[-900:]
+    assert set(moved["remapped"]) == {"pinky~local"} and "pinky~local" in calibration["sites"]
+    marked = [tuple(p["arm_m"]) for p in calibration["sites"]["pinky~local"]["points"]]
+    assert len(marked) >= 4 and box not in marked  # the jaws were marked around the box, never above it
+    used = moved["attempts"][1]["locate"]["estimates"][0]
+    assert used["map"] == "pinky~local" and used["outside_mm"] == 0.0
+    assert math.dist(cell.box, CONFIG["sites"]["belt"]["place"]) < 0.004
+
+
+def test_with_no_map_at_all_the_seat_proposes_a_remap_and_nothing_moves_without_a_person(tmp_path):
+    cell = Cell(START)
+    moved = m.move(cell, CONFIG, {"sites": {}}, "pinky", "belt", tmp_path)
+    assert moved["result"].startswith("stopped: remap proposed") and cell.commands == []
+    assert moved["decisions"][0]["facts"]["box_found"] is False
+
+
+def test_a_site_local_map_file_is_used_where_it_holds_the_box_and_the_fine_map_elsewhere(tmp_path):
+    calibrated(tmp_path)
+    near = [(round(0.080 + dx, 4), round(0.070 + dy, 4)) for dx in (-0.02, 0, 0.02) for dy in (-0.02, 0, 0.02)]
+    local = m.cal.site_record([(tray_pixel(*q), q) for q in near], "2026-10-27T00:00:00+00:00")
+    (tmp_path / "local-map.json").write_text(json.dumps(local))
+    config = copy.deepcopy(CONFIG)
+    config["sites"]["pinky"]["local_map"] = str(tmp_path / "local-map.json")
+    loaded = m.load_maps(tmp_path / "cal.json", config)
+    found = m.locate(Cell((0.080, 0.070)), config, loaded, "pinky")
+    assert found["estimates"][0]["map"] == "pinky~local" and m.map_check(config, found) is None
+    assert math.dist(found["arm_m"], (0.080, 0.070)) < 0.002
+    assert m.locate(Cell(START), config, loaded, "pinky")["estimates"][0]["map"] == "pinky"

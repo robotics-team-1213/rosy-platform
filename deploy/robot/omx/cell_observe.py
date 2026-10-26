@@ -3,6 +3,7 @@ their maps' errors, the wrist check right above the box, the frames decisions us
 arm point would show (for keeping placements on a surface's flat zone). cell_pipeline acts on these."""
 from __future__ import annotations
 
+import json
 import math
 import sys
 from datetime import datetime, timezone
@@ -51,13 +52,47 @@ def record_key(site: str, camera: str) -> str:
     return site if camera == "top" else f"{site}@{camera}"
 
 
+def maps(calibration: dict, site: str, camera: str) -> list:
+    """The maps that turn a `camera` pixel on `site` into arm x, y, best first: a local jaw map fitted around
+    where the box was seen, the fine box map, the coarse jaw map (only the top camera marks the jaws)."""
+    keys = [f"{site}~local", site, f"{site}~coarse"] if camera == "top" else [record_key(site, camera)]
+    return [(key, calibration["sites"][key]) for key in keys if key in calibration["sites"]]
+
+
+def outside_mm(record: dict, arm) -> float | None:
+    """How far `arm` lies outside the arm points the map was fitted on (0 inside): beyond them it only
+    extrapolates. None for a map that kept no points."""
+    points = [p["arm_m"] for p in record.get("points") or []]
+    if not points:
+        return None
+    xs, ys = zip(*points)
+    dx, dy = max(min(xs) - arm[0], 0.0, arm[0] - max(xs)), max(min(ys) - arm[1], 0.0, arm[1] - max(ys))
+    return round(1000 * math.hypot(dx, dy), 1)
+
+
+def load_maps(path, config: dict) -> dict:
+    """The calibration file, with a site-local map kept as its own file (sites.<site>.local_map, one record
+    of the calibration form) as `<site>~local` unless the file already has a newer one from a re-map."""
+    calibration = cal.load(path) if Path(path).exists() else {"schema": cal.SCHEMA, "sites": {}}
+    for site, spec in config["sites"].items():
+        local = Path(spec["local_map"]).expanduser() if spec.get("local_map") else None
+        if local is not None and local.exists() and f"{site}~local" not in calibration["sites"]:
+            record = json.loads(local.read_text())
+            if not isinstance(record, dict) or len(record.get("homography") or []) != 3:
+                raise SystemExit(f"{local}: a local map needs a 3x3 homography")
+            calibration["sites"][f"{site}~local"] = record
+    return calibration
+
+
 def locate(cell, config: dict, calibration: dict, site: str) -> dict:
     """Every fixed camera with a map for `site` estimates the box, weighted by its map's leave-one-out
-    error. One camera that cannot see the box does not stop the others."""
+    error. One camera that cannot see the box does not stop the others. Each camera uses the first of its
+    maps whose fitted points the box lies within (map_extent_mm), else its best map, marked as outside."""
     estimates, missing = [], []
+    limit = config.get("map_extent_mm", 10.0)
     for camera in fixed_cameras(config):
-        record = calibration["sites"].get(record_key(site, camera))
-        if record is None:
+        options = maps(calibration, site, camera)
+        if not options:
             missing.append(f"{camera}: no map")
             continue
         img = cell.frame(camera)
@@ -66,14 +101,19 @@ def locate(cell, config: dict, calibration: dict, site: str) -> dict:
         if not box.get("found"):
             missing.append(f"{camera}: box not seen")
             continue
-        pixel = (box["cx"], box["cy"])
-        if "z_view" in record:  # a coarse jaw map: bring the box pixel to the height the map was fitted at
-            pixel = cal.parallax(pixel, config["sites"][site]["z"], record["z_view"], config["cameras"][camera])
-        x, y = cal.to_arm(record["homography"], pixel)
+        fits = []
+        for key, record in options:
+            pixel = (box["cx"], box["cy"])
+            if "z_view" in record:  # a jaw map: bring the box pixel to the height the map was fitted at
+                pixel = cal.parallax(pixel, config["sites"][site]["z"], record["z_view"], config["cameras"][camera])
+            arm = cal.to_arm(record["homography"], pixel)
+            fits.append((key, record, arm, outside_mm(record, arm)))
+        key, record, (x, y), outside = next((f for f in fits if (f[3] or 0) <= limit), fits[0])
         turn = cal.yaw_sign(record["homography"], (box["cx"], box["cy"])) * wrap90(box["yaw"])
         sigma = max(0.5, (record.get("loo_error_mm") or {}).get("mean", 5.0))
         estimates.append({"camera": camera, "pixel": [box["cx"], box["cy"]], "arm_m": [x, y], "turn": turn,
-                          "sigma_mm": sigma, "frame": frame})
+                          "sigma_mm": sigma, "frame": frame, "map": key, "outside_mm": outside,
+                          "residual_mm": (record.get("loo_error_mm") or {}).get("max")})
     if not estimates:
         return {"found": False, "error": "; ".join(missing) or "no fixed camera configured"}
     weights = [1 / e["sigma_mm"] ** 2 for e in estimates]
@@ -86,6 +126,25 @@ def locate(cell, config: dict, calibration: dict, site: str) -> dict:
     return {"found": True, "arm_m": [round(x, 4), round(y, 4)], "turn_deg": round(turn, 1),
             "yaw_deg": round(config["sites"][site]["yaw_deg"] + turn, 1),
             "sigma_mm": round(1 / math.sqrt(sum(weights)), 2), "estimates": estimates, "missing": missing}
+
+
+def map_check(config: dict, found: dict) -> str | None:
+    """Why the map that put this box in arm x, y should not be trusted for a grasp here, or None: the box
+    lies outside every map's fitted points by more than map_extent_mm, or the map's leave-one-out error
+    is above map_residual_mm."""
+    for e in found.get("estimates", []):
+        if (e.get("outside_mm") or 0) > config.get("map_extent_mm", 10.0):
+            return f"{e['camera']}: box {e['outside_mm']} mm outside the points of map {e['map']}"
+        if (e.get("residual_mm") or 0) > config.get("map_residual_mm", 10.0):
+            return f"{e['camera']}: map {e['map']} leave-one-out error {e['residual_mm']} mm"
+    return None
+
+
+def detection(found: dict) -> dict:
+    """What a case row keeps of one detection: where the box was seen and through which map."""
+    return {"found": found["found"], "arm_m": found.get("arm_m"), "error": found.get("error"),
+            "maps": [{k: e.get(k) for k in ("camera", "pixel", "map", "outside_mm", "residual_mm")}
+                     for e in found.get("estimates", [])]}
 
 
 def hover_check(cell, config: dict, calibration: dict, site: str) -> dict:
