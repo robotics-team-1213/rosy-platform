@@ -121,7 +121,7 @@ def test_image_owns_guard_and_final_environmentfile_after_operator_environment(t
     assert "Conflicts=rosy-io.service rosy-navigation.service" in installer
     assert "After=rosy-io.service rosy-navigation.service" in installer
     starts = [line for line in installer.splitlines() if line.startswith("ExecStartPre=")]
-    assert "os_motion_guard.py reconcile" in starts[0]
+    assert "os_motion_guard.py inhibited" in starts[0]
     assert "os_rauc_service.py check" in starts[1]
 
 
@@ -155,3 +155,16 @@ def test_guard_units_and_privileged_preconditions_parse_with_real_systemd(tmp_pa
         "rosy-os-motion-guard.service", "rosy-core.service", "rosy-io.service", "rosy-navigation.service"],
         capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_installer_checks_inhibition_without_writing_outside_its_rauc_namespace(tmp_path, monkeypatch):
+    _, _, root, _, _ = _boot(tmp_path, monkeypatch, "INSTALLING")
+    guard = importlib.import_module("os_motion_guard")
+    guard.reconcile(root)
+    def forbidden_write(*args, **kwargs):
+        pytest.fail("RAUC preflight must be read-only outside its two RAUC directories")
+    monkeypatch.setattr(guard, "_write_atomic", forbidden_write)
+    guard.require_inhibited(root)
+    (root / guard.ENVIRONMENT).unlink()
+    with pytest.raises((OSError, ValueError)):
+        guard.require_inhibited(root)
