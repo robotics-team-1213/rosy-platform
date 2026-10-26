@@ -84,6 +84,7 @@ def test_unknown_or_changed_health_cannot_publish_usable_evidence(tmp_path, monk
         original = host.sleep
         def sleep(seconds):
             original(seconds)
+            if seconds != 12: return  # Mutate between the two samples, after the separate I/O settle.
             if damage == "pid": data["MainPID"] = "456"
             elif damage == "invocation": data["InvocationID"] = "b" * 32
             else: (root / "proc/sys/kernel/random/boot_id").write_text(TRANSACTION)
@@ -239,3 +240,18 @@ def test_observational_io_uses_the_existing_native_sensor_settle_before_sampling
     host.sleep = settling
     assert m.check(root, TRANSACTION, host=host, run=run)["boot_id"] == TRIAL_BOOT
     assert intervals[0] == IO_SETTLE_S
+
+
+def test_io_stabilization_cannot_extend_the_trial_deadline(tmp_path, monkeypatch):
+    from native_release import IO_SETTLE_S
+    m, _, root, _, host, _, run, _, _, _ = _health(tmp_path, monkeypatch)
+    clock = [140_000_000_000]
+    monkeypatch.setattr(m, "_now", lambda: clock[0])
+    sleep = host.sleep
+    def delayed(seconds):
+        assert seconds == IO_SETTLE_S
+        sleep(seconds)
+        clock[0] = 166_000_000_000
+    host.sleep = delayed
+    with pytest.raises(ValueError, match="deadline"):
+        m.check(root, TRANSACTION, host=host, run=run)
