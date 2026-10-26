@@ -58,6 +58,8 @@ def read_inputs(dist: Path, public: Path) -> dict:
     manifest, provenance = record("manifest.json"), record("build-provenance.json")
     if (type(manifest["schema_version"]) is not int or manifest["schema_version"] != 2
             or manifest["release_id"] != identity or manifest["layout"] != layout
+            or manifest.get("product") != "rosy-os" or manifest.get("board") != "pinky_pro"
+            or manifest.get("architecture") != "arm64"
             or layout["provision_role"] != "bootstrap" or provenance["architecture"] != "aarch64"
             or provenance["source_revision"] != value["source_revision"]):
         raise ValueError("OS inputs differ from native image provenance")

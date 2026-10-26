@@ -151,3 +151,10 @@ def test_real_bundle_signing_is_accepted_by_existing_os_consumer(tmp_path, monke
     journal.write_text(json.dumps(record))
     assert client.poll(apply=False)["outcome"] == "no-update"
     assert state.read_state(device)["pending"] is None
+    m.update_rollout(output, private, public, promote=True)
+    promoted = verify((output / "os-rollout.json").read_bytes(), (output / "os-rollout.json.sig").read_text().strip(), public, facts["metadata"])
+    assert promoted["canary_ok"] is True and promoted["published_at"] == rollout["published_at"]
+    m.update_rollout(output, private, public, withdraw=True)
+    revoked = verify((output / "os-rollout.json").read_bytes(), (output / "os-rollout.json.sig").read_text().strip(), public, facts["metadata"])
+    assert revoked["withdrawn"] is True
+    with pytest.raises(ValueError): m.update_rollout(output, private, public, promote=True)
