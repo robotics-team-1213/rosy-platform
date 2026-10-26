@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-893 | 관제 단위와 호스트 배치를 분리하고 부하에 따라 합치거나 나눈다 | Accepted (2026-10-27) |
 | D-892 | Fleet 모바일 관제의 로봇 상태·작업 우선 배치 | Accepted (2026-10-27) |
 | D-891 | Fleet 인식 모델 승격 대기열 — 올린 D-874 묶음을 다시 검사하고 결정만 기록한다 | Proposed (2026-10-26) |
 | D-887 | Signed site service sets and identity-bound retirement | Accepted (2026-10-26) |
