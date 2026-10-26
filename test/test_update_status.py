@@ -172,3 +172,10 @@ def test_repo_digest_reads_only_the_named_ref(tmp_path):
     assert status.repo_digest('f', tmp_path, tmp_path) == hashlib.sha256(b'old\n').hexdigest()
     assert status.repo_digest('g', tmp_path, tmp_path) is None
     assert status.repo_digest('g', tmp_path, tmp_path, {tmp_path: 'HEAD'}) == hashlib.sha256(b'g').hexdigest()
+
+
+def test_the_cam_stream_runs_the_auto_updated_code_with_its_private_config_left_in_place():
+    unit = (ROOT / 'deploy/site/rosy-cam-stream.service').read_text(encoding='utf-8')
+    start = next(line for line in unit.splitlines() if line.startswith('ExecStart='))
+    assert '%h/.local/share/rosy/site-tools/current/deploy/site/rosy_cam_screen.py stream-start' in start
+    assert '--config %h/.local/share/rosy/cam-screen/cam-screen.json' in start

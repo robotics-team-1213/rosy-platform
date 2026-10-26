@@ -348,7 +348,9 @@ def test_the_cells_arm_health_files_come_from_the_environment_when_not_given(man
     # D-871: the auto-updated unit names no arms; the private env lists this cell's one or two health files
     path = tmp_path / "manifest.yaml"
     path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding="utf-8")
-    for key, value in {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret",
+    for key in ("CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE", "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"):
+        monkeypatch.delenv(key, raising=False)  # the full suite may leave these set; the bridge checks them first
+    for key, value in {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret", "RMW_IMPLEMENTATION": "rmw_fastrtps_cpp",
                        "ROSY_OBSERVATION_ARM_HEALTH": f"not_a_registered_arm={tmp_path / 'x.json'}"}.items():
         monkeypatch.setenv(key, value)
     with pytest.raises(SystemExit):

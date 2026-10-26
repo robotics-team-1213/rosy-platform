@@ -1,7 +1,6 @@
 import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 const $=id=>document.getElementById(id);
-$('theme').value=document.documentElement.dataset.theme||'dark';$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{}document.dispatchEvent(new CustomEvent('rosy:theme'));};
 const DOMAINS={lane:'Pinky 차로·픽셀',object:'Pinky 객체',omx:'OMX 모방학습',sim:'Isaac SIM',vlm:'VLM 판단',decision:'판단 모델'};
 const requested=new URLSearchParams(location.search).get('domain');
 const domain=DOMAINS[requested]?requested:null;

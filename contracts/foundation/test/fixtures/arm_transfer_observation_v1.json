@@ -1,0 +1,189 @@
+{
+  "request": {
+    "phase": "PRE_DISPATCH",
+    "expected_request_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "observations": [
+      {
+        "evidence_id": "ev-1",
+        "producer_id": "observer-1",
+        "evaluator_revision": "eval-1",
+        "sequence": 1,
+        "action_id": "action-1",
+        "attempt_id": "attempt-1",
+        "frame_id": "world",
+        "policy_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "catalog_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bindings_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "object_ref": "object-1",
+        "object_origin_id": "model-origin",
+        "object_observed_at_ns": 1100000000,
+        "object_pose": {
+          "position_m": [
+            0,
+            0,
+            0.2
+          ],
+          "orientation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "owners": [
+          {
+            "workcell_id": "w-1",
+            "instance_id": "arm-1",
+            "journal_id": "journal-arm-1",
+            "owner_session_id": "session-1",
+            "model_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "calibration_revision": "cal-1",
+            "transform_revision": "tf-1",
+            "links_observed_at_ns": 1100000000,
+            "links": {
+              "link1": {
+                "bounds": {
+                  "min_m": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "max_m": [
+                    1.1,
+                    1.1,
+                    1.1
+                  ]
+                },
+                "linear_velocity_m_s": [
+                  0,
+                  0,
+                  0
+                ],
+                "angular_velocity_rad_s": null
+              }
+            },
+            "gripper_observed_at_ns": 1100000000,
+            "gripper_state": "OPEN",
+            "held_state": "NONE",
+            "held_object_ref": null
+          }
+        ]
+      },
+      {
+        "evidence_id": "ev-2",
+        "producer_id": "observer-1",
+        "evaluator_revision": "eval-1",
+        "sequence": 2,
+        "action_id": "action-1",
+        "attempt_id": "attempt-1",
+        "frame_id": "world",
+        "policy_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "catalog_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "bindings_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "object_ref": "object-1",
+        "object_origin_id": "model-origin",
+        "object_observed_at_ns": 1300000000,
+        "object_pose": {
+          "position_m": [
+            0,
+            0,
+            0.2
+          ],
+          "orientation_xyzw": [
+            0,
+            0,
+            0,
+            1
+          ]
+        },
+        "owners": [
+          {
+            "workcell_id": "w-1",
+            "instance_id": "arm-1",
+            "journal_id": "journal-arm-1",
+            "owner_session_id": "session-1",
+            "model_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "calibration_revision": "cal-1",
+            "transform_revision": "tf-1",
+            "links_observed_at_ns": 1300000000,
+            "links": {
+              "link1": {
+                "bounds": {
+                  "min_m": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "max_m": [
+                    1.1,
+                    1.1,
+                    1.1
+                  ]
+                },
+                "linear_velocity_m_s": [
+                  0,
+                  0,
+                  0
+                ],
+                "angular_velocity_rad_s": null
+              }
+            },
+            "gripper_observed_at_ns": 1300000000,
+            "gripper_state": "OPEN",
+            "held_state": "NONE",
+            "held_object_ref": null
+          }
+        ]
+      }
+    ]
+  },
+  "context": {
+    "mission_id": "physical-1",
+    "request_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "action_id": "action-1",
+    "attempt_id": "attempt-1",
+    "status": "PREPARED",
+    "phase": "PRE_DISPATCH",
+    "not_before_ns": 1000000000,
+    "capture_deadline": "2030-01-01T00:00:00Z",
+    "producer_id": "observer-1",
+    "evaluator_revision": "eval-1",
+    "frame_id": "world",
+    "policy_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "catalog_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bindings_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "object_ref": "object-1",
+    "object_origin_id": "model-origin",
+    "min_separation_ns": 100000000,
+    "max_age_ns": 500000000,
+    "owners": [
+      {
+        "workcell_id": "w-1",
+        "instance_id": "arm-1",
+        "journal_id": "journal-arm-1",
+        "owner_session_id": "session-1",
+        "model_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "calibration_revision": "cal-1",
+        "transform_revision": "tf-1"
+      }
+    ]
+  },
+  "receipt": {
+    "receipt_id": "physical-record-1",
+    "mission_id": "physical-1",
+    "action_id": "action-1",
+    "attempt_id": "attempt-1",
+    "request_digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "workcell_id": "w-1",
+    "instance_id": "arm-1",
+    "policy_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "evidence_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "object_ref": "object-1",
+    "source": "source",
+    "target": "target",
+    "authority_epoch": 2,
+    "dispatch_generation": 3,
+    "validated_at_ns": 2000000000,
+    "physical_status": "AT_TARGET_AND_CLEAR"
+  }
+}

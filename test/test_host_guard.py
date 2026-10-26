@@ -38,7 +38,7 @@ def _recovery(role):
 
 
 def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-06:20\n", now="12:00",
-           action_rc=0, env_extra=None, recovery_answer="null"):
+           action_rc=0, env_extra=None, recovery_answer="null", updates_answer="null"):
     """Run the guard with a stub ssh that answers ``health`` and records every remote command.
 
     Any other command exits ``action_rc`` (a nonzero one also writes a refusal to stderr)."""
@@ -49,6 +49,7 @@ def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-0
         "#!/bin/sh\n"
         f'eval "last=\\${{$#}}"; echo "$last" >> {calls}\n'
         f"[ \"$last\" != recovery ] || {{ echo '{recovery_answer}'; exit 0; }}\n"
+        f"[ \"$last\" != updates ] || {{ echo '{updates_answer}'; exit 0; }}\n"
         f'[ "$last" = health ] || {{ [ {action_rc} = 0 ] || echo "refused: $last" >&2; exit {action_rc}; }}\n'
         f"echo '{answer}'; exit {exit_code}\n")
     (bin_dir / "ssh").chmod(0o755)
@@ -60,7 +61,7 @@ def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-0
            "GUARD_LOCAL_HEALTH": str(tmp_path / "no-local-health"), **(env_extra or {})}
     for _ in range(runs):
         subprocess.run([sys.executable, str(GUARD)], env=env, check=True, capture_output=True, timeout=60)
-    return [line for line in calls.read_text().splitlines() if line != "recovery"] if calls.exists() else []
+    return [line for line in calls.read_text().splitlines() if line not in ("recovery", "updates")] if calls.exists() else []
 
 
 def _actions(tmp_path):
@@ -380,3 +381,40 @@ def test_misidentified_or_malformed_recovery_is_unavailable(tmp_path, change):
     report = json.dumps({**_recovery("model"), **change})
     _guard(tmp_path, HEALTHY, conf="model pc op@model -\n", recovery_answer=report)
     assert _status(tmp_path)["model"]["recovery"] is None
+
+
+UPDATES = {"schema": "rosy.update-report/1", "time": 123, "gate": "open",
+           "updaters": [{"unit": "rosy-omx-autoupdate.service", "timer": "enabled", "healthy_at": 120.0,
+                         "last": {"step": "up_to_date", "release": "c47d7c3e78c9", "reason": None, "at": 120.0}}]}
+
+
+def test_the_guard_keeps_each_pcs_update_report_without_touching_the_ladder(tmp_path):
+    # D-871: collected beside health, never a reason to restart or reboot
+    assert _guard(tmp_path, HEALTHY, updates_answer=json.dumps(UPDATES), runs=2) == ["health"] * 2
+    assert _status(tmp_path)["pc1"]["updates"] == UPDATES and _actions(tmp_path) == []
+
+
+@pytest.mark.parametrize("reply", ["null", "not-json", '{"schema": "other"}', '{"schema": "rosy.update-report/1"}'])
+def test_a_missing_or_malformed_update_report_is_no_evidence(tmp_path, reply):
+    _guard(tmp_path, HEALTHY, updates_answer=reply)
+    assert _status(tmp_path)["pc1"]["updates"] is None and _status(tmp_path)["pc1"]["state"] == "ok"
+
+
+def test_an_updates_line_only_reads_updates_and_is_rebuilt_every_run(tmp_path):
+    calls = _guard(tmp_path, HEALTHY, conf="site updates robttt@localhost\n", updates_answer=json.dumps(UPDATES))
+    assert calls == []  # no health, restart or reboot for the site PC's own user
+    assert (tmp_path / "calls").read_text().splitlines() == ["updates"]
+    assert _status(tmp_path)["site"] == {"source": "local", "updates": UPDATES}
+    _guard(tmp_path, HEALTHY, conf="")
+    assert "site" not in _status(tmp_path)
+
+
+def test_the_forced_command_runs_only_the_update_report_for_updates(tmp_path, monkeypatch):
+    report = tmp_path / "report.py"
+    report.write_text('print(\'{"schema": "rosy.update-report/1"}\')\n')
+    monkeypatch.setenv("GUARD_UPDATE_REPORT", str(report))
+    result, calls = _remote(tmp_path, "updates")
+    assert result.returncode == 0 and json.loads(result.stdout) == {"schema": "rosy.update-report/1"}
+    assert calls == []
+    result, calls = _remote(tmp_path, "updates --all")
+    assert result.returncode == 2 and calls == []

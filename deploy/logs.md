@@ -3479,6 +3479,7 @@
 - 검토: 별도 전체 read-only 리뷰의 복원·취소·부분 export·바이트 보존·완료 목록 원자성 지적을 재현 후 수정했고 후속 리뷰에서 닫았다. 모바일 기존 percentage flex-basis와 공용 column 배치의 충돌은 실제 computed geometry로 확인해 신규 그룹에 공용 폼만 적용했다.
 - gate 변화: source closure만 검증했다. 운영 SDK/환경 설치, 실제 HF 왕복, signed artifact 설치·서비스 활성화·장치/현장 수용은 수행하지 않았다.
 - CE: 해당 없음 — 결정의 근거와 복구 조건은 구현·회귀·주석·운영 안내에 보존한다.
+
 ## 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
 
 - 변경: `rosy-host-guard-remote health`가 `~/rosy-test`·`/` 여유와 GPU 메모리를 덧붙인다. `rosy-host-guard`는 30GiB/90% 기준의 `disk-low`를 보고만 하고 복구 단계를 진행시키지 않는다. `rosy-host-control`의 ai·model `clean-storage`는 `rosy-test-storage.service`를 한 번 시작한다(없으면 exit 5).
@@ -3487,6 +3488,14 @@
 - 검토 수정: `install-host-control.sh`가 `units-user`를 ai에만 써서 모델 PC의 `clean-storage`가 늘 거부됐다. ai·model에 쓰도록 고치고 dry-run 시험으로 RED→GREEN을 확인했다.
 - 추가(사용자 요청): `health`에 RAM 전체·여유 용량, GPU 사용률·온도, CPU 사용률(1초 `/proc/stat`)·최고 thermal zone 온도를 더했다. 방식은 CORE `runtime.py`와 같다. RAM 10% 미만은 보고 전용 `memory-low`, 온도·사용률은 표시 전용이다.
 
+## 2026-10-26 · 4c4aef6e9a · machine 계정 도구와 서명된 전달 경로
+
+- 변경: `site_users.py add-service`는 기존 service 역할의 bearer만 stdin으로 받아 기존 원자적 registry publication을 재사용한다. 사람용 add/login 제한은 유지한다. 새 candidate는 도구와 hash 및 서명된 `site_users_tool_required: true`를 포함한다. 갱신한 verifier는 새 필수 도구 누락을 거절하면서 marker 없는 과거 candidate의 확인·rollback을 유지한다.
+- 전환: updater가 candidate 내부 코드를 신뢰하지 않으므로 기존 관리자 경로로 독립 verifier를 먼저 갱신한다. 운영 중·보존한 rollback·신규 candidate를 각각 검증하는 순서와 matrix를 site README에 명시했다. 실제 verifier 교체·계정 생성·운영 배포는 아직 하지 않았다.
+- 증거: 공식 비현장 원격 RED `c7bf2535b3`는98실행/62통과/36NEW/skip0, marker 시험 RED `a0ac3b1102`는108실행/64통과/44NEW/skip0이다. 각 run을 known_failures로 분류했으며 known/flaky0이다. 후자는 과거 marker·도구 미포함 허용과 실제 Ed25519 서명 변조 거절도 확인했다. 구현 후 GREEN·전체 착지 검증은 별도이며 이 RED를 통과 증거로 쓰지 않는다.
+- gate 변화: source 구현·검증 진행이다. 운영 서비스 신원·ARM 설치 binding·관측·실물 장치 수용을 열지 않는다.
+- 교훈: CE 해당 없음 — 기존 committed-state 교훈을 적용했으며 원자적 저장·서명 전환의 판단은 구현·회귀 시험·운영 절차에 보존했다.
+- 후속 GREEN: 독립 소스 리뷰 후 커밋 `4c4aef6e9a`를 비현장 승인 원격에서 검증했다. CLI·candidate builder/verifier·실제 signing·updater/rollback·workflow·fetch 일곱 파일237 PASS/skip0/NEW0/known0/flaky0이며 모든 run을 분류했다. 신뢰 verifier 교체·서명된 candidate 설치·운영 principal 발급·실제 연결은 수행하지 않았다. 플랫폼 전체 착지 검증은 별도다.
 ## 2026-10-26 · uncommitted · Site updater runtime extraction before migration
 
 - 변경: relocate only six existing runtime/verification methods to site_update_runtime; updater590 to516lines, helper110. Keep switch/rollback/order and public import bindings; update reviewed five-file administrator install closure.
@@ -3506,3 +3515,25 @@
 - 변경: `rosy-host-guard`는 `parse_health`로 원격·로컬 응답을 한 번에 해석한다. ai·model의 `disk-low`에 6시간마다 `clean-storage`를 요청한다. 관제 PC 자기 행에 로컬 `health` 값을 더한다. guard-remote에 `clean-storage` 명령을 더했다. ai_pc·model_pc manifest에 `units-user`(@LOGIN@)를 넣었다.
 - 증거: `test/test_host_guard.py`, `test/test_host_state.py`, `test/test_host_recovery_browser.py` 원격 실행.
 - gate 변화: 없음. PC별 재설치는 별도다.
+
+## 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+
+- Change: authenticate exactly legacy3/current4; bind current/staged/rollback Compose and loaded proof, retire only identity-proven outgoing PostgreSQL without force/volume deletion; retain separate same-commit physical relocation.
+- Evidence: real-signature source bc61f16ea9 RED3/8 controls; canonical-inventory source77d8b34bac RED38/13 controls; overlay source9e8e86575f RED2/1 control; forged physical journal source8e856f02a9 RED1. Raw logs remain outside Git; independent implementation review and committed GREEN pending. Initial42 failures used a corrected-later manual selector and are not uniform migration-cause proof.
+- Gate: source preparation only; no install/site/FIELD or deployment acceptance.
+- CE: existing whole-configuration and identical-external-helper lessons applied; solved lesson decision awaits actual GREEN.
+
+## 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+
+- Change: bind exact authenticated legacy3/current4 to candidate-local Compose/overlay and loaded identities; exact-ID retired PostgreSQL cleanup precedes normal rollback restoration, while consistent physical relocation remains separate. Builder/signing blobs remain base-exact.
+- Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
+- Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
+- CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
+
+## 2026-10-26 · uncommitted · clean-storage helper가 원격 `cat` 대신 LoadState로 유닛 확인
+
+- 원인: systemd 255는 `systemctl --machine=<user>@ cat`을 "Cannot remotely cat units."로 거부한다. 그래서 유닛이 연결돼 있어도 모든 시험 PC에서 exit 5(NO_STORAGE_SERVICE)였다. 모델 PC 설치 뒤 guard 강제 명령으로 재현했다.
+- 변경: `deploy/site/rosy-host-control`이 `show -p LoadState --value`가 `loaded`인지 본다. 시험의 systemctl 가짜를 실제처럼 `--machine` `cat`을 거부하게 바꿨다(RED→GREEN).
+- 증거: 모델 PC에서 `cat` rc 1, `show` → loaded/not-found. 원격 host control·guard·host-state 시험 NEW 0.
+- gate 변화: 없음. AI·모델 PC에 helper 재설치가 필요하다.
+- 교훈: CE 새 교훈 기록 — `docs/solutions/runtime-errors/systemctl-machine-refuses-cat-so-clean-storage-always-refused-2026-10-26.md`.

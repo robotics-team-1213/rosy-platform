@@ -16,13 +16,13 @@ def get(handler, path, center, workspace=None):
     owner = re.fullmatch(PREFIX + r'/owner-status/([A-Za-z0-9_][A-Za-z0-9_.-]{0,63})', path)
     if owner:
         if center is None:
-            raise ValueError('OMX learning center is not configured on this host')
+            raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
         handler.send(center.read_owner_status(owner[1]))
         return True
     profile = re.fullmatch(PREFIX + r'/profile/([0-9a-f-]{36})', path)
     if profile or path == PREFIX + '/profiles':
         if center is None:
-            raise ValueError('OMX learning center is not configured on this host')
+            raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
         handler.send(center.profiles.get(profile[1])['profile'] if profile else {'profiles': center.profiles.list()})
         return True
     review = re.fullmatch(PREFIX + r'/review/([0-9a-f]{32})', path)
@@ -30,7 +30,7 @@ def get(handler, path, center, workspace=None):
     frame_set = re.fullmatch(PREFIX + r'/review-frame-set/([0-9a-f]{32})/([0-9a-f]{64})/(\d{1,9})/(\d{1,9})/(\d{1,4}(?:,\d{1,4}){0,7})', path)
     if review or frame or frame_set:
         if center is None:
-            raise ValueError('OMX learning center is not configured on this host')
+            raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
         match = review or frame or frame_set
         prepared = _registered(workspace, match[1])
         if frame_set:
@@ -44,7 +44,7 @@ def get(handler, path, center, workspace=None):
     match = re.fullmatch(PREFIX + r'/artifact/([0-9a-f-]{36})', path)
     if match:
         if center is None:
-            raise ValueError('OMX learning center is not configured on this host')
+            raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
         handler.send(center.artifact(match[1]), mime='application/zip')
         return True
     if path != PREFIX:
@@ -58,7 +58,7 @@ def post(handler, path, body, center, workspace=None):
     if not path.startswith(PREFIX + '/'):
         return False
     if center is None:
-        raise ValueError('OMX learning center is not configured on this host')
+        raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
     if path == PREFIX + '/profile':
         handler.send(center.profiles.save(body, getattr(handler, 'learning_principal', None)))
         return True

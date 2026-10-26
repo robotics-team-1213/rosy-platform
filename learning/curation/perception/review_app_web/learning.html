@@ -6,11 +6,11 @@
 <script type="module" src="/learning.js"></script></head>
 <body><a class="skip-link" href="#learning-main">학습 작업으로 이동</a>
 <ui-shell grammar="procedure" class="ui-app-shell"><ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a class="workspace-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
-<label class="theme-label"><span>화면</span> <select id="theme" class="ui-field"><option value="dark">어둡게</option><option value="light">밝게</option></select></label></ui-topbar>
+<ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
 <div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈" aria-current="page">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a></nav></div>
-<div class="ui-app-main"><div class="ui-pathbar"><h1>학습 작업</h1></div>
+<div class="ui-app-main"><div class="ui-pathbar"><h1>학습센터</h1><span data-spacer></span><div class="heading-links"><a class="workspace-link" data-action-icon="robot" href="/learning/tasks">로봇·과제 등록하고 학습 시작</a><a class="workspace-link" data-action-icon="robot" href="/learning/sim">SIM 실험</a><a class="workspace-link" data-action-icon="account" href="/accounts">계정·외부 자료</a></div></div>
 <main id="learning-main" class="learning-main" tabindex="-1">
-<div class="workspace-heading"><div><h2>학습센터</h2><p>로봇·과제별 자료와 모델을 연결하고 개선 근거를 확인합니다.</p></div><div class="heading-links"><a class="workspace-link" data-action-icon="robot" href="/learning/tasks">로봇·과제 등록하고 학습 시작</a><a class="workspace-link" data-action-icon="robot" href="/learning/sim">SIM 실험</a><a class="workspace-link" data-action-icon="account" href="/accounts">계정·외부 자료</a></div></div>
+<p class="learning-lede">로봇·과제별 자료와 모델을 연결하고 개선 근거를 확인합니다.</p>
 <ui-status id="notice" state="ready" hidden></ui-status><ui-status id="learning-error" state="error" role="alert" hidden></ui-status>
 <ui-section class="learning-section pipeline" aria-labelledby="pipeline-title" aria-busy="true" id="pipeline">
 <div class="ui-workspace-bar"><h2 id="pipeline-title" class="ui-section-heading">현재 인식 자료의 학습 흐름</h2><span data-spacer></span><ui-button id="refresh" data-action-icon="refresh" kind="quiet">최신 결과 확인</ui-button></div>
@@ -27,7 +27,7 @@
 <section id="learning-start" class="learning-section learning-panel" aria-labelledby="learning-start-title"><h2 id="learning-start-title">어떤 로봇의 어떤 과제를 개선할까요?</h2>
 <p>로봇 종류와 개별 장치·그룹, 과제의 성공 조건을 먼저 정합니다. 사용할 자료와 학습 방법을 연결하고, 같은 조건의 성공률과 사람이 들인 시간을 비교하세요.</p>
 <p class="quiet">현재 인식 학습은 위 자료 흐름에서 이어갑니다. 행동 정책 학습은 OMX 로봇암의 ACT 시범·교정 학습과 HIL-SERL 경험 학습을 지원하며, 다른 로봇의 정책 학습과 현장 실행은 아직 연결되지 않았습니다.</p>
-<div class="learning-next-actions"><a class="workspace-link" href="/learning/tasks">로봇·과제 등록 → 자료 선택 → 학습·평가</a><a class="workspace-link" href="#pipeline">현재 인식 자료로 학습 이어가기</a><a class="workspace-link" href="/learning/omx#profile-panel">OMX 로봇암 과제·팔·카메라 정하기</a><a class="workspace-link" href="/learning/sim">SIM 과제·검증 근거 확인</a></div>
+<div class="learning-next-actions"><a class="workspace-link" href="/learning/omx#profile-panel">OMX 로봇암 과제·팔·카메라 정하기</a></div>
 <details><summary>OMX 시범이나 학습 결과가 있다면</summary><p><a class="workspace-link" href="/learning/omx#dataset-section">기존 시범 검수·데이터 선택</a> · <a class="workspace-link" href="/learning/omx#train-section">학습 진행 확인</a> · <a class="workspace-link" href="/learning/omx#comparison-section">같은 조건의 결과 비교</a></p></details>
 </section>
 

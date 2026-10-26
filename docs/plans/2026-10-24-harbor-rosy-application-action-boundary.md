@@ -12,9 +12,48 @@
 
 ## 실행 상태와 선행 조건
 
-2026-10-24 작성. 이번 요청은 계획·ADR 기록 범위다. P0 문서 등록 뒤에도 제품 구현을 시작했다는 뜻이 아니다. P1은 상세 동작 계약을 확정하는 단계이며, 그 산출물 승인 전 P2–P5의 제품 구현을 시작하지 않는다. 아직 정하지 않은 public path·wire 필드를 이 문서에서 이미 존재하는 API처럼 선언하지 않는다.
+2026-10-24 실행 중. 사용자의 “목표잡고 진행” 지시로 문서 등록 뒤 구현·원격 검증을 진행한다. P0와 첫 TRIP slice 뒤 API v1.312의 중립 ARM 제안·승인·독립 raw 관측·서버 실행 추적·별도 물리 receipt와 Harbor 업무 binding을 구현했다. 고정 플랫폼 source bb38/Harbor source93e71의 독립 HTTP/UDS와 기존 Cell/TRIP 회귀는 통과했다. 2026-10-25 최신 bb38 FULL23개가 모두exit0/official0NEW로 종료했고 독립 증거 검토도 완료했다. 아래 체크리스트의 다단계 업무·현장 binding·운영 producer·실패 후 명시 복구·착지는 이 첫 simulation 검증과 구별한다.
 
 문서 등록은 사용자의 2026-10-24 “바로 처리” 지시로 `docs/application-action-boundary` 작업용 worktree 1개 일회 추가 예외를 사용한다. 기존 등록 15개·고아 디렉터리 3개를 보존했다. 예외는 문서 등록과 검증용이며 추가 제품 구현 슬롯·착지·push 승인으로 확대하지 않는다. 검증 후 다음 실행 전까지 브랜치·증거를 보존하고 소유자 정리 절차로 슬롯을 회수한다.
+
+첫 simulation 흐름의 마감 근거는 다음과 같다. 아래 P1–P5의 넓은 전환 과제와 실물 수용은 별도로 유지한다.
+
+- [x] D-856·Harbor ADR0006에 업무/물리 참조·실행·관측·완료 책임을 기록한다.
+- [x] API v1.312의 typed 제안/승인/관측/receipt/cancel과 principal/key/body·두 사람·fence·claim 검증을 구현하고 원격 RED/GREEN을 보존한다.
+- [x] 준비/최초 전송/receipt/물리 종료를 공유 원장에 결속하고 기존 stop·최종 owner 권한·UNKNOWN 점유를 유지한다.
+- [x] Harbor에 단일 물리 이동 binding과 HTTP 소비를 추가하고 물리 receipt만으로 업무 완료를 기록하지 않는다.
+- [x] 고정 bb38/Harbor93e71에서 독립 HTTP·실제 UDS framing·두 번째 stdlib 소비자·플랫폼 미import·rosy_cell import 차단·기존 Cell/TRIP 회귀를 확인한다.
+- [x] 최종 bb38의 FULL23 전체를 완료·공식 분류하고 manifest와 독립 증거 검토를 기록한다.
+- [x] 최종 metadata 커밋과 size/safety/lint·문서 guard·clean Git 상태를 확인한다. source6f5e71dfa6의 공식 원격 guard235passed/skip0/0NEW, size/safety14commits exit0, lint0errors와 양쪽 clean checkout을 확인했다.
+
+이후 기존 브랜치는 `feat/application-action-boundary`로 전환됐다. 동료의 병합이 끝나고 슬롯이 9개로 줄어든 뒤 정규 예산 안에서 `app-neutral-actions`/`feat/neutral-arm-actions`를 생성했다(base `ba256ec45d`). 팔 구현은 이 격리 작업 공간이 소유한다. 과거 문서 슬롯 예외를 확대하지 않았으며 착지·push·배포·실물은 수행하지 않는다.
+
+| 산출물 | 확인한 상태 | 남은 범위 |
+|---|---|---|
+| P0 ADR·Log·계획 | `f14d00748e` 문서 원격 552 passed | 없음 |
+| [TRIP 상세 계약](2026-10-24-application-action-contract-design.md) | 조회/응답 유실 대조 구현, Harbor와 독립 HTTP 1 passed, 기존 Cell HTTP 3 passed | 팔 공정 변환을 대신하지 않음 |
+| [중립 팔 계산](2026-10-24-neutral-arm-planning-design.md) | 기존 Cell provenance 보존, 관련 원격 135 passed, 독립 검토 | 실제 실행 통합은 아래 owner 행 참조 |
+| [팔 catalog·사전검사](2026-10-24-neutral-arm-preflight-design.md) | API v1.299·owner/Fleet HTTP 연결, 신규/기존 원격 213 passed/skip0, 실제 HTTP/UDS·독립 검토 | 중립 실행 통합은 아래 원장/owner 행 참조, 설치 wheel·장치 수용 |
+| [step grant 검증 경계](2026-10-24-step-grant-boundary-design.md) | typed kind·공통 identity와 종류별 전체 payload 분리, 원격 184/152개 별도 회귀·독립 검토 | 실제 물리 producer·등록 kind·실행 |
+| [중립 팔 실행 계약](2026-10-24-neutral-arm-execution-design.md) | 물체–기하 결속 원격 112개, v1.303 grant·기존 소비자 원격 1385개 및 독립 검토 | 실제 physical producer·전체 자원 종료·Harbor 변환 |
+| [원장 provenance](2026-10-24-neutral-arm-ledger-design.md) | 초기version5 provenance·Cell 소비자 차단, 원격 69/13/244개 별도 회귀와 affected 두 그룹 통과; 현재version6은 물리 승인 행 참조 | physical HTTP·claim 종료 연결 |
+| [owner 실행](2026-10-24-neutral-arm-owner-design.md) | 내부 복구 74개, v1.305 설치 factory/phase-only IPC 153개·v2 client 15개 별도 회귀 및 독립 검토 | actual admitted-state/HTTP·Fleet producer·물리 종료·Harbor 연결 |
+| [managed owner 권한](2026-10-24-managed-transfer-authority-design.md) | 영속 mode/최종 명령 경계, 집중 119개·affected 1754 passed/34 skipped/0 NEW | 실제 ROS/장치·승인/물리 종료 |
+| [실제 capability/대상 owner](2026-10-24-managed-transfer-capability-design.md) | API v1.306·canonical journal/session·receipt/404 결속, 집중790/0 NEW, FULL표행1NEW 수정 후 entry9 7371 passed/91 skipped/0 NEW(다른22개원본0NEW), 독립 검토 | Fleet physical producer·claim 종료·Harbor ARM |
+| [물리 종료/producer 계획](2026-10-24-neutral-transfer-closure-and-producer-design.md) | 독립 architecture/critic 3회 검토 approve, World 사실/Fleet atomic claim/Harbor 업무 분리와 object origin·실행 전 점유 확인 명시 | policy·물리 관측·승인/producer·Harbor 연결 구현 |
+| [World 물리 관측 자료형](../validation/harbor-physical-observations-2026-10-24/result.md) | source084 불변 raw facts·미측정 속도 None 보존·독립 wheel, World28/affected764 passed·0 NEW | 실제 producer·현재 원장 결속/claims |
+| [고정 OMX 전체 형상](../validation/harbor-physical-observations-2026-10-24/result.md#고정-omx-전체-형상-식별) | sourceb045 URDF·8개 mesh 내용·전체9개 링크, World36/affected753 passed·0 NEW·독립 검토 | 실제 bounds·관측 producer·두 표본 정책/claims |
+| [Fleet 두 표본 물리 검사](../validation/harbor-physical-evaluator-2026-10-24/result.md) | source205 정책/시각/전체 링크/정지/object pose·집중67 passed/skip0·affected4587/6312 passed·각0 NEW·독립 재검토 | credential ingress·현재 원장 context/fence·atomic claim 종료·producer/Harbor |
+| [중립 원장·물리 승인](../validation/harbor-physical-proposals-2026-10-24/result.md) | source76 내부 create/read/two-person approval·공통claims·version6·공유 자원 leaf·집중1292 passed/skip0·FULL23 모두0 NEW·독립 안전 검토 | public HTTP/DTO·live capability·prepared context/dispatcher·관측/claim 종료·Harbor; 원본 G1 timing 원인 미확정 |
+| [중립 ARM 작업 HTTP](../validation/harbor-arm-job-http-2026-10-24/result.md) | API v1.307·closed DTO·실제 all-owner capability·2인 승인/Origin/audit, source58 HTTP18 passed/skip0·FULL23 각각0 NEW·독립 계약/전체로그 검토 | prepared context·최초 전송·장치/관측/claim 종료·Harbor ARM은 별도 검증 |
+| [독립 ARM 관측·Harbor HTTP](../validation/harbor-arm-observer-http-2026-10-24/result.md) | API v1.312; raw observer/expiry/isolation/audit, Fleet monitor와 단일 SDK 제출, 별도 physical receipt. source bb38/Harbor93e71 ARM1·Cell3·TRIP1 HTTP 통과, ARM 두 진입 각각 Submit1/Get1, 업무 WAITING 유지 | 최신 bb38 FULL23개 각각exit0/0NEW·독립 증거 검토; facts는 synthetic. 운영 producer·physics/실물·현장 binding·실패 후 물리 정리·복구는 별도 |
+| [내부 물리 실행 원장](../validation/harbor-physical-execution-2026-10-24/result.md) | source3b 고정 준비/전송 의도·owner 결과·별도 POST_ACTION receipt/atomic release·집중101 passed/skip0/0 NEW·독립 계약 검토 | 실제 SDK dispatcher·관측 credential HTTP·Harbor ARM·최종 FULL23/독립 실제 HTTP |
+| [전체 stop 대상·내부 SDK](../validation/harbor-physical-execution-2026-10-24/result.md#내부-sdk-dispatcher) | source80 stop65/source54 SDK121 passed·skip0·0 NEW, process guard/최종 send 경계·독립 safety/contract 검토 | app 관측 credential HTTP·Harbor ARM·native UDS/TCP HTTP·최종 FULL23 |
+| 전체 P3–P5 | 진행 중 | 중립 팔 실행의 승인/자원 종료, Harbor 공정 변환, 복구·독립성 통합 증거 |
+
+첫 HTTP 증거는 플랫폼 commit `a8a7d66121597bec9ee5efa2d25e66e0dbfc75c1`과 Harbor commit `0ee812f2ebd9aa83f160534b53d1e711ee755416`의 고정 조합이며 새 팔 구현의 검증으로 대신하지 않는다. 전체 회귀에서 확인한 기동/오류 문구 회귀는 별도 수정·재검증하고 FULL 통과와 개별 회귀 통과를 구별한다.
+
+공개 사전검사 commit `754d5ca7bf`의 후속 FULL은 문서 검사 두 종류와 충전 status 조회 타임아웃으로 실패했다. 문서 검사는 수정 후 통과했으며, 같은 SHA의 충전 해당 node는 단독 재실행에서 통과했다. FULL 실패의 재현 조건과 추가 전체 검증은 미완료로 유지한다. 상세는 위 사전검사 검증 기록을 따른다.
 
 ## Global Constraints
 
@@ -44,13 +83,13 @@
 
 **Files:** 플랫폼 신규 `docs/adr/D-<선점번호>-application-action-boundary.md`, 수정 `docs/reference/ROSY ADR Log.md`, `docs/logs.md`; 이 계획의 Spec 링크. 생성 index는 생성기로만 갱신한다.
 
-- [ ] 슬롯 운영 규칙으로 작업 슬롯을 확보한다. main의 `git status --short --branch`, `git worktree list`, `python tools/worktrees.py status`로 점유와 동료 변경을 확인한다.
-- [ ] `python tools/worktrees.py new app-action-boundary docs/application-action-boundary`로 생성하고 등록된 non-main 브랜치인지 확인한다. 일회성 예외가 있으면 사유·회수 조건을 인계에 남긴다.
-- [ ] worktree의 `README.md` 핵심 계약, `docs/AGENTS.md`, `docs/adr/AGENTS.md`, `docs/progress.md`, `docs/index.md`를 읽는다. D-827~829·D-836·D-841 및 병행 작업의 최신 상태를 다시 확인한다.
-- [ ] `tools/harness/adr_reserve.py`를 읽고 작성 직전 `python tools/harness/adr_reserve.py next "업무 공정 해석과 로봇 동작 실행의 분리"`를 실행한다.
-- [ ] D-856을 정식 ADR로 기록한다. 제목을 선점 번호 형식으로 바꾸고 구조 경계의 사용자 결정과 상세 wire 미확정을 구분한다. 현재 링크는 소유 저장소의 상대 경로로 바꾼다. Log 상태도 일치시킨다.
-- [ ] `docs/logs.md`에 이번 문서 등록과 미실행 검사를 남긴다. `python tools/harness/rosy_harness.py generate`, `python tools/harness/rosy_harness.py lint`를 실행한다. 새 ADR과 Log 항목의 쌍·번호 충돌·링크를 확인한다.
-- [ ] 자신의 경로만 커밋하고 공식 원격 runner로 `test/test_harness_contracts.py`를 검증한다. 실제 경로가 변경되면 `rg --files test`로 현행 시험을 먼저 확인한다. 생성 문서 변경이 있으면 그 변경도 같은 검증 SHA에 포함한다.
+- [x] 슬롯 운영 규칙으로 작업 슬롯을 확보한다. main의 `git status --short --branch`, `git worktree list`, `python tools/worktrees.py status`로 점유와 동료 변경을 확인한다.
+- [x] `python tools/worktrees.py new app-action-boundary docs/application-action-boundary`로 생성하고 등록된 non-main 브랜치인지 확인한다. 일회성 예외가 있으면 사유·회수 조건을 인계에 남긴다.
+- [x] worktree의 `README.md` 핵심 계약, `docs/AGENTS.md`, `docs/adr/AGENTS.md`, `docs/progress.md`, `docs/index.md`를 읽는다. D-827~829·D-836·D-841 및 병행 작업의 최신 상태를 다시 확인한다.
+- [x] `tools/harness/adr_reserve.py`를 읽고 작성 직전 `python tools/harness/adr_reserve.py next "업무 공정 해석과 로봇 동작 실행의 분리"`를 실행한다.
+- [x] D-856을 정식 ADR로 기록한다. 제목을 선점 번호 형식으로 바꾸고 구조 경계의 사용자 결정과 상세 wire 미확정을 구분한다. 현재 링크는 소유 저장소의 상대 경로로 바꾼다. Log 상태도 일치시킨다.
+- [x] `docs/logs.md`에 이번 문서 등록과 미실행 검사를 남긴다. `python tools/harness/rosy_harness.py generate`, `python tools/harness/rosy_harness.py lint`를 실행한다. 새 ADR과 Log 항목의 쌍·번호 충돌·링크를 확인한다.
+- [x] 자신의 경로만 커밋하고 공식 원격 runner로 `test/test_harness_contracts.py`를 검증한다. 실제 경로가 변경되면 `rg --files test`로 현행 시험을 먼저 확인한다. 생성 문서 변경이 있으면 그 변경도 같은 검증 SHA에 포함한다.
 
 **Exit:** ADR·Log·계획 링크가 정본을 가리키고 lint와 해당 문서 계약 검사의 결과·SHA가 있다. Git 밖 초안과 계획은 이 정본으로 가는 안내로 바꾼다.
 
@@ -118,7 +157,7 @@
 - [ ] 플랫폼·Harbor·하네스를 고정 전체 SHA/clean checkout으로 준비한다. 임시 자격·장부·simulation 서버로 정상 흐름과 중복·충돌·busy·권한·응답 유실·재시작·늦은 결과를 HTTP 경계에서 검증한다.
 - [ ] Harbor 없는 공급자, palletizing 없는 중립 실행 구성, 플랫폼 Python 없는 Harbor 소비자, 같은 fixture를 쓰는 두 번째 최소 HTTP 소비자를 각각 실행한다. 두 번째 소비자는 시험용으로만 두고 새 제품 앱을 만들지 않는다.
 - [ ] 동작 완료와 업무 완료를 따로 단언한다. 합성 관측을 실제 화물·퇴피·하역 수용으로 기록하지 않는다.
-- [ ] 기존 Cell 경로 회귀와 배포 profile 불변을 확인한다. 실패 시 새 경로를 비활성화하고 기존 지원 버전으로 되돌린다. 장부 삭제·요청 key 초기화·자동 재접수는 복구 방법으로 사용하지 않는다.
+- [ ] 기존 Cell 경로 회귀와 배포 profile 불변을 확인한다. 실패 시 새 경로의 dispatch를 비활성화한다. managed journal이 생긴 profile은 권한 제한·장부·점유를 보존한 HOLD에서 복구하며 구버전 binary나 unmanaged profile로 제어권을 자동 복귀시키지 않는다. 기존 지원 버전 복귀는 그 버전이 해당 journal/권한을 보존하는 경우에만 허용한다. 장부 삭제·요청 key 초기화·자동 재접수는 복구 방법으로 사용하지 않는다.
 - [ ] 양쪽 validation에 SHA·환경·명령·exit·skip·관측 출처·확인 한계를 기록한다. 앱 계약 정본은 플랫폼, Harbor 대응은 Harbor 문서에서 관리하고 내용을 복제하지 않는다.
 - [ ] 기존 `CELL_TRANSFER` 폐기는 실제 소비자 목록이 0이고 새 검증 보장이 확인된 별도 변경에서만 다룬다. 실물은 장치 담당과 별도 수용 계획으로 진행한다.
 
@@ -135,4 +174,4 @@ python test/known_failures.py X:/DevTemp/harbor-action-boundary/<단계>/run-1.t
 
 이번 문서 작성의 CE 판정은 **해당 없음**이다. 운영 장애 해결이나 비자명한 검증된 복구를 수행하지 않았다. 구현 단계에서 장애·데이터 무결성·권한 경계 문제가 실제로 해결되면 workspace CE 게이트를 적용한다.
 
-현재 다음 행동은 P0 검증 결과를 확인하고 P1의 첫 동작 계약을 확정하는 것이다. P1 계약 설계 뒤에 제품 구현 순서와 시험명을 보완한다. 이번 계획 기록은 push·병합·배포·장치 실행 승인이 아니다.
+첫 simulation 흐름은 완료했다. 고정 source bb38의 FULL23 전체와 양쪽 source·실패·skip·수용 한계를 기록했고 metadata commit/원격 guard235·size/safety/lint·clean Git 상태를 확인했다. physical 생성/두 사람 승인·단일 SDK 전송·독립 관측·atomic 원래 claim 해제·Harbor의 단일 이동 binding은 위 독립 HTTP 근거까지 연결했다. 최신 상태는 [관측·HTTP 검증](../validation/harbor-arm-observer-http-2026-10-24/result.md)을 따른다. 기존 World ArmState의 정규화 관절값/unobserved 물체 상태는 퇴피·물체 배치 증거로 쓰지 않는다. 다단계 업무·운영 producer·현장 수용은 후속이며 이 기록은 push·병합·배포·장치 실행 승인이 아니다.

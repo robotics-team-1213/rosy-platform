@@ -104,8 +104,9 @@ class Host:
 
     def build_env(self, lock: Path | None, target: Path) -> None:
         if lock is None:  # a service on the host's own packages
-            subprocess.run([self.cfg["base_python"], "-m", "venv", "--system-site-packages", str(target)],
-                           check=True, timeout=300)
+            make = ([os.path.expanduser(self.cfg["uv"]), "venv", "-q", "--python", self.cfg["base_python"]]
+                    if self.cfg.get("uv") else [self.cfg["base_python"], "-m", "venv"])
+            subprocess.run([*make, "--system-site-packages", str(target)], check=True, timeout=300)
             return
         system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
         if self.cfg.get("uv"):  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25

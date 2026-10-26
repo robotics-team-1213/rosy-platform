@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'curation/omx'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # experiment_dataset sits beside this file
 import native_review as native
 from experiment_dataset import dataset_lease
 

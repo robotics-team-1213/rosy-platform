@@ -333,6 +333,4 @@ $('pipeline-action').onclick=()=> {
   else if(action==='refresh')$('refresh').click();
   else if(['start','retry'].includes(action))controlAction(action);
 };
-$('theme').value=document.documentElement.dataset.theme||'dark';
-$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 load().catch(()=>{});

@@ -64,7 +64,9 @@ case "$ROLE:$ACTION:$UNIT" in
     # D-883: start the rosy-ops lab storage service once; host_storage.py owns what is kept.
     owner=$(cat "$CONF/units-user" 2>/dev/null || true)
     [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
-    systemctl --user --machine="$owner@" cat rosy-test-storage.service >/dev/null 2>&1 || refuse "no rosy-test-storage.service" 5
+    # systemd refuses `cat` over --machine ("Cannot remotely cat units."); LoadState works there.
+    [ "$(systemctl --user --machine="$owner@" show -p LoadState --value rosy-test-storage.service 2>/dev/null)" = loaded ] \
+      || refuse "no rosy-test-storage.service" 5
     systemctl --user --machine="$owner@" --no-block start rosy-test-storage.service
     ;;
   site:install-site-config:fleet-site.yaml|\

@@ -43,10 +43,10 @@ def test_learning_compact_header_stays_within_first_view_budget(browser_workspac
     page.goto(page.url.split('?')[0].rstrip('/') + route, wait_until='networkidle')
     topbar = page.locator('ui-topbar').bounding_box()
     assert topbar['height'] <= height * 0.2, (route, topbar, height)
-    # D-741: the app bar is one row (app, theme); navigation stays in the rail.
+    # D-741: the app bar is one row (app, account, theme cycle); navigation stays in the rail.
     assert page.locator('ui-topbar h1, ui-topbar nav').count() == 0
     brand = page.locator('ui-topbar ui-brand').bounding_box()
-    theme = page.locator('ui-topbar .theme-label select').bounding_box()
+    theme = page.locator('ui-topbar [data-theme-cycle]').bounding_box()
     assert brand['x'] + brand['width'] <= theme['x'], (route, brand, theme)
     rail = page.locator('.ui-rail').bounding_box()
     assert rail['y'] == topbar['y'] + topbar['height'], (route, rail, topbar)

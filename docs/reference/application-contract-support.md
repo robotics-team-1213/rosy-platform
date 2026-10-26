@@ -21,6 +21,15 @@ Harbor 용어의 정본은 팀 저장소 `harborlogi/CONTEXT.md`(2026-10-24 확�
 
 ## 외부 HTTP 소비
 
+2026-10-24 D-856 추가: API v1.312의 첫 simulation ARM 경로는 아래 legacy Cell 경로와 별도로 설치한다. 정본 shape·권한·오류 코드는 API reference, source/skip/수용 한계는 [독립 ARM HTTP 검증](../validation/harbor-arm-observer-http-2026-10-24/result.md)이 소유한다. 기본 구성에서 실행은 열리지 않는다.
+
+| 중립 ARM surface | 소유자와 제한 |
+|---|---|
+| `POST/GET /api/fleet/arm-transfers/jobs`, `GET /{mission_id}`, `POST /{mission_id}/admit` | 앱의 named principal/key/body scope, 다른 named operator 승인, Fleet의 공유 원장·fence·모든 claim/capability |
+| `GET /api/fleet/arm-transfers/observation-context`, `POST /jobs/{mission_id}/observations` | 별도 expiring 관측자 credential; 원본 측정값만 제출. 앱/승인자와 분리하며 Fleet monitor가 실행을 추적 |
+| `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | creator/named operator scope. 물리 receipt와 Harbor 업무 완료는 별개 |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | 원래 scope/권한 유지. ACK·timeout·Action 성공으로 점유를 해제하지 않음 |
+
 | 목적 | 현재 경로·producer | 권한·의미 | 소비 제한 |
 |---|---|---|---|
 | 장치·사이트 조회 | `GET /api/fleet/state`, `/api/fleet/site-map`, `/api/fleet/observations`; `console/console_routes.py` | read guard와 사이트 read 권한 | 관측은 시각·출처와 함께 사용한다. 조회는 예약이 아니다. |

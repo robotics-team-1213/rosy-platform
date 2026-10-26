@@ -456,7 +456,7 @@ def land(args) -> int:
 
     for round_no in range(1, args.max_rounds + 1):
         land_queue.touch()  # a held ticket stays fresh through long rounds
-        reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
+        reusable, prepared = args.tests == "auto", None  # a green affected tier pre-push may reuse
         main_sha = out(wt, "rev-parse", "main")
         print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
         land_events.emit("round", round=round_no, main=main_sha)
@@ -483,7 +483,7 @@ def land(args) -> int:
                 # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
                 # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
                 invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
-                reusable = False  # the FULL tier ran on an earlier candidate
+                reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
                 summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
             else:
@@ -530,7 +530,7 @@ def land(args) -> int:
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
-            land_full.save(wt, branch, candidate, main_sha)
+            land_full.save(wt, branch, candidate, main_sha, "full", invocations)
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha
@@ -548,8 +548,8 @@ def land(args) -> int:
             landed = out(main_co, "rev-parse", "HEAD")
             if reusable and landed == candidate:
                 record = land_record.write(wt, candidate, main_sha, invocations,
-                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))],
-                                           "full" if note else "records" if delta and all(map(record_only, delta)) else "affected")
+                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))], prepared=prepared,
+                                           tier="full" if note else "records" if delta and all(map(record_only, delta)) else "affected")
                 summary.append(f"land record for pre-push: {record}")
             count = out(wt, "rev-list", "--count", f"{start}..{landed}")
             print("\n".join(["== landed (not pushed)", *summary,
