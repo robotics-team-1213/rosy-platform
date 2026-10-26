@@ -183,7 +183,9 @@ class Guest:
     def run(self, command, *, timeout=300, data=None):
         result = self._ssh(command, timeout=timeout, data=data)
         if result.returncode:
-            raise ValueError("guest command failed: " + result.stderr.decode(errors="replace")[-3000:])
+            stdout = result.stdout.decode("utf-8", errors="replace")[-6000:]
+            stderr = result.stderr.decode("utf-8", errors="replace")[-6000:]
+            raise ValueError("guest command failed:\n" + stdout + "\n" + stderr)
         return result.stdout.decode("utf-8", errors="replace")
 
     def provision_source(self, source):
