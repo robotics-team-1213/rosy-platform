@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · feat(sim): D-877 물체 위치 평가 사실, 탐침 PASS 순서
 - 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
 - 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 - 2026-10-26 · 0a88b44f94 · D-888 actual guest-kernel root evidence
 - 2026-10-26 · 75e832c640 · D-888 offline signing evidence
-- 2026-10-26 · 0b370fcc7b · D-888 unsigned OS producer evidence
