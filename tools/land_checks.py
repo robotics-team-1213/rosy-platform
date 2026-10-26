@@ -70,6 +70,28 @@ def _safety(wt: Path, python: str, ids: list[str]) -> list[str]:
     return [line for line in done.stdout.splitlines() if line] if done.returncode == 0 else list(ids)
 
 
+def _ids(wt: Path, verdict: str) -> list[str]:
+    """The NEW node ids of a known_failures verdict, each path checked against the tree.
+
+    A run over several paths can print ids from another pytest rootdir (2026-10-26, feat/update-view:
+    ``middleware/robot_execution/local/test_feature_matrix.py`` for ``applications/fleet/test/...``), and the
+    reruns below then found no file. A path the tree lacks takes the one tracked test file of that name.
+    """
+    ids = []
+    for line in verdict.splitlines():
+        if not (m := NEW_LINE.match(line.strip())):
+            continue
+        nodeid = m.group(1).strip()
+        path, sep, rest = nodeid.partition("::")
+        if not (wt / path).is_file():
+            found = [p for p in _git(wt, "ls-files", "--", f"*{Path(path).name}").stdout.splitlines()
+                     if Path(p).name == Path(path).name]
+            if len(found) == 1:
+                nodeid = found[0] + sep + rest
+        ids.append(nodeid)
+    return ids
+
+
 def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
                run, *, tested_sha: str) -> tuple[list[str], str]:
     """Rerun the NEW ids of one invocation alone; ``(load-flaky ids, "")`` or ``([], why it stops)``.
@@ -86,7 +108,7 @@ def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, 
 
 def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
                  run, *, tested_sha: str) -> tuple[list[str], str]:
-    ids = [m.group(1).strip() for line in verdict.splitlines() if (m := NEW_LINE.match(line.strip()))]
+    ids = _ids(wt, verdict)
     if not ids or len(ids) > MAX_RERUN:
         return [], f"{len(ids)} NEW id(s); a rerun alone is tried only for 1 to {MAX_RERUN}"
     safety = _safety(wt, python, ids)
@@ -100,6 +122,9 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
         return [], "incomplete isolated rerun results"
     if _git(wt, "rev-parse", "HEAD").stdout.strip() != tested_sha:
         return [], "HEAD changed during isolated checks; retry the landing"
+    lost = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code not in (0, 1)]
+    if lost:  # 4: no such file, 5: nothing collected, 255: host lost: no verdict, not a second failure
+        return [], "the rerun alone gave no verdict: " + "; ".join(lost)
     again = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code != 0]
     if again:
         return [], "failed again when run alone: " + "; ".join(again)
@@ -121,7 +146,7 @@ def main_red(wt: Path, inv: list[str], verdict: str, logdir: Path, tag: str, pyt
 
     Never lets a landing through: it only says whether the failure is main's or the branch's.
     """
-    ids = [m.group(1).strip() for line in verdict.splitlines() if (m := NEW_LINE.match(line.strip()))]
+    ids = _ids(wt, verdict)
     if not ids:
         return ""
     main = _git(wt, "rev-parse", "main").stdout.strip()

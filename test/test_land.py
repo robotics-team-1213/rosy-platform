@@ -825,6 +825,19 @@ def test_new_failure_that_fails_again_or_too_many_still_stops(repos, monkeypatch
     assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
 
 
+def test_rerun_ids_from_another_rootdir_are_mapped_to_the_tree_and_no_test_found_is_no_verdict(repos, tmp_path):
+    """2026-10-26: ids printed from another pytest rootdir made both reruns find no file."""
+    main, wt = repos
+    sent = []
+    verdict = "NEW elsewhere/local/test_a.py::test_a\n"
+    for codes, why in (([4], "gave no verdict"), ([1], "failed again when run alone")):
+        ids, said = land.land_checks._rerun_alone(
+            wt, ["pkg/test"], tmp_path / "original.txt", verdict, tmp_path, "map", sys.executable,
+            lambda invs, *a, **k: sent.extend(invs) or list(codes), tested_sha=git(wt, "rev-parse", "HEAD"))
+        assert not ids and why in said
+    assert sent[0] == ["pkg/test/test_a.py::test_a"], "the one tracked test_a.py, not the printed path"
+
+
 def test_safety_root_test_is_never_rerun(repos, monkeypatch, capsys):
     main, wt = repos
     monkeypatch.setattr(land.land_checks, "_safety", lambda wt_, python, ids: list(ids))
