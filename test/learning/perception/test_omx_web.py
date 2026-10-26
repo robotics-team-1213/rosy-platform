@@ -95,11 +95,15 @@ def test_registered_intake_folders_are_listed_read_only(tmp_path):
         thread.join()
 
 
+IDENTITY, BY_ID = 'SERIAL-9F3A71-IDENT', '/dev/v4l/by-id/usb-CAM_SERIAL123'
+
+
 def native(root, setup, *, camera=False):
     """A prepare-native intake: inspection.json records the refusal-checked ``{role: revision}``."""
     prepared(root, camera=camera)
     report = json.loads((root / 'inspection.json').read_text())
-    report.update(camera_keys=[f'observation.images.{role}' for role in setup], camera_setup=setup)
+    report.update(camera_keys=[f'observation.images.{role}' for role in setup], camera_setup=setup,
+                  camera_identity=IDENTITY, camera_path=BY_ID)
     (root / 'inspection.json').write_text(json.dumps(report))
 
 
@@ -109,7 +113,7 @@ def test_prepare_native_camera_reference_links_only_stored_revisions(tmp_path):
     from types import SimpleNamespace
     workspace, store = Workspace(tmp_path / 'workspace.sqlite3'), tmp_path / 'state' / 'camera-setup'
     store.mkdir(parents=True)
-    (store / f'{"c" * 64}.json').write_text('{}')
+    (store / f'{"c" * 64}.json').write_text(json.dumps(dict(camera_identity=IDENTITY, device_path=BY_ID)))
     for name, setup, camera in (('native', {'top': 'c' * 64, 'wrist': 'd' * 64}, False),
                                 ('both', {'top': 'c' * 64}, True), ('bad', {'top': '../../x'}, False)):
         native(tmp_path / name, setup, camera=camera)
@@ -127,6 +131,7 @@ def test_prepare_native_camera_reference_links_only_stored_revisions(tmp_path):
     assert rows['bad']['error'] and 'camera_reference' not in rows['bad']
     raw = json.dumps(responses, ensure_ascii=False)
     assert str(tmp_path) not in raw and json.dumps(str(tmp_path))[1:-1] not in raw
+    assert IDENTITY not in raw and 'SERIAL123' not in raw and '/dev/v4l' not in raw
 
 
 def test_segment_reviews_append_versions_and_leave_original_labels_untouched(tmp_path):
