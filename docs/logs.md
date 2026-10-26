@@ -12099,6 +12099,14 @@ osy-d395-s1d\`.
 - 증거: `6b0f7568f5` 원격98시험과 구조/harness/affected247시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 실제 개별·중앙 집계·중앙 직접 수집 subprocess와 중앙 단절 독립성·프로세스 간 writer 배타성을 확인했다. 최종 독립 재검토 차단 없음.
 - gate 변화: Monitoring SOURCE GO, 화면/배포/실제 PC 수용은 HOLD다. CE: 해당 없음 — 새 기능의 코드·회귀가 판단 근거를 보존한다.
 
+## 2026-10-26 · 7e85b28a8e · fix(remote): 원격 잡 명령을 stdin으로 보낸다
+
+- 변경: `remote_job.ssh_call`이 `bash -s`를 실행하고 명령을 stdin으로 보낸다. `remote_pytest.remote`는 `remote_job.argv_command`를 거쳐 8,000바이트(`ARGV_MAX`)를 넘는 명령을 거부한다. 회귀 시험 2개(`test/test_remote_pytest.py`).
+- 이유: 노트북의 Git for Windows `ssh.exe`는 Python에서 띄우면 원격 명령을 약 8,190바이트에서 오류 없이 자른다. FULL 착지의 수집 게이트 잡 단어(경로 115개, 5 KB)와 잡 본문(4 KB)이 이를 넘어 `tools/collect_alone.py` 이하 인자가 사라졌고, pytest가 트리 전체를 한 프로세스로 수집해(37684 items / import file mismatch 11) 문서만 바꾼 착지를 NEW 11로 멈췄다. 게이트 로직 자체는 정상이다.
+- 증거: 수정 전 main 433bc0d8a0에서 같은 115경로 호출 재현(37684 items / 11 errors), `test` 항목을 뺀 114경로도 재현, `ROSY_COLLECT_PATHS=test`만은 660 passed, 정상 2경로+5,200바이트 더미 단어도 재현. Python에서 Git ssh.exe로 8,150 x는 그대로, 8,200·12,000 x는 8,176에서 잘림(Windows OpenSSH는 모두 그대로). 수정 뒤 결과는 아래 검증 줄.
+- gate 변화: 복구. 수집 게이트와 단독 실행(`ROSY_ALONE_FILES`)이 긴 목록에서도 제 인자를 받는다.
+- CE: 새 교훈 — `docs/solutions/workflow-issues/windows-ssh-exe-cuts-long-remote-command-2026-10-26.md`.
+
 ## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 
 - 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
@@ -12111,3 +12119,11 @@ osy-d395-s1d\`.
 - 변경: D-629의 좁은 화면 순서만 D-892로 부분 대체한다. 이전 결정 본문은 보존하고 새 결정·색인·DESIGN 참조·반응형 DOM·회귀 시험을 함께 맞춘다.
 - 증거: ADR 번호는 관문에서 선점했으며 ADR Log의 UTF-8 BOM·CRLF를 유지했다. 문서·DOM 변경 뒤 공식 원격 재검증은 진행 중이다.
 - gate 변화: 없음. Accepted는 실물·현장 또는 제품 전체 UI/UX 수용을 뜻하지 않는다.
+
+## 2026-10-27 · uncommitted · feat(sim): D-877 물체 위치 평가 사실, 탐침 PASS 순서
+
+- 변경: MuJoCo·Isaac이 `/sim/object_tf`로 움직이는 상자 위치를 내고 적합성이 5mm 흔들림을 검사, 두 Gazebo 탐침은 정리 뒤 PASS, 두 카메라 사슬 시험이 저널 두 프레임 확인, [검증 기록](validation/omx-sim-object-facts-2026-10-27/result.md).
+- 증거: MuJoCo(AI PC)·Isaac(모델 PC) 적합성 통과, 흔들림 0.0mm. 단일 카메라 Gazebo와 VLA P0 stale이 PASS 뒤 EXIT_OK. 원격 pytest 통과.
+- gate 변화: 없음. Isaac 흔들림 값은 파지 시험 전까지 의미를 주장하지 않는다.
+- 결정: 없음.
+- 교훈: 없음(AI PC overlay 삭제와 복구는 검증 기록에 남김).
