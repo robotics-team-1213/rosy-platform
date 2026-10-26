@@ -1296,4 +1296,5 @@
 ## 2026-10-26 · 62173b9899 · 모터 관측 없음 사유를 한국어로
 
 - 변경: `support_reason`이 화면에 그대로 나오던 영어 문장을 표면 대체 문구와 같은 한국어로 바꿨다. 응답 모양·상태값은 같다.
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.

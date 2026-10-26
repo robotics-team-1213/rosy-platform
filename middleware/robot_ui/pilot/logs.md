@@ -983,4 +983,5 @@
 ## 2026-10-26 · 62173b9899 · 앱 바 높이 덧쓰기 정리
 
 - 변경: 공용 `ui-topbar`가 D-741 앱 바 높이(64px)를 기본으로 갖게 되어 이 표면의 같은 값 덧쓰기를 지웠다(Pilot은 두 줄 머리 높이를 명시로 유지).
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.
