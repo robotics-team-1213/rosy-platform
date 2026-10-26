@@ -138,3 +138,45 @@ def test_fake_root_never_uses_live_service_manager_for_commit_or_recovery(tmp_pa
     owner = importlib.import_module("os_update_commit")
     with pytest.raises(ValueError, match="explicit test runner"): owner.commit(tmp_path, TRANSACTION)
     with pytest.raises(ValueError, match="explicit test runner"): owner.recover(tmp_path)
+
+
+@pytest.mark.parametrize("change", ["expired", "disabled", "media"])
+def test_intent_fsync_delay_cannot_extend_health_or_policy_authority(tmp_path, monkeypatch, change):
+    owner, health, state, boot, root, _, host, _, run, _, _ = _candidate(tmp_path, monkeypatch)
+    save = owner._json_atomic
+    def delayed(path, value, mode):
+        save(path, value, mode)
+        if change == "expired": monkeypatch.setattr(health, "_now", lambda: 71_000_000_000)
+        elif change == "disabled":
+            (root / "var/lib/rosy-device/policy/updates/config.json").write_text('{"enabled":false}')
+        else: monkeypatch.setattr(owner, "capture", lambda r: dict(slot="b", layout={}))
+    monkeypatch.setattr(owner, "_json_atomic", delayed)
+    with pytest.raises(ValueError): owner.commit(root, TRANSACTION, host=host, run=run)
+    assert state.read_state(root)["pending"]["phase"] == "COMMIT_INTENT"
+    assert (root / boot.BOOTSTRAP).read_bytes() == boot.autoboot("a")
+
+
+def test_committed_state_before_cleanup_is_recoverable_on_the_same_boot(tmp_path, monkeypatch):
+    import rosy_claim
+    owner, _, state, _, root, _, host, _, run, _, _ = _candidate(tmp_path, monkeypatch)
+    cleanup = owner._cleanup
+    def cut(*args): raise PowerCut()
+    monkeypatch.setattr(owner, "_cleanup", cut)
+    with pytest.raises(PowerCut): owner.commit(root, TRANSACTION, host=host, run=run)
+    assert state.read_state(root)["pending"] is None
+    assert rosy_claim.check(root, now=host.now()) is not None
+    monkeypatch.setattr(owner, "_cleanup", cleanup)
+    assert owner.recover(root, host=host, run=run)["committed"]["slot"] == "b"
+    assert rosy_claim.check(root, now=host.now()) is None
+
+
+def test_preserved_source_recovery_releases_only_its_own_new_boot_claim(tmp_path, monkeypatch):
+    import rosy_claim
+    owner, _, _, _, root, _, host, _, run, _, _ = _candidate(tmp_path, monkeypatch)
+    def cut(*args): raise PowerCut()
+    monkeypatch.setattr(owner, "_write_atomic", cut)
+    with pytest.raises(PowerCut): owner.commit(root, TRANSACTION, host=host, run=run)
+    _normal(root, "a")
+    rosy_claim.acquire(root, "os-update:" + TRANSACTION, "recovery fixture", 300, now=host.now())
+    owner.recover(root, host=host, run=run)
+    assert rosy_claim.check(root, now=host.now()) is None
