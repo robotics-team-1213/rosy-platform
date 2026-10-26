@@ -18,13 +18,22 @@ def _note(value, field, *, required=False):
     return value
 
 
+def _binding(value):
+    if not isinstance(value, dict) or set(value) != {'owner_id', 'sha256'}:
+        raise ValueError('expected current registered arm binding')
+    _text(value['owner_id'], 'source owner', 128, required=True)
+    if not isinstance(value['sha256'], str) or re.fullmatch('[0-9a-f]{64}', value['sha256']) is None:
+        raise ValueError('invalid source binding digest')
+    return dict(value)
+
+
 class DeviceCareStore(DeviceProfileStore):
     def __init__(self, path):
         super().__init__(path)
         with closing(self._connect()) as db, db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS fleet_device_care (
-                    device_id TEXT PRIMARY KEY, source_kind TEXT, source_id TEXT,
+                    device_id TEXT PRIMARY KEY, source_kind TEXT, source_id TEXT, source_binding_json TEXT,
                     caution TEXT NOT NULL, characteristics_json TEXT, report_json TEXT,
                     received_at REAL, updated_by TEXT NOT NULL, updated_at REAL NOT NULL,
                     UNIQUE(source_kind, source_id));
@@ -32,6 +41,10 @@ class DeviceCareStore(DeviceProfileStore):
                     id INTEGER PRIMARY KEY, device_id TEXT NOT NULL, kind TEXT NOT NULL,
                     text TEXT NOT NULL, actor TEXT NOT NULL, created_at REAL NOT NULL);
             ''')
+            db.execute('BEGIN IMMEDIATE')
+            if 'source_binding_json' not in {row['name'] for row in db.execute('PRAGMA table_info(fleet_device_care)')}:
+                # Legacy links remain unverified until an operator confirms the current registration.
+                db.execute('ALTER TABLE fleet_device_care ADD COLUMN source_binding_json TEXT')
 
     def _require_profile(self, device_id):
         if self.get_profile(device_id) is None:
@@ -47,6 +60,7 @@ class DeviceCareStore(DeviceProfileStore):
             'device_id': device_id, 'source_kind': None, 'source_id': None,
             'caution': '', 'updated_by': None, 'updated_at': None}
         document = json.loads(result.pop('characteristics_json', None) or 'null')
+        result['source_binding'] = json.loads(result.pop('source_binding_json', None) or 'null')
         report = json.loads(result.pop('report_json', None) or 'null')
         result['characteristics_summary'] = None if document is None else {
             'revision': document['revision'], 'status': document['status'],
@@ -70,7 +84,7 @@ class DeviceCareStore(DeviceProfileStore):
             return None
         return {**self.get_profile(row['device_id']), **care}
 
-    def put(self, device_id, body, *, actor):
+    def put(self, device_id, body, *, actor, source_binding=None):
         self._require_profile(device_id)
         if not isinstance(body, dict) or set(body) != {'source_kind', 'source_id', 'caution', 'characteristics'}:
             raise ValueError('expected source_kind, source_id, caution and characteristics')
@@ -82,6 +96,9 @@ class DeviceCareStore(DeviceProfileStore):
                 raise ValueError('invalid source identifier')
         else:
             raise ValueError('expected a registered robot or arm source, or null pair')
+        bound = _binding(source_binding) if kind == 'arm' else None
+        if kind != 'arm' and source_binding is not None:
+            raise ValueError('only arm sources have a registered arm binding')
         caution = _note(body['caution'], 'caution')
         _text(actor, 'actor', 96, required=True)
         document = body['characteristics']
@@ -89,21 +106,24 @@ class DeviceCareStore(DeviceProfileStore):
             document = parse_json(document)
         if document is not None:
             document = validate_characteristics(document)
-            if document['binding']['device_id'] != device_id or kind != 'arm':
+            if (document['binding']['device_id'] != device_id or kind != 'arm'
+                    or document['binding']['owner_id'] != bound['owner_id']):
                 raise ValueError('characteristics require the same device_id and an arm source')
         encoded = json.dumps(document, sort_keys=True) if document is not None else None
+        binding_json = json.dumps(bound, sort_keys=True) if bound is not None else None
         try:
             with closing(self._connect()) as db, db:
                 db.execute('BEGIN IMMEDIATE')
                 old = db.execute('SELECT * FROM fleet_device_care WHERE device_id=?', (device_id,)).fetchone()
-                changed = old is None or (old['source_kind'], old['source_id'], old['characteristics_json']) != (
-                    kind, source, encoded)
+                changed = old is None or (old['source_kind'], old['source_id'], old['characteristics_json'],
+                                          old['source_binding_json']) != (kind, source, encoded, binding_json)
                 db.execute('''INSERT INTO fleet_device_care
-                    (device_id,source_kind,source_id,caution,characteristics_json,updated_by,updated_at)
-                    VALUES (?,?,?,?,?,?,?) ON CONFLICT(device_id) DO UPDATE SET
+                    (device_id,source_kind,source_id,caution,characteristics_json,source_binding_json,updated_by,updated_at)
+                    VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(device_id) DO UPDATE SET
                     source_kind=excluded.source_kind,source_id=excluded.source_id,caution=excluded.caution,
-                    characteristics_json=excluded.characteristics_json,updated_by=excluded.updated_by,
-                    updated_at=excluded.updated_at''', (device_id, kind, source, caution, encoded, actor, time.time()))
+                    characteristics_json=excluded.characteristics_json,source_binding_json=excluded.source_binding_json,
+                    updated_by=excluded.updated_by,updated_at=excluded.updated_at''',
+                           (device_id, kind, source, caution, encoded, binding_json, actor, time.time()))
                 if changed:
                     db.execute('UPDATE fleet_device_care SET report_json=NULL,received_at=NULL WHERE device_id=?',
                                (device_id,))
@@ -130,15 +150,20 @@ class DeviceCareStore(DeviceProfileStore):
             self._event(db, device_id, body['kind'], body['text'], actor, time.time())
         return self.get(device_id)
 
-    def ingest(self, device_id, source_id, report, *, now=None):
+    def ingest(self, device_id, source_id, report, *, source_binding, now=None):
         now = time.time() if now is None else now
+        expected = _binding(source_binding)
         with closing(self._connect()) as db, db:
             # Serialize replacement and ingestion so a rebind cannot admit an old source report.
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM fleet_device_care WHERE device_id=?', (device_id,)).fetchone()
             if row is None or row['source_kind'] != 'arm' or row['source_id'] != source_id:
                 raise ValueError('report source does not match this profile')
+            if json.loads(row['source_binding_json'] or 'null') != expected:
+                raise ValueError('registered source configuration changed; confirm the profile link')
             document = json.loads(row['characteristics_json'] or 'null')
+            if document is None or document['binding']['owner_id'] != expected['owner_id']:
+                raise ValueError('report owner does not match current source registration')
             report = validate_report(report, document, now=now)
             previous = json.loads(row['report_json'] or 'null')
             if report == previous:

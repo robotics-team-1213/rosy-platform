@@ -33,7 +33,7 @@ SOURCE = 'fixture-profile-observation'
 
 
 @pytest.fixture
-def persisted_cell(tmp_path):
+def persisted_cell(tmp_path, request):
     arm = {'source_id': 'source-one', 'arm_id': 'fixture-owner', 'label': '검증용 팔',
            'board_id': 'EXAMPLE-BOARD', 'joint_topic': '/omx_commissioning/fixture_owner/joint_states',
            'joint_names': ['joint2', 'joint3'], 'token_env': 'EXAMPLE_PROFILE_SOURCE',
@@ -74,6 +74,10 @@ def persisted_cell(tmp_path):
         publish(json.dumps(report).encode(), fleet_url='https://fleet.example', device_id='arm-one',
                 source_id='source-one', token=SOURCE, context=ssl.create_default_context(), opener=Transport())
 
+    if getattr(request, 'param', False):
+        changed = manifest.model_dump(by_alias=True)
+        changed['workcells'][0]['arms'][0]['arm_id'] = 'replacement-owner'
+        manifest = WorkcellObservationManifest.model_validate(changed)
     # A new app and store reopen the database before any browser requests.
     listener = safe_listener()
     origin = f'http://127.0.0.1:{listener.getsockname()[1]}'
@@ -128,5 +132,32 @@ def test_persisted_analysis_origin_and_diagnosis_order_in_cell(persisted_cell, w
                 target.parent.mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(target), full_page=True)
             assert not errors and not writes
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize('persisted_cell', [True], indirect=True)
+def test_restarted_cell_does_not_attach_old_owner_profile_or_accept_old_report(persisted_cell):
+    from playwright.sync_api import expect, sync_playwright
+    origin, report = persisted_cell
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(**launch_options())
+        try:
+            page = browser.new_page(viewport={'width': 390, 'height': 1000})
+            page.add_init_script(f"sessionStorage.setItem('rosy-console-token', '{VIEWER}')")
+            page.goto(origin + '/console/cell')
+            info = page.locator('[data-arm-source="source-one"] [data-robot-profile]')
+            expect(info).to_contain_text('프로필 연결을 다시 확인하세요')
+            expect(info).not_to_contain_text('2·3번 관절 하중 주의')
+            expect(info.locator('a')).to_have_attribute('href', '/console/install?profile=arm-one#device-profiles')
+            old = page.request.get(origin + '/api/fleet/device-profiles/arm-one/care',
+                                   headers={'Authorization': f'Bearer {VIEWER}'}).json()
+            assert old['source_binding_status'] == 'owner_changed'
+            assert old['caution'] == care()['caution']
+            assert old['latest_analysis']['fresh'] is False
+            assert old['latest_analysis']['assessed_at'] == report['assessed_at']
+            rejected = page.request.post(origin + '/api/fleet/device-profiles/arm-one/load-reports/source-one',
+                                         headers={'X-Workcell-Observation-Token': SOURCE}, data=report)
+            assert rejected.status == 422
         finally:
             browser.close()

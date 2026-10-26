@@ -58,7 +58,7 @@ export function createCellObservation({request, root}) {
         healthDetails.addEventListener('toggle', () => paintHealth(entry));
         paintHealth(entry); staleArm(entry); arms.set(arm.source_id, entry);
         card.append(element('h4', arm.label), healthDetails, element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
-        card.append(profiles.detail('arm', arm.source_id));
+        card.append(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
       }
       for (const camera of cell.cameras) {
         const card = element('article'); card.className = 'cell-observation-card'; card.dataset.cameraSource = camera.source_id;
@@ -157,7 +157,7 @@ export function createCellObservation({request, root}) {
       for (const cell of state.workcells) for (const arm of cell.arms) {
         const entry = arms.get(arm.source_id);
         root.querySelector(`[data-arm-source="${CSS.escape(arm.source_id)}"] [data-robot-profile]`)
-          ?.replaceWith(profiles.detail('arm', arm.source_id));
+          ?.replaceWith(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
         // motor_health ages already include source/receipt aging; add only this browser request's transit.
         entry.health.accept(arm.motor_health, {requestedAtMs, receivedAtMs: Date.now()});
         paintHealth(entry);

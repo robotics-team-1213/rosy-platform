@@ -1,5 +1,6 @@
 """Producer -> authenticated bridge -> durable Fleet profile, without hardware."""
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
+from hashlib import sha256
 import json
 import ssl
 import time
@@ -19,6 +20,7 @@ def site(tmp_path):
     class Observations:
         owner_id = 'fixture-owner'
         registered = True
+        board_id = 'fixture-board'
 
         def authorize(self, source, token):
             if not self.registered or source != 'source-one' or token != 'observation-only-fixture':
@@ -27,6 +29,11 @@ def site(tmp_path):
         def snapshot(self):
             arms = [{'source_id': 'source-one', 'arm_id': self.owner_id, 'label': '실습 팔'}] if self.registered else []
             return {'workcells': [{'arms': arms}]}
+
+        def arm_binding(self, source):
+            assert source == 'source-one' and self.registered
+            return {'owner_id': self.owner_id,
+                    'sha256': sha256(f'{self.owner_id}/{self.board_id}'.encode()).hexdigest()}
 
     def viewer(authorization: str = Header('')):
         if authorization not in ('viewer', 'operator'):
@@ -122,10 +129,10 @@ def test_changed_manifest_owner_cannot_attach_old_profile_or_accept_old_report(s
     base = '/api/fleet/device-profiles/arm-one'
     headers = {'Authorization': 'operator'}
     payload = care() | {'characteristics': document if measured else None}
+    observer = {'X-Workcell-Observation-Token': 'observation-only-fixture'}
     assert client.put(base + '/care', json=payload, headers=headers).status_code == 200
     if measured:
-        assert client.post(base + '/load-reports/source-one', json=report,
-            headers={'X-Workcell-Observation-Token': 'observation-only-fixture'}).status_code == 202
+        assert client.post(base + '/load-reports/source-one', json=report, headers=observer).status_code == 202
     client.app.state.profile_observations.owner_id = 'replacement-owner'
     response = client.get('/api/fleet/device-profile-sources/arm/source-one', headers=headers).json()
     assert response['profile'] is None
@@ -135,8 +142,7 @@ def test_changed_manifest_owner_cannot_attach_old_profile_or_accept_old_report(s
     assert previous['caution'] == payload['caution']
     if measured:
         assert previous['latest_analysis']['fresh'] is False
-        assert client.post(base + '/load-reports/source-one', json=report,
-            headers={'X-Workcell-Observation-Token': 'observation-only-fixture'}).status_code == 422
+        assert client.post(base + '/load-reports/source-one', json=report, headers=observer).status_code == 422
 
 
 def test_removed_source_is_not_attached_to_a_current_robot(site):
@@ -147,3 +153,33 @@ def test_removed_source_is_not_attached_to_a_current_robot(site):
     response = client.get('/api/fleet/device-profile-sources/arm/source-one', headers=headers).json()
     assert response['profile'] is None
     assert response['source_binding_status'] == 'source_unregistered'
+
+
+def test_changed_board_registration_rejects_an_old_report_even_with_the_same_owner(site):
+    client, _ = site
+    document, report = monitor_report(stamp=time.time())
+    base = '/api/fleet/device-profiles/arm-one'
+    headers = {'Authorization': 'operator'}
+    assert client.put(base + '/care', json=care() | {'characteristics': document}, headers=headers).status_code == 200
+    observer = {'X-Workcell-Observation-Token': 'observation-only-fixture'}
+    assert client.post(base + '/load-reports/source-one', json=report, headers=observer).status_code == 202
+    client.app.state.profile_observations.board_id = 'replacement-board'
+    current = client.get('/api/fleet/device-profile-sources/arm/source-one', headers=headers).json()
+    assert current['profile'] is None
+    assert current['source_binding_status'] == 'registration_changed'
+    assert client.get(base + '/care', headers=headers).json()['latest_analysis']['fresh'] is False
+    assert client.post(base + '/load-reports/source-one', json=report, headers=observer).status_code == 422
+
+
+def test_legacy_link_is_unverified_until_explicit_operator_reconfirmation(site):
+    client, store = site
+    headers = {'Authorization': 'operator'}
+    path = '/api/fleet/device-profiles/arm-one/care'
+    assert client.put(path, json=care(), headers=headers).status_code == 200
+    with closing(store._connect()) as db, db:
+        db.execute('UPDATE fleet_device_care SET source_binding_json=NULL WHERE device_id=?', ('arm-one',))
+    current = client.get('/api/fleet/device-profile-sources/arm/source-one', headers=headers).json()
+    assert current['profile'] is None and current['source_binding_status'] == 'unverified_link'
+    assert client.get(path, headers=headers).json()['caution'] == care()['caution']
+    assert client.put(path, json=care(), headers=headers).json()['source_binding_status'] == 'matched'
+    assert client.get('/api/fleet/device-profile-sources/arm/source-one', headers=headers).json()['profile'] is not None
