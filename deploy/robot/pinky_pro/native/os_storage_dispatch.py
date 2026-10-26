@@ -25,7 +25,7 @@ BOOTSTRAP_FILES = ("os_state_storage.py", "os_state_firstboot.py", "os_state_lay
                    "os_state_accounts.py", "os_state_files.py", "os_state_config.py", "os_state_ready.py", "os_storage_dispatch.py",
                    "os_ssh_hostkeys.py")
 FIRST_BOOT_NATIVE = (*BOOTSTRAP_FILES, "first_boot_runtime.py", "first_boot_support.py", "network_handoff.py", "operator_keys.py",
-                     "native_release.py", "signing.py", "network_transaction.py", "network.py",
+                     "native_release.py", "native_release_links.py", "signing.py", "network_transaction.py", "network.py",
                      "nm_network.py", "rosy_claim.py", "rosy-os-firstboot.conf", "os_factory_release.py",
                      "os_boot_recover.py", "image-layer-reconcile.py", "sync-image-layer.py",
                      "image_layer_boot.py", "image_layer_files.py", "rosy-os-recover.conf",
