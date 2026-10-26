@@ -79,6 +79,22 @@ def verify_snapshot(root):
             raise ValueError("trusted signer installation changed; install a reviewed snapshot again")
 
 
+def snapshot_drift(root, repo, ref="origin/main"):
+    """Snapshot files whose bytes (CR removed) differ from, or are absent at, `ref` in the `repo` checkout.
+
+    A warning for status tools, never a gate: the coordinator keeps running the reviewed snapshot.
+    Files main added to the installer's list are not seen; only the snapshot's own list is compared.
+    """
+    root = Path(root)
+    manifest = json.loads((root / "trusted-snapshot.json").read_text(encoding="utf-8"))
+    differ = []
+    for name in sorted(manifest["files"]):
+        shown = subprocess.run(["git", "-C", str(repo), "show", f"{ref}:{name}"], capture_output=True)
+        if shown.returncode or shown.stdout.replace(b"\r", b"") != (root / name).read_bytes().replace(b"\r", b""):
+            differ.append(name)
+    return differ
+
+
 def dispatch_expired(stamp, now=None):
     return ((now or datetime.now(timezone.utc)) - datetime.fromisoformat(stamp)).total_seconds() >= 1200
 

@@ -7,20 +7,14 @@
 from __future__ import annotations
 
 import math
-from typing import Mapping, Protocol, Sequence, runtime_checkable
+from typing import Mapping, Sequence
 
-from fleet.formation.geometry import Point
+from fleet.swarm.api.types import Point
+from fleet.swarm.api.ports import SlotAssigner
 
 
 class AssignmentError(ValueError):
     """배정할 수 없는 입력."""
-
-
-@runtime_checkable
-class SlotAssigner(Protocol):
-    def assign(self, robots: Mapping[str, Point], slots: Sequence[Point]) -> dict[str, int]:
-        """`robot_id → slot index`. 전단사여야 한다."""
-        ...
 
 
 class GreedyDistanceAssigner:

@@ -8,7 +8,8 @@ gz_sim 의 swarm_bench 는 fleet 내부 모듈(``fleet.swarm.*``,
 
 from fleet.formation.geometry import Formation, slot_world_position
 from fleet.swarm.robots import load_robots
-from fleet.swarm.session import FormationSession, FormationSpec, SessionState
+from fleet.swarm.session import FormationSession
+from fleet.swarm.api.types import FormationSpec, SessionState
 from fleet.swarm.transport import HttpRobotClient, RobotApiError
 
 __all__ = [

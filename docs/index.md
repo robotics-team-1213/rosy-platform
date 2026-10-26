@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · D-871 통합관제 업데이트 현황
-- 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
-- 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
-- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
-- 2026-10-26 · e2f5289d4e · 공유 clone은 게시 브랜치만 origin에 push한다
+- 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
+- 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
+- 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
+- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
