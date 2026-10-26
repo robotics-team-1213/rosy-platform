@@ -1,14 +1,39 @@
 """Opt-in disposable guest verification; never a release-image builder or a host installer."""
 import hashlib
 import importlib
+import json
 import os
 from pathlib import Path
+import shlex
 
 import pytest
 
 
 def module():
     return importlib.import_module("os_system_vm")
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
+def test_actual_systemd_device_allow_representation(tmp_path):
+    with module().Guest(tmp_path) as guest:
+        assert guest.run("cat /var/lib/cloud/data/instance-id").strip() == guest.instance_id
+        root = "/dev/block/" + guest.run("cat /sys/class/block/vda/dev").strip()
+        work = "/dev/block/" + guest.run("cat /sys/class/block/vdb/dev").strip()
+        grants = [(root, "r"), (work, "rw"), ("/dev/loop-control", "rw"), ("block-loop", "rwm"),
+                  ("/dev/mapper/control", "rw"), ("block-device-mapper", "rwm")]
+        command = ["systemd-run", "--unit=rosy-system-device-grants", "--property=DevicePolicy=closed",
+                   "--property=PrivateDevices=false", "--property=ProtectKernelLogs=true",
+                   "--property=ProtectClock=true", "--property=ProtectSystem=strict"]
+        command.extend("--property=DeviceAllow=" + path + " " + rights for path, rights in grants)
+        command.extend(["/usr/bin/sleep", "300"])
+        guest.run(shlex.join(command))
+        try:
+            raw = guest.run("systemctl show --value -p DeviceAllow rosy-system-device-grants.service").strip()
+            words = shlex.split(raw)
+            actual = list(zip(words[::2], words[1::2]))
+            assert len(words) % 2 == 0 and len(actual) == len(grants) and set(actual) == set(grants), json.dumps(dict(raw=raw, expected=grants))
+        finally:
+            guest.run("systemctl stop rosy-system-device-grants.service")
 
 
 def test_guest_download_rejects_hash_or_size_before_publishing(tmp_path):
