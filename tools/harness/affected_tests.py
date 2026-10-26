@@ -92,6 +92,17 @@ RECORD_NAMES = frozenset({"logs.md", "index.md", "progress.md"})
 #: Generated or append-only records: their real readers. Path-part matches hit comments and fixtures.
 RECORD_READERS = ("test/test_harness_contracts.py", "test/architecture/test_document_placement.py",
                   "test/architecture/test_folder_layout.py")
+#: Contract tests that read one module's record (test_land/test_pre_push_hook only name docs/logs.md
+#: and index.md in temporary repositories and fixture strings).
+# shortcut: listed by hand (a 2026-10-26 scan of path mentions found only this one); a new
+# test that reads a module record must be added here, or the record edit will not select it.
+RECORD_EXTRA_READERS = {"operations/apps/games/progress.md": ("test/test_rosy_games_surface.py",)}
+
+
+def is_record(repo: Repo, path: str) -> bool:
+    """STATUS.md, or a harness module's own logs.md/progress.md or generated index.md (rosy_harness generate)."""
+    p = PurePosixPath(path)
+    return path == "STATUS.md" or (p.name in RECORD_NAMES and any(m["path"] == str(p.parent) for m in repo.modules))
 
 
 def markdown_keeps_module_selection(path: str) -> bool:
@@ -101,8 +112,8 @@ def markdown_keeps_module_selection(path: str) -> bool:
 
 
 def markdown_readers(repo: Repo, path: str) -> list[str]:
-    if path == "STATUS.md" or PurePosixPath(path).name in RECORD_NAMES:
-        return list(RECORD_READERS)
+    if is_record(repo, path):
+        return [*RECORD_READERS, *RECORD_EXTRA_READERS.get(path, ())]
     readers = repo.referencing_tests(path)
     if _under(path, "docs/adr"):  # bodies are read through the Log and globbed by its readers
         readers += repo.referencing_tests(ADR_LOG)
@@ -366,6 +377,8 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             (why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
         if trigger and affected_narrow.add_readers(repo, path, trigger, add):
             continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
+        if path == affected_narrow.HARNESS_YAML:  # reads harness.yaml; not in GUARD_SET
+            add("test/architecture/test_folder_layout.py", f"reads {path}")
         if path == affected_narrow.HARNESS_YAML and trigger:
             added, why = affected_narrow.harness_modules_added(repo, *harness_texts) if harness_texts else (
                 [], "no base to compare")

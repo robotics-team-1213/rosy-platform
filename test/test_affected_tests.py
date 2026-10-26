@@ -663,6 +663,7 @@ def test_harness_yaml_module_added_only_selects_its_suites_not_full():
     assert sel.mode == "affected", sel.escalations
     assert {"test/architecture", "test/test_harness_contracts.py", "test/test_affected_tests.py"} <= set(sel.reasons)
     assert "harness.yaml: module(s) added: zz_added" in sel.reasons["test/architecture"]
+    assert "test/architecture/test_folder_layout.py" in sel.reasons
 
 
 @pytest.mark.parametrize("head, why", [
@@ -675,15 +676,48 @@ def test_harness_yaml_module_added_only_selects_its_suites_not_full():
     (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: &t [test/architecture]\n"),
      "anchor"),
     (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: [operations/zz_added/test]\n"),
-     "no test file"),
+     "no test function"),
     (_harness_with(NEW_MODULE) + "zz_new_key: 1\n", "other than modules"),
     (REAL_HARNESS + "modules: [\n", "does not parse"),
-], ids=["modified", "overlap", "duplicate", "anchor", "no-tests", "other-key", "unparsable"])
+    (_harness_with(NEW_MODULE + "    tests: [operations/fleet/test]\n"), "duplicate key 'tests'"),
+    (_harness_with("  - name: zz_added\n    path: &p operations/zz_added\n    tests: [test/architecture]\n"
+                   "    functional: [*p]\n"), "anchor, alias or merge key"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    <<: {tests: [test/architecture]}\n"),
+     "anchor, alias or merge key"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: [operations/apps/games/test]\n"),
+     "not in CI's gating full matrix"),
+], ids=["modified", "overlap", "duplicate", "anchor", "no-tests", "other-key", "unparsable",
+        "duplicate-key", "alias", "merge-key", "not-ci-gated"])
 def test_harness_yaml_other_changes_stay_full(head, why):
-    sel = _harness_select(head)
+    _assert_harness_full(_harness_select(head), why)
+
+
+def _assert_harness_full(sel, why):
     assert sel.mode == "full"
     [escalation] = [e for e in sel.escalations if e.startswith("tools/harness/harness.yaml")]
     assert why in escalation and escalation.endswith(": harness configuration or the selector itself"), escalation
+    local = [p for inv in sel.local_invocations for p in inv]
+    assert "test/architecture/test_folder_layout.py" in local, local
+
+
+def test_harness_yaml_module_deletion_is_full():
+    _assert_harness_full(_harness_select(REAL_HARNESS, base=_harness_with(NEW_MODULE)), "removed")
+
+
+def test_harness_yaml_without_a_base_is_full():
+    sel = affected.select(affected.Repo.load(ROOT), ["tools/harness/harness.yaml"])
+    _assert_harness_full(sel, "no base to compare")
+
+
+def test_harness_yaml_added_suite_without_test_functions_is_full():
+    """A test_*.py with no `def test_` collects nothing, so it does not show the module is tested."""
+    repo, target = affected.Repo.load(ROOT), "test/test_rosy_games_surface.py"
+    head = _harness_with(f"  - name: zz_added\n    path: operations/zz_added\n    tests: [{target}]\n")
+    assert affected.affected_narrow.harness_modules_added(repo, REAL_HARNESS, head)[0]
+    text = repo.text
+    repo.text = lambda path: "HELPER = 1\n" if path == target else text(path)
+    added, why = affected.affected_narrow.harness_modules_added(repo, REAL_HARNESS, head)
+    assert not added and "no test function" in why
 
 
 @pytest.mark.parametrize("path, mode", [
@@ -713,6 +747,19 @@ def test_records_select_only_their_readers(path):
     """2026-10-26: docs/logs.md selected tests that name it only in a comment or a fixture string."""
     sel = affected.select(affected.Repo.load(ROOT), [path])
     assert sel.mode == "affected" and set(sel.reasons) == GUARDS | set(affected.RECORD_READERS), sorted(sel.reasons)
+
+
+def test_a_module_record_read_by_a_contract_test_selects_it():
+    sel = affected.select(affected.Repo.load(ROOT), ["operations/apps/games/progress.md"])
+    assert set(sel.reasons) == GUARDS | set(affected.RECORD_READERS) | {"test/test_rosy_games_surface.py"}
+
+
+@pytest.mark.parametrize("path, record", [
+    ("docs/logs.md", True), ("operations/fleet/index.md", True), ("STATUS.md", True),
+    ("operations/fleet/docs/logs.md", False), ("docs/plans/index.md", False), ("operations/progress.md", False),
+])
+def test_records_are_status_and_module_root_records_only(path, record):
+    assert affected.is_record(affected.Repo.load(ROOT), path) is record
 
 
 def test_generated_module_index_does_not_select_the_module_suite():
