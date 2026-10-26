@@ -1,6 +1,7 @@
 """Execute the client build stage and prove offline dependency closure in a fresh target."""
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 
@@ -15,9 +16,15 @@ def test_omx_client_workflow_build_and_offline_install(tmp_path):
     build = next(step['run'] for step in workflow['jobs']['build']['steps']
                  if step.get('name') == 'Build client wheels')
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    python_bin = tmp_path/'python-bin'
+    python_bin.mkdir()
+    python_launcher = python_bin/'python'
+    python_launcher.write_text(
+        f'#!/bin/sh\nexec {shlex.quote(sys.executable)} "$@"\n', encoding='utf-8')
+    python_launcher.chmod(0o755)
     result = subprocess.run(['bash', '-c', build], cwd=ROOT, capture_output=True, text=True,
                             env={**os.environ, 'RUNNER_TEMP': str(tmp_path), 'GITHUB_SHA': revision,
-                                 'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ.get('PATH', '')},
+                                 'PATH': str(python_bin) + os.pathsep + os.environ.get('PATH', '')},
                             timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr
     stage = tmp_path/'omx-client'

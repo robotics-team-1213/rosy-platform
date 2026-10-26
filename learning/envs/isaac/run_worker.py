@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import selectors
+import shutil
 import signal
 import stat
 import subprocess
@@ -18,6 +19,8 @@ from run_system import System
 
 
 def _budget(directory):
+    if shutil.disk_usage(directory).free < 1024 ** 3:
+        return 'insufficient_space'
     count, size = 0, 0
     for base, dirs, files in os.walk(directory, followlinks=False):
         for name in dirs + files:
@@ -54,6 +57,9 @@ def _reap(child):
 
 def supervise(argv, *, cwd, env, descriptors, output, stop_requested, timeout=165,
               log_limit=16 * 1024 * 1024):
+    # Keep the existing 256 MiB output bound plus space for final records and owned cleanup.
+    if shutil.disk_usage(output).free < 1024 ** 3 + 256 * 1024 ** 2:
+        return {'exit_code': None, 'reason': 'insufficient_space'}
     deadline, written, reason = time.monotonic() + timeout, 0, None
     child = subprocess.Popen(argv, cwd=cwd, env=env, pass_fds=tuple(descriptors),
                              start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
