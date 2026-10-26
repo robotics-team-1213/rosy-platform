@@ -72,8 +72,26 @@ def read_bound_report(root: Path, pending: dict) -> dict:
 
 
 def _namespace(root):
-    identities = [os.readlink(root / f"proc/{process}/ns/mnt") for process in ("self", "1")]
-    if identities[0] == identities[1] or any(not re.fullmatch(r"mnt:\[[0-9]+\]", item) for item in identities):
+    own = os.readlink(root / "proc/self/ns/mnt")
+    if not re.fullmatch(r"mnt:\[[0-9]+\]", own):
+        raise ValueError("finalization requires a private mount namespace")
+    try:
+        host = os.readlink(root / "proc/1/ns/mnt")
+    except PermissionError:
+        before = _mount_table(root, "proc/1/mountinfo")
+        caller = _mount_table(root, "proc/self/mountinfo")
+        after = _mount_table(root, "proc/1/mountinfo")
+        host_roots, local_roots = before.get("/", []), caller.get("/", [])
+        if before != after or len(host_roots) != 1 or len(local_roots) != 1:
+            raise ValueError("private mount namespace identity is unknown")
+        host_root, local_root = host_roots[0], local_roots[0]
+        # A chroot/bind root in PID1's namespace still appears somewhere in PID1's complete mount tree.
+        host_ids = {row["mount_id"] for rows in before.values() for row in rows}
+        if (local_root["mount_id"] in host_ids
+                or any(local_root[key] != host_root[key] for key in ("device", "root", "filesystem"))):
+            raise ValueError("finalization requires a private mount namespace")
+        return
+    if own == host or not re.fullmatch(r"mnt:\[[0-9]+\]", host):
         raise ValueError("finalization requires a private mount namespace")
 
 
