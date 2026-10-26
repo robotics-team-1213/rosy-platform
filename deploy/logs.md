@@ -3545,3 +3545,11 @@
 - 근거: 원격 집중 시험 21 passed, NEW 0. 초기 고정 두 팔 목록에서 4개 회귀 시험 실패를 확인했다. 실제 등록된 두 팔은 선택을 보존한 채 DISCONNECTED로 보고했다.
 - gate 변화: 없음. 카메라·팔 실물 연결과 실제 동작 수용은 이 점검 수정의 통과 조건으로 대체하지 않는다.
 - CE: 해당 없음 — 설정 정본과 보고 동작은 코드·시험 및 기존 복사본 drift 교훈으로 설명된다.
+
+## 2026-10-27 · b6f8f0b46f · Arm S 파일 관측 producer 관리 경로
+
+- 변경: arm_status_bridge가 canonical guard motor-health를 Fleet 관절·팔 이름으로 전달한다. live held fault를 terminal로 만들지 않으며 보정 단위와 읽기 전용 경계를 유지한다.
+- 설치: rosy-omx-arm-status.service와 private mode 0600 env 예제에 source/arm/live/calibration/health/HTTPS/CA/팔 전용 토큰을 결속했다. 기존 devices 업데이터의 units·unit_files·smoke와 host service manifest에 포함했다.
+- 증거: RED c29de1139f 원격 5 expected failures/4 passed → b6f8f0b46f bridge/status/updater/manifest/readiness/pipeline/motor-health/Fleet 집중 원격 181 passed, NEW 0. 로그는 저장소 밖 D:/DevTemp/fleet-arm-observation-{red,green}/run-1.txt.
+- gate 변화: 없음. 실제 호스트 설치·재부팅·Fleet 브라우저·장치 수용은 별도이며 활성 수집 세션은 건드리지 않았다.
+- CE: 해당 없음 — 정본 health 재사용과 stale/terminal 경계는 코드·시험·README 및 기존 stale-health 교훈에 남아 중복 교훈을 만들지 않는다.
