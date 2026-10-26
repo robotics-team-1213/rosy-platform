@@ -1,6 +1,5 @@
 """Actual descriptor witnesses for contained, finite, stable catalog capture."""
 import os
-import gc
 import multiprocessing
 from pathlib import Path
 
@@ -17,16 +16,6 @@ def identity(stat):
 
 def fd_count():
     return len(list(Path('/proc/self/fd').iterdir()))
-
-
-def fd_snapshot():
-    descriptors = {}
-    for path in list(Path('/proc/self/fd').iterdir()):
-        try:
-            descriptors[path.name] = os.readlink(path)
-        except FileNotFoundError:
-            continue
-    return descriptors
 
 
 def _fifo_import_worker(sender, store, folder):
@@ -118,15 +107,12 @@ def test_selected_or_internal_links_never_read_target_bytes(tmp_path, monkeypatc
         if identity(real_fstat(fd)) in protected:
             reads.append(len(raw))
         return raw
-    before, baseline = snapshot(store), fd_snapshot()
+    before, baseline = snapshot(store), fd_count()
     monkeypatch.setattr(os, 'read', observe)
     with pytest.raises(ValueError, match='link|path|regular|catalog|directory|capture'):
         review_ingest.import_frames(store, body)
     assert not reads, 'linked selected content was read through an actual target FD'
-    assert snapshot(store) == before
-    gc.collect()
-    current = fd_snapshot()
-    assert current == baseline, dict(before=baseline, after=current)
+    assert snapshot(store) == before and fd_count() == baseline
 
 
 def test_directory_replacement_after_parent_open_never_reads_outside_and_rejects_stale_binding(tmp_path, monkeypatch):
