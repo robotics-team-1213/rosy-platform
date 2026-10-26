@@ -146,6 +146,8 @@
 
 - 열차(3단계)보다 잠금 밖 준비(5단계)를 먼저 넣었다. 대기의 대부분이 잠금 안 FULL이었기 때문이다.
 - 선택기 규칙 4(foundation AST)·5(모듈 삭제·이동)는 80커밋 재현에서 절감이 0건이고 검토에서 위험한 좁힘이 나와 뺐다. 선택기는 속도보다 정확성을 위한 것이다(FULL 13→15, 잘못 좁던 관문 파일 3건).
+- 격리 관문을 처음 실제로 쓸 때 모든 FULL 착지가 거짓으로 멈췄다. 노트북의 Git for Windows `ssh.exe`는 Python에서 띄우면 약 8,190바이트를 넘는 원격 명령을 오류 없이 자른다. 115경로 job 단어가 pytest 대상을 잘라 냈다. `remote_job.ssh_call`은 명령을 stdin으로 보내고, 인자로 보내는 곳은 8,000바이트를 넘으면 거부한다(`fix/isolation-collect-gate`). 교훈: `docs/solutions/workflow-issues/windows-ssh-exe-cuts-long-remote-command-2026-10-26.md`.
+- 단독 job 안의 시간 제한 시험(`test_platform_g1_timing`)이 다른 다섯 프로세스 옆에서 실패했다. `serial_suites.txt` 접두 아래 파일은 풀이 빈 뒤 하나씩 돈다.
 - 수집만 하는(collect-only) 관문은 fixture 안의 `spec_from_file_location` 적재를 잡지 못했다(사고 재현). 파일 단독 실행이 잡았다. 교훈: `docs/solutions/workflow-issues/shared-pytest-process-masks-path-dependent-import-2026-10-26.md`.
 
 **남은 개선 (담당·조건):**
@@ -163,4 +165,5 @@
 | 사건 기록 백업 | `rosy-land-events.jsonl`·`rosy-land-isolation.jsonl`은 백업이 없다(단일 손실점). 6항 기록 문단대로 `Rosy/artifacts/` 정기 복사를 넣는다 | 착지 도구 담당 |
 | 몰림 검증·목표 | 05:40·21:00 통계로 대기 p90 30분, 차례 p90 10분을 확인한다. 넘으면 그날 원인 한 줄을 작업 기록에 남긴다 | 원격 시험 담당 |
 | 통합 열차·묶음 | 1~3항. 새 실패 비율 p ≤ 0.1을 확인한 뒤에 켠다 | 착지 도구 담당 |
+| 워크트리 정리의 진행 중 보호 | `worktrees.py prune --apply`가 push 중이던 detached 워크트리(`.worktrees/pub-pin`, 깨끗하고 브랜치 병합됨)를 지워 #210 pre-push가 FileNotFoundError로 실패했다(10-26 밤). prune은 `git worktree lock`된 것, 최근 2시간 안에 바뀐 detached 워크트리, 프로세스가 cwd로 쓰는 워크트리를 지우지 않는다. 그 전까지 push용 워크트리는 `git worktree lock`으로 잠근다 | 워크트리 도구 담당(D-886) |
 | 시험 PC 배치 | 격리 job(6코어)과 같은 배치의 guard도 6코어 호스트를 기다린다. 측정해 필요하면 배치를 나눈다 | 원격 시험 담당 |
