@@ -11995,3 +11995,9 @@ osy-d395-s1d\`.
 - 변경: `tools/land_isolation.py`·`tools/collect_alone.py` 추가, `tools/land_guards.py`가 가드 회차에 수집 게이트(선택된 시험 파일마다 따로 `pytest --collect-only`)를 싣고, `tools/land_prepare.py`(잠금 밖)에서만 변경 파일을 직접 참조하는 시험(최대 10개)과 안전 루트 시험을 파일마다 따로 돌린다. 루트 `conftest.py`가 수집 중 `sys.path`를 늘린 시험 모듈을 보고만 한다(`.gitignore` 예외, 루트 파일 목록 추가). `tools/land.py`는 고치지 않았다.
 - 증거: 원격 `test/test_land_isolation.py test/test_land*.py test/test_remote_pytest.py test/architecture/test_document_placement.py` exit 0. FULL 선택 2,123파일 수집 게이트: 작업자 2개 347 s, 6개 150 s(메모리 최고 491 MiB), 실패 0. 변이(게이트 끔·한 프로세스 수집) 3 failed. 사고 재현(6a07a06b0f 이전 `native_cycle.py`): 폴더 419 passed, 단독 ERROR, 수집 게이트 31 passed(픽스처에서 `spec_from_file_location`으로 읽어 수집 때는 드러나지 않음) — 이 경우는 참조 시험 단독 실행(`test_native_cycle.py`가 참조 7개 안에 듦)이 잡는다.
 - gate 변화: 착지 가드 회차에 수집 게이트 1잡, 준비 단계에 단독 실행 최대 10잡+안전 시험.
+
+## 2026-10-26 · uncommitted · fix(land): 단독 실행 시간 상한·기록, 묵은 단독 재실행, 안전 간선
+
+- 변경: robot-0d 토론 결과 반영. 참조 시험 단독 실행을 개수 10 대신 시간 상한(600 s, 작업자 6)으로 바꾸고 원격 한 잡(`tools/collect_alone.py` `ROSY_ALONE_FILES`)에서 돌린다. 못 돈 파일은 버리지 않고 `<git-common-dir>/rosy-land-isolation.jsonl`에 `incomplete`로 남기며 차례 요약에 `isolation incomplete: <files>`를 찍는다(보고 줄이 없으면 전부 못 돈 것으로 친다). 준비 뒤 main이 움직여 그 시험들이 참조하는 파일을 바꾸면 차례에서 그 시험만 다시 단독 실행한다. 수집 게이트는 준비 단계만 돈다. 안전 규칙은 시험 경로의 `is_safety` 대신 `is_safety` 원본을 참조하는 시험(개수 상한 없음, 같은 시간 상한)으로 바꿨다. 교훈 `shared-pytest-process-masks-path-dependent-import-2026-10-26.md`에 collect-only가 픽스처 시점 로드를 못 잡는다는 절을 더했다. `tools/land.py`·`land_prepare.py`·`land_full.py`는 이번에 고치지 않았다.
+- 증거: 아래 원격 실행 결과를 따른다.
+- gate 변화: 준비 단계에 수집 게이트 1잡과 단독 실행 1잡, 차례에는 묵은 단독 재실행만.
