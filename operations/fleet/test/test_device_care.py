@@ -4,6 +4,8 @@ from pathlib import Path
 import runpy
 import sqlite3
 import threading
+import sys
+from unittest.mock import patch
 
 import pytest
 
@@ -12,9 +14,11 @@ from fleet.server.device_care import DeviceCareStore
 
 
 def monitor_report(*, stamp=100., attention=False):
-    from omx_adapter.load_monitor import LoadMonitor
     from rosy.contracts.motion.characteristics import characteristics_digest
     root = Path(__file__).resolve().parents[3]
+    # The cross-owner fixture loads the adapter explicitly; Fleet does not depend on its runtime.
+    with patch.object(sys, 'path', [str(root / 'middleware/devices/omx/adapter'), *sys.path]):
+        from omx_adapter.load_monitor import LoadMonitor
     fixture = runpy.run_path(str(root / 'middleware/devices/omx/adapter/test/load_motion_fixtures.py'))
     document = fixture['characteristics']()
     document['binding']['device_id'] = 'arm-one'
@@ -28,7 +32,7 @@ def monitor_report(*, stamp=100., attention=False):
     return document, report
 
 
-def setup(tmp_path):
+def _store(tmp_path):
     path = tmp_path / 'tasks.sqlite3'
     profiles = DeviceProfileStore(path)
     for device in ('arm-one', 'arm-two'):
@@ -41,7 +45,7 @@ def care(source='source-one'):
 
 
 def test_persistence_and_source_uniqueness(tmp_path):
-    path, store = setup(tmp_path)
+    path, store = _store(tmp_path)
     store.put('arm-one', care(), actor='alice')
     store.add_event('arm-one', {'kind': 'fault', 'text': '처짐 관찰'}, actor='alice')
     restored = DeviceCareStore(path)
@@ -57,7 +61,7 @@ def test_persistence_and_source_uniqueness(tmp_path):
     {'caution': []}, {'source_kind': 'camera'},
     {'source_id': '../arm'}, {'characteristics': {'schema': 'wrong'}}])
 def test_invalid_replacement_preserves_previous(tmp_path, change):
-    _, store = setup(tmp_path)
+    _, store = _store(tmp_path)
     store.put('arm-one', care(), actor='alice')
     before = store.get('arm-one')
     invalid = copy.deepcopy(care()) | change
@@ -67,7 +71,7 @@ def test_invalid_replacement_preserves_previous(tmp_path, change):
 
 
 def test_missing_profile_and_unbound_reports_rejected(tmp_path):
-    _, store = setup(tmp_path)
+    _, store = _store(tmp_path)
     with pytest.raises(ValueError):
         store.put('missing', care(), actor='alice')
     with pytest.raises(ValueError):
@@ -76,7 +80,7 @@ def test_missing_profile_and_unbound_reports_rejected(tmp_path):
 
 
 def test_real_monitor_output_duplicate_age_restart_and_rebind(tmp_path):
-    path, store = setup(tmp_path)
+    path, store = _store(tmp_path)
     document, report = monitor_report()
     store.put('arm-one', care() | {'characteristics': document}, actor='alice')
     store.ingest('arm-one', 'source-one', report, now=100.02)
@@ -105,7 +109,7 @@ def test_real_monitor_output_duplicate_age_restart_and_rebind(tmp_path):
     {'status': 'observing', 'reasons': ['feedback_gap']}, {'joint_captured_at': {}},
     {'errors_rad': {'unknown_joint': 0}}, {'request_sha256': 'bad'}, {'new_joint_samples': []}])
 def test_rejected_report_cannot_replace_last_observation(tmp_path, change):
-    _, store = setup(tmp_path)
+    _, store = _store(tmp_path)
     document, report = monitor_report()
     store.put('arm-one', care() | {'characteristics': document}, actor='alice')
     store.ingest('arm-one', 'source-one', report, now=100.02)
@@ -117,7 +121,7 @@ def test_rejected_report_cannot_replace_last_observation(tmp_path, change):
 
 
 def test_care_replacement_holds_write_lock_before_reading_old_binding(tmp_path, monkeypatch):
-    path, store = setup(tmp_path)
+    path, store = _store(tmp_path)
     store.put('arm-one', care(), actor='alice')
     reading, release = threading.Event(), threading.Event()
     connect = store._connect

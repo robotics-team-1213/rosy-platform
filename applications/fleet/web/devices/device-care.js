@@ -10,9 +10,17 @@ export function createDeviceCare({root, scope, call, identity}) {
   const allowed = () => identity()?.role === 'operator' && Boolean(identity()?.principal_id)
     && identity().principal_id !== 'site-console';
   function authorization() {
-    for (const key of ['source', 'caution', 'file', 'remove', 'kind', 'text', 'save', 'add'])
-      field(key).disabled = !selected || busy || !allowed();
+    const reason = !selected ? '장치 정보를 먼저 선택하세요.' : busy ? '기록을 확인하고 있습니다.'
+      : !allowed() ? '이름 있는 운영자 계정이 필요합니다.' : '';
+    field('permission').textContent = reason;
+    for (const key of ['source', 'caution', 'file', 'remove', 'kind', 'text', 'save', 'add']) {
+      const input = field(key);
+      input.disabled = Boolean(reason);
+      if (input.localName === 'ui-button') input.setAttribute('reason', reason);
+      else input.setAttribute('aria-describedby', 'device-care-permission');
+    }
     field('export').disabled = !document;
+    field('export').setAttribute('reason', document ? '' : '내보낼 특성 JSON이 없습니다.');
   }
   function preview() {
     field('document').textContent = document
