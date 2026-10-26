@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -64,6 +65,29 @@ def test_hosts() -> list[str]:
 
 def site_host() -> str:
     return str(load().get("site_host") or "").strip()
+
+
+def ssh_target(value, field: str) -> str:
+    """One SSH destination, never command options, role suffixes or shell words."""
+    if not isinstance(value, str) or not re.fullmatch(
+            r'(?:[A-Za-z0-9_][A-Za-z0-9_.-]*@)?[A-Za-z0-9_][A-Za-z0-9_.-]*', value.strip()):
+        raise SystemExit(f'lab-hosts.json {field} must contain SSH target strings')
+    return value.strip()
+
+
+def omx_hosts(config: dict | None = None) -> list[str]:
+    """Native service placement; an absent key preserves legacy site co-location."""
+    config = load() if config is None else config
+    if 'omx_hosts' not in config:
+        site = config.get('site_host', '')
+        return [ssh_target(site, 'site_host')] if site else []
+    raw = config['omx_hosts']
+    if not isinstance(raw, list):
+        raise SystemExit('lab-hosts.json omx_hosts must be a list')
+    hosts = [ssh_target(item, 'omx_hosts') for item in raw]
+    if len(set(hosts)) != len(hosts):
+        raise SystemExit('lab-hosts.json omx_hosts must not contain duplicate targets')
+    return hosts
 
 
 def robots() -> dict[str, str]:

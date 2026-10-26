@@ -136,6 +136,25 @@ def test_service_role_composition_preserves_every_unit_and_rejects_conflicts():
         status.declared_units({'site': {'x': {'run': 'off'}}, 'omx': {'x': {'run': 'active'}}}, {'site', 'omx'})
 
 
+def test_status_main_collects_an_independent_production_host(monkeypatch):
+    config = {'site_host': 'site@h', 'omx_hosts': ['arm@h']}
+    monkeypatch.setattr(status.lab_hosts, 'load', lambda: config)
+    monkeypatch.setattr(status, 'load_inventory', lambda: {'site': {}, 'omx': {}})
+    monkeypatch.setattr(status, 'ref_state', lambda *args: dict(
+        ref='HEAD', verdict='ok', tip='a'*12, fetched_h=0, problem=None))
+    monkeypatch.setattr(status, 'robot_cd_root', lambda: None)
+    monkeypatch.setattr(status.sys, 'argv', ['update_status.py'])
+    targets = []
+    def run(argv, **kwargs):
+        targets.append(argv[-2])
+        return subprocess.CompletedProcess(argv, 0, stdout=b'gate open\n', stderr=b'')
+    monkeypatch.setattr(status.subprocess, 'run', run)
+    with pytest.raises(SystemExit) as ended:
+        status.main()
+    assert ended.value.code == 0
+    assert targets == ['site@h', 'arm@h']
+
+
 def observed(**files):
     host = dict(files={}, instances={}, copies={}, paths={})
     for name, record in files.items():
