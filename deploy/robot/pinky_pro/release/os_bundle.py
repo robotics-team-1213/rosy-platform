@@ -146,7 +146,10 @@ def _command(argv, *, timeout=60):
     result = subprocess.run([str(p) for p in argv], capture_output=True, timeout=timeout,
                             env=dict(os.environ, LC_ALL="C"))
     if result.returncode:
-        raise ValueError("offline RAUC command failed")
+        error = result.stderr.decode("utf-8", errors="replace")[-2048:]
+        if "--key" in argv:
+            error = error.replace(str(argv[argv.index("--key") + 1]), "<private-key>")
+        raise ValueError(f"offline RAUC command failed ({result.returncode}): {error}")
     return result.stdout
 
 
