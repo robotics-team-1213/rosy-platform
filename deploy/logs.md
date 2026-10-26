@@ -3516,3 +3516,13 @@
 - 증거: 최종 공식 원격 4676189d86, os-media-rebase-final2, 1070 passed/32 skipped/44 warnings, 135.02s, 0 NEW. 실제 sysfs 읽기·GPT 일반 파일·installed/frozen SDK 실행과 모델 mount/block identity를 포함한다. 실제 block 설치, privileged filesystem/PID1, native ARM64 artifact·SD·기체 수용을 증명하지 않는다. 중간 broad 회귀의 builder Ubuntu 표기·fixture 변수명 검사 실패 2개도 source를 고쳐 해결했고 scanner는 유지했다.
 - gate 변화: 없음. 실제 RAUC verifier/daemon/install/rebase writer, OS claim·motion inhibition·정책·trial/health/commit/fallback과 native artifact·서명·SD readback은 남았다.
 - CE: 해당 없음 — sysfs i_size와 kernel/GPT 결속 판단을 코드·실제 읽기 회귀·D-888에 남겨 별도 해결 기록을 중복하지 않는다.
+
+## 2026-10-26 · 35eeffe31f · OS metadata와 실제 RAUC/CMS 검증 및 설치 설정 준비
+
+- 변경: 기존 Ed25519로 원본 OS metadata를 파싱 전에 검증하고 exact schema를 검사한다. private staged bundle의 크기·전체 hash·동일 inode와 bounded CMS footer를 확인한 뒤 고정 RAUC1.11.3과 현재 시간의 P-256 인증서로 검증한다. JSON2 inner/outer metadata, factory/ABI/두 image를 대조하고 hook·custom handler·foreign/expired signer를 거절한다. helper 세 개를 SDK/frozen closure에 넣는다. 이미지에는 rauc1.11.3-2 binary를 고정하고 upstream rauc-service를 거절한다.
+- 설치 준비: 서명 재검증 후 현재 카드 media를 새로 capture하여 비활성 root/boot 용량을 확인한다. custom backend·activate-installed=false·A/B parent/child 설정과 실제 daemon용 비활성 두 장치 rw/parent r/loop·verity DeviceAllow 입력을 생성한다. 이 함수는 파일·service·block을 변경하지 않는다. 실제 daemon의 D-Bus·namespace 적용과 transaction/boot controller 연결은 아직 남아 있다.
+- 증거: 0a67253358 공식 원격 os-rauc-trust-final2, 1159 passed/32 skipped/49 warnings, 147.59s, 0 NEW. e315b2e042 설치 설정·기존 frozen/media 통합 82 passed/15.32s, 0 NEW; 35eeffe31f 실제 RAUC의 생성 config/CMS 파싱 7 passed/1.92s, 0 NEW. 별도 임시 경로로 공식 hash-pinned deb를 추출하며 전역 package/service는 설치하지 않는다. 만료 입력을 만들기 위한 test publisher만 검증 없는 생성 config를 쓰고 consumer의 시간·서명 검사는 유지한다. frozen isolated 실행은 mutable SDK를 손상시킨 상태에서도 실제 CMS를 검증한다.
+- gate 변화: 없음. SOURCE이며 실제 daemon/cgroup/PID1/block 설치, native ARM64 artifact·서명·SD 기록·Pi 부팅 수용이 아니다. 32개 PowerShell skip은 통과로 세지 않는다. broad 회귀에서 fixture binary 디렉터리와 공개 hash 문맥 검사를 고쳤고 보안 scanner는 유지했다. 제품 키·게시·카드 쓰기는 수행하지 않았다.
+- CE: 해당 없음 — parser 순서와 fixture/consumer 경계의 비직관적인 판단은 소스·반례·D-888에 남긴다.
+
+- 최종 runtime 포함 회귀: 35eeffe31f 공식 원격 os-rauc-runtime-final, 1166 passed/32 skipped/49 warnings, 165.15s. 앞의 개별 집계와 중복되므로 합산하지 않는다.

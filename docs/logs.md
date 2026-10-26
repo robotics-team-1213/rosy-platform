@@ -11690,3 +11690,12 @@ osy-d395-s1d\`.
 - 증거: 공식 원격 1070 passed/32 skipped/44 warnings, 0 NEW. 독립 검토의 두 수용 결함을 수정한 ea0f7bbbd1 소스 증가분 APPROVE. source/model/실제 read-only sysfs와 SYSTEM·ARM artifact·media·device 수용을 구분한다.
 - gate 변화: 없음. 전체 OS installer와 최종 이미지·SD 작업은 계속 남아 있다.
 - CE: 해당 없음 — 비직관적인 제약과 재현 방법을 기존 ADR·source·회귀에 보존한다.
+
+## 2026-10-26 · 35eeffe31f · D-888의 배포 metadata·CMS·설치 설정 경계 기록
+
+- 변경: raw Ed25519-before-parse와 bounded CMS footer, 고정 P-256 인증서 하나/현재 시간/실제 RAUC JSON2의 exact inner·outer 비교를 Proposed D-888에 기록한다. info-only sealed noop config와 현재 카드에서 새로 생성하는 설치용 custom backend config를 구분한다. 실제 daemon 권한 적용·controller 연결은 아직 남아 있으며 config 생성은 설치 권한이 아니다. binary pin과 upstream service 제외를 명시한다.
+- 증거: 공식 원격 0a67253358 1159 passed/32 skipped/49 warnings, 0 NEW. 설치 설정/frozen 통합 e315b2e042 82 passed, 실제 RAUC config/CMS 35eeffe31f 7 passed, 각각 0 NEW. 실제 OpenSSL/RAUC 및 frozen subprocess 결과이며 SYSTEM·ARM artifact·SD·DEVICE 증거가 아니다. 독립 verifier/image SOURCE 증가분 검토 APPROVE는 fbb75316e3/0a67253358 범위다.
+- gate 변화: 없음. 완료된 새 A/B 이미지 이후 SD 기록 요청을 유지하고 미완성 또는 기존 MBR 이미지를 대체 기록하지 않는다.
+- CE: 해당 없음 — 판단과 재현 조건을 코드·반례·기존 ADR에 보존한다.
+
+- 최종 runtime 포함 회귀: 35eeffe31f 공식 원격 os-rauc-runtime-final, 1166 passed/32 skipped/49 warnings, 165.15s. 개별 시험 수와 합산하지 않는다.

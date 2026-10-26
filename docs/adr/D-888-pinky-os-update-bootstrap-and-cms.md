@@ -46,6 +46,12 @@ B에서 비활성 boot A를 교체하면 사용 중인 FAT를 덮어쓰고, 전�
 
 ### Consequences
 
+배포 metadata는 기존 Ed25519로 원본 JSON 바이트를 먼저 검증한 뒤 중복 키와 예상 밖 필드를 거절한다. bundle 이름·SHA256·크기, board/arch, compatible, native factory, boot ABI 2와 state reader/writer 1, CMS signer SPKI를 결속한다. verifier는 private staging의 0400 일반 파일과 소유권·단일 link·동일 inode를 확인하고 전체 hash를 대조한다. CMS footer 크기를 먼저 제한한 뒤 RAUC 1.11.3의 실제 검증을 실행한다. JSON2의 인증된 inner metadata와 외부 metadata를 대조하고 hook·custom handler·adaptive 설치를 거절한다. CMS에는 고정된 P-256 인증서 하나만 허용하며 현재 시간의 유효기간 검사를 유지한다.
+
+서명 검사에 사용하는 sealed slotless `bootloader=noop` 설정은 `info` 전용이다. 설치 설정은 fresh media capture로 현재 카드의 장치를 정하고 비활성 두 partition에 후보가 들어가는지 확인하여 별도로 생성한다. `bootloader=custom`, `activate-installed=false`, rootfs와 child boot의 A/B 묶음, 공통 RAUC data-directory를 사용한다. 동적으로 생성하는 DeviceAllow는 실제 daemon에 적용할 입력이며 비활성 root/boot rw와 parent r, loop/verity 장치만 포함한다. 설정 생성 자체는 설치 권한이 아니다. 실제 daemon의 root-only D-Bus·namespace·cgroup 적용과 transaction/boot controller 연결·SYSTEM 검증은 아직 남아 있다.
+
+native image는 Noble `rauc=1.11.3-2` binary package와 실제 일반 binary 파일을 검사하고, 전역 제어를 여는 upstream `rauc-service` package를 거절한다. test tool은 공식 deb의 크기·SHA256을 확인해 pytest 임시 경로에만 추출하며 전역 package나 service를 설치하지 않는다. 임시 인증서와 실제 CMS/verity, frozen 설치 경로 실행 시험은 제품 인증서·ARM artifact·실물 설치 수용을 대신하지 않는다.
+
 새 factory는 root별 `os-media.json`에 전체 GPT snapshot을 보관하고 kernel command line에 `rauc.slot=a/b`를 명시한다. 공통 `os-update/state.json`은 schema 1, committed A/release, pending null, failed_versions 빈 목록으로 초기화하며 RAUC/staging 디렉터리는 root 0700이다. 누락을 정상 idle로 추측하지 않는다. 현재의 순수 metadata 변환은 검증된 factory A의 fstab·descriptor·media snapshot·cmdline 네 파일만 받아, 기존 카드의 비활성 슬롯 UUID와 mount 배치로 렌더링한다. GPT·data·bootstrap을 쓰거나 후보 코드를 실행하지 않는다. 실제 installer의 서명 검증·장치 수용·write/재수용 연결은 별도다.
 
 media admission은 현재 descriptor·mount·kernel RAUC slot, 전체 디스크 handle의 block identity, 실제 GPT 양쪽 사본과 snapshot을 대조한다. 여섯 kernel partition의 `start`·`size`도 GPT와 같아야 하며, 비활성 root/boot가 PID1이나 호출자 mount view에 남아 있으면 거절한다. capture 결과는 이후 쓰기 권한을 대신하지 않으며 실제 파괴 경계에서 다시 확인해야 한다.
