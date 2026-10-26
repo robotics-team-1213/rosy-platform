@@ -36,6 +36,7 @@ def test_control_unit_approval_uses_current_revision_and_stale_read_blocks_actio
             page.goto(site + "/console?view=work")
             page.evaluate("theme => window.RosyTheme.set(theme)", theme)
             page.clock.run_for(2000)
+            page.locator("#work-integrations > summary").click()
             panel = page.locator("#control-unit-work")
             expect(panel).to_be_visible()
             expect(panel).to_contain_text("상위 관제 A")
@@ -96,6 +97,7 @@ def test_unknown_submission_keeps_its_body_and_identity_across_reload(site, outc
         try:
             page.goto(site + "/console?view=work")
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             page.locator("#control-unit-work summary").click()
             page.locator("#control-unit-target_unit").fill("A")
             page.locator("#control-unit-robot_id").fill("a")
@@ -115,6 +117,7 @@ def test_unknown_submission_keeps_its_body_and_identity_across_reload(site, outc
                 return
             page.reload()
             page.clock.run_for(1500)
+            page.locator("#work-integrations > summary").click()
             page.locator("#control-unit-work summary").click()
             expect(page.locator("#control-unit-target_unit")).to_have_value("A")
             expect(page.locator("#control-unit-x")).to_have_value("1")

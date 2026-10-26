@@ -89,6 +89,7 @@ def _prepare(page):
         expect(page.locator(f"#{kind}-revision")).to_contain_text("저장된 버전")
     page.locator("#compile").click()
     expect(page.locator("#summary")).to_contain_text("18회 전송")
+    expect(page.locator('#proposal-stage')).to_have_attribute('open', '')
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -106,6 +107,7 @@ def test_discord_request_uses_real_cell_preparation_and_separate_confirmation(br
     page.locator('#cell-channel-reason').fill('reviewed saved recipe and cell')
     page.locator('#propose').click()
     expect(page.locator('#proposal')).to_contain_text('운영자 별도 승인 대기')
+    expect(page.locator('#mission-stage')).to_have_attribute('open', '')
     proposal_id = page.locator('#mission-id').input_value()
     from fleet.server.cell_job_store import CellJobStore
     jobs = CellJobStore(tasks.store.path)
@@ -687,6 +689,7 @@ def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(brow
            "operator_checkpoints": [{"checkpoint_id": "a" * 64, "status": "WAITING_ACCESS",
                                      "pallet_id": "A", "layer_index": 1, "thickness_m": 0.002}]}
     page.route("**/api/fleet/cell-jobs/sheet-held", lambda route: route.fulfill(json={"job": job}))
+    page.locator("#mission-stage > summary").click()
     page.locator("#mission-id").fill("sheet-held")
     page.locator("#read-job").click()
     expect(page.locator("#job-summary")).to_contain_text("작업 보류")
