@@ -12050,3 +12050,9 @@ osy-d395-s1d\`.
 - 변경: robot-0d 착지 승인 조건 두 가지. `remote_pytest.run`이 호출 가운데 가장 큰 `ROSY_JOB_CORES`(잠금 예약)만큼 빈 코어가 있는 시험 PC에만 배치하고, 그런 요구에는 바닥 없는 대체 배치를 쓰지 않고 기다린다. `land_isolation.py close`는 `--reason`이 없거나 비면 거절하고, done 줄에 이유·누가(git user.email, 없으면 OS 사용자)·언제를 남긴다. `rosy-land-isolation.jsonl`과 `land_events`에 백업이 없다는 점(알려진 단일 손실 지점)을 모듈 docstring과 `tools/AGENTS.md`에 적었다. robot-47 조건: 차례 목록을 제자리에서 늘리는 연결은 끝까지 착지 시험이 고정한다(`land.py`가 가드 회차에 복사본을 넘기면 그 시험이 실패).
 - 증거: 원격 `test/test_land_isolation.py test/test_doctor.py test/test_remote_pytest.py test/test_remote_test_tools.py` 137 passed, `test/test_land.py test/test_land_events.py test/test_land_queue.py test/test_land_record.py` 129 passed. 변이: 배치가 예약 코어를 무시 → 배치 시험 실패, `land.py`가 `list(invocations)`를 넘김 → 묵은 재실행 끝까지 시험 실패.
 - gate 변화: 6코어 잡은 6코어가 빈 시험 PC를 기다린다.
+
+## 2026-10-26 · uncommitted · feat(remote): OMX 팔 S 핫픽스 반복 도구
+
+- 변경: `tools/remote/omx_hotfix.py` 추가. 손으로 하던 임시 커밋(임시 `GIT_INDEX_FILE`·`commit-tree`·`refs/rosy-wip/<이름>`), 원격 시험(`remote_pytest.py --sha`), 현장 PC 배포(`git archive`를 ssh 표준 입력으로 `~/rosy-test/omx-tools-<sha10>/`에 풀고 `REVISION`이 같으면 건너뜀, `omx-tools-current` 링크를 임시 이름 `ln -sfn` 뒤 `mv -T`로 교체), 상태 보기를 하위 명령 넷으로 묶었다. 배포는 `test`가 같은 sha로 남긴 로그의 마지막 pytest 요약이 `passed`이고 `failed`/`error`가 없을 때만 한다. 주소는 `--host`나 `OMX_HOTFIX_HOST`로만 받는다(D-226). 팔을 움직이거나 세션을 시작하지 않는다.
+- 증거: 원격 `test/test_omx_hotfix.py test/architecture/test_document_placement.py` 28 passed(exit 0, 모델 PC). 변이 4개(로그의 `failed` 검사 제거, 링크를 제자리 `ln -sfn`, `REVISION` 건너뜀 끔, 임시 인덱스 대신 공유 인덱스)는 해당 시험 5 failed. 실제 `run-1.txt`에 배포 관문이 통과, 다른 sha로는 거절. 현장 PC 배포·실물 수용은 하지 않았다.
+- gate 변화: 없음. 현장 PC 배포 전에 원격 시험 통과 로그가 필요하다.
