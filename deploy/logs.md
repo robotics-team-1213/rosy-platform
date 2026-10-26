@@ -3565,3 +3565,11 @@
 - 검증: 공식 원격5fc52b58fd os-motion-policy-final1594passed/32skipped/49warnings318.88s0NEW, runner66178 terminal0. 이후 readonly precondition 변경의 공식 cfbe016caf os-motion-policy-readonly-final65passed7.50s0NEW, runner14418 terminal0. 실제 frozen import와 offline systemd parser를 포함하며 mount/DT/CORE/manager는 모델이다. 두 집계를 합산하지 않는다. 앞선 정책140pass/guard135pass도 겹치는 회귀이며 모두0NEW; malformed-config3fail 및 readonly-method1fail 반례를 수정했다.
 - gate 변화: 없음. 실제 PID1의 정지/EnvironmentFile 효과·cgroup·모터, deadline/watchdog/controller/rebase/health/commit/fallback, producer/feed/signing/capacity, SYSTEM/nativeARM/서명/SD readback은 미완료다. 제품 키·게시·main 착지·SD 기록은 수행하지 않았다. 32개 PowerShell skip은 미검증이다.
 - CE: 해당 없음 — 공통 정책 재사용과 sandbox 밖 차단 파일의 writer/reader 분리는 소스·시험·D-888에 보존한다.
+
+## 2026-10-26 · 82ccb2e22b · D-888 독립 trial deadline
+
+- 변경: protocol2 frozen helper와 DefaultDependencies=no timer/service를 추가한다. sysinit drop-in이 local-fs 완료 전에 부팅 기준180초/정확도1초 timer를 시작하며 storage/projection/CORE를 요구하지 않는다. raw DT0은 공통 상태 읽기·재부팅 없이 종료하고 unknown flag는 HOLD한다. DT1은 별도 child에서 최대3초 동안 firmware/default/committed 상태를 확인한다. 확정된 동일 boot의 flag1은 유지하며 미확정·손상·timeout이면 systemctl --no-block reboot만 요청한다.
+- 경계: timeout child를 kill한 뒤 다시 wait하지 않아 공통 저장소의 멈춘 I/O가 parent를 붙잡지 않게 한다. 실제 하드웨어 watchdog과 pre-PID1 복귀를 대신하지 않는다. test root에서 기본 runner가 host reboot를 요청하지 못하게 한다. helper/timer/service/sysinit 연결은 protocol2에만 설치하고 SDK sync/backup namespace에서 제외한다. frozen60/early10, sync1014lines 유지.
+- 검증: 초기 missing-feature13fail1.60s를 재현한 뒤 공식 원격cca5934dda46passed7.54s0NEW, 8ca6cd446e16passed5.19s0NEW를 확인했다. 실제3초 지연 child와 offline systemd parser, poisoned mutable SDK의 frozen CLI를 실행한다. 최종82ccb2e22b os-trial-deadline-final1612passed/32skipped/49warnings307.24s0NEW, runner45262 terminal0. frozen CLI에서 정상 부팅과 실제 모델 commit 후 flag1 유지의 두 결과를 확인한다. 집계는 겹쳐 합산하지 않는다.
+- gate 변화: 없음. 실제 PID1의 timer·정상 reboot, uninterruptible kernel I/O·watchdog handoff·실물 전원 차단 수용은 미검증이다. kernel/PID1 watchdog 설정·관측 admission·apt 정책, controller/rebase/health/commit/fallback·producer/feed/signing/capacity·SYSTEM/nativeARM/SD readback은 남아 있다. 제품 키·게시·main 착지·SD 기록은 수행하지 않았다. 32개 PowerShell skip은 미검증이다.
+- CE: 해당 없음 — bounded child의 이유와 정상/확정 boot 제외 조건은 source·시험·D-888에 보존한다.

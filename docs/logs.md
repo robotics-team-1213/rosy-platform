@@ -11731,3 +11731,10 @@ osy-d395-s1d\`.
 - 증거: 공식 원격5fc52b58fd1594passed/32skipped/49warnings318.88s0NEW와 이후cfbe016caf의 readonly 변경65passed7.50s0NEW. 실제 frozen import·systemd offline parser이며 DT/mount/CORE/manager는 모델이다. 집계는 겹쳐 합산하지 않는다.
 - gate 변화: 없음. 전체 SD 이미지·trial/watchdog/controller/health/commit/fallback·SYSTEM·ARM artifact·서명·기록 목표는 계속 남는다. 실제 PID1/motor 수용이나 새 독립 리뷰를 주장하지 않는다.
 - CE: 해당 없음 — source·시험·기존 ADR이 판단과 한계를 보존한다.
+
+## 2026-10-26 · 82ccb2e22b · D-888 독립 trial deadline 책임 기록
+
+- 변경: early180초 timer와3초 child probe, raw DT 정상/unknown 분기, committed sameboot flag1 유지, 정상 재부팅 요청의 범위를 D-888에 기록한다. 공통 storage/CORE 실패와 분리하지만 실제 PID1·kernel watchdog 수용을 대신하지 않는다.
+- 증거: 공식 원격82ccb2e22b os-trial-deadline-final1612passed/32skipped/49warnings307.24s0NEW. 실제3초 지연 child·offline systemd parser·poisoned mutable SDK의 frozen CLI이며 DT/mount/commit은 모델이다. 앞선46/16pass 집계는 겹쳐 합산하지 않는다.
+- gate 변화: 없음. 전체 SD 이미지·watchdog/controller/rebase/health/commit/fallback·SYSTEM·ARM artifact·서명·기록 목표는 미완료다. 실제 장치 수용이나 새 독립 리뷰를 주장하지 않는다.
+- CE: 해당 없음 — 구현과 반례가 판단을 보존한다.
