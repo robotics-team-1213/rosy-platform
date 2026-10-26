@@ -11780,3 +11780,10 @@ osy-d395-s1d\`.
 - 증거: exact 9fe8daa1e2 공식 원격 os-feed-final 2069passed32skipped49warnings380.19s, known_failures 0NEW. 실제 Ed/HTTP/fsync/frozen 실행과 firmware/services/RAUC 모델을 구분한다. 중간 subset 통과 수를 합산하지 않는다.
 - gate 변화: 없음. D-888 Proposed 유지. producer/signing·capacity·SYSTEM·최종 리뷰/로컬 착지·native ARM artifact·SD 기록/readback·DEVICE는 남는다. 공개 push/제품 키 사용/SD 변경은 없다.
 - CE: 해당 없음 — 코드·시험·D-888이 판단을 보존하며 실물 수용으로 기록하지 않는다.
+
+## 2026-10-26 · 0b370fcc7b · D-888 unsigned OS producer evidence
+
+- 변경: actual GPT slot-A bounded export, logical/archive digest와 source/native factory binding, outer image checksum 및 native ARM unsigned handoff 계약을 D-888에 기록했다. offline native signature 주입/CMS bundling은 다음 작업이다.
+- 증거: exact0b370fcc7b 공식 원격 os-export-final128passed5.71s,0NEW. 작은 GPT의 실제 range/XZ/hash와 manifest CLI 검사, source 변이·오류 cleanup을 포함하며 bootable image를 생성한 시험은 아니다. 이전90pass/11pass와 합산하지 않는다. size4commits/shell syntax PASS;lint0errors35warnings.
+- gate 변화: 없음. D-888 Proposed, native ARM artifact·signing·capacity·SYSTEM·최종 리뷰/정식 localmain·SD 전체 readback·DEVICE는 남는다. 공개 게시와 제품 키/SD 작업은 없다.
+- CE: 해당 없음 — 코드·시험·결정문이 판단을 보존한다.

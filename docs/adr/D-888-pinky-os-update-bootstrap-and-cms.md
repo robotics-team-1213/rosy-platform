@@ -134,6 +134,10 @@ os-rollout schema1은 kind=os-update, release_id, bundle basename/SHA256, publis
 
 boot unit의 run은 optional network config나 new-run freeze 검사보다 pending/retained-tryboot 복구를 먼저 수행한다. 기존 site-wide ops-update-freeze/local marker gate를 frozen helper로 재사용하며 source discovery만 막고 필요한 복귀는 막지 않는다. 새 후보는 서명된 catalogue/rollout/private stage를 통해 기존 lifecycle owner에 원래 metadata bytes와 signature를 넘긴다. 긴 paced 다운로드와 install을 위해 unit은24시간으로 제한하고 Nice19/idle I/O를 사용한다. trial의 독립180초 deadline과 fresh health margin은 그대로다. 이 소스 연결은 실제 OS feed 게시·제품 서명·ARM artifact 배포를 뜻하지 않는다.
 
+native image builder는 최종 raw 삭제 전에 `export-os-bundle-inputs.py`로 actual GPT와 assembly snapshot을 대조하고 root_a/boot_a 두 범위만 압축해 `os-bundle-inputs/`에 보존한다. source는 read-only regular single-link/owner/size와 추출 전후 inode/mtime/ctime를 확인한다. original GPT/bootstrap/data와 raw image를 쓰지 않는다. 새 private workspace에 rootfs.ext4.xz·boot.vfat.xz와 logical/archive size/SHA를 fsync한 뒤 게시하며 실패 시 자신이 만든 workspace만 회수한다. inputs.json은 release/source revision·ABI/state·layout·native factory checksum identity를 결속한다. factory manifest의 checksum과 release identity도 대조하지만 아직 unsigned 입력이므로 설치 권한이 아니다.
+
+세 export 파일은 최종 image distribution SHA256SUMS에 포함한다. native ARM workflow는 파일 존재·XZ 검사·원래 factory list digest·image layout/release/source revision의 일치를 검사하고 unsigned artifact로만 올린다. 테스트의 작은 GPT fixture는 추출 바이트·실제 manifest CLI의 outer checksum·source 변이/오류 시 미게시를 확인하며 bootable image가 아니다. offline signer는 authenticated distribution과 supplied native factory signature를 검증하고 disposable root에 해당 서명만 넣은 뒤 CMS bundle을 만들어야 한다. exporter와 CI wiring 완료는 그 후속 서명 또는 native ARM artifact 생성의 증거가 아니다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.

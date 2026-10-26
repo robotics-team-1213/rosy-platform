@@ -3624,3 +3624,10 @@
 - 증거: exact 9fe8daa1e2 원격 os-feed-final 2069passed32skipped49warnings380.19s, 0NEW. 앞선 rollout41·feed52/56·lifecycle320·frozen323 통과는 중복 subset이다. rollout16·feed11·fresh admission3·bundle mode fsync1 counterexample 실패를 관측한 뒤 수정했다. real Ed/HTTP/file mode fsync/frozen CLI 시험과 synthetic firmware/services/RAUC 모델은 구분한다.
 - gate 변화: 없음. D-888 Proposed 유지. producer/offline signer·용량 실측·disposable SYSTEM·전체 리뷰/정식 localmain 착지·native ARM signed artifact·SD full readback은 남는다. 32 skips 및 기체 boot/powercut 수용은 미검증이다. 공개 push·제품 키·SD 쓰기는 하지 않았다.
 - CE: 해당 없음 — 이번 판단은 코드·회귀 시험·D-888에 보존되며 실제 장치 장애를 해결한 증거는 없다.
+
+## 2026-10-26 · 0b370fcc7b · unsigned OS bundle inputs producer
+
+- 변경: native GPT builder가 raw finalization 전 actual GPT를 검사하고 root_a/boot_a만 bounded stream으로 XZ 압축해 export한다. logical/archive size·SHA와 source/native factory/layout/ABI binding을 담아 fresh private workspace에서 fsync 게시한다. readonly source 변이와 잘못된 table/prototype/symlink/factory/identity/기존 출력은 거절한다. image outer checksum 및 native ARM workflow의 unsigned handoff 검사에 연결했다.
+- 증거: ab3ca003e3 os-export-red 9failed0.33s → d543bcdaf5 os-export-green90passed4.50s;3831edb1dc handoff RED1failed11passed0.48s → exact0b370fcc7b os-export-final128passed5.71s,0NEW. 작은 실제 GPT 추출/압축·actual create-image-manifest CLI checksum·source 변이와 디스크 오류 cleanup을 확인했다. 이미지/공장 서명/기존 builder/RAUC image contracts 포함128은 앞90과 중복이다. shell syntax와 size4commits PASS, lint0errors35warnings.
+- gate 변화: 없음. exporter 소스/CI 연결이며 actual hosted ARM artifact·root signature 주입/CMS+Ed signer·실측 capacity·SYSTEM·최종 리뷰/로컬 병합·SD 기록/readback·DEVICE는 남는다. 공개 push/제품 키/SD 쓰기는 수행하지 않았다.
+- CE: 해당 없음 — 구현·시험·D-888이 판단을 보존하고 실제 장치/운영 장애 해결은 없다.
