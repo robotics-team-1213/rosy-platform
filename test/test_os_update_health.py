@@ -221,3 +221,21 @@ def test_actual_tls_probe_verifies_the_configured_device_identity(tmp_path, monk
         server.shutdown()
         server.server_close()
         worker.join(timeout=5)
+
+
+def test_observational_io_uses_the_existing_native_sensor_settle_before_sampling(tmp_path, monkeypatch):
+    from native_release import IO_SETTLE_S
+    m, _, root, _, host, _, run, _, _, _ = _health(tmp_path, monkeypatch)
+    host.inputs_changes = dict(battery_percent=None)
+    host.write_inputs()
+    sleep = host.sleep
+    intervals = []
+    def settling(seconds):
+        intervals.append(seconds)
+        sleep(seconds)
+        if seconds == IO_SETTLE_S:
+            host.inputs_changes = {}
+            host.write_inputs()
+    host.sleep = settling
+    assert m.check(root, TRANSACTION, host=host, run=run)["boot_id"] == TRIAL_BOOT
+    assert intervals[0] == IO_SETTLE_S

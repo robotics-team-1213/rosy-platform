@@ -220,3 +220,21 @@ def test_service_calls_never_run_under_native_release_or_state_lock(tmp_path, mo
     if trial: m.resume(root, host=host, run=unlocked)
     else: m.start(root, bundle, b"metadata", "sig", host=host, run=unlocked)
     assert commands
+
+
+def test_source_observational_restart_settles_before_reauthorizing_arm(tmp_path, monkeypatch):
+    from native_release import IO_SETTLE_S
+    m, _, _, root, _, _, host, _, run, bundle, _ = _source(tmp_path, monkeypatch)
+    sleep = host.sleep
+    def settling(seconds):
+        sleep(seconds)
+        if seconds == IO_SETTLE_S:
+            host.inputs_changes = {}
+            host.write_inputs()
+    def restarting(argv, **kwargs):
+        if argv == ["/usr/bin/systemctl", "restart", "rosy-io.service"]:
+            host.inputs_changes = dict(battery_percent=None)
+            host.write_inputs()
+        return run(argv, **kwargs)
+    host.sleep = settling
+    assert m.start(root, bundle, b"metadata", "sig", host=host, run=restarting)["pending"]["phase"] == "ARMED"
