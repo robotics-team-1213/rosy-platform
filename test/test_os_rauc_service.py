@@ -201,14 +201,19 @@ def test_recovery_revokes_known_runtime_after_claim_expiry_without_reinstalling(
     assert not (root / m.DROPIN).exists()
 
 
-def test_lifecycle_uses_actual_ed_cms_and_verity_verification_with_a_modeled_manager(tmp_path, monkeypatch, rauc_tool):
+@pytest.mark.parametrize("encoding", ["utf8", "utf16"])
+def test_lifecycle_uses_actual_ed_cms_and_verity_verification_with_a_modeled_manager(tmp_path, monkeypatch, rauc_tool, encoding):
     from test_os_rauc import _case as signed_case, _consumer
     from test_os_frozen_firstboot import _prefix, _stage
     m, root, bundle, _, _, manager, journal, config = _case(tmp_path / "device", monkeypatch)
     verifier = _consumer(monkeypatch, rauc_tool)
     runtime = importlib.import_module("os_rauc_runtime")
     monkeypatch.setattr(runtime, "verify_bundle", verifier.verify_bundle)
-    signed_root, signed_bundle, raw, signature, _, _ = signed_case(tmp_path / "signed", rauc_tool)
+    signed_root, signed_bundle, raw, signature, private, _ = signed_case(tmp_path / "signed", rauc_tool)
+    if encoding == "utf16":
+        from signing import sign_checksums
+        raw = json.dumps(json.loads(raw)).encode("utf-16")
+        signature = sign_checksums(raw, private)
     for relative in (verifier.ED_KEY, verifier.CMS_KEY):
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
