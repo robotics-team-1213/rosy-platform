@@ -17,12 +17,16 @@ from test_device_care import care, monitor_report
 @pytest.fixture
 def site(tmp_path):
     class Observations:
+        owner_id = 'fixture-owner'
+        registered = True
+
         def authorize(self, source, token):
-            if source != 'source-one' or token != 'observation-only-fixture':
+            if not self.registered or source != 'source-one' or token != 'observation-only-fixture':
                 raise PermissionError()
 
         def snapshot(self):
-            return {'workcells': [{'arms': [{'source_id': 'source-one', 'arm_id': 'fixture-owner', 'label': '실습 팔'}]}]}
+            arms = [{'source_id': 'source-one', 'arm_id': self.owner_id, 'label': '실습 팔'}] if self.registered else []
+            return {'workcells': [{'arms': arms}]}
 
     def viewer(authorization: str = Header('')):
         if authorization not in ('viewer', 'operator'):
@@ -36,9 +40,11 @@ def site(tmp_path):
         return principal
 
     app = FastAPI()
+    observations = Observations()
+    app.state.profile_observations = observations
     install_device_care_routes(
         app, tmp_path / 'tasks.sqlite3', console=SimpleNamespace(robot_ids=['robot-one']),
-        observations=Observations(), require_viewer=viewer, require_named_operator=operator)
+        observations=observations, require_viewer=viewer, require_named_operator=operator)
     app.state.device_care.put_profile('arm-one', {'display_name': '실습 팔', 'device_kind': 'manipulator'},
                                       updated_by='alice')
     with TestClient(app) as client:
@@ -107,3 +113,37 @@ def test_bridge_refuses_untrusted_origin_before_transport(origin):
     with pytest.raises(ValueError):
         publish(b'{}', fleet_url=origin, device_id='arm-one', source_id='source-one', token='fixture',
                 context=ssl.create_default_context())
+
+
+@pytest.mark.parametrize('measured', [False, True])
+def test_changed_manifest_owner_cannot_attach_old_profile_or_accept_old_report(site, measured):
+    client, _ = site
+    document, report = monitor_report(stamp=time.time())
+    base = '/api/fleet/device-profiles/arm-one'
+    headers = {'Authorization': 'operator'}
+    payload = care() | {'characteristics': document if measured else None}
+    assert client.put(base + '/care', json=payload, headers=headers).status_code == 200
+    if measured:
+        assert client.post(base + '/load-reports/source-one', json=report,
+            headers={'X-Workcell-Observation-Token': 'observation-only-fixture'}).status_code == 202
+    client.app.state.profile_observations.owner_id = 'replacement-owner'
+    response = client.get('/api/fleet/device-profile-sources/arm/source-one', headers=headers).json()
+    assert response['profile'] is None
+    assert response['source_binding_status'] == 'owner_changed'
+    previous = client.get(base + '/care', headers=headers).json()
+    assert previous['source_binding_status'] == 'owner_changed'
+    assert previous['caution'] == payload['caution']
+    if measured:
+        assert previous['latest_analysis']['fresh'] is False
+        assert client.post(base + '/load-reports/source-one', json=report,
+            headers={'X-Workcell-Observation-Token': 'observation-only-fixture'}).status_code == 422
+
+
+def test_removed_source_is_not_attached_to_a_current_robot(site):
+    client, _ = site
+    headers = {'Authorization': 'operator'}
+    assert client.put('/api/fleet/device-profiles/arm-one/care', json=care(), headers=headers).status_code == 200
+    client.app.state.profile_observations.registered = False
+    response = client.get('/api/fleet/device-profile-sources/arm/source-one', headers=headers).json()
+    assert response['profile'] is None
+    assert response['source_binding_status'] == 'source_unregistered'
