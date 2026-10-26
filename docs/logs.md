@@ -12112,6 +12112,14 @@ osy-d395-s1d\`.
 - 증거: ADR 번호는 관문에서 선점했으며 ADR Log의 UTF-8 BOM·CRLF를 유지했다. 문서·DOM 변경 뒤 공식 원격 재검증은 진행 중이다.
 - gate 변화: 없음. Accepted는 실물·현장 또는 제품 전체 UI/UX 수용을 뜻하지 않는다.
 
+## 2026-10-27 · uncommitted · feat(sim): D-877 물체 위치 평가 사실, 탐침 PASS 순서
+
+- 변경: MuJoCo·Isaac이 `/sim/object_tf`로 움직이는 상자 위치를 내고 적합성이 5mm 흔들림을 검사, 두 Gazebo 탐침은 정리 뒤 PASS, 두 카메라 사슬 시험이 저널 두 프레임 확인, [검증 기록](validation/omx-sim-object-facts-2026-10-27/result.md).
+- 증거: MuJoCo(AI PC)·Isaac(모델 PC) 적합성 통과, 흔들림 0.0mm. 단일 카메라 Gazebo와 VLA P0 stale이 PASS 뒤 EXIT_OK. 원격 pytest 통과.
+- gate 변화: 없음. Isaac 흔들림 값은 파지 시험 전까지 의미를 주장하지 않는다.
+- 결정: 없음.
+- 교훈: 없음(AI PC overlay 삭제와 복구는 검증 기록에 남김).
+
 ## 2026-10-27 · uncommitted · D-893 관제 단위와 호스트 배치
 
 - 변경: 사용자에게 위임받아 중앙 고정·장비별 Fleet 고정·역할별 유연 배치를 비교하고 세 번째를 선택했다. 관제 분리는 작업 책임으로, 호스트 분리는 부하·장치 연결·장애 격리로 결정한다. D-850·D-855·D-862와 기존 장치 실행·안전 권한을 유지하고 배치별 수용 조건을 기록했다.
