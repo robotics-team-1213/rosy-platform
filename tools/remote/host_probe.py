@@ -30,7 +30,8 @@ b=0; if [ -e "$J/busy" ]; then  # "<expiry epoch> <owner> <pid>" or a bare touch
   b=1; t=; read -r t _ < "$J/busy" 2>/dev/null || true
   case "$t" in ''|*[!0-9]*) e=0;; *) e=${#t};; esac
   if [ "$e" -ge 10 ]; then [ "$t" -gt "$now" ] 2>/dev/null || b=3  # an explicit expiry wins over a reboot
-  elif [ "$(stat -c %Y "$J/busy")" -lt "$(awk '/^btime /{print $2}' /proc/stat)" ]; then b=2; fi
+  # The site PC's hold may be a person's equipment work, not a test job: a reboot never releases it (robot-4a).
+  elif [ ! -e "$J/site" ] && [ "$(stat -c %Y "$J/busy")" -lt "$(awk '/^btime /{print $2}' /proc/stat)" ]; then b=2; fi
 fi
 st=0; [ -e "$J/site" ] && st=1
 d=~/rosy-test; [ -d "$d" ] || d=~

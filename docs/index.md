@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 8ecbd7e41e · 현장 PC의 busy 보류는 재부팅이 풀지 않는다
 - 2026-10-26 · uncommitted · busy 표시 만료와 GitHub Actions 커밋 고정
 - 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
 - 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
 - 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
-- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐

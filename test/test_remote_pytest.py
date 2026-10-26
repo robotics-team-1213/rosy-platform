@@ -242,7 +242,11 @@ def test_probe_script_busy_marker_needs_a_live_expiry_or_this_boot(tmp_path):
         return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()[7]
 
     assert busy_field("") == "1"  # a bare touch this boot
-    assert busy_field("", mtime=1000) == "2"  # the 2026-10-24 site PC marker: older than boot
+    (jobs / "site").touch()  # the site PC's hold may be a person's equipment work: a reboot never releases it
+    assert busy_field("device-information-id15-20261024T125225Z\n", mtime=1000) == "1"
+    assert busy_field(f"{(now - 1)} owner 4242\n", mtime=1000) == "3"  # an explicit expiry still applies there
+    (jobs / "site").unlink()
+    assert busy_field("", mtime=1000) == "2"  # a pre-boot marker on a test PC (model/AI) is stale
     assert busy_field("12345 owner\n", mtime=1000) == "2"  # a pid-sized number is not an expiry
     assert busy_field(f"{now + 3600} owner 4242\n", mtime=1000) == "1"  # an explicit expiry outlives a reboot
     assert busy_field(f"{now - 1} owner 4242\n") == "3"

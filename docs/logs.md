@@ -11682,3 +11682,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_remote_pytest.py`, `test/test_native_sim_job.py`, `test/test_site_candidate_workflow.py`, `test/test_flashable_image_layout.py` 136 통과, known_failures NEW 0. 변이(부팅 전 규칙, 만료 규칙, place 문구, `marked_busy`, 태그 하나 되돌림) 각각 해당 새 시험이 빨개졌다.
 - gate 변화: 모든 워크플로 `uses:`가 40자리 SHA와 `# vX.Y.Z (pinned commit)`이어야 한다(로컬 `./` 재사용 워크플로 제외).
 - 교훈: CE 해당 없음 — 규칙과 이유가 PROBE 주석과 시험에 있다.
+
+## 2026-10-26 · 8ecbd7e41e · 현장 PC의 busy 보류는 재부팅이 풀지 않는다
+
+- 변경: `host_probe.py`의 PROBE는 `~/rosy-jobs/site`가 있는 호스트에서 재부팅 전 busy 표식을 무시하지 않는다. 표식에 만료 epoch가 있으면 그 만료는 계속 따른다.
+- 이유: 토론(robot-4a). 현장 PC는 운영 전용이라(D-571), 그 PC의 busy는 시험 표식이 아니라 사람이 운영 장비 작업으로 건 보류일 수 있다. 10-24 `device-information-...` 표식의 주인과 이유는 기록이 없다. 정전이나 수동 재시작이라면 보류가 아직 유효할 수 있다. 모델 PC·AI PC는 그대로 무시한다.
+- 증거: `test/test_remote_pytest.py::test_probe_script_busy_marker_needs_a_live_expiry_or_this_boot`의 site 사례.
+- gate 변화: 없음.
+- 교훈: CE 해당 없음.
