@@ -65,6 +65,15 @@ def test_guest_source_provisioning_refuses_an_unbound_instance(tmp_path, monkeyp
     assert calls == ["cat /var/lib/cloud/data/instance-id"]
 
 
+def test_nested_guest_failure_includes_bounded_stdout_diagnostics(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    guest = module().Guest(tmp_path)
+    monkeypatch.setattr(guest, "_ssh", lambda *a, **k: SimpleNamespace(returncode=1,
+        stdout=b"actual guest filesystem counterexample", stderr=b""))
+    with pytest.raises(ValueError, match="actual guest filesystem counterexample"):
+        guest.run("owned guest check")
+
+
 @pytest.mark.parametrize("wrong_range", [False, True])
 def test_large_guest_input_uses_exact_bounded_http_ranges(tmp_path, monkeypatch, wrong_range):
     import http.server
