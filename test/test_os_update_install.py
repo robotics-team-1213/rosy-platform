@@ -24,6 +24,9 @@ def _installer(tmp_path, monkeypatch, fault=None):
     import os_motion_guard
     os_motion_guard.reconcile(root)
     module = importlib.import_module("os_update_install")
+    parent = root / Path(module.WORK).parent
+    parent.mkdir(parents=True, mode=0o700)
+    parent.chmod(0o700)
     media = importlib.import_module("os_media").capture(root)
     private, public = _keys(tmp_path / "offline", "fixture")
     key = root / "etc/rosy/trusted-release-keys" / public.name
