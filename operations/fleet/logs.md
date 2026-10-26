@@ -4942,10 +4942,23 @@
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
 
+## 2026-10-27 · e7093c177a · ARM transfer 결과 판정과 검수용 export
+
+- 변경: 기존 simulation observer의 POST_ACTION 관측에서 Action 결과와 task succeeded/failed/unknown을 분리하고, 원본 근거를 기존 Fleet 이벤트 원장에 보존한다. 검수 export는 metadata-only이며 완료·재시도 권한을 만들지 않는다. POST_ACTION 계보 검사를 기존 완료 경로와 공유한다.
+- 증거: tests-only RED와 구현 GREEN, 독립 검토 반례 RED/GREEN을 공식 원격 실행했다. 관련 통합은 81988c1eb0의 116 passed/0 skipped. e7093c177a affected는 역의존·guard 4607 passed/190 skipped, Fleet 7052 passed/389 skipped, 두 invocation exit 0·known NEW 0. 독립 계약 재검토에서 중요 발견 없음. `docs/validation/transfer-outcomes-2026-10-27/result.md`와 `operations/fleet/docs/transfer-outcome-review.md` 참고.
+- Gate: 기존 모듈 gate를 올리지 않는다. 실제 장치·모델 품질·자동 재파지·다중 attempt·현장 수용은 별도다. 착지·push 미수행.
+- CE: 해당 없음 — 판단과 회귀 증거가 코드·시험·검증 기록에 남아 있다.
+
+## 2026-10-27 · c86b3e51d5 · owner 실행 단계와 복구 다음 확인
+
+- 변경: 보존된 네 단계 owner receipt의 명시적 FAILED·취소·불확실성을 검수 export v2에 연결했다. 종료 후 관측이 없는 Action 실패도 내보내고, 현재 HOLD를 유지한 채 대기·실행 대조·재관측·사람 검토 등 읽기 전용 다음 확인을 제안한다. 물리 실패 원인이나 새 실행 권한은 추정하지 않는다.
+- 증거: tests-only 26344ecf9b의 원격 16 failed/1 passed → 812b3b224c 156 passed. 독립 검토 TTL 반례 e231ff081a 2 failed → c86b3e51d5의 관련 통합 172 passed/0 skipped, runner exit 0·known NEW 0. 같은 source affected는 역의존·guard 4604 passed/190 skipped와 문서 검사 1 failed, Fleet 7070 passed/391 skipped와 기존 콘솔 계약 불일치 1 failed다. 문서 표기를 고친 a24f265097에서 해당 guard·문서 배치 9 passed/NEW 0. 전체 회귀 통과로 보고하지 않는다. `docs/validation/transfer-execution-review-2026-10-27/result.md` 참고.
+- Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
+- CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
+
 ## 2026-10-27 · d02b8d65e7 · 작업 큐 총 대기시간 계측 first_queued_at (계획 2026-10-27-fleet-queue-first-queued-at)
 
 - 변경: `fleet_tasks.first_queued_at` 컬럼(스키마 마이그레이션 additions 경로). `enqueue`가 COALESCE로 task id당 최초 입장 시각을 한 번만 기록하고 `release_traffic_wait`의 `queued_at` 재작성은 이 값을 건드리지 않는다. `FleetTaskScheduler.claim_next`가 주입 wall-clock으로 `total_queue_wait_seconds`를 함께 내놓고(기원 없는 옛 행은 None), 디스패치 시도마다 두 대기시간·우선순위·attempt_seq를 INFO 1줄로 남긴다. 노출은 로그뿐(API·UI 없음, 계획 결정).
 - 증거: 신규 `test_queue_wait_metrics.py` 8건 포함 원격 시험 77 passed, known NEW 0(관련 5 suite). 변이 검증: COALESCE 보존 제거 → 재대기열 보존 시험 red(`042bf8a957`), 되돌림 후 green(`d02b8d65e7`).
 - Gate: 없음. 호스트 시험까지만 유효 — 실제 사이트 큐에서 쌓이는 로그로 지표 노출·집계를 별도 결정한다.
 - CE: 해당 없음 — 계획 문서와 시험·커밋에 근거가 남아 있다.
-
