@@ -14,3 +14,16 @@ Fix between the runs: the release phase opens from the measured jaw position (`s
 On the real arm this case does not stop the cell (the guard has no following-error bound on the current-limited gripper), but the same rule applies: a release opens from where the jaws are.
 
 Not shown here: the real arm under the guard's teacher mode, real S cell coordinates (the sim cell is not the S cell), the B leg (belt → Pinky) and the decision seat. Evidence archives and receipts are kept outside the repository with the session scratch (`sim-chunks-2`, `sim-chunks-3`).
+
+## Smooth motion and scenarios (later the same day)
+
+Candidates `a4168ad085` (smooth travel and eased lines) and `ef7c1e50c3` (scenarios). The chunk plan now aims at the box pose the observer reports instead of the recipe's fixed pose, the way the real pipeline aims at the box the top camera locates.
+
+| Run | Box | Grasp yaw | Result |
+|---|---|---|---|
+| smooth | nominal | site | **PASS**: xy 0.26 mm, lift 102 mm; phases 115 / 34 / 157 / 107 s |
+| `pick-place-chunks-offset` | moved 12 mm, −8 mm | site | **PASS**: xy 0.26 mm |
+| `pick-place-chunks-yaw-site` | turned 20° | site (not turned) | **FAIL** in grasp: `bounded_readback_step_limit`, the jaws closing 20° off the box's edges stopped on its corners |
+| `pick-place-chunks-yaw-box` | turned 20° | turned by the box's true 20° | **PASS**: xy 0.10 mm |
+
+The sim teacher dispatches each short target on its own clock, so the smoother speed profile does not show in phase times. These runs check geometry and success only. The yaw pair shows that turning the jaws with the box is right when the box's yaw is known. The real failure on 2026-10-25 came from a rough top-camera yaw (25° read from a ~30 px box), not from turning as such. That is why the real pipeline keeps the site yaw, caps the turn at 10° until the wrist view is learned, and lets outcomes decide (`cell_choices`). A wrist-camera edge yaw measured right above the box is the candidate that could lift the cap.

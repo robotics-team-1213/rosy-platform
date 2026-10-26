@@ -20,7 +20,9 @@ roles:
     rosy-dataset-review-account.service: {run: active, channel: snapshot, source: "rosy-ml/legacy-review-account-code/releases/*", doc: docs/adr/D-809-legacy-learning-account-boundary.md}
     rosy-dataset-review.service: {run: active, channel: external, source: "dataset-review-937*", dropins: [90-account-loopback.conf], doc: docs/adr/D-809-legacy-learning-account-boundary.md}
     rosy-edge-review.service: {run: active, channel: signed, source: "rosy-ml/edge-capture/review-code/current", doc: docs/adr/D-545-model-pc-review-versioned-release.md}
-    rosy-learning-center.service: {run: active, channel: installer, source: ".local/share/rosy-learning-center/source/*", doc: docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md}
+    rosy-learning-center.service: {run: active, channel: autoupdate, source: ".local/share/rosy-learning-center/source/*", doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
+    rosy-learning-center-update.service: {run: oneshot, channel: updater, template: deploy/model_pc/rosy-learning-center-update.service, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
+    rosy-learning-center-update.timer: {run: timer, channel: updater, template: deploy/model_pc/rosy-learning-center-update.timer, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
     rosy-learning-redesign.service: {run: "off", channel: installer, note: "earlier Learning candidate (ac50d6330e)", doc: deploy/model_pc/README.md}
     rosy-learning-cycle-20261004.service: {run: "off", channel: retired, doc: deploy/model_pc/README.md}
     rosy-model-advertise.service: {run: "off", channel: retired, doc: deploy/site/README.md}
@@ -53,7 +55,7 @@ roles:
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
   ai:
-    pinky-backend.service: {run: active, channel: external, note: "Pinky stack from ~/.local/bin, outside this repository", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-backend.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin, outside this repository; stopped and disabled 2026-10-26 (user approval): its SQLite WAL wrote ~1.8 MB/s nonstop during test I/O contention", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
@@ -61,7 +63,9 @@ roles:
     rosy-ai-gpu-watchdog.service: {run: oneshot, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.service, doc: deploy/ai_pc/README.md}
     rosy-ai-gpu-watchdog.timer: {run: timer, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.timer, doc: deploy/ai_pc/README.md}
     rosy-decision-laya.service: {run: "off", channel: copy, doc: deploy/ai_pc/README.md}
-    rosy-learning-center.service: {run: active, channel: installer, source: ".local/share/rosy-learning-center/source/*", doc: docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md}
+    rosy-learning-center.service: {run: active, channel: autoupdate, source: ".local/share/rosy-learning-center/source/*", doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
+    rosy-learning-center-update.service: {run: oneshot, channel: updater, template: deploy/model_pc/rosy-learning-center-update.service, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
+    rosy-learning-center-update.timer: {run: timer, channel: updater, template: deploy/model_pc/rosy-learning-center-update.timer, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
     rosy-ollama.service: {run: active, channel: host, dropins: [warm.conf], note: "warm.conf keeps the vision model loaded", doc: deploy/ai_pc/README.md}
     rosy-situation.service: {run: active, channel: autoupdate, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-situation-autoupdate.service: {run: oneshot, channel: updater, dropins: [bootstrap.conf], note: "bootstrap.conf falls back to ~/rosy-situation/bootstrap before the first switch; harmless afterwards", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
@@ -92,3 +96,5 @@ roles:
     rosy-user-overhead-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
     rosy-user-mdns-bridge.service: {run: oneshot, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
     rosy-user-mdns-bridge.timer: {run: timer, channel: snapshot, doc: deploy/site/README.md}
+    rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
+    rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}

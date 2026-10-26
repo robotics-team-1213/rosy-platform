@@ -84,7 +84,10 @@ took hours to land. Four separate things blocked it.
   split candidate next to `fleet` and `site_ui/console`.
 - **Symptom (infra):** two runs lost host contact for more than 600 s (exit 255).
   `test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds`
-  was flagged LOAD-FLAKY twice under load.
+  was flagged LOAD-FLAKY twice. Correction 2026-10-26: the cause is not suite load. It failed 3/3
+  first tries on the AI PC after its disk was freed (0/2 on the model PC); the likely cause is AI PC
+  disk I/O contention (io pressure full avg10 up to 57%, a continuous foreign WAL writer), not proven.
+  See [read-only-test-dirs-fill-lab-disks-2026-10-26.md](read-only-test-dirs-fill-lab-disks-2026-10-26.md).
 - **Root cause:** there is no landing order or queue. A wide branch selects the full tier, so every
   move of `main` during a round costs a full rerun.
 
@@ -139,8 +142,59 @@ took hours to land. Four separate things blocked it.
   merge of `main` kept the branch's copy of a gap line `main` had already removed when that ADR landed, and lint
   stopped the landing with "declared gap now exists" (three branches that day, `feat/land-queue` among them).
   After each merge of `main`, `tools/land.py` now drops every gap line whose ADR file or Log row exists
-  (`land_merge.landed_gaps`), commits that on the topic branch and prints it in the land log. Test:
+  (`land_merge.landed_gaps`) and prints it in the land log. Since 2026-10-26 this happens inside `land.merge`, in
+  the merge commit itself (see 6). Test:
   `test/test_land.py::test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge`.
+
+### 6. The queue held for FULL turns that had already passed (2026-10-25)
+
+- **Symptom:** 12 tickets queued, the oldest 173 min. Turns with the affected tier took 4-13 min, but a turn that
+  ran FULL held everyone behind it for about an hour (`feat/rasptank-no-motion`, 22:17-23:20), although its FULL
+  tier had passed while it waited. One branch restarted 16 times before landing. Numbers from six sessions:
+  workspace record `local-main-landing-speed.md` (outside the repo).
+- **Root causes found in the code:**
+  - main's delta during the wait held `tools/harness/affected_tests.py`, so the delta selection escalated
+    ("harness configuration or the selector itself") and the turn ran FULL again. That harness edit had passed its
+    own FULL tier when it landed.
+  - The turn loop committed the gap clean-up as a separate non-merge commit. `land_full.restore` treats any
+    non-merge commit after the FULL candidate as new code, so the FULL pass was voided. A merge commit that
+    `generate` changed (`docs/index.md`) was voided the same way.
+  - `pretest()` merged `main` without the gap clean-up, so lint stopped it with "declared gap now exists" when a
+    peer had declared a gap for the ADR the branch adds (D-877).
+  - A `--no-queue` landing at 22:52 moved `main` in the middle of another turn and gave that turn a second round.
+- **Fixed (2026-10-26):** `land.merge` drops landed gap lines in the merge commit (pretest and turn alike);
+  `land_full.restore` keeps a FULL pass when the merge commit differs from git's merge only in the records
+  `land_merge.resolver` auto-resolves; a delta that escalated only for landed harness files runs its guards and
+  mapped suites (`select(..., landed=True)`); `--no-queue` is refused while a live ticket holds its turn. Tests:
+  `test/test_land.py::test_a_gap_main_declared_for_an_adr_this_branch_adds_is_dropped_by_the_pretest_merge`,
+  `::test_a_merge_that_only_dropped_gap_lines_keeps_the_full_pass`,
+  `::test_main_delta_escalated_only_by_landed_harness_files_runs_its_mapped_suites`,
+  `::test_no_queue_is_refused_while_a_lander_holds_its_turn`.
+- **Retries rerun only what failed (2026-10-26):** `run_tests` stopped on the first NEW failure, so the passes
+  after it were never kept, and it kept nothing when any invocation lost its host. One fixed failure then reran
+  every invocation. Now every invocation is judged, each clean pass of its own usable evidence is kept
+  (`land_cache`), and the stop lists every failure at the end. LOAD-FLAKY passes are still not kept. Tests:
+  `test/test_land.py::test_a_new_failure_still_keeps_the_invocations_that_passed_beside_it`,
+  `::test_cache_never_keeps_a_failure_or_a_partial_run`.
+- **What failed last time runs first (2026-10-26):** an invocation with a NEW failure is marked in
+  `<git-common-dir>/rosy-land-failed.json` and cleared once it passes. The next run sends the marked ones to the
+  test PCs alone first; if they fail again the landing stops before the rest is spent. Test:
+  `test/test_land.py::test_what_failed_last_run_runs_alone_first_and_a_repeat_stops_before_the_rest`.
+- **A branch's reordered copy of main's log entries (2026-10-26):** a hand-fitted merge of main left main's
+  `docs/logs.md` entries in another order on the branch; the turn stopped "a side changed existing lines".
+  `land_logs.append_blocks` now keeps main's order when the branch only reordered (nothing edited or dropped)
+  and inserts the branch's new entries by date; main reordering, or an edit, still stops. Test:
+  `test/test_land.py::test_logs_md_this_branch_reordering_mains_entries_keeps_mains_order`.
+- **Old branches landed with old landing code (2026-10-26):** `land.py` ran from the landing branch's own copy,
+  so a branch made before a landing fix still landed with the old rules (robot-71's turn stopped on a log merge
+  that main's `land_logs` already accepts). `land_checks.landed_copy` now re-runs main's `tools/land.py` with the
+  same arguments, in the branch's worktree, whenever the branch's `tools/land*.py` differ from main's
+  (`ROSY_LAND_OWN_COPY` stops a second re-run). Test:
+  `test/test_land.py::test_a_branch_with_older_landing_code_lands_with_mains_copy`.
+- **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
+  selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
+- **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the
+  lock, a ready-order queue) is planned separately.
 
 The candidates as first written:
 

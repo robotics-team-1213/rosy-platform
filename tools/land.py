@@ -55,6 +55,7 @@ from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
 HARNESS = "tools/harness/rosy_harness.py"
+HARNESS_TRIGGER = ": harness configuration or the selector itself"  # affected_tests.FULL_TRIGGERS
 SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
@@ -124,6 +125,12 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
                 raise Stop(f"changes outside canonical generation targets: {sorted(unexpected)}")
             if written:
                 git(wt, "add", "--", *written)
+        gaps, dropped = landed_gaps(wt)
+        if dropped:  # in the merge commit, so the pretest's merge drops them too and land_full keeps its FULL pass
+            (wt / ADR_GAPS).write_bytes(gaps)
+            git(wt, "add", "--", ADR_GAPS)
+            print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
+            resolved[ADR_GAPS] = gaps
         git(wt, "commit", "--no-edit")
     except (Stop, ValueError, KeyError, OSError, subprocess.CalledProcessError) as exc:
         abort = git(wt, "merge", "--abort", check=False)
@@ -177,11 +184,13 @@ def pack(wt: Path, paths: list[str]) -> list[list[str]]:
     return [members for members, _ in groups]
 
 
-def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[list[list[str]], str | None]:
+def select(wt: Path, base: str, python: str, head: str | None = None,
+           landed: bool = False) -> tuple[list[list[str]], str | None]:
     """pytest invocations for base...HEAD (or base...head), and a FULL note owed to the summary.
 
     The D-436 selector (`rosy_harness.py affected`) when the harness is present —
     it adds the guard set and reverse dependents — otherwise the nearest test/ dir.
+    ``landed``: base...head is main's delta, already on main with its own FULL tier when it escalated.
     """
     if (wt / "tools/harness/affected_tests.py").is_file():
         # Strict UTF-8: the JSON must parse whole; PYTHONUTF8 makes the child write UTF-8.
@@ -193,6 +202,12 @@ def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[l
                        f"{result.stdout}{result.stderr}".rstrip())
         try:
             sel = json.loads(result.stdout)
+            if landed and sel["escalations"] and all(e.endswith(HARNESS_TRIGGER) for e in sel["escalations"]):
+                # A harness edit on main passed its own FULL tier when it landed; a FULL tier for every lander
+                # behind it held the queue an hour each (2026-10-25). Its guards and mapped suites still run.
+                print("[tests] main's delta escalated only for harness files that landed with their own FULL"
+                      " tier: the guards and its mapped suites")
+                return sel["local_invocations"] + browser_tier(wt, base, head), None
             if sel["mode"] == "full":
                 # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
                 # guards alone; not via GitHub, which would publish unpushed main commits.
@@ -293,33 +308,54 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
     head = out(wt, "rev-parse", "HEAD")
     reused, todo, keep = land_cache.split(wt, args, invocations, head, python, select)
     done += reused
-    logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(todo) + 1)]
-    began = time.monotonic()
-    codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
-    if out(wt, "rev-parse", "HEAD") != head:
-        raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
-    if len(codes) != len(todo):
-        raise Stop("incomplete remote results; not landing")
-    print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
-    whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
-    for inv, log, code in zip(todo, logs, codes):
+
+    def batch(part: list[tuple[int, list[str]]]) -> list[str]:
+        todo = [inv for _, inv in part]
+        logs = [logdir / f"run-{round_no}-{n}.txt" for n, _ in part]
+        began = time.monotonic()
+        codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
         if out(wt, "rev-parse", "HEAD") != head:
-            raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
-        if why := land_cache.unusable(code, log):
-            raise Stop(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
-        check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
-                               capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
-        print(check.stdout, end="")
-        flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
-            wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run,
-            tested_sha=head)
-        if out(wt, "rev-parse", "HEAD") != head:
-            raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
-        if check.returncode != 0 and not flaky:
-            raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
-        if check.returncode == 0 and whole:
-            keep(inv, log)
-        done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
+            raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
+        if len(codes) != len(todo):
+            raise Stop("incomplete remote results; not landing")
+        print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
+        # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
+        # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
+        stops = []
+        for (n, _), inv, log, code in zip(part, todo, logs, codes):
+            if out(wt, "rev-parse", "HEAD") != head:
+                raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
+            if why := land_cache.unusable(code, log):
+                stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
+                continue
+            check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
+            print(check.stdout, end="")
+            flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
+                wt, inv, log, check.stdout, logdir, f"{round_no}-{n}", python, remote_pytest.run,
+                tested_sha=head)
+            if out(wt, "rev-parse", "HEAD") != head:
+                raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
+            if check.returncode != 0 and not flaky:
+                stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
+                land_cache.failed(wt, inv, True)
+                continue
+            land_cache.failed(wt, inv, False)
+            if check.returncode == 0:
+                keep(inv, log)
+            done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
+        return stops
+
+    # What failed last time runs alone first: failing again stops before the rest spends the test PCs.
+    numbered = list(enumerate(todo, 1))
+    first = land_cache.failed_first(wt, todo)
+    parts = ([[x for x in numbered if x[1] in first], [x for x in numbered if x[1] not in first]]
+             if first and len(first) < len(todo) else [numbered])
+    for i, part in enumerate(parts):
+        if stops := batch(part):
+            rest = sum(map(len, parts[i + 1:]))
+            raise Stop("\n".join(stops) + (f"\n(failed last run too; {rest} other invocation(s) not run)"
+                                           if rest else ""))
     if args.node:
         mjs = sorted(str(p.relative_to(wt).as_posix()) for inv in invocations for t in inv
                      if _test_dir(t) for p in (wt / _test_dir(t) / "web").glob("**/*.mjs"))
@@ -399,6 +435,11 @@ def land(args) -> int:
         except Exception as exc:
             print(f"[land] warning: worktree prune failed, landing continues: {exc}")
     python = sys.executable
+    if args.no_queue and not args.dry_run:
+        holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
+        if holders:  # a landing outside the queue mid-turn gave that turn another round (2026-10-25, 22:52)
+            raise Stop(f"--no-queue refused: {land_queue.describe(holders[:1])} holds its turn. Wait, or stop it"
+                       " first during an incident")
     if not (args.no_queue or args.dry_run):
         before = out(wt, "rev-parse", "main")
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
@@ -425,13 +466,6 @@ def land(args) -> int:
             resolved = merge(wt, main_sha, branch, python, args.dry_run)
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                            + (f", auto-resolved {resolved}" if resolved else ""))
-            gaps, dropped = landed_gaps(wt) if not args.dry_run else (b"", [])
-            if dropped:  # merge=union brought back lines main removed when those ADRs landed
-                (wt / ADR_GAPS).write_bytes(gaps)
-                git(wt, "add", "--", ADR_GAPS)
-                git(wt, "commit", "-m", f"chore(adr): drop adr_gaps lines of landed {', '.join(dropped)}")
-                print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
-                summary.append(f"round {round_no}: dropped landed ADR gap(s) {dropped} from {ADR_GAPS}")
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
         size_check(wt, main_sha, candidate, python)
@@ -450,7 +484,7 @@ def land(args) -> int:
             elif full_main:
                 # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
                 # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
-                invocations, note = select(wt, full_main, python, head=main_sha)
+                invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
                 reusable = False  # the FULL tier ran on an earlier candidate
                 summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
@@ -539,6 +573,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
     try:
+        wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
+        code = land_checks.landed_copy(Path(args.main_checkout) if args.main_checkout else main_checkout(wt),
+                                       sys.argv[1:] if argv is None else argv)
+        if code is not None:
+            return code
         return land(args)
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)

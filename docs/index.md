@@ -340,7 +340,9 @@
 ## 교훈 (docs/solutions)
 
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
+- [모듈 logs.md 의 BOM 상태가 제각각이라 append 만 해도 append-only 검사가 깨진다](solutions/workflow-issues/logs-md-bom-states-vary-preserve-per-file-2026-10-25.md)
 - [PowerShell 한글 저널 append가 UTF-8을 망가뜨린다 (2026-10-04, 4회)](solutions/workflow-issues/powershell-utf8-append-mangles-korean-journals.md)
+- [병합 해결 중 main이 움직이면 스쿼시 커밋이 동료 착지를 되돌릴 수 있다](solutions/workflow-issues/squash-after-stale-merge-can-revert-concurrent-landings-2026-10-25.md)
 - [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험
@@ -351,7 +353,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · Monitoring 기존 원천 수집·durable 집계·읽기 API
-- 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
-- 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
-- 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
-- 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인
+- 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
+- 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다
+- 2026-10-26 · uncommitted · fix(land): 지난번 실패한 시험 묶음을 먼저 돌린다
+- 2026-10-26 · uncommitted · fix(land): 다시 시도하면 실패한 시험 묶음만 다시 돈다

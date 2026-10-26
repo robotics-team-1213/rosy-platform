@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
-- 2026-10-25 · 055f40747f · signing 설치 closure와 provenance 회귀 통과
-- 2026-10-25 · 9f0df4f99b · 설치형 updater 복구 시험과 공개 digest inventory
-- 2026-10-25 · 4fdf8c9fee · 동적 서명 소비자 호환과 추가 회귀
-- 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
+- 2026-10-26 · 9816e56bd9 · Site updater pure split verified
+- 2026-10-26 · uncommitted · Site updater runtime extraction before migration
+- 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
+- 2026-10-26 · 007e6c3b5a · Learning UI 설정·보관 흐름 source 검증 완료 (D-884)
+- 2026-10-26 · uncommitted · Learning 저장 설정 UI와 준비 파이프라인 closure (D-884)

@@ -4706,6 +4706,18 @@
 - 증거: [검증 기록](../../docs/validation/event-reconnect-replay-2026-10-25/result.md). 신규 RED5건과 durable replay 보존 뒤 관련 원격98개 통과, skip0/NEW0. 원본 ID·내용·seq와 audit/projection 한 번 기록을 단언한다.
 - gate 변화: SOURCE 회귀만 확인했다. 구 peer·메모리 재시작·실물 수용과 영속 outbox는 보장하지 않는다. CE 해당 없음: 판단은 정본 ADR·회귀로 복원된다.
 
+## 2026-10-25 · 4ed200d0ee · 군집 세션 무장 경로 의미 보존 분리
+
+- 변경: 기존 네 메서드와 enum을 같은 패키지에 옮겨 session628→520줄. 기존 export·logger·정리 순서를 유지하고 안전 분류와 ratchet를 함께 반영했다.
+- 증거: [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). 원격 기준108개, 추출·기능 회귀123개 통과, skip0/NEW0. 독립 검토 승인.
+- gate 변화: 준비 추출만 검증했다. FULL 착지·신선도 소비자·실물 수용은 별도다. CE 해당 없음.
+
+## 2026-10-25 · uncommitted · Swarm lifecycle extraction integration preparation
+
+- Change: merged main d93c306e3f and pinned C0 commit 94d27806d2 on refactor/swarm-reference-stream-land without production-code conflicts.
+- Evidence: Git blob comparison and [integration record](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md). Static integration checks only; no new remote pass for this integrated HEAD.
+- gate 변화: unchanged. Official FULL testing and landing await C0 landing confirmation and GO. CE: not applicable.
+
 ## 2026-10-25 · uncommitted · feat(fleet): D-865 P2a policy admission decision core
 
 - 변경: fleet/server/missions/policy_admission.py 신설(설정 해석·운영자 전환·상한·감사 판정 core), test/test_policy_admission_core.py 추가, D-865 실행 설계 P2 상태(P2a/P2b 분리) 표시.
@@ -4721,6 +4733,19 @@
 - gate 변화: 없음.
 - 결정: 없음.
 - 교훈: 없음
+
+## 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
+
+- Change: owner-local API holds existing declarations, the Decision facade supplies existing planning choices, and actual lifecycle/arming/relay safety behavior stays in tagged owners. No frozen violation growth or wire change.
+- Evidence: official source9f9fc5846d two separation failures versus main6abf6a8a7e two passes; new sourcecac7a23477 API/planning guards RED3 and emergency guard PASS1 remotely. All22 nonconstructor lifecycle method ASTs and original CORE C1 blobs remain identical. Independent implementation review and committed GREEN follow separately.
+- gate 변화: pending implementation verification; no landing/device/field claim. Existing structural-guard lesson will be updated only after GREEN.
+
+## 2026-10-25 · cc237b02c1 · D-875 committed verification
+
+- Change: independently reviewed owner-local API and actual Safety lifecycle separation; legacy exports/planner/default construction preserved, no frozen violation growth.
+- Evidence: committed remote architecture plus15 focused Fleet suites 578PASS5SKIP, NEW0/known0/flaky0, runnerexit0. Original22 lifecycle method ASTs and prepared2bea CORE3 Git blobs exact. Logs: %LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt and known-final.txt.
+- Gate: generate/lint/diff/syntax/size and official dry-run PASS; actual FULL/landing/device/field pending. Initial afba candidate sole CLI size failure retained externally; root-authorized own amendment removed one blankline, independently confirmed, then finalSHA rerun.
+- CE: root owns existing structural-guards lesson update with separate queued-FULL tooling unit; verified case draft supplied outside Git. Prior pending entry is superseded by this evidence.
 
 ## 2026-10-25 · uncommitted · feat(fleet): D-865 P2b policy admission HTTP surface
 
@@ -4738,6 +4763,27 @@
 - 결정: 없음.
 - 교훈: 없음
 
+## 2026-10-25 · c5b4bcf1b3 · D-875 최신 main 통합 검증
+
+- 변경: 최신 main의 motor_health API 선언을 정본 port에 보존하고 양쪽 기록·안전 등록·기존 크기 축소를 유지했다. D-868 착지 뒤 임시 gap을 제거했다.
+- 증거: 독립 안전 소스 리뷰 승인, 원격 architecture와 Fleet 15개 suite 590 passed, 5 skipped, NEW0/known0/flaky0. [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 원본 로그 위치와 커밋을 남겼다.
+- gate 변화: 없음. 공식 FULL·착지·배포·실물 수용은 별도다.
+- 교훈: 기존 구조 검사 선행 교훈에 반영된 D-875 경계 판단을 유지한다.
+
+## 2026-10-25 · 99a7d5c663 · D-875 exact formation API guard
+
+- Change: formation guard admits only two neutral API leaves, checks their required parent files and resolves relative/member spellings; existing prohibitions and other guards remain exact. No production source changes.
+- Evidence: tests-only75bff0bce4 remote RED43FAIL46PASS; reviewed correction99a7d5c663 remote93PASS0SKIP, then expanded679PASS5SKIP; each GREEN NEW0/known0/flaky0, runnerexit0. Exact logs in %LOCALAPPDATA%/Temp/rosy-formation-api-boundary/.
+- Gate: per-commit source size and generate/lint/diff passed (lint0errors35warnings). Actual main merge, independent whole-branch review, FULL/landing and field acceptance pending root.
+- CE: verified case facts supplied outside Git for root-owned existing structural-guards lesson update.
+
+## 2026-10-25 · d0d02fe6e4 · D-875 소유 모듈 경계 검사까지 최신 main 검증
+
+- 변경: 검증된 main의 정책 구현·정본 시험 묶기와 C1 경계 수정을 통합했다. 실제 ADR이 있는 D-874·D-875 임시 gap만 정리했다.
+- 증거: 독립 통합 소스 리뷰 승인, owner boundary를 포함한 architecture/Fleet 원격 679 passed, 5 skipped, NEW0/known0/flaky0. [검증 기록](../../docs/validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 이전 FULL 실패와 새 소스를 구분했다.
+- gate 변화: 없음. 최신 소스의 공식 FULL·착지·게시·배포·실물 수용은 별도다.
+- 교훈: 기존 구조 검사 선행 교훈에 이미 안내된 소유 모듈 시험 목록을 함께 실행해야 함을 반영했다.
+
 ## 2026-10-25 · uncommitted · 작업 종류 poll의 실제 화면 반영을 기다린다
 
 - 원인: 공개 main02c80a7c20의 CI40179928359 Fleet2of5에서 종류 제거 후 즉시 is_hidden 판정이 실패했다. 가상 timer 진행은 Python route 응답과 refresh DOM 반영 완료를 보장하지 않는다. 동일 종류 추가는 이미 Playwright expect로 기다리고 있었다.
@@ -4750,3 +4796,41 @@
 - 변경: `/api/fleet/monitoring`이 기존 읽기 권한으로 마지막 SharedGather 캐시만 projection한다. 완료된 gather의 본문·두 시각을 한 tuple로 게시하고 조회 중 gather·로봇 요청·교통·인계를 실행하지 않는다. 민감 본문을 제외하고 나이를 보존하며 검증 불가 시 공개 503 코드만 반환한다.
 - 증거: `09b50defff` 원격 RED에서 경로 미구현404 3건·getter 미구현11건을 확인했다. 실제 Fleet HTTP·금지된 gather·0기준 시계·부분 게시·비유한 시계·민감 필드 제외를 회귀로 고정했다. 독립 계약 검토에서 차단 사항이 없었다. GREEN 결과는 커밋 SHA의 원격 로그로 확인한다.
 - gate 변화: 기존 모듈 gate를 올리지 않는다. 독립 Monitoring 수집기·화면·배포·장치 수용은 별도다. CE: 해당 없음.
+
+## 2026-10-25 · uncommitted · feat(fleet): D-865 P2c 정책 승인 자동 admit 루프·지속 상한·감사 저장소
+
+- 변경: missions/policy_admission_worker.py(주기 틱: RESOLVED 제안 → 승인 종류·robot 자원 → 범위 판정 → mission_service.admit, generation 은 제안의 source_dispatch_generation 사용), missions/policy_admission_audit.py(SQLite 감사·상한, LineStuckAnswerLog 패턴), proposal_store.list_resolved, core issued_provider(재시작 생존 상한), 콘솔 설정이 tasks_db 있을 때 감사 저장소 연결, 라우트 인스톨러의 startup/shutdown 루프 기동(app.py 0줄 증가), 시험 2건(worker 8 + audit 3).
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. digest 재판정(resolver)은 운영 candidate_resolver 주입이 확인되지 않아 1차 제외, 후속 조각.
+- gate 변화: 없음. 설정 없으면 루프·상한 모두 비활성이고 현행 승인 동작 불변.
+- 결정: D-865 P2c 산출물.
+- 교훈: docs/solutions/workflow-issues/ 에 BOM 상태 보존·스쿼시 후 main-diff 경로 검사 2건 기록(같은 커밋).
+
+## 2026-10-25 · uncommitted · fix(fleet): 감사 저장소 append 의 reason 기본값 수정
+
+- 변경: policy_admission_audit.append 의 reason 을 선택 인자로(Default None) — ADMITTED 판정은 사유가 없다. 착지 회차 NEW 10건 전부 이 TypeError 였다.
+- 증거: 착지 로그 run-1-2.txt 의 TypeError 로 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · fix(fleet): 가짜 저장소가 list_resolved 지원 시 그대로 쓰기
+
+- 변경: proposal_queries.list_resolved 이 store 에 list_resolved 메서드가 있으면 그 값을 그대로 쓰게 — 착지 회차 NEW 7건 전부 FakeProposals 에 purge_expired 가 없어 AttributeError. 실제 ProposalStore 는 SQL 경로, 가짜는 메서드 경로.
+- 증거: 착지 로그 AttributeError 로 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · fix(fleet): worker 상한 연결·로봇 묶음 우선 검사 순서 수정
+
+- 변경: worker._consider 가 (1) robots!=1 검사를 hold_reason 앞으로 옮겨 ROBOT_UNBOUND 가 정확히 기록되게, (2) 시험 _worker 가 core 에 audit.issued_count 를 연결해 SQLite 상한이 core 에 반영되게. 착지 회차 NEW 2건의 원인.
+- 증거: 단독 재실행 로그로 IndexError(로봇 없는 제안)·assert 3!=2(상한 미반영) 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+
+## 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
+
+- 변경: `host_control`의 `HOST_ACTIONS`(ai·model `clean-storage`), `ACTION_NOT_ALLOWED`·`NO_STORAGE_SERVICE` 코드, 설치 화면의 [시험 저장소 정리] 버튼과 디스크·GPU 여유 표시.
+- 증거: `operations/fleet/test/test_host_control.py` 원격 실행.
+- gate 변화: 없음. 버튼은 catalogue가 그 동작을 내줄 때만 보인다.

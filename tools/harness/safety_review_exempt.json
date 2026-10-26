@@ -502,5 +502,21 @@
     "commit": "bb6a4e38c22714e05eeb601351c69a52f250a960",
     "original_commit": "82c3bff42e31f13ee213b6bf782919a822b68971",
     "reason": "PR #167 squash commit omitted the reviewed source Safety-Review trailer. Independent read-only review agent, 2026-10-23: APPROVE for bc6edabfe0/82c3bff42e against base d227b0c2c5; traced report_field/src.field -> _status_message -> _status_loop -> Rosy Cam parseStatus/CornerGuide/StreamScreen; the change only adds the phone-facing status field_state and corners_needed 0 and does not touch sightings, homography, authentication, motion or connection lifecycle. The squash diff equals the reviewed branch diff (same 17 files, identical ingest.py patch-id); PR CI 39963705171 passed. Provenance only; no production code, safety policy or device/field acceptance change."
+  },
+  {
+    "commit": "85cfdeb4d8092d3a2dbb798c5fcb4f0938172e00",
+    "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Measured camera preview lifecycle (D-775): ingest.py only adds a preview-only MeasuredPreview, a measured-status view behind the existing preview_signer source-bound auth, and a geometry observe hook; map-plane response moved verbatim to preview_plane.py. No sighting, pose, homography-for-tracking, camera auth or stop path changed. Covered by test_measured_preview.py (8 tests) plus Fleet measured_calibration tests. No tests rerun by the reviewer."
+  },
+  {
+    "commit": "9a8d9ba2cc997a0d36aa4175ba2f40138c5ab5ff",
+    "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Preview-only: ingest.py passes source to MeasuredPreview.session_id so the measured preview session rotates on any frame geometry change and stale confirmations are cleared; grant consumption is tightened, not relaxed. No sighting, pose, auth, tracking homography or stop path touched. Covered by updated test_measured_preview.py. No tests rerun by the reviewer."
+  },
+  {
+    "commit": "a77ac1b3743b3c2cb7526041aa77dd58638169c6",
+    "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Preview-only perf fix: ingest.py awaits preview_plane.rectified_jpeg, which runs rectify_jpeg off the event loop once per (source, settings, frame) and shares the result; auth, per-viewer rate limits and the 422 error path are unchanged. No sighting, pose, camera auth, tracking homography or stop path touched. Covered by test_rectified_preview_encodes_once_per_frame_for_every_viewer. No tests rerun by the reviewer."
+  },
+  {
+    "commit": "7fb358aaaa2197ccdfbeab6f04cf361e6291c8c4",
+    "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Deletes 11 origin-merge duplicates under fleet/server/site_observation (deletions only). 10 are byte-identical to blobs kept at HEAD under server/recognition or server/pose; sightings_config.py differs from the kept recognition/sightings_config.py only by function order, docstring and an unused import (same logic). Nothing at HEAD imports fleet.server.site_observation."
   }
 ]

@@ -19,6 +19,12 @@ pytestmark = pytest.mark.skipif(shutil.which("sh") is None or os.name == "nt", r
 HEALTHY = "60 5 1.2 24 7200 -"
 LOW_MEMORY = "2 95 3.0 24 7200 -"
 UNIT_DOWN = "60 5 1.2 24 7200 pinky-backend.service"
+# D-883: then ~/rosy-test free_kb use%, / free_kb use%, GPU used total MiB
+GIB = 2**20  # KiB per GiB
+RAM = f"{32 * GIB} {16 * GIB} 12 48"  # MemTotal MemAvailable kB, CPU busy%, CPU temp C
+NO_GPU = "- - - -"
+DISK_OK = f"{HEALTHY} {200 * GIB} 40 {100 * GIB} 50 2048 24576 37 61 {RAM}"
+DISK_FULL = f"{HEALTHY} {int(2.6 * GIB)} 100 {100 * GIB} 50 {NO_GPU} {RAM}"
 
 
 def _recovery(role):
@@ -66,7 +72,44 @@ def test_a_healthy_pc_is_never_touched(tmp_path):
     assert row["state"] == "ok"
     assert row["resources"] == {
         "avail_pct": 60, "swap_pct": 5, "load": 1.2, "cores": 24, "uptime_s": 7200, "down": [],
+        # a six-field reply: disk and RAM size unknown, not healthy; the RAM warning still uses avail_pct
+        "disk": None, "disk_low": None, "gpu": None, "memory": None, "memory_low": False, "cpu": None,
     }
+
+
+def test_disk_and_gpu_headroom_are_recorded(tmp_path):
+    assert _guard(tmp_path, DISK_OK) == ["health"]
+    row = json.loads((tmp_path / "state/status.json").read_text())["pc1"]
+    assert row["state"] == "ok" and row["resources"]["disk_low"] is False
+    assert row["resources"]["disk"] == {"test_free_gb": 200.0, "test_use_pct": 40,
+                                        "root_free_gb": 100.0, "root_use_pct": 50}
+    assert row["resources"]["gpu"] == {"used_mib": 2048, "total_mib": 24576, "util_pct": 37, "temp_c": 61}
+    assert row["resources"]["cpu"] == {"busy_pct": 12, "temp_c": 48}
+    assert row["resources"]["memory"] == {"total_gb": 32.0, "avail_gb": 16.0}
+    assert row["resources"]["memory_low"] is False
+
+
+def test_low_ram_is_a_report_only_warning_before_the_memory_ladder(tmp_path):
+    answer = f"8 10 1.2 24 7200 - {200 * GIB} 40 {100 * GIB} 50 {NO_GPU} {32 * GIB} {int(2.5 * GIB)} - -"
+    assert _guard(tmp_path, answer, runs=7) == ["health"] * 7
+    row = json.loads((tmp_path / "state/status.json").read_text())["pc1"]
+    assert row["state"] == "memory-low" and row["bad"] == 0 and _actions(tmp_path) == []
+    assert row["resources"]["memory"] == {"total_gb": 32.0, "avail_gb": 2.5}
+    assert row["resources"]["cpu"] == {"busy_pct": None, "temp_c": None}  # unreadable, not zero
+
+
+@pytest.mark.parametrize("answer", [DISK_FULL, f"{HEALTHY} {200 * GIB} 95 {100 * GIB} 50 {NO_GPU} {RAM}"])
+def test_a_low_disk_is_reported_and_never_restarts_or_reboots(tmp_path, answer):
+    """2026-10-26: a 100% full AI PC; a reboot frees nothing, clean-storage is the operator's call."""
+    assert _guard(tmp_path, answer, runs=7, conf="ai pc op@ai 05:50-06:20\n") == ["health"] * 7
+    row = json.loads((tmp_path / "state/status.json").read_text())["ai"]
+    assert row["state"] == "disk-low" and row["bad"] == 0 and row["resources"]["disk_low"] is True
+    assert row["resources"]["gpu"] is None and _actions(tmp_path) == []
+
+
+def test_a_low_disk_with_low_memory_keeps_the_memory_ladder(tmp_path):
+    assert _guard(tmp_path, f"{LOW_MEMORY} {GIB} 99 {GIB} 99 {NO_GPU} {RAM}", runs=3) == ["health"] * 3 + ["reboot"]
+    assert json.loads((tmp_path / "state/status.json").read_text())["pc1"]["resources"]["disk_low"] is True
 
 
 @pytest.mark.parametrize("junk", ["", "{not json", "[1, 2]"])
@@ -186,6 +229,9 @@ def _remote(tmp_path, command, units="pinky-backend.service\n", role=None):
                        "logger": "", "sudo": 'echo "sudo $*" >> "$CALLS"'}.items():
         (bin_dir / name).write_text(f"#!/bin/sh\n{body}\nexit 0\n")
         (bin_dir / name).chmod(0o755)
+    if not (bin_dir / "nvidia-smi").exists():  # a GPU test PC must not put its real GPU in the reply
+        (bin_dir / "nvidia-smi").write_text("#!/bin/sh\nexit 127\n")
+        (bin_dir / "nvidia-smi").chmod(0o755)
     (tmp_path / "units").write_text(units)
     if role:
         (tmp_path / "role").write_text(role + "\n")
@@ -200,8 +246,23 @@ def _remote(tmp_path, command, units="pinky-backend.service\n", role=None):
 def test_the_forced_command_reports_down_units_in_health(tmp_path):
     result, _ = _remote(tmp_path, "health")
     fields = result.stdout.split()
-    assert result.returncode == 0 and len(fields) == 6
+    assert result.returncode == 0 and len(fields) == 18, result.stdout
     assert all(f.replace(".", "").isdigit() for f in fields[:5]) and fields[5] == "pinky-backend.service"
+    assert all(f.isdigit() for f in fields[6:10]) and fields[10:14] == ["-", "-", "-", "-"]  # no GPU
+    total, avail = int(fields[14]), int(fields[15])  # RAM kB from /proc/meminfo
+    assert 0 < avail <= total and abs(int(fields[0]) - 100 * avail // total) <= 2  # two meminfo reads
+    assert 0 <= int(fields[16]) <= 100  # CPU busy over one second of /proc/stat
+    assert fields[17] == "-" or -40 <= int(fields[17]) <= 120  # a VM test PC may have no thermal zone
+
+
+def test_the_forced_command_sums_gpu_memory_and_ignores_a_broken_driver(tmp_path):
+    (tmp_path / "rbin").mkdir()
+    gpu = tmp_path / "rbin" / "nvidia-smi"
+    gpu.write_text("#!/bin/sh\nprintf '1000, 8000, 20, 71\\n500, 8000, 85, 64\\n'\n")
+    gpu.chmod(0o755)
+    assert _remote(tmp_path, "health")[0].stdout.split()[10:14] == ["1500", "16000", "85", "71"]
+    gpu.write_text("#!/bin/sh\necho 'NVIDIA-SMI has failed'; exit 9\n")
+    assert _remote(tmp_path, "health")[0].stdout.split()[10:14] == ["-", "-", "-", "-"]
 
 
 def test_the_site_role_checks_system_units_and_others_user_units(tmp_path):

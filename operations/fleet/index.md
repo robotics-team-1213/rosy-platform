@@ -64,6 +64,7 @@
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 | D-801 | 관제 콘솔 로봇 실시간 영상은 사이트 발급 읽기 위임과 SFU 기본·사이트 PC MCU 모자이크 혼합 토폴로지를 쓴다(D-789 Decision 3 대체) |
+| D-875 | Swarm owner-local API separates planning from safety lifecycle |
 
 ## 계획·결과 문서
 
@@ -101,8 +102,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · uncommitted · D-876 캐시 전용 모니터링 producer
-- 2026-10-25 · uncommitted · 작업 종류 poll의 실제 화면 반영을 기다린다
-- 2026-10-25 · uncommitted · fix(fleet): 정책 승인 라우트의 가드 dependencies 형태 수정
-- 2026-10-25 · uncommitted · feat(fleet): D-865 P2b policy admission HTTP surface
-- 2026-10-25 · uncommitted · test(fleet): 정책 승인 최소 절 시험의 enabled 기대 수정
+- 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
+- 2026-10-25 · uncommitted · fix(fleet): worker 상한 연결·로봇 묶음 우선 검사 순서 수정
+- 2026-10-25 · uncommitted · fix(fleet): 가짜 저장소가 list_resolved 지원 시 그대로 쓰기
+- 2026-10-25 · uncommitted · fix(fleet): 감사 저장소 append 의 reason 기본값 수정
+- 2026-10-25 · uncommitted · feat(fleet): D-865 P2c 정책 승인 자동 admit 루프·지속 상한·감사 저장소
