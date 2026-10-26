@@ -5,6 +5,7 @@ import functools
 import fcntl
 import hashlib
 import http.server
+import io
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ import signal
 import socket
 import stat
 import subprocess
+import tarfile
 import threading
 import time
 from urllib.request import Request, urlopen
@@ -120,6 +122,7 @@ class Guest:
         self.root = self.directory / "qemu-root"
         self.process = self.server = self.thread = self.stderr = None
         self.ssh_port = None
+        self.instance_id = "rosy-system-" + str(uuid.uuid4())
 
     def command(self, ssh_port, seed_port):
         d = self.directory
@@ -162,7 +165,7 @@ class Guest:
         public = (self.directory / "guest-key.pub").read_text().strip()
         (seed / "user-data").write_text("#cloud-config\ndisable_root: false\nssh_pwauth: false\nusers:\n"
             f"  - name: root\n    lock_passwd: true\n    ssh_authorized_keys:\n      - {public}\n")
-        (seed / "meta-data").write_text(f"instance-id: rosy-system-{uuid.uuid4()}\nlocal-hostname: rosy-system-guest\n")
+        (seed / "meta-data").write_text(f"instance-id: {self.instance_id}\nlocal-hostname: rosy-system-guest\n")
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(_Seed, directory=str(seed)))
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -182,6 +185,43 @@ class Guest:
         if result.returncode:
             raise ValueError("guest command failed: " + result.stderr.decode(errors="replace")[-3000:])
         return result.stdout.decode("utf-8", errors="replace")
+
+    def provision_source(self, source):
+        if self.run("cat /var/lib/cloud/data/instance-id").strip() != self.instance_id:
+            raise ValueError("guest instance does not belong to this SYSTEM fixture")
+        self.run("test ! -e /run/rosy-system-guest")
+        self.run("test \"$(blockdev --getsize64 /dev/vdb)\" = 17179869184")
+        self.run("! findmnt -rn -S /dev/vdb")
+        self.run("mkfs.ext4 -F -q -m 0 -E lazy_itable_init=0,lazy_journal_init=0 /dev/vdb", timeout=300)
+        self.run("mkdir -p /work")
+        self.run("mount -o nodev,nosuid /dev/vdb /work")
+        # All package/service mutations are inside the UUID-bound disposable guest.
+        self.run("apt-get update -qq", timeout=600)
+        self.run("DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=120 install -y -qq "
+            "python3-pytest python3-yaml python3-cryptography openssl e2fsprogs dosfstools mtools util-linux udev "
+            "squashfs-tools rauc=1.11.3-2 rsync", timeout=900)
+        source = Path(source)
+        content = io.BytesIO()
+        def public_source(info):
+            if "__pycache__" in Path(info.name).parts or info.name.endswith(".pyc"):
+                return None
+            info.uid = info.gid = 0
+            info.uname = info.gname = "root"
+            return info
+        with tarfile.open(fileobj=content, mode="w:gz", compresslevel=1) as archive:
+            for name in ("deploy/robot/pinky_pro", "deploy/hosts/common", "contracts/foundation", "tools/harness", "test"):
+                archive.add(source / name, arcname=name, filter=public_source)
+            for path in source.glob("*.yaml"):
+                archive.add(path, arcname=path.name, filter=public_source)
+        raw = content.getvalue()
+        if len(raw) > 128 * 1024**2:
+            raise ValueError("SYSTEM source handoff exceeds its expected size")
+        self.run("cat > /work/source.tar.gz", data=raw, timeout=300)
+        if self.run("sha256sum /work/source.tar.gz").split()[0] != hashlib.sha256(raw).hexdigest():
+            raise ValueError("SYSTEM source handoff digest differs")
+        self.run("mkdir /work/source")
+        self.run("tar -xzf /work/source.tar.gz -C /work/source", timeout=300)
+        self.run("cat > /run/rosy-system-guest", data=self.instance_id.encode("ascii"))
 
     def __enter__(self):
         try:
