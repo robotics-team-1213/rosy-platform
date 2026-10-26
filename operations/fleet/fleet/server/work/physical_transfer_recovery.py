@@ -56,18 +56,36 @@ def _assessment(detail, grant, policy):
     return detail
 
 
+def _retained_execution(store, connection, mission_id):
+    row = connection.execute("SELECT grant_json FROM fleet_physical_transfer_attempts WHERE mission_id=?",
+                             (mission_id,)).fetchone()
+    if row is None:
+        raise KeyError(mission_id)
+    grant = FleetArmTransferGrant.model_validate_json(row[0])
+    return PhysicalTransferExecution(store, grant_ttl_s=(grant.expires_at - grant.issued_at).total_seconds())
+
+
+def retained_snapshot(execution, mission_id):
+    with closing(execution.store._journal._connect()) as connection:
+        connection.execute("BEGIN")
+        try:
+            retained = _retained_execution(execution.store, connection, mission_id)
+        except KeyError:
+            return None
+        return retained._state(connection, mission_id)
+
+
 def _parent(execution, connection, mission_id):
     store = execution.store
     job = _job(store, connection, mission_id)
     if _event(connection, mission_id, ORIGIN) or _event(connection, mission_id, CREATED):
         raise MissionConflict("one recovery child is the complete retry budget")
-    row = connection.execute("SELECT grant_json FROM fleet_physical_transfer_attempts WHERE mission_id=?",
-                             (mission_id,)).fetchone()
-    if row is None:
-        raise MissionConflict("recovery requires a retained original attempt")
-    grant = FleetArmTransferGrant.model_validate_json(row[0])
-    retained = PhysicalTransferExecution(store, grant_ttl_s=(grant.expires_at - grant.issued_at).total_seconds())
+    try:
+        retained = _retained_execution(store, connection, mission_id)
+    except KeyError as exc:
+        raise MissionConflict("recovery requires a retained original attempt") from exc
     state = retained._state(connection, mission_id)
+    grant = FleetArmTransferGrant.model_validate(state["grant"])
     latest = retained._last_receipt(connection, mission_id)
     if latest is None or not state["first_send_committed"]:
         raise MissionConflict("recovery requires the original submitted Action receipt")
@@ -169,7 +187,18 @@ def _lineage_record(store, connection, mission_id):
     receipts = [receipt for receipt in receipts if receipt["journal_event_id"] == detail["source_receipt_event_id"]]
     if len(receipts) != 1 or _digest(receipts[0]) != detail["source_receipt_digest"]:
         raise MissionConflict("recovery lost its original receipt")
-    verify_phase_receipt(grant, receipts[0], phase_ids=("approach", "grasp", "transfer", "release"))
+    receipt = verify_phase_receipt(grant, receipts[0], phase_ids=("approach", "grasp", "transfer", "release"))
+    source_digest = detail["source_assessment_digest"]
+    if source_digest is None:
+        if receipt.state.value != "FAILED":
+            raise MissionConflict("successful Action recovery requires its retained failed assessment")
+    else:
+        assessments = [json.loads(row[0]) for row in connection.execute(
+            "SELECT detail_json FROM fleet_cell_events WHERE mission_id=? AND event_type=?", (parent_id, ASSESSED))]
+        assessments = [item for item in assessments if _digest(item) == source_digest]
+        if (receipt.state.value != "SUCCEEDED" or len(assessments) != 1
+                or _assessment(assessments[0], grant, store.installation.policy)["task_outcome"] != "failed"):
+            raise MissionConflict("recovery lost its original failed task assessment")
     return detail
 
 
@@ -191,10 +220,9 @@ def validate_recovery_preconditions(store, connection, mission_id, observations)
         raise MissionConflict("child submission requires new observations after recovery approval")
 
 
-def recover_transfer(execution, parent_id, *, proposer, principal, expected_request_digest,
-                     expected_receipt_event_id, expected_assessment_digest, expected_generation,
-                     observations, authenticated_producer_id, capabilities, capabilities_observed_at_ns):
-    store, policy = execution.store, execution.store.installation.policy
+def _check_request(store, proposer, principal, expected_request_digest, expected_receipt_event_id,
+                   expected_assessment_digest, expected_generation, observations):
+    policy = store.installation.policy
     proposed_by, actor = _principal(proposer, propose=True), _principal(principal, operator=True)
     if proposed_by == actor or policy.producer_id in {proposed_by, actor}:
         raise PermissionError("recovery requires independent proposer, operator and observer")
@@ -207,26 +235,58 @@ def recover_transfer(execution, parent_id, *, proposer, principal, expected_requ
     if (not isinstance(observations, (tuple, list)) or len(observations) != 2
             or any(not isinstance(sample, TransferObservation) for sample in observations)):
         raise ValueError("recovery requires two immutable World observations")
-    observations = tuple(observations)
+    return proposed_by, actor, tuple(observations)
+
+
+def _replay(store, connection, parent_id, proposed_by, actor, expected_request_digest,
+            expected_receipt_event_id, expected_assessment_digest, expected_generation,
+            observations, authenticated_producer_id):
+    parent = _job(store, connection, parent_id)
+    if parent["proposal_principal_id"] != proposed_by:
+        raise PermissionError("only the original proposer may propose its recovery")
+    prior = _event(connection, parent_id, CREATED)
+    if prior is None:
+        return None
+    prior = _lineage_record(store, connection, parent_id)
+    context = TransferEvidenceContext.model_validate_json(_json(prior["evidence"]["context"]))
+    evidence = json.loads(evidence_document(context, observations))
+    request = _request(parent_id, proposed_by, actor, expected_request_digest, expected_receipt_event_id,
+        expected_assessment_digest, expected_generation, authenticated_producer_id, evidence)
+    if prior["recovery_request_digest"] != _digest(request):
+        raise MissionConflict("recovery request changed")
+    return _job(store, connection, prior["child_mission_id"])
+
+
+def find_recovery(execution, parent_id, *, proposer, principal, expected_request_digest,
+                  expected_receipt_event_id, expected_assessment_digest, expected_generation,
+                  observations, authenticated_producer_id):
+    proposed_by, actor, observations = _check_request(execution.store, proposer, principal,
+        expected_request_digest, expected_receipt_event_id, expected_assessment_digest, expected_generation, observations)
+    with closing(execution.store._journal._connect()) as connection:
+        connection.execute("BEGIN")
+        return _replay(execution.store, connection, parent_id, proposed_by, actor, expected_request_digest,
+            expected_receipt_event_id, expected_assessment_digest, expected_generation, observations,
+            authenticated_producer_id)
+
+
+def recover_transfer(execution, parent_id, *, proposer, principal, expected_request_digest,
+                     expected_receipt_event_id, expected_assessment_digest, expected_generation,
+                     observations, authenticated_producer_id, capabilities, capabilities_observed_at_ns):
+    store, policy = execution.store, execution.store.installation.policy
+    proposed_by, actor, observations = _check_request(store, proposer, principal, expected_request_digest,
+        expected_receipt_event_id, expected_assessment_digest, expected_generation, observations)
     with closing(store._journal._connect()) as connection:
         connection.execute("BEGIN IMMEDIATE")
-        parent = _job(store, connection, parent_id)
-        if parent["proposal_principal_id"] != proposed_by:
-            raise PermissionError("only the original proposer may propose its recovery")
-        prior = _event(connection, parent_id, CREATED)
-        if prior is not None:
-            context = TransferEvidenceContext.model_validate_json(_json(prior["evidence"]["context"]))
-        else:
-            parent, grant, latest, assessment, context = _parent(execution, connection, parent_id)
+        child = _replay(store, connection, parent_id, proposed_by, actor, expected_request_digest,
+            expected_receipt_event_id, expected_assessment_digest, expected_generation, observations,
+            authenticated_producer_id)
+        if child is not None:
+            return child
+        parent, grant, latest, assessment, context = _parent(execution, connection, parent_id)
         evidence = json.loads(evidence_document(context, observations))
         request = _request(parent_id, proposed_by, actor, expected_request_digest, expected_receipt_event_id,
             expected_assessment_digest, expected_generation, authenticated_producer_id, evidence)
         request_digest = _digest(request)
-        if prior is not None:
-            prior = _lineage_record(store, connection, parent_id)
-            if prior["recovery_request_digest"] != request_digest:
-                raise MissionConflict("recovery request changed")
-            return _job(store, connection, prior["child_mission_id"])
         if (grant.request_digest != expected_request_digest
                 or latest["receipt"]["journal_event_id"] != expected_receipt_event_id
                 or (None if assessment is None else _digest(assessment)) != expected_assessment_digest):

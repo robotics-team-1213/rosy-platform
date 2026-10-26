@@ -8,7 +8,7 @@ from core_common.protocol.arm_transfer import ArmTransferCapability, FleetArmTra
 from .physical_transfer_store import PhysicalTransferRequest
 from .local_action_transport import LocalActionUnavailable
 from .physical_transfer_io import physical_io
-from .physical_transfer_recovery import recover_transfer
+from .physical_transfer_recovery import find_recovery, recover_transfer, retained_snapshot
 
 _LOG = logging.getLogger(__name__)
 
@@ -55,17 +55,19 @@ class PhysicalTransferDispatcher:
     def recover(self, mission_id, *, proposer, principal, expected_request_digest,
                 expected_receipt_event_id, expected_assessment_digest, expected_generation,
                 observations, authenticated_producer_id):
+        request = dict(proposer=proposer, principal=principal, expected_request_digest=expected_request_digest,
+            expected_receipt_event_id=expected_receipt_event_id, expected_assessment_digest=expected_assessment_digest,
+            expected_generation=expected_generation, observations=observations,
+            authenticated_producer_id=authenticated_producer_id)
         with physical_io(self._journal_path):
-            capabilities, observed_at_ns = self._capabilities()
-            child = recover_transfer(self.execution, mission_id, proposer=proposer, principal=principal,
-                expected_request_digest=expected_request_digest, expected_receipt_event_id=expected_receipt_event_id,
-                expected_assessment_digest=expected_assessment_digest, expected_generation=expected_generation,
-                observations=observations, authenticated_producer_id=authenticated_producer_id,
-                capabilities=capabilities, capabilities_observed_at_ns=observed_at_ns)
-            try:
-                prepared = self.execution.snapshot(child["mission_id"])
-            except KeyError:
-                prepared = self.prepare(child["mission_id"]) if child["status"] == "READY" else None
+            child = find_recovery(self.execution, mission_id, **request)
+            if child is None:
+                capabilities, observed_at_ns = self._capabilities()
+                child = recover_transfer(self.execution, mission_id, **request,
+                    capabilities=capabilities, capabilities_observed_at_ns=observed_at_ns)
+            prepared = retained_snapshot(self.execution, child["mission_id"])
+            if prepared is None and child["status"] == "READY":
+                prepared = self.prepare(child["mission_id"])
             return dict(job=child, execution=prepared)
 
     def submit(self, mission_id, *, observations, authenticated_producer_id):
