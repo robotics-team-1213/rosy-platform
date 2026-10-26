@@ -61,6 +61,7 @@ class SiteUpdater(SiteRuntimeIO):
         self.clock = clock
         self.dry_run = dry_run
         self._accepted_images = {}
+        self._runtime_proofs = {}
         self._functional_baseline = None
 
     # state
@@ -155,8 +156,11 @@ class SiteUpdater(SiteRuntimeIO):
         raise Rejected(f"release {tag} has no asset {name}")
 
     # host checks
-    def check_overrides(self, env: dict[str, str], commit: str) -> None:
-        check_overrides(env, commit, self._run, self._compose)
+    def check_overrides(self, env: dict[str, str], commit: str, *, folder: Path | None = None,
+                        env_file: Path | None = None, services=SERVICES) -> None:
+        def compose(env, *args, **kwargs):
+            return self._compose(env, *args, folder=folder, env_file=env_file, **kwargs)
+        check_overrides(env, commit, self._run, compose, services)
 
     def _prior_target(self) -> Path:
         """Return the installed candidate folder, migrating a real directory once."""
@@ -286,9 +290,25 @@ class SiteUpdater(SiteRuntimeIO):
         if (not self.paths.env_backup.is_file()
                 or read_env(self.paths.env_backup).get('ROSY_SITE_IMAGE_TAG') != transaction['current']):
             raise Refused('rollback backup does not match journal commit')
+        if transaction.get('migration') and (
+                read_env(self.paths.site_env).get('ROSY_SITE_IMAGE_TAG') != transaction['current']
+                or (self.paths.link.is_symlink() and self.paths.link.resolve() != previous.resolve())
+                or (self.paths.link.exists() and not self.paths.link.is_symlink() and previous.exists())):
+            raise Refused('physical relocation journal differs from the original current path')
         verification_path = previous if previous.exists() else self.paths.link
         self._verify(verification_path, loaded=True, expected_commit=transaction['current'],
                      env=read_env(self.paths.env_backup))
+        backup_env = read_env(self.paths.env_backup)
+        self.check_overrides(backup_env, transaction['current'], folder=verification_path,
+                             env_file=self.paths.env_backup,
+                             services=self._runtime_proofs[transaction['current']])
+        if not transaction.get('migration'):
+            outgoing = self.paths.candidates / transaction['commit']
+            if outgoing.is_symlink() or not outgoing.is_dir():
+                raise Rejected('outgoing canonical candidate is unavailable')
+            self._verify(outgoing, loaded=True, expected_commit=transaction['commit'], env=backup_env)
+            self._retire_postgres(backup_env, outgoing, transaction['commit'],
+                                  self._runtime_proofs[transaction['current']])
         if (transaction.get('migration') and not previous.exists()
                 and self.paths.link.is_dir() and not self.paths.link.is_symlink()):
             os.rename(self.paths.link, previous)
@@ -390,6 +410,7 @@ class SiteUpdater(SiteRuntimeIO):
         try:
             self._verify(self.paths.link, loaded=True, expected_commit=current,
                          env=env)
+            self.check_overrides(env, current, services=self._runtime_proofs[current])
             reason = self._containers_reason(env, current)
             if not reason:
                 self._functional_baseline, missing = functional_inventory(self.config, self.http)
@@ -406,6 +427,10 @@ class SiteUpdater(SiteRuntimeIO):
                 state.pop('previous', None)  # never invent rollback history for a manual switch
                 log('adopted-current', commit=current)
             release = self.select(self.list_releases(), current, state)
+        except Refused as error:
+            log('refused', reason=str(error))
+            state['last_run']['result'] = 'refused'
+            return EXIT_FAILED
         except Rejected as error:
             log('refused', reason=f'running candidate verification failed: {error}')
             state['last_run']['result'] = 'refused'
@@ -429,15 +454,14 @@ class SiteUpdater(SiteRuntimeIO):
             commit = commits.pop()
             if not self.is_newer(current, commit):
                 raise Rejected('candidate commit is not a strict descendant of the running commit')
-            self.check_overrides(env, commit)
             if self.dry_run:
                 log("would-install", tag=tag, commit=commit, current=current)
                 state["last_run"]["result"] = "dry-run"
                 return EXIT_OK
             log("staging", tag=tag, commit=commit)
             target = self.stage(release, commit, sums)
-            self._verify(target, loaded=False,
-                         env=env)
+            proof = self._verify(target, loaded=False, env=env)
+            self.check_overrides(env, commit, folder=target, services=proof['verified_images'])
             load = self._run(["docker", "image", "load", "--input", str(target / "images.tar")],
                              timeout=1800, check=False)
             if load.returncode != 0:

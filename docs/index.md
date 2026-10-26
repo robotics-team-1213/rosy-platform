@@ -341,7 +341,9 @@
 ## 교훈 (docs/solutions)
 
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
+- [모듈 logs.md 의 BOM 상태가 제각각이라 append 만 해도 append-only 검사가 깨진다](solutions/workflow-issues/logs-md-bom-states-vary-preserve-per-file-2026-10-25.md)
 - [PowerShell 한글 저널 append가 UTF-8을 망가뜨린다 (2026-10-04, 4회)](solutions/workflow-issues/powershell-utf8-append-mangles-korean-journals.md)
+- [병합 해결 중 main이 움직이면 스쿼시 커밋이 동료 착지를 되돌릴 수 있다](solutions/workflow-issues/squash-after-stale-merge-can-revert-concurrent-landings-2026-10-25.md)
 - [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험
@@ -351,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
-- 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
-- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
-- 2026-10-26 · uncommitted · 원격 pytest job의 /tmp 누수 경고와 설치 환경 지문
-- 2026-10-26 · 5acb6bbb94 · 시험 job의 I/O 등급과 현장 PC 정리 타이머 선언
+- 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
+- 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+- 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+- 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
+- 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)

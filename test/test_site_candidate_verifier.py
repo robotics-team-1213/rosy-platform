@@ -38,7 +38,7 @@ def _image_blobs(service: str, config_digest: str | None = None):
     return config, image_manifest
 
 
-def _write_images_tar(path, *, with_index=True, overrides=None):
+def _write_images_tar(path, *, with_index=True, overrides=None, services=SERVICES):
     """Write a docker-save shaped archive; return {service: (config_id, manifest_id)}.
 
     overrides[service] may set "manifest" (bytes stored as the manifest blob) or
@@ -47,7 +47,7 @@ def _write_images_tar(path, *, with_index=True, overrides=None):
     overrides = overrides or {}
     files: dict[str, bytes] = {}
     docker_manifest, index_rows, ids = [], [], {}
-    for service in SERVICES:
+    for service in services:
         reference = f"rosy-site-{service}:{COMMIT}"
         config, image_manifest = _image_blobs(service)
         config_id, manifest_id = _sha(config), _sha(image_manifest)

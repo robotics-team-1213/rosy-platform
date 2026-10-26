@@ -228,6 +228,15 @@ def test_sudoers_gets_the_login_and_a_broken_file_is_never_installed(tmp_path):
     assert not list(sudoers.parent.glob("*.rosy-tmp"))
 
 
+@pytest.mark.parametrize("role, wanted", [("ai", True), ("model", True), ("site", False)])
+def test_the_lab_pcs_carry_the_storage_owner_as_desired_state(role, wanted):
+    """D-883: a model PC installed without units-user refused every clean-storage request."""
+    lines = (ROOT / "deploy" / ROLES[role] / "host-state" / "manifest").read_text(encoding="utf-8").splitlines()
+    line = "approval=recovery file /etc/rosy/host-control/units-user common/host-control-units-user.in"
+    assert (line in lines) is wanted
+    assert (ROOT / "deploy/hosts/common/host-state/host-control-units-user.in").read_text() == "@LOGIN@\n"
+
+
 @pytest.mark.parametrize("role", sorted(ROLES))
 def test_every_role_manifest_parses_and_its_sources_exist(role):
     dirs = {"common": ROOT / "deploy/hosts/common/host-state", "role": ROOT / "deploy" / ROLES[role] / "host-state"}

@@ -18,7 +18,6 @@
 1132 devices/omx/adapter/omx_adapter/action_store.py
 771 drive/behaviors/docking/manager.py
 822 drive/behaviors/line_follow/manager.py
-691 drive/behaviors/swarm/manager.py
 630 drive/behaviors/traffic_policy/manager.py
 842 drive/motion_limits/adapter/node.py
 757 fleet/fleet/cli.py
@@ -28,7 +27,6 @@
 1325 fleet/fleet/server/console/console.py
 797 fleet/fleet/server/evidence/proposal_store.py
 936 fleet/fleet/server/missions/mission_store.py
-628 fleet/fleet/swarm/session.py
 755 fleet/web/line-stuck.js
 606 fleet/web/shared/site-map-model.js
 788 fleet/web/shared/vision-view.js

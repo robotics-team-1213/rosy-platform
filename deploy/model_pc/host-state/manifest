@@ -12,3 +12,5 @@ approval=sim apt ros-jazzy-ros-gz ros-jazzy-gz-ros2-control ros-jazzy-navigation
 # D-805 update gate: skip updaters while updates are frozen (ops-update-freeze tag or a local freeze file).
 safe file /etc/systemd/system/rosy-nightly-reboot.service.d/10-update-gate.conf common/10-update-gate.conf
 safe file /etc/systemd/system/rosy-model-watch.service.d/10-update-gate.conf common/10-update-gate.conf
+# D-883: owner of the lab user units and rosy-test-storage.service; clean-storage refuses without it.
+approval=recovery file /etc/rosy/host-control/units-user common/host-control-units-user.in

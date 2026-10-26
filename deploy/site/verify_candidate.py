@@ -46,6 +46,15 @@ class CandidateVerificationError(ValueError):
     """Candidate metadata or local host image state does not match."""
 
 
+def verified_services(value: object) -> tuple[str, ...]:
+    """Canonicalize only the two authenticated service inventories (D-887)."""
+    if isinstance(value, list) and all(isinstance(s, str) for s in value):
+        for services in (SERVICES[:3], SERVICES):
+            if len(value) == len(services) and set(value) == set(services):
+                return services
+    raise CandidateVerificationError("candidate images must contain exactly Fleet, Vision, proxy, optionally Postgres")
+
+
 def _digest(path: Path) -> str:
     hasher = hashlib.sha256()
     with path.open("rb") as stream:
@@ -142,10 +151,9 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         raise CandidateVerificationError("image archive hash mismatch")
 
     images = manifest.get("images")
-    if not isinstance(images, dict) or set(images) != set(SERVICES):
-        raise CandidateVerificationError("candidate must contain Fleet, Vision, proxy and Postgres images")
+    services = verified_services(list(images) if isinstance(images, dict) else None)
     image_ids: dict[str, str] = {}
-    for service in SERVICES:
+    for service in services:
         row = images[service]
         if not isinstance(row, dict):
             raise CandidateVerificationError(f"invalid {service} image record")
@@ -169,7 +177,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "manifest": manifest,
         "source_commit": commit,
         "platform": "linux/amd64",
-        "verified_images": list(SERVICES),
+        "verified_images": list(services),
         "image_ids": image_ids,
         "deployment_files": len(hashes),
         "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
@@ -340,16 +348,17 @@ def verify_candidate(
             "workcell": summary["workcell"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
+            "verified_images": summary["verified_images"],
         }
     archive_ids = _archive_image_ids(
         root / "images.tar",
         {service: (summary["manifest"]["images"][service]["reference"],
                    summary["manifest"]["images"][service]["image_id"])
-         for service in SERVICES},
+         for service in summary["verified_images"]},
     )
     image_ids: dict[str, str] = {}
     id_forms: dict[str, str] = {}
-    for service in SERVICES:
+    for service in summary["verified_images"]:
         row = summary["manifest"]["images"][service]
         reference = row["reference"]
         accepted = archive_ids[service]

@@ -11277,6 +11277,19 @@ osy-d395-s1d\`.
 - 결정: 없음.
 - 교훈: 없음(D-866 단독 실행 규칙 위반 1회를 기록에 남김).
 
+## 2026-10-25 · uncommitted · D-875 swarm safety and planning boundary
+
+- Change: owner-local API holds existing declarations, the Decision facade supplies existing planning choices, and actual lifecycle/arming/relay safety behavior stays in tagged owners. No frozen violation growth or wire change.
+- Evidence: official source9f9fc5846d two separation failures versus main6abf6a8a7e two passes; new sourcecac7a23477 API/planning guards RED3 and emergency guard PASS1 remotely. All22 nonconstructor lifecycle method ASTs and original CORE C1 blobs remain identical. Independent implementation review and committed GREEN follow separately.
+- gate 변화: pending implementation verification; no landing/device/field claim. Existing structural-guard lesson will be updated only after GREEN.
+
+## 2026-10-25 · cc237b02c1 · D-875 committed verification
+
+- Change: independently reviewed owner-local API and actual Safety lifecycle separation; legacy exports/planner/default construction preserved, no frozen violation growth.
+- Evidence: committed remote architecture plus15 focused Fleet suites 578PASS5SKIP, NEW0/known0/flaky0, runnerexit0. Original22 lifecycle method ASTs and prepared2bea CORE3 Git blobs exact. Logs: %LOCALAPPDATA%/Temp/rosy-c1-boundary/green-final/run-1.txt and known-final.txt.
+- Gate: generate/lint/diff/syntax/size and official dry-run PASS; actual FULL/landing/device/field pending. Initial afba candidate sole CLI size failure retained externally; root-authorized own amendment removed one blankline, independently confirmed, then finalSHA rerun.
+- CE: root owns existing structural-guards lesson update with separate queued-FULL tooling unit; verified case draft supplied outside Git. Prior pending entry is superseded by this evidence.
+
 ## 2026-10-25 · uncommitted · queued FULL pretest 구조 검사 우선
 
 - 변경: 대기 중 FULL pretest에도 기존 구조 검사 runner를 먼저 호출하고 검사 뒤 HEAD를 다시 확인한다. FIFO·기존 main 기준·캐시·FULL 기록 규칙은 유지한다.
@@ -11407,6 +11420,13 @@ osy-d395-s1d\`.
 - 증거: 유효한 fixture를 새 Python에서 import한 뒤 기존 구현 RED 1건을 재현했다. 수정 커밋 원격 관련 회귀 507 passed, skip0, NEW0/known0/flaky0; 독립 소스 리뷰 승인. [검증 기록](validation/affected-import-pack-restoration-2026-10-25/result.md).
 - gate 변화: 없음. 공식 FULL·착지·게시·배포는 별도 확인한다. 보존한 C1 후보는 이 수정에 포함하지 않는다.
 - 교훈: 기존 [실제 커밋 검증 교훈](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)에 통합 과정의 호출 경로·회귀 시험 보존을 추가했다.
+
+## 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
+
+- 변경: 기존 [구조 검사 선행 교훈](solutions/workflow-issues/structural-guards-should-fail-before-the-full-land-round-2026-10-15.md)에 Fleet owner가 이미 지정한 boundary 시험의 누락과 검증된 exact-leaf API 검사 수정을 추가했다.
+- 증거: tests-only RED 43 failed/46 passed, 수정 93 passed, 최신 main 통합 원격 확장 679 passed/5 skipped/NEW0. [검증 기록](validation/swarm-lifecycle-extraction-2026-10-25/result.md)에 소스와 실패한 FULL을 별도로 남겼다.
+- gate 변화: 없음. 최신 후보의 공식 FULL·착지·배포는 별도 확인한다.
+- 교훈: 범용 플랫폼 guard와 변경 소유자의 기존 계약 시험을 함께 선택한다.
 
 ## 2026-10-25 · uncommitted · 공급암 S 셀 파이프라인: 원위치·보정·사이클, 경쟁 후보 장부, 접촉 대응
 
@@ -11683,3 +11703,85 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_robot_cd.py`, `test/test_deployment_targets.py`, `test/test_tool_script_names.py`, `test/test_update_status.py`. 새 시험은 옛 이름이 있으면 실패한다.
 - gate 변화: main의 `test_robot_cd` 2건이 다시 녹색이 된다.
 - 교훈: CE 해당 없음 — 재발 방지가 이름 검사 시험에 있다.
+
+## 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
+
+- 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
+- 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
+- gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · 공급암 S: 실물 사례를 모델 PC Isaac에서 재현하는 사례 파이프라인
+
+- 변경: `cell_pipeline`의 `cases.jsonl`이 시도마다 장면(상자 위치·회전, 집게 각도, 놓을 곳, 결과)을 남긴다. `cell_cases.py`(실물 정지 6건과 장면이 있는 사례 → 시뮬레이터 사례), `cell_case_suite.py`(모델 PC Isaac `arm-s-cell-case` 실행으로 재현·판정, 알려진 Isaac 차이 구분). 실행 관리자가 사례를 받는다(run_catalog·run_store·run_worker·remote_isaac). worker가 공급암 S 실행마다 KeyError로 죽어 UNKNOWN이 되던 것과 사례 실행의 입력 재구성 오류를 고쳤다.
+- 증거: 원격 시험 통과. 모델 PC 실행 결과는 `docs/validation/omx-arm-s-cell-cases-2026-10-26/result.md`(사례 4 일치, 3·5는 알려진 Isaac 집게 차이).
+- gate 변화: 없음. Gazebo 사례 입력과 Isaac 집게 결합은 미해결.
+
+## 2026-10-26 · uncommitted · fix(land): FULL를 다시 돌지 않는 차례, pretest 공백 정리, 차례 중 우회 거부
+
+- 변경: `land.merge`가 착지된 ADR 공백 줄을 병합 커밋 안에서 지운다(pretest·차례 공통). `land_full.restore`는 병합 커밋이 git 병합과 자동 정리 기록만 다르면 FULL 통과를 유지한다. 대기 중 main 변화분이 이미 착지한 하네스 파일 때문에만 FULL로 오르면 guard와 매핑 시험만 돈다. 다른 착지가 차례를 쥐면 `--no-queue`를 거부한다.
+- 증거: `test/test_land.py`·`test_land_queue.py`·`test_land_record.py` 원격 통과(109 passed). 원인 근거는 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 6절.
+- gate 변화: 없음. 잠금 밖 시험·준비 순서 대기열은 다음 단계.
+
+## 2026-10-26 · uncommitted · fix(land): 다시 시도하면 실패한 시험 묶음만 다시 돈다
+
+- 변경: `run_tests`가 첫 NEW 실패에서 멈추지 않고 모든 invocation을 판정한 뒤 통과분을 `land_cache`에 남기고 실패를 모아 멈춘다. 한 invocation의 호스트가 끊겨도 나머지의 통과는 기록한다. LOAD-FLAKY 통과는 계속 기록하지 않는다.
+- 증거: `test/test_land.py` 원격 통과. 근거는 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 6절.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 지난번 실패한 시험 묶음을 먼저 돌린다
+
+- 변경: NEW 실패가 난 invocation을 `<git-common-dir>/rosy-land-failed.json`에 표시하고 통과하면 지운다. 다음 실행은 표시된 것만 먼저 시험 PC에 보내고, 다시 실패하면 나머지를 돌리지 않고 멈춘다.
+- 증거: `test/test_land.py` 원격 통과.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다
+
+- 변경: `land_logs.append_blocks`가 브랜치 쪽 사본이 main의 기존 항목 순서만 바꾼 경우(수정·삭제 없음) main 순서를 유지하고 브랜치의 새 항목을 날짜 순으로 넣는다. main이 순서를 바꾸거나 항목을 고친 경우는 그대로 멈춘다.
+- 증거: `test/test_land.py` 원격 통과.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
+
+- 변경: `land.py`가 시작할 때 브랜치의 `tools/land*.py`가 main 체크아웃과 다르면 main의 `tools/land.py`를 같은 인자로, 브랜치 워크트리에서 다시 실행한다(`land_checks.landed_copy`, `ROSY_LAND_OWN_COPY`로 재실행 한 번만). 오래된 브랜치가 옛 규칙으로 멈추던 빈틈.
+- 증거: `test/test_land.py` 원격 통과.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
+
+- 변경: ADR D-885와 Log 행. D-879 gap 행 제거(착지), D-884 gap 선언.
+- 증거: 원격 시험으로 확인한다.
+- gate 변화: 없음. PC 재설치 전에는 자동 요청이 거절로 기록된다. CE: 해당 없음 — 원인(venv 48시간 보존)은 rosy-ops PR #4와 기존 교훈 메모가 다룬다.
+
+## 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)
+
+- 변경: `tools/worktrees.py` `CAP` 50→14(main 포함 15), topic 소문자 kebab 48자 검사, 모든 prune이 `main`에 들어갔고 체크아웃되지 않은 로컬 브랜치를 정확한 sha로 정리(`main`·`archive/*` 제외). shared-checkout에 「브랜치 이름과 수명」 정본, AGENTS·git-workflow·명령 카드 상한 문구.
+- 근거: 같은 날 워크트리 22개, 로컬 브랜치 488개 중 132개가 이미 main에 있었다. 문서 예산 15와 도구 상한 50이 달랐다.
+- gate 변화: 없음. 정리될 때까지 일반 `new`가 거절된다.
+
+## 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
+
+- 변경: AGENTS.md 「같이 하는 깃」 6번, shared-checkout.md, git-workflow.md, 착지 명령 카드의 게시 마지막 단계를 `git merge --ff-only origin/main`에서 역동기화(로컬 main에서 만든 워크트리에서 `git merge origin/main`을 land.py로 착지)로 바꿨다. 우산 Rosy/AGENTS.md(git 밖)도 같이 고쳤다. 규칙 결정은 D-889(Proposed, 별도 브랜치)가 D-868 5단계를 고친다.
+- 증거: 게시 PR이 병합될 즈음 로컬 main은 게시 SHA보다 앞서 있어(시간당 약 1착지) origin/main의 조상이 아니므로 ff-only가 실패한다. 게시 스크립트 검토에서 확인.
+- gate 변화: 없음. 절차 문서다.
+- 교훈: 없음
+
+## 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+
+- Change: authenticate exactly legacy3/current4; bind current/staged/rollback Compose and loaded proof, retire only identity-proven outgoing PostgreSQL without force/volume deletion; retain separate same-commit physical relocation.
+- Evidence: real-signature source bc61f16ea9 RED3/8 controls; canonical-inventory source77d8b34bac RED38/13 controls; overlay source9e8e86575f RED2/1 control; forged physical journal source8e856f02a9 RED1. Raw logs remain outside Git; independent implementation review and committed GREEN pending. Initial42 failures used a corrected-later manual selector and are not uniform migration-cause proof.
+- Gate: source preparation only; no install/site/FIELD or deployment acceptance.
+- CE: existing whole-configuration and identical-external-helper lessons applied; solved lesson decision awaits actual GREEN.
+
+## 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+
+- Change: bind exact authenticated legacy3/current4 to candidate-local Compose/overlay and loaded identities; exact-ID retired PostgreSQL cleanup precedes normal rollback restoration, while consistent physical relocation remains separate. Builder/signing blobs remain base-exact.
+- Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
+- Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
+- CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
+
+## 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
+
+- 변경: 실행 예시의 Git ID를 같은 commit으로 해석되는 짧은 revision으로 표기하고 전체 SHA는 본문에 유지했다. 기존 Git ID 교훈에 CLI 코드블록도 검사된다는 조건과 실제 실패·수정 검증을 보강했다.
+- 증거: 첫 통합 commit 7b2dbeb623의 관련 gate는 1 FAIL/1093 PASS/2 SKIP, 단독 실패·main 통과를 보존했다. 문서 수정 commit 6d493681e4에서 동일 원격 secret guard 1 PASS/runner·outer0/NEW0·known0·flaky0, scanner와 네 production 파일은 그대로다.
+- Gate: 공식 재착지·게시·site/DEVICE/FIELD는 아직 대기한다. 정밀 시각 수용을 주장하지 않는다.
+- CE: 기존 교훈 갱신; 새 중복 문서나 scanner 예외는 만들지 않았다.
