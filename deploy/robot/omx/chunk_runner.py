@@ -77,7 +77,9 @@ CONTACT_CHUNKS = ("descend", "grasp", "release")
 # of 300. Hold when a load-bearing joint lags STRAIN_LAG units (3.1 deg), its lag rose by STRAIN_RISE over the
 # last STRAIN_TICKS ticks and the guard's last PWM sample (5 Hz) is at STRAIN_PWM of its cap. Holding needs room:
 # the guard brakes at 10 deg/s^2, so its command still runs v^2/20 deg on (1.5 deg at RISE_SPEED).
-STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM = 1.7, 0.25, 6, 0.35
+# STRAIN_PWM 0.35 held a normal park out of a sagged reach (lag 1.8 at 263 of 600 = 44 %, 2026-10-27); the
+# real strains were at 55-86 %.
+STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM = 1.7, 0.25, 6, 0.5
 # Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
 # At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3

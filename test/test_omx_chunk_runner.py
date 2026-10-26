@@ -442,6 +442,7 @@ def test_a_lag_that_keeps_rising_while_the_joint_pushes_holds_with_torque_on_the
 @pytest.mark.parametrize("lag, pwm", [
     (lambda n: 2.0, 500),                                # a steady travel lag, even past STRAIN_LAG, is not strain
     (lambda n: min(2.5, max(0.0, 0.05 * (n - 30))), 100),  # rising but hardly pushing: the guard's PWM is low
+    (lambda n: min(2.0, max(0.0, 0.05 * (n - 30))), 263),  # a park out of a sagged reach at 44 % (2026-10-27)
 ])
 def test_travel_lag_without_a_rising_push_is_not_strain(lag, pwm):
     status = run_with(Straining(lag, pwm), goto_library(), ["goto approach_pinky", "stop"])
