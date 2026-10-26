@@ -12118,3 +12118,9 @@ osy-d395-s1d\`.
 - 증거: 독립 source tree ef757dad18와 Monitoring incoming 15경로를 보존한 통합 tree 09379a4fe6 승인. 로컬 commit 259605fb2c의 selector·실제 소유권 299P/0S와 생산 source 7개가 같은 b36e441576의 도구 8파일 234P/0S는 각 official/outer/known0·NEW0이다. 첫 fixture 오류·빈 -k 실행·10F/2F는 원본을 보존하고 새 SHA에서 보완했다. 실제 old-candidate/env cache report 반례 1F/3P는 수정 전 RED다. quiet progress 수와 범위·SHA·미실행 항목은 validation/land-explicit-full-2026-10-27/result.md에서 구분한다.
 - gate 변화: 집중 소스 검증만 완료. 실제 FULL·착지·push·게시·site/robot/UTC/FIELD 수용은 실행하지 않았다. main commit 3125704e24의 후속 UI 변경은 Root가 공식 착지 때 정상 통합하며 이 소스 PASS에 포함했다고 주장하지 않는다.
 - CE: 기존 land-record와 Windows UTF-8 교훈을 갱신했다. Root의 검증된 부분 worktree 복구 기록은 gateway 소스 수정과 구분한다. 새 교훈·dependency·제품 API·권한·ratchet 완화는 없다.
+
+## 2026-10-27 · 3d199fe1d1 · 명시적 FULL 착지 시도의 충전 실패와 동일 호스트 대조
+
+- 변경: `validation/land-explicit-full-2026-10-27b/result.md`에 공식 실패와 대조 근거를 고정했다. 후보 3d199fe1d1의 본시험 11/25 호출에서 15,697P/562S/1F 뒤 14호출이 취소됐으며 FULL·착지는 실패했다. guard/isolation 결과와 중복 범위를 별도 기록했다.
+- 증거: product·fixture·runner의 동일성을 확인했지만 원인 해결을 주장하지 않는다. 후보 단독 실패 AI와 기준선 통과 모델의 호스트 차이를 확인하고 AI-only 후보→기준선→후보 exact node 대조를 수행했다. 세 실행은 실제 node·dot·exit0·known0로 확인했으며 quiet에 없는 통과 요약줄을 만들지 않았다.
+- gate 변화: 실패 자료를 유지하고 독립 검토 조건에 따라 fresh 공식 FULL 1회를 준비한다. 재실패 시 최초 HOLD·SQL/상태 전이 시각 계측을 먼저 한다. 제품·timeout·quarantine·NTP/장치 설정 변경은 없으며 CE는 원인 미해결이다.
