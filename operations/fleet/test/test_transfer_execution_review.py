@@ -6,8 +6,8 @@ import pytest
 
 from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from test_physical_transfer_evidence import geometry, policy
-from test_physical_transfer_store import installation, rig, claims, connect
-from test_physical_transfer_submission import prepared
+from test_physical_transfer_store import NOW, installation, rig, claims, connect, create, admit
+from test_physical_transfer_submission import prepared, authorize
 from test_physical_transfer_outcomes import submitted, receipt, observe
 
 
@@ -104,3 +104,26 @@ def test_export_rejects_replaced_owner_receipt_before_publishing(submitted, tmp_
         import_module("fleet.server.physical_transfer_outcomes").export_transfer_outcomes(
             store, job["mission_id"], output)
     assert not output.exists()
+
+
+@pytest.mark.parametrize("ttl,max_age_ns", [(1.5, 500_000_000), (30.0, 20_000_000_000)])
+def test_export_uses_the_retained_grant_lifetime(rig, tmp_path, ttl, max_age_ns):
+    from test_physical_transfer_preparation import prepare
+    from fleet.server.physical_transfer_execution import PhysicalTransferExecution
+
+    path, tasks, control, store = rig
+    configured = store.installation.policy.model_copy(update={"max_age_ns": max_age_ns})
+    caps = tuple(cap.model_copy(update={"resource_policy_digest": configured.digest})
+                 for cap in store.installation.capabilities)
+    store.installation = store.installation.model_copy(update={"policy": configured, "capabilities": caps})
+    executor = PhysicalTransferExecution(store, grant_ttl_s=ttl)
+    job = admit(store, create(store), control)
+    row = prepare(executor, job["mission_id"], store)
+    store._clock_ns = lambda: NOW + 350_000_000
+    state = (path, tasks, store, executor, job, row)
+    authorize(state)
+    store._clock_ns = lambda: NOW + 400_000_000
+    observe(state, phase_receipt(state))
+    result = import_module("fleet.server.physical_transfer_outcomes").export_transfer_outcomes(
+        store, job["mission_id"], tmp_path / "configured-grant.json")
+    assert result["execution_review"]["failure_phase"] == "grasp"
