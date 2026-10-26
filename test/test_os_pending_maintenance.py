@@ -85,3 +85,25 @@ def test_abi2_sdk_without_pending_fence_is_rejected_even_if_it_claims_abi2(tmp_p
     m = importlib.import_module("os_payload_compatibility")
     with pytest.raises(ValueError, match="fence"):
         m.verify_contract(native, state_schema=1, boot_abi=2)
+
+
+@pytest.mark.parametrize("entry", ["resume", "apply", "precheck"])
+def test_auto_updater_checks_pending_before_resuming_or_invoking_any_host_command(tmp_path, monkeypatch, entry):
+    _, manager, _, _, path = _pending_candidate(tmp_path, monkeypatch)
+    from auto_update_fakes import upd
+    updater = upd.Updater.__new__(upd.Updater)
+    updater.root = manager.root
+    def forbidden(*args, **kwargs):
+        pytest.fail("native updater crossed the persistent OS maintenance fence")
+    updater._policy_path = forbidden
+    updater._hold = forbidden
+    class Host:
+        current_release = forbidden
+    updater.host = Host()
+    before = path.read_bytes()
+    if entry == "precheck":
+        assert any("OS_UPDATE_PENDING" in reason for reason in updater.precheck())
+    else:
+        with pytest.raises(upd.UpdateError, match="OS_UPDATE_PENDING"):
+            updater._run({"applying": {"step": "rollback"}}) if entry == "resume" else updater.apply(CANDIDATE, {})
+    assert path.read_bytes() == before
