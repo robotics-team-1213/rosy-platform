@@ -106,8 +106,11 @@ def _rewrite_manifest(case, mutate):
     seal()
 
 
-def test_signed_gpt_layout_is_returned_by_the_actual_release_verifier(verifier, gpt_release):
+@pytest.mark.parametrize("provision_role", ["boot_a", "bootstrap"])
+def test_signed_gpt_layout_is_returned_by_the_actual_release_verifier(verifier, gpt_release, provision_role):
+    _rewrite_manifest(gpt_release, lambda layout: layout.__setitem__("provision_role", provision_role))
     dist, public, image, _, _, layout = gpt_release
+    layout["provision_role"] = provision_role
     report = verifier.verify_image_release(dist, public, image, RELEASE)
     assert report["layout"] == layout
     assert report["sha256"] == hashlib.sha256(image.read_bytes()).hexdigest()

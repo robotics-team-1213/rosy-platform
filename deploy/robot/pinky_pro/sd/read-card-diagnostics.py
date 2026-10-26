@@ -28,6 +28,7 @@ import sys
 from typing import Callable
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 # HERE 는 sd/ 다. 형제인 native/ 에 레드action 모듈이 있다 (D-175, D-192 이전 경로는
 # 여기에 "robot" 을 더해 없어진 자리로 갔다).
 sys.path.insert(0, str(HERE.parent / "native"))
@@ -437,7 +438,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--slot", choices=("a", "b"), help="explicit GPT root slot; never guessed from boot defaults")
     args = parser.parse_args(argv)
     try:
-        layout = json.loads(args.layout_file.read_text(encoding="utf-8")) if args.layout_file else None
+        layout = json.loads(args.layout_file.read_text(encoding="utf-8-sig")) if args.layout_file else None
         report = extract(device_path(args.disk), args.out, layout=layout, slot=args.slot)
     except PermissionError as error:
         print(f"cannot open {args.disk} read-only ({error}); run from an administrator PowerShell",
