@@ -11874,3 +11874,10 @@ osy-d395-s1d\`.
 - 증거: 게시 PR이 병합될 즈음 로컬 main은 게시 SHA보다 앞서 있어(시간당 약 1착지) origin/main의 조상이 아니므로 ff-only가 실패한다. 게시 스크립트 검토에서 확인.
 - gate 변화: 없음. 절차 문서다.
 - 교훈: 없음
+
+## 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 4~8 (설계 0.7)
+
+- 변경: 규칙 8: 착지·시험 관문 도구(`tools/land*.py`, `worktrees.py`, `worktree_rules.py`, `tools/hooks/**`, `remote_pytest.py`와 그것이 import하는 `tools/remote` 모듈, `test/known_failures.py`)는 FULL이다. 말단 도구는 이미 자기를 부르는 시험을 골랐다. `--base main --head feat/publish-automation`이 FULL이던 원인은 `--head`인데도 체크아웃의 파일을 읽은 것이었다. 이제 `--head`면 그 커밋의 파일을 읽는다(`affected_repo.Repo` rev, 크기 한도 때문에 `Repo`를 순수 이동). 규칙 6: `test/architecture` 변경은 그 디렉터리 전체. 규칙 7: `known_failures.txt`에서 빠지거나 더해진 id의 시험 파일을 돌리고, 더한 id의 시험을 같은 브랜치가 고쳤거나 안전 태그이거나 파일이 없으면 FULL(사람 검토). 규칙 4: core_common 새 모듈과 `protocol/schemas.py` 끝 추가는 AST로 추가만인지 보고 foundation 묶음·import하는 시험·API reference를 읽는 시험·버전 맞춤 시험을 돌린다. 규칙 5: 지우거나 옮긴 모듈의 마지막 이름을 Markdown 밖 어느 파일도 부르지 않고 모듈·import 뿌리를 넘지 않으면 좁힌다. FULL 사유는 모두 escalation에 적힌다.
+- 증거: 커밋마다 `test/test_affected_tests.py`, `test/test_harness_contracts.py`, `test/architecture` 원격 통과(NEW 0), 규칙별 변이 커밋(`git commit-tree`)에서 빨강 확인. main 첫 부모 80커밋 재실행(각 커밋 파일 기준): FULL 13 → 14. 규칙 7로 1건 빠지고, 규칙 8의 관문 도구로 2건 늘었다(예전에는 관문 도구가 FULL이 아니었다). 나머지는 안전 경로·harness·패키징·CI 등 다른 사유를 함께 가진다.
+- gate 변화: 관문 도구 변경은 이제 FULL(전에는 이름 일치 시험만). `test/flaky_quarantine.txt`는 안전 루트라 FULL 그대로.
+- 교훈: 없음 — `--head` 읽기 오류는 코드와 회귀 시험으로 고쳤다.

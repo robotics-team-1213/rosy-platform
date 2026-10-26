@@ -352,8 +352,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 4~8 (설계 0.7)
 - 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
 - 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)
 - 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
 - 2026-10-26 · uncommitted · fix(land): AGENTS.md 표는 행 단위로 합치고, 기다리는 동안 충돌을 미리 본다
-- 2026-10-26 · uncommitted · feat(land): 확정된 첫 실패에서 회차 취소, 차례 시간 상한 10분, 대기열 상태 표시
