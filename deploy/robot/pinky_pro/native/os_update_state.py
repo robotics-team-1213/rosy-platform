@@ -116,14 +116,22 @@ def read_state(root: Path = Path("/")) -> dict:
 class _Store:
     def __init__(self, root, state):
         self.root, self._state = root, state
+        self._active = True
 
     @property
     def state(self):
         return deepcopy(self._state)
 
     def _save(self, value):
+        if not self._active:
+            raise ValueError("OS_UPDATE_STATE_HOLD: state lock is no longer held by a usable writer")
         _validate(value)
-        _json_atomic(_path(self.root, STATE), value, 0o600)
+        try:
+            _json_atomic(_path(self.root, STATE), value, 0o600)
+        except BaseException:
+            # A failed parent fsync may follow a successful rename; reopen rather than reuse stale state.
+            self._active = False
+            raise
         self._state = deepcopy(value)
 
     def begin(self, verified, media, boot_id, transaction_id):
@@ -179,6 +187,16 @@ class _Store:
         self._save(dict(self.state, committed=dict(slot=pending["target_slot"],
             release_id=pending["verified"]["metadata"]["release_id"]), pending=None))
 
+    def record_failure(self, transaction_id, boot_id, current_slot):
+        """Fallback owner calls after observing normal firmware boot on the preserved source."""
+        pending = self._pending(transaction_id)
+        _guid(boot_id)
+        if (current_slot != pending["source_slot"] or _layout(self.root)[0]["slot"] != current_slot
+                or boot_id == pending["trial_boot_id"] or pending["phase"] == "COMMIT_INTENT"):
+            raise ValueError("OS failure requires source boot or commit-owner reconciliation")
+        failed = [*self._state["failed_versions"], pending["verified"]["metadata"]["release_id"]]
+        self._save(dict(self.state, pending=None, failed_versions=failed))
+
 
 @contextmanager
 def locked(root: Path = Path("/")):
@@ -196,6 +214,10 @@ def locked(root: Path = Path("/")):
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
                 raise ValueError("OS state lock is busy") from exc
-            yield _Store(root, _load(root))
+            store = _Store(root, _load(root))
+            try:
+                yield store
+            finally:
+                store._active = False
     except (OSError, ValueError, TypeError, KeyError, RecursionError) as exc:
         raise ValueError(f"OS_UPDATE_STATE_HOLD: {exc}") from exc
