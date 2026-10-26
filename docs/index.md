@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-26 · b82af1ec31 · pure landing selection extraction
+- 2026-10-26 · uncommitted · Monitoring 기존 원천 수집·durable 집계·읽기 API
 - 2026-10-26 · uncommitted · test(fleet): D-891 리뷰 후속
 - 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
 - 2026-10-26 · uncommitted · fix(remote): 잡의 예약 코어를 배치 바닥으로, close에 이유 필수
-- 2026-10-26 · uncommitted · fix(land): 단독 실행 기록의 소비·안전 멈춤·죽은 잡·--no-queue
