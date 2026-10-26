@@ -11960,6 +11960,30 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_publish_main.py`(reviewer 없는 목록 거부, 저장소 목록 적재, PR 본문 줄).
 - gate 변화: 없음. CE: 해당 없음 — 검토 표기 보강이다.
 
+## 2026-10-26 · uncommitted · D-871 통합관제 업데이트 현황
+
+- 변경: `deploy/hosts/common/rosy-update-report`(PC별 업데이트 유닛의 타이머·마지막 단계·릴리스·사유 코드·동결 관문, 로그 원문 없음), 강제 명령 `updates`, 가드의 `updates` 수집과 `<name> updates <target>` 줄을 추가했다(관제 PC 자신, 복구 사다리 없음). `fleet.host_control.update_summary`, viewer용 `/api/fleet/updates`, 설치 화면 호스트 카드의 업데이트 줄을 추가했다. 화면은 가드가 보고한 PC를 모두 그린다(셀 관제 PC N대). 동결은 표시만 한다(사용자 결정).
+- 증거: 관제 PC·모델 PC에서 보고 스크립트를 실제로 실행했다(관제 PC omx-autoupdate·omx-devices up_to_date c47d7c3e78c9, 사이트 스택 site-221aedf1bdd5. 모델 PC model-code held, review waiting). 원격 시험(아래 착지).
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · D-871 3단계: review v12·v13-eval, site-tools
+
+- 변경: `rosy-review-release-update`가 서명된 model-code를 v12(8773), v13-eval(8775), v13 순서로 적용한다(v13만 실패 시 유닛 실패). 관제 PC cam-stream과 account-tls 코드는 `site-tools` 설정 하나(`omx_autoupdate` service, 타이머만 재시작, uv)로 main을 따른다. `rosy-site-tools-autoupdate.{service,timer}`를 추가했다. `lock: null`도 `uv`로 venv를 만든다. D-871 개정, services.yaml, README.
+- 증거: 원격 시험(아래 PR). 각 PC 적용은 병합 뒤.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · 교훈 갱신: 카메라 readiness와 여러 유닛 동시 재시작
+
+- 변경: `docs/solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md`에 네 번째 실패를 덧붙였다. 자동 업데이트가 카메라와 readiness를 한 번에 restart해 정지 복원이 덜 끝났고 시작이 거부됐다. 그런데도 다중 유닛 `is-active`가 0이라 `switched`로 기록됐다. #209의 순차 재시작과 유닛별 확인, 복구 순서, 증거를 적었다.
+- 증거: 관제 PC 2026-10-25 20:33 실패, 같은 날 밤 순차 재시작으로 전환·롤백·재전환 모두 READY.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · 교훈 2건: 폴더 단위 pytest 초록, 착지 기록 끊김
+
+- 변경: `docs/solutions/workflow-issues/`에 두 교훈을 더했다. 하나는 같은 pytest 프로세스의 형제 시험이 경로 지정 로드 모듈의 import 오류를 가린 사례다(test_native_cycle, MAIN-RED). 다른 하나는 A'가 시험을 차례 앞으로 옮긴 뒤 착지 기록이 조용히 끊긴 사례다(`fix/land-record-after-prepare`).
+- 증거: test_native_cycle.py는 혼자 실행하면 ERROR 26, 폴더 실행은 exit 0이었다(원격 5e162cca21). `.git/rosy-land` 마지막 기록은 16:21이었다. 새 끝에서 끝 시험은 원격 153 passed이고, 변이에서 2건이 빨강이 됐다.
+- gate 변화: 없음.
+
 ## 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
 
 - 변경: `remote/work_queue.py`가 여유 있는 실험실 PC(가벼운 PC·현장 PC·살아 있는 `sim` 잠금/예약이 있는 PC 제외)에 기존 한 번에 하나 작업자 옆으로 브라우저 전용 레인을 `BROWSER_PER_HOST`(2)개까지 둔다. 레인마다 별도 run(작업 폴더·잠금)이다. 브라우저 작업 잠금은 class `browser`로 쓰고 PROBE가 `sim_held`·`browser_jobs`를 세므로 다른 run의 브라우저 작업도 상한에 들어간다. `tools/land_browser.py`가 `land.py`의 브라우저 단계를 파일 단위 8조각(파일 크기 LPT, 이름순 동률)으로 나누고, 부하에서 LOAD-FLAKY였던 3파일은 `ROSY_BROWSER_ALONE=1` 한 조각으로 모아 그 run의 레인이 빌 때까지 기다렸다가 혼자 돈다. 조각이 파일을 잃거나 겹치거나 빈 조각이 생기면 예외로 멈춘다.

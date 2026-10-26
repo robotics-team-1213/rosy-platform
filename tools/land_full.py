@@ -31,10 +31,22 @@ def _path(wt: Path, branch: str) -> Path:
     return Path(common) / RECORDS / (branch.replace("/", "-") + ".json")
 
 
-def save(wt: Path, branch: str, candidate: str, main: str) -> None:
+def save(wt: Path, branch: str, candidate: str, main: str, tier: str | None = None,
+         invocations: list[list[str]] | None = None) -> None:
     path = _path(wt, branch)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"candidate": candidate, "main": main}), encoding="utf-8")
+    path.write_text(json.dumps({"candidate": candidate, "main": main, "tier": tier, "invocations": invocations}),
+                    encoding="utf-8")
+
+
+def prepared(wt: Path, branch: str, main: str | None) -> dict | None:
+    """The saved tier over ``main`` (tier, invocations, candidate, main) for the land record, or None."""
+    try:
+        record = json.loads(_path(wt, branch).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    ok = isinstance(record, dict) and main and record.get("main") == main and record.get("tier") in ("full", "affected")
+    return record if ok and isinstance(record.get("invocations"), list) else None
 
 
 def forget(wt: Path, branch: str) -> None:

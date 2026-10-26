@@ -3816,6 +3816,14 @@
           "request_ids": [
             "GET:/api/fleet/peers"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/installation/host-services.js",
+          "expression": "/api/fleet/updates",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/updates"
+          ]
         }
       ],
       "requests": [
@@ -3905,6 +3913,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/hosts"
+        },
+        {
+          "id": "GET:/api/fleet/updates",
+          "method": "GET",
+          "path": "/api/fleet/updates",
+          "implementation": "operations/fleet/fleet/server/host_control_routes.py",
+          "handler": "update_overview",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_host_control.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/updates"
         },
         {
           "id": "GET:/api/fleet/peers",

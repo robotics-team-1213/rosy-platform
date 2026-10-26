@@ -4,8 +4,6 @@ import '/common/ui.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
 const KINDS={training:'학습',evaluation:'평가',review:'검수'};
-$('theme').value=document.documentElement.dataset.theme||'dark';
-$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 
 function entry(label,tag,note,url){
   const item=document.createElement('li');item.className='workspace-entry';

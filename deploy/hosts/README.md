@@ -161,7 +161,9 @@ sudo python3 deploy/hosts/common/rosy-host-state install site --approve recovery
 - 설정 누락은 보고만 하며 기존 가드의 재부팅 조건·상한을 바꾸지 않는다.
 
 원본은 각 PC의 `/var/lib/rosy-host-state/status.json`과 관제 PC의
-`/var/lib/rosy-host-guard/status.json`이다. 가드가 멈추면 파일의 시각으로 지연을 표시한다.
+`/var/lib/rosy-host-guard/status.json`이다.
+
+**업데이트 현황 (D-871).** 가드는 PC마다 `health` 옆에서 강제 명령 `updates`도 부른다. 그 PC의 `rosy-update-report`(`install-guard-remote.sh`가 `/usr/local/sbin`에 설치)가 업데이트 유닛별 타이머, 마지막 단계·릴리스·사유 코드, 동결 관문 상태를 JSON으로 돌려주고, 가드는 이를 `status.json`의 `updates`에 둔다. 로그 원문은 보내지 않는다. 가드가 도는 관제 PC 자신의 사용자 유닛은 `hosts.conf`의 `site updates <user>@127.0.0.1` 줄로 읽는다. 이 줄은 `updates`만 부르고 복구 사다리(재시작·재부팅)는 돌리지 않는다. 그 사용자의 `authorized_keys`에도 가드 키를 강제 명령으로 넣는다. Fleet은 운영자에게 `/api/fleet/hosts`(사유 포함)를, 모든 역할에 `/api/fleet/updates`(상태·릴리스 요약)를 보여 준다. 셀마다 관제 PC가 따로 있으면 `pc` 줄을 늘린다. 화면은 가드가 보고한 PC를 모두 그린다. 가드가 멈추면 파일의 시각으로 지연을 표시한다.
 가드의 상태 디렉터리는 `0751`, 비밀 없는 JSON은 `0644`로 Fleet 컨테이너의 UID 10001이 읽는다.
 SSH 키가 있는 `/etc/rosy/host-guard`는 `0750`을 유지한다.
 Fleet 자체가 중단되면 이 화면도 사용할 수 없으며, 외부 가용성 감시는 별도다.

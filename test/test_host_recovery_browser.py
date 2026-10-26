@@ -123,3 +123,51 @@ def test_a_lab_pc_offers_storage_cleaning_and_shows_its_headroom(console_url):
         assert "모델·데이터·사용 중 환경은 지우지 않으며" in page.evaluate("window.cleanPrompts[0]")
         assert not errors
         browser.close()
+
+
+def test_every_reported_pc_shows_its_update_channels_and_a_viewer_sees_only_the_summary(console_url):
+    # D-871: a fourth PC (one control PC per OMX cell) and update rows; reasons only for operators
+    from playwright.sync_api import sync_playwright, expect
+
+    now = time.time()
+    report = {"schema": "rosy.update-report/1", "time": int(now), "gate": "frozen", "updaters": [
+        {"unit": "rosy-omx-devices-autoupdate.service", "timer": "enabled", "healthy_at": now - 60,
+         "last": {"step": "deferred", "release": "d0d7f7367b4d", "reason": "follower_torque_not_off", "at": now}},
+        {"unit": "rosy-learning-center-update.service", "timer": "disabled", "healthy_at": None, "last": None}]}
+    hosts = {"hosts": [{"host": name, "units": []} for name in ("site", "ai", "model")],
+             "drift": None, "guard": {"cell-b": {"time": int(now), "state": "ok", "updates": report},
+                                      "robot-a": {"time": int(now), "state": "ok"}}}
+    summary = {"hosts": [{"host": "cell-b", "state": "frozen", "gate": "frozen", "channels": [
+        {"unit": "rosy-omx-devices-autoupdate.service", "state": "ok", "release": "d0d7f7367b4d", "at": now}]}]}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.goto(console_url, wait_until="networkidle")
+        page.evaluate("""async ([hosts, summary]) => {
+            const {createHostServices} = await import('/console/assets/host-services.js');
+            for (const [id, role] of [['as-operator', 'operator'], ['as-viewer', 'viewer']]) {
+                const root = document.createElement('section');
+                root.id = id;
+                root.innerHTML = '<p id="host-services-status"></p><div id="host-services-report"></div>' +
+                    '<div id="host-services-commands"></div><p id="host-services-note"></p>';
+                document.body.append(root);
+                const call = async path => {
+                    if (path === '/api/fleet/hosts' && role === 'viewer') {
+                        throw Object.assign(new Error('forbidden'), {status: 403});
+                    }
+                    return path === '/api/fleet/updates' ? summary : hosts;
+                };
+                await createHostServices({root, call, confirmIrreversible: async () => false}).refresh();
+            }
+        }""", [hosts, summary])
+        operator = page.locator("#as-operator #host-services-report")
+        cell = operator.locator('[data-host="cell-b"]')
+        expect(cell).to_contain_text("업데이트 동결")
+        expect(cell).to_contain_text("omx-devices · 정상 · d0d7f7367b4d · deferred (follower_torque_not_off)")
+        expect(cell).to_contain_text("learning-center · 꺼짐")
+        expect(operator).to_contain_text("PC 4대")
+        expect(operator.locator('[data-host="robot-a"]')).to_have_count(0)  # robots are not PCs
+        viewer = page.locator("#as-viewer #host-services-report")
+        expect(viewer.locator('[data-host="cell-b"]')).to_contain_text("omx-devices · 정상 · d0d7f7367b4d")
+        expect(viewer).not_to_contain_text("follower_torque_not_off")
+        assert not errors
+        browser.close()
