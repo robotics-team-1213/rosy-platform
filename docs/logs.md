@@ -12065,3 +12065,11 @@ osy-d395-s1d\`.
 - 증거: 원격 대상 시험 52 passed, NEW 0.
 - gate 변화: 강화(스트림 초과 분기 시험).
 - CE: 해당 없음 — 시험 보강이다.
+
+## 2026-10-26 · uncommitted · feat(sim): D-877 공통 작업 장면, 실시간 배율 보고, Isaac 전환 조건 1차
+
+- 변경: `tools/sim/omx_cell_world.py`(Gazebo 셀 world의 상자를 모든 백엔드에), MuJoCo·Isaac 어댑터가 같은 장면 사용, 적합성 요약에 `real_time_factor`, `policy_chain_gazebo.py` 제품 owner 실행기, [작업 장면 기록](validation/omx-sim-cell-scene-2026-10-26/result.md), [Isaac 전환 조건 기록](validation/isaac-switch-conditions-2026-10-26/result.md).
+- 증거: 작업 장면에서 MuJoCo(실시간 배율 0.999)·Isaac(0.936) 적합성 통과. Isaac 640×480 두 대는 6~7Hz, 실시간 배율 0.91~0.94로 전환 조건 미충족.
+- gate 변화: 없음. Isaac 주 시뮬레이터 전환 조건은 아직이다.
+- 결정: 없음(640×480 유지 여부는 사용자 결정 대기).
+- 교훈: 없음.

@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · feat(sim): D-877 공통 작업 장면, 실시간 배율 보고, Isaac 전환 조건 1차
 - 2026-10-26 · uncommitted · test(fleet): D-891 리뷰 후속
 - 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
 - 2026-10-26 · uncommitted · fix(remote): 잡의 예약 코어를 배치 바닥으로, close에 이유 필수
 - 2026-10-26 · uncommitted · fix(land): 단독 실행 기록의 소비·안전 멈춤·죽은 잡·--no-queue
-- 2026-10-26 · uncommitted · fix(land): 단독 실행 시간 상한·기록, 묵은 단독 재실행, 안전 간선
