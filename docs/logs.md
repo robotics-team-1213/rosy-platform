@@ -11977,3 +11977,9 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md`에 네 번째 실패를 덧붙였다. 자동 업데이트가 카메라와 readiness를 한 번에 restart해 정지 복원이 덜 끝났고 시작이 거부됐다. 그런데도 다중 유닛 `is-active`가 0이라 `switched`로 기록됐다. #209의 순차 재시작과 유닛별 확인, 복구 순서, 증거를 적었다.
 - 증거: 관제 PC 2026-10-25 20:33 실패, 같은 날 밤 순차 재시작으로 전환·롤백·재전환 모두 READY.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 공유 pytest 프로세스가 가린 import 착지 게이트
+
+- 변경: `tools/land_isolation.py`·`tools/collect_alone.py` 추가, `tools/land_guards.py`가 가드 회차에 수집 게이트(선택된 시험 파일마다 따로 `pytest --collect-only`)를 싣고, `tools/land_prepare.py`(잠금 밖)에서만 변경 파일을 직접 참조하는 시험(최대 10개)과 안전 루트 시험을 파일마다 따로 돌린다. 루트 `conftest.py`가 수집 중 `sys.path`를 늘린 시험 모듈을 보고만 한다(`.gitignore` 예외, 루트 파일 목록 추가). `tools/land.py`는 고치지 않았다.
+- 증거: 원격 `test/test_land_isolation.py test/test_land*.py test/test_remote_pytest.py test/architecture/test_document_placement.py` exit 0. FULL 선택 2,123파일 수집 게이트: 작업자 2개 347 s, 6개 150 s(메모리 최고 491 MiB), 실패 0. 변이(게이트 끔·한 프로세스 수집) 3 failed. 사고 재현(6a07a06b0f 이전 `native_cycle.py`): 폴더 419 passed, 단독 ERROR, 수집 게이트 31 passed(픽스처에서 `spec_from_file_location`으로 읽어 수집 때는 드러나지 않음) — 이 경우는 참조 시험 단독 실행(`test_native_cycle.py`가 참조 7개 안에 듦)이 잡는다.
+- gate 변화: 착지 가드 회차에 수집 게이트 1잡, 준비 단계에 단독 실행 최대 10잡+안전 시험.
