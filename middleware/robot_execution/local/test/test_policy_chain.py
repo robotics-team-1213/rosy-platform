@@ -2,6 +2,7 @@
 from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from hashlib import sha256
+import json
 import sqlite3
 import threading
 import time
@@ -119,6 +120,9 @@ def test_two_installed_cameras_chain_and_bind_both_frames(tmp_path):
         result = chain.port.submit('sim-sdk', observation_id=source['observation_id'],
             policy_revision=source['policy_revision'], positions={'joint_1':.101,'joint_2':.001})
         assert result['accepted'] and driver.commands[-1].command_id == result['command_id']
+        # The journaled intent binds both installed frames, not only the first camera's.
+        intent = json.dumps(chain.session._execution_journal.read(result['command_id'])['intent'])
+        assert sha256(bytes(range(12))).hexdigest() in intent and sha256(bytes(range(12, 24))).hexdigest() in intent
 
 
 def test_policy_without_installed_camera_is_refused_before_issuance(tmp_path):
