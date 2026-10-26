@@ -119,10 +119,13 @@ def test_hash_mismatch_and_non_canonical_bytes_are_refused(made):
     client, _ = made
     raw = encoded(bundle())
     assert code(upload(client, raw, claimed="f" * 64)) == "BUNDLE_HASH_MISMATCH"
-    for other in (raw.rstrip(b"\n"), raw.decode().encode("ascii", "backslashreplace"),
-                  raw.replace(b": ", b":"), b"\xef\xbb\xbf" + raw, b"{not json"):
+    for other, expected in ((raw.rstrip(b"\n"), "BUNDLE_NOT_CANONICAL"),
+                            (raw.decode().encode("ascii", "backslashreplace"), "BUNDLE_NOT_CANONICAL"),
+                            (raw.replace(b": ", b":"), "BUNDLE_NOT_CANONICAL"),
+                            (b"\xef\xbb\xbf" + raw, "BUNDLE_NOT_CANONICAL"),  # json.loads decodes a BOM'd bytes body
+                            (b"{not json", "BUNDLE_NOT_JSON")):
         response = upload(client, other)
-        assert response.status_code == 422 and code(response) in {"BUNDLE_NOT_CANONICAL", "BUNDLE_NOT_JSON"}
+        assert (response.status_code, code(response)) == (422, expected), other[:20]
     assert client.get(URL, headers=auth("viewer-a")).json()["proposals"] == []
 
 
@@ -145,6 +148,18 @@ def test_oversize_upload_is_refused_unread(made):
     from fleet.server.perception_promotion import MAX_BUNDLE_BYTES
     response = upload(client, b" " * (MAX_BUNDLE_BYTES + 1))
     assert (response.status_code, code(response)) == (413, "BUNDLE_TOO_LARGE")
+
+
+def test_streamed_oversize_upload_without_length_is_refused(made):
+    client, _ = made
+    from fleet.server.perception_promotion import MAX_BUNDLE_BYTES
+
+    def chunks():  # a generator body goes out chunked, with no Content-Length to trust
+        for _ in range(MAX_BUNDLE_BYTES // 65536 + 1):
+            yield b" " * 65536
+    response = client.post(URL, params={"sha256": "0" * 64}, content=chunks(), headers=auth("admin-a"))
+    assert (response.status_code, code(response)) == (413, "BUNDLE_TOO_LARGE")
+    assert client.get(URL, headers=auth("viewer-a")).json()["proposals"] == []
 
 
 def test_the_same_bundle_is_queued_once(made):
