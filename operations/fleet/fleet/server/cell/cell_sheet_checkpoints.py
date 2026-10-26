@@ -130,14 +130,15 @@ def due(connection, mission_id, step_index):
 
 
 def recover_ready(connection, now, event):
-    rows = connection.execute("SELECT * FROM fleet_cell_jobs WHERE status='READY'").fetchall()
+    rows = connection.execute("SELECT * FROM fleet_cell_jobs WHERE provenance_kind='legacy' AND status='READY'").fetchall()
     return sum(hold_due(connection, job, job["current_step_index"], now, event) for job in rows)
 
 
 def guard_ready(connection, mission_id, step_index, now, event):
     if type(step_index) is not int or step_index < 0:
         raise ValueError("step_index must be a non-negative integer")
-    job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,)).fetchone()
+    job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='legacy'",
+                             (mission_id,)).fetchone()
     if job is None:
         raise KeyError(mission_id)
     if job["status"] != "READY" or job["current_step_index"] != step_index:

@@ -409,3 +409,96 @@ def test_set_policy_admin_writes_several_people_once(tmp_path, monkeypatch):
     assert [user.get("policy_admin") for user in list_users(path)] == [True, True, None]
     with pytest.raises(SiteUsersError, match="policy_admin"):
         validate_users_document({"users": [{**_entry(), "policy_admin": "yes"}]})
+
+
+def test_add_service_registers_a_machine_without_console_credentials(tmp_path, monkeypatch, capsys):
+    from fleet.server.site_users import hash_password, load_site_accounts
+
+    path = tmp_path / "site-users.yaml"
+    human = {"principal_id": "person-1", "role": "operator", "login": "person",
+             "password_scrypt": hash_password("test-only-password")}
+    _seed(path, _entry(), human)
+    _stdin(monkeypatch, TOKEN + "\r\n")
+
+    assert main(["add-service", str(path), "--principal", "external-app", "--token-stdin"]) == 0
+
+    digest = sha256(TOKEN.encode()).hexdigest()
+    entries = yaml.safe_load(path.read_text(encoding="utf-8"))["users"]
+    assert entries == [_entry(), human, {"principal_id": "external-app", "role": "service",
+                                       "token_sha256": digest}]
+    tokens, logins = load_site_accounts(path)
+    assert tokens[digest] == {"principal_id": "external-app", "role": "service"}
+    assert set(logins) == {"person"}
+    output = capsys.readouterr()
+    assert json.loads(output.out.splitlines()[0]) == {
+        "action": "add-service", "principal_id": "external-app", "role": "service", "dry_run": False}
+    assert all(secret not in output.out + output.err for secret in (TOKEN, digest, human["password_scrypt"]))
+    assert TOKEN not in path.read_text(encoding="utf-8")
+    gid = ["--gid", str(path.stat().st_gid)] if os.name == "posix" else []
+    assert main(["validate", str(path), *gid]) == 0
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o440
+    _no_temp_files_left(tmp_path)
+
+
+@pytest.mark.parametrize("principal,token,error", [
+    ("operator-1", "fresh-token", "already exists"),
+    ("external-app", "tok-1", "another principal"),
+    ("external-app", "", "empty"),
+    ("external-app", "   \n", "empty"),
+    ("   ", "fresh-token", "non-empty"),
+])
+def test_add_service_refusals_preserve_the_registry(tmp_path, monkeypatch, capsys, principal, token, error):
+    path = tmp_path / "site-users.yaml"
+    original = _seed(path, _entry())
+    _stdin(monkeypatch, token)
+    with pytest.raises(SystemExit):
+        main(["add-service", str(path), "--principal", principal, "--token-stdin"])
+    assert error in capsys.readouterr().err
+    assert path.read_bytes() == original
+    _no_temp_files_left(tmp_path)
+
+
+def test_add_service_dry_run_does_not_publish_or_change_ownership(tmp_path, monkeypatch, capsys):
+    path = tmp_path / "site-users.yaml"
+    original = _seed(path, _entry())
+    status = path.stat()
+    _stdin(monkeypatch, TOKEN)
+    monkeypatch.setattr(site_users, "_apply_fleet_ownership", lambda path: pytest.fail("dry run changed ownership"))
+    assert main(["add-service", str(path), "--principal", "external-app", "--token-stdin", "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "action": "add-service", "principal_id": "external-app", "role": "service", "dry_run": True}
+    assert path.read_bytes() == original
+    assert path.stat().st_mode == status.st_mode
+    _no_temp_files_left(tmp_path)
+
+
+@pytest.mark.parametrize("extra", [[], ["--role", "operator"], ["--login", "machine"],
+                                 ["--password-hash-stdin"], ["--token", TOKEN]])
+def test_add_service_accepts_only_stdin_machine_credentials(tmp_path, monkeypatch, extra):
+    path = tmp_path / "site-users.yaml"
+    original = _seed(path, _entry())
+    _stdin(monkeypatch, TOKEN)
+    with pytest.raises(SystemExit):
+        main(["add-service", str(path), "--principal", "external-app",
+              *(["--token-stdin"] if extra else []), *extra])
+    assert path.read_bytes() == original
+
+
+def test_add_service_ownership_failure_preserves_original_registry(tmp_path, monkeypatch, capsys):
+    if os.name != "posix":
+        pytest.skip("Fleet ownership applies on the Linux site host")
+    path = tmp_path / "site-users.yaml"
+    original = _seed(path, _entry())
+    _stdin(monkeypatch, TOKEN)
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+
+    def refuse_ownership(*args):
+        raise PermissionError("ownership refused")
+
+    monkeypatch.setattr(os, "fchown", refuse_ownership)
+    with pytest.raises(SystemExit):
+        main(["add-service", str(path), "--principal", "external-app", "--token-stdin"])
+    assert "ownership refused" in capsys.readouterr().err
+    assert path.read_bytes() == original
+    _no_temp_files_left(tmp_path)
