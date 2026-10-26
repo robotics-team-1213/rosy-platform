@@ -12106,6 +12106,12 @@ osy-d395-s1d\`.
 - gate 변화: HOLD 유지. 원래 FULL 실패를 단독 선택 성공으로 바꾸지 않으며 다음 공식 전체 실행·착지·게시·실물 수용은 별도다.
 - CE: 미해결 — 종료 지연 원인과 해결을 입증하지 못해 해결 교훈을 쓰지 않았다.
 
+## 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
+
+- 변경: D-629의 좁은 화면 순서만 D-892로 부분 대체한다. 이전 결정 본문은 보존하고 새 결정·색인·DESIGN 참조·반응형 DOM·회귀 시험을 함께 맞춘다.
+- 증거: ADR 번호는 관문에서 선점했으며 ADR Log의 UTF-8 BOM·CRLF를 유지했다. 문서·DOM 변경 뒤 공식 원격 재검증은 진행 중이다.
+- gate 변화: 없음. Accepted는 실물·현장 또는 제품 전체 UI/UX 수용을 뜻하지 않는다.
+
 ## 2026-10-27 · 9e7b4f6f0a · OMX 화면에 prepare-native 카메라 기준 표시
 
 - 변경: `/learning/omx`가 `inspection.json`의 `camera_setup`(prepare-native `--camera-reference`, PR #200·D-792 S3)을 역할마다 "기준 일치(prepare-native에서 거부 검사 통과) · 기준 <revision 12자>"로 보인다. 64-hex 검증한 revision이 camera-setup 저장소에 있을 때만 같은 사이트 기준 사진 링크를 단다. 기존 `camera-setup.json`은 섀도 증거로 따로 표시하고, 둘 다 없을 때만 기존 문구를 보인다. `camera_identity`와 경로는 내보내지 않는다.
