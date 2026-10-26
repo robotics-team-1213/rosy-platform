@@ -17,3 +17,15 @@
 - 변경: 원천 어댑터 시험의 setup 보조함수와 모든 호출을 source_context로 바꿨다. pytest7의 nose 초기화 훅으로 호출되지 않게 하며 원천 시험의 검증 조건은 유지한다.
 - 증거: 공식 service 착지에서 새 CI 검사 test_no_test_module_defines_a_nose_style_setup_function이 이 함수명을 검출했고 main 단독에서는 통과했다. 수정 SHA의 원격 원천 시험과 해당 검사20 PASS/0 SKIP이다. 실패 로그는 보존하고 기존 실패 목록에 추가하지 않는다.
 - gate 변화: 없음. 후속 공식 전체 검증·병합은 별도로 진행한다. CE 해당 없음 — 호환성 이유가 기존 CI 검사와 이 수정에 직접 남는다.
+
+## 2026-10-26 · uncommitted · 독립 실행기와 프로세스 경계
+
+- 변경: `rosy-monitoring` CLI를 wheel에 등록하고 loopback/단일 worker/비공개 state-dir를 고정했다. POSIX 권한을 보장할 수 없는 환경은 시작을 거부한다. Fleet 캐시 미구축과 실제 빈 목록을 구별하며, peer 수신의 로컬 저장·시계·재전송 거절을 Collector에 보존한다.
+- 증거: `6b0f7568f5` 원격98 PASS/0 SKIP, 구조/harness/affected247 PASS/0 SKIP, 두 비교 NEW/KNOWN/FLAKY0. 실제 subprocess의 개별·peer 집계·중앙 직접 수집·중앙 종료 후 현장 지속·중복 writer 거부·재시작 수명 비증가와 private-state RED/수정을 확인했다. 최종 독립 재검토 차단 없음.
+- gate 변화: SOURCE GO, LOCAL/ARTIFACT/DEVICE/FIELD HOLD. 화면·native/TLS 묶음·실제 PC 수용을 포함하지 않는다. CE: 해당 없음 — 새 실행 경계와 회귀에 직접 기록했다.
+
+## 2026-10-26 · bc730ac631 · 후속 원천 시험의 초기화 훅 호환성
+
+- 변경: service의 setup 이름 충돌 수정을 CLI 후보에도 반영하고 추가 Fleet 캐시 회귀의 호출도 source_context로 바꿨다. 제품 동작과 시험 조건은 유지한다.
+- 증거: 원격 원천 어댑터22 PASS/0 SKIP, NEW/KNOWN/FLAKY0. service 수정과 함께 들어가면 새 nose 훅 검사에서 보조함수를 잘못 초기화하지 않는다.
+- gate 변화: 없음. 공식 병합 전체 검증은 후속이며 장치·현장 수용을 올리지 않는다. CE 해당 없음 — 기존 검사·회귀가 해당 조건을 직접 설명한다.

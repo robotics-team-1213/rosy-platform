@@ -14,7 +14,9 @@ from urllib.parse import urlsplit
 import httpx
 from core_common.protocol.monitoring import FleetMonitoringRead
 
+from .cache import ObservationRejected
 from .models import MonitoringLink, MonitoringNode, MonitoringSnapshot
+from .store import StoreUnavailable
 
 
 BODY_LIMIT = 1024 * 1024
@@ -201,7 +203,7 @@ class SourceReader:
         current = self._metadata(source)
         nodes, links = [self._node(source, 'UNKNOWN', current)], []
         if value.sampled_at is None:
-            return nodes, links
+            return nodes, links, False
         for row in value.robots:
             metadata = self._metadata(source, captured=value.sampled_at,
                                       age=max(value.cache_age_s, row.state_age_s or 0.0))
@@ -215,7 +217,7 @@ class SourceReader:
                 reachable=row.reachable, failure_stage=stage if row.link == 'tls-refused' else
                 'none' if row.reachable is True else stage,
                 duration_ms=None, reason_code=row.reason_code, **metadata))
-        return nodes, links
+        return nodes, links, True
 
     async def poll(self, source):
         started, wall = time.monotonic(), self.cache._wall()
@@ -252,11 +254,15 @@ class SourceReader:
                                 raise SourceFailure('protocol')
                             nodes = [self._node(source, health, self._metadata(source))]
                         elif source.kind == 'fleet':
-                            nodes, links = self._fleet(source, await self._get(client, base + '/api/fleet/monitoring'))
+                            nodes, links, complete = self._fleet(
+                                source, await self._get(client, base + '/api/fleet/monitoring'))
                         else:
                             await self._get(client, source.url)
                             nodes = [self._node(source, 'UNKNOWN', self._metadata(source))]
-                complete = source.kind != 'peer'
+                if source.kind not in {'peer', 'fleet'}:
+                    complete = True
+        except (StoreUnavailable, ObservationRejected):
+            raise  # The collector owns local storage, clock and replay diagnostics.
         except (SourceFailure, httpx.HTTPError, OSError, ValueError, OverflowError, TimeoutError) as error:
             stage = _stage(error)
             nodes, links = [], []
