@@ -936,6 +936,24 @@ def test_a_job_that_dies_without_an_exit_code_is_reported_after_two_polls(tmp_pa
     assert text.startswith(b"half a log\n") and b"ended without an exit code" in text
 
 
+def test_ssh_call_keeps_a_long_job_word_whole_past_the_ssh_exe_cut():
+    """2026-10-26: Git for Windows' ssh.exe started from Python cuts its remote command at ~8,190 bytes, silently.
+    A FULL landing's collection gate word (115 paths) lost the paths after it and pytest collected the whole tree."""
+    if not shutil.which("bash") or sys.platform == "win32":
+        pytest.skip("bash stands in for the remote shell")
+    word = "ROSY_COLLECT_PATHS=" + ",".join(f"pkg{i}/module/test" for i in range(600))
+    args = [word, "tools/collect_alone.py", "-pno:cacheprovider"]
+    cut_ssh = ["bash", "-c", 'exec bash -c "${2:0:8186}"', "ssh"]  # $1 host, $2 the remote command, as measured
+    done = rj.ssh_call(cut_ssh, "h", 'printf "%s\\n" "$#" "${#1}" "$2" "$3"', *args)
+    assert done.stdout.decode().split() == ["3", str(len(word)), *args[1:]]
+
+
+def test_remote_refuses_a_command_ssh_exe_would_cut(monkeypatch):
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: pytest.fail("a cut command reached ssh"))
+    with pytest.raises(SystemExit, match="over"):
+        rp.remote("h", "true", "x" * rj.ARGV_MAX, timeout=1)
+
+
 def test_killed_job_shows_no_live_pid_and_no_code_and_start_does_not_rerun_a_finished_job(tmp_path):
     if not shutil.which("setsid") or sys.platform == "win32":
         pytest.skip("Linux setsid/timeout/ionice are required")
