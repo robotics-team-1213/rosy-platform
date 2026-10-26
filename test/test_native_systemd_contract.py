@@ -485,6 +485,12 @@ NETWORK_EVIDENCE_READS = {
 }
 
 DECLARED_READS = {
+    # These entrypoints only read journal/bootstrap/media; controller writers are separate.
+    "rosy-os-motion-guard.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
+    "rosy-os-trial-deadline.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
+    "rosy-os-rauc.service": {"/etc/rosy", "/etc/rauc", "/etc/systemd", "/etc/dbus-1",
+                              "/opt/rosy/os-bootstrap", "/var/lib/rosy-device", "/run/rosy-claim",
+                              "/run/rosy-provision-boot", "/run/systemd/system"},
     # Only the admission methods are called: none of firstboot's writers run here.
     "rosy-os-storage.service": {
         "/var/lib/rosy-device", "/etc/rosy", "/etc/hostname", "/etc/hosts",
@@ -585,6 +591,12 @@ NETWORK_SOURCES = [
 
 # Program sources scanned for write roots, per unit.
 PROGRAM_SOURCES = {
+    "rosy-os-motion-guard.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_motion_guard", "os_bootloader", "os_update_state", "os_state_layout", "os_state_io")],
+    "rosy-os-trial-deadline.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_trial_deadline", "os_bootloader", "os_update_state", "os_state_layout")],
+    "rosy-os-rauc.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout")],
     "rosy-os-storage.service": ["deploy/robot/pinky_pro/native/os_storage_dispatch.py",
                                 "deploy/robot/pinky_pro/native/os_state_storage.py",
                                 "deploy/robot/pinky_pro/native/os_state_layout.py",
