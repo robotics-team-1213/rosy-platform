@@ -1620,3 +1620,11 @@
 - 증거: 원격 pytest(AI PC) 같은 묶음 + `paint_reuse_sim.py`, `test_module_structure.py` 572 passed, 26 skipped, `known_failures` NEW 0.
 - gate 변화: 없음. Gazebo 재실행과 실물 수용은 하지 않았다.
 - 결정: D-588 (예약)
+
+## 2026-10-18 · uncommitted · docs: CLAUDE.md를 AGENTS.md로 합치고 지운다
+
+- 변경: 지침 파일을 AGENTS.md 하나로 둔다. `CLAUDE.md`에서 아직 맞는 Device 설치 흐름(`deploy/robot/pinky_pro/`), 신원값 수기 기입 금지, 증거 분리 규칙을 `AGENTS.md`「Device flow」로 옮기고, 옛 `src/control` 경로·명령은 버렸다. `test_absorbed_guides_use_the_rosy_os_device_path`는 `AGENTS.md`와 `STEPS.txt`를 본다.
+- 증거: 로컬 main 착지(`tools/land.py --tests auto`) 원격 pytest 매 라운드 `known_failures` NEW 0, 마지막 라운드 6566 passed, 406 skipped. origin 기반 PR 브랜치는 pre-push 검사로 다시 본다.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
