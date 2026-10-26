@@ -956,6 +956,14 @@
       ],
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
+    "GET:/api/fleet/updates": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_host_control.py",
+        "test_every_signed_in_role_reads_the_update_summary"
+      ],
+      "source_revision": "8cd66e02ee10214330f3dbfb036ceb104d3971b9"
+    },
     "GET:/api/fleet/peers": {
       "status": 200,
       "test": [
