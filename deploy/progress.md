@@ -48,6 +48,8 @@ plans:
 ---
 ## 지금 상태
 
+- 2026-10-27 whole-OS A/B: disposable ARM SYSTEM에서 A→B(68d343b8c5,9passed)·B→A(cec31dcf9d,1passed)의 실제 RAUC 비활성 설치/readback·공용 mount 유지·180초 PID1 복구/reboot를 확인했다. firmware DT·payload·정책 입력은 합성이며, 독립 기준선 두 실행은 healthy commit의 연속 왕복이나 Pi 수용을 증명하지 않는다. native 최종 이미지·capacity·제품 CMS/서명·SD full readback과 실기 boot/watchdog/powercut은 계속 HOLD다. 상세 범위와 원격 증거는 [실행 기록](logs.md#2026-10-27--cec31dcf9d--arm-system-양방향-비활성-os-설치와-독립-복구-검증)을 따른다.
+
 - 2026-10-05 D-456: 수신 암호화 보조 payload와 claim 기반 TLS 유지보수 도구의 SOURCE/LOCAL 검사를 확인했다. CORE는 `/opt/rosy/releases`를 읽기만 한다. 실 POSIX 권한·ARM 빌드·서명된 장치 반영·LAN HTTPS 연결은 미확인으로 남긴다.
 
 - D-161 제품 기준선은 Ubuntu Server 24.04 arm64 + native ROS 2 Jazzy다.
