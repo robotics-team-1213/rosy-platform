@@ -4,14 +4,14 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
+import sysconfig
 
 import pytest
 
 
 @pytest.mark.skipif(not shutil.which('systemd-analyze'), reason='native systemd parser required')
 def test_native_service_unit_parses_with_installed_launcher(tmp_path):
-    executable = Path(sys.executable).with_name('rosy-monitoring')
+    executable = Path(sysconfig.get_path('scripts')) / 'rosy-monitoring'
     assert executable.is_file() and os.access(executable, os.X_OK), 'the wheel console entry point must be installed'
     source = Path(__file__).resolve().parents[1] / 'deploy/rosy-monitoring.service'
     text = source.read_text(encoding='utf-8')
