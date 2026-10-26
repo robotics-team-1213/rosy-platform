@@ -212,6 +212,22 @@ def test_a_session_gain_is_written_for_the_session_and_restored_to_the_value_fou
     assert arm.motors[13]["p_gain"] == 400 and (13, "p_gain", 400) not in arm.writes
 
 
+def test_a_session_profile_is_written_for_the_session_and_restored_to_the_value_found(tmp_path):
+    """2026-10-27: the servo snapped to each whole-tick goal; a session profile ramps between them."""
+    found = {"profile_acc": 0, "profile_vel": 0}
+    arm, leader = follower({motor: dict(found) for motor in m.FOLLOWER}), leader_arm()
+    path = tmp_path / "caps.json"
+    path.write_text(json.dumps({str(k): (dict(v, acc=8, vel=20) if k in (12, 13) else v) for k, v in CAPS_FILE.items()}))
+    caps = m.load_caps(path)
+    assert caps[12] == {"pwm_limit": 300, "profile_acc": 8, "profile_vel": 20}
+    s, calls = session(arm, leader)
+    record = s.execute(config(tmp_path), caps, teleop_only=False)
+    assert record["caps_restored"] is True and record["safe_end"] is True
+    assert (12, "profile_acc", 8) in arm.writes and (13, "profile_vel", 20) in arm.writes
+    assert all(arm.motors[motor]["profile_acc"] == 0 and arm.motors[motor]["profile_vel"] == 0 for motor in m.FOLLOWER)
+    assert not any(motor not in (12, 13) and name.startswith("profile") for motor, name, _ in arm.writes)
+
+
 def test_chunk_mode_runs_the_chunk_runner_and_keeps_the_cameras_for_the_judge(tmp_path):
     seen = []
     arm, leader = follower(), leader_arm()
@@ -290,6 +306,9 @@ def test_teleop_only_runs_teleoperate_on_the_robot_and_teleop_part(tmp_path):
     {**CAPS_FILE, 14: {"pwm": 500, "current": 250}},                 # above the XL330 ceiling (400)
     {**CAPS_FILE, 16: {"current": 250}},                             # no pwm
     {**CAPS_FILE, 14: {"pwm": 300, "current": 250, "p": 5000}},      # a gain above its ceiling
+    {**CAPS_FILE, 12: {"pwm": 300, "acc": 8}},                       # a profile needs both acc and vel
+    {**CAPS_FILE, 12: {"pwm": 300, "acc": 1, "vel": 20}},            # acceleration below the guard's lag budget
+    {**CAPS_FILE, 12: {"pwm": 300, "acc": 8, "vel": 5}},             # velocity that would slow the guard's stream
 ])
 def test_caps_files_must_cover_every_motor_within_range(tmp_path, caps):
     good = tmp_path / "good.json"

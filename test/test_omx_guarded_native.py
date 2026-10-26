@@ -143,6 +143,33 @@ def test_streaming_profile_must_read_back_zero_before_enabling(guard, register):
     assert ('on',) not in device.bus.events and not device.bus.is_connected
 
 
+@pytest.mark.parametrize("acc, vel, drive_mode, kept", [
+    (8, 20, 0, True),     # record_session's session profile: the servo ramps between whole-tick goals
+    (1, 1, 0, False),     # joint_tune's resting 1/1 would crawl at 1.4 deg/s
+    (8, 0, 0, False),     # velocity 0 is a step profile; half a profile is not admitted
+    (200, 20, 0, False),  # above the admitted acceleration
+    (8, 20, 4, False),    # time-based drive mode: the same numbers mean milliseconds
+])
+def test_a_session_profile_within_the_lag_budget_is_kept_and_anything_else_cleared(guard, acc, vel, drive_mode, kept):
+    device = SimpleNamespace(bus=Bus(), cameras={})
+    for name in NAMES:
+        device.bus.profiles[name, "Profile_Acceleration"], device.bus.profiles[name, "Profile_Velocity"] = acc, vel
+    read = device.bus.read
+    device.bus.read = lambda register, motor, **kw: drive_mode if register == "Drive_Mode" else read(register, motor, **kw)
+    guard.connect_passive(device, follower=True)
+    expected = {(acc, vel) if kept else (0, 0)}
+    assert {(device.bus.profiles[n, "Profile_Acceleration"], device.bus.profiles[n, "Profile_Velocity"])
+            for n in NAMES} == expected
+    assert not any(device.bus.torque.values())
+
+
+def test_the_admitted_profile_never_limits_the_stream_and_lags_well_inside_the_bound(guard):
+    deg_s2, deg_s = 214.577 * 360 / 3600, 0.229 * 360 / 60  # X-series raw units
+    stream = 10.0  # deg/s: the guard's tracking limit in _body_command
+    assert guard.PROFILE_VEL[0] * deg_s >= 2 * stream
+    assert stream ** 2 / (2 * guard.PROFILE_ACC[0] * deg_s2) <= 0.5 < 5  # added lag vs the following-error bound
+
+
 @pytest.mark.parametrize("problem", ["calibration", "mode", "camera"])
 def test_connect_failure_turns_torque_off_and_closes_bus(guard, problem):
     device = SimpleNamespace(bus=Bus(), cameras={})

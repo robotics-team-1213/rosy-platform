@@ -13,29 +13,27 @@ commissioning caps (PWM 20, Current 50) keep the follower from following. This w
    never two openers);
 4. runs `guarded_native.py record` (or `teleoperate` with --teleop-only, for a dry run without data;
    `record --teacher` for a --replay trajectory, `chunk_runner.py` for --chunks, both inside the guard);
-5. always, however the command ends (Ctrl-C, SIGTERM, a dropped SSH session's SIGHUP): the recorder
-   gets SIGINT and 10 s to finish its episode before it is killed; then, with further interrupts
-   ignored, torque OFF on follower 11-16 (retried for up to 30 s, reopening the port after a USB
-   drop, until every motor reads 0) and on the leader gripper (6), each motor's caps back to the
-   commissioning baseline (PWM 20, Current 50) even if another motor failed, the stopped services
-   started again, session.json written. The exit status is non-zero unless that ending was safe.
+5. always, however the command ends (Ctrl-C, SIGTERM, a dropped SSH session's SIGHUP): the recorder gets SIGINT
+   and 10 s to finish its episode before it is killed; then, with further interrupts ignored, torque OFF on
+   follower 11-16 (retried for up to 30 s, reopening the port after a USB drop, until every motor reads 0) and on
+   the leader gripper (6), each motor's caps back to the commissioning baseline (PWM 20, Current 50) even if
+   another motor failed, the stopped services started again, session.json written. The exit status is non-zero
+   unless that ending was safe.
 
-The session refuses to start unless the follower caps are at the baseline (an earlier session that
-did not restore them must be fixed first), and caps files may not exceed 400.
-No independent stop exists while LeRobot holds the bus: keep a hand on the follower power switch.
-Run it inside tmux so a dropped connection does not even reach it.
+The session refuses to start unless the follower caps are at the baseline (an earlier session that did not restore
+them must be fixed first), and caps files may not exceed 400. No independent stop exists while LeRobot holds the
+bus: keep a hand on the follower power switch. Run it inside tmux so a dropped connection does not even reach it.
 
   record_session.py --config record-config.json --caps caps.json [--task-card task-card.yaml] [--teleop-only]
 
-caps.json: {"11": {"pwm": 300}, ..., "16": {"pwm": 300, "current": 250}}  (all six IDs); optional "p": a Position P
-  Gain for the session only, restored to the value found (2026-10-26: the arm S wrist at its factory 400 trailed
-  4.8 deg under load at 28 % PWM, and the guard stops at 5)
-Tasks plug in and out: the record config holds only what does not change with the task (devices,
-cameras, fps); a task card (tasks/<task>.yaml, schema rosy.omx-task-card.v1) holds the task text,
-episode timing, dataset name and its design (layout, phases, success and failure labels). With
---task-card the card's `record` block fills the dataset section, the dataset root becomes a new
-`<root_prefix>/<task_id>-r<revision>-<stamp>`, and the card is copied verbatim with its sha256 into
-session.json, so review knows which design an episode was recorded under.
+caps.json: {"11": {"pwm": 300}, ..., "16": {"pwm": 300, "current": 250}}  (all six IDs); optional session-only "p"
+  (Position P Gain; 2026-10-26 the wrist at 400 trailed 4.8 deg, the guard stops at 5) and "acc"+"vel"
+  (Profile_Acceleration/Velocity in guarded_native.PROFILE_ACC/VEL: the servo ramps between tick-quantized goals)
+Tasks plug in and out: the record config holds only what does not change with the task (devices, cameras, fps); a
+task card (tasks/<task>.yaml, schema rosy.omx-task-card.v1) holds the task text, episode timing, dataset name and
+its design (layout, phases, success and failure labels). With --task-card the card's `record` block fills the
+dataset section, the dataset root becomes a new `<root_prefix>/<task_id>-r<revision>-<stamp>`, and the card is
+copied verbatim with its sha256 into session.json, so review knows which design an episode was recorded under.
 """
 from __future__ import annotations
 
@@ -51,6 +49,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from guarded_native import PROFILE_ACC, PROFILE_VEL
 from joint_tune import BASELINE, CAP_MAX, FOLLOWER, SerialBus, no_interrupts, protect_signals, session_lock
 from record_config import validate_config
 
@@ -64,6 +63,7 @@ P_GAIN_MAX = 1600  # the elbow runs at 1500; higher gains need their own commiss
 # behind (2026-10-26, user decision: higher than 400). 600 is 68 % of their 885; the XL330 wrist keeps CAP_MAX.
 XL430_PWM_MAX = 600
 TORQUE_OFF_DEADLINE_S = 30.0
+SESSION_ONLY = ("p_gain", "profile_acc", "profile_vel")  # not commissioning caps: restored to the value found
 
 
 def interrupt_on_parent_death() -> None:
@@ -81,17 +81,18 @@ def load_caps(path: Path) -> dict:
         raise SystemExit(f"caps must name every follower ID {sorted(FOLLOWER)}")
     for motor, cap in caps.items():
         xl330 = FOLLOWER[motor][0] == 1200
-        allowed = {"pwm", "current", "p"} if xl330 else {"pwm", "p"}
-        if not set(cap) <= allowed or "pwm" not in cap:
-            raise SystemExit(f"motor {motor}: caps keys must be {sorted(allowed)} with pwm")
+        allowed = {"pwm", "current", "p", "acc", "vel"} if xl330 else {"pwm", "p", "acc", "vel"}
+        if not set(cap) <= allowed or "pwm" not in cap or ("acc" in cap) != ("vel" in cap):
+            raise SystemExit(f"motor {motor}: caps keys must be {sorted(allowed)} with pwm, acc and vel together")
         pwm_max = PWM_MAX if xl330 else XL430_PWM_MAX
         if not (type(cap["pwm"]) is int and 1 <= cap["pwm"] <= pwm_max):
             raise SystemExit(f"motor {motor}: pwm 1..{pwm_max}")
         if "current" in cap and not (type(cap["current"]) is int and 1 <= cap["current"] <= CURRENT_MAX):
             raise SystemExit(f"motor {motor}: current 1..{CURRENT_MAX}")
-        if "p" in cap and not (type(cap["p"]) is int and 1 <= cap["p"] <= P_GAIN_MAX):
-            raise SystemExit(f"motor {motor}: p 1..{P_GAIN_MAX}")
-    names = {"pwm": "pwm_limit", "current": "current_limit", "p": "p_gain"}  # caps-file keys -> register names
+        for key, (low, high) in (("p", (1, P_GAIN_MAX)), ("acc", PROFILE_ACC), ("vel", PROFILE_VEL)):
+            if key in cap and not (type(cap[key]) is int and low <= cap[key] <= high):
+                raise SystemExit(f"motor {motor}: {key} {low}..{high}")
+    names = {"pwm": "pwm_limit", "current": "current_limit", "p": "p_gain", "acc": "profile_acc", "vel": "profile_vel"}
     return {motor: {names[key]: value for key, value in cap.items()} for motor, cap in caps.items()}
 
 
@@ -271,7 +272,7 @@ class Session:
             if bus.read("torque"):
                 raise RuntimeError(f"follower {motor} torque ON: EEPROM caps not written")
             for name, value in values.items():
-                if name == "p_gain":  # not a commissioning cap: restore exactly what the motor had
+                if name in SESSION_ONLY:  # restore exactly what the motor had
                     self.found_gains = getattr(self, "found_gains", {})
                     self.found_gains.setdefault(motor, {})[name] = bus.read(name)
                 bus.write(name, value)
@@ -323,10 +324,10 @@ class Session:
                 bus.motor = motor
                 for name, value in values.items():
                     try:
-                        # the cleanup path writes only torque OFF and baseline caps; a session gain goes back
+                        # the cleanup path writes only torque OFF and baseline caps; a session-only value goes back
                         # through the ordinary write, torque being confirmed OFF before this runs (2026-10-26:
                         # the cleanup refused the wrist p_gain and the session ended safe_end false)
-                        write, read = ((bus.write, bus.read) if name == "p_gain" else (bus.cleanup_write, bus.cleanup_read))
+                        write, read = ((bus.write, bus.read) if name in SESSION_ONLY else (bus.cleanup_write, bus.cleanup_read))
                         write(name, value)
                         after = read(name)
                         self.note_fault(bus)

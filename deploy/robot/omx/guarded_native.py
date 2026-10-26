@@ -25,6 +25,13 @@ NAMES = (*BODY, "gripper")
 #: PWM_Limit admitted per body joint: the XL430 base, shoulder and elbow carry the arm at reach up to
 #: record_session's XL430_PWM_MAX (2026-10-26: 78 % of 300 at 0.23 m); the XL330 wrist stays at 400.
 PWM_ADMIT_MAX = {"shoulder_pan": 600, "shoulder_lift": 600, "elbow_flex": 600, "wrist_flex": 400, "wrist_roll": 400}
+#: Session servo profile (record_session caps "acc"/"vel", raw X-series units: 21.46 deg/s^2, 1.374 deg/s) kept at
+#: connect so the servo ramps between the whole-tick goals instead of snapping to each (2026-10-27: arm S shook on
+#: 1-2 tick steps). Velocity >= 20.6 deg/s, twice the 10 deg/s this guard streams at most, so it never slows a stream;
+#: acceleration >= 107 deg/s^2 adds a steady lag of v^2/2a <= 0.47 deg at 10 deg/s (0.06 at RISE_SPEED 3.6 deg/s)
+#: against the 5 deg following-error bound. Anything else is cleared to 0 (step goals) as before.
+PROFILE_ACC, PROFILE_VEL = (5, 100), (15, 200)
+PROFILE = {"Profile_Acceleration": PROFILE_ACC, "Profile_Velocity": PROFILE_VEL}
 
 
 def torque_off(bus):
@@ -78,8 +85,9 @@ def connect_passive(device, *, follower):
                 raise ValueError(f"{name}: expected commissioned mode 4 body / 5 gripper")
             if bus.read("Hardware_Error_Status", name) or bus.read("Torque_Enable", name):
                 raise ValueError(f"{name}: error or torque is ON")
-            if follower:
-                for register in ("Profile_Velocity", "Profile_Acceleration"):
+            if follower and not (all(low <= bus.read(r, name) <= high for r, (low, high) in PROFILE.items())
+                                 and not bus.read("Drive_Mode", name) & 4):  # bit 2: time-based, other units
+                for register in PROFILE:
                     bus.write(register, name, 0)
                     if bus.read(register, name) != 0:
                         raise ValueError(f"{name}: {register} readback mismatch")
