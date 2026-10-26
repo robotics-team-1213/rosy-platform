@@ -4941,3 +4941,10 @@
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-27 · e7093c177a · ARM transfer 결과 판정과 검수용 export
+
+- 변경: 기존 simulation observer의 POST_ACTION 관측에서 Action 결과와 task succeeded/failed/unknown을 분리하고, 원본 근거를 기존 Fleet 이벤트 원장에 보존한다. 검수 export는 metadata-only이며 완료·재시도 권한을 만들지 않는다. POST_ACTION 계보 검사를 기존 완료 경로와 공유한다.
+- 증거: tests-only RED와 구현 GREEN, 독립 검토 반례 RED/GREEN을 공식 원격 실행했다. 관련 통합은 81988c1eb0의 116 passed/0 skipped. e7093c177a affected는 역의존·guard 4607 passed/190 skipped, Fleet 7052 passed/389 skipped, 두 invocation exit 0·known NEW 0. 독립 계약 재검토에서 중요 발견 없음. `docs/validation/transfer-outcomes-2026-10-27/result.md`와 `operations/fleet/docs/transfer-outcome-review.md` 참고.
+- Gate: 기존 모듈 gate를 올리지 않는다. 실제 장치·모델 품질·자동 재파지·다중 attempt·현장 수용은 별도다. 착지·push 미수행.
+- CE: 해당 없음 — 판단과 회귀 증거가 코드·시험·검증 기록에 남아 있다.
