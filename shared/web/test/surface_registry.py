@@ -40,7 +40,7 @@ _SCOPES = ("path", "value", "reason", "baseline", "shape", "port", "theme", "bre
 THEMES = ("dark", "light")
 TOKENS = "shared/web/tokens.css"
 _THEME_JS = re.compile(
-    r'<link rel="stylesheet" href="/common/tokens\.css">\s*<script src="/common/theme\.js"></script>')
+    r'<link rel="stylesheet" href="(?P<prefix>\./|/)common/tokens\.css">\s*<script src="(?P=prefix)common/theme\.js"></script>')
 _PIN = re.compile(r"<html\b[^>]*\bdata-theme-pin=\"dark\"", re.I)
 _THEME_COLOUR = re.compile(r'<meta\s+name="theme-color"\s+content="([^"]*)"', re.I)
 _COLOUR_SCHEME = re.compile(r"color-scheme\s*:")

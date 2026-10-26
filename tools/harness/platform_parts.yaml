@@ -602,7 +602,15 @@ roots:
     d427_target: operations/monitoring
     wave: none
     import_prefix: [rosy.monitoring]
-    note: D-876 independent read-only observation/configuration/cache wheel; collector, HTTP API and UI follow separately. No Fleet/CORE command or host repair authority.
+    note: D-876 independent read-only collector, scoped API and POSIX launcher; UI source belongs to applications/monitoring. No Fleet/CORE command or host repair authority.
+    concern: other
+  - path: applications/monitoring
+    layout_target: applications/monitoring
+    part: operations
+    d427_target: operations/ui/monitoring
+    wave: none
+    import_prefix: []
+    note: D-876 independent Monitoring application boundary and backend browser contracts; visual UI acceptance follows separately. Static artifacts consume canonical shared web assets.
     concern: other
   - path: operations/processes/palletizing
     part: operations

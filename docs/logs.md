@@ -11674,3 +11674,21 @@ osy-d395-s1d\`.
 - 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
 - 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · Monitoring 기존 원천 수집·durable 집계·읽기 API
+
+- 변경: 독립 Monitoring에 기존 CORE/Fleet/host 출력을 읽는 제한 수집기, 사이트별 reader API, 정규화 SQLite 관측·anchor·peer cursor·제한 이력을 구현했다. 캐시 GET은 운영 gather와 원천 polling을 호출하지 않는다. 쓰기 전용 lease와 게시 전 durable commit, 복구 시 stale 보고 경로, 고정 오류 코드 및 원천 JSON 제한을 적용했다.
+- 증거: `5a5355aa69` 원격89시험과 구조/harness/affected247시험이 모두 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 재시작/역순/동시 writer/응답 aging/task 종료/원천 손상/이력 만료 RED와 수정을 확인했고, 최종 SHA 독립 재검토에서 추가 차단 없음이 확인됐다.
+- gate 변화: Monitoring의 CLI·독립 프로세스·브라우저·native 묶음·실제 PC/LAN/TLS/장치 수용은 HOLD다. 공유 기반/등록을 먼저 착지한 뒤 이 서비스를 병합한다. CE: 해당 없음 — 새 구현의 계약과 회귀로 기록했다.
+
+## 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
+
+- 변경: 설치 wheel의 독립 CLI, loopback/비공개 상태 경로/단일 worker, 플랫폼 권한 미보장 시 시작 거부를 구현했다. Fleet 캐시 미구축에서 과거 관측을 만료까지 보존하고 peer 수신의 로컬 거절 사유를 Collector로 전달한다.
+- 증거: `6b0f7568f5` 원격98시험과 구조/harness/affected247시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 실제 개별·중앙 집계·중앙 직접 수집 subprocess와 중앙 단절 독립성·프로세스 간 writer 배타성을 확인했다. 최종 독립 재검토 차단 없음.
+- gate 변화: Monitoring SOURCE GO, 화면/배포/실제 PC 수용은 HOLD다. CE: 해당 없음 — 새 기능의 코드·회귀가 판단 근거를 보존한다.
+
+## 2026-10-26 · uncommitted · Monitoring 앱 소유·공유 검증 등록
+
+- 변경: 독립 상태 앱의 소유/표면 기준과 source part·크기 측정·browser scope·CI를 등록했다. 기존 원격 구조/브라우저 게이트를 약화하지 않고 실제 backend 조회를 검증한다.
+- 증거: `1a9cd5b164` 실제 Chromium3시험과 구조/harness/affected/browser-scope262시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). API 브라우저 경로의 증거이며 화면 완성·G1/G2/G3·native 배포·현장 수용은 아니다.
+- gate 변화: UI·배포·실제 PC HOLD 유지. CE: 해당 없음 — 소유/등록/회귀로 기록했다.

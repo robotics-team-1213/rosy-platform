@@ -490,3 +490,9 @@
 - 변경: checkbox label에 기존 ui-check를 적용하고 textarea의 ui-field 설정을 생성 위치로 옮겼다. 입력 의미·기명 권한·원장 처분은 유지한다.
 - 증거: source42e079ef48 FULL의 공유 입력 검사1 FAIL을 source79ff20cc96에서 수정했고 해당 원격 회귀1 PASS·SKIP0·NEW0이다. 기존 sourcebbffbf8577의 집중 Chromium/Node33건과 source42e079ef48의 명시 Chromium4그룹은 각각 통과했다. 최종 수정 source의 공식 FULL은 후속 실행이다.
 - gate 변화: 공통 입력 표현을 맞추며 장치·현장 수용을 승격하지 않는다. CE 해당 없음 — 원인과 수정 조건이 기존 공유 UI 검사에 직접 남는다.
+
+## 2026-10-26 · 916a6b79bd · 독립 Monitoring 화면 진입
+
+- 변경: 관제 utility 영역에 `/monitoring/` 새 창 링크를 추가했다. Fleet 자격 전달·추가 polling·명령은 없다. 같은 TLS site의 독립 Monitoring proxy 경로가 배포 전제다.
+- 증거: 고정 topbar·5영역·정지 배선은 변경하지 않았다. b6e8620373의 Fleet header·grammar·shared controls 원격44 PASS/0 SKIP, NEW/KNOWN/FLAKY0이다. 별도 Monitoring의 실제 prefixed UI는 Chromium에서 독립 검증했다.
+- gate 변화: 기존 관제·장치 수용을 올리지 않는다. CE 해당 없음 — 단순 링크이며 별도 판단을 숨기지 않는다.

@@ -9,9 +9,10 @@ from uuid import uuid4
 
 from .config import MonitoringConfig
 from .models import MonitoringLink, MonitoringNode, MonitoringSnapshot
+from .store import MAX_ANCHORS, StoreUnavailable
 
 
-MAX_REMEMBERED = 8192
+MAX_REMEMBERED = MAX_ANCHORS
 
 
 class ObservationRejected(ValueError):
@@ -41,13 +42,14 @@ class _Record:
 
 def _fact(item):
     return item.model_dump(exclude={"age_s", "remaining_s", "report_remaining_s", "freshness",
-                                    "label", "expected"})
+                                    "label", "expected", "last_success_at"})
 
 
 class ObservationCache:
     def __init__(self, config: MonitoringConfig, *, monotonic=time.monotonic,
-                 utcnow=lambda: datetime.now(timezone.utc)):
+                 utcnow=lambda: datetime.now(timezone.utc), store=None):
         self.config = config
+        self.store = store
         self._monotonic, self._utcnow = monotonic, utcnow
         self._last_now = -math.inf
         self._sources = {source.id: source for source in config.sources}
@@ -56,7 +58,8 @@ class ObservationCache:
                                     | {site for s in config.sources for site in s.peer_sites})
         self.generation, self._sequence = uuid4().hex, 0
         self._groups = {}
-        # shortcut: keep at most 8192 identities until restart; use durable bounded anchors for larger inventory churn.
+        self._failures = {}
+        # shortcut: reject new identities at 8192; add verified expired-anchor pruning for larger inventory churn.
         self._latest = {}
         self._peers = {}
         self._retired = {source.id: deque(maxlen=64) for source in config.sources if source.kind == "peer"}
@@ -70,7 +73,7 @@ class ObservationCache:
             for site in scopes:
                 item = MonitoringNode(
                     id=f"{site}:{kind}:{source.id}", site_id=site, kind=kind,
-                    label=source.label or source.id,
+                    label=(source.label or source.id)[:80],
                     origin_collector=source.id if peer else config.collector_id, origin_source=source.id,
                     sample_id=None, sampled_at=None, age_s=None,
                     valid_for_s=900 if source.kind == "host_guard" else 2100 if source.kind == "host_state" else 15,
@@ -78,6 +81,51 @@ class ObservationCache:
                 )
                 rows[item.id] = _Record(item, now, None, now, now)
             self._groups[("peer" if peer else "local", source.id)] = rows
+        if store is not None:
+            self._restore(now, self._wall())
+
+    def _restore(self, now, wall):
+        saved = self.store.load()
+        groups, anchors = {}, {}
+        try:
+            for table in ('visible', 'anchors'):
+                for key, item, captured in saved[table]:
+                    elapsed = (wall - captured).total_seconds()
+                    if elapsed < 0:
+                        raise StoreUnavailable()
+                    source = self._sources.get(key[1])
+                    if source is None:
+                        continue
+                    scopes = source.peer_sites if key[0] == 'peer' else (source.site_id,)
+                    if (item.site_id not in scopes or key[0] == 'peer' and source.kind != 'peer'
+                            or key[0] == 'local' and item.origin_collector != self.config.collector_id):
+                        raise StoreUnavailable()
+                    age = None if item.age_s is None else item.age_s + elapsed + 2.0
+                    record = _Record(item, now, age,
+                                     now + max(0.0, item.remaining_s - elapsed - 2.0), now)
+                    if table == 'visible':
+                        groups.setdefault(key, {})[item.id] = record
+                    else:
+                        anchors[(key, item.id)] = record
+            peers, retired = {}, dict(self._retired)
+            for source, cursor in saved['peers'].items():
+                if source not in self._retired:
+                    continue
+                generation, sequence, history = cursor
+                if (not isinstance(generation, str) or len(generation) != 32
+                        or any(c not in '0123456789abcdef' for c in generation)
+                        or type(sequence) is not int or not 0 <= sequence <= 2**63 - 1
+                        or not isinstance(history, list) or len(history) > 64
+                        or any(not isinstance(g, str) or len(g) != 32
+                               or any(c not in '0123456789abcdef' for c in g) for g in history)):
+                    raise StoreUnavailable()
+                peers[source] = (generation, sequence)
+                retired[source] = deque(history, maxlen=64)
+            proposed = self._groups | groups
+            self._compose(proposed, self.scope_sites, now, wall, 0)
+        except (ValueError, TypeError, KeyError):
+            raise StoreUnavailable() from None
+        self._groups, self._latest, self._peers, self._retired = proposed, anchors, peers, retired
 
     def _now(self):
         now = self._monotonic()
@@ -102,6 +150,13 @@ class ObservationCache:
             return _Record(item, now, None, now, now)
         if old is not None and old.item.sampled_at is not None and item.sampled_at < old.item.sampled_at:
             raise ObservationRejected("MONITORING_REPLAY")
+        if isinstance(item, MonitoringLink):
+            successes = [value for value in (item.last_success_at,
+                         old.item.last_success_at if old is not None else None,
+                         item.sampled_at if item.reachable is True and item.failure_stage == 'none' else None)
+                         if value is not None]
+            if successes:
+                item = item.model_copy(update={"last_success_at": max(successes)})
         wall_age = (wall - item.sampled_at).total_seconds()
         if wall_age < -1:
             raise ObservationRejected("MONITORING_CLOCK")
@@ -140,12 +195,16 @@ class ObservationCache:
             own_id = f"{site}:collector:{self.config.collector_id}"
             if own_id in used:
                 raise ObservationRejected()
+            failures = [reason for source_id, reason in self._failures.items()
+                        if site in (self._sources[source_id].peer_sites if self._sources[source_id].kind == 'peer'
+                                    else (self._sources[source_id].site_id,))]
             nodes.append(MonitoringNode(
                 id=own_id, kind="collector", label="ROSY Monitoring", site_id=site,
                 origin_collector=self.config.collector_id, origin_source="collector",
                 sample_id=f"{self.generation}:{sequence}", sampled_at=wall, age_s=0.0,
                 valid_for_s=15, remaining_s=15.0, report_remaining_s=15.0,
-                freshness="fresh", reported_health="OK",
+                freshness="fresh", reported_health="WARNING" if failures else "OK",
+                reason_code=failures[0] if failures else None,
             ))
         return MonitoringSnapshot(schema_version=1, collector_id=self.config.collector_id,
                                   generation=self.generation, sequence=sequence, produced_at=wall,
@@ -153,13 +212,20 @@ class ObservationCache:
                                   nodes=tuple(sorted(nodes, key=lambda item: item.id)),
                                   links=tuple(sorted(links, key=lambda item: item.id)))
 
-    def _commit(self, key, records, now, wall):
+    def _commit(self, key, records, now, wall, *, peer_cursor=None):
         remembered = self._latest | {(key, record.item.id): record for record in records.values()
                                      if record.item.sample_id is not None}
         if len(remembered) > MAX_REMEMBERED:
             raise ObservationRejected("MONITORING_CAPACITY")
         proposed = self._groups | {key: records}
-        self._compose(proposed, self.scope_sites, now, wall, self._sequence)
+        snapshot = self._compose(proposed, self.scope_sites, now, wall, self._sequence)
+        # Aging floats, UTC fractions and a growing sequence must fit without another source update.
+        size = len(snapshot.model_dump_json().encode('utf-8'))
+        if size + 64 * (len(snapshot.nodes) + len(snapshot.links)) > 1024 * 1024:
+            raise ObservationRejected('MONITORING_CAPACITY')
+        if self.store is not None:
+            self.store.save(key, [record.value(now) for record in records.values()],
+                            wall=wall, peer_cursor=peer_cursor)
         self._groups = proposed
         self._latest = remembered
 
@@ -214,9 +280,12 @@ class ObservationCache:
             anchor = self._latest.get((key, item.id), old.get(item.id))
             records[item.id] = self._record(item, anchor, now, wall, elapsed_s + 1.0,
                                             snapshot.remaining_s, peer=True)
-        self._commit(key, records, now, wall)
+        retired = deque(self._retired[source_id], maxlen=64)
         if previous and snapshot.generation != previous[0]:
-            self._retired[source_id].append(previous[0])
+            retired.append(previous[0])
+        cursor = (snapshot.generation, snapshot.sequence, list(retired))
+        self._commit(key, records, now, wall, peer_cursor=cursor)
+        self._retired[source_id] = retired
         self._peers[source_id] = (snapshot.generation, snapshot.sequence)
 
     def snapshot(self, sites: frozenset[str]) -> MonitoringSnapshot:
@@ -225,3 +294,18 @@ class ObservationCache:
         now, wall = self._now(), self._wall()
         self._sequence += 1
         return self._compose(self._groups, sites, now, wall, self._sequence)
+
+    def checkpoint(self):
+        """Record expiration transitions even when a remote peer never responds again."""
+        if self.store is not None:
+            now, wall = self._now(), self._wall()
+            for key, records in self._groups.items():
+                self.store.save(key, [record.value(now) for record in records.values()], wall=wall)
+            self.store.prune(wall)
+
+    def collection_failure(self, source_id, reason=None):
+        self._source(source_id)
+        if reason is None:
+            self._failures.pop(source_id, None)
+        else:
+            self._failures[source_id] = reason

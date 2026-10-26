@@ -28,13 +28,16 @@ from pathlib import Path
 from importlib.metadata import distribution
 import sys
 sys.path.insert(0, sys.argv[1])
-from rosy.monitoring import cache, config, models
+from rosy.monitoring import cache, config, models, service
 dist = distribution('rosy-monitoring')
 assert dist.version == '0.1.0'
 files = {str(p) for p in dist.files}
 assert 'rosy/monitoring/cache.py' in files
+assert 'rosy/monitoring/__main__.py' in files
+assert any(entry.name == 'rosy-monitoring' and entry.value == 'rosy.monitoring.__main__:main'
+           for entry in dist.entry_points)
 assert 'rosy/__init__.py' not in files
-assert all(Path(m.__file__).is_relative_to(Path(sys.argv[1])) for m in (cache, config, models))
+assert all(Path(m.__file__).is_relative_to(Path(sys.argv[1])) for m in (cache, config, models, service))
 assert not any(name.split('.')[0] in {'fleet', 'rclpy', 'rospy'} for name in sys.modules)
 assert not any('fleet' in requirement.lower() or 'rclpy' in requirement.lower()
                for requirement in dist.requires or [])
