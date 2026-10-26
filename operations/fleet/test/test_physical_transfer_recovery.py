@@ -6,12 +6,13 @@ import sqlite3
 
 import pytest
 
+from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from fleet.server.mission_store import MissionConflict
 from fleet.server.site_auth import SitePrincipal
 from test_physical_transfer_evidence import geometry, policy
-from test_physical_transfer_store import NOW, PROPOSER, OPERATOR, installation, rig, claims, connect
+from test_physical_transfer_store import NOW, PROPOSER, OPERATOR, installation, rig, claims, connect, create, admit
 from test_physical_transfer_preparation import execution
-from test_physical_transfer_submission import prepared, observations
+from test_physical_transfer_submission import prepared, observations, authorize
 from test_physical_transfer_outcomes import submitted, observe, receipt
 from test_transfer_execution_review import phase_receipt
 
@@ -104,18 +105,20 @@ def test_uncertain_or_active_owner_is_not_a_recovery_candidate(submitted, state)
     assert snapshot(submitted[0]) == before
 
 
-@pytest.mark.parametrize("kind", ["held", "moving", "target", "missing", "attempt", "stale", "producer"])
+@pytest.mark.parametrize("kind", ["held", "moving", "zone", "target", "missing", "attempt", "stale", "producer",
+                                 "reused-id", "sequence"])
 def test_unproven_source_or_clearance_never_releases_parent_claims(failed_transfer, kind):
     args = arguments(failed_transfer)
     values = list(args["observations"])
     if kind == "held":
         owner = replace(values[0].owners[0], held_state="UNKNOWN")
         values[0] = replace(values[0], owners=(owner, *values[0].owners[1:]))
-    elif kind == "moving":
+    elif kind in {"moving", "zone"}:
         owner = values[0].owners[0]
         links = dict(owner.links)
         name = next(iter(links))
-        links[name] = replace(links[name], linear_velocity_m_s=(.05, 0., 0.))
+        links[name] = (replace(links[name], linear_velocity_m_s=(.05, 0., 0.)) if kind == "moving" else
+                       replace(links[name], bounds=failed_transfer[2].installation.policy.zones[0]))
         values[0] = replace(values[0], owners=(replace(owner, links=links), *values[0].owners[1:]))
     elif kind == "target":
         values[0] = replace(values[0], object_pose=failed_transfer[2].installation.policy.target_pose)
@@ -125,8 +128,12 @@ def test_unproven_source_or_clearance_never_releases_parent_claims(failed_transf
         values[0] = replace(values[0], attempt_id="other-attempt")
     elif kind == "stale":
         failed_transfer[2]._clock_ns = lambda: NOW + 2_000_000_000
-    else:
+    elif kind == "producer":
         args["authenticated_producer_id"] = "application"
+    elif kind == "reused-id":
+        values[0] = replace(values[0], evidence_id="ev-1")
+    else:
+        values[0] = replace(values[0], sequence=1)
     args["observations"] = tuple(values)
     before = snapshot(failed_transfer[0])
     with pytest.raises((ValueError, MissionConflict)):
@@ -164,5 +171,74 @@ def test_late_lineage_write_failure_rolls_back_child_approval_and_claim_transfer
             "WHEN NEW.event_type='PHYSICAL_TRANSFER_RECOVERY_ORIGIN' BEGIN SELECT RAISE(ABORT,'injected'); END")
     before = snapshot(failed_transfer[0])
     with pytest.raises(sqlite3.IntegrityError, match="injected"):
+        api().recover_transfer(failed_transfer[3], failed_transfer[4]["mission_id"], **args)
+    assert snapshot(failed_transfer[0]) == before
+
+
+def assessment(case, *, kind="failed", offset=600_000_000, sequence=3):
+    from fleet.server.physical_transfer_outcomes import record_transfer_outcome
+    data = measured(case[2], case[5], offset=offset, sequence=sequence, target=kind == "succeeded")
+    if kind == "unknown":
+        data = tuple(replace(sample, object_pose=None) for sample in data)
+    return record_transfer_outcome(case[3], case[4]["mission_id"], case[5]["grant"]["request_digest"], data,
+                                   authenticated_producer_id=case[2].installation.policy.producer_id)
+
+
+def test_successful_action_with_latest_failed_task_uses_new_source_evidence(submitted):
+    observe(submitted, receipt(submitted))
+    submitted[2]._clock_ns = lambda: NOW + 1_000_000_000
+    assessment(submitted)
+    submitted[2]._clock_ns = lambda: NOW + 1_400_000_000
+    child = recover(submitted, observations=measured(submitted[2], submitted[5], offset=1_000_000_000, sequence=5))
+    assert child["status"] == "READY"
+    assert submitted[2].get(submitted[4]["mission_id"], principal=PROPOSER)["status"] == "HOLD"
+
+
+@pytest.mark.parametrize("latest", ["unknown", "succeeded"])
+def test_old_failed_task_does_not_override_the_latest_assessment(submitted, latest):
+    observe(submitted, receipt(submitted))
+    submitted[2]._clock_ns = lambda: NOW + 1_000_000_000
+    assessment(submitted)
+    submitted[2]._clock_ns = lambda: NOW + 1_400_000_000
+    assessment(submitted, kind=latest, offset=1_000_000_000, sequence=5)
+    before = snapshot(submitted[0])
+    with pytest.raises(MissionConflict):
+        api().recovery_context(submitted[3], submitted[4]["mission_id"])
+    assert snapshot(submitted[0]) == before
+
+
+@pytest.mark.parametrize("lifetime", [1.5, 30.])
+def test_reopened_recovery_reads_original_grant_lifetime_and_prepares_with_current_ttl(rig, lifetime):
+    from fleet.server.physical_transfer_execution import PhysicalTransferExecution
+    path, tasks, control, store = rig
+    parent = admit(store, create(store), control)
+    original = PhysicalTransferExecution(store, grant_ttl_s=lifetime)
+    state = original.prepare(parent["mission_id"], capabilities=store.installation.capabilities,
+                             capabilities_observed_at_ns=NOW - 1)
+    case = (path, tasks, store, original, parent, state)
+    store._clock_ns = lambda: NOW + 350_000_000
+    authorize(case)
+    store._clock_ns = lambda: NOW + 400_000_000
+    observe(case, phase_receipt(case))
+    store._clock_ns = lambda: NOW + 1_000_000_000
+    current = execution(store)
+    child = api().recover_transfer(current, parent["mission_id"], **arguments(case))
+    ready = current.prepare(child["mission_id"], capabilities=store.installation.capabilities,
+                            capabilities_observed_at_ns=store._now_ns() - 1)
+    grant = FleetArmTransferGrant.model_validate(ready["grant"])
+    assert (grant.expires_at - grant.issued_at).total_seconds() == 15.
+
+
+def test_clock_regression_during_child_admission_rolls_back_every_change(failed_transfer, monkeypatch):
+    store = failed_transfer[2]
+    args = arguments(failed_transfer)
+    original = store._journal._event
+    def regress(connection, mission_id, step_index, event_type, actor, detail):
+        original(connection, mission_id, step_index, event_type, actor, detail)
+        if event_type == "PHYSICAL_TRANSFER_ADMITTED":
+            store._clock_ns = lambda: NOW + 900_000_000
+    monkeypatch.setattr(store._journal, "_event", regress)
+    before = snapshot(failed_transfer[0])
+    with pytest.raises(MissionConflict, match="clock"):
         api().recover_transfer(failed_transfer[3], failed_transfer[4]["mission_id"], **args)
     assert snapshot(failed_transfer[0]) == before
