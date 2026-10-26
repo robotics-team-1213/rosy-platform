@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from collections import deque
 import json
+from uuid import UUID
 
 from core_common.protocol.motor_health import MotorHealthResponse
 
 from .hardware_profile import _number
 from .load_assessment import assess_candidates, command_positions
-from .motion_characteristics import _canonical, _text, document_digest, validate_characteristics
+from .motion_characteristics import _canonical, _text, validate_characteristics
 
 
 class LoadMonitor:
@@ -21,6 +22,8 @@ class LoadMonitor:
             raise ValueError('monitor requires a measured-domain candidate')
         _text(command_id, 'command_id')
         _text(session_id, 'session_id')
+        if str(UUID(session_id)) != session_id:
+            raise ValueError('session_id must be a canonical UUID')
         self.started_at = _number(started_at, 'started_at', positive=True)
         self.command_id, self.session_id, self.candidate_id = command_id, session_id, candidate_id
         self.trajectory_sha256 = match['trajectory_sha256']
@@ -30,6 +33,11 @@ class LoadMonitor:
         self.latched = set()
         self.error_since = {}
         self.history = {name: deque(maxlen=4096) for name in self.profile['joints']}
+
+    def unavailable(self, reason, *, now):
+        """Record lost inputs without inventing a capture time or joint measurement."""
+        _text(reason, 'reason')
+        return self._report({reason}, {}, None, _number(now, 'now', positive=True))
 
     def _report(self, reasons, errors, captured, now):
         self.latched.update(reasons)
@@ -107,7 +115,8 @@ class LoadMonitor:
             if motor.sample_age_s > self.profile['monitor']['max_age_s'] or stamp > captured + 1e-6:
                 reasons.add(f'stale_feedback:{name}')
                 continue
-            if previous is not None and (stamp <= previous or stamp - previous > self.profile['monitor']['max_gap_s'] + 1e-9):
+            if previous is not None and (
+                    stamp <= previous or stamp - previous > self.profile['monitor']['max_gap_s'] + 1e-9):
                 reasons.add(f'feedback_gap:{name}')
                 continue
             self.last_joint_capture[name] = stamp
@@ -139,7 +148,8 @@ class LoadMonitor:
             history.popleft()
         previous, reversals = 0, 0
         for _, value in history:
-            sign = 1 if value >= limits['oscillation_amplitude_rad'] else -1 if value <= -limits['oscillation_amplitude_rad'] else 0
+            amplitude = limits['oscillation_amplitude_rad']
+            sign = 1 if value >= amplitude else -1 if value <= -amplitude else 0
             if sign:
                 if previous and sign != previous:
                     reversals += 1

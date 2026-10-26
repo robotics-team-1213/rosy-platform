@@ -1,8 +1,6 @@
 """End-to-end local-file contracts, exercised only on the remote test host."""
 import json
 
-import pytest
-
 from load_motion_fixtures import characteristics, health, request
 from omx_adapter.motion_characteristics import characteristics_digest, save_characteristics
 from omx_adapter.load_motion_cli import main
@@ -58,6 +56,7 @@ def test_watch_consumes_existing_snapshot_and_writes_recovery_recommendation(tmp
            'motors': [{**m.model_dump(exclude={'sample_age_s'}), 'observed_at': 100.} for m in h.motors],
            'stop_reasons': ['hardware error']}
     write_motor_health_snapshot(path, row)
+    original = path.read_bytes()
     monkeypatch.setattr('omx_adapter.load_motion_cli.time.time', lambda: 100.)
     args = ['watch', str(profile), str(req), '--accepted-sha256', characteristics_digest(p),
             '--health', str(path), '--candidate-id', 'direct', '--command-id', 'fixture-command',
@@ -68,7 +67,7 @@ def test_watch_consumes_existing_snapshot_and_writes_recovery_recommendation(tmp
     assert report == json.loads(out.read_text())
     assert report['status'] == 'hold_for_owner_review'
     assert report['automatic_recovery_enabled'] is False
-    assert path.read_bytes() == path.read_bytes()  # Input is not an output destination.
+    assert path.read_bytes() == original
 
 
 def test_watch_missing_source_is_a_persisted_hold_not_a_healthy_sample(tmp_path, capsys, monkeypatch):
