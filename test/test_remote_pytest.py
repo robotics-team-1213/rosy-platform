@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 import remote_job as rj  # noqa: E402
 import remote_pytest as rp  # noqa: E402
 import xdist_plan as xp  # noqa: E402
+import work_queue as wq  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -181,7 +182,7 @@ def test_pick_prints_one_host_or_exits_1(monkeypatch, capsys):
 
 
 def test_probe_parser_reads_only_the_rosyprobe_line():
-    line = "ROSYPROBE 8 0.5 4194304 8388608 1 0 0 2 6 1"
+    line = "ROSYPROBE 8 0.5 4194304 8388608 1 0 0 2 6 1 0 0"
     p = rp.parse_probe(f"Welcome to Ubuntu\nlast login: today\n{line}\nbye\n")
     assert p["nproc"] == 8 and p["avail_gb"] == 4 and p["pytest"] and not p["sim"] and p["lock_gb"] == 6 and p["site"]
     assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6 0\n") is None
@@ -217,7 +218,7 @@ def test_place_refuses_a_host_below_the_disk_floor_and_keeps_unmeasured_ones(mon
 def test_place_ignores_a_pre_boot_or_expired_busy_marker_and_says_so(monkeypatch):
     """2026-10-24: a bare busy marker left on the site PC would block it forever; the probe now reports 2/3."""
     monkeypatch.setattr(rp, "SITES", set())
-    line = "ROSYPROBE 8 0.0 16777216 33554432 1 1 {} 0 0 0"
+    line = "ROSYPROBE 8 0.0 16777216 33554432 1 1 {} 0 0 0 0 0"
     probes = [rp.parse_probe(line.format(b)) for b in "0123"]
     assert [(p["busy"], p["busy_ignored"]) for p in probes] == [
         (False, None), (True, None), (False, "pre-boot"), (False, "expired")]
@@ -265,19 +266,22 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
     try:
         (jobs / "live.lock").write_text(f"{live.pid} pytest 2 6\n")
         (jobs / "dead.lock").write_text("999999999 sim 6 8\n")
+        (jobs / "chromium.lock").write_text(f"{live.pid} browser 0 0\n")  # another run's browser job
         (jobs / "odd.lock").write_text(f"{live.pid} sim 6 7.5\n")  # counts 0, does not abort
         (jobs / "evil.lock").write_text(f"{live.pid} sim a[$(touch {jobs}/pwned)] 1\n")
         now = int(time.time())
         (jobs / "soon.resv").write_text(f"{now + 600} pytest 2 6\n")  # reserved, not started yet
+        (jobs / "isaac.resv").write_text(f"{now + 600} gpu 0 0\n")  # a GPU run keeps browser lanes off too
         (jobs / "old.resv").write_text(f"{now - 1} pytest 2 6\n")
         (jobs / "junk.resv").write_text("soon pytest 2 6\n")
         script = rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
         fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
     finally:
         live.kill()
-    assert len(fields) == 15 and fields[8:11] == ["4", "12", "0"]  # then df free_kb use% of ~/rosy-test, /tmp
+    # site 0, sim_held 3 (the live sim locks + the gpu reservation), browser_jobs 1, then df free_kb use% of ~/rosy-test, /tmp
+    assert len(fields) == 17 and fields[8:13] == ["4", "12", "0", "3", "1"]
     assert (jobs / "soon.resv").exists() and not (jobs / "old.resv").exists() and not (jobs / "junk.resv").exists()
-    assert rp.parse_probe(" ".join(fields))["lock_gb"] == 12
+    assert rp.parse_probe(" ".join(fields))["lock_gb"] == 12 and rp.parse_probe(" ".join(fields))["sim_held"] == 3
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
     assert not (jobs / "pwned").exists()
 
@@ -522,6 +526,49 @@ def test_a_slow_host_does_not_hold_back_queued_invocations(monkeypatch, tmp_path
     assert [h for h, _ in seen].count("slow@2") == 1 and sorted(p for _, p in seen) == list("01234")
 
 
+def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do_not(monkeypatch):
+    monkeypatch.setattr(wq, "BROWSER_PER_HOST", 2)
+    room = {"cores": 14, "mem": 15, "site": False, "light": False}
+    headroom = {"a": room, "light": {**room, "light": True}, "site": {**room, "site": True},
+                "gz": {**room, "sim_held": 1}}
+    b, alone = [rp.BROWSER_ENV, "t/a_browser.py"], [rp.BROWSER_ENV, rp.ALONE_ENV, "t/b_browser.py"]
+    assert rp.workers(["a", "light", "site", "gz", "unmeasured"], [["t"], b, b, b], headroom) == [
+        ("a", "main"), ("a", "lane"), ("a", "lane"), ("light", "any"), ("site", "any"), ("gz", "any"),
+        ("unmeasured", "any")]
+    assert rp.workers(["a"], [b], headroom) == [("a", "lane")]  # no main run without its own work
+    assert rp.workers(["a"], [["t"], b, b], {"a": {**room, "browser_jobs": 1}}) == [("a", "main"), ("a", "lane")]
+    assert rp.workers(["a"], [["t"], b], {"a": {**room, "browser_jobs": 3}}) == [("a", "any")]  # cap held by others
+    assert rp.workers(["a"], [["t"], alone], headroom) == [("a", "any")]  # an alone chunk is no lane job
+    monkeypatch.setattr(wq, "BROWSER_PER_HOST", 0)
+    assert rp.workers(["a"], [["t"], b], headroom) == [("a", "any")]
+
+
+def test_browser_lanes_run_beside_main_capped_per_host_and_an_alone_chunk_runs_without_them(monkeypatch, tmp_path):
+    monkeypatch.setattr(wq, "BROWSER_PER_HOST", 2)
+    guard, now, peak, clashes = threading.Lock(), {"lane": 0, "main": 0, "alone": 0}, {"lane": 0, "both": 0}, []
+
+    def job(h, path):
+        kind = "alone" if path == "alone_browser.py" else "lane" if path.endswith("_browser.py") else "main"
+        with guard:
+            now[kind] += 1
+            peak["lane"] = max(peak["lane"], now["lane"])
+            peak["both"] = max(peak["both"], now["lane"] + now["main"] + now["alone"])
+            if now["alone"] and now["lane"]:
+                clashes.append(path)
+        time.sleep(0.3 if kind == "main" else 0.15)
+        with guard:
+            now[kind] -= 1
+        return 0
+
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1"], job)
+    invs = [["slow.py"], [rp.BROWSER_ENV, rp.ALONE_ENV, "alone_browser.py"],
+            *[[rp.BROWSER_ENV, f"{i}_browser.py"] for i in range(5)]]
+    assert rp.run(invs, [tmp_path / f"{i}.txt" for i in range(len(invs))], repo=tmp_path) == [0] * len(invs)
+    assert sorted(p for _, p in seen) == sorted(["slow.py", "alone_browser.py", *[f"{i}_browser.py" for i in range(5)]])
+    assert peak["lane"] == 2 and peak["both"] == 3  # two lanes beside main at once, never a third browser job
+    assert clashes == []  # no lane job of the run while its alone chunk ran
+
+
 def test_an_invocation_that_fails_mid_run_is_retried_on_another_host_and_a_lost_one_is_not(monkeypatch, tmp_path):
     failed = []
 
@@ -695,6 +742,7 @@ def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
     assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
     assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
+    assert 'X=browser' in rj.JOB and 'echo "$$ $X $C $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
 
 
 def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch):

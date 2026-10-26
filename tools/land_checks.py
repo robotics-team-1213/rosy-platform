@@ -92,17 +92,38 @@ def _ids(wt: Path, verdict: str) -> list[str]:
     return ids
 
 
+def added_known(wt: Path, inv: list[str]) -> list[str]:
+    """Ids this landing adds to test/known_failures.txt (vs local main) whose test file `inv` runs."""
+    base = subprocess.run(["git", "-C", str(wt), "show", "main:test/known_failures.txt"], capture_output=True,
+                          text=True, encoding="utf-8", errors="replace")
+    if base.returncode != 0:
+        return []
+
+    sys.path.append(str(Path(__file__).resolve().parents[1] / "test"))
+    from known_failures import load_known  # one parser, so the two cannot drift
+
+    def ids(text: str) -> set[str]:
+        return set(load_known(text))
+    head = (wt / "test/known_failures.txt").read_text(encoding="utf-8") if (wt / "test/known_failures.txt").is_file() else ""
+    return sorted(i for i in ids(head) - ids(base.stdout)
+                  if any(i.split("::")[0] == p or i.startswith(p.rstrip("/") + "/") for p in inv))
+
+
 def verdict(wt: Path, inv: list[str], log: Path, logdir: Path, tag: str, python: str, run,
             tested_sha: str) -> tuple[int, list[str], str]:
     """test/known_failures.py on ``log``, then the rerun alone for its NEW ids: (exit, load-flaky ids, why).
 
     A NEW failure is confirmed (exit non-zero, no load-flaky ids) only after the rerun, so land.py's early stop
     never cancels a round for a failure that passes alone."""
-    check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", env={**os.environ, "PYTHONUTF8": "1"})
+    must = [arg for nodeid in added_known(wt, inv) for arg in ("--must-fail", nodeid)]
+    check = subprocess.run([python, "test/known_failures.py", str(log), *must], cwd=wt, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", env={**os.environ, "PYTHONUTF8": "1"})
     print(check.stdout, end="")
     if check.returncode == 0:
         return 0, [], ""
+    passing = [line.split()[1] for line in check.stdout.splitlines() if line.startswith("MUST-FAIL ")]
+    if passing:  # not a failure to rerun: the listed test passes, so the new line hides nothing
+        return check.returncode, [], f"known_failures.txt adds id(s) that pass here: {', '.join(passing)}"
     return (check.returncode, *load_flaky(wt, inv, log, check.stdout, logdir, tag, python, run, tested_sha=tested_sha))
 
 

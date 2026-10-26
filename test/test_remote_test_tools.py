@@ -305,7 +305,7 @@ def test_run_dispatches_selected_profile_to_every_host(monkeypatch, tmp_path):
     monkeypatch.setattr(rp, "placed_hosts", lambda *a, **k: ["a", "b"])
     monkeypatch.setattr(rp, "cost", lambda *a: 1)
     contexts = []
-    def run_on(host, invocations, logs, sha, repo, label, work=None, *, test_tools=None):
+    def run_on(host, invocations, logs, sha, repo, label, work=None, *, test_tools=None, **lane):  # kind, gate
         contexts.append((host, test_tools))
         while (i := work.take()) is not None:
             work.codes[i] = 0

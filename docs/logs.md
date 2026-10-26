@@ -11990,6 +11990,29 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_remote_isaac.py test/test_omx_cell_cases.py` 25 passed(d7648f5e32, 모델 PC). 예약 제거를 건너뛴 변이는 새 시험 2건이 빨강. `rosy_harness.py lint` 0 errors, `size_range.py main HEAD` ok.
 - gate 변화: 없음.
 
+## 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 6·7·8 (설계 0.7), 규칙 4·5는 뺌
+
+- 변경: 규칙 8: 착지·시험 관문 파일(`tools/land*.py`, `worktrees.py`, `worktree_rules.py`, `tools/hooks/**`, `remote_pytest.py`와 그것이 import하거나 읽는 `tools/remote` 파일(`serial_suites.txt` 포함), `test/known_failures.py`, `test/browser_scope.py`)은 FULL이다. 말단 도구는 이미 자기를 부르는 시험을 골랐다. `--head`인데도 체크아웃의 파일을 읽던 것을 그 커밋의 파일을 읽게 고쳤다(`affected_repo.Repo` rev, 크기 한도 때문에 `Repo`를 순수 이동). 규칙 6: `test/architecture` 변경은 그 디렉터리 전체. 규칙 7: `known_failures.txt`에서 빠지거나 더해진 id의 시험 파일을 돌린다. 더한 id는 브랜치의 다른 변경을 선택기가 매핑한 결과가 그 시험을 고르거나, 안전 태그이거나, 파일이 없으면 FULL(사람 검토)이다. 더한 id가 그 회차에서 실제로 실패하지 않으면 `land_checks`가 `known_failures.py --must-fail`로 착지를 멈춘다. 규칙 4(foundation AST)와 5(모듈 삭제·이동)는 robot-0d 검토(안전하지 않은 좁힘)와 재실행에서 줄어든 FULL 0건 때문에 되돌렸다.
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py`, `test/architecture`, `test/test_known_failures.py`, `test/test_land.py` 원격 통과(578 passed, NEW 0). 규칙별 변이 커밋(`git commit-tree`)이 빨강. main 첫 부모 80커밋 재실행(각 커밋 파일 기준): FULL 13 → 15. 규칙 7로 1건 빠지고, 규칙 8의 관문 파일로 3건 늘었다(전에는 관문 파일이 FULL이 아니었다).
+- gate 변화: 관문 파일 변경은 이제 FULL. `known_failures.txt`에 더한 id가 통과하면 착지가 멈춘다. `test/flaky_quarantine.txt`는 안전 루트라 FULL 그대로.
+- 교훈: 없음 — `--head` 읽기 오류는 코드와 회귀 시험으로 고쳤다.
+
+## 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
+
+- 변경: `remote/work_queue.py`가 여유 있는 실험실 PC(가벼운 PC·현장 PC·살아 있는 `sim` 잠금/예약이 있는 PC 제외)에 기존 한 번에 하나 작업자 옆으로 브라우저 전용 레인을 `BROWSER_PER_HOST`(2)개까지 둔다. 레인마다 별도 run(작업 폴더·잠금)이다. 브라우저 작업 잠금은 class `browser`로 쓰고 PROBE가 `sim_held`·`browser_jobs`를 세므로 다른 run의 브라우저 작업도 상한에 들어간다. `tools/land_browser.py`가 `land.py`의 브라우저 단계를 파일 단위 8조각(파일 크기 LPT, 이름순 동률)으로 나누고, 부하에서 LOAD-FLAKY였던 3파일은 `ROSY_BROWSER_ALONE=1` 한 조각으로 모아 그 run의 레인이 빌 때까지 기다렸다가 혼자 돈다. 조각이 파일을 잃거나 겹치거나 빈 조각이 생기면 예외로 멈춘다.
+- 이유: FULL 한 번에서 브라우저 4조각이 878/772/536/487 s를 썼고, 직렬 1코어 작업이 PC의 유일한 자리를 차지해 xdist 묶음 뒤에 줄을 섰다.
+- 증거: 모델 PC 한 대에 같은 3조각을 동시에 1/2/3개 → 벽시계 1053/632/449 s, 조각별 시간 1% 이내 동일, 실패 0, 조각당 최대 메모리 751 MiB. 3도 느려지지 않았지만 main의 xdist 작업과 준비 중 착지 최대 3개가 같이 돌기 때문에 2로 둔다. 전체 브라우저 96파일 9조각을 모델·AI PC에서 실행: 각 305/350/373/237/427/283/561/368/585 s(합 3488 s), 벽시계 1163 s(3.0배), 실패는 known 1건(`test_theme_browser.py` topbar). 헤드리스 Chromium은 두 PC 모두 WebGL 렌더러가 SwiftShader라 NVIDIA GPU를 쓰지 않아 `--disable-gpu`를 붙여도 바뀌지 않음(추가하지 않음). 원격 `test/test_land_browser.py test/test_remote_pytest.py test/test_land.py test/test_remote_sim.py test/test_land_events.py` NEW 0. 합집합 시험은 파일 하나를 버리는 변이에서 3건 실패.
+- gate 변화: 없음(같은 파일을 같은 직렬 조건으로 정확히 한 번 실행). sim이 한 PC를 잡고 있으면 FULL 조각을 받을 실험실 PC가 하나뿐이라 이득이 작다.
+- CE: 해당 없음 — 장애 해결이 아니라 측정 기반 성능 변경이며 측정값은 코드 주석과 이 기록에 있다.
+
+## 2026-10-26 · uncommitted · tools/land_browser.py: 건너뛰기만 한 브라우저 조각은 통과가 아니다
+
+- 변경: `land.py`가 브라우저 호출(`ROSY_RUN_BROWSER_TESTS=1`)의 exit 0/1을 판정할 때 `land_browser.vacuous`로 그 조각 자신의 요약 줄(격리 재실행 표지 앞)을 읽어 passed > 0, skipped == 0이 아니면 착지를 멈춘다. 조각을 만들 때도 옵트인이 없는 조각은 예외로 멈춘다.
+- 이유: 옵트인이 작업에 닿지 않거나 Chromium이 건너뛰기 가드 뒤에 없으면 모든 시험이 수집된 뒤 건너뛰어져 exit 0(5가 아님)으로 빈 통과가 된다(robot-0d).
+- 결정: 정상 PC에서 건너뛰는 브라우저 파일은 없다(2026-10-26 전체 1537건 skipped 0). 그래서 파일별 허용 건너뛰기 목록 없이 0만 허용한다. `test_games_board_browser.py`가 포트 6000이 잡혀 건너뛰는 경우도 그 시험이 돌지 않은 것이라 빨강으로 두고, 다음 착지가 그 조각을 다시 돌린다.
+- 증거: 원격에서 같은 87건 조각을 옵트인 있음/없음으로 실행 → 있음 87 passed exit 0 판정 통과, 없음 87 skipped exit 0 → `vacuous` "0 passed, 87 skipped"로 빨강. 시험 `test/test_land_browser.py`(요약 6가지, 재실행 뒤 숨김 방지, 옵트인 없는 조각), `test/test_land.py`(건너뛰기만 한 조각이 착지를 멈춤).
+- gate 변화: 강화(빈 통과 차단). CE: 해당 없음 — 사전 차단 규칙이며 장애 해결이 아니다.
+
 ## 2026-10-26 · uncommitted · fix(land): 공유 pytest 프로세스가 가린 import 착지 게이트
 
 - 변경: `tools/land_isolation.py`·`tools/collect_alone.py` 추가, `tools/land_guards.py`가 가드 회차에 수집 게이트(선택된 시험 파일마다 따로 `pytest --collect-only`)를 싣고, `tools/land_prepare.py`(잠금 밖)에서만 변경 파일을 직접 참조하는 시험(최대 10개)과 안전 루트 시험을 파일마다 따로 돌린다. 루트 `conftest.py`가 수집 중 `sys.path`를 늘린 시험 모듈을 보고만 한다(`.gitignore` 예외, 루트 파일 목록 추가). `tools/land.py`는 고치지 않았다.
