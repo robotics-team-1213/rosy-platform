@@ -326,48 +326,21 @@ def test_cli_json_diffs_against_base_and_working_tree(sample, capsys):
         _git(sample, "checkout", "-q", "main")
 
 
-NODE = "middleware/core/gateway/core/node.py"  # nothing in the sample names "node"
-
-
-@pytest.mark.parametrize("change, mode, why, extra", [
-    (("git", "mv", "middleware/perception/control/battery.py", "middleware/perception/nodes/battery.py"), "full",
-     "still name 'battery'", {}),                                                    # imported by name
-    (("git", "rm", "-q", "middleware/perception/control/battery.py"), "full", "still name 'battery'", {}),
-    (("git", "mv", "tools/ssh/rosy_ssh_enroll.py", "tools/ssh/enroll.py"), "affected", "", {}),  # same folder
-    # Rule 5 (design 0.7): a removed or moved module nothing names narrows; any naming file is FULL.
-    (("git", "rm", "-q", NODE), "affected", "", {}),
-    (("git", "mv", NODE, "middleware/core/gateway/core/runtime/node.py"), "affected", "", {}),
-    (("git", "mv", NODE, "middleware/perception/control/node.py"), "full", "crosses a module or import root", {}),
-    *((("git", "rm", "-q", NODE), "full", "still name 'node'", {path: text}) for path, text in {
-        "test/zz_loader.py": "MODULE = importlib.import_module(f'core.{\"node\"}')\n",   # dynamic import
-        "middleware/core/gateway/setup.py": "entry_points={'console_scripts': ['n = core.node:main']}\n",
-        "middleware/core/gateway/package.xml": "<exec_depend>node</exec_depend>\n",
-        "deploy/robot/rosy-core.service": "ExecStart=/usr/bin/python3 -m core.node\n",
-        "deploy/robot/Dockerfile": "CMD [\"python3\", \"-m\", \"core.node\"]\n",
-        "test/zz_required.py": "LEARNING_REQUIRED = ('middleware/core/gateway/core/node.py',)\n",
-        "test/architecture/size_ratchet.txt": "middleware/core/gateway/core/node.py 900\n",
-        "middleware/core/api/web/app.js": "import('./node.js')\n",
-    }.items()),
-], ids=["folder-move-named", "removed-named", "same-folder", "removed-unnamed", "moved-unnamed", "cross-module",
-        "dynamic-import", "entry-point", "package-xml", "systemd", "dockerfile", "path-list", "size-ratchet", "web"])
-def test_committed_folder_moves_escalate(sample, capsys, change, mode, why, extra):
-    """D-762 stage 0: the 2026-10-13 S3..S10 restructure shape (renames across folders) is FULL
-    unless nothing names the moved or removed module (rule 5)."""
+@pytest.mark.parametrize("change, mode", [
+    (("git", "mv", "middleware/perception/control/battery.py", "middleware/perception/nodes/battery.py"), "full"),
+    (("git", "rm", "-q", "middleware/core/gateway/core/node.py"), "full"),           # import path gone
+    (("git", "mv", "tools/ssh/rosy_ssh_enroll.py", "tools/ssh/enroll.py"), "affected"),  # same folder
+])
+def test_committed_folder_moves_escalate(sample, capsys, change, mode):
+    """D-762 stage 0: the 2026-10-13 S3..S10 restructure shape (renames across folders) is FULL."""
     _git(sample, "checkout", "-q", "-b", "move")
     try:
-        for folder in ("middleware/perception/nodes", "middleware/core/gateway/core/runtime"):
-            (sample / folder).mkdir(exist_ok=True)
-        for rel, text in extra.items():
-            (sample / rel).parent.mkdir(parents=True, exist_ok=True)
-            (sample / rel).write_text(text, encoding="utf-8")
-            _git(sample, "add", rel)
+        (sample / "middleware/perception/nodes").mkdir(exist_ok=True)
         _git(sample, *change[1:])
         _git(sample, "commit", "-q", "-m", "move")
         assert harness.main(["affected", "--repo", str(sample), "--base", "main", "--json"]) == 0
         out = json.loads(capsys.readouterr().out)
-        layout = [e for e in out["escalations"] if "folder move" in e or "module removed" in e]
-        assert out["mode"] == mode and bool(layout) == bool(why), out["escalations"]
-        assert all(why in e for e in layout), layout
+        assert out["mode"] == mode, out["escalations"]
         assert bool(out["full_invocations"]) == (mode == "full")
     finally:
         _git(sample, "checkout", "-q", "main")
@@ -902,10 +875,6 @@ def test_head_files_are_read_at_head_not_from_the_checkout(sample, capsys):
         # a directory and a missing path (with a space) read empty and keep the batch stream in step
         assert repo.text("tools/sim") == "" and repo.text("zz missing.txt") == ""
         assert repo.text("tools/sim/zz_leaf.sh") == "echo leaf\n"
-        # rule 5 searches the same revision, and names the hit without the "<rev>:" prefix
-        assert affected.affected_narrow.layout_problem(repo, "x/zz_leaf.py", None) == (
-            "1 file(s) still name 'zz_leaf', first test/test_zz_leaf.py")
-        assert affected.affected_narrow.layout_problem(repo, "x/zz_gone.py", None) == ""
     finally:
         _git(sample, "checkout", "-q", "main")
         _git(sample, "branch", "-q", "-D", "leaf")

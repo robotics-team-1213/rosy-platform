@@ -175,25 +175,19 @@ def changed_files(repo: Path, base: str, head: str | None = None) -> list[str]:
     return sorted(n.strip() for n in names if n.strip())
 
 
-def moves(repo: Path, base: str, head: str | None = None, facts: Repo | None = None) -> list[str]:
+def moves(repo: Path, base: str, head: str | None = None) -> list[str]:
     """D-762 stage 0: committed layout changes in ``base...head`` as escalations.
 
     A rename across directories or a removed non-test Python module changes import
-    and path layout that the one-level selector cannot follow, unless nothing names it
-    (rule 5, ``affected_narrow.layout_problem`` over `facts`); the changed paths still map.
+    and path layout that the one-level selector cannot follow.
     """
     found = []
     for line in _git(repo, "diff", "--name-status", "-M", f"{base}...{head or 'HEAD'}").splitlines():
         status, *paths = line.split("\t")
         if status.startswith("R") and PurePosixPath(paths[0]).parent != PurePosixPath(paths[1]).parent:
-            old, new, what = paths[0], paths[1], f"{paths[0]} -> {paths[1]}: folder move"
+            found.append(f"{paths[0]} -> {paths[1]}: folder move")
         elif status == "D" and paths[0].endswith(".py") and not TEST_FILE.search(paths[0]):
-            old, new, what = paths[0], None, f"{paths[0]}: Python module removed"
-        else:
-            continue
-        why = affected_narrow.layout_problem(facts, old, new) if facts else "references not checked"
-        if why:
-            found.append(f"{what} ({why})")
+            found.append(f"{paths[0]}: Python module removed")
     return found
 
 
@@ -427,7 +421,7 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
             texts = (_git(repo_root, "show", f"{merge_base}:{affected_narrow.HARNESS_YAML}"),
                      _git(repo_root, "show", f"{head}:{affected_narrow.HARNESS_YAML}") if head
                      else (repo_root / affected_narrow.HARNESS_YAML).read_text(encoding="utf-8"))
-        sel = select(repo, changed, moves(repo_root, base, head, repo), texts, base_text)
+        sel = select(repo, changed, moves(repo_root, base, head), texts, base_text)
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
