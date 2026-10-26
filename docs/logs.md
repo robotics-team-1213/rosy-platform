@@ -11676,3 +11676,10 @@ osy-d395-s1d\`.
 - 증거: 공식 원격939 passed/16 skipped/5 warnings,0 NEW. 실제 일반 파일 GPT와 installed configurer 실행을 포함하지만 loop/format/rsync는 모의이며 ARM64 artifact나 부팅 증거가 아니다.
 - gate 변화: 없음. production BUILD_GO 차단과 전체 OS·SD 후속 목표를 유지한다.
 - CE: 해당 없음 — 재현 조건과 한계는 ADR·소스·시험에 남겼다.
+
+## 2026-10-26 · b0dcb657e2 · D-888 bootstrap과 RAUC CMS 경계 기록
+
+- 변경: D-888 Proposed와 동일 ADR Log 행을 함께 작성했다. Noble OpenSSL 3.0.13의 Ed25519 CMS 실패/P-256 CMS 서명·검증 성공 관측에 따라 별도 CMS 인증서 pin을 계획한다. 기존 Ed25519 배포 서명은 유지한다. D-879·D-881 Proposed는 bootstrap 영속 입력, protocol 1/2 호환, boot ABI 2, 진단·card layout 전달 경계로 갱신했다. peer 예약 D-884~887은 실제 ref와 main 부재 확인 후 임시 gap으로 기록했다.
+- 증거: b0dcb657e2 공식 원격 668 passed/32 skipped/5 warnings, 0 NEW. 독립 검토는 수집 경로 누락 수정 후 5933449847 소스 증가분을 승인했다. ADR Log UTF-8 BOM·CRLF를 보존한다.
+- gate 변화: 없음. 계획/소스 검증은 전체 OS updater, 실제 signed image, SD 기록 또는 기체 부팅 수용이 아니다.
+- CE: 해당 없음 — 판단은 ADR·실제 crypto 기능 관측·회귀 시험에 보존한다.

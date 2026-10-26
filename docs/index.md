@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · b0dcb657e2 · D-888 bootstrap과 RAUC CMS 경계 기록
 - 2026-10-26 · 2b65ad60f0 · D-879의 이미지 조립 구현과 수용 경계 기록
 - 2026-10-26 · e2860d4e5f · D-881 지속 데이터·SSH host identity 구체화
 - 2026-10-26 · b3044a5b6d · D-881의 payload·OS 호환 경계 구체화
 - 2026-10-26 · 11121c33eb · D-881 A/B 기체 상태와 슬롯 기록 분리 제안
-- 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다

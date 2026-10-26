@@ -3500,3 +3500,11 @@
 - 증거: 실제 sfdisk 일반 파일 GPT roundtrip, root/data metadata와 모의 loop/format/rsync orchestration에서 실제 installed configurer 실행을 확인했다. 최종 공식 원격939 passed/16 skipped/5 warnings(115.62s,2b65ad60f0),0 NEW. 변경 Bash 및 workflow6개 run block 구문과 내장 Python AST 확인0. source/model 결과이며 privileged loop/format/fsck, 실제 native ARM64 이미지·32GB 수용·부팅·OS OTA를 검증한 것은 아니다.
 - gate 변화: production BUILD_GO HOLD 유지. OS update engine, 기존 카드 GUID rebase, trial/health/commit/fallback, 실제 산출물·서명·SD 기록이 남았다.
 - CE: 해당 없음 — geometry/cleanup/rebase 경계는 소스·시험·D-879에 기록했다.
+
+## 2026-10-26 · b0dcb657e2 · bootstrap 영속 입력과 boot ABI 2 연결
+
+- 변경: 새 factory의 provision FAT를 bootstrap 1로 옮기고 schema 2/ab-v2와 boot ABI 2를 결속한다. 기존 schema 1/ab-v1·boot A 실험 이미지와 MBR 경로는 유지한다. 서명된 provision_role을 실제 GPT 비교·readback·PowerShell 선택까지 전달하고 offline root 및 native payload가 실제 boot ABI를 검증한다. frozen helper 검증은 설치 catalog를 공유한다. 첫 등록·슬롯 변경과 부팅 blackbox·온라인 수집·명시적 GPT 카드 진단을 함께 연결했다.
+- 검토: 독립 코드 검토에서 온라인 수집이 오래된 boot 슬롯 로그를 읽는 누락을 찾았다. producer→collector 반례를 먼저 확인하고, 검증된 mount의 제한된 이름·크기·소유권 파일만 수집하도록 수정했다. provision mount 전체의 비밀 파일 차단은 유지한다. 5933449847 재검토 APPROVE는 소스 범위이며 실행 증거가 아니다.
+- 증거: 최종 공식 원격 b0dcb657e2, protocol-final3, 668 passed/32 skipped/5 warnings, 96.79s, 0 NEW. 32개 skip은 Linux에서 사용할 수 없는 PowerShell 경로이며 통과로 세지 않는다. 실제 GPT 일반 파일·installed configurer/SDK 및 파일 모델의 mount/firstboot/진단을 포함하고 native ARM64 이미지·실물 mount·B→A 설치 중 unmount·전원 차단을 증명하지 않는다. runner가 /tmp/pytest-of-ai 잔여 경로도 보고했으며 다른 작업의 임시 경로를 정리하지 않았다.
+- gate 변화: 없음. RAUC installer/claim/motion inhibition/trial/health/commit/fallback, 기존 카드 GUID rebase, native ARM64 artifact·서명·SD 전체 readback과 실물 수용이 남았다. D-888은 CMS 공개 인증서와 외부 Ed25519 배포 서명을 분리하며 제품 키 생성·사용·공개 게시를 수행하지 않았다.
+- CE: 해당 없음 — 재현 가능한 경계와 반례가 소스·회귀 시험·D-888에 남아 별도 교훈을 중복하지 않는다.
