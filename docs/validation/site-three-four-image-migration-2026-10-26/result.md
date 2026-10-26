@@ -48,3 +48,11 @@ Coverage includes real authenticated sets, unchanged current4 builder, complete 
 Source files are 410/534/184/540 lines (verifier/I/O/runtime/updater), below the 570-line pre-split boundary. Reviewed source AST parses, diff checks, source lint and complete per-commit D766 passed; final documentation checks and dry-run are recorded in the handoff. Existing Native/A/C2 refs are retained. This is committed source evidence: no official feature land, helper install, signed candidate rebuild, live migration/rollback, robot access or field acceptance occurred.
 
 CE: 해당 없음. Existing whole-configuration and identical-external-helper lessons were applied. D-887, explicit failure ordering and regression fixtures retain the service-set, physical-journal and manual-selector reasoning; another solved-problem document would duplicate those artifacts. Operational migration remains unverified.
+
+## Official gate format correction
+
+The first official integration at commit `7b2dbeb623` passed its separate 287-test guard, then the related gate reported 1 failure / 1093 passes / 2 skips. The failure was `test_no_secrets_in_tracked_files`: the full tested Git ID in the CLI code block was classified as a high-entropy token. It reproduced alone and passed on main commit `e6e7c47b3c`; the branch did not land. No raw finding excerpt was printed during diagnosis. Git object lookup confirmed commit provenance, and the full source ID remains in the introduction.
+
+Commit `6d493681e4` changes only the command example to an explicitly abbreviated, unambiguous revision. The same committed-revision remote secret guard passed once in 22.14 seconds, official runner and outer cmd exit0; known NEW0/known0/flaky0. Logs outside Git: `format-guard-green/{run-1.txt,run-1-known.txt}` and `format-guard-green-runner.txt` under the same evidence root. The failed first gate and standalone/main checks remain under the official landing log directory. Scanner, allowlist, tests and all four production files are unchanged. Official re-landing, publication and field acceptance remain pending.
+
+CE: 기존 교훈 갱신 — [Git ID 표기 규칙](../../solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md)에 CLI 코드블록 적용과 실제 RED/GREEN 근거를 보강했다. 시간 정밀도나 운영 migration 해결 기록으로 확대하지 않는다.

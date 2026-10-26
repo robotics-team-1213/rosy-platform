@@ -11724,3 +11724,10 @@ osy-d395-s1d\`.
 - Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
 - Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
 - CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
+
+## 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
+
+- 변경: 실행 예시의 Git ID를 같은 commit으로 해석되는 짧은 revision으로 표기하고 전체 SHA는 본문에 유지했다. 기존 Git ID 교훈에 CLI 코드블록도 검사된다는 조건과 실제 실패·수정 검증을 보강했다.
+- 증거: 첫 통합 commit 7b2dbeb623의 관련 gate는 1 FAIL/1093 PASS/2 SKIP, 단독 실패·main 통과를 보존했다. 문서 수정 commit 6d493681e4에서 동일 원격 secret guard 1 PASS/runner·outer0/NEW0·known0·flaky0, scanner와 네 production 파일은 그대로다.
+- Gate: 공식 재착지·게시·site/DEVICE/FIELD는 아직 대기한다. 정밀 시각 수용을 주장하지 않는다.
+- CE: 기존 교훈 갱신; 새 중복 문서나 scanner 예외는 만들지 않았다.
