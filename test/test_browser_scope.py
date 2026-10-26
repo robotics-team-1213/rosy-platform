@@ -31,6 +31,7 @@ def test_shared_web_change_reaches_every_surface_family():
 def test_a_changed_browser_test_selects_itself_and_unrelated_paths_select_nothing():
     assert browser_scope.targets(["test/test_games_board_browser.py"]) == ["test/test_games_board_browser.py"]
     assert browser_scope.targets(["docs/logs.md", "middleware/drive/planning/grid/goals.py"]) == []
+    assert browser_scope.targets(["tools/land_browser.py"]) == []  # a module named *_browser.py is not a test
 
 
 def test_windows_separators_are_accepted():
