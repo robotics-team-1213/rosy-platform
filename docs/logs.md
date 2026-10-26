@@ -11983,3 +11983,9 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/workflow-issues/`에 두 교훈을 더했다. 하나는 같은 pytest 프로세스의 형제 시험이 경로 지정 로드 모듈의 import 오류를 가린 사례다(test_native_cycle, MAIN-RED). 다른 하나는 A'가 시험을 차례 앞으로 옮긴 뒤 착지 기록이 조용히 끊긴 사례다(`fix/land-record-after-prepare`).
 - 증거: test_native_cycle.py는 혼자 실행하면 ERROR 26, 폴더 실행은 exit 0이었다(원격 5e162cca21). `.git/rosy-land` 마지막 기록은 16:21이었다. 새 끝에서 끝 시험은 원격 153 passed이고, 변이에서 2건이 빨강이 됐다.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(remote): Isaac supervisor 실행이 host probe에 gpu 예약으로 보인다
+
+- 변경: `tools/remote/remote_isaac.py`의 PREPARE는 준비가 끝나면 배치 예약 `~/rosy-jobs/<name>.resv`를 지운다. 그래서 supervisor가 돌리는 Isaac 실행은 `~/rosy-jobs`에 아무것도 남기지 않았고, `host_probe.py`는 모델 PC를 비었다고 보고 착지 시험과 브라우저 레인을 그 위에 놓았다. 이제 `start()`와 매 `observe()`가 실행이 살아 있는 동안 `~/rosy-jobs/isaac-<run id>.resv`(`<만료 epoch> gpu 6 8`, 만료 지금+2시간)를 다시 쓰고, 끝 상태(SUCCEEDED·FAILED·STOPPED)나 stop에서 지운다. 클라이언트가 죽으면 probe가 만료된 파일을 지운다. 예산은 Gazebo sim과 같은 6코어 8 GB다. `remote_sim.py`는 이미 sim lock을 잡고 있어 바꾸지 않았다(robot-4a 확인).
+- 증거: 원격 `test/test_remote_isaac.py test/test_omx_cell_cases.py` 25 passed(d7648f5e32, 모델 PC). 예약 제거를 건너뛴 변이는 새 시험 2건이 빨강. `rosy_harness.py lint` 0 errors, `size_range.py main HEAD` ok.
+- gate 변화: 없음.
