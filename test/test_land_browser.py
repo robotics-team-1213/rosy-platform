@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import land  # noqa: E402
 import land_browser  # noqa: E402
 import browser_scope  # noqa: E402  (test/, on sys.path through land's remote_pytest)
+from known_failures import RERUN_MARKER  # noqa: E402
 
 ENV = (land_browser.BROWSER_ENV, land_browser.ALONE_ENV)
 EVERY = browser_scope.targets(["test/browser_harness.py"])  # maps to browser_scope.EVERYTHING
@@ -69,6 +70,35 @@ def test_a_missing_or_repeated_chunk_stops_the_tier(monkeypatch, tmp_path):
         land_browser.chunks(tmp_path, paths, 3)
     with pytest.raises(RuntimeError):
         land_browser.check(paths, [[land_browser.BROWSER_ENV, *paths], [land_browser.BROWSER_ENV]])  # an empty one
+
+
+@pytest.mark.parametrize("summary, why", [
+    ("117 passed, 2 warnings in 305.08s (0:05:05)", None),
+    ("1 failed, 166 passed, 2 warnings in 367.63s", None),  # the failure is known_failures' to judge
+    ("12 skipped in 0.50s", "0 passed, 12 skipped"),  # the opt-in never reached the job
+    ("5 passed, 1 skipped in 9.00s", "5 passed, 1 skipped"),  # e.g. the games board found port 6000 taken
+    ("no tests ran in 0.01s", "0 passed, 0 skipped"),
+    (None, "0 passed, 0 skipped"),  # no log
+])
+def test_a_browser_chunk_passes_only_when_tests_ran_and_none_skipped(tmp_path, summary, why):
+    log = tmp_path / "run.txt"
+    if summary is not None:
+        log.write_text(f"..s [100%]\n{summary}\n", encoding="utf-8")
+    got = land_browser.vacuous([land_browser.BROWSER_ENV, "t_browser.py"], log)
+    assert (got is None) if why is None else (why in got)
+    assert land_browser.vacuous(["t_browser.py"], log) is None  # not opted in: no browser verdict asked
+
+
+def test_the_quarantine_rerun_does_not_hide_the_chunks_own_skips(tmp_path):
+    log = tmp_path / "run.txt"
+    log.write_text(f"3 passed, 4 skipped in 1.00s\n{RERUN_MARKER}\n1 passed in 0.10s\n", encoding="utf-8")
+    assert "4 skipped" in land_browser.vacuous([land_browser.BROWSER_ENV, "t_browser.py"], log)
+
+
+def test_a_chunk_built_without_the_opt_in_stops_the_tier():
+    paths = ["a_browser.py", "b_browser.py"]
+    with pytest.raises(RuntimeError, match="not opted in"):
+        land_browser.check(paths, [[land_browser.BROWSER_ENV, "a_browser.py"], ["b_browser.py"]])
 
 
 def test_no_two_browser_files_bind_the_same_fixed_port():

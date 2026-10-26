@@ -138,6 +138,23 @@ def test_web_change_adds_its_browser_tests_opted_in_and_other_changes_do_not(rep
     assert land.browser_tier(wt, "HEAD~1") == []
 
 
+def test_a_browser_chunk_that_only_skipped_stops_the_landing(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"operations/apps/games/x.py": "y = 1\n"}, "games page")  # selects the games browser chunk
+    before = git(main, "rev-parse", "HEAD")
+
+    def opt_in_lost(invocations, logs, *args, **kwargs):  # the browser job never saw ROSY_RUN_BROWSER_TESTS=1
+        for inv, log in zip(invocations, logs):
+            log.write_text("s [100%]\n12 skipped in 0.50s\n" if land.remote_pytest.BROWSER_ENV in inv
+                           else ". [100%]\n1 passed in 0.01s\n", encoding="utf-8")
+        return [0] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", opt_in_lost)
+    assert land.main(["--tests", "auto"]) == 1
+    assert "ran no browser test for real (0 passed, 12 skipped" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
+
+
 def test_dirty_worktree_refused(repos):
     main, wt = repos
     (wt / "pkg/a.py").write_text("dirty\n")

@@ -323,7 +323,7 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
                 cancelled.append(inv)
                 land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs)
                 continue
-            if why := land_cache.unusable(code, log):
+            if why := land_cache.unusable(code, log) or land_browser.vacuous(inv, log):
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
                 land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs)
                 continue
