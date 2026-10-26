@@ -12078,3 +12078,10 @@ osy-d395-s1d\`.
 - Evidence: independent source treec0f27b3c40 approval; committed standalone REDb41cbae63511FAIL/NEW11 at missing-leaf assertions; sourceb82af1ec31 five-file remote152PASS0skip, official/outer/known0/NEW0. AST bodies preserved after inverse dependency qualification; other gateway functions/classes unchanged. Browser tests cover chunks/selection, without Chromium opt-in.
 - Gate: source preparation only; official FULL/landing/publish/device acceptance pending Root. Raw capped /tmp pip warnings retained with unknown attribution/no cleanup. See validation/land-selection-extraction-2026-10-26/result.md and external source-bound evidence.
 - CE: not applicable; pure split and existing size/selection lessons, without a new solved runtime incident.
+
+## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
+
+- 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
+- 증거: 소스758f92b620 root6FAIL/11447PASS/1211SKIP,23invocation 취소. 같은6건 main 선택 통과를 전체 맥락 대조로 확대하지 않았다. root 수집을 포함한 AI 대조4회는 각각21PASS/수집7SKIP, 공식·outer·known0/NEW0이며 기존 실패 원인은 미해결이다. validation/land-selection-extraction-2026-10-27/result.md.
+- gate 변화: HOLD 유지. 원래 FULL 실패를 단독 선택 성공으로 바꾸지 않으며 다음 공식 전체 실행·착지·게시·실물 수용은 별도다.
+- CE: 미해결 — 종료 지연 원인과 해결을 입증하지 못해 해결 교훈을 쓰지 않았다.
