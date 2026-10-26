@@ -51,6 +51,7 @@ def test_mount_owner_detaches_before_readonly_reopen_and_preserves_failed_cleanu
     images = tmp_path / "images"
     images.mkdir()
     calls = []
+    factories = []
     class Resources:
         def loop(self, image, *, readonly=False):
             calls.append(("loop", image.name, readonly))
@@ -71,7 +72,7 @@ def test_mount_owner_detaches_before_readonly_reopen_and_preserves_failed_cleanu
     monkeypatch.setattr(m.os, "geteuid", lambda: 0)
     monkeypatch.setattr(m, "_read", lambda *a: b"modeled source metadata")
     monkeypatch.setattr(m, "rebase_files", lambda *a: calls.append(("validate-source",)))
-    monkeypatch.setattr(m, "inject", lambda *a: calls.append(("inject",)))
+    monkeypatch.setattr(m, "inject", lambda *a: (factories.append(a[1]), calls.append(("inject",))))
     monkeypatch.setattr(m, "_verify", lambda *a: calls.append(("verify-ro",)))
     from test_os_update_manifest import metadata
     value = metadata()
@@ -85,3 +86,4 @@ def test_mount_owner_detaches_before_readonly_reopen_and_preserves_failed_cleanu
         assert calls.index(("close",)) < calls.index(("loop", "rootfs.ext4", True))
         assert ("mount", "root-mount", True) in calls and ("mount", "boot-mount", True) in calls
         assert calls.index(("inject",)) < calls.index(("verify-ro",))
+        assert factories == [tmp_path / "factory-release" / value["native_factory"]["release_id"]]
