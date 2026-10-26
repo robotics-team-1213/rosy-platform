@@ -32,13 +32,15 @@ def lane_job(inv: list[str]) -> bool:
 
 def workers(hosts: list[str], invocations: list[list[str]], headroom: dict) -> list[tuple[str, str]]:
     """(host, kind) per worker thread. "any" takes everything one at a time (light, site, sim-holding or unmeasured
-    hosts, or no lane jobs); otherwise "main" takes all but lane jobs and each "lane" only lane jobs."""
+    hosts, no lane jobs, or the host already runs BROWSER_PER_HOST browser jobs of any run); otherwise "main" takes
+    all but lane jobs and each "lane" only lane jobs."""
     lanes = sum(map(lane_job, invocations))
     rest = len(invocations) - lanes
     plan = []
     for host in hosts:
         room = headroom.get(host)
-        n = 0 if not room or room["light"] or room["site"] or room.get("sim_held") else min(BROWSER_PER_HOST, lanes)
+        free = BROWSER_PER_HOST - room.get("browser_jobs", 0) if room else 0  # other runs' browser jobs count
+        n = 0 if not room or room["light"] or room["site"] or room.get("sim_held") else max(0, min(free, lanes))
         plan += [(host, "any")] if n == 0 else [(host, "main")] * bool(rest) + [(host, "lane")] * n
     return plan
 

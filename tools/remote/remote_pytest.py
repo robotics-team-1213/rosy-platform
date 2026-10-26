@@ -217,7 +217,7 @@ def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[s
         notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}{stale}")
         if why == "ok" or why.startswith("light"):
             HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m,
-                              "sim_held": p.get("sim_held", 0)}
+                              "sim_held": p.get("sim_held", 0), "browser_jobs": p.get("browser_jobs", 0)}
             ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))
     ranked.sort()
     return [r[-1] for r in ranked if not r[0]] or [r[-1] for r in ranked], notes

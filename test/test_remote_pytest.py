@@ -182,7 +182,7 @@ def test_pick_prints_one_host_or_exits_1(monkeypatch, capsys):
 
 
 def test_probe_parser_reads_only_the_rosyprobe_line():
-    line = "ROSYPROBE 8 0.5 4194304 8388608 1 0 0 2 6 1"
+    line = "ROSYPROBE 8 0.5 4194304 8388608 1 0 0 2 6 1 0 0"
     p = rp.parse_probe(f"Welcome to Ubuntu\nlast login: today\n{line}\nbye\n")
     assert p["nproc"] == 8 and p["avail_gb"] == 4 and p["pytest"] and not p["sim"] and p["lock_gb"] == 6 and p["site"]
     assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6 0\n") is None
@@ -218,7 +218,7 @@ def test_place_refuses_a_host_below_the_disk_floor_and_keeps_unmeasured_ones(mon
 def test_place_ignores_a_pre_boot_or_expired_busy_marker_and_says_so(monkeypatch):
     """2026-10-24: a bare busy marker left on the site PC would block it forever; the probe now reports 2/3."""
     monkeypatch.setattr(rp, "SITES", set())
-    line = "ROSYPROBE 8 0.0 16777216 33554432 1 1 {} 0 0 0"
+    line = "ROSYPROBE 8 0.0 16777216 33554432 1 1 {} 0 0 0 0 0"
     probes = [rp.parse_probe(line.format(b)) for b in "0123"]
     assert [(p["busy"], p["busy_ignored"]) for p in probes] == [
         (False, None), (True, None), (False, "pre-boot"), (False, "expired")]
@@ -266,6 +266,7 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
     try:
         (jobs / "live.lock").write_text(f"{live.pid} pytest 2 6\n")
         (jobs / "dead.lock").write_text("999999999 sim 6 8\n")
+        (jobs / "chromium.lock").write_text(f"{live.pid} browser 0 0\n")  # another run's browser job
         (jobs / "odd.lock").write_text(f"{live.pid} sim 6 7.5\n")  # counts 0, does not abort
         (jobs / "evil.lock").write_text(f"{live.pid} sim a[$(touch {jobs}/pwned)] 1\n")
         now = int(time.time())
@@ -276,8 +277,8 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
     finally:
         live.kill()
-    # site 0, then sim_held 2 (the live sim locks), then df free_kb use% of ~/rosy-test, /tmp
-    assert len(fields) == 16 and fields[8:12] == ["4", "12", "0", "2"]
+    # site 0, sim_held 2 (the live sim locks), browser_jobs 1, then df free_kb use% of ~/rosy-test, /tmp
+    assert len(fields) == 17 and fields[8:13] == ["4", "12", "0", "2", "1"]
     assert (jobs / "soon.resv").exists() and not (jobs / "old.resv").exists() and not (jobs / "junk.resv").exists()
     assert rp.parse_probe(" ".join(fields))["lock_gb"] == 12 and rp.parse_probe(" ".join(fields))["sim_held"] == 2
     assert not (jobs / "dead.lock").exists() and (jobs / "live.lock").exists()
@@ -534,6 +535,8 @@ def test_full_lab_hosts_get_browser_lanes_and_light_site_or_sim_holding_hosts_do
         ("a", "main"), ("a", "lane"), ("a", "lane"), ("light", "any"), ("site", "any"), ("gz", "any"),
         ("unmeasured", "any")]
     assert rp.workers(["a"], [b], headroom) == [("a", "lane")]  # no main run without its own work
+    assert rp.workers(["a"], [["t"], b, b], {"a": {**room, "browser_jobs": 1}}) == [("a", "main"), ("a", "lane")]
+    assert rp.workers(["a"], [["t"], b], {"a": {**room, "browser_jobs": 3}}) == [("a", "any")]  # cap held by others
     assert rp.workers(["a"], [["t"], alone], headroom) == [("a", "any")]  # an alone chunk is no lane job
     monkeypatch.setattr(wq, "BROWSER_PER_HOST", 0)
     assert rp.workers(["a"], [["t"], b], headroom) == [("a", "any")]
@@ -738,6 +741,7 @@ def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
     assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
     assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
+    assert 'X=browser' in rj.JOB and 'echo "$$ $X $C $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
 
 
 def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch):

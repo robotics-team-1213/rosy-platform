@@ -43,7 +43,8 @@ while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
 # ROSY_JOB_RESERVE_GB: the lock budget placement counts (laptop memory history), apart from the MemoryMax cap.
 C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-$M}
 [[ $C$M$G =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/_MEM_GB/_RESERVE_GB must be whole numbers"; exit 2; }
-echo "$$ pytest $C $G" > "$L"
+X=pytest; [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && X=browser  # PROBE counts browser locks per host
+echo "$$ $X $C $G" > "$L"
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
 [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
