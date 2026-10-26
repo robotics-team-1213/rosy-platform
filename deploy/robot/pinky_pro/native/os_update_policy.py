@@ -24,7 +24,7 @@ class _Policy(UpdaterRecords):
                 problems.append("battery charging state is unknown")
         return problems
 
-    def _gates(self, transaction_id: str) -> list[str]:
+    def _controls(self, transaction_id: str) -> list[str]:
         reasons = []
         try:
             config = self._config()
@@ -42,6 +42,10 @@ class _Policy(UpdaterRecords):
         claim = rosy_claim.check(self.root, now=self.host.now())
         if claim is None or claim.get("holder") != "os-update:" + transaction_id:
             reasons.append("OS transaction does not hold the live claim")
+        return reasons
+
+    def _gates(self, transaction_id: str) -> list[str]:
+        reasons = self._controls(transaction_id)
         pending = read_state(self.root)["pending"]
         if pending is not None and (
             pending["transaction_id"] != transaction_id
@@ -52,11 +56,26 @@ class _Policy(UpdaterRecords):
         return reasons
 
 
-def authorize(root: Path, transaction_id: str, *, host: Host | None = None) -> None:
-    """Raise on deferral; never waive CORE samples or mutate policy/history/journal."""
+class _TrialPolicy(_Policy):
+    def _gates(self, transaction_id: str) -> list[str]:
+        from os_bootloader import _snapshot
+        from os_motion_guard import require_inhibited
+        reasons = self._controls(transaction_id)
+        facts, state, default = _snapshot(self.root)
+        pending = state["pending"]
+        if (pending is None or pending["transaction_id"] != transaction_id or pending["phase"] != "TRIAL"
+                or facts["tryboot"] != 1 or facts["boot_id"] != self.host.boot_id()
+                or pending["trial_boot_id"] != facts["boot_id"] or facts["slot"] != pending["target_slot"]
+                or default != pending["source_slot"]):
+            reasons.append("trial policy requires the bound, uncommitted target boot")
+        require_inhibited(self.root)
+        return reasons
+
+
+def _authorize(policy: _Policy, transaction_id: str) -> dict:
     if not isinstance(transaction_id, str) or str(uuid.UUID(transaction_id)) != transaction_id:
         raise ValueError("OS_UPDATE_POLICY: invalid transaction UUID")
-    policy = _Policy(root, host if host is not None else Host(root))
+    boot_id = policy.host.boot_id()
     reasons = policy._gates(transaction_id)
     if not reasons:
         problems, first = policy._sample()
@@ -69,5 +88,18 @@ def authorize(root: Path, transaction_id: str, *, host: Host | None = None) -> N
                 reasons.append("status-inputs was not rewritten by CORE")
             # Operator controls and the claim can change during the sample interval.
             reasons += policy._gates(transaction_id)
+            if policy.host.boot_id() != boot_id:
+                reasons.append("boot changed while observing CORE")
     if reasons:
         raise ValueError("OS_UPDATE_POLICY: " + "; ".join(reasons))
+    return dict(boot_id=boot_id, first_written_at=first.isoformat(), second_written_at=second.isoformat())
+
+
+def authorize(root: Path, transaction_id: str, *, host: Host | None = None) -> None:
+    """Source admission never mutates policy/history/journal or waives CORE samples."""
+    _authorize(_Policy(root, host if host is not None else Host(root)), transaction_id)
+
+
+def authorize_trial(root: Path, transaction_id: str, *, host: Host | None = None) -> dict:
+    """Return two fresh idle observations only for this transaction's actual trial boot."""
+    return _authorize(_TrialPolicy(root, host if host is not None else Host(root)), transaction_id)

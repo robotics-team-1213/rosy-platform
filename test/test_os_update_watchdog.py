@@ -213,7 +213,6 @@ def test_trial_watchdog_observation_requires_current_boot_journal(tmp_path, monk
     from test_os_bootloader import _trial
     from test_os_update_state import TRIAL_BOOT
     module, root, _, logs, _, run = _watchdog(tmp_path, monkeypatch)
-    saved = (root / "boot/firmware/cmdline.txt").read_text()
     _trial(root)
     command = root / "proc/cmdline"
     (root / "boot/firmware/cmdline.txt").write_text(command.read_text())
@@ -228,4 +227,3 @@ def test_trial_watchdog_observation_requires_current_boot_journal(tmp_path, monk
     for row in logs:
         row["_BOOT_ID"] = TRIAL_BOOT.replace("-", "")
     assert module.observe(root, run=trial_run)["boot_id"] == TRIAL_BOOT
-    assert saved  # The fixture had a separate firmware input before trial.

@@ -69,12 +69,18 @@ def _journal(raw: str, boot_id: str) -> None:
 
 
 def admit(root: Path = Path("/"), *, run=_run) -> dict:
+    """Auto-arm admission is deliberately restricted to the normal source boot."""
+    if boot_facts(root)["tryboot"]:
+        raise ValueError("OS_WATCHDOG_HOLD: watchdog auto-arm admission requires the normal source boot")
+    return observe(root, run=run)
+
+
+def observe(root: Path = Path("/"), *, run=_run) -> dict:
+    """Observe this boot's watchdog during source or trial health checks."""
     try:
         if root != Path("/") and run is _run:
             raise ValueError("live watchdog observations require the real root or an explicit test runner")
         facts = boot_facts(root)
-        if facts["tryboot"]:
-            raise ValueError("watchdog auto-arm admission requires the normal source boot")
         owner = root.stat().st_uid
         config = _read(_path(root, "boot/firmware/config.txt"), 65536, owner).decode("utf-8")
         if not config.endswith(BOOT_CONFIG) or config.count("# ROSY A/B kernel watchdog") != 1:

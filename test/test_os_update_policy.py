@@ -166,6 +166,9 @@ def _trial_policy(tmp_path, monkeypatch):
     bootstrap.write_bytes(autoboot("a"))
     _trial(root)
     reconcile(root)
+    import rosy_claim
+    host = result[-1]
+    rosy_claim.acquire(root, "os-update:" + TRANSACTION, "trial fixture", 300, now=host.now())
     return result
 
 
