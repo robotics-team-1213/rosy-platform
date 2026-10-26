@@ -123,7 +123,7 @@ FILES = {
     "test/test_robot_runtime.py": "def test_x():\n    pass\n",
     "test/test_unrelated.py": "def test_y():\n    pass\n",
     "test/test_line_follow_contract_docs.py": "DOC = 'docs/reference/line-follow.md'\n",
-    "test/test_network_topology_contracts.py": "",
+    "test/test_network_topology_contracts.py": 'ADR = ROOT / "docs" / "reference" / "ROSY ADR Log.md"\n',
     ".github/workflows/ci.yml": "name: ci\n",
     ".github/workflows/release.yml": "name: release\n",
     "test/test_release_workflow.py": "WORKFLOW = '.github/workflows/release.yml'\n",
@@ -202,7 +202,7 @@ CASES = [
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
      {"middleware/perception/test", "middleware/core/gateway/test"}),
-    ("ADR only -> docs module contracts (guards cover the ADR index)",
+    ("ADR only -> the ADR Log readers (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
      ["docs/reference/line-follow.md"], "affected",
@@ -229,8 +229,7 @@ CASES = [
     ("source layout -> full", ["middleware/perception/control/_source_layout.py"], "full", None),
     ("architecture guard -> full", ["test/architecture/test_layout.py"], "full", None),
     ("known failures list -> full", ["test/known_failures.txt"], "full", None),
-    ("foundation record -> its module suite and direct dependents, not full", ["contracts/foundation/logs.md"],
-     "affected", {"contracts/foundation/test", "middleware/perception/test"}),
+    ("module record -> its readers, not the module suite", ["contracts/foundation/logs.md"], "affected", set()),
 ]
 
 
@@ -706,3 +705,24 @@ def test_harness_yaml_added_module_taking_tracked_files_is_full():
                          "    source_paths: [middleware/core/services/core_features]\n    tests: [test/architecture]\n")
     added, why = affected.affected_narrow.harness_modules_added(affected.Repo.load(ROOT), REAL_HARNESS, head)
     assert not added and "overlaps module core_features" in why
+
+
+def test_generated_module_index_does_not_select_the_module_suite():
+    """2026-10-26: operations/fleet/index.md selected ~7,900 tests in three commits."""
+    assert "operations/fleet/test" not in affected.select(affected.Repo.load(ROOT), ["operations/fleet/index.md"]).reasons
+
+
+def test_module_note_markdown_selects_readers_not_the_module_suite():
+    sel = affected.select(affected.Repo.load(ROOT), ["operations/fleet/docs/call-map.md"])
+    assert "operations/fleet/test" not in sel.reasons
+
+
+@pytest.mark.parametrize("path, expected", [
+    ("operations/fleet/AGENTS.md", "operations/fleet/test"),
+    ("docs/reference/ROSY API & Protocol Reference.md", "test/test_network_topology_contracts.py"),
+    ("docs/adr/D-161-ubuntu-server-native-ros-runtime.md", "test/test_ubuntu_native_runtime_contract.py"),
+    ("docs/reference/ROSY ADR Log.md", "test/test_rosy_games_surface.py"),
+    ("docs/adr/D-161-ubuntu-server-native-ros-runtime.md", "test/test_network_topology_contracts.py"),
+])
+def test_contract_checked_markdown_keeps_its_selection(path, expected):
+    assert expected in affected.select(affected.Repo.load(ROOT), [path]).reasons

@@ -11716,3 +11716,9 @@ osy-d395-s1d\`.
 - 변경: `affected` 선택기가 `tools/harness/harness.yaml`을 merge base와 head에서 같은 로더로 읽어, 기존 항목과 다른 키는 그대로이고 `modules`에 새 항목만 더했으며 새 이름·경로가 기존 모듈과 겹치지 않고(추적 파일의 소유 모듈도 바뀌지 않음), 앵커·별칭이 없고, 새 모듈의 tests 경로에 시험 파일이 있고 FULL 티어가 그 경로를 덮으면 FULL 대신 guard + 새 모듈 시험 + `test/test_harness_contracts.py`·`test/test_affected_tests.py`를 고른다(`affected_narrow.harness_modules_added`). `sim2real_gaps.yaml`·`perception_gaps.yaml`은 lint·generate와 자기 계약 시험만 읽어 FULL이 아니다. `*.py`, `platform_parts.yaml`, `platform_dependencies.yaml`, 역방향 검사가 없는 허용 목록 `log_repairs.yaml`, 그 밖의 새 파일은 그대로 FULL이고 문구 끝 `: harness configuration or the selector itself`도 그대로다. 2026-10-26 13:35 `feat/monitoring-registration`(harness.yaml 5줄)이 FULL로 착지 잠금을 45분 넘게 잡은 일.
 - 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 브랜치 선택 확인.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(harness): 모듈 아래 Markdown은 모듈 시험 전체를 고르지 않는다
+
+- 변경: `affected` 선택기에서 바뀐 `*.md`는 그 파일을 이름으로 읽는 시험과 guard만 고른다. 내용을 코드와 맞춰 보는 `AGENTS.md`, `README.md`, ADR Log를 뺀 `docs/reference/*.md`, `docs/deployment/**`는 지금처럼 모듈 선택을 유지한다. 2026-10-26 생성 파일 `operations/fleet/index.md` 한 줄 변경이 세 커밋에서 `operations/fleet/test` 약 7,900개를 고른 일.
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 커밋 d1a999fd0d·bd48652bf0·4b79b8bc2f 선택 74개 경로 → 9개(guard).
+- gate 변화: 없음.

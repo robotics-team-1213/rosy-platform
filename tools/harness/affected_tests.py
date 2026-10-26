@@ -85,6 +85,24 @@ NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
                 "tools/harness/sim2real_gaps.yaml", "tools/harness/perception_gaps.yaml",
                 "test/architecture/size_ratchet.txt", "test/architecture/size_units.txt")
 
+# Markdown selects only the tests that read it, not its module's suite (operations/fleet/index.md
+# selected ~7,900 tests, 2026-10-26), except prose that contract tests check against code.
+ADR_LOG = "docs/reference/ROSY ADR Log.md"
+
+
+def markdown_keeps_module_selection(path: str) -> bool:
+    p = PurePosixPath(path)
+    return (p.name in {"AGENTS.md", "README.md"} or _under(path, "docs/deployment")
+            or (str(p.parent) == "docs/reference" and path != ADR_LOG))
+
+
+def markdown_readers(repo: Repo, path: str) -> list[str]:
+    readers = repo.referencing_tests(path)
+    if _under(path, "docs/adr"):  # bodies are read through the Log and globbed by its readers
+        readers += repo.referencing_tests(ADR_LOG)
+    return readers
+
+
 # A module whose `tests` is the whole root suite is too broad to select by
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
 BROAD_TESTS = frozenset({"test"})
@@ -359,6 +377,10 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
         if TEST_FILE.search(path):
             if repo.exists(path):
                 add(path, f"changed test file {path}")
+            continue
+        if path.endswith(".md") and not markdown_keeps_module_selection(path):
+            for test in markdown_readers(repo, path):
+                add(test, f"reads {path}")
             continue
         module = repo.module_for(path)
         referencing = repo.referencing_tests(path) + affected_narrow.registry_readers(repo, path)
