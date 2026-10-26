@@ -75,6 +75,8 @@ def test_authenticated_candidate_sdk_is_parsed_without_executing_its_top_level_c
     current, target, release, value, private, _ = _installed(tmp_path)
     sdk = release / "deploy/robot/native/image_layer_boot.py"
     sdk.write_text(sdk.read_text() + "\nraise RuntimeError('authenticated candidate code executed')\n")
+    for name in ("manifest.json", "SHA256SUMS", "SHA256SUMS.sig"):
+        (release / name).unlink()
     seal_release(release, FACTORY_ID)
     sums = (release / "SHA256SUMS").read_bytes()
     (release / "SHA256SUMS.sig").write_text(sign_checksums(sums, private) + "\n")
