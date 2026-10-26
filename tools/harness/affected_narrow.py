@@ -21,8 +21,9 @@ import affected_tests as at  # attributes read at call time, so the cyclic impor
 
 # D-762 stage 0 ("넓은 경로 일치가 아니라 실제 영향"): triggers whose real readers the selector can
 # find. A path matching only these selects its readers (`narrowed`); no reader found -> FULL.
-NARROWABLE_TRIGGERS = ("contracts/foundation/**",)
+NARROWABLE_TRIGGERS = ("contracts/foundation/**", "test/architecture/**")
 FOUNDATION = "contracts/foundation"
+ARCHITECTURE = "test/architecture"
 #: registry file -> (top-level list key, reader module its contract tests import)
 REGISTRIES = {"shared/web/surfaces.yaml": ("surfaces", "surface_registry")}
 FROM_IMPORT = re.compile(r"^\s*from\s+(\.*)([\w.]*)\s+import\s+(\([^)]*\)|[^\n]*)", re.MULTILINE)
@@ -104,6 +105,10 @@ def narrowed(repo: at.Repo, path: str) -> dict[str, str] | None:
     """
     if not repo.exists(path) or PurePosixPath(path).name in at.IGNORED_BASENAMES:
         return None
+    if at._under(path, ARCHITECTURE):
+        # Rule 6 (design 0.7): a guard rule or its data runs the whole guard directory, plus outside readers.
+        return {ARCHITECTURE: f"architecture guard rules changed ({path})",
+                **{t: f"references {path}" for t in repo.referencing_tests(path) if not at._under(t, ARCHITECTURE)}}
     if at.TEST_FILE.search(path):
         return {path: f"changed test file {path}"}
     if at._under(path, f"{FOUNDATION}/core_common") and path.endswith(".py"):

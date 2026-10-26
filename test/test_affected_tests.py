@@ -227,7 +227,11 @@ CASES = [
     # D-762 stage 0: source layout and guard rules escalate; records under a trigger do not.
     ("package manifest -> full", ["middleware/perception/package.xml"], "full", None),
     ("source layout -> full", ["middleware/perception/control/_source_layout.py"], "full", None),
-    ("architecture guard -> full", ["test/architecture/test_layout.py"], "full", None),
+    # Rule 6 (design 0.7): a guard rule change runs the whole guard directory, not FULL.
+    ("architecture guard -> the whole test/architecture", ["test/architecture/test_module_structure.py"],
+     "affected", {"test/architecture"}),
+    ("architecture guard removed -> full", ["test/architecture/test_layout.py"], "full", None),
+    ("architecture conftest -> full", ["test/architecture/conftest.py"], "full", None),
     ("known failures list -> full", ["test/known_failures.txt"], "full", None),
     ("module record -> its readers, not the module suite", ["contracts/foundation/logs.md"], "affected", set()),
 ]
