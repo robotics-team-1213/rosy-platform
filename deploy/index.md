@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 8dc0b91774 · D-888 watchdog 관측 admission과 A/B apt 정책
 - 2026-10-26 · 82ccb2e22b · D-888 독립 trial deadline
 - 2026-10-26 · cfbe016caf · D-888 공통 OS 정책과 재부팅 후 주행 차단
 - 2026-10-26 · 0a7b6bb462 · transaction별 RAUC daemon 권한과 설치 lifecycle
 - 2026-10-26 · bbef5d4bae · frozen firmware callback과 비활성 trial 준비
-- 2026-10-26 · 57e7fdb090 · 영속 OS transaction과 native 유지보수 fence

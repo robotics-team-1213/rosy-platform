@@ -3573,3 +3573,12 @@
 - 검증: 초기 missing-feature13fail1.60s를 재현한 뒤 공식 원격cca5934dda46passed7.54s0NEW, 8ca6cd446e16passed5.19s0NEW를 확인했다. 실제3초 지연 child와 offline systemd parser, poisoned mutable SDK의 frozen CLI를 실행한다. 최종82ccb2e22b os-trial-deadline-final1612passed/32skipped/49warnings307.24s0NEW, runner45262 terminal0. frozen CLI에서 정상 부팅과 실제 모델 commit 후 flag1 유지의 두 결과를 확인한다. 집계는 겹쳐 합산하지 않는다.
 - gate 변화: 없음. 실제 PID1의 timer·정상 reboot, uninterruptible kernel I/O·watchdog handoff·실물 전원 차단 수용은 미검증이다. kernel/PID1 watchdog 설정·관측 admission·apt 정책, controller/rebase/health/commit/fallback·producer/feed/signing/capacity·SYSTEM/nativeARM/SD readback은 남아 있다. 제품 키·게시·main 착지·SD 기록은 수행하지 않았다. 32개 PowerShell skip은 미검증이다.
 - CE: 해당 없음 — bounded child의 이유와 정상/확정 boot 제외 조건은 source·시험·D-888에 보존한다.
+
+## 2026-10-26 · 8dc0b91774 · D-888 watchdog 관측 admission과 A/B apt 정책
+
+- 변경: 새 boot A/B config.txt 끝의 unconditional kernel_watchdog_timeout180과 OS 소유 PID1 Runtime/Reboot watchdog10초 설정을 추가한다. 기존 overlay를 유지하고 입력·최종 출력64KiB 한도를 사전 검증한다. systemd255에서 ShutdownWatchdogSec는 RebootWatchdogSec의 alias임을 원본 parser로 확인해 현대 이름을 사용한다. EEPROM은 쓰지 않는다.
+- admission: normal source boot의 실제 proc cmdline에 firmware open_timeout180이 하나만 주입되었고 saved boot cmdline에는 없는지 확인한다. sysfs open_timeout/BCM identity/active/timeout10과 effective PID1 Version255·runtime/reboot10·장치를 읽고, 같은 boot의 trusted PID1 journal에서 hardware open→running10 순서와 이후 실패 부재를 요구한다. /dev/watchdog은 열지 않는다. 이 함수의 실제 controller 연결은 남아 있으며 unknown은 stage-only/noarm이어야 한다.
+- 이미지: protocol2에만 apt-daily/apt-daily-upgrade timer/service와 unattended-upgrades.service의 descriptor 존재 시 시작 금지 조건을 설치한다. 하나의 frozen no-apt 정책을 여러 대상에 설치하는 source/target pair registry를 configure·daemon·fixture에서 함께 사용한다. SDK sync/backup은 manager config·apt namespace를 쓰지 못한다. frozen63/early10, sync1014lines 유지.
+- 검증: 초기 missing-feature27fail1.65s 뒤 공식417e1999c989passed7.76s0NEW. 실제 systemd condition 평가·poisoned mutable SDK의 frozen admission은 통과했고, rendered output 한도 반례1fail28pass1.69s를 수정했다. 최종8dc0b91774 os-watchdog-final1647passed/32skipped/49warnings301.57s0NEW, runner68771 terminal0. 앞선 집계는 겹쳐 합산하지 않는다. firmware/sysfs/PID1 결과는 모델이며 실제 watchdog 장치를 열거나 시험 PC 설정을 변경하지 않았다.
+- gate 변화: 없음. 실물 watchdog handoff/reset·실제 부팅의 apt 비활성·controller arm 연결·rebase/health/commit/fallback·SYSTEM/producer/feed/signing/capacity/nativeARM/SD readback은 미완료다. 제품 키·게시·main 착지·SD 기록을 수행하지 않았다. 32개 PowerShell skip은 미검증이다.
+- CE: 해당 없음 — 관측과 설정의 구분, 장치 미개방, parser 버전 결속과 출력 한도를 source·시험·D-888에 보존한다.

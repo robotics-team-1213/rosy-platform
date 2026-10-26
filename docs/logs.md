@@ -11738,3 +11738,10 @@ osy-d395-s1d\`.
 - 증거: 공식 원격82ccb2e22b os-trial-deadline-final1612passed/32skipped/49warnings307.24s0NEW. 실제3초 지연 child·offline systemd parser·poisoned mutable SDK의 frozen CLI이며 DT/mount/commit은 모델이다. 앞선46/16pass 집계는 겹쳐 합산하지 않는다.
 - gate 변화: 없음. 전체 SD 이미지·watchdog/controller/rebase/health/commit/fallback·SYSTEM·ARM artifact·서명·기록 목표는 미완료다. 실제 장치 수용이나 새 독립 리뷰를 주장하지 않는다.
 - CE: 해당 없음 — 구현과 반례가 판단을 보존한다.
+
+## 2026-10-26 · 8dc0b91774 · D-888 watchdog/apt 정책과 관측 범위 기록
+
+- 변경: firmware kernel watchdog 요청과 PID1 runtime/reboot 설정, source boot에 결속된 sysfs·manager·trusted journal 관측의 구분을 D-888에 기록한다. systemd255 alias/logging 순서를 공식 원본으로 확인한다. no-apt 조건과 공통 asset registry의 소유 경계를 명시한다.
+- 증거: 공식8dc0b91774 os-watchdog-final1647passed/32skipped/49warnings301.57s0NEW. actual systemd condition과 frozen import/admission, modeled firmware/sysfs/PID1이며 실제 watchdog 장치를 열지 않는다. 소스·parser 증거로 실물 reset/부팅 수용을 주장하지 않는다.
+- gate 변화: 없음. 실제 controller·rebase/health/commit/fallback·SYSTEM·ARM 이미지·서명·SD 기록과 전체 읽기 목표는 미완료다. 별도 독립 리뷰나 main 착지는 수행하지 않았다.
+- CE: 해당 없음 — source·반례·ADR이 판단과 다음 수용 조건을 보존한다.

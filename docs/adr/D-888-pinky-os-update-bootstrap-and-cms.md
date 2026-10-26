@@ -92,6 +92,12 @@ protocol2의 sysinit drop-in은 `DefaultDependencies=no`인 deadline timer를 lo
 
 deadline helper/timer/service/sysinit 연결은 frozen closure에 포함하고 protocol2에만 설치한다. 앱 sync/backup은 deadline unit과 sysinit drop-in namespace를 쓰지 못한다. 실제 3초 지연 child·poisoned mutable SDK의 frozen CLI·offline systemd parser는 SOURCE 증거다. 실제 PID1의 timer 활성화/재부팅, 커널의 uninterruptible I/O, watchdog handoff와 전원 차단 복귀를 대신하지 않는다. commit owner의 timer 취소와 kernel/PID1 watchdog 설정·실제 지원 확인은 남아 있다.
 
+새 protocol2 boot A/B의 config.txt 끝에는 unconditional `[all]`의 `kernel_watchdog_timeout=180`을 추가한다. 기존 overlay는 유지하고 입력·출력 모두 64KiB 안에서 검증한다. [Raspberry Pi 공식 설명](https://github.com/raspberrypi/documentation/blob/master/documentation/asciidoc/computers/config_txt/boot.adoc#kernel_watchdog_timeout)에 따라 kernel open_timeout handoff를 요청하며 EEPROM은 쓰지 않는다. OS 소유 manager config는 `/dev/watchdog0`, RuntimeWatchdogSec=10s, RebootWatchdogSec=10s를 지정한다. [systemd255 설정 parser](https://github.com/systemd/systemd/blob/v255/src/core/main.c)는 계획에 적힌 ShutdownWatchdogSec를 RebootWatchdogSec의 obsolete alias로 처리하므로 현대 이름으로 동일한 shutdown 단계 설정을 적용한다. kernel watchdog 설정만으로 실제 지원을 주장하지 않는다.
+
+`os_update_watchdog.admit`는 normal source boot에 묶인 읽기 전용 관측이다. 저장된 boot cmdline에 없는 `watchdog.open_timeout=180`이 실제 proc cmdline에 하나만 나타나는지, kernel open_timeout과 Broadcom watchdog identity/state/10초 timeout이 맞는지 확인한다. 실제 PID1의 Version255·Runtime/Reboot watchdog 값·장치를 읽고 같은 boot의 trusted PID1 journal에서 hardware open과 10초 enable의 순서를 요구한다. [systemd255 watchdog 구현](https://github.com/systemd/systemd/blob/v255/src/shared/watchdog.c)은 장치를 enable한 뒤 running timeout 로그를 기록한다. 나중 실패/다른 timeout·손상·부족한 증거는 HOLD한다. 이 관측은 /dev/watchdog을 열지 않아 상태를 바꾸지 않는다. 실제 ARM 기체 관측과 controller의 최종 arm 연결은 별도이며 unknown은 stage-only로 처리해야 한다.
+
+protocol2 root에는 apt-daily/apt-daily-upgrade timer와 service, unattended-upgrades.service가 os-slot descriptor 존재 시 시작하지 않는 OS 소유 조건을 둔다. 수동 apt 명령을 실행하거나 OS 밖의 package manager를 제어하지 않는다. 공통 frozen no-apt 정책을 다섯 대상에 설치하기 위해 asset registry는 source/target pair 목록으로 관리하며 configure와 daemon의 live/frozen 검사는 같은 목록을 사용한다. watchdog manager config·apt unit namespace는 앱 sync/backup에서 제외한다. actual systemd condition 평가와 poisoned mutable SDK의 frozen admission은 SOURCE이며 실제 부팅의 apt 비활성/하드웨어 reset 수용은 아니다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.
