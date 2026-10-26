@@ -11728,3 +11728,9 @@ osy-d395-s1d\`.
 - 변경: `docs/logs.md`, `docs/index.md`, `STATUS.md`, 모듈의 `logs.md`·`index.md`·`progress.md`가 바뀌면 `affected` 선택기가 이름 부분 일치 대신 실제 읽는 시험(`test/test_harness_contracts.py`, `test/architecture/test_document_placement.py`, `test/architecture/test_folder_layout.py`)만 고른다. 주석이나 시험 고정 문자열에 `docs/logs.md`가 있다는 이유로 `test_api_reserve`, `test_browser_scope` 등이 뽑히던 일. ADR Log·`docs/adr/**`의 읽는 시험은 앞 커밋 그대로다.
 - 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 커밋 5308d9ad56·afd1606a0e 선택 17개 경로 → 9개.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(harness): harness.yaml 좁히기는 CI gating 행렬·중복 키·실제 시험을 확인한다
+
+- 변경: 리뷰(robot-0d) 반영. 추가 모듈의 시험 파일은 야간·main push 풀 행렬(`ci_matrix` 풀 모드)의 gating 항목에 들어 있고 `--ignore`되지 않아야 좁힌다. 앞 검사는 모든 등록 모듈을 담는 `lab_full_invocations`와 비교해 실패할 수 없었다. 비gating `modules` 러너만 도는 시험은 그 러너가 gating이 될 때까지 FULL이다. `harness.yaml`은 반복 키를 거부하는 SafeLoader로 읽고, head 문서의 anchor·alias·merge key는 줄 정규식 대신 파서 이벤트로 찾는다. 추가한 `tests`·`functional` 경로마다 `def test_`가 있는 파일이 있어야 한다. `harness.yaml` 변경은 언제나 `test/architecture/test_folder_layout.py`를 고른다. 기록 판정은 `STATUS.md`와 harness 모듈 폴더 바로 아래 `logs.md`·`progress.md`·생성 `index.md`로 줄였고, `operations/apps/games/progress.md`는 그 파일을 읽는 `test/test_rosy_games_surface.py`도 고른다(`test/test_land.py`, `test/test_pre_push_hook.py`는 임시 저장소와 고정 문자열에서만 이름을 쓴다).
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py`, `test/architecture/test_folder_layout.py` 원격 실행; gating 조건·중복 키·참조 검사·`def test_` 조건을 각각 깨뜨린 임시 커밋에서 해당 시험 빨강 확인.
+- gate 변화: 없음.
