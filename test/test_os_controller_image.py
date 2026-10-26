@@ -38,7 +38,7 @@ def test_lifecycle_timer_and_units_are_frozen_and_installed_only_for_new_images(
 def test_controller_unit_has_runtime_configuration_without_waiting_for_its_own_deadline():
     unit = (BASE / "native/rosy-os-update.service").read_text()
     assert "EnvironmentFile=/etc/rosy/runtime.env" in unit
-    assert "os_update_controller.py resume" in unit
+    assert "os_update_controller.py run" in unit
     assert "ConditionPathIsDirectory=/var/lib/rosy-device/os-update" in unit
     assert "ProtectSystem=strict" in unit and "DevicePolicy=closed" in unit
     assert "DeviceAllow=block-mmc r" in unit and "DeviceAllow=block-mmc rw" not in unit

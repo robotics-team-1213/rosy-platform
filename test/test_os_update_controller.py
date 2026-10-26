@@ -47,6 +47,7 @@ def _source(tmp_path, monkeypatch):
         m.authorize(r, txn, host=host)
         return host.current_release()
     monkeypatch.setattr(m, "source_health", source_health)
+    monkeypatch.setattr(m, "admit_release", lambda *a, **k: None, raising=False)  # Signed feed is tested over real HTTP separately.
     monkeypatch.setattr(m, "watchdog_admit", lambda *a, **k: dict(boot_id=SOURCE_BOOT))
     def install(r, b, raw, signature, *, authorize, run):
         authorize()
@@ -264,3 +265,27 @@ def test_untracked_committed_tryboot_flag_does_not_request_reboot(tmp_path, monk
     (root / "proc/device-tree/chosen/bootloader/tryboot").write_bytes(struct.pack(">I", 1))
     assert m.resume(root, host=host, run=run)["pending"] is None
     assert not any("reboot" in command for command in calls)
+
+
+def test_rollout_is_checked_before_install_and_again_before_arm(tmp_path, monkeypatch):
+    m, state, _, root, _, _, host, _, run, bundle, _ = _source(tmp_path, monkeypatch)
+    phases = []
+    def admission(r, metadata, *, host):
+        pending = state.read_state(r)["pending"]
+        phases.append(None if pending is None else pending["phase"])
+    monkeypatch.setattr(m, "admit_release", admission)
+    assert m.start(root, bundle, b"metadata", "sig", host=host, run=run)["pending"]["phase"] == "ARMED"
+    assert phases == [None, "INSTALLING", "VERIFIED"]
+
+
+def test_verified_withdrawal_after_install_returns_to_source_without_arm(tmp_path, monkeypatch):
+    from os_update_feed import Withdrawn
+    m, state, boot, root, _, config, host, calls, run, bundle, _ = _source(tmp_path, monkeypatch)
+    def admission(r, metadata, *, host):
+        pending = state.read_state(r)["pending"]
+        if pending is not None and pending["phase"] == "VERIFIED": raise Withdrawn("verified fixture withdrawal")
+    monkeypatch.setattr(m, "admit_release", admission)
+    result = m.start(root, bundle, b"metadata", "sig", host=host, run=run)
+    assert result["pending"] is None and result["failed_versions"]
+    assert config.read_bytes() == boot.autoboot("a")
+    assert not any("reboot" in argv for argv in calls)
