@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
-- 2026-10-26 · 9816e56bd9 · Site updater pure split verified
-- 2026-10-26 · uncommitted · Site updater runtime extraction before migration
-- 2026-10-26 · uncommitted · D-883 호스트 디스크·GPU 보고와 시험 PC 저장소 정리 요청
-- 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
-- 2026-10-26 · uncommitted · 공급암 S 셀 Isaac 재생
+- 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
+- 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다
+- 2026-10-26 · uncommitted · fix(land): 지난번 실패한 시험 묶음을 먼저 돌린다
+- 2026-10-26 · uncommitted · fix(land): 다시 시도하면 실패한 시험 묶음만 다시 돈다
+- 2026-10-26 · uncommitted · fix(land): FULL를 다시 돌지 않는 차례, pretest 공백 정리, 차례 중 우회 거부

@@ -14,7 +14,7 @@ from import_report import verify_report
 from prepare_omx_urdf import prepare
 from run_admission import acquire, gpu_state
 from run_binding import load_binding, sdk_check
-from run_store import RunConflict, TERMINAL, input_snapshot
+from run_store import RunConflict, TERMINAL, input_snapshot, requested
 from run_system import System
 
 
@@ -131,8 +131,7 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
     row = store.get(run_id)
     if row['status'] in TERMINAL:
         return 0
-    expected = input_snapshot(row['input']['scenario_id'],
-                              {'seed': row['input']['config']['seed']}, binding['source_sha'])
+    expected = input_snapshot(row['input']['scenario_id'], requested(row['input']['config']), binding['source_sha'])
     if expected['input_sha256'] != row['input_sha256']:
         raise ValueError('Worker source and immutable input differ')
     owner = System().observe('rosy-isaac-' + run_id + '.service')
@@ -179,8 +178,12 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                     if arm_task:  # the real cell's chunk frames for this scenario (system python: the planner)
                         frames = directory / 'frames.json'
                         repo = Path(__file__).resolve().parents[3]
+                        which = ['--scenario', row['input']['config']['scenario']]
+                        if 'case' in row['input']['config']:
+                            (directory / 'case.json').write_text(json.dumps(row['input']['config']['case']))
+                            which = ['--case', str(directory / 'case.json')]
                         subprocess.run(['/usr/bin/python3', str(repo / 'deploy/robot/omx/isaac_cell_frames.py'),
-                                        '--scenario', row['input']['config']['scenario'], '--out', str(frames)],
+                                        *which, '--out', str(frames)],
                                        cwd=directory, env=env, check=True, timeout=120, capture_output=True)
                         argv = [binding['sdk_python'], str(Path(__file__).with_name('arm_s_cell_task.py')),
                                 '--urdf', str(urdf), '--frames', str(frames), '--output-dir', str(directory/'usd'),
@@ -198,7 +201,8 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                             report = verify_contact_report(report_path, sdk_version=binding['sdk_version'])
                         elif arm_task:
                             from arm_s_cell_report import verify_report as verify_arm_report
-                            report = verify_arm_report(report_path, scenario=row['input']['config']['scenario'],
+                            config = row['input']['config']
+                            report = verify_arm_report(report_path, scenario=config.get('case', config['scenario']),
                                 frames_sha256=hashlib.sha256(frames.read_bytes()).hexdigest(),
                                 sdk_version=binding['sdk_version'])
                         else:
@@ -253,7 +257,9 @@ def _finish(store, run_id, outcome, report, artifacts, stopped, *, gpu=None,
     passed = report is not None and (not (contact_task or arm_task) or report['task_success'] is True)
     status = 'STOPPED' if stopped else ('SUCCEEDED' if passed else 'FAILED')
     result = dict(outcome, status=status, stage='model_import', task_success=None,
-                  import_verified=report is not None, completed_frames=report['completed_frames'] if report else None,
+                  import_verified=report is not None,  # the arm S report counts physics steps, not import frames (KeyError
+                  # here turned every finished arm S run into UNKNOWN until 2026-10-26)
+                  completed_frames=report.get('completed_frames') if report else None,
                   cleanup=cleanup, gpu=gpu, video_unavailable_reason='model_import_does_not_record_video')
     if contact_task:
         result.update(stage='contact_roundtrip', task_success=bool(report and report['task_success']),

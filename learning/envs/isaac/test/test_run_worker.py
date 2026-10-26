@@ -125,3 +125,21 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
         assert final['result']['task_success'] is None
         assert store.artifact(row['run_id'], 'import-report')['bytes'] > 0
         assert final['result']['gpu']['uuid'] == 'GPU-test'
+
+
+def test_a_finished_arm_s_run_is_recorded_from_its_own_report():
+    """2026-10-26: the arm S report has no completed_frames; the KeyError left every finished run UNKNOWN."""
+    mod = module()
+    done = []
+
+    class Store:
+        def get(self, run_id):
+            return {'input': {'scenario_id': 'arm-s-cell-case'}, 'revision': 3, 'status': 'RUNNING'}
+
+        def finish(self, run_id, revision, result, artifacts):
+            done.append(result)
+
+    report = {'task_success': True, 'judgement': {'result': 'frame_contact', 'matches_expectation': True}}
+    assert mod._finish(Store(), 'r', {'reason': 'process_exited'}, report, [], False) == 0
+    assert done[0]['status'] == 'SUCCEEDED' and done[0]['evidence_class'] == 'ARM_S_CELL_FRAME_CONTACT'
+    assert done[0]['completed_frames'] is None and done[0]['stage'] == 'arm_s_cell'
