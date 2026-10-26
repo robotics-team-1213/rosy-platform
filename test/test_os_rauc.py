@@ -59,6 +59,20 @@ def test_real_cms_verity_and_exact_outer_metadata_are_accepted(tmp_path, monkeyp
     assert bundle.read_bytes() == before
 
 
+def test_cms_size_is_bounded_before_starting_a_parser(tmp_path, monkeypatch, rauc_tool):
+    m = _consumer(monkeypatch, rauc_tool)
+    root, bundle, raw, _, private, _ = _case(tmp_path, rauc_tool)
+    bundle.chmod(0o600)
+    value = bundle.read_bytes()[:-8] + (65537).to_bytes(8, "big")
+    bundle.write_bytes(value); bundle.chmod(0o400)
+    metadata_value = json.loads(raw)
+    metadata_value["bundle"]["sha256"] = hashlib.sha256(value).hexdigest()
+    raw = json.dumps(metadata_value).encode()
+    monkeypatch.setattr(m, "_inspect", lambda *args: pytest.fail("oversized CMS reached RAUC"))
+    with pytest.raises(ValueError, match="CMS footer"):
+        m.verify_bundle(root, bundle, raw, sign_checksums(raw, private))
+
+
 @pytest.mark.parametrize("case", ["signature", "hash", "signer_pin", "foreign_cms", "no_keyring", "writable", "outside"])
 def test_bad_distribution_or_cms_never_becomes_installable(tmp_path, monkeypatch, rauc_tool, case):
     m = _consumer(monkeypatch, rauc_tool)
