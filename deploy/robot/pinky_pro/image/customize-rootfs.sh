@@ -101,6 +101,7 @@ done
 [[ -f "$BOOT_OVERLAY" ]] || fail "Pi 5 boot overlay configuration is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
+python3 "$(dirname "$0")/os_cms_trust.py" --lock "$LOCK" --source-tree "$SOURCE_TREE" --root "$ROOT"
 [[ "$(realpath -e "$ROSY_IMAGE_BOOT")" == "$ROOT/boot/firmware" ]] \
     || fail "ROSY_IMAGE_BOOT is not the image's /boot/firmware"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"

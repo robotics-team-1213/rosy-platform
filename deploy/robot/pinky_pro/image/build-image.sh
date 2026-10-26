@@ -41,6 +41,7 @@ ARCH="$(uname -m)"
 [[ -f "$LOCK" ]] || fail "missing $LOCK"
 "$SCRIPT_DIR/verify-inputs.sh" "$LOCK" \
     || fail "inputs are not pinned; see the 'verified: false' entries in $LOCK"
+python3 "$SCRIPT_DIR/os_cms_trust.py" --lock "$LOCK" --source-tree "$WORKSPACE"
 
 SOURCE_REVISION="$(awk '
     /^sources:[[:space:]]*$/ { in_sources=1; next }
