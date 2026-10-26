@@ -203,15 +203,17 @@ def sweep_branches(root: Path, now: float, apply: bool, say=print, quiet: bool =
     """Delete (or, without ``apply``, count) local branches in main that no worktree has checked out."""
     common = root / _git(root, "rev-parse", "--git-common-dir").stdout.strip()
     listed = _git(root, "for-each-ref", "--merged", "refs/heads/main", "refs/heads",
-                  "--format=%(refname:short)	%(objectname)	%(worktreepath)")
+                  "--format=%(refname:short)\t%(objectname)\t%(worktreepath)")
     if listed.returncode != 0:
         raise RuntimeError(f"git for-each-ref failed: {listed.stderr.strip()}")
     done = 0
     for line in listed.stdout.splitlines():
-        branch, sha, checked_out = line.split("	")
-        try:  # a reflog changed within the landed wait: just made, maybe about to be checked out
-            fresh = now - os.path.getmtime(common / "logs" / "refs" / "heads" / branch) < LANDED_IDLE_HOURS * 3600
-        except OSError:
+        branch, sha, checked_out = line.split("\t")
+        try:  # newest reflog entry within the landed wait: just made, maybe about to be checked out
+            # Its time field, not the file's mtime: gc and reflog expire rewrite every reflog file (2026-10-26).
+            last = (common / "logs" / "refs" / "heads" / branch).read_text(encoding="utf-8").splitlines()[-1]
+            fresh = now - int(last.split("\t")[0].split()[-2]) < LANDED_IDLE_HOURS * 3600
+        except (OSError, UnicodeError, IndexError, ValueError):  # no reflog: nothing says it is new
             fresh = False
         if checked_out or fresh or branch in keep or branch == "main" or branch.startswith("archive/"):
             continue

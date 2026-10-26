@@ -519,6 +519,8 @@ def test_prune_deletes_merged_branches_no_worktree_uses_and_keeps_the_rest(main,
 
     assert worktrees.prune(main, now=time.time()) == 0  # created just now: inside the 1 h wait
     assert "would delete 0 merged branch(es)" in capsys.readouterr().out
+    for reflog in (main / ".git" / "logs" / "refs" / "heads").rglob("*"):
+        os.utime(reflog, (LATER, LATER))  # gc / reflog expire rewrote every file; their entries are old
     worktrees.prune(main, now=LATER)
     assert "would delete 1 merged branch(es)" in capsys.readouterr().out  # dry run touches nothing
     assert "refs/heads/fix/landed" in refs(main, "refs/heads")
