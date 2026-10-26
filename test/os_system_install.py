@@ -193,6 +193,8 @@ if __name__ == "__main__":
     source = Path(__file__).resolve().parents[1]
     for relative in ("", "test", "deploy/robot/pinky_pro/native", "deploy/robot/pinky_pro/release"):
         sys.path.insert(0, str(source / relative))
+    if args.command == "install":
+        sys.path.insert(0, "/opt/rosy/os-bootstrap/native-runtime")
     try:
         result = snapshot(args.instance_id) if args.command == "snapshot" else install(args.instance_id)
     except Exception:

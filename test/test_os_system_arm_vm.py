@@ -42,7 +42,7 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path):
         root_uuid = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_a")
         guest.restart_slot(root_uuid, "a")
         assert guest.run("findmnt -n -o SOURCE /").strip() == "/dev/vdc4"
-        facts = guest.run("cd /work/source && python3 -c \"import sys,json;sys.path.insert(0,'deploy/robot/pinky_pro/native');from os_media import capture;print(json.dumps(capture()))\"")
+        facts = guest.run("python3 -c \"import sys,json;sys.path.insert(0,'/opt/rosy/os-bootstrap/native-runtime');from os_media import capture;print(json.dumps(capture()))\"")
         media = json.loads(facts)
         assert media["slot"] == "a" and media["layout"] == layout
         installed = json.loads(guest.run(scenario.format(command="install"), timeout=5400))
