@@ -60,7 +60,7 @@ def manifest():
             f"native_factory_release_id=2026.10.26-010\nnative_factory_checksums_sha256={'a' * 64}\n")
 
 
-def make_bundle(directory, tool, key, certificate, text=None):
+def make_bundle(directory, tool, key, certificate, text=None, *, verify_creation=True):
     source = directory / "source"
     source.mkdir(parents=True)
     (source / "rootfs.ext4").write_bytes(os.urandom(8192))
@@ -75,6 +75,11 @@ def make_bundle(directory, tool, key, certificate, text=None):
     config.write_text(f"[system]\ncompatible=rosy-pinky-pro-ab-v2\nbootloader=noop\nbundle-formats=verity\ndata-directory={directory / 'state'}\n"
                       f"[keyring]\npath={certificate}\ncheck-purpose=codesign\nuse-bundle-signing-time=false\n")
     bundle = directory / f"rosy-os-pinky-pro-{RELEASE}-arm64.raucb"
-    run([tool, "--conf", config, "--cert", certificate, "--key", key,
+    creation_config = config
+    if not verify_creation:
+        # An untrusted publisher can sign expired input; only this negative fixture omits creator-side trust.
+        creation_config = directory / "untrusted-creator.conf"
+        creation_config.write_text("[system]\ncompatible=rosy-pinky-pro-ab-v2\nbootloader=noop\nbundle-formats=verity\n")
+    run([tool, "--conf", creation_config, "--cert", certificate, "--key", key,
          "--mksquashfs-args=-processors 1", "bundle", source, bundle])
     return bundle, config

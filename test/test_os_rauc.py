@@ -31,7 +31,7 @@ def _case(tmp_path, tool, *, text=None, foreign=False, expired=False):
         run(["openssl", "x509", "-in", certificate, "-signkey", key, "-days", "-1", "-out", old])
         certificate = old
     bundle_key, bundle_cert = signer(tmp_path / "foreign") if foreign else (key, certificate)
-    produced, _ = make_bundle(tmp_path / "producer", tool, bundle_key, bundle_cert, text)
+    produced, _ = make_bundle(tmp_path / "producer", tool, bundle_key, bundle_cert, text, verify_creation=not expired)
     ring = root / "etc/rauc/keyring.pem"
     ring.parent.mkdir(parents=True)
     shutil.copy2(certificate, ring)
