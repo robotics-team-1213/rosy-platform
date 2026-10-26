@@ -3529,3 +3529,11 @@
 - Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
 - Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
 - CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
+
+## 2026-10-26 · uncommitted · clean-storage helper가 원격 `cat` 대신 LoadState로 유닛 확인
+
+- 원인: systemd 255는 `systemctl --machine=<user>@ cat`을 "Cannot remotely cat units."로 거부한다. 그래서 유닛이 연결돼 있어도 모든 시험 PC에서 exit 5(NO_STORAGE_SERVICE)였다. 모델 PC 설치 뒤 guard 강제 명령으로 재현했다.
+- 변경: `deploy/site/rosy-host-control`이 `show -p LoadState --value`가 `loaded`인지 본다. 시험의 systemctl 가짜를 실제처럼 `--machine` `cat`을 거부하게 바꿨다(RED→GREEN).
+- 증거: 모델 PC에서 `cat` rc 1, `show` → loaded/not-found. 원격 host control·guard·host-state 시험 NEW 0.
+- gate 변화: 없음. AI·모델 PC에 helper 재설치가 필요하다.
+- 교훈: CE 새 교훈 기록 — `docs/solutions/runtime-errors/systemctl-machine-refuses-cat-so-clean-storage-always-refused-2026-10-26.md`.
