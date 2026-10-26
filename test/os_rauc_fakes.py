@@ -1,5 +1,6 @@
 """Pinned native RAUC extracted into pytest storage; never installs a package or service."""
 import hashlib
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -62,11 +63,11 @@ def manifest():
 def make_bundle(directory, tool, key, certificate, text=None):
     source = directory / "source"
     source.mkdir(parents=True)
-    (source / "rootfs.ext4").write_bytes(b"R" * 1024)
+    (source / "rootfs.ext4").write_bytes(os.urandom(8192))
     (source / "boot.vfat").write_bytes(b"B" * 512)
     (source / "manifest.raucm").write_text(text or manifest())
     config = directory / "system.conf"
-    config.write_text(f"[system]\ncompatible=rosy-pinky-pro-ab-v2\nbootloader=noop\nbundle-formats=verity\n"
+    config.write_text(f"[system]\ncompatible=rosy-pinky-pro-ab-v2\nbootloader=noop\nbundle-formats=verity\ndata-directory={directory / 'state'}\n"
                       f"[keyring]\npath={certificate}\ncheck-purpose=codesign\nuse-bundle-signing-time=false\n")
     bundle = directory / f"rosy-os-pinky-pro-{RELEASE}-arm64.raucb"
     run([tool, "--conf", config, "--cert", certificate, "--key", key,
