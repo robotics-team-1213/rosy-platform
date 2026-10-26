@@ -36,7 +36,7 @@ def stage(prefix: Path) -> None:
         target = destination / name
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
         shutil.copyfile(source, target)
-        target.chmod(0o755 if name.endswith((".sh", "/rosy-os-bootloader")) else 0o644)
+        target.chmod(0o755 if name.endswith((".sh", "/rosy-os-bootloader", "/rosy-os-finalize")) else 0o644)
 
 
 def main(argv=None) -> int:

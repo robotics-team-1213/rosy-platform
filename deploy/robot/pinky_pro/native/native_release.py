@@ -138,7 +138,7 @@ class NativeReleaseManager:
         self.journal = self.state / "native-activation.json"
         self.lock = self.state / "native-release.lock"
         self._runtime = runtime or self._systemctl
-        self._links = links
+        self._links = links or None
         # D-412 review N1: a last condition (the updater's hold/seal/idle check) run
         # after verification and right before the runtime stops; raising refuses.
         self.precheck = precheck

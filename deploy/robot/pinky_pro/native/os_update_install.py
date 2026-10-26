@@ -60,7 +60,8 @@ def read_report(root: Path) -> dict:
     if value is None or any(value[k] != v for k, v in _binding(pending).items()):
         raise ValueError("installed receipt binding differs or is missing")
     expected = dict(schema_version=1, **pending["verified"]["metadata"]["native_factory"])
-    if value["native_factory"] != expected:
+    if (value["native_factory"] != expected or not isinstance(value["native_factory"], dict)
+            or type(value["native_factory"].get("schema_version")) is not int):
         raise ValueError("installed receipt factory differs")
     _digest(value["metadata_sha256"])
     return value
@@ -163,6 +164,29 @@ def _fsck(root, targets, run):
         device = str(root / item["part"]["path"].lstrip("/"))
         argv = ["/usr/sbin/e2fsck", "-f", "-n", device] if item["fs"] == "ext4" else ["/usr/sbin/fsck.fat", "-n", device]
         _call(run, argv)
+
+
+def recover_workspace(root: Path) -> None:
+    """Caller has stopped the entire RAUC cgroup and validated its same-boot request."""
+    work = _path(root, WORK)
+    if not work.exists():
+        return
+    info = work.stat()
+    if (not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o700
+            or set(p.name for p in work.iterdir()) != {"root", "boot"}):
+        raise ValueError("unknown finalizer workspace; preserving it")
+    local = _mount_table(root, "proc/self/mountinfo")
+    children = [_path(root, WORK + "/" + name) for name in ("root", "boot")]
+    for child in children:
+        point = "/" + child.relative_to(root).as_posix()
+        observed = child.stat()
+        if (not stat.S_ISDIR(observed.st_mode) or stat.S_IMODE(observed.st_mode) != 0o700
+                or observed.st_dev != info.st_dev or any(child.iterdir())
+                or any(p == point or p.startswith(point + "/") for p in local)):
+            raise ValueError("finalizer workspace is mounted or not empty; preserving it")
+    for child in children:
+        child.rmdir()
+    work.rmdir()
 
 
 def finalize(root: Path = Path("/"), *, run=_run) -> dict:

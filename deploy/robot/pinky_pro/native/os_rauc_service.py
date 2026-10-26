@@ -18,7 +18,7 @@ from os_media import capture
 from os_rauc import RAUC
 from os_rauc_runtime import prepare
 from os_state_io import _write_atomic
-from os_state_layout import COMMON, _object, _path, _read
+from os_state_layout import COMMON, _object, _pairs, _path, _read
 from os_storage_dispatch import OS_UPDATE_ASSETS
 from os_update_state import layout_digest, read_state
 
@@ -104,7 +104,7 @@ def _empty_cgroup(root, group):
         if not path.parent.exists():
             return
         raise ValueError("RAUC cgroup completion is unknown")
-    fields = dict(line.split() for line in raw.splitlines())
+    fields = _pairs([line.split() for line in raw.splitlines()])
     if fields.get("populated") != "0":
         raise ValueError("RAUC cgroup still has live processes")
 
@@ -253,6 +253,8 @@ def recover(root=Path("/"), *, run=_run):
             raise ValueError("live service management requires the real root")
         _stop(root, run)
         _, _, _, files = _existing(root)
+        from os_update_install import recover_workspace
+        recover_workspace(root)
         paths = [_path(root, RUNTIME), _path(root, RUNTIME + "/mount"), _path(root, DROPIN).parent]
         directories = {p: (p.stat().st_dev, p.stat().st_ino) for p in paths}
         _cleanup(root, files, directories)
