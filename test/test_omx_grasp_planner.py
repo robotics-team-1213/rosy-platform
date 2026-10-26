@@ -113,3 +113,12 @@ def test_a_path_past_the_keep_out_line_is_refused_before_any_chunk_exists():
     with pytest.raises(SystemExit, match="keep_out"):
         m.Planner(dict(PLAN, keep_out={"x_max_m": 0.10})).library()
     assert m.Planner(dict(PLAN, keep_out={"x_max_m": 0.30})).library()["chunks"]
+
+
+def test_keep_out_counts_the_gripper_body_not_only_the_tool_tip():
+    """2026-10-27: the TCP stayed 2 cm inside the line while the wrist and gripper hit the wall behind the belt."""
+    planner = m.Planner(PLAN)
+    library = planner.library()
+    tip = max(fk(planner, f).x for frames in library["chunks"].values() for f in frames)
+    with pytest.raises(SystemExit, match="wrist or gripper"):
+        m.Planner(dict(PLAN, keep_out={"x_max_m": round(tip + m.BODY_MARGIN_M / 2, 3)})).library()

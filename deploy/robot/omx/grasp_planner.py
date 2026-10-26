@@ -32,6 +32,9 @@ TOOL_DOWN_TOL = math.radians(1.0)
 POS_TOL = 0.0015     # m between the requested and the FK position of every frame
 REACH_MARGIN_M = 0.008  # wrist distance kept inside l1 + l2 at the travel end points of a site
 MIN_STANDOFF_M = 0.02   # the shortest approach / lift a site may shrink to
+# shortcut: the gripper housing's reach past the tool axis is an estimate, not a measurement; measure it on the
+# cell and replace (2026-10-27: a TCP-only keep-out let the wrist and gripper hit the wall behind the belt)
+BODY_MARGIN_M = 0.035
 
 
 def rad_to_norm(rad: float, lo: float = 0, hi: float = 4095) -> float:
@@ -170,9 +173,15 @@ class Planner:
                   + transit_path(chunks["lift_pick"][-1], chunks["above_place"][0], p["grip_closed"], self.fps, transit)
                   + transit_path(chunks["lift_place"][-1], home, p["grip_closed"], self.fps, transit))
         for name, frames in [*chunks.items(), ("travel", travel)]:
-            worst = max(self.kin.fk([norm_to_rad(v) for v in f[:5]]).x for f in frames)
+            worst = max(self.body_x(f) for f in frames)
             if worst > bound:
-                raise SystemExit(f"{name}: the tool reaches x {worst:.3f} m past keep_out x_max {bound} m")
+                raise SystemExit(f"{name}: the wrist or gripper reaches x {worst:.3f} m past keep_out x_max {bound} m")
+
+    def body_x(self, frame) -> float:
+        """Largest x of the gripper body: the TCP and the wrist point behind it, plus the housing margin."""
+        pose = self.kin.fk([norm_to_rad(v) for v in frame[:5]])
+        wrist_x = pose.x - self.kin.tool_length_m * pose.rotation[0][0]  # back along the approach axis
+        return max(pose.x, wrist_x) + BODY_MARGIN_M
 
 
     def leg(self, library):
