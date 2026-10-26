@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · fix: 등록 변경 시 이전 팔 프로필 연결 격리
 - 2026-10-27 · c86b3e51d5 · owner 실행 단계와 복구 다음 확인
 - 2026-10-27 · e7093c177a · ARM transfer 결과 판정과 검수용 export
 - 2026-10-27 · uncommitted · feat: 로봇 상세의 지속 프로필과 하중 분석 파이프라인
 - 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
-- 2026-10-26 · uncommitted · D-856 forward-port to local main

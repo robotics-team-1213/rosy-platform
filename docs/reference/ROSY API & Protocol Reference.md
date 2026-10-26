@@ -26,6 +26,8 @@ D-860 장치 설명 프로필을 재사용해 로봇 상세에서 현재 상태�
 
 분석 수신은 원본 `assessed_at`, capture와 joint capture 시각을 보존한다. 같은 출력 재전송은 저장 시각·신선도를 갱신하지 않고, 같거나 과거 분석 시각의 다른 내용·미래 시각은 거절한다. 연결 또는 특성 변경 시 기존 최근 분석을 지우며 기록은 보존한다. 조회와 브라우저 경과 시간 모두 가장 오래된 근거의 나이를 반영한다. 만료·누락은 현재 상태 미확인이고 정상 판정이 아니다. 분석 주의 사유 변경은 중복을 억제해 기록하며 사람 기록과 구분한다. 모든 응답의 `motion_admitted`·`automatic_recovery_enabled`는 false이고 `command_binding=caller_supplied_unverified`를 승격하지 않는다. 네트워크 수신은 실제 owner 명령 결속·장치 정지·복구의 증거가 아니다.
 
+arm care 저장 시 서버가 현재 source·owner·board·joint topic·joint names의 등록 지문을 `source_binding={owner_id,sha256}`으로 보존한다. 이름·자격은 지문에서 제외한다. 현재 등록과 다르면 source 조회는 `profile=null`과 `source_binding_status=source_unregistered|unverified_link|owner_changed|registration_changed` 및 편집할 `device_id`를 반환한다. 정상 연결은 `matched`, 미연결은 `not_linked`다. 장치별 care 조회는 기존 기록을 보존하되 불일치 분석은 `fresh=false`로 표시한다. 기존 DB의 지문 없는 연결은 추정하지 않고 운영자의 재저장을 요구한다. 수신 시 현재 등록·저장 지문·특성 owner 대조는 duplicate 처리보다 먼저 수행한다. Workcell snapshot의 arm에는 불투명한 `binding_sha256`을 포함하며 Cell은 현재 owner·지문으로 늦은 응답도 대조한다. 지문은 설정 결속이며 하드웨어 신원 증명이나 제어 권한이 아니다. 수신 자격이 없으면 관측 서비스 가용성보다 먼저 401을 반환한다.
+
 ### v1.323 Navigation intent epoch preservation (D-890)
 
 Intent 문법의 `navigate`/`home`만 optional `expected_boot_id`(UUID 문자열), `expected_owner_generation`(bool 제외 비음수 정수)을 받는다. 주어진 값은 그대로 유지하며 최종 pair 허용 여부는 기존 실행 owner가 판단한다. CORE `/api/v1/do` Home도 본문을 기존 `HomeRequest`로 전달한다. Fleet navigate는 어느 한 epoch key라도 있으면 자원·admission·Task 생성 전에 `COMMAND_REJECTED` / `FLEET_NAVIGATION_CALLER_EPOCH_UNSUPPORTED`로 거절한다. epoch 없는 기존 Fleet 경로와 Home 원본 전달은 유지한다.

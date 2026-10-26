@@ -26,6 +26,10 @@ The completion audit found two presentation/evidence gaps before declaring succe
 
 ## Limits and recovery
 
+The previous FULL candidate commit `9d374786de` completed prechecks (287 architecture/harness passes; 2164 collection passes and 1 skip; 131 standalone passes and 1 skip). Runtime Fleet produced 7154 passes, 403 skips and one failure: missing source credentials returned unavailable before unauthorized. This is not a FULL pass. The gateway stopped when the candidate changed and did not advance main.
+
+Registration-change audit reproduced three failures at commit `d57547ed3b`: an owner replacement (with and without characteristics) and source removal still exposed the previous profile. Commit `2bb5853fe3` persists the original registration binding, quarantines changed/legacy links without deleting their records, validates binding before duplicate ingestion, and checks the current Cell snapshot against cached responses. Remote care/store/routes/Workcell and real browser suites passed, including a replacement-owner browser case using the real persisted pipeline. Node passed all 395 cases. Commit `24c5c92c19` additionally fixes the FULL authorization-order failure; the two affected route/AI suites passed all 37 cases remotely. The native wrapper returned exit 1 despite the runner's explicit remote pytest exit 0; the recorded run contains no failed case. Independent contract review of this commit found no remaining supported material defect and did not execute tests. Final FULL and main landing remain pending.
+
 Care data uses the existing task SQLite backup/restore boundary. Rebinding/removing characteristics invalidates the latest report while keeping bounded history. Report duplicates retain source times and cannot renew freshness. UI/API observations never grant execution authority or clear owner faults. Missing storage or observations stay unavailable. Hardware timing of additional motor-health reads and measured load envelopes still require separate device acceptance.
 
 CE: 해당 없음 — the resolved reasoning is directly represented by code, regression tests and this verification record; no separate lesson is needed.

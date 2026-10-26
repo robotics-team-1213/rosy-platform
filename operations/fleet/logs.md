@@ -4975,3 +4975,9 @@
 - 증거: tests-only 26344ecf9b의 원격 16 failed/1 passed → 812b3b224c 156 passed. 독립 검토 TTL 반례 e231ff081a 2 failed → c86b3e51d5의 관련 통합 172 passed/0 skipped, runner exit 0·known NEW 0. 같은 source affected는 역의존·guard 4604 passed/190 skipped와 문서 검사 1 failed, Fleet 7070 passed/391 skipped와 기존 콘솔 계약 불일치 1 failed다. 문서 표기를 고친 a24f265097에서 해당 guard·문서 배치 9 passed/NEW 0. 전체 회귀 통과로 보고하지 않는다. `docs/validation/transfer-execution-review-2026-10-27/result.md` 참고.
 - Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
 - CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
+
+## 2026-10-27 · uncommitted · fix: 등록 변경 시 이전 팔 프로필 연결 격리
+
+- 변경: 등록 당시 source·owner·board·관절 구성 지문을 보존한다. 등록 변경·제거와 legacy 연결은 현재 팔에서 숨기고 재확인을 요구한다. 원본 관리 기록은 보존하고 분석 수신은 duplicate 처리 전에 현재 지문을 확인한다. 자격 누락은 가용성 검사보다 먼저 거절한다.
+- 증거: commit `d57547ed3b`의 owner 변경·source 제거 3건 RED 후 commit `2bb5853fe3`의 관련 저장소·경로·Workcell·실제 브라우저 회귀 PASS. commit `24c5c92c19`의 인증 관련 원격 37건 PASS. FULL 재검증과 main 병합은 진행 중이다.
+- CE: 해당 없음 — 원인과 회귀 조건은 코드·시험·검증 기록에 남겼다. 설정 지문은 물리 신원 증명이나 실행 권한이 아니다.
