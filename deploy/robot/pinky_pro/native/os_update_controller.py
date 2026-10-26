@@ -172,7 +172,7 @@ def start(root: Path, bundle: Path, raw: bytes, signature: str, *, host: Host | 
                 verified = verify_bundle(root, bundle, raw, signature)
                 current = source_health(root, transaction_id, host=host, run=run)
                 media = capture(root)
-                with NativeReleaseManager(root=root)._locked():
+                with NativeReleaseManager(root=root, public_key=_path(root, PUBLIC_KEY))._locked():
                     if read_state(root) != initial or host.current_release() != current or _snapshot(root)[0] != facts:
                         raise ValueError("source changed before posting pending")
                     with locked(root) as store:
@@ -202,7 +202,7 @@ def _failed_source(root, facts, pending, host, run):
     else:
         _stop(root, run)
     _quiet(root, run)
-    with NativeReleaseManager(root=root)._locked(), locked(root) as store:
+    with NativeReleaseManager(root=root, public_key=_path(root, PUBLIC_KEY))._locked(), locked(root) as store:
         if store.state["pending"] != pending:
             raise ValueError("source failure owner changed")
         store.record_failure(pending["transaction_id"], facts["boot_id"], facts["slot"])
