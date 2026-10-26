@@ -11696,3 +11696,11 @@ osy-d395-s1d\`.
 - 증거: AI PC `/tmp`는 ext4 `/`(현재 73%). 원격 AI PC 단위 시험 통과, 변이 세 개(tmpfs 대체 제거, 마운트 접두 경계 제거, 측정 디렉터리 전달 제거) 모두 빨강. 파일 전체 1회 12 통과.
 - gate 변화: 없음.
 - 교훈: CE 해당 없음 — 근거가 docstring과 시험에 있다.
+
+## 2026-10-26 · uncommitted · 원격 pytest의 실패 id가 저장소 기준 경로로 나온다
+
+- 변경: `tools/remote/remote_pytest.py`의 `PYTEST_TAIL`과 격리 재실행 인자에 `--rootdir=.`(실행 워크트리)를 넣는다.
+- 이유: robot-73 착지(10-26)에서 여러 경로를 한 번에 돌린 호출의 NEW 실패가 `middleware/robot_execution/local/test_feature_matrix.py::…`처럼 잘못된 뿌리로 찍혀 단독 재실행이 아무것도 돌리지 않았다. pytest는 공통 조상에 설정 파일이 없으면 첫 인자부터 위로 처음 만난 `pyproject.toml`을 pytest 절이 없어도 rootdir로 삼는다. 저장소 어디에도 pytest 설정 절은 없어서 그 configfile은 빈 설정이었다.
+- 증거: 시험 PC에서 `middleware/robot_execution/local/test test/ applications/fleet/test/ --collect-only -p no:xdist`를 `--rootdir` 없이/있이 비교: rootdir `…/middleware/robot_execution/local`·configfile `pyproject.toml` → rootdir 실행 디렉터리·configfile 없음, 둘 다 12568개·모듈 662개, 항목 이름 차이는 시각·경로 매개변수 2개뿐. 새 시험 `test_pytest_tail_keeps_failed_ids_repo_relative_when_the_first_path_has_a_pyproject`는 `--rootdir` 변이에서 `pkg/test_b.py::test_b`로 빨강, 복원 후 `test/test_remote_pytest.py test/test_land.py` 180 통과, known_failures 0 new.
+- gate 변화: 없음. land_checks의 id 되돌리기·exit 4/5 처리는 robot-47 몫.
+- 교훈: CE 해당 없음 — 원인은 코드 주석과 회귀 시험에 있다.

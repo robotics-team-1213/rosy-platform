@@ -97,7 +97,10 @@ RESERVE_S = {"pytest": 4500, "pick": 600}
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
-PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", *known_failures.NO_ROS_LAUNCH_PLUGINS]
+# --rootdir=. (the run worktree): node ids stay repo-relative; without it the first arg's nearest
+# pyproject.toml (even one with no pytest section) became rootdir and FAILED ids lost their root.
+ROOTDIR = "--rootdir=."
+PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", ROOTDIR, *known_failures.NO_ROS_LAUNCH_PLUGINS]
 # Leading words of an invocation that remote_job.JOB exports instead of passing to pytest.
 ENV_ARG = re.compile(r"^ROSY_[A-Z0-9_]*=")
 BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
@@ -510,7 +513,7 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
     rerun, lost = log.with_name(log.stem + "-rerun.txt"), None
     try:
         env = [*words, *itertools.takewhile(ENV_ARG.match, inv)]  # serial: ids, never -n
-        rerun_code = remote_job.run(host, name, f"{k}r", rerun, job, [*env, *ids, "-q", "-rA", "-p", "no:cacheprovider"],
+        rerun_code = remote_job.run(host, name, f"{k}r", rerun, job, [*env, *ids, "-q", "-rA", "-p", "no:cacheprovider", ROOTDIR],
                                     PYTEST_TIMEOUT, SSH, **stop)
     except remote_job.Lost as error:
         lost, rerun_code = str(error), remote_job.LOST_EXIT

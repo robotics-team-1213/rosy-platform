@@ -965,7 +965,7 @@ def test_run_on_reruns_only_quarantined_failures_once(tmp_path, monkeypatch, lis
     if not listed:
         assert len(calls) == 1
         return
-    assert calls[1] == ("0r", ["test/q.py::test_f", "-q", "-rA", "-p", "no:cacheprovider"])
+    assert calls[1] == ("0r", ["test/q.py::test_f", "-q", "-rA", "-p", "no:cacheprovider", "--rootdir=."])
     assert len(calls) == 2
     text = log.read_text(encoding="utf-8")
     assert rp.known_failures.RERUN_MARKER in text
@@ -1145,6 +1145,18 @@ def test_run_on_adds_xdist_to_the_run_but_never_to_the_quarantine_rerun(tmp_path
     assert calls[0][:6] == ["ROSY_JOB_CORES=6", "shared/web/test", "-n", "6", "--dist", "loadfile"]
     assert calls[0][6:] == rp.PYTEST_TAIL
     assert calls[1][:2] == ["ROSY_JOB_CORES=6", "shared/web/test/test_q.py::test_f"] and "-n" not in calls[1]
+
+
+def test_pytest_tail_keeps_failed_ids_repo_relative_when_the_first_path_has_a_pyproject(tmp_path):
+    """robot-73: an empty package pyproject.toml under the first path became rootdir, so FAILED ids lost their root."""
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "pyproject.toml").write_text("[project]\nname = 'pkg'\n", encoding="utf-8")
+    (tmp_path / "pkg" / "test_a.py").write_text("def test_a():\n    assert False\n", encoding="utf-8")
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "test_b.py").write_text("def test_b():\n    assert False\n", encoding="utf-8")
+    out = subprocess.run([sys.executable, "-m", "pytest", "pkg", "other", *rp.PYTEST_TAIL], cwd=tmp_path,
+                         capture_output=True, text=True, timeout=120).stdout
+    assert set(rp.known_failures.failed_ids(out)) == {"pkg/test_a.py::test_a", "other/test_b.py::test_b"}, out
 
 
 def test_venv_installs_pinned_xdist_so_its_hash_rebuilds_the_venv():

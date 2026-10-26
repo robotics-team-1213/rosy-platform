@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · 원격 pytest의 실패 id가 저장소 기준 경로로 나온다
 - 2026-10-26 · uncommitted · G1 시간 시험의 fsync 측정이 tmpfs를 피하고 파일시스템을 밝힌다
 - 2026-10-26 · uncommitted · G1 시간 시험의 디스크 판정을 fsync 직접 측정으로 바꾼다
 - 2026-10-26 · uncommitted · G1 시간 시험이 디스크 I/O 경합에서는 실패 대신 이유를 찍고 건너뛴다
 - 2026-10-26 · uncommitted · remote_pytest.run이 첫 실패에서 남은 호출을 멈출 수 있게 한다
-- 2026-10-26 · uncommitted · tools/doctor.py와 FULL 승격 경로 설명
