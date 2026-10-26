@@ -177,6 +177,11 @@ took hours to land. Four separate things blocked it.
   `<git-common-dir>/rosy-land-failed.json` and cleared once it passes. The next run sends the marked ones to the
   test PCs alone first; if they fail again the landing stops before the rest is spent. Test:
   `test/test_land.py::test_what_failed_last_run_runs_alone_first_and_a_repeat_stops_before_the_rest`.
+- **A branch's reordered copy of main's log entries (2026-10-26):** a hand-fitted merge of main left main's
+  `docs/logs.md` entries in another order on the branch; the turn stopped "a side changed existing lines".
+  `land_logs.append_blocks` now keeps main's order when the branch only reordered (nothing edited or dropped)
+  and inserts the branch's new entries by date; main reordering, or an edit, still stops. Test:
+  `test/test_land.py::test_logs_md_this_branch_reordering_mains_entries_keeps_mains_order`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

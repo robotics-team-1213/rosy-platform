@@ -619,6 +619,20 @@ def test_logs_md_side_reordering_base_entries_refuses():
     assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
 
 
+def test_logs_md_this_branch_reordering_mains_entries_keeps_mains_order():
+    """2026-10-26: a hand-fitted merge left main's entries in another order on the branch; the turn stopped
+    "a side changed existing lines". Nothing was edited or dropped, so main's order wins."""
+    a, b = dated("2026-10-13", "a"), dated("2026-10-14", "b")
+    base = "# docs logs\n" + a + b
+    ours = "# docs logs\n" + b + a + dated("2026-10-15", "branch")
+    for theirs, tail in ((base + dated("2026-10-16", "peer"), dated("2026-10-15", "branch") + dated("2026-10-16", "peer")),
+                         (base, dated("2026-10-15", "branch"))):
+        merged = land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode()
+        assert merged.rstrip() == (base + tail).rstrip()
+    edited = ours.replace("- 증거: 없음", "- 증거: 있음", 1)  # reordered and edited: still a human's call
+    assert land.append_blocks(base.encode(), edited.encode(), base.encode()) is None
+
+
 def test_logs_md_same_new_entry_on_both_sides_is_written_once():
     base = "# docs logs\n" + dated("2026-10-13", "base")
     picked = dated("2026-10-14", "picked")
