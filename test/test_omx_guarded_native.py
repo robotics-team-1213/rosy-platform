@@ -747,6 +747,24 @@ def test_body_invalid_actual_pwm_limit_refuses_before_enable(guard, limit):
     assert ('on',) not in follower.events
 
 
+def test_xl430_joints_admit_600_and_the_xl330_wrist_still_refuses_above_400(guard):
+    for limits, admitted in (({'shoulder_lift': 600, 'elbow_flex': 600}, True), ({'shoulder_lift': 601}, False),
+                             ({'shoulder_lift': 600, 'wrist_flex': 401}, False)):
+        follower, leader, clock = Bus(), Bus(leader=True), [10.0]
+        effort_read(follower)
+        read = follower.read
+        follower.read = lambda register, motor, _read=read, _l=limits, **kw: (
+            _l.get(motor, 330) if register == 'PWM_Limit' else _read(register, motor, **kw))
+        motion = guard.NativeJointMotion(follower, leader, body_only=True, clock=lambda: clock[0])
+        if admitted:
+            motion.send(action(leader))
+            assert motion.pwm_limits['shoulder_lift'] == 600
+        else:
+            with pytest.raises(ValueError, match='PWM_Limit'):
+                motion.send(action(leader))
+            assert ('on',) not in follower.events
+
+
 def test_initial_alignment_deadline_is_fixed_by_admitted_gap_not_later_targets(guard):
     motion, follower, leader, clock, step = phased_pair(guard)
     for _ in range(95):

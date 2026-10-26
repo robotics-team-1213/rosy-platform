@@ -22,6 +22,9 @@ MAX_STEP_S = 0.1
 SEED_TOLERANCE_TICKS = 1
 BODY = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
 NAMES = (*BODY, "gripper")
+#: PWM_Limit admitted per body joint: the XL430 base, shoulder and elbow carry the arm at reach up to
+#: record_session's XL430_PWM_MAX (2026-10-26: 78 % of 300 at 0.23 m); the XL330 wrist stays at 400.
+PWM_ADMIT_MAX = {"shoulder_pan": 600, "shoulder_lift": 600, "elbow_flex": 600, "wrist_flex": 400, "wrist_roll": 400}
 
 
 def torque_off(bus):
@@ -214,7 +217,7 @@ class NativeJointMotion:
                 if self.follower.read("Torque_Enable", name):
                     raise ValueError(f"{name}: PWM_Limit admission requires torque OFF")
                 limit = self.follower.read("PWM_Limit", name)
-                if not isinstance(limit, (int, float)) or not math.isfinite(limit) or not 0 < limit <= 400:
+                if not isinstance(limit, (int, float)) or not math.isfinite(limit) or not 0 < limit <= PWM_ADMIT_MAX[name]:
                     raise ValueError(f"{name}: invalid PWM_Limit {limit}")
                 limits[name] = limit
             self.pwm_limits = limits
