@@ -29,8 +29,50 @@ def test_qemu_command_has_only_owned_images_and_loopback_ssh(tmp_path):
     argv = vm.command(22022, 22023)
     assert "-accel" in argv and argv[argv.index("-accel") + 1] == "tcg"
     assert "hostfwd=tcp:127.0.0.1:22022-:22" in " ".join(argv)
-    assert "-enable-kvm" not in argv and "/dev/" not in " ".join(argv)
+    assert "-enable-kvm" not in argv
+    assert all(value.startswith("file=" + str(tmp_path) + "/") for key, value in zip(argv, argv[1:]) if key == "-drive")
     assert all(str(tmp_path) in value for key, value in zip(argv, argv[1:]) if key in {"-kernel", "-initrd", "-bios"})
+
+
+@pytest.mark.parametrize("wrong_range", [False, True])
+def test_large_guest_input_uses_exact_bounded_http_ranges(tmp_path, monkeypatch, wrong_range):
+    import http.server
+    import re
+    import threading
+    m = module()
+    monkeypatch.setattr(m, "RANGE_BYTES", 8192, raising=False)
+    monkeypatch.setattr(m, "RANGE_THRESHOLD", 8192, raising=False)
+    data, requests = b"bounded upstream range data" * 1000, []
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_): pass
+        def do_GET(self):
+            match = re.fullmatch(r"bytes=(\d+)-(\d+)", self.headers.get("Range", ""))
+            if not match:
+                self.send_error(400)
+                return
+            start, end = map(int, match.groups())
+            requests.append((start, end))
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start + int(wrong_range)}-{end}/{len(data)}")
+            self.send_header("Content-Length", str(end - start + 1))
+            self.end_headers()
+            self.wfile.write(data[start:end + 1])
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    expected = dict(url=f"http://127.0.0.1:{server.server_port}/fixture", size_bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
+    try:
+        if wrong_range:
+            with pytest.raises(ValueError): m.download(expected, tmp_path / "image")
+            assert not (tmp_path / "image").exists()
+        else:
+            m.download(expected, tmp_path / "image")
+            assert (tmp_path / "image").read_bytes() == data
+            assert requests == [(start, min(start + 8191, len(data) - 1)) for start in range(0, len(data), 8192)]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
