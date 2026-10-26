@@ -40,9 +40,9 @@ const pageScope = createPageScope();
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
 // Current intervention stays outside context tabs; hidden panels keep their owners mounted.
-const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
-  document.querySelector('.console-context')];
-const MAP_PANEL = 1;
+const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('.console-context'),
+  document.querySelector('[aria-labelledby="map-heading"]')];
+const MAP_PANEL = 2;
 const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
   robots: () => view.robots,
   canManage: () => !auth.locked && auth.role === "operator" && !namedReason(),
