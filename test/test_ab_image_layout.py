@@ -126,6 +126,7 @@ def test_each_slot_uses_its_root_boot_and_the_shared_data_and_provision(tmp_path
         boot.mkdir()
         (root / "etc/fstab").write_text(original)
         (boot / "cmdline.txt").write_text("console=tty1 root=LABEL=writable rootwait\n")
+        (boot / "config.txt").write_text("[pi5]\ndtoverlay=uart0-pi5\n")
         m.configure_slot(root, boot, layout, slot)
         descriptor = json.loads((root / "etc/rosy/os-slot.json").read_text())
         assert descriptor["root_partuuid"] == parts["root_" + slot]["unique_guid"]
@@ -137,6 +138,7 @@ def test_each_slot_uses_its_root_boot_and_the_shared_data_and_provision(tmp_path
         assert "/var/lib/rosy-device/maps /var/lib/rosy/maps none bind" in fstab
         assert f"PARTUUID={parts['bootstrap']['unique_guid']} /run/rosy-provision-boot vfat" in fstab
         assert "rosy.os_layout=ab-v2" in (boot / "cmdline.txt").read_text()
+        assert (boot / "config.txt").read_text().endswith("[all]\nkernel_watchdog_timeout=180\n")
         import yaml
         fixed = yaml.safe_load((root / "etc/cloud/cloud.cfg.d/99-rosy-fixed-layout.cfg").read_text())
         assert fixed == {"growpart": {"mode": "off"}, "resize_rootfs": False}
