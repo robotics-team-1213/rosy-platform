@@ -213,6 +213,16 @@ def _failed_source(root, facts, pending, host, run):
     return read_state(root)
 
 
+def _finish(root, facts, result, run):
+    intent = commit_owner._private(root, commit_owner.INTENT, commit_owner.INTENT_FIELDS)
+    if (facts["tryboot"] and result["pending"] is None and intent is not None
+            and intent["trial_boot_id"] == facts["boot_id"] and intent["target_slot"] == facts["slot"]
+            and intent["release_id"] == result["committed"]["release_id"]):
+        # A normal boot clears retained tryboot and reloads the operator's configured I/O environment.
+        _call(run, ["/usr/bin/systemctl", "--no-block", "reboot"])
+    return result
+
+
 def resume(root: Path = Path("/"), *, host: Host | None = None, run=_run):
     try:
         root = _root(root, run)
@@ -221,11 +231,11 @@ def resume(root: Path = Path("/"), *, host: Host | None = None, run=_run):
             facts, state, _ = _snapshot(root)
             pending = state["pending"]
             if pending is None:
-                return commit_owner.recover(root, host=host, run=run)
+                return _finish(root, facts, commit_owner.recover(root, host=host, run=run), run)
             transaction_id = pending["transaction_id"]
             _claim(root, transaction_id, host)
             if pending["phase"] == "COMMIT_INTENT":
-                return commit_owner.recover(root, host=host, run=run)
+                return _finish(root, facts, commit_owner.recover(root, host=host, run=run), run)
             if facts["tryboot"]:
                 try:
                     if pending["phase"] == "ARMED":
@@ -239,7 +249,7 @@ def resume(root: Path = Path("/"), *, host: Host | None = None, run=_run):
                             raise ValueError("health bytes changed before HEALTHY")
                         _transition(root, transaction_id, "HEALTHY", facts["boot_id"], health_sha256=hashlib.sha256(raw).hexdigest())
                     invoke(root, ("set-state", pending["target_slot"], "good"))
-                    return commit_owner.commit(root, transaction_id, host=host, run=run)
+                    return _finish(root, facts, commit_owner.commit(root, transaction_id, host=host, run=run), run)
                 except (OSError, ValueError, subprocess.SubprocessError):
                     after = read_state(root)["pending"]
                     # A published intent needs its original GOOD_ACK for recovery, even if cleanup failed.
