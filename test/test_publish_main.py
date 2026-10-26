@@ -65,6 +65,18 @@ def test_newest_commit_with_a_green_full_record_is_published(repo, capsys):
     assert f"would push {full}" in out and "secret scan: 1 commits' added lines clean" in out
 
 
+def test_a_green_full_commit_with_an_older_pre_push_is_skipped(repo):
+    local, _ = repo
+    old_hook = _commit(local, "app.py", "1")
+    tool.land_record.write(local, old_hook, _git(local, "rev-parse", f"{old_hook}^"), FULL, [])
+    _commit(local, "tools/hooks/pre-push", "new gate
+")  # the installed hook would refuse old_hook
+    assert tool.publish_sha(local) is None
+    same_hook = _commit(local, "app.py", "2")
+    tool.land_record.write(local, same_hook, _git(local, "rev-parse", f"{same_hook}^"), FULL, [])
+    assert tool.publish_sha(local) == same_hook
+
+
 # Assembled at runtime so no credential assignment literal sits in this source.
 LEAK = "pass" + "word = " + json.dumps("unexpected-live-credential-92817")
 
