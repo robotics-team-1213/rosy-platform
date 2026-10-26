@@ -106,6 +106,12 @@ protocol2 root에는 apt-daily/apt-daily-upgrade timer와 service, unattended-up
 
 daemon MainPID=0만으로 자식 writer가 끝났다고 판단하지 않는다. stop 전후와 canonical unit cgroup의 [cgroup2 populated](https://docs.kernel.org/admin-guide/cgroup-v2.html#un-populated-notification)가 모두 0이거나 사라진 경우에만 권한을 회수한다. live child·unknown hierarchy는 HOLD로 runtime을 보존한다. 같은 boot의 인증된 request와 전체 cgroup 종료를 확인한 복구는 known root/boot의 private·unmounted·빈 workspace만 지운다. unknown 파일과 mounted tree를 재귀 삭제하지 않는다. 실제 kernel namespace/cgroup/RAUC/fsck 수용은 SYSTEM 단계이며, signed-candidate 비실행·네 파일 I/O·양방향 전이·frozen 실행의 SOURCE 시험과 구분한다.
 
+시범 부팅의 `os_update_health.check`는 TRIAL·target slot·새 boot ID·보존된 source default·motion fence를 먼저 확인한다. 공통 enabled/Hold/seal/network/claim 정책과 알려진 60–100% 배터리 조건은 source와 trial에서 공유하되 source admission은 trial에서 계속 거절한다. trial은 12초 간격의 서로 다른 fresh idle CORE 기록을 요구한다. source 전용 watchdog admission과 별도로 같은 boot의 firmware/kernel/PID1 관측을 재사용하며 두 health 관측 사이에 결과가 달라지면 거절한다.
+
+시범 root의 signed factory·inventory·Python pin·AST 계약과 current pointer를 검증하고, source finalizer가 남긴 transaction/layout/manifest/factory receipt를 대조한다. source receipt reader의 실제 source-boot 조건은 유지하며 별도 bound decoder를 trial owner가 사용한다. 현재 projection/boot/slot을 확인한 뒤 navigation을 정지하고 cgroup2 전체 종료를 확인한다. I/O는 frozen OS guard와 signed factory unit bytes, effective drop-in 및 마지막 false EnvironmentFile을 확인한 뒤 재시작한다. CORE/I/O의 InvocationID·MainPID·상태가 두 관측 사이에 바뀌면 거절한다. `/api/v1`의 local HTTP/TLS readiness는 기존 wait-core-ready 계약(200–499)을 사용하며 redirect/proxy를 따르지 않는다. HTTP 응답만으로 health를 인정하지 않고 fresh idle CORE samples도 필요하다.
+
+health는 bootstrap/state phase/ACK를 쓰지 않는다. 성공한 boot/transaction/services/projection/factory/watchdog/samples를 common RAUC 하위 private receipt로 fsync 게시하고 readback한다. CLOCK_BOOTTIME 기준 165초 이후에는 게시·소비하지 않으며 receipt 유효기간은 30초다. 잘못된 nested schema와 PID, 다른 boot 또는 만료된 receipt는 HOLD한다. 이후 commit owner는 receipt의 정확한 바이트 digest·HEALTHY·같은 trial의 GOOD_ACK·운영자 조건·실제 서비스 상태를 다시 결속해야 한다. 장기 COMMIT_INTENT 복구는 일반 health의 same-boot expiry를 우회하는 flag로 구현하지 않고 별도 복구 역할로 처리해야 한다. 현재 이 helper는 frozen source이며 controller/service 호출 연결과 commit/fallback은 아직 남아 있다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.

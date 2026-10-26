@@ -11752,3 +11752,10 @@ osy-d395-s1d\`.
 - 증거: de194 broad1929pass/32skip/49warn+fixture1fail377.49s 후 da363 관련306pass13.56s0NEW로 fixture를 바로잡았다. 최종2b8ff Python pin 반례 수정·관련55pass14.77s0NEW. 집계는 겹치며 합산하지 않는다. actual crypto/frozen CLI/파일 I/O와 modeled kernel/fsck 증거를 구분한다.
 - gate 변화: 없음. 실제 SYSTEM/ARM 이미지·서명·SD·기체 수용과 전체 controller/health/commit/fallback은 미완료다. 독립 리뷰/main 착지/public push는 수행하지 않았다.
 - CE: 해당 없음 — 판단과 반례는 구현·시험·기존 ADR에 보존한다.
+
+## 2026-10-26 · 48064a6e56 · D-888 trial health source와 증거 범위
+
+- 변경: source-only admission과 trial admission을 분리하고 공통 운영자 정책·battery/idle samples·현재 boot watchdog 검사를 재사용했다. frozen trial health는 projection/factory/install receipt, 전체 navigation 정지, inhibited I/O restart, stable CORE/I/O와 local readiness를 결속해 30초짜리 private receipt를 게시한다. default/phase/ACK는 별도 commit owner의 책임으로 남겼다.
+- 증거: `c57db7561c` 관련 원격 417 passed/16.83s, `48064a6e56`의 실제 local HTTP/TLS·hostname/CA 거절·frozen import 포함 health 29 passed/4.31s, 0 NEW. committed480 확장 회귀는 1972 passed, 32 skipped, 49 warnings/342.02s, 0 NEW다. 각 subset은 중복되어 합산하지 않는다. 잘못된 path로 실행되지 않은 첫 회귀 호출은 exit4이며 통과 증거가 아니다.
+- gate 변화: 없음. D-888은 Proposed를 유지한다. helper의 source 증거이며 실제 controller/commit/fallback·SYSTEM/native ARM/image/signing/SD/device 수용을 증명하지 않는다. 32 skipped는 미검증이며 main merge/public push/제품 키·SD 작업은 수행하지 않았다.
+- CE: 해당 없음 — 판단과 반례는 구현·시험·D-888에 보존한다.

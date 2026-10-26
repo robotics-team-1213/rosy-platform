@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 48064a6e56 · D-888 trial health source와 증거 범위
 - 2026-10-26 · 2b8ff14ee8 · D-888 installed finalization과 kernel stop 증거 범위
 - 2026-10-26 · 8dc0b91774 · D-888 watchdog/apt 정책과 관측 범위 기록
 - 2026-10-26 · 82ccb2e22b · D-888 독립 trial deadline 책임 기록
 - 2026-10-26 · cfbe016caf · D-888 공통 정책과 motion guard 책임 기록
-- 2026-10-26 · 0a7b6bb462 · D-888 RAUC daemon lifecycle과 검증 범위 기록
