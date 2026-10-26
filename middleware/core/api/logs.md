@@ -1268,6 +1268,7 @@
 - 변경: v1.296 viewer API가 서버 지정 파일·소유자·세션만 읽고 장치나 호출자 경로를 열지 않는다.
 - 증거: 기존 소스 검증과 현재 운영 인증을 독립 읽기 전용 검토했다. 최종 원격 영향 선택 결과는 연결 기록에 확정한다.
 - gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+
 ## 2026-10-24 · uncommitted · D-862 공통 reference 버전 pin 정렬
 
 - 변경: 공식 api_reserve bump 도구로 API app의 공통 reference pin을 v1.309로 옮겼다. CORE route·최종 명령·안전·정지 해제 동작은 변경하지 않는다.
@@ -1292,6 +1293,12 @@
 - 변경: 예약 도구로 API reference v1.318과 CORE app의 계약 설명을 맞췄다. CORE route·권한·명령·WS envelope 동작은 바꾸지 않았다.
 - 증거: 버전 고정값은 `api_reserve.py bump`로 함께 갱신했다. 원격 버전 정렬 시험으로 확인한다.
 - gate 변화: 없음. Fleet 캐시 읽기 wire의 계약 표시 변경이며 CORE·장치 수용을 주장하지 않는다. CE: 해당 없음.
+
+## 2026-10-26 · 62173b9899 · 모터 관측 없음 사유를 한국어로
+
+- 변경: `support_reason`이 화면에 그대로 나오던 영어 문장을 표면 대체 문구와 같은 한국어로 바꿨다. 응답 모양·상태값은 같다.
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
+- gate 변화: 없음.
 
 ## 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
 

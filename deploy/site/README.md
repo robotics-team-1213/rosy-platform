@@ -154,8 +154,8 @@ TLS and Account signing keys. The candidate's `Caddyfile.account` retains
 verified Fleet backend TLS and serves the existing public app-link statements.
 
 The daily `rosy-account-tls-renew.timer` keeps that pair valid. It runs
-`account_tls_renew.py` from a release folder
-(`~/.local/share/rosy/account-tls/releases/<sha>/`), never from a preparation copy. The
+`account_tls_renew.py` from a release folder, never from a preparation copy. Since D-871 that is the
+auto-updated site-tools release: `ROSY_ACCOUNT_TLS_SOURCE=~/.local/share/rosy/site-tools/current/deploy/site/account_tls_renew.py`. The
 certificate folder (keys, `backups/`) is data and stays where it was prepared.
 `~/.config/rosy/account-tls.env` sets `ROSY_ACCOUNT_TLS_SOURCE` (the release script),
 `ROSY_ACCOUNT_TLS_CERTS` (that folder) and `ROSY_ACCOUNT_TLS_DOMAIN` (the approved
@@ -861,8 +861,11 @@ set-policy-admin /etc/rosy/site/site-users.yaml --principal <id> [--principal <i
 Deploy a Fleet that knows `policy_admin` before setting it: an older Fleet refuses the
 key at startup. All roles remain subject to CORE's local safety checks.
 
-Maintain `site-users.yaml` with `deploy/site/site_users.py` instead of an
-editor: `python3 deploy/site/site_users.py add /etc/rosy/site/site-users.yaml
+The signed candidate includes the host tool at
+`/opt/rosy/candidate/deploy/site/site_users.py`; it runs on the site host with
+Python 3 and PyYAML, without installing Fleet there. Maintain `site-users.yaml`
+with that tool instead of an editor:
+`sudo python3 /opt/rosy/candidate/deploy/site/site_users.py add /etc/rosy/site/site-users.yaml
 --principal <id> --role <operator|viewer|policy-admin> --token-stdin` pipes the
 raw token through stdin only (it never enters argv, `ps`, or logs), stores just
 its SHA-256 digest, and publishes atomically — temp file plus rename, then a
@@ -874,10 +877,23 @@ empty users list. After each write the tool applies `root:10001` mode `0440`
 itself when run as root, and otherwise prints the exact `chown`/`chmod` line
 to run.
 
+For a machine client, provision a distinct high-entropy token through the
+approved secret manager and privately pipe it to
+`sudo python3 /opt/rosy/candidate/deploy/site/site_users.py add-service
+/etc/rosy/site/site-users.yaml --principal <machine-id> --token-stdin`.
+Use `--dry-run` first. The token travels through stdin; never paste it into
+command arguments, shell history, logs, or chat. Deliver the same raw token to
+the client's protected credential store through the secret manager. The registry
+stores only its digest, and this command prints only the principal, fixed
+`service` role, outcome and ownership guidance. It grants the existing Fleet
+service permissions; it adds no operator, policy, or scoped grants. A service
+principal cannot have a Console login or password. `add` remains limited to its
+human-role whitelist; use the separate person login flow below for operators.
+
 For a human Console login, generate the password hash with the existing
 `python3 -m fleet.server.site_users hash-password` command in the Fleet
 environment. It prompts without echo on an interactive terminal. Supply the
-result through a private pipe to `sudo python3 deploy/site/site_users.py
+result through a private pipe to `sudo python3 /opt/rosy/candidate/deploy/site/site_users.py
 add-login /etc/rosy/site/site-users.yaml --principal <person-id> --role operator
 --login <login-id> --password-hash-stdin`. Do not put the password or hash in
 command arguments, logs, or chat. `--dry-run` validates without publishing;
@@ -894,7 +910,7 @@ manually restored file was published with group `101` instead of `10001`, and
 the watcher fed the unreadable file straight into a roughly two-minute Fleet
 crash loop (`unable to load site user credentials`). Never edit or restore
 this file by hand — always use `site_users.py`. Gate every automatic restart
-on `python3 deploy/site/site_users.py validate <file>` (YAML shape, digest
+on `python3 /opt/rosy/candidate/deploy/site/site_users.py validate <file>` (YAML shape, digest
 formats, permission bits, owning group; a non-zero exit means keep Fleet on
 the last good file and log instead of restarting).
 
@@ -1035,6 +1051,33 @@ authenticate that same candidate: an unsigned replacement could replace both.
 The production site key ID and public key are not selected or present in this
 repository yet; until they are independently provisioned, host activation is
 HOLD.
+
+Candidates built with the service-token tool carry the signed manifest field
+`site_users_tool_required: true` and the hash of `deploy/site/site_users.py`.
+Before accepting these candidates, an administrator must refresh the independently
+installed verifier from the reviewed checkout through the trusted administrator
+path above. For the updater, use the reviewed-checkout installation procedure
+below; it imports the verifier installed beside it, never the candidate's copy.
+The previous verifier rejects the new tool as an unsupported deployment file.
+The updated verifier accepts historical signed candidates without the marker;
+when a tool is listed, its file and hash are always checked. A present marker
+must be literal `true`, and requires the tool and its hash. Removing or changing
+the marker also invalidates the manifest signature.
+
+Before enabling updates, run the independently installed verifier against the
+running candidate, each retained rollback candidate, and the new signed candidate.
+Use `--signature-only` for the new candidate before loading its images, then
+verify the loaded images as below. Historical running and rollback candidates
+must retain their original signed manifests; do not add the marker or tool to
+them. Record this transition matrix in host evidence:
+
+| Signed candidate | Updated verifier outcome |
+|---|---|
+| Historical, no marker and no tool | Accepted under the existing checks |
+| No marker, tool listed | Tool must exist and match its signed hash |
+| Marker `true`, tool listed | Tool must exist and match its signed hash |
+| Marker `true`, tool omitted | Rejected |
+| Marker present with any other value | Rejected |
 
 Copy the signed candidate to the approved Ubuntu host using the site's
 controlled transfer path. Verify its signature and files before Docker loads
@@ -1874,14 +1917,17 @@ serial·model·포커스·잠금·상태를 다시 읽고, 서비스 상태가 �
 `started`/`stopped`다. 이 상태는 카메라 세션이며 Vision의 프레임 수신 증거가 아니다.
 `snapshot`은 폰 화면(미리보기·상태 문구)을 PNG로 받아 화각을 원격으로 확인할 때 쓴다.
 
-멈춘 송출을 사람 없이 다시 켜려면 관제 PC 사용자 계정에 타이머를 둔다. 스크립트와
-개인 설정은 `~/.local/share/rosy/cam-screen/`에 있어야 한다. 일부러 끄는 동안에는
+멈춘 송출을 사람 없이 다시 켜려면 관제 PC 사용자 계정에 타이머를 둔다. 개인 설정은
+`~/.local/share/rosy/cam-screen/cam-screen.json`에 둔다. 스크립트는 D-871부터 자동 업데이트되는
+site-tools 릴리스(`~/.local/share/rosy/site-tools/current/deploy/site/rosy_cam_screen.py`)에서 실행한다. 일부러 끄는 동안에는
 타이머를 먼저 멈춘다(`systemctl --user stop rosy-cam-stream.timer`).
 
 ```bash
 install -m 0644 deploy/site/rosy-cam-stream.service deploy/site/rosy-cam-stream.timer ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now rosy-cam-stream.timer
 ```
+
+**site-tools 자동 업데이트 (D-871).** `site-tools-autoupdate.json.example`을 `~/.config/rosy/site-tools-autoupdate.json`에 복사하고 `<owner>`를 채운다. 저장소 사본의 `deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/site-tools-autoupdate.json run`을 한 번 실행하면 `current`가 생긴다. 그다음 `account-tls.env`의 `ROSY_ACCOUNT_TLS_SOURCE`를 `current` 경로로 바꾸고 `systemctl --user enable --now rosy-site-tools-autoupdate.timer`를 실행한다. 이후 업데이터는 30분마다 CI를 통과한 main을 받아 cam-stream과 account-tls 타이머만 다시 띄운다.
 
 CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
 `_adb-tls-connect._tcp`에서 예상 serial의 후보를 찾아 변경된 포트로 재연결한다.

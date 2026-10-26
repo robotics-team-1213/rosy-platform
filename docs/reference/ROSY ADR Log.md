@@ -15,6 +15,7 @@
 | D-886 | 워크트리 도구 차단값을 15개 예산과 맞추고, 착지한 브랜치를 prune이 지운다 | Accepted (2026-10-26) |
 | D-885 | guard가 디스크 부족 시험 PC의 저장소 정리를 요청한다 (D-883 보충) | Accepted for implementation (2026-10-26) |
 | D-884 | Learning 저장 대상 풀과 검증된 로컬 자료 회수. [전문](../adr/D-884-learning-storage-pool-and-local-reclamation.md) | Accepted (2026-10-26) |
+| D-889 | CI/CD 흐름: 통합 열차·정기 게시·잠금 밖 FULL | Proposed (2026-10-26) |
 | D-875 | Swarm owner-local API separates planning from safety lifecycle | Accepted for implementation (2026-10-25) |
 | D-883 | Monitoring 호스트 자원 감시와 시험 PC 저장소 정리 요청 (D-876 §5·D-524 보충) | Accepted for implementation (2026-10-26) |
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |

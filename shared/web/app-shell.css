@@ -20,6 +20,9 @@
 
 .ui-app-main { min-width: 0; display: flex; flex-direction: column; container-type: inline-size; }
 .ui-pathbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-pathbar); min-block-size: var(--pathbar-height); padding: var(--inset-pathbar); border-block-end: 1px solid var(--border-default); }
+/* 경로 줄 = 화면의 머리: 제목 하나(h1), 남는 폭, 그 화면의 동작. 본문에 같은 제목을 다시 두지 않는다. */
+.ui-pathbar > h1 { margin: 0; font: var(--weight-strong) var(--text-title)/var(--leading-label) var(--body); }
+.ui-pathbar > [data-spacer] { flex: 1; }
 .ui-crumbs { display: flex; align-items: center; gap: var(--gap-pathbar); color: var(--text-secondary); font: var(--weight-medium) var(--text-label)/var(--leading-control) var(--body); }
 .ui-crumbs a { display: inline-flex; align-items: center; min-block-size: var(--target-secondary); color: inherit; }
 

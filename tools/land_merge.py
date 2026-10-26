@@ -76,6 +76,8 @@ def resolver(path: str) -> str | None:
         return "append"
     if path == ADR_GAPS:
         return "union-dedupe"
+    if name == "AGENTS.md":
+        return "table-rows"
     # progress.md is hand-written lint input (gates), not generated: a human resolves it.
     if name == "index.md" or path in GENERATED:
         return "generated"
@@ -153,6 +155,61 @@ def sort_adr_rows(data: bytes) -> bytes:
     return b"".join(result)
 
 
+def _rows(data: bytes) -> tuple[list[bytes], dict[tuple[int, bytes], bytes]] | None:
+    """(lines outside tables, {(table number, first cell): row}), or None when a table repeats a first cell."""
+    other, rows, table, inside = [], {}, -1, False
+    for line in data.splitlines(keepends=True):
+        if line.startswith(b"|"):
+            table += not inside
+            inside = True
+            key = (table, line.split(b"|")[1].strip())
+            if key in rows:
+                return None
+            rows[key] = line
+        else:
+            inside = False
+            other.append(line)
+    return other, rows
+
+
+def table_rows(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
+    """Both sides' row edits of AGENTS.md tables keyed by first cell, in theirs' (main's) order with this branch's
+    new rows after the row they follow; None when a row changed on both sides (or was dropped on one and edited
+    on the other) or anything outside the tables changed. Two landings lost 121 and 149 min of queue to one
+    AGENTS.md table where each had edited a different row (2026-10-26)."""
+    parts = [_rows(x) for x in (base, ours, theirs)]
+    if None in parts or not parts[0][0] == parts[1][0] == parts[2][0]:
+        return None
+    (_, b), (_, o), (_, t) = parts
+    chosen = {}
+    for key in {*b, *o, *t}:
+        bv, ov, tv = b.get(key), o.get(key), t.get(key)
+        if ov == bv:
+            chosen[key] = tv
+        elif tv == bv or tv == ov:
+            chosen[key] = ov
+        else:
+            return None
+    out, table, inside = [], -1, False
+    ours_order = list(o)
+    for line in theirs.splitlines(keepends=True):
+        if not line.startswith(b"|"):
+            inside = False
+            out.append(line)
+            continue
+        table += not inside
+        inside = True
+        key = (table, line.split(b"|")[1].strip())
+        if chosen.get(key) is not None:
+            out.append(chosen[key])
+        for later in ours_order[ours_order.index(key) + 1:] if key in o else []:
+            if later in t or later in b or chosen.get(later) is None:
+                break
+            out.append(chosen[later])  # this branch's new row(s) right after the row they follow
+    added = [chosen[k] for k in o if k not in b and k not in t]
+    return b"".join(out) if all(row in out for row in added) else None  # a new row's neighbour was dropped
+
+
 def plan(wt: Path, conflicts: dict[str, dict[int, str]]) -> tuple[dict[str, bytes], list[str]]:
     """Resolved bytes per auto-resolvable path, and `path: why` for the rest. Touches nothing."""
     resolved: dict[str, bytes] = {}
@@ -170,6 +227,8 @@ def plan(wt: Path, conflicts: dict[str, dict[int, str]]) -> tuple[dict[str, byte
             data: bytes | None = theirs
         elif kind == "append":
             data = append_blocks(base, ours, theirs)
+        elif kind == "table-rows":
+            data = table_rows(base, ours, theirs)
         elif clashes_are_insertions(base, ours, theirs):
             data = union(base, ours, theirs)
             if kind == "adr-log":

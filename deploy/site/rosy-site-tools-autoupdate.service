@@ -1,0 +1,12 @@
+[Unit]
+Description=ROSY site tools (camera phone stream, Account TLS renewal): switch to the newest green main (D-871)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# D-805: skipped while updates are frozen
+ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'
+# The updater runs from the live release, so it updates itself with the tools (paths in the config).
+ExecStart=/usr/bin/python3 %h/.local/share/rosy/site-tools/current/deploy/robot/omx/omx_autoupdate.py --config %h/.config/rosy/site-tools-autoupdate.json run
+TimeoutStartSec=1800
+Nice=10

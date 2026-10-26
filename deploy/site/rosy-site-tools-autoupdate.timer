@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for a new green site tools release every 30 minutes
+
+[Timer]
+OnBootSec=6min
+OnUnitActiveSec=30min
+RandomizedDelaySec=120s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

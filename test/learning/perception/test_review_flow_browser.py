@@ -539,7 +539,7 @@ def test_learning_compact_actions_and_connection_form_use_full_width(browser_wor
     page, _, _ = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
-    main = page.locator('.workspace-heading').bounding_box()
+    main = page.locator('#pipeline').bounding_box()
     for selector in ('#new-task', '#refresh'):
         box = page.locator(selector).bounding_box()
         assert abs(box['x'] - main['x']) <= 1 and abs(box['width'] - main['width']) <= 1, (selector, box, main)
@@ -617,7 +617,7 @@ def test_learning_filter_shows_visible_count(browser_workspace, tmp_path, width)
     (report / 'state.json').write_text('{"status":"done"}', encoding='utf-8')
     page.set_viewport_size({'width': width, 'height': 844})
     page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
-    expect(page.locator('.workspace-heading h2')).to_have_text('학습센터')
+    expect(page.locator('.ui-pathbar h1')).to_have_text('학습센터')
     page.locator('#new-task').click()
     page.locator('#name').fill('검수할 결과')
     page.locator('#path').fill(str(report))

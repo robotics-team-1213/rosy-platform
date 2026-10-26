@@ -5,8 +5,6 @@ import {accountFetch} from '/account-session.js';
 import {cssColor} from '/common/ui.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
-$('theme').value=document.documentElement.dataset.theme||'dark';
-$('theme').onchange=()=> {document.documentElement.dataset.theme=$('theme').value;try{localStorage.setItem('rosy.theme',$('theme').value);}catch{} document.dispatchEvent(new CustomEvent('rosy:theme'));};
 const MOUNT=[['height_cm','높이','cm'],['distance_cm','거리','cm'],['tilt_deg','tilt','°'],['pan_deg','pan','°'],['roll_deg','roll','°']];
 const VERDICT={ok:['ready','맞음 — 이 위치로 녹화할 수 있습니다.'],adjust:['warning','조정 필요 — 점선에 실선이 겹치도록 카메라를 옮기세요.'],
   unmeasurable:['error','측정 불가 — 너무 어둡거나 장면이 많이 바뀌어 기준과 맞출 수 없습니다(마커 방식은 마커 3개 이상). 손목 카메라는 팔을 확인 자세로 보냈는지, 교정 지문과 해상도도 확인하세요.']};

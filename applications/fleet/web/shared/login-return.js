@@ -24,6 +24,8 @@ export function loginReturn(value, origin) {
       if (view === 'work' || view === 'records') query.set('view', view);
       if (query.has('view') && ['pending', 'done', 'new', 'open', 'closed', 'facts', 'log'].includes(show)) query.set('show', show);
       if (url.searchParams.get('inbox') === '1') query.set('inbox', '1');
+      const transfer = url.searchParams.getAll('arm_transfer');
+      if (view === 'work' && transfer.length === 1 && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$/.test(transfer[0])) query.set('arm_transfer', transfer[0]);
     }
     const robot = url.searchParams.get('robot');
     if (['/console', '/console/site-map'].includes(url.pathname) && /^[a-zA-Z0-9_-]{1,128}$/.test(robot || '')) {

@@ -336,6 +336,7 @@
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 - [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
+- [2026-10-24-neutral-arm-planning-design.md](plans/2026-10-24-neutral-arm-planning-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -354,6 +355,6 @@
 
 - 2026-10-26 · e18c084879 · D-890 public Home seam classification
 - 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
-- 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
-- 2026-10-26 · d4a0e5b968 · D-887 source migration verified
-- 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+- 2026-10-26 · uncommitted · tools/land_browser.py: 건너뛰기만 한 브라우저 조각은 통과가 아니다
+- 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
+- 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 6·7·8 (설계 0.7), 규칙 4·5는 뺌
