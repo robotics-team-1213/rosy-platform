@@ -144,3 +144,69 @@ def test_another_transaction_or_source_boot_is_never_authorized(tmp_path, monkey
     journal.write_text(json.dumps(value))
     with pytest.raises(ValueError, match="OS_UPDATE_POLICY"):
         m.authorize(root, TRANSACTION, host=host)
+
+
+def _trial_policy(tmp_path, monkeypatch):
+    import struct
+    from test_os_bootloader import _trial
+    from test_os_update_state import _advance
+    from os_bootloader import autoboot
+    from os_motion_guard import reconcile
+    result = _policy(tmp_path, monkeypatch)
+    module, state, root, _, verified, facts, _, _ = result
+    state.mount_facts = lambda *args: []  # Kernel/firmware observations are models.
+    _begin(state, root, verified, facts)
+    _advance(state, root, "TRIAL")
+    dt = root / "proc/device-tree/chosen/bootloader"
+    dt.mkdir(parents=True)
+    for name, value in (("partition", 2), ("tryboot", 0)):
+        (dt / name).write_bytes(struct.pack(">I", value))
+    bootstrap = root / "run/rosy-provision-boot/autoboot.txt"
+    bootstrap.parent.mkdir(parents=True)
+    bootstrap.write_bytes(autoboot("a"))
+    _trial(root)
+    reconcile(root)
+    return result
+
+
+def test_trial_policy_observes_bound_trial_without_source_boot_waiver(tmp_path, monkeypatch):
+    from test_os_update_state import TRIAL_BOOT
+    m, _, root, journal, _, _, _, host = _trial_policy(tmp_path, monkeypatch)
+    before = journal.read_bytes()
+    with pytest.raises(ValueError, match="source boot"):
+        m.authorize(root, TRANSACTION, host=host)
+    result = m.authorize_trial(root, TRANSACTION, host=host)
+    assert result["boot_id"] == TRIAL_BOOT
+    assert result["second_written_at"] > result["first_written_at"]
+    assert journal.read_bytes() == before
+
+
+@pytest.mark.parametrize("damage", ["source", "boot", "transaction", "phase", "guard", "disabled", "moving", "claim"])
+def test_trial_policy_rechecks_firmware_controls_and_motion_fence(tmp_path, monkeypatch, damage):
+    import struct
+    m, _, root, journal, _, _, directory, host = _trial_policy(tmp_path, monkeypatch)
+    original = host.sleep
+    def sleep(seconds):
+        original(seconds)
+        if damage == "source":
+            (root / "proc/device-tree/chosen/bootloader/tryboot").write_bytes(struct.pack(">I", 0))
+        elif damage == "boot":
+            (root / "proc/sys/kernel/random/boot_id").write_text(SOURCE_BOOT)
+        elif damage in ("transaction", "phase"):
+            value = json.loads(journal.read_text())
+            if damage == "transaction": value["pending"]["transaction_id"] = SOURCE_BOOT
+            else: value["pending"]["phase"] = "HEALTHY"; value["pending"]["health_sha256"] = "b" * 64
+            journal.write_text(json.dumps(value))
+        elif damage == "guard":
+            (root / "run/rosy-os-update/motion.env").unlink()
+        elif damage == "disabled":
+            (directory / "config.json").write_text('{"enabled":false}')
+        elif damage == "moving":
+            host.inputs_changes = dict(velocity_linear=0.2)
+            host.write_inputs()
+        else:
+            import rosy_claim
+            rosy_claim.release(root, "os-update:" + TRANSACTION)
+    host.sleep = sleep
+    with pytest.raises(ValueError):
+        m.authorize_trial(root, TRANSACTION, host=host)

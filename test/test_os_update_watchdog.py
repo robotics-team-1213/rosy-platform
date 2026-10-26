@@ -207,3 +207,25 @@ def test_trial_boot_cannot_supply_source_autoarm_evidence(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="normal source boot"):
         module.admit(root, run=run)
     assert calls == []
+
+
+def test_trial_watchdog_observation_requires_current_boot_journal(tmp_path, monkeypatch):
+    from test_os_bootloader import _trial
+    from test_os_update_state import TRIAL_BOOT
+    module, root, _, logs, _, run = _watchdog(tmp_path, monkeypatch)
+    saved = (root / "boot/firmware/cmdline.txt").read_text()
+    _trial(root)
+    command = root / "proc/cmdline"
+    (root / "boot/firmware/cmdline.txt").write_text(command.read_text())
+    command.write_text(command.read_text().strip() + " watchdog.open_timeout=180\n")
+    def trial_run(argv, **kwargs):
+        if argv[0] == "/usr/bin/journalctl":
+            assert "--boot=" + TRIAL_BOOT.replace("-", "") in argv
+            return subprocess.CompletedProcess(argv, 0, "\n".join(json.dumps(row) for row in logs), "")
+        return run(argv, **kwargs)
+    with pytest.raises(ValueError, match="OS_WATCHDOG_HOLD"):
+        module.observe(root, run=trial_run)
+    for row in logs:
+        row["_BOOT_ID"] = TRIAL_BOOT.replace("-", "")
+    assert module.observe(root, run=trial_run)["boot_id"] == TRIAL_BOOT
+    assert saved  # The fixture had a separate firmware input before trial.
