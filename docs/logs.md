@@ -11674,3 +11674,10 @@ osy-d395-s1d\`.
 - 변경: `rosy-monitoring`의 사이트 범위·읽기 자격·관측 그래프·단조 시계 캐시를 구현하고 source part, CI wheel 빌드와 독립 시험 경로를 등록했다. 원천과 수집 경로의 수명을 분리하고 중계·재시작으로 표본이 새로워지는 것을 거부한다. Fleet/ROS를 import하지 않는다.
 - 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · tools/publish_main.py: D-868 게시 자동화 초안(기본 dry run)
+
+- 변경: `tools/publish_main.py`를 추가한다. fetch 뒤 origin/main이 로컬 main의 조상이 아니면 `git merge-tree`로 판정해 기록 파일(`docs/logs.md`·`docs/index.md`·`adr_gaps.txt`)의 내용 충돌뿐이면 exit 4(동기화 착지 명령 안내), 그 밖이면 exit 3 "sync needs robot-4d"로 멈춘다. 동기화 착지는 스스로 하지 않는다. 게시 SHA는 `origin/main..main`의 ancestry-path에서 녹색 FULL 착지 기록이 있는 가장 새 커밋이다. 녹색 FULL은 그 SHA의 `land_record` 기록이 있고 base가 조상이며, invocation 가운데 정확히 `["test"]`(FULL 계층만 돌리는 루트 test/ 전체)가 있는 것이다. 마지막 게시가 `--min-hours`(6)보다 오래됐거나 `--force-blocked`일 때만 `--apply`에서 git common dir 아래 임시 분리 워크트리로 `publish/main-YYYYMMDD-HH`를 push하고 PR을 연다. `--merge-when-green`은 mergeable·ci-result 녹색일 때만 `--merge --match-head-commit`으로 병합한다.
+- 이유: 0.3 게시 자동화 명세. main 끝에는 녹색 FULL이 거의 없고, pre-push가 main 체크아웃 작업 트리로 시험을 골라 10-26에 exit 4가 두 번 났다.
+- 증거: `test/test_publish_main.py`(bare origin 고정 저장소, gh는 대역) 원격 실행. SHA 선택 규칙과 충돌 관문은 변형을 넣어 시험이 빨개지는 것을 확인했다.
+- gate 변화: 없음. GitHub에 대해 실행하지 않았고 첫 실제 게시는 robot-4d 검토 뒤다. CE: 해당 없음 — 새 도구와 그 시험이며 장애 해결이 아니다.
