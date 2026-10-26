@@ -321,3 +321,33 @@ def test_the_wrapper_resolves_its_own_directory_through_a_symlink(tmp_path):
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.split() == ["-B", str(NATIVE.resolve() / "rosy_diag_collect.py"), "collect", "--out",
                                         "/tmp/x"]
+
+
+@pytest.mark.parametrize("protocol", [1, 2])
+def test_ab_produced_blackbox_is_collected_without_slot_logs_or_provision_secrets(tmp_path, monkeypatch, protocol):
+    from os_state_boot_fakes import shared_roots
+    from test_boot_blackbox import _boot, FAILED_CARD_UNITS
+    import os_state_layout
+    root, _, _, _ = shared_roots(tmp_path, monkeypatch, root_slot="b", protocol=protocol)
+    (root / "proc/sys/kernel/random/boot_id").write_text(BOOT_ID)
+    stale = root / "boot/firmware/rosy-diag/latest.txt"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("STALE_SLOT_BLACKBOX")
+    provision = root / "run/rosy-provision-boot"
+    secrets = [provision / "rosy-config.yaml", provision / "rosy-diag/rosy-config.yaml"]
+    _boot(root, FAILED_CARD_UNITS)
+    for path in secrets:
+        path.write_text(DENIED_MARK)
+    (provision / "rosy-diag/boot-000099-abcdef01.json").symlink_to(secrets[0])
+    original = os_state_layout._read
+
+    def guarded(path, *args):
+        assert path not in secrets, "collector opened provisioning secrets"
+        return original(path, *args)
+
+    monkeypatch.setattr(os_state_layout, "_read", guarded)
+    members = _members(_module().collect(root, FakeRunner(), tmp_path / "out"))
+    assert "No module named 'signing'" in members["blackbox/latest.txt"]
+    assert not any("STALE_SLOT_BLACKBOX" in text or DENIED_MARK in text for text in members.values())
+    assert "blackbox/boot-000099-abcdef01.json" not in members
+    assert not any("rosy-config.yaml" in name for name in members)
