@@ -52,6 +52,7 @@ def repos(tmp_path, monkeypatch, request):
     git(main, "worktree", "add", "-q", str(wt), "-b", "feat/x", "main")
     monkeypatch.chdir(wt)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
+    monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
 
     def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
         # Fixture repos are throwaway and cannot be shipped to a test host; this test itself

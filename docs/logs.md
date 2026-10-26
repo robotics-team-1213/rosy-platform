@@ -12111,3 +12111,11 @@ osy-d395-s1d\`.
 - 변경: D-629의 좁은 화면 순서만 D-892로 부분 대체한다. 이전 결정 본문은 보존하고 새 결정·색인·DESIGN 참조·반응형 DOM·회귀 시험을 함께 맞춘다.
 - 증거: ADR 번호는 관문에서 선점했으며 ADR Log의 UTF-8 BOM·CRLF를 유지했다. 문서·DOM 변경 뒤 공식 원격 재검증은 진행 중이다.
 - gate 변화: 없음. Accepted는 실물·현장 또는 제품 전체 UI/UX 수용을 뜻하지 않는다.
+
+## 2026-10-27 · uncommitted · fix(land): 손으로 고른 --tests가 선택 시험을 대신하지 못하게
+
+- 변경: `tools/land.py`. `--tests "<pytest args>"`는 선택 시험을 대신하지 않고 그 위에 더한다(사전 시험과 차례 모두 `land.select`). `--tests none`은 `--skip-reason "<사용자의 말>"`이 있어야 하고, 그 사유를 사건 기록 `skip`으로 남긴다. land.py 자기 시험만 `ROSY_LAND_FIXTURE=1`로 예전처럼 대신한다.
+- 근거: `3125704e24`(D-892)가 사전 시험·관문 없이 손으로 고른 브라우저 시험 하나로 착지해 main이 깨졌다(`test_console_queues_contract.py`, `test_integrated_control_backend_browser.py`). 같은 변경에 선택기를 다시 돌리면 `operations/fleet/test`를 골랐다. 다른 착지 2건이 그 MAIN-RED로 멈췄다.
+- 증거: 원격 `test/test_land_tests_flag.py` 등.
+- gate 변화: 강화(우회 경로를 막음). 사용자 명시 우회(`docs/solutions/workflow-issues/first-field-result-from-the-no-release-path-release-in-parallel-2026-10-10.md` 4)는 사유와 함께 남는다.
+- CE: 미정 — 착지 뒤 판단.
