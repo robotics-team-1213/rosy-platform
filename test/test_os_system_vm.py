@@ -103,3 +103,6 @@ def test_actual_guest_runs_pid1_without_host_privileges(tmp_path):
         assert "systemd 255" in facts and "\n0\n" in facts and "x86_64" in facts
         # These block devices are guest-local virtual devices, never host hardware.
         assert "virtio" in guest.run("readlink -f /sys/class/block/vdb/device")
+        guest.provision_source(Path(__file__).resolve().parents[1])
+        report = guest.run("cd /work/source && ROSY_OS_GUEST=1 python3 -m pytest test/test_os_system_root.py -q -rA", timeout=600)
+        assert "1 passed" in report and "SYSTEM actual fsck/owned-loop" in report, report
