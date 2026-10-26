@@ -3,7 +3,7 @@
 
 Windows cannot mount the card's ext4 root, and ``wsl --mount`` fails on USB SD
 readers (0x8007000f, leaving the disk offline). This tool opens the physical
-disk (or a raw image file) read-only, finds the Linux root partition in the MBR,
+disk (or a raw image file) read-only, finds an MBR root or an explicitly selected GPT slot,
 parses ext4 in pure Python (``pip install ext4``) and copies a fixed set of
 diagnosis files into an output folder, plus the D-175 black box ``rosy-diag/``
 from the FAT32 boot partition. Nothing is ever written to the source.
@@ -32,6 +32,7 @@ HERE = Path(__file__).resolve().parent
 # 여기에 "robot" 을 더해 없어진 자리로 갔다).
 sys.path.insert(0, str(HERE.parent / "native"))
 from rosy_diag_redact import is_denied_path  # noqa: E402
+from media_layout import parse_gpt, validate_layout
 
 
 SECTOR = 512
@@ -383,15 +384,28 @@ def copy_black_box(raw: RawDisk, boot: tuple[int, int], out: Path, report: dict)
                 }
 
 
-def extract(disk: str, out: Path, open_tree: Callable[[RawDisk, int, int], object] = open_ext4) -> dict:
+def extract(disk: str, out: Path, open_tree: Callable[[RawDisk, int, int], object] = open_ext4,
+            *, layout: dict | None = None, slot: str | None = None) -> dict:
     """Read-only extraction from a physical disk path or raw image file."""
+    if (layout is None) != (slot is None) or slot not in (None, "a", "b"):
+        raise ValueError("GPT diagnostics require both a verified layout snapshot and explicit slot a/b")
+    expected = validate_layout(layout) if layout is not None else None
     out = Path(out)
     _prepare_output(out)
     report = _new_report(disk)
     raw = RawDisk(disk)
     try:
-        boot, root = select_partitions(raw.read_at(0, SECTOR))
-        raw.size = max(start + length for start, length in (root, boot or (0, 0)))
+        if expected is None:
+            boot, root = select_partitions(raw.read_at(0, SECTOR))
+            raw.size = max(start + length for start, length in (root, boot or (0, 0)))
+        else:
+            raw.size = expected["raw_size_bytes"]
+            if parse_gpt(raw.read_at, raw.size, expected["provision_role"]) != expected:
+                raise ValueError("GPT differs from supplied layout snapshot")
+            parts = {p["role"]: (p["start_lba"] * SECTOR, p["size_lba"] * SECTOR)
+                     for p in expected["partitions"]}
+            boot, root = parts[expected["provision_role"]], parts["root_" + slot]
+            report["slot"] = slot
         report["partitions"] = {"root": {"offset": root[0], "length": root[1]}}
         if boot is not None:
             report["partitions"]["boot"] = {"offset": boot[0], "length": boot[1]}
@@ -418,9 +432,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--disk", required=True,
                         help=r"Windows disk number (Get-Disk), \\.\PhysicalDriveN, or a raw image file")
     parser.add_argument("--out", required=True, type=Path, help="new or empty output folder")
+    parser.add_argument("--layout-file", type=Path,
+                        help="GPT layout snapshot returned by the signed release verifier; required with --slot")
+    parser.add_argument("--slot", choices=("a", "b"), help="explicit GPT root slot; never guessed from boot defaults")
     args = parser.parse_args(argv)
     try:
-        report = extract(device_path(args.disk), args.out)
+        layout = json.loads(args.layout_file.read_text(encoding="utf-8")) if args.layout_file else None
+        report = extract(device_path(args.disk), args.out, layout=layout, slot=args.slot)
     except PermissionError as error:
         print(f"cannot open {args.disk} read-only ({error}); run from an administrator PowerShell",
               file=sys.stderr)
