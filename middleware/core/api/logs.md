@@ -1268,6 +1268,7 @@
 - 변경: v1.296 viewer API가 서버 지정 파일·소유자·세션만 읽고 장치나 호출자 경로를 열지 않는다.
 - 증거: 기존 소스 검증과 현재 운영 인증을 독립 읽기 전용 검토했다. 최종 원격 영향 선택 결과는 연결 기록에 확정한다.
 - gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+
 ## 2026-10-24 · uncommitted · D-862 공통 reference 버전 pin 정렬
 
 - 변경: 공식 api_reserve bump 도구로 API app의 공통 reference pin을 v1.309로 옮겼다. CORE route·최종 명령·안전·정지 해제 동작은 변경하지 않는다.
@@ -1298,3 +1299,10 @@
 - 변경: `support_reason`이 화면에 그대로 나오던 영어 문장을 표면 대체 문구와 같은 한국어로 바꿨다. 응답 모양·상태값은 같다.
 - 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.
+
+## 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
+
+- 변경: optional navigate/home caller epoch 문법과 정본 상수, CORE Home 본문 전달, Fleet navigate의 실행 전 명시적 거절을 함께 보완했다. API v1.323과 공식 도구의 기존 version pins를 정렬했다.
+- 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
+- Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
+- CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
