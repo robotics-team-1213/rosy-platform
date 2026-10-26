@@ -2,6 +2,7 @@
 import importlib
 import json
 import os
+import stat
 
 import pytest
 
@@ -194,3 +195,31 @@ def test_corrupt_pending_bindings_are_never_read_as_idle(tmp_path, monkeypatch, 
     path.write_text(json.dumps(value))
     with pytest.raises(ValueError, match="OS_UPDATE_STATE_HOLD"):
         m.read_state(root)
+
+
+def test_store_cannot_publish_after_its_lock_context_exits(tmp_path, monkeypatch):
+    m, root, path, _, verified, facts = _state(tmp_path, monkeypatch)
+    with m.locked(root) as store: pass
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="lock"):
+        store.begin(verified, facts, SOURCE_BOOT, TRANSACTION)
+    assert path.read_bytes() == before
+
+
+def test_parent_fsync_failure_preserves_published_pending_and_invalidates_the_writer(tmp_path, monkeypatch):
+    m, root, path, _, verified, facts = _state(tmp_path, monkeypatch)
+    original = os.fsync
+    def fail_directory(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError("injected parent fsync error")
+        original(fd)
+    monkeypatch.setattr(os, "fsync", fail_directory)
+    with m.locked(root) as store:
+        with pytest.raises(OSError, match="parent fsync"):
+            store.begin(verified, facts, SOURCE_BOOT, TRANSACTION)
+        with pytest.raises(ValueError, match="lock"):
+            store.begin(verified, facts, SOURCE_BOOT, TRIAL_BOOT)
+    assert json.loads(path.read_text())["pending"]["transaction_id"] == TRANSACTION
+    monkeypatch.setattr(os, "fsync", original)
+    with m.locked(root) as reopened:
+        assert reopened.state["pending"]["transaction_id"] == TRANSACTION
