@@ -14,11 +14,14 @@ in a later commit" is red on the growing commit even when the branch tip is gree
 from __future__ import annotations
 
 import datetime as dt
+import functools
+import os
 import re
 import subprocess
 import sys
 import types
 import xml.etree.ElementTree as ET
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import PurePosixPath
 
 import size_limits
@@ -31,49 +34,89 @@ def _git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True, encoding="utf-8", check=True).stdout
 
 
-def _show(commit: str, path: str) -> str | None:
-    done = subprocess.run(["git", "show", f"{commit}:{path}"], capture_output=True, text=True, encoding="utf-8")
-    return done.stdout if done.returncode == 0 else None
+# Keyed by blob oid: commits of one range share almost every blob, so each is read once per run
+# instead of once per commit (3,235 commits ran for hours in pre-push on 2026-10-27).
+_TEXT: dict[str, str] = {}
+_LINES: dict[str, int] = {}
+_SCRIPTS: dict[tuple, int] = {}
+_NAMES: dict[str, str | None] = {}
+_RULES: dict[str, types.ModuleType] = {}
+_path = functools.lru_cache(maxsize=None)(PurePosixPath)  # immutable, so a shared instance is the same value
 
 
-def _blobs(commit: str, paths: list[str]) -> dict[str, bytes]:
-    """Contents of ``paths`` at ``commit`` in one ``git cat-file --batch``."""
-    feed = "".join(f"{commit}:{path}\n" for path in paths).encode()
+@functools.lru_cache(maxsize=8)
+def _tree(commit: str) -> dict[str, str]:
+    """``path -> blob oid`` of ``commit``'s tree."""
+    tree = {}
+    for entry in _git("ls-tree", "-r", "-z", commit).split("\0"):
+        if entry:
+            meta, path = entry.split("\t", 1)
+            _, kind, oid = meta.split()
+            if kind == "blob":
+                tree[path] = oid
+    return tree
+
+
+def _read(oids) -> dict[str, bytes]:
+    """Contents of the blobs ``oids`` in one ``git cat-file --batch``."""
+    oids = list(dict.fromkeys(oids))
+    if not oids:
+        return {}
+    feed = "".join(f"{oid}\n" for oid in oids).encode()
     out = subprocess.run(["git", "cat-file", "--batch"], input=feed, capture_output=True, check=True).stdout
     blobs, at = {}, 0
-    for path in paths:
+    for oid in oids:
         header_end = out.index(b"\n", at)
         size = int(out[at:header_end].split()[2])
-        blobs[path] = out[header_end + 1:header_end + 1 + size]
+        blobs[oid] = out[header_end + 1:header_end + 1 + size]
         at = header_end + 2 + size
     return blobs
 
 
+def _show(commit: str, path: str) -> str | None:
+    oid = _tree(commit).get(path)
+    if oid is None:
+        return None
+    if oid not in _TEXT:  # newlines as the former ``git show`` read with text=True gave them
+        _TEXT[oid] = _read([oid])[oid].decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return _TEXT[oid]
+
+
 def rule_at(commit: str):
     """The commit's own ``size_limits.py``, so a later rule change never reddens an earlier commit."""
-    source = _show(commit, "tools/harness/size_limits.py")
-    if source is None:
+    oid = _tree(commit).get("tools/harness/size_limits.py")
+    if oid is None:
         return size_limits
-    module = types.ModuleType("size_limits_at_commit")
-    exec(compile(source, "size_limits.py", "exec"), module.__dict__)
-    return module
+    if oid not in _RULES:
+        module = types.ModuleType("size_limits_at_commit")
+        exec(compile(_show(commit, "tools/harness/size_limits.py"), "size_limits.py", "exec"), module.__dict__)
+        module.PurePosixPath = _path  # measure() parses every path once per package; the paths repeat
+        _RULES[oid] = module
+    return _RULES[oid]
 
 
 def measure_commit(commit: str, units: list[str], limits=size_limits) -> tuple[dict, dict, dict]:
     roots = colcon_roots()
-    paths = _git("ls-tree", "-r", "--name-only", "-z", commit).split("\0")
-    code = [p for p in paths if PurePosixPath(p).suffix in limits.CODE_SUFFIXES | limits.WEB_SUFFIXES]
-    blobs = _blobs(commit, code)
-    files = {path: blob.count(b"\n") + (not blob.endswith(b"\n") and bool(blob)) for path, blob in blobs.items()}
-    xmls = [p for p in paths if p.endswith("/package.xml") and any(
+    tree = _tree(commit)
+    code = [p for p in tree if PurePosixPath(p).suffix in limits.CODE_SUFFIXES | limits.WEB_SUFFIXES]
+    script_rule = getattr(limits, "inline_script_lines", None)  # absent before revision 2
+    html = [p for p in code if p.endswith(".html")] if script_rule else []
+    missing = [tree[p] for p in code if tree[p] not in _LINES]
+    missing += [tree[p] for p in html if (script_rule, tree[p]) not in _SCRIPTS]
+    for oid, blob in _read(missing).items():
+        _LINES[oid] = blob.count(b"\n") + (not blob.endswith(b"\n") and bool(blob))
+        if script_rule:
+            _SCRIPTS[script_rule, oid] = script_rule(blob.decode("utf-8", "replace"))
+    files = {path: _LINES[tree[path]] for path in code}
+    xmls = [p for p in tree if p.endswith("/package.xml") and any(
         p.startswith(root + "/") and limits.is_prod(PurePosixPath(p[len(root) + 1:]).parts) for root in roots)]
-    packages = {ET.fromstring(blob).findtext("name"): str(PurePosixPath(path).parent)
-                for path, blob in _blobs(commit, xmls).items()}
+    for oid, blob in _read(tree[p] for p in xmls if tree[p] not in _NAMES).items():
+        _NAMES[oid] = ET.fromstring(blob).findtext("name")
+    packages = {_NAMES[tree[path]]: str(PurePosixPath(path).parent) for path in xmls}
     packages.update(getattr(limits, "STANDALONE", {}))
-    if not hasattr(limits, "inline_script_lines"):  # a commit from before revision 2
+    if not script_rule:
         return limits.measure(files, packages, roots, units)
-    scripts = {path: limits.inline_script_lines(blob.decode("utf-8", "replace"))
-               for path, blob in blobs.items() if path.endswith(".html")}
+    scripts = {path: _SCRIPTS[script_rule, tree[path]] for path in html}
     return limits.measure(files, packages, roots, units, scripts)
 
 
@@ -133,15 +176,30 @@ def check(commit: str) -> list[str]:
     return bad
 
 
+CHUNK = 50  # fewer commits than this per extra process cost more to start than they save
+
+
+def _check_all(commits: list[str]) -> list[list[str]]:
+    return [check(commit) for commit in commits]
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print(__doc__, file=sys.stderr)
         return 2
     base, head = argv
     commits = _git("rev-list", "--reverse", head, "^" + base).split()
+    # Contiguous chunks, one per process, so neighbouring commits share a process's blob caches.
+    workers = min(os.cpu_count() or 1, len(commits) // CHUNK + 1)
+    size = -(-len(commits) // workers) or 1
+    chunks = [commits[at:at + size] for at in range(0, len(commits), size)]
+    if workers > 1:
+        with ProcessPoolExecutor(workers) as pool:
+            verdicts = [bad for chunk in pool.map(_check_all, chunks) for bad in chunk]
+    else:
+        verdicts = [check(commit) for commit in commits]
     red = []
-    for commit in commits:
-        bad = check(commit)
+    for commit, bad in zip(commits, verdicts):
         if bad:
             red.append(_git("log", "-1", "--format=%h %s", commit).strip() + "\n    " + "\n    ".join(bad))
     print(f"[size-range] {len(commits)} commit(s) checked")
