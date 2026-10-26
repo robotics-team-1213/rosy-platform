@@ -228,13 +228,11 @@ def test_parent_fsync_failure_preserves_published_pending_and_invalidates_the_wr
 
 
 def test_frozen_state_writer_works_with_poisoned_mutable_sdk(tmp_path, monkeypatch):
-    from test_os_frozen_firstboot import _stage
+    from test_os_frozen_firstboot import _prefix, _stage
     _, root, _, _, verified, facts = _state(tmp_path / "device", monkeypatch)
-    prefix = tmp_path / "installed/opt/rosy"
-    prefix.mkdir(parents=True)
+    prefix = _prefix(tmp_path / "installed")
     _stage(prefix)
     mutable = prefix / "native-runtime"
-    mutable.mkdir()
     names = ("os_update_state", "os_update_manifest", "os_state_layout", "os_state_io", "signing", "media_layout")
     for name in names:
         (mutable / (name + ".py")).write_text("raise RuntimeError('mutable SDK was imported')\n")
