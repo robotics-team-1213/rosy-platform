@@ -23,7 +23,7 @@ GPT 이미지를 기록하면서 그 선택 규칙을 유지하면 다른 boot �
    | `schema_version` | 정수 1 |
    | `scheme`, `sector_size` | `gpt`, 정수 512 |
    | `disk_guid`, `raw_size_bytes` | source GPT의 nonzero GUID와 sector 정렬된 image 전체 길이 |
-   | `provision_role` | 이 단위에서는 `boot_a`만 허용 |
+   | `provision_role` | 기존 실험 이미지 `boot_a`, D-888 새 factory `bootstrap` |
    | `partitions` | 아래 여섯 역할의 정확한 목록 |
 
    각 partition의 키는 `role`, `number`, `start_lba`, `size_lba`, `type_guid`, `unique_guid`다.
@@ -62,7 +62,7 @@ GPT 이미지를 기록하면서 그 선택 규칙을 유지하면 다른 boot �
 6. **개인화는 지정 역할의 FAT32 volume에만 쓴다.**
    partition number/GUID/offset/size와 physical disk가 모두 맞아야 한다. enumeration 순서와 drive letter를 identity로 쓰지 않는다.
    명시적 `BootMountPath`도 이 조건을 우회할 수 없다. secrets는 기록 후 layout 검증 전에 쓰지 않는다.
-   readback의 기존 Windows FSInfo/status/SVI 허용은 유지하고 provisioning extras는 `boot_a`에서만 허용한다.
+   readback의 기존 Windows FSInfo/status/SVI 허용은 유지하고 provisioning extras는 서명된 `provision_role`에서만 허용한다.
    다른 FAT의 kernel/config/autoboot 파일, root/data/table/gap 변경은 거절한다.
    완료한 FAT buffer는 해제하여 세 FAT를 동시에 모으지 않는다.
 
@@ -79,6 +79,10 @@ native 빌더는 기존 Ubuntu customization 결과를 읽기 전용 source로 �
 finalizer는 snapshot과 actual GPT를 대조한 뒤 FAT 세 개와 ext4 세 개를 검사한다. manifest producer에는 같은 snapshot을 전달한다. native ARM64 workflow는 unsigned 경계를 유지한다. 후속 OS bundle 설치는 대상 카드의 기존 GPT UUID에 root·boot metadata를 맞춰야 한다. 새 SD용 factory snapshot의 UUID를 기존 카드에 그대로 적용하면 D-881 admission에서 거절된다. 이 설치 단계는 아직 구현하지 않았다. 이 구현 상태는 privileged loop/filesystem 실행, ARM64 artifact, firmware boot 또는 OS trial/commit/fallback 수용을 뜻하지 않는다. production BUILD_GO 차단은 유지한다.
 
 ### Verification and consequences
+
+D-888의 새 factory는 bootstrap 1을 영속 provision volume으로 쓴다. descriptor schema 2와 `ab-v2`를 함께 검증하며, 기존 boot A 실험 이미지의 schema 1/`ab-v1` 읽기 호환을 유지한다. 두 역할은 같은 GPT 물리 배치를 가지므로 parser는 서명된 기대 정책을 인자로 받고 파티션 물리 metadata 전체를 검증한다. Python readback과 PowerShell mount 선택은 이 정책을 그대로 소비한다. 기존 카드의 자동 변환은 하지 않는다.
+
+새 카드의 깊은 진단은 signed release verifier가 돌려준 layout snapshot과 확인할 root 슬롯을 명시한다. `python deploy/robot/pinky_pro/sd/read-card-diagnostics.py --disk <확인한 디스크> --out <새 출력 폴더> --layout-file <검증한 layout.json> --slot a`를 사용한다. B 진단은 `--slot b`로 별도 폴더에 추출한다. 이 도구는 GPT 양쪽 사본과 snapshot을 대조하고 읽기 전용으로 동작하며 자체 서명 검증이나 active 슬롯 추측을 하지 않는다. 기존 MBR 진단은 두 추가 인자 없이 유지한다.
 
 실제 signed verifier/readback/PowerShell fixture를 통한 positive/negative 회귀, legacy MBR 및 installed closure를 확인한다.
 PowerShell을 실행하지 못한 skip을 통과로 계산하지 않는다. 시험 PC의 별도 pinned test-tools 환경을 사용한다.

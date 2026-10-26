@@ -16,7 +16,7 @@
 6. mutable CORE HOME·NM profile·SSH key/registry는 기존 소유자가 공유 정본을 계속 갱신한다. 남는 privileged device 설정은 canonical generation commit 경로를 사용한다. 삭제·revoke는 A→B→A에서 보존되며 firstboot snapshot으로 되살리지 않는다. 전체 `/etc`·계정 DB·payload code는 공유하지 않는다.
 7. 기존 firstboot `_stage_new_device()`의 network-assisted handoff를 유지한다. 검증된 site/operator 접근을 보존하되 이전 robot의 CORE/DDS/API/Fleet 실행 권한은 열지 않는다. 이미 provisioned된 A root를 다른 board로 옮긴 반례를 시험한다(D-746의 SD 교체/reimage 정책도 참조).
 8. canonical generation의 file contents/mode와 directory entries를 durable하게 게시한 뒤, 해당 generation을 참조하는 completion을 durable commit한다. 그 뒤에만 provision bundle을 삭제하고 parent directory를 fsync한다. 예외 주입뿐 아니라 rename/directory persistence 손실·재정렬을 모델링하고, 실제 powercut 수용은 별도로 남긴다.
-9. boot_a의 provision PARTUUID mount를 양 root가 사용한다. factory native signature는 동일 release/checksum에만 결속한다. SSH host keys는 factory에 넣지 않으며 전용 공통 저장소·ordering으로 host identity를 보존한다.
+9. 양 root가 동일한 provision PARTUUID mount를 사용한다. D-888 새 factory는 bootstrap 1/schema 2/`ab-v2`이고, 기존 실험 이미지의 boot A 2/schema 1/`ab-v1`도 읽는다. 실제 partition 번호·descriptor·kernel marker가 섞이면 거절한다. factory native signature는 동일 release/checksum에만 결속한다. SSH host keys는 factory에 넣지 않으며 전용 공통 저장소·ordering으로 host identity를 보존한다.
 
 storage admission 코드는 OS 이미지 소유 `/opt/rosy/os-bootstrap`에 고정한다. payload image-layer sync는 이 경로를 쓰지 못한다. 초기 부팅 dispatcher는 다른 payload helper를 import하지 않고 legacy 여부만 판별하며, A/B이면 해당 root의 보호된 OS bootstrap으로 exec한다. A/B marker·descriptor가 있으면 bootstrap 누락이나 부패를 legacy로 우회하지 않는다. 이 경계는 app helper의 중단된 교체가 NetworkManager·SSH 시작 전 검증 코드의 ABI를 바꾸지 못하게 한다. OS artifact 서명은 이 사본을 포함하며, schema 전환은 이전 root의 bootstrap이 읽을 수 있는 범위에서만 허용한다.
 
@@ -91,6 +91,8 @@ A/B root의 native payload admission은 서명·전체 inventory 검증을 마�
 | D-430 | admission 실패는 기존 runtime gate를 닫으며 CORE의 최종 Base 명령 권한을 보존한다. OMX 권한을 변경하지 않는다 |
 
 ### Alternatives and consequences
+
+D-888의 boot ABI 2에서는 영속 provision FAT를 교체할 boot A/B와 분리한다. 새 SDK는 boot ABI 1·2를 선언하며 payload admission과 offline root configurer가 실제 descriptor의 ABI를 검사한다. state schema는 1로 유지한다. 부팅 blackbox와 온라인 진단은 검증된 provision mount를 사용하고, 온라인 진단은 제한된 blackbox 파일 이름·크기·소유권만 예외적으로 읽는다. provision mount 전체의 비밀 파일 deny-list는 유지한다. frozen bootstrap 검증 목록은 `os_storage_dispatch.BOOTSTRAP_FILES` 한 곳을 따른다.
 
 `/var/lib/rosy` 전체 공유는 다른 root의 journal/inverse를 재생하므로 기각한다. 개별 config 파일 bind는 atomic replace/unlink와 맞지 않는다. 최초 credential snapshot 재생은 이후 rotation/revoke를 잃는다. 하나의 ready gate는 초기화에 필요한 storage와 이미 projection된 root를 구분하지 못하므로 두 단계로 나눈다.
 
