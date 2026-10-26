@@ -4,7 +4,7 @@
 
 기존 simulation 프로필 observer 입력을 통해 Action 성공과 task 성공·목표 미달·미확인을 구분한다. 판정과 원본 관측은 기존 Fleet 이벤트 원장에 보존하고 검수용 JSON으로 내보낸다. 실제 완료·claim 해제는 기존 `confirm_physical`만 수행한다.
 
-구현·문서 검토 head: `e7093c177af8315faad9a27d342879e23c0b5b77`. 기준: `c2e21981ecee89285647ce2a392aaac76eeee6f3`.
+구현·문서 검토 revision: `e7093c177af8315faad9a27d342879e23c0b5b77`. 기준 revision: `c2e21981ecee89285647ce2a392aaac76eeee6f3`.
 
 ## 원격 시험 증거
 
