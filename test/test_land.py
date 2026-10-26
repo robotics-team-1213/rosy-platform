@@ -138,18 +138,6 @@ def test_web_change_adds_its_browser_tests_opted_in_and_other_changes_do_not(rep
     assert land.browser_tier(wt, "HEAD~1") == []
 
 
-def test_browser_files_split_into_size_balanced_chunks_for_both_hosts(tmp_path):
-    sizes = {"a_browser.py": 900, "b_browser.py": 500, "c_browser.py": 400, "d_browser.py": 300,
-             "e_browser.py": 200, "f_browser.py": 100}
-    for name, size in sizes.items():
-        (tmp_path / name).write_text("x" * size)
-    chunks = land.balanced(tmp_path, sorted(sizes), land.BROWSER_CHUNKS)
-    assert sorted(p for c in chunks for p in c) == sorted(sizes) and len(chunks) == 4
-    totals = sorted(sum(sizes[p] for p in c) for c in chunks)
-    assert totals == [500, 500, 500, 900]  # LPT: no chunk waits behind more than the largest file
-    assert land.balanced(tmp_path, ["a_browser.py"], 4) == [["a_browser.py"]]  # never an empty invocation
-
-
 def test_dirty_worktree_refused(repos):
     main, wt = repos
     (wt / "pkg/a.py").write_text("dirty\n")
