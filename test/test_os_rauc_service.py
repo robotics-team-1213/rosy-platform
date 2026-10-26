@@ -44,6 +44,15 @@ class Manager:
             assert self.active
             self.installs += 1
             if self.fault == "install": code = 1
+            elif self.fault != "finalizer":
+                # Model the daemon's trusted post-handler result; its real file/mount logic has its own suite.
+                from os_bootloader import _binding
+                from os_state_io import _json_atomic
+                from os_update_install import report_path
+                pending = self.module.read_state(self.root)["pending"]
+                report = dict(_binding(pending), metadata_sha256="a" * 64,
+                    native_factory=dict(schema_version=1, **pending["verified"]["metadata"]["native_factory"]))
+                _json_atomic(report_path(self.root, pending), report, 0o600)
         else:
             assert argv == ["systemctl", "daemon-reload"]
         return subprocess.CompletedProcess(argv, code, output, "fixture failure" if code else "")
@@ -52,6 +61,8 @@ class Manager:
 def _case(tmp_path, monkeypatch, fault=None):
     boot, state, root, journal, config = _boot(tmp_path, monkeypatch, "INSTALLING")
     _permit(boot, state, root)
+    import os_motion_guard
+    os_motion_guard.reconcile(root)
     m = importlib.import_module("os_rauc_service")
     runtime = importlib.import_module("os_rauc_runtime")
     verified = state.read_state(root)["pending"]["verified"]
@@ -284,3 +295,21 @@ def test_static_unit_is_accepted_by_the_actual_systemd_parser_in_an_offline_root
     result = subprocess.run([analyze, "verify", "--man=no", "--root=" + str(tmp_path), "rosy-os-rauc.service"],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_successful_client_without_finalizer_receipt_is_hold(tmp_path, monkeypatch):
+    m, root, bundle, raw, signature, manager, journal, config = _case(tmp_path, monkeypatch, "finalizer")
+    before = journal.read_bytes(), config.read_bytes()
+    with pytest.raises(ValueError, match="receipt"):
+        m.install(root, bundle, raw, signature, run=manager, authorize=lambda: None)
+    assert (journal.read_bytes(), config.read_bytes()) == before
+    assert not manager.active and not (root / m.RUNTIME).exists()
+
+
+def test_prior_receipt_is_not_replayed_as_a_new_install(tmp_path, monkeypatch):
+    m, root, bundle, raw, signature, manager, _, _ = _case(tmp_path, monkeypatch)
+    m.install(root, bundle, raw, signature, run=manager, authorize=lambda: None)
+    before = len(manager.calls)
+    with pytest.raises(ValueError, match="receipt"):
+        m.install(root, bundle, raw, signature, run=manager, authorize=lambda: None)
+    assert manager.installs == 1 and len(manager.calls) == before

@@ -56,7 +56,8 @@ def test_runtime_uses_current_card_devices_and_only_inactive_write_permissions(t
         assert parent["allow-mounted"] == child["allow-mounted"] == "false"
         assert parent["install-same"] == child["install-same"] == "true"
         assert parent["resize"] == "false"
-    assert set(config["handlers"]) == {"bootloader-custom-backend"}
+    assert set(config["handlers"]) == {"bootloader-custom-backend", "post-install"}
+    assert config["handlers"]["post-install"] == str(root / "opt/rosy/os-bootstrap/native-runtime/rosy-os-finalize")
     assert config["handlers"]["bootloader-custom-backend"] == str(root / "opt/rosy/os-bootstrap/native-runtime/rosy-os-bootloader")
     lines = result["device_dropin"].splitlines()
     target = {"a": (4, 2), "b": (5, 3)}[result["target_slot"]]
