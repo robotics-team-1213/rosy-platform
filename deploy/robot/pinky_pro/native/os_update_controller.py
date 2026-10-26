@@ -132,6 +132,11 @@ def _transition(root, transaction_id, phase, boot_id, **kwargs):
         store.transition(transaction_id, phase, boot_id, **kwargs)
 
 
+def admit_release(root, metadata, *, host):
+    from os_update_feed import Feed
+    Feed(root, host=host).admit(metadata)
+
+
 def _arm(root, transaction_id, host, run):
     source_health(root, transaction_id, host=host, run=run)
     facts, state, _ = _snapshot(root)
@@ -140,6 +145,8 @@ def _arm(root, transaction_id, host, run):
             or facts["boot_id"] != pending["source_boot_id"] or pending["phase"] not in {"VERIFIED", "ARMED"}):
         raise ValueError("cannot arm a stale source boot")
     _claim(root, transaction_id, host)
+    admit_release(root, pending["verified"]["metadata"], host=host)
+    authorize(root, transaction_id, host=host)
     # The callback recaptures GPT and validates this short-lived source-only permit.
     permit = dict(_binding(pending), claim_holder="os-update:" + transaction_id,
                   expires_monotonic_ns=time.monotonic_ns() + 15_000_000_000)
@@ -170,6 +177,7 @@ def start(root: Path, bundle: Path, raw: bytes, signature: str, *, host: Host | 
                 watchdog_admit(root, run=run)
                 _read(_path(root, "sys/fs/cgroup/cgroup.controllers"), 4096, root.stat().st_uid)
                 verified = verify_bundle(root, bundle, raw, signature)
+                admit_release(root, verified["metadata"], host=host)
                 current = source_health(root, transaction_id, host=host, run=run)
                 media = capture(root)
                 with NativeReleaseManager(root=root, public_key=_path(root, PUBLIC_KEY))._locked():
@@ -180,8 +188,10 @@ def start(root: Path, bundle: Path, raw: bytes, signature: str, *, host: Host | 
                 reconcile(root)
                 _quiet(root, run)
                 _transition(root, transaction_id, "INSTALLING", facts["boot_id"])
-                result = rauc_install(root, bundle, raw, signature,
-                                      authorize=lambda: authorize(root, transaction_id, host=host), run=run)
+                def install_admission():
+                    admit_release(root, verified["metadata"], host=host)
+                    authorize(root, transaction_id, host=host)
+                result = rauc_install(root, bundle, raw, signature, authorize=install_admission, run=run)
                 if (not isinstance(result, dict) or result.get("installed") is not True
                         or result.get("manifest_sha256") != verified["manifest_sha256"] or result.get("report") != read_report(root)):
                     raise ValueError("RAUC client success and installed receipt must both match")
@@ -189,7 +199,7 @@ def start(root: Path, bundle: Path, raw: bytes, signature: str, *, host: Host | 
                 _transition(root, transaction_id, "VERIFIED", facts["boot_id"])
                 _call(run, ["/usr/bin/systemctl", "restart", "rosy-io.service"])
                 host.sleep(IO_SETTLE_S)
-                return _arm(root, transaction_id, host, run)
+                return _arm_or_restore(root, transaction_id, host, run)
             finally:
                 if read_state(root)["pending"] is None:
                     rosy_claim.release(root, "os-update:" + transaction_id)
@@ -221,6 +231,15 @@ def _finish(root, facts, result, run):
         # A normal boot clears retained tryboot and reloads the operator's configured I/O environment.
         _call(run, ["/usr/bin/systemctl", "--no-block", "reboot"])
     return result
+
+
+def _arm_or_restore(root, transaction_id, host, run):
+    from os_update_feed import Withdrawn
+    try:
+        return _arm(root, transaction_id, host, run)
+    except Withdrawn:
+        facts, state, _ = _snapshot(root)
+        return _failed_source(root, facts, state["pending"], host, run)
 
 
 def resume(root: Path = Path("/"), *, host: Host | None = None, run=_run):
@@ -267,23 +286,26 @@ def resume(root: Path = Path("/"), *, host: Host | None = None, run=_run):
             reconcile(root)
             _call(run, ["/usr/bin/systemctl", "restart", "rosy-io.service"])
             host.sleep(IO_SETTLE_S)
-            return _arm(root, transaction_id, host, run)
+            return _arm_or_restore(root, transaction_id, host, run)
     except (OSError, ValueError, TypeError, KeyError, rosy_claim.ClaimBusy, subprocess.SubprocessError) as exc:
         raise ValueError(f"OS_CONTROLLER_HOLD: {exc}") from exc
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("resume", "install"))
+    parser.add_argument("command", choices=("run", "resume", "install"))
     parser.add_argument("--bundle", type=Path)
     parser.add_argument("--metadata", type=Path)
     parser.add_argument("--signature", type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command == "resume":
+        if args.command in {"run", "resume"}:
             if any((args.bundle, args.metadata, args.signature)):
-                raise ValueError("resume does not accept install paths")
-            result = resume()
+                raise ValueError("run/resume do not accept install paths")
+            if args.command == "run":
+                from os_update_feed import run as poll_feed
+                result = poll_feed()
+            else: result = resume()
         else:
             if not all((args.bundle, args.metadata, args.signature)):
                 raise ValueError("install requires bundle/metadata/signature paths")

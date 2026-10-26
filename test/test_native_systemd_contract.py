@@ -491,7 +491,7 @@ NETWORK_EVIDENCE_READS = {
 DECLARED_READS = {
     "rosy-os-update.service": {"/etc/rosy", "/etc/rauc", "/etc/systemd", "/etc/dbus-1", "/opt/rosy",
         "/var/lib/rosy-device", "/var/lib/rosy/releases", "/var/lib/rosy/updates", "/run/rosy",
-        "/sys", "/dev", "/proc", "/usr/local/share/rosy", "/boot/firmware"},
+        "/sys", "/dev", "/proc", "/usr/local/share/rosy", "/boot/firmware", "$HOME"},
     # These entrypoints only read journal/bootstrap/media; controller writers are separate.
     "rosy-os-motion-guard.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
     "rosy-os-trial-deadline.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
@@ -601,7 +601,8 @@ PROGRAM_SOURCES = {
     "rosy-os-update.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
         ("os_update_controller", "os_update_commit", "os_update_health", "os_update_policy", "os_update_watchdog",
          "os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout",
-         "os_update_install", "os_installed_factory", "native_release", "os_motion_guard", "auto_update_host", "auto_update_records")],
+         "os_update_install", "os_installed_factory", "native_release", "os_motion_guard", "auto_update_host", "auto_update_records",
+         "os_update_feed", "os_update_stage", "os_update_rollout")] + ["deploy/hosts/common/host-state/rosy-update-gate"],
     "rosy-os-motion-guard.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
         ("os_motion_guard", "os_bootloader", "os_update_state", "os_state_layout", "os_state_io")],
     "rosy-os-trial-deadline.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
