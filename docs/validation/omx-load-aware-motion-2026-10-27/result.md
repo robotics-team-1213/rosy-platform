@@ -16,7 +16,7 @@
 | JSON 계약·원자적 저장 | `a5802fb8cd` | 25건 통과; 선행 `ce469081ac`에서는 미구현 모듈로 예상 실패 |
 | 계약·전 구간 후보 평가 | `793ad81bf2` | 56건 통과; 선행 미구현 상태의 예상 실패 확인 |
 | 기존 생산자와 새 기능 통합 | `1e6e71dfca` | 110건 통과; native producer → snapshot reader → monitor를 합성 버스로 검증 |
-| 영향 선택 58개 시험 경로 | `00581175c49704d48a2eeada711fd20486c620a8` | 2,079 통과, 22 skipped, 2 실패. 두 실패는 새 로그 제목 형식에 의한 harness 검사였다. |
+| 영향 선택 58개 시험 경로 | commit `00581175c49704d48a2eeada711fd20486c620a8` | 2,079 통과, 22 skipped, 2 실패. 두 실패는 새 로그 제목 형식에 의한 harness 검사였다. |
 | 로그 형식 수정·생성 색인·문서 배치 | `aec7f05a35` | 원격 harness/document placement/folder layout 122건 통과; 기준 실패 비교 0 NEW, 0 known, 0 flaky |
 
 넓은 회귀 실행과 기록 수정 사이의 Python/JSON/YAML/XML/TXT 제품·시험 소스 diff는 비어 있다. 최종 두 실패를 고친 뒤 관련 기록·배치 시험을 다시 실행했으며 전체 58개 경로를 재실행했다고 주장하지 않는다. 22 skipped는 통과로 계산하지 않는다. 해당 실행의 `-rfE` 출력에는 개별 skip 이유가 없으므로 이 기록에서 임의로 분류하지 않는다.
@@ -24,7 +24,7 @@
 영향 선택과 실행 방법:
 
 ```text
-python tools/harness/rosy_harness.py affected --base 3125704e24244591d9e2e43032034d8efe14a6f2 --head 00581175c4 --json
+python tools/harness/rosy_harness.py affected --base 3125704e24 --head 00581175c4 --json
 python tools/remote/remote_pytest.py --sha 00581175c4 --log-dir <external-log-dir> --affected-json -
 python tools/remote/remote_pytest.py --sha aec7f05a35 --log-dir <external-log-dir> -- test/test_harness_contracts.py test/architecture/test_document_placement.py test/architecture/test_folder_layout.py -q
 ```
@@ -33,8 +33,8 @@ python tools/remote/remote_pytest.py --sha aec7f05a35 --log-dir <external-log-di
 
 | 원본 보고서 | SHA256 |
 |---|---|
-| `final-affected/run-1.txt` | `11788caf0617e2c1be263555e292c30d5df64449131238a937e841a162d5c6da` |
-| `final-record-check/run-1.txt` | `0bdff077b42f98662aa933c8907c7dc3a4049707b39d9d7c6d41a62b9981bb0f` |
+| `final-affected/run-1.txt` | sha256: `11788caf0617e2c1be263555e292c30d5df64449131238a937e841a162d5c6da` |
+| `final-record-check/run-1.txt` | sha256: `0bdff077b42f98662aa933c8907c7dc3a4049707b39d9d7c6d41a62b9981bb0f` |
 
 추가 정적 검사: 새 Python 파일 flake8(120열) 통과, 기준부터 문서 초안 커밋까지의 13개 커밋 size-range 검사 통과. 프로젝트 의존성은 추가하지 않았다. CI, 전체 저장소 시험, ROS transport, ARM64 payload, 실물·현장 수용 증거는 아니다.
 
