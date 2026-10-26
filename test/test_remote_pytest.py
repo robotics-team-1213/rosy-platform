@@ -412,7 +412,8 @@ def test_pushing_origin_main_itself_sends_a_full_bundle(tmp_path, monkeypatch):
 def _fake_ssh(tmp_path, monkeypatch, fail_on):
     """A fake ssh: `true` succeeds; a script containing `fail_on` exits 1, anything else 0."""
     fake = tmp_path / "fake_ssh.py"
-    fake.write_text("import sys\nc = sys.argv[-1]\nif c != 'true':\n    sys.stdin.buffer.read()\n"
+    fake.write_text("import sys\nc = sys.argv[-1]\nif c != 'true':\n    data = sys.stdin.buffer.read()\n"
+                    "    c = data.decode() if c == 'bash -s' else c\n"  # remote_job.ssh_call: command on stdin
                     f"sys.exit(1 if {fail_on!r} in c else 0)\n", encoding="utf-8")
     monkeypatch.setattr(rp, "SSH", [sys.executable, str(fake)])
     monkeypatch.setenv("ROSY_TEST_HOSTS", "h")
