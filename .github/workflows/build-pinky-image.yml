@@ -111,9 +111,12 @@ jobs:
           test -f "$release/manifest.json"
           test -f "$release/SHA256SUMS"
           test -f "$release/rosy-os-pinky-pro-$RELEASE_ID-arm64.capacity.json"
+          test -f "$release/os-bundle-inputs/inputs.json"
+          test -f "$release/os-bundle-inputs/rootfs.ext4.xz"
+          test -f "$release/os-bundle-inputs/boot.vfat.xz"
           test ! -e "$release/SHA256SUMS.sig"
           python3 - "$release" <<'PY'
-          import json, sys
+          import hashlib, json, sys
           from pathlib import Path
           folder = Path(sys.argv[1])
           manifest = json.loads((folder / "manifest.json").read_text())
@@ -123,8 +126,19 @@ jobs:
           assert set(capacity["roots"]) == {"a", "b"}
           for root in capacity["roots"].values():
               assert root["available_bytes"] >= root["reserve_required_bytes"]
+          inputs = json.loads((folder / "os-bundle-inputs/inputs.json").read_bytes())
+          manifest_revision = json.loads((folder / "build-provenance.json").read_bytes())["source_revision"]
+          assert inputs["source_revision"] == manifest_revision
+          assert inputs["release_id"] == manifest["release_id"]
+          assert inputs["layout"] == manifest["layout"]
+          assert inputs["boot_abi"] == 2 and inputs["state_schema"] == {"read_min": 1, "read_max": 1, "write": 1}
+          assert set(inputs["images"]) == {"rootfs.ext4", "boot.vfat"}
+          factory = folder / "factory-release" / inputs["release_id"] / "SHA256SUMS"
+          assert inputs["native_factory"] == {"release_id": inputs["release_id"],
+              "checksums_sha256": hashlib.sha256(factory.read_bytes()).hexdigest()}
           PY
           xz --test "$release/rosy-os-pinky-pro-$RELEASE_ID-arm64.img.xz"
+          xz --test "$release/os-bundle-inputs/rootfs.ext4.xz" "$release/os-bundle-inputs/boot.vfat.xz"
           (cd "$release" && sha256sum --check SHA256SUMS)
 
       - name: Upload unsigned image handoff
