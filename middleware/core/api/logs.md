@@ -1306,3 +1306,9 @@
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-27 · uncommitted · deepinit Dashboard 소스 링크 복구
+
+- 변경: api/AGENTS.md의 Dashboard 안내 링크를 middleware/robot_ui/robot/AGENTS.md로 바로잡았다. 인증·API·CSP 계약은 유지한다.
+- 증거: app.py::_dashboard_root의 소스 fallback과 대상 AGENTS.md의 존재를 대조했다. 전체 AGENTS.md의 로컬 Markdown 링크와 Parent context 경로를 정적으로 확인한다.
+- gate 변화: 없음. HTTP·WebSocket·장치 동작 시험을 수행한 기록이 아니다.
