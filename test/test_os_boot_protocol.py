@@ -1,10 +1,15 @@
 """Protocol 2 admission and authenticated provisioning policy; no card writes."""
 import io
 import json
+from pathlib import Path
+import sys
 
 import pytest
 
-from os_state_layout import LAYOUT_FIELDS, _layout, _object
+BASE = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro"
+sys.path.insert(0, str(BASE / "native"))
+sys.path.insert(0, str(BASE / "sd"))
+from os_state_layout import _layout, _object
 from test_os_state_admission import DESCRIPTOR, ROOT_UUID
 from test_sd_gpt_layout import _table_image
 from media_layout import LayoutCapture, inspect_device, parse_gpt, validate_layout
