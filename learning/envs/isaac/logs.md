@@ -29,6 +29,7 @@
 - 변경: 단일 CORE 주행·정지, Nav2, 두 로봇 Fleet, 이동 후 적재 순서의 목표와 원격 호스트·clock·명령·독립 관측 책임을 정리했다. 현재 6.1 import API와 D-434의 5.1 설치 기록 차이, watchdog·센서·다중 로봇 미수용을 명시하고 stale progress 경로/버전 설명을 고쳤다. 런너와 SDK 코드는 바꾸지 않았다.
 - 증거: 현재 learning/envs/isaac/test 10 passed/1 skipped. 실제 xacro 렌더는 overlay 부재로 skipped. 5.1 공식 ROS 2 Navigation/Clock 문서와 현재 graph·CORE navigation remap을 대조했다. 모델 PC runtime은 실행하지 않았다.
 - gate 변화: SOURCE/LOCAL 상태 유지, ROS-SIM HOLD 유지. host helper 시험은 실제 주행 수용이 아니다.
+
 ## 2026-10-04 · uncommitted · fix(isaac): SDK 호환 import와 명령 만료 경계
 
 - 변경: 5.1 legacy importer와 최신 API를 capability로 구분하고 defaultPrim이 있는 USD를 live stage에 참조한다. 명령 수신 시각 기반 watchdog과 graph/USD wheel-target 초기·pause·reset·stale zero를 추가했다. 실제 SDK에서 확인된 graph attribute 경로를 절대 경로로 연결하고, SDK 종료가 Python 예외를 exit 0으로 덮지 않게 했다.
@@ -43,7 +44,6 @@
 - 증거: gain/passive 검사는 RED 후 구현했으며 host 69 passed/1 skipped, 신규 known failure 0, scoped Python lint·diff 통과. 독립 source review 후 모델 PC에서 실제 CORE auth API·단일 publisher·odom/joints/clock·applied gain/action을 관찰했다. A07은 1000 graph callback, 593 Twist receipt, 367 graph/USD target zero readback, SDK main 정상 반환·CORE/SDK exit 0·두 소유 PID 부재를 확인했다.
 - gate: I1 주행·물리 정지는 HOLD. CORE cmd_vel 만료는 약 0.4초에 zero지만 전진 추종 실패·회전 만료 후 actual yaw drift가 남았다. finite-frame 종료 후 SDK GUI callback traceback 2건과 native interrupt-close 오류도 close 반환·process 종료와 별도다. 세부 시도·hash·남은 일은 [I1 실측 기록](../../../docs/validation/cell-isaac-2026-10-04/isaac-core-drive.md)에 기록했다.
 - 교훈: command target zero를 실제 stop으로 승격하지 않는다. importer가 passive caster에 position drive를 만들 수 있으므로 actuator identity와 실제 tensor gains를 확인한다. 정상 SDK close·process 종료와 native interrupt-close 오류는 분리 기록한다.
-
 
 ## 2026-10-04 · uncommitted · fix(ci): keep physics regression sources plain UTF-8
 
@@ -138,7 +138,6 @@
 - 변경: actual native 생성자는 scan과 같은 URDF nominal body·simulation collision box 회전반경을 받아 path/body 형상을 설정한다. 기존 gateway front_clearance를 호출해 동일 검증·body/scan points를 전달하고 return evidence를 중복 전달하지 않는다. native body 불일치와 no-return UNKNOWN은 관측/학습 admission에서 거절한다. guided pivot·map-only motion을 유효 camera state로 바꾸지 않는다.
 - 증거: AI PC committed-source camera_lane/native_scan62passed·known_failures0NEW. 실제 표본에서 먼 벽은 주행, 정지 간격 내 가까운 벽은0, UNKNOWN은유효state없음, body불일치는거절을 검증했다. replay는 recorded pixels·CPU 추론이며 native 주행/학습/완주 증거가 아니다.
 - gate 변화: 없음. actual native 재실행·유효RL·전체완주·교통/Fleet·실물 수용은 미검증이다.
-
 
 ## 2026-10-12 · eae0f59da0 · test(isaac): 카메라 RL 업데이트와 진단 실패 기록
 
@@ -345,6 +344,7 @@
 - 변경: 고정 합성 fixture와 CAD IK·접촉 관측·독립 판정을 공통 catalog/runner/CLI에 연결했다. 기존 import와 실행 잠금·상한·종료 검증을 유지한다.
 - 증거: run36041b241ee25366986bb3a6262ba0be의3,624 physics step·양방향 접촉 lift/이송·해제 후 안정·FINAL6파일·GPU 해제. 독립 검토와 원격377 PASS/1 SKIP, NEW0. 앞선4개 SDK 실패를 보존했다.
 - gate 변화: Pinky 정지 tray proxy·컨베이어 proxy의 단일 SIM 스모크 수용이다. full Pinky·실측 카메라 정합·주행·learned AI·실물 수용이 아니다. 상세는 docs/validation/isaac-pinky-conveyor-roundtrip-2026-10-25/result.md. CE 구동 방식 교훈 새 기록.
+
 ## 2026-10-25 · uncommitted · OMX import 보고서의 공개 소스 포트
 
 - 변경: 기존 개발 기준 a46daee90b7의 import_report·선택적 import_omx 보고서·회귀를 공개 accepted source에 그대로 옮겼다. 기존 벤더 자산과 importer를 유지한다. 보고서는 정상 SDK 정리 뒤 배타적으로 생성하며 모델·관절·자산·프레임 증거를 별도 검증한다.

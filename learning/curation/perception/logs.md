@@ -260,8 +260,27 @@
 - 변경: 기존 SIM HTTP·화면에서 접촉 보고서와 다섯 단계 PNG를 허용하고 MIME·크기·SHA 검사를 유지했다. 모델 검사에 고정된 완료 문구·설명을 수정하고 재실행이 선택한 run의 시나리오·seed를 복원하도록 했다.
 - 증거: 새 artifact 경로 9개 RED 뒤 API·Chromium 21 PASS. 독립 검토가 발견한 시나리오 복원 누락도 데스크톱·모바일 Chromium 2개 RED로 확인했으며 최종 GREEN은 착지 기록에 남긴다.
 - gate 변화: SIM 결과 조회·동일 조건 재실행 연결이다. 학습 Episode 생성·policy 승격·운영 설치·실물 수용은 추가하지 않았다. 검증된 drive 방식 교훈은 Isaac 검증 기록에서 참조한다.
+
 ## 2026-10-25 · uncommitted · 공개 Learning의 접촉 왕복 증거 연결
 
 - 변경: 공개 화면·실행 상세 링크·평가 연결을 보존하며 접촉 보고서와 다섯 PNG의 제한된 조회와 재실행 scenario 복원을 옮겼다.
 - 증거: 28cbe5dc48에서 새 경로 아홉 건의 404를 재현했고 ebc1a89c52 명시적 원격 API/Chromium 26개가 통과했다. [검증 기록](../../../docs/validation/learning-conveyor-release-2026-10-25/result.md).
 - gate 변화: 없음. 최종 SHA CI·운영 조회·학습 데이터·정책 평가·실물 수용은 각각 별도 확인한다.
+
+## 2026-10-26 · d24d1abc64 · 저장공간 브라우저 시험 용량 고정
+
+- 변경: 합성 fixture의 free_space 관측을10 GiB로 고정하고 UI 잔여값을 검증한다. 실제 storage/data 동작은 바꾸지 않았다.
+- 검증: commit d24d1abc64, 모델 호스트 디스크 점검 후 실제 opt-in 두 viewport 포함10 PASS/skip0/NEW0. 기존 MAIN-RED와 raw 로그를 보존했다.
+- gate 변화: 제품·기기 gate 변화 없음. docs/validation/learning-storage-browser-capacity-2026-10-26/result.md는 합성 시험 근거이며 실제 라벨·모델 수용을 뜻하지 않는다.
+
+## 2026-10-26 · 62173b9899 · Learning 셸 정렬
+
+- 변경: 네 정답 화면(객체·픽셀·로봇암 시범·VLM)이 같은 레일 + 경로 줄 탭(D-542 §2)을 쓴다. 로봇암 화면 제목을 메뉴 이름 `로봇암 시범 검수`로 맞췄다. 경로 줄 제목과 본문 h2가 겹치던 홈·카메라·로봇암·과제·작업 공간은 경로 줄에 제목과 화면 동작만 두고 설명은 한 줄로 내렸다. 계정 화면도 같은 앱 바·레일·경로 줄 안에 넣었다. 화면마다 복사된 테마 select·저장 코드 11벌을 지우고 공용 `data-theme-cycle`(D-668, ui-wiring.js)을 쓴다. 본문은 가운데 정렬 대신 레일 옆에 붙여 화면을 옮겨도 왼쪽 끝이 같다.
+- 증거: 로컬 Edge 캡처 1366·390에서 13개 화면 페이지 오류 없음. 원격 결과는 착지 기록에 적는다.
+- gate 변화: 없음.
+
+## 2026-10-26 · 62173b9899 · 홈 안내 중복 링크 정리와 OMX 오류 문구
+
+- 변경: 홈의 `어떤 로봇의 어떤 과제` 칸에서 경로 줄 동작(과제 등록·SIM)과 같은 페이지 앵커를 반복하던 링크 셋을 지우고 OMX 과제 링크만 남겼다. OMX 학습 실행기 미연결 오류를 한국어로 바꿨다.
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
+- gate 변화: 없음.

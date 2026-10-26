@@ -39,10 +39,11 @@ def test_storage_http_read_permissions_paths_and_revocation(tmp_path, accounts):
 
 
 @pytest.mark.parametrize('width', [1440, 320])
-def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, width):
+def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, width, monkeypatch):
     from browser_harness import browser_tests_enabled, free_port, open_page
     if not browser_tests_enabled(): pytest.skip('requires explicit Chromium browser run')
     playwright = pytest.importorskip('playwright.sync_api')
+    monkeypatch.setattr('storage_inventory.free_space', lambda _fd: 10 * 1024**3)
     folder = tmp_path / 'review'; folder.mkdir(); store = open_store(folder)
     root = tmp_path / 'pending'; root.mkdir(); (root / 'clip.mp4').write_bytes(b'x' * 2048)
     cfg = dict(project_id='one', roots=[dict(id='pending', label='Incoming media', role='pending', path=str(root))])
@@ -66,6 +67,7 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 page.keyboard.press('Escape')
                 page.locator('#storage-preflight button').click()
                 expect(page.locator('#storage-result')).to_contain_text('공간 추정 충족')
+                expect(page.locator('#storage-result')).to_contain_text('잔여 10 GiB')
                 page.locator('#storage-upload').fill('1')
                 page.locator('#storage-preflight button').click()
                 expect(page.locator('#storage-result')).to_contain_text('공간 확인 보류')

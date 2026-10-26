@@ -150,7 +150,9 @@ def targets(paths: list[str]) -> list[str]:
             if path.startswith(prefix):
                 for pattern in patterns:
                     selected.update(_expand(pattern))
-        if path in known or (path.endswith("_browser.py") and (ROOT / path).is_file()):
+        # test_ prefix: tools/land_browser.py is a module, not a test (2026-10-26 landings stopped on it)
+        if path in known or (path.rsplit("/", 1)[-1].startswith("test_") and path.endswith("_browser.py")
+                             and (ROOT / path).is_file()):
             selected.add(path)
     return sorted(selected)
 

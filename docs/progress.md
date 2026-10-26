@@ -269,6 +269,7 @@ adrs:
 - D-777
 - D-784
 plans:
+- docs/plans/2026-10-24-neutral-arm-planning-design.md
 - docs/plans/2026-10-17-native-map-adoption.md
 - docs/plans/2026-10-15-omx-learning-operations-design.md
 - docs/plans/2026-10-15-omx-learning-operations.md
@@ -418,3 +419,14 @@ plans:
 ## 공통 판단 목표 구조와 분리 계획 (2026-10-11)
 
 - D-648 Proposed와 목표 트리/의존/사례표·분리 계획을 작성했다. Situation assessment, Decision 후보, execution/site 순수 규칙, 현재 Fleet 원장 어댑터와 coordination을 구별했다. 실제 소스 이동·설치·장치 gate 변화는 없다.
+
+## D-856 애플리케이션 업무와 동작 경계 (2026-10-24)
+
+- 정식 ADR·Log·전체 계획을 등록했다. 첫 중립 TRIP 조회/대조는 Harbor 독립 HTTP로 검증했다. 팔의 중립 계획기·owner 설치 catalog와 API v1.299 읽기 사전검사를 연결했다. 신규/기존 관련 원격 213 passed/skip0와 실제 stdlib-only HTTP→UDS 및 독립 검토를 확인했다. SHA·이력 metadata·합성 상태/설치 검증 한계는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md에 기록했다.
+- 전체 목표는 진행 중이다. 중립 팔 grant/실행과 공통 원장/Cell provenance 경계, Harbor 공정 변환·업무 관측·복구/설치 독립성 증거가 남는다. 기존 Cell 호환과 실물 비활성 상태를 유지한다. 실행 상세는 docs/plans/2026-10-24-harbor-rosy-application-action-boundary.md를 따른다.
+- step 시작의 typed grant 파싱·공통 identity·종류별 전체 payload 검증을 분리했다. Cell 원장/복구 184개와 dispatcher/transport 등 152개 별도 원격 회귀가 통과했으며 새 kind는 열지 않았다. 선행 공개 사전검사 FULL의 충전 조회 타임아웃은 단독 통과와 구별해 미해결로 기록했다. docs/plans/2026-10-24-step-grant-boundary-design.md와 위 validation을 따른다.
+- owner 설치 물체 참조→기하 결속을 불변 catalog/revision으로 검증한다. d0d7f4616d의 원격 112 passed/skip0/0 NEW와 독립 검토를 기록했다. 실행 소비자와 중립 grant는 후속이며 docs/plans/2026-10-24-neutral-arm-execution-design.md를 따른다.
+- 중립 팔 grant DTO를 v1.303에 등록했다. commit 1258314f51의 신규·기존 소비자 원격 1385 passed/skip0/0 NEW, 독립 검토와 크기·안전 trailer 검사를 통과했다. runtime 접수는 비활성이며 docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md의 한계를 따른다.
+- grant 단계 source 8da8bb1593의 FULL 세 그룹이 각각 11932/4359/6257 passed, 543/117/336 skipped, 0 NEW로 끝났다. 이후 원장 version5·Cell 소비자 차단의 69/13/244개 별도 회귀도 통과했다. physical creator·owner 실행은 후속이며 docs/validation/harbor-neutral-arm-ledger-2026-10-24/result.md를 따른다.
+- 중립 owner transaction의 grant/object·snapshot/HOLD 복구를 구현했다. commit 11486ce7cd의 신규·기존 소비자 원격 74 passed/skip0/0 NEW와 독립 재검토를 확인했다. 설치 factory/runtime·parent journal 대조는 docs/plans/2026-10-24-neutral-arm-owner-design.md의 다음 단계다.
+- API v1.305의 명시적 설치 factory·phase-only IPC와 Fleet v2 client를 연결했다. 원격 owner 153개·client 15개 별도 회귀가 skip0/0 NEW로 통과했다. 실제 admitted-state/HTTP·Fleet producer·자원 종료·Harbor 변환은 남는다. 선행 migration affected는 4722/6270 passed, 187/336 skipped, 각각 0 NEW로 끝났다.

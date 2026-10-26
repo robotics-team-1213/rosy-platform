@@ -9,9 +9,9 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from enum import Enum
 from typing import Callable
+
+from fleet.swarm.api.types import (DEFAULT_SPACING, MIN_SPACING, Point, Formation, FormationError, SlotOffset)
 
 #: 두 로봇이 가장 가까워지는 거리의 하한. LINE 과 GRID 앞줄은 팔로워를 리더와 나란히
 #: 세우므로 이 값이 그대로 로봇 사이 거리다. Nav2 는 목표점이 아니라 **팔로워의
@@ -21,34 +21,6 @@ from typing import Callable
 #: 이다 (`src/navigation/params/nav2_params.yaml`: footprint 반폭 6 cm(한 변 12 cm) 정사각 → 외접반경
 #: 0.085, inflation_radius 0.15, global costmap footprint_padding 0.03). 0.4 는 그 위로
 #: 약 5 cm 여유다 — 넉넉하지 않다. Nav2 파라미터가 바뀌면 이 식으로 다시 계산한다.
-MIN_SPACING = 0.4
-DEFAULT_SPACING = 0.6
-
-Point = tuple[float, float]
-
-
-class Formation(str, Enum):
-    FOLLOW = "FOLLOW"
-    COLUMN = "COLUMN"
-    LINE = "LINE"
-    V = "V"
-    GRID = "GRID"
-    CIRCLE = "CIRCLE"
-    #: D-559: COLUMN slots, but each follower replays the leader's driven path
-    #: (`mode="trail"`, `distance` = path distance behind the leader).
-    TRAIL = "TRAIL"
-
-
-class FormationError(ValueError):
-    """대형을 만들 수 없는 파라미터."""
-
-
-@dataclass(frozen=True)
-class SlotOffset:
-    """리더 heading 기준 슬롯. `distance` 는 리더 뒤(+), `lateral` 은 리더 왼쪽(+), m."""
-
-    distance: float
-    lateral: float
 
 
 def _side(k: int) -> float:

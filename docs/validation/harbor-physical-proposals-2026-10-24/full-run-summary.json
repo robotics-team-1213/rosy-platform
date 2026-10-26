@@ -1,0 +1,1117 @@
+{
+  "format": "rosy.physical-transfer-full-verification/1",
+  "original": {
+    "source_commit": "9d3db3beecf60215eb4a93d598a36ba316254008",
+    "runner_exit_code": 1,
+    "execution_tier": "23 original full_invocations; local_invocations expanded without filtering",
+    "entries": [
+      {
+        "run": 1,
+        "targets": [
+          "learning/registry/policy/test"
+        ],
+        "pytest_counts": {
+          "passed": 117,
+          "failed": 0,
+          "skipped": 4,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 6.76,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-1.txt"
+      },
+      {
+        "run": 2,
+        "targets": [
+          "learning/training/omx/test"
+        ],
+        "pytest_counts": {
+          "passed": 142,
+          "failed": 0,
+          "skipped": 16,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 1.24,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-2.txt"
+      },
+      {
+        "run": 3,
+        "targets": [
+          "learning/training/pinky/test"
+        ],
+        "pytest_counts": {
+          "passed": 6,
+          "failed": 0,
+          "skipped": 6,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.74,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-3.txt"
+      },
+      {
+        "run": 4,
+        "targets": [
+          "learning/curation/omx/test"
+        ],
+        "pytest_counts": {
+          "passed": 229,
+          "failed": 0,
+          "skipped": 3,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 1.57,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-4.txt"
+      },
+      {
+        "run": 5,
+        "targets": [
+          "learning/curation/pinky/test"
+        ],
+        "pytest_counts": {
+          "passed": 21,
+          "failed": 0,
+          "skipped": 28,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.59,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-5.txt"
+      },
+      {
+        "run": 6,
+        "targets": [
+          "learning/training/world_model/test"
+        ],
+        "pytest_counts": {
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.55,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-6.txt"
+      },
+      {
+        "run": 7,
+        "targets": [
+          "learning/evaluation/world_model/test"
+        ],
+        "pytest_counts": {
+          "passed": 4,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.65,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-7.txt"
+      },
+      {
+        "run": 8,
+        "targets": [
+          "operations/prediction/world_model/test"
+        ],
+        "pytest_counts": {
+          "passed": 12,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.52,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-8.txt"
+      },
+      {
+        "run": 9,
+        "targets": [
+          "middleware/core/gateway/test",
+          "middleware/core/events/test",
+          "middleware/core/services/test",
+          "shared/web/test",
+          "contracts/foundation/test",
+          "middleware/devices/pinky/profile/test",
+          "middleware/devices/omx/profile/test"
+        ],
+        "pytest_counts": {
+          "passed": 7371,
+          "failed": 0,
+          "skipped": 91,
+          "errors": 0,
+          "warnings": 12,
+          "subtests_passed": 5
+        },
+        "duration_s": 519.09,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-9.txt"
+      },
+      {
+        "run": 10,
+        "targets": [
+          "middleware/core/gateway/test/test_account_pipeline.py"
+        ],
+        "pytest_counts": {
+          "passed": 6,
+          "failed": 0,
+          "skipped": 2,
+          "errors": 0,
+          "warnings": 12,
+          "subtests_passed": 0
+        },
+        "duration_s": 20.71,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-10.txt"
+      },
+      {
+        "run": 11,
+        "targets": [
+          "middleware/perception/test"
+        ],
+        "pytest_counts": {
+          "passed": 3554,
+          "failed": 0,
+          "skipped": 113,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 62
+        },
+        "duration_s": 154.17,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-11.txt"
+      },
+      {
+        "run": 12,
+        "targets": [
+          "operations/fleet/test"
+        ],
+        "pytest_counts": {
+          "passed": 6342,
+          "failed": 0,
+          "skipped": 336,
+          "errors": 0,
+          "warnings": 2,
+          "subtests_passed": 0
+        },
+        "duration_s": 696.52,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-12.txt"
+      },
+      {
+        "run": 13,
+        "targets": [
+          "applications/fleet/test"
+        ],
+        "pytest_counts": {
+          "passed": 49,
+          "failed": 0,
+          "skipped": 34,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 4.84,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-13.txt"
+      },
+      {
+        "run": 14,
+        "targets": [
+          "operations/overhead/test"
+        ],
+        "pytest_counts": {
+          "passed": 736,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 50.38,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-14.txt"
+      },
+      {
+        "run": 15,
+        "targets": [
+          "operations/processes/cell/test"
+        ],
+        "pytest_counts": {
+          "passed": 155,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.55,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-15.txt"
+      },
+      {
+        "run": 16,
+        "targets": [
+          "operations/situation/test"
+        ],
+        "pytest_counts": {
+          "passed": 121,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 2,
+          "subtests_passed": 0
+        },
+        "duration_s": 3.59,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-16.txt"
+      },
+      {
+        "run": 17,
+        "targets": [
+          "operations/world/test"
+        ],
+        "pytest_counts": {
+          "passed": 38,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 1.75,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-17.txt"
+      },
+      {
+        "run": 18,
+        "targets": [
+          "test/test_platform_palletizing_compat.py",
+          "test/test_platform_cell_submission.py",
+          "test/architecture/test_platform_dependency_boundaries.py"
+        ],
+        "pytest_counts": {
+          "passed": 25,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 1.02,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-18.txt"
+      },
+      {
+        "run": 19,
+        "targets": [
+          "integrations/simulation/gazebo/test"
+        ],
+        "pytest_counts": {
+          "passed": 328,
+          "failed": 0,
+          "skipped": 4,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 8.98,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-19.txt"
+      },
+      {
+        "run": 20,
+        "targets": [
+          "middleware/devices/pinky/bringup/test",
+          "middleware/drivers/pinky_adc/test",
+          "middleware/perception/test/test_ir_adc_lock.py",
+          "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+          "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+          "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"
+        ],
+        "pytest_counts": {
+          "passed": 473,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.72,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-20.txt"
+      },
+      {
+        "run": 21,
+        "targets": [
+          "test"
+        ],
+        "pytest_counts": {
+          "passed": 9708,
+          "failed": 2,
+          "skipped": 1132,
+          "errors": 0,
+          "warnings": 56,
+          "subtests_passed": 0
+        },
+        "duration_s": 755.31,
+        "known_failure_counts": {
+          "new": 2,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [
+          "test/architecture/test_safety_separation.py::test_safety_does_not_import_decision_learning_or_model_sdks",
+          "test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds"
+        ],
+        "log": "rosy-physical-store-9d-full/run-21.txt"
+      },
+      {
+        "run": 22,
+        "targets": [
+          "operations/site_ui/media/test",
+          "middleware/media/test",
+          "learning/evaluation/perception/test",
+          "operations/apps/games/test",
+          "operations/processes/palletizing/test",
+          "middleware/robot_ui/face/test/test_info_screen.py",
+          "middleware/robot_ui/face/test/test_info_screen_boot.py",
+          "middleware/robot_ui/face/test/test_wifi_qr.py",
+          "middleware/drivers/pinky_led/test/test_led_package_contract.py",
+          "middleware/drivers/imu_bno055/test/test_package_contract.py",
+          "middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py",
+          "middleware/robot_ui/robot/test",
+          "middleware/robot_ui/pilot/test",
+          "middleware/devices/omx/adapter/test",
+          "contracts/ros_idl/test/test_srv_surface.py",
+          "middleware/devices/pinky/description/test/test_urdf_surface.py",
+          "operations/signal_observation/test",
+          "learning/envs/isaac/test"
+        ],
+        "pytest_counts": {
+          "passed": 1873,
+          "failed": 0,
+          "skipped": 297,
+          "errors": 0,
+          "warnings": 2,
+          "subtests_passed": 0
+        },
+        "duration_s": 61.05,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-22.txt"
+      },
+      {
+        "run": 23,
+        "targets": [
+          "middleware/core/api/test"
+        ],
+        "pytest_counts": {
+          "passed": 188,
+          "failed": 0,
+          "skipped": 13,
+          "errors": 0,
+          "warnings": 2,
+          "subtests_passed": 25
+        },
+        "duration_s": 7.1,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-9d-full/run-23.txt"
+      }
+    ]
+  },
+  "final": {
+    "source_commit": "76a173b5fd33b1907bfedba8b5a1bf5f78506ac3",
+    "runner_exit_code": 0,
+    "execution_tier": "23 original full_invocations; local_invocations expanded without filtering",
+    "entries": [
+      {
+        "run": 1,
+        "targets": [
+          "learning/registry/policy/test"
+        ],
+        "pytest_counts": {
+          "passed": 117,
+          "failed": 0,
+          "skipped": 4,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 2.43,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-1.txt"
+      },
+      {
+        "run": 2,
+        "targets": [
+          "learning/training/omx/test"
+        ],
+        "pytest_counts": {
+          "passed": 142,
+          "failed": 0,
+          "skipped": 16,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 1.01,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-2.txt"
+      },
+      {
+        "run": 3,
+        "targets": [
+          "learning/training/pinky/test"
+        ],
+        "pytest_counts": {
+          "passed": 6,
+          "failed": 0,
+          "skipped": 6,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.73,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-3.txt"
+      },
+      {
+        "run": 4,
+        "targets": [
+          "learning/curation/omx/test"
+        ],
+        "pytest_counts": {
+          "passed": 229,
+          "failed": 0,
+          "skipped": 3,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 1.47,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-4.txt"
+      },
+      {
+        "run": 5,
+        "targets": [
+          "learning/curation/pinky/test"
+        ],
+        "pytest_counts": {
+          "passed": 21,
+          "failed": 0,
+          "skipped": 28,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.47,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-5.txt"
+      },
+      {
+        "run": 6,
+        "targets": [
+          "learning/training/world_model/test"
+        ],
+        "pytest_counts": {
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.54,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-6.txt"
+      },
+      {
+        "run": 7,
+        "targets": [
+          "learning/evaluation/world_model/test"
+        ],
+        "pytest_counts": {
+          "passed": 4,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.63,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-7.txt"
+      },
+      {
+        "run": 8,
+        "targets": [
+          "operations/prediction/world_model/test"
+        ],
+        "pytest_counts": {
+          "passed": 12,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.37,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-8.txt"
+      },
+      {
+        "run": 9,
+        "targets": [
+          "middleware/core/gateway/test",
+          "middleware/core/events/test",
+          "middleware/core/services/test",
+          "shared/web/test",
+          "contracts/foundation/test",
+          "middleware/devices/pinky/profile/test",
+          "middleware/devices/omx/profile/test"
+        ],
+        "pytest_counts": {
+          "passed": 7378,
+          "failed": 0,
+          "skipped": 91,
+          "errors": 0,
+          "warnings": 12,
+          "subtests_passed": 5
+        },
+        "duration_s": 421.03,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-9.txt"
+      },
+      {
+        "run": 10,
+        "targets": [
+          "middleware/core/gateway/test/test_account_pipeline.py"
+        ],
+        "pytest_counts": {
+          "passed": 6,
+          "failed": 0,
+          "skipped": 2,
+          "errors": 0,
+          "warnings": 12,
+          "subtests_passed": 0
+        },
+        "duration_s": 13.04,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-10.txt"
+      },
+      {
+        "run": 11,
+        "targets": [
+          "middleware/perception/test"
+        ],
+        "pytest_counts": {
+          "passed": 3554,
+          "failed": 0,
+          "skipped": 113,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 62
+        },
+        "duration_s": 136.66,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-11.txt"
+      },
+      {
+        "run": 12,
+        "targets": [
+          "operations/fleet/test"
+        ],
+        "pytest_counts": {
+          "passed": 6343,
+          "failed": 0,
+          "skipped": 336,
+          "errors": 0,
+          "warnings": 2,
+          "subtests_passed": 0
+        },
+        "duration_s": 732.33,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-12.txt"
+      },
+      {
+        "run": 13,
+        "targets": [
+          "applications/fleet/test"
+        ],
+        "pytest_counts": {
+          "passed": 49,
+          "failed": 0,
+          "skipped": 34,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 4.24,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-13.txt"
+      },
+      {
+        "run": 14,
+        "targets": [
+          "operations/overhead/test"
+        ],
+        "pytest_counts": {
+          "passed": 736,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 48.27,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-14.txt"
+      },
+      {
+        "run": 15,
+        "targets": [
+          "operations/processes/cell/test"
+        ],
+        "pytest_counts": {
+          "passed": 155,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.55,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-15.txt"
+      },
+      {
+        "run": 16,
+        "targets": [
+          "operations/situation/test"
+        ],
+        "pytest_counts": {
+          "passed": 121,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 2,
+          "subtests_passed": 0
+        },
+        "duration_s": 3.45,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-16.txt"
+      },
+      {
+        "run": 17,
+        "targets": [
+          "operations/world/test"
+        ],
+        "pytest_counts": {
+          "passed": 38,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 1.49,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-17.txt"
+      },
+      {
+        "run": 18,
+        "targets": [
+          "test/test_platform_palletizing_compat.py",
+          "test/test_platform_cell_submission.py",
+          "test/architecture/test_platform_dependency_boundaries.py"
+        ],
+        "pytest_counts": {
+          "passed": 25,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.79,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-18.txt"
+      },
+      {
+        "run": 19,
+        "targets": [
+          "integrations/simulation/gazebo/test"
+        ],
+        "pytest_counts": {
+          "passed": 328,
+          "failed": 0,
+          "skipped": 4,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 8.95,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-19.txt"
+      },
+      {
+        "run": 20,
+        "targets": [
+          "middleware/devices/pinky/bringup/test",
+          "middleware/drivers/pinky_adc/test",
+          "middleware/perception/test/test_ir_adc_lock.py",
+          "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+          "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+          "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"
+        ],
+        "pytest_counts": {
+          "passed": 473,
+          "failed": 0,
+          "skipped": 0,
+          "errors": 0,
+          "warnings": 0,
+          "subtests_passed": 0
+        },
+        "duration_s": 0.61,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-20.txt"
+      },
+      {
+        "run": 21,
+        "targets": [
+          "test"
+        ],
+        "pytest_counts": {
+          "passed": 9707,
+          "failed": 0,
+          "skipped": 1135,
+          "errors": 0,
+          "warnings": 56,
+          "subtests_passed": 0
+        },
+        "duration_s": 708.61,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-21.txt"
+      },
+      {
+        "run": 22,
+        "targets": [
+          "operations/site_ui/media/test",
+          "middleware/media/test",
+          "learning/evaluation/perception/test",
+          "operations/apps/games/test",
+          "operations/processes/palletizing/test",
+          "middleware/robot_ui/face/test/test_info_screen.py",
+          "middleware/robot_ui/face/test/test_info_screen_boot.py",
+          "middleware/robot_ui/face/test/test_wifi_qr.py",
+          "middleware/drivers/pinky_led/test/test_led_package_contract.py",
+          "middleware/drivers/imu_bno055/test/test_package_contract.py",
+          "middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py",
+          "middleware/robot_ui/robot/test",
+          "middleware/robot_ui/pilot/test",
+          "middleware/devices/omx/adapter/test",
+          "contracts/ros_idl/test/test_srv_surface.py",
+          "middleware/devices/pinky/description/test/test_urdf_surface.py",
+          "operations/signal_observation/test",
+          "learning/envs/isaac/test",
+          "middleware/robot_execution/local/test/test_native_parent_fence.py",
+          "middleware/robot_execution/local/test/test_omx_policy_session.py",
+          "tools/calibration/test/test_analyze_store.py",
+          "tools/calibration/test/test_camera_board.py",
+          "tools/calibration/test/test_store_cli.py",
+          "tools/calibration/test/test_urdf_nominal.py",
+          "tools/capture/test/test_edge_drive_advisory.py"
+        ],
+        "pytest_counts": {
+          "passed": 2021,
+          "failed": 0,
+          "skipped": 297,
+          "errors": 0,
+          "warnings": 2,
+          "subtests_passed": 0
+        },
+        "duration_s": 58.62,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-22.txt"
+      },
+      {
+        "run": 23,
+        "targets": [
+          "middleware/core/api/test"
+        ],
+        "pytest_counts": {
+          "passed": 188,
+          "failed": 0,
+          "skipped": 13,
+          "errors": 0,
+          "warnings": 2,
+          "subtests_passed": 25
+        },
+        "duration_s": 6.61,
+        "known_failure_counts": {
+          "new": 0,
+          "known": 0,
+          "flaky": 0
+        },
+        "new_test_ids": [],
+        "log": "rosy-physical-store-76-full/run-23.txt"
+      }
+    ]
+  },
+  "focused": [
+    {
+      "source_commit": "76a173b5fd33b1907bfedba8b5a1bf5f78506ac3",
+      "passed": 1292,
+      "skipped": 0,
+      "new_failures": 0,
+      "log": "rosy-resource-leaf-green/run-1.txt"
+    },
+    {
+      "source_commit": "76a173b5fd33b1907bfedba8b5a1bf5f78506ac3",
+      "passed": 4,
+      "skipped": 0,
+      "new_failures": 0,
+      "log": "rosy-physical-store-76-g1-recheck/run-1.txt",
+      "scope": "all four G1 timing tests; strict existing bounds unchanged"
+    }
+  ],
+  "unresolved": "Original 9d G1 contact gap p99 0.525457 s exceeded the 0.5 s test bound. Final FULL and same-source G1 recheck passed; the original cause is unconfirmed."
+}

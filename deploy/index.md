@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · e732c6bd2c · main의 authenticated checksum API를 공통 signing으로 보존
-- 2026-10-25 · 055f40747f · signing 설치 closure와 provenance 회귀 통과
-- 2026-10-25 · 9f0df4f99b · 설치형 updater 복구 시험과 공개 digest inventory
-- 2026-10-25 · 4fdf8c9fee · 동적 서명 소비자 호환과 추가 회귀
-- 2026-10-25 · uncommitted · 다기종 배포 경계와 공통 release 서명 분리
+- 2026-10-26 · uncommitted · clean-storage helper가 원격 `cat` 대신 LoadState로 유닛 확인
+- 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+- 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+- 2026-10-26 · uncommitted · guard 자동 `clean-storage` 요청, 관제 PC 자기 자원, `units-user` desired state (D-885)
+- 2026-10-26 · 9816e56bd9 · Site updater pure split verified

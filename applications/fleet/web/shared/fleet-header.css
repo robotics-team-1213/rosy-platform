@@ -49,7 +49,6 @@ ui-topbar {
   grid-template-areas: "identity status actions safety";
   align-items: center;
   gap: var(--space-4);
-  min-height: var(--appbar-height);
   padding: var(--space-2) var(--space-3);
 }
 .fleet-header-identity { grid-area: identity; min-width: 0; }

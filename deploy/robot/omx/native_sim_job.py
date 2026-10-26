@@ -28,6 +28,27 @@ def validate_state(state):
     return document
 
 
+def boot_time():
+    """Kernel boot epoch (/proc/stat btime); 0 when unknown, so every marker still counts."""
+    try:
+        return next(int(line.split()[1]) for line in Path("/proc/stat").read_text().splitlines()
+                    if line.startswith("btime "))
+    except (OSError, StopIteration, ValueError, IndexError):
+        return 0
+
+
+def marked_busy(jobs_root):
+    """The host_probe PROBE busy rule: a 10+ digit first word is an expiry epoch; otherwise a pre-boot marker is stale."""
+    path = Path(jobs_root) / "busy"
+    try:
+        words, mtime = path.read_text(errors="replace").split(), path.stat().st_mtime
+    except FileNotFoundError:
+        return False
+    if words and words[0].isascii() and words[0].isdigit() and len(words[0]) >= 10:
+        return int(words[0]) > time.time()
+    return mtime >= boot_time()
+
+
 def capacity(jobs_root, ignore_name=None):
     """D-568 headroom after live locks and unexpired reservations, without deleting peers."""
     jobs_root, cpu, memory = Path(jobs_root), 0, 0
@@ -75,7 +96,7 @@ def reserve(state, *, jobs_root=None, approve_study=False):
     jobs = Path(jobs_root) if jobs_root is not None else Path.home() / "rosy-jobs"
     if (jobs / "site").exists():
         raise PermissionError("native simulation refuses a site host")
-    if (jobs / "busy").exists():
+    if marked_busy(jobs):
         raise RuntimeError("simulation host is marked busy")
     jobs.mkdir(mode=0o700, parents=True, exist_ok=True)
     name = "sim-omx-native-" + document["run_id"]
@@ -127,7 +148,7 @@ def run(state, *, launcher=subprocess.run):
     jobs = Path(intent["jobs_root"])
     if (jobs / "site").exists():
         raise PermissionError("native simulation refuses a site host")
-    if (jobs / "busy").exists():
+    if marked_busy(jobs):
         raise RuntimeError("simulation host is marked busy")
     if any(value < floor for value, floor in zip(
             capacity(jobs, "sim-omx-native-" + document["run_id"]), (6, 8))):
@@ -156,7 +177,7 @@ def run(state, *, launcher=subprocess.run):
     finally:
         (state / "budget.lock").unlink(missing_ok=True)
         (state / "budget.resv").unlink(missing_ok=True)
-        task = ("SEE_CANONICAL_PICK_PLACE_RESULT" if document.get("experiment", "g2") in {"pick-place", "pick-place-demonstrations", "pick-place-chunks"}|STUDY_EXPERIMENTS
+        task = ("SEE_CANONICAL_PICK_PLACE_RESULT" if document.get("experiment", "g2") in {"pick-place", "pick-place-demonstrations", "pick-place-chunks", "pick-place-chunks-offset", "pick-place-chunks-yaw-site", "pick-place-chunks-yaw-box"}|STUDY_EXPERIMENTS
                 else "SEE_CANONICAL_G2_RESULT")
         write_json(state / "exit.json", {"exit_code": code, "error": error, "ended_at": time.time(),
                                          "runtime": "EXITED", "task": task})
@@ -175,7 +196,7 @@ def status(state):
         if path.is_file():
             value[name] = read_json(path)
     task_result = state / "pick-place" / "result.json"
-    if document.get("experiment", "g2") in {"pick-place", "pick-place-demonstrations", "pick-place-chunks"}|STUDY_EXPERIMENTS and task_result.is_file():
+    if document.get("experiment", "g2") in {"pick-place", "pick-place-demonstrations", "pick-place-chunks", "pick-place-chunks-offset", "pick-place-chunks-yaw-site", "pick-place-chunks-yaw-box"}|STUDY_EXPERIMENTS and task_result.is_file():
         value["pick-place-result"] = read_json(task_result)
     return value
 

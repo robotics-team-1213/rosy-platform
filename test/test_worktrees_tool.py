@@ -397,24 +397,24 @@ def test_new_creates_below_the_cap_and_refuses_at_it(main, monkeypatch, capsys):
     assert "[t <t@t>; session sess-7]" in capsys.readouterr().out
 
 
-def test_default_fifty_cap_counts_orphans_and_preserves_explicit_exception(main, capsys):
-    assert worktrees.CAP == 50
-    for index in range(49):
+def test_default_cap_is_the_fifteen_slot_budget_counts_orphans_and_preserves_explicit_exception(main, capsys):
+    assert worktrees.CAP == 14  # D-886: 14 under .worktrees/ plus main
+    for index in range(13):
         (main / ".worktrees" / f"orphan-{index}").mkdir(parents=True)
 
-    assert worktrees.main(["new", "fiftieth", "docs/fiftieth", "--no-prune"]) == 0
+    assert worktrees.main(["new", "fourteenth", "docs/fourteenth", "--no-prune"]) == 0
     capsys.readouterr()
     assert worktrees.main(["new", "overflow", "docs/overflow", "--no-prune"]) == 1
-    assert "the cap is 50" in capsys.readouterr().err
+    assert "the cap is 14" in capsys.readouterr().err
     assert not (main / ".worktrees" / "overflow").exists()
     assert "refs/heads/docs/overflow" not in refs(main, "refs/heads")
-    assert len(list((main / ".worktrees").iterdir())) == 50
+    assert len(list((main / ".worktrees").iterdir())) == 14
 
     assert worktrees.main(["new", "overflow", "docs/overflow", "--no-prune",
                            "--force-over-cap", "user-approved ADR exception"]) == 0
     description = git(main, "config", "branch.docs/overflow.description")
-    assert "over cap (50 >= 50): user-approved ADR exception" in description
-    assert all((main / ".worktrees" / f"orphan-{index}").is_dir() for index in range(49))
+    assert "over cap (14 >= 14): user-approved ADR exception" in description
+    assert all((main / ".worktrees" / f"orphan-{index}").is_dir() for index in range(13))
 
 
 def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, monkeypatch, capsys):
@@ -491,12 +491,53 @@ def test_status_explains_a_tip_that_is_a_merge_of_main(main, capsys):
 
 @pytest.mark.parametrize("name, branch", [
     ("x", "wip/x"), ("x", "feat"), ("x", "feat/"), ("x", "feat/a..b"), ("../x", "feat/x"), ("x.", "feat/x"),
+    ("x", "feat/Upper"), ("x", "feat/snake_case"), ("x", "feat/a/b"), ("x", "feat/-x"), ("x", "feat/" + "a" * 49),
     ("taken", "feat/y"), ("y", "feat/taken")])
 def test_new_rejects_bad_type_name_and_existing_path_or_branch(main, name, branch):
     add(main, "taken")
     assert worktrees.main(["new", name, branch]) == 1
     assert sorted(p.name for p in (main / ".worktrees").iterdir()) == ["taken"]
     assert refs(main, "refs/heads") == ["refs/heads/feat/taken", "refs/heads/main"]
+
+
+def test_gc_rewriting_logs_head_does_not_make_an_idle_worktree_active(main):
+    wt = add(main, "done", commit=True, merge=True, owner=PEER)
+    os.utime(Path(git(wt, "rev-parse", "--absolute-git-dir")) / "logs" / "HEAD", (LATER, LATER))  # reflog expire --all
+    assert worktrees.prune(main, apply=True, now=LATER) == 1  # its newest entry is 75 h old
+    assert not wt.exists()
+
+
+def test_prune_deletes_merged_branches_no_worktree_uses_and_keeps_the_rest(main, capsys):
+    landed = main / "landed.txt"
+    git(main, "branch", "fix/landed")
+    git(main, "branch", "archive/kept")
+    git(main, "config", "branch.fix/landed.description", "owner: p <p@p>")
+    wt = add(main, "open")  # checked out (locked, so the worktree stays): kept even though it is in main
+    git(main, "worktree", "lock", str(wt))
+    git(main, "branch", "feat/ahead", "main")
+    landed.write_text("x", encoding="utf-8")
+    git(main, "add", "landed.txt")
+    git(main, "commit", "-q", "-m", "landed")
+    git(main, "switch", "-q", "feat/ahead")
+    (main / "ahead.txt").write_text("y", encoding="utf-8")
+    git(main, "add", "ahead.txt")
+    git(main, "commit", "-q", "-m", "ahead")
+    git(main, "switch", "-q", "main")
+
+    assert worktrees.prune(main, now=time.time()) == 0  # created just now: inside the 1 h wait
+    assert "would delete 0 merged branch(es)" in capsys.readouterr().out
+    for reflog in (main / ".git" / "logs" / "refs" / "heads").rglob("*"):
+        os.utime(reflog, (LATER, LATER))  # gc / reflog expire rewrote every file; their entries are old
+    worktrees.prune(main, now=LATER)
+    assert "would delete 1 merged branch(es)" in capsys.readouterr().out  # dry run touches nothing
+    assert "refs/heads/fix/landed" in refs(main, "refs/heads")
+
+    worktrees.prune(main, apply=True, now=LATER)
+    assert "deleted 1 merged branch(es)" in capsys.readouterr().out
+    assert refs(main, "refs/heads") == ["refs/heads/archive/kept", "refs/heads/feat/ahead", "refs/heads/feat/open",
+                                        "refs/heads/main"]
+    assert "fix/landed" not in git(main, "config", "--list")
+    assert wt.is_dir()
 
 
 def test_lint_note_is_silent_in_ci_and_without_worktrees_and_never_raises(main, monkeypatch):
@@ -727,3 +768,91 @@ def test_new_records_the_owner_override_and_status_names_unknown_owners(main, ca
     line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
     assert line["mine"].endswith("[dispatcher lane 3]")
     assert line["bare"].endswith("[unknown]") and line["noname"].endswith("[unknown]")
+
+
+def _git_fails_inside(folder: Path, main: Path) -> None:
+    """A real git in the tombstoned folder stops there: no fall-through to the parent repository."""
+    run = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=folder, capture_output=True, text=True)
+    assert run.returncode == 128 and str(main) not in run.stdout, (run.stdout, run.stderr)
+
+
+def _held(monkeypatch, wt: Path) -> None:
+    """What a process with ``wt`` as its cwd does on Windows: the folder itself cannot be deleted."""
+    real = Path.rmdir
+
+    def rmdir(self):
+        if self == wt:
+            raise PermissionError(32, "The process cannot access the file", str(self))
+        real(self)
+
+    monkeypatch.setattr(Path, "rmdir", rmdir)
+    monkeypatch.setattr(worktrees.rules.shutil, "rmtree",
+                        lambda path, **kw: (_ for _ in ()).throw(PermissionError(32, "in use", str(path))))
+
+
+def test_held_folder_after_removal_gets_a_tombstone_and_the_next_prune_deletes_it(main, monkeypatch, capsys):
+    wt = add(main, "held", commit=True, merge=True)
+
+    def half_remove(real, cwd, args):
+        if args[:2] != ("worktree", "remove"):
+            return None
+        for item in wt.iterdir():  # git deleted the files; the open handle keeps the empty folder
+            shutil.rmtree(item) if item.is_dir() else item.unlink()
+        real(cwd, "worktree", "prune")
+        return subprocess.CompletedProcess(args, 1, "", "error: failed to delete: Permission denied")
+
+    wrap_git(monkeypatch, half_remove)
+    with monkeypatch.context() as held:
+        _held(held, wt)
+        assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert "ORPHAN  " in out and "tombstone" in out and "FAIL    held" in out
+    assert [p.name for p in wt.iterdir()] == [".git"] and worktrees.rules.is_tombstone(wt)
+    _git_fails_inside(wt, main)
+    assert str(wt) not in git(main, "worktree", "list", "--porcelain")
+    root, rows = worktrees.scan(main)
+    assert [(r["name"], r["orphan"]) for r in rows] == [("held", True)]  # never a live worktree
+    assert worktrees.main(["status"], now=LATER) == 0
+    assert "only caches" in [line for line in capsys.readouterr().out.splitlines() if line.startswith("held ")][0]
+    assert worktrees.prune(main, apply=True, now=time.time()) == 1  # nothing to lose: no idle wait
+    assert not wt.exists()
+
+
+def test_empty_leftover_folder_is_removed_not_tombstoned(main, monkeypatch, capsys):
+    wt = add(main, "gone", commit=True, merge=True)
+
+    def half_remove(real, cwd, args):
+        if args[:2] != ("worktree", "remove"):
+            return None
+        for item in wt.iterdir():
+            shutil.rmtree(item) if item.is_dir() else item.unlink()
+        real(cwd, "worktree", "prune")
+        return subprocess.CompletedProcess(args, 1, "", "error: failed to delete: Permission denied")
+
+    wrap_git(monkeypatch, half_remove)
+    assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    assert "empty folder removed" in capsys.readouterr().out and not wt.exists()
+
+
+def test_orphan_that_cannot_be_cleared_gets_a_tombstone(main, monkeypatch, capsys):
+    orphan = main / ".worktrees" / "stuck" / "__pycache__"
+    orphan.mkdir(parents=True)
+    (orphan / "m.pyc").write_text("c", encoding="utf-8")
+    with monkeypatch.context() as held:
+        _held(held, orphan.parent)
+        assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    assert "FAIL    stuck [orphan]" in capsys.readouterr().out
+    _git_fails_inside(orphan.parent, main)
+    assert worktrees.prune(main, apply=True, now=LATER) == 1 and not orphan.parent.exists()
+
+
+def test_new_clears_a_tombstone_folder_or_refuses_while_it_is_held(main, monkeypatch, capsys):
+    folder = main / ".worktrees" / "again"
+    folder.mkdir(parents=True)
+    with monkeypatch.context() as held:
+        _held(held, folder)
+        assert "tombstone" in worktrees.rules.leave_tombstone(folder)
+        assert worktrees.main(["new", "again", "feat/again"]) == 1
+        assert "could not be cleared" in capsys.readouterr().err
+    assert worktrees.main(["new", "again", "feat/again"]) == 0
+    assert git(folder, "rev-parse", "--abbrev-ref", "HEAD") == "feat/again"

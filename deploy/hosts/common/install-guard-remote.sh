@@ -3,7 +3,7 @@
 #
 #   sudo deploy/hosts/common/install-guard-remote.sh [--dry-run] [--site-key "ssh-ed25519 AAAA... rosy-host-guard"] [--unit <unit>]...
 #
-# Installs /usr/local/sbin/rosy-host-guard-remote, /etc/rosy/host-guard/units (the units the guard
+# Installs /usr/local/sbin/rosy-host-guard-remote and rosy-update-report (D-871), /etc/rosy/host-guard/units (the units the guard
 # watches and may ask the D-524 helper to restart; --unit replaces the list), and with --site-key an
 # authorized_keys entry that can run nothing but the forced command. The helper and its one sudoers
 # line are desired state (rosy-host-state install <role> --approve ..., D-530). Idempotent.
@@ -33,6 +33,7 @@ put() {  # put <path> <mode> <content>
 [ "$DRY" = 1 ] || [ "$(id -u)" = 0 ] || { echo "run with sudo (or --dry-run)" >&2; exit 1; }
 
 run install -m 0755 "$HERE/rosy-host-guard-remote" /usr/local/sbin/rosy-host-guard-remote
+run install -m 0755 "$HERE/rosy-update-report" /usr/local/sbin/rosy-update-report
 if [ ${#UNITS[@]} -gt 0 ]; then
   run install -d -m 0755 /etc/rosy/host-guard
   put /etc/rosy/host-guard/units 0644 "$(printf '%s\n' "${UNITS[@]}")"

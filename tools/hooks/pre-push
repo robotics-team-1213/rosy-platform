@@ -16,8 +16,20 @@ cd "$(git rev-parse --show-toplevel)"
 # several different commits is refused. Without the two arguments (a manual
 # `git show ...:pre-push | bash`) stdin is the script, and HEAD is tested.
 PUSH_SHA=""
+# D-868: a clone with `git config rosy.publishOnly true` (the shared agent clone) reaches
+# origin only through publish/main-* PRs; teammates' clones leave it unset and are not gated.
+PUBLISH_ONLY=$(git config --bool rosy.publishOnly 2>/dev/null || true)
 if [ $# -ge 2 ]; then
-  while read -r _ local_sha _ _; do
+  while read -r _ local_sha remote_ref _; do
+    if [ "$PUBLISH_ONLY" = "true" ] && [ -z "${ROSY_PUSH_REASON:-}" ]; then
+      case "$local_sha:$remote_ref" in
+        *[!0]*:refs/heads/publish/main-*) ;;
+        *[!0]*:*)
+          echo "[pre-push] rosy.publishOnly: $remote_ref is not publish/main-*. Land on local main and publish (D-868)." >&2
+          echo "[pre-push] incident only: ROSY_PUSH_REASON=\"<why>\" git push ..." >&2
+          exit 1 ;;
+      esac
+    fi
     case "$local_sha" in
       *[!0]*)
         # An annotated tag pushes a tag object; compare the commit it names.
@@ -31,6 +43,14 @@ if [ $# -ge 2 ]; then
   done
 fi
 PUSH_SHA="${PUSH_SHA:-$(git rev-parse HEAD)}"
+# 2026-10-26: the shared clone ran a 2026-10-11 copy of this hook for two weeks; every later gate was
+# skipped. An installed copy that differs from the pushed commit's hook refuses until reinstalled.
+if [ "$PUBLISH_ONLY" = "true" ] && [ -f "$0" ] \
+   && tracked=$(git show "$PUSH_SHA:tools/hooks/pre-push" 2>/dev/null) \
+   && [ "$(printf '%s\n' "$tracked" | sed 's/\r$//')" != "$(sed 's/\r$//' "$0")" ]; then
+  echo "[pre-push] $0 is not the pushed commit's tools/hooks/pre-push; run: bash tools/hooks/install.sh" >&2
+  exit 1
+fi
 # Git exports repository-local variables to hooks. Clear them after locating
 # this checkout: gate tests create foreign repositories, where inherited
 # GIT_DIR/GIT_COMMON_DIR override git -C and can mutate this repository.
@@ -38,6 +58,19 @@ PUSH_SHA="${PUSH_SHA:-$(git rev-parse HEAD)}"
 while IFS= read -r git_local_variable; do
   unset "$git_local_variable"
 done < <(git rev-parse --local-env-vars)
+
+# 2026-10-26 (robot-4d, exit 4 twice): lint and the affected selector read files, and main had moved
+# past the pinned PUSH_SHA, so tests absent from it were sent. When the checkout is not exactly
+# PUSH_SHA (other HEAD, or tracked/staged edits) every later step runs in a detached copy of it.
+if [ "$(git rev-parse HEAD)" != "$PUSH_SHA" ] || ! git diff --quiet HEAD --; then
+  PUSH_TREE="$(git rev-parse --path-format=absolute --git-common-dir)/rosy-prepush/$$"
+  CHECKOUT="$PWD"
+  # Leave the copy before removing it: Windows cannot delete the current directory.
+  trap 'cd "$CHECKOUT" && git worktree remove --force "$PUSH_TREE" >/dev/null 2>&1 || true' EXIT
+  git worktree add --detach --quiet "$PUSH_TREE" "$PUSH_SHA"
+  echo "[pre-push] checkout is not ${PUSH_SHA:0:10}; judging that commit in $PUSH_TREE"
+  cd "$PUSH_TREE"
+fi
 
 PY=""
 for candidate in python3 python; do

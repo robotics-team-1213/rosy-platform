@@ -119,6 +119,57 @@ def test_pytest_runs_through_the_remote_runner_on_the_pushed_commit():
     assert pushed.stdout.strip() == "1" * 40, pushed.stderr
 
 
+@pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
+@pytest.mark.parametrize("refs, config, reason, allowed", [
+    (["publish/main-20261026"], "true", "", True),
+    (["feat/x"], "true", "", False),
+    (["publish/main-20261026", "main"], "true", "", False),  # one ungated ref refuses the push
+    (["feat/x"], "true", "incident 42", True),
+    (["feat/x"], None, "", True),                            # teammates' clones are not gated
+])
+def test_publish_only_clone_pushes_publish_branches_only(tmp_path, refs, config, reason, allowed):
+    """D-868: the shared agent clone reaches origin only through publish/main-* PRs."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "ROSY_PUSH_REASON"}
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=env)
+    if config:
+        subprocess.run(["git", "-C", str(tmp_path), "config", "rosy.publishOnly", config], check=True, env=env)
+    text = SCRIPT.read_text(encoding="utf-8")
+    stdin_part = text.split("# Git exports repository-local", 1)[0].split("set -euo pipefail", 1)[1]
+    probe = stdin_part.replace('cd "$(git rev-parse --show-toplevel)"', "")
+    lines = f"refs/heads/gone {'0' * 40} refs/heads/gone abc\n"  # a deletion is never gated
+    lines += "".join(f"refs/heads/b {'1' * 40} refs/heads/{ref} {'0' * 40}\n" for ref in refs)
+    pushed = subprocess.run([BASH, "-c", probe, "hook", "origin", "url"], input=lines, capture_output=True,
+                            text=True, cwd=tmp_path, env={**env, "ROSY_PUSH_REASON": reason})
+    assert (pushed.returncode == 0) == allowed, pushed.stderr
+    if not allowed:
+        assert "ROSY_PUSH_REASON" in pushed.stderr
+
+
+@pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
+@pytest.mark.parametrize("same", [True, False])
+def test_a_stale_installed_copy_refuses_the_push(tmp_path, same):
+    """2026-10-26: the shared clone ran a 10-11 copy for two weeks; a copy unlike the pushed hook stops."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k != "ROSY_PUSH_REASON"}
+    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, env=env,
+                                    capture_output=True, text=True).stdout.strip()
+    git("init", "-q")
+    git("config", "rosy.publishOnly", "true")
+    stdin_part = SCRIPT.read_text(encoding="utf-8").split("# Git exports repository-local", 1)[0]
+    installed = tmp_path / "installed-pre-push"
+    installed.write_text(stdin_part.replace('cd "$(git rev-parse --show-toplevel)"', ""), encoding="utf-8")
+    tracked = tmp_path / "tools/hooks/pre-push"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text(installed.read_text(encoding="utf-8") + ("" if same else "# newer gate\n"), encoding="utf-8")
+    git("add", "tools/hooks/pre-push")
+    git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "hook")
+    line = f"refs/heads/b {git('rev-parse', 'HEAD')} refs/heads/publish/main-20261026 {'0' * 40}\n"
+    pushed = subprocess.run([BASH, str(installed), "origin", "url"], input=line, capture_output=True,
+                            text=True, cwd=tmp_path, env=env)
+    assert (pushed.returncode == 0) == same, pushed.stderr
+    if not same:
+        assert "install.sh" in pushed.stderr
+
+
 def _safety_step_repo(tmp_path, manifest="roots:\n  - path: safe\n    concern: safety\n"):
     """A throwaway clone layout: the real safety_review.py (BASELINE = its root commit) and a safety root."""
     def git(*args):
@@ -219,3 +270,40 @@ def test_installer_uses_the_hooks_path_git_uses_from_a_linked_worktree(tmp_path,
     assert (linked / ".git").is_file()
     assert (parent / ".git/config").read_bytes() == config_before
     assert git(parent, "show-ref") == refs_before
+
+
+@pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
+@pytest.mark.parametrize("checkout", ["moved", "staged", "same"])
+def test_selection_reads_the_pushed_commit_not_the_checkout(tmp_path, checkout):
+    """robot-4d 2026-10-26: main moved past PUSH_SHA, the selector read the checkout and sent tests absent
+    from the pushed commit (pytest exit 4). The selector's test list (Repo.load) comes from PUSH_SHA."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, env=env,
+                                    capture_output=True, text=True).stdout.strip()
+    git("init", "-q", "-b", "main")
+    for name, text in {"tools/harness/harness.yaml": "modules: []\n",
+                       "tools/harness/platform_parts.yaml": "roots: []\n", "test/test_old.py": ""}.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    commit = lambda m: git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", m)
+    git("add", ".")
+    commit("pushed")
+    pushed = git("rev-parse", "HEAD")
+    (tmp_path / "test/test_extra.py").write_text("", encoding="utf-8")
+    git("add", "test/test_extra.py")
+    if checkout != "staged":
+        commit("main moved on")
+    if checkout == "same":
+        pushed = git("rev-parse", "HEAD")
+    step = SCRIPT.read_text(encoding="utf-8").split("done < <(git rev-parse --local-env-vars)", 1)[1].split('PY=""', 1)[0]
+    probe = (f'set -euo pipefail\nPUSH_SHA={pushed}\n{step}\n"$PY" -c "import sys; sys.path.insert(0, sys.argv[1]);'
+             f' import affected_tests as a, pathlib; print(a.Repo.load(pathlib.Path(\'.\')).test_files)"'
+             f' {(ROOT / "tools/harness").as_posix()}\npwd -W 2>/dev/null || pwd\n')
+    result = subprocess.run([BASH, "-c", probe], cwd=tmp_path, capture_output=True, text=True,
+                            env={**env, "PY": sys.executable})
+    assert result.returncode == 0, result.stderr
+    selected, where = result.stdout.strip().splitlines()[-2:]
+    assert ("test_extra.py" in selected) == (checkout == "same"), result.stdout
+    assert "test/test_old.py" in selected
+    assert (Path(where).resolve() == tmp_path.resolve()) == (checkout == "same")
+    assert len(git("worktree", "list").splitlines()) == 1, "the detached copy is removed on exit"

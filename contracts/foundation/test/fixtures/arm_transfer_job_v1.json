@@ -1,0 +1,35 @@
+{
+  "create": {
+    "workcell_id": "w-1",
+    "instance_id": "arm-1",
+    "object_ref": "object-1",
+    "source": "source",
+    "target": "target",
+    "request_key": "move-1"
+  },
+  "admit": {
+    "expected_proposal_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "expected_generation": 1
+  },
+  "proposed": {
+    "mission_id": "physical-1",
+    "action_kind": "ARM_TRANSFER",
+    "proposal_principal_id": "harbor",
+    "request_key": "move-1",
+    "request_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "proposal_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "transfer": {
+      "workcell_id": "w-1",
+      "instance_id": "arm-1",
+      "object_ref": "object-1",
+      "source": "source",
+      "target": "target"
+    },
+    "resource_policy_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "status": "PROPOSED",
+    "authority_epoch": null,
+    "dispatch_generation": null,
+    "approved_by": null,
+    "reason": null
+  }
+}

@@ -20,6 +20,8 @@ Each stage can also be run alone:
              current) -> lift -> travel high -> descend -> release -> lift -> park. An empty grasp lifts
              and parks.
   verify     after the release, is the box where the next grasp on that surface reaches (place_check)?
+  record     one A/B cycle recorded as two training episodes through record_session --replay, labelled
+             held/empty from the recorded jaws (cell_record.py); no chunk session may be running.
 
 The arm is moved only by the chunk_runner session already running under record_session.py --chunks
 (the guard's teacher mode owns the bus). This pipeline sends it commands; it never opens a port.
@@ -45,7 +47,7 @@ from cell_observe import (  # noqa: E402
 )
 import numpy as np  # noqa: E402
 
-STAGES = ("run", "reset", "calibrate", "locate", "transfer", "verify", "recover")
+STAGES = ("run", "reset", "calibrate", "locate", "transfer", "verify", "recover", "record")
 
 
 def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
@@ -177,6 +179,17 @@ def rule_backend(prompt, images, schema):
     """No decision model configured: retry while retry is allowed, else stop. Measurement already vetoed."""
     allowed = schema["properties"]["decision"]["enum"]
     return {"decision": "retry" if "retry" in allowed else "abort", "reason": "rule: no decision model"}
+
+
+def scene(config: dict, source: str, dest: str, tried: dict) -> dict | None:
+    """What a simulator needs to replay this attempt (cell_cases.from_row): box, jaw turn, place, outcome."""
+    found, transfer = tried["locate"], tried.get("transfer") or {}
+    if not found.get("found") or "grasp_yaw" not in tried:
+        return None
+    place = config["sites"][dest]["place"]
+    return {"box_m": found["arm_m"], "box_turn_deg": found.get("turn_deg", 0.0),
+            "grasp_turn_deg": round(tried["grasp_yaw"]["yaw_deg"] - config["sites"][source]["yaw_deg"], 1),
+            "place": "belt" if dest == "belt" else place, "outcome": transfer.get("result"), "at": transfer.get("at")}
 
 
 def case(work: Path, row: dict) -> None:
@@ -404,7 +417,8 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
         decision = seat.decide(dict(facts, site=source, attempt=attempt))
         out["decisions"].append(decision)
         case(work, {"from": source, "to": dest, "attempt": attempt, "facts": facts, "decision": decision["decision"],
-                    "by": decision["by"], "reason": decision.get("reason")})
+                    "by": decision["by"], "reason": decision.get("reason"),
+                    "scene": scene(config, source, dest, tried)})
         if decision["decision"] != "retry" or (facts.get("fault")):
             return {**out, "result": f"stopped: {decision['decision']} ({facts['check']})"}
     return {**out, "result": f"stopped: {attempts} attempts"}
@@ -484,7 +498,7 @@ class FifoCell:
                     row = json.loads(line)
                     if row.get("command") in (command, "run " + command) or row.get("fault"):
                         return row
-            time.sleep(0.5)
+            time.sleep(0.1)  # the next step should follow the last without a visible pause
         return {"ok": False, "error": f"no status within {self.timeout_s} s"}
 
     def frame(self, camera: str):
@@ -521,7 +535,10 @@ def main(argv=None):
     work = Path(config["work_dir"]).expanduser()
     calibration_path = Path(config["calibration_path"]).expanduser()
     cell = FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-    if not cell.act("state").get("ok"):
+    if args.stage == "record":  # record_session takes the arm itself: no chunk session may hold it
+        if cell.act("state").get("ok"):
+            raise SystemExit("stop the chunk session first (park, stop): record_session needs the arm")
+    elif not cell.act("state").get("ok"):
         raise SystemExit("start record_session.py --chunks first: no chunk_runner answers")
     seat = None
     if config.get("decision_model"):  # e.g. {"url": "http://127.0.0.1:11434", "model": "qwen3-vl:8b-instruct"}
@@ -529,7 +546,11 @@ def main(argv=None):
 
         seat = judge_seat.Seat(judge_seat.ollama(**config["decision_model"]))
     KEEP["dir"] = work / "frames"
-    if args.stage == "recover":
+    if args.stage == "record":
+        import cell_record
+
+        result = cell_record.record_cycle(cell, config, cal.load(calibration_path), work, args.source, args.to)
+    elif args.stage == "recover":
         result = recover(cell, config, args.source, work, args.person_at_switch)
     elif args.stage == "run":
         result = run(cell, config, calibration_path, work, args.cycles, seat=seat)

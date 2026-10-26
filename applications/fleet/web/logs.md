@@ -454,6 +454,17 @@
 - 증거: 실제 Chromium36 PASS(기존 작업면 포함), 별도 1366/320·dark/light·미확인 재적재/거절 복구6 PASS. [검증 기록](../../../docs/validation/control-unit-pipeline-2026-10-24/result.md). 합성 fixture이며 실제 장치 상태가 아니다.
 - gate 변화: 집중 소프트웨어 경로만 확인했다. 최종 통합 검사·착지·현장 화면 수용은 별도다. CE 해당 없음.
 
+## 2026-10-24 · uncommitted · TRIP 요청 조회 불가 문구
+
+- 변경: 새 중립 TRIP 조회의 TRIP_JOB_NOT_FOUND에 요청 번호·접속 계정을 확인하는 문구를 추가했다. 권한 밖 원장의 존재를 구별해 알리지 않는다.
+- 증거: f3d7d3fba5의 기존 trip 오류 문구 coverage가 누락을 재현했다. 52a9ccf6b5에서 이 coverage를 포함한 관련 원격 261 passed, skip 0이다.
+- gate 변화: 문구 표 한 줄이며 화면 구조·동작·실물 변경은 없다. CE 해당 없음.
+
+## 2026-10-24 · uncommitted · 운행 오류 문구 표 분리와 크기 회귀
+
+- 변경: 기존 788줄 site-map-model에 라벨을 추가하는 대신 표를 trip-error-labels.js로 옮기고 기존 export를 유지했다. 자산 manifest를 등록하고 source ratchet을 720줄로 낮췄다. 구버전 표의 다른 코드 맵을 포함하는 coverage와 공유 문서 import 경계를 함께 연결했다.
+- 증거: 34ff5f55c1의 원격 라벨 coverage·문서 import·서버 자산·모듈 구조 회귀 94 passed, skip0, 0 NEW다. 기존 node 모델 소비자 6개 suite는 63 tests/exit0이며 f3d7d3fba5..34ff5f55c1 크기 검사 8 commits가 통과했다. 추출 소스의 독립 검토를 받았다.
+- gate 변화: 공개 import·자산 제공을 보존했다. 전체 FULL은 이전 f3의 실패 기록이며 수정 범위의 GREEN과 구별한다. CE 해당 없음: 모듈·manifest·기존 coverage로 변경 판단을 복원할 수 있다.
 ## 2026-10-24 · e1e69f32c7 · 관제 UI 표시·수명·스타일 경계 분리
 
 - 변경: 운행 표시를 trip-display, 목록 표현을 roster-presentation, 로스터 전용 스타일을 roster.css로 분리했다. 셸은 로스터 공개 과업 동작을 쓰고 기존 권한·요청·폴링·초점을 유지한다. 실제 소비자·자산 registry·문서 로드를 함께 갱신했다.
@@ -490,3 +501,9 @@
 - 변경: checkbox label에 기존 ui-check를 적용하고 textarea의 ui-field 설정을 생성 위치로 옮겼다. 입력 의미·기명 권한·원장 처분은 유지한다.
 - 증거: source42e079ef48 FULL의 공유 입력 검사1 FAIL을 source79ff20cc96에서 수정했고 해당 원격 회귀1 PASS·SKIP0·NEW0이다. 기존 sourcebbffbf8577의 집중 Chromium/Node33건과 source42e079ef48의 명시 Chromium4그룹은 각각 통과했다. 최종 수정 source의 공식 FULL은 후속 실행이다.
 - gate 변화: 공통 입력 표현을 맞추며 장치·현장 수용을 승격하지 않는다. CE 해당 없음 — 원인과 수정 조건이 기존 공유 UI 검사에 직접 남는다.
+
+## 2026-10-26 · 62173b9899 · 앱 바 높이 덧쓰기 정리
+
+- 변경: 공용 `ui-topbar`가 D-741 앱 바 높이(64px)를 기본으로 갖게 되어 이 표면의 같은 값 덧쓰기를 지웠다(Pilot은 두 줄 머리 높이를 명시로 유지).
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
+- gate 변화: 없음.

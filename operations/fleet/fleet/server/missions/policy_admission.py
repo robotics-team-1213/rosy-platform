@@ -68,13 +68,17 @@ class PolicyAdmissionSettings:
 
 
 class PolicyAdmissionCore:
-    """범위 상태·운영자 전환(메모리, D-610 패턴)·상한·감사."""
+    """범위 상태·운영자 전환(메모리, D-610 패턴)·상한·감사.
 
-    def __init__(self, settings: PolicyAdmissionSettings, now):
+    ``issued_provider``(P2c)가 있으면 상한은 감사 저장소의 ADMITTED 수에서 읽는다
+    (재시작 생존). 없으면 이 core의 메모리 감사로 센다(P2a 단위 시험용)."""
+
+    def __init__(self, settings: PolicyAdmissionSettings, now, issued_provider=None):
         self._settings = settings
         self._now = now  # callable -> ISO-8601 UTC string
         self._switch = settings.enabled
         self._audit: deque[PolicyAdmissionAuditEntry] = deque(maxlen=AUDIT_LIMIT)
+        self._issued_provider = issued_provider
 
     def scope(self) -> PolicyAdmissionScope:
         return PolicyAdmissionScope(
@@ -86,6 +90,8 @@ class PolicyAdmissionCore:
             scope_revision=self._settings.scope_revision)
 
     def _issued(self) -> int:
+        if self._issued_provider is not None:
+            return int(self._issued_provider(self._settings.scope_revision))
         return sum(1 for entry in self._audit
                    if entry.scope_revision == self._settings.scope_revision
                    and entry.outcome == "ADMITTED")

@@ -54,7 +54,7 @@ def test_agents_md_records_the_shared_checkout_commands():
 
     assert WORKTREE in section
     assert "python tools/worktrees.py prune --apply" in section
-    assert "50개 이상이면 만들지 않고" in section and "누가 만들었든 깨끗하고" in section
+    assert "14개(main 포함 15개) 이상이면 만들지 않고" in section and "누가 만들었든 깨끗하고" in section
     assert "소유자 기록이 없는 것은 `--all`을 줘야 다룬다" in section
     assert "기다리지 않고 바로 지운다" in section and "명령 하나 `python tools/worktrees.py prune --apply`" in section
     # D-790: landed worktrees wait 1 h, the two states that need a person, and the load-flaky rerun.

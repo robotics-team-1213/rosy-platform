@@ -1,7 +1,29 @@
 import json
 import hashlib
+import sqlite3
 import pytest
 from learning_workspace import Workspace
+
+
+@pytest.fixture(autouse=True)
+def closes_database_connections(monkeypatch):
+    connect = sqlite3.connect
+    connections = []
+
+    def retained_connection(*args, **kwargs):
+        connection = connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr('learning_workspace.sqlite3.connect', retained_connection)
+    yield
+    try:
+        for connection in connections:
+            with pytest.raises(sqlite3.ProgrammingError, match='closed database'):
+                connection.execute('SELECT 1')
+    finally:
+        for connection in connections:
+            connection.close()
 
 
 def test_owner_pipeline_hold_is_visible_without_private_inputs(tmp_path):
