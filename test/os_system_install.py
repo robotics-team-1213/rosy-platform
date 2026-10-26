@@ -83,7 +83,8 @@ def _bundle():
                              f"[keyring]\npath={certificate}\ncheck-purpose=codesign\nuse-bundle-signing-time=false\n")
     bundle = WORK / f"rosy-os-pinky-pro-{RELEASE}-arm64.raucb"
     run(["/usr/bin/rauc", "--conf", configuration, "--cert", certificate,
-         "--key", "/work/card/cms/fixture.key.pem", "--mksquashfs-args=-processors 1",
+         # gzip level 9 dominated TCG time; level 1 preserves the exact image bytes and verity checks.
+         "--key", "/work/card/cms/fixture.key.pem", "--mksquashfs-args=-processors 1 -comp gzip -Xcompression-level 1",
          "bundle", source, bundle], timeout=1800)
     metadata = _metadata(value, _spki(certificate.read_bytes()),
                          dict(filename=bundle.name, sha256=sha256_file(bundle), size_bytes=bundle.stat().st_size))
