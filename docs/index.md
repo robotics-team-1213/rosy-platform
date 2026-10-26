@@ -336,6 +336,7 @@
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 - [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
+- [2026-10-24-neutral-arm-planning-design.md](plans/2026-10-24-neutral-arm-planning-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -353,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · Monitoring 기존 원천 수집·durable 집계·읽기 API
-- 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
-- 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다
-- 2026-10-26 · uncommitted · fix(land): 지난번 실패한 시험 묶음을 먼저 돌린다
-- 2026-10-26 · uncommitted · fix(land): 다시 시도하면 실패한 시험 묶음만 다시 돈다
+- 2026-10-26 · uncommitted · test(fleet): D-891 리뷰 후속
+- 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
+- 2026-10-26 · uncommitted · fix(remote): 잡의 예약 코어를 배치 바닥으로, close에 이유 필수
+- 2026-10-26 · uncommitted · fix(land): 단독 실행 기록의 소비·안전 멈춤·죽은 잡·--no-queue

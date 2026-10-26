@@ -16,7 +16,7 @@ commit of its own in the branch reflog, D-790), whoever made it; no wait at all 
 own landed worktree (owner note equal to the caller's identity, session included); ``--idle-hours``
 (default 72) for the rest, a just-created empty worktree included. Its branch is
 deleted by exact sha (``git update-ref -d <ref> <sha>``) once that sha is an
-ancestor of main. ``--snapshot``, which only a person or the dispatcher runs,
+ancestor of main, as are landed branches no worktree uses (D-886). ``--snapshot``, for a person or dispatcher,
 also takes idle worktrees that are dirty or unmerged: the working files (modified,
 staged, untracked) go into a commit on top of the worktree's HEAD, built in a
 temporary index and kept as ``refs/wip/<date>/<name>`` (not a tag: ``git push
@@ -34,7 +34,7 @@ prune removes an orphan idle 1 h, archiving files other than caches and ``.omc/s
 (``tools/worktree_rules.py``).
 
 Idle is the time since the newest of: the tip commit, the worktree's ``.git``
-file and ``logs/HEAD``, and the files ``git status`` lists. No ``logs/HEAD``
+file, the newest ``logs/HEAD`` entry, and the files ``git status`` lists. No ``logs/HEAD``
 reads as active. The index is not used: a plain ``git status`` refreshes it.
 
 ``new`` and ``tools/land.py`` only report what the lossless prune would remove
@@ -56,7 +56,7 @@ from pathlib import Path
 
 import worktree_rules as rules
 
-CAP = 50  # everything under .worktrees/, orphan directories included
+CAP = 14  # everything under .worktrees/, orphan directories included; with main, the 15-slot budget (D-886)
 IDLE_HOURS = 72.0
 STALE_LOCK = 30 * 60  # seconds after which another run's prune lock is taken over
 TYPES = ("feat", "fix", "refactor", "docs", "uiux")  # D-372
@@ -150,7 +150,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
 
     Cheap facts only, four git calls for the whole set and no ``git status``:
     branch, tip, lock, merged into main, owner, and ``last`` = newest of the tip commit
-    time, the ``.git`` file (creation) and ``logs/HEAD``; without ``logs/HEAD``
+    time, the ``.git`` file (creation) and the newest ``logs/HEAD`` entry; without one
     it is infinite, which reads as active. A directory git does not list (a
     half-removed worktree) is an ``orphan`` row. A dot-named directory (``.omc``) and a plain
     file under ``.worktrees/`` are not worktrees and not orphans: not listed, not counted.
@@ -182,7 +182,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
             git_dir = path / (path / ".git").read_text(encoding="utf-8").partition("gitdir:")[2].strip()
         except OSError:
             git_dir = path
-        reflog = _mtime(git_dir / "logs" / "HEAD")
+        reflog = rules.reflog_time(git_dir / "logs" / "HEAD")  # entry time: gc rewrites the file (D-886)
         branch = block.get("branch", "").removeprefix("refs/heads/")
         rows.append(_row(path, branch=branch, sha=sha, owner=owners.get(branch, ""),
                          locked="locked" in block, merged=is_merged, git_dir=git_dir,
@@ -371,11 +371,8 @@ def _takes(row: dict, snapshot: bool) -> bool:
 def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, apply: bool = False,
           everyone: bool = False, quiet: bool = False, now: float | None = None, say=print) -> int:
     """Remove (or, without ``apply``, list) what may go; return how many. ``quiet`` drops the KEEP lines.
-
-    A lossless removal needs no owner: nothing is lost and the worktree sat idle for days. A row
-    that needs a snapshot (dirty or unmerged work) is taken only from its owner unless ``everyone``
-    (``--all``); no owner note reads as unowned.
-    """
+    A lossless removal needs no owner; a row needing a snapshot (dirty or unmerged) is taken only from its
+    owner unless ``everyone`` (``--all``), no owner note reading as unowned. Landed branches follow."""
     now = time.time() if now is None else now
     day = time.strftime("%Y-%m-%d", time.localtime(now))
     root, rows = scan(cwd)
@@ -389,7 +386,7 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
             os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
         except FileExistsError:
             raise RuntimeError(f"another prune is running ({lock}; taken over after 30 min)") from None
-    done = 0
+    done, failed = 0, set()
     try:
         for row in sorted(rows, key=lambda r: r["name"]):
             judge(row, now, idle_hours, here, lossless=not snapshot, me=me)
@@ -413,6 +410,8 @@ def prune(cwd: Path, *, idle_hours: float = IDLE_HOURS, snapshot: bool = False, 
                 done += 1
             except (RuntimeError, OSError) as exc:
                 say(f"FAIL    {label} {exc}")
+                failed.add(row["branch"])  # its "branch kept" holds for this run
+        rules.sweep_branches(root, now, apply, say, quiet, keep=failed)
     finally:
         if apply:
             lock.unlink(missing_ok=True)
@@ -480,8 +479,8 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
     held = rules.clear_tombstone(root / ".worktrees", name)  # a removed worktree's folder left by an open handle
     known = git(root, "rev-parse", "-q", "--verify", f"{base}^{{commit}}").returncode == 0
     problem = (
-        f"branch must be <type>/<topic> with <type> one of {', '.join(TYPES)} (D-372): {branch!r}"
-        if kind not in TYPES or not topic or git(root, "check-ref-format", "--branch", branch).returncode != 0
+        f"branch must be <type>/<topic>, <type> one of {', '.join(TYPES)}, {rules.TOPIC_RULE} (D-372): {branch!r}"
+        if kind not in TYPES or not rules.topic_ok(topic) or git(root, "check-ref-format", "--branch", branch).returncode != 0
         else f"short name must be one path component of letters, digits, '.', '_', '-', not ending in '.': {name!r}"
         if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?", name)
         else '--force-over-cap needs a reason: --force-over-cap "<reason>"' if reason is not None and not reason.strip()

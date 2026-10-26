@@ -81,9 +81,10 @@ _LAB_ENDPOINTS = (
 )
 _LAB_ROBOT_LAN = ("192.168.1.201", "192.168.1.202")
 
-# DESIGN.md is the shared visual guide D-359 §8 places at the repo root.
+# DESIGN.md is the shared visual guide D-359 §8 places at the repo root. conftest.py reports sys.path inserters
+# for every suite remote_pytest.py runs with --rootdir=. (tools/land_isolation.py).
 ROOT_FILES = {
-    ".dockerignore", ".gitattributes", ".gitignore",
+    ".dockerignore", ".gitattributes", ".gitignore", "conftest.py",
     "AGENTS.md", "CONCEPTS.md", "CONTRIBUTING.md", "DESIGN.md", "LICENSE", "PRODUCT.md", "README.md", "STATUS.md", "env.sh",
 }
 MODULE_ROOT_DOCS = {"README.md", "AGENTS.md", "CLAUDE.md", "progress.md", "logs.md", "index.md"}

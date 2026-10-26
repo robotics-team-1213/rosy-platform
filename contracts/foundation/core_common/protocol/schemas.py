@@ -6,6 +6,24 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 
 from __future__ import annotations
 
+from .device_actions import (  # noqa: F401
+    DeviceActionState, DeviceActionPhaseReceipt, MissionPhaseProgress, LocalStopState,
+    StopRequestSource, ResolvedTargetEvidence, FleetActionGrant, DeviceActionReceipt,
+    DeviceActionLookup, DeviceActionCancelRequest, LocalStopRequest, LocalStopQuery,
+    LocalStopRearmRequest, LocalStopSnapshot)
+from .arm_transfer import ArmTransferCapability, ArmTransferPayload, FleetArmTransferGrant  # noqa: F401
+from .arm_transfer_jobs import (  # noqa: F401
+    ArmTransferRequest, ArmTransferRequestKey, ArmTransferJobCreate, ArmTransferJobAdmit,
+    ArmTransferJobSnapshot, ArmTransferJobResponse)
+from .wire_status import RobotMode, NavigationState, HealthState, Severity, AckStatus
+from .arm_transfer_observations import (  # noqa: F401
+    ArmObservationPose, ArmObservationBounds, ArmLinkObservation, ArmOwnerObservation,
+    ArmTransferObservation, ArmTransferObservationRequest, ArmTransferOwnerContext,
+    ArmTransferObservationContext, ArmTransferObservationContextResponse, ArmTransferPhysicalReceipt,
+    ArmTransferPhysicalReceiptResponse, ArmTransferObservationReply, ArmTransferCancelRequest)
+
+from .arm_transfer_preflight import (  # noqa: F401
+    ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckResponse, ArmTransferCheckRejection)
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
 from .monitoring import FleetLinkObservation, FleetMonitoringRead  # noqa: F401
 from .trip_jobs import (TripJobRequest, TripJobStep, TripJobSnapshot, TripJobStepSnapshot,
@@ -26,7 +44,7 @@ from .integrated_control import (  # noqa: F401
     ControlStopRequest, ControlStopIngress, ControlStopUnitResult, ControlStopSnapshot,
     ControlStopReconcile, ControlStopReference, ControlStopHistory,
 )
-from .navigation_cancel import ScopedNavigationCancelRequest  # noqa: F401
+from .navigation_cancel import NAVIGATION_ADMISSION_FENCE_VERSION, ScopedNavigationCancelRequest  # noqa: F401
 from .lamp import LampIdentifyRequest  # noqa: F401
 from .media_grants import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest  # noqa: F401
 from .channel_requests import (  # noqa: F401
@@ -38,7 +56,6 @@ from .channel_requests import (  # noqa: F401
 
 import enum
 import json
-import math
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from uuid import uuid4
@@ -91,53 +108,6 @@ def new_msg_id() -> str:
 
 
 # --- 공용 enum (API Ref §4) ----------------------------------------------
-
-class RobotMode(str, enum.Enum):
-    IDLE = "IDLE"
-    MANUAL = "MANUAL"
-    NAVIGATION = "NAVIGATION"
-    DOCKING = "DOCKING"
-    EMERGENCY = "EMERGENCY"
-
-
-class NavigationState(str, enum.Enum):
-    IDLE = "IDLE"
-    PLANNING = "PLANNING"
-    NAVIGATING = "NAVIGATING"
-    ARRIVED = "ARRIVED"
-    CANCELED = "CANCELED"
-    FAILED = "FAILED"
-    BLOCKED = "BLOCKED"
-
-
-class HealthState(str, enum.Enum):
-    OK = "OK"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    UNKNOWN = "UNKNOWN"
-
-
-class Severity(str, enum.Enum):
-    INFO = "info"
-    WARNING = "warning"
-    ERROR = "error"
-    CRITICAL = "critical"
-
-
-class AckStatus(str, enum.Enum):
-    ACCEPTED = "ACCEPTED"
-    STARTED = "STARTED"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-
-
-from .device_actions import (  # noqa: F401
-    DeviceActionState, DeviceActionPhaseReceipt, MissionPhaseProgress,
-    LocalStopState, StopRequestSource, ResolvedTargetEvidence, FleetActionGrant,
-    DeviceActionReceipt, DeviceActionLookup, DeviceActionCancelRequest,
-    LocalStopRequest, LocalStopQuery, LocalStopRearmRequest, LocalStopSnapshot,
-)
-
 
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------
 
@@ -522,38 +492,8 @@ class AckPayload(BaseModel):
     error: Optional[str] = None
 
 
-class UiSurfaceLink(BaseModel):
-    id: str
-    title: str
-
-
-class UiPanelDescriptor(BaseModel):
-    id: str
-    title: str
-    slot: str
-    order: int
-    module: str
-    css: list[str]
-    action_group: str | None = None
-    state: str
-    reason: str | None = None
-
-
-class UiActionGroup(BaseModel):
-    id: str
-    title: str
-    order: int
-
-
-class UiSurfaceManifest(BaseModel):
-    surface: str
-    grammar: str
-    role: str
-    surfaces: list[UiSurfaceLink]
-    action_groups: list[UiActionGroup]
-    panels: list[UiPanelDescriptor]
-    revision: str
-
+from .ui_surface import (  # noqa: F401
+    UiSurfaceLink, UiPanelDescriptor, UiActionGroup, UiSurfaceManifest)
 
 # --- D-418 로봇 SSH 접속 (API Ref §5.8, v1.89 additive) ----------------------
 #

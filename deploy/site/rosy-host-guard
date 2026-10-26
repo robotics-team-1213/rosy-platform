@@ -6,6 +6,7 @@ see host-guard.conf.example) lists one host per line:
 
   <name> pc <ssh-target> <quiet HH:MM-HH:MM or ->
   <name> robot <host>:<port>
+  <name> updates <ssh-target>           (D-871: only `updates`, e.g. the site PC's own user; no ladder)
 
 A pc answers `health` through its forced command (rosy-host-guard-remote); restart and reboot run
 the D-524 Service Control helper there (reboot = shutdown -r +10). Recovery ladder:
@@ -50,6 +51,11 @@ MIN_DISK_FREE_GB = float(os.environ.get("GUARD_MIN_DISK_FREE_GB", "30"))
 MAX_DISK_USE_PCT = int(os.environ.get("GUARD_MAX_DISK_USE_PCT", "90"))
 # Report-only RAM warning, well before the MIN_AVAIL_PCT + swap ladder above acts.
 WARN_AVAIL_PCT = int(os.environ.get("GUARD_WARN_AVAIL_PCT", "10"))
+# D-885: a disk-low lab PC gets one clean-storage request per gap; the site PC keeps product data.
+LAB_PCS = ("ai", "model")
+CLEAN_GAP_S = int(os.environ.get("GUARD_CLEAN_GAP_S", "21600"))
+# The site PC reads its own headroom with the same forced command the other PCs answer.
+LOCAL_HEALTH = os.environ.get("GUARD_LOCAL_HEALTH", "/usr/local/sbin/rosy-host-guard-remote")
 
 
 def now_hhmm() -> str:
@@ -126,15 +132,9 @@ def recovery_report(value):
     return value
 
 
-def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
-    entry["recovery"] = None
-    answer = ssh(target, "health")
-    if answer is None:
-        entry["state"] = "unreachable"
-        entry["resources"] = None  # a missed reply must not keep the previous headroom
-        print(f"{name}: unreachable (watchdog's job if it froze)", flush=True)
-        return
-    fields = answer.split()  # a malformed reply raises here, before any counter changes
+def parse_health(answer: str) -> dict:
+    """The forced command's `health` line as resources; raises on a malformed reply."""
+    fields = answer.split()
     avail, swap, load, cores, uptime = int(fields[0]), int(fields[1]), float(fields[2]), int(fields[3]), int(fields[4])
     down = [] if len(fields) < 6 or fields[5] == "-" else fields[5].split(",")
     disk = gpu = disk_low = None  # an older forced command sends six fields: unknown, never healthy
@@ -154,26 +154,60 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
         cpu = {"busy_pct": None if fields[16] == "-" else int(fields[16]),
                "temp_c": None if fields[17] == "-" else int(fields[17])}
     memory_low = avail < WARN_AVAIL_PCT
-    entry["resources"] = {
+    return {
         "avail_pct": avail, "swap_pct": swap, "load": load,
         "cores": cores, "uptime_s": uptime, "down": down,
         "disk": disk, "disk_low": disk_low, "gpu": gpu, "memory": memory, "memory_low": memory_low,
         "cpu": cpu,
     }
+
+
+def update_report(text: str | None) -> dict | None:
+    """A PC's update channels (D-871). Anything else is no evidence; it never affects the recovery ladder."""
+    try:
+        value = json.loads(text or "null")
+    except ValueError:
+        return None
+    if (not isinstance(value, dict) or value.get("schema") != "rosy.update-report/1"
+            or value.get("gate") not in ("open", "frozen", "missing") or not isinstance(value.get("updaters"), list)
+            or type(value.get("time")) is not int):
+        return None
+    return value
+
+
+def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
+    entry["recovery"] = None
+    entry["updates"] = None
+    answer = ssh(target, "health")
+    if answer is None:
+        entry["state"] = "unreachable"
+        entry["resources"] = None  # a missed reply must not keep the previous headroom
+        print(f"{name}: unreachable (watchdog's job if it froze)", flush=True)
+        return
+    resources = parse_health(answer)  # a malformed reply raises here, before any counter changes
+    entry["resources"] = resources
+    avail, swap, load, cores = (resources[k] for k in ("avail_pct", "swap_pct", "load", "cores"))
+    uptime, down, disk = resources["uptime_s"], resources["down"], resources["disk"]
+    disk_low, memory_low, memory = resources["disk_low"], resources["memory_low"], resources["memory"]
     try:
         recovery = recovery_report(json.loads(ssh(target, "recovery") or "null"))
         if recovery and (name not in ("site", "model", "ai") or recovery["role"] == name):
             entry["recovery"] = recovery
     except (ValueError, TypeError):
         pass  # Older hosts may not provide recovery yet; resource recovery keeps its existing policy.
+    entry["updates"] = update_report(ssh(target, "updates"))  # older hosts: None, shown as unknown
     reasons = []
     if avail < MIN_AVAIL_PCT and swap > MAX_SWAP_PCT:
         reasons.append(f"memory avail {avail}% swap {swap}%")
     if down:
         reasons.append("down " + ",".join(down))
     high_load = load > cores * MAX_LOAD_PER_CORE
-    if disk_low:
-        print(f"{name}: disk low {disk} (report only; clean-storage, D-883)", flush=True)
+    if disk_low and name in LAB_PCS and time.time() - entry.get("last_clean_request", 0) >= CLEAN_GAP_S:
+        # D-885: the rosy-ops service decides what goes; a refusal (older PC) waits the same gap.
+        entry["last_clean_request"] = int(time.time())
+        remote_action(name, target, "clean-storage", f"disk low {disk}")
+    elif disk_low:
+        print(f"{name}: disk low {disk} (clean-storage requested at {entry.get('last_clean_request')})", flush=True)
     if memory_low:
         print(f"{name}: memory avail {avail}% {memory} (report only, D-883)", flush=True)
     if not reasons:
@@ -211,6 +245,16 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
             entry.update(bad=0, restarted=False, reboots=entry.get("reboots", 0) + 1, last_reboot=int(time.time()))
 
 
+def local_health() -> dict | None:
+    """This PC's own headroom; unreadable or malformed is absence, never a synthesized healthy row."""
+    try:
+        done = subprocess.run([LOCAL_HEALTH], env={**os.environ, "SSH_ORIGINAL_COMMAND": "health"},
+                              capture_output=True, text=True, timeout=30)
+        return parse_health(done.stdout) if done.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
+        return None
+
+
 def main() -> int:
     STATE.mkdir(parents=True, exist_ok=True)
     status_file = STATE / "status.json"
@@ -226,9 +270,16 @@ def main() -> int:
     status = {name: row for name, row in status.items()
               if isinstance(row, dict) and row.get("source") != "local"}
     now = now_hhmm()
+    updates_only = {}
     for raw in CONFIG.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].split()
         if not line:
+            continue
+        if line[1:2] == ["updates"]:  # D-871: update channels only (the site PC itself); never the ladder
+            try:
+                updates_only[line[0]] = update_report(ssh(line[2], "updates"))
+            except Exception as exc:  # noqa: BLE001 - like the other lines, one bad line never stops the rest
+                print(f"{line[0]}: updates failed: {exc!r}", flush=True)
             continue
         entry = status.setdefault(line[0], {})
         entry["recovery"] = None
@@ -253,13 +304,18 @@ def main() -> int:
     try:
         recovery = recovery_report(json.loads(LOCAL_STATUS.read_text(encoding="utf-8")).get("recovery"))
         if recovery:
-            status[recovery["role"]] = {
+            row = status[recovery["role"]] = {
                 "source": "local",
                 "time": recovery.get("time"), "state": recovery.get("state", "error"),
                 "resources": recovery.get("resources"), "recovery": recovery,
             }
+            local = local_health()
+            if local is not None:
+                row["resources"] = {**(row["resources"] or {}), **local}
     except (OSError, ValueError, AttributeError):
         pass  # A missing local report is shown as unverified by Fleet, never synthesized as healthy.
+    for name, report in updates_only.items():  # after the local report, which replaces the site row
+        status.setdefault(name, {"source": "local"})["updates"] = report  # rebuilt every run, like the local row
     tmp = status_file.with_suffix(".tmp")
     tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, status_file)

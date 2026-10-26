@@ -12,9 +12,10 @@ _SINGLE_ARM = "mission_id NOT IN (SELECT mission_id FROM fleet_cell_arm_jobs)"
 
 def read_cell_job(connection, mission_id):
     row = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=?", (mission_id,)).fetchone()
-    if row is None:
+    if row is None or row["provenance_kind"] != "legacy":
         return None
     job = dict(row)
+    job.pop("provenance_kind")
     for source, target in (("job_json", "job"), ("resources_json", "resources"),
                            ("ledger_markers_json", "ledger_markers")):
         job[target] = json.loads(job.pop(source))
@@ -41,7 +42,8 @@ def read_cell_job(connection, mission_id):
 
 
 def jobs_by_status(connection, status):
-    rows = connection.execute(f"SELECT mission_id FROM fleet_cell_jobs WHERE status=? AND {_SINGLE_ARM} "
+    rows = connection.execute(f"SELECT mission_id FROM fleet_cell_jobs WHERE provenance_kind='legacy' "
+                              f"AND status=? AND {_SINGLE_ARM} "
                               "ORDER BY updated_at, mission_id", (status,)).fetchall()
     return [read_cell_job(connection, row["mission_id"]) for row in rows]
 
@@ -50,6 +52,7 @@ def unresolved_jobs(connection):
     rows = connection.execute(
         "SELECT DISTINCT j.mission_id FROM fleet_cell_jobs j JOIN fleet_action_claims c "
         "ON c.owner_kind='mission' AND c.owner_id=j.mission_id AND c.generation=j.dispatch_generation "
-        f"WHERE j.status='HOLD' AND c.phase IN ('UNKNOWN', 'DISPATCHING') AND j.{_SINGLE_ARM} "
+        f"WHERE j.provenance_kind='legacy' AND j.status='HOLD' "
+        f"AND c.phase IN ('UNKNOWN', 'DISPATCHING') AND j.{_SINGLE_ARM} "
         "ORDER BY j.updated_at, j.mission_id").fetchall()
     return [read_cell_job(connection, row["mission_id"]) for row in rows]

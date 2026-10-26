@@ -7,7 +7,7 @@ from core_common.protocol.motor_health import MotorHealthResponse
 
 def read_motor_health(*, now=None):
     unavailable = lambda: MotorHealthResponse(evidence='unavailable', status='unavailable',
-                                               support_reason='No verified motor telemetry available')
+                                               support_reason='모터별 관측을 제공하는 실행 세션이 없습니다.')
     source, owner = os.environ.get('ROSY_MOTOR_HEALTH_FILE'), os.environ.get('ROSY_MOTOR_HEALTH_OWNER')
     if not source or not owner:
         return unavailable()

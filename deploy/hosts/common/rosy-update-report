@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Print this PC's update channels as one JSON object for the site guard (D-871); read-only.
+
+  rosy-update-report
+
+Every user unit `rosy-*autoupdate.service` / `rosy-*-update.service` of the calling user is reported with its timer state and the last step
+it logged: the JSON line of omx_autoupdate.py / learning_center_update.py, or the plain line of
+auto_review_release.py. Only the step, the release, a short reason code and times leave the PC, never
+log text. `gate` is the D-805 freeze gate: open, frozen or missing. The D-441 site stack updater's
+state file is added when it is readable. Installed as /usr/local/sbin/rosy-update-report by
+install-guard-remote.sh and called through the guard's forced command (`updates`).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import time
+
+UNIT = re.compile(r"^rosy-[a-z0-9@_.-]*(autoupdate|-update)\.service$")
+HEALTHY = {"switched", "up_to_date", "idle", "active"}
+# auto_review_release.py prints plain lines: "already active: <release>", "activated: <release>", "waiting ..."
+REVIEW = re.compile(r"\b(already active|activated): (\S+)|\b(waiting for [a-z -]+)")
+WORD = re.compile(r"^[A-Za-z0-9_.:@-]{1,80}$")
+STAMP = re.compile(r"^[0-9T:+.Z-]{1,40}$")
+GATE = os.environ.get("ROSY_UPDATE_GATE", "/usr/local/bin/rosy-update-gate")
+SITE_STATE = Path(os.environ.get("ROSY_SITE_AUTOUPDATE_STATE", "/var/lib/rosy/site-autoupdate.json"))
+
+
+def word(value):
+    """A short identifier or nothing: free text never leaves the PC."""
+    return value if isinstance(value, str) and WORD.fullmatch(value) else None
+
+
+def step_of(line: str) -> dict | None:
+    stamp, _, message = line.partition(" ")
+    try:
+        at = float(stamp)
+    except ValueError:
+        return None
+    brace = message.find("{")
+    if brace >= 0:
+        try:
+            row = json.loads(message[brace:])
+        except ValueError:
+            row = None
+        if isinstance(row, dict) and (word(row.get("step")) or word(row.get("result"))):
+            return {"step": word(row.get("step")) or word(row.get("result")), "release": word(row.get("release")),
+                    "reason": word(row.get("reason")), "at": at}
+    found = REVIEW.search(message)
+    if found:
+        if found.group(1):
+            return {"step": "active", "release": word(found.group(2)), "reason": None, "at": at}
+        return {"step": "waiting", "release": None, "reason": word(found.group(3).replace(" ", "_")), "at": at}
+    return None
+
+
+def journal(unit: str) -> list[str]:
+    done = subprocess.run(["journalctl", "--user", "-u", unit, "--no-pager", "-n", "400", "-o", "short-unix"],
+                          capture_output=True, text=True, timeout=30)
+    return done.stdout.splitlines() if done.returncode == 0 else []
+
+
+def updater(home: Path, unit: str) -> dict:
+    timer = unit[: -len(".service")] + ".timer"
+    units = home / ".config/systemd/user"
+    steps = [s for s in map(step_of, journal(unit)) if s]
+    healthy = [s["at"] for s in steps if s["step"] in HEALTHY]
+    return {"unit": unit,
+            "timer": "enabled" if (units / "timers.target.wants" / timer).exists()
+            else "disabled" if (units / timer).exists() else "none",
+            "last": steps[-1] if steps else None,
+            "healthy_at": healthy[-1] if healthy else None}
+
+
+def gate() -> str:
+    if not os.access(GATE, os.X_OK):
+        return "missing"
+    try:
+        return "open" if subprocess.run([GATE], capture_output=True, timeout=20).returncode == 0 else "frozen"
+    except subprocess.TimeoutExpired:
+        return "frozen"  # the gate itself fails closed on a slow network
+
+
+def site_stack() -> dict | None:
+    try:
+        state = json.loads(SITE_STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(state, dict):
+        return None
+    # {"installed": {"tag", "commit", ...}, "last_run": {"result", "time": ISO-8601}, "failed": {...}}
+    installed = state.get("installed") if isinstance(state.get("installed"), dict) else {}
+    last = state.get("last_run") if isinstance(state.get("last_run"), dict) else {}
+    return {"current": word(installed.get("tag")), "result": word(last.get("result")),
+            "at": last.get("time") if isinstance(last.get("time"), str) and STAMP.fullmatch(last["time"]) else None,
+            "failed": len(state["failed"]) if isinstance(state.get("failed"), dict) else 0}
+
+
+def report() -> dict:
+    home = Path.home()
+    units_dir = home / ".config/systemd/user"
+    names = sorted(p.name for p in units_dir.glob("rosy-*.service") if UNIT.fullmatch(p.name)) \
+        if units_dir.is_dir() else []
+    body = {"schema": "rosy.update-report/1", "time": int(time.time()), "gate": gate(),
+            "updaters": [updater(home, name) for name in names]}
+    stack = site_stack()
+    if stack:
+        body["site_stack"] = stack
+    return body
+
+
+def main(argv=None) -> int:
+    argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter).parse_args(argv)
+    print(json.dumps(report(), sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

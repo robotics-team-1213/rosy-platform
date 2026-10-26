@@ -198,3 +198,39 @@ def test_an_xdist_session_that_collected_nothing_is_caught():
     assert known_failures.collected_nothing("6 workers [0 items]\n", paths)
     assert not known_failures.collected_nothing("2 workers [10 items]\n", paths)
     assert not known_failures.collected_nothing("2 workers [0 items]\n", paths[:1])
+
+
+# --- Design 0.7 rule 7: an id a landing adds to the list must fail on that run -----------------------
+
+LISTED = next(iter(known_failures.load_known((ROOT / "test/known_failures.txt").read_text(encoding="utf-8"))), None)
+
+
+@pytest.mark.skipif(LISTED is None, reason="the real list is empty")
+@pytest.mark.parametrize("report, code", [(f"FAILED {LISTED} - boom\n1 failed in 1.0s\n", 0),
+                                          ("1 passed in 1.0s\n", 1)], ids=["fails", "passes"])
+def test_a_must_fail_id_that_passes_fails_the_comparison(tmp_path, capsys, report, code):
+    log = tmp_path / "run.txt"
+    log.write_text(report, encoding="utf-8")
+    assert known_failures.main([str(log), "--must-fail", LISTED]) == code
+    assert (f"MUST-FAIL {LISTED}" in capsys.readouterr().out) == bool(code)
+
+
+def test_land_passes_only_the_ids_this_landing_adds_that_the_invocation_runs(tmp_path):
+    sys.path.insert(0, str(ROOT / "tools"))
+    import land_checks
+    import subprocess
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True)
+    listed = tmp_path / "test/known_failures.txt"
+    listed.parent.mkdir()
+    listed.write_text("# h\ntest/test_a.py::test_old  # r\n", encoding="utf-8")
+    git("init", "-q", "-b", "main")
+    git("-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x")
+    git("add", "test/known_failures.txt")
+    git("-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "list")
+    listed.write_text("# h\ntest/test_a.py::test_old  # r\ntest/test_a.py::test_new  # r\n"
+                      "other/test_b.py::test_c  # r\n", encoding="utf-8")
+    assert land_checks.added_known(tmp_path, ["test"]) == ["test/test_a.py::test_new"]
+    assert land_checks.added_known(tmp_path, ["other/test_b.py", "-q"]) == ["other/test_b.py::test_c"]
+    assert land_checks.added_known(tmp_path, ["middleware"]) == []

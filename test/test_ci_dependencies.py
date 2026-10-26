@@ -445,8 +445,9 @@ def test_every_ci_job_has_a_timeout_below_the_six_hour_default():
     import yaml
 
     jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    # scope walks a publish PR's whole range per commit (#210: 3,145 commits, cancelled at 10 min)
     for name, job in jobs.items():
-        assert 0 < int(job.get("timeout-minutes", 0)) <= 30, name
+        assert 0 < int(job.get("timeout-minutes", 0)) <= (60 if name == "scope" else 30), name
 
 
 def test_merge_group_runs_the_full_tier_against_the_group_base():

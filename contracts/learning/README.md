@@ -17,6 +17,8 @@ D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt�
 고정 10Hz 카메라의 기록은 10fps 또는 교사 시연용 5fps만 받는다. 원본 capture/state
 시각과 선택한 기록 주기의 간격을 그대로 검증하며, 주기 표기만 바꾼 원본은 거절한다.
 
+0.1.14는 D-891로 `promotion_request`에 D-874 승격 요청 묶음의 `SCHEMA`·`FORBIDDEN`·`validate`와 정본 인코더 `encoded`(비ASCII 유지, 끝 줄바꿈, `fleet_export.encoded`와 다름)를 둔다. Learning이 만들고 Fleet이 다시 검사하는 바이트가 하나다. 모양만 검사하며 승인·배포 권한이 아니다.
+
 [D-854](../../docs/adr/D-854-omx-policy-runner-and-action-space.md)의 `action_space`는 OMX 데이터셋·정책이 선언하는 행동 단위
 (`lerobot_norm_v1`, `dynamixel_rad_v1`)와 버전이 붙은 순수 변환기다. 식은 lerobot 0.4.4 `omx_follower`
 (`use_degrees: false`) 정규화와 같고, 범위 밖 값은 잘라 맞추되 `convert()`가 잘린 개수를 돌려준다. lerobot

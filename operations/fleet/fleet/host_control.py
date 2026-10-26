@@ -63,6 +63,53 @@ def read_json_object(path: Path) -> dict | None:
     return body if isinstance(body, dict) else None
 
 
+STUCK_AFTER_S = 6 * 3600  # the same bound as tools/remote/update_status.py
+_WORD = re.compile(r"^[A-Za-z0-9_.:@-]{1,80}$")
+
+
+def _word(value):
+    return value if isinstance(value, str) and _WORD.fullmatch(value) else None
+
+
+def _number(value):
+    return value if type(value) in (int, float) and value == value and abs(value) != float("inf") else None
+
+
+def update_summary(guard: dict | None, now: float) -> dict:
+    """D-871: each PC's update channels for every signed-in role: state and release only, no reasons.
+
+    `ok` = a healthy step within STUCK_AFTER_S, `off` = its timer is not enabled, `stuck` = otherwise.
+    A PC whose report is missing or malformed is `unknown`; nothing is inferred from silence."""
+    hosts = []
+    for name, row in sorted((guard or {}).items()):
+        if not isinstance(row, dict) or "updates" not in row:
+            continue  # robots and older guard rows are not update hosts
+        report = row["updates"]
+        if not isinstance(report, dict) or not isinstance(report.get("updaters"), list):
+            hosts.append({"host": name, "state": "unknown", "gate": None, "channels": []})
+            continue
+        channels = []
+        for item in report["updaters"]:
+            if not isinstance(item, dict) or not _word(item.get("unit")):
+                continue
+            last = item.get("last") if isinstance(item.get("last"), dict) else {}
+            healthy = _number(item.get("healthy_at"))
+            fresh = healthy is not None and now - healthy <= STUCK_AFTER_S
+            state = "off" if item.get("timer") != "enabled" else "ok" if fresh else "stuck"
+            channels.append({"unit": item["unit"], "state": state, "release": _word(last.get("release")),
+                             "at": _number(last.get("at"))})
+        stack = report.get("site_stack") if isinstance(report.get("site_stack"), dict) else None
+        if stack:
+            channels.append({"unit": "rosy-site-autoupdate", "state": "ok" if _word(stack.get("result")) else "unknown",
+                             "release": _word(stack.get("current")), "at": None})
+        worst = ("stuck" if any(c["state"] == "stuck" for c in channels)
+                 else "frozen" if report.get("gate") == "frozen" else "ok")
+        gate = report.get("gate") if report.get("gate") in ("open", "frozen", "missing") else None
+        hosts.append({"host": name, "state": worst, "gate": gate, "time": _number(report.get("time")),
+                      "channels": channels})
+    return {"hosts": hosts}
+
+
 def catalogue() -> dict:
     hosts = []
     for host, units in HOSTS.items():

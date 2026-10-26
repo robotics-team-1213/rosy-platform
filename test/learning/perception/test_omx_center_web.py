@@ -36,7 +36,7 @@ def test_existing_review_app_routes_work_without_a_configured_center():
     assert not web.post(handler, '/api/frames/1', {}, None)
     assert web.get(handler, web.PREFIX, None)
     assert sent[0]['status'] == 'not_configured'
-    with pytest.raises(ValueError, match='not configured'):
+    with pytest.raises(ValueError, match='연결되지 않았습니다'):
         web.post(handler, web.PREFIX + '/run', {}, None)
 
 

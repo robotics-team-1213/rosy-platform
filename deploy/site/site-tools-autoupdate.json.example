@@ -1,0 +1,41 @@
+{
+  "kind": "service",
+  "repo_url": "https://github.com/<owner>/rosy-platform.git",
+  "github_repo": "<owner>/rosy-platform",
+  "branch": "main",
+  "required_checks": [
+    "ci-result"
+  ],
+  "root": "~/.local/share/rosy/site-tools",
+  "base_python": "/usr/bin/python3",
+  "uv": "~/.local/bin/uv",
+  "lock": null,
+  "paths": [
+    "deploy/site/rosy_cam_screen.py",
+    "deploy/site/account_tls_renew.py",
+    "deploy/site/rosy-cam-stream.service",
+    "deploy/site/rosy-cam-stream.timer",
+    "deploy/site/rosy-account-tls-renew.service",
+    "deploy/site/rosy-account-tls-renew.timer",
+    "deploy/site/rosy-site-tools-autoupdate.service",
+    "deploy/site/rosy-site-tools-autoupdate.timer",
+    "deploy/robot/omx/omx_autoupdate.py"
+  ],
+  "smoke": "import sys; sys.path[:0] = ['deploy/site', 'deploy/robot/omx']; import rosy_cam_screen, account_tls_renew, omx_autoupdate; print('smoke ok')",
+  "units": [
+    "rosy-cam-stream.timer",
+    "rosy-account-tls-renew.timer"
+  ],
+  "unit_files": [
+    "deploy/site/rosy-cam-stream.service",
+    "deploy/site/rosy-cam-stream.timer",
+    "deploy/site/rosy-account-tls-renew.service",
+    "deploy/site/rosy-account-tls-renew.timer",
+    "deploy/site/rosy-site-tools-autoupdate.service",
+    "deploy/site/rosy-site-tools-autoupdate.timer"
+  ],
+  "restart_running_only": true,
+  "settle": 10,
+  "require_verified_commit": false,
+  "keep": 3
+}

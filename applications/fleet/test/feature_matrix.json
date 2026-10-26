@@ -4,6 +4,51 @@
   "evidence_scope": "HTTP response receipts from passing backend tests; refusal-only routes are explicit. Sample evidence covers representative transactions, not every configured API branch or physical device behavior.",
   "features": [
     {
+      "id": "arm_transfer_handoff",
+      "title": "외부 앱 중립 ARM 제안 인계",
+      "entrypoints": ["applications/fleet/web/index.html"],
+      "consumers": ["applications/fleet/web/work/arm-transfer-view.js"],
+      "availability": "Installed simulation ARM transfer API; known mission ID; independent named Fleet operator. No physical deployment or application completion evidence.",
+      "calls": [
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(id)}", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}"]},
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/dispatch-control", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/dispatch-control"]},
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(snapshot.mission_id)}/admit", "resolution": "literal-or-template", "request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"]}
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/arm-transfers/jobs/{mission_id}",
+          "method": "GET",
+          "path": "/api/fleet/arm-transfers/jobs/{mission_id}",
+          "implementation": "operations/fleet/fleet/server/work/arm_transfer_job_routes.py",
+          "handler": "read_id",
+          "expected_statuses": [200],
+          "status": "verified",
+          "verification_scope": "Real HTTP console read with independent Fleet token, installed simulation policy, real SQLite and synthetic capability port; no device execution.",
+          "contract_tests": ["operations/fleet/test/test_arm_transfer_console_browser.py", "operations/fleet/test/test_arm_transfer_job_api.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/arm-transfers/jobs/{mission_id}"
+        },
+        {
+          "id": "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit",
+          "method": "POST",
+          "path": "/api/fleet/arm-transfers/jobs/{mission_id}/admit",
+          "implementation": "operations/fleet/fleet/server/work/arm_transfer_job_routes.py",
+          "handler": "admit",
+          "expected_statuses": [200],
+          "status": "verified",
+          "verification_scope": "Real HTTP confirmation produces READY with independent approved_by, unchanged proposal digest and current dispatch generation. No observer or actuator is installed.",
+          "contract_tests": ["operations/fleet/test/test_arm_transfer_console_browser.py", "operations/fleet/test/test_arm_transfer_job_api.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"
+        }
+      ],
+      "flows": [
+        {"id": "arm_transfer_handoff.happy", "kind": "happy", "steps": [{"request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}", "GET:/api/fleet/dispatch-control", "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"], "screen_assertion": "독립 Fleet 운영자의 명시적 확인 후 실제 HTTP 원장 READY를 조회한다"}], "scenario_id": "arm_transfer_handoff.happy", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_real_http_console_admits_external_proposal_with_independent_identity", "sample_status": "verified", "test_scope": "Real API and SQLite with synthetic capability port, no physical owner", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"},
+        {"id": "arm_transfer_handoff.refused", "kind": "refused", "steps": [{"request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"], "screen_assertion": "403·409·503 응답 후 자동 재전송을 막고 원본 재조회를 요구한다"}], "scenario_id": "arm_transfer_handoff.refused", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_rejection_and_unknown_response_require_read_without_automatic_retry", "sample_status": "verified", "test_scope": "Fixture API browser responses; refusal presentation and no retry, not server authorization evidence", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"},
+        {"id": "arm_transfer_handoff.terminal", "kind": "terminal", "steps": [{"request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}"], "screen_assertion": "승인 단계가 READY로 끝나면 승인 단추를 잠그고 실행·물리·업무 완료를 구별한다"}], "scenario_id": "arm_transfer_handoff.terminal", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_deep_link_reads_and_explicit_confirmation_admits_saved_contract", "sample_status": "verified", "test_scope": "Terminal approval UI stage only; READY is not terminal execution or business completion", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"}
+      ]
+    },
+    {
       "id": "control_units",
       "title": "관제 간 작업 위임",
       "entrypoints": [
@@ -3771,6 +3816,14 @@
           "request_ids": [
             "GET:/api/fleet/peers"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/installation/host-services.js",
+          "expression": "/api/fleet/updates",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/updates"
+          ]
         }
       ],
       "requests": [
@@ -3860,6 +3913,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/hosts"
+        },
+        {
+          "id": "GET:/api/fleet/updates",
+          "method": "GET",
+          "path": "/api/fleet/updates",
+          "implementation": "operations/fleet/fleet/server/host_control_routes.py",
+          "handler": "update_overview",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_host_control.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/updates"
         },
         {
           "id": "GET:/api/fleet/peers",
