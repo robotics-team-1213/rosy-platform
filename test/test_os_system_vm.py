@@ -31,7 +31,8 @@ def test_actual_systemd_device_allow_representation(tmp_path):
             raw = guest.run("systemctl show --value -p DeviceAllow rosy-system-device-grants.service").strip()
             words = shlex.split(raw)
             actual = list(zip(words[::2], words[1::2]))
-            assert len(words) % 2 == 0 and len(actual) == len(grants) and set(actual) == set(grants), json.dumps(dict(raw=raw, expected=grants))
+            expected = grants + [("char-rtc", "r")]  # ProtectClock's actual systemd 255 implication.
+            assert len(words) % 2 == 0 and len(actual) == len(expected) and set(actual) == set(expected), json.dumps(dict(raw=raw, expected=expected))
         finally:
             guest.run("systemctl stop rosy-system-device-grants.service")
 

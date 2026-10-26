@@ -18,7 +18,7 @@ class Manager:
     def __init__(self, module, root, prepared, fault=None):
         self.module, self.root, self.fault = module, root, fault
         self.calls, self.active, self.installs = [], False, 0
-        self.devices = "\n".join(line.removeprefix("DeviceAllow=") for line in prepared["device_dropin"].splitlines()
+        self.devices = "char-rtc r\n" + "\n".join(line.removeprefix("DeviceAllow=") for line in prepared["device_dropin"].splitlines()
                                  if line.startswith("DeviceAllow=") and line != "DeviceAllow=")
 
     def __call__(self, argv, timeout=60):
@@ -40,6 +40,7 @@ class Manager:
                 DevicePolicy="closed", DeviceAllow=self.devices,
                 ReadWritePaths="/run/rosy-os-update/rauc /var/lib/rosy-device/os-update/rauc", ProtectSystem="strict")
             if self.fault == "devices": values["DeviceAllow"] += "\n/dev/block/8:4 rw"
+            if self.fault == "rtc_write": values["DeviceAllow"] = values["DeviceAllow"].replace("char-rtc r\n", "char-rtc rw\n")
             if self.fault == "filesystem": values["ReadWritePaths"] += " /boot/firmware"
             output = values[key]
         elif argv[:2] == ["systemctl", "start"]:
@@ -106,7 +107,7 @@ def test_controlled_daemon_lifecycle_rechecks_before_install_and_revokes_after_s
     assert (journal.read_bytes(), config.read_bytes()) == before
 
 
-@pytest.mark.parametrize("fault", ["devices", "filesystem", "install"])
+@pytest.mark.parametrize("fault", ["devices", "rtc_write", "filesystem", "install"])
 def test_install_failure_or_effective_permission_drift_never_arms_or_changes_bootstrap(tmp_path, monkeypatch, fault):
     m, root, bundle, raw, signature, manager, journal, config = _case(tmp_path, monkeypatch, fault)
     before = journal.read_bytes(), config.read_bytes()
