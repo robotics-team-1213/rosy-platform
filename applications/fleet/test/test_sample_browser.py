@@ -142,6 +142,9 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
                                  data={'login':'sample', 'password':'CHANGE_ME'})
             page = context.new_page()
+            reads = []
+            page.on('response', lambda response: reads.append((urlsplit(response.url).path, response.status))
+                    if '/api/fleet/cell-jobs/' in response.url or '/api/fleet/dispatch-control' in response.url else None)
             page.goto(origin + '/console/cell')
             for kind in ('recipe', 'cell'):
                 page.locator(f'#{kind}-id').fill('sample')
@@ -162,7 +165,12 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             page.locator('.ui-subnav a[href="#mission-heading"]').click()
             page.locator('#mission-id').fill('sample-cell-job-1')
             page.locator('#read-job').click()
-            expect(page.locator('#job-summary')).to_contain_text('승인 대기')
+            try:
+                expect(page.locator('#job-summary')).to_contain_text('승인 대기')
+            except AssertionError:
+                print('cell read diagnostic', page.locator('#notice').inner_text(), reads,
+                      page.locator('#user-role').get_attribute('title'))
+                raise
             page.locator('#admit').click()
             expect(page.locator('#job-summary')).to_contain_text('실행 대기')
             page.get_by_role('button', name='Cell 보류', exact=True).click()

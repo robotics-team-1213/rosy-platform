@@ -158,6 +158,7 @@ def _shots(page, name, fits=False):
     for width, height in SIZES:
         page.set_viewport_size({"width": width, "height": height})
         page.clock.run_for(1500)  # a poll and a redraw at this size
+        page.evaluate('window.scrollTo(0, 0)')
         if out:
             page.screenshot(path=str(Path(out) / f"{name}-{width}x{height}.png"), full_page=True)
         if width < 480:
