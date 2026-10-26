@@ -3,6 +3,9 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
+import time
 import uuid
 
 import pytest
@@ -45,6 +48,9 @@ def test_model_target_refuses_missing_ambiguous_site_or_shell_target(lab):
 class Remote:
     def __init__(self, receipt):
         self.receipt, self.calls, self.fail = receipt, [], True
+
+    def hold(self, run_id, active):
+        pass
 
     def call(self, sha, payload):
         self.calls.append(payload)
@@ -199,3 +205,48 @@ def test_transport_preserves_unknown_run_with_diagnostic_error():
     remote.runner = SimpleNamespace(remote=lambda *a, **k: SimpleNamespace(returncode=0,
                                     stdout=json.dumps(row).encode()))
     assert remote._invoke('fixed script', {}) == row
+
+
+def isaac_host(tmp_path, monkeypatch, statuses):
+    """The real HOLD script against HOME=tmp_path; the supervisor reports `statuses` in order."""
+    mod = module()
+    monkeypatch.setenv('HOME', str(tmp_path))
+    remote = mod.SSH.__new__(mod.SSH)
+    remote.target_id = None
+    remote._invoke = lambda script, value: json.loads(subprocess.run(
+        [sys.executable, '-c', script], input=json.dumps(value).encode(),
+        capture_output=True, check=True).stdout)
+
+    def call(sha, payload):
+        value = json.loads((tmp_path / 'receipt.json').read_text())
+        return {'run_id': value['run_id'], 'input_sha256': value['input_sha256'],
+                'status': statuses.pop(0), 'revision': 0}
+    remote.call = call
+    return mod, remote
+
+
+def test_supervisor_run_holds_gpu_reservation_until_terminal(tmp_path, monkeypatch):
+    statuses = ['RUNNING', 'RUNNING', 'SUCCEEDED']
+    mod, remote = isaac_host(tmp_path, monkeypatch, statuses)
+    receipt = tmp_path / 'receipt.json'
+    row = mod.start(request(), receipt, remote)
+    resv = tmp_path / 'rosy-jobs' / ('isaac-' + row['run_id'] + '.resv')
+    expiry, kind, cores, gb = resv.read_text().split()
+    assert (kind, cores, gb) == ('gpu', '6', '8')
+    assert time.time() < int(expiry) <= time.time() + 7200
+    resv.write_text('%d gpu 6 8\n' % (time.time() + 10))
+    mod.observe(receipt, remote)
+    assert int(resv.read_text().split()[0]) > time.time() + 7000, 'active poll renews the hold'
+    mod.observe(receipt, remote)
+    assert not resv.exists() and not statuses
+
+
+def test_stopping_supervisor_run_releases_reservation(tmp_path, monkeypatch):
+    statuses = ['RUNNING', 'RUNNING', 'STOP_REQUESTED']
+    mod, remote = isaac_host(tmp_path, monkeypatch, statuses)
+    receipt = tmp_path / 'receipt.json'
+    row = mod.start(request(), receipt, remote)
+    resv = tmp_path / 'rosy-jobs' / ('isaac-' + row['run_id'] + '.resv')
+    assert resv.exists()
+    mod.observe(receipt, remote, stop=True)
+    assert not resv.exists() and not statuses
