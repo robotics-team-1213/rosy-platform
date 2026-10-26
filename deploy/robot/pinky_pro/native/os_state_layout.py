@@ -59,6 +59,21 @@ def _read(path: Path, limit: int, owner: int | None = None) -> bytes:
     return raw
 
 
+def _sysfs_read(root: Path, path: Path) -> bytes:
+    path = path.resolve(strict=True)
+    if not path.is_relative_to((root / "sys").resolve(strict=True)):
+        raise ValueError("kernel attribute escapes sysfs")
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as handle:
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != root.stat().st_uid or info.st_mode & 0o022:
+            raise ValueError("kernel attribute type or ownership differs")
+        # sysfs reports PAGE_SIZE for short text attributes; bound actual bytes, not i_size.
+        raw = handle.read(65)
+    if len(raw) > 64:
+        raise ValueError("kernel attribute exceeds size limit")
+    return raw
+
+
 def _pairs(items):
     value = {}
     for key, item in items:
@@ -189,7 +204,7 @@ def mount_facts(root: Path, layout: dict) -> list[dict]:
         partition_dir = (root / "sys/dev/block" / identity).resolve(strict=True)
         if not partition_dir.is_relative_to(root / "sys"):
             raise ValueError("partition sysfs path escapes sysfs")
-        number = _read(partition_dir / "partition", 64).decode("ascii").strip()
+        number = _sysfs_read(root, partition_dir / "partition").decode("ascii").strip()
         expected = {"root": 4 if layout["slot"] == "a" else 5, "data": 6,
                     "provision": 1 if layout["schema_version"] == 2 else 2}[role]
         if number != str(expected):

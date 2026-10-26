@@ -9,18 +9,18 @@ import re
 import stat
 
 from media_layout import parse_gpt, validate_layout
-from os_state_layout import _layout, _mount_table, _one_mount, _pairs, _path, _read, mount_facts
+from os_state_layout import _layout, _mount_table, _one_mount, _pairs, _path, _read, _sysfs_read, mount_facts
 
 
-def _number(path: Path) -> int:
-    raw = _read(path, 64).decode("ascii").strip()
+def _number(path: Path, root: Path = Path("/")) -> int:
+    raw = _sysfs_read(root, path).decode("ascii").strip()
     if not re.fullmatch(r"[0-9]{1,20}", raw):
         raise ValueError("invalid sysfs number")
     return int(raw)
 
 
-def _device(path: Path) -> str:
-    raw = _read(path, 64).decode("ascii").strip()
+def _device(path: Path, root: Path) -> str:
+    raw = _sysfs_read(root, path).decode("ascii").strip()
     match = re.fullmatch(r"([0-9]{1,4}):([0-9]{1,7})", raw)
     if not match or not 1 <= int(match[1]) <= 4095 or int(match[2]) > 1048575:
         raise ValueError("invalid block device identity")
@@ -29,7 +29,7 @@ def _device(path: Path) -> str:
     return raw
 
 
-def _partitions(disk: Path) -> dict[int, str]:
+def _partitions(disk: Path, root: Path, layout: dict) -> dict[int, str]:
     entries = list(islice(disk.iterdir(), 129))
     if len(entries) > 128:
         raise ValueError("too many disk sysfs entries")
@@ -37,9 +37,13 @@ def _partitions(disk: Path) -> dict[int, str]:
     for path in entries:
         if path.is_symlink() or not path.is_dir() or not (path / "partition").exists():
             continue
-        number, device = _number(path / "partition"), _device(path / "dev")
+        number, device = _number(path / "partition", root), _device(path / "dev", root)
         if number in result or device in result.values() or number not in range(1, 7):
             raise ValueError("ambiguous kernel partition topology")
+        expected = layout["partitions"][number - 1]
+        if (_number(path / "start", root) != expected["start_lba"]
+                or _number(path / "size", root) != expected["size_lba"]):
+            raise ValueError("kernel partition range differs from authenticated GPT")
         result[number] = device
     if set(result) != set(range(1, 7)):
         raise ValueError("kernel does not expose all six GPT partitions")
@@ -69,11 +73,11 @@ def _capture(root: Path) -> dict:
     if not partition.is_relative_to(root / "sys"):
         raise ValueError("root partition escapes sysfs")
     disk = partition.parent
-    devices = _partitions(disk)
+    devices = _partitions(disk, root, layout)
     if devices[4 if slot == "a" else 5] != current_device:
         raise ValueError("current root device differs from kernel partition topology")
-    disk_device = _device(disk / "dev")
-    if disk_device in devices.values() or _number(disk / "size") * 512 < layout["raw_size_bytes"]:
+    disk_device = _device(disk / "dev", root)
+    if disk_device in devices.values() or _number(disk / "size", root) * 512 < layout["raw_size_bytes"]:
         raise ValueError("physical disk identity or capacity differs")
     host, local = _mount_table(root, "proc/1/mountinfo"), _mount_table(root, "proc/self/mountinfo")
     active_boot = devices[2 if slot == "a" else 3]
