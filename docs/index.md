@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 9fe8daa1e2 · D-888 OS feed source evidence
 - 2026-10-26 · 4ef7a2ec33 · D-888 boot lifecycle caller와 검증 범위
 - 2026-10-26 · 127eab6a88 · D-888 commit/intent 복구와 FAT source 경계
 - 2026-10-26 · 48064a6e56 · D-888 trial health source와 증거 범위
 - 2026-10-26 · 2b8ff14ee8 · D-888 installed finalization과 kernel stop 증거 범위
-- 2026-10-26 · 8dc0b91774 · D-888 watchdog/apt 정책과 관측 범위 기록

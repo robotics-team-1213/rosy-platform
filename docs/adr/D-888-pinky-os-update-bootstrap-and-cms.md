@@ -126,6 +126,14 @@ ABI2 root에만 frozen `rosy-os-update.service`와 timer/sysinit 연결을 설�
 
 확정 뒤 controller는 자기 commit.json의 target/release/trial boot ID가 현재 committed 상태와 일치하는 경우에만 정상 reboot를 한 번 요청한다. 이는 같은 boot에 남은 tryboot 표식을 다음 source 업데이트 전에 정리하고, false 환경으로 시작한 I/O에 operator의 설정을 다시 적용하기 위한 단계다. 다른 boot ID에서는 같은 요청을 반복하지 않으며 intent 없이 committed tryboot 표식만 있는 경우도 재부팅하지 않는다. 독립 deadline의 committed-boot 판정과 일반 source의 정상 부팅 조건을 완화하지 않는다. 실제 firmware 표식 전환과 두 번의 부팅 수용은 DEVICE에서 확인해야 한다.
 
+frozen feed는 native payload 태그를 제외하고 os-pinky-pro 버전 태그의 다섯 OS assets만 선택한다. 순서는 common committed OS version과 failed_versions로 판정하며 current native version은 사용하지 않는다. production asset URL은 해당 repo/tag/name의 canonical GitHub URL이어야 하고, 명시된 custom API는 같은 origin만 허용한다. catalogue는 페이지당100·최대10페이지와 크기 제한을 적용하며 잘린 목록으로 후보를 결정하지 않는다. OS 전용 private feed cache의 10분 갱신과 403/429 backoff는 native 상태와 분리한다. API 응답은 설치 권한이 아니며 os-update/rollout의 exact bytes Ed 서명을 검증한 뒤에만 JSON을 해석한다.
+
+os-rollout schema1은 kind=os-update, release_id, bundle basename/SHA256, published_at, canary hostname 목록, canary_ok, withdrawn, wave_delay_s를 결속한다. delay는600초 이상이며 non-canary는 signed promotion과 대기 완료가 필요하다. withdrawal은 canary도 막는다. 같은 릴리스의 metadata는 private staging에 immutable bytes로 두고 bundle은 signed size/hash를 지키며 paced stream으로 받는다. file/mode fsync와 parent fsync 뒤400으로 게시한다. pending이 있으면 stage/회수를 거절한다. free space는 bundle+기존512MiB margin을 실제 측정하고 부족할 때만 signed metadata와 정확한 파일 목록·owner/mode/single-link가 맞는 과거 cache를 회수한다. 알 수 없는 파일·symlink·다른 데이터는 지우지 않는다. 이 gate는 최종32GB artifact 용량 측정을 대신하지 않는다.
+
+단순 발견 cache나 기존 staged bundle로 arm을 허가하지 않는다. source의 pending 전, RAUC의 느린 검증 뒤 INSTALLING admission, 최종 VERIFIED arm에서 tagged release와 signed rollout을 새로 읽고 그 뒤 idle/battery/claim 정책을 확인한다. 설치 후 인증된 withdrawal이면 writer를 회수하고 보존된 source에 실패 버전을 기록해 복귀하며 arm하지 않는다. 서명·네트워크 오류를 withdrawal로 간주해 버전을 영구 실패 처리하지 않는다.
+
+boot unit의 run은 optional network config나 new-run freeze 검사보다 pending/retained-tryboot 복구를 먼저 수행한다. 기존 site-wide ops-update-freeze/local marker gate를 frozen helper로 재사용하며 source discovery만 막고 필요한 복귀는 막지 않는다. 새 후보는 서명된 catalogue/rollout/private stage를 통해 기존 lifecycle owner에 원래 metadata bytes와 signature를 넘긴다. 긴 paced 다운로드와 install을 위해 unit은24시간으로 제한하고 Nice19/idle I/O를 사용한다. trial의 독립180초 deadline과 fresh health margin은 그대로다. 이 소스 연결은 실제 OS feed 게시·제품 서명·ARM artifact 배포를 뜻하지 않는다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.

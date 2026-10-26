@@ -3617,3 +3617,10 @@
 - 증거: 6f8d90576d 확장 원격 os-controller-final 2027passed32skipped49warnings/317.14s,0NEW. b48947a1c5 settle 최종400passed18.01s 및 최종4ef7a2ec33 normalize 최종402passed16.32s,0NEW. 서로 중복되어 합산하지 않는다. 초기 constructor public_key 누락10실패, 새 unit SDK 보호 누락2실패, source/trial settle 누락2실패와 정상화 요청 누락1실패를 검출·수정했다. 기존 PID/Invocation race fixture는 settle 이전이 아닌 두 samples 사이에 변이를 주도록 옮겨 검사 의미를 유지했다. normalize 첫 green의 fixture scope NameError1은 변수 범위를 복원해 수정했다. actual Ed source signature·offline systemd parser·실제 flock·frozen CLI와 별개로 firmware/services/RAUC/CORE 입력은 모델이다.
 - gate 변화: 없음. 32 skips와 실제 PID1/cgroup/FAT/RAUC/boot/powercut·DEVICE는 미검증이다. 새 release feed/rollout/staging·producer/CMS+Ed signer/capacity·disposable SYSTEM·전체 최종 리뷰/정식 localmain 착지·native ARM signed image·SD full readback은 남는다. 현재 boot timer는 pending resume이며 새 release 자동 선택은 아직 없다. public push/제품 키/ARM build/SD 쓰기는 수행하지 않았다.
 - CE: 해당 없음 — 관련 기존 모델 증거/CORE cwd 교훈을 적용했고 구현·회귀 시험·D-888에 판단을 보존한다. 모델 통과를 실제 장치 수용으로 기록하지 않는다.
+
+## 2026-10-26 · 9fe8daa1e2 · OS signed feed와 private staging 연결
+
+- 변경: OS 전용 태그·정확한 Ed25519 metadata/rollout 서명·committed OS 순서·canary/철회 정책을 frozen controller에 연결했다. bounded paced download와 immutable private staging은 실제 bundle+512MiB 여유를 확인하고 알려진 과거 cache만 회수한다. pending 전·RAUC 검증 후·arm 전에 release/rollout을 새로 확인한다. boot run은 optional config/freeze보다 복구를 먼저 수행한다. 기존 freeze helper와 unit inventory를 연결했다.
+- 증거: exact 9fe8daa1e2 원격 os-feed-final 2069passed32skipped49warnings380.19s, 0NEW. 앞선 rollout41·feed52/56·lifecycle320·frozen323 통과는 중복 subset이다. rollout16·feed11·fresh admission3·bundle mode fsync1 counterexample 실패를 관측한 뒤 수정했다. real Ed/HTTP/file mode fsync/frozen CLI 시험과 synthetic firmware/services/RAUC 모델은 구분한다.
+- gate 변화: 없음. D-888 Proposed 유지. producer/offline signer·용량 실측·disposable SYSTEM·전체 리뷰/정식 localmain 착지·native ARM signed artifact·SD full readback은 남는다. 32 skips 및 기체 boot/powercut 수용은 미검증이다. 공개 push·제품 키·SD 쓰기는 하지 않았다.
+- CE: 해당 없음 — 이번 판단은 코드·회귀 시험·D-888에 보존되며 실제 장치 장애를 해결한 증거는 없다.

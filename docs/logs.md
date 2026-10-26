@@ -11773,3 +11773,10 @@ osy-d395-s1d\`.
 - 증거: exact6f 확장 원격 2027passed32skipped49warnings317.14s,0NEW; b489 settle 원격400passed18.01s 및 최종4ef7a2ec33 normalize/health/controller/commit/policy/deadline/image/systemd 원격402passed16.32s,0NEW. subset은 중복되며 skips는 미검증이다. 자기 intent/current boot에만 정상 reboot를 요청하고 다른 boot·intent 없는 표식은 재부팅하지 않는다. actual signed source/CLI/flock/offline systemd와 synthetic firmware/CORE/services/RAUC 모델을 구분해 D-888에 기록했다.
 - gate 변화: 없음. D-888 Proposed 유지. OS feed/rollout·staging/producer/offline signer/capacity·SYSTEM·전체 최종 리뷰/정식 localmain 착지·native ARM image/서명/SD 전체 readback과 기체 수용은 남는다. 현재 설치·부팅 제어기 연결을 자동 release 선택 완료로 표시하지 않는다. main merge/public push/제품 키·SD 작업은 수행하지 않았다.
 - CE: 해당 없음 — 기존 모델 증거/예전 CORE release cwd 교훈과 구현·시험·D-888이 판단을 보존한다.
+
+## 2026-10-26 · 9fe8daa1e2 · D-888 OS feed source evidence
+
+- 변경: D-888에 OS-only signed feed/rollout, private bounded staging과 cache 회수, 세 번의 fresh withdrawal admission, 복구 우선 boot run과 frozen freeze helper 계약을 기록했다. native payload 순서와 OS committed 순서를 분리한다.
+- 증거: exact 9fe8daa1e2 공식 원격 os-feed-final 2069passed32skipped49warnings380.19s, known_failures 0NEW. 실제 Ed/HTTP/fsync/frozen 실행과 firmware/services/RAUC 모델을 구분한다. 중간 subset 통과 수를 합산하지 않는다.
+- gate 변화: 없음. D-888 Proposed 유지. producer/signing·capacity·SYSTEM·최종 리뷰/로컬 착지·native ARM artifact·SD 기록/readback·DEVICE는 남는다. 공개 push/제품 키 사용/SD 변경은 없다.
+- CE: 해당 없음 — 코드·시험·D-888이 판단을 보존하며 실물 수용으로 기록하지 않는다.
