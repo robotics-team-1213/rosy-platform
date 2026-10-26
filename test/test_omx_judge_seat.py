@@ -63,3 +63,19 @@ def test_no_parseable_object_reply_is_vetoed_to_abort(backend):
 def test_the_model_chooses_when_the_measurement_allows_it():
     row = m.Seat(Model("proceed")).decide({"box_found": True, "next": "grasp", "aligned": True})
     assert row["decision"] == "proceed" and row["by"] == "model"
+
+
+def test_remap_is_offered_only_when_the_measurement_blames_the_map():
+    model = Model("remap")
+    row = m.Seat(model).decide({"box_found": True, "next": "grasp", "aligned": True})
+    assert row["decision"] == "abort" and row["by"] == "veto" and "remap" not in model.asked[0]
+    row = m.Seat(model).decide({"box_found": True, "next": "grasp", "aligned": False, "remap": True})
+    assert row["decision"] == "remap" and "proceed" not in model.asked[1]
+    row = m.Seat(model).decide({"box_found": False, "next": "grasp", "remap": True})  # no map: nothing to grasp yet
+    assert row["decision"] == "remap" and set(model.asked[2]) == {"remap", "park", "abort"}
+
+
+def test_without_a_model_the_rules_take_the_remap_when_offered_else_retry():
+    off_map = {"box_found": True, "next": "grasp", "aligned": False}
+    assert m.Seat(m.rules).decide(dict(off_map, remap=True))["decision"] == "remap"
+    assert m.Seat(m.rules).decide(off_map)["decision"] == "retry"
