@@ -12012,3 +12012,11 @@ osy-d395-s1d\`.
 - 결정: 정상 PC에서 건너뛰는 브라우저 파일은 없다(2026-10-26 전체 1537건 skipped 0). 그래서 파일별 허용 건너뛰기 목록 없이 0만 허용한다. `test_games_board_browser.py`가 포트 6000이 잡혀 건너뛰는 경우도 그 시험이 돌지 않은 것이라 빨강으로 두고, 다음 착지가 그 조각을 다시 돌린다.
 - 증거: 원격에서 같은 87건 조각을 옵트인 있음/없음으로 실행 → 있음 87 passed exit 0 판정 통과, 없음 87 skipped exit 0 → `vacuous` "0 passed, 87 skipped"로 빨강. 시험 `test/test_land_browser.py`(요약 6가지, 재실행 뒤 숨김 방지, 옵트인 없는 조각), `test/test_land.py`(건너뛰기만 한 조각이 착지를 멈춤).
 - gate 변화: 강화(빈 통과 차단). CE: 해당 없음 — 사전 차단 규칙이며 장애 해결이 아니다.
+
+## 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
+
+- 변경: D-874 묶음의 `SCHEMA`·`FORBIDDEN`·`validate`·정본 인코더를 `rosy-contracts-learning` 0.1.14 `promotion_request`로 옮겼다(Learning은 import, 바이트 동일). Fleet `missions/perception_promotion.py`가 policy-admin이 올린 묶음 바이트를 해시·정본 인코딩·공유 검증기로 다시 보고, 다른 policy-admin의 결정 하나만 `fleet_perception_proposal`에 기록한다. 본문 256 KiB 한도. `work_routes.py`에서 governance 옆에 마운트, `app.py`는 그대로.
+- 이유: Learning의 승격 요청을 사람이 결정할 Fleet 자리가 없었고, 기존 정책 제안 표는 OMX 작업대 모델이다.
+- 증거: 원격 `test_perception_promotion.py`·`test_learning_promotion_request_contract.py`·Learning `test_promotion_request.py` 51 passed, `operations/fleet/test` 7014 passed, `test/architecture`·harness·learning·robot_execution 3000 passed(a72a056ef8). `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음. 승인은 레지스트리·`models/accepted`·배포를 건드리지 않는다.
+- CE: 해당 없음 — 장애 해결이 아닌 새 기능이다.
