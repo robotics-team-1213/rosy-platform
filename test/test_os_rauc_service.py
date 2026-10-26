@@ -10,6 +10,7 @@ import pytest
 
 from test_os_bootloader import _boot, _permit
 from test_os_frozen_firstboot import BASE
+from os_rauc_fakes import rauc_tool
 
 
 class Manager:
@@ -197,3 +198,49 @@ def test_recovery_revokes_known_runtime_after_claim_expiry_without_reinstalling(
     m.recover(root, run=manager)
     assert not manager.active and manager.installs == 1 and not (root / m.RUNTIME).exists()
     assert not (root / m.DROPIN).exists()
+
+
+def test_lifecycle_uses_actual_ed_cms_and_verity_verification_with_a_modeled_manager(tmp_path, monkeypatch, rauc_tool):
+    from test_os_rauc import _case as signed_case, _consumer
+    m, root, bundle, _, _, manager, journal, config = _case(tmp_path / "device", monkeypatch)
+    verifier = _consumer(monkeypatch, rauc_tool)
+    runtime = importlib.import_module("os_rauc_runtime")
+    monkeypatch.setattr(runtime, "verify_bundle", verifier.verify_bundle)
+    signed_root, signed_bundle, raw, signature, _, _ = signed_case(tmp_path / "signed", rauc_tool)
+    for relative in (verifier.ED_KEY, verifier.CMS_KEY):
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(signed_root / relative, target)
+    bundle.chmod(0o600)
+    shutil.copyfile(signed_bundle, bundle)
+    bundle.chmod(0o400)
+    value = json.loads(journal.read_text())
+    value["pending"]["verified"] = verifier.verify_bundle(root, bundle, raw, signature)
+    journal.write_text(json.dumps(value))
+    before = journal.read_bytes(), config.read_bytes()
+    assert m.install(root, bundle, raw, signature, run=manager, authorize=lambda: None)["installed"]
+    assert manager.installs == 1 and not manager.active
+    assert (journal.read_bytes(), config.read_bytes()) == before
+
+
+def test_static_unit_is_accepted_by_the_actual_systemd_parser_in_an_offline_root(tmp_path):
+    analyze = shutil.which("systemd-analyze")
+    assert analyze, "systemd-analyze is required by the Ubuntu test environment"
+    units = tmp_path / "etc/systemd/system"
+    units.mkdir(parents=True)
+    shutil.copyfile(BASE / "native/rosy-os-rauc.service", units / "rosy-os-rauc.service")
+    # Only dependency fixtures: verify parses the real RAUC unit, never starts PID1 or a service.
+    for target in ("sysinit.target", "basic.target", "shutdown.target", "sockets.target"):
+        (units / target).write_text("[Unit]\nDescription=fixture\nDefaultDependencies=no\n")
+    for name in ("dbus.service", "rosy-os-storage.service"):
+        (units / name).write_text("[Unit]\nDefaultDependencies=no\n[Service]\nType=oneshot\nExecStart=/usr/bin/true\n")
+    (units / "dbus.socket").write_text("[Unit]\nDefaultDependencies=no\n[Socket]\nListenStream=/run/dbus/system_bus_socket\n")
+    binaries = tmp_path / "usr/bin"
+    binaries.mkdir(parents=True)
+    for name in ("python3", "rauc", "true"):
+        path = binaries / name
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o755)
+    result = subprocess.run([analyze, "verify", "--man=no", "--root=" + str(tmp_path), "rosy-os-rauc.service"],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
