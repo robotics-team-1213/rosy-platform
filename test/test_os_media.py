@@ -104,6 +104,24 @@ def test_unchanged_gpt_cannot_authorize_stale_kernel_partition_ranges(tmp_path, 
     assert device.read_bytes() == before
 
 
+@pytest.mark.parametrize("handle_kind", ["regular_file", "foreign_block_device"])
+def test_open_handle_must_match_the_whole_disk_block_identity(tmp_path, monkeypatch, handle_kind):
+    m, root, _, _, device, _ = _card(tmp_path, monkeypatch)
+    original = os.fstat
+    def wrong_handle(fd):
+        info = original(fd)
+        if stat.S_ISBLK(info.st_mode):
+            values = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+            values.update(st_mode=stat.S_IFREG | 0o600) if handle_kind == "regular_file" else values.update(st_rdev=os.makedev(8, 16))
+            return SimpleNamespace(**values)
+        return info
+    monkeypatch.setattr(os, "fstat", wrong_handle)
+    before = device.read_bytes()
+    with pytest.raises(ValueError, match="whole-disk handle"):
+        m.capture(root)
+    assert device.read_bytes() == before
+
+
 @pytest.mark.parametrize("case", ["bad_gpt", "foreign_snapshot", "wrong_descriptor", "old_protocol",
     "wrong_boot", "mounted_inactive_root", "mounted_inactive_boot", "private_inactive_mount",
     "small_disk", "duplicate_device", "wrong_parent", "wrong_rauc_slot"])

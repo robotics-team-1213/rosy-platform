@@ -52,3 +52,26 @@ def test_storage_mount_admission_handles_page_sized_sysfs_attributes(tmp_path, m
         return info
     monkeypatch.setattr(os, "fstat", kernel_attribute)
     assert _module().admit_storage(root)["phase"] == "FACTORY_EMPTY"
+
+
+@pytest.mark.parametrize("case", ["oversized", "outside", "symlink_outside", "writable", "fifo"])
+def test_sysfs_reader_rejects_unsafe_inputs_without_relaxing_its_scope(tmp_path, case):
+    module()
+    from os_state_layout import _sysfs_read
+    (tmp_path / "sys").mkdir()
+    path = tmp_path / "sys/value"
+    if case == "fifo":
+        os.mkfifo(path)
+    elif case in ("outside", "symlink_outside"):
+        other = tmp_path / "metadata.json"
+        other.write_bytes(b"4\n")
+        if case == "outside":
+            path = other
+        else:
+            path.symlink_to(other)
+    else:
+        path.write_bytes(b"4" * 65 if case == "oversized" else b"4\n")
+        if case == "writable":
+            path.chmod(0o666)
+    with pytest.raises(ValueError):
+        _sysfs_read(tmp_path, path)
