@@ -3538,7 +3538,7 @@
 - gate 변화: 없음. AI·모델 PC에 helper 재설치가 필요하다.
 - 교훈: CE 새 교훈 기록 — `docs/solutions/runtime-errors/systemctl-machine-refuses-cat-so-clean-storage-always-refused-2026-10-26.md`.
 
-## 2026-10-27 · 선택된 셀의 팔 목록으로 관측기 점검
+## 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
 
 - 기존 셀 등록 파일과 `ROSY_OBSERVATION_WORKCELL` 선택에서 관측기 인스턴스를 읽는다. 연결된 USB 개수는 팔 구성을 바꾸지 않는다.
 - 선택된 팔의 장치 미연결(DISCONNECTED), 서비스 중지(DOWN), 설정 오류(CONFIGURATION), 선택 밖 관측기 실행(UNEXPECTED)을 구분하고 모두 실패로 유지한다.
