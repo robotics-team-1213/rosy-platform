@@ -26,7 +26,7 @@ from .integrated_control import (  # noqa: F401
     ControlStopRequest, ControlStopIngress, ControlStopUnitResult, ControlStopSnapshot,
     ControlStopReconcile, ControlStopReference, ControlStopHistory,
 )
-from .navigation_cancel import ScopedNavigationCancelRequest  # noqa: F401
+from .navigation_cancel import NAVIGATION_ADMISSION_FENCE_VERSION, ScopedNavigationCancelRequest  # noqa: F401
 from .lamp import LampIdentifyRequest  # noqa: F401
 from .media_grants import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest  # noqa: F401
 from .channel_requests import (  # noqa: F401

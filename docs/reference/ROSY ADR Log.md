@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-887 | Signed site service sets and identity-bound retirement | Accepted (2026-10-26) |
+| D-890 | Navigation intent epoch preservation | Accepted (2026-10-26) |
 | D-886 | 워크트리 도구 차단값을 15개 예산과 맞추고, 착지한 브랜치를 prune이 지운다 | Accepted (2026-10-26) |
 | D-885 | guard가 디스크 부족 시험 PC의 저장소 정리를 요청한다 (D-883 보충) | Accepted for implementation (2026-10-26) |
 | D-884 | Learning 저장 대상 풀과 검증된 로컬 자료 회수. [전문](../adr/D-884-learning-storage-pool-and-local-reclamation.md) | Accepted (2026-10-26) |

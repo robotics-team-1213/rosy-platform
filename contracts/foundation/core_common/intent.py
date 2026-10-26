@@ -10,6 +10,7 @@ import json
 import math
 from copy import deepcopy
 from dataclasses import dataclass
+from uuid import UUID
 
 FORBIDDEN_KEYS = frozenset({"cmd_vel", "image", "twist"})
 MAX_STEPS = 8
@@ -43,8 +44,10 @@ class _Verb:
 
 _VERBS: dict[str, _Verb] = {
     "navigate": _Verb("robot", "POST", "/api/v1/navigation/goal", "NAVIGATE",
-                      frozenset({"x", "y", "yaw", "waypoint"})),
-    "home": _Verb("robot", "POST", "/api/v1/navigation/home", "RETURN_HOME", frozenset()),
+                      frozenset({"x", "y", "yaw", "waypoint", "expected_boot_id",
+                                 "expected_owner_generation"})),
+    "home": _Verb("robot", "POST", "/api/v1/navigation/home", "RETURN_HOME",
+                 frozenset({"expected_boot_id", "expected_owner_generation"})),
     "cancel": _Verb("robot", "POST", "/api/v1/navigation/cancel", None, frozenset()),
     "stop": _Verb("robot", "POST", "/api/v1/safety/stop", None, frozenset()),
     "move": _Verb("robot", "POST", "/api/v1/teleop", "MOVE", frozenset({"linear", "angular"})),
@@ -80,6 +83,8 @@ _FIELD_SCHEMAS = {
     "spacing": {"type": "number"},
     "members": {"type": "array", "items": {"type": "string"}},
     "robot": {"type": "string"},
+    "expected_boot_id": {"type": "string", "format": "uuid"},
+    "expected_owner_generation": {"type": "integer", "minimum": 0},
 }
 
 
@@ -231,9 +236,16 @@ def _validate_value(field: str, value: object) -> None:
     elif field_type == "integer":
         if isinstance(value, bool) or not isinstance(value, int):
             raise IntentError("INVALID_FIELD_TYPE", f"{field} must be an integer")
+        if "minimum" in expected and value < expected["minimum"]:
+            raise IntentError("INVALID_FIELD_TYPE", f"{field} must be at least {expected['minimum']}")
     elif field_type == "string":
         if not isinstance(value, str):
             raise IntentError("INVALID_FIELD_TYPE", f"{field} must be a string")
+        if expected.get("format") == "uuid":
+            try:
+                UUID(value)
+            except ValueError as exc:
+                raise IntentError("INVALID_FIELD_TYPE", f"{field} must be a UUID") from exc
     elif field_type == "array":
         if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
             raise IntentError("INVALID_FIELD_TYPE", f"{field} must be an array of strings")

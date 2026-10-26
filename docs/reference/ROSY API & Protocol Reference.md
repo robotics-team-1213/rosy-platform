@@ -5,9 +5,15 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.321
+**Version:** v1.323
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.323 Navigation intent epoch preservation (D-890)
+
+Intent 문법의 `navigate`/`home`만 optional `expected_boot_id`(UUID 문자열), `expected_owner_generation`(bool 제외 비음수 정수)을 받는다. 주어진 값은 그대로 유지하며 최종 pair 허용 여부는 기존 실행 owner가 판단한다. CORE `/api/v1/do` Home도 본문을 기존 `HomeRequest`로 전달한다. Fleet navigate는 어느 한 epoch key라도 있으면 자원·admission·Task 생성 전에 `COMMAND_REJECTED` / `FLEET_NAVIGATION_CALLER_EPOCH_UNSUPPORTED`로 거절한다. epoch 없는 기존 Fleet 경로와 Home 원본 전달은 유지한다.
+
+Foundation의 `NAVIGATION_ADMISSION_FENCE_VERSION = 1`을 schemas에서 재수출한다. 상수 등록은 runtime marker 광고나 mandatory public pair 시행을 뜻하지 않는다. idle cancel·managed qualification·lease cleanup은 후속 제품 변경이며 envelope1.0은 유지한다.
 
 ### v1.321 Learning 저장 대상 풀과 자료 회수 (D-884)
 
@@ -3895,6 +3901,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.323 | 2026-10-26 | D-890: optional strict navigate/home intent epochs; CORE Home body preservation and explicit pre-admission Fleet navigate caller-epoch rejection. Canonical fence version registration only; runtime qualification and envelope1.0 unchanged. |
 | v1.321 | 2026-10-26 | D-884: project-scoped HF storage pool, namespace capacity reservations, pinned archive/reconciliation, verified local reclaim/restore and managed cache; existing publish/manage authority and envelope1.0 preserved. Host source verification is separate from live HF/Isaac acceptance. |
 | v1.320 | 2026-10-26 | D-883: Service Control `clean-storage` for ai/model only (400 `ACTION_NOT_ALLOWED` on site, 409 `NO_STORAGE_SERVICE`), guard `resources.disk`/`disk_low`/`gpu`/`memory`/`memory_low`/`cpu` and the report-only `disk-low`/`memory-low` states. Fleet route shape and envelope1.0 unchanged. |
 | v1.318 | 2026-10-25 | D-876: passive Fleet connection cache wire, strict bounded observations, preserved cache/source ages and D-535 reasons; no raw body or control fields. Handler and independent Monitoring runtime remain unimplemented; envelope1.0 unchanged. |
