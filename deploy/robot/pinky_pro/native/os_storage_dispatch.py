@@ -9,7 +9,10 @@ import stat
 import sys
 
 OS_UPDATE_ASSETS = {"rosy-os-rauc.service": "etc/systemd/system/rosy-os-rauc.service",
-                    "rosy-rauc-dbus.conf": "etc/dbus-1/system.d/90-rosy-rauc.conf"}
+                    "rosy-rauc-dbus.conf": "etc/dbus-1/system.d/90-rosy-rauc.conf",
+                    "rosy-os-motion-guard.service": "etc/systemd/system/rosy-os-motion-guard.service",
+                    **{f"rosy-os-{unit}-guard.conf": f"etc/systemd/system/rosy-{unit}.service.d/zz-rosy-os-guard.conf"
+                       for unit in ("core", "io", "navigation")}}
 
 BOOTSTRAP_FILES = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "os_state_io.py",
                    "os_state_accounts.py", "os_state_files.py", "os_state_config.py", "os_state_ready.py", "os_storage_dispatch.py",
@@ -22,7 +25,9 @@ FIRST_BOOT_NATIVE = (*BOOTSTRAP_FILES, "first_boot_runtime.py", "first_boot_supp
                      "rosy-os-storage.conf", "rosy-os-projection.conf", "rosy-os-tailnet.conf", "os_payload_compatibility.py",
                      "os_slot_metadata.py", "media_layout.py", "os_media.py", "os_update_manifest.py", "os_rauc.py", "os_rauc_runtime.py", "os_update_state.py",
                      "os_bootloader.py", "rosy-os-bootloader", "os_rauc_service.py", "rosy-os-rauc.service", "rosy-rauc-dbus.conf",
-                     "os_update_policy.py", "auto_update_records.py", "auto_update_host.py", "rosy_transfer.py")
+                     "os_update_policy.py", "auto_update_records.py", "auto_update_host.py", "rosy_transfer.py",
+                     "os_motion_guard.py", "rosy-os-motion-guard.service", "rosy-os-core-guard.conf",
+                     "rosy-os-io-guard.conf", "rosy-os-navigation-guard.conf")
 FIRST_BOOT_FILES = ("first-boot/rosy-first-boot.py", "first-boot/rosy-first-boot.sh", "deploy/sd/personalization.py",
                     *("native-runtime/" + name for name in FIRST_BOOT_NATIVE))
 

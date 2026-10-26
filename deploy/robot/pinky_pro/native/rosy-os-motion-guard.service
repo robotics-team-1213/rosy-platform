@@ -1,0 +1,21 @@
+[Unit]
+Description=ROSY durable OS update motion guard
+Requires=rosy-os-storage.service
+After=rosy-os-storage.service
+Before=rosy-core.service rosy-io.service rosy-navigation.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_motion_guard.py reconcile
+TimeoutStartSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictSUIDSGID=true
