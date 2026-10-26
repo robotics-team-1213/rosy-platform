@@ -444,6 +444,8 @@ def test_actual_cpu_model_composition_is_numeric_only(tmp_path, monkeypatch):
     from lerobot.configs.types import PolicyFeature, FeatureType
     session, _, packet, client, _, _, _, _, root = case(tmp_path, monkeypatch)
     monkeypatch.undo()  # Use the real byte-loaded CPU predictor, not the host fake.
+    # Numerical composition uses the fixture clock; separate tests cover wall-time expiry.
+    monkeypatch.setattr('sim_policy_inference.perf_counter_ns', lambda: int(session._clock() * 1e9))
     torch.set_num_threads(2)
     config = ACTConfig(input_features={
         'observation.state': PolicyFeature(FeatureType.STATE,(2,)),

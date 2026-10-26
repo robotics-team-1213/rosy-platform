@@ -78,6 +78,6 @@
 
 - 2026-10-26 · d4a0e5b968 · D-887 source migration verified
 - 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+- 2026-10-26 · uncommitted · guard 자동 `clean-storage` 요청, 관제 PC 자기 자원, `units-user` desired state (D-885)
 - 2026-10-26 · 9816e56bd9 · Site updater pure split verified
 - 2026-10-26 · uncommitted · Site updater runtime extraction before migration
-- 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)

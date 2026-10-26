@@ -3479,6 +3479,7 @@
 - 검토: 별도 전체 read-only 리뷰의 복원·취소·부분 export·바이트 보존·완료 목록 원자성 지적을 재현 후 수정했고 후속 리뷰에서 닫았다. 모바일 기존 percentage flex-basis와 공용 column 배치의 충돌은 실제 computed geometry로 확인해 신규 그룹에 공용 폼만 적용했다.
 - gate 변화: source closure만 검증했다. 운영 SDK/환경 설치, 실제 HF 왕복, signed artifact 설치·서비스 활성화·장치/현장 수용은 수행하지 않았다.
 - CE: 해당 없음 — 결정의 근거와 복구 조건은 구현·회귀·주석·운영 안내에 보존한다.
+
 ## 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
 
 - 변경: `rosy-host-guard-remote health`가 `~/rosy-test`·`/` 여유와 GPU 메모리를 덧붙인다. `rosy-host-guard`는 30GiB/90% 기준의 `disk-low`를 보고만 하고 복구 단계를 진행시키지 않는다. `rosy-host-control`의 ai·model `clean-storage`는 `rosy-test-storage.service`를 한 번 시작한다(없으면 exit 5).
@@ -3500,6 +3501,12 @@
 - 증거: committed six-site-suite regression178 passed/0 skipped in2.07s, official runner/outercmd0, knownNEW0/known0/flaky0. Generate/lint0errors35warnings/diff/complete D766 pass; officialdry-run0 plans conflict-free affected gate over observedmainf943. Source review write-tree disclosure is preserved, not described as zeroGitwrites.
 - gate 변화: no land/install/site/FIELD promotion. Legacy3/current4 migration and retired Postgres cleanup remain pending the separate feature after split landing.
 - CE: no new lesson; extraction/copy closure are explained by source, tests, README and existing installer guidance.
+
+## 2026-10-26 · uncommitted · guard 자동 `clean-storage` 요청, 관제 PC 자기 자원, `units-user` desired state (D-885)
+
+- 변경: `rosy-host-guard`는 `parse_health`로 원격·로컬 응답을 한 번에 해석한다. ai·model의 `disk-low`에 6시간마다 `clean-storage`를 요청한다. 관제 PC 자기 행에 로컬 `health` 값을 더한다. guard-remote에 `clean-storage` 명령을 더했다. ai_pc·model_pc manifest에 `units-user`(@LOGIN@)를 넣었다.
+- 증거: `test/test_host_guard.py`, `test/test_host_state.py`, `test/test_host_recovery_browser.py` 원격 실행.
+- gate 변화: 없음. PC별 재설치는 별도다.
 
 ## 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
 
