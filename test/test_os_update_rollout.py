@@ -10,6 +10,12 @@ from test_factory_release_signature import _keys
 from test_os_update_manifest import metadata
 
 
+@pytest.fixture(autouse=True)
+def native_test_path():
+    from test_ab_image_layout import module
+    module()
+
+
 def rollout(value=None):
     value = metadata() if value is None else value
     return dict(schema_version=1, kind="os-update", release_id=value["release_id"],
