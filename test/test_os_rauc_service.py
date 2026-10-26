@@ -27,10 +27,15 @@ class Manager:
         code, output = 0, ""
         if argv[:2] == ["systemctl", "stop"]:
             if self.fault == "stop" and self.active: code = 1
-            else: self.active = False
+            else:
+                lingering = self.fault == "children" and self.active
+                self.active = False
+                events = self.root / "sys/fs/cgroup/system.slice/rosy-os-rauc.service/cgroup.events"
+                events.write_text(f"populated {1 if lingering else 0}\nfrozen 0\n")
         elif argv[:2] == ["systemctl", "show"]:
             key = argv[argv.index("-p") + 1]
             values = dict(ActiveState="active" if self.active else "inactive", MainPID="123" if self.active else "0",
+                ControlGroup="/system.slice/rosy-os-rauc.service" if self.active else "",
                 FragmentPath="/etc/systemd/system/" + name, DropInPaths="/" + self.module.DROPIN,
                 DevicePolicy="closed", DeviceAllow=self.devices,
                 ReadWritePaths="/run/rosy-os-update/rauc /var/lib/rosy-device/os-update/rauc", ProtectSystem="strict")
@@ -63,6 +68,12 @@ def _case(tmp_path, monkeypatch, fault=None):
     _permit(boot, state, root)
     import os_motion_guard
     os_motion_guard.reconcile(root)
+    controllers = root / "sys/fs/cgroup/cgroup.controllers"
+    controllers.parent.mkdir(parents=True)
+    controllers.write_text("cpu io memory pids\n")
+    events = controllers.parent / "system.slice/rosy-os-rauc.service/cgroup.events"
+    events.parent.mkdir(parents=True)
+    events.write_text("populated 0\nfrozen 0\n")
     m = importlib.import_module("os_rauc_service")
     runtime = importlib.import_module("os_rauc_runtime")
     verified = state.read_state(root)["pending"]["verified"]
@@ -313,3 +324,13 @@ def test_prior_receipt_is_not_replayed_as_a_new_install(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="receipt"):
         m.install(root, bundle, raw, signature, run=manager, authorize=lambda: None)
     assert manager.installs == 1 and len(manager.calls) == before
+
+
+def test_parent_exit_does_not_revoke_files_while_any_cgroup_child_is_alive(tmp_path, monkeypatch):
+    m, root, bundle, raw, signature, manager, journal, config = _case(tmp_path, monkeypatch, "children")
+    before = journal.read_bytes(), config.read_bytes()
+    with pytest.raises(ValueError, match="cgroup"):
+        m.install(root, bundle, raw, signature, run=manager, authorize=lambda: None)
+    assert not manager.active  # Parent is gone, but the kernel still reports a live child.
+    assert (root / m.RUNTIME / "request.json").exists()
+    assert (journal.read_bytes(), config.read_bytes()) == before
