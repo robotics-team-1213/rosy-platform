@@ -3561,3 +3561,10 @@
 - 증거: RED 4454ff7500 원격 38 expected NEW/47 passed → 1f121be8a1 집중 loader/status/host-manifest/ArmS/transfer 원격 86 passed, SKIP 0, NEW/KNOWN/FLAKY 0. 로그는 저장소 밖 D:/DevTemp/fleet-omx-host-placement-{red,green}/run-1.txt.
 - gate 변화: 없음. 호스트 등록은 서비스 설치·활성화·동작 허가가 아니다. 실제 private 설정, signed artifact 배포, 재부팅·장치·Fleet 브라우저 수용은 별도이며 이 변경에서는 수행하지 않았다.
 - CE: 해당 없음 — 배치 의미·충돌·수집 거부 판단은 코드·회귀 시험·hosts README에 남아 별도 교훈을 늘리지 않는다.
+
+## 2026-10-27 · 83b85f7f8a · 네이티브 수집 호출자의 시뮬레이션 호스트 중복 거부
+
+- 원인: 상태 도구에만 둔 역할 중복 검사가 정본 loader를 직접 쓰는 수집 전송 경로에는 적용되지 않았다. 별도 검토가 transport 이전 거부 누락을 찾았다.
+- 변경: 시뮬레이션 후보 파싱과 네이티브 중복 검사를 lab_hosts로 모았다. 명시적 model/ai, suffix 없는 후보, 잘못 쓴 역할을 정본에서 거부한다. suffix 없는 후보의 상태 inventory 역할은 기존대로 생략하며, site+omx 및 test_hosts 소속만 있는 배치는 허용한다.
+- 근거: RED bb04d6ae07 원격 16 expected NEW/88 passed → 83b85f7f8a 동일 loader/status/transfer/manifest/ArmS 집중 원격 104 passed, SKIP 0, NEW/KNOWN/FLAKY 0. helper와 transfer 각각 명시·기존 fallback 배치를 검사하고 _remote/_copy 호출 전 거부를 확인했다. 로그는 저장소 밖 D:/DevTemp/fleet-omx-host-placement-fix-round1-{red-complete,green}/run-1.txt.
+- gate 변화: 없음. 실제 호스트·장치·배포에 접근하지 않았다. CE: 해당 없음 — 호출자 경계와 거부 이유는 정본 loader 및 회귀 시험이 보존한다.
