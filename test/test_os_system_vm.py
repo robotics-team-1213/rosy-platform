@@ -32,6 +32,21 @@ def test_pid1_start_evidence_binds_boot_unit_sender_event_and_clock(change):
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
+def test_actual_pid1_journal_event_survives_guest_reboot(tmp_path):
+    with module().Guest(tmp_path) as guest:
+        assert guest.run("cat /var/lib/cloud/data/instance-id").strip() == guest.instance_id
+        boot = guest.run("cat /proc/sys/kernel/random/boot_id").strip()
+        unit = "rosy-system-journal-proof.service"
+        guest.run("systemd-run --unit=rosy-system-journal-proof --on-active=15s "
+                  "--timer-property=AccuracySec=1s --property=Type=oneshot "
+                  "/usr/bin/systemctl --no-block reboot")
+        journal = guest._ssh("stdbuf -oL journalctl --boot --follow --unit=" + unit
+                             + " --output=json --no-pager", timeout=180)
+        module().pid1_start(journal.stdout, unit, boot, 0)
+        assert guest.process.wait(timeout=90) == 0
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
 def test_actual_private_mount_guard_without_pid1_ptrace_authority(tmp_path):
     with module().Guest(tmp_path) as guest:
         guest.provision_source(Path(__file__).resolve().parents[1])

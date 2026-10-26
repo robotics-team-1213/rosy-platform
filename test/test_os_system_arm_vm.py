@@ -57,7 +57,11 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path):
         assert guest.run("od -An -tx1 /proc/device-tree/chosen/bootloader/tryboot").split() == ["00", "00", "00", "01"]
         assert guest.run("systemctl is-active rosy-os-trial-deadline.timer").strip() == "active"
         assert "OnBootSec=180s" in guest.run("systemctl cat rosy-os-trial-deadline.timer")
-        assert guest.process.wait(timeout=240) == 0  # QEMU -no-reboot exits on the guest's reboot request.
+        boot = guest.run("cat /proc/sys/kernel/random/boot_id").strip()
+        journal = guest._ssh("stdbuf -oL journalctl --boot --follow "
+                             "--unit=rosy-os-trial-deadline.service --output=json --no-pager", timeout=240)
+        importlib.import_module("os_system_vm").pid1_start(
+            journal.stdout, "rosy-os-trial-deadline.service", boot, 180_000_000)
+        assert guest.process.wait(timeout=90) == 0  # QEMU -no-reboot exits on the guest's reboot request.
         console = (tmp_path / "guest-console.log").read_text(errors="replace")
-        assert "rosy-os-trial-deadline.service" in console
         assert "reboot: Restarting system" in console

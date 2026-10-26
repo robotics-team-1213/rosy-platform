@@ -26,6 +26,24 @@ RANGE_BYTES = 8 * 1024**2
 RANGE_THRESHOLD = 32 * 1024**2
 
 
+def pid1_start(raw, unit, boot_id, earliest_us):
+    boot = uuid.UUID(boot_id).hex
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        event = json.loads(line)
+        if not isinstance(event, dict):
+            raise ValueError("journal entry is not an object")
+        # systemd v255 sd-messages.h: SD_MESSAGE_UNIT_STARTING.
+        if (event.get("UNIT") == unit and event.get("_PID") == "1"
+                and event.get("_BOOT_ID") == boot
+                and event.get("MESSAGE_ID") == "7d4958e842da4a758f6c1cdc7b36dcc5"):
+            stamp = event.get("__MONOTONIC_TIMESTAMP", "")
+            if isinstance(stamp, str) and stamp.isdecimal() and int(stamp) >= earliest_us:
+                return event
+    raise ValueError("no matching PID1 unit-start event after the boot deadline")
+
+
 def download(expected, target):
     target = Path(target)
     if target.exists() or target.is_symlink():
