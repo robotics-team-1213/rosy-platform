@@ -64,6 +64,7 @@
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
 | D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
 | D-801 | 관제 콘솔 로봇 실시간 영상은 사이트 발급 읽기 위임과 SFU 기본·사이트 PC MCU 모자이크 혼합 토폴로지를 쓴다(D-789 Decision 3 대체) |
+| D-875 | Swarm owner-local API separates planning from safety lifecycle |
 
 ## 계획·결과 문서
 
