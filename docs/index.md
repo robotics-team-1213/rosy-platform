@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 0a88b44f94 · D-888 actual guest-kernel root evidence
 - 2026-10-26 · 75e832c640 · D-888 offline signing evidence
 - 2026-10-26 · 0b370fcc7b · D-888 unsigned OS producer evidence
 - 2026-10-26 · 9fe8daa1e2 · D-888 OS feed source evidence
 - 2026-10-26 · 4ef7a2ec33 · D-888 boot lifecycle caller와 검증 범위
-- 2026-10-26 · 127eab6a88 · D-888 commit/intent 복구와 FAT source 경계

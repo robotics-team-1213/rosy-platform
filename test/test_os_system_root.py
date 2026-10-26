@@ -68,6 +68,7 @@ def test_actual_loop_fsck_mount_signature_injection_and_error_cleanup(tmp_path):
     assert not (release / "SHA256SUMS.sig").exists()
     assert hashlib.sha256(boot_image.read_bytes()).hexdigest() == boot_sha
     # Exercise rejection after the real RW mount; all owned loop/mount resources must still be released.
+    # The real publisher allocates a fresh owned workspace for each signing attempt.
     bad_images = tmp_path / "bad-signature-case/images"
     bad_images.mkdir(parents=True)
     for name in ("rootfs.ext4", "boot.vfat"):

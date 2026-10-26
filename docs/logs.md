@@ -11794,3 +11794,10 @@ osy-d395-s1d\`.
 - 증거: exact75e832c640 원격270passed28.64s,0NEW. 실제 Ed/CMS/verity/native verification과 producer→real HTTP feed→bounded stage→withdraw/failed refusal를 확인했다. root loop/fsck/mount/PID1는 모델 또는 미실행이며 SYSTEM/DEVICE 증거로 합산하지 않는다. size11commits PASS,lint0errors35warnings.
 - gate 변화: 없음. D-888 Proposed, SYSTEM·최종 리뷰/로컬 병합·제품 trust/publication 승인·native ARM artifact/서명/capacity·SD 기록/readback·DEVICE 미완료. 공개 push/제품 key/SD 작업은 없다.
 - CE: 해당 없음 — 코드·시험·D-888이 판단을 보존한다.
+
+## 2026-10-26 · 0a88b44f94 · D-888 actual guest-kernel root evidence
+
+- 변경: fixed public input/private TCG/NoCloud UUID·guest-only setup, 실제 offline signature preparation과 오류 정리, OS/native signature namespace 분리를 기록했다. host와 product image/DEVICE 범위를 구분한다.
+- 증거: exact0a88b44f94 official22passed269.81s,0NEW. 그중1개 outer scenario가 actual guest kernel fsck/owned loops/RW injection/fresh RO verification/invalid signature cleanup1개를 실행한다. 합성 app/layout 및 미실행 실제 card install/firmware를 분리한다. /tmp omx_01_control directory warning은 연관 미확인으로 보존했다.
+- gate 변화: 없음. D-888 Proposed 유지. RAUC/PID1 SYSTEM 나머지·최종 리뷰/로컬 착지·product trust/publication·native ARM image/capacity/서명·SD readback·DEVICE는 남는다. 제품 키/호스트 운영 설정/공개 push/SD 변경은 없다.
+- CE: 해당 없음 — 구현·시험·D-888이 판단을 보존한다.

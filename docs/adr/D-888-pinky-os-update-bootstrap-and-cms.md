@@ -144,7 +144,13 @@ native image builder는 최종 raw 삭제 전에 `export-os-bundle-inputs.py`로
 
 offline publisher는 verity bundle을 pinned RAUC1.11로 만들고 exact-byte Ed os-update/초기 canary rollout을 생성한다. product private key는 owner-only0600이며 dist/output 밖에 있어야 하고 hosted CI 실행은 거절한다. 실제 기존 `os_rauc` 소비자로 outer/CMS/verity/images를 다시 확인한 뒤에만 새 output directory에 다섯 assets를 fsync 게시한다. `rollout --promote`는 원래 publication time/delay를 유지한 채 canary_ok만 승격하고 `--withdraw`는 철회를 서명한다. 철회된 후보의 재승격은 거절하며 pair 갱신 오류는 이전 bytes 복원을 시도한다. 이 도구는 GitHub 게시를 수행하지 않는다.
 
-SOURCE 시험은 실제 Ed/CMS/verity·native payload 검증·생산자→HTTP catalogue→stage→withdraw/failed refusal를 포함한다. mount lifecycle 시험은 명시적인 kernel/service 모델이며 actual fsck/mount/loop/systemd/RAUC install과 firmware 수용은 아직 SYSTEM/DEVICE에서 확인해야 한다. 시험용 ephemeral 키는 제품 trust가 아니다.
+SOURCE 시험은 실제 Ed/CMS/verity·native payload 검증·생산자→HTTP catalogue→stage→withdraw/failed refusal를 포함한다. 초기 mount lifecycle 시험은 명시적인 kernel/service 모델이며 후속 실제 kernel 증거는 아래 SYSTEM 기록과 구분한다. RAUC install과 firmware 수용은 여전히 별도 SYSTEM/DEVICE에서 확인해야 한다. 시험용 ephemeral 키는 제품 trust가 아니다.
+
+SYSTEM fixture는 unprivileged 시험 PC의 private QEMU8.2.2/TCG·2vCPU·2GiB VM에서 실제 Ubuntu24.04/kernel/systemd255를 부팅한다. input은 [고정된 cloud release](https://cloud-images.ubuntu.com/releases/noble/release-20261017/)의 exact size/SHA와 Ubuntu apt metadata의 고정된 QEMU/dependency checksum으로 검증한다. [NoCloud](https://docs.cloud-init.io/en/24.2/reference/datasources/nocloud.html)의 unique instance ID와 loopback SSH ephemeral key로 자기 guest를 결속한 뒤에만 guest의 전용16GiB virtio 작업 디스크를 format하고 패키지·source를 설치한다. 호스트 apt/root/서비스/실물 장치는 변경하지 않는다. 공개 입력 cache만0700에 보존하고 reuse마다 SHA를 확인하며 mutable guest에는 별도 복사본을 준다. bulk transfer32MiB stall은 exact HTTP Range와 whole SHA를 유지해 해결했다.
+
+실제 guest root 시험은 합성 native payload/512MiB layout metadata·128MiB ext4/64MiB FAT32 파일을 사용한다. source의 offline root preparer로 실제 fsck·자기 loop allocation·RW signature injection·detach·새 RO loop의 native/Python/SDK 검증을 실행했다. debugfs exact signature readback, 원래 unsigned tree 미변경, boot FAT hash 보존, 잘못된 supplied signature의 실제 RW mount 뒤 거절, fixture backing loop 전부 해제를 확인했다. 이 증거는 실제 GPT card install이나 Pi firmware 수용을 뜻하지 않는다.
+
+guest에서 OS release와 native factory ID가 다른 유효한 helper 입력을 사용하자 signature namespace를 OS ID로 찾는 가정이 드러났다. helper는 authenticated native_factory.release_id로 경로를 선택하도록 수정했다. publisher의 기존 fresh-build 입력 검증은 완화하지 않았다. 각 시도는 새 workspace를 소유한다. 처음 양성 시험 뒤 같은 workspace를 재사용한 음성 fixture는 기존 mount target 거절 조건에 걸렸으므로, 별도 새 이미지/작업 공간에서 오류 정리를 검증했다. existing-target guard를 exist_ok로 약하게 바꾸지 않는다. exact0a88b44f94 원격22개 통과에는 실제 guest의1개 kernel 시험이 포함되며 합산하지 않는다.
 
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.

@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 0a88b44f94 · disposable SYSTEM guest와 실제 offline root preparation
 - 2026-10-26 · 75e832c640 · public CMS build trust와 offline OS signing bridge
 - 2026-10-26 · 0b370fcc7b · unsigned OS bundle inputs producer
 - 2026-10-26 · 9fe8daa1e2 · OS signed feed와 private staging 연결
 - 2026-10-26 · 4ef7a2ec33 · frozen OS 설치·시범 부팅·복귀 제어기 연결
-- 2026-10-26 · 127eab6a88 · A/B commit owner와 중단된 intent 복구
