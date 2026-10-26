@@ -44,7 +44,8 @@ Secret scan (D-889 5): a merge-commit publish ships every commit, so before plan
 each commit in origin/main..SHA adds (``git log -p --cc -U0``: plain diffs, and lines a merge adds that
 no parent has) go through the repository scanner ``deploy/robot/pinky_pro/release/secret_scan.py``
 (``scan_text`` with ``public_provenance.json`` and the ``scan_files`` fixture/prose excuses). A value added
-and removed inside the range is still caught; the tip tree alone would miss it.
+and removed inside the range is still caught; the tip tree alone would miss it. Hits reviewed as not secrets
+are listed by (commit, path, rule), never by value, in ``BASELINE``; only an exact triple is skipped.
 """
 
 from __future__ import annotations
@@ -65,6 +66,7 @@ import worktree_rules  # noqa: E402  (tombstone for a removed worktree folder a 
 SCANNER = TOOLS.parent / "deploy" / "robot" / "pinky_pro" / "release"
 sys.path.insert(0, str(SCANNER))
 import secret_scan  # noqa: E402  (the one repository secret scanner: tokens, keys, PSKs, SHA-256 rows)
+BASELINE = "deploy/robot/pinky_pro/release/publish_secret_baseline.json"
 
 SYNC_RECORDS = frozenset({"docs/logs.md", "docs/index.md", "tools/harness/adr_gaps.txt"})
 PREFIX = "publish/main-"
@@ -194,13 +196,34 @@ def scan_range(repo: Path, base: str, head: str) -> tuple[int, list[tuple[str, s
     return commits, hits
 
 
+def load_baseline(repo: Path) -> frozenset[tuple[str, str, str]]:
+    """Reviewed (commit, path, rule) hits that are not secrets; holds no values. Malformed -> Stop."""
+    path = repo / BASELINE
+    if not path.is_file():
+        return frozenset()
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        assert doc["schema"] == "rosy.publish-secret-baseline/1"
+        entries = set()
+        for row in doc["records"]:
+            assert set(row) == {"commit", "path", "rule", "verdict", "reviewed"}
+            assert re.fullmatch(r"[0-9a-f]{40}", row["commit"]) and row["verdict"] == "reviewed: not a secret"
+            entries.add((row["commit"], row["path"], row["rule"]))
+        return frozenset(entries)
+    except (OSError, ValueError, KeyError, TypeError, AssertionError) as exc:
+        raise Stop(1, f"{BASELINE} is malformed ({exc!r}); not publishing") from exc
+
+
 def secret_gate(repo: Path, sha: str) -> str:
-    commits, hits = scan_range(repo, "origin/main", sha)
+    commits, found = scan_range(repo, "origin/main", sha)
+    baseline = load_baseline(repo)
+    hits = [hit for hit in found if hit not in baseline]  # a new commit or another rule still stops
     if hits:
         shown = "\n".join(f"  {c[:10]} {p} [{rule}]" for c, p, rule in hits[:50])
         raise Stop(9, f"secret scan: {len(hits)} hit(s) in origin/main..{sha[:10]} (values redacted); not"
                       f" publishing:\n{shown}" + ("\n  ..." if len(hits) > 50 else ""))
-    return f"secret scan: {commits} commits' added lines clean"
+    skipped = f", {len(found)} reviewed baseline hit(s) skipped" if found else ""
+    return f"secret scan: {commits} commits' added lines clean{skipped}"
 
 
 def _stamp(name: str) -> datetime | None:

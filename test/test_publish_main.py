@@ -81,6 +81,42 @@ def test_a_secret_added_and_removed_inside_the_range_still_stops_the_publish(rep
     assert "unexpected-live-credential" not in err  # the value is never printed
 
 
+def _baseline(local: Path, *hits: tuple[str, str, str]) -> None:
+    rows = [{"commit": c, "path": p, "rule": r, "verdict": "reviewed: not a secret", "reviewed": "2026-10-26"}
+            for c, p, r in hits]
+    path = local / tool.BASELINE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"schema": "rosy.publish-secret-baseline/1", "records": rows}), encoding="utf-8")
+
+
+def test_a_reviewed_baseline_hit_passes_but_the_same_path_in_a_new_commit_stops(repo, capsys):
+    local, _ = repo
+    reviewed = _commit(local, "config/site.env", LEAK + "\n")
+    sha = _commit(local, "app.py", "1")
+    tool.land_record.write(local, sha, reviewed, FULL, [])
+    _baseline(local, (reviewed, "config/site.env", "credential"))
+    assert _run(local) == 0
+    assert "1 reviewed baseline hit(s) skipped" in capsys.readouterr().out
+    again = _commit(local, "config/site.env", LEAK + " # again\n")
+    tool.land_record.write(local, again, sha, FULL, [])
+    assert _run(local) == 9
+    err = capsys.readouterr().err
+    assert f"{again[:10]} config/site.env [credential]" in err and reviewed[:10] not in err
+
+
+def test_a_baseline_row_carrying_anything_but_the_triple_and_verdict_is_refused(repo, capsys):
+    local, _ = repo
+    sha = _commit(local, "app.py", "1")
+    tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
+    _baseline(local, (sha, "app.py", "credential"))
+    path = local / tool.BASELINE
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["records"][0]["excerpt"] = "a value must never be stored here"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    assert _run(local) == 1
+    assert "malformed" in capsys.readouterr().err
+
+
 def test_a_secret_only_a_merge_commit_adds_is_caught(repo, capsys):
     local, base = repo
     _git(local, "checkout", "-q", "-b", "side", base)
