@@ -10,6 +10,7 @@ import pytest
 
 IMAGE = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/image"
 FACTORY = "d951d2aa-a022-4e72-8d56-82fdf428583c"
+RELEASE_ID = "2026.10.26-011"
 
 
 def module():
@@ -57,11 +58,17 @@ def test_factory_data_is_explicit_and_has_existing_service_directory_ownership(t
     m = module()
     calls = {}
     monkeypatch.setattr(m.os, "chown", lambda path, uid, gid: calls.update({Path(path).relative_to(tmp_path).as_posix(): (uid, gid)}))
-    m.initialize_data(tmp_path, FACTORY)
+    m.initialize_data(tmp_path, FACTORY, RELEASE_ID)
     assert json.loads((tmp_path / "state/schema.json").read_text()) == {"schema_version": 1, "state_schema": 1}
     assert json.loads((tmp_path / "state/factory.json").read_text())["factory_id"] == FACTORY
     assert not (tmp_path / "state/current.json").exists()
     assert not (tmp_path / "ssh-hostkeys").exists()
+    assert json.loads((tmp_path / "os-update/state.json").read_text()) == dict(schema_version=1,
+        committed=dict(slot="a", release_id=RELEASE_ID), pending=None, failed_versions=[])
+    assert (tmp_path / "os-update/state.json").stat().st_mode & 0o777 == 0o600
+    for name in ("os-update", "os-update/rauc", "os-update/staging"):
+        assert (tmp_path / name).is_dir()
+        assert (tmp_path / name).stat().st_mode & 0o777 == 0o700
     assert calls["core"] == (960, 960)
     assert calls["maps"] == (961, 960)
     assert calls["models"] == (tmp_path.stat().st_uid, 963)
@@ -97,8 +104,15 @@ def test_data_initialization_refuses_existing_state_before_writes(tmp_path, monk
         factory = "not-a-guid"
     monkeypatch.setattr(m.os, "chown", lambda *args: pytest.fail("must preflight before ownership mutation"))
     with pytest.raises(ValueError):
-        m.initialize_data(root, factory)
+        m.initialize_data(root, factory, RELEASE_ID)
     assert not (root / "state/schema.json").exists()
+
+
+@pytest.mark.parametrize("release_id", [None, True, "", "latest", "2026.10.26-011/../other"])
+def test_factory_os_release_is_required_before_any_data_writes(tmp_path, release_id):
+    with pytest.raises(ValueError, match="release"):
+        module().initialize_data(tmp_path, FACTORY, release_id)
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_each_slot_uses_its_root_boot_and_the_shared_data_and_provision(tmp_path):
