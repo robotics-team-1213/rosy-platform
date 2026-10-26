@@ -1,0 +1,9 @@
+[Unit]
+Description=ROSY independent trial boot deadline
+DefaultDependencies=no
+Before=local-fs.target
+
+[Timer]
+OnBootSec=180s
+AccuracySec=1s
+Unit=rosy-os-trial-deadline.service
