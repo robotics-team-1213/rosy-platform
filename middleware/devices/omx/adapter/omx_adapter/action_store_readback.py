@@ -6,6 +6,8 @@ import json
 from contextlib import closing
 from typing import Any, Callable
 
+from .journal_identity import existing_journal_identity
+
 
 def _nonempty(name: str, value: object, *, maximum: int = 192) -> str:
     if (not isinstance(value, str) or not value.strip() or value != value.strip()
@@ -37,14 +39,7 @@ class ActionStoreReadback:
                 event['detail'] = json.loads(event.pop('detail_json'))
             # Read an existing owner identity in this same snapshot. Never mint
             # a missing journal identity just to satisfy a provenance verifier.
-            identity = None
-            if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
-                                  "AND name='omx_journal_identity'").fetchone():
-                identities = connection.execute('SELECT singleton,journal_id FROM omx_journal_identity').fetchall()
-                if (len(identities) != 1 or identities[0][0] != 1
-                        or not isinstance(identities[0][1], str) or not identities[0][1].strip()):
-                    raise PermissionError('original owner journal identity is malformed')
-                identity = identities[0][1]
+            identity = existing_journal_identity(connection)
             return dict(action=action, events=events, phases=phases, journal_id=identity)
 
     def unresolved_actions(self, *, workcell_id: str | None = None) -> list[dict[str, Any]]:

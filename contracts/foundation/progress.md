@@ -47,3 +47,17 @@ plans:
 기존 tracking/sighting 승인과 World/CORE 권한은 유지한다. 원격 시험의 커밋·실행·실패 수정·skipped와
 실측 근거의 한계는 [구현 검증 기록](../../docs/validation/measured-camera-lifecycle-2026-10-16/result.md)에 모은다. 기존 모듈 gate의 물리 수용 범위를
 넓히지 않는다. D-598의 현재 현장 readback·로봇별 오차 계수는 아직 확보하지 못했다.
+
+## 2026-10-24 · D-856 공유 자원 키의 contract leaf
+
+source76의 core_common.resource_keys는 stdlib-only 자원 식별자 정규화다. safety/decision 양쪽이 이 leaf를 소비하고 기존 Fleet import는 같은 함수 재수출로 보존한다. wire·API 버전·writer 권한은 바꾸지 않는다. Foundation 전체와 관련 Fleet/구조 집중 원격1292 passed/skip0와 FULL23개 각각exit0/known0 NEW·독립 안전 검토를 확인했다. [원본 실패·skip·물리 수용의 한계](../../docs/validation/harbor-physical-proposals-2026-10-24/result.md)를 따른다. runtime/물리 수용 gate는 그대로다.
+
+
+## 2026-10-24 · D-856 중립 ARM 작업 HTTP DTO
+
+API v1.307의 frozen closed 제안·승인·조회 DTO를 store와 HTTP가 공유한다. TaskStatus 분리는 AST와 facade identity를 유지한다. 소스58 HTTP18 passed/skip0/0 NEW와 FULL23개 각각exit0/known0 NEW, 독립 계약·전체로그 검토를 확인했다. [결과와 원본 실패·skip 범위](../../docs/validation/harbor-arm-job-http-2026-10-24/result.md)를 따른다. 이후 schema7/8·제출/물리 종료·Harbor 연결을 이 증거로 대신하지 않으며 기존 모듈 gate를 넓히지 않는다.
+
+
+## 2026-10-24 · D-856 v1.312 독립 관측 wire
+
+API v1.312의 closed raw 관측·context·physical receipt·cancel DTO를 facade에서 재수출한다. unknown coverage를 보존하고 enum 추출의 AST/facade identity를 유지한다. source c4 집중1266passed/skip0/0NEW, 최종 source bb38의 auth/observer/release gates122passed/skip0/0NEW를 확인했다. 독립 wire/consumer 검토와 [양 끝 HTTP·FULL 진행 상태](../../docs/validation/harbor-arm-observer-http-2026-10-24/result.md)를 따른다. 최신 bb38 FULL23개 각각exit0/0NEW와 독립 전체 증거 검토를 확인했다. 이전 source의 성공/실패와 합치지 않는다. 합성 facts·관측 source의 물리 진위를 schema가 보장하지 않으며 기존 물리 gate는 유지한다.

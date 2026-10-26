@@ -26,7 +26,7 @@ jobs:
       IMAGE_WORK: /tmp/rosy-image-work
       RESOLVED_LOCK: /tmp/rosy-inputs.resolved.yaml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -114,7 +114,7 @@ jobs:
           (cd "$release" && sha256sum --check SHA256SUMS)
 
       - name: Upload unsigned image handoff
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
         with:
           name: rosy-pinky-image-unsigned-${{ inputs.release_id }}-${{ github.sha }}
           path: /tmp/rosy-image-dist/${{ inputs.release_id }}/*

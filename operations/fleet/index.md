@@ -91,6 +91,8 @@
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
 - [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
 - [2026-10-11-stable-map-readouts-design.md](../../docs/plans/2026-10-11-stable-map-readouts-design.md)
+- [2026-10-24-managed-transfer-capability-design.md](../../docs/plans/2026-10-24-managed-transfer-capability-design.md)
+- [2026-10-24-neutral-transfer-closure-and-producer-design.md](../../docs/plans/2026-10-24-neutral-transfer-closure-and-producer-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -102,8 +104,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · D-856 forward-port to local main
 - 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
 - 2026-10-25 · uncommitted · fix(fleet): worker 상한 연결·로봇 묶음 우선 검사 순서 수정
 - 2026-10-25 · uncommitted · fix(fleet): 가짜 저장소가 list_resolved 지원 시 그대로 쓰기
 - 2026-10-25 · uncommitted · fix(fleet): 감사 저장소 append 의 reason 기본값 수정
-- 2026-10-25 · uncommitted · feat(fleet): D-865 P2c 정책 승인 자동 admit 루프·지속 상한·감사 저장소

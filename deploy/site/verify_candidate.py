@@ -30,7 +30,7 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-stack.service", "site-firewall.py", "rosy-site-firewall.service",
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
-    "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
+    "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
     "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
@@ -108,11 +108,15 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         raise CandidateVerificationError("invalid source commit")
     if manifest.get("image_tag") != commit or manifest.get("platform") != "linux/amd64":
         raise CandidateVerificationError("manifest tag or platform mismatch")
+    if "site_users_tool_required" in manifest and manifest["site_users_tool_required"] is not True:
+        raise CandidateVerificationError("site_users_tool_required must be true when present")
 
     hashes = manifest.get("deployment_file_sha256")
     if not isinstance(hashes, dict):
         raise CandidateVerificationError("deployment file hashes are missing")
     required = set(REQUIRED_DEPLOYMENT_FILES) | set(REQUIRED_DOCUMENT_FILES)
+    if "site_users_tool_required" not in manifest and "site_users.py" not in hashes:
+        required.discard("site_users.py")  # historical signed candidates remain valid for rollback
     # Preserve verification/rollback of earlier signed candidates; the new pair is indivisible.
     if not set(hashes) & set(ACCOUNT_DEPLOYMENT_FILES):
         required.difference_update(ACCOUNT_DEPLOYMENT_FILES)

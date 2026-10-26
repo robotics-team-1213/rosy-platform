@@ -11,6 +11,7 @@ D-792 camera page in ``review_app_web`` landed red on the shared/web token suite
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from pathlib import PurePosixPath
 
@@ -151,3 +152,87 @@ def registry_readers(repo: at.Repo, path: str) -> list[str]:
         if any(at._under(path, tree) for tree in cache[registry]):
             found += [t for t in repo.test_files if t != path and reader in repo.imports(t) and t not in found]
     return found
+
+
+HARNESS_YAML = "tools/harness/harness.yaml"
+TEST_DEF = re.compile(r"^\s*(?:async\s+)?def test_", re.MULTILINE)
+
+
+class UniqueKeyLoader(yaml.SafeLoader):
+    """yaml.SafeLoader that rejects a repeated mapping key instead of keeping the last value."""
+
+    def construct_mapping(self, node, deep=False):
+        keys = [self.construct_object(key, deep=True) for key, _ in node.value]
+        repeated = [k for i, k in enumerate(keys) if k in keys[:i]]
+        if repeated:
+            raise yaml.constructor.ConstructorError(None, None, f"duplicate key {repeated[0]!r}", node.start_mark)
+        return super().construct_mapping(node, deep)
+
+
+def _uses_reference(text: str) -> bool:
+    """The document has an anchor, alias or merge key anywhere (one edit could change many entries)."""
+    return any(isinstance(ev, yaml.AliasEvent) or getattr(ev, "anchor", None)
+               or (isinstance(ev, yaml.ScalarEvent) and ev.value == "<<" and ev.style is None)
+               for ev in yaml.parse(text, Loader=UniqueKeyLoader))
+
+
+def harness_modules_added(repo: at.Repo, base_text: str, head_text: str) -> tuple[list[dict], str]:
+    """``harness.yaml`` changed only by added ``modules`` entries: (added, ""), else ([], why FULL).
+
+    Parsed like ``Repo.load`` (safe loading) but a repeated key, which safe_load silently drops, is
+    FULL, and so is any anchor, alias or merge key in head. Ownership is
+    deepest-wins (``Repo.module_for``), so an added entry may sit anywhere in the list; what it
+    must not do is take a tracked file from an existing module, so that is computed, not guessed.
+    """
+    try:
+        if _uses_reference(head_text):  # before loading: the merge key never reaches construct_mapping
+            return [], "head uses a YAML anchor, alias or merge key"
+        base, head = yaml.load(base_text, UniqueKeyLoader), yaml.load(head_text, UniqueKeyLoader)
+    except yaml.YAMLError as exc:
+        return [], f"does not parse: {' '.join(str(exc).split())}"
+    if not (isinstance(base, dict) and isinstance(head, dict)
+            and isinstance(base.get("modules"), list) and isinstance(head.get("modules"), list)):
+        return [], "no modules list on both sides"
+    if {k: v for k, v in base.items() if k != "modules"} != {k: v for k, v in head.items() if k != "modules"}:
+        return [], "a key other than modules changed"
+    old, added, rest = base["modules"], [], iter(base["modules"])
+    pending = next(rest, None)
+    for entry in head["modules"]:  # base must be head minus the added entries, in order
+        if pending is not None and entry == pending:
+            pending = next(rest, None)
+        else:
+            added.append(entry)
+    if pending is not None or not added:
+        return [], "an existing module entry changed or was removed"
+    names = [m.get("name") for m in added if isinstance(m, dict)]
+    if len(names) != len(added) or len(set(names)) != len(names) or set(names) & {m.get("name") for m in old}:
+        return [], "added module name missing or duplicated"
+    for module in added:
+        suites = list(module.get("tests") or []) + list(module.get("functional") or [])
+        if not isinstance(module.get("path"), str) or not module.get("tests"):
+            return [], f"module {module['name']} has no path or tests"
+        if any(not isinstance(s, str) or not any(TEST_DEF.search(repo.text(t)) for t in repo.test_files_under(s))
+               for s in suites):
+            return [], f"module {module['name']}: a tests/functional path has no test function"
+        sources = (module["path"], *(module.get("source_paths") or ()))
+        clash = next((m["name"] for m in old for s in (m["path"], *m.get("source_paths", ())) for t in sources
+                      if at._under(s, t) or at._under(t, s)), None)
+        if clash:  # even with no tracked file there yet, the next file added would change owner
+            return [], f"module {module['name']} path overlaps module {clash}"
+    before, after = (dataclasses.replace(repo, modules=old), dataclasses.replace(repo, modules=head["modules"]))
+    for path in repo.tracked:
+        owner = before.module_for(path)
+        if owner is not None and (after.module_for(path) or {}).get("name") != owner["name"]:
+            return [], f"{path} would move from module {owner['name']}"
+    # CI's nightly/main-push matrix (ci.yml runs ci_matrix in full mode): a suite only the
+    # non-gating `modules` runner reaches is never enforced there, so it cannot skip FULL yet.
+    # shortcut: over-strict until that runner gates (deadline 2026-11-15, test_modules_runner_gates_by_2026_11_15); then most module adds narrow on their own, recheck here.
+    nightly = [e for e in at.ci_matrix(after, at.Selection("full", []))["include"] if e["kind"] == "pytest"]
+    args = [p for e in nightly for inv in e["invocations"] for p in inv]
+    ignored = {p.removeprefix("--ignore=") for p in args if p.startswith("--ignore=")}
+    gated = [p for e in nightly if e["gating"] for inv in e["invocations"] for p in inv if not p.startswith("-")]
+    for module in added:
+        files = [t for s in (*module["tests"], *(module.get("functional") or [])) for t in repo.test_files_under(s)]
+        if any(t in ignored or not any(at._under(t, g) for g in gated) for t in files):
+            return [], f"module {module['name']}: a suite is not in CI's gating full matrix"
+    return added, ""

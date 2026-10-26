@@ -336,6 +336,7 @@
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 - [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
+- [2026-10-24-neutral-arm-planning-design.md](plans/2026-10-24-neutral-arm-planning-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -352,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · tools/publish_main.py: 기준 목록 검토자 표기와 IP·호스트 공백 표시
+- 2026-10-26 · uncommitted · tools/publish_main.py: 검토한 비밀 검사 기준 목록
+- 2026-10-26 · uncommitted · tools/publish_main.py: 게시 전 비밀 검사(D-889 5)와 역할 이름
+- 2026-10-26 · uncommitted · tools/publish_main.py: D-868 게시 자동화 초안(기본 dry run)
 - 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
-- 2026-10-26 · d4a0e5b968 · D-887 source migration verified
-- 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
-- 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
-- 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)

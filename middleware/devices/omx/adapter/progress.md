@@ -26,6 +26,8 @@ gates:
     state: PARKED
 adrs: [D-61, D-147, D-168, D-273, D-282, D-336, D-369, D-376, D-386, D-390, D-402, D-403, D-411]
 plans:
+  - docs/plans/2026-10-24-managed-transfer-capability-design.md
+  - docs/plans/2026-10-24-managed-transfer-authority-design.md
   - docs/plans/2026-10-15-omx-camera-recovery.md
   - docs/plans/2026-10-04-d442-omx-preempt-recovery.md
   - docs/plans/2026-10-01-omx-demonstration-lerobot-design.md

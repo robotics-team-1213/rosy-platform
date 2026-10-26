@@ -10,18 +10,22 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 from core_common.protocol.schemas import (
+    ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckRejection,
+    ArmTransferCapability,
     DeviceActionReceipt,
     FleetActionGrant,
+    FleetArmTransferGrant,
     FleetCellTransferGrant,
 )
+from core_common.protocol.arm_transfer_preflight import ARM_PREFLIGHT_REJECTION_STATUS
 
 from .action_receipts import receipt_matches_grant
 
 _INSTANCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$")
-# One wire version per admitted kind. Both kinds report ordered phase summaries
+# One wire version per admitted kind. Phased kinds report ordered phase summaries
 # (v2); a kind missing here has no local executor and is refused before any I/O.
-_PROTOCOL_VERSION_BY_KIND = {"PICK_PLACE": 2, "CELL_TRANSFER": 2}
-ActionGrant = FleetActionGrant | FleetCellTransferGrant
+_PROTOCOL_VERSION_BY_KIND = {"PICK_PLACE": 2, "CELL_TRANSFER": 2, "ARM_TRANSFER": 2}
+ActionGrant = FleetActionGrant | FleetCellTransferGrant | FleetArmTransferGrant
 
 
 class LocalActionUnavailable(TimeoutError):
@@ -30,6 +34,14 @@ class LocalActionUnavailable(TimeoutError):
 
 class LocalActionRejected(ValueError):
     """The local API explicitly rejected the Action request before acceptance."""
+
+
+class ArmPreflightRejected(LocalActionRejected):
+    """A supported, typed read-only planning refusal from the owner."""
+
+    def __init__(self, rejection: ArmTransferCheckRejection, status: int):
+        super().__init__(rejection.code)
+        self.code, self.reason, self.status = rejection.code, rejection.reason, status
 
 
 class DeviceActionTransport(Protocol):
@@ -53,6 +65,29 @@ class UnixLocalActionTransport:
             raise ValueError("UDS Action timeout must be between 10 ms and 2 s")
         self.timeout_s = float(timeout_s)
 
+    def check_transfer(self, request: ArmTransferCheckRequest) -> ArmTransferCheckResult:
+        request = ArmTransferCheckRequest.model_validate(request)
+        response = self._exchange(request.instance_id, {
+            "version": 2, "operation": "CheckTransfer", "transfer": request.model_dump(mode="json")})
+        if (type(response.get("version")) is not int or response["version"] != 2
+                or type(response.get("status")) is not int):
+            raise LocalActionUnavailable("invalid owner preflight protocol")
+        if response["status"] != 200:
+            try:
+                rejection = ArmTransferCheckRejection.model_validate(response.get("error"))
+                if ARM_PREFLIGHT_REJECTION_STATUS[rejection.code] != response["status"]:
+                    raise ValueError("planning rejection status mismatch")
+            except (TypeError, ValueError, KeyError) as exc:
+                raise LocalActionUnavailable("unsupported owner preflight response") from exc
+            raise ArmPreflightRejected(rejection, response["status"])
+        try:
+            result = ArmTransferCheckResult.model_validate(response.get("check"))
+            if result.request != request:
+                raise ValueError("owner preflight response refers to another request")
+        except (TypeError, ValueError) as exc:
+            raise LocalActionUnavailable("invalid owner preflight facts") from exc
+        return result
+
     def submit(self, grant: ActionGrant) -> DeviceActionReceipt:
         version = self._version(grant)
         return self._receipt(grant, {
@@ -70,6 +105,8 @@ class UnixLocalActionTransport:
         error = response.get("error")
         if (response.get("status") == 404 and isinstance(error, Mapping)
                 and error.get("code") == "ACTION_NOT_FOUND"):
+            if isinstance(grant, FleetArmTransferGrant):
+                raise LocalActionUnavailable("ARM_TRANSFER absence requires fenced reconciliation")
             return None  # only the owner's explicit "no such Action"; other 404s are errors
         return self._parse_receipt(grant, response)
 
@@ -83,6 +120,20 @@ class UnixLocalActionTransport:
             "reason": reason,
             "requested_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    def transfer_capability(self, instance_id: str, *, workcell_id: str) -> ArmTransferCapability:
+        response = self._exchange(instance_id, {"version": 2, "operation": "GetTransferCapability"})
+        try:
+            if (set(response) != {"version", "status", "capability"}
+                    or type(response.get("version")) is not int or response["version"] != 2
+                    or type(response.get("status")) is not int or response["status"] != 200):
+                raise ValueError("capability response is unavailable or unsupported")
+            capability = ArmTransferCapability.model_validate(response.get("capability"))
+            if (capability.workcell_id, capability.instance_id) != (workcell_id, instance_id):
+                raise ValueError("capability response targets another owner")
+        except (TypeError, ValueError) as exc:
+            raise LocalActionUnavailable("invalid or unavailable managed transfer capability") from exc
+        return capability
 
     def owner_identity(self, instance_id: str) -> Mapping[str, Any]:
         """The owner's self-reported identity (simulation flag, D-390 §5), read over the same UDS."""
@@ -177,6 +228,6 @@ class UnixLocalActionTransport:
 
 
 __all__ = [
-    "ActionGrant", "DeviceActionTransport", "LocalActionRejected", "LocalActionUnavailable",
+    "ActionGrant", "DeviceActionTransport", "LocalActionRejected", "LocalActionUnavailable", "ArmPreflightRejected",
     "UnixLocalActionTransport",
 ]

@@ -482,6 +482,10 @@
     "area-nav.js": {
       "path": "shared/area-nav.js",
       "media_type": "application/javascript"
+    },
+    "arm-transfer-view.js": {
+      "path": "work/arm-transfer-view.js",
+      "media_type": "application/javascript"
     }
   }
 }

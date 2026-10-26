@@ -304,3 +304,18 @@ def test_local_stop_query_requires_workcell_and_runtime_instance():
     assert query.workcell_id == "omx-cell-01"
     with pytest.raises(ValidationError):
         LocalStopQuery(workcell_id="omx-cell-01", instance_id="")
+
+
+@pytest.mark.parametrize("name", [
+    "DeviceActionState", "DeviceActionPhaseReceipt", "MissionPhaseProgress", "LocalStopState",
+    "StopRequestSource", "ResolvedTargetEvidence", "FleetActionGrant", "DeviceActionReceipt",
+    "DeviceActionLookup", "DeviceActionCancelRequest", "LocalStopRequest", "LocalStopQuery",
+    "LocalStopRearmRequest", "LocalStopSnapshot",
+])
+def test_device_action_leaf_retains_canonical_class_identity_and_schema(name):
+    from core_common.protocol import device_actions, schemas
+
+    canonical = getattr(schemas, name)
+    assert canonical is getattr(device_actions, name)
+    if hasattr(canonical, "model_json_schema"):
+        assert canonical.model_json_schema()["title"] == name
