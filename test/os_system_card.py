@@ -41,7 +41,9 @@ def prepare_card(work: Path) -> dict:
     if work.exists() or work.is_symlink() or not work.is_relative_to(Path("/work")):
         raise ValueError("SYSTEM card needs a new directory on the owned work volume")
     work.mkdir(mode=0o700)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/release"))
+    source = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(source))
+    sys.path.insert(0, str(source / "deploy/robot/pinky_pro/release"))
     from test_ab_image_assembly import module as assembler_module
     from test_ab_image_layout import module as layout_module
     from test_os_factory_release import _factory
