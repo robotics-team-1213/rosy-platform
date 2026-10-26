@@ -197,7 +197,7 @@ def install(root, bundle, raw, signature, *, authorize, run=_run):
             for relative, entry in _contents(prepared, raw, signature, request).items():
                 files[relative] = entry  # A failed parent fsync can follow a successful publication.
                 data, mode = entry
-                _write_atomic(_path(root, relative), data.decode("ascii"), mode)
+                _write_atomic(_path(root, relative), data, mode)
             _call(run, ["systemctl", "daemon-reload"])
             _call(run, ["systemctl", "start", SERVICE], timeout=660)
             _effective(run, prepared)

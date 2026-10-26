@@ -10,11 +10,13 @@ import tempfile
 SERIAL = re.compile(r"^[0-9a-f]{8,32}$")
 
 
-def _write_atomic(path: Path, content: str, mode: int) -> None:
+def _write_atomic(path: Path, content: str | bytes, mode: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+        binary = isinstance(content, bytes)
+        options = {} if binary else {"encoding": "utf-8", "newline": "\n"}
+        with os.fdopen(descriptor, "wb" if binary else "w", **options) as handle:
             handle.write(content)
             handle.flush()
             os.chmod(temporary, mode)
