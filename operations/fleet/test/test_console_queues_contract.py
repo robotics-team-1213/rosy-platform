@@ -51,14 +51,14 @@ def test_empty_queues_disappear_by_attribute_not_style():
 
 
 def test_the_queues_panel_heads_the_rail():
-    """D-493 — 지도가 왼쪽 열 전체를 쓰고(3 : 2), 예외 큐는 오른쪽 열 맨 위다(D-201 예외가 먼저).
+    """D-493 — 지도가 왼쪽 열 전체를 쓰고(2 : 1), 예외 큐는 오른쪽 열 맨 위다(D-201 예외가 먼저).
     2026-10-02 회차의 교훈(큐가 지도 아래 963px)은 그대로다: 큐는 지도 밑으로 가지 않는다."""
     styles = (WEB / "shared" / "styles.css").read_text(encoding="utf-8")
     shell = CONSOLE.read_text(encoding="utf-8")
     assert "main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);" in styles
     assert ".console-primary { grid-column: 1; }" in styles
     assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
-    assert "const MAP_PANEL = 1;" in shell
+    assert "const MAP_PANEL = 2;" in shell  # D-892: queue, status summary, map.
 
 
 def test_queue_and_roster_attention_share_one_rule():
