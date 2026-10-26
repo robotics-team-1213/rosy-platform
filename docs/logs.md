@@ -11959,3 +11959,9 @@ osy-d395-s1d\`.
 - 이유: 동기화·게시 담당 검토. 기준 목록이 사람의 승인으로 읽히지 않게 하고, 규칙이 생길 때까지 게시마다 공백이 보이게 한다.
 - 증거: 원격 `test/test_publish_main.py`(reviewer 없는 목록 거부, 저장소 목록 적재, PR 본문 줄).
 - gate 변화: 없음. CE: 해당 없음 — 검토 표기 보강이다.
+
+## 2026-10-26 · uncommitted · D-871 통합관제 업데이트 현황
+
+- 변경: `deploy/hosts/common/rosy-update-report`(PC별 업데이트 유닛의 타이머·마지막 단계·릴리스·사유 코드·동결 관문, 로그 원문 없음), 강제 명령 `updates`, 가드의 `updates` 수집과 `<name> updates <target>` 줄을 추가했다(관제 PC 자신, 복구 사다리 없음). `fleet.host_control.update_summary`, viewer용 `/api/fleet/updates`, 설치 화면 호스트 카드의 업데이트 줄을 추가했다. 화면은 가드가 보고한 PC를 모두 그린다(셀 관제 PC N대). 동결은 표시만 한다(사용자 결정).
+- 증거: 관제 PC·모델 PC에서 보고 스크립트를 실제로 실행했다(관제 PC omx-autoupdate·omx-devices up_to_date c47d7c3e78c9, 사이트 스택 site-221aedf1bdd5. 모델 PC model-code held, review waiting). 원격 시험(아래 착지).
+- gate 변화: 없음.
