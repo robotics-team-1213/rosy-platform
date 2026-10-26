@@ -11965,3 +11965,15 @@ osy-d395-s1d\`.
 - 변경: `deploy/hosts/common/rosy-update-report`(PC별 업데이트 유닛의 타이머·마지막 단계·릴리스·사유 코드·동결 관문, 로그 원문 없음), 강제 명령 `updates`, 가드의 `updates` 수집과 `<name> updates <target>` 줄을 추가했다(관제 PC 자신, 복구 사다리 없음). `fleet.host_control.update_summary`, viewer용 `/api/fleet/updates`, 설치 화면 호스트 카드의 업데이트 줄을 추가했다. 화면은 가드가 보고한 PC를 모두 그린다(셀 관제 PC N대). 동결은 표시만 한다(사용자 결정).
 - 증거: 관제 PC·모델 PC에서 보고 스크립트를 실제로 실행했다(관제 PC omx-autoupdate·omx-devices up_to_date c47d7c3e78c9, 사이트 스택 site-221aedf1bdd5. 모델 PC model-code held, review waiting). 원격 시험(아래 착지).
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · D-871 3단계: review v12·v13-eval, site-tools
+
+- 변경: `rosy-review-release-update`가 서명된 model-code를 v12(8773), v13-eval(8775), v13 순서로 적용한다(v13만 실패 시 유닛 실패). 관제 PC cam-stream과 account-tls 코드는 `site-tools` 설정 하나(`omx_autoupdate` service, 타이머만 재시작, uv)로 main을 따른다. `rosy-site-tools-autoupdate.{service,timer}`를 추가했다. `lock: null`도 `uv`로 venv를 만든다. D-871 개정, services.yaml, README.
+- 증거: 원격 시험(아래 PR). 각 PC 적용은 병합 뒤.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · 교훈 갱신: 카메라 readiness와 여러 유닛 동시 재시작
+
+- 변경: `docs/solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md`에 네 번째 실패를 덧붙였다. 자동 업데이트가 카메라와 readiness를 한 번에 restart해 정지 복원이 덜 끝났고 시작이 거부됐다. 그런데도 다중 유닛 `is-active`가 0이라 `switched`로 기록됐다. #209의 순차 재시작과 유닛별 확인, 복구 순서, 증거를 적었다.
+- 증거: 관제 PC 2026-10-25 20:33 실패, 같은 날 밤 순차 재시작으로 전환·롤백·재전환 모두 READY.
+- gate 변화: 없음.

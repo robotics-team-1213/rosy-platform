@@ -17,7 +17,8 @@ Publish mode:
    record's ``tier`` field when present, else (older records) one invocation exactly ``["test"]`` (root
    test/ whole: only ``lab_full_invocations``, the FULL tier, runs it; the affected tier names root test
    files one by one). If records exist in the range but none has a ``tier`` string or an ``invocations``
-   list of lists, the format is unknown: exit 8, never a silent "nothing to publish".
+   list of lists, the format is unknown: exit 8, never a silent "nothing to publish". A SHA whose
+   ``tools/hooks/pre-push`` differs from main's is skipped: the installed hook refuses to push it.
 3. Due when the last publish (newest ``origin/publish/main-YYYYMMDD[-HH]`` by name; with --apply also
    merged ``publish/main-`` PRs from gh) is older than --min-hours, or ``--force-blocked`` names a waiting PR.
 4. --apply: refuse if a publish PR is open; check the Safety-Review range (``safety_review.py origin/main
@@ -132,6 +133,9 @@ def tier(record: dict) -> str | None:
     return None
 
 
+HOOK = "tools/hooks/pre-push"
+
+
 def green_full(repo: Path, sha: str) -> bool:
     record = land_record.read(repo, sha)
     return bool(record) and tier(record) == "full" and ancestor(repo, record["base"], sha)
@@ -145,7 +149,8 @@ def publish_sha(repo: Path) -> str | None:
             continue
         seen += 1
         known += tier(record) is not None
-        if green_full(repo, sha):
+        # The installed pre-push refuses a commit whose own tools/hooks/pre-push differs from it.
+        if green_full(repo, sha) and not git(repo, "diff", "--quiet", sha, "main", "--", HOOK, check=False).returncode:
             return sha
     if seen and not known:
         raise Stop(8, f"{seen} land record(s) past origin/main, none with a known format (tier field or"
