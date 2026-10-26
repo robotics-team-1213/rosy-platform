@@ -500,6 +500,13 @@ def test_new_rejects_bad_type_name_and_existing_path_or_branch(main, name, branc
     assert refs(main, "refs/heads") == ["refs/heads/feat/taken", "refs/heads/main"]
 
 
+def test_gc_rewriting_logs_head_does_not_make_an_idle_worktree_active(main):
+    wt = add(main, "done", commit=True, merge=True, owner=PEER)
+    os.utime(Path(git(wt, "rev-parse", "--absolute-git-dir")) / "logs" / "HEAD", (LATER, LATER))  # reflog expire --all
+    assert worktrees.prune(main, apply=True, now=LATER) == 1  # its newest entry is 75 h old
+    assert not wt.exists()
+
+
 def test_prune_deletes_merged_branches_no_worktree_uses_and_keeps_the_rest(main, capsys):
     landed = main / "landed.txt"
     git(main, "branch", "fix/landed")

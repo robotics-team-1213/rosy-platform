@@ -34,7 +34,7 @@ prune removes an orphan idle 1 h, archiving files other than caches and ``.omc/s
 (``tools/worktree_rules.py``).
 
 Idle is the time since the newest of: the tip commit, the worktree's ``.git``
-file and ``logs/HEAD``, and the files ``git status`` lists. No ``logs/HEAD``
+file, the newest ``logs/HEAD`` entry, and the files ``git status`` lists. No ``logs/HEAD``
 reads as active. The index is not used: a plain ``git status`` refreshes it.
 
 ``new`` and ``tools/land.py`` only report what the lossless prune would remove
@@ -150,7 +150,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
 
     Cheap facts only, four git calls for the whole set and no ``git status``:
     branch, tip, lock, merged into main, owner, and ``last`` = newest of the tip commit
-    time, the ``.git`` file (creation) and ``logs/HEAD``; without ``logs/HEAD``
+    time, the ``.git`` file (creation) and the newest ``logs/HEAD`` entry; without one
     it is infinite, which reads as active. A directory git does not list (a
     half-removed worktree) is an ``orphan`` row. A dot-named directory (``.omc``) and a plain
     file under ``.worktrees/`` are not worktrees and not orphans: not listed, not counted.
@@ -182,7 +182,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
             git_dir = path / (path / ".git").read_text(encoding="utf-8").partition("gitdir:")[2].strip()
         except OSError:
             git_dir = path
-        reflog = _mtime(git_dir / "logs" / "HEAD")
+        reflog = rules.reflog_time(git_dir / "logs" / "HEAD")  # entry time: gc rewrites the file (D-886)
         branch = block.get("branch", "").removeprefix("refs/heads/")
         rows.append(_row(path, branch=branch, sha=sha, owner=owners.get(branch, ""),
                          locked="locked" in block, merged=is_merged, git_dir=git_dir,

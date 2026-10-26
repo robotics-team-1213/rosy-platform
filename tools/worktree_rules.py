@@ -195,6 +195,18 @@ def clear_orphan(path: Path, keep: list[Path], droppable, day: str) -> str:
     return note + (" orphan directory removed" if keep else " orphan directory without content removed")
 
 
+def reflog_time(path: Path) -> float:
+    """Time of the newest entry in a reflog file, 0 when there is none.
+
+    Not the file's mtime: ``git reflog expire --all`` (run by gc) rewrites every reflog file, worktrees'
+    ``logs/HEAD`` included, and leaves the entries as they were (2026-10-26, D-886).
+    """
+    try:
+        return float(path.read_text(encoding="utf-8").splitlines()[-1].split("\t")[0].split()[-2])
+    except (OSError, UnicodeError, IndexError, ValueError):
+        return 0.0
+
+
 def topic_ok(topic: str) -> bool:
     return len(topic) <= TOPIC_MAX and TOPIC.fullmatch(topic) is not None
 
@@ -209,12 +221,8 @@ def sweep_branches(root: Path, now: float, apply: bool, say=print, quiet: bool =
     done = 0
     for line in listed.stdout.splitlines():
         branch, sha, checked_out = line.split("\t")
-        try:  # newest reflog entry within the landed wait: just made, maybe about to be checked out
-            # Its time field, not the file's mtime: gc and reflog expire rewrite every reflog file (2026-10-26).
-            last = (common / "logs" / "refs" / "heads" / branch).read_text(encoding="utf-8").splitlines()[-1]
-            fresh = now - int(last.split("\t")[0].split()[-2]) < LANDED_IDLE_HOURS * 3600
-        except (OSError, UnicodeError, IndexError, ValueError):  # no reflog: nothing says it is new
-            fresh = False
+        # A reflog entry within the landed wait: just made, maybe about to be checked out. No reflog: not new.
+        fresh = now - reflog_time(common / "logs" / "refs" / "heads" / branch) < LANDED_IDLE_HOURS * 3600
         if checked_out or fresh or branch in keep or branch == "main" or branch.startswith("archive/"):
             continue
         if apply and _git(root, "update-ref", "-d", f"refs/heads/{branch}", sha).returncode != 0:
