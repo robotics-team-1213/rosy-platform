@@ -5,6 +5,7 @@ import pytest
 
 from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from fleet.server.mission_store import MissionConflict
+from fleet.server.local_action_transport import LocalActionUnavailable
 from fleet.server.physical_transfer_observer import PhysicalObservationService
 from fleet.server.physical_transfer_outcomes import export_transfer_outcomes, record_transfer_outcome
 from test_physical_transfer_evidence import geometry, policy
@@ -102,3 +103,24 @@ def test_relabelled_parent_frames_cannot_authorize_the_child(failed_driver):
         d.dispatcher.submit(result["job"]["mission_id"], observations=reused,
                             authenticated_producer_id=d.store.installation.policy.producer_id)
     assert len(d.port.submitted) == 1 and claims(d.path) == before
+
+
+def test_exact_dispatcher_replay_needs_no_owner_connection(failed_driver, monkeypatch):
+    d, _ = failed_driver
+    original = recover(failed_driver)
+    def unavailable():
+        raise LocalActionUnavailable("owner unavailable")
+    monkeypatch.setattr(d.dispatcher, "_capabilities", unavailable)
+    assert recover(failed_driver) == original
+    assert len(d.port.submitted) == 1
+
+
+def test_dispatcher_replay_after_ttl_change_returns_the_retained_child_grant(failed_driver):
+    from fleet.server.physical_transfer_execution import PhysicalTransferExecution
+    from fleet.server.physical_transfer_dispatcher import PhysicalTransferDispatcher
+    d, _ = failed_driver
+    original = recover(failed_driver)
+    d.dispatcher = PhysicalTransferDispatcher(PhysicalTransferExecution(d.store, grant_ttl_s=30.),
+        d.port, d.tasks, deployment_profile="simulation")
+    assert recover(failed_driver) == original
+    assert len(d.port.submitted) == 1

@@ -242,3 +242,35 @@ def test_clock_regression_during_child_admission_rolls_back_every_change(failed_
     with pytest.raises(MissionConflict, match="clock"):
         api().recover_transfer(failed_transfer[3], failed_transfer[4]["mission_id"], **args)
     assert snapshot(failed_transfer[0]) == before
+
+
+@pytest.mark.parametrize("kind", ["delete", "tamper"])
+def test_missing_or_changed_original_assessment_blocks_export_and_child_submission(submitted, tmp_path, kind):
+    import json
+    from fleet.server.physical_transfer_outcomes import export_transfer_outcomes
+    path, _, store, executor, parent, _ = submitted
+    observe(submitted, receipt(submitted))
+    store._clock_ns = lambda: NOW + 1_000_000_000
+    assessment(submitted)
+    store._clock_ns = lambda: NOW + 1_400_000_000
+    child = recover(submitted, observations=measured(store, submitted[5], offset=1_000_000_000, sequence=5))
+    prepared_child = executor.prepare(child["mission_id"], capabilities=store.installation.capabilities,
+                                      capabilities_observed_at_ns=store._now_ns() - 1)
+    with connect(path) as connection:
+        if kind == "delete":
+            connection.execute("DELETE FROM fleet_cell_events WHERE event_type='PHYSICAL_TRANSFER_ASSESSED'")
+        else:
+            row = connection.execute("SELECT event_id,detail_json FROM fleet_cell_events "
+                "WHERE event_type='PHYSICAL_TRANSFER_ASSESSED'").fetchone()
+            detail = json.loads(row["detail_json"])
+            detail["task_outcome"] = "unknown"
+            connection.execute("UPDATE fleet_cell_events SET detail_json=? WHERE event_id=?", (json.dumps(detail), row["event_id"]))
+    with pytest.raises(MissionConflict):
+        export_transfer_outcomes(store, parent["mission_id"], tmp_path / "invalid.json")
+    assert not (tmp_path / "invalid.json").exists()
+    store._clock_ns = lambda: NOW + 1_800_000_000
+    with pytest.raises(MissionConflict):
+        executor.authorize_submission(child["mission_id"], expected_request_digest=prepared_child["grant"]["request_digest"],
+            observations=measured(store, prepared_child, offset=1_400_000_000, sequence=7),
+            authenticated_producer_id=store.installation.policy.producer_id,
+            capabilities=store.installation.capabilities, capabilities_observed_at_ns=store._now_ns() - 1)
