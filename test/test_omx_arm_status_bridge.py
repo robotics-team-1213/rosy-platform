@@ -26,6 +26,14 @@ def test_follower_units_convert_to_dynamixel_radians():
     assert rad["gripper_joint_1"] == pytest.approx(0.0, abs=0.002)  # gripper 50 of 0..100
 
 
+def test_conversion_preserves_the_followers_calibrated_tick_range():
+    calibration = {motor: {"range_min": 1024, "range_max": 3072} for motor in m.MOTORS}
+    rad = m.to_radians([-100, 100, 0, 0, 0, 25], calibration)
+    assert rad["joint1"] == pytest.approx(-math.pi / 2, abs=0.00001)
+    assert rad["joint2"] == pytest.approx(math.pi / 2, abs=0.00001)
+    assert rad["gripper_joint_1"] == pytest.approx(-math.pi / 4, abs=0.00001)
+
+
 def test_only_fresh_newer_rows_are_sent():
     row = {"t": 100.0, "state": [0, 0, 0, 0, 0, 50]}
     assert m.fresh_sample(row, None, 100.5) is not None
@@ -98,8 +106,9 @@ def test_fleet_stores_and_serves_the_guard_fault(tmp_path):
         "cameras": [{"source_id": "top", "label": "Top", "role": "overhead", "arm_id": None,
             "image_topic": "/top/image_raw", "device_path": "/dev/v4l/by-path/example-top",
             "token_env": "EXAMPLE_TOP", "credential_sha256": sha256(b"top-secret").hexdigest()}]}]})
+    clock = [NOW]
     fleet = WorkcellObservations(manifest, {"omx_arm_s": "arm-secret"},
-                                 wall=lambda: NOW, monotonic=lambda: NOW)
+                                 wall=lambda: clock[0], monotonic=lambda: clock[0])
 
     def post(sequence, sample):
         fleet.ingest("omx_arm_s", "arm-secret", ArmObservation(epoch="a" * 32, sequence=sequence,
@@ -110,10 +119,43 @@ def test_fleet_stores_and_serves_the_guard_fault(tmp_path):
     arm = post(1, m.next_sample({"t": NOW - 0.3, "state": [0, 0, 0, 0, 0, 50]}, active, None, NOW))
     assert arm["fresh"] and arm["motor_health"]["status"] == "active"
     assert arm["motor_health"]["motors"][0]["joint"] == "joint1"
+    clock[0] = NOW + 3
+    stale = fleet.snapshot()["workcells"][0]["arms"][0]
+    assert not stale["fresh"] and stale["positions"] is None
+    assert stale["motor_health"]["evidence"] == "delayed"
+    clock[0] = NOW
     fault = m.arm_health(_snapshot(tmp_path, "fault", reasons=["following error"]), ARM_ID, NOW)
     arm = post(2, m.next_sample({}, fault, NOW - 0.3, NOW))
     assert arm["positions"] is None and arm["motor_health"]["status"] == "fault"
     assert arm["motor_health"]["stop_reasons"] == ["following error"]
+
+
+@pytest.mark.parametrize("status", ["fault", "ended"])
+def test_terminal_guard_health_does_not_need_a_live_file(tmp_path, monkeypatch, status):
+    import types
+
+    sent = []
+
+    class Sender:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def send(self, sample):
+            sent.append(sample)
+
+    def finish(_):
+        raise InterruptedError
+
+    monkeypatch.setitem(sys.modules, "workcell_observation_bridge", types.SimpleNamespace(ArmSender=Sender))
+    monkeypatch.setenv("EXAMPLE_TOKEN", "example-token")
+    monkeypatch.setattr(m.time, "time", lambda: NOW)
+    monkeypatch.setattr(m.time, "sleep", finish)
+    path = _snapshot(tmp_path, status, reasons=["session ended"] if status == "ended" else ["following error"])
+    with pytest.raises(InterruptedError):
+        m.main(["--live", str(tmp_path / "missing-live.json"), "--fleet-url", "https://fleet.example.invalid",
+                "--source-id", "omx_arm_s", "--token-env", "EXAMPLE_TOKEN", "--arm-id", ARM_ID,
+                "--health-file", str(path)])
+    assert len(sent) == 1 and sent[0].value is None and sent[0].motor_health.status == status
 
 
 def test_held_live_fault_never_becomes_a_terminal_guard_fault():
