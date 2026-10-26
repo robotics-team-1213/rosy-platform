@@ -183,3 +183,13 @@ def test_legacy_link_is_unverified_until_explicit_operator_reconfirmation(site):
     assert client.get(path, headers=headers).json()['caution'] == care()['caution']
     assert client.put(path, json=care(), headers=headers).json()['source_binding_status'] == 'matched'
     assert client.get('/api/fleet/device-profile-sources/arm/source-one', headers=headers).json()['profile'] is not None
+
+
+def test_unconfigured_report_intake_requires_a_source_credential_before_reporting_availability(tmp_path):
+    app = FastAPI()
+    install_device_care_routes(app, tmp_path / 'tasks.sqlite3', console=None, observations=None,
+                               require_viewer=lambda: None, require_named_operator=lambda: None)
+    with TestClient(app) as client:
+        path = '/api/fleet/device-profiles/arm-one/load-reports/source-one'
+        assert client.post(path, json={}, headers={'Authorization': 'ai-only'}).status_code == 401
+        assert client.post(path, json={}, headers={'X-Workcell-Observation-Token': 'fixture'}).status_code == 503

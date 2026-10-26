@@ -121,6 +121,8 @@ def install_device_care_routes(app, path, *, console, observations, require_view
     @app.post('/api/fleet/device-profiles/{device_id}/load-reports/{source_id}', status_code=202, tags=['fleet'])
     async def report(device_id: str, source_id: str, request: Request,
                      token: str | None = Header(None, alias='X-Workcell-Observation-Token')):
+        if not token:
+            raise HTTPException(401, detail={'code': 'WORKCELL_OBSERVATION_UNAUTHORIZED'})
         if observations is None:
             raise HTTPException(503, detail={'code': 'WORKCELL_OBSERVATIONS_UNAVAILABLE'})
         try:

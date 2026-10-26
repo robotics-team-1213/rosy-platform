@@ -49,9 +49,10 @@ export function paintProfile(root, profile, {elapsedS = 0, unavailable = false, 
       const origin = node('dl'); origin.className = 'ui-readout'; origin.dataset.profileOrigin = '';
       const analysis = profile.latest_analysis;
       const rows = [['프로필', profile.device_id],
-        ['설정된 관측원', profile.source_id ? `${profile.source_kind}/${profile.source_id}` : '연결 안 함'],
+        ['설정된 관측원', profile.source_id ? `${profile.source_kind}/${profile.source_id}` : '연결 안 함']];
+      if (profile.source_kind === 'arm') rows.push(
         ['연결 당시 owner', profile.source_binding?.owner_id || '미확인'],
-        ['현재 등록 owner', profile.registered_owner_id || '미확인']];
+        ['현재 등록 owner', profile.registered_owner_id || '미확인']);
       if (analysis) rows.push(
         ['분석 owner / 모터 그룹', `${analysis.context?.owner_id || '미확인'} / ${analysis.context?.motor_group || '미확인'}`],
         ['분석 시각', new Date(analysis.assessed_at * 1000).toLocaleString()],
