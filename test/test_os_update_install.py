@@ -187,6 +187,24 @@ def test_receipt_nested_schema_bool_is_not_an_integer(tmp_path, monkeypatch):
         m.read_report(root)
 
 
+def test_trial_receipt_decoder_preserves_source_guard_and_all_bindings(tmp_path, monkeypatch):
+    from test_os_bootloader import _trial
+    from test_os_update_state import _advance
+    m, root, *rest = _installer(tmp_path, monkeypatch)
+    m.finalize(root, run=rest[-2])
+    state = importlib.import_module("os_update_state")
+    _advance(state, root, "TRIAL")
+    _trial(root)
+    pending = state.read_state(root)["pending"]
+    with pytest.raises(ValueError, match="source boot"):
+        m.read_report(root)
+    report = m.read_bound_report(root, pending)
+    assert report["target_slot"] == "b"
+    pending["verified"]["manifest_sha256"] = "0" * 64
+    with pytest.raises(ValueError, match="binding"):
+        m.read_bound_report(root, pending)
+
+
 def test_frozen_finalizer_entrypoint_and_receipt_reader_need_no_mutable_sdk(tmp_path, monkeypatch):
     import sys
     from test_os_frozen_firstboot import _prefix, _stage

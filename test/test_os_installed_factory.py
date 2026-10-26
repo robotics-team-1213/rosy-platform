@@ -86,3 +86,18 @@ def test_authenticated_candidate_sdk_is_parsed_without_executing_its_top_level_c
     value["native_factory"] = {k: descriptor[k] for k in ("release_id", "checksums_sha256")}
     module = importlib.import_module("os_installed_factory")
     assert module.verify(current, target, value) == descriptor
+
+
+def test_current_factory_requires_the_signed_factory_to_be_the_active_pointer(tmp_path):
+    _, target, release, value, _, _ = _installed(tmp_path)
+    module = importlib.import_module("os_installed_factory")
+    pointer = target / "opt/rosy/current"
+    with pytest.raises(ValueError, match="OS_FACTORY_HOLD"):
+        module.verify_current(target, value)
+    pointer.symlink_to("releases/" + FACTORY_ID)
+    assert module.verify_current(target, value)["release_id"] == FACTORY_ID
+    assert (release / "SHA256SUMS.sig").is_file()
+    pointer.unlink()
+    pointer.symlink_to("releases/unrelated")
+    with pytest.raises(ValueError, match="OS_FACTORY_HOLD"):
+        module.verify_current(target, value)
