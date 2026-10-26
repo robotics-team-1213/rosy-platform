@@ -2,6 +2,7 @@
 import datetime as dt
 import importlib
 import json
+import struct
 import subprocess
 import uuid
 
@@ -253,13 +254,12 @@ def test_committed_trial_requests_one_normal_boot_for_future_automatic_updates(t
     _normal(root, "b")
     assert m.resume(root, host=host, run=run)["pending"] is None
     assert calls.count(normal_reboot) == 1
-    (root / "proc/device-tree/chosen/bootloader/tryboot").write_bytes(__import__("struct").pack(">I", 1))
+    (root / "proc/device-tree/chosen/bootloader/tryboot").write_bytes(struct.pack(">I", 1))
     assert m.resume(root, host=host, run=run)["pending"] is None
     assert calls.count(normal_reboot) == 1  # A different boot cannot repeat this transaction's normalization.
 
 
 def test_untracked_committed_tryboot_flag_does_not_request_reboot(tmp_path, monkeypatch):
-    import struct
     m, _, _, root, _, _, host, calls, run, _, _ = _source(tmp_path, monkeypatch)
     (root / "proc/device-tree/chosen/bootloader/tryboot").write_bytes(struct.pack(">I", 1))
     assert m.resume(root, host=host, run=run)["pending"] is None
