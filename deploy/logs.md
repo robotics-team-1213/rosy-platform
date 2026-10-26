@@ -3553,3 +3553,11 @@
 - 증거: RED c29de1139f 원격 5 expected failures/4 passed → b6f8f0b46f bridge/status/updater/manifest/readiness/pipeline/motor-health/Fleet 집중 원격 181 passed, NEW 0. 로그는 저장소 밖 D:/DevTemp/fleet-arm-observation-{red,green}/run-1.txt.
 - gate 변화: 없음. 실제 호스트 설치·재부팅·Fleet 브라우저·장치 수용은 별도이며 활성 수집 세션은 건드리지 않았다.
 - CE: 해당 없음 — 정본 health 재사용과 stale/terminal 경계는 코드·시험·README 및 기존 stale-health 교훈에 남아 중복 교훈을 만들지 않는다.
+
+## 2026-10-27 · 1f121be8a1 · 네이티브 OMX 제어 호스트 명시 등록
+
+- 변경: private `omx_hosts` SSH 대상 배열을 기존 lab loader에 추가했다. 키 없음은 site+omx 기존 배치, 명시적 빈 배열은 site만, 대상 목록은 해당 호스트의 omx 역할만 뜻한다. 네이티브 11개 유닛과 업데이터를 단일 omx 그룹으로 옮기고 역할 합성 시 충돌을 거부한다.
+- 감시·호출자: 별도 제어 PC를 test/sim 후보로 추가하지 않고 상태 probe에 포함한다. 수집 전송은 유일한 네이티브 호스트에서 읽고 0개/복수면 거부한다. 복구 가드는 별도 hosts.conf와 기존 권한을 유지한다. 자체 검토에서 기존 test_hosts 빈 문자열 무시 동작도 보존했다.
+- 증거: RED 4454ff7500 원격 38 expected NEW/47 passed → 1f121be8a1 집중 loader/status/host-manifest/ArmS/transfer 원격 86 passed, SKIP 0, NEW/KNOWN/FLAKY 0. 로그는 저장소 밖 D:/DevTemp/fleet-omx-host-placement-{red,green}/run-1.txt.
+- gate 변화: 없음. 호스트 등록은 서비스 설치·활성화·동작 허가가 아니다. 실제 private 설정, signed artifact 배포, 재부팅·장치·Fleet 브라우저 수용은 별도이며 이 변경에서는 수행하지 않았다.
+- CE: 해당 없음 — 배치 의미·충돌·수집 거부 판단은 코드·회귀 시험·hosts README에 남아 별도 교훈을 늘리지 않는다.

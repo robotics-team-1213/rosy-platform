@@ -105,7 +105,7 @@ def test_roles_come_from_the_site_host_and_sim_host_suffixes():
 
 
 def test_separate_control_hosts_are_probed_without_test_or_sim_enrollment():
-    config = {'site_host': 'site@h', 'test_hosts': ['m@h'], 'omx_hosts': ['arm@h', 'arm2@h']}
+    config = {'site_host': 'site@h', 'test_hosts': ['m@h', '  '], 'omx_hosts': ['arm@h', 'arm2@h']}
     assert status.roles(config) == {'site@h': {'site'}, 'arm@h': {'omx'}, 'arm2@h': {'omx'}}
     assert status.probe_targets(config) == ['m@h', 'site@h', 'arm@h', 'arm2@h']
 

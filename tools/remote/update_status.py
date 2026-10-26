@@ -227,7 +227,8 @@ def probe_targets(config: dict) -> list[str]:
     raw = config.get('test_hosts', [])
     if not isinstance(raw, list):
         raise SystemExit('lab-hosts.json test_hosts must be a list')
-    tests = [lab_hosts.ssh_target(item, 'test_hosts') for item in raw if item != '']
+    tests = [lab_hosts.ssh_target(item, 'test_hosts') for item in raw
+             if not (isinstance(item, str) and not item.strip())]
     return list(dict.fromkeys([*tests, *roles(config)]))
 
 
