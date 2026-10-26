@@ -355,6 +355,6 @@
 
 - 2026-10-27 · 3d199fe1d1 · 명시적 FULL 착지 시도의 충전 실패와 동일 호스트 대조
 - 2026-10-27 · b36e441576 · 명시적 FULL의 현재 준비와 게시 적격성
+- 2026-10-27 · uncommitted · feat(sim): D-877 물체 위치 평가 사실, 탐침 PASS 순서
 - 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
 - 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
-- 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
