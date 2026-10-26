@@ -211,7 +211,8 @@ class Guest:
             info.uname = info.gname = "root"
             return info
         with tarfile.open(fileobj=content, mode="w:gz", compresslevel=1) as archive:
-            for name in ("deploy/robot/pinky_pro", "deploy/hosts/common", "contracts/foundation", "tools/harness", "test"):
+            for name in ("deploy/robot/pinky_pro", "deploy/hosts/common", "contracts/foundation", "tools/harness", "test",
+                         "shared/web/tokens.css", "shared/web/components.css"):
                 archive.add(source / name, arcname=name, filter=public_source)
             for path in source.glob("*.yaml"):
                 archive.add(path, arcname=path.name, filter=public_source)
