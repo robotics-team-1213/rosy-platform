@@ -116,7 +116,7 @@ class TransferEvidenceContext(_Closed):
 
 
 class PhysicalEvidenceRejected(ValueError):
-    """Stable rejection reason; rejection never changes the ledger or claims."""
+    """Stable rejection reason; validation grants no completion or release authority."""
 
 
 def _pose_matches(actual, goal, policy):
