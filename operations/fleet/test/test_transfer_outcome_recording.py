@@ -87,20 +87,19 @@ def test_export_preserves_original_attempt_and_is_explicitly_unreviewed(rig, tmp
         sample["object_pose"] = None
     assert rig.client.post(url, headers=OBSERVER, json=request).status_code == 409
     module = import_module("fleet.server.physical_transfer_outcomes")
-    service = rig.app.state.arm_transfer_observation_service
     output = tmp_path / "outcomes.json"
-    module.export_transfer_outcomes(service, mission, output)
+    module.export_transfer_outcomes(rig.store, mission, output)
     doc = json.loads(output.read_text())
     assert doc["scope"] == "unreviewed_metadata_only"
     assert doc["outcomes"][0]["task_outcome"] == "unknown"
     assert doc["outcomes"][0]["evidence"]["samples"] == request["observations"]
     assert doc["raw_camera_bytes_available"] is False and doc["behavior_training_eligible"] is False
     with pytest.raises(FileExistsError):
-        module.export_transfer_outcomes(service, mission, output)
+        module.export_transfer_outcomes(rig.store, mission, output)
     with closing(rig.store._journal._connect()) as connection:
         connection.execute("UPDATE fleet_cell_events SET detail_json=json_set(detail_json, "
             "'$.evidence.samples[0].object_ref','tampered') WHERE event_type='PHYSICAL_TRANSFER_ASSESSED'")
         connection.commit()
     with pytest.raises(ValueError, match="evidence"):
-        module.export_transfer_outcomes(service, mission, tmp_path / "changed.json")
+        module.export_transfer_outcomes(rig.store, mission, tmp_path / "changed.json")
     assert not (tmp_path / "changed.json").exists()
