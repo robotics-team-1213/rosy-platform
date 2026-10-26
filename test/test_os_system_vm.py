@@ -14,6 +14,28 @@ def module():
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
+def test_actual_private_mount_guard_without_pid1_ptrace_authority(tmp_path):
+    with module().Guest(tmp_path) as guest:
+        guest.provision_source(Path(__file__).resolve().parents[1])
+        guest.run("cd /work/source && python3 -c \"import sys;from pathlib import Path;sys.path.insert(0,'test');"
+                  "from test_os_frozen_firstboot import _prefix;_prefix(Path('/work/runtime'))\"")
+        imports = ("import sys;from pathlib import Path;"
+                   "sys.path.insert(0,'/work/runtime/opt/rosy/native-runtime');"
+                   "from os_update_install import _namespace;\n")
+        outside = imports + ("try:\n _namespace(Path('/'))\nexcept ValueError:\n print('HOST_REFUSED')\n"
+                             "else:\n raise AssertionError('PID1 namespace was accepted')\n")
+        command = ["nsenter", "--mount=/proc/1/ns/mnt", "--", "/usr/bin/python3", "-I", "-B", "-c", outside]
+        assert guest.run(shlex.join(command)).strip() == "HOST_REFUSED"
+        probe = imports + "_namespace(Path('/'));print('PRIVATE_NAMESPACE_OK')"
+        command = ["systemd-run", "--wait", "--pipe", "--collect", "--unit=rosy-system-namespace",
+                   "--property=PrivateMounts=true", "--property=ProtectSystem=strict",
+                   "--property=NoNewPrivileges=true",
+                   "--property=CapabilityBoundingSet=CAP_SYS_ADMIN CAP_MKNOD CAP_DAC_OVERRIDE",
+                   "/usr/bin/python3", "-I", "-B", "-c", probe]
+        assert guest.run(shlex.join(command)).strip() == "PRIVATE_NAMESPACE_OK"
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
 def test_actual_systemd_device_allow_representation(tmp_path):
     with module().Guest(tmp_path) as guest:
         assert guest.run("cat /var/lib/cloud/data/instance-id").strip() == guest.instance_id
