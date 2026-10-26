@@ -12093,6 +12093,12 @@ osy-d395-s1d\`.
 - Gate: source preparation only; official FULL/landing/publish/device acceptance pending Root. Raw capped /tmp pip warnings retained with unknown attribution/no cleanup. See validation/land-selection-extraction-2026-10-26/result.md and external source-bound evidence.
 - CE: not applicable; pure split and existing size/selection lessons, without a new solved runtime incident.
 
+## 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
+
+- 변경: 설치 wheel의 독립 CLI, loopback/비공개 상태 경로/단일 worker, 플랫폼 권한 미보장 시 시작 거부를 구현했다. Fleet 캐시 미구축에서 과거 관측을 만료까지 보존하고 peer 수신의 로컬 거절 사유를 Collector로 전달한다.
+- 증거: `6b0f7568f5` 원격98시험과 구조/harness/affected247시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 실제 개별·중앙 집계·중앙 직접 수집 subprocess와 중앙 단절 독립성·프로세스 간 writer 배타성을 확인했다. 최종 독립 재검토 차단 없음.
+- gate 변화: Monitoring SOURCE GO, 화면/배포/실제 PC 수용은 HOLD다. CE: 해당 없음 — 새 기능의 코드·회귀가 판단 근거를 보존한다.
+
 ## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 
 - 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
