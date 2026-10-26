@@ -12112,3 +12112,11 @@ osy-d395-s1d\`.
 - 증거: 모델 PC, `-n 6 --dist loadfile`, 6 GB 상한, 실패 0: Fleet 7024 passed 2분 50초(순차 18분 19초), root `test/` 11433 passed 3분 24초(순차 16분 54초), perception 3582 passed 45초(순차 2분 34초), overhead·situation·core/api·robot_ui robot/pilot·imu_bno055·robot_execution/local·omx adapter·training/omx·deploy 각 25초 이하. 고정 id 전에는 Fleet·`test/` 모두 "Different tests were collected between gw…"로 수집 단계에서 멈췄다. `xdist_plan`은 실행하는 체크아웃의 목록을 읽으므로 효과는 착지 뒤부터다.
 - gate 변화: 없음(같은 시험, 병렬 실행). rclpy·ROS_DOMAIN_ID 묶음은 한 번의 측정이라 부하성 실패가 나오면 D-790 재실행이 가른다.
 - CE: 미정 — 착지 뒤 실제 사전 시험 시간으로 판단.
+
+## 2026-10-27 · uncommitted · perf(land): 착지한 FULL 변화분 뒤에서 FULL을 다시 돌지 않음
+
+- 변경: `tools/land_selection.py`. 차례에서 main의 변화분이 FULL로 올라갔어도 그 변화분은 자기 FULL을 통과하고 착지한 것이므로, 대기 착지는 FULL을 다시 준비하지 않고 변화분의 직접 대상 시험과 합친 트리 위 이 브랜치 자신의 선택(브랜치가 FULL급이면 그 직접 대상)을 함께 돈다(D-889 3항 "합친 affected"). 안전 경로가 어느 쪽에든 있으면 FULL을 유지한다(D-889 6항). 하네스 파일만 예외였던 10-25 규칙을 넓혔다.
+- 근거: 10-26 08:59~10-27 02:16 사건 기록에서 같은 착지의 FULL 재준비가 390분으로 사전 시험 벽시계의 35%였고(7건, 그중 6건은 대기 착지도 FULL급), 몰릴수록 FULL 착지 하나가 대기 N건에 FULL N번을 시킨다.
+- 증거: 원격 `test/test_land_selection.py test/test_land.py` 결과는 착지 기록에 남긴다.
+- gate 변화: 착지 차례의 FULL 재시험을 좁힌다. 남는 위험은 두 변경 모두 직접 건드리지 않은 곳의 상호작용이며, 다음 FULL 착지와 게시 전 녹색 FULL 요구(D-889 5항)가 받친다. 사용자 결정(2026-10-27).
+- CE: 미정 — 몰림 때 재준비 시간으로 판단.
