@@ -124,6 +124,25 @@ def test_discord_request_uses_real_cell_preparation_and_separate_confirmation(br
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
 
 
+@pytest.mark.parametrize("heading,stage,field", [
+    ("proposal-heading", "proposal-stage", "workcell"),
+    ("mission-heading", "mission-stage", "mission-id"),
+])
+def test_cell_stage_links_reveal_controls_on_entry_and_repeat_click(browser_site, heading, stage, field):
+    from playwright.sync_api import expect
+
+    page, _, origin = browser_site
+    page.set_viewport_size({"width": 390, "height": 844})
+    expect(page.locator(f"#{field}")).to_be_hidden()
+    page.goto(origin + "/console/cell#" + heading)
+    page.reload()
+    expect(page.locator(f"#{field}")).to_be_visible()
+    page.locator(f"#{stage} > summary").click()
+    expect(page.locator(f"#{field}")).to_be_hidden()
+    page.locator(f'.ui-subnav a[href="#{heading}"]').click()
+    expect(page.locator(f"#{field}")).to_be_visible()
+
+
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_cell_page_keeps_emergency_stop_in_first_view(browser_site, width, height):
     from playwright.sync_api import expect

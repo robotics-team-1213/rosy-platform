@@ -8,6 +8,11 @@ import {renderStructuredDocument} from '/console/assets/cell-document-editor.js'
 import {createCellObservation} from '/console/assets/cell-observation.js';
 
 const $ = id => document.getElementById(id);
+const revealStage = hash => $(hash.slice(1))?.closest('details')?.setAttribute('open', '');
+for (const link of document.querySelectorAll('.ui-subnav a[href^="#"]'))
+  link.addEventListener('click', () => revealStage(link.hash));
+window.addEventListener('hashchange', () => revealStage(location.hash));
+revealStage(location.hash);
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 let channelReceipt = null, channelReview = null;
