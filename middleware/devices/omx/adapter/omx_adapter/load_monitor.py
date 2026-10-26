@@ -47,6 +47,7 @@ class LoadMonitor:
                                    else 'continue_observation_only'),
                 'reasons': sorted(self.latched), 'errors_rad': errors,
                 'command_id': self.command_id, 'candidate_id': self.candidate_id,
+                'command_binding': 'caller_supplied_unverified',
                 'trajectory_sha256': self.trajectory_sha256,
                 'characteristics_sha256': self.assessment['characteristics_sha256'],
                 'characteristics_revision': self.profile['revision'],
@@ -87,14 +88,17 @@ class LoadMonitor:
                 or now - captured > self.profile['monitor']['max_age_s']):
             reasons.add('stale_feedback')
         names = list(self.profile['joints'])
-        if len(health.motors) != len(names) or {m.joint for m in health.motors} != set(names):
+        motors = [m for m in health.motors if m.group == self.profile['binding']['motor_group']]
+        if len(motors) != len(names) or {m.joint for m in motors} != set(names):
             reasons.add('joint_coverage')
+            if any(m.joint in names and m.group != self.profile['binding']['motor_group'] for m in health.motors):
+                reasons.add('motor_identity')
         if reasons:
             return self._report(reasons, errors, captured, now)
-        for motor in health.motors:
+        for motor in motors:
             name = motor.joint
             joint = self.profile['joints'][name]
-            if motor.group != health.owner_id or motor.id != joint['motor_id']:
+            if motor.id != joint['motor_id']:
                 reasons.add(f'motor_identity:{name}')
                 continue
             if motor.hardware_error is None:

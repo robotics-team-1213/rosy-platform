@@ -38,6 +38,7 @@ def test_uses_source_time_not_receipt_time_final_goal_or_raw_goal():
     assert out['motion_admitted'] is out['automatic_recovery_enabled'] is False
     assert out['command_id'] == 'fixture-command'
     assert out['characteristics_sha256'] == characteristics_digest(p)
+    assert out['command_binding'] == 'caller_supplied_unverified'
 
 
 def test_signed_raw_calibration_is_applied():
@@ -134,3 +135,54 @@ def test_empty_or_terminal_source_returns_hold_without_fabricated_positions():
     out = monitor(p, r).observe(h, captured_at=100., now=100., context=r['context'])
     assert out['status'] == 'hold_for_owner_review'
     assert out['errors_rad'] == {}
+
+
+def test_native_producer_through_real_snapshot_reader_supports_named_group(tmp_path, monkeypatch):
+    import importlib.util
+    from pathlib import Path
+    from types import SimpleNamespace
+    from core_common.motor_health import read_motor_health_snapshot
+    from omx_adapter.motion_characteristics import validate_characteristics
+
+    p = characteristics()
+    p['binding']['motor_group'] = 'arm_a'
+    renamed = {'joint2': 'shoulder_lift', 'joint3': 'elbow_flex'}
+    p['joints'] = {renamed[n]: j for n, j in p['joints'].items()}
+    p['monitor']['joints'] = {renamed[n]: j for n, j in p['monitor']['joints'].items()}
+    for e in p['envelopes']:
+        for key in ('position_rad', 'max_velocity_rad_s', 'max_acceleration_rad_s2'):
+            e[key] = {renamed[n]: j for n, j in e[key].items()}
+    p = validate_characteristics(p)
+    r = request(p)
+    source = Path(__file__).resolve().parents[5] / 'deploy/robot/omx/motor_health.py'
+    spec = importlib.util.spec_from_file_location('load_native_health_test', source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    snapshot = tmp_path / 'native.json'
+    monkeypatch.setenv('ROSY_OMX_MONITOR_STATE', str(snapshot))
+    monkeypatch.setenv('ROSY_OMX_MONITOR_OWNER', p['binding']['owner_id'])
+    monkeypatch.setenv('ROSY_OMX_MONITOR_SESSION', '00000000-0000-4000-8000-000000000001')
+    monkeypatch.setattr(module.time, 'time', lambda: 100.)
+
+    class Bus:
+        enabled = False
+        motors = {n: SimpleNamespace(id=j['motor_id']) for n, j in p['joints'].items()}
+
+        def read(self, register, name, *, normalize=False):
+            assert normalize is False
+            return {'Torque_Enable': int(self.enabled), 'Hardware_Error_Status': 0,
+                    'Temperature_Limit': 70, 'Min_Voltage_Limit': 110, 'Max_Voltage_Limit': 130,
+                    'Present_Temperature': 25, 'Present_Input_Voltage': 120}[register]
+
+    bus = Bus()
+    names = tuple(p['joints'])
+    arm = SimpleNamespace(label='arm_a', follower=bus, active=names, clock=lambda: 10.,
+                          pwm_limits=dict.fromkeys(names, 100), command=dict.fromkeys(names, 2048.))
+    native = module.MotorHealth(tmp_path / 'native.jsonl')
+    native.admit(arm)
+    bus.enabled = True
+    native.sample(arm, dict.fromkeys(names, 2048.), dict.fromkeys(names, 10.), 10.)
+    h, captured = read_motor_health_snapshot(snapshot, p['binding']['owner_id'], now=100.)
+    out = monitor(p, r).observe(h, captured_at=captured, now=100., context=r['context'])
+    assert out['status'] == 'observing'
+    assert out['errors_rad'] == {name: 0. for name in names}

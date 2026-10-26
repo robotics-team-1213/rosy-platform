@@ -37,6 +37,7 @@ def _watch(args, profile, request):
                           candidate_id=args.candidate_id, command_id=args.command_id,
                           started_at=args.started_at, session_id=args.session_id)
     initial_request_digest = document_digest(request)
+    last_signature = None
     for index in range(args.samples):
         now = time.time()
         try:
@@ -46,15 +47,24 @@ def _watch(args, profile, request):
             else:
                 health, captured = read_motor_health_snapshot(
                     Path(args.health).absolute(), profile['binding']['owner_id'], now=now)
+                signature = document_digest(health.model_dump(
+                    exclude={'sample_age_s': True, 'motors': {'__all__': {'sample_age_s'}}}))
                 # Polling the same capture cannot renew freshness or count as a new oscillation sample.
-                duplicate = (captured == monitor.last_capture and monitor.last_now is not None
+                duplicate = (signature == last_signature and captured == monitor.last_capture
+                             and monitor.last_now is not None
                              and now >= monitor.last_now and health.status == 'active'
                              and health.sample_age_s is not None
                              and health.sample_age_s <= profile['monitor']['max_age_s'])
                 if duplicate:
-                    report = None
+                    if now - monitor.last_now > profile['monitor']['max_gap_s'] + 1e-9:
+                        report = monitor.unavailable('feedback_gap', now=now)
+                    elif any(m.sample_age_s > profile['monitor']['max_age_s'] for m in health.motors):
+                        report = monitor.unavailable('stale_feedback', now=now)
+                    else:
+                        report = None
                 else:
                     report = monitor.observe(health, captured_at=captured, now=now, context=request['context'])
+                last_signature = signature
         except (OSError, ValueError, TypeError, KeyError, OverflowError):
             report = monitor.unavailable('source_unavailable', now=now)
         if report is not None:

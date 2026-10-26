@@ -6,7 +6,7 @@ def characteristics():
     names = ['joint2', 'joint3']
     return {
         'schema': 'rosy.omx-motion-characteristics.v1', 'revision': 'fixture-v1', 'status': 'measured',
-        'binding': {'device_id': 'fixture-arm', 'owner_id': 'fixture-owner',
+        'binding': {'device_id': 'fixture-arm', 'owner_id': 'fixture-owner', 'motor_group': 'fixture-owner',
                     'hardware_profile_revision': 'hardware-fixture', 'calibration_revision': 'cal-fixture',
                     'robot_model_sha256': 'a' * 64, 'installation_revision': 'mount-fixture',
                     'tool_revision': 'tool-fixture', 'assist_mechanism_revision': 'none'},

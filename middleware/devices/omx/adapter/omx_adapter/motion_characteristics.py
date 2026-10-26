@@ -12,7 +12,7 @@ import tempfile
 from .hardware_profile import _fields, _number, _range, _vector
 
 SCHEMA = 'rosy.omx-motion-characteristics.v1'
-BINDING_FIELDS = ('device_id owner_id hardware_profile_revision calibration_revision robot_model_sha256 '
+BINDING_FIELDS = ('device_id owner_id motor_group hardware_profile_revision calibration_revision robot_model_sha256 '
                   'installation_revision tool_revision assist_mechanism_revision')
 MAX_BYTES = 1_000_000
 _NAME = re.compile(r'[A-Za-z0-9_.:-]{1,128}\Z')
@@ -70,6 +70,9 @@ def validate_characteristics(document):
     for key in ('device_id', 'owner_id'):
         if binding[key] is not None and not _NAME.fullmatch(binding[key]):
             raise ValueError(f'binding.{key}: invalid identifier')
+    group = binding['motor_group']
+    if group is not None and re.fullmatch(r'[A-Za-z0-9_.-]{1,64}', group) is None:
+        raise ValueError('binding.motor_group: invalid measured group')
     if data['measured_at'] is not None or not draft:
         _text(data['measured_at'], 'measured_at')
         if date.fromisoformat(data['measured_at']).isoformat() != data['measured_at']:
@@ -87,7 +90,8 @@ def validate_characteristics(document):
     for name, joint in joints.items():
         if not _NAME.fullmatch(name) or len(name) > 64:
             raise ValueError('invalid joint name')
-        _fields(joint, 'motor_id motor_model raw_zero rad_per_raw position_rad velocity_rad_s acceleration_rad_s2', name)
+        _fields(joint, 'motor_id motor_model raw_zero rad_per_raw position_rad '
+                'velocity_rad_s acceleration_rad_s2', name)
         motor_id = _count(joint['motor_id'], 'motor_id', 253)
         if motor_id in seen:
             raise ValueError('duplicate motor identity')
@@ -113,7 +117,8 @@ def validate_characteristics(document):
 
 
 def _validate_monitor(monitor, joints):
-    _fields(monitor, 'max_age_s max_gap_s tracking_duration_s oscillation_window_s oscillation_cycles joints', 'monitor')
+    _fields(monitor, 'max_age_s max_gap_s tracking_duration_s oscillation_window_s '
+            'oscillation_cycles joints', 'monitor')
     for key in ('max_age_s', 'max_gap_s', 'tracking_duration_s', 'oscillation_window_s'):
         _number(monitor[key], f'monitor.{key}', positive=True)
     cycles = _count(monitor['oscillation_cycles'], 'oscillation_cycles', 1000)
