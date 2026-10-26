@@ -1,6 +1,7 @@
 """Firmware callback files are real; kernel mounts/devices/DT observations are fixture models."""
 import importlib
 import json
+from pathlib import Path
 import struct
 import subprocess
 import sys
@@ -180,6 +181,8 @@ def test_installed_frozen_cli_handles_preboot_good_without_mutable_sdk_or_bootst
     frozen = prefix / "os-bootstrap/native-runtime"
     script = frozen / "rosy-os-bootloader"
     assert script.is_file() and script.stat().st_mode & 0o111 == 0o111
+    help_result = subprocess.run([str(script), "--help"], capture_output=True, text=True, timeout=30)
+    assert help_result.returncode == 0, help_result.stderr
     for folder in (prefix / "native-runtime", prefix / "deploy/sd"):
         for file in folder.glob("*.py"):
             file.write_text("raise RuntimeError('mutable SDK was imported')\n")
@@ -199,3 +202,17 @@ runpy.run_path(sys.argv[0],run_name='__main__')
     assert result.returncode == 0 and result.stdout == "", result.stderr
     assert (path.read_bytes(), config.read_bytes()) == before
     assert boot.invoke(root, ["get-state", "b"]) == "good"
+
+
+def test_pure_autoboot_codec_needs_no_release_signing_or_linux_runtime_import(tmp_path):
+    native = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/native"
+    script = """
+import sys
+sys.path.insert(0,sys.argv[1])
+import os_bootloader
+assert 'signing' not in sys.modules and 'os_update_state' not in sys.modules
+assert os_bootloader.parse_autoboot(os_bootloader.autoboot('b')) == 'b'
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", script, str(native)],
+                            capture_output=True, text=True, cwd=tmp_path, timeout=30)
+    assert result.returncode == 0, result.stderr
