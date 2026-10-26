@@ -42,6 +42,8 @@ class Arm:
         return self.read(name)
 
     def cleanup_write(self, name, value):
+        if name not in ("torque", "pwm_limit", "current_limit"):  # as joint_tune.SerialBus.cleanup_write
+            raise ValueError("cleanup permits only torque OFF and baseline caps")
         self.write(name, value)
 
     def alert(self):
@@ -205,7 +207,7 @@ def test_a_session_gain_is_written_for_the_session_and_restored_to_the_value_fou
     s, calls = session(arm, leader)
     caps = {**CAPS, 14: {**CAPS[14], "p_gain": 800}}
     record = s.execute(config(tmp_path), caps, teleop_only=False)
-    assert record["caps_restored"] is True and (14, "p_gain", 800) in arm.writes
+    assert record["caps_restored"] is True and record["safe_end"] is True and (14, "p_gain", 800) in arm.writes
     assert arm.motors[14]["p_gain"] == 380, "back to what the motor had, not a constant"
     assert arm.motors[13]["p_gain"] == 400 and (13, "p_gain", 400) not in arm.writes
 

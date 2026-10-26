@@ -319,8 +319,12 @@ class Session:
                 bus.motor = motor
                 for name, value in values.items():
                     try:
-                        bus.cleanup_write(name, value)
-                        after = bus.cleanup_read(name)
+                        # the cleanup path writes only torque OFF and baseline caps; a session gain goes back
+                        # through the ordinary write, torque being confirmed OFF before this runs (2026-10-26:
+                        # the cleanup refused the wrist p_gain and the session ended safe_end false)
+                        write, read = ((bus.write, bus.read) if name == "p_gain" else (bus.cleanup_write, bus.cleanup_read))
+                        write(name, value)
+                        after = read(name)
                         self.note_fault(bus)
                         if after != value:
                             raise RuntimeError(f"{name} readback {after} != {value}")
