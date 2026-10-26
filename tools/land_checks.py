@@ -92,6 +92,20 @@ def _ids(wt: Path, verdict: str) -> list[str]:
     return ids
 
 
+def verdict(wt: Path, inv: list[str], log: Path, logdir: Path, tag: str, python: str, run,
+            tested_sha: str) -> tuple[int, list[str], str]:
+    """test/known_failures.py on ``log``, then the rerun alone for its NEW ids: (exit, load-flaky ids, why).
+
+    A NEW failure is confirmed (exit non-zero, no load-flaky ids) only after the rerun, so land.py's early stop
+    never cancels a round for a failure that passes alone."""
+    check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", env={**os.environ, "PYTHONUTF8": "1"})
+    print(check.stdout, end="")
+    if check.returncode == 0:
+        return 0, [], ""
+    return (check.returncode, *load_flaky(wt, inv, log, check.stdout, logdir, tag, python, run, tested_sha=tested_sha))
+
+
 def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
                run, *, tested_sha: str) -> tuple[list[str], str]:
     """Rerun the NEW ids of one invocation alone; ``(load-flaky ids, "")`` or ``([], why it stops)``.

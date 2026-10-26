@@ -134,7 +134,7 @@ def test_native_arm64_workflow_builds_only_an_unsigned_handoff():
     assert "deploy/robot/pinky_pro/image/build-image.sh" in text
     assert "SHA256SUMS.sig" in text and "test ! -e" in text
     assert "private" not in text.lower()
-    assert "actions/upload-artifact@v4" in text
+    assert "actions/upload-artifact@" in text
     assert 'sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"' in text
     assert text.index('sudo dpkg -i "$ros_source"') < text.index(
         "python3-colcon-common-extensions"

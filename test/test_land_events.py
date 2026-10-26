@@ -35,9 +35,11 @@ def test_daily_numbers_from_waits_turns_and_verdicts():
             {"t": t + 360, "event": "stop", "pid": 1},
             {"t": t + 400, "event": "turn", "pid": 2, "waited_s": 1800},
             {"t": t + 700, "event": "tests", "pid": 2, "verdict": "flaky"},
-            {"t": t + 760, "event": "landed", "pid": 2}]
+            {"t": t + 760, "event": "landed", "pid": 2},
+            {"t": t + 800, "event": "prepared", "pid": 3, "seconds": 1500}]
     (day,) = land_stats.daily(rows).values()
     assert (day["landed"], day["stopped"], day["invocations"]) == (1, 1, 3)
     assert day["wait_p90_min"] == 30 and day["turn_p50_min"] in (6, 6.0)
     assert day["new_share"] == round(1 / 3, 3) and day["flaky_share"] == round(1 / 3, 3)
+    assert day["prepare_p50_min"] == 25, "prepare time is apart from the queue wait"
     assert json.dumps(land_stats.daily(rows))  # --json prints it

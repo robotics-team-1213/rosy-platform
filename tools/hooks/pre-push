@@ -59,6 +59,19 @@ while IFS= read -r git_local_variable; do
   unset "$git_local_variable"
 done < <(git rev-parse --local-env-vars)
 
+# 2026-10-26 (robot-4d, exit 4 twice): lint and the affected selector read files, and main had moved
+# past the pinned PUSH_SHA, so tests absent from it were sent. When the checkout is not exactly
+# PUSH_SHA (other HEAD, or tracked/staged edits) every later step runs in a detached copy of it.
+if [ "$(git rev-parse HEAD)" != "$PUSH_SHA" ] || ! git diff --quiet HEAD --; then
+  PUSH_TREE="$(git rev-parse --path-format=absolute --git-common-dir)/rosy-prepush/$$"
+  CHECKOUT="$PWD"
+  # Leave the copy before removing it: Windows cannot delete the current directory.
+  trap 'cd "$CHECKOUT" && git worktree remove --force "$PUSH_TREE" >/dev/null 2>&1 || true' EXIT
+  git worktree add --detach --quiet "$PUSH_TREE" "$PUSH_SHA"
+  echo "[pre-push] checkout is not ${PUSH_SHA:0:10}; judging that commit in $PUSH_TREE"
+  cd "$PUSH_TREE"
+fi
+
 PY=""
 for candidate in python3 python; do
   if command -v "$candidate" >/dev/null 2>&1 \

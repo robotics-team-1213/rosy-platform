@@ -71,7 +71,8 @@ def queue_dir(wt: Path) -> Path:
 def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting") -> Path:
     """Write this process's ticket at the end of the queue and return its path.
 
-    ``status``: ``preparing`` (a FULL tier outside the lock: keeps its place, blocks no one), ``waiting``,
+    ``status``: ``pending`` (waiting for a preparation slot) or ``preparing`` (tests outside the lock: keeps its
+    place, blocks no one; ``land_prepare.py``), ``waiting``,
     or ``turn`` (merging, testing, landing). A ticket without one (an older land.py) counts as waiting."""
     qdir.mkdir(parents=True, exist_ok=True)
     stamp = time.time_ns()
@@ -110,7 +111,7 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     runs it outside the lock and keeps its place."""
     rows = ahead(qdir, Path("~"), now)  # every live ticket ("~" sorts after the digits)
     return [r for r in rows if r["ticket"] != ticket.name and (
-        r.get("status") == "turn" or (r["ticket"] < ticket.name and r.get("status") != "preparing"))]
+        r.get("status") == "turn" or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")))]
 
 
 def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
@@ -137,8 +138,8 @@ def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
 
 
 def describe(rows: list[dict]) -> str:
-    return ", ".join(f"{r.get('branch', '?')} (pid {r.get('pid', '?')} on {r.get('host', '?')}, "
-                     f"{r['age'] / 60:.0f} min)" for r in rows)
+    return ", ".join(f"{r.get('branch', '?')} ({r.get('status', 'waiting')}, pid {r.get('pid', '?')} on "
+                     f"{r.get('host', '?')}, {r['age'] / 60:.0f} min)" for r in rows)
 
 
 def touch(ticket: Path | None = None) -> None:
@@ -150,9 +151,9 @@ def touch(ticket: Path | None = None) -> None:
             pass
 
 
-def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep) -> None:
+def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None) -> None:
     """Mark ``ticket`` waiting; return once nothing blocks it (``blockers``), marked as in its turn;
-    QueueError after ``timeout`` seconds."""
+    QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop."""
     set_status(ticket, "waiting")
     began, said, last = clock(), None, 0.0
     while True:
@@ -166,7 +167,9 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         if len(rows) != said or clock() - last >= REPORT_EVERY:
             print(f"[queue] position {len(rows) + 1}; ahead: {describe(rows)}", flush=True)
             said, last = len(rows), clock()
-        if clock() - began >= timeout:
+        if check and (why := check()):
+            raise QueueError(f"{why}. Nothing was merged or tested; fix it on the branch and run land.py again")
+        if timeout and clock() - began >= timeout:
             raise QueueError(f"waited {timeout / 60:.0f} min in the landing queue ({qdir}), {len(rows)} still"
                              f" ahead: {describe(rows)}. Nothing was merged or tested. Run land.py again later;"
                              " during an incident, --no-queue lands without waiting")

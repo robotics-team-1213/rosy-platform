@@ -11711,24 +11711,90 @@ osy-d395-s1d\`.
 - 증거: `test/test_land.py` 원격 통과.
 - gate 변화: 없음.
 
-## 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
+## 2026-10-26 · ef0600c636 · pytest 작업마다 메모리 최고치를 재고, 기록에 따라 예약을 줄인다
 
-- 변경: ADR D-885와 Log 행. D-879 gap 행 제거(착지), D-884 gap 선언.
-- 증거: 원격 시험으로 확인한다.
-- gate 변화: 없음. PC 재설치 전에는 자동 요청이 거절로 기록된다. CE: 해당 없음 — 원인(venv 48시간 보존)은 rosy-ops PR #4와 기존 교훈 메모가 다룬다.
+- 변경: `tools/remote/remote_job.py`의 JOB이 pytest가 끝난 뒤 scope cgroup의 `memory.peak`를 읽어 `[remote-pytest] memory peak <MiB> MiB`를 찍는다. scope 안의 감시 프로세스가 읽으므로 pytest는 그대로 exec되어 timeout의 TERM/KILL을 직접 받는다. 잠금 예산은 새 `ROSY_JOB_RESERVE_GB`(기본값은 `MemoryMax` GB)로 따로 두고 `MemoryMax`는 `ROSY_JOB_MEM_GB`(기본 6)를 유지한다. 새 `tools/remote/memory_history.py`가 노트북에서 그 줄을 `<git-common-dir>/rosy-pytest-memory.jsonl`에 쌓고, 같은 argv의 기록이 있고 모두 4 GiB 이하면 3 GB를 예약한다. 기록이 없거나 하나라도 4 GiB를 넘으면 6 GB이다. 가벼운 호스트는 기존처럼 자기 상한을 예약한다.
+- 이유: 10-26에 잰 140개 pytest scope의 중앙값은 0.3 GB, p90은 약 3.1 GB, 최대는 5.7 GB였고 4 GB를 넘은 것은 4개뿐이었다. 그런데 작업마다 6 GB를 잡아서 30 GB 호스트에 pytest 4개가 돌면 실제 MemAvailable이 16 GB 넘게 남아도 sim(8 GB)이 들어가지 못했다.
+- 증거: 원격 `test/test_remote_pytest_memory.py`, `test/test_remote_pytest.py`, `test/test_remote_test_tools.py`. 최고치 줄·기록·예약 선택·예약과 상한 분리를 변이로 확인했다.
+- gate 변화: 없음. 시험 PC 배치만 바뀐다. 실제 호스트에서 sim이 함께 배치되는지는 아직 보지 않았다.
+- 교훈: CE 해당 없음 — 규칙과 이유가 코드 주석과 시험에 있다.
 
-## 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)
+## 2026-10-26 · uncommitted · tools/doctor.py와 FULL 승격 경로 설명
 
-- 변경: `tools/worktrees.py` `CAP` 50→14(main 포함 15), topic 소문자 kebab 48자 검사, 모든 prune이 `main`에 들어갔고 체크아웃되지 않은 로컬 브랜치를 정확한 sha로 정리(`main`·`archive/*` 제외). shared-checkout에 「브랜치 이름과 수명」 정본, AGENTS·git-workflow·명령 카드 상한 문구.
-- 근거: 같은 날 워크트리 22개, 로컬 브랜치 488개 중 132개가 이미 main에 있었다. 문서 예산 15와 도구 상한 50이 달랐다.
-- gate 변화: 없음. 정리될 때까지 일반 `new`가 거절된다.
+- 변경: `tools/doctor.py`를 추가한다. 착지·게시 전에 한 번 돌리는 읽기 전용 점검으로, 설치된 pre-push가 HEAD의 `tools/hooks/pre-push`와 같은지(다르면 FAIL, `bash tools/hooks/install.sh`), `rosy.publishOnly`, 워크트리 슬롯(main 포함 15)과 치울 수 있는 개수, 로컬 `main`과 `origin/main`의 앞섬·뒤처짐과 마지막 fetch 나이, 착지 대기열의 표·차례·죽은 표를 OK/WARN/FAIL 한 줄과 고칠 명령으로 보여 준다. `--hosts`는 시험 PC마다 `~/rosy-test/maintenance/last-report.json`의 남은 GiB와 `~/rosy-jobs/disk-low`를 ssh로 읽는다. 기존 `worktrees.scan`/`prune`(dry run), `update_status.ref_state`, `land_queue._stale`, `lab_hosts`를 그대로 쓴다. `tools/harness/affected_tests.py`는 어떤 모듈·import 루트·시험에도 안 잡혀 FULL이 된 경로를 `unmapped`(JSON 새 키)로 모으고, `--print`에 경로마다 "그 경로를 읽는 시험에 경로를 글자 그대로 적는다" 힌트를 찍는다. 기존 JSON 키는 바꾸지 않았다.
+- 이유: 착지 전 낡은 훅·뒤처진 main·죽은 대기표·가득 찬 시험 PC를 각각 다른 명령으로 찾아야 했고, FULL 승격 원인이 f-string 경로처럼 선택기에 안 보이는 참조일 때 무엇을 고칠지 출력에 없었다.
+- 증거: `test/test_doctor.py`(가짜 git 저장소, 네트워크 없음), `test/test_affected_tests.py::test_unknown_paths_are_listed_with_a_hint_in_json_and_print`. 원격 실행과 변이 증명은 보고에 적는다.
+- gate 변화: 없음. 도구는 읽기만 하고 `land.py`·CI는 바꾸지 않았다.
+- 결정: 없음.
+- 교훈: CE 해당 없음 — 새 도구와 시험이 내용을 담는다.
 
-## 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
+## 2026-10-26 · uncommitted · remote_pytest.run이 첫 실패에서 남은 호출을 멈출 수 있게 한다
 
-- 변경: AGENTS.md 「같이 하는 깃」 6번, shared-checkout.md, git-workflow.md, 착지 명령 카드의 게시 마지막 단계를 `git merge --ff-only origin/main`에서 역동기화(로컬 main에서 만든 워크트리에서 `git merge origin/main`을 land.py로 착지)로 바꿨다. 우산 Rosy/AGENTS.md(git 밖)도 같이 고쳤다. 규칙 결정은 D-889(Proposed, 별도 브랜치)가 D-868 5단계를 고친다.
-- 증거: 게시 PR이 병합될 즈음 로컬 main은 게시 SHA보다 앞서 있어(시간당 약 1착지) origin/main의 조상이 아니므로 ff-only가 실패한다. 게시 스크립트 검토에서 확인.
-- gate 변화: 없음. 절차 문서다.
-- 교훈: 없음
+- 변경: `remote_pytest.run(..., on_done=None)`을 추가한다. 호출 하나가 끝날 때마다(호스트를 잃은 호출 제외) 그 호스트의 작업 스레드에서 `on_done(invocation, log_path)`를 한 번에 하나씩 부른다. True를 돌려주거나 예외를 내면 공유 큐(`work_queue.Work.stop`)가 더 내주지 않고, 다른 호스트에서 돌고 있는 작업은 다음 poll이 그 작업을 볼 때 `remote_job.KILL`로 TERM한다. 시작하지 않은 호출과 중단한 호출은 int가 아닌 `remote_job.CANCELLED`(`"cancelled"`)로 돌아오고 `[remote-pytest] cancelled after a failure: <inv>`를 찍는다. 연결을 잃은 작업은 전처럼 건드리지 않는다. `on_done`이 없으면 전과 같다.
+- 이유: 10-26 착지 차례 하나가 03:05에 NEW 실패 8건을 보고도 나머지 호출을 03:24까지 돌려 착지 대기열을 약 19분 잡았다.
+- 증거: 원격 `test/test_remote_pytest.py`(호출마다 콜백, True면 대기 호출 미실행·실행 중 작업 중단, 예외면 경고 뒤 중단, 콜백 안에서 `run()` 다시 호출해도 교착 없음, 잃은 작업은 KILL 안 함). 변이로 확인했다.
+- gate 변화: 없음. `tools/land.py` 연결은 별도 브랜치가 한다.
+- 교훈: CE 해당 없음 — 규칙이 코드 주석과 시험에 있다.
+
+## 2026-10-26 · uncommitted · G1 시간 시험이 디스크 I/O 경합에서는 실패 대신 이유를 찍고 건너뛴다
+
+- 변경: `test/test_platform_g1_timing.py`의 `assert_timing`이 시간 경계를 놓친 뒤 CPU 깨움 지연 검사에 더해 `/proc/pressure/io`의 `full avg10`을 한 번 읽는다(`io_full_avg10`). 10%를 넘으면 `host disk I/O contended: io full avg10=<x>% > 10%`로 건너뛴다. 파일이 없으면(리눅스 아님, PSI 없음) 전처럼 실패한다. 경계 값과 `barrier_journal`은 그대로다.
+- 이유: 10-26 AI PC 실패 때 깨움 지연은 정상인데 io full avg10이 48-57%, contact gap p99가 2.6-5.7 s(경계 0.5 s)였다. 10%는 지난 10 s 가운데 1 s 동안 모든 작업이 I/O에 멈춘 것으로, 0.5 s 경계의 두 배다.
+- 증거: 원격 AI PC에서 파서·판정 단위 시험(full 줄만 읽음, 파일 없음·full 줄 없음은 None, 57%는 건너뜀, 9.9%와 파일 없음은 실패) 통과, 변이 두 개(`full`→`some`, `>`→`<`)로 빨강 확인. 같은 커밋으로 파일 전체 3회: 1회차 8 통과·1 건너뜀(`io full avg10=15.4%`, contact gap p99 1.76 s), 2·3회차 9 통과.
+- gate 변화: 없음. 이 건너뜀은 시간 증거가 아님을 뜻하며, 깨끗한 호스트의 통과를 대신하지 않는다.
+- 교훈: CE 해당 없음 — 판단 근거가 코드 주석·docstring과 시험에 있다.
+
+## 2026-10-26 · uncommitted · G1 시간 시험의 디스크 판정을 fsync 직접 측정으로 바꾼다
+
+- 변경: `assert_timing`이 시간 경계를 놓치고 CPU 깨움 지연이 정상이면, 임시 디렉터리(pytest `tmp_path`와 journal이 있는 곳)에서 4 KiB write+fsync를 5번 재어(`fsync_p90_s`) p90이 20 ms를 넘을 때 `host disk I/O slow: write+fsync p90=<x> ms > 20 ms`로 건너뛴다. PSI는 보조로 `some avg60 > 5%`(`io_some_avg60`)만 본다. 앞 커밋의 `full avg10 > 10%`는 뺀다. CPU 검사와 경계 값, `barrier_journal`은 그대로다.
+- 이유: 10-25 AI PC에서 lease POST 0.32 s(경계 0.25 s)가 깨질 때 io full avg10은 0.36%, some avg60은 6.3%, SQLite fsync는 40-55 ms(CPU 1 ms), 디스크는 95% 찼다. full avg10 기준으로는 이 경우를 놓친다.
+- 증거: 원격 AI PC에서 단위 시험(some avg60 파싱, 파일·줄 없음은 None, fsync 측정, 45 ms는 건너뜀, 15 ms와 some avg60 6.3%는 건너뜀, 4.9%와 PSI 없음은 실패) 통과. 변이 세 개(`FSYNC_LIMIT_S` 0.02→0.05, `some`→`full`, `avg60`→`avg10`) 모두 빨강. 같은 내용으로 파일 전체 3회 모두 10 통과(건너뜀·실패 없음, 그때 경계 미달이 없어 판정은 실제로 불리지 않음).
+- gate 변화: 없음. 건너뜀은 시간 증거가 아니고 깨끗한 호스트의 통과를 대신하지 않는다.
+- 교훈: CE 해당 없음 — 측정 근거가 상수 주석과 시험에 있다.
+
+## 2026-10-26 · uncommitted · G1 시간 시험의 fsync 측정이 tmpfs를 피하고 파일시스템을 밝힌다
+
+- 변경: `disk_probe_dir`가 `/proc/self/mountinfo`에서 임시 디렉터리의 파일시스템과 마운트를 찾는다. 원격 실행기는 TMPDIR를 `--basetemp` 옆(`/tmp/rosy-pytest-*`)에 두므로 그곳은 `tmp_path`의 `owner.sqlite3`와 같은 파일시스템이다. tmpfs·ramfs면 작업 디렉터리에서 잰다. 건너뛰기 이유에 `p90=<x> ms on ext4 (/)`처럼, 작업 디렉터리로 옮겼으면 `in the working dir (temp dir is on tmpfs)`까지 적는다.
+- 이유: tmpfs의 fsync는 약 0 ms라 늘 통과한다. 10-25에 느렸던 곳은 SQLite가 쓰는 실행 디렉터리의 루트 디스크(95% 참)였다.
+- 증거: AI PC `/tmp`는 ext4 `/`(현재 73%). 원격 AI PC 단위 시험 통과, 변이 세 개(tmpfs 대체 제거, 마운트 접두 경계 제거, 측정 디렉터리 전달 제거) 모두 빨강. 파일 전체 1회 12 통과.
+- gate 변화: 없음.
+- 교훈: CE 해당 없음 — 근거가 docstring과 시험에 있다.
+
+## 2026-10-26 · uncommitted · 원격 pytest의 실패 id가 저장소 기준 경로로 나온다
+
+- 변경: `tools/remote/remote_pytest.py`의 `PYTEST_TAIL`과 격리 재실행 인자에 `--rootdir=.`(실행 워크트리)를 넣는다.
+- 이유: robot-73 착지(10-26)에서 여러 경로를 한 번에 돌린 호출의 NEW 실패가 `middleware/robot_execution/local/test_feature_matrix.py::…`처럼 잘못된 뿌리로 찍혀 단독 재실행이 아무것도 돌리지 않았다. pytest는 공통 조상에 설정 파일이 없으면 첫 인자부터 위로 처음 만난 `pyproject.toml`을 pytest 절이 없어도 rootdir로 삼는다. 저장소 어디에도 pytest 설정 절은 없어서 그 configfile은 빈 설정이었다.
+- 증거: 시험 PC에서 `middleware/robot_execution/local/test test/ applications/fleet/test/ --collect-only -p no:xdist`를 `--rootdir` 없이/있이 비교: rootdir `…/middleware/robot_execution/local`·configfile `pyproject.toml` → rootdir 실행 디렉터리·configfile 없음, 둘 다 12568개·모듈 662개, 항목 이름 차이는 시각·경로 매개변수 2개뿐. 새 시험 `test_pytest_tail_keeps_failed_ids_repo_relative_when_the_first_path_has_a_pyproject`는 `--rootdir` 변이에서 `pkg/test_b.py::test_b`로 빨강, 복원 후 `test/test_remote_pytest.py test/test_land.py` 180 통과, known_failures 0 new.
+- gate 변화: 없음. land_checks의 id 되돌리기·exit 4/5 처리는 robot-47 몫.
+- 교훈: CE 해당 없음 — 원인은 코드 주석과 회귀 시험에 있다.
+
+## 2026-10-26 · uncommitted · busy 표시 만료와 GitHub Actions 커밋 고정
+
+- 변경: `tools/remote/host_probe.py` PROBE가 `~/rosy-jobs/busy`의 첫 단어가 10자리 이상 epoch면 그 시각까지만, 아니면 이번 부팅 뒤에 만든 표시만 busy로 센다(2 = 부팅 전, 3 = 만료). `place()`는 `busy marker pre-boot (ignored)`/`expired (ignored)`를 덧붙인다. `deploy/robot/omx/native_sim_job.py`의 두 busy 검사도 같은 규칙(`marked_busy`)을 쓴다. 저장소 안에 busy를 쓰는 코드는 없어, `deploy/ai_pc/README.md`의 소유자 명령을 `<만료 epoch> <소유자> <pid>` 형식으로 바꿨다. `.github/workflows/*.yml`의 태그 고정 `uses:` 17줄을 태그가 가리키는 커밋 SHA로 고정했다(checkout v4.4.0, setup-java v4.9.1, upload-artifact v4.6.2, setup-python v5.6.0).
+- 이유: 만료도 pid도 없는 표시(현장 PC, 2026-10-24)가 호스트를 영원히 막았다. 움직이는 태그는 검토 없이 새 코드를 돌린다.
+- 증거: 원격 `test/test_remote_pytest.py`, `test/test_native_sim_job.py`, `test/test_site_candidate_workflow.py`, `test/test_flashable_image_layout.py` 136 통과, known_failures NEW 0. 변이(부팅 전 규칙, 만료 규칙, place 문구, `marked_busy`, 태그 하나 되돌림) 각각 해당 새 시험이 빨개졌다.
+- gate 변화: 모든 워크플로 `uses:`가 40자리 SHA와 `# vX.Y.Z (pinned commit)`이어야 한다(로컬 `./` 재사용 워크플로 제외).
+- 교훈: CE 해당 없음 — 규칙과 이유가 PROBE 주석과 시험에 있다.
+
+## 2026-10-26 · 8ecbd7e41e · 현장 PC의 busy 보류는 재부팅이 풀지 않는다
+
+- 변경: `host_probe.py`의 PROBE는 `~/rosy-jobs/site`가 있는 호스트에서 재부팅 전 busy 표식을 무시하지 않는다. 표식에 만료 epoch가 있으면 그 만료는 계속 따른다.
+- 이유: 토론(robot-4a). 현장 PC는 운영 전용이라(D-571), 그 PC의 busy는 시험 표식이 아니라 사람이 운영 장비 작업으로 건 보류일 수 있다. 10-24 `device-information-...` 표식의 주인과 이유는 기록이 없다. 정전이나 수동 재시작이라면 보류가 아직 유효할 수 있다. 모델 PC·AI PC는 그대로 무시한다.
+- 증거: `test/test_remote_pytest.py::test_probe_script_busy_marker_needs_a_live_expiry_or_this_boot`의 site 사례.
+- gate 변화: 없음.
+- 교훈: CE 해당 없음.
+
+## 2026-10-26 · uncommitted · fix(hooks): pre-push가 밀어 올리는 커밋의 트리로 판정
+
+- 변경: `tools/hooks/pre-push`는 체크아웃이 `PUSH_SHA`와 다르면(다른 HEAD, 추적·스테이징 변경) `<git-common-dir>/rosy-prepush/<pid>`에 그 커밋을 detached 워크트리로 꺼내 lint·생성 기록·Safety-Review·크기·affected 선택을 거기서 돌리고 끝날 때 지운다. 같으면 지금과 같다. robot-4d에서 고정한 SHA 뒤로 main이 움직여 그 커밋에 없는 시험 파일이 선택되고 pytest exit 4가 두 번 났다(`affected --head`는 diff만 PUSH_SHA로 보고 `Repo.load`는 작업 트리를 읽었다).
+- 증거: `test/test_pre_push_hook.py::test_selection_reads_the_pushed_commit_not_the_checkout`(moved·staged·same)가 훅의 해당 단계를 그대로 돌려 선택기의 시험 목록에 PUSH_SHA에 없는 파일이 없음을 본다. 변이 증명은 완료 보고에 적는다.
+- gate 변화: 체크아웃과 PUSH_SHA가 다를 때 판정 대상이 작업 트리에서 밀어 올리는 커밋으로 바뀐다. CE: 해당 없음 — 재발 방지가 회귀 시험에 있다.
+
+## 2026-10-26 · uncommitted · affected 선택기가 안전 경로 변경을 FULL로 올린다
+
+- 변경: `tools/harness/affected_tests.py`가 바뀐 경로마다 `safety_review.is_safety`(D-430 §5 판정, `platform_parts.yaml`의 `concern: safety` 루트와 `safety_modules`)를 불러, 안전 경로면 이유 `safety path (platform_parts concern: safety)`로 FULL에 올리고 foundation 좁히기도 하지 않는다. 접두를 `FULL_TRIGGERS`에 복사하지 않는다. `NOT_TRIGGERS`가 먼저라 안전 루트 아래 Markdown은 FULL이 아니다. 이전에는 안전 경로도 trailer만 요구하고 affected 범위로 시험됐다.
+- 증거: `test/test_affected_tests.py`에 안전 경로 FULL, 비안전·Markdown 비승격, 가장 깊은 루트 판정 시험을 더했고 `is_safety`를 False로 바꾸는 변이로 빨강을 확인했다. 원격 `test/test_affected_tests.py`, `test/test_harness_contracts.py`, `test/test_safety_review.py`.
+- gate 변화: 없음. 안전 경로(`test/flaky_quarantine.txt` 포함) 변경은 이제 FULL을 돈다. CE: 해당 없음 — 합의된 설계의 선택기 규칙이며 시험이 규칙을 지킨다.
 
 ## 2026-10-26 · uncommitted · feat(land): 착지마다 사건 기록을 남기고 하루 숫자를 뽑는다
 
@@ -11747,3 +11813,40 @@ osy-d395-s1d\`.
 - 변경: 대기열 표가 `preparing`(차례 전 FULL 시험 중, 자리는 지키고 아무도 막지 않음)·`waiting`·`turn` 상태를 가진다. 차례는 차례 중인 표가 없고 앞선 `waiting` 표가 없을 때 시작한다(`land_queue.blockers`). pretest는 앞에 누가 있을 때만이 아니라 FULL 기록이 없는 모든 auto 착지에서 돈다. 선택기가 없을 때 대체 선택이 `head`를 무시하던 것도 고쳤다.
 - 증거: `test/test_land.py`, `test/test_land_queue.py` 원격 통과. 근거: `feat/monitoring-registration`이 맨 앞에서 FULL 10묶음을 잠금 안에서 40분 넘게 돌렸다.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · feat(land): 모든 착지의 시험을 잠금 밖에서(D-889 A')
+
+- 변경: `land_prepare.py`. auto 착지는 차례 전에 자기 선택을 돌리고(동시 준비 최대 3, 표 `pending`→`preparing`, 둘 다 아무도 막지 않음) 통과한 단계를 기록한다. 차례에서는 그 main 이후 변화분만 후보 트리에서 고른다. 변화분이 FULL로 오르면 잠금 밖에서 다시 준비하고 다시 기다린다. 선택기가 없으면 FULL만 준비한다. `pretest`를 `land.py`에서 옮겼다.
+- 증거: `test/test_land.py`, `test/test_land_queue.py`, harness 계약·architecture 원격 통과(407 passed).
+- gate 변화: 없음. 차례 안 변화분 시험의 시간 상한(10분)은 early-stop 연결과 함께 다음에.
+
+## 2026-10-26 · uncommitted · feat(land): 확정된 첫 실패에서 회차 취소, 차례 시간 상한 10분, 대기열 상태 표시
+
+- 변경: `run_tests`가 invocation이 끝날 때마다 판정한다(`remote_pytest.run`의 `on_done`, `land_checks.verdict`: known_failures 후 단독 재실행). 확정된 NEW면 나머지를 취소하고, 취소된 것은 캐시에 남기지 않으며 실패로도 세지 않는다. 차례 안 시험이 600초를 넘으면 나머지를 취소(`Overtime`)하고 잠금 밖에서 준비한 뒤 다시 기다린다(`land_prepare.again`). 앞선 표 표시에 상태(preparing 등)를 넣었다.
+- 증거: `test/test_land.py`, `test/test_land_queue.py`, `test/test_remote_pytest.py` 원격 통과(211 passed).
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): AGENTS.md 표는 행 단위로 합치고, 기다리는 동안 충돌을 미리 본다
+
+- 변경: `land_merge.table_rows`가 AGENTS.md 표 충돌을 첫 칸 기준 행 단위로 합친다(같은 행을 양쪽이 바꾸거나 한쪽이 지우고 다른 쪽이 고치면 사람). `land_prepare.watch`가 대기 중 main이 움직일 때마다 `git merge-tree`로 병합을 미리 보고 자동으로 못 푸는 충돌이면 바로 멈춘다. `--queue-timeout` 기본값은 0(무제한). 준비 시간은 `prepared` 사건으로 남기고 `land_stats`가 prepare p50/p90을 보여 준다.
+- 증거: `test/test_land.py`, `test/test_land_queue.py`, `test/test_land_events.py`, harness 계약·architecture 원격 통과(502 passed).
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
+
+- 변경: ADR D-885와 Log 행. D-879 gap 행 제거(착지), D-884 gap 선언.
+- 증거: 원격 시험으로 확인한다.
+- gate 변화: 없음. PC 재설치 전에는 자동 요청이 거절로 기록된다. CE: 해당 없음 — 원인(venv 48시간 보존)은 rosy-ops PR #4와 기존 교훈 메모가 다룬다.
+
+## 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)
+
+- 변경: `tools/worktrees.py` `CAP` 50→14(main 포함 15), topic 소문자 kebab 48자 검사, 모든 prune이 `main`에 들어갔고 체크아웃되지 않은 로컬 브랜치를 정확한 sha로 정리(`main`·`archive/*` 제외). shared-checkout에 「브랜치 이름과 수명」 정본, AGENTS·git-workflow·명령 카드 상한 문구.
+- 근거: 같은 날 워크트리 22개, 로컬 브랜치 488개 중 132개가 이미 main에 있었다. 문서 예산 15와 도구 상한 50이 달랐다.
+- gate 변화: 없음. 정리될 때까지 일반 `new`가 거절된다.
+
+## 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
+
+- 변경: AGENTS.md 「같이 하는 깃」 6번, shared-checkout.md, git-workflow.md, 착지 명령 카드의 게시 마지막 단계를 `git merge --ff-only origin/main`에서 역동기화(로컬 main에서 만든 워크트리에서 `git merge origin/main`을 land.py로 착지)로 바꿨다. 우산 Rosy/AGENTS.md(git 밖)도 같이 고쳤다. 규칙 결정은 D-889(Proposed, 별도 브랜치)가 D-868 5단계를 고친다.
+- 증거: 게시 PR이 병합될 즈음 로컬 main은 게시 SHA보다 앞서 있어(시간당 약 1착지) origin/main의 조상이 아니므로 ff-only가 실패한다. 게시 스크립트 검토에서 확인.
+- gate 변화: 없음. 절차 문서다.
+- 교훈: 없음

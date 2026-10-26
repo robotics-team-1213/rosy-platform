@@ -32,7 +32,7 @@ def percentile(values: list[float], q: float) -> float | None:
 
 def daily(rows: list[dict]) -> dict[str, dict]:
     days: dict[str, dict] = defaultdict(lambda: {"landed": 0, "stopped": 0, "waits": [], "turns": [],
-                                                 "tests": defaultdict(int)})
+                                                 "tests": defaultdict(int), "prepares": []})
     turn_at: dict[int, float] = {}
     for row in rows:
         day = days[time.strftime("%Y-%m-%d", time.localtime(row["t"]))]
@@ -44,6 +44,8 @@ def daily(rows: list[dict]) -> dict[str, dict]:
             day["landed" if event == "landed" else "stopped"] += 1
             if pid in turn_at:
                 day["turns"].append((row["t"] - turn_at.pop(pid)) / 60)
+        elif event == "prepared":
+            day["prepares"].append(row.get("seconds", 0) / 60)
         elif event == "tests":
             day["tests"][row.get("verdict", "?")] += 1
     out = {}
@@ -53,6 +55,8 @@ def daily(rows: list[dict]) -> dict[str, dict]:
         out[name] = {"landed": day["landed"], "stopped": day["stopped"],
                      "wait_p50_min": percentile(day["waits"], .5), "wait_p90_min": percentile(day["waits"], .9),
                      "turn_p50_min": percentile(day["turns"], .5), "turn_p90_min": percentile(day["turns"], .9),
+                     "prepare_p50_min": percentile(day["prepares"], .5),
+                     "prepare_p90_min": percentile(day["prepares"], .9),
                      "invocations": judged, "new_share": share("new"), "flaky_share": share("flaky"),
                      "unusable_share": share("unusable")}
     return out

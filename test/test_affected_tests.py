@@ -403,6 +403,39 @@ def test_real_repo_ci_workflow_keeps_full_execution_coverage():
     assert "test" in sel.reasons
 
 
+# --- D-430 5 safety paths: FULL through safety_review.is_safety, never a copied prefix list ---------
+
+
+def _safety_escalations(sel):
+    return [e for e in sel.escalations if e.endswith(affected.SAFETY_TRIGGER)]
+
+
+def test_real_repo_safety_paths_escalate_to_full_and_are_never_narrowed():
+    repo = affected.Repo.load(ROOT)
+    # A concern: safety root file, and a safety_modules entry under the narrowable foundation.
+    for path in ("middleware/drive/motion_limits/actuation.py",
+                 "contracts/foundation/core_common/protocol/swarm_freshness.py"):
+        sel = affected.select(repo, [path])
+        assert sel.mode == "full", path
+        assert _safety_escalations(sel) == [f"{path}: {affected.SAFETY_TRIGGER}"], sel.escalations
+
+
+def test_real_repo_non_safety_path_and_safety_markdown_are_not_escalated_by_the_safety_rule():
+    repo = affected.Repo.load(ROOT)
+    for path in ("middleware/perception/control/battery.py",
+                 "middleware/drive/motion_limits/AGENTS.md"):  # NOT_TRIGGERS: Markdown is not FULL
+        assert not _safety_escalations(affected.select(repo, [path])), path
+
+
+def test_safety_rule_follows_deepest_root_wins(tmp_path):
+    """is_safety's intended rule: the deepest owning root decides, so a deeper root without
+    concern under a safety root is not safety (the real manifest has no such nesting today)."""
+    repo = affected.Repo(tmp_path, modules=[], owners=[], tracked=[], test_files=[],
+                         safety_roots=[{"path": "a", "concern": "safety"}, {"path": "a/b"}])
+    assert _safety_escalations(affected.select(repo, ["a/x.py"]))
+    assert not _safety_escalations(affected.select(repo, ["a/b/x.py"]))
+
+
 # --- D-436 4: GitHub runs the full tier as a parallel matrix; local --run does not -------------
 
 
@@ -643,3 +676,15 @@ def test_modules_runner_gates_by_2026_11_15():
         assert not reporting, f"set gating for {reporting} (D-762 stage 1 deadline 2026-11-15)"
     else:
         assert reporting in ([], ["modules"]), reporting
+
+
+def test_unknown_paths_are_listed_with_a_hint_in_json_and_print(sample, capsys):
+    """An "unknown -> full" path is named in ``unmapped`` and printed with how to map it."""
+    sel = _select(sample, "tools/mystery/run.sh", "deploy/robot/run.sh")
+    assert sel.mode == "full"
+    assert sel.unmapped == ["tools/mystery/run.sh"], "only the path no module/test names"
+    assert sel.to_json()["unmapped"] == ["tools/mystery/run.sh"]
+    text = affected.render(sel)
+    assert "  tools/mystery/run.sh\n      hint: name this path literally in the test that loads it" in text
+    assert "deploy/robot/run.sh\n      hint" not in text
+    assert _select(sample, "deploy/robot/run.sh").unmapped == []
