@@ -54,7 +54,7 @@ def monitoring_backend(tmp_path, request):
     @app.middleware('http')
     async def delayed_actual_response(request, call_next):
         response = await call_next(request)
-        if (request.url.path == '/api/monitoring/v1/snapshot'
+        if (slow.key is not None and request.url.path == '/api/monitoring/v1/snapshot'
                 and request.headers.get('authorization') == slow.key and not slow.entered.is_set()):
             slow.entered.set()
             until = time.monotonic() + 10
