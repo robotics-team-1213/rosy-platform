@@ -68,11 +68,11 @@ def _pairs(items):
     return value
 
 
-def _object(raw: bytes, fields: set[str]) -> dict:
+def _object(raw: bytes, fields: set[str], *, schema_versions=(1,)) -> dict:
     value = json.loads(raw, object_pairs_hook=_pairs)
     if not isinstance(value, dict) or set(value) != fields:
         raise ValueError("state fields differ")
-    if type(value["schema_version"]) is not int or value["schema_version"] != 1:
+    if type(value["schema_version"]) is not int or value["schema_version"] not in schema_versions:
         raise ValueError("unsupported state schema_version")
     if "state_schema" in value and (type(value["state_schema"]) is not int or value["state_schema"] != 1):
         raise ValueError("unsupported shared state schema")
@@ -101,10 +101,12 @@ def _layout(root: Path) -> tuple[dict, str] | None:
     descriptor = _path(root, DESCRIPTOR)
     if not markers and not descriptor.exists():
         return None
-    if markers != ["rosy.os_layout=ab-v1"]:
+    if markers not in (["rosy.os_layout=ab-v1"], ["rosy.os_layout=ab-v2"]):
         raise ValueError("A/B kernel marker missing, ambiguous or unsupported")
     raw = _read(descriptor, 8192, root.stat().st_uid)
-    layout = _object(raw, LAYOUT_FIELDS)
+    layout = _object(raw, LAYOUT_FIELDS, schema_versions=(1, 2))
+    if markers != [f"rosy.os_layout=ab-v{layout['schema_version']}"]:
+        raise ValueError("kernel marker differs from slot protocol")
     if layout["slot"] not in ("a", "b"):
         raise ValueError("invalid A/B slot")
     guids = [_guid(layout[key]) for key in ("root_partuuid", "data_partuuid", "provision_partuuid")]
@@ -188,7 +190,8 @@ def mount_facts(root: Path, layout: dict) -> list[dict]:
         if not partition_dir.is_relative_to(root / "sys"):
             raise ValueError("partition sysfs path escapes sysfs")
         number = _read(partition_dir / "partition", 64).decode("ascii").strip()
-        expected = {"root": 4 if layout["slot"] == "a" else 5, "data": 6, "provision": 2}[role]
+        expected = {"root": 4 if layout["slot"] == "a" else 5, "data": 6,
+                    "provision": 1 if layout["schema_version"] == 2 else 2}[role]
         if number != str(expected):
             raise ValueError("partition role differs from A/B slot")
         if disk is not None and partition_dir.parent != disk:
