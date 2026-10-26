@@ -70,18 +70,30 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     if land.git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
         land.merge(wt, main_sha, branch, python, False)
     candidate = land.out(wt, "rev-parse", "HEAD")
-    if invocations is None:
+    explicit = args.tests == "full"
+    env = None
+    if explicit:
+        args._full_witness = None
+        invocations, note, env = land.land_selection.required(land, wt, main_sha, python)
+    elif invocations is None:
         invocations, note = land.select(wt, main_sha, python)
         if not note and not (wt / "tools/harness/affected_tests.py").is_file():
             return  # main's delta stands in for an affected tier only where the D-436 selector maps it
     print(f"[land] {'FULL' if note else 'affected'} tier before the turn, ticket preparing (main {main_sha[:10]})",
           flush=True)
     logdir, began = land.tmp_dir(branch), time.monotonic()
-    land.land_guards.first(wt, args, invocations, logdir, "pre", land.run_tests, isolated=True)  # alone runs: here only
+    guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
+    guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests, isolated=True)  # alone runs: here only
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
-    land.run_tests(wt, args, invocations, logdir, "pre")
+    land.land_selection.require_eligible(land, args, land.land_selection.eligible(land, guarded))
+    tested = land.run_tests(wt, args, invocations, logdir, "pre")
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
-    land.land_full.save(wt, branch, candidate, main_sha, "full" if note else "affected", invocations)
-    land.land_events.emit("prepared", tier="full" if note else "affected", seconds=round(time.monotonic() - began))
+    clean = land.land_selection.eligible(land, guarded + tested)
+    land.land_selection.require_eligible(land, args, clean)
+    tier = ("full" if note else "affected") if clean else None
+    land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+    if explicit:
+        args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
+    land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))

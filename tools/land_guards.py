@@ -25,7 +25,7 @@ def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: 
 
     Skipped for explicit --tests; the guards are left out when every selected path already is a guard.
     """
-    if args.tests != "auto":
+    if args.tests not in ("auto", "full"):
         return []
     guards = [g for g in GUARDS if (wt / g).exists()]
     paths = [p.rstrip("/") for inv in invocations for p in inv]

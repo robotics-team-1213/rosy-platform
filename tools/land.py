@@ -179,23 +179,13 @@ def fallback_targets(wt: Path, changed: list[str]) -> list[str]:
 
 
 def pack(wt: Path, paths: list[str]) -> list[list[str]]:
-    """Split paths into pytest invocations so no two test files share a basename."""
-    groups: list[tuple[list[str], set[str]]] = []
-    for path in paths:
-        root = wt / path
-        names = {root.name} if root.is_file() else {p.name for p in root.rglob("test_*.py")}
-        for members, seen in groups:
-            if not names & seen:
-                members.append(path)
-                seen |= names
-                break
-        else:
-            groups.append(([path], set(names)))
-    return [members for members, _ in groups]
+    return land_selection.pack(wt, paths)
 
 
 def select(wt: Path, base: str, python: str, head: str | None = None,
-           landed: bool = False) -> tuple[list[list[str]], str | None]:
+           landed: bool = False, full: bool = False) -> tuple[list[list[str]], str | None]:
+    if full:
+        return land_selection.select(sys.modules[__name__], wt, base, python, head, landed, full=True)
     return land_selection.select(sys.modules[__name__], wt, base, python, head, landed)
 
 
@@ -379,6 +369,7 @@ def land(args) -> int:
         except Exception as exc:
             print(f"[land] warning: worktree prune failed, landing continues: {exc}")
     python = sys.executable
+    land_selection.begin(sys.modules[__name__], args)
     qdir = ticket = None
     if args.no_queue and not args.dry_run:
         holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
@@ -390,7 +381,7 @@ def land(args) -> int:
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
         size_check(wt, before, "HEAD", python)
         qdir, ticket = land_queue.enter(wt, branch, "preparing")  # main() releases the ticket on every exit
-        if args.tests == "auto" and land_full.restore(wt, branch) is None:
+        if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
             land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
         land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(sys.modules[__name__], wt))
     logdir = tmp_dir(branch)
@@ -404,7 +395,7 @@ def land(args) -> int:
 
     for round_no in range(1, args.max_rounds + 1):
         land_queue.touch()  # a held ticket stays fresh through long rounds
-        reusable, prepared = args.tests == "auto", None  # a green affected tier pre-push may reuse
+        reusable, prepared = args.tests in ("auto", "full"), None  # a green affected tier pre-push may reuse
         main_sha = out(wt, "rev-parse", "main")
         print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
         land_events.emit("round", round=round_no, main=main_sha)
@@ -418,7 +409,9 @@ def land(args) -> int:
         note = None
         if args.tests == "none":
             invocations: list[list[str]] = []
-        elif args.tests == "auto":
+        elif args.tests in ("auto", "full"):
+            if args.tests == "full":
+                full_main = land_selection.current_main(sys.modules[__name__], wt, args, branch, main_sha, python)
             # A peer's edit to a path the branch moved or removed: the selector skips paths that no longer
             # exist, so the delta tier would test nothing of it; run this branch's FULL selection again.
             gone = [p for p in lines(wt, "diff", "--name-only", "--diff-filter=d", full_main, main_sha)
@@ -426,7 +419,7 @@ def land(args) -> int:
             if gone:
                 summary.append(f"round {round_no}: main delta edits {len(gone)} path(s) gone here"
                                f" ({gone[0]}): FULL again")
-                invocations, note = select(wt, main_sha, python)
+                invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
             elif full_main:
                 # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
                 # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
@@ -435,7 +428,7 @@ def land(args) -> int:
                 summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
             else:
-                invocations, note = select(wt, main_sha, python)
+                invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
             if note and note not in summary:
                 summary.append(note)
             if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
@@ -462,6 +455,7 @@ def land(args) -> int:
         summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
         if out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"HEAD changed during guards; {candidate[:10]} was tested; retry the landing")
+        land_selection.require_eligible(sys.modules[__name__], args, land_selection.eligible(sys.modules[__name__], guarded))
         if guarded and out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved during the guard round; merging again")
             continue
@@ -474,11 +468,12 @@ def land(args) -> int:
         if out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
         # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
-        reusable = reusable and not any("LOAD-FLAKY" in line or land_cache.NARROW in line for line in tested)
+        reusable = reusable and land_selection.eligible(sys.modules[__name__], guarded + tested)
+        land_selection.require_eligible(sys.modules[__name__], args, reusable)
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
-            land_full.save(wt, branch, candidate, main_sha, "full", invocations)
+            land_full.save(wt, branch, candidate, main_sha, "full" if land_selection.eligible(sys.modules[__name__], guarded + tested) else None, invocations)
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha
@@ -489,6 +484,7 @@ def land(args) -> int:
         tip = out(wt, "rev-parse", f"refs/heads/{branch}")
         if tip != candidate or out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"{branch} moved to {tip[:10]} during the checks; {candidate[:10]} was tested, not that")
+        land_selection.require_eligible(sys.modules[__name__], args, reusable and prepared is not None)
         on_main(main_co)
         ff = git(main_co, "merge", "--ff-only", candidate, check=False)
         if ff.returncode == 0:
@@ -516,7 +512,7 @@ def land(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--main-checkout", help="path of the worktree that has main checked out")
-    parser.add_argument("--tests", default="auto", help='auto | none | "<pytest args>"')
+    parser.add_argument("--tests", default="auto", help='auto | full (queued canonical FULL) | none | "<pytest args>"')
     parser.add_argument("--node", action="store_true", help="also node --test the selected test dirs' web/*.mjs")
     parser.add_argument("--max-rounds", type=int, default=5)
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
