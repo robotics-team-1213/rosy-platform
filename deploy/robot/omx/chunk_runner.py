@@ -58,8 +58,9 @@ TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
 PARK_SPEED = GUARD_UNITS_PER_S  # units per second for every joint: what the guard's teacher mode streams
 # shoulder_lift moving negative lifts the arm's weight (rise from a reach). Guard logs 2026-10-26/27: its lag
 # behind the command was median/p90/max 1.8/3.5/4.75 deg at 6-8 deg/s and 1.0/1.8/3.0 deg at 4-6 deg/s; the
-# guard stops at 5 (a rise from x 0.24 m did on 2026-10-27). 3 units/s is 5.4 deg/s.
-RISE_SPEED = 3.0
+# guard stops at 5 (a rise from x 0.24 m did on 2026-10-27). 2 units/s is 3.6 deg/s: at 3 (5.4 deg/s) a rise
+# from the container reach lagged 1.8 units and set off the strain hold every time, at P 1200 and 1600 alike.
+RISE_SPEED = 2.0
 # Motor health (Present_PWM / Present_Current / Present_Temperature, raw): read once per HEALTH_PERIOD_S, and
 # fresh for a grasp verdict. The guard already samples PWM about 5 times a second on the same bus; reading
 # these three every 3 ticks as well doubled the traffic, and on 2026-10-25 a bus read stalled the loop past
