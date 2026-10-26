@@ -138,6 +138,14 @@ native image builder는 최종 raw 삭제 전에 `export-os-bundle-inputs.py`로
 
 세 export 파일은 최종 image distribution SHA256SUMS에 포함한다. native ARM workflow는 파일 존재·XZ 검사·원래 factory list digest·image layout/release/source revision의 일치를 검사하고 unsigned artifact로만 올린다. 테스트의 작은 GPT fixture는 추출 바이트·실제 manifest CLI의 outer checksum·source 변이/오류 시 미게시를 확인하며 bootable image가 아니다. offline signer는 authenticated distribution과 supplied native factory signature를 검증하고 disposable root에 해당 서명만 넣은 뒤 CMS bundle을 만들어야 한다. exporter와 CI wiring 완료는 그 후속 서명 또는 native ARM artifact 생성의 증거가 아니다.
 
+`image/os_cms_trust.py`는 source의 고정된 public certificate 경로와 lock의 승인 여부·exact PEM SHA·SPKI SHA를 검증한다. 단일 P-256 code-signing leaf와 현재 인증서 유효기간을 요구하며 private PEM/chain/다른 키/만료/경로 이탈을 거절한다. resolver는 이 승인을 자동 생성하지 않는다. 현재 lock의 CMS digest는 null, 승인 false이며 제품 인증서는 아직 없다. native builder는 비싼 빌드 전에 검사하고 customizer는 같은 public bytes만 root의 `/etc/rauc/keyring.pem`에0644로 설치한다. 기존 다른 trust와 symlink/hardlink는 덮지 않는다. 초기 이미지의 native factory는 기존 enrollment 방식대로 unsigned이며 OS bundle용 복사본에서만 별도 서명을 주입한다.
+
+`release/os_bundle.py sign`은 offline 입력의 outer Ed와 모든 checksum을 먼저 검증한 뒤 inputs/provenance/Pinky image identity/layout/ABI·nested factory Ed를 대조한다. 압축 파일은 authenticated logical size/hash 한도 안에서만 fresh private workspace에 푼다. `os_bundle_root.py`는 자신이 만든 disposable loop/mount만 소유하고 actual fsck 뒤 root RW/boot RO에서 factory-A 네 metadata 파일을 검증한다. 동일 source revision·approved Ed/CMS trust·factory descriptor/list/signature를 대조하고 supplied `SHA256SUMS.sig`만 주입한다. 현재 source의 native payload/Python/SDK 검증은 후보 코드를 실행하거나 enrollment를 하지 않는다. detach/fsck 뒤 새 RO loop로 readback하며 cleanup 실패는 workspace를 보존하고 실패한다.
+
+offline publisher는 verity bundle을 pinned RAUC1.11로 만들고 exact-byte Ed os-update/초기 canary rollout을 생성한다. product private key는 owner-only0600이며 dist/output 밖에 있어야 하고 hosted CI 실행은 거절한다. 실제 기존 `os_rauc` 소비자로 outer/CMS/verity/images를 다시 확인한 뒤에만 새 output directory에 다섯 assets를 fsync 게시한다. `rollout --promote`는 원래 publication time/delay를 유지한 채 canary_ok만 승격하고 `--withdraw`는 철회를 서명한다. 철회된 후보의 재승격은 거절하며 pair 갱신 오류는 이전 bytes 복원을 시도한다. 이 도구는 GitHub 게시를 수행하지 않는다.
+
+SOURCE 시험은 실제 Ed/CMS/verity·native payload 검증·생산자→HTTP catalogue→stage→withdraw/failed refusal를 포함한다. mount lifecycle 시험은 명시적인 kernel/service 모델이며 actual fsck/mount/loop/systemd/RAUC install과 firmware 수용은 아직 SYSTEM/DEVICE에서 확인해야 한다. 시험용 ephemeral 키는 제품 trust가 아니다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.

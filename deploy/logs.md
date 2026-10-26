@@ -3631,3 +3631,10 @@
 - 증거: ab3ca003e3 os-export-red 9failed0.33s → d543bcdaf5 os-export-green90passed4.50s;3831edb1dc handoff RED1failed11passed0.48s → exact0b370fcc7b os-export-final128passed5.71s,0NEW. 작은 실제 GPT 추출/압축·actual create-image-manifest CLI checksum·source 변이와 디스크 오류 cleanup을 확인했다. 이미지/공장 서명/기존 builder/RAUC image contracts 포함128은 앞90과 중복이다. shell syntax와 size4commits PASS, lint0errors35warnings.
 - gate 변화: 없음. exporter 소스/CI 연결이며 actual hosted ARM artifact·root signature 주입/CMS+Ed signer·실측 capacity·SYSTEM·최종 리뷰/로컬 병합·SD 기록/readback·DEVICE는 남는다. 공개 push/제품 키/SD 쓰기는 수행하지 않았다.
 - CE: 해당 없음 — 구현·시험·D-888이 판단을 보존하고 실제 장치/운영 장애 해결은 없다.
+
+## 2026-10-26 · 75e832c640 · public CMS build trust와 offline OS signing bridge
+
+- 변경: 승인된 public certificate의 exact file/SPKI pin·P256 leaf/codeSign/current-time 검증과 native image keyring staging을 연결했다. 미승인 pin은 null/false로 보존한다. offline signer는 signed distribution/native factory/provenance를 검증하고 bounded root/boot를 풀어 disposable root에 supplied native signature만 주입·검증한다. real RAUC verity/CMS와 Ed metadata/rollout을 기존 소비자로 검증한 후 fresh output에 게시한다. promotion/withdraw CLI는 게시 없이 정책만 서명한다. private600/external-key/hosted-CI refusal, cleanup HOLD를 적용했다.
+- 증거: exact75e832c640 official os-signer-final270passed28.64s,0NEW. CMS RED13→159pass1fixturefail→160pass5.34s;signer/root RED7+4→64pass1RAUCfail→65pass5.32s;board provenance RED1→수정;rollout RED1→최종270에 포함. RAUC4096-byte minimum은 zero-filled fixture 압축 문제였고 비자명한 fixture ranges로 수정했다. nested signature counterexample는 outer를 다시 서명해 별도 inner 권한을 확인한다. 실제 crypto/native 검증/HTTP stage와 mount/PID1/firmware 모델을 구분한다. subset 수는 중복이다. size11commits PASS,lint0errors35warnings.
+- gate 변화: 없음. 제품 cert/key provisioning·실제 disposable SYSTEM·최종 독립 리뷰/정식 localmain·publication 승인/native ARM signed artifact·capacity·identified SD write/full readback·DEVICE는 남는다. 제품 키 생성/사용·공개 push·SD 변경은 없다.
+- CE: 해당 없음 — fixture/모델 범위와 판단은 코드·시험·D-888에 보존하며 실제 장치/운영 장애 해결로 기록하지 않는다.
