@@ -16,4 +16,4 @@
 | Isaac Sim 5.1 | 모델 PC | 통과 | 126 / 127 | 0.936 | 0.065 / 0.0 rad |
 
 - 원격 pytest(`test/test_omx_sim_backends.py`, `test/test_omx_backend_conformance.py`) 통과.
-- 단일 카메라 Gazebo 탐침(`policy_chain_gazebo.py`)도 제품 owner 실행기로 바꿨다(D-866 P0 교훈). 이 기록에서 그 탐침을 다시 돌리지는 않았다.
+- 단일 카메라 Gazebo 탐침(`policy_chain_gazebo.py`)도 제품 owner 실행기로 바꿨다(D-866 P0 교훈). 같은 커밋에서 AI PC로 다시 돌려 `OMX_POLICY_CHAIN_GAZEBO_PASS`와 `OMX_POLICY_CHAIN_EXIT_OK`를 확인했다.
