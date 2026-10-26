@@ -176,7 +176,7 @@ def capped(host: str) -> str:
 
 def remote(host: str, script: str, *args: str, timeout: float, **kw) -> subprocess.CompletedProcess:
     """Run script on host under capped(host); a timeout is a failed step (exit 124), never a pass."""
-    command = capped(host) + "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
+    command = remote_job.argv_command(script, args, capped(host))
     if "input" not in kw:
         kw["stdin"] = subprocess.DEVNULL
     try:
