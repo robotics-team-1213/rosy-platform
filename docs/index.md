@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
+- 2026-10-26 · uncommitted · D-889 추가 1: 구현 결과와 남은 개선
 - 2026-10-26 · uncommitted · feat(sim): D-877 공통 작업 장면, 실시간 배율 보고, Isaac 전환 조건 1차
 - 2026-10-26 · uncommitted · Monitoring 기존 원천 수집·durable 집계·읽기 API
 - 2026-10-26 · uncommitted · test(fleet): D-891 리뷰 후속
-- 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
