@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · fix(land): 공유 pytest 프로세스가 가린 import 착지 게이트
+- 2026-10-26 · uncommitted · fix(remote): Isaac supervisor 실행이 host probe에 gpu 예약으로 보인다
+- 2026-10-26 · uncommitted · 교훈 2건: 폴더 단위 pytest 초록, 착지 기록 끊김
 - 2026-10-26 · uncommitted · 교훈 갱신: 카메라 readiness와 여러 유닛 동시 재시작
 - 2026-10-26 · uncommitted · D-871 3단계: review v12·v13-eval, site-tools
-- 2026-10-26 · uncommitted · D-871 통합관제 업데이트 현황
-- 2026-10-26 · uncommitted · tools/publish_main.py: 기준 목록 검토자 표기와 IP·호스트 공백 표시
