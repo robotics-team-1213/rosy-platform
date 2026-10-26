@@ -199,7 +199,6 @@ def probe(host: str) -> dict | None:
 
 def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0) -> tuple[list[str], list[str]]:
     """(hosts above the cls floor, most headroom first, light ones after, the site PC only when no other fits; notes).
-
     ``cores``: an invocation's own ``ROSY_JOB_CORES`` (its lock's reservation) raises the core floor to it."""
     need_c, need_m = max(NEEDS[cls][0], cores), NEEDS[cls][1]
     floor_m = LIGHT_GB.get(cls, need_m)
