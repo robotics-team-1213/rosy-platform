@@ -31,7 +31,7 @@ def record_transfer_outcome(execution, mission_id, expected_request_digest, obse
                 {"request": job["request"], "installation": job["installation"]}):
             raise PermissionError("assessment is outside the installed profile")
         from .physical_transfer_evidence import TransferEvidenceContext
-        context = TransferEvidenceContext.model_validate(state["context"])
+        context = TransferEvidenceContext.model_validate_json(_json(state["context"]))
         outcome = assess_transfer_outcome(store.installation.policy, context, observations,
             action_state="SUCCEEDED", now_ns=store._now_ns(), authenticated_producer_id=authenticated_producer_id)
         document = evidence_document(context, observations)
