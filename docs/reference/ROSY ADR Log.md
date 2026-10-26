@@ -21,6 +21,10 @@
 | D-875 | Swarm owner-local API separates planning from safety lifecycle | Accepted for implementation (2026-10-25) |
 | D-883 | Monitoring 호스트 자원 감시와 시험 PC 저장소 정리 요청 (D-876 §5·D-524 보충) | Accepted for implementation (2026-10-26) |
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
+| D-860 | 장치 설명 정보는 등록과 제어 권한에서 분리한다 | Accepted (2026-10-24) |
+| D-856 | 업무 공정 해석과 로봇 동작 실행의 분리 | Accepted (2026-10-24) |
+| D-857 | Rosy Learning 제품 정의 — 네 역할, 센터 하나(8768), 5단계 메뉴, 임시·확정 정답과 작은 사람 확인 | Accepted (2026-10-24, 사용자 결정 6건) |
+| D-855 | 관제 위임 요청과 실행 시도에 결속된 취소 계약 | Accepted for implementation (2026-10-23) |
 | D-854 | OMX 학습 정책 실행기 하나로 — 정책 종류를 갈아 끼우는 AI PC 정책 실행기와 행동 단위 변환 | Proposed (2026-10-23) |
 | D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |
@@ -1321,3 +1325,8 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted (2026-10-26). 사용자 설계 승인·구현 지시이며 운영 활성화는 별도다.
 
 HF user/org별 용량 예약과 작업의 연결·고정 revision·SHA를 보존한다. 검증된 관리 자료만 명시적으로 회수·복원하며 활성 lease와 pin을 보호한다. 전문은 [D-884](../adr/D-884-learning-storage-pool-and-local-reclamation.md).
+## D-860 - Descriptive device profiles independent of enrollment and control
+
+**Status:** Accepted (2026-10-24)
+
+Fleet stores editable device names, models, declared arm counts and hardware identifiers in its existing database. Profiles confer no membership, connection attestation or motion authority. Details: [D-860](../adr/D-860-descriptive-device-profiles.md).

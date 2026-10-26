@@ -339,6 +339,10 @@
       "path": "devices/enrollment.js",
       "media_type": "application/javascript"
     },
+    "device-profiles.js": {
+      "path": "devices/device-profiles.js",
+      "media_type": "application/javascript"
+    },
     "signals.js": {
       "path": "signals.js",
       "media_type": "application/javascript"

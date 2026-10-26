@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.323
+**Version:** v1.324
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.324 로봇 상세 프로필·관리 기록과 하중 분석 관측
+
+D-860 장치 설명 프로필을 재사용해 로봇 상세에서 현재 상태·주의사항·최근 진단을 먼저 보여 준다. 지속 관리 기록과 실측 특성 JSON은 기존 task SQLite에 보존하며, 특성 저장은 제어 허가나 고장 해제가 아니다. 상세 care·source 수집 계약은 아래 장치 정보 절의 후속 항목을 따른다. 관측 대상은 명시적으로 등록된 robot 또는 arm source에 결속하며, 새 실행·정지·복구 경로를 만들지 않는다.
 
 ### v1.323 Navigation intent epoch preservation (D-890)
 
@@ -541,6 +545,13 @@ Internal exceptions and paths are not exposed. No error retries POST, switches a
 arm, starts execution, releases a resource claim or rearms a stop latch.
 The installed physical binding and execution-time checks remain owner/Fleet
 responsibilities. Harbor owns candidate policy and all business interpretation.
+### v1.308 Descriptive device information (D-860)
+
+When the persistent Fleet task database is configured, `GET /api/fleet/device-profiles` returns `{profiles: [...]}` sorted by `device_id`, and `GET /api/fleet/device-profiles/{device_id}` returns one record (404 `DEVICE_PROFILE_NOT_FOUND` if absent). Both require Viewer. `PUT /api/fleet/device-profiles/{device_id}` creates or fully replaces descriptive metadata and requires a named Operator. The stable path ID matches `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`; changing a display name does not change it.
+
+Body: required `display_name` (nonblank, at most 80 characters), `device_kind` (`manipulator`, `mobile`, `other`); optional `manufacturer` and `model` (at most 80 characters, default empty), `arm_count` (null or strict integer 0..16; a manipulator's nonnull count is at least one), `hardware_ids` (default empty, at most sixteen unique nonblank opaque strings of at most 200 characters). Control characters, unknown fields and invalid values are rejected with 422 before replacement. Device identifiers and hardware IDs are descriptive metadata, never commands or authority. Authentication and permissions retain 401/403 behavior; database failures return 503 rather than an empty successful result.
+
+Response adds `device_id`, server `updated_at` (Unix seconds), named `updated_by`, `connection_status: "not_checked"`, `control_enabled: false`. Saving does not enroll devices, change the operational roster, open serial ports, update calibration, clear faults or enable motion. Connection verification, measured hardware acceptance and physical command admission remain separate. Envelope protocol version is unchanged.
 
 ### v1.298 Scoped transport execution snapshots (D-856)
 
@@ -4209,6 +4220,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.305 | 2026-10-24 | D-856: explicitly installed neutral arm owner phase execution through IPC v2, mandatory shared control/gripper/fence and durable workflow completion; no Fleet producer or business/zone completion. |
 | v1.303 | 2026-10-24 | D-856: inactive physical arm transfer grant DTO and unchanged Action/stop DTO extraction; no runtime kind or submit activation, envelope 1.0 unchanged. |
 | v1.299 | 2026-10-24 | D-856: authenticated simulation arm-transfer preflight with installed physical references, scoped owner IPC and request-bound planning facts; no admission/dispatch authority, envelope 1.0 unchanged. |
+| v1.308 | 2026-10-24 | D-860: descriptive device metadata read/replace in the existing Fleet database; named operator writes, no enrollment, connection attestation or motion authority. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |
