@@ -12,3 +12,5 @@ report wifi-allow
 approval=sim apt ros-jazzy-ros-gz ros-jazzy-gz-ros2-control ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-slam-toolbox ros-jazzy-rosbag2-storage-mcap ros-jazzy-realtime-tools ros-jazzy-xacro ros-jazzy-robot-state-publisher ros-jazzy-joint-state-publisher python3-opencv python3-numpy python3-colcon-common-extensions
 # D-805 update gate: skip updaters while updates are frozen (ops-update-freeze tag or a local freeze file).
 safe file /etc/systemd/system/rosy-nightly-reboot.service.d/10-update-gate.conf common/10-update-gate.conf
+# D-883: owner of the lab user units and rosy-test-storage.service; clean-storage refuses without it.
+approval=recovery file /etc/rosy/host-control/units-user common/host-control-units-user.in
