@@ -11,6 +11,8 @@ D-792 camera page in ``review_app_web`` landed red on the shared/web token suite
 
 from __future__ import annotations
 
+import dataclasses
+import difflib
 import re
 from pathlib import PurePosixPath
 
@@ -151,3 +153,62 @@ def registry_readers(repo: at.Repo, path: str) -> list[str]:
         if any(at._under(path, tree) for tree in cache[registry]):
             found += [t for t in repo.test_files if t != path and reader in repo.imports(t) and t not in found]
     return found
+
+
+HARNESS_YAML = "tools/harness/harness.yaml"
+YAML_ALIAS = re.compile(r"(?:^|[\s\[{,:])[&*][\w-]|<<\s*:")  # anchor, alias or merge key
+
+
+def harness_modules_added(repo: at.Repo, base_text: str, head_text: str) -> tuple[list[dict], str]:
+    """``harness.yaml`` changed only by added ``modules`` entries: (added, ""), else ([], why FULL).
+
+    Parsed with the selector's own loader (``Repo.load``: yaml.safe_load). Ownership is
+    deepest-wins (``Repo.module_for``), so an added entry may sit anywhere in the list; what it
+    must not do is take a tracked file from an existing module, so that is computed, not guessed.
+    """
+    try:
+        base, head = yaml.safe_load(base_text), yaml.safe_load(head_text)
+    except yaml.YAMLError as exc:
+        return [], f"does not parse: {str(exc).splitlines()[0]}"
+    if not (isinstance(base, dict) and isinstance(head, dict)
+            and isinstance(base.get("modules"), list) and isinstance(head.get("modules"), list)):
+        return [], "no modules list on both sides"
+    if {k: v for k, v in base.items() if k != "modules"} != {k: v for k, v in head.items() if k != "modules"}:
+        return [], "a key other than modules changed"
+    old, added, rest = base["modules"], [], iter(base["modules"])
+    pending = next(rest, None)
+    for entry in head["modules"]:  # base must be head minus the added entries, in order
+        if pending is not None and entry == pending:
+            pending = next(rest, None)
+        else:
+            added.append(entry)
+    if pending is not None or not added:
+        return [], "an existing module entry changed or was removed"
+    names = [m.get("name") for m in added if isinstance(m, dict)]
+    if len(names) != len(added) or len(set(names)) != len(names) or set(names) & {m.get("name") for m in old}:
+        return [], "added module name missing or duplicated"
+    new_lines = [ln[1:] for ln in difflib.unified_diff(base_text.splitlines(), head_text.splitlines(), n=0, lineterm="")
+                 if ln.startswith("+") and not ln.startswith("+++")]
+    if any(YAML_ALIAS.search(ln.split("#", 1)[0]) for ln in new_lines):
+        return [], "added text uses a YAML anchor, alias or merge key"
+    for module in added:
+        suites = list(module.get("tests") or []) + list(module.get("functional") or [])
+        if not isinstance(module.get("path"), str) or not module.get("tests"):
+            return [], f"module {module['name']} has no path or tests"
+        if any(not isinstance(s, str) or not repo.test_files_under(s) for s in suites):
+            return [], f"module {module['name']}: a tests/functional path has no test file"
+        sources = (module["path"], *(module.get("source_paths") or ()))
+        clash = next((m["name"] for m in old for s in (m["path"], *m.get("source_paths", ())) for t in sources
+                      if at._under(s, t) or at._under(t, s)), None)
+        if clash:  # even with no tracked file there yet, the next file added would change owner
+            return [], f"module {module['name']} path overlaps module {clash}"
+    before, after = (dataclasses.replace(repo, modules=old), dataclasses.replace(repo, modules=head["modules"]))
+    for path in repo.tracked:
+        owner = before.module_for(path)
+        if owner is not None and (after.module_for(path) or {}).get("name") != owner["name"]:
+            return [], f"{path} would move from module {owner['name']}"
+    full = [p for inv in at.lab_full_invocations(after) for p in inv if not p.startswith("-")]
+    for module in added:
+        if not all(any(at._under(s, f) for f in full) for s in (*module["tests"], *(module.get("functional") or []))):
+            return [], f"module {module['name']} not covered by FULL tier"
+    return added, ""

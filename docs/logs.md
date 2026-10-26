@@ -11710,3 +11710,9 @@ osy-d395-s1d\`.
 - 변경: `land.py`가 시작할 때 브랜치의 `tools/land*.py`가 main 체크아웃과 다르면 main의 `tools/land.py`를 같은 인자로, 브랜치 워크트리에서 다시 실행한다(`land_checks.landed_copy`, `ROSY_LAND_OWN_COPY`로 재실행 한 번만). 오래된 브랜치가 옛 규칙으로 멈추던 빈틈.
 - 증거: `test/test_land.py` 원격 통과.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(harness): harness.yaml 모듈 추가와 gap 기록은 FULL로 올리지 않는다
+
+- 변경: `affected` 선택기가 `tools/harness/harness.yaml`을 merge base와 head에서 같은 로더로 읽어, 기존 항목과 다른 키는 그대로이고 `modules`에 새 항목만 더했으며 새 이름·경로가 기존 모듈과 겹치지 않고(추적 파일의 소유 모듈도 바뀌지 않음), 앵커·별칭이 없고, 새 모듈의 tests 경로에 시험 파일이 있고 FULL 티어가 그 경로를 덮으면 FULL 대신 guard + 새 모듈 시험 + `test/test_harness_contracts.py`·`test/test_affected_tests.py`를 고른다(`affected_narrow.harness_modules_added`). `sim2real_gaps.yaml`·`perception_gaps.yaml`은 lint·generate와 자기 계약 시험만 읽어 FULL이 아니다. `*.py`, `platform_parts.yaml`, `platform_dependencies.yaml`, 역방향 검사가 없는 허용 목록 `log_repairs.yaml`, 그 밖의 새 파일은 그대로 FULL이고 문구 끝 `: harness configuration or the selector itself`도 그대로다. 2026-10-26 13:35 `feat/monitoring-registration`(harness.yaml 5줄)이 FULL로 착지 잠금을 45분 넘게 잡은 일.
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 브랜치 선택 확인.
+- gate 변화: 없음.

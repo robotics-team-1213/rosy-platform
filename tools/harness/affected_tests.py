@@ -79,7 +79,10 @@ FULL_TRIGGERS = (
 )
 # D-762 stage 0: records under a trigger change no rule, import or layout; the guards still run.
 # D-766 4: lowering a ratchet row or registering a size unit is data; test_module_structure still runs.
+# Gap registries are data read only by lint/generate and their own contract tests (selected as referencing tests).
+# log_repairs.yaml stays FULL: it is an allow-list for the append-only log gate with no stale-entry check.
 NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
+                "tools/harness/sim2real_gaps.yaml", "tools/harness/perception_gaps.yaml",
                 "test/architecture/size_ratchet.txt", "test/architecture/size_units.txt")
 
 # A module whose `tests` is the whole root suite is too broad to select by
@@ -318,7 +321,9 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
 
 
 
-def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
+def select(repo: Repo, changed: list[str], moved: list[str] = (),
+           harness_texts: tuple[str, str] | None = None) -> Selection:
+    """`harness_texts`: ``harness.yaml`` at the merge base and at head; without it that file is FULL."""
     sel = Selection(mode="affected", changed=changed, escalations=list(moved))
 
     def add(path: str, why: str) -> None:
@@ -337,6 +342,16 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
             (why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
         if trigger and affected_narrow.add_readers(repo, path, trigger, add):
             continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
+        if path == affected_narrow.HARNESS_YAML and trigger:
+            added, why = affected_narrow.harness_modules_added(repo, *harness_texts) if harness_texts else (
+                [], "no base to compare")
+            if added:
+                trigger, reason = None, f"harness.yaml: module(s) added: {', '.join(m['name'] for m in added)}"
+                for test in [p for m in added for p in (*m["tests"], *(m.get("functional") or []))] + [
+                        "test/test_harness_contracts.py", "test/test_affected_tests.py"]:
+                    add(test, reason)
+            else:  # land.py HARNESS_TRIGGER matches the suffix, so the reason goes before it
+                trigger = f"({why}): {trigger}"
         if trigger:
             # Still map the path below: a FULL selection runs locally as the guards plus
             # these suites (the escalated module's own tests, its referencing tests).
@@ -471,7 +486,13 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
     repo = Repo.load(repo_root)
     try:
         changed = changed_files(repo_root, base, head)
-        sel = select(repo, changed, moves(repo_root, base, head))
+        texts = None
+        if affected_narrow.HARNESS_YAML in changed:
+            merge_base = _git(repo_root, "merge-base", base, head or "HEAD").strip()
+            texts = (_git(repo_root, "show", f"{merge_base}:{affected_narrow.HARNESS_YAML}"),
+                     _git(repo_root, "show", f"{head}:{affected_narrow.HARNESS_YAML}") if head
+                     else (repo_root / affected_narrow.HARNESS_YAML).read_text(encoding="utf-8"))
+        sel = select(repo, changed, moves(repo_root, base, head), texts)
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}

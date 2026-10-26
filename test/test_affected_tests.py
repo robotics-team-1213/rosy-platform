@@ -643,3 +643,66 @@ def test_modules_runner_gates_by_2026_11_15():
         assert not reporting, f"set gating for {reporting} (D-762 stage 1 deadline 2026-11-15)"
     else:
         assert reporting in ([], ["modules"]), reporting
+
+
+# 2026-10-26: a five-line `modules:` addition went FULL and held the land lock 45+ minutes.
+REAL_HARNESS = (ROOT / "tools/harness/harness.yaml").read_text(encoding="utf-8")
+NEW_MODULE = "  - name: zz_added\n    path: operations/zz_added\n    tests: [test/architecture]\n"
+
+
+def _harness_with(entry: str, base: str = REAL_HARNESS) -> str:
+    assert "\nmodules:\n" in base
+    return base.replace("\nmodules:\n", "\nmodules:\n" + entry, 1)
+
+
+def _harness_select(head: str, base: str = REAL_HARNESS):
+    return affected.select(affected.Repo.load(ROOT), ["tools/harness/harness.yaml"], harness_texts=(base, head))
+
+
+def test_harness_yaml_module_added_only_selects_its_suites_not_full():
+    sel = _harness_select(_harness_with(NEW_MODULE))
+    assert sel.mode == "affected", sel.escalations
+    assert {"test/architecture", "test/test_harness_contracts.py", "test/test_affected_tests.py"} <= set(sel.reasons)
+    assert "harness.yaml: module(s) added: zz_added" in sel.reasons["test/architecture"]
+
+
+@pytest.mark.parametrize("head, why", [
+    (REAL_HARNESS.replace("    path: middleware/core/services\n", "    path: middleware/core/servicez\n", 1),
+     "existing module entry changed"),
+    (_harness_with("  - name: zz_added\n    path: middleware/core/services/src\n    tests: [test/architecture]\n"),
+     "overlaps module core_features"),
+    (_harness_with("  - name: core_features\n    path: operations/zz_added\n    tests: [test/architecture]\n"),
+     "name missing or duplicated"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: &t [test/architecture]\n"),
+     "anchor"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: [operations/zz_added/test]\n"),
+     "no test file"),
+    (_harness_with(NEW_MODULE) + "zz_new_key: 1\n", "other than modules"),
+    (REAL_HARNESS + "modules: [\n", "does not parse"),
+], ids=["modified", "overlap", "duplicate", "anchor", "no-tests", "other-key", "unparsable"])
+def test_harness_yaml_other_changes_stay_full(head, why):
+    sel = _harness_select(head)
+    assert sel.mode == "full"
+    [escalation] = [e for e in sel.escalations if e.startswith("tools/harness/harness.yaml")]
+    assert why in escalation and escalation.endswith(": harness configuration or the selector itself"), escalation
+
+
+@pytest.mark.parametrize("path, mode", [
+    ("tools/harness/sim2real_gaps.yaml", "affected"), ("tools/harness/perception_gaps.yaml", "affected"),
+    ("tools/harness/log_repairs.yaml", "full"), ("tools/harness/platform_parts.yaml", "full"),
+    ("tools/harness/platform_dependencies.yaml", "full"), ("tools/harness/affected_narrow.py", "full"),
+    ("tools/harness/zz_unknown.json", "full"),
+])
+def test_harness_data_registries_are_not_full_but_code_and_manifests_are(path, mode):
+    sel = affected.select(affected.Repo.load(ROOT), [path])
+    assert sel.mode == mode, sel.escalations
+    if mode == "affected":
+        assert "test/test_harness_contracts.py" in sel.reasons
+
+
+def test_harness_yaml_added_module_taking_tracked_files_is_full():
+    """A source_paths entry inside an existing module counts as an overlap, like path."""
+    head = _harness_with("  - name: zz_added\n    path: operations/zz_added\n"
+                         "    source_paths: [middleware/core/services/core_features]\n    tests: [test/architecture]\n")
+    added, why = affected.affected_narrow.harness_modules_added(affected.Repo.load(ROOT), REAL_HARNESS, head)
+    assert not added and "overlaps module core_features" in why
