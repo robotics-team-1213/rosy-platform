@@ -37,6 +37,9 @@ RECIPE_4 = G1_FIXTURE / "recipe_4sku.yaml"
 
 
 JITTER_LIMIT_S = 0.05  # a 5 ms nap overshooting by more than this means the host cannot give timing evidence
+# 10% = 1 s of the last 10 s with every task stalled on I/O, twice the 0.5 s contact-gap bound; failures saw 48-57%.
+IO_FULL_LIMIT_PCT = 10.0
+IO_PRESSURE = Path("/proc/pressure/io")
 
 
 def scheduling_jitter_s(samples=40, nap_s=0.005):
@@ -49,12 +52,28 @@ def scheduling_jitter_s(samples=40, nap_s=0.005):
     return worst
 
 
+def io_full_avg10(path=None):
+    """Linux PSI `full avg10` for I/O (percent); None where the file is absent (not Linux, no PSI)."""
+    try:
+        text = Path(path or IO_PRESSURE).read_text()
+    except OSError:
+        return None
+    for line in text.splitlines():
+        kind, *fields = line.split() or [""]
+        if kind == "full":
+            values = dict(field.split("=", 1) for field in fields)
+            return float(values["avg10"]) if "avg10" in values else None
+    return None
+
+
 def assert_timing(ok, detail):
     """Proposed D-780 bounds are measured with real threads and sockets.
 
     A miss on a lab PC busy with other jobs (2026-10-23: pre-push failures that passed alone on the same
     sha) is not evidence about the design, so it skips with the measured jitter. A miss on a host that
-    still wakes threads on time fails as before. Functional assertions never go through this.
+    still wakes threads on time fails as before. Disk contention (2026-10-26 AI PC: io full avg10 48-57%,
+    contact gap p99 2.6-5.7 s) leaves wake-ups on time, so PSI io is checked separately. Functional
+    assertions never go through this.
     """
     if ok:
         return
@@ -62,6 +81,10 @@ def assert_timing(ok, detail):
     if jitter > JITTER_LIMIT_S:
         pytest.skip(f"timing bound missed on a contended host (5 ms nap overshoot {jitter * 1000:.0f} ms "
                     f"> {JITTER_LIMIT_S * 1000:.0f} ms); not timing evidence: {detail}")
+    io_full = io_full_avg10()
+    if io_full is not None and io_full > IO_FULL_LIMIT_PCT:
+        pytest.skip(f"host disk I/O contended: io full avg10={io_full:.1f}% > {IO_FULL_LIMIT_PCT:.0f}%; "
+                    f"not timing evidence: {detail}")
     raise AssertionError(detail)
 
 
@@ -334,8 +357,38 @@ def test_a_missed_timing_bound_fails_on_a_quiet_host_and_skips_only_when_contend
     assert_timing(True, "never measured")
     module = assert_timing.__globals__
     monkeypatch.setitem(module, "scheduling_jitter_s", lambda: 0.001)
+    monkeypatch.setitem(module, "io_full_avg10", lambda: None)
     with pytest.raises(AssertionError, match="quiet"):
         assert_timing(False, "quiet host miss")
     monkeypatch.setitem(module, "scheduling_jitter_s", lambda: 0.2)
     with pytest.raises(pytest.skip.Exception, match="contended host"):
         assert_timing(False, "busy host miss")
+
+
+PSI_IO = ("some avg10=61.20 avg60=40.11 avg300=12.03 total=912345678\n"
+          "full avg10={full} avg60=38.70 avg300=11.50 total=876543210\n")
+
+
+def test_io_pressure_reads_full_avg10_and_none_without_psi(tmp_path):
+    psi = tmp_path / "io"
+    psi.write_text(PSI_IO.format(full="48.12"))
+    assert io_full_avg10(psi) == 48.12  # the full line, not some (61.20)
+    psi.write_text("some avg10=3.00 avg60=1.00 avg300=0.50 total=10\n")
+    assert io_full_avg10(psi) is None
+    assert io_full_avg10(tmp_path / "absent") is None
+
+
+def test_a_timing_miss_skips_on_disk_io_pressure_only_above_the_limit(monkeypatch, tmp_path):
+    module = assert_timing.__globals__
+    monkeypatch.setitem(module, "scheduling_jitter_s", lambda: 0.001)  # wake-ups on time: only I/O decides
+    psi = tmp_path / "io"
+    monkeypatch.setitem(module, "IO_PRESSURE", psi)
+    psi.write_text(PSI_IO.format(full="57.00"))
+    with pytest.raises(pytest.skip.Exception, match=r"disk I/O contended: io full avg10=57.0% > 10%"):
+        assert_timing(False, "contact gap miss")
+    psi.write_text(PSI_IO.format(full="9.90"))
+    with pytest.raises(AssertionError, match="contact gap miss"):
+        assert_timing(False, "contact gap miss")
+    psi.unlink()
+    with pytest.raises(AssertionError, match="contact gap miss"):
+        assert_timing(False, "contact gap miss")

@@ -11672,3 +11672,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_remote_pytest.py`(호출마다 콜백, True면 대기 호출 미실행·실행 중 작업 중단, 예외면 경고 뒤 중단, 콜백 안에서 `run()` 다시 호출해도 교착 없음, 잃은 작업은 KILL 안 함). 변이로 확인했다.
 - gate 변화: 없음. `tools/land.py` 연결은 별도 브랜치가 한다.
 - 교훈: CE 해당 없음 — 규칙이 코드 주석과 시험에 있다.
+
+## 2026-10-26 · uncommitted · G1 시간 시험이 디스크 I/O 경합에서는 실패 대신 이유를 찍고 건너뛴다
+
+- 변경: `test/test_platform_g1_timing.py`의 `assert_timing`이 시간 경계를 놓친 뒤 CPU 깨움 지연 검사에 더해 `/proc/pressure/io`의 `full avg10`을 한 번 읽는다(`io_full_avg10`). 10%를 넘으면 `host disk I/O contended: io full avg10=<x>% > 10%`로 건너뛴다. 파일이 없으면(리눅스 아님, PSI 없음) 전처럼 실패한다. 경계 값과 `barrier_journal`은 그대로다.
+- 이유: 10-26 AI PC 실패 때 깨움 지연은 정상인데 io full avg10이 48-57%, contact gap p99가 2.6-5.7 s(경계 0.5 s)였다. 10%는 지난 10 s 가운데 1 s 동안 모든 작업이 I/O에 멈춘 것으로, 0.5 s 경계의 두 배다.
+- 증거: 원격 AI PC에서 파서·판정 단위 시험(full 줄만 읽음, 파일 없음·full 줄 없음은 None, 57%는 건너뜀, 9.9%와 파일 없음은 실패) 통과, 변이 두 개(`full`→`some`, `>`→`<`)로 빨강 확인. 같은 커밋으로 파일 전체 3회: 1회차 8 통과·1 건너뜀(`io full avg10=15.4%`, contact gap p99 1.76 s), 2·3회차 9 통과.
+- gate 변화: 없음. 이 건너뜀은 시간 증거가 아님을 뜻하며, 깨끗한 호스트의 통과를 대신하지 않는다.
+- 교훈: CE 해당 없음 — 판단 근거가 코드 주석·docstring과 시험에 있다.
