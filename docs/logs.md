@@ -12072,6 +12072,14 @@ osy-d395-s1d\`.
 - 증거: `5a5355aa69` 원격89시험과 구조/harness/affected247시험이 모두 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 재시작/역순/동시 writer/응답 aging/task 종료/원천 손상/이력 만료 RED와 수정을 확인했고, 최종 SHA 독립 재검토에서 추가 차단 없음이 확인됐다.
 - gate 변화: Monitoring의 CLI·독립 프로세스·브라우저·native 묶음·실제 PC/LAN/TLS/장치 수용은 HOLD다. 공유 기반/등록을 먼저 착지한 뒤 이 서비스를 병합한다. CE: 해당 없음 — 새 구현의 계약과 회귀로 기록했다.
 
+## 2026-10-26 · uncommitted · feat(sim): D-877 공통 작업 장면, 실시간 배율 보고, Isaac 전환 조건 1차
+
+- 변경: `tools/sim/omx_cell_world.py`(Gazebo 셀 world의 상자를 모든 백엔드에), MuJoCo·Isaac 어댑터가 같은 장면 사용, 적합성 요약에 `real_time_factor`, `policy_chain_gazebo.py` 제품 owner 실행기, [작업 장면 기록](validation/omx-sim-cell-scene-2026-10-26/result.md), [Isaac 전환 조건 기록](validation/isaac-switch-conditions-2026-10-26/result.md).
+- 증거: 작업 장면에서 MuJoCo(실시간 배율 0.999)·Isaac(0.936) 적합성 통과. Isaac 640×480 두 대는 6~7Hz, 실시간 배율 0.91~0.94로 전환 조건 미충족.
+- gate 변화: 없음. Isaac 주 시뮬레이터 전환 조건은 아직이다.
+- 결정: 없음(640×480 유지 여부는 사용자 결정 대기).
+- 교훈: 없음.
+
 ## 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
 
 - 변경: 설치 wheel의 독립 CLI, loopback/비공개 상태 경로/단일 worker, 플랫폼 권한 미보장 시 시작 거부를 구현했다. Fleet 캐시 미구축에서 과거 관측을 만료까지 보존하고 peer 수신의 로컬 거절 사유를 Collector로 전달한다.
