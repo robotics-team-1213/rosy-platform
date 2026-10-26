@@ -28,7 +28,8 @@ ALLOWED_CALLS = frozenset({
     "property", "staticmethod", "classmethod", "enum.auto", "auto", "timedelta"})
 STATEMENTS = (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign, ast.ClassDef, ast.FunctionDef,
               ast.AsyncFunctionDef)
-SHADOWED = frozenset(dir(builtins)) | sys.stdlib_module_names
+# Private C modules (_datetime) are left out: `import datetime as _datetime` is the usual alias, not a shadow.
+SHADOWED = frozenset(dir(builtins)) | {name for name in sys.stdlib_module_names if not name.startswith("_")}
 
 
 def readers(repo: at.Repo, path: str, base: str | None) -> tuple[dict[str, str] | None, str]:

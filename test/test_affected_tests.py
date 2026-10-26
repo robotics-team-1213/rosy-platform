@@ -979,7 +979,7 @@ def _foundation_select(path: str, head: str, base: str | None):
 @pytest.mark.parametrize("path, head, base", [
     (SCHEMAS, SCHEMAS_BASE + NEW_CLASS, SCHEMAS_BASE),
     (SCHEMAS, SCHEMAS_BASE + "\nfrom .zz_new import ZzNew\n", SCHEMAS_BASE),
-    (NEW_PROTOCOL, '"""New."""\nfrom __future__ import annotations\n\nfrom datetime import datetime\n\n'
+    (NEW_PROTOCOL, '"""New."""\nfrom __future__ import annotations\n\nimport datetime as _datetime\nfrom datetime import datetime\n\n'
                    'from pydantic import BaseModel, Field\n\n\nclass ZzNew(BaseModel):\n    at: datetime = Field()\n', None),
 ], ids=["schemas-class", "schemas-reexport", "new-module"])
 def test_foundation_additions_only_narrow_and_always_run_the_pair_tests(path, head, base):
