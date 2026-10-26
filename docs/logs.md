@@ -11977,3 +11977,9 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/runtime-errors/omx-camera-readiness-preview-active-before-owning-camera-2026-10-23.md`에 네 번째 실패를 덧붙였다. 자동 업데이트가 카메라와 readiness를 한 번에 restart해 정지 복원이 덜 끝났고 시작이 거부됐다. 그런데도 다중 유닛 `is-active`가 0이라 `switched`로 기록됐다. #209의 순차 재시작과 유닛별 확인, 복구 순서, 증거를 적었다.
 - 증거: 관제 PC 2026-10-25 20:33 실패, 같은 날 밤 순차 재시작으로 전환·롤백·재전환 모두 READY.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · 교훈 2건: 폴더 단위 pytest 초록, 착지 기록 끊김
+
+- 변경: `docs/solutions/workflow-issues/`에 두 교훈을 더했다. 하나는 같은 pytest 프로세스의 형제 시험이 경로 지정 로드 모듈의 import 오류를 가린 사례다(test_native_cycle, MAIN-RED). 다른 하나는 A'가 시험을 차례 앞으로 옮긴 뒤 착지 기록이 조용히 끊긴 사례다(`fix/land-record-after-prepare`).
+- 증거: test_native_cycle.py는 혼자 실행하면 ERROR 26, 폴더 실행은 exit 0이었다(원격 5e162cca21). `.git/rosy-land` 마지막 기록은 16:21이었다. 새 끝에서 끝 시험은 원격 153 passed이고, 변이에서 2건이 빨강이 됐다.
+- gate 변화: 없음.
