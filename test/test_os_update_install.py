@@ -18,8 +18,8 @@ from test_os_bootloader import _boot, _permit
 from test_os_update_state import TRANSACTION
 
 
-def _installer(tmp_path, monkeypatch, fault=None):
-    boot, state, root, journal, config = _boot(tmp_path / "card", monkeypatch, "INSTALLING")
+def _installer(tmp_path, monkeypatch, fault=None, *, slot="a"):
+    boot, state, root, journal, config = _boot(tmp_path / "card", monkeypatch, "INSTALLING", slot=slot)
     _permit(boot, state, root)
     import os_motion_guard
     os_motion_guard.reconcile(root)
@@ -49,7 +49,8 @@ def _installer(tmp_path, monkeypatch, fault=None):
     descriptor = json.loads((candidate / "etc/rosy/os-factory-release.json").read_text())
     value["pending"]["verified"]["metadata"]["native_factory"] = {k: descriptor[k] for k in ("release_id", "checksums_sha256")}
     nodes = {}
-    for role, field, data in (("root_b", "rootfs", b"r" * 1024), ("boot_b", "boot", b"b" * 512)):
+    target = "b" if slot == "a" else "a"
+    for role, field, data in (("root_" + target, "rootfs", b"r" * 1024), ("boot_" + target, "boot", b"b" * 512)):
         node = root / media["partitions"][role]["path"].lstrip("/")
         node.write_bytes(data)
         nodes[str(node)] = media["partitions"][role]["device"]
@@ -128,14 +129,16 @@ def _installer(tmp_path, monkeypatch, fault=None):
     return module, root, journal, config, sources, release, original, calls, writes, run, nodes
 
 
-def test_finalize_reads_back_inactive_images_and_rebases_only_four_files_then_reports(tmp_path, monkeypatch):
-    m, root, journal, config, sources, release, original, calls, writes, run, _ = _installer(tmp_path, monkeypatch)
+@pytest.mark.parametrize("slot", ["a", "b"])
+def test_finalize_reads_back_inactive_images_and_rebases_only_four_files_then_reports(tmp_path, monkeypatch, slot):
+    m, root, journal, config, sources, release, original, calls, writes, run, _ = _installer(tmp_path, monkeypatch, slot=slot)
     signature = (release / "SHA256SUMS.sig").read_bytes()
     before = config.read_bytes(), journal.read_bytes()
     result = m.finalize(root, run=run)
     assert result == m.read_report(root)
-    assert result["transaction_id"] == TRANSACTION and result["target_slot"] == "b"
-    assert json.loads((sources["root"] / "etc/rosy/os-slot.json").read_text())["slot"] == "b"
+    target = "b" if slot == "a" else "a"
+    assert result["transaction_id"] == TRANSACTION and result["target_slot"] == target
+    assert json.loads((sources["root"] / "etc/rosy/os-slot.json").read_text())["slot"] == target
     assert len(writes) == 4 and set(writes) == {"root/etc/fstab", "root/etc/rosy/os-slot.json", "root/etc/rosy/os-media.json", "boot/cmdline.txt"}
     assert (release / "SHA256SUMS.sig").read_bytes() == signature
     assert (config.read_bytes(), journal.read_bytes()) == before
@@ -143,12 +146,13 @@ def test_finalize_reads_back_inactive_images_and_rebases_only_four_files_then_re
     assert all(not any("tryboot" in str(arg) for arg in argv) for argv in calls)
 
 
-@pytest.mark.parametrize("fault", ["root_hash", "boot_hash", "namespace", "write", "unmount", "readback", "foreign"])
+@pytest.mark.parametrize("fault", ["root_hash", "boot_hash", "short_read", "namespace", "write", "unmount", "readback", "foreign"])
 def test_failure_never_reports_or_changes_default_or_phase(tmp_path, monkeypatch, fault):
     m, root, journal, config, _, _, _, calls, writes, run, nodes = _installer(tmp_path, monkeypatch, fault)
     if fault in ("root_hash", "boot_hash"):
-        path = next(path for path, device in nodes.items() if device == ("8:5" if fault == "root_hash" else "8:3"))
-        Path(path).write_bytes(b"wrong")
+        path = Path(list(nodes)[0 if fault == "root_hash" else 1])
+        path.write_bytes(b"x" * path.stat().st_size)
+    elif fault == "short_read": Path(list(nodes)[0]).write_bytes(b"short")
     elif fault == "namespace":
         path = root / "proc/self/ns/mnt"
         path.unlink()
@@ -162,7 +166,7 @@ def test_failure_never_reports_or_changes_default_or_phase(tmp_path, monkeypatch
         m.finalize(root, run=run)
     assert (config.read_bytes(), journal.read_bytes()) == before
     assert not m.report_path(root).exists()
-    if fault in ("root_hash", "boot_hash", "namespace", "foreign"): assert writes == []
+    if fault in ("root_hash", "boot_hash", "short_read", "namespace", "foreign"): assert writes == []
     if fault == "foreign": assert (root / m.WORK / "keep").read_text() == "unknown"
 
 

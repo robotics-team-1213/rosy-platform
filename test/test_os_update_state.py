@@ -16,15 +16,15 @@ TRIAL_BOOT = "22222222-2222-4222-8222-222222222222"
 TRANSACTION = "33333333-3333-4333-8333-333333333333"
 
 
-def _state(tmp_path, monkeypatch):
-    media, root, _, _, _, _ = _card(tmp_path, monkeypatch)
+def _state(tmp_path, monkeypatch, *, slot="a"):
+    media, root, _, _, _, _ = _card(tmp_path, monkeypatch, slot)
     m = importlib.import_module("os_update_state")
     monkeypatch.setattr(m, "mount_facts", media.mount_facts)
     facts = media.capture(root)
     directory = root / "var/lib/rosy-device/os-update"
     directory.mkdir(parents=True, mode=0o700)
     path = directory / "state.json"
-    initial = dict(schema_version=1, committed=dict(slot="a", release_id="2026.10.26-010"),
+    initial = dict(schema_version=1, committed=dict(slot=slot, release_id="2026.10.26-010"),
                    pending=None, failed_versions=[])
     path.write_text(json.dumps(initial))
     path.chmod(0o600)

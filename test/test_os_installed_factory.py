@@ -66,3 +66,20 @@ def test_installed_factory_mismatch_is_hold_without_signature_repair_or_candidat
         module.verify(current, target, value)
     assert (signature.read_bytes() if signature.exists() else None) == before
     assert not (target / "var").exists()
+
+
+def test_authenticated_candidate_sdk_is_parsed_without_executing_its_top_level_code(tmp_path):
+    import hashlib
+    from build_payload_release import seal_release
+    from signing import sign_checksums
+    current, target, release, value, private, _ = _installed(tmp_path)
+    sdk = release / "deploy/robot/native/image_layer_boot.py"
+    sdk.write_text(sdk.read_text() + "\nraise RuntimeError('authenticated candidate code executed')\n")
+    seal_release(release, FACTORY_ID)
+    sums = (release / "SHA256SUMS").read_bytes()
+    (release / "SHA256SUMS.sig").write_text(sign_checksums(sums, private) + "\n")
+    descriptor = dict(schema_version=1, release_id=FACTORY_ID, checksums_sha256=hashlib.sha256(sums).hexdigest())
+    (target / "etc/rosy/os-factory-release.json").write_text(json.dumps(descriptor))
+    value["native_factory"] = {k: descriptor[k] for k in ("release_id", "checksums_sha256")}
+    module = importlib.import_module("os_installed_factory")
+    assert module.verify(current, target, value) == descriptor

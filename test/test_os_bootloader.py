@@ -12,20 +12,20 @@ import pytest
 from test_os_update_state import _state, _begin, _advance, SOURCE_BOOT, TRIAL_BOOT, TRANSACTION
 
 
-def _boot(tmp_path, monkeypatch, phase=None):
-    state, root, path, initial, verified, media = _state(tmp_path, monkeypatch)
+def _boot(tmp_path, monkeypatch, phase=None, *, slot="a"):
+    state, root, path, initial, verified, media = _state(tmp_path, monkeypatch, slot=slot)
     boot = importlib.import_module("os_bootloader")
     state.mount_facts = lambda *args: []  # Synthetic kernel mounts, never hardware acceptance.
     dt = root / "proc/device-tree/chosen/bootloader"
     dt.mkdir(parents=True)
-    for name, value in (("partition", 2), ("tryboot", 0)):
+    for name, value in (("partition", 2 if slot == "a" else 3), ("tryboot", 0)):
         (dt / name).write_bytes(struct.pack(">I", value))
     boot_id = root / "proc/sys/kernel/random/boot_id"
     boot_id.parent.mkdir(parents=True)
     boot_id.write_text(SOURCE_BOOT + "\n")
     config = root / "run/rosy-provision-boot/autoboot.txt"
     config.parent.mkdir(parents=True)
-    config.write_bytes(b"[all]\ntryboot_a_b=1\nboot_partition=2\n[tryboot]\nboot_partition=3\n")
+    config.write_bytes(boot.autoboot(slot))
     (path.parent / "rauc").mkdir(mode=0o700)
     if phase:
         _begin(state, root, verified, media)
@@ -40,7 +40,7 @@ def _permit(boot, state, root, *, claim=True):
     if claim:
         rosy_claim.acquire(root, holder, "fixture OS update", 60)
     record = dict(schema_version=1, transaction_id=TRANSACTION, source_boot_id=SOURCE_BOOT,
-        target_slot="b", manifest_sha256=pending["verified"]["manifest_sha256"],
+        target_slot=pending["target_slot"], manifest_sha256=pending["verified"]["manifest_sha256"],
         layout_sha256=pending["layout_sha256"], claim_holder=holder,
         expires_monotonic_ns=time.monotonic_ns() + 10_000_000_000)
     path = root / "run/rosy-os-update/arm.json"
