@@ -64,6 +64,6 @@ PC를 추가할 때마다 관제 단위를 나누는 방식은 과도한 분산�
 - 공유 호스트 두 암의 장치 혼선 방지와 한 암의 정지·복구가 다른 암에 미치는 영향.
 - 통합 화면이 하위 원장·신선도·정지 결과를 보존하고 하위 승인을 우회하지 않는지 확인.
 
-검토 기준 main은 `cbe4cfe3cf204939b4e1c132283a4243ea62b1b4`다. [현재 topology 검증](../../operations/fleet/fleet/server/ledger/control_unit_config.py)은 단일 부모·최대 3단계·최대 64개 관제와 자원 중복 소유 거절을 구현한다. 이 수치를 이번 결정에서 확대하지 않는다. [관제 연결 설정](../../deploy/site/control-unit.example.yaml)과 [선택 Compose 설정](../../deploy/site/compose.control-unit.yaml.example)은 현재 구성 예시다.
+검토 기준 main은 `cbe4cfe3cf`다. [현재 topology 검증](../../operations/fleet/fleet/server/ledger/control_unit_config.py)은 단일 부모·최대 3단계·최대 64개 관제와 자원 중복 소유 거절을 구현한다. 이 수치를 이번 결정에서 확대하지 않는다. [관제 연결 설정](../../deploy/site/control-unit.example.yaml)과 [선택 Compose 설정](../../deploy/site/compose.control-unit.yaml.example)은 현재 구성 예시다.
 
 [관제 구성 시험](../../operations/fleet/test/test_control_unit_config.py), [관제 연결 시험](../../operations/fleet/test/test_control_unit_runtime.py), [자격 범위 시험](../../operations/fleet/test/test_control_unit_credential_scope.py), [정지 시험](../../operations/fleet/test/test_control_unit_stops.py)은 기존 경계의 근거다. 이 기록의 문서 검증과 실제 새 배치의 DEVICE/FIELD 수용을 구별한다. 라즈베리파이 성능, 두 암의 실물 동시 동작과 새 원격 연산 경로는 별도 증거가 필요하다.
