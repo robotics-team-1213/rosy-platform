@@ -17,9 +17,9 @@ def test_real_linux_sysfs_attributes_are_read_without_trusting_reported_size():
     for path in paths:
         raw = path.read_bytes()
         assert len(raw) <= 64
-        assert os_media._number(Path("/"), path) == int(raw)
+        assert os_media._number(path) == int(raw)
         observed.append((path.stat().st_size, len(raw)))
-    assert all(reported >= actual for reported, actual in observed)
+    assert any(reported > 64 for reported, _ in observed)
 
 
 def test_sysfs_exception_never_relaxes_stored_metadata_size_checks(tmp_path, monkeypatch):
