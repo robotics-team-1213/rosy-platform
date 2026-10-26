@@ -161,7 +161,7 @@ def _files(targets):
 def _fsck(root, targets, run):
     for item in targets:
         device = str(root / item["part"]["path"].lstrip("/"))
-        argv = ["/usr/sbin/e2fsck", "-f", "-n", device] if item["fs"] == "ext4" else ["/usr/sbin/fsck.vfat", "-n", device]
+        argv = ["/usr/sbin/e2fsck", "-f", "-n", device] if item["fs"] == "ext4" else ["/usr/sbin/fsck.fat", "-n", device]
         _call(run, argv)
 
 

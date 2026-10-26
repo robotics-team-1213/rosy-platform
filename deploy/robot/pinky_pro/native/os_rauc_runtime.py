@@ -28,7 +28,8 @@ def prepare(root: Path, bundle: Path, raw_metadata: bytes, signature: str) -> di
         f"data-directory={root / COMMON / 'os-update/rauc'}\n\n"
         f"[keyring]\npath={root / CMS_KEY}\ncheck-purpose=codesign\n"
         "use-bundle-signing-time=false\nallow-partial-chain=false\n\n"
-        f"[handlers]\nbootloader-custom-backend={root / 'opt/rosy/os-bootstrap/native-runtime/rosy-os-bootloader'}\n")
+        f"[handlers]\nbootloader-custom-backend={root / 'opt/rosy/os-bootstrap/native-runtime/rosy-os-bootloader'}\n"
+        f"post-install={root / 'opt/rosy/os-bootstrap/native-runtime/rosy-os-finalize'}\n")
     for index, slot in enumerate(("a", "b")):
         configuration += (f"\n[slot.rootfs.{index}]\ndevice={parts['root_' + slot]['path']}\n"
             f"type=ext4\nbootname={slot}\nallow-mounted=false\ninstall-same=true\nresize=false\n"

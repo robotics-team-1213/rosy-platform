@@ -189,7 +189,7 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    avahi-daemon avahi-utils ca-certificates chrony dnsmasq-base libnss-mdns locales network-manager \
+    avahi-daemon avahi-utils ca-certificates chrony dnsmasq-base dosfstools e2fsprogs libnss-mdns locales network-manager util-linux \
     openssh-server openssl python3 python3-pip python3-yaml "rauc=$RAUC_PACKAGE_VERSION" \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp iptables iproute2
 # D-190: the boot display (rosy-face.service since D-433). RPi.GPIO on the Pi 5 is

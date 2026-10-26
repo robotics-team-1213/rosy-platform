@@ -181,6 +181,9 @@ def install(root, bundle, raw, signature, *, authorize, run=_run):
         if run is _run and root != Path("/"):
             raise ValueError("live service management requires the real root")
         pending, prepared = _admit(root, bundle, raw, signature)
+        from os_update_install import report_path, read_report
+        if report_path(root, pending).exists():
+            raise ValueError("an installed receipt already exists; recover instead of replaying install")
         _claim(root, pending)
         _stop(run)
         runtime, dropdir = _path(root, RUNTIME), _path(root, DROPIN).parent
@@ -208,8 +211,9 @@ def install(root, bundle, raw, signature, *, authorize, run=_run):
             _claim(root, pending)
             if read_state(root)["pending"] != pending or layout_digest(capture(root)["layout"]) != pending["layout_sha256"]:
                 raise ValueError("RAUC transaction or media changed before install")
-            _call(run, [RAUC, "--conf", str(runtime / "system.conf"), "install", str(bundle)], timeout=900)
-            return dict(installed=True, manifest_sha256=prepared["verified"]["manifest_sha256"])
+            _call(run, [RAUC, "--conf", str(runtime / "system.conf"), "install", str(bundle)], timeout=2700)
+            report = read_report(root)
+            return dict(installed=True, manifest_sha256=prepared["verified"]["manifest_sha256"], report=report)
         finally:
             _stop(run)
             _cleanup(root, files, directories)

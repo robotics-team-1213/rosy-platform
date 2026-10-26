@@ -489,7 +489,7 @@ DECLARED_READS = {
     "rosy-os-motion-guard.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
     "rosy-os-trial-deadline.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
     "rosy-os-rauc.service": {"/etc/rosy", "/etc/rauc", "/etc/systemd", "/etc/dbus-1",
-                              "/opt/rosy/os-bootstrap", "/var/lib/rosy-device", "/run/rosy-claim",
+                              "/opt/rosy", "/var/lib/rosy-device", "/var/lib/rosy/releases", "/run/rosy-claim",
                               "/run/rosy-provision-boot", "/run/systemd/system"},
     # Only the admission methods are called: none of firstboot's writers run here.
     "rosy-os-storage.service": {
@@ -596,7 +596,8 @@ PROGRAM_SOURCES = {
     "rosy-os-trial-deadline.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
         ("os_trial_deadline", "os_bootloader", "os_update_state", "os_state_layout")],
     "rosy-os-rauc.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
-        ("os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout")],
+        ("os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout",
+         "os_update_install", "os_installed_factory", "native_release")],
     "rosy-os-storage.service": ["deploy/robot/pinky_pro/native/os_storage_dispatch.py",
                                 "deploy/robot/pinky_pro/native/os_state_storage.py",
                                 "deploy/robot/pinky_pro/native/os_state_layout.py",

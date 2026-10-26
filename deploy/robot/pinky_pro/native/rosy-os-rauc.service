@@ -21,7 +21,7 @@ ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_rau
 ExecStart=/usr/bin/rauc --conf=/run/rosy-os-update/rauc/system.conf service
 TimeoutStartSec=10min
 TimeoutStopSec=30
-RuntimeMaxSec=20min
+RuntimeMaxSec=50min
 KillMode=control-group
 Restart=no
 NoNewPrivileges=true

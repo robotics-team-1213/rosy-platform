@@ -115,7 +115,7 @@ def _installer(tmp_path, monkeypatch, fault=None):
             row = mounted.pop(target)
             Path(target).rename(sources[row["name"]])
             Path(target).mkdir(mode=0o700)
-        elif argv[0] in ("/usr/sbin/e2fsck", "/usr/sbin/fsck.vfat", "/usr/sbin/blockdev"):
+        elif argv[0] in ("/usr/sbin/e2fsck", "/usr/sbin/fsck.fat", "/usr/sbin/blockdev"):
             assert argv[-1] in nodes and not mounted, "never fsck or flush a mounted target"
         else:
             assert argv[:2] == ["/usr/bin/sync", "-f"]
