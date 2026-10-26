@@ -71,6 +71,60 @@ def test_each_pc_has_its_own_recovery_report_and_stale_data_is_not_healthy(conso
         browser.close()
 
 
+def test_a_lab_pc_offers_storage_cleaning_and_shows_its_headroom(console_url):
+    """D-883: the button sends the confirmed Service Control action; the site gets no button."""
+    from playwright.sync_api import sync_playwright, expect
+
+    now = int(time.time())
+    resources = {"avail_pct": 8, "swap_pct": 0, "load": 1.2, "cores": 24, "uptime_s": 900, "down": [],
+                 "disk": {"test_free_gb": 2.6, "test_use_pct": 100, "root_free_gb": 2.6, "root_use_pct": 100},
+                 "disk_low": True, "gpu": {"used_mib": 10248, "total_mib": 16303, "util_pct": 3, "temp_c": 42},
+                 "memory": {"total_gb": 30.8, "avail_gb": 2.5}, "memory_low": True,
+                 "cpu": {"busy_pct": 12, "temp_c": 56}}
+    body = {
+        "hosts": [{"host": "site", "actions": ["reboot", "cancel-reboot", "restart-unit"], "units": []},
+                  {"host": "ai", "actions": ["reboot", "cancel-reboot", "clean-storage"], "units": []}],
+        "guard": {"ai": {"time": now, "state": "disk-low", "resources": resources, "recovery": {
+            "time": now, "state": "ok", "issues": [], "watchdog": {"state": "ok", "timeout_s": 30},
+            "kernel": {"state": "ok", "panic_s": 10, "softlockup_panic": 1}, "ssh": {"state": "ok"},
+            "swap": {"state": "ok", "total_bytes": 0, "used_bytes": 0}}}},
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.goto(console_url, wait_until="networkidle")
+        page.evaluate("""async body => {
+            const {createHostServices} = await import('/console/assets/host-services.js');
+            const root = document.createElement('section');
+            root.id = 'clean-test';
+            root.innerHTML = '<p id="host-services-status"></p><div id="host-services-report"></div>' +
+                '<div id="host-services-commands"></div><p id="host-services-note"></p>';
+            document.body.append(root);
+            window.cleanCalls = [];
+            window.cleanPrompts = [];
+            const view = createHostServices({root, call: async (url, options) => {
+                if (options) { window.cleanCalls.push({url, ...options}); return {code: 'ACCEPTED'}; }
+                return body;
+            }, confirmIrreversible: async prompt => { window.cleanPrompts.push(prompt.message); return true; }});
+            await view.refresh();
+        }""", body)
+        root = page.locator("#clean-test")
+        ai = root.locator('#host-services-report [data-host="ai"]')
+        expect(ai).to_contain_text("디스크 부족")
+        expect(ai).to_contain_text("시험 디스크 여유 2.6GB(100%)")
+        expect(ai).to_contain_text("메모리 여유 2.5/30.8GB(8%)")
+        expect(ai).to_contain_text("CPU 온도 56°C")
+        buttons = root.locator("#host-services-commands ui-button", has_text="시험 저장소 정리")
+        expect(buttons).to_have_count(1)  # the site PC has no such action in its catalogue
+        buttons.first.click()
+        expect(root.locator("#host-services-note")).to_contain_text("clean-storage 접수 (ACCEPTED)")
+        calls = page.evaluate("window.cleanCalls")
+        assert calls == [{"url": "/api/fleet/hosts/ai/control", "method": "POST",
+                          "body": {"action": "clean-storage", "unit": None, "operator_confirmed": True}}]
+        assert "모델·데이터·사용 중 환경은 지우지 않으며" in page.evaluate("window.cleanPrompts[0]")
+        assert not errors
+        browser.close()
+
+
 def test_every_reported_pc_shows_its_update_channels_and_a_viewer_sees_only_the_summary(console_url):
     # D-871: a fourth PC (one control PC per OMX cell) and update rows; reasons only for operators
     from playwright.sync_api import sync_playwright, expect

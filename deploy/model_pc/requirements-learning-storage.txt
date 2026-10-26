@@ -1,0 +1,2 @@
+# Optional upload runtime; matches the existing OMX cell dependency pin.
+huggingface-hub==0.35.3

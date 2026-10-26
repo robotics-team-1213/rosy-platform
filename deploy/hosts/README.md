@@ -150,8 +150,10 @@ sudo python3 deploy/hosts/common/rosy-host-state install site --approve recovery
 
 이후 Fleet의 **설치·보정 → 호스트 서비스**에서 세 PC를 각각 확인한다.
 
-- 가드는 10분마다 원격 PC의 `health`(메모리·swap 사용률·CPU 부하)와 `recovery` 캐시를 읽는다.
-  관제 PC는 자기 로컬 보고를 사용한다.
+- 가드는 10분마다 원격 PC의 `health`(메모리·swap·부하, D-883의 디스크·RAM 용량·CPU 사용률/온도·GPU)와 `recovery` 캐시를 읽는다.
+  관제 PC는 자기 로컬 보고에 같은 `health`를 로컬로 실행한 값을 더한다(D-885).
+- 디스크 여유 30GiB 미만 또는 사용률 90% 이상은 `disk-low`다. AI·모델 PC면 가드가 6시간에 한 번
+  `clean-storage`(rosy-ops `rosy-test-storage.service`)를 요청하고, 운영자는 같은 동작을 화면에서 요청할 수 있다.
 - 로컬 점검은 설치 직후 및 30분마다 실제 워치독·커널 설정·SSH 복구의 최근 실행과
   실패 카운터·활성 swap 총량과 사용량을 기록한다. 화면은 30초마다 읽는다.
 - 원격 호스트 결과 15분, 복구 설정 결과 35분 초과는 점검 지연이다. 결과 부재·미지원·접속

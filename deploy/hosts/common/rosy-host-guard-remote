@@ -1,8 +1,8 @@
 #!/bin/sh
 # Forced command for the host guard key (D-530; authorized_keys `command=...,restrict`).
-# health | recovery (cached, read-only) | updates (D-871, read-only) | restart <listed unit> | reboot.
-# Nothing else.
-# restart and reboot go through the D-524 Service Control helper (rosy-host-control), which
+# health | recovery (cached, read-only) | updates (D-871, read-only) | restart <listed unit> | reboot |
+# clean-storage (D-885). Nothing else.
+# restart, reboot and clean-storage go through the D-524 Service Control helper (rosy-host-control), which
 # owns the closed unit set and reboots with shutdown -r +10; this script never runs systemctl
 # restart or reboot itself.
 # Installed by deploy/hosts/common/install-guard-remote.sh as /usr/local/sbin/rosy-host-guard-remote.
@@ -65,6 +65,11 @@ case "$1" in
     [ $# -eq 2 ] && [ -f "$UNITS" ] && grep -v '^#' "$UNITS" | grep -qxF -- "$2" || refuse
     logger -t rosy-host-guard "restart $2 requested by the guard"
     exec sudo -n /usr/local/sbin/rosy-host-control restart-unit "$2"
+    ;;
+  clean-storage)
+    [ $# -eq 1 ] || refuse
+    logger -t rosy-host-guard "clean-storage requested by the guard"
+    exec sudo -n /usr/local/sbin/rosy-host-control clean-storage
     ;;
   reboot)
     [ $# -eq 1 ] || refuse

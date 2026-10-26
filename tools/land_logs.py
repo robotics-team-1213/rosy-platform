@@ -35,12 +35,18 @@ def _date(block: bytes) -> bytes | None:
     return match.group(1) if match else None
 
 
-def _new(base: list[bytes], side: list[bytes]) -> tuple[list[bytes], bool] | None:
+def _new(base: list[bytes], side: list[bytes], may_reorder: bool = False) -> tuple[list[bytes], bool] | None:
     """(side's entries the base lacks, whether side kept base's blocks as a prefix), or None
-    when side dropped, rewrote or reordered a base entry (moving its own new entries is not editing)."""
+    when side dropped, rewrote or reordered a base entry (moving its own new entries is not editing).
+    ``may_reorder``: a side whose base entries are all there, only in another order, gives its new
+    entries with prefix False; its order is then never kept."""
     pending = Counter(map(_key, base))
-    if pending - Counter(map(_key, side)) or [k for k in map(_key, side) if k in pending] != list(map(_key, base)):
+    if pending - Counter(map(_key, side)):
         return None
+    if [k for k in map(_key, side) if k in pending] != list(map(_key, base)):
+        if not may_reorder:
+            return None
+        return [x for x in side if _key(x) not in pending], False
     added = []
     for block in side:
         if pending[_key(block)]:
@@ -64,16 +70,19 @@ def append_blocks(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
     (head, b), (oh, o), (th, t) = split(base), split(ours), split(theirs)
     if oh.rstrip() != head.rstrip() or th.rstrip() != head.rstrip():
         return None
-    mine, other = _new(b, o), _new(b, t)
+    # this branch's own copy may hold main's entries in another order: a hand-fitted merge of main whose
+    # order later main no longer matches (2026-10-26). Main's order wins; main reordering still refuses.
+    mine, other = _new(b, o, may_reorder=True), _new(b, t)
     if mine is None or other is None:
         return None
-    if mine == ([], True):
+    reordered = [k for k in map(_key, o) if k in {_key(x) for x in b}] != list(map(_key, b))
+    if mine == ([], True) or (reordered and not mine[0]):
         return theirs
-    if other == ([], True):
+    if other == ([], True) and not reordered:
         return ours
-    if not mine[1] and not other[1]:
+    if not reordered and not mine[1] and not other[1]:
         return None  # both sides inserted or moved entries: no one sequence to keep
-    keep, extra, top = (o, other[0], oh) if not mine[1] else (t, mine[0], th)
+    keep, extra, top = (o, other[0], oh) if not mine[1] and not reordered else (t, mine[0], th)
     old = {_key(x) for x in b}
     kept = list(keep)
     floor = max((i + 1 for i, x in enumerate(kept) if _key(x) in old), default=0)

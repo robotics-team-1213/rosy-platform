@@ -32,7 +32,7 @@ python tools/worktrees.py status                              # every worktree w
   clean, merged into `main`, not locked, no ignored data, idle 1 h when its branch landed a commit of its own
   and 72 h otherwise (D-790), so nothing is left to lose; your own landed worktree needs no wait; orphan directories
   idle 1 h, their files zipped to `$ROSY_SCRATCH/worktree-orphans/` and verified first);
-  `new --prune` applies that first. It refuses at 50 directories under `.worktrees/` and names each worktree
+  `new --prune` applies that first. It refuses at 14 directories under `.worktrees/` (15 with main, D-886) and names each worktree
   removable now and by whom; `status` shows each row's owner (`unknown` when none; `new --owner "<who>"` sets it)
   and whether you may remove it. `landed-dirty` = the branch is in `main` but files are uncommitted: move the
   work to a new worktree. `stale-history` = a pre-rewrite branch: never merge or land it (`new --from` refuses it). `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
