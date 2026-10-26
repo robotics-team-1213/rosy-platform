@@ -90,7 +90,7 @@ def test_native_caddy_tls_routes_auth_scopes_and_backend_outage(tmp_path, monito
                 assert snapshot.headers['cache-control'] == 'no-store'
                 assert client.get(path + '?site_id=site-b', headers=headers).status_code == 403
                 with httpx.Client(trust_env=False, timeout=2) as untrusted:
-                    with pytest.raises(httpx.ConnectError):
+                    with pytest.raises(httpx.ConnectError, match='CERTIFICATE_VERIFY_FAILED'):
                         untrusted.get(f'https://localhost:{port}/monitoring-health')
                 monitoring_backend.server.should_exit = True
                 monitoring_backend.worker.join(timeout=10)
