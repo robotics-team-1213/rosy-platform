@@ -16,6 +16,7 @@ AB_V1_FILES = (
     "rosy_auto_update.py", "rosy_claim.py", "image_layer_boot.py", "image_layer_files.py",
     "sync-image-layer.py", "image-layer-reconcile.py", "first_boot_runtime.py", "first_boot_support.py",
 )
+AB_V2_FILES = (*AB_V1_FILES, "os_update_state.py", "os_update_manifest.py", "media_layout.py")
 
 
 def _mapping(value, fields):
@@ -51,10 +52,22 @@ def verify_contract(native: Path, *, state_schema: int, boot_abi: int = BOOT_ABI
         raise ValueError("payload cannot read and preserve the shared state schema")
     if not set(AB_V1_FILES) <= set(files):
         raise ValueError("payload SDK omits required A/B state owners")
+    if boot_abi == 2 and not set(AB_V2_FILES) <= set(files):
+        raise ValueError("payload SDK omits the persistent OS pending fence")
     for name in files:
         if not _safe(native, name).is_file():
             raise ValueError("declared SDK closure is incomplete")
     return value
+
+
+def require_native_maintenance(root: Path) -> None:
+    """Called under native release.lock; the OS controller creates pending under that same short lock."""
+    admitted = _layout(root)
+    if admitted is None or admitted[0]["schema_version"] != 2:
+        return
+    from os_update_state import read_state
+    if read_state(root)["pending"] is not None:
+        raise ValueError("OS_UPDATE_PENDING: native maintenance waits for the OS transaction")
 
 
 def require_ab_payload(root: Path, release: Path) -> None:

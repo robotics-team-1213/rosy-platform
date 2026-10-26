@@ -374,6 +374,14 @@ class NativeReleaseManager:
         self._set_link(self.current, old_current)
         self._set_link(self.previous, candidate)
 
+    def _maintenance(self) -> None:
+        if _ab_marked(self.root):
+            try:
+                from os_payload_compatibility import require_native_maintenance
+            except ImportError as exc:
+                raise ValueError("OS_UPDATE_STATE_HOLD: installed SDK lacks the maintenance fence") from exc
+            require_native_maintenance(self.root)
+
     def activate(self, release_id: str, restart_units: tuple[str, ...] = ()) -> dict:
         restart_units = tuple(restart_units)
         if not set(restart_units) <= RESTARTABLE_ALONE:
@@ -384,6 +392,7 @@ class NativeReleaseManager:
         else:
             runtime = self._runtime
         with self._locked():
+            self._maintenance()
             self.verify(release_id)
             self.check_python_runtime(release_id)
             old_current = self._link_id(self.current)
@@ -427,6 +436,7 @@ class NativeReleaseManager:
 
     def rollback(self) -> dict:
         with self._locked():
+            self._maintenance()
             old_current = self._link_id(self.current)
             candidate = self._link_id(self.previous)
             if old_current is None or candidate is None:
