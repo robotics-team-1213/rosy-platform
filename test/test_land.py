@@ -541,13 +541,15 @@ def test_peer_edit_to_a_path_the_branch_moved_reruns_full(repos, monkeypatch, ca
 
     def run_tests(wt_, args, invocations, logdir, round_no):
         calls.append(invocations)
-        if round_no == "pre":  # a peer edits the file at its old path while the full tier runs
+        if round_no == "pre" and "line_0 = -1" not in (main / "pkg/big.py").read_text():  # once, during the FULL tier
             commit(main, {"pkg/big.py": big.replace("line_0 = 0", "line_0 = -1")}, "peer edit")
         return real(wt_, args, invocations, logdir, round_no)
 
     monkeypatch.setattr(land, "run_tests", run_tests)
     assert land.main(["--tests", "auto"]) == 0
-    assert calls == [[["pkg/test"]], [["pkg/test"]]]
+    # FULL before the turn; the gone path makes it FULL again, prepared outside the lock; the next turn runs
+    # the (stub) selector's answer for main's now empty delta
+    assert calls == [[["pkg/test"]], [["pkg/test"]], [["pkg/test/test_a.py"]]]
     assert "gone here (pkg/big.py): FULL again" in capsys.readouterr().out
     assert "line_0 = -1" in (main / "moved/big.py").read_text()
 
@@ -763,7 +765,8 @@ def test_head_move_cannot_publish_full_record(repos, monkeypatch, waiting):
     monkeypatch.setattr(land.land_full, "save", lambda *a: pytest.fail("published an obsolete FULL record"))
     if waiting:
         with pytest.raises(land.Stop, match="HEAD changed"):
-            land.pretest(wt, "feat/x", land.argparse.Namespace(tests="auto"), sys.executable)
+            land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto"), sys.executable,
+                                      None, None)
     else:
         before = git(main, "rev-parse", "HEAD")
         assert land.main(["--tests", "auto"]) == 1
@@ -1075,13 +1078,27 @@ def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeyp
     assert expected in capsys.readouterr().err
 
 
-def test_no_pretest_without_anyone_ahead(repos, monkeypatch):
+AFFECTED_THEN_DELTA = """import json, sys
+def generated_targets(repo):
+    return {}
+def generate(repo):
+    return []
+if sys.argv[1] == 'affected':
+    print(json.dumps({"mode": "affected", "escalations": [],
+                      "invocations": [] if '--head' in sys.argv else [["pkg/test"]]}))
+"""
+
+
+def test_an_affected_landing_prepares_outside_the_lock_and_its_turn_runs_mains_delta_only(repos, monkeypatch):
+    """D-889 A' (2026-10-26): every affected tier ran inside the lock, 4-13 min a turn."""
     main, wt = repos
-    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    commit(wt, {"tools/harness/rosy_harness.py": AFFECTED_THEN_DELTA, "tools/harness/affected_tests.py": "",
+                "pkg/a.py": "x = 2\n"}, "branch with a selector")
     rounds = []
-    monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append(round_no) or [])
+    monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append((round_no, inv)) or [])
     assert land.main(["--tests", "auto"]) == 0
-    assert "pre" not in rounds
+    assert ("pre", [["pkg/test"]]) in rounds, "the branch's own selection, before its turn"
+    assert all(not inv for r, inv in rounds if r == 1), "main did not move: the turn runs nothing of the branch again"
 
 
 def test_the_ticket_is_released_after_a_stop_and_after_ctrl_c(repos, monkeypatch):

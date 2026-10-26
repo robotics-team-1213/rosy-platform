@@ -46,7 +46,8 @@ import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees
 from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
 import land_guards  # noqa: E402  (structural guards before the long round)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
-import land_full  # noqa: E402  (a green FULL tier outlives the run that passed it)
+import land_full  # noqa: E402  (a green tier outlives the run that passed it)
+import land_prepare  # noqa: E402  (D-889 A': tests outside the lock, then main's delta at the turn)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
 import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did)
@@ -395,28 +396,6 @@ def on_main(main_co: Path) -> None:
         raise Stop(f"{main_co} has {head or 'a detached HEAD'} checked out, not refs/heads/main")
 
 
-def pretest(wt: Path, branch: str, args, python: str) -> None:
-    """A FULL tier before the turn, its ticket ``preparing`` so it blocks no one (2026-10-19: FULL tiers inside the
-    queue held a landing 100+ min; 2026-10-26: one at the front held everyone 40+ min). Green, it is recorded as
-    the turn's ``land_full`` (D-762 stage 0): the turn runs main's delta only. An affected tier runs at the turn."""
-    main_sha = out(wt, "rev-parse", "main")
-    if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
-        merge(wt, main_sha, branch, python, False)
-    candidate = out(wt, "rev-parse", "HEAD")
-    invocations, note = select(wt, main_sha, python)
-    if not note:
-        return
-    print(f"[land] FULL tier before the turn, ticket preparing (main {main_sha[:10]})", flush=True)
-    logdir = tmp_dir(branch)
-    land_guards.first(wt, args, invocations, logdir, "pre", run_tests)
-    if out(wt, "rev-parse", "HEAD") != candidate:
-        raise Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
-    run_tests(wt, args, invocations, logdir, "pre")   # a NEW failure stops here, before the wait
-    if out(wt, "rev-parse", "HEAD") != candidate:
-        raise Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
-    land_full.save(wt, branch, candidate, main_sha)
-
-
 def land(args) -> int:
     wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
     branch = out(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -439,6 +418,7 @@ def land(args) -> int:
         except Exception as exc:
             print(f"[land] warning: worktree prune failed, landing continues: {exc}")
     python = sys.executable
+    qdir = ticket = None
     if args.no_queue and not args.dry_run:
         holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
         if holders:  # a landing outside the queue mid-turn gave that turn another round (2026-10-25, 22:52)
@@ -450,7 +430,7 @@ def land(args) -> int:
         size_check(wt, before, "HEAD", python)
         qdir, ticket = land_queue.enter(wt, branch, "preparing")  # main() releases the ticket on every exit
         if args.tests == "auto" and land_full.restore(wt, branch) is None:
-            pretest(wt, branch, args, python)   # preparing: a FULL tier keeps its place without blocking anyone
+            land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
         land_queue.wait(qdir, ticket, args.queue_timeout * 60)
     logdir = tmp_dir(branch)
     summary: list[str] = []
@@ -497,6 +477,11 @@ def land(args) -> int:
                 invocations, note = select(wt, main_sha, python)
             if note and note not in summary:
                 summary.append(note)
+            if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
+                land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
+                land_queue.wait(qdir, ticket, args.queue_timeout * 60)
+                full_main = land_full.restore(wt, branch)
+                continue
         else:
             invocations = [shlex.split(args.tests)]
         if args.dry_run:

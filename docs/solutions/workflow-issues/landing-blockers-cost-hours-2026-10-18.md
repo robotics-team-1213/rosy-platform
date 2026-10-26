@@ -198,6 +198,14 @@ took hours to land. Four separate things blocked it.
   (`land_queue.blockers`). The pretest runs for every auto landing without a FULL record. Tests:
   `test/test_land_queue.py::test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_everyone`,
   `test/test_land.py::test_harness_selector`.
+- **Every tier prepares outside the lock (2026-10-26, D-889 A'):** `land_prepare.prepare` runs each auto
+  landing's own selection before its turn (ticket `pending` until fewer than three prepare, then
+  `preparing`; neither blocks anyone) and records the tier that passed. The turn selects main's delta since
+  that main on the candidate, so overlap is judged by the selector, not by a separate area model; a delta
+  that escalates to FULL is prepared outside the lock again and the ticket waits once more. Without the
+  D-436 selector only a FULL tier prepares. Tests:
+  `test/test_land.py::test_an_affected_landing_prepares_outside_the_lock_and_its_turn_runs_mains_delta_only`,
+  `test/test_land_queue.py::test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

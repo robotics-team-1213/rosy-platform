@@ -71,7 +71,8 @@ def queue_dir(wt: Path) -> Path:
 def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting") -> Path:
     """Write this process's ticket at the end of the queue and return its path.
 
-    ``status``: ``preparing`` (a FULL tier outside the lock: keeps its place, blocks no one), ``waiting``,
+    ``status``: ``pending`` (waiting for a preparation slot) or ``preparing`` (tests outside the lock: keeps its
+    place, blocks no one; ``land_prepare.py``), ``waiting``,
     or ``turn`` (merging, testing, landing). A ticket without one (an older land.py) counts as waiting."""
     qdir.mkdir(parents=True, exist_ok=True)
     stamp = time.time_ns()
@@ -110,7 +111,7 @@ def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
     runs it outside the lock and keeps its place."""
     rows = ahead(qdir, Path("~"), now)  # every live ticket ("~" sorts after the digits)
     return [r for r in rows if r["ticket"] != ticket.name and (
-        r.get("status") == "turn" or (r["ticket"] < ticket.name and r.get("status") != "preparing"))]
+        r.get("status") == "turn" or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")))]
 
 
 def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:

@@ -91,3 +91,20 @@ def test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_e
     queue.set_status(full, "waiting")
     assert queue.blockers(tmp_path, full) == [] and [r["branch"] for r in queue.blockers(tmp_path, later)] == [
         "feat/full"], "done preparing, the FULL lander is first again"
+
+
+def test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one(tmp_path):
+    import land_prepare
+    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(3)]
+    mine = queue.take(tmp_path, "feat/mine")
+    later = queue.take(tmp_path, "feat/later")
+    naps = []
+
+    def nap(s):
+        naps.append(s)
+        assert json.loads(mine.read_text())["status"] == "pending"
+        assert [r["branch"] for r in queue.blockers(tmp_path, later)] == [], "pending blocks no one"
+        busy.pop().unlink()  # one preparing lander finishes
+
+    land_prepare.slot(tmp_path, mine, sleep=nap)
+    assert len(naps) == 1 and json.loads(mine.read_text())["status"] == "preparing"

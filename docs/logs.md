@@ -11728,3 +11728,9 @@ osy-d395-s1d\`.
 - 변경: 대기열 표가 `preparing`(차례 전 FULL 시험 중, 자리는 지키고 아무도 막지 않음)·`waiting`·`turn` 상태를 가진다. 차례는 차례 중인 표가 없고 앞선 `waiting` 표가 없을 때 시작한다(`land_queue.blockers`). pretest는 앞에 누가 있을 때만이 아니라 FULL 기록이 없는 모든 auto 착지에서 돈다. 선택기가 없을 때 대체 선택이 `head`를 무시하던 것도 고쳤다.
 - 증거: `test/test_land.py`, `test/test_land_queue.py` 원격 통과. 근거: `feat/monitoring-registration`이 맨 앞에서 FULL 10묶음을 잠금 안에서 40분 넘게 돌렸다.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · feat(land): 모든 착지의 시험을 잠금 밖에서(D-889 A')
+
+- 변경: `land_prepare.py`. auto 착지는 차례 전에 자기 선택을 돌리고(동시 준비 최대 3, 표 `pending`→`preparing`, 둘 다 아무도 막지 않음) 통과한 단계를 기록한다. 차례에서는 그 main 이후 변화분만 후보 트리에서 고른다. 변화분이 FULL로 오르면 잠금 밖에서 다시 준비하고 다시 기다린다. 선택기가 없으면 FULL만 준비한다. `pretest`를 `land.py`에서 옮겼다.
+- 증거: `test/test_land.py`, `test/test_land_queue.py`, harness 계약·architecture 원격 통과(407 passed).
+- gate 변화: 없음. 차례 안 변화분 시험의 시간 상한(10분)은 early-stop 연결과 함께 다음에.
