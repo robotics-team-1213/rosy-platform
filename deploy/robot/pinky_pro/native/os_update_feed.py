@@ -204,7 +204,8 @@ class Feed:
 def run(root=Path("/"), *, host=None, http=None, service_run=None):
     try:
         # Construct the feed only after recovery: invalid optional network config must not strand pending state.
-        if read_state(root)["pending"] is not None:
+        facts, state, _ = lifecycle._snapshot(root)
+        if state["pending"] is not None or facts["tryboot"]:
             return dict(outcome="resumed", state=lifecycle.resume(root, host=host, **({"run": service_run} if service_run is not None else {})))
         return Feed(root, host=host, http=http).poll(run=service_run)
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, UpdateError) as exc:

@@ -6,11 +6,12 @@ import os
 from pathlib import Path
 import stat
 
-from auto_update_host import DISK_MARGIN_BYTES
+from auto_update_host import DISK_MARGIN_BYTES, UpdateError
 from os_factory_release import PUBLIC_KEY
 from os_state_io import _write_atomic
 from os_state_layout import COMMON, _path, _read
 from os_update_manifest import release_id, verify_metadata
+from os_update_state import read_state
 
 STAGING = COMMON + "/os-update/staging"
 
@@ -75,6 +76,10 @@ def _reclaim(root, staging, keep):
 
 
 def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str, *, host, http) -> Path:
+    if read_state(root)["pending"] is not None:
+        raise ValueError("OS_STAGE: pending transaction owns the existing cache")
+    if verify_metadata(raw, signature, _path(root, PUBLIC_KEY)) != metadata:
+        raise ValueError("OS_STAGE: caller metadata differs from signed bytes")
     staging = _directory(root, STAGING)
     directory = _directory(root, STAGING + "/" + metadata["release_id"])
     expected = metadata["bundle"]
@@ -105,7 +110,8 @@ def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str, *, h
     descriptor = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     os.close(descriptor)
     try:
-        digest = http.download(url, part, expected["size_bytes"])
+        try: digest = http.download(url, part, expected["size_bytes"])
+        except UpdateError as exc: raise ValueError(f"OS_STAGE_DOWNLOAD: {exc}") from exc
         if part.stat().st_size != expected["size_bytes"] or digest != expected["sha256"]:
             raise ValueError("OS_STAGE: downloaded bundle size/digest differs")
         part.chmod(0o400)
