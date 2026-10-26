@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+NAVIGATION_ADMISSION_FENCE_VERSION = 1
+
 
 class ScopedNavigationCancelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)

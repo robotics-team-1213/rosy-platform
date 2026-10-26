@@ -355,6 +355,6 @@
 
 - 2026-10-26 · uncommitted · test(fleet): D-891 리뷰 후속
 - 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
+- 2026-10-26 · e18c084879 · D-890 public Home seam classification
+- 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
 - 2026-10-26 · uncommitted · tools/land_browser.py: 건너뛰기만 한 브라우저 조각은 통과가 아니다
-- 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
-- 2026-10-26 · uncommitted · fix(selector): 선택기 규칙 6·7·8 (설계 0.7), 규칙 4·5는 뺌

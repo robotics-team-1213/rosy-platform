@@ -12013,6 +12013,20 @@ osy-d395-s1d\`.
 - 증거: 원격에서 같은 87건 조각을 옵트인 있음/없음으로 실행 → 있음 87 passed exit 0 판정 통과, 없음 87 skipped exit 0 → `vacuous` "0 passed, 87 skipped"로 빨강. 시험 `test/test_land_browser.py`(요약 6가지, 재실행 뒤 숨김 방지, 옵트인 없는 조각), `test/test_land.py`(건너뛰기만 한 조각이 착지를 멈춤).
 - gate 변화: 강화(빈 통과 차단). CE: 해당 없음 — 사전 차단 규칙이며 장애 해결이 아니다.
 
+## 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
+
+- 변경: optional navigate/home caller epoch 문법과 정본 상수, CORE Home 본문 전달, Fleet navigate의 실행 전 명시적 거절을 함께 보완했다. API v1.323과 공식 도구의 기존 version pins를 정렬했다.
+- 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
+- Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
+- CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-26 · e18c084879 · D-890 public Home seam classification
+
+- 변경: 실제 HTTP/CoreServices/native Home 통합 시험의 fixture import에 반응한 D-184 분류에 정확한 경로 한 개와 공개 계약 근거만 등록했다. 검사 정규식·탐색·집합 동일성·stale 검사는 유지한다.
+- 증거: 첫 공식 FULL은29묶음1FAIL/34989PASS/2235SKIP(묶음 간 중복 포함), 별도guard287PASS였다. 실패ID의 단독 재현1FAIL과 actualmain209dbf98b3의1PASS를 보존했다. 수정sourcee18c084879의 동일 guard+실제Home 회귀3PASS/0SKIP, official·outer·known0/NEW0·known0·flaky0이다. 새 결과: docs/validation/navigation-intent-epoch-prelude-2026-10-26b/result.md.
+- Gate: 첫 FULL은 실패이며 착지하지 않았다. 기존 집중 시험·첫 실패와 보완 검증을 구분하고 최신 main 통합·공식 재착지·CI·현장 수용은 아직 대기한다.
+- CE: 해당 없음 — 코드 분류 근거와 회귀·검증 기록으로 판단을 보존했다.
+
 ## 2026-10-26 · uncommitted · feat(fleet): 인식 모델 승격 대기열(D-891)
 
 - 변경: D-874 묶음의 `SCHEMA`·`FORBIDDEN`·`validate`·정본 인코더를 `rosy-contracts-learning` 0.1.14 `promotion_request`로 옮겼다(Learning은 import, 바이트 동일). Fleet `missions/perception_promotion.py`가 policy-admin이 올린 묶음 바이트를 해시·정본 인코딩·공유 검증기로 다시 보고, 다른 policy-admin의 결정 하나만 `fleet_perception_proposal`에 기록한다. 본문 256 KiB 한도. `work_routes.py`에서 governance 옆에 마운트, `app.py`는 그대로.
