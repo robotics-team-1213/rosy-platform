@@ -226,7 +226,7 @@ def full_case(repos, monkeypatch):
             if stopped:
                 codes.append(land.remote_pytest.CANCELLED)
                 continue
-            text, code = GREEN, 0
+            code, text = GREEN
             if "ROSY_ALONE_FILES=pkg/test/test_a.py" in inv:
                 text += ("[isolation] " + case.report + ": "
                          + ("pkg/test/test_a.py" if case.report == "incomplete" else "1") + "\n"
