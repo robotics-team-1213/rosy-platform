@@ -13,6 +13,24 @@ def module():
     return importlib.import_module("os_system_vm")
 
 
+@pytest.mark.parametrize("change", [None, "boot", "unit", "pid", "kind", "clock", "json"])
+def test_pid1_start_evidence_binds_boot_unit_sender_event_and_clock(change):
+    boot = "11111111-1111-4111-8111-111111111111"
+    event = dict(UNIT="rosy-os-trial-deadline.service", _PID="1", _BOOT_ID=boot.replace("-", ""),
+                 MESSAGE_ID="7d4958e842da4a758f6c1cdc7b36dcc5", __MONOTONIC_TIMESTAMP="180000001")
+    if change == "boot": event["_BOOT_ID"] = "2" * 32
+    if change == "unit": event["UNIT"] = "another.service"
+    if change == "pid": event["_PID"] = "42"
+    if change == "kind": event["MESSAGE_ID"] = "0" * 32
+    if change == "clock": event["__MONOTONIC_TIMESTAMP"] = "179999999"
+    raw = b"not json" if change == "json" else json.dumps(event).encode()
+    if change is None:
+        assert module().pid1_start(raw, "rosy-os-trial-deadline.service", boot, 180_000_000) == event
+    else:
+        with pytest.raises(ValueError):
+            module().pid1_start(raw, "rosy-os-trial-deadline.service", boot, 180_000_000)
+
+
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
 def test_actual_private_mount_guard_without_pid1_ptrace_authority(tmp_path):
     with module().Guest(tmp_path) as guest:
