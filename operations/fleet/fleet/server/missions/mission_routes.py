@@ -495,11 +495,13 @@ def install_mission_routes(app, *, mission_service, proposal_store, goal_evidenc
         return {"proposal": _mission_candidate_result(proposal, rejected)["proposal"],
                 "mission": redact_cell_job(rejected, principal) if cell else rejected, "decision": decision}
 
-    if policy_admission_core is not None:  # D-865 P2b: the policy-admission surface rides the mission guard set
+    if policy_admission_core is not None:  # D-865 P2b/P2c: surface + auto-admit loop
         from fleet.server.missions.policy_admission_routes import (
             install_policy_admission_routes)
         install_policy_admission_routes(
             app, core=policy_admission_core, require_viewer=require_viewer,
             require_named_operator=require_named_operator,
-            read_guard=read_guard, operator_guard=operator_guard)
+            read_guard=read_guard, operator_guard=operator_guard,
+            proposal_store=proposal_store, mission_service=mission_service,
+            audit_log=getattr(policy_admission_core, "audit_log", None))
     return fleet_proposal_create, fleet_proposal_resolve, fleet_mission_admit

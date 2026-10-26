@@ -3451,6 +3451,34 @@
 - gate 변화: SOURCE prototype이며 native ARM64 artifact·실물 SD·부팅·OS 자동 갱신·powercut 수용은 HOLD다. 기존 작업 브랜치는 보존하고 현재 main에서 완결된 source snapshot을 새 착지 브랜치로 검증한다.
 - 교훈: CE 해당 없음 — 수정 근거는 회귀 시험과 기존 설치/검증 교훈에 명시된다. Linux 전체 PS 한계는 작업 기록에 미해결로 남긴다.
 
+## 2026-10-26 · uncommitted · Learning 저장 모듈의 배포 포함 검사 (D-884)
+
+- 변경: 새 저장 pool/jobs/files/hub/web/source와 기존 inventory·저장 화면을 model-code 필수 입력에 포함한다. 선택적 HF host 의존성은 기존 OMX cell과 같은 0.35.3 pin으로 선언한다. 자동 설치·운영 재시작·원격 자료 삭제는 수행하지 않는다.
+- 증거: source `bc9d3f81c0`의 보관·회수·Isaac disk guard 원격 57건 통과, UI/복구 `49d3c2bc9a` 원격 63건 통과. 별도 누락 모듈 부정 시험 5건의 RED를 확인했으며, 이번 필수 목록의 최종 검증은 후속 committed-SHA 시험 기록에 남긴다.
+- gate 변화: source 입력의 완결성을 검증하는 변경이다. signed artifact 설치·실제 HF 왕복·Isaac SDK 실행·실물 수용으로 계산하지 않는다.
+- CE: 해당 없음 — 규칙과 근거는 D-884·회귀·운영 안내에 보존한다.
+
+## 2026-10-26 · 07943e133d · Learning 저장 입력과 복구의 최종 source 검증 (D-884)
+
+- 변경: model-code 필수 storage 입력, optional HF dependency pin 및 꺼진 설정 예제를 제공하고 취소·묶음 복구·소비자 lease·공유 cache 경계를 보완했다.
+- 증거: 배포 archive 누락 부정 시험을 포함한 release 235 passed; 최종 pool/jobs/hub/source와 문서 하네스 72 passed/0 skipped/NEW0, browser·화면·API 계약 21 passed/0 skipped/NEW0. 상세 revision 및 FULL 원시 실패·후속 확인은 learning/curation/perception/docs/storage-pool.md의 착지 전 검증 기록을 따른다.
+- gate 변화: 소스 closure 증거만 추가한다. 실제 HF 왕복·Isaac SDK·signed artifact 설치·운영 자료 삭제·장치 수용은 수행하지 않았고 운영 서비스는 활성화하지 않았다.
+- CE: 해당 없음 — 복구 판단은 구현·회귀 시험·D-884와 운영 안내로 확인할 수 있다.
+
+## 2026-10-26 · uncommitted · Learning 저장 설정 UI와 준비 파이프라인 closure (D-884)
+
+- 변경: storage_setup·storage_prepare·storage-settings.js를 model-code 필수 입력에 포함한다. 기존 계정·저장소 UI에서 측정 quota/cache 설정, 실제 소량 private 쓰기·읽기 proof, 활성화, 완료 폴더·Isaac 결과 준비와 기존 회수/복원으로 이어진다. 파일 JSON 편집은 초기 seed 대안이며 UI 정본은 workspace SQLite CAS다.
+- 증거: no-JSON HTTP 흐름과 양 테마/폭의 전체 브라우저 흐름, 별도 신규 파일 누락 부정 시험의 RED/GREEN을 확인했다. 독립 리뷰의 과거 복원·취소·부분 export 및 원자적 manifest 지적을 회귀 시험으로 수정했다. 최종 committed revision의 영향 시험/브라우저 결과는 후속 검증 기록에 남긴다.
+- gate 변화: host source closure에 한한다. 운영 계정 사용, 실제 HF 전송, SDK/모델 실행, signed artifact 설치·장치 수용을 수행하지 않았다.
+- CE: 해당 없음 — 복구 근거는 D-884·운영 안내·실제 파일/SQLite 회귀에 보존한다.
+
+## 2026-10-26 · 007e6c3b5a · Learning UI 설정·보관 흐름 source 검증 완료 (D-884)
+
+- 변경: 저장 설정부터 완료 자료 준비·보관·회수·복원까지 기존 Learning UI와 계정 권한으로 연결하고, 신규 모듈·자산의 배포 포함과 복구 경계를 마감했다.
+- 증거: 영향 선택 affected/no escalation, `00e54f4c82` 원격 3,563 passed / 326 skipped / NEW0. 신규 setup/prepare/JS 필수 archive 입력과 기존 계정·검수·API·하네스 회귀를 포함한다. source guard92/0, 명시적 browser·HTTP·공용 control47/0, 펼친 설정 양 폭/테마2/0은 각각 NEW0다. 커밋별 근거는 learning/curation/perception/docs/storage-pool.md의 UI 확장 검증을 따른다.
+- 검토: 별도 전체 read-only 리뷰의 복원·취소·부분 export·바이트 보존·완료 목록 원자성 지적을 재현 후 수정했고 후속 리뷰에서 닫았다. 모바일 기존 percentage flex-basis와 공용 column 배치의 충돌은 실제 computed geometry로 확인해 신규 그룹에 공용 폼만 적용했다.
+- gate 변화: source closure만 검증했다. 운영 SDK/환경 설치, 실제 HF 왕복, signed artifact 설치·서비스 활성화·장치/현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 결정의 근거와 복구 조건은 구현·회귀·주석·운영 안내에 보존한다.
 ## 2026-10-26 · uncommitted · guard 디스크·GPU 보고와 `clean-storage` helper (D-883)
 
 - 변경: `rosy-host-guard-remote health`가 `~/rosy-test`·`/` 여유와 GPU 메모리를 덧붙인다. `rosy-host-guard`는 30GiB/90% 기준의 `disk-low`를 보고만 하고 복구 단계를 진행시키지 않는다. `rosy-host-control`의 ai·model `clean-storage`는 `rosy-test-storage.service`를 한 번 시작한다(없으면 exit 5).

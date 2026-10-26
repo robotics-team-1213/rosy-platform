@@ -11675,6 +11675,42 @@ osy-d395-s1d\`.
 - 증거: 최초 RED와 독립 검토의 표본 역순·누락/unknown 복귀·동일 capture 내용 변경을 원격 RED로 재현했다. 수정 `efdddebe30`의 설치 wheel 포함52시험이 통과했고, `a3c6ebbb9b`의 architecture/harness/affected/platform guards도 통과했다. 두 비교는 NEW/KNOWN/FLAKY0이며 최종 캐시 독립 재검토에서 기존 지적3개 수정·추가 차단 없음이 확인됐다.
 - gate 변화: 없음. 현재 Python 기반만 구현했으며 HTTP 수집기·조회 API·UI·native 배포·실물 네트워크 수용은 후속이다. CE: 해당 없음 — 새 코드의 계약 시험이며 운영 장애 해결이 아니다.
 
+## 2026-10-26 · uncommitted · 공급암 S: 실물 사례를 모델 PC Isaac에서 재현하는 사례 파이프라인
+
+- 변경: `cell_pipeline`의 `cases.jsonl`이 시도마다 장면(상자 위치·회전, 집게 각도, 놓을 곳, 결과)을 남긴다. `cell_cases.py`(실물 정지 6건과 장면이 있는 사례 → 시뮬레이터 사례), `cell_case_suite.py`(모델 PC Isaac `arm-s-cell-case` 실행으로 재현·판정, 알려진 Isaac 차이 구분). 실행 관리자가 사례를 받는다(run_catalog·run_store·run_worker·remote_isaac). worker가 공급암 S 실행마다 KeyError로 죽어 UNKNOWN이 되던 것과 사례 실행의 입력 재구성 오류를 고쳤다.
+- 증거: 원격 시험 통과. 모델 PC 실행 결과는 `docs/validation/omx-arm-s-cell-cases-2026-10-26/result.md`(사례 4 일치, 3·5는 알려진 Isaac 집게 차이).
+- gate 변화: 없음. Gazebo 사례 입력과 Isaac 집게 결합은 미해결.
+
+## 2026-10-26 · uncommitted · fix(land): FULL를 다시 돌지 않는 차례, pretest 공백 정리, 차례 중 우회 거부
+
+- 변경: `land.merge`가 착지된 ADR 공백 줄을 병합 커밋 안에서 지운다(pretest·차례 공통). `land_full.restore`는 병합 커밋이 git 병합과 자동 정리 기록만 다르면 FULL 통과를 유지한다. 대기 중 main 변화분이 이미 착지한 하네스 파일 때문에만 FULL로 오르면 guard와 매핑 시험만 돈다. 다른 착지가 차례를 쥐면 `--no-queue`를 거부한다.
+- 증거: `test/test_land.py`·`test_land_queue.py`·`test_land_record.py` 원격 통과(109 passed). 원인 근거는 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 6절.
+- gate 변화: 없음. 잠금 밖 시험·준비 순서 대기열은 다음 단계.
+
+## 2026-10-26 · uncommitted · fix(land): 다시 시도하면 실패한 시험 묶음만 다시 돈다
+
+- 변경: `run_tests`가 첫 NEW 실패에서 멈추지 않고 모든 invocation을 판정한 뒤 통과분을 `land_cache`에 남기고 실패를 모아 멈춘다. 한 invocation의 호스트가 끊겨도 나머지의 통과는 기록한다. LOAD-FLAKY 통과는 계속 기록하지 않는다.
+- 증거: `test/test_land.py` 원격 통과. 근거는 `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` 6절.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 지난번 실패한 시험 묶음을 먼저 돌린다
+
+- 변경: NEW 실패가 난 invocation을 `<git-common-dir>/rosy-land-failed.json`에 표시하고 통과하면 지운다. 다음 실행은 표시된 것만 먼저 시험 PC에 보내고, 다시 실패하면 나머지를 돌리지 않고 멈춘다.
+- 증거: `test/test_land.py` 원격 통과.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다
+
+- 변경: `land_logs.append_blocks`가 브랜치 쪽 사본이 main의 기존 항목 순서만 바꾼 경우(수정·삭제 없음) main 순서를 유지하고 브랜치의 새 항목을 날짜 순으로 넣는다. main이 순서를 바꾸거나 항목을 고친 경우는 그대로 멈춘다.
+- 증거: `test/test_land.py` 원격 통과.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
+
+- 변경: `land.py`가 시작할 때 브랜치의 `tools/land*.py`가 main 체크아웃과 다르면 main의 `tools/land.py`를 같은 인자로, 브랜치 워크트리에서 다시 실행한다(`land_checks.landed_copy`, `ROSY_LAND_OWN_COPY`로 재실행 한 번만). 오래된 브랜치가 옛 규칙으로 멈추던 빈틈.
+- 증거: `test/test_land.py` 원격 통과.
+- gate 변화: 없음.
+
 ## 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
 
 - 변경: ADR D-885와 Log 행. D-879 gap 행 제거(착지), D-884 gap 선언.

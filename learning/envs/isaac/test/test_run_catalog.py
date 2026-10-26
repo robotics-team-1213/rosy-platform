@@ -47,3 +47,15 @@ def test_readiness_catalog_cannot_be_mutated_by_a_caller():
     rows = mod.catalog()
     rows[0]['id'] = 'changed'
     assert mod.catalog()[0]['id'] == 'omx-f-import'
+
+
+def test_an_arm_s_case_run_takes_a_checked_case_beside_the_seed():
+    mod = catalog_module()
+    case = {'box': [0.0, 0.0, 25.0], 'place': 'belt', 'grasp_turn': 0.0, 'expect': 'not_held'}
+    config = mod.normalize('arm-s-cell-case', {'seed': 0, 'case': case})
+    assert config['scenario'] == 'case' and config['case'] == case
+    for bad in ({'seed': 0}, {'seed': 0, 'case': dict(case, box=[0.2, 0, 0])}):
+        with pytest.raises(ValueError):
+            mod.normalize('arm-s-cell-case', bad)
+    with pytest.raises(ValueError):
+        mod.normalize('arm-s-cell-nominal', {'seed': 0, 'case': case})
