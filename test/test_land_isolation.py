@@ -98,6 +98,27 @@ def test_each_alone_reports_only_the_masked_file(pair):
     assert land_isolation.each_alone(pair, files, land_isolation.COLLECT, budget_s=-1) == {}
 
 
+def test_a_serial_prefix_file_runs_with_nothing_else_on_the_host(monkeypatch, tmp_path):
+    """2026-10-27: test_platform_g1_timing failed beside five other alone processes."""
+    import threading
+    import time
+    live, seen, lock = [0], {}, threading.Lock()
+
+    def run(argv, **kw):
+        with lock:
+            live[0] += 1
+            seen[argv[-1]] = max(seen.get(argv[-1], 0), live[0])
+        time.sleep(0.05)
+        with lock:
+            live[0] -= 1
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(land_isolation.subprocess, "run", run)
+    files = ["pkg/test_a.py", "test/test_timing.py", "pkg/test_b.py", "pkg/test_c.py"]
+    done = land_isolation.each_alone(tmp_path, files, [], workers=4, serial=("test",))
+    assert set(done) == set(files) and seen["test/test_timing.py"] == 1, seen
+
+
 def test_alone_job_workers_equal_the_cores_its_job_word_reserves(pair):
     """remote_job.JOB writes ROSY_JOB_CORES to the job's lock; the pool must use exactly that many."""
     for words in ({"ROSY_ALONE_FILES": "test_a_inserts.py"}, {"ROSY_COLLECT_PATHS": "."}):

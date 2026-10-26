@@ -35,7 +35,6 @@ import re
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -79,12 +78,12 @@ def each_alone(root: Path, files: list[str], options: list[str], workers: int = 
     """``{file: (exit code, output tail)}`` of ``pytest <options> <file>``, one process per file, in list order.
 
     Capped by time, not file count: a file not started within ``budget_s`` is left out, one still running at the
-    end is stopped and gets ``None``. Files under a ``serial`` prefix never run at the same time as each other."""
+    end is stopped and gets ``None``. Files under a ``serial`` prefix run after the pool, one at a time with nothing
+    else running: timing tests (test_platform_g1_timing) failed beside five other processes (2026-10-27)."""
     env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTEST_XDIST", "PYTEST_CURRENT"))}
-    deadline, one_at_a_time = time.monotonic() + budget_s, threading.Lock()
+    deadline = time.monotonic() + budget_s
 
     def one(path: str):
-        held = any(path == s or path.startswith(s + "/") for s in serial) and one_at_a_time.acquire()
         try:
             if (left := deadline - time.monotonic()) <= 0:
                 return path, None
@@ -95,12 +94,12 @@ def each_alone(root: Path, files: list[str], options: list[str], workers: int = 
             return path, (r.returncode, (r.stdout + r.stderr)[-3000:])
         except subprocess.TimeoutExpired:
             return path, (None, f"stopped at the {budget_s:.0f} s budget")
-        finally:
-            if held:
-                one_at_a_time.release()
 
+    alone = [p for p in files if any(p == s or p.startswith(s + "/") for s in serial)]
     with ThreadPoolExecutor(max(1, workers)) as pool:
-        return {path: res for path, res in pool.map(one, files) if res is not None}
+        done = dict(pool.map(one, [p for p in files if p not in alone]))
+    done.update(map(one, alone))  # the pool has drained: one process on the host
+    return {path: res for path, res in done.items() if res is not None}
 
 
 def new_failures(report: str) -> list[str]:
