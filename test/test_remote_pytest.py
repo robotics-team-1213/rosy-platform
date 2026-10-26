@@ -1202,9 +1202,10 @@ def test_worker_count_follows_free_cores_memory_the_job_cap_and_the_site_quota(m
 @pytest.mark.parametrize("inv, why", [
     (GROUP, None),
     (["shared/web/test/", ".\\contracts\\foundation\\test", "-k", "not slow"], None),
-    (["test/test_land.py"], "test is in serial_suites.txt"),
-    (["middleware/core/gateway/test", "middleware/perception/test"], "middleware/perception is in"),
-    (["middleware"], "is in serial_suites.txt"),  # a parent of a serial suite
+    (["test", "operations/fleet/test", "middleware/perception"], None),  # -n 6 matched serial (2026-10-27)
+    (["learning/envs/isaac/test/test_x.py"], "learning/envs/isaac/test is in serial_suites.txt"),
+    (["middleware/core/gateway/test", "integrations/simulation/gazebo/test"], "gazebo/test is in"),
+    (["integrations"], "is in serial_suites.txt"),  # a parent of a serial suite
     (["."], "is in serial_suites.txt"),
     (["middleware/core/gateway/test/test_api.py::test_x"], "node ids"),
     ([rp.BROWSER_ENV, "shared/web/test"], "browser job"),
@@ -1221,7 +1222,7 @@ def test_serial_list_and_rules_keep_hazardous_invocations_serial(inv, why):
 def test_serial_list_parses_comments_and_names_real_paths():
     assert xp.load_serial("# head\n\ntest  # why\n middleware\\perception/ \n") == ["test", "middleware/perception"]
     serial = xp.load_serial(xp.SERIAL_FILE.read_text(encoding="utf-8"))
-    assert "test" in serial and "operations/fleet/test" in serial
+    assert "integrations/simulation/gazebo/test" in serial and "tools" in serial  # tools: land_isolation's jobs
     assert all((ROOT / prefix).exists() for prefix in serial), "a stale line keeps nothing serial"
 
 
