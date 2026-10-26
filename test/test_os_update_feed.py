@@ -53,6 +53,7 @@ def publish(hub, private, *, revision="2026.10.26-011", withdrawn=False, canary_
         hub.assets[key] = content
         entry["assets"].append(dict(name=filename, size=len(content), browser_download_url=hub.base + "/dl/" + key))
     hub.releases.append(entry)
+    hub.etag = '"os-' + str(len(hub.releases)) + '"'
     return value, body, policy
 
 
@@ -113,3 +114,52 @@ def test_insufficient_real_staging_space_never_downloads_or_changes_os_state(fee
     with pytest.raises(ValueError, match="DISK"): m.Feed(root, host=host).poll(apply=False)
     assert journal.read_bytes() == before
     assert not any(path.endswith(value["bundle"]["filename"]) for path, _ in hub.requests)
+
+
+@pytest.mark.parametrize("unknown", [False, True])
+def test_space_reclamation_only_removes_recognized_signed_cache_files(feed, unknown):
+    from auto_update_host import DISK_MARGIN_BYTES
+    m, hub, host, root, _, _, private, _ = feed
+    old, _, _ = publish(hub, private)
+    m.Feed(root, host=host).poll(apply=False)
+    directory = root / "var/lib/rosy-device/os-update/staging" / old["release_id"]
+    old_bundle = directory / old["bundle"]["filename"]
+    if unknown: (directory / "operator-note.txt").write_text("preserve this unknown file")
+    new, _, _ = publish(hub, private, revision="2026.10.26-012")
+    host.t += dt.timedelta(seconds=601)
+    host.free_bytes = lambda p: 0 if old_bundle.exists() else DISK_MARGIN_BYTES + new["bundle"]["size_bytes"]
+    if unknown:
+        with pytest.raises(ValueError, match="DISK"): m.Feed(root, host=host).poll(apply=False)
+        assert old_bundle.exists() and (directory / "operator-note.txt").is_file()
+    else:
+        assert m.Feed(root, host=host).poll(apply=False)["release_id"] == new["release_id"]
+        assert not directory.exists()
+
+
+def test_rate_limit_backoff_is_separate_from_native_state_and_stops_repeat_requests(feed):
+    m, hub, host, root, _, journal, _, _ = feed
+    hub.status = 429
+    hub.extra_headers = {"Retry-After": "1200"}
+    before = journal.read_bytes()
+    with pytest.raises(ValueError, match="RATE_LIMITED"): m.Feed(root, host=host).poll(apply=False)
+    count = len(hub.requests)
+    with pytest.raises(ValueError, match="RATE_LIMITED"): m.Feed(root, host=host).poll(apply=False)
+    assert len(hub.requests) == count and journal.read_bytes() == before
+
+
+def test_download_cache_cannot_be_reclaimed_under_a_pending_transaction(feed):
+    from os_update_stage import stage
+    from os_media import capture
+    from test_os_update_state import SOURCE_BOOT, TRANSACTION
+    m, hub, host, root, state, _, private, _ = feed
+    value, _, _ = publish(hub, private)
+    client = m.Feed(root, host=host)
+    client.poll(apply=False)
+    verified = dict(metadata=value, manifest_sha256="e" * 64,
+                    images=dict(rootfs=dict(filename="rootfs.ext4", sha256="f" * 64, size=value["rootfs_bytes"]),
+                                boot=dict(filename="boot.vfat", sha256="a" * 64, size=value["boot_bytes"])))
+    with state.locked(root) as store: store.begin(verified, capture(root), SOURCE_BOOT, TRANSACTION)
+    raw = hub.assets[value["release_id"] + "/os-update.json"]
+    sig = hub.assets[value["release_id"] + "/os-update.json.sig"].decode()
+    with pytest.raises(ValueError, match="pending"):
+        stage(root, value, raw, sig, hub.base, host=host, http=client.http)
