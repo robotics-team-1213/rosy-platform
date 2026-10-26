@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · fix(hooks): pre-push가 밀어 올리는 커밋의 트리로 판정
 - 2026-10-26 · 8ecbd7e41e · 현장 PC의 busy 보류는 재부팅이 풀지 않는다
 - 2026-10-26 · uncommitted · busy 표시 만료와 GitHub Actions 커밋 고정
 - 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
 - 2026-10-25 · d0d02fe6e4 · 플랫폼 guard와 소유 모듈 경계 검사의 선택 누락 기록
-- 2026-10-25 · cc237b02c1 · D-875 committed verification
