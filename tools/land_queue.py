@@ -151,9 +151,9 @@ def touch(ticket: Path | None = None) -> None:
             pass
 
 
-def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep) -> None:
+def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None) -> None:
     """Mark ``ticket`` waiting; return once nothing blocks it (``blockers``), marked as in its turn;
-    QueueError after ``timeout`` seconds."""
+    QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop."""
     set_status(ticket, "waiting")
     began, said, last = clock(), None, 0.0
     while True:
@@ -167,7 +167,9 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         if len(rows) != said or clock() - last >= REPORT_EVERY:
             print(f"[queue] position {len(rows) + 1}; ahead: {describe(rows)}", flush=True)
             said, last = len(rows), clock()
-        if clock() - began >= timeout:
+        if check and (why := check()):
+            raise QueueError(f"{why}. Nothing was merged or tested; fix it on the branch and run land.py again")
+        if timeout and clock() - began >= timeout:
             raise QueueError(f"waited {timeout / 60:.0f} min in the landing queue ({qdir}), {len(rows)} still"
                              f" ahead: {describe(rows)}. Nothing was merged or tested. Run land.py again later;"
                              " during an incident, --no-queue lands without waiting")

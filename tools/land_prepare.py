@@ -36,8 +36,27 @@ def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     """Mid-turn work too long for the lock (a FULL delta, or the turn's time cap): prepare it outside, wait again,
     and give back the main it now passed over."""
     prepare(land, wt, branch, args, python, qdir, ticket, invocations, note)
-    land_queue.wait(qdir, ticket, args.queue_timeout * 60)
+    land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=watch(land, wt))
     return land.land_full.restore(wt, branch)
+
+
+def watch(land, wt: Path):
+    """For ``land_queue.wait``: each time main moves, preview the merge (``git merge-tree``, the tree untouched)
+    and name a conflict land.py cannot resolve, so it stops now instead of at its turn (2026-10-26: a landing
+    waited 121 min, then stopped on a conflict main had made during the wait)."""
+    seen = [None]
+
+    def check() -> str | None:
+        main = land.out(wt, "rev-parse", "main")
+        if main == seen[0]:
+            return None
+        seen[0] = main
+        tree = land.git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main, check=False)
+        if tree.returncode != 1:
+            return None
+        manual = land.plan(wt, land.conflict_stages(tree.stdout))[1]
+        return f"main {main[:10]} conflicts with this branch outside the auto-resolved records: {manual}" if manual else None
+    return check
 
 
 def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
@@ -57,7 +76,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
             return  # main's delta stands in for an affected tier only where the D-436 selector maps it
     print(f"[land] {'FULL' if note else 'affected'} tier before the turn, ticket preparing (main {main_sha[:10]})",
           flush=True)
-    logdir = land.tmp_dir(branch)
+    logdir, began = land.tmp_dir(branch), time.monotonic()
     land.land_guards.first(wt, args, invocations, logdir, "pre", land.run_tests)
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
@@ -65,3 +84,4 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     land.land_full.save(wt, branch, candidate, main_sha)
+    land.land_events.emit("prepared", tier="full" if note else "affected", seconds=round(time.monotonic() - began))

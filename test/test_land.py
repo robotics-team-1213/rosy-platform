@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import land  # noqa: E402
+import land_merge  # noqa: E402
 
 LOG = "docs/reference/ROSY ADR Log.md"
 BOM = b"\xef\xbb\xbf"
@@ -638,6 +639,31 @@ def test_logs_md_this_branch_reordering_mains_entries_keeps_mains_order():
     assert land.append_blocks(base.encode(), edited.encode(), base.encode()) is None
 
 
+AGENTS = b"# tools\n\n| File | Description |\n|---|---|\n| `a.py` | a |\n| `b.py` | b |\n| `c.py` | c |\n\nEnd.\n"
+
+
+def test_agents_md_rows_edited_on_different_sides_merge_by_first_cell():
+    """2026-10-26: two landings lost 121 and 149 min of queue to an AGENTS.md table with one row edited each."""
+    ours = AGENTS.replace(b"| `a.py` | a |", b"| `a.py` | a, ours |").replace(b"| `c.py` | c |\n", b"| `c.py` | c |\n| `d.py` | new |\n")
+    theirs = AGENTS.replace(b"| `b.py` | b |", b"| `b.py` | b, main |")
+    merged = land_merge.table_rows(AGENTS, ours, theirs)
+    assert merged == AGENTS.replace(b"| `a.py` | a |", b"| `a.py` | a, ours |").replace(
+        b"| `b.py` | b |", b"| `b.py` | b, main |").replace(b"| `c.py` | c |\n", b"| `c.py` | c |\n| `d.py` | new |\n")
+    assert land_merge.resolver("tools/AGENTS.md") == "table-rows"
+
+
+@pytest.mark.parametrize("ours, theirs", [
+    (b"| `a.py` | a, ours |", b"| `a.py` | a, main |"),   # the same row changed on both sides
+    (b"", b"| `a.py` | a, main |"),                      # dropped on one side, edited on the other
+])
+def test_agents_md_same_row_on_both_sides_needs_a_human(ours, theirs):
+    row = b"| `a.py` | a |\n"
+    assert land_merge.table_rows(AGENTS, AGENTS.replace(row, ours + (b"\n" if ours else b"")),
+                                      AGENTS.replace(row, theirs + b"\n")) is None
+    edited_prose = AGENTS.replace(b"End.", b"End, edited.")
+    assert land_merge.table_rows(AGENTS, edited_prose, AGENTS.replace(row, theirs + b"\n")) is None
+
+
 def test_logs_md_same_new_entry_on_both_sides_is_written_once():
     base = "# docs logs\n" + dated("2026-10-13", "base")
     picked = dated("2026-10-14", "picked")
@@ -1066,7 +1092,7 @@ def test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout(repos, mo
     peer = land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # this test process: alive
     monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: pytest.fail("test host reached"))
     before = git(main, "rev-parse", "HEAD")
-    assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1
+    assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1
     captured = capsys.readouterr()
     assert "position 2; ahead: feat/peer" in captured.out and "--no-queue" in captured.err
     assert git(main, "rev-parse", "HEAD") == before and git(wt, "rev-list", "--merges", "main..HEAD") == ""
@@ -1088,7 +1114,7 @@ def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos,
         return real_save(*args)
 
     monkeypatch.setattr(land.land_full, "save", save)
-    assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1                # the peer never leaves
+    assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1                # the peer never leaves
     assert rounds == ["gpre", "pre", "save"] and "FULL tier before the turn" in capsys.readouterr().out
     assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
 
@@ -1114,7 +1140,7 @@ def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeyp
 
     monkeypatch.setattr(land, "run_tests", run_tests)
     monkeypatch.setattr(land.land_full, "save", lambda *a: saved.append(a))
-    assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1
+    assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1
     assert phases == ["gpre"] and saved == []
     assert git(main, "rev-parse", "HEAD") == before
     assert sorted(qdir.glob("*.json")) == [peer]

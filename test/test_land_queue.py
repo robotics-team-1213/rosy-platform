@@ -114,3 +114,14 @@ def test_who_is_ahead_shows_each_tickets_status(tmp_path):
     queue.take(tmp_path, "feat/full", status="preparing")
     mine = queue.take(tmp_path, "feat/mine")
     assert "feat/full (preparing," in queue.describe(queue.ahead(tmp_path, mine))
+
+
+def test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_limit(tmp_path):
+    """Rule 9 (2026-10-26): a conflict main made during the wait stopped the landing only at its turn."""
+    ticket(tmp_path, "feat/peer", os.getpid())
+    mine = queue.take(tmp_path, "feat/mine")
+    calls = []
+    with pytest.raises(queue.QueueError, match="conflicts with this branch"):
+        queue.wait(tmp_path, mine, timeout=0, sleep=lambda s: None,
+                   check=lambda: calls.append(1) or ("main abc conflicts with this branch" if len(calls) > 2 else None))
+    assert len(calls) == 3, "no time limit: it waited until the check spoke"

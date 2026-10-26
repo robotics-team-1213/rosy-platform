@@ -350,8 +350,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · fix(land): AGENTS.md 표는 행 단위로 합치고, 기다리는 동안 충돌을 미리 본다
 - 2026-10-26 · uncommitted · feat(land): 확정된 첫 실패에서 회차 취소, 차례 시간 상한 10분, 대기열 상태 표시
 - 2026-10-26 · uncommitted · feat(land): 모든 착지의 시험을 잠금 밖에서(D-889 A')
 - 2026-10-26 · uncommitted · fix(land): FULL은 차례 밖에서, 대기열 표에 상태
 - 2026-10-26 · uncommitted · fix(land): 착지 기록에 단계(tier), 재실행 node id 경로 바로잡기
-- 2026-10-26 · uncommitted · feat(land): 착지마다 사건 기록을 남기고 하루 숫자를 뽑는다

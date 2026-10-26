@@ -214,6 +214,16 @@ took hours to land. Four separate things blocked it.
   before the ticket waits again. Tests:
   `test/test_land.py::test_a_confirmed_new_failure_cancels_the_rest_and_the_cancelled_are_neither_kept_nor_failures`,
   `::test_the_turns_time_cap_cancels_the_rest_as_overtime_and_a_prepare_round_has_no_cap`.
+- **Queue time lost to a conflict found only at the turn (2026-10-26):** two landings waited 121 and 149 min, then
+  stopped on `tools/AGENTS.md`, where each side had edited a different table row. `land_merge.table_rows` now
+  merges AGENTS.md tables row by row (first cell as key; the same row changed on both sides, or dropped on one
+  and edited on the other, still needs a person), and `land_prepare.watch` previews the merge with
+  `git merge-tree` each time main moves during the wait, stopping at once on a conflict land.py cannot resolve.
+  `--queue-timeout` defaults to 0 (no limit): dead tickets are reclaimed by PID and refresh age, and a live
+  landing gained nothing from being dropped (robot-91 lost its prepared tier that way). Tests:
+  `test/test_land.py::test_agents_md_rows_edited_on_different_sides_merge_by_first_cell`,
+  `::test_agents_md_same_row_on_both_sides_needs_a_human`,
+  `test/test_land_queue.py::test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_limit`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

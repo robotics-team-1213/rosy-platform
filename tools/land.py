@@ -444,7 +444,7 @@ def land(args) -> int:
         qdir, ticket = land_queue.enter(wt, branch, "preparing")  # main() releases the ticket on every exit
         if args.tests == "auto" and land_full.restore(wt, branch) is None:
             land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
-        land_queue.wait(qdir, ticket, args.queue_timeout * 60)
+        land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(sys.modules[__name__], wt))
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
@@ -575,7 +575,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prune", action="store_true", help="remove finished worktrees (lossless prune) first")
     parser.add_argument("--no-prune", action="store_true", help="do not report finished worktrees either")
     parser.add_argument("--no-cache", action="store_true", help="rerun every invocation (no land_cache.py reuse)")
-    parser.add_argument("--queue-timeout", type=float, default=180, help="minutes to wait in the landing queue")
+    parser.add_argument("--queue-timeout", type=float, default=0, help="minutes to wait in the queue (0: no limit)")
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
     try:

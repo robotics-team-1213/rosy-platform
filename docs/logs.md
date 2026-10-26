@@ -11825,3 +11825,9 @@ osy-d395-s1d\`.
 - 변경: `run_tests`가 invocation이 끝날 때마다 판정한다(`remote_pytest.run`의 `on_done`, `land_checks.verdict`: known_failures 후 단독 재실행). 확정된 NEW면 나머지를 취소하고, 취소된 것은 캐시에 남기지 않으며 실패로도 세지 않는다. 차례 안 시험이 600초를 넘으면 나머지를 취소(`Overtime`)하고 잠금 밖에서 준비한 뒤 다시 기다린다(`land_prepare.again`). 앞선 표 표시에 상태(preparing 등)를 넣었다.
 - 증거: `test/test_land.py`, `test/test_land_queue.py`, `test/test_remote_pytest.py` 원격 통과(211 passed).
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): AGENTS.md 표는 행 단위로 합치고, 기다리는 동안 충돌을 미리 본다
+
+- 변경: `land_merge.table_rows`가 AGENTS.md 표 충돌을 첫 칸 기준 행 단위로 합친다(같은 행을 양쪽이 바꾸거나 한쪽이 지우고 다른 쪽이 고치면 사람). `land_prepare.watch`가 대기 중 main이 움직일 때마다 `git merge-tree`로 병합을 미리 보고 자동으로 못 푸는 충돌이면 바로 멈춘다. `--queue-timeout` 기본값은 0(무제한). 준비 시간은 `prepared` 사건으로 남기고 `land_stats`가 prepare p50/p90을 보여 준다.
+- 증거: `test/test_land.py`, `test/test_land_queue.py`, `test/test_land_events.py`, harness 계약·architecture 원격 통과(502 passed).
+- gate 변화: 없음.
