@@ -32,8 +32,9 @@ jobs:
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container: ros:jazzy-ros-base
     # A lost runner otherwise holds the run for the 6 h default (run 38588670328 sat 45 min in an
-    # install step). Measured scope: ~35 s.
-    timeout-minutes: 10
+    # install step). Measured scope: ~35 s. A publish PR's per-commit size rule walks its whole range
+    # (#210: 3,145 commits, cancelled at 10 min on 2026-10-26), so the cap leaves room for that.
+    timeout-minutes: 60
     outputs:
       mode: ${{ steps.scope.outputs.mode }}
       matrix: ${{ steps.scope.outputs.matrix }}
