@@ -315,12 +315,16 @@ def test_full_current_report_cannot_fall_back_to_historical_cache_complete(prepa
     import land_cache
     pair, logdir, args = prepared
     args.tests = mode
+    git(pair, "config", "user.name", "t")
+    git(pair, "config", "user.email", "t@t")
+    monkeypatch.setattr(land_isolation, "_cache_entries", land_cache.entries)
     candidate = git(pair, "rev-parse", "HEAD")
     commit(pair, {"current.py": "VALUE = 1\n"}, "different current candidate")
     old = tmp_path / "historical-complete.txt"
     old.write_text("[isolation] complete: 2\n", encoding="utf-8")
     land_cache.record(pair, candidate, git(pair, "rev-parse", candidate + "^{tree}"), "old-env",
                       land_isolation.job(FILES)[0], old)
+    assert any(entry["log"] == str(old) for entry in land_isolation._cache_entries(pair))
     calls = []
     report = "[isolation] complete: 2\n" if fresh else "1 passed\n"
     run = fake_round({"gpre": {"run-gpre-1.txt": report}, "gprer": {"run-gprer-1.txt": report}}, calls)
