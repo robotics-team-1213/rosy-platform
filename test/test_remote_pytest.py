@@ -214,6 +214,48 @@ def test_place_refuses_a_host_below_the_disk_floor_and_keeps_unmeasured_ones(mon
     assert rp.placed_hosts("pytest") == []
 
 
+def test_place_ignores_a_pre_boot_or_expired_busy_marker_and_says_so(monkeypatch):
+    """2026-10-24: a bare busy marker left on the site PC would block it forever; the probe now reports 2/3."""
+    monkeypatch.setattr(rp, "SITES", set())
+    line = "ROSYPROBE 8 0.0 16777216 33554432 1 1 {} 0 0 0"
+    probes = [rp.parse_probe(line.format(b)) for b in "0123"]
+    assert [(p["busy"], p["busy_ignored"]) for p in probes] == [
+        (False, None), (True, None), (False, "pre-boot"), (False, "expired")]
+    chosen, notes = rp.place("pytest", ["a@1", "b@2", "c@3", "d@4"], probes)
+    assert sorted(chosen) == ["a@1", "c@3", "d@4"]
+    assert notes[0].endswith(" - ok") and notes[1].endswith("marked busy (~/rosy-jobs/busy)")
+    assert notes[2].endswith(" - ok; busy marker pre-boot (ignored)")
+    assert notes[3].endswith(" - ok; busy marker expired (ignored)")
+
+
+def test_probe_script_busy_marker_needs_a_live_expiry_or_this_boot(tmp_path):
+    if not shutil.which("bash") or sys.platform == "win32":
+        pytest.skip("POSIX bash with /proc is required")
+    jobs = tmp_path / "rosy-jobs"
+    jobs.mkdir()
+    now, script = int(time.time()), rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
+
+    def busy_field(text, mtime=None):
+        (jobs / "busy").write_text(text)
+        if mtime is not None:
+            os.utime(jobs / "busy", (mtime, mtime))
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()[7]
+
+    assert busy_field("") == "1"  # a bare touch this boot
+    (jobs / "site").touch()  # the site PC's hold may be a person's equipment work: a reboot never releases it
+    assert busy_field("device-information-id15-20261024T125225Z\n", mtime=1000) == "1"
+    assert busy_field(f"{(now - 1)} owner 4242\n", mtime=1000) == "3"  # an explicit expiry still applies there
+    (jobs / "site").unlink()
+    assert busy_field("", mtime=1000) == "2"  # a pre-boot marker on a test PC (model/AI) is stale
+    assert busy_field("12345 owner\n", mtime=1000) == "2"  # a pid-sized number is not an expiry
+    assert busy_field(f"{now + 3600} owner 4242\n", mtime=1000) == "1"  # an explicit expiry outlives a reboot
+    assert busy_field(f"{now - 1} owner 4242\n") == "3"
+    assert busy_field(f"{now + 3600}x$(touch {jobs}/pwned)\n") == "1"  # junk is never evaluated
+    assert not (jobs / "pwned").exists()
+    (jobs / "busy").unlink()
+    assert subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()[7] == "0"
+
+
 def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
     if not shutil.which("bash") or sys.platform == "win32":
         pytest.skip("POSIX bash with /proc is required")
@@ -435,10 +477,10 @@ def _fake_hosts(monkeypatch, tmp_path, hosts, job, venv_fails=()):
     monkeypatch.setattr(rp, "remote", lambda h, script, *a, **kw: subprocess.CompletedProcess(
         [], 1 if script == rp.VENV and h in venv_fails else 0, b"", b""))
 
-    def run(h, name, k, log, job_args, inv, *a):
+    def run(h, name, k, log, job_args, inv, *a, **kw):
         path = next(w for w in inv if not rp.ENV_ARG.match(w))  # past xdist_plan's ROSY_JOB_* words
         seen.append((h, path))
-        code = job(h, path)
+        code = job(h, path, kw["stop"]) if kw else job(h, path)  # stop only reaches a job when on_done is given
         log.write_bytes(b"")
         return code
     monkeypatch.setattr(rp.remote_job, "run", run)
@@ -502,6 +544,79 @@ def test_an_invocation_that_fails_mid_run_is_retried_on_another_host_and_a_lost_
     seen.clear()
     codes = rp.run([["gone"], ["x"]], [tmp_path / "g.txt", tmp_path / "x2.txt"], repo=tmp_path)
     assert codes == [rj.LOST_EXIT, 0] and [p for _, p in seen].count("gone") == 1
+
+
+def test_on_done_is_asked_once_per_finished_invocation_and_false_changes_nothing(monkeypatch, tmp_path):
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], lambda h, path, stop=None: len(path))
+    asked, logs = [], [tmp_path / f"{i}.txt" for i in range(3)]
+    codes = rp.run([["x"], ["yy"], ["zzz"]], logs, repo=tmp_path, on_done=lambda inv, log: asked.append((inv, log)))
+    assert codes == [1, 2, 3] and len(seen) == 3
+    assert sorted(asked) == sorted(zip([["x"], ["yy"], ["zzz"]], logs))
+
+
+def test_on_done_true_skips_queued_and_terms_running_invocations(monkeypatch, tmp_path, capsys):
+    slow_started, stops = threading.Event(), []
+
+    def job(h, path, stop):
+        if path == "slow":  # what remote_job.run does when its poll sees stop: KILL, then CANCELLED
+            slow_started.set()
+            stops.append(stop.wait(10))
+            return rj.CANCELLED
+        assert slow_started.wait(10)
+        return 1
+
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], job)
+    order = ["fail", "slow", "q1", "q2"]
+    codes = rp.run([[p] for p in order], [tmp_path / f"{p}.txt" for p in order], repo=tmp_path,
+                   on_done=lambda inv, log: inv == ["fail"])
+    assert codes == [1, rp.CANCELLED, rp.CANCELLED, rp.CANCELLED] and stops == [True]
+    assert sorted(p for _, p in seen) == ["fail", "slow"], "queued invocations never start"
+    out = capsys.readouterr().out
+    assert all(f"cancelled after a failure: {p}" in out for p in ("slow", "q1", "q2")) and ": fail" not in out
+
+
+def test_on_done_raising_cancels_the_rest_with_a_warning(monkeypatch, tmp_path, capsys):
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1"], lambda h, path, stop: 0)
+
+    def boom(inv, log):
+        raise ValueError("bad callback")
+
+    codes = rp.run([["x"], ["y"]], [tmp_path / "x.txt", tmp_path / "y.txt"], repo=tmp_path, on_done=boom)
+    assert codes == [0, rp.CANCELLED] and [p for _, p in seen] == ["x"]
+    assert "on_done raised ValueError('bad callback'); cancelling the rest" in capsys.readouterr().err
+
+
+def test_on_done_may_call_run_again_from_inside_without_deadlock(monkeypatch, tmp_path):
+    seen = _fake_hosts(monkeypatch, tmp_path, ["a@1", "b@2"], lambda h, path, stop=None: 1 if path.startswith("x") else 0)
+    nested = []
+
+    def rerun_alone(inv, log):  # land's flaky check reruns the failing ids before deciding
+        nested.append(rp.run([["x::t"]], [tmp_path / "rerun.txt"], repo=tmp_path))
+        return inv == ["x"]
+
+    result = []
+    worker = threading.Thread(target=lambda: result.append(rp.run(
+        [["x"], ["y"]], [tmp_path / "x.txt", tmp_path / "y.txt"], repo=tmp_path, on_done=rerun_alone)), daemon=True)
+    worker.start()
+    worker.join(30)
+    assert not worker.is_alive(), "a nested run() inside on_done deadlocked"
+    assert nested and all(n == [1] for n in nested) and result[0][0] == 1
+    assert ("a@1", "x::t") in seen or ("b@2", "x::t") in seen
+
+
+def test_a_set_stop_terms_a_job_it_can_see_but_never_a_lost_one(tmp_path):
+    stop = threading.Event()
+    stop.set()
+    fake = FakeJobHost([b"a", b"b", b"c"], 0)
+    now, sleep, clock = _clock()
+    log = tmp_path / "1.txt"
+    assert rj.run("h", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock,
+                  stop=stop) == rj.CANCELLED
+    assert fake.scripts[-1] == rj.KILL and fake.polls == 1 and b"cancelled after a failure" in log.read_bytes()
+    fake = FakeJobHost([b"a", b"b"], 0, fail=set(range(1, 99)))
+    with pytest.raises(rj.Lost):
+        rj.run("h", "r", 0, log, ["r", "d", ""], [], 60, [], call=fake, sleep=sleep, clock=clock, budget=60, stop=stop)
+    assert rj.KILL not in fake.scripts
 
 
 def test_largest_test_files_are_queued_first(tmp_path):
@@ -892,7 +1007,7 @@ def test_run_on_reruns_only_quarantined_failures_once(tmp_path, monkeypatch, lis
     if not listed:
         assert len(calls) == 1
         return
-    assert calls[1] == ("0r", ["test/q.py::test_f", "-q", "-rA", "-p", "no:cacheprovider"])
+    assert calls[1] == ("0r", ["test/q.py::test_f", "-q", "-rA", "-p", "no:cacheprovider", "--rootdir=."])
     assert len(calls) == 2
     text = log.read_text(encoding="utf-8")
     assert rp.known_failures.RERUN_MARKER in text
@@ -1072,6 +1187,18 @@ def test_run_on_adds_xdist_to_the_run_but_never_to_the_quarantine_rerun(tmp_path
     assert calls[0][:6] == ["ROSY_JOB_CORES=6", "shared/web/test", "-n", "6", "--dist", "loadfile"]
     assert calls[0][6:] == rp.PYTEST_TAIL
     assert calls[1][:2] == ["ROSY_JOB_CORES=6", "shared/web/test/test_q.py::test_f"] and "-n" not in calls[1]
+
+
+def test_pytest_tail_keeps_failed_ids_repo_relative_when_the_first_path_has_a_pyproject(tmp_path):
+    """robot-73: an empty package pyproject.toml under the first path became rootdir, so FAILED ids lost their root."""
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "pyproject.toml").write_text("[project]\nname = 'pkg'\n", encoding="utf-8")
+    (tmp_path / "pkg" / "test_a.py").write_text("def test_a():\n    assert False\n", encoding="utf-8")
+    (tmp_path / "other").mkdir()
+    (tmp_path / "other" / "test_b.py").write_text("def test_b():\n    assert False\n", encoding="utf-8")
+    out = subprocess.run([sys.executable, "-m", "pytest", "pkg", "other", *rp.PYTEST_TAIL], cwd=tmp_path,
+                         capture_output=True, text=True, timeout=120).stdout
+    assert set(rp.known_failures.failed_ids(out)) == {"pkg/test_a.py::test_a", "other/test_b.py::test_b"}, out
 
 
 def test_venv_installs_pinned_xdist_so_its_hash_rebuilds_the_venv():

@@ -76,3 +76,52 @@ def test_leave_removes_held_tickets(tmp_path, monkeypatch):
     queue.leave()
     queue.leave()
     assert not list(tmp_path.iterdir())
+
+
+def test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_everyone(tmp_path):
+    """2026-10-26: a FULL tier at the front of the queue held every lander behind it 40+ min."""
+    full = queue.take(tmp_path, "feat/full", status="preparing")
+    small = queue.take(tmp_path, "feat/small")
+    assert queue.blockers(tmp_path, small) == [], "the preparing FULL lander ahead does not block"
+    queue.wait(tmp_path, small, timeout=0)
+    assert json.loads(small.read_text())["status"] == "turn"
+    later = queue.take(tmp_path, "feat/later")
+    assert [r["branch"] for r in queue.blockers(tmp_path, full)] == ["feat/small"], "in its turn: blocks all"
+    small.unlink()
+    queue.set_status(full, "waiting")
+    assert queue.blockers(tmp_path, full) == [] and [r["branch"] for r in queue.blockers(tmp_path, later)] == [
+        "feat/full"], "done preparing, the FULL lander is first again"
+
+
+def test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one(tmp_path):
+    import land_prepare
+    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(3)]
+    mine = queue.take(tmp_path, "feat/mine")
+    later = queue.take(tmp_path, "feat/later")
+    naps = []
+
+    def nap(s):
+        naps.append(s)
+        assert json.loads(mine.read_text())["status"] == "pending"
+        assert [r["branch"] for r in queue.blockers(tmp_path, later)] == [], "pending blocks no one"
+        busy.pop().unlink()  # one preparing lander finishes
+
+    land_prepare.slot(tmp_path, mine, sleep=nap)
+    assert len(naps) == 1 and json.loads(mine.read_text())["status"] == "preparing"
+
+
+def test_who_is_ahead_shows_each_tickets_status(tmp_path):
+    queue.take(tmp_path, "feat/full", status="preparing")
+    mine = queue.take(tmp_path, "feat/mine")
+    assert "feat/full (preparing," in queue.describe(queue.ahead(tmp_path, mine))
+
+
+def test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_limit(tmp_path):
+    """Rule 9 (2026-10-26): a conflict main made during the wait stopped the landing only at its turn."""
+    ticket(tmp_path, "feat/peer", os.getpid())
+    mine = queue.take(tmp_path, "feat/mine")
+    calls = []
+    with pytest.raises(queue.QueueError, match="conflicts with this branch"):
+        queue.wait(tmp_path, mine, timeout=0, sleep=lambda s: None,
+                   check=lambda: calls.append(1) or ("main abc conflicts with this branch" if len(calls) > 2 else None))
+    assert len(calls) == 3, "no time limit: it waited until the check spoke"

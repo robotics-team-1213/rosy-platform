@@ -10,6 +10,8 @@
 #control-unit-work .work-list > li { display: grid; gap: var(--space-2); padding-block: var(--space-3); }
 #control-unit-work .work-list > li > :is(h3, p) { margin: 0; overflow-wrap: anywhere; }
 #fleet-main > .console-primary > .work-overview { flex-shrink: 0; }
+.arm-transfer-work { display: grid; gap: var(--space-3); padding-block: var(--space-4); border-block-start: 1px solid var(--border-subtle); }
+.arm-transfer-work > :is(h2, p) { margin: 0; overflow-wrap: anywhere; }
 
 
 #integrated-control { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 1px solid var(--border-subtle); min-width: 0; }

@@ -1,0 +1,302 @@
+{
+  "source_commit": "dc5dbe55af29dcef3a27373d89d1607ed0cada86",
+  "baseline_commit": "7307262837",
+  "runner_exit": 1,
+  "selection_mode": "full",
+  "invocation_count": 23,
+  "execution_rule": "Original full_invocations copied unchanged into local_invocations; all other selection metadata retained; no added filters.",
+  "runs": [
+    {
+      "run": 1,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-1.txt",
+      "summary": "117 passed, 4 skipped in 6.04s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/registry/policy/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 2,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-2.txt",
+      "summary": "142 passed, 16 skipped in 4.31s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/training/omx/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 3,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-3.txt",
+      "summary": "6 passed, 6 skipped in 0.25s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/training/pinky/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 4,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-4.txt",
+      "summary": "229 passed, 3 skipped in 5.55s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/curation/omx/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 5,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-5.txt",
+      "summary": "21 passed, 28 skipped in 0.81s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/curation/pinky/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 6,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-6.txt",
+      "summary": "3 passed in 0.25s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/training/world_model/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 7,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-7.txt",
+      "summary": "4 passed in 0.31s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "learning/evaluation/world_model/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 8,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-8.txt",
+      "summary": "12 passed in 0.08s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/prediction/world_model/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 9,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-9.txt",
+      "summary": "7415 passed, 91 skipped, 2 warnings, 5 subtests passed in 841.04s (0:14:01)",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/core/gateway/test",
+        "middleware/core/events/test",
+        "middleware/core/services/test",
+        "shared/web/test",
+        "contracts/foundation/test",
+        "middleware/devices/pinky/profile/test",
+        "middleware/devices/omx/profile/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 10,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-10.txt",
+      "summary": "6 passed, 2 skipped, 2 warnings in 21.30s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/core/gateway/test/test_account_pipeline.py"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 11,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-11.txt",
+      "summary": "3554 passed, 113 skipped, 62 subtests passed in 170.15s (0:02:50)",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/perception/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 12,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-12.txt",
+      "summary": "1 failed, 6478 passed, 336 skipped, 4 warnings in 928.06s (0:15:28)",
+      "known_exit": 1,
+      "known_output": "NEW       operations/fleet/test/test_ai_facts.py::test_ai_observer_reads_like_a_viewer_and_posts_only_facts_and_heartbeats\n1 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/fleet/test"
+      ],
+      "pytest_exit": 1
+    },
+    {
+      "run": 13,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-13.txt",
+      "summary": "49 passed, 34 skipped in 5.47s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "applications/fleet/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 14,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-14.txt",
+      "summary": "736 passed in 56.82s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/overhead/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 15,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-15.txt",
+      "summary": "155 passed in 0.33s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/processes/cell/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 16,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-16.txt",
+      "summary": "121 passed, 2 warnings in 7.76s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/situation/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 17,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-17.txt",
+      "summary": "38 passed in 1.34s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/world/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 18,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-18.txt",
+      "summary": "25 passed in 1.18s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "test/test_platform_palletizing_compat.py",
+        "test/test_platform_cell_submission.py",
+        "test/architecture/test_platform_dependency_boundaries.py"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 19,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-19.txt",
+      "summary": "328 passed, 4 skipped in 10.24s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "integrations/simulation/gazebo/test"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 20,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-20.txt",
+      "summary": "473 passed in 0.49s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/devices/pinky/bringup/test",
+        "middleware/drivers/pinky_adc/test",
+        "middleware/perception/test/test_ir_adc_lock.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 21,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-21.txt",
+      "summary": "1 failed, 9706 passed, 1135 skipped, 56 warnings in 910.97s (0:15:10)",
+      "known_exit": 1,
+      "known_output": "NEW       test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files\n1 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "test"
+      ],
+      "pytest_exit": 1
+    },
+    {
+      "run": 22,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-22.txt",
+      "summary": "2031 passed, 298 skipped, 2 warnings in 59.98s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "operations/site_ui/media/test",
+        "middleware/media/test",
+        "learning/evaluation/perception/test",
+        "operations/apps/games/test",
+        "operations/processes/palletizing/test",
+        "middleware/robot_ui/face/test/test_info_screen.py",
+        "middleware/robot_ui/face/test/test_info_screen_boot.py",
+        "middleware/robot_ui/face/test/test_wifi_qr.py",
+        "middleware/drivers/pinky_led/test/test_led_package_contract.py",
+        "middleware/drivers/imu_bno055/test/test_package_contract.py",
+        "middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py",
+        "middleware/robot_ui/robot/test",
+        "middleware/robot_ui/pilot/test",
+        "middleware/devices/omx/adapter/test",
+        "contracts/ros_idl/test/test_srv_surface.py",
+        "middleware/devices/pinky/description/test/test_urdf_surface.py",
+        "operations/signal_observation/test",
+        "learning/envs/isaac/test",
+        "deploy/robot/pinky_pro/release/test/test_secret_scan.py",
+        "middleware/robot_execution/local/test/test_native_parent_fence.py",
+        "middleware/robot_execution/local/test/test_omx_policy_session.py",
+        "middleware/robot_execution/local/test/test_policy_runtime_ros.py",
+        "tools/calibration/test/test_analyze_store.py",
+        "tools/calibration/test/test_camera_board.py",
+        "tools/calibration/test/test_store_cli.py",
+        "tools/calibration/test/test_urdf_nominal.py",
+        "tools/capture/test/test_edge_drive_advisory.py"
+      ],
+      "pytest_exit": 0
+    },
+    {
+      "run": 23,
+      "log": "C:\\Users\\SERIGGG\\AppData\\Local\\Temp\\rosy-physical-api312-full\\run-23.txt",
+      "summary": "188 passed, 13 skipped, 2 warnings, 25 subtests passed in 8.32s",
+      "known_exit": 0,
+      "known_output": "0 new, 0 known, 0 flaky, 0 listed but not failing",
+      "targets": [
+        "middleware/core/api/test"
+      ],
+      "pytest_exit": 0
+    }
+  ]
+}

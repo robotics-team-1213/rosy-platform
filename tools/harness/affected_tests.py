@@ -34,6 +34,7 @@ from affected_pack import IGNORED_BASENAMES, MAX_INVOCATION_CHARS, SelectionErro
 
 import yaml
 import affected_narrow  # D-762 stage 0 FULL-trigger narrowing
+import safety_review  # D-430 5 judge, reused so the selector and the trailer rule agree
 from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, FULL_SUITES,  # noqa: F401
                          ROOT_SHARDS, SUITE_SHARDS, ci_matrix)  # the CI full-run matrix, re-exported
 
@@ -79,8 +80,49 @@ FULL_TRIGGERS = (
 )
 # D-762 stage 0: records under a trigger change no rule, import or layout; the guards still run.
 # D-766 4: lowering a ratchet row or registering a size unit is data; test_module_structure still runs.
+#: A path ``safety_review.is_safety`` tags (``concern: safety`` roots, ``safety_modules``) is FULL and never
+#: narrowed; NOT_TRIGGERS still wins, so Markdown under a safety root is not FULL.
+SAFETY_TRIGGER = "safety path (platform_parts concern: safety)"
+# Gap registries are data read only by lint/generate and their own contract tests (selected as referencing tests).
+# log_repairs.yaml stays FULL: it is an allow-list for the append-only log gate with no stale-entry check.
 NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
+                "tools/harness/sim2real_gaps.yaml", "tools/harness/perception_gaps.yaml",
                 "test/architecture/size_ratchet.txt", "test/architecture/size_units.txt")
+
+# Markdown selects only the tests that read it, not its module's suite (operations/fleet/index.md
+# selected ~7,900 tests, 2026-10-26), except prose that contract tests check against code.
+ADR_LOG = "docs/reference/ROSY ADR Log.md"
+RECORD_NAMES = frozenset({"logs.md", "index.md", "progress.md"})
+#: Generated or append-only records: their real readers. Path-part matches hit comments and fixtures.
+RECORD_READERS = ("test/test_harness_contracts.py", "test/architecture/test_document_placement.py",
+                  "test/architecture/test_folder_layout.py")
+#: Contract tests that read one module's record (test_land/test_pre_push_hook only name docs/logs.md
+#: and index.md in temporary repositories and fixture strings).
+# shortcut: listed by hand (a 2026-10-26 scan of path mentions found only this one); a new
+# test that reads a module record must be added here, or the record edit will not select it.
+RECORD_EXTRA_READERS = {"operations/apps/games/progress.md": ("test/test_rosy_games_surface.py",)}
+
+
+def is_record(repo: Repo, path: str) -> bool:
+    """STATUS.md, or a harness module's own logs.md/progress.md or generated index.md (rosy_harness generate)."""
+    p = PurePosixPath(path)
+    return path == "STATUS.md" or (p.name in RECORD_NAMES and any(m["path"] == str(p.parent) for m in repo.modules))
+
+
+def markdown_keeps_module_selection(path: str) -> bool:
+    p = PurePosixPath(path)
+    return (p.name in {"AGENTS.md", "README.md"} or _under(path, "docs/deployment")
+            or (str(p.parent) == "docs/reference" and path != ADR_LOG))
+
+
+def markdown_readers(repo: Repo, path: str) -> list[str]:
+    if is_record(repo, path):
+        return [*RECORD_READERS, *RECORD_EXTRA_READERS.get(path, ())]
+    readers = repo.referencing_tests(path)
+    if _under(path, "docs/adr"):  # bodies are read through the Log and globbed by its readers
+        readers += repo.referencing_tests(ADR_LOG)
+    return readers
+
 
 # A module whose `tests` is the whole root suite is too broad to select by
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
@@ -92,12 +134,18 @@ IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import|import\s+([A-Za-z
 
 
 
+UNMAPPED_HINT = ("name this path literally in the test that loads it"
+                 " (f-string/module-name-only references are invisible to the selector)")
+
+
 @dataclass
 class Selection:
     mode: str  # "affected" or "full"
     changed: list[str]
     reasons: dict[str, list[str]] = field(default_factory=dict)  # test path -> why
     escalations: list[str] = field(default_factory=list)
+    #: Changed paths behind an "unknown -> full" escalation: no module, import root or test names them.
+    unmapped: list[str] = field(default_factory=list)
     invocations: list[list[str]] = field(default_factory=list)
     #: What runs locally when the selection escalated: guards + directly affected suites.
     local_invocations: list[list[str]] = field(default_factory=list)
@@ -106,7 +154,7 @@ class Selection:
 
     def to_json(self) -> dict:
         return {"mode": self.mode, "changed": self.changed, "escalations": self.escalations,
-                "reasons": self.reasons, "invocations": self.invocations,
+                "unmapped": self.unmapped, "reasons": self.reasons, "invocations": self.invocations,
                 "local_invocations": self.local_invocations,
                 "full_invocations": self.full_invocations}
 
@@ -168,6 +216,8 @@ class Repo:
     owners: list[tuple[str, tuple[str, ...]]]  # (root path, import prefixes)
     tracked: list[str]
     test_files: list[str]
+    safety_roots: list[dict] = field(default_factory=list)
+    safety_modules: set[str] = field(default_factory=set)
     _texts: dict[str, str] = field(default_factory=dict)
     _imports: dict[str, set[str]] = field(default_factory=dict)
     _tokens: dict[str, set[str]] = field(default_factory=dict)
@@ -179,7 +229,8 @@ class Repo:
         owners = [(r["path"], tuple(r.get("import_prefix") or ())) for r in parts.get("roots") or []]
         tracked = sorted(set(_git(root, "ls-files").splitlines()))
         tests = [p for p in tracked if TEST_FILE.search(p)]
-        return cls(root, list(harness.get("modules") or []), owners, tracked, tests)
+        return cls(root, list(harness.get("modules") or []), owners, tracked, tests,
+                   list(parts.get("roots") or []), set(parts.get("safety_modules") or ()))
 
     def text(self, path: str) -> str:
         if path not in self._texts:
@@ -318,7 +369,9 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
 
 
 
-def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
+def select(repo: Repo, changed: list[str], moved: list[str] = (),
+           harness_texts: tuple[str, str] | None = None) -> Selection:
+    """`harness_texts`: ``harness.yaml`` at the merge base and at head; without it that file is FULL."""
     sel = Selection(mode="affected", changed=changed, escalations=list(moved))
 
     def add(path: str, why: str) -> None:
@@ -333,10 +386,26 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
     touched_modules: dict[str, dict] = {}
     broad_fallback_modules: dict[str, dict] = {}
     for path in changed:
-        trigger = None if any(_match(path, p) for p in NOT_TRIGGERS) else next(
-            (why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
-        if trigger and affected_narrow.add_readers(repo, path, trigger, add):
+        if any(_match(path, p) for p in NOT_TRIGGERS):
+            trigger = None
+        elif safety_review.is_safety(path, repo.safety_roots, repo.safety_modules):
+            trigger = SAFETY_TRIGGER
+        else:
+            trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
+        if trigger and trigger != SAFETY_TRIGGER and affected_narrow.add_readers(repo, path, trigger, add):
             continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
+        if path == affected_narrow.HARNESS_YAML:  # reads harness.yaml; not in GUARD_SET
+            add("test/architecture/test_folder_layout.py", f"reads {path}")
+        if path == affected_narrow.HARNESS_YAML and trigger:
+            added, why = affected_narrow.harness_modules_added(repo, *harness_texts) if harness_texts else (
+                [], "no base to compare")
+            if added:
+                trigger, reason = None, f"harness.yaml: module(s) added: {', '.join(m['name'] for m in added)}"
+                for test in [p for m in added for p in (*m["tests"], *(m.get("functional") or []))] + [
+                        "test/test_harness_contracts.py", "test/test_affected_tests.py"]:
+                    add(test, reason)
+            else:  # land.py HARNESS_TRIGGER matches the suffix, so the reason goes before it
+                trigger = f"({why}): {trigger}"
         if trigger:
             # Still map the path below: a FULL selection runs locally as the guards plus
             # these suites (the escalated module's own tests, its referencing tests).
@@ -344,6 +413,10 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
         if TEST_FILE.search(path):
             if repo.exists(path):
                 add(path, f"changed test file {path}")
+            continue
+        if path.endswith(".md") and not markdown_keeps_module_selection(path):
+            for test in markdown_readers(repo, path):
+                add(test, f"reads {path}")
             continue
         module = repo.module_for(path)
         referencing = repo.referencing_tests(path) + affected_narrow.registry_readers(repo, path)
@@ -377,6 +450,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = ()) -> Selection:
             # node step and land.py --node only globs test/web), so FULL would add nothing.
             continue
         sel.escalations.append(f"{path}: maps to no module, import root or test (unknown -> full)")
+        sel.unmapped.append(path)
 
     # Direct reverse dependents (D-436 1): modules whose shipped (non-test) code
     # imports a touched module's prefix, plus any test file importing it. One
@@ -432,6 +506,10 @@ def render(sel: Selection) -> str:
     if sel.escalations:
         lines.append("escalated to FULL because:")
         lines += [f"  - {e}" for e in sel.escalations]
+        if sel.unmapped:
+            lines.append("unmapped paths (each alone makes this FULL):")
+            for path in sel.unmapped:
+                lines += [f"  {path}", f"      hint: {UNMAPPED_HINT}"]
     else:
         lines.append("selected:")
         for path in sorted(sel.reasons):
@@ -471,7 +549,13 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
     repo = Repo.load(repo_root)
     try:
         changed = changed_files(repo_root, base, head)
-        sel = select(repo, changed, moves(repo_root, base, head))
+        texts = None
+        if affected_narrow.HARNESS_YAML in changed:
+            merge_base = _git(repo_root, "merge-base", base, head or "HEAD").strip()
+            texts = (_git(repo_root, "show", f"{merge_base}:{affected_narrow.HARNESS_YAML}"),
+                     _git(repo_root, "show", f"{head}:{affected_narrow.HARNESS_YAML}") if head
+                     else (repo_root / affected_narrow.HARNESS_YAML).read_text(encoding="utf-8"))
+        sel = select(repo, changed, moves(repo_root, base, head), texts)
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}

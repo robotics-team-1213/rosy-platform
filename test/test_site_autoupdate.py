@@ -189,6 +189,7 @@ def _verifier(calls):
         manifest.setdefault('account_https', True)
         manifest.setdefault('omx', True)
         manifest.setdefault('workcell', True)
+        manifest['verified_images'] = list(upd.SERVICES)
         manifest['accepted_image_ids'] = {s: [_image_id(manifest['source_commit'], s)] for s in upd.SERVICES}
         return manifest
     return verify
@@ -664,9 +665,12 @@ def test_pre_omx_rollback_uses_backup_overlay_requirements(host, enabled):
             stream.write('ROSY_SITE_PAIRING_COMPOSE=-f /opt/rosy/candidate/deploy/site/compose.omx.yaml\n')
     target = host.paths.candidates / NEW
     target.mkdir()
+    (target / 'release.json').write_text(json.dumps({'source_commit': NEW}))
+    (target / 'release.json.sig').write_text('signed')
     upd.write_env_tag(host.paths.site_env, NEW)
     upd.swap_link(host.paths.link, target)
-    state = {'failed': {}, 'switch': {'previous': str(old), 'current': OLD}}
+    state = {'failed': {}, 'switch': {'previous': str(old), 'current': OLD,
+                                     'commit': NEW, 'tag': _tag(NEW)}}
     fake = FakeHost(host.paths)
     updater = _updater(host, FakeHttp([], {}), fake)
     if enabled:
@@ -819,6 +823,8 @@ def test_interrupted_switch_is_undone_before_network_access(host, held):
     shutil.copy2(host.paths.site_env, host.paths.env_backup)
     target = host.paths.candidates / NEW
     target.mkdir()
+    (target / 'release.json').write_text(json.dumps({'source_commit': NEW}))
+    (target / 'release.json.sig').write_text('signed')
     upd.write_env_tag(host.paths.site_env, NEW)
     upd.swap_link(host.paths.link, target)
     state = {'failed': {}, 'switch': {'previous': str(host.paths.candidates / OLD),

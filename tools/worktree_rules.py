@@ -13,6 +13,10 @@
   ``rmdir``-ed when empty, else gets a tombstone ``.git`` file (``leave_tombstone``) pointing at a
   gitdir that cannot exist, so git inside it fails instead of walking up to the main checkout's
   ``.git`` and acting on main. The tombstone counts as a cache: the next prune deletes the folder.
+- D-886: ``new`` takes a topic of lowercase words joined by ``-`` (``topic_ok``), and every prune ends
+  with ``sweep_branches``: local branches already in main that no worktree has checked out go, by exact
+  sha, once their reflog is ``LANDED_IDLE_HOURS`` old; ``main`` and ``archive/*`` (a person's, D-790) stay.
+  Lossless: the commits are on main (D-372 decision 2).
 
 Standard library only.
 """
@@ -20,6 +24,7 @@ Standard library only.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -34,6 +39,9 @@ STALE_COMMITS = 2_000
 # only it with main and carry ~13,800 commits of the old line (feat/integrated-learning-pipeline, 2026-10-17).
 REWRITE_BASE = "ad86fca808"
 REWRITE_TIME = 1790038514  # its committer time: a merge-base this old or older is on the old line
+TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+TOPIC_MAX = 48
+TOPIC_RULE = f"<topic> lowercase letters and digits joined by '-', at most {TOPIC_MAX} characters (D-886)"
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
@@ -185,3 +193,34 @@ def clear_orphan(path: Path, keep: list[Path], droppable, day: str) -> str:
     except OSError as exc:  # an open handle (WinError 32): what is left must not act on main
         raise OSError(f"{exc};{note}{leave_tombstone(path) if path.exists() else ''}") from exc
     return note + (" orphan directory removed" if keep else " orphan directory without content removed")
+
+
+def topic_ok(topic: str) -> bool:
+    return len(topic) <= TOPIC_MAX and TOPIC.fullmatch(topic) is not None
+
+
+def sweep_branches(root: Path, now: float, apply: bool, say=print, quiet: bool = False, keep=frozenset()) -> int:
+    """Delete (or, without ``apply``, count) local branches in main that no worktree has checked out."""
+    common = root / _git(root, "rev-parse", "--git-common-dir").stdout.strip()
+    listed = _git(root, "for-each-ref", "--merged", "refs/heads/main", "refs/heads",
+                  "--format=%(refname:short)	%(objectname)	%(worktreepath)")
+    if listed.returncode != 0:
+        raise RuntimeError(f"git for-each-ref failed: {listed.stderr.strip()}")
+    done = 0
+    for line in listed.stdout.splitlines():
+        branch, sha, checked_out = line.split("	")
+        try:  # a reflog changed within the landed wait: just made, maybe about to be checked out
+            fresh = now - os.path.getmtime(common / "logs" / "refs" / "heads" / branch) < LANDED_IDLE_HOURS * 3600
+        except OSError:
+            fresh = False
+        if checked_out or fresh or branch in keep or branch == "main" or branch.startswith("archive/"):
+            continue
+        if apply and _git(root, "update-ref", "-d", f"refs/heads/{branch}", sha).returncode != 0:
+            say(f"FAIL    branch {branch} moved; kept")  # exact sha: a commit not on main is never dropped
+            continue
+        if apply:
+            _git(root, "config", "--remove-section", f"branch.{branch}")
+        done += 1
+    if done or not quiet:
+        say(f"[worktrees] {'deleted' if apply else 'would delete'} {done} merged branch(es) no worktree uses")
+    return done
