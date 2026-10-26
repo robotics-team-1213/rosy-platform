@@ -17,7 +17,6 @@ from pathlib import PurePosixPath
 
 import yaml
 
-import affected_foundation  # rule 4: contracts/foundation additions proven by AST
 import affected_tests as at  # attributes read at call time, so the cyclic import is safe
 
 # D-762 stage 0 ("넓은 경로 일치가 아니라 실제 영향"): triggers whose real readers the selector can
@@ -42,8 +41,6 @@ def add_readers(repo: at.Repo, path: str, trigger: str, add, changed=(), base_te
         found, why = known_failure_tests(repo, changed, base_text)
     else:
         found, why = narrowed(repo, path), ""
-        if found is None and base_text is not None:  # rule 4: additions only, proven by AST
-            found, why = affected_foundation.readers(repo, path, base_text(path))
     if found is None:
         return why
     # D-762 stage 0: the readers found, not the whole tree; foundation keeps its own suite.
