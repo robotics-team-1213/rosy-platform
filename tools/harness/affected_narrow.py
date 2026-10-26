@@ -63,10 +63,11 @@ def _listed(text: str) -> set[str]:
 def known_failure_tests(repo: at.Repo, changed, base_text) -> tuple[dict[str, str] | None, str]:
     """Rule 7 (design 0.7): the files of the ids a known_failures edit adds or removes, or (None, why).
 
-    A removed id runs to prove it is green. An added id runs too, but needs a person when this
-    branch also changes that test or the test is safety-tagged (the list must not hide a failure
-    the branch made, test/known_failures.txt header). Whether an added id really fails is
-    known_failures.py's comparison on that run, not the selector's.
+    A removed id runs to prove it is green. An added id runs too, but needs a person when another
+    change on the branch selects that test (the selector's own mapping of the other changed paths,
+    guards aside) or the test is safety-tagged: the list must not hide a failure the branch made
+    (test/known_failures.txt header). That an added id really fails is enforced on the run:
+    land_checks passes it to known_failures.py --must-fail.
     flaky_quarantine.txt is a concern: safety root, so it stays FULL like every safety path.
     """
     if base_text is None:
@@ -77,8 +78,8 @@ def known_failure_tests(repo: at.Repo, changed, base_text) -> tuple[dict[str, st
     for nodeid in sorted(old ^ new):
         test = nodeid.split("::")[0]
         if nodeid in new:
-            if test in changed:
-                return None, f"adds {nodeid} while this branch changes {test}: needs human review"
+            if _selected_by_other_changes(repo, changed, base_text, test):
+                return None, f"adds {nodeid} while other changes on this branch select {test}: needs human review"
             if at.safety_review.is_safety(test, repo.safety_roots, repo.safety_modules):
                 return None, f"adds safety-tagged {nodeid}: needs human review"
             if not repo.exists(test):
@@ -86,6 +87,20 @@ def known_failure_tests(repo: at.Repo, changed, base_text) -> tuple[dict[str, st
         if repo.exists(test):
             found.setdefault(test, f"{'added to' if nodeid in new else 'removed from'} {KNOWN_FAILURES}: {nodeid}")
     return found, ""
+
+
+def _selected_by_other_changes(repo: at.Repo, changed, base_text, test: str) -> bool:
+    """The selection of the branch's other changed paths runs `test` (a FULL one runs everything)."""
+    others = [p for p in changed if p != KNOWN_FAILURES]
+    if not others:
+        return False
+    cache = vars(repo).setdefault("_others_selection", {})
+    key = tuple(others)
+    if key not in cache:
+        cache[key] = at.select(repo, others, base_text=base_text)
+    sel = cache[key]
+    return sel.mode == "full" or any(at._under(test, path) for path, whys in sel.reasons.items()
+                                     if any(not why.startswith("guard set") for why in whys))
 
 
 def _from_imports(repo: at.Repo, path: str) -> list[tuple[str, frozenset[str]]]:

@@ -840,7 +840,8 @@ def test_contract_checked_markdown_keeps_its_selection(path, expected):
 GATE_TOOLS = ["tools/land.py", "tools/land_queue.py", "tools/land_cache.py", "tools/worktrees.py",
               "tools/worktree_rules.py", "tools/hooks/pre-push", "tools/hooks/land_record.py",
               "tools/remote/remote_pytest.py", "tools/remote/remote_job.py", "tools/remote/host_probe.py",
-              "tools/remote/xdist_plan.py", "test/known_failures.py", "tools/harness/affected_tests.py"]
+              "tools/remote/xdist_plan.py", "test/known_failures.py", "tools/harness/affected_tests.py",
+              "test/browser_scope.py", "tools/remote/serial_suites.txt"]
 
 
 @pytest.mark.parametrize("path", GATE_TOOLS)
@@ -909,14 +910,18 @@ def test_known_failures_reason_or_comment_edit_runs_only_guards_and_readers(samp
     assert sel.mode == "affected" and set(sel.reasons) == GUARDS
 
 
-@pytest.mark.parametrize("head, changed, why", [
-    (f"{KF_HEADER}{PLAIN}  # r\n", (KF, "test/test_unrelated.py"), "this branch changes test/test_unrelated.py"),
+@pytest.mark.parametrize("head, changed, why, on_sample", [
+    (f"{KF_HEADER}{PLAIN}  # r\n", (KF, "test/test_unrelated.py"),
+     "other changes on this branch select test/test_unrelated.py", True),
+    # the source the test covers changed, not the test: the selector's own mapping decides
+    (f"{KF_HEADER}test/test_rosy_ssh_enroll.py::test_x  # r\n", (KF, "tools/ssh/rosy_ssh_enroll.py"),
+     "other changes on this branch select test/test_rosy_ssh_enroll.py", True),
     (f"{KF_HEADER}middleware/devices/omx/adapter/omx_adapter/real/dynamixel_stop_test.py::test_x  # r\n", (KF,),
-     "adds safety-tagged"),
-    (f"{KF_HEADER}test/test_zz_missing.py::test_x  # r\n", (KF,), "test file does not exist"),
-], ids=["same-branch", "safety", "missing-file"])
-def test_known_failures_added_line_needing_a_person_stays_full(head, changed, why):
-    sel = _kf_select(head, changed=changed)
+     "adds safety-tagged", False),
+    (f"{KF_HEADER}test/test_zz_missing.py::test_x  # r\n", (KF,), "test file does not exist", False),
+], ids=["same-branch-test", "same-branch-source", "safety", "missing-file"])
+def test_known_failures_added_line_needing_a_person_stays_full(sample, head, changed, why, on_sample):
+    sel = _kf_select(head, changed=changed, repo=affected.Repo.load(sample) if on_sample else None)
     assert sel.mode == "full"
     [escalation] = [e for e in sel.escalations if e.startswith(KF)]
     assert why in escalation and escalation.endswith(": known failures list"), escalation

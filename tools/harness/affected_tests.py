@@ -56,10 +56,12 @@ FULL_TRIGGERS = (
     ("tools/harness/**", "harness configuration or the selector itself"),
     # Rule 8 (design 0.7): the landing/test gate tools never test themselves with a selection they made;
     # leaf tools under tools/ select the tests that name them. Same reason text: land.py's HARNESS_TRIGGER.
-    # The remote_pytest entries are what it imports (2026-10-26); a new gate import belongs here.
+    # What land.py and remote_pytest import or read (2026-10-26: browser_scope, xdist_plan's serial_suites.txt);
+    # a new gate import belongs here.
     *((gate, "harness configuration or the selector itself") for gate in (
         "tools/land*.py", "tools/worktrees.py", "tools/worktree_rules.py", "tools/hooks/**",
-        "test/known_failures.py", *(f"tools/remote/{name}.py" for name in (
+        "test/known_failures.py", "test/browser_scope.py", "tools/remote/serial_suites.txt",
+        *(f"tools/remote/{name}.py" for name in (
             "remote_pytest", "remote_job", "host_probe", "lab_hosts", "memory_history",
             "remote_test_tools", "xdist_plan", "work_queue")))),
     (".github/workflows/**", "CI workflow"),
