@@ -494,7 +494,7 @@ def test_mounted_image_verifier_rejects_missing_required_package(tmp_path):
 
 def test_mounted_image_verifier_rejects_product_docker_or_device_secrets(tmp_path):
     root = _valid_root(tmp_path)
-    (root / "usr/bin").mkdir(parents=True)
+    (root / "usr/bin").mkdir(parents=True, exist_ok=True)
     (root / "usr/bin/docker").write_text("fixture\n", encoding="utf-8")
     (root / "etc/rosy/runtime.env").write_text("ROSY_NAMESPACE=rosy_01\n", encoding="utf-8")
     connections = root / "etc/NetworkManager/system-connections"
