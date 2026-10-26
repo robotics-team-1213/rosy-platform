@@ -4956,7 +4956,7 @@
 - Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
 - CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
 
-## 2026-10-27 · feat/policy-admission-console · D-865 P3 콘솔 표시 회귀
+## 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀
 
 - 변경: 없음(코드 변경은 `applications/fleet/web` 참조). 이 모듈에서는 콘솔 계약 시험을 확장했다 — `test_work_overview_browser.py`에 범위 readback·배지·기명 운영자 전환·409 사유·보기 전용 잠금 시험 추가, `test/web/work-view.test.mjs`에 순수 판정·문구 시험 추가.
 - 증거: 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1` `test_work_overview_browser.py` 36 통과(신규 3건 포함)·known_failures NEW 0. `test_server_app`·`test_remaining_platform_installed` 50 통과 NEW 0. 전체 affected/FULL 통과를 뜻하지 않는다.

@@ -514,7 +514,7 @@
 - 증거: 소스 d15e7a9545의 명시 원격 묶음은 537 PASS·2 FAIL이었다. 실패 두 건은 옛 모바일 순서를 검사했으며 보이는 순서와 DOM 순서를 함께 수정해 재검증한다. 앞선 선택 전·후 배치·소유권 6건과 Node 60개 파일은 통과했다. 전체 affected/FULL 통과를 뜻하지 않는다.
 - gate 변화: 제품·장치·현장 수용 승격 없음. 샘플 계정 전환 후 간헐 조회 실패는 원인 미확정이며 시험 실패 진단을 보존한다.
 
-## 2026-10-27 · feat/policy-admission-console · D-865 P3 승인 범위 readback과 자동 승인 배지
+## 2026-10-27 · uncommitted · D-865 P3 승인 범위 readback과 자동 승인 배지
 
 - 변경: work 뷰가 `GET /api/fleet/policy-admission`을 함께 읽어 승인 대기 행에 범위 소속 배지(`자동 승인`)를 붙이고, work 개요에 범위 readback(로봇·종류·잔여 상한·revision·차단 사유)과 기명 운영자 전환 단추를 둔 `<details>` 패널을 추가했다. 판정·문구는 순수 함수(`autoAdmitScope`·`policyScopeText`·`autoAdmitDetail`)이고 readback이 없으면 fail-closed로 배지를 끈다. 범위 밖 로봇·`two_person`·상한 소진·전환 꺼짐은 배지 없이 사람 승인으로 남는다. 새 자산이 없어 allowlist·CSP는 그대로다.
 - 증거: node `work-view.test.mjs` 6 통과(범위 안·로봇 밖·two_person·소진·비활성·readback 문구). 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1`로 `test_work_overview_browser.py` 36 통과·`test_console_palette`·`test_console_disabled_features`·`test_document_imports`·`test_doc_tabs` 포함 0 NEW, `test_server_app`·`test_remaining_platform_installed` 50 통과 0 NEW. 전체 affected/FULL 통과를 뜻하지 않는다.
