@@ -111,12 +111,18 @@ def _lane_compliance_config(args):
 
 
 def _policy_admission_core(args):
-    """D-865: ``fleet.policy_admission`` of ``--site-config`` → core (disabled when absent)."""
+    """D-865: ``fleet.policy_admission`` of ``--site-config`` → core (disabled when absent).
+
+    P2c: with ``--tasks-db`` the durable audit log rides the same SQLite and the
+    core's budget counts survive restarts; without it the surface still mounts,
+    only the auto-admit loop stays off."""
     import yaml
     from datetime import datetime, timezone
 
     from fleet.server.missions.policy_admission import (
         PolicyAdmissionCore, PolicyAdmissionSettings)
+    from fleet.server.missions.policy_admission_audit import (
+        PolicyAdmissionAuditLog)
 
     try:
         site_config = {}
@@ -127,5 +133,14 @@ def _policy_admission_core(args):
             (site_config.get("fleet") or {}).get("policy_admission"))
     except (OSError, TypeError, AttributeError, ValueError, yaml.YAMLError) as exc:
         sys.exit(f"policy_admission config: {exc}")
-    return PolicyAdmissionCore(
-        settings, now=lambda: datetime.now(timezone.utc).isoformat())
+    audit_log = None
+    issued_provider = None
+    tasks_db = getattr(args, "tasks_db", None)
+    if tasks_db:
+        audit_log = PolicyAdmissionAuditLog(tasks_db)
+        issued_provider = audit_log.issued_count
+    core = PolicyAdmissionCore(
+        settings, now=lambda: datetime.now(timezone.utc).isoformat(),
+        issued_provider=issued_provider)
+    core.audit_log = audit_log
+    return core

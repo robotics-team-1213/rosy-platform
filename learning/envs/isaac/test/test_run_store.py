@@ -176,6 +176,16 @@ def test_input_snapshot_binds_source_assets_and_normalized_conditions():
         mod.input_snapshot('omx-f-import', {'seed': 0}, 'HEAD')
 
 
+def test_the_worker_rebuilds_a_case_runs_input_from_its_normalized_config():
+    """2026-10-26: the worker rebuilt every input from the seed alone and refused each arm S case run."""
+    mod = module()
+    case = {'box': [0.0, 0.0, 25.0], 'place': 'belt', 'grasp_turn': 0.0, 'expect': 'not_held'}
+    first = mod.input_snapshot('arm-s-cell-case', {'seed': 0, 'case': case}, SHA)
+    again = mod.input_snapshot('arm-s-cell-case', mod.requested(first['input']['config']), SHA)
+    assert again['input_sha256'] == first['input_sha256']
+    assert mod.requested(mod.input_snapshot('omx-f-import', {'seed': 7}, SHA)['input']['config']) == {'seed': 7}
+
+
 @pytest.mark.parametrize('changes', [None, [], 'invalid'])
 def test_non_object_state_changes_are_rejected(tmp_path, changes):
     store = module().RunStore(tmp_path / 'runs')

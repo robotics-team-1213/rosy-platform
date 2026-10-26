@@ -340,7 +340,9 @@
 ## 교훈 (docs/solutions)
 
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
+- [모듈 logs.md 의 BOM 상태가 제각각이라 append 만 해도 append-only 검사가 깨진다](solutions/workflow-issues/logs-md-bom-states-vary-preserve-per-file-2026-10-25.md)
 - [PowerShell 한글 저널 append가 UTF-8을 망가뜨린다 (2026-10-04, 4회)](solutions/workflow-issues/powershell-utf8-append-mangles-korean-journals.md)
+- [병합 해결 중 main이 움직이면 스쿼시 커밋이 동료 착지를 되돌릴 수 있다](solutions/workflow-issues/squash-after-stale-merge-can-revert-concurrent-landings-2026-10-25.md)
 - [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험
@@ -351,7 +353,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
-- 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
-- 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
-- 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
-- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
+- 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)
+- 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
+- 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
+- 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다

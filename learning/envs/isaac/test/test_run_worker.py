@@ -50,6 +50,27 @@ def test_output_limit_and_linked_outputs_refuse_success(tmp_path):
     assert row['reason'] == 'unsafe_output'
 
 
+def test_disk_preflight_keeps_output_budget_in_addition_to_reserve(tmp_path, monkeypatch):
+    import shutil
+    from types import SimpleNamespace
+    monkeypatch.setattr(shutil, 'disk_usage', lambda path: SimpleNamespace(free=1024 ** 3))
+    row = run(tmp_path, "from pathlib import Path;Path('launched').write_text('unexpected')")
+    assert row['reason'] == 'insufficient_space' and row['exit_code'] is None
+    assert not (tmp_path / 'launched').exists()
+
+
+def test_disk_pressure_reaps_only_the_owned_child(tmp_path, monkeypatch):
+    import shutil
+    from types import SimpleNamespace
+    measured = []
+    def available(path):
+        measured.append(path)
+        return SimpleNamespace(free=2 * 1024 ** 3 if len(measured) == 1 else 0)
+    monkeypatch.setattr(shutil, 'disk_usage', available)
+    row = run(tmp_path, 'import time; time.sleep(20)', timeout=.2)
+    assert row['reason'] == 'insufficient_space' and row['exit_code'] != 0
+
+
 @pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual', 'missing_residual'])
 def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, evidence):
     from contextlib import nullcontext
@@ -104,3 +125,21 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
         assert final['result']['task_success'] is None
         assert store.artifact(row['run_id'], 'import-report')['bytes'] > 0
         assert final['result']['gpu']['uuid'] == 'GPU-test'
+
+
+def test_a_finished_arm_s_run_is_recorded_from_its_own_report():
+    """2026-10-26: the arm S report has no completed_frames; the KeyError left every finished run UNKNOWN."""
+    mod = module()
+    done = []
+
+    class Store:
+        def get(self, run_id):
+            return {'input': {'scenario_id': 'arm-s-cell-case'}, 'revision': 3, 'status': 'RUNNING'}
+
+        def finish(self, run_id, revision, result, artifacts):
+            done.append(result)
+
+    report = {'task_success': True, 'judgement': {'result': 'frame_contact', 'matches_expectation': True}}
+    assert mod._finish(Store(), 'r', {'reason': 'process_exited'}, report, [], False) == 0
+    assert done[0]['status'] == 'SUCCEEDED' and done[0]['evidence_class'] == 'ARM_S_CELL_FRAME_CONTACT'
+    assert done[0]['completed_frames'] is None and done[0]['stage'] == 'arm_s_cell'

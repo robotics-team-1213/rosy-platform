@@ -4797,6 +4797,38 @@
 - 증거: `09b50defff` 원격 RED에서 경로 미구현404 3건·getter 미구현11건을 확인했다. 실제 Fleet HTTP·금지된 gather·0기준 시계·부분 게시·비유한 시계·민감 필드 제외를 회귀로 고정했다. 독립 계약 검토에서 차단 사항이 없었다. GREEN 결과는 커밋 SHA의 원격 로그로 확인한다.
 - gate 변화: 기존 모듈 gate를 올리지 않는다. 독립 Monitoring 수집기·화면·배포·장치 수용은 별도다. CE: 해당 없음.
 
+## 2026-10-25 · uncommitted · feat(fleet): D-865 P2c 정책 승인 자동 admit 루프·지속 상한·감사 저장소
+
+- 변경: missions/policy_admission_worker.py(주기 틱: RESOLVED 제안 → 승인 종류·robot 자원 → 범위 판정 → mission_service.admit, generation 은 제안의 source_dispatch_generation 사용), missions/policy_admission_audit.py(SQLite 감사·상한, LineStuckAnswerLog 패턴), proposal_store.list_resolved, core issued_provider(재시작 생존 상한), 콘솔 설정이 tasks_db 있을 때 감사 저장소 연결, 라우트 인스톨러의 startup/shutdown 루프 기동(app.py 0줄 증가), 시험 2건(worker 8 + audit 3).
+- 증거: 미실행 — 커밋 후 원격 회귀로 확인. digest 재판정(resolver)은 운영 candidate_resolver 주입이 확인되지 않아 1차 제외, 후속 조각.
+- gate 변화: 없음. 설정 없으면 루프·상한 모두 비활성이고 현행 승인 동작 불변.
+- 결정: D-865 P2c 산출물.
+- 교훈: docs/solutions/workflow-issues/ 에 BOM 상태 보존·스쿼시 후 main-diff 경로 검사 2건 기록(같은 커밋).
+
+## 2026-10-25 · uncommitted · fix(fleet): 감사 저장소 append 의 reason 기본값 수정
+
+- 변경: policy_admission_audit.append 의 reason 을 선택 인자로(Default None) — ADMITTED 판정은 사유가 없다. 착지 회차 NEW 10건 전부 이 TypeError 였다.
+- 증거: 착지 로그 run-1-2.txt 의 TypeError 로 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · fix(fleet): 가짜 저장소가 list_resolved 지원 시 그대로 쓰기
+
+- 변경: proposal_queries.list_resolved 이 store 에 list_resolved 메서드가 있으면 그 값을 그대로 쓰게 — 착지 회차 NEW 7건 전부 FakeProposals 에 purge_expired 가 없어 AttributeError. 실제 ProposalStore 는 SQL 경로, 가짜는 메서드 경로.
+- 증거: 착지 로그 AttributeError 로 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+
+## 2026-10-25 · uncommitted · fix(fleet): worker 상한 연결·로봇 묶음 우선 검사 순서 수정
+
+- 변경: worker._consider 가 (1) robots!=1 검사를 hold_reason 앞으로 옮겨 ROBOT_UNBOUND 가 정확히 기록되게, (2) 시험 _worker 가 core 에 audit.issued_count 를 연결해 SQLite 상한이 core 에 반영되게. 착지 회차 NEW 2건의 원인.
+- 증거: 단독 재실행 로그로 IndexError(로봇 없는 제안)·assert 3!=2(상한 미반영) 식별. 수정 후 원격 회귀로 재확인.
+- gate 변화: 없음.
+- 결정: 없음.
+- 교훈: 없음
+
 ## 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
 
 - 변경: `host_control`의 `HOST_ACTIONS`(ai·model `clean-storage`), `ACTION_NOT_ALLOWED`·`NO_STORAGE_SERVICE` 코드, 설치 화면의 [시험 저장소 정리] 버튼과 디스크·GPU 여유 표시.

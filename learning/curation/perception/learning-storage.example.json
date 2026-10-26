@@ -2,8 +2,22 @@
   "project_id": "REPLACE_WITH_PROJECT_OR_WORKSPACE_ID",
   "reserve_bytes": 1073741824,
   "roots": [
-    {"id": "raw", "label": "Captured media", "role": "raw", "path": "/private/learning/raw"},
-    {"id": "pending", "label": "Transfer queue", "role": "pending", "path": "/private/learning/pending"}
+    {"id": "raw", "label": "Captured media", "role": "raw", "path": "/private/learning/raw", "reclaimable": false},
+    {"id": "pending", "label": "Transfer queue", "role": "pending", "path": "/private/learning/pending"},
+    {"id": "cache", "label": "Managed working copies", "role": "cache", "path": "/private/learning/cache"}
   ],
-  "remote_quota": null
+  "remote_quota": null,
+  "pool": {
+    "enabled": false,
+    "managed_root_id": "cache",
+    "cache_policy": {"enabled": false, "max_bytes": 10737418240},
+    "targets": [
+      {"id": "hf-a", "connection_id": "REPLACE_WITH_CONNECTION_A", "repo_type": "dataset", "repo_id": "account-a/rosy-data", "quota_owner": "account-a", "priority": 0, "enabled": true},
+      {"id": "hf-b", "connection_id": "REPLACE_WITH_CONNECTION_B", "repo_type": "dataset", "repo_id": "account-b/rosy-data", "quota_owner": "account-b", "priority": 1, "enabled": true}
+    ],
+    "quotas": {
+      "account-a": {"remaining_bytes": 0, "reserve_bytes": 1073741824, "source": "Administrator measurement required", "measured_at": 0, "expires_at": 1},
+      "account-b": {"remaining_bytes": 0, "reserve_bytes": 1073741824, "source": "Administrator measurement required", "measured_at": 0, "expires_at": 1}
+    }
+  }
 }

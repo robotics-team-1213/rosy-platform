@@ -37,18 +37,51 @@ SCENARIOS = {
     'overhang': dict(box=(0., 0., 0.), place=(.072, .135), expect='frame_contact'),  # the box's edge over the frame
     'wrong-yaw': dict(box=(0., 0., 20.), place='belt', expect='not_held'),  # jaws at the site yaw on a turned box
 }
+OUTCOMES = ('placed', 'held_not_placed', 'not_held', 'frame_contact')
+# a case from the real cell (deploy/robot/omx/cell_cases.py) stays on the tray and inside the arm's reach here
+CASE_LIMITS = dict(box_m=.025, turn_deg=45., grasp_turn_deg=45., place_x=(.03, .20), place_y=(-.10, .20))
+
+
+def check_case(case):
+    """A real-cell case as a scenario: box (dx, dy from the tray centre in m, turn in deg), place ('belt' or an
+    arm-frame point), grasp_turn (deg added to the site's jaw yaw) and expect (an outcome, or None: measure)."""
+    if not isinstance(case, dict) or set(case) != {'box', 'place', 'grasp_turn', 'expect'}:
+        raise ValueError('a case needs exactly box, place, grasp_turn and expect')
+    box, place, turn, expect = case['box'], case['place'], case['grasp_turn'], case['expect']
+    number = lambda v: type(v) in (int, float) and math.isfinite(v)  # noqa: E731
+    if not (isinstance(box, list) and len(box) == 3 and all(map(number, box))
+            and abs(box[0]) <= CASE_LIMITS['box_m'] and abs(box[1]) <= CASE_LIMITS['box_m']
+            and abs(box[2]) <= CASE_LIMITS['turn_deg']):
+        raise ValueError('case box must be [dx, dy, turn] on the tray')
+    if place != 'belt' and not (isinstance(place, list) and len(place) == 2 and all(map(number, place))
+                                and CASE_LIMITS['place_x'][0] <= place[0] <= CASE_LIMITS['place_x'][1]
+                                and CASE_LIMITS['place_y'][0] <= place[1] <= CASE_LIMITS['place_y'][1]):
+        raise ValueError("case place must be 'belt' or a reachable [x, y]")
+    if not number(turn) or abs(turn) > CASE_LIMITS['grasp_turn_deg'] or expect not in (*OUTCOMES, None):
+        raise ValueError('case grasp_turn or expect out of range')
+    return dict(box=[float(v) for v in box], place=place if place == 'belt' else [float(v) for v in place],
+                grasp_turn=float(turn), expect=expect)
+
+
+def spec(scenario):
+    """A named scenario, or a checked case dict."""
+    if isinstance(scenario, str):
+        return dict(SCENARIOS[scenario], grasp_turn=0.)
+    return check_case(scenario)
+
+
 # a body joint lagging its command by this much is the runner's soft contact (1.5 units of at most 1.8 deg)
 SOFT_CONTACT_RAD = 1.5 * math.radians(1.8)
 
 
 def box_start(scenario):
     """(x, y, z) of the box centre and its yaw in degrees, square to the jaws unless the scenario turns it."""
-    dx, dy, yaw = SCENARIOS[scenario]['box']
+    dx, dy, yaw = spec(scenario)['box']
     return (TRAY['center'][0] + dx, TRAY['center'][1] + dy, TRAY['top'] + BOX / 2), BOX_YAW_DEG + yaw
 
 
 def place_point(scenario):
-    place = SCENARIOS[scenario]['place']
+    place = spec(scenario)['place']
     return (BELT['center'][0], BELT['center'][1], BELT['top']) if place == 'belt' else (*place, TRAY['top'])
 
 
@@ -67,6 +100,7 @@ def evaluate(samples, scenario):
     placed = (math.hypot(final[0] - place[0], final[1] - place[1]) <= .015
               and abs(final[2] - place[2] - BOX / 2) <= .006 and not frame_contact)
     outcome = 'frame_contact' if frame_contact else 'placed' if placed else 'held_not_placed' if lifted else 'not_held'
-    return dict(result=outcome, matches_expectation=outcome == SCENARIOS[scenario]['expect'],
+    expect = spec(scenario)['expect']  # None: a measured candidate, nothing to match
+    return dict(result=outcome, matches_expectation=None if expect is None else outcome == expect,
                 final_box_m=[round(v, 4) for v in final], max_joint_error_rad=round(max(lag), 4),
                 first_soft_contact_tick=soft, frame_contact=frame_contact, lifted_samples=len(lifted))
