@@ -82,3 +82,24 @@ def test_watch_missing_source_is_a_persisted_hold_not_a_healthy_sample(tmp_path,
     assert report['status'] == 'hold_for_owner_review'
     assert report['captured_at'] is None
     assert report['errors_rad'] == {}
+
+
+def test_frozen_snapshot_hits_gap_before_max_age(tmp_path, capsys, monkeypatch):
+    from core_common.motor_health import write_motor_health_snapshot
+    p, _, profile, req = inputs(tmp_path)
+    path = tmp_path / 'health.json'
+    h = health(p)
+    row = {'schema_version': 'rosy.motor-health.v1', 'owner_id': h.owner_id, 'session_id': h.session_id,
+           'status': 'active', 'observed_at': 100., 'expected_motor_count': 2,
+           'motors': [{**m.model_dump(exclude={'sample_age_s'}), 'observed_at': 100.} for m in h.motors],
+           'stop_reasons': []}
+    write_motor_health_snapshot(path, row)
+    clock = iter([100., 100.05, 100.1, 100.15])
+    monkeypatch.setattr('omx_adapter.load_motion_cli.time.time', lambda: next(clock))
+    monkeypatch.setattr('omx_adapter.load_motion_cli.time.sleep', lambda _: None)
+    code = main(['watch', str(profile), str(req), '--accepted-sha256', characteristics_digest(p),
+                 '--health', str(path), '--candidate-id', 'direct', '--command-id', 'fixture-command',
+                 '--session-id', h.session_id, '--started-at', '100', '--samples', '4', '--interval-s', '.05'])
+    reports = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert code == 3
+    assert 'feedback_gap' in reports[-1]['reasons']
