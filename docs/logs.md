@@ -10899,6 +10899,42 @@ osy-d395-s1d\`.
 - 증거: 문서 등록 f14d00748e의 원격 552 passed, 첫 읽기 회귀 95664a6496의 77 passed. Harbor는 별도 작업 브랜치에서 소비하며 기본 checkout의 동료 변경을 보존한다. 최신 전체 검증과 실제 HTTP는 별도 결과다.
 - gate 변화: 문서 승인과 첫 흐름 구현 진행이며 장치·배포·현장 수용은 열지 않는다. CE 해당 없음: 기능 추가와 기존 계약 재사용이다.
 
+## 2026-10-24 · d0d7f4616d · D-856 물체 참조와 owner 기하 결속
+
+- 변경: 설치 catalog의 기하와 물체 참조를 불변 map·별도 digest로 결속했다. requester가 기하를 바꾸거나 데이터 생성으로 실행 권한을 얻는 통로는 없다.
+- 증거: 누락 모듈 RED 14 failed 후 결속·사전검사·기존 pose/Cell acceptance 원격 112 passed, skip0, 0 NEW. 독립 계약 검토에서 material finding은 없었다.
+- gate 변화: 내부 데이터 경계만 검증했다. 중립 grant·실제 owner 소비·원장 migration·물리 자원 해제·Harbor 연결은 계속 진행한다. CE 해당 없음: 구현과 회귀가 판단 근거를 보존한다.
+
+## 2026-10-24 · 1258314f51 · D-856 비활성 중립 팔 grant 계약
+
+- 변경: v1.303에 물리 참조와 공통 권한 envelope만 받는 grant DTO를 등록했다. 기존 Action/stop DTO 14개는 AST를 그대로 옮겨 canonical export를 유지하고 facade 크기를 줄였다.
+- 증거: 공식 원격 1385 passed, skip0, 0 NEW. 독립 계약 검토와 size_range/safety_review 통과. 정확한 소스·시험·한계는 docs/validation/harbor-neutral-arm-grant-2026-10-24/result.md를 따른다.
+- gate 변화: 실제 runtime 종류·submit은 아직 거절한다. 원장 provenance·owner phase/recovery·물리 자원 종료와 Harbor 업무 변환을 다음으로 연결한다. CE 해당 없음: 계약과 시험이 판단 근거를 보존한다.
+
+## 2026-10-24 · uncommitted · D-856 중립 원장 migration 설계
+
+- 변경: 기존 parent의 네 legacy provenance를 보존하고 새 물리 형식과 구분하는 최소 재구성·소비자 차단·원복/동시성 검증 계획을 작성했다.
+- 증거: 현재 schema version 4, FK·per-arm mirror·read projection·site-stop 해제 경로를 조사하고 독립 계약 검토를 받았다. source 8da8bb1593의 FULL 원격 실행은 진행 중이며 결과를 기다린다.
+- gate 변화: 다음 migration의 RED/SQL 구현 준비다. schema·물리 creator·새 runtime kind를 구현했다는 기록이 아니다. CE 해당 없음: 검증 전 설계이며 해결된 운영 장애가 아니다.
+
+## 2026-10-24 · dda08892c9 · D-856 원장 migration 구현과 선행 FULL 결과
+
+- 변경: legacy provenance를 보존하는 원장 version5와 기존 Cell 소비자의 physical 차단을 구현했다. 선행 grant 단계 FULL 결과도 해당 SHA에 결속해 기록했다.
+- 증거: migration 관련 원격 69/13/244개 별도 회귀가 skip0/0 NEW로 통과하고 독립 검토 지적을 수정·재검토했다. grant source 8da8bb1593의 FULL 세 그룹은 11932/4359/6257 passed와 543/117/336 skipped, 각각 0 NEW다. 서로 다른 소스·수용 범위를 docs/validation의 두 기록에서 구분한다.
+- gate 변화: migration 이후 affected 전체 검증과 실제 creator·owner 실행·자원 종료·Harbor 변환은 남는다. CE 해당 없음: 운영 장애 해결이 아닌 구현·시험 보완이다.
+
+## 2026-10-24 · 11486ce7cd · D-856 owner transaction 물체·복구 결속
+
+- 변경: 중립 grant/object_ref만으로 그리퍼 transaction과 별도 snapshot을 만들고, raw identity·generation을 대조해 재시작을 HOLD로 복구한다. 가짜 Cell/camera 자료를 만들지 않는다.
+- 증거: 누락 consumer RED16과 태그 삭제 우회 RED1 뒤 신규·기존 소비자 원격 74 passed/skip0/0 NEW, 독립 재검토 finding 해소. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md에 결속했다.
+- gate 변화: 내부 상태 기계 소비자다. 설치 factory·phase-only runtime·parent journal 대조·Fleet 물리 자원 종료와 Harbor 연결은 남는다. CE 해당 없음: 보완 근거는 source·시험에 남는다.
+
+## 2026-10-24 · 45173e6f92 · D-856 설치된 owner phase 실행과 client 연결
+
+- 변경: API v1.305의 설치 결속 factory와 기존 phase/그리퍼 workflow, v2/shared control/완료 기록을 연결했다. 기본 owner와 direct driver의 거절 경계를 유지한다.
+- 증거: owner 집중 회귀 153 passed/skip0/0 NEW, SDK 15 passed/skip0/0 NEW 및 독립 검토를 기록했다. 선행 migration affected 전체도 exit0으로 끝났다. 소스·합성 port·실물 미검증 한계는 owner/migration validation에 결속했다.
+- gate 변화: Fleet physical 생성/승인·actual owner-state/HTTP·물리 자원 종료와 Harbor 업무 변환은 남는다. CE 해당 없음: 정상 구현과 검증의 기록이다.
+
 ## 2026-10-24 · afb218aed1 · 최신 main과 UI 표시 추출의 충돌 통합
 
 - 변경: [추가 통합 기록](validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md)에 새 오류 문구 보존·지도 크기 기록 하향·양쪽 로그 보존 판단을 남겼다. 초기 동결 관측은 유지한다.
@@ -11710,6 +11746,46 @@ osy-d395-s1d\`.
 - 변경: `land.py`가 시작할 때 브랜치의 `tools/land*.py`가 main 체크아웃과 다르면 main의 `tools/land.py`를 같은 인자로, 브랜치 워크트리에서 다시 실행한다(`land_checks.landed_copy`, `ROSY_LAND_OWN_COPY`로 재실행 한 번만). 오래된 브랜치가 옛 규칙으로 멈추던 빈틈.
 - 증거: `test/test_land.py` 원격 통과.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · D-885 디스크 부족 시험 PC 자동 정리 요청과 관제 PC 자기 자원
+
+- 변경: ADR D-885와 Log 행. D-879 gap 행 제거(착지), D-884 gap 선언.
+- 증거: 원격 시험으로 확인한다.
+- gate 변화: 없음. PC 재설치 전에는 자동 요청이 거절로 기록된다. CE: 해당 없음 — 원인(venv 48시간 보존)은 rosy-ops PR #4와 기존 교훈 메모가 다룬다.
+
+## 2026-10-26 · uncommitted · 워크트리 상한 15·착지한 브랜치 정리·브랜치 이름 규칙 (D-886)
+
+- 변경: `tools/worktrees.py` `CAP` 50→14(main 포함 15), topic 소문자 kebab 48자 검사, 모든 prune이 `main`에 들어갔고 체크아웃되지 않은 로컬 브랜치를 정확한 sha로 정리(`main`·`archive/*` 제외). shared-checkout에 「브랜치 이름과 수명」 정본, AGENTS·git-workflow·명령 카드 상한 문구.
+- 근거: 같은 날 워크트리 22개, 로컬 브랜치 488개 중 132개가 이미 main에 있었다. 문서 예산 15와 도구 상한 50이 달랐다.
+- gate 변화: 없음. 정리될 때까지 일반 `new`가 거절된다.
+
+## 2026-10-26 · uncommitted · 게시 PR 병합 뒤 역동기화
+
+- 변경: AGENTS.md 「같이 하는 깃」 6번, shared-checkout.md, git-workflow.md, 착지 명령 카드의 게시 마지막 단계를 `git merge --ff-only origin/main`에서 역동기화(로컬 main에서 만든 워크트리에서 `git merge origin/main`을 land.py로 착지)로 바꿨다. 우산 Rosy/AGENTS.md(git 밖)도 같이 고쳤다. 규칙 결정은 D-889(Proposed, 별도 브랜치)가 D-868 5단계를 고친다.
+- 증거: 게시 PR이 병합될 즈음 로컬 main은 게시 SHA보다 앞서 있어(시간당 약 1착지) origin/main의 조상이 아니므로 ff-only가 실패한다. 게시 스크립트 검토에서 확인.
+- gate 변화: 없음. 절차 문서다.
+- 교훈: 없음
+
+## 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+
+- Change: authenticate exactly legacy3/current4; bind current/staged/rollback Compose and loaded proof, retire only identity-proven outgoing PostgreSQL without force/volume deletion; retain separate same-commit physical relocation.
+- Evidence: real-signature source bc61f16ea9 RED3/8 controls; canonical-inventory source77d8b34bac RED38/13 controls; overlay source9e8e86575f RED2/1 control; forged physical journal source8e856f02a9 RED1. Raw logs remain outside Git; independent implementation review and committed GREEN pending. Initial42 failures used a corrected-later manual selector and are not uniform migration-cause proof.
+- Gate: source preparation only; no install/site/FIELD or deployment acceptance.
+- CE: existing whole-configuration and identical-external-helper lessons applied; solved lesson decision awaits actual GREEN.
+
+## 2026-10-26 · d4a0e5b968 · D-887 source migration verified
+
+- Change: bind exact authenticated legacy3/current4 to candidate-local Compose/overlay and loaded identities; exact-ID retired PostgreSQL cleanup precedes normal rollback restoration, while consistent physical relocation remains separate. Builder/signing blobs remain base-exact.
+- Evidence: independent source trees3d656bb2ac/f32fd0b400 approved; final committed nine-suite remote291 passed/0 skipped, official/outer0, knownNEW0/known0/flaky0. Initial source01d7 six failures and all separate RED records remain preserved in site-three-four-image-migration validation; no failure was quarantined.
+- Gate: source proof only; actual feature land, installed helper parity, signed rebuild, live site rollback and FIELD pending.
+- CE: 해당 없음; D887/tests plus existing whole-configuration/identical-helper lessons retain the non-obvious decisions without a duplicate solution journal.
+
+## 2026-10-26 · 6d493681e4 · D-887 validation command provenance format
+
+- 변경: 실행 예시의 Git ID를 같은 commit으로 해석되는 짧은 revision으로 표기하고 전체 SHA는 본문에 유지했다. 기존 Git ID 교훈에 CLI 코드블록도 검사된다는 조건과 실제 실패·수정 검증을 보강했다.
+- 증거: 첫 통합 commit 7b2dbeb623의 관련 gate는 1 FAIL/1093 PASS/2 SKIP, 단독 실패·main 통과를 보존했다. 문서 수정 commit 6d493681e4에서 동일 원격 secret guard 1 PASS/runner·outer0/NEW0·known0·flaky0, scanner와 네 production 파일은 그대로다.
+- Gate: 공식 재착지·게시·site/DEVICE/FIELD는 아직 대기한다. 정밀 시각 수용을 주장하지 않는다.
+- CE: 기존 교훈 갱신; 새 중복 문서나 scanner 예외는 만들지 않았다.
 
 ## 2026-10-26 · uncommitted · tools/publish_main.py: D-868 게시 자동화 초안(기본 dry run)
 

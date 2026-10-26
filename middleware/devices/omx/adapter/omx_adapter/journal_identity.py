@@ -24,4 +24,17 @@ def journal_identity(path: Path | str) -> str:
         return connection.execute("SELECT journal_id FROM omx_journal_identity").fetchone()[0]
 
 
-__all__ = ["journal_identity"]
+def existing_journal_identity(connection: sqlite3.Connection) -> str | None:
+    """Read the existing canonical identity in the caller's snapshot; never create one."""
+    if not connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                              "AND name='omx_journal_identity'").fetchone():
+        return None
+    rows = connection.execute("SELECT singleton,journal_id FROM omx_journal_identity").fetchall()
+    if (len(rows) != 1 or rows[0][0] != 1 or not isinstance(rows[0][1], str)
+            or not rows[0][1] or rows[0][1] != rows[0][1].strip() or len(rows[0][1]) > 192
+            or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in rows[0][1])):
+        raise PermissionError("original owner journal identity is malformed")
+    return rows[0][1]
+
+
+__all__ = ["journal_identity", "existing_journal_identity"]

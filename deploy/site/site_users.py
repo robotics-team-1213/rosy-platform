@@ -24,9 +24,7 @@ from pathlib import Path
 
 import yaml
 
-# File-level contract mirrors fleet/server/auth/site_users.py (D-276). `service`
-# rows exist for non-operator automation (Cell workspace proposals) and are
-# managed by that flow, not provisioned by hand here.
+# File-level contract mirrors fleet/server/auth/site_users.py (D-276).
 FILE_ROLES = frozenset({"viewer", "operator", "policy-admin", "service", "ai_observer"})
 CLI_ROLES = frozenset({"viewer", "operator", "policy-admin"})
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -189,12 +187,25 @@ def _read_token(stream) -> str:
 
 def add_user(path: Path | str, principal: str, role: str, token: str,
              *, dry_run: bool = False) -> dict[str, object]:
-    """Register one principal; ``token`` is the raw bearer and is hashed here."""
+    """Register one human principal with a bearer token."""
+    if role not in CLI_ROLES:
+        raise SiteUsersError(f"role must be one of {sorted(CLI_ROLES)}")
+    return _add_token_user(path, principal, role, token, dry_run=dry_run)
+
+
+def add_service(path: Path | str, principal: str, token: str,
+                *, dry_run: bool = False) -> dict[str, object]:
+    """Register a machine bearer without console credentials or extra grants."""
+    result = _add_token_user(path, principal, "service", token, dry_run=dry_run)
+    return {"action": "add-service", "principal_id": result["entry"]["principal_id"],
+            "role": "service", "dry_run": dry_run}
+
+
+def _add_token_user(path: Path | str, principal: str, role: str, token: str,
+                    *, dry_run: bool = False) -> dict[str, object]:
     principal = principal.strip()
     if not principal:
         raise SiteUsersError("principal must be a non-empty id")
-    if role not in CLI_ROLES:
-        raise SiteUsersError(f"role must be one of {sorted(CLI_ROLES)}")
     if not token.strip():
         raise SiteUsersError("token read from stdin is empty")
     digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -309,10 +320,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     adding.add_argument("file", type=Path)
     adding.add_argument("--principal", required=True)
     adding.add_argument("--role", required=True, choices=sorted(CLI_ROLES),
-                        help="human roles only; service rows belong to the Cell flow")
+                        help="human roles only; use add-service for a machine")
     adding.add_argument("--token-stdin", action="store_true", required=True,
                         help="read the raw bearer token from stdin (never argv)")
     adding.add_argument("--dry-run", action="store_true")
+    service_adding = commands.add_parser("add-service", help="register a machine with a stdin token")
+    service_adding.add_argument("file", type=Path)
+    service_adding.add_argument("--principal", required=True)
+    service_adding.add_argument("--token-stdin", action="store_true", required=True,
+                                help="read the raw bearer token from stdin (never argv)")
+    service_adding.add_argument("--dry-run", action="store_true")
     login_adding = commands.add_parser("add-login", help="register a D-519 password login")
     login_adding.add_argument("file", type=Path)
     login_adding.add_argument("--principal", required=True)
@@ -349,6 +366,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "add":
             result = add_user(args.file, args.principal, args.role, _read_token(sys.stdin),
                               dry_run=args.dry_run)
+        elif args.command == "add-service":
+            result = add_service(args.file, args.principal, _read_token(sys.stdin), dry_run=args.dry_run)
         else:
             result = remove_user(args.file, args.principal, dry_run=args.dry_run)
     except (SiteUsersError, OSError) as exc:
