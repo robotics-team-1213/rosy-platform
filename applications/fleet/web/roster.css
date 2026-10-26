@@ -81,6 +81,7 @@
   .context-panel > .panel[aria-labelledby="roster-heading"] { display: flex; flex-direction: column; }
   .robot-list-details { order: 1; }
   .workspace-heading, #robot-workspace-empty, #robot-workspace { order: 2; }
+  .panel:has(#robot-workspace > article) > .robot-list-details { order: 3; }
   .roster-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roster-block > h2 { grid-column: 1 / -1; }
   .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 1; grid-row: 2; justify-content: flex-start; }

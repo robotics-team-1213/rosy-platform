@@ -48,6 +48,11 @@ def test_mobile_robot_status_precedes_map_and_critical_text_is_readable(console_
                 Path(output).mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(Path(output) / f"fleet-status-{theme}-{width}.png"), full_page=True)
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            page.locator('#robot-choice').select_option('rosy_01')
+            page.locator('#robot-workspace article').wait_for()
+            selected = page.locator('#robot-workspace').bounding_box()
+            assert selected['y'] < page.locator('.robot-list-details').bounding_box()['y']
+            assert selected['y'] < 844
             assert not errors
         finally:
             browser.close()
