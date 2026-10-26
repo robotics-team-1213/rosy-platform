@@ -10,8 +10,9 @@ import urllib.request
 
 from deploy.site.deliberation_sandbox import bounded_process
 from rosy.decision.deliberation import Problem, canonical, identifier
-from rosy.decision.deliberation.judgment import judgment, judgment_schema
+from rosy.decision.deliberation.judgment import judgment, judgment_schema, schema_missing_allowlist
 from rosy.decision.deliberation.profiles import AdapterCapabilities, BoundProfile, ModelProfile
+from rosy.decision.structured_output import ollama_chat, ollama_reply
 
 MODEL = 'qwen3-vl:8b-instruct'
 DIGEST = '0533d74300e4f9bc367d675d4e64ffd073d50ff16a2b4096cc2e8a1cf8c96319'
@@ -80,7 +81,7 @@ def execute(raw, remaining):
         raise ValueError('INVALID_LOCAL_JOB')
     profile = (status_model_profile if problem.domain == 'fleet_status' else model_profile)(body['profile_revision'])
     bound = BoundProfile(profile, problem.digest)
-    missing = body['schema']['properties']['missing_evidence']['items']['enum']
+    missing = schema_missing_allowlist(body['schema'])
     if len(missing) > 16 or len(set(missing)) != len(missing):
         raise ValueError('INVALID_LOCAL_JOB')
     schema = judgment_schema(problem, bound, missing_allowlist=missing)
@@ -92,20 +93,11 @@ def execute(raw, remaining):
                            profile_revision=identifier(prior['profile_revision']))
         judgment(problem, BoundProfile(previous, problem.digest), prior, missing_allowlist=missing)
     loaded(exchange('/api/ps', None, available()))
-    request = {'model': MODEL, 'messages': [{'role': 'user', 'content': canonical(body)}],
-               'format': schema, 'stream': False, 'options': {'num_predict': 1024}}
+    request = ollama_chat(MODEL, [{'role': 'user', 'content': canonical(body)}], schema)
     response = exchange('/api/chat', request, available())
     loaded(exchange('/api/ps', None, available()))
-    message = response['message']
-    usage = {'input_tokens': response['prompt_eval_count'], 'output_tokens': response['eval_count']}
-    if (response.get('model') != MODEL or response.get('done') is not True
-            or response.get('done_reason') != 'stop' or message.get('role') != 'assistant'
-            or message.get('tool_calls') or message.get('function_call')
-            or type(message.get('content')) is not str
-            or any(type(value) is not int or value < 0 for value in usage.values())
-            or usage['output_tokens'] > 1024):
-        raise ValueError('INVALID_LOCAL_RESPONSE')
-    checked = judgment(problem, bound, json.loads(message['content']), missing_allowlist=missing)
+    payload, usage = ollama_reply(response, MODEL, 'INVALID_LOCAL_RESPONSE')
+    checked = judgment(problem, bound, payload, missing_allowlist=missing)
     return {'model_id': MODEL, 'model_revision': DIGEST, 'cost_usd': 0.0,
             'usage': usage, 'judgment': checked.payload}
 

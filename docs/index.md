@@ -351,7 +351,7 @@
 ## 최근 기록
 
 - 2026-10-26 · uncommitted · ROSY Monitoring 독립 관측 기반 wheel
-- 2026-10-25 · uncommitted · D-876 Fleet 모니터링 wire 계약 v1.318
-- 2026-10-25 · uncommitted · feat(sim): D-877 시뮬레이터 공통 층과 MuJoCo 백엔드
-- 2026-10-25 · 055f40747f · 착지 회귀 수정의 원격 확인
-- 2026-10-25 · 9f0df4f99b · RaspTank 평가 기준선과 공개 무결성 값 등록
+- 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
+- 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
+- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
+- 2026-10-26 · uncommitted · 원격 pytest job의 /tmp 누수 경고와 설치 환경 지문
