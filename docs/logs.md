@@ -12020,3 +12020,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test_perception_promotion.py`·`test_learning_promotion_request_contract.py`·Learning `test_promotion_request.py` 51 passed, `operations/fleet/test` 7014 passed, `test/architecture`·harness·learning·robot_execution 3000 passed(a72a056ef8). `rosy_harness.py lint` 0 errors.
 - gate 변화: 없음. 승인은 레지스트리·`models/accepted`·배포를 건드리지 않는다.
 - CE: 해당 없음 — 장애 해결이 아닌 새 기능이다.
+
+## 2026-10-26 · uncommitted · test(fleet): D-891 리뷰 후속
+
+- 변경: Content-Length 없는 스트림 본문이 256 KiB를 넘으면 413인 시험 추가, 비정규 바이트 경우마다 오류 코드 고정, D-890 gap의 브랜치 이름 정정(843e5e3e8f).
+- 증거: 원격 대상 시험 52 passed, NEW 0.
+- gate 변화: 강화(스트림 초과 분기 시험).
+- CE: 해당 없음 — 시험 보강이다.
