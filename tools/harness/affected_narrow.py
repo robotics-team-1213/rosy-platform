@@ -21,7 +21,7 @@ import affected_tests as at  # attributes read at call time, so the cyclic impor
 
 # D-762 stage 0 ("넓은 경로 일치가 아니라 실제 영향"): triggers whose real readers the selector can
 # find. A path matching only these selects its readers (`narrowed`); no reader found -> FULL.
-NARROWABLE_TRIGGERS = ("contracts/foundation/**", "test/architecture/**")
+NARROWABLE_TRIGGERS = ("contracts/foundation/**", "test/architecture/**", "test/known_failures.txt")
 FOUNDATION = "contracts/foundation"
 ARCHITECTURE = "test/architecture"
 #: registry file -> (top-level list key, reader module its contract tests import)
@@ -29,18 +29,63 @@ REGISTRIES = {"shared/web/surfaces.yaml": ("surfaces", "surface_registry")}
 FROM_IMPORT = re.compile(r"^\s*from\s+(\.*)([\w.]*)\s+import\s+(\([^)]*\)|[^\n]*)", re.MULTILINE)
 
 
-def add_readers(repo: at.Repo, path: str, trigger: str, add) -> bool:
-    """Select the readers of a triggered `path` through `add`; False (FULL) when it cannot narrow."""
+def add_readers(repo: at.Repo, path: str, trigger: str, add, changed=(), base_text=None) -> str | None:
+    """Select the readers of a triggered `path` through `add`: None when narrowed, else why it stays
+    FULL ("" when there is nothing to add to the trigger's own reason).
+
+    `base_text(path)`: the file at the merge base, None when it did not exist there."""
     hits = [pattern for pattern, _ in at.FULL_TRIGGERS if at._match(path, pattern)]
-    found = narrowed(repo, path) if hits and all(p in NARROWABLE_TRIGGERS for p in hits) else None
+    if not hits or any(p not in NARROWABLE_TRIGGERS for p in hits):
+        return ""
+    if path == KNOWN_FAILURES:
+        found, why = known_failure_tests(repo, changed, base_text)
+    else:
+        found, why = narrowed(repo, path), ""
     if found is None:
-        return False
+        return why
     # D-762 stage 0: the readers found, not the whole tree; foundation keeps its own suite.
     if at._under(path, FOUNDATION) and not at.TEST_FILE.search(path):
         found.setdefault(f"{FOUNDATION}/test", f"module core_common ({path})")
     for test, why in found.items():
         add(test, f"{why} (narrowed from: {trigger})")
-    return True
+    return None
+
+
+KNOWN_FAILURES = "test/known_failures.txt"
+
+
+def _listed(text: str) -> set[str]:
+    """Node ids of a known-failures list, parsed like test/known_failures.py load_known."""
+    return {line.strip().partition("  # ")[0].strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")}
+
+
+def known_failure_tests(repo: at.Repo, changed, base_text) -> tuple[dict[str, str] | None, str]:
+    """Rule 7 (design 0.7): the files of the ids a known_failures edit adds or removes, or (None, why).
+
+    A removed id runs to prove it is green. An added id runs too, but needs a person when this
+    branch also changes that test or the test is safety-tagged (the list must not hide a failure
+    the branch made, test/known_failures.txt header). Whether an added id really fails is
+    known_failures.py's comparison on that run, not the selector's.
+    flaky_quarantine.txt is a concern: safety root, so it stays FULL like every safety path.
+    """
+    if base_text is None:
+        return None, "no base to compare"
+    old, new = _listed(base_text(KNOWN_FAILURES) or ""), _listed(repo.text(KNOWN_FAILURES))
+    found = {t: f"references {KNOWN_FAILURES}" for t in [*repo.referencing_tests(KNOWN_FAILURES),
+                                                         "test/test_known_failures.py"] if repo.exists(t)}
+    for nodeid in sorted(old ^ new):
+        test = nodeid.split("::")[0]
+        if nodeid in new:
+            if test in changed:
+                return None, f"adds {nodeid} while this branch changes {test}: needs human review"
+            if at.safety_review.is_safety(test, repo.safety_roots, repo.safety_modules):
+                return None, f"adds safety-tagged {nodeid}: needs human review"
+            if not repo.exists(test):
+                return None, f"adds {nodeid}, whose test file does not exist"
+        if repo.exists(test):
+            found.setdefault(test, f"{'added to' if nodeid in new else 'removed from'} {KNOWN_FAILURES}: {nodeid}")
+    return found, ""
 
 
 def _from_imports(repo: at.Repo, path: str) -> list[tuple[str, frozenset[str]]]:

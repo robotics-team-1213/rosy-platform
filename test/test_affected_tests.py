@@ -232,7 +232,7 @@ CASES = [
      "affected", {"test/architecture"}),
     ("architecture guard removed -> full", ["test/architecture/test_layout.py"], "full", None),
     ("architecture conftest -> full", ["test/architecture/conftest.py"], "full", None),
-    ("known failures list -> full", ["test/known_failures.txt"], "full", None),
+    ("known failures list without a base -> full", ["test/known_failures.txt"], "full", None),
     ("module record -> its readers, not the module suite", ["contracts/foundation/logs.md"], "affected", set()),
 ]
 
@@ -878,3 +878,50 @@ def test_head_files_are_read_at_head_not_from_the_checkout(sample, capsys):
     finally:
         _git(sample, "checkout", "-q", "main")
         _git(sample, "branch", "-q", "-D", "leaf")
+
+
+# --- Rule 7 (design 0.7): a known_failures edit runs the ids it adds or removes ---------------------
+
+KF = "test/known_failures.txt"
+KF_HEADER = "# header\n"
+PLAIN = "test/test_unrelated.py::test_y"
+
+
+def _kf_select(head: str, base: str = KF_HEADER, changed=(KF,), repo=None):
+    repo = repo or affected.Repo.load(ROOT)
+    repo._texts[KF] = head
+    return affected.select(repo, list(changed), base_text=lambda path: base if path == KF else None)
+
+
+@pytest.mark.parametrize("base, head", [(f"{KF_HEADER}{PLAIN}  # r\n", KF_HEADER),
+                                        (KF_HEADER, f"{KF_HEADER}{PLAIN}  # flake\n")],
+                         ids=["removed", "added"])
+def test_known_failures_line_selects_that_test_not_full(sample, base, head):
+    sel = _kf_select(head, base, repo=affected.Repo.load(sample))
+    assert sel.mode == "affected", sel.escalations
+    assert set(sel.reasons) == GUARDS | {"test/test_unrelated.py"}
+    assert any(PLAIN in why for why in sel.reasons["test/test_unrelated.py"])
+
+
+def test_known_failures_reason_or_comment_edit_runs_only_guards_and_readers(sample):
+    sel = _kf_select(f"# new header\n{PLAIN}  # new reason\n", f"{KF_HEADER}{PLAIN}  # r\n",
+                     repo=affected.Repo.load(sample))
+    assert sel.mode == "affected" and set(sel.reasons) == GUARDS
+
+
+@pytest.mark.parametrize("head, changed, why", [
+    (f"{KF_HEADER}{PLAIN}  # r\n", (KF, "test/test_unrelated.py"), "this branch changes test/test_unrelated.py"),
+    (f"{KF_HEADER}middleware/devices/omx/adapter/omx_adapter/real/dynamixel_stop_test.py::test_x  # r\n", (KF,),
+     "adds safety-tagged"),
+    (f"{KF_HEADER}test/test_zz_missing.py::test_x  # r\n", (KF,), "test file does not exist"),
+], ids=["same-branch", "safety", "missing-file"])
+def test_known_failures_added_line_needing_a_person_stays_full(head, changed, why):
+    sel = _kf_select(head, changed=changed)
+    assert sel.mode == "full"
+    [escalation] = [e for e in sel.escalations if e.startswith(KF)]
+    assert why in escalation and escalation.endswith(": known failures list"), escalation
+
+
+def test_flaky_quarantine_stays_full_as_a_safety_root():
+    sel = affected.select(affected.Repo.load(ROOT), ["test/flaky_quarantine.txt"], base_text=lambda path: "")
+    assert sel.mode == "full" and _safety_escalations(sel)

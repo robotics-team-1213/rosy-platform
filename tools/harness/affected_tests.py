@@ -219,8 +219,10 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
 
 
 def select(repo: Repo, changed: list[str], moved: list[str] = (),
-           harness_texts: tuple[str, str] | None = None) -> Selection:
-    """`harness_texts`: ``harness.yaml`` at the merge base and at head; without it that file is FULL."""
+           harness_texts: tuple[str, str] | None = None, base_text=None) -> Selection:
+    """`harness_texts`: ``harness.yaml`` at the merge base and at head; without it that file is FULL.
+    `base_text(path)`: a file at the merge base (None: absent there); without it the rules that compare
+    with the base (known_failures) stay FULL."""
     sel = Selection(mode="affected", changed=changed, escalations=list(moved))
 
     def add(path: str, why: str) -> None:
@@ -241,8 +243,12 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             trigger = SAFETY_TRIGGER
         else:
             trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
-        if trigger and trigger != SAFETY_TRIGGER and affected_narrow.add_readers(repo, path, trigger, add):
-            continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
+        if trigger and trigger != SAFETY_TRIGGER:
+            why = affected_narrow.add_readers(repo, path, trigger, add, changed, base_text)
+            if why is None:
+                continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
+            if why:  # land.py HARNESS_TRIGGER matches the suffix, so the reason goes before it
+                trigger = f"({why}): {trigger}"
         if path == affected_narrow.HARNESS_YAML:  # reads harness.yaml; not in GUARD_SET
             add("test/architecture/test_folder_layout.py", f"reads {path}")
         if path == affected_narrow.HARNESS_YAML and trigger:
@@ -403,13 +409,19 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
         repo = Repo.load(repo_root)
     try:
         changed = changed_files(repo_root, base, head)
+        merge_base = _git(repo_root, "merge-base", base, head or "HEAD").strip()
+
+        def base_text(path: str) -> str | None:
+            try:
+                return _git(repo_root, "show", f"{merge_base}:{path}")
+            except SelectionError:
+                return None
         texts = None
         if affected_narrow.HARNESS_YAML in changed:
-            merge_base = _git(repo_root, "merge-base", base, head or "HEAD").strip()
             texts = (_git(repo_root, "show", f"{merge_base}:{affected_narrow.HARNESS_YAML}"),
                      _git(repo_root, "show", f"{head}:{affected_narrow.HARNESS_YAML}") if head
                      else (repo_root / affected_narrow.HARNESS_YAML).read_text(encoding="utf-8"))
-        sel = select(repo, changed, moves(repo_root, base, head), texts)
+        sel = select(repo, changed, moves(repo_root, base, head), texts, base_text)
     except SelectionError as exc:
         sel = Selection(mode="full", changed=[], escalations=[f"cannot diff against {base!r}: {exc}"])
         sel.reasons = {p: ["full tier (D-436 2)"] for p in _full_paths(repo)}
