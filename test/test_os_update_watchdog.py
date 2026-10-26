@@ -104,6 +104,12 @@ def test_watchdog_boot_config_preserves_overlays_and_ends_in_unconditional_hando
     assert module.render_boot_config(rendered.encode()) == rendered
 
 
+def test_rendered_watchdog_configuration_also_fits_the_runtime_read_limit():
+    module = importlib.import_module("os_update_watchdog")
+    with pytest.raises(ValueError):
+        module.render_boot_config(b"x" * 65520)
+
+
 @pytest.mark.parametrize("protocol", [1, 2])
 def test_image_installs_watchdog_and_stops_active_root_apt_only_for_protocol2(tmp_path, monkeypatch, protocol):
     from test_os_factory_release import _device, FACTORY_ID
@@ -135,3 +141,48 @@ def test_image_installs_watchdog_and_stops_active_root_apt_only_for_protocol2(tm
         else: assert not (root / destination).exists()
         with pytest.raises(ValueError, match="IMAGE_LAYER_DESTINATION"):
             sync_mod.check_destination(destination)
+
+
+def test_no_apt_condition_is_evaluated_by_actual_systemd_without_starting_a_service(tmp_path):
+    import shutil
+    analyze = shutil.which("systemd-analyze")
+    assert analyze
+    slot = tmp_path / "os-slot.json"
+    condition = "ConditionPathExists=!" + str(slot)
+    for exists in (False, True):
+        if exists: slot.write_text("{}")
+        result = subprocess.run([analyze, "condition", condition], capture_output=True, text=True, timeout=30)
+        assert result.returncode == (1 if exists else 0), result.stderr
+
+
+def test_frozen_watchdog_admission_executes_with_poisoned_application_sdk(tmp_path, monkeypatch):
+    import sys
+    from test_os_frozen_firstboot import _prefix, _stage
+    _, root, properties, logs, _, _ = _watchdog(tmp_path / "device", monkeypatch)
+    prefix = _prefix(tmp_path / "installed")
+    _stage(prefix)
+    for folder in (prefix / "native-runtime", prefix / "deploy/sd"):
+        for path in folder.glob("*.py"):
+            path.write_text("raise RuntimeError('mutable SDK imported')\n")
+    code = """
+import json,sys,subprocess
+from pathlib import Path
+frozen=Path(sys.argv[1])/'os-bootstrap/native-runtime'
+sys.path[:0]=[str(frozen),str(Path(sys.argv[1])/'native-runtime')]
+import os_update_watchdog
+data=json.loads(sys.stdin.read())
+def run(argv,**kwargs):
+    if argv[0]=='/usr/bin/systemctl':
+        output='\\n'.join(k+'='+v for k,v in data['properties'].items())
+    else:
+        assert argv[0]=='/usr/bin/journalctl'
+        output='\\n'.join(json.dumps(row) for row in data['logs'])
+    return subprocess.CompletedProcess(argv,0,output,'')
+result=os_update_watchdog.admit(Path(sys.argv[2]),run=run)
+assert result['boot_id']==sys.argv[3]
+for name in ('os_update_watchdog','os_bootloader','os_state_layout'):
+    assert Path(sys.modules[name].__file__).is_relative_to(frozen)
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(prefix), str(root), SOURCE_BOOT],
+        input=json.dumps(dict(properties=properties, logs=logs)), capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
