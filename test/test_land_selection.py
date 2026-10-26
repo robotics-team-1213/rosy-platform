@@ -82,7 +82,7 @@ def test_failed_selector_raises_callers_stop(caller, tmp_path):
     selection = load_selection()
     land, _, _ = caller
     land.subprocess.run = lambda *a, **k: SimpleNamespace(returncode=7, stdout="out", stderr="error")
-    with pytest.raises(land.Stop, match="affected selector failed \(exit 7\)") as exc:
+    with pytest.raises(land.Stop, match=r"affected selector failed \(exit 7\)") as exc:
         selection.select(land, tmp_path, "base", "python")
     assert type(exc.value) is land.Stop
     assert str(exc.value).endswith("outerror")
