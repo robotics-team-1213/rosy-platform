@@ -23,6 +23,7 @@ Disabled-by-default profile validation plus optional ROS action and camera adapt
 | Directory | Purpose |
 |-----------|---------|
 | `pilot_sim/` | SIM-only Pilot owner, own D-766 size unit (see `pilot_sim/AGENTS.md`) |
+| `real/` | Existing D-858 bus, gates, commissioning and stop-test implementation; separate D-766 size unit |
 
 ## For AI Agents
 
