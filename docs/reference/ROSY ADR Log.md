@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-891 | Fleet 인식 모델 승격 대기열 — 올린 D-874 묶음을 다시 검사하고 결정만 기록한다 | Proposed (2026-10-26) |
 | D-887 | Signed site service sets and identity-bound retirement | Accepted (2026-10-26) |
 | D-890 | Navigation intent epoch preservation | Accepted (2026-10-26) |
 | D-886 | 워크트리 도구 차단값을 15개 예산과 맞추고, 착지한 브랜치를 prune이 지운다 | Accepted (2026-10-26) |
