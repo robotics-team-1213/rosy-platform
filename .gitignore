@@ -105,6 +105,8 @@ data/calibration/
 # (env.sh) is tracked explicitly; new throwaway
 # scripts belong in tools/ or outside the repo.
 /*.py
+# Root conftest: report-only sys.path inserters at collection (tools/land_isolation.py).
+!/conftest.py
 
 
 # Agent and tool state, per-machine (.omc/skills is committable)
