@@ -149,34 +149,37 @@ class PhysicalTransferStore:
             return self._read(connection, row[0]) if row is not None else None
 
     def create(self, *, principal, request_key, request):
+        with closing(self._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            result = self._create(connection, principal=principal, request_key=request_key, request=request)
+            connection.commit()
+            return result
+
+    def _create(self, connection, *, principal, request_key, request):
         actor = _principal(principal, propose=True)
         if actor == self.installation.policy.producer_id:
             raise PermissionError("physical observer cannot propose an operation")
         key = _nonempty("request_key", request_key, limit=160)
         request = PhysicalTransferRequest.model_validate(request)
         digest = sha256(_json(request.model_dump(mode="json")).encode()).hexdigest()
-        with closing(self._journal._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            prior = connection.execute("SELECT mission_id,request_digest FROM fleet_cell_jobs "
-                "WHERE provenance_kind='physical' AND proposal_principal_id=? AND request_key=?", (actor, key)).fetchone()
-            if prior is not None:
-                if prior["request_digest"] != digest:
-                    raise MissionConflict("physical request key was reused with a different request")
-                return self._read(connection, prior["mission_id"])
-            installed, policy = self.installation, self.installation.policy
-            if not _matches(request, installed):
-                raise MissionConflict("physical references are not in the installed transfer profile")
-            mission_id = "physical-" + uuid4().hex
-            timestamp = datetime.fromtimestamp(self._now_ns() / 1e9, timezone.utc).isoformat()
-            connection.execute("""INSERT INTO fleet_cell_jobs(mission_id,proposal_principal_id,request_key,request_digest,
-                workcell_id,instance_id,job_json,resources_json,ledger_markers_json,status,created_at,updated_at,provenance_kind)
-                VALUES(?,?,?,?,?,?,?,?,'[]','PROPOSED',?,?,'physical')""",
-                (mission_id, actor, key, digest, request.workcell_id, request.instance_id, self._document(request),
-                 _json(policy.resources), timestamp, timestamp))
-            self._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_PROPOSED", actor, {"request_digest": digest})
-            result = self._read(connection, mission_id)
-            connection.commit()
-            return result
+        prior = connection.execute("SELECT mission_id,request_digest FROM fleet_cell_jobs "
+            "WHERE provenance_kind='physical' AND proposal_principal_id=? AND request_key=?", (actor, key)).fetchone()
+        if prior is not None:
+            if prior["request_digest"] != digest:
+                raise MissionConflict("physical request key was reused with a different request")
+            return self._read(connection, prior["mission_id"])
+        installed, policy = self.installation, self.installation.policy
+        if not _matches(request, installed):
+            raise MissionConflict("physical references are not in the installed transfer profile")
+        mission_id = "physical-" + uuid4().hex
+        timestamp = datetime.fromtimestamp(self._now_ns() / 1e9, timezone.utc).isoformat()
+        connection.execute("""INSERT INTO fleet_cell_jobs(mission_id,proposal_principal_id,request_key,request_digest,
+            workcell_id,instance_id,job_json,resources_json,ledger_markers_json,status,created_at,updated_at,provenance_kind)
+            VALUES(?,?,?,?,?,?,?,?,'[]','PROPOSED',?,?,'physical')""",
+            (mission_id, actor, key, digest, request.workcell_id, request.instance_id, self._document(request),
+             _json(policy.resources), timestamp, timestamp))
+        self._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_PROPOSED", actor, {"request_digest": digest})
+        return self._read(connection, mission_id)
 
     def _check_capabilities(self, capabilities, observed_at_ns, now_ns):
         if (type(observed_at_ns) is not int or observed_at_ns < 0 or observed_at_ns > now_ns
@@ -192,55 +195,61 @@ class PhysicalTransferStore:
 
     def admit(self, mission_id, *, principal, expected_proposal_digest, expected_generation,
               capabilities, capabilities_observed_at_ns):
+        with closing(self._journal._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            result = self._admit(connection, mission_id, principal=principal,
+                expected_proposal_digest=expected_proposal_digest, expected_generation=expected_generation,
+                capabilities=capabilities, capabilities_observed_at_ns=capabilities_observed_at_ns)
+            connection.commit()
+            return result
+
+    def _admit(self, connection, mission_id, *, principal, expected_proposal_digest, expected_generation,
+               capabilities, capabilities_observed_at_ns):
         actor = _principal(principal, operator=True)
         if actor == self.installation.policy.producer_id:
             raise PermissionError("physical observer cannot approve an operation")
         if (not isinstance(expected_proposal_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_proposal_digest)
                 or type(expected_generation) is not int or expected_generation < 0):
             raise ValueError("exact proposal digest and dispatch generation are required")
-        with closing(self._journal._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='physical'",
-                                     (mission_id,)).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            if actor == row["proposal_principal_id"]:
-                raise PermissionError("physical proposer cannot approve its own operation")
-            result = self._read(connection, mission_id)
-            request = PhysicalTransferRequest.model_validate(result["request"])
-            if (result["proposal_digest"] != expected_proposal_digest or row["job_json"] != self._document(request)
-                    or row["resources_json"] != _json(self.installation.policy.resources)):
-                raise MissionConflict("physical proposal or installed snapshot changed")
-            control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
-            if control is None or not control["dispatch_enabled"] or control["generation"] != expected_generation:
-                raise MissionConflict("physical dispatch generation is closed or changed")
-            checked_at = self._now_ns()
-            self._check_capabilities(capabilities, capabilities_observed_at_ns, checked_at)
-            if row["status"] == "READY" and result["approved_by"] == actor:
-                owned = connection.execute("SELECT resource_key,generation,phase FROM fleet_action_claims "
-                    "WHERE owner_kind='mission' AND owner_id=?", (mission_id,)).fetchall()
-                expected = {key for _, _, key in normalize_resources(self.installation.policy.resources)}
-                if (row["authority_epoch"] == control["authority_epoch"] and row["dispatch_generation"] == expected_generation
-                        and {c["resource_key"] for c in owned} == expected
-                        and all(c["generation"] == expected_generation and c["phase"] == "CLAIMED" for c in owned)):
-                    return result
-            if row["status"] != "PROPOSED":
-                raise MissionConflict("physical operation was already admitted or held")
-            if not reserve(connection, owner_kind="mission", owner_id=mission_id, generation=expected_generation,
-                           resources=self.installation.policy.resources, phase="CLAIMED"):
-                raise MissionConflict("physical resource claim conflicts with another operation")
-            boundary = self._now_ns()  # Capture after reservation; preconditions must be observed later.
-            if boundary < checked_at:
-                raise MissionConflict("server clock moved backwards during physical reservation")
-            self._check_capabilities(capabilities, capabilities_observed_at_ns, boundary)
-            connection.execute("INSERT INTO fleet_physical_transfer_approvals VALUES(?,?,?,?,?,?,?)",
-                (mission_id, expected_proposal_digest, actor, boundary, boundary, control["authority_epoch"], expected_generation))
-            connection.execute("UPDATE fleet_cell_jobs SET status='READY',authority_epoch=?,dispatch_generation=?,updated_at=? "
-                               "WHERE mission_id=?", (control["authority_epoch"], expected_generation,
-                               datetime.fromtimestamp(boundary / 1e9, timezone.utc).isoformat(), mission_id))
-            self._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_ADMITTED", actor,
-                {"proposal_digest": expected_proposal_digest, "authority_epoch": control["authority_epoch"],
-                 "dispatch_generation": expected_generation, "claims_acquired_at_ns": boundary})
-            result = self._read(connection, mission_id)
-            connection.commit()
-            return result
+        row = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=? AND provenance_kind='physical'",
+                                 (mission_id,)).fetchone()
+        if row is None:
+            raise KeyError(mission_id)
+        if actor == row["proposal_principal_id"]:
+            raise PermissionError("physical proposer cannot approve its own operation")
+        result = self._read(connection, mission_id)
+        request = PhysicalTransferRequest.model_validate(result["request"])
+        if (result["proposal_digest"] != expected_proposal_digest or row["job_json"] != self._document(request)
+                or row["resources_json"] != _json(self.installation.policy.resources)):
+            raise MissionConflict("physical proposal or installed snapshot changed")
+        control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+        if control is None or not control["dispatch_enabled"] or control["generation"] != expected_generation:
+            raise MissionConflict("physical dispatch generation is closed or changed")
+        checked_at = self._now_ns()
+        self._check_capabilities(capabilities, capabilities_observed_at_ns, checked_at)
+        if row["status"] == "READY" and result["approved_by"] == actor:
+            owned = connection.execute("SELECT resource_key,generation,phase FROM fleet_action_claims "
+                "WHERE owner_kind='mission' AND owner_id=?", (mission_id,)).fetchall()
+            expected = {key for _, _, key in normalize_resources(self.installation.policy.resources)}
+            if (row["authority_epoch"] == control["authority_epoch"] and row["dispatch_generation"] == expected_generation
+                    and {c["resource_key"] for c in owned} == expected
+                    and all(c["generation"] == expected_generation and c["phase"] == "CLAIMED" for c in owned)):
+                return result
+        if row["status"] != "PROPOSED":
+            raise MissionConflict("physical operation was already admitted or held")
+        if not reserve(connection, owner_kind="mission", owner_id=mission_id, generation=expected_generation,
+                       resources=self.installation.policy.resources, phase="CLAIMED"):
+            raise MissionConflict("physical resource claim conflicts with another operation")
+        boundary = self._now_ns()  # Capture after reservation; preconditions must be observed later.
+        if boundary < checked_at:
+            raise MissionConflict("server clock moved backwards during physical reservation")
+        self._check_capabilities(capabilities, capabilities_observed_at_ns, boundary)
+        connection.execute("INSERT INTO fleet_physical_transfer_approvals VALUES(?,?,?,?,?,?,?)",
+            (mission_id, expected_proposal_digest, actor, boundary, boundary, control["authority_epoch"], expected_generation))
+        connection.execute("UPDATE fleet_cell_jobs SET status='READY',authority_epoch=?,dispatch_generation=?,updated_at=? "
+                           "WHERE mission_id=?", (control["authority_epoch"], expected_generation,
+                           datetime.fromtimestamp(boundary / 1e9, timezone.utc).isoformat(), mission_id))
+        self._journal._event(connection, mission_id, None, "PHYSICAL_TRANSFER_ADMITTED", actor,
+            {"proposal_digest": expected_proposal_digest, "authority_epoch": control["authority_epoch"],
+             "dispatch_generation": expected_generation, "claims_acquired_at_ns": boundary})
+        return self._read(connection, mission_id)
