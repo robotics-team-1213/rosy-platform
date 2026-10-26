@@ -12065,3 +12065,11 @@ osy-d395-s1d\`.
 - 증거: 원격 대상 시험 52 passed, NEW 0.
 - gate 변화: 강화(스트림 초과 분기 시험).
 - CE: 해당 없음 — 시험 보강이다.
+
+## 2026-10-26 · 7e85b28a8e · fix(remote): 원격 잡 명령을 stdin으로 보낸다
+
+- 변경: `remote_job.ssh_call`이 `bash -s`를 실행하고 명령을 stdin으로 보낸다. `remote_pytest.remote`는 `remote_job.argv_command`를 거쳐 8,000바이트(`ARGV_MAX`)를 넘는 명령을 거부한다. 회귀 시험 2개(`test/test_remote_pytest.py`).
+- 이유: 노트북의 Git for Windows `ssh.exe`는 Python에서 띄우면 원격 명령을 약 8,190바이트에서 오류 없이 자른다. FULL 착지의 수집 게이트 잡 단어(경로 115개, 5 KB)와 잡 본문(4 KB)이 이를 넘어 `tools/collect_alone.py` 이하 인자가 사라졌고, pytest가 트리 전체를 한 프로세스로 수집해(37684 items / import file mismatch 11) 문서만 바꾼 착지를 NEW 11로 멈췄다. 게이트 로직 자체는 정상이다.
+- 증거: 수정 전 main 433bc0d8a0에서 같은 115경로 호출 재현(37684 items / 11 errors), `test` 항목을 뺀 114경로도 재현, `ROSY_COLLECT_PATHS=test`만은 660 passed, 정상 2경로+5,200바이트 더미 단어도 재현. Python에서 Git ssh.exe로 8,150 x는 그대로, 8,200·12,000 x는 8,176에서 잘림(Windows OpenSSH는 모두 그대로). 수정 뒤 결과는 아래 검증 줄.
+- gate 변화: 복구. 수집 게이트와 단독 실행(`ROSY_ALONE_FILES`)이 긴 목록에서도 제 인자를 받는다.
+- CE: 새 교훈 — `docs/solutions/workflow-issues/windows-ssh-exe-cuts-long-remote-command-2026-10-26.md`.
