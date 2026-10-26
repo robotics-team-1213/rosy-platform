@@ -141,7 +141,8 @@ def test_unproven_source_or_clearance_never_releases_parent_claims(failed_transf
     assert snapshot(failed_transfer[0]) == before
 
 
-@pytest.mark.parametrize("kind", ["self-approval", "other-proposer", "receipt", "digest", "fence", "claim"])
+@pytest.mark.parametrize("kind", ["self-approval", "other-proposer", "receipt", "digest", "fence", "epoch",
+                                 "capabilities", "claim"])
 def test_permission_binding_and_current_claims_are_required(failed_transfer, kind):
     args = arguments(failed_transfer)
     if kind == "self-approval":
@@ -155,6 +156,12 @@ def test_permission_binding_and_current_claims_are_required(failed_transfer, kin
     elif kind == "fence":
         with connect(failed_transfer[0]) as connection:
             connection.execute("UPDATE fleet_dispatch_control SET generation=generation+1")
+    elif kind == "epoch":
+        with connect(failed_transfer[0]) as connection:
+            connection.execute("UPDATE fleet_dispatch_control SET authority_epoch=authority_epoch+1")
+    elif kind == "capabilities":
+        args["capabilities"] = tuple(cap.model_copy(update={"owner_session_id": "another-session"})
+                                     for cap in args["capabilities"])
     else:
         with connect(failed_transfer[0]) as connection:
             connection.execute("DELETE FROM fleet_action_claims WHERE resource_key=(SELECT resource_key FROM fleet_action_claims LIMIT 1)")
