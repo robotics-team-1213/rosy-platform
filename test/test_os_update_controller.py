@@ -39,7 +39,8 @@ def _source(tmp_path, monkeypatch):
         calls.append(argv)
         output = ""
         if "show" in argv:
-            output = "ActiveState=inactive\nMainPID=0\nControlGroup=\n"
+            values = dict(ActiveState="inactive", MainPID="0", ControlGroup="")
+            output = values[argv[argv.index("-p") + 1]] if "--value" in argv else "\n".join(k + "=" + v for k, v in values.items())
         return subprocess.CompletedProcess(argv, 0, output, "")
     def source_health(r, txn, *, host, run):
         m.authorize(r, txn, host=host)
@@ -124,3 +125,76 @@ def test_fake_root_cannot_invoke_live_lifecycle_commands(tmp_path):
     m = importlib.import_module("os_update_controller")
     with pytest.raises(ValueError, match="explicit test runner"): m.resume(tmp_path)
     with pytest.raises(ValueError, match="explicit test runner"): m.start(tmp_path, tmp_path / "bundle", b"raw", "sig")
+
+
+@pytest.mark.parametrize("fresh_boot", [False, True])
+def test_source_resume_records_failure_without_rearming_or_trusting_a_client_receipt(tmp_path, monkeypatch, fresh_boot):
+    m, state, _, root, _, config, host, calls, run, bundle, _ = _source(tmp_path, monkeypatch)
+    if fresh_boot:
+        m.start(root, bundle, b"metadata", "sig", host=host, run=run)
+        (root / "proc/sys/kernel/random/boot_id").write_text("44444444-4444-4444-8444-444444444444")
+    else:
+        def fail(*a, **k): raise ValueError("modeled lost RAUC client result")
+        monkeypatch.setattr(m, "rauc_install", fail)
+        with pytest.raises(ValueError): m.start(root, bundle, b"metadata", "sig", host=host, run=run)
+    calls.clear()
+    before = config.read_bytes()
+    result = m.resume(root, host=host, run=run)
+    assert result["pending"] is None and result["failed_versions"]
+    assert result == state.read_state(root) and config.read_bytes() == before
+    assert not any("reboot" in argv for argv in calls)
+
+
+def test_published_intent_error_preserves_good_ack_for_the_next_resume(tmp_path, monkeypatch):
+    from test_os_update_health import _health
+    _, state, root, _, host, calls, run, _, _, _ = _health(tmp_path, monkeypatch)
+    m = importlib.import_module("os_update_controller")
+    owner = m.commit_owner
+    monkeypatch.setattr(owner, "capture", lambda r: dict(slot="b", layout=json.loads((r / "etc/rosy/os-media.json").read_text())))
+    write = owner._write_atomic
+    def uncertain(path, data, mode):
+        write(path, data, mode)
+        if path.name == "autoboot.txt": raise OSError("modeled uncertain parent fsync")
+    monkeypatch.setattr(owner, "_write_atomic", uncertain)
+    with pytest.raises(ValueError): m.resume(root, host=host, run=run)
+    assert state.read_state(root)["pending"]["phase"] == "COMMIT_INTENT"
+    from os_bootloader import ACK
+    assert json.loads((root / ACK).read_text())["state"] == "good"
+    assert not any("reboot" in argv for argv in calls)
+    monkeypatch.setattr(owner, "_write_atomic", write)
+    assert m.resume(root, host=host, run=run)["committed"]["slot"] == "b"
+
+
+def test_source_health_checks_real_signed_runtime_without_starting_or_restarting_services(tmp_path, monkeypatch):
+    m = importlib.import_module("os_update_controller")
+    observe = m.source_health
+    _, _, _, root, _, _, host, _, _, _, _ = _source(tmp_path, monkeypatch)
+    from test_factory_release_signature import _keys, FACTORY_ID
+    from test_os_factory_release import _factory
+    private, public = _keys(tmp_path / "offline", "fixture")
+    release, _ = _factory(root, FACTORY_ID, private, public, signed=True)
+    (root / "opt/rosy/current").symlink_to("releases/" + FACTORY_ID)
+    schema = root / "var/lib/rosy-device/state/schema.json"
+    schema.parent.mkdir(parents=True)
+    schema.write_text('{"schema_version":1,"state_schema":1}')
+    guard = root / "etc/systemd/system/rosy-io.service.d/zz-rosy-os-guard.conf"
+    guard.parent.mkdir(parents=True)
+    native = m.Path(m.__file__).parent
+    guard.write_bytes((native / "rosy-os-io-guard.conf").read_bytes())
+    (root / "etc/systemd/system/rosy-io.service").write_bytes((release / "deploy/robot/native/rosy-io.service").read_bytes())
+    host.current_release = lambda: FACTORY_ID
+    host.process_cwd = lambda pid: str(release)
+    monkeypatch.setattr(m.health, "verify_ready", lambda r: dict(boot_id=SOURCE_BOOT, slot="a"))
+    monkeypatch.setattr(m.health, "_probe", lambda: None)
+    commands = []
+    def run(argv, **kwargs):
+        commands.append(argv)
+        data = dict(ActiveState="active", SubState="running", MainPID="123", InvocationID="a" * 32, Result="success",
+                    EnvironmentFiles=m.health.IO_ENVIRONMENT_FILES,
+                    DropInPaths="/etc/systemd/system/rosy-io.service.d/zz-rosy-os-guard.conf")
+        return subprocess.CompletedProcess(argv, 0, "\n".join(k + "=" + v for k, v in data.items()), "")
+    m._claim(root, TRANSACTION, host)
+    assert observe(root, TRANSACTION, host=host, run=run) == FACTORY_ID
+    assert all("show" in command for command in commands)
+    (release / "SHA256SUMS.sig").write_text("invalid signature")
+    with pytest.raises(ValueError): observe(root, TRANSACTION, host=host, run=run)
