@@ -54,6 +54,7 @@ def prepare_card(work: Path) -> dict:
     ab, assembler = layout_module(), assembler_module()
     from os_state_layout import COMMON, SHARED_BINDINGS
     from os_state_accounts import ACCOUNT_IDS
+    from os_ssh_hostkeys import FILES as HOST_KEY_FILES, _keys as validate_host_keys
     from os_bootloader import autoboot
     layout, start = ab.plan(), 2048
     for part, mib in zip(layout["partitions"], (64, 64, 64, 4096, 4096, 3072)):
@@ -77,6 +78,14 @@ def prepare_card(work: Path) -> dict:
             resources.mount(device, target, filesystem="vfat" if part["number"] <= 3 else "ext4")
             volumes[part["role"]] = target
         ab.initialize_data(volumes["data"], str(uuid.uuid4()), CURRENT)
+        # Pin the owned guest's existing SSH identity before storage projects the common pair.
+        host_keys = volumes["data"] / "ssh-hostkeys"
+        host_keys.mkdir(mode=0o700)
+        for name, mode in HOST_KEY_FILES.items():
+            path = host_keys / name
+            path.write_bytes((Path("/etc/ssh") / name).read_bytes())
+            path.chmod(mode)
+        validate_host_keys(host_keys, 0)
         for slot in ("a", "b"):
             root, boot = volumes["root_" + slot], volumes["boot_" + slot]
             # Only a disposable guest is cloned; packages, native payload and firmware remain test fixtures.
