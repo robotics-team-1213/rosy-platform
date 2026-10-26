@@ -19,6 +19,7 @@ SCRIPT = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT))
 import ab_image_layout as ab
 from os_state_layout import COMMON, SHARED_BINDINGS
+from os_bootloader import autoboot
 
 
 def _run(command: list[str], *, timeout=180, **kwargs):
@@ -184,7 +185,7 @@ def assemble(source: Path, output: Path, work: Path, release_id: str) -> dict:
             free = os.statvfs(root)
             capacity["roots"][slot] = ab.capacity_report(free.f_bavail * free.f_frsize, payload_bytes)
         ab._write_atomic(volumes["bootstrap"] / "autoboot.txt",
-            "[all]\ntryboot_a_b=1\nboot_partition=2\n[tryboot]\nboot_partition=3\n", 0o644)
+            autoboot("a").decode("ascii"), 0o644)
         ab._write_atomic(volumes["bootstrap"] / "config.txt", "# ROSY Pinky Pi 5 A/B bootstrap\n", 0o644)
         resources.unmount_all()
         for number in range(1, 7):

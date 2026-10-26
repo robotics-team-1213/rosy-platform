@@ -11,8 +11,7 @@ import sys
 import time
 
 from os_state_io import _json_atomic
-from os_state_layout import COMMON, _guid, _layout, _object, _pairs, _path, _read
-from os_update_manifest import _digest
+from os_state_layout import COMMON, _digest, _guid, _layout, _object, _pairs, _path, _read
 
 BOOTSTRAP = "run/rosy-provision-boot/autoboot.txt"
 RAUC_STATE = COMMON + "/os-update/rauc"
