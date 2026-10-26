@@ -47,3 +47,9 @@
 - 변경: 공식 Caddy 시험 도구의 크기·SHA256을 고정하고 실제 배포 예시의 UI/API 경로를 임시 loopback TLS 서버로 검증한다. 신뢰 저장소·실제 서비스는 변경하지 않으며 프로세스는 시험 종료 시 회수한다. 응답 지연 fixture는 명시적인 키가 설정된 경우에만 동작하게 고쳤다.
 - 증거: TLS flag·browser flag를 켠 원격18 PASS/0 SKIP(native proxy1·unit1·Chromium16), 비교 NEW/KNOWN/FLAKY0. 인증401·scope403·CA 검증·미신뢰 인증서의 CERTIFICATE_VERIFY_FAILED·canonical UI 자산과 API 전달·backend 중단502를 확인했다. 최초6eaf164261의 비인증 응답 지연 RED를 보존했다. 읽기 전용 검토 차단 없음.
 - gate 변화: SOURCE/LOCAL GO, ARTIFACT/DEVICE/FIELD HOLD. 대상 PC·운영 담당자가 지정되지 않아 실제 배포 경로·계정·권한·LAN/TLS는 확인하지 않았다. CE 해당 없음 — fixture 조건과 검증 범위는 코드·회귀·배포 안내에 직접 남는다.
+
+## 2026-10-26 · 50ea4a90f2 · native 시험의 설치 scheme 적용
+
+- 변경: CI가 시스템 Python에 wheel을 설치하는 경로와 실험실 venv 경로를 함께 따르도록 sysconfig의 scripts 경로에서 실행 파일을 찾는다. 파일 존재·실행 권한·실제 systemd 파서 검사는 유지한다.
+- 증거: 원격 native unit1 PASS/0 SKIP, NEW/KNOWN/FLAKY0. 기존 c22e9bc8b3의 TLS·unit·Chromium18 PASS/0 SKIP 근거와 함께 적용한다. CI의 실제 시스템 설치 단계는 .github/workflows/ci.yml에 있다.
+- gate 변화: 없음. 실제 배포 대상 지정·권한·LAN/TLS 수용은 별도다. CE 해당 없음 — 표준 설치 scheme과 기존 CI 설정이 이유를 직접 설명한다.

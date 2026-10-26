@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 50ea4a90f2 · native 시험의 설치 scheme 적용
 - 2026-10-26 · c22e9bc8b3 · 격리 native HTTPS 경로 수용
 - 2026-10-26 · 96f995a996 · native unit 파서 검증
 - 2026-10-26 · 7a699b1e25 · 독립 native 배포 입력과 canonical UI 묶음
 - 2026-10-26 · 42404e6d6c · 독립 상태 화면과 실제 근거 검증
-- 2026-10-26 · uncommitted · 독립 앱 경계와 실제 backend 브라우저 경로 등록
