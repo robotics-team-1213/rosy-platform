@@ -31,7 +31,7 @@ def collect(home=None):
             raise ValueError('selected workcell must be unique')
         arms = [arm['arm_id'] for arm in matches[0]['arms']]
         if (not 1 <= len(arms) <= 8 or len(set(arms)) != len(arms)
-                or any(not isinstance(arm, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]*', arm) for arm in arms)):
+                or any(not isinstance(arm, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]{0,63}', arm) for arm in arms)):
             raise ValueError('invalid selected arm identities')
         selected = {}
         for arm in arms:

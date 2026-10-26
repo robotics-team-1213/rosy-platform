@@ -124,7 +124,10 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
         kind, _, rest = raw.partition(' ')
         if kind == 'topology':
             try:
-                host['topology'] = json.loads(rest)
+                report = json.loads(rest)
+                if not isinstance(report, dict):
+                    raise ValueError('invalid topology report')
+                host['topology'] = report
             except ValueError:
                 host['topology'] = {'error': 'invalid workcell selection report'}
         elif kind == 'gate':
@@ -268,7 +271,7 @@ def audit(declared: dict, host: dict, digest) -> list:
         instances = entry.get('instances', [])
         if entry.get('instances_from') == 'workcell-arms':
             selected = host.get('topology', {}).get('arms')
-            if not selected or host.get('topology', {}).get('error'):
+            if not isinstance(selected, dict) or not selected or host.get('topology', {}).get('error'):
                 findings.append(('CONFIGURATION', name, 'selected workcell arm configuration unavailable'))
                 selected = {}
             instances = list(selected)

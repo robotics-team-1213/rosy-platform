@@ -22,11 +22,11 @@ def selection(tmp_path, arms):
 
 
 def test_only_selected_arms_are_collected_even_when_other_arm_configs_exist(tmp_path):
-    config = selection(tmp_path, ['first', 'second', 'third'])
-    for arm in ['first', 'second', 'third', 'not_selected']:
+    config = selection(tmp_path, ['_first', 'second', 'third'])
+    for arm in ['_first', 'second', 'third', 'not_selected']:
         (config / f'omx-observer-{arm}.env').write_text(f'ROSY_OBSERVER_DEVICE=/dev/serial/by-id/{arm}\n')
     found = collector().collect(tmp_path)
-    assert set(found['arms']) == {'first', 'second', 'third'}
+    assert set(found['arms']) == {'_first', 'second', 'third'}
     assert all(item == {'configured': True, 'connected': False} for item in found['arms'].values())
     assert 'never-report-this' not in str(found)
 
