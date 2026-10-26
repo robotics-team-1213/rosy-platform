@@ -1125,9 +1125,7 @@ def test_a_landing_prepared_before_its_turn_leaves_a_record_with_the_prepared_ti
     main, wt = repos
     start = git(main, "rev-parse", "HEAD")
     # its presence lets an affected tier prepare (land_prepare.prepare); the selection itself is faked
-    commit(wt, {"pkg/a.py": "x = 2
-", "tools/harness/affected_tests.py": "# stub
-"}, "branch")
+    commit(wt, {"pkg/a.py": "x = 2\n", "tools/harness/affected_tests.py": "# stub\n"}, "branch")
     note = "FULL tier (test)" if tier == "full" else None
     monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None if k.get("landed") else note))
     assert land.main(["--tests", "auto"]) == 0
