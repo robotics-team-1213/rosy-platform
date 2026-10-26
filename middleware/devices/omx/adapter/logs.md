@@ -789,3 +789,9 @@
 - 변경: Adapted neutral phase-runner imports to main's pick_place package. Moved the physical transfer DTO/profile implementation into the existing contracts holder with explicit compatibility exports; combined package size stays below D-766 without a new ratchet exception.
 - 증거: static syntax and measured size only. Remote legacy Cell/neutral owner regression and independent safety review remain required. No runtime or hardware activation.
 - gate 변화: None. No new runtime, device or field acceptance. CE: no new learning; the compatibility imports and measured size retain the integration reasoning.
+
+## 2026-10-27 · feat/omx-load-aware-motion · measured load-domain analysis
+
+- 변경: added strict device/group/configuration-bound JSON characteristics with atomic storage, complete quintic-segment candidate evaluation against certified load domains, and passive source-time tracking/oscillation analysis through `python -m omx_adapter.load_motion_cli`. Existing native-owner health now supplies measured error/torque fields through its existing bus. No controller, public endpoint or automatic recovery was enabled; command binding remains caller-supplied and unverified.
+- 증거: contract+assessment56 passed at `793ad81bf2`; producer+feature110 passed remotely at `1e6e71dfca`. Independent review reproduced and corrected producer coverage, frozen-source cadence and multi-group sample reuse; final affected regression for the last correction is pending. Synthetic tests do not establish device load/cadence/stop acceptance.
+- gate 변화: no runtime, ROS-SIM, DEVICE or FIELD advancement. CE: no new durable lesson; contract, focused regressions and `docs/load-aware-motion.md` retain the reasoning.
