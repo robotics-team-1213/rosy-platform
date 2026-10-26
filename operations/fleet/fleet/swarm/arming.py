@@ -16,8 +16,10 @@ reform 이 멀쩡히 달리던 대형을 세운 채로 남긴다(계획 실패�
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Optional
+
+from fleet.swarm.api.types import (FormationSpec, SessionError, ArmingFailed, MapMismatch, InvalidFormation)
+from fleet.swarm.session_arming import check_leader_ready
 
 from core_common.protocol.schemas import RobotMode
 from fleet.formation.assignment import AssignmentError, SlotAssigner
@@ -31,49 +33,8 @@ from fleet.formation.geometry import (
 )
 
 
-@dataclass
-class FormationSpec:
-    formation: Formation
-    spacing: float = DEFAULT_SPACING
-    grid_cols: int = 2
-    max_speed: float = 0.15
-    stream_timeout_ms: int = 1000
-
-
-class SessionError(Exception):
-    pass
-
-
-class ArmingFailed(SessionError):
-    def __init__(self, robot_id: str, code: str, message: str = "") -> None:
-        super().__init__(f"{robot_id} refused follow: {code} {message}".strip())
-        self.robot_id = robot_id
-        self.code = code
-
-
-class MapMismatch(SessionError):
-    def __init__(self, map_ids: dict[str, Optional[str]]) -> None:
-        super().__init__(f"robots are not on one map: {map_ids}")
-        self.map_ids = map_ids
-
-
-class InvalidFormation(SessionError):
-    """대형을 만들 수 없는 spec. `FormationError`/`AssignmentError` 의 세션 쪽 얼굴."""
-
-
 def _leader_key(leader_state: dict, leader_id: Optional[str]) -> str:
     return leader_id or str(leader_state.get("robot_id") or "leader")
-
-
-def check_leader_ready(leader_state: dict, leader_id: Optional[str] = None) -> None:
-    """리더가 무장을 받을 상태인가. 팔로워를 한 대도 묶기 전에 본다.
-
-    팔로워를 리더에 묶는 것이 무장이다. 선 리더에 묶으면 e-stop 이 풀리는 순간
-    전원이 그 프레임을 따라간다.
-    """
-    if leader_state.get("mode") == RobotMode.EMERGENCY.value:
-        raise ArmingFailed(_leader_key(leader_state, leader_id), "EMERGENCY_ACTIVE",
-                           "leader is in e-stop")
 
 
 def plan_assignment(leader_state: dict, follower_states: dict[str, dict],

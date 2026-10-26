@@ -352,6 +352,6 @@
 
 - 2026-10-26 · d4a0e5b968 · D-887 source migration verified
 - 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
-- 2026-10-26 · 96f9bd977d · tools/release/deploy.py가 deploy 패키지를 가려 main이 빨갛던 것을 고친다
-- 2026-10-26 · uncommitted · docs(solutions): copied or declared artifacts drift silently and disable gates
-- 2026-10-26 · a4a357a416 · update_status의 비교 기준 신선도와 robot CD 스냅숏 뒤처짐
+- 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
+- 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다
+- 2026-10-26 · uncommitted · fix(land): 지난번 실패한 시험 묶음을 먼저 돌린다
