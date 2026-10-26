@@ -90,7 +90,8 @@ def _capture(root: Path) -> dict:
     inactive = {devices[5 if slot == "a" else 4], devices[3 if slot == "a" else 2]}
     if any(row["device"] in inactive for table in (host, local) for rows in table.values() for row in rows):
         raise ValueError("inactive OS root or boot is already mounted")
-    raw = root / "proc/1/root/dev/block" / disk_device
+    # The fstat rdev binds this namespace's node; following PID1 root would require ptrace access.
+    raw = root / "dev/block" / disk_device
     with os.fdopen(os.open(raw, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC), "rb", buffering=0) as handle:
         info = os.fstat(handle.fileno())
         if not stat.S_ISBLK(info.st_mode) or f"{os.major(info.st_rdev)}:{os.minor(info.st_rdev)}" != disk_device:
