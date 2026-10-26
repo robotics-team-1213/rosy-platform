@@ -548,7 +548,8 @@ def land(args) -> int:
             landed = out(main_co, "rev-parse", "HEAD")
             if reusable and landed == candidate:
                 record = land_record.write(wt, candidate, main_sha, invocations,
-                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))])
+                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))],
+                                           "full" if note else "records" if delta and all(map(record_only, delta)) else "affected")
                 summary.append(f"land record for pre-push: {record}")
             count = out(wt, "rev-list", "--count", f"{start}..{landed}")
             print("\n".join(["== landed (not pushed)", *summary,
