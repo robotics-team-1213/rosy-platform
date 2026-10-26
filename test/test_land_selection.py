@@ -13,11 +13,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.fixture
-def selection(monkeypatch):
+def load_selection():
     path = ROOT / "tools/land_selection.py"
     assert path.is_file(), "selection must have a standalone owner outside the near-limit gateway"
-    monkeypatch.syspath_prepend(str(ROOT / "tools"))
     spec = importlib.util.spec_from_file_location("standalone_land_selection", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -49,7 +47,8 @@ def caller(tmp_path):
     return land, payload, calls
 
 
-def test_affected_selection_keeps_candidate_subprocess_and_env(selection, caller, tmp_path):
+def test_affected_selection_keeps_candidate_subprocess_and_env(caller, tmp_path):
+    selection = load_selection()
     land, _, calls = caller
     invocations, note = selection.select(land, tmp_path, "base", "python", head="candidate")
     assert invocations == [["selected/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]]
@@ -59,7 +58,8 @@ def test_affected_selection_keeps_candidate_subprocess_and_env(selection, caller
     assert calls[0][1]["env"] is land.ENV
 
 
-def test_full_selection_keeps_full_plan_and_reason(selection, caller, tmp_path):
+def test_full_selection_keeps_full_plan_and_reason(caller, tmp_path):
+    selection = load_selection()
     land, payload, _ = caller
     payload.update(mode="full", escalations=["safety", "foundation"])
     invocations, note = selection.select(land, tmp_path, "base", "python")
@@ -67,7 +67,8 @@ def test_full_selection_keeps_full_plan_and_reason(selection, caller, tmp_path):
     assert note == "selector escalated to FULL (safety; foundation): full tier on the lab PCs"
 
 
-def test_landed_harness_delta_keeps_local_selection(selection, caller, tmp_path):
+def test_landed_harness_delta_keeps_local_selection(caller, tmp_path):
+    selection = load_selection()
     land, payload, _ = caller
     payload.update(mode="full", escalations=["tools/harness/x.py" + land.HARNESS_TRIGGER])
     assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
@@ -77,7 +78,8 @@ def test_landed_harness_delta_keeps_local_selection(selection, caller, tmp_path)
         ["test"], ["module/test"]]
 
 
-def test_failed_selector_raises_callers_stop(selection, caller, tmp_path):
+def test_failed_selector_raises_callers_stop(caller, tmp_path):
+    selection = load_selection()
     land, _, _ = caller
     land.subprocess.run = lambda *a, **k: SimpleNamespace(returncode=7, stdout="out", stderr="error")
     with pytest.raises(land.Stop, match="affected selector failed \(exit 7\)") as exc:
@@ -87,7 +89,8 @@ def test_failed_selector_raises_callers_stop(selection, caller, tmp_path):
 
 
 @pytest.mark.parametrize("payload", ["{", "null", '{}', '{"mode":"full"}'])
-def test_unusable_selector_raises_callers_stop(selection, caller, tmp_path, payload):
+def test_unusable_selector_raises_callers_stop(caller, tmp_path, payload):
+    selection = load_selection()
     land, _, _ = caller
     land.subprocess.run = lambda *a, **k: SimpleNamespace(returncode=0, stdout=payload, stderr="")
     with pytest.raises(land.Stop, match="unusable JSON") as exc:
@@ -96,7 +99,8 @@ def test_unusable_selector_raises_callers_stop(selection, caller, tmp_path, payl
     assert exc.value.__cause__ is not None
 
 
-def test_fallback_preserves_callers_path_mapping_and_packing(selection, tmp_path):
+def test_fallback_preserves_callers_path_mapping_and_packing(tmp_path):
+    selection = load_selection()
     calls = []
     changed, targets = ["package/code.py"], ["package/test"]
     def lines(*args):
@@ -115,7 +119,8 @@ def test_fallback_preserves_callers_path_mapping_and_packing(selection, tmp_path
     assert calls == [(tmp_path, "diff", "--name-only", "base...candidate")]
 
 
-def test_browser_tier_preserves_target_pack_chunk_order(selection, tmp_path):
+def test_browser_tier_preserves_target_pack_chunk_order(tmp_path):
+    selection = load_selection()
     calls = []
     def lines(*args):
         calls.append(args)
@@ -139,7 +144,9 @@ def test_browser_tier_preserves_target_pack_chunk_order(selection, tmp_path):
     assert calls == [(tmp_path, "diff", "--name-only", "base...HEAD")]
 
 
-def test_legacy_gateway_delegates_with_same_module_and_signatures(selection, monkeypatch, tmp_path):
+def test_legacy_gateway_delegates_with_same_module_and_signatures(monkeypatch, tmp_path):
+    selection = load_selection()
+    monkeypatch.syspath_prepend(str(ROOT / "tools"))
     land = importlib.import_module("land")
     calls = []
     def choose(*args):
