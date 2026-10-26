@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
 - 2026-10-26 · 62173b9899 · 모터 관측 없음 사유를 한국어로
 - 2026-10-25 · uncommitted · D-876 API reference v1.318 표시 정렬
 - 2026-10-25 · uncommitted · 호스트 에이전트 중계 문구 표기 정렬
 - 2026-10-24 · c60d6046bb · network-only 호스트 작업 중계
-- 2026-10-24 · uncommitted · D-862 공통 reference 버전 pin 정렬
