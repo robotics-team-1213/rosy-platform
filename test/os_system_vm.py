@@ -113,6 +113,14 @@ def _port():
 
 
 class Guest:
+    binary = "qemu-system-x86_64"
+
+    def pins(self):
+        return json.loads(PINS.read_bytes())
+
+    def prepare_boot(self):
+        pass
+
     def __init__(self, directory):
         self.directory = Path(directory).absolute()
         info = self.directory.stat()
@@ -141,7 +149,7 @@ class Guest:
     def _prepare(self):
         if platform.machine() != "x86_64" or os.geteuid() == 0:
             raise ValueError("SYSTEM fixture requires an unprivileged native x86_64 Linux test host")
-        pins = json.loads(PINS.read_bytes())
+        pins = self.pins()
         self.root.mkdir(mode=0o700)
         for filename, size, sha in pins["debs"]:
             archive = self.directory / Path(filename).name
@@ -150,7 +158,7 @@ class Guest:
         self.env = dict(os.environ, LD_LIBRARY_PATH=":".join(str(self.root / p) for p in
             ("usr/lib/x86_64-linux-gnu", "lib/x86_64-linux-gnu")),
             QEMU_MODULE_DIR=str(self.root / "usr/lib/x86_64-linux-gnu/qemu"))
-        version = subprocess.run([str(self.root / "usr/bin/qemu-system-x86_64"), "--version"],
+        version = subprocess.run([str(self.root / "usr/bin" / self.binary), "--version"],
             env=self.env, capture_output=True, text=True, timeout=30)
         if version.returncode or "version 8.2.2" not in version.stdout:
             raise ValueError("private QEMU cannot run: " + version.stderr[-2000:])
@@ -170,6 +178,7 @@ class Guest:
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.ssh_port = _port()
+        self.prepare_boot()
         self.stderr = (self.directory / "qemu-stderr.log").open("wb")
         self.process = subprocess.Popen(self.command(self.ssh_port, self.server.server_port), env=self.env,
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=self.stderr, start_new_session=True)
