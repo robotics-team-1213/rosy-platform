@@ -163,3 +163,60 @@ def test_download_cache_cannot_be_reclaimed_under_a_pending_transaction(feed):
     sig = hub.assets[value["release_id"] + "/os-update.json.sig"].decode()
     with pytest.raises(ValueError, match="pending"):
         stage(root, value, raw, sig, hub.base, host=host, http=client.http)
+
+
+def test_authenticated_staging_passes_original_bytes_to_the_lifecycle_owner(feed, monkeypatch):
+    m, hub, host, root, _, _, private, _ = feed
+    value, body, _ = publish(hub, private)
+    calls = []
+    def install(r, bundle, raw, signature, **kwargs):
+        assert r == root and bundle.read_bytes() == body
+        assert raw == hub.assets[value["release_id"] + "/os-update.json"]
+        assert signature.encode() == hub.assets[value["release_id"] + "/os-update.json.sig"]
+        calls.append(value["release_id"])
+        return dict(pending=dict(phase="ARMED"))
+    monkeypatch.setattr(m.lifecycle, "start", install)
+    result = m.Feed(root, host=host).poll()
+    assert result["outcome"] == "trial-requested" and calls == [value["release_id"]]
+
+
+def test_bad_optional_feed_config_cannot_strand_an_existing_transaction(tmp_path, monkeypatch):
+    from test_os_update_controller import _source
+    controller, _, _, root, _, _, host, _, run, bundle, directory = _source(tmp_path, monkeypatch)
+    def failed(*a, **k): raise ValueError("modeled lost client")
+    monkeypatch.setattr(controller, "rauc_install", failed)
+    with pytest.raises(ValueError): controller.start(root, bundle, b"metadata", "sig", host=host, run=run)
+    (directory / "config.json").write_text("malformed configuration")
+    m = importlib.import_module("os_update_feed")
+    result = m.run(root, host=host, service_run=run)
+    assert result["outcome"] == "resumed" and result["state"]["pending"] is None
+
+
+def test_frozen_feed_honors_existing_freeze_marker_before_any_network(feed, monkeypatch):
+    import subprocess
+    import sys
+    from test_os_frozen_firstboot import _prefix, _stage
+    _, _, _, root, _, _, _, _ = feed
+    prefix = _prefix(root)
+    _stage(prefix)
+    frozen = prefix / "os-bootstrap/native-runtime"
+    for source in (prefix / "native-runtime").glob("*.py"):
+        source.write_text("raise RuntimeError('mutable SDK executed')\n")
+    (root / "etc/rosy/update-freeze").write_text("operator freeze")
+    code = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import auto_update_records
+auto_update_records.policy_file=lambda root,name:root/'var/lib/rosy-device/policy/updates'/name
+import os_update_feed
+client=os_update_feed.Feed(Path(sys.argv[2]))
+try: client._freeze()
+except ValueError as exc: assert 'OS_FEED_FROZEN' in str(exc)
+else: raise AssertionError('frozen feed ignored operator freeze')
+for name in ('os_update_feed','os_update_stage','os_update_rollout','os_update_controller'):
+    assert Path(sys.modules[name].__file__).is_relative_to(Path(sys.argv[1]))
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(frozen), str(root)],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
