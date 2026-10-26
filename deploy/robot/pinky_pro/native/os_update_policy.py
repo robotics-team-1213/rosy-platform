@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import uuid
 
-from auto_update_host import Host, SAMPLE_GAP_S, _finite
+from auto_update_host import Host, SAMPLE_GAP_S, UpdateError, _finite
 from auto_update_records import UpdaterRecords
 import rosy_claim
 from os_update_state import read_state
@@ -26,9 +26,13 @@ class _Policy(UpdaterRecords):
 
     def _gates(self, transaction_id: str) -> list[str]:
         reasons = []
-        if not self._config()["enabled"]:
+        try:
+            config = self._config()
+            kind, detail = self._hold()
+        except UpdateError as exc:
+            return [str(exc)]
+        if not config["enabled"]:
             reasons.append("automatic updates disabled")
-        kind, detail = self._hold()
         if kind in {"active", "invalid"}:
             reasons.append(detail)
         current = self.host.current_release()
