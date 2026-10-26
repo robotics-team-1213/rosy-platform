@@ -11,3 +11,9 @@
 - 변경: CORE viewer identity/diagnostics, Fleet 수동 캐시, 기존 host 보고 파일과 peer의 관측을 제한된 독립 수집 루프에 연결했다. API는 등록 reader의 사이트 범위만 조회한다. SQLite는 정규화 관측·수명 anchor·peer cursor를 게시 전에 저장하며, 원천이 없어도 7일/사이트4096건 이력을 유지한다. 단일 writer lease를 store 수명 동안 유지한다.
 - 증거: `5a5355aa69` 원격89 PASS/0 SKIP, 구조·harness·affected247 PASS/0 SKIP, 두 비교 NEW/KNOWN/FLAKY0. 실제 HTTP 원천 종료, 수신 재시작·역순·동시 writer 거부·저장 실패·8192 durable 한도·JSON 깊이/자료형/UTF8·응답 aging·task 종료503을 검증했다. 최종 독립 재검토 차단 없음. 별도 프로세스/Windows lease·CLI·브라우저·native 설치·현장은 포함하지 않는다.
 - gate 변화: 미완료 gate를 유지하고 blocker를 실제 남은 항목으로 갱신했다. CE: 해당 없음 — 원칙을 구현과 회귀에 직접 기록했으며 운영 장애 해결 기록이 아니다.
+
+## 2026-10-26 · 8f2cd35b06 · pytest 초기화 훅 이름 충돌 수정
+
+- 변경: 원천 어댑터 시험의 setup 보조함수와 모든 호출을 source_context로 바꿨다. pytest7의 nose 초기화 훅으로 호출되지 않게 하며 원천 시험의 검증 조건은 유지한다.
+- 증거: 공식 service 착지에서 새 CI 검사 test_no_test_module_defines_a_nose_style_setup_function이 이 함수명을 검출했고 main 단독에서는 통과했다. 수정 SHA의 원격 원천 시험과 해당 검사20 PASS/0 SKIP이다. 실패 로그는 보존하고 기존 실패 목록에 추가하지 않는다.
+- gate 변화: 없음. 후속 공식 전체 검증·병합은 별도로 진행한다. CE 해당 없음 — 호환성 이유가 기존 CI 검사와 이 수정에 직접 남는다.
