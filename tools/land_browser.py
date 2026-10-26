@@ -34,7 +34,7 @@ def balanced(wt: Path, paths: list[str], n: int) -> list[list[str]]:
     size = {p: (wt / p).stat().st_size if (wt / p).is_file() else 0 for p in paths}
     bins: list[tuple[list[int], list[str]]] = [([0], []) for _ in range(min(n, len(paths)))]
     for path in sorted(paths, key=lambda p: (-size[p], p)):  # ties by name: the same chunks for any input order
-        total, members = min(bins, key=lambda b: b[0][0])
+        total, members = min(bins, key=lambda b: (b[0][0], len(b[1])))  # empty files still fill every list
         total[0] += size[path]
         members.append(path)
     return [sorted(members) for _, members in bins]
