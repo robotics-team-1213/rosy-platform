@@ -53,6 +53,18 @@ def test_qemu_command_has_only_owned_images_and_loopback_ssh(tmp_path):
     assert all(str(tmp_path) in value for key, value in zip(argv, argv[1:]) if key in {"-kernel", "-initrd", "-bios"})
 
 
+def test_guest_source_provisioning_refuses_an_unbound_instance(tmp_path, monkeypatch):
+    guest = module().Guest(tmp_path)
+    calls = []
+    def observe(command, **kwargs):
+        calls.append(command)
+        return "foreign-instance"
+    monkeypatch.setattr(guest, "run", observe)
+    with pytest.raises(ValueError, match="instance"):
+        guest.provision_source(tmp_path)
+    assert calls == ["cat /var/lib/cloud/data/instance-id"]
+
+
 @pytest.mark.parametrize("wrong_range", [False, True])
 def test_large_guest_input_uses_exact_bounded_http_ranges(tmp_path, monkeypatch, wrong_range):
     import http.server
