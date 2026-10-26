@@ -15,7 +15,7 @@ Commit `bf3470f9fe`: real Chromium passed all 10 desktop/mobile and Viewer/Opera
 
 The first information-order assertion had a Boolean/bit-mask expression error. After correcting it, Chromium exposed the earlier app/formation action row above the new profile. That row was moved after the profile along with the ordinary robot actions. The assertion still checks the first action row, and the corrected scenario now passes.
 
-Visual inspection of desktop and mobile captures also exposed existing zero-basis action buttons compressing into unreadable narrow columns on mobile. The existing wrapping flex row now uses an 8rem basis; the browser case requires action widths of at least 110px while preserving page width.
+Visual inspection of desktop and mobile captures also exposed existing zero-basis action buttons compressing into unreadable narrow columns on mobile. The existing wrapping flex row now uses an 8rem basis; the browser case requires action widths of at least 110px while preserving page width. Commit `8ce8e21139` passed all 6 related real Chromium cases after that correction (exit 0).
 
 The size rule found a one-line growth in the frozen app composer. The isolated local implementation commit was corrected before landing, preserving the same arguments within the prior line count. Rewritten tip commit `be54620204` differs from tested commit `24c1d225b0` only in composer formatting; commit `0359b6981a` adds disclosure preservation and its browser assertion. Subsequent main refresh changed only a pre-existing map panel contract test. Final integration verification is enforced by the local landing gateway.
 

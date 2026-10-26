@@ -99,8 +99,9 @@ def test_bounded_strict_import_and_known_source(site):
     assert store.get('arm-one')['source_id'] is None
 
 
-@pytest.mark.parametrize('origin', ['http://fleet.example', 'https://user:pass@fleet.example',
-                                   'https://fleet.example/path', 'https://fleet.example?token=hidden'])
+@pytest.mark.parametrize('origin', [
+    'http://fleet.example', 'https://user:pass@fleet.example',
+    'https://fleet.example/path', 'https://fleet.example?token=hidden'])
 def test_bridge_refuses_untrusted_origin_before_transport(origin):
     from deploy.robot.omx.load_report_bridge import publish
     with pytest.raises(ValueError):
