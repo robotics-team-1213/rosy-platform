@@ -2,12 +2,14 @@
 import configparser
 import importlib
 import json
+import subprocess
 
 import pytest
 
 from test_ab_image_layout import module
 from test_os_media import _card
 from test_os_update_manifest import metadata
+from os_rauc_fakes import rauc_tool
 
 
 def _runtime(tmp_path, monkeypatch, slot="a"):
@@ -100,3 +102,28 @@ def test_media_is_recaptured_for_each_preparation(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="kernel partition range"):
         m.prepare(root, root / "bundle.raucb", b"outer", "signature")
     assert events == ["verify", "capture", "verify", "capture"]
+
+
+def test_pinned_rauc_accepts_generated_configuration_without_running_the_boot_backend(tmp_path, monkeypatch, rauc_tool):
+    from test_os_rauc import _case, _consumer
+    _consumer(monkeypatch, rauc_tool)
+    media, card_root, _, _, _, _ = _card(tmp_path / "card", monkeypatch)
+    facts = media.capture(card_root)
+    root, bundle, raw, signature, _, _ = _case(tmp_path / "signed", rauc_tool)
+    m = importlib.import_module("os_rauc_runtime")
+    monkeypatch.setattr(m, "capture", lambda observed: facts)
+    rauc_data = root / "var/lib/rosy-device/os-update/rauc"
+    rauc_data.mkdir(mode=0o700)
+    backend = root / "opt/rosy/os-bootstrap/native-runtime/rosy-os-bootloader"
+    backend.parent.mkdir(parents=True)
+    marker = tmp_path / "backend-was-executed"
+    backend.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 99\n")
+    backend.chmod(0o755)
+    result = m.prepare(root, bundle, raw, signature)
+    config = tmp_path / "system.conf"
+    config.write_text(result["configuration"])
+    read = subprocess.run([str(rauc_tool), "--conf", str(config), "info", "--output-format=json-2", str(bundle)],
+                          capture_output=True, timeout=30)
+    assert read.returncode == 0, read.stderr.decode()
+    assert json.loads(read.stdout)["update"]["version"] == json.loads(raw)["release_id"]
+    assert not marker.exists()
