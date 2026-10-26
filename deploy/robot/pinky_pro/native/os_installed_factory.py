@@ -24,6 +24,27 @@ def verify(current_root: Path, target_root: Path, metadata: dict) -> dict:
         current_root, target_root = Path(current_root).absolute(), Path(target_root).absolute()
         if target_root == current_root or target_root == Path("/") or target_root.is_symlink():
             raise ValueError("an independent inactive root is required")
+        return _verify(current_root, target_root, metadata)
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise ValueError(f"OS_FACTORY_HOLD: {exc}") from exc
+
+
+def verify_current(root: Path, metadata: dict) -> dict:
+    """Trial owner separately proves firmware/transaction binding before checking this active factory."""
+    try:
+        root = Path(root).absolute()
+        descriptor = _verify(root, root, metadata)
+        pointer = root / "opt/rosy/current"
+        expected = _path(root, "opt/rosy/releases/" + descriptor["release_id"])
+        if not pointer.is_symlink() or pointer.resolve(strict=True) != expected:
+            raise ValueError("current native pointer is not the installed factory")
+        return descriptor
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise ValueError(f"OS_FACTORY_HOLD: {exc}") from exc
+
+
+def _verify(current_root: Path, target_root: Path, metadata: dict) -> dict:
+    try:
         validate_metadata(metadata)
         descriptor = _object(_file(target_root, DESCRIPTOR, 8192),
                              {"schema_version", "release_id", "checksums_sha256"})

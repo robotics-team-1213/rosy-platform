@@ -54,7 +54,11 @@ def report_path(root: Path, pending=None) -> Path:
 
 
 def read_report(root: Path) -> dict:
-    pending = _pending(root)
+    return read_bound_report(root, _pending(root))
+
+
+def read_bound_report(root: Path, pending: dict) -> dict:
+    """Decode only; caller must independently admit its actual source or trial boot."""
     relative = report_path(root, pending).relative_to(root).as_posix()
     value = _private(root, relative, REPORT_FIELDS)
     if value is None or any(value[k] != v for k, v in _binding(pending).items()):
