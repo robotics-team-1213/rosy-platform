@@ -45,6 +45,11 @@ MIN_UPTIME_S = int(os.environ.get("GUARD_MIN_UPTIME_S", "3600"))
 MAX_REBOOTS = int(os.environ.get("GUARD_MAX_REBOOTS", "2"))
 REBOOT_MIN_GAP_S = int(os.environ.get("GUARD_REBOOT_MIN_GAP_S", "3600"))
 REBOOT_DELAY_MIN = 10  # D-524 helper reboots with shutdown -r +10
+# D-883: the rosy-ops lab storage floor. Report only; a reboot does not free a disk.
+MIN_DISK_FREE_GB = float(os.environ.get("GUARD_MIN_DISK_FREE_GB", "30"))
+MAX_DISK_USE_PCT = int(os.environ.get("GUARD_MAX_DISK_USE_PCT", "90"))
+# Report-only RAM warning, well before the MIN_AVAIL_PCT + swap ladder above acts.
+WARN_AVAIL_PCT = int(os.environ.get("GUARD_WARN_AVAIL_PCT", "10"))
 
 
 def now_hhmm() -> str:
@@ -132,9 +137,28 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
     fields = answer.split()  # a malformed reply raises here, before any counter changes
     avail, swap, load, cores, uptime = int(fields[0]), int(fields[1]), float(fields[2]), int(fields[3]), int(fields[4])
     down = [] if len(fields) < 6 or fields[5] == "-" else fields[5].split(",")
+    disk = gpu = disk_low = None  # an older forced command sends six fields: unknown, never healthy
+    if len(fields) >= 10 and "-" not in fields[6:10]:
+        test_kb, test_pct, root_kb, root_pct = (int(f) for f in fields[6:10])
+        disk = {"test_free_gb": round(test_kb / 2**20, 1), "test_use_pct": test_pct,
+                "root_free_gb": round(root_kb / 2**20, 1), "root_use_pct": root_pct}
+        disk_low = (min(test_kb, root_kb) / 2**20 < MIN_DISK_FREE_GB
+                    or max(test_pct, root_pct) >= MAX_DISK_USE_PCT)
+    if len(fields) >= 14 and "-" not in fields[10:14]:
+        gpu = {"used_mib": int(fields[10]), "total_mib": int(fields[11]),
+               "util_pct": int(fields[12]), "temp_c": int(fields[13])}
+    memory = cpu = None
+    if len(fields) >= 16:
+        memory = {"total_gb": round(int(fields[14]) / 2**20, 1), "avail_gb": round(int(fields[15]) / 2**20, 1)}
+    if len(fields) >= 18:  # display only: no measured threshold yet for a hot or busy PC
+        cpu = {"busy_pct": None if fields[16] == "-" else int(fields[16]),
+               "temp_c": None if fields[17] == "-" else int(fields[17])}
+    memory_low = avail < WARN_AVAIL_PCT
     entry["resources"] = {
         "avail_pct": avail, "swap_pct": swap, "load": load,
         "cores": cores, "uptime_s": uptime, "down": down,
+        "disk": disk, "disk_low": disk_low, "gpu": gpu, "memory": memory, "memory_low": memory_low,
+        "cpu": cpu,
     }
     try:
         recovery = recovery_report(json.loads(ssh(target, "recovery") or "null"))
@@ -148,8 +172,14 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
     if down:
         reasons.append("down " + ",".join(down))
     high_load = load > cores * MAX_LOAD_PER_CORE
+    if disk_low:
+        print(f"{name}: disk low {disk} (report only; clean-storage, D-883)", flush=True)
+    if memory_low:
+        print(f"{name}: memory avail {avail}% {memory} (report only, D-883)", flush=True)
     if not reasons:
-        entry.update(state="load-high" if high_load else "ok", bad=0, restarted=False, reboots=0)
+        state = ("disk-low" if disk_low else "memory-low" if memory_low
+                 else "load-high" if high_load else "ok")
+        entry.update(state=state, bad=0, restarted=False, reboots=0)
         if high_load:
             print(f"{name}: load {load}/{cores} cores (report only)", flush=True)
         return

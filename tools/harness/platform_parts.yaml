@@ -596,6 +596,14 @@ roots:
     wave: "3a"
     import_prefix: [rosy.world]
     concern: other
+  - path: operations/monitoring
+    layout_target: operations/monitoring
+    part: operations
+    d427_target: operations/monitoring
+    wave: none
+    import_prefix: [rosy.monitoring]
+    note: D-876 independent read-only observation/configuration/cache wheel; collector, HTTP API and UI follow separately. No Fleet/CORE command or host repair authority.
+    concern: other
   - path: operations/processes/palletizing
     part: operations
     d427_target: operations/processes/palletizing

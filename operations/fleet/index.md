@@ -102,8 +102,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
 - 2026-10-25 · uncommitted · D-876 캐시 전용 모니터링 producer
 - 2026-10-25 · uncommitted · 작업 종류 poll의 실제 화면 반영을 기다린다
 - 2026-10-25 · d0d02fe6e4 · D-875 소유 모듈 경계 검사까지 최신 main 검증
 - 2026-10-25 · 99a7d5c663 · D-875 exact formation API guard
-- 2026-10-25 · c5b4bcf1b3 · D-875 최신 main 통합 검증
