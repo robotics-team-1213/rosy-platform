@@ -3508,3 +3508,11 @@
 - 증거: 최종 공식 원격 b0dcb657e2, protocol-final3, 668 passed/32 skipped/5 warnings, 96.79s, 0 NEW. 32개 skip은 Linux에서 사용할 수 없는 PowerShell 경로이며 통과로 세지 않는다. 실제 GPT 일반 파일·installed configurer/SDK 및 파일 모델의 mount/firstboot/진단을 포함하고 native ARM64 이미지·실물 mount·B→A 설치 중 unmount·전원 차단을 증명하지 않는다. runner가 /tmp/pytest-of-ai 잔여 경로도 보고했으며 다른 작업의 임시 경로를 정리하지 않았다.
 - gate 변화: 없음. RAUC installer/claim/motion inhibition/trial/health/commit/fallback, 기존 카드 GUID rebase, native ARM64 artifact·서명·SD 전체 readback과 실물 수용이 남았다. D-888은 CMS 공개 인증서와 외부 Ed25519 배포 서명을 분리하며 제품 키 생성·사용·공개 게시를 수행하지 않았다.
 - CE: 해당 없음 — 재현 가능한 경계와 반례가 소스·회귀 시험·D-888에 남아 별도 교훈을 중복하지 않는다.
+
+## 2026-10-26 · 4676189d86 · 기존 카드 media admission과 비활성 OS metadata 변환
+
+- 변경: factory가 전체 os-media snapshot과 rauc.slot을 기록한다. os_slot_metadata는 검증된 factory A의 네 metadata 파일만 기존 카드의 비활성 슬롯으로 순수 변환하며 실제 쓰기·서명 수용은 installer 책임이다. os_media는 protocol 2, mount/device/parent/capacity, 실제 GPT 양쪽 사본, kernel partition 여섯 개의 start/size, 비활성 mount 부재를 확인한다. source SDK와 OS frozen closure에 helper 3개를 함께 넣으며 공통 OS state의 committed A/release와 private RAUC/staging을 factory에서 명시적으로 초기화한다.
+- 검토/반례: 독립 검토가 sysfs PAGE_SIZE와 stale kernel partition 범위 누락을 찾았다. 실제 Linux 숫자 reader RED 1 failed/1 passed와 page-size·범위 반례를 확인한 뒤, sysfs 전용 bounded reader와 여섯 범위 대조를 추가했다. 기존 mount_facts도 같은 reader를 쓴다. 저장 metadata의 크기 검사와 path deny를 약하게 하지 않았다. ea0f7bbbd1 재검토 APPROVE는 소스 범위다.
+- 증거: 최종 공식 원격 4676189d86, os-media-rebase-final2, 1070 passed/32 skipped/44 warnings, 135.02s, 0 NEW. 실제 sysfs 읽기·GPT 일반 파일·installed/frozen SDK 실행과 모델 mount/block identity를 포함한다. 실제 block 설치, privileged filesystem/PID1, native ARM64 artifact·SD·기체 수용을 증명하지 않는다. 중간 broad 회귀의 builder Ubuntu 표기·fixture 변수명 검사 실패 2개도 source를 고쳐 해결했고 scanner는 유지했다.
+- gate 변화: 없음. 실제 RAUC verifier/daemon/install/rebase writer, OS claim·motion inhibition·정책·trial/health/commit/fallback과 native artifact·서명·SD readback은 남았다.
+- CE: 해당 없음 — sysfs i_size와 kernel/GPT 결속 판단을 코드·실제 읽기 회귀·D-888에 남겨 별도 해결 기록을 중복하지 않는다.

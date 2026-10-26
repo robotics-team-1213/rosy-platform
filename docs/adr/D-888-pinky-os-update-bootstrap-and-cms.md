@@ -46,6 +46,12 @@ B에서 비활성 boot A를 교체하면 사용 중인 FAT를 덮어쓰고, 전�
 
 ### Consequences
 
+새 factory는 root별 `os-media.json`에 전체 GPT snapshot을 보관하고 kernel command line에 `rauc.slot=a/b`를 명시한다. 공통 `os-update/state.json`은 schema 1, committed A/release, pending null, failed_versions 빈 목록으로 초기화하며 RAUC/staging 디렉터리는 root 0700이다. 누락을 정상 idle로 추측하지 않는다. 현재의 순수 metadata 변환은 검증된 factory A의 fstab·descriptor·media snapshot·cmdline 네 파일만 받아, 기존 카드의 비활성 슬롯 UUID와 mount 배치로 렌더링한다. GPT·data·bootstrap을 쓰거나 후보 코드를 실행하지 않는다. 실제 installer의 서명 검증·장치 수용·write/재수용 연결은 별도다.
+
+media admission은 현재 descriptor·mount·kernel RAUC slot, 전체 디스크 handle의 block identity, 실제 GPT 양쪽 사본과 snapshot을 대조한다. 여섯 kernel partition의 `start`·`size`도 GPT와 같아야 하며, 비활성 root/boot가 PID1이나 호출자 mount view에 남아 있으면 거절한다. capture 결과는 이후 쓰기 권한을 대신하지 않으며 실제 파괴 경계에서 다시 확인해야 한다.
+
+독립 검토와 실제 Linux 읽기 시험에서 sysfs text attribute의 표시 크기를 작은 일반 파일처럼 취급하면 정상 장치를 거절함을 확인했다. [Linux v6.8 구현](https://raw.githubusercontent.com/torvalds/linux/v6.8/fs/sysfs/file.c)은 이 크기를 PAGE_SIZE로 게시한다. sysfs 안의 소유권·형식이 맞는 attribute만 별도 helper로 최대 65바이트 읽어 실제 64바이트 제한을 확인한다. 저장된 JSON·서명 metadata의 엄격한 일반 파일 크기 검사는 유지한다. page 크기를 재현하는 모델과 실제 sysfs 회귀를 함께 두며, 이는 Pi 부팅이나 block 쓰기 수용이 아니다.
+
 이 결정과 소스 시험은 native ARM64 이미지, SD 기록, 부팅·업데이트·복귀 수용을 대신하지 않는다.
 새 이미지의 서명·전체 readback까지 끝낸 engineering SD로 첫 실물 시험을 진행한다.
 production BUILD_GO는 실물 수용까지 계속 거절한다. EEPROM 자동 쓰기는 포함하지 않는다.

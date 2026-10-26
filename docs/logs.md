@@ -11683,3 +11683,10 @@ osy-d395-s1d\`.
 - 증거: b0dcb657e2 공식 원격 668 passed/32 skipped/5 warnings, 0 NEW. 독립 검토는 수집 경로 누락 수정 후 5933449847 소스 증가분을 승인했다. ADR Log UTF-8 BOM·CRLF를 보존한다.
 - gate 변화: 없음. 계획/소스 검증은 전체 OS updater, 실제 signed image, SD 기록 또는 기체 부팅 수용이 아니다.
 - CE: 해당 없음 — 판단은 ADR·실제 crypto 기능 관측·회귀 시험에 보존한다.
+
+## 2026-10-26 · 4676189d86 · D-888의 media 수용과 metadata 변환 경계 기록
+
+- 변경: root별 media snapshot, 명시적 factory OS state, 기존 카드에 맞춘 네 파일 변환, 실제 GPT와 kernel partition 범위 결속을 D-888 Proposed에 기록한다. sysfs PAGE_SIZE의 실제 재현과 좁은 읽기 예외, 기존 metadata 검사를 유지하는 이유를 Linux 원본과 함께 남긴다.
+- 증거: 공식 원격 1070 passed/32 skipped/44 warnings, 0 NEW. 독립 검토의 두 수용 결함을 수정한 ea0f7bbbd1 소스 증가분 APPROVE. source/model/실제 read-only sysfs와 SYSTEM·ARM artifact·media·device 수용을 구분한다.
+- gate 변화: 없음. 전체 OS installer와 최종 이미지·SD 작업은 계속 남아 있다.
+- CE: 해당 없음 — 비직관적인 제약과 재현 방법을 기존 ADR·source·회귀에 보존한다.
