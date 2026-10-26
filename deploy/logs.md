@@ -3560,3 +3560,10 @@
 - 증거: 두 참조가 실제 commit 객체이며 고정 기록이 원본 blob과 같음을 독립 검토했다. 수정된 목록을 사용한 가드의 순수 함수 전체 추적 파일 스캔은 0건이다. 커밋된 수정본의 원격 가드 검증은 아직 대기 중이다.
 - gate 변화: 없음. 이 한 줄의 정확한 entropy token만 판정하며 private-key·credential·PSK·QR 검사를 유지한다. 중단된 전체 시험과 취소된 충전 시험을 통과로 보고하지 않는다.
 - CE: 미해결 — 원격 집중 검증 후 기존 Git ID 교훈의 두 검사 구분과 고정 기록 처리 설명을 보완한다.
+
+## 2026-10-27 · f44520f70e · exact-line provenance 원격 가드 확인
+
+- 변경: 고정 기록을 보존한 정확한 provenance 보완과 증거 라벨 형식 복구의 집중 결과를 `../docs/validation/land-explicit-full-2026-10-27c/result.md`에 남겼다. 앞선 실패와 최초 라벨 누락 커밋도 유지한다.
+- 증거: 공식 원격 runner에서 harness·release boundary 183 PASS/0 SKIP/0 FAIL, runner·외부 명령·known exit0·NEW0이다. source·환경·raw 해시는 검증 기록에 묶었다. 기존 secret 탐지 시험과 append-only 보호를 완화하지 않았다.
+- gate 변화: 집중 가드만 회복했다. 중단된 FULL, 취소된 충전 시험, 게시·배포·장치 수용은 완료로 올리지 않는다.
+- CE: 기존 교훈 갱신 — 게시 대장과 전체 파일 provenance의 독립성, 고정 기록 처리의 잘못된 선례 해석을 보완했다.
