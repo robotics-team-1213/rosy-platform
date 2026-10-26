@@ -171,6 +171,20 @@ def test_every_action_is_pinned_to_a_full_commit_sha():
         assert re.search(re.escape(ref) + r" # v\d+\.\d+\.\d+ \(pinned commit\)\r?\n", text), ref
 
 
+def test_every_workflow_action_is_pinned_to_a_full_commit_sha():
+    """A moved tag runs new code without review; local reusable workflows (./...) are this commit already."""
+    refs = []
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if m := re.match(r"\s*(?:-\s+)?uses:\s*(\S+)(.*)$", line):
+                refs.append((path.name, m[1], m[2]))
+    remote = [r for r in refs if not r[1].startswith("./")]
+    assert len(remote) >= 25, refs  # the scan itself must see the workflows
+    for name, ref, comment in remote:
+        assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", ref), (name, ref)
+        assert re.fullmatch(r" # v\d+\.\d+\.\d+ \(pinned commit\)", comment), (name, ref)
+
+
 def test_pre_job_fails_fast_when_the_site_release_exists():
     jobs = _workflow()["jobs"]
     check = jobs["check-release-free"]

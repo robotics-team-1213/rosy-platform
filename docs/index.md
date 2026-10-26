@@ -354,4 +354,4 @@
 - 2026-10-26 · uncommitted · fix(land): FULL은 차례 밖에서, 대기열 표에 상태
 - 2026-10-26 · uncommitted · fix(land): 착지 기록에 단계(tier), 재실행 node id 경로 바로잡기
 - 2026-10-26 · uncommitted · feat(land): 착지마다 사건 기록을 남기고 하루 숫자를 뽑는다
-- 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
+- 2026-10-26 · uncommitted · affected 선택기가 안전 경로 변경을 FULL로 올린다
