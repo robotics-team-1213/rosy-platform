@@ -1119,6 +1119,23 @@ def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos,
     assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
 
 
+@pytest.mark.parametrize("tier", ["full", "affected"])
+def test_a_landing_prepared_before_its_turn_leaves_a_record_with_the_prepared_tier(repos, monkeypatch, tier):
+    """2026-10-26: after A' every landing prepared outside the lock, and no land record was written."""
+    main, wt = repos
+    start = git(main, "rev-parse", "HEAD")
+    # its presence lets an affected tier prepare (land_prepare.prepare); the selection itself is faked
+    commit(wt, {"pkg/a.py": "x = 2
+", "tools/harness/affected_tests.py": "# stub
+"}, "branch")
+    note = "FULL tier (test)" if tier == "full" else None
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None if k.get("landed") else note))
+    assert land.main(["--tests", "auto"]) == 0
+    record = land.land_record.read(main, git(main, "rev-parse", "HEAD"))
+    assert record and record["tier"] == tier and record["prepared_on"] == start
+    assert record["invocations"] == [["pkg/test"], ["pkg/test"]]  # the prepared tier, then the turn's delta
+
+
 @pytest.mark.parametrize("guard_outcome", ["failure", "head_move"])
 def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeypatch, capsys, guard_outcome):
     main, wt = repos

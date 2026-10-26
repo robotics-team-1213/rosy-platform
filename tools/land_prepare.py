@@ -83,5 +83,5 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     land.run_tests(wt, args, invocations, logdir, "pre")
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
-    land.land_full.save(wt, branch, candidate, main_sha)
+    land.land_full.save(wt, branch, candidate, main_sha, "full" if note else "affected", invocations)
     land.land_events.emit("prepared", tier="full" if note else "affected", seconds=round(time.monotonic() - began))
