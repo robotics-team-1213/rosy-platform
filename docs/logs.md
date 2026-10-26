@@ -12105,3 +12105,10 @@ osy-d395-s1d\`.
 - 증거: 소스758f92b620 root6FAIL/11447PASS/1211SKIP,23invocation 취소. 같은6건 main 선택 통과를 전체 맥락 대조로 확대하지 않았다. root 수집을 포함한 AI 대조4회는 각각21PASS/수집7SKIP, 공식·outer·known0/NEW0이며 기존 실패 원인은 미해결이다. validation/land-selection-extraction-2026-10-27/result.md.
 - gate 변화: HOLD 유지. 원래 FULL 실패를 단독 선택 성공으로 바꾸지 않으며 다음 공식 전체 실행·착지·게시·실물 수용은 별도다.
 - CE: 미해결 — 종료 지연 원인과 해결을 입증하지 못해 해결 교훈을 쓰지 않았다.
+
+## 2026-10-27 · 9e7b4f6f0a · OMX 화면에 prepare-native 카메라 기준 표시
+
+- 변경: `/learning/omx`가 `inspection.json`의 `camera_setup`(prepare-native `--camera-reference`, PR #200·D-792 S3)을 역할마다 "기준 일치(prepare-native에서 거부 검사 통과) · 기준 <revision 12자>"로 보인다. 64-hex 검증한 revision이 camera-setup 저장소에 있을 때만 같은 사이트 기준 사진 링크를 단다. 기존 `camera-setup.json`은 섀도 증거로 따로 표시하고, 둘 다 없을 때만 기존 문구를 보인다. `camera_identity`와 경로는 내보내지 않는다.
+- 증거: 원격 `test_omx_web.py`·새 `test_omx_camera_reference_browser.py`(1440·390, ROSY_RUN_BROWSER_TESTS=1)·`test_omx_segments_browser.py`·`test_browser_scope.py` 36 PASS, 0 FAIL.
+- gate 변화: 없음. 화면 표시만 바뀌고 착지·실물 수용은 별도다.
+- CE: 해당 없음 — 시험 locator가 숨은 단계의 heading을 못 찾은 것은 기존 셀렉터 습관 문제로, 코드·시험이 근거를 보존한다.
