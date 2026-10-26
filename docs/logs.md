@@ -11984,6 +11984,12 @@ osy-d395-s1d\`.
 - 증거: test_native_cycle.py는 혼자 실행하면 ERROR 26, 폴더 실행은 exit 0이었다(원격 5e162cca21). `.git/rosy-land` 마지막 기록은 16:21이었다. 새 끝에서 끝 시험은 원격 153 passed이고, 변이에서 2건이 빨강이 됐다.
 - gate 변화: 없음.
 
+## 2026-10-26 · uncommitted · fix(remote): Isaac supervisor 실행이 host probe에 gpu 예약으로 보인다
+
+- 변경: `tools/remote/remote_isaac.py`의 PREPARE는 준비가 끝나면 배치 예약 `~/rosy-jobs/<name>.resv`를 지운다. 그래서 supervisor가 돌리는 Isaac 실행은 `~/rosy-jobs`에 아무것도 남기지 않았고, `host_probe.py`는 모델 PC를 비었다고 보고 착지 시험과 브라우저 레인을 그 위에 놓았다. 이제 `start()`와 매 `observe()`가 실행이 살아 있는 동안 `~/rosy-jobs/isaac-<run id>.resv`(`<만료 epoch> gpu 6 8`, 만료 지금+2시간)를 다시 쓰고, 끝 상태(SUCCEEDED·FAILED·STOPPED)나 stop에서 지운다. 클라이언트가 죽으면 probe가 만료된 파일을 지운다. 예산은 Gazebo sim과 같은 6코어 8 GB다. `remote_sim.py`는 이미 sim lock을 잡고 있어 바꾸지 않았다(robot-4a 확인).
+- 증거: 원격 `test/test_remote_isaac.py test/test_omx_cell_cases.py` 25 passed(d7648f5e32, 모델 PC). 예약 제거를 건너뛴 변이는 새 시험 2건이 빨강. `rosy_harness.py lint` 0 errors, `size_range.py main HEAD` ok.
+- gate 변화: 없음.
+
 ## 2026-10-26 · uncommitted · tools/remote: 브라우저 레인과 브라우저 단계 8조각
 
 - 변경: `remote/work_queue.py`가 여유 있는 실험실 PC(가벼운 PC·현장 PC·살아 있는 `sim` 잠금/예약이 있는 PC 제외)에 기존 한 번에 하나 작업자 옆으로 브라우저 전용 레인을 `BROWSER_PER_HOST`(2)개까지 둔다. 레인마다 별도 run(작업 폴더·잠금)이다. 브라우저 작업 잠금은 class `browser`로 쓰고 PROBE가 `sim_held`·`browser_jobs`를 세므로 다른 run의 브라우저 작업도 상한에 들어간다. `tools/land_browser.py`가 `land.py`의 브라우저 단계를 파일 단위 8조각(파일 크기 LPT, 이름순 동률)으로 나누고, 부하에서 LOAD-FLAKY였던 3파일은 `ROSY_BROWSER_ALONE=1` 한 조각으로 모아 그 run의 레인이 빌 때까지 기다렸다가 혼자 돈다. 조각이 파일을 잃거나 겹치거나 빈 조각이 생기면 예외로 멈춘다.
