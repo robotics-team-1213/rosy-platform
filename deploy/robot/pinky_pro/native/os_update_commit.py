@@ -8,6 +8,7 @@ import stat
 import subprocess
 
 from auto_update_host import Host
+from native_release import NativeReleaseManager
 from os_bootloader import (BINDING, BOOTSTRAP, RAUC_STATE, _ack, _binding, _private,
                            _snapshot, autoboot, boot_lock)
 from os_media import capture
@@ -146,7 +147,7 @@ def _commit(root, transaction_id, host, run):
     _write_atomic(target, autoboot(pending["target_slot"]), mode)
     if _read(_path(root, BOOTSTRAP), 256, root.stat().st_uid) != autoboot(pending["target_slot"]):
         raise ValueError("persistent firmware default readback differs")
-    with locked(root) as store:
+    with NativeReleaseManager(root=root)._locked(), locked(root) as store:
         if store.state != state:
             raise ValueError("OS state changed after default publication")
         store.commit(transaction_id, pending["trial_boot_id"])
@@ -178,12 +179,12 @@ def recover(root: Path, *, host: Host | None = None, run=_run) -> dict:
             _proof(root, pending)
             _media(root, pending, facts)
             if default == pending["target_slot"] and facts["slot"] == pending["target_slot"]:
-                with locked(root) as store:
+                with NativeReleaseManager(root=root)._locked(), locked(root) as store:
                     if store.state != state:
                         raise ValueError("intent changed during target recovery")
                     store.commit(pending["transaction_id"], pending["trial_boot_id"])
             elif default == pending["source_slot"] and facts["slot"] == pending["source_slot"] and facts["tryboot"] == 0:
-                with locked(root) as store:
+                with NativeReleaseManager(root=root)._locked(), locked(root) as store:
                     if store.state != state:
                         raise ValueError("intent changed during source recovery")
                     store.abandon_commit(pending["transaction_id"], facts["boot_id"], facts["slot"])
