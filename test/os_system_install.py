@@ -149,6 +149,7 @@ def install(instance):
     from os_update_controller import _locks
     from os_update_state import locked, read_state
     from os_bootloader import boot_facts
+    from os_motion_guard import reconcile, require_inhibited
     import os_rauc_service
     import rosy_claim
     root = Path("/")
@@ -162,10 +163,13 @@ def install(instance):
     with _locks(root):
         with locked(root) as store:
             store.begin(verified, media, boot, transaction)
-            store.transition(transaction, "INSTALLING", boot)
         holder = "os-update:" + transaction
         rosy_claim.acquire(root, holder, "synthetic SYSTEM RAUC admission", 10800)
         try:
+            assert reconcile(root) is True  # An already-active oneshot will not rerun after pending changes.
+            with locked(root) as store:
+                store.transition(transaction, "INSTALLING", boot)
+            require_inhibited(root)
             run(["systemctl", "start", "rosy-os-motion-guard.service"])
             bootstrap = media["partitions"]["bootstrap"]["path"]
             before = run(["sha256sum", bootstrap]).split()[0]
