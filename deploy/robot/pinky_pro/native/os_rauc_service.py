@@ -55,7 +55,7 @@ def _file(root, relative, mode, limit=32768):
 
 
 def _assets(root):
-    for source, target in ASSETS.items():
+    for source, target in ASSETS:
         expected = _file(root, "opt/rosy/os-bootstrap/native-runtime/" + source, 0o644)
         if _file(root, target, 0o644) != expected:
             raise ValueError("live RAUC asset differs from its frozen owner")

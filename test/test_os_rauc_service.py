@@ -63,7 +63,7 @@ def _case(tmp_path, monkeypatch, fault=None):
     bundle.write_bytes(b"modeled bundle")
     bundle.chmod(0o400)
     raw, signature = json.dumps(verified["metadata"]).encode(), "fixture-signature"
-    for source, target in m.ASSETS.items():
+    for source, target in m.ASSETS:
         for path in (root / target, root / "opt/rosy/os-bootstrap/native-runtime" / source):
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(BASE / "native" / source, path)

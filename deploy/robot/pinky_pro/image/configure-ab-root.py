@@ -46,7 +46,7 @@ def configure(root: Path, release_id: str) -> None:
     for source, destination in OVERRIDES.items():
         changes["etc/systemd/system/" + destination] = _read(prefix / "native-runtime" / source, 8192, owner)
     if slot["schema_version"] == 2:
-        for source, destination in OS_UPDATE_ASSETS.items():
+        for source, destination in OS_UPDATE_ASSETS:
             changes[destination] = _read(prefix / "native-runtime" / source, 8192, owner)
     targets = {}
     for relative, data in changes.items():

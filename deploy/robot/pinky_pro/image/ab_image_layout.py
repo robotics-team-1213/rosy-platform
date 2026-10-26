@@ -18,6 +18,7 @@ from os_state_files import sync_directory
 from os_state_io import _json_atomic, _write_atomic
 from os_state_layout import _guid, _path, _read
 from os_slot_metadata import render_files
+from os_update_watchdog import render_boot_config
 
 MIB = 1024**2
 RAW_MIB = 29 * 1024
@@ -130,9 +131,17 @@ def configure_slot(root: Path, boot: Path, layout: dict, slot: str) -> None:
             raise ValueError("offline slot metadata is hard-linked")
     if cmdline_path.stat().st_nlink != 1:
         raise ValueError("offline kernel command line is hard-linked")
+    config_path, watchdog_config = None, None
+    if layout["provision_role"] == "bootstrap":
+        config_path = _path(boot, "config.txt")
+        if config_path.stat().st_nlink != 1:
+            raise ValueError("offline boot configuration is hard-linked")
+        watchdog_config = render_boot_config(_read(config_path, 65536, boot.stat().st_uid))
     for relative, target in targets.items():
         _write_atomic(target, changes[relative], 0o644)
     _write_atomic(cmdline_path, rendered_command, 0o644)
+    if config_path is not None:
+        _write_atomic(config_path, watchdog_config, 0o644)
 
 
 def capacity_report(free_bytes: int, payload_bytes: int) -> dict:

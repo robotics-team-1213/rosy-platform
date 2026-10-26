@@ -19,6 +19,7 @@ def _source(tmp_path):
     boot.mkdir()
     (root / "etc/fstab").write_text("LABEL=writable / ext4 defaults 0 1\nLABEL=system-boot /boot/firmware vfat defaults 0 1\n")
     (boot / "cmdline.txt").write_text("console=tty1 root=LABEL=writable rootwait quiet\n")
+    (boot / "config.txt").write_text("[pi5]\n")
     ab.configure_slot(root, boot, layout, "a")
     files = {name: (boot / name if name == "cmdline.txt" else root / name).read_text() for name in FILES}
     return files, layout, ab.plan()
