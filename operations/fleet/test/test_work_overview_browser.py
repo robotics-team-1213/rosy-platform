@@ -438,7 +438,7 @@ def test_policy_admission_readback_badge_and_named_operator_switch(site, size):
             expect(page.locator("#work-list .work-auto-admit")).to_have_count(0)  # 끄면 배지도 없다
 
             def conflict(route):
-                posts.append((route.request.url.path, route.request.post_data))
+                posts.append(("/api/fleet/policy-admission", route.request.post_data))
                 route.fulfill(status=409, json={"detail": {"code": "POLICY_ADMISSION_SCOPE_NOT_CONFIGURED"}})
             page.route("**/api/fleet/policy-admission",
                        lambda route: conflict(route) if route.request.method == "POST" else route.fallback())
