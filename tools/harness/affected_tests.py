@@ -88,6 +88,10 @@ NOT_TRIGGERS = ("**/*.md", "tools/harness/adr_gaps.txt",
 # Markdown selects only the tests that read it, not its module's suite (operations/fleet/index.md
 # selected ~7,900 tests, 2026-10-26), except prose that contract tests check against code.
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
+RECORD_NAMES = frozenset({"logs.md", "index.md", "progress.md"})
+#: Generated or append-only records: their real readers. Path-part matches hit comments and fixtures.
+RECORD_READERS = ("test/test_harness_contracts.py", "test/architecture/test_document_placement.py",
+                  "test/architecture/test_folder_layout.py")
 
 
 def markdown_keeps_module_selection(path: str) -> bool:
@@ -97,6 +101,8 @@ def markdown_keeps_module_selection(path: str) -> bool:
 
 
 def markdown_readers(repo: Repo, path: str) -> list[str]:
+    if path == "STATUS.md" or PurePosixPath(path).name in RECORD_NAMES:
+        return list(RECORD_READERS)
     readers = repo.referencing_tests(path)
     if _under(path, "docs/adr"):  # bodies are read through the Log and globbed by its readers
         readers += repo.referencing_tests(ADR_LOG)

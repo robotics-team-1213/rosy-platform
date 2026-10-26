@@ -11722,3 +11722,9 @@ osy-d395-s1d\`.
 - 변경: `affected` 선택기에서 바뀐 `*.md`는 그 파일을 이름으로 읽는 시험과 guard만 고른다. 내용을 코드와 맞춰 보는 `AGENTS.md`, `README.md`, ADR Log를 뺀 `docs/reference/*.md`, `docs/deployment/**`는 지금처럼 모듈 선택을 유지한다. 2026-10-26 생성 파일 `operations/fleet/index.md` 한 줄 변경이 세 커밋에서 `operations/fleet/test` 약 7,900개를 고른 일.
 - 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 커밋 d1a999fd0d·bd48652bf0·4b79b8bc2f 선택 74개 경로 → 9개(guard).
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(harness): 생성·누적 기록 변경은 실제로 읽는 시험만 고른다
+
+- 변경: `docs/logs.md`, `docs/index.md`, `STATUS.md`, 모듈의 `logs.md`·`index.md`·`progress.md`가 바뀌면 `affected` 선택기가 이름 부분 일치 대신 실제 읽는 시험(`test/test_harness_contracts.py`, `test/architecture/test_document_placement.py`, `test/architecture/test_folder_layout.py`)만 고른다. 주석이나 시험 고정 문자열에 `docs/logs.md`가 있다는 이유로 `test_api_reserve`, `test_browser_scope` 등이 뽑히던 일. ADR Log·`docs/adr/**`의 읽는 시험은 앞 커밋 그대로다.
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 커밋 5308d9ad56·afd1606a0e 선택 17개 경로 → 9개.
+- gate 변화: 없음.

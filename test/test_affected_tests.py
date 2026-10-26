@@ -707,6 +707,14 @@ def test_harness_yaml_added_module_taking_tracked_files_is_full():
     assert not added and "overlaps module core_features" in why
 
 
+@pytest.mark.parametrize("path", ["operations/fleet/index.md", "operations/fleet/logs.md", "docs/logs.md",
+                                  "docs/index.md", "STATUS.md", "deploy/logs.md"])
+def test_records_select_only_their_readers(path):
+    """2026-10-26: docs/logs.md selected tests that name it only in a comment or a fixture string."""
+    sel = affected.select(affected.Repo.load(ROOT), [path])
+    assert sel.mode == "affected" and set(sel.reasons) == GUARDS | set(affected.RECORD_READERS), sorted(sel.reasons)
+
+
 def test_generated_module_index_does_not_select_the_module_suite():
     """2026-10-26: operations/fleet/index.md selected ~7,900 tests in three commits."""
     assert "operations/fleet/test" not in affected.select(affected.Repo.load(ROOT), ["operations/fleet/index.md"]).reasons

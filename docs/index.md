@@ -352,8 +352,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · fix(harness): 생성·누적 기록 변경은 실제로 읽는 시험만 고른다
 - 2026-10-26 · uncommitted · fix(harness): 모듈 아래 Markdown은 모듈 시험 전체를 고르지 않는다
 - 2026-10-26 · uncommitted · fix(harness): harness.yaml 모듈 추가와 gap 기록은 FULL로 올리지 않는다
 - 2026-10-26 · uncommitted · fix(land): 착지는 언제나 main에 있는 착지 코드로 돈다
 - 2026-10-26 · uncommitted · fix(land): 브랜치가 main 기록 순서만 바꾼 logs.md는 main 순서로 합친다
-- 2026-10-26 · uncommitted · fix(land): 지난번 실패한 시험 묶음을 먼저 돌린다
