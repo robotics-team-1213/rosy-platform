@@ -3727,3 +3727,11 @@
 - 증거: 77632d0f1d source regression2091passed35skipped49warnings408.03s,0NEW; cec fixture/export/rebase regression32passed0.69s,0NEW. subset과 SYSTEM 수를 합산하지 않는다. namespace 실제 제한 service와 PID1 journal reboot의 별도 quick proof를 통과했다. B 원본 snapshot은 공장 A 입력을 요구하는 기존 계약에서 실제 거절됐고, exporter와 같은 공장 A snapshot으로 fixture를 복원한 뒤 역방향 시험이 통과했다. 전체 브랜치와 최종 수정의 독립 읽기 전용 리뷰에서 material source blocker는 확인되지 않았다.
 - gate 변화: 제품 ARTIFACT/DEVICE는 HOLD다. kernel/PID1/RAUC/mount/cgroup은 실제 disposable guest이며 firmware DT·native payload·정책/CORE 관측은 합성이다. Pi watchdog/firmware·healthy commit·전원 차단·실기 공유 identity/revoke/delete persistence, native ARM64 최종 이미지·실측 capacity·제품 CMS trust/서명·SD 기록/전체 읽기는 남는다. 정식 local main 착지와 공개 publication도 아직 수행하지 않았다. runner의 임시 /tmp 경고를 근거 없이 정리하지 않았다.
 - CE: 해당 없음 — namespace 판정과 exporter 입력 계약, 반례 및 fixture 한계는 구현·시험·D-888에 보존되어 있다. 가상 장치 검증을 실물/운영 수용으로 기록하지 않는다.
+
+## 2026-10-27 · 50438808a9 · native release의 격리 실행 import와 시험 fixture 복원
+
+- 원인: e80f9a94b8 FULL 참조 시험 단독 실행에서 유효 이미지·ship·native activation 세 wrapper가 실패했다. lazy pointer helper의 맨 이름 import가 패키지 import 경로에서는 실패했고, ship의 수동 설치 fixture에도 helper가 빠졌다. 유효 이미지 fixture에는 새 필수 locked RAUC binary/dpkg Version이 없었다. 수집 통과와 여러 파일을 함께 실행한 결과는 이 독립 실행을 대신하지 못했다.
+- 변경: 패키지 import는 상대 형제 import, 설치 스크립트는 기존 맨 이름 import를 사용하며 둘 다 lazy import와 오류 전파를 유지한다. 실제 SDK 목록에 이미 있던 helper를 ship fixture에도 포함했고, 유효 이미지 fixture에 고정된 RAUC package/binary를 넣었다. 실제 이미지 검사 조건과 설치 권한은 약하게 바꾸지 않았다.
+- 증거: exact50438808a9 official 원격 파일별 독립 실행 `os-isolated-activation-green` 30passed1.87s, `os-isolated-ship-green` 13passed10.10s, `os-isolated-mounted-green` 13passed0.13s, 각각0NEW다. 서로 다른 pytest 프로세스이며 수정 전 단독 실패가 수정 뒤 통과했다. 세 파일 diff의 독립 리뷰는 package/standalone 실행 및 실제 SDK closure를 확인했다. 기체·서명·SD 검증의 증거는 아니다.
+- gate 변화: 최종 FULL과 정식 local main 착지는 아직 미완료다. e80 자동 재검사는 고정된 이전 커밋을 사용하고, HEAD 변경 보호가 오래된 후보의 착지를 차단한다. 새 native ARM64 이미지·제품 서명·SD 기록/전체 읽기·DEVICE는 계속 남는다.
+- CE: 해당 없음 — [기존 import 격리 교훈](../docs/solutions/workflow-issues/shared-pytest-process-masks-path-dependent-import-2026-10-26.md)을 적용했다. 원인과 예방은 이미 그 교훈에 있고, 이번 변경의 판단과 독립 실행은 코드·시험·이 기록으로 확인할 수 있어 교훈을 중복 추가하지 않았다.
