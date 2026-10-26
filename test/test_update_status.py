@@ -87,7 +87,7 @@ CHANNELS = {'autoupdate', 'updater', 'signed', 'snapshot', 'installer', 'copy', 
 
 def test_every_declared_unit_names_a_known_run_channel_and_existing_repo_paths():
     roles = status.load_inventory()
-    assert set(roles) == {'model', 'ai', 'site'}
+    assert set(roles) == {'model', 'ai', 'site', 'omx'}
     for role, units in roles.items():
         for name, entry in units.items():
             assert name.startswith(('rosy-', 'pinky-')) and name.endswith(('.service', '.timer')), name
@@ -101,7 +101,39 @@ def test_every_declared_unit_names_a_known_run_channel_and_existing_repo_paths()
 
 def test_roles_come_from_the_site_host_and_sim_host_suffixes():
     assert status.roles({'site_host': 'site@h', 'sim_hosts': ['m@h=model', 'a@h=ai', 'x@h']}) == {
-        'm@h': 'model', 'a@h': 'ai', 'site@h': 'site'}
+        'm@h': {'model'}, 'a@h': {'ai'}, 'site@h': {'site', 'omx'}}
+
+
+def test_separate_control_hosts_are_probed_without_test_or_sim_enrollment():
+    config = {'site_host': 'site@h', 'test_hosts': ['m@h'], 'omx_hosts': ['arm@h', 'arm2@h']}
+    assert status.roles(config) == {'site@h': {'site'}, 'arm@h': {'omx'}, 'arm2@h': {'omx'}}
+    assert status.probe_targets(config) == ['m@h', 'site@h', 'arm@h', 'arm2@h']
+
+
+@pytest.mark.parametrize('explicit, expected', [([], {'site'}), (['site@h'], {'site', 'omx'})])
+def test_explicit_empty_or_colocated_omx_roles(explicit, expected):
+    config = {'site_host': 'site@h', 'omx_hosts': explicit}
+    assert status.roles(config) == {'site@h': expected}
+    assert status.probe_targets(config) == ['site@h']
+
+
+@pytest.mark.parametrize('config', [
+    {'sim_hosts': ['a@h=unknown']}, {'sim_hosts': ['a@h=model', 'a@h=ai']},
+    {'site_host': 'a@h', 'sim_hosts': ['a@h=ai']},
+    {'sim_hosts': ['a@h=ai'], 'omx_hosts': ['a@h']},
+    {'sim_hosts': 'a@h=ai'}, {'sim_hosts': [{}]},
+    {'site_host': {}}, {'site_host': 'site@h extra'},
+])
+def test_ambiguous_or_malformed_roles_fail_closed(config):
+    with pytest.raises(SystemExit):
+        status.roles(config)
+
+
+def test_service_role_composition_preserves_every_unit_and_rejects_conflicts():
+    inventory = status.load_inventory()
+    assert status.declared_units(inventory, {'site', 'omx'}) == {**inventory['site'], **inventory['omx']}
+    with pytest.raises(SystemExit, match='conflict'):
+        status.declared_units({'site': {'x': {'run': 'off'}}, 'omx': {'x': {'run': 'active'}}}, {'site', 'omx'})
 
 
 def observed(**files):
@@ -209,6 +241,6 @@ def test_selected_arms_distinguish_disconnection_stopped_service_and_missing_con
 
 
 def test_observer_manifest_uses_selected_workcell_arms_without_a_fixed_count():
-    entry = status.load_inventory()['site']['rosy-omx-observer@.service']
+    entry = status.load_inventory()['omx']['rosy-omx-observer@.service']
     assert entry.get('instances_from') == 'workcell-arms'
     assert 'instances' not in entry

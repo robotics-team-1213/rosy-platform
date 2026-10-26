@@ -181,7 +181,7 @@ def test_managed_arm_s_service_has_private_explicit_bindings_and_release_ownersh
     assert "ROSY_ARM_S_TOKEN=\n" in env
     assert "current-env/bin/python" in env and "current/deploy/robot/omx/arm_status_bridge.py" in env
     assert "current/contracts/foundation" in env and "current/operations/overhead" in env
-    entry = yaml.safe_load((ROOT / "deploy/hosts/services.yaml").read_text())["roles"]["site"][unit]
+    entry = yaml.safe_load((ROOT / "deploy/hosts/services.yaml").read_text())["roles"]["omx"][unit]
     assert entry["channel"] == "autoupdate" and entry["template"] == f"deploy/robot/omx/{unit}"
     cfg = json.loads((OMX / "omx-devices-autoupdate.json.example").read_text())
     assert unit in cfg["units"] and f"deploy/robot/omx/{unit}" in cfg["unit_files"]

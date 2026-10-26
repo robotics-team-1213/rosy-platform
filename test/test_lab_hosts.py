@@ -67,3 +67,21 @@ def test_rejects_a_non_object(monkeypatch, tmp_path):
     monkeypatch.setenv("ROSY_LAB_HOSTS", str(path))
     with pytest.raises(SystemExit, match="JSON object"):
         lab_hosts.load()
+
+
+@pytest.mark.parametrize('config, expected', [
+    ({}, []), ({'site_host': 'site@lab'}, ['site@lab']),
+    ({'site_host': 'site@lab', 'omx_hosts': []}, []),
+    ({'site_host': 'site@lab', 'omx_hosts': ['arm@lab']}, ['arm@lab']),
+    ({'site_host': 'site@lab', 'omx_hosts': ['site@lab', 'arm@lab']}, ['site@lab', 'arm@lab']),
+])
+def test_native_omx_placement_is_explicit_with_legacy_colocation(config, expected):
+    assert lab_hosts.omx_hosts(config) == expected
+
+
+@pytest.mark.parametrize('raw', [None, '', 'arm@lab', {}, [None], [{}], [''], [' '],
+                                      ['arm@lab', 'arm@lab'], ['arm@lab', ' arm@lab '],
+                                      ['arm@lab=site'], ['-option'], ['arm@lab command']])
+def test_rejects_malformed_explicit_omx_placement(raw):
+    with pytest.raises(SystemExit, match='omx_hosts'):
+        lab_hosts.omx_hosts({'omx_hosts': raw})

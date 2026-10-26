@@ -73,6 +73,28 @@ def test_transfer_reserves_then_copies_and_rechecks_source_before_receipt(module
     assert result['receipt_path'] == 'rosy-test/omx-il-data/transfer-receipts/received-1.json'
 
 
+def test_transfer_reads_the_independent_native_host(module, monkeypatch):
+    monkeypatch.setattr(module.lab_hosts, 'load', lambda: dict(
+        site_host='site@host', omx_hosts=['arm@host'], test_hosts=['model@host']))
+    calls = []
+    verified = dict(manifest_sha256='a'*64, file_count=2)
+    monkeypatch.setattr(module, '_remote', lambda host, action, *args: calls.append((host, action)) or verified)
+    monkeypatch.setattr(module, '_copy', lambda *args: calls.append(('copy', args)))
+    module.transfer('session')
+    assert calls[0] == ('arm@host', 'source')
+    assert calls[2][1][0] == 'arm@host'
+    assert not any(call[0] == 'site@host' for call in calls)
+
+
+@pytest.mark.parametrize('hosts', [[], ['arm@host', 'arm2@host']])
+def test_transfer_refuses_missing_or_ambiguous_native_source(module, monkeypatch, hosts):
+    monkeypatch.setattr(module.lab_hosts, 'load', lambda: dict(
+        site_host='site@host', omx_hosts=hosts, test_hosts=['model@host']))
+    monkeypatch.setattr(module, '_remote', lambda *args: pytest.fail('transport invoked'))
+    with pytest.raises(ValueError, match='exactly one'):
+        module.transfer('session')
+
+
 @pytest.mark.parametrize('name', ['../outside', '-option', 'space name', 'x;y', 'x/y'])
 def test_unsafe_session_names_never_reach_transport(module, name, monkeypatch):
     monkeypatch.setattr(module, '_remote', lambda *args: pytest.fail('transport invoked'))
