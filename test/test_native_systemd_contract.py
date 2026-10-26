@@ -339,6 +339,9 @@ ROOT_ONLY_STATE = (
 # What each ProtectSystem=strict unit's program writes, derived from the code.
 # "$HOME" is the unit's Environment=HOME. Keep this next to the code references.
 DECLARED_WRITES = {
+    "rosy-os-rauc.service": {"/run/rosy-os-update/rauc", "/var/lib/rosy-device/os-update/rauc"},
+    "rosy-os-motion-guard.service": {"/run/rosy-os-update"},
+    "rosy-os-trial-deadline.service": set(),
     "rosy-os-storage.service": set(),
     "rosy-os-tailnet.service": {"/var/lib/rosy-device/tailscale", "/var/lib/rosy-device/state/config.lock"},
     "rosy-network-agent.service": {

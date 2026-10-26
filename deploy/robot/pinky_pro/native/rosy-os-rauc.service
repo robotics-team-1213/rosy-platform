@@ -5,6 +5,8 @@ After=dbus.service rosy-os-storage.service rosy-os-motion-guard.service
 Conflicts=rosy-io.service rosy-navigation.service
 After=rosy-io.service rosy-navigation.service
 ConditionPathExists=/run/rosy-os-update/rauc/request.json
+ConditionPathIsDirectory=/run/rosy-os-update/rauc
+ConditionPathIsDirectory=/var/lib/rosy-device/os-update/rauc
 StartLimitIntervalSec=0
 
 [Service]

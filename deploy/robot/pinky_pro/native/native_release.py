@@ -214,7 +214,8 @@ class NativeReleaseManager:
             raise ValueError("NATIVE_RELEASE_PATH: release escapes the release store")
         return candidate
 
-    def verify(self, release_id: str) -> dict:
+    def verify_payload(self, release_id: str) -> dict:
+        """Read-only signed native payload validation; caller owns live/offline A/B admission."""
         release = self._release(release_id)
         if self.public_key.is_symlink() or not self.public_key.is_file():
             raise ValueError("SIGNATURE_KEY_UNREADABLE: trusted public key is missing")
@@ -284,6 +285,11 @@ class NativeReleaseManager:
             path = release / relative
             if path.is_symlink() or sha256_file(path) != digest:
                 raise ValueError(f"NATIVE_MANIFEST_PAYLOAD: digest mismatch for {relative}")
+        return manifest
+
+    def verify(self, release_id: str) -> dict:
+        manifest = self.verify_payload(release_id)
+        release = self._release(release_id)
         if _ab_marked(self.root):
             try:
                 from os_payload_compatibility import require_ab_payload

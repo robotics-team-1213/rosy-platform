@@ -36,7 +36,7 @@ FIRST_BOOT_NATIVE = (*BOOTSTRAP_FILES, "first_boot_runtime.py", "first_boot_supp
                      "os_motion_guard.py", "rosy-os-motion-guard.service", "rosy-os-core-guard.conf",
                      "rosy-os-io-guard.conf", "rosy-os-navigation-guard.conf", "os_trial_deadline.py",
                      "rosy-os-trial-deadline.timer", "rosy-os-trial-deadline.service", "rosy-os-deadline.conf",
-                     "os_update_watchdog.py", "rosy-os-watchdog.conf", "rosy-os-no-apt.conf")
+                     "os_update_watchdog.py", "rosy-os-watchdog.conf", "rosy-os-no-apt.conf", "os_installed_factory.py")
 FIRST_BOOT_FILES = ("first-boot/rosy-first-boot.py", "first-boot/rosy-first-boot.sh", "deploy/sd/personalization.py",
                     *("native-runtime/" + name for name in FIRST_BOOT_NATIVE))
 
