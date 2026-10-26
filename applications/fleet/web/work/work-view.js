@@ -127,7 +127,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
         ? "범위가 설정되지 않아 전환하지 못했습니다. 사이트 설정을 먼저 확인하세요."
         : `전환 결과 미확인 · ${error.message || "다시 보내지 않았습니다. readback을 확인하세요."}`;
     } finally { policyBusy = false; }
-    if (life.current()) paintPolicy();
+    if (life.current()) { paintPolicy(); paint(); }  // the badge follows the switch immediately
   }
   el("work-new").hidden = !fresh;
   if (area) {
