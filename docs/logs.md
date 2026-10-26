@@ -12072,6 +12072,20 @@ osy-d395-s1d\`.
 - 증거: `5a5355aa69` 원격89시험과 구조/harness/affected247시험이 모두 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 재시작/역순/동시 writer/응답 aging/task 종료/원천 손상/이력 만료 RED와 수정을 확인했고, 최종 SHA 독립 재검토에서 추가 차단 없음이 확인됐다.
 - gate 변화: Monitoring의 CLI·독립 프로세스·브라우저·native 묶음·실제 PC/LAN/TLS/장치 수용은 HOLD다. 공유 기반/등록을 먼저 착지한 뒤 이 서비스를 병합한다. CE: 해당 없음 — 새 구현의 계약과 회귀로 기록했다.
 
+## 2026-10-26 · uncommitted · feat(sim): D-877 공통 작업 장면, 실시간 배율 보고, Isaac 전환 조건 1차
+
+- 변경: `tools/sim/omx_cell_world.py`(Gazebo 셀 world의 상자를 모든 백엔드에), MuJoCo·Isaac 어댑터가 같은 장면 사용, 적합성 요약에 `real_time_factor`, `policy_chain_gazebo.py` 제품 owner 실행기, [작업 장면 기록](validation/omx-sim-cell-scene-2026-10-26/result.md), [Isaac 전환 조건 기록](validation/isaac-switch-conditions-2026-10-26/result.md).
+- 증거: 작업 장면에서 MuJoCo(실시간 배율 0.999)·Isaac(0.936) 적합성 통과. Isaac 640×480 두 대는 6~7Hz, 실시간 배율 0.91~0.94로 전환 조건 미충족.
+- gate 변화: 없음. Isaac 주 시뮬레이터 전환 조건은 아직이다.
+- 결정: 없음(640×480 유지 여부는 사용자 결정 대기).
+- 교훈: 없음.
+
+## 2026-10-26 · uncommitted · D-889 추가 1: 구현 결과와 남은 개선
+
+- 변경: D-889에 "추가 1"을 덧붙였다. 로컬 main에 착지한 구성 요소와 SHA(사건 기록·잠금 밖 준비·early-stop·게시 스크립트·착지 기록 복구·선택기·브라우저 lane·Isaac 예약·격리 관문·CI scope 상한)를 적었다. 실측(차례 대기 2.7~5시간에서 0분, 차례 p50 2.3~2.8분, 브라우저 3,488초에서 1,163초)도 적었다. 계획과 달라진 점(열차보다 잠금 밖 준비를 먼저, 선택기 규칙 4·5 뺌, collect-only로는 부족)과, 담당이 정해진 남은 개선 12건을 표로 남겼다. Status는 Proposed 그대로다(열차·묶음 미구현).
+- 증거: `land_stats --days 1`(10-26), 착지 기록 `.git/rosy-land/*.json`, 설계 작업 계획 0.7~0.9절.
+- gate 변화: 없음.
+
 ## 2026-10-26 · 7e85b28a8e · fix(remote): 원격 잡 명령을 stdin으로 보낸다
 
 - 변경: `remote_job.ssh_call`이 `bash -s`를 실행하고 명령을 stdin으로 보낸다. `remote_pytest.remote`는 `remote_job.argv_command`를 거쳐 8,000바이트(`ARGV_MAX`)를 넘는 명령을 거부한다. 회귀 시험 2개(`test/test_remote_pytest.py`).
