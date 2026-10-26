@@ -195,3 +195,49 @@ def test_bootstrap_write_preserves_fat_mount_permission_bits(tmp_path, monkeypat
     monkeypatch.setattr(os, "chmod", fat_chmod)
     assert owner.commit(root, TRANSACTION, host=host, run=run)["committed"]["slot"] == "b"
     assert target.stat().st_mode & 0o777 == 0o755
+
+
+@pytest.mark.parametrize("proof", ["intent", "ack", "health_bytes"])
+def test_new_default_recovery_requires_the_original_exact_intent_and_health_proof(tmp_path, monkeypatch, proof):
+    owner, health, state, boot, root, journal, host, _, run, _, _ = _candidate(tmp_path, monkeypatch)
+    actual = owner._write_atomic
+    def cut(path, content, mode):
+        actual(path, content, mode)
+        if path.name == "autoboot.txt": raise PowerCut()
+    monkeypatch.setattr(owner, "_write_atomic", cut)
+    with pytest.raises(PowerCut): owner.commit(root, TRANSACTION, host=host, run=run)
+    if proof == "health_bytes":
+        target = health._report_path(root, state.read_state(root)["pending"])
+        target.write_bytes(target.read_bytes() + b" ")  # Same JSON, different authenticated receipt bytes.
+    else:
+        path = root / (owner.INTENT if proof == "intent" else boot.ACK)
+        value = json.loads(path.read_text())
+        if proof == "intent": value["transaction_id"] = SOURCE_BOOT
+        else: value["state"] = "bad"
+        path.write_text(json.dumps(value))
+    _normal(root, "b")
+    before = journal.read_bytes()
+    with pytest.raises(ValueError): owner.recover(root, host=host, run=run)
+    assert journal.read_bytes() == before
+    assert (root / boot.BOOTSTRAP).read_bytes() == boot.autoboot("b")
+
+
+def test_frozen_commit_owner_imports_with_poisoned_mutable_sdk(tmp_path):
+    import subprocess
+    import sys
+    from test_os_frozen_firstboot import _prefix, _stage
+    prefix = _prefix(tmp_path)
+    _stage(prefix)
+    for source in (prefix / "native-runtime").glob("*.py"):
+        source.write_text("raise RuntimeError('mutable SDK executed')\n")
+    frozen = prefix / "os-bootstrap/native-runtime"
+    code = """
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import os_update_commit
+for name in ('os_update_commit', 'os_update_health', 'os_update_state', 'os_bootloader'):
+    assert Path(sys.modules[name].__file__).is_relative_to(Path(sys.argv[1]))
+"""
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(frozen)], capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
