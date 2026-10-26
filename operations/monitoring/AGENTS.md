@@ -3,13 +3,15 @@
 **Parent:** [operations/AGENTS.md](../AGENTS.md)
 
 `rosy.monitoring` owns D-876 observation models, scoped configuration, durable aggregation,
-owner-source collection and the read API. Launcher, UI and deployment follow separately.
+owner-source collection, the read API and a POSIX launcher. UI and deployment follow separately.
 See [README.md](README.md) and [the API contract](../../docs/reference/rosy-monitoring-api.md).
 Current acceptance gates live in [progress.md](progress.md); record changes and verification
 in [logs.md](logs.md), then regenerate the harness index.
 
 - Keep this wheel ROS-free and independent of the Fleet distribution. Fleet owns its passive
   `/api/fleet/monitoring` producer; CORE/host owners retain their diagnostics and repair logic.
+- Keep the launcher on loopback with one worker and a private 0700 state directory. Reject platforms
+  whose private state permissions it cannot enforce; never skip that check to make startup succeed.
 - Preserve original sample identity, reported health and source age across forwarding and receiving restarts.
   The service must use its owned `MonitoringStore`; publish facts and advance peer cursors only after durable commit.
   Restore report paths as stale and subtract elapsed time from source budgets. Never recreate a corrupt/foreign DB.
