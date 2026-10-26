@@ -90,10 +90,33 @@ def _effective(run, prepared):
         raise ValueError("effective RAUC writable paths differ")
 
 
-def _stop(run):
+def _empty_cgroup(root, group):
+    if not group:
+        return
+    if (not group.startswith("/") or Path(group).name != SERVICE
+            or any(part in {"..", "."} for part in group.split("/")) or len(group) > 1024):
+        raise ValueError("RAUC cgroup identity differs")
+    _read(_path(root, "sys/fs/cgroup/cgroup.controllers"), 4096, root.stat().st_uid)
+    path = _path(root, "sys/fs/cgroup" + group + "/cgroup.events")
+    try:
+        raw = _read(path, 4096, root.stat().st_uid).decode("ascii")
+    except FileNotFoundError:
+        if not path.parent.exists():
+            return
+        raise ValueError("RAUC cgroup completion is unknown")
+    fields = dict(line.split() for line in raw.splitlines())
+    if fields.get("populated") != "0":
+        raise ValueError("RAUC cgroup still has live processes")
+
+
+def _stop(root, run):
+    groups = {_value(run, "ControlGroup"), "/system.slice/" + SERVICE}
     _call(run, ["systemctl", "stop", SERVICE])
     if _value(run, "MainPID") != "0" or _value(run, "ActiveState") not in ("inactive", "failed"):
         raise ValueError("RAUC daemon is not confirmed stopped")
+    groups.add(_value(run, "ControlGroup"))
+    for group in groups:
+        _empty_cgroup(root, group)
 
 
 def _request(root):
@@ -185,7 +208,7 @@ def install(root, bundle, raw, signature, *, authorize, run=_run):
         if report_path(root, pending).exists():
             raise ValueError("an installed receipt already exists; recover instead of replaying install")
         _claim(root, pending)
-        _stop(run)
+        _stop(root, run)
         runtime, dropdir = _path(root, RUNTIME), _path(root, DROPIN).parent
         if runtime.exists() or dropdir.exists():
             raise ValueError("recover the existing RAUC runtime before starting a new one")
@@ -215,7 +238,7 @@ def install(root, bundle, raw, signature, *, authorize, run=_run):
             report = read_report(root)
             return dict(installed=True, manifest_sha256=prepared["verified"]["manifest_sha256"], report=report)
         finally:
-            _stop(run)
+            _stop(root, run)
             _cleanup(root, files, directories)
             _call(run, ["systemctl", "daemon-reload"])
     except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError) as exc:
@@ -228,7 +251,7 @@ def recover(root=Path("/"), *, run=_run):
         root = Path(root).absolute()
         if run is _run and root != Path("/"):
             raise ValueError("live service management requires the real root")
-        _stop(run)
+        _stop(root, run)
         _, _, _, files = _existing(root)
         paths = [_path(root, RUNTIME), _path(root, RUNTIME + "/mount"), _path(root, DROPIN).parent]
         directories = {p: (p.stat().st_dev, p.stat().st_ino) for p in paths}
