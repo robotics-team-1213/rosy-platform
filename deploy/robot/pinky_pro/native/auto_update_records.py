@@ -24,6 +24,14 @@ class UpdaterRecords:
 
     # records --------------------------------------------------------------------
 
+    def _maintenance_problem(self) -> str | None:
+        try:
+            from os_payload_compatibility import require_native_maintenance
+            require_native_maintenance(self.root)
+        except (ImportError, OSError, ValueError) as exc:
+            return f"OS_MAINTENANCE_HOLD: {exc}"
+        return None
+
     def _policy_path(self, name: str) -> Path:
         try:
             return policy_file(self.root, name)
@@ -346,6 +354,8 @@ class UpdaterRecords:
 
     def precheck(self) -> list[str]:
         """What native_release runs right before it stops the runtime: hold, seal, one fresh sample."""
+        if problem := self._maintenance_problem():
+            return [problem]
         reasons = []
         kind, detail = self._hold()
         if kind in {"active", "invalid"}:
@@ -360,6 +370,8 @@ class UpdaterRecords:
         """Read-only: may this robot apply now? Two status samples, two different writes."""
         current = self.host.current_release()
         reasons: list[str] = []
+        if problem := self._maintenance_problem():
+            reasons.append(problem)
         kind, detail = self._hold()
         if kind in {"active", "invalid"}:
             reasons.append(detail)

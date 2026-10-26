@@ -323,6 +323,8 @@ class UpdaterApply:
 
     def apply(self, release_id: str, state: dict) -> dict:
         """Activate ``release_id`` under the claim. Refuses anything not newer than current."""
+        if problem := self._maintenance_problem():
+            raise UpdateError(problem)
         current = self.host.current_release()
         if current is None or not RELEASE_ID.fullmatch(release_id) or not release_id > current:
             raise UpdateError(f"NOT_NEWER: {release_id} is not above the current release {current}")
