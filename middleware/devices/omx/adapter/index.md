@@ -49,7 +49,7 @@
 
 ## 최근 기록
 
-- 2026-10-27 · uncommitted · 순수 chunk 파서와 경로 계산을 설치 패키지로 추출
+- 2026-10-27 · 752c9b0aed · 순수 chunk 파서와 경로 계산을 설치 패키지로 추출
 - 2026-10-26 · uncommitted · neutral ARM forward-port contracts holder
 - 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
 - 2026-10-24 · uncommitted · fix(omx): D-858 S1 독립 안전 검토 지적 반영 (H1, M1-M6)

@@ -790,8 +790,8 @@
 - 증거: static syntax and measured size only. Remote legacy Cell/neutral owner regression and independent safety review remain required. No runtime or hardware activation.
 - gate 변화: None. No new runtime, device or field acceptance. CE: no new learning; the compatibility imports and measured size retain the integration reasoning.
 
-## 2026-10-27 · uncommitted · 순수 chunk 파서와 경로 계산을 설치 패키지로 추출
+## 2026-10-27 · 752c9b0aed · 순수 chunk 파서와 경로 계산을 설치 패키지로 추출
 
 - 변경: 기존 chunk 파서·transit/park·속도 검사·motion profile을 설치된 OMX 모듈로 옮기고, 기존 스크립트는 같은 함수를 내보낸다. 기존 검증 오류와 계산·명목 상수를 유지하며 실행자·버스는 바꾸지 않는다.
-- 증거: tests-only `9a2a504f02` 원격 RED에서 모듈 부재·네이티브 import 의존 파일 누락 10개 실패를 관측했다. 소스 검토 및 커밋된 GREEN은 아직 대기 중이다.
+- 증거: tests-only `9a2a504f02` 원격 RED에서 모듈 부재·네이티브 import 의존 파일 누락 10개 실패를 관측했다. 독립 검토 뒤 소스 `752c9b0aed`에서 설치·네이티브 배포 시험 62 passed, 기존 스크립트 별도 시험 113 passed/2 skipped, NEW 0. 옮긴 여덟 함수의 AST가 원본과 일치한다. 건너뛴 두 시험은 녹화 데이터의 leader 활동 검사이며, 설치 파서·경로·배포 import 검사는 모두 실행했다.
 - gate 변화: 없음. 새 명령 권한·서비스·실물 수용은 없다. CE: 해당 없음 — 코드 이동·기존 회귀·네이티브 import 시험으로 설명된다.
