@@ -262,3 +262,32 @@ def test_kernel_device_tree_alias_is_bounded_to_the_real_sysfs_tree(tmp_path, mo
     original.symlink_to(foreign, target_is_directory=True)
     with pytest.raises(ValueError, match="alias escapes"):
         boot.boot_facts(root)
+
+
+def test_committed_trial_remains_readable_before_the_next_normal_reboot(tmp_path, monkeypatch):
+    boot, state, root, _, config = _boot(tmp_path, monkeypatch, "VERIFIED")
+    _permit(boot, state, root)
+    boot.invoke(root, ["set-primary", "b"])
+    with state.locked(root) as store: store.transition(TRANSACTION, "ARMED", SOURCE_BOOT)
+    _trial(root)
+    with state.locked(root) as store: store.transition(TRANSACTION, "TRIAL", TRIAL_BOOT)
+    boot.invoke(root, ["set-state", "b", "good"])
+    with state.locked(root) as store:
+        store.transition(TRANSACTION, "HEALTHY", TRIAL_BOOT, health_sha256="a" * 64)
+        store.transition(TRANSACTION, "COMMIT_INTENT", TRIAL_BOOT)
+    # Model the separate commit owner's successful bootstrap publication, not a hardware acceptance.
+    config.write_bytes(boot.autoboot("b"))
+    with state.locked(root) as store: store.commit(TRANSACTION, TRIAL_BOOT)
+    before = config.read_bytes()
+    assert boot.invoke(root, ["get-current"]) == boot.invoke(root, ["get-primary"]) == "b"
+    assert boot.invoke(root, ["get-state", "b"]) == "good"
+    assert config.read_bytes() == before
+
+
+def test_untracked_other_slot_trial_is_still_hold(tmp_path, monkeypatch):
+    boot, _, root, _, config = _boot(tmp_path, monkeypatch)
+    _trial(root)
+    before = config.read_bytes()
+    with pytest.raises(ValueError, match="untracked boot"):
+        boot.invoke(root, ["get-primary"])
+    assert config.read_bytes() == before
