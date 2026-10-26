@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · 교훈 갱신: 카메라 readiness와 여러 유닛 동시 재시작
+- 2026-10-26 · uncommitted · D-871 3단계: review v12·v13-eval, site-tools
 - 2026-10-26 · uncommitted · D-871 통합관제 업데이트 현황
 - 2026-10-26 · uncommitted · tools/publish_main.py: 기준 목록 검토자 표기와 IP·호스트 공백 표시
 - 2026-10-26 · uncommitted · tools/publish_main.py: 검토한 비밀 검사 기준 목록
-- 2026-10-26 · uncommitted · tools/publish_main.py: 게시 전 비밀 검사(D-889 5)와 역할 이름
-- 2026-10-26 · uncommitted · tools/publish_main.py: D-868 게시 자동화 초안(기본 dry run)

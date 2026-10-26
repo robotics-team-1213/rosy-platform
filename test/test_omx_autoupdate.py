@@ -568,3 +568,11 @@ def test_a_sequential_restart_stops_in_reverse_then_starts_in_order(tmp_path, mo
     assert m.Host({"root": str(tmp_path), "settle": 0, "sequential": True}).restart(units)
     verbs = [line for line in calls.read_text().splitlines() if " is-active " not in line]
     assert verbs == [f"--user stop {u}" for u in reversed(units)] + [f"--user start {u}" for u in units]
+
+
+def test_a_service_on_the_hosts_packages_also_builds_with_uv(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: calls.append(args))
+    m.Host({"base_python": "/usr/bin/python3", "uv": "/opt/uv"}).build_env(None, tmp_path / "env")
+    assert calls == [["/opt/uv", "venv", "-q", "--python", "/usr/bin/python3", "--system-site-packages",
+                      str(tmp_path / "env")]]

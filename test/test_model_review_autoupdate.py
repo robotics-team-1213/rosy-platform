@@ -86,3 +86,16 @@ def test_release_update_unit_takes_the_running_review_python_and_host_from_its_e
     start = next(line for line in unit.splitlines() if line.startswith('ExecStart='))
     assert '--python ${REVIEW_PYTHON}' in start and '--host ${REVIEW_HOST}' in start
     assert '.venv/bin/python' not in start  # a fixed venv dropped the account rollout's environment (2026-10-20)
+
+
+def test_the_v12_and_eval_reviews_follow_the_same_accepted_release_before_v13():
+    # D-871: each extra review app has its own root, state, port and service; v13 runs last and alone fails the unit
+    unit = (Path(__file__).resolve().parents[1] / 'deploy/model_pc/rosy-review-release-update.service').read_text(encoding='utf-8')
+    starts = [line for line in unit.splitlines() if line.startswith('ExecStart=')]
+    assert len(starts) == 3
+    assert starts[-1].startswith('ExecStart=/usr/bin/python3') and 'review-v13-code' in starts[-1]
+    for line, root, port, service in ((starts[0], 'review-v12-code', '8773', 'rosy-review-v12.service'),
+                                      (starts[1], 'review-v13-eval-code', '8775', 'rosy-review-v13-eval.service')):
+        assert line.startswith('ExecStart=-/usr/bin/python3') and f'%h/rosy-ml/{root} ' in line
+        assert f'--port {port} ' in line and f'--service {service} ' in line
+        assert '--python ${REVIEW_PYTHON}' in line and '--minimum-sequence ${MINIMUM_SEQUENCE}' in line
