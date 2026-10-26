@@ -11752,3 +11752,9 @@ osy-d395-s1d\`.
 - 변경: `tools/hooks/pre-push`는 체크아웃이 `PUSH_SHA`와 다르면(다른 HEAD, 추적·스테이징 변경) `<git-common-dir>/rosy-prepush/<pid>`에 그 커밋을 detached 워크트리로 꺼내 lint·생성 기록·Safety-Review·크기·affected 선택을 거기서 돌리고 끝날 때 지운다. 같으면 지금과 같다. robot-4d에서 고정한 SHA 뒤로 main이 움직여 그 커밋에 없는 시험 파일이 선택되고 pytest exit 4가 두 번 났다(`affected --head`는 diff만 PUSH_SHA로 보고 `Repo.load`는 작업 트리를 읽었다).
 - 증거: `test/test_pre_push_hook.py::test_selection_reads_the_pushed_commit_not_the_checkout`(moved·staged·same)가 훅의 해당 단계를 그대로 돌려 선택기의 시험 목록에 PUSH_SHA에 없는 파일이 없음을 본다. 변이 증명은 완료 보고에 적는다.
 - gate 변화: 체크아웃과 PUSH_SHA가 다를 때 판정 대상이 작업 트리에서 밀어 올리는 커밋으로 바뀐다. CE: 해당 없음 — 재발 방지가 회귀 시험에 있다.
+
+## 2026-10-26 · uncommitted · affected 선택기가 안전 경로 변경을 FULL로 올린다
+
+- 변경: `tools/harness/affected_tests.py`가 바뀐 경로마다 `safety_review.is_safety`(D-430 §5 판정, `platform_parts.yaml`의 `concern: safety` 루트와 `safety_modules`)를 불러, 안전 경로면 이유 `safety path (platform_parts concern: safety)`로 FULL에 올리고 foundation 좁히기도 하지 않는다. 접두를 `FULL_TRIGGERS`에 복사하지 않는다. `NOT_TRIGGERS`가 먼저라 안전 루트 아래 Markdown은 FULL이 아니다. 이전에는 안전 경로도 trailer만 요구하고 affected 범위로 시험됐다.
+- 증거: `test/test_affected_tests.py`에 안전 경로 FULL, 비안전·Markdown 비승격, 가장 깊은 루트 판정 시험을 더했고 `is_safety`를 False로 바꾸는 변이로 빨강을 확인했다. 원격 `test/test_affected_tests.py`, `test/test_harness_contracts.py`, `test/test_safety_review.py`.
+- gate 변화: 없음. 안전 경로(`test/flaky_quarantine.txt` 포함) 변경은 이제 FULL을 돈다. CE: 해당 없음 — 합의된 설계의 선택기 규칙이며 시험이 규칙을 지킨다.

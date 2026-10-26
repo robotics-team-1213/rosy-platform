@@ -403,6 +403,39 @@ def test_real_repo_ci_workflow_keeps_full_execution_coverage():
     assert "test" in sel.reasons
 
 
+# --- D-430 5 safety paths: FULL through safety_review.is_safety, never a copied prefix list ---------
+
+
+def _safety_escalations(sel):
+    return [e for e in sel.escalations if e.endswith(affected.SAFETY_TRIGGER)]
+
+
+def test_real_repo_safety_paths_escalate_to_full_and_are_never_narrowed():
+    repo = affected.Repo.load(ROOT)
+    # A concern: safety root file, and a safety_modules entry under the narrowable foundation.
+    for path in ("middleware/drive/motion_limits/actuation.py",
+                 "contracts/foundation/core_common/protocol/swarm_freshness.py"):
+        sel = affected.select(repo, [path])
+        assert sel.mode == "full", path
+        assert _safety_escalations(sel) == [f"{path}: {affected.SAFETY_TRIGGER}"], sel.escalations
+
+
+def test_real_repo_non_safety_path_and_safety_markdown_are_not_escalated_by_the_safety_rule():
+    repo = affected.Repo.load(ROOT)
+    for path in ("middleware/perception/control/battery.py",
+                 "middleware/drive/motion_limits/AGENTS.md"):  # NOT_TRIGGERS: Markdown is not FULL
+        assert not _safety_escalations(affected.select(repo, [path])), path
+
+
+def test_safety_rule_follows_deepest_root_wins(tmp_path):
+    """is_safety's intended rule: the deepest owning root decides, so a deeper root without
+    concern under a safety root is not safety (the real manifest has no such nesting today)."""
+    repo = affected.Repo(tmp_path, modules=[], owners=[], tracked=[], test_files=[],
+                         safety_roots=[{"path": "a", "concern": "safety"}, {"path": "a/b"}])
+    assert _safety_escalations(affected.select(repo, ["a/x.py"]))
+    assert not _safety_escalations(affected.select(repo, ["a/b/x.py"]))
+
+
 # --- D-436 4: GitHub runs the full tier as a parallel matrix; local --run does not -------------
 
 
