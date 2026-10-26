@@ -289,3 +289,29 @@ def harness_modules_added(repo: at.Repo, base_text: str, head_text: str) -> tupl
         if any(t in ignored or not any(at._under(t, g) for g in gated) for t in files):
             return [], f"module {module['name']}: a suite is not in CI's gating full matrix"
     return added, ""
+
+
+def layout_problem(repo: at.Repo, old: str, new: str | None) -> str:
+    """Rule 5 (design 0.7): why a removed (`new` None) or moved file stays FULL, "" when nothing names it.
+
+    Any tracked non-Markdown file naming its last component as a word (``git grep -w``) counts: dynamic
+    imports, entry points (setup/pyproject/package.xml/launch/systemd/Dockerfile), path-constant lists
+    such as LEARNING_REQUIRED, harness.yaml, platform_parts, size_ratchet and web assets all spell it.
+    A move across modules or import roots stays FULL: no host install/build smoke exists to run instead.
+    """
+    if new is not None:
+        def owner(path: str):
+            roots = [r for r, _ in repo.owners if at._under(path, r)]
+            return (repo.module_for(path) or {}).get("name"), max(roots, key=len, default=None)
+        if owner(old) != owner(new):
+            return "crosses a module or import root (no host install/build smoke to run instead)"
+    stem = PurePosixPath(old).stem
+    where = [repo.rev] if repo.rev else ["--untracked"]
+    result = at.subprocess.run(["git", "-C", str(repo.root), "grep", "-l", "-I", "-w", "-F", "-e", stem, *where,
+                                "--", ".", ":(exclude)*.md"], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
+    if result.returncode not in (0, 1):  # 1: no match
+        return f"cannot search for {stem!r}: {result.stderr.strip()}"
+    hits = [h.removeprefix(f"{repo.rev}:") if repo.rev else h for h in result.stdout.splitlines()]
+    hits = [h for h in hits if h != new]
+    return f"{len(hits)} file(s) still name {stem!r}, first {hits[0]}" if hits else ""
