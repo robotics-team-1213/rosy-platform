@@ -1,5 +1,6 @@
 """Actual descriptor witnesses for contained, finite, stable catalog capture."""
 import os
+import gc
 import multiprocessing
 from pathlib import Path
 
@@ -123,6 +124,7 @@ def test_selected_or_internal_links_never_read_target_bytes(tmp_path, monkeypatc
         review_ingest.import_frames(store, body)
     assert not reads, 'linked selected content was read through an actual target FD'
     assert snapshot(store) == before
+    gc.collect()
     current = fd_snapshot()
     assert current == baseline, dict(before=baseline, after=current)
 
