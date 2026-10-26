@@ -16,7 +16,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from omx_topic_backend import SIM_COMMANDS, SIM_STATES  # noqa: E402
-from omx_backend_conformance import CAMERAS, JOINTS  # noqa: E402
+from omx_backend_conformance import CAMERAS, JOINTS, OBJECTS  # noqa: E402
 from omx_cell_world import boxes, quaternion  # noqa: E402
 
 TIMESTEP_S, STATE_PERIOD_S = .002, .01
@@ -92,7 +92,9 @@ def main():
     from rclpy.node import Node
     from rclpy.qos import qos_profile_sensor_data
     from rosgraph_msgs.msg import Clock
+    from geometry_msgs.msg import TransformStamped
     from sensor_msgs.msg import Image, JointState
+    from tf2_msgs.msg import TFMessage
 
     mesh_root = Path(get_package_share_directory('open_manipulator_description'))/'meshes/omx_f'
     model = build(args.urdf.read_text(), mesh_root, shape)
@@ -103,12 +105,14 @@ def main():
     qpos = {name: model.joint(name).qposadr[0] for name in joints}
     qvel = {name: model.joint(name).dofadr[0] for name in joints}
     actuator = {name: model.actuator(name).id for name in JOINTS}
+    movable = [box['name'] for box in boxes() if not box['static']]
 
     rclpy.init()
     node = Node('omx_mujoco_backend')
     clock_pub = node.create_publisher(Clock, '/clock', 10)
     state_pub = node.create_publisher(JointState, SIM_STATES, 10)
     image_pub = {name: node.create_publisher(Image, topic, qos_profile_sensor_data) for name, topic in CAMERAS.items()}
+    object_pub = node.create_publisher(TFMessage, OBJECTS, 10)  # Evaluation facts, never a policy input.
 
     def command(message):
         for name, position in zip(message.name, message.position):
@@ -133,6 +137,16 @@ def main():
                                    velocity=[float(data.qvel[qvel[n]]) for n in joints])
                 state.header.stamp = now
                 state_pub.publish(state)
+                poses = []
+                for name in movable:
+                    pose = TransformStamped()
+                    pose.header.stamp, pose.header.frame_id, pose.child_frame_id = now, 'world', name
+                    (pose.transform.translation.x, pose.transform.translation.y,
+                     pose.transform.translation.z) = (float(v) for v in data.body(name).xpos)
+                    (pose.transform.rotation.w, pose.transform.rotation.x, pose.transform.rotation.y,
+                     pose.transform.rotation.z) = (float(v) for v in data.body(name).xquat)
+                    poses.append(pose)
+                object_pub.publish(TFMessage(transforms=poses))
                 rclpy.spin_once(node, timeout_sec=0)
             if data.time >= next_camera:
                 next_camera += 1/args.camera_hz
