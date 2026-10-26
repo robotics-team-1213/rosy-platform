@@ -249,6 +249,13 @@ def test_committed_trial_requests_one_normal_boot_for_future_automatic_updates(t
     assert m.resume(root, host=host, run=run)["pending"] is None
     normal_reboot = ["/usr/bin/systemctl", "--no-block", "reboot"]
     assert calls.count(normal_reboot) == 1
+    assert not any("--reboot-argument=0 tryboot" in command for command in calls)
+    _normal(root, "b")
+    assert m.resume(root, host=host, run=run)["pending"] is None
+    assert calls.count(normal_reboot) == 1
+    (root / "proc/device-tree/chosen/bootloader/tryboot").write_bytes(__import__("struct").pack(">I", 1))
+    assert m.resume(root, host=host, run=run)["pending"] is None
+    assert calls.count(normal_reboot) == 1  # A different boot cannot repeat this transaction's normalization.
 
 
 def test_untracked_committed_tryboot_flag_does_not_request_reboot(tmp_path, monkeypatch):
@@ -257,7 +264,3 @@ def test_untracked_committed_tryboot_flag_does_not_request_reboot(tmp_path, monk
     (root / "proc/device-tree/chosen/bootloader/tryboot").write_bytes(struct.pack(">I", 1))
     assert m.resume(root, host=host, run=run)["pending"] is None
     assert not any("reboot" in command for command in calls)
-    assert not any("--reboot-argument=0 tryboot" in command for command in calls)
-    _normal(root, "b")
-    assert m.resume(root, host=host, run=run)["pending"] is None
-    assert calls.count(normal_reboot) == 1
