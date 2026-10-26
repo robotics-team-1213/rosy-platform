@@ -137,6 +137,27 @@ def test_empty_or_terminal_source_returns_hold_without_fabricated_positions():
     assert out['errors_rad'] == {}
 
 
+def test_other_group_updates_do_not_reconsume_selected_group_samples():
+    from copy import deepcopy
+    p, r = characteristics(), request()
+    m = monitor(p, r)
+    h = health(p)
+    others = [motor.model_copy(update={'group': 'other-arm'}) for motor in h.motors]
+    h.motors.extend(others)
+    assert m.observe(h, captured_at=100., now=100., context=r['context'])['status'] == 'observing'
+    h = deepcopy(h)
+    for motor in h.motors:
+        motor.sample_age_s = .05 if motor.group == p['binding']['motor_group'] else 0.
+    out = m.observe(h, captured_at=100.05, now=100.05, context=r['context'])
+    assert out['status'] == 'observing'
+    assert out['errors_rad'] == {}
+    assert out['new_joint_samples'] == []
+    for motor in h.motors:
+        motor.sample_age_s = .15 if motor.group == p['binding']['motor_group'] else 0.
+    out = m.observe(h, captured_at=100.15, now=100.15, context=r['context'])
+    assert any('feedback_gap' in reason for reason in out['reasons'])
+
+
 def test_native_producer_through_real_snapshot_reader_supports_named_group(tmp_path, monkeypatch):
     import importlib.util
     from pathlib import Path
