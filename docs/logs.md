@@ -11967,3 +11967,11 @@ osy-d395-s1d\`.
 - 증거: 모델 PC 한 대에 같은 3조각을 동시에 1/2/3개 → 벽시계 1053/632/449 s, 조각별 시간 1% 이내 동일, 실패 0, 조각당 최대 메모리 751 MiB. 3도 느려지지 않았지만 main의 xdist 작업과 준비 중 착지 최대 3개가 같이 돌기 때문에 2로 둔다. 전체 브라우저 96파일 9조각을 모델·AI PC에서 실행: 각 305/350/373/237/427/283/561/368/585 s(합 3488 s), 벽시계 1163 s(3.0배), 실패는 known 1건(`test_theme_browser.py` topbar). 헤드리스 Chromium은 두 PC 모두 WebGL 렌더러가 SwiftShader라 NVIDIA GPU를 쓰지 않아 `--disable-gpu`를 붙여도 바뀌지 않음(추가하지 않음). 원격 `test/test_land_browser.py test/test_remote_pytest.py test/test_land.py test/test_remote_sim.py test/test_land_events.py` NEW 0. 합집합 시험은 파일 하나를 버리는 변이에서 3건 실패.
 - gate 변화: 없음(같은 파일을 같은 직렬 조건으로 정확히 한 번 실행). sim이 한 PC를 잡고 있으면 FULL 조각을 받을 실험실 PC가 하나뿐이라 이득이 작다.
 - CE: 해당 없음 — 장애 해결이 아니라 측정 기반 성능 변경이며 측정값은 코드 주석과 이 기록에 있다.
+
+## 2026-10-26 · uncommitted · tools/land_browser.py: 건너뛰기만 한 브라우저 조각은 통과가 아니다
+
+- 변경: `land.py`가 브라우저 호출(`ROSY_RUN_BROWSER_TESTS=1`)의 exit 0/1을 판정할 때 `land_browser.vacuous`로 그 조각 자신의 요약 줄(격리 재실행 표지 앞)을 읽어 passed > 0, skipped == 0이 아니면 착지를 멈춘다. 조각을 만들 때도 옵트인이 없는 조각은 예외로 멈춘다.
+- 이유: 옵트인이 작업에 닿지 않거나 Chromium이 건너뛰기 가드 뒤에 없으면 모든 시험이 수집된 뒤 건너뛰어져 exit 0(5가 아님)으로 빈 통과가 된다(robot-0d).
+- 결정: 정상 PC에서 건너뛰는 브라우저 파일은 없다(2026-10-26 전체 1537건 skipped 0). 그래서 파일별 허용 건너뛰기 목록 없이 0만 허용한다. `test_games_board_browser.py`가 포트 6000이 잡혀 건너뛰는 경우도 그 시험이 돌지 않은 것이라 빨강으로 두고, 다음 착지가 그 조각을 다시 돌린다.
+- 증거: 원격에서 같은 87건 조각을 옵트인 있음/없음으로 실행 → 있음 87 passed exit 0 판정 통과, 없음 87 skipped exit 0 → `vacuous` "0 passed, 87 skipped"로 빨강. 시험 `test/test_land_browser.py`(요약 6가지, 재실행 뒤 숨김 방지, 옵트인 없는 조각), `test/test_land.py`(건너뛰기만 한 조각이 착지를 멈춤).
+- gate 변화: 강화(빈 통과 차단). CE: 해당 없음 — 사전 차단 규칙이며 장애 해결이 아니다.
