@@ -1,12 +1,11 @@
 """Durable pending state reconstructs motion inhibition; no hardware is commanded."""
 import importlib
 import json
-from pathlib import Path
 
 import pytest
 
 from test_os_bootloader import _boot, _trial
-from test_os_update_state import _advance, TRANSACTION, TRIAL_BOOT
+from test_os_update_state import TRANSACTION, TRIAL_BOOT
 
 
 def test_pending_reconstructs_no_drive_after_runtime_directory_is_lost(tmp_path, monkeypatch):
@@ -45,7 +44,10 @@ def test_committed_trial_restores_operator_controls_without_rewriting_them(tmp_p
     operator.write_text("ROSY_IO_DRIVE_ENABLED=true\n")
     _trial(root)
     assert guard.reconcile(root) is True
-    _advance(state, root, "COMMIT_INTENT")
+    for phase in ("TRIAL", "HEALTHY", "COMMIT_INTENT"):
+        with state.locked(root) as store:
+            store.transition(TRANSACTION, phase, TRIAL_BOOT,
+                             health_sha256="b" * 64 if phase == "HEALTHY" else None)
     from os_bootloader import autoboot
     config.write_bytes(autoboot("b"))
     with state.locked(root) as store:
