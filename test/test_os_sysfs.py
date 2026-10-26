@@ -36,3 +36,19 @@ def test_sysfs_exception_never_relaxes_stored_metadata_size_checks(tmp_path, mon
     monkeypatch.setattr(os, "fstat", page_sized)
     with pytest.raises(ValueError, match="bounded regular"):
         os_state_layout._read(path, 64)
+
+
+def test_storage_mount_admission_handles_page_sized_sysfs_attributes(tmp_path, monkeypatch):
+    from os_state_boot_fakes import shared_roots
+    from test_os_storage_boot import _module
+    root, _, _, _ = shared_roots(tmp_path, monkeypatch, protocol=2)
+    original = os.fstat
+    def kernel_attribute(fd):
+        info = original(fd)
+        if Path(os.readlink(f"/proc/self/fd/{fd}")).is_relative_to(root / "sys"):
+            values = list(info)
+            values[6] = 4096
+            return os.stat_result(values)
+        return info
+    monkeypatch.setattr(os, "fstat", kernel_attribute)
+    assert _module().admit_storage(root)["phase"] == "FACTORY_EMPTY"
