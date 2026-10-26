@@ -11,6 +11,9 @@ from pathlib import Path
 import re
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "native"))
+from os_storage_dispatch import BOOTSTRAP_FILES
+
 
 REQUIRED_UNITS = (
     "rosy-os-storage.service",
@@ -236,8 +239,8 @@ def lamp_driver_findings(root: Path) -> list[str]:
 
 STORAGE_CONSUMERS = ("NetworkManager.service", "ssh.service", "ssh.socket", "tailscaled.service",
                      "rosy-ssh-access-boot.service", "rosy-first-boot.service", "rosy-first-boot-retry.service")
-BOOTSTRAP_HELPERS = ("os_state_storage.py", "os_state_firstboot.py", "os_state_layout.py", "os_state_io.py", "os_state_accounts.py", "os_state_files.py", "os_state_config.py", "os_state_ready.py", "os_storage_dispatch.py")
-STORAGE_HELPERS = (*BOOTSTRAP_HELPERS, "os_storage_dispatch.py", "first_boot_runtime.py")
+BOOTSTRAP_HELPERS = BOOTSTRAP_FILES
+STORAGE_HELPERS = (*BOOTSTRAP_HELPERS, "first_boot_runtime.py")
 
 
 def storage_gate_findings(root: Path) -> list[str]:
