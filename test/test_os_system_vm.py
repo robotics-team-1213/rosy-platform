@@ -23,6 +23,25 @@ def test_guest_download_rejects_hash_or_size_before_publishing(tmp_path):
         assert not (tmp_path / field).exists()
 
 
+def test_cached_public_inputs_are_reverified_and_copied_independently(tmp_path, monkeypatch):
+    m = module()
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    source = tmp_path / "upstream"
+    source.write_bytes(b"known bytes")
+    sha = hashlib.sha256(source.read_bytes()).hexdigest()
+    expected = dict(url=source.as_uri(), size_bytes=11, sha256=sha)
+    m.cached_input(expected, tmp_path / "first")
+    (tmp_path / "first").write_bytes(b"guest writes")
+    monkeypatch.setattr(m, "urlopen", lambda *a, **k: pytest.fail("verified cache was downloaded again"))
+    m.cached_input(expected, tmp_path / "second")
+    assert (tmp_path / "second").read_bytes() == b"known bytes"
+    cached = tmp_path / "cache/rosy-os-system-inputs" / (sha + ".bin")
+    cached.chmod(0o600)
+    cached.write_bytes(b"bad cache!!")
+    with pytest.raises(ValueError): m.cached_input(expected, tmp_path / "third")
+    assert not (tmp_path / "third").exists()
+
+
 def test_qemu_command_has_only_owned_images_and_loopback_ssh(tmp_path):
     m = module()
     vm = m.Guest(tmp_path)
