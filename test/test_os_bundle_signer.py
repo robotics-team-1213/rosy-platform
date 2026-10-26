@@ -15,6 +15,8 @@ from test_factory_release_signature import _keys
 from sign_image_release import sign_image_release
 from signing import sign_checksums
 from os_rauc_fakes import rauc_tool, signer
+from test_os_update_feed import feed  # Actual HTTP catalogue/staging fixture.
+from auto_update_fakes import HOST
 
 
 def module():
@@ -58,13 +60,17 @@ def test_authenticates_distribution_and_factory_before_parsing_os_inputs(tmp_pat
     assert value["native_factory"]["checksums_sha256"] == hashlib.sha256((dist / "factory-release" / RELEASE_ID / "SHA256SUMS").read_bytes()).hexdigest()
 
 
-@pytest.mark.parametrize("change", ["metadata", "archive", "outer_signature", "factory_signature"])
+@pytest.mark.parametrize("change", ["metadata", "archive", "outer_signature", "factory_signature", "foreign_board"])
 def test_refuses_untrusted_inputs_without_mutating_distribution(tmp_path, change):
     m, dist, private, public = distribution(tmp_path)
     path = dist / {"metadata": "os-bundle-inputs/inputs.json", "archive": "os-bundle-inputs/rootfs.ext4.xz",
-        "outer_signature": "SHA256SUMS.sig", "factory_signature": f"factory-release/{RELEASE_ID}/SHA256SUMS.sig"}[change]
-    path.write_bytes(b"tampered")
-    if change == "factory_signature":
+        "outer_signature": "SHA256SUMS.sig", "factory_signature": f"factory-release/{RELEASE_ID}/SHA256SUMS.sig",
+        "foreign_board": "manifest.json"}[change]
+    if change == "foreign_board":
+        value = json.loads(path.read_bytes())
+        path.write_text(json.dumps({**value, "board": "foreign-robot"}))
+    else: path.write_bytes(b"tampered")
+    if change in {"factory_signature", "foreign_board"}:
         # Even an outer signature does not replace the native factory signature.
         from signing import build_sha256sums
         entries = [p.relative_to(dist).as_posix() for p in dist.rglob("*") if p.is_file()
@@ -90,7 +96,7 @@ def test_decompression_is_bounded_by_both_size_and_digest(tmp_path):
         with pytest.raises(ValueError): m.decompress(archive, bad, tmp_path / (field + ".ext4"))
 
 
-def test_real_bundle_signing_is_accepted_by_existing_os_consumer(tmp_path, monkeypatch, rauc_tool):
+def test_real_bundle_signing_is_accepted_by_existing_os_consumer(tmp_path, monkeypatch, rauc_tool, feed):
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)  # Ephemeral fixture keys only, never a product CI signer.
     m, dist, private, public = distribution(tmp_path)
     cms_private, certificate = signer(tmp_path / "cms")
@@ -98,7 +104,7 @@ def test_real_bundle_signing_is_accepted_by_existing_os_consumer(tmp_path, monke
     prepared = []
     monkeypatch.setattr(m, "prepare_root", lambda work, *_: prepared.append(work))
     output = tmp_path / "signed-os"
-    m.sign(dist, output, private, public, cms_private, certificate, canary=["fixture-device"], rauc=str(rauc_tool))
+    m.sign(dist, output, private, public, cms_private, certificate, canary=[HOST], rauc=str(rauc_tool))
     assert len(prepared) == 1
     assert {p.name for p in output.iterdir()} == {f"rosy-os-pinky-pro-{RELEASE_ID}-arm64.raucb",
         "os-update.json", "os-update.json.sig", "os-rollout.json", "os-rollout.json.sig"}
@@ -122,4 +128,26 @@ def test_real_bundle_signing_is_accepted_by_existing_os_consumer(tmp_path, monke
     from os_update_rollout import verify, authorize
     rollout = verify((output / "os-rollout.json").read_bytes(), (output / "os-rollout.json.sig").read_text().strip(), public, facts["metadata"])
     from datetime import datetime, timezone
-    authorize(rollout, "fixture-device", datetime.now(timezone.utc))
+    authorize(rollout, HOST, datetime.now(timezone.utc))
+    client_module, hub, host, device, state, journal, _, _ = feed
+    host.t = datetime.now(timezone.utc)
+    (device / "etc/rosy/trusted-release-keys" / public.name).write_bytes(public.read_bytes())
+    entry = dict(tag_name="os-pinky-pro-" + RELEASE_ID, draft=False, prerelease=False, assets=[])
+    for path in output.iterdir():
+        asset = RELEASE_ID + "/" + path.name
+        hub.assets[asset] = path.read_bytes()
+        entry["assets"].append(dict(name=path.name, size=path.stat().st_size, browser_download_url=hub.base + "/dl/" + asset))
+    hub.releases.append(entry)
+    client = client_module.Feed(device, host=host)
+    assert client.poll(apply=False)["outcome"] == "staged"
+    downloaded = device / "var/lib/rosy-device/os-update/staging" / RELEASE_ID / bundle.name
+    assert downloaded.read_bytes() == bundle.read_bytes()
+    withdrawn = json.dumps({**rollout, "withdrawn": True}).encode()
+    hub.assets[RELEASE_ID + "/os-rollout.json"] = withdrawn
+    hub.assets[RELEASE_ID + "/os-rollout.json.sig"] = sign_checksums(withdrawn, private).encode()
+    with pytest.raises(client_module.Withdrawn): client.admit(facts["metadata"])
+    record = json.loads(journal.read_bytes())
+    record["failed_versions"] = [RELEASE_ID]
+    journal.write_text(json.dumps(record))
+    assert client.poll(apply=False)["outcome"] == "no-update"
+    assert state.read_state(device)["pending"] is None
