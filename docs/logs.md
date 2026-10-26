@@ -12086,6 +12086,26 @@ osy-d395-s1d\`.
 - 증거: `land_stats --days 1`(10-26), 착지 기록 `.git/rosy-land/*.json`, 설계 작업 계획 0.7~0.9절.
 - gate 변화: 없음.
 
+## 2026-10-26 · b82af1ec31 · pure landing selection extraction
+
+- Change: move only select/browser_tier to land_selection with caller-owned Stop/env/helper seams and unchanged public wrappers; land581->548, helper53. No explicit FULL/receipt/prepared policy change.
+- Evidence: independent source treec0f27b3c40 approval; committed standalone REDb41cbae63511FAIL/NEW11 at missing-leaf assertions; sourceb82af1ec31 five-file remote152PASS0skip, official/outer/known0/NEW0. AST bodies preserved after inverse dependency qualification; other gateway functions/classes unchanged. Browser tests cover chunks/selection, without Chromium opt-in.
+- Gate: source preparation only; official FULL/landing/publish/device acceptance pending Root. Raw capped /tmp pip warnings retained with unknown attribution/no cleanup. See validation/land-selection-extraction-2026-10-26/result.md and external source-bound evidence.
+- CE: not applicable; pure split and existing size/selection lessons, without a new solved runtime incident.
+
+## 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
+
+- 변경: 설치 wheel의 독립 CLI, loopback/비공개 상태 경로/단일 worker, 플랫폼 권한 미보장 시 시작 거부를 구현했다. Fleet 캐시 미구축에서 과거 관측을 만료까지 보존하고 peer 수신의 로컬 거절 사유를 Collector로 전달한다.
+- 증거: `6b0f7568f5` 원격98시험과 구조/harness/affected247시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 실제 개별·중앙 집계·중앙 직접 수집 subprocess와 중앙 단절 독립성·프로세스 간 writer 배타성을 확인했다. 최종 독립 재검토 차단 없음.
+- gate 변화: Monitoring SOURCE GO, 화면/배포/실제 PC 수용은 HOLD다. CE: 해당 없음 — 새 기능의 코드·회귀가 판단 근거를 보존한다.
+
+## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
+
+- 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
+- 증거: 소스758f92b620 root6FAIL/11447PASS/1211SKIP,23invocation 취소. 같은6건 main 선택 통과를 전체 맥락 대조로 확대하지 않았다. root 수집을 포함한 AI 대조4회는 각각21PASS/수집7SKIP, 공식·outer·known0/NEW0이며 기존 실패 원인은 미해결이다. validation/land-selection-extraction-2026-10-27/result.md.
+- gate 변화: HOLD 유지. 원래 FULL 실패를 단독 선택 성공으로 바꾸지 않으며 다음 공식 전체 실행·착지·게시·실물 수용은 별도다.
+- CE: 미해결 — 종료 지연 원인과 해결을 입증하지 못해 해결 교훈을 쓰지 않았다.
+
 ## 2026-10-27 · uncommitted · perf(remote): 직렬 묶음 13개를 xdist로
 
 - 변경: `tools/remote/serial_suites.txt`에서 13줄을 뺐다(D-799 3: 직렬과 `-n`의 실패가 같음을 시험 PC에서 본 뒤). root `test/`와 `operations/fleet/test`는 착지 사전 시험의 임계 경로였다(10-26 FULL 사전 시험 25~60분, 그중 순차 17분·18분). 직렬 경로 하나가 섞인 묶음도 통째로 순차였다(imu_bno055가 섞인 media·games·palletizing 묶음). Gazebo·Isaac은 재지 않아 남기고, `tools`는 land_isolation의 collect_alone 잡이 기대므로 남겼다. 워커마다 수집 id가 달라 xdist 수집이 멈추던 두 매개변수(`test_password_session.py` 무작위 salt 해시, `test_site_conversation_client.py` `time.time()`)에 고정 id를 줬다.
