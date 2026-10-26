@@ -106,6 +106,7 @@ def test_preboot_good_ack_does_not_commit_or_arm(tmp_path, monkeypatch):
 def test_verified_source_arm_is_idempotent_and_trial_reports_target_without_bootstrap_write(tmp_path, monkeypatch):
     boot, state, root, path, config = _boot(tmp_path, monkeypatch, "VERIFIED")
     _permit(boot, state, root)
+    boot.invoke(root, ["set-state", "b", "good"])
     before = path.read_bytes(), config.read_bytes()
     for _ in range(2):
         assert boot.invoke(root, ["set-primary", "b"]) == ""
@@ -216,3 +217,48 @@ assert os_bootloader.parse_autoboot(os_bootloader.autoboot('b')) == 'b'
     result = subprocess.run([sys.executable, "-I", "-B", "-c", script, str(native)],
                             capture_output=True, text=True, cwd=tmp_path, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_arm_recaptures_real_media_after_the_permit_was_issued(tmp_path, monkeypatch):
+    boot, state, root, path, config = _boot(tmp_path, monkeypatch, "VERIFIED")
+    _permit(boot, state, root)
+    size = root / "sys/devices/virtual/block/sda/sda5/size"
+    size.write_text(str(int(size.read_text()) - 1))
+    before = path.read_bytes(), config.read_bytes()
+    with pytest.raises(ValueError, match="kernel partition range"):
+        boot.invoke(root, ["set-primary", "b"])
+    assert (path.read_bytes(), config.read_bytes()) == before
+    assert boot.invoke(root, ["get-primary"]) == "a"
+
+
+@pytest.mark.parametrize("damage", ["symlink", "hardlink", "wide_mode", "corrupt"])
+def test_untrusted_arm_record_is_hold_without_touching_bootstrap(tmp_path, monkeypatch, damage):
+    import os
+    boot, state, root, _, config = _boot(tmp_path, monkeypatch, "VERIFIED")
+    _permit(boot, state, root)
+    boot.invoke(root, ["set-primary", "b"])
+    arm = root / boot.ARM
+    if damage == "symlink": arm.rename(arm.with_suffix(".target")); arm.symlink_to(arm.with_suffix(".target"))
+    elif damage == "hardlink": os.link(arm, arm.with_suffix(".alias"))
+    elif damage == "wide_mode": arm.chmod(0o644)
+    else: arm.write_text("{")
+    before = config.read_bytes()
+    with pytest.raises(ValueError, match="OS_BOOT_HOLD"):
+        boot.invoke(root, ["get-primary"])
+    assert config.read_bytes() == before
+
+
+def test_kernel_device_tree_alias_is_bounded_to_the_real_sysfs_tree(tmp_path, monkeypatch):
+    boot, _, root, _, _ = _boot(tmp_path, monkeypatch)
+    original = root / "proc/device-tree"
+    target = root / "sys/firmware/devicetree/base"
+    target.parent.mkdir(parents=True)
+    original.rename(target)
+    original.symlink_to(target, target_is_directory=True)
+    assert boot.boot_facts(root)["partition"] == 2
+    original.unlink()
+    foreign = root / "fake-firmware"
+    foreign.mkdir()
+    original.symlink_to(foreign, target_is_directory=True)
+    with pytest.raises(ValueError, match="alias escapes"):
+        boot.boot_facts(root)

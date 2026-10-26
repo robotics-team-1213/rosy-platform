@@ -41,7 +41,7 @@ def _card(tmp_path, monkeypatch, slot="a"):
         (part / "start").write_text(str(layout["partitions"][number - 1]["start_lba"]))
         (part / "size").write_text(str(layout["partitions"][number - 1]["size_lba"]))
         (aliases / f"8:{number}").symlink_to(part, target_is_directory=True)
-    device = root / "proc/1/root/dev/block/8:0"
+    device = root / "dev/block/8:0"
     device.parent.mkdir(parents=True)
     device.write_bytes(raw)
     boot = 2 if slot == "a" else 3
