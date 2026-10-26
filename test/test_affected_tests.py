@@ -123,7 +123,7 @@ FILES = {
     "test/test_robot_runtime.py": "def test_x():\n    pass\n",
     "test/test_unrelated.py": "def test_y():\n    pass\n",
     "test/test_line_follow_contract_docs.py": "DOC = 'docs/reference/line-follow.md'\n",
-    "test/test_network_topology_contracts.py": "",
+    "test/test_network_topology_contracts.py": 'ADR = ROOT / "docs" / "reference" / "ROSY ADR Log.md"\n',
     ".github/workflows/ci.yml": "name: ci\n",
     ".github/workflows/release.yml": "name: release\n",
     "test/test_release_workflow.py": "WORKFLOW = '.github/workflows/release.yml'\n",
@@ -202,7 +202,7 @@ CASES = [
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
      {"middleware/perception/test", "middleware/core/gateway/test"}),
-    ("ADR only -> docs module contracts (guards cover the ADR index)",
+    ("ADR only -> the ADR Log readers (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
      ["docs/reference/line-follow.md"], "affected",
@@ -229,8 +229,7 @@ CASES = [
     ("source layout -> full", ["middleware/perception/control/_source_layout.py"], "full", None),
     ("architecture guard -> full", ["test/architecture/test_layout.py"], "full", None),
     ("known failures list -> full", ["test/known_failures.txt"], "full", None),
-    ("foundation record -> its module suite and direct dependents, not full", ["contracts/foundation/logs.md"],
-     "affected", {"contracts/foundation/test", "middleware/perception/test"}),
+    ("module record -> its readers, not the module suite", ["contracts/foundation/logs.md"], "affected", set()),
 ]
 
 
@@ -688,3 +687,141 @@ def test_unknown_paths_are_listed_with_a_hint_in_json_and_print(sample, capsys):
     assert "  tools/mystery/run.sh\n      hint: name this path literally in the test that loads it" in text
     assert "deploy/robot/run.sh\n      hint" not in text
     assert _select(sample, "deploy/robot/run.sh").unmapped == []
+
+# 2026-10-26: a five-line `modules:` addition went FULL and held the land lock 45+ minutes.
+REAL_HARNESS = (ROOT / "tools/harness/harness.yaml").read_text(encoding="utf-8")
+NEW_MODULE = "  - name: zz_added\n    path: operations/zz_added\n    tests: [test/architecture]\n"
+
+
+def _harness_with(entry: str, base: str = REAL_HARNESS) -> str:
+    assert "\nmodules:\n" in base
+    return base.replace("\nmodules:\n", "\nmodules:\n" + entry, 1)
+
+
+def _harness_select(head: str, base: str = REAL_HARNESS):
+    return affected.select(affected.Repo.load(ROOT), ["tools/harness/harness.yaml"], harness_texts=(base, head))
+
+
+def test_harness_yaml_module_added_only_selects_its_suites_not_full():
+    sel = _harness_select(_harness_with(NEW_MODULE))
+    assert sel.mode == "affected", sel.escalations
+    assert {"test/architecture", "test/test_harness_contracts.py", "test/test_affected_tests.py"} <= set(sel.reasons)
+    assert "harness.yaml: module(s) added: zz_added" in sel.reasons["test/architecture"]
+    assert "test/architecture/test_folder_layout.py" in sel.reasons
+
+
+@pytest.mark.parametrize("head, why", [
+    (REAL_HARNESS.replace("    path: middleware/core/services\n", "    path: middleware/core/servicez\n", 1),
+     "existing module entry changed"),
+    (_harness_with("  - name: zz_added\n    path: middleware/core/services/src\n    tests: [test/architecture]\n"),
+     "overlaps module core_features"),
+    (_harness_with("  - name: core_features\n    path: operations/zz_added\n    tests: [test/architecture]\n"),
+     "name missing or duplicated"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: &t [test/architecture]\n"),
+     "anchor"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: [operations/zz_added/test]\n"),
+     "no test function"),
+    (_harness_with(NEW_MODULE) + "zz_new_key: 1\n", "other than modules"),
+    (REAL_HARNESS + "modules: [\n", "does not parse"),
+    (_harness_with(NEW_MODULE + "    tests: [operations/fleet/test]\n"), "duplicate key 'tests'"),
+    (_harness_with("  - name: zz_added\n    path: &p operations/zz_added\n    tests: [test/architecture]\n"
+                   "    functional: [*p]\n"), "anchor, alias or merge key"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    <<: {tests: [test/architecture]}\n"),
+     "anchor, alias or merge key"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: [operations/apps/games/test]\n"),
+     "not in CI's gating full matrix"),
+], ids=["modified", "overlap", "duplicate", "anchor", "no-tests", "other-key", "unparsable",
+        "duplicate-key", "alias", "merge-key", "not-ci-gated"])
+def test_harness_yaml_other_changes_stay_full(head, why):
+    _assert_harness_full(_harness_select(head), why)
+
+
+def _assert_harness_full(sel, why):
+    assert sel.mode == "full"
+    [escalation] = [e for e in sel.escalations if e.startswith("tools/harness/harness.yaml")]
+    assert why in escalation and escalation.endswith(": harness configuration or the selector itself"), escalation
+    local = [p for inv in sel.local_invocations for p in inv]
+    assert "test/architecture/test_folder_layout.py" in local, local
+
+
+def test_harness_yaml_module_deletion_is_full():
+    _assert_harness_full(_harness_select(REAL_HARNESS, base=_harness_with(NEW_MODULE)), "removed")
+
+
+def test_harness_yaml_without_a_base_is_full():
+    sel = affected.select(affected.Repo.load(ROOT), ["tools/harness/harness.yaml"])
+    _assert_harness_full(sel, "no base to compare")
+
+
+def test_harness_yaml_added_suite_without_test_functions_is_full():
+    """A test_*.py with no `def test_` collects nothing, so it does not show the module is tested."""
+    repo, target = affected.Repo.load(ROOT), "test/test_rosy_games_surface.py"
+    head = _harness_with(f"  - name: zz_added\n    path: operations/zz_added\n    tests: [{target}]\n")
+    assert affected.affected_narrow.harness_modules_added(repo, REAL_HARNESS, head)[0]
+    text = repo.text
+    repo.text = lambda path: "HELPER = 1\n" if path == target else text(path)
+    added, why = affected.affected_narrow.harness_modules_added(repo, REAL_HARNESS, head)
+    assert not added and "no test function" in why
+
+
+@pytest.mark.parametrize("path, mode", [
+    ("tools/harness/sim2real_gaps.yaml", "affected"), ("tools/harness/perception_gaps.yaml", "affected"),
+    ("tools/harness/log_repairs.yaml", "full"), ("tools/harness/platform_parts.yaml", "full"),
+    ("tools/harness/platform_dependencies.yaml", "full"), ("tools/harness/affected_narrow.py", "full"),
+    ("tools/harness/zz_unknown.json", "full"),
+])
+def test_harness_data_registries_are_not_full_but_code_and_manifests_are(path, mode):
+    sel = affected.select(affected.Repo.load(ROOT), [path])
+    assert sel.mode == mode, sel.escalations
+    if mode == "affected":
+        assert "test/test_harness_contracts.py" in sel.reasons
+
+
+def test_harness_yaml_added_module_taking_tracked_files_is_full():
+    """A source_paths entry inside an existing module counts as an overlap, like path."""
+    head = _harness_with("  - name: zz_added\n    path: operations/zz_added\n"
+                         "    source_paths: [middleware/core/services/core_features]\n    tests: [test/architecture]\n")
+    added, why = affected.affected_narrow.harness_modules_added(affected.Repo.load(ROOT), REAL_HARNESS, head)
+    assert not added and "overlaps module core_features" in why
+
+
+@pytest.mark.parametrize("path", ["operations/fleet/index.md", "operations/fleet/logs.md", "docs/logs.md",
+                                  "docs/index.md", "STATUS.md", "deploy/logs.md"])
+def test_records_select_only_their_readers(path):
+    """2026-10-26: docs/logs.md selected tests that name it only in a comment or a fixture string."""
+    sel = affected.select(affected.Repo.load(ROOT), [path])
+    assert sel.mode == "affected" and set(sel.reasons) == GUARDS | set(affected.RECORD_READERS), sorted(sel.reasons)
+
+
+def test_a_module_record_read_by_a_contract_test_selects_it():
+    sel = affected.select(affected.Repo.load(ROOT), ["operations/apps/games/progress.md"])
+    assert set(sel.reasons) == GUARDS | set(affected.RECORD_READERS) | {"test/test_rosy_games_surface.py"}
+
+
+@pytest.mark.parametrize("path, record", [
+    ("docs/logs.md", True), ("operations/fleet/index.md", True), ("STATUS.md", True),
+    ("operations/fleet/docs/logs.md", False), ("docs/plans/index.md", False), ("operations/progress.md", False),
+])
+def test_records_are_status_and_module_root_records_only(path, record):
+    assert affected.is_record(affected.Repo.load(ROOT), path) is record
+
+
+def test_generated_module_index_does_not_select_the_module_suite():
+    """2026-10-26: operations/fleet/index.md selected ~7,900 tests in three commits."""
+    assert "operations/fleet/test" not in affected.select(affected.Repo.load(ROOT), ["operations/fleet/index.md"]).reasons
+
+
+def test_module_note_markdown_selects_readers_not_the_module_suite():
+    sel = affected.select(affected.Repo.load(ROOT), ["operations/fleet/docs/call-map.md"])
+    assert "operations/fleet/test" not in sel.reasons
+
+
+@pytest.mark.parametrize("path, expected", [
+    ("operations/fleet/AGENTS.md", "operations/fleet/test"),
+    ("docs/reference/ROSY API & Protocol Reference.md", "test/test_network_topology_contracts.py"),
+    ("docs/adr/D-161-ubuntu-server-native-ros-runtime.md", "test/test_ubuntu_native_runtime_contract.py"),
+    ("docs/reference/ROSY ADR Log.md", "test/test_rosy_games_surface.py"),
+    ("docs/adr/D-161-ubuntu-server-native-ros-runtime.md", "test/test_network_topology_contracts.py"),
+])
+def test_contract_checked_markdown_keeps_its_selection(path, expected):
+    assert expected in affected.select(affected.Repo.load(ROOT), [path]).reasons

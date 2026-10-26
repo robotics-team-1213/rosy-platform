@@ -11711,6 +11711,30 @@ osy-d395-s1d\`.
 - 증거: `test/test_land.py` 원격 통과.
 - gate 변화: 없음.
 
+## 2026-10-26 · uncommitted · fix(harness): harness.yaml 모듈 추가와 gap 기록은 FULL로 올리지 않는다
+
+- 변경: `affected` 선택기가 `tools/harness/harness.yaml`을 merge base와 head에서 같은 로더로 읽어, 기존 항목과 다른 키는 그대로이고 `modules`에 새 항목만 더했으며 새 이름·경로가 기존 모듈과 겹치지 않고(추적 파일의 소유 모듈도 바뀌지 않음), 앵커·별칭이 없고, 새 모듈의 tests 경로에 시험 파일이 있고 FULL 티어가 그 경로를 덮으면 FULL 대신 guard + 새 모듈 시험 + `test/test_harness_contracts.py`·`test/test_affected_tests.py`를 고른다(`affected_narrow.harness_modules_added`). `sim2real_gaps.yaml`·`perception_gaps.yaml`은 lint·generate와 자기 계약 시험만 읽어 FULL이 아니다. `*.py`, `platform_parts.yaml`, `platform_dependencies.yaml`, 역방향 검사가 없는 허용 목록 `log_repairs.yaml`, 그 밖의 새 파일은 그대로 FULL이고 문구 끝 `: harness configuration or the selector itself`도 그대로다. 2026-10-26 13:35 `feat/monitoring-registration`(harness.yaml 5줄)이 FULL로 착지 잠금을 45분 넘게 잡은 일.
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 브랜치 선택 확인.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(harness): 모듈 아래 Markdown은 모듈 시험 전체를 고르지 않는다
+
+- 변경: `affected` 선택기에서 바뀐 `*.md`는 그 파일을 이름으로 읽는 시험과 guard만 고른다. 내용을 코드와 맞춰 보는 `AGENTS.md`, `README.md`, ADR Log를 뺀 `docs/reference/*.md`, `docs/deployment/**`는 지금처럼 모듈 선택을 유지한다. 2026-10-26 생성 파일 `operations/fleet/index.md` 한 줄 변경이 세 커밋에서 `operations/fleet/test` 약 7,900개를 고른 일.
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 커밋 d1a999fd0d·bd48652bf0·4b79b8bc2f 선택 74개 경로 → 9개(guard).
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(harness): 생성·누적 기록 변경은 실제로 읽는 시험만 고른다
+
+- 변경: `docs/logs.md`, `docs/index.md`, `STATUS.md`, 모듈의 `logs.md`·`index.md`·`progress.md`가 바뀌면 `affected` 선택기가 이름 부분 일치 대신 실제 읽는 시험(`test/test_harness_contracts.py`, `test/architecture/test_document_placement.py`, `test/architecture/test_folder_layout.py`)만 고른다. 주석이나 시험 고정 문자열에 `docs/logs.md`가 있다는 이유로 `test_api_reserve`, `test_browser_scope` 등이 뽑히던 일. ADR Log·`docs/adr/**`의 읽는 시험은 앞 커밋 그대로다.
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py` 원격 실행; 실제 커밋 5308d9ad56·afd1606a0e 선택 17개 경로 → 9개.
+- gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(harness): harness.yaml 좁히기는 CI gating 행렬·중복 키·실제 시험을 확인한다
+
+- 변경: 리뷰(robot-0d) 반영. 추가 모듈의 시험 파일은 야간·main push 풀 행렬(`ci_matrix` 풀 모드)의 gating 항목에 들어 있고 `--ignore`되지 않아야 좁힌다. 앞 검사는 모든 등록 모듈을 담는 `lab_full_invocations`와 비교해 실패할 수 없었다. 비gating `modules` 러너만 도는 시험은 그 러너가 gating이 될 때까지 FULL이다. `harness.yaml`은 반복 키를 거부하는 SafeLoader로 읽고, head 문서의 anchor·alias·merge key는 줄 정규식 대신 파서 이벤트로 찾는다. 추가한 `tests`·`functional` 경로마다 `def test_`가 있는 파일이 있어야 한다. `harness.yaml` 변경은 언제나 `test/architecture/test_folder_layout.py`를 고른다. 기록 판정은 `STATUS.md`와 harness 모듈 폴더 바로 아래 `logs.md`·`progress.md`·생성 `index.md`로 줄였고, `operations/apps/games/progress.md`는 그 파일을 읽는 `test/test_rosy_games_surface.py`도 고른다(`test/test_land.py`, `test/test_pre_push_hook.py`는 임시 저장소와 고정 문자열에서만 이름을 쓴다).
+- 증거: `test/test_affected_tests.py`, `test/test_harness_contracts.py`, `test/architecture/test_folder_layout.py` 원격 실행; gating 조건·중복 키·참조 검사·`def test_` 조건을 각각 깨뜨린 임시 커밋에서 해당 시험 빨강 확인.
+- gate 변화: 없음.
+
 ## 2026-10-26 · ef0600c636 · pytest 작업마다 메모리 최고치를 재고, 기록에 따라 예약을 줄인다
 
 - 변경: `tools/remote/remote_job.py`의 JOB이 pytest가 끝난 뒤 scope cgroup의 `memory.peak`를 읽어 `[remote-pytest] memory peak <MiB> MiB`를 찍는다. scope 안의 감시 프로세스가 읽으므로 pytest는 그대로 exec되어 timeout의 TERM/KILL을 직접 받는다. 잠금 예산은 새 `ROSY_JOB_RESERVE_GB`(기본값은 `MemoryMax` GB)로 따로 두고 `MemoryMax`는 `ROSY_JOB_MEM_GB`(기본 6)를 유지한다. 새 `tools/remote/memory_history.py`가 노트북에서 그 줄을 `<git-common-dir>/rosy-pytest-memory.jsonl`에 쌓고, 같은 argv의 기록이 있고 모두 4 GiB 이하면 3 GB를 예약한다. 기록이 없거나 하나라도 4 GiB를 넘으면 6 GB이다. 가벼운 호스트는 기존처럼 자기 상한을 예약한다.
