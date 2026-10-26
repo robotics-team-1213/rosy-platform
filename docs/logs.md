@@ -11627,3 +11627,9 @@ osy-d395-s1d\`.
 - 변경: `land.py`·`land_queue.py`가 대기열 진입, 차례, 회차, invocation별 판정(pass/flaky/new/unusable), 착지, 정지를 `<git-common-dir>/rosy-land-events.jsonl`에 한 줄씩 남긴다(`land_events.py`, 줄 단위 O_APPEND). `land_stats.py`가 날마다 착지·정지 수, 대기·차례 p50/p90, 새 실패·LOAD-FLAKY·판정 불가 비율을 보여 준다. 묶음 착지는 새 실패 비율이 10% 이하로 유지될 때 켠다.
 - 증거: `test/test_land_events.py`, `test/test_land.py` 원격 통과.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): 착지 기록에 단계(tier), 재실행 node id 경로 바로잡기
+
+- 변경: `land_record`에 착지가 돈 단계(`tier`: full/affected/records)를 남긴다. 게시 스크립트가 "녹색 FULL 착지"를 이 값으로 찾는다. `land_checks`가 다른 pytest rootdir 기준으로 찍힌 node id를 같은 이름의 추적된 시험 파일 하나로 고치고, 단독 재실행이 exit 4·5·255면 "다시 실패"가 아니라 "판정 없음"으로 보고한다.
+- 증거: `test/test_land.py`, `test/test_land_record.py` 원격 통과.
+- gate 변화: 없음.
