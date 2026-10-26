@@ -350,7 +350,8 @@ def test_main_plan_or_environment_change_requires_new_current_preparation(full_c
     case.mutate = advance
     assert land.main(["--tests", "full"]) == 0
     own = git(case.wt, "rev-parse", "HEAD")
-    assert land.land_record.read(case.main, own)["tier"] == "full"
+    record = land.land_record.read(case.main, own)
+    assert record and record["tier"] == "full"
     if changed == "registry":
         assert any("ui/test/test_new_browser.py" in inv for inv in body_calls(case))
     elif changed == "alone":
@@ -434,3 +435,11 @@ def test_explicit_full_missing_canonical_evidence_fails_closed(full_case, fault)
 def test_custom_pytest_arguments_stay_nonqualifying(full_case):
     assert land.main(["--tests", "pkg/test -k test_a"]) == 0
     assert land.land_record.read(full_case.main, git(full_case.main, "rev-parse", "HEAD")) is None
+
+
+def test_explicit_full_refuses_incident_no_queue_before_ff_or_receipt(full_case):
+    before = git(full_case.main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "full", "--no-queue"]) == 1
+    assert git(full_case.main, "rev-parse", "HEAD") == before
+    assert not full_case.remote
+    assert land.land_record.read(full_case.main, git(full_case.wt, "rev-parse", "HEAD")) is None
