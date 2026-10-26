@@ -2,6 +2,8 @@
 import importlib
 import json
 import struct
+import subprocess
+import sys
 import time
 
 import pytest
@@ -167,3 +169,33 @@ def test_unknown_or_committed_slot_mutations_are_rejected(tmp_path, monkeypatch,
     before = path.read_bytes(), config.read_bytes()
     with pytest.raises(ValueError): boot.invoke(root, argv)
     assert (path.read_bytes(), config.read_bytes()) == before
+
+
+def test_installed_frozen_cli_handles_preboot_good_without_mutable_sdk_or_bootstrap_write(tmp_path, monkeypatch):
+    from test_os_frozen_firstboot import _prefix, _stage
+    boot, state, root, path, config = _boot(tmp_path / "device", monkeypatch, "INSTALLING")
+    _permit(boot, state, root)
+    prefix = _prefix(tmp_path / "installed")
+    _stage(prefix)
+    frozen = prefix / "os-bootstrap/native-runtime"
+    script = frozen / "rosy-os-bootloader"
+    assert script.is_file() and script.stat().st_mode & 0o111 == 0o111
+    for folder in (prefix / "native-runtime", prefix / "deploy/sd"):
+        for file in folder.glob("*.py"):
+            file.write_text("raise RuntimeError('mutable SDK was imported')\n")
+    code = """
+import runpy,sys
+from pathlib import Path
+sys.path.insert(0,str(Path(sys.argv[1]).parent))
+import os_update_state
+# Model only kernel mounts; execute the installed CLI and all real journal/firmware readers.
+os_update_state.mount_facts = lambda *args: []
+sys.argv = [sys.argv[1], '--root',sys.argv[2], 'set-state','b','good']
+runpy.run_path(sys.argv[0],run_name='__main__')
+"""
+    before = path.read_bytes(), config.read_bytes()
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(script), str(root)],
+        capture_output=True, text=True, cwd=tmp_path, timeout=30)
+    assert result.returncode == 0 and result.stdout == "", result.stderr
+    assert (path.read_bytes(), config.read_bytes()) == before
+    assert boot.invoke(root, ["get-state", "b"]) == "good"
