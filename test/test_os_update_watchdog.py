@@ -89,7 +89,7 @@ def test_unknown_or_inconsistent_watchdog_support_never_authorizes_arm(tmp_path,
         module.admit(root, run=run)
 
 
-@pytest.mark.parametrize("source", [b"\xff", b"bad\0config", b"x" * 65537])
+@pytest.mark.parametrize("source", [b"\xff", b"bad\0config", b"x" * 65537], ids=["encoding", "nul", "oversize"])
 def test_invalid_offline_boot_config_is_rejected(source):
     module = importlib.import_module("os_update_watchdog")
     with pytest.raises(ValueError):
