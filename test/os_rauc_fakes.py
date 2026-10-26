@@ -66,6 +66,11 @@ def make_bundle(directory, tool, key, certificate, text=None):
     (source / "rootfs.ext4").write_bytes(os.urandom(8192))
     (source / "boot.vfat").write_bytes(b"B" * 512)
     (source / "manifest.raucm").write_text(text or manifest())
+    for filename in ("hook.sh", "handler.sh"):
+        if text and "filename=" + filename in text:
+            script = source / filename
+            script.write_text("#!/bin/sh\nexit 99\n")
+            script.chmod(0o755)
     config = directory / "system.conf"
     config.write_text(f"[system]\ncompatible=rosy-pinky-pro-ab-v2\nbootloader=noop\nbundle-formats=verity\ndata-directory={directory / 'state'}\n"
                       f"[keyring]\npath={certificate}\ncheck-purpose=codesign\nuse-bundle-signing-time=false\n")

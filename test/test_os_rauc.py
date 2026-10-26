@@ -21,11 +21,15 @@ def _consumer(monkeypatch, tool):
     return m
 
 
-def _case(tmp_path, tool, *, text=None, foreign=False):
+def _case(tmp_path, tool, *, text=None, foreign=False, expired=False):
     root = tmp_path / "device"
     public_dir = root / "etc/rosy/trusted-release-keys"
     private, public = _keys(public_dir, "distribution")
     key, certificate = signer(tmp_path / "cms")
+    if expired:
+        old = certificate.with_name("expired.pem")
+        run(["openssl", "x509", "-in", certificate, "-signkey", key, "-days", "-1", "-out", old])
+        certificate = old
     bundle_key, bundle_cert = signer(tmp_path / "foreign") if foreign else (key, certificate)
     produced, _ = make_bundle(tmp_path / "producer", tool, bundle_key, bundle_cert, text)
     ring = root / "etc/rauc/keyring.pem"
@@ -73,10 +77,10 @@ def test_cms_size_is_bounded_before_starting_a_parser(tmp_path, monkeypatch, rau
         m.verify_bundle(root, bundle, raw, sign_checksums(raw, private))
 
 
-@pytest.mark.parametrize("case", ["signature", "hash", "signer_pin", "foreign_cms", "no_keyring", "writable", "outside"])
+@pytest.mark.parametrize("case", ["signature", "hash", "signer_pin", "foreign_cms", "expired", "no_keyring", "writable", "outside"])
 def test_bad_distribution_or_cms_never_becomes_installable(tmp_path, monkeypatch, rauc_tool, case):
     m = _consumer(monkeypatch, rauc_tool)
-    root, bundle, raw, signature, private, ring = _case(tmp_path, rauc_tool, foreign=case == "foreign_cms")
+    root, bundle, raw, signature, private, ring = _case(tmp_path, rauc_tool, foreign=case == "foreign_cms", expired=case == "expired")
     if case == "signature":
         raw += b" "
     elif case == "hash":
@@ -99,7 +103,7 @@ def test_bad_distribution_or_cms_never_becomes_installable(tmp_path, monkeypatch
     assert bundle.read_bytes() == before
 
 
-@pytest.mark.parametrize("case", ["board", "version", "revision", "abi", "state", "native_factory", "native_digest"])
+@pytest.mark.parametrize("case", ["board", "version", "revision", "abi", "state", "native_factory", "native_digest", "hooks", "handler", "data_class"])
 def test_real_signed_cms_metadata_must_agree_with_outer_contract(tmp_path, monkeypatch, rauc_tool, case):
     m = _consumer(monkeypatch, rauc_tool)
     text = manifest()
@@ -109,7 +113,10 @@ def test_real_signed_cms_metadata_must_agree_with_outer_contract(tmp_path, monke
     elif case == "abi": text = text.replace("boot_abi=2", "boot_abi=1")
     elif case == "state": text = text.replace("state_write=1", "state_write=2")
     elif case == "native_factory": text = text.replace("native_factory_release_id=2026.10.26-010", "native_factory_release_id=2026.10.26-009")
-    else: text = text.replace("native_factory_checksums_sha256=" + "a" * 64, "native_factory_checksums_sha256=" + "c" * 64)
+    elif case == "native_digest": text = text.replace("native_factory_checksums_sha256=" + "a" * 64, "native_factory_checksums_sha256=" + "c" * 64)
+    elif case == "hooks": text += "[hooks]\nfilename=hook.sh\nhooks=install-check\n"
+    elif case == "handler": text += "[handler]\nfilename=handler.sh\n"
+    else: text = text.replace("[image.boot]", "[image.data]")
     root, bundle, raw, signature, _, _ = _case(tmp_path, rauc_tool, text=text)
     with pytest.raises(ValueError):
         m.verify_bundle(root, bundle, raw, signature)

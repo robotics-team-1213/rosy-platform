@@ -134,14 +134,14 @@ def _verify(root: Path, bundle: Path, raw_metadata: bytes, signature: str) -> di
             digest.update(chunk)
         if digest.hexdigest() != metadata["bundle"]["sha256"]:
             raise ValueError("OS bundle differs from its signed digest")
-        value = _inspect(bundle, keyring)
-        images = _inner(value, metadata)
         handle.seek(-8, os.SEEK_END)
         size = int.from_bytes(handle.read(8), "big")
         if not 0 < size <= 65536 or size + 8 >= info.st_size:
             raise ValueError("invalid CMS footer size")
         handle.seek(-8 - size, os.SEEK_END)
         cms = handle.read(size)
+        value = _inspect(bundle, keyring)
+        images = _inner(value, metadata)
         pem = _run(["openssl", "pkcs7", "-inform", "DER", "-print_certs"], data=cms)
         certificates = re.findall(PEM_CERT, pem)
         if len(certificates) != 1 or _certificate(certificates[0]) != pinned_der:
