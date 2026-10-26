@@ -3537,3 +3537,9 @@
 - 증거: 모델 PC에서 `cat` rc 1, `show` → loaded/not-found. 원격 host control·guard·host-state 시험 NEW 0.
 - gate 변화: 없음. AI·모델 PC에 helper 재설치가 필요하다.
 - 교훈: CE 새 교훈 기록 — `docs/solutions/runtime-errors/systemctl-machine-refuses-cat-so-clean-storage-always-refused-2026-10-26.md`.
+
+## 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내
+
+- 변경: deploy/site/README.md 운영 절에 루프 생존(`/readyz`, 503과 최소 본문)과 프로세스 생존(`/healthz`)의 분리를 적었다. compose healthcheck·mdns 광고 검증·autoupdate 게이트는 `/healthz`를 그대로 쓰며 `/readyz`에 연결하지 않는다고 못박았다.
+- 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
+- gate 변화: 없음. CE: 해당 없음.
