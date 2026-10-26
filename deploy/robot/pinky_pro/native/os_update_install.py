@@ -236,7 +236,11 @@ def finalize(root: Path = Path("/"), *, run=_run) -> dict:
             raise ValueError("installed metadata changed before writes")
         for name, content in rendered.items():
             base = targets[1 if name == "cmdline.txt" else 0]["path"]
-            _write_atomic(_path(base, name), content, 0o644)
+            target = _path(base, name)
+            mode = stat.S_IMODE(target.stat().st_mode) if name == "cmdline.txt" else 0o644
+            if mode & 0o7022:
+                raise ValueError("unsafe installed metadata permission bits")
+            _write_atomic(target, content, mode)
         for item in targets:
             _call(run, ["/usr/bin/sync", "-f", str(item["path"])])
         _unmount(root, active, run)

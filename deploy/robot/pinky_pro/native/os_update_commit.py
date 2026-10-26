@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import stat
 import subprocess
 
 from auto_update_host import Host
@@ -137,7 +138,12 @@ def _commit(root, transaction_id, host, run):
     health.read_health(root, pending)
     if _snapshot(root) != (facts, state, default):
         raise ValueError("trial changed during durable intent publication")
-    _write_atomic(_path(root, BOOTSTRAP), autoboot(pending["target_slot"]), 0o644)
+    target = _path(root, BOOTSTRAP)
+    mode = stat.S_IMODE(target.stat().st_mode)
+    if mode & 0o7022:
+        raise ValueError("unsafe bootstrap permission bits")
+    # FAT read/execute bits come from mount masks, not a per-file chmod to 0644.
+    _write_atomic(target, autoboot(pending["target_slot"]), mode)
     if _read(_path(root, BOOTSTRAP), 256, root.stat().st_uid) != autoboot(pending["target_slot"]):
         raise ValueError("persistent firmware default readback differs")
     with locked(root) as store:
