@@ -165,10 +165,20 @@ def test_real_systemd_parser_accepts_deadline_without_localfs_dependency(tmp_pat
     assert result.returncode == 0, result.stderr
 
 
-def test_committed_probe_runs_from_frozen_install_with_poisoned_mutable_sdk(tmp_path, monkeypatch):
+@pytest.mark.parametrize("is_committed", [False, True])
+def test_committed_probe_runs_from_frozen_install_with_poisoned_mutable_sdk(tmp_path, monkeypatch, is_committed):
     import sys
     from test_os_frozen_firstboot import _prefix, _stage
-    _, _, root, _, _ = _boot(tmp_path / "device", monkeypatch)
+    boot, state, root, _, config = _boot(tmp_path / "device", monkeypatch, "ARMED" if is_committed else None)
+    if is_committed:
+        _trial(root)
+        for phase in ("TRIAL", "HEALTHY", "COMMIT_INTENT"):
+            with state.locked(root) as store:
+                store.transition(TRANSACTION, phase, TRIAL_BOOT,
+                                 health_sha256="b" * 64 if phase == "HEALTHY" else None)
+        config.write_bytes(boot.autoboot("b"))
+        with state.locked(root) as store:
+            store.commit(TRANSACTION, TRIAL_BOOT)
     prefix = _prefix(tmp_path / "installed")
     _stage(prefix)
     for folder in (prefix / "native-runtime", prefix / "deploy/sd"):
@@ -182,10 +192,10 @@ frozen=Path(sys.argv[1])/'os-bootstrap/native-runtime'
 sys.path[:0]=[str(frozen),str(Path(sys.argv[1])/'native-runtime')]
 import os_update_state,os_trial_deadline
 os_update_state.mount_facts=lambda *args: []
-assert os_trial_deadline.main(['committed','--root',sys.argv[2]]) == 1
+assert os_trial_deadline.main(['committed','--root',sys.argv[2]]) == int(sys.argv[3])
 for name in ('os_trial_deadline','os_bootloader','os_update_state','os_state_layout','os_update_manifest','media_layout'):
     assert Path(sys.modules[name].__file__).is_relative_to(frozen)
 """
-    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(prefix), str(root)],
+    result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(prefix), str(root), str(int(not is_committed))],
         capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
