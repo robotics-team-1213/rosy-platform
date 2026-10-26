@@ -47,13 +47,16 @@ def launch(tmp_path, *, overlay_exists=True, site=False, launch_exit=0):
     return result, capture
 
 
-def test_native_overlay_world_and_allocated_domain_reach_simulation_launch(tmp_path):
+def test_native_overlay_world_and_allocated_domain_reach_simulation_launch(tmp_path, monkeypatch):
+    multiline = "first\r\nnot-a-key-value\nlast=part"
+    monkeypatch.setenv("ROSY_TEST_MULTILINE", multiline)
     result, capture = launch(tmp_path)
     assert result.returncode == 0, result.stderr
     args = capture.read_text().splitlines()
     assert args[:3] == ["launch", "open_manipulator_bringup", "omx_f_follower_ai_gazebo.launch.py"]
     assert args[3] == "world:=" + str(tmp_path / "selected world")
     env = dict(line.split("=", 1) for line in capture.with_suffix(".env").read_text().splitlines())
+    assert env["ROSY_TEST_MULTILINE"] == multiline
     assert env["NATIVE_ROS_LOADED"] == env["NATIVE_OVERLAY_LOADED"] == "yes"
     assert env["ROS_DOMAIN_ID"] == "17"
     assert env["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST"
