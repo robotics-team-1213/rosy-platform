@@ -81,6 +81,19 @@ def test_site_stop_blocks_new_assessment_and_never_restarts_motion(rig):
     assert recorded(rig) == [] and len(rig.port.submitted) == 1
 
 
+@pytest.mark.parametrize("reuse", ["evidence_id", "sequence"])
+def test_pre_dispatch_evidence_cannot_be_relabelled_as_a_post_action_failure(rig, reuse):
+    mission, url, request = post_action(rig)
+    with closing(rig.store._journal._connect()) as connection:
+        before = json.loads(connection.execute("SELECT evidence_json FROM fleet_physical_transfer_observations "
+            "WHERE mission_id=? AND phase='PRE_DISPATCH'", (mission,)).fetchone()[0])["samples"]
+    for sample, original in zip(request["observations"], before):
+        sample[reuse] = original[reuse]
+        sample["object_pose"]["position_m"] = [0., 0., .2]
+    assert rig.client.post(url, headers=OBSERVER, json=request).status_code == 409
+    assert recorded(rig) == [] and len(rig.port.submitted) == 1
+
+
 def test_export_preserves_original_attempt_and_is_explicitly_unreviewed(rig, tmp_path):
     mission, url, request = post_action(rig)
     for sample in request["observations"]:
