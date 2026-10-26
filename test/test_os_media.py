@@ -38,6 +38,8 @@ def _card(tmp_path, monkeypatch, slot="a"):
         part.mkdir()
         (part / "partition").write_text(str(number))
         (part / "dev").write_text(f"8:{number}")
+        (part / "start").write_text(str(layout["partitions"][number - 1]["start_lba"]))
+        (part / "size").write_text(str(layout["partitions"][number - 1]["size_lba"]))
         (aliases / f"8:{number}").symlink_to(part, target_is_directory=True)
     device = root / "proc/1/root/dev/block/8:0"
     device.parent.mkdir(parents=True)
@@ -66,8 +68,11 @@ def _card(tmp_path, monkeypatch, slot="a"):
         return changed(info, st_dev=os.makedev(8, boot)) if os.fspath(path) == str(root / "boot/firmware") else info
     def fixture_fstat(fd):
         info = actual_fstat(fd)
-        if os.readlink(f"/proc/self/fd/{fd}") == str(device):
+        path = os.readlink(f"/proc/self/fd/{fd}")
+        if path == str(device):
             return changed(info, st_mode=stat.S_IFBLK | 0o600, st_rdev=os.makedev(8, 0))
+        if Path(path).is_relative_to(root / "sys"):
+            return changed(info, st_size=4096)
         return info
     monkeypatch.setattr(os, "stat", fixture_stat)
     monkeypatch.setattr(os, "fstat", fixture_fstat)
@@ -84,6 +89,18 @@ def test_capture_reads_actual_gpt_and_identifies_inactive_root_and_boot(tmp_path
     assert snapshot["disk_device"] == "8:0"
     assert snapshot["partitions"]["root_b"]["device"] == "8:5"
     assert snapshot["partitions"]["boot_a"]["path"] == "/dev/block/8:2"
+    assert device.read_bytes() == before
+
+
+@pytest.mark.parametrize("number", range(1, 7))
+@pytest.mark.parametrize("attribute", ["start", "size"])
+def test_unchanged_gpt_cannot_authorize_stale_kernel_partition_ranges(tmp_path, monkeypatch, number, attribute):
+    m, root, _, disk, device, _ = _card(tmp_path, monkeypatch)
+    path = disk / ("sda" + str(number)) / attribute
+    path.write_text(str(int(path.read_text()) + 1))
+    before = device.read_bytes()
+    with pytest.raises(ValueError, match="kernel partition range"):
+        m.capture(root)
     assert device.read_bytes() == before
 
 
