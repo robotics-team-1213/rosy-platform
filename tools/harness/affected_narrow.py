@@ -226,6 +226,7 @@ def harness_modules_added(repo: at.Repo, base_text: str, head_text: str) -> tupl
             return [], f"{path} would move from module {owner['name']}"
     # CI's nightly/main-push matrix (ci.yml runs ci_matrix in full mode): a suite only the
     # non-gating `modules` runner reaches is never enforced there, so it cannot skip FULL yet.
+    # shortcut: over-strict until that runner gates (deadline 2026-11-15, test_modules_runner_gates_by_2026_11_15); then most module adds narrow on their own, recheck here.
     nightly = [e for e in at.ci_matrix(after, at.Selection("full", []))["include"] if e["kind"] == "pytest"]
     args = [p for e in nightly for inv in e["invocations"] for p in inv]
     ignored = {p.removeprefix("--ignore=") for p in args if p.startswith("--ignore=")}
