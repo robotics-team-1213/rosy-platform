@@ -342,7 +342,9 @@ FULL = ('{"mode": "full", "escalations": ["a -> b/a: folder move"], "invocations
 ])
 def test_harness_selector(repos, monkeypatch, capsys, affected, red, code):
     main, wt = repos
-    stub = f"import sys\nif sys.argv[1] == 'affected':\n    {affected}\n"
+    stub = (f"import sys\nif sys.argv[1] == 'affected' and '--head' in sys.argv:\n"  # main's delta: nothing
+            "    print('{\"mode\": \"affected\", \"escalations\": [], \"invocations\": []}')\n"
+            f"elif sys.argv[1] == 'affected':\n    {affected}\n")
     files = {"tools/harness/rosy_harness.py": stub, "tools/harness/affected_tests.py": "", "pkg/a.py": "x = 2\n"}
     if red:
         files["pkg/test/test_bad.py"] = "def test_bad():\n    assert False\n"
@@ -356,8 +358,9 @@ def test_harness_selector(repos, monkeypatch, capsys, affected, red, code):
         assert ("affected selector failed" if affected.startswith("sys") else "NEW failure") in captured.err
         assert git(main, "rev-parse", "HEAD") == before
     else:
-        assert calls == [[["pkg/test"]]], "a FULL landing runs full_invocations, not the guards alone"
-        assert "FULL tier took" in captured.out.split("== landed")[1]
+        assert calls[0] == [["pkg/test"]], "a FULL landing runs full_invocations, not the guards alone"
+        assert not any(calls[1:]), "outside the lock first; the turn runs main's (empty) delta only"
+        assert "FULL tier before the turn" in captured.out
 
 
 GUARD = ("from pathlib import Path\n\n\n"
@@ -512,7 +515,7 @@ def test_main_moving_during_a_full_round_reruns_only_the_delta_tier(repos, monke
 
     def run_tests(wt_, args, invocations, logdir, round_no):
         calls.append(invocations)
-        if round_no == 1:  # a peer lands while the full tier runs
+        if round_no == "pre":  # a peer lands while the full tier runs, before this lander's turn
             commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
         return real(wt_, args, invocations, logdir, round_no)
 
@@ -538,7 +541,7 @@ def test_peer_edit_to_a_path_the_branch_moved_reruns_full(repos, monkeypatch, ca
 
     def run_tests(wt_, args, invocations, logdir, round_no):
         calls.append(invocations)
-        if round_no == 1:  # a peer edits the file at its old path while the full tier runs
+        if round_no == "pre":  # a peer edits the file at its old path while the full tier runs
             commit(main, {"pkg/big.py": big.replace("line_0 = 0", "line_0 = -1")}, "peer edit")
         return real(wt_, args, invocations, logdir, round_no)
 
@@ -1039,7 +1042,7 @@ def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos,
 
     monkeypatch.setattr(land.land_full, "save", save)
     assert land.main(["--tests", "auto", "--queue-timeout", "0"]) == 1                # the peer never leaves
-    assert rounds == ["gpre", "pre", "save"] and "FULL tier while waiting" in capsys.readouterr().out
+    assert rounds == ["gpre", "pre", "save"] and "FULL tier before the turn" in capsys.readouterr().out
     assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
 
 
@@ -1159,7 +1162,7 @@ def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
         return [["pkg/test"]], (None if head else "selector escalated to FULL")
 
     def run_tests(wt_, args, invocations, logdir, round_no):
-        if round_no == 2:
+        if round_no == 1:  # the FULL tier ran outside the lock ("pre"); the delta round loses its host
             raise land.Stop("no test host reachable")
         commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
         return ["pytest ok"]

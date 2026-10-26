@@ -76,3 +76,18 @@ def test_leave_removes_held_tickets(tmp_path, monkeypatch):
     queue.leave()
     queue.leave()
     assert not list(tmp_path.iterdir())
+
+
+def test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_everyone(tmp_path):
+    """2026-10-26: a FULL tier at the front of the queue held every lander behind it 40+ min."""
+    full = queue.take(tmp_path, "feat/full", status="preparing")
+    small = queue.take(tmp_path, "feat/small")
+    assert queue.blockers(tmp_path, small) == [], "the preparing FULL lander ahead does not block"
+    queue.wait(tmp_path, small, timeout=0)
+    assert json.loads(small.read_text())["status"] == "turn"
+    later = queue.take(tmp_path, "feat/later")
+    assert [r["branch"] for r in queue.blockers(tmp_path, full)] == ["feat/small"], "in its turn: blocks all"
+    small.unlink()
+    queue.set_status(full, "waiting")
+    assert queue.blockers(tmp_path, full) == [] and [r["branch"] for r in queue.blockers(tmp_path, later)] == [
+        "feat/full"], "done preparing, the FULL lander is first again"

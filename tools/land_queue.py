@@ -68,15 +68,18 @@ def queue_dir(wt: Path) -> Path:
     return Path(common.stdout.strip()) / QUEUE
 
 
-def take(qdir: Path, branch: str, worktree: str = "") -> Path:
-    """Write this process's ticket at the end of the queue and return its path."""
+def take(qdir: Path, branch: str, worktree: str = "", status: str = "waiting") -> Path:
+    """Write this process's ticket at the end of the queue and return its path.
+
+    ``status``: ``preparing`` (a FULL tier outside the lock: keeps its place, blocks no one), ``waiting``,
+    or ``turn`` (merging, testing, landing). A ticket without one (an older land.py) counts as waiting."""
     qdir.mkdir(parents=True, exist_ok=True)
     stamp = time.time_ns()
     while (qdir / f"{stamp:020d}-{os.getpid()}.json").exists():  # one process, one clock tick (Windows)
         stamp += 1
     name = f"{stamp:020d}-{os.getpid()}.json"
     info = {"pid": os.getpid(), "host": socket.gethostname(), "start": time.time(), "branch": branch,
-            "worktree": worktree}
+            "worktree": worktree, "status": status}
     tmp = qdir / f".{name}.tmp"
     tmp.write_text(json.dumps(info), encoding="utf-8")
     os.replace(tmp, qdir / name)
@@ -90,6 +93,24 @@ def _stale(info: dict | None, age: float) -> str | None:
         return f"pid {info.get('pid')} is gone"
     # shortcut: a reused PID looks alive; STALE_AFTER still reclaims it.
     return None
+
+
+def set_status(ticket: Path, status: str) -> None:
+    """Rewrite a held ticket's status by rename (also refreshes it)."""
+    info = json.loads(ticket.read_text(encoding="utf-8"))
+    tmp = ticket.with_name(f".{ticket.name}.tmp")
+    tmp.write_text(json.dumps({**info, "status": status}), encoding="utf-8")
+    os.replace(tmp, ticket)
+
+
+def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
+    """Who keeps ``ticket`` from its turn: any ticket in its turn, and every earlier one not preparing.
+
+    A FULL tier in the lock held every lander behind it for 40+ min (2026-10-26); a preparing ticket now
+    runs it outside the lock and keeps its place."""
+    rows = ahead(qdir, Path("~"), now)  # every live ticket ("~" sorts after the digits)
+    return [r for r in rows if r["ticket"] != ticket.name and (
+        r.get("status") == "turn" or (r["ticket"] < ticket.name and r.get("status") != "preparing"))]
 
 
 def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
@@ -130,14 +151,17 @@ def touch(ticket: Path | None = None) -> None:
 
 
 def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep) -> None:
-    """Return once no live ticket is ahead of ``ticket``; QueueError after ``timeout`` seconds."""
+    """Mark ``ticket`` waiting; return once nothing blocks it (``blockers``), marked as in its turn;
+    QueueError after ``timeout`` seconds."""
+    set_status(ticket, "waiting")
     began, said, last = clock(), None, 0.0
     while True:
-        rows = ahead(qdir, ticket, clock())
+        rows = blockers(qdir, ticket, clock())
         if not rows:
             if said is not None:
                 print(f"[queue] first in line after {(clock() - began) / 60:.0f} min", flush=True)
             land_events.emit("turn", waited_s=round(clock() - began))
+            set_status(ticket, "turn")
             return
         if len(rows) != said or clock() - last >= REPORT_EVERY:
             print(f"[queue] position {len(rows) + 1}; ahead: {describe(rows)}", flush=True)
@@ -150,10 +174,10 @@ def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.s
         sleep(POLL)
 
 
-def enter(wt: Path, branch: str) -> tuple[Path, Path]:
+def enter(wt: Path, branch: str, status: str = "waiting") -> tuple[Path, Path]:
     """Take a ticket (its place in the queue) and release it at exit whatever happens; (queue dir, ticket)."""
     qdir = queue_dir(wt)
-    ticket = take(qdir, branch, str(wt))
+    ticket = take(qdir, branch, str(wt), status)
     _held.append(ticket)
     atexit.register(leave)
     print(f"[queue] ticket {ticket.name} in {qdir}", flush=True)

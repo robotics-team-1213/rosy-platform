@@ -11722,3 +11722,9 @@ osy-d395-s1d\`.
 - 변경: `land_record`에 착지가 돈 단계(`tier`: full/affected/records)를 남긴다. 게시 스크립트가 "녹색 FULL 착지"를 이 값으로 찾는다. `land_checks`가 다른 pytest rootdir 기준으로 찍힌 node id를 같은 이름의 추적된 시험 파일 하나로 고치고, 단독 재실행이 exit 4·5·255면 "다시 실패"가 아니라 "판정 없음"으로 보고한다.
 - 증거: `test/test_land.py`, `test/test_land_record.py` 원격 통과.
 - gate 변화: 없음.
+
+## 2026-10-26 · uncommitted · fix(land): FULL은 차례 밖에서, 대기열 표에 상태
+
+- 변경: 대기열 표가 `preparing`(차례 전 FULL 시험 중, 자리는 지키고 아무도 막지 않음)·`waiting`·`turn` 상태를 가진다. 차례는 차례 중인 표가 없고 앞선 `waiting` 표가 없을 때 시작한다(`land_queue.blockers`). pretest는 앞에 누가 있을 때만이 아니라 FULL 기록이 없는 모든 auto 착지에서 돈다. 선택기가 없을 때 대체 선택이 `head`를 무시하던 것도 고쳤다.
+- 증거: `test/test_land.py`, `test/test_land_queue.py` 원격 통과. 근거: `feat/monitoring-registration`이 맨 앞에서 FULL 10묶음을 잠금 안에서 40분 넘게 돌렸다.
+- gate 변화: 없음.

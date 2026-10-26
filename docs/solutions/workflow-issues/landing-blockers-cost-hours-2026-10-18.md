@@ -191,6 +191,13 @@ took hours to land. Four separate things blocked it.
   same arguments, in the branch's worktree, whenever the branch's `tools/land*.py` differ from main's
   (`ROSY_LAND_OWN_COPY` stops a second re-run). Test:
   `test/test_land.py::test_a_branch_with_older_landing_code_lands_with_mains_copy`.
+- **A FULL tier at the front held everyone (2026-10-26):** the pretest ran only when someone was ahead, so a
+  FULL lander first in line ran its tier inside the lock (`feat/monitoring-registration`, 40+ min, 10 batches).
+  Tickets now carry a status: `preparing` (the FULL tier before the turn: keeps its place, blocks no one),
+  `waiting`, `turn`. A turn starts when no ticket is in its turn and no earlier ticket is waiting
+  (`land_queue.blockers`). The pretest runs for every auto landing without a FULL record. Tests:
+  `test/test_land_queue.py::test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_everyone`,
+  `test/test_land.py::test_harness_selector`.
 - **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
   selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
 - **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the

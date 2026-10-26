@@ -218,8 +218,8 @@ def select(wt: Path, base: str, python: str, head: str | None = None,
             return sel["invocations"] + browser_tier(wt, base, head), None
         except (ValueError, KeyError, TypeError) as exc:
             raise Stop(f"affected selector printed unusable JSON ({exc!r}); not guessing tests") from exc
-    changed = lines(wt, "diff", "--name-only", f"{base}...HEAD")
-    return pack(wt, fallback_targets(wt, changed)) + browser_tier(wt, base), None
+    changed = lines(wt, "diff", "--name-only", f"{base}...{head or 'HEAD'}")  # main's delta when head is given
+    return pack(wt, fallback_targets(wt, changed)) + browser_tier(wt, base, head), None
 
 
 def browser_tier(wt: Path, base: str, head: str | None = None) -> list[list[str]]:
@@ -396,9 +396,9 @@ def on_main(main_co: Path) -> None:
 
 
 def pretest(wt: Path, branch: str, args, python: str) -> None:
-    """A FULL tier while waiting in the queue (v2 lap 2026-10-19: 5 landers ahead, each with its FULL tier
-    inside the queue, held a landing 100+ min). Green, it is recorded as the turn's ``land_full`` (D-762
-    stage 0): the turn then runs main's delta only. An affected tier is short and runs at the turn."""
+    """A FULL tier before the turn, its ticket ``preparing`` so it blocks no one (2026-10-19: FULL tiers inside the
+    queue held a landing 100+ min; 2026-10-26: one at the front held everyone 40+ min). Green, it is recorded as
+    the turn's ``land_full`` (D-762 stage 0): the turn runs main's delta only. An affected tier runs at the turn."""
     main_sha = out(wt, "rev-parse", "main")
     if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
         merge(wt, main_sha, branch, python, False)
@@ -406,7 +406,7 @@ def pretest(wt: Path, branch: str, args, python: str) -> None:
     invocations, note = select(wt, main_sha, python)
     if not note:
         return
-    print(f"[land] FULL tier while waiting in the queue (main {main_sha[:10]})", flush=True)
+    print(f"[land] FULL tier before the turn, ticket preparing (main {main_sha[:10]})", flush=True)
     logdir = tmp_dir(branch)
     land_guards.first(wt, args, invocations, logdir, "pre", run_tests)
     if out(wt, "rev-parse", "HEAD") != candidate:
@@ -448,9 +448,9 @@ def land(args) -> int:
         before = out(wt, "rev-parse", "main")
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
         size_check(wt, before, "HEAD", python)
-        qdir, ticket = land_queue.enter(wt, branch)  # main() releases the ticket on every exit
-        if args.tests == "auto" and land_queue.ahead(qdir, ticket) and land_full.restore(wt, branch) is None:
-            pretest(wt, branch, args, python)   # keeps its place: the FULL tier runs while the others land
+        qdir, ticket = land_queue.enter(wt, branch, "preparing")  # main() releases the ticket on every exit
+        if args.tests == "auto" and land_full.restore(wt, branch) is None:
+            pretest(wt, branch, args, python)   # preparing: a FULL tier keeps its place without blocking anyone
         land_queue.wait(qdir, ticket, args.queue_timeout * 60)
     logdir = tmp_dir(branch)
     summary: list[str] = []
