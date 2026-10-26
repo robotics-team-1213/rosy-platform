@@ -53,6 +53,7 @@ def prepare_card(work: Path) -> dict:
     from os_rauc_fakes import signer
     ab, assembler = layout_module(), assembler_module()
     from os_state_layout import COMMON, SHARED_BINDINGS
+    from os_state_accounts import ACCOUNT_IDS
     from os_bootloader import autoboot
     layout, start = ab.plan(), 2048
     for part, mib in zip(layout["partitions"], (64, 64, 64, 4096, 4096, 3072)):
@@ -86,6 +87,12 @@ def prepare_card(work: Path) -> dict:
                              "run/rosy-provision-boot", "var/lib/rosy/releases", *SHARED_BINDINGS):
                 (root / relative).mkdir(parents=True, exist_ok=True)
             (root / "tmp").chmod(0o1777)
+            # The Ubuntu cloud fixture lacks the fixed accounts created by customize-rootfs.sh.
+            for name, identity in ACCOUNT_IDS.items():
+                run(["groupadd", "--root", root, "--gid", identity, name])
+                run(["useradd", "--root", root, "--uid", identity, "--gid", identity,
+                     "--no-create-home", "--home-dir", "/home/rosy" if name == "rosy" else "/nonexistent",
+                     "--shell", "/bin/bash" if name == "rosy" else "/usr/sbin/nologin", name])
             _factory(root, CURRENT, private, public, signed=True)
             prefix = _prefix(root)
             _stage(prefix)
