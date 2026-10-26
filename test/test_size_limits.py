@@ -185,6 +185,12 @@ def test_range_check_is_red_on_a_commit_that_grows_before_a_later_split(tmp_path
     monkeypatch.setattr(size_range, "CHUNK", 1)  # one commit per process: the parallel path keeps order
     assert size_range.main([base, "HEAD"]) == 1
     assert "grow a.py past 600" in capsys.readouterr().err
+
+    def no_pool(*_):
+        raise NotImplementedError("no sem_open")
+    monkeypatch.setattr(size_range, "ProcessPoolExecutor", no_pool)  # a container without multiprocessing
+    assert size_range.main([base, "HEAD"]) == 1
+    assert "grow a.py past 600" in capsys.readouterr().err
     assert size_range.main([grown, "HEAD"]) == 0
     # A merge's base row is the higher parent's: a row the other side already carried is not new or raised.
     git("checkout", "-q", "-b", "side", base)

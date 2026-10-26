@@ -22,6 +22,7 @@ import sys
 import types
 import xml.etree.ElementTree as ET
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import PurePosixPath
 
 import size_limits
@@ -190,13 +191,19 @@ def main(argv: list[str]) -> int:
     base, head = argv
     commits = _git("rev-list", "--reverse", head, "^" + base).split()
     # Contiguous chunks, one per process, so neighbouring commits share a process's blob caches.
-    workers = min(os.cpu_count() or 1, len(commits) // CHUNK + 1)
+    # The CPUs this process may use (a CI container's share), not the host's count.
+    cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
+    workers = min(cpus or 1, len(commits) // CHUNK + 1)
     size = -(-len(commits) // workers) or 1
     chunks = [commits[at:at + size] for at in range(0, len(commits), size)]
+    verdicts = None
     if workers > 1:
-        with ProcessPoolExecutor(workers) as pool:
-            verdicts = [bad for chunk in pool.map(_check_all, chunks) for bad in chunk]
-    else:
+        try:
+            with ProcessPoolExecutor(workers) as pool:
+                verdicts = [bad for chunk in pool.map(_check_all, chunks) for bad in chunk]
+        except (OSError, NotImplementedError, BrokenProcessPool) as error:  # no usable multiprocessing here
+            print(f"[size-range] process pool unavailable ({error!r}); checking serially", file=sys.stderr)
+    if verdicts is None:
         verdicts = [check(commit) for commit in commits]
     red = []
     for commit, bad in zip(commits, verdicts):
