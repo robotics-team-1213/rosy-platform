@@ -307,3 +307,28 @@ def test_close_needs_a_reason_and_records_who_and_when(prepared, monkeypatch, ca
     assert (rec["kind"], rec["reason"], rec["by"], rec["alone"]) == ("done", "nightly not built yet",
                                                                   "closer@example.invalid", ["m/test/test_b.py"])
     assert rec["at"] and rec["t"]
+
+
+@pytest.mark.parametrize("mode", ["auto", "full"])
+@pytest.mark.parametrize("fresh", [False, True])
+def test_full_current_report_cannot_fall_back_to_historical_cache_complete(prepared, monkeypatch, tmp_path, mode, fresh):
+    import land_cache
+    pair, logdir, args = prepared
+    args.tests = mode
+    candidate = git(pair, "rev-parse", "HEAD")
+    old = tmp_path / "historical-complete.txt"
+    old.write_text("[isolation] complete: 2\n", encoding="utf-8")
+    land_cache.record(pair, candidate, git(pair, "rev-parse", "HEAD^{tree}"), "fixture-env",
+                      land_isolation.job(FILES)[0], old)
+    calls = []
+    report = "[isolation] complete: 2\n" if fresh else "1 passed\n"
+    run = fake_round({"gpre": {"run-gpre-1.txt": report}, "gprer": {"run-gprer-1.txt": report}}, calls)
+    if mode == "full" and not fresh:
+        with pytest.raises(RuntimeError, match=r"without its \[isolation\] report"):
+            land_isolation.run(pair, "feat/x", [["m/test"]], args, logdir, "pre", run, [], True)
+        assert [name for name, _ in calls] == ["gpre", "gprer"]
+        assert land_isolation.rows(pair)[-1]["error"] == "no [isolation] report twice"
+    else:
+        land_isolation.run(pair, "feat/x", [["m/test"]], args, logdir, "pre", run, [], True)
+        assert [name for name, _ in calls] == ["gpre"]
+        assert land_isolation.rows(pair)[-1]["incomplete"] == []
