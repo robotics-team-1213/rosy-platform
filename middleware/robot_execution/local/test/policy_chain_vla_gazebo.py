@@ -347,8 +347,7 @@ def scenario(case, out, runtime, rig, controllers, calibration):
                       camera_accepted=[c.accepted for c in rig.cameras], camera_rejected=[c.rejected for c in rig.cameras],
                       scope='D-866 P0 SIM contract probe; untrained base model, clamped proposals, no task success')
         (out/'chain-result.json').write_text(json.dumps(result, indent=2, default=str))
-        print(f'OMX_VLA_P0_{case.upper()}_PASS='+json.dumps(dict(case=case, hold_reason=result['hold_reason'],
-              steps=len(steps), reconnect_refused=True)), flush=True)
+        return dict(case=case, hold_reason=result['hold_reason'], steps=len(steps), reconnect_refused=True)
 
 
 def main():
@@ -418,10 +417,10 @@ def main():
         # The product owner executor (yields the GIL each turn); the stock one held 82% of GIL time spinning.
         executor = OwnerMultiThreadedExecutor(num_threads=4)
         executor.add_node(node)
-        errors = []
+        errors, passed = [], []
         def work():
             try:
-                scenario(case, out, runtime, rig, controllers, calibration)
+                passed.append(scenario(case, out, runtime, rig, controllers, calibration))
             except BaseException as error:
                 errors.append(error)
         worker = threading.Thread(target=work, name='omx-vla-p0')
@@ -447,12 +446,15 @@ def main():
                 memory_peak=memory_peak.read_text().strip() if memory_peak.exists() else None), indent=2))
             (out/'stalls.json').write_text(json.dumps(dict(stalls=list(stalls), gc=list(gc_pauses)), indent=2))
             (out/'joint-intake.json').write_text(json.dumps(list(intake_trace), default=str))
-            assert stopped and workers_stopped, 'own executor/workers did not drain'
+            if not (stopped and workers_stopped):  # Keep the scenario's own failure visible as the cause.
+                raise AssertionError('own executor/workers did not drain') from (errors[0] if errors else None)
             runtime.destroy()
             node.destroy_node()
             rclpy.try_shutdown()
         if errors:
             raise errors[0]
+        # PASS only after a clean teardown, so a grep for PASS cannot count a run whose cleanup failed.
+        print(f'OMX_VLA_P0_{case.upper()}_PASS='+json.dumps(passed[0]), flush=True)
         print('OMX_VLA_P0_EXIT_OK', flush=True)
 
 

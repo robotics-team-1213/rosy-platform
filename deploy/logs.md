@@ -3537,3 +3537,11 @@
 - 증거: 모델 PC에서 `cat` rc 1, `show` → loaded/not-found. 원격 host control·guard·host-state 시험 NEW 0.
 - gate 변화: 없음. AI·모델 PC에 helper 재설치가 필요하다.
 - 교훈: CE 새 교훈 기록 — `docs/solutions/runtime-errors/systemctl-machine-refuses-cat-so-clean-storage-always-refused-2026-10-26.md`.
+
+## 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
+
+- 변경: 기존 셀 등록 파일과 `ROSY_OBSERVATION_WORKCELL` 선택에서 관측기 인스턴스를 읽는다. 연결된 USB 개수는 팔 구성을 바꾸지 않는다.
+- 선택된 팔의 장치 미연결(DISCONNECTED), 서비스 중지(DOWN), 설정 오류(CONFIGURATION), 선택 밖 관측기 실행(UNEXPECTED)을 구분하고 모두 실패로 유지한다.
+- 근거: 원격 집중 시험 21 passed, NEW 0. 초기 고정 두 팔 목록에서 4개 회귀 시험 실패를 확인했다. 실제 등록된 두 팔은 선택을 보존한 채 DISCONNECTED로 보고했다.
+- gate 변화: 없음. 카메라·팔 실물 연결과 실제 동작 수용은 이 점검 수정의 통과 조건으로 대체하지 않는다.
+- CE: 해당 없음 — 설정 정본과 보고 동작은 코드·시험 및 기존 복사본 drift 교훈으로 설명된다.
