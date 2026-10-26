@@ -158,13 +158,20 @@ def test_guard_units_and_privileged_preconditions_parse_with_real_systemd(tmp_pa
 
 
 def test_installer_checks_inhibition_without_writing_outside_its_rauc_namespace(tmp_path, monkeypatch):
-    _, _, root, _, _ = _boot(tmp_path, monkeypatch, "INSTALLING")
+    _, _, root, journal, _ = _boot(tmp_path, monkeypatch, "INSTALLING")
     guard = importlib.import_module("os_motion_guard")
     guard.reconcile(root)
     def forbidden_write(*args, **kwargs):
         pytest.fail("RAUC preflight must be read-only outside its two RAUC directories")
     monkeypatch.setattr(guard, "_write_atomic", forbidden_write)
     guard.require_inhibited(root)
+    before = journal.read_bytes()
+    value = json.loads(before)
+    value["pending"] = None
+    journal.write_text(json.dumps(value))
+    with pytest.raises(ValueError, match="OS_MOTION_HOLD"):
+        guard.require_inhibited(root)
+    journal.write_bytes(before)
     (root / guard.ENVIRONMENT).unlink()
     with pytest.raises((OSError, ValueError)):
         guard.require_inhibited(root)

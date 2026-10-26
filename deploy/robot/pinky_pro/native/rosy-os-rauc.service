@@ -13,7 +13,8 @@ BusName=de.pengutronix.rauc
 User=root
 Group=root
 UMask=0077
-ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_motion_guard.py reconcile
+# The controller/early guard publishes motion.env outside this daemon's two writable directories.
+ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_motion_guard.py inhibited
 ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_rauc_service.py check
 ExecStart=/usr/bin/rauc --conf=/run/rosy-os-update/rauc/system.conf service
 TimeoutStartSec=10min
