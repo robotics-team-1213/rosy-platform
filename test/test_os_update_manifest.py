@@ -1,5 +1,4 @@
 """Exact Ed25519-authenticated OS metadata is distinct from native payload discovery."""
-import copy
 import importlib
 import json
 
