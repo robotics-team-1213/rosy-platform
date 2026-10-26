@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -202,6 +203,7 @@ def test_recovery_revokes_known_runtime_after_claim_expiry_without_reinstalling(
 
 def test_lifecycle_uses_actual_ed_cms_and_verity_verification_with_a_modeled_manager(tmp_path, monkeypatch, rauc_tool):
     from test_os_rauc import _case as signed_case, _consumer
+    from test_os_frozen_firstboot import _prefix, _stage
     m, root, bundle, _, _, manager, journal, config = _case(tmp_path / "device", monkeypatch)
     verifier = _consumer(monkeypatch, rauc_tool)
     runtime = importlib.import_module("os_rauc_runtime")
@@ -218,7 +220,40 @@ def test_lifecycle_uses_actual_ed_cms_and_verity_verification_with_a_modeled_man
     value["pending"]["verified"] = verifier.verify_bundle(root, bundle, raw, signature)
     journal.write_text(json.dumps(value))
     before = journal.read_bytes(), config.read_bytes()
-    assert m.install(root, bundle, raw, signature, run=manager, authorize=lambda: None)["installed"]
+    prepared = runtime.prepare(root, bundle, raw, signature)
+    prefix = _prefix(tmp_path / "installed")
+    _stage(prefix)
+    for folder in (prefix / "native-runtime", prefix / "deploy/sd"):
+        for path in folder.glob("*.py"):
+            path.write_text("raise RuntimeError('mutable SDK was imported')\n")
+    code = """
+import json,sys,subprocess
+from pathlib import Path
+frozen=Path(sys.argv[1])/'os-bootstrap/native-runtime'
+sys.path[:0]=[str(frozen),str(Path(sys.argv[1])/'native-runtime')]
+data=json.loads(sys.stdin.read())
+import os_rauc,os_update_state,os_media
+os_rauc.RAUC=sys.argv[3]
+# Model only kernel and manager observations; actual frozen crypto and preflight execute.
+os_update_state.mount_facts=lambda *args: []
+os_media.capture=lambda *args: data['media']
+import os_rauc_service as service
+def manager(argv,timeout=60):
+    assert argv[:2]==['systemctl','show']
+    return subprocess.CompletedProcess(argv,0,data['properties'][argv[argv.index('-p')+1]],'')
+service.check(Path(sys.argv[2]),run=manager)
+for name in ('os_rauc_service','os_rauc_runtime','os_rauc','os_update_state','os_bootloader','os_storage_dispatch','signing','media_layout'):
+    assert Path(sys.modules[name].__file__).is_relative_to(frozen)
+"""
+    properties = dict(FragmentPath="/etc/systemd/system/" + m.SERVICE, DropInPaths="/" + m.DROPIN,
+        ProtectSystem="strict", DevicePolicy="closed", DeviceAllow=manager.devices,
+        ReadWritePaths="/run/rosy-os-update/rauc /var/lib/rosy-device/os-update/rauc")
+    def authorize():
+        result = subprocess.run([sys.executable, "-I", "-B", "-c", code, str(prefix), str(root), str(rauc_tool)],
+            input=json.dumps(dict(media=prepared["media"], properties=properties)),
+            capture_output=True, text=True, timeout=30, cwd=tmp_path)
+        assert result.returncode == 0, result.stderr
+    assert m.install(root, bundle, raw, signature, run=manager, authorize=authorize)["installed"]
     assert manager.installs == 1 and not manager.active
     assert (journal.read_bytes(), config.read_bytes()) == before
 
