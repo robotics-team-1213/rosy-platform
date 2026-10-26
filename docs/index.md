@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
 - 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 - 2026-10-26 · uncommitted · Monitoring 앱 소유·공유 검증 등록
 - 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
 - 2026-10-26 · b82af1ec31 · pure landing selection extraction
-- 2026-10-26 · uncommitted · D-889 추가 1: 구현 결과와 남은 개선

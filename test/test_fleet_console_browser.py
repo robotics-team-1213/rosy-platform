@@ -2916,11 +2916,11 @@ def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
 
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
-def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(console_url, width, height):
-    """D-629: compact intervention/map/context order and mounted tab owners survive resizing."""
+def test_single_column_tier_puts_exceptions_and_robot_context_before_the_map(console_url, width, height):
+    """D-892: intervention/context/map order and mounted owners survive resizing."""
     from playwright.sync_api import sync_playwright
 
-    panels = ['.queues-panel', '[aria-labelledby="map-heading"]', '.console-context']
+    panels = ['.queues-panel', '.console-context', '[aria-labelledby="map-heading"]']
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
         page.set_viewport_size({"width": width, "height": height})
