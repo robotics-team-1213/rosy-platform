@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-26 · uncommitted · D-871 통합관제 업데이트 현황
 - 2026-10-26 · uncommitted · tools/publish_main.py: 기준 목록 검토자 표기와 IP·호스트 공백 표시
 - 2026-10-26 · uncommitted · tools/publish_main.py: 검토한 비밀 검사 기준 목록
 - 2026-10-26 · uncommitted · tools/publish_main.py: 게시 전 비밀 검사(D-889 5)와 역할 이름
 - 2026-10-26 · uncommitted · tools/publish_main.py: D-868 게시 자동화 초안(기본 dry run)
-- 2026-10-26 · 6d493681e4 · D-887 validation command provenance format

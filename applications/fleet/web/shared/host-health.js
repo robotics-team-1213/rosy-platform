@@ -83,3 +83,35 @@ export function hostHealth(row) {
   else healthy = row.state === "ok";
   return {current, verified, label, healthy};
 }
+
+// D-871 update channels. The same 6 h bound as tools/remote/update_status.py and fleet.host_control.
+const UPDATE_STALE_S = 6 * 3600;
+const CHANNEL_LABEL = {ok: "정상", off: "꺼짐", stuck: "멈춤", unknown: "미확인"};
+const GATE_LABEL = {open: "업데이트 허용", frozen: "업데이트 동결", missing: "동결 관문 없음"};
+
+export function unitName(unit) {
+  return String(unit || "").replace(/^rosy-/, "").replace(/(-autoupdate|-update)?\.service$/, "");
+}
+
+export function channelState(item, now = Date.now() / 1000) {
+  if (item?.state) return item.state;  // /api/fleet/updates already classified it
+  if (item?.timer !== "enabled") return "off";
+  return Number.isFinite(item?.healthy_at) && now - item.healthy_at <= UPDATE_STALE_S ? "ok" : "stuck";
+}
+
+// One line per channel. Reasons (the last step's reason code) only where the caller may see them.
+export function updateLines(report, {reasons = false} = {}) {
+  if (!report || !Array.isArray(report.updaters ?? report.channels)) return ["업데이트 · 보고 없음"];
+  const lines = [`업데이트 · ${GATE_LABEL[report.gate] || "동결 여부 미확인"}`];
+  for (const item of report.updaters ?? report.channels) {
+    const last = item.last || {};
+    const release = item.release ?? last.release;
+    const parts = [unitName(item.unit), CHANNEL_LABEL[channelState(item)] || "미확인"];
+    if (release) parts.push(release);
+    if (reasons && last.step) parts.push(last.reason ? `${last.step} (${last.reason})` : last.step);
+    lines.push(parts.join(" · "));
+  }
+  const stack = report.site_stack;
+  if (stack) lines.push(`사이트 스택 · ${stack.current || "미확인"}${reasons && stack.failed ? ` · 실패 기록 ${stack.failed}` : ""}`);
+  return lines;
+}
