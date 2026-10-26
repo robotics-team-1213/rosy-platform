@@ -1,5 +1,7 @@
 """Screen-review regressions: reachable mobile status and readable critical text."""
 import re
+import os
+from pathlib import Path
 
 import pytest
 
@@ -42,6 +44,9 @@ def test_mobile_robot_status_precedes_map_and_critical_text_is_readable(console_
             }""")
             foreground, background = sorted(map(luminance, colors))
             assert (background + 0.05) / (foreground + 0.05) >= 4.5, colors
+            if output := os.environ.get("ROSY_SHOT_DIR"):
+                Path(output).mkdir(parents=True, exist_ok=True)
+                page.screenshot(path=str(Path(output) / f"fleet-status-{theme}-{width}.png"), full_page=True)
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert not errors
         finally:
