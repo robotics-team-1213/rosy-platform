@@ -11680,3 +11680,11 @@ osy-d395-s1d\`.
 - 증거: 원격 AI PC에서 파서·판정 단위 시험(full 줄만 읽음, 파일 없음·full 줄 없음은 None, 57%는 건너뜀, 9.9%와 파일 없음은 실패) 통과, 변이 두 개(`full`→`some`, `>`→`<`)로 빨강 확인. 같은 커밋으로 파일 전체 3회: 1회차 8 통과·1 건너뜀(`io full avg10=15.4%`, contact gap p99 1.76 s), 2·3회차 9 통과.
 - gate 변화: 없음. 이 건너뜀은 시간 증거가 아님을 뜻하며, 깨끗한 호스트의 통과를 대신하지 않는다.
 - 교훈: CE 해당 없음 — 판단 근거가 코드 주석·docstring과 시험에 있다.
+
+## 2026-10-26 · uncommitted · G1 시간 시험의 디스크 판정을 fsync 직접 측정으로 바꾼다
+
+- 변경: `assert_timing`이 시간 경계를 놓치고 CPU 깨움 지연이 정상이면, 임시 디렉터리(pytest `tmp_path`와 journal이 있는 곳)에서 4 KiB write+fsync를 5번 재어(`fsync_p90_s`) p90이 20 ms를 넘을 때 `host disk I/O slow: write+fsync p90=<x> ms > 20 ms`로 건너뛴다. PSI는 보조로 `some avg60 > 5%`(`io_some_avg60`)만 본다. 앞 커밋의 `full avg10 > 10%`는 뺀다. CPU 검사와 경계 값, `barrier_journal`은 그대로다.
+- 이유: 10-25 AI PC에서 lease POST 0.32 s(경계 0.25 s)가 깨질 때 io full avg10은 0.36%, some avg60은 6.3%, SQLite fsync는 40-55 ms(CPU 1 ms), 디스크는 95% 찼다. full avg10 기준으로는 이 경우를 놓친다.
+- 증거: 원격 AI PC에서 단위 시험(some avg60 파싱, 파일·줄 없음은 None, fsync 측정, 45 ms는 건너뜀, 15 ms와 some avg60 6.3%는 건너뜀, 4.9%와 PSI 없음은 실패) 통과. 변이 세 개(`FSYNC_LIMIT_S` 0.02→0.05, `some`→`full`, `avg60`→`avg10`) 모두 빨강. 같은 내용으로 파일 전체 3회 모두 10 통과(건너뜀·실패 없음, 그때 경계 미달이 없어 판정은 실제로 불리지 않음).
+- gate 변화: 없음. 건너뜀은 시간 증거가 아니고 깨끗한 호스트의 통과를 대신하지 않는다.
+- 교훈: CE 해당 없음 — 측정 근거가 상수 주석과 시험에 있다.
