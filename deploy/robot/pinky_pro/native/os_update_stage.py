@@ -115,6 +115,7 @@ def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str, *, h
         if part.stat().st_size != expected["size_bytes"] or digest != expected["sha256"]:
             raise ValueError("OS_STAGE: downloaded bundle size/digest differs")
         part.chmod(0o400)
+        with part.open("rb") as handle: os.fsync(handle.fileno())
         os.replace(part, target)
         fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
         try: os.fsync(fd)
