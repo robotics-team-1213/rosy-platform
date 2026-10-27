@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import TypeAdapter
 
+from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from core_common.protocol.arm_transfer_jobs import ArmTransferRequestKey
 from core_common.protocol.arm_transfer_observations import ArmTransferObservation
 from .mission_store import MissionConflict
@@ -13,8 +14,10 @@ from .physical_transfer_evidence import PhysicalEvidenceRejected, validate_trans
 from .physical_transfer_io import physical_io
 from .physical_transfer_observations import evidence_document, world_observations
 from .physical_transfer_recovery import (
-    _digest, _job, _lineage_record, _newer_observations, _parent,
+    _assessment, _digest, _job, _lineage_record, _newer_observations, _parent, _retained_execution,
 )
+from .physical_transfer_outcomes import EVENT as ASSESSED
+from .physical_transfer_review import assess_transfer_execution
 from .physical_transfer_store import _principal
 from .site_auth import SitePrincipal
 
@@ -67,6 +70,11 @@ def _source(execution, connection, parent_id):
         expected_assessment_digest=None if assessment is None else _digest(assessment),
         expected_generation=job["dispatch_generation"], context=context.model_dump(mode="json"),
         execution_authorized=False)
+    control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
+    if (control is None or not control["dispatch_enabled"]
+            or control["generation"] != source["expected_generation"]
+            or control["authority_epoch"] != job["authority_epoch"]):
+        raise MissionConflict("recovery requires the current active dispatch fence")
     return source, job, grant, context
 
 
@@ -95,11 +103,6 @@ def _validate(execution, connection, parent_id, intent, observations, producer):
     source, job, grant, context = _source(execution, connection, parent_id)
     if _digest(source) != intent["context_digest"]:
         raise MissionConflict("original effect or dispatch binding changed")
-    control = connection.execute("SELECT * FROM fleet_dispatch_control WHERE control_id=1").fetchone()
-    if (control is None or not control["dispatch_enabled"]
-            or control["generation"] != source["expected_generation"]
-            or control["authority_epoch"] != job["authority_epoch"]):
-        raise MissionConflict("recovery requires the current active dispatch fence")
     validate_transfer_observations(execution.store.installation.policy, context, observations,
         now_ns=execution.store._now_ns(), authenticated_producer_id=producer)
     if min(observations[0].sample_times_ns) <= intent["requested_at_ns"]:
@@ -147,6 +150,27 @@ class RecoveryRequestService:
         if self.store.get(parent_id, principal=principal) is None:
             raise KeyError(parent_id)
 
+    def _execution_review(self, connection, parent_id):
+        job = _job(self.store, connection, parent_id)
+        if job["status"] not in {"RUNNING", "HOLD", "ACTION_SUCCEEDED", "GOAL_CONFIRMED"}:
+            return None
+        try:
+            retained = _retained_execution(self.store, connection, parent_id)
+        except KeyError:
+            return None
+        state = retained._state(connection, parent_id)
+        receipt = retained._last_receipt(connection, parent_id)
+        if receipt is None or not state["first_send_committed"]:
+            return None
+        grant = FleetArmTransferGrant.model_validate(state["grant"])
+        row = connection.execute("SELECT detail_json FROM fleet_cell_events WHERE mission_id=? AND event_type=? "
+            "ORDER BY event_id DESC LIMIT 1", (parent_id, ASSESSED)).fetchone()
+        outcome = "unknown" if row is None else _assessment(json.loads(row[0]), grant,
+            self.store.installation.policy)["task_outcome"]
+        review = assess_transfer_execution(grant, receipt["receipt"], job_status=job["status"], task_outcome=outcome)
+        return {key: review[key] for key in ("scope", "action_outcome", "owner_reason", "phase_summaries",
+            "failure_phase", "last_reported_phase", "task_outcome", "physical_failure_cause")}
+
     def preview(self, parent_id, principal):
         self._visible(parent_id, principal)
         actor = _principal(principal)
@@ -155,10 +179,13 @@ class RecoveryRequestService:
             view = dict(parent_mission_id=parent_id, recovery_limit=1, child_mission_id=None,
                 status="UNAVAILABLE", context_digest=None, request_id=None, proposal_digest=None,
                 evidence_digest=None, proposed_by=None, expected_generation=None,
-                can_request=False, can_approve=False, reason=None, execution_authorized=False)
+                can_request=False, can_approve=False, reason=None, execution_authorized=False,
+                execution_review=self._execution_review(connection, parent_id))
             lineage = _lineage_record(self.store, connection, parent_id)
             if lineage is not None:
-                return {**view, "status": "RECOVERED", "child_mission_id": lineage["child_mission_id"]}
+                if lineage["parent_mission_id"] != parent_id:
+                    return {**view, "reason": "RECOVERY_LIMIT_REACHED"}
+                return {**view, "status": "CHILD_CREATED", "child_mission_id": lineage["child_mission_id"]}
             try:
                 source, job, _, _ = _source(self.execution, connection, parent_id)
             except MissionConflict:
@@ -173,6 +200,8 @@ class RecoveryRequestService:
                 return view
             view.update(request_id=intent["request_id"], proposal_digest=intent["proposal_digest"],
                         proposed_by=intent["proposed_by"], status="WAITING_OBSERVATIONS")
+            if intent["context_digest"] != view["context_digest"]:
+                return {**view, "status": "EXPIRED", "reason": "RECOVERY_CONTEXT_CHANGED"}
             proof = _proof(connection, parent_id, intent)
             if proof is None:
                 return view
@@ -217,12 +246,15 @@ class RecoveryRequestService:
     def context(self, parent_id, request_id):
         with closing(self.store._journal._connect()) as connection:
             connection.execute("BEGIN")
-            intent = _intent(connection, parent_id, request_id, latest=True)
-            source, _, _, _ = _source(self.execution, connection, parent_id)
-            if _digest(source) != intent["context_digest"]:
-                raise MissionConflict("recovery context changed")
-            policy = self.store.installation.policy
-            return dict(mission_id=parent_id, request_id=request_id, proposal_digest=intent["proposal_digest"],
+            return self._context(connection, parent_id, request_id)
+
+    def _context(self, connection, parent_id, request_id):
+        intent = _intent(connection, parent_id, request_id, latest=True)
+        source, _, _, _ = _source(self.execution, connection, parent_id)
+        if _digest(source) != intent["context_digest"]:
+            raise MissionConflict("recovery context changed")
+        policy = self.store.installation.policy
+        return dict(mission_id=parent_id, request_id=request_id, proposal_digest=intent["proposal_digest"],
                 purpose="RECOVERY_RESET", execution_authorized=False,
                 context={**source["context"], "not_before_ns": max(source["context"]["not_before_ns"],
                                                                           intent["requested_at_ns"])},
@@ -231,6 +263,30 @@ class RecoveryRequestService:
                 bindings_digest=policy.bindings_digest, object_ref=policy.object_ref,
                 object_origin_id=policy.object_origin_id, min_separation_ns=policy.min_separation_ns,
                 max_age_ns=policy.max_age_ns)
+
+    def pending_context(self):
+        with closing(self.store._journal._connect()) as connection:
+            connection.execute("BEGIN")
+            rows = connection.execute("SELECT mission_id,MAX(event_id) AS latest FROM fleet_cell_events "
+                "WHERE event_type=? GROUP BY mission_id ORDER BY latest", (REQUESTED,)).fetchall()
+            for row in rows:
+                parent_id = row["mission_id"]
+                try:
+                    intent = _intent(connection, parent_id)
+                    context = self._context(connection, parent_id, intent["request_id"])
+                    _principal(self.resolve_proposer(connection, intent["proposed_by"]), propose=True)
+                    proof = _proof(connection, parent_id, intent)
+                    if proof is not None:
+                        try:
+                            _validate(self.execution, connection, parent_id, intent, _samples(proof), proof["producer_id"])
+                        except PhysicalEvidenceRejected:
+                            pass
+                        else:
+                            continue
+                    return context
+                except (KeyError, MissionConflict, PermissionError):
+                    continue
+            return None
 
     def observe(self, parent_id, request_id, *, expected_proposal_digest, observations, authenticated_producer_id):
         with physical_io(self.store._journal.path), closing(self.store._journal._connect()) as connection:
