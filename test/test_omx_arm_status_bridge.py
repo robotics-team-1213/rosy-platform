@@ -193,3 +193,71 @@ def test_missing_producer_credential_refuses_startup(monkeypatch):
     with pytest.raises(SystemExit, match="ROSY_ARM_S_TOKEN is not set"):
         m.main(["--live", "missing.json", "--fleet-url", "https://fleet.example.invalid",
                 "--source-id", "omx_arm_s", "--token-env", "ROSY_ARM_S_TOKEN"])
+
+
+@pytest.mark.parametrize("ending,status,reason", [
+    ("end", "ended", "session ended"),
+    ("fault", "fault", "following error"),
+    ("safe_parent", "ended", "session ended"),
+    ("unsafe_parent", "fault", "cleanup unconfirmed"),
+])
+@pytest.mark.parametrize("terminal_delay", [0.0, 3.0], ids=["recent-measurement", "stale-measurement"])
+def test_real_native_terminal_reaches_bridge_after_sent_positions(
+        tmp_path, monkeypatch, ending, status, reason, terminal_delay):
+    from types import SimpleNamespace
+
+    spec = importlib.util.spec_from_file_location("native_motor_health", OMX / "motor_health.py")
+    producer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(producer)
+    path = (tmp_path / "native-health.json").resolve()
+    monkeypatch.setenv("ROSY_OMX_MONITOR_STATE", str(path))
+    monkeypatch.setenv("ROSY_OMX_MONITOR_OWNER", ARM_ID)
+    monkeypatch.setenv("ROSY_OMX_MONITOR_SESSION", "12345678-1234-4234-8234-123456789abc")
+    wall, tick, reads = [NOW - 0.2], [10.0], []
+    monkeypatch.setattr(producer.time, "time", lambda: wall[0])
+    registers = {"Torque_Enable": 0, "Temperature_Limit": 70, "Min_Voltage_Limit": 60,
+                 "Max_Voltage_Limit": 140, "Present_Temperature": 25,
+                 "Present_Input_Voltage": 120, "Hardware_Error_Status": 0, "Present_PWM": 0}
+
+    def read(register, name, *, normalize=False):
+        assert normalize is False
+        reads.append((register, name))
+        return registers[register]
+
+    bus = SimpleNamespace(motors={name: SimpleNamespace(id=11 + i) for i, name in enumerate(m.MOTORS)},
+                          read=read, write=lambda *args: pytest.fail("health must never write registers"))
+    motion = SimpleNamespace(label="follower", follower=bus, active=m.MOTORS, clock=lambda: tick[0],
+                             pwm_limits=dict.fromkeys(m.MOTORS, 400), command=dict.fromkeys(m.MOTORS, 2048))
+    monitor = producer.MotorHealth(tmp_path / "health.jsonl")
+    monitor.admit(motion)
+    monitor.sample(motion, dict.fromkeys(m.MOTORS, 2048), dict.fromkeys(m.MOTORS, 0), tick[0])
+    measured = json.loads(path.read_text())
+    row = {"t": NOW - 0.1, "state": [0, 0, 0, 0, 0, 50]}
+    sent = m.next_sample(row, m.arm_health(path, ARM_ID, NOW - 0.1), None, NOW - 0.1)
+    assert sent.value and sent.motor_health.status == "active"
+    reads_before_terminal = list(reads)
+
+    wall[0], tick[0] = NOW + terminal_delay, 10.2 + terminal_delay
+    if ending == "end":
+        monitor.end()
+    elif ending == "fault":
+        monitor.fault(motion, ValueError("following error"))
+    else:
+        producer.finish_snapshot(path, ARM_ID, monitor.session_id, safe_end=ending == "safe_parent")
+    terminal = json.loads(path.read_text())
+    assert terminal["observed_at"] == measured["observed_at"]
+    assert terminal["motors"] == measured["motors"]
+    assert reads == reads_before_terminal
+    health = m.arm_health(path, ARM_ID, wall[0])
+    assert health[0].status == status and health[0].stop_reasons == [reason]
+    age = wall[0] - measured["observed_at"]
+    assert health[0].sample_age_s == pytest.approx(age)
+    assert all(motor.sample_age_s == pytest.approx(age) for motor in health[0].motors)
+
+    sample = m.next_sample(row, health, sent.captured_at, wall[0])
+    assert sample is not None, "the actual native terminal event was lost after newer positions"
+    assert sample.value is None and sample.motor_health.status == status
+    assert sample.captured_at == wall[0] == terminal["terminal_at"]
+    assert sample.motor_health.sample_age_s == pytest.approx(age)
+    assert m.next_sample(row, health, sample.captured_at, wall[0]) is None
+    assert m.next_sample({}, health, None, wall[0] + 5) is None

@@ -6,7 +6,7 @@ from ..contracts.judgment import judgment
 from ..contracts.profiles import AdapterCapabilities, BoundProfile, ModelProfile, bind_profile
 from .versioned_request import prepare_request
 from .cost_evidence import project
-from ..contracts.billing import CallResult, _RejectedJudgment
+from ..contracts.billing import CallResult, RejectedJudgment
 
 
 class VersionedCliProvider:
@@ -39,7 +39,7 @@ class VersionedCliProvider:
         except (ValueError, TypeError, KeyError, RecursionError, OverflowError):
             if billing is not None: raise
             unsafe = type(payload) is dict and type(payload.get('objections')) is list and 'unsafe' in payload['objections']
-            raise _RejectedJudgment(bound, cost, unsafe) from None
+            raise RejectedJudgment(bound, cost, unsafe) from None
         if billing is None: return checked, cost
         try: evidence = project(problem, bound, checked, cost, body, billing)
         except (ValueError, TypeError, KeyError, RecursionError, OverflowError):

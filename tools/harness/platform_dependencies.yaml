@@ -70,8 +70,10 @@ boundaries:
     forbidden_imports: [fleet, rosy_cell, omx_adapter, rclpy]
   - importer_prefix: rosy.integrations.robots.omx
     forbidden_imports: [fleet, rosy_cell, rclpy]
+  # Allow list (the standard library is always allowed): the real-arm agent composes only these.
   - importer_prefix: rosy_agent
-    forbidden_imports: [fleet, rosy_cell, rclpy]
+    allowed_imports: [rosy_agent, core_common, omx_adapter, rosy.processes.palletizing,
+                      rosy.integrations.robots.omx, yaml, pydantic]
 
 # Contract canaries exercise forbidden edges even when one endpoint is not built yet.
 future_boundary_canaries:

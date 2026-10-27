@@ -1,0 +1,16 @@
+[Unit]
+Description=ROSY normal reboot after an uncommitted trial
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_trial_deadline.py expire
+TimeoutStartSec=25
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictSUIDSGID=true

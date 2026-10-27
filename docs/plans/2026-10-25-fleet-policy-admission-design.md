@@ -61,13 +61,13 @@ Task 정책 경로(`policy_evidence`, `POLICY_DISPATCH_ENABLED`)는 이미 만�
 
 ### P2 — 서버 구현
 
-**상태:** P2a 착지(2026-10-25) — 판정 core(`missions/policy_admission.py`: 설정 해석·전환·상한·감사)와 단위 시험. P2b(루트 `GET/POST /api/fleet/policy-admission`·`/audit`, 자동 admit 루프·제안 열거·digest 재판정·generation 결정, `cli_config` adapter·app.py 조립, 상한의 SQLite 지속화, SRS MSN-008 계약 줄 v1.314 갱신)는 별도 브랜치다.
+**상태:** 착지(2026-10-25~26, 로컬 main) — P2a 판정 core, P2b HTTP 표면·사이트 설정 연결, P2c 자동 admit 루프·내구 감사 상한(`missions/policy_admission*.py` 계열, `481325d261`·`1283525eec`·`b92f8a165f`부터의 연속).
 
 **산출물:** `cli_config` adapter, 범위 객체·스위치·readback, 정책 principal admit 경로, 감사 기록, 회귀 시험(신규 `test_policy_admission*.py` + 기존 `test_mission_store`·`test_mission_dispatcher`·`test_dispatch_stop_latch` 확장). · **주의:** `missions/`는 safety_modules 밖이지만 `console.py`·`task_dispatch_routes.py` 등을 만지면 D-430 §5 `Safety-Review:` trailer와 독립 리뷰가 필요하다. 범위를 최소로 잡아 missions 경로 안에서 끝내는 것을 먼저 본다. · **Exit:** E-stop·generation 변경·범위 밖 제안·digest 불일치가 전부 거절/HOLD되는 회귀 통과.
 
 ### P3 — 콘솔 표시
 
-**산출물:** work 뷰 자동 승인 배지, 범위 상태 readback 화면(named operator 스위치 포함). · **Files:** `applications/fleet/web/work/`, `console-refresh.js` 패턴 재사용 · **Exit:** 콘솔 계약 시험 통과.
+**상태:** 구현·원격 시험·착지 완료(2026-10-27, 로컬 main `b54b29d5d0`) — 브랜치 `feat/policy-admission-console`. work 뷰 승인 대기 행의 자동 승인 배지, work 개요의 범위 readback 패널과 기명 운영자 전환. 판정은 순수 함수로 분리(node 시험), readback 부재·404는 fail-closed로 배지를 끈다. 새 콘솔 자산이 없어 allowlist·CSP는 그대로다. · **Files:** `applications/fleet/web/work/`, `console-refresh.js` 패턴 재사용 · **Exit:** 콘솔 계약 시험 통과 — 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1` `test_work_overview_browser.py` 36 통과(신규 3건 포함)·known_failures NEW 0, `test_server_app`·`test_remaining_platform_installed` 50 통과·NEW 0.
 
 ### P4 — 원격 회귀·착지
 

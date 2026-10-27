@@ -21,6 +21,12 @@ from .arm_transfer_observations import (  # noqa: F401
     ArmTransferObservation, ArmTransferObservationRequest, ArmTransferOwnerContext,
     ArmTransferObservationContext, ArmTransferObservationContextResponse, ArmTransferPhysicalReceipt,
     ArmTransferPhysicalReceiptResponse, ArmTransferObservationReply, ArmTransferCancelRequest)
+from .arm_transfer_recovery import (  # noqa: F401
+    ArmTransferRecoveryCreate, ArmTransferRecoveryApprove, ArmTransferRecoveryRequestSnapshot,
+    ArmTransferRecoveryRequestResponse, ArmTransferRecoveryPreview, ArmTransferRecoveryPreviewResponse,
+    ArmTransferRecoveryOwnerContext, ArmTransferRecoveryEvidenceContext, ArmTransferRecoveryContext,
+    ArmTransferRecoveryContextResponse, ArmTransferRecoveryObservationRequest,
+    ArmTransferRecoveryObservationReply, ArmTransferExecutionReview)
 
 from .arm_transfer_preflight import (  # noqa: F401
     ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckResponse, ArmTransferCheckRejection)

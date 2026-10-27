@@ -8,6 +8,7 @@ from core_common.protocol.arm_transfer import ArmTransferCapability, FleetArmTra
 from .physical_transfer_store import PhysicalTransferRequest
 from .local_action_transport import LocalActionUnavailable
 from .physical_transfer_io import physical_io
+from .physical_transfer_recovery import find_recovery, recover_transfer, retained_snapshot
 
 _LOG = logging.getLogger(__name__)
 
@@ -50,6 +51,26 @@ class PhysicalTransferDispatcher:
             except Exception:
                 self.execution.hold(mission_id, reason="PHYSICAL_PREPARATION_UNAVAILABLE")
                 raise
+
+    def recover(self, mission_id, *, proposer, principal, expected_request_digest,
+                expected_receipt_event_id, expected_assessment_digest, expected_generation,
+                observations, authenticated_producer_id, recovery_approval=None, resolve_proposer=None):
+        request = dict(proposer=proposer, principal=principal, expected_request_digest=expected_request_digest,
+            expected_receipt_event_id=expected_receipt_event_id, expected_assessment_digest=expected_assessment_digest,
+            expected_generation=expected_generation, observations=observations,
+            authenticated_producer_id=authenticated_producer_id, recovery_approval=recovery_approval)
+        with physical_io(self._journal_path):
+            child = find_recovery(self.execution, mission_id, **request)
+            if child is None:
+                capabilities, observed_at_ns = self._capabilities()
+                child = recover_transfer(self.execution, mission_id, **request,
+                    capabilities=capabilities, capabilities_observed_at_ns=observed_at_ns,
+                    resolve_proposer=resolve_proposer)
+            prepared = retained_snapshot(self.execution, child["mission_id"])
+            if prepared is None and child["status"] == "READY":
+                self.prepare(child["mission_id"])
+                prepared = retained_snapshot(self.execution, child["mission_id"])
+            return dict(job=child, execution=prepared)
 
     def submit(self, mission_id, *, observations, authenticated_producer_id):
         if not isinstance(observations, (tuple, list)):
