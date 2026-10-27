@@ -79,5 +79,5 @@
 - 2026-10-27 · f44520f70e · exact-line provenance 원격 가드 확인
 - 2026-10-27 · uncommitted · 고정 검증 기록의 전체 파일 검사 provenance 보완
 - 2026-10-27 · 296fdfc384 · 고정 검증 기록의 Git 참조 비밀정보 오탐 검토
-- 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
-- 2026-10-26 · uncommitted · clean-storage helper가 원격 `cat` 대신 LoadState로 유닛 확인
+- 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내
+- 2026-10-27 · 50438808a9 · native release의 격리 실행 import와 시험 fixture 복원

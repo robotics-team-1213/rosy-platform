@@ -64,6 +64,20 @@ def install_static_routes(app: FastAPI) -> None:
     async def healthz() -> dict:
         return {"status": "ok"}
 
+    @app.get("/readyz", include_in_schema=False)
+    async def readyz() -> dict:
+        """Background-loop liveness (계획 2026-10-27). /healthz keeps meaning process
+        liveness: the compose healthcheck, mDNS advertise check and the autoupdate
+        health gate all consume /healthz and must not change semantics."""
+        supervisor = getattr(app.state, "loop_supervision", None)
+        if supervisor is None:
+            raise HTTPException(status_code=503, detail={"code": "FLEET_LOOPS_NOT_SUPERVISED"})
+        ready, loops = supervisor.ready()
+        if not ready:
+            raise HTTPException(status_code=503,
+                                detail={"code": "FLEET_LOOPS_NOT_READY", "loops": loops})
+        return {"status": "ready", "loops": loops}
+
     @app.get("/", include_in_schema=False)
     def root():
         return RedirectResponse("/console")
