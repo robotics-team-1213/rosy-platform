@@ -31,17 +31,19 @@ def test_history_appends_rows_and_chooses_the_reservation(tmp_path):
     history, small, heavy = tmp_path / mh.FILE, ["test/a.py", "-q"], ["test/b.py"]
     assert mh.reserve_gb(history, small) == 6 and mh.reserve_gb(None, small) == 6  # no history
     mh.record(history, small, "ai@1", 900, "ab" * 20)
-    mh.record(history, small, "omen", 4096, "cd" * 20)  # exactly 4 GiB is not heavy
+    mh.record(history, small, "omen", 300, "cd" * 20)
     mh.record(None, small, "omen", 9999, "cd" * 20)  # outside a git repo: nothing written
     rows = history.read_text(encoding="utf-8").splitlines()
     assert len(rows) == 2 and '"key": "test/a.py -q"' in rows[0] and '"host": "ai@1"' in rows[0]
     assert '"peak_mib": 900' in rows[0] and '"sha": "' + "ab" * 20 + '"' in rows[0] and '"time": "20' in rows[0]
     with history.open("a", encoding="utf-8") as out:
         out.write('{"key": "test/a.py -q", "peak_mib"\n[]\n')  # torn and foreign lines are skipped
-    assert mh.reserve_gb(history, small) == 3
+    assert mh.reserve_gb(history, small) == 2  # 1.25 x the highest peak (900 MiB), rounded up
     assert mh.reserve_gb(history, heavy) == 6  # another argv has no history
-    mh.record(history, small, "ai@1", 4097, "ef" * 20)
-    assert mh.reserve_gb(history, small) == 6  # one heavy peak keeps the full reservation
+    mh.record(history, heavy, "ai@1", 100, "ef" * 20)
+    assert mh.reserve_gb(history, heavy) == 1  # never below 1 GB
+    mh.record(history, small, "ai@1", 9000, "ef" * 20)
+    assert mh.reserve_gb(history, small) == 6  # never above the 6 GB MemoryMax
 
 
 def _run_on(tmp_path, monkeypatch, headroom, peak=b"[remote-pytest] memory peak 300 MiB\n"):
@@ -64,7 +66,7 @@ def test_dispatch_reserves_from_history_but_keeps_the_cap(tmp_path, monkeypatch)
     assert not [w for w in first if w.startswith("ROSY_JOB_")]  # no history: JOB's defaults, 6 and 6
     assert '"peak_mib": 300' in (tmp_path / mh.FILE).read_text(encoding="utf-8")
     second = _run_on(tmp_path, monkeypatch, full)
-    assert second[0] == "ROSY_JOB_RESERVE_GB=3" and not [w for w in second if w.startswith("ROSY_JOB_MEM_GB=")]
+    assert second[0] == "ROSY_JOB_RESERVE_GB=1" and not [w for w in second if w.startswith("ROSY_JOB_MEM_GB=")]
     light = _run_on(tmp_path, monkeypatch, {**full, "light": True, "mem": 4.5})
     assert [w for w in light if w.startswith("ROSY_JOB_")] == ["ROSY_JOB_MEM_GB=4"]  # its cap is its reservation
     mh.record(tmp_path / mh.FILE, ["test/x.py"], "h", 5000, "ab" * 20)

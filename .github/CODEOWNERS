@@ -1,14 +1,50 @@
-# Review requests go to the repository owner until module owners are assigned
-# (docs/reference/team-guide.md §5.1). Owners come from the role Epics in Jira
-# KAN (KAN-19..23); add a line here only once the Epic has an assignee.
+# Review owners follow the `capability:` of each root in
+# tools/harness/platform_parts.yaml; test/architecture/test_capability_owners.py
+# keeps the two in step. People behind the logins: docs/reference/team-guide.md §5.1.
+# `platform` roots (shared code, no role Epic) stay with the default owner.
+# The last matching line wins, so keep the default first.
 * @livsbittt
 
-# KAN-19 관제·충전·물류 (장원종)
+# KAN-19 fleet: 관제·충전·물류
 /operations/fleet/ @livsbittt
+/operations/decision/ @livsbittt
+/operations/site_execution/ @livsbittt
+/operations/site_devices/ @livsbittt
+/operations/world/ @livsbittt
+/operations/monitoring/ @livsbittt
+/operations/prediction/ @livsbittt
+/operations/situation/ @livsbittt
+/applications/fleet/ @livsbittt
+/integrations/messaging/discord/ @livsbittt
 
-# KAN-22 비전·AI (윤영민)
+# KAN-20 pinky. Device and image paths keep the default owner as a second reviewer.
+/middleware/devices/pinky/ @PURPLE-SY @livsbittt
+/middleware/drivers/ @PURPLE-SY @livsbittt
+/middleware/robot_ui/ @PURPLE-SY
+/operations/apps/games/ @PURPLE-SY
+/learning/training/pinky/ @PURPLE-SY
+/learning/curation/pinky/ @PURPLE-SY
+/deploy/robot/pinky_pro/ @PURPLE-SY @livsbittt
+
+# KAN-21 omx. Arm paths keep the default owner as a second reviewer.
+/middleware/devices/omx/ @sajy0804 @ddaokki @livsbittt
+/middleware/skills/manipulation/ @sajy0804 @ddaokki @livsbittt
+/integrations/robots/omx/ @sajy0804 @ddaokki @livsbittt
+/operations/processes/ @sajy0804 @ddaokki
+/learning/envs/isaac/ @sajy0804 @ddaokki
+/learning/training/omx/ @sajy0804 @ddaokki
+/learning/curation/omx/ @sajy0804 @ddaokki
+/deploy/robot/omx/ @sajy0804 @ddaokki @livsbittt
+
+# KAN-22 vision_ai: 비전·AI
+/middleware/perception/ @now2466
+/operations/signal_observation/ @now2466
 /operations/overhead/ @now2466
 /operations/site_ui/cam/ @now2466
-
-# KAN-20 Pinky (노재용), KAN-21 OMX (김승용, 서정민): middleware/devices/ 줄은
-# GitHub 계정이 확인되면 추가한다.
+/learning/registry/ @now2466
+/learning/evaluation/ @now2466
+/learning/training/world_model/ @now2466
+/learning/training/perception/ @now2466
+/learning/curation/perception/ @now2466
+/tools/perception/ @now2466
+/tools/perception_prototype/ @now2466

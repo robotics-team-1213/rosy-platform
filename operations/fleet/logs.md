@@ -4977,6 +4977,13 @@
 - Gate: 기존 gate 변화 없음. 공개 복구 ingress·화면·무인 반복·Gazebo 과제·실물·모델 학습 수용은 별도다. 원래 미션은 HOLD로 유지한다.
 - CE: 해당 없음 — D-895·회귀 시험·검증 기록이 판단과 수정 이유를 보존한다.
 
+## 2026-10-27 · 167bae90bb · 전체 옵션 구성의 루프 열거 시험 (루프 감시 후속)
+
+- 변경: `test_loop_supervision.py`에 모든 선택 서비스(알림·신호·resolver·localization·드리프트·charge·lease·job-trips·제안·미션/셀 디스패처·목표 증거·모델 턴·제어유닛·물리 이송)가 켜진 구성의 시험을 추가했다. 루프 몸체는 걸어 뺀 채 `start_fleet_loops`의 스폰 배선만 돌려 23개 선언 이름 전부가 running으로 언랩되는지 본다. 최소 앱 시험이 못 잡던 "선택 분기 언랩 누락" 간극을 닫는다(모듈 docstring의 후속 과제 해소).
+- 증거: 원격 시험 10 passed, known NEW 0. 변이 검증: job-trips 분기의 supervised 제거 → 신규 시험 red(`498989d626`), 복원 green(`167bae90bb`).
+- Gate: 없음. 호스트 시험까지만 유효하며 실제 사이트에서의 `/readyz` 관찰 기록은 여전히 별도.
+- CE: 해당 없음 — 시험과 변이 이력이 커밋에 남아 있다.
+
 ## 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀
 
 - 변경: 없음(코드 변경은 `applications/fleet/web` 참조). 이 모듈에서는 콘솔 계약 시험을 확장했다 — `test_work_overview_browser.py`에 범위 readback·배지·기명 운영자 전환·409 사유·보기 전용 잠금 시험 추가, `test/web/work-view.test.mjs`에 순수 판정·문구 시험 추가.

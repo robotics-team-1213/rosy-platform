@@ -189,9 +189,12 @@ def test_probe_parser_reads_only_the_rosyprobe_line():
     assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6 0\n") is None
     assert rp.parse_probe("ROSYPROBE 8 0.5\n") is None
     assert "disk_free_gb" not in p  # an older probe: disk unknown, never a refusal
-    # ~/rosy-test then /tmp: the fuller filesystem counts
+    # ~/rosy-test then /tmp: GB of ~/rosy-test's disk, use% of the fuller; a full /tmp still refuses
     disk = rp.parse_probe(f"{line} 52428800 40 2726297 100 \n")
-    assert disk["disk_free_gb"] == 2726297 / 2**20 and disk["disk_use"] == 100 and disk["nproc"] == 8
+    assert disk["disk_free_gb"] == 50 and disk["disk_use"] == 100 and disk["nproc"] == 8 and rp.disk_full(disk)
+    # the site PC: 103 GB free on / and a 7.4 GB tmpfs /tmp at 1% is healthy
+    site = rp.parse_probe(f"{line} 107186760 54 7774272 1 \n")
+    assert not rp.disk_full(site), "a small empty tmpfs is not a full disk"
 
 
 def _probe(**disk):
