@@ -201,8 +201,8 @@ def test_real_account_revocation_blocks_new_child_but_preserves_exact_replay(fai
     c.store = app.state.arm_transfer_job_store
     c.store._clock_ns = lambda: c.clock[0]
     c.port.store = c.store
-    assert _login(c.client, login="harbor").status_code == 200
-    assert _login(manager, login="manager").status_code == 200
+    assert _login(c.client, login="harbor").status_code == 204
+    assert _login(manager, login="manager").status_code == 204
     view = c.client.get(c.url + "/recovery").json()["recovery"]
     response = c.client.post(c.url + "/recovery", headers=ORIGIN,
         json=dict(request_key="account-recovery", expected_context_digest=view["context_digest"]))
