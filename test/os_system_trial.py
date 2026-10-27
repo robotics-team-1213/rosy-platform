@@ -86,8 +86,7 @@ def validate(raw, *, target_slot, root_uuid, previous_boot):
                     root_argument="root=PARTUUID=" + root_uuid, slot=target_slot, os_layout="ab-v2",
                     device_tree_partition=2 if target_slot == "a" else 3, tryboot=1, deadline_active=True)
     if (not isinstance(boot, str) or str(uuid.UUID(boot)) != boot or boot == previous_boot or boots != {uuid.UUID(boot).hex}
-            or any(facts[key] != value or type(facts[key]) is not type(value)
-                   for key, value in expected.items() if key != "tryboot")
+            or any(facts[key] != value or type(facts[key]) is not type(value) for key, value in expected.items())
             or not isinstance(facts["deadline_timer"], str)
             or [line.strip() for line in facts["deadline_timer"].splitlines()
                 if line.strip().startswith("OnBootSec=")] != ["OnBootSec=180s"]):
