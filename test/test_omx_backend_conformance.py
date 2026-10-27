@@ -46,6 +46,14 @@ def test_each_contract_breach_is_reported():
                                              travel_after_rad=0.05)),
         'goal ignored': dict(stop=dict(accepted=True, cancel_acknowledged=True, travel_before_rad=0.0,
                                        travel_after_rad=0.0)),
+        'object drift': dict(objects={'infeed_block': [(0.0, 0.17, 0.015), (0.0, 0.17, 0.0)]}),
     }
     for label, change in cases.items():
         assert mod.check(_samples(mod, **change), shape=(240, 320), camera_hz=4.5), label
+
+
+def test_still_objects_and_a_backend_without_object_facts_conform():
+    mod = _mod()
+    still = {'infeed_block': [(0.0, 0.17, 0.015), (0.0, 0.1702, 0.0151)]}
+    assert mod.check(_samples(mod, objects=still), shape=(240, 320), camera_hz=4.5) == []
+    assert mod.check(_samples(mod, objects={}), shape=(240, 320), camera_hz=4.5) == []

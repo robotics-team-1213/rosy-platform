@@ -124,17 +124,33 @@ KILL = r"""read -r pid _ < ~/rosy-jobs/"$1".lock 2>/dev/null && kill -TERM -- "-
 LOST_EXIT = 255  # what land.py sees for an invocation whose host went silent
 VANISHED_EXIT = 254  # the job ended without an exit code (host reboot, SIGKILL, START cut off)
 CANCELLED = "cancelled"  # not an int: a cancelled invocation never reads as a pass or a cached result
+ARGV_MAX = 8000  # remote command bytes passed as an ssh argument; ssh.exe cut at ~8,190 (measured 2026-10-26)
 
 
 class Lost(Exception):
     """No contact with the host for the reconnect budget; the job keeps running there."""
 
 
+def command(script: str, args, prefix: str = "") -> str:
+    return prefix + "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
+
+
+def argv_command(script: str, args, prefix: str = "") -> str:
+    """command() for one ssh argument: Git for Windows' ssh.exe started from Python cuts its remote command at
+    about 8,190 bytes without an error (2026-10-26), so a longer one is refused, never sent."""
+    text = command(script, args, prefix)
+    if len(text) > ARGV_MAX:
+        raise SystemExit(f"[remote-pytest] remote command of {len(text)} bytes is over {ARGV_MAX}; send it on stdin")
+    return text
+
+
 def ssh_call(ssh: list[str], host: str, script: str, *args: str) -> subprocess.CompletedProcess | None:
-    """One short ssh call, or None when the link failed (ssh exit 255, timeout)."""
-    command = "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
+    """One short ssh call, or None when the link failed (ssh exit 255, timeout).
+
+    The command goes on stdin (argv_command's limit): a FULL landing's gate word dropped every pytest path after it."""
+    command_text = command(script, args)
     try:
-        result = subprocess.run([*ssh, host, command], stdin=subprocess.DEVNULL, capture_output=True,
+        result = subprocess.run([*ssh, host, "bash -s"], input=command_text.encode(), capture_output=True,
                                 timeout=CALL_TIMEOUT)
     except (OSError, subprocess.TimeoutExpired):
         return None

@@ -1797,3 +1797,9 @@
 - 변경: 진단 화면이 tokens.css를 싣고도 같은 색을 hex로 다시 적고 `--ink`·`--ink-quiet`를 덮어쓰던 것을 역할→토큰 참조로 바꿨다. 본문 rgba 20여 곳은 역할의 알파(color-mix)로, 캔버스 색표 `T`는 hex 사본 대신 CSS 속성 이름(`T_VARS`)을 그리는 순간 RosyPalette로 푼다. 토큰이 없는 지도 래스터(render_png와 같은 값)와 대안 경로·핀 두 색만 역할 블록에 남는다. 주행 화살표 엔티티는 공용 아이콘, 정적 인라인 style은 클래스로 옮겼다.
 - 증거: 정적 점검(역할 블록 밖 원시 색 0, T 속성 20개 모두 선언됨). 원격 검사는 별도 기록한다.
 - gate 변화: 없음. 화면은 여전히 dark 고정(data-theme-pin)이며 색 값의 출처만 바뀌었다.
+
+## 2026-10-27 · uncommitted · deepinit 소스 위치 안내 정렬
+
+- 변경: 루트와 nodes/AGENTS.md에서 ROS composition과 import facade를 실제 nodes/·control/ 위치로 구분하고, 카메라 구현·Drive motion limits·관련 안내 링크를 현재 소스에 맞췄다.
+- 증거: control/_source_layout.py의 PACKAGE_DIRS·CONTROL_ROOTS·FLAT_ROOTS와 setup.py의 설치 경로를 대조했다. 전체 AGENTS.md의 로컬 Markdown 링크와 Parent context 경로를 정적으로 확인한다. 런타임 코드는 변경하지 않았다.
+- gate 변화: 없음. ROS·장치·현장 수용을 검증한 변경이 아니다.

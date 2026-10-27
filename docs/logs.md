@@ -12099,6 +12099,14 @@ osy-d395-s1d\`.
 - 증거: `6b0f7568f5` 원격98시험과 구조/harness/affected247시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 실제 개별·중앙 집계·중앙 직접 수집 subprocess와 중앙 단절 독립성·프로세스 간 writer 배타성을 확인했다. 최종 독립 재검토 차단 없음.
 - gate 변화: Monitoring SOURCE GO, 화면/배포/실제 PC 수용은 HOLD다. CE: 해당 없음 — 새 기능의 코드·회귀가 판단 근거를 보존한다.
 
+## 2026-10-26 · 7e85b28a8e · fix(remote): 원격 잡 명령을 stdin으로 보낸다
+
+- 변경: `remote_job.ssh_call`이 `bash -s`를 실행하고 명령을 stdin으로 보낸다. `remote_pytest.remote`는 `remote_job.argv_command`를 거쳐 8,000바이트(`ARGV_MAX`)를 넘는 명령을 거부한다. 회귀 시험 2개(`test/test_remote_pytest.py`).
+- 이유: 노트북의 Git for Windows `ssh.exe`는 Python에서 띄우면 원격 명령을 약 8,190바이트에서 오류 없이 자른다. FULL 착지의 수집 게이트 잡 단어(경로 115개, 5 KB)와 잡 본문(4 KB)이 이를 넘어 `tools/collect_alone.py` 이하 인자가 사라졌고, pytest가 트리 전체를 한 프로세스로 수집해(37684 items / import file mismatch 11) 문서만 바꾼 착지를 NEW 11로 멈췄다. 게이트 로직 자체는 정상이다.
+- 증거: 수정 전 main 433bc0d8a0에서 같은 115경로 호출 재현(37684 items / 11 errors), `test` 항목을 뺀 114경로도 재현, `ROSY_COLLECT_PATHS=test`만은 660 passed, 정상 2경로+5,200바이트 더미 단어도 재현. Python에서 Git ssh.exe로 8,150 x는 그대로, 8,200·12,000 x는 8,176에서 잘림(Windows OpenSSH는 모두 그대로). 수정 뒤 결과는 아래 검증 줄.
+- gate 변화: 복구. 수집 게이트와 단독 실행(`ROSY_ALONE_FILES`)이 긴 목록에서도 제 인자를 받는다.
+- CE: 새 교훈 — `docs/solutions/workflow-issues/windows-ssh-exe-cuts-long-remote-command-2026-10-26.md`.
+
 ## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 
 - 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
@@ -12111,6 +12119,69 @@ osy-d395-s1d\`.
 - 변경: D-629의 좁은 화면 순서만 D-892로 부분 대체한다. 이전 결정 본문은 보존하고 새 결정·색인·DESIGN 참조·반응형 DOM·회귀 시험을 함께 맞춘다.
 - 증거: ADR 번호는 관문에서 선점했으며 ADR Log의 UTF-8 BOM·CRLF를 유지했다. 문서·DOM 변경 뒤 공식 원격 재검증은 진행 중이다.
 - gate 변화: 없음. Accepted는 실물·현장 또는 제품 전체 UI/UX 수용을 뜻하지 않는다.
+
+## 2026-10-27 · uncommitted · feat(sim): D-877 물체 위치 평가 사실, 탐침 PASS 순서
+
+- 변경: MuJoCo·Isaac이 `/sim/object_tf`로 움직이는 상자 위치를 내고 적합성이 5mm 흔들림을 검사, 두 Gazebo 탐침은 정리 뒤 PASS, 두 카메라 사슬 시험이 저널 두 프레임 확인, [검증 기록](validation/omx-sim-object-facts-2026-10-27/result.md).
+- 증거: MuJoCo(AI PC)·Isaac(모델 PC) 적합성 통과, 흔들림 0.0mm. 단일 카메라 Gazebo와 VLA P0 stale이 PASS 뒤 EXIT_OK. 원격 pytest 통과.
+- gate 변화: 없음. Isaac 흔들림 값은 파지 시험 전까지 의미를 주장하지 않는다.
+- 결정: 없음.
+- 교훈: 없음(AI PC overlay 삭제와 복구는 검증 기록에 남김).
+
+## 2026-10-27 · uncommitted · perf(remote): 직렬 묶음 13개를 xdist로
+
+- 변경: `tools/remote/serial_suites.txt`에서 13줄을 뺐다(D-799 3: 직렬과 `-n`의 실패가 같음을 시험 PC에서 본 뒤). root `test/`와 `operations/fleet/test`는 착지 사전 시험의 임계 경로였다(10-26 FULL 사전 시험 25~60분, 그중 순차 17분·18분). 직렬 경로 하나가 섞인 묶음도 통째로 순차였다(imu_bno055가 섞인 media·games·palletizing 묶음). Gazebo·Isaac은 재지 않아 남기고, `tools`는 land_isolation의 collect_alone 잡이 기대므로 남겼다. 워커마다 수집 id가 달라 xdist 수집이 멈추던 두 매개변수(`test_password_session.py` 무작위 salt 해시, `test_site_conversation_client.py` `time.time()`)에 고정 id를 줬다.
+- 증거: 모델 PC, `-n 6 --dist loadfile`, 6 GB 상한, 실패 0: Fleet 7024 passed 2분 50초(순차 18분 19초), root `test/` 11433 passed 3분 24초(순차 16분 54초), perception 3582 passed 45초(순차 2분 34초), overhead·situation·core/api·robot_ui robot/pilot·imu_bno055·robot_execution/local·omx adapter·training/omx·deploy 각 25초 이하. 고정 id 전에는 Fleet·`test/` 모두 "Different tests were collected between gw…"로 수집 단계에서 멈췄다. `xdist_plan`은 실행하는 체크아웃의 목록을 읽으므로 효과는 착지 뒤부터다.
+- gate 변화: 없음(같은 시험, 병렬 실행). rclpy·ROS_DOMAIN_ID 묶음은 한 번의 측정이라 부하성 실패가 나오면 D-790 재실행이 가른다.
+- CE: 미정 — 착지 뒤 실제 사전 시험 시간으로 판단.
+
+## 2026-10-27 · uncommitted · perf(land): 착지한 FULL 변화분 뒤에서 FULL을 다시 돌지 않음
+
+- 변경: `tools/land_selection.py`. 차례에서 main의 변화분이 FULL로 올라갔어도 그 변화분은 자기 FULL을 통과하고 착지한 것이므로, 대기 착지는 FULL을 다시 준비하지 않고 변화분의 직접 대상 시험과 합친 트리 위 이 브랜치 자신의 선택(브랜치가 FULL급이면 그 직접 대상)을 함께 돈다(D-889 3항 "합친 affected"). 안전 경로가 어느 쪽에든 있으면 FULL을 유지한다(D-889 6항). 하네스 파일만 예외였던 10-25 규칙을 넓혔다.
+- 근거: 10-26 08:59~10-27 02:16 사건 기록에서 같은 착지의 FULL 재준비가 390분으로 사전 시험 벽시계의 35%였고(7건, 그중 6건은 대기 착지도 FULL급), 몰릴수록 FULL 착지 하나가 대기 N건에 FULL N번을 시킨다.
+- 증거: 원격 `test/test_land_selection.py test/test_land.py` 결과는 착지 기록에 남긴다.
+- gate 변화: 착지 차례의 FULL 재시험을 좁힌다. 남는 위험은 두 변경 모두 직접 건드리지 않은 곳의 상호작용이며, 다음 FULL 착지와 게시 전 녹색 FULL 요구(D-889 5항)가 받친다. 사용자 결정(2026-10-27).
+- CE: 미정 — 몰림 때 재준비 시간으로 판단.
+
+## 2026-10-27 · uncommitted · perf(core): 충전소 카메라 파이프라인 시험의 느린 경우를 파일로 나눔
+
+- 변경: `middleware/core/gateway/test/test_station_camera_pipeline.py`의 `lifespan`·`shutdown_UNDOCKING`을 `test_station_camera_pipeline_lifespan.py`로, `continuous`를 `test_station_camera_pipeline_continuous.py`로 옮겼다. 두 파일은 매개변수만 두고 원래 시험 함수를 부른다. `composed`·`shutdown_CHARGING`은 `test/flaky_quarantine.txt` node id가 있어 원래 파일에 남겼다.
+- 근거: xdist `--dist loadfile`은 파일 하나를 워커 하나에 준다. FULL의 gateway·events·services·shared/web·foundation 묶음 576초 가운데 이 파일이 511초였다(모델 PC `--durations`, main c2e21981ec). 나눈 뒤 가장 긴 파일은 약 210초로 예상한다.
+- 증거: 원격 결과는 착지 기록에 남긴다.
+- gate 변화: 없음(같은 시험, 같은 매개변수).
+- CE: 해당 없음 — 시험 배치 변경이다.
+
+## 2026-10-27 · uncommitted · fix(land): 크기 규칙을 대기·준비 단계에서 미리 본다
+
+- 변경: `tools/land_prepare.py`. 대기 중 main이 움직이면 깨끗한 `merge-tree` 결과로 참조 없는 미리 보기 커밋을 만들어 `size_range.py`를 돌리고, 실패하면 차례 전에 멈춘다(충돌 미리 보기와 같은 자리). 사전 시험의 main 병합 직후에도 크기 규칙을 돈다. D-889 추가 1 "S0 입장 검사"의 크기 항목이다.
+- 근거: 10-26 08:59~10-27 03시 사건 기록에서 size-range 멈춤 2회가 각각 시작 뒤 수 시간 만에, 합계 392분 뒤에 났다. 몇 초짜리 검사가 차례의 병합 뒤에만 돌았기 때문이다.
+- 증거: 원격 `test/test_land.py` 결과는 착지 기록에 남긴다.
+- gate 변화: 강화(같은 크기 규칙을 더 일찍). 미리 보기 오류는 판정하지 않고 차례의 검사가 결정한다.
+- CE: 해당 없음 — 기존 규칙의 실행 시점 변경이다.
+
+## 2026-10-27 · uncommitted · fix(doctor): 대기열의 반복 준비·무활동 착지를 경고
+
+- 변경: `tools/doctor.py`의 land queue 검사가 살아 있는 티켓마다 이번 실행의 `prepared` 횟수와 마지막 활동(티켓 갱신·사건 기록·`land_checks.tmp_dir`의 원격 로그 중 최근)을 본다. 3번 이상 다시 준비했거나 30분 동안 활동이 없으면 WARN이다.
+- 근거: 2026-10-27 새벽 land.py가 4~5시간씩 떠 있었는데 기다리는지 멈췄는지 doctor가 OK만 보였다. 손으로 보니 멈춘 것은 없었고, 한 실행(fix/comm-freshness-latest-main)은 FULL을 네 번 다시 준비했다(248분).
+- 증거: 실제 대기열에서 그 실행만 "prepared 4 times"로 WARN. 원격 `test/test_doctor.py`.
+- gate 변화: 없음(읽기 전용 진단).
+- CE: 해당 없음 — 진단 출력 보강이다.
+
+## 2026-10-27 · uncommitted · perf(land): 사전 시험의 관문 라운드를 선택 시험과 함께 돌린다
+
+- 변경: `tools/land_prepare.py`가 관문 라운드(구조 검사와 land_isolation의 수집·단독 실행)를 선택 시험 앞이 아니라 옆 스레드에서 돌린다. 각각 따로 `remote_pytest.run`이고, 어느 쪽의 Stop이든 착지를 멈추며 기록(`land_full.save`)은 둘 다 끝난 뒤에만 남는다. 차례 안에서는 관문이 먼저인 채로 둔다.
+- 근거: 관문 라운드가 10-26 오전 73~92초에서 격리 관문이 들어온 뒤 150~870초가 됐고, 동시 3개뿐인 사전 시험 자리를 그만큼 더 쥐었다(10-27 `perf/xdist-root-fleet` 335초).
+- 증거: 원격 `test/test_land.py` 등. 관문이 실패해도 선택 시험은 이미 돈다(새 실패 비율 1.2%라 드문 낭비와 매번의 대기를 바꿨다).
+- gate 변화: 없음(같은 관문, 같은 판정). 관문 실패 때 선택 시험 몫의 시험 PC 시간을 더 쓴다.
+- CE: 미정 — 착지 뒤 사전 시험 시간으로 판단.
+
+## 2026-10-27 · uncommitted · fix(land): 손으로 고른 --tests가 선택 시험을 대신하지 못하게
+
+- 변경: `tools/land.py`. `--tests "<pytest args>"`는 선택 시험을 대신하지 않고 그 위에 더한다(사전 시험과 차례 모두 `land.select`). `--tests none`은 `--skip-reason "<사용자의 말>"`이 있어야 하고, 그 사유를 사건 기록 `skip`으로 남긴다. land.py 자기 시험만 `ROSY_LAND_FIXTURE=1`로 예전처럼 대신한다.
+- 근거: `3125704e24`(D-892)가 사전 시험·관문 없이 손으로 고른 브라우저 시험 하나로 착지해 main이 깨졌다(`test_console_queues_contract.py`, `test_integrated_control_backend_browser.py`). 같은 변경에 선택기를 다시 돌리면 `operations/fleet/test`를 골랐다. 다른 착지 2건이 그 MAIN-RED로 멈췄다.
+- 증거: 원격 `test/test_land_tests_flag.py` 등.
+- gate 변화: 강화(우회 경로를 막음). 사용자 명시 우회(`docs/solutions/workflow-issues/first-field-result-from-the-no-release-path-release-in-parallel-2026-10-10.md` 4)는 사유와 함께 남는다.
+- CE: 미정 — 착지 뒤 판단.
 
 ## 2026-10-27 · 9e7b4f6f0a · OMX 화면에 prepare-native 카메라 기준 표시
 
