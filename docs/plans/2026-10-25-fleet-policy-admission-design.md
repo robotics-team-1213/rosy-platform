@@ -67,7 +67,7 @@ Task 정책 경로(`policy_evidence`, `POLICY_DISPATCH_ENABLED`)는 이미 만�
 
 ### P3 — 콘솔 표시
 
-**상태:** 구현·원격 시험 완료(2026-10-27) — 브랜치 `feat/policy-admission-console`. work 뷰 승인 대기 행의 자동 승인 배지, work 개요의 범위 readback 패널과 기명 운영자 전환. 판정은 순수 함수로 분리(node 시험), readback 부재·404는 fail-closed로 배지를 끈다. 새 콘솔 자산이 없어 allowlist·CSP는 그대로다. · **Files:** `applications/fleet/web/work/`, `console-refresh.js` 패턴 재사용 · **Exit:** 콘솔 계약 시험 통과 — 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1` `test_work_overview_browser.py` 36 통과(신규 3건 포함)·known_failures NEW 0, `test_server_app`·`test_remaining_platform_installed` 50 통과·NEW 0.
+**상태:** 구현·원격 시험·착지 완료(2026-10-27, 로컬 main `b54b29d5d0`) — 브랜치 `feat/policy-admission-console`. work 뷰 승인 대기 행의 자동 승인 배지, work 개요의 범위 readback 패널과 기명 운영자 전환. 판정은 순수 함수로 분리(node 시험), readback 부재·404는 fail-closed로 배지를 끈다. 새 콘솔 자산이 없어 allowlist·CSP는 그대로다. · **Files:** `applications/fleet/web/work/`, `console-refresh.js` 패턴 재사용 · **Exit:** 콘솔 계약 시험 통과 — 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1` `test_work_overview_browser.py` 36 통과(신규 3건 포함)·known_failures NEW 0, `test_server_app`·`test_remaining_platform_installed` 50 통과·NEW 0.
 
 ### P4 — 원격 회귀·착지
 

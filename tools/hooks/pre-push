@@ -184,7 +184,8 @@ FAST_SUITES=(
 # landed by tools/land.py with its affected tier green (land records in
 # <git-common-dir>/rosy-land), reuse those results and run only the fast suites no
 # record ran. A missing record (hand-landed commit, --tests none) runs the gate below.
-if OWED="$("$PY" tools/hooks/land_record.py owed --head "$PUSH_SHA" --upstream origin/main "${FAST_SUITES[@]}")"; then
+# D-889: a publish/main-* push reuses the pushed commit's own record (--own); ci-result is its FULL gate.
+if OWED="$("$PY" tools/hooks/land_record.py owed --head "$PUSH_SHA" --upstream origin/main ${PUBLISH_REF:+--own} "${FAST_SUITES[@]}")"; then
   if [ -z "$OWED" ]; then
     echo "[pre-push] land records cover origin/main..${PUSH_SHA:0:10}; no suite owed"
   else

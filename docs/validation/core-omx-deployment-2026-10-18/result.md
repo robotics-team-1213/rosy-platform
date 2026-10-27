@@ -17,7 +17,7 @@
   D-793 승인·실물 수용 미완료를 차단 사유로 남기며 exit 3이다. SIM I/O 준비 통과는
   exit 0이고, 잘못된 입력·보고서 쓰기 실패는 exit 2다. 보고서는 실행 권한이 아니다.
 
-설정·설치·명령은 [CORE_LEROBOT.md](../../../integrations/robots/omx/CORE_LEROBOT.md),
+설정·설치·명령은 [CORE_LEROBOT.md](../../../integrations/robots/omx/docs/CORE_LEROBOT.md),
 복사용 비공개 설정의 시작점은 `integrations/robots/omx/core-record.json.example`이다.
 기존 D-793 hardware owner의 `rule_based` 제한과 SIM session 제한을 유지했다.
 
