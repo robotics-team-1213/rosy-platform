@@ -12414,6 +12414,29 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 시험 PC 확인의 부하(load1) 검사는 그대로라 실제로 바쁜 PC는 계속 거절된다.
 - CE: 해당 없음 — 갱신한 교훈 §3의 연장이고 근거가 코드·시험에 있다.
 
+## 2026-10-27 · uncommitted · docs(validation): SmolVLA 미세 조정 GPU 메모리
+
+- 변경: `docs/validation/smolvla-train-memory-2026-10-27/`(측정 스크립트와 결과).
+- 근거: D-866 2026-10-27 보완이 AI PC 첫 학습 전에 VRAM을 재도록 했다. 배치 8은 2.96 GB, 16은 4.63 GB, 32는 5 GB 상한 초과. AI PC는 다른 프로세스가 10.2 GB를 써서 ollama와 함께면 배치 16까지만 들어간다.
+- 증거: AI PC 측정 출력(`hold_gpu.sh`로 실행).
+- gate 변화: 없음.
+- CE: 해당 없음 — 측정 기록에 남는다.
+
+## 2026-10-27 · 10f4997e11 · fix(land): affected 재준비에서도 유효한 FULL 원본 보존
+
+- 변경: `tools/land_prepare.py`. 성공한 affected 재준비 뒤에도 캐시 사용과 원래 후보의 계보가 유효하면 기존 FULL 준비 기록을 바이트 그대로 보존한다. 현재 실행의 사건 기록은 affected로 남기고, 다음 차례는 원래 FULL 기준부터 main 변화분 전체를 확인한다. carried·잘못된 계보·비정상 invocations·실패·HEAD 변경은 보존 조건을 통과하지 못한다. `--no-cache`는 이전의 새 affected 체크포인트 동작을 유지한다.
+- 근거: OS 배포 준비에서 FULL 이후 차례 시간 제한으로 다시 준비하자, 같은 브랜치의 단일 준비 파일이 affected로 덮였다. 게시자는 실제 착지 기록의 FULL tier를 요구하므로 시험이 통과해도 새 배포 소스를 선택하지 못할 수 있었다. 원래 후보·main을 새 affected 실행의 값으로 옮기거나 결과를 FULL로 재표기하면 검증 출처가 달라진다.
+- 증거: 원격 회귀 시험에서 두 실패를 재현했고, 수정 후 준비·착지·게시자 연결 47건이 통과했다. 보존 분기를 끈 변이 커밋 `e0e452d426`에서 두 시험이 다시 실패했다. 복원한 `10f4997e11`의 `test_land.py`·`test_land_prepare.py`·`test_land_record.py`·`test_publish_main.py` 159건이 통과했다. 기존 FULL 바이트·기준 main·후보와 최종 게시자 판정을 실제 Git 임시 저장소로 확인한다. 독립 검토 `7c0e816d67`에서 추가 수정 사항 없음이며 복원 트리는 그 검토 트리와 같다.
+- gate 변화: 판정 기준은 유지한다. 유효한 FULL 원본과 현재 후보의 변화분 증거 연결만 보존하며, 실제 최종 소스의 전체 시험을 새로 실행했다고 주장하지 않는다. 장치·이미지·현장 수용과는 별개다.
+- CE: 해당 없음 — 원인과 보존 조건은 새 코드·회귀 시험과 기존 교훈 `docs/solutions/workflow-issues/land-record-stopped-when-tests-moved-before-the-turn-2026-10-26.md`에서 확인할 수 있다.
+
+## 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록
+
+- 변경: 실행 계획(2026-10-25-fleet-policy-admission-design.md) P3 상태줄에 착지 사실과 로컬 main `b54b29d5d0`을 붙였다. 내용 변화 없음.
+- 증거: 착지 기록 `.git/rosy-land/b54b29d5d0…` 랜드 레코드(3라운드, FULL+affected 0 NEW). 모듈 로그·생성 문서는 그 착지에 이미 반영됐다.
+- Gate: 변화 없음. P5 현장 수용은 별도.
+- CE: 해당 없음 — 상태 한 줄 기록.
+
 ## 2026-10-27 · uncommitted · test(isaac): Lab 3 설치 증거와 복구 회귀
 
 - 변경: 별도 Newton·Sim 후보 환경의 최초 설치 증거와 SDK 호환·종료 정리의 회귀 조건을 기록했다.
