@@ -135,7 +135,8 @@ class SampleEngine:
             return reply({'read_only': True, 'physical_acceptance': False, 'workcells': []})
         if method == 'GET' and (path in ('/device-profiles', '/device-profile-sources')
                                 or re.fullmatch('/device-profile-sources/(robot|arm)/[^/]+', path)):
-            return error(404, 'DEVICE_PROFILE_STORAGE_UNAVAILABLE', 'Sample has no profile storage.')
+            # Match an absent Fleet route so the existing poll gate closes until reset.
+            return reply({'detail': 'Not Found'}, status=404)
         if method == 'GET' and f'GET {path}' in self.reads:
             return reply(self.reads[f'GET {path}'])
         match = re.fullmatch('/robots/([^/]+)/path', path)

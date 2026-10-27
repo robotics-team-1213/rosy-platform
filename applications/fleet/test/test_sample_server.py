@@ -40,7 +40,7 @@ def test_sample_profile_reads_report_absent_storage_without_hiding_unknown_reque
     engine = load_engine()
     headers = {'Authorization': 'Bearer sample-operator'}
     for path in ('/device-profiles', '/device-profile-sources',
-                 '/device-profile-sources/robot/sample-robot'):
+                 '/device-profile-sources/robot/sample-robot', '/device-profile-sources/arm/sample-arm'):
         response = engine.handle('GET', '/api/fleet' + path, headers, b'')
         assert response.status == 404
         assert json.loads(response.body) == {'detail': 'Not Found'}
