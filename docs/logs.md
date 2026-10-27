@@ -12336,6 +12336,21 @@ osy-d395-s1d\`.
 - gate 변화: 강화(우회 경로를 막음). 사용자 명시 우회(`docs/solutions/workflow-issues/first-field-result-from-the-no-release-path-release-in-parallel-2026-10-10.md` 4)는 사유와 함께 남는다.
 - CE: 미정 — 착지 뒤 판단.
 
+## 2026-10-27 · 9e7b4f6f0a · OMX 화면에 prepare-native 카메라 기준 표시
+
+- 변경: `/learning/omx`가 `inspection.json`의 `camera_setup`(prepare-native `--camera-reference`, PR #200·D-792 S3)을 역할마다 "기준 일치(prepare-native에서 거부 검사 통과) · 기준 <revision 12자>"로 보인다. 64-hex 검증한 revision이 camera-setup 저장소에 있을 때만 같은 사이트 기준 사진 링크를 단다. 기존 `camera-setup.json`은 섀도 증거로 따로 표시하고, 둘 다 없을 때만 기존 문구를 보인다. `camera_identity`와 경로는 내보내지 않는다.
+- 증거: 원격 `test_omx_web.py`·새 `test_omx_camera_reference_browser.py`(1440·390, ROSY_RUN_BROWSER_TESTS=1)·`test_omx_segments_browser.py`·`test_browser_scope.py` 36 PASS, 0 FAIL.
+- gate 변화: 없음. 화면 표시만 바뀌고 착지·실물 수용은 별도다.
+- CE: 해당 없음 — 시험 locator가 숨은 단계의 heading을 못 찾은 것은 기존 셀렉터 습관 문제로, 코드·시험이 근거를 보존한다.
+
+## 2026-10-27 · uncommitted · feat(land): main 빨강 이월(D-889 추가 2)과 재부팅 창 대기
+
+- 변경: `tools/land_mainred.py`(새), `land.py`·`land_checks.py`·`land_prepare.py`·`land_full.py`·`doctor.py`. robot-56의 조건 7개를 모두 만족하는 NEW만 멈추지 않고 이월하며, 이월한 착지는 land record를 쓰지 않는다(D-889 추가 2). `main_red`는 후보가 병합한 main에서 돌고 지문을 기록한다. 05:15~06:10에는 사전 시험을 시작하지 않는다.
+- 근거: 10-27 00:00~05:40 착지 9·멈춤 26, main 확인 10번 중 7번이 이미 빨강(robot-45 측정). 10-27 06:00 재부팅이 사전 시험을 exit 143으로 끊었다.
+- 증거: 원격 `test/test_land_mainred.py`·`test/test_land_mainred_flow.py`와 착지 도구 시험. 검토 robot-56.
+- gate 변화: 6항을 조건부로 뒤집음(사용자 승인 2026-10-27). 끄기 `ROSY_LAND_MAINRED_CARRY=0`.
+- CE: 미정 — 첫 실제 이월 뒤 판단.
+
 ## 2026-10-27 · uncommitted · fix(remote): venv 준비도 끊긴 접속 뒤 다시 시도, 시험 PC 대기 1시간
 
 - 변경: `tools/remote/remote_pytest.py`. ssh 255(접속 끊김) 재시도를 `ship()` 안의 반복문에서 `remote(..., tries=)`로 옮기고, venv 준비도 3번까지 다시 시도한다. 그 밖의 단계(정리·작업 시작)는 예전처럼 한 번만 돈다. 시험 PC를 기다리는 기본 시간(`--wait`)을 600초에서 3600초로 늘린다.
