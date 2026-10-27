@@ -36,6 +36,20 @@ def test_sample_starts_without_backend_and_never_creates_upstream():
     assert 'sample ready' in result.stdout
 
 
+def test_sample_profile_reads_report_absent_storage_without_hiding_unknown_requests():
+    engine = load_engine()
+    headers = {'Authorization': 'Bearer sample-operator'}
+    for path in ('/device-profiles', '/device-profile-sources',
+                 '/device-profile-sources/robot/sample-robot'):
+        response = engine.handle('GET', '/api/fleet' + path, headers, b'')
+        assert response.status == 404
+        assert json.loads(response.body)['detail']['code'] == 'DEVICE_PROFILE_STORAGE_UNAVAILABLE'
+    assert not engine.unhandled
+    response = engine.handle('GET', '/api/fleet/device-profile-sources/unknown/sample-robot', headers, b'')
+    assert response.status == 501
+    assert engine.unhandled == [('GET', '/api/fleet/device-profile-sources/unknown/sample-robot')]
+
+
 def test_sample_session_ignores_real_fleet_credentials():
     engine = load_engine()
     response = engine.handle('GET', '/api/fleet/auth/session',
