@@ -24,7 +24,7 @@ def run(argv, *, data=None):
     return result.stdout
 
 
-def expired(certificate, key) -> bytes:
+def expired_pem(certificate, key) -> bytes:
     """The certificate re-signed with validity in the past, as PEM.
 
     OpenSSL 3.4+ refuses ``-days -1`` ("end date before start date"); 3.0 has no -not_before/-not_after."""

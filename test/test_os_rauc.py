@@ -13,7 +13,7 @@ from test_ab_image_layout import module
 from test_factory_release_signature import _keys
 from test_os_update_manifest import metadata
 from signing import sign_checksums
-from os_rauc_fakes import rauc_tool, signer, make_bundle, manifest, run, expired
+from os_rauc_fakes import rauc_tool, signer, make_bundle, manifest, run, expired_pem
 
 
 def test_seal_fallbacks_are_the_linux_abi_values():
@@ -40,7 +40,7 @@ def _case(tmp_path, tool, *, text=None, foreign=False, expired=False):
     key, certificate = signer(tmp_path / "cms")
     if expired:
         old = certificate.with_name("expired.pem")
-        old.write_bytes(expired(certificate, key))
+        old.write_bytes(expired_pem(certificate, key))
         certificate = old
     bundle_key, bundle_cert = signer(tmp_path / "foreign") if foreign else (key, certificate)
     produced, _ = make_bundle(tmp_path / "producer", tool, bundle_key, bundle_cert, text, verify_creation=not expired)
