@@ -19,7 +19,9 @@ try:
     spec = importlib.util.spec_from_file_location("cell_pipeline", OMX / "cell_pipeline.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
+    import cell_attempts
     import cell_perception
+    import cell_survey
     import judge_seat
 finally:
     sys.path.remove(str(OMX))
@@ -50,9 +52,9 @@ def rosy_belt_pixel(x, y):
 class Cell:
     """A runner that obeys the chunk commands, and cameras that draw the box and jaws where they are."""
 
-    def __init__(self, box, fail=None, slip=None, blind=(), contact=None, current=0):
+    def __init__(self, box, fail=None, slip=None, blind=(), contact=None, current=0, reach=(0.0, 0.0)):
         self.box, self.held, self.fail, self.slip, self.blind = list(box), False, fail, slip, set(blind)
-        self.contact, self.current = contact, current
+        self.contact, self.current, self.reach = contact, current, reach  # reach: where the arm ends off its plan
         self.library, self.tcp, self.grip, self.commands = None, None, 56.0, []
 
     def act(self, command):
@@ -67,7 +69,7 @@ class Cell:
             self.library = json.loads(Path(command.split(" ", 1)[1]).read_text())["source"]
         elif command == "goto above_pick":
             pick = self.library["pick"]
-            self.tcp = (pick["x"], pick["y"], pick["z"] + CONFIG["plan"]["approach_m"])
+            self.tcp = (pick["x"] + self.reach[0], pick["y"] + self.reach[1], pick["z"] + CONFIG["plan"]["approach_m"])
         elif command.startswith("grip "):
             self.grip = max(48.5, float(command.split()[1]))  # the follower jaws end at 48.5
         elif command == "state":
@@ -167,6 +169,93 @@ def test_an_empty_grasp_is_decided_by_the_seat_retried_and_kept_as_a_case(tmp_pa
     assert rows[0]["facts"]["holding"] is False and rows[-1]["outcome"] == "placed"
     replay = rows[0]["scene"]  # enough for cell_cases.from_row to replay it in a simulator
     assert replay["outcome"] == "empty" and replay["place"] == "belt" and len(replay["box_m"]) == 2
+
+
+def attempt_rows(tmp_path):
+    return [json.loads(line) for line in (tmp_path / "attempts.jsonl").read_text().splitlines()]
+
+
+def test_every_attempt_passed_or_not_is_one_row_with_its_context_and_its_case_names_it(tmp_path, monkeypatch):
+    calibration = calibrated(tmp_path)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    cell_attempts.start(tmp_path / "attempts.jsonl", "run1")
+    moved = m.move(Cell((0.080, 0.100), slip=0.012), CONFIG, calibration, "pinky", "belt", tmp_path)
+    assert moved["result"] == "placed"
+    rows = attempt_rows(tmp_path)
+    assert [(r["outcome"], r["fail_stage"]) for r in rows] == [("failed", "grasp"), ("placed", None)]
+    assert [r["attempt_id"] for r in rows] == ["run1-001", "run1-002"]
+    context = rows[0]["context"]
+    assert context["calibration"]["key"] == "pinky" and context["calibration"]["coarse"] is False
+    assert context["config_sha"] and context["plan_sha"]
+    assert rows[0]["plan"]["pick"]["x"] == rows[0]["locate"]["arm_m"][0]  # where it reached vs where it saw
+    cases = [json.loads(line) for line in (tmp_path / "cases.jsonl").read_text().splitlines()]
+    assert [c["attempt_id"] for c in cases] == ["run1-001", "run1-002"]
+    report = cell_attempts.summary(rows)
+    assert report["attempts"] == 2 and report["placed"] == 1
+    assert report["failures"] == {"grasp: empty at run grasp_pick": 1}
+    assert sum(c["tried"] for c in report["by_position"].values()) == 2
+
+
+def test_a_box_seen_where_no_ik_reaches_is_kept_as_a_plan_failure_not_a_crash(tmp_path, monkeypatch):
+    calibration = calibrated(tmp_path)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    cell_attempts.start(tmp_path / "attempts.jsonl", "run1")
+
+    def unreachable(*args, **kwargs):
+        raise SystemExit("pick: no IK solution within 1.5 mm")
+
+    monkeypatch.setattr(m, "write_library", unreachable)
+    cell = Cell((0.080, 0.100))
+    moved = m.move(cell, CONFIG, calibration, "pinky", "belt", tmp_path)
+    assert moved["result"].startswith("stopped") and not any(c.startswith("run ") for c in cell.commands)
+    rows = attempt_rows(tmp_path)
+    assert {(r["fail_stage"], r["fail_class"]) for r in rows} == {("plan", "no IK for the located box")}
+    assert "no IK solution" in rows[0]["plan_error"]
+
+
+def test_a_bare_move_without_a_run_writes_no_attempt_file(tmp_path):
+    calibration = calibrated(tmp_path)
+    m.move(Cell((0.080, 0.100)), CONFIG, calibration, "pinky", "belt", tmp_path)
+    assert not (tmp_path / "attempts.jsonl").exists()
+
+
+def test_receipts_written_before_the_attempt_log_still_give_rows_by_position(tmp_path):
+    receipts = tmp_path / "receipts"
+    receipts.mkdir()
+    near = {"locate": {"found": True, "arm_m": [0.072, 0.106]}, "transfer": {"result": "placed"},
+            "verify": {"inside": True}}
+    far = {"locate": {"found": True, "arm_m": [0.090, 0.090]}, "transfer": {"result": "contact", "at": "run descend_pick"}}
+    (receipts / "a-reset.json").write_text(json.dumps({"stage": "reset", "from": "pinky", "to": "pinky",
+                                                       "attempts": [far, near]}))
+    report = cell_attempts.summary(cell_attempts.from_receipts(receipts))
+    assert report["by_position"] == {"pinky x70 y110 mm": {"tried": 1, "placed": 1},
+                                     "pinky x90 y90 mm": {"tried": 1, "placed": 0}}
+    assert report["failures"] == {"transfer: contact at run descend_pick": 1}
+
+
+@pytest.mark.parametrize("reach, expected", [((0.0, 0.0), (0.0, 0.0)), ((0.006, -0.004), (6.0, -4.0))])
+def test_a_survey_sees_where_the_jaws_end_over_the_box_and_never_descends(tmp_path, monkeypatch, reach, expected):
+    calibration = calibrated(tmp_path)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    cell_attempts.start(tmp_path / "attempts.jsonl", "run1")
+    cell = Cell((0.080, 0.100), reach=reach)
+    result = cell_survey.survey(cell, CONFIG, calibration, "pinky", tmp_path)
+    assert result["result"] == "surveyed", json.dumps(result, default=str)[:400]
+    assert not any(c.startswith(("run descend", "run grasp")) for c in cell.commands) and cell.commands[-1] == "park"
+    assert math.dist(result["survey"]["offset_mm"], expected) < 1.5
+    row = attempt_rows(tmp_path)[0]
+    assert row["outcome"] == "surveyed" and row["survey"]["offset_mm"] == result["survey"]["offset_mm"]
+    position = cell_attempts.summary([row])["by_position"]["pinky x80 y100 mm"]
+    assert position["tried"] == 1 and position["jaw_offset_mm"] == [result["survey"]["offset_mm"]]
+
+
+def test_the_arm_error_is_the_measured_joints_against_the_sent_ones_through_fk():
+    sent = CONFIG["plan"]["home"][:5] + [50.0]
+    row = {"transfer": {"steps": [{"command": "goto above_pick", "target": sent, "state": list(sent)}]}}
+    assert cell_attempts.arm_error_mm(row) == [0.0, 0.0, 0.0]
+    row["transfer"]["steps"][0]["state"] = sent[:3] + [sent[3] + 2.7] + sent[4:]  # wrist_flex ~5 degrees off
+    assert math.hypot(*cell_attempts.arm_error_mm(row)) > 3
+    assert cell_attempts.arm_error_mm({"transfer": {"steps": [{"command": "goto above_pick"}]}}) is None
 
 
 def test_a_wrist_view_off_the_learned_hover_stops_before_the_descent(tmp_path):
