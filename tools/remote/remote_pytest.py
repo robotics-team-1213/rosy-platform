@@ -498,10 +498,7 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
     """(exit code, lost message or None) of invocation inv as job k of run dir name on host."""
     words, extra, note = xdist_plan.plan(inv, HEADROOM.get(host))
     history = memory_history.path(repo)
-    reserve = memory_history.reserve_gb(history, inv)
-    if reserve < xdist_plan.JOB_MEM_GB and not any(w.startswith("ROSY_JOB_MEM_GB=") for w in words):
-        words = [*words, f"ROSY_JOB_RESERVE_GB={reserve}"]  # light hosts already reserve their smaller cap
-        note += f", reserve {reserve} GB (memory history)"
+    words, note = memory_history.reserve(history, inv, words, note)
     print(f"[remote-pytest] {note}", flush=True)
     try:
         code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH, **stop)
@@ -513,7 +510,7 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
     text = log.read_bytes().decode("utf-8", errors="replace")
     print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
     if (peak := memory_history.peak_mib(text)) is not None:
-        memory_history.record(history, inv, host, peak, sha)
+        memory_history.record(history, inv, host, peak, sha, memory_history.cpu_cores(text))
     failed = known_failures.failed_ids(text)
     ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if code == 1 and failed else []
     if not known_failures.should_rerun(code, failed, ids):  # D-762 stage 1: once, listed ids only
