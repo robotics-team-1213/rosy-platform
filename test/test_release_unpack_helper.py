@@ -109,6 +109,15 @@ def _filesystem_honors_posix_permission_bits(tmp_path: Path) -> bool:
     return before == 0o666 and after == 0o600
 
 
+def test_the_permission_probe_survives_concurrent_callers_in_one_directory(tmp_path):
+    """2026-10-28: xdist workers of one job share TMPDIR and ran this probe at collection together."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(8) as pool:
+        results = list(pool.map(lambda _: _filesystem_honors_posix_permission_bits(tmp_path), range(400)))
+    assert len(set(results)) == 1 and not list(tmp_path.iterdir())
+
+
 @pytest.mark.skipif(
     not _filesystem_honors_posix_permission_bits(Path(tempfile.gettempdir())),
     reason="this filesystem does not honor POSIX permission bits (no WSL/POSIX mount)",
