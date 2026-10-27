@@ -1,5 +1,6 @@
 """Simulation recovery requests, independent reset facts and one separately approved child."""
 import asyncio
+import json
 import sqlite3
 
 from fastapi import Depends, HTTPException
@@ -55,7 +56,8 @@ def install_transfer_recovery_routes(app, *, dispatcher, principals, observer_au
     @app.get(path, response_model=ArmTransferRecoveryPreviewResponse, tags=["fleet-work"])
     async def preview(mission_id: ArmActionId, principal=Depends(require_viewer)):
         current = installed()
-        return await call(lambda: {"recovery": current.preview(mission_id, principal)})
+        return await call(lambda: ArmTransferRecoveryPreviewResponse.model_validate_json(
+            json.dumps({"recovery": current.preview(mission_id, principal)})))
 
     @app.post(path, response_model=ArmTransferRecoveryRequestResponse, tags=["fleet-work"], dependencies=writes)
     async def request(mission_id: ArmActionId, body: ArmTransferRecoveryCreate, principal=Depends(require_proposer)):

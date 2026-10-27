@@ -11,7 +11,7 @@ from test_transfer_recovery_api import (
 )
 from test_arm_transfer_job_api import PATH, headers
 from test_physical_transfer_observer_api import OBSERVER
-from test_physical_transfer_observations import _document
+from fleet.server.physical_transfer_observations import _document
 from test_physical_transfer_recovery import measured
 from test_physical_transfer_store import NOW
 
