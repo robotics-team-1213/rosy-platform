@@ -63,7 +63,8 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
       armAdmissionReason(job, control, principal(), approveReason());
     admit.disabled = Boolean(reason); read.disabled = busy; input.readOnly = busy;
     if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
-    const recoveryWait = busy ? "요청 처리 중입니다" : recoveryAttempted ? "요청 후 작업을 다시 조회하세요" : "";
+    const recoveryWait = busy ? "요청 처리 중입니다" : recovery?.child_mission_id ? "복구 횟수를 이미 사용했습니다" :
+      recoveryAttempted ? "요청 후 작업을 다시 조회하세요" : "";
     const requestReason = recoveryWait || (!recovery?.can_request || !["AVAILABLE", "EXPIRED"].includes(recovery.status) ?
       "복구 관측을 요청할 수 있는 원본 실패 작업을 조회하세요" : "");
     requestRecovery.disabled = Boolean(requestReason);

@@ -141,6 +141,8 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
                 expect(page.locator("#arm-transfer-recovery-child")).to_contain_text("물리 목표 확인됨")
                 expect(page.locator("#arm-transfer-recovery-child")).to_contain_text(child)
                 expect(page.locator("#arm-transfer-recovery-request")).to_be_disabled()
+                expect(page.locator("#arm-transfer-recovery-request")).to_have_attribute("reason", "복구 횟수를 이미 사용했습니다")
+                expect(approve).to_have_attribute("reason", "복구 횟수를 이미 사용했습니다")
                 assert c.client.get(c.url, headers=headers("harbor")).json()["job"]["status"] == "HOLD"
                 assert len(posts) == 1 and len(c.port.submitted) == 2 and not errors
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
