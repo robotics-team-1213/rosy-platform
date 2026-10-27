@@ -14,6 +14,7 @@ import { createMeasuredCalibrationView } from './measured-calibration-view.js';
 import { createStartPointView } from "./start-point-view.js";
 import { createTrackingRelearn } from "./tracking-relearn.js";
 import { createHostServices } from "./host-services.js";
+import { createDeviceProfiles } from "./device-profiles.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
 import { addressMap, movableRobots } from "/console/assets/address-drift.js";
@@ -21,6 +22,7 @@ import { createFleetClient } from "/common/fleet-client.js";
 import { createPasswordLogin } from "./password-login.js";
 import { createPageScope } from "/common/scope.js";
 import { createTaskChooser } from "/common/task-chooser.js";
+import {createDeviceCare} from '/console/assets/device-care.js';
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 import { bindEstop, bindTopbarToggle, showSession, showSignedOut, stopNotice, tickClock, watchFleet } from "/console/assets/fleet-header.js";
 
@@ -40,6 +42,7 @@ const discoveryGate = createPollGate();
 let peerPicker = null;
 let startPoints = null; // D-540 5 시작점 — 자기 잠금 사유(이름 있는 운영자)를 역할 적용 뒤에 다시 건다
 let measuredCalibration = null;
+let deviceProfiles = null;
 
 const auth = {
   token: sessionStorage.getItem("rosy-console-token") || "",
@@ -57,6 +60,7 @@ function operatorControls() {
   return [...document.querySelectorAll(
     "ui-button:not(#estop):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not([data-theme-choice]):not([data-theme-cycle]), main input, main select:not(#vision-source)")]
     .filter(control => !control.closest(".ui-task-chooser")
+      && !control.closest("#device-profiles")
       && !control.closest("#peer-picker")
       && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));
 }
@@ -65,6 +69,7 @@ function applyRole() {
   applyRoleToControls(auth.role, operatorControls());
   startPoints?.updateAuthorization();
   measuredCalibration?.updateAuthorization();
+  deviceProfiles?.updateAuthorization();
 }
 
 function markLocked(reason = "auth") {
@@ -119,6 +124,10 @@ const hostServices = createHostServices({
   confirmIrreversible,
   onPaint: () => applyRole(),
 });
+const deviceCare = createDeviceCare({root: el('device-profiles'), scope: pageScope, call,
+  identity: () => ({role: auth.role, principal_id: auth.principal})});
+deviceProfiles = createDeviceProfiles({root: el('device-profiles'), scope: pageScope, call, care: deviceCare,
+  identity: () => ({role: auth.role, principal_id: auth.principal})});
 
 // Task navigation preserves mounted owners and drafts across auth/page epochs.
 const taskChooser = createTaskChooser({beforeSelect: from => {
@@ -128,12 +137,14 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
 }, tasks: [
   {id: "peers", title: "장비 찾기", panel: el("peer-picker")},
   {id: "robots", title: "로봇 등록", panel: el("robot-enrollment")},
+  {id: "device-profiles", title: "장치 정보", panel: el("device-profiles")},
   {id: "cameras", title: "카메라 연결 승인", panel: el("camera-link")},
   {id: "calibration", title: "카메라 설치·보정", panel: el("camera-calibration")},
   {id: "hosts", title: "호스트 서비스", panel: el("host-services")},
 ]});
 el("install-chooser").append(taskChooser.element);
 taskChooser.setReady();
+if (location.hash === '#device-profiles') void taskChooser.choose('device-profiles');
 pageScope.subscribe(() => {
   taskChooser.resume();
   return () => { void taskChooser.pause().then(() => { if (pageScope.capture().current()) taskChooser.resume(); }); };
@@ -295,6 +306,7 @@ async function refreshAuthorization(renewed = false) {
   discoveryGate.reset();
   enrollment.resetPolling();
   cameraPairing.resetPolling();
+  deviceProfiles.resetPolling();
   try {
     const identity = await call("/api/fleet/session");
     life.check();
@@ -312,6 +324,7 @@ async function refreshAuthorization(renewed = false) {
       startPoints.refresh(),
       relearn.refresh(),
       hostServices.refresh(),
+      deviceProfiles.refresh(),
     ]);
     life.check();
   } catch (_err) {
@@ -342,6 +355,9 @@ pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => peerPicker.refresh(), MAP_MS);
 pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
 pageScope.interval(() => hostServices.refresh().catch(() => {}), 30000);
+pageScope.interval(() => {
+  if (!auth.locked && taskChooser.selectedId === 'device-profiles') deviceProfiles.refresh();
+}, 30000);
 
 pageScope.onResume(() => {
   visionView.reset();
