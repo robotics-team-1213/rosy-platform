@@ -3741,3 +3741,10 @@
 - 변경: deploy/site/README.md 운영 절에 루프 생존(`/readyz`, 503과 최소 본문)과 프로세스 생존(`/healthz`)의 분리를 적었다. compose healthcheck·mdns 광고 검증·autoupdate 게이트는 `/healthz`를 그대로 쓰며 `/readyz`에 연결하지 않는다고 못박았다.
 - 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
 - gate 변화: 없음. CE: 해당 없음.
+
+## 2026-10-27 · 6e71f6ad62 · 매일 원장 백업 타이머(14개 보존)
+
+- 변경: `backup_database`는 있었으나 주기 호출자가 없어 운영 원장에 예약 백업이 없었다. `site_db.py backup`에 `--dest-dir`(타임스탬프 파일명)·`--prune N`(자기 접두사 파일만 최신 N개 보존)을 추가하고, compose에 `fleet-backup` 프로파일 서비스(fleet 이미지 내장 site_db.py·entrypoint python3·네트워크 none·원장 볼륨 읽기 전용·호스트 바인드 `ROSY_SITE_BACKUP_DIR` 기본 `/var/backups/rosy-site`)를 두었으며 `rosy-site-ledger-backup.service/.timer`(매일·Persistent)가 `docker compose run`으로 실행한다. README에 타이머 활성화와 "현장 디스크 경계일 뿐 오프사이트 백업이 아님"을 적었다.
+- 증거: 원격 5 suite(정리 단위·CLI·배포 고정·compose·문서 배치) green, known NEW 0. 변이 검증: 정리 무력화 → CLI 보존 시험 red(`129ed21fac`), 복원 green(`6e71f6ad62`).
+- gate 변화: 없음. 현장 호스트에서 타이머 실가동·복구 훈련(백업→빈 프로젝트 복원)은 별도 수행문.
+- CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
