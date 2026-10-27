@@ -95,6 +95,14 @@ def test_root_conftest_names_the_inserter_and_never_fails(pair, xdist):
     assert "sys.path added by 1 test module(s)" in text and "test_a_inserts.py: helpers" in text, text
 
 
+def test_ros_environment_does_not_skip_path_reporting(pair, monkeypatch):
+    monkeypatch.setenv("AMENT_PREFIX_PATH", str(pair / "ros"))
+    try:
+        test_root_conftest_names_the_inserter_and_never_fails(pair, [])
+    except pytest.skip.Exception as error:
+        pytest.fail(f"ROS environment must retain the path-report assertions: {error}")
+
+
 @pytest.mark.parametrize("plugin_name", ["launch_testing", "launch_ros"])
 def test_nested_pytest_reports_paths_when_ros_plugins_preimport_modules(pair, plugin_name):
     (pair / "conftest.py").write_bytes((ROOT / "conftest.py").read_bytes())
