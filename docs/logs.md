@@ -12429,3 +12429,11 @@ osy-d395-s1d\`.
 - 증거: 원격 회귀 시험에서 두 실패를 재현했고, 수정 후 준비·착지·게시자 연결 47건이 통과했다. 보존 분기를 끈 변이 커밋 `e0e452d426`에서 두 시험이 다시 실패했다. 복원한 `10f4997e11`의 `test_land.py`·`test_land_prepare.py`·`test_land_record.py`·`test_publish_main.py` 159건이 통과했다. 기존 FULL 바이트·기준 main·후보와 최종 게시자 판정을 실제 Git 임시 저장소로 확인한다. 독립 검토 `7c0e816d67`에서 추가 수정 사항 없음이며 복원 트리는 그 검토 트리와 같다.
 - gate 변화: 판정 기준은 유지한다. 유효한 FULL 원본과 현재 후보의 변화분 증거 연결만 보존하며, 실제 최종 소스의 전체 시험을 새로 실행했다고 주장하지 않는다. 장치·이미지·현장 수용과는 별개다.
 - CE: 해당 없음 — 원인과 보존 조건은 새 코드·회귀 시험과 기존 교훈 `docs/solutions/workflow-issues/land-record-stopped-when-tests-moved-before-the-turn-2026-10-26.md`에서 확인할 수 있다.
+
+## 2026-10-27 · b3091b8312 · feat(os): 로컬 정책·슬롯 조회와 실제 SYSTEM 관측 보완
+
+- 변경: 기존 frozen `os_update_controller.py`에 읽기 전용 `status`를 추가했다. 실행/committed 슬롯, 진행 단계·후보, 실패 이력, 공통 정책·hold 종류만 투영한다. CORE·네트워크·상태 쓰기 없이 조회하며 만료 hold도 지우지 않는다. 손상된 기록을 idle로 만들지 않고 설치 인자를 거절한다. `publish_os_release.py`는 서명된 bundle 크기가 GitHub 개별 asset 한도인 2 GiB 이상이면 캡처·원격 호출 전에 멈춘다.
+- 근거: 실제 x86_64 SYSTEM guest의 oneshot 재부팅 작업은 PID1 `UNIT_STARTED` 완료 이벤트를 남겼고, 기존 시험 helper의 `UNIT_STARTING` 단독 판정이 거절했다. 완료 시각은 시작 시각을 증명하지 않으므로 `earliest_us == 0`인 smoke에만 완료 이벤트를 허용했다. ARM의 양수 deadline은 기존 시작 이벤트·boot·unit·PID1·monotonic 결속을 유지한다.
+- 증거: 크기 사전검사 RED 4건 뒤 publisher 33건 통과. PID1 새 smoke 반례 RED 1건 뒤 일반 회귀 104건 통과·명시 opt-in 6건 제외. 수정한 `2c119bc732`의 실제 SYSTEM opt-in은 4건 모두 통과(445.39초)했고 namespace·DeviceAllow 표현·실제 ext4 및 guest 재부팅 경로를 확인했다. `b3091b8312`의 상태/정책/저장소/controller 원격 시험은 111건 통과·0 NEW였다. source 검토와 Safety-Review는 읽기 전용 상태·권한 경계 범위다.
+- gate 변화: 새 이미지 빌드·서명·게시, 실제 Pi firmware·SD 부팅·FIELD 수용을 주장하지 않는다. ARM kernel 가상 fixture 2건은 별도 진행 중이며 제조사 firmware나 production 이미지 증거가 아니다. 2 GiB 초과 bundle의 실제 배포 경로와 최종 artifact 크기도 미확인이다.
+- CE: 해당 없음 — 시간 의미와 거절 조건은 코드 주석·회귀 시험에서 복원할 수 있으며 실제 관측·실행 출처는 별도 검증 기록에 보존했다.

@@ -150,4 +150,17 @@ VM 요청과 최종 metadata를 운영자의 source/release/factory/certificate 
 이 명령은 이미 인증된 signed image를 입력으로 받는다. CI run/source 결속, native image build·image 서명·최종 이미지 선택과
 실제 게시의 성공 근거는 별도로 확인해야 한다. 모델 VM 연결 시험을 실제 A/B 이미지 수용으로 기록하지 않는다.
 게시 도구 `publish_os_release.py`는 기본 dry-run이며 apply도 검증된5개 산출물을 engineering prerelease로만 게시한다.
+GitHub의 개별 파일 제한에 맞춰 2 GiB 이상인 bundle은 복사·원격 초안 생성 전에 거절한다. 큰 bundle의 분할 전송을 제공하는 것은 아니다.
 실제 배포 결과는 해당 artifact·서명·게시 영수증과 별도로 확인한다.
+
+A/B v2 장치의 로컬 OS 상태와 공통 업데이트 정책은 다음 명령으로 읽는다.
+
+```bash
+sudo python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_update_controller.py status
+```
+
+응답의 `state`에는 검증된 현재 실행 슬롯, 기록된 committed 슬롯·릴리스, pending 단계·후보·출발/대상 슬롯,
+실패 버전 이력과 `policy.enabled`·`repo`·`hold` 종류가 담긴다. `committed`는 트랜잭션 기록이며,
+카탈로그 최신 버전이나 설치 패키지 전체의 readback을 뜻하지 않는다. 이 명령은 업데이트 적격성을 승인하지 않고
+네트워크 확인·설치·hold 만료 처리·재부팅을 수행하지 않는다. 설치 파일 인자는 거절한다.
+정책·상태가 읽히지 않으면 정상 idle로 초기화하지 않으며, 비공개 URL·hold 자유 메모·boot/transaction 식별자는 출력하지 않는다.
