@@ -4982,3 +4982,10 @@
 - 증거: commit `d57547ed3b`의 owner 변경·source 제거 3건 RED 후 commit `2bb5853fe3`의 관련 저장소·경로·Workcell·실제 브라우저 회귀 PASS. commit `24c5c92c19`의 인증 관련 원격 37건 PASS. FULL 재검증과 main 병합은 진행 중이다.
 - gate 변화: 기존 gate 유지. 설정 연결 검증은 물리 수용·실행 허가·고장 해제·자동 복구를 활성화하지 않는다.
 - CE: 해당 없음 — 원인과 회귀 조건은 코드·시험·검증 기록에 남겼다. 설정 지문은 물리 신원 증명이나 실행 권한이 아니다.
+
+## 2026-10-27 · 980fa75e8c · 백그라운드 루프 감시와 /readyz (계획 2026-10-27)
+
+- 변경: `fleet/server/loop_supervision.py` 신설 — lifespan이 여는 모든 루프(보조 시작 알림·제어유닛 짝·테더 포함 23개 이름)의 사망 감시(supervised/attach), 주기 실패 rate-limit 로그(주입 시계), 종료 stopping 플래그. 스폰 블록 전체를 app.py에서 `start_fleet_loops()`로 옮겼다(app.py는 D-766 파일 한도 초과라 늘지 못한다 — 래칫 행 882→829 동락). 작업 디스패치 루프의 무음 `except: pass`를 감시 기록+로그로 교체(가용성 불확실 시 작업은 큐에 두는 의미 보존). `/readyz`(ops 평면, 스키마 비노출)가 루프 상태를 내고 죽은 루프에 503. `/healthz`·tether_watch.py는 그대로.
+- 증거: 원격(모델/AI PC) 시험 — 첫 회차에서 새 시험 3개가 readyz 속성명 오타(`loop_supervisor` vs `loop_supervision`)를 잡아 red, 수정 후 green. 변이 검증 3종: 무음 pass 복원→red, stopping no-op→red, readyz 가드는 오타 결함으로 유기 증명(프로브 이력은 로컬 브랜치 `fix/fleet-loop-supervision`·`fix/fleet-loop-supervision-clean`에 보존). D-766 추출 리팩터링 뒤 관련 4 suite 재시험 green, known_failures NEW 0, size_range 통과(래칫 882→828). 계획: Rosy/docs/superpowers/plans/2026-10-27-fleet-loop-supervision.md(우산 밖 로컬).
+- Gate: 없음. 호스트 시험까지만 유효하며 실제 Ubuntu 사이트에서 `/readyz` 관찰 기록은 별도. 선택 루프 전부를 켠 열거 시험과 vision 서비스 루프는 후속.
+- CE: 해당 없음 — 계획·검토·변이 증거가 커밋과 시험에 남아 있다.
