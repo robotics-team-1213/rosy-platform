@@ -113,6 +113,9 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
         if policy["canary_ok"] or policy["withdrawn"]:
             raise ValueError("OS engineering publication requires an initial unpromoted rollout")
         bundle = metadata["bundle"]
+        # GitHub requires each release asset to be strictly below 2 GiB.
+        if bundle["size_bytes"] >= 2 * 1024**3:
+            raise ValueError("OS bundle exceeds GitHub release asset limit: must be below 2 GiB")
         names = {*SIDECARS, bundle["filename"]}
         if {path.name for path in directory.iterdir()} != names:
             raise ValueError("OS publication requires exactly the signed five-asset set")
