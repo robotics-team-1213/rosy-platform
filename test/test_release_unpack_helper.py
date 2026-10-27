@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import shutil
 import subprocess
 import tarfile
@@ -99,8 +100,10 @@ def test_a_normal_release_is_unpacked_and_the_tarball_is_removed(tmp_path, relea
 def _filesystem_honors_posix_permission_bits(tmp_path: Path) -> bool:
     # Git-Bash's own chmod is a no-op for these bits on a plain NTFS mount (no
     # WSL): probed here, once, rather than assumed, since this host is NTFS.
-    probe = tmp_path / "_perm_probe"
-    probe.write_text("x", encoding="utf-8")
+    # A unique name: every xdist worker of a job collects this module at once in the same TMPDIR.
+    fd, name = tempfile.mkstemp(prefix="perm_probe_", dir=tmp_path)
+    os.close(fd)
+    probe = Path(name)
     probe.chmod(0o666)
     before = probe.stat().st_mode & 0o777
     probe.chmod(0o600)
