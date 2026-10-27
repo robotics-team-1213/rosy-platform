@@ -491,6 +491,18 @@ def test_qemu_command_has_only_owned_images_and_loopback_ssh(tmp_path):
     assert all(str(tmp_path) in value for key, value in zip(argv, argv[1:]) if key in {"-kernel", "-initrd", "-bios"})
 
 
+def test_early_guest_exit_retains_bounded_console_and_emulator_diagnostics(tmp_path):
+    guest = module().Guest(tmp_path)
+    guest.process = SimpleNamespace(poll=lambda: 0)
+    (tmp_path / "qemu-stderr.log").write_text("emulator exit detail")
+    (tmp_path / "guest-console.log").write_bytes(b"discarded-prefix" + b"x" * 6000 + b"guest reboot reason\xff")
+    with pytest.raises(ValueError) as failure:
+        guest.wait_boot()
+    detail = str(failure.value)
+    assert "emulator exit detail" in detail and "guest reboot reason" in detail
+    assert "discarded-prefix" not in detail and len(detail) < 7500
+
+
 def test_guest_source_provisioning_refuses_an_unbound_instance(tmp_path, monkeypatch):
     guest = module().Guest(tmp_path)
     calls = []
