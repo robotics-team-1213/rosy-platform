@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from test_ab_image_layout import IMAGE, module as image_module
-from os_rauc_fakes import signer, run
+from os_rauc_fakes import signer, run, expired
 
 CERTIFICATE = "deploy/robot/pinky_pro/release/public-keys/rosy-os-cms-2026-01.pem"
 
@@ -53,7 +53,7 @@ def test_unapproved_or_invalid_certificate_never_becomes_build_trust(tmp_path, c
     if change == "hash": section["cms_certificate_sha256"] = "0" * 64
     if change == "spki": section["cms_signer_spki_sha256"] = "0" * 64
     if change == "expired":
-        raw = run(["openssl", "x509", "-in", certificate, "-signkey", key, "-days", "-1"])
+        raw = expired(certificate, key)
         certificate.write_bytes(raw)
         section["cms_certificate_sha256"] = hashlib.sha256(raw).hexdigest()
     if change == "private":

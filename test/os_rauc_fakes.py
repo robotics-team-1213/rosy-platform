@@ -24,6 +24,16 @@ def run(argv, *, data=None):
     return result.stdout
 
 
+def expired(certificate, key) -> bytes:
+    """The certificate re-signed with validity in the past, as PEM.
+
+    OpenSSL 3.4+ refuses ``-days -1`` ("end date before start date"); 3.0 has no -not_before/-not_after."""
+    base = [str(value) for value in ("openssl", "x509", "-in", certificate, "-signkey", key)]
+    dated = subprocess.run([*base, "-not_before", "20200101000000Z", "-not_after", "20200102000000Z"],
+                           capture_output=True, timeout=60)
+    return dated.stdout if dated.returncode == 0 else run([*base, "-days", "-1"])
+
+
 @pytest.fixture(scope="session")
 def rauc_tool(tmp_path_factory):
     if platform.system() != "Linux":
