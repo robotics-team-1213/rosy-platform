@@ -280,6 +280,8 @@ def test_records_of_an_unknown_format_stop_instead_of_nothing_to_publish(repo, c
 def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(repo, tmp_path, monkeypatch):
     local, _ = repo
     _commit(local, "tools/hooks/pre-push", "#!/bin/sh\r\nexit 0\r\n")  # CRLF as Git for Windows may check it out
+    _git(local, "push", "-q", "origin", "main")
+    _git(local, "fetch", "-q", "origin")
     sha = _commit(local, "app.py", "1")
     tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
     after = _commit(local, "app.py", "2")  # main moved on past the green FULL commit: one landing of lag
