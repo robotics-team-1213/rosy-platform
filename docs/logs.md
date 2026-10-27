@@ -12377,3 +12377,10 @@ osy-d395-s1d\`.
 - 증거: checkpoint `d2217085fe`의 단일 CLI node가 실제 canonical 목록 누락 AssertionError/NEW1을 보였다. source `877cf55c01`에서 CLI 3 PASS, 관련 도구 11파일 336 PASS, selector/architecture 5파일 299 PASS, 모두 SKIP0·official/outer/known exit0·NEW0. CLI는 도구 묶음과 겹치며 합산하지 않는다. quiet 진행 행만 세었고 출력되지 않은 시간 요약은 인용하지 않는다. 별도 raw와 근거는 [후속 검증 기록](validation/land-explicit-full-2026-10-27d/result.md)에 연결했다.
 - gate 변화: 새 집중 검증이며 실제 전체 FULL·착지·게시·장치 수용은 아니다. 기존 frozen 27b/27c, incoming charging 분리의 body·timeout·assertion 및 이전 실패 근거는 보존했다. source까지 D766 20커밋이 통과했고 최종 docs HEAD 검사는 별도 handoff로 확인한다.
 - CE: 기존 교훈을 적용했다. 정규화 반례와 최소 수정은 코드·실제 RED/GREEN이 설명하므로 통합만을 위한 새 교훈은 만들지 않았다.
+
+## 2026-10-27 · 1bdd41e94a · Tool1 main445 통합과 full carry 자격 차단
+
+- 변경: incoming MAINRED·publisher·재부팅 대기·SIM 변경을 보존했다. 기존 CLI 정책을 이미 착지한 land_selection 모듈의 새 configure helper로 옮겨 land.py를 579→570행으로 줄였고 대응 AST를 확인했다. full은 live CARRIED와 반환 carried summary를 둘 다 거절하며, 두 save의 auto carried 우선순위·다른 unclean None bridge·나중 clean close 정책은 유지했다. Root가 known-RED 및 fix tree를 실제 검토했다.
+- 증거: checkpoint commit `2663fcfd9d`에서 full guard/body 6개가 실제 DID NOT RAISE Stop/NEW6을 보였고 대조 5개는 통과했다. fix commit `1bdd41e94a`에서 같은 11개, 관련 owner 15파일 395개, selector/actual architecture 5파일 299개가 PASS/0 SKIP/NEW0, official·outer·known exit0이었다. 11개는 395개와 겹치며 합산하지 않는다. 새 [고정 검증 기록](validation/land-explicit-full-2026-10-27e/result.md)에 실제 argv·raw 12개 SHA-256·정적 proof를 결속했다.
+- gate 변화: 집중 소스 검증이며 정식 FULL·착지·게시·실제 Chromium·G2/충전 원인 해결이 아니다. 기존 고정 기록·provenance·peer bytes를 보존했다. CRLF plain diff flags는 원본과 구분해 남기고 명령 한정 CR-at-EOL 처리로 실제 space/tab/EOF 검사를 유지했다. 최종 docs HEAD 검사는 후속 handoff에 별도로 기록한다.
+- CE: 해당 없음. state/summary 반례와 수정은 코드·시험·새 기록이 설명하므로 중복 교훈은 추가하지 않았다.
