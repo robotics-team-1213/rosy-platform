@@ -182,7 +182,6 @@ def test_real_account_revocation_blocks_new_child_but_preserves_exact_replay(fai
     from fleet.server.mission_service import MissionService
     from fleet.server.mission_store import MissionStore
     from fleet.server.proposal_store import ProposalStore
-    from fleet.server.task_service import FleetTaskService
     from fleet.server.physical_transfer_observer import PhysicalTransferObserver
     from test_physical_transfer_observer_api import TOKEN
     from test_password_session import _client, _login, HASH, ORIGIN
@@ -191,7 +190,7 @@ def test_real_account_revocation_blocks_new_child_but_preserves_exact_replay(fai
     users = {sha256((name + "-secret").encode()).hexdigest(): {"principal_id": name, "role": "operator"}
              for name in ("harbor", "operator")}
     logins = {name: {"principal_id": name, "role": "operator", "password_scrypt": HASH} for name in ("harbor", "manager")}
-    app = create_app(FleetConsole([], []), task_service=FleetTaskService(c.tasks, robot_ids=()),
+    app = create_app(FleetConsole([], []), task_service=c.app.state.task_service,
         mission_service=MissionService(MissionStore(c.db)), proposal_store=ProposalStore(c.db), site_users=users,
         site_logins=logins, accounts_bootstrap=("manager", "test-site"), deployment_profile="simulation",
         omx_action_transport=c.port, arm_transfer_installation=c.installation,
@@ -204,6 +203,7 @@ def test_real_account_revocation_blocks_new_child_but_preserves_exact_replay(fai
     assert _login(c.client, login="harbor").status_code == 204
     assert _login(manager, login="manager").status_code == 204
     view = c.client.get(c.url + "/recovery").json()["recovery"]
+    assert view["can_request"], view
     response = c.client.post(c.url + "/recovery", headers=ORIGIN,
         json=dict(request_key="account-recovery", expected_context_digest=view["context_digest"]))
     assert response.status_code == 200, response.text
@@ -216,7 +216,7 @@ def test_real_account_revocation_blocks_new_child_but_preserves_exact_replay(fai
         response = c.client.post(route, headers={**headers("operator"), **ORIGIN}, json=body)
         assert response.status_code == 200, response.text
         original = response.json()
-    row = next(r for r in manager.get("/api/fleet/auth/accounts").json() if r["principal_id"] == "harbor")
+    row = next(r for r in manager.get("/api/fleet/auth/accounts", headers=ORIGIN).json() if r["principal_id"] == "harbor")
     changes = {"enabled": False} if change == "disable" else {"grants": [{"resource": "site:test-site", "capabilities": ["fleet.read"]}]}
     response = manager.patch("/api/fleet/auth/accounts/" + row["account_id"], headers=ORIGIN,
                               json={"revision": row["revision"], **changes})
