@@ -45,3 +45,5 @@ No package-local suite. Run the manipulation and OMX integration tests after a c
 - Python >= 3.12.
 
 ## Manual Notes
+
+Read [progress.md](progress.md) for current gates and append results to [logs.md](logs.md). Regenerate the module index and repository STATUS with `python tools/harness/rosy_harness.py generate`.

@@ -48,3 +48,5 @@ ROS-free provider. Device planner types come from `omx_adapter` in the ROS works
 None imported directly.
 
 ## Manual Notes
+
+Read [progress.md](progress.md) for current gates and append results to [logs.md](logs.md). Regenerate the module index and repository STATUS with `python tools/harness/rosy_harness.py generate`.

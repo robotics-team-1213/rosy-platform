@@ -22,7 +22,7 @@ LeRobot은 모터나 ROS에 직접 접근하지 않는다. CORE의 선택적 arm
 유효시간·권한·정지 fence·관절 범위를 기존 owner가 다시 검사한다. CORE E-stop은
 arm fence에도 전달된다. 불확실한 응답은 정지를 요청하며 동작을 재시도하지 않는다.
 
-설치·설정 절차는 [CORE_LEROBOT.md](../../../integrations/robots/omx/CORE_LEROBOT.md)에 있다.
+설치·설정 절차는 [CORE_LEROBOT.md](../../../integrations/robots/omx/docs/CORE_LEROBOT.md)에 있다.
 지원 범위는 LeRobot 0.4.4, RGB 한 대, 정확히 일치하는 관절 이름과 rad 단위,
 ACT `n_action_steps=1`, temporal ensemble 없음이다.
 
