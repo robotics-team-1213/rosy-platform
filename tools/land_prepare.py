@@ -13,6 +13,8 @@ passed in so its ``Stop`` is the one the caller catches.
 
 from __future__ import annotations
 
+import sys
+import threading
 import time
 from pathlib import Path
 
@@ -43,8 +45,20 @@ def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
 def watch(land, wt: Path):
     """For ``land_queue.wait``: each time main moves, preview the merge (``git merge-tree``, the tree untouched)
     and name a conflict land.py cannot resolve, so it stops now instead of at its turn (2026-10-26: a landing
-    waited 121 min, then stopped on a conflict main had made during the wait)."""
+    waited 121 min, then stopped on a conflict main had made during the wait). A clean merge also gets the size
+    ratchet on an unreferenced preview commit: main growing the same unit stopped two landings at their turns,
+    392 min after they started (2026-10-26)."""
     seen = [None]
+
+    def size(tree: str, main: str) -> str | None:
+        try:
+            preview = land.out(wt, "commit-tree", tree, "-p", "HEAD", "-p", main, "-m", "land.py size preview")
+            land.size_check(wt, main, preview, sys.executable)
+        except land.Stop as stop:
+            return f"main {main[:10]} merged with this branch fails the size ratchet: {str(stop).splitlines()[0]}"
+        except Exception:  # noqa: BLE001 - a preview only; the turn's own size check still decides
+            return None
+        return None
 
     def check() -> str | None:
         main = land.out(wt, "rev-parse", "main")
@@ -52,6 +66,8 @@ def watch(land, wt: Path):
             return None
         seen[0] = main
         tree = land.git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main, check=False)
+        if tree.returncode == 0:
+            return size(tree.stdout.split()[0], main)
         if tree.returncode != 1:
             return None
         manual = land.plan(wt, land.conflict_stages(tree.stdout))[1]
@@ -70,6 +86,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     if land.git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
         land.merge(wt, main_sha, branch, python, False)
     candidate = land.out(wt, "rev-parse", "HEAD")
+    land.size_check(wt, main_sha, candidate, python)  # before the hosts, not at the turn after them
     if invocations is None:
         invocations, note = land.select(wt, main_sha, python)
         if not note and not (wt / "tools/harness/affected_tests.py").is_file():
@@ -77,10 +94,22 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     print(f"[land] {'FULL' if note else 'affected'} tier before the turn, ticket preparing (main {main_sha[:10]})",
           flush=True)
     logdir, began = land.tmp_dir(branch), time.monotonic()
-    land.land_guards.first(wt, args, invocations, logdir, "pre", land.run_tests, isolated=True)  # alone runs: here only
-    if land.out(wt, "rev-parse", "HEAD") != candidate:
-        raise land.Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
-    land.run_tests(wt, args, invocations, logdir, "pre")
+    # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
+    # 2026-10-27 it took 150-870 s and every pretest waited for it while holding one of MAX_PREPARING slots.
+    # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
+    raised: list[BaseException] = []
+
+    def guards() -> None:
+        try:
+            land.land_guards.first(wt, args, invocations, logdir, "pre", land.run_tests, isolated=True)
+        except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
+            raised.append(error)
+    side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
+    side.start()
+    land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+    side.join()
+    if raised:
+        raise raised[0]
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     land.land_full.save(wt, branch, candidate, main_sha, "full" if note else "affected", invocations)

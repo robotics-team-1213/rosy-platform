@@ -302,6 +302,13 @@ class UpdaterApply:
         pruned = []
         try:
             with self._locked_file(self.root / RELEASE_LOCK):
+                from os_factory_release import pinned_factory
+                try:
+                    factory = pinned_factory(self.root)
+                except ValueError:
+                    return  # Unknown factory binding must never make it a prune candidate.
+                if factory is not None:
+                    keep.add(factory)
                 cutoff = self.host.now().timestamp() - PRUNE_MIN_AGE_S
                 for path in sorted((self.root / RELEASES).iterdir()):
                     if (path.name in keep or not RELEASE_ID.fullmatch(path.name) or path.is_symlink()
@@ -316,6 +323,8 @@ class UpdaterApply:
 
     def apply(self, release_id: str, state: dict) -> dict:
         """Activate ``release_id`` under the claim. Refuses anything not newer than current."""
+        if problem := self._maintenance_problem():
+            raise UpdateError(problem)
         current = self.host.current_release()
         if current is None or not RELEASE_ID.fullmatch(release_id) or not release_id > current:
             raise UpdateError(f"NOT_NEWER: {release_id} is not above the current release {current}")

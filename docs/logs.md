@@ -12099,6 +12099,159 @@ osy-d395-s1d\`.
 - 증거: `6b0f7568f5` 원격98시험과 구조/harness/affected247시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). 실제 개별·중앙 집계·중앙 직접 수집 subprocess와 중앙 단절 독립성·프로세스 간 writer 배타성을 확인했다. 최종 독립 재검토 차단 없음.
 - gate 변화: Monitoring SOURCE GO, 화면/배포/실제 PC 수용은 HOLD다. CE: 해당 없음 — 새 기능의 코드·회귀가 판단 근거를 보존한다.
 
+## 2026-10-26 · 11121c33eb · D-881 A/B 기체 상태와 슬롯 기록 분리 제안
+
+- 변경: gateway에서 예약한 D-881 Proposed와 동일 제목·상태의 ADR index 행을 함께 기록했다. root-local journal/inverse와 공통 정책·identity를 분리하고, storage/projection 두 단계 admission·live writer의 revoke/delete 보존·directory durability·기존 moved-board handoff를 요구한다.
+- 증거: 상태/firstboot 계획은 독립 architecture/critic 두 차례 검토 후 승인됐고, 실제 updater에서 잘못된 AB 조건을 legacy 정책으로 처리하는8개 반례를 먼저 원격 재현했다. 이후 소비자 구현과 정상·실패 회귀를 진행 중이다.
+- gate 변화: 계획·source prototype이며 firstboot/generation producer와 ARM64/SD/장치 수용이 완료된 것은 아니다.
+- 교훈: CE 해당 없음 — 검증되지 않은 부팅·전원 차단을 해결 교훈으로 기록하지 않는다.
+
+## 2026-10-26 · b3044a5b6d · D-881의 payload·OS 호환 경계 구체화
+
+- 변경: 실행하지 않는 literal ABI 해석, 현재 공통 state와 같은 writer만 허용하는 정책, 필수 SDK closure, legacy 최소 verifier 보존을 Proposed D-881에 추가한다.
+- 증거: 공식 원격 회귀 124 passed와 offline assembly 포함 365 passed, 각각 0 NEW. OS bundle backend 및 실제 부팅 수용을 이 결과로 주장하지 않는다.
+- gate 변화: 없음. 전체 이미지·trial/commit/fallback·SD 기록은 계속 진행 중이다.
+- CE: 해당 없음 — 판단과 반례가 ADR·소스·시험에 남아 있다.
+
+## 2026-10-26 · e2860d4e5f · D-881 지속 데이터·SSH host identity 구체화
+
+- 변경: 기존 navigation/model/capture owner의 공통 directory bind, SSH pair의 초기 한 번 생성·일반 파일 투영·missing/corrupt HOLD, OS launcher와 cloud-init 경계를 Proposed ADR에 추가한다.
+- 증거: 통합878 passed/16 skipped 및 마지막 공개키 단일 record 보강11 passed, 각0 NEW. 실제 부팅/서비스 manager와 전원 차단은 검증하지 않았다.
+- gate 변화: 없음. 전체 이미지·OS trial/commit/fallback·SD 기록은 남았다.
+- CE: 해당 없음 — 판단은 ADR·소스·반례 시험으로 재현할 수 있다.
+
+## 2026-10-26 · 2b65ad60f0 · D-879의 이미지 조립 구현과 수용 경계 기록
+
+- 변경:29GiB factory GPT, 슬롯 metadata/data 초기화, baseline update 용량, loop ownership/cleanup, 기존 카드 OS update의 UUID rebase 요구를 Proposed D-879에 추가한다.
+- 증거: 공식 원격939 passed/16 skipped/5 warnings,0 NEW. 실제 일반 파일 GPT와 installed configurer 실행을 포함하지만 loop/format/rsync는 모의이며 ARM64 artifact나 부팅 증거가 아니다.
+- gate 변화: 없음. production BUILD_GO 차단과 전체 OS·SD 후속 목표를 유지한다.
+- CE: 해당 없음 — 재현 조건과 한계는 ADR·소스·시험에 남겼다.
+
+## 2026-10-26 · b0dcb657e2 · D-888 bootstrap과 RAUC CMS 경계 기록
+
+- 변경: D-888 Proposed와 동일 ADR Log 행을 함께 작성했다. Noble OpenSSL 3.0.13의 Ed25519 CMS 실패/P-256 CMS 서명·검증 성공 관측에 따라 별도 CMS 인증서 pin을 계획한다. 기존 Ed25519 배포 서명은 유지한다. D-879·D-881 Proposed는 bootstrap 영속 입력, protocol 1/2 호환, boot ABI 2, 진단·card layout 전달 경계로 갱신했다. peer 예약 D-884~887은 실제 ref와 main 부재 확인 후 임시 gap으로 기록했다.
+- 증거: b0dcb657e2 공식 원격 668 passed/32 skipped/5 warnings, 0 NEW. 독립 검토는 수집 경로 누락 수정 후 5933449847 소스 증가분을 승인했다. ADR Log UTF-8 BOM·CRLF를 보존한다.
+- gate 변화: 없음. 계획/소스 검증은 전체 OS updater, 실제 signed image, SD 기록 또는 기체 부팅 수용이 아니다.
+- CE: 해당 없음 — 판단은 ADR·실제 crypto 기능 관측·회귀 시험에 보존한다.
+
+## 2026-10-26 · 4676189d86 · D-888의 media 수용과 metadata 변환 경계 기록
+
+- 변경: root별 media snapshot, 명시적 factory OS state, 기존 카드에 맞춘 네 파일 변환, 실제 GPT와 kernel partition 범위 결속을 D-888 Proposed에 기록한다. sysfs PAGE_SIZE의 실제 재현과 좁은 읽기 예외, 기존 metadata 검사를 유지하는 이유를 Linux 원본과 함께 남긴다.
+- 증거: 공식 원격 1070 passed/32 skipped/44 warnings, 0 NEW. 독립 검토의 두 수용 결함을 수정한 ea0f7bbbd1 소스 증가분 APPROVE. source/model/실제 read-only sysfs와 SYSTEM·ARM artifact·media·device 수용을 구분한다.
+- gate 변화: 없음. 전체 OS installer와 최종 이미지·SD 작업은 계속 남아 있다.
+- CE: 해당 없음 — 비직관적인 제약과 재현 방법을 기존 ADR·source·회귀에 보존한다.
+
+## 2026-10-26 · 35eeffe31f · D-888의 배포 metadata·CMS·설치 설정 경계 기록
+
+- 변경: raw Ed25519-before-parse와 bounded CMS footer, 고정 P-256 인증서 하나/현재 시간/실제 RAUC JSON2의 exact inner·outer 비교를 Proposed D-888에 기록한다. info-only sealed noop config와 현재 카드에서 새로 생성하는 설치용 custom backend config를 구분한다. 실제 daemon 권한 적용·controller 연결은 아직 남아 있으며 config 생성은 설치 권한이 아니다. binary pin과 upstream service 제외를 명시한다.
+- 증거: 공식 원격 0a67253358 1159 passed/32 skipped/49 warnings, 0 NEW. 설치 설정/frozen 통합 e315b2e042 82 passed, 실제 RAUC config/CMS 35eeffe31f 7 passed, 각각 0 NEW. 실제 OpenSSL/RAUC 및 frozen subprocess 결과이며 SYSTEM·ARM artifact·SD·DEVICE 증거가 아니다. 독립 verifier/image SOURCE 증가분 검토 APPROVE는 fbb75316e3/0a67253358 범위다.
+- gate 변화: 없음. 완료된 새 A/B 이미지 이후 SD 기록 요청을 유지하고 미완성 또는 기존 MBR 이미지를 대체 기록하지 않는다.
+- CE: 해당 없음 — 판단과 재현 조건을 코드·반례·기존 ADR에 보존한다.
+
+- 최종 runtime 포함 회귀: 35eeffe31f 공식 원격 os-rauc-runtime-final, 1166 passed/32 skipped/49 warnings, 165.15s. 개별 시험 수와 합산하지 않는다.
+
+## 2026-10-26 · 57e7fdb090 · D-888 OS journal과 pending fence 경계 기록
+
+- 변경: 명시적인 schema 1 journal, 짧은 state lock, source/trial/health 결속, 실패 버전·COMMIT_INTENT 해소 owner, parent fsync 불확실성 뒤 writer 무효화를 Proposed D-888에 기록한다. native·자동 updater·직접 SDK 유지보수는 pending으로 차단하고 boot recovery는 유지한다. 실제 controller가 같은 짧은 native release.lock으로 pending을 게시해야 한다는 경합 경계를 명시한다.
+- 증거: 초기 공식 원격52 passed와75 passed 각각0NEW; 완전한 설치 SDK를 사용한 frozen state isolated subprocess1 passed/0.53s. 첫 broad1461 passed/1NEW/32 skipped는 기존 오류 코드 계약을 찾아 수정했고 assertion은 유지했다. 실제 journal·flock·fsync와 모델 mount/오류 주입을 SYSTEM·전원 차단·실물 수용과 구분한다.
+- gate 변화: 없음. actual daemon/boot/controller와 최종 이미지·서명·SD 목표는 계속 남아 있다.
+- CE: 해당 없음 — 원인과 재개 조건을 기존 ADR·소스·시험에 보존한다.
+
+- 최종 공식 원격: 57e7fdb090, os-update-state-final2, 1465 passed/32 skipped/49 warnings, 298.04s, 0 NEW. 실제 파일 IO/frozen import와 모델 mount/오류 주입의 SOURCE 증거이며 native ARM64·SYSTEM·SD·DEVICE 수용을 뜻하지 않는다.
+
+## 2026-10-26 · bbef5d4bae · D-888 firmware callback과 commit owner 분리 기록
+
+- 변경: 공식 Pi의 raw BE32·autoboot 표현, source/current claim·짧은 arm permit·fresh media, boot-bound ACK와 arm 취소, frozen 실행 경로를 Proposed D-888에 기록한다. callback이 default를 쓰지 않고 별도 health/commit owner가 승격을 담당한다. 같은 boot의 commit 뒤 DT flag가 남는 경우도 current/default/committed 일치로 처리한다. namespace-local devnode를 정확한 rdev/GPT로 검증하여 PID1 root link의 ptrace 권한을 추가하지 않는 이유를 Linux 원본과 함께 남긴다.
+- 증거: 공식 원격55 passed 및103 passed 각각0NEW, 첫 전체 e1306a9281 1496 passed/32 skipped/49 warnings/292.98s0NEW. 추가 same-boot commit 모델 반례1fail/1pass 수정은 bbef5d4bae다. 실제 callback CLI·file IO·GPT와 모델 DT/mount/commit을 actual daemon·SYSTEM·Pi firmware·powercut 수용과 구분한다.
+- gate 변화: 없음. 실제 updater/daemon/health/commit/fallback 연결과 signed image·SD 목표를 유지한다.
+- CE: 해당 없음 — 판단과 검증 조건은 기존 ADR·소스·반례에 보존한다.
+
+- 최종 공식 원격: bbef5d4bae, os-bootloader-final2,1498 passed/32 skipped/49 warnings,298.19s,0NEW. frozen CLI와 모델 firmware/mount/commit SOURCE 증거이며 actual daemon·SYSTEM·ARM artifact·SD·Pi 수용을 뜻하지 않는다.
+
+## 2026-10-26 · 0a7b6bb462 · D-888 RAUC daemon lifecycle과 검증 범위 기록
+
+- 변경: protocol2 전용 static unit/root-only D-Bus, frozen preflight, transaction/runtime 게시·회수와 manager 설정 대조를 D-888에 반영한다. 느린 SD 검증 뒤 필수 최종 authorize, 다시 보는 claim/pending/media, 정지 실패 시 보존, claim 만료 뒤 회수, raw JSON bytes 보존을 명시한다. 실제 controller 연결과 실제 PID1/cgroup 검증은 여전히 남아 있다.
+- 증거: 공식 원격0a7b6bb462, os-rauc-service-final,1551 passed/32 skipped/49 warnings,316.91s,0NEW. 실제 Ed/CMS/verity·poisoned SDK의 frozen preflight·systemd offline parser이며 manager/mount와 block install은 모델이다. crypto 통과를 실제 장치·kernel 권한 수용으로 표시하지 않는다.
+- gate 변화: 없음. 전체 SD 이미지·자동 OS controller·SYSTEM·ARM artifact·서명·기록 목표는 계속 남는다.
+- CE: 해당 없음 — 판단과 재현 조건을 기존 ADR·source·시험에 보존한다.
+
+## 2026-10-26 · cfbe016caf · D-888 공통 정책과 motion guard 책임 기록
+
+- 변경: 기존 native 정책을 재사용하는 OS60 admission, 두 fresh sample 뒤 최종 gate 재확인, pending 기반 최종 EnvironmentFile·navigation 차단, guard의 자기 파일만 복구하는 책임을 D-888에 기록한다. RAUC의 두 RW 디렉터리 밖 false 파일은 controller/early/I/O guard가 게시하고 daemon은 읽기 전용으로 확인한다.
+- 증거: 공식 원격5fc52b58fd1594passed/32skipped/49warnings318.88s0NEW와 이후cfbe016caf의 readonly 변경65passed7.50s0NEW. 실제 frozen import·systemd offline parser이며 DT/mount/CORE/manager는 모델이다. 집계는 겹쳐 합산하지 않는다.
+- gate 변화: 없음. 전체 SD 이미지·trial/watchdog/controller/health/commit/fallback·SYSTEM·ARM artifact·서명·기록 목표는 계속 남는다. 실제 PID1/motor 수용이나 새 독립 리뷰를 주장하지 않는다.
+- CE: 해당 없음 — source·시험·기존 ADR이 판단과 한계를 보존한다.
+
+## 2026-10-26 · 82ccb2e22b · D-888 독립 trial deadline 책임 기록
+
+- 변경: early180초 timer와3초 child probe, raw DT 정상/unknown 분기, committed sameboot flag1 유지, 정상 재부팅 요청의 범위를 D-888에 기록한다. 공통 storage/CORE 실패와 분리하지만 실제 PID1·kernel watchdog 수용을 대신하지 않는다.
+- 증거: 공식 원격82ccb2e22b os-trial-deadline-final1612passed/32skipped/49warnings307.24s0NEW. 실제3초 지연 child·offline systemd parser·poisoned mutable SDK의 frozen CLI이며 DT/mount/commit은 모델이다. 앞선46/16pass 집계는 겹쳐 합산하지 않는다.
+- gate 변화: 없음. 전체 SD 이미지·watchdog/controller/rebase/health/commit/fallback·SYSTEM·ARM artifact·서명·기록 목표는 미완료다. 실제 장치 수용이나 새 독립 리뷰를 주장하지 않는다.
+- CE: 해당 없음 — 구현과 반례가 판단을 보존한다.
+
+## 2026-10-26 · 8dc0b91774 · D-888 watchdog/apt 정책과 관측 범위 기록
+
+- 변경: firmware kernel watchdog 요청과 PID1 runtime/reboot 설정, source boot에 결속된 sysfs·manager·trusted journal 관측의 구분을 D-888에 기록한다. systemd255 alias/logging 순서를 공식 원본으로 확인한다. no-apt 조건과 공통 asset registry의 소유 경계를 명시한다.
+- 증거: 공식8dc0b91774 os-watchdog-final1647passed/32skipped/49warnings301.57s0NEW. actual systemd condition과 frozen import/admission, modeled firmware/sysfs/PID1이며 실제 watchdog 장치를 열지 않는다. 소스·parser 증거로 실물 reset/부팅 수용을 주장하지 않는다.
+- gate 변화: 없음. 실제 controller·rebase/health/commit/fallback·SYSTEM·ARM 이미지·서명·SD 기록과 전체 읽기 목표는 미완료다. 별도 독립 리뷰나 main 착지는 수행하지 않았다.
+- CE: 해당 없음 — source·반례·ADR이 판단과 다음 수용 조건을 보존한다.
+
+## 2026-10-26 · 2b8ff14ee8 · D-888 installed finalization과 kernel stop 증거 범위
+
+- 변경: current-code 고정 RAUC post-handler의 inactive image readback·네 파일 보정·signed factory/Python pin 검증·private receipt를 D-888에 기록한다. client 성공/receipt/journal/arm의 역할을 나누고 parent 종료와 전체 cgroup 종료를 구분한다. empty workspace 회수와 frozen 실행 모드도 명시한다.
+- 증거: de194 broad1929pass/32skip/49warn+fixture1fail377.49s 후 da363 관련306pass13.56s0NEW로 fixture를 바로잡았다. 최종2b8ff Python pin 반례 수정·관련55pass14.77s0NEW. 집계는 겹치며 합산하지 않는다. actual crypto/frozen CLI/파일 I/O와 modeled kernel/fsck 증거를 구분한다.
+- gate 변화: 없음. 실제 SYSTEM/ARM 이미지·서명·SD·기체 수용과 전체 controller/health/commit/fallback은 미완료다. 독립 리뷰/main 착지/public push는 수행하지 않았다.
+- CE: 해당 없음 — 판단과 반례는 구현·시험·기존 ADR에 보존한다.
+
+## 2026-10-26 · 48064a6e56 · D-888 trial health source와 증거 범위
+
+- 변경: source-only admission과 trial admission을 분리하고 공통 운영자 정책·battery/idle samples·현재 boot watchdog 검사를 재사용했다. frozen trial health는 projection/factory/install receipt, 전체 navigation 정지, inhibited I/O restart, stable CORE/I/O와 local readiness를 결속해 30초짜리 private receipt를 게시한다. default/phase/ACK는 별도 commit owner의 책임으로 남겼다.
+- 증거: `c57db7561c` 관련 원격 417 passed/16.83s, `48064a6e56`의 실제 local HTTP/TLS·hostname/CA 거절·frozen import 포함 health 29 passed/4.31s, 0 NEW. committed480 확장 회귀는 1972 passed, 32 skipped, 49 warnings/342.02s, 0 NEW다. 각 subset은 중복되어 합산하지 않는다. 잘못된 path로 실행되지 않은 첫 회귀 호출은 exit4이며 통과 증거가 아니다.
+- gate 변화: 없음. D-888은 Proposed를 유지한다. helper의 source 증거이며 실제 controller/commit/fallback·SYSTEM/native ARM/image/signing/SD/device 수용을 증명하지 않는다. 32 skipped는 미검증이며 main merge/public push/제품 키·SD 작업은 수행하지 않았다.
+- CE: 해당 없음 — 판단과 반례는 구현·시험·D-888에 보존한다.
+
+## 2026-10-26 · 127eab6a88 · D-888 commit/intent 복구와 FAT source 경계
+
+- 변경: durable intent와 canonical default의 실제 값에 따라 정상 확정·target 복구·fresh source 실패 정리를 구분했다. 일반 commit은 건강 영수증의 same-boot TTL과 live 정책/서비스를 재검사하고 장기 intent 복구는 기존 trial proof를 별도로 대조한다. COMMITTED 뒤 자기 guard/claim·deadline만 정리한다. unknown bootstrap은 offline repair를 요구한다.
+- 증거: committed572의 관련 원격 148passed13.72s,0NEW; 지연 중 정책/TTL/media 변경과 source claim 회수 RED4, 두 FAT mode 경계 RED2가 수정 전 실패했다. exact127의 확장 원격 시험은 1999passed,32skipped,49warnings/306.46s,0NEW이며 skips는 미검증이다. subset 수치는 중복된다. Linux6.8 FAT source를 확인한 계약 모델과 실제 mounted FAT/전원 차단 시험을 구분해 D-888에 기록했다.
+- gate 변화: 없음. frozen callable source이며 실제 controller 연결·SYSTEM/native ARM/image/signing/SD/device 수용을 증명하지 않는다. main merge/public push/제품 키·SD 작업은 수행하지 않았다.
+- CE: 해당 없음 — 구현·시험·D-888이 판단을 보존하며 실제 장치 수용과 혼동하지 않는다.
+
+## 2026-10-26 · 4ef7a2ec33 · D-888 boot lifecycle caller와 검증 범위
+
+- 변경: frozen controller가 staged install/tryboot/trial health/commit/observed fallback을 실제 호출하도록 하고 ABI2 boot service/timer를 연결했다. source preflight는 signed native runtime과 실제 CORE cwd를 확인하며 common pending과 native 유지보수 경계를 공유한다. callback/service 중 state/native release lock을 보유하지 않는다. intent 이후의 에러에서 GOOD_ACK를 보존한다. 새 unit/timer의 mutable SDK 권한을 차단하고 기존 native I/O 안정화20초를 재사용한다.
+- 증거: exact6f 확장 원격 2027passed32skipped49warnings317.14s,0NEW; b489 settle 원격400passed18.01s 및 최종4ef7a2ec33 normalize/health/controller/commit/policy/deadline/image/systemd 원격402passed16.32s,0NEW. subset은 중복되며 skips는 미검증이다. 자기 intent/current boot에만 정상 reboot를 요청하고 다른 boot·intent 없는 표식은 재부팅하지 않는다. actual signed source/CLI/flock/offline systemd와 synthetic firmware/CORE/services/RAUC 모델을 구분해 D-888에 기록했다.
+- gate 변화: 없음. D-888 Proposed 유지. OS feed/rollout·staging/producer/offline signer/capacity·SYSTEM·전체 최종 리뷰/정식 localmain 착지·native ARM image/서명/SD 전체 readback과 기체 수용은 남는다. 현재 설치·부팅 제어기 연결을 자동 release 선택 완료로 표시하지 않는다. main merge/public push/제품 키·SD 작업은 수행하지 않았다.
+- CE: 해당 없음 — 기존 모델 증거/예전 CORE release cwd 교훈과 구현·시험·D-888이 판단을 보존한다.
+
+## 2026-10-26 · 9fe8daa1e2 · D-888 OS feed source evidence
+
+- 변경: D-888에 OS-only signed feed/rollout, private bounded staging과 cache 회수, 세 번의 fresh withdrawal admission, 복구 우선 boot run과 frozen freeze helper 계약을 기록했다. native payload 순서와 OS committed 순서를 분리한다.
+- 증거: exact 9fe8daa1e2 공식 원격 os-feed-final 2069passed32skipped49warnings380.19s, known_failures 0NEW. 실제 Ed/HTTP/fsync/frozen 실행과 firmware/services/RAUC 모델을 구분한다. 중간 subset 통과 수를 합산하지 않는다.
+- gate 변화: 없음. D-888 Proposed 유지. producer/signing·capacity·SYSTEM·최종 리뷰/로컬 착지·native ARM artifact·SD 기록/readback·DEVICE는 남는다. 공개 push/제품 키 사용/SD 변경은 없다.
+- CE: 해당 없음 — 코드·시험·D-888이 판단을 보존하며 실물 수용으로 기록하지 않는다.
+
+## 2026-10-26 · 0b370fcc7b · D-888 unsigned OS producer evidence
+
+- 변경: actual GPT slot-A bounded export, logical/archive digest와 source/native factory binding, outer image checksum 및 native ARM unsigned handoff 계약을 D-888에 기록했다. offline native signature 주입/CMS bundling은 다음 작업이다.
+- 증거: exact0b370fcc7b 공식 원격 os-export-final128passed5.71s,0NEW. 작은 GPT의 실제 range/XZ/hash와 manifest CLI 검사, source 변이·오류 cleanup을 포함하며 bootable image를 생성한 시험은 아니다. 이전90pass/11pass와 합산하지 않는다. size4commits/shell syntax PASS;lint0errors35warnings.
+- gate 변화: 없음. D-888 Proposed, native ARM artifact·signing·capacity·SYSTEM·최종 리뷰/정식 localmain·SD 전체 readback·DEVICE는 남는다. 공개 게시와 제품 키/SD 작업은 없다.
+- CE: 해당 없음 — 코드·시험·결정문이 판단을 보존한다.
+
+## 2026-10-26 · 75e832c640 · D-888 offline signing evidence
+
+- 변경: 승인된 public CMS pin/keyring 설치, signed OS inputs/native factory 검증, disposable root signature 주입, consumer-verified CMS/Ed assets와 서명된 promotion/withdraw 정책을 기록했다. 현재 제품 certificate/pins는 의도적으로 미승인이다.
+- 증거: exact75e832c640 원격270passed28.64s,0NEW. 실제 Ed/CMS/verity/native verification과 producer→real HTTP feed→bounded stage→withdraw/failed refusal를 확인했다. root loop/fsck/mount/PID1는 모델 또는 미실행이며 SYSTEM/DEVICE 증거로 합산하지 않는다. size11commits PASS,lint0errors35warnings.
+- gate 변화: 없음. D-888 Proposed, SYSTEM·최종 리뷰/로컬 병합·제품 trust/publication 승인·native ARM artifact/서명/capacity·SD 기록/readback·DEVICE 미완료. 공개 push/제품 key/SD 작업은 없다.
+- CE: 해당 없음 — 코드·시험·D-888이 판단을 보존한다.
+
+## 2026-10-26 · 0a88b44f94 · D-888 actual guest-kernel root evidence
+
+- 변경: fixed public input/private TCG/NoCloud UUID·guest-only setup, 실제 offline signature preparation과 오류 정리, OS/native signature namespace 분리를 기록했다. host와 product image/DEVICE 범위를 구분한다.
+- 증거: exact0a88b44f94 official22passed269.81s,0NEW. 그중1개 outer scenario가 actual guest kernel fsck/owned loops/RW injection/fresh RO verification/invalid signature cleanup1개를 실행한다. 합성 app/layout 및 미실행 실제 card install/firmware를 분리한다. /tmp omx_01_control directory warning은 연관 미확인으로 보존했다.
+- gate 변화: 없음. D-888 Proposed 유지. RAUC/PID1 SYSTEM 나머지·최종 리뷰/로컬 착지·product trust/publication·native ARM image/capacity/서명·SD readback·DEVICE는 남는다. 제품 키/호스트 운영 설정/공개 push/SD 변경은 없다.
+- CE: 해당 없음 — 구현·시험·D-888이 판단을 보존한다.
+
 ## 2026-10-26 · 7e85b28a8e · fix(remote): 원격 잡 명령을 stdin으로 보낸다
 
 - 변경: `remote_job.ssh_call`이 `bash -s`를 실행하고 명령을 stdin으로 보낸다. `remote_pytest.remote`는 `remote_job.argv_command`를 거쳐 8,000바이트(`ARGV_MAX`)를 넘는 명령을 거부한다. 회귀 시험 2개(`test/test_remote_pytest.py`).
@@ -12127,3 +12280,58 @@ osy-d395-s1d\`.
 - gate 변화: 없음. Isaac 흔들림 값은 파지 시험 전까지 의미를 주장하지 않는다.
 - 결정: 없음.
 - 교훈: 없음(AI PC overlay 삭제와 복구는 검증 기록에 남김).
+
+## 2026-10-27 · uncommitted · perf(remote): 직렬 묶음 13개를 xdist로
+
+- 변경: `tools/remote/serial_suites.txt`에서 13줄을 뺐다(D-799 3: 직렬과 `-n`의 실패가 같음을 시험 PC에서 본 뒤). root `test/`와 `operations/fleet/test`는 착지 사전 시험의 임계 경로였다(10-26 FULL 사전 시험 25~60분, 그중 순차 17분·18분). 직렬 경로 하나가 섞인 묶음도 통째로 순차였다(imu_bno055가 섞인 media·games·palletizing 묶음). Gazebo·Isaac은 재지 않아 남기고, `tools`는 land_isolation의 collect_alone 잡이 기대므로 남겼다. 워커마다 수집 id가 달라 xdist 수집이 멈추던 두 매개변수(`test_password_session.py` 무작위 salt 해시, `test_site_conversation_client.py` `time.time()`)에 고정 id를 줬다.
+- 증거: 모델 PC, `-n 6 --dist loadfile`, 6 GB 상한, 실패 0: Fleet 7024 passed 2분 50초(순차 18분 19초), root `test/` 11433 passed 3분 24초(순차 16분 54초), perception 3582 passed 45초(순차 2분 34초), overhead·situation·core/api·robot_ui robot/pilot·imu_bno055·robot_execution/local·omx adapter·training/omx·deploy 각 25초 이하. 고정 id 전에는 Fleet·`test/` 모두 "Different tests were collected between gw…"로 수집 단계에서 멈췄다. `xdist_plan`은 실행하는 체크아웃의 목록을 읽으므로 효과는 착지 뒤부터다.
+- gate 변화: 없음(같은 시험, 병렬 실행). rclpy·ROS_DOMAIN_ID 묶음은 한 번의 측정이라 부하성 실패가 나오면 D-790 재실행이 가른다.
+- CE: 미정 — 착지 뒤 실제 사전 시험 시간으로 판단.
+
+## 2026-10-27 · uncommitted · perf(land): 착지한 FULL 변화분 뒤에서 FULL을 다시 돌지 않음
+
+- 변경: `tools/land_selection.py`. 차례에서 main의 변화분이 FULL로 올라갔어도 그 변화분은 자기 FULL을 통과하고 착지한 것이므로, 대기 착지는 FULL을 다시 준비하지 않고 변화분의 직접 대상 시험과 합친 트리 위 이 브랜치 자신의 선택(브랜치가 FULL급이면 그 직접 대상)을 함께 돈다(D-889 3항 "합친 affected"). 안전 경로가 어느 쪽에든 있으면 FULL을 유지한다(D-889 6항). 하네스 파일만 예외였던 10-25 규칙을 넓혔다.
+- 근거: 10-26 08:59~10-27 02:16 사건 기록에서 같은 착지의 FULL 재준비가 390분으로 사전 시험 벽시계의 35%였고(7건, 그중 6건은 대기 착지도 FULL급), 몰릴수록 FULL 착지 하나가 대기 N건에 FULL N번을 시킨다.
+- 증거: 원격 `test/test_land_selection.py test/test_land.py` 결과는 착지 기록에 남긴다.
+- gate 변화: 착지 차례의 FULL 재시험을 좁힌다. 남는 위험은 두 변경 모두 직접 건드리지 않은 곳의 상호작용이며, 다음 FULL 착지와 게시 전 녹색 FULL 요구(D-889 5항)가 받친다. 사용자 결정(2026-10-27).
+- CE: 미정 — 몰림 때 재준비 시간으로 판단.
+
+## 2026-10-27 · uncommitted · perf(core): 충전소 카메라 파이프라인 시험의 느린 경우를 파일로 나눔
+
+- 변경: `middleware/core/gateway/test/test_station_camera_pipeline.py`의 `lifespan`·`shutdown_UNDOCKING`을 `test_station_camera_pipeline_lifespan.py`로, `continuous`를 `test_station_camera_pipeline_continuous.py`로 옮겼다. 두 파일은 매개변수만 두고 원래 시험 함수를 부른다. `composed`·`shutdown_CHARGING`은 `test/flaky_quarantine.txt` node id가 있어 원래 파일에 남겼다.
+- 근거: xdist `--dist loadfile`은 파일 하나를 워커 하나에 준다. FULL의 gateway·events·services·shared/web·foundation 묶음 576초 가운데 이 파일이 511초였다(모델 PC `--durations`, main c2e21981ec). 나눈 뒤 가장 긴 파일은 약 210초로 예상한다.
+- 증거: 원격 결과는 착지 기록에 남긴다.
+- gate 변화: 없음(같은 시험, 같은 매개변수).
+- CE: 해당 없음 — 시험 배치 변경이다.
+
+## 2026-10-27 · uncommitted · fix(land): 크기 규칙을 대기·준비 단계에서 미리 본다
+
+- 변경: `tools/land_prepare.py`. 대기 중 main이 움직이면 깨끗한 `merge-tree` 결과로 참조 없는 미리 보기 커밋을 만들어 `size_range.py`를 돌리고, 실패하면 차례 전에 멈춘다(충돌 미리 보기와 같은 자리). 사전 시험의 main 병합 직후에도 크기 규칙을 돈다. D-889 추가 1 "S0 입장 검사"의 크기 항목이다.
+- 근거: 10-26 08:59~10-27 03시 사건 기록에서 size-range 멈춤 2회가 각각 시작 뒤 수 시간 만에, 합계 392분 뒤에 났다. 몇 초짜리 검사가 차례의 병합 뒤에만 돌았기 때문이다.
+- 증거: 원격 `test/test_land.py` 결과는 착지 기록에 남긴다.
+- gate 변화: 강화(같은 크기 규칙을 더 일찍). 미리 보기 오류는 판정하지 않고 차례의 검사가 결정한다.
+- CE: 해당 없음 — 기존 규칙의 실행 시점 변경이다.
+
+## 2026-10-27 · uncommitted · fix(doctor): 대기열의 반복 준비·무활동 착지를 경고
+
+- 변경: `tools/doctor.py`의 land queue 검사가 살아 있는 티켓마다 이번 실행의 `prepared` 횟수와 마지막 활동(티켓 갱신·사건 기록·`land_checks.tmp_dir`의 원격 로그 중 최근)을 본다. 3번 이상 다시 준비했거나 30분 동안 활동이 없으면 WARN이다.
+- 근거: 2026-10-27 새벽 land.py가 4~5시간씩 떠 있었는데 기다리는지 멈췄는지 doctor가 OK만 보였다. 손으로 보니 멈춘 것은 없었고, 한 실행(fix/comm-freshness-latest-main)은 FULL을 네 번 다시 준비했다(248분).
+- 증거: 실제 대기열에서 그 실행만 "prepared 4 times"로 WARN. 원격 `test/test_doctor.py`.
+- gate 변화: 없음(읽기 전용 진단).
+- CE: 해당 없음 — 진단 출력 보강이다.
+
+## 2026-10-27 · uncommitted · perf(land): 사전 시험의 관문 라운드를 선택 시험과 함께 돌린다
+
+- 변경: `tools/land_prepare.py`가 관문 라운드(구조 검사와 land_isolation의 수집·단독 실행)를 선택 시험 앞이 아니라 옆 스레드에서 돌린다. 각각 따로 `remote_pytest.run`이고, 어느 쪽의 Stop이든 착지를 멈추며 기록(`land_full.save`)은 둘 다 끝난 뒤에만 남는다. 차례 안에서는 관문이 먼저인 채로 둔다.
+- 근거: 관문 라운드가 10-26 오전 73~92초에서 격리 관문이 들어온 뒤 150~870초가 됐고, 동시 3개뿐인 사전 시험 자리를 그만큼 더 쥐었다(10-27 `perf/xdist-root-fleet` 335초).
+- 증거: 원격 `test/test_land.py` 등. 관문이 실패해도 선택 시험은 이미 돈다(새 실패 비율 1.2%라 드문 낭비와 매번의 대기를 바꿨다).
+- gate 변화: 없음(같은 관문, 같은 판정). 관문 실패 때 선택 시험 몫의 시험 PC 시간을 더 쓴다.
+- CE: 미정 — 착지 뒤 사전 시험 시간으로 판단.
+
+## 2026-10-27 · uncommitted · fix(land): 손으로 고른 --tests가 선택 시험을 대신하지 못하게
+
+- 변경: `tools/land.py`. `--tests "<pytest args>"`는 선택 시험을 대신하지 않고 그 위에 더한다(사전 시험과 차례 모두 `land.select`). `--tests none`은 `--skip-reason "<사용자의 말>"`이 있어야 하고, 그 사유를 사건 기록 `skip`으로 남긴다. land.py 자기 시험만 `ROSY_LAND_FIXTURE=1`로 예전처럼 대신한다.
+- 근거: `3125704e24`(D-892)가 사전 시험·관문 없이 손으로 고른 브라우저 시험 하나로 착지해 main이 깨졌다(`test_console_queues_contract.py`, `test_integrated_control_backend_browser.py`). 같은 변경에 선택기를 다시 돌리면 `operations/fleet/test`를 골랐다. 다른 착지 2건이 그 MAIN-RED로 멈췄다.
+- 증거: 원격 `test/test_land_tests_flag.py` 등.
+- gate 변화: 강화(우회 경로를 막음). 사용자 명시 우회(`docs/solutions/workflow-issues/first-field-result-from-the-no-release-path-release-in-parallel-2026-10-10.md` 4)는 사유와 함께 남는다.
+- CE: 미정 — 착지 뒤 판단.

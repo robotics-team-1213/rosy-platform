@@ -12,9 +12,10 @@ from test_sd_writer_contract import (POWERSHELL, IMAGE_METADATA, _disk, _run, wr
 pytestmark = pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
 
 
-@pytest.fixture
-def gpt_writer(writer_case, tmp_path):
+@pytest.fixture(params=["boot_a", "bootstrap"])
+def gpt_writer(writer_case, tmp_path, request):
     raw, layout = _table_image(with_files=True)
+    layout["provision_role"] = request.param
     case = writer_case
     case["image"].write_bytes(lzma.compress(raw))
     case["readback"].write_bytes(raw)
@@ -44,13 +45,14 @@ def _write(case, *extra, **kwargs):
                 *extra, plan_only=False, switches=("-AcceptSlowMedia",), **kwargs)
 
 
-def test_gpt_writer_selects_boot_a_independently_of_inventory_order(gpt_writer):
+def test_gpt_writer_selects_signed_provision_role_independently_of_inventory_order(gpt_writer):
     case = gpt_writer
     result = _write(case)
     assert result.returncode == 0, result.stderr
     from pathlib import Path
     for part in case["parts"]:
-        assert (Path(part["MountPath"]) / "rosy-provision/provision.json").exists() is (part["PartitionNumber"] == 2)
+        number = 1 if case["layout"]["provision_role"] == "bootstrap" else 2
+        assert (Path(part["MountPath"]) / "rosy-provision/provision.json").exists() is (part["PartitionNumber"] == number)
     report = json.loads(case["receipt"].read_text(encoding="utf-8-sig"))
     assert report["media_readback"]["layout"] == case["layout"]
     assert report["media_readback"]["verified"] is True
@@ -59,7 +61,8 @@ def test_gpt_writer_selects_boot_a_independently_of_inventory_order(gpt_writer):
 @pytest.mark.parametrize("wrong", ["bootstrap", "boot_b"])
 def test_explicit_gpt_mount_cannot_select_another_fat(gpt_writer, wrong):
     case = gpt_writer
-    part = next(p for p in case["parts"] if p["PartitionNumber"] == (1 if wrong == "bootstrap" else 3))
+    other = 2 if case["layout"]["provision_role"] == "bootstrap" else 1
+    part = next(p for p in case["parts"] if p["PartitionNumber"] == (other if wrong == "bootstrap" else 3))
     result = _write(case, "-BootMountPath", part["MountPath"])
     assert result.returncode != 0
     assert "provision partition" in result.stderr
@@ -92,7 +95,8 @@ def test_wrong_backup_gpt_stops_before_personalization(gpt_writer):
     ("Offset", 512), ("Size", 512), ("FileSystem", "NTFS")])
 def test_windows_partition_identity_must_match_signed_snapshot(gpt_writer, field, value):
     case = gpt_writer
-    case["parts"][1][field] = value
+    number = 1 if case["layout"]["provision_role"] == "bootstrap" else 2
+    case["parts"][number - 1][field] = value
     case["inventory"].write_text(json.dumps([_disk(Partitions=case["parts"])]))
     result = _write(case)
     assert result.returncode != 0
