@@ -12453,6 +12453,33 @@ osy-d395-s1d\`.
 - gate 변화: 없음. Isaac 전환 조건은 여전히 미충족.
 - CE: 새 교훈 기록 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`.
 
+## 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
+- 변경: 동결된 이전 기록을 보존하고 `validation/robot-profile-pipeline-2026-10-27b/result.md`에 로컬 main 통합 결과를 추가했다.
+- 증거: commit `b69d9c7362` 공식 landing 기록과 main ancestry 확인; 후보 Fleet-root 포함 묶음 7,444 통과·407 제외, 별도 root/core 묶음 4,687 통과·225 제외, 실제 Cell/care/pipeline 브라우저 48 통과·0 제외, main Node 398 통과·0 제외. 최종 tier·캐시·기존 FULL·재실행·미검증 범위를 구분했다.
+- gate 변화: 없음. 실물·ARM64·현장 수용이나 자동 복구로 승격하지 않는다.
+- 결정: 없음. 기존 care/API/CORE·OMX 권한 경계를 유지한다.
+- 교훈: CE 미해결. 기존 시간초과의 단독 통과를 해결로 쓰지 않으며 시험 시간·known-failure·quarantine 변경 없음.
+
+## 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
+- 변경: 검증 기록의 receipt 파일명을 `rosy-land/<sha>.json`으로 표기하고 전체 commit은 기존 표에 유지했다. 기존 해시 표기 교훈을 연결했다.
+- 증거: 최초 문서 관문은 해당 경로의 high-entropy-token 1건으로 실패했고 단독 재실행도 실패했다. main에서는 통과해 이 문서의 원인으로 확인됐다. 수정 뒤 동일 순수 scanner와 정상 원격 관문으로 확인한다.
+- gate 변화: 없음. 시험·scanner·known-failure·quarantine·허용 목록은 수정하지 않았다.
+- 교훈: 기존 `git-ids-in-validation-records-need-the-commit-prefix` 지침을 적용했다. 결과를 바꾸지 않는 표기 수정이며 새 해결 교훈은 추가하지 않는다.
+
+## 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
+
+- 변경: API v1.327에 요청·관측 discovery·관측 제출·별도 승인 경로와 closed DTO를 함께 등록했다. 공식 bump의 live pins를 정렬하고 envelope1.0을 유지했다. 계약 등록과 HTTP 설치를 구분한다.
+- 증거: RED30 → 원격1,583 passed/0 skipped·NEW0, source2d932dad6b. docs/validation/transfer-recovery-contract-2026-10-27/result.md에 선택·revision·한계를 보존했다. FULL·실제 HTTP/browser·관측 생산자 수용은 별도다.
+- gate 변화: 없음. 계약 등록의 focused GREEN이며 공유 변경 FULL과 런타임 설치를 대신하지 않는다.
+- CE: 해당 없음 — 추가 운영 장애 해결이나 문서 밖 판단은 없다.
+
+## 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
+
+- 변경: v1.327 헤더·본문과 마지막 버전 변경이력표를 정렬했다. 표 행 누락은 기존 protocol-version alignment 시험이 FULL 가드에서 검출했다.
+- 증거: 실패 가드·단독 재현과 수정 커밋6645ad829b의 원격1,586 passed/0 skipped를 docs/validation/transfer-recovery-contract-2026-10-27b/result.md에 구분했다. 앞선 focused 기록은 보존했다.
+- gate 변화: 없음. 실패한 FULL은 통과로 계산하지 않으며 공식 FULL 재실행과 HTTP·화면 연결이 남았다.
+- CE: 해당 없음 — 새 운영 교훈이 필요한 장애가 아니다.
+
 ## 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
 
 - 변경: `tools/harness/affected_ci.py`의 `modules` 항목에서 `gating: False`를 뗐다. 2026-10-25부터 main CI 실행에서 연속 녹색이었다. 이제 판정 밖은 sensing뿐이다.
