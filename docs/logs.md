@@ -12335,3 +12335,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_tests_flag.py` 등.
 - gate 변화: 강화(우회 경로를 막음). 사용자 명시 우회(`docs/solutions/workflow-issues/first-field-result-from-the-no-release-path-release-in-parallel-2026-10-10.md` 4)는 사유와 함께 남는다.
 - CE: 미정 — 착지 뒤 판단.
+
+## 2026-10-27 · uncommitted · docs: record accepted OMX size-registration restoration
+
+- 변경: 기존 착지 교훈에 공개 PR #184의 real 단위 등록이 로컬 이력 재구성에서 누락된 원인과 복원 판단을 보완했다. 이미 한도를 넘은 소비자 커밋은 보존하고 유효한 선행 기반에서 다시 구성해야 한다.
+- 증거: 복원 소스 `d8dd53f504`의 원격 affected 55 targets에서 1,893 passed, 22 skipped, NEW 0. 실행 코드와 크기 제한·계수 규칙은 변경하지 않았다. 교훈 frontmatter 검증 통과; 본문 검사 21 flags는 현재 시험 식별자와 과거 경로·이력으로 확인했다.
+- gate 변화: 없음. 이 기록은 배포·실물 수용 또는 소비자 이력 재구성 완료를 뜻하지 않는다.
+- CE: 기존 교훈 갱신 — `solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md`.
