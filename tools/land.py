@@ -48,6 +48,7 @@ import land_guards  # noqa: E402  (structural guards before the long round)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
 import land_full  # noqa: E402  (a green tier outlives the run that passed it)
 import land_prepare  # noqa: E402  (D-889 A': tests outside the lock, then main's delta at the turn)
+import land_speculate  # noqa: E402  (D-889 addendum 3: the turn's main delta tested on the predicted tree)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
 import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did)
@@ -456,6 +457,10 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
                 summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
+                if (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
+                    invocations, note = held, None  # it passed before the turn on this tree (up to the records)
+                    prepared = land_speculate.with_spec(sys.modules[__name__], wt, branch, prepared)
+                    summary.append(f"round {round_no}: speculated tree held; main delta passed before the turn")
             else:
                 invocations, note = select(wt, main_sha, python)
             if note and note not in summary:
