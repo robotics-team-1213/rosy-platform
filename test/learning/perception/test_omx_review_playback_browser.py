@@ -350,3 +350,45 @@ def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(p
     assert len(exports) == 1 and exports[0]['review_id'] == next_id
     assert not page.evaluate("""()=>{const event=new Event('beforeunload',{cancelable:true});
         window.dispatchEvent(event);return event.defaultPrevented;}""")
+
+
+@pytest.mark.parametrize('recovery', ['original', 'new_saved_review'])
+def test_changed_recording_without_matching_review_keeps_saved_choice_blocked(playback_page, recovery):
+    import json
+    page, state, expect = playback_page
+    state.document.update(latest_review_id='d' * 32,
+                          trainable={'ok': True, 'counts': {'train': 1, 'eval': 1}})
+    page.locator('#review-open').click()
+    page.locator('#export-saved-review').check()
+    page.locator('#export-name').fill('Source revision changed')
+    page.locator('#export-profile').set_input_files({'name': 'profile.json',
+        'mimeType': 'application/json', 'buffer': json.dumps({'fixture': True}).encode()})
+    page.locator('#refresh').click()
+    expect(page.locator('#native-export')).to_be_enabled()
+    # The owner retains the prepared ID but invalidates older review snapshots for new bytes.
+    state.document.update(source_revision='f' * 64, latest_review_id=None)
+    page.locator('#review-open').click()
+    expect(page.locator('#review-meta')).to_contain_text('f' * 64)
+    expect(page.locator('#export-saved-review')).to_be_checked()
+    expect(page.locator('#export-saved-review')).to_be_enabled()
+    expect(page.locator('#native-export')).to_be_disabled()
+    expect(page.locator('#export-review-status')).to_contain_text('저장 검수 사용 대기')
+    page.locator('#refresh').click()
+    expect(page.locator('#prepared-status')).to_contain_text('검수 분할 준비됨')
+    expect(page.locator('#native-export')).to_be_disabled()
+    exports = []
+    page.route('**/center/export', lambda route: (exports.append(route.request.post_data_json),
+        route.fulfill(json={'accepted': True})))
+    if recovery == 'original':
+        page.locator('#export-saved-review').uncheck()
+        expect(page.locator('#export-review-status')).to_contain_text('원본 검수 결정 사용')
+    else:
+        state.document['latest_review_id'] = 'e' * 32
+        page.locator('#review-open').click()
+        expect(page.locator('#export-saved-review')).to_be_checked()
+        expect(page.locator('#export-review-status')).to_contain_text('e' * 32)
+    expect(page.locator('#native-export')).to_be_enabled()
+    page.locator('#native-export').click()
+    expect(page.locator('#export-status')).to_contain_text('접수')
+    assert len(exports) == 1
+    assert exports[0].get('review_id') == (None if recovery == 'original' else 'e' * 32)
