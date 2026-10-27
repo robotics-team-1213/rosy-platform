@@ -103,3 +103,44 @@ def test_operational_entry_points_cannot_import_ros_even_lazily():
             else: continue
             assert not any(name.split('.')[0] in {'rclpy', 'rclcpp', 'sensor_msgs', 'cv_bridge'}
                            for name in names), relative
+
+
+@pytest.mark.parametrize('unit_name', ['camera@', 'camera-view', 'observer@', 'observation-bridge'])
+def test_native_units_preserve_shell_paths_through_systemd(tmp_path, unit_name):
+    import os
+    import shlex
+    import shutil
+    import subprocess
+    root = Path(__file__).resolve().parents[1]
+    unit = root / f'deploy/robot/omx/rosy-omx-{unit_name}.service'
+    command = next(line.partition('=')[2] for line in unit.read_text().splitlines()
+                   if line.startswith('ExecStart='))
+    # Without ':' systemd consumes ${SOURCE%/path/*} as an invalid variable name.
+    assert command.startswith(':/bin/bash ')
+    if not shutil.which('systemd-run') or not hasattr(os, 'getuid'):
+        pytest.skip('requires Linux user systemd for the unit execution check')
+    runtime = Path(f'/run/user/{os.getuid()}')
+    if not (runtime / 'bus').exists():
+        pytest.skip('user systemd manager unavailable; unit execution not verified')
+    release = tmp_path / 'release with spaces'
+    script = "import json,os,sys; print(json.dumps({'path':os.environ['PYTHONPATH'],'args':sys.argv}))"
+    pipeline = release / 'deploy/robot/omx'
+    camera = release / 'middleware/devices/omx/adapter/omx_adapter/camera_source.py'
+    for source in [camera, *[pipeline / name for name in ('hardware_observer.py',
+                   'commissioning_view.py', 'workcell_observation_bridge.py')]]:
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(script)
+    variables = dict(PYTHONPATH='', ROSY_CAMERA_SOURCE=str(camera), ROSY_CAMERA_PIPELINE_ROOT=str(pipeline),
+        ROSY_OBSERVER_SOURCE=str(pipeline / 'hardware_observer.py'), ROSY_OBSERVER_PYTHON=sys.executable,
+        ROSY_OBSERVATION_SOURCE=str(pipeline / 'workcell_observation_bridge.py'),
+        ROSY_OBSERVATION_PYTHON=sys.executable)
+    arguments = shlex.split(command[1:].replace('%h', str(tmp_path)).replace('%i', 'arm_a'))
+    environment = dict(os.environ, XDG_RUNTIME_DIR=str(runtime),
+                       DBUS_SESSION_BUS_ADDRESS=f'unix:path={runtime}/bus')
+    run = subprocess.run(['systemd-run', '--user', '--quiet', '--wait', '--pipe', '--collect',
+        '--expand-environment=no', *[f'--setenv={key}={value}' for key, value in variables.items()],
+        *arguments], env=environment, text=True, capture_output=True, timeout=15)
+    assert run.returncode == 0, run.stderr
+    result = json.loads(run.stdout)
+    assert Path(result['path'].split(':')[0]).resolve() == release / 'contracts/foundation'
+    assert result['args'][0].startswith(str(release))
