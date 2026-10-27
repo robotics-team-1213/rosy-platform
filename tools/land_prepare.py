@@ -130,5 +130,18 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     tier = "carried" if land.land_mainred.CARRIED else "full" if note else "affected"  # carried: restore() refuses it
-    land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+    anchor = None
+    # Keeping an older base with --no-cache would repeat overtime on every turn.
+    if tier == "affected" and not args.no_cache:
+        anchor_main = land.land_full.restore(wt, branch)
+        anchor = land.land_full.prepared(wt, branch, anchor_main)
+    keep_full = (anchor and anchor["tier"] == "full" and anchor["invocations"]
+                 and all(isinstance(inv, list) and inv
+                         and all(isinstance(word, str) and word for word in inv)
+                         for inv in anchor["invocations"]))
+    if keep_full:
+        # A delta cannot replace a FULL origin; retain its exact base and invocations.
+        print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
+    else:
+        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))

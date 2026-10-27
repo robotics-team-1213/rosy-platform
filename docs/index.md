@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록
-- 2026-10-27 · c36bfb48ad · docs: D-899 인증된 이송 복구 요청 원장
-- 2026-10-27 · uncommitted · fix(remote): 시험 PC 메모리 예약을 실측으로, 현장 PC 디스크 판정 바로잡기
-- 2026-10-27 · uncommitted · fix(land): 시험 PC가 포기해 끝난 착지도 stop으로 남김
-- 2026-10-27 · 6ffe52ae26 · docs: D-895 단일 이송 복구 후손과 원본 증거 보존
+- 2026-10-27 · 10f4997e11 · fix(land): affected 재준비에서도 유효한 FULL 원본 보존
+- 2026-10-27 · uncommitted · docs(validation): SmolVLA 미세 조정 GPU 메모리
+- 2026-10-27 · uncommitted · feat(remote): 시험 작업의 실제 CPU를 재고 코어 예약을 실측으로
+- 2026-10-27 · uncommitted · feat(doctor): 장부상 거절된 시험 PC를 경고
