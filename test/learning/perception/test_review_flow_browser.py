@@ -3,6 +3,7 @@ import os
 import re
 import threading
 import json
+import time
 
 from contextlib import contextmanager
 from pathlib import Path
@@ -65,6 +66,11 @@ def test_owned_pipeline_controls_work_from_keyboard_search(tmp_path, width):
     target = Control(file, before['workspace_id'], home=home, runner=runner)
     Workspace(store.db).register({'kind': 'perception', 'name': '자동 학습', 'path': str(out)})
     with serve(store, target) as (page, _, expect):
+        def delayed_storage(route):
+            response = route.fetch()
+            time.sleep(1)
+            route.fulfill(response=response)
+        page.route('**/api/learning/storage/settings', delayed_storage)
         page.set_viewport_size({'width': width, 'height': 844})
         page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
         expect(page.get_by_role('button', name='학습 시작', exact=True)).to_be_enabled()
