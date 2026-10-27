@@ -164,3 +164,7 @@ sudo python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_update_controller.py
 카탈로그 최신 버전이나 설치 패키지 전체의 readback을 뜻하지 않는다. 이 명령은 업데이트 적격성을 승인하지 않고
 네트워크 확인·설치·hold 만료 처리·재부팅을 수행하지 않는다. 설치 파일 인자는 거절한다.
 정책·상태가 읽히지 않으면 정상 idle로 초기화하지 않으며, 비공개 URL·hold 자유 메모·boot/transaction 식별자는 출력하지 않는다.
+
+ARM SYSTEM guest의 양방향 비활성 설치·복구 관측은 [검증 기록](../validation/pinky-os-arm-system-2026-10-28/result.md)에 있다.
+복구가 SSH 준비보다 먼저 끝날 수 있어, 시험은 원래 cloud observer에서 target journal을 읽기 전용으로 확인한다.
+이는 합성 DT·정책·application을 사용한 kernel 경계 검증이며, 제품 이미지·Pi firmware·실물 수용을 대신하지 않는다.

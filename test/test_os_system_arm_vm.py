@@ -109,6 +109,7 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path, so
         assert all(media["partitions"][role]["device"] in mounted for role in ("bootstrap", "data"))
         # Fault injection: select an installed but unarmed trial. Independent PID1 deadline must recover.
         target_root = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_" + target_slot)
+        # Recovery can outrun SSH readiness; inspect the retained journal from the original cloud observer.
         guest.restart_slot(target_root, target_slot, trial=True, wait=False)
         assert guest.process.wait(timeout=480) == 0  # Includes the real boot and normal shutdown, without SSH admission.
         with (tmp_path / "guest-console.log").open("rb") as stream:
