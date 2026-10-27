@@ -110,3 +110,16 @@ def test_common_robot_tasks_select_real_browser_flow():
                    'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
         assert expected in browser_scope.targets(['learning/curation/perception/' + source])
     assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])
+
+
+def test_omx_archive_handoff_selects_http_named_browser_suites():
+    expected = {'test/learning/perception/test_storage_omx_http.py',
+                'test/learning/perception/test_storage_setup_http.py'}
+    root = 'learning/curation/perception/'
+    for source in ('storage_omx.py', 'storage_prepare.py', 'storage_web.py',
+                   'review_app_web/storage-settings.js', 'review_app_web/omx-export.js',
+                   'review_app_web/learning.html', 'review_app.py'):
+        assert expected <= set(browser_scope.targets([root + source])), source
+    assert expected <= set(browser_scope.targets(['learning/training/omx/experiment_catalog.py']))
+    for target in expected:
+        assert browser_scope.targets([target]) == [target]
