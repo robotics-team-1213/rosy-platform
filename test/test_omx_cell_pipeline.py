@@ -109,7 +109,7 @@ class Cell:
             u, v = m.cal.parallax(tray_pixel(*self.tcp[:2]), CONFIG["sites"]["pinky"]["z"], self.tcp[2],
                                   CONFIG["cameras"]["top"])
             for side in (-1, 1):
-                x = round(u + side * self.grip / 2)  # 47 -> 56 moves each finger ~4.5 px
+                x = round(u) + side * round(self.grip / 2)  # 47 -> 56 moves each finger ~4.5 px, both alike
                 cv2.rectangle(img, (x - 3, round(v) - 3), (x + 3, round(v) + 3), (20, 20, 20), -1)
         return img
 
