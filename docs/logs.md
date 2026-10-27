@@ -12414,6 +12414,58 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 시험 PC 확인의 부하(load1) 검사는 그대로라 실제로 바쁜 PC는 계속 거절된다.
 - CE: 해당 없음 — 갱신한 교훈 §3의 연장이고 근거가 코드·시험에 있다.
 
+## 2026-10-27 · uncommitted · docs(validation): SmolVLA 미세 조정 GPU 메모리
+
+- 변경: `docs/validation/smolvla-train-memory-2026-10-27/`(측정 스크립트와 결과).
+- 근거: D-866 2026-10-27 보완이 AI PC 첫 학습 전에 VRAM을 재도록 했다. 배치 8은 2.96 GB, 16은 4.63 GB, 32는 5 GB 상한 초과. AI PC는 다른 프로세스가 10.2 GB를 써서 ollama와 함께면 배치 16까지만 들어간다.
+- 증거: AI PC 측정 출력(`hold_gpu.sh`로 실행).
+- gate 변화: 없음.
+- CE: 해당 없음 — 측정 기록에 남는다.
+
+## 2026-10-27 · 10f4997e11 · fix(land): affected 재준비에서도 유효한 FULL 원본 보존
+
+- 변경: `tools/land_prepare.py`. 성공한 affected 재준비 뒤에도 캐시 사용과 원래 후보의 계보가 유효하면 기존 FULL 준비 기록을 바이트 그대로 보존한다. 현재 실행의 사건 기록은 affected로 남기고, 다음 차례는 원래 FULL 기준부터 main 변화분 전체를 확인한다. carried·잘못된 계보·비정상 invocations·실패·HEAD 변경은 보존 조건을 통과하지 못한다. `--no-cache`는 이전의 새 affected 체크포인트 동작을 유지한다.
+- 근거: OS 배포 준비에서 FULL 이후 차례 시간 제한으로 다시 준비하자, 같은 브랜치의 단일 준비 파일이 affected로 덮였다. 게시자는 실제 착지 기록의 FULL tier를 요구하므로 시험이 통과해도 새 배포 소스를 선택하지 못할 수 있었다. 원래 후보·main을 새 affected 실행의 값으로 옮기거나 결과를 FULL로 재표기하면 검증 출처가 달라진다.
+- 증거: 원격 회귀 시험에서 두 실패를 재현했고, 수정 후 준비·착지·게시자 연결 47건이 통과했다. 보존 분기를 끈 변이 커밋 `e0e452d426`에서 두 시험이 다시 실패했다. 복원한 `10f4997e11`의 `test_land.py`·`test_land_prepare.py`·`test_land_record.py`·`test_publish_main.py` 159건이 통과했다. 기존 FULL 바이트·기준 main·후보와 최종 게시자 판정을 실제 Git 임시 저장소로 확인한다. 독립 검토 `7c0e816d67`에서 추가 수정 사항 없음이며 복원 트리는 그 검토 트리와 같다.
+- gate 변화: 판정 기준은 유지한다. 유효한 FULL 원본과 현재 후보의 변화분 증거 연결만 보존하며, 실제 최종 소스의 전체 시험을 새로 실행했다고 주장하지 않는다. 장치·이미지·현장 수용과는 별개다.
+- CE: 해당 없음 — 원인과 보존 조건은 새 코드·회귀 시험과 기존 교훈 `docs/solutions/workflow-issues/land-record-stopped-when-tests-moved-before-the-turn-2026-10-26.md`에서 확인할 수 있다.
+
+## 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록
+
+- 변경: 실행 계획(2026-10-25-fleet-policy-admission-design.md) P3 상태줄에 착지 사실과 로컬 main `b54b29d5d0`을 붙였다. 내용 변화 없음.
+- 증거: 착지 기록 `.git/rosy-land/b54b29d5d0…` 랜드 레코드(3라운드, FULL+affected 0 NEW). 모듈 로그·생성 문서는 그 착지에 이미 반영됐다.
+- Gate: 변화 없음. P5 현장 수용은 별도.
+- CE: 해당 없음 — 상태 한 줄 기록.
+
+## 2026-10-27 · uncommitted · docs(adr): D-867 모델 PC 상한 근거, D-571에서 D-867 가리키기
+
+- 변경: D-867에 모델 PC 상한이 AI PC보다 큰 이유를 날짜 붙은 보완으로 더하고, D-571에 4항 상한이 D-867로 바뀌었다는 정정을 더한다.
+- 근거: D-867 검토 지적(근거 없음, D-571에서 바뀐 상한을 찾을 길 없음). GPU 사용량은 2026-10-27 측정(`docs/validation/smolvla-train-memory-2026-10-27/`).
+- 증거: 문서만.
+- gate 변화: 없음.
+- CE: 해당 없음.
+
+## 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
+
+- 변경: `tools/sim/omx_grasp_probe.py`(교사와 같은 파지 기하로 집기·들기·내려놓기 반복, `/sim/object_tf`로 판정)와 `run_omx_backend_conformance.sh ... grasp`. `tools/sim/omx_mujoco_backend.py`는 손가락 mesh 대신 보정 접촉점의 캡슐로 충돌하고 타원 마찰 원뿔을 쓴다. `tools/land_checks.py`는 pytest가 파일 대신 디렉터리를 찍은 실패 id(`middleware/robot_execution/local::test_x`)를 그 시험을 정의한 추적 파일로 바꾼다.
+- 근거: D-866 §2 Isaac 전환 조건의 파지 반복 시험이 없었다. MuJoCo 볼록 껍질 손가락은 블록을 잡지 못했다. 같은 날 다른 착지 두 건이 "directory argument cannot contain :: selection parts"로 재실행에 실패했다.
+- 증거: `docs/validation/omx-sim-grasp-2026-10-27/`(MuJoCo 5/5, Isaac 0/5와 원인 관찰), 원격 `test/test_omx_grasp_probe.py`, `test/test_land.py`.
+- gate 변화: 없음. Isaac 전환 조건은 여전히 미충족.
+- CE: 새 교훈 기록 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`.
+
+## 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
+- 변경: 동결된 이전 기록을 보존하고 `validation/robot-profile-pipeline-2026-10-27b/result.md`에 로컬 main 통합 결과를 추가했다.
+- 증거: commit `b69d9c7362` 공식 landing 기록과 main ancestry 확인; 후보 Fleet-root 포함 묶음 7,444 통과·407 제외, 별도 root/core 묶음 4,687 통과·225 제외, 실제 Cell/care/pipeline 브라우저 48 통과·0 제외, main Node 398 통과·0 제외. 최종 tier·캐시·기존 FULL·재실행·미검증 범위를 구분했다.
+- gate 변화: 없음. 실물·ARM64·현장 수용이나 자동 복구로 승격하지 않는다.
+- 결정: 없음. 기존 care/API/CORE·OMX 권한 경계를 유지한다.
+- 교훈: CE 미해결. 기존 시간초과의 단독 통과를 해결로 쓰지 않으며 시험 시간·known-failure·quarantine 변경 없음.
+
+## 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
+- 변경: 검증 기록의 receipt 파일명을 `rosy-land/<sha>.json`으로 표기하고 전체 commit은 기존 표에 유지했다. 기존 해시 표기 교훈을 연결했다.
+- 증거: 최초 문서 관문은 해당 경로의 high-entropy-token 1건으로 실패했고 단독 재실행도 실패했다. main에서는 통과해 이 문서의 원인으로 확인됐다. 수정 뒤 동일 순수 scanner와 정상 원격 관문으로 확인한다.
+- gate 변화: 없음. 시험·scanner·known-failure·quarantine·허용 목록은 수정하지 않았다.
+- 교훈: 기존 `git-ids-in-validation-records-need-the-commit-prefix` 지침을 적용했다. 결과를 바꾸지 않는 표기 수정이며 새 해결 교훈은 추가하지 않는다.
+
 ## 2026-10-27 · ae535f57ec · fix: publish push가 자기 SHA의 pre-push 사본으로 돈다
 
 - 변경: `tools/publish_main.py --apply`가 게시 SHA의 `tools/hooks/pre-push`를 CR 없이 `<git-common-dir>/rosy-publish/<branch>-hooks/`에 쓰고 `core.hooksPath`로 push한다. 공용 훅을 다른 착지가 재설치해도 진행 중인 게이트는 바뀌지 않는다.
