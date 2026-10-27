@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 import affected_ros
+import affected_pack
 import affected_tests as affected
 import rosy_harness as harness
 
@@ -278,7 +279,7 @@ def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
     """remote_pytest drops -n for a whole invocation when one path is serial (2026-10-28: gazebo kept ten
     suites on one core and every turn ran past the cap)."""
     (tmp_path / "tools/remote").mkdir(parents=True)
-    (tmp_path / affected.SERIAL_FILE).write_text("sim/test  # ROS ports\ntools\n", encoding="utf-8")
+    (tmp_path / affected_pack.SERIAL_FILE).write_text("sim/test  # ROS ports\ntools\n", encoding="utf-8")
 
     class FakeRepo:
         root = tmp_path
@@ -291,7 +292,7 @@ def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
     assert sorted(path for group in groups for path in group) == ["a/test", "b/test", "c/test", "sim/test",
                                                                    "tools/x/test"]
     for group in groups:
-        kinds = {affected.is_serial(p, ["sim/test", "tools"]) for p in group}
+        kinds = {affected_pack.is_serial(p, ["sim/test", "tools"]) for p in group}
         assert len(kinds) == 1, group  # serial and parallel suites never mixed
     assert ["a/test", "b/test", "c/test"] in groups
 
