@@ -127,6 +127,22 @@ def test_repo_root_carries_only_the_listed_files():
     assert sorted(root - ROOT_FILES) == []
 
 
+def test_progress_md_lives_only_in_harness_modules():
+    # A progress.md outside harness.yaml modules never reaches STATUS.md (2026-10-27 survey §1-5).
+    modules = {m["path"] for m in yaml.safe_load(
+        (ROOT / "tools" / "harness" / "harness.yaml").read_text(encoding="utf-8"))["modules"]}
+    stray = [path for path in _tracked()
+             if PurePosixPath(path).name == "progress.md" and str(PurePosixPath(path).parent) not in modules]
+    assert stray == []
+
+
+def test_every_nested_agents_md_names_its_parent():
+    # Header forms vary (`<!-- Parent: -->`, `**Parent context:**`, `Parent:`); any of them in the first lines.
+    missing = [path for path in _tracked() if path.endswith("/AGENTS.md")
+               and "Parent" not in "".join((ROOT / path).read_text(encoding="utf-8").splitlines(True)[:6])]
+    assert missing == []
+
+
 def test_dated_evidence_does_not_live_inside_modules():
     # A result template is not evidence (D-226 rule 4); only dated entries move.
     dated = re.compile(r"/docs/validation/.*\d{4}-\d{2}-\d{2}")
