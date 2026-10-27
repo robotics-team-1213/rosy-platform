@@ -111,6 +111,22 @@ def all_browsers(land, wt, python):
         raise land.Stop(f"explicit FULL browser plan unavailable: {exc}") from exc
 
 
+def configure(land, args):
+    """Initialize CLI policy before delegation to main's landing gateway."""
+    land.EXTRA.clear()
+    land.land_mainred.CARRIED.clear()
+    land.land_mainred.PASSES.clear()
+    if args.tests not in ("auto", "none", "full") and land.os.environ.get(land.FIXTURE_ENV) != "1":
+        land.EXTRA.append(land.shlex.split(args.tests))
+        args.tests = "auto"
+    if args.tests == "none" and not args.skip_reason.strip() and land.os.environ.get(land.FIXTURE_ENV) != "1":
+        print("[land] STOP: --tests none lands with no test, guard or pretest; only on the user's explicit words,"
+              ' as --skip-reason "<their words>" (docs/solutions first-field-result-...-2026-10-10.md 4)',
+              file=land.sys.stderr)
+        return False
+    return True
+
+
 def begin(land, args):
     if args.tests == "full":
         args._full_witness = None  # A previous process's tier cannot prove its guards were clean.

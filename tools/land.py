@@ -53,6 +53,7 @@ import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
 import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did)
 import land_browser  # noqa: E402  (the browser tier in file-level chunks)
 import land_selection  # noqa: E402  (selection with this caller's Stop and helper seams)
+import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
                         generate_records, resolver)
@@ -192,7 +193,8 @@ def select(wt: Path, base: str, python: str, head: str | None = None,
         invocations, note = land_selection.select(sys.modules[__name__], wt, base, python, head, landed, full=True)
     else:
         invocations, note = land_selection.select(sys.modules[__name__], wt, base, python, head, landed)
-    return invocations + [inv for inv in ([] if landed else EXTRA) if inv not in invocations], note
+    more = [] if landed else EXTRA + land_mainred.extra(wt)  # carried ids run until a pass covers them
+    return invocations + [inv for inv in more if inv not in invocations], note
 
 
 def browser_tier(wt: Path, base: str, head: str | None = None) -> list[list[str]]:
@@ -266,9 +268,13 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
         logs = [logdir / f"run-{round_no}-{n}.txt" for n, _ in part]
         began, seen = time.monotonic(), {}
 
+        def judge(inv, log, tag):  # a NEW that main-red carry-over takes (land_mainred) neither stops nor is kept
+            v = land_checks.verdict(wt, inv, Path(log), logdir, tag, python, remote_pytest.run, head)
+            taken = land_checks.carry(wt, Path(log), head, python, inv) if v[0] and not v[1] else ([], "")
+            return (v[0], taken[0], f"main-red carried: {taken[1]}") if taken[0] else v
+
         def on_done(inv, log):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
-            seen[str(log)] = v = land_checks.verdict(wt, inv, Path(log), logdir, f"{round_no}-{Path(log).stem[4:]}",
-                                                     python, remote_pytest.run, head)
+            seen[str(log)] = v = judge(inv, log, f"{round_no}-{Path(log).stem[4:]}")
             return bool(v[0] and not v[1]) or (isinstance(round_no, int) and time.monotonic() - began > TURN_CAP_S)
         codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}", on_done=on_done)
         if out(wt, "rev-parse", "HEAD") != head:
@@ -290,8 +296,7 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
                 land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs)
                 continue
-            failed, flaky, why = seen.get(str(log)) or land_checks.verdict(
-                wt, inv, log, logdir, f"{round_no}-{n}", python, remote_pytest.run, head)
+            failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
             if out(wt, "rev-parse", "HEAD") != head:
                 raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
             if failed and not flaky:
@@ -300,10 +305,15 @@ def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_
                 land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs)
                 continue
             land_cache.failed(wt, inv, False)
-            land_events.emit("tests", round=round_no, argv=inv, verdict="flaky" if flaky else "pass", seconds=secs)
+            carried = why.startswith("main-red")
+            land_events.emit("tests", round=round_no, argv=inv, seconds=secs,
+                             verdict="carried" if carried else "flaky" if flaky else "pass")
             if not failed:
                 keep(inv, log)
-            done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
+                land_mainred.passed(inv)  # this round passed it: an earlier round's carry of it is void
+                land_mainred.close(wt, log.read_text(encoding="utf-8", errors="replace"), head)
+            done.append(f"pytest {' '.join(inv)} ok ({log.name})"
+                        + (f", {why}" if carried else f", LOAD-FLAKY {flaky}" if flaky else ""))
         if cancelled and not stops:
             raise Overtime(f"{len(cancelled)} invocation(s) past the turn's {TURN_CAP_S // 60} min: tested outside the lock")
         return stops + ([f"{len(cancelled)} invocation(s) not run: cancelled after the failure above"] if cancelled else [])
@@ -474,12 +484,13 @@ def land(args) -> int:
         if out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
         # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
-        reusable = reusable and land_selection.eligible(sys.modules[__name__], guarded + tested)
+        reusable = reusable and not land_mainred.CARRIED and land_selection.eligible(sys.modules[__name__], guarded + tested)
         land_selection.require_eligible(sys.modules[__name__], args, reusable)
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
-            land_full.save(wt, branch, candidate, main_sha, "full" if land_selection.eligible(sys.modules[__name__], guarded + tested) else None, invocations)
+            tier = "carried" if land_mainred.CARRIED else "full" if land_selection.eligible(sys.modules[__name__], guarded + tested) else None
+            land_full.save(wt, branch, candidate, main_sha, tier, invocations)
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha
@@ -496,6 +507,8 @@ def land(args) -> int:
         if ff.returncode == 0:
             land_full.forget(wt, branch)
             landed = out(main_co, "rev-parse", "HEAD")
+            if carried := land_mainred.landed(wt, landed, branch):  # closes too; never before the ff
+                summary.append(f"main-red carried {carried}: no land record (pre-push, publish_main see none)")
             if reusable and landed == candidate:
                 record = land_record.write(wt, candidate, main_sha, invocations,
                                            [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))], prepared=prepared,
@@ -531,14 +544,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--queue-timeout", type=float, default=0, help="minutes to wait in the queue (0: no limit)")
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
-    EXTRA.clear()
-    if args.tests not in ("auto", "none", "full") and os.environ.get(FIXTURE_ENV) != "1":
-        EXTRA.append(shlex.split(args.tests))
-        args.tests = "auto"
-    if args.tests == "none" and not args.skip_reason.strip() and os.environ.get(FIXTURE_ENV) != "1":
-        print("[land] STOP: --tests none lands with no test, guard or pretest; only on the user's explicit words,"
-              ' as --skip-reason "<their words>" (docs/solutions first-field-result-...-2026-10-10.md 4)',
-              file=sys.stderr)
+    if not land_selection.configure(sys.modules[__name__], args):
         return 2
     try:
         wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))

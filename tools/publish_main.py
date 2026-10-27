@@ -366,11 +366,14 @@ def main(argv: list[str] | None = None, now: datetime | None = None) -> int:
     parser.add_argument("--min-hours", type=float, default=6.0)
     parser.add_argument("--force-blocked", metavar="REASON", help="publish now: a teammate PR waits on it")
     parser.add_argument("--merge-when-green", metavar="PR")
+    parser.add_argument("--secret-scan", metavar="SHA", help="only the per-commit secret scan of origin/main..SHA")
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     now = now or datetime.now(timezone.utc)
     try:
-        if args.merge_when_green:
+        if args.secret_scan:
+            message = secret_gate(args.repo, git(args.repo, "rev-parse", f"{args.secret_scan}^{{commit}}").stdout.strip())
+        elif args.merge_when_green:
             message = merge_when_green(args.repo, args.merge_when_green, args.apply, now)
         else:
             message = publish(args.repo, args, now)
