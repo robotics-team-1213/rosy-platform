@@ -176,6 +176,8 @@ mkdir -p "$OVERLAY/opt/rosy" "$OVERLAY/opt/rosy/deploy" \
 "$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$OVERLAY/opt/rosy/native-runtime"
 cp -a "$FIRST_BOOT_SOURCE" "$OVERLAY/opt/rosy/first-boot"
 cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
+# A/B launchers and their libraries must survive interrupted application sync.
+python3 "$SCRIPT_DIR/stage-os-firstboot.py" --prefix "$OVERLAY/opt/rosy"
 # The native units address the motor bus as /dev/rosy-motor; the image must
 # carry the rule so a freshly flashed device has the alias on first boot.
 cp "$UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
@@ -191,6 +193,8 @@ cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.service" "$OVERLAY/etc/systemd/syst
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.timer" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-os-storage.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-os-tailnet.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-host-agent.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-pairing.service" "$OVERLAY/etc/systemd/system/"

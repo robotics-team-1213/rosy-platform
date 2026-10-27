@@ -19,9 +19,47 @@ def test_package_names(tmp_path):
     names = verify_mounted_image.package_names(f)
     assert names == {"pkg_a", "pkg_b"}
 
+
+def test_inspect_rejects_a_missing_storage_requirement_for_ssh_socket(tmp_path):
+    findings = verify_mounted_image.inspect(tmp_path, "2026.10.26-001")
+    assert any("ssh.socket" in item and "storage" in item for item in findings)
+
+
+def test_inspect_rejects_missing_tailnet_admission_for_the_daemon(tmp_path):
+    findings = verify_mounted_image.inspect(tmp_path, "2026.10.26-001")
+    assert any("tailscaled.service" in item and "tailnet" in item for item in findings)
+
+
+def test_factory_image_cannot_ship_tailnet_machine_credentials(tmp_path):
+    machine = tmp_path / "var/lib/tailscale"
+    machine.mkdir(parents=True, mode=0o700)
+    (machine / "tailscaled.state").write_bytes(b"synthetic machine credential")
+    findings = verify_mounted_image.inspect(tmp_path, "2026.10.26-001")
+    assert any("device-specific tailnet" in item for item in findings)
+
+
+@pytest.mark.parametrize("state", ["missing", "symlink", "writable", "populated"])
+def test_factory_image_rejects_missing_unsafe_or_populated_tls(tmp_path, state):
+    target = tmp_path / "etc/rosy/tls"
+    target.parent.mkdir(parents=True)
+    if state == "symlink":
+        outside = tmp_path / "external-tls"
+        outside.mkdir(mode=0o750)
+        target.symlink_to(outside, target_is_directory=True)
+    elif state != "missing":
+        target.mkdir(mode=0o750)
+        if state == "writable":
+            target.chmod(0o777)
+        else:
+            (target / "ca.key").write_bytes(b"synthetic key fixture")
+    findings = verify_mounted_image.inspect(tmp_path, "2026.10.26-001")
+    assert any("tls" in item.lower() for item in findings), state
+
 def test_inspect_passes_with_valid_image(tmp_path):
     root = tmp_path / "root"
     root.mkdir()
+    (root / "etc/rosy/tls").mkdir(parents=True, mode=0o750)
+    (root / "var/lib/tailscale").mkdir(parents=True, mode=0o700)
     release_id = "2026.01.01-001"
     release_dir = root / "opt/rosy/releases" / release_id
     release_dir.mkdir(parents=True)
@@ -50,6 +88,22 @@ def test_inspect_passes_with_valid_image(tmp_path):
     # Required units
     for unit in verify_mounted_image.REQUIRED_UNITS:
         path = root / "etc/systemd/system" / unit
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("mock", encoding="utf-8")
+    for name in verify_mounted_image.STORAGE_HELPERS:
+        path = root / "opt/rosy/native-runtime" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("mock", encoding="utf-8")
+    for consumer in verify_mounted_image.STORAGE_CONSUMERS:
+        path = root / "etc/systemd/system" / (consumer + ".requires") / "rosy-os-storage.service"
+        path.parent.mkdir(parents=True)
+        path.symlink_to("../rosy-os-storage.service")
+    for consumer in ("tailscaled.service", "rosy-tailscale-join.service"):
+        path = root / "etc/systemd/system" / (consumer + ".requires") / "rosy-os-tailnet.service"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.symlink_to("../rosy-os-tailnet.service")
+    for name in verify_mounted_image.BOOTSTRAP_HELPERS:
+        path = root / "opt/rosy/os-bootstrap" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("mock", encoding="utf-8")
         
@@ -105,6 +159,14 @@ def test_inspect_passes_with_valid_image(tmp_path):
         for name in verify_mounted_image.DISPLAY_APT_PACKAGES), encoding="utf-8")
     _add_lamp_and_camera(root)
     _add_login_probe_and_defaults(root, release_dir)
+
+    lock = verify_mounted_image.yaml.safe_load(
+        Path(verify_mounted_image.__file__).with_name("inputs.lock.yaml").read_text(encoding="utf-8"))
+    with (root / "var/lib/dpkg/status").open("a", encoding="utf-8") as status:
+        status.write("Package: rauc\nStatus: install ok installed\n"
+                     f"Version: {lock['os_updates']['rauc_package_version']}\n\n")
+    (root / "usr/bin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/bin/rauc").write_text("mock", encoding="utf-8")
 
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings

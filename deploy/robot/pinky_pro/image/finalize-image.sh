@@ -4,10 +4,13 @@ set -euo pipefail
 
 RAW=""
 OUTPUT=""
+LAYOUT_FILE=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --raw-image) RAW="${2:-}"; shift 2 ;;
         --output) OUTPUT="${2:-}"; shift 2 ;;
+        --layout-file) LAYOUT_FILE="${2:-}"; shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -18,6 +21,15 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 for command in losetup lsblk blkid partprobe udevadm e2fsck bmaptool xz sync; do
     command -v "$command" >/dev/null 2>&1 || fail "required command is missing: $command"
 done
+
+FILESYSTEMS="2 ext"
+if [[ -n "$LAYOUT_FILE" ]]; then
+    for command in python3 fsck.vfat; do
+        command -v "$command" >/dev/null 2>&1 || fail "required command is missing: $command"
+    done
+    FILESYSTEMS="$(python3 "$SCRIPT_DIR/ab_image_layout.py" filesystems \
+        --raw-image "$RAW" --layout "$LAYOUT_FILE")" || fail "actual GPT differs from the assembly snapshot"
+fi
 
 LOOP=""
 cleanup() {
@@ -32,13 +44,22 @@ LOOP="$(losetup --find --show --partscan --read-only "$RAW")"
 partprobe "$LOOP"
 udevadm settle
 PARTITIONS="$(lsblk -nrpo NAME,PARTN "$LOOP")"
-ROOT_DEVICE="$(printf '%s\n' "$PARTITIONS" | awk '$2 == "2" {print $1}')"
-[[ -n "$ROOT_DEVICE" && "$(printf '%s\n' "$ROOT_DEVICE" | wc -l)" -eq 1 ]] \
-    || fail "expected exactly one root partition 2 on $LOOP"
-ROOT_FSTYPE="$(blkid -p -s TYPE -o value -- "$ROOT_DEVICE" || true)"
-[[ "${ROOT_FSTYPE,,}" =~ ^ext[234]$ ]] \
-    || fail "expected an ext filesystem on $ROOT_DEVICE; found ${ROOT_FSTYPE:-unknown}"
-e2fsck -fn "$ROOT_DEVICE"
+while read -r number filesystem; do
+    DEVICE="$(printf '%s\n' "$PARTITIONS" | awk -v wanted="$number" '$2 == wanted {print $1}')"
+    [[ -n "$DEVICE" && "$(printf '%s\n' "$DEVICE" | wc -l)" -eq 1 ]] \
+        || fail "expected exactly one partition $number on $LOOP"
+    ACTUAL="$(blkid -p -s TYPE -o value -- "$DEVICE" || true)"
+    if [[ "$filesystem" == ext ]]; then
+        [[ "${ACTUAL,,}" =~ ^ext[234]$ ]] || fail "expected an ext filesystem on $DEVICE"
+    else
+        [[ "${ACTUAL,,}" == "$filesystem" ]] || fail "filesystem differs on $DEVICE"
+    fi
+    if [[ "$filesystem" == vfat ]]; then
+        fsck.vfat -n "$DEVICE"
+    else
+        e2fsck -fn "$DEVICE"
+    fi
+done <<< "$FILESYSTEMS"
 losetup --detach "$LOOP"
 LOOP=""
 
