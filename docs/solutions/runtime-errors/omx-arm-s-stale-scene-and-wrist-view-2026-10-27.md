@@ -1,6 +1,7 @@
 ---
 title: Arm S picks failed on a scene that had changed, a flipped wrist view and a tray rim (2026-10-27)
 date: 2026-10-27
+updated: 2026-10-28
 category: runtime-errors
 module: deploy/robot/omx (cell_scene.py, cell_observe.py, cell_calibration.py, touch_survey.py)
 problem_type: runtime_error
@@ -47,3 +48,36 @@ The profile's wrist reference (cx 347, cy 204) no longer matches the camera. Clo
 - Choose first picks away from fixtures; the tray rim is touched-in, but open jaws are wider than the box.
 - Hub failure recovery is in `omx-guard-stale-health-sample-drops-held-arm-2026-10-25.md`.
 - Evidence: Fleet PC session records and wrist/top frames of 2026-10-27; plan `Rosy/docs/superpowers/plans/2026-10-27-arm-s-coordinates-first.md`.
+
+## Addendum 2026-10-28: top-camera pixel, refusal reading, misses, moved camera, tray reach
+
+No grasp had succeeded when this was written. Status per item is stated honestly.
+
+### 6. The visible "gripper" is the wrist servo, not the jaws (worked around; not coded)
+
+From the top camera the thing that looks like the gripper is the wrist servo (white label), about 10 cm above the jaw tips. The camera sees it obliquely, so its pixel is 2-3 cm from the jaws' floor position except near the image nadir. Targets estimated from the wrist pixel at hover height put touches 1.5-3 cm off, repeatedly.
+
+Fix that worked: press the closed jaws onto known board points near the image centre (a touch, so the gripper is at board height) and read the gripper pixel there; fit pixel to arm x, y from 4 such points (residual about 4 px). Status: resolved by procedure in the session, not a repo helper yet. Caveat: an automatic detector that took the farthest changed pixel from the base picked cables, not the gripper. The pixel must be the gripper, checked visually or by a proper detector; do not trust the heuristic.
+
+### 7. OUTSIDE_WORKSPACE was misread (resolved: reading rule)
+
+A planner refusal OUTSIDE_WORKSPACE was taken as "behind the base is unreachable". The real cause was a touch bottom of z 0.0, below workspace_min z 0.005. The workspace is x, y in [-0.28, 0.28]; behind-base targets plan (pan up to about 149 degrees, joint1 limit 2.6 rad). Rule: read the coordinates in the refusal, the z first, before concluding anything about reach.
+
+### 8. A miss is not free (unresolved: no code guard)
+
+Every touch that landed beside the light cube pushed it. It moved three times and finally left the board edge. After each miss, re-check the top camera before the next touch. Nothing enforces this; it is session discipline only. A guard (re-observe after a touch whose contact was not on the target) is a TODO.
+
+### 9. The camera was moved without any signal (unresolved)
+
+The top camera was physically moved during the USB hub reconnect. Every earlier map (Pinky local, belt, anchored scale) became invalid and nothing flagged it. This is the gap in section 1: `cell_scene.scene_check` compares `camera_id`, which does not change when the camera is bumped. TODO: make the camera identity include its pose (for example, reference marker or fixed board points re-seen and compared to the map within a tolerance) and refuse maps when it differs. Until then, re-fit the pixel map (section 6) after any hub reconnect or visit to the cell.
+
+### 10. Pinky-tray container is out of top-down reach (unresolved)
+
+Straight-down reach at the tray is limited by the wrist: the maximum top-down z is 0.114-0.118 at r 0.227 and 0.094-0.098 at r 0.242. A container centred near r 0.25 with its top at about 0.11 cannot be reached top-down. It needs repositioning closer to the base or a tilted grasp. Neither is done yet.
+
+### Next time (addendum)
+
+- Calibrate pixel to arm with closed-jaw touches near the image centre, and verify the pixel is the gripper by eye.
+- On a planner refusal, quote its coordinates (z first) before diagnosing reach.
+- After a miss or any hub reconnect, observe again before the next touch.
+- Check top-down reach (z versus r) before placing a container.
