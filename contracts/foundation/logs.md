@@ -1057,3 +1057,9 @@
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-28 · b3641b2165 · ROS 없는 로컬 최신 관측 스냅샷
+
+- 변경: stdlib `observation_snapshot`은 같은 사용자·호스트의 bounded atomic IPC와 원본 source/monotonic 시각을 보존한다. 느린 독자를 위한 큐나 재조회에 의한 freshness 갱신은 없다. 외부 API wire shape는 바꾸지 않는다. 사용자는 OMX 운영 producer/viewer/bridge이며 D-901이 경계를 정한다.
+- 검증: tests-only7368fd6fed의 원격 RED 뒤 교체·오염·크기·시간·소스 분리·ROS 없는 세 팔 viewer 회귀 시험을 추가했다. 집중 원격 결과는 실행 기록에 남긴다.
+- gate 변화: 없음. 라이브러리 통과로 장치·녹화·노출 동기화 수용을 주장하지 않는다. CE: 해당 없음 — 구현과 시험에 판단이 직접 남는다.

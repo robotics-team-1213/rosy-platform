@@ -1331,3 +1331,9 @@ HF user/org별 용량 예약과 작업의 연결·고정 revision·SHA를 보존
 **Status:** Accepted (2026-10-24)
 
 Fleet stores editable device names, models, declared arm counts and hardware identifiers in its existing database. Profiles confer no membership, connection attestation or motion authority. Details: [D-860](../adr/D-860-descriptive-device-profiles.md).
+
+## D-901 Native workcell observation communication isolation
+
+**Status:** Accepted (2026-10-28)
+
+OMX 운영 카메라·수동 관절 관측·미리보기·Fleet/Vision 브리지를 ROS 없는 로컬 최신 스냅샷과 기존 HTTPS/WSS로 연결한다. localhost DDS 영상도 사용하지 않는다. 기존 장치·명령 소유권과 현장 전환 수용은 유지한다. 전문은 [D-901](../adr/D-901-native-workcell-observation-isolation.md).

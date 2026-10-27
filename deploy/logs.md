@@ -3396,6 +3396,7 @@
 - 증거: 운용자 문구 규칙(CONCEPTS.md)에 맞춘 문자열 변경이며 계약·시험을 바꾸지 않는다. 원격 시험으로 회귀를 확인한다.
 - gate 변화: 없음. CE: 해당 없음.
 
+
 ## 2026-10-25 · uncommitted · SD 이미지의 서명된 소스 검증과 버전 고정
 
 - 변경: 기존 서명 이미지 검증기가 source-revision.txt와 build-provenance.json의 서명된 source/release 일치를 검사한다. 선택한 빌드 SHA를 기대값으로 고정하면 다른 이미지는 카드 검색 전에 거부하고, 검증 출처를 카드·배치 증거에 남긴다. 이미 전체 검증한 이미지의 checksum을 재사용해 같은 호출에서 대용량 파일을 두 번 읽지 않는다.
@@ -3741,3 +3742,10 @@
 - 변경: deploy/site/README.md 운영 절에 루프 생존(`/readyz`, 503과 최소 본문)과 프로세스 생존(`/healthz`)의 분리를 적었다. compose healthcheck·mdns 광고 검증·autoupdate 게이트는 `/healthz`를 그대로 쓰며 `/readyz`에 연결하지 않는다고 못박았다.
 - 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
 - gate 변화: 없음. CE: 해당 없음.
+
+## 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
+
+- 변경: D-901에 따라 camera_source·hardware_observer·commissioning_view·workcell_observation_bridge의 실제 ROS 발행·구독을 같은 사용자 최신 스냅샷으로 대체했다. unit도 ROS setup 없이 시작한다. 원본 화질 측정·JPEG 한 번 인코딩·host source/monotonic 시각·기존 토큰/TLS ingress를 유지한다. 설정의 topic 문자열은 로컬 키이며 DDS fallback은 없다.
+- 검증: tests-only7368fd6fed에서 helper 부재로 원격 RED를 확인했다. 최초 원격 집중 실행의 새 통합 fixture 오류 3건을 고치고 b3641b2165 재시험을 요청했다. 최종 증거와 현장 수용은 완료 기록에서 구분한다.
+- gate 변화: 없음. 실행 중 장치 소유자·녹화·serial bus는 건드리지 않았다. 이전 DDS collection/simulator 입력은 이 native 카메라와 호환되지 않으며, idle 상태의 동일 버전 unit/env 전환과 소스별 실제 수용이 필요하다.
+- CE: 해당 없음 — 전송 경계와 시간·소유권 판단은 D-901 및 회귀 시험으로 설명할 수 있다. 실물에서 새 원인·복구 교훈을 검증한 변경이 아니다.
