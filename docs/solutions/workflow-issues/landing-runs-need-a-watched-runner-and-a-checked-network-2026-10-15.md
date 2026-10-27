@@ -56,7 +56,8 @@ There was also a real time-limit defect: `on_done` checked the turn's 600-second
 invocation completed. If every invocation remained unfinished, nothing set the existing cancellation
 event. A failed-first batch could also start another budget for the remaining work.
 
-The pending fix in `land_checks.run_tests` creates one deadline for the actual turn and arms a timer
+At the focused-verification checkpoint, before local landing, the pending fix in `land_checks.run_tests`
+creates one deadline for the actual turn and arms a timer
 independent of invocation completion. Single- and multiple-host workers share its stop event.
 Isolated retries and main-comparison diagnostics receive the same event; expiry propagates as cancellation
 instead of launching another diagnostic or reporting a broken callback. Visible running jobs use the existing
