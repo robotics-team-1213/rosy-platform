@@ -12202,3 +12202,10 @@ osy-d395-s1d\`.
 - 증거: 공식 원격 두 파일 183 PASS/0 SKIP/0 FAIL, 49.39초, runner·외부 명령·known exit0·NEW0. 실패 회차의 완료 body는 두 호출뿐이며 Core10 partial을 충전 통과로 세지 않았다.
 - gate 변화: 전체 FULL·착지·게시·배포는 별도 대기다. source guard 회복을 장치·UTC·충전 원인 해결로 확대하지 않는다.
 - CE: 기존 Git ID 교훈을 갱신했다. 게시 commit/path/rule과 전체 파일 path/line/token 판정은 독립이며, 새 문서의 표기 예방책이 기존 고정 기록의 재작성 허가는 아님을 정본 지침과 연결했다. 새 용어·AGENT 변경은 없다.
+
+## 2026-10-27 · 877cf55c01 · Tool1 actual main737 통합과 literal full 보존
+
+- 변경: 정상 병합에서 incoming 병렬 준비·크기 사전 검사·nonSafety main-delta 최적화·custom 추가 시험·명시적 skip 정책을 보존했다. fixture 예외를 해제한 실제 CLI 회귀를 먼저 커밋하고 literal `full`을 EXTRA로 바꾸지 않는 한 줄 수정만 후속 커밋했다. Root가 두 staged tree를 실제 검토했다.
+- 증거: checkpoint `d2217085fe`의 단일 CLI node가 실제 canonical 목록 누락 AssertionError/NEW1을 보였다. source `877cf55c01`에서 CLI 3 PASS, 관련 도구 11파일 336 PASS, selector/architecture 5파일 299 PASS, 모두 SKIP0·official/outer/known exit0·NEW0. CLI는 도구 묶음과 겹치며 합산하지 않는다. quiet 진행 행만 세었고 출력되지 않은 시간 요약은 인용하지 않는다. 별도 raw와 근거는 [후속 검증 기록](validation/land-explicit-full-2026-10-27d/result.md)에 연결했다.
+- gate 변화: 새 집중 검증이며 실제 전체 FULL·착지·게시·장치 수용은 아니다. 기존 frozen 27b/27c, incoming charging 분리의 body·timeout·assertion 및 이전 실패 근거는 보존했다. source까지 D766 20커밋이 통과했고 최종 docs HEAD 검사는 별도 handoff로 확인한다.
+- CE: 기존 교훈을 적용했다. 정규화 반례와 최소 수정은 코드·실제 RED/GREEN이 설명하므로 통합만을 위한 새 교훈은 만들지 않았다.
