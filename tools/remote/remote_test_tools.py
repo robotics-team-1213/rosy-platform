@@ -158,7 +158,8 @@ extra = (line for filename in sys.argv[2:-1] for line in Path(filename).read_tex
          if normalize(line.split("==", 1)[0]) not in pinned)
 Path(sys.argv[-1]).write_text("".join(extra))
 PY
-$P install -c "$N/constraints.txt" -r "$N/site-extra.txt" pytest setuptools wheel flake8 httpx pyyaml \
+# pytest pinned: 9.2.0 arrived with a venv rebuild on 2026-10-28 and broke test_omx_commissioning_stop (fake stat).
+$P install -c "$N/constraints.txt" -r "$N/site-extra.txt" pytest==9.1.1 setuptools wheel flake8 httpx pyyaml \
   jsonschema ext4 numpy pillow playwright pytest-xdist==3.8.0
 $P install --require-hashes --no-deps --only-binary=:all: \
   --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
