@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import importlib.util
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -112,3 +113,20 @@ def test_rebind_retries_after_new_provisioning_waits_for_network(tmp_path):
     result = first_boot.FirstBootProvisioner(root=root, network_activate=lambda _: True).apply(
         bundle=fresh, hardware_serial="10000000deadbeef")
     assert result["state"] == "PROVISIONED"
+
+
+@pytest.mark.parametrize("state,code", [("active", 0), ("activating", 3), ("deactivating", 3), ("", 1)])
+def test_rebind_requires_tailnet_daemon_to_be_stopped(monkeypatch, state, code):
+    module = _rebind()
+    monkeypatch.setattr(module.sys, "argv", ["rebind", "--bundle", "/unused-fixture.json"])
+    checked = []
+
+    def query(argv, **_kwargs):
+        assert argv[:2] == ["systemctl", "is-active"]
+        checked.append(argv[-1])
+        return SimpleNamespace(stdout=state if argv[-1] == "tailscaled.service" else "inactive",
+                               returncode=code if argv[-1] == "tailscaled.service" else 3)
+
+    monkeypatch.setattr(module.subprocess, "run", query)
+    assert module.main() == 1
+    assert "tailscaled.service" in checked

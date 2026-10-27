@@ -1,0 +1,10 @@
+#!/usr/bin/python3 -I
+"""Image-owned RAUC callback entry point; the runtime config names its frozen copy."""
+from pathlib import Path
+import sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from os_bootloader import main
+
+raise SystemExit(main())

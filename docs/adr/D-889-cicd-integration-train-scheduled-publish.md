@@ -167,3 +167,21 @@
 | 통합 열차·묶음 | 1~3항. 새 실패 비율 p ≤ 0.1을 확인한 뒤에 켠다 | 착지 도구 담당 |
 | 워크트리 정리의 진행 중 보호 | `worktrees.py prune --apply`가 push 중이던 detached 워크트리(`.worktrees/pub-pin`, 깨끗하고 브랜치 병합됨)를 지워 #210 pre-push가 FileNotFoundError로 실패했다(10-26 밤). prune은 `git worktree lock`된 것, 최근 2시간 안에 바뀐 detached 워크트리, 프로세스가 cwd로 쓰는 워크트리를 지우지 않는다. 그 전까지 push용 워크트리는 `git worktree lock`으로 잠근다 | 워크트리 도구 담당(D-886) |
 | 시험 PC 배치 | 격리 job(6코어)과 같은 배치의 guard도 6코어 호스트를 기다린다. 측정해 필요하면 배치를 나눈다 | 원격 시험 담당 |
+
+### 추가 2 (2026-10-27): main 빨강 이월 (사용자 승인 2026-10-27)
+
+**상태:** 사용자 승인(robot-45 경유, robot-56 조건 7개). 6항 "야간 FULL이 빨강이면 … 새 착지는 빨간 id를 직접 다시 돌려 녹색이어야 허용한다"를 아래 조건에서만 뒤집는다. 조건 하나라도 어기면 예전처럼 멈춘다. 끄기: `ROSY_LAND_MAINRED_CARRY=0`.
+
+**근거:** 10-27 00:00~05:40 착지 9, 멈춤 26. main 확인 10번 가운데 7번은 main이 이미 빨강이었고(`test_integrated_control_backend_browser` 02:48~03:29, `test_console_queues_contract` 04:18 무렵), 그동안의 착지는 모두 30~75분(p50 35분) 준비를 버렸다. 두 빨강은 손으로 고른 `--tests`로 준비·관문·선택 없이 착지한 `3125704e24`에서 왔고, 그 구멍은 `--tests`가 선택에 더해지고 `--tests none`이 `--skip-reason`을 요구하도록 막았다.
+
+**조건 (`tools/land_mainred.py`):**
+
+1. 같은 실패: 후보가 병합한 main(`merge-base HEAD main`)에서 D-790 main 실행이 그 id를 같은 지문(예외 종류, 위치, 첫 `E` 줄)으로 실패했다. 기록이 있으면 다시 돌리지 않는다. 기록·지문이 없으면 멈춘다.
+2. 이 브랜치의 선택(병합한 main..후보)이 그 시험 파일에 닿지 않고 FULL도 아니다(게이트 도구·conftest·fixture는 FULL이라 멈춘다).
+3. 수집·설정 오류는 이월하지 않는다.
+4. 안전 id(`is_safety`)와 경로에 `omx`가 든 시험(팔 담당 시험이 여러 폴더에 있다)은 이월하지 않는다.
+5. 빨강이 6시간 이하, 이월 5번 미만, 담당자(`python tools/land_mainred.py own <id> <owner>`)가 있다.
+6. 이월한 착지는 land record를 쓰지 않고 `land_full`에는 `carried`로 남는다. pre-push·publish_main·재시작한 실행은 그것을 녹색으로 세지 않는다. 이월은 그 호출을 뒤 라운드가 깨끗이 통과하면 풀리고, 이월·닫음은 fast-forward 뒤에 main에 들어간 커밋 기준으로만 기록한다(멈춘 착지는 둘 다 남기지 않는다). 이월된 id는 모든 선택에 `-rA`로 더해지고, `PASSED` 줄이 있는 실행이 그 착지를 이력에 가진 후보에서 통과해야 그 착지를 덮는다(수정만의 실행, skip·deselect는 덮지 않는다). 이월된 id를 `known_failures`에 넣지 않으므로 FULL은 그것을 돌리고, 실패하면 빨강이다.
+7. 기록: `<git-common-dir>/rosy-main-red.jsonl`의 `red`·`own`·`carry`·`close` 줄(id, main, 지문, 허용 이유). `tools/doctor.py`가 열린 기록을 WARN으로, 착지 요약이 이월한 id를 보인다.
+
+**함께 들어간 것:** 05:15~06:10에는 사전 시험을 시작하지 않는다(7항: 05:30 정리, 06:00 재부팅에 10-27 06:00 사전 시험이 exit 143으로 끊겼다).

@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내
+- 2026-10-27 · 50438808a9 · native release의 격리 실행 import와 시험 fixture 복원
+- 2026-10-27 · cec31dcf9d · ARM SYSTEM 양방향 비활성 OS 설치와 독립 복구 검증
 - 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
-- 2026-10-26 · uncommitted · clean-storage helper가 원격 `cat` 대신 LoadState로 유닛 확인
-- 2026-10-26 · d4a0e5b968 · D-887 source migration verified
-- 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
-- 2026-10-26 · uncommitted · guard 자동 `clean-storage` 요청, 관제 PC 자기 자원, `units-user` desired state (D-885)
+- 2026-10-26 · 0a88b44f94 · disposable SYSTEM guest와 실제 offline root preparation

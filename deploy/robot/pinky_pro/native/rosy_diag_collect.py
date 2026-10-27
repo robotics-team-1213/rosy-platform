@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tarfile
 from typing import Callable
+from itertools import islice
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -59,6 +60,32 @@ FILE_GLOBS = (
     ("provisioning", "var/lib/rosy/provisioning", "*.json"),
     ("release", "var/lib/rosy/releases", "native-activation.json"),
 )
+
+
+def _ab_blackbox(root: Path) -> list | None:
+    from os_state_layout import _layout, _path, _read, mount_facts
+    admitted = _layout(root)
+    if admitted is None:
+        return None
+    mount_facts(root, admitted[0])
+    relative = "run/rosy-provision-boot/rosy-diag"
+    directory = _path(root, relative)
+    if not directory.is_dir():
+        return []
+    paths = list(islice(directory.iterdir(), 33))
+    if len(paths) > 32:
+        raise ValueError("too many persistent blackbox entries")
+    entries = []
+    for path in sorted(paths):
+        if not re.fullmatch(r"latest\.txt|boot-[0-9]{6,12}-[0-9a-f]{8}\.json", path.name):
+            continue
+        try:
+            # Only bounded blackbox files on the admitted mount bypass its blanket secret deny-list.
+            text = _read(_path(root, relative + "/" + path.name), 2 * 1024**2, root.stat().st_uid)
+        except (OSError, ValueError):
+            continue
+        entries.append((path.name, text.decode("utf-8", "replace"), "/" + relative + "/" + path.name))
+    return entries
 
 
 def run_command(argv: list[str]) -> tuple[int, str]:
@@ -171,7 +198,18 @@ def collect(root: Path, run: Runner, out_dir: Path) -> Path:
             entry["truncated"] = True
         entries.append(entry)
 
-    for prefix, directory, pattern in FILE_GLOBS:
+    globs = FILE_GLOBS
+    try:
+        blackbox = _ab_blackbox(root)
+    except (OSError, ValueError):
+        blackbox = []
+    if blackbox is not None:
+        globs = tuple(row for row in globs if row[0] != "blackbox")
+        if not blackbox:
+            missing.append("/run/rosy-provision-boot/rosy-diag (missing or not admitted)")
+        for name, text, source in blackbox:
+            add("blackbox/" + name, text, source)
+    for prefix, directory, pattern in globs:
         device_dir = "/" + directory
         if is_denied_path(device_dir):
             denied.append(device_dir)

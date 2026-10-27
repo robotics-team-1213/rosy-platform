@@ -176,6 +176,13 @@ class FleetTaskService:
                     reason=admission or "POLICY_NOT_ACCEPTED",
                 )
         attempt = self.scheduler.begin_dispatch(task["task_id"])
+        _LOG.info(
+            "fleet task dispatch claimed: task=%s robot=%s priority=%s queue_wait_s=%s "
+            "total_queue_wait_s=%s attempt_seq=%s",
+            task["task_id"], task["robot_id"], task.get("priority_class"),
+            task.get("queue_wait_seconds"), task.get("total_queue_wait_seconds"),
+            attempt.get("attempt_seq"),
+        )
 
         try:
             if not self.store.dispatch_generation_is_current(attempt["dispatch_generation"]):

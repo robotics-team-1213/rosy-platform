@@ -28,8 +28,10 @@ def pipeline_sources(monkeypatch):
         monkeypatch.syspath_prepend(str(root / relative))
 
 
-@pytest.mark.parametrize('full_return', [False, True, 'continuous', 'relocation_abort', 'composed', 'lifespan',
-                                      'motion_busy', 'shutdown_RETURNING', 'shutdown_CHARGING', 'shutdown_UNDOCKING'])
+# lifespan, shutdown_UNDOCKING and continuous (~100-140 s each) run from test_station_camera_pipeline_{lifespan,
+# continuous}.py: xdist --dist loadfile gives one file one worker, and this file alone was 511 of a 576 s run.
+@pytest.mark.parametrize('full_return', [False, True, 'relocation_abort', 'composed',
+                                      'motion_busy', 'shutdown_RETURNING', 'shutdown_CHARGING'])
 def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_stop(station_api, tmp_path,
                                                                                    pipeline_sources, full_return, monkeypatch):
     import cv2

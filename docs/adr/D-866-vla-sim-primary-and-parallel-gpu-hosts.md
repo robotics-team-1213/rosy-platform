@@ -81,3 +81,9 @@ Isaac 전환 조건은 다음과 같다.
 3. 일괄 작업 정의(입력 digest, 커밋, 환경 잠금, 시드)를 만든다. 실행은 기존 `tools/remote/remote_job.py`(분리 실행)와 `remote_omx_native.py`(커밋 고정 작업, D-786), Isaac은 `remote_isaac.py`를 재사용한다.
 4. Isaac OMX 백엔드를 만든다(모델 PC).
 5. 데이터 생산과 학습을 병렬로 진행한다(모델 PC Isaac, AI PC 학습).
+
+**보완 (2026-10-27): 시험 PC 환경과 AI PC 일괄 작업의 실행 방법.** 사용자 결정: AI PC도 학습에 쓰일 수 있으므로 환경이 지워져도 다시 만들 수 있고, 학습과 시뮬레이터가 한 GPU에서 겹치지 않게 한다.
+
+- **시뮬레이터 환경:** OMX vendor overlay, topic_based_ros2_control overlay, MuJoCo venv는 `~/rosy-test/overlays/`와 `~/rosy-test/venvs/sim-mujoco`에 둔다. `eval "$(tools/sim/provision_sim_host.sh)"`가 고정 리비전으로 없는 것만 만들고 경로를 내보낸다. 이 경로는 정리 대상이 아니다(`rosy-ops/docs/lab-host-storage.md` 5번). 2026-10-27 AI PC의 overlay가 손 정리로 지워졌을 때 저장소에 빌더가 없어 모델 PC 사본을 복사해야 했다.
+- **GPU 일괄 작업:** §4의 학습·시드 탐색은 `tools/remote/hold_gpu.sh <cores> <GB> <명령>`으로 시작한다. `~/rosy-jobs`의 `gpu` lock이 작업 프로세스와 함께 살아 있어, `host_probe`가 그 PC의 시뮬레이터 자리를 쓰는 중으로 세고 코어·메모리를 시험 예산에서 뺀다. 작업이 어떻게 끝나든 lock은 그 순간부터 세지 않는다.
+- **아직 없는 것:** SmolVLA 미세 조정의 GPU 메모리를 재지 않았다. AI PC에는 ollama 등이 약 10GB를 쓰므로(Context) 첫 학습 전에 `nvidia-smi`로 남은 VRAM과 학습 최대 사용량을 같은 기록에 남긴다. 체크포인트 중단·재개와 운영 추론 양보 장치(§4)는 이 보완으로 생기지 않는다.

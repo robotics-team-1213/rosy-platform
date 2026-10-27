@@ -145,6 +145,22 @@ def test_publish_only_clone_pushes_publish_branches_only(tmp_path, refs, config,
         assert "ROSY_PUSH_REASON" in pushed.stderr
 
 
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+@pytest.mark.parametrize("ref, scanned", [("publish/main-20261027", "1"), ("feat/x", "")])
+def test_only_a_publish_ref_runs_the_secret_scan_before_safety_review(ref, scanned):
+    """2026-10-27: a plain git push to publish/main-* skipped publish_main.py's per-commit secret scan."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    scan = text.index('tools/publish_main.py --secret-scan "$PUSH_SHA"')
+    assert scan < text.index("safety_review.py origin/main"), "scan before the slower range checks"
+    stdin_part = text.split("# Git exports repository-local", 1)[0].split("set -euo pipefail", 1)[1]
+    probe = stdin_part.replace('cd "$(git rev-parse --show-toplevel)"', "") + 'echo "$PUBLISH_REF"'
+    line = f"refs/heads/b {'1' * 40} refs/heads/{ref} {'0' * 40}\n"
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    pushed = subprocess.run([BASH, "-c", probe, "hook", "origin", "url"], input=line, capture_output=True,
+                            text=True, cwd=ROOT, env={**env, "ROSY_PUSH_REASON": "test"})
+    assert pushed.stdout.strip() == scanned, pushed
+
+
 @pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
 @pytest.mark.parametrize("same", [True, False])
 def test_a_stale_installed_copy_refuses_the_push(tmp_path, same):
