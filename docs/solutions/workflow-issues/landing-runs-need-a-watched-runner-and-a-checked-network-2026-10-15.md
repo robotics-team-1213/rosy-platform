@@ -58,16 +58,19 @@ event. A failed-first batch could also start another budget for the remaining wo
 
 The pending fix in `land_checks.run_tests` creates one deadline for the actual turn and arms a timer
 independent of invocation completion. Single- and multiple-host workers share its stop event.
-Visible running jobs use the existing cancellation path on their next poll, queued jobs do not start,
-and cancelled results never become passing cache entries. Preparation rounds remain uncapped. Existing
+Isolated retries and main-comparison diagnostics receive the same event; expiry propagates as cancellation
+instead of launching another diagnostic or reporting a broken callback. Visible running jobs use the existing
+cancellation path on their next poll, queued jobs do not start, and cancelled results never become passing
+cache entries. Preparation rounds remain uncapped. Existing
 SSH/contact-loss timeouts still apply; a disconnected job is not killed without observing it.
 
 Recovery: preserve source and evidence, update and restart the landing through `tools/land.py` after
 the fix is integrated. Already running Python processes do not reload changed modules automatically.
 Do not bypass verification or cancel unrelated host jobs to free a queue position.
 
-Evidence: four deterministic remote RED cases covered one/two hosts and a successful failed-first
-batch; the fixed source passed those cases plus the existing landing/remote suites (231 passed).
+Evidence: eight deterministic remote RED cases covered one/two hosts, a successful failed-first batch,
+and expiry in isolated/main diagnostics. The fixed source passed those cases and the broader existing
+landing/remote suites (324 passed).
 See [the revision-bound validation record](../../validation/land-turn-deadline-2026-10-28/result.md).
 This focused result is not a FULL-tier, device or field acceptance claim.
 
