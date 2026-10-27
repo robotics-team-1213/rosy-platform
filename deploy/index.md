@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · 82ca57ab0b · 사이트 컨테이너 로그 회전 경계
 - 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내
 - 2026-10-27 · 50438808a9 · native release의 격리 실행 import와 시험 fixture 복원
 - 2026-10-27 · cec31dcf9d · ARM SYSTEM 양방향 비활성 OS 설치와 독립 복구 검증
 - 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
-- 2026-10-26 · 0a88b44f94 · disposable SYSTEM guest와 실제 offline root preparation

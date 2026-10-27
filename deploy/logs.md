@@ -3741,3 +3741,10 @@
 - 변경: deploy/site/README.md 운영 절에 루프 생존(`/readyz`, 503과 최소 본문)과 프로세스 생존(`/healthz`)의 분리를 적었다. compose healthcheck·mdns 광고 검증·autoupdate 게이트는 `/healthz`를 그대로 쓰며 `/readyz`에 연결하지 않는다고 못박았다.
 - 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
 - gate 변화: 없음. CE: 해당 없음.
+
+## 2026-10-27 · 82ca57ab0b · 사이트 컨테이너 로그 회전 경계
+
+- 변경: compose 파일 어디에도 `logging:` 정의가 없어 장기 서비스(fleet·vision·postgres·proxy·media·media-gateway)의 json-file 로그가 호스트 디스크에서 무제한이었다. 기본 스택과 미디어 프로젝트에 20m×3 회전 앵커(`x-logging`)를 걸고 오버레이는 병합 상속으로 그대로 받는다. 신규 계약 시험 `test_site_compose_log_rotation.py`이 전 서비스 경계와 오버레이 비덮어쓰기를 고정한다.
+- 증거: 원격 5 suite(신규 계약 + compose 고정 시험들 + 문서 배치) green, known NEW 0. 변이 검증: postgres의 logging 행 제거 → 계약 시험 red(`9b829fd04d`), 복원 green(`82ca57ab0b`).
+- gate 변화: 없음. 현장 호스트에서 실제 로테이션 관찰(디스크 절감)은 별도 확인.
+- CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
