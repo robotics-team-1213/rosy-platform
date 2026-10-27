@@ -12480,6 +12480,28 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 실패한 FULL은 통과로 계산하지 않으며 공식 FULL 재실행과 HTTP·화면 연결이 남았다.
 - CE: 해당 없음 — 새 운영 교훈이 필요한 장애가 아니다.
 
+## 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
+
+- 변경: `tools/harness/affected_ci.py`의 `modules` 항목에서 `gating: False`를 뗐다. 2026-10-25부터 main CI 실행에서 연속 녹색이었다. 이제 판정 밖은 sensing뿐이다.
+- 영향: execution_local처럼 `modules` 러너만 도는 모듈 시험도 CI가 판정한다. 모듈 추가 착지의 "CI 판정 matrix 밖" 경고가 이 경우 더 나오지 않는다(`affected_narrow.py`).
+- 시험: `test_modules_runner_gates`(11-15 마감 시험 대체), `not-ci-gated` 사례를 sensing 시험(`middleware/perception/test`)으로 바꿈.
+- 증거: GitHub main CI `test (modules)` 녹색 10회 연속(2026-10-25~26, 마지막 run 40412528805).
+- gate 변화: 없음. CI 판정 범위만 넓어짐.
+
+## 2026-10-27 · ae535f57ec · fix: publish push가 자기 SHA의 pre-push 사본으로 돈다
+
+- 변경: `tools/publish_main.py --apply`가 게시 SHA의 `tools/hooks/pre-push`를 CR 없이 `<git-common-dir>/rosy-publish/<branch>-hooks/`에 쓰고 `core.hooksPath`로 push한다. 공용 훅을 다른 착지가 재설치해도 진행 중인 게이트는 바뀌지 않는다.
+- 근거: 10-27 수동 게시 push 두 번이 크기 규칙(약 105분) 도중 공용 훅 교체(14:19)로 `exit=127`과 `line 152: syntax error`로 끝났다. 같은 SHA의 크기 규칙 단독 실행은 통과했다.
+- 증거: 원격 `test/test_publish_main.py`(공용 훅이 실패해도 SHA의 훅으로 push, 사본 정리).
+- Gate: 변화 없음. 같은 훅 내용, --no-verify 없음.
+- CE: 새 교훈 기록 — `docs/solutions/workflow-issues/shared-pre-push-swapped-mid-run-breaks-long-push-2026-10-27.md`.
+
+## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
+- 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
+- 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
+- gate 변화: 없음. 차례 마감(B)과 겹침 섀도(A)는 아직 켜지 않았다.
+- 교훈: 해당 없음. 측정과 규칙은 ADR에 있다.
+
 ## 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
 
 - 변경: `tools/land_batch.py`(새 파일), `tools/land_queue.py`(티켓 `batch` 필드, `wait`의 `done`·`form`), `tools/land.py`(회차 반복을 `rounds`로 떼어 냄, `merge`의 `source`). 앞 착지가 차례를 쥔 동안 대기가 2개 이상이면, 맨 앞 대기자가 녹색으로 준비된 안전 경로 밖 브랜치를 최대 4개까지 한 브랜치로 병합한다. 잠금 밖에서 미리 시험하고 차례에 한 번만 fast-forward한다. 멈추면 각자 단독으로 착지한다. D-889 추가 3.
