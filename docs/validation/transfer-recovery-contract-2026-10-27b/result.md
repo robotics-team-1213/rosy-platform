@@ -9,7 +9,7 @@ failing because the API Ref header and section said v1.327 while the final chang
 had no `| v1.327 |` row. The isolated guard retry reproduced the same assertion.
 This is an owned documentation omission; the failed/incomplete FULL is not acceptance evidence.
 
-Fix `6645ad829bb1ae8e31de1df6b4215103fb7fb522` adds that one table row.
+Fix commit `6645ad829bb1ae8e31de1df6b4215103fb7fb522` adds that one table row.
 It changes no model, runtime code, test assertion, baseline or quarantine.
 
 ```powershell
