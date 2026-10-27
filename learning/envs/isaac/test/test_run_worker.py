@@ -72,7 +72,7 @@ def test_disk_pressure_reaps_only_the_owned_child(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('sdk_version', ['5.1.0.0', '6.2.0.0'])
-@pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual', 'missing_residual'])
+@pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual', 'missing_residual', 'exception'])
 def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, evidence, sdk_version):
     from contextlib import nullcontext
     import os
@@ -109,6 +109,8 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
     def sdk(*args, **kwargs):
         assert kwargs['env'].get('OMNI_KIT_ACCEPT_EULA') == 'YES'
         assert kwargs['env'].get('ACCEPT_EULA') == 'Y'
+        if evidence == 'exception':
+            raise FileNotFoundError('temporary SDK output disappeared')
         if evidence not in {'none', 'missing_residual'}:
             path = kwargs['output'] / 'import-report.json'
             import_report.write_report(path, model='omx_f', frames=120, requested=120,
@@ -122,6 +124,8 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
     monkeypatch.setattr(mod, 'supervise', sdk)
     mod.execute(store, tmp_path / 'binding.json', row['run_id'])
     final = store.get(row['run_id'])
+    if evidence == 'exception':
+        assert final['result']['error_type'] == 'FileNotFoundError'
     assert final['status'] == ('SUCCEEDED' if evidence == 'complete' else
                                'UNKNOWN' if evidence in {'gpu_residual', 'missing_residual'} else 'FAILED')
     if final['status'] == 'SUCCEEDED':
