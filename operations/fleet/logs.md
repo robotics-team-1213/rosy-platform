@@ -4962,3 +4962,24 @@
 - 증거: 원격(모델/AI PC) 시험 — 첫 회차에서 새 시험 3개가 readyz 속성명 오타(`loop_supervisor` vs `loop_supervision`)를 잡아 red, 수정 후 green. 변이 검증 3종: 무음 pass 복원→red, stopping no-op→red, readyz 가드는 오타 결함으로 유기 증명(프로브 이력은 로컬 브랜치 `fix/fleet-loop-supervision`·`fix/fleet-loop-supervision-clean`에 보존). D-766 추출 리팩터링 뒤 관련 4 suite 재시험 green, known_failures NEW 0, size_range 통과(래칫 882→828). 계획: Rosy/docs/superpowers/plans/2026-10-27-fleet-loop-supervision.md(우산 밖 로컬).
 - Gate: 없음. 호스트 시험까지만 유효하며 실제 Ubuntu 사이트에서 `/readyz` 관찰 기록은 별도. 선택 루프 전부를 켠 열거 시험과 vision 서비스 루프는 후속.
 - CE: 해당 없음 — 계획·검토·변이 증거가 커밋과 시험에 남아 있다.
+
+## 2026-10-27 · d02b8d65e7 · 작업 큐 총 대기시간 계측 first_queued_at (계획 2026-10-27-fleet-queue-first-queued-at)
+
+- 변경: `fleet_tasks.first_queued_at` 컬럼(스키마 마이그레이션 additions 경로). `enqueue`가 COALESCE로 task id당 최초 입장 시각을 한 번만 기록하고 `release_traffic_wait`의 `queued_at` 재작성은 이 값을 건드리지 않는다. `FleetTaskScheduler.claim_next`가 주입 wall-clock으로 `total_queue_wait_seconds`를 함께 내놓고(기원 없는 옛 행은 None), 디스패치 시도마다 두 대기시간·우선순위·attempt_seq를 INFO 1줄로 남긴다. 노출은 로그뿐(API·UI 없음, 계획 결정).
+- 증거: 신규 `test_queue_wait_metrics.py` 8건 포함 원격 시험 77 passed, known NEW 0(관련 5 suite). 변이 검증: COALESCE 보존 제거 → 재대기열 보존 시험 red(`042bf8a957`), 되돌림 후 green(`d02b8d65e7`).
+- Gate: 없음. 호스트 시험까지만 유효 — 실제 사이트 큐에서 쌓이는 로그로 지표 노출·집계를 별도 결정한다.
+- CE: 해당 없음 — 계획 문서와 시험·커밋에 근거가 남아 있다.
+
+## 2026-10-27 · db6f4f8c02 · 승인된 단일 이송 복구 후손
+
+- 변경: 기존 부모 attempt·관측을 보존하고 현재 source/clearance·별도 운영자·fence/claims 조건을 만족한 새 자식 미션을 한 번 승인한다. 부모 자원을 원자적으로 이전하고, 자식을 명시 prepare한 뒤 새 관측과 기존 send/closure 경로를 사용한다. 중복 요청·재시작·준비 실패가 예산을 초기화하지 않는다. 검수 export에 root 계보를 보존한다.
+- 증거: 원격 승인 RED 21 failed → 관련 128 passed, 흐름 RED 3 failed → 통합 201 passed. 독립 검토 반례 4 failed와 첫/재조회 snapshot 차이 2 failed를 수정해 7f0a8a152a의 통합 214 passed, 추가 epoch/session 거절을 포함한 73f2fe5a03의 최종 216 passed/0 skipped·known NEW 0을 확인했다. 코드 7f0a8a152a의 독립 계약 재검토에서 추가 중요 발견 없음. `docs/validation/transfer-recovery-2026-10-27/result.md` 참고(저장소 루트 기준). 전체 영향 범위·착지 gate는 별도로 기록한다.
+- Gate: 기존 gate 변화 없음. 공개 복구 ingress·화면·무인 반복·Gazebo 과제·실물·모델 학습 수용은 별도다. 원래 미션은 HOLD로 유지한다.
+- CE: 해당 없음 — D-895·회귀 시험·검증 기록이 판단과 수정 이유를 보존한다.
+
+## 2026-10-27 · 167bae90bb · 전체 옵션 구성의 루프 열거 시험 (루프 감시 후속)
+
+- 변경: `test_loop_supervision.py`에 모든 선택 서비스(알림·신호·resolver·localization·드리프트·charge·lease·job-trips·제안·미션/셀 디스패처·목표 증거·모델 턴·제어유닛·물리 이송)가 켜진 구성의 시험을 추가했다. 루프 몸체는 걸어 뺀 채 `start_fleet_loops`의 스폰 배선만 돌려 23개 선언 이름 전부가 running으로 언랩되는지 본다. 최소 앱 시험이 못 잡던 "선택 분기 언랩 누락" 간극을 닫는다(모듈 docstring의 후속 과제 해소).
+- 증거: 원격 시험 10 passed, known NEW 0. 변이 검증: job-trips 분기의 supervised 제거 → 신규 시험 red(`498989d626`), 복원 green(`167bae90bb`).
+- Gate: 없음. 호스트 시험까지만 유효하며 실제 사이트에서의 `/readyz` 관찰 기록은 여전히 별도.
+- CE: 해당 없음 — 시험과 변이 이력이 커밋에 남아 있다.

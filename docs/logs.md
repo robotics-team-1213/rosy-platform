@@ -12336,6 +12336,53 @@ osy-d395-s1d\`.
 - gate 변화: 강화(우회 경로를 막음). 사용자 명시 우회(`docs/solutions/workflow-issues/first-field-result-from-the-no-release-path-release-in-parallel-2026-10-10.md` 4)는 사유와 함께 남는다.
 - CE: 미정 — 착지 뒤 판단.
 
+## 2026-10-27 · 9e7b4f6f0a · OMX 화면에 prepare-native 카메라 기준 표시
+
+- 변경: `/learning/omx`가 `inspection.json`의 `camera_setup`(prepare-native `--camera-reference`, PR #200·D-792 S3)을 역할마다 "기준 일치(prepare-native에서 거부 검사 통과) · 기준 <revision 12자>"로 보인다. 64-hex 검증한 revision이 camera-setup 저장소에 있을 때만 같은 사이트 기준 사진 링크를 단다. 기존 `camera-setup.json`은 섀도 증거로 따로 표시하고, 둘 다 없을 때만 기존 문구를 보인다. `camera_identity`와 경로는 내보내지 않는다.
+- 증거: 원격 `test_omx_web.py`·새 `test_omx_camera_reference_browser.py`(1440·390, ROSY_RUN_BROWSER_TESTS=1)·`test_omx_segments_browser.py`·`test_browser_scope.py` 36 PASS, 0 FAIL.
+- gate 변화: 없음. 화면 표시만 바뀌고 착지·실물 수용은 별도다.
+- CE: 해당 없음 — 시험 locator가 숨은 단계의 heading을 못 찾은 것은 기존 셀렉터 습관 문제로, 코드·시험이 근거를 보존한다.
+
+## 2026-10-27 · uncommitted · feat(land): main 빨강 이월(D-889 추가 2)과 재부팅 창 대기
+
+- 변경: `tools/land_mainred.py`(새), `land.py`·`land_checks.py`·`land_prepare.py`·`land_full.py`·`doctor.py`. robot-56의 조건 7개를 모두 만족하는 NEW만 멈추지 않고 이월하며, 이월한 착지는 land record를 쓰지 않는다(D-889 추가 2). `main_red`는 후보가 병합한 main에서 돌고 지문을 기록한다. 05:15~06:10에는 사전 시험을 시작하지 않는다.
+- 근거: 10-27 00:00~05:40 착지 9·멈춤 26, main 확인 10번 중 7번이 이미 빨강(robot-45 측정). 10-27 06:00 재부팅이 사전 시험을 exit 143으로 끊었다.
+- 증거: 원격 `test/test_land_mainred.py`·`test/test_land_mainred_flow.py`와 착지 도구 시험. 검토 robot-56.
+- gate 변화: 6항을 조건부로 뒤집음(사용자 승인 2026-10-27). 끄기 `ROSY_LAND_MAINRED_CARRY=0`.
+- CE: 미정 — 첫 실제 이월 뒤 판단.
+
+## 2026-10-27 · uncommitted · fix(remote): venv 준비도 끊긴 접속 뒤 다시 시도, 시험 PC 대기 1시간
+
+- 변경: `tools/remote/remote_pytest.py`. ssh 255(접속 끊김) 재시도를 `ship()` 안의 반복문에서 `remote(..., tries=)`로 옮기고, venv 준비도 3번까지 다시 시도한다. 그 밖의 단계(정리·작업 시작)는 예전처럼 한 번만 돈다. 시험 PC를 기다리는 기본 시간(`--wait`)을 600초에서 3600초로 늘린다.
+- 근거: 10-27 `feat/land-mainred-carry` 착지가 대기열에서 1시간 넘게 기다린 뒤 모델 PC의 `Connection timed out during banner exchange` 한 번으로 멈췄다. 모델 PC는 바로 다시 접속됐다(평균 부하 14~15). venv 준비 스크립트는 잠금(flock)을 잡고 새 venv 자리를 지운 뒤 다시 만들어서 다시 돌려도 안전하다. 다시 건 착지는 모델 PC가 다른 착지들의 사전 시험으로 꽉 차고(남은 메모리 음수) AI PC는 메모리, 현장 PC는 디스크가 부족해 "no test host reachable"를 10분 동안 되풀이했다. 이렇게 죽은 착지는 사건 기록에 `stop`이 남지 않는다.
+- 증거: 원격 `test/test_remote_pytest.py`.
+- gate 변화: 없음(시험 판정은 같고, 시험 전 단계의 일시적 접속 끊김만 다시 시도).
+- CE: 해당 없음 — 재시도와 그 근거가 코드·시험에 남는다.
+
+## 2026-10-27 · 6ffe52ae26 · docs: D-895 단일 이송 복구 후손과 원본 증거 보존
+
+- 변경: 사용자 승인한 내부 simulation 복구 설계를 D-895에 기록했다. root당 자식 하나, 별도 운영자 승인, 원래 효과·새 관측·현재 claims/fence 검사와 원자적 승인, 동일 요청 대조와 계보 보존을 정한다. 공개 API·실물·학습 승격은 별도다.
+- 증거: 공식 ADR 예약 도구로 D-895를 선점하고 Log의 UTF-8 BOM·CRLF를 보존했다. 구현·회귀 증거는 `operations/fleet/docs/transfer-outcome-review.md`의 검증 기록에 있다. 독립 계약 재검토 db6f4f8c02에서 추가 중요 발견 없음.
+- 메타데이터: D-893/D-894의 타 세션 예약 공백은 기존 gap 원장에 pending으로 기록했다. 최초 lint 3 errors를 수정해 0 errors/37 warnings, 기준 이후 11 commits size-range 통과를 확인했다. 실행 검사기를 변경하지 않았다.
+- gate 변화: 없음. 구현 승인과 장치·현장 수용을 구분한다.
+- CE: 해당 없음 — 설계 판단과 검증 근거는 ADR·코드·회귀 시험·모듈 기록으로 보존했다.
+
+## 2026-10-27 · uncommitted · fix(land): 시험 PC가 포기해 끝난 착지도 stop으로 남김
+
+- 변경: `tools/land.py`. `remote_pytest`가 시험 PC를 포기하며 문자열로 끝내는 `SystemExit`(시험 PC 없음, venv 준비 실패 등)도 사건 기록에 `stop`으로 남기고 예전처럼 그대로 끝난다. 숫자 종료 코드는 기록하지 않는다.
+- 근거: 10-27 `feat/land-mainred-carry` 착지가 venv 준비 ssh 시간 초과로 끝났는데 사건 기록에는 `queue`만 있었다. 이번 주 `stop` 55건에 시험 PC 원인은 0건으로 보였다.
+- 증거: 원격 `test/test_land_prepare.py`.
+- gate 변화: 없음(기록만 더함).
+- CE: 해당 없음 — 코드·시험에 남는다.
+
+## 2026-10-27 · uncommitted · fix(remote): 시험 PC 메모리 예약을 실측으로, 현장 PC 디스크 판정 바로잡기
+
+- 변경: `tools/remote/memory_history.py`. 작업마다 잡는 메모리 예약을 "기록된 최고치 4 GiB 이하면 3 GB, 아니면 6 GB"에서 "그 시험 묶음의 최고치 × 1.25, 정수 GB로 올림, 1~6 GB"로 바꾼다. 기록이 없으면 예전처럼 6 GB. `tools/remote/host_probe.py`. 20 GB 하한은 시험이 쓰는 `~/rosy-test` 디스크에만 적용하고, 두 디스크 중 하나라도 99% 이상 차면 거절한다.
+- 근거: 10-27 착지 대기 동안 모델 PC는 실제 여유 메모리가 20 GB인데 예약 합 때문에 "−5.2 GB 남음"으로 거절됐다. 763종·3,077회 기록에서 묶음별 최고치 중앙값은 292 MiB, 90%는 852 MiB 이하인데 99%가 3 GB를 예약했다. 새 규칙이면 예약 합이 2,310 GB에서 922 GB로 준다. 현장 PC는 디스크 103 GB가 비어 있어도 `/tmp`(7.4 GB tmpfs, 사용 1%)의 남은 GB가 20 GB 미만이라 매번 거절됐다. 시험 작업은 TMPDIR을 실행 폴더 아래에 둔다.
+- 증거: 원격 `test/test_remote_pytest.py`, `test/test_remote_pytest_memory.py`.
+- gate 변화: 없음(같은 시험, 같은 판정). 시험 PC 한 대에 동시에 오르는 작업이 늘어난다. 작업마다 `MemoryMax` 6 GB와 실제 `MemAvailable` 검사는 그대로다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` §3.
+
 ## 2026-10-27 · uncommitted · docs: record accepted OMX size-registration restoration
 
 - 변경: 기존 착지 교훈에 공개 PR #184의 real 단위 등록이 로컬 이력 재구성에서 누락된 원인과 복원 판단을 보완했다. 이미 한도를 넘은 소비자 커밋은 보존하고 유효한 선행 기반에서 다시 구성해야 한다.

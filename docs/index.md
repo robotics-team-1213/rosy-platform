@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-27 · uncommitted · docs: record accepted OMX size-registration restoration
-- 2026-10-27 · uncommitted · fix(land): 손으로 고른 --tests가 선택 시험을 대신하지 못하게
-- 2026-10-27 · uncommitted · perf(land): 사전 시험의 관문 라운드를 선택 시험과 함께 돌린다
-- 2026-10-27 · uncommitted · fix(doctor): 대기열의 반복 준비·무활동 착지를 경고
-- 2026-10-27 · uncommitted · fix(land): 크기 규칙을 대기·준비 단계에서 미리 본다
+- 2026-10-27 · uncommitted · fix(remote): 시험 PC 메모리 예약을 실측으로, 현장 PC 디스크 판정 바로잡기
+- 2026-10-27 · uncommitted · fix(land): 시험 PC가 포기해 끝난 착지도 stop으로 남김
+- 2026-10-27 · 6ffe52ae26 · docs: D-895 단일 이송 복구 후손과 원본 증거 보존
+- 2026-10-27 · uncommitted · fix(remote): venv 준비도 끊긴 접속 뒤 다시 시도, 시험 PC 대기 1시간

@@ -22,6 +22,22 @@ import land_queue
 
 MAX_PREPARING = 3
 POLL = 15.0
+# D-889 7: the test PCs clean up at 05:30 and reboot at 06:00; a pretest started in between dies (2026-10-27 06:00,
+# exit 143). Minutes after midnight, local time: no pretest starts inside, it waits for the hosts to come back.
+REBOOT = (5 * 60 + 15, 6 * 60 + 10)
+
+
+def after_reboot(ticket: Path | None, sleep=time.sleep, clock=time.localtime) -> None:
+    """Wait (ticket kept fresh) while the lab PCs' nightly cleanup and reboot window is on."""
+    told = False
+    while REBOOT[0] <= (now := clock()).tm_hour * 60 + now.tm_min < REBOOT[1]:
+        if not told:
+            print(f"[land] test PCs reboot at 06:00: the pretest starts after {REBOOT[1] // 60:02d}:{REBOOT[1] % 60:02d}",
+                  flush=True)
+            told = True
+        if ticket is not None:
+            land_queue.touch(ticket)
+        sleep(POLL)
 
 
 def slot(qdir: Path, ticket: Path, sleep=time.sleep) -> None:
@@ -80,6 +96,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     """Merge main, run this branch's selection (or the given FULL ``invocations`` of main's delta), record it.
 
     A NEW failure stops here, before the turn; the ticket is released by ``land.main``."""
+    after_reboot(ticket)
     if ticket is not None:
         slot(qdir, ticket)
     main_sha = land.out(wt, "rev-parse", "main")
@@ -112,5 +129,6 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
         raise raised[0]
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
-    land.land_full.save(wt, branch, candidate, main_sha, "full" if note else "affected", invocations)
-    land.land_events.emit("prepared", tier="full" if note else "affected", seconds=round(time.monotonic() - began))
+    tier = "carried" if land.land_mainred.CARRIED else "full" if note else "affected"  # carried: restore() refuses it
+    land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+    land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
