@@ -5031,3 +5031,10 @@
 - 증거: 신규 시험(보유 lease 2종·미보유 1종) 포함 원격 4 suite green, known NEW 0. 변이 검증: 기록 조건을 끄면 신규 시험 red(`2790088abd`), 복원 green(`441d50c066`).
 - Gate: 없음. 감사 행 추가일 뿐 상태 기계·전이 조건은 불변(기존 재시작 시험 회귀 없음).
 - CE: 해당 없음 — 결함·수정·근거가 시험과 커밋에 남아 있다.
+
+## 2026-10-27 · 398b533c38 · 자동화 worker의 거절 증거 import 공개 이름 전환
+
+- 변경: `incidents/automation/execution/worker.py`가 분포 경계 너머 import하던 `rosy.decision.billing._RejectedJudgment`가 공개 `RejectedJudgment`로 바뀜에 따라 import·엄격 타입 검사를 따라갔다. 정본 기록은 `operations/decision/logs.md` 같은 SHA 행.
+- 증거: 원격 5 suite(known-cost·deliberation 3종·installed wheel) green, known NEW 0.
+- Gate: 없음. 순수 이름 변경.
+- CE: 해당 없음.
