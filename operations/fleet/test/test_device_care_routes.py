@@ -95,6 +95,27 @@ def test_bridge_real_producer_roundtrip_and_role_boundaries(site):
     assert store.get('arm-one')['latest_analysis']['command_binding'] == 'caller_supplied_unverified'
 
 
+def test_care_catalog_and_named_observation_history_readback(site):
+    client, _store = site
+    viewer = {'Authorization': 'viewer'}
+    catalog = client.get('/api/fleet/device-profile-sources', headers=viewer)
+    assert catalog.status_code == 200
+    assert {(row['source_kind'], row['source_id']) for row in catalog.json()['sources']} == {
+        ('robot', 'robot-one'), ('arm', 'source-one')}
+    path = '/api/fleet/device-profiles/arm-one'
+    note = {'kind': 'maintenance', 'text': 'Checked joint support; observation only.'}
+    assert client.post(path + '/events', json=note).status_code == 401
+    assert client.post(path + '/events', json=note, headers=viewer).status_code == 403
+    response = client.post(path + '/events', json=note, headers={'Authorization': 'operator'})
+    assert response.status_code == 200
+    saved = client.get(path + '/care', headers=viewer)
+    assert saved.status_code == 200 and saved.headers['cache-control'] == 'no-store'
+    event = saved.json()['events'][0]
+    assert event['kind'] == note['kind'] and event['text'] == note['text'] and event['actor'] == 'alice'
+    assert event['created_at'] > 0
+    assert saved.json()['motion_admitted'] is saved.json()['automatic_recovery_enabled'] is False
+
+
 def test_bounded_strict_import_and_known_source(site):
     client, store = site
     path = '/api/fleet/device-profiles/arm-one/care'

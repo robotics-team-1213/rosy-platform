@@ -206,12 +206,13 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
 
     api = {**API, '/api/fleet/session': {'principal_id': 'installer', 'role': 'operator'},
            '/api/fleet/enrollment/robots': {'available': True, 'robots': [], 'identity': {}},
-           '/api/fleet/discovery': {'scanner_online': True, 'devices': []}}
+           '/api/fleet/discovery': {'scanner_online': True, 'devices': []},
+           '/api/fleet/device-profiles': {'profiles': []}}
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
         page.goto(install_url(console_url), wait_until='networkidle')
         tabs = page.get_by_role('tab')
-        expect(tabs).to_have_count(5)
+        expect(tabs).to_have_text(['장비 찾기', '로봇 등록', '장치 정보', '카메라 연결 승인', '카메라 설치·보정', '호스트 서비스'])
         for tab in tabs.all():
             expect(tab).to_be_enabled()
         expect(page.locator('#peer-picker')).to_be_visible()
@@ -225,6 +226,9 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         _open_token_access(page)
         page.locator('#token-save').click()
         expect(page.locator('#user-role')).to_contain_text('보기 전용')  # D-540 2
+        choose(page, '장치 정보')
+        expect(page.locator('#device-profiles')).to_be_visible()
+        expect(page.locator('[data-profile="save"]')).to_be_disabled()
         choose(page, '카메라 연결 승인')
         expect(page.locator('#camera-link')).to_be_visible()
         choose(page, '카메라 설치·보정')
@@ -245,6 +249,8 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         page.set_viewport_size({'width': 390, 'height': 844})
         compact = page.get_by_role('combobox', name='작업 선택')
         expect(compact).to_be_enabled()
+        compact.select_option('device-profiles')
+        expect(page.locator('#device-profiles')).to_be_visible()
         compact.select_option('calibration')
         expect(page.locator('#camera-calibration')).to_be_visible()
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')

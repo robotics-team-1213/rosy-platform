@@ -79,7 +79,8 @@ export function createDeviceProfiles({root, scope, call, identity, care = null})
     }
     if (!el('list').value) return;
     busy = true; updateAuthorization();
-    try { fill(await call(`/api/fleet/device-profiles/${encodeURIComponent(el('list').value)}`)); }
+    const id = el('list').value;
+    try { fill(await call(`/api/fleet/device-profiles/${encodeURIComponent(id)}`)); }
     catch (error) {
       if (error.name !== 'AbortError') el('status').textContent = '장치 정보를 읽지 못했습니다. 다시 선택하세요.';
     } finally { busy = false; updateAuthorization(); }
