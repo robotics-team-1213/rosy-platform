@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import land_guards  # noqa: E402
 import land_isolation  # noqa: E402
+from known_failures import NO_ROS_LAUNCH_PLUGINS
 from test_land import GREEN, _runner, commit, repos  # noqa: E402,F401  (land.py's fixture repos)
 
 PAIR = {
@@ -48,7 +49,8 @@ def pair(tmp_path):
 
 
 def pytest_run(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *args],
+    return subprocess.run([sys.executable, "-m", "pytest", "-q", *NO_ROS_LAUNCH_PLUGINS,
+                           "-p", "no:cacheprovider", *args],
                           cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                           env={**os.environ, **(env or {})}, timeout=300)
 
