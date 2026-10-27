@@ -56,4 +56,4 @@ def test_the_held_pose_is_the_height_and_a_free_descent_needs_no_retreat():
     held = planner.kin.fk([m.norm_to_rad(v) for v in lib["chunks"]["descend_touch_0"][40][:5]])
     assert touched == [[held.x, held.y, held.z]]
     assert cell.sent == ["goto above_0", "run descend_touch_0", "state", "retreat",
-                         "goto above_1", "run descend_touch_1", "park"]
+                         "goto above_1", "run descend_touch_1", "goto above_1", "park"]

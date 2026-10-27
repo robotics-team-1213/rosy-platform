@@ -54,6 +54,10 @@ def survey(cell, planner: Planner, points, log=print) -> list:
         run = cell.act(f"run descend_touch_{k}")
         if not run.get("contact"):  # reached the bottom without a touch: nothing above it here
             log({"k": k, "xy": [x, y], "contact": False})
+            # rise now: a session that ends down there drops the jaws onto whatever stands beside (2026-10-27)
+            if not cell.act(f"goto above_{k}").get("ok"):
+                log({"k": k, "stop": "rise failed"})
+                break
             continue
         pose = planner.kin.fk([norm_to_rad(v) for v in cell.act("state")["state"][:5]])
         touched.append([pose.x, pose.y, pose.z])
