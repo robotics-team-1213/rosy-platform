@@ -13,11 +13,17 @@
 | Pinky 제품 정책 | `deploy/robot/pinky_pro/` | 이미지·native units·SD·manifest/updater·기존 push/rollback executor 유지 |
 | RaspTank 배포 상태 | `deploy/robot/rasptank_metal/deployment-target.json` | source-only, 실행 operation 없음. 실제 profile 소스는 `middleware/devices/rasptank/profile` |
 | 외부 SDK 호스트 상태 | `deploy/hosts/sdk/dji_neo_2/deployment-target.json` | 공식 SDK 미지원, 실행 operation 없음. 기체 firmware 배포 대상 아님 |
+| OMX 호스트 상태 | `deploy/robot/omx/deployment-target.json` | 기존 workcell 구현은 있지만 공통 이미지·업데이트 executor는 없음 |
 
 descriptor는 설치 대상·지원 상태·허용 operation을 기술한다. 실행 파일이나 shell 문장을 지정할 수 없다.
 새 descriptor에 apply를 적는 것만으로 executor가 생기지 않으며, 현재 실행 대상은 Pinky뿐이다.
 Pinky의 `existing_implementation`은 기존 도구 구현이 있다는 뜻으로 장치·현장 수용 완료를 뜻하지 않는다.
 다른 기종을 Pinky target으로 지정해 지원 검사를 우회하지 않는다.
+
+list와 plan의 `delivery`는 platform·architecture·image_backend·application_updater·os_updater·os_compatible·os_tag_prefix를 표시한다.
+현재 Pinky의 검토된 결속은 Pi5/arm64, native-release, RAUC, `rosy-pinky-pro-ab-v2`, `os-pinky-pro-`다.
+RaspTank·DJI·OMX의 실행 backend는 null이며 descriptor 수정만으로 활성화할 수 없다.
+이미지 준비 진입점은 작업 폴더·다운로드·VM 생성 전에 `require_image_backend()`로 지원 여부를 확인해야 한다.
 
 ## 명령
 
@@ -99,3 +105,49 @@ RaspTank 부품·SD 입력은 [Pi 4 준비서](rasptank-pi4-preparation.md)를 �
 
 새 이미지의 전 계층 자동 갱신 요구는 [자동 OS 업데이트 완료 기준](../plans/2026-10-25-rosy-layered-automatic-updates-design.md)을 따른다.
 현재 target CLI와 payload updater 소스 존재만으로 OS 전체 자동 업데이트가 완료되지는 않는다.
+
+## Windows의 OS 서명 준비 도구
+
+Windows x86_64 운영자 PC에서 다음 명령으로 공개 도구 입력을 준비한다.
+
+```powershell
+python tools/release/prepare_os_tools.py
+```
+
+기본 cache는 현재 사용자의 LOCALAPPDATA 아래 Rosy/os-tools다. 새 cache만 owner-only ACL을 만들고,
+기존 cache·파일은 권한·크기·checksum을 검증한다. 잘못된 기존 입력은 덮거나 권한을 바꾸지 않는다.
+공개7-Zip MSI를 읽기 전용 database/CAB로 열어 고정한 구성 요소만 추출하고, QEMU 패키지와 Ubuntu 도구 guest 입력을 검증한다.
+설치 프로그램 실행·호스트 기능 변경·기체 접속은 없다. WindowsGuest는 검증한 패키지를 새 작업 공간에 추출하고
+소유 콘솔의 SSH host key와 정확한 커밋을 결속한다. 이 VM은 Linux 준비·검증용이며 native ARM64 이미지 빌더가 아니다.
+
+추적된 inputs.lock.yaml의 CMS 공개 인증서 지문은 engineering 이미지 준비용으로 선택했다.
+선택 근거와 정확한 PEM/SPKI는 public-keys/README.md에 있다. production ownership/rotation과 실물 수용은 별도로 유지한다.
+큰 bundle 반환은 console-pinned SCP/SFTP와 hash/size 검증을 사용하며, 기존 출력에 덮지 않는 게시에는 hard-link 지원 파일시스템이 필요하다.
+
+OS bundle 외부 서명은 세 부분으로 나뉜다. guest의 `os_bundle_external.py prepare`가 인증된 dist에서
+공개 요청과 임시 서명 bundle만 내보낸다. Windows의 `external_os_signing.sign_inline_cms()`는 정확한 inline manifest,
+이미지 해시·소스·factory·공개 certificate/SPKI pin을 대조하고 운영자 PC의 키로 CMS를 만든다.
+guest의 `os_bundle_external.py finalize`는 그 CMS를 교체하고 기존 RAUC 검증기로 확인한 bundle과 unsigned metadata를 반환한다.
+private key는 guest·CI·공유 시험 PC에 복사하지 않는다. 실제 device의 verifier는 최종 Ed25519 metadata도 요구한다.
+
+서명·검증된 A/B image dist가 준비되면 다음 운영자 명령으로 OS 업데이트5개 산출물을 만든다.
+키 경로는 운영자 보호 폴더의 기존 키를 지정한다. private key를 dist·소스·tools cache에 넣지 않는다.
+
+```powershell
+python tools/release/prepare_os_release.py --target pinky_pro `
+  --dist C:/releases/verified-signed-image --output C:/releases/signed-os-update `
+  --private-key C:/operator-keys/release-private.pem `
+  --public-key deploy/robot/pinky_pro/release/public-keys/rosy-release-2026-01.pem `
+  --cms-private-key C:/operator-keys/os-cms-private.pem `
+  --release-id YYYY.MM.DD-NNN --source-revision EXACT_IMAGE_SOURCE_COMMIT --canary pinky-first
+```
+
+명령은 target 지원 여부와 인증된 image/factory metadata snapshot을 확인하고, 공개 입력만 owned VM에 넘긴다.
+파일은 서버가 응답을 시작하기 전에 size/hash를 검증한 임시 snapshot으로 고정한다.
+VM 요청과 최종 metadata를 운영자의 source/release/factory/certificate pin에 대조한 뒤 로컬 CMS·Ed25519 서명을 만든다.
+최종 서명 metadata/rollout을 기존 device consumer로 다시 검증하고 VM과 HTTP를 닫은 후에만 새 output을 노출한다.
+기존 output에는 덮지 않는다. 실패한 보호 workspace는 조사·복구를 위해 tools cache에 남고 공개 staging은 제거한다.
+이 명령은 이미 인증된 signed image를 입력으로 받는다. CI run/source 결속, native image build·image 서명·최종 이미지 선택과
+실제 게시의 성공 근거는 별도로 확인해야 한다. 모델 VM 연결 시험을 실제 A/B 이미지 수용으로 기록하지 않는다.
+게시 도구 `publish_os_release.py`는 기본 dry-run이며 apply도 검증된5개 산출물을 engineering prerelease로만 게시한다.
+실제 배포 결과는 해당 artifact·서명·게시 영수증과 별도로 확인한다.

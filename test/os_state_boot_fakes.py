@@ -17,7 +17,8 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a", protocol=
         (root / "etc/passwd").write_text("".join(
             f"{name}:x:{uid}:{uid}::{('/home/rosy' if name == 'rosy' else '/nonexistent')}:"
             f"{('/bin/bash' if name == 'rosy' else '/usr/sbin/nologin')}\n" for name, uid in accounts), encoding="ascii")
-        (root / "etc/group").write_text("".join(f"{name}:x:{uid}:\n" for name, uid in accounts), encoding="ascii")
+        (root / "etc/group").write_text("".join(f"{name}:x:{uid}:\n" for name, uid in accounts)
+                                        + "rosy-calib:x:964:\n", encoding="ascii")
         zone = root / "usr/share/zoneinfo/Etc/UTC"
         zone.parent.mkdir(parents=True)
         zone.write_bytes(b"TZif synthetic UTC payload")
@@ -43,7 +44,8 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a", protocol=
                 "var/lib/rosy/ssh": common / "ssh", "home/rosy/.ssh": common / "operator-ssh",
                 "etc/rosy/tls": common / "tls", "var/lib/tailscale": common / "tailscale/machine",
                 "var/lib/rosy/maps": common / "maps", "var/lib/rosy/models": common / "models",
-                "var/lib/rosy/pilot-recordings": common / "pilot-recordings"}
+                "var/lib/rosy/pilot-recordings": common / "pilot-recordings",
+                "var/lib/rosy/calibration": common / "calibration"}
     (common / "tailscale/join").mkdir(parents=True, mode=0o700)
     mountpoints = set()
     for root, (_, host_table, local_table) in zip(roots, tables):
@@ -60,6 +62,8 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a", protocol=
                 backing.chmod(0o2750)
             elif relative == "var/lib/rosy/models":
                 backing.chmod(0o750)
+            elif relative == "var/lib/rosy/calibration":
+                backing.chmod(0o2775)
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             if target.is_dir():
@@ -101,6 +105,8 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a", protocol=
                 fields.update(st_gid=963)
             elif key.endswith("/var/lib/rosy/pilot-recordings"):
                 fields.update(st_uid=963, st_gid=960)
+            elif key.endswith("/var/lib/rosy/calibration"):
+                fields.update(st_gid=964)
             return SimpleNamespace(**fields)
         return info
 
@@ -124,7 +130,8 @@ def shared_roots(tmp_path, monkeypatch, *, root_a=None, root_slot="a", protocol=
                     str(common / "tls"): (common.stat().st_uid, 960),
                     str(common / "maps"): (961, 960),
                     str(common / "models"): (common.stat().st_uid, 963),
-                    str(common / "pilot-recordings"): (963, 960)}.get(path)
+                    str(common / "pilot-recordings"): (963, 960),
+                    str(common / "calibration"): (common.stat().st_uid, 964)}.get(path)
         if identity is None:
             return info
         fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}

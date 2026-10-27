@@ -13,6 +13,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import importlib.util
 import json
+import os
+import runpy
 from pathlib import Path
 import shutil
 import subprocess
@@ -22,7 +24,7 @@ import pytest
 
 from build_payload_release import build_release, seal_release
 from sign_image_release import sign_image_release
-from signing import sign_checksums
+from signing import sign_checksums, build_sha256sums
 
 from deploy.robot.pinky_pro.sd.personalization import DeviceIdentity, create_provision_bundle
 
@@ -146,6 +148,45 @@ def pipeline(tmp_path: Path):
 
     return {"tmp": tmp_path, "private": private, "public": public, "payload": payload,
             "device": device, "release": release, "key": key, "dist": dist}
+
+
+def test_native_build_gate_authenticates_dist_then_rejects_incomplete_native_root(pipeline):
+    case = pipeline
+    dist = case['dist']
+    (dist / 'image.bmap').write_text('<bmap/>', encoding='utf-8')
+    paths = sorted(p.relative_to(dist).as_posix() for p in dist.rglob('*')
+                   if p.is_file() and p.name not in {'SHA256SUMS', 'SHA256SUMS.sig'})
+    paths += [p.relative_to(dist).as_posix() for p in dist.glob('factory-release/*/SHA256SUMS')]
+    paths += [p.relative_to(dist).as_posix() for p in dist.glob('factory-release/*/SHA256SUMS.sig')]
+    sums = build_sha256sums(dist, paths)
+    (dist / 'SHA256SUMS').write_bytes(sums)
+    (dist / 'SHA256SUMS.sig').write_text(sign_checksums(sums, case['private']), encoding='ascii')
+    result = subprocess.run(['bash', str(ROOT / 'deploy/robot/pinky_pro/image/verify-artifacts.sh'), str(dist)],
+        env=dict(os.environ, ROSY_PYTHON=sys.executable, ROSY_RELEASE_PUBLIC_KEY=str(case['public']),
+                 ROSY_NATIVE_RELEASE_PUBLIC_KEY=str(case['public']), ROSY_NATIVE_RELEASE_ID=FACTORY_ID,
+                 ROSY_IMAGE_MOUNT=str(case['device']), ROSY_EXPECTED_IMAGE_REVISION=REVISION),
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode != 0
+    assert '==> native image tree' in result.stdout, result.stdout + result.stderr
+    assert 'opt/ros/jazzy/setup.bash' in result.stderr, result.stderr
+    assert 'BUILD_GO checks passed' not in result.stdout
+
+
+def test_native_build_gate_keeps_ab_hold_after_authenticated_version_changes(pipeline, monkeypatch):
+    script = (ROOT / 'deploy/robot/pinky_pro/image/verify-artifacts.sh').read_text(encoding='utf-8')
+    marker = '"$PYTHON" - "$REPO_ROOT" "$DIST" "$PUBLIC_KEY" "$ROSY_NATIVE_RELEASE_ID" <<\'PY\'\n'
+    body = script.split(marker, 1)[1].split('\nPY\n', 1)[0]
+    verifier = runpy.run_path(str(ROOT / 'deploy/robot/pinky_pro/sd/verify-image-release.py'))['verify_image_release']
+
+    def authenticated_v2(*args):
+        # The shared verifier marks authenticated v2 with layout; classification may already be stale.
+        return dict(verifier(*args), layout={})
+
+    monkeypatch.setattr(runpy, 'run_path', lambda _path: {'verify_image_release': authenticated_v2})
+    monkeypatch.setenv('ROSY_EXPECTED_IMAGE_REVISION', REVISION)
+    monkeypatch.setattr(sys, 'argv', ['-', str(ROOT), str(pipeline['dist']), str(pipeline['public']), FACTORY_ID])
+    with pytest.raises(ValueError, match='A/B'):
+        exec(compile(body, '<native-image-gate>', 'exec'), {})
 
 
 def _card_bundle(case: dict, request_release_id: str = FACTORY_ID) -> dict:

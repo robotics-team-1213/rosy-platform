@@ -46,10 +46,12 @@ def test_installs_exact_pinned_public_certificate_without_private_material(tmp_p
     m.install(root, raw)
 
 
-@pytest.mark.parametrize("change", ["unverified", "hash", "spki", "expired", "private", "chain", "path", "symlink"])
+@pytest.mark.parametrize("change", ["unverified", "null_hash", "null_spki", "hash", "spki", "expired", "private", "chain", "path", "symlink"])
 def test_unapproved_or_invalid_certificate_never_becomes_build_trust(tmp_path, change):
     m, source, certificate, key, section = case(tmp_path)
     if change == "unverified": section["cms_verified"] = False
+    if change == "null_hash": section["cms_certificate_sha256"] = None
+    if change == "null_spki": section["cms_signer_spki_sha256"] = None
     if change == "hash": section["cms_certificate_sha256"] = "0" * 64
     if change == "spki": section["cms_signer_spki_sha256"] = "0" * 64
     if change == "expired":
@@ -87,11 +89,19 @@ def test_existing_trust_is_not_silently_replaced(tmp_path, change):
     assert target.read_bytes() == before
 
 
-def test_build_cannot_resolve_or_customize_without_explicit_public_cms_pins():
+def test_engineering_build_selects_exact_existing_public_cms_certificate():
+    m = module()
+    root = Path(__file__).resolve().parents[1]
     lock = yaml.safe_load((IMAGE / "inputs.lock.yaml").read_bytes())["os_updates"]
-    assert lock["cms_verified"] is False and lock["cms_certificate_sha256"] is None
-    assert lock["cms_signer_spki_sha256"] is None
+    assert lock["cms_verified"] is True
     assert lock["cms_certificate"] == CERTIFICATE
+    raw = (root / CERTIFICATE).read_bytes()
+    assert lock["cms_certificate_sha256"] == hashlib.sha256(raw).hexdigest() == "c9b715ef42497e1e1f746529a882604e7159f7957f652d25977d56f49d9104a1"
+    assert lock["cms_signer_spki_sha256"] == m._spki(raw) == "f0a17ffa253b371ea1a5c8ea541730a7b359ced40d70ee83d63d08be24497a88"
+    assert m.verify(lock, root) == raw
+
+
+def test_build_cannot_resolve_or_customize_without_explicit_public_cms_pins():
     resolver = (IMAGE / "resolve-build-lock.py").read_text()
     assert 'verify_cms(lock["os_updates"]' in resolver
     for name in ("build-image.sh", "customize-rootfs.sh"):

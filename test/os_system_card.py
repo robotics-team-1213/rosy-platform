@@ -55,7 +55,7 @@ def prepare_card(work: Path, *, initial_slot="a") -> dict:
     from os_rauc_fakes import signer
     ab, assembler = layout_module(), assembler_module()
     from os_state_layout import COMMON, SHARED_BINDINGS
-    from os_state_accounts import ACCOUNT_IDS
+    from os_state_accounts import ACCOUNT_IDS, CALIBRATION_GROUP_ID
     from os_ssh_hostkeys import FILES as HOST_KEY_FILES, _keys as validate_host_keys
     from os_bootloader import autoboot
     layout, start = ab.plan(), 2048
@@ -105,6 +105,7 @@ def prepare_card(work: Path, *, initial_slot="a") -> dict:
                 (root / relative).mkdir(parents=True, exist_ok=True)
             (root / "tmp").chmod(0o1777)
             # The Ubuntu cloud fixture lacks the fixed accounts created by customize-rootfs.sh.
+            run(["groupadd", "--root", root, "--gid", CALIBRATION_GROUP_ID, "rosy-calib"])
             for name, identity in ACCOUNT_IDS.items():
                 run(["groupadd", "--root", root, "--gid", identity, name])
                 run(["useradd", "--root", root, "--uid", identity, "--gid", identity,
