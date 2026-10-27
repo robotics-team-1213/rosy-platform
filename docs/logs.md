@@ -12382,3 +12382,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_doctor.py`, 실제 시험 PC 세 대에 대한 `check_capacity` 실행.
 - gate 변화: 없음(읽기 전용 점검).
 - CE: 해당 없음 — 갱신한 교훈(§3)의 확인 절차를 도구로 옮긴 것.
+
+## 2026-10-27 · uncommitted · feat(remote): 시험 작업의 실제 CPU를 재고 코어 예약을 실측으로
+
+- 변경: `tools/remote/remote_job.py` 작업이 끝나면 cgroup `cpu.stat`의 사용 시간과 걸린 시간을 `[remote-pytest] cpu <ms> ms over <ms> ms`로 남긴다. `tools/remote/memory_history.py`가 그 평균 코어를 기록하고, 다음 실행부터 잠금의 코어를 "기록된 최고 평균 × 1.25, 올림"으로 잡는다(`ROSY_JOB_RESERVE_CORES`). 그 값이 작업의 `ROSY_JOB_CORES`보다 작을 때만 쓰고, xdist 일꾼 수(`-n`)는 그대로다. 예약 판단은 `memory_history.reserve()` 한 곳으로 옮겼다.
+- 근거: 10-27 `doctor --hosts`가 AI PC를 "0.0 cores"로 잡았다. 실제 부하는 24코어 중 10.3인데 xdist 작업 잠금이 24코어를 예약했다. 실측 자료가 없어 기록부터 쌓고, 기록이 생긴 시험 묶음만 예약을 줄인다.
+- 증거: 원격 `test/test_remote_pytest_memory.py`(작업 스크립트를 Linux에서 실제로 돌려 cpu 줄과 잠금 값 확인), `test/test_remote_pytest.py`.
+- gate 변화: 없음. 시험 PC 확인의 부하(load1) 검사는 그대로라 실제로 바쁜 PC는 계속 거절된다.
+- CE: 해당 없음 — 갱신한 교훈 §3의 연장이고 근거가 코드·시험에 있다.
