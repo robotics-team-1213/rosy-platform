@@ -267,7 +267,8 @@ def test_unsaved_review_guards_switch_reload_and_departure_without_blocking_refr
     # Confirmation opened before another edit must not discard that newer judgment.
     page.locator('#review-open').click()
     expect(page.get_by_role('dialog')).to_be_visible()
-    reason.fill('newer human judgment')
+    reason.evaluate("""field=>{field.value='newer human judgment';
+        field.dispatchEvent(new Event('input',{bubbles:true}));}""")
     page.get_by_role('button', name='편집 버리고 다시 불러오기', exact=True).click()
     expect(reason).to_have_value('newer human judgment')
     page.locator('#review-open').click()
@@ -286,7 +287,7 @@ def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(p
     import json
     page, state, expect = playback_page
     saved_id, next_id = 'd' * 32, 'e' * 32
-    state.document.update(latest_review_id=saved_id, trainable={'ok': True})
+    state.document.update(latest_review_id=saved_id, trainable={'ok': True, 'counts': {'train': 1, 'eval': 1}})
     page.locator('#review-open').click()
     page.locator('#export-saved-review').check()
     page.locator('#export-name').fill('Reviewed conversion')

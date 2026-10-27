@@ -4,6 +4,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
 import '/omx-review.js';
 import {profileDocumentKey} from '/omx-profiles.js';
+import {renderExportRun} from '/omx-export.js';
 const $=id=>document.getElementById(id);
 const VERDICT={ok:'맞음',adjust:'조정 필요',unmeasurable:'측정 불가'};
 const SPLIT={train:'학습',eval:'평가',test:'시험',exclude:'제외'};
@@ -414,8 +415,10 @@ function renderRuns(){
   if(live.some(run=>run.id===selected))$('experience-run').value=selected;
   if(!live.length)$('experience-run').value='';
   $('experience-run').disabled=!live.length;
-  const nodes=snapshot.runs.map(run=>{
-    if(run.execution_mode==='native_export')return renderExportRun(run);
+  const conversions=snapshot.runs.filter(run=>run.execution_mode==='native_export').map(run=>renderExportRun(run,{states:STATE,request,refresh:refreshCenter,
+    selectDataset:id=>{$('dataset').value=id;pendingRequest=null;selection();}}));
+  $('export-runs').replaceChildren(...(conversions.length?conversions:[el('p','변환 기록이 없습니다. 검수할 시연과 프로필을 선택하세요.','quiet')]));
+  const nodes=snapshot.runs.filter(run=>run.execution_mode!=='native_export').map(run=>{
     const online=run.execution_mode==='online_experience',section=el('section',null,'learning-section');
     section.append(el('h3',`${online?'지속 SAC·경험 수신':run.method==='act'?'ACT 시범/교정':'HIL-SERL SAC 오프라인 재학습'} · ${STATE[run.status]||run.status}`));
     section.append(el('p',`작업 ${run.id} · 데이터 ${run.dataset_id}`,'quiet'));
@@ -444,23 +447,6 @@ function renderRuns(){
     return section;
   });
   $('runs').replaceChildren(...(nodes.length?nodes:[el('p','학습 기록이 없습니다. 데이터를 선택하고 학습을 시작하세요.','quiet')]));
-}
-function renderExportRun(run){
-  const section=el('section',null,'learning-section');
-  section.append(el('h3',`시연 → ACT 데이터 변환 · ${STATE[run.status]||run.status}`));
-  section.append(el('p',`${run.name} · 작업 ${run.id} · 준비 자료 ${run.prepared_id}`,'quiet'));
-  const phase={verifying:'시연 자료 검증 중',exporting:'데이터 변환 중',completed:'데이터 등록 완료'};
-  section.append(el('p',phase[run.progress?.phase]||'변환 상태 확인 중'));
-  if(run.error)section.append(el('p',describe(run.error)));
-  if(run.status==='succeeded'&&run.result){
-    section.append(el('p',`데이터 ${run.result.dataset_id} · revision ${run.result.dataset_revision}`));
-    section.append(el('p',run.result.act_only?'ACT 전용 데이터 · 정책 학습은 별도로 시작하세요.':'정책 학습은 별도로 시작하세요.'));
-  }
-  if(['queued','running'].includes(run.status)){
-    const stop=el('ui-button','이 변환 중지');stop.type='button';stop.setAttribute('kind','quiet');
-    stop.onclick=async()=>{stop.disabled=true;try{await request(CENTER+'/stop',{id:run.id});await refreshCenter();}catch(exc){error(exc.message);stop.disabled=false;}};section.append(stop);
-  }
-  return section;
 }
 async function refreshCenter(){
   if(loading)return;loading=true;
@@ -517,7 +503,7 @@ $('native-export-form').onsubmit=async event=>{
   if($('export-saved-review').checked)pendingExport.review_id=loadedReview.latest_review_id;
   if(selectedProfileRecord)pendingExport.profile_id=selectedProfileRecord.id;
   try{await request(CENTER+'/export',pendingExport);pendingExport=null;$('export-status').textContent='변환 작업을 접수했습니다. 아래 실제 검증·변환 상태를 확인하세요.';await refreshCenter();}
-  catch(exc){$('export-status').textContent='변환 접수 응답을 확인하지 못했습니다. 같은 입력으로 다시 시도할 수 있습니다.';error(exc.message);}
+  catch(exc){$('export-status').textContent=`변환 접수 응답: ${exc.message} · 같은 입력으로 다시 시도할 수 있습니다.`;error(exc.message);}
   finally{exporting=false;exportSelection();}
 };
 $('dataset').onchange=()=>{pendingRequest=null;selection();};

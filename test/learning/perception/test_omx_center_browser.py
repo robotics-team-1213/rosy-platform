@@ -101,7 +101,10 @@ def test_native_review_preview_explicit_confirmation_retry_and_stale_reload(tmp_
                 page.locator('#review-save').click()
                 expect(page.locator('#review-status')).to_contain_text('stale source revision')
                 expect(page.locator('#review-save')).to_be_disabled()
+                departures = []
+                page.once('dialog', lambda dialog: (departures.append(dialog.type), dialog.accept()))
                 page.reload(wait_until='networkidle')
+                assert departures == ['beforeunload']
                 page.locator('#review-open').click()
                 expect(page.locator('[data-episode="0"] [data-field="reason"]')).to_have_value('observed first attempt')
                 expect(page.locator('#export-saved-review')).not_to_be_checked()

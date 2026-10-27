@@ -52,6 +52,7 @@
 <p>기본 조작기는 리더 팔입니다. 게임패드는 선택 가능한 입력 방식으로 준비하며, 작업 팔과 조작기를 구분합니다.</p>
 <ol><li>과제와 장치 설정에서 작업 팔·관절 순서·단위, 카메라의 소속과 배치를 저장합니다.</li><li>상단·손목·측면 시야에 물체와 그리퍼가 보이는지 확인합니다. 카메라를 옮겼다면 배치와 촬영 기준을 다시 확인합니다.</li><li>한 시도마다 영상·관절 상태·실제로 적용한 행동을 같은 기록에 남깁니다. 교정 입력과 개입 시점, 성공·실패·종료·초기화도 함께 기록해야 합니다.</li><li>기록을 연결하고 다음 메뉴에서 프레임·결과를 검수합니다. 영상 파일만으로는 행동을 배우는 데이터가 되지 않습니다.</li></ol>
 <ui-empty><h3>현장 수집·교정 제어는 아직 연결되지 않았습니다</h3><p>이 화면에서 팔을 움직이거나 수집을 시작할 수 없습니다. 장치 연결·교정과 제어 전환을 검증한 뒤 현장 수집 기능을 연결해야 합니다. 이미 수집한 자료는 OMX 시연 준비 결과 폴더로 연결한 뒤 검수할 수 있습니다.</p><div class="learning-next-actions"><a class="workspace-link" href="/learning/camera">카메라 촬영 기준 확인</a><a class="workspace-link" href="/learning?connect=omx#connection-panel">기존 OMX 시연 폴더 연결</a><a class="workspace-link" href="#dataset-section">등록 자료 검수</a></div></ui-empty>
+<p class="quiet">OMX LeRobot 녹화는 모델 PC에서 시연 준비를 마친 폴더를 연결하고, 4단계에서 검수·변환합니다. Pinky Pilot의 MCAP 녹화(.tar)는 모델 PC 수신·영상 변환 후 자료 등록에서 검수하며 OMX 시연 입력과 구분합니다. 변환 완료 카드에서 학습 또는 HF 보관 준비로 이어갈 수 있습니다.</p>
 </section>
 <section id="dataset-section" class="learning-section learning-panel" aria-labelledby="dataset-heading"><h2 id="dataset-heading">4 · 검수·학습 데이터</h2>
 <section class="learning-section learning-panel" aria-labelledby="prepared-heading"><h2 id="prepared-heading">연결된 시연 세트 요약</h2>
@@ -67,6 +68,7 @@
 <label class="ui-check"><input id="export-saved-review" class="ui-field" type="checkbox" disabled> 현재 불러온 저장 검수 사용</label><p id="export-review-status" class="quiet">선택하지 않으면 원본 검수 결정을 사용합니다.</p>
 <p class="quiet">단일 6관절 팔, normalized_-100_100 단위와 원본에 기록된 모든 카메라의 입력 키·영상 크기가 일치하는 프로필 파일이 필요합니다(1 MiB 이하). 추가 카메라도 원본 그대로 변환합니다. 서버가 시연·분할·영수증과 대응을 검증합니다. 미상·시험 fixture 자료는 변환 실행이 거절됩니다.</p>
 <ui-button kind="quiet" id="native-export" type="submit" class="ui-field" disabled>시연 검증하고 ACT 데이터 만들기</ui-button><p id="export-status" role="status"></p></form>
+<div id="export-runs" aria-live="polite"></div>
 <section aria-labelledby="native-review-heading"><h3 id="native-review-heading">시연 프레임과 결과 직접 검수</h3>
 <ui-button kind="quiet" id="review-open" class="ui-field" type="button" disabled>선택 자료 검수 열기 / 다시 불러오기</ui-button>
 <p id="review-status" role="status"></p><div id="review-editor" hidden>
