@@ -205,7 +205,8 @@ def _lineage_record(store, connection, mission_id):
     if detail.get("recovery_approval") is not None:
         from .physical_transfer_recovery_requests import validate_approval
         validate_approval(store, connection, parent_id, detail["recovery_approval"],
-            proposed_by=detail["proposed_by"], evidence=evidence, producer=detail["producer_id"], historical=True)
+            proposed_by=detail["proposed_by"], evidence=evidence, producer=detail["producer_id"],
+            source=request, historical=True)
     return detail
 
 
@@ -313,7 +314,8 @@ def recover_transfer(execution, parent_id, *, proposer, principal, expected_requ
         if recovery_approval is not None:
             from .physical_transfer_recovery_requests import validate_approval
             validate_approval(store, connection, parent_id, recovery_approval, proposed_by=proposed_by,
-                evidence=evidence, producer=authenticated_producer_id, resolve_proposer=resolve_proposer)
+                evidence=evidence, producer=authenticated_producer_id, source=request,
+                resolve_proposer=resolve_proposer)
         child = store._create(connection, principal=proposer, request_key="recovery-" + uuid4().hex,
                               request=PhysicalTransferRequest.model_validate(parent["request"]))
         connection.execute("UPDATE fleet_cell_jobs SET status='HOLD',reason=COALESCE(reason,?),updated_at=? "

@@ -109,7 +109,7 @@ def _validate(execution, connection, parent_id, intent, observations, producer):
 
 
 def validate_approval(store, connection, parent_id, binding, *, proposed_by, evidence,
-                      producer, resolve_proposer=None, historical=False):
+                      producer, source, resolve_proposer=None, historical=False):
     required = {"request_id", "expected_proposal_digest", "expected_evidence_digest", "expected_generation"}
     if not isinstance(binding, dict) or set(binding) != required:
         raise MissionConflict("exact recovery request approval is required")
@@ -119,6 +119,12 @@ def validate_approval(store, connection, parent_id, binding, *, proposed_by, evi
                    for k in ("expected_proposal_digest", "expected_evidence_digest"))):
         raise MissionConflict("invalid recovery request approval binding")
     intent = _intent(connection, parent_id, binding["request_id"], latest=not historical)
+    expected_source = dict(expected_request_digest=source["parent_request_digest"],
+        expected_receipt_event_id=source["source_receipt_event_id"],
+        expected_assessment_digest=source["source_assessment_digest"],
+        expected_generation=source["dispatch_generation"], context=evidence["context"], execution_authorized=False)
+    if intent["source"] != expected_source:
+        raise MissionConflict("authenticated recovery intent targets a different original source")
     proof = _proof(connection, parent_id, intent,
                    binding["expected_evidence_digest"] if historical else None)
     if (intent["proposed_by"] != proposed_by or intent["proposal_digest"] != binding["expected_proposal_digest"]
