@@ -91,8 +91,9 @@ def main(argv=None) -> int:
     from cell_pipeline import FifoCell
 
     cell = FifoCell(args.config.parent / config["io"], config.get("cameras", {}))
-    if not cell.act(f"load {path}").get("ok"):
-        print(json.dumps({"stop": "library refused"}))
+    loaded = cell.act(f"load {path}")
+    if not loaded.get("ok"):  # e.g. no runner: the session ended on its motor-health log budget (2026-10-27)
+        print(json.dumps({"stop": "load failed", "error": loaded.get("error")}))
         return 1
     touched = survey(cell, planner, kept, log=lambda row: print(json.dumps(row), flush=True))
     if touched:
