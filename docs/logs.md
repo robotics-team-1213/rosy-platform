@@ -12260,6 +12260,12 @@ osy-d395-s1d\`.
 - gate 변화: 복구. 수집 게이트와 단독 실행(`ROSY_ALONE_FILES`)이 긴 목록에서도 제 인자를 받는다.
 - CE: 새 교훈 — `docs/solutions/workflow-issues/windows-ssh-exe-cuts-long-remote-command-2026-10-26.md`.
 
+## 2026-10-26 · uncommitted · Monitoring 앱 소유·공유 검증 등록
+
+- 변경: 독립 상태 앱의 소유/표면 기준과 source part·크기 측정·browser scope·CI를 등록했다. 기존 원격 구조/브라우저 게이트를 약화하지 않고 실제 backend 조회를 검증한다.
+- 증거: `1a9cd5b164` 실제 Chromium3시험과 구조/harness/affected/browser-scope262시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). API 브라우저 경로의 증거이며 화면 완성·G1/G2/G3·native 배포·현장 수용은 아니다.
+- gate 변화: UI·배포·실제 PC HOLD 유지. CE: 해당 없음 — 소유/등록/회귀로 기록했다.
+
 ## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 
 - 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
@@ -12496,6 +12502,14 @@ osy-d395-s1d\`.
 - Gate: 변화 없음. 같은 훅 내용, --no-verify 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/shared-pre-push-swapped-mid-run-breaks-long-push-2026-10-27.md`.
 
+## 2026-10-27 · b3091b8312 · feat(os): 로컬 정책·슬롯 조회와 실제 SYSTEM 관측 보완
+
+- 변경: 기존 frozen `os_update_controller.py`에 읽기 전용 `status`를 추가했다. 실행/committed 슬롯, 진행 단계·후보, 실패 이력, 공통 정책·hold 종류만 투영한다. CORE·네트워크·상태 쓰기 없이 조회하며 만료 hold도 지우지 않는다. 손상된 기록을 idle로 만들지 않고 설치 인자를 거절한다. `publish_os_release.py`는 서명된 bundle 크기가 GitHub 개별 asset 한도인 2 GiB 이상이면 캡처·원격 호출 전에 멈춘다.
+- 근거: 실제 x86_64 SYSTEM guest의 oneshot 재부팅 작업은 PID1 `UNIT_STARTED` 완료 이벤트를 남겼고, 기존 시험 helper의 `UNIT_STARTING` 단독 판정이 거절했다. 완료 시각은 시작 시각을 증명하지 않으므로 `earliest_us == 0`인 smoke에만 완료 이벤트를 허용했다. ARM의 양수 deadline은 기존 시작 이벤트·boot·unit·PID1·monotonic 결속을 유지한다.
+- 증거: 크기 사전검사 RED 4건 뒤 publisher 33건 통과. PID1 새 smoke 반례 RED 1건 뒤 일반 회귀 104건 통과·명시 opt-in 6건 제외. 수정한 `2c119bc732`의 실제 SYSTEM opt-in은 4건 모두 통과(445.39초)했고 namespace·DeviceAllow 표현·실제 ext4 및 guest 재부팅 경로를 확인했다. `b3091b8312`의 상태/정책/저장소/controller 원격 시험은 111건 통과·0 NEW였다. source 검토와 Safety-Review는 읽기 전용 상태·권한 경계 범위다.
+- gate 변화: 새 이미지 빌드·서명·게시, 실제 Pi firmware·SD 부팅·FIELD 수용을 주장하지 않는다. ARM kernel 가상 fixture 2건은 별도 진행 중이며 제조사 firmware나 production 이미지 증거가 아니다. 2 GiB 초과 bundle의 실제 배포 경로와 최종 artifact 크기도 미확인이다.
+- CE: 해당 없음 — 시간 의미와 거절 조건은 코드 주석·회귀 시험에서 복원할 수 있으며 실제 관측·실행 출처는 별도 검증 기록에 보존했다.
+
 ## 2026-10-27 · uncommitted · D-893 관제 단위와 호스트 배치
 
 - 변경: 사용자에게 위임받아 중앙 고정·장비별 Fleet 고정·역할별 유연 배치를 비교하고 세 번째를 선택했다. 관제 분리는 작업 책임으로, 호스트 분리는 부하·장치 연결·장애 격리로 결정한다. D-850·D-855·D-862와 기존 장치 실행·안전 권한을 유지하고 배치별 수용 조건을 기록했다.
@@ -12515,6 +12529,23 @@ osy-d395-s1d\`.
 - 증거: 회귀 시험이 고치기 전 코드에서 같은 오류로 실패(원격 1 failed)하고, 고친 뒤 release 시험 109 passed, known_failures NEW 0.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/collection-time-probe-races-across-xdist-workers-2026-10-28.md`.
+
+## 2026-10-28 · uncommitted · fix(test): ARM trial 복구를 SSH 준비와 분리해 관측
+
+- 변경: 시험 전용 root에 빈 persistent journal과 초기 boot probe를 준비했다. Trial은 SSH 준비를 기다리지 않고 정상 reboot 종료를 확인한 뒤 원래 cloud observer에서 target journal을 읽는다. 대상 mount는 owned instance·실제 GPT 확인 후 ro,noload,nodev,nosuid,noexec로 제한하고 실패 시에도 해제한다. 제품 180초 timer와 PID1 시작 이벤트 판정은 유지한다.
+- 근거: 기존 진단에서는 의도한 recovery reboot가 SSH readiness보다 먼저 끝나 wait_boot가 실패했다. Source 슬롯으로 되돌아가면 증거 수집 전에 공통 pending 상태가 바뀔 수 있어 원래 cloud root를 관측자로 선택했다.
+- 증거: source commit `6fa2a37429a68486547bd892d96616a630879eb5`의 실제 emulated ARM 두 방향 시험은 2 passed·0 skipped·0 NEW였다. DT/root/boot/timer probe와 같은 boot의 PID1 시작 이벤트 monotonic 180초 이상 조건을 검사하는 시험이 통과했다. 원문 journal은 실행 중 검증됐지만 성공 로그에 독립 보존되지 않았다. [범위와 영수증](validation/pinky-os-arm-system-2026-10-28/result.md).
+- 통합: source commit `2f8d7fd9af15a432a44269a8ba3b4bf05837b2f9`의 서명·CMS·관측 회귀는 141 passed·6 opt-in skipped·0 NEW였다. Python seal 상수가 없는 경우를 실제 bundle로 검증했고, 잘못된 연산값은 HOLD로 거절했다. 신규 공개 값 하나는 독립 provenance 확인 후 정확한 tuple만 등록했으며 matcher는 유지했다.
+- gate 변화: 새 제품 image·OS bundle 서명/게시, healthy commit 왕복, Pi firmware·hardware watchdog·전원 차단·실물/FIELD 수용으로 승격하지 않는다. 진짜 FULL 검증과 정식 landing/CI/native image 준비는 다음 단계다.
+- CE: 해당 없음 — 비자명한 관측 원칙은 코드 주석·회귀와 제품 검증 기록에서 복원할 수 있어 별도 교훈 문서를 늘리지 않았다.
+
+## 2026-10-28 · uncommitted · fix(harness): operations/monitoring 루트의 capability 복구
+
+- 변경: `tools/harness/platform_parts.yaml`. `applications/monitoring` 루트를 끼워 넣을 때 `operations/monitoring`의 `capability: fleet`가 새 항목으로 넘어가 원래 루트가 capability를 잃었다. 원래 루트에 `capability: fleet`를 다시 둔다.
+- 근거: 착지 사전 시험의 `test/architecture/test_capability_owners.py::test_every_root_has_a_known_capability`가 `operations/monitoring: None`으로 실패했다.
+- 증거: 원격 `test/architecture`·`test/test_harness_contracts.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 편집 실수다.
 
 ## 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
 

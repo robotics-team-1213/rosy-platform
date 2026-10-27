@@ -40,10 +40,7 @@ def admit(instance):
     ADMITTED = True
 
 
-def snapshot(instance):
-    admit(instance)
-    from os_system_card import _guest
-    _guest()  # The original cloud boot, with the six-GPT card entirely unmounted.
+def card_layout():
     from test_ab_image_layout import module
     ab = module()
     layout = ab.validate_layout(json.loads(Path("/work/card/layout.json").read_bytes()))
@@ -53,6 +50,14 @@ def snapshot(instance):
             return stream.read(count)
         if ab.parse_gpt(read_at, 12 * 1024**3, "bootstrap") != layout:
             raise ValueError("SYSTEM snapshot physical GPT differs")
+    return layout
+
+
+def snapshot(instance):
+    admit(instance)
+    from os_system_card import _guest
+    _guest()  # The original cloud boot, with the six-GPT card entirely unmounted.
+    layout = card_layout()
     WORK.mkdir(mode=0o700)
     source = WORK / "source"
     source.mkdir(mode=0o700)
@@ -65,6 +70,29 @@ def snapshot(instance):
         if destination.stat().st_size != part["size_lba"] * 512:
             raise ValueError("SYSTEM snapshot size differs")
     return {"snapshot": True}
+
+
+def journal(instance, source_slot):
+    admit(instance)
+    from os_system_card import _guest
+    _guest()
+    if source_slot not in ("a", "b") or run(["findmnt", "-n", "-o", "SOURCE", "/"]).strip() != b"/dev/vda1":
+        raise ValueError("trial journal requires the original cloud observer root")
+    layout = card_layout()
+    target_slot = "b" if source_slot == "a" else "a"
+    part = next(p for p in layout["partitions"] if p["role"] == "root_" + target_slot)
+    target = WORK / "observed-trial"
+    target.mkdir(mode=0o700)
+    run(["mount", "-t", "ext4", "-o", "ro,noload,nodev,nosuid,noexec", "/dev/vdc" + str(part["number"]), target])
+    try:
+        raw = run(["journalctl", "--directory", target / "var/log/journal", "--output=json", "--no-pager",
+                   "--all", "-n", "128", "--unit=rosy-system-trial-probe.service",
+                   "--unit=rosy-os-trial-deadline.service"], timeout=60)
+        if len(raw) > 1024**2:
+            raise ValueError("trial journal exceeds its evidence bound")
+        return {"journal": raw.decode("utf-8")}
+    finally:
+        run(["umount", target])
 
 
 def _bundle():
@@ -198,7 +226,7 @@ def install(instance, source_slot="a"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("snapshot", "install"))
+    parser.add_argument("command", choices=("snapshot", "install", "journal"))
     parser.add_argument("--instance-id", required=True)
     parser.add_argument("--source-slot", choices=("a", "b"), default="a")
     args = parser.parse_args()
@@ -208,7 +236,9 @@ if __name__ == "__main__":
     if args.command == "install":
         sys.path.insert(0, "/opt/rosy/os-bootstrap/native-runtime")
     try:
-        result = snapshot(args.instance_id) if args.command == "snapshot" else install(args.instance_id, args.source_slot)
+        if args.command == "snapshot": result = snapshot(args.instance_id)
+        elif args.command == "journal": result = journal(args.instance_id, args.source_slot)
+        else: result = install(args.instance_id, args.source_slot)
     except Exception:
         if args.command == "install" and ADMITTED:
             diagnostic = subprocess.run(["journalctl", "-b", "--no-pager", "-n", "45",
