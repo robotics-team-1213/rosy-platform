@@ -136,7 +136,7 @@ async function refresh(current){
       $('storage-cache-enabled').checked=data.cache_policy.enabled;}
     else if(dirty&&formRevision!==data.revision)error('다른 관리자가 저장 설정을 바꿨습니다. 입력을 확인한 뒤 저장 현황을 다시 불러오세요.');
     controls();result(data);
-    if(requestedOmx&&!sourceLoaded){$('storage-prepare-kind').value='omx';await sources();}
+    if(!sourceLoaded&&(requestedOmx||$('storage-prepare-kind').value==='omx')){$('storage-prepare-kind').value='omx';await sources();}
     if(data.operation)timer=setTimeout(()=>poll(current),700);
   }
   return data;
