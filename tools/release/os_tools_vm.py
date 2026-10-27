@@ -339,9 +339,15 @@ class Guest:
         deadline = time.monotonic() + 480
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
-                paths = [self.directory / name for name in ("qemu-stderr.log", "guest-console.log")]
-                raise ValueError("private QEMU exited:\n" + "\n".join(
-                    p.name + ": " + p.read_text(errors="replace")[-3000:] for p in paths if p.is_file()))
+                details = []
+                for name in ("qemu-stderr.log", "guest-console.log"):
+                    path = self.directory / name
+                    if path.is_file():
+                        with path.open("rb") as stream:
+                            stream.seek(0, os.SEEK_END)
+                            stream.seek(max(0, stream.tell() - 3000))
+                            details.append(name + ": " + stream.read(3000).decode(errors="replace"))
+                raise ValueError("private QEMU exited:\n" + "\n".join(details))
             try:
                 if self._ssh("true", timeout=5).returncode == 0:
                     return self
