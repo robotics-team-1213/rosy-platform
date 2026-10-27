@@ -27,4 +27,4 @@ a composition passes it in. G1 SIM use and findings:
 ## CORE and LeRobot
 
 The optional HTTP-only `rosy_omx` Robot adapter connects LeRobot recording and
-inference to CORE's installed OMX policy session. See [setup and limits](CORE_LEROBOT.md).
+inference to CORE's installed OMX policy session. See [setup and limits](docs/CORE_LEROBOT.md).

@@ -386,7 +386,12 @@ def apply(root: Path, record: dict, stage: Stage, run: Runner) -> list[str]:
 
     def black_box() -> None:
         # D-175 L1: readable from the card alone; written only when it matters.
+        from os_state_layout import _layout, mount_facts
+        admitted = _layout(root)
         boot_partition = root / "boot/firmware"
+        if admitted is not None:
+            mount_facts(root, admitted[0])
+            boot_partition = root / "run/rosy-provision-boot"
         if not boot_partition.is_dir() or not rosy_blackbox.needs_write(boot_partition, record):
             return
         tails = {}

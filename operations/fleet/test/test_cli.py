@@ -235,7 +235,7 @@ def test_mission_api_does_not_start_task_dispatcher_for_existing_queued_tasks(
         dispatcher_started.append(True)
         await asyncio.Future()
 
-    monkeypatch.setattr("fleet.server.app._task_dispatch_loop", observe_dispatcher)
+    monkeypatch.setattr("fleet.server.loop_supervision._task_dispatch_loop", observe_dispatcher)
     args = cli.parse_args([
         "console", "--robots", str(robots), "--users-file", str(users),
         "--tasks-db", str(task_db), "--mission-api",

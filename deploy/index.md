@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 - 2026-10-27 · 83b85f7f8a · 네이티브 수집 호출자의 시뮬레이션 호스트 중복 거부
 - 2026-10-27 · 1f121be8a1 · 네이티브 OMX 제어 호스트 명시 등록
 - 2026-10-27 · b6f8f0b46f · Arm S 파일 관측 producer 관리 경로
-- 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
-- 2026-10-26 · uncommitted · clean-storage helper가 원격 `cat` 대신 LoadState로 유닛 확인
+- 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내

@@ -1,0 +1,41 @@
+[Unit]
+Description=ROSY A/B storage admission before network and operator login
+# ssh.socket starts before sockets.target; default basic.target ordering would cycle.
+DefaultDependencies=no
+After=local-fs.target
+Before=sockets.target NetworkManager.service ssh.service ssh.socket tailscaled.service
+Before=rosy-ssh-access-boot.service rosy-first-boot.service rosy-first-boot-retry.service shutdown.target
+Conflicts=shutdown.target
+RequiresMountsFor=/var/lib/rosy-device /run/rosy-provision-boot /var/lib/rosy/provisioning
+RequiresMountsFor=/var/lib/rosy/core /etc/NetworkManager/system-connections /var/lib/rosy/ssh /home/rosy/.ssh
+RequiresMountsFor=/etc/rosy/tls
+RequiresMountsFor=/var/lib/rosy/maps /var/lib/rosy/models /var/lib/rosy/pilot-recordings
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/os_storage_dispatch.py
+TimeoutStartSec=30
+Environment=PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+# PID1 proc-root metadata must stay visible across PrivateDevices; no raw device is opened.
+
+[Install]
+RequiredBy=NetworkManager.service ssh.service ssh.socket tailscaled.service
+RequiredBy=rosy-ssh-access-boot.service rosy-first-boot.service rosy-first-boot-retry.service

@@ -40,7 +40,6 @@ D-839 reserved outside this branch; remove when its ADR lands
 D-842 reserved outside this branch; remove when its ADR lands
 D-843 reserved outside this branch; remove when its ADR lands
 D-844 reserved outside this branch; remove when its ADR lands
-D-860 reserved by another session outside this branch; remove when its ADR lands
 D-872 reserved on preserved communication preparation branches outside this branch; remove when its ADR lands
 D-873 reserved on preserved communication preparation branches outside this branch; remove when its ADR lands
 D-872 reserved by another session outside this branch; remove when its ADR lands
@@ -53,19 +52,17 @@ D-839 reserved in another in-flight branch (refs/adr/D-839); remove when its ADR
 D-842 reserved in another in-flight branch (refs/adr/D-842), absent from origin/main at D-848; remove when its ADR lands
 D-843 reserved in another in-flight branch (refs/adr/D-843), absent from origin/main at D-848; remove when its ADR lands
 D-844 reserved in another in-flight branch (refs/adr/D-844), absent from origin/main at D-848; remove when its ADR lands
-D-860 reserved in another in-flight branch (refs/adr/D-860), absent from origin/main at D-874; remove when its ADR lands
 D-872 reserved by another session outside this branch; remove when its ADR lands
 D-873 reserved by another session outside this branch; remove when its ADR lands
 D-872 reserved in another in-flight branch (refs/adr/D-872), absent from origin/main at D-874; remove when its ADR lands
 D-873 reserved in another in-flight branch (refs/adr/D-873), absent from origin/main at D-874; remove when its ADR lands
 D-880 reserved in another in-flight branch (refs/adr/D-880), absent from main at D-886; remove when its ADR lands
-D-881 reserved in another in-flight branch (refs/adr/D-881), absent from main at D-886; remove when its ADR lands
 D-882 reserved in another in-flight branch (refs/adr/D-882), absent from main at D-886; remove when its ADR lands
 D-880 reserved in another in-flight branch (refs/adr/D-880), absent from this D-884 branch; remove when its ADR lands
-D-881 reserved in another in-flight branch (refs/adr/D-881), absent from this D-884 branch; remove when its ADR lands
 D-882 reserved in another in-flight branch (refs/adr/D-882), absent from this D-884 branch; remove when its ADR lands
 D-880 reserved in another in-flight branch (refs/adr/D-880, fix/comm-admission-fence), absent from main at D-883; remove when its ADR lands
-D-881 reserved in another in-flight branch (refs/adr/D-881, feat/rosy-ab-state), absent from main at D-883; remove when its ADR lands
 D-882 reserved in another in-flight branch (refs/adr/D-882, fix/comm-freshness-current-main), absent from main at D-883; remove when its ADR lands
-D-888 reserved in another in-flight branch (refs/adr/D-888), absent from this D-890 branch; remove when its ADR lands
-D-888 reserved in another in-flight branch (refs/adr/D-888, feat/rosy-ab-state), absent from main at D-883; remove when its ADR lands
+D-894 reserved in another in-flight branch (refs/adr/D-894, manual arm shared contract and authenticated cross-host CORE ingress), absent from this D-895 branch; remove when its ADR lands
+D-896 reserved in another in-flight branch (refs/adr/D-896, Arm S measured-cell Isaac reproduction and single-model sim training); remove when its ADR lands
+D-897 reserved in another in-flight branch (refs/adr/D-897, isolated AI/model PC simulation training); remove when its ADR lands
+D-898 reserved in another in-flight branch (refs/adr/D-898, Fleet perception approval to model registry); remove when its ADR lands

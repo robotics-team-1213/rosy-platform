@@ -2,9 +2,10 @@
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from hashlib import sha256
+import json
 from uuid import uuid4
 
-from .mission_store import _json
+from .mission_store import MissionConflict, _json
 
 
 def world_observations(samples):
@@ -37,6 +38,17 @@ def _document(value):
 
 def evidence_document(context, observations):
     return _json(dict(context=context.model_dump(mode="json"), samples=_document(observations)))
+
+
+def validate_post_action_order(connection, mission_id, observations):
+    row = connection.execute("SELECT evidence_json FROM fleet_physical_transfer_observations "
+        "WHERE mission_id=? AND phase='PRE_DISPATCH'", (mission_id,)).fetchone()
+    if row is None:
+        raise MissionConflict("post-action evidence requires the original preconditions")
+    pre = json.loads(row[0])["samples"]
+    if ({sample.evidence_id for sample in observations} & {sample["evidence_id"] for sample in pre}
+            or observations[0].sequence <= max(sample["sequence"] for sample in pre)):
+        raise MissionConflict("physical closure requires new ordered observations after the preconditions")
 
 
 def record(connection, *, mission_id, grant, context, observations, validated_at_ns):

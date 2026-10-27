@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import os
 import re
 import subprocess
@@ -188,9 +189,12 @@ def test_probe_parser_reads_only_the_rosyprobe_line():
     assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6 0\n") is None
     assert rp.parse_probe("ROSYPROBE 8 0.5\n") is None
     assert "disk_free_gb" not in p  # an older probe: disk unknown, never a refusal
-    # ~/rosy-test then /tmp: the fuller filesystem counts
+    # ~/rosy-test then /tmp: GB of ~/rosy-test's disk, use% of the fuller; a full /tmp still refuses
     disk = rp.parse_probe(f"{line} 52428800 40 2726297 100 \n")
-    assert disk["disk_free_gb"] == 2726297 / 2**20 and disk["disk_use"] == 100 and disk["nproc"] == 8
+    assert disk["disk_free_gb"] == 50 and disk["disk_use"] == 100 and disk["nproc"] == 8 and rp.disk_full(disk)
+    # the site PC: 103 GB free on / and a 7.4 GB tmpfs /tmp at 1% is healthy
+    site = rp.parse_probe(f"{line} 107186760 54 7774272 1 \n")
+    assert not rp.disk_full(site), "a small empty tmpfs is not a full disk"
 
 
 def _probe(**disk):
@@ -412,7 +416,8 @@ def test_pushing_origin_main_itself_sends_a_full_bundle(tmp_path, monkeypatch):
 def _fake_ssh(tmp_path, monkeypatch, fail_on):
     """A fake ssh: `true` succeeds; a script containing `fail_on` exits 1, anything else 0."""
     fake = tmp_path / "fake_ssh.py"
-    fake.write_text("import sys\nc = sys.argv[-1]\nif c != 'true':\n    sys.stdin.buffer.read()\n"
+    fake.write_text("import sys\nc = sys.argv[-1]\nif c != 'true':\n    data = sys.stdin.buffer.read()\n"
+                    "    c = data.decode() if c == 'bash -s' else c\n"  # remote_job.ssh_call: command on stdin
                     f"sys.exit(1 if {fail_on!r} in c else 0)\n", encoding="utf-8")
     monkeypatch.setattr(rp, "SSH", [sys.executable, str(fake)])
     monkeypatch.setenv("ROSY_TEST_HOSTS", "h")
@@ -742,7 +747,7 @@ def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
     assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
     assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
-    assert 'X=browser' in rj.JOB and 'echo "$$ $X $C $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
+    assert 'X=browser' in rj.JOB and 'echo "$$ $X $RC $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
 
 
 def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch):
@@ -752,8 +757,9 @@ def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "0")
     head, answers, sent = _git(repo, "rev-parse", "HEAD"), [255, 255, 0], []
     monkeypatch.setattr(rp.time, "sleep", lambda s: None)
-    monkeypatch.setattr(rp, "remote", lambda host, script, *a, input=None, **kw: sent.append(input) or
-                        subprocess.CompletedProcess([], answers.pop(0), b"", b""))
+    real = subprocess.run
+    monkeypatch.setattr(rp.subprocess, "run", lambda argv, **kw: real(argv, **kw) if argv[0] == "git" else
+                        sent.append(kw["input"]) or subprocess.CompletedProcess(argv, answers.pop(0), b"", b""))
     rp.ship(repo, "h", head, "run1")
     assert len(sent) == 3 and sent[0] == sent[2]  # the whole bundle again each time
     answers[:] = [255, 255, 255]
@@ -761,6 +767,19 @@ def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch
         rp.ship(repo, "h", head, "run2")
     # A second attempt can add it again, even over a half-made (locked "initializing") worktree.
     assert 'git worktree remove -f -f "$R/runs/$NAME"' in rp.SHIP and rp.remote_job.SWEEP in rp.SHIP
+
+
+def test_a_dropped_link_reruns_only_steps_given_tries(monkeypatch):
+    """2026-10-27: one ssh banner timeout in venv setup stopped a landing after an hour in the queue."""
+    answers, calls = [255, 255, 0], []
+    monkeypatch.setattr(rp.time, "sleep", lambda s: None)
+    monkeypatch.setattr(rp.subprocess, "run", lambda argv, **kw: calls.append(argv) or
+                        subprocess.CompletedProcess(argv, answers.pop(0)))
+    assert rp.remote("h", rp.VENV, "run1", timeout=1, tries=3).returncode == 0 and len(calls) == 3
+    answers[:], calls[:] = [255, 0], []
+    assert rp.remote("h", rp.CLEANUP, "run1", timeout=1).returncode == 255 and len(calls) == 1
+    src = inspect.getsource(rp.run_on)
+    assert 'STEP_TIMEOUT["venv"], tries=3' in src, "venv setup reruns (its recipe locks and rebuilds from scratch)"
 
 
 def _job_env(tmp_path, python_body):
@@ -934,6 +953,24 @@ def test_a_job_that_dies_without_an_exit_code_is_reported_after_two_polls(tmp_pa
     assert fake.polls == 5 and now[0] < 60  # not the 92-minute timeout
     text = log.read_bytes()
     assert text.startswith(b"half a log\n") and b"ended without an exit code" in text
+
+
+def test_ssh_call_keeps_a_long_job_word_whole_past_the_ssh_exe_cut():
+    """2026-10-26: Git for Windows' ssh.exe started from Python cuts its remote command at ~8,190 bytes, silently.
+    A FULL landing's collection gate word (115 paths) lost the paths after it and pytest collected the whole tree."""
+    if not shutil.which("bash") or sys.platform == "win32":
+        pytest.skip("bash stands in for the remote shell")
+    word = "ROSY_COLLECT_PATHS=" + ",".join(f"pkg{i}/module/test" for i in range(600))
+    args = [word, "tools/collect_alone.py", "-pno:cacheprovider"]
+    cut_ssh = ["bash", "-c", 'exec bash -c "${2:0:8186}"', "ssh"]  # $1 host, $2 the remote command, as measured
+    done = rj.ssh_call(cut_ssh, "h", 'printf "%s\\n" "$#" "${#1}" "$2" "$3"', *args)
+    assert done.stdout.decode().split() == ["3", str(len(word)), *args[1:]]
+
+
+def test_remote_refuses_a_command_ssh_exe_would_cut(monkeypatch):
+    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: pytest.fail("a cut command reached ssh"))
+    with pytest.raises(SystemExit, match="over"):
+        rp.remote("h", "true", "x" * rj.ARGV_MAX, timeout=1)
 
 
 def test_killed_job_shows_no_live_pid_and_no_code_and_start_does_not_rerun_a_finished_job(tmp_path):
@@ -1183,9 +1220,10 @@ def test_worker_count_follows_free_cores_memory_the_job_cap_and_the_site_quota(m
 @pytest.mark.parametrize("inv, why", [
     (GROUP, None),
     (["shared/web/test/", ".\\contracts\\foundation\\test", "-k", "not slow"], None),
-    (["test/test_land.py"], "test is in serial_suites.txt"),
-    (["middleware/core/gateway/test", "middleware/perception/test"], "middleware/perception is in"),
-    (["middleware"], "is in serial_suites.txt"),  # a parent of a serial suite
+    (["test", "operations/fleet/test", "middleware/perception"], None),  # -n 6 matched serial (2026-10-27)
+    (["learning/envs/isaac/test/test_x.py"], "learning/envs/isaac/test is in serial_suites.txt"),
+    (["middleware/core/gateway/test", "integrations/simulation/gazebo/test"], "gazebo/test is in"),
+    (["integrations"], "is in serial_suites.txt"),  # a parent of a serial suite
     (["."], "is in serial_suites.txt"),
     (["middleware/core/gateway/test/test_api.py::test_x"], "node ids"),
     ([rp.BROWSER_ENV, "shared/web/test"], "browser job"),
@@ -1202,7 +1240,7 @@ def test_serial_list_and_rules_keep_hazardous_invocations_serial(inv, why):
 def test_serial_list_parses_comments_and_names_real_paths():
     assert xp.load_serial("# head\n\ntest  # why\n middleware\\perception/ \n") == ["test", "middleware/perception"]
     serial = xp.load_serial(xp.SERIAL_FILE.read_text(encoding="utf-8"))
-    assert "test" in serial and "operations/fleet/test" in serial
+    assert "integrations/simulation/gazebo/test" in serial and "tools" in serial  # tools: land_isolation's jobs
     assert all((ROOT / prefix).exists() for prefix in serial), "a stale line keeps nothing serial"
 
 

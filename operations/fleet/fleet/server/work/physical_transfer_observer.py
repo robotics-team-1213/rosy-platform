@@ -10,6 +10,8 @@ from .mission_store import MissionConflict, _json
 from .physical_transfer_evidence import TransferEvidenceContext
 from .physical_transfer_io import physical_io
 from .physical_transfer_observations import evidence_document, world_observations
+from .physical_transfer_outcomes import record_transfer_outcome
+from .physical_transfer_recovery import CREATED
 from .physical_transfer_store import PhysicalTransferRequest
 
 
@@ -68,6 +70,9 @@ class PhysicalObservationService:
                 "JOIN fleet_cell_jobs j ON j.mission_id=a.mission_id "
                 "WHERE j.provenance_kind='physical' AND j.status!='GOAL_CONFIRMED' ORDER BY a.prepared_at_ns DESC").fetchall()
             for row in rows:
+                if connection.execute("SELECT 1 FROM fleet_cell_events WHERE mission_id=? AND event_type=?",
+                                      (row["mission_id"], CREATED)).fetchone() is not None:
+                    continue
                 try:
                     self._job(connection, row["mission_id"])
                 except PermissionError:
@@ -130,6 +135,9 @@ class PhysicalObservationService:
                     authenticated_producer_id=self.observer.producer_id)
             else:
                 capabilities, at = ((), self.store._now_ns()) if prior is not None else self.dispatcher._capabilities()
+                if prior is None:
+                    record_transfer_outcome(self.execution, mission_id, body.expected_request_digest, samples,
+                                            authenticated_producer_id=self.observer.producer_id)
                 self.execution.confirm_physical(mission_id, expected_request_digest=body.expected_request_digest,
                     observations=samples, authenticated_producer_id=self.observer.producer_id,
                     capabilities=capabilities, capabilities_observed_at_ns=at)
