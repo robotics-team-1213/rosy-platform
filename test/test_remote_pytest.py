@@ -747,7 +747,7 @@ def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
     assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
     assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
-    assert 'X=browser' in rj.JOB and 'echo "$$ $X $C $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
+    assert 'X=browser' in rj.JOB and 'echo "$$ $X $RC $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
 
 
 def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch):

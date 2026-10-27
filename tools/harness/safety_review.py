@@ -30,6 +30,7 @@ landing adds) and ``tools/hooks/pre-push`` (``origin/main..`` the pushed sha) en
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import subprocess
@@ -79,11 +80,21 @@ def _under(path: str, root: str) -> bool:
 
 
 def _manifest(commit: str) -> dict:
-    """Manifest at ``commit``; empty before it existed."""
-    try:
-        return yaml.safe_load(_git("show", f"{commit}:{MANIFEST}")) or {}
-    except subprocess.CalledProcessError:
-        return {}
+    """Manifest at ``commit``; empty before it existed. Read-only: the dict is shared across commits."""
+    return _manifest_at(commit) if re.fullmatch(r"[0-9a-f]{40}", commit) else _manifest_at.__wrapped__(commit)
+
+
+@functools.cache  # full SHAs only: a ref such as HEAD moves
+def _manifest_at(commit: str) -> dict:
+    oid = subprocess.run(["git", "rev-parse", "-q", "--verify", f"{commit}:{MANIFEST}"],
+                         capture_output=True, text=True).stdout.strip()
+    return _parse(oid) if oid else {}
+
+
+@functools.cache
+def _parse(oid: str) -> dict:
+    # 2026-10-27: yaml.safe_load was 738 of 1,150 s on a 1,878-commit publish range; the blob rarely changes.
+    return yaml.safe_load(_git("cat-file", "blob", oid)) or {}
 
 
 def is_safety(path: str, roots: list[dict], modules: set[str]) -> bool:
@@ -110,9 +121,9 @@ def _parents(commit: str) -> list[str]:
     return _git("rev-list", "--parents", "-n", "1", commit).split()[1:]
 
 
-def needs_review(commit: str, range_manifests: tuple[dict, ...]) -> list[str]:
+def needs_review(commit: str, range_manifests: tuple[dict, ...], parents: list[str] | None = None) -> list[str]:
     """Why ``commit`` needs a trailer (empty when it does not)."""
-    parents = _parents(commit)
+    parents = _parents(commit) if parents is None else parents
     if len(parents) > 1:
         changed = _git("diff-tree", "--cc", "--no-commit-id", "--name-only", commit).split()
     else:
@@ -135,8 +146,13 @@ def resolve_base(base: str, head: str) -> str:
 
 
 def commits(base: str, head: str) -> list[str]:
-    return [commit for commit in _git("rev-list", "--reverse", head, "^" + base, "^" + BASELINE).split()
-            if commit not in EXEMPT]
+    return list(_with_parents(base, head))
+
+
+def _with_parents(base: str, head: str) -> dict[str, list[str]]:
+    """Commits of the range, oldest first, each with its parents (one rev-list for the whole range)."""
+    rows = _git("rev-list", "--reverse", "--parents", head, "^" + base, "^" + BASELINE).splitlines()
+    return {row.split()[0]: row.split()[1:] for row in rows if row and row.split()[0] not in EXEMPT}
 
 
 def main(argv: list[str]) -> int:
@@ -153,9 +169,9 @@ def main(argv: list[str]) -> int:
     base = resolve_base(base, head)
     range_manifests = (_manifest(head), _manifest(base))
     missing = []
-    checked = commits(base, head)
-    for commit in checked:
-        reasons = needs_review(commit, range_manifests)
+    checked = _with_parents(base, head)
+    for commit, parents in checked.items():
+        reasons = needs_review(commit, range_manifests, parents)
         if reasons and not TRAILER.search(_git("log", "-1", "--format=%B", commit)):
             subject = _git("log", "-1", "--format=%h %s (author %an)", commit).strip()
             missing.append(f"{subject}\n    " + "\n    ".join(reasons))

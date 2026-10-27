@@ -78,7 +78,9 @@ def _ids(wt: Path, verdict: str) -> list[str]:
 
     A run over several paths can print ids from another pytest rootdir (2026-10-26, feat/update-view:
     ``middleware/robot_execution/local/test_feature_matrix.py`` for ``applications/fleet/test/...``), and the
-    reruns below then found no file. A path the tree lacks takes the one tracked test file of that name.
+    reruns below then found no file. A path the tree lacks takes the one tracked test file of that name. A
+    directory printed in place of the file (2026-10-27: ``middleware/robot_execution/local::test_x`` for
+    ``shared/web/test/...``) takes the one tracked test file that defines the test.
     """
     ids = []
     for line in verdict.splitlines():
@@ -87,8 +89,13 @@ def _ids(wt: Path, verdict: str) -> list[str]:
         nodeid = m.group(1).strip()
         path, sep, rest = nodeid.partition("::")
         if not (wt / path).is_file():
-            found = [p for p in _git(wt, "ls-files", "--", f"*{Path(path).name}").stdout.splitlines()
-                     if Path(p).name == Path(path).name]
+            if path.endswith(".py"):
+                found = [p for p in _git(wt, "ls-files", "--", f"*{Path(path).name}").stdout.splitlines()
+                         if Path(p).name == Path(path).name]
+            else:
+                name = re.escape(rest.split("::")[0].split("[")[0])
+                found = _git(wt, "grep", "-lE", rf"^\s*(async\s+)?(def|class)\s+{name}\b", "--",
+                             "*test_*.py").stdout.splitlines()
             if len(found) == 1:
                 nodeid = found[0] + sep + rest
         ids.append(nodeid)

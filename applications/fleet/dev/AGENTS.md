@@ -1,4 +1,8 @@
+<!-- Parent: ../AGENTS.md -->
+
 # Fleet frontend development host
+
+**Parent context:** `../AGENTS.md`
 
 Read [../README.md](../README.md) for sample/connected commands and [progress.md](progress.md) and [logs.md](logs.md) for verification scope and history. Root repository instructions own worktrees, commits, remote testing and landing.
 
