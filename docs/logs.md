@@ -12480,6 +12480,22 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 실패한 FULL은 통과로 계산하지 않으며 공식 FULL 재실행과 HTTP·화면 연결이 남았다.
 - CE: 해당 없음 — 새 운영 교훈이 필요한 장애가 아니다.
 
+## 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
+
+- 변경: `tools/harness/affected_ci.py`의 `modules` 항목에서 `gating: False`를 뗐다. 2026-10-25부터 main CI 실행에서 연속 녹색이었다. 이제 판정 밖은 sensing뿐이다.
+- 영향: execution_local처럼 `modules` 러너만 도는 모듈 시험도 CI가 판정한다. 모듈 추가 착지의 "CI 판정 matrix 밖" 경고가 이 경우 더 나오지 않는다(`affected_narrow.py`).
+- 시험: `test_modules_runner_gates`(11-15 마감 시험 대체), `not-ci-gated` 사례를 sensing 시험(`middleware/perception/test`)으로 바꿈.
+- 증거: GitHub main CI `test (modules)` 녹색 10회 연속(2026-10-25~26, 마지막 run 40412528805).
+- gate 변화: 없음. CI 판정 범위만 넓어짐.
+
+## 2026-10-27 · ae535f57ec · fix: publish push가 자기 SHA의 pre-push 사본으로 돈다
+
+- 변경: `tools/publish_main.py --apply`가 게시 SHA의 `tools/hooks/pre-push`를 CR 없이 `<git-common-dir>/rosy-publish/<branch>-hooks/`에 쓰고 `core.hooksPath`로 push한다. 공용 훅을 다른 착지가 재설치해도 진행 중인 게이트는 바뀌지 않는다.
+- 근거: 10-27 수동 게시 push 두 번이 크기 규칙(약 105분) 도중 공용 훅 교체(14:19)로 `exit=127`과 `line 152: syntax error`로 끝났다. 같은 SHA의 크기 규칙 단독 실행은 통과했다.
+- 증거: 원격 `test/test_publish_main.py`(공용 훅이 실패해도 SHA의 훅으로 push, 사본 정리).
+- Gate: 변화 없음. 같은 훅 내용, --no-verify 없음.
+- CE: 새 교훈 기록 — `docs/solutions/workflow-issues/shared-pre-push-swapped-mid-run-breaks-long-push-2026-10-27.md`.
+
 ## 2026-10-27 · b3091b8312 · feat(os): 로컬 정책·슬롯 조회와 실제 SYSTEM 관측 보완
 
 - 변경: 기존 frozen `os_update_controller.py`에 읽기 전용 `status`를 추가했다. 실행/committed 슬롯, 진행 단계·후보, 실패 이력, 공통 정책·hold 종류만 투영한다. CORE·네트워크·상태 쓰기 없이 조회하며 만료 hold도 지우지 않는다. 손상된 기록을 idle로 만들지 않고 설치 인자를 거절한다. `publish_os_release.py`는 서명된 bundle 크기가 GitHub 개별 asset 한도인 2 GiB 이상이면 캡처·원격 호출 전에 멈춘다.
@@ -12487,6 +12503,20 @@ osy-d395-s1d\`.
 - 증거: 크기 사전검사 RED 4건 뒤 publisher 33건 통과. PID1 새 smoke 반례 RED 1건 뒤 일반 회귀 104건 통과·명시 opt-in 6건 제외. 수정한 `2c119bc732`의 실제 SYSTEM opt-in은 4건 모두 통과(445.39초)했고 namespace·DeviceAllow 표현·실제 ext4 및 guest 재부팅 경로를 확인했다. `b3091b8312`의 상태/정책/저장소/controller 원격 시험은 111건 통과·0 NEW였다. source 검토와 Safety-Review는 읽기 전용 상태·권한 경계 범위다.
 - gate 변화: 새 이미지 빌드·서명·게시, 실제 Pi firmware·SD 부팅·FIELD 수용을 주장하지 않는다. ARM kernel 가상 fixture 2건은 별도 진행 중이며 제조사 firmware나 production 이미지 증거가 아니다. 2 GiB 초과 bundle의 실제 배포 경로와 최종 artifact 크기도 미확인이다.
 - CE: 해당 없음 — 시간 의미와 거절 조건은 코드 주석·회귀 시험에서 복원할 수 있으며 실제 관측·실행 출처는 별도 검증 기록에 보존했다.
+
+## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
+- 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
+- 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
+- gate 변화: 없음. 차례 마감(B)과 겹침 섀도(A)는 아직 켜지 않았다.
+- 교훈: 해당 없음. 측정과 규칙은 ADR에 있다.
+
+## 2026-10-28 · uncommitted · fix(release): 권한 확인 파일 이름을 호출마다 다르게
+
+- 변경: `test/test_release_unpack_helper.py`. 모듈 수준 `skipif`의 권한 확인이 고정 이름 `_perm_probe` 대신 `tempfile.mkstemp`로 만든 고유 이름을 쓴다. 같은 디렉터리에서 동시에 불러도 실패하지 않는지 보는 회귀 시험을 더했다.
+- 근거: 10-28 03:15 AI PC에서 착지 사전 시험의 `test/` 실행이 수집 단계에서 `FileNotFoundError`로 멈췄다. 한 작업의 xdist 작업자들은 같은 TMPDIR를 쓰고 이 모듈을 동시에 수집한다(원인 분석 robot-45).
+- 증거: 회귀 시험이 고치기 전 코드에서 같은 오류로 실패(원격 1 failed)하고, 고친 뒤 release 시험 109 passed, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — `docs/solutions/workflow-issues/collection-time-probe-races-across-xdist-workers-2026-10-28.md`.
 
 ## 2026-10-28 · uncommitted · fix(test): ARM trial 복구를 SSH 준비와 분리해 관측
 
