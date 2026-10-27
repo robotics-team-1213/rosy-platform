@@ -3735,3 +3735,9 @@
 - 증거: exact50438808a9 official 원격 파일별 독립 실행 `os-isolated-activation-green` 30passed1.87s, `os-isolated-ship-green` 13passed10.10s, `os-isolated-mounted-green` 13passed0.13s, 각각0NEW다. 서로 다른 pytest 프로세스이며 수정 전 단독 실패가 수정 뒤 통과했다. 세 파일 diff의 독립 리뷰는 package/standalone 실행 및 실제 SDK closure를 확인했다. 기체·서명·SD 검증의 증거는 아니다.
 - gate 변화: 최종 FULL과 정식 local main 착지는 아직 미완료다. e80 자동 재검사는 고정된 이전 커밋을 사용하고, HEAD 변경 보호가 오래된 후보의 착지를 차단한다. 새 native ARM64 이미지·제품 서명·SD 기록/전체 읽기·DEVICE는 계속 남는다.
 - CE: 해당 없음 — [기존 import 격리 교훈](../docs/solutions/workflow-issues/shared-pytest-process-masks-path-dependent-import-2026-10-26.md)을 적용했다. 원인과 예방은 이미 그 교훈에 있고, 이번 변경의 판단과 독립 실행은 코드·시험·이 기록으로 확인할 수 있어 교훈을 중복 추가하지 않았다.
+
+## 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내
+
+- 변경: deploy/site/README.md 운영 절에 루프 생존(`/readyz`, 503과 최소 본문)과 프로세스 생존(`/healthz`)의 분리를 적었다. compose healthcheck·mdns 광고 검증·autoupdate 게이트는 `/healthz`를 그대로 쓰며 `/readyz`에 연결하지 않는다고 못박았다.
+- 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
+- gate 변화: 없음. CE: 해당 없음.
