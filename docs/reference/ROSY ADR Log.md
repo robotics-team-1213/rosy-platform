@@ -1332,4 +1332,3 @@ HF user/org별 용량 예약과 작업의 연결·고정 revision·SHA를 보존
 **Status:** Accepted (2026-10-24)
 
 Fleet stores editable device names, models, declared arm counts and hardware identifiers in its existing database. Profiles confer no membership, connection attestation or motion authority. Details: [D-860](../adr/D-860-descriptive-device-profiles.md).
-
