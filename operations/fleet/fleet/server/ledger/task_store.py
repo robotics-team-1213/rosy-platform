@@ -311,7 +311,7 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
                                      "fleet-recovery", now, reason)
                 recovered += 1
             safe = connection.execute(
-                """SELECT task_id FROM fleet_tasks
+                """SELECT task_id, dispatch_phase, lease_owner FROM fleet_tasks
                    WHERE status='QUEUED' AND dispatch_phase IN ('READY', 'WAITING_TRAFFIC')"""
             ).fetchall()
             for row in safe:
@@ -324,6 +324,11 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
                                    (row["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
                                         owner_id=row["task_id"])
+                if row["lease_owner"] or row["dispatch_phase"] == "WAITING_TRAFFIC":
+                    # The restart took a held lease (or an interrupted traffic wait) away;
+                    # the ledger keeps the audit row. Untouched READY rows stay quiet.
+                    self._append_history(connection, row["task_id"], "QUEUED", "system",
+                                         "fleet-recovery", now, "LEASE_RECLAIMED")
             connection.commit()
         return recovered
 
