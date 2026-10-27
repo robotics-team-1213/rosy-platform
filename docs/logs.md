@@ -12374,3 +12374,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_remote_pytest.py`, `test/test_remote_pytest_memory.py`.
 - gate 변화: 없음(같은 시험, 같은 판정). 시험 PC 한 대에 동시에 오르는 작업이 늘어난다. 작업마다 `MemoryMax` 6 GB와 실제 `MemAvailable` 검사는 그대로다.
 - CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` §3.
+
+## 2026-10-27 · uncommitted · feat(doctor): 장부상 거절된 시험 PC를 경고
+
+- 변경: `tools/doctor.py --hosts`가 시험 PC마다 착지와 같은 배치 판정(`remote_pytest.place`)을 돌리고, 거절인데 실제 여유 메모리·부하·디스크로는 설명되지 않으면 `WARN capacity <host>: ... refused by bookkeeping, not load`를 낸다. 진짜로 꽉 찬 PC의 거절은 OK로 보인다.
+- 근거: 10-27 착지 대기의 원인이 시험 PC 부족이 아니라 예약 장부(3 GB 예약에 0.3 GB 사용)와 `/tmp` tmpfs 판정이었다. 같은 종류가 다시 생기면 사람이 `free -g`를 비교하기 전에 드러나야 한다.
+- 증거: 원격 `test/test_doctor.py`, 실제 시험 PC 세 대에 대한 `check_capacity` 실행.
+- gate 변화: 없음(읽기 전용 점검).
+- CE: 해당 없음 — 갱신한 교훈(§3)의 확인 절차를 도구로 옮긴 것.
