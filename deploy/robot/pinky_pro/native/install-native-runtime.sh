@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Install the native runtime support tree into DESTINATION so it runs without
-# the repository around it (D-174 F1). The image build installs two copies:
-# the immutable /opt/rosy/native-runtime and the per-release
-# deploy/robot/native in a release. Both must import their helpers from their own directory.
+# the repository around it (D-174 F1). Image builds stage the live native-runtime
+# and each signed release; OS boot support freezes its required subset separately.
+# Every copy imports its helpers from its own directory.
 set -euo pipefail
 
 [[ $# -eq 1 ]] || { echo "usage: $0 DESTINATION" >&2; exit 2; }
@@ -22,6 +22,7 @@ find "$DESTINATION" -name '__pycache__' -type d -prune -exec rm -rf {} +
 rm -f -- "$DESTINATION/install-native-runtime.sh"
 # native_release.py imports signing; it is standard-library only.
 cp "$SCRIPT_DIR/../../../hosts/common/release/signing.py" "$DESTINATION/signing.py"
+cp "$SCRIPT_DIR/../sd/media_layout.py" "$DESTINATION/media_layout.py"
 for helper in host_agent.py host_agent_server.py host_lane_perception.py ssh_pairing.py network.py network_transaction.py nm_network.py; do
     cp "$RELEASE_TOOLS/$helper" "$DESTINATION/$helper"
 done
