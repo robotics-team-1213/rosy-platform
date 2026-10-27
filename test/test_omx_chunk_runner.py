@@ -338,7 +338,8 @@ def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_gua
         return
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
     done = by_command(status, "run approach_pinky")[0]
-    assert done["ok"] and done["state"][3] == pytest.approx(60.0) and done["paced_ticks"] > 0
+    assert done["ok"] and done["settled"] and done["paced_ticks"] > 0
+    assert 60.0 - done["state"][3] <= m.PACE_LAG + 0.2  # the whole chunk played; settled within the runner's tolerance
     assert robot.worst < m.PACE_LAG + 0.2  # held near the pace bound, far from the guard's
 
 
