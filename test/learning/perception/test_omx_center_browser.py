@@ -283,9 +283,11 @@ def test_learning_center_offline_and_continuous_experience_actions(tmp_path):
         thread.join(timeout=5)
 
 
-def test_native_export_validates_file_retries_same_request_and_tracks_jobs(tmp_path):
+@pytest.mark.parametrize('staged', [False, True])
+def test_native_export_validates_file_retries_same_request_and_tracks_jobs(tmp_path, staged):
     playwright = pytest.importorskip('playwright.sync_api')
     prepared_id = None
+    data_id, data_revision = str(uuid.uuid4()), 'f' * 64
     profile = {'schema': 'rosy.omx.learning-profile/2', 'name': 'Declared native mapping'}
 
     class Center:
@@ -342,7 +344,8 @@ def test_native_export_validates_file_retries_same_request_and_tracks_jobs(tmp_p
                 page.route('**/api/learning/omx', lambda route: route.fulfill(json={'sets': [{
                     'id': prepared_id, 'name': 'Registered reviewed native set',
                     'trainable': {'ok': True, 'counts': {'train': 2, 'eval': 1}}, 'episodes': []}]}))
-                page.goto(f'http://127.0.0.1:{server.server_port}/learning/omx?view=all', wait_until='networkidle')
+                suffix = '#dataset-section' if staged else '?view=all'
+                page.goto(f'http://127.0.0.1:{server.server_port}/learning/omx{suffix}', wait_until='networkidle')
                 if page.locator('#dataset option').count() > 1:
                     page.locator('#dataset').select_option(index=1)
                 expect = playwright.expect
@@ -364,33 +367,40 @@ def test_native_export_validates_file_retries_same_request_and_tracks_jobs(tmp_p
                 expect(page.locator('#export-name')).to_have_value('Native ACT data')
                 expect(page.locator('#export-profile')).to_have_value('C:\\fakepath\\profile.json')
                 page.locator('#native-export').click()
-                expect(page.locator('#center-error')).to_contain_text('reply lost')
+                expect(page.locator('#export-status')).to_contain_text('reply lost')
                 page.locator('#native-export').click()
-                expect(page.locator('#runs')).to_contain_text('시연 자료 검증 중')
+                expect(page.locator('#export-runs')).to_be_visible()
+                expect(page.locator('#export-runs')).to_contain_text('시연 자료 검증 중')
                 assert len(center.runs) == 1 and len(center.requests) == 2
                 assert center.requests[0] == center.requests[1]
                 assert center.requests[0] == {'prepared_id': prepared_id, 'name': 'Native ACT data',
                     'profile': profile, 'request_id': center.requests[0]['request_id']}
                 uuid.UUID(center.requests[0]['request_id'])
                 page.reload(wait_until='networkidle')
-                expect(page.locator('#runs')).to_contain_text(center.runs[0]['id'])
-                expect(page.locator('#runs')).to_contain_text('시연 자료 검증 중')
+                expect(page.locator('#export-runs')).to_contain_text(center.runs[0]['id'])
+                expect(page.locator('#export-runs')).to_contain_text('시연 자료 검증 중')
                 page.get_by_role('button', name='이 변환 중지').click()
-                expect(page.locator('#runs')).to_contain_text('취소됨')
+                expect(page.locator('#export-runs')).to_contain_text('취소됨')
                 page.locator('#export-name').fill('Second native data')
                 page.locator('#export-profile').set_input_files({'name': 'profile.json', 'mimeType': 'application/json',
                     'buffer': json.dumps(profile).encode()})
                 page.locator('#native-export').click()
-                expect(page.locator('#runs').get_by_role('button', name='이 변환 중지')).to_have_count(1)
+                expect(page.locator('#export-runs').get_by_role('button', name='이 변환 중지')).to_have_count(1)
                 run = center.runs[-1]
                 run.update(status='succeeded', progress={'phase': 'completed'},
-                    result={'dataset_id': 'native-data', 'dataset_revision': 'sealed-native-revision', 'act_only': True})
-                center.datasets.append({'id': 'native-data', 'name': 'Converted native ACT data', 'profile': profile})
+                    result={'dataset_id': data_id, 'dataset_revision': data_revision, 'act_only': True})
+                center.datasets.append({'id': data_id, 'name': 'Converted native ACT data', 'profile': profile})
                 page.get_by_role('button', name='다시 확인', exact=True).click()
-                expect(page.locator('#runs')).to_contain_text('데이터 등록 완료')
-                expect(page.locator('#runs')).to_contain_text('sealed-native-revision')
-                expect(page.locator('#runs')).to_contain_text('ACT 전용')
-                expect(page.locator('#dataset option[value="native-data"]')).to_be_attached()
+                expect(page.locator('#export-runs')).to_contain_text('데이터 등록 완료')
+                expect(page.locator('#export-runs')).to_contain_text(data_revision)
+                expect(page.locator('#export-runs')).to_contain_text('ACT 전용')
+                expect(page.locator(f'#dataset option[value="{data_id}"]')).to_be_attached()
+                expect(page.locator('#export-runs').get_by_role('link', name='이 데이터 HF 보관 준비')).to_have_attribute(
+                    'href', f'/learning?archive=omx&dataset={data_id}&revision={data_revision}#storage-preparation')
+                expect(page.locator('#runs')).not_to_contain_text('시연 → ACT 데이터 변환')
+                page.get_by_role('link', name='이 데이터로 학습 준비', exact=True).click()
+                expect(page.locator('#dataset')).to_have_value(data_id)
+                expect(page.locator('#train-section')).to_be_visible()
                 expect(page.locator('#runs a[download]')).to_have_count(0)
                 expect(page.locator('#comparison tbody tr')).to_have_count(0)
             finally:
