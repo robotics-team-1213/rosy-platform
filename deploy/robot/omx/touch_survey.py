@@ -6,7 +6,9 @@ the same path and clears the hold, so the next point needs no park. The touched 
 cell_calibration surface. Points the planner cannot reach are reported, never guessed.
 
   python touch_survey.py --config cell-pipeline.json --plan plan.json --name right_side --kind object \\
-      --x 0.0,0.025 --y -0.075,-0.1 [--top 0.10] [--bottom 0.02] [--plan-only]
+      --x=0.0,0.025 --y=-0.075,-0.1 [--top 0.10] [--bottom 0.02] [--plan-only]
+
+(--y=... with "=": argparse reads a bare "-0.075,..." as an option.)
 """
 from __future__ import annotations
 
