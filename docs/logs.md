@@ -12421,3 +12421,10 @@ osy-d395-s1d\`.
 - 증거: 착지 회귀에서 문서의 `SHA는` 표기가 비밀정보 검사에 걸렸고 단독 재현은 실패, main 대조는 통과했다. 실제 검사기의 자기 검사로 원래 표기 RED·명시한 SHA-256 GREEN을 확인했다. 검사 규칙과 예외 목록은 바꾸지 않았다.
 - gate 변화: 없음. 수정 커밋은 원격 착지 관문을 다시 통과해야 한다.
 - CE: 해당 없음 — 수정과 기존 검사 규칙에서 원인이 명확하다.
+
+## 2026-10-27 · uncommitted · docs(isaac): SDK 6.2 기본 경로 전환과 제어 증거
+
+- 변경: 두 PC의 SDK 설치·PPO, 모델 PC의 실제 ROS 제어·카메라와 기본 pointer 전환을 별도 [검증 기록](validation/isaac62-sdk-migration-2026-10-27/result.md)으로 보존하고 운영 binding·Lab 3 안내를 갱신했다.
+- 증거: 원격 Isaac 전체 시험 exit 0·신규 실패 0, ROS conformance failures 빈 목록, 두 pointer와 인터프리터 해시 전환 후 재조회. AI 추가 ROS는 외부 GPU owner로 실행 전에 거절됐으며 승인 서비스 복원을 확인했다.
+- gate 변화: 특정 SDK/소프트웨어 실행 증거만 추가한다. 학습 정책·실물·현장 수용을 주장하지 않는다. 초기 UNKNOWN/조기 실패의 미확정 원인을 보존한다.
+- CE: 새 교훈 기록 — USD variant와 누락된 position drive gain은 import 성공만으로 놓칠 수 있어 [해결·회귀·복구 조건](solutions/runtime-errors/isaac62-imported-articulation-with-zero-position-drive-2026-10-27.md)을 남겼다.

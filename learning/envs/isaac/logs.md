@@ -362,3 +362,10 @@
 - 변경: a46daee90b7의 conveyor fixture·report·task·회귀를 그대로 보존하고 catalog를 원본과 같이 활성화했다. 단계 PNG와 보고서는 기존 실행 원장의 크기·해시 검증을 거쳐 Learning 소비 경로에 연결된다.
 - 증거: 원래 source7d0cfcd6e94f/run36041b241ee25366986bb3a6262ba0be의 frozen 검증·실패·drive-mode 교훈을 보존한다. 이번 공개 SHA의 원격 호스트 회귀·독립 검토·CI는 새 SDK 실행과 구분한다.
 - gate 변화: 기존 단일 합성 접촉 스모크의 소스가 공개된다. 새 SDK 실행·동기화 Episode 수집·학습 정책 평가·실물 명령은 수행하지 않았다. CE는 기존 교훈을 재사용하며 새 해결 기록을 늘리지 않는다.
+
+## 2026-10-27 · uncommitted · SDK 6.2 운영 연결과 ROS 제어 검증
+
+- 변경: 정확한 SDK 6.2 binding 허용, Kit EULA 환경, 선택 SDK ROS library 해석, live PhysX variant와 현대 Manipulator position gain을 연결했다. SDK 예외 종류도 보존한다. 기존 SDK 설치·불변 binding·Wheeled 설정은 유지한다.
+- 증거: 소스 6df916084147ce51bb10b34e8339e302a88fdfe6의 원격 Isaac 전체 시험 exit 0·신규 실패 0. 모델 PC ROS conformance는 관절 이동·취소 정지·양쪽 카메라·토픽·GPU 정리를 통과했다. 두 PC의 PhysX/PPO 설치 검증과 모델 PC의 기본 SDK pointer 6.2 전환은 [검증 기록](../../../docs/validation/isaac62-sdk-migration-2026-10-27/result.md)을 따른다.
+- gate 변화: 이번 특정 SDK/소프트웨어 실행 증거를 추가한다. 학습 정책 일반화·실물·현장 수용으로 확대하지 않는다. AI 추가 ROS 시험은 외부 GPU owner로 SDK 시작 전에 거절됐고 승인 서비스는 복원했다.
+- 교훈: [import 성공 뒤 position drive 누락](../../../docs/solutions/runtime-errors/isaac62-imported-articulation-with-zero-position-drive-2026-10-27.md)을 기록했다. 초기 UNKNOWN/조기 실패의 정확한 원인은 미확정으로 유지한다.

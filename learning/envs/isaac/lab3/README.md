@@ -1,15 +1,15 @@
 # Lab 3 분리 학습 환경
 
-AI PC·모델 PC의 수동 Lab v3.0.0 환경은 기존 SDK 5.1 실행기와 별개다. 두 호스트는 [D-897](../../../../docs/adr/D-897-dual-host-offline-simulation-learning.md)의 격리된 오프라인 학습 범위에서 독립 작업을 실행한다. 이 폴더의 도구는 환경 정비용이며 제품 시나리오·운영 SDK 연결·로봇 명령을 추가하지 않는다.
+AI PC·모델 PC의 수동 Lab v3.0.0 환경은 기존 SDK 설치와 별도 경로에 둔다. 두 호스트는 [D-897](../../../../docs/adr/D-897-dual-host-offline-simulation-learning.md)의 격리된 오프라인 학습 범위에서 독립 작업을 실행한다. 이 폴더의 도구는 환경 정비용이며 제품 시나리오·로봇 명령을 추가하지 않는다. 운영 SDK 선택과 실행은 [기존 binding·실행기](../../../../docs/deployment/isaac-experiment-runs.md)를 사용한다.
 
 | 환경 | 위치 | 2026-10-27 최종 검증 |
 |---|---|---|
 | Newton / MJWarp | 두 PC의 `~/rosy-test/venvs/isaaclab-3.0.0-newton/` | 의존성 207개·CUDA·Cartpole·PPO 동시 실행·정리 통과 |
-| Sim 6.2 로컬 호환 환경 | 모델 PC의 `~/rosy-test/venvs/isaaclab-3.0.0-sim62/` | 의존성·CUDA·PhysX Cartpole·PPO·정리 통과 |
+| Sim 6.2 로컬 호환 환경 | 두 PC의 `~/rosy-test/venvs/isaaclab-3.0.0-sim62/` | 의존성·CUDA·PhysX Cartpole·PPO·정리 통과 |
 
 공통 소스는 IsaacLab Git v3.0.0 commit `e3f7d9ff1f5d7f8280de3ece9000b7117f66bcf4`, Python 3.12.3, Torch 2.11.0+cu130이다. Newton은 Warp 1.17.0 / Newton 1.6.1 / MuJoCo-Warp 3.12.0 / RSL-RL 5.5.1 / NumPy 2.3.5다. Sim은 NumPy 2.3.1을 사용한다. 각각 source/와 .venv/를 함께 보존한다.
 
-공식 설정에서 NumPy dependency와 override를 조정하고 다시 잠갔으므로 수정 없는 GA 설치는 아니다. Sim 후보는 registry와 실제 SDK robot wheel의 Requires-Dist 차이를 Lab dependency-metadata로 보정했고 GPU onnxruntime만 설치했다. 후보 lock은 Linux x86_64 전용이다. 원본 upstream.*와 변경 지문은 환경에 보존한다.
+공식 설정에서 NumPy dependency와 override를 조정하고 다시 잠갔으므로 수정 없는 GA 설치는 아니다. Sim 후보는 registry와 실제 SDK robot wheel의 Requires-Dist 차이를 Lab dependency-metadata로 보정했고 GPU onnxruntime만 설치했다. 후보 lock은 Linux x86_64 전용이다. 원본 upstream.*와 변경 지문은 환경에 보존한다. 두 PC는 archive SHA까지 동일한 호환 kernel wheel을 사용한다. 독립 재생성 시 ZIP timestamp로 SHA가 달라지면 lock 검사를 완화하지 않고 검증된 정확한 archive를 공유한다.
 
 설치·GPU 작업은 별도 운영 저장소 `rosy-ops/docs/lab-host-storage.md`의 디스크 게이트, 기존 자원 예약, work/GPU lease, 새 run과 소유 프로세스 확인을 적용한다. 실제 호스트 선택은 기존 `tools/remote/remote_isaac.py`에서 model·ai 역할을 명시한다. AI의 추론 서비스는 첫 검증에서 사용자가 승인한 범위로만 중지·복원했다. 미래 학습에서 같은 GPU와 경합하면 별도 배치·중지 승인을 확인한다. 실행·중지·제품 결과 회수는 [기존 운영 안내](../../../../docs/deployment/isaac-experiment-runs.md)를 유지한다.
 

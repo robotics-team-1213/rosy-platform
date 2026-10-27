@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · SDK 6.2 운영 연결과 ROS 제어 검증
 - 2026-10-25 · uncommitted · 접촉 왕복 producer·판정기의 공개 소스 포트
 - 2026-10-25 · uncommitted · 고정 Isaac 실행 관리자의 공개 소스 포트
 - 2026-10-25 · uncommitted · OMX import 보고서의 공개 소스 포트
 - 2026-10-25 · 7d0cfcd6e9 · 정지 적재면·컨베이어 접촉 왕복
-- 2026-10-21 · uncommitted · 공통 SIM 무점유 성공·실제 중지
