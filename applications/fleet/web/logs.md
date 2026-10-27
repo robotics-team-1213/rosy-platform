@@ -546,3 +546,10 @@
 - 증거: 실제 HTTP/SQLite/Chromium 320·390·1920px, 정상/승인 응답 유실 및 자식 GET 실패를 포함한 최종 14 passed/0 skipped·NEW0. 원격 PNG 6개를 SHA-256 대조해 가져왔고 실제 3개 폭을 확인했다. 독립 시각 검토 disposition: ship, incumbent 디자인 보존. docs/validation/transfer-recovery-public-2026-10-27/result.md 참고.
 - gate 변화: 배포·장치·모델 수용 승격 없음. 합성 World/owner이며 공개 계약은 별도 선행 착지한다.
 - CE: 새 교훈 기록 — 넓은 UUID에서 보이는 카드 경계를 검사하는 회귀와 기존 상세 값 줄바꿈으로 nested clipping을 해결했다.
+
+## 2026-10-28 · ce1ef8ebb0 · 제안자 조회 입력과 요청 응답 유실 후 재조회
+
+- 변경: 기존 ARM GET 조회 단추에 data-work-read를 표시하고 작업 식별자 조회 입력만 일반 운영자 잠금에서 제외했다. 실행 승인·요청 자격과 backend 권한은 유지한다. 조회값을 바꾸면 기존 작업/승인 snapshot을 무효화한다.
+- 증거: 실제 요청 응답을 서버 commit 뒤 끊고 제안자가 재조회하는 반례에서 입력 disabled RED1을 확인했다. 수정 뒤 기존 승인 응답 유실·자식 GET503·단일 복구 한도·긴 ID 검사까지 actual Chromium 14 passed/0 skipped, NEW0. docs/validation/transfer-recovery-public-2026-10-28/result.md 참고.
+- gate 변화: 없음. 선행 계약 검증은 계속 진행하며 공개 source 착지는 별도다.
+- CE: 추가 교훈 없음 — 이 조회 수정은 selector와 회귀로 설명된다. 기존 clipping 교훈은 유지한다.
