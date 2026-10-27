@@ -5,7 +5,9 @@ Description=ROSY tailnet join from the provisioned one-time key (D-477)
 # spends that key so the robot joins the team tailnet as a tagged resource.
 # tailscaled (the package unit) is the daemon; without the file the robot stays
 # LAN-only and the condition skips the unit entirely.
-ConditionPathExists=/etc/rosy/tailscale-join.json
+ConditionPathExists=|/etc/rosy/tailscale-join.json
+ConditionPathExists=|/var/lib/rosy-device/tailscale/join/request.json
+Requires=tailscaled.service rosy-os-tailnet.service
 Wants=network-online.target
 After=network-online.target tailscaled.service
 # A failed join (no uplink at boot, an expired key) retries at the next boot.
@@ -26,7 +28,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -46,6 +48,7 @@ StateDirectoryMode=0755
 # The join file is rewritten in place (same inode; /etc/rosy stays read-only)
 # once the key is spent. "-" keeps an absent file from failing the namespace.
 ReadWritePaths=-/etc/rosy/tailscale-join.json
+ReadWritePaths=-/var/lib/rosy-device/tailscale/join -/var/lib/rosy-device/state/config.lock
 
 [Install]
 WantedBy=multi-user.target

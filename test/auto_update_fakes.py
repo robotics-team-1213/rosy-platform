@@ -95,7 +95,7 @@ class FakeGitHub:
 
             def do_GET(self):  # noqa: N802
                 hub.requests.append((self.path, {k.lower(): v for k, v in self.headers.items()}))
-                if self.path == f"/repos/{REPO}/releases?per_page=20":
+                if self.path in (f"/repos/{REPO}/releases?per_page=20", f"/repos/{REPO}/releases?per_page=100"):
                     if hub.status is not None:
                         self.send_response(hub.status)
                         for key, value in hub.extra_headers.items():
@@ -112,6 +112,13 @@ class FakeGitHub:
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)
+                    return
+                prefix = f"/repos/{REPO}/releases/tags/"
+                if self.path.startswith(prefix):
+                    release = next((item for item in hub.releases if item.get("tag_name") == self.path[len(prefix):]), None)
+                    self.send_response(200 if release is not None else 404)
+                    self.end_headers()
+                    if release is not None: self.wfile.write(json.dumps(release).encode())
                     return
                 if self.path.startswith("/dl/") and self.path[4:] in hub.asset_status:
                     self.send_response(hub.asset_status[self.path[4:]])

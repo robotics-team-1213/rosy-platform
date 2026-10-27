@@ -50,7 +50,7 @@ def validate_layout(value: dict) -> dict:
         raise ValueError("LAYOUT: unsupported fields")
     _integer(value["schema_version"], "schema_version", 1, 1)
     _integer(value["sector_size"], "sector_size", SECTOR, SECTOR)
-    if value["scheme"] != "gpt" or value["provision_role"] != "boot_a":
+    if value["scheme"] != "gpt" or value["provision_role"] not in ("boot_a", "bootstrap"):
         raise ValueError("LAYOUT: unsupported scheme or provision role")
     size = _integer(value["raw_size_bytes"], "raw_size_bytes", HEAD_BYTES + TAIL_BYTES, 2**63 - 1)
     if size % SECTOR:
@@ -85,7 +85,7 @@ def validate_layout(value: dict) -> dict:
         result.append(dict(role=role, number=number, start_lba=start, size_lba=count,
                            type_guid=kind, unique_guid=unique))
     return dict(schema_version=1, scheme="gpt", sector_size=SECTOR, disk_guid=disk,
-                raw_size_bytes=size, provision_role="boot_a", partitions=result)
+                raw_size_bytes=size, provision_role=value["provision_role"], partitions=result)
 
 
 def _header(data: bytes, current: int, backup: int, sectors: int) -> dict:
@@ -109,7 +109,7 @@ def _header(data: bytes, current: int, backup: int, sectors: int) -> dict:
                 table=table, count=count, array_crc=array_crc)
 
 
-def parse_gpt(read_at, raw_size: int) -> dict:
+def parse_gpt(read_at, raw_size: int, provision_role: str = "boot_a") -> dict:
     """Read only bounded primary/backup metadata through a random-read callback."""
     sectors = raw_size // SECTOR
     mbr = read_at(0, SECTOR)
@@ -147,7 +147,7 @@ def parse_gpt(read_at, raw_size: int) -> dict:
                           type_guid=str(uuid.UUID(bytes_le=kind)), unique_guid=str(uuid.UUID(bytes_le=unique))))
     return validate_layout(dict(schema_version=1, scheme="gpt", sector_size=SECTOR,
                                 disk_guid=primary["guid"], raw_size_bytes=raw_size,
-                                provision_role="boot_a", partitions=parts))
+                                provision_role=provision_role, partitions=parts))
 
 
 class LayoutCapture:
@@ -182,7 +182,7 @@ class LayoutCapture:
     def finish(self) -> dict:
         if self.position != self.size:
             raise ValueError("LAYOUT: image raw size differs")
-        actual = parse_gpt(self._read_at, self.size)
+        actual = parse_gpt(self._read_at, self.size, self.layout["provision_role"])
         if actual != self.layout:
             raise ValueError("LAYOUT: image GPT differs from signed metadata")
         return actual
@@ -216,7 +216,7 @@ def inspect_device(handle, layout: dict) -> dict:
         handle.seek(offset)
         return handle.read(count)
 
-    actual = parse_gpt(read_at, expected["raw_size_bytes"])
+    actual = parse_gpt(read_at, expected["raw_size_bytes"], expected["provision_role"])
     if actual != expected:
         raise ValueError("LAYOUT: device GPT differs from signed metadata")
     return actual
