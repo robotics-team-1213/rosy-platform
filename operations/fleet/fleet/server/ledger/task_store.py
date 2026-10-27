@@ -324,7 +324,7 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
                                    (row["task_id"],))
                 release_dispatch_claims(connection, owner_kind="task",
                                         owner_id=row["task_id"])
-                if False and (row["lease_owner"] or row["dispatch_phase"] == "WAITING_TRAFFIC"):
+                if row["lease_owner"] or row["dispatch_phase"] == "WAITING_TRAFFIC":
                     # The restart took a held lease (or an interrupted traffic wait) away;
                     # the ledger keeps the audit row. Untouched READY rows stay quiet.
                     self._append_history(connection, row["task_id"], "QUEUED", "system",
