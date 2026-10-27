@@ -1064,3 +1064,10 @@
 - 증거: tests-only f5bf86ef2c의 missing-contract RED30을 확인한 뒤 source2d932dad6b의 Foundation 전체·gateway protocol·변경 pin suites 원격1,583 passed/0 skipped, NEW0·known0·flaky0을 확인했다. docs/validation/transfer-recovery-contract-2026-10-27/result.md.
 - Gate: 기존 gate 변화 없음. 공유 변경의 공식 FULL·HTTP·독립 생산자·브라우저·장치·학습 수용을 이 focused GREEN으로 대신하지 않는다.
 - CE: 해당 없음 — 계약·직접 회귀 시험과 D-899에 판단 근거를 남겼다.
+
+## 2026-10-27 · 6645ad829b · D-899 canonical API version table alignment
+
+- 변경: 공식 FULL의 collect-alone 가드에서 발견한 API Ref v1.327 변경이력표 행 누락을 한 행으로 보완했다. 기존 버전 정렬 시험의 RED를 그대로 재현 근거로 쓴다.
+- 증거: 원격 Foundation 전체·gateway schema/version alignment·변경 pin suites1,586 passed/0 skipped in22.41s. docs/validation/transfer-recovery-contract-2026-10-27b/result.md. 앞선 FULL은 실패·미완료이며 착지하지 않았다.
+- gate 변화: 없음. 모델·실행 코드·실패 baseline은 바꾸지 않았고 공식 FULL을 다시 수행한다.
+- CE: 해당 없음 — 기존 독립 계약 시험으로 검출·방지하는 문서 수정이다.
