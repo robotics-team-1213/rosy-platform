@@ -339,6 +339,15 @@ ROOT_ONLY_STATE = (
 # What each ProtectSystem=strict unit's program writes, derived from the code.
 # "$HOME" is the unit's Environment=HOME. Keep this next to the code references.
 DECLARED_WRITES = {
+    "rosy-os-update.service": {"/var/lib/rosy-device/os-update", "/var/lib/rosy/updates/.run.lock",
+        "/var/lib/rosy/releases/native-release.lock", "/var/lib/rosy-device/state/config.lock",
+        "/run/rosy-os-update", "/run/systemd/system/rosy-os-rauc.service.d",
+        "/run/rosy-claim", "/run/rosy-claim.lock", "/run/rosy-claim.stale.x", "/run/rosy-provision-boot/autoboot.txt"},
+    "rosy-os-rauc.service": {"/run/rosy-os-update/rauc", "/var/lib/rosy-device/os-update/rauc"},
+    "rosy-os-motion-guard.service": {"/run/rosy-os-update"},
+    "rosy-os-trial-deadline.service": set(),
+    "rosy-os-storage.service": set(),
+    "rosy-os-tailnet.service": {"/var/lib/rosy-device/tailscale", "/var/lib/rosy-device/state/config.lock"},
     "rosy-network-agent.service": {
         "/var/lib/rosy/network", "/etc/NetworkManager/system-connections",
         "/run/rosy-network", "/run/rosy-claim", "/run/rosy-claim.lock", "/run/rosy-claim.stale.x",
@@ -365,7 +374,7 @@ DECLARED_WRITES = {
         # SymlinkStore.set: temporary ".<name>.new" link, then os.replace.
         "/opt/rosy/current", "/opt/rosy/previous", "/opt/rosy/.current.new",
     },
-    "rosy-sd-provision.service": set(),
+    "rosy-sd-provision.service": {"/run/rosy-os-state", "/var/lib/rosy-device/state/config.lock"},
     "rosy-core.service": {
         # core_common/config.py LOCAL_CONFIG_PATH / overlay_path (API writes).
         "$HOME/.rosy/rosy.yaml",
@@ -442,6 +451,7 @@ DECLARED_WRITES = {
         "/var/lib/rosy/updates/state.json", "/var/lib/rosy/updates/status.json",
         "/var/lib/rosy/updates/history.jsonl", "/var/lib/rosy/updates/hold.json",
         "/var/lib/rosy/updates/downloads",
+        "/var/lib/rosy-device/policy/updates/config.json", "/var/lib/rosy-device/policy/updates/hold.json",
         # rosy_claim.py CLAIM_DIR: mkdir in /run, and the stale rename beside it.
         "/run/rosy-claim", "/run/rosy-claim.stale.x",
         # rosy-release-unpack.sh into the release store; native_release.py
@@ -462,10 +472,10 @@ DECLARED_WRITES = {
         # lgpio's notification files in LG_WD (the unit's own runtime directory).
         "/run/rosy-hw-test/.lgd-nfy0",
     },
-    # D-477: the one-shot tailnet join. The spent key leaves the provisioned
-    # file by an in-place rewrite, and the outcome lands in its StateDirectory.
+    # Legacy rewrites the leaf in place; A/B atomically consumes a shared channel.
     "rosy-tailscale-join.service": {
         "/etc/rosy/tailscale-join.json", "/var/lib/rosy/tailscale/join-result.json",
+        "/var/lib/rosy-device/tailscale/join", "/var/lib/rosy-device/state/config.lock",
     },
 }
 
@@ -479,6 +489,24 @@ NETWORK_EVIDENCE_READS = {
 }
 
 DECLARED_READS = {
+    "rosy-os-update.service": {"/etc/rosy", "/etc/rauc", "/etc/systemd", "/etc/dbus-1", "/opt/rosy",
+        "/var/lib/rosy-device", "/var/lib/rosy/releases", "/var/lib/rosy/updates", "/run/rosy",
+        "/sys", "/dev", "/proc", "/usr/local/share/rosy", "/boot/firmware", "$HOME"},
+    # These entrypoints only read journal/bootstrap/media; controller writers are separate.
+    "rosy-os-motion-guard.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
+    "rosy-os-trial-deadline.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
+    "rosy-os-rauc.service": {"/etc/rosy", "/etc/rauc", "/etc/systemd", "/etc/dbus-1",
+                              "/opt/rosy", "/var/lib/rosy-device", "/var/lib/rosy/releases", "/run/rosy-claim",
+                              "/run/rosy-provision-boot", "/run/systemd/system"},
+    # Only the admission methods are called: none of firstboot's writers run here.
+    "rosy-os-storage.service": {
+        "/var/lib/rosy-device", "/etc/rosy", "/etc/hostname", "/etc/hosts",
+        "/etc/passwd", "/etc/group", "/var/lib/tailscale", "/proc/device-tree/serial-number",
+        "/var/lib/rosy/provisioning", "/var/lib/rosy/core", "/var/lib/rosy/ssh",
+        "/etc/NetworkManager/system-connections", "/home/rosy/.ssh",
+        "/run/rosy-provision-boot", "/proc/1/mountinfo", "/proc/self/mountinfo",
+        "/proc/1/root/dev/disk/by-partuuid", "/sys/dev/block", "/opt/rosy/native-runtime", "/opt/rosy/os-bootstrap",
+    },
     "rosy-network-agent.service": NETWORK_EVIDENCE_READS | {
         # Imported generic transport default; the entrypoint overrides it with
         # both dedicated sockets. This name is never opened by this service.
@@ -492,6 +520,10 @@ DECLARED_READS = {
         # sync only reads metadata in the updater's namespace. PID 1 starts a
         # separate bounded tmpfiles worker to create/repair these directories.
         "/var/lib/rosy/maps", "/var/lib/rosy/models", "/var/lib/rosy/pilot-recordings",
+        # A/B admission only reads storage identities and the projection receipt.
+        "/run/rosy-provision-boot", "/run/rosy-os-state/ready.json", "/etc/rosy/os-slot.json",
+        "/var/lib/rosy-device/state", "/proc/1/mountinfo", "/proc/self/mountinfo",
+        "/proc/1/root/dev/disk/by-partuuid",
     },
     "rosy-core.service": {
         # D-456: signed receiver crypto is loaded from immutable release payloads.
@@ -566,6 +598,25 @@ NETWORK_SOURCES = [
 
 # Program sources scanned for write roots, per unit.
 PROGRAM_SOURCES = {
+    "rosy-os-update.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_update_controller", "os_update_commit", "os_update_health", "os_update_policy", "os_update_watchdog",
+         "os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout",
+         "os_update_install", "os_installed_factory", "native_release", "os_motion_guard", "auto_update_host", "auto_update_records",
+         "os_update_feed", "os_update_stage", "os_update_rollout")] + ["deploy/hosts/common/host-state/rosy-update-gate"],
+    "rosy-os-motion-guard.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_motion_guard", "os_bootloader", "os_update_state", "os_state_layout", "os_state_io")],
+    "rosy-os-trial-deadline.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_trial_deadline", "os_bootloader", "os_update_state", "os_state_layout")],
+    "rosy-os-rauc.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout",
+         "os_update_install", "os_installed_factory", "native_release")],
+    "rosy-os-storage.service": ["deploy/robot/pinky_pro/native/os_storage_dispatch.py",
+                                "deploy/robot/pinky_pro/native/os_state_storage.py",
+                                "deploy/robot/pinky_pro/native/os_state_layout.py",
+                                "deploy/robot/pinky_pro/native/os_state_accounts.py",
+                                "deploy/robot/pinky_pro/native/os_state_files.py",
+                                "deploy/robot/pinky_pro/native/os_state_firstboot.py",
+                                "deploy/robot/pinky_pro/native/os_state_io.py"],
     "rosy-network-agent.service": NETWORK_SOURCES + [
         "deploy/robot/pinky_pro/native/rosy-network-agent.py",
         "deploy/robot/pinky_pro/native/network_agent.py",
@@ -633,7 +684,7 @@ PROGRAM_SOURCES = {
     # D-412: the updater, its claim, and the programs it runs as children.
     "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
                                  "deploy/robot/pinky_pro/native/auto_update_host.py",
-                                 "deploy/robot/pinky_pro/native/auto_update_records.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_records.py", "deploy/robot/pinky_pro/native/os_state_layout.py",
                                  "deploy/robot/pinky_pro/native/auto_update_stage.py",
                                  "deploy/robot/pinky_pro/native/auto_update_apply.py",
                                  "deploy/robot/pinky_pro/native/rosy_claim.py",
@@ -642,6 +693,20 @@ PROGRAM_SOURCES = {
                                  "deploy/robot/pinky_pro/native/native_release.py",
                                  "deploy/robot/pinky_pro/native/sync-image-layer.py"],
 }
+
+DECLARED_READS["rosy-os-tailnet.service"] = DECLARED_READS["rosy-os-storage.service"]
+DECLARED_READS["rosy-sd-provision.service"] = set(DECLARED_READS["rosy-os-storage.service"])
+DECLARED_READS["rosy-sd-provision.service"] |= {"/proc/sys/kernel/hostname", "/proc/sys/kernel/random/boot_id",
+    "/etc/timezone", "/usr/share/zoneinfo", "/etc/localtime"}
+DECLARED_READS["rosy-tailscale-join.service"] = DECLARED_READS["rosy-os-storage.service"]
+PROGRAM_SOURCES["rosy-os-tailnet.service"] = [*PROGRAM_SOURCES["rosy-os-storage.service"],
+                                           "deploy/robot/pinky_pro/native/os_state_config.py"]
+PROGRAM_SOURCES["rosy-sd-provision.service"] = [*PROGRAM_SOURCES["rosy-os-storage.service"],
+    "deploy/robot/pinky_pro/native/os_state_config.py", "deploy/robot/pinky_pro/native/os_state_ready.py"]
+PROGRAM_SOURCES["rosy-auto-update.service"] += PROGRAM_SOURCES["rosy-sd-provision.service"]
+DECLARED_READS["rosy-auto-update.service"] |= DECLARED_READS["rosy-sd-provision.service"]
+DECLARED_WRITES["rosy-auto-update.service"].add("/var/lib/rosy-device/state/config.lock")
+PROGRAM_SOURCES["rosy-tailscale-join.service"] += PROGRAM_SOURCES["rosy-os-tailnet.service"]
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
 SEGMENT_CHAIN = re.compile(r"""["'](var|opt|run|etc)["'](?:\s*/\s*["'][^"'/]+["'])+""")

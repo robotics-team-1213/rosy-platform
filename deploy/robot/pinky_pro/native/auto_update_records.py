@@ -11,9 +11,10 @@ from pathlib import Path
 import re
 
 import rosy_claim
+from os_state_layout import StateError, policy_file
 from auto_update_host import (ANGULAR_EPS, API_BASE_URL, APPROVALS, BATTERY_MIN, CLAIM_HOLDER, DEFAULT_REPO,
     DOCKING_IDLE, FACE_UNIT, _finite, HISTORY_MAX_BYTES, LINE_FOLLOW_IDLE, LINEAR_EPS, MAX_HOLD_HOURS,
-    MAX_STATUS_INPUTS_BYTES, NAV_IDLE, NOT_NULL_INPUTS, _number, parse_z, PHASES, _read_json, _reason_class,
+    MAX_STATUS_INPUTS_BYTES, NAV_IDLE, NOT_NULL_INPUTS, _number, parse_z, PHASES, _read_json, _reason_class, _fsync_parent,
     RELEASE_ID, REPO, REQUIRED_INPUTS, RETIRED_DISPLAY_UNIT, SAMPLE_GAP_S, STATUS_INPUTS,
     STATUS_INPUTS_FRESH_S, _tail, UPDATE_DISPLAY, UpdateError, _write_json, _z)
 
@@ -22,6 +23,20 @@ class UpdaterRecords:
     """Updater mixin: state/status/history files, config, holds, approvals and the idle check."""
 
     # records --------------------------------------------------------------------
+
+    def _maintenance_problem(self) -> str | None:
+        try:
+            from os_payload_compatibility import require_native_maintenance
+            require_native_maintenance(self.root)
+        except (ImportError, OSError, ValueError) as exc:
+            return f"OS_STATE_HOLD: {exc}"
+        return None
+
+    def _policy_path(self, name: str) -> Path:
+        try:
+            return policy_file(self.root, name)
+        except StateError as exc:
+            raise UpdateError(str(exc)) from exc
 
     def _load_state(self) -> dict:
         try:
@@ -143,7 +158,7 @@ class UpdaterRecords:
     # config and hold ---------------------------------------------------------------
 
     def _config(self) -> dict:
-        path = self.updates / "config.json"
+        path = self._policy_path("config.json")
         if not path.exists() and not path.is_symlink():
             # On by default since the first real canary commit (D-412, 2026-10-02);
             # config.json {"enabled": false} turns a robot off.
@@ -165,7 +180,7 @@ class UpdaterRecords:
 
     def _hold(self) -> tuple[str, str]:
         """("none" | "active" | "expired" | "invalid", detail). Read-only."""
-        path = self.updates / "hold.json"
+        path = self._policy_path("hold.json")
         if not path.exists() and not path.is_symlink():
             return "none", ""
         try:
@@ -192,7 +207,7 @@ class UpdaterRecords:
         now = self.host.now()
         payload = {"holder": holder, "reason": reason, "created_at": _z(now),
                    "expires_at": _z(now + _dt.timedelta(hours=hours))}
-        _write_json(self.updates / "hold.json", payload)
+        _write_json(self._policy_path("hold.json"), payload)
         self._history("hold_set", None, f"{holder}: {reason} until {payload['expires_at']}")
         return payload
 
@@ -200,9 +215,10 @@ class UpdaterRecords:
         """Remove the hold; also the operator's acknowledgement of a rollback failure and of
         repeated apply failures. Takes the run lock (RunBusy while a run is active)."""
         with self._run_lock():
-            path = self.updates / "hold.json"
+            path = self._policy_path("hold.json")
             existed = path.exists() or path.is_symlink()
             path.unlink(missing_ok=True)
+            _fsync_parent(path)
             state = self._load_state()
             cleared = sorted(state.get("apply_errors") or {})
             acknowledged = None
@@ -220,7 +236,9 @@ class UpdaterRecords:
     def _expire_hold(self) -> None:
         kind, detail = self._hold()
         if kind == "expired":
-            (self.updates / "hold.json").unlink(missing_ok=True)
+            path = self._policy_path("hold.json")
+            path.unlink(missing_ok=True)
+            _fsync_parent(path)
             self._history("hold_expired", None, detail)
 
     # eligibility ---------------------------------------------------------------------
@@ -336,6 +354,8 @@ class UpdaterRecords:
 
     def precheck(self) -> list[str]:
         """What native_release runs right before it stops the runtime: hold, seal, one fresh sample."""
+        if problem := self._maintenance_problem():
+            return [problem]
         reasons = []
         kind, detail = self._hold()
         if kind in {"active", "invalid"}:
@@ -350,6 +370,8 @@ class UpdaterRecords:
         """Read-only: may this robot apply now? Two status samples, two different writes."""
         current = self.host.current_release()
         reasons: list[str] = []
+        if problem := self._maintenance_problem():
+            reasons.append(problem)
         kind, detail = self._hold()
         if kind in {"active", "invalid"}:
             reasons.append(detail)

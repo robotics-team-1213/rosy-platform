@@ -579,7 +579,10 @@ does not trust or replace SSH host keys and does not perform the advanced
 same-card rebind path below.
 
 1. Check the physical Pi identity and the SD label. A blank card written from
-   a signed image is the normal new-device path. An already booted Pi can use
+   a signed image is the normal new-device path. A/B cards require this fresh
+   card path: the root-local rebind tool cannot retire their shared generations
+   and machine credentials and refuses before moving any files. An already
+   booted Pi with a legacy single-root image can use
    the operator-only `rosy-rebind-board.py` path below on the same SD; it moves
    the previous provisioning, CORE data and logs to a root-only archive before
    applying a separately validated new bundle. That archive is logical
@@ -602,7 +605,9 @@ same-card rebind path below.
    old device identity, runtime environment, CORE auth, Fleet bootstrap, or
    provisioning records into the new installation.
 
-For an already booted Pi, stop CORE, I/O and navigation before rebind. The
+For an already booted legacy single-root Pi, stop CORE, I/O, navigation,
+`rosy-tailscale-join.service` and `tailscaled.service` before rebind. The tool
+also refuses transitional service states or an unavailable status check. The
 root-only new-device bundle must have a new UID, name, robot number, CORE
 credential and the *same* site Wi-Fi. `rosy-rebind-board.py --bundle <root-only
 bundle>` checks the old binding and bundle, then archives the previous

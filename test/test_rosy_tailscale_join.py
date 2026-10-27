@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -36,6 +37,7 @@ def _join_file(root: Path, *, key: str = KEY, tags: list[str] | None = None,
         "tags": tags or ["tag:rosy-robot"],
         "hostname": hostname,
     }), encoding="utf-8")
+    path.chmod(0o600)
     return path
 
 
@@ -49,9 +51,19 @@ class _Recorder:
         self.backend = backend
         self.self_node = self_node
         self.calls: list[list[str]] = []
+        self.key_files = []
+        self.key_material = []
+        self.key_modes = []
 
     def __call__(self, argv, timeout_s):
         self.calls.append(list(argv))
+        if argv[1] == "up":
+            for argument in argv:
+                if argument.startswith("--auth-key=file:"):
+                    path = Path(argument.removeprefix("--auth-key=file:"))
+                    self.key_files.append(path)
+                    self.key_material.append(path.read_text())
+                    self.key_modes.append(path.stat().st_mode & 0o777)
         if argv[1] == "status":
             return SimpleNamespace(
                 returncode=0,
@@ -89,7 +101,10 @@ def test_a_fresh_robot_joins_and_the_key_is_spent(env_root, monkeypatch):
     assert module.main() == 0
 
     up = next(call for call in recorder.calls if call[1] == "up")
-    assert "--auth-key=" + KEY in up
+    assert KEY not in " ".join(up)
+    assert recorder.key_material == [KEY]
+    assert recorder.key_modes == [0o600]
+    assert all(not path.exists() for path in recorder.key_files)
     assert "--hostname=rosy-pinky-8kcn" in up
     assert "--advertise-tags=tag:rosy-robot" in up
     assert "--accept-dns=false" in up
@@ -166,6 +181,7 @@ def test_a_malformed_join_file_is_refused_without_running_the_cli(
     join.parent.mkdir(parents=True, exist_ok=True)
     original = json.dumps(payload)
     join.write_text(original, encoding="utf-8")
+    join.chmod(0o600)
 
     assert module.main() == 1
     assert called == []
@@ -186,6 +202,37 @@ def test_a_robot_without_the_cli_refuses_before_touching_the_file(
     assert KEY not in capsys.readouterr().err
 
 
+def test_a_consumed_request_is_idempotent_without_invoking_the_cli(env_root, monkeypatch):
+    module = _load()
+    recorder = _Recorder()
+    monkeypatch.setattr(module, "_invoke", recorder)
+    _join_file(env_root)
+    assert module.main() == 0
+    recorder.calls.clear()
+    assert module.main() == 0
+    assert recorder.calls == []
+    assert _result(env_root)["status"] == "already_consumed"
+
+
+@pytest.mark.parametrize("change", ["permissions", "symlink", "hardlink"])
+def test_unsafe_request_is_refused_before_cli_or_consumption(env_root, monkeypatch, change):
+    module = _load()
+    join = _join_file(env_root)
+    outside = env_root / "untouched-request.json"
+    if change == "permissions":
+        join.chmod(0o644)
+    elif change == "symlink":
+        join.rename(outside)
+        join.symlink_to(outside)
+    else:
+        os.link(join, outside)
+    calls = []
+    monkeypatch.setattr(module, "_invoke", lambda *args: calls.append(args))
+    assert module.main() == 1
+    assert calls == []
+    assert KEY in join.read_text()
+
+
 # --- the unit and its lockstep wiring ---------------------------------------
 
 def _read_unit() -> str:
@@ -194,7 +241,8 @@ def _read_unit() -> str:
 
 def test_the_unit_only_runs_with_a_provisioned_join_file():
     unit = _read_unit()
-    assert "ConditionPathExists=/etc/rosy/tailscale-join.json" in unit
+    assert "ConditionPathExists=|/etc/rosy/tailscale-join.json" in unit
+    assert "ConditionPathExists=|/var/lib/rosy-device/tailscale/join/request.json" in unit
     assert "ProtectSystem=strict" in unit
     assert "StateDirectory=rosy/tailscale" in unit
     assert "ReadWritePaths=-/etc/rosy/tailscale-join.json" in unit
