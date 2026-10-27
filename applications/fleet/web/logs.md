@@ -465,6 +465,7 @@
 - 변경: 기존 788줄 site-map-model에 라벨을 추가하는 대신 표를 trip-error-labels.js로 옮기고 기존 export를 유지했다. 자산 manifest를 등록하고 source ratchet을 720줄로 낮췄다. 구버전 표의 다른 코드 맵을 포함하는 coverage와 공유 문서 import 경계를 함께 연결했다.
 - 증거: 34ff5f55c1의 원격 라벨 coverage·문서 import·서버 자산·모듈 구조 회귀 94 passed, skip0, 0 NEW다. 기존 node 모델 소비자 6개 suite는 63 tests/exit0이며 f3d7d3fba5..34ff5f55c1 크기 검사 8 commits가 통과했다. 추출 소스의 독립 검토를 받았다.
 - gate 변화: 공개 import·자산 제공을 보존했다. 전체 FULL은 이전 f3의 실패 기록이며 수정 범위의 GREEN과 구별한다. CE 해당 없음: 모듈·manifest·기존 coverage로 변경 판단을 복원할 수 있다.
+
 ## 2026-10-24 · e1e69f32c7 · 관제 UI 표시·수명·스타일 경계 분리
 
 - 변경: 운행 표시를 trip-display, 목록 표현을 roster-presentation, 로스터 전용 스타일을 roster.css로 분리했다. 셸은 로스터 공개 과업 동작을 쓰고 기존 권한·요청·폴링·초점을 유지한다. 실제 소비자·자산 registry·문서 로드를 함께 갱신했다.
@@ -532,3 +533,9 @@
 - 후속: 최근 진단을 특성보다 먼저 배치하고 기존 출처 펼침에서 owner·원본 시각·전체 특성 해시를 확인한다. 현재 Cell 등록 owner·지문과 늦게 도착한 응답을 대조해 다른 팔의 기록을 숨긴다. 관련 실제 브라우저 회귀와 Node 395건 PASS; FULL 병합 검증은 별도다.
 - 증거: UI commit `bf3470f9fe`의 원격 Chromium PC·모바일·Viewer/Operator 10건 PASS·NEW 0. 캡처에서 모바일 버튼 압축을 확인해 기존 flex basis를 바꾼 뒤 commit `8ce8e21139`의 관련 Chromium 6건 PASS. `docs/validation/robot-profile-pipeline-2026-10-27/result.md`에 기록한다.
 - gate 변화: 실물 장치·운영 배포는 수용하지 않는다. 오래된 분석과 조회 불가는 현재 정상의 근거가 아니다.
+
+## 2026-10-27 · uncommitted · D-865 P3 승인 범위 readback과 자동 승인 배지
+
+- 변경: work 뷰가 `GET /api/fleet/policy-admission`을 함께 읽어 승인 대기 행에 범위 소속 배지(`자동 승인`)를 붙이고, work 개요에 범위 readback(로봇·종류·잔여 상한·revision·차단 사유)과 기명 운영자 전환 단추를 둔 `<details>` 패널을 추가했다. 판정·문구는 순수 함수(`autoAdmitScope`·`policyScopeText`·`autoAdmitDetail`)이고 readback이 없으면 fail-closed로 배지를 끈다. 범위 밖 로봇·`two_person`·상한 소진·전환 꺼짐은 배지 없이 사람 승인으로 남는다. 새 자산이 없어 allowlist·CSP는 그대로다.
+- 증거: node `work-view.test.mjs` 6 통과(범위 안·로봇 밖·two_person·소진·비활성·readback 문구). 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1`로 `test_work_overview_browser.py` 36 통과·`test_console_palette`·`test_console_disabled_features`·`test_document_imports`·`test_doc_tabs` 포함 0 NEW, `test_server_app`·`test_remaining_platform_installed` 50 통과 0 NEW. 전체 affected/FULL 통과를 뜻하지 않는다.
+- gate 변화: 제품·장치·현장 수용 승격 없음. 자동 승인 활성화는 P5 현장 수용 기록이 별도다.

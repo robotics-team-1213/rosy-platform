@@ -43,6 +43,23 @@ class Work:
             task.update(status=states[event], reason=None)
 
     def handle(self, method, path, body, headers=None, robot_ids=('sample-robot',)):
+        # D-865 P3: the sample site configures no admission scope, so the work view's
+        # policy readback answers fail-closed exactly like an unconfigured real server.
+        if path in ('/policy-admission', '/policy-admission/audit'):
+            status = {'status': {'scope': {'enabled': False, 'robots': [], 'step_approval_kinds': [],
+                    'max_admits': 1, 'valid_until': None, 'scope_revision': 'sample-unset'},
+                    'admits_issued': 0, 'admits_remaining': 0, 'reason': 'NOT_CONFIGURED'}}
+            if path.endswith('/audit'):
+                if method != 'GET':
+                    return error(405, 'METHOD_NOT_ALLOWED')
+                return reply({'entries': [], 'cursor': None})
+            if method == 'GET':
+                return reply(status)
+            if method == 'POST':
+                if body.get('enabled'):
+                    return error(409, 'POLICY_ADMISSION_SCOPE_NOT_CONFIGURED')
+                return reply(status)
+            return error(405, 'METHOD_NOT_ALLOWED')
         match = re.fullmatch(r'/robots/([^/]+)/goal', path)
         if method == 'POST' and match:
             robot = match[1]
