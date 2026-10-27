@@ -219,6 +219,15 @@ certificate identity, config revision, and readback in the site validation
 record. These steps require the actual site host and devices for SITE/FIELD
 acceptance; local Compose checks establish only LOCAL behavior.
 
+Loop liveness is separate from process liveness (2026-10-27). `GET /readyz` on the
+Fleet service reports every background loop as `running`, `not_configured`, or
+`dead` — a dead loop makes it answer 503 with the loop names and counters. Keep
+`/healthz` for what consumes it today (the compose healthcheck, the mDNS
+advertise check, the autoupdate health gate): it keeps answering
+`{"status": "ok"}` while the process is up, and wiring any of those consumers to
+`/readyz` is a separate decision, not part of this stack. `/readyz` exposes names
+and counters only; it never echoes exception messages.
+
 ### Operator PC: resolve the name and verify trust before login
 
 운영자는 인증서의 `ROSY_SITE_TLS_HOST`와 같은 이름으로
