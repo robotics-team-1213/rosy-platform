@@ -25,6 +25,7 @@ from land_merge import resolver
 from land_selection import SAFETY_TRIGGER, _affected
 
 KEY = "spec"
+HOLDER = "rosy-land-spec"  # <git-common-dir>/rosy-land-spec/<branch>: the speculative worktree, like rosy-publish
 
 
 def _record(land, wt: Path, branch: str) -> dict | None:
@@ -63,22 +64,29 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
         return
     main_sha, head = land.out(wt, "rev-parse", "main"), land.out(wt, "rev-parse", "HEAD")
     stacked, spec = [], None
+    # A detached worktree of its own, never the branch's: a hard kill (taskkill /F, 2026-10-28) must not leave the
+    # owner's worktree on an unreferenced merge. Not a .worktrees slot; a killed run's folder goes on the next run.
+    holder = Path(land.out(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")) / HOLDER
+    temp = holder / branch.replace("/", "-")
+    land.worktree_rules.clear_tombstone(holder, temp.name)
+    land.git(wt, "worktree", "remove", "--force", str(temp), check=False)
+    land.git(wt, "worktree", "prune", check=False)
     # a main-red carry judged on this speculative tree must not mark this landing's own turn
     carried, passes = list(land.land_mainred.CARRIED), list(land.land_mainred.PASSES)
     try:
-        land.git(wt, "checkout", "-q", "--detach", main_sha)
+        land.git(wt, "worktree", "add", "-q", "--detach", str(temp), main_sha)
         for candidate in links:
             try:
-                land.merge(wt, candidate, branch, python, False)
+                land.merge(temp, candidate, branch, python, False)
             except land.Stop:
                 break  # a conflict outside the records: the chain ends before this ticket
             stacked.append(candidate)
         if stacked:
-            predicted = land.out(wt, "rev-parse", "HEAD")
-            land.merge(wt, head, branch, python, False)
-            invocations, note = land.select(wt, record["main"], python, head=predicted, landed=True)
-            land.run_tests(wt, args, invocations, land.tmp_dir(branch), "spec")
-            spec = {"tree": land.out(wt, "rev-parse", "HEAD^{tree}"), "sha": land.out(wt, "rev-parse", "HEAD"),
+            predicted = land.out(temp, "rev-parse", "HEAD")
+            land.merge(temp, head, branch, python, False)
+            invocations, note = land.select(temp, record["main"], python, head=predicted, landed=True)
+            land.run_tests(temp, args, invocations, land.tmp_dir(branch), "spec")
+            spec = {"tree": land.out(temp, "rev-parse", "HEAD^{tree}"), "sha": land.out(temp, "rev-parse", "HEAD"),
                     "base": record["main"], "candidate": record["candidate"], "chain": stacked, "main": main_sha,
                     "invocations": invocations, "full": bool(note)}
     except (land.Stop, land.subprocess.CalledProcessError) as error:  # a NEW failure here is the turn's to judge
@@ -86,10 +94,9 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
               flush=True)
     finally:
         land.land_mainred.CARRIED[:], land.land_mainred.PASSES[:] = carried, passes
-        land.git(wt, "merge", "--abort", check=False)
-        land.git(wt, "checkout", "-q", branch)
-    if land.out(wt, "rev-parse", "HEAD") != head:
-        raise land.Stop(f"speculative prepare left HEAD off {head[:10]}; check the worktree")
+        land.git(wt, "worktree", "remove", "--force", str(temp), check=False)
+        if temp.exists() and (left := land.worktree_rules.leave_tombstone(temp)):
+            print(f"[land] {temp}:{left}", flush=True)
     if spec:
         land.land_full._path(wt, branch).write_text(json.dumps({**record, KEY: spec}), encoding="utf-8")
     land.land_events.emit("speculation", stage="prepare", chain=stacked, ran=spec is not None)

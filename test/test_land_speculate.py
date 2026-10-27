@@ -59,6 +59,23 @@ def test_prepare_tests_the_predicted_tree_and_leaves_the_branch_as_it_was(queued
     assert not git(wt, "status", "--porcelain")
 
 
+def test_the_branch_worktree_is_never_touched_even_when_the_speculative_run_raises(queued, monkeypatch):
+    """2026-10-28: land.py trees were stopped with taskkill /F; a branch worktree must never be left detached."""
+    main, wt, base, peer, qdir, ticket, ran, _ = queued
+    head, holder = git(wt, "rev-parse", "HEAD"), main / ".git" / spec.HOLDER
+    git(main, "worktree", "add", "-q", "--detach", str(holder / "feat-x"), base)  # a killed run's leftover
+
+    def killed(wt_, *a):
+        assert Path(wt_) != wt and git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x"
+        raise RuntimeError("killed mid-run")
+    monkeypatch.setattr(land, "run_tests", killed)
+    with pytest.raises(RuntimeError):
+        _prepare(wt, qdir, ticket)
+    assert git(wt, "rev-parse", "HEAD") == head and git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x"
+    assert not git(wt, "status", "--porcelain") and not (holder / "feat-x").exists()
+    assert str(holder) not in git(main, "worktree", "list")
+
+
 def test_a_held_turn_runs_the_root_part_and_lands_a_green_full_record(queued, monkeypatch):
     """Robot-45's rule 3: the record's base is the turn's main, an ancestor of the landed commit."""
     main, wt, base, peer, qdir, ticket, ran, _ = queued
