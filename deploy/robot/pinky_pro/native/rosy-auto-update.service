@@ -32,7 +32,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -55,4 +55,6 @@ StateDirectoryMode=0755
 # installs. No CapabilityBoundingSet=, ProtectProc= or PrivatePIDs=: the health
 # check reads other units' /proc/<pid>/cwd.
 ReadWritePaths=/opt/rosy /var/lib/rosy/releases /run
+ReadWritePaths=-/var/lib/rosy-device/policy/updates
+ReadWritePaths=-/var/lib/rosy-device/state/config.lock
 ReadWritePaths=/etc/systemd/system -/etc/udev/rules.d -/etc/modprobe.d

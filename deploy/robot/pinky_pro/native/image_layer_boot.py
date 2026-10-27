@@ -15,15 +15,24 @@ from image_layer_files import _install, _mode, _sha256
 
 
 CAPABILITIES = ("boot_catalog_v1", "inverse_before_legacy_sync_v1")
+OS_COMPATIBILITY = {"schema_version": 1, "boot_abi": {"min": 1, "max": 2},
+                    "state_schema": {"read_min": 1, "read_max": 1, "write": 1}}
 BOOT_FILES = {"rosy-first-boot.py": 0o644, "rosy-first-boot.sh": 0o755}
 BOOT_DIRECTORY = "opt/rosy/first-boot"
 CATALOG = "image-layer/boot/catalog.json"
 FEATURE_UNITS = ("rosy-network-users.service", "rosy-network-agent.service",
                  "rosy-network-recovery.service", "rosy-network-recovery.timer")
 ENGINE_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
-                "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py",
+                "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py", "os_state_layout.py",
+                "first_boot_runtime.py", "first_boot_support.py", "os_state_firstboot.py", "os_state_storage.py", "os_storage_dispatch.py", "os_state_accounts.py",
+                "os_state_files.py", "os_state_config.py", "operator_keys.py", "os_state_tls.py", "os_state_io.py", "os_state_ready.py", "os_factory_release.py",
                 "rosy_auto_update.py", "rosy_claim.py",
-                "image_layer_boot.py", "image_layer_files.py")
+                "image_layer_boot.py", "image_layer_files.py", "native_release.py", "native_release_links.py", "signing.py", "os_payload_compatibility.py", "os_installed_factory.py", "os_update_install.py", "os_update_health.py", "os_update_commit.py", "os_update_controller.py", "os_update_feed.py", "os_update_stage.py", "os_update_rollout.py",
+                "os_slot_metadata.py", "media_layout.py", "os_media.py", "os_update_manifest.py", "os_rauc.py", "os_rauc_runtime.py", "os_update_state.py", "os_bootloader.py", "os_rauc_service.py", "os_update_policy.py", "rosy_transfer.py", "os_motion_guard.py", "os_trial_deadline.py", "os_update_watchdog.py")
+# The signed bridge-v1 baseline stays valid when later engines add helpers.
+BRIDGE_V1_FILES = ("sync-image-layer.py", "image-layer-reconcile.py", "auto_update_apply.py",
+                   "auto_update_records.py", "auto_update_host.py", "auto_update_stage.py",
+                   "rosy_auto_update.py", "rosy_claim.py", "image_layer_boot.py", "image_layer_files.py")
 BACKUPS = "var/lib/rosy/image-layer-backup"
 JOURNAL = BACKUPS + "/boot-transition.json"
 RELEASE_ID = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}")
@@ -127,6 +136,40 @@ def _previous(root: Path) -> str | None:
     return target.name
 
 
+def _engine_contract(native: Path) -> tuple[tuple[str, ...], bytes]:
+    path = _safe(native, "image_layer_boot.py")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    with os.fdopen(descriptor, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise ValueError("BOOT_BRIDGE_REQUIRED: engine metadata is not a regular file")
+        raw = handle.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
+        raise ValueError("BOOT_BRIDGE_REQUIRED: engine metadata exceeds size limit")
+    tree = ast.parse(raw)
+    declared = {target.id: ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
+                for target in node.targets if isinstance(target, ast.Name)
+                and target.id in ("ENGINE_FILES", "CAPABILITIES")}
+    files = declared["ENGINE_FILES"]
+    if (not isinstance(files, tuple) or not len(BRIDGE_V1_FILES) <= len(files) <= 64
+            or any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*\.py", name) for name in files)
+            or len(set(files)) != len(files) or not set(BRIDGE_V1_FILES) <= set(files)
+            or not set(CAPABILITIES) <= set(declared["CAPABILITIES"])):
+        raise ValueError("BOOT_BRIDGE_REQUIRED: invalid engine closure or capabilities")
+    return files, raw
+
+
+def _engine_snapshot(native: Path, installed: Path, files: tuple[str, ...]) -> dict[str, str] | None:
+    result = {}
+    for name in files:
+        if not _safe(native, name).is_file() or not _safe(installed, name).is_file():
+            return None
+        digest = _sha256(native / name)
+        if _sha256(installed / name) != digest:
+            return None
+        result[name] = digest
+    return result
+
+
 def require_bridge(root: Path, release_id: str, verify) -> str:
     """Capabilities come from installed bytes matching a verified signed release."""
     for candidate in dict.fromkeys([release_id, _previous(root)]):
@@ -135,17 +178,16 @@ def require_bridge(root: Path, release_id: str, verify) -> str:
         native = root / "opt/rosy/releases" / candidate / "deploy/robot/native"
         installed = root / "opt/rosy/native-runtime"
         try:
-            if not all(_safe(native, name).is_file() and _safe(installed, name).is_file()
-                       and _sha256(native / name) == _sha256(installed / name) for name in ENGINE_FILES):
+            files, snapshot = _engine_contract(native)
+            before = _engine_snapshot(native, installed, files)
+            if before is None:
                 continue
             verify(candidate)
-            tree = ast.parse((native / "image_layer_boot.py").read_text(encoding="utf-8"))
-            declared = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign)
-                            and any(isinstance(target, ast.Name) and target.id == "CAPABILITIES"
-                                    for target in node.targets))
-            if set(CAPABILITIES) <= set(declared):
+            # The closure declaration and installed bytes must still be the
+            # same snapshot after the caller verified the signed release.
+            if _engine_contract(native)[1] == snapshot and _engine_snapshot(native, installed, files) == before:
                 return _previous(root) or candidate
-        except (OSError, ValueError, SyntaxError, StopIteration, TypeError):
+        except (OSError, ValueError, SyntaxError, StopIteration, TypeError, KeyError):
             continue
     raise ValueError("BOOT_BRIDGE_REQUIRED: install the signed continuity bridge first")
 
@@ -236,6 +278,24 @@ def reconcile_forward(root: Path, target: str, verify, *, install=_install) -> N
         elif record["backup"]:
             raise ValueError("BOOT_INVERSE: prior boot file is missing")
         install(entry["source"], destination, entry["mode"])
+
+
+def _maintenance(root: Path) -> None:
+    from native_release import _ab_marked
+    if _ab_marked(root):
+        from os_payload_compatibility import require_native_maintenance
+        require_native_maintenance(root)
+
+
+def verify_maintenance(root: Path, target: str, verify):
+    _maintenance(root)
+    return verify(target)
+
+
+def inverse_maintenance(root: Path, target: str, verify, runner, *, install=_install, dry_run=False):
+    # Operator SDK changes are fenced; boot recovery deliberately uses inverse directly.
+    _maintenance(root)
+    return inverse(root, target, verify, runner, install=install, dry_run=dry_run)
 
 
 def inverse(root: Path, target: str, verify, runner, *, install=_install, dry_run: bool = False) -> dict:

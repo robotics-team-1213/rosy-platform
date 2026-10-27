@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-899 | 인증된 이송 복구 요청과 독립 운영자 승인. [전문](../adr/D-899-authenticated-transfer-recovery-intent.md) | Accepted for implementation (2026-10-27) |
+| D-895 | 원래 시도를 보존한 단일 이송 복구 후손. [전문](../adr/D-895-bounded-physical-transfer-recovery-child.md) | Accepted for implementation (2026-10-27) |
+| D-888 | Pinky 전체 OS 업데이트는 bootstrap 영속 입력과 별도 CMS 서명을 사용한다 | Proposed |
 | D-892 | Fleet 모바일 관제의 로봇 상태·작업 우선 배치 | Accepted (2026-10-27) |
 | D-891 | Fleet 인식 모델 승격 대기열 — 올린 D-874 묶음을 다시 검사하고 결정만 기록한다 | Proposed (2026-10-26) |
 | D-887 | Signed site service sets and identity-bound retirement | Accepted (2026-10-26) |
@@ -21,6 +24,7 @@
 | D-875 | Swarm owner-local API separates planning from safety lifecycle | Accepted for implementation (2026-10-25) |
 | D-883 | Monitoring 호스트 자원 감시와 시험 PC 저장소 정리 요청 (D-876 §5·D-524 보충) | Accepted for implementation (2026-10-26) |
 | D-877 | OMX 시뮬레이터 백엔드는 공통 층 하나에 붙는다: Gazebo, Isaac Sim, MuJoCo | Accepted (2026-10-25) |
+| D-860 | 장치 설명 정보는 등록과 제어 권한에서 분리한다 | Accepted (2026-10-24) |
 | D-854 | OMX 학습 정책 실행기 하나로 — 정책 종류를 갈아 끼우는 AI PC 정책 실행기와 행동 단위 변환 | Proposed (2026-10-23) |
 | D-837 | Fleet 작업 셀의 읽기 전용 관측과 화면 연결 | Accepted for implementation (2026-10-21) |
 | D-840 | 하나의 Learning 프로젝트에서 여러 로봇과 실행 호스트를 연결한다 | Accepted for implementation (2026-10-22) |
@@ -890,6 +894,7 @@
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 | Accepted |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Accepted |
 | D-805 | 호스트 업데이트: 장치 owner는 네이티브, 나머지는 컨테이너 — 역할별 두 경로와 현장 전체 동결 관문 | Proposed |
+| D-881 | A/B 이미지의 기체 상태와 슬롯별 적용 기록을 분리한다 | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 
@@ -1321,3 +1326,8 @@ The existing dataset review writer keeps its original human results behind a loo
 **Status:** Accepted (2026-10-26). 사용자 설계 승인·구현 지시이며 운영 활성화는 별도다.
 
 HF user/org별 용량 예약과 작업의 연결·고정 revision·SHA를 보존한다. 검증된 관리 자료만 명시적으로 회수·복원하며 활성 lease와 pin을 보호한다. 전문은 [D-884](../adr/D-884-learning-storage-pool-and-local-reclamation.md).
+## D-860 - Descriptive device profiles independent of enrollment and control
+
+**Status:** Accepted (2026-10-24)
+
+Fleet stores editable device names, models, declared arm counts and hardware identifiers in its existing database. Profiles confer no membership, connection attestation or motion authority. Details: [D-860](../adr/D-860-descriptive-device-profiles.md).

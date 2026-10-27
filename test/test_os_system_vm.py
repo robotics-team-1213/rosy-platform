@@ -1,0 +1,210 @@
+"""Opt-in disposable guest verification; never a release-image builder or a host installer."""
+import hashlib
+import importlib
+import json
+import os
+from pathlib import Path
+import shlex
+
+import pytest
+
+
+def module():
+    return importlib.import_module("os_system_vm")
+
+
+@pytest.mark.parametrize("change", [None, "boot", "unit", "pid", "kind", "clock", "json"])
+def test_pid1_start_evidence_binds_boot_unit_sender_event_and_clock(change):
+    boot = "11111111-1111-4111-8111-111111111111"
+    event = dict(UNIT="rosy-os-trial-deadline.service", _PID="1", _BOOT_ID=boot.replace("-", ""),
+                 MESSAGE_ID="7d4958e842da4a758f6c1cdc7b36dcc5", __MONOTONIC_TIMESTAMP="180000001")
+    if change == "boot": event["_BOOT_ID"] = "2" * 32
+    if change == "unit": event["UNIT"] = "another.service"
+    if change == "pid": event["_PID"] = "42"
+    if change == "kind": event["MESSAGE_ID"] = "0" * 32
+    if change == "clock": event["__MONOTONIC_TIMESTAMP"] = "179999999"
+    raw = b"not json" if change == "json" else json.dumps(event).encode()
+    if change is None:
+        assert module().pid1_start(raw, "rosy-os-trial-deadline.service", boot, 180_000_000) == event
+    else:
+        with pytest.raises(ValueError):
+            module().pid1_start(raw, "rosy-os-trial-deadline.service", boot, 180_000_000)
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
+def test_actual_pid1_journal_event_survives_guest_reboot(tmp_path):
+    with module().Guest(tmp_path) as guest:
+        assert guest.run("cat /var/lib/cloud/data/instance-id").strip() == guest.instance_id
+        boot = guest.run("cat /proc/sys/kernel/random/boot_id").strip()
+        unit = "rosy-system-journal-proof.service"
+        guest.run("systemd-run --unit=rosy-system-journal-proof --on-active=15s "
+                  "--timer-property=AccuracySec=1s --property=Type=oneshot "
+                  "/usr/bin/systemctl --no-block reboot")
+        journal = guest._ssh("stdbuf -oL journalctl --boot --follow --unit=" + unit
+                             + " --output=json --no-pager", timeout=180)
+        module().pid1_start(journal.stdout, unit, boot, 0)
+        assert guest.process.wait(timeout=90) == 0
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
+def test_actual_private_mount_guard_without_pid1_ptrace_authority(tmp_path):
+    with module().Guest(tmp_path) as guest:
+        guest.provision_source(Path(__file__).resolve().parents[1])
+        guest.run("cd /work/source && python3 -c \"import sys;from pathlib import Path;sys.path.insert(0,'test');"
+                  "from test_os_frozen_firstboot import _prefix;_prefix(Path('/work/runtime'))\"")
+        imports = ("import sys;from pathlib import Path;"
+                   "sys.path.insert(0,'/work/runtime/opt/rosy/native-runtime');"
+                   "from os_update_install import _namespace;\n")
+        outside = imports + ("try:\n _namespace(Path('/'))\nexcept ValueError:\n print('HOST_REFUSED')\n"
+                             "else:\n raise AssertionError('PID1 namespace was accepted')\n")
+        command = ["nsenter", "--mount=/proc/1/ns/mnt", "--", "/usr/bin/python3", "-I", "-B", "-c", outside]
+        assert guest.run(shlex.join(command)).strip() == "HOST_REFUSED"
+        probe = imports + "_namespace(Path('/'));print('PRIVATE_NAMESPACE_OK')"
+        command = ["systemd-run", "--wait", "--pipe", "--collect", "--unit=rosy-system-namespace",
+                   "--property=PrivateMounts=true", "--property=ProtectSystem=strict",
+                   "--property=NoNewPrivileges=true",
+                   "--property=CapabilityBoundingSet=CAP_SYS_ADMIN CAP_MKNOD CAP_DAC_OVERRIDE",
+                   "/usr/bin/python3", "-I", "-B", "-c", probe]
+        assert guest.run(shlex.join(command)).strip() == "PRIVATE_NAMESPACE_OK"
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
+def test_actual_systemd_device_allow_representation(tmp_path):
+    with module().Guest(tmp_path) as guest:
+        assert guest.run("cat /var/lib/cloud/data/instance-id").strip() == guest.instance_id
+        root = "/dev/block/" + guest.run("cat /sys/class/block/vda/dev").strip()
+        work = "/dev/block/" + guest.run("cat /sys/class/block/vdb/dev").strip()
+        grants = [(root, "r"), (work, "rw"), ("/dev/loop-control", "rw"), ("block-loop", "rwm"),
+                  ("/dev/mapper/control", "rw"), ("block-device-mapper", "rwm")]
+        command = ["systemd-run", "--unit=rosy-system-device-grants", "--property=DevicePolicy=closed",
+                   "--property=PrivateDevices=false", "--property=ProtectKernelLogs=true",
+                   "--property=ProtectClock=true", "--property=ProtectSystem=strict"]
+        command.extend("--property=DeviceAllow=" + path + " " + rights for path, rights in grants)
+        command.extend(["/usr/bin/sleep", "300"])
+        guest.run(shlex.join(command))
+        try:
+            raw = guest.run("systemctl show --value -p DeviceAllow rosy-system-device-grants.service").strip()
+            words = shlex.split(raw)
+            actual = list(zip(words[::2], words[1::2]))
+            expected = grants + [("char-rtc", "r")]  # ProtectClock's actual systemd 255 implication.
+            assert len(words) % 2 == 0 and len(actual) == len(expected) and set(actual) == set(expected), json.dumps(dict(raw=raw, expected=expected))
+        finally:
+            guest.run("systemctl stop rosy-system-device-grants.service")
+
+
+def test_guest_download_rejects_hash_or_size_before_publishing(tmp_path):
+    m = module()
+    source = tmp_path / "upstream"
+    source.write_bytes(b"known bytes")
+    expected = dict(url=source.as_uri(), size_bytes=11, sha256=hashlib.sha256(source.read_bytes()).hexdigest())
+    m.download(expected, tmp_path / "verified")
+    assert (tmp_path / "verified").read_bytes() == source.read_bytes()
+    for field, value in (("size_bytes", 10), ("sha256", "0" * 64)):
+        with pytest.raises(ValueError): m.download({**expected, field: value}, tmp_path / field)
+        assert not (tmp_path / field).exists()
+
+
+def test_cached_public_inputs_are_reverified_and_copied_independently(tmp_path, monkeypatch):
+    m = module()
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    source = tmp_path / "upstream"
+    source.write_bytes(b"known bytes")
+    sha = hashlib.sha256(source.read_bytes()).hexdigest()
+    expected = dict(url=source.as_uri(), size_bytes=11, sha256=sha)
+    m.cached_input(expected, tmp_path / "first")
+    (tmp_path / "first").write_bytes(b"guest writes")
+    monkeypatch.setattr(m, "urlopen", lambda *a, **k: pytest.fail("verified cache was downloaded again"))
+    m.cached_input(expected, tmp_path / "second")
+    assert (tmp_path / "second").read_bytes() == b"known bytes"
+    cached = tmp_path / "cache/rosy-os-system-inputs" / (sha + ".bin")
+    cached.chmod(0o600)
+    cached.write_bytes(b"bad cache!!")
+    with pytest.raises(ValueError): m.cached_input(expected, tmp_path / "third")
+    assert not (tmp_path / "third").exists()
+
+
+def test_qemu_command_has_only_owned_images_and_loopback_ssh(tmp_path):
+    m = module()
+    vm = m.Guest(tmp_path)
+    argv = vm.command(22022, 22023)
+    assert "-accel" in argv and argv[argv.index("-accel") + 1] == "tcg"
+    assert "hostfwd=tcp:127.0.0.1:22022-:22" in " ".join(argv)
+    assert "-enable-kvm" not in argv
+    assert all(value.startswith("file=" + str(tmp_path) + "/") for key, value in zip(argv, argv[1:]) if key == "-drive")
+    assert all(str(tmp_path) in value for key, value in zip(argv, argv[1:]) if key in {"-kernel", "-initrd", "-bios"})
+
+
+def test_guest_source_provisioning_refuses_an_unbound_instance(tmp_path, monkeypatch):
+    guest = module().Guest(tmp_path)
+    calls = []
+    def observe(command, **kwargs):
+        calls.append(command)
+        return "foreign-instance"
+    monkeypatch.setattr(guest, "run", observe)
+    with pytest.raises(ValueError, match="instance"):
+        guest.provision_source(tmp_path)
+    assert calls == ["cat /var/lib/cloud/data/instance-id"]
+
+
+def test_nested_guest_failure_includes_bounded_stdout_diagnostics(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    guest = module().Guest(tmp_path)
+    monkeypatch.setattr(guest, "_ssh", lambda *a, **k: SimpleNamespace(returncode=1,
+        stdout=b"actual guest filesystem counterexample", stderr=b""))
+    with pytest.raises(ValueError, match="actual guest filesystem counterexample"):
+        guest.run("owned guest check")
+
+
+@pytest.mark.parametrize("wrong_range", [False, True])
+def test_large_guest_input_uses_exact_bounded_http_ranges(tmp_path, monkeypatch, wrong_range):
+    import http.server
+    import re
+    import threading
+    m = module()
+    monkeypatch.setattr(m, "RANGE_BYTES", 8192, raising=False)
+    monkeypatch.setattr(m, "RANGE_THRESHOLD", 8192, raising=False)
+    data, requests = b"bounded upstream range data" * 1000, []
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_): pass
+        def do_GET(self):
+            match = re.fullmatch(r"bytes=(\d+)-(\d+)", self.headers.get("Range", ""))
+            if not match:
+                self.send_error(400)
+                return
+            start, end = map(int, match.groups())
+            requests.append((start, end))
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start + int(wrong_range)}-{end}/{len(data)}")
+            self.send_header("Content-Length", str(end - start + 1))
+            self.end_headers()
+            self.wfile.write(data[start:end + 1])
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    expected = dict(url=f"http://127.0.0.1:{server.server_port}/fixture", size_bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
+    try:
+        if wrong_range:
+            with pytest.raises(ValueError): m.download(expected, tmp_path / "image")
+            assert not (tmp_path / "image").exists()
+        else:
+            m.download(expected, tmp_path / "image")
+            assert (tmp_path / "image").read_bytes() == data
+            assert requests == [(start, min(start + 8191, len(data) - 1)) for start in range(0, len(data), 8192)]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+@pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
+def test_actual_guest_runs_pid1_without_host_privileges(tmp_path):
+    m = module()
+    with m.Guest(tmp_path) as guest:
+        facts = guest.run("cat /proc/1/comm; systemctl --version | head -1; id -u; uname -m")
+        assert facts.splitlines()[0] == "systemd"
+        assert "systemd 255" in facts and "\n0\n" in facts and "x86_64" in facts
+        # These block devices are guest-local virtual devices, never host hardware.
+        assert "virtio" in guest.run("readlink -f /sys/class/block/vdb/device")
+        guest.provision_source(Path(__file__).resolve().parents[1])
+        report = guest.run("cd /work/source && ROSY_OS_GUEST=1 python3 -m pytest test/test_os_system_root.py -q -rA", timeout=600)
+        assert "1 passed" in report and "SYSTEM actual fsck/owned-loop" in report, report

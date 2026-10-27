@@ -16,6 +16,7 @@ and how to fix it. Standard library only.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -23,6 +24,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+import land_mainred
 
 MAX_RERUN = 5  # more NEW ids than this is a real break, not load
 MAX_MAIN_CHECK = 30  # NEW ids rerun on main in one invocation (bounds the command line)
@@ -75,7 +78,9 @@ def _ids(wt: Path, verdict: str) -> list[str]:
 
     A run over several paths can print ids from another pytest rootdir (2026-10-26, feat/update-view:
     ``middleware/robot_execution/local/test_feature_matrix.py`` for ``applications/fleet/test/...``), and the
-    reruns below then found no file. A path the tree lacks takes the one tracked test file of that name.
+    reruns below then found no file. A path the tree lacks takes the one tracked test file of that name. A
+    directory printed in place of the file (2026-10-27: ``middleware/robot_execution/local::test_x`` for
+    ``shared/web/test/...``) takes the one tracked test file that defines the test.
     """
     ids = []
     for line in verdict.splitlines():
@@ -84,8 +89,13 @@ def _ids(wt: Path, verdict: str) -> list[str]:
         nodeid = m.group(1).strip()
         path, sep, rest = nodeid.partition("::")
         if not (wt / path).is_file():
-            found = [p for p in _git(wt, "ls-files", "--", f"*{Path(path).name}").stdout.splitlines()
-                     if Path(p).name == Path(path).name]
+            if path.endswith(".py"):
+                found = [p for p in _git(wt, "ls-files", "--", f"*{Path(path).name}").stdout.splitlines()
+                         if Path(p).name == Path(path).name]
+            else:
+                name = re.escape(rest.split("::")[0].split("[")[0])
+                found = _git(wt, "grep", "-lE", rf"^\s*(async\s+)?(def|class)\s+{name}\b", "--",
+                             "*test_*.py").stdout.splitlines()
             if len(found) == 1:
                 nodeid = found[0] + sep + rest
         ids.append(nodeid)
@@ -184,9 +194,11 @@ def main_red(wt: Path, inv: list[str], verdict: str, logdir: Path, tag: str, pyt
     ids = _ids(wt, verdict)
     if not ids:
         return ""
-    main = _git(wt, "rev-parse", "main").stdout.strip()
+    main = land_mainred.merged_main(wt)  # the main this candidate merged, not main's tip (D-889 addendum 2, 1)
     env = [token for token in inv if ENV_TOKEN.match(token)]
     log = logdir / f"main-{tag}.txt"
+    if land_mainred.known(wt, main, ids):
+        return f"MAIN-RED: every NEW id already failed on main {main[:10]} (rosy-main-red.jsonl); not rerun"
     print(f"[land] rerunning {min(len(ids), MAX_MAIN_CHECK)} NEW id(s) on main {main[:10]} (MAIN-RED check)",
           flush=True)
     try:
@@ -202,11 +214,29 @@ def main_red(wt: Path, inv: list[str], verdict: str, logdir: Path, tag: str, pyt
     red = [m.group(1).strip() for line in again.stdout.splitlines() if (m := NEW_LINE.match(line.strip()))]
     for nodeid in red:
         print(f"MAIN-RED {nodeid}")
+    branch = _git(wt, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    land_mainred.red(wt, main, red, log.read_text(encoding="utf-8", errors="replace"), env, branch)
     if not red:
         return f"the NEW id(s) pass on main {main[:10]}: this branch caused them"
     return (f"MAIN-RED: {len(red)} of {len(ids)} NEW id(s) also fail on main {main[:10]} (log {log}). Main is"
             " broken, not this branch: fix main first in a small fix/ branch that changes only that, land it,"
             " then rerun land.py here (check that no peer is already fixing it)")
+
+
+def carry(wt: Path, log: Path, head: str, python: str, inv: list[str]) -> tuple[list[str], str]:
+    """land_mainred.carry for one invocation's log: its NEW ids, the safety probe and the selector."""
+    text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+    check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+
+    def select(base: str, tip: str) -> dict:
+        done = subprocess.run([python, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", tip,
+                               "--json"], cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        return json.loads(done.stdout) if done.returncode == 0 else {"mode": "full"}  # unknown: never carry
+
+    branch = _git(wt, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    return land_mainred.carry(wt, _ids(wt, check.stdout), text, head, branch,
+                              safety=lambda ids: _safety(wt, python, ids), select=select, inv=inv)
 
 
 OWN_COPY = "ROSY_LAND_OWN_COPY"  # set by the re-run below: the landed copy runs, never re-runs itself

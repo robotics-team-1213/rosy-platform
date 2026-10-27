@@ -119,10 +119,10 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
                             "invocations": [root_tests[i::ROOT_SHARDS]], "ros": "overlay"})
         # D-762 stage 1: every other registered module suite, so CI's full tier is the lab full tier.
-        # Never ran in the CI container before; reports (like sensing) until its first green run.
+        # Gates since 2026-10-27: green on every main run since 2026-10-25 (it reported until then, like sensing).
         modules = at.pack(repo, at._outside_ci_matrix(at._full_paths(repo)))
         if modules:
-            entries.append({"name": "modules", "invocations": modules, "ros": "overlay", "gating": False})
+            entries.append({"name": "modules", "invocations": modules, "ros": "overlay"})
     else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
         whole["test"] = {"name": "root-test", "invocations": [["test"]]}

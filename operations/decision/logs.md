@@ -73,3 +73,9 @@
 - 변경: 기존 로컬 D-831 구현의 원문 보존·Unicode/별칭 충돌·부정/인용/복합 명령·참조 검증과 실제 사용량 계약을 추출했다. Console과 새 Discord profile에서 사용하고 실행 권한은 Fleet/CORE에 둔다.
 - 증거: 원본과 추출본의 새 모듈 바이트를 비교하며 새 게시 SHA에서 동일 ko/en 모델 suite를 다시 실행한다. 이번 적용 자체는 새 평가 receipt가 아니다.
 - gate 변화: 없음. 입력 토큰 절감 효과를 주장하지 않으며 자연어 확인 API는 별도다.
+
+## 2026-10-27 · 398b533c38 · RejectedJudgment 공개 이름 전환
+
+- 변경: fleet 자동화 worker가 `rosy.decision.billing`의 `_RejectedJudgment`를 분포 경계 너머 import·타입 검사하므로, 이름을 공개 `RejectedJudgment`로 바꾸고 패키지 안 provider 3곳·fleet worker(엄격 타입 검사 포함)·회귀 시험을 같은 커밋에 갱신했다. 순수 이름 변경이라 행동 변이 프로브는 해당 없음(누락 위치는 import 즉시 red).
+- 증거: 원격 5 suite(known-cost·deliberation 3종·installed wheel 검사) green, known NEW 0.
+- gate 변화: 없음. 거절 증거의 검증 규칙·엄격 타입 검사·설치 경계는 불변.

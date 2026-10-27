@@ -1,0 +1,22 @@
+{
+  "debs": [
+    ["pool/main/q/qemu/qemu-system-x86_8.2.2+ds-0ubuntu1.18_amd64.deb",11222476,"14602e262627adac030329d2cecfee5f6c0938b34566ff2ea2d4c9a9eb02430d"],
+    ["pool/main/q/qemu/qemu-system-common_8.2.2+ds-0ubuntu1.18_amd64.deb",1255316,"0a0b744f31e87d72dd0465436b8dfbb1ef9f574ecd0d5a2e9dd8c5cb7d0fef1f"],
+    ["pool/main/q/qemu/qemu-system-data_8.2.2+ds-0ubuntu1.18_all.deb",1796342,"a14b88d864859bd61c8a3274971da4ecb7da6cec15be6c265d0d411f783d5f2e"],
+    ["pool/main/s/seabios/seabios_1.16.3-2_all.deb",174648,"cac4e59a66c834d19cae751c22ab3a0391c22f78010fd11aa2e3fe630e6bc0e0"],
+    ["pool/main/i/ipxe/ipxe-qemu_1.21.1+git-20220113.fbbdc3926-0ubuntu2_all.deb",1564600,"1f1612934b6ddaf4dd633760dfe5ef2a79ea2507341fd5efe394ff589a044707"],
+    ["pool/main/liba/libaio/libaio1t64_0.3.113-6build1.1_amd64.deb",7210,"433212b33e26d424605c01cec1de33b63f2cc12870987b4cb7b3625baba66a19"],
+    ["pool/main/d/device-tree-compiler/libfdt1_1.7.0-2build1_amd64.deb",20128,"274d20dfab9d6b216b5de85446a93f6ce5b2cd82c847b8dfdc508577f76eb96a"],
+    ["pool/main/p/pmdk/libpmem1_1.13.1-1.1ubuntu2_amd64.deb",84760,"8f1be1cc834a98f0cf5c0950153f7f939a0c2c92095e98cd7bb40c752c545c1b"],
+    ["pool/main/n/ndctl/libndctl6_77-2ubuntu2_amd64.deb",62750,"4eab53588a8fa9e3192635e118c2d91bc069cde46a4a3785c77a0bb1ae001d02"],
+    ["pool/main/n/ndctl/libdaxctl1_77-2ubuntu2_amd64.deb",21404,"c6629b49c79343fb11ae404aeaa3156f051168da6c6d3d9d8d516acd94705061"],
+    ["pool/main/libs/libslirp/libslirp0_4.7.0-1ubuntu3.1_amd64.deb",63830,"4efa2d1c509de4d10fe965e86a3d864bf542996caf476d9111fd882c73857164"],
+    ["pool/main/libu/liburing/liburing2_2.5-1build1_amd64.deb",21092,"c2aef62accee92a06263c3ad4ef46132c13e409b54296c44792a20491830a7b0"]
+  ],
+  "cloud_base": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/",
+  "cloud": {
+    "guest.qcow2": ["ubuntu-24.04-server-cloudimg-amd64.img",621284352,"04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94"],
+    "vmlinuz": ["unpacked/ubuntu-24.04-server-cloudimg-amd64-vmlinuz-generic",15083912,"41ba36d860aa0b0cd995f4ca8856d80249b244577e704929b55be13fbd1ebd2f"],
+    "initrd": ["unpacked/ubuntu-24.04-server-cloudimg-amd64-initrd-generic",30707872,"bf276ffc12872256080890698b42db0dc9c5a469c896d8b59af6bc4e723cd186"]
+  }
+}

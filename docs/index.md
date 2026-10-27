@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-27 · uncommitted · feat(sim): D-877 물체 위치 평가 사실, 탐침 PASS 순서
-- 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
-- 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
-- 2026-10-26 · uncommitted · Monitoring 앱 소유·공유 검증 등록
-- 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
+- 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
+- 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
+- 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
+- 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
+- 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance

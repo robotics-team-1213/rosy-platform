@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
 SIGNING = ROOT / "deploy" / "hosts" / "common" / "release" / "signing.py"
 RUNTIME_FILES = ("rosy_auto_update.py", "auto_update_host.py", "auto_update_records.py",
-                 "auto_update_stage.py", "auto_update_apply.py", "rosy_claim.py", "rosy_transfer.py")
+                 "auto_update_stage.py", "auto_update_apply.py", "rosy_claim.py", "rosy_transfer.py", "os_state_layout.py")
 FAKE_SYNC = '''import json, pathlib, shutil
 here = pathlib.Path(__file__).resolve().parent
 root = here.parents[5]  # <root>/opt/rosy/current/deploy/robot/native

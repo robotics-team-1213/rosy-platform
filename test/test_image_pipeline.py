@@ -373,7 +373,7 @@ def test_verify_inputs_accepts_a_fully_pinned_lock(tmp_path):
     def settle(node):
         if isinstance(node, dict):
             return {
-                key: (True if key == "verified" else "pinned" if value is None else settle(value))
+                key: (True if key in {"verified", "cms_verified"} else "pinned" if value is None else settle(value))
                 for key, value in node.items()
             }
         return node
