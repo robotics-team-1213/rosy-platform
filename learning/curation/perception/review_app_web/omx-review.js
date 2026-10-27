@@ -175,7 +175,7 @@ $('review-open').onclick=async()=>{
     if($('prepared-set').value!==selected)return;
     current=value;pending=null;modified=false;stale=false;loading=false;render();
     $('review-status').textContent=(current.fixture_only?'시험 fixture · 현장 자료 수용 아님. ':'')+`검수 불러옴 · ${current.trainable?.ok?'학습 분할 준비됨':current.trainable?.reason||'학습 준비 안 됨'}`;
-  }catch(error){$('review-status').textContent=`검수 읽기 실패: ${error.message}`;stale=true;cancelViewer();saveReady();publishLoaded(null);}
+  }catch(error){$('review-status').textContent=`검수 읽기 실패: ${error.message}`;stale=true;cancelViewer();saveReady();publishLoaded();}
   finally{loading=false;$('review-fields').disabled=false;saveReady();preparedChanged();publishLoaded();}
 };
 $('review-episode').onchange=resetFrame;$('review-camera').onchange=()=>preview();$('review-frame').oninput=()=>preview();$('review-view').onchange=()=>preview();
