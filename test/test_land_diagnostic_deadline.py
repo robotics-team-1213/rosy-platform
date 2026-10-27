@@ -15,7 +15,7 @@ FAILURE = "FAILED pkg/test/test_a.py::test_a - assert False\n1 failed in 0.01s\n
 @pytest.mark.parametrize("hosts", [["a@1"], ["a@1", "b@2"]])
 @pytest.mark.parametrize("expires_in", ["alone", "main"])
 def test_diagnostic_expiry_releases_the_turn_without_starting_another_check(
-        cached, monkeypatch, hosts, expires_in):
+        cached, monkeypatch, capsys, hosts, expires_in):
     wt, run, _ = cached
     now, timers, diagnostics = [0], [], []
 
@@ -66,3 +66,4 @@ def test_diagnostic_expiry_releases_the_turn_without_starting_another_check(
 
     assert diagnostics == (["alone"] if expires_in == "alone" else ["alone", "main"])
     assert land.land_cache.entries(wt) == [], "an incomplete diagnostic must not produce passing evidence"
+    assert "on_done raised" not in capsys.readouterr().err, "deadline cancellation is not a broken callback"
