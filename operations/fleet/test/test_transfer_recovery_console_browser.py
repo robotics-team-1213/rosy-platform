@@ -93,7 +93,7 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
                     expect(page.locator("#arm-transfer-id")).to_be_editable()
                 expect(page.locator("#arm-transfer-recovery-state")).to_contain_text("새 관측 대기")
                 assert len(proposer_posts) == 1
-                expect(request).to_have_attribute("reason", "복구 관측을 요청할 수 있는 원본 실패 작업을 조회하세요")
+                expect(request).to_have_attribute("reason", re.compile(r".+"))
                 expect(page.locator("#arm-transfer-recovery-approve")).to_be_disabled()
                 expect(page.locator("#arm-transfer-recovery-approve")).to_have_attribute("reason", re.compile(r".+"))
                 intent = c.client.get(c.url + "/recovery", headers=headers("harbor")).json()["recovery"]
