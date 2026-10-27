@@ -366,6 +366,28 @@ def test_pid1_start_evidence_binds_boot_unit_sender_event_and_clock(change):
             module().pid1_start(raw, "rosy-os-trial-deadline.service", boot, 180_000_000)
 
 
+@pytest.mark.parametrize("change", [None, "boot", "unit", "pid", "failed", "stopped", "clock", "json"])
+def test_completed_pid1_job_is_only_boot_smoke_evidence(change):
+    boot = "11111111-1111-4111-8111-111111111111"
+    event = dict(UNIT="rosy-os-trial-deadline.service", _PID="1", _BOOT_ID=boot.replace("-", ""),
+                 MESSAGE_ID="39f53479d3a045ac8e11786248231fbf", __MONOTONIC_TIMESTAMP="181000001")
+    if change == "boot": event["_BOOT_ID"] = "2" * 32
+    if change == "unit": event["UNIT"] = "another.service"
+    if change == "pid": event["_PID"] = "42"
+    if change == "failed": event["MESSAGE_ID"] = "be02cf6855d2428ba40df7e9d022f03d"
+    if change == "stopped": event["MESSAGE_ID"] = "9d1aaa27d60140bd96365438aad20286"
+    if change == "clock": event["__MONOTONIC_TIMESTAMP"] = "-1"
+    raw = b"not json" if change == "json" else json.dumps(event).encode()
+    if change is None:
+        assert module().pid1_start(raw, event["UNIT"], boot, 0) == event
+    else:
+        with pytest.raises(ValueError):
+            module().pid1_start(raw, "rosy-os-trial-deadline.service", boot, 0)
+    # Completion at 181 seconds cannot establish whether the job began before 180 seconds.
+    with pytest.raises(ValueError):
+        module().pid1_start(raw, "rosy-os-trial-deadline.service", boot, 180_000_000)
+
+
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable SYSTEM guest opt-in")
 def test_actual_pid1_journal_event_survives_guest_reboot(tmp_path):
     with module().Guest(tmp_path) as guest:
