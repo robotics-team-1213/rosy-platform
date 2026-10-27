@@ -25,6 +25,7 @@ import tempfile
 import time
 from pathlib import Path
 
+import land_events
 import land_mainred
 
 MAX_RERUN = 5  # more NEW ids than this is a real break, not load
@@ -134,7 +135,26 @@ def verdict(wt: Path, inv: list[str], log: Path, logdir: Path, tag: str, python:
     passing = [line.split()[1] for line in check.stdout.splitlines() if line.startswith("MUST-FAIL ")]
     if passing:  # not a failure to rerun: the listed test passes, so the new line hides nothing
         return check.returncode, [], f"known_failures.txt adds id(s) that pass here: {', '.join(passing)}"
-    return (check.returncode, *load_flaky(wt, inv, log, check.stdout, logdir, tag, python, run, tested_sha=tested_sha))
+    result = (check.returncode, *load_flaky(wt, inv, log, check.stdout, logdir, tag, python, run, tested_sha=tested_sha))
+    failure(wt, inv, log, tested_sha, result[1])
+    return result
+
+
+def failure(wt: Path, inv: list[str], log: Path, sha: str, flaky: list[str]) -> None:
+    """A ``failure`` event: the failed ids and the host's user name (never its address), so land_stats can split
+    the new-failure share into one id failing for several branches, one host, or one branch (D-889 addendum 3).
+    The host comes from the laptop's memory history row of this argv and commit, not from the remote job."""
+    sys.path.append(str(Path(__file__).resolve().parents[1] / "test"))
+    sys.path.append(str(Path(__file__).resolve().parent / "remote"))
+    import known_failures
+    import memory_history
+    try:
+        failed = known_failures.failed_ids(log.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        failed = []
+    rows = [r for r in memory_history._rows(memory_history.path(wt), inv) if r.get("sha") == sha]
+    host = str(rows[-1].get("host", "")).split("@")[0] or None if rows else None
+    land_events.emit("failure", argv=inv, failed=failed[:20], host=host, flaky=flaky[:20], confirmed=not flaky)
 
 
 def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,

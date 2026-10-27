@@ -43,3 +43,36 @@ def test_daily_numbers_from_waits_turns_and_verdicts():
     assert day["new_share"] == round(1 / 3, 3) and day["flaky_share"] == round(1 / 3, 3)
     assert day["prepare_p50_min"] == 25, "prepare time is apart from the queue wait"
     assert json.dumps(land_stats.daily(rows))  # --json prints it
+
+
+def test_confirmed_failures_split_into_shared_host_and_branch_causes():
+    """D-889 addendum 3: the new-failure share (p) caps batching; shared and host causes are tooling's to fix."""
+    t = 1_792_900_000.0
+    fail = lambda dt, branch, host, *ids, confirmed=True: {  # noqa: E731
+        "t": t + dt, "event": "failure", "branch": branch, "host": host, "failed": list(ids), "confirmed": confirmed}
+    rows = [fail(0, "a", "ai", "test/x.py::t"), fail(600, "b", "rosy", "test/x.py::t"),  # two branches: shared
+            fail(0, "c", "robttt", "test/y.py::t"), fail(900, "c", "robttt", "test/y.py::t"),  # one host: host
+            fail(0, "d", "ai", "test/z.py::t"),  # one branch once: branch
+            fail(0, "e", "ai", "test/w.py::t", confirmed=False),  # load-flaky: not counted
+            fail(land_stats.WINDOW + 1, "f", "ai", "test/z.py::t")]  # same id, far apart, other host: branch
+    (day,) = land_stats.daily(rows).values()
+    assert (day["failed_shared"], day["failed_host"], day["failed_branch"]) == (2, 2, 2)
+
+
+def test_a_judged_failure_leaves_its_ids_and_host_user_never_the_address(tmp_path, monkeypatch):
+    import land_checks
+    sys.path.insert(0, str(ROOT / "tools" / "remote"))
+    import memory_history
+
+    history, inv, sha = tmp_path / memory_history.FILE, ["test/x.py"], "ab" * 20
+    memory_history.record(history, inv, "ai@" + ".".join(["100", "1", "2", "3"]), 300, sha)
+    monkeypatch.setattr(memory_history, "path", lambda repo: history)
+    log = tmp_path / "run-1-1.txt"
+    log.write_text("FAILED test/x.py::test_a - assert 0\nFAILED test/x.py::test_b\n1 failed\n", encoding="utf-8")
+    emitted = []
+    monkeypatch.setattr(land_checks.land_events, "emit", lambda event, **fields: emitted.append((event, fields)))
+    land_checks.failure(tmp_path, inv, log, sha, [])
+    land_checks.failure(tmp_path, inv, log, "cd" * 20, ["test/x.py::test_b"])
+    assert emitted[0] == ("failure", {"argv": inv, "failed": ["test/x.py::test_a", "test/x.py::test_b"], "host": "ai",
+                                      "flaky": [], "confirmed": True})
+    assert emitted[1][1]["host"] is None and emitted[1][1]["confirmed"] is False
