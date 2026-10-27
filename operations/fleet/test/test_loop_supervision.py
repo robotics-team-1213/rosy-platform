@@ -2,8 +2,8 @@
 
 변이 검증 대상(계획 8): supervised/attach 하나 제거, stopping 플래그 제거,
 디스패치 pass 복원은 각각 이 파일의 시험을 red로 만들어야 한다. 최소 앱에서
-켜지지 않는 선택 루프(charge 등)의 언랩은 이 시험이 못 잡는다 — 전체 옵션
-구성 시험은 후속.
+켜지지 않는 선택 루프(charge 등)의 언랩은 전체 옵션 구성 시험
+(test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configured)이 잡는다.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from fakes import FakeClock, FakeRobot
 from fleet.server import background_workers
+from fleet.server import loop_supervision
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.loop_supervision import DEAD, NOT_CONFIGURED, RUNNING, LoopSupervisor
@@ -226,3 +227,70 @@ def test_readyz_without_lifespan_stays_ready_with_declared_names(tmp_path):
     loops = TestClient(app).get("/readyz").json()["loops"]
     assert set(loops) == EXPECTED_LOOPS
     assert all(row["state"] == NOT_CONFIGURED for row in loops.values())
+
+
+# --- 전체 옵션 구성: 선택 분기의 언랩 (계획 2026-10-27 후속) ---
+
+def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configured(monkeypatch):
+    """모든 선택 서비스가 켜진 구성에서 23개 루프 전부가 running으로 언랩되는지.
+
+    루프 몸체는 각자의 시험이 소유한다 — 여기서는 스폰 배선(supervised/attach)만
+    검증한다. 팩토리를 영원히 대기하는 코루틴으로 바꿔 몸체를 걸어 뺀다.
+    (변이: 어느 선택 분기의 supervised/attach를 지워도 이 시험은 red —
+    그 루프가 not_configured로 남는다.)
+    """
+    async def hang(*_args, **_kwargs):
+        await asyncio.Event().wait()
+
+    class Service:  # run()을 딱 한 번 부르는 선택 서비스
+        def run(self):
+            return asyncio.ensure_future(hang())
+
+    class Tether:  # start()가 태스크를 반환하는 유일한 예외 (D-526)
+        def start(self):
+            return asyncio.ensure_future(hang())
+
+    async def exercise():
+        supervisor = LoopSupervisor()
+        app = SimpleNamespace(state=SimpleNamespace(
+            arm_transfer_dispatcher=Service(), stuck_resolver=Service(),
+            trip_runner=Service(), charge_runtime=Service(), job_trips=Service(),
+            tether_watch=Tether(), paths=Service(), lane_compliance=object()))
+        console = SimpleNamespace(
+            _signals=Service(), goal_leases=SimpleNamespace(ttl_s=4.0),
+            prune_task_queue_entries=lambda ids: None)
+
+        # 루프 몸체 걸어 빼기: 스폰 배선이 부르는 모든 팩토리를 대기 코루틴으로.
+        for factory in ("goal_evidence_expiry_loop", "lane_compliance_loop",
+                        "goal_lease_renew_loop", "proposal_expiry_loop",
+                        "mission_dispatch_loop", "mission_feedback_schedule_loop",
+                        "_task_dispatch_loop", "_mission_model_turn_worker_loop"):
+            monkeypatch.setattr(loop_supervision, factory, hang)
+        monkeypatch.setattr(loop_supervision, "start_control_unit_tasks",
+                            lambda app: [asyncio.ensure_future(hang()) for _ in range(2)])
+        monkeypatch.setattr(loop_supervision, "start_notification_worker",
+                            lambda app, config: (None, asyncio.ensure_future(hang())))
+
+        _started, _notification_http, background_tasks = loop_supervision.start_fleet_loops(
+            app, console, supervisor=supervisor,
+            task_service=SimpleNamespace(), drive_cancel=None,
+            proposal_store=object(), mission_dispatcher=object(),
+            cell_job_dispatcher=object(), goal_evidence_service=object(),
+            mission_model_turn_scheduler=object(), mission_model_turn_worker=object(),
+            localization_service=Service(), calibration_drift_watch=Service(),
+            notification_config=object(), identity=Service(),
+            log=logging.getLogger("test-loop-supervision"), lane_compliance_period_s=1.0)
+
+        ready, loops = supervisor.ready()
+        assert ready is True
+        assert set(loops) == EXPECTED_LOOPS
+        not_running = {name for name, row in loops.items() if row["state"] != RUNNING}
+        assert not_running == set()
+
+        supervisor.stopping()  # 정리: 남은 태스크가 경보로 흘러들지 않게
+        for task in background_tasks:
+            task.cancel()
+        await asyncio.gather(*background_tasks, return_exceptions=True)
+        return None
+
+    asyncio.run(exercise())
