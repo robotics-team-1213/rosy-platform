@@ -35,7 +35,7 @@ def test_modern_importer_preserves_control_configuration(tmp_path, robot_type):
     else:
         assert options['joint_target_type'] == 'position'
         assert options['override_joint_stiffness'] == 40.0
-        assert options['override_joint_damping'] == .3
+        assert options['override_joint_damping'] == pytest.approx(2 * (40.0 ** .5) * .5 + .3)
 
 
 @pytest.mark.parametrize("robot_type", ["Wheeled", "Manipulator"])
