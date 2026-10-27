@@ -89,13 +89,14 @@ def test_root_conftest_names_the_inserter_and_never_fails(pair, xdist):
     assert "sys.path added by 1 test module(s)" in text and "test_a_inserts.py: helpers" in text, text
 
 
-def test_nested_pytest_reports_paths_when_ros_plugins_preimport_modules(pair):
+@pytest.mark.parametrize("plugin_name", ["launch_testing", "launch_ros"])
+def test_nested_pytest_reports_paths_when_ros_plugins_preimport_modules(pair, plugin_name):
     (pair / "conftest.py").write_bytes((ROOT / "conftest.py").read_bytes())
     plugins = pair / "ros_plugins"
     metadata = plugins / "fake_ros_launch-0.0.dist-info"
     metadata.mkdir(parents=True)
     (metadata / "METADATA").write_text("Metadata-Version: 2.1\nName: fake-ros-launch\nVersion: 0.0\n")
-    (metadata / "entry_points.txt").write_text("[pytest11]\nlaunch_testing = early_collect\nlaunch_ros = early_collect\n")
+    (metadata / "entry_points.txt").write_text(f"[pytest11]\n{plugin_name} = early_collect\n")
     # ROS launch collection can import a module before the report hook observes its sys.path change.
     (plugins / "early_collect.py").write_text(
         f"import runpy\nrunpy.run_path({str(pair / 'test_a_inserts.py')!r})\n")
