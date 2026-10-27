@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from test_os_update_policy import _policy
-from test_os_update_state import _begin
+from test_os_update_state import _advance, _begin, SOURCE_BOOT, TRANSACTION
 
 
 def controller():
@@ -20,8 +20,9 @@ def snapshot(paths):
 
 
 @pytest.mark.parametrize("pending", [False, True])
-def test_status_projects_local_slots_policy_and_pending_without_writes(tmp_path, monkeypatch, pending):
-    _, state, root, journal, verified, facts, directory, host = _policy(tmp_path, monkeypatch)
+@pytest.mark.parametrize("slot", ["a", "b"])
+def test_status_projects_local_slots_policy_and_pending_without_writes(tmp_path, monkeypatch, pending, slot):
+    _, state, root, journal, verified, facts, directory, host = _policy(tmp_path, monkeypatch, slot=slot)
     config = directory / "config.json"
     config.write_text(json.dumps(dict(enabled=False, repo="example/robot-updates",
                                      api_base="https://catalog.invalid/private")))
@@ -31,16 +32,29 @@ def test_status_projects_local_slots_policy_and_pending_without_writes(tmp_path,
     # No transport, CORE, claim, service or device-operation methods are available to status.
     result = controller().status(root, host=SimpleNamespace(now=host.now))
     assert result["schema_version"] == 1
-    assert result["running_slot"] == "a"
-    assert result["committed"] == dict(slot="a", release_id="2026.10.26-010")
+    assert result["running_slot"] == slot
+    assert result["committed"] == dict(slot=slot, release_id="2026.10.26-010")
     assert result["policy"] == dict(enabled=False, repo="example/robot-updates", hold="none")
     assert result["failed_versions"] == []
     expected = (dict(phase="PREPARED", release_id=verified["metadata"]["release_id"],
-                     source_slot="a", target_slot="b") if pending else None)
+                     source_slot=slot, target_slot="b" if slot == "a" else "a") if pending else None)
     assert result["pending"] == expected
     assert not any(word in json.dumps(result) for word in ("api_base", "catalog.invalid", "source_boot_id", "manifest_sha256"))
     assert snapshot([journal, config]) == before
     assert not (directory / "hold.json").exists()
+
+
+def test_status_reports_failed_versions_from_the_lifecycle_journal(tmp_path, monkeypatch):
+    _, state, root, journal, verified, facts, _, host = _policy(tmp_path, monkeypatch)
+    _begin(state, root, verified, facts)
+    _advance(state, root, "TRIAL")
+    with state.locked(root) as store:
+        store.record_failure(TRANSACTION, SOURCE_BOOT, "a")
+    before = snapshot([journal])
+    result = controller().status(root, host=SimpleNamespace(now=host.now))
+    assert result["failed_versions"] == [verified["metadata"]["release_id"]]
+    assert result["pending"] is None
+    assert snapshot([journal]) == before
 
 
 @pytest.mark.parametrize("kind", ["active", "expired", "invalid"])
