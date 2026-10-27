@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · fix(harness): operations/monitoring 루트의 capability 복구
 - 2026-10-28 · uncommitted · fix(release): 권한 확인 파일 이름을 호출마다 다르게
 - 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 2026-10-27 · ae535f57ec · fix: publish push가 자기 SHA의 pre-push 사본으로 돈다
 - 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
-- 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row

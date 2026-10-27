@@ -678,6 +678,7 @@ roots:
     import_prefix: [rosy.monitoring]
     note: D-876 independent read-only collector, scoped API and POSIX launcher; UI source belongs to applications/monitoring. No Fleet/CORE command or host repair authority.
     concern: other
+    capability: fleet
   - path: applications/monitoring
     layout_target: applications/monitoring
     part: operations

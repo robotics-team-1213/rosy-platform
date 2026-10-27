@@ -12515,3 +12515,11 @@ osy-d395-s1d\`.
 - 증거: 회귀 시험이 고치기 전 코드에서 같은 오류로 실패(원격 1 failed)하고, 고친 뒤 release 시험 109 passed, known_failures NEW 0.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/collection-time-probe-races-across-xdist-workers-2026-10-28.md`.
+
+## 2026-10-28 · uncommitted · fix(harness): operations/monitoring 루트의 capability 복구
+
+- 변경: `tools/harness/platform_parts.yaml`. `applications/monitoring` 루트를 끼워 넣을 때 `operations/monitoring`의 `capability: fleet`가 새 항목으로 넘어가 원래 루트가 capability를 잃었다. 원래 루트에 `capability: fleet`를 다시 둔다.
+- 근거: 착지 사전 시험의 `test/architecture/test_capability_owners.py::test_every_root_has_a_known_capability`가 `operations/monitoring: None`으로 실패했다.
+- 증거: 원격 `test/architecture`·`test/test_harness_contracts.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 편집 실수다.
