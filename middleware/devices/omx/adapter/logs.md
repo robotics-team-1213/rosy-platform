@@ -802,3 +802,9 @@
 - 변경: public S3 #184의 commit 3f6071fe73에 있던 `devices/omx/adapter/omx_adapter/real` 크기 단위 행을 복원하고 부모 AGENTS 표에 기존 책임을 적었다. commit 4f483955bf의 cherry-pick은 코드와 독스트링을 유지했지만 이 행을 가져오지 않았고, 이력 합류 commit 1a474f511f도 행이 있는 두 번째 부모와 달리 누락을 유지했다. 새 하위 패키지 승격이나 B/C 기준 충족 주장이 아니다. 한도·바닥·ratchet·계산 규칙과 드라이버 동작은 그대로다.
 - 증거: 원본 commit 3220c61927과 public commit 3f6071fe73의 init·로그·크기 행 및 현재 트리를 Git으로 비교했다. 기존 profile 소비자 원격 결과 344 PASS / 1 NEW는 부모 단위 10,353 > 10,000의 RED 증거다. 이 복원 변경의 원격 검증과 독립 검토는 아직 대기 중이다.
 - gate 변화: 없음. 복원은 rebuilt profile의 검증이나 실물·배포·현장 수용이 아니다. CE: 미해결 — 이력 누락 원인은 확인했으며 복원 검증 전이다.
+
+## 2026-10-27 · uncommitted · refactor(omx): align five literal value-contract families
+
+- 변경: moved profile declarations, ROS goal events, watchdog/intake observations, hardware document validators and five kinematic value classes to the existing contracts owner. Explicit legacy aliases preserve identity; the hardware CLI and solver/resource loader stay at their original paths. Transfer contracts now import the kinematic values directly. No new size unit, limit, driver, motion policy or safety classification.
+- 증거: reviewed tests-only commit `13eee434c6d6a194aa9b4f873c6b3232c7208d13`, official remote job `13eee434c6-4835e1`: 1 failed, 33 passed, no errors/skips. The installed canonical-first probe fails because adapter_profile is absent. Moved AST/global/import closure and static checks accompany the source freeze; independent source review and committed compatibility GREEN remain pending. No local product imports or pytest.
+- gate 변화: none. No runtime, ROS-SIM, DEVICE or FIELD acceptance. CE: not applicable; existing installed-layout and isolated-import lessons apply.
