@@ -12452,3 +12452,11 @@ osy-d395-s1d\`.
 - 증거: `docs/validation/omx-sim-grasp-2026-10-27/`(MuJoCo 5/5, Isaac 0/5와 원인 관찰), 원격 `test/test_omx_grasp_probe.py`, `test/test_land.py`.
 - gate 변화: 없음. Isaac 전환 조건은 여전히 미충족.
 - CE: 새 교훈 기록 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`.
+
+## 2026-10-27 · uncommitted · feat(sim): Isaac 파지 반복 5/5 — 구동, 손가락 대칭, 공용 손가락 패드
+
+- 변경: `learning/envs/isaac/run_omx_backend.py`(force 구동과 화물 fixture 이득, 가져온 mimic 대신 측정한 `gripper_joint_1`의 반대 각으로 `gripper_joint_2` 구동, 보정 접촉점 캡슐 패드, 마찰 재질, 자기 충돌 끔). 패드 정의는 `tools/sim/omx_cell_world.py`로 옮겨 MuJoCo와 함께 쓴다.
+- 근거: 1차 기록에서 Isaac 0/5. D-866 §2 Isaac 전환 조건의 파지 반복.
+- 증거: `docs/validation/omx-sim-grasp-2026-10-27b/`(Isaac 5/5, MuJoCo 5/5, 두 백엔드 적합성 통과), 원격 `test/test_omx_sim_backends.py`.
+- gate 변화: Isaac 전환 조건 중 파지 반복 충족(시험 범위 안). 카메라 640×480 10Hz와 렌더링 비교는 미충족.
+- CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`에 Isaac 원인 세 겹과 공용 패드 위치.
