@@ -55,6 +55,7 @@ import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did
 import land_browser  # noqa: E402  (the browser tier in file-level chunks)
 import land_selection  # noqa: E402  (selection with this caller's Stop and helper seams)
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
+import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
                         generate_records, resolver)
@@ -100,8 +101,8 @@ def lines(cwd: Path, *args: str) -> list[str]:
 
 # --- merging (conflict auto-resolution itself: land_merge.py) --------------------
 
-def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> list[str]:
-    """Merge main_sha into HEAD; return the auto-resolved paths. Stop on anything else."""
+def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, source: str = "main") -> list[str]:
+    """Merge main_sha (``source``: a batch member's tip, land_batch.py) into HEAD; return the auto-resolved paths."""
     if dry_run:
         tree = git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main_sha, check=False)
         conflicts = conflict_stages(tree.stdout) if tree.returncode == 1 else {}
@@ -112,7 +113,7 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
             raise Stop("merge would conflict outside the auto-resolvable set:\n  " + "\n  ".join(manual))
         return sorted(resolved)
     result = git(wt, "merge", "--no-edit", "--no-commit", "-m",
-                 f"Merge branch 'main' into {branch}", main_sha, check=False)
+                 f"Merge branch '{source}' into {branch}", main_sha, check=False)
     if result.returncode == 0 and git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0:
         return []
     resolved = {}
@@ -262,99 +263,7 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
 
 def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
-    python = sys.executable
-    done = []
-    if (wt / HARNESS).is_file():
-        step(wt, [python, HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
-        done.append("lint ok")
-    # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
-    # no host means it waits, then fails, and nothing lands).
-    head = out(wt, "rev-parse", "HEAD")
-    reused, todo, keep = land_cache.split(wt, args, invocations, head, python, select)
-    done += reused
-
-    def batch(part: list[tuple[int, list[str]]]) -> list[str]:
-        todo = [inv for _, inv in part]
-        logs = [logdir / f"run-{round_no}-{n}.txt" for n, _ in part]
-        began, seen = time.monotonic(), {}
-
-        def judge(inv, log, tag):  # a NEW that main-red carry-over takes (land_mainred) neither stops nor is kept
-            v = land_checks.verdict(wt, inv, Path(log), logdir, tag, python, remote_pytest.run, head)
-            taken = land_checks.carry(wt, Path(log), head, python, inv) if v[0] and not v[1] else ([], "")
-            return (v[0], taken[0], f"main-red carried: {taken[1]}") if taken[0] else v
-
-        def on_done(inv, log):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
-            seen[str(log)] = v = judge(inv, log, f"{round_no}-{Path(log).stem[4:]}")
-            return bool(v[0] and not v[1]) or (isinstance(round_no, int) and time.monotonic() - began > TURN_CAP_S)
-        codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}", on_done=on_done)
-        if out(wt, "rev-parse", "HEAD") != head:
-            raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
-        if len(codes) != len(todo):
-            raise Stop("incomplete remote results; not landing")
-        print(f"[pytest] {(secs := round(time.monotonic() - began))}s", flush=True)
-        # Every invocation is judged and each clean pass kept before a stop, so a retry reruns only what failed
-        # or lost its host (2026-10-25: one fixed failure reran 27 passed invocations).
-        stops, cancelled = [], []
-        for (n, _), inv, log, code in zip(part, todo, logs, codes):
-            if out(wt, "rev-parse", "HEAD") != head:
-                raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
-            if code == remote_pytest.CANCELLED:  # never ran to a verdict: not kept, not a failure of its own
-                cancelled.append(inv)
-                land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs)
-                continue
-            if why := land_cache.unusable(code, log) or land_browser.vacuous(inv, log):
-                stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
-                land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs)
-                continue
-            failed, flaky, why = seen.get(str(log)) or judge(inv, log, f"{round_no}-{n}")
-            if out(wt, "rev-parse", "HEAD") != head:
-                raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
-            if failed and not flaky:
-                stops.append(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
-                land_cache.failed(wt, inv, True)
-                land_events.emit("tests", round=round_no, argv=inv, verdict="new", seconds=secs)
-                continue
-            land_cache.failed(wt, inv, False)
-            carried = why.startswith("main-red")
-            land_events.emit("tests", round=round_no, argv=inv, seconds=secs,
-                             verdict="carried" if carried else "flaky" if flaky else "pass")
-            if not failed:
-                keep(inv, log)
-                land_mainred.passed(inv)  # this round passed it: an earlier round's carry of it is void
-                land_mainred.close(wt, log.read_text(encoding="utf-8", errors="replace"), head)
-            done.append(f"pytest {' '.join(inv)} ok ({log.name})"
-                        + (f", {why}" if carried else f", LOAD-FLAKY {flaky}" if flaky else ""))
-        if cancelled and not stops:
-            raise Overtime(f"{len(cancelled)} invocation(s) past the turn's {TURN_CAP_S // 60} min: tested outside the lock")
-        return stops + ([f"{len(cancelled)} invocation(s) not run: cancelled after the failure above"] if cancelled else [])
-
-    # What failed last time runs alone first: failing again stops before the rest spends the test PCs.
-    numbered = list(enumerate(todo, 1))
-    first = land_cache.failed_first(wt, todo)
-    parts = ([[x for x in numbered if x[1] in first], [x for x in numbered if x[1] not in first]]
-             if first and len(first) < len(todo) else [numbered])
-    for i, part in enumerate(parts):
-        if stops := batch(part):
-            rest = sum(map(len, parts[i + 1:]))
-            raise Stop("\n".join(stops) + (f"\n(failed last run too; {rest} other invocation(s) not run)"
-                                           if rest else ""))
-    if args.node:
-        mjs = sorted(str(p.relative_to(wt).as_posix()) for inv in invocations for t in inv
-                     if _test_dir(t) for p in (wt / _test_dir(t) / "web").glob("**/*.mjs"))
-        mjs = list(dict.fromkeys(mjs))
-        if mjs:
-            # D-518: console modules import /console/assets/<name>; Node resolves those through
-            # the suite's register hook, as test_site_map_api.py does.
-            hooks = sorted({f"./{h.relative_to(wt).as_posix()}" for inv in invocations for t in inv
-                            if _test_dir(t) for h in (wt / _test_dir(t) / "web").glob("register-*.mjs")})
-            step(wt, ["node", *[a for h in hooks for a in ("--import", h)], "--test", *mjs],
-                 logdir / f"node-{round_no}.txt", "node")
-            done.append(f"node --test {len(mjs)} file(s) ok")
-        else:
-            done.append("node skipped: no web/*.mjs under the selected test dirs")
-    if out(wt, "rev-parse", "HEAD") != head:
-        raise Stop(f"HEAD changed during checks; {head[:10]} was tested; retry the landing")
-    return done
+    return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
 
 
 def main_checkout(wt: Path) -> Path:
@@ -408,7 +317,13 @@ def land(args) -> int:
         qdir, ticket = land_queue.enter(wt, branch, "preparing")  # main() releases the ticket on every exit
         if args.tests == "auto" and land_full.restore(wt, branch) is None:
             land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
-        land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(sys.modules[__name__], wt))
+        if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
+            return code  # a batch landed this branch
+    return rounds(args, wt, branch, main_co, python, qdir, ticket)
+
+
+def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket) -> int:
+    """Merge main, test, fast-forward until main holds still; ``branch`` is HEAD (a topic or a batch branch)."""
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
