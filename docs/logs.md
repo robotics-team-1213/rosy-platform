@@ -12453,6 +12453,19 @@ osy-d395-s1d\`.
 - gate 변화: 없음. Isaac 전환 조건은 여전히 미충족.
 - CE: 새 교훈 기록 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`.
 
+## 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
+- 변경: 동결된 이전 기록을 보존하고 `validation/robot-profile-pipeline-2026-10-27b/result.md`에 로컬 main 통합 결과를 추가했다.
+- 증거: commit `b69d9c7362` 공식 landing 기록과 main ancestry 확인; 후보 Fleet-root 포함 묶음 7,444 통과·407 제외, 별도 root/core 묶음 4,687 통과·225 제외, 실제 Cell/care/pipeline 브라우저 48 통과·0 제외, main Node 398 통과·0 제외. 최종 tier·캐시·기존 FULL·재실행·미검증 범위를 구분했다.
+- gate 변화: 없음. 실물·ARM64·현장 수용이나 자동 복구로 승격하지 않는다.
+- 결정: 없음. 기존 care/API/CORE·OMX 권한 경계를 유지한다.
+- 교훈: CE 미해결. 기존 시간초과의 단독 통과를 해결로 쓰지 않으며 시험 시간·known-failure·quarantine 변경 없음.
+
+## 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
+- 변경: 검증 기록의 receipt 파일명을 `rosy-land/<sha>.json`으로 표기하고 전체 commit은 기존 표에 유지했다. 기존 해시 표기 교훈을 연결했다.
+- 증거: 최초 문서 관문은 해당 경로의 high-entropy-token 1건으로 실패했고 단독 재실행도 실패했다. main에서는 통과해 이 문서의 원인으로 확인됐다. 수정 뒤 동일 순수 scanner와 정상 원격 관문으로 확인한다.
+- gate 변화: 없음. 시험·scanner·known-failure·quarantine·허용 목록은 수정하지 않았다.
+- 교훈: 기존 `git-ids-in-validation-records-need-the-commit-prefix` 지침을 적용했다. 결과를 바꾸지 않는 표기 수정이며 새 해결 교훈은 추가하지 않는다.
+
 ## 2026-10-27 · uncommitted · feat(perception): Fleet 승인을 모델 PC 레지스트리에 반영(D-898)
 
 - 변경: Fleet `GET /api/fleet/perception-promotions/{sha}/decision.signed`(viewer)가 정본 결정과 새 역할 키 `perception-decision`의 Ed25519 서명을 돌려준다(키 없음 503, 미결정 409). 모델 PC `approval_import.py`가 서명·APPROVED·묶음 해시·revision·files·결과 폴더·제안자≠승인자를 확인한 뒤 model-watch와 같은 work.lock 아래 `accepted/`와 `models/approvals/<sha>/`에 기록한다. 활성 포인터·shadow·배포는 건드리지 않는다. contracts 0.1.15(`decision_encoded`·`sign`·`verify`), 상태 행 조회는 `promotion_request.ready_rows`로 공유.
