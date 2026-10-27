@@ -5,7 +5,7 @@ import re
 from dataclasses import asdict
 
 from .. import canonical, identifier, opinion
-from ..contracts.billing import _RejectedJudgment
+from ..contracts.billing import RejectedJudgment
 
 
 def _argv(kind, model, cli_version, schema, budget_usd):
@@ -44,7 +44,7 @@ def _decode_result(kind, launch, code, raw, output_limit, budget_usd, *, bound=N
         try: payload = json.loads(payload)
         except (ValueError, TypeError, RecursionError, OverflowError):
             if bound is not None and getattr(launch, 'billing_receipt', None) is None:
-                raise _RejectedJudgment(bound, cost) from None
+                raise RejectedJudgment(bound, cost) from None
             raise
     return payload, cost
 

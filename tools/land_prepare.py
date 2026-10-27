@@ -145,3 +145,4 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     else:
         land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
+    land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)

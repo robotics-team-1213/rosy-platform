@@ -242,8 +242,8 @@ os_updates:
   rauc_package_version: 1.11.3-2
   compatible: rosy-pinky-pro-ab-v2
   bundle_format: verity
-  # Public certificate provisioning/approval is still pending; the resolver must not invent trust.
+  # Selected for authorized engineering images; production ownership and physical acceptance remain separate.
   cms_certificate: deploy/robot/pinky_pro/release/public-keys/rosy-os-cms-2026-01.pem
-  cms_certificate_sha256: null
-  cms_signer_spki_sha256: null
-  cms_verified: false
+  cms_certificate_sha256: c9b715ef42497e1e1f746529a882604e7159f7957f652d25977d56f49d9104a1
+  cms_signer_spki_sha256: f0a17ffa253b371ea1a5c8ea541730a7b359ced40d70ee83d63d08be24497a88
+  cms_verified: true

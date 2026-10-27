@@ -1124,7 +1124,22 @@ Python은 호스트 ROS ABI와 맞아야 한다. Jazzy setup을 먼저 source하
 인증 후 팔별 freshness와 세 영상을 확인한다. Fleet/Vision 설정과 서명 절차는
 [사이트 배포 안내](../../site/README.md)를 따른다.
 
-**자동 업데이트 (D-871).** 카메라, 화질 뷰어·준비 서비스, 관측기, 브리지는 하나의 업데이터로 함께 움직인다. 이 업데이터는 `rosy-omx-devices-autoupdate.timer`(10분마다)이고, 쓰는 코드는 셀 도구와 같은 `omx_autoupdate.py`(`kind: service`, `idle_gate: cell`)다.
+**Arm S live-file 관측.** ROS가 없는 Arm S는 live/calibration/guard-health 파일을 가진 호스트에서
+`rosy-omx-arm-status.service`를 쓴다. `arm-status.env.example`을
+`~/.config/rosy/omx-arm-status.env`에 mode 0600으로 복사하고, Fleet manifest의
+`source_id`·`arm_id`, 실제 live·calibration·canonical health 경로, HTTPS origin·CA와
+해당 팔 전용 토큰을 설정한다. 빈 토큰은 시작을 거부한다. guard의
+`ROSY_OMX_MONITOR_OWNER`는 같은 arm_id여야 한다. 유닛을 user systemd 경로에 복사하고
+`daemon-reload` 뒤 `enable --now rosy-omx-arm-status.service`로 활성화한다.
+같은 source에 기존 ROS observation bridge를 동시에 연결하지 않는다.
+
+이 producer는 파일만 읽고 `ArmSender`로 보낸다. 보정 범위로 변환한 신선한 관절 위치와
+정본 `rosy.motor-health.v1`만 사용하며, 누락된 PWM·온도·목표를 만들지 않는다.
+guard terminal health는 위치 없이 한 번 보내고, live의 held fault는 terminal로 바꾸지 않는다.
+live가 멈추면 위치 전송도 멈추고 Fleet이 2초 뒤 위치를 지운다. 영상은 기존 WSS producer와
+Fleet 카메라 패널을 그대로 쓴다. 이 서비스는 serial bus를 열거나 명령을 내리지 않는다.
+
+**자동 업데이트 (D-871).** 카메라, 화질 뷰어·준비 서비스, 관측기, 브리지와 Arm S live-file producer는 하나의 업데이터로 함께 움직인다. 이 업데이터는 `rosy-omx-devices-autoupdate.timer`(10분마다)이고, 쓰는 코드는 셀 도구와 같은 `omx_autoupdate.py`(`kind: service`, `idle_gate: cell`)다.
 
 - 하는 일: CI를 통과한 main을 `~/.local/share/rosy/omx-devices/releases/<sha12>`에 푼다. `current`를 바꾸고, 이전에 돌던 유닛만 다시 띄운다.
 - 바꾸는 조건: 셀이 쉴 때만 바꾼다. 셀이 쉰다는 것은 다음 셋을 모두 만족하는 것이다.
@@ -1132,7 +1147,7 @@ Python은 호스트 ROS ABI와 맞아야 한다. Jazzy setup을 먼저 source하
   - 관측기 말고 버스를 연 프로세스가 없다.
   - 관측기 health가 모든 모터 토크 OFF를 보고한다.
 - 설치:
-  1. `omx-devices-autoupdate.json.example`을 `~/.config/rosy/omx-devices-autoupdate.json`에 복사한다. 이 셀의 팔 수만큼 `devices`, `observers`, `units`를 채운다.
+  1. `omx-devices-autoupdate.json.example`을 `~/.config/rosy/omx-devices-autoupdate.json`에 복사한다. 이 셀의 팔 수만큼 `devices`, `observers`, `units`를 채운다. Arm S 호스트는 `rosy-omx-arm-status.service`를 `units`와 `unit_files`에 포함하고 `arm-status.env.example`의 current/current-env 경로를 유지한다. Arm S가 없는 호스트는 해당 유닛을 목록에서 뺀다.
   2. env 파일의 코드 경로를 `~/.local/share/rosy/omx-devices/current`와 `current-env`로 바꾼다(`observer.env.example`, `observation-bridge.env.example`). 카메라 env는 `ROSY_CAMERA_SOURCE=.../current/middleware/devices/omx/adapter/omx_adapter/camera_source.py`, `ROSY_CAMERA_PIPELINE_ROOT=.../current/deploy/robot/omx`로 바꾼다.
   3. SHA가 이름에 박힌 drop-in(`95-motor-health-*.conf`)을 지운다. health 파일은 이제 템플릿과 `ROSY_OBSERVATION_ARM_HEALTH`가 정한다.
   4. 첫 실행은 저장소 사본으로 `python3 deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/omx-devices-autoupdate.json run`.

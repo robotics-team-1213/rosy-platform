@@ -4,5 +4,14 @@
   "install_target": "External SDK host candidate; no supported host implementation selected",
   "status": "sdk_unsupported",
   "operations": [],
+  "delivery": {
+    "platform": "external-sdk-host",
+    "architecture": null,
+    "image_backend": null,
+    "application_updater": null,
+    "os_updater": null,
+    "os_compatible": null,
+    "os_tag_prefix": null
+  },
   "reason": "DJI official SDK compatibility marks Neo 2 unsupported (checked 2026-10-25). No ROSY SDK, telemetry or flight integration. See docs/deployment/multi-device-onboarding.md."
 }
