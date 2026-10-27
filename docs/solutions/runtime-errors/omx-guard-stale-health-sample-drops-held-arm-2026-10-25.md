@@ -56,6 +56,19 @@ The device-side cause is the same unpowered hub. Retries hide single packets, no
 
 Recovery from a low pose that worked: start a new session; the guard seeds at the present pose. Then `park`. It folded home slowly from 2 cm above the floor.
 
+## Same hub, third failure: every device dropped at once (2026-10-27 19:22)
+
+The hub lost all its devices together. The session ended `UNSAFE_END`: torque off was not confirmed (`Port is in use`) and the follower caps stayed raised in the boards. The gripper camera came back on another USB port, so a camera config that named the port (by-path) stopped working; the host now names it by-id. Retries cannot help here: the port itself is gone.
+
+Recovery order that worked (resolved, nothing left open for this failure):
+
+1. Wait until both follower boards and the camera show up again under `/dev/serial/by-id` and `/dev/v4l/by-id`. The session refuses to start until both by-id boards exist; do not work around that.
+2. Per follower, `commissioning_limits.py --baseline` to put the caps back (see `omx-follower-caps-left-raised-in-eeprom-2026-10-24.md`).
+3. Start a new session, check the cameras by id, then `park` and `stop`.
+4. Before any pick, observe the scene again: someone touched the cell while the hub was being reconnected (see `omx-arm-s-stale-scene-and-wrist-view-2026-10-27.md`).
+
+Three hub failures in four days (2026-10-24, 10-27 corrupt packets, 10-27 19:22) make the powered hub or a direct cable the real fix; it is still not done.
+
 ## Next time
 
 - Before a long hold over an object, expect that the guard may drop the arm; keep holds short or hold at transit height.

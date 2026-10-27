@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
+from cell_scene import scene_check  # noqa: E402
 
 def wrap90(deg: float) -> float:
     """A square box looks the same every 90 degrees: the smallest turn, in (-45, 45]."""
@@ -123,21 +124,22 @@ def locate(cell, config: dict, calibration: dict, site: str) -> dict:
 
     x, y = mean([e["arm_m"][0] for e in estimates]), mean([e["arm_m"][1] for e in estimates])
     turn = mean([e["turn"] for e in estimates])
-    return {"found": True, "arm_m": [round(x, 4), round(y, 4)], "turn_deg": round(turn, 1),
+    return {"found": True, "observed": datetime.now(timezone.utc).isoformat(), "arm_m": [round(x, 4), round(y, 4)],
+            "turn_deg": round(turn, 1),
             "yaw_deg": round(config["sites"][site]["yaw_deg"] + turn, 1),
             "sigma_mm": round(1 / math.sqrt(sum(weights)), 2), "estimates": estimates, "missing": missing}
 
 
-def map_check(config: dict, found: dict) -> str | None:
+def map_check(config: dict, found: dict, calibration: dict | None = None) -> str | None:
     """Why the map that put this box in arm x, y should not be trusted for a grasp here, or None: the box
     lies outside every map's fitted points by more than map_extent_mm, or the map's leave-one-out error
-    is above map_residual_mm."""
+    is above map_residual_mm. With `calibration`, also a scene that changed since the map or detection (cell_scene)."""
     for e in found.get("estimates", []):
         if (e.get("outside_mm") or 0) > config.get("map_extent_mm", 10.0):
             return f"{e['camera']}: box {e['outside_mm']} mm outside the points of map {e['map']}"
         if (e.get("residual_mm") or 0) > config.get("map_residual_mm", 10.0):
             return f"{e['camera']}: map {e['map']} leave-one-out error {e['residual_mm']} mm"
-    return None
+    return scene_check(config, calibration, found) if calibration else None
 
 
 def detection(found: dict) -> dict:

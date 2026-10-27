@@ -390,7 +390,7 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
         found = locate(cell, config, calibration, source)
         tried = {"locate": found}
         out["attempts"].append(tried)
-        off_map = map_check(config, found) if found["found"] else None
+        off_map = map_check(config, found, calibration) if found["found"] else None
         if found["found"] and off_map is None:
             yaw_pick, yaw = grasp_yaw(config, calibration, source, found, choices)
             tried["grasp_yaw"] = {"choice": yaw_pick, "yaw_deg": yaw}

@@ -44,6 +44,23 @@ def fit(points) -> np.ndarray:
     return np.vstack([coef.T, [0.0, 0.0, 1.0]])
 
 
+def anchored(h, pairs) -> np.ndarray:
+    """Re-anchor map `h` on touched points: pairs [((px, py), (x_m, y_m)), ...], at least 2. The turn and
+    mirroring stay h's; the scale comes from the touched pairs' spacing, the offset from their centres. A
+    box that moved a few cm was found with one touch this way (2026-10-27); 2 points cannot fit shear."""
+    if len(pairs) < 2:
+        raise ValueError("anchoring needs at least 2 touched points")
+    h = np.asarray(h, float)
+    lin = h[:2, :2] / h[2, 2]
+    px, arm = np.array([p for p, _ in pairs], float), np.array([a for _, a in pairs], float)
+    dpx, darm = px - px.mean(0), arm - arm.mean(0)
+    scale = float(np.linalg.norm(darm) / np.linalg.norm(dpx @ lin.T))
+    out = np.eye(3)
+    out[:2, :2] = lin * scale
+    out[:2, 2] = arm.mean(0) - out[:2, :2] @ px.mean(0)
+    return out
+
+
 def to_arm(h, pixel) -> tuple[float, float]:
     x, y, w = np.asarray(h, float) @ [pixel[0], pixel[1], 1.0]
     return float(x / w), float(y / w)
@@ -78,11 +95,11 @@ def grid(center, spacing_m: float, n: int = 3) -> list:
     return out
 
 
-def site_record(points, measured: str) -> dict:
+def site_record(points, measured: str, camera_id: str | None = None) -> dict:
     if len(points) < MIN_POINTS:
         raise ValueError(f"need at least {MIN_POINTS} measured points, got {len(points)}")
     return {"homography": fit(points).round(9).tolist(), "loo_error_mm": loo_error_mm(points), "measured": measured,
-            "points": [{"pixel": [round(u, 2), round(v, 2)], "arm_m": [x, y]} for (u, v), (x, y) in points]}
+            **({"camera_id": camera_id} if camera_id else {}), "points": [{"pixel": [round(u, 2), round(v, 2)], "arm_m": [x, y]} for (u, v), (x, y) in points]}
 
 
 def load(path: Path) -> dict:
