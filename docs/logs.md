@@ -12358,3 +12358,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_remote_pytest.py`.
 - gate 변화: 없음(시험 판정은 같고, 시험 전 단계의 일시적 접속 끊김만 다시 시도).
 - CE: 해당 없음 — 재시도와 그 근거가 코드·시험에 남는다.
+
+## 2026-10-27 · uncommitted · fix(land): 시험 PC가 포기해 끝난 착지도 stop으로 남김
+
+- 변경: `tools/land.py`. `remote_pytest`가 시험 PC를 포기하며 문자열로 끝내는 `SystemExit`(시험 PC 없음, venv 준비 실패 등)도 사건 기록에 `stop`으로 남기고 예전처럼 그대로 끝난다. 숫자 종료 코드는 기록하지 않는다.
+- 근거: 10-27 `feat/land-mainred-carry` 착지가 venv 준비 ssh 시간 초과로 끝났는데 사건 기록에는 `queue`만 있었다. 이번 주 `stop` 55건에 시험 PC 원인은 0건으로 보였다.
+- 증거: 원격 `test/test_land_prepare.py`.
+- gate 변화: 없음(기록만 더함).
+- CE: 해당 없음 — 코드·시험에 남는다.
