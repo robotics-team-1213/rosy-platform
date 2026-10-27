@@ -103,13 +103,30 @@ result = dispatcher.recover(parent_mission_id, proposer=proposer, principal=oper
 
 export v2의 추가 `recovery_lineage`에는 root/parent/child 미션과 `attempt_index`(원래 0, 복구 1)가 들어간다. 원본 receipt·참조한 task 판정·양방향 계보·관측 digest를 확인한다. 학습/평가 분할은 같은 root를 함께 둔다. 운영자 실행 승인 뒤에도 학습 라벨은 별도로 검수하고, `unreviewed_metadata_only`·`behavior_training_eligible=false`를 유지한다.
 
+## 시뮬레이션 복구 HTTP와 콘솔
+
+공개 형식은 API v1.327의 `ArmTransferRecovery*` 계약이다. 모든 경로는 기존 Fleet 인증·감사·동일 SQLite 원장을 사용한다. simulation 설치와 독립 observer가 없으면 사용할 수 없다.
+
+| 경로 | 주체와 결과 |
+|---|---|
+| `GET /api/fleet/arm-transfers/jobs/{mission_id}/recovery` | 조회 권한으로 원래 owner의 실행 결과·단계, 요청·근거 상태와 별도 자식 ID를 읽는다. 물리 원인은 미확인으로 남는다. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery` | 원래 제안자만 `request_key`와 조회한 `expected_context_digest`로 새 관측을 요청한다. 주체를 본문에 넣지 않는다. |
+| `GET /api/fleet/arm-transfers/recovery-context` | 독립 observer 자격으로 현재 수집할 요청 하나를 읽는다. 유효한 근거가 이미 있거나 원본·권한·실행 fence가 바뀐 요청은 수집 대상으로 내놓지 않는다. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/observations` | observer만 `purpose=RECOVERY_RESET`, 요청 다이제스트와 새 시료 두 개를 제출한다. 콘솔은 이 자격이나 시료를 만들지 않는다. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve` | 다른 기명 운영자가 조회한 요청·근거 다이제스트와 실행 세대를 정확히 승인한다. 현재 제안자 권한을 자식 생성 트랜잭션에서 다시 확인한다. 응답은 여과된 자식 `job`뿐이다. |
+
+콘솔은 기존 `arm_transfer` 작업 상세에 원래 실패와 복구를 함께 표시한다. 원래 제안자의 **복구 관측 요청**은 실행 승인이 아니며, 새 사실이 없으면 관측 대기로 남는다. 다른 운영자는 표시된 근거를 확인한 뒤 별도 확인창에서 한 번 승인한다. 만료·변경·409 응답은 다시 조회해 새 근거를 검토한다. 응답이 끊겨도 자동 재전송하지 않는다.
+
+자식을 만들면 공개 상태는 `CHILD_CREATED`다. 성공을 뜻하지 않으며 자식은 기존 새 PRE_DISPATCH·POST_ACTION 절차를 거친다. 자식 조회가 실패해도 알고 있는 ID와 소비한 복구 횟수를 보존한다. 자식에서 다시 복구를 요청할 수 없다. 정확한 과거 승인 재조회는 재시작·정지 fence·SDK 연결 실패나 제안자 권한 철회 뒤에도 같은 자식을 읽으며 새로운 실행을 승인하지 않는다.
+
 ## 다음 구현과 검증
 
 - 파지·들기·운반 단계의 관측을 결속한 뒤 헛잡음·낙하를 구분한다.
-- 현재 내부 복구는 root당 자식 하나다. 공개 ingress·화면·무인 반복 재시도는 별도 계약과 수용이 필요하다.
+- 현재 복구는 root당 자식 하나이며 공개 HTTP·화면도 같은 한도를 따른다. 실제 관측 생산자·장치 연결과 무인 반복 재시도는 별도 계약과 수용이 필요하다.
 - 검수된 결과 판정 자료, 복구 선택 자료, 사람 교정 시연은 용도와 원본 계보를 분리한다.
 - 시험은 `test_physical_transfer_outcome.py`, `test_transfer_outcome_recording.py`, `test_transfer_execution_review.py`와 기존 physical-transfer evidence/observer/closure/outcomes/stops/dispatcher suite를 공식 원격 runner에서 수행한다. 실제 장치·현장 수용은 별도다.
 - 복구는 `test_physical_transfer_recovery.py`와 `test_transfer_recovery_flow.py`가 합성 World 시료·fake owner로 검증한다. 이 결과를 Gazebo 과제·실물 성공이나 모델 품질로 해석하지 않는다.
+- HTTP·인증은 `test_transfer_recovery_api.py`·`test_transfer_recovery_auth.py`, 실제 HTTP/브라우저의 요청·관측·별도 승인·자식 완료·응답 유실은 `test_transfer_recovery_console_browser.py`가 검증한다. 모두 합성 관측과 owner를 사용한다.
 
 ## 2026-10-27 복구 구현 검증 기록
 

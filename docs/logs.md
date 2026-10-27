@@ -12411,3 +12411,10 @@ osy-d395-s1d\`.
 - 증거: 실패 가드·단독 재현과 수정 커밋6645ad829b의 원격1,586 passed/0 skipped를 docs/validation/transfer-recovery-contract-2026-10-27b/result.md에 구분했다. 앞선 focused 기록은 보존했다.
 - gate 변화: 없음. 실패한 FULL은 통과로 계산하지 않으며 공식 FULL 재실행과 HTTP·화면 연결이 남았다.
 - CE: 해당 없음 — 새 운영 교훈이 필요한 장애가 아니다.
+
+## 2026-10-27 · 477761474d · 공개 simulation 복구 연결 검증과 clipping 교훈
+
+- 변경: 기존 복구 how-to에 authenticated 요청·독립 관측·정확 승인·자식 조회 경로를 기록했다. frozen public 검증 기록은 실제 source revision과 RED/GREEN·skip·실물 미수행을 구분한다. source-only commit은 공개 PR이나 main 착지 증거로 표현하지 않는다.
+- 증거: auth 109, HTTP/service 37, 최종 API/auth 18, 최종 actual browser 14 pass; broad 453 pass/35 skip는 별도 범위다. 독립 계약 검토의 simulation 표시 Minor를 해결했고 시각 검토 ship. 공개 ingress·진행 기록과 별개로 장치·학습 수용은 남는다.
+- gate 변화: 없음. 공식 선행 계약/제품 로컬 착지 도구 결과는 별도 후속 기록한다.
+- CE: 새 교훈 기록 — page/element scrollWidth만으로 nested card clipping을 검출할 수 없는 실제 반례와 ancestor-bounds 회귀를 solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md에 남겼다. Frontmatter parser 통과, local-only commit 인용 2건은 미게시·착지 대기로 명시해 의도 확인했다.
