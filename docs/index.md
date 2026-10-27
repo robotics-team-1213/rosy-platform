@@ -355,6 +355,6 @@
 
 - 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
 - 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
-- 2026-10-27 · c36bfb48ad · docs: D-899 인증된 이송 복구 요청 원장
-- 2026-10-27 · uncommitted · fix(remote): 시험 PC 메모리 예약을 실측으로, 현장 PC 디스크 판정 바로잡기
-- 2026-10-27 · uncommitted · fix(land): 시험 PC가 포기해 끝난 착지도 stop으로 남김
+- 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
+- 2026-10-27 · uncommitted · docs(adr): D-867 모델 PC 상한 근거, D-571에서 D-867 가리키기
+- 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록

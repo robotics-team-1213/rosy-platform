@@ -53,6 +53,18 @@ def test_a_record_whose_base_is_not_an_ancestor_is_ignored(repo):
     assert tool.owed(path, c[1], "origin/main", FAST) is None
 
 
+def test_a_publish_push_reuses_the_heads_own_record_without_the_chain(repo, monkeypatch, capsys):
+    path, c = repo
+    tool.write(path, c[3], c[2], [["test/fast_a.py"]], [])  # c[1]..c[2] have no record: the chain is broken
+    monkeypatch.chdir(path)
+    assert tool.main(["owed", "--head", c[3], *FAST]) == 3
+    assert tool.main(["owed", "--head", c[3], "--own", *FAST]) == 0
+    assert capsys.readouterr().out.split() == ["test/fast_b.py"]
+    assert tool.main(["owed", "--head", c[2], "--own", *FAST]) == 3  # no own record: the full gate as before
+    hook = (ROOT / "tools" / "hooks" / "pre-push").read_text(encoding="utf-8")
+    assert "${PUBLISH_REF:+--own}" in hook[hook.index("land_record.py owed"):][:200]
+
+
 def test_nothing_past_origin_runs_the_gate_as_before(repo):
     path, c = repo
     assert tool.owed(path, c[0], "origin/main", FAST) is None
