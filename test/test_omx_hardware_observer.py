@@ -17,6 +17,19 @@ def observer():
     return module
 
 
+def native_channel(monkeypatch, module, publish):
+    import json
+    class Channel:
+        def __init__(self, key): self.key = key
+        def write(self, kind, payload, **kwargs):
+            assert kind == 'joints' and kwargs['captured_at'] > 0
+            values = json.loads(payload)
+            publish(self.key, SimpleNamespace(name=list(values), position=list(values.values())))
+    monkeypatch.setattr(module, 'SnapshotChannel', Channel)
+    monkeypatch.setitem(sys.modules, 'rclpy', None)
+    monkeypatch.setitem(sys.modules, 'sensor_msgs', None)
+
+
 def rows():
     return [dict(id=i, model_number=1060 if i < 14 else 1200, position_raw=2048,
                  torque_enabled=0, hardware_error=0) for i in range(11, 17)]
@@ -50,6 +63,7 @@ def test_existing_owner_publishes_fault32_before_stopping_without_joint_state(mo
     monkeypatch.setitem(sys.modules, 'sensor_msgs.msg', SimpleNamespace(
         JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
     state = tmp_path / 'health.json'
+    native_channel(monkeypatch, module, lambda key, message: published.append(message))
     result = module.main(['--device', '/test/follower', '--domain-id', '13', '--persistent',
                          '--health-file', str(state), '--health-owner', 'arm_a'])
     assert result == 2 and published == [] and events == ['open', 'read', 'close']
@@ -82,7 +96,7 @@ def test_persistent_observation_stops_and_releases_bus_without_restarting(monkey
     def sleep(_seconds):
         clock[0] += 301
         if ending == "stop" and len(samples) == 2:
-            running[0] = False
+            raise KeyboardInterrupt()
 
     node = SimpleNamespace(
         create_publisher=lambda *args: SimpleNamespace(publish=samples.append),
@@ -95,11 +109,12 @@ def test_persistent_observation_stops_and_releases_bus_without_restarting(monkey
         JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
     monkeypatch.setattr(module, "time", SimpleNamespace(
         monotonic=lambda: clock[0], time=lambda: 1700000000 + clock[0], sleep=sleep))
+    native_channel(monkeypatch, module, lambda key, message: samples.append(message))
     result = module.main(["--device", "/test/follower", "--domain-id", "13", "--persistent"])
     assert result == (0 if ending == "stop" else 2)
     assert len(samples) == (2 if ending == "stop" else 1)
     assert events.count("read") == 2 and events.count("open") == events.count("close") == 1
-    assert "destroy" in events
+    assert 'destroy' not in events
 
 
 def test_persistent_mode_cannot_silently_extend_a_bounded_run():
@@ -140,9 +155,10 @@ def test_dual_arm_observer_routes_a_guarded_sample_to_its_own_topic(monkeypatch,
     monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(module.time, "sleep", lambda delay: clock.__setitem__(0, clock[0] + 1.5))
     topic = f"/omx_commissioning/{arm}/joint_states"
+    native_channel(monkeypatch, module, lambda key, message: (topics.append(key), messages.append(message)))
     assert module.main(["--device", f"/test/{arm}", "--domain-id", "13", "--duration", "1", "--joint-topic", topic]) == 0
     assert topics == [topic]
-    assert arm in nodes[0]
+    assert nodes == []
     assert len(messages) == 1
     import json
     sample = next(json.loads(line) for line in capsys.readouterr().out.splitlines() if '"sample"' in line)
@@ -215,19 +231,27 @@ def test_motor_fault_closes_port_and_publishes_no_state(monkeypatch, capsys, cle
         JointState=lambda: SimpleNamespace(header=SimpleNamespace())))
     monkeypatch.setenv("ROS_AUTOMATIC_DISCOVERY_RANGE", "LOCALHOST")
     monkeypatch.setenv("ROS_STATIC_PEERS", "remote-peer")
+    native_channel(monkeypatch, module, lambda key, message: events.append('publish'))
     assert module.main(["--device", "/test", "--domain-id", "13", "--duration", "1"]) == 2
-    assert events == ["open", "close", "destroy", "shutdown"]
+    assert events == ["open", "close"]
     import json
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["exit_code"] == 2
 
 
 @pytest.mark.parametrize("setting", ["CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE",
                                      "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"])
-def test_external_discovery_overrides_are_rejected_before_ros_or_serial_import(monkeypatch, setting):
+def test_discovery_settings_cannot_enable_ros_in_native_observer(monkeypatch, setting):
     monkeypatch.setenv(setting, "external-profile")
-    with pytest.raises(SystemExit) as error:
-        observer().main(["--device", "/test", "--domain-id", "13", "--duration", "1"])
-    assert error.value.code == 2
+    module = observer()
+    @contextmanager
+    def port(device):
+        yield object()
+    data = rows()
+    data[0]['hardware_error'] = 4
+    monkeypatch.setitem(sys.modules, 'register_probe', SimpleNamespace(
+        open_readonly_port=port, read_motors=lambda p: data))
+    native_channel(monkeypatch, module, lambda *args: pytest.fail('fault produced positions'))
+    assert module.main(['--device', '/test', '--duration', '1']) == 2
 
 
 def test_observer_unit_restarts_only_into_an_idle_cell():
