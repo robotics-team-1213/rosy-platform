@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from contextlib import closing
@@ -63,6 +64,54 @@ def test_backup_refuses_to_overwrite_an_existing_operator_backup(tmp_path):
         backup_database(source, backup)
 
     assert backup.read_bytes() == b"keep-existing-backup"
+
+
+def test_prune_keeps_the_newest_timestamped_backups_only(tmp_path):
+    for name in ("fleet-backup-20260101-000000.sqlite3", "fleet-backup-20260102-000000.sqlite3",
+                 "fleet-backup-20260103-000000.sqlite3", "unrelated.sqlite3"):
+        (tmp_path / name).write_bytes(b"x")
+
+    removed = site_db._prune_backups(tmp_path, keep=2)
+
+    assert removed == ["fleet-backup-20260101-000000.sqlite3"]
+    assert not (tmp_path / "fleet-backup-20260101-000000.sqlite3").exists()
+    assert (tmp_path / "fleet-backup-20260103-000000.sqlite3").exists()
+    assert (tmp_path / "unrelated.sqlite3").exists()  # 이 도구가 만든 것만 치운다
+
+
+def test_cli_backup_with_dest_dir_timestamps_and_prunes(tmp_path, capsys):
+    source = tmp_path / "fleet.sqlite3"
+    _database(source, "timer")
+    dest_dir = tmp_path / "nightly"
+    stale = dest_dir / "fleet-backup-20260101-000000.sqlite3"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"old")
+
+    code = site_db.main(["backup", "--source", str(source), "--dest-dir", str(dest_dir),
+                         "--prune", "2"])
+
+    assert code == 0
+    report = json.loads(capsys.readouterr().out)
+    created = Path(report["path"])
+    assert created.parent == dest_dir and created.is_file()
+    assert created.name.startswith("fleet-backup-") and created.name.endswith(".sqlite3")
+    assert report["pruned"] == ["fleet-backup-20260101-000000.sqlite3"]
+    assert not stale.exists()
+    assert _value(created) == "timer"
+
+
+def test_cli_backup_rejects_ambiguous_or_empty_targets(tmp_path):
+    source = tmp_path / "fleet.sqlite3"
+    _database(source, "x")
+
+    with pytest.raises(SystemExit):
+        site_db.main(["backup", "--source", str(source)])
+    with pytest.raises(SystemExit):
+        site_db.main(["backup", "--source", str(source), "--destination", str(tmp_path / "a"),
+                      "--dest-dir", str(tmp_path)])
+    with pytest.raises(SystemExit):
+        site_db.main(["backup", "--source", str(source), "--dest-dir", str(tmp_path),
+                      "--prune", "0"])
 
 
 def test_restore_requires_stopped_assertion_and_keeps_pre_restore_snapshot(tmp_path):
