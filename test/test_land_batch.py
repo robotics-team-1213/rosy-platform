@@ -117,3 +117,6 @@ def test_eligible_wants_a_prepared_member_at_its_worktree_head(repos, tmp_path):
     assert land_batch.eligible(land, wt, row)
     assert not land_batch.eligible(land, wt, {**row, "host": "elsewhere"})
     assert not land_batch.eligible(land, wt, {**row, "batch": ["feat/y"]}), "a leader is not a member"
+    commit(main, {"tools/harness/platform_parts.yaml": "roots:\n  - path: pkg/m.py\n    concern: safety\n"}, "tag")
+    assert land_batch.safety(land, wt, "feat/m") and not land_batch.safety(land, wt, "feat/x")
+    assert not land_batch.eligible(land, wt, row), "a safety branch lands alone (D-889 3)"

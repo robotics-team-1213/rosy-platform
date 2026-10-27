@@ -12465,3 +12465,11 @@ osy-d395-s1d\`.
 - 증거: 최초 문서 관문은 해당 경로의 high-entropy-token 1건으로 실패했고 단독 재실행도 실패했다. main에서는 통과해 이 문서의 원인으로 확인됐다. 수정 뒤 동일 순수 scanner와 정상 원격 관문으로 확인한다.
 - gate 변화: 없음. 시험·scanner·known-failure·quarantine·허용 목록은 수정하지 않았다.
 - 교훈: 기존 `git-ids-in-validation-records-need-the-commit-prefix` 지침을 적용했다. 결과를 바꾸지 않는 표기 수정이며 새 해결 교훈은 추가하지 않는다.
+
+## 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
+
+- 변경: `tools/land_batch.py`(새 파일), `tools/land_queue.py`(티켓 `batch` 필드, `wait`의 `done`·`form`), `tools/land.py`(회차 반복을 `rounds`로 떼어 냄, `merge`의 `source`). 앞 착지가 차례를 쥔 동안 대기가 2개 이상이면, 맨 앞 대기자가 녹색으로 준비된 안전 경로 밖 브랜치를 최대 4개까지 한 브랜치로 병합한다. 잠금 밖에서 미리 시험하고 차례에 한 번만 fast-forward한다. 멈추면 각자 단독으로 착지한다. D-889 추가 3.
+- 근거: 10-28 01:53 대기열이 16건이었고 대기 p50은 167분이었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`(144 passed), 착지 도구 관련 시험 13개 파일(415 passed, known_failures NEW 0).
+- gate 변화: 없음.
+- CE: 해당 없음 — 흐름과 근거가 D-889 추가 3과 시험에 남는다.

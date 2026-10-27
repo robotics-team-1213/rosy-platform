@@ -3,7 +3,8 @@
 On 2026-10-28 sixteen landings queued. Each turn merged main, tested main's delta and fast-forwarded, so the
 last one waited for fifteen serial turns, and every one of them moved main under everyone behind it. Now the
 earliest waiting ticket, while another ticket blocks it, leads a batch when at least ``BATCH_MIN`` waiting
-tickets (itself included) hold a green prepared tier (``land_full.restore``). Its ticket names the members
+tickets (itself included, at most ``BATCH_MAX``) hold a green prepared tier (``land_full.restore``) and touch no
+safety-tagged path (D-889 3: those land alone, as does a run with ``--tests`` other than auto). Its ticket names the members
 (``batch``), so they wait behind it (``land_queue.blockers``). In its own worktree it merges each member's
 tip into a new branch ``<leader>-batch<HHMMSS>`` (``land.merge``: the records auto-resolve; a member with any
 other conflict is left out and lands alone), prepares that branch outside the lock (``land_prepare``), and
@@ -16,6 +17,7 @@ Never resets or force-deletes: a stopped batch branch is kept for its log; a lan
 from __future__ import annotations
 
 import socket
+import sys
 import time
 from pathlib import Path
 
@@ -25,10 +27,23 @@ import land_prepare
 import land_queue
 
 BATCH_MIN = 2  # waiting tickets, the leader included, that make a batch
+BATCH_MAX = 4  # D-889 3: k <= 4 while the measured NEW rate p stays <= 0.1 (66 % of batches pass at p = 0.1)
 
 
 def in_main(land, wt: Path, branch: str) -> bool:
     return land.git(wt, "merge-base", "--is-ancestor", f"refs/heads/{branch}", "main", check=False).returncode == 0
+
+
+def safety(land, wt: Path, branch: str) -> bool:
+    """D-889 3: a branch that touches a safety-tagged path (D-430 5) lands alone, never in a batch."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "harness"))
+        import safety_review  # PyYAML, as the safety_review step land.py already runs
+        manifest = safety_review._manifest(land.out(wt, "rev-parse", "main"))
+    except Exception:  # noqa: BLE001 - no manifest reading: treat it as safety, it lands alone
+        return True
+    paths = land.lines(wt, "diff", "--name-only", f"main...refs/heads/{branch}")
+    return any(safety_review._is_safety_in(path, manifest) for path in paths)
 
 
 def eligible(land, wt: Path, row: dict) -> bool:
@@ -40,7 +55,8 @@ def eligible(land, wt: Path, row: dict) -> bool:
         return False
     head = land.git(other, "rev-parse", "HEAD", check=False).stdout.strip()
     tip = land.git(wt, "rev-parse", f"refs/heads/{name}", check=False).stdout.strip()
-    return bool(head) and head == tip and land_full.restore(other, name) is not None
+    return (bool(head) and head == tip and land_full.restore(other, name) is not None
+            and not safety(land, wt, name))
 
 
 def former(land, wt: Path, qdir: Path, ticket: Path):
@@ -54,7 +70,7 @@ def former(land, wt: Path, qdir: Path, ticket: Path):
         waiting = [r for r in tickets if r.get("status") == "waiting"]
         if len(waiting) < BATCH_MIN or waiting[0]["ticket"] != ticket.name:
             return False
-        joined = [r for r in waiting[1:] if eligible(land, wt, r)]
+        joined = [r for r in waiting[1:] if eligible(land, wt, r)][:BATCH_MAX - 1]
         if len(joined) + 1 < BATCH_MIN:
             return False
         land_queue.set_status(ticket, "preparing", batch=[r["branch"] for r in joined])
@@ -66,7 +82,8 @@ def former(land, wt: Path, qdir: Path, ticket: Path):
 def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path) -> int | None:
     """Wait for the turn. 0 when a batch landed this branch; None when it lands alone (``land.rounds``)."""
     form, chosen = former(land, wt, qdir, ticket)
-    form = form if args.tests == "auto" else None  # a batch is tested; a skipped or hand-picked run never leads one
+    if args.tests != "auto" or safety(land, wt, branch):
+        form = None  # a batch is tested, and a safety branch lands alone (D-889 3)
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
                               done=lambda: in_main(land, wt, branch), form=form)
@@ -100,7 +117,7 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
             raise land.Stop("no member merged without a conflict")
         land_queue.set_status(ticket, "preparing", batch=took)
         print(f"[batch] {name}: {branch} + {', '.join(took)}", flush=True)
-        land_events.emit("batch", branch=name, members=took)
+        land_events.emit("train", branches=[branch, *took], k=len(took) + 1, result="formed")
         land_prepare.prepare(land, wt, name, args, python, qdir, ticket)
         land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt))
         code = land.rounds(args, wt, name, main_co, python, qdir, ticket)
@@ -111,6 +128,7 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
             raise land.Stop(f"batch {name} stopped ({stop}); switching back to {branch} failed, worktree left"
                             f" as is:\n{back.stdout}{back.stderr}") from stop
         land_queue.set_status(ticket, "waiting", batch=[])
+        land_events.emit("train", branches=[branch, *took], k=len(took) + 1, result="stopped")
         print(f"[batch] {name} stopped, kept for its log; {branch} and the members land alone: {stop}", flush=True)
         return None
     land.git(wt, "switch", branch)
@@ -118,4 +136,5 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
     land.git(wt, "branch", "-d", name, check=False)
     land_full.forget(wt, name)
     land_full.forget(wt, branch)
+    land_events.emit("train", branches=[branch, *took], k=len(took) + 1, result="landed")
     return code
