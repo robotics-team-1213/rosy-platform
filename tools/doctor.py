@@ -10,7 +10,9 @@ remove, local ``main`` against ``origin/main`` and the age of the last fetch (``
 and the ``tools/land.py`` queue (tickets, holder, dead or stale tickets; ``land_queue`` removes those
 on its next read, this tool does not; a live run that re-prepared ``REPREPARED`` times or showed no activity in its
 ticket, events or logs for ``QUIET_MIN`` minutes is a WARN), and ``land_isolation`` records still open after a night (FAIL). ``--hosts`` also reads each lab PC's
-``~/rosy-test/maintenance/last-report.json`` and ``~/rosy-jobs/disk-low`` over ssh. Standard library only.
+``~/rosy-test/maintenance/last-report.json`` and ``~/rosy-jobs/disk-low`` over ssh, and places each host as a landing
+would: a refusal its raw memory, load and disk do not explain is a WARN (bookkeeping, not a full host). Standard
+library only.
 """
 
 from __future__ import annotations
@@ -27,11 +29,13 @@ from pathlib import Path
 TOOLS = Path(__file__).resolve().parent
 sys.path[:0] = [str(TOOLS), str(TOOLS / "remote")]
 
+import host_probe  # noqa: E402
 import lab_hosts  # noqa: E402
 import land_events  # noqa: E402
 import land_isolation  # noqa: E402
 import land_mainred  # noqa: E402
 import land_queue  # noqa: E402
+import remote_pytest  # noqa: E402
 import update_status  # noqa: E402
 import worktrees  # noqa: E402
 
@@ -158,6 +162,35 @@ def check_hosts(now: float) -> list[tuple]:
     return found
 
 
+def check_capacity(hosts: list[str] | None = None, probe=None) -> list[tuple]:
+    """Each host's pytest placement (remote_pytest.place, as a landing sees it) beside its raw numbers.
+
+    A refusal that MemAvailable, load and disk use do not explain is bookkeeping, not a full host (2026-10-27:
+    3 GB locks for 0.3 GB jobs showed a 20 GB-free PC as -5.2 GB; a 7.4 GB /tmp tmpfs refused the site PC)."""
+    hosts = lab_hosts.test_hosts() if hosts is None else hosts
+    probes = [(probe or remote_pytest.probe)(host) for host in hosts]
+    _, notes = remote_pytest.place("pytest", hosts, probes)
+    need_c, need_m = remote_pytest.NEEDS["pytest"]
+    found, notes = [], iter(notes)
+    for host, p in zip(hosts, probes):
+        note = next(notes).split(": ", 1)[1]
+        if p is None:
+            found.append(("WARN", f"capacity {host}: no probe answer", None))
+            continue
+        site = host in remote_pytest.SITES or p.get("site", False)
+        res_c, res_m = remote_pytest.SITE_RESERVE if site else (0, 0)
+        raw = (p["avail_gb"] - res_m >= need_m and p["nproc"] - p["load1"] - res_c >= need_c and not p["busy"]
+               and p.get("disk_use", 0) < host_probe.FULL_USE and p.get("disk_free_gb", 99) >= host_probe.DISK_FLOOR_GB)
+        if note.endswith(" - ok") or note.endswith("smallest invocations") or not raw:
+            found.append(("OK", f"capacity {host}: {note}", None))
+        else:
+            found.append(("WARN", f"capacity {host}: {note}; yet MemAvailable {p['avail_gb']:.1f} GB, load "
+                          f"{p['load1']:.1f}/{p['nproc']}, locks {p['lock_gb']} GB: refused by bookkeeping, not load",
+                          "ssh <host> cat ~/rosy-jobs/*.lock; docs/solutions/workflow-issues/"
+                          "landing-blockers-cost-hours-2026-10-18.md section 3"))
+    return found
+
+
 def check_isolation(repo: Path, now: float) -> list[tuple]:
     """Landed alone runs cut by the budget or skipped (--no-queue) whose files nothing ran alone since."""
     found = land_isolation.open_entries(repo, now)
@@ -184,7 +217,7 @@ def run(repo: Path, hosts: bool = False, now: float | None = None, out=print) ->
               lambda: check_main(repo, now), lambda: check_queue(repo, now), lambda: check_isolation(repo, now),
               lambda: check_mainred(repo, now)]
     if hosts:
-        checks.append(lambda: check_hosts(now))
+        checks += [lambda: check_hosts(now), check_capacity]
     failed = False
     for check in checks:
         try:
