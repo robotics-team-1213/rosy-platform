@@ -53,7 +53,9 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
         while not server.started and worker.is_alive() and time.monotonic() < deadline:
             time.sleep(.02)
         assert server.started
-        rig.tasks.rearm_dispatch(expected_generation=rig.tasks.dispatch_control()["generation"], actor_id="operator")
+        control = rig.tasks.dispatch_control()
+        if not control["dispatch_enabled"]:
+            rig.tasks.rearm_dispatch(expected_generation=control["generation"], actor_id="operator")
         c = fail_transfer(rig)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(**launch_options())
