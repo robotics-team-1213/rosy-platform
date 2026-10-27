@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import threading
 from pathlib import Path
@@ -49,3 +50,17 @@ def test_waiting_landing_previews_the_size_ratchet_of_mains_merge(repos):
     reason = check()
     assert reason and "fails the size ratchet" in reason and git(main, "rev-parse", "HEAD")[:10] in reason
     assert check() is None, "once per main"
+
+
+def test_a_landing_whose_test_hosts_give_up_leaves_a_stop(repos, monkeypatch):
+    """2026-10-27: a venv-setup ssh timeout ended a landing with no stop event, invisible to land_stats."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+
+    def gone(*a, **k):
+        raise SystemExit("[remote-pytest] venv setup on h failed")
+    monkeypatch.setattr(land, "run_tests", gone)
+    with pytest.raises(SystemExit):
+        land.main(["--tests", "auto"])
+    events = [json.loads(line) for line in (main / ".git" / land.land_events.EVENTS).read_text(encoding="utf-8").splitlines()]
+    assert [e["reason"] for e in events if e["event"] == "stop"] == ["[remote-pytest] venv setup on h failed"]
