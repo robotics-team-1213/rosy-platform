@@ -165,7 +165,8 @@ class RecoveryRequestService:
                 return {**view, "reason": "RECOVERY_NOT_ADMISSIBLE"}
             view.update(status="AVAILABLE", context_digest=_digest(source),
                 expected_generation=source["expected_generation"],
-                can_request=actor == job["proposal_principal_id"] and principal.role in {"operator", "service"})
+                can_request=actor == job["proposal_principal_id"] and principal.role in {"operator", "service"}
+                and principal.permits_site("fleet.operate", {"operator", "service"}))
             try:
                 intent = _intent(connection, parent_id)
             except KeyError:
