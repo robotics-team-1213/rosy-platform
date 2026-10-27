@@ -1,4 +1,8 @@
+<!-- Parent: ../AGENTS.md -->
+
 # Applications
+
+**Parent context:** `../AGENTS.md`
 
 제품 앱은 `applications/<product>/`에서 개발한다. Fleet의 현재 경계와 실행 방법은 [fleet/README.md](fleet/README.md)를 먼저 읽는다.
 
