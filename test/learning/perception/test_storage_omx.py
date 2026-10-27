@@ -132,6 +132,25 @@ def test_receipt_change_during_copy_cannot_be_sealed_or_uploaded(setup_case, reg
     assert not list(exports.glob('omx-*/storage-source.json'))
 
 
+def test_destination_alias_is_refused_and_source_descriptor_is_closed(setup_case, registered, monkeypatch):
+    import storage_omx
+    center, row, source = registered
+    prepare, actor, body, remote = preparation(setup_case, center, row)
+    exports = Path(next(r['path'] for r in prepare.setup.configuration()[1]['roots'] if r['id'] == 'exports'))
+    (exports / f'omx-{row["id"]}-{row["revision"]}').symlink_to(source, target_is_directory=True)
+    opened, original = [], storage_omx.open_root
+    def tracked(path):
+        fd = original(path)
+        opened.append(fd)
+        return fd
+    monkeypatch.setattr(storage_omx, 'open_root', tracked)
+    commits = remote.commits
+    with pytest.raises(OSError): prepare.prepare(actor, body)
+    for fd in opened:
+        with pytest.raises(OSError): os.fstat(fd)
+    assert not (source / 'storage-source.json').exists() and remote.commits == commits
+
+
 @pytest.mark.parametrize('field,value', [('confirm_completed', False), ('dataset_id', '../outside'),
     ('revision', 'main'), ('path', '/arbitrary/host/path')])
 def test_preparation_requires_fixed_identity_and_consent(setup_case, registered, field, value):
