@@ -1,5 +1,7 @@
 import asyncio
+from hashlib import sha256
 from pathlib import Path
+import shutil
 import threading
 import time
 
@@ -108,7 +110,12 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
                 assert c.client.get(c.url, headers=headers("harbor")).json()["job"]["status"] == "HOLD"
                 assert len(posts) == 1 and len(c.port.submitted) == 2 and not errors
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-                save_temp_screenshot(page, f"transfer-recovery-{width}-{'lost' if lost_reply else 'ok'}.png")
+                page.locator("#arm-transfer-recovery").scroll_into_view_if_needed()
+                shot = save_temp_screenshot(page, f"transfer-recovery-{width}-{'lost' if lost_reply else 'ok'}.png")
+                retained = Path.home() / "rosy-test/artifacts/transfer-recovery" / c.parent / shot.name
+                retained.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(shot, retained)
+                print(f"retained screenshot: {retained} sha256 {sha256(retained.read_bytes()).hexdigest()}")
             finally:
                 browser.close()
     finally:
