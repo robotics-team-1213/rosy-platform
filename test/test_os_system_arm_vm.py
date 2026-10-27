@@ -4,6 +4,8 @@ import os
 import json
 from pathlib import Path
 import shlex
+import io
+from types import SimpleNamespace
 
 import pytest
 
@@ -22,6 +24,54 @@ def test_arm_guest_has_owned_virtio_card_and_kernel_nocloud_without_host_devices
     drives = [v for k, v in zip(argv, argv[1:]) if k == "-drive"]
     assert len(drives) == 3 and all(v.startswith("file=" + str(tmp_path) + "/") for v in drives)
     assert any("ab-media.raw" in v for v in drives)
+
+
+def stopped_guest(tmp_path, monkeypatch):
+    guest = module().ArmGuest(tmp_path)
+    guest.process = SimpleNamespace(poll=lambda: 0, wait=lambda **k: 0)
+    guest.stderr = io.BytesIO()
+    guest.env = {}
+    guest.server = SimpleNamespace(server_port=22023)
+    guest.ssh_port = 22022
+    calls = []
+    monkeypatch.setattr(guest, "run", lambda command, **kw:
+                        guest.instance_id if "instance-id" in command else "")
+    monkeypatch.setattr(guest, "_ssh", lambda *a, **k: SimpleNamespace(returncode=0))
+    monkeypatch.setattr(module().subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
+    def launch(argv, **kwargs):
+        calls.append(argv)
+        return SimpleNamespace(poll=lambda: None)
+    monkeypatch.setattr(module().subprocess, "Popen", launch)
+    return guest, calls
+
+
+def test_trial_start_can_observe_recovery_without_waiting_for_ssh(tmp_path, monkeypatch):
+    guest, calls = stopped_guest(tmp_path, monkeypatch)
+    monkeypatch.setattr(guest, "wait_boot", lambda: pytest.fail("trial recovery must not require SSH readiness"))
+    guest.restart_slot("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "b", trial=True, wait=False)
+    assert len(calls) == 1
+    assert "rauc.slot=b" in calls[0][calls[0].index("-append") + 1]
+    assert guest.slot == "b"
+
+
+def test_observer_restarts_original_cloud_without_source_slot_recovery(tmp_path, monkeypatch):
+    guest, calls = stopped_guest(tmp_path, monkeypatch)
+    guest.slot = "b"
+    ready = []
+    monkeypatch.setattr(guest, "wait_boot", lambda: ready.append(True))
+    guest.start_observer()
+    assert ready == [True] and len(calls) == 1
+    arguments = calls[0][calls[0].index("-append") + 1]
+    assert arguments.startswith("root=/dev/vda1 ") and "rauc.slot=" not in arguments
+
+
+@pytest.mark.parametrize("returncode", [None, -15])
+def test_observer_refuses_live_or_abnormally_exited_guest(tmp_path, monkeypatch, returncode):
+    guest, calls = stopped_guest(tmp_path, monkeypatch)
+    guest.process = SimpleNamespace(poll=lambda: returncode)
+    with pytest.raises(ValueError):
+        guest.start_observer()
+    assert calls == []
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable ARM SYSTEM guest opt-in")
