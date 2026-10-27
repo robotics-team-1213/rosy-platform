@@ -12460,3 +12460,11 @@ osy-d395-s1d\`.
 - 증거: `docs/validation/omx-sim-grasp-2026-10-27b/`(Isaac 5/5, MuJoCo 5/5, 두 백엔드 적합성 통과), 원격 `test/test_omx_sim_backends.py`.
 - gate 변화: Isaac 전환 조건 중 파지 반복 충족(시험 범위 안). 카메라 640×480 10Hz와 렌더링 비교는 미충족.
 - CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`에 Isaac 원인 세 겹과 공용 패드 위치.
+
+## 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
+
+- 변경: `learning/envs/isaac/run_omx_backend.py`. 손가락 패드에 rest offset 1mm, 뒤 손가락(`gripper_joint_2`)을 단단한 추종자로.
+- 근거: Isaac이 0.385rad에서 쥐어 교사 판정 하한 0.3935에 못 미쳤다. 패드가 블록에 약 1mm씩 박혔고, 뒤 손가락이 약해 블록이 한쪽으로 밀렸다.
+- 증거: `docs/validation/omx-sim-grasp-2026-10-27b/`(Isaac 0.405–0.408rad, 5/5, 적합성 0.972).
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — 같은 교훈 파일에 4번 항목(쥔 각도를 보정값과 비교).

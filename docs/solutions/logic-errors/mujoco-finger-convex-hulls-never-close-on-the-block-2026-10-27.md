@@ -65,6 +65,10 @@ Isaac 5.1 failed the same probe for three stacked reasons; each hid the next:
    both still left the fingers uncoupled. Removing the mimic and setting `gripper_joint_2`'s target each frame to the
    mirror of the measured `gripper_joint_1` made them symmetric (0.380/-0.380).
 3. The imported finger collision then closed past the 30 mm block. The same calibrated capsule pads fixed it: 5/5.
+4. "Held" is not enough: Isaac held at 0.385 rad, below the teacher's `contact_held` floor (0.3935), because the pads
+   sank ~1 mm per side into the block (more solver iterations did not help). A 1 mm pad rest offset and a stiff
+   follower finger (the real gripper is one motor) bring the held angle to 0.405-0.408, matching Gazebo's 0.407.
+   Compare the held angle with the calibrated one, not only lifted/not lifted.
 
 Read back the composed joint attributes (drive type, mimic axis, damping) and the measured finger pair before tuning
 anything; a probe that only reports "not held" cannot tell these apart. Record:

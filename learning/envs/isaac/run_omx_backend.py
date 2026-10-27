@@ -25,6 +25,11 @@ CAMERAS = {"top": "/top_camera/image_raw", "front": "/front_camera/image_raw"}
 OBJECTS = "/sim/object_tf"  # Evaluation facts (tools/sim/omx_backend_conformance.py OBJECTS), never a policy input.
 TOP_CAMERA_POS = (0.12, 0.0, 0.65)  # Above the work area, looking down (cell top camera ~650 mm, D-794).
 RENDER_HZ = 60.0
+# Held, the pads sank ~1 mm per side into a 30 mm block (pad gap 27.9-28.5 mm) and the fingers stopped at 0.386/0.399
+# rad where Gazebo and MuJoCo stop at 0.407; more solver iterations did not change it. The pads rest PAD_REST_OFFSET_M
+# off the item instead, fitted so the held angle matches the calibrated one (2026-10-28).
+PAD_REST_OFFSET_M, PAD_CONTACT_OFFSET_M = .001, .003
+FOLLOWER_STIFFNESS, FOLLOWER_DAMPING, FOLLOWER_MAX_EFFORT_NM = 300.0, 5.0, 2.0
 
 
 def parse_args():
@@ -71,7 +76,8 @@ def main():
             raise RuntimeError(f"expected one OMX articulation and link5, found {roots} {links}")
         # The finger collision hulls overlap; self-collision jammed gripper_joint_2 against link6 (2026-10-27).
         # Gazebo and the MuJoCo backend do not self-collide the arm either.
-        PhysxSchema.PhysxArticulationAPI.Apply(stage.GetPrimAtPath(roots[0])).CreateEnabledSelfCollisionsAttr(False)
+        articulation = PhysxSchema.PhysxArticulationAPI.Apply(stage.GetPrimAtPath(roots[0]))
+        articulation.CreateEnabledSelfCollisionsAttr(False)
         if not any(p.IsA(UsdPhysics.Scene) for p in stage.Traverse()):
             UsdPhysics.Scene.Define(stage, Sdf.Path("/World/physicsScene"))
         PhysicsSchemaTools.addGroundPlane(stage, "/World/groundPlane", "Z", 1500, Gf.Vec3f(0, 0, -0.02), Gf.Vec3f(0.5))
@@ -94,6 +100,12 @@ def main():
         # 0.005, and corrected it still did not couple the fingers (2026-10-27). The follower is removed from the mimic
         # and driven like gripper_joint_1, its target set each frame to the mirror of gripper_joint_1 (main loop).
         follower = joints["gripper_joint_2"]
+        # One motor moves both real fingers. A follower as weak as the lead let the lead push the held block off
+        # centre (0.397/-0.428 rad); a stiff follower keeps the pair symmetric, as the rigid Gazebo mimic does.
+        follower_drive = UsdPhysics.DriveAPI(follower, "angular")
+        follower_drive.GetStiffnessAttr().Set(FOLLOWER_STIFFNESS)
+        follower_drive.GetDampingAttr().Set(FOLLOWER_DAMPING)
+        follower_drive.GetMaxForceAttr().Set(FOLLOWER_MAX_EFFORT_NM)
         for instance in [str(s).split(":", 1)[1] for s in follower.GetAppliedSchemas() if str(s).startswith("PhysxMimicJointAPI:")]:
             follower.RemoveAPI(PhysxSchema.PhysxMimicJointAPI, instance)
         grip = UsdShade.Material.Define(stage, Sdf.Path("/World/GripMaterial"))
@@ -117,6 +129,9 @@ def main():
             UsdGeom.Xformable(pad).AddTranslateOp().Set(Gf.Vec3d(x, side*(y + PAD_RADIUS), 0.0))
             pad.CreatePurposeAttr("guide")
             UsdPhysics.CollisionAPI.Apply(pad.GetPrim())
+            offsets = PhysxSchema.PhysxCollisionAPI.Apply(pad.GetPrim())
+            offsets.CreateContactOffsetAttr(PAD_CONTACT_OFFSET_M)
+            offsets.CreateRestOffsetAttr(PAD_REST_OFFSET_M)
             UsdShade.MaterialBindingAPI.Apply(pad.GetPrim()).Bind(grip, UsdShade.Tokens.weakerThanDescendants, "physics")
         for box in boxes():
             cube = UsdGeom.Cube.Define(stage, Sdf.Path(f"/World/Cell/{box['name']}"))
