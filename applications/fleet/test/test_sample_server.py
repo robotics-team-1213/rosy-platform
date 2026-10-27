@@ -43,7 +43,7 @@ def test_sample_profile_reads_report_absent_storage_without_hiding_unknown_reque
                  '/device-profile-sources/robot/sample-robot'):
         response = engine.handle('GET', '/api/fleet' + path, headers, b'')
         assert response.status == 404
-        assert json.loads(response.body)['detail']['code'] == 'DEVICE_PROFILE_STORAGE_UNAVAILABLE'
+        assert json.loads(response.body) == {'detail': 'Not Found'}
     assert not engine.unhandled
     response = engine.handle('GET', '/api/fleet/device-profile-sources/unknown/sample-robot', headers, b'')
     assert response.status == 501
