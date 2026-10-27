@@ -356,5 +356,5 @@
 - 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
 - 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
 - 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
+- 2026-10-28 · uncommitted · fix(release): 권한 확인 파일 이름을 호출마다 다르게
 - 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
-- 2026-10-27 · ae535f57ec · fix: publish push가 자기 SHA의 pre-push 사본으로 돈다

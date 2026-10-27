@@ -12502,6 +12502,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 차례 마감(B)과 겹침 섀도(A)는 아직 켜지 않았다.
 - 교훈: 해당 없음. 측정과 규칙은 ADR에 있다.
 
+## 2026-10-28 · uncommitted · fix(release): 권한 확인 파일 이름을 호출마다 다르게
+
+- 변경: `test/test_release_unpack_helper.py`. 모듈 수준 `skipif`의 권한 확인이 고정 이름 `_perm_probe` 대신 `tempfile.mkstemp`로 만든 고유 이름을 쓴다. 같은 디렉터리에서 동시에 불러도 실패하지 않는지 보는 회귀 시험을 더했다.
+- 근거: 10-28 03:15 AI PC에서 착지 사전 시험의 `test/` 실행이 수집 단계에서 `FileNotFoundError`로 멈췄다. 한 작업의 xdist 작업자들은 같은 TMPDIR를 쓰고 이 모듈을 동시에 수집한다(원인 분석 robot-45).
+- 증거: 회귀 시험이 고치기 전 코드에서 같은 오류로 실패(원격 1 failed)하고, 고친 뒤 release 시험 109 passed, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — `docs/solutions/workflow-issues/collection-time-probe-races-across-xdist-workers-2026-10-28.md`.
+
 ## 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
 
 - 변경: `tools/land_batch.py`(새 파일), `tools/land_queue.py`(티켓 `batch` 필드, `wait`의 `done`·`form`), `tools/land.py`(회차 반복을 `rounds`로 떼어 냄, `merge`의 `source`). 앞 착지가 차례를 쥔 동안 대기가 2개 이상이면, 맨 앞 대기자가 녹색으로 준비된 안전 경로 밖 브랜치를 최대 4개까지 한 브랜치로 병합한다. 잠금 밖에서 미리 시험하고 차례에 한 번만 fast-forward한다. 멈추면 각자 단독으로 착지한다. D-889 추가 3.
