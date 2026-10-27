@@ -1,0 +1,10 @@
+#!/usr/bin/python3 -I
+"""Current-image RAUC post-install handler; never invoke a handler from the incoming image."""
+from pathlib import Path
+import sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from os_update_install import main
+
+raise SystemExit(main())

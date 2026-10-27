@@ -27,6 +27,17 @@ def _module():
     return module
 
 
+@pytest.mark.parametrize("path", [
+    "/var/lib/rosy-device/state/config-initializing.json",
+    "/var/lib/rosy-device/state/generations/fixture/etc__rosy__fleet-bootstrap.json",
+    "/var/lib/rosy-device/core/.rosy/rosy.yaml",
+    "/run/rosy-provision-boot/rosy-config.yaml",
+    "/run/rosy-provision-boot/rosy-provision/provision.json",
+])
+def test_ab_private_state_and_boot_a_inputs_are_never_read_for_diagnostics(path):
+    assert _module().is_denied_path(path)
+
+
 PSK_VALUE = "site" + "-wifi-" + "pass-9384"
 TOKEN_VALUE = "Zk3" + "q9LmT2vXw8" + "Ab7Cd1Ef4Gh6Ij0Kl5Mn8Op3Qr"
 PEM = "-----BEGIN " + "PRIVATE KEY-----\nMIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEA\n-----END " + "PRIVATE KEY-----"
