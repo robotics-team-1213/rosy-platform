@@ -12390,3 +12390,10 @@ osy-d395-s1d\`.
 - 메타데이터: 실제 다른 세션의 예약 D-896/D-897/D-898을 pending gap으로 선언해 lint의 3 errors를 수정했다. 이후 0 errors/37 warnings. 실행 selector나 실패 baseline을 바꾸지 않았다.
 - Gate: 기존 gate 변화 없음. 호스트 검증과 실제 관측 생산자·장치·학습 수용은 별도다.
 - CE: 해당 없음 — ADR·공통 검증·회귀 시험으로 이유와 근거를 보존했다.
+
+## 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록
+
+- 변경: 실행 계획(2026-10-25-fleet-policy-admission-design.md) P3 상태줄에 착지 사실과 로컬 main `b54b29d5d0`을 붙였다. 내용 변화 없음.
+- 증거: 착지 기록 `.git/rosy-land/b54b29d5d04a509d989718d10168e64a3742c5a5.json`(3라운드, FULL+affected 0 NEW). 모듈 로그·생성 문서는 그 착지에 이미 반영됐다.
+- Gate: 변화 없음. P5 현장 수용은 별도.
+- CE: 해당 없음 — 상태 한 줄 기록.
