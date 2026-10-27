@@ -3741,3 +3741,10 @@
 - 변경: deploy/site/README.md 운영 절에 루프 생존(`/readyz`, 503과 최소 본문)과 프로세스 생존(`/healthz`)의 분리를 적었다. compose healthcheck·mdns 광고 검증·autoupdate 게이트는 `/healthz`를 그대로 쓰며 `/readyz`에 연결하지 않는다고 못박았다.
 - 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
 - gate 변화: 없음. CE: 해당 없음.
+
+## 2026-10-27 · 2ecb9b9015 · fleet가 best-effort 컨텍스트 미러를 기다리지 않는다
+
+- 변경: D-796은 컨텍스트 로그 미러를 가산·best-effort(쓰기 실패는 경고, SQLite 원장 불변)로 설계했는데 compose는 fleet 시작을 `postgres(service_healthy)`에 묶어 두었다. 미러가 느리면 관제 자체가 열리지 않는 이 위반을 풀었다 — fleet의 `depends_on` 제거, postgres는 스택에 그대로 배포된다. 신규 계약 시험이 의존 부재와 미러 잔존을 함께 고정한다.
+- 증거: 원격 5 suite(신규 계약 + compose·후보·이행 고정) green, known NEW 0. 변이 검증: depends_on 복원 → 계약 시험 red(`3923f1121e`), 복원 green(`2ecb9b9015`).
+- gate 변화: 없음. 실제 현장에서 postgres 지연 시 관제 기동·경고 로그 관찰은 별도.
+- CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
