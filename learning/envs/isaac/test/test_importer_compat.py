@@ -14,7 +14,8 @@ def helper():
     return module
 
 
-def test_modern_importer_preserves_wheel_configuration(tmp_path):
+@pytest.mark.parametrize('robot_type', ['Wheeled', 'Manipulator'])
+def test_modern_importer_preserves_control_configuration(tmp_path, robot_type):
     options = {}
     destination = tmp_path / "modern.usd"
     destination.write_text("USD")
@@ -25,11 +26,16 @@ def test_modern_importer_preserves_wheel_configuration(tmp_path):
 
     api = SimpleNamespace(URDFImporterConfig=Config,
                           URDFImporter=lambda config: SimpleNamespace(import_urdf=lambda: str(destination)))
-    assert helper().import_model(api, None, tmp_path / "robot.urdf", tmp_path, "Wheeled") == str(destination)
-    assert options["fix_base"] is False
-    assert options["merge_fixed_joints"] is True
-    assert options["joint_target_type"] == {".*wheel_joint": "velocity"}
-    assert options["override_joint_stiffness"] == {".*wheel_joint": 0.0}
+    assert helper().import_model(api, None, tmp_path / "robot.urdf", tmp_path, robot_type) == str(destination)
+    assert options["merge_fixed_joints"] is (robot_type == 'Wheeled')
+    if robot_type == 'Wheeled':
+        assert options["fix_base"] is False
+        assert options["joint_target_type"] == {".*wheel_joint": "velocity"}
+        assert options["override_joint_stiffness"] == {".*wheel_joint": 0.0}
+    else:
+        assert options['joint_target_type'] == 'position'
+        assert options['override_joint_stiffness'] == 40.0
+        assert options['override_joint_damping'] == .3
 
 
 @pytest.mark.parametrize("robot_type", ["Wheeled", "Manipulator"])
