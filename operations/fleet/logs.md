@@ -4983,3 +4983,17 @@
 - 증거: 원격 시험 10 passed, known NEW 0. 변이 검증: job-trips 분기의 supervised 제거 → 신규 시험 red(`498989d626`), 복원 green(`167bae90bb`).
 - Gate: 없음. 호스트 시험까지만 유효하며 실제 사이트에서의 `/readyz` 관찰 기록은 여전히 별도.
 - CE: 해당 없음 — 시험과 변이 이력이 커밋에 남아 있다.
+
+## 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀
+
+- 변경: 없음(코드 변경은 `applications/fleet/web` 참조). 이 모듈에서는 콘솔 계약 시험을 확장했다 — `test_work_overview_browser.py`에 범위 readback·배지·기명 운영자 전환·409 사유·보기 전용 잠금 시험 추가, `test/web/work-view.test.mjs`에 순수 판정·문구 시험 추가.
+- 증거: 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1` `test_work_overview_browser.py` 36 통과(신규 3건 포함)·known_failures NEW 0. `test_server_app`·`test_remaining_platform_installed` 50 통과 NEW 0. 전체 affected/FULL 통과를 뜻하지 않는다.
+- Gate: 기존 gate 유지. P4 원격 회귀·착지와 P5 현장 수용은 이 브랜치 밖의 별도 단계다.
+- CE: 해당 없음 — 새 판단은 없고 시험·코드가 근거를 담는다.
+
+## 2026-10-27 · c36bfb48ad · feat: 인증된 복구 요청과 원본 결속
+
+- 변경: D-899 내부 요청·독립 근거 원장을 기존 Fleet DB에 추가했다. 자식 생성의 동일 트랜잭션에서 최신 요청/근거·완전한 원본 tuple·현재 제안자 권한을 대조하며 정확한 승인 replay는 역사적 근거로 같은 자식을 읽는다. 원래 실패와 단일 자식 예산은 유지한다.
+- 증거: 서비스 부재 RED 7 → 46 passed. 독립 검토의 직접 C 원본 판정 교체 반례 RED 1 → 47 passed. read-only Account preview RED 1을 수정해 최종 16 suites 283 passed/0 skipped·runner exit 0·NEW 0. 독립 source 재검토 완료. `docs/validation/transfer-recovery-intent-2026-10-27/result.md` 참고(저장소 루트 기준).
+- Gate: 기존 gate 변화 없음. 실제 HTTP 인증 resolver·공유 API 계약·콘솔과 관측 생산자는 다음 별도 착지 단위다. 합성 World/fake owner의 호스트 시험을 장치·현장·학습 수용으로 보고하지 않는다.
+- CE: 해당 없음 — 원본 결속과 권한 표시의 판단은 ADR·원장 코드·직접 회귀 시험에 남아 있다.

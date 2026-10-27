@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · c36bfb48ad · docs: D-899 인증된 이송 복구 요청 원장
 - 2026-10-27 · uncommitted · fix(remote): 시험 PC 메모리 예약을 실측으로, 현장 PC 디스크 판정 바로잡기
 - 2026-10-27 · uncommitted · fix(land): 시험 PC가 포기해 끝난 착지도 stop으로 남김
 - 2026-10-27 · 6ffe52ae26 · docs: D-895 단일 이송 복구 후손과 원본 증거 보존
 - 2026-10-27 · 1bdd41e94a · Tool1 main445 통합과 full carry 자격 차단
-- 2026-10-27 · 877cf55c01 · Tool1 actual main737 통합과 literal full 보존

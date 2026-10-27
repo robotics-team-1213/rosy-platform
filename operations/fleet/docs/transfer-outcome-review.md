@@ -4,6 +4,14 @@
 
 운영자 승인을 받은 한 번의 복구는 아래의 내부 trusted-host 호출로 준비한다. 현재 공개 화면·HTTP에 복구 시료 제출이나 승인 버튼을 추가하지 않았다.
 
+## 인증된 복구 요청 원장 준비
+
+D-899의 `RecoveryRequestService`는 이후 HTTP 연결에서 사용할 요청·근거·승인의 내부 원장이다. 원래 제안자의 요청과 독립 producer의 새 관측을 보존하고, 요청 ID·proposal/evidence digest·원래 grant/receipt/assessment/generation을 자식 생성 트랜잭션에 결속한다. 원래 제안자의 현재 권한은 해당 트랜잭션의 resolver로 확인한다. 주체와 역할을 사용자 body에서 구성하면 안 된다.
+
+관측은 요청 생성 시점보다 새로워야 하며, 요청 대체·근거 만료·권한 취소에서는 승인을 거절한다. 승인한 뒤에는 원래 요청과 근거를 역사적으로 대조해 같은 자식을 반환하므로 owner 장애·현재 TTL 경과가 새 시도를 만들지 않는다. 부모 기록과 최대 1회 예산은 기존 D-895 경계를 따른다.
+
+이 단계는 내부 서비스와 호스트 시험이다. 실제 HTTP 인증 resolver·복구 관측 API·콘솔·실제 Gazebo/실물 생산자는 아직 연결하지 않았다. 공개 API는 공유 schema/API reference 계약을 먼저 반영한 뒤 연결한다. [내부 원장 검증 기록](../../../docs/validation/transfer-recovery-intent-2026-10-27/result.md).
+
 ## 관측 제출 뒤 남는 기록
 
 기존 독립 observer가 POST_ACTION 관측 두 개를 제출하면 Fleet은 다음을 확인한다.
