@@ -75,5 +75,23 @@ landing/remote suites (324 passed).
 See [the revision-bound validation record](../../validation/land-turn-deadline-2026-10-28/result.md).
 This focused result is not a FULL-tier, device or field acceptance claim.
 
+## Fixture landings must not wait for the physical lab clock (2026-10-28)
+
+Mocking remote execution did not isolate the shared `test_land.repos` fixture from `after_reboot`.
+During the lab's 05:15–06:10 KST maintenance window, otherwise ordinary preparation tests could sleep
+until 06:10. Captured pytest output hid the notice. Both test hosts reported KST, and an official remote
+reproduction on the committed pre-fix source with `faulthandler_timeout=5` showed the test inside `after_reboot`'s sleep.
+That reproduction was then cancelled; exit 143 is not a passing or completed test result.
+
+The shared throwaway-repository fixture now mocks `after_reboot`, including its dependent preparation
+and speculation tests. The production gate is unchanged. Its separate test uses an explicit fake clock
+and sleep to check waiting inside the window and release at 06:10, without requesting that fixture.
+The corrected committed source passed 336 related remote tests in 43.84 seconds during the real window.
+The revision-bound validation record above identifies both local commits and the separate log paths.
+
+For recovery, cancel only the identified owned jobs, preserve their logs, and restart the official landing.
+The real preflight must still wait until the maintenance window ends. Apply this fixture isolation when
+remote I/O is mocked but an operational clock, backoff or maintenance gate remains reachable.
+
 ## Applicability
 Any long-running remote job started by an agent on the shared laptop.

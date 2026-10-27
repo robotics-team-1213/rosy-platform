@@ -52,3 +52,17 @@ deadline이 지나도 같은 event가 실행을 취소하고 main 비교를 추�
 각각 별도 단계이며 이 324건으로 완료했다고 주장하지 않는다.
 
 CE: 기존 실행기 관측 교훈 갱신 — 자식·CPU 관측만으로 정체를 단정하지 않고 stack과 원격 진행을 확인한다.
+
+## 최신 main 통합과 실제 시간대 의존성
+
+계측 변경과 통합한 `fe4f255818`은 관련 325개 시험과 공식 FULL 25개 invocation을 통과했다.
+이후 최신 main을 합친 `077f2d026a`의 최종 차이 시험은 완료 전에 중단했다. 두 시험 PC가 KST이고,
+단위시험이 실제 05:15–06:10 재부팅 대기에 들어갈 수 있음을 확인했기 때문이다.
+같은 revision의 단일 원격 재현에 `faulthandler_timeout=5`를 적용하자
+`after_reboot → prepare → test_pretest_guards_run_beside_the_selection_and_their_stop_still_stops`
+스택이 남았다. 진단 재현의 취소 exit 143과 앞선 부분 로그를 통과 근거로 합산하지 않는다.
+
+공통 throwaway repo fixture에서만 운영 대기를 모의 처리한 `2b05b9756c`는 실제 대기 시간대에도
+관련 16파일 **336 passed in 43.84s**, exit0이다. 운영 게이트와 가짜 시계로 이를 검증하는 전용 시험은
+유지했다. 원본은 `%LOCALAPPDATA%/Temp/rosy-land-turn-deadline/red-reboot-window/run-1.txt`와
+`green-reboot-window/run-1.txt`다. 새 후보의 필수 FULL과 최종 main 반영은 여전히 별도 검증 단계다.
