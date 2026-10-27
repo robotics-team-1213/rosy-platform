@@ -5,6 +5,14 @@ x-rosy-site:
   allow_literal_bind: "${ROSY_SITE_ALLOW_LITERAL_BIND:-}"
   tls_host: "${ROSY_SITE_TLS_HOST:-}"
 
+# Bounded json-file logging for every long-running service: unbounded container
+# logs have no upper bound on the site host's disk otherwise.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   fleet:
     image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
@@ -152,6 +160,7 @@ services:
       postgres:
         condition: service_healthy
     networks: [site_backend, robot_egress]
+    logging: *default-logging
 
   vision:
     image: rosy-site-vision:${ROSY_SITE_IMAGE_TAG:-local}
@@ -219,6 +228,7 @@ services:
       retries: 3
       start_period: 15s
     networks: [site_backend]
+    logging: *default-logging
 
   # D-796: optional site-host context/log store. It is an additive mirror of the
   # D-640 advisory journal only — the Fleet SQLite ledger stays the single source
@@ -258,6 +268,7 @@ services:
       retries: 5
       start_period: 20s
     networks: [site_backend]
+    logging: *default-logging
 
   proxy:
     image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
@@ -308,6 +319,7 @@ services:
       site_backend:
         aliases: [proxy]
       site_edge: {}
+    logging: *default-logging
 
 volumes:
   sighting_data:
