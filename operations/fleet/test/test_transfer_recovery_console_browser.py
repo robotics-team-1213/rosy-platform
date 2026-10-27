@@ -119,6 +119,7 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
                 assert c.client.get(c.url, headers=headers("harbor")).json()["job"]["status"] == "HOLD"
                 assert len(posts) == 1 and len(c.port.submitted) == 2 and not errors
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                assert page.locator("#arm-transfer-recovery-child").evaluate("node => node.scrollWidth <= node.clientWidth")
                 page.locator("#arm-transfer-recovery").scroll_into_view_if_needed()
                 shot = save_temp_screenshot(page, f"transfer-recovery-{width}-{'lost' if lost_reply else 'ok'}.png")
                 retained = Path.home() / "rosy-test/artifacts/transfer-recovery" / c.parent / shot.name
