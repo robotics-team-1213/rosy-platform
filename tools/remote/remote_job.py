@@ -57,8 +57,6 @@ B=$(mktemp -d /tmp/rosy-pytest-XXXXXX) || exit 1
 # TMPDIR beside the basetemp, not in it (pytest wipes --basetemp at start): TEMP-or-/tmp tests leak otherwise.
 mkdir -m 700 "$B/p" "$B/t"; export TMPDIR=$B/t TEMP=$B/t TMP=$B/t
 # The deps hash names the inputs, not what unpinned pip picked; installed dist-info names do (one per run).
-# The interpreter build and OpenSSL differ per host (site PC: uv's standalone 3.12, OpenSSL 3.5; 2026-10-27).
-echo "[remote-pytest] $(hostname) python $("$V/bin/python" -c 'import sys; print(sys.version.split()[0])') $(openssl version 2>/dev/null | cut -d' ' -f1-2)"
 echo "[remote-pytest] env ${V##*/} freeze $(cd "$V" && ls -d lib/python3*/site-packages/*.dist-info \
   receiver-crypto/*.dist-info 2>/dev/null | sha256sum | cut -c1-16)"
 # Best-effort lowest, not idle (-c3): idle gets no disk time while any other process writes, so a timing
