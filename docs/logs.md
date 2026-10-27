@@ -12473,3 +12473,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`(144 passed), 착지 도구 관련 시험 13개 파일(415 passed, known_failures NEW 0).
 - gate 변화: 없음.
 - CE: 해당 없음 — 흐름과 근거가 D-889 추가 3과 시험에 남는다.
+
+## 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
+
+- 변경: `tools/land_batch.py`. 앞 항목의 묶음 크기 4를 2로 줄였다. FULL 준비 기록이 있는 브랜치와 묶음 선택이 FULL인 묶음은 단독으로 착지하고, 멈춘 묶음의 `train` 사건에 `bisect`를 남긴다. D-889 추가 3을 추가 4로 옮기고 근거를 고쳤다(robot-72의 추가 3과 번호가 겹쳤다).
+- 근거: 앞 항목의 실패율 0.8~1.2%는 호출당 비율이라 D-889 3항의 p가 아니다. 착지당 p ≈ 0.2다(준비 124번에 NEW 42건, robot-45 측정). k=2에서 모두 통과할 확률은 64%이고, 실패한 쌍은 두 단독 착지로 나뉜다.
+- 증거: 원격 `test/test_land_batch.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.

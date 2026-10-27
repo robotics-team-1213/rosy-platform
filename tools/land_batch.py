@@ -3,14 +3,16 @@
 On 2026-10-28 sixteen landings queued. Each turn merged main, tested main's delta and fast-forwarded, so the
 last one waited for fifteen serial turns, and every one of them moved main under everyone behind it. Now the
 earliest waiting ticket, while another ticket blocks it, leads a batch when at least ``BATCH_MIN`` waiting
-tickets (itself included, at most ``BATCH_MAX``) hold a green prepared tier (``land_full.restore``) and touch no
-safety-tagged path (D-889 3: those land alone, as does a run with ``--tests`` other than auto). Its ticket names the members
+tickets (itself included, at most ``BATCH_MAX``) hold a green affected prepared tier (``land_full``) and touch no
+safety-tagged path (D-889 3/6: safety, FULL-class and ``--tests`` other than auto land alone). Its ticket names the members
 (``batch``), so they wait behind it (``land_queue.blockers``). In its own worktree it merges each member's
 tip into a new branch ``<leader>-batch<HHMMSS>`` (``land.merge``: the records auto-resolve; a member with any
-other conflict is left out and lands alone), prepares that branch outside the lock (``land_prepare``), and
+other conflict is left out and lands alone), merges main, lands alone if that selects FULL, prepares the
+branch outside the lock (``land_prepare``), and
 lands it through the ordinary rounds: one turn, one fast-forward for all. A member sees its tip in main and
 ends as landed. If the batch stops (a NEW failure, a conflict, the size ratchet, the queue), the leader goes
 back to its own branch, which the batch never touched, clears ``batch`` and lands alone; so do the members.
+With k = 2 that is D-889 3's bisect: each half is one landing.
 Never resets or force-deletes: a stopped batch branch is kept for its log; a landed one goes with ``-d``.
 """
 
@@ -27,7 +29,9 @@ import land_prepare
 import land_queue
 
 BATCH_MIN = 2  # waiting tickets, the leader included, that make a batch
-BATCH_MAX = 4  # D-889 3: k <= 4 while the measured NEW rate p stays <= 0.1 (66 % of batches pass at p = 0.1)
+# D-889 3 sets k from the measured NEW rate p: 10-27..28 p ~ 0.2 (42 NEW in 124 prepares), all-pass k=2 64 %,
+# k=4 41 %. A failed pair halves into its two single landings; a larger k needs a deeper bisect first.
+BATCH_MAX = 2
 
 
 def in_main(land, wt: Path, branch: str) -> bool:
@@ -55,8 +59,13 @@ def eligible(land, wt: Path, row: dict) -> bool:
         return False
     head = land.git(other, "rev-parse", "HEAD", check=False).stdout.strip()
     tip = land.git(wt, "rev-parse", f"refs/heads/{name}", check=False).stdout.strip()
-    return (bool(head) and head == tip and land_full.restore(other, name) is not None
-            and not safety(land, wt, name))
+    return bool(head) and head == tip and affected(other, name) and not safety(land, wt, name)
+
+
+def affected(wt: Path, branch: str) -> bool:
+    """A green affected prepared tier; a FULL-class landing goes alone (D-889 6)."""
+    record = land_full.prepared(wt, branch, land_full.restore(wt, branch))
+    return record is not None and record["tier"] == "affected"
 
 
 def former(land, wt: Path, qdir: Path, ticket: Path):
@@ -82,8 +91,8 @@ def former(land, wt: Path, qdir: Path, ticket: Path):
 def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path) -> int | None:
     """Wait for the turn. 0 when a batch landed this branch; None when it lands alone (``land.rounds``)."""
     form, chosen = former(land, wt, qdir, ticket)
-    if args.tests != "auto" or safety(land, wt, branch):
-        form = None  # a batch is tested, and a safety branch lands alone (D-889 3)
+    if args.tests != "auto" or safety(land, wt, branch) or not affected(wt, branch):
+        form = None  # a batch is tested; safety and FULL-class branches land alone (D-889 3/6)
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
                               done=lambda: in_main(land, wt, branch), form=form)
@@ -118,6 +127,10 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
         land_queue.set_status(ticket, "preparing", batch=took)
         print(f"[batch] {name}: {branch} + {', '.join(took)}", flush=True)
         land_events.emit("train", branches=[branch, *took], k=len(took) + 1, result="formed")
+        main_sha = land.out(wt, "rev-parse", "main")
+        land.merge(wt, main_sha, name, python, False)
+        if land.select(wt, main_sha, python)[1]:
+            raise land.Stop("the batch selects the FULL tier: FULL-class landings go alone (D-889 6)")
         land_prepare.prepare(land, wt, name, args, python, qdir, ticket)
         land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt))
         code = land.rounds(args, wt, name, main_co, python, qdir, ticket)
@@ -128,7 +141,8 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
             raise land.Stop(f"batch {name} stopped ({stop}); switching back to {branch} failed, worktree left"
                             f" as is:\n{back.stdout}{back.stderr}") from stop
         land_queue.set_status(ticket, "waiting", batch=[])
-        land_events.emit("train", branches=[branch, *took], k=len(took) + 1, result="stopped")
+        land_events.emit("train", branches=[branch, *took], k=len(took) + 1, result="stopped",
+                         bisect="halves land alone" if took else None)
         print(f"[batch] {name} stopped, kept for its log; {branch} and the members land alone: {stop}", flush=True)
         return None
     land.git(wt, "switch", branch)

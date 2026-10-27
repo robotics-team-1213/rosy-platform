@@ -79,6 +79,7 @@ def test_a_batch_lands_its_clean_members_in_one_fast_forward_and_leaves_a_confli
     main, wt, rows = batch_repos(repos, tmp_path)
     qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="preparing")
     calls = []
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([], None))
     monkeypatch.setattr(land_batch.land_prepare, "prepare", lambda land_, wt_, name, *a: calls.append(name))
     monkeypatch.setattr(land_batch.land_queue, "wait", lambda *a, **k: None)
     def rounds(args, wt_, name, main_co, *a):  # the ordinary rounds' fast-forward, without their tests
@@ -99,6 +100,7 @@ def test_a_stopped_batch_goes_back_to_the_untouched_leader_branch_and_clears_its
     main, wt, rows = batch_repos(repos, tmp_path)
     before = git(wt, "rev-parse", "HEAD")
     qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="preparing")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([], None))
     monkeypatch.setattr(land_batch.land_prepare, "prepare", lambda *a: (_ for _ in ()).throw(land.Stop("NEW failure")))
     assert land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
                            ticket, main, rows) is None
@@ -108,6 +110,16 @@ def test_a_stopped_batch_goes_back_to_the_untouched_leader_branch_and_clears_its
     assert not land_batch.in_main(land, wt, "feat/m")
 
 
+def test_a_batch_that_selects_the_full_tier_goes_alone_before_any_pretest(repos, tmp_path, monkeypatch):
+    main, wt, rows = batch_repos(repos, tmp_path)
+    qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="preparing")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["test"]], "FULL tier (harness)"))
+    monkeypatch.setattr(land_batch.land_prepare, "prepare", lambda *a: pytest.fail("prepared a FULL-class batch"))
+    assert land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
+                           ticket, main, rows) is None
+    assert git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x" and info(ticket)["batch"] == []
+
+
 def test_eligible_wants_a_prepared_member_at_its_worktree_head(repos, tmp_path):
     main, wt, rows = batch_repos(repos, tmp_path)
     row = {**rows[0], "host": socket.gethostname(), "status": "waiting"}
@@ -115,6 +127,9 @@ def test_eligible_wants_a_prepared_member_at_its_worktree_head(repos, tmp_path):
     member = Path(row["worktree"])
     land.land_full.save(member, "feat/m", git(member, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD"), "affected", [])
     assert land_batch.eligible(land, wt, row)
+    land.land_full.save(member, "feat/m", git(member, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD"), "full", [])
+    assert not land_batch.eligible(land, wt, row), "a FULL-class landing goes alone (D-889 6)"
+    land.land_full.save(member, "feat/m", git(member, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD"), "affected", [])
     assert not land_batch.eligible(land, wt, {**row, "host": "elsewhere"})
     assert not land_batch.eligible(land, wt, {**row, "batch": ["feat/y"]}), "a leader is not a member"
     commit(main, {"tools/harness/platform_parts.yaml": "roots:\n  - path: pkg/m.py\n    concern: safety\n"}, "tag")
