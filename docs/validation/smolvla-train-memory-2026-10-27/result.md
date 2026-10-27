@@ -11,7 +11,7 @@
 
 ## 방법
 
-- 스크립트: [`smolvla_train_mem.py`](smolvla_train_mem.py). `lerobot/smolvla_base`(LeRobot 0.4.4, torch 2.7.1+cu128, 시험 PC의 `policy-latency-gpu` 환경)를 OMX 특징(상태 6, 행동 6, 카메라 `top`·`front` 480×640)으로 불러온다. 영상은 모델 안에서 512×512로 바뀌므로 입력 크기는 메모리에 거의 영향이 없다.
+- 스크립트: [`evidence/smolvla_train_mem.py`](evidence/smolvla_train_mem.py). `lerobot/smolvla_base`(LeRobot 0.4.4, torch 2.7.1+cu128, 시험 PC의 `policy-latency-gpu` 환경)를 OMX 특징(상태 6, 행동 6, 카메라 `top`·`front` 480×640)으로 불러온다. 영상은 모델 안에서 512×512로 바뀌므로 입력 크기는 메모리에 거의 영향이 없다.
 - 무작위 텐서 배치와 정책 자신의 tokenizer로 만든 과제 문장을 쓴다. 배치마다 3걸음을 돌려 AdamW 상태가 잡힌 뒤의 최대값을 `torch.cuda.max_memory_allocated`로 읽는다.
 - `torch.cuda.set_per_process_memory_fraction`으로 이 프로세스를 5GB로 묶어 메모리 부족이 다른 프로세스에 번지지 않게 했다. `tools/remote/hold_gpu.sh 4 8`로 실행해 그동안 그 PC의 시뮬레이터 자리를 막았다.
 
