@@ -32,8 +32,8 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
   panel.append(heading, node("p", "인계받은 작업 식별자로 원본을 조회하세요. 조회와 승인은 별도입니다.", "hint"),
     form, state, detail, node("p", "실행 승인 후 장치 동작이 시작될 수 있습니다. 물리 목표 확인과 외부 앱의 업무 완료는 별도 근거입니다.", "hint"));
   const recoveryPanel = node("section"), recoveryState = node("p"), review = node("p"),
-    recoveryActions = node("div", "", "ui-actions"), requestRecovery = node("ui-button", "복구 관측 요청"),
-    approveRecovery = node("ui-button", "독립 운영자로 복구 1회 승인"), childState = node("p"),
+    recoveryActions = node("ui-actions"), requestRecovery = node("ui-button", "복구 관측 요청"),
+    approveRecovery = node("ui-button", "독립 운영자로 복구 1회 승인"), childState = node("dl", "", "work-detail"),
     technical = node("details"), bindings = node("dl", "", "work-detail");
   recoveryPanel.id = "arm-transfer-recovery"; recoveryPanel.hidden = true;
   recoveryState.id = "arm-transfer-recovery-state";
@@ -86,9 +86,11 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
       ["evidence_digest", "관측 다이제스트"], ["context_digest", "원본 근거 다이제스트"], ["expected_generation", "실행 세대"], ["reason", "판정 사유"]]) {
       field(title, recovery[key], bindings);
     }
-    if (recovery.child_mission_id) childState.textContent = child ?
-      `복구 시도 ${child.mission_id} · ${states[child.status] || "상태 확인 필요"}` :
-      `복구 시도 ${recovery.child_mission_id} · 결과를 조회할 수 없습니다. 다시 조회하세요. 복구 횟수는 이미 사용됐습니다.`;
+    if (recovery.child_mission_id) {
+      field("복구 시도", recovery.child_mission_id, childState);
+      field("결과", child ? states[child.status] || "상태 확인 필요" :
+        "결과를 조회할 수 없습니다. 다시 조회하세요. 복구 횟수는 이미 사용됐습니다.", childState);
+    }
   }
   function show() {
     detail.replaceChildren();
