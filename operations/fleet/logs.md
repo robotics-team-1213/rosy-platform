@@ -4759,6 +4759,19 @@
 - 증거: [통합 기록](../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md). 새 고정 커밋의 집중·공식 회귀는 후속 검증 대상이다. 이전 지도 시험의 단발 실패와 단독 통과는 Git 밖 원장에서 구분했다.
 - gate 변화: 없음. 기준선·신선도·대기시간·실행 권한 변경 없음. CE 해당 없음: 판단은 소유 경계와 단언으로 설명된다.
 
+## 2026-10-24 · uncommitted · 장치 설명 정보 저장과 조회 (D-860)
+
+- 변경: 기존 Fleet task DB에 장치 이름·제조사·모델·종류·선언된 팔 수·하드웨어 식별자를 저장한다. Viewer 조회와 기명 Operator 교체를 기존 역할 가드로 구분한다. 등록 로스터·실물 owner·보정·명령 권한과 결합하지 않는다.
+- 증거: 누락 구현의 원격 RED를 확인했다(0054db7523, 저장/API 모듈 없음). 최종 revision의 원격 회귀와 독립 검토는 후속 기록 대상이다.
+- gate 변화: 연결 검증은 not_checked, 제어 허용은 false다. 현재 OMX S 실물 동작·보정·정지 수용은 미해결이며 이 기능으로 열지 않는다.
+
+## 2026-10-24 · 9a0f3ae2b2 · 장치 정보 검증과 실물 경계
+
+- 증거: [검증 기록](../../docs/validation/device-information-2026-10-24/result.md). 원격 회귀 191개, 활성 브라우저 4개, 최종 연결 변경 회귀 15개 통과와 독립 검토를 구분해 기록했다. 모든 공식 로그의 NEW는 0이다.
+- 운영: 사용자 선언 OMX S 한팔 정보를 기존 현장 Fleet DB에 저장하고 재조회했다. 운영 코드 배포·서비스 재시작·토크·이동은 수행하지 않았다. CE 미해결: 실물 식별·보정·정지 수용은 미검증이다.
+- 변경: 장치 정보의 최종 소스·원격 시험·관리자 메타데이터 저장 증거를 검증 기록에 연결했다.
+- gate 변화: 소프트웨어 검증만 추가했다. 연결·보정·실물 정지·동작 수용은 미확인 상태다.
+
 ## 2026-10-24 · uncommitted · D-862 공통 API reference 버전 정렬
 
 - 변경: 공식 api_reserve bump 도구로 Fleet의 현행 API reference 검증 pin을 v1.309에 정렬했다. 기존 TRIP·Task·Mission 읽기/쓰기의 내용과 권한은 유지한다.
@@ -4942,6 +4955,13 @@
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
 
+## 2026-10-27 · uncommitted · feat: 로봇 상세의 지속 프로필과 하중 분석 파이프라인
+
+- 변경: D-860 설명 프로필에 별도 care 테이블을 연결했다. 등록 source 명시 결속, 주의사항·고장 관찰·정비 기록과 원본 특성 JSON, source-token 전용 모니터 출력 수신을 제공한다. 재바인딩과 수신을 쓰기 트랜잭션으로 직렬화하며 원본 capture 시각과 구성 해시로 신선도를 판정한다. 계산기 검증은 ROS-free motion 계약에서 공유한다. API v1.324.
+- 증거: 구현 commit `24c1d225b0`의 원격 관련 129건 PASS·NEW 0, UI commit `bf3470f9fe`의 실제 Chromium 10건 PASS·NEW 0. 기록은 `docs/validation/robot-profile-pipeline-2026-10-27/result.md`. 최종 통합 후보는 착지 gateway가 전체 회귀로 검사한다.
+- gate 변화: 관련 SOURCE/원격 UI GO. 배포·장치 활성화·실물 하중 수용은 미수행이다. 조언은 명령 허가나 실제 정지·복구가 아니다.
+- CE: 해당 없음 — 판단은 코드와 회귀 시험에 직접 남기며 별도 해결 교훈으로 중복하지 않는다.
+
 ## 2026-10-27 · e7093c177a · ARM transfer 결과 판정과 검수용 export
 
 - 변경: 기존 simulation observer의 POST_ACTION 관측에서 Action 결과와 task succeeded/failed/unknown을 분리하고, 원본 근거를 기존 Fleet 이벤트 원장에 보존한다. 검수 export는 metadata-only이며 완료·재시도 권한을 만들지 않는다. POST_ACTION 계보 검사를 기존 완료 경로와 공유한다.
@@ -4955,6 +4975,13 @@
 - 증거: tests-only 26344ecf9b의 원격 16 failed/1 passed → 812b3b224c 156 passed. 독립 검토 TTL 반례 e231ff081a 2 failed → c86b3e51d5의 관련 통합 172 passed/0 skipped, runner exit 0·known NEW 0. 같은 source affected는 역의존·guard 4604 passed/190 skipped와 문서 검사 1 failed, Fleet 7070 passed/391 skipped와 기존 콘솔 계약 불일치 1 failed다. 문서 표기를 고친 a24f265097에서 해당 guard·문서 배치 9 passed/NEW 0. 전체 회귀 통과로 보고하지 않는다. `docs/validation/transfer-execution-review-2026-10-27/result.md` 참고.
 - Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
 - CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
+
+## 2026-10-27 · uncommitted · fix: 등록 변경 시 이전 팔 프로필 연결 격리
+
+- 변경: 등록 당시 source·owner·board·관절 구성 지문을 보존한다. 등록 변경·제거와 legacy 연결은 현재 팔에서 숨기고 재확인을 요구한다. 원본 관리 기록은 보존하고 분석 수신은 duplicate 처리 전에 현재 지문을 확인한다. 자격 누락은 가용성 검사보다 먼저 거절한다.
+- 증거: commit `d57547ed3b`의 owner 변경·source 제거 3건 RED 후 commit `2bb5853fe3`의 관련 저장소·경로·Workcell·실제 브라우저 회귀 PASS. commit `24c5c92c19`의 인증 관련 원격 37건 PASS. FULL 재검증과 main 병합은 진행 중이다.
+- gate 변화: 기존 gate 유지. 설정 연결 검증은 물리 수용·실행 허가·고장 해제·자동 복구를 활성화하지 않는다.
+- CE: 해당 없음 — 원인과 회귀 조건은 코드·시험·검증 기록에 남겼다. 설정 지문은 물리 신원 증명이나 실행 권한이 아니다.
 
 ## 2026-10-27 · 980fa75e8c · 백그라운드 루프 감시와 /readyz (계획 2026-10-27)
 

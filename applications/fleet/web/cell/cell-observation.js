@@ -1,5 +1,6 @@
 import {createScope} from '/common/scope.js';
 import {frameBadge} from '/console/assets/vision-view.js';
+import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
 import {createMotorHealthState, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
 
 const element = (tag, text = '') => {
@@ -17,6 +18,7 @@ const staleCamera = entry => {
 export function createCellObservation({request, root}) {
   const empty = element('ui-empty', '접속하면 작업 셀의 실제 관측을 확인할 수 있습니다.');
   let life = null, pending = false, layout = '', disposed = false;
+  let profiles = null;
   const arms = new Map(), cameras = new Map();
   root.replaceChildren(empty);
   function paintHealth(entry) {
@@ -56,6 +58,7 @@ export function createCellObservation({request, root}) {
         healthDetails.addEventListener('toggle', () => paintHealth(entry));
         paintHealth(entry); staleArm(entry); arms.set(arm.source_id, entry);
         card.append(element('h4', arm.label), healthDetails, element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
+        card.append(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
       }
       for (const camera of cell.cameras) {
         const card = element('article'); card.className = 'cell-observation-card'; card.dataset.cameraSource = camera.source_id;
@@ -130,6 +133,7 @@ export function createCellObservation({request, root}) {
     if (disposed || pending) return;
     if (!life) {
       life = createScope();
+      profiles = createRobotProfiles({call: request, scope: life});
       const poll = setInterval(refresh, 500);
       const expiry = setInterval(() => {
         for (const entry of arms.values()) {
@@ -152,6 +156,8 @@ export function createCellObservation({request, root}) {
       empty.textContent = '등록된 작업 셀 관측이 없습니다.';
       for (const cell of state.workcells) for (const arm of cell.arms) {
         const entry = arms.get(arm.source_id);
+        root.querySelector(`[data-arm-source="${CSS.escape(arm.source_id)}"] [data-robot-profile]`)
+          ?.replaceWith(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
         // motor_health ages already include source/receipt aging; add only this browser request's transit.
         entry.health.accept(arm.motor_health, {requestedAtMs, receivedAtMs: Date.now()});
         paintHealth(entry);

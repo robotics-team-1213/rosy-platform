@@ -30,7 +30,7 @@ class Bus:
         self.motors = {name: SimpleNamespace(id=11 + i) for i, name in enumerate(NAMES)}
         self.values = {name: {'Torque_Enable': 0, 'Temperature_Limit': 70, 'Min_Voltage_Limit': 60,
                               'Max_Voltage_Limit': 140, 'Present_Temperature': 25,
-                              'Present_Input_Voltage': 120} for name in NAMES}
+                              'Present_Input_Voltage': 120, 'Hardware_Error_Status': 0} for name in NAMES}
         self.reads = []
 
     def read(self, register, name, *, normalize=False):
@@ -66,6 +66,18 @@ def test_id12_high_pwm_warns_even_when_tracking_error_is_zero(tmp_path, capsys):
     assert joint['temperature_c'] == 25 and joint['voltage_raw'] == 120 and joint['voltage_v'] == 12
     assert joint['usb_port'] == arm.follower.port and 'high_pwm' in joint['warnings']
     assert '12' in capsys.readouterr().out
+
+
+def test_native_snapshot_preserves_group_and_measured_fault_torque_fields(tmp_path):
+    monitor = monitor_type()(tmp_path / 'health.jsonl')
+    arm = motion()
+    monitor.admit(arm)
+    for value in arm.follower.values.values():
+        value['Torque_Enable'] = 1
+    monitor.sample(arm, dict.fromkeys(NAMES, 2028), dict.fromkeys(NAMES, 0), 10.)
+    snapshot = json.loads(monitor.state_path.read_text())
+    assert all(m['group'] == arm.label for m in snapshot['motors'])
+    assert all(m['hardware_error'] == 0 and m['torque_enabled'] is True for m in snapshot['motors'])
 
 
 @pytest.mark.parametrize('register,value,stops', [('Present_Temperature', 65, False),
