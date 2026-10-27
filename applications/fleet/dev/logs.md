@@ -49,3 +49,9 @@
 - 변경: pending 통합관제 항목을 실제 성공 응답과 통과 browser source로 결속하고 기존 모든 receipt를 보존했다. sample R/A/A1/B 설명을 현재 구성에 맞췄다.
 - 증거: sourceef6dc95958 capture5건은8 API200을 통과 node에서 관찰했고 sourcebbffbf8577의 browser/Node33건은 SKIP0·NEW0이다. source45d1f72ac0 actual backend Chromium1건은 가로채기 없이 실제 Fleet API·원장·지도·한 번 정지와 GET-only readback을 확인했다.
 - gate 변화: source 검증이며 실물·현장 수용은 아니다. 최종 metadata/공식 착지 검사를 진행한다. CE 해당 없음 — 증거 형식과 회귀에 직접 남는다.
+
+## 2026-10-27 · uncommitted · fix: 샘플 프로필 저장소 미설정 표시
+
+- 변경: 샘플에 저장소가 없는 장치 프로필 목록·관측원 조회는 기존 Fleet의 미설정 라우트와 같은 코드 없는 404를 반환한다. 설치 화면의 미설정 안내와 poll 중단을 유지하며, 알 수 없는 요청은 기존 501 오류로 남긴다.
+- 증거: FULL 후보 commit `16ac653bd4`의 설치 browser 실패는 단독 재실행에서도 실패하고 main에서 통과했다. commit `155256761e`의 501 재현과 commit `44aa430260`의 실제 안내 문구·응답 형식 2건 RED 후, commit `018db37b39`의 원격 샘플 서버·실제 Chromium 19건 PASS, runner exit 0. 독립 검토에서 미설정 의미 불일치 해소를 확인했다.
+- gate 변화: 샘플의 저장·진단 성공이나 실물 제어를 추가하지 않는다. 전체 재검증·main 병합은 진행 중이다. CE 해당 없음 — 복구 조건은 코드 주석·회귀 시험·검증 기록에 남겼다.
