@@ -87,12 +87,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
             "operations/fleet/test/test_device_profile_routes.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profiles"
         },
         {
@@ -104,12 +104,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
             "operations/fleet/test/test_device_profile_routes.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profiles/{device_id}"
         },
         {
@@ -121,12 +121,13 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
-            "operations/fleet/test/test_device_profile_routes.py"
+            "operations/fleet/test/test_device_profile_routes.py",
+            "operations/fleet/test/test_device_care_pipeline_browser.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/device-profiles/{device_id}"
         },
         {
@@ -138,12 +139,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
             "operations/fleet/test/test_device_care_routes.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profile-sources"
         },
         {
@@ -155,12 +156,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
             "operations/fleet/test/test_device_care_routes.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profile-sources/{kind}/{source_id}"
         },
         {
@@ -172,12 +173,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
             "operations/fleet/test/test_device_care_routes.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profiles/{device_id}/care"
         },
         {
@@ -189,12 +190,13 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
-            "operations/fleet/test/test_device_care_routes.py"
+            "operations/fleet/test/test_device_care_routes.py",
+            "operations/fleet/test/test_device_care_pipeline_browser.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/device-profiles/{device_id}/care"
         },
         {
@@ -206,12 +208,12 @@
           "expected_statuses": [
             200
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
             "operations/fleet/test/test_device_care_routes.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/device-profiles/{device_id}/events"
         },
         {
@@ -223,12 +225,13 @@
           "expected_statuses": [
             202
           ],
-          "status": "pending",
+          "status": "verified",
           "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
           "contract_tests": [
-            "operations/fleet/test/test_device_care_routes.py"
+            "operations/fleet/test/test_device_care_routes.py",
+            "operations/fleet/test/test_device_care_pipeline_browser.py"
           ],
-          "test_reference_kind": "pending actual HTTP capture",
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/device-profiles/{device_id}/load-reports/{source_id}"
         }
       ],
@@ -249,9 +252,9 @@
           ],
           "scenario_id": "robot_care_profiles.happy",
           "browser_test": "operations/fleet/test/test_device_care_pipeline_browser.py::test_persisted_analysis_origin_and_diagnosis_order_in_cell",
-          "sample_status": "pending",
+          "sample_status": "verified",
           "test_scope": "Actual backend and reopened SQLite with synthetic LoadMonitor input; TestClient-adapted HTTPS, no device or deployed TLS.",
-          "source_revision": ""
+          "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
         },
         {
           "id": "robot_care_profiles.refused",
@@ -268,9 +271,9 @@
           ],
           "scenario_id": "robot_care_profiles.refused",
           "browser_test": "operations/fleet/test/test_device_care_browser.py::test_care_editor_keeps_draft_after_metadata_save_and_source_mapping",
-          "sample_status": "pending",
+          "sample_status": "verified",
           "test_scope": "Browser fixture API verifies role presentation and draft retention; server authorization is proved separately by route capture.",
-          "source_revision": ""
+          "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
         },
         {
           "id": "robot_care_profiles.terminal",
@@ -285,9 +288,9 @@
           ],
           "scenario_id": "robot_care_profiles.terminal",
           "browser_test": "operations/fleet/test/test_device_care_browser.py::test_robot_information_precedes_actions_and_failed_refresh_is_visible",
-          "sample_status": "pending",
+          "sample_status": "verified",
           "test_scope": "Browser fixture responses and time progression; terminal read status only, no fault clearing or execution.",
-          "source_revision": ""
+          "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
         }
       ]
     },

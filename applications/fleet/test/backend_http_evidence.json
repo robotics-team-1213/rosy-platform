@@ -3,6 +3,11 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac",
+      "result": "40 passed, 0 skipped; 9 actual profile/care HTTP routes, real producer/API/reopened SQLite browser flow, fixture role/refresh presentation and six-task installation workflow. Synthetic inputs; no device or deployed TLS evidence.",
+      "pytest_root": "."
+    },
+    {
       "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f",
       "result": "8 passed, 0 skipped; includes actual HTTP console admission with independent operator, real SQLite and synthetic capability port. No device or physical evidence.",
       "pytest_root": "operations/fleet"
@@ -49,6 +54,78 @@
     }
   ],
   "requests": {
+    "GET:/api/fleet/device-profiles": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_profile_routes.py",
+        "test_authorization[-401-401]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/device-profiles/{device_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_profile_routes.py",
+        "test_authorization[operator-200-200]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "PUT:/api/fleet/device-profiles/{device_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_pipeline_browser.py",
+        "test_persisted_analysis_origin_and_diagnosis_order_in_cell[1440]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/device-profile-sources": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_routes.py",
+        "test_care_catalog_and_named_observation_history_readback"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/device-profile-sources/{kind}/{source_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_routes.py",
+        "test_bridge_real_producer_roundtrip_and_role_boundaries"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/device-profiles/{device_id}/care": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_routes.py",
+        "test_care_catalog_and_named_observation_history_readback"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "PUT:/api/fleet/device-profiles/{device_id}/care": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_pipeline_browser.py",
+        "test_persisted_analysis_origin_and_diagnosis_order_in_cell[1440]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "POST:/api/fleet/device-profiles/{device_id}/events": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_routes.py",
+        "test_care_catalog_and_named_observation_history_readback"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "POST:/api/fleet/device-profiles/{device_id}/load-reports/{source_id}": {
+      "status": 202,
+      "test": [
+        "operations/fleet/test/test_device_care_pipeline_browser.py",
+        "test_persisted_analysis_origin_and_diagnosis_order_in_cell[1440]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
     "GET:/api/fleet/control-unit/overview": {
       "status": 200,
       "test": [
