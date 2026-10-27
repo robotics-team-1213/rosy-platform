@@ -100,10 +100,29 @@ def prepare_card(work: Path, *, initial_slot="a") -> dict:
             run(["rsync", "-aHAXx", "--numeric-ids", "--exclude=/work/***", "--exclude=/proc/***",
                  "--exclude=/sys/***", "--exclude=/dev/***", "--exclude=/run/***", "--exclude=/mnt/***",
                  "--exclude=/tmp/***", "--exclude=/var/log/***", "/", str(root) + "/"], timeout=600)
-            for relative in ("proc", "sys", "dev", "run", "tmp", "var/log", COMMON, "boot/firmware",
+            for relative in ("proc", "sys", "dev", "run", "tmp", "var/log", "var/log/journal", COMMON, "boot/firmware",
                              "run/rosy-provision-boot", "var/lib/rosy/releases", *SHARED_BINDINGS):
                 (root / relative).mkdir(parents=True, exist_ok=True)
             (root / "tmp").chmod(0o1777)
+            if any((root / "var/log/journal").iterdir()):
+                raise ValueError("SYSTEM trial journal must start empty before its snapshot")
+            probe = root / "opt/rosy-system/trial-probe.py"
+            probe.parent.mkdir(parents=True)
+            shutil.copyfile(Path(__file__).with_name("os_system_trial.py"), probe)
+            (root / "etc/rosy-system-guest-id").write_text(Path("/var/lib/cloud/data/instance-id").read_text())
+            journal_config = root / "etc/systemd/journald.conf.d/90-rosy-system.conf"
+            journal_config.parent.mkdir(parents=True, exist_ok=True)
+            journal_config.write_text("[Journal]\nStorage=persistent\nSystemMaxUse=16M\n")
+            unit = root / "etc/systemd/system/rosy-system-trial-probe.service"
+            unit.write_text("[Unit]\nDescription=Owned SYSTEM trial boot observations\nDefaultDependencies=no\n"
+                            "Requires=rosy-os-storage.service systemd-journal-flush.service\n"
+                            "After=rosy-os-storage.service systemd-journal-flush.service\nBefore=basic.target\n"
+                            "[Service]\nType=oneshot\nEnvironment=ROSY_OS_GUEST=1\n"
+                            "ExecStart=/usr/bin/python3 -I -B /opt/rosy-system/trial-probe.py\n"
+                            "TimeoutStartSec=60\nSyslogIdentifier=rosy-system-trial-probe\n")
+            wanted = root / "etc/systemd/system/basic.target.wants"
+            wanted.mkdir(parents=True, exist_ok=True)
+            (wanted / unit.name).symlink_to("../" + unit.name)
             # The Ubuntu cloud fixture lacks the fixed accounts created by customize-rootfs.sh.
             run(["groupadd", "--root", root, "--gid", CALIBRATION_GROUP_ID, "rosy-calib"])
             for name, identity in ACCOUNT_IDS.items():

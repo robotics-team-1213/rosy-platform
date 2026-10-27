@@ -97,6 +97,7 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path, so
         facts = guest.run("python3 -c \"import sys,json;sys.path.insert(0,'/opt/rosy/os-bootstrap/native-runtime');from os_media import capture;print(json.dumps(capture()))\"")
         media = json.loads(facts)
         assert media["slot"] == source_slot and media["layout"] == layout
+        source_boot = guest.run("cat /proc/sys/kernel/random/boot_id").strip()
         target_slot = "b" if source_slot == "a" else "a"
         installed = json.loads(guest.run(scenario.format(command="install"), timeout=5400))
         assert installed["installed"] is True
@@ -108,16 +109,18 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path, so
         assert all(media["partitions"][role]["device"] in mounted for role in ("bootstrap", "data"))
         # Fault injection: select an installed but unarmed trial. Independent PID1 deadline must recover.
         target_root = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_" + target_slot)
-        guest.restart_slot(target_root, target_slot, trial=True)
-        assert guest.run("findmnt -n -o SOURCE /").strip() == ("/dev/vdc5" if target_slot == "b" else "/dev/vdc4")
-        assert guest.run("od -An -tx1 /proc/device-tree/chosen/bootloader/tryboot").split() == ["00", "00", "00", "01"]
-        assert guest.run("systemctl is-active rosy-os-trial-deadline.timer").strip() == "active"
-        assert "OnBootSec=180s" in guest.run("systemctl cat rosy-os-trial-deadline.timer")
-        boot = guest.run("cat /proc/sys/kernel/random/boot_id").strip()
-        journal = guest._ssh("stdbuf -oL journalctl --boot --follow "
-                             "--unit=rosy-os-trial-deadline.service --output=json --no-pager", timeout=240)
-        importlib.import_module("os_system_vm").pid1_start(
-            journal.stdout, "rosy-os-trial-deadline.service", boot, 180_000_000)
-        assert guest.process.wait(timeout=90) == 0  # QEMU -no-reboot exits on the guest's reboot request.
-        console = (tmp_path / "guest-console.log").read_text(errors="replace")
-        assert "reboot: Restarting system" in console
+        guest.restart_slot(target_root, target_slot, trial=True, wait=False)
+        assert guest.process.wait(timeout=480) == 0  # Includes the real boot and normal shutdown, without SSH admission.
+        with (tmp_path / "guest-console.log").open("rb") as stream:
+            console = stream.read(1024**2 + 1)
+        assert len(console) <= 1024**2 and b"reboot: Restarting system" in console
+        with (tmp_path / "trial-console.log").open("xb") as stream:
+            stream.write(console)
+        print("ARM_TRIAL_REBOOT " + next(line.decode(errors="replace") for line in console.splitlines()
+                                         if b"reboot: Restarting system" in line))
+        guest.start_observer()
+        evidence = json.loads(guest.run(scenario.format(command="journal"), timeout=120))
+        (tmp_path / "trial-journal.jsonl").write_text(evidence["journal"])
+        print("ARM_TRIAL_JOURNAL_BEGIN\n" + evidence["journal"] + "\nARM_TRIAL_JOURNAL_END")
+        importlib.import_module("os_system_trial").validate(evidence["journal"], target_slot=target_slot,
+                                                           root_uuid=target_root, previous_boot=source_boot)

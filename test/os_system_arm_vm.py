@@ -61,8 +61,9 @@ class ArmGuest(Guest):
         subprocess.run([tool, "-t", "s", str(dtb), "/", "serial-number", "10000000abcd1234"],
                        env=self.env, capture_output=True, check=True, timeout=30)
 
-    def restart_slot(self, root_uuid, slot, *, trial=False):
-        if str(uuid.UUID(root_uuid)) != root_uuid or slot not in ("a", "b") or type(trial) is not bool:
+    def restart_slot(self, root_uuid, slot, *, trial=False, wait=True):
+        if (str(uuid.UUID(root_uuid)) != root_uuid or slot not in ("a", "b")
+                or type(trial) is not bool or type(wait) is not bool):
             raise ValueError("invalid owned SYSTEM slot boot request")
         if self.run("cat /var/lib/cloud/data/instance-id").strip() != self.instance_id:
             raise ValueError("SYSTEM restart instance differs")
@@ -72,15 +73,34 @@ class ArmGuest(Guest):
         except subprocess.TimeoutExpired:
             pass
         self.process.wait(timeout=90)
-        self.stderr.close()
+        self._firmware(slot, trial)
+        self.root_uuid, self.slot = root_uuid, slot
+        self._start_stopped(wait=wait)
+
+    def _firmware(self, slot, trial):
         tool, dtb = self.root / "usr/bin/fdtput", self.directory / "firmware.dtb"
         for name, value in (("partition", "2" if slot == "a" else "3"), ("tryboot", "1" if trial else "0")):
             subprocess.run([str(tool), "-p", "-t", "x", str(dtb), "/chosen/bootloader", name, value],
                            env=self.env, capture_output=True, check=True, timeout=30)
-        self.root_uuid, self.slot = root_uuid, slot
+    def _start_stopped(self, *, wait):
+        if self.process is None or self.process.poll() != 0:
+            raise ValueError("observer requires a normally stopped owned guest")
+        self.stderr.close()
         self.stderr = (self.directory / "qemu-stderr.log").open("ab")
         self.process = subprocess.Popen(self.command(self.ssh_port, self.server.server_port), env=self.env,
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=self.stderr, start_new_session=True)
-        self.wait_boot()
-        self.run("mkdir -p /work")
-        self.run("mount -o nodev,nosuid /dev/vdb /work")
+        if wait:
+            self.wait_boot()
+            if self.run("cat /var/lib/cloud/data/instance-id").strip() != self.instance_id:
+                raise ValueError("SYSTEM restarted guest instance differs")
+            self.run("mkdir -p /work")
+            self.run("mount -o nodev,nosuid /dev/vdb /work")
+
+    def start_observer(self):
+        if self.process is None or self.process.poll() != 0:
+            raise ValueError("observer requires a normally stopped owned guest")
+        self._firmware("a", False)
+        self.slot = None
+        self._start_stopped(wait=True)
+        self.run("test ! -e /run/rosy-system-guest")
+        self.run("cat > /run/rosy-system-guest", data=self.instance_id.encode("ascii"))

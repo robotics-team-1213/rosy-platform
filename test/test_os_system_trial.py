@@ -2,7 +2,6 @@
 import copy
 import importlib
 import json
-from pathlib import Path
 
 import pytest
 
@@ -104,3 +103,49 @@ def test_fixture_probe_refuses_an_unowned_root_before_commands(tmp_path, monkeyp
     monkeypatch.delenv("ROSY_OS_GUEST", raising=False)
     with pytest.raises(ValueError):
         m.capture(fixture_root(tmp_path), run=lambda *a, **k: pytest.fail("unowned probe ran a command"))
+
+
+def journal_reader(tmp_path, monkeypatch, *, root=b"/dev/vda1", fail=False):
+    m = importlib.import_module("os_system_install")
+    calls = []
+    monkeypatch.setattr(m, "WORK", tmp_path)
+    monkeypatch.setattr(m, "admit", lambda instance: calls.append(["admit"]))
+    monkeypatch.setattr(importlib.import_module("os_system_card"), "_guest", lambda: calls.append(["guest"]))
+    def layout():
+        calls.append(["physical-gpt"])
+        return dict(partitions=[dict(role="root_a", number=4), dict(role="root_b", number=5)])
+    monkeypatch.setattr(m, "card_layout", layout)
+    def run(argv, **kwargs):
+        words = list(map(str, argv))
+        calls.append(words)
+        if words[0] == "findmnt": return root
+        if words[0] == "journalctl":
+            if fail: raise ValueError("fixture journal read failed")
+            return b'{"fixture":"journal"}\n'
+        return b""
+    monkeypatch.setattr(m, "run", run)
+    return m, calls
+
+
+@pytest.mark.parametrize("source", ["a", "b"])
+@pytest.mark.parametrize("fail", [False, True])
+def test_journal_reader_mounts_only_target_read_only_and_unmounts_on_failure(tmp_path, monkeypatch, source, fail):
+    m, calls = journal_reader(tmp_path, monkeypatch, fail=fail)
+    if fail:
+        with pytest.raises(ValueError, match="fixture journal read failed"):
+            m.journal("fixture-instance", source)
+    else:
+        assert m.journal("fixture-instance", source) == {"journal": '{"fixture":"journal"}\n'}
+    mount = next(call for call in calls if call[0] == "mount")
+    assert calls[:2] == [["admit"], ["guest"]] and calls.index(["physical-gpt"]) < calls.index(mount)
+    assert mount == ["mount", "-t", "ext4", "-o", "ro,noload,nodev,nosuid,noexec",
+                     "/dev/vdc5" if source == "a" else "/dev/vdc4", str(tmp_path / "observed-trial")]
+    assert calls[-1] == ["umount", str(tmp_path / "observed-trial")]
+
+
+def test_journal_reader_refuses_source_slot_as_observer_before_mounting(tmp_path, monkeypatch):
+    m, calls = journal_reader(tmp_path, monkeypatch, root=b"/dev/vdc4")
+    with pytest.raises(ValueError, match="original cloud observer"):
+        m.journal("fixture-instance", "a")
+    assert not any(call[0] == "mount" for call in calls)
+    assert not (tmp_path / "observed-trial").exists()
