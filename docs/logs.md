@@ -12509,3 +12509,9 @@ osy-d395-s1d\`.
 - 증거: 회귀 시험이 고치기 전 코드에서 같은 오류로 실패(원격 1 failed)하고, 고친 뒤 release 시험 109 passed, known_failures NEW 0.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/collection-time-probe-races-across-xdist-workers-2026-10-28.md`.
+
+## 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 변경: D-889 추가 3 후속에 A를 투기적 준비(`9c6a6c55b1`)로 바꾼 것, C(`6ca3fd3d9e`)·실패 이벤트(`48c2522593`) 구현, 독립 착지 레인 측정(1/48), coverage 시험 영향 지도 파일럿과 다음 단계를 적었다.
+- 증거: 착지 48건의 발자국 측정, ai PC 파일럿(fleet 시험 serial 1,478초 → coverage 2,323초, 엄격 규칙 48%).
+- gate 변화: 없음(문서만). `tools/remote/remote_pytest.py`는 598줄이라 다음 변경 전에 나눠야 한다. `fix/land-turn-deadline-v3`가 C 뒤에 착지하면 그 브랜치가 `remote_pytest.py`·`work_queue.py` 충돌을 푼다.
+- 교훈: 기존 교훈 갱신 없음. 튕김("main 따라잡기")의 정본 기록은 D-889 추가 3이다.
