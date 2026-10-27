@@ -16,8 +16,19 @@ from fleet.server.central_registry import CentralRegistry
 
 def install_registry_routes(app: FastAPI, *, registry, enrollment, pairing, sync_token,
                             require_viewer: Callable, require_operator: Callable,
-                            named_identity: bool) -> None:
+                            named_identity: bool, device_profile_path, require_named_operator: Callable,
+                            observations=None) -> None:
     """Compose existing registry/pairing owners without changing their guards or writes."""
+    if device_profile_path is not None:
+        from fleet.server.device_profiles import DeviceProfileStore
+        from fleet.server.device_profile_routes import install_device_profile_routes
+
+        app.state.device_profiles = DeviceProfileStore(device_profile_path)
+        install_device_profile_routes(app, app.state.device_profiles, require_viewer=require_viewer,
+                                      require_named_operator=require_named_operator)
+        from fleet.server.device_care_routes import install_device_care_routes
+        install_device_care_routes(app, device_profile_path, console=getattr(app.state, 'console', None),
+            observations=observations, require_viewer=require_viewer, require_named_operator=require_named_operator)
     if enrollment is not None:
         from fleet.server.enrollment_routes import install_enrollment_routes
         install_enrollment_routes(app, enrollment, require_viewer=require_viewer,
