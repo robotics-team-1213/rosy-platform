@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · SDK 검증 기록의 공개 지문 종류 명시
 - 2026-10-27 · uncommitted · AI ROS 거절의 관측 범위 보충
 - 2026-10-27 · uncommitted · docs(isaac): SDK 6.2 기본 경로 전환과 제어 증거
 - 2026-10-27 · uncommitted · docs(isaac): 실행 파일의 SHA-256 표기를 명확히 함
 - 2026-10-27 · uncommitted · docs(isaac): SDK 복구와 두 PC 동시 학습 검증
-- 2026-10-27 · uncommitted · docs(learning): D-897 두 호스트 오프라인 시뮬레이션 학습

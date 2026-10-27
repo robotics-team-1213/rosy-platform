@@ -29,7 +29,7 @@ URDF 변환이 성공해도 SDK 6.2의 초기 USD는 Physics variant가 선택�
 
 `importer_compat.reference_model`에서 live reference의 physx variant를 선택하고, 현대 Manipulator 변환에 position target과 명시적 gain을 넣는다. stiffness 40, damping `2√40×0.5+0.3`은 기존 MuJoCo의 actuator 속도 감쇠와 passive damping을 기준으로 삼았다. passive 0.3만 복사하면 actuator 항 약 6.3246을 빠뜨린다. 실물 팔 보정값·엔진 간 물리 동등성은 별도다.
 
-정확한 버전별 importer·variant·drive 회귀와 전체 Isaac 호스트 시험이 통과했다. 소스 `6df916084147ce51bb10b34e8339e302a88fdfe6`, 모델 PC `isaac62-ros-final-304dbb`는 취소 전 약 0.0297rad, 취소 후 0rad, 양쪽 카메라 56프레임, clock/joint 각각 678개, drift 0mm, failures 빈 목록과 GPU 정리를 확인했다. [수치와 전환 기록](../../validation/isaac62-sdk-migration-2026-10-27/result.md)을 따른다.
+정확한 버전별 importer·variant·drive 회귀와 전체 Isaac 호스트 시험이 통과했다. commit `6df916084147ce51bb10b34e8339e302a88fdfe6`, 모델 PC `isaac62-ros-final-304dbb`는 취소 전 약 0.0297rad, 취소 후 0rad, 양쪽 카메라 56프레임, clock/joint 각각 678개, drift 0mm, failures 빈 목록과 GPU 정리를 확인했다. [수치와 전환 기록](../../validation/isaac62-sdk-migration-2026-10-27/result.md)을 따른다.
 
 ## 복구와 다음 적용
 
