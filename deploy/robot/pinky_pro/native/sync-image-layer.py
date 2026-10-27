@@ -59,11 +59,12 @@ UNIT_DIR = "etc/systemd/system"
 UDEV_DIR = "etc/udev/rules.d"
 MODPROBE_DIR = "etc/modprobe.d"
 ALLOWED_PREFIXES = (NATIVE_RUNTIME + "/", UNIT_DIR + "/", UDEV_DIR + "/", MODPROBE_DIR + "/")
-# Never written, whatever the allowlist says (config.txt, kernel and modules,
-# the CORE Python runtime, device configuration, accounts and sudo).
+# OS boot/configuration and account state never belong to application sync.
 FORBIDDEN_PREFIXES = (
-    "boot/", "etc/rosy/", "usr/local/", "lib/modules/", "usr/lib/modules/",
-    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow",
+    "boot/", "etc/rosy/", "opt/rosy/os-bootstrap/", "usr/local/", "lib/modules/", "usr/lib/modules/",
+    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow", "etc/systemd/system/rosy-os-rauc", "etc/systemd/system/rosy-os-motion-guard", "etc/systemd/system/rosy-os-trial-deadline", "etc/systemd/system/rosy-os-update", "etc/systemd/system/sysinit.target.d/", "etc/systemd/system.conf.d/", "etc/systemd/system/apt-daily", "etc/systemd/system/unattended-upgrades",
+    *(f"etc/systemd/system/{unit}.service.d/" for unit in (
+        "rosy-first-boot", "rosy-release-recover", "rosy-os-storage", "rosy-sd-provision", "rosy-os-tailnet", "rosy-core", "rosy-io", "rosy-navigation")),
 )
 BACKUP_ROOT = "var/lib/rosy/image-layer-backup"
 BACKUP_MANIFEST = "backup-manifest.json"
@@ -84,9 +85,8 @@ STATE_CONFIG = BACKUP_ROOT + "/state-directories.conf"
 
 # Native units plus the signed boot catalog share the fresh-image inventory.
 UNITS = (
-    "rosy-release-recover.service",
-    "rosy-sd-provision.service",
-    "rosy-core.service",
+    "rosy-release-recover.service", "rosy-os-storage.service", "rosy-os-tailnet.service",
+    "rosy-sd-provision.service", "rosy-core.service",
     "rosy-host-agent.service",
     "rosy-runtime.target",
     "rosy-io.service",
@@ -121,7 +121,7 @@ UNITS = (
 # Of those, the ones customize-rootfs.sh enables. A unit the sync adds is
 # enabled only if it is here, as a fresh image would have it.
 ENABLED_UNITS = frozenset({
-    "rosy-host-agent.service",
+    "rosy-host-agent.service", "rosy-os-storage.service", "rosy-os-tailnet.service",
     "rosy-release-recover.service",
     "rosy-runtime.target",
     "rosy-boot-status.service",
@@ -158,7 +158,7 @@ RETIRED_UNITS = frozenset({"rosy-boot-display.service"})
 # restarting network/config can drop the SSH session that runs the push.
 # Their new definition takes effect at the next boot.
 NEXT_BOOT_ONLY = frozenset({
-    "rosy-release-recover.service",
+    "rosy-release-recover.service", "rosy-os-storage.service", "rosy-os-tailnet.service",
     "rosy-sd-provision.service",
     "rosy-network.service",
     "rosy-config.service",
@@ -898,7 +898,7 @@ def sync(
     root = Path(root)
     with _release_lock(root):
         release_id, release = resolve_current(root, is_link=is_link, readlink=readlink)
-        verify(release_id)
+        boot.verify_maintenance(root, release_id, verify)
         native = release / RELEASE_NATIVE
         if not native.is_dir():
             raise SyncError(f"IMAGE_LAYER_SOURCE: release {release_id} has no {RELEASE_NATIVE}")
@@ -964,7 +964,7 @@ def sync(
 
 def inverse_boot_layer(root: Path, target: str, *, verify, runner: Runner = _run, dry_run: bool = False) -> dict:
     with _release_lock(root):
-        return boot.inverse(root, target, verify, runner, install=_install, dry_run=dry_run)
+        return boot.inverse_maintenance(root, target, verify, runner, install=_install, dry_run=dry_run)
 
 
 def _verifier(root: Path, public_key: Path) -> Callable[[str], object]:
