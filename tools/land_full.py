@@ -60,6 +60,8 @@ def restore(wt: Path, branch: str) -> str | None:
         candidate, main = record["candidate"], record["main"]
     except (OSError, ValueError, KeyError, TypeError):
         return None
+    if record.get("tier") == "carried":
+        return None  # a main-red carry (land_mainred) is never green: the next run tests it again
     ancestor = lambda a, b: _git(wt, "merge-base", "--is-ancestor", a, b).returncode == 0  # noqa: E731
     if not (ancestor(candidate, "HEAD") and ancestor(main, "main")):
         return None

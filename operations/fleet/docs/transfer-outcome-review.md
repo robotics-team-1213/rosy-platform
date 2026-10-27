@@ -2,6 +2,8 @@
 
 현재 연결은 기존 ARM transfer HTTP의 **simulation 프로필**에서 사용한다. 관측을 받은 뒤 Action 결과와 물체 목표 달성 결과를 나누어 기록한다. 실물 활성화·자동 복구·학습 데이터 수용을 추가한 기능은 아니다.
 
+운영자 승인을 받은 한 번의 복구는 아래의 내부 trusted-host 호출로 준비한다. 현재 공개 화면·HTTP에 복구 시료 제출이나 승인 버튼을 추가하지 않았다.
+
 ## 관측 제출 뒤 남는 기록
 
 기존 독립 observer가 POST_ACTION 관측 두 개를 제출하면 Fleet은 다음을 확인한다.
@@ -61,9 +63,46 @@ export_transfer_outcomes(store, "<mission-id>", Path("<external-scratch>/outcome
 
 이 값은 읽기 전용 조언이다. `execution_authorized=false`, `automatic_retry_allowed=false`이며 실제 재조회·관측·동작을 자동 실행하지 않는다. 늦은 성공 receipt가 현재 HOLD를 해제하지 않는다. 현재 미션당 단일 attempt 원장과 물체·자원 조정 제약을 우회하지 않는다.
 
+## 새 승인으로 한 번의 복구 준비
+
+[D-895](../../../docs/adr/D-895-bounded-physical-transfer-recovery-child.md)는 기존 단일 attempt 표를 보존하고 별도 복구 미션을 연결한다. 첫 시도와 복구 자식 한 개가 같은 root를 가진다. 자식은 다시 복구할 수 없다.
+
+원래 제안자와 그와 다른 이름 있는 운영자가 필요하다. owner FAILED(부모 job HOLD), 또는 Action 성공과 같은 grant의 최신 task failed 판정만 후보가 된다. 결과 불명·취소·owner HOLD·진행 중·성공 완료는 기존 효과를 먼저 대조한다. 정지·generation/epoch 변경을 복구 승인으로 해제하지 않는다.
+
+기존 서버와 독립 observer 인증을 이미 구성한 신뢰 환경에서 사용한다. `proposer`와 `operator`는 인증된 기존 principal이며, 물체 시료와 producer ID는 신뢰된 host composition이 주입한다.
+
+```python
+from fleet.server.physical_transfer_recovery import recovery_context
+
+dispatcher = app.state.arm_transfer_dispatcher
+view = recovery_context(dispatcher.execution, parent_mission_id)
+# 독립 producer가 view["context"] 이후의 새 source/clearance 시료 두 개를 확보한다.
+bindings = {key: view[key] for key in (
+    "expected_request_digest", "expected_receipt_event_id",
+    "expected_assessment_digest", "expected_generation")}
+result = dispatcher.recover(parent_mission_id, proposer=proposer, principal=operator,
+    observations=authenticated_world_samples,
+    authenticated_producer_id=installed_observer.producer_id, **bindings)
+```
+
+`expected_receipt_event_id`는 owner journal event 번호다. assessment digest는 최신 판정 전체 canonical JSON의 SHA-256이며, 그 안의 관측 evidence_digest와 다르다. 조회 문맥은 실행 허가를 만들지 않는다.
+
+복구 시료는 원래 receipt 이후의 새로운 ID·sequence·시각이어야 한다. 같은 원래 action/attempt·설치·owner journal/session·출처를 결속하고 물체 source pose·집게 open/empty·팔 정지·구역 비점유를 확인한다. 원래 제안·현재 claims·fence·capabilities·새 자식 승인·양방향 계보를 하나의 트랜잭션으로 처리한다. 실패하면 기존 자원과 작업을 보존한다.
+
+반환된 `job`은 자식 미션이고 `execution`은 새 PREPARED snapshot이다. 이 호출은 owner submit을 수행하지 않는다. 기존 observer가 **자식의 새 action/attempt에 결속된 새 PRE_DISPATCH 시료**를 제출해야 기존 send 경로로 이어진다. 복구에 쓴 부모 시료 ID·sequence를 자식에게 다시 사용할 수 없다. 자식의 완료는 기존 POST_ACTION·현재 claim 해제 경로를 거친다. 원래 실패 미션은 HOLD로 남아 이력을 보존한다.
+
+정확한 요청을 재전송하면 같은 자식의 현재 상태를 대조한다. 완료·HOLD·준비됨 상태의 자식에 새 attempt를 만들지 않는다. 새 자식의 준비가 실패한 경우도 계보·자원·소비한 예산을 보존한다. 기록 조회는 owner 연결이나 현재 TTL 변경에 의존하지 않는다. 재조회한 과거 grant는 새 실행 허가가 아니며 실제 제출에는 기존 현재 상태·시간·권한 검사가 적용된다.
+
+export v2의 추가 `recovery_lineage`에는 root/parent/child 미션과 `attempt_index`(원래 0, 복구 1)가 들어간다. 원본 receipt·참조한 task 판정·양방향 계보·관측 digest를 확인한다. 학습/평가 분할은 같은 root를 함께 둔다. 운영자 실행 승인 뒤에도 학습 라벨은 별도로 검수하고, `unreviewed_metadata_only`·`behavior_training_eligible=false`를 유지한다.
+
 ## 다음 구현과 검증
 
 - 파지·들기·운반 단계의 관측을 결속한 뒤 헛잡음·낙하를 구분한다.
-- 현 원장은 미션당 단일 attempt다. 반복 attempt의 이관·원본 보존·권한 재검증 없이 자동 재파지를 추가하지 않는다.
+- 현재 내부 복구는 root당 자식 하나다. 공개 ingress·화면·무인 반복 재시도는 별도 계약과 수용이 필요하다.
 - 검수된 결과 판정 자료, 복구 선택 자료, 사람 교정 시연은 용도와 원본 계보를 분리한다.
 - 시험은 `test_physical_transfer_outcome.py`, `test_transfer_outcome_recording.py`, `test_transfer_execution_review.py`와 기존 physical-transfer evidence/observer/closure/outcomes/stops/dispatcher suite를 공식 원격 runner에서 수행한다. 실제 장치·현장 수용은 별도다.
+- 복구는 `test_physical_transfer_recovery.py`와 `test_transfer_recovery_flow.py`가 합성 World 시료·fake owner로 검증한다. 이 결과를 Gazebo 과제·실물 성공이나 모델 품질로 해석하지 않는다.
+
+## 2026-10-27 복구 구현 검증 기록
+
+revision별 RED/GREEN, 독립 검토 수정, 영향 범위·착지 상태와 미수행 범위는 [검증 기록](../../../docs/validation/transfer-recovery-2026-10-27/result.md)에 보존한다. 기존 판정·실행 검토는 `2f2494cf32`에 로컬 착지했고, 후속 복구는 별도 검증한다.

@@ -80,6 +80,15 @@ def test_a_green_full_commit_with_an_older_pre_push_is_skipped(repo):
 LEAK = "pass" + "word = " + json.dumps("unexpected-live-credential-92817")
 
 
+def test_secret_scan_alone_is_what_pre_push_runs_for_a_publish_ref(repo, capsys):
+    local, _ = repo
+    clean = _commit(local, "app.py", "1")
+    assert _run(local, "--secret-scan", clean) == 0
+    _commit(local, "config/site.env", LEAK + "\n")
+    assert _run(local, "--secret-scan", "HEAD") == 9
+    assert "[credential]" in capsys.readouterr().err
+
+
 def test_a_secret_added_and_removed_inside_the_range_still_stops_the_publish(repo, capsys):
     local, _ = repo
     added = _commit(local, "config/site.env", LEAK + "\n")

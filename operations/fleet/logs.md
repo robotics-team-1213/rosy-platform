@@ -4956,6 +4956,27 @@
 - Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
 - CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
 
+## 2026-10-27 · 980fa75e8c · 백그라운드 루프 감시와 /readyz (계획 2026-10-27)
+
+- 변경: `fleet/server/loop_supervision.py` 신설 — lifespan이 여는 모든 루프(보조 시작 알림·제어유닛 짝·테더 포함 23개 이름)의 사망 감시(supervised/attach), 주기 실패 rate-limit 로그(주입 시계), 종료 stopping 플래그. 스폰 블록 전체를 app.py에서 `start_fleet_loops()`로 옮겼다(app.py는 D-766 파일 한도 초과라 늘지 못한다 — 래칫 행 882→829 동락). 작업 디스패치 루프의 무음 `except: pass`를 감시 기록+로그로 교체(가용성 불확실 시 작업은 큐에 두는 의미 보존). `/readyz`(ops 평면, 스키마 비노출)가 루프 상태를 내고 죽은 루프에 503. `/healthz`·tether_watch.py는 그대로.
+- 증거: 원격(모델/AI PC) 시험 — 첫 회차에서 새 시험 3개가 readyz 속성명 오타(`loop_supervisor` vs `loop_supervision`)를 잡아 red, 수정 후 green. 변이 검증 3종: 무음 pass 복원→red, stopping no-op→red, readyz 가드는 오타 결함으로 유기 증명(프로브 이력은 로컬 브랜치 `fix/fleet-loop-supervision`·`fix/fleet-loop-supervision-clean`에 보존). D-766 추출 리팩터링 뒤 관련 4 suite 재시험 green, known_failures NEW 0, size_range 통과(래칫 882→828). 계획: Rosy/docs/superpowers/plans/2026-10-27-fleet-loop-supervision.md(우산 밖 로컬).
+- Gate: 없음. 호스트 시험까지만 유효하며 실제 Ubuntu 사이트에서 `/readyz` 관찰 기록은 별도. 선택 루프 전부를 켠 열거 시험과 vision 서비스 루프는 후속.
+- CE: 해당 없음 — 계획·검토·변이 증거가 커밋과 시험에 남아 있다.
+
+## 2026-10-27 · d02b8d65e7 · 작업 큐 총 대기시간 계측 first_queued_at (계획 2026-10-27-fleet-queue-first-queued-at)
+
+- 변경: `fleet_tasks.first_queued_at` 컬럼(스키마 마이그레이션 additions 경로). `enqueue`가 COALESCE로 task id당 최초 입장 시각을 한 번만 기록하고 `release_traffic_wait`의 `queued_at` 재작성은 이 값을 건드리지 않는다. `FleetTaskScheduler.claim_next`가 주입 wall-clock으로 `total_queue_wait_seconds`를 함께 내놓고(기원 없는 옛 행은 None), 디스패치 시도마다 두 대기시간·우선순위·attempt_seq를 INFO 1줄로 남긴다. 노출은 로그뿐(API·UI 없음, 계획 결정).
+- 증거: 신규 `test_queue_wait_metrics.py` 8건 포함 원격 시험 77 passed, known NEW 0(관련 5 suite). 변이 검증: COALESCE 보존 제거 → 재대기열 보존 시험 red(`042bf8a957`), 되돌림 후 green(`d02b8d65e7`).
+- Gate: 없음. 호스트 시험까지만 유효 — 실제 사이트 큐에서 쌓이는 로그로 지표 노출·집계를 별도 결정한다.
+- CE: 해당 없음 — 계획 문서와 시험·커밋에 근거가 남아 있다.
+
+## 2026-10-27 · db6f4f8c02 · 승인된 단일 이송 복구 후손
+
+- 변경: 기존 부모 attempt·관측을 보존하고 현재 source/clearance·별도 운영자·fence/claims 조건을 만족한 새 자식 미션을 한 번 승인한다. 부모 자원을 원자적으로 이전하고, 자식을 명시 prepare한 뒤 새 관측과 기존 send/closure 경로를 사용한다. 중복 요청·재시작·준비 실패가 예산을 초기화하지 않는다. 검수 export에 root 계보를 보존한다.
+- 증거: 원격 승인 RED 21 failed → 관련 128 passed, 흐름 RED 3 failed → 통합 201 passed. 독립 검토 반례 4 failed와 첫/재조회 snapshot 차이 2 failed를 수정해 7f0a8a152a의 통합 214 passed, 추가 epoch/session 거절을 포함한 73f2fe5a03의 최종 216 passed/0 skipped·known NEW 0을 확인했다. 코드 7f0a8a152a의 독립 계약 재검토에서 추가 중요 발견 없음. `docs/validation/transfer-recovery-2026-10-27/result.md` 참고(저장소 루트 기준). 전체 영향 범위·착지 gate는 별도로 기록한다.
+- Gate: 기존 gate 변화 없음. 공개 복구 ingress·화면·무인 반복·Gazebo 과제·실물·모델 학습 수용은 별도다. 원래 미션은 HOLD로 유지한다.
+- CE: 해당 없음 — D-895·회귀 시험·검증 기록이 판단과 수정 이유를 보존한다.
+
 ## 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀
 
 - 변경: 없음(코드 변경은 `applications/fleet/web` 참조). 이 모듈에서는 콘솔 계약 시험을 확장했다 — `test_work_overview_browser.py`에 범위 readback·배지·기명 운영자 전환·409 사유·보기 전용 잠금 시험 추가, `test/web/work-view.test.mjs`에 순수 판정·문구 시험 추가.
