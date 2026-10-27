@@ -31,8 +31,8 @@ def setup_server(tmp_path, accounts, pool_setup, monkeypatch):
     folder = tmp_path / 'review'; folder.mkdir()
     store = open_store(folder)
     @contextmanager
-    def running():
-        server = make_server(store, 0, accounts=accounts)
+    def running(**server_options):
+        server = make_server(store, 0, accounts=accounts, **server_options)
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         try: yield f'http://127.0.0.1:{server.server_port}'
         finally:
