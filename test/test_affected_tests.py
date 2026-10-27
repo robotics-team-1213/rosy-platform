@@ -286,7 +286,7 @@ def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
 
         @staticmethod
         def test_import_names(path):
-            return {PurePosixPath(path).name: path}
+            return {path: path}  # no import clash: only the serial rule may split them
 
     groups = affected.pack(FakeRepo(), ["a/test", "sim/test", "b/test", "tools/x/test", "c/test"])
     assert sorted(path for group in groups for path in group) == ["a/test", "b/test", "c/test", "sim/test",
