@@ -12480,6 +12480,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 실패한 FULL은 통과로 계산하지 않으며 공식 FULL 재실행과 HTTP·화면 연결이 남았다.
 - CE: 해당 없음 — 새 운영 교훈이 필요한 장애가 아니다.
 
+## 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
+
+- 변경: `tools/harness/affected_ci.py`의 `modules` 항목에서 `gating: False`를 뗐다. 2026-10-25부터 main CI 실행에서 연속 녹색이었다. 이제 판정 밖은 sensing뿐이다.
+- 영향: execution_local처럼 `modules` 러너만 도는 모듈 시험도 CI가 판정한다. 모듈 추가 착지의 "CI 판정 matrix 밖" 경고가 이 경우 더 나오지 않는다(`affected_narrow.py`).
+- 시험: `test_modules_runner_gates`(11-15 마감 시험 대체), `not-ci-gated` 사례를 sensing 시험(`middleware/perception/test`)으로 바꿈.
+- 증거: GitHub main CI `test (modules)` 녹색 10회 연속(2026-10-25~26, 마지막 run 40412528805).
+- gate 변화: 없음. CI 판정 범위만 넓어짐.
+
 ## 2026-10-27 · 477761474d · 공개 simulation 복구 연결 검증과 clipping 교훈
 
 - 변경: 기존 복구 how-to에 authenticated 요청·독립 관측·정확 승인·자식 조회 경로를 기록했다. frozen public 검증 기록은 실제 source revision과 RED/GREEN·skip·실물 미수행을 구분한다. source-only commit은 공개 PR이나 main 착지 증거로 표현하지 않는다.

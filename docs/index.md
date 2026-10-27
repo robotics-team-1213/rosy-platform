@@ -356,5 +356,5 @@
 - 2026-10-28 · b948a23204 · public UI 계약 실패와 수정 검증 기록
 - 2026-10-28 · ce1ef8ebb0 · 제안자의 요청 응답 유실 후 조회 검증
 - 2026-10-27 · 477761474d · 공개 simulation 복구 연결 검증과 clipping 교훈
+- 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
 - 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
-- 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
