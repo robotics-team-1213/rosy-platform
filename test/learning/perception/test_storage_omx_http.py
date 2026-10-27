@@ -122,5 +122,10 @@ def test_missing_handoff_revision_cannot_silently_select_other_data(archive_serv
             expect(page.locator('#storage-completed-consent')).not_to_be_checked()
             page.locator('#storage-completed-consent').check()
             expect(page.locator('#storage-prepare-submit')).to_be_enabled()
+            page.get_by_role('button', name='저장 현황 다시 확인', exact=True).click()
+            expect(page.locator('#storage-prepare-dataset')).to_have_value(row['id'])
+            expect(page.locator('#storage-completed-consent')).not_to_be_checked()
+            page.locator('#storage-completed-consent').check()
+            expect(page.locator('#storage-prepare-submit')).to_be_enabled()
             assert not errors
         finally: browser.close()
