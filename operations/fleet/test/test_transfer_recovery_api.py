@@ -145,6 +145,49 @@ def test_expired_proof_is_not_approved_or_silently_replaced(failed_api):
     assert c.client.get(c.url + "/recovery", headers=headers("operator")).json()["recovery"]["child_mission_id"] is None
 
 
+def test_http_restart_replays_retained_child_with_closed_fence_and_offline_sdk(failed_api):
+    from datetime import datetime, timezone
+    from hashlib import sha256
+    from fastapi.testclient import TestClient
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.mission_service import MissionService
+    from fleet.server.mission_store import MissionStore
+    from fleet.server.proposal_store import ProposalStore
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.physical_transfer_observer import PhysicalTransferObserver
+    from test_physical_transfer_observer_api import TOKEN
+
+    c = failed_api
+    intent = request_recovery(c)
+    evidence = observe_recovery(c, intent)
+    route = c.url + "/recovery/" + intent["request_id"] + "/approve"
+    body = approval(c, intent, evidence)
+    first = c.client.post(route, headers=headers("operator"), json=body)
+    assert first.status_code == 200
+    child = first.json()["job"]["mission_id"]
+    users = {sha256((name + "-secret").encode()).hexdigest(): {"principal_id": name, "role": role}
+             for name, role in (("harbor", "service"), ("operator", "operator"))}
+    restarted = create_app(FleetConsole([], []), task_service=FleetTaskService(c.tasks, robot_ids=()),
+        mission_service=MissionService(MissionStore(c.db)), proposal_store=ProposalStore(c.db), site_users=users,
+        deployment_profile="simulation", omx_action_transport=c.port, arm_transfer_installation=c.installation,
+        arm_transfer_observer=PhysicalTransferObserver(producer_id=c.installation.policy.producer_id,
+            token=TOKEN, valid_until=datetime(2035, 1, 1, tzinfo=timezone.utc)))
+    restarted.state.arm_transfer_job_store._clock_ns = lambda: c.clock[0]
+    def offline(*args, **kwargs):
+        raise OSError("SDK unavailable after restart")
+    c.port.transfer_capability = c.port.owner_identity = offline
+    assert not c.tasks.dispatch_control()["dispatch_enabled"]
+    client = TestClient(restarted)
+    response = client.post(route, headers=headers("operator"), json=body)
+    assert response.status_code == 200, response.text
+    assert response.json()["job"]["mission_id"] == child
+    view = client.get(c.url + "/recovery", headers=headers("operator")).json()["recovery"]
+    assert view["status"] == "CHILD_CREATED" and view["child_mission_id"] == child
+    assert not view["can_request"] and not view["can_approve"]
+    assert len(c.port.submitted) == 1 and {r["owner_id"] for r in claims(c.db)} == {child}
+
+
 def test_changed_task_assessment_expires_a_request_before_any_reset_proof(rig):
     c = rig
     c.parent = approved(c)

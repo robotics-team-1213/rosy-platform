@@ -98,7 +98,15 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
                 if lost_reply:
                     expect(page.locator("#arm-transfer-recovery-state")).to_contain_text("결과 미확인")
                     expect(approve).to_be_disabled()
+                    child = c.client.get(c.url + "/recovery", headers=headers("operator")).json()["recovery"]["child_mission_id"]
+                    child_path = "**" + PATH + "/" + child
+                    page.route(child_path, lambda route: route.fulfill(status=503, json={"detail": "read unavailable"}))
                     page.locator("#arm-transfer-read").click()
+                    expect(page.locator("#arm-transfer-recovery-child")).to_contain_text("복구 횟수는 이미 사용됐습니다")
+                    expect(page.locator("#arm-transfer-recovery-child")).to_contain_text(child)
+                    expect(page.locator("#arm-transfer-recovery-request")).to_be_disabled()
+                    assert len(posts) == 1
+                    page.unroute(child_path)
                 expect(page.locator("#arm-transfer-recovery-state")).to_contain_text("복구 시도")
                 view = c.client.get(c.url + "/recovery", headers=headers("operator")).json()["recovery"]
                 child = view["child_mission_id"]
