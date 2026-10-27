@@ -12398,3 +12398,11 @@ osy-d395-s1d\`.
 - 증거: 문서만.
 - gate 변화: 없음.
 - CE: 해당 없음.
+
+## 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
+
+- 변경: `tools/sim/omx_grasp_probe.py`(교사와 같은 파지 기하로 집기·들기·내려놓기 반복, `/sim/object_tf`로 판정)와 `run_omx_backend_conformance.sh ... grasp`. `tools/sim/omx_mujoco_backend.py`는 손가락 mesh 대신 보정 접촉점의 캡슐로 충돌하고 타원 마찰 원뿔을 쓴다. `tools/land_checks.py`는 pytest가 파일 대신 디렉터리를 찍은 실패 id(`middleware/robot_execution/local::test_x`)를 그 시험을 정의한 추적 파일로 바꾼다.
+- 근거: D-866 §2 Isaac 전환 조건의 파지 반복 시험이 없었다. MuJoCo 볼록 껍질 손가락은 블록을 잡지 못했다. 같은 날 다른 착지 두 건이 "directory argument cannot contain :: selection parts"로 재실행에 실패했다.
+- 증거: `docs/validation/omx-sim-grasp-2026-10-27/`(MuJoCo 5/5, Isaac 0/5와 원인 관찰), 원격 `test/test_omx_grasp_probe.py`, `test/test_land.py`.
+- gate 변화: 없음. Isaac 전환 조건은 여전히 미충족.
+- CE: 새 교훈 기록 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`.
