@@ -22,7 +22,8 @@ def failed_api(rig):
         json=normal_measured(rig, context, phase="PRE_DISPATCH")).status_code == 200
     result = rig.port.result
     rig.port.get = lambda grant: result(grant, "FAILED", 5)
-    assert rig.app.state.arm_transfer_dispatcher.tick()["status"] == "HOLD"
+    rig.app.state.arm_transfer_dispatcher.tick()
+    assert rig.client.get(url, headers=headers("harbor")).json()["job"]["status"] == "HOLD"
     rig.port.result = lambda grant, state, event: result(grant, state, event if grant.mission_id == parent else event + 10)
     rig.port.get = lambda grant: rig.port.result(grant, "SUCCEEDED", 6)
     rig.clock[0] = NOW + 1_000_000_000
@@ -119,7 +120,7 @@ def test_observer_credentials_and_origin_and_closed_bodies_are_enforced(failed_a
 def test_stopped_dispatch_fence_blocks_capture_and_new_requests(failed_api):
     c = failed_api
     intent = request_recovery(c)
-    c.tasks.stop_dispatch(actor_id="operator", reason="test stop")
+    c.tasks.close_dispatch_for_startup()
     view = c.client.get(c.url + "/recovery", headers=headers("harbor")).json()["recovery"]
     assert view["status"] == "UNAVAILABLE" and not view["can_request"]
     assert c.client.get(RECOVERY_CONTEXT, headers=OBSERVER).json() == {"context": None}
