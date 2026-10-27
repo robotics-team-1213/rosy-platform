@@ -155,6 +155,37 @@ def test_park_runs_through_the_runner_and_needs_a_home_chunk():
     assert refused[1]["ok"] is False and "home chunk" in refused[1]["error"]
 
 
+def test_a_session_nobody_talks_to_folds_home_then_ends_so_torque_goes_off():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    robot, status, clock, queue = Robot(), [], [0.0], ["run approach_pinky"]  # then the link is lost
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])  # returns: the session ends by itself
+    park, end = by_command(status, "run park")[0], status[-1]
+    assert park["ok"] and park["state"][:5] == pytest.approx(HOME[:5])
+    assert end["command"] == "stop" and "no command" in end["reason"]
+    assert clock[0] >= m.IDLE_PARK_S + m.IDLE_STOP_S
+
+
+def test_a_caller_that_keeps_asking_for_state_keeps_the_arm_where_it_is():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    status, clock, sent = [], [0.0], []
+
+    def lines():  # a `state` every 100 s for 10 minutes, then stop
+        due = int(clock[0] // 100)
+        if due > len(sent):
+            sent.append(due)
+            return ["stop"] if clock[0] > 600 else ["state"]
+        return ["run approach_pinky"] if not sent and clock[0] < 1 / 30 else []
+
+    r = m.Runner(Robot(), lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lines)
+    assert not by_command(status, "run park") and status[-1]["command"] == "stop" and "reason" not in status[-1]
+
+
 class Bus:
     """Present_PWM / Present_Current / Present_Temperature per motor name, raw like the Dynamixel bus."""
 
