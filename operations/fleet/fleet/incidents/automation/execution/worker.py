@@ -16,7 +16,7 @@ from fleet.server.incident_deliberation import FleetBaseline
 from ..closure import observe_closure
 from ..contract import CaseBudget, CaseScope, micros
 from ..ledger.receipt import model_receipt
-from rosy.decision.deliberation.contracts.billing import call_cost_evidence, _RejectedJudgment
+from rosy.decision.deliberation.contracts.billing import call_cost_evidence, RejectedJudgment
 from rosy.decision.deliberation.calibration_selection import select_calibrated
 from ..recovery_candidates import RecoveryCandidates, observed_recovery
 
@@ -317,9 +317,9 @@ class IncidentCaseWorker:
                 state='UNKNOWN', actual_cost_usd=cost, summary={'reason': 'WORKER_CANCELLED'}))
             await asyncio.shield(self._finish(scope, 'WORKER_CANCELLED'))
             raise
-        except _RejectedJudgment as error:
+        except RejectedJudgment as error:
             try:
-                if (type(error) is not _RejectedJudgment or error.bound != bound
+                if (type(error) is not RejectedJudgment or error.bound != bound
                         or type(error.unsafe) is not bool or micros(error.cost_usd) > micros(profile.max_cost_usd)):
                     raise ValueError('REJECTED_CALL_CONTEXT_CHANGED')
                 error.bound.validate(problem, profile)

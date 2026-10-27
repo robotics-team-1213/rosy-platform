@@ -19,8 +19,8 @@ def usd(value):
     return value
 
 
-class _RejectedJudgment(ValueError):
-    """Internal validated transport cost, never a judgment or independently certified bill."""
+class RejectedJudgment(ValueError):
+    """Validated transport cost of a rejected call, never a judgment or independently certified bill."""
     def __init__(self, bound, cost_usd, unsafe=False):
         if type(bound) is not BoundProfile or type(unsafe) is not bool:
             raise ValueError('INVALID_REJECTED_CALL_CONTEXT')
