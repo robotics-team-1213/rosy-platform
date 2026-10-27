@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
 - 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
 - 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
 - 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
 - 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
-- 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
