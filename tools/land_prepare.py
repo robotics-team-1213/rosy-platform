@@ -139,7 +139,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
                  and all(isinstance(inv, list) and inv
                          and all(isinstance(word, str) and word for word in inv)
                          for inv in anchor["invocations"]))
-    if False:  # Mutation proof: disable retention; restore before landing.
+    if keep_full:
         # A delta cannot replace a FULL origin; retain its exact base and invocations.
         print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
     else:
