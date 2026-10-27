@@ -47,6 +47,9 @@ def test_eight_pages_use_same_frontend_without_unhandled_requests(sample_site, p
             assert page.goto(origin + path).status == 200
             expect(page.locator('body')).to_be_visible()
             page.wait_for_timeout(1800)
+            if path == '/console/install':
+                expect(page.locator('[data-profile="status"]')).to_have_text(
+                    '이 Fleet에는 장치 정보 저장이 설정되지 않았습니다.')
             assert not external, external
             assert not errors, errors
             assert not engine.unhandled, engine.unhandled

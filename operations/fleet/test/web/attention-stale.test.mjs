@@ -31,7 +31,7 @@ register("./common-loader.mjs", import.meta.url);
 const { createRoster } = await import("../../../../applications/fleet/web/roster.js");
 
 const view = { robots: [], formation: null, stateUnavailable: false, receivedAtMs: null };
-const { attentionItems } = createRoster({ view, streamEvidence: () => null });
+const { attentionItems } = createRoster({ scope: {onDispose() {}, interval() {}}, view, streamEvidence: () => null });
 const STUCK = { stuck_id: "stuck-abc" };
 const full = (extra) => ({ robot_id: "a", online: true, state: { safety: { estop: false } },
   line_stuck: STUCK, state_age_s: 0.4, ...extra });
