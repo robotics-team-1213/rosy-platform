@@ -242,11 +242,11 @@ def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configure
     async def hang(*_args, **_kwargs):
         await asyncio.Event().wait()
 
-    class Service:  # run()을 딱 한 번 부르는 선택 서비스
+    class Service:  # run()이 코루틴을 반환하는 선택 서비스 (supervised 대상)
         def run(self):
-            return asyncio.ensure_future(hang())
+            return hang()
 
-    class Tether:  # start()가 태스크를 반환하는 유일한 예외 (D-526)
+    class Tether:  # start()가 태스크를 반환하는 유일한 예외 (attach 대상, D-526)
         def start(self):
             return asyncio.ensure_future(hang())
 
