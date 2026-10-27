@@ -10,6 +10,23 @@ import json
 import sys
 from pathlib import Path
 
+SAFETY_TRIGGER = ": safety path (platform_parts concern: safety)"  # affected_tests.SAFETY_TRIGGER
+
+
+def _affected(land, wt: Path, python: str, base: str, head: str | None, full: bool = False) -> dict:
+    # Strict UTF-8: the JSON must parse whole; PYTHONUTF8 makes the child write UTF-8.
+    result = land.subprocess.run([python, land.HARNESS, "affected", "--base", base, *(["--head", head] if head else []),
+                                  "--json", *(["--full"] if full else [])], cwd=wt,
+                                 capture_output=True, text=True, encoding="utf-8", env=land.ENV)
+    if result.returncode != 0:
+        raise land.Stop(f"affected selector failed (exit {result.returncode}); not guessing tests:\n"
+                        f"{result.stdout}{result.stderr}".rstrip())
+    return json.loads(result.stdout)
+
+
+def _unique(invocations: list[list[str]]) -> list[list[str]]:
+    return [list(inv) for inv in dict.fromkeys(map(tuple, invocations))]
+
 
 def select(land, wt: Path, base: str, python: str, head: str | None = None,
            landed: bool = False, full: bool = False) -> tuple[list[list[str]], str | None]:
@@ -20,25 +37,23 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
     ``landed``: base...head is main's delta, already on main with its own FULL tier when it escalated.
     """
     if (wt / "tools/harness/affected_tests.py").is_file():
-        # Strict UTF-8: the JSON must parse whole; PYTHONUTF8 makes the child write UTF-8.
-        result = land.subprocess.run([python, land.HARNESS, "affected", "--base", base, *(["--head", head] if head else []),
-                                 "--json", *(["--full"] if full else [])], cwd=wt,
-                                capture_output=True, text=True, encoding="utf-8", env=land.ENV)
-        if result.returncode != 0:
-            raise land.Stop(f"affected selector failed (exit {result.returncode}); not guessing tests:\n"
-                       f"{result.stdout}{result.stderr}".rstrip())
         try:
-            sel = json.loads(result.stdout)
+            sel = _affected(land, wt, python, base, head, full)
             if full:
                 if sel["mode"] != "full" or not valid_plan(sel["full_invocations"]) or ["test"] not in sel["full_invocations"]:
                     raise ValueError("forced selector did not supply the canonical whole FULL plan")
                 return sel["full_invocations"] + all_browsers(land, wt, python), "explicit canonical FULL"
-            if landed and sel["escalations"] and all(e.endswith(land.HARNESS_TRIGGER) for e in sel["escalations"]):
-                # A harness edit on main passed its own FULL tier when it landed; a FULL tier for every lander
-                # behind it held the queue an hour each (2026-10-25). Its guards and mapped suites still run.
-                print("[tests] main's delta escalated only for harness files that landed with their own FULL"
-                      " tier: the guards and its mapped suites")
-                return sel["local_invocations"] + land.browser_tier(wt, base, head), None
+            # D-889 3 (combined affected, not FULL per cycle): a delta that escalated landed on main with its own
+            # FULL tier, and this branch passed its own tier before the turn. Repeating FULL for every lander
+            # behind a FULL landing was 35 % of pretest time on 2026-10-26; what is left is both changes' own
+            # suites on the merged tree. Safety paths on either side keep FULL (D-889 6).
+            own = _affected(land, wt, python, head, None) if landed and head and sel["escalations"] else None
+            if own is not None and not any(e.endswith(SAFETY_TRIGGER) for e in sel["escalations"] + own["escalations"]):
+                print("[tests] main's delta escalated but landed with its own FULL tier: its mapped suites and"
+                      " this branch's own selection on the merged tree")
+                mine = own["local_invocations"] if own["mode"] == "full" else own["invocations"]
+                return _unique(sel["local_invocations"] + mine + land.browser_tier(wt, base, head)
+                               + land.browser_tier(wt, head)), None
             if sel["mode"] == "full":
                 # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
                 # guards alone; not via GitHub, which would publish unpushed main commits.

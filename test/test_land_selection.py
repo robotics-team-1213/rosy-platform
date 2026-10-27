@@ -78,6 +78,28 @@ def test_landed_harness_delta_keeps_local_selection(caller, tmp_path):
         ["test"], ["module/test"]]
 
 
+def test_landed_full_delta_runs_both_changes_own_suites_unless_safety(caller, tmp_path):
+    selection = load_selection()
+    land, _, calls = caller
+    delta = dict(mode="full", escalations=["conftest.py: pytest conftest"], local_invocations=[["guard/test"]],
+                 full_invocations=[["test"]])
+    mine = dict(mode="affected", escalations=[], invocations=[["mine/test"], ["guard/test"]])
+    answers = [delta, mine]
+    land.subprocess = SimpleNamespace(run=lambda command, **kw: calls.append(command) or SimpleNamespace(
+        returncode=0, stdout=json.dumps(answers.pop(0)), stderr=""))
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True) == (
+        [["guard/test"], ["mine/test"], ["ROSY_RUN_BROWSER_TESTS=1", "browser/test"]], None)
+    assert calls[-1] == ["python", land.HARNESS, "affected", "--base", "main", "--json"]  # this branch on the merge
+    answers[:] = [delta, dict(mine, escalations=["safe/x.py" + selection.SAFETY_TRIGGER])]
+    assert selection.select(land, tmp_path, "base", "python", head="main", landed=True)[1] is not None
+
+
+def test_safety_trigger_is_the_selectors_text():
+    selection = load_selection()
+    text = (ROOT / "tools/harness/affected_tests.py").read_text(encoding="utf-8")
+    assert f'SAFETY_TRIGGER = "{selection.SAFETY_TRIGGER[2:]}"' in text
+
+
 def test_failed_selector_raises_callers_stop(caller, tmp_path):
     selection = load_selection()
     land, _, _ = caller
