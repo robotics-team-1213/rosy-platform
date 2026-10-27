@@ -8,6 +8,7 @@ the browser chunks mostly run behind main's queue there; the site PC never gets 
 from __future__ import annotations
 
 import collections
+from concurrent.futures import CancelledError
 import contextlib
 import itertools
 import os
@@ -16,6 +17,8 @@ import sys
 import threading
 import time
 from pathlib import Path
+
+from remote_job import CANCELLED
 
 
 BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
@@ -26,6 +29,14 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # xdist job and up to 3 preparing landings share the host, and load-flaky browser ids exist.
 # ROSY_BROWSER_PER_HOST overrides it to measure.
 BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
+
+
+def cancelled(invocations: list[list[str]], codes: list) -> list[int | str]:
+    """codes with every invocation that never ran (None) marked CANCELLED, each one printed."""
+    for inv, code in zip(invocations, codes):
+        if code in (None, CANCELLED):
+            print(f"[remote-pytest] cancelled after a failure: {' '.join(inv)}", flush=True)
+    return [CANCELLED if code is None else code for code in codes]
 
 
 def lane_job(inv: list[str]) -> bool:
@@ -68,9 +79,10 @@ class Work:
 
     A filtered take scans todo, so every take and give_back holds one lock. Once stop is set nothing more is taken."""
 
-    def __init__(self, order, on_done=None):
+    def __init__(self, order, on_done=None, stop=None):
         self.todo, self.codes, self.lost = collections.deque(order), {}, set()
-        self.on_done, self.stop, self._asking = on_done, threading.Event(), threading.Lock()
+        self.on_done, self._asking = on_done, threading.Lock()
+        self.stop = stop if stop is not None else threading.Event()
         self._queue, self.began = threading.Lock(), time.monotonic()  # began: an invocation's queue wait starts here
 
     def done(self, inv: list[str], log: Path) -> None:
@@ -85,6 +97,9 @@ class Work:
                 return
             try:
                 cancel = bool(self.on_done(inv, log))
+            except CancelledError:
+                self.stop.set()
+                raise
             except Exception as error:  # noqa: BLE001 - a broken callback must not hang or pass the run
                 print(f"[remote-pytest] WARNING: on_done raised {error!r}; cancelling the rest", file=sys.stderr, flush=True)
                 cancel = True

@@ -12496,6 +12496,12 @@ osy-d395-s1d\`.
 - Gate: 변화 없음. 같은 훅 내용, --no-verify 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/shared-pre-push-swapped-mid-run-breaks-long-push-2026-10-27.md`.
 
+## 2026-10-27 · uncommitted · D-893 관제 단위와 호스트 배치
+
+- 변경: 사용자에게 위임받아 중앙 고정·장비별 Fleet 고정·역할별 유연 배치를 비교하고 세 번째를 선택했다. 관제 분리는 작업 책임으로, 호스트 분리는 부하·장치 연결·장애 격리로 결정한다. D-850·D-855·D-862와 기존 장치 실행·안전 권한을 유지하고 배치별 수용 조건을 기록했다.
+- 증거: 전용 문서 워크트리에서 D-893을 예약해 본문·ADR Log를 함께 등록한다. 링크·생성 기록·harness lint와 문서 계약 원격 시험의 결과는 검증 후 작업 기록에 남긴다.
+- gate 변화: 배치 원칙만 Accepted. 런타임·API·배포·DEVICE/FIELD 상태는 바꾸지 않는다. CE: 해당 없음 — 새로 해결·검증한 운영 장애나 장치 성질이 없는 설계 결정이다.
+
 ## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
 - 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
@@ -12509,3 +12515,27 @@ osy-d395-s1d\`.
 - 증거: 회귀 시험이 고치기 전 코드에서 같은 오류로 실패(원격 1 failed)하고, 고친 뒤 release 시험 109 passed, known_failures NEW 0.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/collection-time-probe-races-across-xdist-workers-2026-10-28.md`.
+
+## 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
+
+- 변경: `tools/land_batch.py`(새 파일), `tools/land_queue.py`(티켓 `batch` 필드, `wait`의 `done`·`form`), `tools/land.py`(회차 반복을 `rounds`로 떼어 냄, `merge`의 `source`). 앞 착지가 차례를 쥔 동안 대기가 2개 이상이면, 맨 앞 대기자가 녹색으로 준비된 안전 경로 밖 브랜치를 최대 4개까지 한 브랜치로 병합한다. 잠금 밖에서 미리 시험하고 차례에 한 번만 fast-forward한다. 멈추면 각자 단독으로 착지한다. D-889 추가 3.
+- 근거: 10-28 01:53 대기열이 16건이었고 대기 p50은 167분이었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`(144 passed), 착지 도구 관련 시험 13개 파일(415 passed, known_failures NEW 0).
+- gate 변화: 없음.
+- CE: 해당 없음 — 흐름과 근거가 D-889 추가 3과 시험에 남는다.
+
+## 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
+
+- 변경: `tools/land_batch.py`. 앞 항목의 묶음 크기 4를 2로 줄였다. FULL 준비 기록이 있는 브랜치와 묶음 선택이 FULL인 묶음은 단독으로 착지하고, 멈춘 묶음의 `train` 사건에 `bisect`를 남긴다. D-889 추가 3을 추가 4로 옮기고 근거를 고쳤다(robot-72의 추가 3과 번호가 겹쳤다).
+- 근거: 앞 항목의 실패율 0.8~1.2%는 호출당 비율이라 D-889 3항의 p가 아니다. 착지당 p ≈ 0.2다(준비 124번에 NEW 42건, robot-45 측정). k=2에서 모두 통과할 확률은 64%이고, 실패한 쌍은 두 단독 착지로 나뉜다.
+- 증거: 원격 `test/test_land_batch.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
+
+- 변경: `tools/land_batch.py`. 고정 k=2를 k = min(준비된 대기 수, kopt(p))로 바꿨다. p는 사건 기록의 최근 24시간(최소 50개 실행) NEW 비율이고, 묶을 때마다 다시 계산한다. 실패한 묶음은 리더가 앞 절반으로 다시 묶고 뒤 절반을 풀어 준다. 리더 하나가 될 때까지 거듭한다. `train` 사건에 `p`·`runs`·`k`·`bisect`를 남긴다. D-889 추가 4의 가변 k.
+- 근거: 사용자 지시(robot-45 경유). 차례당 기대 착지 수 표는 추가 4에 있다. 10-28 03시 실측은 p = 0.31로 k = 2다.
+- 증거: 원격 `test/test_land_batch.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 표가 D-889 추가 4와 시험에 남는다.

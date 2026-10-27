@@ -3396,7 +3396,6 @@
 - 증거: 운용자 문구 규칙(CONCEPTS.md)에 맞춘 문자열 변경이며 계약·시험을 바꾸지 않는다. 원격 시험으로 회귀를 확인한다.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-10-25 · uncommitted · SD 이미지의 서명된 소스 검증과 버전 고정
 
 - 변경: 기존 서명 이미지 검증기가 source-revision.txt와 build-provenance.json의 서명된 source/release 일치를 검사한다. 선택한 빌드 SHA를 기대값으로 고정하면 다른 이미지는 카드 검색 전에 거부하고, 검증 출처를 카드·배치 증거에 남긴다. 이미 전체 검증한 이미지의 checksum을 재사용해 같은 호출에서 대용량 파일을 두 번 읽지 않는다.
@@ -3742,6 +3741,21 @@
 - 변경: deploy/site/README.md 운영 절에 루프 생존(`/readyz`, 503과 최소 본문)과 프로세스 생존(`/healthz`)의 분리를 적었다. compose healthcheck·mdns 광고 검증·autoupdate 게이트는 `/healthz`를 그대로 쓰며 `/readyz`에 연결하지 않는다고 못박았다.
 - 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
 - gate 변화: 없음. CE: 해당 없음.
+
+## 2026-10-27 · b6f8f0b46f · Arm S 파일 관측 producer 관리 경로
+
+- 변경: arm_status_bridge가 canonical guard motor-health를 Fleet 관절·팔 이름으로 전달한다. live held fault를 terminal로 만들지 않으며 보정 단위와 읽기 전용 경계를 유지한다.
+- 설치: rosy-omx-arm-status.service와 private mode 0600 env 예제에 source/arm/live/calibration/health/HTTPS/CA/팔 전용 토큰을 결속했다. 기존 devices 업데이터의 units·unit_files·smoke와 host service manifest에 포함했다.
+- 증거: RED c29de1139f 원격 5 expected failures/4 passed → b6f8f0b46f bridge/status/updater/manifest/readiness/pipeline/motor-health/Fleet 집중 원격 181 passed, NEW 0. 로그는 저장소 밖 D:/DevTemp/fleet-arm-observation-{red,green}/run-1.txt.
+- gate 변화: 없음. 실제 호스트 설치·재부팅·Fleet 브라우저·장치 수용은 별도이며 활성 수집 세션은 건드리지 않았다.
+- CE: 해당 없음 — 정본 health 재사용과 stale/terminal 경계는 코드·시험·README 및 기존 stale-health 교훈에 남아 중복 교훈을 만들지 않는다.
+
+## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
+
+- 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.
+- 증거: 승인된 RED merge 3bc312f9dd5867ca49105dd8d7c36de908afaa97의 bridge 원격 시험은 실제 작성기 경로 8 NEW / 기존 12 PASS / SKIP 0으로 종료 이벤트 누락을 재현했다. 추가 무측정·fault→end→parent 시각 보존 5개 사례는 검토용 초안이며 아직 실행하지 않았다.
+- gate 변화: 없음. P2 OPEN이며 제품 수정은 독립 검토·커밋 원격 GREEN 전이다. 착지·배포·실물 수용은 하지 않았다.
+- CE: 미해결 — 원인을 실제 작성기 회귀로 확인했으나 수정의 GREEN과 재검토 전이다.
 
 ## 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
 
