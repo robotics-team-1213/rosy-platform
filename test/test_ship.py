@@ -150,7 +150,7 @@ def device(tmp_path: Path):
     runtime = root / "opt/rosy/native-runtime"
     runtime.mkdir(parents=True)
     native = ROOT / "deploy/robot/pinky_pro/native"
-    for name in ("native_release.py", "activate-release.sh"):
+    for name in ("native_release.py", "native_release_links.py", "activate-release.sh"):
         shutil.copy2(native / name, runtime / name)
     shutil.copy2(ROOT / "deploy/hosts/common/release/signing.py", runtime / "signing.py")
     (runtime / "wait-core-ready.py").write_text("print('ready stub')\n")

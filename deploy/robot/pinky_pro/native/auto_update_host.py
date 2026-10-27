@@ -343,15 +343,25 @@ class Http:
 # --- files ------------------------------------------------------------------------
 
 
+def _fsync_parent(path: Path) -> None:
+    if os.name == "posix":
+        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
 def _write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
     with temporary.open("w", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         handle.flush()
+        os.chmod(temporary, 0o644)
         os.fsync(handle.fileno())
-    os.chmod(temporary, 0o644)
     os.replace(temporary, path)
+    _fsync_parent(path)
 
 
 def _read_json(path: Path, limit: int = 1024 * 1024) -> object:
