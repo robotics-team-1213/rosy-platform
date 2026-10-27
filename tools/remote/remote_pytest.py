@@ -466,7 +466,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
         pick = wanted(kind, invocations)
         take = work.take_small if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick)
         while not (lost and shared) and (i := take()) is not None:
-            inv, log = invocations[i], logs[i]
+            inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
             if lost:
                 work.codes[i] = remote_job.LOST_EXIT
@@ -474,7 +474,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
             try:
                 context = [name, deps_sha, cpu, *([test_tools] if test_tools else [])]
                 with guard(gate, kind, inv):
-                    work.codes[i], lost = one(host, name, k, inv, log, context, repo, sha,
+                    work.codes[i], lost = one(host, name, k, inv, log, context, repo, sha, queued,
                                               **({"stop": work.stop} if work.on_done or stop is not None else {}))
             except BaseException:
                 work.give_back(i)  # never dropped: another host (or run()'s fallback) runs it
@@ -494,9 +494,9 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
 
 
 def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str], repo: Path,
-        sha: str, **stop) -> tuple[int | str, str | None]:
+        sha: str, queued: int = 0, **stop) -> tuple[int | str, str | None]:
     """(exit code, lost message or None) of invocation inv as job k of run dir name on host."""
-    words, extra, note = xdist_plan.plan(inv, HEADROOM.get(host))
+    words, extra, note, began = *xdist_plan.plan(inv, HEADROOM.get(host)), time.monotonic()
     history = memory_history.path(repo)
     words, note = memory_history.reserve(history, inv, words, note)
     print(f"[remote-pytest] {note}", flush=True)
@@ -510,7 +510,8 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
     text = log.read_bytes().decode("utf-8", errors="replace")
     print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
     if (peak := memory_history.peak_mib(text)) is not None:
-        memory_history.record(history, inv, host, peak, sha, memory_history.cpu_cores(text))
+        memory_history.record(history, inv, host, peak, sha, memory_history.cpu_cores(text),
+                              memory_history.timing(text, queued, time.monotonic() - began))
     failed = known_failures.failed_ids(text)
     ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if code == 1 and failed else []
     if not known_failures.should_rerun(code, failed, ids):  # D-762 stage 1: once, listed ids only

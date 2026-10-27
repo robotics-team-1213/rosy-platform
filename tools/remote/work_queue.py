@@ -15,6 +15,7 @@ import os
 import re
 import sys
 import threading
+import time
 from pathlib import Path
 
 from remote_job import CANCELLED
@@ -82,7 +83,7 @@ class Work:
         self.todo, self.codes, self.lost = collections.deque(order), {}, set()
         self.on_done, self._asking = on_done, threading.Lock()
         self.stop = stop if stop is not None else threading.Event()
-        self._queue = threading.Lock()
+        self._queue, self.began = threading.Lock(), time.monotonic()  # began: an invocation's queue wait starts here
 
     def done(self, inv: list[str], log: Path) -> None:
         """Ask on_done(inv, log) whether to cancel the rest; set stop when it says so or raises (the safe side).
