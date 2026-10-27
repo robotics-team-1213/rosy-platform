@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 - 2026-10-27 · f44520f70e · exact-line provenance 원격 가드 확인
 - 2026-10-27 · uncommitted · 고정 검증 기록의 전체 파일 검사 provenance 보완
 - 2026-10-27 · 296fdfc384 · 고정 검증 기록의 Git 참조 비밀정보 오탐 검토
-- 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내
-- 2026-10-27 · 50438808a9 · native release의 격리 실행 import와 시험 fixture 복원
+- 2026-10-27 · b6f8f0b46f · Arm S 파일 관측 producer 관리 경로

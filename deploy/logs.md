@@ -3742,6 +3742,14 @@
 - 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
 - gate 변화: 없음. CE: 해당 없음.
 
+## 2026-10-27 · b6f8f0b46f · Arm S 파일 관측 producer 관리 경로
+
+- 변경: arm_status_bridge가 canonical guard motor-health를 Fleet 관절·팔 이름으로 전달한다. live held fault를 terminal로 만들지 않으며 보정 단위와 읽기 전용 경계를 유지한다.
+- 설치: rosy-omx-arm-status.service와 private mode 0600 env 예제에 source/arm/live/calibration/health/HTTPS/CA/팔 전용 토큰을 결속했다. 기존 devices 업데이터의 units·unit_files·smoke와 host service manifest에 포함했다.
+- 증거: RED c29de1139f 원격 5 expected failures/4 passed → b6f8f0b46f bridge/status/updater/manifest/readiness/pipeline/motor-health/Fleet 집중 원격 181 passed, NEW 0. 로그는 저장소 밖 D:/DevTemp/fleet-arm-observation-{red,green}/run-1.txt.
+- gate 변화: 없음. 실제 호스트 설치·재부팅·Fleet 브라우저·장치 수용은 별도이며 활성 수집 세션은 건드리지 않았다.
+- CE: 해당 없음 — 정본 health 재사용과 stale/terminal 경계는 코드·시험·README 및 기존 stale-health 교훈에 남아 중복 교훈을 만들지 않는다.
+
 ## 2026-10-27 · 296fdfc384 · 고정 검증 기록의 Git 참조 비밀정보 오탐 검토
 
 - 변경: 게시 검토 대장에 commit 296fdfc384의 검증 문서 경로와 high-entropy-token 규칙 한 건만 추가했다. 기존 109개 record와 scanner·규칙·임계값을 유지한다.
@@ -3763,3 +3771,10 @@
 - 증거: 공식 원격 runner에서 harness·release boundary 183 PASS/0 SKIP/0 FAIL, runner·외부 명령·known exit0·NEW0이다. source·환경·raw 해시는 검증 기록에 묶었다. 기존 secret 탐지 시험과 append-only 보호를 완화하지 않았다.
 - gate 변화: 집중 가드만 회복했다. 중단된 FULL, 취소된 충전 시험, 게시·배포·장치 수용은 완료로 올리지 않는다.
 - CE: 기존 교훈 갱신 — 게시 대장과 전체 파일 provenance의 독립성, 고정 기록 처리의 잘못된 선례 해석을 보완했다.
+
+## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
+
+- 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.
+- 증거: 승인된 RED merge 3bc312f9dd5867ca49105dd8d7c36de908afaa97의 bridge 원격 시험은 실제 작성기 경로 8 NEW / 기존 12 PASS / SKIP 0으로 종료 이벤트 누락을 재현했다. 추가 무측정·fault→end→parent 시각 보존 5개 사례는 검토용 초안이며 아직 실행하지 않았다.
+- gate 변화: 없음. P2 OPEN이며 제품 수정은 독립 검토·커밋 원격 GREEN 전이다. 착지·배포·실물 수용은 하지 않았다.
+- CE: 미해결 — 원인을 실제 작성기 회귀로 확인했으나 수정의 GREEN과 재검토 전이다.
