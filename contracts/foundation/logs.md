@@ -1057,3 +1057,10 @@
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-27 · 2d932dad6b · D-899 bounded simulation recovery wire contract
+
+- 변경: API v1.327에 복구 요청·독립 관측·별도 운영자 승인 DTO13개와 schemas 정본 재수출을 등록했다. 기존 입장 승인·관측·단계 receipt 타입을 재사용하며 실행 권한·물리 원인·성공을 만들지 않는다. HTTP 설치는 별도 제품 변경이다.
+- 증거: tests-only f5bf86ef2c의 missing-contract RED30을 확인한 뒤 source2d932dad6b의 Foundation 전체·gateway protocol·변경 pin suites 원격1,583 passed/0 skipped, NEW0·known0·flaky0을 확인했다. docs/validation/transfer-recovery-contract-2026-10-27/result.md.
+- Gate: 기존 gate 변화 없음. 공유 변경의 공식 FULL·HTTP·독립 생산자·브라우저·장치·학습 수용을 이 focused GREEN으로 대신하지 않는다.
+- CE: 해당 없음 — 계약·직접 회귀 시험과 D-899에 판단 근거를 남겼다.

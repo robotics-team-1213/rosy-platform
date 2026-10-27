@@ -12390,3 +12390,10 @@ osy-d395-s1d\`.
 - 메타데이터: 실제 다른 세션의 예약 D-896/D-897/D-898을 pending gap으로 선언해 lint의 3 errors를 수정했다. 이후 0 errors/37 warnings. 실행 selector나 실패 baseline을 바꾸지 않았다.
 - Gate: 기존 gate 변화 없음. 호스트 검증과 실제 관측 생산자·장치·학습 수용은 별도다.
 - CE: 해당 없음 — ADR·공통 검증·회귀 시험으로 이유와 근거를 보존했다.
+
+## 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
+
+- 변경: API v1.327에 요청·관측 discovery·관측 제출·별도 승인 경로와 closed DTO를 함께 등록했다. 공식 bump의 live pins를 정렬하고 envelope1.0을 유지했다. 계약 등록과 HTTP 설치를 구분한다.
+- 증거: RED30 → 원격1,583 passed/0 skipped·NEW0, source2d932dad6b. docs/validation/transfer-recovery-contract-2026-10-27/result.md에 선택·revision·한계를 보존했다. FULL·실제 HTTP/browser·관측 생산자 수용은 별도다.
+- gate 변화: 없음. 계약 등록의 focused GREEN이며 공유 변경 FULL과 런타임 설치를 대신하지 않는다.
+- CE: 해당 없음 — 추가 운영 장애 해결이나 문서 밖 판단은 없다.

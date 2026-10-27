@@ -1,4 +1,3 @@
-"""Recovery wire facts never grant motion or turn an attempt into physical success."""
 from copy import deepcopy
 from importlib import import_module
 import json
