@@ -12391,6 +12391,13 @@ osy-d395-s1d\`.
 - Gate: 기존 gate 변화 없음. 호스트 검증과 실제 관측 생산자·장치·학습 수용은 별도다.
 - CE: 해당 없음 — ADR·공통 검증·회귀 시험으로 이유와 근거를 보존했다.
 
+## 2026-10-27 · uncommitted · docs: record accepted OMX size-registration restoration
+
+- 변경: 기존 착지 교훈에 공개 PR #184의 real 단위 등록이 로컬 이력 재구성에서 누락된 원인과 복원 판단을 보완했다. 이미 한도를 넘은 소비자 커밋은 보존하고 유효한 선행 기반에서 다시 구성해야 한다.
+- 증거: 복원 소스 `d8dd53f504`의 원격 affected 55 targets에서 1,893 passed, 22 skipped, NEW 0. 실행 코드와 크기 제한·계수 규칙은 변경하지 않았다. 교훈 frontmatter 검증 통과; 본문 검사 21 flags는 현재 시험 식별자와 과거 경로·이력으로 확인했다.
+- gate 변화: 없음. 이 기록은 배포·실물 수용 또는 소비자 이력 재구성 완료를 뜻하지 않는다.
+- CE: 기존 교훈 갱신 — `solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md`.
+
 ## 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
 
 - 변경: API v1.327에 요청·관측 discovery·관측 제출·별도 승인 경로와 closed DTO를 함께 등록했다. 공식 bump의 live pins를 정렬하고 envelope1.0을 유지했다. 계약 등록과 HTTP 설치를 구분한다.
