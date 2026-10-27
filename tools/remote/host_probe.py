@@ -8,6 +8,7 @@ from __future__ import annotations
 # Free GB hard floor of ~/rosy-test's and /tmp's disk (rosy-ops lab-host-storage rule 1, 30 GiB, is the earlier agent
 # pre-check). No percent rule: 90% of a 434-468 GB lab disk still leaves ~45 GB and would refuse healthy hosts.
 DISK_FLOOR_GB = 20
+FULL_USE = 99
 
 # One line: ROSYPROBE nproc load1 avail_kb total_kb py312 sim busy lock_cores lock_gb site sim_held browser_jobs,
 # then free_kb use% of ~/rosy-test's and /tmp's filesystems (df -Pk; absent from an older probe). Dead-pid
@@ -55,13 +56,15 @@ def parse_probe(out: str) -> dict | None:
              "lock_cores": int(cores), "lock_gb": int(gb), "site": site == "1",
              "sim_held": int(held), "browser_jobs": int(browsers)}
         free, use = [int(x) for x in disk[0::2]], [int(x) for x in disk[1::2]]
-        if free and use:  # the fuller of the two filesystems; an older probe has none (unknown = ok)
-            p["disk_free_gb"], p["disk_use"] = min(free) / 2**20, max(use)
+        if free and use:  # GB on ~/rosy-test's (jobs keep TMPDIR there); use% of the fuller; older probe: none
+            p["disk_free_gb"], p["disk_use"] = free[0] / 2**20, max(use)
         return p
     except (IndexError, ValueError):
         return None
 
 
 def disk_full(p: dict) -> bool:
-    """Below DISK_FLOOR_GB free; False when the probe did not measure the disk."""
-    return "disk_free_gb" in p and p["disk_free_gb"] < DISK_FLOOR_GB
+    """Below DISK_FLOOR_GB free on ~/rosy-test's disk, or either filesystem at FULL_USE%; False when unmeasured.
+
+    2026-10-27: the site PC's /tmp is a 7.4 GB tmpfs at 1%; the floor on it refused that host every time."""
+    return "disk_free_gb" in p and (p["disk_free_gb"] < DISK_FLOOR_GB or p["disk_use"] >= FULL_USE)

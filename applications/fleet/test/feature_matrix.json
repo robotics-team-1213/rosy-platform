@@ -1513,6 +1513,15 @@
             "GET:/api/fleet/tasks/{task_id}",
             "GET:/api/fleet/trips/{trip_id}"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/work-view.js",
+          "expression": "/api/fleet/policy-admission",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/policy-admission",
+            "POST:/api/fleet/policy-admission"
+          ]
         }
       ],
       "requests": [
@@ -1549,6 +1558,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/ai"
+        },
+        {
+          "id": "GET:/api/fleet/policy-admission",
+          "method": "GET",
+          "path": "/api/fleet/policy-admission",
+          "implementation": "operations/fleet/fleet/server/missions/policy_admission_routes.py",
+          "handler": "policy_admission_status",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_policy_admission_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/policy-admission"
         },
         {
           "id": "GET:/api/fleet/robots/{robot_id}/line-stuck/evidence",
@@ -1770,6 +1796,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/map-pin"
+        },
+        {
+          "id": "POST:/api/fleet/policy-admission",
+          "method": "POST",
+          "path": "/api/fleet/policy-admission",
+          "implementation": "operations/fleet/fleet/server/missions/policy_admission_routes.py",
+          "handler": "policy_admission_toggle",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_policy_admission_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/policy-admission"
         },
         {
           "id": "POST:/api/fleet/robots/{robot_id}/power",

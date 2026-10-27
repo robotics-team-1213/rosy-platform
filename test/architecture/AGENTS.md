@@ -14,6 +14,8 @@ Repo-structure tests: where folders, packages, documents and imports are allowed
 
 | File | Description |
 |------|-------------|
+| `test_capability_owners.py` | Every `platform_parts.yaml` root has one `capability:`; `.github/CODEOWNERS` routes each owned root to that capability's logins and names no root without them |
+| `test_wheel_structure.py` | Wheels (`pyproject.toml` without `package.xml`) carry `COLCON_IGNORE`, `AGENTS.md` and their own tests; `KNOWN_WITHOUT_OWN_TESTS` is checked both ways |
 | `test_module_structure.py` | D-168/D-427 package standard: declared roots, owner guides, harness modules and functional tests; package dependencies and import direction; D-766 absolute size limits (600/800/10,000) against `size_ratchet.txt` and `size_units.txt`; the counting rule is `tools/harness/size_limits.py`. Every tracked code file under a colcon or ops root must be measured (`SIZE_UNMEASURED` lists exceptions with reasons); fleet holders equal `fleet/_source_layout.py` `SOURCE_ROOTS`. Static holder mapping preserves installed package identities |
 | `size_ratchet.txt` | D-766 4: files and units already over the limit, `<count> <key>`, frozen at the measured count; rows only go down. `safety <count> <key> <YYYY-MM-DD>` rows are the D-766 8 exception. Data: not a FULL trigger |
 | `size_units.txt` | D-766: size units, `<path>` or `<path> small` (grandfathered below the 1,000-line floor). Data: not a FULL trigger |
