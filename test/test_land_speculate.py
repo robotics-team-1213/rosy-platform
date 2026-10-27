@@ -90,7 +90,24 @@ def test_a_different_landing_breaks_the_prediction_and_the_turn_runs_main_delta(
     git(wt, "merge", "-q", "--no-edit", "main")
     assert spec.held(land, wt, "feat/x", base, git(wt, "rev-parse", "HEAD")) is None
     events = [json.loads(line) for line in (main / ".git" / land.land_events.EVENTS).read_text().splitlines()]
-    assert [e.get("why") for e in events if e["event"] == "speculation" and e["stage"] == "turn"] == ["tree"]
+    broke = [e for e in events if e["event"] == "speculation" and e["stage"] == "turn"]
+    assert [(e["why"], e["missing"], e["outside"]) for e in broke] == [("tree", [peer], 1)]
+
+
+@pytest.mark.parametrize("guard", [True, False])
+def test_a_held_records_only_turn_without_root_tests_still_runs_the_guards(queued, monkeypatch, guard):
+    """The root test/ guards read the records that differ: an empty set would land them untested."""
+    main, wt, base, peer, qdir, ticket, ran, _ = queued
+    if guard:
+        commit(wt, {"test/test_harness_contracts.py": "def test_g():\n    pass\n"}, "a guard file")
+        land.land_full.save(wt, "feat/x", git(wt, "rev-parse", "HEAD"), base, "full", [["pkg/test"]])
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test/test_a.py"]], None))
+    _prepare(wt, qdir, ticket)
+    git(main, "merge", "-q", "--ff-only", peer)
+    commit(main, {"docs/logs.md": "## entry\n"}, "records only")
+    git(wt, "merge", "-q", "--no-edit", "main")
+    assert spec.held(land, wt, "feat/x", base, git(wt, "rev-parse", "HEAD")) == (
+        [["test/test_harness_contracts.py"]] if guard else [])
 
 
 @pytest.mark.parametrize("status, escalation, chained", [

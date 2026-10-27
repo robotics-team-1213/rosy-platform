@@ -79,7 +79,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
             invocations, note = land.select(wt, record["main"], python, head=predicted, landed=True)
             land.run_tests(wt, args, invocations, land.tmp_dir(branch), "spec")
             spec = {"tree": land.out(wt, "rev-parse", "HEAD^{tree}"), "sha": land.out(wt, "rev-parse", "HEAD"),
-                    "base": record["main"], "candidate": record["candidate"], "chain": stacked,
+                    "base": record["main"], "candidate": record["candidate"], "chain": stacked, "main": main_sha,
                     "invocations": invocations, "full": bool(note)}
     except (land.Stop, land.subprocess.CalledProcessError) as error:  # a NEW failure here is the turn's to judge
         print(f"[land] speculative prepare abandoned: {str(error).splitlines()[0] if str(error) else error!r}",
@@ -105,12 +105,19 @@ def held(land, wt: Path, branch: str, full_main: str, candidate: str) -> list[li
         return None
     differ = land.lines(wt, "diff", "--name-only", spec["tree"], f"{candidate}^{{tree}}")
     if not all(map(resolver, differ)):
-        land.land_events.emit("speculation", stage="turn", held=False, why="tree", differ=differ[:20])
+        # which bet failed: a chained ticket not landed (bounced or still behind), or landings outside the chain
+        landed = [c for c in spec["chain"] if land.git(wt, "merge-base", "--is-ancestor", c, "main",
+                                                        check=False).returncode == 0]
+        moved = len(land.lines(wt, "rev-list", "--first-parent", "main", f"^{spec['main']}")) if spec.get("main") else None
+        land.land_events.emit("speculation", stage="turn", held=False, why="tree", differ=differ[:20],
+                              missing=[c for c in spec["chain"] if c not in landed],
+                              outside=None if moved is None else max(0, moved - len(landed)))
         return None
     root = [kept for kept in ([p for p in inv if p.startswith("test/") or p == "test"] for inv in spec["invocations"])
             if kept]
     land.land_events.emit("speculation", stage="turn", held=True, differ=differ[:20])
-    return root or [[g for g in land.land_guards.GUARDS if (wt / g).exists()]]
+    guards = [g for g in land.land_guards.GUARDS if (wt / g).exists()]
+    return root or ([guards] if guards else [])  # never an empty invocation: bare pytest would collect anything
 
 
 def with_spec(land, wt: Path, branch: str, prepared: dict | None) -> dict | None:
