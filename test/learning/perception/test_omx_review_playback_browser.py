@@ -45,6 +45,7 @@ def playback_page(tmp_path):
         'decisions': [{'episode_index': index, 'outcome': 'failure', 'split': 'exclude',
                        'object_result': 'unknown', 'reason': 'original'} for index in (0, 1)],
         'latest_review_id': None, 'fixture_only': True, 'trainable': {'ok': False, 'reason': 'fixture draft'}}
+    state.document = document
     center = SimpleNamespace(bind_workspace=lambda project: None, profiles=SimpleNamespace(list=lambda: []),
                              snapshot=lambda: {'datasets': [], 'runs': [], 'methods': {}})
     store = ReviewStore(tmp_path / 'review', empty_training=True)
@@ -60,7 +61,8 @@ def playback_page(tmp_path):
                   window.fetch=(url,options)=>originalFetch(url,String(url).includes('/review-frame-set/')?
                     {...options,signal:undefined}:options);""")
                 page.route('**/api/learning/omx', lambda route: route.fulfill(json={'sets': [{
-                    'id': prepared_id, 'name': 'Playback fixture', 'trainable': document['trainable'], 'episodes': []}]}))
+                    'id': identifier, 'name': title, 'trainable': document['trainable'], 'episodes': []}
+                    for identifier, title in [(prepared_id, 'Playback fixture'), ('c' * 32, 'Other recording')]]}))
                 page.route('**/center/review/' + prepared_id, lambda route: route.fulfill(
                     status=400 if state.review_fail else 200,
                     json={'error': 'source hash changed'} if state.review_fail else document))
@@ -231,3 +233,96 @@ def test_manual_scrubbing_keeps_one_read_and_only_latest_pending_target(playback
     assert len(state.requests) - baseline == 2
     assert state.max_inflight == 1
     print('MANUAL_SCRUB complete issued=2 max=1 latest=2')
+
+
+def test_unsaved_review_guards_switch_reload_and_departure_without_blocking_refresh(playback_page):
+    page, state, expect = playback_page
+    reason = page.locator('[data-episode="0"] [data-field="reason"]')
+    reason.fill('human judgment not saved')
+    page.locator('#prepared-set').select_option('c' * 32)
+    expect(page.get_by_role('dialog')).to_be_visible()
+    page.get_by_role('button', name='취소', exact=True).click()
+    expect(page.locator('#prepared-set')).to_have_value('a' * 32)
+    expect(reason).to_have_value('human judgment not saved')
+    page.locator('#review-open').click()
+    expect(page.get_by_role('dialog')).to_be_visible()
+    page.get_by_role('button', name='취소', exact=True).click()
+    expect(reason).to_have_value('human judgment not saved')
+    page.locator('#refresh').click()
+    expect(page.locator('#omx-status')).to_contain_text('세트 2개')
+    expect(reason).to_have_value('human judgment not saved')
+    assert page.evaluate("""()=>{const event=new Event('beforeunload',{cancelable:true});
+        window.dispatchEvent(event);return event.defaultPrevented;}""")
+    # Confirmation opened before another edit must not discard that newer judgment.
+    page.locator('#review-open').click()
+    expect(page.get_by_role('dialog')).to_be_visible()
+    reason.fill('newer human judgment')
+    page.get_by_role('button', name='편집 버리고 다시 불러오기', exact=True).click()
+    expect(reason).to_have_value('newer human judgment')
+    page.locator('#review-open').click()
+    page.get_by_role('button', name='편집 버리고 다시 불러오기', exact=True).click()
+    expect(reason).to_have_value('original')
+    assert not page.evaluate("""()=>{const event=new Event('beforeunload',{cancelable:true});
+        window.dispatchEvent(event);return event.defaultPrevented;}""")
+    reason.fill('discard this edit')
+    page.locator('#prepared-set').select_option('c' * 32)
+    page.get_by_role('button', name='편집 버리고 자료 바꾸기', exact=True).click()
+    expect(page.locator('#prepared-set')).to_have_value('c' * 32)
+    expect(page.locator('#review-editor')).to_be_hidden()
+
+
+def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(playback_page):
+    import json
+    page, state, expect = playback_page
+    saved_id, next_id = 'd' * 32, 'e' * 32
+    state.document.update(latest_review_id=saved_id, trainable={'ok': True})
+    page.locator('#review-open').click()
+    page.locator('#export-saved-review').check()
+    page.locator('#export-name').fill('Reviewed conversion')
+    page.locator('#export-profile').set_input_files({'name': 'profile.json',
+        'mimeType': 'application/json', 'buffer': json.dumps({'fixture': True}).encode()})
+    page.locator('#refresh').click()
+    expect(page.locator('#native-export')).to_be_enabled()
+    reason = page.locator('[data-episode="0"] [data-field="reason"]')
+    reason.fill('corrected human judgment')
+    expect(page.locator('#export-saved-review')).to_be_checked()
+    expect(page.locator('#native-export')).to_be_disabled()
+    expect(page.locator('#export-review-status')).to_contain_text('미저장')
+    page.locator('#export-saved-review').uncheck()
+    expect(page.locator('#export-review-status')).to_contain_text('원본 검수')
+    expect(page.locator('#native-export')).to_be_enabled()
+    page.locator('#export-saved-review').check()
+    posts, pending_saves, exports = [], [], []
+
+    def save(route):
+        posts.append(route.request.post_data_json)
+        if len(posts) == 1:
+            route.fulfill(status=503, json={'error': 'reply lost; retry same request'})
+        else:
+            pending_saves.append(route)
+
+    page.route('**/center/review', save)
+    page.locator('#reviewer').fill('Human Reviewer')
+    page.locator('#review-confirmed').check()
+    page.locator('#review-save').click()
+    expect(page.locator('#review-status')).to_contain_text('reply lost')
+    expect(reason).to_have_value('corrected human judgment')
+    expect(page.locator('#native-export')).to_be_disabled()
+    with page.expect_request('**/center/review'):
+        page.locator('#review-save').click()
+    page.locator('#prepared-set').select_option('c' * 32)
+    expect(page.locator('#prepared-set')).to_have_value('a' * 32)
+    assert len(pending_saves) == 1 and posts[0] == posts[1]
+    state.document.update(latest_review_id=next_id, decisions=posts[1]['decisions'])
+    pending_saves.pop().fulfill(json=dict(state.document, saved_review_id=next_id))
+    expect(page.locator('#review-status')).to_contain_text(next_id)
+    expect(page.locator('#export-saved-review')).to_be_checked()
+    expect(page.locator('#export-review-status')).to_contain_text(next_id)
+    expect(page.locator('#native-export')).to_be_enabled()
+    page.route('**/center/export', lambda route: (exports.append(route.request.post_data_json),
+        route.fulfill(json={'accepted': True})))
+    page.locator('#native-export').click()
+    expect(page.locator('#export-status')).to_contain_text('접수')
+    assert len(exports) == 1 and exports[0]['review_id'] == next_id
+    assert not page.evaluate("""()=>{const event=new Event('beforeunload',{cancelable:true});
+        window.dispatchEvent(event);return event.defaultPrevented;}""")
