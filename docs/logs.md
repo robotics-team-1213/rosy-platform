@@ -12496,6 +12496,12 @@ osy-d395-s1d\`.
 - Gate: 변화 없음. 같은 훅 내용, --no-verify 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/shared-pre-push-swapped-mid-run-breaks-long-push-2026-10-27.md`.
 
+## 2026-10-27 · uncommitted · D-893 관제 단위와 호스트 배치
+
+- 변경: 사용자에게 위임받아 중앙 고정·장비별 Fleet 고정·역할별 유연 배치를 비교하고 세 번째를 선택했다. 관제 분리는 작업 책임으로, 호스트 분리는 부하·장치 연결·장애 격리로 결정한다. D-850·D-855·D-862와 기존 장치 실행·안전 권한을 유지하고 배치별 수용 조건을 기록했다.
+- 증거: 전용 문서 워크트리에서 D-893을 예약해 본문·ADR Log를 함께 등록한다. 링크·생성 기록·harness lint와 문서 계약 원격 시험의 결과는 검증 후 작업 기록에 남긴다.
+- gate 변화: 배치 원칙만 Accepted. 런타임·API·배포·DEVICE/FIELD 상태는 바꾸지 않는다. CE: 해당 없음 — 새로 해결·검증한 운영 장애나 장치 성질이 없는 설계 결정이다.
+
 ## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
 - 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
