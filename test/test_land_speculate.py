@@ -15,7 +15,7 @@ import land  # noqa: E402
 import land_speculate as spec  # noqa: E402
 from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture repos)
 
-SELECTED = [["pkg/test"], ["test/test_harness_contracts.py"]]
+SELECTED = [["pkg/test/test_a.py"], ["test/test_harness_contracts.py"]]
 
 
 @pytest.fixture
