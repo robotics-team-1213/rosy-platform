@@ -293,8 +293,12 @@ def test_native_main_delivers_only_registered_channels_without_ros(manifest, tmp
     monkeypatch.setenv('ROSY_OBSERVATION_DIR', str(tmp_path / 'ipc'))
     base = manifest.workcells[0].arms[0]
     for index in range(1, arm_count):
+        token = f'arm-secret-{index}'
+        monkeypatch.setenv(f'EXAMPLE_ARM_{index}', token)
         manifest.workcells[0].arms.append(base.model_copy(update={
             'source_id': f'arm_feedback_{index}', 'arm_id': f'arm_{index}',
+            'board_id': f'example-board-{index}', 'token_env': f'EXAMPLE_ARM_{index}',
+            'credential_sha256': sha256(token.encode()).hexdigest(),
             'joint_topic': f'/omx_commissioning/arm_{index}/joint_states'}))
     path = tmp_path / 'manifest.yaml'
     path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding='utf-8')
@@ -318,7 +322,8 @@ def test_native_main_delivers_only_registered_channels_without_ros(manifest, tmp
     monkeypatch.setattr(bridge, 'ArmSender', Sender)
     monkeypatch.setattr(bridge, 'CameraSender', Sender)
     monkeypatch.setattr(bridge, 'threading', SimpleNamespace(
-        Event=lambda: stop, Thread=threading.Thread, current_thread=threading.current_thread))
+        Event=lambda: stop, Thread=threading.Thread, Lock=threading.Lock,
+        current_thread=threading.current_thread))
     timer = threading.Timer(5, stop.set)
     timer.start()
     try:
