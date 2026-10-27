@@ -12,7 +12,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/config", ["config/omx_f_kinematics.yaml"]),
     ],
-    install_requires=["setuptools", "PyYAML"],
+    install_requires=["setuptools", "PyYAML", "rosy-contracts-motion==0.1.0"],
     zip_safe=True,
     description="ROS-native OMX adapter profile boundary",
     license="Apache-2.0",

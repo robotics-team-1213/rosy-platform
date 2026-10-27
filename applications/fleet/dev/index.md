@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · fix: 프로필 API 소비자와 설치 작업 검증 연결
+- 2026-10-27 · uncommitted · fix: 샘플 프로필 저장소 미설정 표시
 - 2026-10-25 · uncommitted · 관제8 API 관측 receipt와 통과 sample flow 등록
 - 2026-10-25 · uncommitted · 비동기·streaming backend HTTP 증거 수집
 - 2026-10-25 · uncommitted · 합성 정지 예제도 관제별 stale 결과 보존
-- 2026-10-25 · uncommitted · D-862 독립·중첩 통합관제 합성 예제
-- 2026-10-21 · a7ef52c3aa · Development module guards and public fixture identity
