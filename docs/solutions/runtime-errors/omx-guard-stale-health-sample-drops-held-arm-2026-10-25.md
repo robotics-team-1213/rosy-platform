@@ -46,6 +46,16 @@ The arm rests where it stopped, torque off. With a person at the power switch:
 
 A command client that opens the FIFO blocking (`open(fifo, "w")`) waits forever once the runner is gone, and hands its command to the next runner that opens the FIFO. A stale `park` sat waiting this way. Open with `O_WRONLY | O_NONBLOCK` so it fails at once, and kill any waiting writer before starting a runner.
 
+## Same hub, second failure: one corrupt status packet (2026-10-27)
+
+The guard's per-cycle `sync_read("Present_Position")` raised `ConnectionError: Failed to sync read 'Present_Position' ... after 1 tries. [TxRxResult] Incorrect status packet!`, and the session ended with torque off. On 2026-10-27 this happened in three arm S sessions (02:41, 03:19, 13:5x). Twice the arm was parked; the third time it was 2 cm above the floor during a touch survey and dropped onto it. The read had no retry, so one bad packet ended the session.
+
+The fix is `READ_RETRY = 2` on the guard's leader and follower position reads. A read is safe to repeat, and a bus that is really gone still fails closed after the retries. `test_a_corrupt_status_packet_is_read_again_and_a_dead_bus_still_stops` checks it: 1 or 2 bad packets pass, 3 stop with torque off. The writes are not retried; a failed write is still a fault.
+
+The device-side cause is the same unpowered hub. Retries hide single packets, not a dying link. If `Incorrect status packet` or comm -3001 shows up in several sessions a day, fix the hub or the cable instead of raising the retry count.
+
+Recovery from a low pose that worked: start a new session; the guard seeds at the present pose. Then `park`. It folded home slowly from 2 cm above the floor.
+
 ## Next time
 
 - Before a long hold over an object, expect that the guard may drop the arm; keep holds short or hold at transit height.
