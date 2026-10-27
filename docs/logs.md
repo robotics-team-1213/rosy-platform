@@ -12509,3 +12509,10 @@ osy-d395-s1d\`.
 - 증거: 회귀 시험이 고치기 전 코드에서 같은 오류로 실패(원격 1 failed)하고, 고친 뒤 release 시험 109 passed, known_failures NEW 0.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/collection-time-probe-races-across-xdist-workers-2026-10-28.md`.
+
+## 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
+
+- 변경: 고정 OMX 자료의 보관 인계, 검수 유실 방지, 변환 상태와 API v1.328, signed runtime closure의 구현·화면·원격 증거를 `docs/validation/recording-learning-handoff-2026-10-28/`에 보존한다. HTTP 이름의 Chromium 시험도 선택되도록 브라우저 선택기를 고쳤다.
+- 증거: FULL 26 invocation 전부 원격 실행, 종료 코드 모두 0. 첫 실행 합계 36,657 passed / 2,297 skipped / 1 failed이며 기존 quarantine의 G1 timing 한 건은 공식 재시도 통과다. 전체 로그 비교 NEW0 / known0 / flaky1. 두 화면 크기·테마의 실제 Chromium 캡처를 독립 검토했다. 실패·중단·후속 시험은 결과 기록에서 구분한다.
+- gate 변화: 없음. fixture HTTP/Chromium, 소스·계약·패키지 회귀 근거다. 실물 녹화·실제 HF 쓰기·reader 왕복·장치/현장 수용·설치/배포·착지/push는 새로 수행하지 않았다.
+- CE: 해당 없음. 검수 상태, 파일 무결성과 시험 선택·동기화 판단이 코드·회귀 시험·기존 안내에 남아 별도 교훈을 늘리지 않는다.
