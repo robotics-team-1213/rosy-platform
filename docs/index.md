@@ -355,6 +355,6 @@
 
 - 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
 - 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
+- 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
+- 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
 - 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
-- 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
-- 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
