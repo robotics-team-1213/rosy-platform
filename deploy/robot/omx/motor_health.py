@@ -32,7 +32,8 @@ class MotorHealth:
     def publish(self):
         motors, stamps = [], []
         fields = ('joint', 'id', 'command_raw', 'present_raw', 'error_deg', 'pwm', 'pwm_limit',
-                  'pwm_utilization', 'temperature_c', 'temperature_limit_c', 'voltage_v', 'warnings')
+                  'pwm_utilization', 'temperature_c', 'temperature_limit_c', 'voltage_v', 'warnings',
+                  'hardware_error', 'torque_enabled', 'fault')
         for state in self.motions.values():
             last = state['last']
             if last is None:
@@ -124,6 +125,18 @@ class MotorHealth:
             effort = (bus.read("Present_PWM", name, normalize=False) if name == "gripper" else pwm.get(name))
             effort = self.number(effort, name + " PWM")
             temperature, voltage, unsafe = self.health(bus, name, limits)
+            hardware_error = torque_enabled = None
+            if not unsafe:
+                hardware_error = bus.read('Hardware_Error_Status', name, normalize=False)
+                if type(hardware_error) is not int or not 0 <= hardware_error <= 255:
+                    raise ValueError(f'{name}: invalid measured hardware status')
+                if hardware_error:
+                    unsafe.append(f'{name}: hardware error {hardware_error}')
+                else:
+                    torque_raw = bus.read('Torque_Enable', name, normalize=False)
+                    if type(torque_raw) is not int or torque_raw not in (0, 1):
+                        raise ValueError(f'{name}: invalid measured torque state')
+                    torque_enabled = bool(torque_raw)
             violations.extend(unsafe)
             warnings = []
             utilization = abs(effort) / limits["pwm_limit"]
@@ -134,7 +147,9 @@ class MotorHealth:
             motors.append(dict(joint=name, id=bus.motors[name].id, usb_port=port if isinstance(port, str) else None,
                                command_raw=command, present_raw=present, error_deg=abs(present - command) * 360 / 4096,
                                pwm=effort, pwm_utilization=utilization, temperature_c=temperature,
-                               voltage_raw=voltage, voltage_v=voltage / 10, warnings=warnings, **limits))
+                               voltage_raw=voltage, voltage_v=voltage / 10, warnings=warnings,
+                               hardware_error=hardware_error, torque_enabled=torque_enabled,
+                               fault=bool(unsafe), **limits))
             if unsafe:
                 break  # Stop further bus reads as soon as an actual configured hard limit is known.
         if not violations and not 0 <= self.number(motion.clock(), "sample completion time") - now <= 0.5:
