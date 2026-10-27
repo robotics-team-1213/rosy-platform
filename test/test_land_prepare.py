@@ -78,6 +78,7 @@ def full_anchor(repos, monkeypatch):
     commit(main, {"lib/peer.py": "peer = 1\n"}, "peer after FULL")
     git(wt, "merge", "--no-edit", "main")
     monkeypatch.setattr(land.land_mainred, "CARRIED", [])
+    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)
     monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: None)
     monkeypatch.setattr(land, "run_tests", lambda *a, **k: [])
     return main, wt, base, candidate, path, original
@@ -125,7 +126,8 @@ def test_again_retains_original_full_base_when_main_moves_during_preparation(ful
 
 
 @pytest.mark.parametrize("invalid", ["own_commit", "edited_merge", "carried", "no_cache",
-                                   "prior_affected", "missing_invocations"])
+                                   "prior_affected", "missing_invocations", "empty_invocations",
+                                   "malformed_invocations"])
 def test_affected_preparation_does_not_upgrade_unusable_full_evidence(full_anchor, invalid):
     main, wt, base, candidate, path, original = full_anchor
     if invalid == "own_commit":
@@ -136,10 +138,12 @@ def test_affected_preparation_does_not_upgrade_unusable_full_evidence(full_ancho
         commit(wt, {"pkg/a.py": "x = 4\n"}, "merge with an unsupported own edit")
     elif invalid == "carried":
         land.land_mainred.CARRIED.append(("pkg/test/test_a.py::test_a", base, "red", ("pkg/test",)))
-    elif invalid in ("prior_affected", "missing_invocations"):
+    elif invalid in ("prior_affected", "missing_invocations", "empty_invocations", "malformed_invocations"):
+        invocations = {"prior_affected": [["pkg/test"]], "missing_invocations": None,
+                       "empty_invocations": [], "malformed_invocations": ["pkg/test"]}[invalid]
         land.land_full.save(wt, "feat/x", candidate, base,
                             "affected" if invalid == "prior_affected" else "full",
-                            [["pkg/test"]] if invalid == "prior_affected" else None)
+                            invocations)
     args = land.argparse.Namespace(tests="auto", no_cache=invalid == "no_cache")
     land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, None, None, [["pkg/test"]], "")
     record = json.loads(path.read_text())
