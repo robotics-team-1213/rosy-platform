@@ -553,3 +553,10 @@
 - 증거: 실제 요청 응답을 서버 commit 뒤 끊고 제안자가 재조회하는 반례에서 입력 disabled RED1을 확인했다. 수정 뒤 기존 승인 응답 유실·자식 GET503·단일 복구 한도·긴 ID 검사까지 actual Chromium 14 passed/0 skipped, NEW0. docs/validation/transfer-recovery-public-2026-10-28/result.md 참고.
 - gate 변화: 없음. 선행 계약 검증은 계속 진행하며 공개 source 착지는 별도다.
 - CE: 추가 교훈 없음 — 이 조회 수정은 selector와 회귀로 설명된다. 기존 clipping 교훈은 유지한다.
+
+## 2026-10-28 · b948a23204 · 복구 버튼의 공용 계약·초기화·소진 사유
+
+- 변경: 두 공용 버튼을 명시적으로 선언하고 종류·비활성 사유를 제공했다. 두 번째 승인 확인을 정확한 기존 inventory에 등록했다. 최초 render에서 인증 초기화 전 role 콜백을 읽지 않도록 기존 단락 평가 순서를 보존하고, 자식이 있으면 복구 횟수 소진을 표시한다.
+- 증거: native 후보 d01의 UI 계약 2개 wrapper 실패와 수정 중 초기화 회귀의 실제 browser 14 FAIL을 보존했다. af1b7ac467에서 공용 계약 37 PASS/0 skip와 browser 14 PASS/0 skip, 최신 b948a23204에서 소진 사유를 포함한 실제 browser 14 PASS/0 skip·NEW0. 독립 계약 재검토는 초기화 경로를 대조해 남은 회귀 없음. docs/validation/transfer-recovery-public-2026-10-28/ui-contract-correction.md 참고.
+- gate 변화: 없음. 합성 World/owner 검증이며 최종 공식 public 착지는 별도다.
+- CE: 추가 교훈 없음. 기존 clipping 교훈은 유지하며 초기화 판단은 source comment와 실제 회귀가 보존한다.

@@ -12493,3 +12493,10 @@ osy-d395-s1d\`.
 - 증거: focused RED1은 조회 입력 disabled였고 HTTP 재조회 자체는 성공했다. source ce1ef8ebb0의 actual browser 14 passed/0 skipped·NEW0, 원격 PNG SHA-256 대조, 계약 재검토의 권한 확대 없음. docs/validation/transfer-recovery-public-2026-10-28/result.md 참고.
 - gate 변화: 없음. 공식 로컬 병합 결과는 별도 확인한다.
 - CE: 추가 기록 없음 — 기존 clipping 교훈과 새 source 회귀가 판단 근거를 보존한다.
+
+## 2026-10-28 · b948a23204 · public UI 계약 실패와 수정 검증 기록
+
+- 변경: 이전 frozen 결과는 보존하고 native UI 계약 실패, 수정 중 초기화 회귀, 후속 공용 계약·실제 browser 통과를 ui-contract-correction.md에 구분했다. 최종 캡처와 중간 응답 유실 검증의 증거 범위를 분리했다.
+- 증거: source af1b7ac467의 계약 37 PASS/0 skip·browser 14 PASS/0 skip, 최신 b948a23204의 실제 browser 14 PASS/0 skip·NEW0. 원격 PNG 6개의 SHA-256을 대조했다. 초기화 순서의 독립 재검토에서 남은 회귀 없음.
+- gate 변화: 없음. 공유 계약은 main에 반영됐고 public 공식 재착지는 후속 결과를 따른다.
+- CE: 새 교훈 추가 없음. 기존 nested clipping 교훈과 코드·시험이 각 판단을 보존한다.
