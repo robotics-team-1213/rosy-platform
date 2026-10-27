@@ -274,6 +274,37 @@ def test_a_blocked_arm_stops_the_runner():
         r.run(lambda: [queue.pop(0)] if queue else [])
 
 
+class GuardStops(Robot):
+    """The guard raises in the middle of a chunk (following error), or the bus dies and reads fail too."""
+
+    def __init__(self, after, bus_dead=False):
+        super().__init__()
+        self.after, self.bus_dead, self.dead = after, bus_dead, False
+
+    def send_action(self, action):
+        if len(self.sent) >= self.after:
+            self.dead = self.bus_dead
+            raise ValueError("wrist_flex: following error >5 motor degrees; command=3344, current=3287")
+        super().send_action(action)
+
+    def get_observation(self):
+        if self.dead:
+            raise ConnectionError("Failed to sync read 'Present_Position'")
+        return super().get_observation()
+
+
+@pytest.mark.parametrize("bus_dead", [False, True])
+def test_a_session_that_ends_mid_chunk_says_so_in_its_last_status(bus_dead):
+    status, clock, queue = [], [0.0], ["run approach_pinky"]
+    r = m.Runner(GuardStops(after=4, bus_dead=bus_dead), library(), fps=30, status=status.append,
+                 clock=lambda: clock[0], sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    with pytest.raises(ValueError, match="following error"):  # the stop itself is untouched
+        r.run(lambda: [queue.pop(0)] if queue else [])
+    last = status[-1]
+    assert last["command"] == "run approach_pinky" and last["ok"] is False
+    assert last["fault"].startswith("session ended: ValueError: wrist_flex: following error")
+
+
 def test_the_library_contract_is_enforced(tmp_path):
     import json
     bad = {**library(), "fps": 2}  # 2 units per frame is within the guard speed at 2 fps

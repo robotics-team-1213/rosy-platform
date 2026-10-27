@@ -331,7 +331,14 @@ class Runner:
             # one command per tick: a burst of jogs must not move the target by more than one jog at once
             if self.pending and not self.command(self.pending.pop(0)):
                 return
-            self.tick()
+            try:
+                self.tick()
+            except Exception as error:
+                # a guard stop or a bus error ends the session; without this row the caller waited 300 s for a
+                # status that never came (2026-10-25..27). No bus read here: after a bus error it would raise again
+                self.status({"command": f"run {self.chunk}" if self.chunk else "tick", "ok": False,
+                             "fault": f"session ended: {type(error).__name__}: {error}"[:300], "t": round(time.time(), 3)})
+                raise
             if self.live and self.ticks % max(1, self.fps // 2) == 0:
                 self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in self.present()],
                            "target": [round(v, 2) for v in self.target], "chunk": self.chunk,
