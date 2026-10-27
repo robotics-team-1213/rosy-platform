@@ -21,6 +21,10 @@ def import_model(api, execute, urdf: Path, output_dir: Path, robot_type: str) ->
         if robot_type == "Wheeled":
             options.update(joint_target_type={".*wheel_joint": "velocity"},
                            override_joint_stiffness={".*wheel_joint": 0.0})
+        else:
+            # The modern converter leaves absent URDF gains at zero; match the shared MuJoCo position servo.
+            options.update(joint_target_type='position', override_joint_stiffness=40.0,
+                           override_joint_damping=.3)
         usd_path = api.URDFImporter(api.URDFImporterConfig(**options)).import_urdf()
     else:
         if not callable(execute):
