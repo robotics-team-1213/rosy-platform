@@ -53,3 +53,5 @@ binding 정확 버전 허용, 명시적 Kit EULA, 선택 SDK의 ROS library 해�
 학습 정책·시연 데이터·물체 위치/크기/높이 일반화·카메라 좌표 정합·RGB 내용의 시각 품질·실물 이동·현장 수용은 이번 검사에 포함하지 않았다. 두 PC의 동시 PhysX PPO 수행도 이번 기록의 주장이 아니다. 이전 동시 학습 검증은 Newton 기준이다. 드라이버 변경·재부팅·제품 AI 등록소 신설·원격 push는 수행하지 않았다.
 
 CE: 새 교훈 기록 — import 성공과 관절 제어 수용을 분리해야 했던 converter 변경은 [해결 기록](../../solutions/runtime-errors/isaac62-imported-articulation-with-zero-position-drive-2026-10-27.md)에 남긴다.
+
+보고서와 정제 증거는 [Confluence SDK 전환 기록](https://winna1492.atlassian.net/wiki/spaces/SP/pages/10420233)에 게시했다. 본문을 재조회하고 첨부 5개를 다운로드해 SHA-256을 대조했다. 실제 브라우저의 시각 배치는 확인하지 않았다. 기존 초기/복구 페이지에도 후속 링크를 추가하고 이력을 보존했다.
