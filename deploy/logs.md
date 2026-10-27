@@ -3741,3 +3741,9 @@
 - 변경: deploy/site/README.md 운영 절에 루프 생존(`/readyz`, 503과 최소 본문)과 프로세스 생존(`/healthz`)의 분리를 적었다. compose healthcheck·mdns 광고 검증·autoupdate 게이트는 `/healthz`를 그대로 쓰며 `/readyz`에 연결하지 않는다고 못박았다.
 - 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
 - gate 변화: 없음. CE: 해당 없음.
+
+## 2026-10-28 · 0f76cb9a4e · Learning 인계 런타임의 필수 파일 closure
+
+- 변경: storage_omx.py와 review_app_web/omx-export.js를 signed model-code의 필수 파일에 추가했다. 실제 설치·서명·배포·서비스 재시작은 하지 않았다.
+- 증거: 6b22a71b8f에서 각 파일 누락 묶음이 거부되지 않는 2개 실패를 재현했다. 0f76cb9a4e의 전체 model-code/review release·OMX 저장 회귀 255 passed, skip0. 최종 영향 선택은 별도 로그로 확인한다.
+- gate 변화: 없음. 파일 목록 수용은 실행 호스트나 장치의 실제 설치 수용이 아니다. CE: 해당 없음 — 필수 파일과 누락 부정 회귀가 예방 근거다.

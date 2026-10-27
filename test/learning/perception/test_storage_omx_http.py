@@ -84,7 +84,7 @@ def test_conversion_card_to_exact_confirmed_archive_in_chromium(archive_server, 
             expect(page.locator('#storage-prepare-submit')).to_be_enabled()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             if os.environ.get('ROSY_SCREENSHOT_DIR'):
-                capture = Path(os.environ['ROSY_SCREENSHOT_DIR'])
+                capture = Path(os.environ['ROSY_SCREENSHOT_DIR']).expanduser()
                 capture.mkdir(parents=True, exist_ok=True)
                 page.locator('#storage-preparation').scroll_into_view_if_needed()
                 page.screenshot(path=str(capture / f'omx-archive-{width}-{theme}.png'))

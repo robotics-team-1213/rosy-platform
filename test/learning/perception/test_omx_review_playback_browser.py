@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires ex
 
 def capture(page, name):
     if root := os.environ.get('ROSY_SCREENSHOT_DIR'):
-        target = Path(root) / name
+        target = Path(root).expanduser() / name
         target.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(target))
         print(f'screenshot: {target}')
