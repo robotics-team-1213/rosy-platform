@@ -70,7 +70,7 @@ test("card line: lap for an open trip, the lease end reason after it stopped, no
 
 test("a stopped trip is a warn row (the card opens); a new open trip clears it", () => {
   const view = { robots: [], stateUnavailable: false, receivedAtMs: null, trafficTrips: [], endedTrips: [LOST] };
-  const { attentionItems } = createRoster({ view, streamEvidence: () => null });
+  const { attentionItems } = createRoster({ scope: {onDispose() {}, interval() {}}, view, streamEvidence: () => null });
   assert.deepEqual(attentionItems(robot()).map((item) => `${item.severity}${item.text}`),
     ["warn: 운행 멈춤 · 로봇 화면·Pilot에서 넘겨받음(kim-tablet)"]);
   view.trafficTrips = [{ robot_id: "a", trip_id: "t2" }];
@@ -84,7 +84,7 @@ test("D-763 8: the card line shows Fleet's wait; past its bound a warn row, no �
   assert.equal(cardTripLine({ traffic, trafficTrips: [wait("signal", true)] }, "a"), "대기 · 신호");
   assert.equal(cardTripLine({ traffic, trafficTrips: [wait("signal", false, false)] }, "a"), "반복 운행 3바퀴째");
   const view = { robots: [], stateUnavailable: false, receivedAtMs: null, trafficTrips: [wait("authority", true)], endedTrips: [] };
-  const { attentionItems } = createRoster({ view, streamEvidence: () => null });
+  const { attentionItems } = createRoster({ scope: {onDispose() {}, interval() {}}, view, streamEvidence: () => null });
   assert.deepEqual(attentionItems(robot()), []);  // a wait within its bound is no exception
   view.trafficTrips = [wait("crosswalk_wait", false)];
   assert.deepEqual(attentionItems(robot()).map((item) => `${item.severity}${item.text}`),

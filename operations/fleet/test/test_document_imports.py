@@ -19,6 +19,7 @@ _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 _ASSET = "/console/assets/"
 
 SHARED = {
+    "robot-profile-view.js",  # Read-only profiles shared by Console, Cell and Installation.
     "app-runtime.js",
     "address-drift.js",
     "authorization.js",
@@ -88,6 +89,7 @@ OWN = {
         "state-age.js",
     },
     "install.js": {
+        "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.
         "enrollment.js",
         "camera-pairing.js",
         "camera-peer.js",

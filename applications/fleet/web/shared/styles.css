@@ -341,7 +341,7 @@ main {
 .robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .convoy-form-wrap > summary { display: list-item; }
 /* 버튼 글자는 낱자로 끊지 않는다. 좁으면 버튼째 다음 줄로 내린다. */
-.robot-actions ui-button { flex: 1 1 0; white-space: nowrap; word-break: keep-all; }
+.robot-actions ui-button { flex: 1 1 8rem; white-space: nowrap; word-break: keep-all; }
 
 /* 대형 행동은 넓은 화면에서 접고, 좁은 칸에서는 두 열의 같은 폭으로 읽는다. */
 .formation-actions ui-button { white-space: normal; }

@@ -254,6 +254,37 @@ def test_dispatch_attempt_is_stable_and_restart_never_requeues_ambiguous_send(tm
     assert restarted.claim_next(worker_id="worker-b", available_robot_ids={"rosy_01"}) is None
 
 
+def test_restart_reclaims_held_leases_with_an_audit_row_and_leaves_idle_queues_quiet(tmp_path):
+    path = tmp_path / "fleet.sqlite3"
+    store = FleetTaskStore(path)
+    _rearm(store)
+    for task_id, robot_id in (("held", "rosy_01"), ("traffic", "rosy_02"), ("plain", "rosy_01")):
+        store.create_task(
+            task_id=task_id, robot_id=robot_id, task_type="navigate",
+            source="operator", actor_id="site-console", request_key=task_id,
+            request={"goal": {"x": 1, "y": 2, "yaw": 0}}, evidence=None,
+        )
+        store.enqueue(task_id, priority_class=0)
+    store.claim_next(worker_id="worker-a", available_robot_ids={"rosy_01"})  # holds "held"
+    store.claim_next(worker_id="worker-b", available_robot_ids={"rosy_02"})  # holds "traffic"
+    store.mark_dispatching("traffic", worker_id="worker-b")
+    store.wait_for_traffic(
+        "traffic", worker_id="worker-b", reason="ROUTE_CONFLICT", blocked_by="rosy_01",
+        waiting_on=["rosy_01"], dispatch_attempted=True, cancel_confirmed=True,
+    )
+
+    restarted = FleetTaskStore(path)
+    restarted.recover_interrupted_work()
+
+    for task_id in ("held", "traffic"):
+        reclaimed = [row for row in restarted.history(task_id)
+                     if row["reason"] == "LEASE_RECLAIMED"]
+        assert reclaimed, f"{task_id}의 회수가 원장에 남아야 한다"
+        assert reclaimed[-1]["status"] == "QUEUED"
+        assert restarted.get_task(task_id)["dispatch_phase"] == "READY"
+    assert all(row["reason"] != "LEASE_RECLAIMED" for row in restarted.history("plain"))
+
+
 def test_expired_pre_dispatch_lease_can_be_claimed_safely_again(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     _rearm(store)

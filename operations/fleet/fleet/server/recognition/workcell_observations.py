@@ -3,6 +3,7 @@ from collections import deque
 from copy import deepcopy
 from hashlib import sha256
 import hmac
+import json
 import math
 import threading
 import time
@@ -17,6 +18,11 @@ class WorkcellObservations:
         self._joints = {arm.source_id: frozenset(arm.joint_names)
                         for cell in manifest.workcells for arm in cell.arms}
         self._arm_ids = {arm.source_id: arm.arm_id for cell in manifest.workcells for arm in cell.arms}
+        self._bindings = {
+            arm.source_id: {'owner_id': arm.arm_id, 'sha256': sha256(json.dumps({
+                key: getattr(arm, key) for key in ('source_id', 'arm_id', 'board_id', 'joint_topic', 'joint_names')
+            }, sort_keys=True).encode()).hexdigest()}
+            for cell in manifest.workcells for arm in cell.arms}
         if (set(tokens) != self._joints.keys()
                 or any(type(token) is not str or not token for token in tokens.values())
                 or len(set(tokens.values())) != len(tokens)):
@@ -35,7 +41,8 @@ class WorkcellObservations:
         self._workcells = [{
             "workcell_id": cell.workcell_id, "label": cell.label,
             "arms": [{"source_id": arm.source_id, "arm_id": arm.arm_id, "label": arm.label,
-                      "units": "encoder_rad"} for arm in cell.arms],
+                      "units": "encoder_rad", "binding_sha256": self._bindings[arm.source_id]['sha256']}
+                     for arm in cell.arms],
             "cameras": [{"source_id": camera.source_id, "label": camera.label,
                          "role": camera.role, "arm_id": camera.arm_id} for camera in cell.cameras],
         } for cell in manifest.workcells]
@@ -43,6 +50,10 @@ class WorkcellObservations:
     def credential_values(self) -> tuple[str, ...]:
         """Server-side startup isolation checks only; never include these in read responses."""
         return tuple(self._tokens.values())
+
+    def arm_binding(self, source_id: str) -> dict:
+        """Declared source configuration, excluding labels and credentials; no hardware attestation."""
+        return dict(self._bindings[source_id])
 
     def camera_source_ids(self) -> tuple[str, ...]:
         return tuple(camera["source_id"] for cell in self._workcells for camera in cell["cameras"])
