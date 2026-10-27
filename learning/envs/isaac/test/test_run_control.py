@@ -136,7 +136,8 @@ def test_listing_keeps_corrupt_run_placeholder_and_healthy_run(setup):
     assert any(item['run_id'] == 'f' * 32 and item['status'] == 'UNKNOWN' for item in rows)
 
 
-def test_binding_accepts_root_owned_interpreter_and_excludes_managed_data(tmp_path, monkeypatch):
+@pytest.mark.parametrize('sdk_version', ['5.1.0.0', '6.0.0.0', '6.2.0.0'])
+def test_binding_accepts_root_owned_interpreter_and_excludes_managed_data(tmp_path, monkeypatch, sdk_version):
     module()
     import hashlib
     import json
@@ -158,12 +159,16 @@ def test_binding_accepts_root_owned_interpreter_and_excludes_managed_data(tmp_pa
     import os
     binding = {'uid': os.getuid(), 'source_root': str(source), 'source_sha': SHA,
                'sdk_python': str(python), 'sdk_python_sha256': hashlib.sha256(python.read_bytes()).hexdigest(),
-               'sdk_version': '5.1.0.0', 'model_code_root': str(owner), 'data_root': str(data)}
+               'sdk_version': sdk_version, 'model_code_root': str(owner), 'data_root': str(data)}
     path = tmp_path / 'binding.json'
     path.write_text(json.dumps(binding))
     assert run_binding.load_binding(path)['sdk_python'] == str(python)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     assert run_binding.load_binding(path, expected_digest=digest)['data_root'] == str(data)
+    for unsupported in ('6.2.0.1', '6.3.0.0', '6.2.0.0+rosy.1'):
+        path.write_text(json.dumps(dict(binding, sdk_version=unsupported)))
+        with pytest.raises(ValueError, match='Unapproved SDK'):
+            run_binding.load_binding(path)
     replacement = tmp_path / 'other-data'
     replacement.mkdir()
     path.write_text(json.dumps(dict(binding, data_root=str(replacement))))
