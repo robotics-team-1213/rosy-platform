@@ -72,23 +72,34 @@ def test_failed_legacy_config_and_missing_outputs_are_rejected(tmp_path):
         helper().import_model(api, None, tmp_path / "r.urdf", tmp_path, "Wheeled")
 
 
-def test_imported_asset_is_referenced_without_replacing_live_stage():
+@pytest.mark.parametrize('physics_variants', [[], ['none', 'physics', 'physx'], ['none', 'mujoco']])
+def test_imported_asset_is_referenced_without_replacing_live_stage(physics_variants):
     module = helper()
     assert hasattr(module, "reference_model"), "Safe stage-reference loader is missing"
     calls = []
     prim = SimpleNamespace(IsValid=lambda: True)
     asset = SimpleNamespace(GetDefaultPrim=lambda: prim)
     reference = SimpleNamespace(AddReference=lambda path: calls.append(("reference", path)) or True)
+    physics = SimpleNamespace(GetVariantNames=lambda: physics_variants,
+                              SetVariantSelection=lambda value: calls.append(("physics", value)) or True)
+    variants = SimpleNamespace(GetNames=lambda: ['Physics'] if physics_variants else [],
+                               GetVariantSet=lambda name: physics)
     stage = SimpleNamespace(GetPrimAtPath=lambda path: SimpleNamespace(IsValid=lambda: False),
-                            DefinePrim=lambda path, kind: SimpleNamespace(GetReferences=lambda: reference))
+                            DefinePrim=lambda path, kind: SimpleNamespace(GetReferences=lambda: reference,
+                                                                          GetVariantSets=lambda: variants))
     context = SimpleNamespace(get_stage=lambda: stage,
                               open_stage=lambda path: pytest.fail("Replacing live SDK stage risks graph invalidation"))
     usd = SimpleNamespace(Stage=SimpleNamespace(Open=lambda path: asset))
     geom = SimpleNamespace(GetStageUpAxis=lambda _: "Z", GetStageMetersPerUnit=lambda _: 1.0,
                            SetStageUpAxis=lambda *args: calls.append(("axis", args[1])),
                            SetStageMetersPerUnit=lambda *args: calls.append(("units", args[1])))
-    assert module.reference_model(context, "robot.usd", usd, geom) is stage
-    assert calls == [("axis", "Z"), ("units", 1.0), ("reference", "robot.usd")]
+    if physics_variants and 'physx' not in physics_variants:
+        with pytest.raises(RuntimeError, match='PhysX'):
+            module.reference_model(context, "robot.usd", usd, geom)
+    else:
+        assert module.reference_model(context, "robot.usd", usd, geom) is stage
+        expected = [("axis", "Z"), ("units", 1.0), ("reference", "robot.usd")]
+        assert calls == expected + ([("physics", "physx")] if physics_variants else [])
 
 
 def test_reference_rejects_asset_with_no_default_prim():
