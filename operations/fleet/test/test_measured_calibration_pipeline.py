@@ -86,6 +86,7 @@ def test_restart_source_sync_actual_render_readback_and_revocation(tmp_path, mon
                 assert revoked.status_code == 200, revoked.text
                 await worker.refresh_config()
                 ingest._preview_last_sent.clear()
+                src.latest.captured_at = time.time()  # stale (>5 s) wins over revoked: a loaded host got 404
                 frame = await ingest._preview_response(lease['frame_path'], f"Bearer {lease['lease']}")
                 assert frame.status_code == 409 and frame.body != raw
                 worker.close()

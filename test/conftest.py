@@ -18,6 +18,7 @@ for path in (
     ROOT / "deploy" / "robot" / "pinky_pro" / "release",
     ROOT / "tools" / "harness",
     ROOT / "contracts" / "foundation",
+    ROOT / "middleware" / "devices" / "omx" / "adapter",
     ROOT / "operations" / "fleet",
     ROOT / "operations" / "decision" / "src",
     ROOT / "operations" / "world" / "src",

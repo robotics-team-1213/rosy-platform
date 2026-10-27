@@ -1,6 +1,7 @@
 ---
 title: Four landing blockers cost hours on one day; size-locked units, a red main, a crowded test queue and oversized branches
 date: 2026-10-18
+last_updated: 2026-10-27
 category: workflow-issues
 module: tools/land.py, tools/land_checks.py, tools/harness/size_range.py, tools/harness/affected_tests.py, tools/harness/affected_narrow.py, shared/web/surfaces.yaml
 problem_type: workflow_issue
@@ -19,6 +20,7 @@ applies_when:
   - "a land.py run stops on a D-766 size verdict, or a NEW failure in a file the branch did not change"
   - "planning a change inside fleet, site_ui/console, rosy_auto_update.py, trip_runner.py or trip_ports.py"
   - "a branch bundles several tasks (WebRTC T2-T5 + console + topology) into one landing"
+  - "an existing package still claims a size unit but its registration disappeared during history reconstruction"
 tags: [land-py, d-766, size-ratchet, restack, main-red, affected-tier, surfaces-yaml, test-queue, branch-size]
 ---
 
@@ -252,6 +254,32 @@ The candidates as first written:
    affected by `main`'s delta united with the branch's affected set, not the whole tier.
 3. **Keep branches narrow.** The existing rule in `AGENTS.md` 「같이 하는 깃」 1 (one landable concern
    per branch, about 15 changed files at most) keeps branches in narrow tiers, so a rerun is cheap.
+
+### 7. Accepted size-unit metadata was omitted during history reconstruction (2026-10-27)
+
+The OMX profile checkpoint passed its 49 behavior cases but failed the package-size guard at
+10,353 lines. Its earlier combined-prerequisite commit was already over the limit at 10,039.
+The existing `real` package and owner log said it was independently measured, yet
+`test/architecture/size_units.txt` lacked its row.
+
+History established a missing registration, not a newly eligible split. [PR #184](https://github.com/robotics-team-1213/rosy-platform/pull/184)
+contained `devices/omx/adapter/omx_adapter/real`; the local reconstruction retained its code and
+purpose statement but omitted the registry change. The first local history-join merge also
+retained the omission although its second parent contained the row.
+Current promotion criteria did not independently fire, so inventing a new lifecycle criterion
+would have hidden the cause. The repair restores the accepted row and its parent ownership entry.
+
+Before landing, the pending local restoration passed the complete affected selection:
+1,893 tests passed, 22 remained skipped, and the known-failure comparison reported no NEW failures.
+The measured parent changed from 9,681 to 8,348 lines; the existing real package remained 1,333.
+Its runtime source, limits, floor, ratchet and counting algorithm were unchanged. This verifies
+the pending source restoration, not native deployment or physical acceptance.
+
+When a package declaration and registry disagree, inspect the accepted source commit and merge
+parents before inventing another split or exception. Carry ownership and size metadata with the
+implementation. If consumer commits already exceed the limit, preserve them as evidence and
+rebuild from a base containing the prerequisite: a later registry merge cannot repair their
+per-commit verdicts. The old profile history still required that reconstruction at this checkpoint.
 
 ## Not fixed here
 

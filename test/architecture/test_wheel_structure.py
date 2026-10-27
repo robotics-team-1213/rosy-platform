@@ -11,6 +11,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path, PurePosixPath
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 
 #: Wheels whose tests live with their consumers or in the repository test/ suite.
@@ -62,3 +64,13 @@ def test_every_wheel_owns_tests():
         f"new: {sorted(without - set(KNOWN_WITHOUT_OWN_TESTS))}, "
         f"stale: {sorted(set(KNOWN_WITHOUT_OWN_TESTS) - without)}"
     )
+
+
+def test_every_control_wheel_is_a_harness_module():
+    # P2 c for wheels, control only (2026-10-27 debate, consensus 3): real-arm paths show up in STATUS.md.
+    harness = ROOT / "tools" / "harness"
+    roots = yaml.safe_load((harness / "platform_parts.yaml").read_text(encoding="utf-8"))["roots"]
+    modules = {m["path"] for m in yaml.safe_load((harness / "harness.yaml").read_text(encoding="utf-8"))["modules"]}
+    control = {r["path"] for r in roots if r.get("concern") == "control"} & set(WHEELS)
+    assert control, "no concern: control wheel found"
+    assert sorted(control - modules) == []
