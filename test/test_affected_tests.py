@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 import affected_ros
+import affected_pack
 import affected_tests as affected
 import rosy_harness as harness
 
@@ -272,6 +273,28 @@ def test_pack_bounds_remote_command_length_without_dropping_tests():
     assert sorted(path for group in groups for path in group) == paths
     assert all(sum(len(path) + 1 for path in group) <= affected.MAX_INVOCATION_CHARS
                for group in groups)
+
+
+def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
+    """remote_pytest drops -n for a whole invocation when one path is serial (2026-10-28: gazebo kept ten
+    suites on one core and every turn ran past the cap)."""
+    (tmp_path / "tools/remote").mkdir(parents=True)
+    (tmp_path / affected_pack.SERIAL_FILE).write_text("sim/test  # ROS ports\ntools\n", encoding="utf-8")
+
+    class FakeRepo:
+        root = tmp_path
+
+        @staticmethod
+        def test_import_names(path):
+            return {path: path}  # no import clash: only the serial rule may split them
+
+    groups = affected.pack(FakeRepo(), ["a/test", "sim/test", "b/test", "tools/x/test", "c/test"])
+    assert sorted(path for group in groups for path in group) == ["a/test", "b/test", "c/test", "sim/test",
+                                                                   "tools/x/test"]
+    for group in groups:
+        kinds = {affected_pack.is_serial(p, ["sim/test", "tools"]) for p in group}
+        assert len(kinds) == 1, group  # serial and parallel suites never mixed
+    assert ["a/test", "b/test", "c/test"] in groups
 
 
 def test_duplicate_basenames_run_in_separate_invocations(sample):
