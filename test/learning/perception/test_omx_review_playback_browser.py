@@ -334,6 +334,15 @@ def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(p
     expect(page.locator('#export-review-status')).to_contain_text(next_id)
     capture(page, 'recording-learning-review-saved.png')
     expect(page.locator('#native-export')).to_be_enabled()
+    state.review_fail = True
+    page.locator('#review-open').click()
+    expect(page.locator('#review-status')).to_contain_text('source hash changed')
+    expect(page.locator('#export-saved-review')).to_be_checked()
+    expect(page.locator('#native-export')).to_be_disabled()
+    state.review_fail = False
+    page.locator('#review-open').click()
+    expect(page.locator('#export-review-status')).to_contain_text(next_id)
+    expect(page.locator('#native-export')).to_be_enabled()
     page.route('**/center/export', lambda route: (exports.append(route.request.post_data_json),
         route.fulfill(json={'accepted': True})))
     page.locator('#native-export').click()
