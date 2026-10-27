@@ -117,6 +117,28 @@ def test_default_dry_run_has_no_github_mutations(prepared):
     assert not hub.calls
 
 
+@pytest.mark.parametrize("size", [2 * 1024**3, 2 * 1024**3 + 1])
+@pytest.mark.parametrize("apply", [False, True])
+def test_github_size_limit_is_checked_before_bundle_capture(prepared, monkeypatch, size, apply):
+    directory, public, value, private = prepared
+    value["bundle"]["size_bytes"] = size
+    raw = json.dumps(value).encode()
+    (directory / "os-update.json").write_bytes(raw)
+    (directory / "os-update.json.sig").write_text(sign_checksums(raw, private))
+    publisher, hub = module(), GitHub()
+    capture = publisher._capture
+
+    def checked_capture(source, target, limit):
+        assert source.name != value["bundle"]["filename"], "oversized bundle must be refused before capture"
+        return capture(source, target, limit)
+
+    monkeypatch.setattr(publisher, "_capture", checked_capture)
+    with pytest.raises(ValueError, match="GitHub.*2 GiB"):
+        publisher.publish(directory, public, release_id=value["release_id"],
+                          source_revision=value["source_revision"], apply=apply, gh=hub)
+    assert not hub.calls
+
+
 def test_success_uploads_exact_captured_bytes_before_opening_engineering_prerelease(prepared):
     hub = GitHub()
     directory = prepared[0]
