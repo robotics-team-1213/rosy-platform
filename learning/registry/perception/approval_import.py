@@ -1,16 +1,18 @@
 """Record a Fleet perception approval in the model store (D-898): verify everything, then accept.
 
 approval_import.py --decision <decision.signed> --public-key <pinned pem> --key-id <pinned id>
-    --state <learning state root> --ledger <learning cycle state.json> --store <model store>
-    --work-root <model-code root>
+    --state <learning state root> --ledger <learning cycle state.json> --results-root <result folders root>
+    --store <model store> --work-root <model-code root>
 
 The signed file is Fleet's GET /api/fleet/perception-promotions/<sha>/decision.signed, carried by a
-person. Checks, in order, before any write: the pinned key id and Ed25519 signature, state APPROVED;
-the local <state>/promotion-requests/<sha>.json bytes, revision and files; the learning_cycle row's
-result folder (promotion_request.ready_rows, the D-874 lookup) holds those files; decided_by differs
-from proposed_by. Then, holding the model-code work.lock that model-watch's executor holds, the result
-folder goes inbox -> models/accepted/<revision> (store.accept) and the decision and its signed file go
-to models/approvals/<sha>/. accepted/ still means only "intake passed"; approval is approvals/.
+person. Holding the model-code work.lock that model-watch's executor also takes, it checks in order and
+before any write: the pinned key id and Ed25519 signature, state APPROVED; the local
+<state>/promotion-requests/<sha>.json bytes, revision and files; the learning_cycle row
+(promotion_request.ready_rows, the D-874 lookup) whose result folder lies inside --results-root and holds
+exactly the approved files; decided_by differs from proposed_by. Then only the approved files (plus the
+intake's model_manifest.json and intake_report.json, by exact name) are copied inbox -> models/accepted/<revision>
+(store.accept), the copy is checked against the approved hashes, and the decision and its signed file go to
+models/approvals/<sha>/. accepted/ still means only "intake passed"; approval is approvals/.
 Nothing here moves the active pointer, shadow or a robot. Run it directly, not through
 `rosy_model_code.py exec`: that executor already holds the lock, so this would exit 75.
 Exit 0 recorded (or already recorded), 2 refused, 75 work lock busy (retry later)."""
@@ -21,6 +23,7 @@ import argparse
 import contextlib
 import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -38,6 +41,9 @@ from store import Store, file_hashes, safe_name  # noqa: E402
 
 BUSY_EXIT, REFUSED_EXIT = 75, 2
 MAX_SIGNED_BYTES = 256 * 1024  # the decision repeats the bundle's file list, which Fleet bounds at 256 KiB
+# Written by the intake beside the model files and bound to them by sha256 (model_manifest.json); not approved bytes.
+META = frozenset({"model_manifest.json", "intake_report.json"})
+_KEY_ID = re.compile(r"[A-Za-z0-9._-]{1,96}")  # Fleet's rule; the signed message joins its fields with NUL
 
 
 class Refused(ValueError):
@@ -46,20 +52,25 @@ class Refused(ValueError):
 
 @contextlib.contextmanager
 def work_lock(root):
-    """The exclusive <model-code root>/work.lock of deploy/site/rosy_model_code.py; busy raises BlockingIOError."""
+    """Exclusive, non-blocking flock on <model-code root>/work.lock; busy raises BlockingIOError.
+
+    shortcut: a copy of work_lock() in deploy/site/rosy_model_code.py (the signed executor is not importable from a
+    registry module). Both must keep the same file name and exclusive flock mode, or this stops excluding model-watch."""
     import fcntl
     with (Path(root) / "work.lock").open("a+") as f:
         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         yield
 
 
-def _same_files(folder: Path, files) -> bool:
-    have = file_hashes(folder)
-    return all(have.get(item["name"]) == item["sha256"] for item in files)
+def _models(folder: Path) -> dict:
+    """{name: sha256} of every file except the META names; compared exactly, so an extra file never passes."""
+    return {name: sha for name, sha in file_hashes(folder).items() if name not in META}
 
 
-def checked(signed_file, public_key: bytes, key_id: str, state, ledger):
-    """(decision, decision bytes, signed file bytes, result folder); every refusal comes before any write."""
+def checked(signed_file, public_key: bytes, key_id: str, state, ledger, results_root):
+    """(decision, decision bytes, signed file bytes, result folder, expected {name: sha256}); no writes."""
+    if not _KEY_ID.fullmatch(str(key_id)):
+        raise Refused("the pinned key id must match [A-Za-z0-9._-]{1,96}")
     signed_raw = Path(signed_file).read_bytes()
     try:
         if len(signed_raw) > MAX_SIGNED_BYTES:
@@ -81,6 +92,10 @@ def checked(signed_file, public_key: bytes, key_id: str, state, ledger):
     sha = str(doc["bundle_sha256"])
     if not re.fullmatch(r"[0-9a-f]{64}", sha):
         raise Refused("bundle_sha256 is not a sha256")
+    expected = {item["name"]: item["sha256"] for item in doc["files"]}
+    if len(expected) != len(doc["files"]) or any(
+            name in (".", "..") or name in META or Path(name).name != name or "\\" in name for name in expected):
+        raise Refused("the approved file names must be unique plain names")
     try:
         bundle_raw = (Path(state) / "promotion-requests" / f"{sha}.json").read_bytes()
     except OSError:
@@ -93,50 +108,66 @@ def checked(signed_file, public_key: bytes, key_id: str, state, ledger):
     rows = promotion_request.ready_rows(ledger, doc["model_revision"], doc["files"])
     if not rows:
         raise Refused("no learning_cycle row published this revision with these files")
-    folder = Path(rows[-1]["result"]["location"])
+    folder = Path(rows[-1]["result"]["location"]).resolve()
+    if not folder.is_relative_to(Path(results_root).resolve()) or not folder.is_dir():
+        raise Refused(f"the result folder {folder} is not a folder inside --results-root")
     try:
-        same = _same_files(folder, doc["files"])
+        same = _models(folder) == expected
     except OSError:
         same = False
     if not same:
-        raise Refused(f"the result folder {folder} no longer holds the approved files")
+        raise Refused(f"the result folder {folder} does not hold exactly the approved files")
     if doc["decided_by"] == doc["proposed_by"]:
         raise Refused("the approver is the proposer (D-793 needs two people)")
-    return doc, raw, signed_raw, folder
+    return doc, raw, signed_raw, folder, expected
 
 
-def record(doc, raw: bytes, signed_raw: bytes, folder: Path, store_root, work_root) -> str:
-    """Under the work lock: accepted/<revision> (no-op if the same files are there) and approvals/<sha>/."""
-    store, revision, sha = Store(store_root), doc["model_revision"], doc["bundle_sha256"]
-    if not safe_name(revision):
-        raise Refused(f"revision {revision!r} is not a store folder name")
+def _accept(store: Store, folder: Path, expected: dict, revision: str, sha: str) -> str:
+    dest = store.accepted / revision
+    if dest.exists():
+        if _models(dest) != expected:
+            raise Refused(f"{revision} is already accepted with different files")
+        return f"{revision} already accepted"
+    inbox = store.inbox / f"approval-{sha[:16]}"
+    shutil.rmtree(inbox, ignore_errors=True)  # only this tool writes this name: an interrupted run's copy
+    try:
+        inbox.mkdir(parents=True)
+        for name in [*expected, *(m for m in sorted(META) if (folder / m).is_file())]:
+            shutil.copy2(folder / name, inbox / name)
+        # The copy is checked against the approved hashes, not against its own source (which may have changed).
+        if _models(inbox) != expected:
+            raise Refused("the files copied from the result folder differ from the approved files")
+        store.accept(inbox.name, revision)
+    finally:
+        shutil.rmtree(inbox, ignore_errors=True)
+    return f"{revision} accepted"
+
+
+def _approve(store: Store, sha: str, raw: bytes, signed_raw: bytes) -> str:
+    final = store.root / "models" / "approvals" / sha
+    if (final / "decision.json").is_file():
+        if (final / "decision.json").read_bytes() != raw:
+            raise Refused(f"approvals/{sha} already holds a different decision")
+        return "approval already recorded"
+    temporary = final.with_name(f".tmp-{sha}")  # a directory without decision.json is a crash leftover: absent
+    shutil.rmtree(temporary, ignore_errors=True)
+    shutil.rmtree(final, ignore_errors=True)
+    temporary.mkdir(parents=True)
+    (temporary / "decision.signed").write_bytes(signed_raw)
+    (temporary / "decision.json").write_bytes(raw)
+    os.replace(temporary, final)
+    return f"approval recorded in models/approvals/{sha}"
+
+
+def run(signed_file, public_key: bytes, key_id: str, state, ledger, store_root, work_root, results_root) -> str:
+    """Everything, including the checks, happens while holding the work lock model-watch also takes."""
     with work_lock(work_root):
-        dest = store.accepted / revision
-        if dest.exists():
-            if not _same_files(dest, doc["files"]):
-                raise Refused(f"{revision} is already accepted with different files")
-            done = f"{revision} already accepted"
-        else:
-            inbox = store.inbox / f"approval-{sha[:16]}"
-            shutil.rmtree(inbox, ignore_errors=True)  # only this tool writes this name: an interrupted run's copy
-            shutil.copytree(folder, inbox)
-            if file_hashes(inbox) != file_hashes(folder):
-                raise Refused("the inbox copy differs from the result folder")
-            store.accept(inbox.name, revision)
-            done = f"{revision} accepted"
-        approvals = store.root / "models" / "approvals" / sha
-        if approvals.exists():
-            if (approvals / "decision.json").read_bytes() != raw:
-                raise Refused(f"approvals/{sha} already holds a different decision")
-            return done + ", approval already recorded"
-        approvals.mkdir(parents=True)
-        (approvals / "decision.signed").write_bytes(signed_raw)
-        (approvals / "decision.json").write_bytes(raw)
-        return done + f", approval recorded in models/approvals/{sha}"
-
-
-def run(signed_file, public_key: bytes, key_id: str, state, ledger, store_root, work_root) -> str:
-    return record(*checked(signed_file, public_key, key_id, state, ledger), store_root, work_root)
+        doc, raw, signed_raw, folder, expected = checked(signed_file, public_key, key_id, state, ledger, results_root)
+        store, revision = Store(store_root), doc["model_revision"]
+        if not safe_name(revision):
+            raise Refused(f"revision {revision!r} is not a store folder name")
+        done = _accept(store, folder, expected, revision, doc["bundle_sha256"])
+        return f"{done}, {_approve(store, doc['bundle_sha256'], raw, signed_raw)}"
 
 
 def main(argv=None) -> int:
@@ -144,12 +175,13 @@ def main(argv=None) -> int:
     for name, text in (("--decision", "decision.signed file from Fleet"), ("--public-key", "pinned public key (PEM)"),
                        ("--key-id", "pinned perception-decision key id"), ("--state", "learning state root"),
                        ("--ledger", "learning cycle state.json (the D-874 anchor ledger)"),
+                       ("--results-root", "folder that must contain the learning result folder"),
                        ("--store", "model store root"), ("--work-root", "model-code root holding work.lock")):
         ap.add_argument(name, required=True, help=text)
     args = ap.parse_args(argv)
     try:
         print(run(args.decision, Path(args.public_key).read_bytes(), args.key_id, args.state, args.ledger,
-                  args.store, args.work_root))
+                  args.store, args.work_root, args.results_root))
     except BlockingIOError:
         print("work lock busy (model-watch or a model job is running); retry later", file=sys.stderr)
         return BUSY_EXIT

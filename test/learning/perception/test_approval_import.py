@@ -1,6 +1,7 @@
 """D-898: the model PC records a signed Fleet approval only after every check, under model-watch's lock."""
 import fcntl
 import json
+import shutil
 from types import SimpleNamespace
 
 import pytest
@@ -9,7 +10,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 import approval_import as ai
 import promotion_request as pr
-from rosy.contracts.learning.promotion_request import decision_encoded, sign
+from rosy.contracts.learning.promotion_request import decision_encoded, encoded, sign
 from store import file_hashes
 from test_promotion_request import candidate
 
@@ -39,13 +40,13 @@ def made(tmp_path):
                            approvals=tmp_path / 'store/models/approvals' / sha)
 
 
-def run(made, *, key=None, signed_id=KEY_ID, pinned_id=KEY_ID, signature=None, **change):
-    raw = decision_encoded(dict(made.row, **change))
+def run(made, *, key=None, signed_id=KEY_ID, pinned_id=KEY_ID, signature=None, results=None, raw=None, **change):
+    raw = raw or decision_encoded(dict(made.row, **change))
     doc = {'key_id': signed_id, 'decision': raw.decode(),
            'signature': signature or sign(raw, private_pem(key or made.key), signed_id)}
     path = made.tmp / 'decision.signed'
     path.write_text(json.dumps(doc), encoding='utf-8')
-    return ai.run(path, made.public, pinned_id, made.state, made.ledger, made.store, made.work)
+    return ai.run(path, made.public, pinned_id, made.state, made.ledger, made.store, made.work, results or made.tmp)
 
 
 def untouched(made):
@@ -114,3 +115,85 @@ def test_accepted_with_other_files_refuses_and_same_files_is_a_no_op(made):
     assert {p.name: p.stat().st_mtime_ns for p in made.accepted.iterdir()} == before
     assert not (made.store / 'models/inbox').exists()
     assert (made.approvals / 'decision.json').is_file()
+
+
+def test_a_source_swapped_between_the_check_and_the_copy_is_refused(made, monkeypatch):
+    real = shutil.copy2
+
+    def swap_then_copy(src, dst):
+        (made.root / 'model.onnx').write_bytes(b'unapproved model')  # after checked(), before the copy lands
+        return real(src, dst)
+    monkeypatch.setattr(ai.shutil, 'copy2', swap_then_copy)
+    with pytest.raises(ValueError, match='copied'):
+        run(made)
+    untouched(made)
+
+
+def test_an_extra_file_is_refused_on_import_and_on_the_no_op_path(made):
+    (made.root / 'extra.pt').write_bytes(b'pickle')
+    with pytest.raises(ValueError, match='exactly'):
+        run(made)
+    untouched(made)
+    (made.root / 'extra.pt').unlink()
+    run(made)
+    shutil.rmtree(made.approvals)
+    (made.accepted / 'extra.pt').write_bytes(b'pickle')  # an accepted revision with a stowaway is not "the same"
+    with pytest.raises(ValueError, match='different files'):
+        run(made)
+    assert not made.approvals.exists()
+
+
+def test_a_leftover_partial_approvals_directory_is_recovered(made):
+    made.approvals.mkdir(parents=True)  # a crash after mkdir, before decision.json
+    (made.approvals.parent / f".tmp-{made.row['bundle_sha256']}").mkdir()
+    assert 'approval recorded' in run(made)
+    assert (made.approvals / 'decision.json').is_file() and (made.approvals / 'decision.signed').is_file()
+    assert not (made.approvals.parent / f".tmp-{made.row['bundle_sha256']}").exists()
+
+
+def test_a_result_folder_outside_the_results_root_is_refused(made):
+    other = made.tmp / 'elsewhere'
+    other.mkdir()
+    with pytest.raises(ValueError, match='results-root'):
+        run(made, results=other)
+    untouched(made)
+
+
+@pytest.mark.parametrize('bad', ['', 'a/b', 'k\x00id', 'x' * 97, 'spaced id'])
+def test_the_pinned_key_id_must_be_plain(made, bad):
+    with pytest.raises(ValueError, match='key id'):
+        run(made, pinned_id=bad, signed_id=bad)
+    untouched(made)
+
+
+def test_no_ledger_row_refuses(made):
+    made.ledger.write_text(json.dumps({'cycles': {}}))
+    with pytest.raises(ValueError, match='learning_cycle'):
+        run(made)
+    untouched(made)
+
+
+@pytest.mark.parametrize('content', [
+    json.dumps({'key_id': KEY_ID, 'decision': 'x'}), json.dumps({'key_id': KEY_ID, 'decision': 'x', 'signature': 's', 'z': 1}),
+    json.dumps({'key_id': KEY_ID, 'decision': 1, 'signature': 's'}), 'not json', '[]', ' ' * (ai.MAX_SIGNED_BYTES + 1)])
+def test_a_malformed_or_oversized_signed_file_is_refused(made, content):
+    path = made.tmp / 'decision.signed'
+    path.write_text(content)
+    with pytest.raises(ValueError, match='decision.signed'):
+        ai.run(path, made.public, KEY_ID, made.state, made.ledger, made.store, made.work, made.tmp)
+    untouched(made)
+
+
+@pytest.mark.parametrize('field, value', [('bundle_sha256', 'Z' * 64), ('files', [{'name': '../x', 'sha256': 'b' * 64}])])
+def test_a_signed_but_malformed_decision_is_refused(made, field, value):
+    # Signed by the real key, but not something Fleet's encoder would ever emit.
+    raw = encoded(dict(made.row, **{field: value}, schema='rosy.fleet.perception-decision/1'))
+    with pytest.raises(ValueError):
+        run(made, raw=raw)
+    untouched(made)
+
+
+def test_a_rejected_decision_signed_by_fleet_is_refused(made):
+    with pytest.raises(ValueError, match='REJECTED'):
+        run(made, state='REJECTED')
+    untouched(made)

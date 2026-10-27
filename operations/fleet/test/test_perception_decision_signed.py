@@ -71,3 +71,30 @@ def test_without_a_configured_key_nothing_unsigned_is_served(made, monkeypatch):
     response = client.get(f"{URL}/{digest}/decision.signed", headers=auth("viewer-a"))
     assert (response.status_code, code(response)) == (503, "DECISION_KEY_NOT_CONFIGURED")
     assert "signature" not in response.text and "decided_by" not in response.text
+
+
+def test_a_rejected_decision_is_signed_as_rejected(made, public_key):
+    client, _ = made
+    digest = proposed(client)
+    decide(client, digest, "REJECTED")
+    signed = client.get(f"{URL}/{digest}/decision.signed", headers=auth("viewer-a")).json()
+    assert verify(signed["decision"].encode(), signed["signature"], public_key, KEY_ID)["state"] == "REJECTED"
+
+
+@pytest.mark.parametrize("damage", ["missing_key_file", "extra_field", "not_a_key", "open_permissions"])
+def test_a_broken_key_configuration_is_a_503_and_never_unsigned(made, public_key, tmp_path, damage):
+    client, _ = made
+    digest = proposed(client)
+    decide(client, digest)
+    config, pem = tmp_path / "decision-key.json", tmp_path / "decision.pem"
+    if damage == "missing_key_file":
+        pem.unlink()
+    elif damage == "extra_field":
+        config.write_text(json.dumps({"key_id": KEY_ID, "private_key_file": "decision.pem", "other": 1}))
+    elif damage == "not_a_key":
+        pem.write_text("not a key")
+    else:
+        os.chmod(pem, 0o644)
+    response = client.get(f"{URL}/{digest}/decision.signed", headers=auth("viewer-a"))
+    assert (response.status_code, code(response)) == (503, "DECISION_KEY_INVALID")
+    assert "signature" not in response.text
