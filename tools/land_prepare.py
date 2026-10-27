@@ -157,3 +157,4 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
+    land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)
