@@ -12392,3 +12392,18 @@ osy-d395-s1d\`.
 - 증거: checkpoint commit `2663fcfd9d`에서 full guard/body 6개가 실제 DID NOT RAISE Stop/NEW6을 보였고 대조 5개는 통과했다. fix commit `1bdd41e94a`에서 같은 11개, 관련 owner 15파일 395개, selector/actual architecture 5파일 299개가 PASS/0 SKIP/NEW0, official·outer·known exit0이었다. 11개는 395개와 겹치며 합산하지 않는다. 새 [고정 검증 기록](validation/land-explicit-full-2026-10-27e/result.md)에 실제 argv·raw 12개 SHA-256·정적 proof를 결속했다.
 - gate 변화: 집중 소스 검증이며 정식 FULL·착지·게시·실제 Chromium·G2/충전 원인 해결이 아니다. 기존 고정 기록·provenance·peer bytes를 보존했다. CRLF plain diff flags는 원본과 구분해 남기고 명령 한정 CR-at-EOL 처리로 실제 space/tab/EOF 검사를 유지했다. 최종 docs HEAD 검사는 후속 handoff에 별도로 기록한다.
 - CE: 해당 없음. state/summary 반례와 수정은 코드·시험·새 기록이 설명하므로 중복 교훈은 추가하지 않았다.
+## 2026-10-27 · 6ffe52ae26 · docs: D-895 단일 이송 복구 후손과 원본 증거 보존
+
+- 변경: 사용자 승인한 내부 simulation 복구 설계를 D-895에 기록했다. root당 자식 하나, 별도 운영자 승인, 원래 효과·새 관측·현재 claims/fence 검사와 원자적 승인, 동일 요청 대조와 계보 보존을 정한다. 공개 API·실물·학습 승격은 별도다.
+- 증거: 공식 ADR 예약 도구로 D-895를 선점하고 Log의 UTF-8 BOM·CRLF를 보존했다. 구현·회귀 증거는 `operations/fleet/docs/transfer-outcome-review.md`의 검증 기록에 있다. 독립 계약 재검토 db6f4f8c02에서 추가 중요 발견 없음.
+- 메타데이터: D-893/D-894의 타 세션 예약 공백은 기존 gap 원장에 pending으로 기록했다. 최초 lint 3 errors를 수정해 0 errors/37 warnings, 기준 이후 11 commits size-range 통과를 확인했다. 실행 검사기를 변경하지 않았다.
+- gate 변화: 없음. 구현 승인과 장치·현장 수용을 구분한다.
+- CE: 해당 없음 — 설계 판단과 검증 근거는 ADR·코드·회귀 시험·모듈 기록으로 보존했다.
+
+## 2026-10-27 · uncommitted · fix(land): 시험 PC가 포기해 끝난 착지도 stop으로 남김
+
+- 변경: `tools/land.py`. `remote_pytest`가 시험 PC를 포기하며 문자열로 끝내는 `SystemExit`(시험 PC 없음, venv 준비 실패 등)도 사건 기록에 `stop`으로 남기고 예전처럼 그대로 끝난다. 숫자 종료 코드는 기록하지 않는다.
+- 근거: 10-27 `feat/land-mainred-carry` 착지가 venv 준비 ssh 시간 초과로 끝났는데 사건 기록에는 `queue`만 있었다. 이번 주 `stop` 55건에 시험 PC 원인은 0건으로 보였다.
+- 증거: 원격 `test/test_land_prepare.py`.
+- gate 변화: 없음(기록만 더함).
+- CE: 해당 없음 — 코드·시험에 남는다.

@@ -4969,3 +4969,10 @@
 - 증거: 신규 `test_queue_wait_metrics.py` 8건 포함 원격 시험 77 passed, known NEW 0(관련 5 suite). 변이 검증: COALESCE 보존 제거 → 재대기열 보존 시험 red(`042bf8a957`), 되돌림 후 green(`d02b8d65e7`).
 - Gate: 없음. 호스트 시험까지만 유효 — 실제 사이트 큐에서 쌓이는 로그로 지표 노출·집계를 별도 결정한다.
 - CE: 해당 없음 — 계획 문서와 시험·커밋에 근거가 남아 있다.
+
+## 2026-10-27 · db6f4f8c02 · 승인된 단일 이송 복구 후손
+
+- 변경: 기존 부모 attempt·관측을 보존하고 현재 source/clearance·별도 운영자·fence/claims 조건을 만족한 새 자식 미션을 한 번 승인한다. 부모 자원을 원자적으로 이전하고, 자식을 명시 prepare한 뒤 새 관측과 기존 send/closure 경로를 사용한다. 중복 요청·재시작·준비 실패가 예산을 초기화하지 않는다. 검수 export에 root 계보를 보존한다.
+- 증거: 원격 승인 RED 21 failed → 관련 128 passed, 흐름 RED 3 failed → 통합 201 passed. 독립 검토 반례 4 failed와 첫/재조회 snapshot 차이 2 failed를 수정해 7f0a8a152a의 통합 214 passed, 추가 epoch/session 거절을 포함한 73f2fe5a03의 최종 216 passed/0 skipped·known NEW 0을 확인했다. 코드 7f0a8a152a의 독립 계약 재검토에서 추가 중요 발견 없음. `docs/validation/transfer-recovery-2026-10-27/result.md` 참고(저장소 루트 기준). 전체 영향 범위·착지 gate는 별도로 기록한다.
+- Gate: 기존 gate 변화 없음. 공개 복구 ingress·화면·무인 반복·Gazebo 과제·실물·모델 학습 수용은 별도다. 원래 미션은 HOLD로 유지한다.
+- CE: 해당 없음 — D-895·회귀 시험·검증 기록이 판단과 수정 이유를 보존한다.

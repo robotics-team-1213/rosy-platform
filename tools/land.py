@@ -562,6 +562,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[land] STOP: {exc}", file=sys.stderr)
         land_events.emit("stop", reason=str(exc).splitlines()[0][:300])
         return 1
+    except SystemExit as exc:  # remote_pytest gives up on its hosts this way (no host, venv setup): still a stop
+        if isinstance(exc.code, str):
+            land_events.emit("stop", reason=exc.code.splitlines()[0][:300])
+        raise
     finally:
         land_queue.leave()  # also on Ctrl-C; a killed process's ticket is reclaimed by PID
 
