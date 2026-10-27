@@ -275,17 +275,17 @@ git push
 
 소스 경로와 책임은 [폴더 책임표](platform-folder-responsibilities.md), 소유 영역의 정본은 `tools/harness/platform_parts.yaml`을 본다. 경로별 GitHub 리뷰 담당은 [CODEOWNERS](../../.github/CODEOWNERS), 역할별 사람 담당은 아래 표에서 확인한다.
 
-2026-10-17 기준 배정이다. 담당은 리드가 정하며 Jira 역할별 Epic의 담당이 바뀌면 이 표와 관련 `CODEOWNERS` 항목을 함께 갱신한다. 그 외 영역의 담당은 아직 지정되지 않았다.
+2026-10-27 기준 배정이다. 담당은 리드가 정한다. 각 root의 역할은 `platform_parts.yaml`의 `capability:`이고, 계정은 같은 파일의 `capabilities:`에 둔다. Epic 담당이 바뀌면 그 계정, `CODEOWNERS`, 이 표를 함께 고친다. `test/architecture/test_capability_owners.py`가 앞의 둘이 맞는지 확인한다. `platform`(공통 코드)은 기본 담당(`*`)이 리뷰한다.
 
 | Epic | 역할 | 담당 |
 |---|---|---|
-| KAN-19 | 관제·충전·물류 | 장원종 (@livsbittt) |
-| KAN-20 | Pinky | 노재용, GitHub 계정 확인 필요 |
-| KAN-21 | OMX | 김승용·서정민 공동, GitHub 계정 확인 필요 |
-| KAN-22 | 비전·AI | 윤영민 (@now2466) |
+| KAN-19 | 관제·충전·물류 (`fleet`) | 장원종 (@livsbittt) |
+| KAN-20 | Pinky (`pinky`) | 노재용 (@PURPLE-SY) |
+| KAN-21 | OMX (`omx`) | 김승용·서정민 공동 (@sajy0804, @ddaokki) |
+| KAN-22 | 비전·AI (`vision_ai`) | 윤영민 (@now2466) |
 | KAN-23 | 통합 시나리오·시연·일정 | 민주환 (@WINNAKEN, PM) 조율, 전원 참여 |
 
-KAN-23은 특정 경로의 담당이 아니다. Epic의 역할을 GitHub 경로 소유권으로 확대하지 않는다. 노재용·김승용·서정민의 GitHub 계정이 확인되면 `CODEOWNERS`에 장치 경로를 추가한다.
+KAN-23은 특정 경로의 담당이 아니다. Epic의 역할을 GitHub 경로 소유권으로 확대하지 않는다. 실물 팔·로봇 장치·이미지 경로(`middleware/devices/`, `middleware/drivers/`, `deploy/robot/`, OMX 연동)는 역할 담당과 기본 담당이 함께 리뷰한다.
 
 ### 5.2 처음 잡기 좋은 일
 

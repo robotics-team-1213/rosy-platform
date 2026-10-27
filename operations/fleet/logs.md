@@ -4984,6 +4984,13 @@
 - Gate: 없음. 호스트 시험까지만 유효하며 실제 사이트에서의 `/readyz` 관찰 기록은 여전히 별도.
 - CE: 해당 없음 — 시험과 변이 이력이 커밋에 남아 있다.
 
+## 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀
+
+- 변경: 없음(코드 변경은 `applications/fleet/web` 참조). 이 모듈에서는 콘솔 계약 시험을 확장했다 — `test_work_overview_browser.py`에 범위 readback·배지·기명 운영자 전환·409 사유·보기 전용 잠금 시험 추가, `test/web/work-view.test.mjs`에 순수 판정·문구 시험 추가.
+- 증거: 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1` `test_work_overview_browser.py` 36 통과(신규 3건 포함)·known_failures NEW 0. `test_server_app`·`test_remaining_platform_installed` 50 통과 NEW 0. 전체 affected/FULL 통과를 뜻하지 않는다.
+- Gate: 기존 gate 유지. P4 원격 회귀·착지와 P5 현장 수용은 이 브랜치 밖의 별도 단계다.
+- CE: 해당 없음 — 새 판단은 없고 시험·코드가 근거를 담는다.
+
 ## 2026-10-27 · 441d50c066 · 재시작 lease 회수의 원장 기록 LEASE_RECLAIMED
 
 - 변경: `recover_interrupted_work`의 safe 재대기열이 lease·로봇 예약·dispatch claim을 정리하면서 아무 기록도 남기지 않아, 회수당한 작업이 한 번도 잡을 쥔 적 없는 것처럼 보였다. 이제 실제로 lease를 쥐고 있었거나(lease_owner) 트래픽 대기 중이던(WAITING_TRAFFIC) 행에만 `QUEUED`/`LEASE_RECLAIMED` history(system/fleet-recovery)를 남긴다. 미사용 READY 행은 조용히 두어 재시작마다 원장이 도배되지 않는다.
