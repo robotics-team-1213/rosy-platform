@@ -12394,6 +12394,6 @@ osy-d395-s1d\`.
 ## 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록
 
 - 변경: 실행 계획(2026-10-25-fleet-policy-admission-design.md) P3 상태줄에 착지 사실과 로컬 main `b54b29d5d0`을 붙였다. 내용 변화 없음.
-- 증거: 착지 기록 `.git/rosy-land/b54b29d5d04a509d989718d10168e64a3742c5a5.json`(3라운드, FULL+affected 0 NEW). 모듈 로그·생성 문서는 그 착지에 이미 반영됐다.
+- 증거: 착지 기록 `.git/rosy-land/b54b29d5d0…` 랜드 레코드(3라운드, FULL+affected 0 NEW). 모듈 로그·생성 문서는 그 착지에 이미 반영됐다.
 - Gate: 변화 없음. P5 현장 수용은 별도.
 - CE: 해당 없음 — 상태 한 줄 기록.
