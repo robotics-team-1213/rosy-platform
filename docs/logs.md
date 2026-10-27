@@ -12487,3 +12487,11 @@ osy-d395-s1d\`.
 - 시험: `test_modules_runner_gates`(11-15 마감 시험 대체), `not-ci-gated` 사례를 sensing 시험(`middleware/perception/test`)으로 바꿈.
 - 증거: GitHub main CI `test (modules)` 녹색 10회 연속(2026-10-25~26, 마지막 run 40412528805).
 - gate 변화: 없음. CI 판정 범위만 넓어짐.
+
+## 2026-10-27 · ae535f57ec · fix: publish push가 자기 SHA의 pre-push 사본으로 돈다
+
+- 변경: `tools/publish_main.py --apply`가 게시 SHA의 `tools/hooks/pre-push`를 CR 없이 `<git-common-dir>/rosy-publish/<branch>-hooks/`에 쓰고 `core.hooksPath`로 push한다. 공용 훅을 다른 착지가 재설치해도 진행 중인 게이트는 바뀌지 않는다.
+- 근거: 10-27 수동 게시 push 두 번이 크기 규칙(약 105분) 도중 공용 훅 교체(14:19)로 `exit=127`과 `line 152: syntax error`로 끝났다. 같은 SHA의 크기 규칙 단독 실행은 통과했다.
+- 증거: 원격 `test/test_publish_main.py`(공용 훅이 실패해도 SHA의 훅으로 push, 사본 정리).
+- Gate: 변화 없음. 같은 훅 내용, --no-verify 없음.
+- CE: 새 교훈 기록 — `docs/solutions/workflow-issues/shared-pre-push-swapped-mid-run-breaks-long-push-2026-10-27.md`.
