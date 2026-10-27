@@ -49,3 +49,15 @@
 - 변경: pending 통합관제 항목을 실제 성공 응답과 통과 browser source로 결속하고 기존 모든 receipt를 보존했다. sample R/A/A1/B 설명을 현재 구성에 맞췄다.
 - 증거: sourceef6dc95958 capture5건은8 API200을 통과 node에서 관찰했고 sourcebbffbf8577의 browser/Node33건은 SKIP0·NEW0이다. source45d1f72ac0 actual backend Chromium1건은 가로채기 없이 실제 Fleet API·원장·지도·한 번 정지와 GET-only readback을 확인했다.
 - gate 변화: source 검증이며 실물·현장 수용은 아니다. 최종 metadata/공식 착지 검사를 진행한다. CE 해당 없음 — 증거 형식과 회귀에 직접 남는다.
+
+## 2026-10-27 · uncommitted · fix: 샘플 프로필 저장소 미설정 표시
+
+- 변경: 샘플에 저장소가 없는 장치 프로필 목록·관측원 조회는 기존 Fleet의 미설정 라우트와 같은 코드 없는 404를 반환한다. 설치 화면의 미설정 안내와 poll 중단을 유지하며, 알 수 없는 요청은 기존 501 오류로 남긴다.
+- 증거: FULL 후보 commit `16ac653bd4`의 설치 browser 실패는 단독 재실행에서도 실패하고 main에서 통과했다. commit `155256761e`의 501 재현과 commit `44aa430260`의 실제 안내 문구·응답 형식 2건 RED 후, commit `018db37b39`의 원격 샘플 서버·실제 Chromium 19건 PASS, runner exit 0. 독립 검토에서 미설정 의미 불일치 해소를 확인했다.
+- gate 변화: 샘플의 저장·진단 성공이나 실물 제어를 추가하지 않는다. 전체 재검증·main 병합은 진행 중이다. CE 해당 없음 — 복구 조건은 코드 주석·회귀 시험·검증 기록에 남겼다.
+
+## 2026-10-27 · uncommitted · fix: 프로필 API 소비자와 설치 작업 검증 연결
+
+- 변경: 설치의 여섯 작업을 정확히 확인하고 새 장치 정보의 Viewer 잠금·모바일 전환을 검증한다. 프로필의 실제 API 9개와 소비자를 기능 목록에 등록하고 통과한 HTTP 응답·원본 commit·시험 node를 결속한다. 기존 증거와 누락 검출 규칙은 유지한다.
+- 증거: FULL 후보 commit `05f436131a`의 기능 목록·기존 5-tab 시험 실패는 각각 단독 재현되고 main에서 통과했다. commit `8e86f34a26`의 실제 API·재시작 DB·Chromium·권한·설치 작업 40건 PASS/0 SKIP에서 HTTP 9개를 수집했다. commit `0a3bca1f98`의 기능 목록·부정 검사·수집기 8건 PASS, console Node suite exit 0. `backend_http_evidence.json`은 해당 실제 source와 node를 보존한다.
+- gate 변화: 합성 입력·TestClient HTTPS·fixture UI의 범위를 구분하며 실물·배포 TLS·실행 수용으로 승격하지 않는다. 전체 재검증·main 병합은 별도다. CE 해당 없음 — 원인과 결속 규칙은 코드·회귀 시험·검증 기록에 남겼다.
