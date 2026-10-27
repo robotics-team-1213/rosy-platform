@@ -10,6 +10,19 @@ from os_system_vm import Guest, PINS
 class ArmGuest(Guest):
     binary = "qemu-system-aarch64"
 
+    def wait_boot(self):
+        try:
+            return super().wait_boot()
+        except ValueError as error:
+            path = self.directory / "guest-console.log"
+            if path.is_file():
+                with path.open("rb") as stream:
+                    stream.seek(0, 2)
+                    stream.seek(max(0, stream.tell() - 3000))
+                    tail = stream.read(3000).decode(errors="replace")
+                raise ValueError(str(error) + "\nguest-console.log: " + tail) from error
+            raise
+
     def pins(self):
         common = json.loads(PINS.read_bytes())
         arm = json.loads(Path(__file__).with_name("os_system_arm_vm_inputs.json").read_bytes())

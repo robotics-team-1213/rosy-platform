@@ -491,18 +491,20 @@ def test_qemu_command_has_only_owned_images_and_loopback_ssh(tmp_path):
     assert all(str(tmp_path) in value for key, value in zip(argv, argv[1:]) if key in {"-kernel", "-initrd", "-bios"})
 
 
-def test_early_guest_exit_retains_bounded_console_and_emulator_diagnostics(tmp_path, monkeypatch):
-    guest = module().Guest(tmp_path)
+def test_early_arm_guest_exit_retains_bounded_console_and_emulator_diagnostics(tmp_path, monkeypatch):
+    guest = importlib.import_module("os_system_arm_vm").ArmGuest(tmp_path)
     guest.process = SimpleNamespace(poll=lambda: 0)
     (tmp_path / "qemu-stderr.log").write_text("emulator exit detail")
     (tmp_path / "guest-console.log").write_bytes(b"discarded-prefix" + b"x" * 6000 + b"guest reboot reason\xff")
-    logs = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    console = (tmp_path / "guest-console.log").read_bytes()
+    original_open = Path.open
     class TailOnly(io.BytesIO):
         def read(self, size=-1):
             assert 0 <= size <= 3000, "diagnostic must bound the source read"
             return super().read(size)
     with monkeypatch.context() as patch:
-        patch.setattr(Path, "open", lambda p, *a, **k: TailOnly(logs[p.name]))
+        patch.setattr(Path, "open", lambda p, *a, **k: TailOnly(console)
+                      if p.name == "guest-console.log" else original_open(p, *a, **k))
         with pytest.raises(ValueError) as failure:
             guest.wait_boot()
     detail = str(failure.value)
