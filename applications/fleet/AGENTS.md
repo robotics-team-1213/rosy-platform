@@ -1,4 +1,8 @@
+<!-- Parent: ../AGENTS.md -->
+
 # Fleet application
+
+**Parent context:** `../AGENTS.md`
 
 먼저 [README.md](README.md)에서 화면·gateway·플랫폼 서비스의 경계를 확인한다.
 
