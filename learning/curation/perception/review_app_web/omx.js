@@ -139,9 +139,11 @@ function render(set){
   const sourceInfo=el('details',null,'omx-source-info');sourceInfo.append(el('summary','원본 전체 시연 상태·메타데이터'));
   const t=set.trainable,status=el('ui-status',t.ok?`전체 시연 학습 가능 — ${Object.entries(t.counts).map(([k,v])=>`${SPLIT[k]||k} ${v}`).join(', ')}`:`전체 시연 학습 불가 — ${t.reason}`);
   status.setAttribute('state',t.ok?'ready':'warning');sourceInfo.append(status);
-  const cs=set.camera_setup;
-  sourceInfo.append(el('p',cs?`카메라 기준: ${Object.entries(cs.references||{}).map(([r,v])=>`${r} ${String(v).slice(0,8)}`).join(', ')} (${cs.mode})`
-    :'카메라 맞춤 판정 없음 — prepare에 --camera-reference를 주면 기록됩니다.','quiet'));
+  const cs=set.camera_setup,native=Object.entries(set.camera_reference||{});
+  for(const [role,r] of native){const p=el('p',`${role}: 기준 일치(prepare-native에서 거부 검사 통과) · 기준 `,'quiet omx-native-reference'),rev=String(r.revision).slice(0,12);
+    if(r.reference&&/^[0-9a-f]{64}$/.test(r.revision)){const a=el('a',rev);a.href=`/api/learning/camera/stills/${r.revision}`;p.append(a);}else p.append(rev);sourceInfo.append(p);}
+  if(cs)sourceInfo.append(el('p',`섀도 증거(prepare 프레임 비교, 거부하지 않음): ${Object.entries(cs.references||{}).map(([r,v])=>`${r} ${String(v).slice(0,8)}`).join(', ')} (${cs.mode})`,'quiet omx-shadow-reference'));
+  if(!cs&&!native.length)sourceInfo.append(el('p','카메라 맞춤 판정 없음 — prepare에 --camera-reference를 주면 기록됩니다.','quiet'));
   const table=el('table',null,'omx-episodes'),head=el('tr');
   ['Episode','세션','프레임','분할','결과','검수자','이유','카메라(시작 → 끝)'].forEach(h=>head.append(el('th',h)));
   table.append(el('thead'));table.tHead.append(head);
