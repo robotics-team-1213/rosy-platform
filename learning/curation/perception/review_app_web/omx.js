@@ -316,10 +316,10 @@ function describe(value){return typeof value==='string'?value:JSON.stringify(val
 function exportSelection(){
   const prepared=preparedSets.find(set=>set.id===$('prepared-set').value);
   const saved=loadedReview?.prepared_id===prepared?.id&&loadedReview?.latest_review_id;
-  const savedPending=$('export-saved-review').checked&&(loadedReview?.dirty||loadedReview?.saving);
-  $('export-saved-review').disabled=!saved;
-  if(!saved)$('export-saved-review').checked=false;
-  $('export-review-status').textContent=$('export-saved-review').checked?`저장 검수 ${saved} 사용 · 원본 revision ${loadedReview.source_revision}${savedPending?' · 미저장 편집 또는 검수 처리 중입니다. 저장·다시 불러오기를 마치거나 원본 검수 사용을 선택하세요.':''}`:`원본 검수 결정 사용${saved?' · 저장 검수 '+saved+'를 사용하려면 위 항목을 선택하세요.':' · 저장 검수는 검수를 불러온 뒤 선택할 수 있습니다.'}`;
+  const chosenSaved=$('export-saved-review').checked;
+  const savedPending=chosenSaved&&(!saved||loadedReview?.dirty||loadedReview?.saving);
+  $('export-saved-review').disabled=!saved&&!chosenSaved;
+  $('export-review-status').textContent=chosenSaved&&!saved?'저장 검수 사용 대기 · 현재 원본에 맞는 저장 검수가 없습니다. 검수를 저장하거나 유효한 검수를 다시 불러오세요. 원본 결정을 쓰려면 위 선택을 해제하세요.':chosenSaved?`저장 검수 ${saved} 사용 · 원본 revision ${loadedReview.source_revision}${savedPending?' · 미저장 편집 또는 검수 처리 중입니다. 저장·다시 불러오기를 마치거나 원본 검수 사용을 선택하세요.':''}`:`원본 검수 결정 사용${saved?' · 저장 검수 '+saved+'를 사용하려면 위 항목을 선택하세요.':' · 저장 검수는 검수를 불러온 뒤 선택할 수 있습니다.'}`;
   $('prepared-status').textContent=!preparedReady?'등록 자료 연결을 다시 확인하세요.':!prepared?'검수 시연을 자료 등록 화면에서 연결하세요.':prepared.trainable?.ok?'검수 분할 준비됨 · 실제 변환 입력은 서버가 다시 검증합니다.':`변환 준비 안 됨: ${prepared.error||prepared.trainable?.reason||'검수·분할을 확인하세요.'}`;
   $('native-export').disabled=exporting||savedPending||!token||!preparedReady||!prepared?.trainable?.ok||!exportProfile||!$('export-name').value.trim();
 }
