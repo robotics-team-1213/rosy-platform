@@ -214,6 +214,8 @@ class PhysicalTransferExecution:
             context = TransferEvidenceContext.model_validate_json(_json(result["context"]))
             validate_transfer_observations(store.installation.policy, context, observations,
                 now_ns=now_ns, authenticated_producer_id=authenticated_producer_id)
+            from .physical_transfer_recovery import validate_recovery_preconditions
+            validate_recovery_preconditions(store, connection, mission_id, observations)
             record(connection, mission_id=mission_id, grant=grant, context=context,
                    observations=observations, validated_at_ns=now_ns)
             final_ns = store._now_ns()
