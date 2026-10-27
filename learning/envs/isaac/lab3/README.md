@@ -23,7 +23,7 @@
 
 SDK kernel은 urllib3==2.7.0을 고정하지만 Lab은 [보안 수정판 2.8.0](https://github.com/urllib3/urllib3/security/advisories/GHSA-vxq7-64xx-v4gw) 이상을 요구한다. `kernel_wheel.py`는 원본 wheel의 SHA와 모든 RECORD 항목을 검사하고, urllib3==2.8.0을 지정하는 **로컬 버전 6.2.0.0+rosy.1**을 새 파일로 만든다. SDK 런타임 payload는 그대로 보존하고 METADATA·dist-info 이름·RECORD·출처 JSON만 바꾼다. 원본 파일과 기존 출력은 덮어쓰지 않는다. wheel 바이너리는 호스트의 sdk-compat/에만 두며 공개 저장소에 배포하지 않는다.
 
-입력은 [PyPI의 공식 kernel 6.2.0.0 Linux x86_64 wheel](https://pypi.org/project/isaacsim-kernel/6.2.0.0/#files)이며 SHA-256은 `f6b49ed4fa67569c90d69c835e7700bb339b57ce67aecfe6b5b76c52b0c0b3b4`다. 승인된 정비 작업의 예산 안에서 다음 도구로 재구성한다.
+입력은 [PyPI의 공식 kernel 6.2.0.0 Linux x86_64 wheel](https://pypi.org/project/isaacsim-kernel/6.2.0.0/#files)이며 SHA-256은 `f6b49ed4fa67569c90d69c835e7700bb339b57ce67aecfe6b5b76c52b0c0b3b4`다. ROSY_REPO는 현재 저장소 checkout, ISAAC3_ENV는 위 Sim 환경의 절대 경로로 지정한다. 승인된 정비 작업의 예산 안에서 다음 도구로 재구성한다.
 
 ```bash
 python3 "$ROSY_REPO/learning/envs/isaac/lab3/kernel_wheel.py" \

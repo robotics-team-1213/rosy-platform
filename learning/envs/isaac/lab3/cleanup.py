@@ -9,7 +9,13 @@ def snapshot():
     relative = next(line.split(':', 2)[2] for line in Path('/proc/self/cgroup').read_text().splitlines()
                     if line.startswith('0::'))
     scope = Path('/sys/fs/cgroup') / relative.lstrip('/')
-    members = {int(pid) for path in scope.rglob('cgroup.procs') for pid in path.read_text().split()}
+    members = set()
+    pending = [scope]
+    while pending:
+        group = pending.pop()
+        # Read ownership directly: globbing an unavailable scope can silently yield no files.
+        members.update(int(pid) for pid in (group / 'cgroup.procs').read_text().split())
+        pending.extend(path for path in group.iterdir() if path.is_dir())
     gpu = subprocess.run(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader,nounits'],
                          capture_output=True, text=True, timeout=5)
     return {'owned_pids': sorted(members - {os.getpid()}),
