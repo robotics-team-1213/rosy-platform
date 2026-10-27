@@ -12336,6 +12336,13 @@ osy-d395-s1d\`.
 - gate 변화: 강화(우회 경로를 막음). 사용자 명시 우회(`docs/solutions/workflow-issues/first-field-result-from-the-no-release-path-release-in-parallel-2026-10-10.md` 4)는 사유와 함께 남는다.
 - CE: 미정 — 착지 뒤 판단.
 
+## 2026-10-27 · 9e7b4f6f0a · OMX 화면에 prepare-native 카메라 기준 표시
+
+- 변경: `/learning/omx`가 `inspection.json`의 `camera_setup`(prepare-native `--camera-reference`, PR #200·D-792 S3)을 역할마다 "기준 일치(prepare-native에서 거부 검사 통과) · 기준 <revision 12자>"로 보인다. 64-hex 검증한 revision이 camera-setup 저장소에 있을 때만 같은 사이트 기준 사진 링크를 단다. 기존 `camera-setup.json`은 섀도 증거로 따로 표시하고, 둘 다 없을 때만 기존 문구를 보인다. `camera_identity`와 경로는 내보내지 않는다.
+- 증거: 원격 `test_omx_web.py`·새 `test_omx_camera_reference_browser.py`(1440·390, ROSY_RUN_BROWSER_TESTS=1)·`test_omx_segments_browser.py`·`test_browser_scope.py` 36 PASS, 0 FAIL.
+- gate 변화: 없음. 화면 표시만 바뀌고 착지·실물 수용은 별도다.
+- CE: 해당 없음 — 시험 locator가 숨은 단계의 heading을 못 찾은 것은 기존 셀렉터 습관 문제로, 코드·시험이 근거를 보존한다.
+
 ## 2026-10-27 · b36e441576 · 명시적 FULL의 현재 준비와 게시 적격성
 
 - 변경: literal full을 현재 candidate의 정본 normal FULL·ALL browser/chunk/ALONE으로 연결했다. 매 실행 정상 준비와 fresh guard/isolation, 기존 exact body-cache와 같은 실행의 witness/main-delta bridge를 유지한다. 두 save의 guarded+tested LOAD-FLAKY/NARROW는 auto tier=None, full은 save/FF 전에 중단한다. 과거 isolation cache report는 full 초기·retry에서 제외하고 기존 nonSafety 추적/Safety 중단 정책을 유지한다.

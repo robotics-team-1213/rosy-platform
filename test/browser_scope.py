@@ -71,7 +71,7 @@ REVIEW = [
     "test/learning/perception/test_review_app_smoke.py",
 ]
 OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for name in
-                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments")]
+                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments", "camera_reference")]
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
