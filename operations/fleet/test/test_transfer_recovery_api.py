@@ -130,3 +130,101 @@ def test_stopped_dispatch_fence_blocks_capture_and_new_requests(failed_api):
     assert c.client.get(RECOVERY_CONTEXT, headers=OBSERVER).json() == {"context": None}
     assert c.client.post(c.url + "/recovery", headers=headers("harbor"),
         json=dict(request_key="after-stop", expected_context_digest=intent["context_digest"])).status_code == 409
+
+
+def test_expired_proof_is_not_approved_or_silently_replaced(failed_api):
+    c = failed_api
+    intent = request_recovery(c)
+    evidence = observe_recovery(c, intent)
+    c.clock[0] += c.installation.policy.max_age_ns + 1
+    view = c.client.get(c.url + "/recovery", headers=headers("operator")).json()["recovery"]
+    assert view["status"] == "EXPIRED" and not view["can_approve"]
+    assert c.client.get(RECOVERY_CONTEXT, headers=OBSERVER).json()["context"]["request_id"] == intent["request_id"]
+    assert c.client.post(c.url + "/recovery/" + intent["request_id"] + "/approve", headers=headers("operator"),
+                         json=approval(c, intent, evidence)).status_code == 409
+    assert c.client.get(c.url + "/recovery", headers=headers("operator")).json()["recovery"]["child_mission_id"] is None
+
+
+def test_changed_task_assessment_expires_a_request_before_any_reset_proof(rig):
+    c = rig
+    c.parent = approved(c)
+    c.url = PATH + "/" + c.parent
+    context = c.client.get(CONTEXT, headers=OBSERVER).json()["context"]
+    assert c.client.post(c.url + "/observations", headers=OBSERVER,
+        json=normal_measured(c, context, phase="PRE_DISPATCH")).status_code == 200
+    assert c.app.state.arm_transfer_dispatcher.tick()["status"] == "ACTION_SUCCEEDED"
+    state = c.app.state.arm_transfer_dispatcher.execution.snapshot(c.parent)
+    def failed_assessment(offset, sequence):
+        c.clock[0] = NOW + offset + 350_000_000
+        return c.client.post(c.url + "/observations", headers=OBSERVER,
+            json=dict(phase="POST_ACTION", expected_request_digest=state["grant"]["request_digest"],
+                observations=_document(measured(c.store, state, offset=offset, sequence=sequence))))
+    assert failed_assessment(800_000_000, 10).status_code == 409
+    intent = request_recovery(c)
+    assert failed_assessment(1_400_000_000, 12).status_code == 409
+    view = c.client.get(c.url + "/recovery", headers=headers("harbor")).json()["recovery"]
+    assert view["status"] == "EXPIRED" and view["reason"] == "RECOVERY_CONTEXT_CHANGED"
+    assert view["context_digest"] != intent["context_digest"]
+    assert view["execution_review"]["action_outcome"] == "SUCCEEDED"
+    assert view["execution_review"]["task_outcome"] == "failed"
+    assert c.client.get(RECOVERY_CONTEXT, headers=OBSERVER).json() == {"context": None}
+    replacement = request_recovery(c, "fresh-assessment")
+    assert replacement["request_id"] != intent["request_id"]
+
+
+@pytest.mark.parametrize("change", ["disable", "grant"])
+@pytest.mark.parametrize("created", [False, True])
+def test_real_account_revocation_blocks_new_child_but_preserves_exact_replay(failed_api, change, created):
+    from datetime import datetime, timezone
+    from hashlib import sha256
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.mission_service import MissionService
+    from fleet.server.mission_store import MissionStore
+    from fleet.server.proposal_store import ProposalStore
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.physical_transfer_observer import PhysicalTransferObserver
+    from test_physical_transfer_observer_api import TOKEN
+    from test_password_session import _client, _login, HASH, ORIGIN
+
+    c = failed_api
+    users = {sha256((name + "-secret").encode()).hexdigest(): {"principal_id": name, "role": "operator"}
+             for name in ("harbor", "operator")}
+    logins = {name: {"principal_id": name, "role": "operator", "password_scrypt": HASH} for name in ("harbor", "manager")}
+    app = create_app(FleetConsole([], []), task_service=FleetTaskService(c.tasks, robot_ids=()),
+        mission_service=MissionService(MissionStore(c.db)), proposal_store=ProposalStore(c.db), site_users=users,
+        site_logins=logins, accounts_bootstrap=("manager", "test-site"), deployment_profile="simulation",
+        omx_action_transport=c.port, arm_transfer_installation=c.installation,
+        arm_transfer_observer=PhysicalTransferObserver(producer_id=c.installation.policy.producer_id,
+            token=TOKEN, valid_until=datetime(2035, 1, 1, tzinfo=timezone.utc)))
+    c.app, c.client, manager = app, _client(app), _client(app)
+    c.store = app.state.arm_transfer_job_store
+    c.store._clock_ns = lambda: c.clock[0]
+    c.port.store = c.store
+    assert _login(c.client, login="harbor").status_code == 200
+    assert _login(manager, login="manager").status_code == 200
+    view = c.client.get(c.url + "/recovery").json()["recovery"]
+    response = c.client.post(c.url + "/recovery", headers=ORIGIN,
+        json=dict(request_key="account-recovery", expected_context_digest=view["context_digest"]))
+    assert response.status_code == 200, response.text
+    intent = response.json()["request"]
+    evidence = observe_recovery(c, intent)
+    route = c.url + "/recovery/" + intent["request_id"] + "/approve"
+    body = approval(c, intent, evidence)
+    original = None
+    if created:
+        response = c.client.post(route, headers={**headers("operator"), **ORIGIN}, json=body)
+        assert response.status_code == 200, response.text
+        original = response.json()
+    row = next(r for r in manager.get("/api/fleet/auth/accounts").json() if r["principal_id"] == "harbor")
+    changes = {"enabled": False} if change == "disable" else {"grants": [{"resource": "site:test-site", "capabilities": ["fleet.read"]}]}
+    response = manager.patch("/api/fleet/auth/accounts/" + row["account_id"], headers=ORIGIN,
+                              json={"revision": row["revision"], **changes})
+    assert response.status_code == 200, response.text
+    assert c.client.get(c.url, headers=headers("harbor")).status_code == 401
+    response = c.client.post(route, headers={**headers("operator"), **ORIGIN}, json=body)
+    if created:
+        assert response.status_code == 200 and response.json() == original
+    else:
+        assert response.status_code == 403
+        assert {r["owner_id"] for r in claims(c.db)} == {c.parent}
