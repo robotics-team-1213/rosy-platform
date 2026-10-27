@@ -12260,6 +12260,12 @@ osy-d395-s1d\`.
 - gate 변화: 복구. 수집 게이트와 단독 실행(`ROSY_ALONE_FILES`)이 긴 목록에서도 제 인자를 받는다.
 - CE: 새 교훈 — `docs/solutions/workflow-issues/windows-ssh-exe-cuts-long-remote-command-2026-10-26.md`.
 
+## 2026-10-26 · uncommitted · Monitoring 앱 소유·공유 검증 등록
+
+- 변경: 독립 상태 앱의 소유/표면 기준과 source part·크기 측정·browser scope·CI를 등록했다. 기존 원격 구조/브라우저 게이트를 약화하지 않고 실제 backend 조회를 검증한다.
+- 증거: `1a9cd5b164` 실제 Chromium3시험과 구조/harness/affected/browser-scope262시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). API 브라우저 경로의 증거이며 화면 완성·G1/G2/G3·native 배포·현장 수용은 아니다.
+- gate 변화: UI·배포·실제 PC HOLD 유지. CE: 해당 없음 — 소유/등록/회귀로 기록했다.
+
 ## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 
 - 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
@@ -12515,6 +12521,14 @@ osy-d395-s1d\`.
 - 증거: 회귀 시험이 고치기 전 코드에서 같은 오류로 실패(원격 1 failed)하고, 고친 뒤 release 시험 109 passed, known_failures NEW 0.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — `docs/solutions/workflow-issues/collection-time-probe-races-across-xdist-workers-2026-10-28.md`.
+
+## 2026-10-28 · uncommitted · fix(harness): operations/monitoring 루트의 capability 복구
+
+- 변경: `tools/harness/platform_parts.yaml`. `applications/monitoring` 루트를 끼워 넣을 때 `operations/monitoring`의 `capability: fleet`가 새 항목으로 넘어가 원래 루트가 capability를 잃었다. 원래 루트에 `capability: fleet`를 다시 둔다.
+- 근거: 착지 사전 시험의 `test/architecture/test_capability_owners.py::test_every_root_has_a_known_capability`가 `operations/monitoring: None`으로 실패했다.
+- 증거: 원격 `test/architecture`·`test/test_harness_contracts.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 편집 실수다.
 
 ## 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
 
