@@ -1,6 +1,8 @@
 """Recording frames verify atomic galleries and sequential playback in Chromium."""
 import base64
 import io
+import os
+from pathlib import Path
 import threading
 from types import SimpleNamespace
 
@@ -10,6 +12,14 @@ from browser_harness import browser_tests_enabled, free_port
 from review_app import ReviewStore, make_server
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
+
+
+def capture(page, name):
+    if root := os.environ.get('ROSY_SCREENSHOT_DIR'):
+        target = Path(root) / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
+        print(f'screenshot: {target}')
 
 
 @pytest.fixture
@@ -244,6 +254,7 @@ def test_unsaved_review_guards_switch_reload_and_departure_without_blocking_refr
     page.get_by_role('button', name='취소', exact=True).click()
     expect(page.locator('#prepared-set')).to_have_value('a' * 32)
     expect(reason).to_have_value('human judgment not saved')
+    capture(page, 'recording-learning-review-unsaved.png')
     page.locator('#review-open').click()
     expect(page.get_by_role('dialog')).to_be_visible()
     page.get_by_role('button', name='취소', exact=True).click()
@@ -281,7 +292,9 @@ def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(p
     page.locator('#export-name').fill('Reviewed conversion')
     page.locator('#export-profile').set_input_files({'name': 'profile.json',
         'mimeType': 'application/json', 'buffer': json.dumps({'fixture': True}).encode()})
+    expect(page.locator('#export-status')).to_contain_text('프로필 파일을 읽었습니다')
     page.locator('#refresh').click()
+    expect(page.locator('#prepared-status')).to_contain_text('검수 분할 준비됨')
     expect(page.locator('#native-export')).to_be_enabled()
     reason = page.locator('[data-episode="0"] [data-field="reason"]')
     reason.fill('corrected human judgment')
@@ -318,6 +331,7 @@ def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(p
     expect(page.locator('#review-status')).to_contain_text(next_id)
     expect(page.locator('#export-saved-review')).to_be_checked()
     expect(page.locator('#export-review-status')).to_contain_text(next_id)
+    capture(page, 'recording-learning-review-saved.png')
     expect(page.locator('#native-export')).to_be_enabled()
     page.route('**/center/export', lambda route: (exports.append(route.request.post_data_json),
         route.fulfill(json={'accepted': True})))
