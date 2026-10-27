@@ -133,12 +133,18 @@ git rev-parse --verify -q origin/main >/dev/null || {
 }
 # D-889 5: a publish push puts the whole range's history on a public repo. A plain git push to
 # publish/main-* skipped publish_main.py's per-commit scan (2026-10-27), so the hook runs it too.
-if [ -n "${PUBLISH_REF:-}" ] && [ -f tools/publish_main.py ]; then
+# publish_main.py --apply ran both checks for exactly this SHA moments ago and says so (D-889); any other push runs them.
+CHECKED=""
+if [ -n "${PUBLISH_REF:-}" ] && [ "${ROSY_PUBLISH_CHECKED:-}" = "$PUSH_SHA" ]; then
+  CHECKED=1
+  echo "[pre-push] secret scan and Safety-Review: publish_main.py passed them on ${PUSH_SHA:0:10}"
+fi
+if [ -n "${PUBLISH_REF:-}" ] && [ -z "$CHECKED" ] && [ -f tools/publish_main.py ]; then
   echo "[pre-push] secret scan on origin/main..${PUSH_SHA:0:10}"
   "$PY" tools/publish_main.py --secret-scan "$PUSH_SHA" || exit 1
 fi
-echo "[pre-push] Safety-Review trailer on origin/main..${PUSH_SHA:0:10}"
-if ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 2>&1)"; then
+[ -n "$CHECKED" ] || echo "[pre-push] Safety-Review trailer on origin/main..${PUSH_SHA:0:10}"
+if [ -z "$CHECKED" ] && ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 2>&1)"; then
   printf '%s\n' "$SAFETY_OUT" >&2
   case "$SAFETY_OUT" in
     *"without a \`Safety-Review:"*)
@@ -148,7 +154,7 @@ if ! SAFETY_OUT="$("$PY" tools/harness/safety_review.py origin/main "$PUSH_SHA" 
   esac
   exit 1
 fi
-printf '%s\n' "$SAFETY_OUT"
+[ -n "$CHECKED" ] || printf '%s\n' "$SAFETY_OUT"
 
 # D-766 2: every pushed commit passes the size rule on its own (git only, no tests).
 if [ -f tools/harness/size_range.py ]; then

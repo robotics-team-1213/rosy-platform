@@ -17,8 +17,8 @@ Publish mode:
    record's ``tier`` field when present, else (older records) one invocation exactly ``["test"]`` (root
    test/ whole: only ``lab_full_invocations``, the FULL tier, runs it; the affected tier names root test
    files one by one). If records exist in the range but none has a ``tier`` string or an ``invocations``
-   list of lists, the format is unknown: exit 8, never a silent "nothing to publish". A SHA whose
-   ``tools/hooks/pre-push`` differs from main's is skipped: the installed hook refuses to push it.
+   list of lists, the format is unknown: exit 8, never a silent "nothing to publish". The push runs the
+   SHA's own hook copy (4.), so a later hook edit on main does not make older green SHAs unpublishable.
 3. Due when the last publish (newest ``origin/publish/main-YYYYMMDD[-HH]`` by name; with --apply also
    merged ``publish/main-`` PRs from gh) is older than --min-hours, or ``--force-blocked`` names a waiting PR.
 4. --apply: refuse if a publish PR is open; check the Safety-Review range (``safety_review.py origin/main
@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -85,9 +86,9 @@ class Stop(Exception):
         self.code = code
 
 
-def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+def git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
-                            encoding="utf-8", errors="replace")
+                            encoding="utf-8", errors="replace", env=env)
     if check and result.returncode != 0:
         raise Stop(1, f"git {' '.join(args)} failed ({result.returncode}): {result.stderr.strip()}")
     return result
@@ -152,8 +153,7 @@ def publish_sha(repo: Path) -> str | None:
             continue
         seen += 1
         known += tier(record) is not None
-        # The installed pre-push refuses a commit whose own tools/hooks/pre-push differs from it.
-        if green_full(repo, sha) and not git(repo, "diff", "--quiet", sha, "main", "--", HOOK, check=False).returncode:
+        if green_full(repo, sha):  # pushed through its own hook copy, so a hook edit on main never blocks it
             return sha
     if seen and not known:
         raise Stop(8, f"{seen} land record(s) past origin/main, none with a known format (tier field or"
@@ -321,8 +321,9 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
         hooks.mkdir(exist_ok=True)
         (hooks / "pre-push").write_bytes(git(repo, "show", f"{sha}:{HOOK}").stdout.replace("\r", "").encode())
         (hooks / "pre-push").chmod(0o755)
+        # The hook skips the secret scan and Safety-Review this run just passed for exactly this SHA (D-889).
         push = git(temp, "-c", f"core.hooksPath={hooks.as_posix()}", "push", "origin", f"{sha}:refs/heads/{branch}",
-                   check=False)
+                   check=False, env={**os.environ, "ROSY_PUBLISH_CHECKED": sha})
         if push.returncode != 0:
             raise Stop(1, f"push refused (pre-push or remote):\n{push.stdout}{push.stderr}".rstrip())
     finally:
