@@ -22,8 +22,7 @@ Each stage can also be run alone:
   verify     after the release, is the box where the next grasp on that surface reaches (place_check)?
   record     one A/B cycle recorded as two training episodes through record_session --replay, labelled
              held/empty from the recorded jaws (cell_record.py); no chunk session may be running.
-  survey     above the located box without descending: the jaws' offset from it, map plus arm (cell_survey.py).
-Every pick attempt and survey is one attempts.jsonl row with the context it ran with (cell_attempts.py).
+  survey     above the box, never descending: the jaws' offset from it (cell_survey.py). Rows: cell_attempts.py.
 
 The arm is moved only by the chunk_runner session already running under record_session.py --chunks
 (the guard's teacher mode owns the bus). This pipeline sends it commands; it never opens a port.
@@ -69,7 +68,8 @@ def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
 
 SEQUENCE = ("goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick", "goto above_place",
             "run descend_place", "run release_place", "run lift_place", "park")
-STEP_KEYS = ("ok", "error", "holding", "gripper_current_ma", "settled", "fault", "contact", "state", "target", "t")
+STEP_KEYS = ("ok", "error", "holding", "gripper_current_ma", "settled", "fault", "contact", "state", "target", "t",
+             "paced_ticks")
 
 
 def transfer(cell, library: Path, hover=None) -> dict:

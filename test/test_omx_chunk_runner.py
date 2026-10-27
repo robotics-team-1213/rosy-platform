@@ -305,6 +305,43 @@ def test_a_session_that_ends_mid_chunk_says_so_in_its_last_status(bus_dead):
     assert last["fault"].startswith("session ended: ValueError: wrist_flex: following error")
 
 
+class SlowWrist(Robot):
+    """wrist_flex follows at most `rate` units a tick, and the guard stops past 2.78 units (5 motor degrees)."""
+
+    def __init__(self, rate=0.1):
+        super().__init__()
+        self.rate, self.worst = rate, 0.0
+
+    def send_action(self, action):
+        self.sent.append(action)
+        for i, name in enumerate(m.NAMES):
+            step = action[name] - self.pos[i]
+            self.pos[i] += max(-self.rate, min(self.rate, step)) if i == 3 else step
+        self.worst = max(self.worst, abs(action["wrist_flex.pos"] - self.pos[3]))
+        if self.worst > 2.78:
+            raise ValueError("wrist_flex: following error >5 motor degrees")
+        return action
+
+
+@pytest.mark.parametrize("paced", [True, False])
+def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_guard_stops(monkeypatch, paced):
+    if not paced:
+        monkeypatch.setattr(m, "PACE_LAG", 99.0)
+    lift = library()
+    lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
+    robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(robot, lift, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    if not paced:  # the wrist falls 0.05 units a tick further behind and the guard turns torque off
+        with pytest.raises(ValueError, match="following error"):
+            r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+        return
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    done = by_command(status, "run approach_pinky")[0]
+    assert done["ok"] and done["state"][3] == pytest.approx(60.0) and done["paced_ticks"] > 0
+    assert robot.worst < m.PACE_LAG + 0.2  # held near the pace bound, far from the guard's
+
+
 def test_the_library_contract_is_enforced(tmp_path):
     import json
     bad = {**library(), "fps": 2}  # 2 units per frame is within the guard speed at 2 fps
