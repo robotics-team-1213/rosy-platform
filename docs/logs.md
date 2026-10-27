@@ -12428,3 +12428,8 @@ osy-d395-s1d\`.
 - 증거: 원격 Isaac 전체 시험 exit 0·신규 실패 0, ROS conformance failures 빈 목록, 두 pointer와 인터프리터 해시 전환 후 재조회. AI 추가 ROS는 외부 GPU owner로 실행 전에 거절됐으며 승인 서비스 복원을 확인했다.
 - gate 변화: 특정 SDK/소프트웨어 실행 증거만 추가한다. 학습 정책·실물·현장 수용을 주장하지 않는다. 초기 UNKNOWN/조기 실패의 미확정 원인을 보존한다.
 - CE: 새 교훈 기록 — USD variant와 누락된 position drive gain은 import 성공만으로 놓칠 수 있어 [해결·회귀·복구 조건](solutions/runtime-errors/isaac62-imported-articulation-with-zero-position-drive-2026-10-27.md)을 남겼다.
+
+## 2026-10-27 · uncommitted · AI ROS 거절의 관측 범위 보충
+
+- 보충: 앞 기록의 외부 GPU owner 표현을 GPU 무점유 확인 조건 미충족으로 한정한다. 당시 원본 조회 응답이 없어 점유와 조회 실패를 구분하지 않는다. SDK 미시작·서비스 복원과 AI 학습 스모크 성공의 구분은 유지한다.
+- gate 변화: 없음. 추가 runtime 성공으로 표시하지 않는다.

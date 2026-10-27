@@ -369,3 +369,8 @@
 - 증거: 소스 6df916084147ce51bb10b34e8339e302a88fdfe6의 원격 Isaac 전체 시험 exit 0·신규 실패 0. 모델 PC ROS conformance는 관절 이동·취소 정지·양쪽 카메라·토픽·GPU 정리를 통과했다. 두 PC의 PhysX/PPO 설치 검증과 모델 PC의 기본 SDK pointer 6.2 전환은 [검증 기록](../../../docs/validation/isaac62-sdk-migration-2026-10-27/result.md)을 따른다.
 - gate 변화: 이번 특정 SDK/소프트웨어 실행 증거를 추가한다. 학습 정책 일반화·실물·현장 수용으로 확대하지 않는다. AI 추가 ROS 시험은 외부 GPU owner로 SDK 시작 전에 거절됐고 승인 서비스는 복원했다.
 - 교훈: [import 성공 뒤 position drive 누락](../../../docs/solutions/runtime-errors/isaac62-imported-articulation-with-zero-position-drive-2026-10-27.md)을 기록했다. 초기 UNKNOWN/조기 실패의 정확한 원인은 미확정으로 유지한다.
+
+## 2026-10-27 · uncommitted · AI 추가 ROS 거절 근거 보충
+
+- 보충: 앞 항목의 외부 GPU owner는 helper의 오류 문구다. 당시 점유와 조회 오류를 구분한 원본 응답을 저장하지 않았으므로 GPU 무점유 확인 조건 미충족까지만 확인된 사실로 유지한다. SDK 미시작·승인 서비스 복원은 확인했다.
+- gate 변화: 없음. AI ROS 통과를 주장하지 않는다.

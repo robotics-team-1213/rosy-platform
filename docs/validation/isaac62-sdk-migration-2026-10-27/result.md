@@ -29,7 +29,7 @@ SDK 6.2 후보 binding의 기존 실행 관리자는 OMX import·관절·120프�
 
 같은 버전에서 초기 ROS 시험은 카메라와 토픽을 수신했지만 관절 이동량 0으로 실패했다. 새 URDF converter의 미선택 Physics variant를 live reference에서 physx로 선택하고, URDF에 없는 drive gain을 명시했다. 현대 Manipulator importer는 position target, stiffness 40, damping `2√40×0.5+0.3 ≈ 6.6246`을 사용한다. 이는 기존 MuJoCo servo 계수를 기준으로 한 시뮬레이션 설정이며 물리 엔진 전체의 동등성이나 실물 팔 보정값을 뜻하지 않는다. wheel·구형 importer 경로는 유지한다.
 
-AI PC의 추가 ROS 시험 `isaac62-ai-ros-ccd75f`는 승인된 두 서비스 중지 후에도 외부 GPU 사용자가 남아 SDK 실행 전에 거절됐다. 외부 프로세스는 중지하지 않았다. 두 서비스 복원은 성공했다. 이 결과를 AI의 ROS conformance 통과로 표시하지 않으며, 앞서 통과한 AI PhysX·PPO 설치 검증과 구분한다.
+AI PC의 추가 ROS 시험 `isaac62-ai-ros-ccd75f`는 승인된 두 서비스 중지 후에도 GPU 무점유 확인 조건이 60초 동안 충족되지 않아 SDK 실행 전에 거절됐다. helper는 외부 GPU owner로 표시했지만 점유와 조회 실패를 구분한 당시 원본 응답은 저장하지 않았으므로 특정 owner로 단정하지 않는다. 추가 프로세스는 중지하지 않았고 두 서비스 복원은 성공했다. 이 결과를 AI의 ROS conformance 통과로 표시하지 않으며, 앞서 통과한 AI PhysX·PPO 설치 검증과 구분한다.
 
 ## 기본 경로 전환
 
@@ -41,6 +41,8 @@ AI PC의 추가 ROS 시험 `isaac62-ai-ros-ccd75f`는 승인된 두 서비스 �
 | 직접 launcher pointer | b6d72d2144c5ae7e13f94f381c52c78320e7b1ad2db20bf2c1785bc258794522 | f82189f2e9a97ed5e16d2a331685644ba7008f6c0e4cf7dad92524847c7f7695 |
 
 원본은 해당 소유 run의 `original-0`(launcher), `original-1`(JSON)에 mode 0600으로 보존한다. rollback도 같은 lease에서 실제 현재 SHA가 위 전환 값과 일치할 때만 원본을 복원하고 두 파일·기존 SDK 5.1 지문을 재확인한다. 외부 변경이나 마지막 receipt 실패가 있으면 실제 bytes를 먼저 대조하고 자동 덮어쓰기를 거절한다. 이전 SHA의 source binding을 수정하지 않는다. 새 기본값을 쓰는 별도 source binding의 CLI 확인은 후속 기록으로 결속한다.
+
+전환 후 소스 `1ca6bfa93982b7b82dfd35333aac3f8b754431f2`의 새 공식 source binding을 생성했다. 기존 `remote_isaac`의 check→start→receipt→observe→fetch 경로에서 SDK 6.2 준비, 실행 `a8351cfa2cb6524cb97f34873f917455`의 120프레임·exit 0·GPU 해제·최종 snapshot 파일 크기/SHA 검증을 모두 통과했다. 별도 후보 binding을 사용한 앞선 시험과 구분한다. 로컬 증거 record는 `isaac62-default-601a80`이다.
 
 ## 소스 검증과 남은 범위
 
