@@ -45,7 +45,7 @@ SDK 종료 직전에는 Torch 2.11.0+cu130·NumPy 2.3.1이 관측됐고 top-leve
 
 SDK lock SHA-256은 `d0475ad52dd5ab77ee559cb7e5c0734ad56fc65a6edeb773f7d2022c0bf038ce`다. 원본 kernel SHA는 `f6b49ed4fa67569c90d69c835e7700bb339b57ce67aecfe6b5b76c52b0c0b3b4`, 로컬 wheel SHA는 `d865768dcaeaece10fa56c5cdc7c9c167e9fbcb956f125f1225b2bf541743c44`다.
 
-실행한 cleanup.py SHA는 `49fdd947a367dd49be570f50fe2fae55f6cffb06ed7f2c8bf485b54cae2df814`, kernel_wheel.py SHA는 `a5d134a156841d7df87941807128be934af5ba85a8aff2cc165d32104ef5f05d`이며 커밋 `ad878b235d`의 바이트와 같다. 이후 로그 구획 이력을 정리했지만 구현 바이트는 바꾸지 않았다. 정제 ZIP manifest는 원본·정제본 SHA를 구분하고 CRC와 항목별 SHA를 검증했다.
+실행한 cleanup.py SHA-256은 `49fdd947a367dd49be570f50fe2fae55f6cffb06ed7f2c8bf485b54cae2df814`, kernel_wheel.py SHA-256은 `a5d134a156841d7df87941807128be934af5ba85a8aff2cc165d32104ef5f05d`이며 커밋 `ad878b235d`의 바이트와 같다. 이후 로그 구획 이력을 정리했지만 구현 바이트는 바꾸지 않았다. 정제 ZIP manifest는 원본·정제본 SHA를 구분하고 CRC와 항목별 SHA를 검증했다.
 
 | Confluence 첨부 | SHA-256 |
 |---|---|

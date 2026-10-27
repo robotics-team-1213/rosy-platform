@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · docs(isaac): 실행 파일의 SHA-256 표기를 명확히 함
 - 2026-10-27 · uncommitted · docs(isaac): SDK 복구와 두 PC 동시 학습 검증
 - 2026-10-27 · uncommitted · docs(learning): D-897 두 호스트 오프라인 시뮬레이션 학습
 - 2026-10-27 · uncommitted · test(isaac): Lab 3 설치 증거와 복구 회귀
 - 2026-10-27 · uncommitted · fix(remote): 시험 PC 메모리 예약을 실측으로, 현장 PC 디스크 판정 바로잡기
-- 2026-10-27 · uncommitted · fix(land): 시험 PC가 포기해 끝난 착지도 stop으로 남김
