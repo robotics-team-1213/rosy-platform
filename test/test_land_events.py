@@ -54,7 +54,7 @@ def test_confirmed_failures_split_into_shared_host_and_branch_causes():
             fail(0, "c", "robttt", "test/y.py::t"), fail(900, "c", "robttt", "test/y.py::t"),  # one host: host
             fail(0, "d", "ai", "test/z.py::t"),  # one branch once: branch
             fail(0, "e", "ai", "test/w.py::t", confirmed=False),  # load-flaky: not counted
-            fail(land_stats.WINDOW + 1, "f", "ai", "test/z.py::t")]  # same id, far apart, other host: branch
+            fail(land_stats.WINDOW + 1, "f", "rosy", "test/z.py::t")]  # same id, far apart, other host: branch
     (day,) = land_stats.daily(rows).values()
     assert (day["failed_shared"], day["failed_host"], day["failed_branch"]) == (2, 2, 2)
 
