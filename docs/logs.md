@@ -12414,6 +12414,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 시험 PC 확인의 부하(load1) 검사는 그대로라 실제로 바쁜 PC는 계속 거절된다.
 - CE: 해당 없음 — 갱신한 교훈 §3의 연장이고 근거가 코드·시험에 있다.
 
+## 2026-10-27 · uncommitted · docs(validation): SmolVLA 미세 조정 GPU 메모리
+
+- 변경: `docs/validation/smolvla-train-memory-2026-10-27/`(측정 스크립트와 결과).
+- 근거: D-866 2026-10-27 보완이 AI PC 첫 학습 전에 VRAM을 재도록 했다. 배치 8은 2.96 GB, 16은 4.63 GB, 32는 5 GB 상한 초과. AI PC는 다른 프로세스가 10.2 GB를 써서 ollama와 함께면 배치 16까지만 들어간다.
+- 증거: AI PC 측정 출력(`hold_gpu.sh`로 실행).
+- gate 변화: 없음.
+- CE: 해당 없음 — 측정 기록에 남는다.
+
 ## 2026-10-27 · 10f4997e11 · fix(land): affected 재준비에서도 유효한 FULL 원본 보존
 
 - 변경: `tools/land_prepare.py`. 성공한 affected 재준비 뒤에도 캐시 사용과 원래 후보의 계보가 유효하면 기존 FULL 준비 기록을 바이트 그대로 보존한다. 현재 실행의 사건 기록은 affected로 남기고, 다음 차례는 원래 FULL 기준부터 main 변화분 전체를 확인한다. carried·잘못된 계보·비정상 invocations·실패·HEAD 변경은 보존 조건을 통과하지 못한다. `--no-cache`는 이전의 새 affected 체크포인트 동작을 유지한다.
