@@ -12413,3 +12413,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_remote_pytest_memory.py`(작업 스크립트를 Linux에서 실제로 돌려 cpu 줄과 잠금 값 확인), `test/test_remote_pytest.py`.
 - gate 변화: 없음. 시험 PC 확인의 부하(load1) 검사는 그대로라 실제로 바쁜 PC는 계속 거절된다.
 - CE: 해당 없음 — 갱신한 교훈 §3의 연장이고 근거가 코드·시험에 있다.
+
+## 2026-10-27 · uncommitted · docs(validation): SmolVLA 미세 조정 GPU 메모리
+
+- 변경: `docs/validation/smolvla-train-memory-2026-10-27/`(측정 스크립트와 결과).
+- 근거: D-866 2026-10-27 보완이 AI PC 첫 학습 전에 VRAM을 재도록 했다. 배치 8은 2.96 GB, 16은 4.63 GB, 32는 5 GB 상한 초과. AI PC는 다른 프로세스가 10.2 GB를 써서 ollama와 함께면 배치 16까지만 들어간다.
+- 증거: AI PC 측정 출력(`hold_gpu.sh`로 실행).
+- gate 변화: 없음.
+- CE: 해당 없음 — 측정 기록에 남는다.
