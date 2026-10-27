@@ -261,3 +261,66 @@ def test_real_native_terminal_reaches_bridge_after_sent_positions(
     assert sample.motor_health.sample_age_s == pytest.approx(age)
     assert m.next_sample(row, health, sample.captured_at, wall[0]) is None
     assert m.next_sample({}, health, None, wall[0] + 5) is None
+
+
+@pytest.fixture
+def unsampled_native_health(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    spec = importlib.util.spec_from_file_location("native_motor_health_empty", OMX / "motor_health.py")
+    producer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(producer)
+    monkeypatch.setenv("ROSY_OMX_MONITOR_STATE", str((tmp_path / "empty-health.json").resolve()))
+    monkeypatch.setenv("ROSY_OMX_MONITOR_OWNER", ARM_ID)
+    monkeypatch.setenv("ROSY_OMX_MONITOR_SESSION", "12345678-1234-4234-8234-123456789abc")
+    wall = [NOW]
+
+    def clock():
+        wall[0] += 0.01
+        return wall[0]
+
+    monkeypatch.setattr(producer.time, "time", clock)
+    bus = SimpleNamespace(motors={name: SimpleNamespace(id=11 + i) for i, name in enumerate(m.MOTORS)})
+    motion = SimpleNamespace(label="follower", follower=bus, active=m.MOTORS, clock=lambda: 10.0)
+    return producer, producer.MotorHealth(tmp_path / "empty-health.jsonl"), motion, wall
+
+
+@pytest.mark.parametrize("ending,status,reason", [
+    ("end", "ended", "session ended"),
+    ("fault", "fault", "following error"),
+    ("safe_parent", "ended", "session ended"),
+    ("unsafe_parent", "fault", "cleanup unconfirmed"),
+])
+def test_native_terminal_without_measurements_has_valid_source_clock(unsampled_native_health, ending, status, reason):
+    from core_common.motor_health import read_motor_health_snapshot
+
+    producer, monitor, motion, wall = unsampled_native_health
+    monitor.publish()
+    terminal_time = wall[0] + 0.01
+    if ending == "end":
+        monitor.end()
+    elif ending == "fault":
+        monitor.fault(motion, ValueError("following error"))
+    else:
+        producer.finish_snapshot(monitor.state_path, ARM_ID, monitor.session_id, safe_end=ending == "safe_parent")
+    row = json.loads(monitor.state_path.read_text())
+    health, event = read_motor_health_snapshot(monitor.state_path, ARM_ID, now=wall[0] + 0.1)
+    assert row["observed_at"] <= row["terminal_at"] == terminal_time == event
+    assert health.status == status and health.stop_reasons == [reason]
+    assert health.evidence == "disconnected" and health.motors == [] and row["expected_motor_count"] == 0
+
+
+def test_native_fault_clock_and_reason_survive_end_and_parent_cleanup(unsampled_native_health):
+    from core_common.motor_health import read_motor_health_snapshot
+
+    producer, monitor, motion, wall = unsampled_native_health
+    monitor.fault(motion, ValueError("following error"))
+    fault = json.loads(monitor.state_path.read_text())
+    wall[0] += 1
+    monitor.end()
+    producer.finish_snapshot(monitor.state_path, ARM_ID, monitor.session_id, safe_end=True)
+    terminal = json.loads(monitor.state_path.read_text())
+    health, event = read_motor_health_snapshot(monitor.state_path, ARM_ID, now=wall[0] + 0.1)
+    assert terminal == fault
+    assert event == fault["terminal_at"] and health.stop_reasons == ["following error"]
+    assert health.status == "fault" and health.evidence == "disconnected"
