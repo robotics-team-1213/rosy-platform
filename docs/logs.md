@@ -12430,6 +12430,13 @@ osy-d395-s1d\`.
 - gate 변화: 판정 기준은 유지한다. 유효한 FULL 원본과 현재 후보의 변화분 증거 연결만 보존하며, 실제 최종 소스의 전체 시험을 새로 실행했다고 주장하지 않는다. 장치·이미지·현장 수용과는 별개다.
 - CE: 해당 없음 — 원인과 보존 조건은 새 코드·회귀 시험과 기존 교훈 `docs/solutions/workflow-issues/land-record-stopped-when-tests-moved-before-the-turn-2026-10-26.md`에서 확인할 수 있다.
 
+## 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록
+
+- 변경: 실행 계획(2026-10-25-fleet-policy-admission-design.md) P3 상태줄에 착지 사실과 로컬 main `b54b29d5d0`을 붙였다. 내용 변화 없음.
+- 증거: 착지 기록 `.git/rosy-land/b54b29d5d0…` 랜드 레코드(3라운드, FULL+affected 0 NEW). 모듈 로그·생성 문서는 그 착지에 이미 반영됐다.
+- Gate: 변화 없음. P5 현장 수용은 별도.
+- CE: 해당 없음 — 상태 한 줄 기록.
+
 ## 2026-10-27 · uncommitted · feat(perception): Fleet 승인을 모델 PC 레지스트리에 반영(D-898)
 
 - 변경: Fleet `GET /api/fleet/perception-promotions/{sha}/decision.signed`(viewer)가 정본 결정과 새 역할 키 `perception-decision`의 Ed25519 서명을 돌려준다(키 없음 503, 미결정 409). 모델 PC `approval_import.py`가 서명·APPROVED·묶음 해시·revision·files·결과 폴더·제안자≠승인자를 확인한 뒤 model-watch와 같은 work.lock 아래 `accepted/`와 `models/approvals/<sha>/`에 기록한다. 활성 포인터·shadow·배포는 건드리지 않는다. contracts 0.1.15(`decision_encoded`·`sign`·`verify`), 상태 행 조회는 `promotion_request.ready_rows`로 공유.
