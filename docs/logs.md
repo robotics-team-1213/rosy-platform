@@ -12383,6 +12383,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음(같은 시험, 같은 판정). 시험 PC 한 대에 동시에 오르는 작업이 늘어난다. 작업마다 `MemoryMax` 6 GB와 실제 `MemAvailable` 검사는 그대로다.
 - CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` §3.
 
+## 2026-10-27 · c36bfb48ad · docs: D-899 인증된 이송 복구 요청 원장
+
+- 변경: 인증된 요청과 새 독립 근거, 원본 전체 결속, 별도 운영자 승인, 역사적 승인 replay를 D-899·Log·모듈 how-to·검증 기록에 연결했다. 공유 API schema 계약·HTTP·콘솔은 뒤의 별도 단계로 둔다.
+- 증거: 공식 도구로 D-899 예약, ADR/Log 동시 커밋, Log BOM/CRLF 보존. 관련 원격 16 suites 283 passed/0 skipped·NEW 0, 독립 계약 검토의 원본 판정 교체 결함은 직접 RED/GREEN 후 재확인했다.
+- 메타데이터: 실제 다른 세션의 예약 D-896/D-897/D-898을 pending gap으로 선언해 lint의 3 errors를 수정했다. 이후 0 errors/37 warnings. 실행 selector나 실패 baseline을 바꾸지 않았다.
+- Gate: 기존 gate 변화 없음. 호스트 검증과 실제 관측 생산자·장치·학습 수용은 별도다.
+- CE: 해당 없음 — ADR·공통 검증·회귀 시험으로 이유와 근거를 보존했다.
+
 ## 2026-10-27 · uncommitted · feat(doctor): 장부상 거절된 시험 PC를 경고
 
 - 변경: `tools/doctor.py --hosts`가 시험 PC마다 착지와 같은 배치 판정(`remote_pytest.place`)을 돌리고, 거절인데 실제 여유 메모리·부하·디스크로는 설명되지 않으면 `WARN capacity <host>: ... refused by bookkeeping, not load`를 낸다. 진짜로 꽉 찬 PC의 거절은 OK로 보인다.
