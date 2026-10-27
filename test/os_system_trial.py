@@ -66,7 +66,7 @@ def validate(raw, *, target_slot, root_uuid, previous_boot):
         if not isinstance(event, dict):
             raise ValueError("trial journal entry is not an object")
         event_boot = event.get("_BOOT_ID")
-        if not isinstance(event_boot, str) or str(uuid.UUID(event_boot)) != event_boot:
+        if not isinstance(event_boot, str) or uuid.UUID(event_boot).hex != event_boot:
             raise ValueError("trial journal boot UUID differs")
         boots.add(event_boot)
         message = event.get("MESSAGE", "")
@@ -74,7 +74,8 @@ def validate(raw, *, target_slot, root_uuid, previous_boot):
             if event.get("_SYSTEMD_UNIT") != UNIT or event.get("_UID") != "0":
                 raise ValueError("trial probe sender differs")
             facts = json.loads(message.removeprefix(PREFIX))
-            if not isinstance(facts, dict) or set(facts) != FIELDS or event.get("_BOOT_ID") != facts["boot_id"]:
+            if (not isinstance(facts, dict) or set(facts) != FIELDS
+                    or event_boot != uuid.UUID(facts["boot_id"]).hex):
                 raise ValueError("trial probe boot binding differs")
             records.append(facts)
     if len(records) != 1:
@@ -84,7 +85,7 @@ def validate(raw, *, target_slot, root_uuid, previous_boot):
     expected = dict(schema_version=1, root_device="/dev/vdc4" if target_slot == "a" else "/dev/vdc5",
                     root_argument="root=PARTUUID=" + root_uuid, slot=target_slot, os_layout="ab-v2",
                     device_tree_partition=2 if target_slot == "a" else 3, tryboot=1, deadline_active=True)
-    if (not isinstance(boot, str) or str(uuid.UUID(boot)) != boot or boot == previous_boot or boots != {boot}
+    if (not isinstance(boot, str) or str(uuid.UUID(boot)) != boot or boot == previous_boot or boots != {uuid.UUID(boot).hex}
             or any(facts[key] != value or type(facts[key]) is not type(value) for key, value in expected.items())
             or not isinstance(facts["deadline_timer"], str)
             or [line.strip() for line in facts["deadline_timer"].splitlines()

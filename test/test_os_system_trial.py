@@ -23,9 +23,9 @@ def facts():
 
 
 def events():
-    probe = dict(_UID="0", _PID="200", _BOOT_ID=BOOT, _SYSTEMD_UNIT=UNIT,
+    probe = dict(_UID="0", _PID="200", _BOOT_ID=BOOT.replace("-", ""), _SYSTEMD_UNIT=UNIT,
                  SYSLOG_IDENTIFIER="rosy-system-trial-probe", MESSAGE="ROSY_SYSTEM_TRIAL " + json.dumps(facts()))
-    started = dict(_PID="1", _BOOT_ID=BOOT, UNIT="rosy-os-trial-deadline.service",
+    started = dict(_PID="1", _BOOT_ID=BOOT.replace("-", ""), UNIT="rosy-os-trial-deadline.service",
                    MESSAGE_ID="7d4958e842da4a758f6c1cdc7b36dcc5", __MONOTONIC_TIMESTAMP="180000001")
     return [probe, started]
 
@@ -41,7 +41,7 @@ def test_valid_trial_journal_binds_real_observations_to_the_deadline_boot():
 
 @pytest.mark.parametrize("fault", ["tryboot", "partition", "root_device", "root_uuid", "slot", "layout",
     "old_boot", "sender_boot", "uid", "unit", "inactive_timer", "timer_config", "deadline_pid",
-    "completed_only", "early_start", "duplicate_probe", "missing_deadline"])
+    "completed_only", "early_start", "duplicate_probe", "missing_deadline", "hyphenated_journal_boot"])
 def test_offline_trial_rejects_unbound_or_weaker_evidence(fault):
     rows = copy.deepcopy(events())
     observed = facts()
@@ -53,7 +53,8 @@ def test_offline_trial_rejects_unbound_or_weaker_evidence(fault):
         key, value = changes[fault]
         observed[key] = value
         rows[0]["MESSAGE"] = "ROSY_SYSTEM_TRIAL " + json.dumps(observed)
-    elif fault == "sender_boot": rows[0]["_BOOT_ID"] = PREVIOUS
+    elif fault == "sender_boot": rows[0]["_BOOT_ID"] = PREVIOUS.replace("-", "")
+    elif fault == "hyphenated_journal_boot": rows[0]["_BOOT_ID"] = BOOT
     elif fault == "uid": rows[0]["_UID"] = "1000"
     elif fault == "unit": rows[0]["_SYSTEMD_UNIT"] = "unrelated.service"
     elif fault == "deadline_pid": rows[1]["_PID"] = "99"
