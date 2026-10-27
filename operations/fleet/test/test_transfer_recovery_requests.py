@@ -105,6 +105,14 @@ def test_revoked_original_proposer_cannot_be_approved(failed_driver):
     assert claims(failed_driver[0].path) == before
 
 
+def test_read_only_account_is_not_offered_a_recovery_request(failed_driver):
+    d, _ = failed_driver
+    read_only = SitePrincipal(PROPOSER.principal_id, "operator", account_id="read-only-account",
+        site_resource="site:test", grants=(("site:test", ("fleet.read",)),))
+    preview = service(failed_driver).preview(d.job["mission_id"], read_only)
+    assert preview["can_request"] is False
+
+
 def test_expired_evidence_cannot_be_approved(failed_driver):
     d, _ = failed_driver
     s = service(failed_driver)
