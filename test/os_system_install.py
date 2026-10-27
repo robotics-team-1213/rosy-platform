@@ -83,7 +83,7 @@ def journal(instance, source_slot):
     part = next(p for p in layout["partitions"] if p["role"] == "root_" + target_slot)
     target = WORK / "observed-trial"
     target.mkdir(mode=0o700)
-    run(["mount", "-t", "ext4", "-o", "ro,noload,nodev,nosuid,noexec", "/dev/vdc" + str(part["number"]), target])
+    run(["mount", "-t", "ext4", "-o", "noload,nodev,nosuid,noexec", "/dev/vdc" + str(part["number"]), target])
     try:
         raw = run(["journalctl", "--directory", target / "var/log/journal", "--output=json", "--no-pager",
                    "--all", "-n", "128", "--unit=rosy-system-trial-probe.service",
