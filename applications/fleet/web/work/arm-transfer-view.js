@@ -26,6 +26,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
   input.id = "arm-transfer-id"; input.name = "mission_id"; input.required = true; input.maxLength = 192;
   label.htmlFor = input.id; label.append(input);
   read.id = "arm-transfer-read"; admit.id = "arm-transfer-admit";
+  read.setAttribute("data-work-read", "");
   state.id = "arm-transfer-state"; state.setAttribute("role", "status"); state.setAttribute("aria-live", "polite");
   admit.setAttribute("aria-describedby", state.id);
   actions.append(read, admit); form.append(label, actions);

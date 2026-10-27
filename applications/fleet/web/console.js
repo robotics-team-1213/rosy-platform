@@ -121,7 +121,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling)는 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input, main select:not(#vision-source):not(#robot-choice):not([data-work-read])");
+    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#robot-choice):not([data-work-read])");
 }
 
 const view = {
