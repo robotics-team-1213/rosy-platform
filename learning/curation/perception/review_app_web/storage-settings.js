@@ -1,5 +1,9 @@
 const $=id=>document.getElementById(id), GiB=1024**3;
 let send, changed, state, draft=[], quotas={}, generation=0, timer, busy=false, dirty=false, formRevision=0;
+const archiveParams=new URLSearchParams(location.search);
+let requestedOmx=archiveParams.get('archive')==='omx'?{id:archiveParams.get('dataset'),revision:archiveParams.get('revision')}:null;
+let omxSources=[],sourceLoaded=false,sourceRequest=0;
+const selectedOmx=()=>omxSources.find(row=>row.id===$('storage-prepare-dataset').value);
 const text=(parent,tag,value)=>{const node=document.createElement(tag);node.textContent=value;parent.append(node);return node;};
 const localDate=seconds=>{const date=new Date(seconds*1000);return new Date(date-date.getTimezoneOffset()*60000).toISOString().slice(0,16);};
 const bytes=input=>Math.ceil(Number(input.value)*GiB);
@@ -100,7 +104,7 @@ function controls(){
   $('storage-target-add').disabled=Boolean(pending)||!state?.connections?.length;
   $('storage-verify').disabled=Boolean(pending)||dirty||state?.upload_available===false||!saved||!targets.length||!$('storage-check-consent').checked;
   $('storage-activate').disabled=Boolean(pending)||dirty||enabled||!verified;
-  $('storage-prepare-submit').disabled=Boolean(pending)||dirty||!enabled||!$('storage-completed-consent').checked;
+  $('storage-prepare-submit').disabled=Boolean(pending)||dirty||!enabled||!$('storage-completed-consent').checked||($('storage-prepare-kind').value==='omx'&&!selectedOmx());
   $('storage-check-reason').textContent=pending?'보관 작업 처리 중입니다. 끝나면 다음 작업을 할 수 있습니다.':
     dirty?'저장하지 않은 변경이 있습니다. 저장 설정 저장을 눌러 반영한 뒤 다음 작업을 하세요.':
     state?.upload_available===false?'보관 서버의 전송 기능이 아직 준비되지 않았습니다. 운영자에게 서버 구성을 요청하세요.':
@@ -132,6 +136,7 @@ async function refresh(current){
       $('storage-cache-enabled').checked=data.cache_policy.enabled;}
     else if(dirty&&formRevision!==data.revision)error('다른 관리자가 저장 설정을 바꿨습니다. 입력을 확인한 뒤 저장 현황을 다시 불러오세요.');
     controls();result(data);
+    if(requestedOmx&&!sourceLoaded){$('storage-prepare-kind').value='omx';await sources();}
     if(data.operation)timer=setTimeout(()=>poll(current),700);
   }
   return data;
@@ -141,7 +146,7 @@ async function poll(current){
   catch(failure){if(current===generation)error(failureMessage(failure));}
 }
 export function storageSetupDirty(){return dirty;}
-export function clearStorageSetup(){generation++;clearTimeout(timer);state=null;draft=[];quotas={};dirty=false;$('storage-setup').hidden=true;}
+export function clearStorageSetup(){generation++;sourceRequest++;clearTimeout(timer);state=null;draft=[];quotas={};dirty=false;omxSources=[];sourceLoaded=false;$('storage-setup').hidden=true;}
 export async function loadStorageSetup(request,onChanged){
   send=request;changed=onChanged;const current=generation;
   try{await refresh(current);}catch(failure){if(current===generation){$('storage-setup').hidden=false;error(failureMessage(failure));}}
@@ -174,23 +179,37 @@ $('storage-verify').addEventListener('click',()=>action('settings/verify',{revis
 $('storage-activate').addEventListener('click',()=>action('settings/activate',{revision:state.revision}));
 async function sources(){
   if(!send||!state?.can_manage)return;
-  const current=generation, isaac=$('storage-prepare-kind').value==='isaac';
+  const current=generation,ticket=++sourceRequest,kind=$('storage-prepare-kind').value,isaac=kind==='isaac',omx=kind==='omx';
+  const previous=selectedOmx();
+  $('storage-folder-fields').hidden=isaac||omx;$('storage-isaac-fields').hidden=!isaac;$('storage-omx-fields').hidden=!omx;
   try{
-    const data=await send('/api/learning/storage/'+(isaac?'sim-sources':'sources'));if(current!==generation)return;
-    $('storage-folder-fields').hidden=isaac;$('storage-isaac-fields').hidden=!isaac;
-    const input=$(isaac?'storage-prepare-run':'storage-prepare-folder');input.replaceChildren();
-    const rows=isaac?data.runs:data.folders.filter(row=>row.can_prepare);
-    for(const row of rows){const option=text(input,'option',isaac?`${row.scenario_id||'Isaac 결과'} · ${row.run_id}`:row.artifact_id);option.value=isaac?row.run_id:row.artifact_id;}
-    $('storage-source-help').textContent=isaac&&!data.configured?'SIM 실행 연결이 필요합니다. SIM 실험 화면에서 실행기 상태를 확인하세요.':
+    const data=await send('/api/learning/storage/'+(isaac?'sim-sources':'sources'));if(current!==generation||ticket!==sourceRequest)return;
+    const input=$(omx?'storage-prepare-dataset':isaac?'storage-prepare-run':'storage-prepare-folder'),old=input.value;input.replaceChildren();
+    const rows=omx?(data.datasets||[]):isaac?data.runs:data.folders.filter(row=>row.can_prepare);
+    if(omx){omxSources=rows;const empty=text(input,'option','보관할 데이터와 버전을 선택하세요');empty.value='';}
+    for(const row of rows){const option=text(input,'option',omx?row.name:isaac?`${row.scenario_id||'Isaac 결과'} · ${row.run_id}`:row.artifact_id);option.value=omx?row.id:isaac?row.run_id:row.artifact_id;}
+    if(omx){
+      input.value=requestedOmx?(rows.find(row=>row.id===requestedOmx.id&&row.revision===requestedOmx.revision)?.id||''):old;
+      if(previous?.revision!==selectedOmx()?.revision)$('storage-completed-consent').checked=false;
+      showOmx();sourceLoaded=true;
+      if(requestedOmx){$('storage-preparation').open=true;$('storage-preparation').scrollIntoView({block:'start'});}
+    }
+    $('storage-source-help').textContent=omx&&requestedOmx&&!selectedOmx()?'요청한 데이터 버전이 등록 목록과 일치하지 않습니다. 원본 변환 결과를 확인하거나 사용할 버전을 직접 선택하세요.':
+      omx&&!data.omx_configured?'OMX 학습센터 연결이 필요합니다. 학습센터 설정을 확인하세요.':
+      isaac&&!data.configured?'SIM 실행 연결이 필요합니다. SIM 실험 화면에서 실행기 상태를 확인하세요.':
       !rows.length?'준비할 완료 자료가 없습니다. 등록된 완료 자료 위치 또는 SIM 실험의 종료 결과를 확인하세요.':
-        '파일의 쓰기가 끝난 자료만 선택하세요. 이미 준비한 목록은 다시 작성하지 않습니다.';
-  }catch(failure){if(current===generation)error(failureMessage(failure));}
+        omx?'선택한 고정 버전의 별도 사본을 만듭니다. 원본 학습 데이터는 보존하며 확인 후에만 전송합니다.':'파일의 쓰기가 끝난 자료만 선택하세요. 이미 준비한 목록은 다시 작성하지 않습니다.';
+  }catch(failure){if(current===generation&&ticket===sourceRequest){if(omx){omxSources=[];showOmx();}error(failureMessage(failure));}}
+  finally{if(current===generation&&ticket===sourceRequest)controls();}
 }
-$('storage-sources-refresh').addEventListener('click',sources);$('storage-prepare-kind').onchange=sources;
+function showOmx(){const row=selectedOmx();$('storage-omx-revision').textContent=row?`고정 버전 ${row.revision} · ROSY ACT 학습 데이터 · 보관 시 바이트 검증`:'등록된 데이터 버전을 확인하세요.';}
+$('storage-prepare-dataset').onchange=()=>{requestedOmx=null;$('storage-completed-consent').checked=false;showOmx();controls();};
+$('storage-sources-refresh').addEventListener('click',sources);$('storage-prepare-kind').onchange=()=>{requestedOmx=null;$('storage-completed-consent').checked=false;sources();};
 $('storage-prepare-form').onsubmit=event=>{
   event.preventDefault();const kind=$('storage-prepare-kind').value;
   const body={kind,archive:true,confirm_completed:$('storage-completed-consent').checked};
-  if(kind==='isaac')body.run_id=$('storage-prepare-run').value;
+  if(kind==='omx'){const row=selectedOmx();if(!row){error('보관할 등록 데이터 버전을 선택하세요.');return;}body.dataset_id=row.id;body.revision=row.revision;}
+  else if(kind==='isaac')body.run_id=$('storage-prepare-run').value;
   else{body.artifact_id=$('storage-prepare-folder').value;body.profile=$('storage-prepare-profile').value;
     body.provenance={source_revision:$('storage-source-revision').value.trim()};
     if(!body.provenance.source_revision){error('자료의 출처 버전을 입력하세요.');return;}}
