@@ -142,7 +142,8 @@ def test_setup_browser_completes_first_use_without_json(setup_server, accounts, 
             session, _ = session_for(url, accounts)
             page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
             page.goto(url + '/learning', wait_until='networkidle')
-            page.locator('#theme').select_option(theme)
+            if theme == 'light': page.locator('[data-theme-cycle]').click()
+            playwright.expect(page.locator('html')).to_have_attribute('data-theme', theme)
             expect = playwright.expect
             expect(page.locator('#storage-setup')).to_be_visible()
             page.locator('#storage-settings-open').click()

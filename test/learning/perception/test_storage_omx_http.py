@@ -78,7 +78,8 @@ def test_conversion_card_to_exact_confirmed_archive_in_chromium(archive_server, 
             expect(page.locator('#storage-completed-consent')).not_to_be_checked()
             expect(page.locator('#storage-prepare-submit')).to_be_disabled()
             assert remote.commits == commits
-            page.locator('#theme').select_option(theme)
+            if theme == 'light': page.locator('[data-theme-cycle]').click()
+            expect(page.locator('html')).to_have_attribute('data-theme', theme)
             page.locator('#storage-completed-consent').check()
             expect(page.locator('#storage-prepare-submit')).to_be_enabled()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
