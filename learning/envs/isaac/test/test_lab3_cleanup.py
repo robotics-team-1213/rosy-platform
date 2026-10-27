@@ -53,3 +53,22 @@ def test_clean_state_needs_no_sleep(monkeypatch):
     result = exercise(monkeypatch, [CLEAN])
     assert result['clean'] is True
     assert result['elapsed_seconds'] == 0
+
+
+def test_snapshot_refuses_missing_owned_cgroup_evidence(monkeypatch, tmp_path):
+    api = module()
+    own = tmp_path / 'self-cgroup'
+    own.write_text('0::/unmounted-service\n')
+    real_path = Path
+
+    def mapped_path(value):
+        return {'/proc/self/cgroup': own, '/sys/fs/cgroup': tmp_path / 'cgroups'}.get(str(value), real_path(value))
+
+    class IdleGPU:
+        returncode = 0
+        stdout = ''
+
+    monkeypatch.setattr(api, 'Path', mapped_path)
+    monkeypatch.setattr(api.subprocess, 'run', lambda *args, **kwargs: IdleGPU())
+    with pytest.raises(FileNotFoundError):
+        api.snapshot()
