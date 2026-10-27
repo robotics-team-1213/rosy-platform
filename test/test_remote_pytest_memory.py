@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -88,6 +89,15 @@ def test_dispatch_reserves_from_history_but_keeps_the_cap(tmp_path, monkeypatch)
     assert [w for w in light if w.startswith("ROSY_JOB_")] == ["ROSY_JOB_MEM_GB=4"]  # its cap is its reservation
     mh.record(tmp_path / mh.FILE, ["test/x.py"], "h", 5000, "ab" * 20)
     assert not [w for w in _run_on(tmp_path, monkeypatch, full, b"") if w.startswith("ROSY_JOB_")]
+
+
+def test_dispatch_records_each_invocations_queue_wait_and_run_time(tmp_path, monkeypatch):
+    """D-889 addendum 3: a turn's cap estimate needs per-invocation seconds; land events only had the batch's."""
+    full = {"cores": 1.0, "mem": 10.0, "site": False, "light": False}
+    _run_on(tmp_path, monkeypatch, full, b"[remote-pytest] memory peak 300 MiB\n[remote-pytest] cpu 1 ms over 42400 ms\n")
+    row = json.loads((tmp_path / mh.FILE).read_text(encoding="utf-8").splitlines()[-1])
+    assert row["pytest_s"] == 42 and row["queued_s"] >= 0 and row["job_s"] >= 0
+    assert mh.timing("1 passed\n", 3.4, 9.6) == {"queued_s": 3, "job_s": 10}  # an older host script: no cpu line
 
 
 @pytest.mark.skipif(LINUX_JOB, reason="Linux setsid/timeout/ionice are required")
