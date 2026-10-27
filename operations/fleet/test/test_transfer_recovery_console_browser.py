@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 import threading
 import time
+from uuid import UUID
 
 import pytest
 
@@ -76,6 +77,7 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
                 expect(page.locator("#arm-transfer-recovery-approve")).to_be_disabled()
                 intent = c.client.get(c.url + "/recovery", headers=headers("harbor")).json()["recovery"]
                 observe_recovery(c, intent)
+                monkeypatch.setattr("fleet.server.physical_transfer_store.uuid4", lambda: UUID(hex="8" * 32))
                 page.close()
 
                 page = browser.new_page(viewport={"width": width, "height": 900})
