@@ -15,6 +15,10 @@ RECOVERY_CONTEXT = "/api/fleet/arm-transfers/recovery-context"
 
 @pytest.fixture
 def failed_api(rig):
+    return fail_transfer(rig)
+
+
+def fail_transfer(rig):
     parent = approved(rig)
     url = PATH + "/" + parent
     context = rig.client.get(CONTEXT, headers=OBSERVER).json()["context"]
