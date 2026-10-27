@@ -86,7 +86,6 @@ def test_real_verifier_accepts_cpython_without_seal_constant_names(tmp_path, mon
                 headers.delattr(fcntl, name, raising=False)
             importlib.reload(m)
             headers.setattr(m, "RAUC", str(rauc_tool))
-            headers.setattr(m, "F_ADD_SEALS", -1)  # Intentional fixture mutation; restore before qualification.
             assert m.verify_bundle(root, bundle, raw, signature)["metadata"] == json.loads(raw)
     finally:
         importlib.reload(m)
