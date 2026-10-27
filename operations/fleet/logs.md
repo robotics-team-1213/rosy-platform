@@ -4983,3 +4983,10 @@
 - 증거: 원격 시험 10 passed, known NEW 0. 변이 검증: job-trips 분기의 supervised 제거 → 신규 시험 red(`498989d626`), 복원 green(`167bae90bb`).
 - Gate: 없음. 호스트 시험까지만 유효하며 실제 사이트에서의 `/readyz` 관찰 기록은 여전히 별도.
 - CE: 해당 없음 — 시험과 변이 이력이 커밋에 남아 있다.
+
+## 2026-10-27 · 441d50c066 · 재시작 lease 회수의 원장 기록 LEASE_RECLAIMED
+
+- 변경: `recover_interrupted_work`의 safe 재대기열이 lease·로봇 예약·dispatch claim을 정리하면서 아무 기록도 남기지 않아, 회수당한 작업이 한 번도 잡을 쥔 적 없는 것처럼 보였다. 이제 실제로 lease를 쥐고 있었거나(lease_owner) 트래픽 대기 중이던(WAITING_TRAFFIC) 행에만 `QUEUED`/`LEASE_RECLAIMED` history(system/fleet-recovery)를 남긴다. 미사용 READY 행은 조용히 두어 재시작마다 원장이 도배되지 않는다.
+- 증거: 신규 시험(보유 lease 2종·미보유 1종) 포함 원격 4 suite green, known NEW 0. 변이 검증: 기록 조건을 끄면 신규 시험 red(`2790088abd`), 복원 green(`441d50c066`).
+- Gate: 없음. 감사 행 추가일 뿐 상태 기계·전이 조건은 불변(기존 재시작 시험 회귀 없음).
+- CE: 해당 없음 — 결함·수정·근거가 시험과 커밋에 남아 있다.
