@@ -8,6 +8,7 @@ the browser chunks mostly run behind main's queue there; the site PC never gets 
 from __future__ import annotations
 
 import collections
+from concurrent.futures import CancelledError
 import contextlib
 import itertools
 import os
@@ -95,6 +96,9 @@ class Work:
                 return
             try:
                 cancel = bool(self.on_done(inv, log))
+            except CancelledError:
+                self.stop.set()
+                raise
             except Exception as error:  # noqa: BLE001 - a broken callback must not hang or pass the run
                 print(f"[remote-pytest] WARNING: on_done raised {error!r}; cancelling the rest", file=sys.stderr, flush=True)
                 cancel = True

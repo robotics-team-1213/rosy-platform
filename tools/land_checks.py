@@ -16,6 +16,7 @@ and how to fix it. Standard library only.
 
 from __future__ import annotations
 
+from concurrent.futures import CancelledError
 import json
 import os
 import re
@@ -280,8 +281,17 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
         logs = [logdir / f"run-{round_no}-{n}.txt" for n, _ in part]
         began, seen = land.time.monotonic(), {}
 
+        def diagnostic_run(*positional, **kwargs):
+            if stop.is_set():
+                raise CancelledError("turn deadline expired before diagnostic checks")
+            codes = land.remote_pytest.run(*positional, **kwargs, stop=stop)
+            if stop.is_set():
+                raise CancelledError("turn deadline expired during diagnostic checks")
+            return codes
+
         def judge(inv, log, tag):  # a NEW that main-red carry-over takes (land_mainred) neither stops nor is kept
-            v = land.land_checks.verdict(wt, inv, land.Path(log), logdir, tag, python, land.remote_pytest.run, head)
+            run = diagnostic_run if stop is not None else land.remote_pytest.run
+            v = land.land_checks.verdict(wt, inv, land.Path(log), logdir, tag, python, run, head)
             taken = land.land_checks.carry(wt, land.Path(log), head, python, inv) if v[0] and not v[1] else ([], "")
             return (v[0], taken[0], f"main-red carried: {taken[1]}") if taken[0] else v
 
@@ -348,7 +358,14 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
     parts = ([[x for x in numbered if x[1] in first], [x for x in numbered if x[1] not in first]]
              if first and len(first) < len(todo) else [numbered])
     for i, part in enumerate(parts):
-        if stops := batch(part):
+        try:
+            stops = batch(part)
+        except CancelledError as error:
+            if deadline is not None and land.time.monotonic() >= deadline:
+                raise land.Overtime(
+                    f"turn's {land.TURN_CAP_S // 60} min expired during diagnostic checks: tested outside the lock") from error
+            raise land.Stop("remote diagnostic cancelled without a verdict") from error
+        if stops:
             rest = sum(map(len, parts[i + 1:]))
             raise land.Stop("\n".join(stops) + (f"\n(failed last run too; {rest} other invocation(s) not run)"
                                                 if rest else ""))
