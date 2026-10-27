@@ -12382,3 +12382,11 @@ osy-d395-s1d\`.
 - 증거: 사용자 요청과 두 호스트의 GPU·RAM·드라이버·실제 서비스 상태를 조회했다. 설치와 동시 학습의 실제 수용은 후속 기록으로 확인한다.
 - gate 변화: 없음. 역할 예외 승인과 환경·제품 수용을 구분한다.
 - CE: 해당 없음 — 새 사용자 결정은 ADR에 보존한다.
+
+## 2026-10-27 · uncommitted · docs(isaac): SDK 복구와 두 PC 동시 학습 검증
+
+- 변경: Lab 3 README의 두 호스트 실행 조건과 동결 복구 기록을 추가했다. 설치된 Torch metadata로 fsspec 설명을 정정하고 로컬 kernel 버전·원본 payload 보존·SDK 보안 범위를 구분했다.
+- 증거: AI·모델 PC에서 각각 Newton 64환경·64iteration·65,536 transitions, 새 checkpoint 3개와 clean을 확인했다. 실제 learn 구간이 8.457134초 겹쳤고 AI의 두 user unit은 active/running/enabled로 복원됐다. 모델 SDK는 CUDA·PhysX·fsspec IO·PPO와 종료 정리를 통과했다. helper SHA·lock·정제 증거 ZIP은 docs/validation/isaaclab3-repair-2026-10-27/result.md와 Confluence 10190849에 연결했다.
+- 검증 범위: 구현 회귀는 원격 RED→GREEN, 이전 소스 회귀 511 PASS/1 SKIP/NEW 0이다. 최종 커밋의 원격 검사·착지는 후속 관문에서 확인한다. SDK 종료 직전 관측과 Hub disabled 조건을 검토했고 최초 실패도 보존했다.
+- gate 변화: 없음. 설치 검증은 제품 task·일반화·실물 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인·복구 판단은 구현·회귀 시험·README·동결 검증 기록으로 보존돼 별도 교훈을 중복하지 않는다.
