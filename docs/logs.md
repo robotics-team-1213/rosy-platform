@@ -12351,6 +12351,14 @@ osy-d395-s1d\`.
 - gate 변화: 6항을 조건부로 뒤집음(사용자 승인 2026-10-27). 끄기 `ROSY_LAND_MAINRED_CARRY=0`.
 - CE: 미정 — 첫 실제 이월 뒤 판단.
 
+## 2026-10-27 · uncommitted · fix(remote): venv 준비도 끊긴 접속 뒤 다시 시도, 시험 PC 대기 1시간
+
+- 변경: `tools/remote/remote_pytest.py`. ssh 255(접속 끊김) 재시도를 `ship()` 안의 반복문에서 `remote(..., tries=)`로 옮기고, venv 준비도 3번까지 다시 시도한다. 그 밖의 단계(정리·작업 시작)는 예전처럼 한 번만 돈다. 시험 PC를 기다리는 기본 시간(`--wait`)을 600초에서 3600초로 늘린다.
+- 근거: 10-27 `feat/land-mainred-carry` 착지가 대기열에서 1시간 넘게 기다린 뒤 모델 PC의 `Connection timed out during banner exchange` 한 번으로 멈췄다. 모델 PC는 바로 다시 접속됐다(평균 부하 14~15). venv 준비 스크립트는 잠금(flock)을 잡고 새 venv 자리를 지운 뒤 다시 만들어서 다시 돌려도 안전하다. 다시 건 착지는 모델 PC가 다른 착지들의 사전 시험으로 꽉 차고(남은 메모리 음수) AI PC는 메모리, 현장 PC는 디스크가 부족해 "no test host reachable"를 10분 동안 되풀이했다. 이렇게 죽은 착지는 사건 기록에 `stop`이 남지 않는다.
+- 증거: 원격 `test/test_remote_pytest.py`.
+- gate 변화: 없음(시험 판정은 같고, 시험 전 단계의 일시적 접속 끊김만 다시 시도).
+- CE: 해당 없음 — 재시도와 그 근거가 코드·시험에 남는다.
+
 ## 2026-10-27 · 6ffe52ae26 · docs: D-895 단일 이송 복구 후손과 원본 증거 보존
 
 - 변경: 사용자 승인한 내부 simulation 복구 설계를 D-895에 기록했다. root당 자식 하나, 별도 운영자 승인, 원래 효과·새 관측·현재 claims/fence 검사와 원자적 승인, 동일 요청 대조와 계보 보존을 정한다. 공개 API·실물·학습 승격은 별도다.

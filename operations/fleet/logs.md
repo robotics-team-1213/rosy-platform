@@ -4963,6 +4963,13 @@
 - Gate: 없음. 호스트 시험까지만 유효하며 실제 Ubuntu 사이트에서 `/readyz` 관찰 기록은 별도. 선택 루프 전부를 켠 열거 시험과 vision 서비스 루프는 후속.
 - CE: 해당 없음 — 계획·검토·변이 증거가 커밋과 시험에 남아 있다.
 
+## 2026-10-27 · d02b8d65e7 · 작업 큐 총 대기시간 계측 first_queued_at (계획 2026-10-27-fleet-queue-first-queued-at)
+
+- 변경: `fleet_tasks.first_queued_at` 컬럼(스키마 마이그레이션 additions 경로). `enqueue`가 COALESCE로 task id당 최초 입장 시각을 한 번만 기록하고 `release_traffic_wait`의 `queued_at` 재작성은 이 값을 건드리지 않는다. `FleetTaskScheduler.claim_next`가 주입 wall-clock으로 `total_queue_wait_seconds`를 함께 내놓고(기원 없는 옛 행은 None), 디스패치 시도마다 두 대기시간·우선순위·attempt_seq를 INFO 1줄로 남긴다. 노출은 로그뿐(API·UI 없음, 계획 결정).
+- 증거: 신규 `test_queue_wait_metrics.py` 8건 포함 원격 시험 77 passed, known NEW 0(관련 5 suite). 변이 검증: COALESCE 보존 제거 → 재대기열 보존 시험 red(`042bf8a957`), 되돌림 후 green(`d02b8d65e7`).
+- Gate: 없음. 호스트 시험까지만 유효 — 실제 사이트 큐에서 쌓이는 로그로 지표 노출·집계를 별도 결정한다.
+- CE: 해당 없음 — 계획 문서와 시험·커밋에 근거가 남아 있다.
+
 ## 2026-10-27 · db6f4f8c02 · 승인된 단일 이송 복구 후손
 
 - 변경: 기존 부모 attempt·관측을 보존하고 현재 source/clearance·별도 운영자·fence/claims 조건을 만족한 새 자식 미션을 한 번 승인한다. 부모 자원을 원자적으로 이전하고, 자식을 명시 prepare한 뒤 새 관측과 기존 send/closure 경로를 사용한다. 중복 요청·재시작·준비 실패가 예산을 초기화하지 않는다. 검수 export에 root 계보를 보존한다.
