@@ -65,6 +65,20 @@ took hours to land. Four separate things blocked it.
 - **Root cause:** cost per landing is set by the selection size (a FULL round runs every suite) and
   by the number of sessions landing at once. Nothing in the workflow made a session weigh the land
   cost before bundling.
+- **Update 2026-10-27:** "no test host reachable" also means *every host refused*, and the refusals
+  were bookkeeping, not load. The model PC had 20 GB `MemAvailable` but showed "-5.2 GB free":
+  `place()` takes `min(MemAvailable, total - lock GB)`, and each job locked 3 GB (or 6) although
+  the highest peak per argv was a median 292 MiB, p90 852 MiB (763 argvs, 3,077 runs). The site
+  PC was refused at every probe for "disk 7.4 GB free": the floor took the smaller of
+  `~/rosy-test`'s and `/tmp`'s free GB, and its `/tmp` is a 7.4 GB tmpfs at 1%. The AI PC was
+  under its floor too, so a landing that had queued an hour gave up at the 600 s wait. Earlier
+  the same day one `Connection timed out during banner exchange` in venv setup ended another
+  landing (shipping retried ssh 255, venv setup did not). Neither death wrote a `stop` event, so
+  `land_stats` showed zero host failures among the week's 55 stops. Fixed: a reservation of
+  1.25 x the argv's measured peak (1-6 GB), the GB floor on `~/rosy-test` only plus a 99 % use
+  rule, `remote(..., tries=3)` for ship and venv setup, a 3600 s wait, and a `stop` for a string
+  `SystemExit`. **Before raising `MAX_PREPARING` or buying hosts, compare each host's probe line
+  ("N GB free") with `free -g` on it:** a gap is a bookkeeping refusal, not a full host.
 
 ### 4. Big bundles
 
