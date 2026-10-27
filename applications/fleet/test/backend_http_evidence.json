@@ -46,6 +46,11 @@
       "source_revision": "62d77b86c20b782983c191088866bc15f1073067",
       "result": "5 passed, 0 skipped; ported origin #133/#135/#148 Fleet HTTP routes, TestClient",
       "pytest_root": "."
+    },
+    {
+      "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83",
+      "result": "6 passed; policy admission readback and toggle receipts captured for the work view (D-865 P3)",
+      "pytest_root": "."
     }
   ],
   "requests": {
@@ -1512,6 +1517,24 @@
         "test_real_http_console_admits_external_proposal_with_independent_identity"
       ],
       "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"
+    },
+    "GET:/api/fleet/policy-admission": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_admission_routes.py",
+        "TestPolicyAdmissionRoutes",
+        "test_budget_readback_after_admissions"
+      ],
+      "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83"
+    },
+    "POST:/api/fleet/policy-admission": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_admission_routes.py",
+        "TestPolicyAdmissionRoutes",
+        "test_toggle_off_and_on_round_trips"
+      ],
+      "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83"
     }
   }
 }
