@@ -79,9 +79,13 @@ def _under(path: str, root: str) -> bool:
     return path == root or path.startswith(root + "/")
 
 
-@functools.cache
 def _manifest(commit: str) -> dict:
     """Manifest at ``commit``; empty before it existed. Read-only: the dict is shared across commits."""
+    return _manifest_at(commit) if re.fullmatch(r"[0-9a-f]{40}", commit) else _manifest_at.__wrapped__(commit)
+
+
+@functools.cache  # full SHAs only: a ref such as HEAD moves
+def _manifest_at(commit: str) -> dict:
     oid = subprocess.run(["git", "rev-parse", "-q", "--verify", f"{commit}:{MANIFEST}"],
                          capture_output=True, text=True).stdout.strip()
     return _parse(oid) if oid else {}
