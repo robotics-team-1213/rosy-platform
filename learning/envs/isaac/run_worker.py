@@ -208,8 +208,9 @@ def execute(store, binding_file, run_id, *, expected_binding_sha256=None):
                         else:
                             report = verify_report(report_path, model='omx_f', frames=120,
                                                    sdk_version=binding['sdk_version'])
-            except (OSError, ValueError, subprocess.SubprocessError):
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
                 outcome['reason'] = 'sdk_or_report_verification_failed'
+                outcome['error_type'] = type(exc).__name__
                 report = None
             try:
                 clean = _cleanup(owner)
