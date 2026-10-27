@@ -452,6 +452,7 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
             "updated_at": row["updated_at"],
             "priority_class": row["priority_class"],
             "queued_at": row["queued_at"],
+            "first_queued_at": row["first_queued_at"],
             "expires_at": row["expires_at"],
             "lease_owner": row["lease_owner"],
             "lease_until": row["lease_until"],
