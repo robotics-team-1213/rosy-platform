@@ -11,6 +11,7 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-895 | 원래 시도를 보존한 단일 이송 복구 후손. [전문](../adr/D-895-bounded-physical-transfer-recovery-child.md) | Accepted for implementation (2026-10-27) |
+| D-888 | Pinky 전체 OS 업데이트는 bootstrap 영속 입력과 별도 CMS 서명을 사용한다 | Proposed |
 | D-892 | Fleet 모바일 관제의 로봇 상태·작업 우선 배치 | Accepted (2026-10-27) |
 | D-891 | Fleet 인식 모델 승격 대기열 — 올린 D-874 묶음을 다시 검사하고 결정만 기록한다 | Proposed (2026-10-26) |
 | D-887 | Signed site service sets and identity-bound retirement | Accepted (2026-10-26) |
@@ -891,6 +892,7 @@
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 | Accepted |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 | Accepted |
 | D-805 | 호스트 업데이트: 장치 owner는 네이티브, 나머지는 컨테이너 — 역할별 두 경로와 현장 전체 동결 관문 | Proposed |
+| D-881 | A/B 이미지의 기체 상태와 슬롯별 적용 기록을 분리한다 | Proposed |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

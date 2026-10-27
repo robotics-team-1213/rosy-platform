@@ -1,0 +1,47 @@
+[Unit]
+Description=ROSY transaction-scoped whole-OS installer
+Requires=dbus.service rosy-os-storage.service rosy-os-motion-guard.service
+After=dbus.service rosy-os-storage.service rosy-os-motion-guard.service
+Conflicts=rosy-io.service rosy-navigation.service
+After=rosy-io.service rosy-navigation.service
+ConditionPathExists=/run/rosy-os-update/rauc/request.json
+ConditionPathIsDirectory=/run/rosy-os-update/rauc
+ConditionPathIsDirectory=/var/lib/rosy-device/os-update/rauc
+StartLimitIntervalSec=0
+
+[Service]
+Type=dbus
+BusName=de.pengutronix.rauc
+User=root
+Group=root
+UMask=0077
+# The controller/early guard publishes motion.env outside this daemon's two writable directories.
+ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_motion_guard.py inhibited
+ExecStartPre=/usr/bin/python3 -I -B /opt/rosy/os-bootstrap/native-runtime/os_rauc_service.py check
+ExecStart=/usr/bin/rauc --conf=/run/rosy-os-update/rauc/system.conf service
+TimeoutStartSec=10min
+TimeoutStopSec=30
+RuntimeMaxSec=50min
+KillMode=control-group
+Restart=no
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=false
+PrivateMounts=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_MKNOD CAP_DAC_OVERRIDE
+DevicePolicy=closed
+DeviceAllow=
+ReadWritePaths=/run/rosy-os-update/rauc /var/lib/rosy-device/os-update/rauc

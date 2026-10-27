@@ -1,0 +1,12 @@
+{
+  "debs": [
+    ["pool/main/q/qemu/qemu-system-arm_8.2.2+ds-0ubuntu1.18_amd64.deb",10963018,"06184a21b9c8dc573ab6d255e9826cc4732df90e56bd65c52e92ad640af4d60a"],
+    ["pool/main/d/device-tree-compiler/device-tree-compiler_1.7.0-2build1_amd64.deb",228180,"b2c1e8c86f18b6bda26408f92bfb9ec1a1e40bfdc41f1034600ccd68e82d2ed7"],
+    ["pool/universe/c/capstone/libcapstone4_4.0.2-5.1build1_amd64.deb",655652,"c2b92fa793412f00fe14f3a8e30bb73b1138d237bafda520f291db33ed475e0c"]
+  ],
+  "cloud": {
+    "guest.qcow2": ["ubuntu-24.04-server-cloudimg-arm64.img",616522752,"50e24e1fb79e89116e939d90aa7738f7af48c442fa1bc2510131e0b39c50348e"],
+    "vmlinuz": ["unpacked/ubuntu-24.04-server-cloudimg-arm64-vmlinuz-generic",18600927,"353bab8eeaad9caf931dd85fd7a7bf8800d2669d759c0369ffaba7abc03a7aff"],
+    "initrd": ["unpacked/ubuntu-24.04-server-cloudimg-arm64-initrd-generic",29297293,"86e1b682fc0655e7b6d455c44f8ea2d7f0d35a8ff097e292da6ee46a206041fd"]
+  }
+}
