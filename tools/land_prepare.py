@@ -138,8 +138,8 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     clean = land.land_selection.eligible(land, guarded + tested)
-    land.land_selection.require_eligible(land, args, clean)
-    tier = "carried" if land.land_mainred.CARRIED else ("full" if note else "affected") if clean else None
+    land.land_selection.require_eligible(land, args, clean, guarded + tested)
+    tier = land.land_selection.tier(land, guarded + tested, bool(note))
     land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)

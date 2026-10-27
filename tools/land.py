@@ -471,7 +471,7 @@ def land(args) -> int:
         summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
         if out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"HEAD changed during guards; {candidate[:10]} was tested; retry the landing")
-        land_selection.require_eligible(sys.modules[__name__], args, land_selection.eligible(sys.modules[__name__], guarded))
+        land_selection.require_eligible(sys.modules[__name__], args, land_selection.eligible(sys.modules[__name__], guarded), guarded)
         if guarded and out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved during the guard round; merging again")
             continue
@@ -485,11 +485,11 @@ def land(args) -> int:
             raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
         # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
         reusable = reusable and not land_mainred.CARRIED and land_selection.eligible(sys.modules[__name__], guarded + tested)
-        land_selection.require_eligible(sys.modules[__name__], args, reusable)
+        land_selection.require_eligible(sys.modules[__name__], args, reusable, guarded + tested)
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
-            tier = "carried" if land_mainred.CARRIED else "full" if land_selection.eligible(sys.modules[__name__], guarded + tested) else None
+            tier = land_selection.tier(sys.modules[__name__], guarded + tested, True)
             land_full.save(wt, branch, candidate, main_sha, tier, invocations)
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:

@@ -138,9 +138,17 @@ def eligible(land, summary):
     return not any("LOAD-FLAKY" in line or land.land_cache.NARROW in line for line in summary)
 
 
-def require_eligible(land, args, qualifies):
-    if args.tests == "full" and not qualifies:
+def require_eligible(land, args, qualifies, summary=()):
+    if args.tests == "full" and (not qualifies or land.land_mainred.CARRIED
+                                 or any("main-red carried:" in line for line in summary)):
         raise land.Stop("explicit FULL has no qualifying clean evidence; not saving or landing")
+
+
+def tier(land, summary, full):
+    """Carry refuses restart reuse; other unclean auto evidence retains its nonqualifying delta bridge."""
+    if land.land_mainred.CARRIED:
+        return "carried"
+    return ("full" if full else "affected") if eligible(land, summary) else None
 
 
 def required(land, wt, main, python):
