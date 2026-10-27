@@ -79,7 +79,10 @@ ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py"]
 TASKS = ["test/learning/perception/test_learning_tasks_browser.py"]
 STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/learning/perception/test_vlm_judge_browser.py",
           "test/learning/perception/test_promotion_request_browser.py"]
-LEARNING = OMX_LEARNING + CAMERA + SIM + PIPELINE + ACCOUNTS + TASKS + STAGES
+# These HTTP suites also contain opt-in Chromium flows; filename discovery alone misses them.
+STORAGE = ["test/learning/perception/test_storage_" + name + "_http.py" for name in
+           ("inventory", "jobs", "setup", "omx")]
+LEARNING = OMX_LEARNING + CAMERA + SIM + PIPELINE + ACCOUNTS + TASKS + STAGES + STORAGE
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
@@ -100,14 +103,19 @@ SCOPE: dict[str, list[str]] = {
     "learning/curation/perception/review_app_web/app.css": LEARNING,
     "learning/curation/perception/review_app_web/commands.js": LEARNING,
     "learning/curation/perception/review_app_web/account-session.js": LEARNING,
-    **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING for name in
-       ("omx.html", "omx.js", "omx-profiles.js", "omx-review.js")},
+    **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STORAGE for name in
+       ("omx.html", "omx.js", "omx-profiles.js", "omx-review.js", "omx-export.js")},
     # Their rail and sub-menu are walked by the OMX owner-status and stage browser tests.
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STAGES for name in
        ("catalog.html", "camera.html")},
     "learning/curation/perception/omx_web.py": OMX_LEARNING,
     "learning/curation/perception/omx_center_web.py": OMX_LEARNING,
     "learning/training/omx/": OMX_LEARNING + TASKS,
+    "learning/training/omx/experiment_catalog.py": STORAGE,
+    **{f"learning/curation/perception/{name}": STORAGE for name in
+       ("storage_inventory.py", "storage_pool.py", "storage_jobs.py", "storage_files.py", "storage_hub.py",
+        "storage_web.py", "storage_source.py", "storage_setup.py", "storage_prepare.py", "storage_omx.py",
+        "review_app_web/storage.js", "review_app_web/storage-settings.js")},
     **{f"learning/curation/perception/{name}": TASKS for name in
        ("learning_tasks.py", "learning_tasks_web.py", "review_app_web/tasks.html", "review_app_web/tasks.js")},
     **{f"learning/curation/perception/{name}": CAMERA for name in
@@ -117,7 +125,7 @@ SCOPE: dict[str, list[str]] = {
        ("sim_web.py", "review_app_web/sim.html", "review_app_web/sim.js")},
     **{f"learning/curation/perception/{name}": PIPELINE for name in
        ("learning_control.py", "learning_pipeline.py")},
-    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS
+    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS + STORAGE
        for name in ("learning.html", "learning.js")},
     **{f"learning/curation/perception/{name}": STAGES for name in
        ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "promotion_request.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
