@@ -55,6 +55,7 @@ import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did
 import land_browser  # noqa: E402  (the browser tier in file-level chunks)
 import land_selection  # noqa: E402  (selection with this caller's Stop and helper seams)
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
+import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
                         generate_records, resolver)
@@ -100,8 +101,8 @@ def lines(cwd: Path, *args: str) -> list[str]:
 
 # --- merging (conflict auto-resolution itself: land_merge.py) --------------------
 
-def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> list[str]:
-    """Merge main_sha into HEAD; return the auto-resolved paths. Stop on anything else."""
+def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, source: str = "main") -> list[str]:
+    """Merge main_sha (``source``: a batch member's tip, land_batch.py) into HEAD; return the auto-resolved paths."""
     if dry_run:
         tree = git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main_sha, check=False)
         conflicts = conflict_stages(tree.stdout) if tree.returncode == 1 else {}
@@ -112,7 +113,7 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
             raise Stop("merge would conflict outside the auto-resolvable set:\n  " + "\n  ".join(manual))
         return sorted(resolved)
     result = git(wt, "merge", "--no-edit", "--no-commit", "-m",
-                 f"Merge branch 'main' into {branch}", main_sha, check=False)
+                 f"Merge branch '{source}' into {branch}", main_sha, check=False)
     if result.returncode == 0 and git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0:
         return []
     resolved = {}
@@ -408,7 +409,13 @@ def land(args) -> int:
         qdir, ticket = land_queue.enter(wt, branch, "preparing")  # main() releases the ticket on every exit
         if args.tests == "auto" and land_full.restore(wt, branch) is None:
             land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
-        land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(sys.modules[__name__], wt))
+        if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
+            return code  # a batch landed this branch
+    return rounds(args, wt, branch, main_co, python, qdir, ticket)
+
+
+def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket) -> int:
+    """Merge main, test, fast-forward until main holds still; ``branch`` is HEAD (a topic or a batch branch)."""
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
