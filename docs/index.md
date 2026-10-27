@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
 - 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
 - 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
 - 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
 - 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
-- 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path

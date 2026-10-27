@@ -46,15 +46,16 @@ def test_wait_ends_landed_once_the_branch_is_in_main_and_batch_when_it_leads_one
 
 def test_only_the_earliest_waiting_ticket_leads_and_only_with_enough_members(tmp_path, monkeypatch):
     monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row: row["branch"] != "feat/unprepared")
+    monkeypatch.setattr(land_batch, "rate", lambda path: (0.25, 50))
     turn = queue.take(tmp_path, "feat/turn", status="turn")
     mine, unprepared = queue.take(tmp_path, "feat/mine", status="waiting"), queue.take(tmp_path, "feat/unprepared")
     queue.set_status(unprepared, "waiting")
-    form, chosen = land_batch.former(land, tmp_path, tmp_path, mine)
+    form, chosen, measured = land_batch.former(land, tmp_path, tmp_path, mine)
     assert not form([]), "the one other waiting ticket is not prepared"
     peer = queue.take(tmp_path, "feat/peer", status="waiting")
-    form_peer, _ = land_batch.former(land, tmp_path, tmp_path, peer)
+    form_peer, _, _ = land_batch.former(land, tmp_path, tmp_path, peer)
     assert not form_peer([]), "an earlier waiting ticket leads, not this one"
-    assert form([]) and [r["branch"] for r in chosen] == ["feat/peer"]
+    assert form([]) and [r["branch"] for r in chosen] == ["feat/peer"] and measured == {"p": 0.25, "runs": 50}
     assert info(mine)["batch"] == ["feat/peer"] and info(mine)["status"] == "preparing"
     assert not form_peer([]), "one batch at a time"
     assert turn.exists()
@@ -86,9 +87,9 @@ def test_a_batch_lands_its_clean_members_in_one_fast_forward_and_leaves_a_confli
         git(main_co, "merge", "-q", "--ff-only", name)
         return 0
     monkeypatch.setattr(land, "rounds", rounds)
-    code = land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
-                           ticket, main, rows)
-    assert code == 0 and calls and calls[0].startswith("feat/x-batch")
+    code, took = land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
+                                 ticket, main, rows, {})
+    assert code == 0 and took == ["feat/m"] and calls and calls[0].startswith("feat/x-batch")
     assert info(ticket)["batch"] == ["feat/m"], "the conflicting member was left out"
     for branch, landed in (("feat/x", True), ("feat/m", True), ("feat/c", False)):
         assert land_batch.in_main(land, wt, branch) is landed, branch
@@ -103,9 +104,8 @@ def test_a_stopped_batch_goes_back_to_the_untouched_leader_branch_and_clears_its
     monkeypatch.setattr(land, "select", lambda *a, **k: ([], None))
     monkeypatch.setattr(land_batch.land_prepare, "prepare", lambda *a: (_ for _ in ()).throw(land.Stop("NEW failure")))
     assert land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
-                           ticket, main, rows) is None
+                           ticket, main, rows, {}) == (None, ["feat/m"])
     assert git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x" and git(wt, "rev-parse", "HEAD") == before
-    assert info(ticket)["batch"] == [] and info(ticket)["status"] == "waiting"
     assert git(wt, "branch", "--list", "feat/x-batch*"), "a stopped batch branch is kept for its log"
     assert not land_batch.in_main(land, wt, "feat/m")
 
@@ -116,8 +116,8 @@ def test_a_batch_that_selects_the_full_tier_goes_alone_before_any_pretest(repos,
     monkeypatch.setattr(land, "select", lambda *a, **k: ([["test"]], "FULL tier (harness)"))
     monkeypatch.setattr(land_batch.land_prepare, "prepare", lambda *a: pytest.fail("prepared a FULL-class batch"))
     assert land_batch.lead(land, wt, "feat/x", land.argparse.Namespace(queue_timeout=0), sys.executable, qdir,
-                           ticket, main, rows) is None
-    assert git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x" and info(ticket)["batch"] == []
+                           ticket, main, rows, {})[0] is None
+    assert git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x"
 
 
 def test_eligible_wants_a_prepared_member_at_its_worktree_head(repos, tmp_path):
@@ -135,3 +135,52 @@ def test_eligible_wants_a_prepared_member_at_its_worktree_head(repos, tmp_path):
     commit(main, {"tools/harness/platform_parts.yaml": "roots:\n  - path: pkg/m.py\n    concern: safety\n"}, "tag")
     assert land_batch.safety(land, wt, "feat/m") and not land_batch.safety(land, wt, "feat/x")
     assert not land_batch.eligible(land, wt, row), "a safety branch lands alone (D-889 3)"
+
+
+@pytest.mark.parametrize("p, k", [(None, 2), (0.31, 2), (0.21, 2), (0.2, 3), (0.13, 3), (0.12, 4), (0.08, 4),
+                                  (0.07, 6), (0.0, 6)])
+def test_k_follows_the_rolling_new_rate_by_the_addendum_table(p, k):
+    assert land_batch.kopt(p) == k
+
+
+def test_the_rolling_new_rate_counts_runs_over_24_hours_widened_to_the_last_50(tmp_path):
+    now, rows = 1_000_000.0, []
+    for n in range(60):  # 60 runs, an hour apart; every third met a NEW in its pretest
+        t = now - n * 3600
+        rows.append({"t": t, "event": "tests", "pid": n, "branch": "b", "verdict": "new" if n % 3 == 0 else "pass"})
+        rows.append({"t": t + 1, "event": "prepared" if n % 3 else "stop", "pid": n, "branch": "b"})
+    rows.append({"t": now, "event": "tests", "pid": 999, "branch": "b", "verdict": "pass"})  # neither: not a run
+    path = tmp_path / "events.jsonl"
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    p, runs = land_batch.rate(path, now=now + 2)
+    assert runs == 50 and p == pytest.approx(17 / 50), "24 h hold 25 runs, so the last 50"
+    assert land_batch.rate(tmp_path / "none.jsonl") == (None, 0)
+
+
+def test_a_failed_batch_bisects_by_halving_until_the_leader_goes_alone(tmp_path, monkeypatch):
+    qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/l", status="preparing")
+    rows = [{"branch": f"feat/m{n}"} for n in range(5)]
+    tries = []
+
+    def lead(land_, wt, branch, args, python, qdir_, ticket_, main_co, members, measured):
+        tries.append([r["branch"] for r in members])
+        return None, [r["branch"] for r in members]
+    waits = iter(["batch", None])
+    monkeypatch.setattr(land_batch, "lead", lead)
+    monkeypatch.setattr(land_batch, "safety", lambda *a: False)
+    monkeypatch.setattr(land_batch, "affected", lambda *a: True)
+    monkeypatch.setattr(land_batch.land_prepare, "watch", lambda *a: None)
+
+    chosen: list = []
+
+    def wait(*a, form=None, **k):  # the first wait forms a batch of six, the next one is the turn alone
+        got = next(waits)
+        if got == "batch":
+            chosen[:] = rows
+        return got
+    monkeypatch.setattr(land_batch, "former", lambda *a: (lambda rows_: True, chosen, {}))
+    monkeypatch.setattr(land_batch.land_queue, "wait", wait)
+    args = land.argparse.Namespace(queue_timeout=0, tests="auto")
+    assert land_batch.queue(land, tmp_path, "feat/l", args, sys.executable, qdir, ticket, tmp_path) is None
+    assert tries == [[f"feat/m{n}" for n in range(5)], ["feat/m0", "feat/m1"], ["feat/m0"]], "6 -> 3 -> 2 -> alone"
+    assert info(ticket)["batch"] == []
