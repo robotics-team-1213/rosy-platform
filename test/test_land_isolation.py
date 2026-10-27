@@ -84,10 +84,6 @@ def test_alone_runs_past_the_budget_are_reported_not_dropped(pair):
 def test_root_conftest_names_the_inserter_and_never_fails(pair, xdist):
     if xdist and not importlib.util.find_spec("xdist"):
         pytest.skip("pytest-xdist not installed (CI)")
-    if os.environ.get("AMENT_PREFIX_PATH"):
-        # shortcut: the ROS CI container (apt pytest 7.4 + ament plugins) prints no report; pytest 7.4 alone does.
-        # The conftest is report-only and never fails a run. Find the cause, then drop this skip (D-889 follow-up).
-        pytest.skip("report not produced under the ROS CI container; cause open (2026-10-28)")
     (pair / "conftest.py").write_bytes((ROOT / "conftest.py").read_bytes())
     run = pytest_run(pair, ".", *xdist)
     text = run.stdout + run.stderr
