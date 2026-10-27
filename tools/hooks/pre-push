@@ -157,7 +157,9 @@ fi
 [ -n "$CHECKED" ] || printf '%s\n' "$SAFETY_OUT"
 
 # D-766 2: every pushed commit passes the size rule on its own (git only, no tests).
-if [ -f tools/harness/size_range.py ]; then
+# publish_main.py's push is skipped: each landing ran it on its own commits and the PR's CI scope job runs it on
+# the whole range again; on this laptop it took 40+ min over a 4,000-commit range (2026-10-28, git reads under load).
+if [ -z "$CHECKED" ] && [ -f tools/harness/size_range.py ]; then
   echo "[pre-push] size rule per commit on origin/main..${PUSH_SHA:0:10}"
   "$PY" tools/harness/size_range.py origin/main "$PUSH_SHA" || exit 1
 fi
