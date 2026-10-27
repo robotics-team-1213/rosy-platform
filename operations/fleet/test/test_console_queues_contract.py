@@ -103,7 +103,8 @@ def test_the_rail_is_the_one_scroll_and_decisions_open_in_the_queue():
     assert 'id="stuck-panel"' not in index and 'id="roster-toggle"' not in index
     assert "dataset.decisionSlot = row.key;" in roster
     assert 'decision: "stuck"' in roster and 'decision: "replan"' in roster
-    assert "export function mustExpand(robot)" in roster
+    assert 'export {mustExpand, selectRobot} from "./roster-cards.js";' in roster
+    assert "export function mustExpand(robot)" in (WEB / 'roster-cards.js').read_text(encoding='utf-8')
 
 
 def test_d577_lane_lost_hold_rows_name_the_reason_and_rise_after_the_deadline():

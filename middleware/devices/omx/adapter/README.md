@@ -1,5 +1,9 @@
 # omx_adapter
 
+Read-only device-specific load-domain assessment and monitoring are available through
+`python -m omx_adapter.load_motion_cli`; see [inputs, JSON storage and limits](docs/load-aware-motion.md).
+This path does not enable motion or automatic recovery.
+
 This package is the disabled-by-default software boundary for a future OMX-AI
 fixed workcell. Its generic ROS bindings can be exercised against ROS action
 servers and camera message publishers without selecting or enabling hardware.
