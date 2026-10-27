@@ -5003,3 +5003,10 @@
 - 증거: 원격 승인 RED 21 failed → 관련 128 passed, 흐름 RED 3 failed → 통합 201 passed. 독립 검토 반례 4 failed와 첫/재조회 snapshot 차이 2 failed를 수정해 7f0a8a152a의 통합 214 passed, 추가 epoch/session 거절을 포함한 73f2fe5a03의 최종 216 passed/0 skipped·known NEW 0을 확인했다. 코드 7f0a8a152a의 독립 계약 재검토에서 추가 중요 발견 없음. `docs/validation/transfer-recovery-2026-10-27/result.md` 참고(저장소 루트 기준). 전체 영향 범위·착지 gate는 별도로 기록한다.
 - Gate: 기존 gate 변화 없음. 공개 복구 ingress·화면·무인 반복·Gazebo 과제·실물·모델 학습 수용은 별도다. 원래 미션은 HOLD로 유지한다.
 - CE: 해당 없음 — D-895·회귀 시험·검증 기록이 판단과 수정 이유를 보존한다.
+
+## 2026-10-27 · 167bae90bb · 전체 옵션 구성의 루프 열거 시험 (루프 감시 후속)
+
+- 변경: `test_loop_supervision.py`에 모든 선택 서비스(알림·신호·resolver·localization·드리프트·charge·lease·job-trips·제안·미션/셀 디스패처·목표 증거·모델 턴·제어유닛·물리 이송)가 켜진 구성의 시험을 추가했다. 루프 몸체는 걸어 뺀 채 `start_fleet_loops`의 스폰 배선만 돌려 23개 선언 이름 전부가 running으로 언랩되는지 본다. 최소 앱 시험이 못 잡던 "선택 분기 언랩 누락" 간극을 닫는다(모듈 docstring의 후속 과제 해소).
+- 증거: 원격 시험 10 passed, known NEW 0. 변이 검증: job-trips 분기의 supervised 제거 → 신규 시험 red(`498989d626`), 복원 green(`167bae90bb`).
+- Gate: 없음. 호스트 시험까지만 유효하며 실제 사이트에서의 `/readyz` 관찰 기록은 여전히 별도.
+- CE: 해당 없음 — 시험과 변이 이력이 커밋에 남아 있다.
