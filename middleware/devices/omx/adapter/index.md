@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · ed77a021dc · test(omx): record literal value-contract compatibility
 - 2026-10-27 · uncommitted · refactor(omx): align five literal value-contract families
 - 2026-10-27 · uncommitted · fix(omx): restore accepted real-driver size registration
 - 2026-10-27 · aec7f05a35 · measured load-domain analysis
 - 2026-10-26 · uncommitted · neutral ARM forward-port contracts holder
-- 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
