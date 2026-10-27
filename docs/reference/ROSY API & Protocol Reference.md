@@ -4247,6 +4247,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.327 | 2026-10-27 | D-899: closed simulation recovery request, independent RECOVERY_RESET observations, exact operator approval bindings and bounded execution review. Contract registration only; HTTP/UI installation and physical acceptance are separate. Envelope1.0 unchanged. |
 | v1.323 | 2026-10-26 | D-890: optional strict navigate/home intent epochs; CORE Home body preservation and explicit pre-admission Fleet navigate caller-epoch rejection. Canonical fence version registration only; runtime qualification and envelope1.0 unchanged. |
 | v1.321 | 2026-10-26 | D-884: project-scoped HF storage pool, namespace capacity reservations, pinned archive/reconciliation, verified local reclaim/restore and managed cache; existing publish/manage authority and envelope1.0 preserved. Host source verification is separate from live HF/Isaac acceptance. |
 | v1.320 | 2026-10-26 | D-883: Service Control `clean-storage` for ai/model only (400 `ACTION_NOT_ALLOWED` on site, 409 `NO_STORAGE_SERVICE`), guard `resources.disk`/`disk_low`/`gpu`/`memory`/`memory_low`/`cpu` and the report-only `disk-low`/`memory-low` states. Fleet route shape and envelope1.0 unchanged. |
