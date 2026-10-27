@@ -70,6 +70,7 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
                 page.goto(link)
                 request = page.locator("#arm-transfer-recovery-request")
                 expect(request).to_be_enabled()
+                expect(page.locator("#arm-transfer-recovery")).to_contain_text("시뮬레이션")
                 request.click()
                 expect(page.locator("#arm-transfer-recovery-state")).to_contain_text("새 관측 대기")
                 expect(page.locator("#arm-transfer-recovery-approve")).to_be_disabled()

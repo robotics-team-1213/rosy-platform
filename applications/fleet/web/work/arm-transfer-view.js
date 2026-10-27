@@ -46,7 +46,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
   requestRecovery.setAttribute("kind", "quiet"); approveRecovery.setAttribute("kind", "primary");
   recoveryActions.append(requestRecovery, approveRecovery);
   technical.append(node("summary", "조회한 복구 근거"), bindings);
-  recoveryPanel.append(node("h3", "실패 확인과 제한된 복구"), review, recoveryState, recoveryActions, childState,
+  recoveryPanel.append(node("h3", "시뮬레이션 · 실패 확인과 제한된 복구"), review, recoveryState, recoveryActions, childState,
     node("p", "원래 실패는 보존됩니다. 원래 제안자의 요청과 새 관측, 다른 운영자의 승인을 거쳐 복구 시도를 최대 1회 만듭니다.", "hint"), technical);
   panel.append(recoveryPanel);
   anchor.before(panel);
