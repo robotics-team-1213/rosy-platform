@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # D-866 P2: start the shared OMX layer plus one simulator adapter, then judge it with omx_backend_conformance.py.
 # remote_sim only (it sets OUT and an isolated ROS domain):
-#   remote_sim.py ... cmd -- "OMX_CELL_OVERLAY=... tools/sim/run_omx_backend_conformance.sh mujoco 240x320 5"
+#   remote_sim.py ... cmd -- "tools/sim/run_omx_backend_conformance.sh mujoco 240x320 5"
+# Without OMX_CELL_OVERLAY it provisions the host first (provision_sim_host.sh; builds only what is missing).
 set -eo pipefail
 backend="$1" shape="$2" camera_hz="$3"
 source /opt/ros/jazzy/setup.bash
-source "${OMX_CELL_OVERLAY:?}/setup.bash"
+[[ -n ${OMX_CELL_OVERLAY:-} ]] || eval "$("$(dirname "${BASH_SOURCE[0]}")/provision_sim_host.sh")"
+source "$OMX_CELL_OVERLAY/setup.bash"
 source "${TOPIC_BASED_OVERLAY:-$HOME/rosy-test/overlays/topic_based_ros2_control-aa9f9ef952/install}/setup.bash"
 set -u
 export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST

@@ -45,7 +45,16 @@ def _verdicts(setup, index):
             for role, check in rows.get(index, {}).items()}
 
 
-def prepared_set(row, workspace=None, center=None):
+def _native_reference(inspection, state):
+    """prepare-native's refusal-checked ``{role: revision}``; ``reference`` says the store still holds it."""
+    if 'camera_setup' not in inspection:
+        return None
+    from camera_reference import recorded  # validates 64-hex revisions naming exactly the dataset cameras
+    return {role: {'revision': revision, 'reference': bool(state) and (Path(state) / 'camera-setup' / f'{revision}.json').is_file()}
+            for role, revision in recorded(inspection['camera_setup'], inspection.get('camera_keys', [])).items()}
+
+
+def prepared_set(row, workspace=None, center=None, state=None):
     """One registered row as the page shows it, or None when it is not a prepared intake folder."""
     import native_segments as segments
     root = Path(row['path'])
@@ -91,20 +100,21 @@ def prepared_set(row, workspace=None, center=None):
                 return {'id': row['id'], 'name': row['name'], 'error': '원본이 바뀌어 기존 구간 검수와 일치하지 않습니다.'}
         return {'id': row['id'], 'name': row['name'], 'trainable': trainable, 'episodes': episodes, **review_fields,
                 'segment_review': review, 'camera_keys': inspection.get('camera_keys', []),
+                'camera_reference': _native_reference(inspection, state),
                 'camera_setup': None if setup is None else {'mode': setup.get('mode'), 'references': setup.get('references'),
                                                             'camera_info_sha256': setup.get('camera_info_sha256')}}
     except (AttributeError, KeyError, TypeError, OSError, ValueError):
         return {'id': row['id'], 'name': row['name'], 'error': '등록 자료가 불완전하거나 손상됐습니다. 원본 검증을 다시 실행하세요.'}
 
 
-def get(handler, path, workspace, center=None):
+def get(handler, path, workspace, center=None, state=None):
     """Serve the OMX page and its read; False leaves the path to review_app."""
     if path in PAGES:
         name, mime = PAGES[path]
         handler.send((STATIC / name).read_bytes(), mime=mime)
     elif path == '/api/learning/omx':
         rows = [row for row in workspace.list() if row['kind'] == 'omx']
-        handler.send({'sets': [s for row in rows if (s := prepared_set(row, workspace, center)) is not None]})
+        handler.send({'sets': [s for row in rows if (s := prepared_set(row, workspace, center, state)) is not None]})
     elif path == '/api/learning/omx/frame':
         import native_segments as segments
         query = parse_qs(urlparse(handler.path).query, strict_parsing=True)
