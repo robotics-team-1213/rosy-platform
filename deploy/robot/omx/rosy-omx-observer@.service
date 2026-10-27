@@ -13,7 +13,7 @@ EnvironmentFile=%h/.config/rosy/omx-observer-%i.env
 ExecStartPre=/bin/mkdir -p -m 0700 %h/.local/state/rosy/motor-health
 ExecStartPre=/bin/sh -c 'exec 9>>"%h/rosy-omx/session.lock"; flock -n 9 || { echo "a session holds the OMX cell"; exit 1; }; if fuser "$ROSY_OBSERVER_DEVICE" >/dev/null 2>&1; then echo "another process owns $ROSY_OBSERVER_DEVICE"; exit 1; fi'
 Environment=ROSY_OBSERVATION_DIR=%t/rosy-observations
-ExecStart=/bin/bash -c 'export PYTHONPATH="${ROSY_OBSERVER_SOURCE%/deploy/*}/contracts/foundation${PYTHONPATH:+:$PYTHONPATH}"; exec "$ROSY_OBSERVER_PYTHON" "$ROSY_OBSERVER_SOURCE" --device "$ROSY_OBSERVER_DEVICE" --joint-topic "$ROSY_OBSERVER_TOPIC" --persistent --health-file "%h/.local/state/rosy/motor-health/%i.json" --health-owner %i'
+ExecStart=:/bin/bash -c 'export PYTHONPATH="${ROSY_OBSERVER_SOURCE%/deploy/*}/contracts/foundation${PYTHONPATH:+:$PYTHONPATH}"; exec "$ROSY_OBSERVER_PYTHON" "$ROSY_OBSERVER_SOURCE" --device "$ROSY_OBSERVER_DEVICE" --joint-topic "$ROSY_OBSERVER_TOPIC" --persistent --health-file "%h/.local/state/rosy/motor-health/%i.json" --health-owner %i'
 Restart=on-failure
 RestartSec=30
 KillSignal=SIGTERM

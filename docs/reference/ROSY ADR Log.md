@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-901 | Native workcell observation communication isolation. [전문](../adr/D-901-native-workcell-observation-isolation.md) | Accepted (2026-10-28) |
 | D-899 | 인증된 이송 복구 요청과 독립 운영자 승인. [전문](../adr/D-899-authenticated-transfer-recovery-intent.md) | Accepted for implementation (2026-10-27) |
 | D-895 | 원래 시도를 보존한 단일 이송 복구 후손. [전문](../adr/D-895-bounded-physical-transfer-recovery-child.md) | Accepted for implementation (2026-10-27) |
 | D-888 | Pinky 전체 OS 업데이트는 bootstrap 영속 입력과 별도 CMS 서명을 사용한다 | Proposed |
@@ -1332,8 +1333,3 @@ HF user/org별 용량 예약과 작업의 연결·고정 revision·SHA를 보존
 
 Fleet stores editable device names, models, declared arm counts and hardware identifiers in its existing database. Profiles confer no membership, connection attestation or motion authority. Details: [D-860](../adr/D-860-descriptive-device-profiles.md).
 
-## D-901 Native workcell observation communication isolation
-
-**Status:** Accepted (2026-10-28)
-
-OMX 운영 카메라·수동 관절 관측·미리보기·Fleet/Vision 브리지를 ROS 없는 로컬 최신 스냅샷과 기존 HTTPS/WSS로 연결한다. localhost DDS 영상도 사용하지 않는다. 기존 장치·명령 소유권과 현장 전환 수용은 유지한다. 전문은 [D-901](../adr/D-901-native-workcell-observation-isolation.md).
