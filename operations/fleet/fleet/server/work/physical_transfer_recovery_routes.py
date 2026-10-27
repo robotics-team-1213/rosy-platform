@@ -1,4 +1,3 @@
-"""Simulation recovery requests, independent reset facts and one separately approved child."""
 import asyncio
 import json
 import sqlite3

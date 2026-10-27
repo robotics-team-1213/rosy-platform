@@ -268,7 +268,7 @@ class RecoveryRequestService:
         with closing(self.store._journal._connect()) as connection:
             connection.execute("BEGIN")
             rows = connection.execute("SELECT mission_id,MAX(event_id) AS latest FROM fleet_cell_events "
-                "WHERE event_type=? GROUP BY mission_id ORDER BY latest", (REQUESTED,)).fetchall()
+                "WHERE event_type=? GROUP BY mission_id ORDER BY latest", (REQUESTED,))
             for row in rows:
                 parent_id = row["mission_id"]
                 try:

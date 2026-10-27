@@ -182,7 +182,6 @@ class PasswordSessions:
         if db is None:
             with self._ledger.db() as current:
                 return self.principal_by_id(principal_id, db=current)
-        # A caller's uncommitted authority must not latch this process into Account mode.
         site_id = self._authority_site(db)
         if site_id is not None:
             row = db.execute("SELECT * FROM rosy_accounts WHERE principal_id=? AND enabled=1",
