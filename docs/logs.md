@@ -12342,3 +12342,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test_omx_web.py`·새 `test_omx_camera_reference_browser.py`(1440·390, ROSY_RUN_BROWSER_TESTS=1)·`test_omx_segments_browser.py`·`test_browser_scope.py` 36 PASS, 0 FAIL.
 - gate 변화: 없음. 화면 표시만 바뀌고 착지·실물 수용은 별도다.
 - CE: 해당 없음 — 시험 locator가 숨은 단계의 heading을 못 찾은 것은 기존 셀렉터 습관 문제로, 코드·시험이 근거를 보존한다.
+
+## 2026-10-27 · uncommitted · feat(land): main 빨강 이월(D-889 추가 2)과 재부팅 창 대기
+
+- 변경: `tools/land_mainred.py`(새), `land.py`·`land_checks.py`·`land_prepare.py`·`land_full.py`·`doctor.py`. robot-56의 조건 7개를 모두 만족하는 NEW만 멈추지 않고 이월하며, 이월한 착지는 land record를 쓰지 않는다(D-889 추가 2). `main_red`는 후보가 병합한 main에서 돌고 지문을 기록한다. 05:15~06:10에는 사전 시험을 시작하지 않는다.
+- 근거: 10-27 00:00~05:40 착지 9·멈춤 26, main 확인 10번 중 7번이 이미 빨강(robot-45 측정). 10-27 06:00 재부팅이 사전 시험을 exit 143으로 끊었다.
+- 증거: 원격 `test/test_land_mainred.py`·`test/test_land_mainred_flow.py`와 착지 도구 시험. 검토 robot-56.
+- gate 변화: 6항을 조건부로 뒤집음(사용자 승인 2026-10-27). 끄기 `ROSY_LAND_MAINRED_CARRY=0`.
+- CE: 미정 — 첫 실제 이월 뒤 판단.
