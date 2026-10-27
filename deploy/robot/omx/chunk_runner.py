@@ -65,10 +65,12 @@ CONTACT_LAG, CONTACT_TICKS = 1.5, 2
 CONTACT_CHUNKS = ("descend", "grasp", "release")
 # Pacing: a body joint behind the guard's sent command by PACE_LAG units holds the next frame until it catches
 # up. On arm S the wrist_flex (XL330) gives ~35 PWM per degree, so a lift or goto grew its lag 0.2 -> 2.6 -> 5
-# degrees at PWM 135-165 of 300 and the guard turned torque off (12 sessions, 2026-10-25..27); at rest it is
-# within 0.4 degrees. 1.6 units is 2.9 degrees of the guard's 5. After PACE_MAX_S the frames go on: the guard
-# still decides. Contact chunks reach CONTACT_LAG first and keep their contact response.
-PACE_LAG, PACE_MAX_S = 1.6, 3.0
+# degrees at PWM 135-165 of 300 and the guard turned torque off (12 sessions, 2026-10-25..27). 1.6 units is 2.9
+# degrees of the guard's 5. A hold lasts only while the lag shrinks: reached over the conveyor, the wrist sat
+# 2.08 units low with no motion at all (2026-10-28), and waiting for 1.6 there moved one frame per PACE_MAX_S.
+# Where the lag stops shrinking it is the pose's droop (`pace_floor`); frames go on, and hold again only when the
+# lag grows PACE_RISE past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
+PACE_LAG, PACE_RISE, PACE_MAX_S = 1.6, 0.3, 3.0
 # Stalled = pushing at its session cap (300) while short of its target and not moving: blocked or colliding.
 # At the cap alone is normal: the elbow saturates while lifting the arm out of home (2026-10-25).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
@@ -139,6 +141,7 @@ class Runner:
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
         self.played, self.retreat_frames, self.contact_ticks = [], [], 0
         self.lag, self.paced, self.paced_ticks = 0.0, 0, 0  # paced_ticks: frames held in the current chunk
+        self.pace_floor, self.pace_last = 0.0, None
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
         self.health_present = None
 
@@ -253,10 +256,16 @@ class Runner:
         return True
 
     def tick(self) -> None:
-        if self.queue and self.lag > PACE_LAG and self.paced < PACE_MAX_S * self.fps:
-            self.paced, self.paced_ticks = self.paced + 1, self.paced_ticks + 1  # let the joint catch up
+        if self.lag < PACE_LAG:
+            self.pace_floor = 0.0
+        shrinking = self.pace_last is None or self.lag < self.pace_last - 0.01
+        if (self.queue and self.lag > max(PACE_LAG, self.pace_floor + PACE_RISE) and shrinking
+                and self.paced < PACE_MAX_S * self.fps):
+            self.paced, self.paced_ticks, self.pace_last = self.paced + 1, self.paced_ticks + 1, self.lag
         elif self.queue:
-            self.target, self.paced = self.queue.pop(0), 0
+            if self.pace_last is not None:  # the hold ended: what is left is this pose's droop
+                self.pace_floor = max(self.pace_floor, self.lag)
+            self.target, self.paced, self.pace_last = self.queue.pop(0), 0, None
             if self.chunk is not None:
                 self.played.append(list(self.target))
         sent = self.robot.send_action(dict(zip(NAMES, self.target)))
@@ -317,7 +326,7 @@ class Runner:
             if (error <= SETTLE_TOL and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
                 fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL,
                               paced_ticks=self.paced_ticks)
-                self.paced_ticks = 0
+                self.paced_ticks, self.pace_floor = 0, 0.0
                 if self.chunk == "park" and (self.fault or "").startswith("contact"):
                     self.fault = None  # folded home after a soft contact: the next attempt may start
                 if grasp:  # jaws stopped short of this chunk's closed target: something is between them

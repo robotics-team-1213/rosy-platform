@@ -343,6 +343,33 @@ def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_gua
     assert robot.worst < m.PACE_LAG + 0.2  # held near the pace bound, far from the guard's
 
 
+class DroopingWrist(SlowWrist):
+    """Reached out, the wrist sits `droop` units under its command even at rest (2.08 over the conveyor)."""
+
+    def __init__(self, droop=2.0):
+        super().__init__(rate=1.0)
+        self.droop = droop
+
+    def send_action(self, action):
+        self.sent.append(action)
+        for i, name in enumerate(m.NAMES):
+            self.pos[i] = action[name] - (self.droop if i == 3 else 0.0)
+        self.worst = max(self.worst, abs(action["wrist_flex.pos"] - self.pos[3]))
+        return action
+
+
+def test_a_steady_droop_is_not_waited_out_frame_by_frame():
+    lift = library()
+    lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
+    status, clock, queue = [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(DroopingWrist(), lift, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    done = by_command(status, "run approach_pinky")[0]
+    assert done["ok"] and done["paced_ticks"] <= 3  # one look at a lag that does not shrink, then on
+    assert clock[0] < 100 / 30 + m.SETTLE_S + 1  # 2026-10-28: one frame per 3 s took a park past 300 s
+
+
 def test_the_library_contract_is_enforced(tmp_path):
     import json
     bad = {**library(), "fps": 2}  # 2 units per frame is within the guard speed at 2 fps
