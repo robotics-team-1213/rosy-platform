@@ -86,9 +86,11 @@ def export_transfer_outcomes(store, mission_id, output):
             task_outcome=outcomes[-1]["task_outcome"] if outcomes else "unknown")
         review["receipt_digest"] = sha256(_json(prior["receipt"]).encode()).hexdigest()
         review["source_assessment_digests"] = [item["evidence_digest"] for item in outcomes]
+        from .physical_transfer_recovery import recovery_lineage
         document = dict(schema="rosy.transfer-outcome-export/2", scope="unreviewed_metadata_only",
             mission_id=mission_id, raw_camera_bytes_available=False, behavior_training_eligible=False,
-            outcomes=outcomes, execution_review=review)
+            outcomes=outcomes, execution_review=review,
+            recovery_lineage=recovery_lineage(store, connection, mission_id))
     output = Path(output)
     fd, pending = tempfile.mkstemp(prefix=".transfer-outcomes-", dir=output.parent)
     try:
