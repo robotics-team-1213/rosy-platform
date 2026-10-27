@@ -355,6 +355,6 @@
 
 - 2026-10-28 · uncommitted · fix(test): ARM trial 복구를 SSH 준비와 분리해 관측
 - 2026-10-27 · b3091b8312 · feat(os): 로컬 정책·슬롯 조회와 실제 SYSTEM 관측 보완
+- 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
+- 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
 - 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
-- 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
-- 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
