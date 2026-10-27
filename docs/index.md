@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
 - 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
 - 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
 - 2026-10-27 · uncommitted · docs(adr): D-867 모델 PC 상한 근거, D-571에서 D-867 가리키기
-- 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록

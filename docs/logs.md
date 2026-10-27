@@ -12465,3 +12465,9 @@ osy-d395-s1d\`.
 - 증거: 최초 문서 관문은 해당 경로의 high-entropy-token 1건으로 실패했고 단독 재실행도 실패했다. main에서는 통과해 이 문서의 원인으로 확인됐다. 수정 뒤 동일 순수 scanner와 정상 원격 관문으로 확인한다.
 - gate 변화: 없음. 시험·scanner·known-failure·quarantine·허용 목록은 수정하지 않았다.
 - 교훈: 기존 `git-ids-in-validation-records-need-the-commit-prefix` 지침을 적용했다. 결과를 바꾸지 않는 표기 수정이며 새 해결 교훈은 추가하지 않는다.
+
+## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
+- 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
+- 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
+- gate 변화: 없음. 차례 마감(B)과 겹침 섀도(A)는 아직 켜지 않았다.
+- 교훈: 해당 없음. 측정과 규칙은 ADR에 있다.
