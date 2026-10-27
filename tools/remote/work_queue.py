@@ -77,9 +77,10 @@ class Work:
 
     A filtered take scans todo, so every take and give_back holds one lock. Once stop is set nothing more is taken."""
 
-    def __init__(self, order, on_done=None):
+    def __init__(self, order, on_done=None, stop=None):
         self.todo, self.codes, self.lost = collections.deque(order), {}, set()
-        self.on_done, self.stop, self._asking = on_done, threading.Event(), threading.Lock()
+        self.on_done, self._asking = on_done, threading.Lock()
+        self.stop = stop if stop is not None else threading.Event()
         self._queue = threading.Lock()
 
     def done(self, inv: list[str], log: Path) -> None:

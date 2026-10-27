@@ -21,6 +21,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import tempfile
 import time
 from pathlib import Path
@@ -262,6 +263,7 @@ def landed_copy(main_co: Path, argv: list[str]) -> int | None:
 
 def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
+    deadline = land.time.monotonic() + land.TURN_CAP_S if isinstance(round_no, int) else None
     python = land.sys.executable
     done = []
     if (wt / land.HARNESS).is_file():
@@ -285,9 +287,18 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
 
         def on_done(inv, log):  # D-889: a confirmed NEW failure, or the turn's time cap, cancels the rest
             seen[str(log)] = v = judge(inv, log, f"{round_no}-{land.Path(log).stem[4:]}")
-            return bool(v[0] and not v[1]) or (
-                isinstance(round_no, int) and land.time.monotonic() - began > land.TURN_CAP_S)
-        codes = land.remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}", on_done=on_done)
+            return bool(v[0] and not v[1]) or (deadline is not None and land.time.monotonic() >= deadline)
+        stop = threading.Event() if deadline is not None else None
+        timer = threading.Timer(max(0, deadline - land.time.monotonic()), stop.set) if stop is not None else None
+        if timer is not None:
+            timer.daemon = True
+            timer.start()
+        try:
+            codes = land.remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}", on_done=on_done,
+                                          **({"stop": stop} if stop is not None else {}))
+        finally:
+            if timer is not None:
+                timer.cancel()
         if land.out(wt, "rev-parse", "HEAD") != head:
             raise land.Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
         if len(codes) != len(todo):
