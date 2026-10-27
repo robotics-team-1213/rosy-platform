@@ -6,7 +6,7 @@ import pytest
 from fleet.server.mission_store import MissionConflict
 from fleet.server.site_auth import SitePrincipal
 from test_transfer_recovery_flow import failed_driver, driver, geometry, policy, installation, rig
-from test_physical_transfer_store import PROPOSER, OPERATOR, claims
+from test_physical_transfer_store import NOW, PROPOSER, OPERATOR, claims
 from test_physical_transfer_recovery import measured
 
 
@@ -138,3 +138,41 @@ def test_request_key_replay_is_exact_and_changed_context_is_rejected(failed_driv
     with pytest.raises(MissionConflict):
         s.request(d.job["mission_id"], principal=PROPOSER, request_key="request-one",
                   expected_context_digest="f" * 64)
+
+
+def test_new_assessment_cannot_replace_the_authenticated_intent_source(driver):
+    from core_common.protocol.arm_transfer import FleetArmTransferGrant
+    from fleet.server.physical_transfer_outcomes import record_transfer_outcome
+    from fleet.server.physical_transfer_recovery import recovery_context
+    from test_physical_transfer_dispatcher import ready, submit
+    d = driver
+    before = ready(d)
+    original = d.execution.snapshot(d.job["mission_id"])
+    submit(d, before)
+    d.clock[0] = NOW + 400_000_000
+    grant = FleetArmTransferGrant.model_validate(original["grant"])
+    d.execution.record_receipt(d.job["mission_id"], d.port.result(grant, "SUCCEEDED", 5))
+    d.clock[0] = NOW + 1_000_000_000
+    producer = d.store.installation.policy.producer_id
+    def assess(offset, sequence):
+        return record_transfer_outcome(d.execution, d.job["mission_id"], grant.request_digest,
+            measured(d.store, original, offset=offset, sequence=sequence), authenticated_producer_id=producer)
+    assert assess(600_000_000, 3)["task_outcome"] == "failed"
+    case = (d, {})
+    s = service(case)
+    intent = request(s, case)
+    evidence = capture(s, case, intent)
+    assert assess(900_000_000, 10)["task_outcome"] == "failed"
+    latest = recovery_context(d.execution, d.job["mission_id"])
+    binding = dict(request_id=intent["request_id"], expected_proposal_digest=intent["proposal_digest"],
+        expected_evidence_digest=evidence["evidence_digest"], expected_generation=latest["expected_generation"])
+    held = claims(d.path)
+    with pytest.raises(MissionConflict):
+        d.dispatcher.recover(d.job["mission_id"], proposer=PROPOSER, principal=OPERATOR,
+            **{key: latest[key] for key in ("expected_request_digest", "expected_receipt_event_id",
+                "expected_assessment_digest", "expected_generation")},
+            observations=measured(d.store, original, offset=1_200_000_000, sequence=20),
+            authenticated_producer_id=producer, recovery_approval=binding,
+            resolve_proposer=lambda connection, name: PROPOSER)
+    assert claims(d.path) == held
+    assert s.preview(d.job["mission_id"], OPERATOR)["child_mission_id"] is None
