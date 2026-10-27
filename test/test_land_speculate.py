@@ -40,6 +40,7 @@ def queued(repos, monkeypatch):
         (round_no, git(wt_, "rev-parse", "HEAD^{tree}"))) or [])
     monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
     monkeypatch.setattr(land.land_mainred, "CARRIED", [])
+    land.land_events.bind(wt, "feat/x")  # land.main binds; the direct calls below need it too
     return main, wt, base, peer, qdir, ticket, ran, escalations
 
 
