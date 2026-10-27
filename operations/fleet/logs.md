@@ -4976,3 +4976,10 @@
 - 증거: 원격 승인 RED 21 failed → 관련 128 passed, 흐름 RED 3 failed → 통합 201 passed. 독립 검토 반례 4 failed와 첫/재조회 snapshot 차이 2 failed를 수정해 7f0a8a152a의 통합 214 passed, 추가 epoch/session 거절을 포함한 73f2fe5a03의 최종 216 passed/0 skipped·known NEW 0을 확인했다. 코드 7f0a8a152a의 독립 계약 재검토에서 추가 중요 발견 없음. `docs/validation/transfer-recovery-2026-10-27/result.md` 참고(저장소 루트 기준). 전체 영향 범위·착지 gate는 별도로 기록한다.
 - Gate: 기존 gate 변화 없음. 공개 복구 ingress·화면·무인 반복·Gazebo 과제·실물·모델 학습 수용은 별도다. 원래 미션은 HOLD로 유지한다.
 - CE: 해당 없음 — D-895·회귀 시험·검증 기록이 판단과 수정 이유를 보존한다.
+
+## 2026-10-27 · c36bfb48ad · feat: 인증된 복구 요청과 원본 결속
+
+- 변경: D-899 내부 요청·독립 근거 원장을 기존 Fleet DB에 추가했다. 자식 생성의 동일 트랜잭션에서 최신 요청/근거·완전한 원본 tuple·현재 제안자 권한을 대조하며 정확한 승인 replay는 역사적 근거로 같은 자식을 읽는다. 원래 실패와 단일 자식 예산은 유지한다.
+- 증거: 서비스 부재 RED 7 → 46 passed. 독립 검토의 직접 C 원본 판정 교체 반례 RED 1 → 47 passed. read-only Account preview RED 1을 수정해 최종 16 suites 283 passed/0 skipped·runner exit 0·NEW 0. 독립 source 재검토 완료. `docs/validation/transfer-recovery-intent-2026-10-27/result.md` 참고(저장소 루트 기준).
+- Gate: 기존 gate 변화 없음. 실제 HTTP 인증 resolver·공유 API 계약·콘솔과 관측 생산자는 다음 별도 착지 단위다. 합성 World/fake owner의 호스트 시험을 장치·현장·학습 수용으로 보고하지 않는다.
+- CE: 해당 없음 — 원본 결속과 권한 표시의 판단은 ADR·원장 코드·직접 회귀 시험에 남아 있다.

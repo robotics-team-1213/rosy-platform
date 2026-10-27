@@ -12366,3 +12366,11 @@ osy-d395-s1d\`.
 - 메타데이터: D-893/D-894의 타 세션 예약 공백은 기존 gap 원장에 pending으로 기록했다. 최초 lint 3 errors를 수정해 0 errors/37 warnings, 기준 이후 11 commits size-range 통과를 확인했다. 실행 검사기를 변경하지 않았다.
 - gate 변화: 없음. 구현 승인과 장치·현장 수용을 구분한다.
 - CE: 해당 없음 — 설계 판단과 검증 근거는 ADR·코드·회귀 시험·모듈 기록으로 보존했다.
+
+## 2026-10-27 · c36bfb48ad · docs: D-899 인증된 이송 복구 요청 원장
+
+- 변경: 인증된 요청과 새 독립 근거, 원본 전체 결속, 별도 운영자 승인, 역사적 승인 replay를 D-899·Log·모듈 how-to·검증 기록에 연결했다. 공유 API schema 계약·HTTP·콘솔은 뒤의 별도 단계로 둔다.
+- 증거: 공식 도구로 D-899 예약, ADR/Log 동시 커밋, Log BOM/CRLF 보존. 관련 원격 16 suites 283 passed/0 skipped·NEW 0, 독립 계약 검토의 원본 판정 교체 결함은 직접 RED/GREEN 후 재확인했다.
+- 메타데이터: 실제 다른 세션의 예약 D-896/D-897/D-898을 pending gap으로 선언해 lint의 3 errors를 수정했다. 이후 0 errors/37 warnings. 실행 selector나 실패 baseline을 바꾸지 않았다.
+- Gate: 기존 gate 변화 없음. 호스트 검증과 실제 관측 생산자·장치·학습 수용은 별도다.
+- CE: 해당 없음 — ADR·공통 검증·회귀 시험으로 이유와 근거를 보존했다.
