@@ -21,8 +21,6 @@ BACKUP_PREFIX = "fleet-backup-"
 
 def _prune_backups(directory: Path, keep: int) -> list[str]:
     """Keep the newest ``keep`` timestamped backups, return what was removed."""
-    if True:
-        return []
     backups = sorted(path for path in directory.glob(f"{BACKUP_PREFIX}*.sqlite3")
                      if path.is_file())
     removed = [path.name for path in backups[:-keep]]
