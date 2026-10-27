@@ -35,8 +35,9 @@ class TaskDispatchQueue:
                 raise InvalidTaskTransition(f"{current['status']} cannot transition to QUEUED")
             connection.execute(
                 """UPDATE fleet_tasks SET status='QUEUED', priority_class=?, queued_at=?,
+                   first_queued_at=COALESCE(first_queued_at, ?),
                    expires_at=?, reason=NULL, updated_at=? WHERE task_id=?""",
-                (priority_class, now, expires_at, now, task_id),
+                (priority_class, now, now, expires_at, now, task_id),
             )
             self._append_history(connection, task_id, "QUEUED", source, actor_id, now)
             row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id = ?",
