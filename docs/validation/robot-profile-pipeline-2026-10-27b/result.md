@@ -17,7 +17,9 @@
 
 main에서 다음 세 커밋의 ancestry를 직접 확인했다: 원본 하중 구현 commit `58b219cbef5a328a963c8650a814507173ccace2`, HTTP 증거 검증 commit `0a3bca1f98`, 최종 통합 commit `b69d9c7362bbc32b0b5b86a787aa7189a81225a0`. main의 추적 파일은 깨끗했으며 동료의 기존 미추적 문서는 보존했다.
 
-실행 명령은 `python tools/land.py --tests auto --no-prune`다. 공식 기록은 공통 Git 디렉터리의 `rosy-land/b69d9c7362bbc32b0b5b86a787aa7189a81225a0.json`에 있다.
+실행 명령은 `python tools/land.py --tests auto --no-prune`다. 공식 기록은 공통 Git 디렉터리의 `rosy-land/<sha>.json`에 있으며, `<sha>`는 아래 표의 통합 commit이다.
+
+전체 Git ID는 종류를 명시해 표에 유지하고 경로에는 placeholder를 사용했다. [기존 해시 표기 교훈](../../solutions/workflow-issues/git-ids-in-validation-records-need-the-commit-prefix-2026-10-07.md)에 따른 표기 수정이며 관측 결과·scanner·허용 목록은 변경하지 않았다.
 
 | 기록 필드 | 값 |
 |---|---|
