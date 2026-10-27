@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-899 | 인증된 이송 복구 요청과 독립 운영자 승인. [전문](../adr/D-899-authenticated-transfer-recovery-intent.md) | Accepted for implementation (2026-10-27) |
 | D-895 | 원래 시도를 보존한 단일 이송 복구 후손. [전문](../adr/D-895-bounded-physical-transfer-recovery-child.md) | Accepted for implementation (2026-10-27) |
 | D-888 | Pinky 전체 OS 업데이트는 bootstrap 영속 입력과 별도 CMS 서명을 사용한다 | Proposed |
 | D-892 | Fleet 모바일 관제의 로봇 상태·작업 우선 배치 | Accepted (2026-10-27) |
