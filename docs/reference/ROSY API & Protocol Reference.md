@@ -5,9 +5,69 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.324
+**Version:** v1.327
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.327 Simulation recovery request, independent facts and approval (D-899)
+
+Closed recovery DTOs in `core_common.protocol.arm_transfer_recovery` are re-exported by `schemas`.
+This entry registers the contract; Fleet HTTP installation and console wiring follow separately.
+Envelope `PROTOCOL_VERSION` stays1.0 (D-870). No producer, device motion or training is enabled here.
+
+| Method/path | Input | Access/result |
+|---|---|---|
+| GET /api/fleet/arm-transfers/jobs/{mission_id}/recovery | ArmActionId | Same scoped job read; ArmTransferRecoveryPreviewResponse |
+| POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery | ArmTransferRecoveryCreate | Original authenticated proposer only; ArmTransferRecoveryRequestResponse; present-Origin check |
+| GET /api/fleet/arm-transfers/recovery-context | No body | Independent X-Physical-Observation-Token; ArmTransferRecoveryContextResponse; null means no capture request |
+| POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/observations | ArmTransferRecoveryObservationRequest | Same independent observer credential and present-Origin check; ArmTransferRecoveryObservationReply |
+| POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve | ArmTransferRecoveryApprove | Different named operator and present-Origin check; existing ArmTransferJobResponse for the child |
+
+All new models are closed/frozen. Create contains only `request_key` (existing trimmed1..160
+ArmTransferRequestKey) and `expected_context_digest` (ArmDigest). Approve extends
+ArmTransferJobAdmit's `expected_proposal_digest` and strict nonnegative `expected_generation`
+with `expected_evidence_digest`. Caller actor, role, grant and physical-clearance assertions
+are not input fields. Both path identifiers use ArmActionId. Installation is simulation-only;
+absence of an installed recovery/observer service is503, not execution permission.
+
+RequestResponse wraps `request`: request_id, request_key, proposal_digest, context_digest,
+proposed_by (trimmed control-free max96), requested_at_ns (strict nonnegative int below2^63).
+PreviewResponse wraps `recovery`: parent_mission_id, recovery_limit=1 (bool forbidden),
+child_mission_id, status, context_digest, request_id, proposal_digest, evidence_digest,
+proposed_by, expected_generation, can_request, can_approve, reason, execution_authorized=false,
+and nullable execution_review. Absent bindings use JSON null; reason is a nullable
+bounded ArmPhysicalRef explaining the current state.
+Status is UNAVAILABLE/AVAILABLE/WAITING_OBSERVATIONS/READY_FOR_APPROVAL/EXPIRED/CHILD_CREATED.
+READY_FOR_APPROVAL requires all exact request/proof/generation bindings; can_approve is false
+in every other state. CHILD_CREATED requires a distinct child and both capabilities false.
+It records creation of the sole retry, never physical success; read the child's actual job status.
+
+The bounded execution_review has scope=owner_reported_execution_only, action_outcome
+(existing DeviceActionState), nullable owner_reason (preserves empty text, max256),
+phase_summaries (up to4 existing DeviceActionPhaseReceipt), nullable failure_phase and
+last_reported_phase (approach/grasp/transfer/release), task_outcome (succeeded/failed/unknown),
+and physical_failure_cause=null. Missing owner evidence yields null review. This projection
+does not expose a grant, infer a physical cause, or provide human truth-label approval.
+
+ContextResponse wraps nullable `context`: mission_id, request_id, proposal_digest,
+purpose=RECOVERY_RESET, execution_authorized=false, context, producer_id, evaluator_revision,
+frame_id, policy_digest, catalog_digest, bindings_digest, object_ref, object_origin_id,
+min_separation_ns, max_age_ns. Nested context contains action_id, attempt_id,
+phase=PRE_DISPATCH, not_before_ns and1..32 unique owner scopes. Each recovery owner has
+exactly workcell_id, instance_id, journal_id and owner_session_id; unlike the normal
+ArmTransferOwnerContext it contains no unsupported model/calibration/transform fields.
+No expected object pose or installed truth geometry is returned. Numeric times use the
+same strict nonnegative counters; owner scope and reference types match existing arm DTOs.
+
+ObservationRequest requires purpose=RECOVERY_RESET, expected_proposal_digest and exactly
+two existing ArmTransferObservation samples. Reply contains only evidence_digest.
+The host must validate independent producer identity, original source, fresh facts and current
+dispatch fence; the contract does not supply a producer or attest physical measurements.
+Approval must recheck original proposer authority inside child creation, preserve parent HOLD,
+and enforce the original root's one-child limit. Exact replay returns the same child without
+new execution. New child PRE/POST observations remain separate and must be fresh.
+No response contains the internal recovery execution/grant. Operational approval is not a
+learning label; failure/recovery metadata remains subject to separate human review.
 
 ### v1.324 로봇 상세 프로필·관리 기록과 하중 분석 관측
 
@@ -4213,6 +4273,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.327 | 2026-10-27 | D-899: closed simulation recovery request, independent RECOVERY_RESET observations, exact operator approval bindings and bounded execution review. Contract registration only; HTTP/UI installation and physical acceptance are separate. Envelope1.0 unchanged. |
 | v1.324 | 2026-10-27 | Robot detail care profiles, persistent fault/caution/maintenance observations, shared motion-characteristics JSON validation and source-token-only advisory load report ingestion; no new command authority. |
 | v1.323 | 2026-10-26 | D-890: optional strict navigate/home intent epochs; CORE Home body preservation and explicit pre-admission Fleet navigate caller-epoch rejection. Canonical fence version registration only; runtime qualification and envelope1.0 unchanged. |
 | v1.321 | 2026-10-26 | D-884: project-scoped HF storage pool, namespace capacity reservations, pinned archive/reconciliation, verified local reclaim/restore and managed cache; existing publish/manage authority and envelope1.0 preserved. Host source verification is separate from live HF/Isaac acceptance. |

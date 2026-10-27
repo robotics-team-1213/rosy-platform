@@ -12466,6 +12466,20 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 시험·scanner·known-failure·quarantine·허용 목록은 수정하지 않았다.
 - 교훈: 기존 `git-ids-in-validation-records-need-the-commit-prefix` 지침을 적용했다. 결과를 바꾸지 않는 표기 수정이며 새 해결 교훈은 추가하지 않는다.
 
+## 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
+
+- 변경: API v1.327에 요청·관측 discovery·관측 제출·별도 승인 경로와 closed DTO를 함께 등록했다. 공식 bump의 live pins를 정렬하고 envelope1.0을 유지했다. 계약 등록과 HTTP 설치를 구분한다.
+- 증거: RED30 → 원격1,583 passed/0 skipped·NEW0, source2d932dad6b. docs/validation/transfer-recovery-contract-2026-10-27/result.md에 선택·revision·한계를 보존했다. FULL·실제 HTTP/browser·관측 생산자 수용은 별도다.
+- gate 변화: 없음. 계약 등록의 focused GREEN이며 공유 변경 FULL과 런타임 설치를 대신하지 않는다.
+- CE: 해당 없음 — 추가 운영 장애 해결이나 문서 밖 판단은 없다.
+
+## 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
+
+- 변경: v1.327 헤더·본문과 마지막 버전 변경이력표를 정렬했다. 표 행 누락은 기존 protocol-version alignment 시험이 FULL 가드에서 검출했다.
+- 증거: 실패 가드·단독 재현과 수정 커밋6645ad829b의 원격1,586 passed/0 skipped를 docs/validation/transfer-recovery-contract-2026-10-27b/result.md에 구분했다. 앞선 focused 기록은 보존했다.
+- gate 변화: 없음. 실패한 FULL은 통과로 계산하지 않으며 공식 FULL 재실행과 HTTP·화면 연결이 남았다.
+- CE: 해당 없음 — 새 운영 교훈이 필요한 장애가 아니다.
+
 ## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
 - 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
