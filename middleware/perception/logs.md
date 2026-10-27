@@ -1803,3 +1803,9 @@
 - 변경: 루트와 nodes/AGENTS.md에서 ROS composition과 import facade를 실제 nodes/·control/ 위치로 구분하고, 카메라 구현·Drive motion limits·관련 안내 링크를 현재 소스에 맞췄다.
 - 증거: control/_source_layout.py의 PACKAGE_DIRS·CONTROL_ROOTS·FLAT_ROOTS와 setup.py의 설치 경로를 대조했다. 전체 AGENTS.md의 로컬 Markdown 링크와 Parent context 경로를 정적으로 확인한다. 런타임 코드는 변경하지 않았다.
 - gate 변화: 없음. ROS·장치·현장 수용을 검증한 변경이 아니다.
+
+## 2026-10-27 · fe49e767b3 · A/B OS에서 operator overlay와 참조 프로필 보존
+
+- 변경: 기존 line_observer_overrides CLI의 기본 경로는 A/B marker/descriptor가 있으면 root canonical configuration owner에 write/clear를 맡긴다. helper 실패는 로컬 파일 쓰기로 우회하지 않는다. NOMINAL은 사용자가 고른 프로필을 overlay와 같은 generation에 보존하고 참조를 안정된 root 설정 경로로 바꾼다. 기존 사용자 지정 파일 경로와 단일 root의 atomic writer는 유지한다. 노드 주행 권한·NOMINAL 증거 등급은 바꾸지 않는다.
+- 증거: canonical dispatch/clear/no-fallback 및 profile dependency argv를 포함한 이 모듈14passedfe49e767b3. 배포 owner31passed는 실제 profile 원본 삭제 뒤 A→B→A의 exact bytes와 nominal_ground_plane 결과, 잘못된 profile 입력의 무변경 거절을 확인한다. mount/boot는 해당 모델 시험의 범위이며 실제 camera/기체 수용은 미실행이다.
+- gate 변화: 없음. 보정과 재시작의 현장 확인은 기존 runbook을 따른다. CE: 해당 없음 — 동작과 의존성은 코드·회귀 시험에 직접 남는다.

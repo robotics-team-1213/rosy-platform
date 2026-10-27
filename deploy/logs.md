@@ -3750,6 +3750,58 @@
 - gate 변화: 없음. 실제 호스트 설치·재부팅·Fleet 브라우저·장치 수용은 별도이며 활성 수집 세션은 건드리지 않았다.
 - CE: 해당 없음 — 정본 health 재사용과 stale/terminal 경계는 코드·시험·README 및 기존 stale-health 교훈에 남아 중복 교훈을 만들지 않는다.
 
+## 2026-10-27 · fe49e767b3 · full OS integration: authenticated inputs and persistent commissioning
+
+- 변경: OS signer는 검증된 checksum snapshot과 실제 JSON bytes를 결합한다. trial/commit은 인증된 factory의 실행 CORE cwd와 최신 systemd identity를 다시 관측하고, 오래 걸린 관측 뒤에도 health receipt/deadline을 검사한다. 새 공장 A/B data에는 root:rosy-calib(964),2775 보정 저장소를 bind하며 해당 그룹에 런타임 쓰기 계정이나 alias를 허용하지 않는다. IR/line overlay와 NOMINAL 참조 프로필은 canonical generation/tombstone으로 보존한다. Host Agent의 설정·재시작 실패 복원은 같은 기록 경로와 expected-byte 비교를 사용하며, 새 변경은 잠금 획득 뒤 정지 증거를 다시 확인한다. root 전용 operator CLI와 기존 line overlay CLI도 공유 기록 경로를 사용한다.
+- 증거: 서명·CORE·보정 owner8 suites206passed450cb1d40f; 통합 inspector/signature/systemd/customization358passedae6eb591ee; overlay races6 suites349passed152939fd38; bounded snapshot29passedd5c9f86d1b; profile 원본을 제거한 A→B→A와 실제 nominal_ground_plane 소비자를 포함한31passed 및 line CLI14passedfe49e767b3. 같은 시험이 겹치므로 합산하지 않는다. 각 경계의 RED를 먼저 관측했고 독립 검토의 deadline·geometry CAS·정지 admission·참조 프로필 지적은 회귀 시험과 후속 검토로 닫았다.
+- SYSTEM:152939fd38의 opt-in guest wrapper1passed. 내부 실제 ext4/bind/964 ownership/accepted-record·pin 보존과 fsck/owned-loop/RW signature injection/RO readback/cleanup2개 시험을 요구한다. 합성 payload/layout과 실제 disposable guest kernel 근거이며 Pi 부팅이나 RAUC inactive-device 설치 증거가 아니다. 최초 wrapper의1passed 고정 기대값은 실제 내부2passed를 보고 거절해 수정했다.
+- gate 변화: 없음. 이전 A/B volume의 보정 경로·그룹 이관은 제공하지 않으며 새 factory image 준비 범위다. 제품 CMS trust/key decision, 로봇별 지원 선언, operator-local signing, 원격 게시, native ARM64 A/B 산출물, main 착지와 DEVICE 수용은 남아 있다. 기존 선택 이미지·SD 카드·기체·운영 키는 변경하지 않았다.
+- CE: 해당 없음 — 기존 old-CORE activation 교훈과 최종 코드·회귀 시험으로 판단을 복원할 수 있다. 별도의 중복 교훈을 만들지 않았다.
+
+## 2026-10-27 · 9f5b9c550b · operator-local OS signing preparation
+
+- 변경: 기존 검증용 Guest를 tools/release/os_tools_vm.py와 공통 public-input JSON으로 옮기고 test import/ArmGuest identity를 보존했다. operator용 handoff는 정확한 커밋의 허용 경로만 Git archive로 만들며 미커밋·ignored·untracked 파일을 넣지 않는다. 전송 크기를 제한하고 guest UUID 검증 뒤, guest disk/package 변경 전에 source를 검증한다. tar.umask=0022를 고정해 로컬 Git 설정이 source 경로를 group/world writable로 만들지 못하게 한다. Windows platform backend는 다음 구현 범위다.
+- 증거: 고정 RAUC1.11.3의 extract/OpenSSL binary CMS/replace/new-authority 검증2passed34d1c6e722(테스트 키만 사용). shared source/ARM import/public-provenance32passed4opt-in skipped9f5b9c550b. 실제 Linux SYSTEM wrapper1passed656d8c053b는 내부 두 filesystem 사례를 요구한다. 별도 operator Windows QEMU probe는 hash-pinned Ubuntu guest, console-derived host-key pin, UUID/UID0/systemd 및 종료를 관측했다. 이 probe는 제품 Windows 경로 통합·ARM64 빌드·Pi 수용 근거가 아니다.
+- 공개 자료 게이트: 공개 CMS 후보는 정확한 경로/전체 인증서 지문으로만 entropy 예외를 허용하며 EOF 표현 차이도 검증한다. private-key·credential 검사는 유지한다. inventory는 공유 검사와 OpenSSL X.509 parsing으로 공개 객체를 확인한다. 관련5suite104passed03d707e5a2 및 독립 검토 완료. 과거 public Ubuntu pins/public SSH interpolation/진단 fixture4tuple을 개별 검토해 기존 publication baseline에 기록했다.463commit 범위의19건은 검토된 자료이며 미검토0건이다.
+- gate 변화: 없음. CMS trust는 아직 false/null이고 키는 operator 보호 폴더에만 있다. 새 이미지 생성·서명·게시·착지와 실제 SD/부팅은 완료되지 않았다. CE: 해당 없음 — 코드·회귀 시험·구체적 준비 script에 원인과 검증이 남는다.
+
+## 2026-10-27 · dc3066ba70 · Windows tools guest and coherent OS prerelease publisher
+
+- 변경: 정본 WindowsGuest는 보호된 operator cache의 공개 입력을 독립 파일로 복사하고 정확한 source revision을 요구한다. QEMU 프로세스가 실행 중일 때 소유 콘솔의 Ed25519 host key를 고정하고 사용자 SSH 설정·agent forwarding을 차단한다. 작업 디스크는 guest 소유32GiB이며 실제 카드나 로봇 경로를 사용하지 않는다. 검증한 maintainer package와 인증한7z 구성 요소를 새 작업 공간에 캡처한 뒤 QEMU 전체를 추출하므로 기존 추출 cache의 실행 파일을 신뢰하지 않는다. Windows0700이 추가 principal을 부여하는 실제 거절을 관측해, 새 하위 폴더는 검증된 owner-only ACL을 상속하고 다시 검사한다.
+- 게시: publish_os_release.py는 서명된 metadata/rollout과 bundle의 정확한5개 파일을 캡처한다. 기본은 offline dry-run이며 apply도 engineering prerelease만 게시한다. GitHub draft 생성 응답의 양의 정수ID에5개 upload·검증·최종 PATCH를 고정한다. 같은 tag가 다른 draft로 교체되어도 미검증 대체본을 게시하지 않는다. remote 이름·크기·SHA256·source·state가 다르거나 누락되면 거절한다. CMS/verity는 서명 및 소비 단계의 책임이다.
+- 증거: 최초 게시23개 RED 후24passed72d0958f02. draft 교체 race RED6f0f5d8db6 후 고정ID 게시29개와 guest27개를 합친56passed4opt-in skipped21e14e576a. cache 변조는 실제 실행 전 거절하도록 RED5개 후27passed4opt-in skipped8b53502760. public provenance와 guest4suite48passed4skippeddc3066ba70. 독립 검토는 두 지적의 수정과 후속 scope를 확인했다. 같은 guest 시험은 겹치므로 합산하지 않는다.
+- operator 준비: d7890ec597 정본 경로의 실제 Windows boot·console key pin·instance/UID0/systemd·committed source 전달·RAUC1.11.3 설치와 소유 프로세스 종료를 확인했다. 최종 새 추출 경로dc3066ba70의 실제 실행은 별도 확인 중이다. 유지보수 script는 아직 repository의 재현 가능한 bootstrap CLI로 통합하지 않았다. 실제 GitHub upload·최종 native ARM64 image·OS bundle 서명·게시·main 착지·SD 기록·기체 수용의 근거는 아니다.
+- gate 변화: 없음. 자동 업데이트 SD 이미지의 최종 준비·배포 목표는 진행 중이다. 실제 product private key를 VM/시험 PC/CI/로봇에 보내지 않았다. CE: 해당 없음 — 경계의 원인과 복구가 코드·재현 RED/GREEN·operator 준비 기록에 남으며 별도 교훈으로 중복하지 않는다.
+
+- 후속 실제 준비: 최종 새 추출 경로dc3066ba70도 Windows에서 boot·console host-key pin·instance/UID0/systemd·committed source 전달·RAUC1.11.3 및 소유 프로세스 종료를 확인했다. 공개 입력만 전달했고 실제 product key·robot access·release image build는 없었다. publisher/publication-policy/public-provenance 마지막3suite71passedc3198c7601. source history475commit22건은 정확한 공개 checksum으로 개별 검토됐으며 미검토0건이다. 이 결과로 Windows tools 준비 범위만 닫으며 최종 이미지·번들 서명·실제 게시 수용을 대신하지 않는다.
+
+## 2026-10-27 · 8768fa17cf · common delivery profiles and keyless OS bundle stages
+
+- 변경: 기존 list/plan에7필드 delivery 결속을 표시하고 PinkyPi5/arm64 native-release·RAUC·compatible/tag를 고정했다. RaspTanksource-only, DJIunsupported SDK host와 OMXworkcell의 미지원 이미지/update backend는 null이다. require_image_backend는 Pinky의 기존 backend만 반환한다. generic guest나 BCM/MMC device admission을 넓히지 않았다. 이미지 준비 caller 연결은 다음 단계다.
+- Windows bootstrap: prepare_os_tools.py가 공개 pin을 검증하고, 신규 cache만 owner-only ACL을 만든다. MSI는 읽기 전용으로 CAB를 추출해 정확한7z 두 구성 요소만 게시한다. 실제 Windows CLI의 기존 cache 재검증과 별도 신규 폴더 ACL·MSI/CAB 추출·구성 요소 검증을 실행했다(canonical-bootstrap-preparation.json, source5425662e41). installer action·서비스 변경·실물 장치·product key 사용은 없었다.
+- 서명: external_os_signing은 실제 RAUC inline manifest의 정확한 section/key, source/release/factory, image size/hash, verity·ABI·state와 공개 cert/SPKI pin을 확인하고 Windows 로컬 키로 CMS를 만든다. os_bundle_external.prepare는 인증된 dist/기존 root injection 후 임시 preparer 키로 bundle을 만들며 public5파일만 내보낸다. finalize는 준비 bundle을 digest로 캡처하고 operator CMS/정확한 manifest를 확인해 교체하며 native RAUC inspector로 검증한다. Linux 단계에는 product private key 인자가 없다. root cleanup 실패는 work tree를 보존한다.
+- 증거: profile36passed131df73e73, bootstrap19passedc71f3d7571, 외부 inline/CMS21passeda2cb45a82c. keyless prepare→외부 CMS→finalize→기존 device verifier 수용과 기존 signer/guest63passed3opt-in skipped5425662e41. 실제 RAUC1.11.3/CMS이며 해당 fixture의 root image injection은 모델링했다. 별도 실제 filesystem gate를 이 시험으로 대체하지 않는다. 실제 allowlisted commit archive에서 CLI import를 확인하고 helper를 제외하는 mutation도 요구한2passed19879b5a7b. 후속 bootstrap/inline/profile76passed8768fa17cf. 시험은 겹치므로 합산하지 않는다.
+- 검토: 독립 profile/bootstrap/inline·CMS/prepare-finalize 검토에 미해결 지적 없음. 실제 외부 요청의 expected facts는 인증된 dist와 owned guest 측정에서 와야 하므로 최종 operator caller가 이를 보장해야 한다. 테스트 URL의 고정 example.invalid marker만을 과거 정확한 tuple로 검토했고 현재 fixture의 URL redaction 기대값은 유지했다.
+- gate 변화: 없음. 운영자 단일 실행 경로·파일 전달·최종 outer Ed25519·qualified native ARM64 image·trust 선택·실제 게시·main 착지·SD 준비 선택은 남았다. 실제 기체·카드·기존 운영 설정은 변경하지 않았다. CE: 해당 없음 — 결정은 구현·회귀·운영자 도구 준비 영수증에 남으며 별도 교훈을 중복하지 않는다.
+
+## 2026-10-27 · db99bab13e · bounded guest bundle return and engineering CMS selection
+
+- 변경: WindowsGuest.copy_from은 finalized 아래 고정 basename만 받으며1..16GiB와 SHA256을 요구한다. SSH와 같은 소유 콘솔의 authority를 사용해 SCP/SFTP로 보호된 UUID.part 파일에 스트리밍한다. 소유 guest 생존·파일 type/link/size/hash를 확인하고 같은 디렉터리 hard link로 기존 출력에 덮지 않고 게시한다. 실패 시 자신의 part만 제거한다. Windows NTFS의 실제 SCP/ACL/hard-link 동작은 별도 operator 준비 실행 중이다.
+- 증거: copy27case가 미구현 RED387db1c604였고 shared guest/ARM56passed4opt-in skipsa35c00d750. 독립 transport 검토에서 미해결 지적 없음. 실제 Windows 전송이나 최종 OS bundle 수용의 근거로 확대하지 않는다.
+- 공개 trust: 기존 사용자 승인 범위인 이미지 준비와 비활성 engineering 게시를 위해 추적된 CMS 인증서를 선택했다. 공개 PEM/SPKI를 Windows OpenSSL로 다시 확인한 뒤 정확한 지문과 cms_verified를 lock에 기록했다. public-keys README가 engineering 선택을 설명한다. production ownership/rotation, GitHub release 환경 승인, BUILD_GO와 D-888 실물 HOLD는 바꾸지 않았다. 미승인/null/다른 지문의 거절 fixture를 유지했다.
+- 증거: tracked CMS 미선택 REDf1b4bc6dd2 후 CMS/resolver/image lock/customization88passeddb99bab13e. runner가 공유 시험 호스트의 pip 임시 경로를 보고했으며 현재 작업의 소유·발생 원인은 확인하지 않았다. 해당 호스트 전체 cleanup 성공으로 기록하지 않는다. 현재 source scan clean,492commit publication range23개는 검토됐고 미검토0건이다.
+- 다음: 운영자 caller가 독립적인 인증 dist snapshot과 owned guest를 결속하고 실제 image/bundle을 준비·서명·검증·게시해야 한다. 실제 SCP 준비와 native ARM64 산출물은 별도 확인한다. CE: 해당 없음 — 구현·회귀·공개 trust 선택 기록에 근거가 있다.
+- gate 변화: engineering CMS 신뢰 선택만 완료했다. production BUILD_GO와 D-888 실물 HOLD는 유지한다.
+
+## 2026-10-27 · 6bd97f9914 · operator OS preparation and current-main integration
+
+- 변경: prepare_os_release.py가 인증된 image/factory snapshot, 승인된 engineering CMS pin, 커밋된 도구 source와 owned guest를 결속한다. 공개 입력 전달→keyless prepare→Windows 로컬 CMS→finalize→bounded bundle 반환→로컬 Ed metadata/initial rollout→기존 native consumer 재검증→guest/HTTP 종료 뒤 새5파일 output을 노출한다. 기존 output은 보존하고 실패한 공개 staging은 지우며 보호된 실패 workspace는 조사용으로 남긴다. 실제 기체·카드·네트워크 설정은 변경하지 않는다.
+- 전송 경계: 응답 시점 path를 다시 열면 부모 경로 교체로 다른 bytes가 읽힐 수 있음을 임시 파일 fixture로 재현했다. 서버 listen 전에 모든 입력을 size/hash 검증한 private temporary snapshot으로 만들고 응답은 그 snapshot만 사용한다. concurrent range seek는 파일별 lock으로 보호하며 listener/handler 종료 뒤 handle을 닫는다. 경로 교체·동일 크기 변조2RED0d931f1620 후 HTTP39case와 operator21case, 합계60passedbb646ffc61. 이는 실제 credential 유출 사건이 아니라 개발 경계의 재현 시험이다.
+- 서명·caller 증거: facts8passed35303334e7, native consumer proof11passed7973fb3cc5, operator command21passed9a947559fa. 실제 CMS·Ed25519·고정 RAUC를 쓰며 root injection과 Windows guest 실행은 해당 fixture에서 모델링한다. 이를 실제 이미지 빌드로 확대하지 않는다. Windows 공개 소스 반환은 실제 완료: sourcedb99bab13e,3,298,953bytes, exactSHA 일치·SCP/NTFS no-clobber·single link·owned process 종료를 canonical-guest-transfer-preparation.json에 기록했다. product key 공유·robot access·release image build는 false다.
+- 병합: mainfb006de2b7를 합치며 main의 PID1 journal binding helper를 정본 tools guest로 옮기고 alias·양쪽 시험을 유지했다. mounted-image fixture는 lock-derived RAUC stanza/binary를 한 번만 만들고 separate-boot 거절을 보존한다. 로그는 공통 기록과 양쪽 append를 정본 whole-block renderer로 보존했고 provenance는 실제 공통 base의 변경/삭제를 유지하며 정확한 reviewed baseline tuple을 합쳤다.
+- 검증: source6bd97f99149656ebf09d625d56d441ca6d6775d2를 모델 PC에서 원격 실행했다. guest/ARM, mounted-image, public-provenance, publish-policy, CMS, operator, public-input8파일196passed6opt-in skips, runner session47343 exit0, known compare0NEW/0known/0flaky다. 6skip은 실제 SYSTEM guest4개와 ARM source-slot a/b2개이며 이 실행에서는 활성화하지 않았다. 실행 argv·source·role·환경 해시·로그 digest는 외부 operator-verification-evidence.json에 부모 agent의 canonical runner 관측으로 결속한다. test log 자체가 source를 내장한다고 주장하지 않는다.
+- gate 변화: 독립 contract 검토에 지원되는 위반 없음. evidence 검토가 지적한 기록 최신성과 실행 결속을 보완했다. safety-trailer gate93commits exit0. FULL 착지 검증·native ARM64 image qualification·실제 operator 전체 거래·서명된 이미지/RAUC 게시·SD 선택·실물 수용은 아직 남았다. production BUILD_GO와 D-888 HOLD는 유지한다. CE: 해당 없음 — 원인과 예방이 snapshot 구현·재현 시험·서명 경계와 이 기록에 남는다.
+
 ## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 
 - 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.

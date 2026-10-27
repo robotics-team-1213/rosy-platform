@@ -357,4 +357,4 @@
 - 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
 - 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
 - 2026-10-28 · uncommitted · fix(harness): operations/monitoring 루트의 capability 복구
-- 2026-10-28 · uncommitted · fix(release): 권한 확인 파일 이름을 호출마다 다르게
+- 2026-10-28 · uncommitted · fix(test): ARM trial 복구를 SSH 준비와 분리해 관측
