@@ -1157,6 +1157,8 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: fleet.server.goal_admission.QueueDecision}  # D-430 frozen hold shapes (console helper)
+  - {symbol: fleet.server.goal_admission.response_of}
   - {symbol: fleet.swarm.session_lifecycle.FormationLifecycle, public: true}
   - {symbol: fleet.swarm.session_lifecycle.EVENT_TYPES, public: true}
   - {symbol: fleet.swarm.session_lifecycle.TRIGGERS, public: true}
