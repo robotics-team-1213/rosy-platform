@@ -291,6 +291,10 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     profile_revision='sim-profile', capacity_revision=None))
             monitor.motion.checked = trace_failure('checked', monitor.motion.checked)
             monitor.motion.call = trace_failure('motion_call', monitor.motion.call)
+            if lifespan:
+                from station_timing_probe import install_timing_probe
+                timing = install_timing_probe(owner=owner, navigation=svc.nav, motion=monitor.motion, ports=ports, tasks=tasks,
+                    registry=registry, app=core.app, clock=lambda: now[0], monkeypatch=monkeypatch)
             ingress = StationIngress(stations=stations, sessions=charges, sources=[source, global_source],
                 clients=lambda: {robot_id: robot}, clock=lambda: now[0])
             if full_return:
@@ -588,6 +592,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 for _ in range(30):
                     await step()
                 live = owner.readback()
+                if lifespan and not (live.seating_verified and live.charging_verified):
+                    timing('seating_assertion')
                 assert live.seating_verified and live.charging_verified, (
                     live.state, live.reason, world.pose, world.command, owner.feed.relative_pose(),
                     owner.sensors._proof_at, owner.seating._since, owner._seated_until)
