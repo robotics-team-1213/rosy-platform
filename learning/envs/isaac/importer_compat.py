@@ -65,7 +65,14 @@ def reference_model(context, usd_path: str, usd_api, geom_api):
         raise RuntimeError("SDK stage already contains the imported asset")
     geom_api.SetStageUpAxis(stage, geom_api.GetStageUpAxis(asset_stage))
     geom_api.SetStageMetersPerUnit(stage, geom_api.GetStageMetersPerUnit(asset_stage))
-    references = stage.DefinePrim("/World/Imported", "Xform").GetReferences()
+    imported = stage.DefinePrim("/World/Imported", "Xform")
+    references = imported.GetReferences()
     if not references.AddReference(usd_path):
         raise RuntimeError("Imported USD reference could not be authored")
+    # SDK 6.2 exports physics in an initially unselected variant.
+    variants = imported.GetVariantSets()
+    if 'Physics' in variants.GetNames():
+        physics = variants.GetVariantSet('Physics')
+        if 'physx' not in physics.GetVariantNames() or not physics.SetVariantSelection('physx'):
+            raise RuntimeError('Imported USD has no selectable PhysX variant')
     return stage
