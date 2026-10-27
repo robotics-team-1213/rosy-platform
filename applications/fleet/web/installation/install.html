@@ -126,6 +126,67 @@
               </dialog>
             </div>
           </section>
+          <section id="device-profiles" class="panel install-task" aria-labelledby="device-profiles-heading">
+            <h2 id="device-profiles-heading">장치 정보</h2>
+            <p class="hint">이름·모델·구성을 저장합니다. 실제 연결은 별도 확인이 필요하며, 저장으로 로봇 등록·보정·운용을 시작하지 않습니다.</p>
+            <div class="ui-form">
+              <label class="ui-field-label" for="device-profile-list">저장된 장치
+                <select id="device-profile-list" class="ui-field" data-profile="list"><option value="">접속 후 목록을 확인하세요</option></select>
+              </label>
+              <ui-button kind="quiet" type="button" data-profile="refresh">목록 다시 확인</ui-button>
+              <ui-button kind="quiet" type="button" data-profile="new">새 장치 · 입력 지우기</ui-button>
+            </div>
+            <dl class="ui-readout"><dt>저장된 정보</dt><dd data-profile="saved">저장된 장치 정보를 선택하거나 새 정보를 입력하세요.</dd></dl>
+            <p class="hint" data-profile="permission">저장은 이름 있는 운영자 계정으로 접속한 뒤 할 수 있습니다.</p>
+            <div class="ui-form">
+              <label class="ui-field-label" for="device-profile-id">장치 ID
+                <input id="device-profile-id" class="ui-field" data-profile="device_id" maxlength="64" autocomplete="off" aria-describedby="device-profile-id-help">
+              </label>
+              <label class="ui-field-label" for="device-profile-name">표시 이름
+                <input id="device-profile-name" class="ui-field" data-profile="display_name" maxlength="80" placeholder="예: OMX S">
+              </label>
+              <label class="ui-field-label" for="device-profile-manufacturer">제조사 (선택)
+                <input id="device-profile-manufacturer" class="ui-field" data-profile="manufacturer" maxlength="80">
+              </label>
+              <label class="ui-field-label" for="device-profile-model">모델 (선택)
+                <input id="device-profile-model" class="ui-field" data-profile="model" maxlength="80" placeholder="예: OMX S 또는 OMX AI">
+              </label>
+              <label class="ui-field-label" for="device-profile-kind">장치 종류
+                <select id="device-profile-kind" class="ui-field" data-profile="device_kind"><option value="manipulator">로봇 팔</option><option value="mobile">이동 로봇</option><option value="other">기타</option></select>
+              </label>
+              <label class="ui-field-label" for="device-profile-arms">팔 수 (선택)
+                <input id="device-profile-arms" class="ui-field" data-profile="arm_count" type="number" min="0" max="16" step="1" aria-describedby="device-profile-composition-help">
+              </label>
+              <label class="ui-field-label" for="device-profile-hardware">장치 식별값 (선택, 한 줄에 하나)
+                <textarea id="device-profile-hardware" class="ui-field" data-profile="hardware_ids" rows="3" aria-describedby="device-profile-composition-help"></textarea>
+              </label>
+            </div>
+            <p id="device-profile-id-help" class="hint">장치 ID는 저장 후 바꿀 수 없습니다. 다른 장치는 새 장치로 입력하세요.</p>
+            <p id="device-profile-composition-help" class="hint">팔 수는 실제 구성을 확인해 입력하세요. USB 장치나 식별값 개수로 정하지 않습니다. 식별값은 연결·신원 확인을 뜻하지 않습니다.</p>
+            <ui-actions><ui-button kind="primary" type="button" data-profile="save">장치 정보 저장</ui-button></ui-actions>
+            <p class="hint" data-profile="status" role="status" aria-live="polite"></p>
+            <h3>운용 기록 · 특성 JSON</h3>
+            <p id="device-care-permission" class="hint" data-care="permission" aria-live="polite"></p>
+            <p class="hint">로봇 상세에서 먼저 보이는 정보입니다. 기록은 실시간 고장 해제나 운용 승인을 뜻하지 않습니다.</p>
+            <div class="ui-form">
+              <label class="ui-field-label">로봇·팔 관측원 연결<select class="ui-field" data-care="source"><option value="">연결 안 함</option></select></label>
+              <label class="ui-field-label">항상 표시할 주의사항<textarea class="ui-field" data-care="caution" maxlength="2000" rows="3"></textarea></label>
+              <label class="ui-field-label">측정 특성 JSON 가져오기<input class="ui-field" data-care="file" type="file" accept="application/json,.json"></label>
+            </div>
+            <p class="hint" data-care="document">특성 JSON 미등록</p>
+            <ui-actions>
+              <ui-button kind="quiet" type="button" data-care="export">특성 JSON 내보내기</ui-button>
+              <ui-button kind="quiet" type="button" data-care="remove">특성 등록 비우기</ui-button>
+              <ui-button kind="primary" type="button" data-care="save">연결·주의사항·특성 저장</ui-button>
+            </ui-actions>
+            <div class="ui-form">
+              <label class="ui-field-label">기록 종류<select class="ui-field" data-care="kind"><option value="fault">고장 관찰</option><option value="caution">주의</option><option value="maintenance">정비</option></select></label>
+              <label class="ui-field-label">관찰·조치 내용<textarea class="ui-field" data-care="text" maxlength="2000" rows="3"></textarea></label>
+            </div>
+            <ui-button kind="quiet" type="button" data-care="add">기록 추가</ui-button>
+            <p class="hint" data-care="status" role="status" aria-live="polite">장치 정보를 먼저 선택하세요.</p>
+            <section data-care="history" aria-label="저장된 로봇 운용 기록"></section>
+          </section>
           <!-- D-341 3–5·11: 콘솔은 6자리 코드를 모른다. 운영자가 폰 화면의 코드를 입력하고,
                설치자가 폰과 이 화면의 사이트 지문·자격 ID를 맞춰 본다. -->
           <section id="camera-link" class="panel install-task camera-link" aria-labelledby="camera-link-heading" data-role-lock>

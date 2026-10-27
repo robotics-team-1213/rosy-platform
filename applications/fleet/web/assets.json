@@ -34,7 +34,10 @@
     }
   },
   "assets": {
-    "app-runtime.js": {"path": "runtime.js", "media_type": "application/javascript"},
+    "app-runtime.js": {
+      "path": "runtime.js",
+      "media_type": "application/javascript"
+    },
     "assistant.js": {
       "path": "assistant/panel.js",
       "media_type": "application/javascript"
@@ -339,6 +342,10 @@
       "path": "devices/enrollment.js",
       "media_type": "application/javascript"
     },
+    "device-profiles.js": {
+      "path": "devices/device-profiles.js",
+      "media_type": "application/javascript"
+    },
     "signals.js": {
       "path": "signals.js",
       "media_type": "application/javascript"
@@ -486,6 +493,14 @@
     "arm-transfer-view.js": {
       "path": "work/arm-transfer-view.js",
       "media_type": "application/javascript"
+    },
+    "robot-profile-view.js": {
+      "path": "devices/robot-profile-view.js",
+      "media_type": "text/javascript"
+    },
+    "device-care.js": {
+      "path": "devices/device-care.js",
+      "media_type": "text/javascript"
     }
   }
 }
