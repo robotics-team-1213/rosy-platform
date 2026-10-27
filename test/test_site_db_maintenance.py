@@ -83,9 +83,11 @@ def test_cli_backup_with_dest_dir_timestamps_and_prunes(tmp_path, capsys):
     source = tmp_path / "fleet.sqlite3"
     _database(source, "timer")
     dest_dir = tmp_path / "nightly"
-    stale = dest_dir / "fleet-backup-20260101-000000.sqlite3"
-    stale.parent.mkdir(parents=True)
+    stale, newer = (dest_dir / "fleet-backup-20260101-000000.sqlite3",
+                    dest_dir / "fleet-backup-20260102-000000.sqlite3")
+    dest_dir.mkdir(parents=True)
     stale.write_bytes(b"old")
+    newer.write_bytes(b"recent")
 
     code = site_db.main(["backup", "--source", str(source), "--dest-dir", str(dest_dir),
                          "--prune", "2"])
@@ -96,8 +98,8 @@ def test_cli_backup_with_dest_dir_timestamps_and_prunes(tmp_path, capsys):
     assert created.parent == dest_dir and created.is_file()
     assert created.name.startswith("fleet-backup-") and created.name.endswith(".sqlite3")
     assert report["pruned"] == ["fleet-backup-20260101-000000.sqlite3"]
-    assert not stale.exists()
-    assert _value(created) == "timer"
+    assert not stale.exists()  # 가장 오래된 것만 정리
+    assert newer.exists() and _value(created) == "timer"
 
 
 def test_cli_backup_rejects_ambiguous_or_empty_targets(tmp_path):
