@@ -65,15 +65,33 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
             try:
                 page = browser.new_page(viewport={"width": width, "height": 900})
                 errors, posts = [], []
+                proposer_posts = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
+                page.on("request", lambda request: proposer_posts.append(request.url) if request.method == "POST" else None)
                 page.add_init_script("sessionStorage.setItem('rosy-console-token', 'harbor-secret')")
                 link = origin + "/console?view=work&arm_transfer=" + c.parent
                 page.goto(link)
                 request = page.locator("#arm-transfer-recovery-request")
                 expect(request).to_be_enabled()
                 expect(page.locator("#arm-transfer-recovery")).to_contain_text("시뮬레이션")
+                if lost_reply:
+                    def lose_request(route):
+                        if route.request.method == "POST":
+                            assert route.fetch().status == 200
+                            route.abort("failed")
+                        else:
+                            route.continue_()
+                    page.route("**" + c.url + "/recovery", lose_request)
                 request.click()
+                if lost_reply:
+                    expect(page.locator("#arm-transfer-recovery-state")).to_contain_text("요청 결과 미확인")
+                    expect(request).to_be_disabled()
+                    assert len(proposer_posts) == 1
+                    page.locator("#arm-transfer-read").click()
+                    page.unroute("**" + c.url + "/recovery")
+                    expect(page.locator("#arm-transfer-id")).to_be_editable()
                 expect(page.locator("#arm-transfer-recovery-state")).to_contain_text("새 관측 대기")
+                assert len(proposer_posts) == 1
                 expect(page.locator("#arm-transfer-recovery-approve")).to_be_disabled()
                 intent = c.client.get(c.url + "/recovery", headers=headers("harbor")).json()["recovery"]
                 observe_recovery(c, intent)
