@@ -3,21 +3,24 @@
 remote_job.JOB prints ``[remote-pytest] memory peak <MiB> MiB`` (the scope's cgroup ``memory.peak``).
 remote_pytest.one() appends it with the invocation's argv key, host, sha and time to
 ``<git-common-dir>/rosy-pytest-memory.jsonl`` (beside land_cache's file) and, before the next run of the
-same argv, reserves ``SMALL_GB`` when every recorded peak was at most ``HEAVY_MIB``, else ``FULL_GB``.
+same argv, reserves ``MARGIN`` times its highest recorded peak in whole GB (at least 1), else ``FULL_GB``.
 MemoryMax stays 6 GB either way, so a wrong guess only lets one more job onto a host, it never kills one.
-Measured 2026-10-26 over 140 scopes: median 0.3 GB, p90 3.1 GB, max 5.7 GB. Standard library only.
+Measured 2026-10-26 over 140 scopes: median 0.3 GB, p90 3.1 GB, max 5.7 GB. 2026-10-27 over 763 argvs (3,077
+runs) the highest peak per argv was median 292 MiB, p90 852 MiB, while 99% reserved 3 GB: the reservations, not
+the hosts' memory, filled the test PCs. Standard library only.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 import time
 from pathlib import Path
 
 FILE = "rosy-pytest-memory.jsonl"
-FULL_GB, SMALL_GB, HEAVY_MIB = 6, 3, 4 * 1024
+FULL_GB, MARGIN = 6, 1.25
 PEAK = re.compile(r"^\[remote-pytest\] memory peak (\d+) MiB\r?$", re.M)
 
 
@@ -48,7 +51,7 @@ def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str)
 
 
 def reserve_gb(history: Path | None, inv: list[str]) -> int:
-    """SMALL_GB when inv has recorded peaks and none is over HEAVY_MIB; FULL_GB otherwise."""
+    """MARGIN x inv's highest recorded peak, rounded up to whole GB within 1..FULL_GB; FULL_GB with no record."""
     want, peaks = key(inv), []
     try:
         lines = history.read_text(encoding="utf-8").splitlines() if history else []
@@ -61,4 +64,4 @@ def reserve_gb(history: Path | None, inv: list[str]) -> int:
                 peaks.append(int(row["peak_mib"]))
         except (ValueError, KeyError, TypeError):
             continue  # a torn or foreign line
-    return SMALL_GB if peaks and max(peaks) <= HEAVY_MIB else FULL_GB
+    return min(FULL_GB, max(1, math.ceil(max(peaks) * MARGIN / 1024))) if peaks else FULL_GB

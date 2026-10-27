@@ -12407,3 +12407,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_prepare.py`.
 - gate 변화: 없음(기록만 더함).
 - CE: 해당 없음 — 코드·시험에 남는다.
+
+## 2026-10-27 · uncommitted · fix(remote): 시험 PC 메모리 예약을 실측으로, 현장 PC 디스크 판정 바로잡기
+
+- 변경: `tools/remote/memory_history.py`. 작업마다 잡는 메모리 예약을 "기록된 최고치 4 GiB 이하면 3 GB, 아니면 6 GB"에서 "그 시험 묶음의 최고치 × 1.25, 정수 GB로 올림, 1~6 GB"로 바꾼다. 기록이 없으면 예전처럼 6 GB. `tools/remote/host_probe.py`. 20 GB 하한은 시험이 쓰는 `~/rosy-test` 디스크에만 적용하고, 두 디스크 중 하나라도 99% 이상 차면 거절한다.
+- 근거: 10-27 착지 대기 동안 모델 PC는 실제 여유 메모리가 20 GB인데 예약 합 때문에 "−5.2 GB 남음"으로 거절됐다. 763종·3,077회 기록에서 묶음별 최고치 중앙값은 292 MiB, 90%는 852 MiB 이하인데 99%가 3 GB를 예약했다. 새 규칙이면 예약 합이 2,310 GB에서 922 GB로 준다. 현장 PC는 디스크 103 GB가 비어 있어도 `/tmp`(7.4 GB tmpfs, 사용 1%)의 남은 GB가 20 GB 미만이라 매번 거절됐다. 시험 작업은 TMPDIR을 실행 폴더 아래에 둔다.
+- 증거: 원격 `test/test_remote_pytest.py`, `test/test_remote_pytest_memory.py`.
+- gate 변화: 없음(같은 시험, 같은 판정). 시험 PC 한 대에 동시에 오르는 작업이 늘어난다. 작업마다 `MemoryMax` 6 GB와 실제 `MemAvailable` 검사는 그대로다.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/landing-blockers-cost-hours-2026-10-18.md` §3.
