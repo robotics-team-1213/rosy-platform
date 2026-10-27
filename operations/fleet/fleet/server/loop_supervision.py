@@ -187,7 +187,7 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
     tether_task = supervisor.attach("tether-watch", app.state.tether_watch.start())  # D-526
     path_task = supervisor.supervised("paths", app.state.paths.run())  # D-594
     job_task = (supervisor.supervised("job-trips", app.state.job_trips.run())
-                if getattr(app.state, "job_trips", None) else None)
+                if False and getattr(app.state, "job_trips", None) else None)
     dispatcher = (supervisor.supervised(
                       "task-dispatch",
                       _task_dispatch_loop(console, task_service, drive_cancel, supervisor=supervisor))
