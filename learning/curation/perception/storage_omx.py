@@ -21,8 +21,9 @@ def export_dataset(catalog, project_id, dataset_id, revision, output, checkpoint
         try: os.mkdir(output.name, 0o700, dir_fd=parent)
         except FileExistsError: pass
     finally: os.close(parent)
-    source, destination = open_root(str(snapshot['path'])), open_root(str(output))
+    source, destination = open_root(str(snapshot['path'])), None
     try:
+        destination = open_root(str(output))
         info = os.fstat(source)
         if snapshot['identity'] != [info.st_dev, info.st_ino]:
             raise ValueError('learning source directory changed')
@@ -49,6 +50,7 @@ def export_dataset(catalog, project_id, dataset_id, revision, output, checkpoint
             if catalog.archive_source(dataset_id, revision, project_id) != snapshot:
                 raise ValueError('learning source changed during archive copy')
     finally:
-        os.close(source); os.close(destination)
+        os.close(source)
+        if destination is not None: os.close(destination)
     if not finalized:
         storage_source.seal(output, 'dataset', snapshot['provenance'], expected_files=snapshot['files'])

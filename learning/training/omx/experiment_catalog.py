@@ -4,7 +4,6 @@ import json
 import os
 import re
 import shutil
-from pathlib import Path
 
 from experiment_dataset import load_dataset
 from experiment_io import identifier, read_json, sync_directory
