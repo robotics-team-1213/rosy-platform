@@ -279,9 +279,14 @@ def test_records_of_an_unknown_format_stop_instead_of_nothing_to_publish(repo, c
 
 def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(repo, tmp_path, monkeypatch):
     local, _ = repo
+    _commit(local, "tools/hooks/pre-push", "#!/bin/sh\r\nexit 0\r\n")  # CRLF as Git for Windows may check it out
     sha = _commit(local, "app.py", "1")
     tool.land_record.write(local, sha, _git(local, "rev-parse", f"{sha}^"), FULL, [])
     after = _commit(local, "app.py", "2")  # main moved on past the green FULL commit: one landing of lag
+    # 2026-10-27: a landing reinstalled the shared hook mid-push and bash died rereading it; the push uses its own copy
+    shared = local / ".git" / "hooks" / "pre-push"
+    shared.write_text("#!/bin/sh\nexit 1\n")
+    shared.chmod(0o755)
     tool.land_record.write(local, after, sha, AFFECTED, [])
     calls = []
 
@@ -300,6 +305,7 @@ def test_apply_pushes_the_chosen_sha_from_a_temporary_worktree_and_opens_a_pr(re
         assert fact in body
     assert body.endswith(tool.GENERATED_BY)
     assert _git(local, "worktree", "list").count("\n") == 0  # the temporary worktree is gone
+    assert list((local / ".git" / "rosy-publish").iterdir()) == []  # and its hook copy
 
 
 def _view(local: Path, sha: str, **over) -> str:

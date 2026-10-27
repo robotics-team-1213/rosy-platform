@@ -12390,3 +12390,10 @@ osy-d395-s1d\`.
 - 메타데이터: 실제 다른 세션의 예약 D-896/D-897/D-898을 pending gap으로 선언해 lint의 3 errors를 수정했다. 이후 0 errors/37 warnings. 실행 selector나 실패 baseline을 바꾸지 않았다.
 - Gate: 기존 gate 변화 없음. 호스트 검증과 실제 관측 생산자·장치·학습 수용은 별도다.
 - CE: 해당 없음 — ADR·공통 검증·회귀 시험으로 이유와 근거를 보존했다.
+## 2026-10-27 · ae535f57ec · fix: publish push가 자기 SHA의 pre-push 사본으로 돈다
+
+- 변경: `tools/publish_main.py --apply`가 게시 SHA의 `tools/hooks/pre-push`를 CR 없이 `<git-common-dir>/rosy-publish/<branch>-hooks/`에 쓰고 `core.hooksPath`로 push한다. 공용 훅을 다른 착지가 재설치해도 진행 중인 게이트는 바뀌지 않는다.
+- 근거: 10-27 수동 게시 push 두 번이 크기 규칙(약 105분) 도중 공용 훅 교체(14:19)로 `exit=127`과 `line 152: syntax error`로 끝났다. 같은 SHA의 크기 규칙 단독 실행은 통과했다.
+- 증거: 원격 `test/test_publish_main.py`(공용 훅이 실패해도 SHA의 훅으로 push, 사본 정리).
+- Gate: 변화 없음. 같은 훅 내용, --no-verify 없음.
+- CE: 새 교훈 기록 — `docs/solutions/workflow-issues/shared-pre-push-swapped-mid-run-breaks-long-push-2026-10-27.md`.

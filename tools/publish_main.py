@@ -24,7 +24,9 @@ Publish mode:
 4. --apply: refuse if a publish PR is open; check the Safety-Review range (``safety_review.py origin/main
    <sha>`` at that SHA) and push ``<sha>:refs/heads/publish/main-YYYYMMDD-HH`` (UTC) from a temporary
    detached worktree at that SHA under ``<git-common-dir>/rosy-publish/`` (pre-push selects tests from the
-   working tree), never --no-verify or force; ``gh pr create`` with the publish facts (lag = landings on
+   working tree) through a private LF copy of that SHA's own ``tools/hooks/pre-push`` (``core.hooksPath``:
+   a landing reinstalls the shared hook while the gate runs for hours, and bash rereads the swapped file),
+   never --no-verify or force; ``gh pr create`` with the publish facts (lag = landings on
    main after the SHA that this PR leaves out); remove the worktree (``worktree_rules`` tombstone when a
    held handle keeps the folder).
 
@@ -56,6 +58,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -312,12 +315,18 @@ def publish(repo: Path, args: argparse.Namespace, now: datetime) -> str:
     worktree_rules.clear_tombstone(holder, name)  # an earlier run's folder a handle kept
     temp = holder / name
     git(repo, "worktree", "add", "--detach", str(temp), sha)
+    hooks = holder / f"{name}-hooks"
     try:
         safety = safety_range(temp, sha)
-        push = git(temp, "push", "origin", f"{sha}:refs/heads/{branch}", check=False)
+        hooks.mkdir(exist_ok=True)
+        (hooks / "pre-push").write_bytes(git(repo, "show", f"{sha}:{HOOK}").stdout.replace("\r", "").encode())
+        (hooks / "pre-push").chmod(0o755)
+        push = git(temp, "-c", f"core.hooksPath={hooks.as_posix()}", "push", "origin", f"{sha}:refs/heads/{branch}",
+                   check=False)
         if push.returncode != 0:
             raise Stop(1, f"push refused (pre-push or remote):\n{push.stdout}{push.stderr}".rstrip())
     finally:
+        shutil.rmtree(hooks, ignore_errors=True)
         git(repo, "worktree", "remove", "--force", str(temp), check=False)
         note = worktree_rules.leave_tombstone(temp) if temp.exists() else ""
         if note:
