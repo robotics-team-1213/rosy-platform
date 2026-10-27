@@ -12452,3 +12452,11 @@ osy-d395-s1d\`.
 - 증거: `docs/validation/omx-sim-grasp-2026-10-27/`(MuJoCo 5/5, Isaac 0/5와 원인 관찰), 원격 `test/test_omx_grasp_probe.py`, `test/test_land.py`.
 - gate 변화: 없음. Isaac 전환 조건은 여전히 미충족.
 - CE: 새 교훈 기록 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`.
+
+## 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
+
+- 변경: `tools/harness/affected_ci.py`의 `modules` 항목에서 `gating: False`를 뗐다. 2026-10-25부터 main CI 실행에서 연속 녹색이었다. 이제 판정 밖은 sensing뿐이다.
+- 영향: execution_local처럼 `modules` 러너만 도는 모듈 시험도 CI가 판정한다. 모듈 추가 착지의 "CI 판정 matrix 밖" 경고가 이 경우 더 나오지 않는다(`affected_narrow.py`).
+- 시험: `test_modules_runner_gates`(11-15 마감 시험 대체), `not-ci-gated` 사례를 sensing 시험(`middleware/perception/test`)으로 바꿈.
+- 증거: GitHub main CI `test (modules)` 녹색 10회 연속(2026-10-25~26, 마지막 run 40412528805).
+- gate 변화: 없음. CI 판정 범위만 넓어짐.
