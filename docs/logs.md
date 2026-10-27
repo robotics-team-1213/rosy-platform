@@ -12422,6 +12422,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 측정 기록에 남는다.
 
+## 2026-10-27 · 10f4997e11 · fix(land): affected 재준비에서도 유효한 FULL 원본 보존
+
+- 변경: `tools/land_prepare.py`. 성공한 affected 재준비 뒤에도 캐시 사용과 원래 후보의 계보가 유효하면 기존 FULL 준비 기록을 바이트 그대로 보존한다. 현재 실행의 사건 기록은 affected로 남기고, 다음 차례는 원래 FULL 기준부터 main 변화분 전체를 확인한다. carried·잘못된 계보·비정상 invocations·실패·HEAD 변경은 보존 조건을 통과하지 못한다. `--no-cache`는 이전의 새 affected 체크포인트 동작을 유지한다.
+- 근거: OS 배포 준비에서 FULL 이후 차례 시간 제한으로 다시 준비하자, 같은 브랜치의 단일 준비 파일이 affected로 덮였다. 게시자는 실제 착지 기록의 FULL tier를 요구하므로 시험이 통과해도 새 배포 소스를 선택하지 못할 수 있었다. 원래 후보·main을 새 affected 실행의 값으로 옮기거나 결과를 FULL로 재표기하면 검증 출처가 달라진다.
+- 증거: 원격 회귀 시험에서 두 실패를 재현했고, 수정 후 준비·착지·게시자 연결 47건이 통과했다. 보존 분기를 끈 변이 커밋 `e0e452d426`에서 두 시험이 다시 실패했다. 복원한 `10f4997e11`의 `test_land.py`·`test_land_prepare.py`·`test_land_record.py`·`test_publish_main.py` 159건이 통과했다. 기존 FULL 바이트·기준 main·후보와 최종 게시자 판정을 실제 Git 임시 저장소로 확인한다. 독립 검토 `7c0e816d67`에서 추가 수정 사항 없음이며 복원 트리는 그 검토 트리와 같다.
+- gate 변화: 판정 기준은 유지한다. 유효한 FULL 원본과 현재 후보의 변화분 증거 연결만 보존하며, 실제 최종 소스의 전체 시험을 새로 실행했다고 주장하지 않는다. 장치·이미지·현장 수용과는 별개다.
+- CE: 해당 없음 — 원인과 보존 조건은 새 코드·회귀 시험과 기존 교훈 `docs/solutions/workflow-issues/land-record-stopped-when-tests-moved-before-the-turn-2026-10-26.md`에서 확인할 수 있다.
+
 ## 2026-10-27 · uncommitted · feat(perception): Fleet 승인을 모델 PC 레지스트리에 반영(D-898)
 
 - 변경: Fleet `GET /api/fleet/perception-promotions/{sha}/decision.signed`(viewer)가 정본 결정과 새 역할 키 `perception-decision`의 Ed25519 서명을 돌려준다(키 없음 503, 미결정 409). 모델 PC `approval_import.py`가 서명·APPROVED·묶음 해시·revision·files·결과 폴더·제안자≠승인자를 확인한 뒤 model-watch와 같은 work.lock 아래 `accepted/`와 `models/approvals/<sha>/`에 기록한다. 활성 포인터·shadow·배포는 건드리지 않는다. contracts 0.1.15(`decision_encoded`·`sign`·`verify`), 상태 행 조회는 `promotion_request.ready_rows`로 공유.
