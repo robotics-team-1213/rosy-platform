@@ -85,3 +85,5 @@
 - `remote_pytest.py --pick sim`(D-568 5항)은 바꾸지 않았다. 관제 PC가 `sim` 능력과 하한을 갖추면 그 경로는 관제 PC를 고를 수 있다. 지금은 8스레드와 nav2 부재로 넘지 못한다(D-568 3항).
 
 **Related:** [D-434](D-434-model-pc-and-site-pc-roles.md), [D-476 모델 PC Gazebo 검증](../validation/d476-gazebo-model-pc-2026-10-06/result.md), [D-527](D-527-decision-test-host-boundaries.md), [D-530](D-530-host-management-desired-state-and-guard.md), D-553(`remote_pytest.py` 분산), [D-568](D-568-compute-pool-headroom-placement.md), [D-584](D-584-tests-never-run-on-operator-laptop.md).
+
+**정정 (2026-10-27):** 4항의 실행당 상한은 [D-867](D-867-ai-pc-sim-caps-for-vla-probes.md)이 바꿨다(AI PC 12코어·10GB, 모델 PC 16코어·10GB). 배치 규칙과 관제 PC 제외는 이 ADR 그대로다.

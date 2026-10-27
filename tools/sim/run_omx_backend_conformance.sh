@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # D-866 P2: start the shared OMX layer plus one simulator adapter, then judge it with omx_backend_conformance.py.
 # remote_sim only (it sets OUT and an isolated ROS domain):
-#   remote_sim.py ... cmd -- "tools/sim/run_omx_backend_conformance.sh mujoco 240x320 5"
+#   remote_sim.py ... cmd -- "tools/sim/run_omx_backend_conformance.sh mujoco 240x320 5 [conformance|grasp]"
+# grasp runs omx_grasp_probe.py (the Isaac switch condition's grasp repeat) instead of the conformance check.
 # Without OMX_CELL_OVERLAY it provisions the host first (provision_sim_host.sh; builds only what is missing).
 set -eo pipefail
-backend="$1" shape="$2" camera_hz="$3"
+backend="$1" shape="$2" camera_hz="$3" check="${4:-conformance}"
 source /opt/ros/jazzy/setup.bash
 [[ -n ${OMX_CELL_OVERLAY:-} ]] || eval "$("$(dirname "${BASH_SOURCE[0]}")/provision_sim_host.sh")"
 source "$OMX_CELL_OVERLAY/setup.bash"
@@ -43,5 +44,10 @@ for topic in joint_commands joint_states; do
   ros2 topic echo --csv "/sim/$topic" sensor_msgs/msg/JointState >"$OUT/sim-$topic.csv" 2>/dev/null &
   pids+=($!)
 done
+if [[ $check == grasp ]]; then
+  python3 "$here/omx_grasp_probe.py" --trials "${GRASP_TRIALS:-5}" --ready-s "${CONFORMANCE_READY_S:-300}" \
+    --out "$OUT/grasp.json"
+  exit
+fi
 python3 "$here/omx_backend_conformance.py" --shape "$shape" --camera-hz "$(python3 -c "print($camera_hz*.9)")" \
   --ready-s "${CONFORMANCE_READY_S:-300}" --out "$OUT/conformance.json"

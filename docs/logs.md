@@ -12437,6 +12437,35 @@ osy-d395-s1d\`.
 - Gate: 변화 없음. P5 현장 수용은 별도.
 - CE: 해당 없음 — 상태 한 줄 기록.
 
+## 2026-10-27 · uncommitted · docs(adr): D-867 모델 PC 상한 근거, D-571에서 D-867 가리키기
+
+- 변경: D-867에 모델 PC 상한이 AI PC보다 큰 이유를 날짜 붙은 보완으로 더하고, D-571에 4항 상한이 D-867로 바뀌었다는 정정을 더한다.
+- 근거: D-867 검토 지적(근거 없음, D-571에서 바뀐 상한을 찾을 길 없음). GPU 사용량은 2026-10-27 측정(`docs/validation/smolvla-train-memory-2026-10-27/`).
+- 증거: 문서만.
+- gate 변화: 없음.
+- CE: 해당 없음.
+
+## 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
+
+- 변경: `tools/sim/omx_grasp_probe.py`(교사와 같은 파지 기하로 집기·들기·내려놓기 반복, `/sim/object_tf`로 판정)와 `run_omx_backend_conformance.sh ... grasp`. `tools/sim/omx_mujoco_backend.py`는 손가락 mesh 대신 보정 접촉점의 캡슐로 충돌하고 타원 마찰 원뿔을 쓴다. `tools/land_checks.py`는 pytest가 파일 대신 디렉터리를 찍은 실패 id(`middleware/robot_execution/local::test_x`)를 그 시험을 정의한 추적 파일로 바꾼다.
+- 근거: D-866 §2 Isaac 전환 조건의 파지 반복 시험이 없었다. MuJoCo 볼록 껍질 손가락은 블록을 잡지 못했다. 같은 날 다른 착지 두 건이 "directory argument cannot contain :: selection parts"로 재실행에 실패했다.
+- 증거: `docs/validation/omx-sim-grasp-2026-10-27/`(MuJoCo 5/5, Isaac 0/5와 원인 관찰), 원격 `test/test_omx_grasp_probe.py`, `test/test_land.py`.
+- gate 변화: 없음. Isaac 전환 조건은 여전히 미충족.
+- CE: 새 교훈 기록 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`.
+
+## 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
+- 변경: 동결된 이전 기록을 보존하고 `validation/robot-profile-pipeline-2026-10-27b/result.md`에 로컬 main 통합 결과를 추가했다.
+- 증거: commit `b69d9c7362` 공식 landing 기록과 main ancestry 확인; 후보 Fleet-root 포함 묶음 7,444 통과·407 제외, 별도 root/core 묶음 4,687 통과·225 제외, 실제 Cell/care/pipeline 브라우저 48 통과·0 제외, main Node 398 통과·0 제외. 최종 tier·캐시·기존 FULL·재실행·미검증 범위를 구분했다.
+- gate 변화: 없음. 실물·ARM64·현장 수용이나 자동 복구로 승격하지 않는다.
+- 결정: 없음. 기존 care/API/CORE·OMX 권한 경계를 유지한다.
+- 교훈: CE 미해결. 기존 시간초과의 단독 통과를 해결로 쓰지 않으며 시험 시간·known-failure·quarantine 변경 없음.
+
+## 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
+- 변경: 검증 기록의 receipt 파일명을 `rosy-land/<sha>.json`으로 표기하고 전체 commit은 기존 표에 유지했다. 기존 해시 표기 교훈을 연결했다.
+- 증거: 최초 문서 관문은 해당 경로의 high-entropy-token 1건으로 실패했고 단독 재실행도 실패했다. main에서는 통과해 이 문서의 원인으로 확인됐다. 수정 뒤 동일 순수 scanner와 정상 원격 관문으로 확인한다.
+- gate 변화: 없음. 시험·scanner·known-failure·quarantine·허용 목록은 수정하지 않았다.
+- 교훈: 기존 `git-ids-in-validation-records-need-the-commit-prefix` 지침을 적용했다. 결과를 바꾸지 않는 표기 수정이며 새 해결 교훈은 추가하지 않는다.
+
 ## 2026-10-27 · uncommitted · test(isaac): Lab 3 설치 증거와 복구 회귀
 
 - 변경: 별도 Newton·Sim 후보 환경의 최초 설치 증거와 SDK 호환·종료 정리의 회귀 조건을 기록했다.
