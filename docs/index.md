@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-10-27 · ae535f57ec · fix: publish push가 자기 SHA의 pre-push 사본으로 돈다
+- 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
+- 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
 - 2026-10-27 · uncommitted · docs(fleet): avoid a bare git ID in the receipt path
 - 2026-10-27 · uncommitted · docs(fleet): record robot profile integration acceptance
-- 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
-- 2026-10-27 · uncommitted · docs(adr): D-867 모델 PC 상한 근거, D-571에서 D-867 가리키기
