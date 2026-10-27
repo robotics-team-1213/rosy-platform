@@ -52,10 +52,10 @@ def pid1_start(raw, unit, boot_id, earliest_us):
         event = json.loads(line)
         if not isinstance(event, dict):
             raise ValueError("journal entry is not an object")
-        # systemd v255 sd-messages.h: SD_MESSAGE_UNIT_STARTING.
+        # UNIT_STARTED is smoke-only: completion time cannot prove a positive start deadline.
         if (event.get("UNIT") == unit and event.get("_PID") == "1"
                 and event.get("_BOOT_ID") == boot
-                and event.get("MESSAGE_ID") == "7d4958e842da4a758f6c1cdc7b36dcc5"):
+                and (event.get("MESSAGE_ID") == "7d4958e842da4a758f6c1cdc7b36dcc5" or (earliest_us == 0 and event.get("MESSAGE_ID") == "39f53479d3a045ac8e11786248231fbf"))):
             stamp = event.get("__MONOTONIC_TIMESTAMP", "")
             if isinstance(stamp, str) and stamp.isdecimal() and int(stamp) >= earliest_us:
                 return event
