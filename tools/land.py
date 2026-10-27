@@ -532,7 +532,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
     EXTRA.clear()
-    if args.tests not in ("auto", "none") and os.environ.get(FIXTURE_ENV) != "1":
+    if args.tests not in ("auto", "none", "full") and os.environ.get(FIXTURE_ENV) != "1":
         EXTRA.append(shlex.split(args.tests))
         args.tests = "auto"
     if args.tests == "none" and not args.skip_reason.strip() and os.environ.get(FIXTURE_ENV) != "1":
