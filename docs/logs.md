@@ -12465,3 +12465,25 @@ osy-d395-s1d\`.
 - 증거: 최초 문서 관문은 해당 경로의 high-entropy-token 1건으로 실패했고 단독 재실행도 실패했다. main에서는 통과해 이 문서의 원인으로 확인됐다. 수정 뒤 동일 순수 scanner와 정상 원격 관문으로 확인한다.
 - gate 변화: 없음. 시험·scanner·known-failure·quarantine·허용 목록은 수정하지 않았다.
 - 교훈: 기존 `git-ids-in-validation-records-need-the-commit-prefix` 지침을 적용했다. 결과를 바꾸지 않는 표기 수정이며 새 해결 교훈은 추가하지 않는다.
+
+## 2026-10-27 · 2d932dad6b · docs: D-899 simulation recovery shared wire
+
+- 변경: API v1.327에 요청·관측 discovery·관측 제출·별도 승인 경로와 closed DTO를 함께 등록했다. 공식 bump의 live pins를 정렬하고 envelope1.0을 유지했다. 계약 등록과 HTTP 설치를 구분한다.
+- 증거: RED30 → 원격1,583 passed/0 skipped·NEW0, source2d932dad6b. docs/validation/transfer-recovery-contract-2026-10-27/result.md에 선택·revision·한계를 보존했다. FULL·실제 HTTP/browser·관측 생산자 수용은 별도다.
+- gate 변화: 없음. 계약 등록의 focused GREEN이며 공유 변경 FULL과 런타임 설치를 대신하지 않는다.
+- CE: 해당 없음 — 추가 운영 장애 해결이나 문서 밖 판단은 없다.
+
+## 2026-10-27 · 6645ad829b · docs: recovery API canonical changelog row
+
+- 변경: v1.327 헤더·본문과 마지막 버전 변경이력표를 정렬했다. 표 행 누락은 기존 protocol-version alignment 시험이 FULL 가드에서 검출했다.
+- 증거: 실패 가드·단독 재현과 수정 커밋6645ad829b의 원격1,586 passed/0 skipped를 docs/validation/transfer-recovery-contract-2026-10-27b/result.md에 구분했다. 앞선 focused 기록은 보존했다.
+- gate 변화: 없음. 실패한 FULL은 통과로 계산하지 않으며 공식 FULL 재실행과 HTTP·화면 연결이 남았다.
+- CE: 해당 없음 — 새 운영 교훈이 필요한 장애가 아니다.
+
+## 2026-10-27 · uncommitted · fix(ci): `modules` 러너를 판정에 넣음 (D-762 단계 1)
+
+- 변경: `tools/harness/affected_ci.py`의 `modules` 항목에서 `gating: False`를 뗐다. 2026-10-25부터 main CI 실행에서 연속 녹색이었다. 이제 판정 밖은 sensing뿐이다.
+- 영향: execution_local처럼 `modules` 러너만 도는 모듈 시험도 CI가 판정한다. 모듈 추가 착지의 "CI 판정 matrix 밖" 경고가 이 경우 더 나오지 않는다(`affected_narrow.py`).
+- 시험: `test_modules_runner_gates`(11-15 마감 시험 대체), `not-ci-gated` 사례를 sensing 시험(`middleware/perception/test`)으로 바꿈.
+- 증거: GitHub main CI `test (modules)` 녹색 10회 연속(2026-10-25~26, 마지막 run 40412528805).
+- gate 변화: 없음. CI 판정 범위만 넓어짐.
