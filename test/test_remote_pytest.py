@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import os
 import re
 import subprocess
@@ -753,8 +754,9 @@ def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "0")
     head, answers, sent = _git(repo, "rev-parse", "HEAD"), [255, 255, 0], []
     monkeypatch.setattr(rp.time, "sleep", lambda s: None)
-    monkeypatch.setattr(rp, "remote", lambda host, script, *a, input=None, **kw: sent.append(input) or
-                        subprocess.CompletedProcess([], answers.pop(0), b"", b""))
+    real = subprocess.run
+    monkeypatch.setattr(rp.subprocess, "run", lambda argv, **kw: real(argv, **kw) if argv[0] == "git" else
+                        sent.append(kw["input"]) or subprocess.CompletedProcess(argv, answers.pop(0), b"", b""))
     rp.ship(repo, "h", head, "run1")
     assert len(sent) == 3 and sent[0] == sent[2]  # the whole bundle again each time
     answers[:] = [255, 255, 255]
@@ -762,6 +764,19 @@ def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch
         rp.ship(repo, "h", head, "run2")
     # A second attempt can add it again, even over a half-made (locked "initializing") worktree.
     assert 'git worktree remove -f -f "$R/runs/$NAME"' in rp.SHIP and rp.remote_job.SWEEP in rp.SHIP
+
+
+def test_a_dropped_link_reruns_only_steps_given_tries(monkeypatch):
+    """2026-10-27: one ssh banner timeout in venv setup stopped a landing after an hour in the queue."""
+    answers, calls = [255, 255, 0], []
+    monkeypatch.setattr(rp.time, "sleep", lambda s: None)
+    monkeypatch.setattr(rp.subprocess, "run", lambda argv, **kw: calls.append(argv) or
+                        subprocess.CompletedProcess(argv, answers.pop(0)))
+    assert rp.remote("h", rp.VENV, "run1", timeout=1, tries=3).returncode == 0 and len(calls) == 3
+    answers[:], calls[:] = [255, 0], []
+    assert rp.remote("h", rp.CLEANUP, "run1", timeout=1).returncode == 255 and len(calls) == 1
+    src = inspect.getsource(rp.run_on)
+    assert 'STEP_TIMEOUT["venv"], tries=3' in src, "venv setup reruns (its recipe locks and rebuilds from scratch)"
 
 
 def _job_env(tmp_path, python_body):

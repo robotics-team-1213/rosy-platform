@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-27 · uncommitted · fix(remote): venv 준비도 끊긴 접속 뒤 다시 시도, 시험 PC 대기 1시간
 - 2026-10-27 · uncommitted · fix(land): 손으로 고른 --tests가 선택 시험을 대신하지 못하게
 - 2026-10-27 · uncommitted · perf(land): 사전 시험의 관문 라운드를 선택 시험과 함께 돌린다
 - 2026-10-27 · uncommitted · fix(doctor): 대기열의 반복 준비·무활동 착지를 경고
 - 2026-10-27 · uncommitted · fix(land): 크기 규칙을 대기·준비 단계에서 미리 본다
-- 2026-10-27 · uncommitted · perf(core): 충전소 카메라 파이프라인 시험의 느린 경우를 파일로 나눔
