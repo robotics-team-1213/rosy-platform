@@ -17,6 +17,9 @@ TURN = 4096
 TICKS_PER_DEGREE = TURN / 360
 MAX_GAP_S = 0.5
 MAX_STEP_S = 0.1
+# one corrupt status packet on the shared hub ended three arm S sessions on 2026-10-27, once with the arm low;
+# a read is safe to repeat, and a bus that is really gone still fails after the retries
+READ_RETRY = 2
 #: A torque-off servo follows its Present_Position with Goal_Position, so a seed write is
 #: replaced within one sample and the readback can be one tick away from the next pose read.
 SEED_TOLERANCE_TICKS = 1
@@ -177,8 +180,8 @@ class NativeJointMotion:
             raw = self.follower._unnormalize({self.follower.motors[n].id: action[n + ".pos"] for n in NAMES})
             leader = {ids[i]: v for i, v in raw.items()}  # the teacher's target, in follower ticks
         else:
-            leader = self.leader.sync_read("Present_Position", normalize=False)
-        current = self.follower.sync_read("Present_Position", normalize=False)
+            leader = self.leader.sync_read("Present_Position", normalize=False, num_retry=READ_RETRY)
+        current = self.follower.sync_read("Present_Position", normalize=False, num_retry=READ_RETRY)
         finite_values(leader, NAMES)
         finite_values(current, NAMES)
         if self.body_only and self.follower.read("Torque_Enable", "gripper"):

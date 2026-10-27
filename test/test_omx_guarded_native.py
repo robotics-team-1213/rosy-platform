@@ -31,6 +31,7 @@ class Bus:
         self.torque = dict.fromkeys(NAMES, 0)
         self.events = []
         self.fail_write = False
+        self.bad_reads = 0  # corrupt status packets before a good one
         self.goals = {}
         self.profiles = {(n, register): 1 for n in NAMES
                          for register in ('Profile_Velocity', 'Profile_Acceleration')}
@@ -68,8 +69,13 @@ class Bus:
             return self.profiles[motor, register]
         raise AssertionError(register)
 
-    def sync_read(self, register, motors=None, *, normalize=True):
+    def sync_read(self, register, motors=None, *, normalize=True, num_retry=0):
         assert register in ("Present_Position", "Goal_Position")
+        if self.bad_reads:  # like lerobot: retries consume bad packets, then the read fails
+            used = min(self.bad_reads, num_retry + 1)
+            self.bad_reads -= used
+            if used == num_retry + 1:
+                raise ConnectionError("Failed to sync read 'Present_Position' [TxRxResult] Incorrect status packet!")
         source = self.raw if register == "Present_Position" else self.goals
         values = {n: source[n] for n in (motors or NAMES)}
         return self.norm(values) if normalize else values
@@ -251,6 +257,21 @@ def test_elapsed_rate_bound_caps_long_pause_and_does_not_accumulate_motion(guard
     assert abs(goals[-1]["wrist_roll"] - 2028) <= 4096 / 360 * 0.1
     motion.send(action(leader))
     assert [e[1] for e in follower.events if e[0] == "goal"][-1] == goals[-1]
+
+
+@pytest.mark.parametrize("bad, survives", [(1, True), (2, True), (3, False)])
+def test_a_corrupt_status_packet_is_read_again_and_a_dead_bus_still_stops(guard, bad, survives):
+    motion, follower, leader, clock = pair(guard)
+    motion.send(action(leader))
+    clock[0] += 0.1
+    follower.bad_reads = bad
+    if survives:
+        motion.send(action(leader))
+        assert all(follower.torque[n] for n in guard.BODY)
+    else:
+        with pytest.raises(OSError):
+            motion.send(action(leader))
+        assert not any(follower.torque.values())
 
 
 @pytest.mark.parametrize("problem", ["nan", "missing", "range", "write", "stale", "gap"])
