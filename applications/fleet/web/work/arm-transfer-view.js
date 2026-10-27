@@ -68,8 +68,9 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
       "복구 관측을 요청할 수 있는 원본 실패 작업을 조회하세요" : "");
     requestRecovery.disabled = Boolean(requestReason);
     if (requestReason) requestRecovery.setAttribute("reason", requestReason); else requestRecovery.removeAttribute("reason");
-    const recoveryReason = recoveryWait || approveReason() || (!recovery?.can_approve ?
-      "독립 생산자의 새 관측과 다른 운영자 승인이 필요합니다" : "");
+    // The role closure is initialized after the first render; read it only for an eligible approval.
+    const recoveryReason = recoveryWait || (!recovery?.can_approve ?
+      "독립 생산자의 새 관측과 다른 운영자 승인이 필요합니다" : approveReason());
     approveRecovery.disabled = Boolean(recoveryReason);
     if (recoveryReason) approveRecovery.setAttribute("reason", recoveryReason); else approveRecovery.removeAttribute("reason");
   }

@@ -72,6 +72,7 @@ def test_real_http_failure_request_observation_approval_and_child_result(rig, mo
                 page.add_init_script("sessionStorage.setItem('rosy-console-token', 'harbor-secret')")
                 link = origin + "/console?view=work&arm_transfer=" + c.parent
                 page.goto(link)
+                assert not errors, f"console startup failed: {errors}"
                 request = page.locator("#arm-transfer-recovery-request")
                 expect(request).to_be_enabled()
                 expect(page.locator("#arm-transfer-recovery")).to_contain_text("시뮬레이션")
