@@ -14,6 +14,10 @@ from os_state_layout import COMMON, _pairs, _path, _read
 from os_update_manifest import COMPATIBLE, _digest, _fields, _integer, verify_metadata
 
 RAUC = "/usr/bin/rauc"
+# Linux ABI values from <fcntl.h>: a CPython built against older headers (uv's standalone 3.12) lacks the names.
+F_ADD_SEALS = getattr(fcntl, "F_ADD_SEALS", 1033)
+SEALS = sum(getattr(fcntl, name, bit) for name, bit in
+            (("F_SEAL_SEAL", 1), ("F_SEAL_SHRINK", 2), ("F_SEAL_GROW", 4), ("F_SEAL_WRITE", 8)))
 ED_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 CMS_KEY = "etc/rauc/keyring.pem"
 PEM_CERT = rb"-----BEGIN CERTIFICATE-----\r?\n(?:[A-Za-z0-9+/=]+\r?\n)+-----END CERTIFICATE-----"
@@ -53,8 +57,7 @@ def _inspect(bundle: Path, certificate: Path) -> dict:
     descriptor = os.memfd_create("rosy-rauc-verify", os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
     try:
         os.write(descriptor, config)
-        fcntl.fcntl(descriptor, fcntl.F_ADD_SEALS,
-                    fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL)
+        fcntl.fcntl(descriptor, F_ADD_SEALS, SEALS)
         raw = _run([RAUC, "--conf", f"/proc/self/fd/{descriptor}", "info", "--output-format=json-2", str(bundle)],
                    pass_fds=(descriptor,))
     finally:
