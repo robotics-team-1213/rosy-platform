@@ -23,9 +23,16 @@ case "$backend" in
       --urdf "$OUT/layer/omx_f_topic.urdf" --shape "$shape" --camera-hz "$camera_hz" >"$OUT/backend.log" 2>&1 &
     pids+=($!) ;;
   isaac)
-    # Isaac 5.1 is Python 3.11 with its own Jazzy libraries: a clean environment, never the system ROS one.
+    # The SDK's Python and bundled Jazzy libraries must stay separate from the system ROS environment.
     sdk="${ISAAC_SDK_VENV:-$(cat "$HOME/rosy-isaac-ready/sdk-path.txt")}"
-    (cd "$here/../../learning/envs/isaac" && /usr/bin/env -i HOME="$HOME" USER="${USER:-}" PATH=/usr/bin:/bin       XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1       ROS_DOMAIN_ID="$ROS_DOMAIN_ID" ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_DISTRO=jazzy       RMW_IMPLEMENTATION=rmw_fastrtps_cpp       LD_LIBRARY_PATH="$sdk/lib/python3.11/site-packages/isaacsim/exts/isaacsim.ros2.bridge/jazzy/lib"       "$sdk/bin/python" run_omx_backend.py --output-dir "$OUT/isaac" --shape "$shape" --camera-hz "$camera_hz"       >"$OUT/backend.log" 2>&1) &
+    sdk_ros_lib="$(/usr/bin/env -i HOME="$HOME" PATH=/usr/bin:/bin \
+      "$sdk/bin/python" "$here/../../learning/envs/isaac/sdk_ros.py")"
+    (cd "$here/../../learning/envs/isaac" && /usr/bin/env -i HOME="$HOME" USER="${USER:-}" PATH=/usr/bin:/bin \
+      XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 \
+      ROS_DOMAIN_ID="$ROS_DOMAIN_ID" ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_DISTRO=jazzy \
+      RMW_IMPLEMENTATION=rmw_fastrtps_cpp LD_LIBRARY_PATH="$sdk_ros_lib" \
+      "$sdk/bin/python" run_omx_backend.py --output-dir "$OUT/isaac" --shape "$shape" --camera-hz "$camera_hz" \
+      >"$OUT/backend.log" 2>&1) &
     pids+=($!) ;;
   *) echo "unknown backend $backend" >&2; exit 2 ;;
 esac
