@@ -33,9 +33,12 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
   panel.append(heading, node("p", "인계받은 작업 식별자로 원본을 조회하세요. 조회와 승인은 별도입니다.", "hint"),
     form, state, detail, node("p", "실행 승인 후 장치 동작이 시작될 수 있습니다. 물리 목표 확인과 외부 앱의 업무 완료는 별도 근거입니다.", "hint"));
   const recoveryPanel = node("section"), recoveryState = node("p"), review = node("p"),
-    recoveryActions = node("ui-actions"), requestRecovery = node("ui-button", "복구 관측 요청"),
-    approveRecovery = node("ui-button", "독립 운영자로 복구 1회 승인"), childState = node("dl", "", "work-detail"),
+    recoveryActions = node("ui-actions"), childState = node("dl", "", "work-detail"),
     technical = node("details"), bindings = node("dl", "", "work-detail");
+  const requestRecovery = node("ui-button", "복구 관측 요청");
+  requestRecovery.setAttribute("kind", "quiet");
+  const approveRecovery = node("ui-button", "독립 운영자로 복구 1회 승인");
+  approveRecovery.setAttribute("kind", "primary");
   recoveryPanel.id = "arm-transfer-recovery"; recoveryPanel.hidden = true;
   recoveryState.id = "arm-transfer-recovery-state";
   recoveryState.setAttribute("role", "status"); recoveryState.setAttribute("aria-live", "polite");
@@ -44,7 +47,6 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
   for (const button of [requestRecovery, approveRecovery]) {
     button.setAttribute("type", "button"); button.setAttribute("aria-describedby", recoveryState.id);
   }
-  requestRecovery.setAttribute("kind", "quiet"); approveRecovery.setAttribute("kind", "primary");
   recoveryActions.append(requestRecovery, approveRecovery);
   technical.append(node("summary", "조회한 복구 근거"), bindings);
   recoveryPanel.append(node("h3", "시뮬레이션 · 실패 확인과 제한된 복구"), review, recoveryState, recoveryActions, childState,
@@ -61,8 +63,15 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
       armAdmissionReason(job, control, principal(), approveReason());
     admit.disabled = Boolean(reason); read.disabled = busy; input.readOnly = busy;
     if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
-    requestRecovery.disabled = busy || recoveryAttempted || !recovery?.can_request || !["AVAILABLE", "EXPIRED"].includes(recovery.status);
-    approveRecovery.disabled = busy || recoveryAttempted || !recovery?.can_approve || Boolean(approveReason());
+    const recoveryWait = busy ? "요청 처리 중입니다" : recoveryAttempted ? "요청 후 작업을 다시 조회하세요" : "";
+    const requestReason = recoveryWait || (!recovery?.can_request || !["AVAILABLE", "EXPIRED"].includes(recovery.status) ?
+      "복구 관측을 요청할 수 있는 원본 실패 작업을 조회하세요" : "");
+    requestRecovery.disabled = Boolean(requestReason);
+    if (requestReason) requestRecovery.setAttribute("reason", requestReason); else requestRecovery.removeAttribute("reason");
+    const recoveryReason = recoveryWait || approveReason() || (!recovery?.can_approve ?
+      "독립 생산자의 새 관측과 다른 운영자 승인이 필요합니다" : "");
+    approveRecovery.disabled = Boolean(recoveryReason);
+    if (recoveryReason) approveRecovery.setAttribute("reason", recoveryReason); else approveRecovery.removeAttribute("reason");
   }
   function field(title, value, target = detail) { target.append(node("dt", title), node("dd", String(value ?? "미확인"))); }
   function showRecovery() {
