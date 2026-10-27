@@ -12366,3 +12366,9 @@ osy-d395-s1d\`.
 - 메타데이터: D-893/D-894의 타 세션 예약 공백은 기존 gap 원장에 pending으로 기록했다. 최초 lint 3 errors를 수정해 0 errors/37 warnings, 기준 이후 11 commits size-range 통과를 확인했다. 실행 검사기를 변경하지 않았다.
 - gate 변화: 없음. 구현 승인과 장치·현장 수용을 구분한다.
 - CE: 해당 없음 — 설계 판단과 검증 근거는 ADR·코드·회귀 시험·모듈 기록으로 보존했다.
+
+## 2026-10-27 · uncommitted · feat(perception): Fleet 승인을 모델 PC 레지스트리에 반영(D-898)
+
+- 변경: Fleet `GET /api/fleet/perception-promotions/{sha}/decision.signed`(viewer)가 정본 결정과 새 역할 키 `perception-decision`의 Ed25519 서명을 돌려준다(키 없음 503, 미결정 409). 모델 PC `approval_import.py`가 서명·APPROVED·묶음 해시·revision·files·결과 폴더·제안자≠승인자를 확인한 뒤 model-watch와 같은 work.lock 아래 `accepted/`와 `models/approvals/<sha>/`에 기록한다. 활성 포인터·shadow·배포는 건드리지 않는다. contracts 0.1.15(`decision_encoded`·`sign`·`verify`), 상태 행 조회는 `promotion_request.ready_rows`로 공유.
+- 증거: 거절 사유별 시험과 정상 경로·잠금·Fleet 경로 시험이 원격에서 통과했다. 실물 모델 PC 반영과 키 운영은 확인하지 못했다. CE: 해당 없음 — 새 기능의 계약과 회귀로 기록했다.
+- gate 변화: 모델 PC 반영은 서명 결정 파일을 사람이 옮겨 실행할 때만 일어난다. 실물 반영·키 발급은 HOLD다. 배포·활성화는 이 변경 밖이다.
