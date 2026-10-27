@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 - 2026-10-27 · 6bd97f9914 · operator OS preparation and current-main integration
 - 2026-10-27 · db99bab13e · bounded guest bundle return and engineering CMS selection
 - 2026-10-27 · 8768fa17cf · common delivery profiles and keyless OS bundle stages
 - 2026-10-27 · dc3066ba70 · Windows tools guest and coherent OS prerelease publisher
-- 2026-10-27 · 9f5b9c550b · operator-local OS signing preparation

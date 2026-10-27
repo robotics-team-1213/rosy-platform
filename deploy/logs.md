@@ -3742,6 +3742,14 @@
 - 증거: 변경은 문서 한 문단이며 compose·유닛 변화 없음(test_site_* 계약 시험 대상 아님).
 - gate 변화: 없음. CE: 해당 없음.
 
+## 2026-10-27 · b6f8f0b46f · Arm S 파일 관측 producer 관리 경로
+
+- 변경: arm_status_bridge가 canonical guard motor-health를 Fleet 관절·팔 이름으로 전달한다. live held fault를 terminal로 만들지 않으며 보정 단위와 읽기 전용 경계를 유지한다.
+- 설치: rosy-omx-arm-status.service와 private mode 0600 env 예제에 source/arm/live/calibration/health/HTTPS/CA/팔 전용 토큰을 결속했다. 기존 devices 업데이터의 units·unit_files·smoke와 host service manifest에 포함했다.
+- 증거: RED c29de1139f 원격 5 expected failures/4 passed → b6f8f0b46f bridge/status/updater/manifest/readiness/pipeline/motor-health/Fleet 집중 원격 181 passed, NEW 0. 로그는 저장소 밖 D:/DevTemp/fleet-arm-observation-{red,green}/run-1.txt.
+- gate 변화: 없음. 실제 호스트 설치·재부팅·Fleet 브라우저·장치 수용은 별도이며 활성 수집 세션은 건드리지 않았다.
+- CE: 해당 없음 — 정본 health 재사용과 stale/terminal 경계는 코드·시험·README 및 기존 stale-health 교훈에 남아 중복 교훈을 만들지 않는다.
+
 ## 2026-10-27 · fe49e767b3 · full OS integration: authenticated inputs and persistent commissioning
 
 - 변경: OS signer는 검증된 checksum snapshot과 실제 JSON bytes를 결합한다. trial/commit은 인증된 factory의 실행 CORE cwd와 최신 systemd identity를 다시 관측하고, 오래 걸린 관측 뒤에도 health receipt/deadline을 검사한다. 새 공장 A/B data에는 root:rosy-calib(964),2775 보정 저장소를 bind하며 해당 그룹에 런타임 쓰기 계정이나 alias를 허용하지 않는다. IR/line overlay와 NOMINAL 참조 프로필은 canonical generation/tombstone으로 보존한다. Host Agent의 설정·재시작 실패 복원은 같은 기록 경로와 expected-byte 비교를 사용하며, 새 변경은 잠금 획득 뒤 정지 증거를 다시 확인한다. root 전용 operator CLI와 기존 line overlay CLI도 공유 기록 경로를 사용한다.
@@ -3793,3 +3801,10 @@
 - 병합: mainfb006de2b7를 합치며 main의 PID1 journal binding helper를 정본 tools guest로 옮기고 alias·양쪽 시험을 유지했다. mounted-image fixture는 lock-derived RAUC stanza/binary를 한 번만 만들고 separate-boot 거절을 보존한다. 로그는 공통 기록과 양쪽 append를 정본 whole-block renderer로 보존했고 provenance는 실제 공통 base의 변경/삭제를 유지하며 정확한 reviewed baseline tuple을 합쳤다.
 - 검증: source6bd97f99149656ebf09d625d56d441ca6d6775d2를 모델 PC에서 원격 실행했다. guest/ARM, mounted-image, public-provenance, publish-policy, CMS, operator, public-input8파일196passed6opt-in skips, runner session47343 exit0, known compare0NEW/0known/0flaky다. 6skip은 실제 SYSTEM guest4개와 ARM source-slot a/b2개이며 이 실행에서는 활성화하지 않았다. 실행 argv·source·role·환경 해시·로그 digest는 외부 operator-verification-evidence.json에 부모 agent의 canonical runner 관측으로 결속한다. test log 자체가 source를 내장한다고 주장하지 않는다.
 - gate 변화: 독립 contract 검토에 지원되는 위반 없음. evidence 검토가 지적한 기록 최신성과 실행 결속을 보완했다. safety-trailer gate93commits exit0. FULL 착지 검증·native ARM64 image qualification·실제 operator 전체 거래·서명된 이미지/RAUC 게시·SD 선택·실물 수용은 아직 남았다. production BUILD_GO와 D-888 HOLD는 유지한다. CE: 해당 없음 — 원인과 예방이 snapshot 구현·재현 시험·서명 경계와 이 기록에 남는다.
+
+## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
+
+- 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.
+- 증거: 승인된 RED merge 3bc312f9dd5867ca49105dd8d7c36de908afaa97의 bridge 원격 시험은 실제 작성기 경로 8 NEW / 기존 12 PASS / SKIP 0으로 종료 이벤트 누락을 재현했다. 추가 무측정·fault→end→parent 시각 보존 5개 사례는 검토용 초안이며 아직 실행하지 않았다.
+- gate 변화: 없음. P2 OPEN이며 제품 수정은 독립 검토·커밋 원격 GREEN 전이다. 착지·배포·실물 수용은 하지 않았다.
+- CE: 미해결 — 원인을 실제 작성기 회귀로 확인했으나 수정의 GREEN과 재검토 전이다.
