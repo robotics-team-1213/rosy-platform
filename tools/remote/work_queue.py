@@ -16,6 +16,8 @@ import sys
 import threading
 from pathlib import Path
 
+from remote_job import CANCELLED
+
 
 BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
 ALONE_ENV = "ROSY_BROWSER_ALONE=1"  # a timing-sensitive browser chunk: no lane job of its own run beside it
@@ -25,6 +27,14 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 # xdist job and up to 3 preparing landings share the host, and load-flaky browser ids exist.
 # ROSY_BROWSER_PER_HOST overrides it to measure.
 BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "2"))
+
+
+def cancelled(invocations: list[list[str]], codes: list) -> list[int | str]:
+    """codes with every invocation that never ran (None) marked CANCELLED, each one printed."""
+    for inv, code in zip(invocations, codes):
+        if code in (None, CANCELLED):
+            print(f"[remote-pytest] cancelled after a failure: {' '.join(inv)}", flush=True)
+    return [CANCELLED if code is None else code for code in codes]
 
 
 def lane_job(inv: list[str]) -> bool:

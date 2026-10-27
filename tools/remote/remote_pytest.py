@@ -60,7 +60,7 @@ import remote_job  # noqa: E402
 import remote_test_tools  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
-from work_queue import ALONE_ENV, BROWSER_ENV, Gate, Work, cost, guard, wanted, workers  # noqa: E402,F401
+from work_queue import ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, wanted, workers  # noqa: E402,F401
 
 CANCELLED = remote_job.CANCELLED
 
@@ -420,14 +420,6 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     if on_done:
         return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])
     return [work.codes[i] for i in range(len(invocations))]
-
-
-def cancelled(invocations: list[list[str]], codes: list) -> list[int | str]:
-    """codes with every invocation that never ran (None) marked CANCELLED, each one printed."""
-    for inv, code in zip(invocations, codes):
-        if code in (None, CANCELLED):
-            print(f"[remote-pytest] cancelled after a failure: {' '.join(inv)}", flush=True)
-    return [CANCELLED if code is None else code for code in codes]
 
 
 def quarantine(repo: Path, sha: str) -> dict[str, str]:
