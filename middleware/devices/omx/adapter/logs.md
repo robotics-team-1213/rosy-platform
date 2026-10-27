@@ -789,3 +789,9 @@
 - 변경: Adapted neutral phase-runner imports to main's pick_place package. Moved the physical transfer DTO/profile implementation into the existing contracts holder with explicit compatibility exports; combined package size stays below D-766 without a new ratchet exception.
 - 증거: static syntax and measured size only. Remote legacy Cell/neutral owner regression and independent safety review remain required. No runtime or hardware activation.
 - gate 변화: None. No new runtime, device or field acceptance. CE: no new learning; the compatibility imports and measured size retain the integration reasoning.
+
+## 2026-10-27 · uncommitted · fix(omx): restore accepted real-driver size registration
+
+- 변경: public S3 #184의 commit 3f6071fe73에 있던 `devices/omx/adapter/omx_adapter/real` 크기 단위 행을 복원하고 부모 AGENTS 표에 기존 책임을 적었다. commit 4f483955bf의 cherry-pick은 코드와 독스트링을 유지했지만 이 행을 가져오지 않았고, 이력 합류 commit 1a474f511f도 행이 있는 두 번째 부모와 달리 누락을 유지했다. 새 하위 패키지 승격이나 B/C 기준 충족 주장이 아니다. 한도·바닥·ratchet·계산 규칙과 드라이버 동작은 그대로다.
+- 증거: 원본 commit 3220c61927과 public commit 3f6071fe73의 init·로그·크기 행 및 현재 트리를 Git으로 비교했다. 기존 profile 소비자 원격 결과 344 PASS / 1 NEW는 부모 단위 10,353 > 10,000의 RED 증거다. 이 복원 변경의 원격 검증과 독립 검토는 아직 대기 중이다.
+- gate 변화: 없음. 복원은 rebuilt profile의 검증이나 실물·배포·현장 수용이 아니다. CE: 미해결 — 이력 누락 원인은 확인했으며 복원 검증 전이다.
