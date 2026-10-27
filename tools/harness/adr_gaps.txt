@@ -64,3 +64,6 @@ D-880 reserved in another in-flight branch (refs/adr/D-880, fix/comm-admission-f
 D-882 reserved in another in-flight branch (refs/adr/D-882, fix/comm-freshness-current-main), absent from main at D-883; remove when its ADR lands
 D-893 reserved in another in-flight branch (refs/adr/D-893, control-unit-host-placement), absent from this D-895 branch; remove when its ADR lands
 D-894 reserved in another in-flight branch (refs/adr/D-894, manual arm shared contract and authenticated cross-host CORE ingress), absent from this D-895 branch; remove when its ADR lands
+D-896 reserved in another in-flight branch (refs/adr/D-896, Arm S measured-cell Isaac reproduction and single-model sim training); remove when its ADR lands
+D-897 reserved in another in-flight branch (refs/adr/D-897, isolated AI/model PC simulation training); remove when its ADR lands
+D-898 reserved in another in-flight branch (refs/adr/D-898, Fleet perception approval to model registry); remove when its ADR lands
