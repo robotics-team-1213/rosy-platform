@@ -160,3 +160,18 @@ def test_hosts_reads_report_and_disk_low_over_ssh(repo, monkeypatch):
     assert "WARN host pc-c: unreachable over ssh" in text
     monkeypatch.setattr(doctor.subprocess, "run", real_run)
     assert "host pc" not in lines(repo)[1], "--hosts is off by default"
+
+
+def test_capacity_warns_on_a_refusal_the_hosts_raw_numbers_do_not_explain(monkeypatch):
+    """2026-10-27: 3 GB locks for 0.3 GB jobs showed the model PC (20 GB available) as -5.2 GB free."""
+    monkeypatch.setattr(doctor.remote_pytest, "SITES", set())
+    base = {"nproc": 24, "load1": 4.0, "total_gb": 30.0, "pytest": True, "sim": True, "busy": False,
+            "lock_cores": 4, "site": False, "disk_free_gb": 99.0, "disk_use": 78}
+    probes = {"booked": {**base, "avail_gb": 20.0, "lock_gb": 35},  # reservations only
+              "full": {**base, "avail_gb": 2.0, "lock_gb": 6},  # really out of memory
+              "free": {**base, "avail_gb": 20.0, "lock_gb": 6}, "gone": None}
+    found = doctor.check_capacity(list(probes), probe=probes.get)
+    levels = {text.split(":")[0].split()[-1]: level for level, text, _ in found}
+    assert levels == {"booked": "WARN", "full": "OK", "free": "OK", "gone": "WARN"}
+    assert "refused by bookkeeping" in found[0][1] and "locks 35 GB" in found[0][1]
+    assert "no probe answer" in found[3][1]
