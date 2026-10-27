@@ -16,33 +16,19 @@ import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
-import { placeRosterCards as place } from "./roster-cards.js";
+import { placeRosterCards as place, mustExpand, selectRobot } from "./roster-cards.js";
+export {mustExpand, selectRobot} from "./roster-cards.js";
+import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 import { createRosterSummary, nodeWithText, tag, blockWith, navTag, queuedReason, REACH_LABEL,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
-
-/** D-651: all four safety exceptions remain visible in the compact list, ahead of nominal robots. */
-export function mustExpand(robot) {
-  const estop = robot.state?.safety?.estop;
-  return !robot.online || !robot.state || estop !== false || Boolean(robot.calibration);
-}
-
-/** Inspection is UI-only. Switching robots withdraws every pending map interaction. */
-export function selectRobot(view, robotId) {
-  if (robotId && !view.robots.some(robot => robot.robot_id === robotId)) return false;
-  if (view.focusRobot === robotId) return false;
-  view.focusRobot = robotId || null;
-  view.selected = null;
-  view.pinning = null;
-  view.cursor = null;
-  return true;
-}
 
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction, onSelectionChanged = () => {} }) {
   const { attentionItems, fillQueues } = createQueues({ scope, el, view, render, streamEvidence });
   const trip = createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason });
   const motorHealth = createFleetMotorHealth({view, scope});
+  const profiles = createRobotProfiles({call, scope, render});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
   function openCard(robotId) {
     if (selectRobot(view, robotId)) {
@@ -200,11 +186,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       head.appendChild(locTag);
     }
     node.appendChild(head);
-    const context = createRobotAppActions(robot.robot_id, view.robotPeers, nodeWithText);
-    const group = nodeWithText('ui-button', '', '대형·대열 관리');
-    group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
-    group.addEventListener('click', scope.guard(() => view.openFormationWorkspace?.()));
-    context.append(group); node.appendChild(context);
     if (role) node.appendChild(nodeWithText('p', 'hint',
       `목적지는 리더 ${formation.leader}에게 배정합니다 · 팔로워 ${Object.keys(formation.assignment || {}).filter(id => id !== formation.leader).join(', ') || '없음'}`));
     // D-517 10: 운행 상태 한 줄("반복 운행 3바퀴째", "앞 블록 대기 · rosy_02"), 끝난 운행은 그 이유(D-541 7).
@@ -252,6 +233,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     });
     node.appendChild(facts);
     node.appendChild(motorHealth.detail(robot));
+    node.appendChild(profiles.detail("robot", robot.robot_id));
+    const context = createRobotAppActions(robot.robot_id, view.robotPeers, nodeWithText);
+    const group = nodeWithText('ui-button', '', '대형·대열 관리');
+    group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
+    group.addEventListener('click', scope.guard(() => view.openFormationWorkspace?.()));
+    context.append(group); node.appendChild(context);
 
     if (!view.stateUnavailable) {
       if (power.safetyRelease) node.appendChild(nodeWithText("p", "hint", power.safetyRelease));

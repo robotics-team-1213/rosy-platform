@@ -753,6 +753,7 @@
 - 변경: 수정 후 재검증과 원본 FULL 실패를 validation/plan에 함께 기록했다.
 - 증거: 실패 entry9의 원래7 targets 전체가7371 passed/91 skipped/0 NEW, runner exit0였다. 원본46의 다른22개는0 NEW이며 한 SHA에서23개를 재실행했다고 주장하지 않는다.
 - gate 변화: 설치/owner/receipt의 host 검증 근거다. 물리 관측·producer/claim·Harbor ARM·장치/현장은 후속이다. CE 미해결: 기존 G1 timing 원인 미확정.
+
 ## 2026-10-24 · uncommitted · feat(omx): D-858 S1 실물 Dynamixel port와 가짜 버스 시험
 
 - 변경: `omx_adapter/dynamixel_port.py`에 `LocalActionPort` 실물 구현을 두었다. 은퇴한 device-core(rosy-vault 9a744a3)의 시작 HOLD, 정지 래치와 현 위치 버팀, RAM 쓰기만(EEPROM 없음), 추종 오차·하드웨어 오류·포즈 미도달·빈손 파지 HOLD를 옮기고, 관절 위치·속도 한계는 `ArmCommandConfig`에서 읽는다. 래치 해제는 `local_stop` 펜스가 그 세대에서 열려 있을 때만 한다. D-858 §4 관문(측정 한계·그리퍼 실측·정지 시험)과 정책 기술 거부를 둔다. 같은 팔 인스턴스·같은 시리얼 장치의 두 번째 writer를 거부한다. safety_modules에 등록했다.
@@ -789,6 +790,12 @@
 - 변경: Adapted neutral phase-runner imports to main's pick_place package. Moved the physical transfer DTO/profile implementation into the existing contracts holder with explicit compatibility exports; combined package size stays below D-766 without a new ratchet exception.
 - 증거: static syntax and measured size only. Remote legacy Cell/neutral owner regression and independent safety review remain required. No runtime or hardware activation.
 - gate 변화: None. No new runtime, device or field acceptance. CE: no new learning; the compatibility imports and measured size retain the integration reasoning.
+
+## 2026-10-27 · aec7f05a35 · measured load-domain analysis
+
+- 변경: added strict device/group/configuration-bound JSON characteristics with atomic storage, complete quintic-segment candidate evaluation against certified load domains, and passive source-time tracking/oscillation analysis through `python -m omx_adapter.load_motion_cli`. Existing native-owner health now supplies measured error/torque fields through its existing bus. No controller, public endpoint or automatic recovery was enabled; command binding remains caller-supplied and unverified.
+- 증거: mapped remote regression at `00581175c4`: 2079 passed, 22 skipped; two harness failures from the new log heading were fixed, then record/placement regression passed 122 at `aec7f05a35` with 0 NEW. Product/test code is unchanged between those runs. Independent review findings on producer coverage, frozen-source cadence and multi-group sample reuse were reproduced and corrected. See `docs/validation/omx-load-aware-motion-2026-10-27/result.md`. No device load/cadence/stop acceptance.
+- gate 변화: no runtime, ROS-SIM, DEVICE or FIELD advancement. CE: no new durable lesson; contract, focused regressions and `docs/load-aware-motion.md` retain the reasoning.
 
 ## 2026-10-27 · uncommitted · fix(omx): restore accepted real-driver size registration
 
