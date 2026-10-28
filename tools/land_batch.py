@@ -212,7 +212,7 @@ def early(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     so they share one pretest. On 2026-10-28 every waiting ticket was FULL-class or unprepared, so the pending
     affected ones never found a leader and each waited for a pretest slot of its own. 0 when the batch landed
     this branch; None to go on alone (its own pretest, then ``queue``)."""
-    if ticket is None or args.tests != "auto":
+    if ticket is None or not plain_auto(args, land.EXTRA):
         return None  # a skipped or explicit run never leads
     tickets = land_queue.ahead(qdir, Path("~"))
     busy = taken(tickets)
