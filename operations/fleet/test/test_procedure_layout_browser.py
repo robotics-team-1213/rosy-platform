@@ -124,8 +124,7 @@ def test_policy_without_verified_workcell_has_no_actionable_forms(tmp_path, stat
         page.route('**/api/fleet/**', serve)
         page.goto(origin + '/console/policy')
         expect(page.locator('#policy-verdict')).not_to_have_attribute('state', 'pending')
-        if status == 200:
-            expect(page.locator('#policy-workcell')).to_be_hidden()
+        expect(page.locator('#policy-workcell')).to_be_hidden()
         capture(page, f'policy-unavailable-{status}-320')
         for element in ['policy-incident-report', 'policy-sync-owner', 'policy-window-request', 'policy-proposal-submit']:
             expect(page.locator('#' + element)).not_to_be_visible()
