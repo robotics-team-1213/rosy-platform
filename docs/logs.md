@@ -12834,3 +12834,11 @@ osy-d395-s1d\`.
 - 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 코멘트 규칙 문구는 기존 §3 스마트 커밋 금지와 주체를 구분해 충돌하지 않는다.
 - gate 변화: 없음.
 - CE: 해당 없음 — 문서 관례 추가이며 코드·장치·시험 경로 변경이 없다.
+
+## 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
+
+- 변경: `docs/reference/atlassian-integration.md` §4 기록 연결 규칙을 다듬었다. 문서마다 새 코멘트를 만들지 않고 이슈 하나에 기록용 코멘트 하나를 두고, 새 기록(문서 링크·한두 문장 요약)을 그 코멘트에 이어 붙인다. KAN-61 댓글10020에서 하던 방식과 같은 형태다. 머리 갱신 날짜를 2026-10-29로 올렸다.
+- 근거: 2026-10-29 사용자 결정 — 댓글이 이슈마다 흩어지지 않게 스레드 하나로 이어 붙이고, 문서는 링크로 건다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 작업 공간 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)과 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절의 같은 규칙 문구도 같은 날 함께 고쳤다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 관례 다듬기이며 코드·장치·시험 경로 변경이 없다.
