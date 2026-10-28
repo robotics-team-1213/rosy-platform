@@ -62,6 +62,8 @@ class SiteUpdater(SiteRuntimeIO):
         self.dry_run = dry_run
         self._accepted_images = {}
         self._runtime_proofs = {}
+        self._image_references = {}
+        self._incremental_commits = set()
         self._functional_baseline = None
 
     # state
@@ -160,7 +162,7 @@ class SiteUpdater(SiteRuntimeIO):
                         env_file: Path | None = None, services=SERVICES) -> None:
         def compose(env, *args, **kwargs):
             return self._compose(env, *args, folder=folder, env_file=env_file, **kwargs)
-        check_overrides(env, commit, self._run, compose, services)
+        check_overrides(env, commit, self._run, compose, services, self._image_references.get(commit))
 
     def _prior_target(self) -> Path:
         """Return the installed candidate folder, migrating a real directory once."""
@@ -356,6 +358,15 @@ class SiteUpdater(SiteRuntimeIO):
             if not isinstance(commit, str) or not _COMMIT.fullmatch(commit):
                 return
             kept_commits.add(commit)
+            try:
+                images = json.loads((folder / 'release.json').read_text(encoding='utf-8')).get('images', {})
+                for service, row in images.items():
+                    reference = row['reference']
+                    if service not in SERVICES or not re.fullmatch(f'rosy-site-{service}:[0-9a-f]{{40}}', reference):
+                        return
+                    kept_commits.add(reference.rsplit(':', 1)[1])
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
+                return
         for reference in listed.split():
             match = re.fullmatch(r"rosy-site-(?:fleet|vision|proxy|postgres):([0-9a-f]{40})", reference)
             if match and match.group(1) not in kept_commits and reference not in used:
@@ -462,10 +473,11 @@ class SiteUpdater(SiteRuntimeIO):
             target = self.stage(release, commit, sums)
             proof = self._verify(target, loaded=False, env=env)
             self.check_overrides(env, commit, folder=target, services=proof['verified_images'])
-            load = self._run(["docker", "image", "load", "--input", str(target / "images.tar")],
-                             timeout=1800, check=False)
-            if load.returncode != 0:
-                raise Rejected("docker image load failed")
+            if proof.get('archive_services', proof['verified_images']):
+                load = self._run(["docker", "image", "load", "--input", str(target / "images.tar")],
+                                 timeout=1800, check=False)
+                if load.returncode != 0:
+                    raise Rejected("docker image load failed")
             self._verify(target, loaded=True,
                          env=env)
             previous = self._prior_target()

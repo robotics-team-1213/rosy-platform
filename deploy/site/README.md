@@ -1,5 +1,45 @@
 # Ubuntu site server: Fleet and camera middleware
 
+## Incremental service image updates
+
+Full candidates remain the default. To build an incremental candidate, supply a
+previous **signed** candidate and the independently enrolled site public key:
+
+```bash
+python3 deploy/site/build_candidate.py --output-dir /tmp/site-candidate-new \
+  --base-candidate /path/to/verified-base-candidate \
+  --trusted-key-id <site-key-id> --trusted-public-key /path/to/site-public.pem
+```
+
+The builder authenticates the base and requires its commit to be an ancestor of
+HEAD. Dockerfile/COPY inputs, including deleted files and ignore rules, determine
+which services rebuild. Unchanged images retain their exact signed references and
+SBOMs. The version 2 manifest signs the complete desired service set, but
+`images.tar` carries only changed images. Configuration-only candidates carry no
+images. Unsupported build input forms are rebuilt conservatively. A full build
+without `--base-candidate` refreshes upstream base images and dependencies; run
+that path for security/base-image refreshes, not just when application code changes.
+
+Before publishing the first version 2 candidate, update the independently installed
+signer, verifier and updater from this reviewed revision. An older verifier refuses
+version 2. Keep the offline signing key out of the build host and CI. The same
+signature, full desired-state image checks, firewall/certificate preflight,
+functional health gate and durable rollback journal still apply.
+
+On an active stack, version 2 application reconciles Compose without `down` or
+`systemctl restart`: only services whose image or configuration changed are
+recreated. The service set is still validated as a whole. A missing or mismatched
+reused image fails before the active candidate is switched; use a full candidate
+for a new server or to recover missing images. Retained rollback candidates protect
+their reused image references from pruning.
+
+CI dispatch can set `base_commit` to the full source commit of a signed site release.
+Configure repository variables `ROSY_SITE_SIGNING_KEY_ID` and
+`ROSY_SITE_SIGNING_PUBLIC_KEY_PEM` through the trusted administrator path first.
+The build fetches that base through the existing guarded fetcher and authenticates
+it before reuse. Empty `base_commit` keeps full delivery. No private key is needed
+in CI. Source tests do not establish live Docker continuity or field acceptance.
+
 This Compose stack is the site control-plane host. It provides Fleet's browser
 console and display-only sightings ingestion, plus camera frame reception and
 ArUco projection. It does not replace the ROS 2 Jazzy/Pi product runtime. Fleet

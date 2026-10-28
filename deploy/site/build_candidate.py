@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
 import shutil
 import subprocess
+import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
+
+if __package__:
+    from .verify_candidate import verify_candidate, _archive_image_ids
+else:
+    from verify_candidate import verify_candidate, _archive_image_ids
 
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_FILES = (
@@ -78,6 +85,26 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _build_inputs(site: Path, service: str) -> set[str] | None:
+    """Unknown COPY/ADD forms disable reuse rather than miss an input."""
+    prefix = "deploy/site/" if service == "proxy" else ""
+    name = f"Dockerfile.{service}"
+    paths = {f"deploy/site/{name}", f"deploy/site/{name}.dockerignore", prefix + ".dockerignore",
+             "deploy/site/build_candidate.py", ".github/workflows/build-site-candidate.yml"}
+    for line in (site / name).read_text(encoding="utf-8").replace("\\\n", " ").splitlines():
+        words = line.split()
+        if not words or words[0].upper() not in {"COPY", "ADD"}:
+            continue
+        if (len(words) < 3 or any(w.startswith(("[", "<<")) for w in words[1:])
+                or any(w.startswith("--") and not w.startswith(_PARSED_COPY_FLAGS) for w in words[1:])):
+            return None
+        for source in (w.rstrip("/") for w in words[1:-1] if not w.startswith("--")):
+            if not source or any(c in source for c in "*$?[") or source.startswith(("/", ".", "http:" , "https:")):
+                return None
+            paths.add(prefix + source)
+    return paths
+
+
 def _candidate_output(root: Path, output_dir: Path) -> Path:
     root = root.resolve()
     output = output_dir.resolve()
@@ -106,7 +133,8 @@ def _sbom_command(tool: str, reference: str, sbom_path: Path) -> list[str]:
 
 def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess.run,
                     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
-                    sbom_tool: str = "scout") -> dict:
+                    sbom_tool: str = "scout", base_candidate: Path | None = None,
+                    trusted_key_id: str | None = None, trusted_public_key: Path | None = None) -> dict:
     if sbom_tool not in SBOM_TOOLS:
         raise ValueError(f"unsupported SBOM tool: {sbom_tool}")
     root = root.resolve()
@@ -129,6 +157,24 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
                     capture_output=True, text=True).stdout.strip()
     if not _COMMIT.fullmatch(commit):
         raise ValueError("git HEAD must be a full 40-character commit")
+
+    base, proofs, changed = {}, {}, []
+    if base_candidate is not None:
+        if not trusted_key_id or trusted_public_key is None:
+            raise ValueError("incremental builds require an independently trusted key ID and public key")
+        base_candidate = base_candidate.resolve(strict=True)
+        base = verify_candidate(base_candidate, trusted_key_id=trusted_key_id,
+                                trusted_public_key=trusted_public_key, runner=runner,
+                                inspect_loaded_images=False)
+        runner(["git", "merge-base", "--is-ancestor", base["source_commit"], commit], cwd=root, check=True)
+        changed = runner(["git", "diff", "--name-only", "--no-renames", "-z", base["source_commit"], commit],
+                         cwd=root, check=True, capture_output=True, text=True).stdout.split("\0")
+        proofs = _archive_image_ids(base_candidate / "images.tar", {
+            s: (base["images"][s]["reference"], base["images"][s]["image_id"])
+            for s in base["archive_services"]})
+        proofs.update({s: dict.fromkeys(ids) for s, ids in base["reused_images"].items()})
+    elif trusted_key_id is not None or trusted_public_key is not None:
+        raise ValueError("trusted base keys require --base-candidate")
 
     tag = commit
     output.mkdir(parents=True, exist_ok=True)
@@ -153,12 +199,24 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
 
     images: dict[str, dict[str, str]] = {}
     references: list[str] = []
+    reused = {}
+
+    def reuse(service: str, inputs: set[str] | None) -> bool:
+        if (not base or service not in base["images"] or inputs is None
+                or any(path and (path == p or path.startswith(p + "/")) for path in changed for p in inputs)):
+            return False
+        images[service] = dict(base["images"][service])
+        reused[service] = list(proofs[service])
+        shutil.copyfile(base_candidate / images[service]["sbom"], sbom_dir / f"{service}.spdx")
+        return True
     services = {
         "fleet": (site / "Dockerfile.fleet", root),
         "vision": (site / "Dockerfile.vision", root),
         "proxy": (site / "Dockerfile.proxy", site),
     }
     for service, (dockerfile, context) in services.items():
+        if reuse(service, _build_inputs(site, service)):
+            continue
         reference = f"rosy-site-{service}:{tag}"
         runner(["docker", "build", "--pull", "--platform", "linux/amd64",
                 "--tag", reference, "--file", str(dockerfile), str(context)],
@@ -187,6 +245,8 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         references.append(reference)
 
     for service, upstream in MIRRORED_IMAGES.items():
+        if reuse(service, {"deploy/site/build_candidate.py", ".github/workflows/build-site-candidate.yml"}):
+            continue
         reference = f"rosy-site-{service}:{tag}"
         runner(["docker", "pull", "--platform", "linux/amd64", upstream], cwd=root, check=True)
         runner(["docker", "tag", upstream, reference], cwd=root, check=True)
@@ -216,10 +276,23 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         references.append(reference)
 
     archive = output / "images.tar"
-    runner(["docker", "image", "save", "--output", str(archive), *references],
-           cwd=root, check=True)
+    if references:
+        runner(["docker", "image", "save", "--output", str(archive), *references], cwd=root, check=True)
+    else:
+        with tarfile.open(archive, "w") as bundle:
+            member = tarfile.TarInfo("manifest.json")
+            member.size = 2
+            bundle.addfile(member, io.BytesIO(b"[]"))
     if not archive.is_file() or archive.stat().st_size == 0:
         raise RuntimeError("Docker did not produce a non-empty image archive")
+
+    if base:
+        for name in (n for n in DEPLOY_FILES if n.startswith("compose") and n.endswith(".yaml")):
+            path = deploy_dir / name
+            text = path.read_text(encoding="utf-8")
+            for service, row in images.items():
+                text = text.replace(f"rosy-site-{service}:${{ROSY_SITE_IMAGE_TAG:-local}}", row["reference"])
+            path.write_text(text, encoding="utf-8")
 
     config_hashes = {
         name: _sha256(deploy_dir / name)
@@ -240,6 +313,8 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         "deployment_command": "docker compose --env-file <private-site-env> "
                               "-f deploy/site/compose.yaml up -d --no-build",
     }
+    if base:
+        manifest.update(manifest_version=2, base_commit=base["source_commit"], reused_images=reused)
     (output / "release.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return manifest
@@ -252,9 +327,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sbom-tool", choices=SBOM_TOOLS, default="scout",
                         help="SPDX JSON SBOM generator: Docker Scout (local default) "
                              "or anchore syft (CI runners, no Docker Hub login)")
+    parser.add_argument("--base-candidate", type=Path, help="signed candidate whose unchanged images are reused")
+    parser.add_argument("--trusted-key-id", help="independently enrolled base signing key ID")
+    parser.add_argument("--trusted-public-key", type=Path, help="independently enrolled base public key")
     args = parser.parse_args(argv)
     try:
-        manifest = build_candidate(ROOT, args.output_dir, sbom_tool=args.sbom_tool)
+        manifest = build_candidate(ROOT, args.output_dir, sbom_tool=args.sbom_tool,
+                                   base_candidate=args.base_candidate, trusted_key_id=args.trusted_key_id,
+                                   trusted_public_key=args.trusted_public_key)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
         parser.error(str(exc))
     print(f"site candidate: {manifest['source_commit']} -> {args.output_dir.resolve()}")
