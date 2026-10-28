@@ -50,7 +50,7 @@
 ## 최근 기록
 
 - 2026-10-27 · uncommitted · refactor(omx): extract legacy motion thread unchanged
+- 2026-10-27 · 752c9b0aed · 순수 chunk 파서와 경로 계산을 설치 패키지로 추출
 - 2026-10-27 · uncommitted · fix(omx): restore accepted real-driver size registration
 - 2026-10-27 · aec7f05a35 · measured load-domain analysis
 - 2026-10-26 · uncommitted · neutral ARM forward-port contracts holder
-- 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
