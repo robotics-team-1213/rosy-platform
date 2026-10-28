@@ -267,6 +267,39 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             assert abs(fact["stop"][1] - first["stop"][1]) <= 1, (name, width, fact["stop"], first["stop"])
 
 
+@pytest.mark.parametrize('name,path', DOCS)
+@pytest.mark.parametrize('width', [320, 1440])
+def test_authenticated_account_refresh_does_not_reveal_token_or_collapse_layout(tmp_path, name, path, width):
+    from playwright.sync_api import expect
+    with _fleet(tmp_path, console_token='header-token') as (browser, origin):
+        page = browser.new_page(viewport={'width': width, 'height': 1000})
+        page.goto(origin+path)
+        expect(page.locator('#user-role')).to_have_text('인증 필요')
+        open_token_access(page)
+        page.locator('#console-token').fill('header-token')
+        page.locator('#token-save').click()
+        expect(page.locator('#fleet-login')).to_be_hidden()
+        page.locator('#topbar-more').click()
+        expect(page.locator('#topbar-extra')).to_be_visible()
+        expect(page.locator('#token-access')).to_be_hidden()
+        before = page.locator('ui-topbar').bounding_box()
+        page.evaluate("""async()=>{
+          const header=await import('/console/assets/fleet-header.js');
+          const response=await fetch('/api/fleet/session');
+          header.showSession(await response.json());
+        }""")
+        expect(page.locator('#topbar-more')).to_have_attribute('aria-expanded', 'true')
+        assert abs(page.locator('ui-topbar').bounding_box()['height']-before['height'])<=1
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        page.locator('#fleet-theme').focus()
+        page.keyboard.press('Escape')
+        expect(page.locator('#topbar-more')).to_be_focused()
+        if shots := os.environ.get('ROSY_SHOT_DIR'):
+            target=Path(shots).expanduser();target.mkdir(parents=True,exist_ok=True)
+            page.screenshot(path=str(target/f'account-stable-{name}-{width}.png'))
+        page.close()
+
+
 def test_a_lost_link_is_readable_on_a_phone(tmp_path):
     from playwright.sync_api import expect
 
