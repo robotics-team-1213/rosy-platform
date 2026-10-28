@@ -1,7 +1,7 @@
 ---
 title: A bare 40-digit git id in a validation record reads as a high-entropy token and blocks every push
 date: 2026-10-07
-last_updated: 2026-10-26
+last_updated: 2026-10-27
 category: workflow-issues
 module: docs/validation, test/test_release_boundary_guards.py, tools/hooks/pre-push
 problem_type: workflow_issue
@@ -39,8 +39,16 @@ push를 막는다** — 2026-10-07 오전(`db006d7cf`로 고침, uiux-site-g3-re
 - 회차 문서를 착지하기 전에 확인하라. pytest는 노트북에서 돌리지 않으므로(D-584) 원격으로
   `python tools/remote/remote_pytest.py -- test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`
   를 돌리거나, 시험이 쓰는 순수 함수를 파일 하나에 직접 부른다:
-  `python -c "import sys; sys.path.insert(0, 'deploy/robot/pinky_pro/release'); import secret_scan as s; p='<path>'; print(s.scan_text(p, open(p, encoding='utf-8').read()))"`
+  `python -c "import sys; sys.path.insert(0, 'deploy/robot/pinky_pro/release'); import secret_scan as s; p='<path>'; print([(f.path, f.line_number, f.kind) for f in s.scan_text(p, open(p, encoding='utf-8').read())])"`
   (인자 순서는 path, text). 빈 목록이면 통과다. push 훅에서 깨지는 것보다 여기서 깨지는 게 싸다.
+
+## 고정 기록과 두 비밀 검사
+
+게시의 추가 줄 검사는 `publish_secret_baseline.json`의 commit/path/rule 판정을 사용한다. 전체 추적 파일 가드는 `public_provenance.json`의 정확한 path/UTF-8 line SHA-256/token 판정을 사용한다. 게시 검토 한 건을 등록해도 전체 파일 가드가 통과한다는 뜻은 아니다. 전체 파일 검사를 재현할 때는 가드와 같이 `load_public_provenance` 결과를 `scan_files`에 전달하고, 원시 탐지 수와 검토 적용 후 탐지 수를 구분한다.
+
+이미 고정된 기록의 처리는 [validation 지침](../../validation/AGENTS.md)을 따른다. 새 문서의 표기 예방책을 기존 기록의 재작성 허가로 해석하지 않는다. 기록을 보존해야 하는 오탐은 원본 blob과 참조의 실제 Git 객체 여부를 확인하고 독립 검토한 뒤, 기존 exact-line provenance 목록에 해당 경로·행 해시·토큰만 등록한다. 게시 검사가 별도로 실패하면 그 commit/path/rule 판정도 따로 필요하다. 범용 matcher·임계값·credential 검사는 유지한다.
+
+2026-10-27 로컬 후보 commit `30168bec9d`에서 이 차이를 놓쳐 전체 본문 시험 중 해당 가드가 실패했다. 단독 재실행도 실패했고 당시 로컬 main 기준 commit `2f2494cf32`에서는 통과했다. 고정 기록은 commit `296fdfc384`의 blob 그대로 보존하고 provenance 한 건만 추가했다. 기존 231개 record와 순서는 유지했다. 수정 commit `f44520f70e`에서 `test/test_harness_contracts.py`와 `test/test_release_boundary_guards.py`를 공식 원격 runner로 실행해 183 PASS/0 SKIP/0 FAIL, NEW0/known0/flaky0을 확인했다. 이는 집중 가드 검증이며 전체 FULL·착지·공개 게시 증거는 아니다.
 
 ## Why This Matters
 
@@ -50,8 +58,7 @@ push를 막는다** — 2026-10-07 오전(`db006d7cf`로 고침, uiux-site-g3-re
 
 - push 훅은 공유 체크아웃의 **모든 세션**이 같이 쓴다 — 한 문서의 오탐이 동료의 푸시까지 막는다.
 - CI도 같은 시험을 돌리므로 오탐이 원격에 올라가면 main 초록불(최우선 규칙)이 꺼진다.
-- "기록은 얼어 있다"(docs/validation AGENTS)와 충돌하지 않는다 — `commit` 접두어는 관측 결과를
-  바꾸는 게 아니라 스캐너가 읽는 표기일 뿐이고, `db006d7cf`가 같은 수정의 선례다.
+- 과거의 접두어 수정 선례가 현재 고정 기록의 재작성을 허용하지는 않는다. 기록 보존은 위 validation 지침을 기준으로 판단한다.
 
 ## When to Apply
 

@@ -5045,3 +5045,11 @@
 - 증거: 신규/기존 auth 109 passed, HTTP/service 37 passed, API/auth 최종 18 passed/0 skipped(재시작·닫힌 fence·SDK offline·실제 Account disable/grant 변경 포함). 관련 broad 453 passed/35 skipped와 별도 실제 브라우저 14 passed/0 skipped. revision·실패 회차·명령은 docs/validation/transfer-recovery-public-2026-10-27/result.md에 구분했다.
 - gate 변화: 기존 gate 승격 없음. 공식 로컬 착지 별도 대기, push·실물·Gazebo producer·학습 수용 미수행.
 - CE: 새 교훈 기록 — 페이지 넘침 가드가 놓친 nested 식별자 잘림을 실제 캡처와 결정적 RED/GREEN으로 확인해 docs/solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md에 남겼다.
+
+## 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
+
+- 변경: `test_work_sources.py`가 매번 새로 만드는 앱의 State 설정 4곳을 직접 대입한다. 실제 요청·작업 종류 판정 assertion은 유지한다. 생산 코드와 설정은 바꾸지 않는다.
+- 원인: 같은 Starlette 1.6.0에서 pytest 9.1.1은 동적 속성의 원래 값을 저장하지만 9.2.0은 인스턴스 `__dict__`에 없는 값을 NOTSET으로 저장한다. 같은 State 속성을 두 번 patch하면 종료 시 두 번 삭제해 KeyError가 난다. 두 원격 환경의 독립 재현으로 차이를 확인했다.
+- 증거: 후보 `651ec7a06a`의 Fleet 전체·단독 재실행에서 종료 오류 RED, 기준 main의 pytest 9.1.1 환경에서는 단독 통과. 수정 커밋 `cdbd0c332e`는 같은 pytest 9.2.0 환경(`1fde7a90b47fe7fb`)에서 해당 파일 11 passed / 0 skipped / NEW 0. 독립 검토는 전용 앱 격리·검증 조건 유지를 확인했다. 원격 로그는 작업 공간의 native-cell-transport 실행 기록에 연결했다.
+- Gate: 전체 착지 검증은 별도이며 실물·서비스 수용 근거가 아니다.
+- CE: 해당 없음 — 전용 앱이라는 적용 조건과 버전별 원인은 시험 주석·이 기록에서 복원할 수 있다.

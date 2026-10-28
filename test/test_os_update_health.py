@@ -17,6 +17,10 @@ def _health(tmp_path, monkeypatch):
     calls = []
     ready = dict(schema_version=1, boot_id=TRIAL_BOOT, slot="b")
     factory = dict(schema_version=1, **pending["verified"]["metadata"]["native_factory"])
+    original_cwd = host.process_cwd
+    monkeypatch.setattr(host, 'process_cwd', lambda pid: str(root / 'opt/rosy/releases' / factory['release_id'])
+                        if pid == 123 else original_cwd(pid))
+    monkeypatch.setattr(m, 'Host', lambda _root: host)
     monkeypatch.setattr(m, "verify_ready", lambda r: ready)
     monkeypatch.setattr(m, "verify_current", lambda r, v: factory)
     monkeypatch.setattr(m, "read_bound_report", lambda r, p: dict(native_factory=factory))
@@ -45,6 +49,54 @@ def _health(tmp_path, monkeypatch):
         return subprocess.CompletedProcess(argv, 0, "", "")
     monkeypatch.setattr(m, "_empty_cgroup", lambda *a, **kw: None)
     return m, state, root, journal, host, calls, run, data, ready, dropin
+
+
+@pytest.mark.parametrize('cwd', [None, '/opt/rosy/releases/previous-factory'])
+def test_trial_health_refuses_wrong_or_unreadable_core_cwd(tmp_path, monkeypatch, cwd):
+    m, state, root, journal, host, _, run, _, _, _ = _health(tmp_path, monkeypatch)
+    before = journal.read_bytes()
+    queried = []
+
+    def current_cwd(pid):
+        queried.append(pid)
+        return cwd
+
+    monkeypatch.setattr(host, 'process_cwd', current_cwd)
+    with pytest.raises(ValueError, match='CORE.*release'):
+        m.check(root, TRANSACTION, host=host, run=run)
+    assert queried == [123]
+    assert not m._report_path(root, state.read_state(root)['pending']).exists()
+    assert journal.read_bytes() == before
+
+
+def test_trial_health_rechecks_core_cwd_after_samples(tmp_path, monkeypatch):
+    m, state, root, journal, host, _, run, _, _, _ = _health(tmp_path, monkeypatch)
+    before = journal.read_bytes()
+    authorize = m.authorize_trial
+
+    def changed_cwd(*args, **kwargs):
+        result = authorize(*args, **kwargs)
+        monkeypatch.setattr(host, 'process_cwd', lambda _pid: None)
+        return result
+
+    monkeypatch.setattr(m, 'authorize_trial', changed_cwd)
+    with pytest.raises(ValueError, match='CORE.*release'):
+        m.check(root, TRANSACTION, host=host, run=run)
+    assert not m._report_path(root, state.read_state(root)['pending']).exists()
+    assert journal.read_bytes() == before
+
+
+def test_health_revalidation_refuses_changed_core_cwd(tmp_path, monkeypatch):
+    m, state, root, journal, host, _, run, _, _, _ = _health(tmp_path, monkeypatch)
+    m.check(root, TRANSACTION, host=host, run=run)
+    pending = state.read_state(root)['pending']
+    receipt = m._report_path(root, pending).read_bytes()
+    before = journal.read_bytes()
+    monkeypatch.setattr(host, 'process_cwd', lambda _pid: None)
+    with pytest.raises(ValueError, match='CORE.*release'):
+        m.revalidate(root, pending, run=run)
+    assert m._report_path(root, pending).read_bytes() == receipt
+    assert journal.read_bytes() == before
 
 
 def test_trial_health_restarts_inhibited_io_and_binds_durable_receipt_without_committing(tmp_path, monkeypatch):

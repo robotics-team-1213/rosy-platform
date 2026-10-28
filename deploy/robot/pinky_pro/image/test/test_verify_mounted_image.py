@@ -55,7 +55,8 @@ def test_factory_image_rejects_missing_unsafe_or_populated_tls(tmp_path, state):
     findings = verify_mounted_image.inspect(tmp_path, "2026.10.26-001")
     assert any("tls" in item.lower() for item in findings), state
 
-def test_inspect_passes_with_valid_image(tmp_path):
+@pytest.mark.parametrize('separate_boot', [False, True])
+def test_inspect_passes_with_valid_image(tmp_path, separate_boot):
     root = tmp_path / "root"
     root.mkdir()
     (root / "etc/rosy/tls").mkdir(parents=True, mode=0o750)
@@ -154,20 +155,30 @@ def test_inspect_passes_with_valid_image(tmp_path):
     (wants.parent / verify_mounted_image.DISPLAY_UNIT).write_text("mock", encoding="utf-8")
     (root / verify_mounted_image.DISPLAY_UDEV_RULE).write_text("mock", encoding="utf-8")
     (root / "var/lib/dpkg").mkdir(parents=True)
+    lock = verify_mounted_image.yaml.safe_load(
+        Path(verify_mounted_image.__file__).with_name("inputs.lock.yaml").read_text(encoding="utf-8"))
     (root / "var/lib/dpkg/status").write_text("".join(
         f"Package: {name}\nStatus: install ok installed\n\n"
-        for name in verify_mounted_image.DISPLAY_APT_PACKAGES), encoding="utf-8")
+        for name in verify_mounted_image.DISPLAY_APT_PACKAGES)
+        + f"Package: rauc\nStatus: install ok installed\nVersion: {lock['os_updates']['rauc_package_version']}\n\n", encoding="utf-8")
+    (root / "usr/bin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/bin/rauc").write_bytes(b"synthetic installed RAUC binary fixture")
     _add_lamp_and_camera(root)
     _add_login_probe_and_defaults(root, release_dir)
 
-    lock = verify_mounted_image.yaml.safe_load(
-        Path(verify_mounted_image.__file__).with_name("inputs.lock.yaml").read_text(encoding="utf-8"))
-    with (root / "var/lib/dpkg/status").open("a", encoding="utf-8") as status:
-        status.write("Package: rauc\nStatus: install ok installed\n"
-                     f"Version: {lock['os_updates']['rauc_package_version']}\n\n")
-    (root / "usr/bin").mkdir(parents=True, exist_ok=True)
-    (root / "usr/bin/rauc").write_text("mock", encoding="utf-8")
-
+    if separate_boot:
+        boot = tmp_path / 'mounted-boot'
+        (root / 'boot/firmware').rename(boot)
+        assert verify_mounted_image.inspect(root, release_id), 'missing default boot must still be rejected'
+        findings = verify_mounted_image.inspect(root, release_id, boot_root=boot)
+        assert not findings, findings
+        (boot / 'overlays/rosy-ws281x.dtbo').unlink()
+        assert any('lamp overlay' in finding for finding in
+                   verify_mounted_image.inspect(root, release_id, boot_root=boot))
+        (boot / 'config.txt').unlink()
+        assert any('boot configuration' in finding for finding in
+                   verify_mounted_image.inspect(root, release_id, boot_root=boot))
+        return
     findings = verify_mounted_image.inspect(root, release_id)
     assert not findings, findings
 
