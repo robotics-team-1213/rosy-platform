@@ -4,9 +4,11 @@
 76 min with no child process, no event and its ticket "preparing", until a person killed it at 09:10; the stdout
 file's last lines were still in Python's buffer, so where it hung was lost. Progress is any land event, any queue
 touch (``land_events.beat``) or any remote job poll (``remote_job.LAST_POLL``, every POLL_S while a job runs).
+Long silent steps beat too: land.step (lint, size_range, safety_review) and remote_pytest.remote (ship, venv
+setup up to 3,600 s) run through ``remote_job.step``, which marks LAST_POLL every POLL_S while the child runs.
 Past LIMIT_S without one, the watchdog writes ``faulthandler`` stacks of all threads to ``<logdir>/watchdog-<pid>.txt``,
 records a ``stop`` event, removes the process's tickets and exits 3. It never writes to stdout or stderr: a blocked
-stream must not block it too. LIMIT_S is above the longest single step (venv setup, 3,600 s). Standard library only.
+stream must not block it too. Standard library only.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ import threading
 import time
 from pathlib import Path
 
-LIMIT_S = float(os.environ.get("ROSY_LAND_WATCHDOG_MIN", "90")) * 60
+LIMIT_S = 30 * 60.0
 CHECK_S = 60.0
 
 

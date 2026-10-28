@@ -163,6 +163,33 @@ def ssh_call(ssh: list[str], host: str, script: str, *args: str) -> subprocess.C
     return None if result.returncode == 255 else result
 
 
+def step(argv: list[str], timeout: float | None = None, **kw) -> subprocess.CompletedProcess:
+    """``subprocess.run(argv, timeout=timeout, **kw)`` that marks LAST_POLL every POLL_S while the child runs, so
+    land_watchdog sees a long silent step (venv setup up to 3,600 s, size_range over thousands of commits) as alive.
+    TimeoutExpired kills the child and is raised, as subprocess.run does."""
+    global LAST_POLL
+    data = kw.pop("input", None)
+    if kw.pop("capture_output", False):
+        kw["stdout"] = kw["stderr"] = subprocess.PIPE
+    if data is not None:
+        kw["stdin"] = subprocess.PIPE
+    deadline = None if timeout is None else time.monotonic() + timeout
+    with subprocess.Popen(argv, **kw) as proc:
+        while True:
+            LAST_POLL = time.monotonic()
+            wait = POLL_S if deadline is None else max(0.0, min(POLL_S, deadline - time.monotonic()))
+            try:
+                out, err = proc.communicate(data, timeout=wait)
+                break
+            except subprocess.TimeoutExpired:
+                data = None  # written on the first call; a retry must not send it again
+                if deadline is not None and time.monotonic() >= deadline:
+                    proc.kill()
+                    proc.communicate()
+                    raise subprocess.TimeoutExpired(argv, timeout) from None
+    return subprocess.CompletedProcess(argv, proc.returncode, out, err)
+
+
 def retrying(call, what: str, host: str, budget: float, sleep, clock):
     """call() until it returns non-None, backing off; (result, None) or (None, seconds without contact)."""
     start, n = clock(), 0
