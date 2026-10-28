@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import land_guards  # noqa: E402
 import land_isolation  # noqa: E402
+from known_failures import NO_ROS_LAUNCH_PLUGINS
 from test_land import GREEN, _runner, commit, repos  # noqa: E402,F401  (land.py's fixture repos)
 
 PAIR = {
@@ -48,7 +49,8 @@ def pair(tmp_path):
 
 
 def pytest_run(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *args],
+    return subprocess.run([sys.executable, "-m", "pytest", "-q", *NO_ROS_LAUNCH_PLUGINS,
+                           "-p", "no:cacheprovider", *args],
                           cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                           env={**os.environ, **(env or {})}, timeout=300)
 
@@ -82,12 +84,33 @@ def test_alone_runs_past_the_budget_are_reported_not_dropped(pair):
 def test_root_conftest_names_the_inserter_and_never_fails(pair, xdist):
     if xdist and not importlib.util.find_spec("xdist"):
         pytest.skip("pytest-xdist not installed (CI)")
-    if os.environ.get("AMENT_PREFIX_PATH"):
-        # shortcut: the ROS CI container (apt pytest 7.4 + ament plugins) prints no report; pytest 7.4 alone does.
-        # The conftest is report-only and never fails a run. Find the cause, then drop this skip (D-889 follow-up).
-        pytest.skip("report not produced under the ROS CI container; cause open (2026-10-28)")
     (pair / "conftest.py").write_bytes((ROOT / "conftest.py").read_bytes())
     run = pytest_run(pair, ".", *xdist)
+    text = run.stdout + run.stderr
+    assert run.returncode == 0, text
+    assert "sys.path added by 1 test module(s)" in text and "test_a_inserts.py: helpers" in text, text
+
+
+def test_ros_environment_does_not_skip_path_reporting(pair, monkeypatch):
+    monkeypatch.setenv("AMENT_PREFIX_PATH", str(pair / "ros"))
+    try:
+        test_root_conftest_names_the_inserter_and_never_fails(pair, [])
+    except pytest.skip.Exception as error:
+        pytest.fail(f"ROS environment must retain the path-report assertions: {error}")
+
+
+@pytest.mark.parametrize("plugin_name", ["launch_testing", "launch_ros"])
+def test_nested_pytest_reports_paths_when_ros_plugins_preimport_modules(pair, plugin_name):
+    (pair / "conftest.py").write_bytes((ROOT / "conftest.py").read_bytes())
+    plugins = pair / "ros_plugins"
+    metadata = plugins / "fake_ros_launch-0.0.dist-info"
+    metadata.mkdir(parents=True)
+    (metadata / "METADATA").write_text("Metadata-Version: 2.1\nName: fake-ros-launch\nVersion: 0.0\n")
+    (metadata / "entry_points.txt").write_text(f"[pytest11]\n{plugin_name} = early_collect\n")
+    # ROS launch collection can import a module before the report hook observes its sys.path change.
+    (plugins / "early_collect.py").write_text(
+        f"import runpy\nrunpy.run_path({str(pair / 'test_a_inserts.py')!r})\n")
+    run = pytest_run(pair, ".", env={"PYTHONPATH": str(plugins), "PYTEST_DISABLE_PLUGIN_AUTOLOAD": ""})
     text = run.stdout + run.stderr
     assert run.returncode == 0, text
     assert "sys.path added by 1 test module(s)" in text and "test_a_inserts.py: helpers" in text, text
