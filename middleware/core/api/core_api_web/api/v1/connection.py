@@ -16,7 +16,7 @@ from core_api_web.api.deps import (
 )
 from core_api_web.api.errors import ReasonError
 from core_api_web.api.v1.auth import NO_STORE, _Window, _error, _pairing, client_allowed
-from core_api_web.api.v1.host import BOOT_STATUS_FILE, read_boot_status
+from core_api_web.api.v1.host import BOOT_STATUS_FILE
 from core_common.protocol.access import ConnectionInfo
 
 connection_router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
@@ -90,7 +90,7 @@ def connection(request: Request, svc: CoreServicesLike = Depends(get_services)):
     _admit(request, host)
     tls = bool((svc.config.get('network') or {}).get('tls'))
     path = str(((svc.config.get('hardware_probe') or {}).get('boot_status_path')) or BOOT_STATUS_FILE)
-    boot = read_boot_status(path)
+    boot = svc.host_files.read_boot_status(path)
     # Same rule as host status-summary: CORE answering without the indicator file is ready.
     stage = boot['stage'] if boot else 'CORE_READY'
     return JSONResponse(headers=NO_STORE, content={

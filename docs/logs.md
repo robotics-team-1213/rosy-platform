@@ -12714,6 +12714,21 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 시험이 잡은 인코딩 실수다.
 
+## 2026-10-28 · uncommitted · fix(omx): 값 계약 이동을 OMX 배포 묶음 경로에 반영
+
+- 변경: `deploy/robot/omx/omx-devices-autoupdate.json.example`의 `paths`에 `omx_adapter/contracts/adapter_profile.py`·`contracts/watchdog_observation.py`를 더한다. 이 브랜치가 `watchdog_observation.py`·`profile.py`가 쓰는 값을 `contracts/` 아래로 옮겼는데, main에 먼저 들어온 chunk-library의 배포 묶음에는 그 두 모듈이 없었다.
+- 근거: 착지 사전 시험의 `middleware/devices/omx/adapter/test/test_chunk_library.py::test_native_export_contains_the_script_import_closure`가 `No module named 'omx_adapter.contracts.watchdog_observation'`으로 실패했다(main에서는 통과).
+- 증거: 원격 `middleware/devices/omx/adapter/test`·`test/test_omx_arm_status_bridge.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 두 착지의 import 목록을 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · CORE host-file C6 published triage
+
+- Change: Record individual verdicts for the 33 remaining host-file reaches in the existing C6 criteria; the exact tuples live only in its literal registry. Three declared-member reaches are fixed in source instead of admitted. Correct the battery absent-judgment rationale without tightening runtime freshness.
+- Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
+- gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
+- CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.
+
 ## 2026-10-28 · uncommitted · fix(land): 묶음이 FULL급 맨 앞을 건너뛰고 사전 시험 대기 티켓도 싣는다
 
 - 변경: `tools/land_batch.py`·`tools/land_prepare.py`. 리더는 묶을 수 있는 `waiting` 가운데 가장 앞선 것이다. 구성원에 `pending`을 더한다(갈라진 지점의 선택이 affected일 때). 묶음에 든 `pending`은 슬롯을 잡지 않고, 착지되면 사전 시험을 건너뛴다. D-889 추가 4.

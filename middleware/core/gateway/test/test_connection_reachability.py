@@ -40,3 +40,34 @@ def test_connection_is_lan_only_and_rate_limited(core_client):
     assert int(limited.headers["retry-after"]) >= 1
     other = TestClient(original.app, base_url="http://192.168.1.10", client=("192.168.1.22", 1234))
     assert other.get("/api/v1/auth/connection").status_code == 200
+
+
+def test_connection_missing_boot_file_still_reports_core_ready(core_client, tmp_path):
+    status = tmp_path / "missing-boot-status.json"
+    assert not status.exists()
+    original, _ = core_client(config_overrides={"hardware_probe": {"boot_status_path": str(status)}})
+    client = TestClient(original.app, base_url="http://192.168.1.10", client=("192.168.1.20", 1234))
+    response = client.get("/api/v1/auth/connection")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["core_ready"], body["stage"], body["release"]) == (True, "CORE_READY", None)
+
+
+def test_connection_uses_injected_boot_reader_and_keeps_missing_core_ready(core_client, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    path = str(tmp_path / "not-produced.json")
+    calls = []
+
+    def read_boot_status(actual_path):
+        calls.append(actual_path)
+        return None
+
+    original, svc = core_client(config_overrides={"hardware_probe": {"boot_status_path": path}})
+    monkeypatch.setattr(svc, "host_files", SimpleNamespace(read_boot_status=read_boot_status), raising=False)
+    client = TestClient(original.app, base_url="http://192.168.1.10", client=("192.168.1.23", 1234))
+    response = client.get("/api/v1/auth/connection")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["core_ready"], body["stage"], body["release"]) == (True, "CORE_READY", None)
+    assert calls == [path]

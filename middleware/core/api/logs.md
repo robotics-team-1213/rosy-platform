@@ -1312,3 +1312,10 @@
 - 변경: api/AGENTS.md의 Dashboard 안내 링크를 middleware/robot_ui/robot/AGENTS.md로 바로잡았다. 인증·API·CSP 계약은 유지한다.
 - 증거: app.py::_dashboard_root의 소스 fallback과 대상 AGENTS.md의 존재를 대조했다. 전체 AGENTS.md의 로컬 Markdown 링크와 Parent context 경로를 정적으로 확인한다.
 - gate 변화: 없음. HTTP·WebSocket·장치 동작 시험을 수행한 기록이 아니다.
+
+## 2026-10-28 · uncommitted · host-file 실행을 CORE owner에 위임
+
+- 변경: host hardware·상태 요약·connection이 주입된 `svc.host_files`를 사용한다. API에는 역할·요청 검증·공개 응답 조립·HTTP 오류 매핑을 남기고 실행 파일 처리와 전역 cooldown/lock을 기존 CORE system owner로 옮긴다. API는 CORE 실행 모듈을 import하거나 재수출하지 않는다.
+- 증거: commit `2249cc5130c37c37b501501d64584367235b2661`의 공식 원격 RED에서 API 2·connection 1·node 1·bridge 1이 기존 경로의 미위임 assertion으로 실패했다. private fact 반환과 fixture 대상 이동은 미커밋 SOURCE 검토 대상이며 GREEN·설치본 검증은 대기한다.
+- gate 변화: 없음. API 경로·스키마·ADR 버전·권한이나 장치 수용을 바꾸지 않는다.
+- CE: 해당 없음 — 보존 조건과 경계 판단을 코드·시험·검토 기록으로 확인하는 단계다.
