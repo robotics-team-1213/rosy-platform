@@ -244,14 +244,20 @@ def test_an_in_flight_download_is_aborted_by_cancel_or_leaving(tablet_page, how)
     _enter_recording_drive(page, base_url, archive="slow")
     try:
         row = _open_sheet(page)
-        row.locator("[data-recording-fetch]").click()
+        row.locator("[data-recording-fetch]").focus()
+        page.keyboard.press("Enter")
         row.locator("[data-recording-cancel]").wait_for()
+        playwright_sync.expect(row.locator("[data-recording-cancel]")).to_be_focused()
         assert _eventually(lambda: "archive" in _recordings(page, base_url)["log"])
-        page.click("[data-recording-cancel]" if how == "cancel" else "[data-drive-exit]")
+        if how == "cancel":
+            page.keyboard.press("Enter")
+        else:
+            page.click("[data-drive-exit]")
         assert _eventually(lambda: "archive_aborted" in _recordings(page, base_url)["log"]), \
             _recordings(page, base_url)
         if how == "cancel":
             page.wait_for_function("document.querySelector('[data-recording-status]')?.textContent.includes('취소')")
+            playwright_sync.expect(row.locator("[data-recording-fetch]")).to_be_focused()
     finally:
         _recordings(page, base_url, release=True)
     assert "archive_done" not in _recordings(page, base_url)["log"]
@@ -284,3 +290,128 @@ def test_recordings_sheet_refresh_keeps_keyboard_focus(tablet_page):
     assert _eventually(lambda: _recordings(page, base_url)["lists"] >= lists + 2)
     assert page.evaluate("document.activeElement === window.__focused && window.__focused.isConnected")
     assert errors == [], errors
+
+
+@pytest.fixture
+def recording_panel(tablet_page):
+    """Mount the real component with controllable reads; no device requests or timers."""
+    base_url, page, errors = tablet_page
+    page.goto(base_url + '/pilot')
+    page.evaluate("""async () => {
+      await customElements.whenDefined('ui-button');
+      const {mountRobotRecording} = await import('/pilot/assets/screens/robot-recording.js');
+      const root = document.createElement('main'); document.body.replaceChildren(root);
+      const toggle = document.createElement('ui-button'), detail = document.createElement('span');
+      const open = document.createElement('ui-button'), anchor = document.createElement('div');
+      open.dataset.fixtureOpen = ''; open.textContent = '녹화본 열기';
+      const outside = document.createElement('input'); outside.className = 'ui-field'; outside.dataset.fixtureOutside = '';
+      root.append(toggle, detail, open, outside, anchor);
+      window.recordListing = {download_allowed:true, items:['record-a','record-b'].map(id => ({
+        id, status:'complete', bytes:1000, duration_s:1, started_at:'2026-10-02T10:15:00Z'}))};
+      window.recordResolvers = []; window.recordHold = false; window.recordWrites = 0;
+      window.recordArchiveReads = 0; window.recordSaves = 0;
+      window.recordComponent = mountRobotRecording({toggle,detail,openButton:open,sheetHost:root,anchor,
+        save(){recordSaves++;},
+        schedule(fn, ms){if(ms === 3000) window.recordRefresh = fn; return ()=>{};},
+        request:async(path, options={}) => {
+          if (options.method) { recordWrites++; throw new Error('unexpected write'); }
+          if (path.endsWith('/active')) return {status:200,body:{active:{state:'idle'}}};
+          if (recordHold) return new Promise(resolve => recordResolvers.push(resolve));
+          return {status:200,body:structuredClone(recordListing)};
+        },
+        requestBlob:async(_path, options) => {
+          recordArchiveReads++;
+          return new Promise(resolve => {window.recordFinishDownload = resolve;
+            options.signal.addEventListener('abort',()=>resolve(null),{once:true});});
+        }});
+      open.click();
+    }""")
+    playwright_sync.expect(page.locator('[data-recording-fetch]')).to_have_count(2)
+    yield page
+    assert page.evaluate('recordWrites') == 0
+    assert errors == []
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason='browser opt-in')
+@pytest.mark.parametrize('change', ['reorder', 'disabled', 'removed', 'empty', 'read-failed', 'move-row', 'move-outside', 'no-focus'])
+def test_changed_recording_rows_keep_the_current_keyboard_target(recording_panel, change):
+    page = recording_panel
+    row = page.locator('[data-recording-id="record-a"]')
+    row.locator('[data-recording-fetch]').focus()
+    outside = page.locator('[data-fixture-outside]')
+    if change == 'no-focus':
+        outside.fill('keep this input')
+    page.evaluate("""() => {
+      window.beforeRecordingButton = document.querySelector('[data-recording-fetch]');
+      recordHold = true; recordRefresh();
+    }""")
+    page.wait_for_function('recordResolvers.length === 1')
+    if change == 'move-row':
+        page.locator('[data-recording-id="record-b"] [data-recording-fetch]').focus()
+    elif change == 'move-outside':
+        outside.fill('keep this input')
+    page.evaluate("""change => {
+      recordListing.items[0].bytes++;
+      if(change === 'reorder') recordListing.items.reverse();
+      if(change === 'disabled') {recordListing.download_allowed=false;recordListing.download_blocker='RECORDING_BUSY';}
+      if(change === 'removed') recordListing.items.shift();
+      if(change === 'empty') recordListing.items=[];
+      recordResolvers.shift()(change === 'read-failed' ? {status:503,body:{}} : {status:200,body:recordListing});
+    }""", change)
+    page.wait_for_function('!beforeRecordingButton.isConnected')
+    if change in ['move-outside', 'no-focus']:
+        playwright_sync.expect(outside).to_be_focused()
+        assert outside.input_value() == 'keep this input'
+    elif change in ['removed', 'empty', 'read-failed']:
+        playwright_sync.expect(page.locator('[data-recordings-notice]')).to_be_visible()
+        playwright_sync.expect(page.locator('[data-recordings-notice]')).to_be_focused()
+    elif change == 'disabled':
+        playwright_sync.expect(row.locator('[data-recording-facts]')).to_be_focused()
+    else:
+        target = 'record-b' if change == 'move-row' else 'record-a'
+        playwright_sync.expect(page.locator(f'[data-recording-id="{target}"] [data-recording-fetch]')).to_be_focused()
+    assert page.evaluate('recordArchiveReads') == 0
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason='browser opt-in')
+@pytest.mark.parametrize('outcome', ['complete', 'refused', 'cut'])
+def test_download_result_preserves_focus_moved_outside_the_list(recording_panel, outcome):
+    page = recording_panel
+    page.locator('[data-recording-fetch]').first.focus()
+    page.keyboard.press('Enter')
+    page.locator('[data-recording-cancel]').wait_for()
+    outside = page.locator('[data-fixture-outside]')
+    outside.fill('keep this input')
+    page.evaluate("""outcome => recordFinishDownload(outcome === 'refused'
+      ? {ok:false,body:{error:{code:'RECORDING_BUSY'}}}
+      : {ok:true,blob:new Blob(['x']),length:outcome === 'cut' ? 2 : 1})""", outcome)
+    playwright_sync.expect(page.locator('[data-recording-cancel]')).to_have_count(0)
+    playwright_sync.expect(outside).to_be_focused()
+    assert outside.input_value() == 'keep this input'
+    assert page.evaluate('recordArchiveReads') == 1
+    assert page.evaluate('recordSaves') == (1 if outcome == 'complete' else 0)
+
+
+@pytest.mark.skipif(not browser_tests_enabled(), reason='browser opt-in')
+@pytest.mark.parametrize('ending', ['reopen', 'dispose'])
+def test_recording_read_belongs_to_the_sheet_that_started_it(recording_panel, ending):
+    page = recording_panel
+    page.evaluate('() => {recordHold = true; recordRefresh();}')
+    page.wait_for_function('recordResolvers.length === 1')
+    if ending == 'dispose':
+        page.evaluate("() => {recordComponent.dispose();window.closedRecordingDOM=document.body.innerHTML;}")
+    else:
+        page.locator('[data-recordings-close]').click()
+        page.locator('[data-fixture-open]').click()
+        # A new sheet must be able to request its own state while the old read is still pending.
+        page.wait_for_function('recordResolvers.length === 2')
+        page.evaluate("recordResolvers[1]({status:200,body:{download_allowed:true,items:[{id:'new-sheet',status:'complete',bytes:10}]}})")
+        page.locator('[data-recording-id="new-sheet"]').wait_for()
+        page.locator('[data-recording-fetch]').focus()
+    page.evaluate("recordResolvers[0]({status:200,body:{download_allowed:true,items:[{id:'old-sheet',status:'complete',bytes:20}]}})")
+    page.wait_for_timeout(50)
+    if ending == 'dispose':
+        assert page.evaluate('document.body.innerHTML === closedRecordingDOM')
+    else:
+        playwright_sync.expect(page.locator('[data-recording-id="new-sheet"] [data-recording-fetch]')).to_be_focused()
+        playwright_sync.expect(page.locator('[data-recording-id="old-sheet"]')).to_have_count(0)
