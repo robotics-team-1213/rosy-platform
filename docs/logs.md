@@ -12654,3 +12654,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 5
 - 교훈: 없음
+
+## 2026-10-28 · uncommitted · docs(adr): D-902 Pilot 실물 OMX 조종·녹화는 Fleet과 CORE 수동 팔 경로로
+
+- 변경: `docs/adr/D-902-pilot-real-omx-teleop-and-recording.md`(Proposed)와 ADR Log 행. 실물 OMX Pilot은 Fleet origin에서 제공하고 D-894 seat·deadman·jog/park/goto/run만 쓴다. 녹화는 OMX 수집 owner가 하고 D-411·D-534·D-848 원칙을 따른다. 실행 중인 수집 세션을 빼앗지 않는다.
+- 근거: Pilot 팔 드라이버는 `omx_sim.js`뿐이고(D-390), 실물 팔 S는 SSH·FIFO로만 조작·녹화한다. D-894는 브라우저가 Fleet origin만 부르게 해 장치-origin Pilot과 맞지 않는다.
+- gate 변화: 없음(문서만, 구현·실물 동작 없음). D-894 착지·런타임 수용이 선행 조건이다.
+- CE: 해당 없음 — 방향 결정이며 해결한 장애가 없다.
