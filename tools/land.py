@@ -46,6 +46,7 @@ import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees
 from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
 import land_guards  # noqa: E402  (structural guards before the long round)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
+import land_watchdog  # noqa: E402  (a landing with no progress for 30 min stops itself, stacks on file)
 import land_full  # noqa: E402  (a green tier outlives the run that passed it)
 import land_prepare  # noqa: E402  (D-889 A': tests outside the lock, then main's delta at the turn)
 import land_speculate  # noqa: E402  (D-889 addendum 3: the turn's main delta tested on the predicted tree)
@@ -241,8 +242,8 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
          allow_fail: bool = False) -> tuple[int, str]:
     print(f"[{label}] {' '.join(command)}", flush=True)
     began = time.monotonic()
-    result = subprocess.run(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
-                            errors="replace", env=env)
+    result = remote_pytest.remote_job.step(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
+                                           errors="replace", env=env)  # beats for land_watchdog while it runs
     print(f"[{label}] {time.monotonic() - began:.0f}s", flush=True)
     text = result.stdout + result.stderr
     if log:
@@ -473,6 +474,8 @@ def main(argv: list[str] | None = None) -> int:
         if code is not None:
             return code
         land_events.bind(wt, out(wt, "rev-parse", "--abbrev-ref", "HEAD"))
+        if argv is None:  # the command line only: tests call main() in a pytest process the watchdog must not end
+            land_watchdog.start(tmp_dir(land_events._where["branch"]), land_events, land_queue, remote_pytest.remote_job)
         if args.tests == "none":
             land_events.emit("skip", reason=args.skip_reason.strip()[:300])
         if (code := land(args)) == 0 and not args.dry_run:

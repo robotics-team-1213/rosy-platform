@@ -37,7 +37,15 @@ def bind(wt: Path, branch: str) -> None:
         _where.update(path=Path(common.stdout.strip()) / EVENTS, branch=branch)
 
 
+LAST = [time.monotonic()]  # the latest sign of progress, for land_watchdog
+
+
+def beat() -> None:
+    LAST[0] = time.monotonic()
+
+
 def emit(event: str, **fields) -> None:
+    beat()
     path = _where.get("path")
     if path is None:
         return
