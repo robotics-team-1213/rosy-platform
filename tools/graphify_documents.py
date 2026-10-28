@@ -40,11 +40,16 @@ def augment(graph: dict, out: Path, scope: Path) -> dict:
         if not path.is_file():
             raise ValueError(f'Corpus file disappeared: {name}')
         paths[path] = path.relative_to(scope).as_posix()
-    ids = {path: 'inventory:' + rel for path, rel in paths.items()}
+    file_ids = {node['source_file']: node['id'] for node in graph['nodes']
+                if node.get('source_file') and node.get('source_location') is None
+                and node.get('label') in (node['source_file'], Path(node['source_file']).name)}
+    ids = {path: file_ids.get(rel, 'inventory:' + rel) for path, rel in paths.items()}
     existing = {node['id'] for node in graph['nodes']}
-    if existing.intersection(ids.values()):
+    if any(ids[path] in existing for path, rel in paths.items() if rel not in file_ids):
         raise ValueError('Inventory node IDs collide with the extracted graph')
     for path, rel in paths.items():
+        if rel in file_ids:
+            continue
         graph['nodes'].append({'id': ids[path], 'label': rel, 'type': 'file', 'source_file': rel,
                                'source_location': 'L1', '_origin': 'structural'})
     edges = graph.setdefault('edges', graph.pop('links', []))
