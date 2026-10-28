@@ -253,7 +253,7 @@ service.run(sys.argv[2], 'alice')
     module_dir = os.path.dirname(os.path.abspath(__file__))
     monkeypatch.setattr(sys, 'path', sys.path + [module_dir] * (2 * 1024 ** 2 // len(module_dir) + 1))
     result = subprocess.run([sys.executable, '-c', script, str(tmp_path), job['id']],
-        env={**os.environ, 'PYTHONPATH': os.pathsep.join(sys.path)}, timeout=30)
+        env={**os.environ, 'PYTHONPATH': os.pathsep.join(dict.fromkeys(sys.path))}, timeout=30)
     assert result.returncode == 23
     part = service.root / '.partial' / job['id'] / 'files/weights.bin'
     assert part.stat().st_size == 9 * 1024 ** 2
