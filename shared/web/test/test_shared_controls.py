@@ -506,6 +506,7 @@ def test_diagnostic_palette_references_the_tokens():
 
 
 def loads_shared_ui(page, text):
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
     for attrs in re.findall(r"<script\b([^>]*)>", text):
         if 'type="module"' not in attrs:
             continue
@@ -515,9 +516,15 @@ def loads_shared_ui(page, text):
         if source[1] in ("/common/ui.js", "./common/ui.js"):
             return True
         entry = page.parent / source[1].lstrip("/")
-        if entry.is_file() and re.search(
+        if not entry.is_file():
+            continue
+        code = re.sub(
+            r'''("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|`(?:\\.|[^`\\])*`|/\*.*?\*/|//[^\n]*''',
+            lambda match: match[1] or "", entry.read_text(encoding="utf-8"), flags=re.S,
+        )
+        if re.search(
             r'''^\s*import\s+(?:[^;]*?\s+from\s+)?['"]/common/ui\.js['"]''',
-            entry.read_text(encoding="utf-8"), re.M,
+            code, re.M,
         ):
             return True
     return False
@@ -533,6 +540,10 @@ def test_shell_recognizes_entry_module_loading_shared_controls(tmp_path, stateme
     assert not loads_shared_ui(page, markup)
     (tmp_path / "app.js").write_text(f"/*\n{statement}\n*/", encoding="utf-8")
     assert not loads_shared_ui(page, markup)
+    (tmp_path / "app.js").write_text(f"const example = `\n{statement}\n`;", encoding="utf-8")
+    assert not loads_shared_ui(page, markup)
+    (tmp_path / "app.js").write_text("const delimiter = '/*';\n" + statement, encoding="utf-8")
+    assert loads_shared_ui(page, markup)
     assert not loads_shared_ui(page, markup.replace('type="module"', 'type="text/javascript"'))
     assert not loads_shared_ui(page, '<script type="module" src="/missing.js"></script>')
     assert loads_shared_ui(page, '<script type="module" src="/common/ui.js"></script>')
