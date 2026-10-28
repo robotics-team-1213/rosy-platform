@@ -9,7 +9,7 @@ import pytest
 
 
 def _port_fstat(st_rdev, real=os.fstat):
-    """The fake port's fstat (fd 42) only: m.os is the os module, and pytest's capture fstats its own fds."""
+    """Fake the port (fd 42) only; preserve real metadata for every other descriptor."""
     return lambda fd: SimpleNamespace(st_rdev=st_rdev) if fd == 42 else real(fd)
 
 
@@ -127,8 +127,9 @@ def test_log_directory_failure_does_not_skip_stop_attempt(monkeypatch, tmp_path,
     def open_port(device):
         calls.append("open"); yield SimpleNamespace(ser=SimpleNamespace(fileno=lambda: 42))
     monkeypatch.setattr(m, "open_readonly_port", open_port)
-    monkeypatch.setattr(m.os, "geteuid", lambda: 1000)
-    monkeypatch.setattr(m.os, "fstat", _port_fstat(st_rdev=123))
+    # Keep the fake fstat inside this module; pytest capture needs the real OS metadata.
+    monkeypatch.setattr(m, "os", SimpleNamespace(
+        geteuid=lambda: 1000, fstat=_port_fstat(st_rdev=123), fsync=m.os.fsync))
     monkeypatch.setattr(m, "disable_torque", lambda port, ids: calls.append(ids) or dict(stop_verified=True))
     output = tmp_path / "already-exists"; output.mkdir()
     result = m.main(["--device", "/dev/serial/by-id/confirmed", "--expected-device-id", "123",
@@ -144,8 +145,8 @@ def test_device_identity_mismatch_prevents_any_off_write(monkeypatch, tmp_path):
     def open_port(device):
         yield SimpleNamespace(ser=SimpleNamespace(fileno=lambda: 42))
     monkeypatch.setattr(m, "open_readonly_port", open_port)
-    monkeypatch.setattr(m.os, "geteuid", lambda: 1000)
-    monkeypatch.setattr(m.os, "fstat", _port_fstat(st_rdev=999))
+    monkeypatch.setattr(m, "os", SimpleNamespace(
+        geteuid=lambda: 1000, fstat=_port_fstat(st_rdev=999), fsync=m.os.fsync))
     monkeypatch.setattr(m, "disable_torque", lambda *args: pytest.fail("wrong device written"))
     assert m.main(["--device", "/dev/serial/by-id/confirmed", "--expected-device-id", "123",
                    "--ids", "16", "--output", str(tmp_path / "record")]) == 2
@@ -159,8 +160,8 @@ def test_serial_cleanup_failure_after_verified_off_is_not_clean_exit(monkeypatch
         yield SimpleNamespace(ser=SimpleNamespace(fileno=lambda: 42))
         raise OSError("serial close failed")
     monkeypatch.setattr(m, "open_readonly_port", open_port)
-    monkeypatch.setattr(m.os, "geteuid", lambda: 1000)
-    monkeypatch.setattr(m.os, "fstat", _port_fstat(st_rdev=123))
+    monkeypatch.setattr(m, "os", SimpleNamespace(
+        geteuid=lambda: 1000, fstat=_port_fstat(st_rdev=123), fsync=m.os.fsync))
     monkeypatch.setattr(m, "disable_torque", lambda port, ids: dict(stop_verified=True))
     result = m.main(["--device", "/dev/serial/by-id/confirmed", "--expected-device-id", "123",
                      "--ids", "16", "--output", str(tmp_path / "record")])
