@@ -51,8 +51,8 @@ def test_matching_real_keys_work_without_decryption(verifier, make_key, key_type
 
 @pytest.mark.parametrize("cipher", ["aes256-gcm@openssh.com", "chacha20-poly1305@openssh.com"])
 def test_authenticated_encryption_keys_are_accepted(verifier, make_key, cipher):
-    unlock = secrets.token_urlsafe(16)
-    private, public = make_key(passphrase=unlock, cipher=cipher)
+    key_passphrase = secrets.token_urlsafe(16)
+    private, public = make_key(passphrase=key_passphrase, cipher=cipher)
     assert verifier.key_pair(private, public).startswith("SHA256:")
 
 
