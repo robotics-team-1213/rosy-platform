@@ -16,6 +16,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "release"))
 import ab_image_layout as ab
 from os_state_layout import _pairs, _read
 from os_update_manifest import release_id as validate_release_id
