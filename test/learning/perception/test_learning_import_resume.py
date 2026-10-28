@@ -227,7 +227,7 @@ def test_resume_capacity_uses_remaining_bytes_across_all_files(tmp_path, monkeyp
     assert service.get('alice', 'alpha', job['id'])['status'] == 'completed'
 
 
-def test_process_crash_keeps_verified_checkpoint_and_existing_server_recovers(tmp_path):
+def test_process_crash_keeps_verified_checkpoint_and_existing_server_recovers(tmp_path, monkeypatch):
     import os
     import subprocess
     import sys
@@ -249,6 +249,9 @@ def killed(*args, **kwargs):
 transport.chunks = killed
 service.run(sys.argv[2], 'alice')
 '''
+    # Exercise accumulated full-suite import roots without collecting every module.
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    monkeypatch.setattr(sys, 'path', sys.path + [module_dir] * (2 * 1024 ** 2 // len(module_dir) + 1))
     result = subprocess.run([sys.executable, '-c', script, str(tmp_path), job['id']],
         env={**os.environ, 'PYTHONPATH': os.pathsep.join(sys.path)}, timeout=30)
     assert result.returncode == 23
