@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · b3641b2165 · ROS 없는 로컬 최신 관측 스냅샷
+- 2026-10-27 · 6645ad829b · D-899 canonical API version table alignment
+- 2026-10-27 · 2d932dad6b · D-899 bounded simulation recovery wire contract
 - 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
 - 2026-10-25 · uncommitted · D-876 Fleet 캐시 전용 모니터링 계약
-- 2026-10-25 · uncommitted · feat(contracts): D-865 policy admission wire schemas v1.314
-- 2026-10-25 · 6d79c46bf8 · D-870 군집 원본 시각과 수명 계약
-- 2026-10-24 · uncommitted · D-862 통합관제 정보·정지 요청 공유 계약

@@ -8,6 +8,19 @@ import pytest
 from secret_scan import load_public_provenance, scan_files, scan_text
 
 
+def test_public_os_cms_certificate_exception_binds_exact_path_and_bytes():
+    root = Path(__file__).resolve().parents[1]
+    path = 'deploy/robot/pinky_pro/release/public-keys/rosy-os-cms-2026-01.pem'
+    text = (root / path).read_text(encoding='utf-8')
+    policy = load_public_provenance(root / 'deploy/robot/pinky_pro/release/public_provenance.json')
+    assert not scan_text(path, text, public_provenance=policy)
+    assert not scan_text(path, text.rstrip('\n'), public_provenance=policy)
+    assert scan_text('docs/copied-certificate.pem', text, public_provenance=policy)
+    lines = text.splitlines()
+    lines[2] = lines[2][:-1] + ('A' if lines[2][-1] != 'A' else 'B')
+    assert scan_text(path, '\n'.join(lines), public_provenance=policy)
+
+
 def test_public_account_signature_vector_exception_is_exact():
     root = Path(__file__).resolve().parents[1]
     path = 'operations/site_ui/cam/app/src/test/resources/account-access-v1.json'

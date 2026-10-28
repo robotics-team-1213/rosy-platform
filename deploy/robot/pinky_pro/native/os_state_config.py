@@ -2,14 +2,19 @@
 from __future__ import annotations
 
 import contextlib
+import argparse
 import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import stat
+import sys
 import uuid
+import yaml
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from os_state_io import _json_atomic
 from os_state_firstboot import FirstBootState
 from os_state_files import (CONFIG_FILES, INITIAL, POINTER_FIELDS, PUBLICATION, initial_changes,
@@ -154,3 +159,68 @@ def commit_runtime(root: Path, data: bytes, *, expected: bytes) -> None:
             raise ValueError("canonical runtime changed before publication")
         update.stage("etc/rosy/runtime.env", data, 0o640)
         update.commit()
+
+
+def main(argv=None, *, root=Path('/')) -> int:
+    parser = argparse.ArgumentParser(description='Commit or clear a commissioned operator overlay across A/B OS roots.')
+    parser.add_argument('--file', required=True, choices=('ir_calibration.yaml', 'line_observer_overrides.yaml'))
+    parser.add_argument('--profile-input', type=Path, help='Referenced NOMINAL camera profile, captured with a line overlay')
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument('--input', help='UTF-8 overlay file, or - for standard input')
+    source.add_argument('--clear', action='store_true')
+    args = parser.parse_args(argv)
+    try:
+        if os.geteuid() != 0:
+            raise ValueError('operator overlay publication requires root')
+        data = None
+        if not args.clear:
+            if args.input == '-':
+                data = sys.stdin.buffer.read(65537)
+            else:
+                with Path(args.input).open('rb') as handle:
+                    data = handle.read(65537)
+            if len(data) > 65536:
+                raise ValueError('operator overlay exceeds canonical file limit')
+            data.decode('utf-8')
+        profile_name = 'etc/rosy/camera_nominal.yaml'
+        profile, parameters = None, {}
+        document = yaml.safe_load(data) if args.file == 'line_observer_overrides.yaml' and data is not None else None
+        if isinstance(document, dict):
+            node = document.get('/**/line_observer_node', {})
+            parameters = node.get('ros__parameters', {}) if isinstance(node, dict) else {}
+        if not isinstance(parameters, dict):
+            raise ValueError('invalid line observer parameters')
+        nominal = parameters.get('camera_ground_source') == 'NOMINAL'
+        if args.profile_input is not None:
+            if args.clear or args.file != 'line_observer_overrides.yaml' or not nominal:
+                raise ValueError('profile input requires a NOMINAL line overlay')
+            if parameters.get('nominal_camera_profile_path') != str(args.profile_input.absolute()):
+                raise ValueError('profile input differs from the explicit overlay reference')
+            with args.profile_input.open('rb') as handle:
+                profile = handle.read(65537)
+            if len(profile) > 65536 or not isinstance(yaml.safe_load(profile.decode('utf-8')), dict):
+                raise ValueError('camera profile is not a bounded mapping')
+            parameters['nominal_camera_profile_path'] = '/' + profile_name
+            data = yaml.safe_dump(document, sort_keys=False).encode('utf-8')
+        with configuration_update(root) as update:
+            if update.shared is None or update.pointer is None:
+                raise ValueError('operator overlays require a provisioned A/B device')
+            if args.file == 'line_observer_overrides.yaml' and args.clear:
+                update.stage(profile_name, None, 0o644)
+            elif nominal:
+                if profile is not None:
+                    update.stage(profile_name, profile, 0o644)
+                elif (parameters.get('nominal_camera_profile_path') != '/' + profile_name
+                      or update.values.get(profile_name) is None):
+                    raise ValueError('NOMINAL overlay requires its persistent profile')
+            update.stage('etc/rosy/' + args.file, data, 0o644)
+            update.commit()
+    except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError):
+        print('OS_OPERATOR_OVERLAY_HOLD', file=sys.stderr)
+        return 1
+    print('OS_OPERATOR_OVERLAY_COMMITTED')
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -52,6 +52,11 @@ modules:
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
+  - name: situation
+    path: operations/situation
+    tests: [operations/situation/test]
+    functional_kind: pytest
+    functional: [operations/situation/test]
   - name: media
     path: operations/site_ui/media
     tests: [operations/site_ui/media/test]
@@ -200,6 +205,32 @@ modules:
     tests: [middleware/robot_ui/pilot/test]
     functional_kind: host-contract
     functional: [middleware/robot_ui/pilot/test/test_stick.py]
+  # 2026-10-27: concern: control wheels (module-responsibility debate, consensus 3).
+  - name: omx_transfer
+    path: integrations/robots/omx
+    tests: [test/test_platform_omx_transfer_provider.py]
+    functional_kind: pytest
+    functional: [test/test_platform_omx_transfer_provider.py]
+  - name: omx_agent
+    path: middleware/devices/omx/agent
+    tests: [test/test_platform_workcell_coordinator.py, test/test_platform_owner_barriers.py]
+    functional_kind: pytest
+    functional: [test/test_platform_workcell_coordinator.py, test/test_platform_owner_barriers.py]
+  - name: execution_local
+    path: middleware/robot_execution/local
+    tests: [middleware/robot_execution/local/test]
+    functional_kind: pytest
+    functional: [middleware/robot_execution/local/test]
+  - name: skill_api
+    path: middleware/skills/api
+    tests: [test/test_platform_transfer_owner_boundary.py, test/test_platform_contract_mapping.py]
+    functional_kind: pytest
+    functional: [test/test_platform_transfer_owner_boundary.py, test/test_platform_contract_mapping.py]
+  - name: skill_manipulation
+    path: middleware/skills/manipulation
+    tests: [test/test_platform_transfer_owner_boundary.py]
+    functional_kind: pytest
+    functional: [test/test_platform_transfer_owner_boundary.py]
   - name: omx_adapter
     path: middleware/devices/omx/adapter
     tests: [middleware/devices/omx/adapter/test]

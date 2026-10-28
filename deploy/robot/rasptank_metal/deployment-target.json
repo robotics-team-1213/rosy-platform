@@ -4,5 +4,14 @@
   "install_target": "RaspTank Metal Raspberry Pi 4 candidate",
   "status": "source_only",
   "operations": [],
+  "delivery": {
+    "platform": "raspberry-pi-4",
+    "architecture": null,
+    "image_backend": null,
+    "application_updater": null,
+    "os_updater": null,
+    "os_compatible": null,
+    "os_tag_prefix": null
+  },
   "reason": "Config-only source preparation: no accepted native payload, image, driver or deployment executor."
 }

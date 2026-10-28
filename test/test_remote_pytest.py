@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import os
 import re
 import subprocess
@@ -188,9 +189,12 @@ def test_probe_parser_reads_only_the_rosyprobe_line():
     assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6 0\n") is None
     assert rp.parse_probe("ROSYPROBE 8 0.5\n") is None
     assert "disk_free_gb" not in p  # an older probe: disk unknown, never a refusal
-    # ~/rosy-test then /tmp: the fuller filesystem counts
+    # ~/rosy-test then /tmp: GB of ~/rosy-test's disk, use% of the fuller; a full /tmp still refuses
     disk = rp.parse_probe(f"{line} 52428800 40 2726297 100 \n")
-    assert disk["disk_free_gb"] == 2726297 / 2**20 and disk["disk_use"] == 100 and disk["nproc"] == 8
+    assert disk["disk_free_gb"] == 50 and disk["disk_use"] == 100 and disk["nproc"] == 8 and rp.disk_full(disk)
+    # the site PC: 103 GB free on / and a 7.4 GB tmpfs /tmp at 1% is healthy
+    site = rp.parse_probe(f"{line} 107186760 54 7774272 1 \n")
+    assert not rp.disk_full(site), "a small empty tmpfs is not a full disk"
 
 
 def _probe(**disk):
@@ -454,7 +458,7 @@ def test_the_pytest_job_is_best_effort_lowest_io_not_idle():
 
 def test_setup_steps_run_at_low_priority_and_capped_on_site_hosts(monkeypatch):
     sent = []
-    monkeypatch.setattr(rp.subprocess, "run", lambda cmd, **kw: sent.append(cmd[-1]) or
+    monkeypatch.setattr(rp.remote_job, "step", lambda cmd, **kw: sent.append(cmd[-1]) or
                         subprocess.CompletedProcess(cmd, 0))
     monkeypatch.setattr(rp, "SITES", {"site@9"})
     rp.remote("model@1", rp.VENV, "x", timeout=1)
@@ -466,7 +470,7 @@ def test_setup_steps_run_at_low_priority_and_capped_on_site_hosts(monkeypatch):
 def test_timeout_is_a_failed_step(monkeypatch):
     def hang(*a, **kw):
         raise subprocess.TimeoutExpired("ssh", 1)
-    monkeypatch.setattr(rp.subprocess, "run", hang)
+    monkeypatch.setattr(rp.remote_job, "step", hang)
     assert rp.remote("h", "true", timeout=1).returncode == 124
 
 
@@ -743,7 +747,7 @@ def test_exit_code_counts_only_when_complete_and_chatter_is_ignored():
     assert '[ -f "$D/$2.rc" ]' in rj.POLL and rj.POLL.index(".rc") < rj.POLL.index("tail")
     assert 'rm -f "$L"' in rj.JOB.split("trap '", 1)[1].split("' EXIT", 1)[0]
     assert 'echo "$$ pytest 2 6" > "$L"' in rj.JOB  # the lock pid is the detached job's own
-    assert 'X=browser' in rj.JOB and 'echo "$$ $X $C $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
+    assert 'X=browser' in rj.JOB and 'echo "$$ $X $RC $G" > "$L"' in rj.JOB  # PROBE counts browser jobs per host
 
 
 def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch):
@@ -753,8 +757,11 @@ def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "0")
     head, answers, sent = _git(repo, "rev-parse", "HEAD"), [255, 255, 0], []
     monkeypatch.setattr(rp.time, "sleep", lambda s: None)
-    monkeypatch.setattr(rp, "remote", lambda host, script, *a, input=None, **kw: sent.append(input) or
-                        subprocess.CompletedProcess([], answers.pop(0), b"", b""))
+    real = subprocess.run
+    monkeypatch.setattr(rp.subprocess, "run", lambda argv, **kw: real(argv, **kw) if argv[0] == "git" else
+                        sent.append(kw["input"]) or subprocess.CompletedProcess(argv, answers.pop(0), b"", b""))
+    monkeypatch.setattr(rp.remote_job, "step", lambda argv, **kw: sent.append(kw["input"]) or  # ssh goes via step
+                        subprocess.CompletedProcess(argv, answers.pop(0), b"", b""))
     rp.ship(repo, "h", head, "run1")
     assert len(sent) == 3 and sent[0] == sent[2]  # the whole bundle again each time
     answers[:] = [255, 255, 255]
@@ -762,6 +769,19 @@ def test_ship_is_retried_from_scratch_after_a_dropped_link(tmp_path, monkeypatch
         rp.ship(repo, "h", head, "run2")
     # A second attempt can add it again, even over a half-made (locked "initializing") worktree.
     assert 'git worktree remove -f -f "$R/runs/$NAME"' in rp.SHIP and rp.remote_job.SWEEP in rp.SHIP
+
+
+def test_a_dropped_link_reruns_only_steps_given_tries(monkeypatch):
+    """2026-10-27: one ssh banner timeout in venv setup stopped a landing after an hour in the queue."""
+    answers, calls = [255, 255, 0], []
+    monkeypatch.setattr(rp.time, "sleep", lambda s: None)
+    monkeypatch.setattr(rp.remote_job, "step", lambda argv, **kw: calls.append(argv) or
+                        subprocess.CompletedProcess(argv, answers.pop(0)))
+    assert rp.remote("h", rp.VENV, "run1", timeout=1, tries=3).returncode == 0 and len(calls) == 3
+    answers[:], calls[:] = [255, 0], []
+    assert rp.remote("h", rp.CLEANUP, "run1", timeout=1).returncode == 255 and len(calls) == 1
+    src = inspect.getsource(rp.run_on)
+    assert 'STEP_TIMEOUT["venv"], tries=3' in src, "venv setup reruns (its recipe locks and rebuilds from scratch)"
 
 
 def _job_env(tmp_path, python_body):
@@ -950,7 +970,7 @@ def test_ssh_call_keeps_a_long_job_word_whole_past_the_ssh_exe_cut():
 
 
 def test_remote_refuses_a_command_ssh_exe_would_cut(monkeypatch):
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: pytest.fail("a cut command reached ssh"))
+    monkeypatch.setattr(rp.remote_job, "step", lambda *a, **k: pytest.fail("a cut command reached ssh"))
     with pytest.raises(SystemExit, match="over"):
         rp.remote("h", "true", "x" * rj.ARGV_MAX, timeout=1)
 

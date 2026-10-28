@@ -53,6 +53,7 @@ def repos(tmp_path, monkeypatch, request):
     monkeypatch.chdir(wt)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
     monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
+    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)
 
     def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
         # Fixture repos are throwaway and cannot be shipped to a test host; this test itself
@@ -874,6 +875,17 @@ def test_rerun_ids_from_another_rootdir_are_mapped_to_the_tree_and_no_test_found
             lambda invs, *a, **k: sent.extend(invs) or list(codes), tested_sha=git(wt, "rev-parse", "HEAD"))
         assert not ids and why in said
     assert sent[0] == ["pkg/test/test_a.py::test_a"], "the one tracked test_a.py, not the printed path"
+
+
+def test_a_directory_printed_for_the_file_maps_to_the_file_that_defines_the_test(repos, tmp_path):
+    """2026-10-27: pytest printed middleware/robot_execution/local::test_x for a shared/web/test file, and
+    the rerun stopped with "directory argument cannot contain :: selection parts"."""
+    main, wt = repos
+    sent = []
+    land.land_checks._rerun_alone(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW elsewhere/local::test_a\n", tmp_path, "dir",
+        sys.executable, lambda invs, *a, **k: sent.extend(invs) or [1], tested_sha=git(wt, "rev-parse", "HEAD"))
+    assert sent[0] == ["pkg/test/test_a.py::test_a"]
 
 
 def test_safety_root_test_is_never_rerun(repos, monkeypatch, capsys):

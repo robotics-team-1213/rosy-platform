@@ -10,6 +10,7 @@ RequiresMountsFor=/var/lib/rosy-device /run/rosy-provision-boot /var/lib/rosy/pr
 RequiresMountsFor=/var/lib/rosy/core /etc/NetworkManager/system-connections /var/lib/rosy/ssh /home/rosy/.ssh
 RequiresMountsFor=/etc/rosy/tls
 RequiresMountsFor=/var/lib/rosy/maps /var/lib/rosy/models /var/lib/rosy/pilot-recordings
+RequiresMountsFor=/var/lib/rosy/calibration
 
 [Service]
 Type=oneshot

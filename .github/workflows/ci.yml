@@ -128,7 +128,7 @@ jobs:
           # python3-opencv: the lane live viewer (integrations/simulation/gazebo/scripts/lane_live_view.py)
           # imports cv2 at module top; without the package the gz_sim step dies at
           # collection and masks every later gate (main red since 650fad89, 2026-09-24).
-          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl zstd python3-opencv python3-pil rauc=1.11.3-2 squashfs-tools ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs ros-jazzy-control-msgs ros-jazzy-controller-manager-msgs
+          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl openssh-client zstd python3-opencv python3-pil rauc=1.11.3-2 squashfs-tools ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs ros-jazzy-control-msgs ros-jazzy-controller-manager-msgs
           # --break-system-packages: ros:jazzy-ros-base 는 Ubuntu 24.04 / Python 3.12 라
           # 시스템 환경이 PEP 668 로 표시되어 있다. 이 플래그가 없어 run 34474895940 이
           # externally-managed-environment 로 40 초만에 죽었고, 그 아래 colcon build 부터
@@ -173,7 +173,7 @@ jobs:
           echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Install Fleet browser verification tools
-        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py')
+        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py')
         run: |
           python3 -m playwright install --with-deps chromium
 
@@ -312,7 +312,7 @@ jobs:
                   if any(target.startswith(p.rstrip("/") + "/") for p in paths if not p.startswith("-")):
                       paths.append("--ignore=" + target)
                       isolated.append(target)
-              browser = [p for p in paths if p.startswith(("operations/fleet/test", "applications/fleet/test")) or p == account_browser]
+              browser = [p for p in paths if p.startswith(("operations/fleet/test", "applications/fleet/test")) or p in (account_browser, "test/test_monitoring_browser.py")]
               rest = [p for p in paths if p not in browser]
               runs += [(rest, {}), (browser, {"ROSY_RUN_BROWSER_TESTS": "1"})]
               for target in isolated:

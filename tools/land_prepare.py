@@ -22,6 +22,22 @@ import land_queue
 
 MAX_PREPARING = 3
 POLL = 15.0
+# D-889 7: the test PCs clean up at 05:30 and reboot at 06:00; a pretest started in between dies (2026-10-27 06:00,
+# exit 143). Minutes after midnight, local time: no pretest starts inside, it waits for the hosts to come back.
+REBOOT = (5 * 60 + 15, 6 * 60 + 10)
+
+
+def after_reboot(ticket: Path | None, sleep=time.sleep, clock=time.localtime) -> None:
+    """Wait (ticket kept fresh) while the lab PCs' nightly cleanup and reboot window is on."""
+    told = False
+    while REBOOT[0] <= (now := clock()).tm_hour * 60 + now.tm_min < REBOOT[1]:
+        if not told:
+            print(f"[land] test PCs reboot at 06:00: the pretest starts after {REBOOT[1] // 60:02d}:{REBOOT[1] % 60:02d}",
+                  flush=True)
+            told = True
+        if ticket is not None:
+            land_queue.touch(ticket)
+        sleep(POLL)
 
 
 def slot(qdir: Path, ticket: Path, sleep=time.sleep) -> None:
@@ -80,6 +96,7 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
     """Merge main, run this branch's selection (or the given FULL ``invocations`` of main's delta), record it.
 
     A NEW failure stops here, before the turn; the ticket is released by ``land.main``."""
+    after_reboot(ticket)
     if ticket is not None:
         slot(qdir, ticket)
     main_sha = land.out(wt, "rev-parse", "main")
@@ -87,30 +104,57 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
         land.merge(wt, main_sha, branch, python, False)
     candidate = land.out(wt, "rev-parse", "HEAD")
     land.size_check(wt, main_sha, candidate, python)  # before the hosts, not at the turn after them
-    if invocations is None:
+    explicit = args.tests == "full"
+    env = None
+    if explicit:
+        args._full_witness = None
+        invocations, note, env = land.land_selection.required(land, wt, main_sha, python)
+    elif invocations is None:
         invocations, note = land.select(wt, main_sha, python)
         if not note and not (wt / "tools/harness/affected_tests.py").is_file():
             return  # main's delta stands in for an affected tier only where the D-436 selector maps it
     print(f"[land] {'FULL' if note else 'affected'} tier before the turn, ticket preparing (main {main_sha[:10]})",
           flush=True)
     logdir, began = land.tmp_dir(branch), time.monotonic()
+    guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
     # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
     # 2026-10-27 it took 150-870 s and every pretest waited for it while holding one of MAX_PREPARING slots.
     # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
     raised: list[BaseException] = []
+    guarded: list[str] = []
 
     def guards() -> None:
+        nonlocal guarded
         try:
-            land.land_guards.first(wt, args, invocations, logdir, "pre", land.run_tests, isolated=True)
+            guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests, isolated=True)
         except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
             raised.append(error)
     side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
     side.start()
-    land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+    tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
     side.join()
     if raised:
         raise raised[0]
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
-    land.land_full.save(wt, branch, candidate, main_sha, "full" if note else "affected", invocations)
-    land.land_events.emit("prepared", tier="full" if note else "affected", seconds=round(time.monotonic() - began))
+    clean = land.land_selection.eligible(land, guarded + tested)
+    land.land_selection.require_eligible(land, args, clean, guarded + tested)
+    tier = land.land_selection.tier(land, guarded + tested, bool(note))  # carried: restore() refuses it
+    anchor = None
+    # Keeping an older base with --no-cache would repeat overtime on every turn.
+    if tier == "affected" and not args.no_cache:
+        anchor_main = land.land_full.restore(wt, branch)
+        anchor = land.land_full.prepared(wt, branch, anchor_main)
+    keep_full = (anchor and anchor["tier"] == "full" and anchor["invocations"]
+                 and all(isinstance(inv, list) and inv
+                         and all(isinstance(word, str) and word for word in inv)
+                         for inv in anchor["invocations"]))
+    if keep_full:
+        # A delta cannot replace a FULL origin; retain its exact base and invocations.
+        print(f"[land] retained FULL preparation {anchor['candidate'][:10]} over {anchor['main'][:10]}", flush=True)
+    else:
+        land.land_full.save(wt, branch, candidate, main_sha, tier, invocations)
+    if explicit:
+        args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
+    land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
+    land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)

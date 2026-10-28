@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 import pytest
 
 import affected_ros
+import affected_pack
 import affected_tests as affected
 import rosy_harness as harness
 
@@ -272,6 +273,28 @@ def test_pack_bounds_remote_command_length_without_dropping_tests():
     assert sorted(path for group in groups for path in group) == paths
     assert all(sum(len(path) + 1 for path in group) <= affected.MAX_INVOCATION_CHARS
                for group in groups)
+
+
+def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
+    """remote_pytest drops -n for a whole invocation when one path is serial (2026-10-28: gazebo kept ten
+    suites on one core and every turn ran past the cap)."""
+    (tmp_path / "tools/remote").mkdir(parents=True)
+    (tmp_path / affected_pack.SERIAL_FILE).write_text("sim/test  # ROS ports\ntools\n", encoding="utf-8")
+
+    class FakeRepo:
+        root = tmp_path
+
+        @staticmethod
+        def test_import_names(path):
+            return {path: path}  # no import clash: only the serial rule may split them
+
+    groups = affected.pack(FakeRepo(), ["a/test", "sim/test", "b/test", "tools/x/test", "c/test"])
+    assert sorted(path for group in groups for path in group) == ["a/test", "b/test", "c/test", "sim/test",
+                                                                   "tools/x/test"]
+    for group in groups:
+        kinds = {affected_pack.is_serial(p, ["sim/test", "tools"]) for p in group}
+        assert len(kinds) == 1, group  # serial and parallel suites never mixed
+    assert ["a/test", "b/test", "c/test"] in groups
 
 
 def test_duplicate_basenames_run_in_separate_invocations(sample):
@@ -668,17 +691,11 @@ def test_unrelated_affected_tests_do_not_install_act_cpu_dependencies():
     assert all(e['name'] != 'omx-act-cpu' for e in matrix)
 
 
-def test_modules_runner_gates_by_2026_11_15():
-    """D-762 stage 1: `modules` reports only until its first green run; it may not stay non-gating."""
-    import datetime
-
+def test_modules_runner_gates():
+    """D-762 stage 1: `modules` gates since 2026-10-27; only sensing still reports."""
     repo = affected.Repo.load(ROOT)
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
-    reporting = sorted(e["name"] for e in matrix if not e["gating"] and not e["name"].startswith("sensing"))
-    if datetime.date.today() > datetime.date(2026, 11, 15):
-        assert not reporting, f"set gating for {reporting} (D-762 stage 1 deadline 2026-11-15)"
-    else:
-        assert reporting in ([], ["modules"]), reporting
+    assert sorted(e["name"] for e in matrix if not e["gating"] and not e["name"].startswith("sensing")) == []
 
 
 def test_unknown_paths_are_listed_with_a_hint_in_json_and_print(sample, capsys):
@@ -732,7 +749,7 @@ def test_harness_yaml_module_added_only_selects_its_suites_not_full():
                    "    functional: [*p]\n"), "anchor, alias or merge key"),
     (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    <<: {tests: [test/architecture]}\n"),
      "anchor, alias or merge key"),
-    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: [operations/apps/games/test]\n"),
+    (_harness_with("  - name: zz_added\n    path: operations/zz_added\n    tests: [middleware/perception/test]\n"),
      "not in CI's gating full matrix"),
 ], ids=["modified", "overlap", "duplicate", "anchor", "no-tests", "other-key", "unparsable",
         "duplicate-key", "alias", "merge-key", "not-ci-gated"])
@@ -930,3 +947,11 @@ def test_known_failures_added_line_needing_a_person_stays_full(sample, head, cha
 def test_flaky_quarantine_stays_full_as_a_safety_root():
     sel = affected.select(affected.Repo.load(ROOT), ["test/flaky_quarantine.txt"], base_text=lambda path: "")
     assert sel.mode == "full" and _safety_escalations(sel)
+
+
+def test_full_json_forces_the_actual_lab_plan_on_an_affected_only_change(sample, capsys):
+    assert harness.main(["affected", "--repo", str(sample), "--base", "HEAD", "--full", "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["mode"] == "full"
+    assert result["full_invocations"] == affected.lab_full_invocations(affected.Repo.load(sample), result["local_invocations"])
+    assert ["test"] in result["full_invocations"]
