@@ -3837,3 +3837,18 @@
 - 증거: 승인된 RED merge 3bc312f9dd5867ca49105dd8d7c36de908afaa97의 bridge 원격 시험은 실제 작성기 경로 8 NEW / 기존 12 PASS / SKIP 0으로 종료 이벤트 누락을 재현했다. 추가 무측정·fault→end→parent 시각 보존 5개 사례는 검토용 초안이며 아직 실행하지 않았다.
 - gate 변화: 없음. P2 OPEN이며 제품 수정은 독립 검토·커밋 원격 GREEN 전이다. 착지·배포·실물 수용은 하지 않았다.
 - CE: 미해결 — 원인을 실제 작성기 회귀로 확인했으나 수정의 GREEN과 재검토 전이다.
+
+## 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
+
+- 변경: D-901에 따라 camera_source·hardware_observer·commissioning_view·workcell_observation_bridge의 실제 ROS 발행·구독을 같은 사용자 최신 스냅샷으로 대체했다. unit도 ROS setup 없이 시작한다. 원본 화질 측정·JPEG 한 번 인코딩·host source/monotonic 시각·기존 토큰/TLS ingress를 유지한다. 설정의 topic 문자열은 로컬 키이며 DDS fallback은 없다.
+- 검증: tests-only7368fd6fed에서 helper 부재로 원격 RED를 확인했다. 최초 원격 집중 실행의 새 통합 fixture 오류 3건을 고치고 b3641b2165 재시험을 요청했다. 최종 증거와 현장 수용은 완료 기록에서 구분한다.
+- gate 변화: 없음. 실행 중 장치 소유자·녹화·serial bus는 건드리지 않았다. 이전 DDS collection/simulator 입력은 이 native 카메라와 호환되지 않으며, idle 상태의 동일 버전 unit/env 전환과 소스별 실제 수용이 필요하다.
+- CE: 해당 없음 — 전송 경계와 시간·소유권 판단은 D-901 및 회귀 시험으로 설명할 수 있다. 실물에서 새 원인·복구 교훈을 검증한 변경이 아니다.
+
+## 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
+
+- 변경: `test_omx_commissioning_stop.py`의 세 시험이 공용 stdlib OS를 바꾸는 대신, 각 시험에서 로드한 모듈의 OS 의존성만 대체한다. 실제 receipt fsync와 모든 장치 동일성·정지 시도·정리 실패 assertion을 유지한다. 생산 정지 경로는 바꾸지 않는다.
+- 원인: 공용 fstat 가짜 값은 st_rdev만 제공해, pytest 9.2 출력 캡처가 읽는 st_size를 없앴다. 후보 65c4cf7164에서 세 시험 모두 단독 재현됐고, 기준 main의 이전 시험 환경에서는 통과했다.
+- 증거: 수정 커밋 bc32cb9b41에서 정지 파일 27개와 Fleet 상태 파일 11개를 함께 원격 실행해 38 passed / 0 skipped / NEW 0. 같은 pytest 9.2 환경 1fde7a90b47fe7fb의 결과이며, 독립 검토는 전용 모듈 격리·실제 fsync 유지·안전 assertion 보존을 확인했다. 실행 로그는 native-cell-transport 작업 기록에 연결했다.
+- gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
+- CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.
