@@ -45,7 +45,8 @@ def test_wait_ends_landed_once_the_branch_is_in_main_and_batch_when_it_leads_one
 
 
 def test_only_the_earliest_waiting_ticket_leads_and_only_with_enough_members(tmp_path, monkeypatch):
-    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row: row["branch"] != "feat/unprepared")
+    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row: row["branch"] != "feat/unprepared"
+                        and row.get("status") in ("waiting", "pending"))
     monkeypatch.setattr(land_batch, "rate", lambda path: (0.25, 50))
     turn = queue.take(tmp_path, "feat/turn", status="turn")
     mine, unprepared = queue.take(tmp_path, "feat/mine", status="waiting"), queue.take(tmp_path, "feat/unprepared")
@@ -184,3 +185,45 @@ def test_a_failed_batch_bisects_by_halving_until_the_leader_goes_alone(tmp_path,
     assert land_batch.queue(land, tmp_path, "feat/l", args, sys.executable, qdir, ticket, tmp_path) is None
     assert tries == [[f"feat/m{n}" for n in range(5)], ["feat/m0", "feat/m1"], ["feat/m0"]], "6 -> 3 -> 2 -> alone"
     assert info(ticket)["batch"] == []
+
+
+def test_a_non_batchable_head_does_not_stop_the_next_ticket_leading_and_pending_tickets_join(tmp_path, monkeypatch):
+    """2026-10-28: 16 of 23 tickets sat pending behind three pretest slots and a FULL-class head led nothing."""
+    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row: row["branch"] != "feat/full"
+                        and row.get("status") in ("waiting", "pending"))
+    monkeypatch.setattr(land_batch, "rate", lambda path: (0.05, 50))
+    queue.take(tmp_path, "feat/turn", status="turn")
+    queue.take(tmp_path, "feat/full", status="waiting")
+    mine = queue.take(tmp_path, "feat/mine", status="waiting")
+    queue.take(tmp_path, "feat/pend", status="pending")
+    queue.take(tmp_path, "feat/busy", status="preparing")
+    form, chosen, _ = land_batch.former(land, tmp_path, tmp_path, mine)
+    assert form([]) and [r["branch"] for r in chosen] == ["feat/pend"], "a preparing ticket is not carried"
+    assert info(mine)["batch"] == ["feat/pend"]
+
+
+def test_a_carried_pending_ticket_holds_its_slot_and_skips_its_pretest_once_landed(repos, tmp_path, monkeypatch):
+    main, wt = repos
+    qdir, ticket = tmp_path / "q", queue.take(tmp_path / "q", "feat/x", status="pending")
+    holds = iter([True, True, False])
+    naps = []
+    land.land_prepare.slot(qdir, ticket, sleep=naps.append, held=lambda: next(holds))
+    assert len(naps) == 2 and info(ticket)["status"] == "preparing"
+    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)
+    monkeypatch.setattr(land.land_prepare, "slot", lambda *a, **k: None)
+    monkeypatch.setattr(land.land_batch, "in_main", lambda *a: True)
+    monkeypatch.setattr(land, "select", lambda *a, **k: pytest.fail("a landed member ran its own pretest"))
+    land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto"), sys.executable, qdir, ticket)
+
+
+def test_a_pending_member_is_judged_by_its_selection_from_the_fork_point(repos, tmp_path, monkeypatch):
+    main, wt, rows = batch_repos(repos, tmp_path)
+    member = Path(rows[0]["worktree"])
+    tip, fork = git(member, "rev-parse", "HEAD"), git(member, "merge-base", "main", "HEAD")
+    bases = []
+    monkeypatch.setattr(land, "select", lambda wt_, base, python: bases.append(base) or ([["pkg/test"]], None))
+    assert land_batch.batchable(land, wt, member, "feat/m", tip) and bases == [fork]
+    assert land_batch.batchable(land, wt, member, "feat/m", tip) and len(bases) == 1, "one selection per tip"
+    commit(member, {"pkg/m2.py": "m = 2\n"}, "a new tip")
+    monkeypatch.setattr(land, "select", lambda *a: ([["test"]], "selector escalated to FULL (x)"))
+    assert not land_batch.batchable(land, wt, member, "feat/m", git(member, "rev-parse", "HEAD")), "FULL-class goes alone"
