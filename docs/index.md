@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · docs(adr): D-902 Pilot 실물 OMX 조종·녹화는 Fleet과 CORE 수동 팔 경로로
+- 2026-10-28 · uncommitted · fix(remote): omx_hotfix 시험의 가짜 SHA를 비밀 검사에 걸리지 않게
 - 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
 - 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
 - 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
-- 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
-- 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
