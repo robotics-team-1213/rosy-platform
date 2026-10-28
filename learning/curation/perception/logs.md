@@ -272,3 +272,23 @@
 - 변경: 합성 fixture의 free_space 관측을10 GiB로 고정하고 UI 잔여값을 검증한다. 실제 storage/data 동작은 바꾸지 않았다.
 - 검증: commit d24d1abc64, 모델 호스트 디스크 점검 후 실제 opt-in 두 viewport 포함10 PASS/skip0/NEW0. 기존 MAIN-RED와 raw 로그를 보존했다.
 - gate 변화: 제품·기기 gate 변화 없음. docs/validation/learning-storage-browser-capacity-2026-10-26/result.md는 합성 시험 근거이며 실제 라벨·모델 수용을 뜻하지 않는다.
+
+## 2026-10-26 · 62173b9899 · Learning 셸 정렬
+
+- 변경: 네 정답 화면(객체·픽셀·로봇암 시범·VLM)이 같은 레일 + 경로 줄 탭(D-542 §2)을 쓴다. 로봇암 화면 제목을 메뉴 이름 `로봇암 시범 검수`로 맞췄다. 경로 줄 제목과 본문 h2가 겹치던 홈·카메라·로봇암·과제·작업 공간은 경로 줄에 제목과 화면 동작만 두고 설명은 한 줄로 내렸다. 계정 화면도 같은 앱 바·레일·경로 줄 안에 넣었다. 화면마다 복사된 테마 select·저장 코드 11벌을 지우고 공용 `data-theme-cycle`(D-668, ui-wiring.js)을 쓴다. 본문은 가운데 정렬 대신 레일 옆에 붙여 화면을 옮겨도 왼쪽 끝이 같다.
+- 증거: 로컬 Edge 캡처 1366·390에서 13개 화면 페이지 오류 없음. 원격 결과는 착지 기록에 적는다.
+- gate 변화: 없음.
+
+## 2026-10-26 · 62173b9899 · 홈 안내 중복 링크 정리와 OMX 오류 문구
+
+- 변경: 홈의 `어떤 로봇의 어떤 과제` 칸에서 경로 줄 동작(과제 등록·SIM)과 같은 페이지 앵커를 반복하던 링크 셋을 지우고 OMX 과제 링크만 남겼다. OMX 학습 실행기 미연결 오류를 한국어로 바꿨다.
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
+- gate 변화: 없음.
+
+## 2026-10-28 · fa368fe89b · 대규모 시험 문맥의 import 경로 직렬화 복구
+
+- 변경: crash/recovery 시험의 자식 `PYTHONPATH`를 첫 등장 순서의 고유 경로로 만든다. 모든 고유 import 경로와 기존 crash 23·9MiB 부분 파일·8MiB 검증 checkpoint·정확한 재개 offset·완료 assertion·30초 timeout은 유지한다. 생산 학습 import와 실제 데이터·라벨은 바꾸지 않는다.
+- 원인/재현: 커밋 8325da055d의 전체 ROOT 문맥에서는 subprocess 실행 전 E2BIG였지만 같은 소스·환경의 단독 실행은 통과했다. d1f049dbcb는 같은 기존 경로를 2MiB 이상 누적하는 조건을 넣어 단독에서도 동일 오류 RED를 재현했다. fa368fe89b의 중복 제거 후 그 조건을 포함한 파일 전체는 원격 20 passed / 1 opt-in skipped / NEW 0이었다.
+- 증거: 같은 pytest 9.2 환경 1fde7a90b47fe7fb의 RED/GREEN이며, 독립 검토가 import 우선순위·모든 고유 경로와 복구 검증 조건 보존을 확인했다. 원본 로그는 native-cell-transport 작업 기록에 연결했다. 기존 일괄 감사는 29묶음 중 ROOT 1건만 비정상이었으며 공식 착지 FULL 영수증이 아니다.
+- gate 변화: 없음. 기록된 skip은 대용량 실제 실험을 실행했다는 뜻이 아니며 실물·현장·학습 승격 수용은 별도다.
+- CE: 해당 없음 — 전체 문맥과 단독 결과의 차이, 재현 조건과 경계 수정의 이유를 회귀 시험·이 기록에 남겼다.

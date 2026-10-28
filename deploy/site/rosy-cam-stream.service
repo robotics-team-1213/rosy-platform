@@ -6,5 +6,6 @@ After=network-online.target
 Type=oneshot
 # Idempotent: a running camera is only read (no wake, no tap). A stopped one is
 # started through the app's own button after serial/model, focus and keyguard checks.
-ExecStart=/usr/bin/python3 %h/.local/share/rosy/cam-screen/rosy_cam_screen.py stream-start --config %h/.local/share/rosy/cam-screen/cam-screen.json
+# D-871: code from the auto-updated site-tools release; the private config stays in cam-screen.
+ExecStart=/usr/bin/python3 %h/.local/share/rosy/site-tools/current/deploy/site/rosy_cam_screen.py stream-start --config %h/.local/share/rosy/cam-screen/cam-screen.json
 NoNewPrivileges=yes

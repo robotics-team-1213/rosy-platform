@@ -48,3 +48,13 @@ def test_the_wrong_yaw_scenario_keeps_the_site_yaw_on_a_turned_box():
     nominal, turned = m.frames_for("nominal"), m.frames_for("wrong-yaw")
     assert turned["box_yaw_deg"] - nominal["box_yaw_deg"] == pytest.approx(20.0)
     assert turned["phases"][0]["frames"][-1] == pytest.approx(nominal["phases"][0]["frames"][-1])  # same jaw yaw
+
+
+def test_a_case_turns_the_jaws_by_its_grasp_turn_and_travels_with_the_frames():
+    case = {"box": [0.0, 0.0, 25.0], "place": "belt", "grasp_turn": 10.0, "expect": None}
+    value, nominal = m.frames_for(case), m.frames_for("nominal")
+    assert value["scenario"] == "case" and value["case"] == case and value["box_yaw_deg"] == pytest.approx(
+        nominal["box_yaw_deg"] + 25.0)
+    wrist = value["phases"][0]["frames"][-1][4] - nominal["phases"][0]["frames"][-1][4]
+    # joint5 rolls the jaws by the turn; the jaws are symmetric, so the IK may take the roll half a turn away
+    assert abs((wrist + math.pi / 2) % math.pi - math.pi / 2) == pytest.approx(math.radians(10.0), abs=0.01)

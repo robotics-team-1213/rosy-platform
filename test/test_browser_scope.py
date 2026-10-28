@@ -37,6 +37,7 @@ def test_shared_web_change_reaches_every_surface_family():
 def test_a_changed_browser_test_selects_itself_and_unrelated_paths_select_nothing():
     assert browser_scope.targets(["test/test_games_board_browser.py"]) == ["test/test_games_board_browser.py"]
     assert browser_scope.targets(["docs/logs.md", "middleware/drive/planning/grid/goals.py"]) == []
+    assert browser_scope.targets(["tools/land_browser.py"]) == []  # a module named *_browser.py is not a test
 
 
 def test_windows_separators_are_accepted():
@@ -115,3 +116,11 @@ def test_common_robot_tasks_select_real_browser_flow():
                    'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
         assert expected in browser_scope.targets(['learning/curation/perception/' + source])
     assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])
+
+
+def test_all_json_expands_the_actual_browser_registry_without_fake_changed_paths(capsys):
+    import json
+    assert browser_scope.main(["--all", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert found == sorted({path for pattern in browser_scope.EVERYTHING for path in browser_scope._expand(pattern)})
+    assert found and "tools/land_browser.py" not in found

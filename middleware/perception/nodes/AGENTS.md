@@ -1,24 +1,24 @@
 <!-- Parent: ../AGENTS.md -->
 <!-- Generated: 2026-09-06 | Updated: 2026-09-24 -->
 
-# control/ (ROS composition and import compatibility)
+# nodes/ (ROS composition)
 
 **Parent context:** `../AGENTS.md`
 **Updated:** 2026-10-11
 
 ## Purpose
-The existing `control` Python package composes ROS nodes, the sensor provider, calibration transport/storage, observation payloads and operator adapters. D-630 moved the sensor and vision implementations to `middleware/perception/sensors/sensing` and `middleware/perception/front_camera/perception`, and the Drive implementations to `middleware/drive/`.
+This folder supplies ROS composition modules installed in the existing `control` Python package: the sensor provider, calibration transport/storage, observation payloads and operator adapters. D-630 moved the sensor and vision implementations to `middleware/perception/sensors/sensing` and `middleware/perception/front_camera/perception`, and the Drive implementations to `middleware/drive/`.
 
-Five compatibility package directories preserve `control.control`, `control.sensing`, `control.planning`, `control.safety` and `control.wander`. Their initializers are active source import/build contracts. The 50 pure `control.control.*` modules have one canonical source across Drive safety (15), tracking (6), recovery (11) and calibration (18); their installed import names remain unchanged. See the [current platform folder guide](../../../docs/reference/platform-folder-responsibilities.md) and [distribution guide](../AGENTS.md).
+Five compatibility package directories in `../control/` preserve `control.control`, `control.sensing`, `control.planning`, `control.safety` and `control.wander`. Their initializers are active source import/build contracts. The pure `control.control.*` modules have one canonical source across Drive motion limits, tracking, recovery and calibration; their installed import names remain unchanged. See the [current platform folder guide](../../../docs/reference/platform-folder-responsibilities.md) and [distribution guide](../AGENTS.md).
 
-D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` and `safety_node` entry modules to `middleware/drive/runtime`; the names below refer to their installed identities. This folder retains sensor/provider/observation composition, general calibration storage and observer adapters. Its five initializer directories contain no algorithm copies.
+D-649 additionally moves the actual `control_node`, `goal_node`, `wander_node` and `safety_node` entry modules to `middleware/drive/runtime`; the names below refer to their installed identities. This folder retains sensor/provider/observation composition, general calibration storage and observer adapters. The five initializer directories in `../control/` contain no algorithm copies.
 
 D-747 moves location assist/status to `../localization`, graph health to `../graph_health`, snapshot triggers to `../snapshots`, line observation to `../sensors/line_observation`, and object evidence to `../front_camera/object_observation`. Dedicated adapters live with their judgments. The filenames below describe preserved installed identities; they are not all source files in this folder. Calibration command/storage, recording process/file IO, provider/executor/TF/web composition live here after S3.
 
 ## Key Files
 | File | Description |
 |------|-------------|
-| `_source_layout.py` | Static canonical holder mapping; the four package facades load their canonical source package, while `control.control` adds only the four declared Drive module roots to its package path |
+| `../control/_source_layout.py` | Static canonical holder mapping; `CONTROL_ROOTS` selects composition modules for the installed `control` package. The four package facades load their canonical source package, while `control.control` adds only the four declared Drive module roots to its package path |
 | `wander_node.py` | Entry wrapper — re-exports `WanderNode`/`main` from `wander/` |
 | `safety_node.py` | Entry wrapper for the safety gate node |
 | `calib_node.py` | Relative `calib/step` FSM; saves one explicitly configured calibration file and requests safety parameters. Bound records validate device/generation context. Parameter acknowledgement does not prove policy adoption |
@@ -36,14 +36,14 @@ D-747 moves location assist/status to `../localization`, graph health to `../gra
 | `loc_assist_node.py` | D-395 P2-3 ROS adapter for `LocAssist`; `initialpose` only for an accepted decision. Off on the device (`enable_loc_assist`), on in gz_multi nav |
 | `dock_observer_node.py` | Camera frames → `dock/observation` via `sensing/dock_observer`; owns no motion. Only the Gazebo camera (`camera_geometry_source` GAZEBO under `use_sim_time`) may use the declared height/pitch/hfov/offset; any other source fails closed (every frame publishes not-visible) |
 
-## Subdirectories
+## Related import facades
 | Directory | Purpose |
 |-----------|---------|
-| `control/` | Initializer and guide for the preserved `control.control` identity; pure modules live in Drive safety/tracking/recovery/calibration (see [control/AGENTS.md](control/AGENTS.md)) |
-| `planning/` | Source initializer facade for `middleware/drive/planning/grid`; installed as `control.planning` |
-| `safety/` | Source initializer facade for `middleware/drive/motion_limits/adapter`; installed as `control.safety` |
-| `sensing/` | Source initializer facade for `middleware/perception/sensors/sensing`; its `control.sensing.perception` child lives in `middleware/perception/front_camera/perception` |
-| `wander/` | Source initializer facade for `middleware/drive/tracking/wander`; installed as `control.wander` |
+| `../control/control/` | Initializer for the preserved `control.control` identity; pure modules live in Drive motion limits/tracking/recovery/calibration (see [import compatibility guide](../control/AGENTS.md)) |
+| `../control/planning/` | Source initializer facade for `middleware/drive/planning/grid`; installed as `control.planning` |
+| `../control/safety/` | Source initializer facade for `middleware/drive/motion_limits/adapter`; installed as `control.safety` |
+| `../control/sensing/` | Source initializer facade for `middleware/perception/sensors/sensing`; its `control.sensing.perception` child lives in `middleware/perception/front_camera/perception` |
+| `../control/wander/` | Source initializer facade for `middleware/drive/tracking/wander`; installed as `control.wander` |
 
 `../setup.py` uses ordinary `package_dir` mappings for the moved subpackages and a narrow build step for the flat `control.control` modules. It installs one copy under each existing identity. The self-contained sdist includes the declared Drive source snapshot; the wheel contains the installed packages and the unchanged `share/control` resources.
 
@@ -65,7 +65,7 @@ D-747 moves location assist/status to `../localization`, graph health to `../gra
 ## Dependencies
 
 ### Internal
-- `../config/` and `../launch/` retain parameter, provider and ROS package-share ownership; `robot.yaml` is loaded before per-node overrides. Canonical sensor/vision/Drive source holders are mapped by `_source_layout.py`.
+- `../config/` and `../launch/` retain parameter, provider and ROS package-share ownership; `robot.yaml` is loaded before per-node overrides. Canonical sensor/vision/Drive source holders are mapped by `../control/_source_layout.py`.
 
 ### External
 - `rclpy`, `std_msgs`, `geometry_msgs`, `nav_msgs`, `sensor_msgs`, `picamera2` (camera node), `tf_transformations`.

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Forced command for the host guard key (D-530; authorized_keys `command=...,restrict`).
-# health | recovery (cached, read-only) | restart <listed unit> | reboot. Nothing else.
-# restart and reboot go through the D-524 Service Control helper (rosy-host-control), which
+# health | recovery (cached, read-only) | updates (D-871, read-only) | restart <listed unit> | reboot |
+# clean-storage (D-885). Nothing else.
+# restart, reboot and clean-storage go through the D-524 Service Control helper (rosy-host-control), which
 # owns the closed unit set and reboots with shutdown -r +10; this script never runs systemctl
 # restart or reboot itself.
 # Installed by deploy/hosts/common/install-guard-remote.sh as /usr/local/sbin/rosy-host-guard-remote.
@@ -20,6 +21,11 @@ case "$1" in
     [ $# -eq 1 ] || refuse
     # Read the root timer's report; this key cannot run probes or repair settings.
     exec python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get("recovery")))' "${GUARD_RECOVERY_STATUS:-/var/lib/rosy-host-state/status.json}"
+    ;;
+  updates)
+    [ $# -eq 1 ] || refuse
+    # D-871: this user's update channels as JSON (steps and releases only, never log text).
+    exec /usr/bin/python3 -I "${GUARD_UPDATE_REPORT:-/usr/local/sbin/rosy-update-report}"
     ;;
   health)
     [ $# -eq 1 ] || refuse
@@ -59,6 +65,11 @@ case "$1" in
     [ $# -eq 2 ] && [ -f "$UNITS" ] && grep -v '^#' "$UNITS" | grep -qxF -- "$2" || refuse
     logger -t rosy-host-guard "restart $2 requested by the guard"
     exec sudo -n /usr/local/sbin/rosy-host-control restart-unit "$2"
+    ;;
+  clean-storage)
+    [ $# -eq 1 ] || refuse
+    logger -t rosy-host-guard "clean-storage requested by the guard"
+    exec sudo -n /usr/local/sbin/rosy-host-control clean-storage
     ;;
   reboot)
     [ $# -eq 1 ] || refuse

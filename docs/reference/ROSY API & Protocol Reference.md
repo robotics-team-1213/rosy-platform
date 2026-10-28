@@ -5,9 +5,133 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.320
+**Version:** v1.327
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.327 Simulation recovery request, independent facts and approval (D-899)
+
+Closed recovery DTOs in `core_common.protocol.arm_transfer_recovery` are re-exported by `schemas`.
+This entry registers the contract; Fleet HTTP installation and console wiring follow separately.
+Envelope `PROTOCOL_VERSION` stays1.0 (D-870). No producer, device motion or training is enabled here.
+
+| Method/path | Input | Access/result |
+|---|---|---|
+| GET /api/fleet/arm-transfers/jobs/{mission_id}/recovery | ArmActionId | Same scoped job read; ArmTransferRecoveryPreviewResponse |
+| POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery | ArmTransferRecoveryCreate | Original authenticated proposer only; ArmTransferRecoveryRequestResponse; present-Origin check |
+| GET /api/fleet/arm-transfers/recovery-context | No body | Independent X-Physical-Observation-Token; ArmTransferRecoveryContextResponse; null means no capture request |
+| POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/observations | ArmTransferRecoveryObservationRequest | Same independent observer credential and present-Origin check; ArmTransferRecoveryObservationReply |
+| POST /api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve | ArmTransferRecoveryApprove | Different named operator and present-Origin check; existing ArmTransferJobResponse for the child |
+
+All new models are closed/frozen. Create contains only `request_key` (existing trimmed1..160
+ArmTransferRequestKey) and `expected_context_digest` (ArmDigest). Approve extends
+ArmTransferJobAdmit's `expected_proposal_digest` and strict nonnegative `expected_generation`
+with `expected_evidence_digest`. Caller actor, role, grant and physical-clearance assertions
+are not input fields. Both path identifiers use ArmActionId. Installation is simulation-only;
+absence of an installed recovery/observer service is503, not execution permission.
+
+RequestResponse wraps `request`: request_id, request_key, proposal_digest, context_digest,
+proposed_by (trimmed control-free max96), requested_at_ns (strict nonnegative int below2^63).
+PreviewResponse wraps `recovery`: parent_mission_id, recovery_limit=1 (bool forbidden),
+child_mission_id, status, context_digest, request_id, proposal_digest, evidence_digest,
+proposed_by, expected_generation, can_request, can_approve, reason, execution_authorized=false,
+and nullable execution_review. Absent bindings use JSON null; reason is a nullable
+bounded ArmPhysicalRef explaining the current state.
+Status is UNAVAILABLE/AVAILABLE/WAITING_OBSERVATIONS/READY_FOR_APPROVAL/EXPIRED/CHILD_CREATED.
+READY_FOR_APPROVAL requires all exact request/proof/generation bindings; can_approve is false
+in every other state. CHILD_CREATED requires a distinct child and both capabilities false.
+It records creation of the sole retry, never physical success; read the child's actual job status.
+
+The bounded execution_review has scope=owner_reported_execution_only, action_outcome
+(existing DeviceActionState), nullable owner_reason (preserves empty text, max256),
+phase_summaries (up to4 existing DeviceActionPhaseReceipt), nullable failure_phase and
+last_reported_phase (approach/grasp/transfer/release), task_outcome (succeeded/failed/unknown),
+and physical_failure_cause=null. Missing owner evidence yields null review. This projection
+does not expose a grant, infer a physical cause, or provide human truth-label approval.
+
+ContextResponse wraps nullable `context`: mission_id, request_id, proposal_digest,
+purpose=RECOVERY_RESET, execution_authorized=false, context, producer_id, evaluator_revision,
+frame_id, policy_digest, catalog_digest, bindings_digest, object_ref, object_origin_id,
+min_separation_ns, max_age_ns. Nested context contains action_id, attempt_id,
+phase=PRE_DISPATCH, not_before_ns and1..32 unique owner scopes. Each recovery owner has
+exactly workcell_id, instance_id, journal_id and owner_session_id; unlike the normal
+ArmTransferOwnerContext it contains no unsupported model/calibration/transform fields.
+No expected object pose or installed truth geometry is returned. Numeric times use the
+same strict nonnegative counters; owner scope and reference types match existing arm DTOs.
+
+ObservationRequest requires purpose=RECOVERY_RESET, expected_proposal_digest and exactly
+two existing ArmTransferObservation samples. Reply contains only evidence_digest.
+The host must validate independent producer identity, original source, fresh facts and current
+dispatch fence; the contract does not supply a producer or attest physical measurements.
+Approval must recheck original proposer authority inside child creation, preserve parent HOLD,
+and enforce the original root's one-child limit. Exact replay returns the same child without
+new execution. New child PRE/POST observations remain separate and must be fresh.
+No response contains the internal recovery execution/grant. Operational approval is not a
+learning label; failure/recovery metadata remains subject to separate human review.
+
+### v1.324 로봇 상세 프로필·관리 기록과 하중 분석 관측
+
+D-860 장치 설명 프로필을 재사용해 로봇 상세에서 현재 상태·주의사항·최근 진단을 먼저 보여 준다. 지속 관리 기록과 실측 특성 JSON은 기존 task SQLite에 보존하며, 특성 저장은 제어 허가나 고장 해제가 아니다. 상세 care·source 수집 계약은 아래 장치 정보 절의 후속 항목을 따른다. 관측 대상은 명시적으로 등록된 robot 또는 arm source에 결속하며, 새 실행·정지·복구 경로를 만들지 않는다.
+
+기존 task 저장소가 설정된 Fleet에 다음 경로를 함께 설치한다. 미설정 상태는 경로 부재이며 UI는 조회 불가로 표시한다. 저장 장애는 `503 DEVICE_PROFILE_STORAGE_UNAVAILABLE`, 입력 오류는 422다.
+
+| 경로 | 권한·입력·의미 |
+|---|---|
+| `GET /api/fleet/device-profile-sources` | Viewer 이상. 기존 console robot ID와 Workcell의 등록된 arm source 목록. 이름·모델·USB 식별값으로 자동 연결하지 않는다. |
+| `GET /api/fleet/device-profile-sources/{kind}/{source_id}` | Viewer 이상. 연결된 설명 프로필·주의사항·특성 요약·최근 분석·최근 기록 100건. 미연결은 `profile=null`. 원본 특성 JSON은 포함하지 않으며 `Cache-Control: no-store`. |
+| `GET /api/fleet/device-profiles/{device_id}/care` | Viewer 이상. 저장된 특성 원본을 포함한 기록 읽기. no-store. |
+| `PUT /api/fleet/device-profiles/{device_id}/care` | 이름 있는 Operator. 정확히 `source_kind`, `source_id`, `caution`, `characteristics`. null source 쌍은 연결 해제, 나머지는 등록된 robot/arm에 명시 결속하며 source 하나에 프로필 하나만 연결한다. 주의사항은 2,000자. 특성은 계산기와 동일한 `rosy.omx-motion-characteristics.v1` 객체 또는 엄격하게 파싱할 원본 JSON 문자열, 또는 null. 장치 ID·등록 arm owner를 대조하며 저장이 측정 수용을 뜻하지 않는다. 최대 본문 1,000,000 bytes. |
+| `POST /api/fleet/device-profiles/{device_id}/events` | 이름 있는 Operator. 정확히 `kind=fault|caution|maintenance`, `text`(비어 있지 않은 2,000자 이하). 관찰 기록을 추가하며 실시간 fault를 해제하지 않는다. 장치별 최신 100건을 SQLite에 보존한다. 최대 본문 16,384 bytes. |
+| `POST /api/fleet/device-profiles/{device_id}/load-reports/{source_id}` | 해당 Workcell arm의 전용 `X-Workcell-Observation-Token`만 허용. 사람·CORE 명령 토큰으로 대체할 수 없다. 기존 `rosy.omx-load-monitor.v1` 출력만 수신(최대 65,536 bytes), source·장치·특성 해시·revision·구성 binding 일치 검사. 202. |
+
+분석 수신은 원본 `assessed_at`, capture와 joint capture 시각을 보존한다. 같은 출력 재전송은 저장 시각·신선도를 갱신하지 않고, 같거나 과거 분석 시각의 다른 내용·미래 시각은 거절한다. 연결 또는 특성 변경 시 기존 최근 분석을 지우며 기록은 보존한다. 조회와 브라우저 경과 시간 모두 가장 오래된 근거의 나이를 반영한다. 만료·누락은 현재 상태 미확인이고 정상 판정이 아니다. 분석 주의 사유 변경은 중복을 억제해 기록하며 사람 기록과 구분한다. 모든 응답의 `motion_admitted`·`automatic_recovery_enabled`는 false이고 `command_binding=caller_supplied_unverified`를 승격하지 않는다. 네트워크 수신은 실제 owner 명령 결속·장치 정지·복구의 증거가 아니다.
+
+arm care 저장 시 서버가 현재 source·owner·board·joint topic·joint names의 등록 지문을 `source_binding={owner_id,sha256}`으로 보존한다. 이름·자격은 지문에서 제외한다. 현재 등록과 다르면 source 조회는 `profile=null`과 `source_binding_status=source_unregistered|unverified_link|owner_changed|registration_changed` 및 편집할 `device_id`를 반환한다. 정상 연결은 `matched`, 미연결은 `not_linked`다. 장치별 care 조회는 기존 기록을 보존하되 불일치 분석은 `fresh=false`로 표시한다. 기존 DB의 지문 없는 연결은 추정하지 않고 운영자의 재저장을 요구한다. 수신 시 현재 등록·저장 지문·특성 owner 대조는 duplicate 처리보다 먼저 수행한다. Workcell snapshot의 arm에는 불투명한 `binding_sha256`을 포함하며 Cell은 현재 owner·지문으로 늦은 응답도 대조한다. 지문은 설정 결속이며 하드웨어 신원 증명이나 제어 권한이 아니다. 수신 자격이 없으면 관측 서비스 가용성보다 먼저 401을 반환한다.
+
+### v1.323 Navigation intent epoch preservation (D-890)
+
+Intent 문법의 `navigate`/`home`만 optional `expected_boot_id`(UUID 문자열), `expected_owner_generation`(bool 제외 비음수 정수)을 받는다. 주어진 값은 그대로 유지하며 최종 pair 허용 여부는 기존 실행 owner가 판단한다. CORE `/api/v1/do` Home도 본문을 기존 `HomeRequest`로 전달한다. Fleet navigate는 어느 한 epoch key라도 있으면 자원·admission·Task 생성 전에 `COMMAND_REJECTED` / `FLEET_NAVIGATION_CALLER_EPOCH_UNSUPPORTED`로 거절한다. epoch 없는 기존 Fleet 경로와 Home 원본 전달은 유지한다.
+
+Foundation의 `NAVIGATION_ADMISSION_FENCE_VERSION = 1`을 schemas에서 재수출한다. 상수 등록은 runtime marker 광고나 mandatory public pair 시행을 뜻하지 않는다. idle cancel·managed qualification·lease cleanup은 후속 제품 변경이며 envelope1.0은 유지한다.
+
+### v1.321 Learning 저장 대상 풀과 자료 회수 (D-884)
+
+아래 경로는 협업 계정이 활성화된 Learning Center 전용이며 CORE 경로가 아니다. 설정 전 pool 읽기는 `not_configured`다. 관리자는 settings 경로로 JSON 편집 없이 설정할 수 있다. private storage 파일은 최초 seed이며 UI 설정 이후 프로젝트 SQLite revision이 정본이다. 기존 `/api/learning/storage`와 정확한 `/storage/preflight` 입력·순간 추정 의미는 유지한다. 새 작업만 용량을 예약하며 기존 HF CLI는 바꾸지 않는다.
+
+설정·자료 준비의 추가 경로는 다음과 같다. 모든 POST는 기존 Origin/CSRF와 현재 publish+manage 권한을 요구한다. settings GET의 비관리자는 enabled/revision/can_manage 요약만 받는다. 관리자도 접근할 수 없는 개인 연결은 id/상태만 보이며 저장에서 보존한다.
+
+| 경로 | 입력·결과 |
+|---|---|
+| `GET /api/learning/storage/settings` | revision, 활성 여부, 접근 가능한 연결·대상·namespace quota, cache 정책, 등록 위치 id/label/role, 요청자별 operation/error/result. 비밀값·절대 경로 제외. |
+| `POST /api/learning/storage/settings` | 정확히 revision/targets/quotas/reserve_bytes/cache_policy. CAS 저장 후 새 배정 중지. 호스트 root 경로·project_id·실행 명령 변경 불가. |
+| `POST /api/learning/storage/settings/verify` | revision 및 confirm=true. 202; enabled 대상마다 작은 실제 private archive를 쓰고 고정 revision 전체를 다시 읽는다. 불확실한 결과는 기존 job을 재사용한다. |
+| `POST /api/learning/storage/settings/activate` | revision. 현재 연결 세대, fresh quota, 요청자의 대상별 실제 private 읽기/쓰기 proof를 재검증한 뒤 활성화. |
+| `GET /api/learning/storage/sources` | 관리자 전용 bounded 등록 폴더 목록. 내부 내용·임의 파일 탐색 제외. |
+| `GET /api/learning/storage/sim-sources` | 기존 pinned SIM owner의 FINAL 결과 목록 요약. SDK 시작 없음. |
+| `POST /api/learning/storage/sources/prepare` | kind=folder이면 artifact_id/profile/provenance, kind=isaac이면 run_id. 공통 confirm_completed=true 및 archive boolean. 202; 전용 exports에서 seal 또는 FINAL 결과 export 후 archive=true이면 기존 job 전송·검증을 잇는다. 같은 source identity/manifest의 재시도는 같은 job을 사용. |
+
+설정 revision은 신규 reservation transaction에서도 검사한다. 변경은 기존 job의 연결·고정 revision이나 복원을 바꾸지 않는다. 전용 exports/cache는 호스트 workspace 기준으로 생성하며 HTTP가 임의 경로나 SDK/패키지 설치 명령을 받지 않는다.
+
+모든 읽기는 현재 프로젝트 view와 요청자 범위를 확인한다. 새 보관·전송·복원은 publish, 로컬 회수·고정 보관·관리 cache 정책 실행은 manage도 요구한다. 모든 POST는 기존 Origin·X-Pinky-Token 검사를 통과해야 한다. 서버에서 actor를 정하고 토큰·절대 경로·provider 오류 본문을 반환하지 않는다.
+
+| 경로 | 정확한 입력과 반환 |
+|---|---|
+| `GET /api/learning/storage/pool` | 대상별 `id`, 상태, namespace별 `available_bytes`와 quota 측정 근거를 반환한다. 접근 불가 연결은 unavailable이며 그 연결의 저장소 정보를 숨긴다. `sources`에는 등록 root ID·label만, `capabilities`에는 현재 사용자의 수행 가능 행위를 반환한다. |
+| `GET /api/learning/storage/jobs` | 요청자가 만든 최근 200개 작업. id, profile, status, 대상/저장소, 고정 revision, bytes_verified, provenance, upload_bytes, local_present, reclaimable, pinned와 오류 코드. 원격 보관 검증은 학습·실물 수용이 아니다. |
+| `POST /api/learning/storage/jobs` | `source_id`, `artifact_id`, `profile`. source_id는 등록 root ID, artifact_id는 그 root 안 완료된 자료의 상대 폴더이며 절대·상위·숨김·링크 경로는 거부한다. profile은 isaac/dataset/model이다. 작업을 등록하며 전송은 아래 run으로 시작한다. |
+| `POST /api/learning/storage/jobs/<id>/run` | 빈 객체. 같은 연결·대상·manifest의 전송 또는 고정 revision 검증을 실행한다. 이미 commit된 작업은 다시 쓰지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/cancel` | 빈 객체. 아직 업로드를 시작하지 않은 예약만 해제하고 cancelled로 기록한다(200). 원본은 보존하며 시작된/불확실한 예약은 해제하지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/reconcile` | `revision`: 기존 원격 commit의 소문자 40자리 SHA. hold 작업의 전체 파일을 읽어 검증한 뒤에만 해당 commit과 예약 사용량을 확정한다(202). 새 commit은 만들지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/restore` | 빈 객체. 해당 고정 revision만 검증하며 관리 cache로 복원한다. |
+| `POST /api/learning/storage/jobs/<id>/reclaim` | `confirm`이 작업 id와 같아야 한다. 검증·권한·정확한 로컬 파일 집합·identity·사용 lease·pin을 다시 확인한다. 원격 자료를 삭제하지 않는다. |
+| `POST /api/learning/storage/jobs/<id>/pin` | `pinned`: boolean. 로컬 회수로부터 보호하거나 해제한다. |
+| `POST /api/learning/storage/cache/reclaim` | 빈 객체. 관리자가 활성화한 cache 정책의 용량 상한과 최소 여유에 맞게 사용이 오래된 검증 cache를 회수한다. source root는 자동 회수하지 않는다. |
+
+작업 변경은 비동기 실행을 수락하면 202이며 GET으로 갱신 상태와 `operation`/`operation_error`를 확인한다. 중복 실행은 하나로 합치고 작업 중인 같은 자료의 다른 변경은 거절한다. 잘못된 입력·용량 부족·미검증·사용 중은 400, 접근 거부는 기존 401/403 규칙이다. 미확인 commit 결과는 `hold/upload_outcome_unknown`, 전송·검증 실패는 `failed/transfer_failed`로 남기며 로컬과 예약을 보존한다. 서버 재시작은 계정 교체나 재업로드 근거가 아니다.
+
+source manifest는 `storage-source.json`의 `rosy.storage-source/1`이며 completed 상태, profile, 파일별 bytes/SHA-256, provenance를 포함한다. 파일 집합 전체를 검증하고 출처가 검증되지 않은 파일을 자동으로 추가하지 않는다. Isaac 출처는 run_id·seed·source_revision을 보존한다. manifest 완료 표시는 파일 보관 범위의 선언이며 시뮬레이션 성공을 증명하지 않는다. 고정 revision과 자료 이력은 로컬 회수 뒤에도 남는다.
+
+큰 파일 집합은 32개 파일씩 같은 저장소에 기록하며 `files_uploaded`/`files_total`은 확인된 전송 기록이다. 부분 전송의 중간 commit을 reconcile하면 확인한 prefix만 확정하고 queued로 돌아가 남은 묶음을 같은 대상에 이어 쓴다. 전체 전송 후 final revision을 고정해 모든 bytes를 검증하기 전에는 bytes_verified나 reclaimable을 true로 표시하지 않는다.
 
 ### v1.318 Fleet 캐시 전용 모니터링 읽기 (D-876)
 
@@ -208,8 +332,301 @@ Raster 원본과 정규화 PNG는 각각 16 MiB 이하, 축별 8192 px 이하·�
 | 404 | `SITE_MAP_DRAWING_NOT_FOUND` | 존재하지 않는 유효한 해시 |
 
 도면 생성/변환은 지도 저장이나 활성화를 하지 않는다. 잘못된 참조는 저장·활성화 전에 거절한다. 교체·템플릿 복사는 검토 완료와 교정 근거를 자동 계승하지 않는다. 기존 revision/CAS·named operator·trip/formation/teach busy 거절을 유지한다. 편집/저장/복사는 이동 명령을 보내지 않는다. 활성화와 실제 주행·현장 교정 수용은 별도다.
-**Status:** Approved
-**대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+### v1.312 Physical observations and execution receipts (D-856)
+
+An explicitly installed simulation physical profile may additionally bind one
+expiring independent World-observer credential. Without it the new execution
+surfaces return503; v1.307 proposal/read/admit remains available as before.
+The observer credential and producer identity are separate from application,
+operator and other registered producer credentials. Applications cannot install
+policy/capabilities, publish clearance verdicts or substitute an operator token
+for the observer. Default and production execution stay closed.
+
+| Method/path | Authority and result |
+| --- | --- |
+| `GET /api/fleet/arm-transfers/observation-context` | `X-Physical-Observation-Token`; returns `{context: ArmTransferObservationContext \| null}` for the installed profile's current observation request. Null means no request, never robot/resource clearance. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/observations` | Same independent observer credential and present-Origin check. Closed `ArmTransferObservationRequest`: `phase` (`PRE_DISPATCH` or `POST_ACTION`), `expected_request_digest`, exactly two `observations`. Returns `ArmTransferObservationReply` with `job` and nullable `receipt`. |
+| `GET /api/fleet/arm-transfers/jobs/{mission_id}/physical-receipt` | Creator or permitted named operator, same scoped read rule as the job. Returns `{receipt: ArmTransferPhysicalReceipt}`. Known job with no receipt is409 `ARM_TRANSFER_PHYSICAL_RECEIPT_PENDING`, unknown job404. |
+| `POST /api/fleet/arm-transfers/jobs/{mission_id}/cancel` | Creator service/operator or permitted named operator, same scoped job access and present-Origin check. Closed `ArmTransferCancelRequest` has only trimmed nonempty `reason` (max192). Returns the job snapshot; cancellation ACK is not stop/clearance proof. |
+
+With an execution profile, admission also prepares stable step/action/attempt and
+the full installed grant after the durable two-person approval. Current simulation
+identity and typed managed capabilities are read for every participant outside
+SQLite before preparation/submission. Failure can leave the existing job HOLD
+after approval; read that ID/key instead of creating a new request.
+
+Observation context is closed and contains `mission_id`, `request_digest`,
+`action_id`, `attempt_id`, `status` (PREPARED/SUBMITTING/ACTION_SUCCEEDED/HOLD/UNKNOWN),
+`phase`, `not_before_ns`, nullable `capture_deadline`, `producer_id`,
+`evaluator_revision`, `frame_id`, `policy_digest`, `catalog_digest`,
+`bindings_digest`, `object_ref`, `object_origin_id`, `min_separation_ns`,
+`max_age_ns` and `owners`. Each owner context has `workcell_id`, `instance_id`,
+`journal_id`, `owner_session_id`, `model_digest`, `calibration_revision`,
+`transform_revision`. Expected target poses and clearance verdicts are not
+supplied as measurements. The producer captures original UTC nanosecond facts.
+
+`ArmTransferObservation` is closed: `evidence_id`, `producer_id`,
+`evaluator_revision`, `sequence`, `action_id`, `attempt_id`, `frame_id`,
+`policy_digest`, `catalog_digest`, `bindings_digest`, `object_ref`,
+`object_origin_id`, `object_observed_at_ns`, nullable `object_pose`, `owners`.
+Pose is `{position_m:[x,y,z], orientation_xyzw:[x,y,z,w]}` with finite numbers
+and a unit quaternion (squared norm tolerance1e-6); bounds are
+`{min_m:[x,y,z], max_m:[x,y,z]}` with ordered finite coordinates.
+Each owner observation is closed: `workcell_id`, `instance_id`, `journal_id`,
+`owner_session_id`, `model_digest`, `calibration_revision`, `transform_revision`,
+`links_observed_at_ns`, `links`, `gripper_observed_at_ns`, `gripper_state`
+(OPEN/CLOSED/MOVING/UNKNOWN), `held_state` (NONE/HELD/UNKNOWN), nullable
+`held_object_ref`. `links` maps at most128 trimmed link references to closed
+`{bounds, linear_velocity_m_s, angular_velocity_rad_s}` records. Both velocities
+are finite 3-vectors or explicit null; null is never measured zero. At most32
+unique owner scopes are allowed. Timestamps/counters are strict integers in
+`[0,2^63)`; all references/digests use the existing trimmed-reference/SHA256 rules.
+
+PRE_DISPATCH facts bind to the prepared identities and post-reservation boundary.
+Fleet validates two fresh complete source-pose/rest/clearance samples and records
+the first-send intent atomically with claim state. A journal-scoped process guard
+serializes RPCs; immediately before SDK send Fleet rechecks the committed proof,
+grant, current fence/claims and time/capability/fact freshness. It submits once.
+The Fleet-owned monitor observes existing attempts via GetAction independently of
+application polling; GET never resubmits. Receipt timestamps and every phase must
+strictly follow the committed first-send intent boundary. Loss/404/session change/restart,
+cancel and HOLD retain occupancy and do not automatically resume.
+
+Action SUCCEEDED still retains all claims. POST_ACTION requires distinct new
+observation IDs/sequences, target-pose/rest/clearance samples after the durable
+success boundary, and current installation/capabilities/fence/original claims.
+Physical receipt, exact original owner/generation claim release and internal
+GOAL_CONFIRMED commit together. Exact evidence replay returns the historical
+receipt without affecting any subsequent owner; other evidence conflicts.
+
+`ArmTransferPhysicalReceipt` is closed: `receipt_id`, `mission_id`, `action_id`,
+`attempt_id`, `request_digest`, `workcell_id`, `instance_id`, `policy_digest`,
+`evidence_digest`, `object_ref`, `source`, `target`, `authority_epoch`,
+`dispatch_generation`, `validated_at_ns`, `physical_status` (AT_TARGET_AND_CLEAR).
+Here and in observation context, request_digest hashes the complete execution
+grant; job.request_digest hashes only the physical proposal request. These are
+different typed resources. A reply's receipt must match its GOAL_CONFIRMED job's
+mission/scope/object/source/target. Physical confirmation is not Harbor business
+completion; that decision and cargo/process binding remain application-owned.
+
+Unauthorized/expired observer401, scope/origin403, unknown job404,
+state/snapshot/evidence conflict or receipt-pending409, malformed/extra fields422,
+unbound profile/storage/owner unavailability503. A200 HOLD job reports retained
+uncertainty, not availability. Credentials and raw grants are never returned.
+
+### v1.307 Neutral ARM transfer job proposals and approval (D-856)
+
+Fleet adds simulation-only proposal/read/admit HTTP for an explicitly installed
+physical transfer profile. Default/unbound and non-simulation profiles return503;
+no ARM dispatcher, device submission, observer ingress or physical claim release
+is activated by these endpoints. READY means a durable approval and claims.
+It does not mean the robot ran, the object arrived or application work completed.
+
+Canonical closed/frozen DTOs live in core_common.protocol.arm_transfer_jobs and
+are re-exported by schemas. ArmTransferRequest contains exactly workcell_id,
+instance_id, object_ref, source and target; source and target differ. Scope IDs
+use ArmScopeId, physical references use ArmPhysicalRef. ArmTransferRequestKey
+is a trimmed control-free string of1..160 characters.
+
+| Method/path | Input | Access/result |
+|---|---|---|
+| POST /api/fleet/arm-transfers/jobs | ArmTransferJobCreate: five physical fields + request_key | existing proposer role;200 ArmTransferJobResponse |
+| GET /api/fleet/arm-transfers/jobs?request_key=... | caller-scoped key | existing viewer authentication; own record only |
+| GET /api/fleet/arm-transfers/jobs/{mission_id} | ArmActionId | creator or a different named site operator |
+| POST /api/fleet/arm-transfers/jobs/{mission_id}/admit | ArmTransferJobAdmit: expected_proposal_digest, expected_generation | named operator different from proposer;200 |
+
+ArmTransferJobResponse has exactly job: ArmTransferJobSnapshot. The snapshot has
+mission_id, action_kind=ARM_TRANSFER, proposal_principal_id, request_key,
+request_digest, proposal_digest, transfer: ArmTransferRequest,
+resource_policy_digest, status, authority_epoch, dispatch_generation,
+approved_by and reason. Status is PROPOSED/READY/RUNNING/ACTION_SUCCEEDED/
+GOAL_CONFIRMED/HOLD; only proposal, approval and HOLD are provided in this slice.
+GOAL_CONFIRMED is physical closure, never application completion. The nullable
+epoch/generation pair and approved_by are JSON null in a PROPOSED state;
+READY and later active states require all three. HOLD can preserve prior approval.
+
+request_digest hashes compact sorted ASCII-escaped JSON of the five physical
+fields, independent of request_key. proposal_digest is an opaque digest of the
+request and installed robot/configuration snapshot. Reusing a caller's key with
+different physical input is409; the same input reads the existing snapshot even
+after installation changes. Unknown jobs/keys are404, unavailable profile/storage
+or capability reads are503. Scope/role/self-approval refusal is403; stale
+proposal/installation/owner identity/control or resource contention is409.
+Stable codes use ARM_TRANSFER_JOB_NOT_FOUND/UNAVAILABLE/FORBIDDEN/CONFLICT.
+Malformed/extra body/query values are422. Unbound503 must not be treated as404.
+
+Applications cannot supply resources, capabilities, owner bindings, policy bounds,
+producer identity, completion flags or grants. The server supplies its installed
+snapshot and reads fresh capability from every required owner through the existing
+Fleet-authenticated SDK before admission; network I/O is outside the SQLite write
+transaction. The store rechecks snapshot/CAS, capability freshness, control and
+claims atomically. Repeated READY approval also verifies current capability and
+preserves the original approval and boundary. Existing Origin/auth/audit guards
+apply. Reads do not submit; creating/admitting never invokes an Action writer.
+
+### v1.306 Managed transfer capability and target-owner binding (D-856)
+
+Local IPC v2 adds Fleet-authenticated read-only `GetTransferCapability`. Its request
+has exactly `version: 2` and `operation: GetTransferCapability`; success has exactly
+`version: 2`, `status: 200`, and `capability: ArmTransferCapability`. A coordinator
+or unknown UID cannot obtain this report through Fleet principal authentication.
+Wrong version/shape is 400; an unavailable, disabled, unmanaged or mismatched
+installation is 503 `ARM_TRANSFER_CAPABILITY_UNAVAILABLE`; peer refusal is 403.
+The existing `GetOwnerIdentity` contract and envelope protocol_version 1.0 remain.
+
+The closed immutable capability contains exactly `action_kind: ARM_TRANSFER`,
+`control_mode: fleet_managed`, `workcell_id`, `instance_id`, `journal_id`,
+`owner_session_id`, `catalog_digest`, `bindings_digest`, `resource_policy_digest`,
+`capability_revision`, and `config_revision`. It derives from the actual registered
+managed phase factory, its shared admission/store/final owner, and the current
+canonical journal identity read in the same SQLite snapshot as managed scope.
+It cannot be supplied by a static identity dict. A read never creates a missing
+journal identity. It describes installation, without proving idle/admission,
+planning feasibility, collision checking, simulation contact or physical clearance.
+
+ARM grants now require `owner_journal_id` and `owner_session_id` in their complete
+canonical digest. Journal identifiers are strict trimmed control-free strings of
+1..64 characters; session identifiers use the physical-reference 1..192 limit.
+The owner checks both before journaling and repeats the binding at managed phase
+submission. Missing/stale target bindings do not inherit approval or replay an
+earlier ARM grant. This revises the unreleased ARM library path; existing
+CELL_TRANSFER and TRIP grant formats are unchanged. Fleet HTTP/registry dispatch
+of ARM remains closed pending approval/claims/closure/consumer integration.
+
+ARM receipts expose the actual canonical journal from the Action snapshot;
+static identity metadata cannot overwrite it. Fleet rejects a missing/different
+journal ID against the grant. A same-journal past Action stays readable after an
+owner session change, while a new execution targeting the old session is refused.
+For ARM, SDK GetAction 404 always means fenced reconciliation is needed; it does
+not return verified absence or permit automatic replay, reassignment or claim
+release. Read-only capability lookup and action success also do not release claims.
+
+### v1.305 Installed neutral arm owner execution (D-856)
+
+Local Action IPC v2 accepts `ARM_TRANSFER` only through an explicitly installed
+phase factory and the existing shared control admission. The owner validates the
+whole grant digest, UID, scope, fence, lifetime and installed capability. A default
+owner without that factory rejects before journaling or actuator submission. IPC
+v1 rejects this kind. The direct-driver path remains PICK_PLACE-only. Fleet's step
+registry and HTTP submission do not gain a neutral producer in this version.
+
+The immutable installation binds object geometry/catalog, capability/configuration
+revisions and an installed resource-policy digest. Physical planning uses registered
+poses and owner-admitted measured state, with matching profile/kinematics/calibration/
+transform/scene revisions and freshness. Mandatory gripper readback binds the opaque
+object, scope, sensor revision and generation. The existing phase/goal port and local
+stop/fence remain the execution authority; no second ROS owner or retry loop is added.
+
+Durable ARM completion uses source `arm-transfer-workflow` and event
+`ARM_TRANSFER_ACTION_COMPLETED`, after four successful phases and fresh release
+readback. Its observation_id is empty, without fabricated camera evidence. Action
+success does not confirm cargo arrival, a business goal or zone clearance. Fleet's
+physical resource-closure evidence and Harbor's business completion remain separate.
+Neutral transaction snapshots require their grant/tag; restart reconciliation holds
+motion and cannot infer success from the snapshot alone.
+
+### v1.303 Neutral arm transfer grant model (D-856)
+
+`FleetArmTransferGrant` and `ArmTransferPayload` add an inactive physical execution
+contract. At v1.303 no submit endpoint or runtime kind was enabled. v1.305 adds
+explicitly installed local owner execution; the Fleet step registry and HTTP
+producer remain closed until ledger, approval, recovery and physical resource
+closure contracts are connected and verified. Envelope protocol_version stays 1.0.
+
+The payload has exactly `object_ref`, `catalog_digest`, `bindings_digest`, `source`,
+`target`, `resource_policy_digest`. References use the strict physical-reference
+type from v1.299; all three digests are lowercase SHA-256. Source and target differ.
+Raw geometry, coordinates, resource policies, Cell recipes and business state are
+not payload fields. Owner installation resolves these references; model validation
+does not approve their physical meaning or grant execution authority.
+
+The grant has exactly `mission_id`, `step_id`, `action_id`, `attempt_id`,
+`request_digest`, `workcell_id`, `instance_id`, `action_kind` (`ARM_TRANSFER`),
+`arm_transfer`, `capability_revision`, `config_revision`, `authority_epoch`,
+`dispatch_generation`, `issued_at`, `expires_at`. The four execution identities are
+distinct strict Action identifiers of 1..192 characters; scope identifiers use the
+same syntax and 96-character limit. Revisions are strict trimmed control-free
+1..128-character strings. Epoch/generation are strict nonnegative integers. Times
+are timezone-aware and expiry follows issuance. Models are frozen and extra fields
+are forbidden, including pair/barrier fields. Whole-grant canonical digest binding
+remains required at runtime; a valid digest alone is not approval.
+
+The existing Action/stop DTO definitions move unchanged to `device_actions.py`;
+their canonical imports from `core_common.protocol.schemas` remain available.
+
+### v1.299 Neutral arm transfer preflight (D-856)
+
+Simulation-only and disabled on an owner without an installed
+physical catalog. This adds read-only planning, not Action admission or dispatch.
+The existing envelope protocol_version remains 1.0 and local Action IPC remains v2.
+
+`POST /api/fleet/arm-transfers/preflight` requires existing `require_proposer`
+authorization (`fleet.operate`, operator/service), including the normal POST Origin
+and audit rules. Viewer, policy-admin and device/ingest credentials cannot call it.
+The exact `ArmTransferCheckRequest` fields are `workcell_id`, `instance_id`,
+`catalog_digest`, `source`, `target`, `geometry`; unknown fields are forbidden.
+References are strict, trimmed, control-free strings of 1..192 characters;
+`instance_id` additionally matches `[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}` and cannot
+escape the configured socket root. `catalog_digest` is lowercase SHA-256.
+No raw pose, joint trajectory, job, recipe, pallet, layer or business evidence is accepted.
+
+Fleet checks the existing workcell→instance `omx_instances` installation mapping.
+The route does not require or enable a Mission dispatcher, Cell compiler or new
+execution ledger. A non-simulation deployment answers 503 `ARM_PREFLIGHT_CLOSED`;
+an unconfigured/mismatched target answers 404 `ARM_PREFLIGHT_TARGET_UNAVAILABLE`.
+Both decisions precede owner I/O.
+
+The bounded local frame is `{version: 2, operation: "CheckTransfer", transfer: request}`.
+The owner's optional `TransferPreflightApi` checks the Unix peer UID allowlist,
+target scope, installed catalog digest/references, and owner-admitted measured
+state. It uses the same owner monotonic clock for observation and planning,
+checks freshness and installation revisions before and after calculation, and
+validates the resulting physical plan. It has no submit, claim, journal-write or
+driver port. Existing Action operations and two-person arm approval are unchanged.
+
+Local success is `{version: 2, status: 200, check: ArmTransferCheckResult}`.
+`check` contains the exact original `request`, `journal_id`, `profile_revision`,
+`kinematics_revision`, `calibration_revision`, `transform_revision`,
+`planning_scene_revision`, `source_state_sequence`, `state_age_s`,
+`simulation: true`, `collision_checked: false`. Profile/kinematics revisions are
+lowercase SHA-256; the remaining identity/revision strings are bounded references.
+The sequence is a strict nonnegative integer, age is finite/nonnegative, and the
+two boolean flags are required with those exact boolean values. Journal identity
+does not identify a boot, clock epoch or execution attempt. No trajectory or permit
+is returned. The planner only supports 180-degree symmetric geometry and provides
+no collision scene.
+
+Fleet validates v2, status, typed result and equality of the complete returned
+request before returning `{check, received_at}` (`ArmTransferCheckResponse`).
+`received_at` is Fleet's aware UTC receipt time, not the owner's observation time.
+`state_age_s` is the owner's calculation-time age in its own clock domain; network
+latency is additional. Raw monotonic timestamps are not exposed for comparison
+between hosts. A cached result is never an execution permit, resource reservation,
+busy/stop verdict, full-arm clearance or cargo/business completion fact.
+
+Supported owner rejections have exact `error: {code, reason}` and are forwarded
+with the status below. A request scope mismatch is rejected before planning.
+
+| Status | code | reason |
+|---|---|---|
+| 409 | `ARM_CATALOG_CHANGED` | `CATALOG_MISMATCH` |
+| 404 | `ARM_REFERENCE_UNAVAILABLE` | `REFERENCE_UNAVAILABLE` |
+| 409 | `ARM_STATE_UNAVAILABLE` | `STATE_INVALID` |
+| 422 | `ARM_TRANSFER_UNPLANNABLE` | existing typed physical planner rejection reason |
+
+An unavailable/unsupported owner, rejected peer, timeout, invalid framing/version,
+malformed response or substituted request yields 503 `ARM_PREFLIGHT_UNAVAILABLE`.
+Internal exceptions and paths are not exposed. No error retries POST, switches an
+arm, starts execution, releases a resource claim or rearms a stop latch.
+The installed physical binding and execution-time checks remain owner/Fleet
+responsibilities. Harbor owns candidate policy and all business interpretation.
+### v1.308 Descriptive device information (D-860)
+
+When the persistent Fleet task database is configured, `GET /api/fleet/device-profiles` returns `{profiles: [...]}` sorted by `device_id`, and `GET /api/fleet/device-profiles/{device_id}` returns one record (404 `DEVICE_PROFILE_NOT_FOUND` if absent). Both require Viewer. `PUT /api/fleet/device-profiles/{device_id}` creates or fully replaces descriptive metadata and requires a named Operator. The stable path ID matches `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`; changing a display name does not change it.
+
+Body: required `display_name` (nonblank, at most 80 characters), `device_kind` (`manipulator`, `mobile`, `other`); optional `manufacturer` and `model` (at most 80 characters, default empty), `arm_count` (null or strict integer 0..16; a manipulator's nonnull count is at least one), `hardware_ids` (default empty, at most sixteen unique nonblank opaque strings of at most 200 characters). Control characters, unknown fields and invalid values are rejected with 422 before replacement. Device identifiers and hardware IDs are descriptive metadata, never commands or authority. Authentication and permissions retain 401/403 behavior; database failures return 503 rather than an empty successful result.
+
+Response adds `device_id`, server `updated_at` (Unix seconds), named `updated_by`, `connection_status: "not_checked"`, `control_enabled: false`. Saving does not enroll devices, change the operational roster, open serial ports, update calibration, clear faults or enable motion. Connection verification, measured hardware acceptance and physical command admission remain separate. Envelope protocol version is unchanged.
 
 ### v1.298 Scoped transport execution snapshots (D-856)
 
@@ -3856,6 +4273,10 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.327 | 2026-10-27 | D-899: closed simulation recovery request, independent RECOVERY_RESET observations, exact operator approval bindings and bounded execution review. Contract registration only; HTTP/UI installation and physical acceptance are separate. Envelope1.0 unchanged. |
+| v1.324 | 2026-10-27 | Robot detail care profiles, persistent fault/caution/maintenance observations, shared motion-characteristics JSON validation and source-token-only advisory load report ingestion; no new command authority. |
+| v1.323 | 2026-10-26 | D-890: optional strict navigate/home intent epochs; CORE Home body preservation and explicit pre-admission Fleet navigate caller-epoch rejection. Canonical fence version registration only; runtime qualification and envelope1.0 unchanged. |
+| v1.321 | 2026-10-26 | D-884: project-scoped HF storage pool, namespace capacity reservations, pinned archive/reconciliation, verified local reclaim/restore and managed cache; existing publish/manage authority and envelope1.0 preserved. Host source verification is separate from live HF/Isaac acceptance. |
 | v1.320 | 2026-10-26 | D-883: Service Control `clean-storage` for ai/model only (400 `ACTION_NOT_ALLOWED` on site, 409 `NO_STORAGE_SERVICE`), guard `resources.disk`/`disk_low`/`gpu`/`memory`/`memory_low`/`cpu` and the report-only `disk-low`/`memory-low` states. Fleet route shape and envelope1.0 unchanged. |
 | v1.318 | 2026-10-25 | D-876: passive Fleet connection cache wire, strict bounded observations, preserved cache/source ages and D-535 reasons; no raw body or control fields. Handler and independent Monitoring runtime remain unimplemented; envelope1.0 unchanged. |
 | v1.316 | 2026-10-25 | D-870: optional strict source sampled_at UTC, conservative100ms clock-bound lifetime, receiver monotonic expiry and implementation-derived swarm.reference_freshness; mixed peer and field UTC acceptance stay explicit, envelope1.0 unchanged. |
@@ -3870,6 +4291,13 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.302 | 2026-10-24 | (origin #148 v1.295, 2026-10-24 port) D-837 source-bound workcell arm observations and preview-only camera registration; native Fleet intake and existing Cell UI are implementation/deployment work, not motion admission. |
 | v1.301 | 2026-10-24 | (origin #135 v1.293, 2026-10-24 port) Additive (D-835): measured PNG/JPEG registration, bounded immutable line/contour candidates, non-writing candidate map validation and optional facility evidence. Existing STL hashes and envelope 1.0 unchanged. |
 | v1.300 | 2026-10-24 | (origin #133 v1.291, 2026-10-24 port) Additive (D-825): Fleet STL source/projection APIs, explicit drawing registration and optional map drawing/road name; envelope 1.0 unchanged. |
+| v1.312 | 2026-10-24 | D-856: opt-in independent physical-observer HTTP, simulation execution monitoring/cancel and immutable physical receipt read; two-sample pre/post checks, original claim release and application-owned business completion. |
+| v1.307 | 2026-10-24 | D-856: closed simulation ARM job proposal/read/two-person admission HTTP, host-read current capabilities and scoped idempotency; dispatcher/observer/physical closure remain closed. |
+| v1.306 | 2026-10-24 | D-856: Fleet-authenticated live managed transfer capability, mandatory ARM target journal/session, canonical receipt matching and fenced 404 reconciliation; no physical producer or claim release. |
+| v1.305 | 2026-10-24 | D-856: explicitly installed neutral arm owner phase execution through IPC v2, mandatory shared control/gripper/fence and durable workflow completion; no Fleet producer or business/zone completion. |
+| v1.303 | 2026-10-24 | D-856: inactive physical arm transfer grant DTO and unchanged Action/stop DTO extraction; no runtime kind or submit activation, envelope 1.0 unchanged. |
+| v1.299 | 2026-10-24 | D-856: authenticated simulation arm-transfer preflight with installed physical references, scoped owner IPC and request-bound planning facts; no admission/dispatch authority, envelope 1.0 unchanged. |
+| v1.308 | 2026-10-24 | D-860: descriptive device metadata read/replace in the existing Fleet database; named operator writes, no enrollment, connection attestation or motion authority. |
 | v1.298 | 2026-10-24 | D-856: additive owner-scoped neutral TRIP snapshots by mission ID or original request key; read-only in closed profiles, existing simulation admission and envelope 1.0 unchanged. |
 | v1.297 | 2026-10-23 | D-855: strict control-unit delegation, owner snapshots and local approval; separate boot/run/correlation-scoped navigation cancellation. Runtime and device acceptance remain separate; envelope 1.0 unchanged. |
 | v1.292 | 2026-10-21 | D-836: additive candidate_robot_ids/request_key trip admission, durable principal/key/body replay and existing lease/claim allocation. Existing robot_id form, named operator and simulation gate remain; envelope 1.0 unchanged. |

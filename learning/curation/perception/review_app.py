@@ -37,6 +37,7 @@ from learning_tasks import Tasks
 from review_ai_jobs import Jobs
 from review_store import Conflict, ReviewStore
 from review_decisions import make_decisions_server, serve_review
+from storage_web import StorageWeb
 from learning_control import Control, ControlConflict
 
 STATIC = Path(__file__).with_name('review_app_web')
@@ -85,7 +86,7 @@ def check_link(url):
     return url
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None):
     check_bind_host(host)
     if workspace_links is not None:
         workspace_links = check_workspace_links({'schema': WORKSPACE_LINKS_SCHEMA, 'workspaces': workspace_links})
@@ -105,6 +106,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
         omx_center.tasks = tasks
     if storage and storage.project_id != project:
         raise ValueError('storage project must match workspace project')
+    storage_web = StorageWeb(storage, accounts, storage_jobs, store.db, sim_runs=sim_runs)
     if accounts:
         from learning_collaboration import Collaboration
         if not ipaddress.ip_address(host).is_loopback:
@@ -166,9 +168,10 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
             try:
                 if collaboration and collaboration.get(self, path, token):
                     return
+                if storage_web.get(self, path): return
                 if learning_tasks_web.get(self, path, tasks, omx_center, token):
                     return
-                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
+                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center, store.state) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -199,7 +202,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if path == '/api/learning/workspaces':
                     return self.send({'configured': workspace_links is not None, 'workspaces': workspace_links or []})
                 if path == '/api/learning/storage':
-                    return self.send(storage.snapshot() if storage else {'status': 'not_configured', 'roots': []})
+                    return self.send(storage_web.inventory.snapshot() if storage_web.inventory else {'status': 'not_configured', 'roots': []})
                 if path == '/api/workspace':
                     frames = [dict(row, pixel_status=review_masks.get(store, row['index'])['status'])
                               for row in store.list_frames()]
@@ -329,7 +332,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 files = {'/': 'index.html', '/app.js': 'app.js', '/history.js': 'history.js', '/viewport.js': 'viewport.js', '/commands.js': 'commands.js', '/app.css': 'app.css',
                          '/box-geometry.mjs': 'box-geometry.mjs', '/learning': 'learning.html',
                          '/learning.js': 'learning.js', '/pixels': 'pixels.html', '/pixels.js': 'pixels.js',
-                         '/storage.js': 'storage.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
+                         '/storage.js': 'storage.js', '/storage-settings.js': 'storage-settings.js', '/versions.js': 'versions.js', '/ai-jobs.js': 'ai-jobs.js',
                          '/catalog': 'catalog.html', '/catalog.js': 'catalog.js',
                          '/accounts': 'accounts.html', '/accounts.js': 'accounts.js', '/account-session.js':'account-session.js',
                          '/learning/evaluate': 'evaluate.html', '/evaluate.js': 'evaluate.js',
@@ -388,6 +391,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     raise ValueError('AI cancellation accepts an empty object only')
                 if collaboration and collaboration.post(self, path, body, token):
                     return
+                if storage_web.post(self, path, body): return
                 if learning_tasks_web.post(self, path, body, tasks, omx_center, collaboration):
                     return
                 if omx_center_web.post(self, path, body, omx_center, learning):
@@ -429,9 +433,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                             accounts.require(self.learning_principal, 'manage')
                         return self.send(ai_jobs.cancel(match[1], actor or 'local-unidentified'))
                 if path == '/api/learning/storage/preflight':
-                    if not storage:
+                    if not storage_web.inventory:
                         raise ValueError('storage is not configured')
-                    return self.send(storage.preflight(body))
+                    return self.send(storage_web.inventory.preflight(body))
                 if path == '/api/prepare':
                     return self.send(store.prepare())
                 if path == '/api/import':
@@ -475,6 +479,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
 
     class Server(ThreadingHTTPServer):
         def server_close(self):
+            storage_web.close()
             ai_jobs.close()
             if collaboration:
                 collaboration.shutdown()
@@ -483,6 +488,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
     try:
         return Server((host, port), Handler)
     except Exception:
+        storage_web.close()
         ai_jobs.close()
         if collaboration:
             collaboration.shutdown()

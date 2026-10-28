@@ -1,0 +1,34 @@
+[Unit]
+Description=ROSY tailnet physical identity admission
+Requires=rosy-os-storage.service
+Wants=rosy-first-boot.service
+After=rosy-os-storage.service rosy-first-boot.service
+Before=tailscaled.service rosy-tailscale-join.service
+PartOf=tailscaled.service
+RequiresMountsFor=/var/lib/rosy-device /var/lib/tailscale /run/rosy-provision-boot
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/os_storage_dispatch.py --tailnet
+TimeoutStartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
+ReadWritePaths=-/var/lib/rosy-device/tailscale -/var/lib/rosy-device/state/config.lock
+
+[Install]
+RequiredBy=tailscaled.service rosy-tailscale-join.service

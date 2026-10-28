@@ -19,6 +19,7 @@ _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 _ASSET = "/console/assets/"
 
 SHARED = {
+    "robot-profile-view.js",  # Read-only profiles shared by Console, Cell and Installation.
     "app-runtime.js",
     "address-drift.js",
     "authorization.js",
@@ -48,6 +49,7 @@ OWN = {
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission
         "control-unit-view.js",  # D-855: delegation review belongs to Console.
+        "arm-transfer-view.js",  # Neutral ARM admission belongs to Console, never install or Cell.
         "integrated-control-view.js",  # D-862: unit information and stop requests belong to Console.
         "inbox.js",  # D-632: console notification and context view owner
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
@@ -87,6 +89,7 @@ OWN = {
         "state-age.js",
     },
     "install.js": {
+        "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.
         "enrollment.js",
         "camera-pairing.js",
         "camera-peer.js",

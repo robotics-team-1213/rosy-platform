@@ -47,6 +47,9 @@ def test_eight_pages_use_same_frontend_without_unhandled_requests(sample_site, p
             assert page.goto(origin + path).status == 200
             expect(page.locator('body')).to_be_visible()
             page.wait_for_timeout(1800)
+            if path == '/console/install':
+                expect(page.locator('[data-profile="status"]')).to_have_text(
+                    '이 Fleet에는 장치 정보 저장이 설정되지 않았습니다.')
             assert not external, external
             assert not errors, errors
             assert not engine.unhandled, engine.unhandled
@@ -65,6 +68,7 @@ def test_control_unit_form_approves_then_reads_existing_task_result(sample_site)
             assert page.request.post(origin + '/api/fleet/auth/login', headers={'Origin': origin},
                 data={'login': 'sample', 'password': 'CHANGE_ME'}).status == 204
             page.goto(origin + '/console?view=work')
+            page.locator('#work-integrations > summary').click()
             panel = page.locator('#control-unit-work')
             expect(panel).to_contain_text('R')
             panel.locator('summary').click()
@@ -141,6 +145,9 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             context.request.post(origin + '/api/fleet/auth/login', headers={'Origin':origin},
                                  data={'login':'sample', 'password':'CHANGE_ME'})
             page = context.new_page()
+            reads = []
+            page.on('response', lambda response: reads.append((urlsplit(response.url).path, response.status))
+                    if '/api/fleet/cell-jobs/' in response.url or '/api/fleet/dispatch-control' in response.url else None)
             page.goto(origin + '/console/cell')
             for kind in ('recipe', 'cell'):
                 page.locator(f'#{kind}-id').fill('sample')
@@ -158,9 +165,15 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             assert response.status == 403
             with page.expect_navigation(wait_until='load'):
                 page.get_by_role('button', name='검토자로 로그인', exact=True).click()
+            page.locator('.ui-subnav a[href="#mission-heading"]').click()
             page.locator('#mission-id').fill('sample-cell-job-1')
             page.locator('#read-job').click()
-            expect(page.locator('#job-summary')).to_contain_text('승인 대기')
+            try:
+                expect(page.locator('#job-summary')).to_contain_text('승인 대기')
+            except AssertionError:
+                print('cell read diagnostic', page.locator('#notice').inner_text(), reads,
+                      page.locator('#user-role').get_attribute('title'))
+                raise
             page.locator('#admit').click()
             expect(page.locator('#job-summary')).to_contain_text('실행 대기')
             page.get_by_role('button', name='Cell 보류', exact=True).click()
@@ -172,6 +185,7 @@ def test_cell_document_preview_admission_and_terminal_read(sample_site):
             page.locator('#read-job').click()
             expect(page.locator('#job-summary')).to_contain_text('목표 확인 완료')
             page.reload()
+            page.locator('.ui-subnav a[href="#mission-heading"]').click()
             page.locator('#mission-id').fill('sample-cell-job-1')
             page.locator('#read-job').click()
             expect(page.locator('#job-summary')).to_contain_text('목표 확인 완료')

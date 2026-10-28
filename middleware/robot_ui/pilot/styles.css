@@ -92,10 +92,8 @@ body[data-pilot-screen="drive"] ui-shell {
   overflow: hidden;
 }
 
-body[data-pilot-screen="drive"] ui-topbar {
-  position: static;
-  flex: none;
-}
+ui-topbar { min-height: var(--topbar-height); } /* D-741 부기: 공용 앱 바는 64px, Pilot은 두 줄 머리 높이(접속 화면 넓은 폭만 한 줄) */
+body[data-pilot-screen="drive"] ui-topbar { position: static; flex: none; }
 
 body[data-pilot-screen="drive"] .pilot-main {
   flex: 1 1 auto;

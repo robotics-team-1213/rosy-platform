@@ -56,6 +56,8 @@ def main() -> int:
     lock["sources"]["rosy_revision"] = args.revision
     for section in ("image_tool", "base_image", "os", "ros"):
         lock[section]["verified"] = True
+    from os_cms_trust import verify as verify_cms
+    verify_cms(lock["os_updates"], Path(__file__).resolve().parents[4])
     verify_tailscale(lock["tailscale"])
     lock["tailscale"]["verified"] = True
     args.output.write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8", newline="\n")

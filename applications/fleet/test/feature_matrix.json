@@ -4,6 +4,342 @@
   "evidence_scope": "HTTP response receipts from passing backend tests; refusal-only routes are explicit. Sample evidence covers representative transactions, not every configured API branch or physical device behavior.",
   "features": [
     {
+      "id": "robot_care_profiles",
+      "title": "Robot characteristics, cautions and advisory diagnostics",
+      "entrypoints": [
+        "applications/fleet/web/installation/install.html",
+        "applications/fleet/web/index.html"
+      ],
+      "consumers": [
+        "applications/fleet/web/devices/device-profiles.js",
+        "applications/fleet/web/devices/device-care.js",
+        "applications/fleet/web/devices/robot-profile-view.js",
+        "applications/fleet/web/cell/cell-observation.js"
+      ],
+      "availability": "Configured task SQLite and explicit robot/arm registration. Source-token advisory analysis only; sample host reports absent storage. No motion admission or physical acceptance.",
+      "calls": [
+        {
+          "consumer": "applications/fleet/web/devices/device-profiles.js",
+          "expression": "/api/fleet/device-profiles",
+          "resolution": "literal-or-template; care base appends /care or /events",
+          "request_ids": [
+            "GET:/api/fleet/device-profiles"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/devices/device-profiles.js",
+          "expression": "/api/fleet/device-profiles/${encodeURIComponent(id)}",
+          "resolution": "literal-or-template; care base appends /care or /events",
+          "request_ids": [
+            "GET:/api/fleet/device-profiles/{device_id}"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/devices/device-profiles.js",
+          "expression": "/api/fleet/device-profiles/${encodeURIComponent(device_id)}",
+          "resolution": "literal-or-template; care base appends /care or /events",
+          "request_ids": [
+            "PUT:/api/fleet/device-profiles/{device_id}"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/devices/device-care.js",
+          "expression": "/api/fleet/device-profiles/${encodeURIComponent(selected)}/care",
+          "resolution": "literal-or-template; care base appends /care or /events",
+          "request_ids": [
+            "GET:/api/fleet/device-profiles/{device_id}/care"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/devices/device-care.js",
+          "expression": "/api/fleet/device-profile-sources",
+          "resolution": "literal-or-template; care base appends /care or /events",
+          "request_ids": [
+            "GET:/api/fleet/device-profile-sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/devices/device-care.js",
+          "expression": "/api/fleet/device-profiles/${encodeURIComponent(selected)}",
+          "resolution": "literal-or-template; care base appends /care or /events",
+          "request_ids": [
+            "GET:/api/fleet/device-profiles/{device_id}/care",
+            "PUT:/api/fleet/device-profiles/{device_id}/care",
+            "POST:/api/fleet/device-profiles/{device_id}/events"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/devices/robot-profile-view.js",
+          "expression": "/api/fleet/device-profile-sources/${key}",
+          "resolution": "literal-or-template; care base appends /care or /events",
+          "request_ids": [
+            "GET:/api/fleet/device-profile-sources/{kind}/{source_id}"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/device-profiles",
+          "method": "GET",
+          "path": "/api/fleet/device-profiles",
+          "implementation": "operations/fleet/fleet/server/device_profile_routes.py",
+          "handler": "list_profiles",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_profile_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profiles"
+        },
+        {
+          "id": "GET:/api/fleet/device-profiles/{device_id}",
+          "method": "GET",
+          "path": "/api/fleet/device-profiles/{device_id}",
+          "implementation": "operations/fleet/fleet/server/device_profile_routes.py",
+          "handler": "get_profile",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_profile_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profiles/{device_id}"
+        },
+        {
+          "id": "PUT:/api/fleet/device-profiles/{device_id}",
+          "method": "PUT",
+          "path": "/api/fleet/device-profiles/{device_id}",
+          "implementation": "operations/fleet/fleet/server/device_profile_routes.py",
+          "handler": "put_profile",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_profile_routes.py",
+            "operations/fleet/test/test_device_care_pipeline_browser.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/device-profiles/{device_id}"
+        },
+        {
+          "id": "GET:/api/fleet/device-profile-sources",
+          "method": "GET",
+          "path": "/api/fleet/device-profile-sources",
+          "implementation": "operations/fleet/fleet/server/device_care_routes.py",
+          "handler": "catalog",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_care_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profile-sources"
+        },
+        {
+          "id": "GET:/api/fleet/device-profile-sources/{kind}/{source_id}",
+          "method": "GET",
+          "path": "/api/fleet/device-profile-sources/{kind}/{source_id}",
+          "implementation": "operations/fleet/fleet/server/device_care_routes.py",
+          "handler": "source_profile",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_care_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profile-sources/{kind}/{source_id}"
+        },
+        {
+          "id": "GET:/api/fleet/device-profiles/{device_id}/care",
+          "method": "GET",
+          "path": "/api/fleet/device-profiles/{device_id}/care",
+          "implementation": "operations/fleet/fleet/server/device_care_routes.py",
+          "handler": "get_care",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_care_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/device-profiles/{device_id}/care"
+        },
+        {
+          "id": "PUT:/api/fleet/device-profiles/{device_id}/care",
+          "method": "PUT",
+          "path": "/api/fleet/device-profiles/{device_id}/care",
+          "implementation": "operations/fleet/fleet/server/device_care_routes.py",
+          "handler": "put_care",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_care_routes.py",
+            "operations/fleet/test/test_device_care_pipeline_browser.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/device-profiles/{device_id}/care"
+        },
+        {
+          "id": "POST:/api/fleet/device-profiles/{device_id}/events",
+          "method": "POST",
+          "path": "/api/fleet/device-profiles/{device_id}/events",
+          "implementation": "operations/fleet/fleet/server/device_care_routes.py",
+          "handler": "event",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_care_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/device-profiles/{device_id}/events"
+        },
+        {
+          "id": "POST:/api/fleet/device-profiles/{device_id}/load-reports/{source_id}",
+          "method": "POST",
+          "path": "/api/fleet/device-profiles/{device_id}/load-reports/{source_id}",
+          "implementation": "operations/fleet/fleet/server/device_care_routes.py",
+          "handler": "report",
+          "expected_statuses": [
+            202
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated API and SQLite with synthetic observations; source credential is required for reports. No hardware execution or deployed TLS evidence.",
+          "contract_tests": [
+            "operations/fleet/test/test_device_care_routes.py",
+            "operations/fleet/test/test_device_care_pipeline_browser.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/device-profiles/{device_id}/load-reports/{source_id}"
+        }
+      ],
+      "flows": [
+        {
+          "id": "robot_care_profiles.happy",
+          "kind": "happy",
+          "steps": [
+            {
+              "request_ids": [
+                "PUT:/api/fleet/device-profiles/{device_id}",
+                "PUT:/api/fleet/device-profiles/{device_id}/care",
+                "POST:/api/fleet/device-profiles/{device_id}/load-reports/{source_id}",
+                "GET:/api/fleet/device-profile-sources/{kind}/{source_id}"
+              ],
+              "screen_assertion": "After real producer/API/SQLite restart, diagnosis and provenance precede traits and actions."
+            }
+          ],
+          "scenario_id": "robot_care_profiles.happy",
+          "browser_test": "operations/fleet/test/test_device_care_pipeline_browser.py::test_persisted_analysis_origin_and_diagnosis_order_in_cell",
+          "sample_status": "verified",
+          "test_scope": "Actual backend and reopened SQLite with synthetic LoadMonitor input; TestClient-adapted HTTPS, no device or deployed TLS.",
+          "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+        },
+        {
+          "id": "robot_care_profiles.refused",
+          "kind": "refused",
+          "steps": [
+            {
+              "request_ids": [
+                "PUT:/api/fleet/device-profiles/{device_id}",
+                "PUT:/api/fleet/device-profiles/{device_id}/care",
+                "POST:/api/fleet/device-profiles/{device_id}/events"
+              ],
+              "screen_assertion": "Viewer editor remains disabled; operator metadata save preserves the care draft."
+            }
+          ],
+          "scenario_id": "robot_care_profiles.refused",
+          "browser_test": "operations/fleet/test/test_device_care_browser.py::test_care_editor_keeps_draft_after_metadata_save_and_source_mapping",
+          "sample_status": "verified",
+          "test_scope": "Browser fixture API verifies role presentation and draft retention; server authorization is proved separately by route capture.",
+          "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+        },
+        {
+          "id": "robot_care_profiles.terminal",
+          "kind": "terminal",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/device-profile-sources/{kind}/{source_id}"
+              ],
+              "screen_assertion": "Read failure stays explicit and old evidence does not become a normal current diagnosis."
+            }
+          ],
+          "scenario_id": "robot_care_profiles.terminal",
+          "browser_test": "operations/fleet/test/test_device_care_browser.py::test_robot_information_precedes_actions_and_failed_refresh_is_visible",
+          "sample_status": "verified",
+          "test_scope": "Browser fixture responses and time progression; terminal read status only, no fault clearing or execution.",
+          "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+        }
+      ]
+    },
+    {
+      "id": "arm_transfer_handoff",
+      "title": "외부 앱 중립 ARM 제안 인계",
+      "entrypoints": ["applications/fleet/web/index.html"],
+      "consumers": ["applications/fleet/web/work/arm-transfer-view.js"],
+      "availability": "Installed simulation ARM transfer API; known mission ID; independent named Fleet operator. No physical deployment or application completion evidence.",
+      "calls": [
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(id)}", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}"]},
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/dispatch-control", "resolution": "literal-or-template", "request_ids": ["GET:/api/fleet/dispatch-control"]},
+        {"consumer": "applications/fleet/web/work/arm-transfer-view.js", "expression": "/api/fleet/arm-transfers/jobs/${encodeURIComponent(snapshot.mission_id)}/admit", "resolution": "literal-or-template", "request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"]}
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/arm-transfers/jobs/{mission_id}",
+          "method": "GET",
+          "path": "/api/fleet/arm-transfers/jobs/{mission_id}",
+          "implementation": "operations/fleet/fleet/server/work/arm_transfer_job_routes.py",
+          "handler": "read_id",
+          "expected_statuses": [200],
+          "status": "verified",
+          "verification_scope": "Real HTTP console read with independent Fleet token, installed simulation policy, real SQLite and synthetic capability port; no device execution.",
+          "contract_tests": ["operations/fleet/test/test_arm_transfer_console_browser.py", "operations/fleet/test/test_arm_transfer_job_api.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/arm-transfers/jobs/{mission_id}"
+        },
+        {
+          "id": "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit",
+          "method": "POST",
+          "path": "/api/fleet/arm-transfers/jobs/{mission_id}/admit",
+          "implementation": "operations/fleet/fleet/server/work/arm_transfer_job_routes.py",
+          "handler": "admit",
+          "expected_statuses": [200],
+          "status": "verified",
+          "verification_scope": "Real HTTP confirmation produces READY with independent approved_by, unchanged proposal digest and current dispatch generation. No observer or actuator is installed.",
+          "contract_tests": ["operations/fleet/test/test_arm_transfer_console_browser.py", "operations/fleet/test/test_arm_transfer_job_api.py"],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"
+        }
+      ],
+      "flows": [
+        {"id": "arm_transfer_handoff.happy", "kind": "happy", "steps": [{"request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}", "GET:/api/fleet/dispatch-control", "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"], "screen_assertion": "독립 Fleet 운영자의 명시적 확인 후 실제 HTTP 원장 READY를 조회한다"}], "scenario_id": "arm_transfer_handoff.happy", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_real_http_console_admits_external_proposal_with_independent_identity", "sample_status": "verified", "test_scope": "Real API and SQLite with synthetic capability port, no physical owner", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"},
+        {"id": "arm_transfer_handoff.refused", "kind": "refused", "steps": [{"request_ids": ["POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit"], "screen_assertion": "403·409·503 응답 후 자동 재전송을 막고 원본 재조회를 요구한다"}], "scenario_id": "arm_transfer_handoff.refused", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_rejection_and_unknown_response_require_read_without_automatic_retry", "sample_status": "verified", "test_scope": "Fixture API browser responses; refusal presentation and no retry, not server authorization evidence", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"},
+        {"id": "arm_transfer_handoff.terminal", "kind": "terminal", "steps": [{"request_ids": ["GET:/api/fleet/arm-transfers/jobs/{mission_id}"], "screen_assertion": "승인 단계가 READY로 끝나면 승인 단추를 잠그고 실행·물리·업무 완료를 구별한다"}], "scenario_id": "arm_transfer_handoff.terminal", "browser_test": "operations/fleet/test/test_arm_transfer_console_browser.py::test_deep_link_reads_and_explicit_confirmation_admits_saved_contract", "sample_status": "verified", "test_scope": "Terminal approval UI stage only; READY is not terminal execution or business completion", "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"}
+      ]
+    },
+    {
       "id": "control_units",
       "title": "관제 간 작업 위임",
       "entrypoints": [
@@ -1468,6 +1804,15 @@
             "GET:/api/fleet/tasks/{task_id}",
             "GET:/api/fleet/trips/{trip_id}"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/work-view.js",
+          "expression": "/api/fleet/policy-admission",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/policy-admission",
+            "POST:/api/fleet/policy-admission"
+          ]
         }
       ],
       "requests": [
@@ -1504,6 +1849,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/ai"
+        },
+        {
+          "id": "GET:/api/fleet/policy-admission",
+          "method": "GET",
+          "path": "/api/fleet/policy-admission",
+          "implementation": "operations/fleet/fleet/server/missions/policy_admission_routes.py",
+          "handler": "policy_admission_status",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_policy_admission_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/policy-admission"
         },
         {
           "id": "GET:/api/fleet/robots/{robot_id}/line-stuck/evidence",
@@ -1725,6 +2087,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/map-pin"
+        },
+        {
+          "id": "POST:/api/fleet/policy-admission",
+          "method": "POST",
+          "path": "/api/fleet/policy-admission",
+          "implementation": "operations/fleet/fleet/server/missions/policy_admission_routes.py",
+          "handler": "policy_admission_toggle",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_policy_admission_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/policy-admission"
         },
         {
           "id": "POST:/api/fleet/robots/{robot_id}/power",
@@ -3771,6 +4150,14 @@
           "request_ids": [
             "GET:/api/fleet/peers"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/installation/host-services.js",
+          "expression": "/api/fleet/updates",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/updates"
+          ]
         }
       ],
       "requests": [
@@ -3860,6 +4247,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/hosts"
+        },
+        {
+          "id": "GET:/api/fleet/updates",
+          "method": "GET",
+          "path": "/api/fleet/updates",
+          "implementation": "operations/fleet/fleet/server/host_control_routes.py",
+          "handler": "update_overview",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_host_control.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/updates"
         },
         {
           "id": "GET:/api/fleet/peers",

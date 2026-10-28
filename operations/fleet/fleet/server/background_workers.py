@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sqlite3
+import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -13,6 +14,17 @@ if TYPE_CHECKING:
     from fleet.server.task_service import FleetTaskService
 
 _LOG = logging.getLogger(__name__)
+
+
+def start_notification_worker(app, config):
+    if config is None:
+        return None, None
+    import httpx
+    from fleet.incidents.notifications import NotificationWorker
+    client = httpx.AsyncClient(trust_env=False)
+    task = asyncio.create_task(NotificationWorker(app.state.line_stuck._log.notifications, config, client,
+        board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
+    return client, task
 
 
 async def control_unit_loop(service):
@@ -78,7 +90,8 @@ def attempt_open(store, task_id: str, attempt_id: str) -> bool:
 
 
 async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskService,
-                              drive_cancel: DriveCancelFence) -> None:
+                              drive_cancel: DriveCancelFence, supervisor=None,
+                              clock=time.monotonic) -> None:
     """Dispatch one eligible task at a time from the app-owned background worker."""
     while True:
         try:
@@ -99,11 +112,16 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
             }
             await task_service.dispatch_next(
                 available, dispatch=lambda task: drive_cancel.fenced_goal(console, task))
+            if supervisor is not None:
+                supervisor.note_ok("task-dispatch")
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
             # A status read failure cannot establish availability. Leave work queued.
-            pass
+            if supervisor is not None:
+                supervisor.note_failure("task-dispatch", error)
+            else:
+                _LOG.error("Fleet task dispatch cycle failed", exc_info=error)
         await asyncio.sleep(0.25)
 
 

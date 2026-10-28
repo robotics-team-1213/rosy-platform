@@ -1,4 +1,4 @@
-"""Fleet-host read-only ROS observations to authenticated Fleet and Vision ingress."""
+"""Native local observations to authenticated Fleet and Vision ingress."""
 from __future__ import annotations
 
 import argparse
@@ -11,6 +11,7 @@ import logging
 import math
 from pathlib import Path
 import ssl
+import signal
 import threading
 import time
 from urllib.error import HTTPError
@@ -23,6 +24,7 @@ import yaml
 from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
 from core_common.motor_health import read_motor_health_snapshot
 from core_common.protocol.motor_health import MotorHealthResponse
+from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
 from rosy_vision import protocol
 
 
@@ -78,11 +80,12 @@ class LatestSource:
         self.wall, self.monotonic = wall, monotonic
         self._lock, self._sample = threading.Lock(), None
 
-    def put(self, stamp, value):
+    def put(self, stamp, value, *, received=None):
         if type(stamp) not in (int, float) or not math.isfinite(stamp) or stamp <= 0:
             raise ValueError('invalid source stamp')
         with self._lock:
-            candidate = Sample(stamp, self.monotonic(), self._sample.sequence + 1 if self._sample else 1, value)
+            candidate = Sample(stamp, self.monotonic() if received is None else received,
+                               self._sample.sequence + 1 if self._sample else 1, value)
             sample_age(candidate, self.wall(), self.monotonic())
             if self._sample and stamp <= self._sample.captured_at:
                 return False
@@ -98,6 +101,33 @@ class LatestSource:
             except ValueError:
                 return None
             return deepcopy(self._sample)
+
+
+class NativeSource(LatestSource):
+    def __init__(self, channel, *, joint_names=None):
+        super().__init__()
+        self.channel, self.joint_names = SnapshotChannel(channel), joint_names
+
+    def latest(self):
+        sample = self.channel.read()
+        if sample is not None:
+            try:
+                if self.joint_names is None:
+                    if sample['kind'] != 'jpeg':
+                        raise ValueError('camera channel must carry JPEG')
+                    value = (sample['payload'], 640, 480)
+                else:
+                    if sample['kind'] != 'joints':
+                        raise ValueError('arm channel must carry joint positions')
+                    value = json.loads(sample['payload'])
+                    if not isinstance(value, dict) or set(value) != set(self.joint_names):
+                        raise ValueError('joint observation must match registered arm')
+                    value = ArmObservation(epoch='0' * 32, sequence=1,
+                        captured_at=sample['captured_at'], positions=value).positions
+                self.put(sample['captured_at'], value, received=sample['monotonic'])
+            except (ValueError, TypeError):
+                pass
+        return super().latest()
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -288,7 +318,7 @@ def main(argv=None):
     parser.add_argument('--workcell', required=True)
     parser.add_argument('--fleet-url', required=True)
     parser.add_argument('--vision-url', required=True)
-    parser.add_argument('--domain-id', type=int, required=True)
+    parser.add_argument('--domain-id', type=int, help='unused legacy registration value; no DDS is started')
     parser.add_argument('--ca-file', type=Path)
     parser.add_argument('--arm-health-file', action='append', metavar='SOURCE_ID=/absolute/file',
                         default=os.environ.get('ROSY_OBSERVATION_ARM_HEALTH', '').split(),
@@ -296,14 +326,6 @@ def main(argv=None):
                              '(default: the space-separated ROSY_OBSERVATION_ARM_HEALTH, one per arm of this cell; '
                              'a flag adds to that list, so a source bound twice is refused)')
     args = parser.parse_args(argv)
-    if not 0 <= args.domain_id <= 232:
-        parser.error('domain-id must be 0..232')
-    for key in ('CYCLONEDDS_URI', 'FASTDDS_DEFAULT_PROFILES_FILE',
-                'FASTRTPS_DEFAULT_PROFILES_FILE', 'ROS_DISCOVERY_SERVER'):
-        if os.environ.get(key):
-            parser.error(f'external discovery override is not allowed: {key}')
-    if os.environ.get('RMW_IMPLEMENTATION', 'rmw_fastrtps_cpp') != 'rmw_fastrtps_cpp':
-        parser.error('observation bridge requires rmw_fastrtps_cpp')
     try:
         manifest = WorkcellObservationManifest.model_validate(yaml.safe_load(args.manifest.read_text(encoding='utf-8')))
         cell, tokens = select_sources(manifest, args.workcell, os.environ)
@@ -319,27 +341,10 @@ def main(argv=None):
         context = ssl.create_default_context(cafile=args.ca_file)
     except (OSError, ValueError, yaml.YAMLError) as error:
         parser.error(f'observation configuration invalid: {type(error).__name__}')
-    os.environ['RMW_IMPLEMENTATION'] = 'rmw_fastrtps_cpp'
-    os.environ['ROS_STATIC_PEERS'] = ''
-    os.environ['ROS_AUTOMATIC_DISCOVERY_RANGE'] = 'LOCALHOST'
-    import cv2
-    import numpy as np
-    import rclpy
-    from rclpy.executors import ExternalShutdownException
-    from rclpy.qos import qos_profile_sensor_data
-    from sensor_msgs.msg import Image, JointState
-    rclpy.init(args=[], domain_id=args.domain_id)
-    node = rclpy.create_node('rosy_workcell_observation_' + uuid4().hex[:12])
     stop, workers, senders = threading.Event(), [], []
+    previous = signal.signal(signal.SIGTERM, interrupt_on_termination)
 
-    def subscribe(source, message_type, topic, convert, sender, *, health_file=None):
-        buffer = LatestSource()
-        def receive(message):
-            try:
-                buffer.put(source_stamp(message), convert(message))
-            except (ValueError, TypeError, OverflowError, cv2.error):
-                node.get_logger().warning(f'ignored invalid observation from {source.source_id}')
-        node.create_subscription(message_type, topic, receive, qos_profile_sensor_data)
+    def deliver(source, buffer, sender, *, health_file=None):
         delivery = ArmHealthSource(buffer, health_file, source.arm_id) if health_file is not None else buffer
         worker = threading.Thread(target=SourceWorker(delivery, sender.send).run, args=(stop,),
                                   name=source.source_id, daemon=True)
@@ -347,24 +352,24 @@ def main(argv=None):
 
     try:
         for arm in cell.arms:
-            subscribe(arm, JointState, arm.joint_topic, lambda msg, names=arm.joint_names: joint_values(msg, names),
+            deliver(arm, NativeSource(arm.joint_topic, joint_names=arm.joint_names),
                       ArmSender(args.fleet_url, arm.source_id, tokens[arm.source_id], context=context),
                       health_file=health_files.get(arm.source_id))
         for camera in cell.cameras:
-            subscribe(camera, Image, camera.image_topic, lambda msg: encode_image(msg, cv2, np),
+            deliver(camera, NativeSource(camera.image_topic),
                       CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context))
-        rclpy.spin(node)
-    except (KeyboardInterrupt, ExternalShutdownException):
+        while not stop.wait(1):
+            pass
+    except KeyboardInterrupt:
         pass
     finally:
+        signal.signal(signal.SIGTERM, previous)
         stop.set()
         for sender in senders:
             if isinstance(sender, CameraSender):
                 sender.close()
         for worker in workers:
             worker.join(timeout=3)
-        node.destroy_node()
-        rclpy.try_shutdown()
 
 
 if __name__ == '__main__':

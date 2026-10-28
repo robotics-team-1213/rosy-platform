@@ -132,7 +132,7 @@ def test_disabled_center_reports_configuration_and_refuses_execution(tmp_path):
             'datasets': [], 'runs': [], 'methods': {}, 'status': 'not_configured'}
         _, learning = request(base, '/api/learning')
         code, response = request(base, PREFIX + '/run', {}, token=learning['token'])
-        assert code == 400 and 'not configured' in response['error']
+        assert code == 400 and '연결되지 않았습니다' in response['error']
 
 
 def test_collaboration_center_writes_still_require_live_manage_permission(tmp_path):

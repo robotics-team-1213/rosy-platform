@@ -6,7 +6,8 @@ Description=Finish ROSY first boot once NetworkManager has joined the site Wi-Fi
 # take the single radio from the D-176 fallback AP.
 After=rosy-first-boot.service NetworkManager.service
 ConditionPathExists=!/var/lib/rosy/provisioning/complete.json
-ConditionPathExists=/boot/firmware/rosy-provision/provision.json
+ConditionPathExists=|/boot/firmware/rosy-provision/provision.json
+ConditionPathExists=|/run/rosy-provision-boot/rosy-provision/provision.json
 
 [Service]
 Type=oneshot

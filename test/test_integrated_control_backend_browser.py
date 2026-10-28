@@ -95,6 +95,7 @@ def test_actual_backend_information_map_stop_and_identity_readback(integrated_ba
             page.on("request", lambda request: writes.append(request.post_data_json)
                     if request.method == "POST" and urlsplit(request.url).path == PREFIX + "/stops" else None)
             page.goto(origin + "/console?view=work")
+            page.locator("#work-integrations > summary").click()
             panel = page.locator("#integrated-control")
             expect(panel).to_be_visible()
             expect(panel).to_contain_text("R · 독립 관제")
@@ -130,6 +131,7 @@ def test_actual_backend_information_map_stop_and_identity_readback(integrated_ba
             assert len(writes) == 1 and writes[0]["stop_id"] == identity
             generation = store.dispatch_control()["generation"]
             page.reload()
+            page.locator("#work-integrations > summary").click()
             expect(page.locator("#integrated-control")).to_be_visible()
             page.locator("#integrated-control summary").filter(has_text="이 관제의 정지 요청 기록").click()
             page.locator("#integrated-stop-history").get_by_role("button").click()

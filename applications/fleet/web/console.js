@@ -40,9 +40,9 @@ const pageScope = createPageScope();
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
 // Current intervention stays outside context tabs; hidden panels keep their owners mounted.
-const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('[aria-labelledby="map-heading"]'),
-  document.querySelector('.console-context')];
-const MAP_PANEL = 1;
+const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('.console-context'),
+  document.querySelector('[aria-labelledby="map-heading"]')];
+const MAP_PANEL = 2;
 const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
   robots: () => view.robots,
   canManage: () => !auth.locked && auth.role === "operator" && !namedReason(),
@@ -51,6 +51,7 @@ const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
 const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
+  confirm: options => confirmedAction.run(options),
   principal: () => auth.principal,
   approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.

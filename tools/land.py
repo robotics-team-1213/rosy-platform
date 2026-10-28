@@ -2,7 +2,7 @@
 
 Run from a topic worktree (never the shared main checkout)::
 
-    python tools/land.py [--main-checkout PATH] [--tests auto|none|"<pytest args>"]
+    python tools/land.py [--main-checkout PATH] [--tests auto|"<extra pytest args>"]
                          [--node] [--max-rounds N] [--dry-run] [--prune | --no-prune] [--no-cache]
                          [--queue-timeout MIN | --no-queue]
 
@@ -46,23 +46,42 @@ import worktrees  # noqa: E402  (D-761: every landing reports finished worktrees
 from land_logs import append_blocks  # noqa: E402,F401  (logs.md: whole entries, date order; tests call it here)
 import land_guards  # noqa: E402  (structural guards before the long round)
 import land_queue  # noqa: E402  (one lander per clone at a time, FIFO)
-import land_full  # noqa: E402  (a green FULL tier outlives the run that passed it)
+import land_watchdog  # noqa: E402  (a landing with no progress for 30 min stops itself, stacks on file)
+import land_full  # noqa: E402  (a green tier outlives the run that passed it)
+import land_prepare  # noqa: E402  (D-889 A': tests outside the lock, then main's delta at the turn)
+import land_speculate  # noqa: E402  (D-889 addendum 3: the turn's main delta tested on the predicted tree)
 import land_checks  # noqa: E402  (D-790: load-flaky rerun; scratch folder, origin distance)
 import land_cache  # noqa: E402  (passed invocations reused across land.py runs)
+import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did)
+import land_browser  # noqa: E402  (the browser tier in file-level chunks)
+import land_selection  # noqa: E402  (selection with this caller's Stop and helper seams)
+import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
+import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan,  # noqa: E402,F401  (auto-resolve)
                         generate_records, resolver)
 import worktree_rules  # noqa: E402  (D-790: stale-history refusal)
 
 HARNESS = "tools/harness/rosy_harness.py"
+HARNESS_TRIGGER = ": harness configuration or the selector itself"  # affected_tests.FULL_TRIGGERS
 SIZE_RANGE = "tools/harness/size_range.py"  # D-766: git-only, seconds; the FULL tier would only find it after the remote round trip
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
+TURN_CAP_S = 600  # D-889: a turn's delta tests past this move outside the lock (land_prepare.again)
+# 2026-10-27: a landing with a hand-picked --tests skipped its selection, guards and pretest and left main red
+# (3125704e24). A real landing always runs the selection; --tests "<args>" only adds EXTRA, "none" is refused.
+FIXTURE_ENV = "ROSY_LAND_FIXTURE"  # land.py's own test fixtures only: --tests none/"<args>" replace the selection
+EXTRA: list[list[str]] = []
+
+
 class Stop(Exception):
     """A step failed; the message says why. Exit 1."""
+
+
+class Overtime(Stop): """The turn's tests ran past TURN_CAP_S, the rest cancelled: land() prepares them outside."""
 
 
 def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -83,8 +102,8 @@ def lines(cwd: Path, *args: str) -> list[str]:
 
 # --- merging (conflict auto-resolution itself: land_merge.py) --------------------
 
-def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> list[str]:
-    """Merge main_sha into HEAD; return the auto-resolved paths. Stop on anything else."""
+def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, source: str = "main") -> list[str]:
+    """Merge main_sha (``source``: a batch member's tip, land_batch.py) into HEAD; return the auto-resolved paths."""
     if dry_run:
         tree = git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main_sha, check=False)
         conflicts = conflict_stages(tree.stdout) if tree.returncode == 1 else {}
@@ -95,7 +114,7 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
             raise Stop("merge would conflict outside the auto-resolvable set:\n  " + "\n  ".join(manual))
         return sorted(resolved)
     result = git(wt, "merge", "--no-edit", "--no-commit", "-m",
-                 f"Merge branch 'main' into {branch}", main_sha, check=False)
+                 f"Merge branch '{source}' into {branch}", main_sha, check=False)
     if result.returncode == 0 and git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0:
         return []
     resolved = {}
@@ -124,6 +143,12 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool) -> l
                 raise Stop(f"changes outside canonical generation targets: {sorted(unexpected)}")
             if written:
                 git(wt, "add", "--", *written)
+        gaps, dropped = landed_gaps(wt)
+        if dropped:  # in the merge commit, so the pretest's merge drops them too and land_full keeps its FULL pass
+            (wt / ADR_GAPS).write_bytes(gaps)
+            git(wt, "add", "--", ADR_GAPS)
+            print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
+            resolved[ADR_GAPS] = gaps
         git(wt, "commit", "--no-edit")
     except (Stop, ValueError, KeyError, OSError, subprocess.CalledProcessError) as exc:
         abort = git(wt, "merge", "--abort", check=False)
@@ -162,74 +187,21 @@ def fallback_targets(wt: Path, changed: list[str]) -> list[str]:
 
 
 def pack(wt: Path, paths: list[str]) -> list[list[str]]:
-    """Split paths into pytest invocations so no two test files share a basename."""
-    groups: list[tuple[list[str], set[str]]] = []
-    for path in paths:
-        root = wt / path
-        names = {root.name} if root.is_file() else {p.name for p in root.rglob("test_*.py")}
-        for members, seen in groups:
-            if not names & seen:
-                members.append(path)
-                seen |= names
-                break
-        else:
-            groups.append(([path], set(names)))
-    return [members for members, _ in groups]
+    return land_selection.pack(wt, paths)
 
 
-def select(wt: Path, base: str, python: str, head: str | None = None) -> tuple[list[list[str]], str | None]:
-    """pytest invocations for base...HEAD (or base...head), and a FULL note owed to the summary.
-
-    The D-436 selector (`rosy_harness.py affected`) when the harness is present —
-    it adds the guard set and reverse dependents — otherwise the nearest test/ dir.
-    """
-    if (wt / "tools/harness/affected_tests.py").is_file():
-        # Strict UTF-8: the JSON must parse whole; PYTHONUTF8 makes the child write UTF-8.
-        result = subprocess.run([python, HARNESS, "affected", "--base", base, *(["--head", head] if head else []),
-                                 "--json"], cwd=wt,
-                                capture_output=True, text=True, encoding="utf-8", env=ENV)
-        if result.returncode != 0:
-            raise Stop(f"affected selector failed (exit {result.returncode}); not guessing tests:\n"
-                       f"{result.stdout}{result.stderr}".rstrip())
-        try:
-            sel = json.loads(result.stdout)
-            if sel["mode"] == "full":
-                # D-762 stage 0: a FULL-class landing runs the whole tier on the lab PCs, never
-                # guards alone; not via GitHub, which would publish unpushed main commits.
-                note = "selector escalated to FULL (" + "; ".join(sel["escalations"][:3]) + "): full tier on the lab PCs"
-                print(f"[tests] {note}")
-                return sel["full_invocations"] + browser_tier(wt, base, head), note
-            return sel["invocations"] + browser_tier(wt, base, head), None
-        except (ValueError, KeyError, TypeError) as exc:
-            raise Stop(f"affected selector printed unusable JSON ({exc!r}); not guessing tests") from exc
-    changed = lines(wt, "diff", "--name-only", f"{base}...HEAD")
-    return pack(wt, fallback_targets(wt, changed)) + browser_tier(wt, base), None
+def select(wt: Path, base: str, python: str, head: str | None = None,
+           landed: bool = False, full: bool = False) -> tuple[list[list[str]], str | None]:
+    if full:
+        invocations, note = land_selection.select(sys.modules[__name__], wt, base, python, head, landed, full=True)
+    else:
+        invocations, note = land_selection.select(sys.modules[__name__], wt, base, python, head, landed)
+    more = [] if landed else EXTRA + land_mainred.extra(wt)  # carried ids run until a pass covers them
+    return invocations + [inv for inv in more if inv not in invocations], note
 
 
 def browser_tier(wt: Path, base: str, head: str | None = None) -> list[list[str]]:
-    """The real-Chromium tests for the paths base...head changes, opted in on the test host only."""
-    changed = lines(wt, "diff", "--name-only", f"{base}...{head or 'HEAD'}")
-    return [[remote_pytest.BROWSER_ENV, *chunk] for group in pack(wt, browser_scope.targets(changed))
-            for chunk in balanced(wt, group, BROWSER_CHUNKS)]
-
-
-# remote_pytest.run's hosts take invocations from one queue, but one browser invocation still ran
-# ~30 min on one host after the rest; 4 chunks let both hosts share that tail.
-BROWSER_CHUNKS = 4
-
-
-def balanced(wt: Path, paths: list[str], n: int) -> list[list[str]]:
-    """paths in at most n lists of near-equal total size: largest first, each into the lightest list.
-
-    A sub-list of one pack() group keeps its basenames apart."""
-    # ponytail: file size stands in for run time; use recorded pytest --durations if chunks skew.
-    size = {p: (wt / p).stat().st_size if (wt / p).is_file() else 0 for p in paths}
-    bins: list[tuple[list[int], list[str]]] = [([0], []) for _ in range(min(n, len(paths)))]
-    for path in sorted(paths, key=lambda p: -size[p]):
-        total, members = min(bins, key=lambda b: b[0][0])
-        total[0] += size[path]
-        members.append(path)
-    return [sorted(members) for _, members in bins]
+    return land_selection.browser_tier(sys.modules[__name__], wt, base, head)
 
 
 def safety_review(wt: Path, base: str, head: str, python: str) -> None:
@@ -270,8 +242,8 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
          allow_fail: bool = False) -> tuple[int, str]:
     print(f"[{label}] {' '.join(command)}", flush=True)
     began = time.monotonic()
-    result = subprocess.run(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
-                            errors="replace", env=env)
+    result = remote_pytest.remote_job.step(command, cwd=wt, capture_output=True, text=True, encoding="utf-8",
+                                           errors="replace", env=env)  # beats for land_watchdog while it runs
     print(f"[{label}] {time.monotonic() - began:.0f}s", flush=True)
     text = result.stdout + result.stderr
     if log:
@@ -283,60 +255,7 @@ def step(wt: Path, command: list[str], log: Path | None, label: str, env: dict =
 
 def run_tests(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: int) -> list[str]:
     """Run lint + pytest (+ node); return a summary line per step. Stop on any NEW failure."""
-    python = sys.executable
-    done = []
-    if (wt / HARNESS).is_file():
-        step(wt, [python, HARNESS, "lint"], logdir / f"lint-{round_no}.txt", "lint")
-        done.append("lint ok")
-    # HEAD is the candidate (merge commit included); the runner ships it to a test host (D-584:
-    # no host means it waits, then fails, and nothing lands).
-    head = out(wt, "rev-parse", "HEAD")
-    reused, todo, keep = land_cache.split(wt, args, invocations, head, python, select)
-    done += reused
-    logs = [logdir / f"run-{round_no}-{i}.txt" for i in range(1, len(todo) + 1)]
-    began = time.monotonic()
-    codes = remote_pytest.run(todo, logs, head, repo=wt, label=f"land-{round_no}")
-    if out(wt, "rev-parse", "HEAD") != head:
-        raise Stop(f"HEAD changed during remote checks; {head[:10]} was tested; retry the landing")
-    if len(codes) != len(todo):
-        raise Stop("incomplete remote results; not landing")
-    print(f"[pytest] {time.monotonic() - began:.0f}s", flush=True)
-    whole = len(codes) == len(todo) and not any(map(land_cache.unusable, codes, logs))  # else cache nothing
-    for inv, log, code in zip(todo, logs, codes):
-        if out(wt, "rev-parse", "HEAD") != head:
-            raise Stop(f"HEAD changed before verdict; {head[:10]} was tested; retry the landing")
-        if why := land_cache.unusable(code, log):
-            raise Stop(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
-        check = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt,
-                               capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
-        print(check.stdout, end="")
-        flaky, why = ([], "") if check.returncode == 0 else land_checks.load_flaky(
-            wt, inv, log, check.stdout, logdir, f"{round_no}-{len(done)}", python, remote_pytest.run,
-            tested_sha=head)
-        if out(wt, "rev-parse", "HEAD") != head:
-            raise Stop(f"HEAD changed during verdict; {head[:10]} was tested; retry the landing")
-        if check.returncode != 0 and not flaky:
-            raise Stop(f"NEW failure in {' '.join(inv)} (log {log}); {why}; not landing")
-        if check.returncode == 0 and whole:
-            keep(inv, log)
-        done.append(f"pytest {' '.join(inv)} ok ({log.name})" + (f", LOAD-FLAKY {flaky}" if flaky else ""))
-    if args.node:
-        mjs = sorted(str(p.relative_to(wt).as_posix()) for inv in invocations for t in inv
-                     if _test_dir(t) for p in (wt / _test_dir(t) / "web").glob("**/*.mjs"))
-        mjs = list(dict.fromkeys(mjs))
-        if mjs:
-            # D-518: console modules import /console/assets/<name>; Node resolves those through
-            # the suite's register hook, as test_site_map_api.py does.
-            hooks = sorted({f"./{h.relative_to(wt).as_posix()}" for inv in invocations for t in inv
-                            if _test_dir(t) for h in (wt / _test_dir(t) / "web").glob("register-*.mjs")})
-            step(wt, ["node", *[a for h in hooks for a in ("--import", h)], "--test", *mjs],
-                 logdir / f"node-{round_no}.txt", "node")
-            done.append(f"node --test {len(mjs)} file(s) ok")
-        else:
-            done.append("node skipped: no web/*.mjs under the selected test dirs")
-    if out(wt, "rev-parse", "HEAD") != head:
-        raise Stop(f"HEAD changed during checks; {head[:10]} was tested; retry the landing")
-    return done
+    return land_checks.run_tests(sys.modules[__name__], wt, args, invocations, logdir, round_no)
 
 
 def main_checkout(wt: Path) -> Path:
@@ -355,28 +274,6 @@ def on_main(main_co: Path) -> None:
         raise Stop(f"{main_co} has {head or 'a detached HEAD'} checked out, not refs/heads/main")
 
 
-def pretest(wt: Path, branch: str, args, python: str) -> None:
-    """A FULL tier while waiting in the queue (v2 lap 2026-10-19: 5 landers ahead, each with its FULL tier
-    inside the queue, held a landing 100+ min). Green, it is recorded as the turn's ``land_full`` (D-762
-    stage 0): the turn then runs main's delta only. An affected tier is short and runs at the turn."""
-    main_sha = out(wt, "rev-parse", "main")
-    if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
-        merge(wt, main_sha, branch, python, False)
-    candidate = out(wt, "rev-parse", "HEAD")
-    invocations, note = select(wt, main_sha, python)
-    if not note:
-        return
-    print(f"[land] FULL tier while waiting in the queue (main {main_sha[:10]})", flush=True)
-    logdir = tmp_dir(branch)
-    land_guards.first(wt, args, invocations, logdir, "pre", run_tests)
-    if out(wt, "rev-parse", "HEAD") != candidate:
-        raise Stop(f"HEAD changed during pretest guards; retry the landing from {candidate[:10]}")
-    run_tests(wt, args, invocations, logdir, "pre")   # a NEW failure stops here, before the wait
-    if out(wt, "rev-parse", "HEAD") != candidate:
-        raise Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
-    land_full.save(wt, branch, candidate, main_sha)
-
-
 def land(args) -> int:
     wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
     branch = out(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -389,6 +286,8 @@ def land(args) -> int:
     dirty = git(wt, "status", "--porcelain").stdout.strip()
     if dirty:
         raise Stop(f"worktree is dirty; commit or remove first:\n{dirty}")
+    if wt.parent.name == ".worktrees":  # D-889 addendum 5: land_async lands from a hidden snapshot instead
+        print("[land] tip: python tools/land_async.py --tests auto frees this worktree at once", flush=True)
     stale = worktree_rules.stale_history(wt, "HEAD")
     if stale:
         raise Stop(f"{branch}: {stale}; landing it would bring that history back. Rebuild on a new branch from"
@@ -399,14 +298,27 @@ def land(args) -> int:
         except Exception as exc:
             print(f"[land] warning: worktree prune failed, landing continues: {exc}")
     python = sys.executable
+    land_selection.begin(sys.modules[__name__], args)
+    qdir = ticket = None
+    if args.no_queue and not args.dry_run:
+        holders = land_queue.ahead(land_queue.queue_dir(wt), Path("~"))  # every live ticket: the first holds its turn
+        if holders:  # a landing outside the queue mid-turn gave that turn another round (2026-10-25, 22:52)
+            raise Stop(f"--no-queue refused: {land_queue.describe(holders[:1])} holds its turn. Wait, or stop it"
+                       " first during an incident")
     if not (args.no_queue or args.dry_run):
         before = out(wt, "rev-parse", "main")
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
         size_check(wt, before, "HEAD", python)
-        qdir, ticket = land_queue.enter(wt, branch)  # main() releases the ticket on every exit
-        if args.tests == "auto" and land_queue.ahead(qdir, ticket) and land_full.restore(wt, branch) is None:
-            pretest(wt, branch, args, python)   # keeps its place: the FULL tier runs while the others land
-        land_queue.wait(qdir, ticket, args.queue_timeout * 60)
+        qdir, ticket = land_queue.enter(wt, branch, "preparing")  # main() releases the ticket on every exit
+        if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
+            land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
+        if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
+            return code  # a batch landed this branch
+    return rounds(args, wt, branch, main_co, python, qdir, ticket)
+
+
+def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket) -> int:
+    """Merge main, test, fast-forward until main holds still; ``branch`` is HEAD (a topic or a batch branch)."""
     logdir = tmp_dir(branch)
     summary: list[str] = []
     tested_main: str | None = None
@@ -418,27 +330,23 @@ def land(args) -> int:
 
     for round_no in range(1, args.max_rounds + 1):
         land_queue.touch()  # a held ticket stays fresh through long rounds
-        reusable = args.tests == "auto"  # a green affected tier pre-push may reuse
+        reusable, prepared = args.tests in ("auto", "full"), None  # a green affected tier pre-push may reuse
         main_sha = out(wt, "rev-parse", "main")
         print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
+        land_events.emit("round", round=round_no, main=main_sha)
         if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
             resolved = merge(wt, main_sha, branch, python, args.dry_run)
             summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                            + (f", auto-resolved {resolved}" if resolved else ""))
-            gaps, dropped = landed_gaps(wt) if not args.dry_run else (b"", [])
-            if dropped:  # merge=union brought back lines main removed when those ADRs landed
-                (wt / ADR_GAPS).write_bytes(gaps)
-                git(wt, "add", "--", ADR_GAPS)
-                git(wt, "commit", "-m", f"chore(adr): drop adr_gaps lines of landed {', '.join(dropped)}")
-                print(f"[merge] {ADR_GAPS}: dropped {dropped}, their ADR now exists")
-                summary.append(f"round {round_no}: dropped landed ADR gap(s) {dropped} from {ADR_GAPS}")
         candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
         safety_review(wt, main_sha, candidate, python)
         size_check(wt, main_sha, candidate, python)
         note = None
         if args.tests == "none":
             invocations: list[list[str]] = []
-        elif args.tests == "auto":
+        elif args.tests in ("auto", "full"):
+            if args.tests == "full":
+                full_main = land_selection.current_main(sys.modules[__name__], wt, args, branch, main_sha, python)
             # A peer's edit to a path the branch moved or removed: the selector skips paths that no longer
             # exist, so the delta tier would test nothing of it; run this branch's FULL selection again.
             gone = [p for p in lines(wt, "diff", "--name-only", "--diff-filter=d", full_main, main_sha)
@@ -446,18 +354,25 @@ def land(args) -> int:
             if gone:
                 summary.append(f"round {round_no}: main delta edits {len(gone)} path(s) gone here"
                                f" ({gone[0]}): FULL again")
-                invocations, note = select(wt, main_sha, python)
+                invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
             elif full_main:
                 # D-762 stage 0: the FULL tier passed over full_main; main's delta since then gets its own
                 # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
-                invocations, note = select(wt, full_main, python, head=main_sha)
-                reusable = False  # the FULL tier ran on an earlier candidate
+                invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
+                reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
                 summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                f" {full_main[:10]}..{main_sha[:10]} runs its {'FULL' if note else 'affected'} tier")
+                if (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
+                    invocations, note = held, None  # it passed before the turn on this tree (up to the records)
+                    prepared = land_speculate.with_spec(sys.modules[__name__], wt, branch, prepared)
+                    summary.append(f"round {round_no}: speculated tree held; main delta passed before the turn")
             else:
-                invocations, note = select(wt, main_sha, python)
+                invocations, note = select(wt, main_sha, python, full=True) if args.tests == "full" else select(wt, main_sha, python)
             if note and note not in summary:
                 summary.append(note)
+            if note and ticket is not None:  # a FULL tier never runs in the lock: prepare it, then wait again
+                full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, note)
+                continue
         else:
             invocations = [shlex.split(args.tests)]
         if args.dry_run:
@@ -479,19 +394,26 @@ def land(args) -> int:
         summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
         if out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"HEAD changed during guards; {candidate[:10]} was tested; retry the landing")
+        land_selection.require_eligible(sys.modules[__name__], args, land_selection.eligible(sys.modules[__name__], guarded), guarded)
         if guarded and out(wt, "rev-parse", "main") != main_sha:
             print("[land] main moved during the guard round; merging again")
             continue
         began = time.monotonic()
-        tested = run_tests(wt, args, invocations, logdir, round_no)
+        try:
+            tested = run_tests(wt, args, invocations, logdir, round_no)
+        except Overtime if ticket is not None else ():  # without a ticket (--no-queue) it stops like any Stop
+            full_main = land_prepare.again(sys.modules[__name__], wt, branch, args, python, qdir, ticket, invocations, "")
+            continue
         if out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
         # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
-        reusable = reusable and not any("LOAD-FLAKY" in line or land_cache.NARROW in line for line in tested)
+        reusable = reusable and not land_mainred.CARRIED and land_selection.eligible(sys.modules[__name__], guarded + tested)
+        land_selection.require_eligible(sys.modules[__name__], args, reusable, guarded + tested)
         summary += [f"round {round_no}: {s}" for s in tested]
         if note:
             full_main = main_sha
-            land_full.save(wt, branch, candidate, main_sha)
+            tier = land_selection.tier(sys.modules[__name__], guarded + tested, True)
+            land_full.save(wt, branch, candidate, main_sha, tier, invocations)
             summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
         if invocations or tested_main is None:
             tested_main = main_sha
@@ -502,14 +424,18 @@ def land(args) -> int:
         tip = out(wt, "rev-parse", f"refs/heads/{branch}")
         if tip != candidate or out(wt, "rev-parse", "HEAD") != candidate:
             raise Stop(f"{branch} moved to {tip[:10]} during the checks; {candidate[:10]} was tested, not that")
+        land_selection.require_eligible(sys.modules[__name__], args, reusable and prepared is not None)
         on_main(main_co)
         ff = git(main_co, "merge", "--ff-only", candidate, check=False)
         if ff.returncode == 0:
             land_full.forget(wt, branch)
             landed = out(main_co, "rev-parse", "HEAD")
+            if carried := land_mainred.landed(wt, landed, branch):  # closes too; never before the ff
+                summary.append(f"main-red carried {carried}: no land record (pre-push, publish_main see none)")
             if reusable and landed == candidate:
                 record = land_record.write(wt, candidate, main_sha, invocations,
-                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))])
+                                           [str(p) for p in sorted(logdir.glob(f"run-{round_no}-*.txt"))], prepared=prepared,
+                                           tier="full" if note else "records" if delta and all(map(record_only, delta)) else "affected")
                 summary.append(f"land record for pre-push: {record}")
             count = out(wt, "rev-list", "--count", f"{start}..{landed}")
             print("\n".join(["== landed (not pushed)", *summary,
@@ -528,21 +454,43 @@ def land(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--main-checkout", help="path of the worktree that has main checked out")
-    parser.add_argument("--tests", default="auto", help='auto | none | "<pytest args>"')
+    parser.add_argument("--tests", default="auto", help='auto | full (queued canonical FULL) | "<pytest args>"'
+                        ' run on top of the selection | none'
+                        ' (with --skip-reason)')
+    parser.add_argument("--skip-reason", default="", help="the user's explicit words that allow --tests none")
     parser.add_argument("--node", action="store_true", help="also node --test the selected test dirs' web/*.mjs")
     parser.add_argument("--max-rounds", type=int, default=5)
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
     parser.add_argument("--prune", action="store_true", help="remove finished worktrees (lossless prune) first")
     parser.add_argument("--no-prune", action="store_true", help="do not report finished worktrees either")
     parser.add_argument("--no-cache", action="store_true", help="rerun every invocation (no land_cache.py reuse)")
-    parser.add_argument("--queue-timeout", type=float, default=180, help="minutes to wait in the landing queue")
+    parser.add_argument("--queue-timeout", type=float, default=0, help="minutes to wait in the queue (0: no limit)")
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
     args = parser.parse_args(argv)
+    if not land_selection.configure(sys.modules[__name__], args):
+        return 2
     try:
-        return land(args)
+        wt = Path(out(Path.cwd(), "rev-parse", "--show-toplevel"))
+        code = land_checks.landed_copy(Path(args.main_checkout) if args.main_checkout else main_checkout(wt),
+                                       sys.argv[1:] if argv is None else argv)
+        if code is not None:
+            return code
+        land_events.bind(wt, out(wt, "rev-parse", "--abbrev-ref", "HEAD"))
+        if argv is None:  # the command line only: tests call main() in a pytest process the watchdog must not end
+            land_watchdog.start(tmp_dir(land_events._where["branch"]), land_events, land_queue, remote_pytest.remote_job)
+        if args.tests == "none":
+            land_events.emit("skip", reason=args.skip_reason.strip()[:300])
+        if (code := land(args)) == 0 and not args.dry_run:
+            land_events.emit("landed", sha=out(wt, "rev-parse", "HEAD"))
+        return code
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)
+        land_events.emit("stop", reason=str(exc).splitlines()[0][:300])
         return 1
+    except SystemExit as exc:  # remote_pytest gives up on its hosts this way (no host, venv setup): still a stop
+        if isinstance(exc.code, str):
+            land_events.emit("stop", reason=exc.code.splitlines()[0][:300])
+        raise
     finally:
         land_queue.leave()  # also on Ctrl-C; a killed process's ticket is reclaimed by PID
 

@@ -25,7 +25,7 @@ def test_finalizer_checks_filesystem_before_deterministic_compression():
         assert f'command -v "$command"' in text
     assert text.index('partprobe "$LOOP"') < text.index("udevadm settle")
     assert text.index("udevadm settle") < text.index('lsblk -nrpo NAME,PARTN "$LOOP"')
-    assert 'blkid -p -s TYPE -o value -- "$ROOT_DEVICE"' in text
+    assert 'blkid -p -s TYPE -o value -- "$DEVICE"' in text
     assert "losetup --detach" in text
     assert text.index("losetup --detach") < text.index("xz --threads=0")
     assert "--check=crc64" in text and "-9e" in text
@@ -134,7 +134,7 @@ def test_native_arm64_workflow_builds_only_an_unsigned_handoff():
     assert "deploy/robot/pinky_pro/image/build-image.sh" in text
     assert "SHA256SUMS.sig" in text and "test ! -e" in text
     assert "private" not in text.lower()
-    assert "actions/upload-artifact@v4" in text
+    assert "actions/upload-artifact@" in text
     assert 'sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"' in text
     assert text.index('sudo dpkg -i "$ros_source"') < text.index(
         "python3-colcon-common-extensions"

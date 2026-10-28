@@ -22,7 +22,7 @@ serial, capped at its free GB, smallest invocations); the site PC only when no o
 An invocation gets pytest-xdist ``-n`` unless ``xdist_plan.py`` keeps it serial. Several invocations
 share one queue over the chosen hosts (D-553): each host runs one at a time and takes the next
 when free, largest test files first. Pytest never runs on this machine (D-584): when no host is reachable
-the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 600), then the
+the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 3600), then the
 gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
 Logs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-pytest/<sha>``, or the system
 temp directory without ``ROSY_SCRATCH``), one
@@ -55,11 +55,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.append(str(Path(__file__).resolve().parents[2] / "test"))
 import known_failures  # noqa: E402
 import lab_hosts  # noqa: E402
+import memory_history  # noqa: E402
 import remote_job  # noqa: E402
 import remote_test_tools  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
-from work_queue import Work, cost  # noqa: E402,F401
+from work_queue import ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, wanted, workers  # noqa: E402,F401
+
+CANCELLED = remote_job.CANCELLED
 
 # A Windows console or pipe encodes with the legacy code page (cp1252), so printing a
 # UTF-8 pytest tail that carries Korean operator text raised UnicodeEncodeError at the
@@ -94,10 +97,12 @@ RESERVE_S = {"pytest": 4500, "pick": 600}
 PUBLIC = "https://github.com/robotics-team-1213/rosy-platform.git"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
        "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4"]
-PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", *known_failures.NO_ROS_LAUNCH_PLUGINS]
+# --rootdir=. (the run worktree): node ids stay repo-relative; without it the first arg's nearest
+# pyproject.toml (even one with no pytest section) became rootdir and FAILED ids lost their root.
+ROOTDIR = "--rootdir=."
+PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", ROOTDIR, *known_failures.NO_ROS_LAUNCH_PLUGINS]
 # Leading words of an invocation that remote_job.JOB exports instead of passing to pytest.
 ENV_ARG = re.compile(r"^ROSY_[A-Z0-9_]*=")
-BROWSER_ENV = "ROSY_RUN_BROWSER_TESTS=1"
 CI = ".github/workflows/ci.yml"
 DEVICE_REQ = "deploy/robot/pinky_pro/image/device-python-requirements.txt"
 CRYPTO_REQ = "deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt"
@@ -107,7 +112,7 @@ TAIL_LINES = 25
 # Seconds before one pytest invocation counts as hung (a failure).
 PYTEST_TIMEOUT = int(os.environ.get("ROSY_TEST_TIMEOUT", "5400"))
 # D-584: how long run() waits for a test host before failing, and the poll interval (seconds).
-WAIT_S, POLL_S = 600.0, 30.0
+WAIT_S, POLL_S = 3600.0, 30.0  # 2026-10-27: other landings' pretests held every host past 600 s
 STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 
 # Fetch public main, unpack the bundle (stdin), check the commit out. Exit 3 = the
@@ -169,16 +174,21 @@ def capped(host: str) -> str:
     return scope + "nice -n 15 ionice -c3 "
 
 
-def remote(host: str, script: str, *args: str, timeout: float, **kw) -> subprocess.CompletedProcess:
-    """Run script on host under capped(host); a timeout is a failed step (exit 124), never a pass."""
-    command = capped(host) + "bash -c " + shlex.quote(script) + " remote " + " ".join(map(shlex.quote, args))
+def remote(host: str, script: str, *args: str, timeout: float, tries: int = 1, **kw) -> subprocess.CompletedProcess:
+    """Run script on host under capped(host); a timeout fails the step (exit 124); ssh 255 reruns, ``tries`` in all."""
+    command = remote_job.argv_command(script, args, capped(host))
     if "input" not in kw:
         kw["stdin"] = subprocess.DEVNULL
-    try:
-        return subprocess.run([*SSH, host, command], timeout=timeout, **kw)
-    except subprocess.TimeoutExpired:
-        print(f"[remote-pytest] {host}: step timed out after {timeout:.0f} s", file=sys.stderr, flush=True)
-        return subprocess.CompletedProcess([], 124, b"", b"")
+    for attempt in range(tries):
+        try:
+            result = remote_job.step([*SSH, host, command], timeout=timeout, **kw)  # beats while it runs
+        except subprocess.TimeoutExpired:
+            print(f"[remote-pytest] {host}: step timed out after {timeout:.0f} s", file=sys.stderr, flush=True)
+            return subprocess.CompletedProcess([], 124, b"", b"")
+        if result.returncode != 255 or attempt == tries - 1:
+            return result
+        print(f"[remote-pytest] {host} lost the link; retrying", file=sys.stderr, flush=True)
+        time.sleep(remote_job.BACKOFF[attempt])
 
 
 def probe(host: str) -> dict | None:
@@ -191,9 +201,10 @@ def probe(host: str) -> dict | None:
     return parse_probe(out)
 
 
-def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[str], list[str]]:
-    """(hosts above the cls floor, most headroom first, light ones after, the site PC only when no other fits; notes)."""
-    need_c, need_m = NEEDS[cls]
+def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0) -> tuple[list[str], list[str]]:
+    """(hosts above the cls floor, most headroom first, light ones after, the site PC only when no other fits; notes).
+    ``cores``: an invocation's own ``ROSY_JOB_CORES`` (its lock's reservation) raises the core floor to it."""
+    need_c, need_m = max(NEEDS[cls][0], cores), NEEDS[cls][1]
     floor_m = LIGHT_GB.get(cls, need_m)
     ranked, notes = [], []
     for i, (host, p) in enumerate(zip(hosts, probes)):
@@ -208,9 +219,11 @@ def place(cls: str, hosts: list[str], probes: list[dict | None]) -> tuple[list[s
                else f"below {cls} floor {need_c} cores/{floor_m} GB" if cores < need_c or mem < floor_m
                else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
         disk = f", disk {p['disk_free_gb']:.1f} GB free ({p['disk_use']}%)" if "disk_free_gb" in p else ""
-        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}")
+        stale = f"; busy marker {p['busy_ignored']} (ignored)" if p.get("busy_ignored") else ""
+        notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}{stale}")
         if why == "ok" or why.startswith("light"):
-            HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m}
+            HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m,
+                              "sim_held": p.get("sim_held", 0), "browser_jobs": p.get("browser_jobs", 0)}
             ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))
     ranked.sort()
     return [r[-1] for r in ranked if not r[0]] or [r[-1] for r in ranked], notes
@@ -253,7 +266,7 @@ def check_tailscale_profile(expected: str | None = None, which=shutil.which, run
                          f" tailnet. Switch by hand: tailscale switch {expected}")
 
 
-def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[str]:
+def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None, cores: int = 0) -> list[str]:
     """Hosts for cls by measured headroom (D-568), printing why; empty when none fits."""
     refuse_local()
     check_tailscale_profile()
@@ -267,10 +280,10 @@ def placed_hosts(cls: str = "pytest", hosts: list[str] | None = None) -> list[st
     with ThreadPoolExecutor(len(hosts)) as pool:
         probes = list(pool.map(probe, hosts))
     SITES.update(h for h, p in zip(hosts, probes) if p and p.get("site"))
-    chosen, notes = place(cls, hosts, probes)
+    chosen, notes = place(cls, hosts, probes, cores)
     for note in notes:
         print(f"[remote-pytest] {note}", file=sys.stderr, flush=True)
-    if not chosen and cls == "pytest":
+    if not chosen and cls == "pytest" and cores <= NEEDS[cls][0]:  # a job's own core need waits instead
         # D-568 7: busy hosts must not stop the gate; the site PC and a full disk never take this fallback.
         chosen = [h for h, p in zip(hosts, probes)
                   if p and p["pytest"] and not p["busy"] and not disk_full(p) and h not in SITES]
@@ -318,13 +331,8 @@ def ship(repo: Path, host: str, sha: str, name: str) -> None:
         for base in (base0, None):
             data = subprocess.run(["git", "-C", str(repo), "bundle", "create", "-", ref,
                                    *([f"^{base}"] if base else [])], capture_output=True, check=True).stdout
-            for attempt in range(3):  # a dropped link (ssh 255) ships again from scratch
-                result = remote(host, SHIP, name, sha, PUBLIC, str(RESERVE_S["pytest"]), input=data,
-                                capture_output=True, timeout=STEP_TIMEOUT["ship"])
-                if result.returncode != 255 or attempt == 2:
-                    break
-                print(f"[remote-pytest] shipping to {host} lost the link; retrying", file=sys.stderr, flush=True)
-                time.sleep(remote_job.BACKOFF[attempt])
+            result = remote(host, SHIP, name, sha, PUBLIC, str(RESERVE_S["pytest"]), input=data,
+                            capture_output=True, timeout=STEP_TIMEOUT["ship"], tries=3)
             if result.returncode == 0:
                 return
             if result.returncode != 3 or not base:
@@ -353,10 +361,13 @@ def capture(command: list[str], log: Path, cwd: Path | None = None) -> int:
 
 def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo: Path | None = None,
         label: str | None = None, wait: float = WAIT_S, poll: float = POLL_S, sleep=time.sleep,
-        clock=time.monotonic, test_tools: str | None = None) -> list[int]:
+        clock=time.monotonic, test_tools: str | None = None, on_done=None, stop=None) -> list[int | str]:
     """Run each pytest invocation for commit sha on a test host; one exit code per invocation.
 
     No host: retry every poll s for up to wait s, then fail (D-584); never runs pytest here.
+    on_done(invocation, log_path) -> bool is asked after each finished invocation (not a lost one); True or an
+    exception cancels the rest: queued ones never start, visible running jobs are TERMed, both come back CANCELLED.
+    A supplied stop event also cancels unfinished invocations through the same remote polling path.
     """
     remote_test_tools.validate(test_tools)
     refuse_local()
@@ -364,36 +375,47 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     sha = git(repo, "rev-parse", f"{sha}^{{commit}}")
     if not invocations:
         return []
+    if stop is not None and stop.is_set():
+        return [CANCELLED] * len(invocations)
     deadline = clock() + wait
-    hosts = placed_hosts("pytest")
+    cores = max((int(w[15:]) for inv in invocations for w in itertools.takewhile(ENV_ARG.match, inv)
+                 if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), default=0)
+    hosts = placed_hosts("pytest", cores=cores)
     while not hosts:
+        if stop is not None and stop.is_set():
+            return [CANCELLED] * len(invocations)
         if clock() + poll > deadline:
             raise SystemExit(f"[remote-pytest] no test host reachable (D-584) after {wait:.0f} s;"
                              " the tests did not run. Report them as not run; do not land or push.")
         print(f"[remote-pytest] no test host reachable; retrying in {poll:.0f} s (D-584)", file=sys.stderr, flush=True)
         sleep(poll)
-        hosts = placed_hosts("pytest")
-    hosts = hosts[:len(invocations)]
-    if len(hosts) == 1:
-        return run_on(hosts[0], invocations, logs, sha, repo, label,
-                      **({"test_tools": test_tools} if test_tools else {}))
+        hosts = placed_hosts("pytest", cores=cores)
+    plan = workers(hosts[:len(invocations)], invocations, HEADROOM)  # (host, kind): browser lanes beside main
+    if len(plan) == 1:
+        codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
+                       **({"test_tools": test_tools} if test_tools else {}), **({"on_done": on_done} if on_done else {}),
+                       **({"stop": stop} if stop is not None else {}))
+        return cancelled(invocations, codes) if on_done or stop is not None else codes
     # D-553 4: every host ships and builds its venv once, then takes the next invocation when free.
-    work = Work(sorted(range(len(invocations)), key=lambda i: -cost(repo, invocations[i])))
+    work = Work(sorted(range(len(invocations)), key=lambda i: -cost(repo, invocations[i])), on_done, stop=stop)
+    gates = {host: Gate() for host, _ in plan}
 
-    def attempt(host):
+    def attempt(slot):
+        host, kind = slot
         try:
-            run_on(host, invocations, logs, sha, repo, label, work,
-                   **({"test_tools": test_tools} if test_tools else {}))
+            run_on(host, invocations, logs, sha, repo, label, work, kind=kind, gate=gates[host],
+                   **({"test_tools": test_tools} if test_tools else {}),
+                   **({"stop": stop} if stop is not None else {}))
             return True
         except SystemExit as error:  # ship/venv failed; pytest failures are exit codes, not this
             print(f"[remote-pytest] {host} failed ({error}); the other hosts take its invocations",
                   file=sys.stderr, flush=True)
             return False
 
-    with ThreadPoolExecutor(len(hosts)) as pool:
-        ok = list(pool.map(attempt, hosts))
-    while work.todo:  # handed back after a mid-run failure, or left by a lost host, once the rest were done
-        working = [h for h, good in zip(hosts, ok) if good and h not in work.lost]
+    with ThreadPoolExecutor(len(plan)) as pool:
+        ok = list(pool.map(attempt, plan))
+    while work.todo and not work.stop.is_set():  # handed back after a mid-run failure, or left by a lost host, once the rest were done
+        working = [h for (h, _), good in zip(plan, ok) if good and h not in work.lost]
         if not working:
             if not any(ok):
                 raise SystemExit("[remote-pytest] every test host failed to set up")
@@ -401,7 +423,10 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
                 work.codes[i] = remote_job.LOST_EXIT
             break
         run_on(working[0], invocations, logs, sha, repo, label, work,
-               **({"test_tools": test_tools} if test_tools else {}))
+               **({"test_tools": test_tools} if test_tools else {}),
+               **({"stop": stop} if stop is not None else {}))
+    if on_done or stop is not None:
+        return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])
     return [work.codes[i] for i in range(len(invocations))]
 
 
@@ -413,14 +438,15 @@ def quarantine(repo: Path, sha: str) -> dict[str, str]:
 
 
 def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, repo: Path,
-           label: str | None, work: Work | None = None, test_tools: str | None = None) -> list[int]:
+           label: str | None, work: Work | None = None, test_tools: str | None = None, on_done=None,
+           kind: str = "any", gate: Gate | None = None, stop=None) -> list[int]:
     """Run invocations on host, one at a time; one exit code per invocation.
 
     With a shared work (run() over several hosts) the host takes indices from it until none is left or the
     host is lost; an index that raises mid-run goes back for another host. Codes land in work.codes."""
     remote_test_tools.validate(test_tools)
     shared = work is not None
-    work = work or Work(range(len(invocations)))
+    work = work or Work(range(len(invocations)), on_done, stop=stop)
     name = f"{label or sha[:10]}-{secrets.token_hex(3)}"
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
     lost = None
@@ -433,24 +459,29 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
             field = "raw-blob" if test_tools == remote_test_tools.PROFILE else "input-blobs"
             print(f"[remote-pytest] test-tools={test_tools} tested={sha} deps={deps_sha} {field}={blobs}", flush=True)
         recipe = remote_test_tools.render_setup(VENV, test_tools)
-        if remote(host, recipe, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"]).returncode != 0:
+        if remote(host, recipe, name, deps_sha, *dirs, timeout=STEP_TIMEOUT["venv"], tries=3).returncode != 0:
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
-        take = work.take_small if HEADROOM.get(host, {}).get("light") else work.take
+        pick = wanted(kind, invocations)
+        take = work.take_small if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick)
         while not (lost and shared) and (i := take()) is not None:
-            inv, log = invocations[i], logs[i]
+            inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)
             print(f"[remote-pytest] pytest {' '.join(inv)}  -> {log}", flush=True)
             if lost:
                 work.codes[i] = remote_job.LOST_EXIT
                 continue
             try:
                 context = [name, deps_sha, cpu, *([test_tools] if test_tools else [])]
-                work.codes[i], lost = one(host, name, k, inv, log, context, repo, sha)
+                with guard(gate, kind, inv):
+                    work.codes[i], lost = one(host, name, k, inv, log, context, repo, sha, queued,
+                                              **({"stop": work.stop} if work.on_done or stop is not None else {}))
             except BaseException:
-                work.todo.appendleft(i)  # never dropped: another host (or run()'s fallback) runs it
+                work.give_back(i)  # never dropped: another host (or run()'s fallback) runs it
                 raise
             k += 1
+            if not lost and work.codes[i] != CANCELLED:
+                work.done(inv, log)
         if lost:
             work.lost.add(host)
         return [work.codes.get(i) for i in range(len(invocations))]
@@ -463,17 +494,24 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
 
 
 def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str], repo: Path,
-        sha: str) -> tuple[int, str | None]:
+        sha: str, queued: int = 0, **stop) -> tuple[int | str, str | None]:
     """(exit code, lost message or None) of invocation inv as job k of run dir name on host."""
-    words, extra, note = xdist_plan.plan(inv, HEADROOM.get(host))
+    words, extra, note, began = *xdist_plan.plan(inv, HEADROOM.get(host)), time.monotonic()
+    history = memory_history.path(repo)
+    words, note = memory_history.reserve(history, inv, words, note)
     print(f"[remote-pytest] {note}", flush=True)
     try:
-        code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH)
+        code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH, **stop)
     except remote_job.Lost as error:
         print(error, file=sys.stderr, flush=True)
         return remote_job.LOST_EXIT, str(error)
+    if code == CANCELLED:
+        return code, None
     text = log.read_bytes().decode("utf-8", errors="replace")
     print("".join(collections.deque(text.splitlines(keepends=True), TAIL_LINES)), end="", flush=True)
+    if (peak := memory_history.peak_mib(text)) is not None:
+        memory_history.record(history, inv, host, peak, sha, memory_history.cpu_cores(text),
+                              memory_history.timing(text, queued, time.monotonic() - began))
     failed = known_failures.failed_ids(text)
     ids = known_failures.rerun_ids(text, quarantine(repo, sha)) if code == 1 and failed else []
     if not known_failures.should_rerun(code, failed, ids):  # D-762 stage 1: once, listed ids only
@@ -482,8 +520,8 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
     rerun, lost = log.with_name(log.stem + "-rerun.txt"), None
     try:
         env = [*words, *itertools.takewhile(ENV_ARG.match, inv)]  # serial: ids, never -n
-        rerun_code = remote_job.run(host, name, f"{k}r", rerun, job, [*env, *ids, "-q", "-rA", "-p", "no:cacheprovider"],
-                                    PYTEST_TIMEOUT, SSH)
+        rerun_code = remote_job.run(host, name, f"{k}r", rerun, job, [*env, *ids, "-q", "-rA", "-p", "no:cacheprovider", ROOTDIR],
+                                    PYTEST_TIMEOUT, SSH, **stop)
     except remote_job.Lost as error:
         lost, rerun_code = str(error), remote_job.LOST_EXIT
         print(lost, file=sys.stderr, flush=True)
@@ -527,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip", action="append", default=[], help="drop this path from the affected set")
     parser.add_argument("--local", action="store_true", help=argparse.SUPPRESS)  # removed, rejected (D-584)
     parser.add_argument("--require-host", action="store_true", help="no-op: always the behaviour (D-584)")
-    parser.add_argument("--wait", type=float, default=WAIT_S, help="seconds to wait for a test host (default 600)")
+    parser.add_argument("--wait", type=float, default=WAIT_S, help="seconds to wait for a test host (default 3600)")
     parser.add_argument("--retry-poll", type=float, default=POLL_S, help="seconds between host probes (default 30)")
     parser.add_argument("--pick", choices=sorted(NEEDS),
                         help="only print the host with the most headroom for this job class (D-568)")

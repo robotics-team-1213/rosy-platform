@@ -37,24 +37,28 @@ def base_recipe():
                 and any(isinstance(t, ast.Name) and t.id == "VENV" for t in n.targets))
 
 
-def test_default_recipe_and_hash_remain_identical(monkeypatch):
+def test_default_recipe_changes_only_pytest_pin_and_rekeys_the_environment(monkeypatch):
     old = base_recipe()
-    assert rp.VENV == old
-    assert tools().render_setup(rp.VENV, None) == old
+    pinned = old.replace('"$N/site-extra.txt" pytest setuptools',
+                         '"$N/site-extra.txt" pytest==9.1.1 setuptools')
+    assert pinned != old
+    assert rp.VENV == pinned
+    assert tools().render_setup(rp.VENV, None) == pinned
     assert tools().render_job(rj.JOB, None) == rj.JOB
     before = rp.deps(ROOT, BASE)
     ci = rp.git(ROOT, "show", f"{BASE}:.github/workflows/ci.yml")
     dirs = re.search(r'--wheel-dir "\$wheelhouse" \\\n\s*(.+)', ci).group(1).split()
     paths = (rp.CI, rp.DEVICE_REQ, rp.CRYPTO_REQ, rp.FLEET_REQ, rp.VISION_REQ, *dirs)
     ids = [rp.git(ROOT, "rev-parse", f"{BASE}:{p}") for p in paths]
-    install = old.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
+    install = pinned.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
     expected = hashlib.sha256("\n".join([install, *ids]).encode()).hexdigest()[:16]
     assert before == (expected, dirs)
     monkeypatch.setattr(rp, "VENV", old)
-    assert rp.deps(ROOT, BASE, test_tools=None) == before
+    legacy = rp.deps(ROOT, BASE, test_tools=None)
+    assert legacy[1] == before[1] and legacy[0] != before[0]
     # Preserve the existing VENV install-recipe monkeypatch contract.
     monkeypatch.setattr(rp, "VENV", old.replace("$P check", "$P check # changed"))
-    assert rp.deps(ROOT, BASE)[0] != before[0]
+    assert rp.deps(ROOT, BASE)[0] != legacy[0]
 
 
 @pytest.mark.parametrize("entry", ["api", "cli"])
@@ -302,10 +306,10 @@ def test_setup_failure_starts_no_job(monkeypatch, tmp_path):
 
 def test_run_dispatches_selected_profile_to_every_host(monkeypatch, tmp_path):
     monkeypatch.setattr(rp, "git", lambda repo, *args: str(ROOT) if args[-1] == "--show-toplevel" else BASE)
-    monkeypatch.setattr(rp, "placed_hosts", lambda *a: ["a", "b"])
+    monkeypatch.setattr(rp, "placed_hosts", lambda *a, **k: ["a", "b"])
     monkeypatch.setattr(rp, "cost", lambda *a: 1)
     contexts = []
-    def run_on(host, invocations, logs, sha, repo, label, work=None, *, test_tools=None):
+    def run_on(host, invocations, logs, sha, repo, label, work=None, *, test_tools=None, **lane):  # kind, gate
         contexts.append((host, test_tools))
         while (i := work.take()) is not None:
             work.codes[i] = 0

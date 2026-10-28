@@ -71,7 +71,7 @@ REVIEW = [
     "test/learning/perception/test_review_app_smoke.py",
 ]
 OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for name in
-                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments")]
+                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments", "camera_reference")]
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
@@ -153,12 +153,23 @@ def targets(paths: list[str]) -> list[str]:
             if path.startswith(prefix):
                 for pattern in patterns:
                     selected.update(_expand(pattern))
-        if path in known or (path.endswith("_browser.py") and (ROOT / path).is_file()):
+        # test_ prefix: tools/land_browser.py is a module, not a test (2026-10-26 landings stopped on it)
+        if path in known or (path.rsplit("/", 1)[-1].startswith("test_") and path.endswith("_browser.py")
+                             and (ROOT / path).is_file()):
             selected.add(path)
     return sorted(selected)
 
 
+def all_targets() -> list[str]:
+    """Expand every registered browser target in this candidate tree."""
+    return sorted({path for pattern in EVERYTHING for path in _expand(pattern)})
+
+
 def main(argv: list[str]) -> int:
+    if argv == ["--all", "--json"]:
+        import json
+        print(json.dumps(all_targets()))
+        return 0
     found = targets(argv)
     if not found:
         print("browser_scope: no browser tests for these paths", file=sys.stderr)

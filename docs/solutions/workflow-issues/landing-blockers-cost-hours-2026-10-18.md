@@ -1,6 +1,7 @@
 ---
 title: Four landing blockers cost hours on one day; size-locked units, a red main, a crowded test queue and oversized branches
 date: 2026-10-18
+last_updated: 2026-10-27
 category: workflow-issues
 module: tools/land.py, tools/land_checks.py, tools/harness/size_range.py, tools/harness/affected_tests.py, tools/harness/affected_narrow.py, shared/web/surfaces.yaml
 problem_type: workflow_issue
@@ -19,6 +20,7 @@ applies_when:
   - "a land.py run stops on a D-766 size verdict, or a NEW failure in a file the branch did not change"
   - "planning a change inside fleet, site_ui/console, rosy_auto_update.py, trip_runner.py or trip_ports.py"
   - "a branch bundles several tasks (WebRTC T2-T5 + console + topology) into one landing"
+  - "an existing package still claims a size unit but its registration disappeared during history reconstruction"
 tags: [land-py, d-766, size-ratchet, restack, main-red, affected-tier, surfaces-yaml, test-queue, branch-size]
 ---
 
@@ -65,6 +67,20 @@ took hours to land. Four separate things blocked it.
 - **Root cause:** cost per landing is set by the selection size (a FULL round runs every suite) and
   by the number of sessions landing at once. Nothing in the workflow made a session weigh the land
   cost before bundling.
+- **Update 2026-10-27:** "no test host reachable" also means *every host refused*, and the refusals
+  were bookkeeping, not load. The model PC had 20 GB `MemAvailable` but showed "-5.2 GB free":
+  `place()` takes `min(MemAvailable, total - lock GB)`, and each job locked 3 GB (or 6) although
+  the highest peak per argv was a median 292 MiB, p90 852 MiB (763 argvs, 3,077 runs). The site
+  PC was refused at every probe for "disk 7.4 GB free": the floor took the smaller of
+  `~/rosy-test`'s and `/tmp`'s free GB, and its `/tmp` is a 7.4 GB tmpfs at 1%. The AI PC was
+  under its floor too, so a landing that had queued an hour gave up at the 600 s wait. Earlier
+  the same day one `Connection timed out during banner exchange` in venv setup ended another
+  landing (shipping retried ssh 255, venv setup did not). Neither death wrote a `stop` event, so
+  `land_stats` showed zero host failures among the week's 55 stops. Fixed: a reservation of
+  1.25 x the argv's measured peak (1-6 GB), the GB floor on `~/rosy-test` only plus a 99 % use
+  rule, `remote(..., tries=3)` for ship and venv setup, a 3600 s wait, and a `stop` for a string
+  `SystemExit`. **Before raising `MAX_PREPARING` or buying hosts, compare each host's probe line
+  ("N GB free") with `free -g` on it:** a gap is a bookkeeping refusal, not a full host.
 
 ### 4. Big bundles
 
@@ -142,8 +158,92 @@ took hours to land. Four separate things blocked it.
   merge of `main` kept the branch's copy of a gap line `main` had already removed when that ADR landed, and lint
   stopped the landing with "declared gap now exists" (three branches that day, `feat/land-queue` among them).
   After each merge of `main`, `tools/land.py` now drops every gap line whose ADR file or Log row exists
-  (`land_merge.landed_gaps`), commits that on the topic branch and prints it in the land log. Test:
+  (`land_merge.landed_gaps`) and prints it in the land log. Since 2026-10-26 this happens inside `land.merge`, in
+  the merge commit itself (see 6). Test:
   `test/test_land.py::test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge`.
+
+### 6. The queue held for FULL turns that had already passed (2026-10-25)
+
+- **Symptom:** 12 tickets queued, the oldest 173 min. Turns with the affected tier took 4-13 min, but a turn that
+  ran FULL held everyone behind it for about an hour (`feat/rasptank-no-motion`, 22:17-23:20), although its FULL
+  tier had passed while it waited. One branch restarted 16 times before landing. Numbers from six sessions:
+  workspace record `local-main-landing-speed.md` (outside the repo).
+- **Root causes found in the code:**
+  - main's delta during the wait held `tools/harness/affected_tests.py`, so the delta selection escalated
+    ("harness configuration or the selector itself") and the turn ran FULL again. That harness edit had passed its
+    own FULL tier when it landed.
+  - The turn loop committed the gap clean-up as a separate non-merge commit. `land_full.restore` treats any
+    non-merge commit after the FULL candidate as new code, so the FULL pass was voided. A merge commit that
+    `generate` changed (`docs/index.md`) was voided the same way.
+  - `pretest()` merged `main` without the gap clean-up, so lint stopped it with "declared gap now exists" when a
+    peer had declared a gap for the ADR the branch adds (D-877).
+  - A `--no-queue` landing at 22:52 moved `main` in the middle of another turn and gave that turn a second round.
+- **Fixed (2026-10-26):** `land.merge` drops landed gap lines in the merge commit (pretest and turn alike);
+  `land_full.restore` keeps a FULL pass when the merge commit differs from git's merge only in the records
+  `land_merge.resolver` auto-resolves; a delta that escalated only for landed harness files runs its guards and
+  mapped suites (`select(..., landed=True)`); `--no-queue` is refused while a live ticket holds its turn. Tests:
+  `test/test_land.py::test_a_gap_main_declared_for_an_adr_this_branch_adds_is_dropped_by_the_pretest_merge`,
+  `::test_a_merge_that_only_dropped_gap_lines_keeps_the_full_pass`,
+  `::test_main_delta_escalated_only_by_landed_harness_files_runs_its_mapped_suites`,
+  `::test_no_queue_is_refused_while_a_lander_holds_its_turn`.
+- **Retries rerun only what failed (2026-10-26):** `run_tests` stopped on the first NEW failure, so the passes
+  after it were never kept, and it kept nothing when any invocation lost its host. One fixed failure then reran
+  every invocation. Now every invocation is judged, each clean pass of its own usable evidence is kept
+  (`land_cache`), and the stop lists every failure at the end. LOAD-FLAKY passes are still not kept. Tests:
+  `test/test_land.py::test_a_new_failure_still_keeps_the_invocations_that_passed_beside_it`,
+  `::test_cache_never_keeps_a_failure_or_a_partial_run`.
+- **What failed last time runs first (2026-10-26):** an invocation with a NEW failure is marked in
+  `<git-common-dir>/rosy-land-failed.json` and cleared once it passes. The next run sends the marked ones to the
+  test PCs alone first; if they fail again the landing stops before the rest is spent. Test:
+  `test/test_land.py::test_what_failed_last_run_runs_alone_first_and_a_repeat_stops_before_the_rest`.
+- **A branch's reordered copy of main's log entries (2026-10-26):** a hand-fitted merge of main left main's
+  `docs/logs.md` entries in another order on the branch; the turn stopped "a side changed existing lines".
+  `land_logs.append_blocks` now keeps main's order when the branch only reordered (nothing edited or dropped)
+  and inserts the branch's new entries by date; main reordering, or an edit, still stops. Test:
+  `test/test_land.py::test_logs_md_this_branch_reordering_mains_entries_keeps_mains_order`.
+- **Old branches landed with old landing code (2026-10-26):** `land.py` ran from the landing branch's own copy,
+  so a branch made before a landing fix still landed with the old rules (robot-71's turn stopped on a log merge
+  that main's `land_logs` already accepts). `land_checks.landed_copy` now re-runs main's `tools/land.py` with the
+  same arguments, in the branch's worktree, whenever the branch's `tools/land*.py` differ from main's
+  (`ROSY_LAND_OWN_COPY` stops a second re-run). Test:
+  `test/test_land.py::test_a_branch_with_older_landing_code_lands_with_mains_copy`.
+- **A FULL tier at the front held everyone (2026-10-26):** the pretest ran only when someone was ahead, so a
+  FULL lander first in line ran its tier inside the lock (`feat/monitoring-registration`, 40+ min, 10 batches).
+  Tickets now carry a status: `preparing` (the FULL tier before the turn: keeps its place, blocks no one),
+  `waiting`, `turn`. A turn starts when no ticket is in its turn and no earlier ticket is waiting
+  (`land_queue.blockers`). The pretest runs for every auto landing without a FULL record. Tests:
+  `test/test_land_queue.py::test_a_preparing_ticket_keeps_its_place_without_blocking_and_a_turn_blocks_everyone`,
+  `test/test_land.py::test_harness_selector`.
+- **Every tier prepares outside the lock (2026-10-26, D-889 A'):** `land_prepare.prepare` runs each auto
+  landing's own selection before its turn (ticket `pending` until fewer than three prepare, then
+  `preparing`; neither blocks anyone) and records the tier that passed. The turn selects main's delta since
+  that main on the candidate, so overlap is judged by the selector, not by a separate area model; a delta
+  that escalates to FULL is prepared outside the lock again and the ticket waits once more. Without the
+  D-436 selector only a FULL tier prepares. Tests:
+  `test/test_land.py::test_an_affected_landing_prepares_outside_the_lock_and_its_turn_runs_mains_delta_only`,
+  `test/test_land_queue.py::test_at_most_three_landings_prepare_at_once_and_a_pending_one_blocks_no_one`.
+- **First confirmed failure stops the round; the turn has a time cap (2026-10-26):** a round ran 19 more min
+  after its first real failure. `run_tests` now judges each invocation as it finishes (`remote_pytest.run`
+  `on_done`, `land_checks.verdict`: known_failures, then the rerun alone) and cancels the rest on a confirmed
+  NEW failure; cancelled invocations are neither kept nor failures of their own. In a turn, tests past
+  `TURN_CAP_S` (600 s) cancel the rest as `Overtime`, and `land_prepare.again` runs them outside the lock
+  before the ticket waits again. Tests:
+  `test/test_land.py::test_a_confirmed_new_failure_cancels_the_rest_and_the_cancelled_are_neither_kept_nor_failures`,
+  `::test_the_turns_time_cap_cancels_the_rest_as_overtime_and_a_prepare_round_has_no_cap`.
+- **Queue time lost to a conflict found only at the turn (2026-10-26):** two landings waited 121 and 149 min, then
+  stopped on `tools/AGENTS.md`, where each side had edited a different table row. `land_merge.table_rows` now
+  merges AGENTS.md tables row by row (first cell as key; the same row changed on both sides, or dropped on one
+  and edited on the other, still needs a person), and `land_prepare.watch` previews the merge with
+  `git merge-tree` each time main moves during the wait, stopping at once on a conflict land.py cannot resolve.
+  `--queue-timeout` defaults to 0 (no limit): dead tickets are reclaimed by PID and refresh age, and a live
+  landing gained nothing from being dropped (robot-91 lost its prepared tier that way). Tests:
+  `test/test_land.py::test_agents_md_rows_edited_on_different_sides_merge_by_first_cell`,
+  `::test_agents_md_same_row_on_both_sides_needs_a_human`,
+  `test/test_land_queue.py::test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_limit`.
+- **Apply when:** a turn runs FULL after a green pretest, or a pretest stops on lint after merging `main`. Read the
+  selector's escalation for main's delta first (`rosy_harness.py affected --base <tested main> --head <main> --json`).
+- **Still open:** the queue is first-come, and tests run while the lock is held; the next stage (tests outside the
+  lock, a ready-order queue) is planned separately.
 
 The candidates as first written:
 
@@ -154,6 +254,32 @@ The candidates as first written:
    affected by `main`'s delta united with the branch's affected set, not the whole tier.
 3. **Keep branches narrow.** The existing rule in `AGENTS.md` 「같이 하는 깃」 1 (one landable concern
    per branch, about 15 changed files at most) keeps branches in narrow tiers, so a rerun is cheap.
+
+### 7. Accepted size-unit metadata was omitted during history reconstruction (2026-10-27)
+
+The OMX profile checkpoint passed its 49 behavior cases but failed the package-size guard at
+10,353 lines. Its earlier combined-prerequisite commit was already over the limit at 10,039.
+The existing `real` package and owner log said it was independently measured, yet
+`test/architecture/size_units.txt` lacked its row.
+
+History established a missing registration, not a newly eligible split. [PR #184](https://github.com/robotics-team-1213/rosy-platform/pull/184)
+contained `devices/omx/adapter/omx_adapter/real`; the local reconstruction retained its code and
+purpose statement but omitted the registry change. The first local history-join merge also
+retained the omission although its second parent contained the row.
+Current promotion criteria did not independently fire, so inventing a new lifecycle criterion
+would have hidden the cause. The repair restores the accepted row and its parent ownership entry.
+
+Before landing, the pending local restoration passed the complete affected selection:
+1,893 tests passed, 22 remained skipped, and the known-failure comparison reported no NEW failures.
+The measured parent changed from 9,681 to 8,348 lines; the existing real package remained 1,333.
+Its runtime source, limits, floor, ratchet and counting algorithm were unchanged. This verifies
+the pending source restoration, not native deployment or physical acceptance.
+
+When a package declaration and registry disagree, inspect the accepted source commit and merge
+parents before inventing another split or exception. Carry ownership and size metadata with the
+implementation. If consumer commits already exceed the limit, preserve them as evidence and
+rebuild from a base containing the prerequisite: a later registry merge cannot repair their
+per-commit verdicts. The old profile history still required that reconstruction at this checkpoint.
 
 ## Not fixed here
 

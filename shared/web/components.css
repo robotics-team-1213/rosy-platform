@@ -814,7 +814,7 @@ ui-topbar {
   position: sticky;
   z-index: 10;
   top: 0;
-  min-height: var(--topbar-height);
+  min-height: var(--appbar-height); /* D-741 앱 바 64px. Pilot 주행·Android 셸만 --topbar-height(D-741 부기) */
   padding: var(--inset-topbar);
   border-bottom: 1px solid var(--surface-line);
   background: var(--surface-recessed);

@@ -11,6 +11,7 @@
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
 | [monitoring](operations/monitoring/progress.md) | MONITORING | 6b0f7568f5 (2026-10-26) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 8036d90c09 (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [media_edge](middleware/media/progress.md) | ROBOT MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
 | [console_source](applications/fleet/web/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
@@ -40,7 +41,12 @@
 | [web_common](shared/web/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
-| [omx_adapter](middleware/devices/omx/adapter/progress.md) | OMX workcell | 7ae0f65c (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [omx_transfer](integrations/robots/omx/progress.md) | OMX workcell | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [omx_agent](middleware/devices/omx/agent/progress.md) | OMX workcell | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [execution_local](middleware/robot_execution/local/progress.md) | Robot execution | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [skill_api](middleware/skills/api/progress.md) | Skills | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [skill_manipulation](middleware/skills/manipulation/progress.md) | Skills | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [omx_adapter](middleware/devices/omx/adapter/progress.md) | OMX workcell | aec7f05a35 (2026-10-27) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](contracts/ros_idl/progress.md) | 장치 | 8058c3676 (2026-10-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](middleware/devices/pinky/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](middleware/devices/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
@@ -68,6 +74,10 @@
 - fleet_decision ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- situation LOCAL: AI PC 루프백 서비스로서의 연속 운영·재시작 관찰은 별도다(현재는 Fleet 분포에 3개 순수 파일만 설치되어 소비자가 섀도 운영).
+- situation ARTIFACT: AI PC 설치·버전 고정 산출물 검증은 별도.
+- situation DEVICE: 장치 연결 경로 없음 — 활성화 시 별도.
+- situation FIELD: D-516에 따라 AI PC의 현장 경로는 아직 활성화되지 않았다.
 - media ARTIFACT: measurement skipped by user decision 2026-10-18; compose.media.yaml/Dockerfile.media exist but no site media image was built, digest-pinned or read back
 - media DEVICE: measurement skipped by user decision 2026-10-18; no robot, Android device or production site installation
 - media FIELD: measurement skipped by user decision 2026-10-18; six physical robots never ran the 30-minute bandwidth/latency/control scenario

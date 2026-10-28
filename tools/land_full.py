@@ -31,10 +31,22 @@ def _path(wt: Path, branch: str) -> Path:
     return Path(common) / RECORDS / (branch.replace("/", "-") + ".json")
 
 
-def save(wt: Path, branch: str, candidate: str, main: str) -> None:
+def save(wt: Path, branch: str, candidate: str, main: str, tier: str | None = None,
+         invocations: list[list[str]] | None = None) -> None:
     path = _path(wt, branch)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"candidate": candidate, "main": main}), encoding="utf-8")
+    path.write_text(json.dumps({"candidate": candidate, "main": main, "tier": tier, "invocations": invocations}),
+                    encoding="utf-8")
+
+
+def prepared(wt: Path, branch: str, main: str | None) -> dict | None:
+    """The saved tier over ``main`` (tier, invocations, candidate, main) for the land record, or None."""
+    try:
+        record = json.loads(_path(wt, branch).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    ok = isinstance(record, dict) and main and record.get("main") == main and record.get("tier") in ("full", "affected")
+    return record if ok and isinstance(record.get("invocations"), list) else None
 
 
 def forget(wt: Path, branch: str) -> None:
@@ -48,6 +60,8 @@ def restore(wt: Path, branch: str) -> str | None:
         candidate, main = record["candidate"], record["main"]
     except (OSError, ValueError, KeyError, TypeError):
         return None
+    if record.get("tier") == "carried":
+        return None  # a main-red carry (land_mainred) is never green: the next run tests it again
     ancestor = lambda a, b: _git(wt, "merge-base", "--is-ancestor", a, b).returncode == 0  # noqa: E731
     if not (ancestor(candidate, "HEAD") and ancestor(main, "main")):
         return None
@@ -59,8 +73,10 @@ def restore(wt: Path, branch: str) -> str | None:
             return None  # something other than main was merged in
         tree = _git(wt, "merge-tree", "--write-tree", "--no-messages", first, others[0])
         if tree.returncode == 0:
-            if tree.stdout.split()[0] != _git(wt, "rev-parse", f"{sha}^{{tree}}").stdout.strip():
-                return None  # the merge commit changed more than git's own merge
+            # land.merge regenerates index.md and drops landed gap lines in the merge commit itself
+            edited = _git(wt, "diff", "--name-only", tree.stdout.split()[0], sha).stdout.split()
+            if not all(map(resolver, edited)):
+                return None  # the merge commit changed more than git's own merge and those records
         elif tree.returncode != 1 or not all(map(resolver, conflict_stages(tree.stdout))):
             return None  # a conflict outside land.py's auto-resolved records was settled by hand
     return main

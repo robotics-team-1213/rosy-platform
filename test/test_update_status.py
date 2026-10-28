@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import time
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('update_status', ROOT / 'tools/remote/update_status.py')
@@ -172,3 +173,42 @@ def test_repo_digest_reads_only_the_named_ref(tmp_path):
     assert status.repo_digest('f', tmp_path, tmp_path) == hashlib.sha256(b'old\n').hexdigest()
     assert status.repo_digest('g', tmp_path, tmp_path) is None
     assert status.repo_digest('g', tmp_path, tmp_path, {tmp_path: 'HEAD'}) == hashlib.sha256(b'g').hexdigest()
+
+
+def test_the_cam_stream_runs_the_auto_updated_code_with_its_private_config_left_in_place():
+    unit = (ROOT / 'deploy/site/rosy-cam-stream.service').read_text(encoding='utf-8')
+    start = next(line for line in unit.splitlines() if line.startswith('ExecStart='))
+    assert '%h/.local/share/rosy/site-tools/current/deploy/site/rosy_cam_screen.py stream-start' in start
+    assert '--config %h/.local/share/rosy/cam-screen/cam-screen.json' in start
+
+
+@pytest.mark.parametrize('count', [1, 2, 3])
+def test_selected_arms_replace_fixed_instances_and_ignore_extra_connected_devices(count):
+    template = 'rosy-omx-observer@.service'
+    host = observed()
+    host['files'][template] = dict(enabled='enabled', active='template', sha256='x', dropins=[])
+    host['topology'] = {'arms': {f'selected_{i}': {'configured': True, 'connected': True} for i in range(count)}}
+    host['instances'] = {f'rosy-omx-observer@selected_{i}.service': dict(active='active', dropins=[]) for i in range(count)}
+    declaration = {template: dict(run='active', channel='autoupdate', instances=['old_a', 'old_b'], instances_from='workcell-arms')}
+    assert findings(declaration, host) == []
+    host['instances']['rosy-omx-observer@connected_but_unselected.service'] = dict(active='active', dropins=[])
+    assert findings(declaration, host) == [('UNEXPECTED', 'rosy-omx-observer@connected_but_unselected.service')]
+
+
+def test_selected_arms_distinguish_disconnection_stopped_service_and_missing_config():
+    template = 'rosy-omx-observer@.service'
+    host = observed()
+    host['files'][template] = dict(enabled='enabled', active='template', sha256='x', dropins=[])
+    declaration = {template: dict(run='active', channel='autoupdate', instances_from='workcell-arms')}
+    host['topology'] = {'arms': {'chosen': {'configured': True, 'connected': False}}}
+    assert findings(declaration, host) == [('DISCONNECTED', 'rosy-omx-observer@chosen.service')]
+    host['topology']['arms']['chosen']['connected'] = True
+    assert findings(declaration, host) == [('DOWN', 'rosy-omx-observer@chosen.service')]
+    host['topology'] = {'error': 'workcell selection unavailable'}
+    assert findings(declaration, host) == [('CONFIGURATION', template)]
+
+
+def test_observer_manifest_uses_selected_workcell_arms_without_a_fixed_count():
+    entry = status.load_inventory()['site']['rosy-omx-observer@.service']
+    assert entry.get('instances_from') == 'workcell-arms'
+    assert 'instances' not in entry

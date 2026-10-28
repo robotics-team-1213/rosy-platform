@@ -53,6 +53,18 @@ def test_a_record_whose_base_is_not_an_ancestor_is_ignored(repo):
     assert tool.owed(path, c[1], "origin/main", FAST) is None
 
 
+def test_a_publish_push_reuses_the_heads_own_record_without_the_chain(repo, monkeypatch, capsys):
+    path, c = repo
+    tool.write(path, c[3], c[2], [["test/fast_a.py"]], [])  # c[1]..c[2] have no record: the chain is broken
+    monkeypatch.chdir(path)
+    assert tool.main(["owed", "--head", c[3], *FAST]) == 3
+    assert tool.main(["owed", "--head", c[3], "--own", *FAST]) == 0
+    assert capsys.readouterr().out.split() == ["test/fast_b.py"]
+    assert tool.main(["owed", "--head", c[2], "--own", *FAST]) == 3  # no own record: the full gate as before
+    hook = (ROOT / "tools" / "hooks" / "pre-push").read_text(encoding="utf-8")
+    assert "${PUBLISH_REF:+--own}" in hook[hook.index("land_record.py owed"):][:200]
+
+
 def test_nothing_past_origin_runs_the_gate_as_before(repo):
     path, c = repo
     assert tool.owed(path, c[0], "origin/main", FAST) is None
@@ -63,3 +75,11 @@ def test_the_hook_falls_back_when_the_helper_says_not_covered():
     reuse = hook.index("land_record.py owed")
     assert reuse < hook.index('AFFECTED_BASE="$(git merge-base')
     assert "exit 0" in hook[reuse:hook.index('AFFECTED_BASE="$(git merge-base')]
+
+
+def test_a_record_names_the_tier_the_landing_ran(repo):
+    """The publish script finds a green FULL landing by this field, not by guessing from the invocations."""
+    root, commits = repo
+    tool.write(root, commits[1], commits[0], [["test"]], [], "full")
+    tool.write(root, commits[2], commits[1], [["pkg/test"]], [])
+    assert tool.read(root, commits[1])["tier"] == "full" and "tier" not in tool.read(root, commits[2])

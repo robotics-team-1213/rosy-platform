@@ -3,15 +3,14 @@
 - **대상:** 실험실 PC에서 `main` 체크아웃 하나를 여러 AI 세션과 같이 쓰는 사람·에이전트
 - **팀원 개인 클론이라면** 이 문서 대신 [git으로 일하는 법](git-workflow.md)과 [팀 가이드](team-guide.md)를 따른다. 두 길의 비교도 [git으로 일하는 법](git-workflow.md) §1에 있다.
 - **GitHub 게시·병합:** 로컬 착지와 별도로 [PR 파이프라인](pr-pipeline.md)을 따른다. 작성·독립 검토 두 에이전트가 확인하고 게시 담당 한 명이 올린다.
-- **갱신:** 2026-10-21 — 사용자 지시로 main 포함 운영 상한을 10개에서 15개로 변경. 2026-10-18 착지 단위로 나누기, `MAIN-RED`. 2026-10-14 워크트리 관문 도구(D-761). 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
+- **갱신:** 2026-10-26 — 도구 차단값을 15개 예산과 일치(D-886), 「브랜치 이름과 수명」 추가, 착지한 브랜치 자동 정리. 2026-10-21 — 사용자 지시로 main 포함 운영 상한을 10개에서 15개로 변경. 2026-10-18 착지 단위로 나누기, `MAIN-RED`. 2026-10-14 워크트리 관문 도구(D-761). 명령 전문은 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」.
 
 ## 워크트리 한도와 슬롯 운영
 
 2026-10-21 사용자 지시에 따른 운영 기준은 **main 포함 최대 15개**다.
 이 절이 운영 예산의 정본이며, 아래 기존 절차의 도구 상한보다 먼저 적용한다.
-`tools/worktrees.py`의 자동 차단값은 현재 `.worktrees/` 50개(D-824)다.
-그 값은 남아 있는 기계적 안전장치이며 15개를 넘겨 일상 작업을 시작해도 된다는 뜻이 아니다.
-이번 규칙 기록은 도구의 상수·자동 차단 동작을 변경하지 않는다.
+`tools/worktrees.py`의 자동 차단값은 이 예산과 같은 `.worktrees/` 14개(main을 더해 15개, D-886)다.
+문서 예산과 도구 차단값이 달라 22개까지 늘었던 일(2026-10-26)을 다시 만들지 않도록 둘을 한 값으로 묶는다.
 
 1. **만들기 전에 센다.** main에서 `git worktree list`와 `python tools/worktrees.py status`를 확인한다.
    main 1개와 작업 디렉터리 최대 14개를 합산한다. 잠금·머지 대기·검토 대기·장기 보류·고아 디렉터리도 슬롯을 차지한다.
@@ -25,7 +24,7 @@
 3. **작업마다 소유자와 다음 행동을 남긴다.** gateway가 기록한 소유자·세션과 브랜치에 작업 목적을 대응시킨다.
    인계에는 HEAD, 미커밋 유무, 마지막 검증 SHA·로그, 다음 행동과 재개 조건을 적는다.
    40분 동안 커밋이 없으면 기존 디스패처 규칙에 따라 상태를 확인한다. 유휴 시간만으로 삭제하지 않는다.
-4. **완료 시 슬롯을 돌려준다.** 필요한 변경을 명시적 경로로 커밋하고 공식 원격 검증·검토 후, 이미 받은 착지 승인 범위에서 `tools/land.py --tests auto`로 main에 반영한다.
+4. **완료 시 슬롯을 돌려준다.** 필요한 변경을 명시적 경로로 커밋하고 공식 원격 검증·검토 후, 이미 받은 착지 승인 범위에서 `python tools/land_async.py --tests auto`로 대기열에 넣는다(아래 6번). 착지는 숨은 스냅샷 워크트리에서 돌고 이 워크트리는 넣는 즉시 비므로 바로 지우거나 다음 일에 쓴다.
    NEW 실패나 시험 PC 연결 실패는 머지를 막는다. 통과하지 않은 변경을 숫자 정리 목적으로 머지하지 않는다.
    완료 후 main에서 ancestry·깨끗한 상태를 확인하고 `python tools/worktrees.py prune --apply`로 정리한다.
    도구가 유휴·소유자 사유로 보존하면 그 사유를 남기고, 이미 승인된 정리 범위에서 소유자·디스패처가 해당 대상만 재검증한다.
@@ -46,7 +45,26 @@
 스냅샷은 복구 수단이며 정식 커밋·원격 검증·머지 완료로 계산하지 않는다.
 개수만 줄이기 위한 `reset`, `clean`, 무조건적인 `--force` 삭제는 사용하지 않는다.
 한도 초과는 사람의 명시적 사고 대응·일회성 전환 승인에 한하며 사유·담당·회수 조건을 기록한다.
-`--force-over-cap`은 도구의 50개 장벽을 우회하는 사고 대응 옵션이지 운영 한도 15개의 일반 예외가 아니다.
+`--force-over-cap`은 도구의 15개 장벽을 우회하는 사고 대응·사용자 승인 옵션이지 일상 작업의 예외가 아니다.
+
+## 브랜치 이름과 수명
+
+브랜치·커밋·착지 전에 기준 브랜치(보통 `main`), 작업 브랜치 이름, 착지 대상(로컬 `main`, `tools/land.py`)을 먼저 정한다.
+이 저장소는 trunk 하나(`main`)에 주제 브랜치를 착지하는 방식이다(D-868). develop·release·task 같은 통합 브랜치나
+작업자 이름이 든 브랜치는 만들지 않는다. 작업자는 이름 대신 `new`가 남기는 소유자 기록(`branch.<b>.description`)으로 구분한다.
+
+| 종류 | 이름 | 누가 만드나 | 언제 사라지나 |
+|---|---|---|---|
+| trunk | `main` | — | 사라지지 않는다 |
+| 작업 | `<type>/<topic>`: type은 `feat`·`fix`·`refactor`·`docs`·`uiux`, topic은 영문 소문자·숫자를 `-`로 이은 48자 이내(ADR 번호가 있으면 `d886-...`처럼 앞에) | `python tools/worktrees.py new`만 | `main`에 착지하면 `prune --apply`가 워크트리와 함께 지운다 |
+| 보관 | `archive/<...>` | 사람(`stale-history` 정리 등) | 사람이 지운다. 도구는 건드리지 않는다 |
+| 미커밋 보존 | `refs/wip/<날짜>/<이름>`(브랜치 아님) | `prune --snapshot`, D-372 보존 | 복구 뒤 사람이 지운다 |
+
+- 위 표에 없는 종류(`wip/`, `tmp/`, `test/`, `land/`, `backup/`, `codex/*`, 날짜만 있는 이름)는 만들지 않는다. 맨손 `git branch`·`git worktree add`도 쓰지 않는다.
+- 한 브랜치는 한 주제다. 이어지는 작업은 착지한 뒤 새 브랜치로 시작한다. 착지한 브랜치에 계속 커밋하지 않는다(`landed-dirty`).
+- `prune`(드라이런 포함)은 `main`에 들어갔고, 어느 워크트리에도 체크아웃되지 않았고, reflog가 1시간 넘게 그대로인 로컬 브랜치를 정확한 sha로만 지운다.
+  `main`과 `archive/*`는 지우지 않는다. 내용은 모두 `main`에 있어 잃는 것이 없다(D-372 결정 2, D-886).
+  `main`에 없는 브랜치는 지우지 않는다. 원격(`origin`) 브랜치는 이 도구가 다루지 않는다.
 
 ## 같이 하는 깃
 
@@ -88,7 +106,7 @@ flowchart TD
    먼저 `$ROSY_SCRATCH/worktree-orphans/<이름>-<날짜>.zip`에 보관하고 그 보관 파일을 다시 열어 확인한 뒤에만 지운다.
    `status`의 `landed-dirty`(착지한 브랜치의 워크트리에 미커밋 파일)는 새 워크트리로 옮기고, `stale-history`(이력 재작성 이전 줄기)는
    병합·착지하지 않는다. 자신이 만든 것(소유자 기록이 같고 세션 id까지 같은 것)은 깨끗하고 `main`에 들어갔고 그 브랜치에 자기 커밋이 있으면 바로 지운다. 더럽거나 `main`에 안 들어간 것은 `--snapshot`의 몫이고 소유자를 가린다.
-   `.worktrees/` 아래가 50개 이상이면 만들지 않는다. `prune --snapshot`은 사람이나
+   `.worktrees/` 아래가 14개(main 포함 15개) 이상이면 만들지 않는다. `prune --snapshot`은 사람이나
    디스패처만 돌린다. 오래 둘 워크트리는 `git worktree lock`으로 잠근다. worktree는 이 저장소의 `.worktrees/`에만 둔다. 공유
    `main` 체크아웃은 `git merge --ff-only`로 착지할 때만 쓴다. 거기에 커밋되지
    않은 변경을 남기면 다른 세션의 fast-forward가 거절된다. 스크래치, 로그,
@@ -123,7 +141,17 @@ flowchart TD
    뺀다. 그 브랜치가 만든 실패를 그 파일에 넣지 않는다. 호스트 pytest 통과는
    장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
 6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 기본 방법은 워크트리에서
-   `python tools/land.py --tests auto`다. 이 도구는 시험 회차 전에 착지 대기열(`<git-common-dir>/rosy-land-queue/`, D-803)에서 표를 받고, 앞선 착지가 끝날 때까지 순번과 앞선 브랜치를 찍으며 기다린다. `--queue-timeout` 분(기본 180)을 넘으면 아무것도 병합·시험하지 않고 멈춘다. 맨 앞이 되면 `main`을 한 번 병합하고 시험한다. 표는 끝날 때(오류와 Ctrl-C 포함) 풀리고, 죽은 프로세스의 표(같은 호스트에서 pid 없음, 또는 3시간 동안 새로 고쳐지지 않음)는 다음 세션이 지운다. `--no-queue`는 사고 대응 때만 쓴다. FULL 티어가 통과한 뒤 `main`이 움직이면 다음 회차는 그 뒤 `main` 변경분의 선택만 돈다. 실행이 끊겨(시험 PC 끊김, Ctrl-C, 회차 상한) `land.py`를 다시 돌려도, 브랜치가 그때 시험한 변경과 `main` 병합만 가지고 있으면 같은 규칙을 쓴다(`<git-common-dir>/rosy-land-full/`, D-803 6). 브랜치에 자기 커밋이 더해졌으면 FULL을 다시 돈다. 손으로 할 때 착지는 워크트리에서 `git merge main`을
+   `python tools/land_async.py --tests auto`다(2026-10-28부터, D-889 추가 5). 커밋된 HEAD를
+   `land/<브랜치>-<UTC 시각>` 브랜치로 떼어 `<git-common-dir>/rosy-land-wt/`의 숨은 워크트리(슬롯이 아니다)에서
+   `land.py`를 돌린다. 명령은 바로 돌아오고 워크트리는 그때부터 비어 있다. 이어 쓰면 그 뒤 커밋은 다음 착지에
+   들어가고, 미커밋 변경이 있으면 거절한다. 기록은 `<git-common-dir>/rosy-land-wt/<이름>.log`이다. 착지하면
+   숨은 워크트리와 스냅샷 브랜치를 지우고, 멈추면 둘을 남기고 `<이름>.stopped`를 쓴다. 멈춘 까닭은 `.log`와
+   `<git-common-dir>/rosy-land-events.jsonl`의 `stop` 사건에 있다. 브랜치에서 고친 뒤 다시 넣는다(합병 충돌이면
+   브랜치에서 `git merge main`). 대기열은 차례 하나를 10분 마감으로 끊고, 차례에서 다시 준비로 돌아가면
+   앞 표들의 후보 위에 미리 시험한 트리(speculative prepare)와 같으면 ff만 하며, 준비된 표가 여럿이면 최근
+   새 실패율에 맞춘 크기로 묶어 한 차례에 착지한다(D-889 추가 3·4). 진전 없이 30분이면 감시자가 스택을 남기고
+   멈춘다. 결과를 바로 지켜보며 착지할 때만 아래 `land.py`를 직접 쓴다.
+   `python tools/land.py --tests auto`는 시험 회차 전에 착지 대기열(`<git-common-dir>/rosy-land-queue/`, D-803)에서 표를 받고, 앞선 착지가 끝날 때까지 순번과 앞선 브랜치를 찍으며 기다린다. `--queue-timeout` 분(기본 180)을 넘으면 아무것도 병합·시험하지 않고 멈춘다. 맨 앞이 되면 `main`을 한 번 병합하고 시험한다. 표는 끝날 때(오류와 Ctrl-C 포함) 풀리고, 죽은 프로세스의 표(같은 호스트에서 pid 없음, 또는 3시간 동안 새로 고쳐지지 않음)는 다음 세션이 지운다. `--no-queue`는 사고 대응 때만 쓴다. FULL 티어가 통과한 뒤 `main`이 움직이면 다음 회차는 그 뒤 `main` 변경분의 선택만 돈다. 실행이 끊겨(시험 PC 끊김, Ctrl-C, 회차 상한) `land.py`를 다시 돌려도, 브랜치가 그때 시험한 변경과 `main` 병합만 가지고 있으면 같은 규칙을 쓴다(`<git-common-dir>/rosy-land-full/`, D-803 6). 브랜치에 자기 커밋이 더해졌으면 FULL을 다시 돈다. 손으로 할 때 착지는 워크트리에서 `git merge main`을
    하고 관련 테스트를 다시 돌린 다음, `main` 체크아웃에서
    `git merge --ff-only <브랜치>`를 한다. `--ff-only`가 거절되면 그 문구를
    알리고, 다른 세션 파일을 치운 뒤 다시 시도하지 않는다. 멈춘 라운드의 NEW id는 `main`에서 한 번 더 돌린다. 거기서도 실패하는 id는 `MAIN-RED`로 찍히고 멈춤 문구가 main이 깨졌다고 적는다. 그때는 자기 브랜치를 고치지 말고, 동료가 이미 고치는지 본 다음 main만 고치는 작은 `fix/` 브랜치를 먼저 착지한다. `tools/land.py`는 치울 수 있는
@@ -132,9 +160,12 @@ flowchart TD
    `git worktree lock`으로 잠근다. 푸시는 사용자가 말한 뒤에만 하고, 순서는
    [D-868](../adr/D-868-local-main-first-merge-commit-publish.md)이다. 모든 변경은 로컬 `main`에 먼저
    착지한다. `origin/main`이 로컬 `main`의 조상이 아니면 워크트리에서 `git merge origin/main`으로 합쳐
-   착지한다. `generate` 뒤 로컬 `main`의 끝을 `publish/main-<YYYYMMDD>` 브랜치로 push해 PR을 열고,
-   `ci-result`가 녹색이면 `gh pr merge <PR> --merge --match-head-commit <SHA>`로 merge commit 병합한 뒤
-   `main` 체크아웃에서 `git merge --ff-only origin/main`. squash·rebase 병합과 force-push는 하지 않는다.
+   착지한다. 게시는 `python tools/publish_main.py`(dry run) 뒤 `--apply`로만 한다. 녹색 FULL 착지 기록이
+   있는 가장 새 커밋을 고르고, 범위 전체 커밋별 비밀 검사·Safety-Review를 돌린 뒤 그 커밋 자체의 pre-push
+   사본으로 `publish/main-<YYYYMMDD-HH>`에 push해 PR을 연다. 그 push는 방금 끝낸 두 검사와 크기 규칙을 다시
+   돌리지 않고(착지마다 돌았고 PR CI가 범위 전체를 다시 본다), 그 커밋 자신의 녹색 착지 기록을 재사용한다.
+   `ci-result`가 녹색이면 `python tools/publish_main.py --merge-when-green <PR> --apply`가 merge commit으로 병합한다.
+   병합 뒤에는 로컬 `main`에서 만든 워크트리에서 `git merge origin/main`을 하고 `tools/land.py`로 착지한다(역동기화). 그 사이 착지가 있으면 fast-forward가 되지 않으므로 `--ff-only`로 맞추지 않는다. squash·rebase 병합과 force-push는 하지 않는다.
    로컬 `main`이 `origin/main`보다 앞에 있으면 그 커밋의 CI 증거는 아직 없다.
 
 주제 브랜치는 `origin/main`이 아니라 로컬 `main`에서 만든다. 이미 게시한 브랜치는 `git merge`로 갱신하고 force-push하지 않는다. 공개 GitHub 게시·검토·병합은 [PR 파이프라인](pr-pipeline.md)을 따른다.

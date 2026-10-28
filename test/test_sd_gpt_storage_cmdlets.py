@@ -13,8 +13,10 @@ pytestmark = pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is requir
 
 
 @pytest.mark.parametrize("has_letter", [False, True])
-def test_storage_cmdlet_resolver_mounts_only_signed_boot_a(tmp_path, has_letter):
+@pytest.mark.parametrize("provision_role,number", [("boot_a", 2), ("bootstrap", 1)])
+def test_storage_cmdlet_resolver_mounts_only_signed_provision_role(tmp_path, has_letter, provision_role, number):
     _, layout = _table_image()
+    layout["provision_role"] = provision_role
     parts = [dict(DiskNumber=7, PartitionNumber=p["number"], Guid="{" + p["unique_guid"] + "}",
                   GptType="{" + p["type_guid"] + "}", Offset=p["start_lba"] * 512,
                   Size=p["size_lba"] * 512, DriveLetter="R" if has_letter else "")
@@ -56,6 +58,6 @@ $mount = Resolve-GptProvisionMount 7 '' $false
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
-    assert report["volumes"] == [2]
+    assert report["volumes"] == [number]
     assert report["mount"] == ("R:\\" if has_letter else "Z:\\")
-    assert report["mounted"] == ([] if has_letter else [dict(disk=7, part=2, letter="Z")])
+    assert report["mounted"] == ([] if has_letter else [dict(disk=7, part=number, letter="Z")])

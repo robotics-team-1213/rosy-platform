@@ -106,8 +106,11 @@ def _rewrite_manifest(case, mutate):
     seal()
 
 
-def test_signed_gpt_layout_is_returned_by_the_actual_release_verifier(verifier, gpt_release):
+@pytest.mark.parametrize("provision_role", ["boot_a", "bootstrap"])
+def test_signed_gpt_layout_is_returned_by_the_actual_release_verifier(verifier, gpt_release, provision_role):
+    _rewrite_manifest(gpt_release, lambda layout: layout.__setitem__("provision_role", provision_role))
     dist, public, image, _, _, layout = gpt_release
+    layout["provision_role"] = provision_role
     report = verifier.verify_image_release(dist, public, image, RELEASE)
     assert report["layout"] == layout
     assert report["sha256"] == hashlib.sha256(image.read_bytes()).hexdigest()
@@ -116,7 +119,7 @@ def test_signed_gpt_layout_is_returned_by_the_actual_release_verifier(verifier, 
 @pytest.mark.parametrize("field,value", [
     ("schema_version", True), ("sector_size", 4096), ("sector_size", 512.0),
     ("raw_size_bytes", True), ("raw_size_bytes", SECTORS * SECTOR + SECTOR),
-    ("provision_role", "bootstrap"), ("provision_role", "boot_b"),
+    ("provision_role", "root_a"), ("provision_role", "boot_b"),
     ("disk_guid", str(uuid.UUID(int=0))), ("executor", "unexpected"),
 ])
 def test_signed_but_wrong_layout_is_rejected(verifier, gpt_release, field, value):
@@ -257,14 +260,16 @@ def test_a_changed_file_is_rejected_in_every_fat(readback, fat_release, tmp_path
 
 
 @pytest.mark.parametrize("role", ROLES[:3])
-def test_provisioning_extra_is_permitted_only_on_the_designated_role(readback, fat_release, tmp_path, role):
+@pytest.mark.parametrize("provision_role", ["boot_a", "bootstrap"])
+def test_provisioning_extra_is_permitted_only_on_the_designated_role(readback, fat_release, tmp_path, role, provision_role):
     _, _, image, _, raw, layout = fat_release
+    layout["provision_role"] = provision_role
     actual = bytearray(raw)
     _mount_fat(actual, layout, role, provision=True)
     device = tmp_path / "card.fixture"
     device.write_bytes(actual)
     kwargs = dict(layout=layout, allowed_extras=frozenset({"rosy-config.yaml"}))
-    if role == "boot_a":
+    if role == provision_role:
         report = readback.verify(image, str(device), **kwargs)
         assert report["boot_partitions"][role]["provisioning_extras"] == ["rosy-config.yaml"]
     else:

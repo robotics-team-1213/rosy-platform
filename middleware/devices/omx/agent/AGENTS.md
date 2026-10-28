@@ -55,3 +55,5 @@ Lazy imports of the device adapter. The wheel stays ROS-free at import of the pa
 - PyYAML, as pinned in `pyproject.toml`.
 
 ## Manual Notes
+
+Read [progress.md](progress.md) for current gates and append results to [logs.md](logs.md). Regenerate the module index and repository STATUS with `python tools/harness/rosy_harness.py generate`.

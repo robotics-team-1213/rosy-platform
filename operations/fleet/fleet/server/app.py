@@ -33,7 +33,11 @@ from fleet.server.console import FleetConsole
 from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.goal_evidence_store import GoalEvidenceStore
 from fleet.server.local_action_transport import UnixLocalActionTransport
-from fleet.server.local_stop_transport import UnixLocalStopTransport
+from fleet.server.arm_transfer_preflight_routes import install_arm_transfer_preflight_routes
+from fleet.server.arm_transfer_job_routes import install_arm_transfer_job_routes
+from fleet.server.mission_storage import configure_mission_storage
+from fleet.server.simulation_pose_binding import validate_simulation_pose_binding
+from fleet.server.physical_transfer_stop_targets import configure_omx_stops
 from fleet.server.mission_dispatcher import MissionDispatcher
 from fleet.server.mission_model_turn_scheduler import MissionModelTurnScheduler
 from fleet.server.mission_model_turn_store import MissionModelTurnStore
@@ -49,14 +53,10 @@ from fleet.incidents.automation.runtime import install_incident_runtime
 from fleet.server.task_service import FleetTaskService
 
 from fleet.server.console_routes import install_console_routes
-from fleet.server.background_workers import proposal_expiry_loop as _proposal_expiry_loop
-from fleet.server.background_workers import goal_evidence_expiry_loop
-from fleet.server.background_workers import lane_compliance_loop
-from fleet.server.background_workers import attempt_open, goal_lease_renew_loop
-from fleet.server.background_workers import _task_dispatch_loop, _mission_model_turn_worker_loop
+from fleet.server.background_workers import attempt_open
+from fleet.server.loop_supervision import FLEET_LOOP_NAMES, LoopSupervisor, start_fleet_loops
 from fleet.server.control_unit_observation_runtime import start_control_unit_tasks
 from fleet.server.control_unit_runtime import install_control_unit
-from fleet.server.dispatch_workers import mission_feedback_schedule_loop, mission_dispatch_loop
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.signal_routes import install_signal_routes
 from fleet.server.ingest_routes import address_reasons, install_discovery_routes, install_ingest_routes
@@ -88,9 +88,6 @@ from fleet.server.lane_route_routes import (  # noqa: F401 — RouteRequest 재�
 )
 
 _LOG = logging.getLogger(__name__)
-_goal_evidence_expiry_loop = partial(goal_evidence_expiry_loop, logger=_LOG)
-_mission_feedback_schedule_loop = partial(mission_feedback_schedule_loop, logger=_LOG)
-_mission_dispatch_loop = partial(mission_dispatch_loop, logger=_LOG)
 DEPLOYMENT_PROFILES = frozenset({"production", "simulation"})
 
 
@@ -150,51 +147,19 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                identity_config=None, lane_compliance_config=None,
                notification_config=None, incident_model_config=None, channel_config=None,channel_model_config=None,
                conversation_config=None, assistant_config=None, station_ingress=None,
-               charge_runtime_factory=None) -> FastAPI:
+               charge_runtime_factory=None, arm_transfer_installation=None, arm_transfer_observer=None) -> FastAPI:
     if autonomous_robots and (task_service is None or stuck_resolver_clients is None):
         raise ValueError("autonomous Fleet requires the durable journal and background stuck resolver")
     if notification_config is not None and task_service is None:
         raise ValueError('team notifications require the durable Fleet journal (task_service)')
     if deployment_profile not in DEPLOYMENT_PROFILES:
         raise ValueError(f"unsupported deployment_profile {deployment_profile!r}")
-    simulation_pose = bool(getattr(map_pose_port, 'simulation_only', False))
-    if simulation_pose:
-        if deployment_profile != 'simulation' or simulation_pose_binding is None:
-            raise ValueError('native SIM pose requires simulation deployment and explicit runner binding')
-        if not callable(getattr(map_pose_port, 'validate_simulation_binding', None)):
-            raise ValueError('native SIM pose requires a validated runner binding')
-        map_pose_port.validate_simulation_binding(simulation_pose_binding)
-    elif simulation_pose_binding is not None:
-        raise ValueError('runner SIM binding requires an explicit native SIM pose port')
+    simulation_pose = validate_simulation_pose_binding(map_pose_port, deployment_profile, simulation_pose_binding)
     if development_sessions is not None and task_service is None:
         # D-473 3: every development session issue and POST is in the durable API audit.
         raise ValueError("development connection mode requires the durable API audit (task_service)")
-    mission_configured = mission_service is not None or proposal_store is not None
-    if (mission_service is None) != (proposal_store is None):
-        raise ValueError("Mission API requires both MissionService and ProposalStore")
-    if candidate_resolver is not None and not mission_configured:
-        raise ValueError("Mission candidate resolver requires MissionService and ProposalStore")
-    if candidate_resolver is not None and not callable(candidate_resolver):
-        raise ValueError("Mission candidate resolver must be callable")
-    if cell_job_compiler is not None and not mission_configured:
-        raise ValueError("Cell Job compiler requires the persistent Mission API")
-    if cell_job_compiler is not None and not callable(getattr(cell_job_compiler, "compile", None)):
-        raise ValueError("Cell Job compiler must implement compile(recipe, cell)")
-    if goal_evidence_service is not None and not mission_configured:
-        raise ValueError("goal evidence requires the persistent Mission API")
-    if goal_evidence_service is not None and goal_evidence_service.missions is not mission_service:
-        raise ValueError("goal evidence service must use the configured MissionService")
-    if mission_configured and task_service is None:
-        raise ValueError("Mission API requires persistent API audit and dispatch-control storage")
-    if mission_configured:
-        database_paths = {
-            task_service.store.path.resolve(), mission_service.store.path.resolve(),
-            proposal_store.path.resolve(),
-        }
-        if goal_evidence_service is not None:
-            database_paths.add(goal_evidence_service.store.path.resolve())
-        if len(database_paths) != 1:
-            raise ValueError("Mission, proposal, audit, and resource claims must share one SQLite database")
+    mission_configured = configure_mission_storage(task_service, mission_service, proposal_store,
+        goal_evidence_service, candidate_resolver, cell_job_compiler)
     cell_job_store = CellJobStore(mission_service.store.path) if mission_configured else None
     if cell_job_store is not None:
         cell_job_store.recover_after_startup()
@@ -212,11 +177,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                         or console.uses_agent_pairing_token(discovery_token)):
         raise ValueError("discovery credential must differ from Fleet and robot credentials")
     configured_omx = dict(omx_instances or {})
-    if len(set(configured_omx.values())) != len(configured_omx):
-        raise ValueError("each OMX instance may be configured only once")
-    stop_transport = omx_stop_transport
-    if configured_omx and stop_transport is None:
-        stop_transport = UnixLocalStopTransport(omx_socket_root)
+    stop_targets, stop_transport = configure_omx_stops(
+        configured_omx, arm_transfer_installation, omx_stop_transport, omx_socket_root)
     if enable_mission_dispatcher and not mission_configured:
         raise ValueError("Mission dispatcher requires the complete Mission API")
     if enable_mission_dispatcher and not configured_omx:
@@ -326,73 +288,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     if tracking is not None:
         tracking.identity = identity
 
+    # Loop liveness registry (계획 2026-10-27): declared at create_app so /readyz
+    # enumerates not_configured loops even before the lifespan runs.
+    loop_supervision = LoopSupervisor()
+    loop_supervision.declare(*FLEET_LOOP_NAMES)
+
     @asynccontextmanager
     async def lifespan(app):
-        control_tasks = start_control_unit_tasks(app)
-        dispatcher = None
-        mission_worker = None
-        cell_job_worker = None
-        proposal_expiry = None
-        goal_evidence_worker = None
-        mission_feedback_scheduler = None
-        mission_model_turn_worker_task = None
-        localization_task = None
-        signal_task = None
-        calibration_drift_task = None
-        notification_http = None
-        notification_task = None
-        if notification_config is not None:
-            import httpx
-            from fleet.incidents.notifications import NotificationWorker
-            notification_http = httpx.AsyncClient(trust_env=False)
-            notification_task = asyncio.create_task(NotificationWorker(
-                app.state.line_stuck._log.notifications, notification_config, notification_http,
-                board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
-        if console._signals is not None:
-            signal_task = asyncio.create_task(console._signals.run())
-        app.state.signal_supervision = signal_task
-        resolver_task = None
-        if getattr(app.state, "stuck_resolver", None) is not None:
-            resolver_task = asyncio.create_task(app.state.stuck_resolver.run())
-        if localization_service is not None:
-            localization_task = asyncio.create_task(localization_service.run())
-        if calibration_drift_watch is not None:
-            calibration_drift_task = asyncio.create_task(calibration_drift_watch.run())
-        trip_task = asyncio.create_task(app.state.trip_runner.run())  # D-494 5
-        charge_task = (asyncio.create_task(app.state.charge_runtime.run())
-                       if app.state.charge_runtime is not None else None)
-        lease_task = (asyncio.create_task(goal_lease_renew_loop(console, _LOG))  # D-550 10
-                      if getattr(getattr(console, "goal_leases", None), "ttl_s", 0) > 0 else None)
-        identity_task = asyncio.create_task(identity.run())  # also polls CORE's blink answers (D-596)
-        lane_task = asyncio.create_task(lane_compliance_loop(  # D-511 M0
-            app.state.lane_compliance, _LOG, LANE_COMPLIANCE_PERIOD_S))
-        tether_task = app.state.tether_watch.start()  # D-526
-        path_task = asyncio.create_task(app.state.paths.run())  # D-594
-        job_task = asyncio.create_task(app.state.job_trips.run()) if getattr(app.state, "job_trips", None) else None
-        if task_service is not None and start_task_dispatcher:
-            dispatcher = asyncio.create_task(
-                _task_dispatch_loop(console, task_service, drive_cancel))
-        if proposal_store is not None:
-            proposal_expiry = asyncio.create_task(_proposal_expiry_loop(proposal_store, _LOG))
-        if mission_dispatcher is not None:
-            mission_worker = asyncio.create_task(_mission_dispatch_loop(mission_dispatcher))
-        if cell_job_dispatcher is not None:
-            cell_job_worker = asyncio.create_task(_mission_dispatch_loop(cell_job_dispatcher))
-        if goal_evidence_service is not None:
-            goal_evidence_worker = asyncio.create_task(
-                _goal_evidence_expiry_loop(goal_evidence_service)
-            )
-        if mission_model_turn_scheduler is not None:
-            mission_feedback_scheduler = asyncio.create_task(
-                _mission_feedback_schedule_loop(mission_model_turn_scheduler)
-            )
-        if mission_model_turn_worker is not None:
-            mission_model_turn_worker_task = asyncio.create_task(
-                _mission_model_turn_worker_loop(mission_model_turn_worker)
-            )
+        _started, notification_http, background_tasks = start_fleet_loops(
+            app, console, supervisor=loop_supervision, task_service=task_service,
+            start_task_dispatcher=start_task_dispatcher, drive_cancel=drive_cancel,
+            proposal_store=proposal_store, mission_dispatcher=mission_dispatcher,
+            cell_job_dispatcher=cell_job_dispatcher, goal_evidence_service=goal_evidence_service,
+            mission_model_turn_scheduler=mission_model_turn_scheduler,
+            mission_model_turn_worker=mission_model_turn_worker,
+            localization_service=localization_service, calibration_drift_watch=calibration_drift_watch,
+            notification_config=notification_config, identity=identity, log=_LOG,
+            lane_compliance_period_s=LANE_COMPLIANCE_PERIOD_S)
         try:
             yield
         finally:
+            loop_supervision.stopping()  # 아래 cancel로 끝나는 루프는 예정된 종료다 (계획 2026-10-27)
             async with AsyncExitStack() as cleanup:
                 for resource in (getattr(app.state, "power_health_display", None),
                                  getattr(app.state, "motor_health_display", None), notification_http,
@@ -403,16 +319,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                 start_points = getattr(app.state, "start_points", None)
                 if start_points is not None:
                     cleanup.callback(start_points.close)
-                backgrounds = [background for background in (dispatcher, mission_worker, cell_job_worker, proposal_expiry,
-                                   goal_evidence_worker, mission_feedback_scheduler,
-                                   mission_model_turn_worker_task, localization_task,
-                                   signal_task, resolver_task, trip_task, identity_task, lane_task, tether_task,
-                                   lease_task, path_task, calibration_drift_task, notification_task, job_task, charge_task,
-                                   *control_tasks)
-                               if background is not None]
-                for background in backgrounds:
+                for background in background_tasks:
                     background.cancel()
-                for result in await asyncio.gather(*backgrounds, return_exceptions=True):
+                for result in await asyncio.gather(*background_tasks, return_exceptions=True):
                     if isinstance(result, Exception):
                         _LOG.error("Fleet background worker failed before shutdown",
                                    exc_info=(type(result), result, result.__traceback__))
@@ -423,6 +332,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         lifespan=lifespan,
         description="사이트 오케스트레이터 — 모음과 원자 액션 흩뿌림 (D-59)",
     )
+    app.state.loop_supervision = loop_supervision  # /readyz reads this (계획 2026-10-27)
     app.state.console = console
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
@@ -531,7 +441,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                          principals=principals, named_logins=password_sessions is not None,
                          console_token=console_token, authorize=authorize, require_viewer=require_viewer,
                          require_named_operator=require_named_operator, map_snapshot=site_maps.active,
-                         configured_omx=configured_omx, stop_transport=stop_transport)
+                         configured_omx=configured_omx, stop_transport=stop_transport, stop_targets=stop_targets)
     # D-473: `--lan-camera-proxy` already means "Fleet sits behind the site Caddy", whose
     # X-Forwarded-For carries the browser address the development session checks.
     install_development_routes(app, sessions=development_sessions, task_service=task_service,
@@ -562,6 +472,16 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return principal
         return authorize(request, request.headers.get("Authorization"))
     operator_guard = [Depends(require_operator)]
+    install_arm_transfer_preflight_routes(
+        app, instances=configured_omx, deployment_profile=deployment_profile,
+        transport=action_transport, socket_root=omx_socket_root, require_proposer=require_proposer)
+    install_arm_transfer_job_routes(
+        app, installation=arm_transfer_installation, deployment_profile=deployment_profile,
+        task_store=task_service.store if mission_configured else None, transport=action_transport,
+        socket_root=omx_socket_root, require_proposer=require_proposer, require_viewer=require_viewer,
+        require_named_operator=require_named_operator, observer=arm_transfer_observer, console=console,
+        principals=principals, other_tokens=other_tokens, other_services=(sightings, policy_evidence),
+        registries=(cell_goal_registry, goal_evidence_service.registry if goal_evidence_service is not None else None))
 
     from fleet.server.peer_routes import install_peer_catalogue
     catalogue = install_peer_catalogue(app, console=console, enrollment=enrollment,
@@ -582,9 +502,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     from fleet.server.central_registry_routes import install_registry_routes
     install_registry_routes(app, registry=central_registry, enrollment=enrollment, pairing=pairing,
-                            sync_token=pairing_sync_token, require_viewer=require_viewer,
-                            require_operator=require_operator,
-                            named_identity=bool(principals) or password_sessions is not None)
+        sync_token=pairing_sync_token, require_viewer=require_viewer, require_operator=require_operator,
+        named_identity=bool(principals) or password_sessions is not None, observations=workcell_observations,
+        device_profile_path=task_service and task_service.store.path, require_named_operator=require_named_operator)
     from fleet.server.camera_peer_adapter import install_camera_peer
     app.state.camera_peer = install_camera_peer(app, pairing=pairing,
         current_users=lambda:site_users or {}, require_named_operator=require_named_operator)
@@ -737,7 +657,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
 
     install_task_dispatch_routes(app, console=console, task_service=task_service,
                                  configured_omx=configured_omx,
-                                 stop_transport=stop_transport,
+                                 stop_transport=stop_transport, stop_targets=stop_targets,
                                  require_viewer=require_viewer,
                                  require_operator=require_operator, require_named_operator=require_named_operator,
                                  read_guard=read_guard, operator_guard=operator_guard,
@@ -870,14 +790,14 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_channel_feature(
         app, config=channel_config, task_service=task_service, principals=principals, site_logins=site_logins,
         require_operator=require_operator, require_named_operator=require_named_operator, read_guard=read_guard,
-        console=console, existing_tokens=other_tokens,
-        secret_owners=(sightings, policy_evidence), proposals=proposal_store, proposal_create=proposal_create,
+        existing_tokens=other_tokens + ((arm_transfer_observer.token,) if arm_transfer_observer else ()),
+        console=console, secret_owners=(sightings, policy_evidence), proposals=proposal_store, proposal_create=proposal_create,
         proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit, cell_service_id=cell_app_service_id)
     install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
-                              fanout_local_omx_stops, configured_omx, stop_transport),
+                              fanout_local_omx_stops, configured_omx, stop_transport, targets=stop_targets),
                           cancel_pending=partial(
                               cancel_pending_task_queue, task_service, console))
     from .channel.conversation.runtime import install_conversation_routes
@@ -898,7 +818,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     # D-524: without site-users or logins every caller is `site-console`, so no host control.
     install_host_control_routes(
         app, require_operator=require_operator, require_named_operator=require_named_operator,
-        helper=(helper_from_config() if principals or password_sessions is not None
+        require_viewer=require_viewer, helper=(helper_from_config() if principals or password_sessions is not None
                 else UnavailableHostHelper()))
 
     install_static_routes(app)

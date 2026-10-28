@@ -122,12 +122,13 @@ def test_kinds_list_only_what_runs_here(tmp_path, monkeypatch):
     monkeypatch.setattr(state.site_maps, "active", lambda: (5, SimpleNamespace(places=[]), None, None))
     assert _work(client, "viewer-secret")["kinds"] == []  # a capable robot, but no place
 
-    monkeypatch.setattr(state, "cell_job_dispatcher", object())
-    monkeypatch.setattr(state, "omx_instances", {"omx_01": "omx_01_control"})
+    # This app is private to the test; pytest 9.2 cannot restore State's dynamic attributes.
+    state.cell_job_dispatcher = object()
+    state.omx_instances = {"omx_01": "omx_01_control"}
     assert _work(client, "viewer-secret")["kinds"] == []  # production profile: Cell dispatch is closed
-    monkeypatch.setattr(state, "deployment_profile", "simulation")
+    state.deployment_profile = "simulation"
     assert _work(client, "viewer-secret")["kinds"] == ["CELL_TRANSFER"]
-    monkeypatch.setattr(state, "omx_instances", {})
+    state.omx_instances = {}
     assert _work(client, "viewer-secret")["kinds"] == []  # no capable device
 
 
