@@ -25,7 +25,7 @@ pytest는 승인된 시험 PC의 커밋에서만 실행했다. 사람 라벨·�
 | 7번 묶음 전체 재검증 | `f7eaca4b3b` | 33 passed, skip0, NEW0. 닫힌 폼을 실제로 열고 오류를 화면에 보이게 촬영하며 추가 동시 편집 시험 포함 |
 | Pilot 셸·서빙 | `cdbab06b42` | 7 passed, skip0. 기존 캐시 버전을 바꿔 설정 수정 자산을 다시 설치하도록 함 |
 
-유효한 최종 선택의 합계는425 passed, skip0, NEW0/known0/flaky0이다. 7번 전체를 교체했으며 최초 실패를 삭제하거나 같은 로그의 끝에 성공 결과로 덮지 않았다. `948ebd2723`과 최종 시험의 HTML·JS·CSS 소스는 같고 기존 assertion은 유지한다.
+유효한 최종 선택의 합계는425 passed, skip0, NEW0/known0/flaky0이다. 7번 전체를 교체했으며 최초 실패를 삭제하거나 같은 로그의 끝에 성공 결과로 덮지 않았다. `948ebd2723`과 최종 시험은 `sw.js` 캐시 키를 제외한 화면 HTML·JS·CSS 소스가 같고 기존 assertion은 유지한다.
 
 최초 `db213a478f`의25 failed에는 PNG fixture의 잘못된 IDAT CRC가 섞여 있었다. 기존 합성 scene을 `cv2.imencode`로 만들어 정상 입력에서 RED를 다시 재현했다. 원본 `red/`, `valid-red/`, `promotion-red/`, `green/`을 덮어쓰지 않았다. `948ebd2723` 이후 화면의 HTML·JS·CSS는 같고, 후속 제품 변경은 `sw.js`의 캐시 키 한 줄이다. 나머지는 fixture·추가 검사·촬영 위치이며 기존 assertion을 유지했다.
 
