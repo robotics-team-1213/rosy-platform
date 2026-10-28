@@ -144,7 +144,7 @@ class MainActivity : Activity() {
     private fun label(text: String, size: Float = RosyMetrics.TextBody) = views.label(text, size)
     private fun button(text: String, action: () -> Unit) = views.button(text, action = action)
     private fun showLobby() {
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(PilotColors.background) }
+        root = views.surface()
         setContentView(root)
         shownCandidates = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)

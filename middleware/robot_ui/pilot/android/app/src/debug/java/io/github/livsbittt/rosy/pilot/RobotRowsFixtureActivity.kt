@@ -19,10 +19,7 @@ class RobotRowsFixtureActivity : Activity() {
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         views = PilotViews(this)
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(PilotColors.background)
-        }
+        val root = views.surface()
         status = views.label("로봇 목록 상태")
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         outside = views.button("다른 제어") { }

@@ -13,9 +13,18 @@ import android.widget.TextView
 
 /** Tablet navigation and device rows share the established Pilot palette and 48dp targets. */
 class PilotViews(private val context: Context) {
+    fun surface() = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(PilotColors.background)
+        fitsSystemWindows = true
+    }
     fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
     fun label(text: String, size: Float = RosyMetrics.TextBody, quiet: Boolean = false) = TextView(context).apply {
         this.text = text; textSize = size; setTextColor(if (quiet) PilotColors.muted else PilotColors.foreground)
+        background = StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), fill(PilotColors.pressed, true))
+            addState(intArrayOf(), fill(android.graphics.Color.TRANSPARENT))
+        }
         setPadding(0, dp(RosyMetrics.Space1.toInt()), 0, dp(RosyMetrics.Space1.toInt()))
     }
     private fun fill(color: Int, focus: Boolean = false) = GradientDrawable().apply {
