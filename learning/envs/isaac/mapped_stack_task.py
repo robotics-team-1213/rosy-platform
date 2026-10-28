@@ -33,6 +33,7 @@ def build_map(world, stage):
 
 def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture):
     import numpy as np
+    from pxr import UsdGeom
     from isaacsim.core.utils.types import ArticulationAction
     kin, profile = planning()
     targets = [np.zeros(r.num_dof) for r in robots]
@@ -128,8 +129,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         trials.append(trial)
         rng = np.random.default_rng(trial['seed'])
         for i, box in enumerate(cargo):
-            box.set_world_pose(np.array([.7, -.5+i*.065, .015]), np.array([1., 0., 0., 0.]))
+            box.set_world_pose(np.array([-.45, .4+i*.065, .016]), np.array([1., 0., 0., 0.]))
             box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
+            UsdGeom.Imageable(box.prim).MakeInvisible()
         for i, robot in enumerate(robots):
             targets[i][joints[i]] = solve(i, home(i), 0.)
             targets[i][fingers[i]] = [.6, -.6]
@@ -148,6 +150,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 raise ValueError('initial arm tracking exceeds 0.03 rad')
             for index, item in enumerate(plan()):
                 arm, box = item['arm'], cargo[index]
+                UsdGeom.Imageable(box.prim).MakeVisible()
                 yaw = float(rng.uniform(-.01, .01))
                 box.set_world_pose(np.array([.16+rng.uniform(-.001, .001), -.09, .041]),
                     np.array([math.cos(yaw/2), 0., 0., math.sin(yaw/2)]))

@@ -62,7 +62,9 @@ def run(args):
         return world.scene.add(FixedCuboid('/World/'+name, name=name, size=1.,
             position=np.array(position), scale=np.array(size), color=np.array(color), physics_material=mat))
 
-    fixed('Table', [0., 0., -.025], [1.8, 1.8, .05], [.30, .32, .34])
+    fixed('Table', [0., -.20, -.025] if mapped else [0., 0., -.025],
+          [.9, .8, .05] if mapped else [1.8, 1.8, .05],
+          [.85, .66, .05] if mapped else [.30, .32, .34])
     belt = fixed('Conveyor', [.16 if mapped else .20, -.28, .0125], FIXTURE['belt_size_m'], [.12, .15, .18])
     UsdPhysics.RigidBodyAPI.Apply(belt.prim).CreateKinematicEnabledAttr(True)
     surface = PhysxSchema.PhysxSurfaceVelocityAPI.Apply(belt.prim)
