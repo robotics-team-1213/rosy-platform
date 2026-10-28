@@ -1,5 +1,7 @@
 """Read recovery and progress updates must not erase action errors or keyboard context."""
 import copy
+import os
+from pathlib import Path
 import threading
 from urllib.parse import urlsplit
 
@@ -20,6 +22,12 @@ DATA = {'project_id': 'fixture-project', 'token': 'fixture-token', 'profiles': [
                   'dataset_id': 'initial', 'inputs': [], 'progress': {'tick': 0},
                   'learning_task': {'task_id': 'task-1'}}],
         'methods': {'act': {'available': True}, 'hilserl': {'available': True}}}
+
+
+def capture(page, name):
+    if value := os.environ.get('ROSY_SHOT_DIR'):
+        root = Path(value).expanduser(); root.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(root / f'learning-{name}.png'))
 
 
 @pytest.fixture
@@ -53,9 +61,11 @@ def test_automatic_read_recovery_clears_only_the_read_error(task_page, status):
     state['status'] = status
     page.goto(url)
     expect(page.locator('#tasks-error')).to_be_visible()
+    capture(page, f'read-error-{status}')
     state['status'] = 200
     expect(page.locator('#tasks-status')).to_contain_text('최신 기록 확인됨', timeout=9000)
     expect(page.locator('#tasks-error')).to_be_hidden()
+    capture(page, f'read-recovered-{status}')
     assert not errors
 
 
@@ -90,6 +100,7 @@ def test_progress_poll_preserves_action_focus_and_completion_returns_to_heading(
     assert state['gets'] > count
     expect(panel.locator(control)).to_be_focused()
     expect(panel.locator('select')).to_have_value('extra')
+    capture(page, 'focus-' + control.replace('[', '').replace(']', ''))
     state['data']['runs'][0]['status'] = 'succeeded'
     page.wait_for_timeout(5500)
     expect(page.locator('#task-runs article h3')).to_be_focused()
@@ -114,4 +125,6 @@ def test_review_shell_is_in_the_first_response_without_javascript(task_page, wid
         expect(page.locator('.ui-rail-nav > a')).to_have_count(5)
         box = page.locator('ui-topbar').bounding_box()
         assert box['x'] >= 0 and box['x'] + box['width'] <= width + 1, (route, box)
+        if route in ['/accounts', '/learning/tasks', '/catalog', '/learning/evaluate']:
+            capture(page, f'shell-{width}-' + route.rsplit('/', 1)[-1])
         page.close()

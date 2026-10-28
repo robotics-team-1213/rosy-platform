@@ -41,6 +41,9 @@ def test_long_stop_error_wraps_and_scrolls_without_hiding_stop(tmp_path, width, 
         assert page.locator('ui-topbar').bounding_box()['height'] <= 180
         box = stop.bounding_box()
         assert box['x'] >= 0 and box['x'] + box['width'] <= width + 1 and box['y'] + box['height'] < 180
+        brand, feedback = page.locator('ui-topbar ui-brand').bounding_box(), notice.bounding_box()
+        assert (brand['x'] + brand['width'] <= feedback['x'] or
+                brand['y'] + brand['height'] <= feedback['y']), (brand, feedback)
         notice.focus()
         page.keyboard.press('End')
         page.wait_for_function("() => { const n = document.querySelector('#shell-notice'); return n.scrollHeight <= n.clientHeight + 1 || n.scrollTop > 0; }")
