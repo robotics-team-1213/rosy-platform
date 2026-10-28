@@ -4,7 +4,9 @@ param(
     [Parameter(Mandatory=$true)][string]$ConfigPath,
     [string]$TaskName = "RosyRobotCD",
     [int]$IntervalMinutes = 5,
-    [string]$Python = ""
+    [string]$Python = "",
+    # Source of an image/payload the operator has already authenticated.
+    [string]$BaseSourceRevision = ""
 )
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
@@ -13,6 +15,9 @@ if ($configFile.StartsWith($repo, [System.StringComparison]::OrdinalIgnoreCase))
     throw "Robot addresses/configuration must stay outside the repository."
 }
 if ($IntervalMinutes -lt 2 -or $IntervalMinutes -gt 1440) { throw "Invalid interval." }
+if ($BaseSourceRevision -and $BaseSourceRevision -cnotmatch '^[0-9a-f]{40}$') {
+    throw "BaseSourceRevision must be an operator-verified full source revision."
+}
 if (-not $Python) { $Python = (Get-Command python -ErrorAction Stop).Source }
 $revision = (& git -C $repo rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $revision -notmatch '^[0-9a-f]{40}$') { throw "No source revision." }
@@ -53,6 +58,9 @@ foreach ($file in $files) {
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 [IO.File]::WriteAllText((Join-Path $snapshot "trusted-snapshot.json"), (@{source_revision=$revision;files=$hashes} | ConvertTo-Json -Depth 5), $utf8)
 $config = Get-Content -LiteralPath $configFile -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($BaseSourceRevision) {
+    $config | Add-Member -NotePropertyName base_source_revision -NotePropertyValue $BaseSourceRevision -Force
+}
 $config | Add-Member -NotePropertyName trusted_root -NotePropertyValue $snapshot -Force
 New-Item -ItemType Directory -Path $base -Force | Out-Null
 $installedConfig = Join-Path $base "config.json"

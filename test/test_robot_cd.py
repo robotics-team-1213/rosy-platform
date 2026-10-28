@@ -330,6 +330,7 @@ def test_published_feature_rollout_resumes_without_republication(tmp_path, monke
         assert coordinator.tick() == "done"
         assert len(resumed) == 1
         assert coordinator.state["payload_tarball"] == str(signed)
+        assert coordinator.state["deployed_sha"] == coordinator.state["delivery_base_sha"] == SHA
         assert len([args for args in calls if args[:2] == ("release", "download")]) == 2
     else:
         with pytest.raises((ValueError, publish.PublishError)):
@@ -385,14 +386,66 @@ def test_failed_native_attempt_cannot_hide_undelivered_change_behind_docs(tmp_pa
     monkeypatch.setattr(coordinator, "ssh", lambda *_: (0, "/opt/rosy/releases/2026.10.05-043\n", ""))
     assert coordinator.tick() == "build_refused"
     head[0] = docs
-    assert coordinator.tick() == "build_dispatched"
-    assert coordinator.state["delivery_policy"] == "full-payload"
-    assert len(dispatches) == 1
+    assert coordinator.tick() == ("build_dispatched" if had_successful_baseline else "delivery_held")
+    assert coordinator.state["delivery_policy"] == ("full-payload" if had_successful_baseline else "review")
+    assert len(dispatches) == int(had_successful_baseline)
     assert f"{failed}...{docs}" not in comparisons
     if had_successful_baseline:
         assert f"{deployed}...{docs}" in comparisons
         assert coordinator.state["deployed_sha"] == deployed
         assert coordinator.state["delivery_base_sha"] == deployed
+
+
+def test_unknown_baseline_holds_until_operator_verified_config_is_supplied(tmp_path):
+    tool = module()
+    calls = []
+
+    def github(*args):
+        calls.append(args)
+        assert args[0] == "api", "unknown baseline must not dispatch or publish"
+        if args[1].endswith("git/ref/heads/main"):
+            return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in args[1]:
+            return json.dumps({"status": "ahead", "files": [{"filename": "docs/a.md", "status": "modified"}]})
+        raise AssertionError(args)
+
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": [], "canary": "unused", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    coordinator.ci = lambda _: "success"
+    assert coordinator.tick() == "delivery_held"
+    assert coordinator.state["delivery_policy"] == "review"
+    assert "base_source_revision" in coordinator.state["reason"]
+    assert len(calls) == 1
+    verified = {**config, "base_source_revision": "cd" * 20}
+    coordinator = tool.Coordinator(verified, gh=github)
+    coordinator.ci = lambda _: "success"
+    assert coordinator.tick() == "no_robot_changes"
+    assert coordinator.state["deployed_sha"] == "cd" * 20
+    assert coordinator.state["delivery_base_sha"] == SHA
+    assert coordinator.tick() == "done"
+    reloaded = tool.Coordinator(verified, gh=github)
+    assert reloaded.state["delivery_base_sha"] == SHA, "config must never rewind an accepted checkpoint"
+    assert not reloaded.baseline_initialized
+
+
+@pytest.mark.parametrize("baseline", ["", "main", "AB" * 20, "ab" * 19, None, ["ab" * 20]])
+def test_config_rejects_unverified_baseline_shape(tmp_path, baseline):
+    tool = module()
+    path = tmp_path / "config.json"
+    tool.write_json(path, {**CONFIG, "state_dir": str(tmp_path), "trusted_root": str(ROOT),
+                          "base_source_revision": baseline})
+    with pytest.raises(ValueError, match="base_source_revision"):
+        tool.load_config(path)
+
+
+def test_config_accepts_the_single_explicit_verified_baseline(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.setattr(tool, "MAX_STATE_DIR", 4096)
+    monkeypatch.setattr(tool, "verify_snapshot", lambda _: None)
+    path = tmp_path / "config.json"
+    tool.write_json(path, {**CONFIG, "state_dir": str(tmp_path), "trusted_root": str(ROOT)})
+    assert tool.load_config(path)["base_source_revision"] == "cd" * 20
 
 
 def test_signer_temporary_files_stay_in_managed_state(tmp_path, monkeypatch):
@@ -434,10 +487,13 @@ def test_next_release_has_independent_attempt_and_canary_state(tmp_path, monkeyp
         return json.dumps({"id": 9})
 
     config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
-              "robots": ["robot-a"], "canary": "robot-a", "key_name": "release-key"}
+              "robots": ["robot-a"], "canary": "robot-a", "key_name": "release-key",
+              "base_source_revision": "cd" * 20}
     coordinator = tool.Coordinator(config, gh=github)
     monkeypatch.setattr(coordinator, "ssh", lambda *args: (0, "/opt/rosy/releases/2026.10.05-043\n", ""))
     assert coordinator.tick() == "build_dispatched"
+    assert coordinator.state["delivery_policy"] == "full-payload"
+    assert not coordinator.state.get("delta_binding"), "accepted source alone is not a signed delta base artifact"
     state = json.loads((tmp_path / "state.json").read_text())
     assert state["sha"] == SHA and state["phase"] == "building"
     assert not {"attempt", "work_dir", "canary_name", "publisher_pid", "tarball_sha256"} & state.keys()
@@ -447,7 +503,7 @@ def test_next_release_has_independent_attempt_and_canary_state(tmp_path, monkeyp
 # --- D-553: build beside CI, sign only after it, never retry forever --------------------
 
 CONFIG = {"repo": "team/robots", "repo_id": 7, "robots": ["robot-a"], "canary": "robot-a",
-          "key_name": "release-key"}
+          "key_name": "release-key", "base_source_revision": "cd" * 20}
 
 
 def github_for(ci_runs, tags=()):
@@ -458,7 +514,8 @@ def github_for(ci_runs, tags=()):
         if "git/ref/heads/main" in path:
             return json.dumps({"object": {"sha": SHA}})
         if "compare/" in path:
-            return json.dumps({"status": "identical"})
+            return json.dumps({"status": "identical" if f"compare/{SHA}...main" in path else "ahead",
+                               "files": [{"filename": "operations/pkg/node.py", "status": "modified"}]})
         if "ci.yml/runs?" in path:
             return json.dumps({"workflow_runs": ci_runs})
         if "matching-refs" in path:

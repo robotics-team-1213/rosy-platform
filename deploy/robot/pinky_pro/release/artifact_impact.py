@@ -58,6 +58,11 @@ NO_PINKY_FILES = {
     "deploy/progress.md",
 }
 
+# These execute from the frozen OS/bootstrap closure, not the switchable SDK.
+# Policy is trusted snapshot data; never import candidate OS code to classify it.
+OS_NATIVE_PREFIXES = ("os_", "rosy-os-", "rosy-rauc-")
+OS_NATIVE_FILES = frozenset({"media_layout.py"})
+
 
 @dataclass(frozen=True)
 class PathImpact:
@@ -105,6 +110,8 @@ def _classify_path(path: str) -> PathImpact:
                       for name in ('rosy-first-boot.py', 'rosy-first-boot.sh')}:
         return PathImpact(path, 'native-payload', 'signed boot catalog; bridge capability and compatibility gates required')
     if normalized.startswith('deploy/robot/pinky_pro/native/'):
+        if name.startswith(OS_NATIVE_PREFIXES) or name in OS_NATIVE_FILES:
+            return PathImpact(path, 'flashable-image', 'frozen privileged OS lifecycle requires A/B OS delivery')
         if name.endswith(('.service', '.timer', '.path', '.target')) and name not in _ota_units():
             return PathImpact(path, 'review', 'unit has no installed image-layer destination')
         return PathImpact(path, 'native-payload', 'signed native runtime; installed-image compatibility gates required')

@@ -149,6 +149,8 @@ def test_coordinator_policy_reaches_dispatch_gate(tmp_path, paths, wanted):
     result = coordinator.tick()
     assert result in ("no_robot_changes", "delivery_held")
     assert coordinator.state["delivery_policy"] == wanted
+    assert coordinator.state["deployed_sha"] == old
+    assert coordinator.state["delivery_base_sha"] == (head if wanted == "none" else old)
     assert all(call[0] != "workflow" for call in calls)
 
 
