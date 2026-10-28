@@ -3929,3 +3929,10 @@
 - 변경: 증분 빌드에서만 필요한 검증기 import를 해당 분기로 옮겼다. 기존 배포 목록 독자는 빌더를 파일 경로로 직접 불러와도 동작한다.
 - 증거: 8a4802129a 빠른 사전 검사에서 기존 pairing 목록 독자의 ModuleNotFoundError 1건을 확인했다(1304 passed/2 skipped 및 별도 도구 160 passed). 6c77de81e0의 pairing·증분·빌더·workflow 64 passed/skip0/NEW0이다. 이전 SHA의 진행 중 FULL은 수정 뒤 취소했으며 통과 근거로 쓰지 않는다. 최종 SHA의 canonical FULL을 별도로 수행한다.
 - gate 변화: 없음. CE: 해당 없음 — 기존 직접 import 시험이 회귀를 검출하며 변경은 의존성 적재 위치에 한정된다.
+
+## 2026-10-29 · 3490bddb9b · 서버 증분 업데이트 최종 원격 회귀
+
+- 변경: 최종 원격 검증 결과와 첫 도입의 전체 재빌드 조건을 기록했다. 실행 코드·workflow·시험은 검증 SHA와 같다.
+- 증거: 동일한 3490bddb9b의 canonical FULL 27개 invocation을 공식 remote_pytest.run으로 수행했다. 합계 37,581 passed/2,351 skipped, 각 명령 exit0, 모든 로그 비교 NEW0/known0/flaky0이다. 1~11번은 현장 PC에서 완료한 뒤 자원이 확보된 모델 PC에서 12~27번을 수행했다. 재배정 중 취소한 현장 12번과, 연결 복구 후 별도로 563 passed/1 skipped인 AI PC의 중복 마지막 묶음은 합계에서 제외했다. 수용한 27개 로그는 archive 내부 바이트를 원본 SHA-256과 대조해 보존했다.
+- gate 변화: 없음. monitoring 브라우저 묶음 16개는 모두 skip이며 브라우저 수용을 입증하지 않는다. 실제 Docker 연속성·CI dispatch·설치/운영 배포·실물 수용·main 착지/push는 수행하지 않았다.
+- CE: 해당 없음 — 판단 근거는 D-301·구성 해시·회귀 시험·기존 import 시험에 남긴다.

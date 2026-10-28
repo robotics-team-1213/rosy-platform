@@ -16,7 +16,9 @@ HEAD. Dockerfile/COPY inputs, including deleted files and ignore rules, determin
 which services rebuild. Unchanged images retain their exact signed references and
 SBOMs. The version 2 manifest signs the complete desired service set, but
 `images.tar` carries only changed images. Configuration-only candidates carry no
-images. Unsupported build input forms are rebuilt conservatively. A full build
+images. Ambiguous build inputs disable reuse; existing ignored-file guards can
+reject unsafe mappings. Builder or candidate-workflow changes rebuild every
+image, so the first rollout may carry full images even with a base. A full build
 without `--base-candidate` refreshes upstream base images and dependencies; run
 that path for security/base-image refreshes, not just when application code changes.
 
