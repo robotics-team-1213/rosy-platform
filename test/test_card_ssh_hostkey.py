@@ -43,7 +43,11 @@ class PublicOnly:
     def open(self, path):
         assert path == PUBLIC, "a non-public file was opened"
         self.opened.append(path)
-        return io.BytesIO(self.value)
+        class Bounded(io.BytesIO):
+            def read(self, size=-1):
+                assert 0 < size <= 4097, "public file reads must be bounded"
+                return super().read(size)
+        return Bounded(self.value)
 
     def listdir(self, path):
         pytest.fail("directory walks are forbidden")
@@ -83,7 +87,8 @@ def test_only_public_file_is_opened_and_signed_mapping_binds_actual_gpt(tmp_path
 
 @pytest.mark.parametrize("bad", [b"ssh-rsa AAAA", b"ssh-ed25519 !!!", b"ssh-ed25519 AAAA",
                                   b"ssh-ed25519 " + base64.b64encode(b"x" * 51),
-                                  key()[0] + b"\n" + key()[0], b"x" * 4097])
+                                  key()[0] + b"\n" + key()[0], b"x" * 4097],
+                         ids=["wrong-type", "base64", "short-wire", "wire-algorithm", "multiline", "oversized"])
 def test_wrong_wire_format_or_size_never_yields_a_receipt(tmp_path, bad):
     m = tool()
     raw, layout = _table_image()
@@ -94,7 +99,7 @@ def test_wrong_wire_format_or_size_never_yields_a_receipt(tmp_path, bad):
     assert not receipt.exists() and disk.read_bytes() == raw
 
 
-@pytest.mark.parametrize("case", ["mapping", "backup_crc", "symlink", "existing_receipt"])
+@pytest.mark.parametrize("case", ["mapping", "backup_crc", "symlink", "parent_symlink", "existing_receipt"])
 def test_mismatch_or_symlink_or_existing_receipt_is_refused(tmp_path, case):
     m = tool()
     raw, layout = _table_image()
@@ -108,9 +113,13 @@ def test_mismatch_or_symlink_or_existing_receipt_is_refused(tmp_path, case):
     if case == "existing_receipt":
         receipt.write_text("operator record")
     tree = PublicOnly(key()[0], "link" if case == "symlink" else "file")
+    if case == "parent_symlink":
+        tree.kind = lambda path: "link" if path == "/ssh-hostkeys" else "file"
     with pytest.raises((ValueError, FileExistsError)):
         m.extract(str(disk), len(raw), expected, NAME, receipt, open_tree=lambda *a: tree)
-    assert tree.opened == [] if case != "existing_receipt" else receipt.read_text() == "operator record"
+    assert tree.opened == []
+    if case == "existing_receipt":
+        assert receipt.read_text() == "operator record"
     assert disk.read_bytes() == raw
 
 
@@ -148,3 +157,35 @@ def test_real_ext4_public_key_and_independent_openssh_fingerprint(tmp_path):
     tool().extract(str(disk), len(card), layout, NAME, receipt)
     assert json.loads(receipt.read_text())["fingerprint"] == fingerprint
     assert disk.read_bytes() == card
+
+
+@pytest.mark.parametrize("case", ["valid", "absent", "duplicate", "bus", "boot", "system", "offline", "capacity"])
+def test_fresh_usb_probe_rejects_ambiguous_or_system_disks(monkeypatch, case):
+    m = tool()
+    row = dict(Number=7, Size=8 * 1024**3, BusType="USB", IsBoot=False, IsSystem=False, IsOffline=False)
+    if case in ("boot", "system", "offline"):
+        row[{"boot": "IsBoot", "system": "IsSystem", "offline": "IsOffline"}[case]] = True
+    if case == "bus":
+        row["BusType"] = "SATA"
+    if case == "capacity":
+        row["Size"] += 1
+    rows = [] if case == "absent" else [row, row] if case == "duplicate" else [row]
+    selector = "fixture" + "-usb-selector"
+
+    def discover(command, **kwargs):
+        assert kwargs["input"] == selector and selector not in str(command)
+        return subprocess.CompletedProcess(command, 0, json.dumps(rows), "")
+
+    monkeypatch.setattr(m.subprocess, "run", discover)
+    if case == "valid":
+        assert m.probe_usb(selector) == (r"\\.\PhysicalDrive7", row["Size"])
+    else:
+        with pytest.raises(ValueError):
+            m.probe_usb(selector)
+
+
+def test_isolated_help_never_touches_media(tmp_path):
+    result = subprocess.run([sys.executable, "-I", str(SCRIPT), "--help"], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert "--disk-serial" in result.stdout and "--layout-file" in result.stdout
