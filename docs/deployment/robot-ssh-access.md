@@ -19,6 +19,78 @@ API 계약은 [구현 계획](../plans/2026-10-02-d418-robot-ssh-access.md)에 �
 필요한 것: OpenSSH 클라이언트(`ssh`, `ssh-keygen`; Windows 10/11, macOS, Linux 기본 포함)와 Python 3.10 이상.
 도구는 표준 라이브러리만 쓰며 Windows, macOS, Linux에서 같다. Windows에서는 `python`, macOS·Linux에서는 `python3`로 실행한다.
 
+## 접속 복구: 웹과 SSH가 함께 막혔을 때
+
+먼저 카드에 넣은 운영자 키로 접속한다. 이 키의 SSH 로그인은 CORE 실행이나 웹 등록을
+요구하지 않는다. 주소가 응답하더라도 올바른 로봇인지는 기존 SSH 호스트 키로 확인한다.
+키가 바뀌었다는 경고를 삭제하거나 다른 계정을 추측해 접속하지 않는다.
+
+```powershell
+$operatorKey = Join-Path $env:LOCALAPPDATA 'Rosy\ssh\rosy-operator-ed25519'
+$robotHosts = Join-Path $env:LOCALAPPDATA 'Rosy\known_hosts'
+ssh -i $operatorKey -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$robotHosts" rosy@<robot-ip>
+```
+
+`Connection refused`는 해당 포트에 연결할 수 없다는 뜻이며 인증 코드로 해결할 수 없다.
+`Permission denied (publickey)`는 SSH가 응답했지만 지정한 키의 로그인을 허용하지 않았다는
+뜻이다. 두 경로가 모두 막혔을 때에는 이미 로그인된 현장 콘솔이나 아래 오프라인 복구를
+사용한다. 새 복구 소스를 접근 불가한 로봇에 원격 설치했다고 간주하지 않는다.
+
+### 카드를 준비할 때 운영자 키를 함께 보존
+
+`setup-moved-device.ps1`은 운영자 개인키와 `.pub` 파일이 모두 없으면 카드 계획과 기록
+전에 멈춘다. 최초 준비 시 Windows 운영 PC에서 다음처럼 키를 만든다. 기존 키는 덮어쓰지
+않으며 개인키는 이 PC에 보관한다. 카드에는 공개키와 그 지문만 전달된다.
+
+```powershell
+$operatorDir = Join-Path $env:LOCALAPPDATA 'Rosy\ssh'
+New-Item -ItemType Directory -Force -Path $operatorDir
+ssh-keygen -t ed25519 -f (Join-Path $operatorDir 'rosy-operator-ed25519')
+```
+
+### 키를 쓸 수 없을 때: 다시 굽지 않고 오프라인 복구
+
+로봇 전원을 끄고 SD 카드를 Linux PC의 리더기에 연결한다. Linux에서 대상 카드를
+확인해 ext4 루트 파티션을 별도 경로에 마운트한다. Windows 진단 리더는 읽기 전용이므로
+이 작업에 사용할 수 없다. 이 도구는 카드를 선택·마운트·포맷하지 않는다.
+
+Linux PC의 이 저장소에서 **공개키 파일만** 지정해 먼저 읽기 전용으로 확인한다.
+
+```sh
+sudo python3 deploy/robot/pinky_pro/sd/recover-ssh-access.py \
+  --root /mnt/rosy-card --public-key /path/to/rosy-operator-ed25519.pub
+```
+
+출력의 장치 UID·이름·로봇 번호·활성 릴리스와 공개키 지문을 확인한다. 적용할 때에는
+같은 값을 명시하고 카드와 다른 파일시스템에 이미 만든 백업 폴더를 지정한다.
+
+```sh
+sudo python3 deploy/robot/pinky_pro/sd/recover-ssh-access.py \
+  --root /mnt/rosy-card --public-key /path/to/rosy-operator-ed25519.pub \
+  --apply --backup-dir /path/to/host-backup \
+  --device-uid <readback-uid> --device-name <readback-name> \
+  --robot-number <readback-number> --release-id <readback-active-release>
+```
+
+적용은 기존 `rosy` 계정의 `authorized_keys`에 ed25519 공개키를 추가한다. 다른 키는
+유지하며 원본 바이트·소유권·권한을 먼저 백업하고 기록 결과를 다시 읽는다. 같은 키로
+재실행하면 추가로 쓰지 않는다. 계정 부재, 불일치한 장치 정보, 심볼릭 링크, 하드 링크,
+안전하지 않은 권한, 같은 파일시스템의 백업은 거절한다. 계정이 없는 카드는 기존 서명된
+개인화 절차를 사용한다. 도구가 임의로 계정이나 비밀번호 인증을 만들지 않는다.
+
+영수증의 `SSH_KEY_RESTORED_ON_CARD`는 카드 파일 변경만 증명한다. 안전하게 마운트를
+해제해 같은 로봇에 넣은 후, 실물 장치의 호스트 키 지문을 확인하고 위 SSH 명령으로 실제
+로그인을 검증한다. 네트워크·SSH 서비스 설정까지 자동 복구됐다고 해석하지 않는다.
+
+되돌릴 때에는 `receipt.json`의 `after_sha256`과 현재 파일이 같은지 먼저 확인하고,
+`authorized_keys.before`와 `before.json`의 원래 소유권·권한을 복원한다. 원본 파일이
+없었던 경우에는 이번에 만든 파일만 제거한다. 복구 후 다른 키 변경이 있었다면 전체
+파일을 덮어쓰지 말고 추가한 키만 검토해 회수한다.
+
+`registration_pending=true`는 이동한 카드의 새 장치 등록이 아직 필요하다는 뜻이다.
+이 복구는 장치 신원·SETUP 보호·운용 모드·모터 승인·지도·보정 자료를 바꾸지 않는다.
+SSH 접속 뒤 새 보드 등록과 정상 제어 복귀는 기존 장치 등록 절차로 별도 확인한다.
+
 ## 1. 화면 코드로 기기 키 등록 (권장)
 
 접속할 PC에서 저장소의 `Rosy OS` 폴더를 열고 실행한다.

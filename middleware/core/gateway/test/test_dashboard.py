@@ -43,7 +43,7 @@ def assert_confirmation_contract(bundle: str) -> None:
     assert "await confirmIrreversible(" in bundle
     ui = (COMMON_ROOT / "ui.js").read_text(encoding="utf-8")
     confirmation = (COMMON_ROOT / "confirmation.js").read_text(encoding="utf-8")
-    assert 'import { createConfirmIrreversible } from "/common/confirmation.js";' in ui
+    assert 'import { createConfirmIrreversible } from "./confirmation.js";' in ui
     assert "confirmIrreversible = createConfirmIrreversible(openLiveDialog)" in ui
     assert 'close = openLiveDialog(dialog,' in confirmation
     assert 'cancel.addEventListener("click", () => close("cancel"))' in confirmation

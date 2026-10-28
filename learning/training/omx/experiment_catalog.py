@@ -128,3 +128,58 @@ class Catalog:
             raise ValueError('registered export dataset identity changed')
         db.execute('INSERT OR IGNORE INTO datasets VALUES (?,?)', (uid, json.dumps(document)))
         return uid
+
+    def archive_sources(self, project_id):
+        """List already registered data without refreshing jobs or moving files."""
+        with self.lock, self.connect() as db:
+            self._archive_project(db, project_id)
+            return [{key: row[key] for key in ('id', 'name', 'revision', 'source')}
+                    for (raw,) in db.execute('SELECT document FROM datasets ORDER BY rowid DESC')
+                    for row in [json.loads(raw)]]
+
+    @staticmethod
+    def _archive_project(db, project_id):
+        binding = db.execute('SELECT project_id FROM workspace_binding WHERE singleton=1').fetchone()
+        if not binding or binding[0] != project_id:
+            raise ValueError('learning archive source belongs to a different project')
+
+    def archive_source(self, dataset_id, revision, project_id):
+        """Return a server-only snapshot of bounded, registered dataset bytes."""
+        from storage_inventory import open_root
+        from storage_files import entry, file_open, names
+        uid = identifier(dataset_id)
+        if not isinstance(revision, str) or not re.fullmatch('[0-9a-f]{64}', revision):
+            raise ValueError('fixed dataset revision required')
+        with self.lock, self.connect() as db:
+            self._archive_project(db, project_id)
+            found = db.execute('SELECT document FROM datasets WHERE id=?', (uid,)).fetchone()
+            if not found or json.loads(found[0])['revision'] != revision:
+                raise ValueError('registered dataset and matching revision required')
+            row = json.loads(found[0])
+            root = self.root / 'datasets' / uid
+            fd = open_root(str(root))
+            try:
+                present = names(fd)
+                with file_open(fd, 'dataset.json') as stream: raw = stream.read(1024 ** 2 + 1)
+                if len(raw) > 1024 ** 2: raise ValueError('dataset description exceeds 1 MiB')
+                document = json.loads(raw)
+                declared = {'dataset.json', *(item['file'] for item in document['episodes'])}
+                receipts = present & {'native-split-receipt.json', 'conversion-receipt.json'}
+                if (present != declared | receipts or len(present) > 1000
+                        or any('/' in name or not re.fullmatch(
+                            r'((dataset|native-split-receipt|conversion-receipt)\.json|[A-Za-z0-9][A-Za-z0-9_.-]{0,120}\.npz)', name)
+                            for name in present)):
+                    raise ValueError('only registered flat dataset files and receipts may be archived')
+                files = {name: entry(fd, name) for name in sorted(present)}
+                if sum(item['bytes'] for item in files.values()) > 512 * 1024 ** 2:
+                    raise ValueError('dataset archive exceeds 512 MiB')
+                checked = load_dataset(root)
+                if checked.revision != revision or checked.source != row['source']:
+                    raise ValueError('registered dataset bytes changed')
+                if names(fd) != present or any(entry(fd, name) != value for name, value in files.items()):
+                    raise ValueError('dataset changed during archive validation')
+                info = os.fstat(fd)
+                return dict(path=root, identity=[info.st_dev, info.st_ino], files=files,
+                    provenance=dict(dataset_id=uid, source_revision=revision, source=checked.source,
+                                    format='rosy.omx.experiment-dataset'))
+            finally: os.close(fd)

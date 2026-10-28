@@ -65,23 +65,33 @@ def test_owned_pipeline_controls_work_from_keyboard_search(tmp_path, width):
     target = Control(file, before['workspace_id'], home=home, runner=runner)
     Workspace(store.db).register({'kind': 'perception', 'name': '자동 학습', 'path': str(out)})
     with serve(store, target) as (page, _, expect):
+        page.add_init_script("""const send=window.fetch;
+          window.fetch=async (...args)=>{
+            const response=await send(...args);
+            if(String(args[0]).includes('/api/learning/storage/settings'))
+              await new Promise(resolve=>setTimeout(resolve,1000));
+            return response;
+          };""")
         page.set_viewport_size({'width': width, 'height': 844})
         page.goto(page.url.split('?')[0].rstrip('/') + '/learning', wait_until='networkidle')
         expect(page.get_by_role('button', name='학습 시작', exact=True)).to_be_enabled()
         for action in ['학습 시작', '학습 중지', '학습 재시도']:
+            # Status renders before storage refresh releases the controls.
+            expect(page.get_by_role('button', name=action, exact=True)).to_be_enabled()
             page.keyboard.press('Control+k')
             page.get_by_role('textbox', name='기능 검색어').fill(action)
             page.keyboard.press('Enter')
             expect(page.locator('#owner-control-status')).to_contain_text(
                 '실행기 처리 중' if action != '학습 중지' else '자동 확인 중지됨')
         assert runner.active and not runner.automatic
+        expect(page.get_by_role('button', name='학습 중지', exact=True)).to_be_enabled()
         page.keyboard.press('Control+k')
         runner.active = False
         runner.invocation = 'd' * 32
         (out / 'state.json').write_text(json.dumps({'review_autobuild': {
             'status': 'request_published', 'cycle_keys': ['current']},
             'cycles': {'current': {'status': 'candidate', 'attempts': 1}}}))
-        expect(page.locator('#owner-control-status')).to_contain_text('자동 확인 중지됨')
+        expect(page.locator('#owner-control-status')).to_contain_text('자동 확인 중지됨', timeout=8000)
         expect(page.get_by_role('dialog', name='기능 검색')).to_be_visible()
         page.keyboard.press('Escape')
         expect(page.get_by_text('학습 후보 저장됨', exact=True)).to_be_visible(timeout=8000)

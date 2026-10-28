@@ -963,3 +963,10 @@
 - 변경: 닫힌 이름(D-641 3항)은 그대로 두고 그림만 바꿨다. tools=렌치, settings=슬라이더(전에는 좌표만 다른 같은 그림), install=망치(내려받기 화살표와 겹쳤음), account=사람(문서처럼 읽혔음), fit=모서리 괄호 안 상자(expand와 구분), box=입체 상자(fit과 같은 그림이었음). `test_action_icon_contract.py`는 경로 문자열 고정 대신 한 이름·한 그림(경로 중복 0)을 검사한다. 장미색 허용 파일에서 `surface-panels.css`를 뺐다(D-277 게이트 강화).
 - 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.
+
+## 2026-10-26 · 181f670b45 · Monitoring mount registration
+
+- 변경: Monitoring의 읽기 전용 표면·포트·계약을 UI 구현 전에 등록했다. 기준선과 G2/G3는 후속 UI 검증까지 보류한다.
+- 공용 control 모듈의 상대 import로 접두 경로에서도 같은 canonical 파일을 사용한다. 테마 검사는 `/common/`과 `./common/`의 동일 mount 쌍만 허용한다.
+- 검증: 원격 181f670b45의 registry·shared controls·typography 59 PASS, 0 SKIP, known_failures NEW 0. 상대 경로·잘못된 테마 mount 회귀 단언을 포함한다. 기존 제품·실물 gate는 올리지 않는다.
+- gate 변화: 없음. UI·실물 수용은 후속이다.
