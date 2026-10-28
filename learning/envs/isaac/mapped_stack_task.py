@@ -54,6 +54,10 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         efforts[0, fingers[i]] = [.2, 2.]
         view.set_max_efforts(efforts)
         print('MAPPED_SI_EFFORTS', i, view.get_max_efforts().tolist(), flush=True)
+        print('MAPPED_MASSES', i, view.get_body_masses().tolist(), flush=True)
+        print('MAPPED_EFFORT_MODES', i, view.get_effort_modes(), flush=True)
+        view.set_solver_position_iteration_counts(np.array([64]))
+        view.set_solver_velocity_iteration_counts(np.array([16]))
 
     def step():
         nonlocal tick
@@ -142,6 +146,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         print('MAPPED_HOME', snapshot(), flush=True)
         print('MAPPED_APPLIED', [(r.get_applied_action().joint_positions.tolist(),
             r.get_applied_action().joint_velocities.tolist(), r.get_joint_velocities().tolist()) for r in robots], flush=True)
+        print('MAPPED_TORQUES', [r.get_measured_joint_efforts().tolist() for r in robots], flush=True)
         if trial_index == 0:
             photo('mapped-overview.png', True)
             photo('mapped-initial.png')
