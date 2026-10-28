@@ -161,6 +161,7 @@ def test_installed_snapshot_contains_executable_delivery_policy(tmp_path):
 def test_coordinator_prepared_full_selects_delta_for_actual_publisher(trees, tmp_path, monkeypatch):
     _, public, ((_, base), (target, full)) = trees
     monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "operator"))
     cd = load("delivery_connected_cd", "tools/release/robot_cd.py")
     state_dir = tmp_path / "cd-state"
     state_dir.mkdir()
@@ -202,7 +203,7 @@ def test_coordinator_prepared_full_selects_delta_for_actual_publisher(trees, tmp
     assert coordinator.state["payload_tarball"] == str(work / full.name)
 
 
-@pytest.mark.parametrize("mode", ["same", "different", "missing", "tamper", "dirty-base", "raced-base"])
+@pytest.mark.parametrize("mode", ["same", "different", "missing", "tamper", "dirty-base", "raced-base", "healthfail"])
 def test_signed_producer_local_http_consumer_transport(trees, tmp_path, mode):
     """Run real HTTP, signature checks and GNU tar; staging never changes current."""
     from auto_update_fakes import FakeGitHub
@@ -322,7 +323,7 @@ def test_signed_producer_local_http_consumer_transport(trees, tmp_path, mode):
             assert (releases / target.name / "SHA256SUMS").read_bytes() == (target / "SHA256SUMS").read_bytes()
             assert (releases / target.name / "manifest.json").read_bytes() == (target / "manifest.json").read_bytes()
         downloads = [path for path, _ in hub.requests if path.endswith(".tar.gz")]
-        if mode == "same":
+        if mode in ("same", "healthfail"):
             assert downloads == [f"/dl/{target.name}/{name}"]
             assert (releases / current / "install/pkg/a.py").read_bytes() == b"old\n"
             assert (releases / current / "install/pkg/b.py").stat().st_ino == (releases / target.name / "install/pkg/b.py").stat().st_ino
@@ -333,5 +334,23 @@ def test_signed_producer_local_http_consumer_transport(trees, tmp_path, mode):
         assert not any("activate" in arg for argv in calls for arg in argv)
         assert (releases.parent / "current").resolve().name == current
         assert identity.read_bytes() == b"preserve identity WiFi calibration"
+        if mode == "healthfail":
+            # Exercise the unchanged application activation/health/rollback
+            # coordinator on the tree reconstructed by the real delta unpacker.
+            from auto_update_fakes import BOOT, FakeHost, updater, write_json, kinds
+            boot = root / "proc/sys/kernel/random/boot_id"
+            boot.parent.mkdir(parents=True)
+            boot.write_text(BOOT + "\n")
+            (root / "opt/rosy/native-runtime").mkdir(parents=True)
+            write_json(root / "var/lib/rosy/updates/config.json", {"enabled": True, "repo": REPO})
+            fake = FakeHost(root, current=current)
+            fake.overrides["ready"] = lambda h, argv: subprocess.CompletedProcess(
+                argv, 1, "", "health failed") if h.links["current"] == target.name else None
+            result = updater(fake, hub).run()
+            assert result["phase"] == "rolled_back", result
+            assert fake.links["current"] == current
+            assert "activate" in kinds(fake) and "rollback" in kinds(fake)
+            assert (releases / current / "install/pkg/a.py").read_bytes() == b"old\n"
+            assert identity.read_bytes() == b"preserve identity WiFi calibration"
     finally:
         hub.close()

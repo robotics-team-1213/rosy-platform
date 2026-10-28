@@ -278,6 +278,9 @@ def test_next_release_has_independent_attempt_and_canary_state(tmp_path, monkeyp
         path = args[1]
         if "git/ref/heads/main" in path:
             return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in path:
+            return json.dumps({"status": "ahead", "files": [
+                {"filename": "operations/pkg/node.py", "status": "modified"}]})
         if "/runs?" in path:
             return json.dumps({"workflow_runs": [run()]})
         if "releases?" in path or "matching-refs" in path:

@@ -141,7 +141,31 @@ elif [[ -n "${ROSY_DELTA_BASE_ID:-}" ]]; then
   exit 1
 fi
 
-tar --unlink-first --no-same-owner --no-same-permissions -xzf "$TARBALL" -C "$TMP"
+# GNU tar --unlink-first also tries to unlink nonempty directory entries and
+# archives containing '.', so unlink only regular destinations ourselves. This
+# prevents tar from truncating an inode still hard-linked to the verified base.
+python3 - "$TARBALL" "$TMP" <<'PY'
+import pathlib
+import sys
+import tarfile
+
+root = pathlib.Path(sys.argv[2])
+with tarfile.open(sys.argv[1], "r:gz") as archive:
+    for member in archive:
+        if not member.isfile():
+            continue
+        parts = pathlib.PurePosixPath(member.name).parts
+        path = root.joinpath(*parts)
+        parent = root
+        for part in parts[:-1]:
+            parent = parent / part
+            if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+                sys.exit("DELTA_DESTINATION_UNSAFE: ancestor is not a plain directory")
+        if path.is_symlink() or path.is_dir():
+            sys.exit("DELTA_DESTINATION_UNSAFE: member is not a plain file")
+        path.unlink(missing_ok=True)
+PY
+tar --no-same-owner --no-same-permissions -xzf "$TARBALL" -C "$TMP"
 rm -f -- "$TMP/.rosy-delta-base"
 if [[ -n "${ROSY_DELTA_BASE_ID:-}" ]]; then
   # Check again after extraction: changed files must not hide a raced preimage.

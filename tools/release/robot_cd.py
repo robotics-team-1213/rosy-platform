@@ -290,7 +290,8 @@ class Coordinator:
             if self.state:
                 self.audit("previous_transaction")
             previous = self.state.get("payload_tarball")
-            if previous is None and self.state.get("phase") == "done" and self.state.get("work_dir"):
+            if (previous is None and self.state.get("phase") == "done"
+                    and self.state.get("work_dir") and self.state.get("release_id")):
                 previous = str(Path(self.state["work_dir"]) / f"{self.state['release_id']}.tar.gz")
             self.state = {}  # attempt budget, canary and PID belong to one release only
             self.save(sha=sha, release_id=release_id, phase="dispatching",
