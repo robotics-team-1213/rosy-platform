@@ -92,3 +92,5 @@ def install_physical_observer_routes(app, *, service, task_store, job_view, requ
             current.dispatcher.cancel(mission_id, reason=body.reason)
             return job_view(current.store.get(mission_id, principal=principal))
         return await call(withdraw)
+
+    return authenticate

@@ -5039,6 +5039,13 @@
 - Gate: 없음. 순수 이름 변경.
 - CE: 해당 없음.
 
+## 2026-10-27 · 477761474d · 인증된 simulation 복구 HTTP·현재 Account 권한
+
+- 변경: D-899 요청 원장을 공개 recovery 경로에 연결했다. observer 인증을 재사용하고 현재 제안자 권한은 자식 생성의 제공된 DB에서 조회한다. 원본·정지 fence·최신 근거를 검사하며 부모 실패, 단일 자식 한도와 역사적 정확 재조회를 보존한다. owner 결과·단계의 공개 요약은 물리 원인을 추정하지 않는다.
+- 증거: 신규/기존 auth 109 passed, HTTP/service 37 passed, API/auth 최종 18 passed/0 skipped(재시작·닫힌 fence·SDK offline·실제 Account disable/grant 변경 포함). 관련 broad 453 passed/35 skipped와 별도 실제 브라우저 14 passed/0 skipped. revision·실패 회차·명령은 docs/validation/transfer-recovery-public-2026-10-27/result.md에 구분했다.
+- gate 변화: 기존 gate 승격 없음. 공식 로컬 착지 별도 대기, push·실물·Gazebo producer·학습 수용 미수행.
+- CE: 새 교훈 기록 — 페이지 넘침 가드가 놓친 nested 식별자 잘림을 실제 캡처와 결정적 RED/GREEN으로 확인해 docs/solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md에 남겼다.
+
 ## 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
 
 - 변경: `test_work_sources.py`가 매번 새로 만드는 앱의 State 설정 4곳을 직접 대입한다. 실제 요청·작업 종류 판정 assertion은 유지한다. 생산 코드와 설정은 바꾸지 않는다.
