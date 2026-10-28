@@ -61,7 +61,10 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, 
 
 def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call) -> int:
     """Run land.py in ``tree``; clean up when the snapshot landed, keep it and mark it stopped otherwise."""
-    code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree))
+    # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
+    with open(tree.parent / (tree.name + ".log"), "a", encoding="utf-8") as log:
+        code = run([sys.executable, "-X", "utf8", "tools/land.py", *land_args], cwd=str(tree), stdout=log,
+                   stderr=subprocess.STDOUT)
     landed = subprocess.run(["git", "-C", str(tree), "merge-base", "--is-ancestor", snap, "main"]).returncode == 0
     if landed:
         main = git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")

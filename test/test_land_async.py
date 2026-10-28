@@ -73,11 +73,13 @@ def test_supervise_cleans_up_only_a_landed_snapshot(repo, lands):
     snap, log = tool.start(dev, [], NOW, lambda *a: None)
     tree = log.parent / log.name.removesuffix(".log")
 
-    def fake_land(argv, cwd):
+    def fake_land(argv, cwd, stdout, stderr):
+        stdout.write("[land] STOP: merge aborted\n")  # what the owner must find in the .log
         if lands:
             _git(main, "merge", "-q", "--ff-only", snap)
         return 0 if lands else 1
     code = tool.supervise(tree, snap, [], run=fake_land)
+    assert "[land] STOP: merge aborted" in log.read_text(encoding="utf-8")
     assert code == (0 if lands else 1)
     assert tree.exists() is not lands
     assert bool(_git(main, "branch", "--list", snap)) is not lands
