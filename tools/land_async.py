@@ -78,11 +78,12 @@ def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call) 
     return code
 
 
-def detach(argv: list[str], log: Path) -> None:
+def detach(argv: list[str], log: Path) -> subprocess.Popen:
     flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    # cwd: the holder, never the caller's worktree, which Windows then cannot delete while the landing runs
     with open(log, "w", encoding="utf-8") as out:
-        subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                         creationflags=flags, start_new_session=os.name != "nt")
+        return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, cwd=log.parent,
+                                creationflags=flags, start_new_session=os.name != "nt")
 
 
 def main(argv: list[str]) -> int:
