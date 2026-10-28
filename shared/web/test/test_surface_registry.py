@@ -113,7 +113,7 @@ def test_declared_baselines_are_tracked():
     assert _under("baseline") == []
 
 
-def test_every_html_under_src_is_registered():
+def test_every_product_html_is_registered():
     """추적 파일과 아직 add하지 않은 파일을 모두 잡는다.
 
     파일시스템 `rglob`을 쓰면 `.gitignore`된 빌드 산출물이 들어오고,
@@ -129,7 +129,7 @@ def test_every_html_under_src_is_registered():
         if not any(here == path or here.startswith(path.rstrip("/") + "/") for path in registered):
             orphans.append(here)
     assert orphans == [], (
-        "src/의 HTML이 레지스트리에 없다 — 표면을 등록하거나 이 파일에서 제외 사유를 적어라:\n"
+        "제품 HTML이 레지스트리에 없다 — 표면을 등록하거나 이 파일에서 제외 사유를 적어라:\n"
         + "\n".join(orphans)
     )
 
