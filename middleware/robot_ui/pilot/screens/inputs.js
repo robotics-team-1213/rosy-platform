@@ -37,7 +37,7 @@ export function mountInputs(root, {onClose, onChange} = {}) {
       button.addEventListener("click", () => {
         config = saveInputConfig({preset: name});
         onChange?.();
-        render();
+        for(const child of presets.children)child.setAttribute('aria-pressed',String(child===button));
       });
       presets.append(button);
     }
@@ -62,7 +62,7 @@ export function mountInputs(root, {onClose, onChange} = {}) {
       button.setAttribute("kind", "segment");
       button.addEventListener("click", () => {
         config = saveInputConfig({curve: name});
-        render();
+        for(const child of curves.children)child.setAttribute('aria-pressed',String(child===button));
       });
       curves.append(button);
     }
@@ -73,7 +73,8 @@ export function mountInputs(root, {onClose, onChange} = {}) {
     invertButton.setAttribute("kind", "segment");
     invertButton.addEventListener("click", () => {
       config = saveInputConfig({invertAngular: !config.invertAngular});
-      render();
+      invertButton.setAttribute('aria-pressed',String(Boolean(config.invertAngular)));
+      invertButton.textContent=config.invertAngular?'반전 켜짐':'반전 꺼짐';
     });
     const invertCell = el("div");
     invertCell.append(el("ui-text", "조향 반전", {scale: "label"}), invertButton);
@@ -89,10 +90,10 @@ export function mountInputs(root, {onClose, onChange} = {}) {
 
     root.replaceChildren(head, el("p", "설정은 바로 저장됩니다. 미리보기만으로 로봇은 움직이지 않습니다."), grid, previewLabel, preview, close);
     previewNode = preview;
-    return preview;
+    return presets.querySelector('[aria-pressed="true"]')||close;
   }
 
-  render();
+  render().focus();
   previewTimer = setInterval(() => {
     const pad = navigator.getGamepads ? [...navigator.getGamepads()].find(Boolean) : null;
     if (!pad) {
