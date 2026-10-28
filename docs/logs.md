@@ -12640,3 +12640,11 @@ osy-d395-s1d\`.
 - 근거: Pilot 팔 드라이버는 `omx_sim.js`뿐이고(D-390), 실물 팔 S는 SSH·FIFO로만 조작·녹화한다. D-894는 브라우저가 Fleet origin만 부르게 해 장치-origin Pilot과 맞지 않는다.
 - gate 변화: 없음(문서만, 구현·실물 동작 없음). D-894 착지·런타임 수용이 선행 조건이다.
 - CE: 해당 없음 — 방향 결정이며 해결한 장애가 없다.
+
+## 2026-10-28 · uncommitted · fix(land): 묶음이 FULL급 맨 앞을 건너뛰고 사전 시험 대기 티켓도 싣는다
+
+- 변경: `tools/land_batch.py`·`tools/land_prepare.py`. 리더는 묶을 수 있는 `waiting` 가운데 가장 앞선 것이다. 구성원에 `pending`을 더한다(갈라진 지점의 선택이 affected일 때). 묶음에 든 `pending`은 슬롯을 잡지 않고, 착지되면 사전 시험을 건너뛴다. D-889 추가 4.
+- 근거: 10-28 15:45 대기 23건 중 16건이 `pending`이었는데 `train` 사건은 0건이었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
