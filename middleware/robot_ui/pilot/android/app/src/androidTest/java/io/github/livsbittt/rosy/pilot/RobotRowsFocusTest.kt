@@ -61,7 +61,10 @@ class RobotRowsFocusTest {
     private fun visible(target: () -> View) = instrumentation.runOnMainSync {
         val view = target()
         assertTrue(view.hasFocus())
-        assertTrue(view.getGlobalVisibleRect(Rect()))
+        val bounds = Rect()
+        assertTrue(view.getGlobalVisibleRect(bounds))
+        assertEquals(view.width, bounds.width())
+        assertEquals(view.height, bounds.height())
         assertEquals(0, activity.selections)
     }
 
@@ -82,6 +85,14 @@ class RobotRowsFocusTest {
         focusRow(0)
         render(emptyList())
         visible { activity.status }
+    }
+
+    @Test fun movingTheFocusedRowBelowALongListKeepsTheWholeRowVisible() {
+        val added = (0 until 20).map { first.copy(host = "fixture-$it.local") to true }
+        render(listOf(other to true) + added)
+        focusRow(0)
+        render(added + (other to true))
+        visible { activity.robots.getChildAt(added.size) }
     }
 
     @Test fun changingAnyEndpointPartUsesStatusInsteadOfAnotherConnection() {

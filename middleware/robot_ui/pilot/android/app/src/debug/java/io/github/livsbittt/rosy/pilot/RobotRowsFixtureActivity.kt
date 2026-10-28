@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 
 /** Debug-only synthetic rows: no discovery, account, connection, or robot commands. */
@@ -26,7 +27,7 @@ class RobotRowsFixtureActivity : Activity() {
         robots = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         outside = views.button("다른 제어") { }
         root.addView(status)
-        root.addView(robots)
+        root.addView(ScrollView(this).apply { addView(robots) }, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(outside)
         setContentView(root)
     }
