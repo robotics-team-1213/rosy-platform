@@ -305,3 +305,10 @@
 - 증거: 원격 RED 7/4/1건 재현 뒤 관련 전체 회귀 16/19/17 passed, skip0, NEW0. 공식 브라우저 선택 17파일의 최초 결과는 262 passed / 1 failed였고, 기존 메뉴 이동 시험의 로딩 대기를 보강한 뒤 해당 두 파일 전체 19 passed / skip0 / NEW0. 저장 검수 캡처 2건과 오류 crop 1건도 실제 Chromium으로 재검증했다. 최종 영향 선택과 원본별 SHA는 `docs/validation/recording-handoff-ui-followup-2026-10-28/`에 분리한다.
 - gate 변화: 없음. 실제 HF 쓰기·실물 녹화/행동·reader 수용·배포·merge/push는 수행하지 않았다. 앞선 전체26 시험은 이전 소스의 기록이며 새 main 통합 이후의 수용으로 재사용하지 않는다.
 - CE: 해당 없음. 상태·거부·초점 경계와 동기화 판단이 코드·회귀·날짜별 검증 기록에 남는다.
+
+## 2026-10-29 · 06c40584b3 · 저장 공간의 공용 버튼과 제목 배치
+
+- 변경: 저장 재조회·공간 추정 버튼을 공용 quiet로 이행하고 submit caller·native 유효성/Enter 배선을 유지했다. 폼 제목은 전용 행에 둔다. 기존 busy/epoch·권한·인증 취소·데이터 계산은 보존한다.
+- 증거: 최종 원격 실제 HTTP/Chromium9 passed/skip0와 공식 영향2880 passed/358 skipped, 각각 NEW0. 4폭×2테마의 ready/form/error24장과 독립 화면 검토를 `docs/validation/learning-storage-controls-2026-10-29/`에 고정했다. 최초 일반 버튼8 실패와 제목 geometry2 실패 원본도 보존했다.
+- gate 변화: 없음. 전체 UI·모델·실물·실제 HF·배포·착지/push/merge 수용과 구분한다.
+- CE: 해당 없음 — 부품/폼/임시 증거 경로의 판단은 코드·회귀·검증 기록에 남는다.
