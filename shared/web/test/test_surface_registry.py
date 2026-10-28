@@ -16,6 +16,23 @@ import surface_registry as registry
 REPO = registry.REPO
 
 
+@pytest.mark.parametrize("prefix", ["/", "./"])
+def test_canonical_theme_assets_share_the_same_mount(prefix):
+    html = (f'<link rel="stylesheet" href="{prefix}common/tokens.css">'
+            f'<script src="{prefix}common/theme.js"></script>')
+    assert registry._THEME_JS.search(html)
+    assert not registry._THEME_JS.search(html.replace('src="' + prefix, 'src="../'))
+    assert not registry._THEME_JS.search(html.replace("common/theme.js", "other/theme.js"))
+
+
+def test_shared_control_modules_resolve_within_their_own_mount():
+    for name in ("ui.js", "ui-wiring.js"):
+        source = (REPO / "shared/web" / name).read_text(encoding="utf-8")
+        assert '"/common/' not in source
+        for imported in re.findall(r'from "(\./[^"]+)"|import "(\./[^"]+)"', source):
+            assert (REPO / "shared/web" / next(value for value in imported if value)).is_file()
+
+
 def test_duplicate_registry_keys_cannot_silently_replace_a_contract(tmp_path):
     import yaml
 

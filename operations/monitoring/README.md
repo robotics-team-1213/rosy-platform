@@ -4,7 +4,8 @@ ROSY 시스템 모니터링의 독립 Python wheel은 `rosy-monitoring`, import�
 소유권과 배치 결정은 [D-876](../../docs/adr/D-876-rosy-monitoring-independent-site-and-aggregate.md)을 따른다.
 
 관측 모델·설정·자격·사이트별 캐시, 원천 수집과 읽기 API를 제공한다.
-독립 실행 CLI를 제공한다. 상태 화면·native 배포 묶음은 후속 단계다.
+독립 실행 CLI와 별도 [상태 화면](../../applications/monitoring/README.md)을 제공한다.
+native 서비스·설정·TLS 프록시 입력은 [배포 안내](deploy/README.md)를 따른다.
 실행 중인 Fleet 프로세스나 ROS를 import하지 않는다.
 HTTP 경로·인증·시간 전달·보존 한도는 [Monitoring API](../../docs/reference/rosy-monitoring-api.md)가 정본이다.
 
