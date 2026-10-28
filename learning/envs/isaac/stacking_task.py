@@ -307,6 +307,8 @@ def run(args):
         world.step(render=False, update_fabric=True)
     belt_motion = (cargo[0].get_world_pose()[0]-start).tolist()
     capture('stacking-initial.png')
+    print('OMX_STACKING_SCENE_READY', json.dumps(dict(arms=2, cargo=len(plan),
+        bin_size_m=FIXTURE['bin_size_m'], belt_displacement_m=belt_motion)), flush=True)
     env.reset()
     network = dict(class_name='MLPModel', hidden_dims=[64, 64], activation='elu', obs_normalization=True)
     cfg = dict(seed=args.seed, device=env.device, num_steps_per_env=32, save_interval=32,

@@ -1,5 +1,28 @@
 # Isaac Sim 5.1/6.x integration
 
+## OMX 두 팔 적재 강화학습 구동 검사
+
+`omx-stacking-rl`은 기존 실행기의 고정 PPO 시나리오다. 공식 OMX-F CAD 두 대,
+접촉 표면 속도 0.02 m/s의 50 cm 벨트, 90×90×90 mm 열린 적재 공간과
+30/60/90 mm 화물 15개(27개 단위 셀)를 구성한다. 설치 좌표는 합성이며 현장 맵 정합이 아니다.
+노란 선은 화물 외곽 부피의 시각 안내이며 물리 벽이 아니다.
+
+`tools/remote/remote_isaac.py check --scenario omx-stacking-rl --config CONFIG.json --sha FULL_SHA`
+에서 설정은 `{"seed":42}`만 받는다. 기존 `start/status/stop/fetch`와 receipt를 사용한다.
+설치된 RSL-RL 5.5의 PPO로 한 환경에서 32회 갱신(1024 제어 스텝)하며, seed+10000의
+평가 회차를 별도로 실행한다. 900초 unit과 870초 자식 감독, 같은 work/GPU 잠금을 사용한다.
+새 의존성을 설치하거나 실제 팔에 정책을 배포하지 않는다.
+
+최종 산출물은 보고서, 실제 SDK의 초기·평가 PNG, 해시 검증한 `stacking-policy.pt`다.
+SDK 서버 run에는 USD 장면과 학습 로그도 남는다. `training_verified`는 유한한 관측·PPO 실행·
+실제 파라미터 변화와 체크포인트 연결을 의미하고, `task_success`는 별도 평가의 전체 적재 결과다.
+적재 성공 0회인 구동 검사도 그대로 기록한다. 32회 갱신으로 적재 숙련·일반화를 주장하지 않는다.
+
+물체 자세 이동은 reset/새 투입 시에만 사용한다. 정책은 활성 팔의 관절·그리퍼를 제어하고,
+화물은 접촉으로 운반한다. 양측 손가락 접촉 lift, 지지면·선행 화물의 위쪽 지지,
+해제 후 안정과 외곽 부피를 확인하며 선행 적재물이 밀리면 성공으로 세지 않는다.
+동일 공간을 두 팔이 동시에 쓰는 협응 학습이나 대규모 병렬 학습은 포함하지 않는다.
+
 `middleware/devices/pinky/description/` remains the robot model source. `prepare_urdf.py` renders its xacro with the simulation collision geometry and without Gazebo plugins. `run_rosy.py` selects the installed 5.1 legacy or 6.x modern importer and creates ROS 2 graphs for one robot: `/rosy_01/cmd_vel` subscription, `/rosy_01/odom`, `/rosy_01/joint_states`, global `/tf`, and one global `/clock` publisher. The USD and URDF are generated artifacts, not repository source.
 
 D-434 keeps the model PC on Isaac Sim 5.1. Its bounded diagnostic runs headless at 640×480 with anti-aliasing disabled. The runner excludes the GUI menu during initial startup; the importer can enable that dependency later. Keep normal extension shutdown so exceptions and failed cleanup remain visible. The SDK repair pins in `requirements-sdk-5.1.txt` apply to a separate SDK environment, not Isaac Lab.
