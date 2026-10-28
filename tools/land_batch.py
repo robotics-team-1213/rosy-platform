@@ -100,12 +100,18 @@ def batchable(land, wt: Path, other: Path, name: str, tip: str) -> str | None:
     return _BATCHABLE[key]
 
 
-def eligible(land, wt: Path, row: dict, kind: str = "affected") -> bool:
+def taken(tickets: list[dict]) -> set[str]:
+    """Branches a live batch already carries (its leaders' ``batch`` lists): no second batch may take them."""
+    return {name for r in tickets for name in (r.get("batch") or [])}
+
+
+def eligible(land, wt: Path, row: dict, kind: str = "affected", carried_now: set[str] = frozenset()) -> bool:
     """A waiting or pending ticket another landing may carry: this host, a clean branch at its worktree's HEAD."""
     other, name = Path(row.get("worktree") or "."), row.get("branch") or ""
     if row.get("status") not in ("waiting", "pending") or row.get("host") != socket.gethostname():
         return False
-    if row.get("batch") or name in ("", "main", "HEAD") or not other.is_dir() or other.resolve() == wt.resolve():
+    if (row.get("batch") or name in carried_now or name in ("", "main", "HEAD") or not other.is_dir()
+            or other.resolve() == wt.resolve()):
         return False
     if in_main(land, wt, name):
         return False
@@ -133,15 +139,17 @@ def former(land, wt: Path, qdir: Path, ticket: Path, kind: str = "affected"):
 
     def form(rows: list[dict]) -> bool:
         tickets = land_queue.ahead(qdir, Path("~"))
-        if any(r.get("batch") for r in tickets):
-            return False  # one batch at a time
+        busy = taken(tickets)
+        me = next((r for r in tickets if r["ticket"] == ticket.name), {})
+        if me.get("branch") in busy:
+            return False  # another batch carries this landing
         # The earliest waiting ticket that may batch leads; a safety or FULL-class head no longer stops the rest.
         earlier = [r for r in tickets if r.get("status") == "waiting" and r["ticket"] < ticket.name]
-        if any(eligible(land, wt, r, kind) for r in earlier):
+        if any(eligible(land, wt, r, kind, busy) for r in earlier):
             return False
         joined = []
         for row in tickets:  # waiting and pending, in arrival order: a pending member skips its own pretest
-            if row["ticket"] != ticket.name and len(joined) < KMAX - 1 and eligible(land, wt, row, kind):
+            if row["ticket"] != ticket.name and len(joined) < KMAX - 1 and eligible(land, wt, row, kind, busy):
                 joined.append(row)
         if len(joined) + 1 < BATCH_MIN:
             return False
@@ -200,22 +208,25 @@ def early(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
     if ticket is None or args.tests != "auto":
         return None  # a skipped or explicit run never leads
     tickets = land_queue.ahead(qdir, Path("~"))
-    if any(r.get("batch") for r in tickets) or not any(
+    busy = taken(tickets)
+    if branch in busy or not any(
             r["ticket"] != ticket.name and r.get("status") in ("waiting", "pending") for r in tickets):
-        return None  # one batch at a time; nobody to carry
+        return None  # another batch carries it; nobody to carry
     if land_full.restore(wt, branch) is not None:
         return None  # a prepared landing leads from its wait (``former``)
     kind = batchable(land, wt, wt, branch, land.out(wt, "rev-parse", "HEAD"))
     if kind is None:
         return None  # safety lands alone
-    joined = [r for r in tickets if r["ticket"] != ticket.name and eligible(land, wt, r, kind)]
+    joined = [r for r in tickets if r["ticket"] != ticket.name and eligible(land, wt, r, kind, busy)]
     if not joined:
         return None
     p, runs = rate(qdir.parent / land_events.EVENTS)
     joined = joined[:(kopt(p) if kind == "affected" else min(kopt(p), KFULL)) - 1]
     land_queue.set_status(ticket, "pending", batch=[r["branch"] for r in joined])
-    rivals = [r for r in land_queue.ahead(qdir, Path("~")) if r["ticket"] < ticket.name and r.get("batch")]
-    if rivals:  # an earlier ticket formed in the same moment: it leads, this one goes alone
+    mine = {branch, *(r["branch"] for r in joined)}
+    rivals = [r for r in land_queue.ahead(qdir, Path("~")) if r["ticket"] < ticket.name and r.get("batch")
+              and mine & {r.get("branch"), *r["batch"]}]
+    if rivals:  # an earlier ticket took one of these in the same moment: it leads, this one goes alone
         land_queue.set_status(ticket, "pending", batch=[])
         return None
     measured = {"p": None if p is None else round(p, 3), "runs": runs}

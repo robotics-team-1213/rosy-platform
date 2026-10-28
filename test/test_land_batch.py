@@ -50,7 +50,7 @@ def test_wait_ends_landed_once_the_branch_is_in_main_and_batch_when_it_leads_one
 
 
 def test_only_the_earliest_waiting_ticket_leads_and_only_with_enough_members(tmp_path, monkeypatch):
-    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row, kind="affected": row["branch"] != "feat/unprepared"
+    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row, kind="affected", busy=frozenset(): row["branch"] != "feat/unprepared" and row["branch"] not in busy
                         and row.get("status") in ("waiting", "pending"))
     monkeypatch.setattr(land_batch, "rate", lambda path: (0.25, 50))
     turn = queue.take(tmp_path, "feat/turn", status="turn")
@@ -63,7 +63,7 @@ def test_only_the_earliest_waiting_ticket_leads_and_only_with_enough_members(tmp
     assert not form_peer([]), "an earlier waiting ticket leads, not this one"
     assert form([]) and [r["branch"] for r in chosen] == ["feat/peer"] and measured == {"p": 0.25, "runs": 50}
     assert info(mine)["batch"] == ["feat/peer"] and info(mine)["status"] == "preparing"
-    assert not form_peer([]), "one batch at a time"
+    assert not form_peer([]), "another batch already carries it"
     assert turn.exists()
 
 
@@ -218,7 +218,7 @@ def test_a_failed_batch_bisects_by_halving_until_the_leader_goes_alone(tmp_path,
 
 def test_a_non_batchable_head_does_not_stop_the_next_ticket_leading_and_pending_tickets_join(tmp_path, monkeypatch):
     """2026-10-28: 16 of 23 tickets sat pending behind three pretest slots and a FULL-class head led nothing."""
-    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row, kind="affected": row["branch"] != "feat/full"
+    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row, kind="affected", busy=frozenset(): row["branch"] != "feat/full"
                         and row.get("status") in ("waiting", "pending"))
     monkeypatch.setattr(land_batch, "rate", lambda path: (0.05, 50))
     queue.take(tmp_path, "feat/turn", status="turn")
@@ -264,7 +264,8 @@ def _early_setup(tmp_path, monkeypatch, kind="affected"):
     peer = queue.take(qdir, "feat/peer", status="pending")
     mine = queue.take(qdir, "feat/mine", status="preparing")
     monkeypatch.setattr(land_batch, "batchable", lambda *a: kind)
-    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row, k="affected": row["branch"] == "feat/peer" and k == kind)
+    monkeypatch.setattr(land_batch, "eligible", lambda land_, wt, row, k="affected", busy=frozenset(): row["branch"] == "feat/peer" and k == kind
+                        and row["branch"] not in busy)
     monkeypatch.setattr(land_batch, "rate", lambda path: (0.25, 50))
     monkeypatch.setattr(land_batch.land_full, "restore", lambda *a: None)
     monkeypatch.setattr(land, "out", lambda *a: "c" * 40)
@@ -313,3 +314,25 @@ def test_a_landing_backs_off_when_an_earlier_ticket_formed_a_batch_in_the_same_m
     args = land.argparse.Namespace(tests="auto")
     assert land_batch.early(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path) is None
     assert info(mine)["batch"] == []
+
+
+def test_a_disjoint_batch_forms_while_another_batch_waits_for_its_pretest(tmp_path, monkeypatch):
+    """2026-10-28 21:31: a FULL batch waited 1.5 h for a pretest slot and its ticket kept every other batch away."""
+    qdir, peer, mine = _early_setup(tmp_path, monkeypatch)
+    other = queue.take(qdir, "feat/other-leader", status="pending")
+    queue.set_status(other, "pending", batch=["feat/carried"])
+    queue.take(qdir, "feat/carried", status="pending")
+    led = []
+    monkeypatch.setattr(land_batch, "run", lambda *a, **k: led.append([r["branch"] for r in a[8]]) or 0)
+    args = land.argparse.Namespace(tests="auto")
+    assert land_batch.early(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path) == 0
+    assert led == [["feat/peer"]], "the carried branch stays with its own batch"
+
+
+def test_a_landing_another_batch_carries_does_not_lead_its_own(tmp_path, monkeypatch):
+    qdir, peer, mine = _early_setup(tmp_path, monkeypatch)
+    leader = queue.take(qdir, "feat/leader", status="pending")
+    queue.set_status(leader, "pending", batch=["feat/mine"])
+    monkeypatch.setattr(land_batch, "run", lambda *a, **k: pytest.fail("a carried landing led"))
+    args = land.argparse.Namespace(tests="auto")
+    assert land_batch.early(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path) is None
