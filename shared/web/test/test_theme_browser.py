@@ -1,7 +1,7 @@
 """D-359 §2.4·§2.5 — theme.js가 실제 표면 HTML에서 첫 그림 전에 테마를 정하고,
 선택 UI가 살아 있는 페이지의 테마를 바꾸는지 Chromium으로 확인한다.
 
-표면 파일은 가짜 호스트(`http://rosy.test`)로 그대로 서빙한다 — 서버 없이
+표면 파일은 가짜 보안 호스트(`https://rosy.test`)로 그대로 서빙한다 — 서버 없이
 `<head>` 순서(tokens.css → theme.js)와 CSP와 같은 외부 스크립트 경로를 그대로 탄다.
 """
 
@@ -24,7 +24,7 @@ SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / 'middleware' / 'robot_ui' / "robot"
 FLEET = SRC.parent / 'applications' / 'fleet' / 'web'
-HOST = "http://rosy.test"
+HOST = "https://rosy.test"
 PALETTES = token_themes.palettes(token_themes.read())
 TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
 PANEL_PAGE = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
