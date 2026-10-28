@@ -12691,3 +12691,17 @@ osy-d395-s1d\`.
 - 근거: Pilot 팔 드라이버는 `omx_sim.js`뿐이고(D-390), 실물 팔 S는 SSH·FIFO로만 조작·녹화한다. D-894는 브라우저가 Fleet origin만 부르게 해 장치-origin Pilot과 맞지 않는다.
 - gate 변화: 없음(문서만, 구현·실물 동작 없음). D-894 착지·런타임 수용이 선행 조건이다.
 - CE: 해당 없음 — 방향 결정이며 해결한 장애가 없다.
+
+## 2026-10-28 · uncommitted · native v2 readonly profile contract
+
+- 변경: D-907·ADR Log와 test/test_native_profile_manifest.py 초안. 기존 v1 producer/validator를 보존하고 v2 서명·형식·inventory·독립 policy·runtime identity 계약을 시험한다.
+- 검증: 검토 기준 14680235에서 b58162a6까지 관련 common signing/Pinky release/native verifier/test seam diff 없음. 현재는 test/doc 후보이며 pytest·생산 구현은 검토 뒤 진행한다.
+- gate 변화: 없음. readonly metadata 검증은 consumer 설치·native closure·활성화·실물 권한 증거가 아니다.
+- CE: 해당 없음 — 새 계약 단위의 test-first 후보이며 해결·검증한 비문서화 장애가 없다.
+
+## 2026-10-28 · uncommitted · D-907 source review R1 corrections
+
+- 변경: runtime binary drift를 유효한 다른 64자리 digest로 바꾸고 OS identity drift와 signed object-key reorder positive를 추가했다. D-903~D-906 예약이 있으나 이 브랜치에 본문이 없어서 필요한 adr_gaps 네 행을 기록했다. 예약 ref는 바꾸지 않았다.
+- 증거: 독립 SOURCE 검토가 malformed digest와 canonical-only positive의 두 oracle 공백을 찾았다. 이 후보의 D-907 추가로 생긴 metadata 의존성을 기존 실패 면제로 처리하지 않는다. 정적 검사와 harness 결과는 같은 외부 구현 기록에 추가한다.
+- gate 변화: 없음. 생산 구현·커밋·원격 pytest는 다음 검토까지 보류한다.
+- CE: 해당 없음 — 설계 단계 시험 oracle 보완이며 운영 장애를 검증·해결한 기록이 아니다.
