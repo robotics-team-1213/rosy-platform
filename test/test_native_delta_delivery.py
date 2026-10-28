@@ -203,6 +203,11 @@ def test_coordinator_prepared_full_selects_delta_for_actual_publisher(trees, tmp
         raise AssertionError(path)
 
     coordinator.api = api
+    def github(*args):
+        assert args[0] == "api", "the connected coordinator test has no live GitHub transport"
+        return json.dumps(api(args[1].removeprefix("repos/team/robots/")))
+
+    coordinator.gh = github
     import make_delta_release
     original = make_delta_release.transport_delta
     monkeypatch.setattr(make_delta_release, "transport_delta", lambda base, full, _, out, **kwargs:
