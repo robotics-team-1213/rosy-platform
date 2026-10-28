@@ -159,3 +159,16 @@ def test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_li
         queue.wait(tmp_path, mine, timeout=0, sleep=lambda s: None,
                    check=lambda: calls.append(1) or ("main abc conflicts with this branch" if len(calls) > 2 else None))
     assert len(calls) == 3, "no time limit: it waited until the check spoke"
+
+
+def test_an_older_pending_ticket_a_batch_carries_reserves_no_preparation_slot(tmp_path):
+    """A carried member never prepares on its own (land_batch), so it must not hold back younger tickets."""
+    import land_prepare
+    for n in range(2):
+        queue.take(tmp_path, f"feat/p{n}", status="preparing")
+    queue.take(tmp_path, "feat/carried", status="pending")
+    leader = queue.take(tmp_path, "feat/leader", status="waiting")
+    queue.set_status(leader, "waiting", batch=["feat/carried"])
+    mine = queue.take(tmp_path, "feat/mine", status="pending")
+    land_prepare.slot(tmp_path, mine, sleep=lambda _: pytest.fail("a carried ticket kept the slot"))
+    assert json.loads(mine.read_text())["status"] == "preparing"
