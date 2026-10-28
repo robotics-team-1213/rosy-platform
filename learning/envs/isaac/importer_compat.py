@@ -21,6 +21,10 @@ def import_model(api, execute, urdf: Path, output_dir: Path, robot_type: str) ->
         if robot_type == "Wheeled":
             options.update(joint_target_type={".*wheel_joint": "velocity"},
                            override_joint_stiffness={".*wheel_joint": 0.0})
+        else:
+            # Absent URDF gains become zero; use MuJoCo's servo coefficients, including actuator velocity damping.
+            options.update(joint_target_type='position', override_joint_stiffness=40.0,
+                           override_joint_damping=2 * (40.0 ** .5) * .5 + .3)
         usd_path = api.URDFImporter(api.URDFImporterConfig(**options)).import_urdf()
     else:
         if not callable(execute):
@@ -65,7 +69,14 @@ def reference_model(context, usd_path: str, usd_api, geom_api):
         raise RuntimeError("SDK stage already contains the imported asset")
     geom_api.SetStageUpAxis(stage, geom_api.GetStageUpAxis(asset_stage))
     geom_api.SetStageMetersPerUnit(stage, geom_api.GetStageMetersPerUnit(asset_stage))
-    references = stage.DefinePrim("/World/Imported", "Xform").GetReferences()
+    imported = stage.DefinePrim("/World/Imported", "Xform")
+    references = imported.GetReferences()
     if not references.AddReference(usd_path):
         raise RuntimeError("Imported USD reference could not be authored")
+    # SDK 6.2 exports physics in an initially unselected variant.
+    variants = imported.GetVariantSets()
+    if 'Physics' in variants.GetNames():
+        physics = variants.GetVariantSet('Physics')
+        if 'physx' not in physics.GetVariantNames() or not physics.SetVariantSelection('physx'):
+            raise RuntimeError('Imported USD has no selectable PhysX variant')
     return stage
