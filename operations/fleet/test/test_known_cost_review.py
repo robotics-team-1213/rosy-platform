@@ -104,7 +104,7 @@ def test_existing_direct_provider_call_keeps_value_error_on_invalid_judgment(kin
 
 @pytest.mark.parametrize('fault', ['input', 'profile', 'type', 'cost'])
 def test_changed_rejected_cost_context_cannot_authorize_a_reviewer(tmp_path, fault):
-    from rosy.decision.deliberation.contracts.billing import _RejectedJudgment
+    from rosy.decision.deliberation.contracts.billing import RejectedJudgment
     async def run():
         now, reviews, handoffs, _, board, store, old, poll, _ = make_incident_worker(tmp_path, provider_cost=.01)
         await old.aclose()
@@ -116,12 +116,12 @@ def test_changed_rejected_cost_context_cannot_authorize_a_reviewer(tmp_path, fau
         codec = VersionedLocalProvider(profile=primary, adapter=descriptor, launch=launch)
         async def altered(*args, **kwargs):
             try: return await codec(*args, **kwargs)
-            except _RejectedJudgment as error:
+            except RejectedJudgment as error:
                 if fault == 'input': error.bound = replace(error.bound, input_hash='0' * 64)
                 elif fault == 'profile': error.bound = replace(error.bound, profile=replace(primary, model_revision='other'))
                 elif fault == 'cost': error.cost_usd = primary.max_cost_usd + .01
                 else:
-                    class ForeignError(_RejectedJudgment): pass
+                    class ForeignError(RejectedJudgment): pass
                     error = ForeignError(error.bound, error.cost_usd)
                 raise error from None
         altered.profile, altered.adapter = primary, descriptor

@@ -2,7 +2,7 @@
 
 실제 `VersionedLocalProvider`·`VersionedCliProvider`는 판정 JSON을 검증하다 실패하면 비용을 worker에 전달하지 못했다. 원래 요청과 비용을 검증한 응답도 UNKNOWN으로 저장되어, 같은 사건의 제한 reviewer 경로에 진입하지 않았다. 이 변경은 기존 직접 호출자의 `ValueError` 계약을 유지하는 내부 예외로 이 누락을 보완한다. 새 공개 JSON·receipt·운영 수용 계약은 만들지 않는다.
 
-`contracts.billing`의 내부 `_RejectedJudgment`는 기존 immutable BoundProfile, 검증된 숫자 비용, 보수적인 unsafe 표시만 담는다. Local은 모델·revision·usage·free-cost envelope를 검증한 다음, CLI는 승인된 transport의 숫자 비용을 검증한 다음 이 오류를 만든다. 검증할 수 없는 billing receipt가 있으면 이 경로를 쓰지 않는다. 깨진 응답 본문·모델 주장은 예외나 원장 receipt·근거·review prior에 저장하지 않는다.
+`contracts.billing`의 공개 `RejectedJudgment`(2026-10-27 이전 내부 `_RejectedJudgment`)는 기존 immutable BoundProfile, 검증된 숫자 비용, 보수적인 unsafe 표시만 담는다. Local은 모델·revision·usage·free-cost envelope를 검증한 다음, CLI는 승인된 transport의 숫자 비용을 검증한 다음 이 오류를 만든다. 검증할 수 없는 billing receipt가 있으면 이 경로를 쓰지 않는다. 깨진 응답 본문·모델 주장은 예외나 원장 receipt·근거·review prior에 저장하지 않는다.
 
 Fleet worker는 예외의 정확한 타입과 현재 BoundProfile·입력·프로파일·비용 한계를 다시 확인한다. 검증된 형식 오류는 REJECTED와 숫자 비용을 같은 기존 원장에 기록한 뒤 같은 사건의 reviewer를 호출한다. reviewer도 기존 역할별/전체 호출·비용·시간·현재성 한도를 사용한다. unsafe는 최종 HOLD로 넘기며 재평가로 해제하지 않는다. 비용·제공자 근거 또는 오류 결속이 불명확하면 UNKNOWN/HOLD와 보수적인 예약을 유지한다. 숫자 비용은 실제 invoice 또는 물리 성공 증거가 아니다.
 

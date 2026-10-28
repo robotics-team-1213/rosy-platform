@@ -3,7 +3,8 @@
 The bench switch used to edit the release's line_follow.yaml in place, so every
 payload update (a new /opt/rosy/releases/<id>) silently dropped it. This tool
 writes /etc/rosy/line_observer_overrides.yaml instead, which no release or
-image-layer sync replaces, and camera_preview.launch.py layers it last. It
+image-layer sync replaces, and camera_preview.launch.py layers it last. A/B OS
+images publish writes and deletions through the shared configuration owner. It
 refuses anything the launch validator would skip, so a written file is a
 loaded file. Run as root on the robot; it restarts only rosy-camera. sudo
 drops PYTHONPATH, so source the ROS and release environments inside the root
@@ -34,6 +35,38 @@ from control.ir_overlay import LEARNED_PAINT_TARGETS, NODE_KEY, OPERATOR_OVERLAY
 CAMERA_UNIT = "rosy-camera"
 
 
+def _canonical_write(path: str, content: bytes | None) -> bool:
+    if os.path.abspath(path) != OPERATOR_OVERLAY:
+        return False
+    marked = os.path.lexists('/etc/rosy/os-slot.json')
+    if not marked:
+        try:
+            with open('/proc/cmdline', 'rb') as handle:
+                raw = handle.read(16385)
+            if len(raw) > 16384:
+                raise ValueError('canonical OS layout admission exceeds its limit')
+            marked = any(word.startswith(b'rosy.os_layout=') for word in raw.split())
+        except FileNotFoundError:
+            pass
+    if not marked:
+        return False
+    command = ['/usr/bin/python3', '-I', '-B', '/opt/rosy/native-runtime/os_state_config.py',
+               '--file', 'line_observer_overrides.yaml']
+    command += ['--clear'] if content is None else ['--input', '-']
+    if content is not None:
+        document = yaml.safe_load(content)
+        parameters = document.get(NODE_KEY, {}).get('ros__parameters', {})
+        if parameters.get('camera_ground_source') == 'NOMINAL':
+            command += ['--profile-input', parameters['nominal_camera_profile_path']]
+    try:
+        result = subprocess.run(command, input=content, capture_output=True, check=False, timeout=30)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError('canonical operator overlay publication failed') from exc
+    if result.returncode:
+        raise ValueError('canonical operator overlay publication failed')
+    return True
+
+
 def overlay_for(args) -> dict:
     params = {"camera_lane_mode": args.mode, "camera_ground_source": args.ground,
               "debug_overlay": not args.no_debug_overlay}
@@ -60,13 +93,15 @@ def write_overlay(path: str, data: dict) -> None:
     problem = operator_overlay_problem(data)
     if problem is not None:
         raise ValueError(problem)
+    content = ('# Written by line_observer_overrides (D-344 §12 addendum); '
+               'remove with: line_observer_overrides clear\n' + yaml.safe_dump(data, sort_keys=False))
+    if _canonical_write(path, content.encode('utf-8')):
+        return
     directory = os.path.dirname(path) or "."
     handle, temp = tempfile.mkstemp(prefix=".line_observer_overrides.", dir=directory)
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as out:
-            out.write("# Written by line_observer_overrides (D-344 §12 addendum); "
-                      "remove with: line_observer_overrides clear\n")
-            yaml.safe_dump(data, out, sort_keys=False)
+            out.write(content)
             out.flush()
             os.fsync(out.fileno())
         os.chmod(temp, 0o644)
@@ -130,6 +165,8 @@ def main(argv=None, run=subprocess.run) -> int:
                 raise ValueError(f"--profile {args.profile} is not an existing file")
             write_overlay(args.path, overlay_for(args))
             print(f"wrote {args.path}")
+        elif _canonical_write(args.path, None):
+            print(f"removed {args.path}; packaged camera lane settings apply")
         elif os.path.exists(args.path):
             os.unlink(args.path)
             _fsync_dir(os.path.dirname(args.path) or ".")

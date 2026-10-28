@@ -43,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · 6e0871b746 · Loop death watch and /readyz (fleet supervision twin)
 - 2026-10-22 · uncommitted · 작업 셀 카메라 preview-only 등록 (D-837)
 - 2026-10-19 · uncommitted · (origin #92 2026-10-17) station measured preview merge integration
 - 2026-10-19 · 0b816554c · (origin #92 2026-10-16) 설치 프로필의 카메라 측정 실행과 종료
 - 2026-10-19 · 3621458a6 · (origin #92 2026-10-16) 고정 지도 카메라의 독립 표식과 스테이션 재발견
-- 2026-10-19 · 22288420c · (origin #92 2026-10-16) D-772 스테이션 전용 카메라 구성 검증

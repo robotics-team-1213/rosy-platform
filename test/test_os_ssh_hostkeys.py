@@ -14,6 +14,10 @@ from test_os_first_boot_state import _provision_a
 NATIVE = Path(__file__).resolve().parents[1] / "deploy/robot/pinky_pro/native"
 
 
+# The module runs /usr/bin/ssh-keygen, which the robot image and lab PCs have; GitHub's ros:jazzy container does not.
+NEEDS_KEYGEN = pytest.mark.skipif(not Path("/usr/bin/ssh-keygen").exists(), reason="/usr/bin/ssh-keygen not installed")
+
+
 def _module():
     spec = importlib.util.spec_from_file_location("os_ssh_keys_test", NATIVE / "os_ssh_hostkeys.py")
     module = importlib.util.module_from_spec(spec)
@@ -21,6 +25,7 @@ def _module():
     return module
 
 
+@NEEDS_KEYGEN
 def test_same_regular_host_key_survives_root_switch_and_stale_root_copy(tmp_path, monkeypatch):
     root, other, common, _ = shared_roots(tmp_path, monkeypatch)
     helper = _module()
@@ -39,6 +44,7 @@ def test_same_regular_host_key_survives_root_switch_and_stale_root_copy(tmp_path
     assert (common / "ssh-hostkeys/ssh_host_ed25519_key").read_bytes() == private
 
 
+@NEEDS_KEYGEN
 @pytest.mark.parametrize("case", ["private_mode", "public_mismatch", "multiline_public", "hardlink", "symlink", "extra"])
 def test_corrupt_common_keys_hold_without_overwriting_the_other_root(tmp_path, monkeypatch, case):
     root, other, common, _ = shared_roots(tmp_path, monkeypatch)

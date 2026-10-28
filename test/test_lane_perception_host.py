@@ -1,5 +1,6 @@
 """Stopped-only perception configuration and transactional camera restart."""
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
@@ -47,6 +48,25 @@ def test_selection_preserves_geometry(config):
     assert result["paint_source"] == "learned"
     assert result["applied"] is True
     assert "camera_height_m_override: 0.059" in config.overlay.read_text()
+
+
+@pytest.mark.parametrize('kind', ['symlink', 'oversize', 'directory', 'fifo'])
+def test_overlay_snapshot_refuses_unbounded_or_nonregular_inputs(config, kind):
+    config.overlay.unlink()
+    if kind == 'symlink':
+        target = config.overlay.with_name('outside.yaml')
+        target.write_text('/**/line_observer_node:\n  ros__parameters: {}\n')
+        config.overlay.symlink_to(target)
+    elif kind == 'oversize':
+        config.overlay.write_bytes(b' ' * 16385)
+    elif kind == 'directory':
+        config.overlay.mkdir()
+    else:
+        os.mkfifo(config.overlay)
+    before = len(os.listdir('/proc/self/fd'))
+    with pytest.raises(ValueError, match='unsafe|large'):
+        config.get()
+    assert len(os.listdir('/proc/self/fd')) == before
 
 
 def test_learned_selection_writes_compensated_reuse(config):

@@ -214,13 +214,39 @@ def _safety_step_repo(tmp_path, manifest="roots:\n  - path: safe\n    concern: s
     return git, commit
 
 
-def _run_safety_step(repo):
+def _run_safety_step(repo, **env):
     """The hook's Safety-Review step, exactly as written, in `repo`."""
     step = (SCRIPT.read_text(encoding="utf-8").split("# No origin/main would narrow", 1)[1]
             .split("\n", 1)[1].split("FAST_SUITES=(", 1)[0])
     head = 'set -euo pipefail\nPUSH_SHA="$(git rev-parse HEAD)"\n'
     return subprocess.run([BASH, "-c", head + step], cwd=repo, capture_output=True, text=True,
-                          env={**os.environ, "PY": sys.executable})
+                          env={**os.environ, "PY": sys.executable, **env})
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+def test_only_publish_mains_own_check_of_this_sha_skips_the_repeated_scans(tmp_path):
+    """D-889: publish_main --apply passed the secret scan and Safety-Review for this SHA just before its push."""
+    git, commit = _safety_step_repo(tmp_path, "roots:\n  - path: safe\n    concern: safety\n")
+    commit({"safe/stop.py": "LIMIT = 2\n"}, "loosen")  # no trailer: the step refuses it when it runs
+    sha = git("rev-parse", "HEAD").strip()
+    assert _run_safety_step(tmp_path, PUBLISH_REF="", ROSY_PUBLISH_CHECKED=sha).returncode == 1  # a branch push
+    assert _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED="0" * 40).returncode == 1
+    skipped = _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED=sha)
+    assert skipped.returncode == 0 and "publish_main.py passed them" in skipped.stdout, skipped.stderr
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+def test_publish_mains_push_skips_the_size_rule_every_other_push_runs_it(tmp_path):
+    """Each landing ran the size rule on its commits and CI reruns it on the range; 40+ min here (2026-10-28)."""
+    git, commit = _safety_step_repo(tmp_path, "roots: []\n")
+    commit({"app.py": "x = 1\n"}, "change\n\nSafety-Review: t unit")
+    sha = git("rev-parse", "HEAD").strip()
+    (tmp_path / "tools/harness/size_range.py").write_text("import sys\nprint('SIZE-RAN')\nsys.exit(1)\n")
+    ran = _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED="0" * 40)
+    assert ran.returncode == 1 and "SIZE-RAN" in ran.stdout, ran.stderr  # a plain push to publish/main-*
+    assert _run_safety_step(tmp_path, PUBLISH_REF="", ROSY_PUBLISH_CHECKED=sha).returncode == 1  # a branch push
+    skipped = _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED=sha)
+    assert skipped.returncode == 0 and "SIZE-RAN" not in skipped.stdout, skipped.stderr
 
 
 @pytest.mark.skipif(BASH is None, reason="bash is required")
