@@ -26,9 +26,11 @@ def advance_joint(position, velocity, requested_velocity, limits, dt):
         raise ValueError('Finite joint command and positive control interval required')
     vmax, amax = limits['velocity'], limits['acceleration']
     low, high = limits['position']
-    # Euler target integration includes one control interval before subsequent braking.
+    # Sum discrete braking steps; continuous v^2/(2a) misses the final fractional step.
     def braking_speed(distance):
-        return (math.sqrt((amax*dt)**2+8*amax*max(0., distance))-amax*dt)/2
+        distance = max(0., distance)
+        steps = math.floor((math.sqrt(1+8*distance/(amax*dt*dt))-1)/2)
+        return distance/(dt*(steps+1))+amax*dt*steps/2
     requested_velocity = max(-min(vmax, braking_speed(position-low)),
                              min(vmax, braking_speed(high-position), requested_velocity))
     velocity += max(-amax*dt, min(amax*dt, requested_velocity-velocity))
