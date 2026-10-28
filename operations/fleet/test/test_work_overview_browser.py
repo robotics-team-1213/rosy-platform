@@ -9,8 +9,9 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real
 
 
 @pytest.mark.parametrize('size', [(320, 568), (1440, 900)])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
 @pytest.mark.parametrize('change', ['same', 'reorder', 'removed', 'empty', 'request-404', 'request-403', 'request-503', 'work-503', 'move-row', 'move-outside', 'no-focus'])
-def test_channel_request_poll_preserves_current_keyboard_target(site, size, change):
+def test_channel_request_poll_preserves_current_keyboard_target(site, size, theme, change):
     from playwright.sync_api import expect, sync_playwright
 
     receipts = [{'request_id': key, 'content': key, 'received_at': '2026-10-12T00:00:00+00:00'}
@@ -24,10 +25,14 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, chan
         try:
             page.goto(site + '/console?view=work')
             page.clock.run_for(2000)
+            page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
             buttons = page.locator('#channel-requests ui-button')
             expect(buttons).to_have_count(2)
             buttons.first.focus()
-            page.evaluate('window.oldRequestButton = document.activeElement')
+            outside = page.locator('#work-refresh')
+            if change == 'no-focus':
+                outside.focus()
+            page.evaluate("window.oldRequestButton = document.querySelector('#channel-requests ui-button')")
             held = []
             target = '/api/fleet/work' if change == 'work-503' else '/api/fleet/channel-requests'
             page.route('**' + target, lambda route: held.append(route))
@@ -35,10 +40,9 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, chan
             # An unrelated read keeps the browser pumping route callbacks without a wall-clock sleep.
             page.wait_for_function('document.readyState === "complete"')
             assert len(held) == 1
-            outside = page.locator('#work-refresh')
             if change == 'move-row':
                 buttons.nth(1).focus()
-            elif change in ['move-outside', 'no-focus']:
+            elif change == 'move-outside':
                 outside.focus()
             remaining = [] if change == 'empty' else receipts[1:] if change == 'removed' else list(reversed(receipts)) if change == 'reorder' else receipts
             if change.startswith('request-') or change == 'work-503':
@@ -55,6 +59,16 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, chan
                 expect(page.locator('#channel-requests li').filter(has_text=wanted).locator('ui-button')).to_be_focused()
             assert posts == []
             assert errors == []
+            if change in ['reorder', 'removed', 'move-outside', 'request-503']:
+                import os
+                from pathlib import Path
+                from uuid import uuid4
+                from browser_harness import save_temp_screenshot
+                capture_dir = os.environ.get('ROSY_UI_CAPTURE_DIR')
+                if capture_dir:
+                    destination = Path(capture_dir) / f'fleet-focus-{change}-{size[0]}-{theme}-{uuid4().hex}.png'
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    save_temp_screenshot(page, str(destination))
         finally:
             browser.close()
 
