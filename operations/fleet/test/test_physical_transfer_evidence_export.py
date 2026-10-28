@@ -112,6 +112,31 @@ def test_export_rejects_tampered_stored_measurements(rig):
     assert len(rig.port.submitted) == 1
 
 
+@pytest.mark.parametrize("replay", ["source-id", "source-sequence"])
+def test_post_action_joint_measurements_cannot_reuse_pre_dispatch_sources(rig, replay):
+    from test_physical_transfer_store import claims
+    mission = approved(rig)
+    url = PATH + "/" + mission
+    context = rig.client.get(CONTEXT, headers=OBSERVER).json()["context"]
+    before = with_joints(measured(rig, context, phase="PRE_DISPATCH"))
+    assert rig.client.post(url + "/observations", headers=OBSERVER, json=before).status_code == 200
+    assert rig.app.state.arm_transfer_dispatcher.tick()["status"] == "ACTION_SUCCEEDED"
+    context = rig.client.get(CONTEXT, headers=OBSERVER).json()["context"]
+    after = with_joints(measured(rig, context, phase="POST_ACTION"))
+    field = "sample_id" if replay == "source-id" else "sequence"
+    for old, new in zip(before["observations"], after["observations"]):
+        new["owners"][0]["joints"][field] = old["owners"][0]["joints"][field]
+    with sqlite3.connect(rig.db) as connection:
+        events = connection.execute("SELECT COUNT(*) FROM fleet_cell_events").fetchone()[0]
+    response = rig.client.post(url + "/observations", headers=OBSERVER, json=after)
+    assert response.status_code == 409
+    assert rig.client.get(url + "/physical-receipt", headers=headers("harbor")).status_code == 409
+    assert {claim["phase"] for claim in claims(rig.db)} == {"HELD"}
+    assert len(rig.port.submitted) == 1
+    with sqlite3.connect(rig.db) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM fleet_cell_events").fetchone()[0] == events
+
+
 @pytest.mark.parametrize("change", ["stale", "future", "same-sequence", "same-id", "joint-order", "partial"])
 def test_new_joint_facts_must_obey_the_existing_source_binding_and_time_gate(rig, change):
     mission = approved(rig)

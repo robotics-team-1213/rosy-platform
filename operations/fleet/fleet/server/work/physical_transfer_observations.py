@@ -10,16 +10,18 @@ from .mission_store import MissionConflict, _json
 
 def world_observations(samples):
     from rosy.world.state.projections.physical_transfer import (
-        ArmPhysicalState, Bounds3, LinkPhysicalState, PhysicalPose, TransferObservation)
+        ArmPhysicalState, Bounds3, JointPhysicalState, LinkPhysicalState, PhysicalPose, TransferObservation)
     result = []
     for sample in samples:
         data = sample.model_dump()
         owners = []
         for owner in data.pop("owners"):
+            joints = owner.pop("joints")
             links = {name: LinkPhysicalState(bounds=Bounds3(**link["bounds"]),
                 linear_velocity_m_s=link["linear_velocity_m_s"], angular_velocity_rad_s=link["angular_velocity_rad_s"])
                 for name, link in owner.pop("links").items()}
-            owners.append(ArmPhysicalState(**owner, links=links))
+            owners.append(ArmPhysicalState(**owner, links=links,
+                joints=None if joints is None else JointPhysicalState(**joints)))
         pose = data.pop("object_pose")
         result.append(TransferObservation(**data, object_pose=None if pose is None else PhysicalPose(**pose),
                                           owners=tuple(owners)))
@@ -28,7 +30,11 @@ def world_observations(samples):
 
 def _document(value):
     if is_dataclass(value):
-        return {field.name: _document(getattr(value, field.name)) for field in fields(value)}
+        document = {field.name: _document(getattr(value, field.name)) for field in fields(value)}
+        # Preserve legacy canonical bytes when optional measured joints are absent.
+        if "joints" in document and document["joints"] is None:
+            del document["joints"]
+        return document
     if isinstance(value, Mapping):
         return {key: _document(item) for key, item in value.items()}
     if isinstance(value, (tuple, list)):
@@ -49,6 +55,19 @@ def validate_post_action_order(connection, mission_id, observations):
     if ({sample.evidence_id for sample in observations} & {sample["evidence_id"] for sample in pre}
             or observations[0].sequence <= max(sample["sequence"] for sample in pre)):
         raise MissionConflict("physical closure requires new ordered observations after the preconditions")
+    previous = {}
+    for sample in pre:
+        for owner in sample["owners"]:
+            joints = owner.get("joints")
+            if joints is not None:
+                previous.setdefault((owner["workcell_id"], owner["instance_id"]), []).append(joints)
+    for sample in observations:
+        for owner in sample.owners:
+            earlier = previous.get((owner.workcell_id, owner.instance_id), ())
+            if owner.joints is not None and any(
+                    owner.joints.sample_id == prior["sample_id"] or owner.joints.sequence <= prior["sequence"]
+                    for prior in earlier):
+                raise MissionConflict("physical closure requires new source joint measurements")
 
 
 def record(connection, *, mission_id, grant, context, observations, validated_at_ns):
