@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT/'middleware/devices/omx/adapter'))
@@ -26,6 +27,9 @@ def build(case):
     if not isinstance(case, dict) or case.get('schema') != SCHEMA:
         raise ValueError('Unexpected SIM planning case')
     kin, profile = OmxKinematics.load(), ArmPlanningProfile.load(PROFILE)
+    control = yaml.safe_load(PROFILE.read_text(encoding='utf-8'))
+    if control['profile'] != 'simulation':
+        raise ValueError('Only the simulation planning profile is allowed')
 
     def solve(base, point, yaw, reference=0.):
         pose = TopDownPose(*(point[i]-base[i] for i in range(3)), yaw)
@@ -62,13 +66,24 @@ def build(case):
         return q
 
     coarse = [curve(i/100) for i in range(101)]
-    vmax = max(abs(coarse[i+1][j]-coarse[i][j])*100 for i in range(100) for j in range(5))
-    amax = max(abs(coarse[i+2][j]-2*coarse[i+1][j]+coarse[i][j])*10000 for i in range(99) for j in range(5))
-    duration = max(.8, vmax/.4, math.sqrt(amax/.4))
+    limits = [control['joints']['joint'+str(i)] for i in range(1, 6)]
+    vmax = max(abs(coarse[i+1][j]-coarse[i][j])*100/(.8*limits[j]['velocity']) for i in range(100) for j in range(5))
+    amax = max(abs(coarse[i+2][j]-2*coarse[i+1][j]+coarse[i][j])*10000/(.8*limits[j]['acceleration']) for i in range(99) for j in range(5))
+    duration = max(.8, vmax, math.sqrt(amax))
     steps = math.ceil(duration/dt)
     if steps > 60000:
         raise ValueError('SIM trajectory exceeds the planning budget')
-    result.update(dt=dt, frames=[curve(i/steps) for i in range(1, steps+1)])
+    # The coarse sweep ends at another wrist branch; the executed sweep must start from the original branch.
+    q5 = start[-1]
+    frames = [curve(i/steps) for i in range(1, steps+1)]
+    previous, velocity = start, [0.]*5
+    for q in frames+[frames[-1]]:
+        next_velocity = [(q[j]-previous[j])/dt for j in range(5)]
+        if any(abs(next_velocity[j]) > limits[j]['velocity']+1e-7
+               or abs(next_velocity[j]-velocity[j])/dt > limits[j]['acceleration']+1e-7 for j in range(5)):
+            raise ValueError('SIM trajectory exceeds joint motion limits')
+        previous, velocity = q, next_velocity
+    result.update(dt=dt, frames=frames)
     return result
 
 
