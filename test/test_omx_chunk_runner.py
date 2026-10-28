@@ -64,6 +64,49 @@ def by_command(status, command):
     return [s for s in status if s["command"] == command]
 
 
+def test_checked_commands_bind_the_session_and_library_at_the_motion_boundary():
+    robot, status = Robot(), []
+    r = m.Runner(robot, library(), fps=30, status=status.append,
+                 operating_context={"scope": "simulation", "sha256": "a" * 64, "session_id": "current"})
+    r.target = list(HOME)
+    reviewed = m.digest(r.library)
+    r.command(f"checked other {reviewed} run approach_pinky")
+    assert not status[-1]["ok"] and "session" in status[-1]["error"]
+    r.library = {**r.library, "gripper_closed": 48.0}
+    r.command(f"checked current {reviewed} run approach_pinky")
+    assert not status[-1]["ok"] and "library" in status[-1]["error"]
+    assert not r.queue and not robot.sent
+
+
+def test_checked_load_validates_content_before_replacing_the_library(tmp_path):
+    import json
+
+    status = []
+    r = m.Runner(Robot(), library(), fps=30, status=status.append,
+                 operating_context={"session_id": "current"})
+    r.target = list(HOME)
+    original = r.library
+    candidate = {**library(), "fps": 30, "chunks": {"home": [HOME]}}
+    path = tmp_path / "candidate.json"
+    path.write_text(json.dumps(candidate))
+    r.command(f"checked current {'0' * 64} load {path}")
+    assert not status[-1]["ok"] and r.library is original
+    r.command(f"checked current {m.digest(candidate)} load {path}")
+    assert status[-1]["ok"] and r.library == candidate
+
+
+def test_manual_intervention_invalidates_the_automatic_command_chain():
+    status = []
+    r = m.Runner(Robot(), library(), fps=30, status=status.append,
+                 operating_context={"session_id": "current"})
+    r.target = list(HOME)
+    reviewed = m.digest(r.library)
+    r.command("grip 50")
+    assert r.operating_context["session_id"] != "current"
+    r.command(f"checked current {reviewed} run approach_pinky")
+    assert not status[-1]["ok"] and not r.queue
+
+
 def test_a_chunk_plays_then_holds_and_reports_the_settled_state():
     robot = Robot()
     status = runner(robot, ["run approach_pinky", "state", "state", "state", "stop"])

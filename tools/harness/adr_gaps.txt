@@ -66,3 +66,11 @@ D-894 reserved in another in-flight branch (refs/adr/D-894, manual arm shared co
 D-896 reserved on another in-flight branch (refs/adr/D-896), absent from this D-897 branch; remove when its ADR lands
 D-896 reserved in another in-flight branch (refs/adr/D-896, Arm S measured-cell Isaac reproduction and single-model sim training); remove when its ADR lands
 D-900 reserved in another in-flight branch (refs/adr/D-900), absent from this D-901 branch; remove when its ADR lands
+D-903 reserved in another in-flight branch (refs/adr/D-903), absent from this D-911 branch; remove when its ADR lands
+D-904 reserved in another in-flight branch (refs/adr/D-904), absent from this D-911 branch; remove when its ADR lands
+D-905 reserved in another in-flight branch (refs/adr/D-905), absent from this D-911 branch; remove when its ADR lands
+D-906 reserved in another in-flight branch (refs/adr/D-906), absent from this D-911 branch; remove when its ADR lands
+D-907 reserved in another in-flight branch (refs/adr/D-907), absent from this D-911 branch; remove when its ADR lands
+D-908 reserved in another in-flight branch (refs/adr/D-908), absent from this D-911 branch; remove when its ADR lands
+D-909 reserved in another in-flight branch (refs/adr/D-909), absent from this D-911 branch; remove when its ADR lands
+D-910 reserved in another in-flight branch (refs/adr/D-910), absent from this D-911 branch; remove when its ADR lands
