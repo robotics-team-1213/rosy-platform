@@ -74,8 +74,12 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
         if request.headers.get("origin") is not None and not same_origin(request):
             raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
 
-    install_physical_observer_routes(app, service=service, task_store=task_store, job_view=_view,
+    observer_auth = install_physical_observer_routes(app, service=service, task_store=task_store, job_view=_view,
         require_viewer=require_viewer, require_proposer=require_proposer, write_origin=write_origin)
+    from .physical_transfer_recovery_routes import install_transfer_recovery_routes
+    install_transfer_recovery_routes(app, dispatcher=dispatcher, principals=principals, observer_auth=observer_auth,
+        job_view=_view, require_viewer=require_viewer, require_proposer=require_proposer,
+        require_named_operator=require_named_operator, write_origin=write_origin)
 
     @app.post(path, response_model=ArmTransferJobResponse, tags=["fleet-work"], dependencies=[Depends(write_origin)])
     async def create(body: ArmTransferJobCreate, principal=Depends(require_proposer)):
