@@ -3910,4 +3910,5 @@
 - 기록: 기존 attempts ledger에 단계별 실패와 운용범위 판정을 남긴다. 동작 전 독점 pending intent를 fsync하고 자신의 완료 기록 뒤에만 해제한다. 중간 관측 상실은 실패이며 같은 작업의 기존 근거로 자동 재실행하지 않는다.
 - 경계: native runner가 checked 명령의 session/library를 처리 시점에 확인한다. unchecked 수동 개입은 자동 사슬을 무효화한다. 기존 guard와 CORE/Fleet/OMX 권한은 유지한다. FIFO/카메라·receipt는 `cell_pipeline_io.py`로 옮겨 기존 import 이름을 유지했다.
 - 검증: 개발 중 `fd254ed147`에서 관련 원격 시험 96 passed. 최종 커밋의 원격 시험·크기/lint 결과는 workspace 작업 기록에 결합한다. 실물 구동·배포·현장 수용은 미실시.
+- gate 변화: 장치 활성화·실물/현장 수용은 그대로 미실시. native 셀 자동 작업에 검증 근거와 현재 조건의 추가 검사를 적용한다.
 - CE: 해당 없음 — 기존 처짐/접촉/설정 복구 교훈을 반영한 새 기능이며 새 실물 장애 해결을 검증하지 않았다.
