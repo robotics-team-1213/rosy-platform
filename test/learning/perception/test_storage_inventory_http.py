@@ -1,5 +1,6 @@
 import json
 import threading
+from uuid import uuid4
 
 import pytest
 
@@ -41,7 +42,7 @@ def test_storage_http_read_permissions_paths_and_revocation(tmp_path, accounts):
 @pytest.mark.parametrize('width', [320, 390, 768, 1440])
 @pytest.mark.parametrize('theme', ['dark', 'light'])
 def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, width, theme, monkeypatch):
-    from browser_harness import browser_tests_enabled, free_port, open_page
+    from browser_harness import browser_tests_enabled, free_port, open_page, save_temp_screenshot
     if not browser_tests_enabled(): pytest.skip('requires explicit Chromium browser run')
     playwright = pytest.importorskip('playwright.sync_api')
     monkeypatch.setattr('storage_inventory.free_space', lambda _fd: 10 * 1024**3)
@@ -72,6 +73,9 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                     expect(control).to_have_attribute('kind', 'quiet')
                     assert control.evaluate('(el) => el.tagName') == 'UI-BUTTON'
                     assert control.bounding_box()['height'] >= 48
+                capture = f'storage-controls-{theme}-{width}-{uuid4().hex}'
+                page.locator('#storage-section').evaluate("el => el.scrollIntoView({block: 'start'})")
+                save_temp_screenshot(page, capture + '-ready.png')
                 page.locator('#storage-download').fill('8000001')
                 preflight.click()
                 assert page.locator('#storage-download').evaluate('(el) => el.validity.rangeOverflow')
@@ -92,6 +96,8 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 page.locator('#storage-refresh').click()
                 expect(page.locator('#storage-error')).to_contain_text('잠시 후 다시 시도하세요')
                 expect(page.locator('#storage-roots')).to_have_text('')
+                page.locator('#storage-section').evaluate("el => el.scrollIntoView({block: 'start'})")
+                save_temp_screenshot(page, capture + '-error.png')
                 page.unroute('**/api/learning/storage')
                 page.locator('#storage-refresh').click()
                 expect(page.locator('#storage-roots')).to_contain_text('Incoming media')
