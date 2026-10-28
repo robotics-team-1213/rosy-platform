@@ -249,6 +249,95 @@ def test_transient_publish_failure_keeps_verified_transaction_pending(tmp_path, 
     assert json.loads((tmp_path / "state.json").read_text())["phase"] == "publishing"
 
 
+@pytest.mark.parametrize("variant", ["legacy", "feature", "digest-mismatch", "source-mismatch", "signature-invalid", "ambiguous"])
+def test_published_feature_rollout_resumes_without_republication(tmp_path, monkeypatch, variant):
+    """Use real publisher tag lookup, signed download and completed-rollout resume."""
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import publish_payload_release as publish
+    operator = tmp_path / "operator"
+    monkeypatch.setenv("LOCALAPPDATA", str(operator))
+    private = operator / "Rosy/signing/release-key.private.pem"
+    private.parent.mkdir(parents=True)
+    trusted = tmp_path / "trusted"
+    public = trusted / "deploy/robot/pinky_pro/release/public-keys/release-key.pem"
+    public.parent.mkdir(parents=True)
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)], check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)], check=True, capture_output=True)
+    monkeypatch.setattr(tool, "ROOT", trusted)
+    release_id = "2026.10.06-046"
+    work = tmp_path / "attempt-1"
+    work.mkdir()
+    signed = work / f"{release_id}.tar.gz"
+    artifact(signed)
+    digest = hashlib.sha256(signed.read_bytes()).hexdigest()
+    state = {"sha": SHA, "phase": "publishing", "release_id": release_id, "work_dir": str(work),
+             "tarball_sha256": digest, "canary_name": "rosy-test"}
+    tool.write_json(tmp_path / "state.json", state)
+    rollout = publish.build_rollout(release_id, digest, SHA, "2026-10-06T12:00:00Z", "rosy-test", 600)
+    rollout["canary_ok"] = True
+    if variant == "digest-mismatch":
+        rollout["tarball_sha256"] = "cd" * 32
+    if variant == "source-mismatch":
+        rollout["source_revision"] = "cd" * 20
+    raw = publish.rollout_bytes(rollout)
+    signature = publish.sign_rollout(raw, private, public)
+    if variant == "signature-invalid":
+        raw += b" "
+    tag = f"payload-{'v2-' if variant != 'legacy' else ''}{release_id}"
+    tags = {tag} if variant != "ambiguous" else {f"payload-{release_id}", f"payload-v2-{release_id}"}
+    calls = []
+
+    def github(*args):
+        calls.append(args)
+        if args[0] == "release":
+            assert args[1] == "download", "existing release must never be created or uploaded again"
+            assert args[2] in tags
+            target = Path(args[args.index("--dir") + 1])
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "rollout.json").write_bytes(raw)
+            (target / "rollout.json.sig").write_text(signature)
+            return ""
+        assert args[0] == "api" and "--method" not in args
+        path = args[1]
+        if path.endswith("git/ref/heads/main"):
+            return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in path:
+            return json.dumps({"status": "identical"})
+        if "matching-refs/tags/" in path:
+            requested = path.rsplit("/", 1)[1]
+            return json.dumps([{"ref": f"refs/tags/{requested}"}] if requested in tags else [])
+        if "/runs?" in path:
+            return json.dumps({"workflow_runs": [run()]})
+        return json.dumps({"id": 9})
+
+    runner = lambda argv: (0, github(*argv[1:]), "")
+    monkeypatch.setattr(publish, "run_gh", runner)
+    original_main = publish.main
+    resumed = []
+
+    def resume(args, **kwargs):
+        assert "--resume" in args, "coordinator lost the already published feature tag"
+        resumed.append(args)
+        return original_main([*args, "--public-key", str(public)], gh_runner=runner, **kwargs)
+
+    monkeypatch.setattr(publish, "main", resume)
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": ["unused"], "canary": "unused", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    monkeypatch.setattr(coordinator, "ssh", lambda *_: (_ for _ in ()).throw(AssertionError("no device access")))
+    if variant in ("legacy", "feature"):
+        assert coordinator.tick() == "done"
+        assert len(resumed) == 1
+        assert coordinator.state["payload_tarball"] == str(signed)
+        assert len([args for args in calls if args[:2] == ("release", "download")]) == 2
+    else:
+        with pytest.raises((ValueError, publish.PublishError)):
+            coordinator.tick()
+        assert resumed == []
+        assert coordinator.state["phase"] == "publishing"
+
+
 def test_signer_temporary_files_stay_in_managed_state(tmp_path, monkeypatch):
     import tempfile
     tool = module()
