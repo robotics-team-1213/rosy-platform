@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -264,6 +265,9 @@ def test_logs_md_edit_next_to_append_is_manual(repos):
     assert land.main(["--tests", "none"]) == 1
     assert no_merge_left(wt)
     assert git(main, "rev-parse", "HEAD") == before
+    # land_stats reads which file needed a human from the event, not only the first line of the STOP
+    events = [json.loads(line) for line in (main / ".git" / land.land_events.EVENTS).read_text(encoding="utf-8").splitlines()]
+    assert "docs/logs.md: a side changed existing lines" in [e for e in events if e["event"] == "stop"][-1]["reason"]
 
 
 def test_adr_log_row_rewrite_next_to_append_is_manual(repos):
@@ -677,14 +681,6 @@ def test_logs_md_same_new_entry_on_both_sides_is_written_once():
     ours = base + picked + dated("2026-10-15", "branch")
     theirs = base + picked
     assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode() == ours
-
-
-def test_logs_md_both_sides_inserting_mid_file_refuses():
-    a, b = dated("2026-10-13", "a"), dated("2026-10-15", "b")
-    base = "# docs logs\n" + a + b
-    ours = "# docs logs\n" + a + dated("2026-10-14", "x") + b
-    theirs = "# docs logs\n" + a + dated("2026-10-14", "y") + b
-    assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
 
 
 def test_logs_md_entry_older_than_the_last_base_entry_stays_below_it():

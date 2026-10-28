@@ -107,7 +107,7 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, sour
     if dry_run:
         tree = git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main_sha, check=False)
         conflicts = conflict_stages(tree.stdout) if tree.returncode == 1 else {}
-        resolved, manual = plan(wt, conflicts)
+        resolved, manual = plan(wt, conflicts, ("HEAD", main_sha))
         print(f"[plan] merge main {main_sha[:10]}: "
               + (f"auto-resolve {sorted(resolved)}, needs a human: {manual}" if conflicts else "no conflicts"))
         if manual:
@@ -121,7 +121,7 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, sour
     if result.returncode != 0:
         try:
             conflicts = conflict_stages(out(wt, "ls-files", "-u"))
-            resolved, manual = plan(wt, conflicts)
+            resolved, manual = plan(wt, conflicts, ("HEAD", main_sha))
         except (Stop, OSError, subprocess.CalledProcessError) as exc:
             git(wt, "merge", "--abort", check=False)
             raise Stop(f"reading the conflict stages failed, merge aborted:\n{exc}") from exc
@@ -286,6 +286,8 @@ def land(args) -> int:
     dirty = git(wt, "status", "--porcelain").stdout.strip()
     if dirty:
         raise Stop(f"worktree is dirty; commit or remove first:\n{dirty}")
+    if wt.parent.name == ".worktrees":  # D-889 addendum 5: land_async lands from a hidden snapshot instead
+        print("[land] tip: python tools/land_async.py --tests auto frees this worktree at once", flush=True)
     stale = worktree_rules.stale_history(wt, "HEAD")
     if stale:
         raise Stop(f"{branch}: {stale}; landing it would bring that history back. Rebuild on a new branch from"
@@ -483,7 +485,7 @@ def main(argv: list[str] | None = None) -> int:
         return code
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)
-        land_events.emit("stop", reason=str(exc).splitlines()[0][:300])
+        land_events.emit("stop", reason=" ".join(str(exc).split())[:300])  # whole STOP: which files, not only why
         return 1
     except SystemExit as exc:  # remote_pytest gives up on its hosts this way (no host, venv setup): still a stop
         if isinstance(exc.code, str):

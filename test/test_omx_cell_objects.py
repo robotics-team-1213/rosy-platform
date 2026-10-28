@@ -1,0 +1,94 @@
+"""Catalogue-driven objects in the top view (cell_objects): synthetic scenes drawn in arm millimetres, seen
+through a parallax-carrying camera, so the measured sizes, splits and vetoes are checked against known truth."""
+import json
+import math
+from pathlib import Path
+import sys
+
+import pytest
+
+cv2 = pytest.importorskip("cv2")
+np = pytest.importorskip("numpy")
+OMX = Path(__file__).parents[1] / "deploy/robot/omx"
+sys.path.insert(0, str(OMX))
+try:
+    import cell_calibration as cal
+    import cell_objects as co
+finally:
+    sys.path.remove(str(OMX))
+
+CATALOG = co.load_catalog(OMX / "object-catalog.example.json")
+CAMERA = {"height_m": 0.5, "center_px": [320, 240]}
+RECORD = {"homography": [[5e-4, 0, -0.16], [0, 5e-4, -0.12], [0, 0, 1]], "z_view": 0.0}  # 2 px/mm at z_view
+ROI = (60, 60, 580, 420)
+TOP = 0.030  # container top above the surface
+
+
+def scene(rects, colour=(60, 160, 60), surface=(200, 200, 200), patches=()):
+    """rects: (cx_mm, cy_mm, length_mm, width_mm, angle_deg) with their tops at TOP; patches: flat (rect, bgr)."""
+    img = np.full((480, 640, 3), surface, np.uint8)
+
+    def draw(r, bgr, z):
+        cx, cy, length, width, ang = r
+        pts = cv2.boxPoints(((cx, cy), (length, width), ang))
+        px = [cal.parallax((320 + 2 * x, 240 + 2 * y), 0.0, z, CAMERA) for x, y in pts]
+        cv2.fillPoly(img, [np.round(px).astype(np.int32)], bgr)
+
+    for r, bgr in patches:
+        draw(r, bgr, 0.0)
+    for r in rects:
+        draw(r, colour, TOP)
+    return img
+
+
+def seen(img):
+    return co.detect(img, ROI, RECORD, CAMERA, CATALOG)
+
+
+def angle_gap(a, b):
+    return abs((a - b + 90) % 180 - 90)
+
+
+@pytest.mark.parametrize("cells", [1, 2, 3])
+@pytest.mark.parametrize("angle", [0, 30, -40])
+def test_single_object_measured(cells, angle):
+    (o,) = seen(scene([(20, -10, 30 * cells, 30, angle)]))
+    assert o["matched"] and o["object"] == f"container-{cells}"
+    assert o["centre_mm"] == pytest.approx([20, -10], abs=1.5)
+    assert o["length_mm"] == pytest.approx(30 * cells, abs=2) and o["width_mm"] == pytest.approx(30, abs=2)
+    if cells > 1:
+        assert angle_gap(o["long_axis_deg"], angle) < 3
+
+
+def test_touching_pair_is_split():
+    # a 2-cell and a 3-cell container side by side, as seen on the real camera on 2026-10-28
+    found = seen(scene([(-30, 0, 60, 30, 0), (-15, 31, 90, 30, 0)]))
+    assert sorted(o["object"] for o in found) == ["container-2", "container-3"]
+    assert all(o["split_from"] == 2 and o["matched"] for o in found)
+
+
+def test_three_side_by_side_rotated():
+    u = math.radians(25)
+    rects = [(40 + k * 30 * -math.sin(u), 20 + k * 30 * math.cos(u), 90, 30, 25) for k in (-1, 0, 1)]
+    found = seen(scene(rects))
+    assert [o["object"] for o in found] == ["container-3"] * 3
+    assert all(o["split_from"] == 3 for o in found)
+
+
+def test_non_catalogue_blob_is_never_a_target():
+    found = seen(scene([(0, 0, 45, 45, 10), (80, 60, 40, 40, 0)]))
+    assert found and not any(o["matched"] or o["grasp"] for o in found)
+
+
+def test_small_fragment_is_unmatched():
+    (o,) = seen(scene([(0, 0, 22, 13, 0)]))
+    assert not o["matched"]
+
+
+def test_black_object_on_light_surface():
+    (o,) = seen(scene([(10, 10, 60, 30, 15)], colour=(15, 15, 15)))
+    assert o["matched"] and o["object"] == "container-2"
+
+
+def test_shadow_is_not_an_object():
+    assert seen(scene([], patches=[((0, 0, 70, 40, 20), (150, 150, 150))])) == []

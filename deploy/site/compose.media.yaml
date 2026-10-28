@@ -3,6 +3,12 @@
 # A media crash or restart never restarts Fleet or Vision, and Fleet never relays video.
 # shortcut: ROSY_MEDIA_BIND_ADDRESS is not managed by site-firewall.py (it covers the Fleet proxy
 # port only); set it to the site LAN address and add the two media ports to the host firewall.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   media:
     image: rosy-site-media:${ROSY_SITE_IMAGE_TAG:-local}
@@ -38,6 +44,7 @@ services:
       retries: 3
       start_period: 10s
     networks: [media_edge]
+    logging: *default-logging
 
   media-gateway:
     image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
@@ -64,6 +71,7 @@ services:
       - no-new-privileges:true
     cap_drop: [ALL]
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       media:
         condition: service_healthy
