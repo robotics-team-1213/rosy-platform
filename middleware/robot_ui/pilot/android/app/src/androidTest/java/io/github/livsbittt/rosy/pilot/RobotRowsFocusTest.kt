@@ -65,7 +65,18 @@ class RobotRowsFocusTest {
         }
     }
 
-    @Test fun FocusOutsideTheListAndInitialRenderingAreNotRedirected() {
+    @Test fun changingAnyEndpointPartUsesStatusInsteadOfAnotherConnection() {
+        instrumentation.runOnMainSync {
+            for (changed in listOf(other.copy(host = "new.local"), other.copy(port = 9443), other.copy(secure = false))) {
+                activity.render(listOf(other to true))
+                activity.robots.getChildAt(0).requestFocus()
+                activity.render(listOf(changed to true))
+                visible(activity.status)
+            }
+        }
+    }
+
+    @Test fun focusOutsideTheListAndInitialRenderingAreNotRedirected() {
         instrumentation.runOnMainSync {
             activity.outside.requestFocus()
             activity.render(listOf(first to true))
