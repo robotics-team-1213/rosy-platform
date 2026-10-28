@@ -116,9 +116,9 @@ def test_unaccepted_export_is_rejected(module, tmp_path, change):
     if change == 'duplicate-key':
         raw = raw[:-1] + ', "mission_id": "other"}'
     elif change == 'nan':
-        raw = raw.replace('null', 'NaN')
+        raw = raw.replace('"physical_failure_cause": null', '"physical_failure_cause": NaN')
     elif change == 'overflow':
-        raw = raw.replace('null', '1e999')
+        raw = raw.replace('"physical_failure_cause": null', '"physical_failure_cause": 1e999')
     one.write_text(raw, encoding='utf-8')
     with pytest.raises(ValueError):
         module.prepare(tmp_path / 'package', train=[one], evaluation=[other])
