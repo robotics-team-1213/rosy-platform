@@ -18,6 +18,7 @@ FIXTURE = dict(revision='confluence-map-long-stack-v1',
     bin_origin_m=[.115, -.015, .025], bin_size_m=[.09, .03, .09],
     belt_size_m=[.12, .50, .025], belt_speed_m_s=.02,
     physics_dt_s=DT, attachment_aid=False, trials=3,
+    drive_gain_units='N_M_PER_RAD_NATIVE_ARTICULATION_API',
     minimum_lift_m=.03, xy_tolerance_m=.0015, z_tolerance_m=.0015,
     envelope_tolerance_m=.001, settle_steps=120, seed_effect='INFEED_XY_AND_YAW',
     controller='NOMINAL_IK_REFERENCE_NOT_LEARNED_POLICY')

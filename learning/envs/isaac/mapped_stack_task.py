@@ -39,8 +39,14 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
     tick = 0
     images, trials = [], []
     for i, robot in enumerate(robots):
-        gains = robot.get_articulation_controller().get_gains()
+        controller = robot.get_articulation_controller()
+        gains = controller.get_gains()
         print('MAPPED_IMPORTED_GAINS', i, [np.asarray(v).tolist() for v in gains], flush=True)
+        kp, kd = np.zeros(robot.num_dof), np.zeros(robot.num_dof)
+        kp[joints[i]], kd[joints[i]] = 5000., 100.
+        kp[fingers[i]], kd[fingers[i]] = [30., 300.], [2., 5.]
+        controller.set_gains(kps=kp, kds=kd)
+        print('MAPPED_SI_GAINS', i, [np.asarray(v).tolist() for v in controller.get_gains()], flush=True)
 
     def step():
         nonlocal tick
