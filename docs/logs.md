@@ -12900,3 +12900,9 @@ osy-d395-s1d\`.
 - 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
 - Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
 - CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
+
+## 2026-10-29 · 61f475246c · SIM 뷰어 토큰·결과 배치 검증 기록
+
+- 변경: `validation/sim-viewer-spacing-2026-10-29/result.md`에 공용 간격 이행·긴 결과 wrapping, 실제 자산 fixture·RED/GREEN·별도 skip·도메인 예외의 SIM owner를 기록했다.
+- 증거: browser26 pass/0 skip와 카드 경계8 pass, 영향833 pass/28 skip·NEW0. 최종32장 독립 검토와 source 범위 P1/P2없음. detector exit0/advisory4의 데이터 도형·stale 표식 및 CSS 해석 한계를 구분했다.
+- gate 변화: 없음. 실제 ROS·Gazebo·CORE·장치·FIELD·설치/배포·공개 push/merge 수용이 아니다. CE: 해당 없음 — 기존 교훈 적용과 회귀로 판단을 복원할 수 있다.
