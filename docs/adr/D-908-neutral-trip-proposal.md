@@ -1,6 +1,6 @@
 ## D-908 업무 앱의 중립 이송 제안과 별도 운영자 승인
 
-**Status:** Proposed (2026-10-28). 계약 방향의 제안이다. path·schema·API 버전·구현·배포·현장 수용은 정하지 않는다.
+**Status:** Accepted (2026-10-28, 사용자 결정). 계약 방향의 결정이다. path·schema·API 버전은 구현과 함께 API reference에서 정하며, 배포·현장 수용은 별도다.
 
 **관련:** D-763 · D-836 · D-841 · D-856 · D-865 · Harbor ADR 0013·0015, Harbor 설계 18·27
 

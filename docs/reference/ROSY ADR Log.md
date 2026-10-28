@@ -10,7 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
-| D-908 | 업무 앱의 중립 이송 제안과 별도 운영자 승인. [전문](../adr/D-908-neutral-trip-proposal.md) | Proposed (2026-10-28) |
+| D-908 | 업무 앱의 중립 이송 제안과 별도 운영자 승인. [전문](../adr/D-908-neutral-trip-proposal.md) | Accepted (2026-10-28, 사용자 결정) |
 | D-897 | AI PC와 모델 PC에서 격리된 시뮬레이션 학습 작업을 병렬 실행한다 | Accepted (2026-10-27, 사용자 요청; 운영 권한·승격 별도) |
 | D-902 | Pilot real OMX teleop and recording through Fleet and the CORE manual arm path. [전문](../adr/D-902-pilot-real-omx-teleop-and-recording.md) | Proposed (2026-10-28) |
 | D-901 | Native workcell observation communication isolation. [전문](../adr/D-901-native-workcell-observation-isolation.md) | Accepted (2026-10-28) |
