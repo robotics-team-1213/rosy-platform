@@ -1,0 +1,38 @@
+<ui-topbar>
+    <div class="fleet-header-identity" data-header-region="identity" role="group" aria-label="제품과 현장">
+    <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
+    </div>
+    <div class="fleet-link-status" data-header-region="status" role="group" aria-label="연결 상태와 시각">
+      <ui-tag id="link-state" variant="inline" status="neutral" data-link="wait">연결 대기</ui-tag>
+      <ui-text id="clock" scale="value">--:--:--</ui-text>
+    </div>
+    <div id="fleet-header-actions" class="fleet-header-actions" data-header-region="actions" role="group" aria-label="알림과 계정">
+    <ui-button kind="quiet" id="fleet-inbox" type="button" aria-label="알림 창"><span data-action-icon="notification" data-icon-only="" aria-label="알림"></span><span id="header-unread" hidden></span></ui-button>
+    <a id="fleet-login" class="ui-disclosure-row" href="/console/login" data-action-icon="login">로그인</a>
+    <!-- D-473 — 개발 접속 경고는 닫힌 계정 단추에서도 보인다. -->
+    <ui-button kind="quiet" id="topbar-more" type="button" aria-expanded="false" aria-controls="topbar-extra" aria-label="계정과 접속">
+      <span class="header-status-item"><span data-action-icon="account" data-icon-only="" aria-label="계정"></span><ui-tag id="user-role" variant="inline" status="neutral">인증 필요</ui-tag></span>
+      <ui-tag id="development-badge" variant="inline" status="warn" hidden aria-label="개발 연결 모드: 같은 망 PC에 1시간 운영자 세션 제공" title="같은 망 PC 누구나 1시간 운영자 세션을 받는다 (D-473)">개발</ui-tag>
+    </ui-button>
+    </div>
+    <div class="fleet-header-safety" data-header-region="safety" role="group" aria-label="안전 조작">
+    <ui-button kind="irreversible" id="estop" data-always-live class="estop" type="button" data-action-icon="estop"><span>비상 정지</span><small>래치 · 로봇별 관리자 해제</small></ui-button>
+    </div>
+    <div id="topbar-extra" class="topbar-extra" data-open="false" role="region" aria-label="계정과 접속 상세">
+      <div id="fleet-account" class="fleet-account-panel" hidden>
+        <p id="fleet-account-identity"></p>
+        <a id="fleet-profile" href="/console/profile" hidden>내 계정</a>
+        <div id="password-login" class="password-login" hidden></div>
+      </div>
+      <ui-button kind="quiet" id="fleet-theme" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
+      <!-- D-519 — 사람은 /console/login에서 로그인한다. 토큰 접속은 계정 단추 아래에 남는다. -->
+
+      <details id="token-access" class="token-access" hidden>
+        <summary>토큰으로 접속</summary>
+        <input id="console-token" class="ui-field token" type="password" placeholder="관제 토큰"
+               autocomplete="off" aria-label="관제 토큰">
+        <ui-button kind="quiet" id="token-save" type="button">접속</ui-button>
+      </details>
+    </div>
+  </ui-topbar>
+

@@ -22,7 +22,8 @@
   <a class="skip-link" href="#cell-main">본문으로 건너뛰기</a>
   <!-- D-540 2 — 네 문서가 같은 머리다(test_fleet_header.py가 글자 그대로 고정한다). 움직임은 web/shared/fleet-header.js 하나다. -->
   <header class="fleet-header">
-  <ui-topbar>
+  <!-- fleet:header:start -->
+<ui-topbar>
     <div class="fleet-header-identity" data-header-region="identity" role="group" aria-label="제품과 현장">
     <ui-brand href="/console" aria-label="Rosy Fleet 관제 홈"><b><span class="fleet-wordmark">Fleet</span></b><small id="fleet-name">사이트</small></ui-brand>
     </div>
@@ -59,16 +60,19 @@
       </details>
     </div>
   </ui-topbar>
+<!-- fleet:header:end -->
   </header>
   <!-- D-741 2 — Fleet 문서 넷은 같은 탐색 레일을 쓴다. 영역은 관제·작업·기록·지도·설치 다섯이다. -->
   <div class="fleet-body">
-  <nav class="doc-tabs" aria-label="Rosy Fleet 문서">
-    <a href="/console" data-action-icon="fleet">관제</a>
-    <a href="/console?view=work" data-action-icon="list" aria-current="page">작업</a>
-    <a href="/console?view=records" data-action-icon="history">기록</a>
-    <a href="/console/site-map" data-action-icon="map" aria-label="현장 지도">지도</a>
-    <a href="/console/install" data-action-icon="install" aria-label="설치·보정">설치</a>
+  <!-- fleet:nav:start -->
+<nav class="doc-tabs" aria-label="Rosy Fleet 문서">
+    <a href="/console"  data-action-icon="fleet">관제</a>
+    <a href="/console?view=work" aria-current="page" data-action-icon="list">작업</a>
+    <a href="/console?view=records"  data-action-icon="history">기록</a>
+    <a href="/console/site-map"  data-action-icon="map" aria-label="현장 지도">지도</a>
+    <a href="/console/install"  data-action-icon="install" aria-label="설치·보정">설치</a>
   </nav>
+<!-- fleet:nav:end -->
   <div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="작업 화면">
     <a class="ui-subnav-item" href="/console?view=work">전체 작업</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=pending">승인 대기</a>
@@ -84,8 +88,8 @@
     <a class="ui-subnav-item" href="#saved-heading">저장된 문서</a>
   </nav></div>
   <div class="fleet-workspace">
-  <main id="cell-main" tabindex="-1">
-    <ui-status id="estop-feedback" hidden></ui-status>
+  <ui-status id="estop-feedback" hidden></ui-status>
+  <main id="cell-main" class="fleet-task-page" tabindex="-1">
     <div class="cell-intro">
       <h1 class="ui-page-heading">팔레타이징 작업 준비</h1>
       <ui-text id="cell-purpose">레시피와 작업대 설정으로 적재 계획을 미리 보고 Fleet에 작업을 제안합니다. 승인·진행은 그 단계에서, 로봇 상태·예외 확인은 관제에서 합니다.</ui-text>

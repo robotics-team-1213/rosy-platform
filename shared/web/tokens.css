@@ -263,6 +263,12 @@
   --gap-pathbar: var(--space-2) var(--space-3);
   --inset-pane: var(--space-2) var(--space-4) var(--space-4);
   --gap-pane: var(--space-3);
+  /* Shared task-page and navigation component roles. */
+  --content-task-max: 90rem;
+  --inset-task-page: var(--space-4);
+  --gap-task-page: var(--space-4);
+  --gap-task-actions: var(--space-3);
+  --size-rail-item: calc(var(--target-secondary) + var(--space-2));
 
   /* ---- 색상 역할(D-624) — 팔레트 값 대신 사용 목적을 고른다 ----------- */
   --surface-canvas: var(--ground);
