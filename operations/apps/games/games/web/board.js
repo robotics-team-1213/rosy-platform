@@ -33,6 +33,8 @@ let polling = false;
 let hasMatch = false;
 let lastEvidence = null;
 let evidenceAnnouncement = "";
+let receipt = null;
+let lastMatchDetails = "";
 let canOperate = false;
 let account = null;
 let loggingOut = false;
@@ -196,14 +198,29 @@ function chips(payload) {
   });
 }
 
+function expireMatchEvidence() {
+  if (!receipt || lastEvidence !== "fresh") return;
+  // Advance the host age by local elapsed time without comparing host/browser clocks.
+  if (receipt.age + (performance.now() - receipt.at) / 1000 <= receipt.after) return;
+  connection.dataset.evidence = "delayed";
+  setFieldEvidence("delayed");
+  const phase = setPhaseEvidence("delayed");
+  setTextIfChanged(connection, "지연 · 마지막 수신 경기 정보");
+  evidenceAnnouncement = connection.textContent;
+  lastEvidence = "delayed";
+  setTextIfChanged(announcement, `${phase} · ${lastMatchDetails} · ${evidenceAnnouncement}`);
+}
+
 async function tick() {
+  expireMatchEvidence();
   if (polling) return;
   polling = true;
   try {
-    const res = await fetch("/overlay.json", { cache: "no-store" });
+    const res = await fetch("/overlay.json", { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error(`overlay ${res.status}`);
     const payload = await res.json();
     if (!payload.field) {
+      receipt = null;
       connection.dataset.evidence = "unavailable";
       lastEvidence = "unavailable";
       setFieldEvidence("unavailable");
@@ -215,6 +232,9 @@ async function tick() {
       return;
     }
     hasMatch = true;
+    receipt = payload.evidence === "fresh" && Number.isFinite(payload.age_s) && payload.age_s >= 0
+      && Number.isFinite(payload.stale_after_s) && payload.stale_after_s > 0
+      ? {at: performance.now(), age: payload.age_s, after: payload.stale_after_s} : null;
     const evidence = payload.evidence || "unavailable";
     setFieldEvidence(evidence);
     connection.dataset.evidence = evidence;
@@ -242,7 +262,8 @@ async function tick() {
     lostElement.hidden = !lost;
     lostElement.textContent = payload.lost_ball || payload.reason === "lost_ball"
       ? "공을 잃음" : "로봇을 잃음";
-    const matchSummary = `${phaseLabel} · ${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}${evidenceAnnouncement ? ` · ${evidenceAnnouncement}` : ""}`;
+    lastMatchDetails = `${payload.field.home_id} ${homeScore}, ${payload.field.away_id} ${awayScore}${lost ? ` · ${lostElement.textContent}` : ""}`;
+    const matchSummary = `${phaseLabel} · ${lastMatchDetails}${evidenceAnnouncement ? ` · ${evidenceAnnouncement}` : ""}`;
     setTextIfChanged(announcement, matchSummary);
     draw(payload);
     chips(payload);
@@ -264,6 +285,7 @@ async function tick() {
     };
     frame.src = `/frame.jpg?t=${Date.now()}`;
   } catch (_error) {
+    receipt = null;
     connection.dataset.evidence = "disconnected";
     lastEvidence = "disconnected";
     setFieldEvidence("disconnected");
