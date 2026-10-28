@@ -81,7 +81,7 @@ def test_service_build_shares_real_host_owner_across_api_and_status_publication(
 
     monkeypatch.setattr(HostFileExchange, "hardware", hardware)
     for _ in range(2):
-        response = client.get("/api/v1/host/hardware")
+        response = client.get("/api/v1/host/hardware", headers={"Authorization": "Bearer rosy-dev-viewer"})
         assert response.status_code == 200, response.text
     assert readers == [(owner, svc)] * 2
     owner.write_status_inputs(svc)

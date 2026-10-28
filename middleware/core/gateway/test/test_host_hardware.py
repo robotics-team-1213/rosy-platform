@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 from core_api_web.api.app import create_app
 from core_api_web.api.v1 import host_hardware as host_api
+from core.system import host_files, host_hardware as hardware_files
 
 VIEWER_TOKEN = "viewer-token"
 OPERATOR_TOKEN = "operator-token"
@@ -49,7 +50,7 @@ def _client(config: dict, state=None):
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
 
-    return TestClient(create_app(config, SimpleNamespace(config=config, state=state)))
+    return TestClient(create_app(config, SimpleNamespace(config=config, state=state, host_files=host_files.HostFileExchange())))
 
 
 def _auth(token: str) -> dict:
@@ -72,11 +73,13 @@ def _write(tmp_path: Path, devices: list[dict], *, measured_at: str | None = Non
 
 @pytest.fixture(autouse=True)
 def _no_refresh_memory():
-    host_api._last_refresh.clear()
-    host_api._last_test.clear()
+    host_files._last_refresh.clear()
+    host_files._last_test.clear()
+    host_files._last_identify.clear()
     yield
-    host_api._last_refresh.clear()
-    host_api._last_test.clear()
+    host_files._last_refresh.clear()
+    host_files._last_test.clear()
+    host_files._last_identify.clear()
 
 
 # --- GET /api/v1/host/hardware ----------------------------------------------------
@@ -144,17 +147,17 @@ def test_a_malformed_result_is_unreadable_not_trusted(tmp_path, mutate):
     (tmp_path / "run/rosy-boot").mkdir(parents=True)
     path = tmp_path / "run/rosy-boot/hardware.json"
     path.write_text(json.dumps(document), encoding="utf-8")
-    assert host_api.read_hardware(str(path)) is None
+    assert hardware_files.read_hardware(str(path)) is None
 
 
 def test_an_oversized_or_non_json_result_is_unreadable(tmp_path):
     body = _client(_config(tmp_path))
     path = tmp_path / "run/rosy-boot/hardware.json"
-    path.write_text(" " * (host_api.MAX_HARDWARE_BYTES + 1), encoding="utf-8")
+    path.write_text(" " * (hardware_files.MAX_HARDWARE_BYTES + 1), encoding="utf-8")
     assert body.get("/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json() == {
         "available": False, "detail": "장치 점검 결과를 읽을 수 없습니다", "devices": []}
     path.write_text("not json", encoding="utf-8")
-    assert host_api.read_hardware(str(path)) is None
+    assert hardware_files.read_hardware(str(path)) is None
 
 
 @POSIX
@@ -168,7 +171,7 @@ def test_a_symlinked_or_fifo_result_is_never_followed(tmp_path):
     assert body["available"] is False and body["detail"] == "장치 점검 결과를 읽을 수 없습니다"
     path.unlink()
     os.mkfifo(path)
-    assert host_api.read_hardware(str(path)) is None
+    assert hardware_files.read_hardware(str(path)) is None
 
 
 def test_the_probe_output_passes_cores_validation(tmp_path):
@@ -224,7 +227,7 @@ def test_rows_rosy_io_holds_are_judged_from_fresh_topics(tmp_path, monkeypatch):
 
     now = time.time()
     # Judge fixture freshness independently of client setup and host load.
-    monkeypatch.setattr(host_api, "time", SimpleNamespace(time=lambda: now))
+    monkeypatch.setattr(hardware_files, "time", SimpleNamespace(time=lambda: now))
     state = FakeState(velocity="fresh", battery="fresh", voltage=8.49, lidar_at=now,
                       ultrasonic_at=now)
     _write(tmp_path, [_held("motor.1"), _held("motor.2"), _held("lidar"), _held("adc.battery"),
@@ -298,7 +301,8 @@ def test_refresh_without_cores_runtime_directory_is_a_503(tmp_path):
 
 
 def test_the_api_runs_no_subprocess_for_hardware():
-    source = Path(host_api.__file__).read_text(encoding="utf-8")
+    source = "\n".join(Path(module.__file__).read_text(encoding="utf-8")
+                       for module in (host_api, host_files, hardware_files))
     assert "import subprocess" not in source and "subprocess." not in source
     assert '"systemctl"' not in source
 
@@ -366,7 +370,7 @@ def test_rosy_hw_tests_outcome_passes_cores_validation(tmp_path):
     (root / "run/rosy").mkdir(parents=True)
     (root / "run/rosy/hw-test.request").write_bytes((tmp_path / "run/rosy/hw-test.request").read_bytes())
     assert program.main(["--root", str(root)], system=Quiet(root), group=lambda _name: None) == 0
-    outcome = host_api.read_test_result(str(root / "run/rosy-boot/hw-test.json"))
+    outcome = host_files.read_test_result(str(root / "run/rosy-boot/hw-test.json"))
     assert outcome is not None and outcome["state"] == "done" and outcome["action"] == "buzzer"
 
 
@@ -426,7 +430,7 @@ def test_a_malformed_test_outcome_is_not_shown(tmp_path, mutate):
     mutate(document)
     path = tmp_path / "hw-test.json"
     path.write_text(json.dumps(document), encoding="utf-8")
-    assert host_api.read_test_result(str(path)) is None
+    assert host_files.read_test_result(str(path)) is None
 
 
 def test_only_an_administrator_can_record_an_answer(tmp_path):
@@ -550,7 +554,7 @@ def test_concurrent_tests_accept_only_one(tmp_path):
 
     from core_api_web.api.errors import ApiError
 
-    svc = SimpleNamespace(config=_config(tmp_path), state=None)
+    svc = SimpleNamespace(config=_config(tmp_path), state=None, host_files=host_files.HostFileExchange())
     auth = SimpleNamespace(token_id="t", label="")
     barrier = threading.Barrier(8)
     outcomes: list[str] = []
@@ -575,10 +579,10 @@ def test_concurrent_answers_keep_both_devices(tmp_path):
     import threading
 
     config = _config(tmp_path)
-    svc = SimpleNamespace(config=config, state=None)
+    svc = SimpleNamespace(config=config, state=None, host_files=host_files.HostFileExchange())
     auth = SimpleNamespace(token_id="t", label="")
     confirm_path = config["hardware_probe"]["confirm_path"]
-    real_read = host_api.read_test_result
+    real_read = host_files.read_test_result
     barrier = threading.Barrier(2)
 
     def fresh(device):
@@ -590,7 +594,7 @@ def test_concurrent_answers_keep_both_devices(tmp_path):
         host_api.host_hardware_confirm(host_api.HardwareConfirmRequest(device=device, observed=True), auth, svc)
 
     lookups = {}
-    host_api.read_test_result = lambda _path: fresh(lookups[threading.current_thread().name])
+    host_files.read_test_result = lambda _path: fresh(lookups[threading.current_thread().name])
     try:
         threads = []
         for device in ("buzzer", "lamp"):
@@ -602,10 +606,12 @@ def test_concurrent_answers_keep_both_devices(tmp_path):
         for thread in threads:
             thread.join()
     finally:
-        host_api.read_test_result = real_read
-    stored = host_api.read_confirmations(confirm_path)
+        host_files.read_test_result = real_read
+    stored = hardware_files.read_confirmations(confirm_path)
     assert set(stored) == {"buzzer", "lamp"}
     assert stored["lamp"]["request_id"] == "lamp-run"
+    assert stored["buzzer"]["request_id"] == "buzzer-run"
+    assert all(entry["observed"] is True and entry["by"] == "t" for entry in stored.values())
 
 
 def test_a_corrupt_answer_file_is_ignored_not_trusted(tmp_path):
@@ -615,14 +621,14 @@ def test_a_corrupt_answer_file_is_ignored_not_trusted(tmp_path):
     for text in ("not json", json.dumps({"schema": 1, "devices": {"buzzer": {"observed": "yes", "by": "a",
                                                                                "label": "", "at": "x"}}})):
         path.write_text(text, encoding="utf-8")
-        assert host_api.read_confirmations(str(path)) == {}
+        assert hardware_files.read_confirmations(str(path)) == {}
     body = _client(_config(tmp_path)).get("/api/v1/host/hardware", headers=_auth(VIEWER_TOKEN)).json()
     assert {row["id"]: row["state"] for row in body["devices"]}["buzzer"] == "needs_human"
 
 
 def test_the_default_answer_file_is_beside_cores_other_state():
     svc = SimpleNamespace(config={})
-    request, result, confirm = host_api._test_paths(svc)
+    request, result, confirm = host_files._test_paths(svc)
     assert request == "/run/rosy/hw-test.request" and result == "/run/rosy-boot/hw-test.json"
     assert Path(confirm) == Path.home() / ".rosy" / "hw-confirmations.json"
 
