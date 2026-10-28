@@ -12900,3 +12900,9 @@ osy-d395-s1d\`.
 - 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
 - Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
 - CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
+
+## 2026-10-29 · 5bd25af46e · Cam LAN 목록 렌더 검증 기록
+
+- 변경: `validation/cam-lan-guidance-2026-10-29/result.md`에 비활성 사유·endpoint key·실제 Keyboard fixture의 RED/GREEN과 초기 시험 설정 실패를 구분해 동결했다.
+- 증거: native 두 밀도 각4 pass, JVM443 pass/0 skip, 원격 affected517 pass/NEW0. source와 최종24장 독립 검토 범위에서 추가P1/P2없음. 보고서97개·PNG24개 해시를 보존했다.
+- gate 변화: 없음. 실제 발견·승인·촬영·실물·FIELD·서명 release·배포는 수용하지 않았다. CE: 해당 없음 — 코드·시험·검증 기록으로 판단을 복원할 수 있다.
