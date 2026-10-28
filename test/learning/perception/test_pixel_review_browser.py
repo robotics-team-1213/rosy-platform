@@ -22,6 +22,41 @@ def open_pixels(page, store, expect, index=0):
     expect(page.locator('#pixel-status')).to_contain_text('v0')
 
 
+@pytest.mark.parametrize('width', [320, 390, 768, 1440])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+@pytest.mark.parametrize('view', ['object', 'pixel'])
+@pytest.mark.parametrize('key', ['Enter', 'Space'])
+def test_class_choices_use_shared_controls_and_keep_keyboard_editing(browser_workspace, width, theme, view, key):
+    page, store, expect = browser_workspace
+    if view == 'pixel':
+        open_pixels(page, store, expect)
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
+    choices = page.locator(f'#{view}-quick-classes .review-class-chip')
+    chip = choices.nth(1) if view == 'pixel' else choices.locator('[value="obstacle_box"]')
+    expect(chip).to_have_attribute('kind', 'segment')
+    assert chip.evaluate('el => el.tagName') == 'UI-BUTTON'
+    assert chip.bounding_box()['height'] >= 48
+    if view == 'object':
+        expect(chip).to_be_disabled()
+        page.get_by_role('button', name='박스 1 선택', exact=True).click()
+    expect(chip).to_be_enabled()
+    value = chip.get_attribute('value')
+    chip.focus()
+    chip.press(key)
+    expect(chip).to_have_attribute('aria-pressed', 'true')
+    expect(page.locator('#pixel-canvas' if view == 'pixel' else '#canvas')).to_be_focused()
+    if view == 'pixel':
+        expect(page.locator('#pixel-class')).to_have_value(value)
+        assert review_masks.get(store, 0)['version'] == 0
+    else:
+        expect(page.locator('#save-status')).to_contain_text('서버 저장됨')
+        assert store.get(0)['review']['boxes'][0]['label'] == value == 'obstacle_box'
+        assert store.get(0)['status'] == 'pending'
+        expect(page.locator('#approve')).to_be_disabled()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
+
+
 def test_ai_context_is_cleared_on_empty_filter_and_reload_failure(browser_workspace):
     page, store, expect = browser_workspace
     opinion = {'available': True, 'current': True, 'model': 'fixture-ai',
