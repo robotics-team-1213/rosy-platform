@@ -70,11 +70,14 @@ def test_conversion_card_to_exact_confirmed_archive_in_chromium(archive_server, 
             page.goto(url + '/learning/omx#dataset-section', wait_until='networkidle')
             expect = playwright.expect
             expect(page.locator('#export-runs')).to_be_visible()
-            page.get_by_role('link', name='이 데이터 HF 보관 준비', exact=True).click()
+            archive = page.get_by_role('link', name='이 데이터 HF 보관 준비', exact=True)
+            archive.focus()
+            page.keyboard.press('Enter')
             expect(page.locator('#storage-prepare-kind')).to_have_value('omx')
             expect(page.locator('#storage-prepare-dataset')).to_have_value(row['id'])
             expect(page.locator('#storage-omx-revision')).to_contain_text(row['revision'])
             expect(page.locator('#storage-preparation')).to_be_visible()
+            expect(page.locator('#storage-preparation > summary')).to_be_focused()
             expect(page.locator('#storage-completed-consent')).not_to_be_checked()
             expect(page.locator('#storage-prepare-submit')).to_be_disabled()
             assert remote.commits == commits
@@ -82,6 +85,10 @@ def test_conversion_card_to_exact_confirmed_archive_in_chromium(archive_server, 
             expect(page.locator('html')).to_have_attribute('data-theme', theme)
             page.locator('#storage-completed-consent').check()
             expect(page.locator('#storage-prepare-submit')).to_be_enabled()
+            page.locator('#storage-sources-refresh').click()
+            expect(page.locator('#storage-prepare-dataset')).to_have_value(row['id'])
+            expect(page.locator('#storage-sources-refresh')).to_be_focused()
+            expect(page.locator('#storage-completed-consent')).to_be_checked()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             if os.environ.get('ROSY_SCREENSHOT_DIR'):
                 capture = Path(os.environ['ROSY_SCREENSHOT_DIR']).expanduser()
@@ -113,6 +120,7 @@ def test_missing_handoff_revision_cannot_silently_select_other_data(archive_serv
             expect(page.locator('#storage-prepare-kind')).to_have_value('omx')
             expect(page.locator('#storage-prepare-dataset')).to_have_value('')
             expect(page.locator('#storage-source-help')).to_contain_text('버전')
+            expect(page.locator('#storage-preparation > summary')).to_be_focused()
             page.locator('#storage-completed-consent').check()
             expect(page.locator('#storage-prepare-submit')).to_be_disabled()
             assert remote.commits == commits

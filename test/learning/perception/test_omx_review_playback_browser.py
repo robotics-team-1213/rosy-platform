@@ -14,11 +14,11 @@ from review_app import ReviewStore, make_server
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
-def capture(page, name):
+def capture(page, name, selector=None):
     if root := os.environ.get('ROSY_SCREENSHOT_DIR'):
         target = Path(root).expanduser() / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(target))
+        (page.locator(selector) if selector else page).screenshot(path=str(target))
         print(f'screenshot: {target}')
 
 
@@ -283,9 +283,35 @@ def test_unsaved_review_guards_switch_reload_and_departure_without_blocking_refr
     expect(page.locator('#review-editor')).to_be_hidden()
 
 
-def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(playback_page):
+def test_review_source_explanation_and_decision_names_work_from_keyboard(playback_page):
+    page, state, expect = playback_page
+    saved_id = 'd' * 32
+    state.document['latest_review_id'] = saved_id
+    page.locator('#review-open').click()
+    for name in ['결과', '물체 결과', '분할']:
+        expect(page.get_by_role('combobox', name=f'시도 0 {name}', exact=True)).to_be_visible()
+    page.locator('#export-profile').focus()
+    page.keyboard.press('Tab')
+    checkbox = page.get_by_role('checkbox', name='현재 불러온 저장 검수 사용')
+    expect(checkbox).to_be_focused()
+    expect(checkbox).to_have_attribute('aria-describedby', 'export-review-status')
+    page.keyboard.press('Space')
+    expect(checkbox).to_be_checked()
+    status = page.locator('#export-review-status')
+    expect(status).to_have_attribute('role', 'status')
+    expect(status).to_contain_text(saved_id)
+    page.locator('[data-episode="0"] [data-field="reason"]').fill('Unsubmitted keyboard edit')
+    expect(status).to_contain_text('미저장')
+    expect(page.locator('#native-export')).to_be_disabled()
+
+
+@pytest.mark.parametrize('width,theme', [(320, 'light'), (1440, 'dark')])
+def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(playback_page, width, theme):
     import json
     page, state, expect = playback_page
+    page.set_viewport_size({'width': width, 'height': 1000})
+    if page.locator('html').get_attribute('data-theme') != theme:
+        page.locator('[data-theme-cycle]').click()
     saved_id, next_id = 'd' * 32, 'e' * 32
     state.document.update(latest_review_id=saved_id, trainable={'ok': True, 'counts': {'train': 1, 'eval': 1}})
     page.locator('#review-open').click()
@@ -332,7 +358,7 @@ def test_saved_review_selection_survives_edits_retry_save_and_binds_conversion(p
     expect(page.locator('#review-status')).to_contain_text(next_id)
     expect(page.locator('#export-saved-review')).to_be_checked()
     expect(page.locator('#export-review-status')).to_contain_text(next_id)
-    capture(page, 'recording-learning-review-saved.png')
+    capture(page, f'recording-learning-review-saved-{width}-{theme}.png', '#native-export-form')
     expect(page.locator('#native-export')).to_be_enabled()
     state.review_fail = True
     page.locator('#review-open').click()
