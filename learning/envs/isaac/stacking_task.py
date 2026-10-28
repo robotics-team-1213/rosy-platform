@@ -175,9 +175,16 @@ def run(args):
         x, y = jaw_contact_point()
         for finger, side in (('link6', 1), ('link7', -1)):
             body = stage.GetPrimAtPath(tool[finger])
+            for prim in list(Usd.PrimRange(body)):
+                if prim.IsInstance():
+                    prim.SetInstanceable(False)
+            disabled = 0
             for prim in Usd.PrimRange(body):
                 if prim.HasAPI(UsdPhysics.CollisionAPI):
                     UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Set(False)
+                    disabled += 1
+            if disabled == 0:
+                raise RuntimeError('Imported finger collision hull was not found')
             pad = UsdGeom.Capsule.Define(stage, body.GetPath().AppendChild('grip_pad'))
             pad.CreateAxisAttr('Z'); pad.CreateRadiusAttr(PAD_RADIUS); pad.CreateHeightAttr(2*PAD_HALF_LENGTH)
             UsdGeom.Xformable(pad).AddTranslateOp().Set(Gf.Vec3d(x, side*(y+PAD_RADIUS), 0.))
@@ -188,6 +195,10 @@ def run(args):
             offsets.CreateRestOffsetAttr(PAD_REST_OFFSET_M)
             UsdShade.MaterialBindingAPI.Apply(pad.GetPrim()).Bind(UsdShade.Material.Get(stage, '/World/GripMaterial'),
                 UsdShade.Tokens.weakerThanDescendants, 'physics')
+            enabled = [p for p in Usd.PrimRange(body) if p.HasAPI(UsdPhysics.CollisionAPI)
+                       and UsdPhysics.CollisionAPI(p).GetCollisionEnabledAttr().Get()]
+            if len(enabled) != 1 or enabled[0].GetPath() != pad.GetPath():
+                raise RuntimeError('Each finger requires exactly its calibrated capsule collider')
         robot = world.scene.add(Robot(articulation_path, name='arm'+str(len(robots))))
         robots.append(robot)
     if mapped:
