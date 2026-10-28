@@ -1998,3 +1998,10 @@
 - 증거: 원본 27a의 작은 회귀는 1 passed, 0 skipped이고 Gateway 전체는 3484 passed, 15 skipped, NEW 0이었다. 원래 충전 지연은 비재현이며 해결된 원인으로 주장하지 않는다. 이식 전 Tool1 commit `fa6ce881ede6fd7b2cca101fd469621cd0bc6f15`의 관련 도구 168 passed, 0 skipped는 이 새 시험 소스의 검증을 대신하지 않는다. 이식한 committed source에서 작은 회귀와 집중 검증을 먼저 수행한다.
 - gate 변화: 없음. 실제 eligible FULL·착지·게시·배포는 아직 대기하며 재발하면 추가 반복을 멈추고 관측된 최초 원인을 조사한다.
 - CE: 미해결 — 계측은 작동을 확인했으나 이전 charging 지연의 원인은 미확정이다.
+
+## 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
+
+- 변경: 독립 검토된 v3 테스트 6파일을 적용한다. API 2·connection 1·node 1·bridge 1 위임 동작을 실제 기존 경로에서 확인하며 제품 소스는 바꾸지 않는다. 승인 패치의 새 EOF 빈 줄 2개만 제거했고 전체 AST·assertion·parameter는 보존했다.
+- 증거: BASE commit `1d5ff5145c61570742107462a6638ec95f57b1da`의 source binding 25개와 승인 SHA-256을 대조했다. 정적 AST·원본 함수 보존 검사를 통과했으며 원격 committed-SHA RED는 이 커밋 뒤 실행한다. owner 부재로 실패할 composition·installed·clocked 사례를 동작 RED로 계산하지 않는다.
+- gate 변화: 없음. 새 owner 구현·GREEN·설치본·장치·현장 수용은 미확인이다.
+- CE: 해당 없음 — 테스트 우선 준비이며 운영 장애의 원인·복구를 검증한 단계가 아니다.

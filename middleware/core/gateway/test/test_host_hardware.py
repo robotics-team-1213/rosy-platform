@@ -706,3 +706,108 @@ def test_commissioning_says_why_the_robot_cannot_move(tmp_path, mode, expected):
     assert "권한" not in body["motion_reason"]
     for key in ("motor_hold", "lidar_hold", "battery_hold", "imu_hold", "slam_hold", "fleet_hold", "detail"):
         assert key in body
+
+
+@pytest.mark.parametrize("age_s,accepted", [(-6, False), (-5, True), (300, True), (301, False)])
+def test_confirmation_window_preserves_inclusive_boundaries(core_client, tmp_path, monkeypatch, age_s, accepted):
+    from core.system import host_files as host_owner
+
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now if tz is not None else now.replace(tzinfo=None)
+
+    # The reader normalizes finished_at to seconds; freeze both producer and consumer clocks.
+    monkeypatch.setattr(host_owner, "datetime", FrozenDateTime)
+    monkeypatch.setattr(sys.modules[__name__], "datetime", FrozenDateTime)
+    config = _config(tmp_path)
+    _tested(tmp_path, "buzzer", age_s=age_s)
+    client, _ = core_client(config_overrides=config, dev_auth=False)
+    response = client.post("/api/v1/host/hardware/confirm",
+                           json={"device": "buzzer", "observed": True}, headers=_auth(ADMIN_TOKEN))
+    confirmations = Path(config["hardware_probe"]["confirm_path"])
+    if accepted:
+        assert response.status_code == 200, response.text
+        assert response.json()["recorded"] is True
+        entry = json.loads(confirmations.read_text(encoding="utf-8"))["devices"]["buzzer"]
+        assert entry["observed"] is True and entry["request_id"] == "fedcba9876543210"
+    else:
+        assert response.status_code == 409 and response.json()["error"]["code"] == "HW_CONFIRM_NO_TEST"
+        assert not confirmations.exists()
+
+
+@pytest.mark.parametrize("identify_first", [True, False])
+def test_identify_and_device_test_share_cooldown(core_client, tmp_path, monkeypatch, identify_first):
+    from core.system import host_files as host_owner
+
+    config = _config(tmp_path)
+    client, _ = core_client(config_overrides=config, dev_auth=False)
+    monkeypatch.setattr(host_owner, "time", SimpleNamespace(monotonic=lambda: 100.0))
+    requests = [("/api/v1/host/lamp/identify", {"color": "blue"}),
+                ("/api/v1/host/hardware/test", {"device": "buzzer"})]
+    if not identify_first:
+        requests.reverse()
+    first = client.post(requests[0][0], json=requests[0][1], headers=_auth(ADMIN_TOKEN))
+    assert first.status_code == 200, first.text
+    request_path = Path(config["hardware_probe"]["test_request_path"])
+    written = request_path.read_bytes()
+    second = client.post(requests[1][0], json=requests[1][1], headers=_auth(ADMIN_TOKEN))
+    assert second.status_code == 429 and second.json()["error"]["code"] == "HW_TEST_COOLDOWN"
+    assert request_path.read_bytes() == written
+
+
+def test_identify_result_correlates_only_the_later_request(core_client, tmp_path, monkeypatch):
+    from core.system import host_files as host_owner
+
+    client, _ = core_client(config_overrides=_config(tmp_path), dev_auth=False)
+    clock = [100.0]
+    monkeypatch.setattr(host_owner, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    first = client.post("/api/v1/host/lamp/identify", json={"color": "blue"}, headers=_auth(ADMIN_TOKEN))
+    assert first.status_code == 200, first.text
+    older_id = first.json()["request_id"]
+    clock[0] += 10
+    later = client.post("/api/v1/host/lamp/identify", json={"color": "blue"}, headers=_auth(ADMIN_TOKEN))
+    assert later.status_code == 200, later.text
+    current_id = later.json()["request_id"]
+    _tested(tmp_path, "identify_blue", request_id=older_id)
+    current_url = f"/api/v1/host/lamp/identify/{current_id}"
+    pending = client.get(current_url, headers=_auth(OPERATOR_TOKEN))
+    assert pending.status_code == 200 and pending.json()["state"] == "pending"
+    old = client.get(f"/api/v1/host/lamp/identify/{older_id}", headers=_auth(OPERATOR_TOKEN))
+    assert old.status_code == 404 and old.json()["error"]["code"] == "IDENTIFY_REQUEST_UNKNOWN"
+    _tested(tmp_path, "identify_blue", request_id=current_id)
+    shown = client.get(current_url, headers=_auth(OPERATOR_TOKEN))
+    assert shown.status_code == 200 and shown.json()["state"] == "shown"
+
+
+@pytest.mark.parametrize("operation,endpoint,payload,forwarded", [
+    ("test_hardware", "/api/v1/host/hardware/test", {"device": "buzzer"}, {"device": "buzzer"}),
+    ("identify", "/api/v1/host/lamp/identify?quiet=true", {"color": "blue"}, {"color": "blue", "quiet": True}),
+])
+def test_hardware_routes_use_injected_owner_and_map_domain_error(
+        core_client, tmp_path, monkeypatch, operation, endpoint, payload, forwarded):
+    calls = []
+
+    class Refused(Exception):
+        def __init__(self, code, message):
+            self.code = code
+            super().__init__(message)
+
+    owner = SimpleNamespace(Error=Refused)
+
+    def refuse(actual, **kwargs):
+        calls.append((actual, kwargs))
+        raise Refused("HW_TEST_COOLDOWN", "잠시 뒤에 다시 시도하세요.")
+
+    setattr(owner, operation, refuse)
+    client, svc = core_client(config_overrides=_config(tmp_path), dev_auth=False)
+    monkeypatch.setattr(svc, "host_files", owner, raising=False)
+    response = client.post(endpoint, json=payload, headers=_auth(ADMIN_TOKEN))
+    assert response.status_code == 429, response.text
+    assert response.json()["error"]["code"] == "HW_TEST_COOLDOWN"
+    assert response.json()["error"]["message"] == "잠시 뒤에 다시 시도하세요."
+    assert len(calls) == 1 and calls[0][0] is svc
+    assert {key: value for key, value in calls[0][1].items() if key != "by"} == forwarded
+    assert isinstance(calls[0][1]["by"], str) and calls[0][1]["by"]
