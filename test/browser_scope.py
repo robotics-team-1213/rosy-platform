@@ -57,6 +57,7 @@ API_WEB = [
 ]
 PILOT = [
     "middleware/robot_ui/pilot/test/test_pilot_browser.py",
+    "middleware/robot_ui/pilot/test/test_recordings_browser.py",
     "middleware/robot_ui/pilot/test/test_lobby_browser.py",
     "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py",
 ]
