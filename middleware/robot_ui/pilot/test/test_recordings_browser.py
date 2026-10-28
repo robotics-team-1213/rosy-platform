@@ -351,7 +351,7 @@ def test_changed_recording_rows_keep_the_current_keyboard_target(recording_panel
     elif change == 'move-outside':
         outside.fill('keep this input')
     page.evaluate("""change => {
-      recordListing.items[0].bytes++;
+      recordListing.items[0].bytes += 1024 * 1024;
       if(change === 'reorder') recordListing.items.reverse();
       if(change === 'disabled') {recordListing.download_allowed=false;recordListing.download_blocker='RECORDING_BUSY';}
       if(change === 'removed') recordListing.items.shift();
