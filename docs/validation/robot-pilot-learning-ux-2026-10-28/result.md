@@ -29,12 +29,17 @@ CORE의 인증·stop latch·명령 권한과 OMX owner는 바꾸지 않았다. �
 | 설치 자산·라우트 검사 | `fce9c60216` | 20 passed, skip0. CMake/Android 등록·서빙 회귀, 실제 빌드 증거는 아님 |
 | 최초 공식 영향 선택 | `724889ceb5` | 2 failed, 9274 passed, 796 skipped, 30 subtests passed. 기존 정적 검사2개가 분리한 CSS를 읽지 않음; `affected-final/run-*.txt` |
 | 정적 검사 입력 보완 | `bc920d2dac` | 13 passed, skip0. 기존 assertion을 유지하고 실제 순서의 두 CSS를 읽음 |
-| 공식 영향 재검증 | `bc920d2dac` | 실행 중; `affected-verified/run-*.txt` |
-| 공식 브라우저56파일·9묶음 | `724889ceb5` | 실행 중; `browser-final/run-*.txt` |
+| 공식 영향 재검증 | `bc920d2dac` | 9284 passed, 796 skipped, 30 subtests passed, NEW0/known0/flaky0. 두 묶음 모두 exit0; `affected-verified/run-*.txt` |
+| 공식 브라우저56파일·9묶음 | `724889ceb5` | 786 passed, skip0, NEW0/known0/flaky0, 9묶음 모두 exit0; `browser-final/run-*.txt` |
+| 기록·문서·크기 구조 | `423ae54157` | 168 passed, skip0. 문서 배치·모듈 구조·harness·design scope 검사 |
 
 최초 `interaction-red`와 `notice-red`에는 fixture 자체의 오류도 있었다. POST robots 경로 누락과 운영자 오류 정제에 의해 치환된 영문 메시지를 고친 뒤 위의 정상 RED로 재현했다. 원본 실패를 성공 기록으로 덮어쓰지 않았다. `79b`의 넓은 검사는 셸 주석 위치·CSS 크기2건과 discovery 접수 수명4건을 찾아 후속 소스에서 수정했다.
 
 `fce9c60216`은 `724889ceb5`에서 설치 목록2곳과 해당 회귀만 바뀐다. `bc920d2dac`은 정적 검사2곳의 입력만 실제 두 CSS로 확장하며 기존 assertion을 유지한다. 실행 UI 소스와 생성 HTML은 같다. 최종 기록 검사는 별도로 결속한다.
+
+`git diff 724889ceb5 HEAD`의 HTML·JS·CSS·HTML fragment 변경은0이다. 영향 선택은 affected이며 FULL escalation과 미매핑은 없다. 영향 검사에서 건너뛴796건은 브라우저 opt-in·환경별 검사 등이며 실행한 것으로 계산하지 않는다. 브라우저 선택은 모든 묶음의 skip0과 실제 통과를 확인했다. `rosy_harness.py lint`는0 errors/41 warnings(이전 검증 기록 갱신 안내와 worktree 한도 도달 포함)이다.
+
+`captures.sha256`와 `reports.sha256`는 외부 캡처·원본 로그의 바이트 해시다. 최종 pytest 환경은 `aa128690cccfaf02`, freeze는 `279c2df20eca6924`이며 Python3.12 시험 PC 환경이다. 최초 실패·후속 성공은 서로 다른 경로에 보존한다.
 
 ## 화면과 독립 검토
 
