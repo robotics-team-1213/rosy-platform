@@ -109,3 +109,23 @@ def test_lightweight_header_is_complete_without_javascript(tmp_path, width):
             expect(page.locator('ui-topbar [data-theme-cycle]')).to_have_count(1)
             fits(page)
             page.close()
+
+
+@pytest.mark.parametrize('status', [200, 401, 503])
+def test_policy_without_verified_workcell_has_no_actionable_forms(tmp_path, status):
+    from playwright.sync_api import expect
+    with _fleet(tmp_path) as (browser, origin):
+        page = browser.new_page(viewport={'width': 320, 'height': 1000})
+        def serve(route):
+            if urlsplit(route.request.url).path.endswith('/workcells') and status != 200:
+                route.fulfill(status=status, json={'detail': 'fixture unavailable'})
+            else:
+                api(route)
+        page.route('**/api/fleet/**', serve)
+        page.goto(origin + '/console/policy')
+        expect(page.locator('#policy-verdict')).not_to_have_attribute('state', 'pending')
+        capture(page, f'policy-unavailable-{status}-320')
+        for element in ['policy-incident-report', 'policy-sync-owner', 'policy-window-request', 'policy-proposal-submit']:
+            expect(page.locator('#' + element)).not_to_be_visible()
+        fits(page)
+        page.close()
