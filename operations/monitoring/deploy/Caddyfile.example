@@ -1,0 +1,14 @@
+# Merge inside an existing TLS site block; replace this documentation-only host.
+monitoring.example.invalid {
+    handle_path /monitoring/* {
+        reverse_proxy 127.0.0.1:8786
+    }
+    redir /monitoring /monitoring/ 308
+    handle /api/monitoring/* {
+        reverse_proxy 127.0.0.1:8786
+    }
+    handle /monitoring-health {
+        rewrite * /health
+        reverse_proxy 127.0.0.1:8786
+    }
+}
