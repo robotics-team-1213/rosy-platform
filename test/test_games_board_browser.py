@@ -270,7 +270,8 @@ def test_match_board_names_server_judged_delay():
 
 
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
-def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height):
+@pytest.mark.parametrize('reported_fresh', [False, True])
+def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height, reported_fresh):
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
 
@@ -279,6 +280,8 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height
     legacy = board.snapshot()[0]
     for key in ("generated_at", "age_s", "stale_after_s", "evidence"):
         legacy.pop(key, None)
+    if reported_fresh:
+        legacy['evidence'] = 'fresh'
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
@@ -286,7 +289,8 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height
             browser, page, errors = open_page(playwright, width, height, url=url)
             page.route("**/overlay.json", lambda route: route.fulfill(json=legacy))
             page.goto(url, wait_until="domcontentloaded")
-            page.wait_for_function("() => document.getElementById('connection')?.dataset.evidence === 'unavailable'")
+            page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
+            assert page.locator('#connection').get_attribute('data-evidence') == 'unavailable'
             assert "시각 정보 없음" in page.locator("#connection").inner_text()
             assert "시각 정보 없음" in page.locator("#match-announcement").inner_text()
             assert "호스트 연결됨" not in page.locator("#connection").inner_text()
