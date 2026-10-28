@@ -12648,3 +12648,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음 — 개별 engineering 카드의 MEDIA만 확인했으며 배포 모듈 전체의 수용을 올리지 않았다.
 - 한계: MEDIA만 확인했다. 첫 부팅·실물 OTA·롤백은 미검증이며 제품 main 착지·공개 게시를 주장하지 않는다.
 - CE: 새 교훈 기록 — 일회성 헤더 복구 후 재발한 실제 저장 장치 조회 순서와 증거를 보존했다. Frontmatter 통과, claims의 미게시 commit 참조 1개는 pending 표기와 함께 판정했다.
+
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
+
+- 변경: D-912(Proposed)에 고정 세 파일의 별도 OS 유지보수 소유권, Ed25519와 OS CMS 이중 권한, 정책 freeze와 중단 복구 경계를 기록했다. 다른 세션의 D-903~D-911 예약은 gap ledger에 보존했다.
+- 검증: OS publisher 54 passed, consumer 초기 79 passed, 잔여 부분파일 공간 복구 39 passed, 실제 publisher→HTTP→서명 canary staging 연결 5 passed(각 0 skipped/0 NEW). 실제 173 원본의 분할 게시 dry-run도 통과했다. 후속 bridge 보강과 부분 delta 연결의 최종 검증은 진행 중이다.
+- gate 변화: 없음 — 실제 Pinky boot·GitHub OTA·rollback은 아직 미검증이고 OS 유지보수 결정은 Proposed다.
+- CE: 해당 없음 — 현재 새 코드의 계약과 회귀로 판별할 수 있는 구현 내용이다. 해결이 검증되지 않은 후속 항목은 작업 기록에 남긴다.

@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-912 | Signed OS transport maintenance with independent authority and durable recovery. [전문](../adr/D-912-signed-os-transport-maintenance.md) | Proposed |
 | D-902 | Pilot real OMX teleop and recording through Fleet and the CORE manual arm path. [전문](../adr/D-902-pilot-real-omx-teleop-and-recording.md) | Proposed (2026-10-28) |
 | D-901 | Native workcell observation communication isolation. [전문](../adr/D-901-native-workcell-observation-isolation.md) | Accepted (2026-10-28) |
 | D-893 | 관제 단위와 호스트 배치를 분리하고 부하에 따라 합치거나 나눈다 | Accepted (2026-10-27) |
