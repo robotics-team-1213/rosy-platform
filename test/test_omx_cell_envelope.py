@@ -195,6 +195,7 @@ def test_invalid_payload_never_reaches_approval(task, envelope, value):
 def test_fifo_checked_command_accepts_the_runners_inner_command_ack(tmp_path, envelope, monkeypatch):
     pytest.importorskip("numpy")
     transport = importlib.import_module("cell_pipeline_io")
+    assert Path(transport.__file__).resolve() == (OMX / "cell_pipeline_io.py").resolve()
     status = tmp_path / "chunk-status.jsonl"
     status.write_text("")
     sent = []
@@ -212,3 +213,12 @@ def test_fifo_checked_command_accepts_the_runners_inner_command_ack(tmp_path, en
         "session_id": "fixture-session", "library_sha256": "a" * 64})
     assert result["ok"]
     assert sent == [f"checked fixture-session {'a' * 64} load plan.json"]
+
+
+def test_shipped_envelope_and_condition_templates_cannot_enable_automatic_motion(task, envelope):
+    document = json.loads((OMX / "cell-envelope.example.json").read_text())
+    assert document["schema"] == envelope.SCHEMA and document["reviews"] == []
+    template = json.loads((OMX / "cell-pipeline.example.json").read_text())
+    config, calibration, library, state = task
+    config["operating_conditions"] = template["operating_conditions"]
+    assert not envelope.assess(config, calibration, library, state, now=100.01)["allowed"]
