@@ -4,7 +4,10 @@ import android.content.Intent
 import android.graphics.Rect
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import androidx.test.platform.app.InstrumentationRegistry
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -22,8 +25,8 @@ class RobotRowsFocusTest {
         val intent = Intent(instrumentation.targetContext, RobotRowsFixtureActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         activity = instrumentation.startActivitySync(intent) as RobotRowsFixtureActivity
+        render(listOf(first to true, other to true, insecure to true))
         instrumentation.runOnMainSync {
-            activity.render(listOf(first to true, other to true, insecure to true))
             activity.robots.getChildAt(0).isFocusableInTouchMode = true
             activity.robots.getChildAt(0).requestFocus()
         }
@@ -36,53 +39,65 @@ class RobotRowsFocusTest {
         if (::activity.isInitialized) instrumentation.runOnMainSync { activity.finish() }
     }
 
-    private fun visible(view: View) {
+    private fun render(rows: List<Pair<Candidate, Boolean>>) {
+        val layout = CountDownLatch(1)
+        instrumentation.runOnMainSync {
+            activity.robots.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+                override fun onGlobalLayout() {
+                    activity.robots.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    layout.countDown()
+                }
+            })
+            activity.render(rows)
+        }
+        assertTrue("robot rows were not laid out", layout.await(5, TimeUnit.SECONDS))
+        instrumentation.waitForIdleSync()
+    }
+
+    private fun focusRow(index: Int) = instrumentation.runOnMainSync {
+        assertTrue(activity.robots.getChildAt(index).requestFocus())
+    }
+
+    private fun visible(target: () -> View) = instrumentation.runOnMainSync {
+        val view = target()
         assertTrue(view.hasFocus())
         assertTrue(view.getGlobalVisibleRect(Rect()))
         assertEquals(0, activity.selections)
     }
 
     @Test fun reorderAndAddKeepsTheEndpointRatherThanTheNameOrPosition() {
-        instrumentation.runOnMainSync {
-            activity.render(listOf(insecure to true, other to true, first to true, first.copy(host = "new.local") to true))
-            visible(activity.robots.getChildAt(1))
-            activity.render(listOf(other to true, first to true, insecure to true))
-            visible(activity.robots.getChildAt(0))
-        }
+        render(listOf(insecure to true, other to true, first to true, first.copy(host = "new.local") to true))
+        visible { activity.robots.getChildAt(1) }
+        render(listOf(other to true, first to true, insecure to true))
+        visible { activity.robots.getChildAt(0) }
     }
 
     @Test fun removingDisablingAndEmptyingTheFocusedListUsesItsStatus() {
-        instrumentation.runOnMainSync {
-            activity.render(listOf(first to true, insecure to true))
-            visible(activity.status)
-            activity.render(listOf(first to true, other to true))
-            activity.robots.getChildAt(1).requestFocus()
-            activity.render(listOf(first to true, other to false))
-            visible(activity.status)
-            activity.robots.getChildAt(0).requestFocus()
-            activity.render(emptyList())
-            visible(activity.status)
-        }
+        render(listOf(first to true, insecure to true))
+        visible { activity.status }
+        render(listOf(first to true, other to true))
+        focusRow(1)
+        render(listOf(first to true, other to false))
+        visible { activity.status }
+        focusRow(0)
+        render(emptyList())
+        visible { activity.status }
     }
 
     @Test fun changingAnyEndpointPartUsesStatusInsteadOfAnotherConnection() {
-        instrumentation.runOnMainSync {
-            for (changed in listOf(other.copy(host = "new.local"), other.copy(port = 9443), other.copy(secure = false))) {
-                activity.render(listOf(other to true))
-                activity.robots.getChildAt(0).requestFocus()
-                activity.render(listOf(changed to true))
-                visible(activity.status)
-            }
+        for (changed in listOf(other.copy(host = "new.local"), other.copy(port = 9443), other.copy(secure = false))) {
+            render(listOf(other to true))
+            focusRow(0)
+            render(listOf(changed to true))
+            visible { activity.status }
         }
     }
 
     @Test fun focusOutsideTheListAndInitialRenderingAreNotRedirected() {
-        instrumentation.runOnMainSync {
-            activity.outside.requestFocus()
-            activity.render(listOf(first to true))
-            visible(activity.outside)
-            activity.render(emptyList())
-            visible(activity.outside)
-        }
+        instrumentation.runOnMainSync { activity.outside.requestFocus() }
+        render(listOf(first to true))
+        visible { activity.outside }
+        render(emptyList())
+        visible { activity.outside }
     }
 }
