@@ -38,6 +38,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
     targets = [np.zeros(r.num_dof) for r in robots]
     tick = 0
     images, trials = [], []
+    for i, robot in enumerate(robots):
+        gains = robot.get_articulation_controller().get_gains()
+        print('MAPPED_IMPORTED_GAINS', i, [np.asarray(v).tolist() for v in gains], flush=True)
 
     def step():
         nonlocal tick
@@ -64,7 +67,10 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         for i, robot in enumerate(robots):
             pose = kin.fk(robot.get_joint_positions()[joints[i]])
             tcps.append([pose.x+FIXTURE['arm_bases_m'][i][0], pose.y+FIXTURE['arm_bases_m'][i][1], pose.z])
-        return dict(tick=tick, boxes=boxes, tcps=tcps)
+        return dict(tick=tick, boxes=boxes, tcps=tcps,
+            joints=[r.get_joint_positions().tolist() for r in robots],
+            commands=[v.tolist() for v in targets],
+            bases=[r.get_world_pose()[0].tolist() for r in robots])
 
     def samples(steps):
         result = [snapshot()]
@@ -118,6 +124,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             robot.set_joint_positions(targets[i])
             robot.set_joint_velocities(np.zeros(robot.num_dof))
         hold(120)
+        print('MAPPED_HOME', snapshot(), flush=True)
         if trial_index == 0:
             photo('mapped-overview.png', True)
             photo('mapped-initial.png')
