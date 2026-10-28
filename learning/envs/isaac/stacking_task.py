@@ -105,6 +105,10 @@ def run(args):
     light.CreateIntensityAttr(1600.)
     robots, links, joint_indices, fingers = [], [], [], []
     for root in (first, second):
+        # Expose imported collision meshes so scene overrides also reach instance children in SDK 6.2.
+        for prim in list(Usd.PrimRange(root)):
+            if prim.IsInstance():
+                prim.SetInstanceable(False)
         prims = list(Usd.PrimRange(root))
         roots = [p for p in prims if p.HasAPI(UsdPhysics.ArticulationRootAPI)]
         if len(roots) != 1:
@@ -175,9 +179,6 @@ def run(args):
         x, y = jaw_contact_point()
         for finger, side in (('link6', 1), ('link7', -1)):
             body = stage.GetPrimAtPath(tool[finger])
-            for prim in list(Usd.PrimRange(body)):
-                if prim.IsInstance():
-                    prim.SetInstanceable(False)
             disabled = 0
             for prim in Usd.PrimRange(body):
                 if prim.HasAPI(UsdPhysics.CollisionAPI):
