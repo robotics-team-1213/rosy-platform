@@ -31,28 +31,33 @@ def _prune_backups(directory: Path, keep: int) -> list[str]:
 
 
 #: 2026-10-28 자원 경계: 무한히 쌓이던 원장 행의 보존 기간(일).
-DEFAULT_HISTORY_RETENTION_DAYS = 30   # 종료 작업의 fleet_task_history
-DEFAULT_AUDIT_RETENTION_DAYS = 90     # rosy_account_audit / device_pairing_audit
+DEFAULT_HISTORY_RETENTION_DAYS = 30   # 종료 작업의 fleet_task_history 행과 fleet_tasks 행
+DEFAULT_AUDIT_RETENTION_DAYS = 90     # rosy_account_audit / device_pairing_audit / core_event_audit
 
 
 def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETENTION_DAYS,
                  audit_days: int = DEFAULT_AUDIT_RETENTION_DAYS) -> dict[str, int]:
-    """Delete terminal-task history rows older than ``history_days`` and audit rows
-    older than ``audit_days``. Runs on the live volume after a fresh backup; tables
-    missing from an older schema are skipped."""
+    """Delete terminal-task rows (history first, then the task row) older than
+    ``history_days`` and audit rows older than ``audit_days``. Runs on the live
+    volume after a fresh backup; tables missing from an older schema are skipped."""
     path = Path(source)
     if history_days < 0 or audit_days < 0:
         raise DatabaseError("retention days must not be negative")
     if not path.is_file():
         raise DatabaseError("source database is missing")
     # fleet_tasks.updated_at / fleet_task_history.created_at are `_now()` ISO strings
-    # (task_store_types._now); the same shape keeps the string comparison exact.
-    # A retention of 0 days skips that group entirely (the CLI's "disable" value).
+    # (task_store_types._now); core_event_audit.received_at uses the same shape. The
+    # same format keeps the string comparison exact. A retention of 0 days skips that
+    # group entirely (the CLI's "disable" value).
     history_cutoff = (datetime.now(timezone.utc)
                       - timedelta(days=history_days)).isoformat(timespec="milliseconds") \
         if history_days > 0 else None
     audit_cutoff = time.time() - audit_days * 86400.0 if audit_days > 0 else None
-    removed = {"fleet_task_history": 0, "rosy_account_audit": 0, "device_pairing_audit": 0}
+    audit_cutoff_iso = (datetime.now(timezone.utc)
+                        - timedelta(days=audit_days)).isoformat(timespec="milliseconds") \
+        if audit_days > 0 else None
+    removed = {"fleet_task_history": 0, "fleet_tasks": 0, "rosy_account_audit": 0,
+               "device_pairing_audit": 0, "core_event_audit": 0}
     try:
         with closing(sqlite3.connect(path, timeout=30.0)) as db:
             tables = {row[0] for row in
@@ -65,6 +70,14 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
                         " SELECT task_id FROM fleet_tasks WHERE status IN"
                         " ('COMPLETED','FAILED','CANCELED','EXPIRED')"
                         " AND updated_at < ?)", (history_cutoff,)).rowcount
+                    # The task row itself (request/evidence/receipt JSON) goes with its
+                    # history: the NOT EXISTS guard leaves no orphaned history behind and
+                    # also collects tasks whose history an earlier prune already removed.
+                    removed["fleet_tasks"] = db.execute(
+                        "DELETE FROM fleet_tasks WHERE status IN"
+                        " ('COMPLETED','FAILED','CANCELED','EXPIRED') AND updated_at < ?"
+                        " AND NOT EXISTS (SELECT 1 FROM fleet_task_history"
+                        " WHERE task_id = fleet_tasks.task_id)", (history_cutoff,)).rowcount
                 if audit_cutoff is not None and "rosy_account_audit" in tables:
                     removed["rosy_account_audit"] = db.execute(
                         "DELETE FROM rosy_account_audit WHERE created_at < ?",
@@ -73,6 +86,13 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
                     removed["device_pairing_audit"] = db.execute(
                         "DELETE FROM device_pairing_audit WHERE at < ?",
                         (audit_cutoff,)).rowcount
+                # Durable CORE event audit (observe/events.py). Dedup survives restarts
+                # on the remaining window; a replay older than the retention re-inserts
+                # as new, which is far beyond any agent replay horizon.
+                if audit_cutoff_iso is not None and "core_event_audit" in tables:
+                    removed["core_event_audit"] = db.execute(
+                        "DELETE FROM core_event_audit WHERE received_at < ?",
+                        (audit_cutoff_iso,)).rowcount
                 db.commit()
             except sqlite3.Error:
                 db.rollback()
@@ -80,6 +100,21 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
     except sqlite3.Error as exc:
         raise DatabaseError("ledger retention prune failed") from exc
     return removed
+
+
+def checkpoint_wal(source: Path | str) -> dict:
+    """Best-effort ``wal_checkpoint(TRUNCATE)`` so pages freed by the prune return to
+    the OS file. Never raises: a busy live writer leaves the WAL in place and the
+    result row reports it as (busy=1, log, checkpointed)."""
+    path = Path(source)
+    if not path.is_file():
+        raise DatabaseError("source database is missing")
+    try:
+        with closing(sqlite3.connect(path, timeout=30.0)) as db:
+            row = db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        return {"wal_checkpoint": [int(value) for value in row]} if row else {"wal_checkpoint": None}
+    except sqlite3.Error:
+        return {"wal_checkpoint": None}
 
 
 class DatabaseError(RuntimeError):
@@ -329,6 +364,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         pruned = []
         pruned_ledger = None
+        checkpointed = None
         if args.command == "backup":
             if bool(args.destination) == bool(args.dest_dir):
                 parser.error("pass exactly one of --destination or --dest-dir")
@@ -344,6 +380,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             # Retention runs only after the backup file exists (2026-10-28 resource bounds).
             pruned_ledger = prune_ledger(args.source, history_days=args.prune_history,
                                          audit_days=args.prune_audit)
+            checkpointed = checkpoint_wal(args.source)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
             return 0
@@ -359,6 +396,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "rollback_path": str(result.rollback_path) if result.rollback_path else None,
         "pruned": pruned,
         "pruned_ledger": pruned_ledger,
+        "checkpoint": checkpointed,
     }))
     return 0
 
