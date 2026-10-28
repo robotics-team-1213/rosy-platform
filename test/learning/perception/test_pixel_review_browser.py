@@ -33,7 +33,7 @@ def test_class_choices_use_shared_controls_and_keep_keyboard_editing(browser_wor
     page.set_viewport_size({'width': width, 'height': 900})
     page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
     choices = page.locator(f'#{view}-quick-classes .review-class-chip')
-    chip = choices.nth(1) if view == 'pixel' else page.locator('#object-quick-classes .review-class-chip[value="obstacle_box"]')
+    chip = choices.nth(2) if view == 'pixel' else page.locator('#object-quick-classes .review-class-chip[value="obstacle_box"]')
     expect(chip).to_have_attribute('kind', 'segment')
     assert chip.evaluate('el => el.tagName') == 'UI-BUTTON'
     assert chip.bounding_box()['height'] >= 48
@@ -42,6 +42,8 @@ def test_class_choices_use_shared_controls_and_keep_keyboard_editing(browser_wor
         page.get_by_role('button', name='박스 1 선택', exact=True).click()
     expect(chip).to_be_enabled()
     value = chip.get_attribute('value')
+    if view == 'pixel':
+        expect(page.locator('#pixel-class')).not_to_have_value(value)
     chip.focus()
     chip.press(key)
     expect(chip).to_have_attribute('aria-pressed', 'true')
@@ -55,6 +57,11 @@ def test_class_choices_use_shared_controls_and_keep_keyboard_editing(browser_wor
         assert store.get(0)['status'] == 'pending'
         expect(page.locator('#approve')).to_be_disabled()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
+    if os.environ.get('ROSY_UI_CAPTURE_DIR') and key == 'Enter':
+        destination = Path(os.environ['ROSY_UI_CAPTURE_DIR'])
+        destination.mkdir(parents=True, exist_ok=True)
+        page.locator(f'#{view}-quick-classes').scroll_into_view_if_needed()
+        page.screenshot(path=str(destination / f'class-controls-{view}-{theme}-{width}.png'))
 
 
 def test_ai_context_is_cleared_on_empty_filter_and_reload_failure(browser_workspace):
