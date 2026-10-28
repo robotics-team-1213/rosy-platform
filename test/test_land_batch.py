@@ -234,3 +234,37 @@ def test_a_pending_member_is_judged_by_its_selection_from_the_fork_point(repos, 
     commit(member, {"pkg/m2.py": "m = 2\n"}, "a new tip")
     monkeypatch.setattr(land, "select", lambda *a: ([["test"]], "selector escalated to FULL (x)"))
     assert not land_batch.batchable(land, wt, member, "feat/m", git(member, "rev-parse", "HEAD")), "FULL-class goes alone"
+
+
+@pytest.mark.parametrize("tests,node,allowed", [("auto", False, True), ("full", False, False),
+                                               ("pkg/test", False, False), ("auto", True, False)])
+def test_requested_checks_control_whether_a_pending_landing_can_be_carried(repos, monkeypatch, tests, node, allowed):
+    main, wt = repos
+    commit(wt, {"pkg/member.py": "member = 1\n"}, "member")
+    monkeypatch.delenv(land.FIXTURE_ENV)  # custom --tests become auto plus EXTRA in production
+    monkeypatch.setattr(land_batch, "batchable", lambda *a: True)
+    seen = []
+
+    def prepare(land_, wt_, branch, args, python, qdir, ticket):
+        queue.set_status(ticket, "pending")
+        row = next(r for r in queue.ahead(qdir, Path("~")) if r["ticket"] == ticket.name)
+        seen.append(land_batch.eligible(land, main, row))
+
+    monkeypatch.setattr(land.land_prepare, "prepare", prepare)
+    monkeypatch.setattr(land_batch, "queue", lambda *a: 0)
+    assert land.main(["--tests", tests, *(["--node"] if node else [])]) == 0
+    assert seen == [allowed]
+
+
+@pytest.mark.parametrize("consent,allowed", [(True, True), (False, False), (None, False), ("auto", False), (1, False)])
+def test_batch_formation_requires_explicit_member_consent(repos, tmp_path, monkeypatch, consent, allowed):
+    main, wt, rows = batch_repos(repos, tmp_path)
+    qdir = tmp_path / "q"
+    mine = queue.take(qdir, "feat/x", str(wt), status="waiting")
+    member = queue.take(qdir, "feat/m", rows[0]["worktree"], status="pending")
+    if consent is not None:
+        queue.set_status(member, "pending", batch_auto=consent)
+    monkeypatch.setattr(land_batch, "batchable", lambda *a: True)
+    form, chosen, _ = land_batch.former(land, wt, qdir, mine)
+    assert form([]) is allowed
+    assert [r["branch"] for r in chosen] == (["feat/m"] if allowed else [])
