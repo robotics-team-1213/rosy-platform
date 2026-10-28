@@ -12720,3 +12720,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_release_boundary_guards.py`·`test/test_secret_public_provenance.py`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 저장소의 공개 출처 등록 절차를 따른 것이다.
+
+## 2026-10-28 · uncommitted · fix(web): 대시보드 시험을 공용 부품의 상대 import에 맞춤 (monitoring 레인)
+
+- 변경: `middleware/core/gateway/test/test_dashboard.py`가 공용 `shared/web/ui.js`에서 찾는 줄을 `"./confirmation.js"`로 바꾼다. 이 레인이 공용 control 모듈을 상대 import로 바꿨다(feat/monitoring-surface-registration과 같은 변경과 같은 수정).
+- 근거: 착지 사전 시험의 `test_dashboard_assets_are_local_and_reference_runtime_contract`·`test_dashboard_exposes_local_field_settings_not_fleet`가 실패했다(main에서는 통과).
+- 증거: 원격 `middleware/core/gateway/test/test_dashboard.py`·`shared/web/test`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 같은 레인이 바꾼 import를 시험에 맞춘 것이다.
