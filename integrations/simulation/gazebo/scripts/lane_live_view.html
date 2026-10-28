@@ -244,7 +244,7 @@ body.tab-results #live { display: none; }
 table { width: 100%; border-collapse: collapse; font-size: var(--text-label); }
 th { text-align: left; font-size: var(--text-micro); color: var(--ink-quiet); font-weight: var(--weight-strong);
      letter-spacing: var(--track-state); padding: var(--space-2); border-bottom: 1px solid var(--line); }
-td { padding: var(--space-2); border-bottom: 1px solid var(--line); vertical-align: top; }
+td { padding: var(--space-2); border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--panel-2); }
 tbody tr.sel { background: var(--accent-soft); }
@@ -261,10 +261,10 @@ tbody tr:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring
            border-radius: var(--radius-button); border: 1px solid var(--line); }
 #runplot .seg { fill: none; stroke: var(--ground-card); stroke-width: 6; stroke-linecap: round; }
 #runplot .tr { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
-.rundetail dl { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-4);
+.rundetail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-4);
                 margin: var(--space-3) 0 0; font-size: var(--text-label); }
 .rundetail dt { color: var(--ink-quiet); }
-.rundetail dd { margin: 0; font-family: var(--font-num); }
+.rundetail dd { margin: 0; font-family: var(--font-num); overflow-wrap: anywhere; }
 .empty { color: var(--dim); padding: var(--space-5) var(--space-1); }
 
 @media (width <= 1000px) {
