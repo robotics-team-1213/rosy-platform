@@ -305,3 +305,10 @@
 - 증거: 원격 RED 7/4/1건 재현 뒤 관련 전체 회귀 16/19/17 passed, skip0, NEW0. 공식 브라우저 선택 17파일의 최초 결과는 262 passed / 1 failed였고, 기존 메뉴 이동 시험의 로딩 대기를 보강한 뒤 해당 두 파일 전체 19 passed / skip0 / NEW0. 저장 검수 캡처 2건과 오류 crop 1건도 실제 Chromium으로 재검증했다. 최종 영향 선택과 원본별 SHA는 `docs/validation/recording-handoff-ui-followup-2026-10-28/`에 분리한다.
 - gate 변화: 없음. 실제 HF 쓰기·실물 녹화/행동·reader 수용·배포·merge/push는 수행하지 않았다. 앞선 전체26 시험은 이전 소스의 기록이며 새 main 통합 이후의 수용으로 재사용하지 않는다.
 - CE: 해당 없음. 상태·거부·초점 경계와 동기화 판단이 코드·회귀·날짜별 검증 기록에 남는다.
+
+## 2026-10-29 · eca72bf579 · feat(learning): media 영수증에 sidecar shadow 증거 수 포함
+
+- 변경: `media_pipeline.py` 영수증(`rosy.learning.media/1`)의 각 세션 행이 sidecar의 `sidecar_rows`, `shadow_live_rows`(로봇이 녹화한 payload), `shadow_backfill_rows`(오프라인 재실행 `"backfill": true` 표시)를 센다. sidecar가 없으면 세 값 모두 null. `trainer_recordings()`와 녹화 잡의 입력은 그대로다. 배경: 녹화 시 shadow 모델이 올라가 있지 않은 세션이 대부분이라(2026-10-28 실험, 모델 PC 학습 mp4에서 shadow 증거 세션 1개) 선택 전략 재료가 있는 세션이 영수증에서 보이지 않았다.
+- 증거: `test_media_pipeline.py` 12 passed(live 1·backfill 1·null payload·빈 side를 구분하는 새 시험 2건 포함), AI PC 원격 실행 exit 0, `known_failures.py` 0 NEW.
+- gate 변화: 없음. 세기만 하고 판정하지 않는다. shadow_live_rows 0인 세션의 백필 여부·선택 전략 채택·로봇 녹화 절차 변경은 별개 결정이다.
+
