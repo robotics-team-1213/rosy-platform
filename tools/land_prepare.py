@@ -41,9 +41,10 @@ def after_reboot(ticket: Path | None, sleep=time.sleep, clock=time.localtime) ->
 
 
 def slot(qdir: Path, ticket: Path, sleep=time.sleep) -> None:
-    """Wait (``pending``: blocks no one) until fewer than ``MAX_PREPARING`` other tickets are preparing."""
+    """Wait for a preparation slot, reserving capacity for older pending tickets."""
     land_queue.set_status(ticket, "pending")
-    while sum(r.get("status") == "preparing" for r in land_queue.ahead(qdir, Path("~"))
+    while sum(r.get("status") == "preparing" or (r.get("status") == "pending" and r["ticket"] < ticket.name)
+              for r in land_queue.ahead(qdir, Path("~"))
               if r["ticket"] != ticket.name) >= MAX_PREPARING:
         land_queue.touch(ticket)
         sleep(POLL)
