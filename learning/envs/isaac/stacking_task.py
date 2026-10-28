@@ -386,9 +386,9 @@ def run(args):
                         action[i*6+n]*limit['velocity'] if moving else 0., limit, control_dt)
                 grip = profile['gripper']
                 idx = fingers[i][0]
-                goal = (grip['position'][0]+(grip['position'][1]-grip['position'][0])*(action[i*6+5]+1)/2
+                grip_goal = (grip['position'][0]+(grip['position'][1]-grip['position'][0])*(action[i*6+5]+1)/2
                         if moving else state[idx])
-                opening, speed[idx] = advance_joint(state[idx], speed[idx], (goal-state[idx])/control_dt, grip, control_dt)
+                opening, speed[idx] = advance_joint(state[idx], speed[idx], (grip_goal-state[idx])/control_dt, grip, control_dt)
                 state[fingers[i]] = [opening, -opening]
                 if not mapped:
                     robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=state))

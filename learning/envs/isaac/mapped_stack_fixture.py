@@ -34,7 +34,7 @@ FIXTURE = dict(revision='confluence-map-long-stack-v1',
 
 RL_FIXTURE = dict(FIXTURE, revision='confluence-map-stacking-rl-v1',
     controller='RSL_RL_PPO_DIRECT_JOINT_VELOCITY', control_decimation=4, max_episode_steps=6000,
-    iterations=32, steps_per_update=32, num_envs=1, evaluation_seed_offset=10000,
+    iterations=32, steps_per_update=32, num_envs=1, trials=1, evaluation_seed_offset=10000,
     infeed_jitter_m=.003, infeed_yaw_jitter_rad=.03)
 
 
