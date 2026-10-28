@@ -127,6 +127,7 @@ def run(args):
         if set(tool) != {'link6', 'link7', 'end_effector_link'}:
             raise RuntimeError('Each OMX requires both finger and TCP links')
         links.append(tool)
+        articulation_path = str(roots[0].GetPath())
         if mapped:
             anchors = [p for p in prims if p.GetName() == 'world_fixed' and p.IsA(UsdPhysics.FixedJoint)]
             if len(anchors) != 1:
@@ -135,6 +136,13 @@ def run(args):
             anchor.GetBody0Rel().SetTargets([])
             anchor.GetLocalPos0Attr().Set(Gf.Vec3f(*FIXTURE['arm_bases_m'][len(robots)]))
             anchor.GetLocalRot0Attr().Set(Gf.Quatf(1.))
+            roots[0].RemoveAPI(UsdPhysics.ArticulationRootAPI)
+            UsdPhysics.ArticulationRootAPI.Apply(anchors[0])
+            fixed_articulation = PhysxSchema.PhysxArticulationAPI.Apply(anchors[0])
+            fixed_articulation.CreateEnabledSelfCollisionsAttr(False)
+            fixed_articulation.CreateSolverPositionIterationCountAttr(64)
+            fixed_articulation.CreateSolverVelocityIterationCountAttr(16)
+            articulation_path = str(root.GetPath())
         for prim in prims:
             if prim.IsA(UsdPhysics.RevoluteJoint):
                 finger = prim.GetName().startswith('gripper')
@@ -180,7 +188,7 @@ def run(args):
             offsets.CreateRestOffsetAttr(PAD_REST_OFFSET_M)
             UsdShade.MaterialBindingAPI.Apply(pad.GetPrim()).Bind(UsdShade.Material.Get(stage, '/World/GripMaterial'),
                 UsdShade.Tokens.weakerThanDescendants, 'physics')
-        robot = world.scene.add(Robot(str(roots[0].GetPath()), name='arm'+str(len(robots))))
+        robot = world.scene.add(Robot(articulation_path, name='arm'+str(len(robots))))
         robots.append(robot)
     if mapped:
         from mapped_stack_fixture import plan as mapped_plan
