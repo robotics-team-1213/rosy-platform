@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · e68f63d769 · D-909와 나머지 UI 레이아웃 점검
 - 2026-10-28 · 2d96683c9c · D-906 Fleet 공통 컴포넌트·레이아웃 역할
 - 2026-10-28 · ae4771b936 · Fleet 계정 영역의 레이아웃 일관성
 - 2026-10-28 · 030c2fb110 · 녹화 인계 UI 후속 검증 기록
 - 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
-- 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements

@@ -970,3 +970,11 @@
 - 증거: 초기 공통 컨트롤·셸·패키지 계약64 passed, 공통 헤더·세션·갤러리 브라우저57 passed. source별 검증 범위는 `docs/validation/fleet-components-layout-tokens-2026-10-28/result.md`에 구분한다. 배치 캡처32개 독립 검토에서 P1/P2 잘림·겹침 없음.
 - gate 변화: 없음. 전체 플랫폼의 모든 하드코딩 제거나 실물 수용을 뜻하지 않는다.
 - CE: 해당 없음. 역할·소비처·값 보존 판단은 코드와 D-906에 남는다.
+
+## 2026-10-28 · e68f63d769 · 절차 문서 역할과 테마 검사 환경 복구
+
+- 변경: 인증/학습/정책 문서, 정책 입력/근거, 로그인 신원 폭의6개 실제 역할을 D-909로 등록하고 갤러리에 계산된 값을 추가했다. 공용 readout과 단계 설명 묶음을 소비하며 개별 원시 치수와 중복 본문 규칙을 제거했다.
+- 검사 원인: 가짜 HTTP 호스트는 secure context가 아니어서 Fleet 초기화의 crypto.randomUUID가 실패했다. fixture를 가짜 HTTPS 호스트로 바꾸고 가용성 assertion·이유 주석을 남겼다. 기존 known-failure 행을 같은 수정 커밋에서 제거했다. 제품 보안 제한은 낮추지 않았다.
+- 증거: 테마/known-failure 계약36 passed/2 skipped(실패 목록이 비어 조건부 비교 사례를 생략), 후속 실제 테마9건 포함39 passed/skip0/NEW0. 상세 source·화면·검사 한계는 `docs/validation/remaining-ui-layout-2026-10-28/result.md`다.
+- gate 변화: 없음. 전체 제품 UI 수용 승격 없음.
+- CE: 해당 없음. 보안 컨텍스트 의존성은 시험 assertion·주석에서 복원된다.
