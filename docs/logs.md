@@ -12846,3 +12846,10 @@ osy-d395-s1d\`.
 - 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
+
+## 2026-10-29 · bc25167b00 · 플랫폼 UI 표면 발견·회귀 기반 검증
+
+- 변경: 현재 제품 holder의 신규 화면 발견, 진입 module의 공용 UI 로드 판정, Monitoring·SIM 레인 뷰어의 공용 변경 회귀 선택을 보강하고 frozen 결과·로그 SHA를 `docs/validation/ui-standardization-foundation-2026-10-29/`에 남긴다.
+- 증거: 원격 집중 78 passed·공식 영향 사전 계약 861 passed·두 실제 소비자 Chromium 18 passed, 각 skip 0/NEW 0. 기존 실패와 리뷰로 찾은 주석 오인을 실제 RED 후 수정했다.
+- gate 변화: 없음. 전체 UI 표준화는 후속 앱 이행·렌더·native 검증이 남는다. FULL selector의 사전 계약을 전체 FULL/CI나 장치 수용으로 쓰지 않는다. 배포·착지·push·merge 미수행.
+- CE: 해당 없음 — 원인·복구 조건이 최종 코드·회귀·이 검증 기록에 남는다.

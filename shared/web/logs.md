@@ -970,3 +970,10 @@
 - 공용 control 모듈의 상대 import로 접두 경로에서도 같은 canonical 파일을 사용한다. 테마 검사는 `/common/`과 `./common/`의 동일 mount 쌍만 허용한다.
 - 검증: 원격 181f670b45의 registry·shared controls·typography 59 PASS, 0 SKIP, known_failures NEW 0. 상대 경로·잘못된 테마 mount 회귀 단언을 포함한다. 기존 제품·실물 gate는 올리지 않는다.
 - gate 변화: 없음. UI·실물 수용은 후속이다.
+
+## 2026-10-29 · bc25167b00 · 현 소스의 표면 발견과 공용 소비자 회귀 연결
+
+- 변경: 제품 holder 6곳의 tracked/untracked HTML을 발견하고 ignored 산출물·문서는 제외한다. 실제 entry module의 공용 UI import는 인정하되 주석·template 예시는 제외한다. Monitoring·레인 뷰어를 shared 변경의 브라우저 선택에 연결했다.
+- 증거: 최종 source 원격 집중 78 passed·사전 계약 861 passed, 각각 skip 0/NEW 0. runtime 동일 source의 실제 두 소비자 Chromium 18 passed/skip 0/NEW 0. 변경 전 발견 5 실패/1 통과·consumer 3 실패·리뷰 주석 오인 2 실패를 보존했다. `docs/validation/ui-standardization-foundation-2026-10-29/` 참조.
+- gate 변화: 없음. selector FULL의 공식 원격 사전 계약이며 전체 FULL/CI·제품 전체 렌더·native/실물·배포 수용과 구분한다.
+- CE: 해당 없음 — 판단이 발견 함수·Git/부정 fixture·검증 기록에 남는다.
