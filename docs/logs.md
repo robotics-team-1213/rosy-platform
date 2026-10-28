@@ -12714,6 +12714,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 시험이 잡은 인코딩 실수다.
 
+## 2026-10-28 · uncommitted · fix(land): 묶음이 FULL급 맨 앞을 건너뛰고 사전 시험 대기 티켓도 싣는다
+
+- 변경: `tools/land_batch.py`·`tools/land_prepare.py`. 리더는 묶을 수 있는 `waiting` 가운데 가장 앞선 것이다. 구성원에 `pending`을 더한다(갈라진 지점의 선택이 affected일 때). 묶음에 든 `pending`은 슬롯을 잡지 않고, 착지되면 사전 시험을 건너뛴다. D-889 추가 4.
+- 근거: 10-28 15:45 대기 23건 중 16건이 `pending`이었는데 `train` 사건은 0건이었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
+
 ## 2026-10-28 · uncommitted · fix(omx): 값 계약 이동을 OMX 배포 묶음 경로에 반영
 
 - 변경: `deploy/robot/omx/omx-devices-autoupdate.json.example`의 `paths`에 `omx_adapter/contracts/adapter_profile.py`·`contracts/watchdog_observation.py`를 더한다. 이 브랜치가 `watchdog_observation.py`·`profile.py`가 쓰는 값을 `contracts/` 아래로 옮겼는데, main에 먼저 들어온 chunk-library의 배포 묶음에는 그 두 모듈이 없었다.
@@ -12728,6 +12736,36 @@ osy-d395-s1d\`.
 - Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
 - gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
 - CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.
+
+## 2026-10-28 · uncommitted · fix(land): 사전 시험 자리 예약을 묶음 규칙과 합침
+
+- 변경: `tools/land_prepare.py`의 `slot()`이 오래된 `pending`에 자리를 먼저 주는 규칙(이 브랜치)과 묶음에 든 구성원을 붙잡는 규칙(`fix/land-batch-pending`)을 함께 쓴다. 묶음에 든 `pending`은 혼자 사전 시험을 하지 않으므로 자리를 예약하지 않는다. 시험 1건을 더했다.
+- 근거: 두 브랜치가 같은 함수를 고쳐 나중에 착지하는 쪽이 충돌했다. 이 브랜치는 3시간 동안 쉬고 있어 이어받았다(사용자 지시).
+- 증거: 원격 `test/test_land_queue.py`·`test/test_land_batch.py`·`test/test_land_prepare.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙이 코드와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · feat(land): urgent ticket (`--urgent "<the user's words>"`)
+- 변경: `land_queue`에 급한 표(한 번에 하나, 사유 필수, `urgent` 사건)를 넣고 `land.py --urgent`로 받는다. 기다리는 일반 표를 앞지르고 차례는 끊지 않는다. `shared-checkout.md` 6번에 쓰는 법과 남의 `land.py`를 멈추지 않는다는 규칙
+- 증거: test_land_urgent.py 3건, land_queue·land·land_batch 시험 142 passed (원격)
+- gate 변화: 없음
+- 결정: D-889 추가 5의 남은 일(우선 차선)
+- 교훈: 없음
+
+## 2026-10-28 · uncommitted · feat(land): FULL 등급끼리 묶음 착지 (D-889 추가 6)
+
+- 변경: D-889 추가 6. `tools/land_batch.py`가 준비 등급 무리(affected/full)별로 묶고, full 묶음은 병합 트리에서 FULL을 한 번 돌린다. full 묶음 크기는 min(kopt(p), 3). safety와 `--tests` 지정은 혼자 간다.
+- 근거: 10-28 12시간 착지 39건 중 묶음 2번, 준비 78건 중 FULL 48건(게이트 도구 Rule 8 약 60회, safety 25회).
+- gate 변화: 없음(착지 절차).
+- CE: 해당 없음 — 측정과 규칙은 ADR 추가 6에 남겼다.
+
+## 2026-10-28 · uncommitted · fix(land): 착지가 시작할 때 같은 무리의 대기 티켓을 묶어 이끈다
+
+- 변경: `tools/land_batch.py`(`early`, 나누기 반복을 `run`으로 묶음), `tools/land.py`(줄에 선 직후 `early`). 사전 시험 기록이 없는 착지가 같은 무리의 `waiting`·`pending` 티켓을 곧바로 묶어 사전 시험을 한 번만 받는다. robot-f4의 `feat/land-batch-full`(무리별 묶음) 위에 쌓았다. D-889 추가 4.
+- 근거: 19:35 대기열에서 `waiting`이 모두 FULL급이거나 tier 기록이 없어 affected 리더가 없었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
 
 ## 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
 

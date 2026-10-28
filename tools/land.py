@@ -309,7 +309,9 @@ def land(args) -> int:
         before = out(wt, "rev-parse", "main")
         safety_review(wt, before, "HEAD", python)  # seconds each: fail before a long wait, not after it
         size_check(wt, before, "HEAD", python)
-        qdir, ticket = land_queue.enter(wt, branch, "preparing")  # main() releases the ticket on every exit
+        qdir, ticket = land_queue.enter(wt, branch, "preparing", args.urgent)  # main() releases it on every exit
+        if (code := land_batch.early(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
+            return code  # it led a batch at once: one shared pretest instead of one each
         if args.tests == "full" or (args.tests == "auto" and land_full.restore(wt, branch) is None):
             land_prepare.prepare(sys.modules[__name__], wt, branch, args, python, qdir, ticket)
         if (code := land_batch.queue(sys.modules[__name__], wt, branch, args, python, qdir, ticket, main_co)) is not None:
@@ -466,6 +468,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-cache", action="store_true", help="rerun every invocation (no land_cache.py reuse)")
     parser.add_argument("--queue-timeout", type=float, default=0, help="minutes to wait in the queue (0: no limit)")
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
+    parser.add_argument("--urgent", default="", metavar="REASON",
+                        help="the user's words: pass waiting tickets (one at a time, D-889 addendum 5)")
     args = parser.parse_args(argv)
     if not land_selection.configure(sys.modules[__name__], args):
         return 2

@@ -355,6 +355,6 @@
 
 - 2026-10-28 · 030c2fb110 · 녹화 인계 UI 후속 검증 기록
 - 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
-- 2026-10-28 · uncommitted · CORE host-file C6 published triage
-- 2026-10-28 · uncommitted · fix(omx): 값 계약 이동을 OMX 배포 묶음 경로에 반영
-- 2026-10-28 · uncommitted · fix(omx): 움직임 분리 시험 파일의 BOM 제거
+- 2026-10-28 · uncommitted · fix(land): 착지가 시작할 때 같은 무리의 대기 티켓을 묶어 이끈다
+- 2026-10-28 · uncommitted · feat(land): FULL 등급끼리 묶음 착지 (D-889 추가 6)
+- 2026-10-28 · uncommitted · feat(land): urgent ticket (`--urgent "<the user's words>"`)
