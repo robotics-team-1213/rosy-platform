@@ -166,7 +166,10 @@ def test_receipt_failure_reports_possible_card_write_and_preserves_backup(card, 
         save(path, content)
     monkeypatch.setattr(recovery, "_save", fail_receipt)
     with pytest.raises(ValueError, match="after card write started") as failure:
-        recovery.apply(root, KEY, backup, identity)
+        try:
+            recovery.apply(root, KEY, backup, identity)
+        except KeyboardInterrupt:
+            pytest.fail("recovery interruption escaped without card state and backup location")
     saved, = backup.iterdir()
     assert str(saved) in str(failure.value)
     assert (saved / "authorized_keys.before").read_bytes() == before
