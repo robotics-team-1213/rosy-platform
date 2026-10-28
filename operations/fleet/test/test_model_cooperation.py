@@ -343,3 +343,23 @@ def test_fallback_retains_original_selection_inputs():
     assert result['state'] == 'CANDIDATE'
     assert result['initial_decision_inputs']['mode'] == 'parallel'
     assert result['decision_inputs']['mode'] == 'sequential'
+
+
+@pytest.mark.parametrize('during', ['reservation', 'record'])
+def test_transport_replacement_before_dispatch_is_rejected(during):
+    async def scenario():
+        ports, replacement = providers(), Exchange()
+        originals = [p.exchange for p in ports]
+        class Replacing(Admission):
+            async def reserve(self, *args):
+                token = await super().reserve(*args)
+                if during == 'reservation': ports[0].exchange = replacement
+                return token
+        async def record(result):
+            if during == 'record' and result['reason'] == 'CALL_RESERVED':
+                ports[0].exchange = replacement
+        result = await supervisor(ports, mode='sequential', admission=Replacing()).run(
+            problem(), ports, current=lambda: True, record=record)
+        assert result['state'] == 'HOLD'
+        assert not replacement.calls and not any(p.calls for p in originals)
+    asyncio.run(scenario())
