@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "tools" / "remote"))
 
 import omx_hotfix as oh  # noqa: E402
 
-SHA = "0123456789abcdef0123456789abcdef01234567"
+SHA = "d" * 40  # a fake revision; a hex-looking literal trips the secret scan
 SHORT = SHA[:10]
 
 

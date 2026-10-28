@@ -12639,3 +12639,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 5
 - 교훈: 없음
+
+## 2026-10-28 · uncommitted · fix(remote): omx_hotfix 시험의 가짜 SHA를 비밀 검사에 걸리지 않게
+
+- 변경: `test/test_omx_hotfix.py`의 가짜 리비전 `"0123…4567"`을 `"d" * 40`으로 바꾼다. 시험의 뜻은 같다(새 커밋 `"c" * 40`과 다르다).
+- 근거: 착지 사전 시험의 `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`가 그 리터럴을 high-entropy-token으로 잡았다.
+- 증거: 원격 `test/test_omx_hotfix.py`·`test/test_release_boundary_guards.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 픽스처 값이다.
