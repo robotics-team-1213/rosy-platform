@@ -129,6 +129,32 @@ def test_profile_rejects_camera_identity_guess_and_unbounded_exposure():
         runtime.validate_profile(profile('/dev/v4l/by-id/selected-camera', 400))
 
 
+def test_a_role_names_the_preview_unit_that_owns_its_camera(monkeypatch, tmp_path):
+    """2026-10-28: the front role's camera is opened by rosy-omx-camera@arm_a_wrist; asking for @front failed restore."""
+    import json
+    runtime = load('camera_readiness')
+    def profile(**front):
+        return dict(viewer_url='http://127.0.0.1:8767', cameras={
+            'top': dict(device='/dev/v4l/by-id/top', candidates=[dict(auto_exposure=1, exposure_time_absolute=400)]),
+            'front': dict(device='/dev/v4l/by-id/grip', candidates=[dict(auto_exposure=1, exposure_time_absolute=400)],
+                          **front)})
+    assert runtime.validate_profile(profile(unit='arm_a_wrist'))
+    for bad in ('top', 'arm_a_wrist.service', '../x', ''):  # a shared or non-instance unit
+        with pytest.raises(ValueError):
+            runtime.validate_profile(profile(unit=bad))
+    asked = []
+    monkeypatch.setattr(runtime, 'identity', lambda device: {'rdev': device})
+    monkeypatch.setattr(runtime, 'producer', lambda unit, device, wait_s=15.0: asked.append(unit) or {})
+    monkeypatch.setattr(runtime, 'get_controls', lambda device, names: {'auto_exposure': 3, 'gain': 4})
+    monkeypatch.setattr(runtime, 'command', lambda args: 'exposure_time_absolute 0x9a0902 (int) : min=1 max=5000 step=1\n')
+    monkeypatch.setattr(runtime, 'write_control', lambda device, name, value: None)
+    baseline = runtime.prepare(profile(unit='arm_a_wrist'), tmp_path, 'p')
+    assert baseline['cameras']['front']['unit'] == 'arm_a_wrist' and asked == ['top', 'arm_a_wrist']
+    runtime.restore(tmp_path)
+    assert asked[2:] == ['top', 'arm_a_wrist']
+    assert all(r['restored'] for r in json.loads((tmp_path/'restoration.json').read_text()).values())
+
+
 def test_settings_restoration_still_runs_when_receipt_storage_fails(monkeypatch, tmp_path):
     import sys
     quality = load('camera_quality')
