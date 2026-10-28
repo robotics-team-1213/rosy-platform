@@ -285,7 +285,7 @@ def test_authenticated_account_refresh_does_not_reveal_token_or_collapse_layout(
         before = page.locator('ui-topbar').bounding_box()
         page.evaluate("""async()=>{
           const header=await import('/console/assets/fleet-header.js');
-          const response=await fetch('/api/fleet/session');
+          const response=await fetch('/api/fleet/session',{headers:{Authorization:'Bearer header-token'}});
           header.showSession(await response.json());
         }""")
         expect(page.locator('#topbar-more')).to_have_attribute('aria-expanded', 'true')
