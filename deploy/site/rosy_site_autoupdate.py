@@ -349,6 +349,7 @@ class SiteUpdater(SiteRuntimeIO):
                 shutil.rmtree(folder, ignore_errors=True)
                 log("pruned-candidate", folder=folder.name)
         kept_commits = {folder.name for folder in kept}
+        kept_references = set()
         for folder in kept:
             try:
                 commit = json.loads((folder / 'release.json').read_text(encoding='utf-8'))['source_commit']
@@ -364,12 +365,13 @@ class SiteUpdater(SiteRuntimeIO):
                     reference = row['reference']
                     if service not in SERVICES or not re.fullmatch(f'rosy-site-{service}:[0-9a-f]{{40}}', reference):
                         return
-                    kept_commits.add(reference.rsplit(':', 1)[1])
+                    kept_references.add(reference)
             except (OSError, ValueError, KeyError, TypeError, AttributeError):
                 return
         for reference in listed.split():
             match = re.fullmatch(r"rosy-site-(?:fleet|vision|proxy|postgres):([0-9a-f]{40})", reference)
-            if match and match.group(1) not in kept_commits and reference not in used:
+            if (match and match.group(1) not in kept_commits
+                    and reference not in kept_references and reference not in used):
                 self._run(["docker", "image", "rm", reference], check=False)
                 log("pruned-image", image=reference)
 

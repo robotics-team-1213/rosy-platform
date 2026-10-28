@@ -86,7 +86,6 @@ def _sha256(path: Path) -> str:
 
 
 def _build_inputs(site: Path, service: str) -> set[str] | None:
-    """Unknown COPY/ADD forms disable reuse rather than miss an input."""
     prefix = "deploy/site/" if service == "proxy" else ""
     name = f"Dockerfile.{service}"
     paths = {f"deploy/site/{name}", f"deploy/site/{name}.dockerignore", prefix + ".dockerignore",
@@ -99,7 +98,7 @@ def _build_inputs(site: Path, service: str) -> set[str] | None:
                 or any(w.startswith("--") and not w.startswith(_PARSED_COPY_FLAGS) for w in words[1:])):
             return None
         for source in (w.rstrip("/") for w in words[1:-1] if not w.startswith("--")):
-            if not source or any(c in source for c in "*$?[") or source.startswith(("/", ".", "http:" , "https:")):
+            if not source or any(c in source for c in "*$?[") or source.startswith(("/", ".", "http:", "https:")):
                 return None
             paths.add(prefix + source)
     return paths
@@ -293,6 +292,14 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
             for service, row in images.items():
                 text = text.replace(f"rosy-site-{service}:${{ROSY_SITE_IMAGE_TAG:-local}}", row["reference"])
             path.write_text(text, encoding="utf-8")
+
+    for name, config, label in (
+            ("compose.yaml", "Caddyfile", "org.rosy.site-caddy-sha256"),
+            ("compose.account.yaml", "Caddyfile.account", "org.rosy.site-account-caddy-sha256")):
+        path = deploy_dir / name
+        text = path.read_text(encoding="utf-8")
+        text = text.replace(f"{label}: unbuilt", f'{label}: "{_sha256(deploy_dir / config)}"')
+        path.write_text(text, encoding="utf-8")
 
     config_hashes = {
         name: _sha256(deploy_dir / name)

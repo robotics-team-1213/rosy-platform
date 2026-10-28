@@ -33,6 +33,11 @@ reused image fails before the active candidate is switched; use a full candidate
 for a new server or to recover missing images. Retained rollback candidates protect
 their reused image references from pruning.
 
+Generated Compose pins separate content-digest labels for the base and Account
+Caddyfiles: a stable file-bind path alone cannot refresh the running file after a
+candidate switch. Changing either file recreates proxy without rebuilding its
+image. This uses [Compose's configuration-change reconciliation](https://docs.docker.com/reference/cli/docker/compose/up/).
+
 CI dispatch can set `base_commit` to the full source commit of a signed site release.
 Configure repository variables `ROSY_SITE_SIGNING_KEY_ID` and
 `ROSY_SITE_SIGNING_PUBLIC_KEY_PEM` through the trusted administrator path first.
