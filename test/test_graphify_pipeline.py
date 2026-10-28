@@ -53,6 +53,8 @@ def test_snapshot_rejects_embedded_git_checkouts(repo):
     nested.mkdir()
     subprocess.run(["git", "init", str(nested)], check=True, capture_output=True)
     (nested / "indexed.py").write_text("class Nested: pass\n")
+    for args in (("add", "."), ("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "nested")):
+        subprocess.run(["git", "-C", str(nested), *args], check=True, capture_output=True)
     with pytest.raises(ValueError, match="Nested"):
         pipeline.snapshot(root, root)
 
