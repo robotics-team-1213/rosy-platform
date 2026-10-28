@@ -57,7 +57,10 @@ def run(args):
 
     fixed('Table', [0., 0., -.025], [1.8, 1.8, .05], [.30, .32, .34])
     belt = fixed('Conveyor', [.20, -.28, .0125], FIXTURE['belt_size_m'], [.12, .15, .18])
+    UsdPhysics.RigidBodyAPI.Apply(belt.prim).CreateKinematicEnabledAttr(True)
     surface = PhysxSchema.PhysxSurfaceVelocityAPI.Apply(belt.prim)
+    surface.CreateSurfaceVelocityEnabledAttr(True)
+    surface.CreateSurfaceVelocityLocalSpaceAttr(False)
     surface.CreateSurfaceVelocityAttr(Gf.Vec3f(0., FIXTURE['belt_speed_m_s'], 0.))
     fixed('BeltStop', [.20, -.029, .035], [.12, .004, .02], [.65, .65, .65])
     fixed('Bin', [.20, .02, .0125], [.09, .09, .025], [.15, .48, .7])
@@ -148,15 +151,15 @@ def run(args):
         contacts.append(world.scene.add(RigidPrim('/World/Cargo'+str(i), name='contact'+str(i),
             track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+
             ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=128)))
-    eye = Gf.Vec3d(.75, -.75, .65)
-    look = Gf.Matrix4d().SetLookAt(eye, Gf.Vec3d(.13, -.07, .06), Gf.Vec3d(0., 0., 1.)).GetInverse()
+    eye = Gf.Vec3d(.60, -.62, .48)
+    look = Gf.Matrix4d().SetLookAt(eye, Gf.Vec3d(.13, -.10, .12), Gf.Vec3d(0., 0., 1.)).GetInverse()
     rotation = look.ExtractRotationQuat()
     camera = Camera('/World/Observer', position=np.array(eye), resolution=(800, 600))
     world.reset()
     camera.initialize()
     camera.set_world_pose(np.array(eye), np.array([rotation.GetReal(), *rotation.GetImaginary()]), camera_axes='usd')
     camera.set_clipping_range(.01, 10.)
-    camera.prim.GetAttribute('focalLength').Set(18.)
+    camera.prim.GetAttribute('focalLength').Set(35.)
     camera.prim.GetAttribute('horizontalAperture').Set(36.)
     camera.prim.GetAttribute('verticalAperture').Set(27.)
     limits_by_name = {joint.get('name'): [float(joint.find('limit').get(key)) for key in ('lower', 'upper')]
