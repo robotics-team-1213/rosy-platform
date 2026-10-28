@@ -3874,3 +3874,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 resource-bounds-1(AI PC, run-1) 	est/test_site_db_maintenance.py 신규 3 시험 통과 — 종료·HOLD·비종료 구분, 0일 비활성화, backup 명령 통합 각각 확인.
 - gate 변화: 없음. 착지 FULL 기록은 착지 때 land record로 남긴다.
 - CE: 해당 없음 — 보존 기간과 SQL이 코드와 시험로 읽힐 수 있다.
+
+## 2026-10-28 · 9b21c8c87b · fix(site): 종료 작업 행·durable 사건 감사·WAL 체크포인트
+
+- 변경: 자원 경계 후속 3건. (1) `fleet_tasks` 종료 행(request/evidence/receipt JSON)을 history와 함께 지운다 — `NOT EXISTS` 가드로 고아 history를 남기지 않고, 과량 prune이 history만 지운 경우도 회수한다. `request_key`는 30일 창이 지나야 재사용된다. (2) `core_event_audit`(observe/events.py, DELETE 0건으로 매 사건 영구 쌓임 확인)를 90일 보존한다 — Fleet 재시작 뒤 중복 제거는 남은 창에서 살고, 90일 넘는 재생은 실제 재생 지평 밖이다. 같은 `fleet.sqlite3`라 `prune_ledger`가 그대로 커버한다. (3) 백업·정리 뒤 `PRAGMA wal_checkpoint(TRUNCATE)`를 최선형으로 돌려 지워진 페이지가 OS 파일로 돌아가게 한다. 세션 만료 정리는 `password_session._issue`가 이미 하고 있어 새 작업 없음.
+- 증거: 원격 시험 retention2-1(AI PC, run-1) `test/test_site_db_maintenance.py`·`test_site_preflight.py`·`test_site_users_cli.py` exit 0, known_failures NEW 0 — 종료·HOLD·비종료 구분, 과거 prune 회수, 감사 90일, 0일 비활성화, backup 통합+체크포인트 보고 각각 확인. `size_range.py` 커밋 직후 통과.
+- gate 변화: 없음. 착지 FULL 기록은 착지 때 land record로 남긴다.
+- CE: 해당 없음 — 보존 근거(재생 지평, request_key 창)가 커밋 문서와 이 기록에 남는다.
