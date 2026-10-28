@@ -104,6 +104,12 @@ def test_publisher_rejects_transport_changed_after_preparation(trees, tmp_path):
 
 @pytest.mark.parametrize("paths,wanted", [(["docs/a.md"], "none"),
     (["deploy/robot/pinky_pro/image/customize-rootfs.sh"], "os-image"),
+    (["deploy/robot/pinky_pro/native/os_update_controller.py"], "os-image"),
+    (["deploy/robot/pinky_pro/native/os_update_transport.py"], "os-image"),
+    (["deploy/robot/pinky_pro/native/os_update_watchdog.py"], "os-image"),
+    (["deploy/robot/pinky_pro/native/rosy-os-update.service"], "os-image"),
+    (["deploy/robot/pinky_pro/release/public-keys/authority.pem"], "os-image"),
+    (["deploy/robot/pinky_pro/native/rosy-rauc-dbus.conf"], "os-image"),
     (["unowned/a.py"], "review"), (["operations/setup.py"], "full-payload")])
 def test_delivery_policy_has_executable_vocabulary(paths, wanted):
     impact = load("delivery_impact", "deploy/robot/pinky_pro/release/artifact_impact.py")
@@ -111,14 +117,21 @@ def test_delivery_policy_has_executable_vocabulary(paths, wanted):
 
 
 @pytest.mark.parametrize("paths,wanted", [(["docs/a.md"], "none"),
-    (["deploy/robot/pinky_pro/image/customize-rootfs.sh"], "os-image"), (["unowned/file"], "review")])
+    (["deploy/robot/pinky_pro/image/customize-rootfs.sh"], "os-image"),
+    (["deploy/robot/pinky_pro/native/os_update_controller.py"], "os-image"),
+    (["deploy/robot/pinky_pro/native/os_update_transport.py"], "os-image"),
+    (["deploy/robot/pinky_pro/native/os_update_watchdog.py"], "os-image"),
+    (["deploy/robot/pinky_pro/native/rosy-os-update.service"], "os-image"),
+    (["deploy/robot/pinky_pro/release/public-keys/authority.pem"], "os-image"),
+    (["unowned/file"], "review")])
 def test_coordinator_policy_reaches_dispatch_gate(tmp_path, paths, wanted):
     cd = load("delivery_cd", "tools/release/robot_cd.py")
     calls = []
     old, head = "1" * 40, "2" * 40
     config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
               "robots": [], "canary": "unused", "key_name": "test"}
-    cd.write_json(tmp_path / "state.json", {"sha": old, "phase": "done"})
+    cd.write_json(tmp_path / "state.json", {"sha": old, "phase": "done", "deployed_sha": old,
+                                          "delivery_base_sha": old})
 
     def github(*args):
         calls.append(args)

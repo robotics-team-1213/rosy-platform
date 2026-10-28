@@ -338,6 +338,63 @@ def test_published_feature_rollout_resumes_without_republication(tmp_path, monke
         assert coordinator.state["phase"] == "publishing"
 
 
+@pytest.mark.parametrize("had_successful_baseline", [True, False])
+def test_failed_native_attempt_cannot_hide_undelivered_change_behind_docs(tmp_path, monkeypatch, had_successful_baseline):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "operator"))
+    deployed, failed, docs = "cd" * 20, SHA, "ef" * 20
+    release_id = "2026.10.06-046"
+    state = {"sha": failed, "phase": "building", "release_id": release_id,
+             "dispatched_at": "2026-10-06T12:00:00+00:00"}
+    if had_successful_baseline:
+        state.update(deployed_sha=deployed, delivery_base_sha=deployed,
+                     payload_tarball=str(tmp_path / "prior-signed.tar.gz"))
+    tool.write_json(tmp_path / "state.json", state)
+    head = [failed]
+    comparisons, dispatches = [], []
+
+    def github(*args):
+        if args[0] == "workflow":
+            dispatches.append(args)
+            return ""
+        path = args[1]
+        if "--method" in args:
+            return "{}"
+        if path.endswith("git/ref/heads/main"):
+            return json.dumps({"object": {"sha": head[0]}})
+        if "compare/" in path:
+            comparison = path.split("compare/", 1)[1]
+            comparisons.append(comparison)
+            files = [{"filename": "docs/after-failure.md", "status": "modified"}]
+            if comparison.startswith(deployed):
+                files.append({"filename": "operations/pkg/node.py", "status": "modified"})
+            return json.dumps({"status": "identical" if comparison.endswith("...main") else "ahead", "files": files})
+        if "/workflows/build-native-payload.yml/runs?" in path:
+            return json.dumps({"workflow_runs": [run(conclusion="failure", event="workflow_dispatch",
+                display_title=f"Pinky payload {release_id}")]})
+        if "/runs?" in path:
+            return json.dumps({"workflow_runs": [run(head_sha=head[0])]})
+        if "releases?" in path or "matching-refs" in path:
+            return "[]"
+        return json.dumps({"id": 9})
+
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": ["unused"], "canary": "unused", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    monkeypatch.setattr(coordinator, "ssh", lambda *_: (0, "/opt/rosy/releases/2026.10.05-043\n", ""))
+    assert coordinator.tick() == "build_refused"
+    head[0] = docs
+    assert coordinator.tick() == "build_dispatched"
+    assert coordinator.state["delivery_policy"] == "full-payload"
+    assert len(dispatches) == 1
+    assert f"{failed}...{docs}" not in comparisons
+    if had_successful_baseline:
+        assert f"{deployed}...{docs}" in comparisons
+        assert coordinator.state["deployed_sha"] == deployed
+        assert coordinator.state["delivery_base_sha"] == deployed
+
+
 def test_signer_temporary_files_stay_in_managed_state(tmp_path, monkeypatch):
     import tempfile
     tool = module()
