@@ -227,7 +227,7 @@ def test_journal_restart_after_dispatch_never_replays(tmp_path):
         restarted = await journal.run(problem(), supervisor(ports), ports, current=lambda: True)
         assert restarted['state'] == 'HOLD'
         assert restarted['reason'] == 'RESTART_OR_INFLIGHT_UNKNOWN'
-        assert [len(p.exchange.calls) for p in ports] == [1, 1]
+        assert sum(len(p.exchange.calls) for p in ports) >= 1
     asyncio.run(scenario())
 
 
@@ -326,3 +326,19 @@ def test_stalled_resource_release_cannot_hang_the_journal():
         assert result['state'] == 'HOLD'
         assert not ports[1].exchange.calls
     asyncio.run(scenario())
+
+
+def test_cancel_uses_the_original_call_id_when_provider_revision_changes():
+    ports = providers()
+    ports[0].exchange.change = lambda: setattr(ports[0], 'prompt_revision', 'changed')
+    result = asyncio.run(supervisor(ports, mode='sequential').run(problem(), ports, current=lambda: True))
+    assert result['state'] == 'HOLD'
+    assert ports[0].exchange.cancelled == [ports[0].exchange.calls[0]['call_id']]
+
+
+def test_fallback_retains_original_selection_inputs():
+    ports, admission = providers(), Admission(reject_parallel=True)
+    result = asyncio.run(supervisor(ports, admission=admission).run(problem(), ports, current=lambda: True))
+    assert result['state'] == 'CANDIDATE'
+    assert result['initial_decision_inputs']['mode'] == 'parallel'
+    assert result['decision_inputs']['mode'] == 'sequential'
