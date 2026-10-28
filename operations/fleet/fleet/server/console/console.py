@@ -32,7 +32,7 @@ from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
-from fleet.server import bays, goal_lease, traffic
+from fleet.server import bays, goal_admission, goal_lease, traffic
 from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
@@ -439,18 +439,14 @@ class FleetConsole(TripAware):
             raise HubError("FORMATION_ACTIVE",
                            f"{robot_id} is in the running formation; stop it first")
         yielding = self._yielding.get(robot_id)
-        if yielding is not None:
+        decision = goal_admission.yield_hold(yielding)
+        if decision is not None:
             # 이 로봇은 남을 지나가게 하려고 비켜서는 중이다. 지금 다른 데로 보내면 방금
             # 비운 통로를 다시 막고, 그 통로를 기다리던 미션은 영영 못 나간다. 세워 둔다.
-            mission = self._task_mission(
-                x, y, yaw, task_id=task_id, attempt_id=attempt_id,
-                attempt_seq=attempt_seq, blocked_by=yielding["for"],
-                waiting_on=[yielding["for"]], reason="YIELDED",
-            )
-            self._queued[robot_id] = mission
-            return {"accepted": False, "queued": True, "dispatch_attempted": False,
-                    "cancel_confirmed": False, "blocked_by": yielding["for"],
-                    "waiting_on": [yielding["for"]], "reason": "YIELDED"}
+            self._queued[robot_id] = goal_admission.mission_of(
+                decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                attempt_seq=attempt_seq)
+            return goal_admission.response_of(decision)
         state, _source = await self._gather_state(robot_id)
         if self._clients.get(robot_id) is not client:
             raise RuntimeError("robot connection changed during localization check")
@@ -461,12 +457,11 @@ class FleetConsole(TripAware):
         if self._verdict(robot_id) == trust.UNTRUSTED:
             # D-395: an unlocalized robot gets no goal (CORE would refuse it); it waits for LOCALIZED.
             self._claims.pop(robot_id, None)
-            self._queued[robot_id] = self._task_mission(
-                x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
-                blocked_by=robot_id, waiting_on=[robot_id], reason="LOCALIZATION_UNTRUSTED")
-            return {"accepted": False, "queued": True, "dispatch_attempted": False,
-                    "cancel_confirmed": False, "blocked_by": robot_id, "waiting_on": [robot_id],
-                    "reason": "LOCALIZATION_UNTRUSTED"}
+            decision = goal_admission.untrusted_self_hold(robot_id)
+            self._queued[robot_id] = goal_admission.mission_of(
+                decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                attempt_seq=attempt_seq)
+            return goal_admission.response_of(decision)
         if robot_id in self._formation_members():
             raise HubError("FORMATION_ACTIVE", f"{robot_id} joined a formation during goal admission")
         if lease_source != "trip" and (busy := self.trip_refusal([robot_id])):
@@ -491,18 +486,13 @@ class FleetConsole(TripAware):
                     raise RuntimeError("navigation goal cancellation was not confirmed")
                 self._goals.pop(robot_id, None)
                 self._claims.pop(robot_id, None)
-                self._queued[robot_id] = self._task_mission(
-                                          x, y, yaw, task_id=task_id, attempt_id=attempt_id,
-                                          attempt_seq=attempt_seq, blocked_by=blocker,
-                                          waiting_on=[blocker], reason="ROUTE_CONFLICT",
-                                          # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는
-                                          # 이 경로 위의 남은 거리로 재 단다. 취소하면 로봇이
-                                          # 경로를 잃으므로 여기에 묻어 둔다.
-                                          route=list(route),
-                )
-                return {"accepted": False, "queued": True, "dispatch_attempted": True,
-                        "cancel_confirmed": True, "blocked_by": blocker,
-                        "waiting_on": [blocker], "reason": "ROUTE_CONFLICT"}
+                decision = goal_admission.route_conflict_hold(blocker, route)
+                # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는 이 경로 위의 남은
+                # 거리로 재 단다. 취소하면 로봇이 경로를 잃으므로 미션에 묻어 둔다.
+                self._queued[robot_id] = goal_admission.mission_of(
+                    decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                    attempt_seq=attempt_seq)
+                return goal_admission.response_of(decision)
 
             await self._observe()
             self.goal_leases.check_stop(robot_id, stop)
@@ -518,13 +508,11 @@ class FleetConsole(TripAware):
                     raise RuntimeError("navigation goal cancellation was not confirmed")
                 self._goals.pop(robot_id, None)
                 self._claims.pop(robot_id, None)
-                self._queued[robot_id] = self._task_mission(
-                    x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
-                    blocked_by=untrusted, waiting_on=[untrusted], reason="LOCALIZATION_UNTRUSTED",
-                    route=list(intended))
-                return {"accepted": False, "queued": True, "dispatch_attempted": True,
-                        "cancel_confirmed": True, "blocked_by": untrusted,
-                        "waiting_on": [untrusted], "reason": "LOCALIZATION_UNTRUSTED"}
+                decision = goal_admission.untrusted_blocker_hold(untrusted, intended)
+                self._queued[robot_id] = goal_admission.mission_of(
+                    decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+                    attempt_seq=attempt_seq)
+                return goal_admission.response_of(decision)
             grid = bays.Grid.from_payload(await self.map())
             self.goal_leases.check_stop(robot_id, stop)
             standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
@@ -542,19 +530,6 @@ class FleetConsole(TripAware):
     def _cancel_confirmed(receipt: Any) -> bool:
         return (isinstance(receipt, dict)
                 and (receipt.get("canceled") is True or receipt.get("navigation") == "CANCELED"))
-
-    @staticmethod
-    def _task_mission(x: float, y: float, yaw: float, *, task_id: str | None,
-                      attempt_id: str | None, attempt_seq: int | None,
-                      **details) -> dict:
-        mission = {"x": x, "y": y, "yaw": yaw, **details}
-        if task_id is not None:
-            mission["task_id"] = task_id
-        if attempt_id is not None:
-            mission["attempt_id"] = attempt_id
-        if attempt_seq is not None:
-            mission["attempt_seq"] = attempt_seq
-        return mission
 
     def _intended_route(self, mover: str, route: Sequence, x: float, y: float) -> list:
         """계획 경로. 아직 없으면 지금 자리에서 목표까지 직선으로 대신한다.
@@ -663,13 +638,11 @@ class FleetConsole(TripAware):
         self._claims.pop(mover, None)
         reason = "NO_YIELD_SPACE" if no_space else "YIELDING"
         blocked_by = (no_space or yielded)[0]
-        self._queued[mover] = self._task_mission(
-            x, y, yaw, task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
-            blocked_by=blocked_by, waiting_on=list(standing), reason=reason, route=list(route),
-        )
-        return {"accepted": False, "queued": True, "dispatch_attempted": True,
-                "cancel_confirmed": True, "blocked_by": blocked_by,
-                "waiting_on": list(standing), "reason": reason,
+        decision = goal_admission.standing_hold(blocked_by, standing, reason, route)
+        self._queued[mover] = goal_admission.mission_of(
+            decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
+            attempt_seq=attempt_seq)
+        return {**goal_admission.response_of(decision),
                 "yielding": yielded, "no_space": no_space}
 
     async def _send_to_bay(self, robot_id: str, bay: tuple, mover: str) -> None:

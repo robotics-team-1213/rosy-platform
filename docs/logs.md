@@ -12615,6 +12615,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 전체 착지 검사를 재개한다.
 - CE: 해당 없음 — 기존 공개 provenance 표기 규칙을 적용한 문서 수정이며 검사 예외를 늘리지 않았다.
 
+## 2026-10-27 · 477761474d · 공개 simulation 복구 연결 검증과 clipping 교훈
+
+- 변경: 기존 복구 how-to에 authenticated 요청·독립 관측·정확 승인·자식 조회 경로를 기록했다. frozen public 검증 기록은 실제 source revision과 RED/GREEN·skip·실물 미수행을 구분한다. source-only commit은 공개 PR이나 main 착지 증거로 표현하지 않는다.
+- 증거: auth 109, HTTP/service 37, 최종 API/auth 18, 최종 actual browser 14 pass; broad 453 pass/35 skip는 별도 범위다. 독립 계약 검토의 simulation 표시 Minor를 해결했고 시각 검토 ship. 공개 ingress·진행 기록과 별개로 장치·학습 수용은 남는다.
+- gate 변화: 없음. 공식 선행 계약/제품 로컬 착지 도구 결과는 별도 후속 기록한다.
+- CE: 새 교훈 기록 — page/element scrollWidth만으로 nested card clipping을 검출할 수 없는 실제 반례와 ancestor-bounds 회귀를 solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md에 남겼다. Frontmatter parser 통과, local-only commit 인용 2건은 미게시·착지 대기로 명시해 의도 확인했다.
+
 ## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
 - 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
@@ -12684,6 +12691,20 @@ osy-d395-s1d\`.
 - gate 변화: 없음(문서만). `tools/remote/remote_pytest.py`는 598줄이라 다음 변경 전에 나눠야 한다. `fix/land-turn-deadline-v3`가 C 뒤에 착지하면 그 브랜치가 `remote_pytest.py`·`work_queue.py` 충돌을 푼다.
 - 교훈: 기존 교훈 갱신 없음. 튕김("main 따라잡기")의 정본 기록은 D-889 추가 3이다.
 
+## 2026-10-28 · ce1ef8ebb0 · 제안자의 요청 응답 유실 후 조회 검증
+
+- 변경: 27일 public 기록은 보존하고 조회 입력의 role-lock 수정·실제 lost-request 흐름·독립 재검토를 새 날짜의 frozen 기록에 분리했다. 승인 응답 유실과 요청 응답 유실을 혼동하지 않는다.
+- 증거: focused RED1은 조회 입력 disabled였고 HTTP 재조회 자체는 성공했다. source ce1ef8ebb0의 actual browser 14 passed/0 skipped·NEW0, 원격 PNG SHA-256 대조, 계약 재검토의 권한 확대 없음. docs/validation/transfer-recovery-public-2026-10-28/result.md 참고.
+- gate 변화: 없음. 공식 로컬 병합 결과는 별도 확인한다.
+- CE: 추가 기록 없음 — 기존 clipping 교훈과 새 source 회귀가 판단 근거를 보존한다.
+
+## 2026-10-28 · b948a23204 · public UI 계약 실패와 수정 검증 기록
+
+- 변경: 이전 frozen 결과는 보존하고 native UI 계약 실패, 수정 중 초기화 회귀, 후속 공용 계약·실제 browser 통과를 ui-contract-correction.md에 구분했다. 최종 캡처와 중간 응답 유실 검증의 증거 범위를 분리했다.
+- 증거: source af1b7ac467의 계약 37 PASS/0 skip·browser 14 PASS/0 skip, 최신 b948a23204의 실제 browser 14 PASS/0 skip·NEW0. 원격 PNG 6개의 SHA-256을 대조했다. 초기화 순서의 독립 재검토에서 남은 회귀 없음.
+- gate 변화: 없음. 공유 계약은 main에 반영됐고 public 공식 재착지는 후속 결과를 따른다.
+- CE: 새 교훈 추가 없음. 기존 nested clipping 교훈과 코드·시험이 각 판단을 보존한다.
+
 ## 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
 - 변경: `reference/shared-checkout.md` 4·6번의 기본 착지를 `python tools/land_async.py --tests auto`로 바꾸고 숨은 스냅샷 워크트리·`.log`·`.stopped`·복구 순서, 대기열 동작(10분 마감, 미리 준비, 적응형 묶음, 30분 감시자), 게시 push 규칙(자기 pre-push 사본, 자기 기록 재사용, 중복 검사·크기 규칙 생략, `--merge-when-green`)을 적었다. D-889 추가 5에 이유·측정·남은 일. `tools/land.py`는 `.worktrees`에서 직접 돌면 land_async를 권하는 한 줄을 찍는다
 - 증거: 10-28 게시 1회 59분 → 10.5분, 04:16~04:42 착지 5건, 대기열 10개 이상 → 3개 (rosy-land-events.jsonl, publish 로그)
@@ -12744,3 +12765,64 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_queue.py`·`test/test_land_batch.py`·`test/test_land_prepare.py`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙이 코드와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · feat(land): urgent ticket (`--urgent "<the user's words>"`)
+- 변경: `land_queue`에 급한 표(한 번에 하나, 사유 필수, `urgent` 사건)를 넣고 `land.py --urgent`로 받는다. 기다리는 일반 표를 앞지르고 차례는 끊지 않는다. `shared-checkout.md` 6번에 쓰는 법과 남의 `land.py`를 멈추지 않는다는 규칙
+- 증거: test_land_urgent.py 3건, land_queue·land·land_batch 시험 142 passed (원격)
+- gate 변화: 없음
+- 결정: D-889 추가 5의 남은 일(우선 차선)
+- 교훈: 없음
+
+## 2026-10-28 · uncommitted · feat(land): FULL 등급끼리 묶음 착지 (D-889 추가 6)
+
+- 변경: D-889 추가 6. `tools/land_batch.py`가 준비 등급 무리(affected/full)별로 묶고, full 묶음은 병합 트리에서 FULL을 한 번 돌린다. full 묶음 크기는 min(kopt(p), 3). safety와 `--tests` 지정은 혼자 간다.
+- 근거: 10-28 12시간 착지 39건 중 묶음 2번, 준비 78건 중 FULL 48건(게이트 도구 Rule 8 약 60회, safety 25회).
+- gate 변화: 없음(착지 절차).
+- CE: 해당 없음 — 측정과 규칙은 ADR 추가 6에 남겼다.
+
+## 2026-10-28 · uncommitted · fix(monitoring): Monitoring 화면 배경을 의미 색 역할로
+
+- 변경: `applications/monitoring/web/monitoring.css`의 `body` 배경을 `--ground`에서 `--surface-canvas`로 바꾼다. 이 레인은 main보다 늦게 합쳐졌고, 그사이 main에 들어온 `shared/web/test/test_design_scope_gates.py::test_direct_colour_declarations_use_semantic_roles`가 직접 배경 선언에 의미 역할을 요구한다.
+- 증거: 원격 `operations/monitoring/test`·`shared/web/test`·`test/architecture`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 토큰 이름 차이다.
+
+## 2026-10-28 · uncommitted · fix(release): Monitoring TLS 시험이 고정한 Caddy 배포 파일 SHA256을 공개 출처로 등록
+
+- 변경: `deploy/robot/pinky_pro/release/public_provenance.json`에 `operations/monitoring/test/test_tls_proxy.py`의 Caddy v2.10.2 linux_amd64 배포 파일 SHA256 줄을 기록한다. 2026-10-28에 그 파일을 내려받아 크기 15875694와 값이 맞음을 확인했다.
+- 근거: 착지 사전 시험의 `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`가 그 값을 high-entropy-token으로 잡았다(main에서는 통과).
+- 증거: 원격 `test/test_release_boundary_guards.py`·`test/test_secret_public_provenance.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 저장소의 공개 출처 등록 절차를 따른 것이다.
+
+## 2026-10-28 · uncommitted · fix(web): 대시보드 시험을 공용 부품의 상대 import에 맞춤 (monitoring 레인)
+
+- 변경: `middleware/core/gateway/test/test_dashboard.py`가 공용 `shared/web/ui.js`에서 찾는 줄을 `"./confirmation.js"`로 바꾼다. 이 레인이 공용 control 모듈을 상대 import로 바꿨다(feat/monitoring-surface-registration과 같은 변경과 같은 수정).
+- 근거: 착지 사전 시험의 `test_dashboard_assets_are_local_and_reference_runtime_contract`·`test_dashboard_exposes_local_field_settings_not_fleet`가 실패했다(main에서는 통과).
+- 증거: 원격 `middleware/core/gateway/test/test_dashboard.py`·`shared/web/test`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 같은 레인이 바꾼 import를 시험에 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · fix(test): 역할 화면 브라우저 시험이 공용 부품의 상대 import를 어느 mount에서나 제공
+
+- 변경: `test/test_role_surface_states_browser.py`가 `confirmation.js`·`live-dialog-geometry.js`·`ui-wiring.js`를 `/common/` 밑에서만 내주던 것을 `**/` 밑 어디서나 내준다. 이 브랜치가 `shared/web/ui.js`의 import를 상대 경로로 바꿨는데, 이 하네스는 `ui.js`를 `/assets/ui.js`로 올리고 이웃 파일은 `/common/`에만 두어 `Failed to fetch dynamically imported module`이 났다.
+- 근거: 착지 사전 시험의 `test_shared_components_apply_button_size_palette_and_status_contracts`가 실패했다(main에서는 통과).
+- 증거: 원격 `ROSY_RUN_BROWSER_TESTS=1 test/test_role_surface_states_browser.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 같은 브랜치가 바꾼 import에 하네스를 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · fix(land): 착지가 시작할 때 같은 무리의 대기 티켓을 묶어 이끈다
+
+- 변경: `tools/land_batch.py`(`early`, 나누기 반복을 `run`으로 묶음), `tools/land.py`(줄에 선 직후 `early`). 사전 시험 기록이 없는 착지가 같은 무리의 `waiting`·`pending` 티켓을 곧바로 묶어 사전 시험을 한 번만 받는다. robot-f4의 `feat/land-batch-full`(무리별 묶음) 위에 쌓았다. D-889 추가 4.
+- 근거: 19:35 대기열에서 `waiting`이 모두 FULL급이거나 tier 기록이 없어 affected 리더가 없었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · fix(land): 겹치지 않는 묶음은 함께 있을 수 있다
+
+- 변경: `tools/land_batch.py`. "묶음은 한 번에 하나" 대신, 이미 실린 브랜치(`taken`)를 다른 묶음의 구성원에서 빼고 실린 착지는 리더가 되지 않게 했다. 동시에 생긴 두 리더는 구성원이 겹칠 때만 늦은 쪽이 물러난다. D-889 추가 4.
+- 근거: 21:31에 FULL 묶음 하나가 사전 시험 슬롯을 1.5시간 기다리는 동안, 차례를 기다리는 FULL 티켓이 묶음을 만들지 못했다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.

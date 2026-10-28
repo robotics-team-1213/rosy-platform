@@ -3895,3 +3895,11 @@
 - 증거: 수정 커밋 bc32cb9b41에서 정지 파일 27개와 Fleet 상태 파일 11개를 함께 원격 실행해 38 passed / 0 skipped / NEW 0. 같은 pytest 9.2 환경 1fde7a90b47fe7fb의 결과이며, 독립 검토는 전용 모듈 격리·실제 fsync 유지·안전 assertion 보존을 확인했다. 실행 로그는 native-cell-transport 작업 기록에 연결했다.
 - gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
 - CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.
+
+## 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인
+
+- 변경: `camera_readiness.py` 프로필의 카메라마다 선택 항목 `unit`(기본은 역할 이름). 확인·복구가 `rosy-omx-camera@<unit>`을 단독 소유자로 본다. README와 시험 1건.
+- 원인: 관제 PC의 front 역할 카메라는 팔 S 그리퍼(Innomaker)이고 `rosy-omx-camera@arm_a_wrist`가 연다. 자동 조정이 `@front`를 소유자로 찾아 06:27부터 restore가 실패했고, 그 실패가 장치 자동 업데이트를 되돌렸다.
+- 증거: 원격 `test/test_omx_camera_readiness.py` 29 passed (2026-10-28 착지 재실행). 호스트 적용은 아직이다.
+- gate 변화: 없음. 호스트 적용(프로필에 `"unit": "arm_a_wrist"`, 이전 상태 디렉터리 정리, 업데이트 관문 복귀)은 배포 뒤 셀이 쉴 때 한다.
+- CE: 미해결 — 호스트 적용 후 판단.

@@ -833,7 +833,10 @@ V4L2 controls of the already selected, single-owner camera devices.
 
 Copy `camera-readiness.json.example` to the private
 `~/.config/rosy/omx-camera-readiness.json`, replacing both identities with the
-existing camera configuration's persistent paths. The candidates are examples
+existing camera configuration's persistent paths. When a role's camera is opened
+by a preview unit with another instance name, set that role's `"unit"` (for arm S's
+gripper camera in the `front` slot: `"unit": "arm_a_wrist"`); the tuner then checks
+`rosy-omx-camera@arm_a_wrist` as the sole owner. The candidates are examples
 for the measured cameras, not universal camera defaults. The tuner checks the
 actual control ranges. Put `ROSY_CAMERA_PIPELINE_ROOT=<absolute-source-directory>`
 in `~/.config/rosy/omx-camera-readiness.env`; that directory must contain

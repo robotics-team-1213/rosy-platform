@@ -1,0 +1,12 @@
+collector_id: direct-central-monitoring
+site_id: central
+readers:
+  - principal_id: central-operator
+    token_env: MONITORING_CENTRAL_READ
+    sites: [central, site-a]
+sources:
+  - id: robot-a
+    site_id: site-a
+    kind: core
+    url: https://robot-a.example.invalid
+    token_env: MONITORING_CORE_UPSTREAM
