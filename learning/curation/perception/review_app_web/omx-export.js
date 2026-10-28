@@ -1,10 +1,12 @@
 // Conversion progress belongs beside its source selection, before learning starts.
 let lastRuns;
+const stopStates=new Map();
 export function renderExportRuns(container,runs,options){
   const encoded=JSON.stringify(runs);if(encoded===lastRuns)return;lastRuns=encoded;
   const active=document.activeElement,row=active?.closest('[data-export-run]');
   const focused=container.contains(row)?row.dataset.exportRun:null,action=active?.dataset.exportAction;
   const nodes=runs.map(run=>renderExportRun(run,options));
+  for(const id of stopStates.keys())if(!runs.some(run=>run.id===id))stopStates.delete(id);
   if(!nodes.length){const empty=document.createElement('p');empty.className='quiet';empty.textContent='변환 기록이 없습니다. 검수할 시연과 프로필을 선택하세요.';nodes.push(empty);}
   container.replaceChildren(...nodes);
   if(focused){
@@ -35,7 +37,14 @@ function renderExportRun(run,{states,request,refresh,selectDataset}){
   if(['queued','running'].includes(run.status)){
     const stop=el('ui-button','이 변환 중지');stop.dataset.exportAction='stop';stop.type='button';stop.setAttribute('kind','quiet');
     const status=el('p');status.setAttribute('role','alert');
-    stop.onclick=async()=>{stop.disabled=true;try{await request('/api/learning/omx/center/stop',{id:run.id});await refresh();}catch(error){status.textContent=error.message;stop.disabled=false;}};
+    const operation=stopStates.get(run.id)||{pending:false,error:''};stopStates.set(run.id,operation);
+    operation.render=()=>{stop.disabled=operation.pending;status.textContent=operation.error;};operation.render();
+    stop.onclick=async()=>{
+      if(operation.pending)return;operation.pending=true;operation.error='';operation.render();
+      try{await request('/api/learning/omx/center/stop',{id:run.id});await refresh();}
+      catch(error){operation.error=error.message;}
+      finally{operation.pending=false;operation.render();}
+    };
     section.append(stop,status);
   }
   return section;
