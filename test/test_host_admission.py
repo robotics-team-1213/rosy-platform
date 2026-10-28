@@ -78,7 +78,8 @@ def test_two_runs_asking_four_each_start_only_the_five_the_host_has_room_for(tmp
 
 @pytest.mark.skipif(not LINUX, reason="Linux setsid/flock are required")
 def test_an_alone_job_waits_for_the_host_to_empty_and_nothing_starts_beside_it(tmp_path):
-    home, env = _job_env(tmp_path, 'touch "$HOME/started.$1.$$"; while [ ! -e "$HOME/release.$1" ]; do sleep 0.05; done\n')
+    body = 'n=${@: -1}; touch "$HOME/started.$n.$$"; while [ ! -e "$HOME/release.$n" ]; do sleep 0.05; done\n'
+    home, env = _job_env(tmp_path, body)  # the last pytest argument names the job
     for name in ("first", "alone", "later"):
         (home / "rosy-test" / "runs" / name).mkdir(parents=True)
     _sh(rj.START, env, "first", "d", "", "0", "60", rj.JOB, "first")
