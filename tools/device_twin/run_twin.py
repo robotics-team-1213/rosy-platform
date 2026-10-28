@@ -5,7 +5,7 @@
     python tools/device_twin/run_twin.py --scenario b,f       # a subset
     python tools/device_twin/run_twin.py --list
 
-Builds, under --work (default X:/DevTemp/d406-twin):
+Builds, under --work (default $ROSY_SCRATCH/d406-twin, else the system temp directory):
 - a throwaway Ed25519 key (never the operator's release key);
 - signed payload releases made with the repo's real tooling (build_twin_release.py);
 - an ubuntu:24.04 container with systemd as PID 1, the real native runtime and
@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import os
 from pathlib import Path
 import sys
+import tempfile
 import time
 import traceback
 
@@ -62,7 +64,7 @@ def write_report(path: Path, results: list[Result], build: Build, started: dt.da
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--scenario", default="all", help=f"all, or a comma list of {','.join(Scenarios.ORDER)}")
-    parser.add_argument("--work", type=Path, default=Path("X:/DevTemp/d406-twin"))
+    parser.add_argument("--work", type=Path, default=Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "d406-twin")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--keep", action="store_true", help="leave the last twin and the fake GitHub running")
     args = parser.parse_args(argv)

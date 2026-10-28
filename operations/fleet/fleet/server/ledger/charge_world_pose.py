@@ -35,6 +35,7 @@ class ChargeWorldPoseSource:
         self._first, self._clock_fault, self._times = True, False, None
         self._leases = {}
         self._has_odom = False
+        self._map_scope = None
 
     def _time(self):
         before, utc, after = self.monotonic(), self.clock(), self.monotonic()
@@ -100,6 +101,10 @@ class ChargeWorldPoseSource:
                 self._boot(await client.docking_status(), facts['boot_id'])
                 self._client(client)
                 previous_scope = self._scope
+                map_scope = (facts['map_id'], facts['map_revision'])
+                if self._scope is not None and self._map_scope != map_scope:
+                    self.poses.retire_source_scope(self._scope)
+                self._map_scope = map_scope
                 self._scope = self.poses.begin_source_scope(self.robot_id,
                     boot_id=facts['boot_id'], odom_epoch=facts['odom_epoch'], client=client)
                 if self._first:

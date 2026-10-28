@@ -14,6 +14,39 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
+@pytest.mark.parametrize('target', [
+    'applications/fleet/test',
+    'applications/fleet/test/test_sample_browser.py',
+    'applications/fleet/test/test_sample_browser.py::test_sample_login',
+])
+def test_ci_activates_standalone_app_browsers(monkeypatch, target):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    install = next(step for step in steps if step['name'] == 'Install Fleet browser verification tools')
+    # Evaluate the condition with the same serialized invocation payload used by Actions.
+    condition = install['if'].replace('toJSON(matrix.invocations)', 'payload').replace('||', 'or')
+    assert eval(condition, {'__builtins__': {}, 'contains': lambda value, part: part in value,
+                            'payload': json.dumps([[target]])})
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([['middleware/core/gateway/test', target]]))
+    monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
+    monkeypatch.delenv('ROSY_BROWSER_TESTS', raising=False)
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter(()), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == 0
+    assert len(calls) == 2
+    assert 'ROSY_RUN_BROWSER_TESTS' not in calls[0][1]
+    assert target in calls[1][0]
+    assert calls[1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+
+
 @pytest.mark.parametrize("selection", [
     ["middleware/devices/omx/adapter/test"],
     ["middleware/devices/omx/adapter/test/test_omx_ros_runtime.py::test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state"],
@@ -412,8 +445,9 @@ def test_every_ci_job_has_a_timeout_below_the_six_hour_default():
     import yaml
 
     jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    # scope walks a publish PR's whole range per commit (#210: 3,145 commits, cancelled at 10 min)
     for name, job in jobs.items():
-        assert 0 < int(job.get("timeout-minutes", 0)) <= 30, name
+        assert 0 < int(job.get("timeout-minutes", 0)) <= (60 if name == "scope" else 30), name
 
 
 def test_merge_group_runs_the_full_tier_against_the_group_base():

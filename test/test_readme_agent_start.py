@@ -40,7 +40,7 @@ def test_readme_publishes_the_shared_checkout_start_before_the_product_contract(
     assert "git add -A" in section
     assert "list.txt" in section
     assert "python test/known_failures.py" in section
-    assert "X:\\DevTemp\\<이름>\\run-1.txt" in section
+    assert "$ROSY_SCRATCH\\<이름>\\run-1.txt" in section
     assert "pytest는 이 노트북에서 돌리지 않는다" in section
     assert "git merge --ff-only <브랜치>" in section
     assert "force-push는 하지 않는다" in section
@@ -54,9 +54,12 @@ def test_agents_md_records_the_shared_checkout_commands():
 
     assert WORKTREE in section
     assert "python tools/worktrees.py prune --apply" in section
-    assert "60개 이상이면 만들지 않고" in section and "누가 만들었든 깨끗하고" in section
+    assert "14개(main 포함 15개) 이상이면 만들지 않고" in section and "누가 만들었든 깨끗하고" in section
     assert "소유자 기록이 없는 것은 `--all`을 줘야 다룬다" in section
-    assert "72시간을 기다리지 않고 바로 지운다" in section and "명령 하나 `python tools/worktrees.py prune --apply`" in section
+    assert "기다리지 않고 바로 지운다" in section and "명령 하나 `python tools/worktrees.py prune --apply`" in section
+    # D-790: landed worktrees wait 1 h, the two states that need a person, and the load-flaky rerun.
+    assert "1시간" in section and "`landed-dirty`" in section and "`stale-history`" in section
+    assert "`LOAD-FLAKY`" in section and "`test/flaky_quarantine.txt`로 옮긴다" in section
     assert "git worktree remove .worktrees" not in section  # one command, not two
     assert "`prune --snapshot`" in section and "사람이나 디스패처만 돌린다" in section
     assert "--snapshot --" not in section  # no ready-to-paste snapshot command for every session
@@ -73,7 +76,7 @@ def test_agents_md_records_the_shared_checkout_commands():
     assert "CRLF" in section
     assert "python tools/harness/rosy_harness.py lint" in section
     assert "python test/known_failures.py" in section
-    assert "X:/DevTemp/<name>/run-1.txt" in section
+    assert "$ROSY_SCRATCH/<name>/run-1.txt" in section
     assert "tools/remote/remote_pytest.py" in section
     assert "git merge --ff-only <브랜치>" in section
     assert "python tools/harness/rosy_harness.py generate" in section

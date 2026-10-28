@@ -623,6 +623,31 @@ def test_new_work_move_sends_the_card_requests_and_shows_the_same_refusal(site):
         browser.close()
 
 
+def test_new_work_trip_picker_keeps_focus_and_destination_across_poll(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        posts = []
+        browser, page, errors = _open(playwright, site, API, posts)
+        page.goto(site + "/console?view=work&show=new")
+        page.clock.run_for(2500)
+        page.locator("#work-new-move").click()
+        page.locator("#work-move-robot").select_option("rosy_02")
+        form = page.locator("#work-move .card-trip")
+        destination = form.get_by_role("combobox", name="목적지", exact=True)
+        destination.select_option("B")
+        destination.focus()
+        page.clock.run_for(2500)
+        expect(destination).to_be_focused()
+        expect(destination).to_have_value("B")
+        page.locator("#work-move-robot").focus()
+        page.locator("#work-move-robot").select_option("rosy_03")
+        expect(form).to_have_attribute("aria-label", "rosy_03 운행")
+        expect(form.get_by_role("combobox", name="목적지", exact=True)).to_have_value("A")
+        assert not posts and not errors
+        browser.close()
+
+
 def test_a_viewer_switches_robots_in_new_work_and_reads_each_reason(site):  # noqa: F811
     """Review P2: the 이동 robot picker is a read control; a viewer switches robots and sees each card's reason,
     while the start controls stay locked."""

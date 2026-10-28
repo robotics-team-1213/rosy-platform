@@ -39,7 +39,7 @@ None.
 - These scripts are for a Linux/Gazebo machine. Do not import them from `control` runtime nodes.
 - `driver.py`'s `RcutilsLogger.warn` alias is a **sim-box** compat shim. Robot code still uses `.warn` on Jazzy.
 - Do not reshape the maze to make a planner look good; change the planner/tests instead.
-- Evidence dumps belong under the registered X: session, or `../../../middleware/perception/test/fixtures/` when a test reads them (D-226), not as new defaults in YAML.
+- Evidence dumps belong under the registered $ROSY_SCRATCH session, or `../../../middleware/perception/test/fixtures/` when a test reads them (D-226), not as new defaults in YAML.
 
 ### Testing Requirements
 

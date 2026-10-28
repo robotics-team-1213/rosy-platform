@@ -103,3 +103,39 @@ def test_transfer_still_refuses_simulation_sources(transfer, tmp_path):
         source_mode='simulation', files={'a': '0'*64})))
     with pytest.raises(ValueError, match='closed hardware'):
         transfer.verify_tree(root)
+
+
+def scripted(tmp_path, *, tamper=False):
+    trajectory = tmp_path/'cycle.json'
+    trajectory.write_text(json.dumps(dict(schema='rosy.omx-replay-trajectory.v1', frames=[[0.0] * 6],
+                                          source=dict(planner='grasp_planner.py top-down v1'))))
+    sha = load('record_seal', 'deploy/robot/omx/record_seal.py')._hash(trajectory)
+    if tamper:
+        trajectory.write_text('{}')
+    segments = dict(A=[0, 1], reset=[1, 2], B=[2, 3])
+    return recording(tmp_path, robot_type='omx_follower', source_mode='scripted_teacher',
+                     replay=dict(path=str(trajectory), sha256=sha, segments=segments))
+
+
+def test_a_scripted_teacher_recording_carries_its_trajectory_and_passes_the_transfer(seal, transfer, tmp_path):
+    run, _ = scripted(tmp_path)
+    result = sealed(seal, run, 'arm-s-replay-1', tmp_path/'collections')
+    collection = Path(result['collection'])
+    manifest = json.loads((collection/'manifest.json').read_text())
+    assert manifest['source_mode'] == 'scripted_teacher'
+    assert manifest['teacher_sha256'] == seal._hash(collection/'teacher'/'trajectory.json')
+    assert manifest['teacher']['kind'] == 'replay_trajectory' and manifest['teacher']['segments']['B'] == [2, 3]
+    assert manifest['teacher']['source'] == {'planner': 'grasp_planner.py top-down v1'}
+    assert transfer.verify_tree(collection)['file_count'] == result['file_count']  # teacher file included
+
+
+@pytest.mark.parametrize('case', ['tampered', 'no_replay', 'unknown_mode'])
+def test_a_teacher_recording_without_its_exact_trajectory_is_refused(seal, tmp_path, case):
+    if case == 'tampered':
+        run, _ = scripted(tmp_path, tamper=True)
+    else:
+        mode = 'scripted_teacher' if case == 'no_replay' else 'sim_teacher'
+        run, _ = recording(tmp_path, source_mode=mode)
+    with pytest.raises(ValueError, match='replay|differs|leader_native'):
+        sealed(seal, run, 'refused', tmp_path/'collections')
+    assert not (tmp_path/'collections'/'refused').exists()

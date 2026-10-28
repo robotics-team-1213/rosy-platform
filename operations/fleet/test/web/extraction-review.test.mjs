@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
-import {createExtractionReview} from '../../../site_ui/console/maps/extraction-review.js';
+import {createExtractionReview} from '/console/assets/extraction-review.js';
 globalThis.crypto ??= webcrypto;
 
 const hash = 'b'.repeat(64), asset = 'a'.repeat(64), extraction = 'c'.repeat(64);

@@ -4,7 +4,7 @@ schema: rosy.platform-parts.v1
 # colcon, rosdep, payload and image consumer reads this one line through
 # tools/harness/colcon_roots.py (stdlib-only, so keep it a one-line flow list).
 # Checked by test/architecture/test_colcon_roots.py.
-colcon_roots: [learning, operations, middleware, contracts, integrations, shared]
+colcon_roots: [learning, operations, middleware, contracts, integrations, shared, applications]
 
 # D-427 ownership manifest after wave 5: every tracked source root maps to one
 # D-427 part. `legacy` fields stay for one release to guard rebasing branches.
@@ -51,6 +51,19 @@ import_rules:
 # §5 `Safety-Review:` trailer check (tools/harness/safety_review.py) read it.
 concerns: [learning, decision, control, safety, contracts, other]
 
+# Capability view (2026-10-27): every root also carries one `capability:`, the
+# Jira role Epic that reviews it. It does not change part, concern or import
+# rules; folders stay where D-427 put them. `platform` is shared code with no
+# role owner (reviewed by the `*` CODEOWNERS default). Owners are GitHub logins;
+# docs/reference/team-guide.md §5.1 maps them to people.
+# Checked against .github/CODEOWNERS by test/architecture/test_capability_owners.py.
+capabilities:
+  fleet: {epic: KAN-19, owners: [livsbittt]}
+  pinky: {epic: KAN-20, owners: [PURPLE-SY]}
+  omx: {epic: KAN-21, owners: [sajy0804, ddaokki]}
+  vision_ai: {epic: KAN-22, owners: [now2466]}
+  platform: {epic: null, owners: []}
+
 roots:
   - path: learning/training/pinky
     part: learning
@@ -58,6 +71,7 @@ roots:
     wave: none
     import_prefix: []
     concern: learning
+    capability: pinky
     note: D-449 offline recorded velocity comparison; no runtime authority.
   - path: learning/curation/pinky
     part: learning
@@ -65,6 +79,7 @@ roots:
     wave: none
     import_prefix: []
     concern: learning
+    capability: pinky
     note: D-449 recorded Pinky source snapshots and Episode conversion; no control authority.
   - path: learning/registry/policy
     part: learning
@@ -72,6 +87,7 @@ roots:
     wave: none
     import_prefix: []
     concern: learning
+    capability: vision_ai
     note: D-449 policy artifact snapshots and transactional metadata ledger; no runtime authority.
   - path: learning/training/omx
     part: learning
@@ -79,6 +95,7 @@ roots:
     wave: none
     import_prefix: []
     concern: learning
+    capability: omx
     note: D-449 offline ACT study; no deployment or execution authority.
   - path: learning/training/world_model
     part: learning
@@ -86,6 +103,7 @@ roots:
     wave: none
     import_prefix: []
     concern: learning
+    capability: vision_ai
     note: D-782 M1 world-model training; no promotion, deployment or execution authority.
   - path: learning/evaluation/world_model
     part: learning
@@ -93,6 +111,7 @@ roots:
     wave: none
     import_prefix: []
     concern: learning
+    capability: vision_ai
     note: D-782 offline acceptance against hold and reach baselines; no promotion or admission.
   - path: contracts/learning
     part: contracts
@@ -100,6 +119,7 @@ roots:
     wave: none
     import_prefix: [rosy.contracts.learning]
     concern: contracts
+    capability: platform
     note: D-449 draft artifact schemas; stdlib only, no runtime authority.
   # --- contracts -----------------------------------------------------------
   - path: contracts/foundation
@@ -109,6 +129,7 @@ roots:
     wave: "4d"
     import_prefix: [core_common]
     concern: contracts
+    capability: platform
   - path: contracts/ros_idl
     part: contracts
     d427_target: contracts/ros_idl
@@ -116,6 +137,7 @@ roots:
     wave: "4d"
     import_prefix: [interfaces]
     concern: contracts
+    capability: platform
   - path: contracts/skill
     part: contracts
     d427_target: contracts/skill
@@ -127,6 +149,7 @@ roots:
       rosy.execution.local.receipts re-export the same objects. Not an api root
       (D-429 §4 rule 1 needs an .api prefix); contracts are importable by every part.
     concern: contracts
+    capability: platform
 
   - path: contracts/motion
     part: contracts
@@ -134,6 +157,7 @@ roots:
     wave: none
     import_prefix: [rosy.contracts.motion]
     concern: contracts
+    capability: platform
     note: >-
       D-442(a) ROS-free Motion Intent and DeviceControlPort shapes. The Pinky B
       writer binding consumes GuardedMotion carrying BaseTwist; full producer admission and the
@@ -147,12 +171,14 @@ roots:
     wave: "4d"
     import_prefix: [core]
     concern: control
+    capability: platform
   - path: middleware/drive/behaviors
     layout_target: middleware/drive/behaviors
     part: middleware
     d427_target: middleware/control/drive/behaviors
     wave: none
     concern: control
+    capability: platform
     import_prefix: [core_features.line_follow, core_features.docking, core_features.navigation, core_features.localization, core_features.swarm, core_features.road_behaviour, core_features.traffic_policy]
     source_packages:
       line_follow: core_features.line_follow
@@ -169,6 +195,7 @@ roots:
     d427_target: middleware/control/drive/runtime
     wave: none
     concern: control
+    capability: platform
     import_prefix: [control.control_node, control.goal_node, control.wander_node, control.safety_node]
     source_packages: {"": control}
     note: D-649 legacy ROS adapters installed by control; final legacy writer stays excluded.
@@ -184,6 +211,7 @@ roots:
       core_features/safety_gate: core_features.safety
       core_features/preview: core_features.vision
     concern: control
+    capability: platform
   - path: middleware/core/services/core_features/safety_gate
     layout_target: middleware/core/services/core_features/safety_gate
     part: middleware
@@ -193,6 +221,7 @@ roots:
     import_prefix: [core_features.safety]
     note: D-430 §1 CORE Safety Guard (SAF-001/003/004/005/006, D-400 shadow); moves with CORE.
     concern: safety
+    capability: platform
   - path: middleware/core/services/core_features/action_rules
     layout_target: middleware/core/services/core_features/action_rules
     part: middleware
@@ -204,6 +233,7 @@ roots:
       D-429 §1 "device local rules" (lane, router, contract), not deliberative decision.
       Tagged so D-430 invariant 2 has a robot-side importer to check.
     concern: decision
+    capability: platform
   - path: middleware/core/events
     part: middleware
     d427_target: middleware/core/events
@@ -211,6 +241,7 @@ roots:
     wave: "4d"
     import_prefix: [core_events]
     concern: control
+    capability: platform
   - path: middleware/core/api
     layout_target: middleware/core/api  # D-626 current layout; d427_target is the ownership ID
     part: middleware
@@ -220,6 +251,7 @@ roots:
     import_prefix: [core_api_web]
     note: Pinky Device API web layer and host-agent client.
     concern: control
+    capability: platform
   - path: middleware/drive/planning/nav2
     layout_target: middleware/drive/planning/nav2
     part: middleware
@@ -228,12 +260,14 @@ roots:
     wave: "4c"
     import_prefix: [navigation]
     concern: control
+    capability: platform
   - path: middleware/drive/planning/nav2/native_map
     layout_target: middleware/drive/planning/nav2/native_map
     part: middleware
     d427_target: middleware/drive/planning/nav2/native_map
     wave: "4c"
     concern: safety
+    capability: platform
     note: D-783 guarded native map producers, canonical identity, SDK/build and plugin boundary.
   - path: middleware/perception
     part: middleware
@@ -248,6 +282,7 @@ roots:
       D-630 sensing and vision source holders; control remains the ROS distribution/import identity.
       Node composition, recorder compatibility and map assets stay in this package.
     concern: control
+    capability: vision_ai
   - path: middleware/drive
     part: middleware
     d427_target: middleware/control/drive
@@ -263,6 +298,7 @@ roots:
       motion_limits/adapter: control.safety
       tracking/wander: control.wander
     concern: control
+    capability: platform
     note: D-630 Drive algorithms; installed by the existing control distribution.
   - path: middleware/drive/motion_limits
     layout_target: middleware/drive/motion_limits
@@ -274,6 +310,7 @@ roots:
       '': control.control
       adapter: control.safety
     concern: safety
+    capability: platform
     note: D-630 policy/clearance and existing sensor-only adapter; no new final writer.
   - path: middleware/drivers/imu_bno055
     part: middleware
@@ -281,18 +318,21 @@ roots:
     legacy: src/drivers/imu_bno055
     wave: "4c"
     concern: control
+    capability: pinky
   - path: middleware/drivers/pinky_adc
     part: middleware
     d427_target: middleware/drivers/pinky_adc
     legacy: src/products/pinky_pro/adc
     wave: "4c"
     concern: control
+    capability: pinky
   - path: middleware/drivers/pinky_lamp
     part: middleware
     d427_target: middleware/drivers/pinky_lamp
     legacy: src/products/pinky_pro/lamp
     wave: "4c"
     concern: control
+    capability: pinky
   - path: middleware/drivers/pinky_led
     part: middleware
     d427_target: middleware/drivers/pinky_led
@@ -300,6 +340,7 @@ roots:
     wave: "4c"
     import_prefix: [led]
     concern: control
+    capability: pinky
   - path: middleware/devices/pinky/bringup
     layout_target: middleware/devices/pinky/bringup
     part: middleware
@@ -308,6 +349,7 @@ roots:
     wave: "4c"
     import_prefix: [bringup, rosylib]
     concern: control
+    capability: pinky
   - path: middleware/devices/pinky/profile
     layout_target: middleware/devices/pinky/profile
     part: middleware
@@ -315,6 +357,14 @@ roots:
     legacy: src/products/pinky_pro/profile
     wave: "4c"
     concern: control
+    capability: pinky
+  - path: middleware/devices/rasptank/profile
+    layout_target: middleware/devices/rasptank/profile
+    part: middleware
+    d427_target: middleware/devices/rasptank/profile
+    wave: "none"
+    concern: control
+    capability: platform
   - path: middleware/devices/omx/adapter
     layout_target: middleware/devices/omx/adapter
     part: middleware
@@ -326,6 +376,7 @@ roots:
       demonstration.py remains device-owned capture; offline lerobot_export.py
       lives in learning/curation/omx and consumes contracts/learning validation.
     concern: control
+    capability: omx
   - path: middleware/devices/omx/profile
     layout_target: middleware/devices/omx/profile
     part: middleware
@@ -334,6 +385,7 @@ roots:
     wave: "4c"
     note: OMX composition config the adapter validates, not an installation pin (profiles/).
     concern: control
+    capability: omx
   - path: middleware/devices/pinky/description
     layout_target: middleware/devices/pinky/description
     part: middleware
@@ -342,6 +394,7 @@ roots:
     wave: "4c"
     note: Pinky URDF used by both the real robot and Gazebo; could also be integrations/robots/pinky.
     concern: control
+    capability: pinky
   - path: middleware/devices/omx/agent
     layout_target: middleware/devices/omx/agent
     part: middleware
@@ -351,6 +404,7 @@ roots:
     import_prefix: [rosy_agent]
     note: OMX cell local Action owner composition (device side of the D-401 cell).
     concern: control
+    capability: omx
   - path: middleware/skills/api
     part: middleware
     d427_target: middleware/skills/api
@@ -358,6 +412,7 @@ roots:
     wave: "4a"
     import_prefix: [rosy.skills.api]
     concern: control
+    capability: platform
     api: true
   - path: middleware/skills/manipulation
     part: middleware
@@ -366,6 +421,7 @@ roots:
     wave: "4a"
     import_prefix: [rosy.skills.manipulation]
     concern: control
+    capability: omx
   - path: operations/site_execution
     layout_target: operations/site_execution
     part: operations
@@ -376,6 +432,7 @@ roots:
       Package metadata only; the api and site source subtrees below are mapped on
       their own. Goes with api/site (3a); local became rosy-execution-local in 2c.
     concern: other
+    capability: fleet
   - path: middleware/robot_execution/local
     layout_target: middleware/robot_execution/local
     part: middleware
@@ -387,6 +444,7 @@ roots:
       Wheel rosy-execution-local (2c, Q4); the import name rosy.execution.local is
       unchanged. rosy-execution no longer packages it.
     concern: control
+    capability: platform
   - path: operations/site_execution/src/rosy/execution/api
     layout_target: operations/site_execution/src/rosy/execution/api
     part: operations
@@ -398,6 +456,7 @@ roots:
       PlanBundle API is internal to the execution module (D-413 §3), not contracts;
       placed with its site producer. Re-decide when execution splits in step B.
     concern: contracts
+    capability: fleet
   - path: operations/site_execution/src/rosy/execution/site
     layout_target: operations/site_execution/src/rosy/execution/site
     part: operations
@@ -407,6 +466,7 @@ roots:
     import_prefix: [rosy.execution.site]
     note: D-657 pure goal verification and full progress projection; helpers import independently, wire schemas load on projection calls; Fleet retains ledgers, producer authentication, claim/fence and device transport.
     concern: other
+    capability: fleet
   - path: middleware/robot_ui/robot
     layout_target: middleware/robot_ui/robot
     part: middleware
@@ -415,6 +475,7 @@ roots:
     wave: "4b"
     note: Robot dashboard screens served by core_api_web on the device.
     concern: other
+    capability: pinky
   - path: middleware/robot_ui/pilot
     layout_target: middleware/robot_ui/pilot
     part: middleware
@@ -422,6 +483,7 @@ roots:
     legacy: src/hmi/pilot
     wave: "4b"
     concern: other
+    capability: pinky
   - path: middleware/robot_ui/pilot/android
     layout_target: middleware/robot_ui/pilot/android
     part: middleware
@@ -430,6 +492,7 @@ roots:
     wave: "4b"
     note: D-432 native discovery shell reuses the CORE-served Pilot UI; no command authority.
     concern: other
+    capability: pinky
   - path: middleware/robot_ui/face
     layout_target: middleware/robot_ui/face
     part: middleware
@@ -438,6 +501,7 @@ roots:
     wave: "4b"
     import_prefix: [emotion]
     concern: other
+    capability: pinky
   # D-429 §2: site devices (signal, dock) are operations-owned, listed here so the
   # firmware entries stay together.
   - path: operations/site_devices/dock
@@ -449,6 +513,7 @@ roots:
       D-429 §2 site device owner: firmware and device contract only. The robot keeps
       polling the dock /status directly (core_features/docking stays middleware).
     concern: control
+    capability: fleet
   - path: operations/site_devices/dock/firmware
     part: operations
     d427_target: operations/site_devices/dock/firmware
@@ -456,6 +521,7 @@ roots:
     wave: "3b"
     note: D-430 §1 dock firmware owns the limit-switch interlock and 0 V boot (layer 2).
     concern: safety
+    capability: fleet
   - path: operations/site_devices/signal
     part: operations
     d427_target: operations/site_devices/signal
@@ -465,6 +531,7 @@ roots:
       D-429 §2 site device owner: firmware, device contract and the driver library Fleet
       imports. Fleet stays the only command path and the signal sequence owner (D-337 §2).
     concern: control
+    capability: fleet
   - path: operations/site_devices/signal/firmware
     part: operations
     d427_target: operations/site_devices/signal/firmware
@@ -472,6 +539,7 @@ roots:
     wave: "3b"
     note: D-430 §1 signal firmware owns the boot and supervision-loss failsafe (layer 2).
     concern: safety
+    capability: fleet
   - path: operations/signal_observation
     layout_target: operations/signal_observation
     part: operations
@@ -482,6 +550,7 @@ roots:
       D-163 read-only observation plane, carved out of the site device owner (D-429 §2).
       Target is D-429's example; the run host stays undecided (D-163).
     concern: other
+    capability: vision_ai
 
   # --- operations: Fleet, world, processes, vision, Console/Cam -------------
   - path: operations/fleet
@@ -496,16 +565,29 @@ roots:
       fleet/server/auth: fleet.server
       fleet/server/console: fleet.server
       fleet/server/ledger: fleet.server
-      fleet/server/site_observation: fleet.server
-      fleet/server/maps: fleet.server
       fleet/server/missions: fleet.server
       fleet/server/work: fleet.server
       fleet/server/trips: fleet.server
       fleet/server/trip_checks: fleet.server
       fleet/server/trip_progress: fleet.server
-      fleet/server/tracking: fleet.server
+      fleet/server/evidence: fleet.server
+      fleet/server/sitemap: fleet.server
       fleet/server/pose: fleet.server
+      fleet/server/recognition: fleet.server
+      fleet/server/rightofway: fleet.server
     concern: decision
+    capability: fleet
+  - path: operations/fleet/fleet/swarm/api
+    part: operations
+    d427_target: operations/fleet/fleet/swarm/api
+    wave: none
+    concern: contracts
+    capability: fleet
+    api: true
+    import_prefix: [fleet.swarm.api]
+    source_packages: {"": fleet.swarm.api}
+    note: D-875 owner-local declarations only; no planning, admission or I/O.
+
   - path: operations/fleet/fleet/observe
     part: operations
     d427_target: operations/fleet/fleet/observe
@@ -513,6 +595,7 @@ roots:
     import_prefix: [fleet.observe]
     source_packages: {"": fleet.observe}
     concern: other
+    capability: fleet
     note: D-699 credential-free CORE event/observation journals in the same Fleet distribution; server aliases and SQLite policy stay compatible.
   - path: operations/decision
     part: operations
@@ -523,8 +606,9 @@ roots:
     source_packages: {src/rosy/decision: rosy.decision}
     note: D-637 canonical Decision source; installed by Fleet. D-657 ledger-bound tool dispatch is fleet.server.model_feedback_dispatch, not Decision.
     concern: decision
-  - path: operations/site_ui/console
-    layout_target: operations/site_ui/console
+    capability: fleet
+  - path: applications/fleet/web
+    layout_target: applications/fleet/web
     part: operations
     d427_target: operations/ui/console
     legacy: src/site/fleet/fleet/server/web
@@ -533,13 +617,51 @@ roots:
     source_packages: {"": fleet.server.web}
     note: D-637 Console source; Fleet installs the existing fleet/server/web resources.
     concern: other
-  - path: operations/apps/fleet
+    capability: fleet
+  - path: applications/fleet/gateway
+    layout_target: applications/fleet/gateway
     part: operations
     d427_target: operations/apps/fleet
     legacy: apps/gateway
     wave: "3a"
     import_prefix: [rosy_gateway]
     concern: other
+    capability: fleet
+  - path: applications/fleet/dev
+    layout_target: applications/fleet/dev
+    part: tools
+    d427_target: applications/fleet/dev
+    wave: none
+    concern: other
+    capability: fleet
+    note: D-830 loopback frontend development host; never installed in Fleet or device payloads.
+  - path: applications/fleet/test
+    layout_target: applications/fleet/test
+    part: test
+    d427_target: applications/fleet/test
+    wave: none
+    concern: other
+    capability: fleet
+  - path: operations/site_ui/media
+    layout_target: operations/site_ui/media
+    part: operations
+    d427_target: operations/site_ui/media
+    wave: none
+    import_prefix: [rosy_media]
+    source_packages: {src/rosy_media: rosy_media}
+    note: D-789 standalone media authorization and supervision; never Fleet video relay or robot command authority.
+    concern: other
+    capability: platform
+  - path: middleware/media
+    layout_target: middleware/media
+    part: middleware
+    d427_target: middleware/media
+    wave: none
+    import_prefix: [rosy_media_edge]
+    source_packages: {src/rosy_media_edge: rosy_media_edge}
+    note: D-791 optional native media process, no camera ownership or robot command authority.
+    concern: other
+    capability: platform
   - path: operations/world
     part: operations
     d427_target: operations/world
@@ -547,6 +669,25 @@ roots:
     wave: "3a"
     import_prefix: [rosy.world]
     concern: other
+    capability: fleet
+  - path: operations/monitoring
+    layout_target: operations/monitoring
+    part: operations
+    d427_target: operations/monitoring
+    wave: none
+    import_prefix: [rosy.monitoring]
+    note: D-876 independent read-only collector, scoped API and POSIX launcher; UI source belongs to applications/monitoring. No Fleet/CORE command or host repair authority.
+    concern: other
+    capability: fleet
+  - path: applications/monitoring
+    layout_target: applications/monitoring
+    part: operations
+    d427_target: operations/ui/monitoring
+    wave: none
+    import_prefix: []
+    note: D-876 independent Monitoring application boundary and backend browser contracts; visual UI acceptance follows separately. Static artifacts consume canonical shared web assets.
+    concern: other
+    capability: fleet
   - path: operations/processes/palletizing
     part: operations
     d427_target: operations/processes/palletizing
@@ -554,6 +695,7 @@ roots:
     wave: "3a"
     import_prefix: [rosy.processes.palletizing]
     concern: other
+    capability: omx
   - path: operations/processes/cell
     part: operations
     d427_target: operations/processes/cell
@@ -561,12 +703,14 @@ roots:
     wave: "3b"
     import_prefix: [rosy_cell]
     concern: other
+    capability: omx
   - path: operations/prediction
     part: operations
     d427_target: operations/prediction
     wave: none
     import_prefix: []
     concern: other
+    capability: fleet
     note: D-782 pre-execution checker and shadow recorder; predictions support REJECT/HOLD only and are not wired to admission or an owner.
   - path: operations/situation
     part: operations
@@ -574,6 +718,7 @@ roots:
     wave: none
     import_prefix: [rosy_situation]
     concern: other
+    capability: fleet
     note: >-
       D-577 AI PC situation service; reads Fleet, posts facts and existing advisory proposals.
       D-652 pure necessity assessment is shared with Fleet through three static holder files;
@@ -586,6 +731,7 @@ roots:
     wave: "3b"
     import_prefix: [rosy_vision]
     concern: other
+    capability: vision_ai
   - path: operations/site_ui/cam
     layout_target: operations/site_ui/cam
     part: operations
@@ -593,6 +739,7 @@ roots:
     legacy: src/site/cam
     wave: "3b"
     concern: other
+    capability: vision_ai
   - path: operations/apps/games
     part: operations
     d427_target: operations/apps/games
@@ -601,6 +748,7 @@ roots:
     import_prefix: [games]
     note: Laptop game host (D-90) with an overhead camera; a site app, not a process.
     concern: other
+    capability: pinky
 
   # --- learning -------------------------------------------------------------
   - path: learning/training/perception
@@ -610,35 +758,41 @@ roots:
     wave: "1"
     note: D-637 trainer source only; data, registry, replay and CLI have explicit owners below.
     concern: learning
+    capability: vision_ai
   - path: learning/curation/perception
     part: learning
     d427_target: learning/curation/perception
     legacy: tools/perception/dataset
     wave: "1"
     concern: learning
+    capability: vision_ai
   - path: learning/registry/perception
     part: learning
     d427_target: learning/registry/perception
     legacy: tools/perception/model
     wave: "1"
     concern: learning
+    capability: vision_ai
   - path: learning/evaluation/perception
     part: learning
     d427_target: learning/evaluation/perception
     legacy: tools/perception/road_replay.py
     wave: "1"
     concern: learning
+    capability: vision_ai
   - path: learning/evaluation/decision
     part: learning
     d427_target: learning/evaluation/decision
     wave: none
     concern: learning
+    capability: vision_ai
     note: D-697 host-only independent operational evidence comparison; no runtime imports or admission.
   - path: tools/perception
     part: tools
     d427_target: tools/perception
     wave: none
     concern: other
+    capability: vision_ai
     note: D-637 CLI orchestration of curation, training, evaluation and registry.
   - path: tools/perception_prototype
     part: tools
@@ -647,6 +801,7 @@ roots:
     wave: "1"
     note: Camera-calibration and real-run prototypes, not part of the learning loop.
     concern: other
+    capability: vision_ai
   - path: learning/envs/isaac
     part: learning
     d427_target: learning/envs/isaac
@@ -655,6 +810,7 @@ roots:
     device_install_exception: "native payload builds every colcon root (Q8); remove with the payload scope change"
     note: Isaac assets and scripts (D-322 holds Isaac Lab training); could also be integrations/simulation/isaac.
     concern: learning
+    capability: omx
   - path: learning/curation/omx
     part: learning
     d427_target: learning/curation/omx
@@ -664,12 +820,14 @@ roots:
       Offline LeRobot export of OMX demonstrations (D-427 1c, Q6).
       OMX body validation belongs to contracts/learning; no middleware import.
     concern: learning
+    capability: omx
   - path: data
     part: learning
     d427_target: data
     wave: none
     note: Teleop recordings and the drive data drop folder; stays in place (D-427 plan Q3).
     concern: learning
+    capability: platform
 
   # --- integrations ---------------------------------------------------------
   - path: integrations/messaging/discord
@@ -681,6 +839,7 @@ roots:
     source_packages: {rosy_discord: rosy_discord}
     note: D-671 pure mention envelope and signature transport, installed by Fleet; no runtime service or device authority.
     concern: other
+    capability: fleet
   - path: integrations/robots/omx
     part: integrations
     integration: robots
@@ -688,6 +847,7 @@ roots:
     wave: none
     import_prefix: [rosy.integrations.robots.omx, lerobot_robot_rosy_omx]
     concern: control
+    capability: omx
   - path: integrations/simulation/gazebo
     part: integrations
     integration: simulation
@@ -696,6 +856,7 @@ roots:
     wave: "4c"
     note: Worlds, models, plugins and Gazebo params; launch/ and scripts/ are mapped on their own.
     concern: other
+    capability: platform
   - path: integrations/simulation/gazebo/launch
     part: middleware
     d427_target: middleware/apps/device/sim
@@ -704,6 +865,7 @@ roots:
     deferred: gz_sim split follow-up
     note: Launch files start the sim device owner on the same middleware pipeline (D-427 §5).
     concern: control
+    capability: platform
   # Same target as the tools/sim root below: when the gz_sim split lands, the
   # scripts move into tools/sim and this root is removed (not given a path).
   - path: integrations/simulation/gazebo/scripts
@@ -714,6 +876,7 @@ roots:
     deferred: gz_sim split follow-up
     note: Sim benches, acceptance harnesses and world/map converters (swarm_bench drives Fleet).
     concern: other
+    capability: platform
 
   # --- shared web -----------------------------------------------------------
   - path: shared/web
@@ -722,6 +885,7 @@ roots:
     legacy: src/hmi/web_common
     wave: "4b"
     concern: other
+    capability: platform
 
   # --- top-level non-part roots ----------------------------------------------
   - path: profiles
@@ -729,22 +893,26 @@ roots:
     d427_target: profiles
     wave: none
     concern: other
+    capability: platform
   - path: deploy
     part: deploy
     d427_target: deploy
     wave: none
     concern: other
+    capability: platform
   - path: tools
     part: tools
     d427_target: tools
     wave: none
     note: Loose scripts directly in tools/ only; every tools/<subfolder> needs its own root.
     concern: other
+    capability: platform
   - path: tools/packaging
     part: tools
     d427_target: tools/packaging
     wave: none
     concern: other
+    capability: platform
     note: D-652 build-time Fleet source composition and self-contained sdist support; excluded from runtime wheels and images.
   - path: tools/validation
     part: tools
@@ -752,101 +920,124 @@ roots:
     wave: none
     note: D-426 Fleet-Gazebo conformance runner (preflight, run planning); host-side only, never installed on a robot.
     concern: other
+    capability: platform
   - path: tools/calibration
     part: tools
     d427_target: tools/calibration
     wave: none
     note: Offline per-robot calibration fit and store CLI (never run on a robot).
     concern: other
+    capability: platform
   - path: tools/capture
     part: tools
     d427_target: tools/capture
     wave: none
     note: Supervised edge-capture drives over the CORE API (D-379 recording, advisory D-424 body check); operator PC only.
     concern: other
+    capability: platform
   - path: tools/device_test
     part: tools
     d427_target: tools/device_test
     wave: none
     note: D-512 agent-run device test (camera preflight, temporary CORE overlay with readback and restore, recording, status/events JSONL); operator PC only.
     concern: other
+    capability: platform
   - path: tools/device_twin
     part: tools
     d427_target: tools/device_twin
     wave: none
     note: D-412 device twin test tool; not shipped.
     concern: other
+    capability: platform
   - path: tools/harness
     part: tools
     d427_target: tools/harness
     wave: none
     concern: other
+    capability: platform
   - path: tools/hooks
     part: tools
     d427_target: tools/hooks
     wave: none
     concern: other
+    capability: platform
   - path: tools/icons
     part: tools
     d427_target: tools/icons
     wave: none
     concern: other
+    capability: platform
   - path: tools/remote
     part: tools
     d427_target: tools/remote
     wave: none
     note: remote_pytest.py runs pytest on the model/AI/site PC by headroom (D-568); not shipped.
     concern: other
+    capability: platform
   - path: tools/release
     part: tools
     d427_target: tools/release
     wave: none
     concern: other
+    capability: platform
   - path: tools/sim
     part: tools
     d427_target: tools/sim
     wave: none
     note: Sim benches and scenario scripts.
     concern: other
+    capability: platform
   - path: tools/ssh
     part: tools
     d427_target: tools/ssh
     wave: none
     note: D-418 operator SSH enrollment and team-key share CLIs (run on the operator PC); not shipped.
     concern: other
+    capability: platform
   - path: .github
     part: tools
     d427_target: .github
     wave: none
     note: CI workflows.
     concern: other
+    capability: platform
   - path: .claude
     part: tools
     d427_target: .claude
     wave: none
     note: Project agent skills and settings.
     concern: other
+    capability: platform
   - path: test
     part: test
     d427_target: test
     wave: none
     concern: other
+    capability: platform
   - path: test/flaky_quarantine.txt
     part: test
     d427_target: test/flaky_quarantine.txt
     wave: none
     concern: safety
+    capability: platform
     note: D-762 stage 1. A listed failure passes after one rerun, so adding an id needs a Safety-Review trailer.
   - path: docs
     part: docs
     d427_target: docs
     wave: none
     concern: other
+    capability: platform
 
 # D-430 §1: safety files inside mixed folders, tagged per file so no folder is
 # split. A mixed file is safety as a whole (§5 change control); `concern: safety`
 # roots above are the directory form.
 safety_modules:
+  - operations/fleet/fleet/swarm/session_lifecycle.py  # Actual lifecycle, stop, resume and epoch guards
+  - operations/fleet/fleet/swarm/session_arming.py  # Member checks and all-or-nothing arming
+  - operations/fleet/fleet/swarm/relay.py  # Reference delivery and readiness
+  - contracts/foundation/core_common/protocol/swarm_freshness.py  # D-870 source-time expiry bound
+  - middleware/drive/behaviors/swarm/manager.py  # Swarm follow ownership, HOLD and timeout
+  - middleware/drive/behaviors/swarm/reference_stream.py  # Swarm reference admission and trail sampling
   - operations/fleet/fleet/server/channel/execution/outcomes/handover.py
   - operations/fleet/fleet/server/channel/execution/outcomes/evidence.py
   - operations/fleet/fleet/swarm/dispatch_guard.py
@@ -904,8 +1095,8 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/charge_policy_admission.py
   - operations/fleet/fleet/server/ledger/charge_source.py
   - operations/fleet/fleet/server/ledger/charge_work_selection.py
-  - operations/fleet/fleet/server/site_observation/map_pose_scope.py
-  - operations/fleet/fleet/server/site_observation/map_state_read.py
+  - operations/fleet/fleet/server/pose/map_pose_scope.py
+  - operations/fleet/fleet/server/pose/map_state_read.py
   - operations/fleet/fleet/server/ledger/charge_world_pose.py
   - operations/fleet/fleet/server/ledger/charge_runtime.py
   - operations/fleet/fleet/server/ledger/charge_bootstrap.py
@@ -918,8 +1109,8 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/station_return_http.py
   - operations/fleet/fleet/server/ledger/charge_robot_http.py
   - operations/fleet/fleet/server/ledger/charge_goal_gate.py
-  - operations/fleet/fleet/server/site_observation/station_ingress.py
-  - operations/fleet/fleet/server/site_observation/station_ingress_routes.py
+  - operations/fleet/fleet/server/recognition/station_ingress.py
+  - operations/fleet/fleet/server/recognition/station_ingress_routes.py
   - operations/fleet/fleet/swarm/station_transport.py
   - operations/fleet/fleet/swarm/navigation_transport.py
   - operations/overhead/rosy_vision/station_worker.py
@@ -930,7 +1121,6 @@ safety_modules:
   - operations/overhead/rosy_vision/station_installation.py
   - operations/overhead/rosy_vision/station_vision.py
   - operations/overhead/rosy_vision/ingest.py
-  - operations/overhead/rosy_vision/ingest_preview.py
   - middleware/drive/behaviors/line_follow/body_stop.py
   - middleware/drive/behaviors/line_follow/clearance.py
   - middleware/drive/behaviors/line_follow/authority.py  # D-517/D-760 movement authority under the trip lease
@@ -940,6 +1130,7 @@ safety_modules:
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
   - middleware/devices/omx/adapter/omx_adapter/command_owner.py
+  - middleware/devices/omx/adapter/omx_adapter/contracts/command_types.py
   - middleware/devices/omx/adapter/omx_adapter/local_stop.py
   - middleware/devices/omx/adapter/omx_adapter/action_api.py
   - middleware/devices/omx/adapter/omx_adapter/owner_recovery_api.py
@@ -962,7 +1153,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
   - operations/fleet/fleet/server/console/console.py
-  - operations/fleet/fleet/server/ledger/goal_lease.py
+  - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
@@ -974,6 +1165,16 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: fleet.swarm.session_lifecycle.FormationLifecycle, public: true}
+  - {symbol: fleet.swarm.session_lifecycle.EVENT_TYPES, public: true}
+  - {symbol: fleet.swarm.session_lifecycle.TRIGGERS, public: true}
+  - {symbol: fleet.swarm.session_arming.require_capability, public: true}
+  - {symbol: fleet.swarm.session_arming.check_leader_ready, public: true}
+  - {symbol: fleet.swarm.session_arming.SessionArming}
+  - {symbol: fleet.swarm.relay.Relay, public: true}
+  - {symbol: core_common.protocol.swarm_freshness.remaining_reference_s, public: true}  # D-870 pure lifetime check
+  - {symbol: core_features.swarm.manager.SwarmManager, public: true}
+  - {symbol: core_features.swarm.reference_stream.SwarmReferenceStream}
   - {symbol: core_features.command._execution_fence.Fence}
   - {symbol: core_features.command._execution_fence.install}
   - {symbol: core_features.command._execution_ledger.Ledger}
@@ -1069,7 +1270,7 @@ safety_anchors:
   - {symbol: rosy_vision.station_vision.StationVisionServer}
   - {symbol: rosy_vision.ingest.IngestServer._send_demand}
   - {symbol: rosy_vision.ingest.IngestServer.stop_measurements}
-  - {symbol: rosy_vision.ingest_preview._preview_response}
+  - {symbol: rosy_vision.ingest.IngestServer._preview_response}
   - {symbol: rosy.execution.local.omx_policy.OwnerPolicySession}
   - {symbol: rosy.execution.local.core_arm_policy.CoreArmPolicyPort}
   - {symbol: rosy.execution.local.policy_lease.MAX_LEASE_DURATION_NS}
@@ -1104,6 +1305,7 @@ safety_anchors:
   - {symbol: core_common.robot_body.NOMINAL_BODY, public: true}
   - {symbol: core_common.robot_body.nominal_body_for, public: true}
   - {symbol: omx_adapter.command_owner.ArmCommandOwner}
+  - {symbol: omx_adapter.contracts.command_types.ArmCommandConfig}
   - {symbol: omx_adapter.local_stop.LocalStopController, public: true}
   - {symbol: omx_adapter.real.dynamixel_port.DynamixelPort}
   - {symbol: omx_adapter.real.dynamixel_bus.SdkBus}
@@ -1146,6 +1348,7 @@ safety_anchors:
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
+  - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
   - {symbol: fleet.server.tether_watch.TetherWatch, public: true}
   - {symbol: fleet.server.tether_watch.map_pose, public: true}

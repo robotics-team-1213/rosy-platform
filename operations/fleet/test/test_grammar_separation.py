@@ -12,7 +12,9 @@ CSS를 복제하는 것 — concept 16 §4가 결함으로 규정한 "Fleet이 �
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
+import pytest
+
+WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
 
 #: 콘솔의 공간 문법(concept 16 §7.1) — 고정 3분할 레일(sense/observe/act).
 #: 이 이름들은 콘솔 styles.css 가 소유한다. fleet 이 쓰는 순간 fleet 은
@@ -37,13 +39,16 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # D-540: fleet-header.css is the one header sheet of the four documents.
         # D-741 6: app-shell.css is the shared seat sheet; Fleet uses its sub-nav seat.
         # Motor health is the shared evidence component, not Robot console layout grammar.
-        "index.html": [*shared_sheets, "/common/motor-health.css", "/common/app-shell.css", "/console/assets/styles.css", "/console/assets/doc-tabs.css",
+        "index.html": [*shared_sheets, "/common/motor-health.css", "/common/app-shell.css", "/console/assets/styles.css",
+                       "/console/assets/roster.css",
+                       "/common/component-controls.css", "/console/assets/doc-tabs.css",
                        "/console/assets/assistant.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
                        "/console/assets/device-watch.css", "/console/assets/work.css"],
-        "install.html": [*shared_sheets, "/common/task-chooser.css",
+        "installation/install.html": [*shared_sheets, "/common/task-chooser.css",
                          "/console/assets/styles.css", "/console/assets/doc-tabs.css",
-                         "/console/assets/fleet-header.css", "/console/assets/password-login.css"],
+                         "/console/assets/fleet-header.css", "/console/assets/password-login.css",
+                         "/console/assets/measured-calibration.css"],
     }
     for page_name, expected_sheets in page_sheets.items():
         hrefs = re.findall(r'<link[^>]+href="([^"]+\.css)"',
@@ -55,3 +60,17 @@ def test_no_stylesheet_imports():
     """@import 로 다른 표면의 시트를 가져오면 문법 경계가 조용히 사라진다."""
     body = SHEET.read_text(encoding="utf-8")
     assert "@import" not in body
+
+
+def test_closed_sheet_list_still_rejects_another_surface(tmp_path, monkeypatch):
+    for name in ("index.html", "installation/install.html"):
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        text = (WEB / name).read_text(encoding="utf-8")
+        if name == "index.html":
+            text = text.replace("</head>", '<link rel="stylesheet" href="/dashboard/assets/styles.css"></head>')
+            assert '/dashboard/assets/styles.css' in text
+        target.write_text(text, encoding="utf-8")
+    monkeypatch.setitem(globals(), "WEB", tmp_path)
+    with pytest.raises(AssertionError):
+        test_fleet_links_only_its_own_sheet_and_the_single_tokens_file()

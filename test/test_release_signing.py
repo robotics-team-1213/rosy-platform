@@ -31,6 +31,22 @@ from signing import (  # via test/conftest.py
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("layout", ["cmd/git.exe", "mingw64/bin/git.exe"])
+@pytest.mark.parametrize("module_name", ["signing", "deploy.site.candidate_signing"])
+def test_git_openssl_candidates_follow_the_installation(monkeypatch, tmp_path, layout, module_name):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    root = tmp_path / "custom-git"
+    git = root / layout
+    monkeypatch.setattr(module.shutil, "which", lambda name: str(git))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "programs"))
+    candidates = module._git_for_windows_dirs()
+    assert str(root / r"usr\bin") in candidates
+    assert str(root / r"mingw64\bin") in candidates
+    assert str(tmp_path / "programs" / "Git" / r"usr\bin") in candidates
+
+
 def test_openssl_is_available():
     """The signature contract needs OpenSSL 3; its absence is a failure.
 
@@ -43,6 +59,17 @@ def test_openssl_is_available():
         "openssl is required by the release signing contract; "
         "install it rather than skipping these tests"
     )
+
+
+@pytest.mark.parametrize("module_name", ["signing", "deploy.site.candidate_signing"])
+def test_git_shim_at_drive_root_keeps_program_files_fallback(monkeypatch, tmp_path, module_name):
+    import importlib
+
+    module = importlib.import_module(module_name)
+    git = Path(Path.cwd().anchor) / "git.exe"
+    monkeypatch.setattr(module.shutil, "which", lambda name: str(git))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "programs"))
+    assert str(tmp_path / "programs" / "Git" / r"usr\bin") in module._git_for_windows_dirs()
 
 
 def _generate_key(directory: Path, name: str = "test") -> tuple[Path, Path]:
@@ -348,6 +375,12 @@ def test_only_public_release_key_pems_are_tracked_in_the_repository():
             content = (ROOT / path).read_text(encoding="utf-8")
             if "BEGIN PUBLIC KEY" in content and "PRIVATE KEY" not in content:
                 continue
+            if path.name == 'rosy-os-cms-2026-01.pem' and 'BEGIN CERTIFICATE' in content and 'PRIVATE KEY' not in content:
+                from secret_scan import scan_text
+                if not scan_text(path.as_posix(), content):
+                    subprocess.run(['openssl', 'x509', '-in', str(ROOT / path), '-noout'],
+                                   capture_output=True, check=True, timeout=10)
+                    continue
         suspicious.append(name)
     assert not suspicious, f"key-shaped files are tracked: {suspicious}"
 
@@ -389,7 +422,7 @@ def test_every_signing_rejection_code_is_asserted_somewhere():
     """
     import re as _re
 
-    source = (ROOT / "deploy" / "robot" / "pinky_pro" / "release" / "signing.py").read_text(encoding="utf-8")
+    source = (ROOT / "deploy" / "hosts" / "common" / "release" / "signing.py").read_text(encoding="utf-8")
     emitted = set(_re.findall(r'Rejection\(\s*\n?\s*"([A-Z0-9_]+)"', source))
     assert emitted, "no rejection codes found; the pattern needs updating"
 

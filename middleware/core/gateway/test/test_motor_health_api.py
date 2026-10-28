@@ -2,23 +2,17 @@
 import importlib.util
 import json
 from pathlib import Path
-from types import SimpleNamespace
+import time
 from uuid import uuid4
 
 import pytest
 
 
 def source(tmp_path, monkeypatch):
-    from core_common import motor_health
-
-    # API setup time is not telemetry age; patch only the producer/reader clocks.
-    clock = SimpleNamespace(time=lambda: 1_700_000_000.)
-    monkeypatch.setattr(motor_health, 'time', clock)
     root = Path(__file__).resolve().parents[4]
     spec = importlib.util.spec_from_file_location('health_source', root / 'deploy/robot/omx/motor_health.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    monkeypatch.setattr(module, 'time', clock)
     spec = importlib.util.spec_from_file_location('health_fakes', root / 'test/test_omx_motor_health.py')
     fakes = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(fakes)
@@ -63,7 +57,7 @@ def test_reader_rejects_wrong_binding_and_untrusted_file(tmp_path, monkeypatch, 
     elif invalid == 'session':
         monkeypatch.setenv('ROSY_MOTOR_HEALTH_SESSION', str(uuid4()))
     elif invalid == 'future':
-        row['observed_at'] += 20
+        row['observed_at'] = time.time() + 20
     elif invalid == 'malformed':
         row['session_id'] = 'not-a-uuid'
     elif invalid == 'oversize':

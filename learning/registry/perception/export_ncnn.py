@@ -114,8 +114,8 @@ def publish(model_folder, doc, report, probe_result, out):
 def convert_ncnn(args, hw, out):
     from ultralytics import YOLO
     from convert import parity, probe_inputs, torch_runner
-    root = Path(os.environ.get("ROSY_MODEL_SCRATCH", "X:/DevTemp/rosy-model-export" if os.name == "nt"
-                               else tempfile.gettempdir()))
+    root = Path(os.environ.get("ROSY_MODEL_SCRATCH")
+                or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-model-export")
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ncnn-", dir=root) as scratch:
         staging = Path(scratch)

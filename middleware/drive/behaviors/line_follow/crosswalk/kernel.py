@@ -32,7 +32,10 @@ from core_features.line_follow.crosswalk.zone import (CORRIDOR_HALF_M, EVIDENCE_
 NONE, ARMED, APPROACHING, LOOKING, WAITING, CROSSING = (
     "none", "armed", "approaching", "looking", "waiting", "crossing")
 HOLD_POSE_M = .01  #: a held corridor stands only this close to its image pose (inside the 3 sigma edge band)
+CLIP_SLICE_M = .05  #: D-573 rev 8: along-road slice of a map-wall clip (extra floor <= tan(skew) x this)
 #: D-573 4 detail reasons of the stuck cause ``crosswalk_blocked``.
+#: D-573 rev 7: a later sighting this much better aligned with the robot's heading re-anchors the zone
+REANCHOR_RAD = math.radians(3.0)
 PERSON, UNKNOWN, STALE, LOST = "person_present", "look_unknown", "sensor_stale", "zone_lost"
 
 
@@ -132,7 +135,7 @@ def _edge_sides(boxes):
     return out
 
 
-def judge_cells(scan: Scan, boxes, origin, heading, *, blind_proven: bool = False, band: float = 0.0):
+def judge_cells(scan: Scan, boxes, origin, heading, *, blind_proven: bool = False, band: float = 0.0, hits=None):
     """(verdict, edge cells). A return deeper than ``band`` inside A is a person at once; one within
     ``band`` of A's outer edge only names its cell (size ``band``) for the caller's persistence count
     (D-573 rev 2). origin/heading: the LiDAR origin and base heading in the anchor frame.
@@ -163,6 +166,8 @@ def judge_cells(scan: Scan, boxes, origin, heading, *, blind_proven: bool = Fals
             continue
         if band <= 0.0:
             occupied = True
+            if hits is not None and not hits:   # diagnostics: the first return that held
+                hits.append((origin[0] + dx * distance, origin[1] + dy * distance))
             continue
         px, py = origin[0] + dx * distance, origin[1] + dy * distance
         depth = 0.0
@@ -172,6 +177,8 @@ def judge_cells(scan: Scan, boxes, origin, heading, *, blind_proven: bool = Fals
                 depth = max(depth, min([v for v, e in zip(d, edge) if e] or [math.inf]))
         if depth > band:
             occupied = True
+            if hits is not None and not hits:
+                hits.append((px, py))
         else:
             cells.add((math.floor(px / band), math.floor(py / band)))
     return (PERSON if occupied else UNKNOWN if unknown or not all(crossed) else None), cells
@@ -188,6 +195,8 @@ class CrosswalkGate:
 
     def reset(self) -> None:
         self._zone: Optional[Zone] = None
+        self._first_yaw: Optional[float] = None
+        self._walls = None
         self._id: Optional[str] = None
         self._state = NONE
         self._reason: Optional[str] = None      # why the last judged scan was not empty
@@ -246,8 +255,11 @@ class CrosswalkGate:
              geo: Optional[Geometry], cruise: float, look_s: float, min_scans: int,
              report_s: float, stale_s: float, odom_error_fraction: float = 0.0,
              range_sigma_m: float = 0.0, persist_k: int = 1, persist_n: int = 1,
-             corridor=None) -> tuple[Optional[float], Optional[str]]:
-        """corridor: the freshest lane edges (image pose, left, right, uncertainty_m) or None."""
+             corridor=None, walls=None) -> tuple[Optional[float], Optional[str]]:
+        """corridor: the freshest lane edges (image pose, left, right, uncertainty_m) or None. walls (rev 8):
+        (lane yaw, left, right, ahead) clip lines across the lane from the body now (None: no wall that side) and
+        how far along the lane from the body they hold."""
+        self._walls = walls
         self._look_s = look_s
         self._persist = (3.0 * range_sigma_m, persist_k, persist_n)
         if self._reason == LOST:
@@ -266,7 +278,7 @@ class CrosswalkGate:
             return self._block(now, STALE, report_s)
         speed = min(geo.v_cross, cruise)
         if self._state in (ARMED, APPROACHING):
-            self._merge(zones, geo.lane_half_m)
+            self._merge(zones, geo.lane_half_m, None if pose is None else pose.yaw, odom_error_fraction)
         # Odom drift since the image pose widens every edge (D-491 margin rule).
         drift = odom_error_fraction * math.hypot(pose.x - self._zone.x, pose.y - self._zone.y)
         z = replace(self._zone, margin=self._zone.margin + drift, lateral=self._zone.lateral + drift)
@@ -302,7 +314,7 @@ class CrosswalkGate:
             right = offset + cright - pad if z.right is None else max(z.right - own, offset + cright - pad)
             z = replace(z, left=left, right=right, lateral=0.0)
         if self._state in (ARMED, APPROACHING):
-            if not self._on_course(z, pose, geo, self._zone.yaw):
+            if not self._on_course(z, pose, geo, self._first_yaw if self._first_yaw is not None else self._zone.yaw):
                 self.reset()      # turned away (review M2): the next tick arms the zone ahead, if any
                 return None, None
             gap = z.near - z.margin - self._local(z, pose, geo.front_x)[0]
@@ -352,6 +364,7 @@ class CrosswalkGate:
         self._count += 1
         self._zone = min(ahead, key=lambda z: z.near - z.margin - self._local(z, pose, geo.front_x)[0])
         self._id, self._state = f"camera-{self._count}", ARMED
+        self._first_yaw = self._zone.yaw   # rev 7: 'turned away' stays judged on the first sighting (rev 5 3)
         return True
 
     def _on_course(self, z: Zone, pose, geo: Geometry, yaw=None) -> bool:
@@ -374,9 +387,12 @@ class CrosswalkGate:
         heading = math.atan2(math.sin(pose.yaw - z.yaw), math.cos(pose.yaw - z.yaw))
         front = self._local(z, pose, geo.front_x)[0]
         band, k, n = self._persist
-        verdict, cells = judge_cells(scan, self._boxes(z, geo, front, self._local(z, pose, 0.0)[1], heading),
-                                     self._local(z, pose, geo.lidar_x),
-                                     heading, blind_proven=self._state == CROSSING, band=band)
+        boxes, hits = self._clip(self._boxes(z, geo, front, self._local(z, pose, 0.0)[1], heading), z, geo, pose), []
+        verdict, cells = judge_cells(scan, boxes, self._local(z, pose, geo.lidar_x),
+                                     heading, blind_proven=self._state == CROSSING, band=band, hits=hits)
+        # diagnostics (the gate glue logs them when the reason changes): A and the return that held, anchor frame
+        self.last_look = tuple(round(f(b[i] for b in boxes), 3) for i, f in enumerate((min, max, min, max)))
+        self.last_hit = tuple(round(v, 3) for v in hits[0]) if hits else None
         # D-573 rev 2: a return within 3 sigma of A's edge is a person once the same cell is hit in
         # >= k of the last n scans; range noise from a surface just outside A scatters over cells.
         self._edge_hist = (self._edge_hist + [cells])[-n:]
@@ -384,28 +400,84 @@ class CrosswalkGate:
             return PERSON
         return verdict
 
-    def _merge(self, zones, lateral_m: float) -> None:
+    def _clip(self, boxes, z: Zone, geo: Geometry, pose):
+        """D-573 rev 8: A ends at Fleet's map wall clip lines beside the lane (gate: inside each wall face by
+        the band), never inside the body's own lane-parallel path (half width + margin), and only as far
+        along as those walls run: past that a box is judged unclipped. The lines run along the lane, turned off
+        the zone axis: each box is cut into CLIP_SLICE_M slices, each clipped at the line's outermost over it
+        (v2 lap r48a stood 5 deg off the lane; one sweep over all of A gave the 2 cm clip back)."""
+        if self._walls is None:
+            return boxes
+        lane_yaw, left, right, cover = self._walls
+        skew = _angle(lane_yaw - z.yaw)
+        along, side = self._local(z, pose, 0.0)
+        end = along + cover * math.cos(skew)
+        if math.cos(skew) < .5 or end <= along:
+            return boxes     # the lane far off the zone axis (MAX_TURN_RAD is well inside), or no wall left ahead
+        slope, out = math.tan(skew), []
+        # an offset across the lane is offset / cos(skew) across the zone axis (farther out, never nearer)
+        left, right = (None if v is None else v / math.cos(skew) for v in (left, right))
+        # The body crosses along the lane (it keeps the lane): its own path is the lane-parallel band of body half
+        # width + margin through it, turned like the clip lines; the crossing boxes carry their heading sweep
+        # themselves. A heading sweep over all of A here put the floor on the wall (v2 lap r50a, -0.11 m).
+        for x0, x1, y0, y1 in boxes:
+            cut = x0
+            while cut < min(x1, end) - 1e-9:
+                nxt = min(cut + CLIP_SLICE_M, x1, end)
+                ends = [slope * (x - along) for x in (cut, nxt)]
+                hi = y1 if left is None else min(y1, side + max(left, geo.body_half_m) + max(ends))
+                lo = y0 if right is None else max(y0, side + min(right, -geo.body_half_m) + min(ends))
+                out.append((cut, nxt, lo, hi))
+                cut = nxt
+            if x1 > end:
+                out.append((max(x0, end), x1, y0, y1))
+        return tuple(out)
+
+    @staticmethod
+    def _ends_in(z, other):
+        """other's near/far ends ((along, across), (along, across)) in z's anchor frame."""
+        cz, sz, c, s = math.cos(z.yaw), math.sin(z.yaw), math.cos(other.yaw), math.sin(other.yaw)
+        ends = []
+        for d in (other.near, other.far):
+            px, py = other.x + c * d - z.x, other.y + s * d - z.y
+            ends.append((cz * px + sz * py, -sz * px + cz * py))
+        return ends
+
+    def _merge(self, zones, lateral_m: float, heading: float | None = None, drift_fraction: float = 0.0) -> None:
         """D-573 1: sightings of the same crosswalk widen the armed one (near: nearer, far: farther),
-        only before the stop; once looking, A is frozen."""
-        z = self._zone
-        cz, sz = math.cos(z.yaw), math.sin(z.yaw)
+        only before the stop; once looking, A is frozen. Rev 7: a later sighting better aligned with the
+        robot's heading (by REANCHOR_RAD) becomes the anchor, the older one merged into it: a zone first
+        seen mid-turn kept that skew and a slope pad of +-0.2 m put the wall in A (v2 lap r43, east)."""
         for other in zones:
+            z = self._zone
             if other.key != z.key or other == z:
                 continue
-            c, s = math.cos(other.yaw), math.sin(other.yaw)
-            ends = []
-            for d in (other.near, other.far):
-                px, py = other.x + c * d - z.x, other.y + s * d - z.y
-                ends.append((cz * px + sz * py, -sz * px + cz * py))
-            (n, ny), (f, fy) = ends
+            (n, ny), (f, fy) = self._ends_in(z, other)
             overlap = n <= z.far + z.margin + other.margin and f >= z.near - z.margin - other.margin
-            if overlap and max(abs(ny), abs(fy)) <= lateral_m + z.lateral + other.lateral:
-                shift = (ny + fy) / 2   # the other sighting's lateral offset in this anchor frame
-                self._zone = z = replace(
-                    z, near=min(z.near, n), far=max(z.far, f), margin=max(z.margin, other.margin),
-                    left=None if None in (z.left, other.left) else max(z.left, other.left + shift),
-                    right=None if None in (z.right, other.right) else min(z.right, other.right + shift),
-                    lateral=max(z.lateral, other.lateral))
+            if not (overlap and max(abs(ny), abs(fy)) <= lateral_m + z.lateral + other.lateral):
+                continue
+            if heading is not None and (abs(_angle(other.yaw - heading)) + REANCHOR_RAD
+                                        < abs(_angle(z.yaw - heading))):
+                (zn, zny), (zf, zfy) = self._ends_in(other, z)
+                shift = (zny + zfy) / 2   # the old anchor's lateral offset in the new frame
+                # review: drift since the old anchor is carried, and without seen edges the old axis stays inside A
+                carry = drift_fraction * math.hypot(other.x - z.x, other.y - z.y)
+                unseen = None in (z.left, other.left) or None in (z.right, other.right)
+                # the old body line's offset (anchor point, not its skewed ends: that skew is what is dropped)
+                across = -math.sin(other.yaw) * (z.x - other.x) + math.cos(other.yaw) * (z.y - other.y)
+                self._zone = replace(
+                    other, near=min(other.near, zn), far=max(other.far, zf),
+                    margin=max(z.margin, other.margin) + carry,
+                    left=None if None in (z.left, other.left) else max(other.left, z.left + shift),
+                    right=None if None in (z.right, other.right) else min(other.right, z.right + shift),
+                    lateral=max(z.lateral, other.lateral) + carry + (abs(across) if unseen else 0.0))
+                continue
+            shift = (ny + fy) / 2   # the other sighting's lateral offset in this anchor frame
+            self._zone = replace(
+                z, near=min(z.near, n), far=max(z.far, f), margin=max(z.margin, other.margin),
+                left=None if None in (z.left, other.left) else max(z.left, other.left + shift),
+                right=None if None in (z.right, other.right) else min(z.right, other.right + shift),
+                lateral=max(z.lateral, other.lateral))
 
     def _restart(self) -> None:
         self._window, self._scans, self._span = None, 0, 0.0

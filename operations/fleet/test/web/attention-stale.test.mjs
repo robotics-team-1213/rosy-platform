@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { STALE_STATE_S, staleAgeS } from "../../../site_ui/console/state-age.js";
+import { STALE_STATE_S, staleAgeS } from "../../../../applications/fleet/web/state-age.js";
 
 const T0 = 1_000_000;
 const row = (extra) => ({ robot_id: "a", online: true, state_age_s: 0.4, ...extra });
@@ -28,10 +28,10 @@ test("offline, missing field and never-received views are not judged", () => {
 // The real attentionItems, with the browser's "/common/..." imports mapped to shared/web.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
-const { createRoster } = await import("../../../site_ui/console/roster.js");
+const { createRoster } = await import("../../../../applications/fleet/web/roster.js");
 
 const view = { robots: [], formation: null, stateUnavailable: false, receivedAtMs: null };
-const { attentionItems } = createRoster({ view, streamEvidence: () => null });
+const { attentionItems } = createRoster({ scope: {onDispose() {}, interval() {}}, view, streamEvidence: () => null });
 const STUCK = { stuck_id: "stuck-abc" };
 const full = (extra) => ({ robot_id: "a", online: true, state: { safety: { estop: false } },
   line_stuck: STUCK, state_age_s: 0.4, ...extra });

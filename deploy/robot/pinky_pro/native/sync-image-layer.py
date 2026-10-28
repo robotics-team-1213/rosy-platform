@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as _dt
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -48,6 +47,9 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from image_layer_files import _install, _mode, _sha256, _write_json
+import image_layer_boot as boot
+
 
 RELEASE_ID = re.compile(r"^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$")
 RELEASE_NATIVE = "deploy/robot/native"
@@ -57,11 +59,12 @@ UNIT_DIR = "etc/systemd/system"
 UDEV_DIR = "etc/udev/rules.d"
 MODPROBE_DIR = "etc/modprobe.d"
 ALLOWED_PREFIXES = (NATIVE_RUNTIME + "/", UNIT_DIR + "/", UDEV_DIR + "/", MODPROBE_DIR + "/")
-# Never written, whatever the allowlist says (config.txt, kernel and modules,
-# the CORE Python runtime, device configuration, accounts and sudo).
+# OS boot/configuration and account state never belong to application sync.
 FORBIDDEN_PREFIXES = (
-    "boot/", "etc/rosy/", "usr/local/", "lib/modules/", "usr/lib/modules/",
-    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow",
+    "boot/", "etc/rosy/", "opt/rosy/os-bootstrap/", "usr/local/", "lib/modules/", "usr/lib/modules/",
+    "etc/sudoers", "etc/passwd", "etc/shadow", "etc/group", "etc/gshadow", "etc/systemd/system/rosy-os-rauc", "etc/systemd/system/rosy-os-motion-guard", "etc/systemd/system/rosy-os-trial-deadline", "etc/systemd/system/rosy-os-update", "etc/systemd/system/sysinit.target.d/", "etc/systemd/system.conf.d/", "etc/systemd/system/apt-daily", "etc/systemd/system/unattended-upgrades",
+    *(f"etc/systemd/system/{unit}.service.d/" for unit in (
+        "rosy-first-boot", "rosy-release-recover", "rosy-os-storage", "rosy-sd-provision", "rosy-os-tailnet", "rosy-core", "rosy-io", "rosy-navigation")),
 )
 BACKUP_ROOT = "var/lib/rosy/image-layer-backup"
 BACKUP_MANIFEST = "backup-manifest.json"
@@ -80,18 +83,15 @@ STATE_DIRECTORIES = {
 }
 STATE_CONFIG = BACKUP_ROOT + "/state-directories.conf"
 
-# The units build-native-payload.sh copies from deploy/robot/pinky_pro/native
-# into the image's /etc/systemd/system. The first-boot units come from
-# image/first-boot, which no release carries, so they stay image-only.
+# Native units plus the signed boot catalog share the fresh-image inventory.
 UNITS = (
-    "rosy-release-recover.service",
-    "rosy-sd-provision.service",
-    "rosy-core.service",
+    "rosy-release-recover.service", "rosy-os-storage.service", "rosy-os-tailnet.service",
+    "rosy-sd-provision.service", "rosy-core.service",
     "rosy-host-agent.service",
     "rosy-runtime.target",
     "rosy-io.service",
     "rosy-camera.service",
-    "rosy-camera-healthy.service", "rosy-camera-healthy.timer",
+    "rosy-camera-healthy.service", "rosy-camera-healthy.timer", "rosy-media.service",  # D-789
     "rosy-navigation.service",
     "rosy-boot-status.service", "rosy-boot-status.timer",
     "rosy-boot-status-ready.service",
@@ -116,11 +116,12 @@ UNITS = (
     "rosy-ssh-password-expire.timer",
     # D-477: one-shot tailnet join; condition-gated on the provisioned key file.
     "rosy-tailscale-join.service",
+    *boot.FEATURE_UNITS,
 )
 # Of those, the ones customize-rootfs.sh enables. A unit the sync adds is
 # enabled only if it is here, as a fresh image would have it.
 ENABLED_UNITS = frozenset({
-    "rosy-host-agent.service",
+    "rosy-host-agent.service", "rosy-os-storage.service", "rosy-os-tailnet.service",
     "rosy-release-recover.service",
     "rosy-runtime.target",
     "rosy-boot-status.service",
@@ -137,6 +138,7 @@ ENABLED_UNITS = frozenset({
     "rosy-ssh-access.path",
     "rosy-ssh-access-boot.service",
     "rosy-tailscale-join.service",
+    *boot.FEATURE_UNITS,
 })
 
 # D-433: a unit a newer one replaced. Its file is only ever REPLACED where an
@@ -156,7 +158,7 @@ RETIRED_UNITS = frozenset({"rosy-boot-display.service"})
 # restarting network/config can drop the SSH session that runs the push.
 # Their new definition takes effect at the next boot.
 NEXT_BOOT_ONLY = frozenset({
-    "rosy-release-recover.service",
+    "rosy-release-recover.service", "rosy-os-storage.service", "rosy-os-tailnet.service",
     "rosy-sd-provision.service",
     "rosy-network.service",
     "rosy-config.service",
@@ -183,20 +185,10 @@ def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(argv, capture_output=True, text=True, timeout=120, check=False)
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def _mode(path: Path) -> int:
-    return path.stat().st_mode & 0o7777
-
-
 def check_destination(relative: str) -> None:
-    """Refuse any destination outside the four allowlisted image directories."""
+    """Allow native image directories and the exact signed boot-support filenames."""
+    if relative in {boot.BOOT_DIRECTORY + "/" + name for name in boot.BOOT_FILES}:
+        return
     parts = relative.split("/")
     if (
         relative.startswith("/")
@@ -266,6 +258,7 @@ def allowlist(native: Path) -> tuple[list[dict], list[dict]]:
             if source.is_symlink() or not source.is_file():
                 raise SyncError(f"IMAGE_LAYER_SOURCE: {source} is not a regular file")
             entries.append(_entry(source, f"{destination}/{source.name}", kind, 0o644))
+    entries.extend(boot.catalog_entries(native))
     return entries, skipped
 
 
@@ -346,36 +339,6 @@ def _release_lock(root: Path):
         finally:
             if os.name == "posix":
                 fcntl.flock(handle, fcntl.LOCK_UN)
-
-
-def _install(source: Path, destination: Path, mode: int) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.rosy-sync.tmp")
-    temporary.unlink(missing_ok=True)
-    with source.open("rb") as reader, temporary.open("wb") as writer:
-        shutil.copyfileobj(reader, writer)
-        writer.flush()
-        os.fsync(writer.fileno())
-    os.chmod(temporary, mode)
-    if hasattr(os, "geteuid") and os.geteuid() == 0:
-        os.chown(temporary, 0, 0)
-    os.replace(temporary, destination)
-
-
-def _write_json(path: Path, payload: dict) -> None:
-    """Write, fsync, rename, and fsync the folder: it survives a power loss."""
-    temporary = path.with_name(f".{path.name}.tmp")
-    with temporary.open("w", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(temporary, path)
-    if os.name == "posix":
-        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
 
 
 def _owe(root: Path, steps: dict) -> None:
@@ -693,7 +656,7 @@ def _post_commands(steps: dict) -> list[list[str]]:
         if unit not in ENABLED_UNITS:
             continue
         # A new .path or .timer would otherwise sit idle until the next boot.
-        if unit.endswith((".path", ".timer")):
+        if unit.endswith((".path", ".timer")) or unit in boot.FEATURE_UNITS:
             commands.append(["systemctl", "enable", "--now", unit])
         else:
             commands.append(["systemctl", "enable", unit])
@@ -782,7 +745,7 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
           pending: dict | None = None,
           state_rules: list[str] | None = None,
           now: Callable[[], _dt.datetime] | None = None) -> dict:
-    """Back up, clean up, install, reload. Undo every change if one fails.
+    """Back up, clean up, install, reload; the boot coordinator owns its inverse.
 
     The reload/enable commands run after the files are in place. Until all of
     them succeed, pending.json names them and the units they affect, so the
@@ -824,6 +787,8 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
         backup_dir = "/" + backup.relative_to(root).as_posix()
         records = []
         for item in work + cleanup:
+            if item["kind"] == "boot":
+                continue  # The boot inverse owns these; legacy sync cannot parse their paths.
             destination = root / item["destination"]
             record = {
                 "path": "/" + item["destination"],
@@ -864,6 +829,8 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
                 done.append(item)
         except BaseException:
             for item in reversed(done):
+                if item["kind"] == "boot":
+                    continue  # The durable boot coordinator settles these before downgrade.
                 destination = root / item["destination"]
                 if item["state"] == "new":
                     destination.unlink(missing_ok=True)
@@ -931,10 +898,16 @@ def sync(
     root = Path(root)
     with _release_lock(root):
         release_id, release = resolve_current(root, is_link=is_link, readlink=readlink)
-        verify(release_id)
+        boot.verify_maintenance(root, release_id, verify)
         native = release / RELEASE_NATIVE
         if not native.is_dir():
             raise SyncError(f"IMAGE_LAYER_SOURCE: release {release_id} has no {RELEASE_NATIVE}")
+        try:
+            if not dry_run:
+                boot.inverse(root, release_id, verify, runner, install=_install)
+            boot.prepare(root, native, release_id, verify, dry_run=dry_run)
+        except ValueError as exc:
+            raise SyncError(str(exc)) from exc
         state_rules = state_directory_rules(root, native)
         pending, pending_report = _load_pending(root, dry_run=dry_run)
         reconciled, owed, legacy_ignored = reconcile(root, dry_run=dry_run)
@@ -989,6 +962,11 @@ def sync(
         return result
 
 
+def inverse_boot_layer(root: Path, target: str, *, verify, runner: Runner = _run, dry_run: bool = False) -> dict:
+    with _release_lock(root):
+        return boot.inverse_maintenance(root, target, verify, runner, install=_install, dry_run=dry_run)
+
+
 def _verifier(root: Path, public_key: Path) -> Callable[[str], object]:
     from native_release import NativeReleaseManager
 
@@ -1007,12 +985,25 @@ def main(
     parser.add_argument("--root", type=Path, default=Path("/"))
     parser.add_argument("--public-key", type=Path, default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--inverse-before-legacy-sync", action="store_true")
+    parser.add_argument("--rollback-target-previous", action="store_true")
     args = parser.parse_args(argv)
+    if args.rollback_target_previous and not args.inverse_before_legacy_sync:
+        parser.error("--rollback-target-previous requires --inverse-before-legacy-sync")
     public_key = args.public_key or args.root / DEFAULT_PUBLIC_KEY
     try:
-        result = sync(args.root, dry_run=args.dry_run,
-                      verify=_verifier(args.root, public_key), runner=runner,
-                      is_link=is_link, readlink=readlink)
+        verify = _verifier(args.root, public_key)
+        if args.inverse_before_legacy_sync:
+            target, _ = resolve_current(args.root, is_link=is_link, readlink=readlink)
+            if args.rollback_target_previous:
+                target = boot._previous(args.root)
+                if target is None:
+                    raise SyncError("BOOT_INVERSE: previous release is not a validated release link")
+                verify(target)
+            result = inverse_boot_layer(args.root, target, verify=verify, runner=runner, dry_run=args.dry_run)
+        else:
+            result = sync(args.root, dry_run=args.dry_run, verify=verify, runner=runner,
+                          is_link=is_link, readlink=readlink)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
         result = {"ok": False, "error": str(exc)}
     print(json.dumps(result, sort_keys=True))

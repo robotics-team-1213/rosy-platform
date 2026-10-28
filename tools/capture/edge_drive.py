@@ -43,12 +43,14 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tools"))
+from data_paths import data_root  # noqa: E402
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))
 
 from core_common.robot_body import PINKY_PRO  # noqa: E402
 
 TOKEN_ENV = "ROSY_CORE_OPERATOR_TOKEN_FILE"
-STORE = REPO / "data" / "calibration"
+STORE = data_root(REPO) / "calibration"
 LIMITS = (0.08, 0.6, 4.0)           # |linear| m/s, |angular| rad/s, seconds
 STOP_REASONS = ("obstacle", "departure", "stale", "driver_released", "limit", "angular_limit", "wall", "lost")
 SOI, EOI = b"\xff\xd8", b"\xff\xd9"

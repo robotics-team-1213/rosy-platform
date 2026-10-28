@@ -22,12 +22,10 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
 
 ## Steps
 
-1. **Commit and push.** The runner builds the pushed commit on origin. It must be a clean
-   tree on `main`. Local uncommitted files from other sessions do not matter; only the
-   pushed commit does.
-   ```bash
-   git push origin main
-   ```
+1. **Get the commit onto origin/main.** The runner builds origin's `main`. Since D-868 it
+   moves only through the publish PR (`AGENTS.md` 「같이 하는 깃」 6), never `git push origin main`;
+   the shared clone's pre-push refuses that (`rosy.publishOnly`). Local uncommitted files from
+   other sessions do not matter; only the merged commit does.
 2. **Pick the release id and build.** The format is `YYYY.MM.DD-NNN`. `NNN` continues
    across dates (012 → 013 → 014). Check `/opt/rosy/releases/` on the robot and the
    existing tags. Never reuse an id: an existing id is only re-checked, never overwritten.
@@ -51,7 +49,7 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    ```
    - It finds the run's `rosy-native-payload-unsigned-<id>-<sha>` artifact and downloads it
      with `download_artifact.py`. The work folder is `--out-dir`, default
-     `X:\DevTemp\rosy-release-<id>`. Already downloaded? Pass `--artifact-dir <dir>`.
+     `$ROSY_SCRATCH/rosy-release-<id>`. Already downloaded? Pass `--artifact-dir <dir>`.
    - It checks that every name in `required-ros-packages.txt` is in `rosy-packages.txt`.
      Both list ROSY workspace packages, not debs.
    - It runs a read-only `dpkg-query -W` over SSH on each `--robot` (repeatable) and prints
@@ -77,7 +75,8 @@ Verified twice on 2026-09-26: releases 013 and 014 on a Pinky Pro running image 
    ships verbatim (Python modules, launch/config, native-runtime scripts) and both robots hold the
    base release this PC prepared, skip steps 1-3:
    ```powershell
-   python tools/release/make_delta_release.py --base-dir X:\DevTemp\rosy-release-<base>\x\<base> --base-tarball X:\DevTemp\rosy-release-<base>\<base>.tar.gz --release-id <new-id>
+   $RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+   python tools/release/make_delta_release.py --base-dir $RosyScratch/rosy-release-<base>/x/<base> --base-tarball $RosyScratch/rosy-release-<base>/<base>.tar.gz --release-id <new-id>
    ```
    It refuses C/C++/interface/package.xml/setup.py changes, added or deleted shipped files and
    anything without a verbatim copy in the base (`--not-shipped <prefix>` for paths that never reach
@@ -258,7 +257,7 @@ published here.
   ```
   A hold always expires (at most 168 h). The reason allows letters, digits, space and
   `. , : _ / ( ) + = @ -`. A held robot still stages the release.
-- Audit lines go to `X:\DevTemp\rosy-rollout-evidence\<date>\rollout.jsonl`.
+- Audit lines go to `$ROSY_SCRATCH/rosy-rollout-evidence/<date>/rollout.jsonl`.
 - **Use a manual push (steps 5-6) when** the robot has no updater yet (its first D-412
   release arrives by push), it is offline from GitHub, you need a release on one robot only,
   or you are rolling back. The push takes the same claim as the updater

@@ -23,16 +23,16 @@ JSON 및 선택된 각 평가 행의 원본 extraction 이미지·마스크·con
 [
   {
     "session": "session-id",
-    "labels": {"path": "X:/DevTemp/frozen/labels.jsonl", "sha256": "RAW_SHA256"},
-    "meta": {"path": "X:/DevTemp/frozen/meta.json", "sha256": "RAW_SHA256"},
-    "video": {"path": "X:/DevTemp/frozen/video.mp4", "sha256": "RAW_SHA256"},
-    "sidecar": {"path": "X:/DevTemp/frozen/sidecar.jsonl", "sha256": "RAW_SHA256"},
-    "pts": {"path": "X:/DevTemp/frozen/pts.json", "sha256": "RAW_SHA256"},
+    "labels": {"path": "<scratch-dir>/frozen/labels.jsonl", "sha256": "RAW_SHA256"},
+    "meta": {"path": "<scratch-dir>/frozen/meta.json", "sha256": "RAW_SHA256"},
+    "video": {"path": "<scratch-dir>/frozen/video.mp4", "sha256": "RAW_SHA256"},
+    "sidecar": {"path": "<scratch-dir>/frozen/sidecar.jsonl", "sha256": "RAW_SHA256"},
+    "pts": {"path": "<scratch-dir>/frozen/pts.json", "sha256": "RAW_SHA256"},
     "extractions": {
       "images/session-id/session-id__000001.jpg": {
-        "image": {"path": "X:/DevTemp/frozen/extracted.jpg", "sha256": "RAW_SHA256"},
-        "mask": {"path": "X:/DevTemp/frozen/mask.png", "sha256": "RAW_SHA256"},
-        "conf": {"path": "X:/DevTemp/frozen/conf.png", "sha256": "RAW_SHA256"}
+        "image": {"path": "<scratch-dir>/frozen/extracted.jpg", "sha256": "RAW_SHA256"},
+        "mask": {"path": "<scratch-dir>/frozen/mask.png", "sha256": "RAW_SHA256"},
+        "conf": {"path": "<scratch-dir>/frozen/conf.png", "sha256": "RAW_SHA256"}
       }
     }
   }
@@ -47,13 +47,14 @@ PTS의 측정 사실을 새로 인증하지 않는다.
 ## 실행
 
 저장소 루트에서 실행한다. 출력은 아직 존재하지 않는 폴더를 지정한다.
-Windows 출력과 임시 staging은 `X:/DevTemp` 아래에만 생성한다.
+Windows 출력과 임시 staging은 `$ROSY_SCRATCH` 아래에만 생성한다.
 
 ```powershell
-python learning/curation/perception/review_eval_package.py `
-  --eval-folder X:/DevTemp/frozen-eval/CONTENT_SHA256 `
-  --sources X:/DevTemp/frozen/sources.json `
-  --out X:/DevTemp/eval-companion-new
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+python learning/training/perception/review_eval_package.py `
+  --eval-folder $RosyScratch/frozen-eval/CONTENT_SHA256 `
+  --sources $RosyScratch/frozen/sources.json `
+  --out $RosyScratch/eval-companion-new
 ```
 
 라이브러리는 `package_eval_companion(eval_folder, source_records, output)`이다.

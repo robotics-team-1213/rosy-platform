@@ -2,6 +2,9 @@
 # not a general permission to rewrite logs or change execution evidence.
 # Originals and corrections remain in the corresponding immutable git commits.
 
+# 2ac60703ff RaspTank journal: add the required gate label from its existing SOURCE/LOCAL/HOLD evidence; no result changed.
+"c935715a1e15057e8d2199470250ddcbcac2f9ae1b844d85ac58a2bb6c580e56": "9d0a51814e2eea7d3ead4a8d3c77f994e747701f3730a1c4afcdeb23ea6d2720"
+
 # 8669ef8db native callback heading/field repair; body evidence unchanged.
 "ed55535bed54123338dad2db22c24fc159009907552540b7a3beb83274365973": "95d2f5a14fc08506ecb646845926ac48bdcb839609a7ef50929111d71be5921d"
 # c2425 OMX heading/field repair; body evidence unchanged.
@@ -15,3 +18,20 @@
 
 # 812735a7d D-638 heading grammar repair: one hash in the commit slot; body evidence unchanged.
 "947cae00ecb98344aa18eb3ce4767dbd4bd628f596f62dcf335cb61a01376feb": "397c8a6e6638e9c12cf6071f188c5ac7bda0c8bdd55eb1ddc0bbcdd71ec98874" # SHA256 normalized journal block pair
+
+# 8f1913c9ff camera provenance entry: add the missing gate field from its existing body; evidence unchanged.
+"f57a8172df2e62df5014d86cc878d1162b94856bbbf63873de2528ce11d6f559": "8317530f2a2846129e42b6ab8fe8e94bdc8d53aabe743de069223d75131b2dc8"
+
+# D-830 new dev journal: add required field labels only; recorded prose and execution evidence unchanged.
+"090997c4e8a7c6cb55e1e91161205d20297d002f061872bc840bd6b1e868bb9a": "ecd49ddac92dc41e76f4cc1ad50eeb8643bfd9ec7fb43d2831244e641e6b607f"
+"f5b7a550ce7cdb28420ccf48abc0d17195189ff02651073d0de66abd9d0d372f": "25e011c426331a111a09da10af80cd1a24567a7e84a7253a9f4b91e77c205692"
+
+# Correct Windows pipeline field-label encoding; execution evidence unchanged.
+"74e277809efbc05da1528a6673746788f587f7f3b06e683df18420e3c58b0c30": "25e011c426331a111a09da10af80cd1a24567a7e84a7253a9f4b91e77c205692"
+"75c57419447018f9e086f872e3687bb21972a37af0967530020da498fdba6f23": "ecd49ddac92dc41e76f4cc1ad50eeb8643bfd9ec7fb43d2831244e641e6b607f"
+# The #179 squash published an earlier draft of a local docs/logs.md entry; joining
+# origin/main into local main keeps the local text under the one heading (D-868).
+"e31abcc5329c5fef808fa07d4b39d186dd748afaa1a84ffb2ed0abbe9e63c8cb": "04add7a64764b4e9428ec40beb0b4c997760e803e9112a04191fd2361a96b525"
+
+# 9c8dbc22d0 provenance journal: rename the confirmation label to the required evidence label; prose and outcomes unchanged.
+"aa3a02dd581162c79e25104aad77f11c2220a27e4aeaf21cc793b53a000b1195": "40ed93cdc4bd535efec83aa97ed02b98009b47b25dd61436349e2368e94f7a18" # SHA256 normalized journal block pair

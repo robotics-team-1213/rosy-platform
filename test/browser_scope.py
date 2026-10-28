@@ -20,6 +20,11 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 FLEET = [
+    "test/test_integrated_control_backend_browser.py",
+    "applications/fleet/test/test_sample_browser.py",
+    "applications/fleet/test/test_feature_browser_flows.py",
+    "applications/fleet/test/test_browser_adapters.py",
+    "test/test_measured_calibration_browser.py",
     "test/test_motor_health_ui_browser.py",
     "test/test_fleet_workcell_observation_browser.py",
     "test/test_fleet_console_browser.py",
@@ -52,17 +57,21 @@ API_WEB = [
 ]
 PILOT = [
     "middleware/robot_ui/pilot/test/test_pilot_browser.py",
+    "middleware/robot_ui/pilot/test/test_lobby_browser.py",
     "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py",
 ]
 GAMES = ["test/test_games_board_browser.py"]
 REVIEW = [
+    "test/learning/perception/test_sim_browser.py",
+    "test/learning/perception/test_vlm_judge_browser.py",
     "test/learning/perception/test_storage_inventory_http.py",
     "test/learning/perception/test_review_flow_browser.py",
+    "test/learning/perception/test_learning_pipeline_browser.py",
     "test/learning/perception/test_pixel_review_browser.py",
     "test/learning/perception/test_review_app_smoke.py",
 ]
 OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for name in
-                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments")]
+                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments", "camera_reference")]
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
@@ -74,15 +83,20 @@ LEARNING = OMX_LEARNING + CAMERA + SIM + PIPELINE + ACCOUNTS + TASKS + STAGES
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING
+MONITORING = ["test/test_monitoring_browser.py"]
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING
 
 SCOPE: dict[str, list[str]] = {
+    "applications/monitoring/": MONITORING,
+    "operations/monitoring/": MONITORING,
+    "applications/fleet/dev/": FLEET,
+    "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
-    "operations/site_ui/console/": FLEET,
+    "applications/fleet/web/": FLEET,
     "middleware/robot_ui/robot/": ROBOT,
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
-    "middleware/devices/omx/adapter/": PILOT[1:],
+    "middleware/devices/omx/adapter/": PILOT[2:],
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
     "learning/curation/perception/review_app.py": LEARNING,
@@ -106,7 +120,7 @@ SCOPE: dict[str, list[str]] = {
        ("sim_web.py", "review_app_web/sim.html", "review_app_web/sim.js")},
     **{f"learning/curation/perception/{name}": PIPELINE for name in
        ("learning_control.py", "learning_pipeline.py")},
-    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS + STAGES
+    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS
        for name in ("learning.html", "learning.js")},
     **{f"learning/curation/perception/{name}": STAGES for name in
        ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "promotion_request.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
@@ -139,12 +153,23 @@ def targets(paths: list[str]) -> list[str]:
             if path.startswith(prefix):
                 for pattern in patterns:
                     selected.update(_expand(pattern))
-        if path in known or (path.endswith("_browser.py") and (ROOT / path).is_file()):
+        # test_ prefix: tools/land_browser.py is a module, not a test (2026-10-26 landings stopped on it)
+        if path in known or (path.rsplit("/", 1)[-1].startswith("test_") and path.endswith("_browser.py")
+                             and (ROOT / path).is_file()):
             selected.add(path)
     return sorted(selected)
 
 
+def all_targets() -> list[str]:
+    """Expand every registered browser target in this candidate tree."""
+    return sorted({path for pattern in EVERYTHING for path in _expand(pattern)})
+
+
 def main(argv: list[str]) -> int:
+    if argv == ["--all", "--json"]:
+        import json
+        print(json.dumps(all_targets()))
+        return 0
     found = targets(argv)
     if not found:
         print("browser_scope: no browser tests for these paths", file=sys.stderr)

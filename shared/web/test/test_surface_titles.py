@@ -18,7 +18,7 @@ LIBRARY = {"web-common"}
 PAGES = (
     "index.html", "surface.html", "learning.html", "pixels.html", "catalog.html",
     "camera.html", "accounts.html", "login.html", "profile.html", "install.html",
-    "maps/site-map.html", "cell/cell.html", "work/policy.html",
+    "site-map.html", "cell/cell.html", "work/policy.html",
 )
 TITLE = re.compile(r"<title>(.*?)</title>", re.S | re.I)
 

@@ -98,6 +98,21 @@ def test_revision_2_test_files_are_held_to_1500_wherever_they_live():
     assert any("over 1500" in p for p in _problems(over, {}, base={}))
 
 
+@pytest.mark.parametrize("test_lines", [1500, 1501])
+def test_android_instrumentation_sources_are_tests_not_package_code(test_lines):
+    app = "operations/site_ui/cam/app"
+    instrumented = f"{app}/src/androidTest/java/cam/RecoveryTest.kt"
+    main = f"{app}/src/main/java/cam/StreamScreen.kt"
+    lookalike = f"{app}/src/main/java/androidTest/Camera.kt"
+    files = {instrumented: test_lines, main: 600, lookalike: 1}
+    counts, over, owner = s.measure(files, {"rosy-cam": "operations/site_ui/cam"}, ("operations",), [])
+    assert counts == {"rosy-cam": 601}
+    assert owner == {main: "rosy-cam", lookalike: "rosy-cam"}
+    assert over == ({instrumented: 1501} if test_lines == 1501 else {})
+    if test_lines == 1501:
+        assert any("over 1500" in p for p in _problems(over, {}, base={}))
+
+
 def test_units_floor_applies_to_new_units_of_large_parents_only():
     counts = {"pkg": 2500, "pkg/unit": 400}
     owner = {"pkg/unit": "pkg"}
@@ -107,6 +122,16 @@ def test_units_floor_applies_to_new_units_of_large_parents_only():
     assert s.unit_problems({"pkg": 1500, "pkg/unit": 400}, owner, ["pkg/unit"], set(), set()) == []  # parent < 2000
     assert any("no longer small" in p for p in s.unit_problems({"pkg": 9000, "pkg/unit": 1200}, owner,
                                                                  ["pkg/unit"], {"pkg/unit"}, {"pkg/unit"}))
+
+
+def test_fleet_work_holder_move_preserves_only_its_existing_small_mark():
+    unit = "fleet/web/work"
+    counts, owner = {"fleet": 9000, unit: 796}, {unit: "fleet"}
+    assert s.unit_problems(counts, owner, [unit], {unit}, {"site_ui/console/work"}) == []
+    assert any("new `small` mark" in problem for problem in
+               s.unit_problems(counts, owner, [unit], {unit}, set()))
+    assert any("no longer small" in problem for problem in
+               s.unit_problems({"fleet": 9000, unit: 1000}, owner, [unit], {unit}, {"site_ui/console/work"}))
 
 
 def test_data_file_parsers_reject_malformed_rows():
@@ -152,8 +177,18 @@ def test_range_check_is_red_on_a_commit_that_grows_before_a_later_split(tmp_path
                    "middleware/pkg/pkg/a.py": "x = 1\n" * 500, s.RATCHET: "# rows\n", s.UNITS: "# units\n"}, "base")
     grown = commit({"middleware/pkg/pkg/a.py": "x = 1\n" * 601}, "grow a.py past 600")
     commit({"middleware/pkg/pkg/a.py": "x = 1\n" * 300, "middleware/pkg/pkg/b.py": "y = 1\n" * 301}, "split a.py")
+    # The same path at two contents: the blob caches must key by content, not path.
     assert size_range.check(git("rev-parse", "HEAD")) == []
     assert any("pkg/pkg/a.py: 601 lines" in p for p in size_range.check(grown))
+    assert size_range.main([base, "HEAD"]) == 1
+    assert "grow a.py past 600" in capsys.readouterr().err
+    monkeypatch.setattr(size_range, "CHUNK", 1)  # one commit per process: the parallel path keeps order
+    assert size_range.main([base, "HEAD"]) == 1
+    assert "grow a.py past 600" in capsys.readouterr().err
+
+    def no_pool(*_):
+        raise NotImplementedError("no sem_open")
+    monkeypatch.setattr(size_range, "ProcessPoolExecutor", no_pool)  # a container without multiprocessing
     assert size_range.main([base, "HEAD"]) == 1
     assert "grow a.py past 600" in capsys.readouterr().err
     assert size_range.main([grown, "HEAD"]) == 0
@@ -167,6 +202,10 @@ def test_range_check_is_red_on_a_commit_that_grows_before_a_later_split(tmp_path
     rule = Path(s.__file__).read_text(encoding="utf-8")
     loose = commit({"tools/harness/size_limits.py": rule.replace("FILE_LIMIT = 600", "FILE_LIMIT = 700"),
                     "middleware/pkg/pkg/c.py": "z = 1\n" * 650}, "c.py at 650 under a 700 rule")
+    assert size_range.check(loose) == []
+    strict = commit({"tools/harness/size_limits.py": rule, "middleware/pkg/pkg/c.py": "z = 1\n" * 651},
+                    "c.py at 651 back under the 600 rule")
+    assert any("pkg/pkg/c.py: 651 lines" in p for p in size_range.check(strict))  # each rule by its content
     assert size_range.check(loose) == []
 
 

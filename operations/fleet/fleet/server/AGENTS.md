@@ -16,23 +16,25 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 | File | Description |
 |---|---|
 | `model_feedback_dispatch.py` | Fleet-owned allowlist, trusted turn scope and existing Mission/Proposal transaction adapters. Decision owns model contracts/catalog only |
-| `deliberation_journal.py` | D-640 durable advisory runs in the existing DB; current-case fence, bounded replay and asynchronous database work. No automatic model activation |
+| `ledger/deliberation_journal.py` | D-640 durable advisory runs in the existing DB; current-case fence, bounded replay and asynchronous database work. No automatic model activation |
+| `ledger/context_log.py`, `ledger/context_options.py` | D-796 site-host Postgres mirror of terminal advisory runs (`ContextLog`, `rosy_deliberation_run`) and its `--context-db-*` console surface (`add_cli_arguments`/`activate_from_args` → the process-wide active sink the journal defaults to). Best-effort only; a failure is a warning and never touches the SQLite ledger |
 | `console.py` | `FleetConsole` — gather(snapshot/map)와 scatter(goal/cancel/estop), 그리고 경로 충돌 시 미션 대기열 |
 | `signals.py` | 신호등(ROSY-SIGNAL-001) gather/scatter — `SignalConsole`(재단언·all_red·3자 교차 검증 verify), `HttpSignalClient`, `HttpSignalObserver`. `swarm/` 로봇 계약과 섞지 않는다 |
 | `signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 검증 |
 | `traffic.py` | 경로 충돌 판정(순수 기하). 전송도 asyncio 도 없다 |
-| `pose/map_pose_service.py` | D-494 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
+| `map_pose_service.py` | D-494 3 `MapPoseService` — 받아들인 sighting과 스냅숏 `odom_pose`로 trip 전용 지도 자세, `GET /api/fleet/robots/{id}/map-pose`. `/route`·교통정리는 읽지 않는다 |
 | `identity.py` | D-472 `IdentityService` — 움직이는 미확인 로봇 한 대씩 CORE LED 점멸을 요청(≤ 6 s), Vision 판정으로 익명 트랙에 묶고 손실·0.30 m 겹침·revision 변경·`identity_ttl_s`에 풀어 `confirmed_track_pose`(D-511 입력)를 낸다. 지도 자세 중재·trip·명령은 읽지 않는다(`test_boundaries.py`) |
 | `lane_compliance_service.py` | D-511 M0 `LaneComplianceMonitor` — 2 Hz로 움직인 로봇만 refresh 하고 모든 로봇의 차로 여유를 판정해 최신값을 `/api/fleet/state` 행 `lane_compliance`와 `GET /api/fleet/robots/{id}/lane-compliance`로 보여 준다. 지도 자세가 LOCALIZED가 아니면 신선한 D-472 LED 확인 트랙(`identity.confirmed_track_pose`, 같은 lease·map id)을 대신 판정하고 `pose_source`·`heading_source`를 남긴다(yaw 없음: 이동 방향, 정지면 방향 문 없이). 로봇에 아무것도 보내지 않는다. 루프는 `background_workers.lane_compliance_loop` |
 | `tether_routes.py`, `tether_watch.py` | D-512 테더 원(표시·설정, 메모리)과 D-526 `TetherWatch`(safety 태그): 0.5 s마다 지도 자세로 반경+0.15 m·누적 회전 405°·자세 2 s 없음을 재고 기존 로봇 E-Stop을 보낸 뒤 trip을 끝낸다. 래치, 테더 POST가 재무장. 되돌아가기는 하지 않는다 |
-| `maps/` | D-825 지도 저장·라우트·주행 가르치기와 제한된 도면 입력/보관 holder. 기존 `fleet.server.site_map_*`·`fleet.server.teach_*` import는 `_source_layout.SERVER_HOLDERS`와 manifest로 유지한다. 확정·주소 만들기는 초안에만 쓰고 도면은 기하만 반환한다. 순수 주행 가르치기 규칙은 `fleet/routing/teach.py`, 권한·제한은 D-825를 본다. |
+| `teach_service.py`, `teach_routes.py` | D-494 6 주행 가르치기 — 한 대의 map pose를 0.5 s마다 기록하고, 멈추면 RDP 선과 끝 장소 후보를 돌려주며, 확정·주소 만들기는 초안에만 쓴다(`/api/fleet/teach*`). 로봇에 아무것도 보내지 않는다. 순수 규칙은 `fleet/routing/teach.py` |
 | (대형) | `swarm/session.py` 의 `FormationSession` 을 콘솔이 하나만 들고 연다 |
 | `password_session.py` | D-519 관제 콘솔 아이디·비밀번호 로그인 — `PasswordSessions`(tasks DB `fleet_console_sessions`, 쿠키 SHA-256만, 유휴 12 h·기억 30 d·절대 30 d, 계정 변경 시 무효), `/api/fleet/auth/login`·`logout`·`session`. 계정과 scrypt 해시는 `site_users.py` |
 | `host_control_routes.py` | D-524 Service Control(서비스 제어) — `GET /api/fleet/hosts`, `POST /api/fleet/hosts/{host}/control`. GET은 목록에 더해 가드 `status.json`(`guard`)과 관제 PC 드리프트(`drift`)를 읽기만 한다. 없거나 깨지면 null이다. POST는 이름 있는 운영자만. 재부팅은 10분 예약이고, 유닛 정지·재시작은 허용 목록만(사이트 유닛은 재시작만). 세 호스트 모두 강제 명령 SSH 키(Fleet 전용 마운트 `/run/rosy-fleet-host-control/`)로 부른다. 프로세스 이름과 셸은 받지 않는다. 설정이 없거나 site-users·로그인이 없으면 POST는 503 |
 | `app.py` | FastAPI 표면. `/api/fleet/*` 와 `/console` 정적 자산 allowlist |
+| `tracking/` | Tracking and purpose-specific calibration holder; existing `fleet.server.tracking*`, `measured_calibration*`, `vision_preview_routes` imports remain stable through `SERVER_HOLDERS`. Preview approval does not change sighting admission |
 | `model_feedback_dispatch.py` | D-657 원장 결속 모델 도구 어댑터. 기존 scope·journal·stop/fence 재검사를 보존하며 Decision 계약/후보를 소비 |
 | `goal_evidence_service.py`, `mission_service.py`, `mission_progress.py` | producer 인증·새 post-action frame/attempt·원장/clock 소비는 Fleet 소유. 순수 목표 검증과 전체 progress 계산은 `rosy.execution.site.{goal_evidence,workflow}` 소비 |
-| `operations/site_ui/console` | 관제 UI 원본 ([안내](../../../site_ui/console/AGENTS.md)). `fleet._source_layout.console_root()`가 source holder와 설치 자산 `fleet/server/web`을 연결한다 |
+| `applications/fleet/web` | 관제 UI 원본 ([안내](../../../../applications/fleet/web/AGENTS.md)). `fleet._source_layout.console_root()`가 source holder와 설치 자산 `fleet/server/web`을 연결한다 |
 
 ## For AI Agents
 
@@ -72,4 +74,4 @@ Fleet 쪽에 남는다(D-12): 하달한 목표를 기억하는 곳은 여기지 
 
 ## Source responsibility holders (D-750)
 
-`peer/` camera proof; `cell/` adapters; `auth/` registration/pairing/sessions; `console/` console assembly/serving; `ledger/` task/mission/trip/receipts; `tracking/` D-457 overhead markerless tracking (display and cross-check only); `pose/` robot pose on the site map (D-395 localization service, D-494 map pose, D-594 path history). These are non-package source holders. Existing `fleet.server.*` names and one SQLite/process/transaction owner remain. `channel/` stays the existing channel package and `app.py` composes the server.
+`peer/` camera proof; `cell/` adapters; `auth/` registration/pairing/sessions; `console/` console assembly/serving; `ledger/` task/mission/trip/receipts; D-798 `evidence/` proposals and evidence, `sitemap/` site map and teaching, `pose/` map pose and lane compliance, `recognition/` identity, sightings and roster, `rightofway/` signals, traffic and bays. These are non-package source holders. Existing `fleet.server.*` names and one SQLite/process/transaction owner remain. `channel/` stays the existing channel package and `app.py` composes the server.

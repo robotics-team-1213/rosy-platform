@@ -231,8 +231,22 @@ if (-not $isAdministrator) {
 
 # Elevated: the release signature verifier needs openssl; Git for Windows ships one.
 if (-not (Get-Command openssl -ErrorAction SilentlyContinue)) {
-    $gitOpenSsl = "C:\Program Files\Git\usr\bin"
-    if (Test-Path -LiteralPath (Join-Path $gitOpenSsl "openssl.exe")) { $env:PATH = "$gitOpenSsl;$env:PATH" }
+    # Git may be a per-user or other-drive install: start from git on PATH, then %ProgramFiles%\Git.
+    $gitRoots = @()
+    $gitExe = Get-Command git -ErrorAction SilentlyContinue
+    if ($gitExe) {
+        $gitRoot = Split-Path -Parent (Split-Path -Parent $gitExe.Source)
+        if ($gitRoot) {
+            $gitRoots += $gitRoot
+            $gitParent = Split-Path -Parent $gitRoot
+            if ($gitParent) { $gitRoots += $gitParent }
+        }
+    }
+    $gitRoots += Join-Path $env:ProgramFiles "Git"
+    foreach ($gitRoot in $gitRoots) {
+        $gitOpenSsl = Join-Path $gitRoot "usr\bin"
+        if (Test-Path -LiteralPath (Join-Path $gitOpenSsl "openssl.exe")) { $env:PATH = "$gitOpenSsl;$env:PATH"; break }
+    }
 }
 
 # 2026-09-24: a click in this window starts QuickEdit selection ("Select" in the

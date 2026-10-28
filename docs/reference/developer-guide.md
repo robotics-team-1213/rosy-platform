@@ -16,7 +16,7 @@
 
 현재 구현과 제안을 구분한다. 점선은 목표 연결이며 운영 연결로 읽지 않는다.
 
-World(`operations/world`, 배포 휠 `rosy-world`)는 별도 PC나 프로세스가 아니다. 현장의 Fleet이 `rosy.world.state.projections.map_pose`를 직접 읽어 현재 자세를 만들고, 그 자세를 미션·대형·차로에 쓴다. 행동 후보로 미래 상태를 예측하는 World model은 후속 계획이다.
+World(`operations/world`, 배포 휠 `rosy-world`)는 별도 PC나 프로세스가 아니다. 현장의 Fleet이 `rosy.world.state.projections.map_pose`를 직접 읽어 현재 자세를 만들고, 그 자세를 미션·대형·차로에 쓴다. 행동 후보로 미래 상태를 예측하는 World model은 [D-782](../adr/D-782-omx-action-conditioned-world-model.md)의 OMX 실행 전 검사기로 기반(데이터·학습·평가·그림자)만 있고 실행 경로에는 연결하지 않았다.
 
 시험은 개발 계약 검사(실험실은 원격 시험 PC·CI, 개인 클론은 팀 가이드 조건) → 모델 PC 독립 L0 → AI PC 고정 버전 스모크 → 현장 Fleet/CORE 수용으로 나눈다([D-527](../adr/D-527-decision-test-host-boundaries.md)). 모델 PC → AI PC → Fleet → CORE의 Decision 경계와 VLM/텍스트 후보의 분리는 [파이프라인 설계](../plans/2026-10-08-decision-model-pipeline-design.md)에 있다. 점선은 **목표 연결**이며 현재 운영 연결이 아니다([D-516](../adr/D-516-offline-decision-model-replay-boundary.md)).
 
@@ -67,6 +67,46 @@ bash tools/run_fleet_sim.sh
 메모와 주행 세션은 소스나 설치물이 아니라 `data/teleop` 및 `data/drive`에 둔다.
 세션 파일은 커밋하지 않으며, 예외는 `data/README.md`를 따른다.
 
+### 로그 레벨과 디버거
+
+core 로그를 자세히 보려면 `log_level`을 준다. core 로거에만 적용되고 rcl/DDS 로그는 그대로다.
+
+```bash
+ros2 launch core rosy_core.launch.py log_level:=debug
+```
+
+중단점이 필요하면 debugpy로 띄우고 VS Code에서 붙는다. debugpy는 개발 PC에만 설치하고 payload에는 넣지 않는다.
+
+```bash
+python3 -m pip install --user debugpy
+# 클라이언트가 붙을 때까지 기다린다. 127.0.0.1에만 연다
+ros2 run --prefix 'python3 -m debugpy --listen 127.0.0.1:5678 --wait-for-client' core core
+```
+
+다른 PC(시뮬 PC 등)에서 띄웠다면 포트를 밖으로 열지 말고 SSH 터널로 가져온다: `ssh -N -L 5678:127.0.0.1:5678 <host>`.
+
+`.vscode/`는 gitignore 대상이라 설정은 각자 둔다. 개인 `.vscode/launch.json` 예:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "core attach (debugpy)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5678 },
+      "justMyCode": false,
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}", "remoteRoot": "<원격 PC의 rosy-platform 경로>" }
+      ]
+    }
+  ]
+}
+```
+
+같은 PC에서 `--symlink-install`로 빌드했다면 `pathMappings`는 필요 없다. 원격이면 `remoteRoot`를 그 PC의 checkout 경로로 바꾼다.
+
 ## 테스트와 CI
 
 작업 중에는 변경 범위의 시험을 요청하고, push 전 훅과 GitHub CI에서 검증을 이어간다([D-436](../adr/D-436-change-scoped-test-tiers.md)). PR의 전체 검사 전환 여부는 selector가 정한다. main push·야간·수동 실행은 전체 검사를 수행한다.
@@ -88,15 +128,20 @@ flowchart LR
 | GitHub CI | PR은 selector 결과, main·야간·수동 실행은 full | `.github/workflows/ci.yml`. 릴리스 빌드는 별도 검증 관문을 따른다 |
 
 실험실에서는 먼저 자기 변경을 커밋한 뒤 선택 결과를 원격 실행기에 보낸다. `affected --run`은 현재 PC에서 pytest를 직접 호출하므로 이 노트북에서는 쓰지 않는다. 결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
+로그·증거·빌드 산출물 같은 저장소 밖 파일은 `ROSY_SCRATCH`에 둔다. 설정하지 않으면 시스템 임시 폴더를 쓴다.
 
 ```bash
-python tools/harness/rosy_harness.py affected --base origin/main --json | python tools/remote/remote_pytest.py --affected-json - --log-dir X:/DevTemp/<이름>
-python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
+python tools/harness/rosy_harness.py affected --base origin/main --json | python tools/remote/remote_pytest.py --affected-json - --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<이름>"
+python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<이름>/run-1.txt"
 ```
 
 여러 시험 묶음이 선택되면 `run-2.txt`, `run-3.txt`도 생긴다. 실행기가 출력한 모든 `run-N.txt`를 위 비교 명령에 각각 넘기고, 각 로그의 실행·건너뜀 수와 `NEW`를 확인한다. 첫 로그만으로 전체 통과를 판단하지 않는다.
 
 quick 시험 목록은 [`tools/hooks/pre-push`](../../tools/hooks/pre-push)가 관리한다. 실패한 묶음을 재현할 때는 훅에 출력된 명령을 원격 실행기로 요청한다. GitHub의 `ci-result`와 개별 잡, 건너뛴 검사는 [PR 파이프라인](pr-pipeline.md#ci와-병합)에 따라 확인한다.
+
+```bash
+python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only·staleness
+```
 
 ### 브라우저 시험 (Chromium)
 
@@ -105,8 +150,8 @@ quick 시험 목록은 [`tools/hooks/pre-push`](../../tools/hooks/pre-push)가 �
 바꾼 경로에 걸린 브라우저 시험만 시험 PC에서 돌린다. 경로와 시험의 대응은 `test/browser_scope.py`의 `SCOPE`다. `tools/land.py --tests auto`는 고른 시험 묶음 뒤에 이 브라우저 시험을 `ROSY_RUN_BROWSER_TESTS=1` 묶음으로 더 돌린다. 손으로 돌릴 때는 `tools/remote/remote_pytest.py`의 `--` 뒤 맨 앞에 `ROSY_RUN_BROWSER_TESTS=1`을 둔다. 앞에 오는 `ROSY_*=값` 단어는 시험 PC 작업의 환경 변수가 되고 pytest 인자가 아니다. 그 작업은 먼저 venv의 playwright에 맞는 Chromium을 그 PC의 `~/.cache/ms-playwright`에 설치한다(있으면 그대로 둔다).
 
 ```bash
-t=$(python test/browser_scope.py <바꾼 경로...>) && python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<이름> -- ROSY_RUN_BROWSER_TESTS=1 $t
-python test/known_failures.py X:/DevTemp/<이름>/run-1.txt
+t=$(python test/browser_scope.py <바꾼 경로...>) && python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<이름>" -- ROSY_RUN_BROWSER_TESTS=1 $t
+python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<이름>/run-1.txt"
 ```
 
 전체 브라우저 묶음은 개발 노트북에서 돌리지 않는다. 2026-10-07 이 노트북에서 34분–2시간 26분이 걸렸고 MemoryError와 `Page.goto` 타임아웃 플레이크가 났다. Gazebo처럼 현장 PC(robttt)나 모델 PC(OMEN)의 그 PC 체크아웃에서 돌린다.

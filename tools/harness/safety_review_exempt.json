@@ -475,6 +475,10 @@
     "reason": "Independent read-only critic (opus), 2026-10-15, D-767 Part A instruction pose_stamp: CONDITIONS (HIGH stale fallback worse than before) then CONDITIONS MET after fail-closed refusal INSTRUCTION_STAMP_UNUSABLE, no 2 s age cut for counting travel, Fleet stamps only instructions with a distance; MEDIUM stamp-check ordering fixed (armed-bend refresh / running-maneuver resend unaffected). Flag default off; remote services/gateway/fleet/guards exit 0, known_failures 0 new; no device acceptance."
   },
   {
+    "commit": "fe7ef2f47500c19033b480c842a55e718c9614c9",
+    "reason": "Independent Codex /root/control_wire_review retrospective SOURCE review, 2026-10-24, against exact commit and HEAD 7db21ac02367a88c1e15f8513a93d2f2f138434c: scoped cancellation preserves replacement navigation and trip-lease owners; Fleet verifies original boot/run/correlation TERMINAL/CANCELED receipts independently of the current facade and never falls back to unconditional cancel. Reviewed deterministic replacement-owner regression and malformed/mismatched/unsupported sender cases. Verified retained scoped 201-PASS log hash and final explicit-SHA 49eb597185ff833885f18e8558bcf86ba31ab1bb proof: 384 PASS, runner exit 0, NEW 0; evidence in docs/validation/control-unit-pipeline-2026-10-24/result.md and focused-invocation.json. This records the missing independent source-review receipt only; main integration verification remains separate, with no CI, deployment, physical-stop, device or field acceptance."
+  },
+  {
     "commit": "fdd01f8fbbfd9b97959ee7fdea74477b98fd727f",
     "original_commit": "995890b6f1c569603ae996b2e16d10f2b79bcfd4",
     "reason": "PR #81 squash lost source Safety-Review trailers from 4f840a94, a892d160 and e77d8ada. Independent read-only /root/review_safety_merge, 2026-10-17: all 10 safety-classified paths byte-identical to the independently reviewed PR source head; no safety untagging; remaining tree differences are PR #80 ADR/research/gaps only. Scoped producer/consumer review found no additional contract violation. Exact squash provenance retention only, not new ROS-SIM, DEVICE or FIELD acceptance; existing source test evidence was not rerun by this reviewer."
@@ -498,5 +502,21 @@
     "commit": "bb6a4e38c22714e05eeb601351c69a52f250a960",
     "original_commit": "82c3bff42e31f13ee213b6bf782919a822b68971",
     "reason": "PR #167 squash commit omitted the reviewed source Safety-Review trailer. Independent read-only review agent, 2026-10-23: APPROVE for bc6edabfe0/82c3bff42e against base d227b0c2c5; traced report_field/src.field -> _status_message -> _status_loop -> Rosy Cam parseStatus/CornerGuide/StreamScreen; the change only adds the phone-facing status field_state and corners_needed 0 and does not touch sightings, homography, authentication, motion or connection lifecycle. The squash diff equals the reviewed branch diff (same 17 files, identical ingest.py patch-id); PR CI 39963705171 passed. Provenance only; no production code, safety policy or device/field acceptance change."
+  },
+  {
+    "commit": "85cfdeb4d8092d3a2dbb798c5fcb4f0938172e00",
+    "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Measured camera preview lifecycle (D-775): ingest.py only adds a preview-only MeasuredPreview, a measured-status view behind the existing preview_signer source-bound auth, and a geometry observe hook; map-plane response moved verbatim to preview_plane.py. No sighting, pose, homography-for-tracking, camera auth or stop path changed. Covered by test_measured_preview.py (8 tests) plus Fleet measured_calibration tests. No tests rerun by the reviewer."
+  },
+  {
+    "commit": "9a8d9ba2cc997a0d36aa4175ba2f40138c5ab5ff",
+    "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Preview-only: ingest.py passes source to MeasuredPreview.session_id so the measured preview session rotates on any frame geometry change and stale confirmations are cleared; grant consumption is tightened, not relaxed. No sighting, pose, auth, tracking homography or stop path touched. Covered by updated test_measured_preview.py. No tests rerun by the reviewer."
+  },
+  {
+    "commit": "a77ac1b3743b3c2cb7526041aa77dd58638169c6",
+    "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Preview-only perf fix: ingest.py awaits preview_plane.rectified_jpeg, which runs rectify_jpeg off the event loop once per (source, settings, frame) and shares the result; auth, per-viewer rate limits and the 422 error path are unchanged. No sighting, pose, camera auth, tracking homography or stop path touched. Covered by test_rectified_preview_encodes_once_per_frame_for_every_viewer. No tests rerun by the reviewer."
+  },
+  {
+    "commit": "7fb358aaaa2197ccdfbeab6f04cf361e6291c8c4",
+    "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Deletes 11 origin-merge duplicates under fleet/server/site_observation (deletions only). 10 are byte-identical to blobs kept at HEAD under server/recognition or server/pose; sightings_config.py differs from the kept recognition/sightings_config.py only by function order, docstring and an unused import (same logic). Nothing at HEAD imports fleet.server.site_observation."
   }
 ]

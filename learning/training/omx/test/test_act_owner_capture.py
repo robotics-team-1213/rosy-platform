@@ -1,21 +1,24 @@
 """Private learning composition; fake predictor/clock are not inference/device proof."""
 from dataclasses import dataclass, replace
+from contextlib import nullcontext, contextmanager
 import hashlib
 import json
 from pathlib import Path
 import sys
+import threading
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path[:0] = [str(ROOT/p) for p in ('learning/training/omx',
-    'learning/training/omx/test', 'middleware/robot_execution/local/test')]
+    'learning/training/omx/test', 'middleware/robot_execution/local/test', 'deploy/robot/omx')]
 from test_omx_policy_session import setup_session, CameraSnapshot
+from sim_policy_inference import infer_for_owner
 from test_act_inference import artifact
 from act_inference import ACTInference
 from act_owner_capture import infer_captured
 from rosy.execution.local.omx_policy import PolicyCandidate
-from rosy.execution.local.policy_install import InstallBinding, load_policy
+from rosy.execution.local.policy_install import InstallBinding, InstalledPolicy, load_policy
 from rosy.contracts.learning import seal
 
 
@@ -25,20 +28,8 @@ class CapturedRGB:
     metadata: CameraSnapshot
     rgb: bytes
 
-
-def infer_for_owner(engine, session, packet):
-    # Explicit isolated caller; no production scheduler or default activation.
-    with session._lock:
-        lease = session.lease
-        doc = session.policy.recheck()
-        if engine.metadata != doc: raise ValueError('different installed policy')
-        observation = session.capture_inference_input(packet.rgb, packet.metadata)
-    result = infer_captured(engine, observation, expected_revision=lease.policy_revision,
-                            monotonic=session._clock)
-    with session._lock:
-        if session.lease is not lease or session.policy.recheck() != doc:
-            raise ValueError('lease or model changed during inference')
-    return PolicyCandidate(**result.candidate_fields()), result
+    def capture(self):
+        return nullcontext(self)
 
 
 def case(tmp_path, monkeypatch, *, enabled=True):
@@ -77,13 +68,206 @@ def case(tmp_path, monkeypatch, *, enabled=True):
 
 def test_exact_capture_and_candidate_reaches_existing_owner(tmp_path, monkeypatch):
     session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
-    candidate, result = infer_for_owner(engine, session, packet)
+    timings = {}
+    candidate, result = infer_for_owner(engine, session, packet, timings=timings)
+    assert timings and all(value >= 0 for value in timings.values())
     assert seen == [result.source]
     assert result.source.positions == (.1, 0.)
     assert result.source.frame_sha256 == packet.metadata.frame_sha256
     assert not client.commands  # Adapter never submits or mints authority.
     assert session.submit(candidate).accepted
     assert client.commands[0].source_state_sequence == result.source.sequence == 10
+
+
+@pytest.mark.parametrize('refresh', [True, False])
+@pytest.mark.parametrize('input_age_s',[.01,.02])
+def test_aged_capture_is_replaced_before_computation_or_stops(tmp_path, monkeypatch, refresh,input_age_s):
+    session, engine, packet, client, clock, _, cameras, seen, _ = case(tmp_path, monkeypatch)
+    clock[0] += input_age_s  # Admission-valid; reserve time for measured submit tails.
+    pauses=[]
+    rgb=[packet.rgb]
+    class LiveCamera:
+        def capture(self):
+            return nullcontext(CapturedRGB(cameras[0], rgb[0]))
+    def pause(delay):
+        pauses.append(delay)
+        clock[0] += delay
+        if refresh:
+            session.observe(replace(session._snapshot, sequence=11, received_at=clock[0]))
+            rgb[0]=bytes(reversed(packet.rgb))
+            cameras[0]=replace(cameras[0], received_at_ns=int(clock[0]*1e9),
+                               frame_sha256=hashlib.sha256(rgb[0]).hexdigest())
+    monkeypatch.setattr('sim_policy_inference.sleep', pause, raising=False)
+    if refresh:
+        candidate, result=infer_for_owner(engine, session, LiveCamera())
+        assert pauses and len(seen)==1
+        assert result.source.sequence==candidate.sequence==11
+        assert candidate.observed_at_ns==int(clock[0]*1e9)
+        assert candidate.camera_received_at_ns==(cameras[0].received_at_ns,)
+        assert result.source.rgb==rgb[0]!=bytes(packet.rgb)
+    else:
+        with pytest.raises((PermissionError, TimeoutError)):
+            infer_for_owner(engine, session, LiveCamera())
+        assert pauses and not seen
+    assert not client.commands
+
+
+def test_fresh_capture_after_attempt_deadline_never_computes(tmp_path, monkeypatch):
+    session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
+    ticks=[0]
+    monkeypatch.setattr('sim_policy_inference.perf_counter_ns', lambda: ticks[0])
+    capture=session.capture_inference_input
+    def delayed_capture(*args):
+        observation=capture(*args)
+        ticks[0]+=session.policy.binding.timing['max_observation_age_ns']
+        return observation
+    monkeypatch.setattr(session, 'capture_inference_input', delayed_capture)
+    with pytest.raises(TimeoutError, match='capture margin'):
+        infer_for_owner(engine, session, packet)
+    assert not seen and not client.commands
+
+
+def test_actor_budget_can_wait_for_a_new_fresh_capture(tmp_path, monkeypatch):
+    session, engine, packet, client, clock, _, cameras, seen, _ = case(tmp_path, monkeypatch)
+    ticks=[0]
+    monkeypatch.setattr('sim_policy_inference.perf_counter_ns', lambda: ticks[0])
+    class LiveCamera:
+        def capture(self):
+            elapsed=session.policy.binding.timing['max_observation_age_ns']
+            ticks[0]+=elapsed;clock[0]+=elapsed/1e9
+            session.observe(replace(session._snapshot,sequence=11,received_at=clock[0]))
+            cameras[0]=replace(cameras[0],received_at_ns=int(clock[0]*1e9))
+            return nullcontext(CapturedRGB(cameras[0],packet.rgb))
+    checks=[]
+    def live():
+        assert not session._lock._is_owned()
+        checks.append(ticks[0])
+    proposed,result=infer_for_owner(engine,session,LiveCamera(),require_live=live)
+    assert len(checks)>=3 and len(seen)==1 and not client.commands
+    assert proposed.observed_at_ns==result.source.observed_at_ns==int(clock[0]*1e9)
+    assert proposed.sequence==11 and proposed.camera_received_at_ns==(cameras[0].received_at_ns,)
+    assert session.submit(proposed).accepted
+
+
+@pytest.mark.parametrize('expires_during', ['capture','inference'])
+def test_actor_budget_expiry_drops_input_or_computed_candidate(tmp_path, monkeypatch, expires_during):
+    session, engine, packet, client, _, _, _, seen, _ = case(tmp_path, monkeypatch)
+    expired=[False]
+    if expires_during=='capture':
+        original=session.capture_inference_input
+        def capture(*args):
+            result=original(*args);expired[0]=True;return result
+        monkeypatch.setattr(session,'capture_inference_input',capture)
+    else:
+        import sim_policy_inference
+        original=sim_policy_inference.infer_captured
+        def compute(*args,**kwargs):
+            result=original(*args,**kwargs);expired[0]=True;return result
+        monkeypatch.setattr(sim_policy_inference,'infer_captured',compute)
+    def live():
+        assert not session._lock._is_owned()
+        if expired[0]:raise TimeoutError('original actor deadline')
+    with pytest.raises(TimeoutError,match='original actor deadline'):
+        infer_for_owner(engine,session,packet,require_live=live)
+    assert len(seen)==int(expires_during=='inference') and not client.commands
+
+
+def test_install_precheck_allows_joint_intake_before_atomic_capture(tmp_path, monkeypatch):
+    session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
+    original = InstalledPolicy.recheck
+    delivered, workers, failures = threading.Event(), [], []
+    first = True
+    snapshot = replace(session._snapshot, sequence=11)
+
+    def observe():
+        try:
+            session.observe(snapshot)
+        except Exception as error:
+            failures.append(error)
+        finally:
+            delivered.set()
+
+    def recheck(policy):
+        nonlocal first
+        if policy is session.policy and first:
+            first = False
+            worker = threading.Thread(target=observe, daemon=True)
+            workers.append(worker)
+            worker.start()
+            assert delivered.wait(1), 'installed verification blocked live joint intake'
+            assert not failures
+        return original(policy)
+
+    monkeypatch.setattr(InstalledPolicy, 'recheck', recheck)
+    try:
+        candidate, result = infer_for_owner(engine, session, packet)
+    finally:
+        for worker in workers:
+            worker.join(2)
+            assert not worker.is_alive()
+    assert candidate.sequence == result.source.sequence == 11
+    assert result.source.observed_at_ns == int(snapshot.received_at * 1e9)
+    assert not client.commands
+
+
+def test_install_tamper_after_precheck_is_rejected_at_capture(tmp_path, monkeypatch):
+    session, engine, packet, client, _, _, _, seen, root = case(tmp_path, monkeypatch)
+    original = InstalledPolicy.recheck
+    first = True
+
+    def recheck(policy):
+        nonlocal first
+        doc = original(policy)
+        if policy is session.policy and first:
+            first = False
+            path = root / doc['files'][0]['path']
+            path.write_bytes(path.read_bytes() + b'tampered after precheck')
+        return doc
+
+    monkeypatch.setattr(InstalledPolicy, 'recheck', recheck)
+    with pytest.raises(ValueError, match='artifact file hash/size differs'):
+        infer_for_owner(engine, session, packet)
+    assert not seen and not client.commands
+
+
+def test_live_capture_is_atomic_under_owner_lock_but_predict_is_outside(tmp_path, monkeypatch):
+    session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
+    active = []
+    class LiveCamera:
+        @contextmanager
+        def capture(self):
+            assert session._lock._is_owned()
+            active.append(True)
+            try:
+                yield packet
+            finally:
+                active.pop()
+    predict=engine._predict
+    def checked(observation):
+        assert not active and not session._lock._is_owned()
+        return predict(observation)
+    engine._predict=checked
+    proposed, _=infer_for_owner(engine,session,LiveCamera())
+    assert session.submit(proposed).accepted and len(client.commands)==1
+
+
+def test_valid_same_scope_renewal_during_compute_preserves_original_candidate(tmp_path, monkeypatch):
+    session, engine, packet, client, clock, *_ = case(tmp_path, monkeypatch)
+    original=session.lease
+    predict=engine._predict
+    def renewing(observation):
+        actions=predict(observation)
+        clock[0]+=.001
+        session.renew(replace(original,issued_at_ns=int(clock[0]*1e9),
+                              expires_at_ns=original.expires_at_ns+1_000_000))
+        return actions
+    engine._predict=renewing
+    proposed,result=infer_for_owner(engine,session,packet)
+    assert session.lease is not original
+    assert proposed.lease_id==original.lease_id
+    assert proposed.observed_at_ns==10_000_000_000
+    assert result.source.camera_received_at_ns==10_000_000_000
+    assert session.submit(proposed).accepted and len(client.commands)==1
 
 
 @pytest.mark.parametrize('change', ['bytes', 'timestamp', 'identity'])
@@ -128,6 +312,22 @@ def test_changes_during_inference_rejected_by_final_owner(tmp_path, monkeypatch,
     assert len(seen) == 1
 
 
+def test_candidate_return_defers_install_admission_to_existing_owner(tmp_path, monkeypatch):
+    session, engine, packet, client, _, _, _, seen, root = case(tmp_path, monkeypatch)
+    predict=engine._predict
+    def changed_install(observation):
+        actions=predict(observation)
+        (root/'policy/model.safetensors').write_bytes(b'changed after numerical inference')
+        return actions
+    engine._predict=changed_install
+    proposed, result=infer_for_owner(engine, session, packet)
+    assert len(seen)==1 and not client.commands
+    assert proposed.observed_at_ns==result.source.observed_at_ns
+    with pytest.raises(PermissionError):
+        session.submit(proposed)
+    assert session.hold_reason and not client.commands
+
+
 def test_same_clock_and_exact_policy_required(tmp_path, monkeypatch):
     session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
     engine._clock = lambda: 10.
@@ -149,16 +349,53 @@ def test_capture_buffer_is_frozen(tmp_path, monkeypatch):
     assert frozen.rgb == packet.rgb
 
 
-def test_lease_change_during_prediction_cannot_relabel_result(tmp_path, monkeypatch):
+@pytest.mark.parametrize('change', [dict(lease_id='other'),dict(issued_at_ns=9_999_999_999),
+                                  dict(expires_at_ns=10_499_999_999)])
+def test_lease_change_during_prediction_cannot_relabel_result(tmp_path, monkeypatch, change):
     session, engine, packet, client, *_ = case(tmp_path, monkeypatch)
     original = engine._predict
     def predict(obs):
         actions = original(obs)
-        session._lease = replace(session.lease, lease_id='other')
+        session._lease = replace(session.lease, **change)
         return actions
     engine._predict = predict
     with pytest.raises(ValueError, match='lease'): infer_for_owner(engine, session, packet)
     assert not client.commands
+
+
+def test_completed_proposal_does_not_wait_for_another_owner_transaction(tmp_path, monkeypatch):
+    session,engine,packet,client,*_=case(tmp_path,monkeypatch)
+    locked,release,finished=threading.Event(),threading.Event(),threading.Event()
+    workers=[];outcome=[]
+    predict=engine._predict
+    def hold_owner():
+        with session._lock:
+            locked.set()
+            assert release.wait(3)
+    def predicting(observation):
+        actions=predict(observation)
+        worker=threading.Thread(target=hold_owner,daemon=True)
+        workers.append(worker);worker.start()
+        assert locked.wait(1)
+        return actions
+    def infer():
+        try:outcome.append(infer_for_owner(engine,session,packet))
+        except Exception as error:outcome.append(error)
+        finally:finished.set()
+    engine._predict=predicting
+    worker=threading.Thread(target=infer,daemon=True);worker.start()
+    try:
+        assert locked.wait(1)
+        assert finished.wait(1), 'unadmitted proposal waited for the owner after numerical inference'
+    finally:
+        release.set();worker.join(2)
+        for holder in workers:holder.join(2)
+    assert not worker.is_alive() and all(not holder.is_alive() for holder in workers)
+    assert len(outcome)==1 and not isinstance(outcome[0],Exception)
+    candidate,result=outcome[0]
+    assert candidate.observed_at_ns==result.source.observed_at_ns==10_000_000_000
+    assert not client.commands
+    assert session.submit(candidate).accepted
 
 
 def test_queued_old_source_is_not_refreshed_to_pass_owner(tmp_path, monkeypatch):
@@ -207,6 +444,8 @@ def test_actual_cpu_model_composition_is_numeric_only(tmp_path, monkeypatch):
     from lerobot.configs.types import PolicyFeature, FeatureType
     session, _, packet, client, _, _, _, _, root = case(tmp_path, monkeypatch)
     monkeypatch.undo()  # Use the real byte-loaded CPU predictor, not the host fake.
+    # Numerical composition uses the fixture clock; separate tests cover wall-time expiry.
+    monkeypatch.setattr('sim_policy_inference.perf_counter_ns', lambda: int(session._clock() * 1e9))
     torch.set_num_threads(2)
     config = ACTConfig(input_features={
         'observation.state': PolicyFeature(FeatureType.STATE,(2,)),

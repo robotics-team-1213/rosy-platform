@@ -11,8 +11,14 @@ import time
 
 ROOT=Path(__file__).resolve().parents[3]
 sys.path[:0]=[str(ROOT/'contracts/learning/src'),str(ROOT/'learning/curation/omx')]
-from act_inference import ACTInference,InferenceObservation
+from act_inference import ACTInference,InferenceObservation,image_key,action_statistics
 from rosy.contracts.learning import validate_dataset,validate_policy
+
+
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
 
 
 def _write(path,data):
@@ -22,7 +28,7 @@ def _write(path,data):
 def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced=True):
     out=Path(out).resolve();policy_root=Path(policy_root).resolve();eval_export=Path(eval_export).resolve()
     dataset_root=Path(dataset_root or policy_root).resolve()
-    if out.exists() or out.drive.upper()=='F:':raise ValueError('new artifact directory outside F: required')
+    if out.exists() or _in_checkout(out):raise ValueError('new artifact directory outside the source checkout required')
     if type(paced) is not bool:raise ValueError('explicit replay cadence flag required')
     if any(out.is_relative_to(p) or p.is_relative_to(out) for p in (policy_root,eval_export,dataset_root)):
         raise ValueError('output must be separate from policy and source inputs')
@@ -36,8 +42,11 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
     source=validate_omx(paths[0].parent)
     if len(policy['evaluations'])!=1:raise ValueError('one bound original offline report required')
     original=json.loads((policy_root/policy['evaluations'][0]['path']).read_bytes())
-    if (original['eval_episode']!=paths[0].parent.name or original['eval_episode'] in original['train_episodes']
-            or len(source['samples'])!=original['eval_frames']):raise ValueError('source differs from held-out evaluation')
+    episode_id=paths[0].parent.name
+    evaluation_ids=original.get('eval_episodes', [original.get('eval_episode')])
+    expected_metrics=original.get('per_episode',{}).get(episode_id,original)
+    if (episode_id not in evaluation_ids or episode_id in original['train_episodes']
+            or len(source['samples'])!=expected_metrics['eval_frames']):raise ValueError('source differs from held-out evaluation')
     stats=json.loads((policy_root/policy['normalization']['path']).read_bytes())
     if stats['fit_episodes']!=original['train_episodes']:raise ValueError('normalization fit sources differ')
     # The actual evaluation reader must be byte-for-byte covered by the bound Dataset.
@@ -77,11 +86,11 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
                 if int(actual['source.'+field].item())!=row[field]:raise ValueError('reader source clock/sequence differs')
             if int(actual['source.received_wall_time_ns'].item())!=row['received_at_ns']:
                 raise ValueError('reader original wall receipt differs')
-            image=actual['observation.images.front']
+            image=actual[image_key(policy)]
             if list(image.shape)!=camera['source_shape']:raise ValueError('reader source image dimensions differ')
             rgb=(image.permute(1,2,0).numpy()*255).round().astype(np.uint8).tobytes()
             received=time.monotonic_ns()
-            obs=InferenceObservation(original['eval_episode'],'offline-replay:'+policy_revision,
+            obs=InferenceObservation(episode_id,'offline-replay:'+policy_revision,
                 tuple(policy['joint_names']),tuple(actual['observation.state'].tolist()),row['state_sequence'],received,
                 camera['identity'],camera['calibration_sha256'],tuple(camera['source_shape']),received,rgb)
             result=engine.infer(obs);predictions.append(result.positions)
@@ -103,8 +112,8 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
                 action_age_within_budget=action_age<=policy['timing']['max_action_age_ns'],positions=list(result.positions)))
         truth=np.asarray([row['action'] for row in source['samples']]);prediction=np.asarray(predictions)
         mae=float(np.abs(truth-prediction).mean())
-        baseline=float(np.abs(truth-np.asarray(stats['action_mean'])).mean())
-        if abs(mae-original['mae_rad'])>1e-6 or abs(baseline-original['constant_baseline_mae_rad'])>1e-9:
+        baseline=float(np.abs(truth-np.asarray(action_statistics(stats,len(policy['joint_names']))[3])).mean())
+        if abs(mae-expected_metrics['mae_rad'])>1e-6 or abs(baseline-expected_metrics['constant_baseline_mae_rad'])>1e-9:
             raise ValueError('actual queued prediction metrics differ from bound offline evaluation')
         # Revalidate all referenced source bytes after video decoding/inference.
         validate_policy(json.loads((policy_root/'policy-artifact.json').read_bytes()),root=policy_root)
@@ -114,14 +123,15 @@ def replay(policy_root,eval_export,out,policy_revision,*,dataset_root=None,paced
         limits=np.asarray(policy['action']['limits'])
         gaps=[frames[i]['input_received_at_owner_monotonic_ns']-frames[i-1]['returned_at_owner_monotonic_ns'] for i in range(1,len(frames))]
         report=dict(schema='rosy.act-inference-replay/1',policy_revision=policy_revision,dataset_revision=dataset['revision'],
-            evaluation_episode=original['eval_episode'],frames=len(frames),actual_model_computations=sum(f['consumed_current'] for f in frames),
+            evaluation_episode=episode_id,frames=len(frames),actual_model_computations=sum(f['consumed_current'] for f in frames),
             queued_candidates=sum(not f['consumed_current'] for f in frames),
             observation_mismatch_count=sum(not f['candidate_matches_current_observation'] for f in frames),
             observation_age_violation_count=sum(not f['observation_age_within_budget'] for f in frames),
             action_age_violation_count=sum(not f['action_age_within_budget'] for f in frames),
             mae_rad=mae,constant_baseline_mae_rad=baseline,
             joint_limit_violation_count=int(((prediction<limits[:,0])|(prediction>limits[:,1])).sum()),
-            original_metrics_reproduced=True,original_verdict=original['verdict'],cadence='minimum-period-after-return' if paced else 'unpaced',
+            original_metrics_reproduced=True,original_verdict=expected_metrics['verdict'],
+            aggregate_original_verdict=original['verdict'],cadence='minimum-period-after-return' if paced else 'unpaced',
             requested_period_ns=policy['timing']['period_ns'],minimum_input_after_previous_return_gap_ns=min(gaps) if gaps else None,
             timestamp_basis='replay-input-receipt owner monotonic; original source clocks preserved separately',
             owner_dispatch='not_attempted',operating_authority='none',independent_sim_task='not_executed',

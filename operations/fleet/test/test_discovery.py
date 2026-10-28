@@ -130,7 +130,7 @@ def test_scanner_lease_expiry_is_reported_apart_from_never_seen():
 
 
 def test_console_raises_an_alarm_when_the_scanner_lease_expires():
-    source = (Path(__file__).resolve().parents[2] / "site_ui/console/devices/device-discovery.js").read_text(
+    source = (Path(__file__).resolve().parents[3] / "applications/fleet/web/devices/device-discovery.js").read_text(
         encoding="utf-8")
     block = source[source.index('snapshot.scanner_state === "expired"'):]
     block = block[:block.index("return;")]

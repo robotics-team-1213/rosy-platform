@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OMX follower joint tuning (IDs 11-16): move one joint, or sweep the gripper to find its ends.
+"""OMX joint tuning: follower IDs 11-16, or bounded leader wrist-roll ID 5 only.
 
 Commissioning tool, not an actuator owner: run it only while no owner or controller holds the bus
 and a person watches the arm. Only the chosen motor and the registers below are ever written, and
@@ -46,6 +46,8 @@ from pathlib import Path
 GRIPPER = 16
 #: id -> (model number, operating mode); XL430-W250 = 1060, XL330-M288 = 1200
 FOLLOWER = {11: (1060, 4), 12: (1060, 4), 13: (1060, 4), 14: (1200, 4), 15: (1200, 4), 16: (1200, 5)}
+LEADER_WRIST = 5
+TUNABLE = {LEADER_WRIST: (1200, 4), **FOLLOWER}
 CAP_MAX = 400  # trial ceiling for PWM and Current Limit (PWM max 885)
 WRITES = {"torque": (64, 1), "goal_current": (102, 2), "profile_acc": (108, 4), "profile_vel": (112, 4),
           "goal_pos": (116, 4), "pwm_limit": (36, 2), "current_limit": (38, 2), "p_gain": (84, 2),
@@ -106,16 +108,18 @@ def no_interrupts():
 
 
 class SerialBus:
-    """The confirmed follower bus, opened exclusively; reads and the WRITES whitelist on one motor."""
+    """Confirmed bus opened exclusively; motor 0 lets session cleanup select its existing IDs."""
 
     def __init__(self, device: str, motor: int) -> None:
+        if motor != 0 and motor not in TUNABLE:
+            raise ValueError("only follower IDs 11-16 or confirmed leader wrist 5 may be tuned")
         import fcntl, termios
         import serial
         from dynamixel_sdk import PacketHandler, PortHandler
 
         path = Path(device)
         if path.parent != Path("/dev/serial/by-id") or not path.is_symlink():
-            raise SystemExit("a physically confirmed /dev/serial/by-id symlink is required")
+            raise RuntimeError("a physically confirmed /dev/serial/by-id symlink is required")
         resolved = str(path.resolve(strict=True))
         self.motor = motor
         self.port = PortHandler(resolved)
@@ -144,14 +148,63 @@ class SerialBus:
         if comm or error:
             raise RuntimeError(f"write {name}: comm {comm} error {error}")
 
+    def _cleanup_check(self, comm: int, error: int) -> None:
+        # An Alert carries usable payload only when transport and instruction status succeeded.
+        if comm or error & 0x7f:
+            raise RuntimeError(f"cleanup: comm {comm} error {error}")
+        if error & 0x80:
+            if not hasattr(self, "cleanup_alerts"):
+                self.cleanup_alerts = {}
+            self.cleanup_alerts[self.motor] = True
+
+    def cleanup_read(self, name: str) -> int:
+        """Fault-preserving evidence for torque OFF and baseline-cap restoration only."""
+        if name not in ("model", "mode", "torque", "hw_error", "pwm_limit", "current_limit"):
+            raise ValueError("register is not cleanup evidence")
+        address, size = READS[name]
+        fn = {1: self.packet.read1ByteTxRx, 2: self.packet.read2ByteTxRx}[size]
+        value, comm, error = fn(self.port, self.motor, address)
+        self._cleanup_check(comm, error)
+        return value
+
+    def cleanup_write(self, name: str, value: int) -> None:
+        """Only torque OFF or verified follower baseline EEPROM writes; never clears a fault."""
+        if not ((name == "torque" and type(value) is int and value == 0)
+                or (name in BASELINE and type(value) is int and value == BASELINE[name])):
+            raise ValueError("cleanup permits only torque OFF and baseline caps")
+        if name in BASELINE:
+            expected = FOLLOWER.get(self.motor)
+            if (expected is None or (name == "current_limit" and expected[0] != 1200)
+                    or (self.cleanup_read("model"), self.cleanup_read("mode")) != expected
+                    or self.cleanup_read("torque") != 0):
+                raise RuntimeError("baseline caps require confirmed follower model/mode and torque OFF")
+        address, size = WRITES[name]
+        fn = {1: self.packet.write1ByteTxRx, 2: self.packet.write2ByteTxRx}[size]
+        comm, error = fn(self.port, self.motor, address, value)
+        self._cleanup_check(comm, error)
+
+    def alert(self) -> tuple[int, bool]:
+        """Torque and the status packet's hardware-alert bit, readable while an alert makes read() fail."""
+        torque, comm, error = self.packet.read1ByteTxRx(self.port, self.motor, READS["torque"][0])
+        if comm:
+            raise RuntimeError(f"motor {self.motor}: comm {comm}")
+        return torque, bool(error & 0x80)
+
+    def reboot(self) -> None:
+        comm, _ = self.packet.reboot(self.port, self.motor)
+        if comm:
+            raise RuntimeError(f"reboot motor {self.motor}: comm {comm}")
+
     def close(self) -> None:
         self.port.ser.close()
 
 
 class Run:
     def __init__(self, bus, motor: int, *, log, grab, clock=time.monotonic, sleep=time.sleep) -> None:
+        if motor not in TUNABLE:
+            raise ValueError("only follower IDs 11-16 or confirmed leader wrist 5 may be tuned")
         self.bus, self.motor, self.log, self.grab, self.clock, self.sleep = bus, motor, log, grab, clock, sleep
-        self.xl330 = FOLLOWER[motor][0] == 1200
+        self.xl330 = TUNABLE[motor][0] == 1200
 
     def state(self) -> dict:
         return {name: self.bus.read(name) for name in STATE}
@@ -215,8 +268,8 @@ class Run:
         drive_mode = self.bus.read("drive_mode")
         self.log(step="before", motor=self.motor, model=model, mode=mode, **before)
         self.grab("before")
-        if ((model, mode) != FOLLOWER[self.motor] or before["torque"] != 0 or before["hw_error"] != 0):
-            raise SystemExit(f"precondition failed: motor {self.motor} must be {FOLLOWER[self.motor]} "
+        if ((model, mode) != TUNABLE[self.motor] or before["torque"] != 0 or before["hw_error"] != 0):
+            raise SystemExit(f"precondition failed: motor {self.motor} must be {TUNABLE[self.motor]} "
                              f"(model, mode), torque OFF, no hardware error")
         if drive_mode & 0x0C:
             raise SystemExit("drive mode must use velocity profiles without automatic torque enable")
@@ -235,19 +288,31 @@ class Run:
         target_for(before["present_pos"])
         limits = ("pwm_limit", "current_limit") if self.xl330 else ("pwm_limit",)
         found = {name: self.bus.read(name) for name in limits}
-        if any(found[name] != BASELINE[name] for name in limits):
+        leader_wrist = self.motor == LEADER_WRIST
+        if leader_wrist:
+            if any(found[name] < BASELINE[name] for name in limits):
+                raise SystemExit(f"leader wrist caps {found} below baseline; refusing to raise them")
+            target = args.to if args.to is not None else before["present_pos"] + args.delta
+            if args.command != "move" or abs(target - before["present_pos"]) > args.max_delta:
+                raise SystemExit("leader wrist permits bounded move only")
+        elif any(found[name] != BASELINE[name] for name in limits):
             raise SystemExit(f"motor {self.motor} caps {found} are not the commissioning baseline; an earlier "
-                             "run did not restore them - lower them with commissioning_limits.py (torque OFF)")
+                             "run did not restore them - lower them with commissioning_limits.py --baseline (torque OFF)")
         restore = {}  # filled before each write, so a write whose readback fails is still restored
         try:
+            if leader_wrist:
+                restore.update({name: BASELINE[name] for name in limits})
+                for name in limits:
+                    if found[name] != BASELINE[name]:
+                        self.set(name, BASELINE[name])
             for name, value in (("pwm_limit", args.pwm),
                                 ("current_limit", args.current_limit if self.xl330 else None),
                                 ("p_gain", args.p_gain), ("i_gain", args.i_gain)):
                 if value is not None:
                     restore[name] = BASELINE[name] if name in BASELINE else self.bus.read(name)
                     self.set(name, value)
-            self.set("profile_acc", args.acceleration)
-            self.set("profile_vel", args.velocity)
+            self.set("profile_acc", 1 if leader_wrist else args.acceleration)
+            self.set("profile_vel", 1 if leader_wrist else args.velocity)
             if self.motor == GRIPPER:
                 self.set("goal_current", args.goal_current)
             fresh = self.state()
@@ -317,7 +382,7 @@ class Run:
 def parse(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--device", required=True)
-    parser.add_argument("--id", type=int, default=GRIPPER, choices=sorted(FOLLOWER))
+    parser.add_argument("--id", type=int, default=GRIPPER, choices=sorted(TUNABLE))
     parser.add_argument("--viewer", default="http://127.0.0.1:8767", help="local camera viewer ('' to skip frames)")
     parser.add_argument("command", choices=("move", "sweep"))
     parser.add_argument("--to", type=int)
@@ -334,6 +399,8 @@ def parse(argv=None):
     parser.add_argument("--max-delta", type=int, default=200, help="non-gripper move limit in ticks")
     parser.add_argument("--reach", type=int, default=1700, help="gripper sweep: push this far each way")
     args = parser.parse_args(argv)
+    if args.id == LEADER_WRIST:
+        args.velocity = args.acceleration = 1
     if not (1 <= args.pwm <= CAP_MAX and 1 <= args.current_limit <= CAP_MAX
             and 1 <= args.goal_current <= args.current_limit):
         parser.error(f"caps must be 1..{CAP_MAX} and the goal current at most the current limit")

@@ -24,6 +24,7 @@ from std_msgs.msg import String, UInt16MultiArray
 from .core_law_input import configure_drivable_law, refresh_drivable_law
 from . import executor_choice
 from .route_context_input import RouteContextInput, bend_expected
+from .lane_route_guide_input import LaneRouteGuideInput, subscribe_route_guide
 from .keep_odom_veto import OdomVetoLaneKeeper
 from .calibrated_values import calibrated
 from .sensing.perception.camera_ground import (
@@ -46,7 +47,7 @@ from .sensing.perception.lane_boundaries import LaneBoundaryTracker
 from .sensing.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from .sensing.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
 from .sensing.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
-from .sensing.perception.drivable.drivable_keep import keep_step, parse_guide, scan_summary
+from .sensing.perception.drivable.drivable_keep import keep_step, scan_summary
 from .sensing.perception.evidence_mode import EvidenceModes
 from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
 from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
@@ -181,7 +182,7 @@ class LineObserverNode(Node, RouteFollowerInput):
         self._evidence_modes = EvidenceModes()
         # D-597 amendment 2: with the drivable target, keep steers from the way itself.
         configure_drivable_law(self, _READ_ONLY)
-        self._wall_ahead = self._lane_guide = None
+        self._wall_ahead, self._lane_guide = None, LaneRouteGuideInput()
         self._odom_history = OdomHistory()
         self._route_follower = None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
@@ -234,8 +235,7 @@ class LineObserverNode(Node, RouteFollowerInput):
             self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
             if self._drivable_required:   # D-597 amendment 2: a wall beyond the model's view
                 self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
-                self.create_subscription(String, 'line/lane_guide', lambda m: setattr(   # route prior (D-511 rev 2)
-                    self, '_lane_guide', parse_guide(m.data, self._stamp())), 10)
+                subscribe_route_guide(self, String)
             route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                                    durability=DurabilityPolicy.VOLATILE)
             self.create_subscription(
@@ -529,7 +529,7 @@ class LineObserverNode(Node, RouteFollowerInput):
                         step, decided = keep_step(
                             self._drivable_steer, self._paint_worker, self._lane_keeper.last, ground,
                             self._lane_keeper._x_offset, float(self.get_parameter('lane_half_width_m').value),
-                            self._odom_history.pose_at, image_stamp, self._wall_ahead, self._lane_guide)
+                            self._odom_history.pose_at, image_stamp, self._wall_ahead, self._lane_guide.for_frame(image_stamp), guide_generation=self._lane_guide.generation)
                     except Exception as exc:  # noqa: BLE001 - a steering bug holds the robot, never kills the node
                         self.get_logger().error(f'drivable steer failed: {exc!r}', throttle_duration_sec=5.0)
                         self._drivable_steer.reset()
@@ -694,8 +694,8 @@ class LineObserverNode(Node, RouteFollowerInput):
         self._odom_history.add(self._odom_stamp, *self._odom_pose)
 
     def _on_scan(self, msg: LaserScan) -> None:
-        ahead, side = scan_summary(msg.ranges, msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max)
-        self._wall_ahead = (ahead, float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9, side)
+        ahead, side, front = scan_summary(msg.ranges, msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max)
+        self._wall_ahead = (ahead, float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9, side, front)
 
     def _on_cmd_vel(self, msg: Twist) -> None:   # Twist has no header: stamped on arrival (node clock, sim time in SIM)
         self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z), self.get_clock().now().nanoseconds * 1e-9

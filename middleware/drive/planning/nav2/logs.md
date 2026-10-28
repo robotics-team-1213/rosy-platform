@@ -91,6 +91,7 @@
 - Change: remap slam_toolbox /map and /map_metadata within the SLAM launch group.
 - Local evidence: mapping contract and dashboard package tests passed on main. The prior web-drive worktree recorded an independent Pinky sensor probe with explicit map remapping; this integration did not repeat that probe or deploy the changed launch file.
 - Gate: SOURCE/LOCAL only. Runtime map and physical G5 acceptance remain unverified.
+
 ## 2026-09-29 · uncommitted · feat(launch): Flask 시대 web_* 진입점 4종 삭제 (스코어카드 §6 과제 3)
 
 - 변경: web_nav2/web_slam/gz_web_nav2/gz_web_slam.launch.xml 삭제 — Flask 자리에 core FastAPI를 띄우던 전환기 진입점으로 D-3 완료 뒤 역할이 끝났다. test/test_flask_launch_removed.py는 가드를 부재 단정으로 반전했다(4파일 부재 + 어떤 navigation XML도 core나 웹서버를 시작하지 않음 + CMake Flask 설치 금지 유지). test/architecture/test_module_structure.py의 KNOWN_UNDECLARED에서 (navigation, core) 엣지를 제거했다. line_follow include는 기본 false 옵트인으로 이미 완화되어 deploy 조립로 이전은 별도 과제로 보루(사용자 결정, 축소안).
@@ -117,65 +118,17 @@
 - 증거: 실행 전이다. preliminary standalone fixture는 없는 helper를 참조하므로 먼저 setup RED를 확인한다. 이 단계는 실제 AMCL/StaticLayer producer나 R3의 전체 navigation/interfaces 빌드·수용을 대체하지 않는다.
 - gate 변화: 없음. D-783/승인 실행 계획을 module metadata에 연결했다. native consumer·CORE admission·ARM64/DEVICE/FIELD는 미확인이다.
 
-## 2026-10-17 · uncommitted · native canonical grid identity helper
-
-- 변경: 전용 safety root 아래 C++ 원본 grid 검증·ROSY-GRID-v1 SHA256·두 원본 시각 identity 비교를 구현했다. float32 resolution을 double로 승격하고 little-endian/signed-zero/raw int8를 보존한다. 지원 profile은 axis-aligned map과 최대 4194304 cells다. helper는 native 처리·운행 허가를 보고하지 않는다.
-- 증거: a22e7c5fb의 승인 AI 시험 PC remote_sim은 Python golden 생성과 SDK/gtest 탐지를 통과한 뒤 없는 grid.cpp에서 setup RED exit 1이었다. 실제 gtest는 실행되지 않았다. 이 source commit 후 원격 compile/6건 실행을 확인한다.
-- gate 변화: 없음. native AMCL/StaticLayer producer 및 R3의 최종 native navigation build/운영·장치 수용은 여전히 남아 있다.
-
-## 2026-10-17 · uncommitted · 실제 AMCL producer RED 준비
-
-- 변경: 실제 AMCL 클래스/DDS 지도·readback service를 쓰는 9개 native gtest와 같은 SHA interfaces→navigation opt-in 빌드/실행 경로를 추가했다. native 호출/실제 cells를 읽는 inspector는 consumer를 대체하지 않는다.
-- 증거: canonical helper 8f749b1f9는 AI 시험 PC에서 compile/link 및 실제 gtest 6 PASS/0 FAIL/0 SKIP, remote_sim exit 0이다. AMCL producer/header/opt-in은 아직 없으므로 새 9건은 실행 전이며 setup 부재 RED를 먼저 확인한다.
-- gate 변화: 없음. canonical helper는 지도 채택 ACK가 아니다. 실제 AMCL/StaticLayer 채택·CORE admission·물리 수용은 계속 미확인이다.
-
-## 2026-10-17 · uncommitted · opt-in 실제 AMCL original-map owner
-
-- 변경: 기본 OFF native opt-in에 고정 SDK 검증과 standalone AMCL owner를 추가했다. 최초 subscription부터 private callback group이 소유하고 실제 handleMapMessage/원본 cells·geometry 확인 후에만 채택을 기록한다. 다른 raw/시각은 native 변경 전 instance를 폐기한다. 전체 parameter transaction을 pre-set에서 거절하고 비활성화/정리/파괴 전 폐기 및 executor join을 수행한다. 원본/instance/generation/build/config를 내부 readback으로 반환한다.
-- 증거: 5d4b074a0의 remote_sim은 same-SHA interfaces/wire 생성·직렬화를 통과한 뒤 navigation이 아직 선언하지 않은 opt-in을 사용하지 않아 setup RED exit 1이었다. AMCL 9건은 미실행이다. 독립 source 검토에서 config 표시 문자열의 정밀도 손실과 cleanup race 검증 부재를 발견해 typed binary config/정밀도 회귀 및 실제 callback barrier로 보완했다. source commit 후 실제 고정 SDK 빌드/DDS/native 10건 및 grid 6건을 실행한다.
-- gate 변화: 없음. 일반 launch는 유지하며 verified component를 등록하지 않는다. 전역 StaticLayer/CORE/운영 factory·전체 충전 주기·장치 수용은 아직 없다. upstream에서 각색한 wiring의 LGPL 고지/원문을 보존한다.
-
-## 2026-10-17 · uncommitted · 고정 costmap SDK의 exported target include 경로 사용
-
-- 변경: SDK header 탐색에 실제 설치된 `nav2_costmap_2d::nav2_costmap_2d_core`의 INTERFACE_INCLUDE_DIRECTORIES를 추가했다. 기존 SHA pin은 유지하며 CMakeCache도 실패 artifact로 보존한다.
-- 증거: 834d6bd02 최초 native 요청은 headroom 부족으로 미실행이었다. 승인 AI 시험 PC의 재요청은 interfaces/wire를 통과한 뒤 static header 탐색에서 실패했다. 읽기 전용 SDK 확인으로 header 존재·기존 SHA 일치와 exported core target의 정확한 include 경로를 확인했다. native 컴파일/10건 실행은 아직 미실행이다.
-- gate 변화: 없음. source guard 원격 결과는 207 PASS/1 FAIL/0 SKIP이며 safety 예외 commit ancestry 한 건이다. 같은 검사는 수정하지 않은 main 8b60af26b에서 1 PASS, 이번 native 변경 이전 branch baseline cb19bf69f에서 1 FAIL이다. branch의 기존 이력 문제로 분리하며 현재 검사 전체 통과를 주장하지 않는다.
-
-## 2026-10-17 · uncommitted · lifecycle SDK pin을 실제 Linux 원본 바이트로 교정
-
-- 변경: 추가 lifecycle header pin이 Windows 캐시의 CRLF hash였던 오류를 교정했다. 기존 R3의 5개 pin/version은 유지한다.
-- 증거: 6c918813c의 bounded placement 재요청 1은 미실행, 2는 실제 시작해 기존 5개 pin을 통과한 뒤 추가 lifecycle pin에서 실패했다. 읽기 전용 SDK 확인으로 model/AI의 Linux 원본 hash가 모두 1fedfbcc…이고 캐시와 줄끝 정규화 후 동일함을 확인했다. 실제 compile/native gtest는 아직 도달하지 않았다.
-- gate 변화: 없음. 임의 SDK 허용이나 pin 우회 없이 실제 승인 SDK 바이트를 사용한다. 새 source revision으로 native 검증을 다시 요청한다.
-
-## 2026-10-17 · uncommitted · native AMCL fixture의 ROS context 초기화 순서 교정
-
-- 변경: 실제 gtest Environment에서 ROS context를 먼저 초기화하고 마지막에 종료한다. Harness의 executor 멤버가 생성된 뒤 constructor body에서 init하던 fixture 오류를 고쳤다. production source는 바꾸지 않았다.
-- 증거: 834ba0a9d는 6개 SDK pin·same-SHA 빌드/provenance 및 C++ compile/link를 통과했다. 실제 gtest 총 16건 중 grid 6건과 typed config 1건 PASS, AMCL Harness 9건은 context-null guard condition 생성에서 실패했다. 이는 AMCL 동작 반례 9건이 아니며 source 직렬화 wire 검사와 분리한다.
-- gate 변화: 없음. fixture만 수정한 revision에서 native 16건을 재실행한다. AMCL 채택·CORE/StaticLayer 및 실기 수용은 아직 입증되지 않았다.
-
-## 2026-10-17 · uncommitted · 설치된 standalone AMCL의 실제 기본 graph 검사 추가
-
-- 변경: R3의 실제 설치 executable/기본 node graph 조건을 검사한다. 승인된 remote_sim의 격리 domain에서 설치 binary를 실행하고 실제 GetState service와 namespace, 초기 UNCONFIGURED와 해당 node의 velocity publisher 부재를 확인한 뒤 자신이 시작한 process만 종료한다.
-- 증거: 새 검사는 아직 실행 전이다. 1f2b0f1e8의 context 수정본 원격 요청은 고정 SHA로 headroom 재시도 중이며 재시작하지 않았다. 이 검사는 이후 revision의 별도 native 실행에 포함한다.
-- gate 변화: 없음. 초기 UNCONFIGURED graph는 실제 localization·접안·운영 admission 증거가 아니며 device를 구성/활성화하지 않는다.
-
 ## 2026-10-17 · uncommitted · native grid·실제 AMCL·설치 graph 검증 기록
 
 - 변경: revision별 setup/동작 결과와 독립 검토 수정, SDK/생성 provenance, 남은 전역/CORE·현장 수용을 [validation](../../../../docs/validation/station-native-map-amcl-2026-10-17/result.md)에 기록했다.
 - 증거: 0034827d2 승인 AI 시험 PC에서 same-SHA interfaces→navigation native 빌드, 실제 gtest grid6+AMCL10 모두 PASS/0 SKIP, 설치 standalone GetState/namespace·초기 UNCONFIGURED 및 정상 종료 PASS, exit 0. 834d6bd02 source guard는 207 PASS/1 FAIL/0 SKIP이고 해당 ancestry 검사 실패는 이전 branch cb19bf69f에서 재현되며 main 8b60af26b는 PASS다.
 - gate 변화: SOURCE GO→HOLD(미완료 전역/CORE·FULL CI, branch 이력 guard 실패를 명시). LOCAL GO는 검증한 native slice에 한정한다. ROS-SIM/ARTIFACT/DEVICE HOLD·FIELD PARKED 유지, 전체 목표 ACTIVE다. 장치 재탐색/이동/토크/재시작/배포/landing/push 없음.
 
-## 2026-10-17 · uncommitted · 실제 global StaticLayer application RED 준비
+## 2026-10-17 · uncommitted · native canonical grid identity helper
 
-- 변경: 실제 Costmap2DROS가 production plugin을 load하고 DDS 지도/readback, full/partial native application·reset/resize·clear service·footprint·callback 정리·profile 거절을 검사하는 14개 native 회귀와 원격 검증 경로를 추가했다. read-only test inspector만 callback/native 처리 수를 읽는다.
-- 증거: 아직 실행 전이다. 새 plugin/등록/test target이 없는 현재 source에서 setup 부재 RED를 먼저 확인한다. 기존 16건과 설치 AMCL graph를 먼저 확인하고 static XML의 실제 14건·실패/skip 부재를 요구한다.
-- gate 변화: 없음. 전역 static source·CORE/admission·실기 수용을 아직 입증하지 않는다.
-
-## 2026-10-17 · uncommitted · 첫 원본 지도의 실제 static application 소유자 구현
-
-- 변경: pinned StaticLayer를 상속하고 첫 DDS 구독부터 원본을 보관한다. 실제 processMap 이후에도 pending이며 actual parent ACTIVE·fresh bounds·일치하는 전체 master window에 base updateCosts가 적용한 경우만 확인한다. master→layer 잠금, reset의 새 generation, 외부 resize/지도 변경의 영구 retire, 전체 parameter transaction freeze, private group/parent 정리 경계를 따른다. 기본 OFF opt-in에 plugin 등록/native 시험을 연결하고 upstream BSD 고지를 보존했다.
-- 증거: 시험 전용 86c0e72da7의 승인 AI 원격 실행은 같은 SHA interface/native 빌드·기존 16건/설치 AMCL smoke PASS 후 static target/XML 부재로 exit 1이었다. 실제 static 동작 0건의 setup RED다. 새 source는 아직 compile·14건 실행 전이며 독립 검토 중이다.
-- gate 변화: 없음. 확인 응답은 원본 static contribution만 기술하며 최종 inflated costmap/위치 수렴/로봇 geometry/이동 권한이 아니다. CORE·전체 lifecycle·현장 수용은 남아 있다.
+- 변경: 전용 safety root 아래 C++ 원본 grid 검증·ROSY-GRID-v1 SHA256·두 원본 시각 identity 비교를 구현했다. float32 resolution을 double로 승격하고 little-endian/signed-zero/raw int8를 보존한다. 지원 profile은 axis-aligned map과 최대 4194304 cells다. helper는 native 처리·운행 허가를 보고하지 않는다.
+- 증거: a22e7c5fb의 승인 AI 시험 PC remote_sim은 Python golden 생성과 SDK/gtest 탐지를 통과한 뒤 없는 grid.cpp에서 setup RED exit 1이었다. 실제 gtest는 실행되지 않았다. 이 source commit 후 원격 compile/6건 실행을 확인한다.
+- gate 변화: 없음. native AMCL/StaticLayer producer 및 R3의 최종 native navigation build/운영·장치 수용은 여전히 남아 있다.
 
 ## 2026-10-17 · uncommitted · 거절된 native configure의 fixture 자원 정리
 
@@ -183,13 +136,145 @@
 - 증거: 00945893a 승인 AI native compile/link·실제 plugin load, 기존 16건/설치 smoke PASS. static 앞 9건 OK 뒤 unsupported disabled profile을 실제 거절하고 parent 해제 중 멈춰 CTest 180초 timeout, synthetic missing_result 1 error다. 전체 14건 실행/통과 증거가 아니다. 이번 좁힌 fixture 수정의 재실행은 아직 전이다. 같은 source 계약 검사는 207 PASS/1 FAIL/0 SKIP이며 기존 branch exception ancestry 실패가 유지된다.
 - gate 변화: 없음. production 거절 후 운영 supervisor의 부분 구성 정리도 runtime factory 연결에서 별도로 다룬다.
 
+## 2026-10-17 · uncommitted · 고정 costmap SDK의 exported target include 경로 사용
+
+- 변경: SDK header 탐색에 실제 설치된 `nav2_costmap_2d::nav2_costmap_2d_core`의 INTERFACE_INCLUDE_DIRECTORIES를 추가했다. 기존 SHA pin은 유지하며 CMakeCache도 실패 artifact로 보존한다.
+- 증거: 834d6bd02 최초 native 요청은 headroom 부족으로 미실행이었다. 승인 AI 시험 PC의 재요청은 interfaces/wire를 통과한 뒤 static header 탐색에서 실패했다. 읽기 전용 SDK 확인으로 header 존재·기존 SHA 일치와 exported core target의 정확한 include 경로를 확인했다. native 컴파일/10건 실행은 아직 미실행이다.
+- gate 변화: 없음. source guard 원격 결과는 207 PASS/1 FAIL/0 SKIP이며 safety 예외 commit ancestry 한 건이다. 같은 검사는 수정하지 않은 main 8b60af26b에서 1 PASS, 이번 native 변경 이전 branch baseline cb19bf69f에서 1 FAIL이다. branch의 기존 이력 문제로 분리하며 현재 검사 전체 통과를 주장하지 않는다.
+
 ## 2026-10-17 · uncommitted · rejected configure 시험의 실제 TF callback 시작 동기화
 
 - 변경: configure 직후 고유 map→base TF가 실제 parent buffer에 수신됐음을 확인하고 정리한다. 고정 sleep·내부 flag 쓰기·fake callback 없이 listener thread의 실제 실행을 확인하는 fixture 조건이며 production source는 바꾸지 않는다.
 - 증거: f05023d376의 gdb-started 단독 거절 시험은 통과해 hang을 재현하지 못했다. 이어 debugger 없이 시작한 자기 시험 child가 멈춘 뒤 같은 parent PID에서 attach한 bounded 진단은 main의 TransformListener destructor→thread.join과 해당 worker의 Executor::wait_for_work/SingleThreadedExecutor::spin을 확인했다. 진단 child만 종료했고 ptrace 정책·현장 장치는 변경하지 않았다. 이 diagnostic exit0는 시험 수용이 아니다. 이번 fixture 수정은 아직 재실행 전이다.
 - gate 변화: 없음. 즉시 생성된 listener의 시작/취소 경계에 관한 fixture 동기화이며, 운영 rejected-config 정리 해결이나 전체14건 통과를 주장하지 않는다.
 
+## 2026-10-17 · uncommitted · 실제 AMCL producer RED 준비
+
+- 변경: 실제 AMCL 클래스/DDS 지도·readback service를 쓰는 9개 native gtest와 같은 SHA interfaces→navigation opt-in 빌드/실행 경로를 추가했다. native 호출/실제 cells를 읽는 inspector는 consumer를 대체하지 않는다.
+- 증거: canonical helper 8f749b1f9는 AI 시험 PC에서 compile/link 및 실제 gtest 6 PASS/0 FAIL/0 SKIP, remote_sim exit 0이다. AMCL producer/header/opt-in은 아직 없으므로 새 9건은 실행 전이며 setup 부재 RED를 먼저 확인한다.
+- gate 변화: 없음. canonical helper는 지도 채택 ACK가 아니다. 실제 AMCL/StaticLayer 채택·CORE admission·물리 수용은 계속 미확인이다.
+
+## 2026-10-17 · uncommitted · lifecycle SDK pin을 실제 Linux 원본 바이트로 교정
+
+- 변경: 추가 lifecycle header pin이 Windows 캐시의 CRLF hash였던 오류를 교정했다. 기존 R3의 5개 pin/version은 유지한다.
+- 증거: 6c918813c의 bounded placement 재요청 1은 미실행, 2는 실제 시작해 기존 5개 pin을 통과한 뒤 추가 lifecycle pin에서 실패했다. 읽기 전용 SDK 확인으로 model/AI의 Linux 원본 hash가 모두 1fedfbcc…이고 캐시와 줄끝 정규화 후 동일함을 확인했다. 실제 compile/native gtest는 아직 도달하지 않았다.
+- gate 변화: 없음. 임의 SDK 허용이나 pin 우회 없이 실제 승인 SDK 바이트를 사용한다. 새 source revision으로 native 검증을 다시 요청한다.
+
 ## 2026-10-17 · uncommitted · 실제 static14건과 같은 SHA native30건 수용 기록
+
+- 변경: 실제 전역 plugin·원본 full application/reset/retire와 fixture 정리/TF 동기화의 revision별 실패·진단·최종 검증을 [validation](../../../../docs/validation/station-native-map-static-2026-10-17/result.md)에 기록했다.
+- 증거: 83db3b1da4 승인 AI 시험 PC에서 같은 SHA interfaces/native navigation 생성·compile/link, 실제 gtest grid6+AMCL10+static14=30 PASS/0 FAIL/0 ERROR/0 SKIP, 설치 AMCL 초기 graph/정상 종료 별도 PASS, exit0. source-sha/exit-code/세 XML을 직접 확인했다. source00945893a5 guard207 PASS/1 FAIL/0 SKIP/NEW1은 기존 branch exception ancestry 한 건이다.
+- gate 변화: LOCAL GO는 검증한 native slice로 갱신한다. SOURCE HOLD(CORE 연결·운영 failed-config 정리·FULL CI·branch guard), ROS-SIM/ARTIFACT/DEVICE HOLD·FIELD PARKED를 유지한다. 현장 담당자는 나중에 확인 가능하며 전체 목표 ACTIVE다.
+
+## 2026-10-17 · uncommitted · 설치된 standalone AMCL의 실제 기본 graph 검사 추가
+
+- 변경: R3의 실제 설치 executable/기본 node graph 조건을 검사한다. 승인된 remote_sim의 격리 domain에서 설치 binary를 실행하고 실제 GetState service와 namespace, 초기 UNCONFIGURED와 해당 node의 velocity publisher 부재를 확인한 뒤 자신이 시작한 process만 종료한다.
+- 증거: 새 검사는 아직 실행 전이다. 1f2b0f1e8의 context 수정본 원격 요청은 고정 SHA로 headroom 재시도 중이며 재시작하지 않았다. 이 검사는 이후 revision의 별도 native 실행에 포함한다.
+- gate 변화: 없음. 초기 UNCONFIGURED graph는 실제 localization·접안·운영 admission 증거가 아니며 device를 구성/활성화하지 않는다.
+
+## 2026-10-17 · uncommitted · 실제 global StaticLayer application RED 준비
+
+- 변경: 실제 Costmap2DROS가 production plugin을 load하고 DDS 지도/readback, full/partial native application·reset/resize·clear service·footprint·callback 정리·profile 거절을 검사하는 14개 native 회귀와 원격 검증 경로를 추가했다. read-only test inspector만 callback/native 처리 수를 읽는다.
+- 증거: 아직 실행 전이다. 새 plugin/등록/test target이 없는 현재 source에서 setup 부재 RED를 먼저 확인한다. 기존 16건과 설치 AMCL graph를 먼저 확인하고 static XML의 실제 14건·실패/skip 부재를 요구한다.
+- gate 변화: 없음. 전역 static source·CORE/admission·실기 수용을 아직 입증하지 않는다.
+
+## 2026-10-17 · uncommitted · opt-in 실제 AMCL original-map owner
+
+- 변경: 기본 OFF native opt-in에 고정 SDK 검증과 standalone AMCL owner를 추가했다. 최초 subscription부터 private callback group이 소유하고 실제 handleMapMessage/원본 cells·geometry 확인 후에만 채택을 기록한다. 다른 raw/시각은 native 변경 전 instance를 폐기한다. 전체 parameter transaction을 pre-set에서 거절하고 비활성화/정리/파괴 전 폐기 및 executor join을 수행한다. 원본/instance/generation/build/config를 내부 readback으로 반환한다.
+- 증거: 5d4b074a0의 remote_sim은 same-SHA interfaces/wire 생성·직렬화를 통과한 뒤 navigation이 아직 선언하지 않은 opt-in을 사용하지 않아 setup RED exit 1이었다. AMCL 9건은 미실행이다. 독립 source 검토에서 config 표시 문자열의 정밀도 손실과 cleanup race 검증 부재를 발견해 typed binary config/정밀도 회귀 및 실제 callback barrier로 보완했다. source commit 후 실제 고정 SDK 빌드/DDS/native 10건 및 grid 6건을 실행한다.
+- gate 변화: 없음. 일반 launch는 유지하며 verified component를 등록하지 않는다. 전역 StaticLayer/CORE/운영 factory·전체 충전 주기·장치 수용은 아직 없다. upstream에서 각색한 wiring의 LGPL 고지/원문을 보존한다.
+
+## 2026-10-17 · uncommitted · 첫 원본 지도의 실제 static application 소유자 구현
+
+- 변경: pinned StaticLayer를 상속하고 첫 DDS 구독부터 원본을 보관한다. 실제 processMap 이후에도 pending이며 actual parent ACTIVE·fresh bounds·일치하는 전체 master window에 base updateCosts가 적용한 경우만 확인한다. master→layer 잠금, reset의 새 generation, 외부 resize/지도 변경의 영구 retire, 전체 parameter transaction freeze, private group/parent 정리 경계를 따른다. 기본 OFF opt-in에 plugin 등록/native 시험을 연결하고 upstream BSD 고지를 보존했다.
+- 증거: 시험 전용 86c0e72da7의 승인 AI 원격 실행은 같은 SHA interface/native 빌드·기존 16건/설치 AMCL smoke PASS 후 static target/XML 부재로 exit 1이었다. 실제 static 동작 0건의 setup RED다. 새 source는 아직 compile·14건 실행 전이며 독립 검토 중이다.
+- gate 변화: 없음. 확인 응답은 원본 static contribution만 기술하며 최종 inflated costmap/위치 수렴/로봇 geometry/이동 권한이 아니다. CORE·전체 lifecycle·현장 수용은 남아 있다.
+
+## 2026-10-17 · uncommitted · native AMCL fixture의 ROS context 초기화 순서 교정
+
+- 변경: 실제 gtest Environment에서 ROS context를 먼저 초기화하고 마지막에 종료한다. Harness의 executor 멤버가 생성된 뒤 constructor body에서 init하던 fixture 오류를 고쳤다. production source는 바꾸지 않았다.
+- 증거: 834ba0a9d는 6개 SDK pin·same-SHA 빌드/provenance 및 C++ compile/link를 통과했다. 실제 gtest 총 16건 중 grid 6건과 typed config 1건 PASS, AMCL Harness 9건은 context-null guard condition 생성에서 실패했다. 이는 AMCL 동작 반례 9건이 아니며 source 직렬화 wire 검사와 분리한다.
+- gate 변화: 없음. fixture만 수정한 revision에서 native 16건을 재실행한다. AMCL 채택·CORE/StaticLayer 및 실기 수용은 아직 입증되지 않았다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) D-783 native 원본 지도 identity RED 준비
+
+- 변경: 기존 Python 원본 grid 계약에서 원격 생성한 golden 7개와 C++ gtest 6건으로 signed zero·raw equal-conversion 차이·두 원본 시각·strict geometry/shape/cell limit를 검사한다. 실제 native helper는 아직 없다.
+- 증거: 실행 전이다. preliminary standalone fixture는 없는 helper를 참조하므로 먼저 setup RED를 확인한다. 이 단계는 실제 AMCL/StaticLayer producer나 R3의 전체 navigation/interfaces 빌드·수용을 대체하지 않는다.
+- gate 변화: 없음. D-783/승인 실행 계획을 module metadata에 연결했다. native consumer·CORE admission·ARM64/DEVICE/FIELD는 미확인이다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) native canonical grid identity helper
+
+- 변경: 전용 safety root 아래 C++ 원본 grid 검증·ROSY-GRID-v1 SHA256·두 원본 시각 identity 비교를 구현했다. float32 resolution을 double로 승격하고 little-endian/signed-zero/raw int8를 보존한다. 지원 profile은 axis-aligned map과 최대 4194304 cells다. helper는 native 처리·운행 허가를 보고하지 않는다.
+- 증거: a22e7c5fb의 승인 AI 시험 PC remote_sim은 Python golden 생성과 SDK/gtest 탐지를 통과한 뒤 없는 grid.cpp에서 setup RED exit 1이었다. 실제 gtest는 실행되지 않았다. 이 source commit 후 원격 compile/6건 실행을 확인한다.
+- gate 변화: 없음. native AMCL/StaticLayer producer 및 R3의 최종 native navigation build/운영·장치 수용은 여전히 남아 있다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 AMCL producer RED 준비
+
+- 변경: 실제 AMCL 클래스/DDS 지도·readback service를 쓰는 9개 native gtest와 같은 SHA interfaces→navigation opt-in 빌드/실행 경로를 추가했다. native 호출/실제 cells를 읽는 inspector는 consumer를 대체하지 않는다.
+- 증거: canonical helper 8f749b1f9는 AI 시험 PC에서 compile/link 및 실제 gtest 6 PASS/0 FAIL/0 SKIP, remote_sim exit 0이다. AMCL producer/header/opt-in은 아직 없으므로 새 9건은 실행 전이며 setup 부재 RED를 먼저 확인한다.
+- gate 변화: 없음. canonical helper는 지도 채택 ACK가 아니다. 실제 AMCL/StaticLayer 채택·CORE admission·물리 수용은 계속 미확인이다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) opt-in 실제 AMCL original-map owner
+
+- 변경: 기본 OFF native opt-in에 고정 SDK 검증과 standalone AMCL owner를 추가했다. 최초 subscription부터 private callback group이 소유하고 실제 handleMapMessage/원본 cells·geometry 확인 후에만 채택을 기록한다. 다른 raw/시각은 native 변경 전 instance를 폐기한다. 전체 parameter transaction을 pre-set에서 거절하고 비활성화/정리/파괴 전 폐기 및 executor join을 수행한다. 원본/instance/generation/build/config를 내부 readback으로 반환한다.
+- 증거: 5d4b074a0의 remote_sim은 same-SHA interfaces/wire 생성·직렬화를 통과한 뒤 navigation이 아직 선언하지 않은 opt-in을 사용하지 않아 setup RED exit 1이었다. AMCL 9건은 미실행이다. 독립 source 검토에서 config 표시 문자열의 정밀도 손실과 cleanup race 검증 부재를 발견해 typed binary config/정밀도 회귀 및 실제 callback barrier로 보완했다. source commit 후 실제 고정 SDK 빌드/DDS/native 10건 및 grid 6건을 실행한다.
+- gate 변화: 없음. 일반 launch는 유지하며 verified component를 등록하지 않는다. 전역 StaticLayer/CORE/운영 factory·전체 충전 주기·장치 수용은 아직 없다. upstream에서 각색한 wiring의 LGPL 고지/원문을 보존한다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 고정 costmap SDK의 exported target include 경로 사용
+
+- 변경: SDK header 탐색에 실제 설치된 `nav2_costmap_2d::nav2_costmap_2d_core`의 INTERFACE_INCLUDE_DIRECTORIES를 추가했다. 기존 SHA pin은 유지하며 CMakeCache도 실패 artifact로 보존한다.
+- 증거: 834d6bd02 최초 native 요청은 headroom 부족으로 미실행이었다. 승인 AI 시험 PC의 재요청은 interfaces/wire를 통과한 뒤 static header 탐색에서 실패했다. 읽기 전용 SDK 확인으로 header 존재·기존 SHA 일치와 exported core target의 정확한 include 경로를 확인했다. native 컴파일/10건 실행은 아직 미실행이다.
+- gate 변화: 없음. source guard 원격 결과는 207 PASS/1 FAIL/0 SKIP이며 safety 예외 commit ancestry 한 건이다. 같은 검사는 수정하지 않은 main 8b60af26b에서 1 PASS, 이번 native 변경 이전 branch baseline cb19bf69f에서 1 FAIL이다. branch의 기존 이력 문제로 분리하며 현재 검사 전체 통과를 주장하지 않는다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) lifecycle SDK pin을 실제 Linux 원본 바이트로 교정
+
+- 변경: 추가 lifecycle header pin이 Windows 캐시의 CRLF hash였던 오류를 교정했다. 기존 R3의 5개 pin/version은 유지한다.
+- 증거: 6c918813c의 bounded placement 재요청 1은 미실행, 2는 실제 시작해 기존 5개 pin을 통과한 뒤 추가 lifecycle pin에서 실패했다. 읽기 전용 SDK 확인으로 model/AI의 Linux 원본 hash가 모두 1fedfbcc…이고 캐시와 줄끝 정규화 후 동일함을 확인했다. 실제 compile/native gtest는 아직 도달하지 않았다.
+- gate 변화: 없음. 임의 SDK 허용이나 pin 우회 없이 실제 승인 SDK 바이트를 사용한다. 새 source revision으로 native 검증을 다시 요청한다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) native AMCL fixture의 ROS context 초기화 순서 교정
+
+- 변경: 실제 gtest Environment에서 ROS context를 먼저 초기화하고 마지막에 종료한다. Harness의 executor 멤버가 생성된 뒤 constructor body에서 init하던 fixture 오류를 고쳤다. production source는 바꾸지 않았다.
+- 증거: 834ba0a9d는 6개 SDK pin·same-SHA 빌드/provenance 및 C++ compile/link를 통과했다. 실제 gtest 총 16건 중 grid 6건과 typed config 1건 PASS, AMCL Harness 9건은 context-null guard condition 생성에서 실패했다. 이는 AMCL 동작 반례 9건이 아니며 source 직렬화 wire 검사와 분리한다.
+- gate 변화: 없음. fixture만 수정한 revision에서 native 16건을 재실행한다. AMCL 채택·CORE/StaticLayer 및 실기 수용은 아직 입증되지 않았다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 설치된 standalone AMCL의 실제 기본 graph 검사 추가
+
+- 변경: R3의 실제 설치 executable/기본 node graph 조건을 검사한다. 승인된 remote_sim의 격리 domain에서 설치 binary를 실행하고 실제 GetState service와 namespace, 초기 UNCONFIGURED와 해당 node의 velocity publisher 부재를 확인한 뒤 자신이 시작한 process만 종료한다.
+- 증거: 새 검사는 아직 실행 전이다. 1f2b0f1e8의 context 수정본 원격 요청은 고정 SHA로 headroom 재시도 중이며 재시작하지 않았다. 이 검사는 이후 revision의 별도 native 실행에 포함한다.
+- gate 변화: 없음. 초기 UNCONFIGURED graph는 실제 localization·접안·운영 admission 증거가 아니며 device를 구성/활성화하지 않는다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) native grid·실제 AMCL·설치 graph 검증 기록
+
+- 변경: revision별 setup/동작 결과와 독립 검토 수정, SDK/생성 provenance, 남은 전역/CORE·현장 수용을 [validation](../../../../docs/validation/station-native-map-amcl-2026-10-17/result.md)에 기록했다.
+- 증거: 0034827d2 승인 AI 시험 PC에서 same-SHA interfaces→navigation native 빌드, 실제 gtest grid6+AMCL10 모두 PASS/0 SKIP, 설치 standalone GetState/namespace·초기 UNCONFIGURED 및 정상 종료 PASS, exit 0. 834d6bd02 source guard는 207 PASS/1 FAIL/0 SKIP이고 해당 ancestry 검사 실패는 이전 branch cb19bf69f에서 재현되며 main 8b60af26b는 PASS다.
+- gate 변화: SOURCE GO→HOLD(미완료 전역/CORE·FULL CI, branch 이력 guard 실패를 명시). LOCAL GO는 검증한 native slice에 한정한다. ROS-SIM/ARTIFACT/DEVICE HOLD·FIELD PARKED 유지, 전체 목표 ACTIVE다. 장치 재탐색/이동/토크/재시작/배포/landing/push 없음.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 global StaticLayer application RED 준비
+
+- 변경: 실제 Costmap2DROS가 production plugin을 load하고 DDS 지도/readback, full/partial native application·reset/resize·clear service·footprint·callback 정리·profile 거절을 검사하는 14개 native 회귀와 원격 검증 경로를 추가했다. read-only test inspector만 callback/native 처리 수를 읽는다.
+- 증거: 아직 실행 전이다. 새 plugin/등록/test target이 없는 현재 source에서 setup 부재 RED를 먼저 확인한다. 기존 16건과 설치 AMCL graph를 먼저 확인하고 static XML의 실제 14건·실패/skip 부재를 요구한다.
+- gate 변화: 없음. 전역 static source·CORE/admission·실기 수용을 아직 입증하지 않는다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 첫 원본 지도의 실제 static application 소유자 구현
+
+- 변경: pinned StaticLayer를 상속하고 첫 DDS 구독부터 원본을 보관한다. 실제 processMap 이후에도 pending이며 actual parent ACTIVE·fresh bounds·일치하는 전체 master window에 base updateCosts가 적용한 경우만 확인한다. master→layer 잠금, reset의 새 generation, 외부 resize/지도 변경의 영구 retire, 전체 parameter transaction freeze, private group/parent 정리 경계를 따른다. 기본 OFF opt-in에 plugin 등록/native 시험을 연결하고 upstream BSD 고지를 보존했다.
+- 증거: 시험 전용 86c0e72da7의 승인 AI 원격 실행은 같은 SHA interface/native 빌드·기존 16건/설치 AMCL smoke PASS 후 static target/XML 부재로 exit 1이었다. 실제 static 동작 0건의 setup RED다. 새 source는 아직 compile·14건 실행 전이며 독립 검토 중이다.
+- gate 변화: 없음. 확인 응답은 원본 static contribution만 기술하며 최종 inflated costmap/위치 수렴/로봇 geometry/이동 권한이 아니다. CORE·전체 lifecycle·현장 수용은 남아 있다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 거절된 native configure의 fixture 자원 정리
+
+- 변경: 실제 parent configure 실패는 UNCONFIGURED로 돌아가지만 생성된 plugin/TF 자원은 남는다. fixture는 이 경우 lifecycle 전이를 흉내내지 않고 실제 protected on_cleanup으로 자원을 정리한 뒤 parent를 해제한다. 정상 lifecycle와 production source는 그대로다.
+- 증거: 00945893a 승인 AI native compile/link·실제 plugin load, 기존 16건/설치 smoke PASS. static 앞 9건 OK 뒤 unsupported disabled profile을 실제 거절하고 parent 해제 중 멈춰 CTest 180초 timeout, synthetic missing_result 1 error다. 전체 14건 실행/통과 증거가 아니다. 이번 좁힌 fixture 수정의 재실행은 아직 전이다. 같은 source 계약 검사는 207 PASS/1 FAIL/0 SKIP이며 기존 branch exception ancestry 실패가 유지된다.
+- gate 변화: 없음. production 거절 후 운영 supervisor의 부분 구성 정리도 runtime factory 연결에서 별도로 다룬다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) rejected configure 시험의 실제 TF callback 시작 동기화
+
+- 변경: configure 직후 고유 map→base TF가 실제 parent buffer에 수신됐음을 확인하고 정리한다. 고정 sleep·내부 flag 쓰기·fake callback 없이 listener thread의 실제 실행을 확인하는 fixture 조건이며 production source는 바꾸지 않는다.
+- 증거: f05023d376의 gdb-started 단독 거절 시험은 통과해 hang을 재현하지 못했다. 이어 debugger 없이 시작한 자기 시험 child가 멈춘 뒤 같은 parent PID에서 attach한 bounded 진단은 main의 TransformListener destructor→thread.join과 해당 worker의 Executor::wait_for_work/SingleThreadedExecutor::spin을 확인했다. 진단 child만 종료했고 ptrace 정책·현장 장치는 변경하지 않았다. 이 diagnostic exit0는 시험 수용이 아니다. 이번 fixture 수정은 아직 재실행 전이다.
+- gate 변화: 없음. 즉시 생성된 listener의 시작/취소 경계에 관한 fixture 동기화이며, 운영 rejected-config 정리 해결이나 전체14건 통과를 주장하지 않는다.
+
+## 2026-10-19 · uncommitted · (origin #92 2026-10-17) 실제 static14건과 같은 SHA native30건 수용 기록
 
 - 변경: 실제 전역 plugin·원본 full application/reset/retire와 fixture 정리/TF 동기화의 revision별 실패·진단·최종 검증을 [validation](../../../../docs/validation/station-native-map-static-2026-10-17/result.md)에 기록했다.
 - 증거: 83db3b1da4 승인 AI 시험 PC에서 같은 SHA interfaces/native navigation 생성·compile/link, 실제 gtest grid6+AMCL10+static14=30 PASS/0 FAIL/0 ERROR/0 SKIP, 설치 AMCL 초기 graph/정상 종료 별도 PASS, exit0. source-sha/exit-code/세 XML을 직접 확인했다. source00945893a5 guard207 PASS/1 FAIL/0 SKIP/NEW1은 기존 branch exception ancestry 한 건이다.

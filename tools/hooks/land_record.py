@@ -39,7 +39,16 @@ def folder(repo: Path) -> Path:
     return (common if common.is_absolute() else repo / common) / "rosy-land"
 
 
-def write(repo: Path, sha: str, base: str, invocations: list[list[str]], logs: list[str]) -> Path:
+def write(repo: Path, sha: str, base: str, invocations: list[list[str]], logs: list[str],
+          tier: str | None = None, prepared: dict | None = None) -> Path:
+    """``tier``: the selection the landing ran ("full", "affected" or "records"); the publish script finds a
+    green FULL landing by it instead of guessing from the invocations. ``prepared`` (``land_full.prepared``):
+    the tier ran before the turn on ``prepared_candidate`` over ``prepared_on``, and the turn ran the D-762
+    selection of main's delta since then on ``sha``; the record keeps both and the prepared tier."""
+    extra = {}
+    if prepared:
+        invocations, tier = prepared["invocations"] + invocations, prepared["tier"]
+        extra = {"prepared_on": prepared["main"], "prepared_candidate": prepared["candidate"]}
     if not (SHA.fullmatch(sha) and SHA.fullmatch(base)):
         raise ValueError("land record needs full commit ids")
     target = folder(repo)
@@ -47,7 +56,7 @@ def write(repo: Path, sha: str, base: str, invocations: list[list[str]], logs: l
     path = target / f"{sha}.json"
     temporary = path.with_suffix(".new")
     temporary.write_text(json.dumps({
-        "sha": sha, "base": base, "invocations": invocations, "logs": logs,
+        "sha": sha, "base": base, "invocations": invocations, "logs": logs, **({"tier": tier} if tier else {}), **extra,
         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }, indent=2) + "\n", encoding="utf-8")
     temporary.replace(path)
@@ -95,11 +104,16 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("owed")
     check.add_argument("--head", required=True)
     check.add_argument("--upstream", default="origin/main")
+    # D-889: a publish ref carries every landing since the last publish (3,900 commits on 2026-10-27), so
+    # the chain to origin/main never closes and the gate re-ran the affected tier of the whole range for
+    # hours. The pushed commit's own record is the landing gate; the publish PR's ci-result is the FULL gate.
+    check.add_argument("--own", action="store_true", help="publish ref: only the head's own record")
     check.add_argument("suites", nargs="*")
     args = parser.parse_args(argv)
     repo = Path.cwd()
     head = _git(repo, "rev-parse", "--verify", f"{args.head}^{{commit}}").stdout.strip()
-    result = owed(repo, head, args.upstream, args.suites)
+    record = read(repo, head) if args.own else None
+    result = owed(repo, head, record["base"] if record else args.upstream, args.suites)
     if result is None:
         return 3
     for suite in result:

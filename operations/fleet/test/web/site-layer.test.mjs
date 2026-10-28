@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   classifySightings, siteBounds, canvasSizeFor, fitTransform, project, gridLines,
   SIGHTING_STALE_MS, SIGHTING_HIDE_MS, streamEvidence, quarterTurn, cameraScreenToMap, mapUpTurn, siteViewTurn,
-} from "../../../site_ui/console/site-layer.js";
+} from "../../../../applications/fleet/web/map/site-layer.js";
 
 const row = (changes) => ({
   robot_id: "rosy-pinky-8kcn", x: 1, y: 0.5, yaw: 0, captured_at: 10, age_ms: 200,

@@ -158,3 +158,79 @@ def test_the_quarantine_is_safety_tagged_and_never_holds_a_safety_test():
     quarantine = known_failures.load_known(known_failures.QUARANTINE.read_text(encoding="utf-8"))
     under_safety = [n for n in quarantine if safety_review.is_safety(n.partition("::")[0], roots, modules)]
     assert not under_safety, under_safety
+
+# pytest-xdist 3.8.0 output (tools/remote/xdist_plan.py), captured from a real -n 2 run.
+XDIST_Q = """bringing up nodes...
+.[gw0] node down: Not properly terminated
+..FE.F                                                                   [100%]
+=================================== ERRORS ====================================
+[gw0] linux -- Python 3.12.3 /venv/bin/python
+=========================== short test summary info ===========================
+FAILED t/test_a.py::test_bad - assert 1 == 2
+FAILED t/test_a.py::test_p[2] - assert 2 == 1
+FAILED t/test_c.py::test_crash - worker 'gw0' crashed while running 't/test_c...
+ERROR t/test_a.py::test_err - RuntimeError: fx
+3 failed, 3 passed, 1 error in 0.64s
+"""
+XDIST_V = """created: 2/2 workers
+2 workers [6 items]
+
+[gw1] [ 16%] PASSED t/test_b.py::test_b 
+[gw0] [ 50%] FAILED t/test_a.py::test_bad 
+[gw0] [ 66%] ERROR t/test_a.py::test_err 
+=========================== short test summary info ===========================
+FAILED t/test_a.py::test_bad - assert 1 == 2
+ERROR t/test_a.py::test_err - RuntimeError: fx
+"""
+
+
+def test_xdist_output_gives_each_failure_once_and_a_crashed_worker_is_a_failure():
+    assert known_failures.failed_ids(XDIST_Q) == [
+        "t/test_a.py::test_bad", "t/test_a.py::test_p[2]", "t/test_c.py::test_crash", "t/test_a.py::test_err"]
+    assert known_failures.failed_ids(XDIST_V) == ["t/test_a.py::test_bad", "t/test_a.py::test_err"]
+    new, seen, _ = known_failures.compare(XDIST_V, {"t/test_a.py::test_bad": "r"})
+    assert (new, seen) == (["t/test_a.py::test_err"], ["t/test_a.py::test_bad"])
+
+
+def test_an_xdist_session_that_collected_nothing_is_caught():
+    paths = ["a/test", "b/test"]
+    assert known_failures.collected_nothing("created: 2/2 workers\n2 workers [0 items]\n", paths)
+    assert known_failures.collected_nothing("6 workers [0 items]\n", paths)
+    assert not known_failures.collected_nothing("2 workers [10 items]\n", paths)
+    assert not known_failures.collected_nothing("2 workers [0 items]\n", paths[:1])
+
+
+# --- Design 0.7 rule 7: an id a landing adds to the list must fail on that run -----------------------
+
+LISTED = next(iter(known_failures.load_known((ROOT / "test/known_failures.txt").read_text(encoding="utf-8"))), None)
+
+
+@pytest.mark.skipif(LISTED is None, reason="the real list is empty")
+@pytest.mark.parametrize("report, code", [(f"FAILED {LISTED} - boom\n1 failed in 1.0s\n", 0),
+                                          ("1 passed in 1.0s\n", 1)], ids=["fails", "passes"])
+def test_a_must_fail_id_that_passes_fails_the_comparison(tmp_path, capsys, report, code):
+    log = tmp_path / "run.txt"
+    log.write_text(report, encoding="utf-8")
+    assert known_failures.main([str(log), "--must-fail", LISTED]) == code
+    assert (f"MUST-FAIL {LISTED}" in capsys.readouterr().out) == bool(code)
+
+
+def test_land_passes_only_the_ids_this_landing_adds_that_the_invocation_runs(tmp_path):
+    sys.path.insert(0, str(ROOT / "tools"))
+    import land_checks
+    import subprocess
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True)
+    listed = tmp_path / "test/known_failures.txt"
+    listed.parent.mkdir()
+    listed.write_text("# h\ntest/test_a.py::test_old  # r\n", encoding="utf-8")
+    git("init", "-q", "-b", "main")
+    git("-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x")
+    git("add", "test/known_failures.txt")
+    git("-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "list")
+    listed.write_text("# h\ntest/test_a.py::test_old  # r\ntest/test_a.py::test_new  # r\n"
+                      "other/test_b.py::test_c  # r\n", encoding="utf-8")
+    assert land_checks.added_known(tmp_path, ["test"]) == ["test/test_a.py::test_new"]
+    assert land_checks.added_known(tmp_path, ["other/test_b.py", "-q"]) == ["other/test_b.py::test_c"]
+    assert land_checks.added_known(tmp_path, ["middleware"]) == []

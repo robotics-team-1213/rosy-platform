@@ -1,0 +1,209 @@
+{
+  "record_kind": "agent-compiled index of completed official tools/land.py output; not CI receipt",
+  "starting_commit": "d2d7f57d78b1ddc40a3311ae76af137b8d5a1068",
+  "full_tier_tested_commit": "f1088a54725559b68e8ad46c323751a8b8556a7d",
+  "full_tier_reference_main_commit": "c440db31f3e59f686c15d162f3bfa3462c1a3310",
+  "integrated_main_parent_commit": "992242d14d2c042eb2df902725164939f85cbbb8",
+  "landed_implementation_commit": "d154853fc894711dffd080f610e7ad41e09af189",
+  "command": "python -X utf8 tools/land.py --tests auto --no-prune",
+  "land_exit": 0,
+  "pushed": false,
+  "full_tier_invocations": [
+    {
+      "log": "run-pre-21.txt",
+      "pytest_arguments": "test",
+      "observed_summary": "9666 passed, 1132 skipped, 56 warnings in 794.52s (0:13:14)",
+      "sha256": "87f34d80ffa11d11bf24c761b6a85827229439bda205c1d047b90378b12546ba"
+    },
+    {
+      "log": "run-pre-12.txt",
+      "pytest_arguments": "operations/fleet/test",
+      "observed_summary": "6212 passed, 336 skipped, 2 warnings in 587.72s (0:09:47)",
+      "sha256": "b6b4d0af643ae57708c415470a4a852ab794705348e46572fd6eb77a1265bb20"
+    },
+    {
+      "log": "run-pre-9.txt",
+      "pytest_arguments": "middleware/core/gateway/test middleware/core/events/test middleware/core/services/test shared/web/test contracts/foundation/test middleware/devices/pinky/profile/test middleware/devices/omx/profile/test",
+      "observed_summary": "7290 passed, 91 skipped, 12 warnings, 5 subtests passed in 456.00s (0:07:35)",
+      "sha256": "72c051cd421258edaed891f65e054424658d11c2095f271aff644cd5784069d5"
+    },
+    {
+      "log": "run-pre-11.txt",
+      "pytest_arguments": "middleware/perception/test",
+      "observed_summary": "3554 passed, 113 skipped, 62 subtests passed in 156.40s (0:02:36)",
+      "sha256": "6f73b335970064a7b5a083d1dbe61b7ca8706186c954d82540a75ced3a8e5168"
+    },
+    {
+      "log": "run-pre-22.txt",
+      "pytest_arguments": "operations/site_ui/media/test middleware/media/test learning/evaluation/perception/test operations/apps/games/test operations/processes/palletizing/test middleware/robot_ui/face/test/test_info_screen.py middleware/robot_ui/face/test/test_info_screen_boot.py middleware/robot_ui/face/test/test_wifi_qr.py middleware/drivers/pinky_led/test/test_led_package_contract.py middleware/drivers/imu_bno055/test/test_package_contract.py middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py middleware/robot_ui/robot/test middleware/robot_ui/pilot/test middleware/devices/omx/adapter/test contracts/ros_idl/test/test_srv_surface.py middleware/devices/pinky/description/test/test_urdf_surface.py operations/signal_observation/test learning/envs/isaac/test deploy/robot/pinky_pro/release/test/test_secret_scan.py middleware/robot_execution/local/test/test_policy_runtime_ros.py",
+      "observed_summary": "1803 passed, 298 skipped, 2 warnings in 60.77s (0:01:00)",
+      "sha256": "03421e654221357d231f111faeaa0501123d1e9269adf73144c9723fe161e59f"
+    },
+    {
+      "log": "run-pre-14.txt",
+      "pytest_arguments": "operations/overhead/test",
+      "observed_summary": "736 passed in 55.33s",
+      "sha256": "52c209dc69df7acfc975d564d090f0f0eef8b2dd28e9e4cd6382a34f23e27f59"
+    },
+    {
+      "log": "run-pre-26.txt",
+      "pytest_arguments": "ROSY_RUN_BROWSER_TESTS=1 applications/fleet/test/test_browser_adapters.py applications/fleet/test/test_feature_browser_flows.py middleware/core/api/test/test_d283_console_browser.py middleware/robot_ui/robot/test/test_dashboard_entry_browser.py operations/fleet/test/test_camera_peer_browser.py operations/fleet/test/test_console_card_trips_browser.py operations/fleet/test/test_password_login_browser.py operations/fleet/test/test_site_map_browser.py test/test_console_lifetime_browser.py test/test_fleet_workflows_browser.py test/test_overhead_tracking_browser.py",
+      "observed_summary": "1 failed, 208 passed, 2 warnings in 472.25s (0:07:52)",
+      "sha256": "950d33302996a959c0d4258f4d4e3056ff9e90171ea54089ea21164ade3fe086"
+    },
+    {
+      "log": "run-pre-24.txt",
+      "pytest_arguments": "ROSY_RUN_BROWSER_TESTS=1 operations/fleet/test/test_convoy_view_browser.py test/test_fleet_console_browser.py test/test_host_recovery_browser.py test/test_peer_picker_browser.py",
+      "observed_summary": "124 passed in 309.20s (0:05:09)",
+      "sha256": "0b4ce763038035c44c35d75e9dc44134f6025ac2e2acc47ef38fed056a8b588f"
+    },
+    {
+      "log": "run-pre-25.txt",
+      "pytest_arguments": "ROSY_RUN_BROWSER_TESTS=1 middleware/robot_ui/robot/test/test_role_g2_browser.py operations/fleet/test/test_account_admin_browser.py operations/fleet/test/test_app_connected_browser.py operations/fleet/test/test_component_adoption_browser.py operations/fleet/test/test_console_roles_browser.py operations/fleet/test/test_control_unit_browser.py operations/fleet/test/test_development_console_browser.py operations/fleet/test/test_fleet_account_browser.py operations/fleet/test/test_policy_console_browser.py operations/fleet/test/test_start_point_browser.py test/test_measured_calibration_browser.py",
+      "observed_summary": "97 passed, 2 warnings in 494.94s (0:08:14)",
+      "sha256": "e910c82a48d5002852b97970bcb7ca817195f5004c7c5a36ccee9e8e1570e1f8"
+    },
+    {
+      "log": "run-pre-27.txt",
+      "pytest_arguments": "ROSY_RUN_BROWSER_TESTS=1 applications/fleet/test/test_sample_browser.py middleware/robot_ui/robot/test/test_calibration_chip_browser.py middleware/robot_ui/robot/test/test_surface_viewport_budget_browser.py operations/fleet/test/test_assistant_browser.py operations/fleet/test/test_cell_app_browser.py operations/fleet/test/test_console_queue_inline_browser.py operations/fleet/test/test_fleet_header_browser.py operations/fleet/test/test_fleet_role_consumers_browser.py operations/fleet/test/test_traffic_view_browser.py operations/fleet/test/test_work_overview_browser.py test/test_console_session_browser.py",
+      "observed_summary": "152 passed, 2 warnings in 444.81s (0:07:24)",
+      "sha256": "1607d92a2b799e7aca4543b2dd27247502a4ec50e757a3a462d884bd06714c7f"
+    },
+    {
+      "log": "run-pre-19.txt",
+      "pytest_arguments": "integrations/simulation/gazebo/test",
+      "observed_summary": "328 passed, 4 skipped in 11.20s",
+      "sha256": "d6ed2544267cf852d91d01f19eb757160b04a5b1642beadef624aad343dee243"
+    },
+    {
+      "log": "run-pre-23.txt",
+      "pytest_arguments": "middleware/core/api/test",
+      "observed_summary": "188 passed, 13 skipped, 2 warnings, 25 subtests passed in 8.09s",
+      "sha256": "1697d40597909b579bfe222e4d881c3331e0fc20e59d7eb432d08d40608abcaa"
+    },
+    {
+      "log": "run-pre-4.txt",
+      "pytest_arguments": "learning/curation/omx/test",
+      "observed_summary": "229 passed, 3 skipped in 1.62s",
+      "sha256": "5256a7a90af83b6b72debd33cbb61a78481c8246560fa9db3971661e803ebc06"
+    },
+    {
+      "log": "run-pre-2.txt",
+      "pytest_arguments": "learning/training/omx/test",
+      "observed_summary": "142 passed, 16 skipped in 1.56s",
+      "sha256": "dff18776c1e4903babd4fa4494fa31c37209cb4505662781a52e8e0cefc58739"
+    },
+    {
+      "log": "run-pre-16.txt",
+      "pytest_arguments": "operations/situation/test",
+      "observed_summary": "121 passed, 2 warnings in 3.82s",
+      "sha256": "08ccdae363c90684162a47d465ca8056b8dc39e4c0891d9ac70d8ea9ea6d8fb3"
+    },
+    {
+      "log": "run-pre-13.txt",
+      "pytest_arguments": "applications/fleet/test",
+      "observed_summary": "49 passed, 34 skipped in 4.92s",
+      "sha256": "4967b4ec75eb77f579517231937cfdcf521f2df1170c7d86e50692f0d7a10e2f"
+    },
+    {
+      "log": "run-pre-1.txt",
+      "pytest_arguments": "learning/registry/policy/test",
+      "observed_summary": "117 passed, 4 skipped in 2.85s",
+      "sha256": "9db86effd74f50a7c21ea8825ba722f64b5d6f366c353f2c751810863384bd17"
+    },
+    {
+      "log": "run-pre-20.txt",
+      "pytest_arguments": "middleware/devices/pinky/bringup/test middleware/drivers/pinky_adc/test middleware/perception/test/test_ir_adc_lock.py --ignore=middleware/devices/pinky/bringup/test/test_flake8.py --ignore=middleware/devices/pinky/bringup/test/test_pep257.py --ignore=middleware/devices/pinky/bringup/test/test_copyright.py",
+      "observed_summary": "473 passed in 0.57s",
+      "sha256": "12f0c331d255282a754037621854addcd8377d126e0c2703c3ff9e29f23676a1"
+    },
+    {
+      "log": "run-pre-15.txt",
+      "pytest_arguments": "operations/processes/cell/test",
+      "observed_summary": "155 passed in 0.48s",
+      "sha256": "6e5765fd8d25b2bf23518bd91d74589c434a2e4ae85a025de852c4223300088a"
+    },
+    {
+      "log": "run-pre-18.txt",
+      "pytest_arguments": "test/test_platform_palletizing_compat.py test/test_platform_cell_submission.py test/architecture/test_platform_dependency_boundaries.py",
+      "observed_summary": "25 passed in 1.05s",
+      "sha256": "69113e4412edf9458ccaef6e28a904a077b7e29a6d5bfbc6807586e013e56a12"
+    },
+    {
+      "log": "run-pre-10.txt",
+      "pytest_arguments": "middleware/core/gateway/test/test_account_pipeline.py",
+      "observed_summary": "6 passed, 2 skipped, 12 warnings in 11.89s",
+      "sha256": "f3cae4dcce293abba92fee699725a18ff457b19e476cb733483015aeaec81112"
+    },
+    {
+      "log": "run-pre-5.txt",
+      "pytest_arguments": "learning/curation/pinky/test",
+      "observed_summary": "21 passed, 28 skipped in 0.65s",
+      "sha256": "0da0711f32f25cb21d60999ffff7ebb133604de5058c7ccce2ae4c49de8ac6f6"
+    },
+    {
+      "log": "run-pre-3.txt",
+      "pytest_arguments": "learning/training/pinky/test",
+      "observed_summary": "6 passed, 6 skipped in 0.87s",
+      "sha256": "afdd96f0666819b9689027804c5253e2b7b9fa121178194dc4dedf06c66842d5"
+    },
+    {
+      "log": "run-pre-8.txt",
+      "pytest_arguments": "operations/prediction/world_model/test",
+      "observed_summary": "12 passed in 0.38s",
+      "sha256": "8effd1b1d59c744b246c9b596f6f602f8fee667617a14c7b12ab083015293925"
+    },
+    {
+      "log": "run-pre-17.txt",
+      "pytest_arguments": "operations/world/test",
+      "observed_summary": "9 passed in 1.49s",
+      "sha256": "0fecf01cd89d4b7b4d382f72ad98e2e1331171530df2780cb280c14de476153e"
+    },
+    {
+      "log": "run-pre-6.txt",
+      "pytest_arguments": "learning/training/world_model/test",
+      "observed_summary": "3 passed in 0.65s",
+      "sha256": "442671f5f5018f3c95a7dce15eac135756d7082b803ab564ef58853cd1eed87c"
+    },
+    {
+      "log": "run-pre-7.txt",
+      "pytest_arguments": "learning/evaluation/world_model/test",
+      "observed_summary": "4 passed in 0.65s",
+      "sha256": "1177d3b3029fa10266117692a096cadffa5a940bf1107e88ae397105d34bc39b"
+    }
+  ],
+  "isolated_retries": [
+    {
+      "log": "alone-pre-26-1.txt",
+      "pytest_arguments": "ROSY_RUN_BROWSER_TESTS=1 operations/fleet/test/test_site_map_browser.py::test_site_map_body_keeps_usable_columns_beside_the_sub_nav[360-740-1-1]",
+      "observed_summary": "1 passed, 2 warnings in 3.48s",
+      "sha256": "6182e7fb0b4d324b6f2084f199ceadac1718227b4aaef96a7991246a8cdd3d2f"
+    }
+  ],
+  "post_merge_invocations": [
+    {
+      "log": "run-g1-1.txt",
+      "pytest_arguments": "test/architecture test/test_harness_contracts.py",
+      "observed_summary": "273 passed, 41 warnings in 45.59s",
+      "sha256": "c953b8e7b4b8976383e6328d399836eee03b8719ef5bb76f7e506c18d9ad0909"
+    },
+    {
+      "log": "run-1-1.txt",
+      "pytest_arguments": "middleware/core/gateway/test/test_protocol_version_alignment.py test/architecture/test_document_placement.py test/architecture/test_folder_layout.py test/architecture/test_module_structure.py test/architecture/test_platform_parts.py test/test_affected_tests.py test/test_api_reserve.py test/test_browser_scope.py test/test_cell_omx_sim_layout_contract.py test/test_harness_contracts.py test/test_land.py test/test_network_topology_contracts.py test/test_platform_contract_mapping.py test/test_platform_palletizing_compat.py test/test_release_boundary_guards.py test/test_robot_literals.py test/test_secret_public_provenance.py",
+      "observed_summary": "505 passed, 37 warnings in 63.84s (0:01:03)",
+      "sha256": "6a55884dcd7c231b7b7bf1f4b3a8c44b98efbe19a9cb4cac849d70055a61b806"
+    }
+  ],
+  "load_flaky_candidates": [
+    "operations/fleet/test/test_site_map_browser.py::test_site_map_body_keeps_usable_columns_beside_the_sub_nav[360-740-1-1]"
+  ],
+  "failure_policy": "D-790 isolated retry passed; initial failure retained. No known-failure or quarantine entry added. Cause remains unverified.",
+  "native_transcript": {
+    "location": "<external>/rosy-control-pipeline-final-land/runner-transcript.txt",
+    "encoding": "UTF-16LE with BOM",
+    "sha256": "1660a45cce8eeb4aa381aede6c06f4c74db67b54f6823bd0ea81b485fc557abf"
+  },
+  "pytest_log_directory": "<external>/rosy-land/feat-control-unit-pipeline",
+  "scope": "Starting branch commit, actual FULL tested merge commit and post-main-merge tested commit are distinct. Invocations overlap; do not sum. Skipped checks are not passing evidence.",
+  "limits": "Host software verification and local main landing only. No push CI, deployment, physical-stop, ARM64 image or field acceptance."
+}

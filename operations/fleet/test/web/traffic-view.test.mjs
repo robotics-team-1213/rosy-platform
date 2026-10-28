@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {drawTraffic, drawSignalLamps} from '../../../site_ui/console/traffic-view.js';
+import {drawTraffic, drawSignalLamps} from '../../../../applications/fleet/web/map/traffic-view.js';
 
 test('signal and occupancy descriptions stay outside the floor plane', () => {
   const arcs = [];

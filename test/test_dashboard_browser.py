@@ -2314,11 +2314,11 @@ def test_an_expired_remembered_token_is_dropped_on_load():
             browser, page = _open_dashboard(playwright, init)
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")
-        page.wait_for_timeout(300)
+        page.wait_for_function("() => window.__apiCalls.some(call => call.path === '/api/v1/auth/connection')")
         assert _storage(page) == {"session": None, "local": None}
         assert "open" in page.locator("#auth-drawer").get_attribute("class")
         assert page.evaluate("window.__apiCalls.map(({method,path})=>({method,path}))") == [
-            {"method": "GET", "path": "/api/v1/auth/connection"}]
+            {"method": "GET", "path": "/api/account/session"}, {"method": "GET", "path": "/api/v1/auth/connection"}]
         browser.close()
 
 

@@ -52,7 +52,7 @@ from core_common.protocol.localization import (CHECKING, DecisionSource, Localiz
 from fleet.localization import cues, pose_request, service_logic, trust
 from fleet.localization.arbiter import Arbiter, Context
 from fleet.localization.service_logic import Ladder, Monitor
-from fleet.swarm.transport import RobotApiError, RobotClient
+from fleet.swarm import read_spread, transport
 
 logger = logging.getLogger("fleet.localization")
 
@@ -85,9 +85,9 @@ def load_lane_rules(path: Optional[Path]) -> dict:
 
 def default_lane_rules() -> Optional[Path]:
     """map_v2_fleet's lane_rules.yaml when Fleet runs from a source checkout, else None."""
-    relative = Path("middleware/perception/map/map_v2_fleet/lane_rules.yaml")
-    # Search upward rather than a fixed depth, so moving this module between holders keeps it.
-    return next((p / relative for p in Path(__file__).resolve().parents if (p / relative).is_file()), None)
+    path = ((Path(__file__).resolve().parents[5] / "middleware") / "perception" / "map" / "map_v2_fleet"
+            / "lane_rules.yaml")
+    return path if path.is_file() else None
 
 
 def build_localization_service(console, sightings, *, enabled: bool = True,
@@ -99,7 +99,7 @@ def build_localization_service(console, sightings, *, enabled: bool = True,
     slots, squares = service_logic.parse_reference_squares(
         load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules()))
     return LocalizationService(console.clients, slots=slots, squares=squares,
-                               read_state=lambda robot_id: console.read_state(robot_id, POLL_S),  # D-760 8
+                               read_state=read_spread.spread(lambda rid: console.read_state(rid, POLL_S), POLL_S / 2),  # D-760 8
                                sightings=sightings, overhead_cue=bool(overhead_cue),
                                pose_request_overhead=bool(pose_request_overhead),
                                traffic_hold=getattr(console, "hold_for_localization", None))
@@ -114,7 +114,7 @@ def _pose(state: Mapping) -> Optional[cues.Pose]:
 
 
 class LocalizationService:
-    def __init__(self, clients: Callable[[], Mapping[str, RobotClient]], *,
+    def __init__(self, clients: Callable[[], Mapping[str, transport.RobotClient]], *,
                  slots: Sequence[cues.Slot] = (), squares: Sequence[tuple[float, float]] = (),
                  sightings=None, overhead_cue: bool = False, pose_request_overhead: bool = True,
                  arbiter: Optional[Arbiter] = None,
@@ -252,7 +252,7 @@ class LocalizationService:
 
     # --- steps ----------------------------------------------------------------------
 
-    async def _pose_request(self, rid: str, client: RobotClient, state: Mapping, now: float) -> None:
+    async def _pose_request(self, rid: str, client: transport.RobotClient, state: Mapping, now: float) -> None:
         """D-546 6: answer the robot's open pose request: overhead, arbiter, model, then a human."""
         reason = str(((state.get("line_follow") or {}).get("reason")) or "")
         if not reason.startswith("lane_return_") or reason == "lane_return_corridor_verified":
@@ -370,14 +370,14 @@ class LocalizationService:
         """Robots whose LOCALIZED pose Fleet can trace to a world cue (tests, console)."""
         return set(self._anchors)
 
-    async def _mission_quiet(self, rid: str, client: RobotClient, now: float) -> bool:
+    async def _mission_quiet(self, rid: str, client: transport.RobotClient, now: float) -> bool:
         """True while CORE runs a mission for `rid` and MISSION_QUIET_S after it ends:
         no arbiter, no decision, no report read (its candidates predate the motion).
         A CORE without missions (an API error such as 501) runs none; an unreadable
         status is quiet for this poll, since Fleet cannot tell the robot is still."""
         try:
             status = await self._bounded(client.localization_mission_status())
-        except RobotApiError:
+        except transport.RobotApiError:
             status = {}
         except Exception as exc:
             logger.debug("localization: %s mission status unreadable: %s", rid, exc)
@@ -390,7 +390,7 @@ class LocalizationService:
             self._quiet_until[rid] = now + MISSION_QUIET_S
         return now < self._quiet_until.get(rid, -math.inf)
 
-    async def _arbitrate(self, rid: str, client: RobotClient, localized: Mapping[str, cues.Pose],
+    async def _arbitrate(self, rid: str, client: transport.RobotClient, localized: Mapping[str, cues.Pose],
                          anchors: Mapping[str, cues.Pose], observations: dict, now: float) -> None:
         try:
             report = await self._bounded(client.localization_candidates())
@@ -427,7 +427,7 @@ class LocalizationService:
             c = report.candidates[decision.candidate_index]
             await self._post_decision(rid, client, decision, (c.x, c.y, c.yaw), now)
 
-    async def _post_decision(self, rid: str, client: RobotClient,
+    async def _post_decision(self, rid: str, client: transport.RobotClient,
                              decision: LocalizationDecision, pose: cues.Pose, now: float) -> None:
         record = {"request_id": decision.request_id, "candidate_index": decision.candidate_index,
                   "cues": [c.value for c in decision.cues], "result": "sent"}
@@ -447,7 +447,7 @@ class LocalizationService:
             self._unconfirmed[rid] = (decision.request_id, pose, anchoring, now)
             logger.warning("localization: decision %s to %s timed out; unconfirmed for %.0f s",
                            decision.request_id, rid, UNCONFIRMED_S)
-        except RobotApiError as exc:
+        except transport.RobotApiError as exc:
             record["result"] = exc.code
             logger.info("localization: %s refused decision %s: %s", rid, decision.request_id, exc.code)
         except Exception as exc:
@@ -507,7 +507,7 @@ class LocalizationService:
         except Exception as exc:
             logger.warning("localization: suspect to %s failed: %s", rid, exc)
 
-    async def _climb(self, rid: str, client: RobotClient, rung: str, status, now: float) -> None:
+    async def _climb(self, rid: str, client: transport.RobotClient, rung: str, status, now: float) -> None:
         """One ladder rung: ask CORE for the rung's mission, or raise needs_human."""
         if rung == "needs_human":
             logger.warning("localization: %s still unlocalized after %.0f s: needs_human (위치 확인 필요)",
@@ -538,7 +538,7 @@ class LocalizationService:
                     target=target if kind == "to_square" else None))
                 logger.info("localization: %s ladder %s: %s sent (held %s)", rid, rung, kind, held)
                 return
-            except RobotApiError as exc:
+            except transport.RobotApiError as exc:
                 record["result"] = exc.code
                 logger.info("localization: %s refused %s: %s %s", rid, kind, exc.code, exc)
                 if exc.code == "busy":

@@ -52,4 +52,48 @@
 
 `advice --input <reply.json> --output <new-advice-dir>`는 형식을 검사하고 `needs_human_review:true`로 저장한다. 모델이 계수·좌표·명령·승인을 반환하면 거부한다. 원격 provider를 자동 호출하거나 응답을 운영에 적용하지 않는다. 미응답이어도 기준 지도와 측정 상태는 유지된다. 기존 Situation 사건 판단은 사건·두 카메라·안전 계약에 묶여 있으므로 이 교정 검토와 합치지 않는다.
 
-출력 디렉터리는 새 경로여야 하며 기존 결과를 덮어쓰지 않는다. 개발용 생성물·로그는 X:의 관리된 세션에 둔다. 실측 수용은 실제 표적 영상, 독립 측량, 고정 카메라 상태와 현장 지도 readback이 필요하다.
+출력 디렉터리는 새 경로여야 하며 기존 결과를 덮어쓰지 않는다. 개발용 생성물·로그는 $ROSY_SCRATCH의 관리된 세션에 둔다. 실측 수용은 실제 표적 영상, 독립 측량, 고정 카메라 상태와 현장 지도 readback이 필요하다.
+
+## 승인 가능한 묶음과 설치 화면 (D-775)
+
+`bundle --input <bundle-input.json> --output <new-bundle-dir>`는 기존 report와 floor 후보를
+검증해 `bundle.json`을 만든다. 입력의 `report`, `floor`는 입력 파일 기준 상대 경로다.
+`context`는 다음 필드를 모두 포함한다.
+
+```json
+{
+  "report": "fit/report.json",
+  "floor": "floor/floor.json",
+  "context": {
+    "map_revision": "활성 지도의 sha256",
+    "survey_digest": "독립 바닥 측량 원본의 SHA-256",
+    "capture": {
+      "signature": "fit과 같은 고정 촬영 조건",
+      "lens": {"kind":"standard", "focal_mm":5.4, "hfov_deg":66.9},
+      "rotation_deg": 0
+    },
+    "bounds_m": [-1.4, -0.63, 1.4, 0.63],
+    "evidence_kind": "measured"
+  }
+}
+```
+
+위 문자열은 설명용 자리표시자다. 실제 sha256과 촬영 조건을 사용한다. 합성 자료는
+`evidence_kind:synthetic`으로 남긴다. 숫자와 digest 검증은 측량의 진실성을 인증하지 않는다.
+실측 주장을 하는 운영자는 원본·측량·독립 check point를 함께 검토해야 한다.
+
+Fleet에는 기존 sighting source 설정과 영속 `--sightings-db`, 현재 활성 지도가 필요하다.
+메모리 전용이면 화면에 그렇게 표시되며 재시작 뒤 보존되지 않는다. Vision은 기존
+`--track` config 동기화를 사용하고 Fleet과 같은 preview 서명 키로 direct preview를 제공한다.
+이 절은 장치에 접속하거나 배포하라는 명령이 아니다.
+
+설치 화면의 **카메라 설치·보정 → 실측 교정**에서 source를 선택하고 묶음을 가져온다.
+지도·독립 오차를 검토한 뒤 p95/최대 허용 오차를 직접 입력하고 이름 있는 운영자로
+승인한다. **저장됨**은 DB 선택 결과이며, 현재 연결의 촬영 조건을 확인하고 지도로 그린
+영상이 돌아와야 **Vision 적용 중**이 된다. viewer는 이미 확인된 영상만 읽는다.
+
+카메라 재접속, 렌즈·JPEG 크기·회전 변경은 재확인을 요구한다. 지도·승인 revision 변경,
+철회, 설정 갱신 5초 만료 때 옛 결과를 사용하지 않는다. 화면/source 전환은 진행 중인
+읽기를 폐기한다. 철회는 기대 revision이 일치할 때만 성공한다. 충돌하면 새 저장 기록을
+다시 읽고 판단한다. 이 승인은 미리보기 전용이며 높은 로봇 마커의 위치 sighting이나
+주행 허가로 사용할 수 없다.

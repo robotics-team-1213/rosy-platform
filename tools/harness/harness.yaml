@@ -42,16 +42,41 @@ modules:
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [operations/fleet/test]
+  - name: monitoring
+    path: operations/monitoring
+    tests: [operations/monitoring/test]
+    functional_kind: pytest
+    functional: [operations/monitoring/test]
   - name: fleet_decision
     path: operations/decision
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
+  - name: situation
+    path: operations/situation
+    tests: [operations/situation/test]
+    functional_kind: pytest
+    functional: [operations/situation/test]
+  - name: media
+    path: operations/site_ui/media
+    tests: [operations/site_ui/media/test]
+    functional_kind: pytest
+    functional: [operations/site_ui/media/test]
+  - name: media_edge
+    path: middleware/media
+    tests: [middleware/media/test]
+    functional_kind: pytest
+    functional: [middleware/media/test]
   - name: console_source
-    path: operations/site_ui/console
-    tests: [operations/fleet/test, test/test_remaining_platform_installed.py]
+    path: applications/fleet/web
+    tests: [applications/fleet/test, operations/fleet/test, test/test_remaining_platform_installed.py]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
+  - name: fleet_app_dev
+    path: applications/fleet/dev
+    tests: [applications/fleet/test]
+    functional_kind: pytest
+    functional: [applications/fleet/test/test_sample_server.py]
   - name: perception_curation
     path: learning/curation/perception
     tests: [test/learning/perception]
@@ -180,6 +205,32 @@ modules:
     tests: [middleware/robot_ui/pilot/test]
     functional_kind: host-contract
     functional: [middleware/robot_ui/pilot/test/test_stick.py]
+  # 2026-10-27: concern: control wheels (module-responsibility debate, consensus 3).
+  - name: omx_transfer
+    path: integrations/robots/omx
+    tests: [test/test_platform_omx_transfer_provider.py]
+    functional_kind: pytest
+    functional: [test/test_platform_omx_transfer_provider.py]
+  - name: omx_agent
+    path: middleware/devices/omx/agent
+    tests: [test/test_platform_workcell_coordinator.py, test/test_platform_owner_barriers.py]
+    functional_kind: pytest
+    functional: [test/test_platform_workcell_coordinator.py, test/test_platform_owner_barriers.py]
+  - name: execution_local
+    path: middleware/robot_execution/local
+    tests: [middleware/robot_execution/local/test]
+    functional_kind: pytest
+    functional: [middleware/robot_execution/local/test]
+  - name: skill_api
+    path: middleware/skills/api
+    tests: [test/test_platform_transfer_owner_boundary.py, test/test_platform_contract_mapping.py]
+    functional_kind: pytest
+    functional: [test/test_platform_transfer_owner_boundary.py, test/test_platform_contract_mapping.py]
+  - name: skill_manipulation
+    path: middleware/skills/manipulation
+    tests: [test/test_platform_transfer_owner_boundary.py]
+    functional_kind: pytest
+    functional: [test/test_platform_transfer_owner_boundary.py]
   - name: omx_adapter
     path: middleware/devices/omx/adapter
     tests: [middleware/devices/omx/adapter/test]
@@ -201,6 +252,11 @@ modules:
     tests: [middleware/devices/omx/profile/test]
     functional_kind: host-contract
     functional: [middleware/devices/omx/profile/test/test_omx_package.py]
+  - name: rasptank_metal
+    path: middleware/devices/rasptank/profile
+    tests: [middleware/devices/rasptank/profile/test]
+    functional_kind: host-contract
+    functional: [middleware/devices/rasptank/profile/test/test_rasptank_profile.py]
   - name: description
     path: middleware/devices/pinky/description
     tests: [middleware/devices/pinky/description/test/test_urdf_surface.py, test/test_robot_runtime.py]

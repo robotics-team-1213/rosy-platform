@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,7 +27,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 TOKENS = {"operator": "rosy-dev-operator", "administrator": "rosy-dev-admin"}
-CAPTURES = Path(os.environ.get("ROSY_SCREENSHOT_DIR", "X:/DevTemp/rosy-uiux-d306-roles-g2"))
+CAPTURES = Path(os.environ.get("ROSY_SCREENSHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-uiux-d306-roles-g2")
 SCENARIOS = {
     "setup": ("normal", "empty", "delayed", "disconnected", "unavailable", "unsupported", "forbidden", "error", "safe_stop", "confirm_cancel"),
     "device": ("normal", "empty", "delayed", "disconnected", "unavailable", "forbidden", "error", "safe_stop", "confirm_cancel"),
@@ -772,7 +773,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             def serve(route):
                 request = route.request
                 path = urlsplit(request.url).path
-                if request.method in {"POST", "PUT"}:
+                if request.method in {"POST", "PUT"} and not path.startswith("/api/v1/vision/media/"):  # D-789 read grant
                     posts.append({"method": request.method, "path": path,
                                   "body": request.post_data_json})
                     if path == "/api/v1/line-follow/mode":
@@ -902,7 +903,7 @@ def test_console_map_data_and_action_feedback_full_shell_captures(tmp_path):
             def serve(route):
                 request = route.request
                 path = urlsplit(request.url).path
-                if request.method == "POST":
+                if request.method == "POST" and not path.startswith("/api/v1/vision/media/"):  # D-789 read grant
                     posts.append({"path": path, "body": request.post_data_json})
                     route.fulfill(status=202, content_type="application/json", body='{"accepted":true}')
                     return

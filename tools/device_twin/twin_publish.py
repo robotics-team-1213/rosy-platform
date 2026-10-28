@@ -10,7 +10,7 @@ This wrapper keeps everything else real and only redirects those two programs:
 LOCALAPPDATA must point at the twin's folder (the throwaway key lives in
 <LOCALAPPDATA>/Rosy/signing/<key-name>.private.pem); this wrapper refuses to run otherwise.
 
-    python tools/device_twin/twin_publish.py --tarball X:/DevTemp/d406-twin/releases/<id>.tar.gz \
+    python tools/device_twin/twin_publish.py --tarball $ROSY_SCRATCH/d406-twin/releases/<id>.tar.gz \
         --canary rosy-pinky-twin --repo twin/rosy-os --key-name twin-d406-test --public-key <pem> ...
 """
 

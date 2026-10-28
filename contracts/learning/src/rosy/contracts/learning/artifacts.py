@@ -72,8 +72,12 @@ def _ref(ref, root):
         file = (base / ref["path"]).resolve()
         if not file.is_relative_to(base) or not file.is_file():
             raise ValueError("artifact file path escapes root or is missing")
-        digest = file_sha256(file)
-        if file.stat().st_size != ref["bytes"] or digest != ref["sha256"]:
+        digest = hashlib.sha256()
+        with file.open("rb") as stream:
+            # Fewer GIL reacquisitions keep full-file checks bounded under Python contention.
+            for block in iter(lambda: stream.read(8 << 20), b""):
+                digest.update(block)
+        if file.stat().st_size != ref["bytes"] or digest.hexdigest() != ref["sha256"]:
             raise ValueError("artifact file hash/size differs")
 
 

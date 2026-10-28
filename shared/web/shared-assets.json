@@ -3,6 +3,7 @@
   "shared_assets": {
     "tokens.css": "text/css",
     "components.css": "text/css",
+    "stage-strip.css": "text/css",
     "template.html": "text/html",
     "template.css": "text/css",
     "app-shell.css": "text/css",
@@ -14,9 +15,12 @@
     "live-dialog-geometry.js": "text/javascript",
     "theme.js": "text/javascript",
     "evidence.js": "text/javascript",
+    "webrtc.js": "text/javascript",
+    "request.js": "text/javascript",
     "motor-health.js": "text/javascript",
     "motor-health.css": "text/css",
     "scope.js": "text/javascript",
+    "fleet-client.js": "text/javascript",
     "icons/cam.svg": "image/svg+xml",
     "icons/pilot.svg": "image/svg+xml",
     "icons/console.svg": "image/svg+xml",
@@ -24,7 +28,18 @@
     "brand/mark.svg": "image/svg+xml",
     "brand/platform.svg": "image/svg+xml",
     "task-chooser.js": "text/javascript",
+    "ui-wiring.js": "text/javascript",
     "task-chooser.css": "text/css",
-    "account-profile.js": "text/javascript"
+    "account-profile.js": "text/javascript",
+    "account-session.js": "text/javascript",
+    "control-dom.js": "text/javascript",
+    "form-controls.js": "text/javascript",
+    "collection-controls.js": "text/javascript",
+    "interaction-controls.js": "text/javascript",
+    "workflow-controls.js": "text/javascript",
+    "component-controls.css": "text/css",
+    "component-gallery.css": "text/css",
+    "component-gallery.html": "text/html",
+    "component-gallery.js": "text/javascript"
   }
 }

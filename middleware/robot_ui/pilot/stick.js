@@ -136,7 +136,7 @@ export function mapInput(source = {}, config = DEFAULT_CONFIG, limits = resolveL
     throttle = pairAxis(Boolean(source.up), Boolean(source.down));
     turn = pairAxis(Boolean(source.left), Boolean(source.right));
   }
-  // 반전은 조향 입력에만 건다. 제자리 회전 버튼·키는 이름표(↺/↻)가 곧 방향이다.
+  // 반전은 조향 입력에만 건다. 제자리 회전 버튼·키는 이름표(좌회전/우회전)가 곧 방향이다.
   const direction = config.invertAngular && source.kind !== "pivot" ? -1 : 1;
   const linear = throttle * limits.linear;
   const angular = turn * direction * limits.angular;

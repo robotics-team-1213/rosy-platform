@@ -32,9 +32,9 @@ import xml.etree.ElementTree as ET
 xml = list(Path(sys.argv[1]).rglob('native_map_grid.gtest.xml'))
 assert len(xml) == 1, xml
 root = ET.parse(xml[0]).getroot()
-assert int(root.attrib['tests']) == 6, root.attrib
+assert int(root.attrib['tests']) == 7, root.attrib
 for name in ('failures', 'errors', 'disabled'):
     assert int(root.attrib.get(name, 0)) == 0, root.attrib
 assert not root.findall('.//skipped')
-print('native_map_grid: 6 actual gtest cases, no failures/errors/skips')
+print('native_map_grid: 7 actual gtest cases, no failures/errors/skips')
 PY

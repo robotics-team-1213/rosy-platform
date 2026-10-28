@@ -159,3 +159,15 @@ def test_numeric_overflow_is_not_silently_accepted_in_log(module, inputs):
     raw = raw.replace(b'"mean_intensity": 100.0', b'"mean_intensity": 1e309')
     with pytest.raises(ValueError, match='environment'):
         module.seal_environment(raw, windows, files, rig_revision='rig', calibration_revision='cal')
+
+
+def test_a_recorder_that_names_the_wrist_camera_wrist_reads_the_same(module, inputs):
+    """D-794 B: ``wrist`` and the legacy ``front`` are one camera; listing both is refused."""
+    raw, windows, files = inputs
+    renamed = raw.replace(b'"front"', b'"wrist"')
+    assert renamed != raw
+    legacy, current = seal(module, inputs), seal(module, (renamed, windows, files))
+    assert bind(module, (renamed, windows, files), current)['episodes'] == bind(module, inputs, legacy)['episodes']
+    both = raw.replace(b'"top"', b'"wrist"')
+    with pytest.raises(ValueError, match='both camera roles'):
+        seal(module, (both, windows, files))

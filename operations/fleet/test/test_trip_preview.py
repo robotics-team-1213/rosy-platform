@@ -11,7 +11,7 @@ import pytest
 from core_common.robot_body import PINKY_PRO
 from fleet import site_map
 from fleet.server import trip_preview
-from fleet.server.trip_ports import bend_geometry
+from fleet.server.trip_geometry import bend_geometry
 from fleet.site_map import SiteMap
 from fleet.server.trips.trip_crosswalks import crosswalk_spans, route_crosswalks
 from test_trip_bend import SW_BEND, _bend_map, _trip

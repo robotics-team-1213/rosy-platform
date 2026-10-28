@@ -17,6 +17,14 @@ for package in skill motion; do
 done
 WHEEL_SOURCES=("$CONTRACT_WORK/skill" "$CONTRACT_WORK/motion")
 WHEEL_NAMES=(rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0)
+# D-789/D-791: the optional robot media wheel (camera mailbox tap + WHIP worker).
+if [[ -f "$WORKSPACE/middleware/media/pyproject.toml" ]]; then
+    mkdir -p "$CONTRACT_WORK/media"
+    cp "$WORKSPACE/middleware/media/pyproject.toml" "$CONTRACT_WORK/media/"
+    cp -a "$WORKSPACE/middleware/media/src" "$CONTRACT_WORK/media/"
+    WHEEL_SOURCES+=("$CONTRACT_WORK/media")
+    WHEEL_NAMES+=(rosy-media-edge==0.1.0)
+fi
 if [[ -f "$WORKSPACE/operations/fleet/package.xml" ]]; then
     mkdir -p "$CONTRACT_WORK/execution"
     cp "$WORKSPACE/operations/site_execution/pyproject.toml" "$CONTRACT_WORK/execution/"
@@ -60,5 +68,7 @@ assert motion.BaseTwist(0.0, 0.0).linear_mps == 0.0
 assert (motion.BaseTwist(0.1, -0.2).linear_mps, motion.BaseTwist(0.1, -0.2).angular_radps) == (0.1, -0.2)
 assert motion.MotionHeader("smoke", "device", "representation-only", "IDLE", 0.0, 1.0).attempt is None
 assert skill.AttemptIdentity is not None
+if (root / 'rosy_media_edge').is_dir():
+    assert (root / 'rosy_media_edge/worker.py').is_file() and (root / 'rosy_media_edge/camera_tap.py').is_file()
 print("MOTION_CONTRACTS_INSTALLED", root)
 PY

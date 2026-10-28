@@ -1,4 +1,5 @@
-import {renderAccountProfile} from '/common/account-profile.js';
+import '/common/account-profile.js';
+import {createAccountSession} from '/common/account-session.js';
 
 const canvas = document.getElementById("pitch");
 const ctx = canvas.getContext("2d");
@@ -33,38 +34,38 @@ let hasMatch = false;
 let lastEvidence = null;
 let evidenceAnnouncement = "";
 let canOperate = false;
-let accountRead = 0;
+let account = null;
 let loggingOut = false;
-async function accountSession() {
-  if (loggingOut) return;
-  const read = ++accountRead;
-  try {
-    const response = await fetch('/api/account/session', {cache:'no-store', signal:AbortSignal.timeout(5000)});
-    if (!response.ok) throw new Error('Account unavailable');
-    const session = await response.json();
-    if (read !== accountRead) return;
-    renderAccountProfile(session);
-    canOperate = session.can_operate === true;
-    document.getElementById('account-login').hidden = !session.enabled || session.authenticated;
-    document.getElementById('account-logout').hidden = !session.authenticated;
-  } catch (_) { if (read !== accountRead) return; canOperate = false; renderAccountProfile(null); }
+function showControls() {
   halt.hidden = !canOperate;
   halt.disabled = !canOperate;
 }
+const session = createAccountSession({
+  current: () => account,
+  apply: value => {
+    account = value;
+    canOperate = value.can_operate === true;
+    document.getElementById('account-login').hidden = !value.enabled || value.authenticated;
+    document.getElementById('account-logout').hidden = !value.authenticated;
+    showControls();
+  },
+  changed: () => { document.body.hidden = true; window.location.reload(); },
+  failed: () => { canOperate = false; showControls(); },
+  poll: 0,
+});
 document.getElementById('account-logout').addEventListener('click', async () => {
   loggingOut = true;
-  accountRead++;
-  renderAccountProfile(null);
-  canOperate = false; halt.hidden = true; halt.disabled = true;
+  session.invalidate();
+  canOperate = false; showControls();
   try {
-    const response = await fetch('/api/account/logout', {method:'POST', signal:AbortSignal.timeout(5000)});
-    if (!response.ok) throw new Error('중앙 로그아웃 처리가 지연 중입니다.');
-  } catch (error) { haltStatus.textContent = error.message; }
+    await session.logout(() => { account = null; }, {signal: AbortSignal.timeout(5000)});
+  } catch (_) { haltStatus.textContent = '중앙 로그아웃 처리가 지연 중입니다.'; }
   loggingOut = false;
-  await accountSession();
+  await session.restore();
 });
-setInterval(accountSession, 10000);
-accountSession();
+// Unlike Robot and Pilot, the board keeps probing after a failed first read.
+setInterval(() => { if (!loggingOut) session.restore(); }, 10000);
+session.restore();
 
 function setTextIfChanged(element, value) {
   if (element.textContent !== value) element.textContent = value;

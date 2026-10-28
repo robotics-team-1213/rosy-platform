@@ -5,14 +5,14 @@
 
 ## Purpose
 
-Site screen home. The parent folder is not a product. `console/` is the Rosy Fleet source (registry id `console`, D-487). `cam/` is Rosy Cam. `operations/apps/fleet` is the `rosy-app-gateway` wheel, not this screen. The existing Fleet distribution installs and serves Console as `fleet/server/web`; API, ledger and final execution authority remain with their existing owners (D-637).
+Site capture and media holder. Fleet product UI moved to `applications/fleet/web` (D-822); the existing Fleet distribution still installs it as `fleet/server/web`. `cam/` is Rosy Cam. API, ledger and final execution authority remain with their existing owners.
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `console/` | Fleet Console source; installed identity `fleet.server.web`, backend `operations/fleet/fleet/server` (see `console/AGENTS.md`) |
 | `cam/` | Rosy Cam Android app, `COLCON_IGNORE` (see `cam/AGENTS.md`) |
+| `media/` | Site media-session service (see `media/AGENTS.md`) |
 
 ## For AI Agents
 
@@ -23,7 +23,7 @@ Site screen home. The parent folder is not a product. `console/` is the Rosy Fle
 
 ### Testing Requirements
 
-See `console/AGENTS.md` for Console and `cam/AGENTS.md` for Cam. Pytest and browser checks run on the remote test PCs per D-584. Protocol fixtures are shared with `operations/overhead/test/fixtures/protocol/`.
+See `cam/AGENTS.md` and `media/AGENTS.md`. Pytest and browser checks run on the remote test PCs per D-584. Protocol fixtures are shared with `operations/overhead/test/fixtures/protocol/`.
 
 ### Common Patterns
 

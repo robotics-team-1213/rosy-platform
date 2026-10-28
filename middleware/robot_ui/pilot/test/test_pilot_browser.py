@@ -9,15 +9,13 @@ from __future__ import annotations
 import os
 import json
 import sys
-import threading
 import time
 from pathlib import Path
 
 import pytest
-from browser_harness import browser_tests_enabled, safe_listener
+from browser_harness import browser_tests_enabled
 
 playwright_sync = pytest.importorskip("playwright.sync_api", reason="Playwright 없음")
-import uvicorn  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -330,20 +328,6 @@ def test_shared_action_icon_preserves_reason_and_button_behavior(tablet_page):
     assert errors == [], errors
 
 
-@pytest.fixture(scope="module")
-def base_url():
-    listener = safe_listener()
-    server = uvicorn.Server(uvicorn.Config(dev_server.app, log_level="warning"))
-    thread = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
-    thread.start()
-    while not server.started:
-        thread.join(0.05)
-    yield f"http://127.0.0.1:{listener.getsockname()[1]}"
-    server.should_exit = True
-    thread.join(timeout=5)
-    listener.close()
-
-
 def _click_tool(page, selector):
     if not page.locator(selector).is_visible():
         page.click("[data-drive-tools]")
@@ -398,18 +382,6 @@ def test_camera_can_be_seen_in_emergency_without_engaging_motion(tablet_page, wi
         assert errors == []
     finally:
         dev_server.STATE["mode"] = previous
-
-
-@pytest.fixture
-def tablet_page(base_url):
-    with playwright_sync.sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": 2000, "height": 1200})
-        errors: list[str] = []
-        page.on("pageerror", lambda exc: errors.append(str(exc)))
-        page.set_default_timeout(10_000)
-        yield base_url, page, errors
-        browser.close()
 
 
 @pytest.fixture(autouse=True)
@@ -527,112 +499,6 @@ def test_drive_withheld_gate_names_the_no_motion_reason(base_url, width, height)
             assert errors == [], errors
         finally:
             browser.close()
-
-
-@pytest.mark.skipif(not browser_tests_enabled(),
-                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_lobby_lists_neighbours_and_points_to_their_origin(tablet_page):
-    """이웃 방 목록(D-343 2.2-3): 이 기기가 대신 찾은 방들이 보이고, 각 버튼이 그 origin URL 을 가진다."""
-    base_url, page, errors = tablet_page
-    page.route("**/api/v1/site/rooms",
-               lambda route: route.fulfill(json={"rooms": [
-                   {"hostname": "rosy-02", "address": "10.0.0.8", "port": 8080,
-                    "kind": "robot", "url": "http://rosy-02.local:8080/pilot/#join"}]}))
-    page.goto(f"{base_url}/pilot")
-    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    room = page.locator("[data-lobby-room=rosy-02]")
-    room.wait_for(state="visible")
-    # 이동 목적지는 버튼의 진입 URL 에 명시돼 있다(D-343 2.3). 시험 호스트에서
-    # 가짜 LAN 이름은 풀리지 않으므로 클릭하지 않고 목적지를 단언한다.
-    assert room.get_attribute("data-lobby-url") == "http://rosy-02.local:8080/pilot/#join"
-    assert errors == [], errors
-
-
-@pytest.mark.skipif(not browser_tests_enabled(),
-                    reason="ROSY_RUN_BROWSER_TESTS=1 옵트인")
-def test_lobby_failure_shows_retry_and_gate_survives(tablet_page):
-    """A failed scan is distinguishable from an empty LAN; login remains usable."""
-    base_url, page, errors = tablet_page
-    page.route("**/api/v1/site/rooms",
-               lambda route: route.fulfill(status=503, json={"code": "DISCOVERY_UNAVAILABLE"}))
-    page.goto(f"{base_url}/pilot")
-    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    page.get_by_text("로봇 목록을 가져오지 못했습니다.", exact=False).wait_for(state="visible")
-    page.locator("[data-lobby-retry]").wait_for(state="visible")
-    assert page.locator("[data-lobby-room]").count() == 0
-    assert errors == [], errors
-
-
-@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-@pytest.mark.parametrize("width,height", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
-def test_lobby_empty_and_failure_fit_declared_widths(base_url, width, height):
-    with playwright_sync.sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": width, "height": height})
-        errors = []
-        page.on("pageerror", lambda exc: errors.append(str(exc)))
-        response = {"fail": False}
-        page.route("**/api/v1/site/rooms", lambda route: route.fulfill(
-            status=503, json={"code": "DISCOVERY_UNAVAILABLE"}) if response["fail"]
-            else route.fulfill(json={"rooms": []}))
-        try:
-            page.goto(f"{base_url}/pilot")
-            page.get_by_text("같은 LAN에서 발견한 다른 로봇이 없습니다").wait_for()
-            for state in ("empty", "failed"):
-                # refreshLobby appends retry after the independent self-state read settles.
-                page.locator("[data-lobby-retry]").wait_for(state="visible")
-                if state == "failed":
-                    response["fail"] = True
-                    page.locator("[data-lobby-retry]").click()
-                    page.get_by_text("로봇 목록을 가져오지 못했습니다.", exact=False).wait_for()
-                if os.environ.get("ROSY_SHOT_DIR"):
-                    shot_dir = Path(os.environ["ROSY_SHOT_DIR"])
-                    shot_dir.mkdir(parents=True, exist_ok=True)
-                    page.screenshot(path=str(shot_dir / f"pilot-lobby-{state}-{width}x{height}.png"))
-                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-                assert page.locator("[data-lobby-retry]").is_visible()
-                if state == "empty":
-                    status_box = page.locator("[data-lobby-self]").bounding_box()
-                    summary_box = page.get_by_text("같은 LAN에서 발견한 다른 로봇이 없습니다").bounding_box()
-                    assert status_box["y"] + status_box["height"] <= summary_box["y"]
-                assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
-                assert page.locator("form[data-pilot-token-form] label").is_visible()
-                estop = page.locator("ui-topbar [data-estop]").bounding_box()
-                assert estop and estop["y"] + estop["height"] <= height, (state, width, estop)
-                main_width = page.locator(".pilot-main").bounding_box()["width"]
-                assert main_width >= min(width, 768) - 1, (state, width, main_width)
-                widths = page.evaluate("""() => ['form[data-pilot-token-form] ui-field',
-                    'form[data-pilot-token-form] ui-button', '[data-lobby-retry]']
-                    .map(selector => document.querySelector(selector).getBoundingClientRect().width)""")
-                if width < 480:
-                    assert max(widths) - min(widths) <= 1, (state, width, widths)
-            assert errors == [], errors
-        finally:
-            browser.close()
-
-
-@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-def test_lobby_retry_recovers_without_duplicate_scans(tablet_page):
-    base_url, page, errors = tablet_page
-    calls = []
-
-    def rooms(route):
-        calls.append(route.request.method)
-        if len(calls) == 1:
-            route.fulfill(status=503, json={"code": "DISCOVERY_UNAVAILABLE"})
-        else:
-            route.fulfill(json={"rooms": [{"hostname": "rosy-02.local", "address": "10.0.0.8",
-                "port": 443, "kind": "robot", "url": "https://rosy-02.local/pilot/#join"}]})
-
-    page.route("**/api/v1/site/rooms", rooms)
-    page.goto(f"{base_url}/pilot")
-    page.locator("[data-lobby-retry]").wait_for(state="visible")
-    page.evaluate("""() => {const retry=document.querySelector('[data-lobby-retry]');
-        retry.click(); retry.click(); retry.click();}""")
-    page.locator('[data-lobby-room="rosy-02.local"]').wait_for(state="visible")
-    assert calls == ["GET", "GET"]
-    assert page.locator("form[data-pilot-token-form] ui-field input").is_visible()
-    assert errors == [], errors
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
@@ -880,26 +746,6 @@ def test_development_connection_refusal_keeps_the_code_form(tablet_page):
     assert errors == [], errors
 
 
-@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-def test_lobby_rejects_unsafe_urls_and_suppresses_current_robot(tablet_page):
-    from urllib.parse import urlsplit
-    base_url, page, errors = tablet_page
-    local = urlsplit(base_url)
-    rows = [{"hostname": "rosy-02.local", "address": "10.0.0.8", "port": 8080, "kind": "robot", "url": url}
-            for url in ("javascript:alert(1)", "https://elsewhere.example/pilot/#join",
-                        "http://user:secret@rosy-02.local:8080/pilot/#join")]
-    rows += [{"hostname": "rosy-01.local", "address": local.hostname, "port": local.port,
-              "kind": "robot", "url": f"http://rosy-01.local:{local.port}/pilot/#join"},
-             {"hostname": "rosy-03.local", "address": "10.0.0.9", "port": 443, "kind": "robot",
-              "url": "https://rosy-03.local/pilot/#join"}]
-    page.route("**/api/v1/site/rooms", lambda route: route.fulfill(json={"rooms": rows}))
-    page.goto(f"{base_url}/pilot")
-    page.locator('[data-lobby-room="rosy-03.local"]').wait_for(state="visible")
-    assert page.locator("[data-lobby-room]").count() == 1
-    assert "선택한 로봇에서 승인·로그인을 확인합니다" in page.locator("[data-lobby-list]").inner_text()
-    assert errors == [], errors
-
-
 def _refuse_second_session(page):
     calls = []
 
@@ -981,84 +827,6 @@ def test_android_shell_without_a_session_stays_with_the_app(tablet_page, token_v
     assert page.locator("form[data-pilot-token-form]").count() == 0
     assert page.locator("[data-lobby-list]").count() == 0
     assert calls == []
-    assert errors == [], errors
-
-
-@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-def test_lobby_shows_self_driving_tag_when_manual_and_moving(tablet_page):
-    """Manual movement is explicitly attributed to this robot."""
-    base_url, page, errors = tablet_page
-    page.route("**/api/v1/site/rooms",
-               lambda route: route.fulfill(json={"rooms": []}))
-    page.route("**/api/v1/robot/state",
-               lambda route: route.fulfill(json={
-                   "mode": "MANUAL",
-                   "evidence": {"velocity": {"evidence": "fresh"}},
-                   "velocity": {"linear": 0.08, "angular": 0.0}}))
-    page.goto(f"{base_url}/pilot")
-    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    tag = page.locator("[data-lobby-self]")
-    tag.wait_for(state="visible")
-    assert tag.inner_text() == "이 로봇 · 운전 중"
-    assert errors == [], errors
-
-
-@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-def test_lobby_self_tag_shows_idle_when_not_driving(tablet_page):
-    base_url, page, errors = tablet_page
-    page.route("**/api/v1/site/rooms",
-               lambda route: route.fulfill(json={"rooms": []}))
-    page.route("**/api/v1/robot/state",
-               lambda route: route.fulfill(json={
-                   "mode": "IDLE", "velocity": {"linear": 0.0, "angular": 0.0},
-                   "evidence": {"velocity": {"evidence": "fresh"}}}))
-    page.goto(f"{base_url}/pilot")
-    page.wait_for_selector("form[data-pilot-token-form] ui-field input")
-    tag = page.locator("[data-lobby-self]")
-    tag.wait_for(state="visible")
-    assert tag.inner_text() == "이 로봇 · 정지 상태"
-    assert errors == [], errors
-
-
-@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-@pytest.mark.parametrize("status,state,word", [
-    (503, {}, "속도 연결 끊김"),
-    (200, {"mode": "MANUAL", "velocity": {"linear": 0}}, "속도 정보 없음"),
-    (200, {"mode": "SAFE_STOP", "safety": {"estop": True},
-           "evidence": {"safety": {"evidence": "fresh"}}}, "안전 정지"),
-    (200, {"mode": "SAFE_STOP", "safety": {"estop": True}}, "안전 정지 보고 · 안전 상태 확인 불가"),
-    (200, {"mode": "NAVIGATION", "velocity": {"linear": 0, "angular": 0.1},
-           "evidence": {"velocity": {"evidence": "fresh"}}}, "이동 중"),
-    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
-           "evidence": {"velocity": {"evidence": "delayed"}}}, "속도 지연"),
-    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
-           "evidence": {"velocity": {"evidence": "disconnected"}}}, "속도 연결 끊김"),
-    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0},
-           "evidence": {"velocity": {"evidence": "unavailable"}}}, "속도 정보 없음"),
-    (200, {"mode": "IDLE", "velocity": {"linear": 0, "angular": 0}}, "속도 연결 끊김"),
-])
-def test_lobby_self_state_never_turns_missing_or_moving_evidence_into_idle(tablet_page, status, state, word):
-    base_url, page, errors = tablet_page
-    page.route("**/api/v1/site/rooms", lambda route: route.fulfill(json={"rooms": []}))
-    page.route("**/api/v1/robot/state", lambda route: route.fulfill(status=status, json=state))
-    page.goto(f"{base_url}/pilot")
-    tag = page.locator("[data-lobby-self]")
-    tag.wait_for(state="visible")
-    assert tag.inner_text() == f"이 로봇 · {word}"
-    assert page.locator("[data-lobby-retry]").is_visible()
-    assert errors == [], errors
-
-
-@pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-@pytest.mark.parametrize("stored", ["null", "{}", "[null, 1]", '[{"host":"other.test","label":"다른 로봇"}]',
-                                   '[{"host":"other.test","label":null,"token":"legacy-secret"}]'])
-def test_recent_metadata_cannot_break_gate_or_offer_another_robot_as_this_origin(tablet_page, stored):
-    base_url, page, errors = tablet_page
-    page.add_init_script(f"localStorage.setItem('rosy.pilot.recent', {json.dumps(stored)})")
-    page.goto(f"{base_url}/pilot")
-    page.locator("form[data-pilot-token-form] ui-field input").wait_for(state="visible")
-    assert page.locator("[data-recent-connect]").count() == 0
-    assert "legacy-secret" not in page.evaluate("localStorage.getItem('rosy.pilot.recent') || ''")
     assert errors == [], errors
 
 
@@ -1236,7 +1004,7 @@ def test_drive_hud_does_not_invent_zero_before_velocity_readback(base_url):
             page.route_web_socket("**/ws/state", lambda route: route.on_message(lambda raw: None))
             _enter_drive(page, base_url)
             assert page.locator("[data-drive-fact=speed]").inner_text() == "—"
-            assert page.locator("[data-drive-fact=turn]").inner_text() != "· 0°/s"
+            assert page.locator("[data-drive-fact=turn]").inner_text() != "0°/s"
             assert page.locator("[data-drive-fact=battery]").inner_text() == "—"
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         finally:
@@ -1696,7 +1464,7 @@ def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
     page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.mouse.down()
     page.wait_for_selector("[data-drive-intent]:not([hidden])", timeout=5_000)
-    page.wait_for_function("document.querySelector('[data-intent-steer]').textContent.includes('▶')")
+    page.wait_for_function("document.querySelector('[data-intent-steer]').textContent.includes('오른쪽')")
     got = page.evaluate("""(() => {
       const r = (s) => document.querySelector(s).getBoundingClientRect();
       const track = r('[data-intent-track]'), dot = r('[data-intent-target]'), view = r('[data-drive-view]');
@@ -1708,8 +1476,8 @@ def test_auto_intent_strip_shows_target_and_core_steer(tablet_page):
               at: (dot.left + dot.width / 2 - track.left) / track.width,
               inside: strip.left >= Math.max(view.left, picL) - 1 && strip.right <= Math.min(view.right, picR) + 1 && strip.bottom <= view.bottom + 1};
     })()""")
-    page.screenshot(path=str(Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp")) / "pilot-intent-tracking.png"))
-    assert got["steer"] == "오른쪽 18°/s ▶" and got["state"] == "tracking"
+    page.screenshot(path=str(Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp")) / "pilot-intent-tracking.png"))
+    assert got["steer"] == "오른쪽 18°/s" and got["state"] == "tracking"
     assert abs(got["at"] - 0.70) < 0.03 and got["inside"], got
     script({"state": "HOLD", "error": None, "linear": 0.0, "angular": 0.0, "reason": "obstacle_ahead"})
     page.wait_for_function("document.querySelector('[data-drive-intent]').dataset.state === 'hold'")
@@ -1963,7 +1731,7 @@ def _calibrating(owner_id: str) -> dict:
 def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_page):
     """D-321 부록: 보정 중이면 띠가 뜨고, 남의 보정이면 주행 조작이 사유와 함께 잠긴다."""
     base_url, page, errors = tablet_page
-    shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/calibration-mode"))
+    shots = Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp") / "calibration-mode")
     shots.mkdir(parents=True, exist_ok=True)
     log = f"{base_url}/__test__/teleop"
     _enter_drive(page, base_url)
@@ -2463,7 +2231,7 @@ def test_empty_controls_are_not_an_old_server(tablet_page):
     assert errors == [], errors
 
 
-# The fake follows the real SIM runtime (pilot_sim_runtime.snapshot/submit, command_owner):
+# The fake follows the real SIM runtime (pilot_sim.runtime.snapshot/submit, command_owner):
 # while a goal runs /state says ready:false, owner_state "active", active_goal; a goal needs a
 # state_sequence served by a ready readback; a second goal while one runs is refused.
 _ARM_HARNESS = """async (opts) => {
@@ -2730,7 +2498,7 @@ def test_arm_gripper_presets_slider_and_badge(tablet_page):
 @pytest.mark.skipif(not browser_tests_enabled(), reason="ROSY_RUN_BROWSER_TESTS=1")
 @pytest.mark.parametrize("viewport", [(2000, 1200), (1200, 2000), (390, 844), (320, 568)])
 def test_arm_gripper_sits_in_the_right_hand_slot(base_url, viewport):
-    shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
+    shots = Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp") / "d411-c")
     with playwright_sync.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -2893,7 +2661,7 @@ def test_stick_grabs_a_touch_outside_the_ring_but_not_a_neighbour_button(base_ur
             if viewport[0] < 600:
                 assert top["clamped"], top           # phone: unclamped, the ring would leave the column
             if viewport[0] < 600:
-                shots = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/d411-c"))
+                shots = Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or os.environ.get("TEMP") or "/tmp") / "d411-c")
                 if shots.drive and Path(shots.drive + "/").exists():
                     shots.mkdir(parents=True, exist_ok=True)
                     page.screenshot(path=str(shots / f"pilot-drive-zone-top-{viewport[0]}x{viewport[1]}.png"))

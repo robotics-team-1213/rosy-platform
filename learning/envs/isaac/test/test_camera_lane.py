@@ -174,7 +174,7 @@ def test_native_scan_reaches_camera_wall_and_core_return_evidence(monkeypatch):
         assert lane.manager._return_source_high_water_ns == 1_000_000_000
         lane.observe(np.full((240, 320, 3), 100, np.uint8),
                      stamp=1., source_now=1., pose=(0., 0., 0.))
-        assert seen == [(None, 1., {'left': None, 'right': None})]
+        assert seen == [(None, 1., {'left': None, 'right': None}, None)]   # + CORE's front sector (none)
         assert lane.observe_scan(sample, body=NOMINAL_BODY) is False
         assert lane.state() is None
         stale = {**sample, 'source_stamp_ns': 2_000_000_000, 'source_now_ns': 3_000_000_000}
@@ -744,7 +744,8 @@ def test_only_current_observed_creep_is_admitted(monkeypatch, changes, accepted)
 
 
 @pytest.mark.parametrize('prior_frames', [0, 3])
-def test_observed_creep_uses_real_drivable_pipeline_without_committing_a_held_path(prior_frames):
+def test_a_turning_corner_closed_further_than_the_pivot_distance_is_driven_up_to(prior_frames):
+    # user 2026-10-18: a route prior names the side; the closed corner turns in place (was a guided creep)
     lane, now, image, output = gap_lane(prior_frames)
     now[0] += .1
     ground = lane.ground
@@ -757,15 +758,9 @@ def test_observed_creep_uses_real_drivable_pipeline_without_committing_a_held_pa
     output[:] = [((denominator > 0) & (np.abs(lateral) < .06) & (forward < .17)).astype(np.uint8), 'drivable']
     lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.),
                  guide=(80., now[0], False, 0., 0., 0.))
-    if prior_frames:
-        assert lane.observation is None
-        assert lane.last['camera_target']['switch_pending'] == 'drivable_creep'
-        now[0] += .1
-        lane.observe(image, stamp=now[0], source_now=now[0], pose=(0., 0., 0.),
-                     guide=(80., now[0], False, 0., 0., 0.))
-    assert lane.last.get('camera_provenance') == 'observed_creep', lane.last
-    assert lane.keeper.last['expected_path_state'] != 'live'
-    assert lane.keeper.last['drivable_steer'].get('target_now_m') is None
+    # closed 0.17 m ahead: it drives up to the corner and turns there (PIVOT_AHEAD_M), not 0.25 m early
+    assert lane.last.get('camera_provenance') == 'observed_target', lane.last
+    assert lane.keeper.last['strategy'] == 'drivable_centre', lane.keeper.last
     lane.close()
 
 

@@ -62,7 +62,9 @@
 | D-684 | Pinky 사건 재관측과 지속 예산 원장 |
 | D-687 | Discord Mission·Cell Job의 기존 소유자 연결 |
 | D-693 | Discord 요청과 현재 사건의 기명 인수 연결 |
-| D-825 | STL 도면 참조와 Fleet 평면 지도 편집 |
+| D-775 | 실측 카메라 교정의 승인·저장·적용·무효화는 목적별 기존 소유자를 따른다 |
+| D-801 | 관제 콘솔 로봇 실시간 영상은 사이트 발급 읽기 위임과 SFU 기본·사이트 PC MCU 모자이크 혼합 토폴로지를 쓴다(D-789 Decision 3 대체) |
+| D-875 | Swarm owner-local API separates planning from safety lifecycle |
 
 ## 계획·결과 문서
 
@@ -89,6 +91,8 @@
 - [2026-10-04-d443-signal-supervision.md](../../docs/plans/2026-10-04-d443-signal-supervision.md)
 - [2026-10-11-mapless-fleet-control.md](../../docs/plans/2026-10-11-mapless-fleet-control.md)
 - [2026-10-11-stable-map-readouts-design.md](../../docs/plans/2026-10-11-stable-map-readouts-design.md)
+- [2026-10-24-managed-transfer-capability-design.md](../../docs/plans/2026-10-24-managed-transfer-capability-design.md)
+- [2026-10-24-neutral-transfer-closure-and-producer-design.md](../../docs/plans/2026-10-24-neutral-transfer-closure-and-producer-design.md)
 
 ## 교훈 (docs/solutions)
 
@@ -100,8 +104,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · uncommitted · 작업 종류 poll의 실제 화면 반영을 기다린다
-- 2026-10-23 · uncommitted · 학습 진입 로그 SHA 정정
-- 2026-10-23 · uncommitted · 학습 진입 초점 문서와 원본 readout
-- 2026-10-23 · c17c221de7 · 학습 진입 카드 상태 토큰
-- 2026-10-22 · uncommitted · 지도 화면 모터 조회 시험 목록
+- 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
+- 2026-10-27 · 398b533c38 · 자동화 worker의 거절 증거 import 공개 이름 전환
+- 2026-10-27 · 441d50c066 · 재시작 lease 회수의 원장 기록 LEASE_RECLAIMED
+- 2026-10-27 · c36bfb48ad · feat: 인증된 복구 요청과 원본 결속
+- 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀

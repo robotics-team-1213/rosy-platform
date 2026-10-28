@@ -110,9 +110,9 @@ console.log(JSON.stringify([
 ]));
 """)
     right, left, straight, held, guard, off, none = out
-    assert right["target"] == 70 and right["dir"] == "right" and right["text"] == "오른쪽 18°/s ▶"
-    assert left["target"] == 0 and left["dir"] == "left" and left["text"].startswith("◀ 왼쪽 29")
-    assert straight["dir"] == "straight" and straight["text"] == "▲ 직진"
+    assert right["target"] == 70 and right["dir"] == "right" and right["text"] == "오른쪽 18°/s"
+    assert left["target"] == 0 and left["dir"] == "left" and left["text"].startswith("왼쪽 29")
+    assert straight["dir"] == "straight" and straight["text"] == "직진"
     assert held["visible"] and not held["tracking"] and held["target"] is None and held["text"] == "멈춤"
     assert guard["guard"] is True
     assert off == {"visible": False} and none == {"visible": False}

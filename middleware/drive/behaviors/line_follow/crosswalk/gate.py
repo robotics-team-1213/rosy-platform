@@ -1,5 +1,6 @@
 """D-573 manager glue; pure gate types and helpers retain their existing import paths."""
 from __future__ import annotations
+import logging
 import math
 from dataclasses import replace
 from types import SimpleNamespace
@@ -114,6 +115,28 @@ class CrosswalkGateMixin:
                                      min(b.observed_x_max_m for b in edges.values())))
         return self._xwalk_corridor[3]
 
+    def _crosswalk_walls(self, now: float, pose):
+        """D-573 rev 8: Fleet's map walls beside the lane (route prior, at its odom sample) as clip lines across
+        the lane from the body now: inside each face by the map band + 3 sigma range, out again by the odom
+        drift since that sample. None without a fresh prior with a wall, or on another odom run."""
+        c, binding = self._config, self.route_guide_binding(now)
+        prior = None if binding is None else binding['prior']
+        if (c.crosswalk_map_wall_band_m is None or pose is None or prior is None or prior.wall_ahead_m is None
+                or (prior.wall_left_m is None and prior.wall_right_m is None)):
+            return None
+        src = self._return_evidence._image_pose(binding.get('stamp_ns'))
+        if src is None or src.frame != pose.frame:
+            return None
+        lane_yaw = src.yaw + math.radians(prior.heading_here_deg)
+        dx, dy = pose.x - src.x, pose.y - src.y
+        across = -math.sin(lane_yaw) * dx + math.cos(lane_yaw) * dy
+        along = math.cos(lane_yaw) * dx + math.sin(lane_yaw) * dy
+        inset = c.crosswalk_map_wall_band_m + 3.0 * c.crosswalk_range_sigma_m
+        drift = c.crosswalk_odom_error_fraction * math.hypot(dx, dy)
+        return (lane_yaw, None if prior.wall_left_m is None else prior.wall_left_m - across - inset + drift,
+                None if prior.wall_right_m is None else prior.wall_right_m - across + inset - drift,
+                prior.wall_ahead_m - along - drift)
+
     def _crosswalk_gate(self, now: float, decision):
         """Cap the tick's final decision; never lifts a zero (D-573 6)."""
         c = self._config
@@ -128,7 +151,11 @@ class CrosswalkGateMixin:
             report_s=c.crosswalk_report_s, stale_s=c.clearance_stale_s,
             odom_error_fraction=c.crosswalk_odom_error_fraction, range_sigma_m=c.crosswalk_range_sigma_m,
             persist_k=c.crosswalk_persist_k, persist_n=c.crosswalk_persist_n,
-            corridor=self._fresh_corridor(now, pose))
+            corridor=self._fresh_corridor(now, pose), walls=self._crosswalk_walls(now, pose))
+        if reason != getattr(self, '_xwalk_logged', None):   # diagnostics on stderr (ROS launch logs keep it)
+            self._xwalk_logged = reason
+            logging.getLogger(__name__).warning('crosswalk %s look=%s hit=%s', reason,
+                                                getattr(self._xwalk, 'last_look', None), getattr(self._xwalk, 'last_hit', None))
         if cap is None:
             return decision
         if cap <= 0.0:

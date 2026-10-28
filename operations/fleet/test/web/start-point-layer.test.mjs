@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {drawStartPointMarks, picturePose} from '../../../site_ui/console/start-point-layer.js';
+import {drawStartPointMarks, picturePose} from '../../../../applications/fleet/web/map/start-point-layer.js';
 
 test('invalid calibration or another map cannot draw a start marker', () => {
   let arcs=0;

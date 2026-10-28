@@ -288,3 +288,83 @@ def test_unknown_finish_without_live_readback_holds_both_claims_and_never_repeat
         finally:
             await http.aclose()
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('change', ['completed', 'foreign_run', 'disabled', 'expired', 'lost_response'])
+def test_native_completion_between_status_and_renewal_keeps_exact_departure(
+        station_api, pipeline_sources, tmp_path, change):
+    from uuid import uuid4
+    from fleet.swarm.transport import RobotApiError
+
+    async def run():
+        runtime, _, ledger, tasks, client, http, owner, manager, now, sample, enabled = await configured(
+            station_api, tmp_path)
+        starts, races, refusals = [], [], []
+        original_start, original_read, original_renew = (
+            client.station_undock, client.docking_status, client.station_departure)
+
+        async def start(permission):
+            starts.append(permission)
+            return await original_start(permission)
+
+        async def native(run_id=None):
+            body = await original_read(run_id)
+            if races and change == 'foreign_run' and body.get('operation'):
+                body['operation']['run_id'] = str(uuid4())
+            return body
+
+        async def renew(permission):
+            if not races and abs(manager.executor.travelled_m()) >= owner.departure.feed.profile.reverse_distance_m:
+                before = manager.native_owner()['owner_generation']
+                assert manager.native.current.phase != 'TERMINAL'
+                owner.tick()  # Real CORE completion after Fleet read status, before its PUT.
+                operation = manager.native.current
+                after = manager.native_owner()['owner_generation']
+                assert operation.phase == 'TERMINAL' and operation.result == 'SUCCEEDED'
+                assert before == permission.expected_owner_generation and after == before+1
+                races.append((str(operation.run_id), before, after))
+                if change == 'disabled':
+                    enabled[0] = False
+                elif change == 'expired':
+                    now[0] = ledger.departure_context('charge-1')['active_permit']['valid_until']
+                elif change == 'lost_response':
+                    raise TimeoutError('SIM renewal response unknown at native completion')
+                try:
+                    await original_renew(permission)
+                except RobotApiError as exc:
+                    assert exc.status == 409 and exc.code == 'OWNER_GENERATION_CHANGED'
+                    refusals.append(exc.code)
+                    raise
+                pytest.fail('stale native generation unexpectedly accepted')
+            return await original_renew(permission)
+
+        client.station_undock, client.docking_status, client.station_departure = start, native, renew
+        try:
+            await runtime.tick()
+            assert ledger.get('charge-1').state == 'UNDOCKING'
+            for _ in range(140):
+                manager.executor.step(.05)
+                now[0] += .05
+                sample(load_present=False, measured_linear_m_s=-.08 if owner.state == 'UNDOCKING' else 0.)
+                at_finish = (not races and abs(manager.executor.travelled_m())
+                             >= owner.departure.feed.profile.reverse_distance_m)
+                if not at_finish:
+                    owner.tick()
+                await runtime.tick()
+                current = ledger.get('charge-1')
+                if current.state in ('HOLD', 'WORK_AVAILABLE'):
+                    break
+            assert races and len(starts) == 1
+            assert refusals == ([] if change == 'lost_response' else ['OWNER_GENERATION_CHANGED'])
+            if change == 'completed':
+                assert current.state == 'WORK_AVAILABLE', current.reason
+                assert ledger.departure_context('charge-1')['receipt']['operation_id'] == races[0][0]
+                assert not tasks.resource_claims(resource_kind='station', resource_id='charger-1')
+            else:
+                assert current.state == 'HOLD'
+                assert tasks.resource_claims(resource_kind='robot', resource_id='robot-1')
+                assert tasks.resource_claims(resource_kind='station', resource_id='charger-1')
+            assert manager.executor.command == (0., 0.)
+        finally:
+            await http.aclose()
+    asyncio.run(run())

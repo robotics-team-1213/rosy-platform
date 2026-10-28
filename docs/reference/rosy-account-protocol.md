@@ -170,8 +170,10 @@ refresh 응답이 불명확하면 이미 소비됐을 수 있는 refresh token�
 
 CORE의 Robot·Pilot 웹은 같은 origin의 `/api/account/login?return=/pilot` 또는
 `return=/dashboard`로 시작하고 `/api/account/callback`에서 state/PKCE를 확인한다.
-`GET /api/account/session`은 enabled/authenticated/account_id/session_family/revision/resource/capabilities만
-반환한다. `POST /api/account/logout`은 same-origin 요청만 받으며 로컬 세션과
+`GET /api/account/session`은 enabled/authenticated/account_id/session_family/revision/resource/capabilities와
+profile/profile_url만 반환한다. 이 본문은 `account_client.browser_session`이 만들고 Games 보드도 같은 본문에
+`can_operate`만 더한다. 브라우저 쪽은 `/common/account-session.js` 하나가 세션 확인, 같은 origin 탭의
+신원 표시(`rosy.account.identity`), 로그아웃을 맡는다. `POST /api/account/logout`은 same-origin 요청만 받으며 로컬 세션과
 중앙 family를 회수한다. 중앙 장애면 로컬 로그아웃 후 암호화된 회수 대기열을
 재시도하고 503으로 미완료 사실을 알린다. 재접속을 권한 복구로 처리하지 않는다.
 
@@ -211,12 +213,12 @@ mount한다. OMX·시뮬 CORE도 동일 설정 계약을 사용하되 각자의 
 주소·resource·key ID는 설치 대상의 승인 값으로 바꾼다. 공개키와 Fernet 암호화 키는
 서로 다른 파일이다. 기존 세션 DB를 두고 암호화 키를 다시 만들지 않는다.
 
-Review 앱은 기존 collaboration 설정에 `account_client_file`과 `account_subjects`
-(중앙 account_id→기존 learning user_id)를 명시한다. 기존 connection 소유권은 유지하고
-최초 사용한 매핑은 원장에 고정하여 다른 사용자로 바꾸지 못한다. 권한은 해당
-`project:<id>`의 중앙 learning capability에서 읽으며 작업 대기열에서도 다시 확인한다.
-Account 모드에서는 기존 프로젝트 비밀번호·HF 로그인으로 사람 인증을 우회하지
-못한다. HF 연결·동의는 Rosy Account로 로그인한 사람에게 별도로 귀속한다.
+Review 앱의 collaboration 설정은 `account_client_file`이 필수이며 사람 로그인은 Rosy Account뿐이다.
+`project:<id>`의 중앙 learning capability를 받은 계정은 학습 쪽 초대 없이 account_id를 user_id로
+들어온다. 기존 learning user_id의 connection을 이어받을 계정만 `account_subjects`(중앙 account_id→기존
+user_id)로 매핑한다. 매핑은 그 계정이 먼저 매핑 없이 들어왔어도 나중에 추가할 수 있고, 처음 쓴 매핑은
+원장에 고정되어 다른 사용자로 바꾸지 못한다(바꾸려 하면 403). 권한은 작업 대기열에서도 다시 확인한다.
+HF OAuth와 토큰은 데이터 연결일 뿐이며 Rosy Account로 로그인한 사람에게 귀속한다.
 수신 endpoint는 `/api/account/login`, `/api/account/callback`이며 복귀는 `/accounts`
 또는 `/`만 허용한다. 로그인 후에는 기존 `/api/accounts/session`·logout을 사용한다.
 

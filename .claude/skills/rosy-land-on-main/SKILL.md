@@ -10,14 +10,18 @@ description: Use when starting, committing, or merging work in rosy-platform whi
 The full record is `AGENTS.md` section 「같이 하는 깃」.
 `docs/reference/shared-checkout.md` section 「같이 하는 깃」 is the same start order.
 This file repeats those commands. A wording change updates `AGENTS.md` and `docs/reference/shared-checkout.md` in one commit.
-The lab umbrella `F:\Dev\Control\Robot\Rosy\Agents.md` records the same procedure.
-The repo is `F:\Dev\Control\Robot\Rosy\rosy-platform` (no space). One `.git/index` serves the
+The lab umbrella `..\AGENTS.md` (the folder above the repo, outside git) records the same procedure.
+The repo is the `rosy-platform` folder under that umbrella; the drive differs per machine. One `.git/index` serves the
 shared `main` checkout. A path you did not write belongs to another session.
 
 ## Before you start
 
+First apply the operating budget in `docs/reference/shared-checkout.md` section 「워크트리 한도와 슬롯 운영」:
+at most 10 total worktrees including main. Count locked, waiting and orphan worktrees too; free a slot before starting another task.
+The gateway's 50-directory refusal below is a mechanical backstop, not permission to exceed that operating budget.
+
 ```bash
-cd F:\Dev\Control\Robot\Rosy\rosy-platform
+cd <umbrella>/rosy-platform        # the shared main checkout
 git status --short --branch; git worktree list
 python tools/worktrees.py new <short-name> <type>/<topic>     # not a bare `git worktree add`
 python tools/worktrees.py status                              # every worktree with a verdict
@@ -25,13 +29,20 @@ python tools/worktrees.py status                              # every worktree w
 
 - `new` (D-761, Proposed) checks `<type>` (`feat`, `fix`, `refactor`, `docs`, `uiux`) and removes nothing:
   it reports how many finished worktrees `python tools/worktrees.py prune --apply` would remove (any owner's:
-  clean, merged into `main`, not locked, no ignored data, idle 72 h, so nothing is left to lose; your own landed worktree, with a commit of its own on its branch, needs no wait);
-  `new --prune` applies that first. It refuses at 60 directories under `.worktrees/` and counts removable
-  worktrees per owner; `status` shows each row's owner and whether you may remove it. `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
+  clean, merged into `main`, not locked, no ignored data, idle 1 h when its branch landed a commit of its own
+  and 72 h otherwise (D-790), so nothing is left to lose; your own landed worktree needs no wait; orphan directories
+  idle 1 h, their files zipped to `$ROSY_SCRATCH/worktree-orphans/` and verified first);
+  `new --prune` applies that first. It refuses at 14 directories under `.worktrees/` (15 with main, D-886) and names each worktree
+  removable now and by whom; `status` shows each row's owner (`unknown` when none; `new --owner "<who>"` sets it)
+  and whether you may remove it. `landed-dirty` = the branch is in `main` but files are uncommitted: move the
+  work to a new worktree. `stale-history` = a pre-rewrite branch: never merge or land it (`new --from` refuses it). `prune --snapshot` keeps uncommitted work under `refs/wip/<date>/<name>` and
   removes dirty or unmerged worktrees too, the caller's own unless `--all`: only a person or the dispatcher runs it.
   `--force-over-cap "<reason>"` is the incident escape hatch. `git worktree lock` keeps a worktree.
 
-- `.worktrees/` is gitignored; do not create worktrees elsewhere on F:. Scratch files go to `X:\DevTemp`.
+- One landable concern and one module family per branch. Over ~15 changed files, or `land.py --dry-run` says FULL
+  (30-90 min per round): split first. Land FULL-trigger (`tools/harness/**`, `contracts/foundation/**`) and `shared/web`
+  parts on their own branch first; land the split of a D-766 unit at >=95% of its limit before adding to it.
+- `.worktrees/` is gitignored; do not create worktrees elsewhere. Scratch files go to `$ROSY_SCRATCH` (unset: the system temp directory).
 - Check `ListAgents` (when available) for peers and what they own.
 - Background executors: commit after every step, and the dispatcher runs a commit monitor
   — 40 minutes without a new commit on the branch is a warning to check on the executor.
@@ -58,8 +69,8 @@ Run the relevant suites in your worktree, then compare against the list of failu
 already exist on main:
 
 ```bash
-python -m pytest <paths> -q -rfE -p no:cacheprovider > X:/DevTemp/<name>/run.txt
-python test/known_failures.py X:/DevTemp/<name>/run.txt     # exit 1 = a NEW failure
+python -m pytest <paths> -q -rfE -p no:cacheprovider > "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/run.txt"
+python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/run.txt"     # exit 1 = a NEW failure
 ```
 
 A `NEW` line is yours until proven otherwise (check it on a clean `main` worktree). If
@@ -96,6 +107,13 @@ blocks whole, one after the other. Regenerate `index.md` conflicts with
 착지 도구: from the topic worktree run `python tools/land.py --tests auto` (`--dry-run` first to see the plan).
 It loops merge main -> auto-resolve ADR Log/logs.md/index.md conflicts -> D-436 affected tests + lint
 -> `known_failures` -> `--ff-only`, stops on any NEW failure or other conflict, and never pushes.
+It first takes a ticket in the landing queue (`<git-common-dir>/rosy-land-queue/`, D-803) and waits, printing its
+position and who is ahead, until the landings ahead have finished; past `--queue-timeout` minutes (default 180) it
+stops without merging or testing. First in line, it merges main once and tests. The ticket is released on every
+exit (errors and Ctrl-C included); a dead holder's ticket (PID gone on this host, or not refreshed for 3 h) is
+removed by the next session. `--no-queue` is for incidents only. After a green FULL tier, a moved main costs only
+main's delta selection, also in a fresh `land.py` run after an interrupted one, as long as the branch added nothing
+but merges of main (`<git-common-dir>/rosy-land-full/`); a new commit of its own means FULL again.
 The manual steps below are what it does.
 
 테스트는 시험 PC에서만 돈다(D-584): 닿는 PC가 없으면 10분 기다린 뒤 실패하고 착지하지 않는다. 노트북 로컬 실행(`--local`, `ROSY_TEST_LOCAL`)은 없다. 못 돌린 시험은 "확인 못 함"으로 보고한다.
@@ -117,10 +135,19 @@ digraph land {
    Report the refusal. Do not stash, checkout, or delete it, and do not clean the file and retry.
 4. `tools/land.py` only reports finished worktrees when it starts (`--prune` removes them, `--no-prune`
    is silent). Remove your landed worktree after leaving it, in the main checkout, with one command:
-   `python tools/worktrees.py prune --apply` (your own landed worktree goes at once, others' after 72 h). A branch
+   `python tools/worktrees.py prune --apply` (your own landed worktree goes at once, others' landed ones after 1 h).
+   Do not keep working in a landed worktree. `land.py` refuses a `stale-history` branch, checks D-766 sizes
+   before any remote test (`python tools/harness/size_range.py main HEAD` shows it first), and reruns 1-5 NEW ids
+   alone once: all pass -> `LOAD-FLAKY`, landing continues, ids go to `<git-common-dir>/rosy-flaky-candidates.txt`
+   for a person to review (never auto-quarantined); any fails again -> stop. A stop reruns its NEW ids once on main:
+   red there too -> `MAIN-RED` (main is broken; fix main in a small `fix/` branch first, after checking no peer is). A branch
    you hold back stays as long as it is committed; `git worktree lock` keeps its worktree too.
-5. Push only when the task says to push, and then only in the D-427 order in `AGENTS.md`.
-   Local main ahead of `origin/main` has no CI evidence.
+5. Push only when the task says to push, in the D-868 order: land on local main first; if `origin/main`
+   is not an ancestor, `git merge origin/main` in a worktree and land it; push local main's tip as
+   `publish/main-<YYYYMMDD>`, open a PR, merge it with `gh pr merge <PR> --merge --match-head-commit <SHA>`
+   once `ci-result` is green, then sync back: `git merge origin/main` in a worktree off main and land it
+   with `tools/land.py` (not `--ff-only`: main has usually moved past the published SHA). Never squash, rebase-merge
+   or force-push. Local main ahead of `origin/main` has no CI evidence.
 
 ## Red flags — stop
 

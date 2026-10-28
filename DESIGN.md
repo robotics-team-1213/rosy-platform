@@ -333,7 +333,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **패널 모서리** (`--radius-panel` 12px): 패널.
 - **깃발 모서리** (`--radius-flag` 999px): `ui-tag`, 점 표지.
 
-비상 정지를 포함한 모든 조작의 크기를 통일한다([D-629](docs/adr/D-629-control-sizing-and-console-hierarchy.md)).
+비상 정지를 포함한 모든 조작의 크기를 통일한다([D-629](docs/adr/D-629-control-sizing-and-console-hierarchy.md)). 좁은 Fleet 관제의 배치·읽기 순서는 [D-892](docs/adr/D-892-fleet-mobile-operator-priority.md)를 따른다.
 
 - `--target-secondary` 48px: 일반 버튼·필드·체크 라벨의 최소 높이.
 - `--target-primary` 48px: 주 명령.
@@ -371,7 +371,24 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 
 공용 구현은 [`shared/web/ui.js`](shared/web/ui.js)·[`components.css`](shared/web/components.css), 실행 가능한 견본은 로봇 `/styleguide`의 [`스타일 갤러리`](middleware/robot_ui/robot/styleguide.html)다. 새 컴포넌트 모음이나 화면별 버튼·입력 사본을 만들지 않는다. 갤러리에서 색상 역할, 다섯 버튼 종류, 입력, 상태, 증거, 읽기·되읽기, 작업 행·작업 선택을 함께 비교한다. 부품 변경은 사용 화면·갤러리·접근성/반응형 시험을 같은 변경에서 맞춘다.
 
-모든 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](middleware/robot_ui/robot/styleguide.html)이다.
+기초 부품은 [`components.css`](shared/web/components.css)가 그리고 [`ui.js`](shared/web/ui.js)가 정의한다. 조합 부품은 아래 역할별 모듈과 [`component-controls.css`](shared/web/component-controls.css)에 둔다. 그림자 DOM을 쓰지 않는다. 견본은 [`styleguide.html`](middleware/robot_ui/robot/styleguide.html)이며 [상호작용 견본 장](shared/web/component-gallery.html)으로 이어진다.
+
+### 입력·자료·복구의 조합 부품
+
+기존 기초 부품과 네이티브 HTML을 조합한다. 쓰는 화면은 `components.css` 다음 `/common/component-controls.css`를 로드한다. 새 팔레트·버튼 사본이나 전체 UI 프레임워크는 추가하지 않는다. 함수가 반환한 `element`를 붙이고 화면을 해제할 때 `dispose`가 있는 부품은 호출한다.
+
+| 모듈 | 공개 부품 | 사용·비사용 조건 |
+|---|---|---|
+| `form-controls.js` | `createFormErrors(form, summary)`, `createFilePicker({id,label,accept,maxBytes,onChange})` | 기존 네이티브 폼에 오류 요약·필드 설명을 연결한다. 파일 이름·크기 검사는 서버 검증을 대체하지 않는다. |
+| `form-controls.js` | `createSearchSelect({id,label,choices,onChange})`, `createDateRange({id,label,onChange})`, `createDirtyGuard(form)` | 검색+네이티브 선택, 현지 달력 날짜 범위, 미저장 이탈 확인. 단순 선택은 원래 select를 쓴다. 저장 성공 뒤에만 dirty guard의 `reset()`으로 기준선을 바꾼다. |
+| `collection-controls.js` | `createListToolbar({id,filters,onChange})`, `createPagination({id,onChange})` | 검색·필터·정렬 의도와 페이지 사실만 처리한다. 서버 검색·선택 범위·총량을 추측하지 않는다. |
+| `collection-controls.js` | `createDataTable({id,columns,onOpen,onSelection,onActiveRemoved})`, `createSelectionBar({id,onClear,actions})` | 고유 문자열 ID로 행을 선택한다. `set(items,{allIds,label})`의 `allIds`는 현재 소유자가 유효함을 아는 범위다. 알 수 없는 전체 페이지 선택을 제공하지 않는다. 일괄 동작과 부분 실패는 호출자가 처리하며 선택을 자동 해제하지 않는다. |
+| `collection-controls.js` | `createPrimaryDetail({id,label,list})` | PC는 목록 옆 상세, 전화는 상세 진입과 목록 복귀. `open({title,body},opener)`의 opener는 재렌더 후 대상을 찾는 함수도 된다. 표면은 `onActiveRemoved`를 상세의 `unavailable(message)`에 연결해 사라진 대상을 명시한다. 복귀 대상이 없어졌으면 목록으로 초점을 보낸다. |
+| `interaction-controls.js` | `createTabs`, `createDisclosure`, `createActionMenu`, `createSupplementPanel` | 탭은 수동 활성화·방향키/Enter, 접힘은 native details. 보조 동작은 일반 Tab 순서의 disclosure이며 ARIA menu가 아니다. 보조 패널은 정지를 가리는 모달이 아니다. |
+| `workflow-controls.js` | `createStatePanel`, `createActionBar`, `createOperationResult` | 로딩·빈 상태·권한·실패·재시도를 구분한다. 요청·접수·실제 재조회·불확실을 표시하며 경과 시간으로 완료를 만들지 않는다. 중요한 동작 이름은 좁은 폭에서도 줄바꿈한다. |
+| `workflow-controls.js` | `createProgress`, `createTimeline`, `createSteps`, `createLogView` | 진행률 미확인은 `null`, 단계는 기존 stage strip을 쓴다. 로그는 호출자가 공개 가능한 내용만 전달한다. 단계·진행률 100%를 물리 완료로 해석하지 않는다. |
+
+실행 예시는 `/common/component-gallery.html`에 있다. 합성 데이터의 설정 폼·운영 목록·개입·파일 절차를 직접 조작하며 양 테마·작은 화면·오류·복귀를 확인한다. 견본 검증, 실제 제품 적용, 실물 수용은 서로 다른 근거다. 외부 참고 패턴은 Carbon의 목록 도구, PatternFly의 primary-detail/empty state, Fluent의 field/drawer, WAI-ARIA APG의 키보드 동작이다. 색·모션·정지 계약은 ROSY의 기존 ADR이 우선한다.
 
 ### 독립 작업의 선택 — `createTaskChooser()`
 
@@ -403,7 +420,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - 네이티브 `input`/`select`/`textarea`에 `class="ui-field"`를 단다(폼 제출·`<label>` 연결·기존 핸들러 유지). 48px, `--radius-control`, `--field-bg`, `--field-line`, 등폭 숫자.
 - `readonly`는 점선 테·조용한 글자, `:user-invalid`·`aria-invalid="true"`는 `--field-invalid` 테, 비활성은 `--disabled-opacity`.
 - 체크·라디오는 필드 상자를 따로 그리지 않는다. 감싸는 `<label class="ui-check">`가 48px 누름 면이다. 체크 상자는 토큰으로 그린다(`appearance: none`): 테 `--ink-quiet`, 켜짐 `--focus-ring`, 비활성은 흐리지 않고 `--ink-quiet` **점선** 테 — 네이티브 비활성 체크는 accent를 버리고 1.2–1.8:1 회색이 되고, 실선이면 꺼진 빈 상자가 켜진 빈 상자와 같아 보인다. 테와 체크는 두 테마에서 3:1 이상이다.
-- `<ui-field>` 감싸개도 같은 얼굴이지만 제품 화면은 클래스 방식을 쓴다.
+- `<ui-field>` 감싸개는 견본·스캐폴드 전용이다. 같은 얼굴을 내지만 제품 화면은 클래스 방식을 쓰고, `test_content_vocabulary.py`가 등록 표면에서 `<ui-field>` 엘리먼트 사용을 막는다.
 
 ### 태그 — `<ui-tag status="…">`
 - 깃발 모양, mono 라벨, `--track-state`. 상태 어휘: `neutral`(조용한 글자) · `active`(정상 진행 — ink 테, 색 아님) · `warn`(주의 글자·테) · `crit`(위험 채움 + `ink-on-crit`).
@@ -411,14 +428,22 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 ### 상태 글 — `<ui-status state="…">`
 - 화면 알림 한 줄. `warning`/`error`/`unavailable`/`forbidden`은 주의색 글자. `state`가 없으면 계약 표지가 그려진다.
 
-### 오버레이 칩 — `<ui-chip>`
+### 오버레이 칩 — `<ui-chip>` (폐기 예정)
 - 지도·영상 위에 얹는 한 줄. 장막 바탕 + 표면선 테두리. 지도 조작은 무대의 높이를 훔치지 않는다.
+- 남은 소비자는 스타일 갤러리 하나다. 새 화면은 쓰지 않는다. 지도·영상 위 한 줄이 필요하면 `.ui-pane` 안의 `ui-tag`·`ui-status`로 조합한다.
 
 ### 분류 머리 — `<ui-triage status="…">`
 - 한 줄 머리. 색을 가진 것은 언제나 하나이고 맥락은 색 없이 따라간다. Fleet 예외 큐(주의·최우선)가 대표 소비자다.
 
 ### 증거 · 빈 상태 — `<ui-evidence state="…">` · `<ui-empty>`
 - 증거 네 상태의 한국어와 나이는 공용 표(`core_ui_logic.js`)가 단일 출처다(운용자 말 참조). 빈 목록·읽기 실패는 목록 밖 한 줄 `ui-empty`다(목록은 숨긴다).
+
+### 단계 스트립 — `<ol class="ui-stage-track">` · `.ui-stage`
+- 절차(`procedure` 문법)가 몇 번째 단계인지 한 줄로 말한다. JS가 없다: `<ol class="ui-stage-track">` 안에 `<li class="ui-stage" data-state="done|now|blocked|todo">순번이 붙은 라벨</li>`을 두고, 지금 단계에 `aria-current="step"`을 단다.
+- 표식은 `--size-stage-mark` 원이고 순번은 `--mono`다. 긴 절차는 줄바꿈해 흐르며 한 단계의 라벨만 `overflow-wrap: anywhere`로 접힌다.
+- 상태는 `ui-tag`와 같은 어휘다. `done`은 지난 단계(조용한 글자, `--surface-raised` 채움 — 빈 테인 `todo`와 라이트에서도 구분된다), `now`는 지금(가장 밝은 중립 글자와 그 잉크로 채운 표식 — 정상은 색이 아니다, D-82), `blocked`는 주의 글자·테(`--status-warn`), `todo`는 남은 단계(빈 테). `data-state`가 없으면 `todo`다.
+- 지금 단계의 뜻은 색 하나가 아니라 `aria-current`, 순번, 채움 셋이 함께 나른다.
+- 규칙은 `/common/stage-strip.css`에 산다 — `components.css`는 D-766 한도(942줄)에서 동결됐으므로 쓰는 화면은 `components.css` 뒤에 이 시트를 링크한다.
 
 ### 아이콘 — `class="ui-icon"`
 - 24 viewBox · 실선 2 · `currentColor`. 크기는 `--text-value` 박스 토큰이 정하고(D-405), 식별은 라벨이 나르며 아이콘은 보조다.
@@ -428,6 +453,18 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **`.ui-form` / `.ui-field-label`**: 네이티브 폼의 필드 묶음. 좁은 칸에서 한 열.
 - **`.ui-readout`**: `dl` 이름–값 두 열. 값은 등폭. 좁은 칸에서 한 열.
 - **`.ui-readback`**: 쓰기 뒤 되읽기 결과 묶음.
+
+### 조합 어휘
+표면마다 다른 이름으로 다시 만들던 묶음을 한 이름으로 부른다. 새 부품이나 화면별 사본을 만들기 전에 이 표를 먼저 본다. 표에 없는 묶음이 두 표면에 필요해지면 구현을 옮긴 뒤 이 표에 한 줄을 더한다. 이름은 `test_content_vocabulary.py`가 지킨다.
+
+| 개념 | 정본 이름 | 지금 쓰는 곳 |
+| --- | --- | --- |
+| 측정 행(이름–값) | `.ui-readout` · `.ui-readback` | 로봇 카드, Fleet 상세, 견본 |
+| 작업 목록 행 | `.ui-task-row` · `taskRow()` | 로봇 작업, Fleet 작업 선택 |
+| 절차 단계 | `.ui-stage-track` · `.ui-stage` | 견본 — 표면 채택 전 |
+| 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
+| 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |
+| 매체 칸 | `.ui-pane[data-pane]` | 로봇 셸, 감지·카메라 |
 
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.

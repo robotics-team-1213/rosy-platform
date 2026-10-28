@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createVoice } from '../../../../operations/site_ui/console/assistant/assistant-voice.js';
+import { createVoice } from '../../../../applications/fleet/web/assistant/assistant-voice.js';
 
 function platform() {
   const instances = [], spoken = [];

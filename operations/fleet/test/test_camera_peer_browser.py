@@ -4,14 +4,14 @@ import pytest
 from browser_harness import browser_tests_enabled
 
 ROOT=Path(__file__).resolve().parents[3]
-WEB=ROOT/'operations/site_ui/console'
+WEB=ROOT/'applications/fleet/web'
 COMMON=ROOT/'shared/web'
-source=(WEB/'install.html').read_text(encoding='utf-8')
+source=(WEB/'installation'/'install.html').read_text(encoding='utf-8')
 PANEL=source[source.index('<section id="camera-peer-panel"'):source.index('</section>',source.index('<section id="camera-peer-panel"'))+10]
 HTML='''<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/common/tokens.css"><link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/styles.css"></head>
 <body><main class="install-shell"><section class="panel camera-link">'''+PANEL+'''</section></main><script type="module">
-import {confirmIrreversible} from '/common/ui.js'; import {createCameraPeerPanel} from '/camera-peer.js';
+import {confirmIrreversible} from '/common/ui.js'; import {createCameraPeerPanel} from '/installation/camera-peer.js';
 window.gets=[];window.failStatus=0;window.writes=[];window.alive=true;window.owner='named-owner';window.auth='old-owner-token';window.locked=false;window.abort=new AbortController();window.cleanup=[];
 window.request={profile:'rosy.camera-peer/1',audience:'fleet-camera-ingest',device_kind:'overhead-camera',source_role:'camera',
 request_id:'A'.repeat(32),state:'pending',revision:2,display_code:'4F7K',label:'긴 카메라 이름을 가진 천장 카메라',client_key_sha256:'a'.repeat(64)};

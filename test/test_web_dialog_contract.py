@@ -49,25 +49,27 @@ PINNED_CONFIRMS = {
     "middleware/robot_ui/robot/peer-approval.js": 2,
     "middleware/robot_ui/robot/settings.js": 2,
     "middleware/robot_ui/robot/telemetry.js": 1,
-    "operations/site_ui/console/devices/camera-pairing.js": 2,
-    "operations/site_ui/console/camera-peer.js": 2,
-    "operations/site_ui/console/cell/cell.js": 1,
-    "operations/site_ui/console/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
-    "operations/site_ui/console/confirmed-action.js": 1,
-    "operations/site_ui/console/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
-    # D-593 console pin asks first; 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision).
-    "operations/site_ui/console/console.js": 1,  # channel review bridge to the same confirmedAction owner
-    "operations/site_ui/console/shared/console-goal.js": 2,
-    "operations/site_ui/console/shared/console-refresh.js": 1,
-    "operations/site_ui/console/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
-    "operations/site_ui/console/host-services.js": 1,  # named operator host control, shared confirmation
-    "operations/site_ui/console/roster.js": 1,
+    "applications/fleet/web/devices/camera-pairing.js": 2,
+    "applications/fleet/web/installation/camera-peer.js": 2,
+    "applications/fleet/web/cell/cell.js": 1,
+    "applications/fleet/web/work/channel-request-view.js": 3,  # D-680/D-687/D-693 Task, Mission admission, incident claim
+    "applications/fleet/web/work/arm-transfer-view.js": 1,  # Explicit independent ARM admission.
+    "applications/fleet/web/work/policy-page.js": 1,  # D-793 incident lock release
+    "applications/fleet/web/confirmed-action.js": 1,
+    "applications/fleet/web/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
+    # 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision). D-798 3.2 split the shell:
+    "applications/fleet/web/console.js": 2,  # Channel and neutral ARM review use the same confirmedAction owner.
+    "applications/fleet/web/console-goal.js": 2,  # map goal send; D-593 operator pin asks first
+    "applications/fleet/web/console-refresh.js": 1,  # dispatch rearm
+    "applications/fleet/web/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
+    "applications/fleet/web/installation/host-services.js": 1,  # named operator host control, shared confirmation
+    "applications/fleet/web/roster.js": 1,
     # Activation and profile replacement; D-655 camera replacement moved to its controller.
-    "operations/site_ui/console/maps/site-map.js": 2,
-    "operations/site_ui/console/maps/map-authoring.js": 1,  # replace drawing reference while retaining geometry
-    "operations/site_ui/console/maps/site-map-camera.js": 1,
-    "operations/site_ui/console/maps/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
-    "operations/site_ui/console/tracking-relearn.js": 1,
+    "applications/fleet/web/sitemap/site-map.js": 2,
+    "applications/fleet/web/sitemap/map-authoring.js": 1,  # replace drawing reference while retaining geometry
+    "applications/fleet/web/sitemap/site-map-camera.js": 1,
+    "applications/fleet/web/sitemap/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
+    "applications/fleet/web/installation/tracking-relearn.js": 1,
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

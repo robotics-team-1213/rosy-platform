@@ -15,7 +15,6 @@ import pytest
 from core.bridge import docking_mode
 from core_common.protocol.station_charging import ChargeSessionStatus, Pose2D, StationPoseRecord
 from test_station_docking_api import station_api
-from station_readback_probe import install_hold_probe
 
 
 @pytest.fixture
@@ -29,8 +28,10 @@ def pipeline_sources(monkeypatch):
         monkeypatch.syspath_prepend(str(root / relative))
 
 
-@pytest.mark.parametrize('full_return', [False, True, 'continuous', 'relocation_abort', 'composed', 'lifespan',
-                                      'motion_busy', 'shutdown_RETURNING', 'shutdown_CHARGING', 'shutdown_UNDOCKING'])
+# lifespan, shutdown_UNDOCKING and continuous (~100-140 s each) run from test_station_camera_pipeline_{lifespan,
+# continuous}.py: xdist --dist loadfile gives one file one worker, and this file alone was 511 of a 576 s run.
+@pytest.mark.parametrize('full_return', [False, True, 'relocation_abort', 'composed',
+                                      'motion_busy', 'shutdown_RETURNING', 'shutdown_CHARGING'])
 def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_stop(station_api, tmp_path,
                                                                                    pipeline_sources, full_return, monkeypatch):
     import cv2
@@ -212,6 +213,27 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 clock=lambda: now[0], returns=returns.adapter if returns else None, return_http=ret,
                 snapshot=snapshot, observation_scope=observation_scope)
             failures = []
+            def trace_failure(label, call):
+                async def traced(*args, **kwargs):
+                    try:
+                        return await call(*args, **kwargs)
+                    except Exception:
+                        import traceback
+                        if len(failures) < 16:
+                            failures.append(f'{label} at SIM {now[0]}\n'+traceback.format_exc())
+                        print('STATION_ASYNC_FAILURE', failures[-1])
+                        try:
+                            if label == 'work_goal':
+                                print('STATION_WORK_FAILURE', runtime.work_admission(robot_id),
+                                    runtime.reason, runtime._work_snapshot, returns.runner.open_trips())
+                            if returns and args and hasattr(args[0], 'operation_id'):
+                                print('STATION_TRIP_FAILURE', returns.runner.view(args[0].operation_id))
+                        except Exception as diagnostic_error:
+                            print('STATION_TRIP_DIAGNOSTIC_UNAVAILABLE', repr(diagnostic_error))
+                        raise
+                return traced
+            ports.read_operation = trace_failure('read_operation', ports.read_operation)
+            ports.read_station = trace_failure('read_station', ports.read_station)
             original_live = ret._live
             def traced_live(session, target, body, **kwargs):
                 try:
@@ -221,7 +243,7 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     raise
             ret._live = traced_live
             readback_reports = []
-            if composed:
+            if lifespan:
                 from station_readback_probe import install_readback_probe
                 readback_reports = install_readback_probe(owner, cycles.motion, lambda: now[0], monkeypatch)
             contended_readbacks, return_submissions = [], []
@@ -267,7 +289,12 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 policy_enabled=lambda: True, ports=ports, id_factory=lambda: next(ids),
                 admit_return=lambda *_: ChargeDecision(decision='WORK_ALLOWED', reason='SIM_BUDGET',
                     profile_revision='sim-profile', capacity_revision=None))
-            install_hold_probe(monitor.motion, lambda: now[0])
+            monitor.motion.checked = trace_failure('checked', monitor.motion.checked)
+            monitor.motion.call = trace_failure('motion_call', monitor.motion.call)
+            if lifespan:
+                from station_timing_probe import install_timing_probe
+                timing = install_timing_probe(owner=owner, navigation=svc.nav, motion=monitor.motion, ports=ports, tasks=tasks,
+                    registry=registry, app=core.app, clock=lambda: now[0], monkeypatch=monkeypatch)
             ingress = StationIngress(stations=stations, sessions=charges, sources=[source, global_source],
                 clients=lambda: {robot_id: robot}, clock=lambda: now[0])
             if full_return:
@@ -290,23 +317,21 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     first = await runtime.tick()
                     assert first.state == 'RETURNING', (first.reason, owner.reason, failures)
                     assert runtime.decision.reason == 'LOW_SOC_RETURN'
-            tick_finished, tick_permitted, runtime_tasks = asyncio.Event(), asyncio.Event(), set()
+            tick_finished, tick_generation, runtime_tasks = asyncio.Condition(), [0], set()
             initial_core_tick = asyncio.Event()
             async def wait_runtime():
-                tick_finished.clear()
-                tick_permitted.set()
-                await asyncio.wait_for(tick_finished.wait(), 3.)
+                async with tick_finished:
+                    previous = tick_generation[0]
+                    await asyncio.wait_for(tick_finished.wait_for(lambda: tick_generation[0] > previous), 3.)
             if lifespan:
                 original_tick = runtime.tick
                 async def observed_tick():
                     runtime_tasks.add(asyncio.current_task())
                     await initial_core_tick.wait()
-                    await tick_permitted.wait()
-                    tick_permitted.clear()
-                    tick_clock = now[0]
                     result = await original_tick()
-                    assert now[0] == tick_clock, 'SIM clock advanced during an in-flight runtime tick'
-                    tick_finished.set()
+                    async with tick_finished:
+                        tick_generation[0] += 1
+                        tick_finished.notify_all()
                     return result
                 runtime.tick = observed_tick
             async def advance():
@@ -315,9 +340,30 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     return charges.get('charge-1')
                 return await runtime.tick() if full_return else await monitor.advance('charge-1')
             console = FleetConsole([endpoint], [robot], clock=lambda: now[0])
+            goal_clock = asyncio.Lock()
+            work_admitting, clock_boundary = asyncio.Event(), asyncio.Event()
+            original_goal = console.goal
+            async def observed_goal(*args, **kwargs):
+                if kwargs.get('task_id') is None or kwargs.get('lease_source') == 'trip':
+                    return await original_goal(*args, **kwargs)
+                async with goal_clock:
+                    entered = now[0]
+                    work_admitting.set()
+                    try:
+                        if lifespan and not clock_boundary.is_set():
+                            await clock_boundary.wait()  # Force the first send to overlap a requested SIM step.
+                        assert now[0] == entered, 'SIM clock advanced during ordinary goal admission'
+                        result = await original_goal(*args, **kwargs)
+                        assert now[0] == entered, 'SIM clock advanced during ordinary goal admission'
+                        return result
+                    finally:
+                        work_admitting.clear()
+            console.goal = trace_failure('work_goal', observed_goal)
             def build_runtime(context):
                 assert context.plans is returns.adapter.plans
                 returns.use_runner(context.runner)
+                context.runner._call = trace_failure('trip_call', context.runner._call)
+                context.runner._step_free = trace_failure('trip_free', context.runner._step_free)
                 ports.clients = ports.return_http.clients = ingress.clients = context.clients
                 return runtime
             app_options = dict(site_maps=returns.adapter.plans, trip_caps_port=returns.plant.caps_for,
@@ -325,6 +371,15 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 trip_lease={'required': True}, charge_runtime_factory=build_runtime) if composed else {}
             fleet = create_app(console, console_token=secrets.token_urlsafe(32), station_ingress=ingress,
                 task_service=cycles.tasks if cycles else None, **app_options)
+            original_refusal = console.trip_refusal
+            def traced_refusal(robot_ids):
+                refusal = original_refusal(robot_ids)
+                if refusal and robot_id in console._goal_busy:
+                    print('STATION_ADMISSION_REFUSAL', now[0], runtime.work_admission(robot_id),
+                        runtime._work_snapshot, returns.runner.robot_busy(robot_id),
+                        returns.runner.lease.jobs.get(robot_id), runtime._next_evaluation)
+                return refusal
+            console.trip_refusal = traced_refusal
             handover_checks = []
             if composed:
                 assert runtime is fleet.state.charge_runtime
@@ -375,6 +430,10 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                     await lifetime.enter_async_context(application_lifetime())
                 next_global = [now[0]]
                 async def step(*, visible=True, server_running=True):
+                    if work_admitting.is_set():
+                        clock_boundary.set()
+                    async with goal_clock:
+                        pass  # SIM time advances between ordinary goal admissions.
                     if cycles:
                         cycles.apply_output()
                     elif svc.modes.mode.value != 'NAVIGATION':
@@ -533,6 +592,8 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                 for _ in range(30):
                     await step()
                 live = owner.readback()
+                if lifespan and not (live.seating_verified and live.charging_verified):
+                    timing('seating_assertion')
                 assert live.seating_verified and live.charging_verified, (
                     live.state, live.reason, world.pose, world.command, owner.feed.relative_pose(),
                     owner.sensors._proof_at, owner.seating._since, owner._seated_until)
@@ -592,7 +653,12 @@ def test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_
                             if complete:
                                 break
                         else:
-                            raise AssertionError(('ordinary work did not complete', cycles.work, world.pose))
+                            raise AssertionError(('ordinary work did not complete',
+                                tasks.get_task(cycles.work['task_id']), world.pose,
+                                svc.nav.nav_state.value, returns.backend.current, returns.runner.open_trips(),
+                                [(task.get_name(), [(stack_frame.f_code.co_name, stack_frame.f_lineno)
+                                    for stack_frame in task.get_stack(limit=2)])
+                                 for task in list(asyncio.all_tasks())[:16]], failures))
                         assert math.hypot(world.pose[0]-.9, world.pose[1]) <= .02, (
                             'ordinary work receipt before physical SIM arrival', number, world.pose)
                         assert abs(math.remainder(world.pose[2], 2*math.pi)) <= math.radians(5)

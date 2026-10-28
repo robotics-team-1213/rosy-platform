@@ -7,15 +7,20 @@
 
 ROSY Platform은 관측한 세계 상태, 현장 미션 조정, 로봇의 안전한 실행, 오프라인 학습·평가를 연결한다. 첫 하드웨어는 Raspberry Pi 5 기반 **Pinky Pro**이며, [pinky_pro](https://github.com/pinklab-kr/pinky_pro) 포크에서 출발했다.
 
+기존 구현 기체와 신규 지원 후보는 [로봇 호환성과 검증 상태](docs/reference/robot-compatibility.md)에서 구분한다. RaspTank Metal / Pi 4는 무구동 소스 프로파일을 준비한 지원 후보이며, 장치 드라이버·통합 이미지·실물 수용은 아직 없다.
+
+목표는 업무 앱이 플랫폼을 고치지 않고 로봇에 작업을 맡기는 범용 실행 플랫폼이며, 첫 적용 사례는 항만 앱 Harbor다. 완료 조건은 [PRODUCT.md 「Product Purpose」](PRODUCT.md#product-purpose)가 정본이다.
+
 ## 시작하기
 
 | 나는 | 여기부터 |
 |---|---|
-| 새 팀원, 개인 클론 사용자 | [팀 가이드](docs/reference/team-guide.md): 초대 수락부터 첫 PR까지 |
+| 새 팀원 | [인수인계](docs/reference/handoff.md): 무엇을 만들고 어디까지 왔는가 → [팀 가이드](docs/reference/team-guide.md): 초대 수락부터 첫 PR까지 |
 | 실험실 공유 체크아웃의 사람·에이전트 | [같이 하는 깃](docs/reference/shared-checkout.md): 작업 위치와 중단 조건 |
-| PR 작성·검토·게시 담당 | [PR 파이프라인](docs/reference/pr-pipeline.md) · [기여 안내](.github/CONTRIBUTING.md) |
+| PR 작성·검토·게시 담당 | [git으로 일하는 법](docs/reference/git-workflow.md): 브랜치·커밋·PR·push 규칙 · [PR 파이프라인](docs/reference/pr-pipeline.md) · [기여 안내](.github/CONTRIBUTING.md) |
 | 동시 작업·교대 담당 | [작업 분담과 인수인계](docs/reference/team-guide.md#36-동시-작업과-인수인계) · [작업·버그 이슈 양식](https://github.com/robotics-team-1213/rosy-platform/issues/new/choose) |
 | 빌드·시뮬·테스트·배포 담당 | [개발 가이드](docs/reference/developer-guide.md) |
+| 제품 앱 개발자 | [Applications](applications/README.md): 제품별 개발 위치 · [Fleet 앱](applications/fleet/README.md): 화면과 앱 진입점 |
 | 현재 구현·검증 상태 확인 | [STATUS.md](STATUS.md): 모듈별 게이트 |
 
 `main` 반영은 주제 브랜치의 PR을 통해 한다. 검토·CI·병합 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md), 문서 작성 기준은 [D-777](docs/adr/D-777-concise-human-agent-documentation.md)을 따른다.
@@ -72,7 +77,8 @@ flowchart TB
 | 관제 규칙 | [Fleet 통합 규칙집](docs/reference/fleet-rulebook.md) — law · rule · AI 후보 · 실행 허가 · 결과 확인 |
 | 업무 앱 계약 | [업무 앱의 지원 계약](docs/reference/application-contract-support.md) — 외부 업무 앱이 쓰는 HTTP 경로·권한·근거 경계 |
 | 배포 | [로봇 배포](docs/deployment/) · [현장 PC 배포](deploy/site/README.md) |
-| 기록 | [해결 기록](docs/solutions/) · [전체 색인](docs/index.md) |
+| 협업 | [인수인계](docs/reference/handoff.md) · [git으로 일하는 법](docs/reference/git-workflow.md) · [보류 브랜치](docs/reference/held-branches.md) |
+| 기록 | [해결 기록](docs/solutions/) · [docs 모듈 색인](docs/index.md) |
 
 문서끼리 다르면 **SRS · API reference · ADR**이 이긴다.
 
@@ -101,7 +107,7 @@ flowchart TB
   gitignored `private/`에 두고 공개 문서에는 `<robot-ip>` 표기를 쓴다(D-226).
   시험 PC와 로봇 SSH 대상은 `private/lab-hosts.json`이다. 모양은
   `tools/remote/hosts.example.json`을 복사한다.
-  날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내은 해당 모듈의
+  날짜 증거는 `docs/validation/<topic>-<YYYY-MM-DD>/`, 모듈 안내는 해당 모듈의
   `docs/` 하나에 둔다.
 
 ## 로봇 실행

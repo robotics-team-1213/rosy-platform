@@ -1,0 +1,10 @@
+# Suites that run without pytest-xdist on the test hosts (tools/remote/xdist_plan.py).
+# One repo-relative path prefix per line; an invocation that names a path under or above one runs
+# serial as a whole. Remove a line only after a serial vs -n run on a test host gave the same failures.
+# Browser jobs (ROSY_RUN_BROWSER_TESTS=1) and node-id invocations are serial without a line here.
+# 2026-10-27: -n 6 on the model PC matched serial (0 failures) for root test (16:54 -> 3:24), operations/fleet/test
+# (18:19 -> 2:50), middleware/perception (2:34 -> 0:45) and ten smaller suites, so their lines went.
+# xdist needs the same test ids in every worker: no random or clock values in parametrize ids.
+integrations/simulation/gazebo/test  # rclpy nodes, ROS_DOMAIN_ID, ports (not measured under -n)
+learning/envs/isaac/test  # ROS_DOMAIN_ID, subprocesses (not measured under -n)
+tools  # calibration and device tools touch the home directory; land_isolation's collect_alone jobs rely on it

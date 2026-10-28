@@ -34,13 +34,6 @@ const blob=new Blob([out.join('\\n')+'\\n'],{{type:'application/jsonl'}});const 
 </script></html>"""
 
 
-def script_json(value) -> str:
-    """JSON for an inline <script>: no '<', so a frame path cannot close the script element."""
-    text = json.dumps(value).replace("<", "\\u003c")
-    assert "<" not in text and json.loads(text) == value
-    return text
-
-
 def build(rows_path: Path, out: Path) -> int:
     rows = [json.loads(line) for line in rows_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     seen, items, meta = set(), [], []
@@ -62,7 +55,7 @@ def build(rows_path: Path, out: Path) -> int:
         items.append(f'<figure><img src="frames/{name}" alt="{row["view"]} {html.escape(frame.name)}" loading="lazy">'
                      f'<figcaption>{index + 1}. {row["view"]} · {html.escape(frame.name)}</figcaption>{sets}</figure>')
         meta.append({"frame": str(frame), "sha256": digest, "view": row["view"], "questions": list(questions)})
-    page = PAGE.format(qs=QUESTION_SET, n=len(meta), items="\n".join(items), rows=script_json(meta))
+    page = PAGE.format(qs=QUESTION_SET, n=len(meta), items="\n".join(items), rows=json.dumps(meta))
     (out / "index.html").write_text(page, encoding="utf-8")
     return len(meta)
 
@@ -75,8 +68,8 @@ def main(argv=None) -> int:
     if args.out.exists() and any(args.out.iterdir()):
         raise SystemExit(f"{args.out} is not empty")
     total = 0
-    for number, rows in enumerate(args.rows, 1):  # numbered so two run folders with one name cannot overwrite
-        total += build(rows, args.out / f"{number}-{rows.parent.name}")
+    for rows in args.rows:
+        total += build(rows, args.out / rows.parent.name)
     print(f"{total} frames under {args.out}")
     return 0
 

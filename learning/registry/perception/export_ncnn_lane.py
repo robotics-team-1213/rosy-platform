@@ -16,8 +16,8 @@ from control.sensing.perception.learned.ncnn_session import NcnnSession
 def convert_lane_ncnn(args, hw, out):
     import pnnx
     from convert import load_torch_model, parity, probe_inputs, torch_runner
-    root = Path(os.environ.get("ROSY_MODEL_SCRATCH", "X:/DevTemp/rosy-model-export" if os.name == "nt"
-                               else tempfile.gettempdir()))
+    root = Path(os.environ.get("ROSY_MODEL_SCRATCH")
+                or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-model-export")
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="lane-ncnn-", dir=root) as scratch:
         staging = Path(scratch)

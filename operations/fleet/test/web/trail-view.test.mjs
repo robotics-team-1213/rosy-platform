@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {drawTrails, mapPose, mergePath, pathQuery, tripFor} from '../../../site_ui/console/trail-view.js';
-import {quarterTurn} from '../../../site_ui/console/site-layer.js';
+import {drawTrails, mapPose, mergePath, pathQuery, tripFor} from '../../../../applications/fleet/web/map/trail-view.js';
+import {quarterTurn} from '../../../../applications/fleet/web/map/site-layer.js';
 
 const LOCALIZED = {state: 'LOCALIZED', pose_frame: 'map'};
 const at = (x, y, id = 'a', localization = LOCALIZED) => [{robot_id: id, state: {pose: {x, y, yaw: 0}, localization}}];

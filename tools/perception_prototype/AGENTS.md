@@ -28,7 +28,7 @@ Unreviewed D-205 prototypes from the 2026-09-24 session: estimating the real cam
 ### Working In This Directory
 
 - Do not treat results as acceptance. Do not polish or extend these scripts; new work goes into the reviewed P2 replay tool (`learning/evaluation/perception/road_replay.py` and its tests).
-- Scripts write `out/`, `*.pkl` and `*.json` into the current working directory. Run from an empty folder outside the repo (for example under `X:\DevTemp`) and never commit the output.
+- Scripts write `out/`, `*.pkl` and `*.json` into the current working directory. Run from an empty folder outside the repo (for example under `$ROSY_SCRATCH`) and never commit the output.
 - Input video defaults to `data/teleop/learning/teleop_20260919_151213_part01..07.mp4` (override `ROSY_TELEOP_DIR`); the camera profile defaults to the draft under `docs/validation/perception-real-video/2026-09-24/` (override `ROSY_CAMERA_PROFILE`).
 - Run order matters in `camcal/` (each step reads the previous step's file) and in `realrun/` (`analyze.py` needs all seven `frames_pNN.jsonl`).
 - Windows host with `python`; no ROS. Needs `opencv-python` and `numpy`.

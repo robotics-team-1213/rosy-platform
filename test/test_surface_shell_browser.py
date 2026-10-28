@@ -119,7 +119,7 @@ def test_the_shell_estop_reaches_the_safety_route(app_client):
             page.add_init_script(script=TOKEN)
             page.goto("http://rosy.test/device", wait_until="domcontentloaded")
             page.click("#shell-estop")
-            page.wait_for_function("document.getElementById('shell-notice').textContent.length > 0")
+            page.wait_for_function("() => document.getElementById('shell-notice').textContent.length > 0")
             assert page.locator("#shell-notice").text_content().startswith("비상 정지 요청 접수")
             assert services.safety.estop is True
         finally:

@@ -8,7 +8,7 @@ from core.bridge.docking_mode import motion_ready
 from core_api_web.api.deps import Mode
 from test_station_docking_api import station_api
 from test_cmd_vel_cycle import run
-from middleware.core.gateway.test.test_trip_lease import STATION_FENCED
+from middleware.core.gateway.test.test_core_trip_lease import STATION_FENCED
 
 
 def prepared(station_api):

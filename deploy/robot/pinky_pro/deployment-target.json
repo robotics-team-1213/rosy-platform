@@ -1,0 +1,17 @@
+{
+  "id": "pinky_pro",
+  "deployment": "native",
+  "install_target": "Pinky Pro native Raspberry Pi runtime",
+  "status": "existing_implementation",
+  "operations": ["apply", "rollback"],
+  "delivery": {
+    "platform": "raspberry-pi-5",
+    "architecture": "arm64",
+    "image_backend": "pinky_pro",
+    "application_updater": "native-release",
+    "os_updater": "rauc",
+    "os_compatible": "rosy-pinky-pro-ab-v2",
+    "os_tag_prefix": "os-pinky-pro-"
+  },
+  "reason": "Existing signed-release executor; deployment and device acceptance remain separate."
+}

@@ -3,7 +3,7 @@ set -eo pipefail
 source /opt/ros/jazzy/setup.bash
 source /opt/omx_ws/install/setup.bash
 set -u
-test -r /repo/middleware/devices/omx/adapter/omx_adapter/pilot_sim_server.py
+test -r /repo/middleware/devices/omx/adapter/omx_adapter/pilot_sim/server.py
 export PYTHONPATH="/repo/contracts/foundation:/repo/middleware/devices/omx/adapter:${PYTHONPATH:-}"
 export ROS_DOMAIN_ID="${OMX_PILOT_DOMAIN_ID:-75}"
 export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
@@ -16,4 +16,4 @@ ros2 run ros_gz_bridge parameter_bridge \
   '/workcell_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo' >/tmp/rosy-pilot-camera.log 2>&1 &
 camera_pid=$!
 trap 'kill "$launch_pid" "$camera_pid" 2>/dev/null || true; wait "$launch_pid" "$camera_pid" 2>/dev/null || true' EXIT
-python3 -m omx_adapter.pilot_sim_server
+python3 -m omx_adapter.pilot_sim.server

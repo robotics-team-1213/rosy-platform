@@ -25,11 +25,12 @@ COLCON_OUTPUT = {"build", "install", "log"}
 
 #: The ROS package names on 2026-10-03 (WSL `colcon list --base-paths src --names-only`).
 #: D-427 moves folders, never names: a move that renames, drops or duplicates one fails here.
+#: The config-only RaspTank profile was explicitly added on 2026-10-25.
 FROZEN_ROS_PACKAGES = frozenset({
     "bringup", "control", "core", "core_api_web", "core_common", "core_events", "core_features",
     "dashboard", "description", "emotion", "fleet", "games", "gz_sim", "imu_bno055", "interfaces",
     "isaac_sim", "lamp_control", "led", "navigation", "omx", "omx_adapter", "pilot", "pinky_pro",
-    "rosy_cell", "rosy_vision", "sensor_adc", "web_common",
+    "rosy_cell", "rosy_vision", "sensor_adc", "web_common", "rasptank_metal",
 })
 
 #: Every tracked file whose colcon/rosdep lines run over the ROSY colcon roots. Value: a
@@ -62,6 +63,9 @@ EXEMPT = {
     # Container workspaces built from per-package COPY lines; moves edit those COPY sources.
     "deploy/robot/pinky_pro/Dockerfile": "per-package COPY into /opt/rosy_ws",
     "deploy/robot/omx/Dockerfile": "upstream OMX sources in /opt/omx_ws",
+    "tools/sim/build_topic_based_ros2_control.sh":
+        "D-877 builds one pinned upstream package (topic_based_ros2_control) in a user overlay; no repo roots",
+    "tools/sim/build_omx_overlay.sh": "D-877 builds the pinned upstream OMX description + bringup in a user overlay",
     "contracts/foundation/core_common/profile.py": "error-message text",
     "middleware/perception/nodes/web_node.py": "docstring",
     "operations/fleet/package.xml": "XML comment",

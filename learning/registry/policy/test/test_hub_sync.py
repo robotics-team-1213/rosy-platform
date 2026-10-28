@@ -1,15 +1,17 @@
 import importlib.util
 import json
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 
 @pytest.fixture
-def module():
+def module(monkeypatch):
     path = Path(__file__).resolve().parents[1] / 'hub_sync.py'
     assert path.is_file(), 'reviewed Hub bundle sync is not implemented'
+    monkeypatch.syspath_prepend(str(path.parent))
     spec = importlib.util.spec_from_file_location('omx_hub_sync', path)
     result = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(result)
@@ -31,6 +33,30 @@ def test_preview_snapshots_only_selected_files(module, bundle):
     assert manifest['repo_id'] == 'team/omx'
     assert set(manifest['files']) == {'README.md', 'meta/info.json'}
     assert not (bundle / 'receipt.json').exists()
+
+
+def test_omx_export_cannot_be_silently_reduced_to_generic_dataset_files(module, tmp_path):
+    source = tmp_path/'source'
+    (source/'meta').mkdir(parents=True)
+    (source/'meta/info.json').write_text('{}')
+    (source/'rosy_export.json').write_text('{"status":"verified"}')
+    output = tmp_path/'bundle'
+    with pytest.raises(ValueError, match='complete OMX export'):
+        module.prepare_bundle(source, output, 'team/omx', 'dataset', ['meta/info.json'])
+    assert not output.exists()
+
+
+def test_large_explicit_file_selection_can_be_read_from_json(module, tmp_path, monkeypatch):
+    source = tmp_path/'source'
+    (source/'meta').mkdir(parents=True)
+    (source/'meta/info.json').write_text('{}')
+    selection = tmp_path/'files.json'
+    selection.write_text('["meta/info.json"]')
+    output = tmp_path/'bundle'
+    monkeypatch.setattr(sys, 'argv', ['hub_sync.py', 'prepare', str(source), '--out', str(output),
+        '--repo-id', 'team/omx', '--repo-type', 'dataset', '--file-list', str(selection)])
+    module.main()
+    assert set(json.loads((output/'manifest.json').read_text())['files']) == {'meta/info.json'}
 
 
 @pytest.mark.parametrize('path', ['../secret', '/secret', 'private/notes.json', '.env', 'meta/../../secret'])

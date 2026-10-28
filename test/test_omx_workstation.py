@@ -171,7 +171,7 @@ def test_simulation_build_patches_vendor_launch_to_use_gazebo_server_only():
     assert "omx_f_gazebo.launch.py" in patch
 
 
-def test_omx_runtime_domain_is_configurable_but_simulation_discovery_stays_local():
+def test_omx_runtime_domain_is_configurable_but_discovery_stays_local():
     import yaml
 
     compose = yaml.safe_load((OMX / "compose.yaml").read_text(encoding="utf-8"))
@@ -181,8 +181,11 @@ def test_omx_runtime_domain_is_configurable_but_simulation_discovery_stays_local
     assert hardware == {
         "ROS_DOMAIN_ID": "${OMX_ROS_DOMAIN_ID:-30}",
         "RMW_IMPLEMENTATION": "rmw_cyclonedds_cpp",
-        "ROS_AUTOMATIC_DISCOVERY_RANGE": "${OMX_ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}",
+        "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST",
+        "CYCLONEDDS_URI": "file:///etc/rosy/cyclonedds.xml",
     }
+    assert compose["services"]["omx-hardware-shell"]["volumes"] == [
+        "../../../middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml:/etc/rosy/cyclonedds.xml:ro"]
     assert simulation["ROS_DOMAIN_ID"] == "${OMX_SIM_DOMAIN_ID:-31}"
     assert simulation["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST"
     assert simulation["RMW_IMPLEMENTATION"] == "rmw_cyclonedds_cpp"

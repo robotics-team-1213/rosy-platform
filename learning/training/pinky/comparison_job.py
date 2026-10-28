@@ -14,6 +14,12 @@ from verify_raw import verify
 from rosy.contracts.learning.pinky import validate_profile
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def write(path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False), encoding='utf-8')
 
@@ -142,7 +148,7 @@ def run(train, evaluation, out, *, steps=40, seed=42760, stride=4):
     if type(steps) is not int or not 1 <= steps <= 10000 or type(stride) is not int or not 1 <= stride <= 32:
         raise ValueError('bounded integer steps/stride required')
     roots = [Path(p).resolve() for p in [*train, evaluation]]; out = Path(out).resolve()
-    if out.exists() or out.drive.upper() == 'F:' or any(out.is_relative_to(p) or p.is_relative_to(out) for p in roots):
+    if out.exists() or _in_checkout(out) or any(out.is_relative_to(p) or p.is_relative_to(out) for p in roots):
         raise ValueError('new output outside F and separate from source required')
     out.mkdir(parents=True)
     try:

@@ -72,6 +72,33 @@ def main():
         return transport
 
     try:
+        class FailingCleanup:
+            def __init__(self):
+                self.attempted = []
+
+            def create_client(self, *args):
+                return client_node.create_client(*args)
+
+            def destroy_client(self, client):
+                self.attempted.append(client)
+                result = client_node.destroy_client(client)
+                if len(self.attempted) == 1:
+                    raise RuntimeError('injected destroy failure after native cleanup')
+                return result
+
+        failed_node = FailingCleanup()
+        try:
+            NativeMapClients.create(failed_node, consumers=profiles, endpoints=endpoints,
+                source=None, parent=lambda: state.parent, clock=lambda: state.time,
+                stop=state.stopped.append)
+        except ValueError as error:
+            assert 'bounded native map owner binding required' in str(error)
+            assert isinstance(error.__cause__, RuntimeError)
+        else:
+            raise AssertionError('invalid private configuration must fail')
+        assert len(failed_node.attempted) == 2 and not tuple(client_node.clients)
+        print('DDS failed configuration preserves setup error and attempts both native client cleanups: PASS')
+
         transport = create()
         pump(executor, transport.ready)
         assert transport.poll()

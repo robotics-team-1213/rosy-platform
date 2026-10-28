@@ -1,6 +1,6 @@
 name: Build unsigned site candidate
 
-# D-437: the site candidate (Fleet, Vision, proxy; linux/amd64) is built on a
+# D-437: the site candidate (Fleet, Vision, proxy, Postgres; linux/amd64) is built on a
 # GitHub-hosted runner and published as an UNSIGNED prerelease. The operator's
 # signing PC signs release.json (sign_candidate.py --manifest-only, D-301;
 # automatically through auto_sign_candidates.py since D-441) and attaches
@@ -28,7 +28,7 @@ on:
       - operations/fleet/**
       - integrations/messaging/discord/**
       - operations/decision/**
-      - operations/site_ui/console/**
+      - applications/fleet/web/**
       - operations/world/src/**
       - operations/site_execution/src/**
       - operations/situation/rosy_situation/__init__.py
@@ -42,7 +42,7 @@ on:
       - contracts/learning/src/**
       - contracts/skill/src/**
       - operations/processes/palletizing/src/**
-      - operations/apps/fleet/**
+      - applications/fleet/gateway/**
       - shared/web/**
       - middleware/perception/map/map_v2_fleet/lane_graph.yaml
       - middleware/perception/map/map_v2_fleet/meshes/road_lines.stl
@@ -352,7 +352,7 @@ jobs:
           set -euo pipefail
           notes="UNSIGNED until release.json.sig is attached.
 
-          Site candidate (Fleet, Vision, proxy; linux/amd64) built from commit ${COMMIT} by ${RUN_URL}.
+          Site candidate (Fleet, Vision, proxy, Postgres; linux/amd64) built from commit ${COMMIT} by ${RUN_URL}.
           The operator's signing PC signs release.json (sign_candidate.py --manifest-only, run by
           auto_sign_candidates.py after the provenance and main-ancestry checks, D-441) and uploads
           release.json.sig. The site host verifies it before docker image load

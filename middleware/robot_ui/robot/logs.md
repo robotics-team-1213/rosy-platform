@@ -951,6 +951,7 @@
 - Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
 - Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
 - Gate: Metadata correction only; existing physical and field gates are unchanged.
+
 ## 2026-10-05 · uncommitted · feat(robot): 기존 관리자 화면에서 LAN 연결 승인
 
 - 변경: 정상 /device 보안 절차와 기존 대시보드에 공용 수신 승인 컴포넌트를 연결한다. 요청 이름·4문자 확인값·역할·키와 공용 CA 확인값을 표시하고 명시 승인/거절·연결 기억·처리 결과를 제공한다. 세션/표면 lifetime이 끝나면 늦은 응답과 쓰기를 취소한다.
@@ -1052,11 +1053,13 @@
 - 변경: 실제 CORE 앱 응답의 `/console` 320/390px에서 조작·감지·관측 칸이 같은 폭으로 쌓이는지 브라우저 계약에 추가했다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 X: 320px 캡처, `/console`·`/setup`·`/device` 2폭 브라우저 2 passed, `known_failures.py` 0 NEW.
 - gate 변화: 로봇 역할 셸 LOCAL G2 배치 부분 근거 추가. 실제 CORE/장치 readback과 전체 G2/G3는 HOLD다.
+
 ## 2026-10-06 · uncommitted · uiux(robot): 카메라 행동 동등 폭
 
 - 변경: 전방 카메라의 영상 확대·녹화 중지 행동을 390px에서 같은 폭으로 맞췄다. 320px에서는 공용 칸 반응 규칙에 따라 각각 전폭으로 쌓는다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 실제 역할 셸 320/390px 브라우저 2 passed, `known_failures.py` 0 NEW. 전체 화면 원본은 X: `captures/robot-camera-equal/`.
 - gate 변화: 로봇 운용 LOCAL 폭 근거 추가. 실제 카메라·장치와 사용자 G3 독회는 HOLD.
+
 ## 2026-10-06 · uncommitted · uiux(robot): 개발 연결 대기 이유와 G2 기록 이름
 
 - 변경: 호환 화면의 개발 연결 버튼에 요청 중·재시도 대기 이유를 붙이고, 활성화 때 지운다. 역할 G2의 목록형 기록은 D-329 규약의 `matrix.json`과 구분해 `role-state-records.json`으로 저장한다.
@@ -1252,6 +1255,7 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+
 ## 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
 
 - Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
@@ -1290,9 +1294,62 @@
 - 증거: `docs/validation/app-role-clarity-2026-10-16/result.md`. 최종 리뷰 회귀와 affected 시험은 실행 기록에서 확인한다.
 - gate 변화: 없음. main 착지·push·배포·새 DEVICE/FIELD 시험 없음.
 
+## 2026-10-17 · eab1d0fb1 · 남은 대시보드 브라우저 검사의 현재 계약 반영
+
+- 변경: 만료 토큰 시험에 익명 계정 세션 조회를 반영하고, 셸 정지 대기식을 CSP에 맞는 함수로 고쳤다. 보정 표시 시험은 현재 소스 경로로 단독 import하도록 고쳤다. 토큰 삭제·서랍·실제 CORE 정지 및 보정 lease 검사를 유지한다.
+- 증거: Python 시험 세 파일의 구문 검사·차이 공백 검사·수정 커밋 safety 검사·독립 계약 검토 통과. 원격 시험 PC의 SSH 연결 시간 초과로 실행 결과는 대기 중이다. docs/validation/remaining-browser-regressions-2026-10-17/result.md.
+- gate 변화: 없음. 기존 실패 목록·장치 수용은 유지하며 main 착지·push·배포하지 않았다.
+
+## 2026-10-17 · 0e8ba72832 · 인증·정지·단독 보정 표시 브라우저 확인
+
+- 변경: 기존 만료 토큰·CSP 정지·보정 표시 실패의 실제 원격 성공을 확보해 목록 해제를 진행한다.
+- 증거: focused 19 passed 중 토큰 삭제·익명 조회·실제 CORE 정지 상태를 확인했고 보정 표시는 별도 invocation 1 passed, skip 0, 각 로그 NEW 0이다. docs/validation/remaining-browser-regressions-verified-2026-10-17/result.md.
+- gate 변화: 없음. 호스트 모의 CORE·합성 lease 검사이며 물리 정지·실측·DEVICE/FIELD 수용이 아니다.
+
+## 2026-10-21 · uncommitted · 저속 주행판과 접속 창 닫기 아이콘
+
+- 변경: 저속 주행판의 `↑ ← ↓ →`와 접속 창 닫기 `×`를 공용 actionIcon(forward·left·reverse·right·close)으로 바꿨다. `.drawer-close`가 공용 단추에 덧칠하던 테두리·색·배경·글자 크기를 지우고 위치만 남겼다. 전송 중 문구는 단추의 aria-label에서 이름을 읽는다.
+- 증거: 정적 점검. 원격 브라우저 검사는 별도 기록한다.
+- gate 변화: 없음. 주행 명령 값(0.03 m/s, 0.10 rad/s, 2초)은 그대로다.
+
+## 2026-10-22 · uncommitted · 접속 홈의 긴 사용자 이름 줄바꿈
+
+- 변경: 로그인한 사용자의 이름 표시만 긴 단어를 줄바꿈해 이름 전체와 작업 화면 링크가 좁은 화면 안에 남도록 했다.
+- 증거: 시험만 추가한 `c54b7e4246`에서 두 폭 모두 이름 영역이 720px로 늘어나 실패했다. 수정 `ed783cbaf5`의 원격 Chromium 접속 홈 전체 16 passed, NEW 0. 320·390px 캡처를 보존하고 320px에서 전체 이름과 목적지 링크를 확인했다.
+- gate 변화: 없음. 인증·명령 동작과 실제 장치 수용은 변경하지 않는다. CE: 해당 없음 — 원인과 해결이 CSS와 브라우저 회귀 시험에 드러나는 제한된 배치 수정이다.
 
 ## 2026-10-22 · 79a11a4a54 · 로봇 콘솔의 모터 상세 연결
 
 - 변경: 같은 출처의 CORE viewer API를 읽고 HTTP 요청 시작부터의 시간을 관측 나이에 반영한다.
 - 증거: 8e8861fc39 원격 UI/D-837 회귀 15 passed/skip0/NEW0에 로봇 화면·전송 지연 회귀 포함.
 - gate 변화: 소스·합성 HTTP·원격 화면 검증 범위다. 운영 배포·장치 실측·물리 과부하 원인 규명은 이 기록의 완료 근거가 아니다. docs/validation/motor-health-runtime-2026-10-22.md.
+
+## 2026-10-23 · uncommitted · 웨이포인트 폼의 공통 오류 설명 적용
+
+- 변경: 공통 오류 요약·필드 설명을 사용하고 저장 실패 뒤 입력을 보존한다. 최신 위치·중복 제출 차단과 기존 저장 API를 유지한다.
+- 증거: `37951c2501`의 검증된 실행 소스와 회귀 시험을 별도 착지 단위로 옮겼다. 앞선 준비·오류 회귀 3 passed와 전체 셸 저장·재조회 1 passed를 보존하고, 현재 main 조합은 공식 착지 도구로 확인한다.
+- gate 변화: 없음. 합성 자료·호스트 화면 근거이며 실제 로봇과 사용자 과업 수용은 미실시다.
+
+## 2026-10-24 · c60d6046bb · 연결 결과 관측과 재접속
+
+- 변경: Wi-Fi 변경 전에 비밀 없는 작업 ID/SSID만 보관하고 응답 유실·화면 재진입 뒤 같은 작업을 조회한다. 준비 응답을 연결 성공으로 표시하지 않고 실제 UUID/SSID/IPv4 관측 또는 rollback/held/resubmit을 표시한다.
+- 증거: `9198a18c7b` opt-in 실제 Chromium 10 passed(대시보드와 복구 화면 선택). [검증 기록](../../../docs/validation/device-network-recovery-2026-10-24/result.md). 암호 저장 금지·연결 끊김 뒤 동일 작업 재조회·최종 결과를 확인했다.
+- gate 변화: SOURCE 근거 추가. 실물 연결 전환과 사람 과업 수용은 미실시다. CE: 별도 새 교훈 없음.
+
+## 2026-10-25 · uncommitted · 호스트 에이전트 화면 표기 정렬
+
+- 변경: 호스트 상태 태그·버튼 비활성 사유·적용 실패 안내의 `Host Agent`를 화면 말 `호스트 에이전트`로 바꿨다. 역할 판단·조회·적용 동작은 그대로다.
+- 증거: 운용자 문구 규칙(DESIGN.md 운용자 말, CONCEPTS.md 호스트 에이전트)에 맞춘 표기 변경이다. 화면 문구 회귀(`test_panel_copy_evidence_browser.py`)와 원격 시험으로 회귀 여부를 확인한다.
+- gate 변화: 없음. 표기 변경이며 동작·실물 수용은 바꾸지 않는다. CE: 해당 없음.
+
+## 2026-10-26 · 62173b9899 · 앱 바 높이 덧쓰기 정리
+
+- 변경: 공용 `ui-topbar`가 D-741 앱 바 높이(64px)를 기본으로 갖게 되어 이 표면의 같은 값 덧쓰기를 지웠다(Pilot은 두 줄 머리 높이를 명시로 유지).
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
+- gate 변화: 없음.
+
+## 2026-10-26 · 62173b9899 · 지도 칸 레이어 단추 겹침 수정
+
+- 변경: 콘솔 지도 칸은 아홉 줄 격자로 자리를 셌는데, 상태 줄 둘이 숨으면 레이어 단추 줄이 `1fr` 줄에 들어가 17px로 눌리고 48px 단추가 아래 `작업 준비에서 지도 확인` 링크를 덮었다. ui-section의 세로 flex를 그대로 쓰고 지도 프레임만 남는 높이를 받게 했다(1366×768 측정: 레이어 630–678, 링크 682). 표면 링크 글자는 장미색 대신 본문색이다(D-277: 장미는 워드마크·현재 위치만).
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
+- gate 변화: 없음.

@@ -31,6 +31,7 @@ if __package__:
         check_overrides, containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
     )
+    from .site_update_runtime import SiteRuntimeIO
 else:  # pragma: no cover - installed host CLI
     if str(SCRIPT_DIR) not in sys.path:
         sys.path.insert(0, str(SCRIPT_DIR))
@@ -42,9 +43,10 @@ else:  # pragma: no cover - installed host CLI
         check_overrides, containers_reason, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         run_lock, runtime_reason, safe_extract, set_hold, swap_link, write_env_tag,
     )
+    from site_update_runtime import SiteRuntimeIO
 
 
-class SiteUpdater:
+class SiteUpdater(SiteRuntimeIO):
     def __init__(self, config: dict, *, paths: Paths | None = None,
                  runner: Runner = subprocess.run, http: Http | None = None,
                  verifier: Callable[..., dict] = verify_candidate,
@@ -59,6 +61,7 @@ class SiteUpdater:
         self.clock = clock
         self.dry_run = dry_run
         self._accepted_images = {}
+        self._runtime_proofs = {}
         self._functional_baseline = None
 
     # state
@@ -94,19 +97,7 @@ class SiteUpdater:
             raise Transient(f"{' '.join(args[:3])} failed: {tail[0][:200]}")
         return result
 
-    def _compose_files(self, env: dict[str, str]) -> list[str]:
-        pairing = shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))
-        return ["-f", str(self.paths.link / "deploy/site/compose.yaml"), *pairing]
 
-    def _compose(self, env: dict[str, str], *args: str, tag: str | None = None,
-                 timeout: int = 120, check: bool = True) -> subprocess.CompletedProcess:
-        process_env = None
-        if tag is not None:
-            # The shell environment beats --env-file in Compose.
-            process_env = {**os.environ, "ROSY_SITE_IMAGE_TAG": tag}
-        return self._run(["docker", "compose", "--project-name", PROJECT, "--env-file",
-                          str(self.paths.site_env), *self._compose_files(env), *args],
-                         timeout=timeout, env=process_env, check=check)
 
     # selection
     def list_releases(self) -> list[dict]:
@@ -165,8 +156,11 @@ class SiteUpdater:
         raise Rejected(f"release {tag} has no asset {name}")
 
     # host checks
-    def check_overrides(self, env: dict[str, str], commit: str) -> None:
-        check_overrides(env, commit, self._run, self._compose)
+    def check_overrides(self, env: dict[str, str], commit: str, *, folder: Path | None = None,
+                        env_file: Path | None = None, services=SERVICES) -> None:
+        def compose(env, *args, **kwargs):
+            return self._compose(env, *args, folder=folder, env_file=env_file, **kwargs)
+        check_overrides(env, commit, self._run, compose, services)
 
     def _prior_target(self) -> Path:
         """Return the installed candidate folder, migrating a real directory once."""
@@ -260,74 +254,10 @@ class SiteUpdater:
         finally:
             shutil.rmtree(staging, ignore_errors=True)
 
-    def _verify(self, folder: Path, *, loaded: bool, expected_commit: str | None = None,
-                env: dict | None = None) -> dict:
-        try:
-            manifest = self.verifier(folder, trusted_key_id=self.config["key_id"],
-                                     trusted_public_key=self.config["public_key"],
-                                     runner=self.runner, inspect_loaded_images=loaded)
-            if manifest.get('source_commit') != (expected_commit or folder.name):
-                raise Rejected('signed manifest commit differs from candidate commit')
-            overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
-            for name, field in (('account', 'account_https'), ('omx', 'omx'), ('workcell', 'workcell')):
-                if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):
-                    raise Rejected(f'{name} overlay is not covered by this signed candidate')
-            if loaded:
-                self._accepted_images[manifest['source_commit']] = manifest.get('accepted_image_ids', {})
-            return manifest
-        except (CandidateVerificationError, OSError) as error:
-            raise Rejected(f"verification failed: {error}") from None
 
     # switch + health
-    def healthy(self, env: dict[str, str], commit: str) -> tuple[bool, str]:
-        deadline = self.clock() + self.config["health_timeout_s"]
-        reason = "not checked"
-        while True:
-            status = self.http.status(self.config["health_url"], self.config["health_ca"])
-            reason = f"healthz returned {status}"
-            if status == 200:
-                reason = self._containers_reason(env, commit)
-                if reason == '':
-                    if self._functional_baseline is None:
-                        reason = functional_reason(self.config, self.http)
-                    else:
-                        try:
-                            observed, _ = functional_inventory(self.config, self.http)
-                            if any(not set(ids) <= set(observed.get(path, []))
-                                   for path, ids in self._functional_baseline.items()):
-                                reason = 'functional API lost previously observed IDs'
-                        except Rejected as error:
-                            reason = str(error)
-                if reason == "":
-                    return True, "healthy"
-            if self.clock() >= deadline:
-                return False, reason
-            self.sleep(5)
 
-    def _containers_reason(self, env: dict[str, str], commit: str) -> str:
-        try:
-            out = self._compose(env, "ps", "--all", "--format", "json").stdout.strip()
-        except Transient as error:
-            return str(error)
-        try:
-            rows = json.loads(out) if out.startswith("[") else [
-                json.loads(line) for line in out.splitlines() if line.strip()]
-        except json.JSONDecodeError:
-            return "docker compose ps output is not JSON"
-        reason = containers_reason(rows, commit, self._accepted_images.get(commit, {}), self._run)
-        if reason:
-            return reason
-        try:
-            output = self._compose(env, 'config', '--hash', '*', tag=commit).stdout
-            hashes = dict(line.split() for line in output.splitlines() if line.strip())
-            return runtime_reason(rows, hashes, self._run)
-        except Transient as error:
-            return str(error)
-        except ValueError:
-            return 'Compose configuration hashes cannot be verified'
 
-    def _restart(self) -> None:
-        self._run(["systemctl", "restart", STACK_UNIT], timeout=300)
 
     def switch(self, env: dict[str, str], previous: Path, target: Path, commit: str,
                current: str) -> tuple[bool, str]:
@@ -360,9 +290,25 @@ class SiteUpdater:
         if (not self.paths.env_backup.is_file()
                 or read_env(self.paths.env_backup).get('ROSY_SITE_IMAGE_TAG') != transaction['current']):
             raise Refused('rollback backup does not match journal commit')
+        if transaction.get('migration') and (
+                read_env(self.paths.site_env).get('ROSY_SITE_IMAGE_TAG') != transaction['current']
+                or (self.paths.link.is_symlink() and self.paths.link.resolve() != previous.resolve())
+                or (self.paths.link.exists() and not self.paths.link.is_symlink() and previous.exists())):
+            raise Refused('physical relocation journal differs from the original current path')
         verification_path = previous if previous.exists() else self.paths.link
         self._verify(verification_path, loaded=True, expected_commit=transaction['current'],
                      env=read_env(self.paths.env_backup))
+        backup_env = read_env(self.paths.env_backup)
+        self.check_overrides(backup_env, transaction['current'], folder=verification_path,
+                             env_file=self.paths.env_backup,
+                             services=self._runtime_proofs[transaction['current']])
+        if not transaction.get('migration'):
+            outgoing = self.paths.candidates / transaction['commit']
+            if outgoing.is_symlink() or not outgoing.is_dir():
+                raise Rejected('outgoing canonical candidate is unavailable')
+            self._verify(outgoing, loaded=True, expected_commit=transaction['commit'], env=backup_env)
+            self._retire_postgres(backup_env, outgoing, transaction['commit'],
+                                  self._runtime_proofs[transaction['current']])
         if (transaction.get('migration') and not previous.exists()
                 and self.paths.link.is_dir() and not self.paths.link.is_symlink()):
             os.rename(self.paths.link, previous)
@@ -411,7 +357,7 @@ class SiteUpdater:
                 return
             kept_commits.add(commit)
         for reference in listed.split():
-            match = re.fullmatch(r"rosy-site-(?:fleet|vision|proxy):([0-9a-f]{40})", reference)
+            match = re.fullmatch(r"rosy-site-(?:fleet|vision|proxy|postgres):([0-9a-f]{40})", reference)
             if match and match.group(1) not in kept_commits and reference not in used:
                 self._run(["docker", "image", "rm", reference], check=False)
                 log("pruned-image", image=reference)
@@ -464,6 +410,7 @@ class SiteUpdater:
         try:
             self._verify(self.paths.link, loaded=True, expected_commit=current,
                          env=env)
+            self.check_overrides(env, current, services=self._runtime_proofs[current])
             reason = self._containers_reason(env, current)
             if not reason:
                 self._functional_baseline, missing = functional_inventory(self.config, self.http)
@@ -480,6 +427,10 @@ class SiteUpdater:
                 state.pop('previous', None)  # never invent rollback history for a manual switch
                 log('adopted-current', commit=current)
             release = self.select(self.list_releases(), current, state)
+        except Refused as error:
+            log('refused', reason=str(error))
+            state['last_run']['result'] = 'refused'
+            return EXIT_FAILED
         except Rejected as error:
             log('refused', reason=f'running candidate verification failed: {error}')
             state['last_run']['result'] = 'refused'
@@ -503,15 +454,14 @@ class SiteUpdater:
             commit = commits.pop()
             if not self.is_newer(current, commit):
                 raise Rejected('candidate commit is not a strict descendant of the running commit')
-            self.check_overrides(env, commit)
             if self.dry_run:
                 log("would-install", tag=tag, commit=commit, current=current)
                 state["last_run"]["result"] = "dry-run"
                 return EXIT_OK
             log("staging", tag=tag, commit=commit)
             target = self.stage(release, commit, sums)
-            self._verify(target, loaded=False,
-                         env=env)
+            proof = self._verify(target, loaded=False, env=env)
+            self.check_overrides(env, commit, folder=target, services=proof['verified_images'])
             load = self._run(["docker", "image", "load", "--input", str(target / "images.tar")],
                              timeout=1800, check=False)
             if load.returncode != 0:

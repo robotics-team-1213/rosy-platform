@@ -13,6 +13,8 @@
 공식 native recorder/자동 교사 데이터는 [native 실행 안내](../../curation/omx/README.md)의
 `native_cycle.py` 경로를 사용한다. byte-bound 검토 분할 → 공식 ACT CLI → 별도 프로세스
 model/processor 재적재 → eval 재생을 연결한다. 아래 `act_job.py`의 SIM rad 계약과 혼합하지 않는다.
+단일 팔 6관절과 양팔 12관절은 native 데이터의 명시된 robot_type·관절 순서로 구분하며,
+train/eval layout이 다르면 평가를 거절한다. 양팔 지원은 실물 과제 성공이나 실행 권한을 뜻하지 않는다.
 
 `act_job.py`는 기존 LeRobot 0.4.4 export의 원본 OMX 시연을 검증하고,
 episode 단위 train/eval → ACT 학습 → weights 저장·재독출 → offline 평가 →
@@ -29,6 +31,63 @@ python learning/training/omx/act_job.py
   --out <new-artifact-directory> --steps 40 --seed 42750 --n-action-steps 4
 ```
 
+`--eval-export`는 여러 독립 에피소드를 받는다. 학습 에피소드만으로 정규화와
+학습 chunk를 계산하며 검증 에피소드 사이에는 정책 큐를 초기화한다. 보고서는 전체
+오차와 에피소드별 오차를 함께 보존한다. 고정 물체 과제는 train 20/validation 5를
+분리하고, 새 SIM 과제 20회의 성공률을 별도로 측정한다.
+
+`--action-representation joint_delta_from_chunk_source_v1`은 원 target에서 chunk 시작
+관측 상태를 뺀 이동량을 학습한다. 미래 target도 모두 같은 시작 상태를 기준으로 한다.
+추론 시 그 원 상태를 더해 절대 target chunk를 한 번 복원하고 큐에 저장하며, 이후
+관측으로 다시 기준을 바꾸지 않는다. 외부 profile과 timestamp·owner 검사는 유지한다.
+새 정규화는 `action_transform` 안에 type·mean·std·absolute_baseline을 기록하며
+기존 최상위 action_mean/action_std를 두지 않아 구 소비자는 모델 생성 전에 거절한다.
+평가 baseline은 원 절대 train target 평균이다. 기본 `absolute`의 정규화 구조는 그대로다.
+
+`--action-representation joint_delta_tanh_from_chunk_source_v1`은 새 checkpoint용으로
+ACT linear action head의 역정규화 이동량 `d`에 `0.035*tanh(d/0.035)`를 적용한다.
+미분 가능한 같은 activation을 학습·validation·재적재·byte 추론에 설치하며 정규화의
+type과 정확한 `max_delta_rad: 0.035`를 hash로 결속한다. 기존 weight key는 유지된다.
+원 절대 target을 자르지 않으므로 0.035rad 밖의 정답은 정확히 재현할 수 없다.
+bounded head의 표본 선택은 미래 4개 target 전체와 집게까지 같은 시작 상태의
+±0.035rad 안에 드는 원본 frame만 고른다. 모든 command가 남아야 하며, 표현 가능한
+frame이 없는 command는 학습 전에 거절한다. `all_frames`는 하나라도 범위 밖이면
+거절한다. 선택한 index와 chunk bound는 `training-index.json`에 기록한다.
+SIM 교사는 계획 보간·접촉 유지 압착과 readback 보정의 중간 이동을 최대 0.03rad로
+제한하고 최종 readback 목표도 0.035rad 안에서만 보낸다. grasp는 팔 목표 도달과
+신선한 접촉 증거를 확인하면 막힌 닫힘 목표를 더 추종하지 않는다. 이 여유가 모든 관측을 보장하지는 않으므로 새
+원본에도 동일한 chunk 검사를 적용한다. 범위 밖 정답만 있는 기존 command를
+삭제하거나 라벨을 줄여 통과시키지 않고 적격 시연을 새로 수집한다.
+chunk 전체는 같은 원 관측 기준이다. 그 뒤 readback 이동까지 제한하지는 못하며 기존
+owner 0.04rad 검사는 계속 필요하다. 이 구조 자체가 물체 과제 성공의 증거는 아니다.
+
+`--action-representation absolute_tanh_from_chunk_source_v1 --initial-policy <parent-root>`는
+검증한 absolute checkpoint를 초기값으로 사용한다. Linear head의 절대 예측 `a`와
+같은 batch 원 관측 `s`로 `s + 0.035*tanh((a-s)/0.035)`를 학습부터 적용한다.
+통계·정답·출력은 절대 위치이며 source를 다시 더하지 않는다. 각 sample의 원점을
+같은 chunk 전체에 적용하고 model 호출 성공·예외 모두에서 원점 context를 지운다.
+부모의 전체 파일 SHA, ACTConfig, 관절·카메라·limits와 train-only 통계가 일치해야
+weights를 읽는다. 부모 revision·weights/config/정규화 SHA와 기존 학습 step을
+정규화·평가 보고서에 결속하고 새 AdamW로 지정한 step을 추가 학습한다. 기존10k와
+추가10k는 구분한다. 원 target을 자르지 않으며, 같은 bounded chunk 선택과 기존 owner
+절대 범위·readback 0.04rad fence를 적용한다. 실제 recovery 정답을 추가한 것은 아니다.
+
+상대 표현의 `--state-noise-std-rad 0.02`는 선택한 train 입력에만 관절별 독립
+Gaussian 교란을 만드는 연구 옵션이다. 전용 RNG(seed+1)를 쓰고 원 절대 target·RGB·
+시각을 유지하며 모든 미래 target에서 같은 noisy 시작 상태를 뺀다. 실제 train만으로
+정규화를 fit하고 validation·추론에는 교란을 넣지 않는다. 분포·std·seed·관절·적용 범위는
+정규화·보고서와 DatasetManifest transformation hash에 결속한다. 교란 입력은 synthetic이며
+실제 관측·추가 시연·SIM truth가 아니다. bounded head에서는 미래 원본 target 모두가
+±0.035rad에 남도록 synthetic 시작 상태만 가능한 구간으로 제한하고, 이 분포를
+`gaussian_state_noise_clamped_to_chunk_support_v1`로 기록한다. 원 action 정답은
+자르거나 바꾸지 않는다. unbounded 상대 head는 기존 Gaussian 교란을 유지한다.
+교란 상태의 실물 도달성이나 recovery 정답·native 성공을 보장하지 않는다.
+기본값 0에서는 전용 RNG와 추가 augmentation metadata를 만들지 않는다.
+
+`lerobot_export.py --sim-ground-truth <truth.json>`으로 검증한 고정 물체 과제의
+원본 증거는 `rosy_sim_truth/`에 복사된다. 학습 snapshot과 공통 Episode에도 같은
+bytes를 보존하고 실제 judge를 기록한다. 명시한 증거가 없으면 기존 operator
+기록을 유지하며 독립 성공 판정을 만들지 않는다.
 
 Windows 출력은 X에 둔다. 새 출력만 허용하며 실패 시 state/error와 부분 산출물을
 보존한다. 학습 중단 시 재개를 지원하지 않는 초기 연구 CLI이므로 새 run 경로를
@@ -40,9 +99,9 @@ DatasetManifest에 포함한다. train-only 정규화를 사용하며 RGB source
 resize/scale, 실제 source duration을 기록한다. chunk는 episode 경계를 넘지 않는다.
 
 현재 설정: ACT ResNet18, dim64/head4/encoder1/decoder1, chunk4, VAE off,
-pretrained weights 없음, CPU4threads, batch8, AdamW lr0.001.
-모든 policy parameter를 하나의 optimizer group으로 학습한다. 저장 ACTConfig의
-optimizer_lr/optimizer_lr_backbone은 둘 다 0.001, weight_decay는 0.0001이며
+pretrained weights 없음, CPU4threads, batch8, AdamW main lr0.0001/backbone lr0.00001.
+ACT의 `get_optim_params()`로 backbone과 나머지 parameter 그룹을 나눈다. 저장 ACTConfig의
+optimizer_lr는 0.0001, optimizer_lr_backbone은 0.00001, weight_decay는 0.0001이며
 offline-report는 실제 optimizer parameter group의 lr/weight_decay/betas/eps와
 실행 옵션, gradient clip norm 1.0을 기록한다. 기존 artifact는 덮어쓰지 않는다.
 영상 정책을 학습하지만 task/duration 정책을 학습했다고 주장하지 않는다. HOLD/reset/stale는 선언이며
@@ -84,11 +143,39 @@ revision만 받아 결과를 반환하며 안전 owner 타입을 import하지 �
 현재 isolated caller 시험이 잠금 밖 추론과 lease 재검사·PolicyCandidate 구성을
 연결한다. 원 관측 재전달·큐 시각 갱신은 없다. 실제 제출·최종 판단은 기존
 `session.submit`에 맡긴다. 기본 runtime·명령·issuer·자동 scheduler·HOLD 해제는 없다.
+Private SIM caller는 추론 뒤 lease 연속성만 재검사하고 미승인 후보를 반환한다.
+추론 중 철회·설치 파일 변경이 생겼어도 후보 반환 자체는 실행 승인이 아니며,
+calibration의 전체 검사 또는 기존 `session.submit`의 최종 검사에서 거절해야 한다.
+실제 SIM actor는 새 입력 대기를 기존 `require_live()`의 과제 종료·감시 조건에
+연결한다. 원본 입력의 freshness와 모든 owner 검사는 유지하며 추론·이미지 저장 후와
+제출 전에도 종료를 검사한다. callback 없는 호출의 기존 획득 시간 한도는 유지한다.
 실제 trusted capture/issuer·승인된 모델의 ROS 프로세스 결선은 여전히 별도다.
 
 기본 n_action_steps=4는 유지한다. `--n-action-steps 1`은 chunk_size4를 유지하면서
 매 관측의 첫 행동만 반환하는 별도 config/평가/PolicyArtifact를 만든다. 허용 값은 1..4이다.
 설정을 바꾸어 기존 artifact의 revision이나 거절 이력을 덮어쓰지 않는다.
+
+기본 학습 표본은 `--sampling all_frames`다. 고정 6관절 OMX SIM 물체 과제의
+`--sampling command_entry`는 각 원 command/goal 쌍에서 팔 target-state 차이
+0.035rad 이하·그리퍼 0.04rad 이하인 첫 원본 frame을 학습 시작점으로 고른다.
+독립 SIM 정답을 요구하며 모든 명령에 표본이 없으면 거절한다. 그리퍼의 학습
+여유는 보장하지 않는다. 원본 arrays·target·시각·chunk 순서·전체 validation은 유지한다.
+선택 indices와 규칙은 `training-index.json` 및 DatasetManifest config SHA에 결속한다.
+학습 표본 선택은 실제 최종 readback 승인이나 물체 성공을 보장하지 않는다.
+
+`--sampling command_entry_and_exit`는 같은 조건을 만족하는 마지막 원본 frame도
+각 command/goal 쌍에서 고른다. 첫·마지막이 같으면 한 번만 쓰고 원본 index의 시간순으로
+정렬한다. 마지막 유효 frame이 정착 상태임을 보장하지 않는다. 기존 시작 표본·허용 범위·
+독립 SIM 정답 요구와 원본 chunk 순서·전체 validation을 유지하며 새 선택 규칙과
+indices를 같은 DatasetManifest 경로에 결속한다. 학습 step 수가 같으면 선택점당
+평균 학습 횟수는 줄어들므로 실제 물체 과제의 개선은 별도로 확인한다.
+
+`--sampling command_entry_exit_and_place_open`는 이 endpoint를 모두 유지하고,
+최종 놓기·열기 구간의 같은 eligibility를 만족하는 원본 내부 frame도 추가한다.
+검증된 SIM truth의 마지막 transfer 명령부터 다섯 팔 목표가 같은 연속 명령을
+선택하며 팔 목표가 바뀌면 즉시 끝낸다. 좌표나 새 정답을 넣지 않고 원본 metadata를
+읽는다. 접촉 정답이나 물체 해제 성공을 뜻하지 않으며 독립 validation과 실제 과제로
+효과를 확인해야 한다. 기본 선택과 action·RGB·chunk 순서는 그대로다.
 
 `act_inference_replay.py`는 bound Dataset 파일에 포함된 실제 LeRobot 평가 reader로
 모델의 입력/행동/큐 provenance·latency를 새 X artifact에 보존하고 기존 offline metrics를

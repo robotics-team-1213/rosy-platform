@@ -24,7 +24,7 @@ SEVERITY = ("crit", "warn", "info")
 
 @dataclass(frozen=True)
 class GuideConfig:
-    #: pose uncertainty u = sighting floor + odom drift per bridged metre (D-517 3, trip_ports)
+    #: pose uncertainty u = sighting floor + odom drift per bridged metre (D-517 3, trip_geometry)
     sighting_floor_m: float = 0.12
     drift_per_m: float = 0.05
     #: two body circles closer than this gap are too close (rotation radius each, D-424)

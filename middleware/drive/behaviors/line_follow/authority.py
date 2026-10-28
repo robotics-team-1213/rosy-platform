@@ -11,6 +11,7 @@ from collections import deque
 from dataclasses import replace
 
 from core_common.protocol.line_authority import SHRINK_TOL_M, STAMP_TOL_S, AuthorityRefused, LineAuthorityStatus
+from .route_guide import bind_guide
 
 #: D-744 5: a map anchor's odom stamp may be this old at receipt. The pose trail keeps 2 s at 50 Hz
 #: (100 samples); Fleet's pose is one trip period (0.5 s) and the request old.
@@ -74,7 +75,7 @@ class AuthorityMixin:
             return None, True
         return next((e for e in reversed(log) if e[0] <= stamp), None), False
 
-    def set_authority(self, authority_id, leg_id, pose_stamp, until_m, ttl_s, now=None, shrink=False, seq=None):
+    def set_authority(self, authority_id, leg_id, pose_stamp, until_m, ttl_s, now=None, shrink=False, seq=None, route_guide=None):
         """Store Fleet's authority. ``AuthorityRefused`` drops the held one too (the robot stands). D-760 3:
         ``seq`` at or below the newest seen on the leg is ignored, as is a request without ``seq`` on a leg that
         has one; ``shrink`` takes min(held end, this end) and never grants: with nothing live to shrink, none is held."""
@@ -106,13 +107,36 @@ class AuthorityMixin:
             if shrink and not live:  # a shrink never grants: Fleet wants less, so whatever is held goes too
                 self._authority = None
                 return dict(accepted=False, reason='shrink_none_held', authority=self.authority_status(now))
+            binding, self._route_source_budget = bind_guide(route_guide, base=base, exact=exact,
+                leg_id=leg_id, seq=seq, now=now, ttl_s=ttl_s, shrink=shrink,
+                budget=getattr(self, '_route_source_budget', None))
             if live:
                 if end < a['end']-SHRINK_TOL_M and not shrink:  # never shrinks unasked: ignored, so it expires
                     logging.getLogger(__name__).info('authority %s on leg %s ignored: %.3f m short', authority_id, leg_id, a['end']-end)
+                    # ... but its route prior is fresh evidence, never a grant: kept (v2 lap r48b/r49a: Fleet's map
+                    # metres ran behind CORE's odom path, every such extend dropped the prior for 3 sim-seconds)
+                    if binding is not None:
+                        a['route_guide'] = binding
                     return dict(accepted=False, reason='shrink', authority=self.authority_status(now))
                 end = min(end, a['end']) if shrink else max(end, a['end'])
-            self._authority = dict(authority_id=authority_id, leg_id=leg_id, end=end, key=base[1], expires_at=now+ttl_s)
+            self._authority = dict(authority_id=authority_id, leg_id=leg_id, end=end, key=base[1],
+                                   expires_at=now+ttl_s, route_guide=binding)
             return dict(accepted=True, reason=None, authority=self.authority_status(now))
+
+    def route_guide(self, now=None):
+        """The active authority's source-expiring prior, never a movement grant."""
+        binding = self.route_guide_binding(now)
+        return None if binding is None else binding['prior']
+
+    def route_guide_binding(self, now=None):
+        """route_guide's binding: ``prior``, ``expires_at`` and its odom sample ``stamp_ns`` (D-573 rev 8)."""
+        with self._lock:
+            now = self._clock() if now is None else now
+            binding = (self._authority or {}).get('route_guide')
+            if (binding is None or self._mode.value == 'OFF' or now >= binding['expires_at']
+                    or self._authority_state(now)[0] != 'FREE'):
+                return None
+            return binding
 
     def _authority_on(self):
         """Enforced: by config, by a request this session, or once a trip lease was seen open (D-760 2: latched

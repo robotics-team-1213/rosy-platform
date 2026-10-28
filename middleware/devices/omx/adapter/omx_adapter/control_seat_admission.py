@@ -4,6 +4,7 @@ import math
 import threading
 import time
 from .pilot_admission_store import PilotAdmissionStore
+from .managed_transfer_scope import bind_scope, load_scope
 
 
 class ControlSeatAdmission:
@@ -19,6 +20,26 @@ class ControlSeatAdmission:
         self._goals = {}
         self._durable = PilotAdmissionStore(store.path, owner.config.workcell_id, owner.config.instance_id)
         self._restart_hold = self._durable.has_pending()
+        self._managed_scope = load_scope(store, owner.config.workcell_id, owner.config.instance_id)
+        self._managed_command = threading.local()
+
+    @property
+    def managed_transfer_policy_digest(self):
+        return None if self._managed_scope is None else self._managed_scope.policy_digest
+
+    def enable_managed_transfers(self, policy_digest):
+        def enable(state):
+            with self._lock:
+                self._session()
+                if self.owner._control_admission is not self:
+                    raise PermissionError("managed mode requires the bound final owner admission")
+                self._expire()
+                self._reconcile(state)
+                if state != "ready" or self._seat or any(not goal[1] for goal in self._goals.values()):
+                    raise PermissionError("managed activation requires an idle, unoccupied owner")
+                self._managed_scope = bind_scope(self.store, self.owner.config.workcell_id,
+                                                 self.owner.config.instance_id, policy_digest)
+        return self.owner.run_admission_policy(enable)
 
     def _session(self):
         if self._restart_hold:
@@ -52,6 +73,8 @@ class ControlSeatAdmission:
     def _acquire(self, token, seat_id, ttl_s, state):
         with self._lock:
             self._session()
+            if self._managed_scope is not None:
+                raise PermissionError("managed transfer owner excludes Pilot control")
             self._expire()
             self._reconcile(state)
             if self._seat and self._seat[:2] != (token, seat_id):
@@ -147,14 +170,29 @@ class ControlSeatAdmission:
                 return False
             if command.session_id != self.session_id:
                 return False
+            if self._managed_scope is not None:
+                if (command.owner != "rule_based"
+                        or getattr(self._managed_command, "command", None) is not command):
+                    return False
+                try:
+                    self._managed_command.validate()
+                except Exception:
+                    return False
+                return True
             if command.owner == "pilot_sim":
                 return bool(self._seat and not self._revoked and command.command_id in self._goals
                             and self._goals[command.command_id][2] == self._seat[1]
                             and not self._goals[command.command_id][1])
             return not self._seat and not self._revoked
 
-    def run_action_admission(self, operation):
-        return self.owner.run_admission_policy(lambda state: self._run_action_admission(state, operation))
+    def run_action_admission(self, operation, *, action_kind=None, resource_policy_digest=None):
+        def admit(state):
+            if self._managed_scope is not None and (
+                    action_kind != "ARM_TRANSFER"
+                    or resource_policy_digest != self._managed_scope.policy_digest):
+                raise PermissionError("managed owner requires an ARM transfer with its installed policy")
+            return self._run_action_admission(state, operation)
+        return self.owner.run_admission_policy(admit)
 
     def _run_action_admission(self, state, operation):
         with self._lock:

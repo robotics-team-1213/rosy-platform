@@ -44,6 +44,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/lock.sh"
 
 ROS_SOURCE_URL="$(lock_value ros apt_source_url)"
 ROS_SOURCE_SHA="$(lock_value ros apt_source_sha256)"
+RAUC_PACKAGE_VERSION="$(lock_value os_updates rauc_package_version)"
 WIRINGPI_URL="$(lock_value hardware_dependencies wiringpi_url)"
 WIRINGPI_SHA="$(lock_value hardware_dependencies wiringpi_sha256)"
 TAILSCALE_URL="$(lock_value tailscale url)"
@@ -100,6 +101,7 @@ done
 [[ -f "$BOOT_OVERLAY" ]] || fail "Pi 5 boot overlay configuration is missing"
 
 ROOT="$(realpath -e "$ROSY_IMAGE_ROOT")"
+python3 "$(dirname "$0")/os_cms_trust.py" --lock "$LOCK" --source-tree "$SOURCE_TREE" --root "$ROOT"
 [[ "$(realpath -e "$ROSY_IMAGE_BOOT")" == "$ROOT/boot/firmware" ]] \
     || fail "ROSY_IMAGE_BOOT is not the image's /boot/firmware"
 RELEASE="$ROOT/opt/rosy/releases/$RELEASE_ID"
@@ -188,8 +190,8 @@ chroot "$ROOT" dpkg -i /tmp/ros2-apt-source.deb
 chroot "$ROOT" dpkg -i /tmp/wiringpi-arm64.deb
 chroot "$ROOT" apt-get update
 chroot "$ROOT" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    avahi-daemon avahi-utils ca-certificates chrony dnsmasq-base libnss-mdns locales network-manager \
-    openssh-server openssl python3 python3-pip python3-yaml \
+    avahi-daemon avahi-utils ca-certificates chrony dnsmasq-base dosfstools e2fsprogs libnss-mdns locales network-manager util-linux \
+    openssh-server openssl python3 python3-pip python3-yaml "rauc=$RAUC_PACKAGE_VERSION" \
     python3-rosdep ros-jazzy-ros-base ros-jazzy-rmw-cyclonedds-cpp iptables iproute2
 # D-190: the boot display (rosy-face.service since D-433). RPi.GPIO on the Pi 5 is
 # the rpi-lgpio compatibility layer; spidev drives the ST7789; PIL, numpy and
@@ -373,6 +375,12 @@ chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
 chroot "$ROOT" getent group rosy-camera >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 963 rosy-camera
 chroot "$ROOT" getent passwd rosy-camera >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 963 --gid 963 --system --no-create-home --shell /usr/sbin/nologin rosy-camera
+chroot "$ROOT" getent group rosy-calib >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 964 rosy-calib
+# A/B roots must agree before either root installs keys into the shared operator home.
+chroot "$ROOT" getent group rosy >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 1001 rosy
+chroot "$ROOT" getent passwd rosy >/dev/null 2>&1 || \
+    chroot "$ROOT" useradd --uid 1001 --gid 1001 --create-home --shell /bin/bash \
+        --groups systemd-journal,adm rosy
 # D-190: the boot display's own account; no login shell, no home of its own
 # (the unit gives it HOME=/var/lib/rosy/display). SupplementaryGroups= in the
 # units names spi, gpio and i2c; systemd refuses to start a unit whose group
@@ -390,8 +398,12 @@ install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"
 chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 chroot "$ROOT" install -d -m 0750 -o root -g rosy-camera /var/lib/rosy/models  # D-373
 chroot "$ROOT" install -d -m 2750 -o rosy-camera -g rosy-core /var/lib/rosy/pilot-recordings  # D-411
+chroot "$ROOT" install -d -m 2775 -o root -g rosy-calib /var/lib/rosy/calibration
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
+chroot "$ROOT" /usr/bin/python3 -I -B /opt/rosy/native-runtime/os_state_accounts.py
+chroot "$ROOT" install -d -m 0750 -o root -g rosy-core /etc/rosy/tls
+chroot "$ROOT" install -d -m 0700 -o root -g root /var/lib/tailscale
 rm -rf -- "$RELEASE/image-overlay"
 # D-192 US-004: the motor bus is UART4 (vendor bringup.py: /dev/ttyAMA4, 1 Mbaud).
 # Without dtoverlay=uart4-pi5 there is no ttyAMA4 and so no /dev/rosy-motor.
@@ -430,19 +442,24 @@ rm -f -- "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id" "$ROOT/etc/ssh/s
 # chrony: CORE SRS §25 — UTC ISO 8601 timestamps and evidence freshness are
 # cross-module premises; NTP reachability is a runtime concern, not an image one.
 systemctl --root "$ROOT" enable NetworkManager.service chrony.service ssh.service \
-    rosy-first-boot.service rosy-first-boot-retry.timer rosy-release-recover.service \
+    rosy-first-boot.service rosy-first-boot-retry.timer rosy-release-recover.service rosy-os-storage.service rosy-os-tailnet.service \
     rosy-runtime.target rosy-host-agent.service \
     rosy-boot-status.service rosy-boot-status.timer rosy-boot-status-ready.service \
     rosy-config.service rosy-network.service rosy-face.service \
     rosy-login-code.service rosy-hw-probe.service rosy-hw-probe.path rosy-hw-test.path \
     rosy-auto-update.timer rosy-ssh-access.path rosy-ssh-access-boot.service \
     tailscaled.service rosy-tailscale-join.service
+if [[ -f "$ROOT/etc/systemd/system/rosy-network-agent.service" ]]; then
+    systemctl --root "$ROOT" enable rosy-network-users.service rosy-network-agent.service \
+        rosy-network-recovery.service rosy-network-recovery.timer
+fi
 # D-174 T0: the console banner is rendered at runtime into /run/rosy-boot/issue.
 mkdir -p "$ROOT/etc/issue.d"
 ln -sfn /run/rosy-boot/issue "$ROOT/etc/issue.d/rosy.issue"
 # D-193: the one-time login code on the console (no LCD), written by
 # rosy-login-code.service into /run/rosy-boot/login.issue (0600, root).
 ln -sfn /run/rosy-boot/login.issue "$ROOT/etc/issue.d/60-rosy-login.issue"
+ln -sfn /run/rosy-boot/recovery-display.txt "$ROOT/etc/issue.d/65-rosy-network-recovery.issue"
 # D-193: `sudo rosy-login-code [--role ...] [--minutes ...]` prints a code to
 # the caller's terminal only; the wrapper resolves the link.
 mkdir -p "$ROOT/usr/local/sbin"
@@ -538,5 +555,9 @@ python3 "$(dirname "$0")/../release/build_payload_release.py" seal \
 mkdir -p "$FACTORY_EXPORT"
 cp -- "$RELEASE/manifest.json" "$RELEASE/SHA256SUMS" "$FACTORY_EXPORT/"
 
+# Parse the actual image's vendor units and required links, including early SSH socket ordering.
+chroot "$ROOT" /usr/bin/systemd-analyze --man=no verify \
+    rosy-os-storage.service rosy-os-tailnet.service NetworkManager.service ssh.service ssh.socket tailscaled.service \
+    rosy-first-boot.service rosy-first-boot-retry.service rosy-ssh-access-boot.service
 python3 "$(dirname "$0")/verify-mounted-image.py" --root "$ROOT" --release-id "$RELEASE_ID"
 echo "ROOTFS_CUSTOMIZED $RELEASE_ID"

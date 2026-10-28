@@ -4,7 +4,7 @@ import { webcrypto } from 'node:crypto';
 globalThis.crypto ??= webcrypto;
 const { register } = await import('node:module');
 register('./resolve-console-assets.mjs', import.meta.url);
-const { createDialogue } = await import('../../../../operations/site_ui/console/assistant/panel.js');
+const { createDialogue } = await import('../../../../applications/fleet/web/assistant/panel.js');
 
 test('an account change discards old replies and creates a new conversation', () => {
   const state = createDialogue();

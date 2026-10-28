@@ -1,0 +1,1617 @@
+{
+  "schema": "rosy.fleet-frontend-http-evidence.v1",
+  "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
+  "reports": [
+    {
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac",
+      "result": "40 passed, 0 skipped; 9 actual profile/care HTTP routes, real producer/API/reopened SQLite browser flow, fixture role/refresh presentation and six-task installation workflow. Synthetic inputs; no device or deployed TLS evidence.",
+      "pytest_root": "."
+    },
+    {
+      "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f",
+      "result": "8 passed, 0 skipped; includes actual HTTP console admission with independent operator, real SQLite and synthetic capability port. No device or physical evidence.",
+      "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7",
+      "result": "5 passed, 0 skipped; actual producer/collector HTTP, scoped stop fanout, restart and local reconciliation; synthetic device transports",
+      "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3",
+      "result": "17 passed, 0 skipped; configured control-unit HTTP, real SQLite and fake task/device transports",
+      "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563",
+      "result": "6 passed; configured HTTP success and authorization refusals, fake device transports",
+      "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40",
+      "result": "6046 passed, 323 skipped, 3 failed; only passing test cases retained",
+      "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "828374a6964601fc83c441f55e40a7e5ac20df99",
+      "result": "4 passed",
+      "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad",
+      "result": "6 passed",
+      "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "4cb62aa16775175d9173f03de72d8c1b92917f2d",
+      "result": "6 passed",
+      "pytest_root": "operations/fleet"
+    },
+    {
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067",
+      "result": "5 passed, 0 skipped; ported origin #133/#135/#148 Fleet HTTP routes, TestClient",
+      "pytest_root": "."
+    },
+    {
+      "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83",
+      "result": "6 passed; policy admission readback and toggle receipts captured for the work view (D-865 P3)",
+      "pytest_root": "."
+    }
+  ],
+  "requests": {
+    "GET:/api/fleet/device-profiles": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_profile_routes.py",
+        "test_authorization[-401-401]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/device-profiles/{device_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_profile_routes.py",
+        "test_authorization[operator-200-200]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "PUT:/api/fleet/device-profiles/{device_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_pipeline_browser.py",
+        "test_persisted_analysis_origin_and_diagnosis_order_in_cell[1440]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/device-profile-sources": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_routes.py",
+        "test_care_catalog_and_named_observation_history_readback"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/device-profile-sources/{kind}/{source_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_routes.py",
+        "test_bridge_real_producer_roundtrip_and_role_boundaries"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/device-profiles/{device_id}/care": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_routes.py",
+        "test_care_catalog_and_named_observation_history_readback"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "PUT:/api/fleet/device-profiles/{device_id}/care": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_pipeline_browser.py",
+        "test_persisted_analysis_origin_and_diagnosis_order_in_cell[1440]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "POST:/api/fleet/device-profiles/{device_id}/events": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_device_care_routes.py",
+        "test_care_catalog_and_named_observation_history_readback"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "POST:/api/fleet/device-profiles/{device_id}/load-reports/{source_id}": {
+      "status": 202,
+      "test": [
+        "operations/fleet/test/test_device_care_pipeline_browser.py",
+        "test_persisted_analysis_origin_and_diagnosis_order_in_cell[1440]"
+      ],
+      "source_revision": "8e86f34a260d6f8b7ed3d2452516fe76d18ff1ac"
+    },
+    "GET:/api/fleet/control-unit/overview": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_integrated_control_http_pipeline.py",
+        "test_nested_producer_collection_http_keeps_unit_robot_task_and_map_ownership"
+      ],
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7"
+    },
+    "GET:/api/fleet/control-unit/units/{unit_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_integrated_control_http_pipeline.py",
+        "test_nested_producer_collection_http_keeps_unit_robot_task_and_map_ownership"
+      ],
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7"
+    },
+    "GET:/api/fleet/control-unit/units/{unit_id}/map": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_integrated_control_http_pipeline.py",
+        "test_nested_producer_collection_http_keeps_unit_robot_task_and_map_ownership"
+      ],
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7"
+    },
+    "POST:/api/fleet/control-unit/stops": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_integrated_control_http_pipeline.py",
+        "test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity[A1]"
+      ],
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7"
+    },
+    "POST:/api/fleet/control-unit/stop-inbox": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_integrated_control_http_pipeline.py",
+        "test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity[A1]"
+      ],
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7"
+    },
+    "GET:/api/fleet/control-unit/stops": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_integrated_control_http_pipeline.py",
+        "test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity[A1]"
+      ],
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7"
+    },
+    "GET:/api/fleet/control-unit/stops/{origin}/{identity}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_integrated_control_http_pipeline.py",
+        "test_targeted_stop_lost_reply_restart_uses_get_only_and_keeps_identity[A1]"
+      ],
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7"
+    },
+    "POST:/api/fleet/control-unit/stops/{origin}/{identity}/reconcile": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_integrated_control_http_pipeline.py",
+        "test_unknown_local_stop_blocks_rearm_and_only_named_local_attestation_reconciles"
+      ],
+      "source_revision": "ef6dc95958fcb2dab5c3090d9f68d65c1f7767f7"
+    },
+    "GET:/api/fleet/control-unit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_bootstrap.py",
+        "test_real_app_builds_control_unit_and_closes_its_transport"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "GET:/api/fleet/control-unit/delegations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_http_summary_listing_read_and_canceled_task_projection"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "GET:/api/fleet/control-unit/delegations/{origin}/{identity}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_child_service_reads_only_its_assigned_identity_and_never_the_ledger"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "POST:/api/fleet/control-unit/delegations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_child_service_reads_only_its_assigned_identity_and_never_the_ledger"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/approve": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_http_summary_listing_read_and_canceled_task_projection"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "POST:/api/fleet/control-unit/delegations/{origin}/{identity}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_control_unit_routes.py",
+        "test_http_summary_listing_read_and_canceled_task_projection"
+      ],
+      "source_revision": "0cadc2668638750d6a7913071b86390d16572dc3"
+    },
+    "GET:/api/fleet/auth/authorize": {
+      "status": 302,
+      "test": [
+        "operations/fleet/test/test_account_authority_routes.py",
+        "test_normal_cookie_automatically_authorizes_registered_app"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/auth/connection": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cli.py",
+        "test_console_development_mode_needs_both_the_flag_and_the_deployment[-development-paired]"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/auth/session": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_deployment.py",
+        "test_account_management_rejects_previous_browser_family_marker"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/session": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_console_camera_pairing.py",
+        "test_a_single_token_site_is_recognised_by_the_panel_and_refused_with_the_reason"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/auth/development-session": {
+      "status": 201,
+      "test": [
+        "operations/fleet/test/test_cli.py",
+        "test_console_development_mode_needs_both_the_flag_and_the_deployment[development-development-development]"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/auth/login": {
+      "status": 204,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_managed_account_reset_and_revoke_are_http_transactions"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/auth/logout": {
+      "status": 204,
+      "test": [
+        "operations/fleet/test/test_password_session.py",
+        "test_logout_ends_the_session"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/auth/accounts": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_ledger.py",
+        "test_account_api_cookie_origin_capability_and_strict_bodies"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/auth/setup": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_setup.py",
+        "test_legacy_setup_requires_policy_admin_cookie[policy-admin-200]"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "PATCH:/api/fleet/auth/accounts/{account_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_ledger.py",
+        "test_account_api_cookie_origin_capability_and_strict_bodies"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/auth/accounts": {
+      "status": 201,
+      "test": [
+        "operations/fleet/test/test_account_ledger.py",
+        "test_account_api_cookie_origin_capability_and_strict_bodies"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/auth/accounts/{account_id}/reset-password": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_managed_account_reset_and_revoke_are_http_transactions"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/auth/accounts/{account_id}/revoke-sessions": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_managed_account_reset_and_revoke_are_http_transactions"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "GET:/api/fleet/auth/profile": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_self_profile.py",
+        "test_profile_and_normal_rotation_commit_failure_preserve_old_state"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "PATCH:/api/fleet/auth/profile": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_self_profile.py",
+        "test_profile_changes_do_not_touch_another_account"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/auth/change-password": {
+      "status": 204,
+      "test": [
+        "operations/fleet/test/test_account_ledger.py",
+        "test_managed_operator_requires_exact_site_grant_for_robot_command"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/policy-governance/workcells": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_governance_is_installed_without_the_mission_api"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/workcells/{workcell_id}/policy": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_confirmation_blocks_leases_until_a_policy_admin_resolves_it"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/confirmations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_confirmation_blocks_leases_until_a_policy_admin_resolves_it"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/confirmations/sync-owner": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_owner_hold_becomes_one_confirmation"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/confirmations/{confirmation_id}/resolve": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_confirmation_blocks_leases_until_a_policy_admin_resolves_it"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/incidents": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_admin_login.py",
+        "test_policy_admin_flag_grants_policy_decisions_beside_operate"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/incidents/{incident_id}/clear": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_incident_closes_windows_and_blocks_real_arm_approval"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/lease": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_supervised_window_bounds_and_leases"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/proposals": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_admin_login.py",
+        "test_policy_admin_flag_grants_policy_decisions_beside_operate"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/proposals/{proposal_id}/decision": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_changed_rig_needs_reapproval"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/windows": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_confirmation_blocks_leases_until_a_policy_admin_resolves_it"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/windows/{window_id}/approve": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_governance.py",
+        "test_confirmation_blocks_leases_until_a_policy_admin_resolves_it"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/workcells/{workcell_id}/policy/windows/{window_id}/close": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_closes_an_approved_policy_window"
+      ],
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
+    },
+    "DELETE:/api/fleet/robots/{robot_id}/hub-link": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_hub_link_create_and_delete_use_enrollment_owner"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "GET:/api/fleet/ai": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_ai_facts.py",
+        "test_d577_chain_view_shows_presence_never_secrets"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/robots/{robot_id}/line-stuck/evidence": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_line_stuck_evidence.py",
+        "test_a_closed_stuck_drops_its_picture_and_a_wrong_id_has_none"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/robots/{robot_id}/path": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_path_history.py",
+        "test_path_api_bounds_its_range_and_size"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/sightings": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cli.py",
+        "test_console_loads_source_permissions_and_persistent_sighting_store"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/state": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_ledger.py",
+        "test_migrated_human_bearer_cannot_bypass_grants_or_disable"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/tethers": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_tether_routes.py",
+        "test_tether_needs_a_named_operator_and_set_is_idempotent"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_named_operator_motion_routes.py",
+        "test_stop_route_stays_open_to_the_shared_token[/api/fleet/robots/rosy_60/cancel-None]"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/goal": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cancel_all.py",
+        "test_cancel_all_is_safe_to_repeat"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/hub-link": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_hub_link_create_and_delete_use_enrollment_owner"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/robots/{robot_id}/identify": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_lamp_identify_route.py",
+        "test_a_parked_robot_is_asked_too"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/line-follow": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_named_operator_motion_routes.py",
+        "test_moving_route_admits_a_named_operator[/api/fleet/robots/rosy_60/line-follow-body1]"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/line-stuck/claim": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_incident_handoff.py",
+        "test_api_claim_has_named_readback_and_no_device_command"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/line-stuck/decision": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_line_stuck_api.py",
+        "test_an_operator_answer_is_forwarded_and_audited_with_the_principal"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/map-pin": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_map_pose_pin.py",
+        "test_named_operator_pins_and_the_pin_is_a_site_map_event"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/power": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_fleet_power.py",
+        "test_sleep_and_wake_are_forwarded_to_core_power_api"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/trip": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_fleet_sim_site_d601.py",
+        "test_a_sim_lane_plan_is_not_refused_for_the_missing_front_preview"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/sightings": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cli.py",
+        "test_console_loads_source_permissions_and_persistent_sighting_store"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/dispatch-control": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_task_client.py",
+        "test_g2_topic_path_uses_real_proposer_and_approver_before_canonical_admission"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/cancel-all": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cancel_all.py",
+        "test_cancel_all_is_safe_to_repeat"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/dispatch/rearm": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_named_operator_motion_routes.py",
+        "test_dispatch_rearm_admits_a_named_operator"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/estop": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_ledger.py",
+        "test_managed_operator_requires_exact_site_grant_for_robot_command"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/tasks/{task_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_task_api.py",
+        "test_app_lifespan_dispatches_queued_task_and_readback_keeps_core_receipt_separate"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/trips": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_lane_traffic.py",
+        "test_traffic_api_is_read_only_and_repeat_needs_a_place_cycle"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/trips/{trip_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_trip_runner.py",
+        "test_every_operator_stop_reaches_the_robot_and_ends_the_trip[/api/fleet/cancel-all-navigation_cancel-operator_cancel]"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/work": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_work_overview.py",
+        "test_work_limit_and_authentication"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/goal-lease/presence": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_goal_lease.py",
+        "test_presence_route_needs_a_named_operator_and_dispatch_check_is_wired"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/tasks/{task_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_task_api.py",
+        "test_task_cancel_only_cancels_queued_task_and_never_calls_core"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/trips/{plan_id}/start": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_trip_runner.py",
+        "test_a_robot_on_a_trip_refuses_other_fleet_motion"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/trips/{trip_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_trip_runner.py",
+        "test_a_robot_on_a_trip_refuses_other_fleet_motion"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/trips/{trip_id}/confirm-replan": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_confirms_a_real_trip_replan"
+      ],
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
+    },
+    "GET:/api/fleet/channel-requests": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_channel_requests.py",
+        "test_create_app_wiring_requires_accounts_and_isolated_key"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/channel-requests/{request_id}/deliberation": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_channel_deliberation_read_is_owned_and_does_not_call_model"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "GET:/api/fleet/channel-requests/{request_id}/review": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_channel_incidents.py",
+        "test_current_claim_relation_retry_and_closed_reply_have_no_device_authority"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/missions/{mission_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_mission_api.py",
+        "test_operator_mission_api_persists_candidate_and_get_does_not_call_provider"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/proposals/{proposal_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_task_client.py",
+        "test_closed_dispatch_does_not_rearm_or_retry"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/channel-requests/discord": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_channel_requests.py",
+        "test_discord_projection_and_signature_matches_fleet"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/channel-requests/{request_id}/admit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_channel_missions.py",
+        "test_prepare_and_independent_existing_admit[cell_job]"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/channel-requests/{request_id}/incident": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_channel_incidents.py",
+        "test_current_claim_relation_retry_and_closed_reply_have_no_device_authority"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/channel-requests/{request_id}/prepare": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_approval_registry.py",
+        "test_rejecting_channel_linked_work_replies_to_the_requester[cell_job]"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/channel-requests/{request_id}/submit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_channel_workflow_routes.py",
+        "test_submit_route_reuses_task_owner_and_rejects_stale_review"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/channel-requests/{request_id}/task": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_channel_workflow_routes.py",
+        "test_console_review_then_existing_task_link_is_owner_scoped"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/missions/{mission_id}/admit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_approval_registry.py",
+        "test_admit_and_reject_answers_never_name_the_cell_proposer"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "PUT:/api/fleet/channel-requests/{request_id}/review": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_channel_workflow_routes.py",
+        "test_console_review_then_existing_task_link_is_owner_scoped"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/cell-app/documents": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_cell_document_reads_keep_saved_identity_and_digest"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "GET:/api/fleet/cell-app/documents/{kind}/{identifier}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_cell_document_reads_keep_saved_identity_and_digest"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/cell-app/compile": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_app_api.py",
+        "test_named_operator_document_revision_and_preview_have_no_mission_effect"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/cell-app/documents/{kind}/{identifier}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_cell_document_reads_keep_saved_identity_and_digest"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/cell-app/proposals": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_app_api.py",
+        "test_app_proposal_uses_configured_service_and_never_admits"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/cell-jobs/{mission_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_job_api.py",
+        "test_cell_service_proposes_and_resolves_but_named_operator_alone_admits"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/cell-jobs/{mission_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_job_recovery.py",
+        "test_operator_routes_need_a_named_operator"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/cell-jobs/{mission_id}/reconcile": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_reconciles_a_lost_cell_action_without_resubmitting"
+      ],
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
+    },
+    "POST:/api/fleet/cell-jobs/{mission_id}/resume": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_job_recovery.py",
+        "test_operator_routes_need_a_named_operator"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/guide": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_guide.py",
+        "test_guide_route_is_read_only_and_needs_a_viewer"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/map": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_server_app.py",
+        "test_map_is_served_when_a_robot_has_one"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/place-markers": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_fleet_place_markers.py",
+        "test_place_marker_ingest_is_source_scoped_ordered_and_leased"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/site-lanes": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_lanes_api.py",
+        "test_lane_paint_stl_is_served_as_flat_triangles_with_the_centrelines"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/site-map": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_api.py",
+        "test_site_map_is_readable_by_a_viewer"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/site-map/active": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_map_profiles.py",
+        "test_profile_api_permissions_validation_and_conflict"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/site-map/draft": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_trip.py",
+        "test_a_start_place_must_face_along_its_lane"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/site-map/lane-graph-crosswalks": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_crosswalks.py",
+        "test_editor_reads_lane_graph_crosswalks_from_the_configured_import"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/site-map/profiles": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_map_profiles.py",
+        "test_profile_api_permissions_validation_and_conflict"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/place-markers": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_fleet_place_markers.py",
+        "test_a_source_reports_only_its_listed_ids_and_a_bend_is_never_moved_by_a_marker"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/site-map/activate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_trip.py",
+        "test_a_start_place_must_face_along_its_lane"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "PUT:/api/fleet/site-map/draft": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_crosswalks.py",
+        "test_crosswalk_writes_need_a_named_operator_and_invalid_bands_are_site_map_invalid"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "PUT:/api/fleet/site-map/profiles/{profile_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_map_profiles.py",
+        "test_profile_api_permissions_validation_and_conflict"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "DELETE:/api/fleet/enrollment/robots/{robot_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_unenrolls_an_idle_robot_and_records_the_actor"
+      ],
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
+    },
+    "GET:/api/fleet/discovery": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_discovery_api.py",
+        "test_authenticated_hello_promotes_only_the_matching_discovery_row"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/discovery/addresses": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_address_drift_api.py",
+        "test_scanner_offline_reads_unknown"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/enrollment/robots": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cli.py",
+        "test_console_with_a_broken_key_still_starts"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/hosts": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_host_control.py",
+        "test_hosts_route_attaches_guard_headroom_and_ignores_a_bad_drift_file"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/updates": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_host_control.py",
+        "test_every_signed_in_role_reads_the_update_summary"
+      ],
+      "source_revision": "8cd66e02ee10214330f3dbfb036ceb104d3971b9"
+    },
+    "GET:/api/fleet/peers": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_peer_catalogue.py",
+        "test_admin_directory_exposes_all_network_roles_without_scan_or_credentials"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/enrollment/robots": {
+      "status": 201,
+      "test": [
+        "operations/fleet/test/test_address_drift_api.py",
+        "test_each_move_is_wired_to_the_screen_code_dialog"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/enrollment/robots/{robot_id}/move-address": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_enrollment_api.py",
+        "test_move_address_takes_the_screen_code_and_answers_without_secrets"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/pairing/v1/credentials": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_camera_peer_adapter.py",
+        "test_actual_app_mount_and_existing_vision_sync_enforce_persistent_binding"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/pairing/v1/credentials/summary": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_console_camera_pairing.py",
+        "test_the_pending_and_summary_shapes_carry_every_field_the_panel_reads"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/pairing/v1/pending": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cli.py",
+        "test_console_wires_d341_pairing_only_with_tls"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/pairing/v1/requests/{request_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pairing_api.py",
+        "test_full_http_flow_and_vision_list"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/pairing/v2/identity": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_peer_request_pending_identity_and_revoke_http_lifecycle"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "GET:/api/fleet/pairing/v2/pending": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_peer_request_pending_identity_and_revoke_http_lifecycle"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "GET:/api/fleet/pairing/v2/relationships": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_peer_request_pending_identity_and_revoke_http_lifecycle"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "GET:/api/fleet/pairing/v2/requests/{request_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_camera_peer_routes.py",
+        "test_request_secret_requires_exact_bearer_header"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/pairing/v1/credentials/{credential_id}/revoke": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pairing_api.py",
+        "test_full_http_flow_and_vision_list"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/pairing/v1/requests": {
+      "status": 201,
+      "test": [
+        "operations/fleet/test/test_console_camera_pairing.py",
+        "test_a_single_token_site_is_recognised_by_the_panel_and_refused_with_the_reason"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/pairing/v1/requests/{request_id}/approve": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_console_camera_pairing.py",
+        "test_the_pending_and_summary_shapes_carry_every_field_the_panel_reads"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/pairing/v1/requests/{request_id}/confirm": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pairing_api.py",
+        "test_full_http_flow_and_vision_list"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/pairing/v1/requests/{request_id}/reject": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_rejects_a_pending_legacy_camera_request"
+      ],
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
+    },
+    "POST:/api/fleet/pairing/v1/requests/{request_id}/reveal": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_console_camera_pairing.py",
+        "test_a_single_token_site_is_recognised_by_the_panel_and_refused_with_the_reason"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/pairing/v2/challenge": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_camera_peer_adapter.py",
+        "test_actual_app_mount_and_existing_vision_sync_enforce_persistent_binding"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/pairing/v2/relationships/{relationship_id}/revoke": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_peer_request_pending_identity_and_revoke_http_lifecycle"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/pairing/v2/requests": {
+      "status": 201,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_peer_request_pending_identity_and_revoke_http_lifecycle"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/pairing/v2/requests/{request_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_camera_peer_routes.py",
+        "test_request_secret_requires_exact_bearer_header"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/pairing/v2/requests/{request_id}/decision": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_peer_request_pending_identity_and_revoke_http_lifecycle"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/pairing/v2/session": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_camera_peer_adapter.py",
+        "test_actual_app_mount_and_existing_vision_sync_enforce_persistent_binding"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "DELETE:/api/fleet/calibrations/{source_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_measured_calibration_api.py",
+        "test_new_approval_config_and_revoke_leave_legacy_contract_unchanged"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "DELETE:/api/fleet/start-points/{source_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_success_contracts.py",
+        "test_named_operator_deletes_a_start_point_with_its_current_revision"
+      ],
+      "source_revision": "a4fe41374e63f3f72e1706bbb7e1745879252563"
+    },
+    "GET:/api/fleet/calibrations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_measured_calibration_api.py",
+        "test_new_approval_config_and_revoke_leave_legacy_contract_unchanged"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/start-points": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_start_points.py",
+        "test_routes_require_operator_and_reject_boolean_or_nonfinite_pose"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/teach": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_teach.py",
+        "test_activation_preserves_running_teach_and_allows_stopped_pending_records"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/tracking": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_overhead_tracking_api.py",
+        "test_state_uses_its_own_read_time_after_a_slow_gather"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/tracking/identity": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_led_identity.py",
+        "test_verdict_and_readback_routes"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/calibrations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_measured_calibration_api.py",
+        "test_new_approval_config_and_revoke_leave_legacy_contract_unchanged"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/teach/confirm": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_teach.py",
+        "test_teach_api_needs_a_named_operator_and_is_audited"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/teach/place": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_teach.py",
+        "test_teach_api_needs_a_named_operator_and_is_audited"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/teach/place-from-marker": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_fleet_place_markers.py",
+        "test_teach_place_from_marker_adds_or_moves_a_draft_place_and_refuses_stale"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/teach/start": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_teach.py",
+        "test_activation_preserves_running_teach_and_allows_stopped_pending_records"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/teach/stop": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_teach.py",
+        "test_activation_preserves_running_teach_and_allows_stopped_pending_records"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/tracking/relearn": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_overhead_tracking_api.py",
+        "test_relearn_is_an_operator_action"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "PUT:/api/fleet/start-points/{source_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_start_points.py",
+        "test_routes_require_operator_and_reject_boolean_or_nonfinite_pose"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/formation": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_named_operator_formation_http_lifecycle_uses_existing_owner"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "GET:/api/fleet/traffic": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_lane_traffic.py",
+        "test_traffic_api_is_read_only_and_repeat_needs_a_place_cycle"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/formation/reform": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_named_operator_formation_http_lifecycle_uses_existing_owner"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/formation/resume": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_named_operator_formation_http_lifecycle_uses_existing_owner"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/formation/start": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_named_operator_formation_http_lifecycle_uses_existing_owner"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/formation/stop": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_app_frontend_http_contracts.py",
+        "test_named_operator_formation_http_lifecycle_uses_existing_owner"
+      ],
+      "source_revision": "bb9fec5fa4d97d2557dae38102a86b41d3b5bcad"
+    },
+    "POST:/api/fleet/signals/presence": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_password_session.py",
+        "test_cookie_operator_presence_names_the_actor"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/signals/{signal_id}/command": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_server_signals.py",
+        "test_signal_command_endpoint_posts_and_answers_the_row"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/traffic/signals/presence": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_traffic_signals.py",
+        "test_signal_route_needs_a_named_operator_and_a_known_signal"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/traffic/signals/{signal_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_traffic_signals.py",
+        "test_signal_demand_route_needs_a_named_operator_demand_mode_and_a_short_ttl"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "DELETE:/api/fleet/robots/{robot_id}/media-grant/{grant_id}": {
+      "status": 204,
+      "test": [
+        "operations/fleet/test/test_robot_media_grants.py",
+        "test_renewal_keeps_the_grant_owner_and_close_is_audited"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/vision/sources": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_server_app.py",
+        "test_lan_camera_proxy_grant_only_opens_preview_routes"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/media-grant": {
+      "status": 201,
+      "test": [
+        "operations/fleet/test/test_robot_media_grants.py",
+        "test_forged_or_robot_signed_tokens_never_validate"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/robots/{robot_id}/media-grant/{grant_id}/renew": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_robot_media_grants.py",
+        "test_renewal_keeps_the_grant_owner_and_close_is_audited"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/vision/lease": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_measured_calibration_api.py",
+        "test_only_named_operator_can_sign_a_current_session_confirmation"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/incidents": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_incident_handoff.py",
+        "test_api_claim_has_named_readback_and_no_device_command"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/incidents/facts/{fact_row}/review": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_line_stuck_api.py",
+        "test_incident_report_separates_sources_and_keeps_operator_reviews"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "POST:/api/fleet/incidents/{robot_id}/{stuck_id}/review": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_line_stuck_api.py",
+        "test_incident_report_separates_sources_and_keeps_operator_reviews"
+      ],
+      "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
+    },
+    "GET:/api/fleet/assistant/status": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_assistant_navigation_routes.py",
+        "test_disabled_handoff_does_not_queue_a_task"
+      ],
+      "source_revision": "4cb62aa16775175d9173f03de72d8c1b92917f2d"
+    },
+    "POST:/api/fleet/assistant/messages": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_assistant_routes.py",
+        "test_console_assistant_unconfigured_is_visible_but_never_executes"
+      ],
+      "source_revision": "4cb62aa16775175d9173f03de72d8c1b92917f2d"
+    },
+    "GET:/api/fleet/assistant/messages/{request_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_assistant_routes.py",
+        "test_console_assistant_unconfigured_is_visible_but_never_executes"
+      ],
+      "source_revision": "4cb62aa16775175d9173f03de72d8c1b92917f2d"
+    },
+    "POST:/api/fleet/site-map/drawings": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_drawing_api.py",
+        "test_anonymous_and_readonly_cannot_upload"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "POST:/api/fleet/site-map/drawings/{asset_sha256}/projections": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_drawing_api.py",
+        "test_anonymous_and_readonly_cannot_upload"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_drawing_api.py",
+        "test_anonymous_and_readonly_cannot_upload"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}/render": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_raster.py",
+        "test_raster_http_guards_registration_and_render"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "POST:/api/fleet/site-map/drawing-projections/{projection_sha256}/extractions": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_extraction.py",
+        "test_extraction_http_keeps_map_unchanged_and_provenance_durable"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "POST:/api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_extraction.py",
+        "test_candidate_map_validation_retains_facility_provenance_without_writing"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "GET:/api/fleet/workcell-observations": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_workcell_observation_routes.py",
+        "test_read_requires_viewer_and_disables_caching"
+      ],
+      "source_revision": "62d77b86c20b782983c191088866bc15f1073067"
+    },
+    "GET:/api/fleet/arm-transfers/jobs/{mission_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_arm_transfer_console_browser.py",
+        "test_real_http_console_admits_external_proposal_with_independent_identity"
+      ],
+      "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"
+    },
+    "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_arm_transfer_console_browser.py",
+        "test_real_http_console_admits_external_proposal_with_independent_identity"
+      ],
+      "source_revision": "915a46da52e14032671d3ecd4a360b60d3ea586f"
+    },
+    "GET:/api/fleet/policy-admission": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_admission_routes.py",
+        "TestPolicyAdmissionRoutes",
+        "test_budget_readback_after_admissions"
+      ],
+      "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83"
+    },
+    "POST:/api/fleet/policy-admission": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_policy_admission_routes.py",
+        "TestPolicyAdmissionRoutes",
+        "test_toggle_off_and_on_round_trips"
+      ],
+      "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83"
+    }
+  }
+}

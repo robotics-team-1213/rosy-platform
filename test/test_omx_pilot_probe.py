@@ -28,8 +28,8 @@ for extra in ("middleware/devices/omx/adapter", "contracts/foundation"):
 uvicorn = pytest.importorskip("uvicorn")
 
 from omx_adapter.command_owner import ArmCommandConfig, CommandDecision, JointStateSnapshot  # noqa: E402
-from omx_adapter.pilot_sim_api import create_pilot_sim_app  # noqa: E402
-from omx_adapter.pilot_sim_runtime import (PilotSimRuntime, sim_admission_limits,  # noqa: E402
+from omx_adapter.pilot_sim.api import create_pilot_sim_app  # noqa: E402
+from omx_adapter.pilot_sim.runtime import (PilotSimRuntime, sim_admission_limits,  # noqa: E402
                                            urdf_position_limits, urdf_velocity_limits)
 from omx_adapter.pose_plan import CellPlanningProfile  # noqa: E402
 from omx_adapter.ros_goal_contract import RosGoalEvent  # noqa: E402
@@ -42,6 +42,12 @@ CELL = CellPlanningProfile.load(ROOT / "deploy/robot/omx/sim/cell_profile.yaml")
 TIME_SCALE = 0.1          # fake goals settle in a tenth of their duration
 
 
+class FakeOwner(SimpleNamespace):
+    @property
+    def joint_state(self):
+        return self.arm.latest_joint_state
+
+
 class FakeArm:
     """Owner-like arm: 'active' while a goal runs, settles to the target after its duration."""
 
@@ -51,7 +57,7 @@ class FakeArm:
             position_limits=sim_admission_limits(CELL.position_limits, urdf_position_limits()),
             allowed_owners=("pilot_sim",), calibration_revision="sim", max_joint_state_age_s=0.5,
             max_goal_duration_s=2.0, action_timeout_s=8.0)
-        self.owner = SimpleNamespace(config=config, state="ready", session_id="session")
+        self.owner = FakeOwner(arm=self, config=config, state="ready", session_id="session")
         self.action_port = SimpleNamespace(server_is_ready=lambda: True)
         self.positions = {name: 0.0 for name in CELL.joint_names}
         self.sequence = 0
@@ -63,7 +69,8 @@ class FakeArm:
         self.runtime = None
         self.commands = []
         self._stop = threading.Event()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self.owner.command_transaction = lambda: self._lock
         self._publish()
         threading.Thread(target=self._spin, daemon=True).start()
 

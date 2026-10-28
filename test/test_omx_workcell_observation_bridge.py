@@ -286,69 +286,62 @@ def test_blocked_failed_source_keeps_only_latest_and_does_not_block_other_source
     assert not any(thread.is_alive() for thread in threads)
 
 
-@pytest.mark.parametrize("external_shutdown", [False, True])
-def test_native_main_subscribes_only_to_configured_sources_with_localhost_discovery(manifest, tmp_path, monkeypatch, external_shutdown):
-    path = tmp_path / "manifest.yaml"
-    path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding="utf-8")
-    for key in ("CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE", "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"):
-        monkeypatch.delenv(key, raising=False)
-    for key, value in {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret", "RMW_IMPLEMENTATION": "rmw_fastrtps_cpp",
-                       "ROS_STATIC_PEERS": "", "ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST"}.items():
-        monkeypatch.setenv(key, value)
-    subscriptions, delivered, lifecycle = [], [], []
-    done = threading.Event()
-    class ExternalShutdown(Exception): pass
-
+@pytest.mark.parametrize("arm_count", [1, 2, 3])
+def test_native_main_delivers_only_registered_channels_without_ros(manifest, tmp_path, monkeypatch, arm_count):
+    from core_common.observation_snapshot import SnapshotChannel
+    import json
+    monkeypatch.setenv('ROSY_OBSERVATION_DIR', str(tmp_path / 'ipc'))
+    base = manifest.workcells[0].arms[0]
+    for index in range(1, arm_count):
+        token = f'arm-secret-{index}'
+        monkeypatch.setenv(f'EXAMPLE_ARM_{index}', token)
+        manifest.workcells[0].arms.append(base.model_copy(update={
+            'source_id': f'arm_feedback_{index}', 'arm_id': f'arm_{index}',
+            'board_id': f'example-board-{index}', 'token_env': f'EXAMPLE_ARM_{index}',
+            'credential_sha256': sha256(token.encode()).hexdigest(),
+            'joint_topic': f'/omx_commissioning/arm_{index}/joint_states'}))
+    path = tmp_path / 'manifest.yaml'
+    path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding='utf-8')
+    monkeypatch.setenv('EXAMPLE_ARM', 'arm-secret')
+    monkeypatch.setenv('EXAMPLE_TOP', 'top-secret')
+    monkeypatch.setenv('ROS_DISCOVERY_SERVER', 'must-not-be-used')
+    for name in ('rclpy', 'sensor_msgs', 'cv_bridge', 'cv2', 'numpy'):
+        monkeypatch.setitem(sys.modules, name, None)
+    for arm in manifest.workcells[0].arms:
+        SnapshotChannel(arm.joint_topic).write('joints', json.dumps(
+            dict.fromkeys(arm.joint_names, .25)).encode(), captured_at=bridge.time.time())
+    SnapshotChannel('/top/image_raw').write('jpeg', b'jpeg', captured_at=bridge.time.time())
+    SnapshotChannel('/unregistered/image_raw').write('jpeg', b'ignored', captured_at=bridge.time.time())
+    delivered, stop = [], threading.Event()
     class Sender:
         def __init__(self, url, source, token, **kwargs): self.source = source
         def send(self, sample):
             delivered.append((self.source, sample.value))
-            if len(delivered) == 2: done.set()
+            if len(delivered) == arm_count + 1: stop.set()
         def close(self): pass
-
-    class Node:
-        def create_subscription(self, kind, topic, callback, qos): subscriptions.append((topic, callback))
-        def destroy_node(self): lifecycle.append("destroyed")
-
-    def spin(node):
-        stamp = bridge.time.time()
-        header = SimpleNamespace(stamp=SimpleNamespace(sec=int(stamp), nanosec=int((stamp % 1) * 1e9)))
-        for topic, callback in subscriptions:
-            message = SimpleNamespace(header=header, name=["joint1"], position=[0.25])
-            callback(message)
-        assert done.wait(3)
-        if external_shutdown:
-            raise ExternalShutdown()
-
-    def shutdown():
-        if external_shutdown:
-            raise RuntimeError("context already shut down by SIGTERM")
-        lifecycle.append("shutdown")
-
-    monkeypatch.setattr(bridge, "ArmSender", Sender)
-    monkeypatch.setattr(bridge, "CameraSender", Sender)
-    monkeypatch.setattr(bridge, "encode_image", lambda msg, cv, np: (b"jpeg", 640, 480))
-    monkeypatch.setitem(sys.modules, "cv2", SimpleNamespace(error=RuntimeError))
-    monkeypatch.setitem(sys.modules, "numpy", SimpleNamespace())
-    monkeypatch.setitem(sys.modules, "rclpy", SimpleNamespace(
-        init=lambda **kwargs: lifecycle.append(kwargs), create_node=lambda name: Node(), spin=spin,
-        shutdown=shutdown, try_shutdown=lambda: lifecycle.append("shutdown")))
-    monkeypatch.setitem(sys.modules, "rclpy.executors", SimpleNamespace(ExternalShutdownException=ExternalShutdown))
-    monkeypatch.setitem(sys.modules, "rclpy.qos", SimpleNamespace(qos_profile_sensor_data=object()))
-    monkeypatch.setitem(sys.modules, "sensor_msgs.msg", SimpleNamespace(Image=object(), JointState=object()))
-    bridge.main(["--manifest", str(path), "--workcell", "example", "--fleet-url", "https://fleet.example",
-                 "--vision-url", "wss://vision.example", "--domain-id", "13"])
-    assert {topic for topic, _ in subscriptions} == {"/omx_commissioning/arm_a/joint_states", "/top/image_raw"}
-    assert {source for source, _ in delivered} == {"arm_feedback", "top"}
-    assert lifecycle == [{"args": [], "domain_id": 13}, "destroyed", "shutdown"]
-    assert os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST" and os.environ["ROS_STATIC_PEERS"] == ""
+    monkeypatch.setattr(bridge, 'ArmSender', Sender)
+    monkeypatch.setattr(bridge, 'CameraSender', Sender)
+    monkeypatch.setattr(bridge, 'threading', SimpleNamespace(
+        Event=lambda: stop, Thread=threading.Thread, Lock=threading.Lock,
+        current_thread=threading.current_thread))
+    timer = threading.Timer(5, stop.set)
+    timer.start()
+    try:
+        bridge.main(['--manifest', str(path), '--workcell', 'example',
+                     '--fleet-url', 'https://fleet.example', '--vision-url', 'wss://vision.example'])
+    finally:
+        timer.cancel()
+    assert {source for source, _ in delivered} == {
+        'top', *[arm.source_id for arm in manifest.workcells[0].arms]}
 
 
 def test_the_cells_arm_health_files_come_from_the_environment_when_not_given(manifest, tmp_path, monkeypatch, capsys):
     # D-871: the auto-updated unit names no arms; the private env lists this cell's one or two health files
     path = tmp_path / "manifest.yaml"
     path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding="utf-8")
-    for key, value in {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret",
+    for key in ("CYCLONEDDS_URI", "FASTDDS_DEFAULT_PROFILES_FILE", "FASTRTPS_DEFAULT_PROFILES_FILE", "ROS_DISCOVERY_SERVER"):
+        monkeypatch.delenv(key, raising=False)  # the full suite may leave these set; the bridge checks them first
+    for key, value in {"EXAMPLE_ARM": "arm-secret", "EXAMPLE_TOP": "top-secret", "RMW_IMPLEMENTATION": "rmw_fastrtps_cpp",
                        "ROSY_OBSERVATION_ARM_HEALTH": f"not_a_registered_arm={tmp_path / 'x.json'}"}.items():
         monkeypatch.setenv(key, value)
     with pytest.raises(SystemExit):

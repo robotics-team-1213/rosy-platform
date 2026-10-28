@@ -647,11 +647,13 @@
 - 변경: 확인창 스크림 구멍은 data-clip을 typed attr()가 읽는다. 캔버스 색 탐침은 채택 스타일시트 규칙 하나로 토큰과 color-mix를 푼다.
 - 증거: 호스트 178 passed, 72 skipped, known_failures 0 new. Chromium에서 구멍은 정지 버튼을 맞추고 바깥은 스크림을 맞춘다. 팔레트 브라우저 시험 통과. 장치 수용은 없다.
 - gate 변화: 없음.
+
 ## 2026-10-06 · uncommitted · uiux(pilot): 320px 전용 폭 선언
 
 - 변경: Pilot의 기존 22rem 미만 머리·제자리 회전·짧은 화면 배치를 `surfaces.yaml`의 선언된 breakpoint로 기록했다. 렌더링 규칙은 바꾸지 않았다.
 - 증거: `shared/web/test/test_responsive_tiers.py` 9 passed, `known_failures.py` 0 NEW.
 - gate 변화: 현재 브랜치의 반응형 계약 실패를 제거했다. Pilot 실제 운전자 G3와 장치 수용은 HOLD.
+
 ## 2026-10-06 · uncommitted · uiux(web-common): 현재 트리 G1 계약 정합성
 
 - 변경: Fleet compact 머리의 현재 격자를 정적 계약에 반영하고, 비활성 사유 검사기가 `setOff(false)`·`setEnabled(true)`를 활성화로 읽도록 고쳤다. D-329 `matrix.json` 검사는 유지하고 다른 형식의 역할 기록 이름을 분리했다.
@@ -687,6 +689,7 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+
 ## 2026-10-11 · uncommitted · uiux: common control geometry and Fleet hierarchy (D-629)
 
 - Change: All controls including emergency stop share 48px targets, label typography and horizontal inset. Danger is identified by fill, icon and verb. Current queues and robot status precede a folded neutral incident archive; source evidence, reviews and export remain available.
@@ -796,6 +799,24 @@
 - 증거: 첫 전체 착지 검사에서 기존 경로 때문에 3 failed, 같은 invocation에서 6252 passed / 63 skipped. 수정 후 원격 검증은 착지 로그에서 확인한다.
 - gate 변화: 없음.
 
+## 2026-10-17 · a49062a0e · D-775 실측 교정의 목적별 운영 연결
+
+- 변경: versioned 수치 bundle, Fleet preview 승인·영속 CAS·감사·철회, source config와 수치 readback, 촬영 session/epoch에 결속한 Vision render, Console 승인·재확인·철회 흐름을 연결했다. 기존 tracking/sighting/World/CORE 권한은 유지한다.
+- 증거: 검증 행렬은 docs/validation/measured-camera-lifecycle-2026-10-16/result.md. d4744b1758에서 공유 계약·Vision와 실제 Fleet→Vision 통합 1,610 passed; 1a9efa0baa UI/설치/공용 계약 79 passed; b367260187 provenance/비밀 경계/통합 128 passed. 광범위 회귀에서 발견한 fixture 의존 경로와 정확한 CSS 목록도 보완했으며 최종 범위 결과를 별도 기록한다.
+- gate 변화: 코드·원격 합성·브라우저 범위. 실제 촬영·독립 측량·ARM64·설치·DEVICE/FIELD와 D-598 운영 주행 수용은 미검증. main 착지·push·배포 없음.
+
+## 2026-10-19 · uncommitted · D-806 앱 표시 이름과 현재 역할 정합
+
+- 변경: 웹 전용 Learning·Games의 title_prefix를 명시하고 기존 런처 신원은 유지했다. 제목 검사는 Fleet 하위 문서와 Learning 계정·카메라 화면까지 포함한다.
+- 증거: 제목 회귀 검사의 수정 전 원격 실행은 2 failed로 기존 불일치를 확인했다. 수정 후 검증은 이 작업의 커밋과 외부 시험 기록으로 확인한다.
+- gate 변화: 없음. 이름·문서·정적 화면 범위이며 설치·실물 실행·DEVICE/FIELD 수용을 바꾸지 않는다.
+
+## 2026-10-19 · 9c1160981c · D-806 이름 정합 검증 완료
+
+- 변경: 이전 Cell 안내·지도 제목을 기대하던 브라우저 검사를 승인한 이름으로 맞췄다. Games 480px·600px 검사를 추가했다.
+- 증거: 구현 689cb1e968의 원격 affected 8,767 passed / 889 skipped, 관측 서비스 647 passed. Chromium 230 passed와 이전 문구 기대값 4 failed는 9c1160981c에서 수정 후 4 passed, Games 중간 폭은 989b806b34에서 2 passed. 최종 비교 NEW 0. 커밋·로그·실행 범위는 docs/validation/app-names-2026-10-19/result.md에 기록했다.
+- gate 변화: 없음. main 병합·push·배포·실물 수용은 수행하지 않았다.
+
 ## 2026-10-19 · uncommitted · D-806 웹 전용 앱 제목 게시
 
 - 변경: Learning·Games의 title_prefix와 기존 Fleet 하위 화면 제목 검사를 반영한다. 런처·패키지 신원은 유지한다.
@@ -807,6 +828,30 @@
 - 변경: Console에서만 쓰는 fleet-client.js·request.js를 Console/shared로 byte 그대로 옮겼다. 설치·정적 경로·브라우저 fixture·Node import를 갱신하고 기존 common 두 URL은 Fleet의 고정 alias로 보존했다.
 - 증거: f6dc4ceca8 원격 shared/web·설치·앱 소유 계약·아키텍처 479 passed/49 skipped, NEW0. 이동 후 scope fixture 경로와 문서 공통 목록에서 드러난 실패는 소유 위치에 맞춰 수정했다. 최종 head의 정상 push gate와 GitHub CI는 별도로 확인한다.
 - gate 변화: 없음. 실제 로봇·현장 수용은 수행하지 않았다.
+
+## 2026-10-21 · uncommitted · 공용 테마 순환 단추와 ui-button 암묵 제출
+
+- 변경: `[data-theme-cycle]` 단추 배선을 Fleet 머리(fleet-header.js)에서 ui.js로 옮겨 모든 앱이 같은 단추를 쓴다. 폼 안의 첫 `ui-button type="submit"`이 입력칸 Enter의 기본 단추가 된다(사용자 정의 요소는 브라우저 암묵 제출 대상이 아니다).
+- 증거: Fleet 머리 Node 시험 11 passed. 테마 선택지 시험은 ui.js와 학습 문서를 보도록 고쳤다. 원격 pytest는 별도 기록한다.
+- gate 변화: 없음.
+
+## 2026-10-21 · uncommitted · class로 공용 단추를 덧칠하는 경로 차단
+
+- 변경: 표면이 자기 `<ui-button>`에 단 class(예: `.view-tab`, `.drawer-close`)로 면·글자·테두리를 칠하는 규칙을 `test_shared_controls.py`가 거절한다. 기존 시험은 선택자에 `ui-button` 글자가 있을 때만 보았다. 걸린 Robot 콘솔 `.view-tab`(공용 segment를 잉크 채움으로 덧칠)은 배치만 남겼다.
+- 증거: 표면 여섯 곳의 건식 점검에서 남은 위반 0. 원격 pytest는 별도 기록한다.
+- gate 변화: 없음.
+
+## 2026-10-21 · uncommitted · `[hidden]` 규칙 하나
+
+- 변경: components.css에 `[hidden] { display: none !important; }` 하나를 두고 Fleet·학습·Robot·Pilot·진단·Games 시트의 요소별 사본 60개를 지웠다. 표면의 `display` 규칙이 브라우저 기본 [hidden]을 이겨 숨긴 요소가 보이는 버그를 막으려 요소마다 사본을 적던 구조였다. 사본을 다시 쓰면 `test_shared_controls.py`가 거절한다. Pilot 영상 바탕 `#000`은 기존 역할 `--surface-recessed`로 바꿨다.
+- 증거: 표면 규칙 중 숨긴 요소를 보이게 하는 것은 없고 모두 `:not([hidden])` 형태다(정적 점검). 원격 브라우저 검사는 별도 기록한다.
+- gate 변화: 없음.
+
+## 2026-10-21 · uncommitted · 사진 검토로 찾은 공용 부품 결함
+
+- 변경: 사유가 붙은 비활성 단추는 아이콘·이름을 한 줄에 두고 사유만 아래 줄로 내린다(전에는 통째로 세로로 쌓여 사유를 숨긴 자리에서도 이웃 단추와 얼굴이 달랐다). 파일 선택 단추에 조용한 단추 얼굴을, 표면이 칠하지 않은 링크에 기본 잉크를 준다(Robot 콘솔의 Pilot 링크가 브라우저 파랑이었다). 줄 수는 크기 행(942) 그대로다.
+- 증거: 시험 PC 캡처(학습 8화면·Robot 3표면, 두 테마). 원격 pytest는 착지에서 기록한다.
+- gate 변화: 없음.
 
 ## 2026-10-21 · uncommitted · 지도 source holder의 공용 UI 계약 연결
 
@@ -826,18 +871,17 @@
 - 증거: source commit 27d4576f4230의 원격 영향 검사에서 미등록 캔버스 파일 1개를 발견했다. 수정 커밋에서 공용 UI 계약과 최종 게시 검사를 다시 실행한다.
 - gate 변화: 없음. 운영 배포와 실제 장치 수용은 별도 확인한다.
 
-## 2026-10-22 · uncommitted · Published-source Learning shell coverage
+## 2026-10-22 · uncommitted · Account 브라우저 세션을 공통 모듈 하나로
 
-- 변경: 공개 원격 main의 테마 선택과 공용 셸을 유지하면서 Learning 화면의 계정 진입점·로봇암·카메라 레일 계약을 맞췄다. OMX 설정·검수·학습, 계정, 카메라, SIM, 현재 자료의 학습 흐름을 읽는 Chromium 시험을 소유 소스와 공용 웹 변경의 browser scope에 연결했다.
-- 증거: 셸 문서의 식별자·구조와 시험 선택 코드의 구문을 확인했다. 이 포트의 커밋된 SHA에 대한 공용 UI 계약·원격 브라우저 시험은 대기 중이며 이전 개발 브랜치 결과를 대신 쓰지 않는다.
-- gate 변화: 없음. 운영 배포·실제 사용자·장치 수용은 별도다.
+- 변경: Robot·Pilot·Games가 각자 복사해 쓰던 Account 세션 확인(순번으로 늦은 응답 버리기, 프로필 발행, 같은 origin 탭 신원 표시 `rosy.account.identity`, 10초 확인, 로그아웃)을 `account-session.js` 하나로 모았다. 앱은 자기 상태를 `current`/`apply`/`changed` 훅으로 넘기며 `restoreAccount` 등 기존 export는 그대로다. Games는 첫 확인 실패 뒤에도 계속 확인하도록 자체 주기를 유지한다. 서버 쪽 `/api/account/session` 본문은 `AccountClient.browser_session` 하나가 만들고 CORE와 Games가 쓴다(Games는 `can_operate`만 더함). 공유 자산 목록·CMake·Pilot 오프라인 캐시에 등록했다.
+- 증거: `test/transport/account-session.test.mjs`(늦은 응답, 신원 변경, 확인 실패, 회수 대기 로그아웃). 원격 pytest는 착지 기록에 남긴다.
+- gate 변화: 없음. Robot·Pilot 화면은 기기 배포본으로 확인해야 한다.
 
-## 2026-10-22 · c95916b97d · Learning 카메라 캔버스 계약 포함
+## 2026-10-22 · uncommitted · D-845 요청 수명 안의 서비스 응답 해석
 
-- 변경: 새 카메라 정렬 renderer를 정상 CANVAS_FILES 목록에 추가해 공용 팔레트·글꼴 판정을 받도록 했다. 예외는 추가하지 않았다.
-- 증거: 139dc53f5d 확대 회귀에서 목록 누락 NEW 1을 재현했다. c95916b97d 원격 공용 캔버스 계약 41건 통과, 기존 실패 비교 NEW 0.
-- gate 변화: 없음. 실물 카메라 위치·동기와 운영 배포 수용은 별도다.
-
+- 변경: createRequest factory의 선택적 readResponse가 raw Response를 해석하도록 했다. 헤더 우선 거절·엄격 JSON은 소비자에 남기고, 기본 JSON/204/blob와 인증·origin·timeout·취소·단일 전송은 보존한다. Fleet 소비자는 이 커밋에 포함하지 않는다.
+- 증거: 이전 committed transport에 새 시험을 적용하면 7개 RED, 구현 뒤 request Node 31 passed/skip 0. reader 결과·오류와 본문 미소비 거절, malformed/empty/204 거절, body 중 부모 취소·timeout, 오류 시 구독 정리와 기본 blob을 확인했다. 공식 원격·FULL 검증은 커밋 후 수행한다.
+- gate 변화: 기존 gate의 물리 수용 범위를 넓히지 않는다. camera-peer 전환·장치·배포 완료를 주장하지 않는다.
 
 ## 2026-10-22 · 79a11a4a54 · 모터 상태 공용 표시와 하드웨어 오류 신원
 
@@ -850,3 +894,72 @@
 - 변경: 모터 표 스크롤 영역의 2px 포커스 폭·간격을 같은 값의 공유 토큰으로 바꿨다.
 - 증거: PR152 CORE CI에서 공유 포커스 치수 계약 위반 1개를 확인했다. 해당 계약과 모터 표를 수정 커밋에서 공식 원격 재검증한다.
 - gate 변화: 포커스 표시 치수는 동일하며, 명령·토크·정지 경로는 바꾸지 않았다.
+
+## 2026-10-22 · c95916b97d · Learning 카메라 캔버스 계약 포함
+
+- 변경: 새 카메라 정렬 renderer를 정상 CANVAS_FILES 목록에 추가해 공용 팔레트·글꼴 판정을 받도록 했다. 예외는 추가하지 않았다.
+- 증거: 139dc53f5d 확대 회귀에서 목록 누락 NEW 1을 재현했다. c95916b97d 원격 공용 캔버스 계약 41건 통과, 기존 실패 비교 NEW 0.
+- gate 변화: 없음. 실물 카메라 위치·동기와 운영 배포 수용은 별도다.
+
+## 2026-10-22 · uncommitted · Published-source Learning shell coverage
+
+- 변경: 공개 원격 main의 테마 선택과 공용 셸을 유지하면서 Learning 화면의 계정 진입점·로봇암·카메라 레일 계약을 맞췄다. OMX 설정·검수·학습, 계정, 카메라, SIM, 현재 자료의 학습 흐름을 읽는 Chromium 시험을 소유 소스와 공용 웹 변경의 browser scope에 연결했다.
+- 증거: 셸 문서의 식별자·구조와 시험 선택 코드의 구문을 확인했다. 이 포트의 커밋된 SHA에 대한 공용 UI 계약·원격 브라우저 시험은 대기 중이며 이전 개발 브랜치 결과를 대신 쓰지 않는다.
+- gate 변화: 없음. 운영 배포·실제 사용자·장치 수용은 별도다.
+
+## 2026-10-23 · uncommitted · Fleet 머리 계정 메뉴를 한 줄로 접는다
+
+- 변경: 계정 상세(`#topbar-extra`)를 흐름 안 두 번째 행에서 계정 단추 아래 메뉴로 옮겼다. `ui-topbar`를 position:relative 기준으로 두고 메뉴는 absolute·`width:max-content`·`max-width:calc(100% - 2 * var(--space-3))`로 띄우며, 열림 표시는 기존 `[data-open="true"]` 규칙을 그대로 쓴다. `grid-column:1/-1`·`padding-top`·`border-top`을 없애 앱 바 높이를 한 줄로 고정했다. 로그인 전에는 `#fleet-inbox`·`#user-role`을 전 폭에서 숨겨 "나" 자리를 `#fleet-login` 하나로 모은다(D-741 3항, 기존 30rem 전용 규칙의 전 폭 확장). 마크업과 시험은 바꾸지 않았다.
+- 증거: `test_fleet_header.py`(4문서 동일·순서·@media 0·container query 3·min-height), `test_ui_token_contracts.py`(표면 그림자 금지 → 그림자 대신 `--surface-raised`+`--border-strong`+`--radius-panel`), `test_site_map_api.py`(`.topbar-extra[data-open="true"]`와 "identity status actions safety" 문자열 유지), `test_fleet_header_browser.py`(161/163), `test_development_console_browser.py`(123 열기 전 hidden, 149 연 뒤 visible). 원격 pytest 결과는 착지 기록에 남긴다. 브라우저 실행은 fastapi 미설치 환경이라 정적으로만 확인했다.
+- gate 변화: 없음. 실제 화면 정렬과 높이는 브라우저·기기 실행으로 확인해야 한다.
+
+## 2026-10-23 · uncommitted · Fleet 머리 메뉴는 흐름 안 제 줄에 둔다
+
+- 변경: 앞 항목의 띄운 메뉴를 되돌려 `#topbar-extra`를 다시 `grid-column:1/-1` 제 줄로 두고(`padding-top`과 위 테두리는 `--border-subtle`) `ui-topbar`의 `position:relative`를 지웠다. 띄운 메뉴는 main 최상단 잠금 띠의 `관제 접속` 단추를 덮어 그 클릭을 `#console-token`이 가로챘고, 시험은 잠금 띠가 보이는 동안 토큰 칸에 다시 입력하라고 요구한다(`test_start_point_browser.py` 274·289). 또 sticky는 이미 위치 지정 값이라 `position:relative`가 `ui-topbar`의 sticky를 이겨 세로 예산 시험이 깨졌다. 로그인 전 `#fleet-inbox`·`#user-role` 숨김(`:has` 규칙)은 그대로 둔다.
+- 증거: 착지 실행 로그 `run-1-2`·`alone-1-2-1~3`. `test_compact_header_budget_keeps_the_stop_in_view` 두 폭이 `sticky: 'relative'`로 실패했고(`test_fleet_console_browser.py:2546`), `test_start_point_browser.py::test_console_has_no_setup_tools_and_connection_guide_recovers`는 `#console-token`이 포인터를 가로채 60회 재시도 뒤 TimeoutError였다. 정적 시험은 바뀐 시트에서 다시 돌린다.
+- gate 변화: 없음. 메뉴를 펼치면 앱 바가 그 줄만큼 높아진다(닫으면 한 줄).
+
+## 2026-10-23 · uncommitted · 조합 어휘를 문서·부품·계약 시험 한 곳에 묶는다
+
+- 변경: 화면마다 다른 이름으로 흩어져 있던 콘텐츠 조합을 `DESIGN.md`의 「조합 어휘」 표 하나로 모으고(측정 행 `.ui-readout`·`.ui-readback`, 작업 목록 행 `.ui-task-row`·`taskRow()`, 절차 단계 `.ui-stage-track`·`.ui-stage`, 증거 블록 `<ui-evidence>`·`<ui-empty>`, 절차 작업 열 `.ui-sidebar`, 매체 칸 `.ui-pane[data-pane]`), 표에 적은 이름이 실제 코드에 있는지 계약 시험이 본다. 표에 없던 절차 단계 스트립을 공용 부품으로 넣었다: `components.css` 543행 뒤 `.ui-stage-track`·`.ui-stage`(번호는 CSS counter, JS 없음), 네 상태 `done`/`now`/`blocked`/`todo`(표시가 없는 `todo`는 기본 `.ui-stage`), `now`만 `aria-current="step"`. 크기·간격은 `tokens.css`의 `--size-stage-mark`·`--gap-stage-track`·`--gap-stage-mark`가 갖는다. 로봇 `/styleguide`에 견본(정상·막힘 두 줄)을 붙였다. `<ui-chip>`은 폐기 예정, `<ui-field>`는 견본·스캐폴드 전용임을 문서에 적었다.
+- 증거: `shared/web/test/test_content_vocabulary.py` 신규 4건 — 단계 규칙에 역할 토큰만 쓰고 원시 색·동작·`100vh`가 없음, CSS `data-state` 집합이 태그 어휘 집합과 같고 `todo`는 규칙이 없음, 생산 표면의 `<ui-field>`가 0(견본·`template.html`만 예외), 표 이름이 전부 `components.css`·`app-shell.css`·`ui.js`·`workspace.js`에서 확인됨(없는 이름은 거절되는 것을 함께 확인). 첫 원격 회차가 두 곳을 잡았고 같은 브랜치에서 고쳤다: 단계 표식의 `line-height`는 원시 배수 대신 `--leading-flat` 토큰을 쓰고, 견본 검사는 CSS 선택자용 정규식이 아니라 HTML 속성 표기를 읽는다. 고친 뒤 같은 함수를 직접 호출해 다섯 건이 통과하는 것을 확인했다. `71a9dcf337`로 시험 PC(AI PC)에서 `shared/web/test -q` exit 0.
+- gate 변화: 없음.
+
+## 2026-10-23 · uncommitted · 표식 문구를 실제 모양에 맞춘다
+
+- 변경: 단계 스트립 표식은 `--radius-flag`(999px)를 쓰므로 실제로는 원인데 `DESIGN.md`와 `components.css` 주석은 '정사각'이라고 적혀 있었다. 두 곳을 '원'으로 고쳐 구현과 문구를 맞췄다. 렌더 결과가 정본이고, 표식 모양을 바꾸지 않았다.
+- 증거: `/stage/dark`·`/stage/light` 헤드리스 렌더(각 24818·24619 bytes)에서 표식이 원으로 확인됨. 이 변경은 문구·주석만이라 토큰·선택자 동작은 그대로다.
+- gate 변화: 없음.
+
+## 2026-10-23 · uncommitted · 마친 단계와 남은 단계를 라이트에서도 구분한다
+
+- 변경: done 표식의 채움이 `--surface-flat`이었는데 라이트에서 캔버스와 거의 같아 todo의 빈 테와 구분되지 않았다. done 채움을 `--surface-raised`로 올려 두 테마 모두에서 지난 단계가 채워진 원으로 읽히게 했다. 상태 어휘·마크업·`aria-current` 계약은 그대로다.
+- 증거: `/stage/dark`·`/stage/light` 헤드리스 렌더(24842·24613 bytes)를 육안 확인 — 라이트에서 done 1·2가 회색 채움, todo 4가 빈 테로 갈린다. `test_content_vocabulary` 4건과 타이포 계약 1건을 직접 호출해 통과.
+- gate 변화: 없음.
+
+## 2026-10-23 · uncommitted · 단계 스트립을 자기 시트로 옮긴다
+
+- 변경: 단계 스트립(`.ui-stage-track`·`.ui-stage`) 규칙을 `components.css`에서 `/common/stage-strip.css`로 옮겼다. `components.css`는 D-766 한도(942줄)에서 동결인데 이 묶음이 59줄을 더해 1001줄이 됐고, 착지 크기 게이트가 STOP했다(4개 커밋이 `grew 942 -> 1001`). 어휘·선택자·상태·기하학은 그대로이고 사는 시트만 바뀐다. `shared-assets.json`·`CMakeLists.txt`에 시트를 등록하고, `/styleguide`가 `components.css` 뒤에 링크하며, `DESIGN.md`가 쓰는 화면의 링크 순서를 적는다.
+- 증거: `test_content_vocabulary.py`의 `stage_rules()`·`declared()`가 두 시트를 함께 읽고, `components.css`에 `ui-stage`가 없어야 한다는 단언을 더했다(분할이 되돌아가면 실패). `test_asset_manifest.py`가 manifest와 install 목록의 일치를 계속 지킨다.
+- gate 변화: 없음.
+
+## 2026-10-23 · 050c0da738 · 입력·목록·복구 조합과 상호작용 견본
+
+- 변경: 네이티브 폼 오류, 파일·검색 선택·날짜·미저장 이탈, 목록·선택·페이지·상세, 탭·접힘·보조 동작·패널, 상태·동작 모음·결과·진행·이력·로그를 역할별 모듈로 추가했다. 기존 스타일 갤러리에서 `/common/component-gallery.html`로 연결한다. API·권한·실행 판단은 표면에 남긴다.
+- 증거: 원격 `050c0da738`의 shared/web 390 passed, 1 native-token export skipped. Fleet 채택 `1cc26ebd37` 33 passed, Robot 채택 `006787ecb7` 3 passed. 독립 검토 5항목은 각각 실패 재현 후 수정했다. 전체 영향 시험·화면 근거와 현재 한계는 검증 기록을 따른다.
+- gate 변화: 없음. 합성 견본·브라우저 검증은 제품 G2/G3·실물 수용을 대신하지 않는다.
+- 결정: D-425·D-359의 표현/권한 경계를 유지한다. 기존 frozen ui.js/components.css 줄 수는 늘리지 않았다.
+- 교훈: 새 라이브러리 구현의 회귀 시험으로 드러나는 내용이며 별도 해결 교훈은 추가하지 않았다.
+
+## 2026-10-26 · 62173b9899 · 앱 바 높이 단일화와 경로 줄 머리
+
+- 변경: 공용 `ui-topbar`의 최소 높이를 D-741 앱 바 `--appbar-height`(64px)로 바꿨다. 같은 값을 표면마다 덧쓰던 Learning·Fleet·Robot 규칙을 지웠고, D-741 부기대로 Pilot만 `--topbar-height`를 명시한다. `app-shell.css`에 경로 줄 제목(h1)과 남는 폭(`[data-spacer]`) 규칙을 더해 경로 줄이 화면 머리(제목 + 그 화면 동작)를 맡는다. `test_app_shell_seats.py`는 공용 테마 순환 단추와 네 정답 화면의 한 탭 줄(D-542 §2)을 확인한다.
+- 증거: 원격 결과는 착지 기록에 적는다. 로컬 shared/web 시험은 기존 brand 실패(main과 같음)·webrtc 경로 길이 오류 외 통과.
+- gate 변화: 없음. LOCAL 캡처는 G2/G3·실물 수용이 아니다.
+- 결정: components.css 줄 수는 늘리지 않았다(D-766).
+
+## 2026-10-26 · 62173b9899 · 헷갈리던 의미 아이콘 다시 그림
+
+- 변경: 닫힌 이름(D-641 3항)은 그대로 두고 그림만 바꿨다. tools=렌치, settings=슬라이더(전에는 좌표만 다른 같은 그림), install=망치(내려받기 화살표와 겹쳤음), account=사람(문서처럼 읽혔음), fit=모서리 괄호 안 상자(expand와 구분), box=입체 상자(fit과 같은 그림이었음). `test_action_icon_contract.py`는 경로 문자열 고정 대신 한 이름·한 그림(경로 중복 0)을 검사한다. 장미색 허용 파일에서 `surface-panels.css`를 뺐다(D-277 게이트 강화).
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
+- gate 변화: 없음.

@@ -184,7 +184,12 @@ def _stop(env: dict, tmp_path: Path) -> subprocess.CompletedProcess:
         bpid, rpid = _state(tmp_path)
         _fake_proc(tmp_path, bpid, "/usr/bin/python3", "/opt/ros/jazzy/bin/ros2", "bag", "record")
         _fake_proc(tmp_path, rpid, "python3", "/tmp/x/jpeg_relay.py", "--ns", "/pinky_t")
-    return _rec(env, "stop")
+    result = _rec(env, "stop")
+    if result.returncode and (tmp_path / "state").exists():
+        probe = subprocess.run(["ps", "-o", "pid,ppid,pgid,stat,args", "-p", f"{bpid},{rpid}"],
+                               capture_output=True, text=True, env=env)
+        result.stderr += probe.stdout + probe.stderr
+    return result
 
 
 def _kill(env: dict, *pids: str) -> None:

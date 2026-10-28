@@ -36,6 +36,15 @@ import class_sets
 from review_app import ReviewStore, Conflict
 
 
+def test_store_exports_preserved():
+    import importlib.util
+    import review_app
+    assert importlib.util.find_spec('review_store') is not None
+    import review_store
+    assert review_app.ReviewStore is review_store.ReviewStore
+    assert review_app.Conflict is review_store.Conflict
+
+
 def open_store(tmp_path):
     source, human, images = fixture_inputs(tmp_path)
     rows = [json.loads(s) for s in human.read_text().splitlines()]
@@ -145,6 +154,24 @@ def test_existing_mask_is_not_a_selectable_ai_candidate(tmp_path):
         assert value['pixel_draft_first'] is None
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+def test_batched_pixel_reviews_match_per_frame_reads_on_two_connections(tmp_path, monkeypatch):
+    import review_masks
+    from test_review_cycle import CLASSES
+    store = open_store(tmp_path)
+    review_masks.bind_classes(store, CLASSES)
+    review_masks.update(store, 0, {'version': 0, 'action': 'fill', 'label': 0}, Conflict)
+    with store.connect() as db:
+        for frame, digest, withdrawn in ((0, 'a' * 64, 0), (1, 'b' * 64, 0), (1, 'c' * 64, 0), (1, 'd' * 64, 1)):
+            db.execute('INSERT INTO pixel_drafts VALUES (?,?,?,?,?,?)', (frame, digest, 'x.png', 'e' * 64, 'sam3', withdrawn))
+    frames = store.list_frames()
+    expected = [review_masks.get(store, f['index']) for f in frames]
+    connect, calls = store.connect, []
+    monkeypatch.setattr(store, 'connect', lambda: calls.append(1) or connect())
+    assert review_masks.get_many(store, frames) == expected
+    assert len(calls) == 2
+    assert [d['sha256'] for d in expected[1]['draft_candidates']] == ['c' * 64, 'b' * 64]
 
 
 def test_unattributed_object_event_does_not_inherit_previous_actor(tmp_path):

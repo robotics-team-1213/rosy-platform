@@ -202,6 +202,70 @@ def test_paired_core_events_are_written_to_the_durable_audit_store(tmp_path):
     assert records[0]["robot_id"] == "rosy_01"
 
 
+def test_reconnect_welcome_does_not_turn_a_sequence_gap_into_an_acknowledgement():
+    hub = SiteHub([_ep()])
+    hub.handle(_hello())
+    higher = EventMessage(seq=50, robot_id="rosy_01", type="nav.completed")
+    hub.handle(Envelope(type=EnvelopeType.EVENT, payload=higher.model_dump(mode="json")))
+
+    welcome = hub.handle(_hello())
+
+    assert welcome.payload["last_event_seq"] == 0
+    assert hub.registry.record("rosy_01").last_event_seq == 50
+    lower = EventMessage(seq=1, robot_id="rosy_01", type="nav.completed")
+    accepted = hub.handle(Envelope(type=EnvelopeType.EVENT, payload=lower.model_dump(mode="json")))
+    assert accepted.payload == {"accepted": True}
+    assert [e.event_id for e in hub.registry.record("rosy_01").events] == [higher.event_id, lower.event_id]
+
+
+def test_memory_event_replayed_after_a_lost_ack_is_kept_once():
+    hub = SiteHub([_ep()])
+    hub.handle(_hello())
+    event = EventMessage(event_id="lost-ack", seq=1, robot_id="rosy_01", type="nav.completed")
+    message = Envelope(type=EnvelopeType.EVENT, payload=event.model_dump(mode="json"))
+    hub.handle(message)  # Accepted, but its reply never reached CORE.
+    hub.handle(_hello())
+
+    replay = hub.handle(message)
+
+    assert replay.payload == {"accepted": True}
+    assert hub.registry.record("rosy_01").events == [event]
+
+
+def test_memory_event_identity_reused_with_changed_content_is_rejected():
+    hub = SiteHub([_ep()])
+    hub.handle(_hello())
+    event = EventMessage(event_id="same-id", seq=1, robot_id="rosy_01", type="nav.completed")
+    hub.handle(Envelope(type=EnvelopeType.EVENT, payload=event.model_dump(mode="json")))
+    changed = event.model_copy(update={"data": {"goal_id": "different"}})
+
+    refused = hub.handle(Envelope(type=EnvelopeType.EVENT, payload=changed.model_dump(mode="json")))
+
+    assert refused.type is EnvelopeType.ERROR
+    assert refused.payload["code"] == "EVENT_NOT_AUDITABLE"
+    assert hub.registry.record("rosy_01").events == [event]
+
+
+def test_durable_event_replayed_after_reconnect_has_one_audit_row_and_projection(tmp_path):
+    from fleet.server.core_event_store import CoreEventStore
+
+    store = CoreEventStore(tmp_path / "fleet.sqlite3")
+    projected = []
+    hub = SiteHub([_ep()], event_store=store, event_callback=projected.append)
+    hub.handle(_hello())
+    event = EventMessage(event_id="durable-lost-ack", seq=1, robot_id="rosy_01", type="nav.completed")
+    message = Envelope(type=EnvelopeType.EVENT, payload=event.model_dump(mode="json"))
+    hub.handle(message)
+    hub.handle(_hello())
+
+    replay = hub.handle(message)
+
+    assert replay.payload == {"accepted": True}
+    assert len(store.read_events()) == 1
+    assert hub.registry.record("rosy_01").events == [event]
+    assert projected == [event.model_dump(mode="json")]
+
+
 def test_paired_core_event_with_secret_field_is_rejected_before_memory_or_disk(tmp_path):
     from fleet.server.core_event_store import CoreEventStore
 

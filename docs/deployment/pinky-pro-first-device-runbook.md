@@ -80,8 +80,8 @@ interruption, and checks the size the API reports; the token comes from
 
 ```bash
 python tools/release/download_artifact.py --run RUN_ID \
-  --name "rosy-unsigned-${RELEASE_ID}-${REVISION}" --out "X:/DevTemp/${RELEASE_ID}/artifact.zip" \
-  --extract "X:/DevTemp/${RELEASE_ID}/artifact"
+  --name "rosy-unsigned-${RELEASE_ID}-${REVISION}" --out "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/${RELEASE_ID}/artifact.zip" \
+  --extract "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/${RELEASE_ID}/artifact"
 ```
 
 Retain the run URL and job result with the builder JSON. The Actions artifact
@@ -164,6 +164,26 @@ JSON의 상대 경로는 그 파일이 있는 폴더를 기준으로 하고, 명
 이미지는 [산출물 선택 절차](pinky-release-artifact-selection.md)에 따라 고르고,
 설치할 source revision과 release ID를 확인한다.
 
+안내 도구는 이미지 전체의 서명·checksum 검증에 더해, 같은 서명 목록에 들어 있는
+`source-revision.txt`와 `build-provenance.json`의 source/release 일치를 확인한다.
+출처 파일이 없거나 서로 다르면 카드 검색 전에 중단한다. 현재 체크아웃의 커밋을
+이미지에 들어 있는 커밋으로 간주하지 않는다. 검증된 소스는 화면과 카드별
+`verified-image.json`, 여러 장 작업의 `batch.json`에 기록한다.
+
+특정 빌드 커밋의 이미지만 허용하려면 로컬 JSON의 `expected_image_revision`에 해당
+소문자 40자리 SHA를 저장하거나 다음처럼 지정한다. 명령줄 값이 JSON보다 우선한다.
+
+```powershell
+.\deploy\robot\pinky_pro\sd\setup-moved-device.ps1 -ExpectedImageRevision '<빌드에 지정한 40자리 source SHA>'
+```
+
+기대값은 실제로 선택한 이미지 빌드의 커밋이다. 운영 도구·문서만 바뀐 최신 HEAD를
+자동으로 쓰지 않는다. 값이 비어 있으면 특정 버전을 고정하지 않으며, 서명된 출처 일치
+검증은 계속 수행한다. 새 기능이 들어 있는 이미지를 요구할 때는 기대값을 고정한다.
+이 옵션은 이미지를 새로 빌드하거나 업데이트를 배포하지 않는다. 오래된 이미지가 거부되면
+그 SHA로 빌드·오프라인 서명한 이미지 폴더를 준비해야 하며, 기존 이미지의 출처 파일을
+수정하거나 기대값을 지워 통과시키지 않는다.
+
 Wi-Fi 프로필은 안내 중 저장하거나 다음 명령으로 한 번 저장한다. 비밀번호는 보안 프롬프트에
 입력하며 명령 인수에 넣지 않는다. 다른 운영 PC의 DPAPI 프로필을 복사하지 않는다.
 
@@ -186,6 +206,21 @@ SSH도 준비하려면 운영자 키 쌍
 연결한 뒤 `NEXT <순서>`를 입력한다. 디스크 번호는 새로 확인하며 UUID·계획은 복사하지 않는다.
 오류·검증 실패·취소가 발생하면 연속 작업을 중단한다.
 계획과 기록은 `ROSY_SCRATCH`가 지정한 폴더, 미지정이면 Windows 임시 폴더에 보관한다.
+
+여러 장을 요청하면 카드 검색 전에 등록부의 자동 번호 범위 40–49에서 요청한 장수만큼
+번호가 남았는지 확인한다. 부족하면 한 장도 기록하지 않는다. 작업 중 같은 번호·장치명·UUID가
+다시 계획되거나 이미지 checksum이 달라지면 다음 작성기를 시작하지 않는다. 이 검사는 번호를
+예약하지 않으므로 같은 현장 등록부로 다른 PC에서 동시에 신규 카드를 만들지 않는다.
+
+출력된 `rosy-sd-batch-<id>/batch.json`에 릴리스·이미지 checksum, 요청·확인 완료·미확인 수,
+카드별 번호·장치명·UUID와 계획·로그·영수증 경로를 남긴다. 비밀번호와 Wi-Fi 프로필 내용은
+복사하지 않는다. `completed`는 모든 카드의 readback과 등록부 검증 완료,
+`stopped`는 오류·취소로 중단, `in_progress`는 진행 중이거나 안내 프로세스가 종료된 상태다.
+중단 시에도 이미 확인한 카드 기록을 보존하며, `active_card`는 확인이 끝나지 않은 카드다.
+분리 실행 작성기는 계속 동작할 수 있으므로 해당 로그와 영수증을 먼저 확인한다.
+`remaining_count`는 자동 재시도 목록이 아니다. 기존 카드의 재기록은 검증된 영수증과
+`-ReprovisionReceipt`를 사용하는 별도 절차를 따른다. 장기 보관할 결과는 임시 폴더 정리 전에
+카드별 증거 폴더와 함께 현장 보관소로 복사한다. 카드 기록 결과는 부팅·장치 승인과 구분한다.
 
 ```powershell
 .\deploy\robot\pinky_pro\sd\card-write-status.ps1 -LogPath '<write-log>'
@@ -461,8 +496,9 @@ readback, exact robot identity, and exact release revision into one verdict. It
 does not change runtime mode or send motor commands.
 
 ```powershell
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
 $Revision = "<signed-manifest-full-40-character-git-revision>"
-$Evidence = Join-Path 'X:\DevTemp' ("pinky-01-preflight-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+$Evidence = Join-Path $RosyScratch ("pinky-01-preflight-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
 ./deploy/robot/pinky_pro/verify/validate-pinky-from-windows.ps1 `
   -PiHost pinky-01.local -PiUser rosy -NetworkInterface eth0 `
   -ExpectedRobotNumber 1 -ExpectedRevision $Revision `
@@ -525,7 +561,7 @@ plan, then displays the robot number, network name, release and card serial for
 review. The operator types `REGISTER <number>` to launch the existing writer;
 the elevated writer still requires its exact `ERASE SERIAL <serial> <name>`
 confirmation and performs the full image readback. Its log, plan and receipt
-stay under `X:\DevTemp\`.
+stay under `$ROSY_SCRATCH/`.
 
 When the operator key pair exists at
 `%LOCALAPPDATA%\Rosy\ssh\rosy-operator-ed25519[.pub]`, the helper adds a
@@ -543,7 +579,10 @@ does not trust or replace SSH host keys and does not perform the advanced
 same-card rebind path below.
 
 1. Check the physical Pi identity and the SD label. A blank card written from
-   a signed image is the normal new-device path. An already booted Pi can use
+   a signed image is the normal new-device path. A/B cards require this fresh
+   card path: the root-local rebind tool cannot retire their shared generations
+   and machine credentials and refuses before moving any files. An already
+   booted Pi with a legacy single-root image can use
    the operator-only `rosy-rebind-board.py` path below on the same SD; it moves
    the previous provisioning, CORE data and logs to a root-only archive before
    applying a separately validated new bundle. That archive is logical
@@ -566,7 +605,9 @@ same-card rebind path below.
    old device identity, runtime environment, CORE auth, Fleet bootstrap, or
    provisioning records into the new installation.
 
-For an already booted Pi, stop CORE, I/O and navigation before rebind. The
+For an already booted legacy single-root Pi, stop CORE, I/O, navigation,
+`rosy-tailscale-join.service` and `tailscaled.service` before rebind. The tool
+also refuses transitional service states or an unavailable status check. The
 root-only new-device bundle must have a new UID, name, robot number, CORE
 credential and the *same* site Wi-Fi. `rosy-rebind-board.py --bundle <root-only
 bundle>` checks the old binding and bundle, then archives the previous

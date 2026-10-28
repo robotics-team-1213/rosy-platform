@@ -21,7 +21,7 @@ from typing import Callable, Iterator
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
-SERVICES = ("fleet", "vision", "proxy")
+SERVICES = ("fleet", "vision", "proxy", "postgres")
 PROJECT = "rosy-site"
 STACK_UNIT = "rosy-site-stack.service"
 SIGNATURE = "release.json.sig"
@@ -42,9 +42,8 @@ _FUNCTIONAL_PATHS = {'/api/fleet/state': ('robots', 'robot_id'),
                      '/api/fleet/vision/sources': ('sources', None)}
 
 
-def check_overrides(env: dict[str, str], commit: str, run, compose) -> None:
-    """Refuse when anything could pin a site image other than the candidate's."""
-    link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
+def allowed_overlays(env: dict[str, str]) -> list[str]:
+    """Allow only canonical configured overlay names before candidate rebasing."""
     pairing, omx = (["-f", f"/opt/rosy/candidate/deploy/site/compose.{name}.yaml"] for name in ("pairing", "omx"))
     account = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
@@ -55,6 +54,13 @@ def check_overrides(env: dict[str, str], commit: str, run, compose) -> None:
                       "the candidate's pairing, omx, workcell and Account overlays")
     if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
         raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
+    return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))
+
+
+def check_overrides(env: dict[str, str], commit: str, run, compose, services=SERVICES) -> None:
+    """Refuse when anything could pin a site image other than the candidate's."""
+    allowed_overlays(env)
+    link_compose = "/opt/rosy/candidate/deploy/site/compose.yaml"
     unit = run(["systemctl", "cat", STACK_UNIT]).stdout
     for line in unit.splitlines():
         line = line.strip()
@@ -75,11 +81,13 @@ def check_overrides(env: dict[str, str], commit: str, run, compose) -> None:
                 raise Refused(f"{STACK_UNIT} adds Compose file {word}")
     result = compose(env, "config", "--format", "json", tag=commit)
     try:
-        services = json.loads(result.stdout).get("services") or {}
+        configured = json.loads(result.stdout).get("services") or {}
     except (json.JSONDecodeError, AttributeError):
         raise Transient("docker compose config output is not JSON") from None
-    for service in SERVICES:
-        image = (services.get(service) or {}).get("image")
+    if not isinstance(configured, dict) or set(configured) != set(services):
+        raise Refused("Compose service set differs from the signed candidate")
+    for service in services:
+        image = (configured.get(service) or {}).get("image")
         if image != f"rosy-site-{service}:{commit}":
             raise Refused(f"Compose resolves {service} to {image!r}, not the candidate "
                           f"image; remove the image override first")
@@ -340,6 +348,8 @@ def load_update_state(paths: Paths) -> dict:
                 or Path(previous).resolve().parent != paths.candidates.resolve()
                 or type(journal.get('migration', False)) is not bool):
             raise Refused('switch journal has an invalid rollback path')
+        if journal.get('migration') and journal['commit'] != journal['current']:
+            raise Refused('physical relocation journal must preserve the current commit')
     state.setdefault('failed', {})
     return state
 
@@ -402,10 +412,13 @@ def runtime_reason(rows, hashes: dict, run) -> str:
     return ''
 
 
-def containers_reason(rows, commit: str, accepted: dict, run) -> str:
+def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES) -> str:
     if not isinstance(rows, list):
         return 'docker compose ps output is not a list'
-    for service in SERVICES:
+    if any(isinstance(row, dict) and row.get('Service') in SERVICES
+           and row['Service'] not in services for row in rows):
+        return 'runtime contains a managed service outside the signed candidate'
+    for service in services:
         matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
         if len(matches) != 1:
             return f'{service} needs exactly one running container'

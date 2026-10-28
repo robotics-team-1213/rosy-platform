@@ -1,7 +1,7 @@
 name: structure report
 
 # D-773: every Monday 09:00 KST, post the structure report as a GitHub issue (or a comment on the
-# open one) and, when the Jira secrets exist, turn up to three split picks into Jira tasks.
+# open one). Optional Jira publication remains a separate manually configured CLI.
 # Fixed rules only (tools/harness/structure_report.py); no model, no code change, never gating.
 
 on:
@@ -21,9 +21,6 @@ jobs:
   report:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      # Only whether Jira is configured; the secrets themselves reach the Jira step alone.
-      HAS_JIRA: ${{ secrets.JIRA_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
@@ -51,24 +48,3 @@ jobs:
             url=$(gh issue create --title "$title" --body-file "$RUNNER_TEMP/report.md")
           fi
           echo "ISSUE_URL=$url" >> "$GITHUB_ENV"
-      - name: Jira tasks (only when the Jira secrets are set)
-        if: env.HAS_JIRA == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT: ${{ vars.JIRA_PROJECT || 'KAN' }}
-          JIRA_ISSUE_TYPE: ${{ vars.JIRA_ISSUE_TYPE || 'Task' }}
-        run: |
-          status=0
-          "$RUNNER_TEMP/venv/bin/python" tools/harness/structure_jira.py "$RUNNER_TEMP/picks.json" "$ISSUE_URL" \
-            > "$RUNNER_TEMP/jira.txt" || status=$?
-          cat "$RUNNER_TEMP/jira.txt"
-          # KAN-31: link by key only; the issue lists the keys the picks created, updated or skipped.
-          if [ -s "$RUNNER_TEMP/jira.txt" ]; then
-            { echo "Jira (이번 주 분리 후보):"; echo; sed 's/^/- /' "$RUNNER_TEMP/jira.txt"; } > "$RUNNER_TEMP/jira-comment.md"
-            gh issue comment "$ISSUE_URL" --body-file "$RUNNER_TEMP/jira-comment.md"
-          fi
-          exit "$status"

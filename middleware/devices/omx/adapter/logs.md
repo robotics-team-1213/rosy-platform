@@ -517,17 +517,11 @@
 - 증거: 확대 착지의 신규3실패를 보완, 정책 host22와 실제 Jazzy runtime8·정책 transport4 통과. 물리 장치를 사용하지 않았다.
 - gate 변화: 없음. D-770의 작은 이동 기반 국소 측정 절차를 구체화하되 초기화 자동복구 쓰기·실제 feedback/stop 수용은 미완료다.
 
-## 2026-10-16 · uncommitted · fix(ci): modules 수집 의존성과 기구학 시험 격리
+## 2026-10-16 · uncommitted · fix(ci): isolate native ROS fixture processes
 
-- 변경: CI 공통 시험 도구에 Playwright SDK와 adapter의 control_msgs 의존성을 추가했다. Chromium 설치와 브라우저 시험 활성화 범위는 기존 전용 단계가 맡는다. geometry 누락 시험은 ament_index_python의 부모와 packages 하위 모듈 캐시를 모두 차단해 설치된 ROS overlay의 geometry를 잘못 찾지 않게 했다.
-- 근거: 문서 병합 b501846ca의 CI 38884946663 modules 잡에 Playwright·control_msgs 수집 오류와 missing geometry 시험 실패가 있었다. 변경 전 main 810ea9bbe의 CI에도 같은 실패가 있다. 시험 결과는 이 수정 브랜치의 원격 로그와 PR CI에서 확인한다.
-- gate 변화: 없음. 실제 장치를 사용하지 않으며 geometry resolver의 제품 동작이나 modules의 gating 설정은 바꾸지 않는다.
-
-## 2026-10-16 · uncommitted · test(ci): 새로 수집된 ROS 시험 실패의 관측 정보
-
-- 변경: Fleet ROS fixture가 사용하는 controller_manager_msgs도 CI에 설치한다. 느린 feedback 시험 실패에 발행 간격·intake 결과·owner sequence와 age·느린 sink 시각을 기록해 원인을 구분한다. 0.2초 freshness와 0.6초 느린 callback 조건은 유지한다.
-- 근거: PR #55 CI 38912405039에서 기존 수집 오류가 해소된 뒤 controller_manager_msgs 수집 오류 하나와 joint_state_stale 회귀 하나가 드러났다. 실행 경로와 독립 리뷰만으로는 생산 코드 결함인지 시험 환경인지 판단할 수 없어 진단 정보를 먼저 추가했다.
-- gate 변화: 없음. 실제 로봇을 사용하지 않으며 native ROS fixture는 원격 시험 PC의 localhost에서 검증한다.
+- Change: Run the two native ROS action fixture files separately using the existing native wrapper DDS/plugin environment, preserve directory and explicit node selection, and fail on skipped native fixtures. Other module environments are unchanged.
+- Evidence: Run 38916624138 fixed Fleet stamps but showed publication gaps of 0.755 s and owner age of 1.174 s in the combined modules process; native host wrappers passed. Two new selection regressions fail against the old workflow. Isolation is a controlled environment correction, not a proven plugin root cause.
+- Gate: No change; final cloud verification is required. Production timing and safety policy are unchanged.
 
 ## 2026-10-16 · uncommitted · test(ci): repair native ROS fixture inputs and scheduling
 
@@ -535,41 +529,17 @@
 - Evidence: Cloud run 38914855479 exposed zero-stamped fixture inputs and a 0.200655 s publication gap against a 0.2 s test allowance. Native remote verification at 17a72fb6f passed all three wrapper parameters, including both Fleet cases; final revision verification follows the formatting repair.
 - Gate: No change. Production freshness validation and physical acceptance remain unchanged.
 
-## 2026-10-16 · uncommitted · fix(ci): isolate native ROS fixture processes
+## 2026-10-16 · uncommitted · test(ci): 새로 수집된 ROS 시험 실패의 관측 정보
 
-- Change: Run the two native ROS action fixture files separately using the existing native wrapper DDS/plugin environment, preserve directory and explicit node selection, and fail on skipped native fixtures. Other module environments are unchanged.
-- Evidence: Run 38916624138 fixed Fleet stamps but showed publication gaps of 0.755 s and owner age of 1.174 s in the combined modules process; native host wrappers passed. Two new selection regressions fail against the old workflow. Isolation is a controlled environment correction, not a proven plugin root cause.
-- Gate: No change; final cloud verification is required. Production timing and safety policy are unchanged.
+- 변경: Fleet ROS fixture가 사용하는 controller_manager_msgs도 CI에 설치한다. 느린 feedback 시험 실패에 발행 간격·intake 결과·owner sequence와 age·느린 sink 시각을 기록해 원인을 구분한다. 0.2초 freshness와 0.6초 느린 callback 조건은 유지한다.
+- 근거: PR #55 CI 38912405039에서 기존 수집 오류가 해소된 뒤 controller_manager_msgs 수집 오류 하나와 joint_state_stale 회귀 하나가 드러났다. 실행 경로와 독립 리뷰만으로는 생산 코드 결함인지 시험 환경인지 판단할 수 없어 진단 정보를 먼저 추가했다.
+- gate 변화: 없음. 실제 로봇을 사용하지 않으며 native ROS fixture는 원격 시험 PC의 localhost에서 검증한다.
 
-## 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD
+## 2026-10-16 · uncommitted · fix(ci): modules 수집 의존성과 기구학 시험 격리
 
-- Change: Record accepted/rejected intake, vendor execution boundaries and the first owner HOLD before terminal-event delivery can block its observation.
-- Evidence: Issue #68 records two main CI failures of the same native regression. This diagnostic revision keeps the existing executor, 0.5 s freshness allowance and 1.5 s blocked feedback interval to distinguish source scheduling from intake/owner delay.
-- Gate: No change. No physical devices or production policy changes.
-
-## 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
-
-- Change: Give the synthetic vendor ActionServer its own executor, matching the external vendor boundary. Keep the owner executor at four workers, all callback groups, 40 feedback messages, 0.5 s freshness, at least 1.5 s blocked sink and completed/ready assertions. Remove investigative switches, affinity changes and callback instrumentation.
-- Evidence: CI 38939987985 at 4932c2c177 recorded a 0.5956 s source-publication gap, stale source rejection and owner HOLD at age 0.6059 s. The owner correctly enforced its policy. Native wrappers passed with separated vendor scheduling at 636d102c5c. A callback-group mutation at c282f6729d kept publications advancing (maximum gap 0.2013 s) but stopped owner sequence at 4 and failed freshness at age 1.6698 s, proving the regression still detects excluded intake. Final SHA and cloud results are recorded in PR #69.
-- Gate: No change. This corrects the test boundary; it does not establish a GIL defect, physical stop or hardware acceptance.
-
-## 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
-
-- Change: Use a spawned, localhost-only test peer with its own ROS context for the vendor and 100 Hz state source. Keep owner MTE4, 40 feedback messages, 0.5 s freshness, blocked sink and completion assertions unchanged. Bound peer startup/shutdown and stop it if its parent disappears. Freeze the synthetic readback clock only in the lost-reply admission unit test.
-- Evidence: The separate-executor trial above passed initially but failed again at 275e14dc46, so it is insufficient. The same pre-push run exposed readback expiry during SQLite setup before the lost-reply test could exercise its intended send failure. No production threshold is changed. Final verification is recorded in PR #69.
-- Gate: No change. This remains a hardware-free test correction.
-
-## 2026-10-17 · uncommitted · test(omx): restore intake isolation after the external-peer negative control
-
-- Change: Remove the two-line callback-group mutation; retain the spawned vendor peer.
-- Evidence: Native, admission and secret guards passed 105 at 91536e1588. Mutation 0e518ae7ba failed the intended owner-sequence assertion with 165 publications and a maximum 0.01096 s gap, while owner sequence remained 2. The other seven native runtime tests passed.
-- Gate: No change. Final native, pre-push and cloud results belong to the restored commit in PR #69.
-
-## 2026-10-17 · uncommitted · test(omx): keep timeout input independent of owner scheduling
-
-- Change: Reuse the spawned vendor peer for the timeout regression, including its original 30 ms state period and 1.2 s delayed result. A second peer worker handles cancel requests; the synthetic peer yields between readiness checks. Owner timing, HOLD latch, cancel ACK and terminal CANCELED assertions are unchanged.
-- Evidence: CI 38944470403 passed slow-feedback but the timeout fixture reached joint_state_stale before action_timeout. Its state source still shared the owner interpreter. This extends the same external-input boundary to that fixture; final verification is recorded in PR #69.
-- Gate: No change. No production executor or safety threshold changes.
+- 변경: CI 공통 시험 도구에 Playwright SDK와 adapter의 control_msgs 의존성을 추가했다. Chromium 설치와 브라우저 시험 활성화 범위는 기존 전용 단계가 맡는다. geometry 누락 시험은 ament_index_python의 부모와 packages 하위 모듈 캐시를 모두 차단해 설치된 ROS overlay의 geometry를 잘못 찾지 않게 했다.
+- 근거: 문서 병합 b501846ca의 CI 38884946663 modules 잡에 Playwright·control_msgs 수집 오류와 missing geometry 시험 실패가 있었다. 변경 전 main 810ea9bbe의 CI에도 같은 실패가 있다. 시험 결과는 이 수정 브랜치의 원격 로그와 PR CI에서 확인한다.
+- gate 변화: 없음. 실제 장치를 사용하지 않으며 geometry resolver의 제품 동작이나 modules의 gating 설정은 바꾸지 않는다.
 
 ## 2026-10-17 · 5d5b3f003 · feat(omx): D-780 조율자 peer와 barrier (owner 쪽)
 
@@ -584,17 +554,23 @@
 - 되돌림 주의: 정지 래치 표는 출처 CHECK에 `coordinator`가 든 표로 한 번 옮겨진다. 이전 build로 되돌리면 표는 그대로 읽히지만 출처가 `coordinator`인 행의 정지 snapshot은 503으로 답하고 dispatch는 Fleet rearm 전까지 닫혀 있다(fail closed).
 - gate 변화: 없음.
 
+## 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
+
+- 변경: `capability_current`, `transfer_provider` 계획기 요청, SIM 그리퍼 판정이 grant의 `item_key`로 승인된 형상을 찾는다. sku가 없으면 키는 지금처럼 `box`다. `PalletizingCellDocumentValidator`는 recipe/3를 cell/3 문서에 대해 혼합 컴파일러로 검증하고, sku마다 `box:<sku>` 형상(잡는 폭 = `width`)을 낸다. owner는 아직 cell/3를 승인하지 않는다(`validate_cell`은 cell/1 로더다). 그래서 실제 owner에서 recipe/3 승인은 거절된다. 이 승인에는 ADR이 필요하다. safety 모듈은 건드리지 않았다.
+- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
+- gate 변화: 없음.
+
+## 2026-10-17 · 9108fd4d8e · fix(omx): Unix Action listener 수명 조회
+
+- 변경: UnixActionServer가 listen 성공 뒤와 teardown 때 serving Event를 관리하고, 기존 stop Event가 설정되면 즉시 false인 read-only is_serving을 제공한다. 인증·socket 권한·Action admission·취소 계약은 유지한다.
+- 증거: 실제 UDS를 포함한 startup 통합과 정지 중 listener 상실을 재현한 원격 집중 묶음 66 passed. 독립 Safety-Review APPROVE는 docs/validation/omx-native-startup-2026-10-17/safety-review.md.
+- gate 변화: 소스·호스트 검증. 이 값은 listener 수명이며 요청 응답성·물리 정지·장치 수용 증거가 아니다.
+
 ## 2026-10-17 · uncommitted · fix: 느린 액션 이벤트를 owner executor에서 분리
 
 - 변경: 같은 context·namespace와 owner에서 해석한 액션 이름으로 전용 SingleThreadedExecutor를 구성했다. handle의 동기식 이벤트 순서·durable terminal 처리와 단일 owner·freshness·HOLD 기준은 유지한다. 생성 실패와 종료 시 전용 executor·스레드·노드를 정리하며 종료 실패를 성공으로 숨기지 않는다.
 - 증거: GitHub RED run39010304643에서 owner1/4 worker 조건 모두 실패했고 해당 native 묶음은 2 failed / 7 passed였다. 외부 발행 간격 약10ms에 owner age는 약1.51s/1.05s로0.5s 기준을 넘었다. 완료된 watchdog poll 관측을 추가했고 상대·private 액션 이름과 remap·반복 종료도 검증한다. 최종 head의 독립 검토와 GitHub GREEN은 PR #83에 기록한다.
 - gate 변화: 없음. 노트북 pytest·원격 시험 PC·vendor Gazebo·실물 장치·DEVICE/FIELD는 미실행이다. 실제 owner 정책·stop/cancel 수용을 이 호스트 시험으로 대신하지 않는다.
-
-## 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약
-
-- 변경: timeout의 실패 상태와 owner HOLD는 즉시 적용하고 미확정 기록만 전용 executor에서 전달한다. cancel 호출 예외 통지도 같은 경로를 쓰며 예약 실패에 owner 스레드 sink 호출로 대체하지 않는다. 이미 결과를 관측했다면 뒤늦은 미확정 기록을 덧붙이지 않는다. 600행 제한에 맞춰 액션 전달은 ros_trajectory_action.py로 분리하고 기존 import 경로를 유지한다.
-- 증거: RED run39011139939의 native 묶음은 3 failed / 10 passed. 4-worker timeout은 fresh 상태에서도 last_terminal_decision 게시가 지연됐다. 추가한 1-worker MTE는 freshness·admission도 실패했으며 원인을 확정하지 않았다. Jazzy의 권고에 따라 직렬 회귀는 SingleThreadedExecutor로 구성하고 기존 4-worker MTE와 0.5s 기준을 보존한다. MTE1 해결을 주장하지 않는다.
-- gate 변화: 없음. 늦은 SUCCEEDED 뒤에도 owner HOLD·새 명령 거절과 순차 이벤트 전달을 검증한다. 최종 SHA 독립 검토와 GitHub CI는 PR #83에 남기며 장치 정지·복구 수용을 대신하지 않는다.
 
 ## 2026-10-17 · uncommitted · test: 수신 지연의 실행 경계 진단과 이동한 계약 시험 경로 수정
 
@@ -602,22 +578,96 @@
 - 증거: run39012627359에서 host 3 failed / 1546 passed / 17 skipped, native 2 failed / 13 passed, Fleet native 2 passed. host 실패는 이동 전 AST 경로였다. native에서는 기존 cancel 관측과 추가 4-worker timeout freshness 실패를 관찰했으며 원인은 아직 확정하지 않았다.
 - gate 변화: 없음. 제품 코드·0.5s 기준·시험 포함 범위는 그대로 두고 다음 GitHub 실행에서 실제 대기 위치를 확인한다. GREEN·staging·장치 수용을 주장하지 않는다.
 
-## 2026-10-17 · uncommitted · fix: OMX owner 실행 루프에 worker 실행 기회 보완
+## 2026-10-17 · uncommitted · test(omx): place synthetic vendor and state source in an external process
 
-- 변경: OMX 전용 MTE subclass가 부모 spin hook의 인자·반환·예외를 유지하고 성공한 회차 뒤 sleep(0)으로 실행 기회를 넘긴다. 실제 owner 진입점·정책/시뮬/Fleet 회귀가 같은 helper를 쓰며 worker 수·poll 주기·0.5s 기준은 유지한다. spin·spin_once·future 대기와 종료 검증을 추가했다.
-- 증거: 진단 run39013248730은 host 1549 passed / 17 skipped, native 1 failed / 14 passed, Fleet native 2 passed. rclpy7.1.12에는 명시적 yield가 없었다. poll 사이 약0.577s 공백과 idle worker를 관찰했고 cancel은 약0.165ms에 반환했다. GIL 원인을 확정하지 않고 scheduling 보완의 효과를 같은 회귀로 검증한다.
-- gate 변화: 없음. 분리된 액션 노드가 새 collection의 단일 client 검사에 걸리는 경로도 확인해 exact owned identity의 RED 계약을 추가했다. 해당 통합 수정과 최종 GREEN 전에는 병합하지 않는다. 장치·실제 배포는 미실행이다.
+- Change: Use a spawned, localhost-only test peer with its own ROS context for the vendor and 100 Hz state source. Keep owner MTE4, 40 feedback messages, 0.5 s freshness, blocked sink and completion assertions unchanged. Bound peer startup/shutdown and stop it if its parent disappears. Freeze the synthetic readback clock only in the lost-reply admission unit test.
+- Evidence: The separate-executor trial above passed initially but failed again at 275e14dc46, so it is insufficient. The same pre-push run exposed readback expiry during SQLite setup before the lost-reply test could exercise its intended send failure. No production threshold is changed. Final verification is recorded in PR #69.
+- Gate: No change. This remains a hardware-free test correction.
 
 ## 2026-10-17 · uncommitted · fix: 수집 client 식별 연결과 계측 없는 최종 회귀
 
 - 변경: 액션 노드의 고정 이름·namespace를 수집 경로에 제공하고 실제 소유한 client만 허용한다. 임시 trace를 제거하되 freshness·watchdog 완료·HOLD 검사는 유지했다. 수정 대상인 OMX timeout quarantine 한 항목만 제거해 자동 재시도 없이 검증한다.
 - 증거: 후보 commit `09c2451ac3e432f8e7aea8e20fbd68d326c31df0`의 run39014273721은 native 18 passed, Fleet native 2 passed, browser 9 passed. host는 의도한 수집 identity RED 한 건만 실패했다(1 failed / 1564 passed / 17 skipped). 후속 최종 head 검토와 CI는 PR #83에 기록한다.
 - gate 변화: 없음. stock MTE1·실물 정지·vendor Gazebo·staging 배포는 미검증이다. 별도 Fleet quarantine은 유지한다.
-## 2026-10-17 · uncommitted · feat(omx): 승인된 물체 형상을 sku로 찾는다 (D-781 §2)
 
-- 변경: `capability_current`, `transfer_provider` 계획기 요청, SIM 그리퍼 판정이 grant의 `item_key`로 승인된 형상을 찾는다. sku가 없으면 키는 지금처럼 `box`다. `PalletizingCellDocumentValidator`는 recipe/3를 cell/3 문서에 대해 혼합 컴파일러로 검증하고, sku마다 `box:<sku>` 형상(잡는 폭 = `width`)을 낸다. owner는 아직 cell/3를 승인하지 않는다(`validate_cell`은 cell/1 로더다). 그래서 실제 owner에서 recipe/3 승인은 거절된다. 이 승인에는 ADR이 필요하다. safety 모듈은 건드리지 않았다.
-- 증거: 원격 pytest를 돌리지 못했다(실험실 시험 호스트 연결 불가).
-- gate 변화: 없음.
+## 2026-10-17 · uncommitted · test(omx): trace slow-feedback intake and first HOLD
+
+- Change: Record accepted/rejected intake, vendor execution boundaries and the first owner HOLD before terminal-event delivery can block its observation.
+- Evidence: Issue #68 records two main CI failures of the same native regression. This diagnostic revision keeps the existing executor, 0.5 s freshness allowance and 1.5 s blocked feedback interval to distinguish source scheduling from intake/owner delay.
+- Gate: No change. No physical devices or production policy changes.
+
+## 2026-10-17 · uncommitted · test(omx): keep timeout input independent of owner scheduling
+
+- Change: Reuse the spawned vendor peer for the timeout regression, including its original 30 ms state period and 1.2 s delayed result. A second peer worker handles cancel requests; the synthetic peer yields between readiness checks. Owner timing, HOLD latch, cancel ACK and terminal CANCELED assertions are unchanged.
+- Evidence: CI 38944470403 passed slow-feedback but the timeout fixture reached joint_state_stale before action_timeout. Its state source still shared the owner interpreter. This extends the same external-input boundary to that fixture; final verification is recorded in PR #69.
+- Gate: No change. No production executor or safety threshold changes.
+
+## 2026-10-17 · uncommitted · fix: OMX owner 실행 루프에 worker 실행 기회 보완
+
+- 변경: OMX 전용 MTE subclass가 부모 spin hook의 인자·반환·예외를 유지하고 성공한 회차 뒤 sleep(0)으로 실행 기회를 넘긴다. 실제 owner 진입점·정책/시뮬/Fleet 회귀가 같은 helper를 쓰며 worker 수·poll 주기·0.5s 기준은 유지한다. spin·spin_once·future 대기와 종료 검증을 추가했다.
+- 증거: 진단 run39013248730은 host 1549 passed / 17 skipped, native 1 failed / 14 passed, Fleet native 2 passed. rclpy7.1.12에는 명시적 yield가 없었다. poll 사이 약0.577s 공백과 idle worker를 관찰했고 cancel은 약0.165ms에 반환했다. GIL 원인을 확정하지 않고 scheduling 보완의 효과를 같은 회귀로 검증한다.
+- gate 변화: 없음. 분리된 액션 노드가 새 collection의 단일 client 검사에 걸리는 경로도 확인해 exact owned identity의 RED 계약을 추가했다. 해당 통합 수정과 최종 GREEN 전에는 병합하지 않는다. 장치·실제 배포는 미실행이다.
+
+## 2026-10-17 · uncommitted · test(omx): separate fake vendor work from the owner executor
+
+- Change: Give the synthetic vendor ActionServer its own executor, matching the external vendor boundary. Keep the owner executor at four workers, all callback groups, 40 feedback messages, 0.5 s freshness, at least 1.5 s blocked sink and completed/ready assertions. Remove investigative switches, affinity changes and callback instrumentation.
+- Evidence: CI 38939987985 at 4932c2c177 recorded a 0.5956 s source-publication gap, stale source rejection and owner HOLD at age 0.6059 s. The owner correctly enforced its policy. Native wrappers passed with separated vendor scheduling at 636d102c5c. A callback-group mutation at c282f6729d kept publications advancing (maximum gap 0.2013 s) but stopped owner sequence at 4 and failed freshness at age 1.6698 s, proving the regression still detects excluded intake. Final SHA and cloud results are recorded in PR #69.
+- Gate: No change. This corrects the test boundary; it does not establish a GIL defect, physical stop or hardware acceptance.
+
+## 2026-10-17 · uncommitted · fix: owner timeout 기록도 action executor에 예약
+
+- 변경: timeout의 실패 상태와 owner HOLD는 즉시 적용하고 미확정 기록만 전용 executor에서 전달한다. cancel 호출 예외 통지도 같은 경로를 쓰며 예약 실패에 owner 스레드 sink 호출로 대체하지 않는다. 이미 결과를 관측했다면 뒤늦은 미확정 기록을 덧붙이지 않는다. 600행 제한에 맞춰 액션 전달은 ros_trajectory_action.py로 분리하고 기존 import 경로를 유지한다.
+- 증거: RED run39011139939의 native 묶음은 3 failed / 10 passed. 4-worker timeout은 fresh 상태에서도 last_terminal_decision 게시가 지연됐다. 추가한 1-worker MTE는 freshness·admission도 실패했으며 원인을 확정하지 않았다. Jazzy의 권고에 따라 직렬 회귀는 SingleThreadedExecutor로 구성하고 기존 4-worker MTE와 0.5s 기준을 보존한다. MTE1 해결을 주장하지 않는다.
+- gate 변화: 없음. 늦은 SUCCEEDED 뒤에도 owner HOLD·새 명령 거절과 순차 이벤트 전달을 검증한다. 최종 SHA 독립 검토와 GitHub CI는 PR #83에 남기며 장치 정지·복구 수용을 대신하지 않는다.
+
+## 2026-10-17 · uncommitted · test(omx): restore intake isolation after the external-peer negative control
+
+- Change: Remove the two-line callback-group mutation; retain the spawned vendor peer.
+- Evidence: Native, admission and secret guards passed 105 at 91536e1588. Mutation 0e518ae7ba failed the intended owner-sequence assertion with 165 publications and a maximum 0.01096 s gap, while owner sequence remained 2. The other seven native runtime tests passed.
+- Gate: No change. Final native, pre-push and cloud results belong to the restored commit in PR #69.
+
+## 2026-10-18 · 4b97b23ac7 · test(omx): native feedback 진단과 Gazebo 이동 검증
+
+- 변경: 시험 전용 선택적 intake·owner lock·최초 HOLD trace와 고정 5회 native 표본을 추가했다. 생산 안전 기준과 freshness·timeout·executor 설정은 유지했다.
+- 증거: 계측 단독 5회·계측 전체 suite 5회·계측 없는 전체 suite 5회·수정하지 않은 main 전체 suite 별도 5회 통과. 원격 affected 1281 passed, 22 skipped, NEW 0. 독립 리뷰는 진단 전용 변경으로 적절하다고 판정했다. 사용자 승인 controller 패키지 설치 후 Gazebo 목표 0.01rad에 관측 이동량 0.008547rad·오차 0.001453rad. 상세 범위와 로그 해시는 docs/validation/omx-feedback-verification-2026-10-18/result.md.
+- gate 변화: 없음. 간헐 stale-feedback 원인은 미확정이며 Fleet→장치 lease 전달·학습 정책 종단간·실물 수용 증거는 없다.
+
+## 2026-10-19 · uncommitted · refactor(omx): recover canonical contract extraction
+
+- 변경: 보존된 omx-native-ready 미커밋에서 ROS-free 계약 타입과 검증을 contracts 단위로 옮긴다. 기존 import는 동일 객체를 다시 내보내고 명령 owner의 상태·정지·실행 권한은 유지한다. command_types의 safety 분류와 import 동일성 회귀를 함께 복구한다.
+- 증거: 현재 main과 이동한 정의의 AST 동일성 및 독립 소스 리뷰를 확인했다. 원격 시험은 커밋 후 착지 관문에서 실행하며 아직 통과로 기록하지 않는다.
+- gate 변화: 없음. 실물 실행·장치 수용·배포를 수행하지 않는다.
+- 결정: D-427·D-429·D-430·D-766의 기존 경계와 크기 규칙을 따른다.
+
+## 2026-10-19 · uncommitted · feat(omx): recover bounded feedback diagnostics
+
+- 변경: Recover bounded intake/watchdog observations and coherent action-receipt snapshots from preserved native simulation work. Current-main age-adjusted receipt regression rejection remains authoritative.
+- 증거: Independent source review approved; committed remote adapter and owner regressions passed with 0 NEW. No hardware or field acceptance is claimed.
+- gate 변화: None; device deployment is outside this recovery.
+
+## 2026-10-19 · dc1d3419eb · refactor(omx): pilot-sim 묶음을 omx_adapter/pilot_sim 크기 단위로 이동
+
+- 변경: `pilot_sim_{runtime,api,capture,server,camera,gripper}.py`를 `omx_adapter/pilot_sim/`으로 옮기고 D-766 단위(`test/architecture/size_units.txt`)로 등록했다. 실행은 `python3 -m omx_adapter.pilot_sim.server`, `_ARM_OWNERS`는 `pilot_sim.server`다. 시연 `source_tree_sha256`은 `pilot_sim/*.py`도 계속 포함한다.
+- 증거: compileall, 여섯 모듈 import(제3자 의존 stub), `test/architecture/test_module_structure.py` 40 passed.
+- gate 변화: 없음. 동작 변경 없는 경로 이동이다.
+
+## 2026-10-19 · uncommitted · fix(omx): origin #83 action event executor 이식
+
+- 변경: origin #83(78a4bea23c)의 별도 action event 노드·SingleThreadedExecutor(`ros_trajectory_action.py`)와 owner worker에 실행 기회를 넘기는 `OwnerMultiThreadedExecutor`(`ros_owner_executor.py`)를 main에 옮겼다. 느린 durable event sink가 joint-state intake와 watchdog을 막지 않는다. 즉시 HOLD, event 순서, action 이름 해석, worker 수, freshness 기준은 유지한다. main에만 있는 `run_hardware_owner.py`에도 같은 executor와 `runtime.destroy()`를 적용했다. #69의 별도 프로세스 fake vendor(`test/ros_feedback_peer.py`, adapter 시험 폴더)와 시험 재구성도 함께 옮겼고 main의 선택적 feedback trace hook은 유지했다(같은 프로세스 publish trace만 빠짐).
+- 증거: docs/validation/omx-owner-executor-port-2026-10-19/result.md.
+- gate 변화: 소스·원격 host/native 시험 범위. main의 #68 비재현 판정(docs/validation/omx-feedback-verification-2026-10-18/result.md)은 보존하고, 사용자 결정으로 예방 보완을 채택한다. 착지 전 독립 Safety-Review가 필요하다. 실물·DEVICE/FIELD는 미검증.
+
+## 2026-10-21 · uncommitted · 실제 파생 SIM world 카메라 출처
+
+- 변경: PilotSimCamera의 기본 world 이름은 유지하고, 별도 물체 workcell을 사용할 때 실제 world 이름을 camera identity에 기록한다.
+- 검증: native RGB 시연 수집에서 파생 world hash·이름과 실제 영상 출처를 확인할 예정이다. 장치·학습 gate 변화 없음.
+- gate 변화: 장치·학습 gate 변화 없음.
+
+## 2026-10-21 · uncommitted · 영상 처리와 관절 기록 수신 분리
+
+- 변경: 관절 기록 수신을 카메라 기본 callback group과 분리한다. 이전 카메라 출처 로그의 누락된 gate 필드는 기존 본문의 같은 문장을 옮겨 형식만 보강하고 날짜순으로 배치했다. 이전·수정 블록의 정확한 SHA 쌍을 기존 log repair 원장에 보존한다.
+- 증거: 기본 callback group의 관절 수신 차단을 실제 ROS에서 RED 1 failed/1 passed로 재현했고 분리 후 2 passed다. batch 4 첫 시연의 원본 2650 RGB를 모델 PC에서 export/readback했다.
+- gate 변화: 명시적 보조 SIM의 시연·원본 기록·별도 callback 수신 범위다. 새 수집 재검증·학습·독립 정책 20회·DEVICE/FIELD는 미완료다.
 
 ## 2026-10-21 · uncommitted · 동일 일련번호 손목 카메라의 포트 구분
 
@@ -625,17 +675,90 @@
 - Evidence: committed tests failed 4/20 before the change; all 20 passed remotely at a694060ead. Two physical Innomaker cameras sharing SN0001 produced separate fresh previews through different USB port paths on Fleet.
 - Gate: unchanged. Preview identity does not establish CameraInfo, arm pairing calibration or physical command authority.
 
+## 2026-10-23 · a3a75e6fd2 · 긴 교사 시연의 원본 시각 기반 5fps 기록
+
+- 변경: 고정 10Hz 카메라에서 교사 시연만 5fps로 선택하고 원본 capture/state 시각과 명령을 보존한다. 기본 Pilot은 10fps이며 3,000프레임 한도·선택 프레임 간격·과거 state 대응·실패 이벤트 검사는 유지한다.
+- 증거: 새 회귀 8개가 수정 전 실패했고 수정 후 기존 capture·교사 시험과 함께 원격 66 passed, 새 실패 0이다. 같은 소스의 실제 격리 SIM 한 시연은 진행 중이며 완료를 주장하지 않는다.
+- gate 변화: SOURCE 회귀 확인만 추가한다. 완결 시연·학습 입력 적격성·독립 정책 평가·DEVICE/FIELD는 미완료다.
+
+## 2026-10-23 · a3a75e6fd2 · 5fps 보조 SIM 교사 시연 종료
+
+- 변경: 추가 소스 변경 없이 동일 교사 소스의 실행 결과를 회수했다.
+- 증거: 같은 소스의 격리 native 시연은 EXITED/0, PASS, cleanup true이며 1,587프레임을 누락 issue 없이 기록했다. 물체 상승 0.1020m, 위치 오차 약 0.0000513m, release 후 안정 2.242 simulated seconds다.
+- gate 변화: 이 한 번의 보조 교사 시연만 확인했다. 모델 PC의 기존 독립 truth 검증은 10fps 고정 때문에 거절했고 원본은 보존했다. 주기 계약 정합·전체 RGB 재독출·ACT 명령 coverage·학습·독립 정책·DEVICE/FIELD는 미완료다.
+
+## 2026-10-23 · db4d8f87ca · Pilot readback와 제출의 owner transaction
+
+- 변경: owner 전달 안에서 runtime snapshot을 게시하고 일반 Pilot 제출·자동 gripper hold의 상태 선택과 제출을 같은 owner RLock으로 묶는다. 기존 admission helper의 ROS I/O 금지 계약은 유지하며 새 command transaction은 action 완료를 기다리지 않는다. 순번·freshness·seat·범위 검사는 그대로다.
+- 증거: 실제 교사 수집 batch 3이 첫 기록 명령에서 순번 불일치로 거부돼 실패 원본을 보존하고 학습을 시작하지 않았다. 실제 owner 동시성 회귀 2개 RED 후 관련 원격 검사 140 passed/0 NEW. 실제 ROS snapshot 선게시 회귀도 RED 후 3 passed/0 skipped. 상세 환경·실패 실행은 docs/validation/omx-pilot-readback-2026-10-23/result.md에 구분했다.
+- gate 변화: SOURCE와 원격 ROS 회귀 범위다. 수정 source의 새 SIM 시연은 실행 중이며 완결 수집·학습·독립 정책 평가·실물 DEVICE/FIELD 수용은 미완료다.
+
+## 2026-10-23 · 187d5b758b · Pilot admitted readback와 policy pending intake 분리
+
+- 변경: 최초 runtime 게시 지연안은 확장 검사에서 기존 policy attach/coalescing 의존성을 깨뜨려 착지하지 않았다. native intake 선게시를 복원하고 readonly owner.joint_state를 Pilot 읽기 5곳에서 사용한다. command transaction과 기존 순번·freshness·seat 검사는 유지한다. 시험용 owner도 같은 명시적 계약을 제공한다.
+- 증거: 기존 policy assertion을 유지한 HTTP/Pilot/owner/정책 검사 173 passed, 0 NEW. 실제 Jazzy pending/admitted·source stamp·watchdog 3 passed/0 skipped. 최초 transaction producer의 보조 교사 시연은 PASS/1,586프레임이며 MODEL 독립 truth·전체 RGB·377명령·718지원 chunk를 확인했다. 세부 source별 범위는 docs/validation/omx-pilot-readback-2026-10-23/result.md를 따른다.
+- gate 변화: SOURCE·원격 ROS 회귀와 명시적 교사 SIM 원본 범위다. 최종 landing 확장 검사, 새 25개 수집·학습·독립 정책 평가·실물 수용은 미완료다. 교사 source와 최종 정책 runtime을 혼동하지 않는다.
+
+## 2026-10-24 · uncommitted · D-856 물리 이송 계획과 Cell provenance 분리
+
+- 변경: pose_plan의 승인 recipe/cell 검증은 호환 adapter에 남기고 물리 입력/profile/기하/plan을 transfer_motion, 궤적 계산을 transfer_planner로 나눴다. 새 요청은 home/pick/place와 접근·운반 높이만 가지며 job·recipe·pallet·layer·업무 완료를 해석하지 않는다. 기존 import/type alias, profile 파일·hash, callback 순서, owner/그리퍼/fence 검증을 유지한다.
+- 증거: commit 67389d0a03의 새 중립 API 시험 10개 RED 후 구현했다. 첫 회귀에서 옮긴 단계 상수 import 누락을 확인해 수정했다. commit 613c6b1b20의 공식 원격 물리/기존 Cell/owner/레이아웃 회귀는 135 passed, skip 0이다. 크기 검사는 통과했고 기존 728줄 예외는 제거했다. 코드 검토·최종 metadata 검증은 후속 결과와 구분한다.
+- gate 변화: simulation 내부 순수 계산 분리다. 충돌 장면·비대칭 물체·실물·새 wire/dispatch를 열지 않는다. 등록 기하를 승인하는 책임은 owner 측 binding에 남으며 후속 중립 preflight/실행 계약이 필요하다. CE 해당 없음: 코드·회귀 시험에서 판단을 복원할 수 있는 구조 분리다.
+
+## 2026-10-24 · uncommitted · D-856 owner 물리 catalog와 사전검사
+
+- 변경: 불변 물리 catalog에 설치 scope·revision·자세/접근 높이·물체 기하를 결속하고 중립 check_transfer 서비스를 추가했다. owner가 admission한 측정 상태와 같은 monotonic clock을 주입받아 계산 전후 freshness·revision·계획 출력을 검증하며 궤적·permit·업무 완료를 반환하지 않는다. submit·claim·journal·driver 포트는 없다.
+- 증거: a1a6b6cb19의 새 API 시험 17개 RED 후 구현했다. 독립 계약 검토의 중간 clock 역행 지적은 a62a360ce2의 정확한 sequence에서 RED 1개로 재현하고 d8e20d980e에서 수정했다. 최종 관련 원격 회귀 117 passed, skip 0, 0 NEW이며 재검토의 필수 finding은 닫혔다.
+- gate 변화: 내부 simulation 계산 서비스만 검증했다. owner 조립·인증된 공개 HTTP/UDS·중립 grant·Harbor 공정 변환은 미완료이며 기존 Cell 실행 경로와 실물 capability는 바꾸지 않았다. CE 해당 없음: clock 조건과 회귀가 판단을 직접 보존한다.
+
+## 2026-10-24 · uncommitted · D-856 인증된 owner 사전검사 읽기 연결
+
+- 변경: 선택적인 v2 CheckTransfer와 peer UID/scope 검사, admitted joint_state 조립 helper를 추가했다. transform은 owner 설치 설정과 catalog를 대조하고 calibration은 측정 snapshot의 값을 보존한다. helper는 adapter에 두어 agent/palletizing 필수 의존성을 피했다. 기존 Cell owner는 선택적 catalog가 없으면 이전 경로를 유지한다.
+- 증거: 설치 transform 누락과 v1 거절 envelope RED 후 수정했다. 기존 ActionApi·Cell runner/owner를 포함한 원격 213 passed/skip0/0 NEW와 실제 HTTP/UDS를 확인했다. 독립 리뷰의 transform finding은 닫혔고 ActionApi 안전 태그의 Safety-Review trailer를 이력에 보완했다. 정확한 SHA는 docs/validation/harbor-neutral-arm-preflight-2026-10-24/result.md를 따른다.
+- gate 변화: simulation 읽기만 연결했다. 새 grant/dispatch·실물 capability는 없다. 공정 독립성은 import 차단, 상태는 합성 fixture이며 UDS stop 지연·설치 wheel·장치 수용은 미확인이다. CE 해당 없음: 경계와 회귀가 판단을 보존한다.
+
+## 2026-10-24 · 11486ce7cd · 중립 grant의 물리 transaction과 재시작 복구
+
+- 변경: 전체 ARM_TRANSFER grant/object_ref를 transaction에 결속하고 관측·Cell 필드 없이 snapshot을 만든다. 새 snapshot은 엄격한 identity/generation 대조 뒤 HOLD로 복구하며 태그를 모두 지워 legacy 완료 복구로 우회하지 못하게 한다.
+- 증거: 누락 consumer RED16·태그 삭제 RED1 뒤 신규·기존 Cell/PICK/transfer provider 원격 74 passed/skip0/0 NEW. 독립 재검토 finding 해소. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md를 따른다.
+- gate 변화: 내부 transaction만 연결했다. factory·실제 parent journal·phase-only runtime/권한·claim 종료·Harbor 연결은 후속이다. CE 해당 없음: source와 거절 회귀에 판단 근거가 남는다.
+
+## 2026-10-24 · 45173e6f92 · D-856 설치된 중립 팔의 phase-only IPC
+
+- 변경: ARM의 typed parse·phase-only/shared control·v2·camera-blind 저장·durable workflow 완료를 연결했다. 설치 factory가 없으면 journal 전에 거절하고 direct driver 종류를 유지한다. Store의 workflow metadata를 leaf로 옮겨 ratchet을 낮췄다.
+- 증거: 새 factory RED9 후 구현하고 합성 goal/gripper port의 실제 planner/journal·기존 API/store/stop/runner/transaction/provider 원격 153 passed/skip0/0 NEW를 확인했다. 최종 feature SHA 독립 검토와 Safety-Review trailer를 기록했다. docs/validation/harbor-neutral-arm-owner-2026-10-24/result.md를 따른다.
+- gate 변화: 명시적 설치를 위한 owner library 경로다. 실제 device/ROS·admitted-state 조립·Fleet producer·물리 claim 종료·Harbor 연결은 후속이다. CE 해당 없음: source·회귀·검토 기록이 판단 근거를 보존한다.
+
+## 2026-10-24 · 69607b2b0d · D-856 managed transfer의 영속 owner 권한
+
+- 변경: 새 opt-in profile의 owner/policy/journal을 schema3에 결속하고 Pilot/raw motion을 제한했다. 검증된 phase의 durable intent·정확한 command/thread·같은 최종 owner와 유효 grant만 동기 제출한다. 예외 후 context를 지우고 최종 writer에서도 만료를 검사한다. 기본 Cell/PICK/Pilot profile은 유지한다.
+- 증거: admission RED4 뒤 구현, 독립 검토의 schema 초기화 경합과 delegate-owner 누락 수정, 유효한 final-writer 만료 RED1 뒤 보강. 최종 planner/journal/final owner·기존 회귀 원격 119 passed/skip0/0 NEW. size/safety 4 commits exit0와 fixed-SHA 소스 재검토 확인. docs/validation/harbor-managed-arm-2026-10-24/result.md 참조.
+- gate 변화: host 집중 검증이며 affected 최초 실행은 1729 passed/36 skipped/1 NEW(nose 호환 setup helper)였다. 두 helper와 호출부를 _setup으로 변경하고 전체 선택 재실행을 준비했다. 실제 ROS module은 앞선 실행에서 rclpy 부재로 skip됐다. Fleet physical producer·claim 해제·Harbor ARM·실물 배포는 후속이다. CE 미해결: 이전 e26 G1 timing 2 NEW는 별도 재현 통과했으나 원인 미확정이다.
+- 후속 확인: test/docs commit 21217e4ea8의 전체 affected(64 targets)는 공식 원격 1754 passed/34 skipped/0 NEW, exit0였다. 중간 목차·소스 commit 표기 guard 실패도 수정했으며 원본 이력은 validation에 보존했다. production 코드는 69607b2b0d 이후 동일하다. 34 skips·CI FULL·실제 ROS/장치 수용을 이 결과로 대체하지 않는다.
+
+## 2026-10-24 · 46f56d6b48 · D-856 실제 managed capability와 대상 owner 결속
+
+- 변경: v2 Fleet-auth GetTransferCapability가 실제 등록 factory/admission/store/final owner와 canonical journal/session을 읽는다. ARM grant는 대상 journal/session을 완전 digest에 포함해 접수/phase 전에 대조한다. receipt는 실제 snapshot journal을 사용하고 static identity가 덮지 않는다. 읽기는 identity를 만들지 않는다.
+- 증거: RED35 뒤 관련 contract·adapter 전체·SDK·actual UDS/owner/provider 원격 790 passed/7 skipped/0 NEW, fixed SHA 독립 검토 no material finding, size/safety exit0. docs/validation/harbor-managed-capability-2026-10-24/result.md 참조.
+- gate 변화: source/host 검증이며 FULL23개 목록은 진행 중이다. 설치 설명이 admission·물리 완료·claim 해제를 승인하지 않는다. 기존 Cell/TRIP 형식과 과거 Action 조회를 유지한다. physical producer·Harbor ARM·실물/배포는 후속이다. CE 미해결: 기존 e26 G1 timing 원인 미확정.
+
+## 2026-10-24 · ebba429c4c · D-856 FULL 이력 표 guard 수정
+
+- 변경: 빠진 v1.306 변경 이력 표 행을 추가했다. production Python은46 이후 동일하다.
+- 증거: 23개 로그 분류에서 entry9의 API 이력 표 행 누락1 NEW, 다른22개0 NEW였다. doc commit ebba429c4c에서 표를 보완했고 같은 entry9 전체를 공식 원격 재실행 중이다. 원래 FULL 실패와790 집중 결과를 구분한다.
+- gate 변화: FULL 통과 판정 전이다. physical producer/claim/Harbor ARM·실물은 계속 후속이다.
+
+## 2026-10-24 · ebba429c4c · D-856 이력 표 수정 재검증 완료
+
+- 변경: 수정 후 재검증과 원본 FULL 실패를 validation/plan에 함께 기록했다.
+- 증거: 실패 entry9의 원래7 targets 전체가7371 passed/91 skipped/0 NEW, runner exit0였다. 원본46의 다른22개는0 NEW이며 한 SHA에서23개를 재실행했다고 주장하지 않는다.
+- gate 변화: 설치/owner/receipt의 host 검증 근거다. 물리 관측·producer/claim·Harbor ARM·장치/현장은 후속이다. CE 미해결: 기존 G1 timing 원인 미확정.
+
 ## 2026-10-24 · uncommitted · feat(omx): D-858 S1 실물 Dynamixel port와 가짜 버스 시험
 
 - 변경: `omx_adapter/dynamixel_port.py`에 `LocalActionPort` 실물 구현을 두었다. 은퇴한 device-core(rosy-vault 9a744a3)의 시작 HOLD, 정지 래치와 현 위치 버팀, RAM 쓰기만(EEPROM 없음), 추종 오차·하드웨어 오류·포즈 미도달·빈손 파지 HOLD를 옮기고, 관절 위치·속도 한계는 `ArmCommandConfig`에서 읽는다. 래치 해제는 `local_stop` 펜스가 그 세대에서 열려 있을 때만 한다. D-858 §4 관문(측정 한계·그리퍼 실측·정지 시험)과 정책 기술 거부를 둔다. 같은 팔 인스턴스·같은 시리얼 장치의 두 번째 writer를 거부한다. safety_modules에 등록했다.
 - 증거: 가짜 버스 시험 `test/test_omx_dynamixel_port.py`. 실물 팔·SDK·시리얼은 쓰지 않았다.
 - gate 변화: 없음. owner는 `enabled=False`·`goals_enabled: false` 그대로이고 port는 어디에도 연결되지 않았다(S4). DEVICE 수용이 아니다.
-
-## 2026-10-24 · uncommitted · fix(omx): D-858 S1 독립 안전 검토 지적 반영 (H1, M1-M6)
-
-- 변경: port의 모든 HOLD·정지·cancel이 주입된 `LocalStopController.trip`을 불러 플랫폼 펜스를 닫는다. `rearm`은 래치 세대보다 엄격히 새 세대, 그 세대에서 열린 펜스, HW 오류 없음을 모두 요구하고 토크 레지스터를 다시 읽는다. `stop()`은 잠금 없이 래치를 먼저 세우고, planner는 state 잠금 밖에서 돈다. 동작 중 매 주기 펜스를 다시 읽는다. 플랫폼 FK로 끝단 작업 공간 상자를 계획과 매 명령에서 검사하고, 상자가 없으면 §4 관문에서 거부한다. 그리퍼 값은 (-π, π)·서로 다름을 요구하고, 쓰기 전 HW 오류와 변화량을 확인한다. 정지 때 관절만 버티고 그리퍼 목표는 유지한다. `SdkBus`도 RAM 주소만 쓰고, TIOCEXCL 실패 시 포트를 닫는다.
-- 증거: 가짜 버스·가짜 SDK 시험 `test/test_omx_dynamixel_port.py`. 실물 팔·SDK·시리얼은 쓰지 않았다. 재검토 대기(D-430 §5).
-- gate 변화: 없음. port는 여전히 어디에도 연결되지 않았다(S4).
 
 ## 2026-10-24 · uncommitted · fix(omx): D-858 S1 재검토 지적 반영 (N1-N4, 재-trip)
 
@@ -650,8 +773,32 @@
 - 구조: 실물 팔 경로(S1 `dynamixel_*`와 S3 모듈)를 `omx_adapter/real/`로 옮겨 D-766 크기 단위로 등록했다(패키지 1만 줄 상한). 내용 변경 없는 이동이다.
 - gate 변화: 없음. owner는 `enabled=False`(S4).
 
+## 2026-10-24 · uncommitted · fix(omx): D-858 S1 독립 안전 검토 지적 반영 (H1, M1-M6)
+
+- 변경: port의 모든 HOLD·정지·cancel이 주입된 `LocalStopController.trip`을 불러 플랫폼 펜스를 닫는다. `rearm`은 래치 세대보다 엄격히 새 세대, 그 세대에서 열린 펜스, HW 오류 없음을 모두 요구하고 토크 레지스터를 다시 읽는다. `stop()`은 잠금 없이 래치를 먼저 세우고, planner는 state 잠금 밖에서 돈다. 동작 중 매 주기 펜스를 다시 읽는다. 플랫폼 FK로 끝단 작업 공간 상자를 계획과 매 명령에서 검사하고, 상자가 없으면 §4 관문에서 거부한다. 그리퍼 값은 (-π, π)·서로 다름을 요구하고, 쓰기 전 HW 오류와 변화량을 확인한다. 정지 때 관절만 버티고 그리퍼 목표는 유지한다. `SdkBus`도 RAM 주소만 쓰고, TIOCEXCL 실패 시 포트를 닫는다.
+- 증거: 가짜 버스·가짜 SDK 시험 `test/test_omx_dynamixel_port.py`. 실물 팔·SDK·시리얼은 쓰지 않았다. 재검토 대기(D-430 §5).
+- gate 변화: 없음. port는 여전히 어디에도 연결되지 않았다(S4).
+
 ## 2026-10-24 · uncommitted · fix(omx): D-858 S3 독립 안전 검토 지적 반영 (H1, H2, M1-M3, L1)
 
 - 변경: 정지 시험 속도를 0.15~0.2 rad/s로 강제하고, 정지 직전 joint1 실측 속도(0.12 rad/s 이상)를 기록·관문에서 재검사한다. 정지 시점은 소프트웨어 STOPPED가 아니라 실측 속도가 0.03 rad/s 아래로 떨어진 때다. 뷰어 JS 문자열의 실제 줄바꿈을 고치고 `node --check`·따옴표 검사 시험을 넣었다. 기록 항목마다 측정 당시 `config_revision`을 남기고, 항목끼리 또는 port 설정과 다르면 관문이 닫힌다. `submit_stop_test`는 joint1만, 진폭 0.2 rad 이내, 20단계 이하만 받는다. CLI는 같은 인스턴스 owner 소켓이 살아 있으면 거부하고, rearm 사유를 `BENCH_COMMISSIONING_REARM`으로 남기며, 끝나면 port를 정지해 펜스를 닫아 둔다. port는 store에서 직접 evidence를 읽고 `reload_evidence()`는 인자 없이 다시 읽는다.
 - 증거: 가짜 버스·가짜 시계 시험(정지 쓰기를 무시하고 계속 미끄러지는 가짜 장치는 불합격). 실물 팔은 쓰지 않았다. 재검토 대기(D-430 §5).
 - gate 변화: 없음. owner는 `enabled=False`(S4).
+
+## 2026-10-26 · uncommitted · neutral ARM forward-port contracts holder
+
+- 변경: Adapted neutral phase-runner imports to main's pick_place package. Moved the physical transfer DTO/profile implementation into the existing contracts holder with explicit compatibility exports; combined package size stays below D-766 without a new ratchet exception.
+- 증거: static syntax and measured size only. Remote legacy Cell/neutral owner regression and independent safety review remain required. No runtime or hardware activation.
+- gate 변화: None. No new runtime, device or field acceptance. CE: no new learning; the compatibility imports and measured size retain the integration reasoning.
+
+## 2026-10-27 · aec7f05a35 · measured load-domain analysis
+
+- 변경: added strict device/group/configuration-bound JSON characteristics with atomic storage, complete quintic-segment candidate evaluation against certified load domains, and passive source-time tracking/oscillation analysis through `python -m omx_adapter.load_motion_cli`. Existing native-owner health now supplies measured error/torque fields through its existing bus. No controller, public endpoint or automatic recovery was enabled; command binding remains caller-supplied and unverified.
+- 증거: mapped remote regression at `00581175c4`: 2079 passed, 22 skipped; two harness failures from the new log heading were fixed, then record/placement regression passed 122 at `aec7f05a35` with 0 NEW. Product/test code is unchanged between those runs. Independent review findings on producer coverage, frozen-source cadence and multi-group sample reuse were reproduced and corrected. See `docs/validation/omx-load-aware-motion-2026-10-27/result.md`. No device load/cadence/stop acceptance.
+- gate 변화: no runtime, ROS-SIM, DEVICE or FIELD advancement. CE: no new durable lesson; contract, focused regressions and `docs/load-aware-motion.md` retain the reasoning.
+
+## 2026-10-27 · uncommitted · fix(omx): restore accepted real-driver size registration
+
+- 변경: public S3 #184의 commit 3f6071fe73에 있던 `devices/omx/adapter/omx_adapter/real` 크기 단위 행을 복원하고 부모 AGENTS 표에 기존 책임을 적었다. commit 4f483955bf의 cherry-pick은 코드와 독스트링을 유지했지만 이 행을 가져오지 않았고, 이력 합류 commit 1a474f511f도 행이 있는 두 번째 부모와 달리 누락을 유지했다. 새 하위 패키지 승격이나 B/C 기준 충족 주장이 아니다. 한도·바닥·ratchet·계산 규칙과 드라이버 동작은 그대로다.
+- 증거: 원본 commit 3220c61927과 public commit 3f6071fe73의 init·로그·크기 행 및 현재 트리를 Git으로 비교했다. 기존 profile 소비자 원격 결과 344 PASS / 1 NEW는 부모 단위 10,353 > 10,000의 RED 증거다. 이 복원 변경의 원격 검증과 독립 검토는 아직 대기 중이다.
+- gate 변화: 없음. 복원은 rebuilt profile의 검증이나 실물·배포·현장 수용이 아니다. CE: 미해결 — 이력 누락 원인은 확인했으며 복원 검증 전이다.

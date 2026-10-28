@@ -26,14 +26,13 @@
   max-width: 100%;
   padding-inline: var(--space-3);
   border-radius: var(--radius-button);
-  color: var(--brand-rose);
+  color: var(--text-primary); /* 장미색은 워드마크와 현재 위치에만(D-277) */
   text-decoration: underline;
   text-underline-offset: 0.2em;
   overflow-wrap: anywhere;
 }
-.surface-link:hover { background: var(--brand-rose-wash); }
+.surface-link:hover { background: var(--surface-sheen); }
 .surface-link:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-.surface-link[hidden] { display: none; }
 .surface-map-frame { position: relative; min-width: 0; min-height: 16rem; }
 .surface-map-frame canvas { display: block; width: 100%; height: clamp(16rem, 45vh, 32rem); background: var(--surface-recessed); outline-offset: 3px; }
 .surface-map-frame canvas[data-goal-cursor] { cursor: crosshair; }
@@ -66,7 +65,6 @@
 .surface-teleop-controls ui-button { user-select: none; -webkit-user-select: none; }
 .surface-camera-stage { position: relative; min-width: 0; min-height: 12rem; display: grid; place-items: center; background: var(--surface-recessed); overflow: hidden; }
 .surface-camera-frame { display: block; width: 100%; max-height: 50vh; object-fit: contain; }
-.surface-camera-frame[hidden] { display: none; }
 .surface-camera-toolbar { display: none; }
 body[data-surface="console"] #vision-stage:fullscreen,
 #vision-stage:fullscreen { width: 100vw; height: 100dvh; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }

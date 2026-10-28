@@ -1,6 +1,6 @@
 ## D-853 Learning VLM 판단은 닫힌 질문의 사람 정답과 모델 비교를 평가 전용으로 둔다
 
-**Status:** Proposed (2026-10-23). 사용자 지시로 `tools/vlm_label_sheet.py`의 일회용 정적 시트를 Rosy Learning 작업 도구로 옮긴다. 이 ADR은 결정만 게시한다. 화면·저장소 구현과 호스트 시험은 후속 변경이며, 정답 품질·모델 PC 운영·질문 기준값 채택은 별도 증거다.
+**Status:** Proposed (2026-10-23). 사용자 지시로 `tools/vlm_label_sheet.py`의 일회용 정적 시트를 Rosy Learning 작업 도구로 옮긴다. 구현·호스트 시험은 이 브랜치의 범위이며, 정답 품질·모델 PC 운영·질문 기준값 채택은 별도 증거다.
 
 **Related:** [D-459](D-459-pinky-persistent-label-review-application.md), [D-461](D-461-task-first-workspace-compositions-and-learning-ux.md), [D-469](D-469-review-web-revalidation-and-guidance.md), [D-475](D-475-human-reviewed-fixed-eval-truth.md), [D-478](D-478-review-app-explicit-trusted-network-bind.md), [D-514](D-514-object-pixel-review-taxonomy-and-scenarios.md), [D-538](D-538-review-studio-workflow.md), [D-542](D-542-human-guided-review-workspace-ux.md).
 
@@ -21,7 +21,7 @@
 
 - 정적 시트 `tools/vlm_label_sheet.py`는 새 정답 작업에 쓰지 않는다. 파일 정리는 별도 변경이다.
 - 현장 사진 보관 경로([D-610](D-610-ai-first-problem-resolution.md))는 바꾸지 않는다. 모델 PC에 이미 있는 벤치 사진만 가져온다.
-- 화면·경로·저장소 세부는 구현이 게시될 때 `learning/curation/perception/docs/review-app.md`에 둔다.
+- 화면·경로·저장소 세부는 `learning/curation/perception/docs/review-app.md` 「VLM 판단」이 소유한다.
 
 ## Amendment by D-857 (2026-10-24)
 

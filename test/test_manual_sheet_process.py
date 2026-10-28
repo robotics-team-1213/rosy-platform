@@ -23,8 +23,8 @@ from rosy.processes.palletizing.submission import compile_cell_submission  # noq
 from rosy.processes.palletizing.recipe import load_recipe, RecipeError  # noqa: E402
 
 
-def documents(manual=True):
-    folder = ROOT / "operations/processes/cell/examples/omx_sim"
+def documents(manual=True, folder=None):
+    folder = folder or ROOT / "operations/processes/cell/examples/omx_sim"
     recipe = yaml.safe_load((folder / "recipe.yaml").read_text(encoding="utf-8"))
     cell = yaml.safe_load((folder / "cell.yaml").read_text(encoding="utf-8"))
     if manual:
@@ -47,7 +47,8 @@ def submission(recipe, cell, compiler, compiled):
 
 
 def test_recipe_one_job_bytes_hashes_and_empty_submission_keys_do_not_change():
-    recipe, cell = documents(manual=False)
+    # Preserve the original recipe/1 inputs and goldens as live SIM geometry evolves.
+    recipe, cell = documents(manual=False, folder=ROOT / "test/fixtures/recipe1_pre_g2")
     compiler, compiled = compile_documents(recipe, cell)
     assert compiled.plan_bundle.recipe_digest == "8b620e598e4e3a90037e339383929fe6267fab0a6638053ef01b89679f9bfd0c"
     assert compiled.plan_bundle.cell_digest == "b994ee5214f590a10cac434085b8680f43a3c4ecf6e156a5625be793c9a986f3"

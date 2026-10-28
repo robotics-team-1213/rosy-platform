@@ -14,7 +14,6 @@ namespace rosy_native_map
 {
 namespace
 {
-constexpr uint64_t kMaxCells = 4194304;
 static_assert(sizeof(double) == 8 && std::numeric_limits<double>::is_iec559);
 
 uint64_t timestamp(const builtin_interfaces::msg::Time & value)
@@ -99,7 +98,7 @@ Identity identify(const nav_msgs::msg::OccupancyGrid & grid)
     static_cast<double>(info.resolution), {p.x, p.y, p.z, q.x, q.y, q.z, q.w},
     timestamp(grid.header.stamp), timestamp(info.map_load_time)};
   const uint64_t cells = static_cast<uint64_t>(info.width) * info.height;
-  if (identity.frame != "map" || !info.width || !info.height || cells > kMaxCells ||
+  if (identity.frame != "map" || !info.width || !info.height || cells > kMaxOriginalCells ||
     grid.data.size() != cells || !std::isfinite(identity.resolution) || identity.resolution <= 0 ||
     !std::all_of(identity.origin.begin(), identity.origin.end(),
       [](double value) {return std::isfinite(value);}) ||

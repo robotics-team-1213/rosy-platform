@@ -17,6 +17,7 @@ import time
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT/'contracts/learning/src'))
 from rosy.contracts.learning import validate_policy
+from rosy.contracts.learning.omx import WRIST, camera_role
 
 
 def _text(value):
@@ -38,13 +39,18 @@ def _vector(values,size=None,positive=False):
 from rosy.contracts.learning.inference import InferenceObservation, InferenceResult
 
 
+def image_key(doc):
+    """Model input key the policy was trained with (D-794 B: never the device's current name)."""
+    return 'observation.images.'+doc['cameras'][0]['name']
+
+
 def _snapshot(root,pin):
     root=Path(root).resolve();manifest=root/'policy-artifact.json';payload=manifest.read_bytes()
     doc=validate_policy(json.loads(payload),root=root)
     if doc['revision']!=pin:raise ValueError('policy revision differs from pinned input')
     if doc['profile']!='omx_joint_target_v1' or doc['environment']!='sim':
         raise ValueError('only the OMX SIM ACT study profile is supported')
-    if len(doc['cameras'])!=1 or doc['cameras'][0]['name']!='front':raise ValueError('one explicit front RGB camera required')
+    if len(doc['cameras'])!=1 or camera_role(doc['cameras'][0]['name'])!=WRIST:raise ValueError('one explicit wrist RGB camera required')
     buffers={}
     for ref in [*doc['files'],doc['normalization'],*doc['evaluations']]:
         content=(root/ref['path']).read_bytes()
@@ -53,6 +59,74 @@ def _snapshot(root,pin):
         buffers[ref['path']]=content
     if manifest.read_bytes()!=payload:raise ValueError('artifact manifest changed while snapshotting')
     return doc,buffers
+
+
+def action_statistics(stats,size):
+    """Decode the representation before model loading; old consumers reject nested statistics."""
+    if 'action_transform' not in stats:
+        try:
+            mean=_vector(stats['action_mean'],size)
+            std=_vector(stats['action_std'],size,positive=True)
+        except KeyError as error:raise ValueError('missing action statistics') from error
+        return 'absolute',mean,std,mean
+    transform=stats['action_transform']
+    if any(key in stats for key in ('action_mean','action_std')) or type(transform) is not dict:
+        raise ValueError('unknown or ambiguous action transform')
+    kind=transform.get('type')
+    keys={'type','mean','std','absolute_baseline'}
+    if kind in ('joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'):
+        keys.add('max_delta_rad')
+        bound=transform.get('max_delta_rad')
+        if type(bound) not in (int,float) or bound!=.035:
+            raise ValueError('exact supported action bound required')
+    elif kind!='joint_delta_from_chunk_source_v1':
+        raise ValueError('unknown or ambiguous action transform')
+    if set(transform)!=keys:raise ValueError('unknown or ambiguous action transform')
+    return (transform['type'],_vector(transform['mean'],size),
+            _vector(transform['std'],size,positive=True),_vector(transform['absolute_baseline'],size))
+
+
+def install_action_head_transform(policy,stats):
+    """Reconstruct the byte-bound trained activation without changing weight keys."""
+    kind,mean,std,_=action_statistics(stats,len(stats['state_mean']))
+    if kind not in ('joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'):return
+    import torch
+    head=policy.model.action_head
+    if type(head) is not torch.nn.Linear or head.out_features!=len(mean) or head._forward_hooks:
+        raise ValueError('one unmodified ACT linear action head required')
+    mean=head.weight.new_tensor(mean);std=head.weight.new_tensor(std)
+    source=[None]
+    if kind=='absolute_tanh_from_chunk_source_v1':
+        model=policy.model
+        if model._forward_pre_hooks or model._forward_hooks:
+            raise ValueError('one unmodified ACT model head source required')
+        state_mean=head.weight.new_tensor(_vector(stats['state_mean'],len(mean)))
+        state_std=head.weight.new_tensor(_vector(stats['state_std'],len(mean),positive=True))
+        def capture_source(_model,inputs):
+            if source[0] is not None or len(inputs)!=1 or not isinstance(inputs[0],dict):
+                raise ValueError('one model call source required')
+            state=inputs[0].get('observation.state')
+            if (not isinstance(state,torch.Tensor) or state.ndim!=2 or state.shape[-1]!=len(mean)
+                    or not torch.isfinite(state).all()):
+                raise ValueError('finite batch source required')
+            original=state*state_std+state_mean
+            if not torch.isfinite(original).all():raise ValueError('nonfinite source')
+            source[0]=original[:,None,:]
+        def clear_source(_model,_inputs,_output):
+            source[0]=None
+        model.register_forward_pre_hook(capture_source)
+        model.register_forward_hook(clear_source,always_call=True)
+    def bounded_delta(_module,_inputs,output):
+        delta=output*std+mean
+        if not torch.isfinite(output).all() or not torch.isfinite(delta).all():
+            raise ValueError('nonfinite action head')
+        if kind=='absolute_tanh_from_chunk_source_v1':
+            origin=source[0]
+            if origin is None or output.ndim!=3 or output.shape[0]!=origin.shape[0]:
+                raise ValueError('same batch model source required for absolute head')
+            return (origin+.035*torch.tanh((delta-origin)/.035)-mean)/std
+        return (.035*torch.tanh(delta/.035)-mean)/std
+    head.register_forward_hook(bounded_delta)
 
 
 def _configuration(doc,buffers):
@@ -64,15 +138,16 @@ def _configuration(doc,buffers):
             or config.get('pretrained_backbone_weights') is not None or config.get('pretrained_path') is not None
             or config.get('temporal_ensemble_coeff') is not None):raise ValueError('local CPU ACT with no downloads or ensemble required')
     inputs={'observation.state':dict(type='STATE',shape=[size]),
-            'observation.images.front':dict(type='VISUAL',shape=camera['model_shape'])}
+            image_key(doc):dict(type='VISUAL',shape=camera['model_shape'])}
     outputs={'action':dict(type='ACTION',shape=[size])}
     if config.get('input_features')!=inputs or config.get('output_features')!=outputs:
         raise ValueError('ACT features differ from policy metadata')
     steps=config.get('n_action_steps');chunk=config.get('chunk_size')
     if type(steps) is not int or type(chunk) is not int or not 1<=steps<=chunk<=1024:
         raise ValueError('bounded positive ACT chunk configuration required')
-    for name in ('state_mean','state_std','action_mean','action_std'):
+    for name in ('state_mean','state_std'):
         _vector(stats[name],size,positive=name.endswith('_std'))
+    action_statistics(stats,size)
     expected=dict(resize_hw=camera['model_shape'][1:],color='rgb',scale=camera['scale'])
     if stats['image']!=expected:raise ValueError('image normalization differs from policy metadata')
     duration=stats['fixed_source_duration_s']
@@ -95,10 +170,14 @@ def _model_from_bytes(config_bytes,weight_bytes,stats,metadata):
     if not isinstance(config,ACTConfig):raise ValueError('ACT config required')
     policy=ACTPolicy(config)
     policy.load_state_dict(load(weight_bytes),strict=True)
+    install_action_head_transform(policy,stats)
     policy.eval()
-    means={name:torch.tensor(stats[name],dtype=torch.float32) for name in ('state_mean','action_mean')}
-    stds={name:torch.tensor(stats[name],dtype=torch.float32) for name in ('state_std','action_std')}
-    camera=metadata['cameras'][0]
+    representation,action_mean,action_std,_=action_statistics(stats,len(metadata['joint_names']))
+    means=dict(state_mean=torch.tensor(stats['state_mean'],dtype=torch.float32),
+               action_mean=torch.tensor(action_mean,dtype=torch.float32))
+    stds=dict(state_std=torch.tensor(stats['state_std'],dtype=torch.float32),
+              action_std=torch.tensor(action_std,dtype=torch.float32))
+    camera=metadata['cameras'][0];key=image_key(metadata)
 
     def predict(obs):
         _,height,width=obs.camera_shape
@@ -107,8 +186,10 @@ def _model_from_bytes(config_bytes,weight_bytes,stats,metadata):
         image=torch.nn.functional.interpolate(image,size=tuple(camera['model_shape'][1:]),mode='bilinear',align_corners=False)
         state=(torch.tensor(obs.positions,dtype=torch.float32)-means['state_mean'])/stds['state_std']
         with torch.inference_mode():
-            chunk=policy.predict_action_chunk({'observation.state':state.unsqueeze(0),'observation.images.front':image})
+            chunk=policy.predict_action_chunk({'observation.state':state.unsqueeze(0),key:image})
             actions=chunk[0,:config.n_action_steps]*stds['action_std']+means['action_mean']
+            if representation in ('joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1'):
+                actions=actions+torch.tensor(obs.positions,dtype=torch.float32)
         return actions.tolist()
     return predict
 

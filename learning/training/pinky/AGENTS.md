@@ -33,7 +33,7 @@ Compares speed models on Pinky recordings. `comparison_job.py` verifies the sour
 
 ### Testing Requirements
 
-`python -m pytest learning/training/pinky/test -q` for host checks. A real comparison uses the pinned environment and writes only to a new directory on X:.
+`python -m pytest learning/training/pinky/test -q` for host checks. A real comparison uses the pinned environment and writes only to a new directory on $ROSY_SCRATCH.
 
 ### Common Patterns
 

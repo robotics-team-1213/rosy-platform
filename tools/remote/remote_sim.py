@@ -5,6 +5,13 @@
                                       swarm_bench|map_v2_runner|fleet_trips [-- <bench args>]
     python tools/remote/remote_sim.py [...] cmd -- <shell command>
 
+Use ``--durable`` for a long command that must survive an observer's SSH loss. The same
+bounded native run detaches and reconnects; ``remote-run.json`` identifies it. On exhausted
+contact or a missing terminal code, keep that run rather than submitting another. Its
+``<run>.sim-job`` journal retains rc/log after successful source/output cleanup. To follow
+the same actor later, load that metadata and call ``remote_sim_job.follow`` with its host,
+name and a separate local log path; this never places, ships or starts a run.
+
 Hosts: ``ROSY_SIM_HOSTS`` (space separated ``user@addr[=role]``), else ``sim_hosts`` in the
 gitignored ``private/lab-hosts.json`` (D-226), else the pytest hosts of ``remote_pytest.py``.
 The role (``model`` or ``ai``, default ``ai``) only picks the run's caps. The site PC is
@@ -17,7 +24,7 @@ host, the ``sim`` floor (6 free cores, 8 GB) after ``~/rosy-jobs`` locks and res
 ``remote_pytest.py`` (git bundle into ``~/rosy-test``); the run builds ``gz_sim`` with colcon,
 then runs the bench headless under ``systemd-run --user --scope`` (MemoryMax, CPUQuota, nice).
 The remote shell stops that scope and frees the lock when it ends; then the outputs are fetched.
-Logs and bench outputs land in ``--log-dir`` (default ``X:/DevTemp/remote-sim/<sha>``); the
+Logs and bench outputs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-sim/<sha>``, else the system temp directory); the
 run's files are removed after a good fetch and kept on the host when the fetch fails. Never run on the operator laptop (D-584).
 Standard library only.
 """
@@ -25,7 +32,9 @@ Standard library only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
+import json
 import os
 import secrets
 import shlex
@@ -40,8 +49,8 @@ import remote_pytest as rp  # noqa: E402
 # D-571: production only, never a sim host (user 2026-10-09 "관제 PC는 시뮬레이션에서 제외").
 PRODUCTION_REFUSAL = "production only, excluded from simulation (D-571)"
 # D-571 4: memory cap (GB) and CPU cap (cores) for one run, by role. A host without a role
-# gets the shared-PC ("ai") caps.
-PROFILES = {"model": {"mem_gb": 6, "cpus": 8}, "ai": {"mem_gb": 4, "cpus": 4}}
+# gets the shared-PC ("ai") caps. D-867 raised "ai" for VLA probes (Gazebo + CORE + SmolVLA in one run).
+PROFILES = {"model": {"mem_gb": 10, "cpus": 16}, "ai": {"mem_gb": 10, "cpus": 12}}
 
 # CORE's pip pins, the Fleet pins CORE's set lacks (one interpreter runs CORE and a SIM Fleet; CORE's
 # pins win, as remote_pytest.py VENV does with the device set), wheel build tools, and the D-373
@@ -53,9 +62,9 @@ DEPS = r"""( flock -w 600 9 || exit 1
   rm -rf "$PYDEPS.new"; mkdir -p "$PYDEPS.new"
   grep -viEf <(sed -n 's/^\([A-Za-z0-9._-]*\)==.*/^\1==/p' "$REQ") "$FLEET_REQ" > "$PYDEPS.new/fleet-extra.txt" \
     || [ $? = 1 ]
-  UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)
-  if [ -n "$UV" ]; then PIP() { "$UV" pip install -q --python /usr/bin/python3 "$@"; }
-  else PIP() { /usr/bin/python3 -m pip install -q "$@"; }; fi
+  UV=$(command -v uv || ls ~/.local/bin/uv 2>/dev/null || true)   # D-802: uv only, deployed by host-state
+  [ -n "$UV" ] || { echo "[remote-sim] uv missing (D-802): sudo python3 deploy/hosts/common/rosy-host-state install <role> --approve uv"; exit 1; }
+  PIP() { "$UV" pip install -q --python /usr/bin/python3 "$@"; }
   PIP --target "$PYDEPS.new" -r "$REQ" -r "$PYDEPS.new/fleet-extra.txt" httpx 'setuptools>=68' wheel \
     && PIP --target "$PYDEPS.new/learned" --require-hashes --no-deps --only-binary :all: -r "$LEARNED_REQ" \
     && touch "$PYDEPS.new/.ok" && rm -rf "$PYDEPS" && mv "$PYDEPS.new" "$PYDEPS"
@@ -155,26 +164,45 @@ def ranked(hosts: list[tuple[str, str]]) -> list[str]:
 
 
 def run_sim(host: str, role: str, bench_cmd: str, bench_args: list[str], sha: str,
-            repo: Path, log_dir: Path, minutes: int) -> int:
+            repo: Path, log_dir: Path, minutes: int, *, durable: bool = False) -> int:
     prof = PROFILES.get(role, PROFILES["ai"])
     name = f"sim-{sha[:10]}-{secrets.token_hex(3)}"
     print(f"[remote-sim] {sha[:10]} on {host} (native, {prof['cpus']} CPU, {prof['mem_gb']} GB)", flush=True)
     log_dir.mkdir(parents=True, exist_ok=True)
+    terminal, fetched_ok = not durable, False
     try:
         try:
             rp.ship(repo, host, sha, name)  # writes <run>.resv, which SIM's job lock replaces
             args = [name, str(prof["mem_gb"]), str(prof["cpus"]), str(minutes), bench_cmd, *bench_args]
             command = ("INNER=" + shlex.quote(INNER) + " bash -c " + shlex.quote(SIM) + " remote "
                        + " ".join(map(shlex.quote, args)))
-            try:
-                proc = subprocess.run([*rp.SSH, host, command], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                      stderr=subprocess.STDOUT, timeout=minutes * 60 + 300)
-                code, text = proc.returncode, proc.stdout
-            except subprocess.TimeoutExpired as exc:
-                code, text = 124, (exc.stdout or b"") + b"\n[remote-sim] ssh timed out\n"
+            if durable:
+                import remote_job
+                import remote_sim_job
+                metadata = dict(name=name, host=host, role=role, source_revision=sha,
+                    command_sha256=hashlib.sha256(json.dumps([bench_cmd, *bench_args]).encode()).hexdigest(),
+                    cpus=prof['cpus'], memory_gib=prof['mem_gb'], minutes=minutes)
+                try:
+                    code = remote_sim_job.run(host, name, args, INNER, SIM, log_dir / 'run.txt', metadata,
+                                              ssh=rp.SSH)
+                except remote_job.Lost as exc:
+                    print(str(exc), file=sys.stderr, flush=True)
+                    return 255
+                if code == remote_job.VANISHED_EXIT:
+                    return code
+                terminal = True
+                text = (log_dir / 'run.txt').read_bytes()
+            else:
+                try:
+                    proc = subprocess.run([*rp.SSH, host, command], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                          stderr=subprocess.STDOUT, timeout=minutes * 60 + 300)
+                    code, text = proc.returncode, proc.stdout
+                except subprocess.TimeoutExpired as exc:
+                    code, text = 124, (exc.stdout or b"") + b"\n[remote-sim] ssh timed out\n"
         finally:
             # Before the fetch: a bench's background launch still writes logs until its scope stops.
-            rp.remote(host, STOP, name, capture_output=True, timeout=120)
+            if terminal:
+                rp.remote(host, STOP, name, capture_output=True, timeout=120)
         (log_dir / "run.txt").write_bytes(text)
         enc = sys.stdout.encoding or "utf-8"  # a cp949 console must not stop the fetch
         print(text.decode("utf-8", "replace")[-3000:].encode(enc, "replace").decode(enc), flush=True)
@@ -184,6 +212,7 @@ def run_sim(host: str, role: str, bench_cmd: str, bench_args: list[str], sha: st
                 # Skip links: ROS and colcon "latest" links are absolute paths on the host.
                 tar.extractall(log_dir / "out", filter=lambda m, path: None if m.issym() or m.islnk()
                                else tarfile.data_filter(m, path))
+            fetched_ok = True
             rp.remote(host, DROP, name, capture_output=True, timeout=120)
         else:
             print(f"[remote-sim] fetching outputs failed (exit {fetched.returncode}): "
@@ -191,7 +220,8 @@ def run_sim(host: str, role: str, bench_cmd: str, bench_args: list[str], sha: st
                   f"[remote-sim] kept on {host}: ~/rosy-test/runs/{name}-out", file=sys.stderr, flush=True)
         return code
     finally:
-        rp.remote(host, rp.CLEANUP, name, capture_output=True, timeout=120)
+        if not durable or (terminal and fetched_ok):
+            rp.remote(host, rp.CLEANUP, name, capture_output=True, timeout=120)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -201,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sha", default="HEAD")
     parser.add_argument("--log-dir", type=Path)
     parser.add_argument("--minutes", type=int, default=45, help="wall limit, compile time included")
+    parser.add_argument("--durable", action="store_true", help="detach and reconnect to the same bounded run on SSH loss")
     parser.add_argument("bench", nargs="?", choices=[*BENCHES, "cmd"])
     parser.add_argument("bench_args", nargs="*", help="after --: bench args, or the command for cmd")
     args = parser.parse_args(argv)
@@ -222,7 +253,10 @@ def main(argv: list[str] | None = None) -> int:
         bench_cmd, bench_args = BENCHES[args.bench], args.bench_args
     base = os.environ.get("ROSY_SIM_LOGS") or rp.log_root("remote-sim")
     log_dir = args.log_dir or Path(base) / sha[:12]
-    code = run_sim(host, role, bench_cmd, bench_args, sha, repo, log_dir, args.minutes)
+    if args.durable:
+        code = run_sim(host, role, bench_cmd, bench_args, sha, repo, log_dir, args.minutes, durable=True)
+    else:
+        code = run_sim(host, role, bench_cmd, bench_args, sha, repo, log_dir, args.minutes)
     print(f"[remote-sim] exit {code} on {host} ({log_dir})")
     return code
 

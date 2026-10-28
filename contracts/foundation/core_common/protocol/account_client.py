@@ -185,6 +185,24 @@ class AccountClient:
             return None
         return self.resolve_session_id(_digest(cookie))
 
+    def media_session_active(self, session_id):
+        """Strict online D-789 check; no cached/offline authority for live media."""
+        if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
+            return False
+        try:
+            with self.transaction() as db:
+                row = db.execute('SELECT * FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
+                if row is None or row['expires'] <= self.clock():
+                    return False
+                tokens = json.loads(self.cipher.decrypt(row['tokens']))
+                claims = self._claims(tokens['access_token'])
+                if not claims.permits(self.resource, 'robot.read'):
+                    return False
+                self._active(tokens['access_token'])
+                return True
+        except (ValueError, InvalidToken, KeyError, AccountUnavailable):
+            return False
+
     def resolve_session_id(self, session_id):
         if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
             return None
@@ -292,6 +310,22 @@ class AccountClient:
                 raise AccountDenied('Invalid local session') from None
             with self.transaction() as db:
                 db.execute('DELETE FROM app_account_revocations WHERE id=?', (row['id'],))
+
+
+def browser_session(client, cookie):
+    """The shared /api/account/session body (D-757) and its claims; each route still authorizes."""
+    if client is None:
+        return {'enabled': False, 'authenticated': False, 'profile': None, 'profile_url': None}, None
+    claims = client.resolve(cookie)
+    profile = client.profile(cookie) if claims else None
+    if profile and profile['account_id'] != claims.sub:
+        profile = None
+    body = {'enabled': True, 'authenticated': claims is not None, 'profile': profile,
+            'profile_url': client.profile_url if claims else None}
+    if claims:
+        body.update(account_id=claims.sub, session_family=claims.sid, revision=claims.rev, resource=claims.aud,
+                    capabilities=[cap for grant in claims.grants for cap in grant.capabilities])
+    return body, claims
 
 
 def load_account_client(filename, *, destinations=('/pilot', '/dashboard', '/')):

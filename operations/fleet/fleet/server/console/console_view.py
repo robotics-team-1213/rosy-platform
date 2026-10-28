@@ -79,15 +79,15 @@ class CapabilityDisplay:
             return None
         cached = self.cache.get(robot_id)
         if cached is None or self.clock() - cached[0] >= self.refresh_s:
-            task = self.pending.get(robot_id)
+            task, started = self.pending.get(robot_id), False
             if task is None or task.done() or task.get_loop() is not asyncio.get_running_loop():
-                task = asyncio.create_task(self._refresh(robot_id, client))
+                task, started = asyncio.create_task(self._refresh(robot_id, client)), True
                 self.pending[robot_id] = task
-            # Only a robot never read (or whose kept value outlived max_age_s) waits; otherwise
-            # the request answers the kept value now.
+            # Only a robot never read (or whose kept value outlived max_age_s) waits, and only the
+            # request that started the refresh: a slow robot does not add wait_s to every request.
             expired = (cached is None or cached[1] is not None and self.max_age_s is not None
                        and self.clock() - cached[0] > self.max_age_s)
-            await asyncio.wait({task}, timeout=wait_s if expired else 0)
+            await asyncio.wait({task}, timeout=wait_s if expired and started else 0)
         return self._kept(robot_id, client)
 
     def _kept(self, robot_id, client):
@@ -149,6 +149,7 @@ class TripCaps:
     line_follow_authority_required: bool = False
     #: D-760 3: ``shrink``/``seq`` and ``ttl_s`` up to 5 s; D-760 2: enforced while its trip lease is open. Absent = no.
     line_follow_authority_shrink: bool = False
+    line_follow_route_guide: bool = False
     line_follow_authority_under_lease: bool = False
     line_follow_advice: bool = False  #: D-551: CORE shows a signal advice (POST /line-follow/advice, display only); absent = no
     lane_bend: bool = False  #: D-507 addendum: CORE takes action ``bend``; absent = no
@@ -189,6 +190,7 @@ def trip_caps(capabilities) -> Optional[TripCaps]:
                             line_follow_authority=item.get("line_follow_authority") is True,
                             line_follow_authority_required=item.get("line_follow_authority_required") is True,
                             line_follow_authority_shrink=item.get("line_follow_authority_shrink") is True,
+                            line_follow_route_guide=item.get("line_follow_route_guide") is True,
                             line_follow_authority_under_lease=item.get("line_follow_authority_under_lease") is True,
                             line_follow_advice=item.get("line_follow_advice") is True,
                             lane_bend=item.get("lane_bend") is True, trip_lease=item.get("trip_lease") is True,

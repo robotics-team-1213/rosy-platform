@@ -1,0 +1,61 @@
+/* D-461 조합의 다음 칸: 단계 스트립. class-only — 마크업이 순서와 상태를 나르고 JS는 없다.
+   `<ol class="ui-stage-track">` 안에 `<li class="ui-stage" data-state>`를 둔다. 상태 어휘는
+   `ui-tag`와 같다. done은 지난 단계(조용한 글자), now는 지금(밝은 글자와 잉크로 채운 표식 —
+   정상은 색이 아니다, D-82), blocked는 주의 글자, todo는 남은 단계다. 긴 절차는 줄바꿈해
+   흐르고, 표식은 `--size-stage-mark` 원에 순번을 넣는다.
+
+   components.css가 D-766 한도에 닿아(942줄 동결) 이 묶음은 자기 시트에 산다. 쓰는 화면은
+   components.css 뒤에 /common/stage-strip.css를 링크한다. */
+.ui-stage-track {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-stage-track);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: ui-stage;
+}
+.ui-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-stage-mark);
+  min-width: 0;
+  color: var(--text-secondary);
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
+  counter-increment: ui-stage;
+  overflow-wrap: anywhere;
+}
+.ui-stage::before {
+  content: counter(ui-stage);
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: var(--size-stage-mark);
+  block-size: var(--size-stage-mark);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-flag);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-label);
+  line-height: var(--leading-flat);
+}
+.ui-stage[data-state="done"]::before {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+.ui-stage[data-state="now"] {
+  color: var(--text-primary);
+}
+.ui-stage[data-state="now"]::before {
+  border-color: var(--text-primary);
+  background: var(--text-primary);
+  color: var(--surface-canvas);
+}
+.ui-stage[data-state="blocked"] {
+  color: var(--status-warn);
+}
+.ui-stage[data-state="blocked"]::before {
+  border-color: var(--status-warn);
+  color: var(--status-warn);
+}

@@ -52,7 +52,9 @@ gates:
   FIELD:
     state: PARKED
 adrs:
-- D-825
+- D-875
+- D-775
+- D-801
 - D-693
 - D-687
 - D-679
@@ -107,6 +109,8 @@ adrs:
 - D-472
 - D-497
 plans:
+- docs/plans/2026-10-24-neutral-transfer-closure-and-producer-design.md
+- docs/plans/2026-10-24-managed-transfer-capability-design.md
 - docs/plans/2026-10-11-mapless-fleet-control.md
 - docs/plans/2026-10-11-stable-map-readouts-design.md
 - docs/plans/2026-10-04-d442-omx-preempt-recovery.md
@@ -174,6 +178,7 @@ SOURCE implemented; remote verification pending. No Fleet REALIGN activation or 
 
 승인된 autonomous_robots의 WAIT/완료 YIELD 재관측, 같은 사건 예산 유지, UNKNOWN durable freeze와 정확한 CORE 사건 종료 확인, 범위 내 검증된 trip 재계획을 구현했다. SharedGather refresh의 센서/state 원장을 bounded durable 저장하고 read_guard 조회와 hash export로 AI 학습 원본을 준비한다. labels/model activation은 자동 생성하지 않는다. 7c0e4f049 원격 238 pass/NEW 0 및 Node 52 pass; 최종 최신 main 착지 gate 별도. SOURCE 증거이며 설치·실기·FIELD gate는 유지한다.
 
+
 ### 2026-10-16 D-772 기존 TripRunner의 충전 복귀 포트
 
 `ChargeReturnTrip`은 충전 세션의 계획·lease·correlation을 첫 RPC 전에 저장하고 기존 TripRunner를 한 번만 제출한다. 명시적인 active route map→station map 결속, 실제 경로 끝점·에너지 admission·현재 설치 버전·세션 예약을 재검사한다. 실제 trip 도착과 CORE 정지 handover ACK 후에만 SUCCEEDED이며 충전 예약은 유지한다. 재시작과 finish 응답 불명은 재제출하지 않는다. DB 장애·경합 전에 실행 token을 차단하고 정확한 CORE/trip/lease 정리를 시도한다.
@@ -218,3 +223,41 @@ c3ac314b5 원격 CORE/HTTP 144개, 3f44891bd Fleet 회귀 149개 통과, 각 NEW
 기존 tracking/sighting 승인과 World/CORE 권한은 유지한다. 원격 시험의 커밋·실행·실패 수정·skipped와
 실측 근거의 한계는 [구현 검증 기록](../../docs/validation/measured-camera-lifecycle-2026-10-16/result.md)에 모은다. 기존 모듈 gate의 물리 수용 범위를
 넓히지 않는다. D-598의 현재 현장 readback·로봇별 오차 계수는 아직 확보하지 못했다.
+
+## 2026-10-24 · D-856 두 표본 물리 검사
+
+source205의 내부 validator는 World 사실과 설치 정책/durable attempt context를 대조한다. 물체 model origin의 source/target pose, 전체 참가자9개 링크의 정지·엄격한 구역 이탈, 두 표본 freshness/순서/경계 이후 조건을 검사한다. quaternion norm 오차와 직접 축소 descriptor를 회귀로 보완했다. 집중67 passed/skip0, affected 전체 두 묶음4587 passed/189 skipped와6312 passed/336 skipped·각exit0/known0 NEW와 독립 재검토를 확인했다. 범위 중복과 skips는 합산/수용으로 세지 않는다.
+
+credential ingress·현재 원장에서 만든 context/fence·physical create/approval·claim 해제 transaction·Harbor ARM은 아직 연결하지 않았다. validator 성공은 receipt나 점유 해제 권한이 아니다. [검증과 한계](../../docs/validation/harbor-physical-evaluator-2026-10-24/result.md)를 따른다. 기존 모듈/현장 gate의 수용 범위를 넓히지 않는다.
+
+## 2026-10-24 · D-856 중립 물리 제안과 승인 원장
+
+source3c는 simulation 내부 physical create/read/two-person approval과 공통 claims를 같은 DB transaction으로 처리한다. 자원 키를 정책 digest에 포함하고 모든 owner workcell도 잠근다. schema version6 승인 테이블과 idempotency index는 기존 migration에 포함한다. stop/startup은 HELD/UNKNOWN 점유를 보존한다. 새 Cell 완료 파일로 이동한 메서드의 AST/호출 의미는 그대로이며 physical 완료에 재사용하지 않는다.
+
+자원 정규화를 공용 contracts leaf로 옮긴 최종source76의 집중1292 passed/skip0, FULL23개 각각exit0/known0 NEW와 독립 안전 검토를 확인했다. 원본9d FULL의 구조/G1 timing 실패는 별도로 보존한다. source76 G1 timing4 passed/skip0도 확인했지만 원본 접촉 간격 실패의 원인은 미확정이다. HTTP/DTO·live SDK capability·prepared action/attempt·관측 credential ingress·dispatcher·물리 receipt/claim 종료·Harbor ARM은 후속이다. READY를 실행 제출로 보지 않는다. [검증 기록](../../docs/validation/harbor-physical-proposals-2026-10-24/result.md)을 따른다.
+
+
+## 2026-10-24 · D-856 중립 ARM 작업 HTTP
+
+API v1.307의 simulation 설치 경로에 closed physical create/read/key/admit를 연결했다. 실제 SDK의 모든 참여 capability를 SQLite 밖에서 읽고 기존 2인 승인·CAS·fence·공통 claims transaction을 호출한다. auth/audit와 present-Origin 검사를 적용하며 미설치503/내부 설치 자료 비노출을 보존한다.
+
+소스58 HTTP18 passed/skip0/known0 NEW와 FULL23개 각각exit0/known0 NEW·독립 검토를 확인했다. [원본 실패·manifest·한계](../../docs/validation/harbor-arm-job-http-2026-10-24/result.md)를 따른다. 장치 제출·물리 종료·Harbor ARM 및 뒤의 schema7/8은 이 소스 검증에 포함하지 않는다. 기존 물리/현장 gate와 이전G1 원인 미확정 상태는 그대로다.
+
+
+## 2026-10-24 · D-856 내부 물리 실행 원장
+
+source3b까지 고정 준비·두 표본 최초 전송 의도·장치 결과 투영·별도 물리 종료 receipt/원자 점유 해제를 구현했다. source3b 집중101 passed/skip0/0 NEW와 독립 계약 검토를 확인했다. 앞선 결과 보완은229 passed/skip0/0 NEW다. [각 SHA·원본 실패·검토·검증 한계](../../docs/validation/harbor-physical-execution-2026-10-24/result.md)를 따른다.
+
+SDK submit/get/cancel dispatcher·관측 credential HTTP·Harbor ARM은 아직 없다. sourcecf의 부분 실행을 FULL로 보지 않으며 최종 소스의 전체23개 검증은 후속이다. 현재 증거는 synthetic World facts와 원장에 한정한다. 실물 bounds·동작·현장 gate와 이전G1 원인 미확정 상태는 유지한다.
+
+
+## 2026-10-24 · D-856 stop 대상과 SDK orchestration
+
+source80dde는 모든 physical participant의 stop/rearm/rollback을 별도 target tuple로 연결한다. legacy dispatch/recovery mapping은 유지하며 app902행 ratchet과 genuine safety review를 결속했다. 집중65 passed/skip0/0 NEW다.
+
+source54f27의 내부 dispatcher는 process-safe RPC 직렬화와 최종 send 재검사, 고정 grant의 단일 submit/이후 GET-only·취소 점유 보존을 구현했다. 집중121 passed/skip0/0 NEW·독립 재검토를 확인했다. [각 source·원본 RED·hash·한계](../../docs/validation/harbor-physical-execution-2026-10-24/result.md)를 따른다. app의 관측 credential HTTP·Harbor ARM 및 최종 FULL/독립 실제 HTTP는 아직 연결·검증 전이다. 현재 Fake SDK 근거로 물리 gate를 넓히지 않는다.
+
+
+## 2026-10-24 · D-856 독립 observer와 Harbor ARM HTTP
+
+source bb38까지 별도 expiring observer credential/identity isolation·audit·closed raw ingress, READY 준비와 단일 SDK 제출, lifespan monitor Get-only·scoped receipt/cancel을 연결했다. Channel 자격 재사용 P1과 missing Header 순서도 RED 뒤 보완·독립 재검토했다. 최종 집중122passed/skip0/0NEW, 플랫폼 bb38/Harbor93e71의 ARM1/Cell3/TRIP1 독립 HTTP·실제 UDS framing을 확인했다. Harbor는 물리 receipt 뒤에도 WAITING을 유지한다. [원본 RED·중복/skip·검토·FULL 상태](../../docs/validation/harbor-arm-observer-http-2026-10-24/result.md)가 근거다. 최신 bb38 FULL23개 각각exit0/0NEW와 독립 전체 증거 검토를 확인했다. synthetic raw facts와 통신/원장 검증을 실물 gate로 확대하지 않는다. 과거 G1 timing 원인 미확정도 유지한다.

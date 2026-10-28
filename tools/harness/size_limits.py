@@ -37,6 +37,7 @@ WEB_SUFFIXES = {".js", ".mjs", ".ts", ".html", ".css"}
 OPS_SUFFIXES = CODE_SUFFIXES | WEB_SUFFIXES
 #: Roots outside every package: each file is held to its file limit, there is no unit total.
 OPS_ROOTS = ("deploy", "tools", "learning",  # learning: moved perception tooling (D-427 wave 1)
+             "applications/fleet/dev",  # D-830 development scripts; no operational package
              "operations/site_devices",  # site device firmware (D-427 wave 3b)
              "operations/signal_observation",  # one-file site service (D-766 coverage addendum)
              "operations/prediction")  # D-782 checker and shadow scripts, no package
@@ -46,7 +47,7 @@ PACKAGE_HOLDERS = {
     "control": tuple(f"middleware/drive/{holder}" for holder in
                      ("calibration", "recovery", "motion_limits", "tracking", "planning/grid", "runtime")),
     "core_features": ("middleware/drive/behaviors",),
-    "fleet": ("operations/decision", "operations/site_ui/console", "operations/situation",
+    "fleet": ("operations/decision", "applications/fleet/web", "operations/situation",
               "operations/site_execution", "integrations/messaging/discord"),
 }
 #: Product roots without a package.xml (pyproject distributions, the Gradle app), counted like a package.
@@ -59,19 +60,23 @@ STANDALONE = {
     "rosy-execution-local": "middleware/robot_execution/local",
     "rosy-skill-api": "middleware/skills/api",
     "rosy-skill-manipulation": "middleware/skills/manipulation",
-    "rosy-app-gateway": "operations/apps/fleet",
+    "rosy-app-gateway": "applications/fleet/gateway",
     "rosy-palletizing": "operations/processes/palletizing",
     "rosy-world": "operations/world",
+    "rosy-monitoring": "operations/monitoring",
+    "rosy-monitoring-web": "applications/monitoring",
     "rosy-cam": "operations/site_ui/cam",
+    "rosy-media": "operations/site_ui/media",
+    "rosy-media-edge": "middleware/media",
 }
 #: D-766 coverage addendum (2026-10-15): files already over their limit when the roots above and
 #: ``.kt`` joined the count. Each may enter the ratchet as a new row once, at no more than this.
 #: D-766 revision 2 (2026-10-16): the scripts over 600 and the test files over 1,500 when those limits began.
 COVERAGE_ROWS = {
     "site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt": 791,
-    "robot_ui/pilot/screens/drive.js": 783, "site_ui/console/line-stuck.js": 756,
-    "site_ui/console/roster.js": 711, "site_ui/console/shared/site-map-model.js": 800,
-    "site_ui/console/shared/vision-view.js": 788, "site_ui/console/site-map.js": 771,
+    "robot_ui/pilot/screens/drive.js": 783, "fleet/web/line-stuck.js": 756,
+    "fleet/web/roster.js": 711, "fleet/web/shared/site-map-model.js": 800,
+    "fleet/web/shared/vision-view.js": 788, "fleet/web/sitemap/site-map.js": 771,
     "middleware/core/events/test/test_audit.py": 1533,
     "middleware/robot_ui/pilot/test/test_pilot_browser.py": 3059,
     "operations/fleet/test/test_trip_runner.py": 1757,
@@ -87,7 +92,8 @@ _SKIP = ("test", "tests", "build", "install", "log")
 
 
 def is_prod(parts) -> bool:
-    return not any(part in _SKIP or part.startswith(".") for part in parts)
+    return (not any(part in _SKIP or part.startswith(".") for part in parts)
+            and ("src", "androidTest") not in zip(parts, parts[1:]))
 
 
 def _under(path: str, folder: str) -> bool:
@@ -96,7 +102,8 @@ def _under(path: str, folder: str) -> bool:
 
 def is_test(path: str) -> bool:
     parts = PurePosixPath(path).parts
-    return (PurePosixPath(path).suffix in OPS_SUFFIXES and any(p in ("test", "tests") for p in parts)
+    return (PurePosixPath(path).suffix in OPS_SUFFIXES
+            and (any(p in ("test", "tests") for p in parts) or ("src", "androidTest") in zip(parts, parts[1:]))
             and not any(p in ("build", "install", "log") or p.startswith(".") for p in parts))
 
 
@@ -308,5 +315,7 @@ def unit_problems(counts: dict, owner: dict, units, small: set, base_small: set)
                        f"{parent_before}; move a whole responsibility or do not register it")
         if unit in small and counts[unit] >= UNIT_FLOOR:
             bad.append(f"{unit}: {counts[unit]} lines, no longer small; drop its `small` mark")
+    # D-822: the existing small work holder moved without changing its contents.
+    base_small = {"fleet/web/work" if unit == "site_ui/console/work" else unit for unit in base_small}
     bad += [f"{unit}: new `small` mark; only grandfathered units carry one" for unit in sorted(small - base_small)]
     return bad

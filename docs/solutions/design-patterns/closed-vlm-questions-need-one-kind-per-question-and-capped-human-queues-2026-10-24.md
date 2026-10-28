@@ -2,7 +2,7 @@
 title: Closed VLM questions need one kind per question, a per-photo evaluation set and a cap on every human queue
 date: 2026-10-24
 category: design-patterns
-module: tools/vlm_question_bench.py, Learning VLM 판단(미게시), D-857
+module: tools/vlm_question_bench.py, learning/curation/perception/vlm_judge.py, D-857
 problem_type: design_pattern
 component: perception_review
 symptoms:
@@ -32,7 +32,7 @@ tags: [vlm, closed-questions, logprobs, consensus, human-truth, review-queue, d-
 | 평가셋 「질문당 30장」을 질문마다 뽑아 합집합 | 135장 중 132장이 사람 평가셋 | 「사진 종류당 30장, 그 사진의 모든 질문, 고정」: 보기당 30 |
 | 의견 갈림 대기열은 점검만 상한(50) | front 평가셋 밖 30장 전부 의견 갈림. 자료가 늘면 끝없음 | 의견 갈림도 보기당 50장(오래된 것부터), 나머지는 `disputed_waiting` |
 
-증거: [vlm-question-bench-2026-10-23](../../validation/vlm-question-bench-2026-10-23/result.md), [2026-10-23b](../../validation/vlm-question-bench-2026-10-23b/result.md), [토론 1라운드](../../validation/vlm-question-debate-2026-10-24/result.md). 평가셋 합집합·의견 갈림 상한은 미게시 Learning VLM 판단 화면을 모델 PC에서 돌려 관찰했고 그 대기열 수치는 아직 게시된 기록이 없다.
+증거: [vlm-question-bench-2026-10-23](../../validation/vlm-question-bench-2026-10-23/result.md), [2026-10-23b](../../validation/vlm-question-bench-2026-10-23b/result.md), 모델 PC 8790 대기열 `/api/learning/vlm/queue`(2026-10-24).
 
 ## Guidance
 
@@ -49,6 +49,6 @@ tags: [vlm, closed-questions, logprobs, consensus, human-truth, review-queue, d-
 
 ## Reference frame and scope (v3, 2026-10-24)
 
-- **관찰됨**([토론 기록](../../validation/vlm-question-debate-2026-10-24/result.md), 사람 정답 없음): 좌우 기준 없는 `front.lane_tape`(both/left/right/none)는 토론 0/27이었다. 사진 기준 `front.tape_left`·`front.tape_right` yes/no로 나누자 세 모델이 처음부터 합의해 의견 갈림이 사실상 없어졌다(0/1). 질문에 기준(사진의 왼쪽 절반 등)을 적는다.
+- **확인됨:** 좌우 기준 없는 `front.lane_tape`(both/left/right/none)는 토론 0/27이었다. 사진 기준 `front.tape_left`·`front.tape_right` yes/no로 나누자 세 모델이 처음부터 합의해 의견 갈림이 사실상 없어졌다(0/1). 질문에 기준(사진의 왼쪽 절반 등)을 적는다.
 - **아직 안 풀림:** 「차로 안 물체」를 「아래쪽 절반, 두 테이프 사이 물체」로 좁혀도 1/26, 천장 장면 질문을 「보이는 로봇 수」로 바꿔도 0/10이었다. 문구가 아니라 작은 사진(320×240, 천장 전체)에서의 모델 한계일 수 있다. 사람 평가셋 정답으로 어느 모델이 맞는지 확인하기 전에는 원인을 단정하지 않는다. 천장은 로봇별 위치가 없어(사진당 ArUco 자세 하나) 로봇 주변 crop 질문을 아직 만들 수 없다.
 - 토론을 더 돌리는 것은 해법이 아니었다: 같은 질문에서 1라운드 합의가 0–1건이면 정답 확인이나 질문 제외를 먼저 한다.

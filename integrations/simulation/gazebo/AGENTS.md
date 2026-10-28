@@ -53,7 +53,7 @@ ros2 launch gz_sim gz_multi.launch.py robots:=3 mode:=slam headless:=true
 
 ### Testing Requirements
 
-Host launch-graph and source/install contracts live in `integrations/simulation/gazebo/test/`. Run committed HEAD through `tools/remote/remote_pytest.py --log-dir X:/DevTemp/gazebo-contracts -- integrations/simulation/gazebo/test/ -q`, then `test/known_failures.py` on the returned log (D-584). CI flake8 includes this package?s `launch/`. Live Gazebo runs use the designated simulation host and remain separate from these unit contracts.
+Host launch-graph and source/install contracts live in `integrations/simulation/gazebo/test/`. Run committed HEAD through `tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/gazebo-contracts" -- integrations/simulation/gazebo/test/ -q`, then `test/known_failures.py` on the returned log (D-584). CI flake8 includes this package?s `launch/`. Live Gazebo runs use the designated simulation host and remain separate from these unit contracts.
 
 ### Common Patterns
 

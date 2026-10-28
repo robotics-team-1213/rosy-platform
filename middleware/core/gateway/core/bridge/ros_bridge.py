@@ -49,7 +49,8 @@ from core.bridge import (
 from core.bridge.cmd_vel import cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
-from core.bridge.route_context import publication as route_context_publication
+from core.bridge.route_context import RouteContextPublication
+from core.bridge.lane_route import RouteGuidePublication
 from core_features.vision import MODEL_STATUS_TOPICS, PREVIEW_TOPIC
 from core_features.navigation.initial_pose import amcl_pose_covariance
 from interfaces.srv import Emotion, SetLed, PilotRecordingStart
@@ -172,8 +173,8 @@ class RosBridge:
                                    durability=DurabilityPolicy.VOLATILE)
             self.route_context_pub = node.create_publisher(
                 String, "line/route_context", route_qos)
-        self._route_context_previous = None
-        self._route_context_at = float("-inf")
+        self._route_context_output = RouteContextPublication()
+        self._lane_guide_pub, self._lane_guide_output = node.create_publisher(String, "line/lane_guide", 10), RouteGuidePublication()
         # Per-device power policy: latched level board for topic-driven devices (camera, perception).
         self.devices_pub = node.create_publisher(String, device_power.DEVICES_TOPIC, _LATCHED)
         self._led_client = node.create_client(SetLed, "set_led")
@@ -401,6 +402,8 @@ class RosBridge:
             source_now=self._node.get_clock().now().nanoseconds * 1e-9)
 
     def _tick_line_follow(self) -> None:
+        for message in self._lane_guide_output.messages(self._svc.line_follow.route_guide() if self._svc.line_follow.active and self._svc.line_follow.config.route_guide_enabled and not self._svc.safety.estop else None, self._node.get_clock().now().nanoseconds / 1e9):
+            self._lane_guide_pub.publish(String(data=json.dumps(message)))
         # D-395 P2-7 mission ends and rotate/nudge twists ride this 20 Hz timer.
         self._svc.loc_mission.tick()
         self._tick_trail()  # D-559 swarm trail follow rides this 20 Hz timer too
@@ -437,15 +440,11 @@ class RosBridge:
             return
         if ros_now is None:
             ros_now = self._node.get_clock().now().nanoseconds / 1e9
-        message, self._route_context_previous, self._route_context_at = (
-            route_context_publication(
-                context, self._route_context_previous, self._route_context_at,
-                now=ros_now))
+        message = self._route_context_output.message(context, ros_now)
         if message is not None:
             self.route_context_pub.publish(String(data=json.dumps(message)))
             self._svc.line_follow.set_route_context_publication(
-                context if self._route_context_previous is not None else None,
-                self._route_context_at)
+                context if self._route_context_output.previous is not None else None, self._route_context_output.at)
 
     @staticmethod
     def _lifecycle_active(msg: TransitionEvent) -> bool:

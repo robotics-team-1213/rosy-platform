@@ -20,6 +20,12 @@ else:
     from fleet_observations import _contains_sensitive_field
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 # Format pinned: retained rule export digests include the size bound; test_canonical_hash_formats.
 def digest(value):
     raw = json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
@@ -79,7 +85,7 @@ def main():
     parser.add_argument('--start', type=float, required=True); parser.add_argument('--end', type=float, required=True)
     args = vars(parser.parse_args())
     output, database = args.pop('output'), args.pop('database')
-    if output.resolve().drive.upper() == 'F:': raise ValueError('export output belongs on X:')
+    if _in_checkout(output): raise ValueError('export output belongs outside the source checkout')
     exported = snapshot(database, **args)
     with output.open('x', encoding='utf-8', newline='\n') as stream:
         stream.write(json.dumps(exported, sort_keys=True, separators=(',', ':'), allow_nan=False)+'\n')

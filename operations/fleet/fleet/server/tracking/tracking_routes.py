@@ -18,6 +18,9 @@ from core_common.protocol.overhead_detections import OverheadDetectionsPayload
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.identity import IdentityError
 from fleet.server.tracking import TrackingError
+from fleet.server.measured_calibration import (
+    MeasuredCalibrationApproval, MeasuredCalibrationService, PreviewStatus,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -89,7 +92,15 @@ def _http(exc: TrackingError | IdentityError) -> HTTPException:
     return HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)})
 
 
-def install_tracking_routes(app, *, tracking, require_operator, read_guard, operator_guard) -> None:
+def install_tracking_routes(app, *, tracking, require_operator, read_guard, operator_guard,
+                            require_named_operator=None, map_revision=None) -> None:
+    measured = MeasuredCalibrationService(tracking, map_revision=map_revision)
+    app.state.measured_calibration = measured
+
+    def named(principal):
+        if require_named_operator is None:
+            raise HTTPException(status_code=403, detail={'code': 'OPERATOR_IDENTITY_REQUIRED'})
+        return require_named_operator(principal=principal)
     @app.post("/api/fleet/detections", tags=["tracking"])
     async def submit_detections(body: OverheadDetectionsPayload,
                                 authorization: Optional[str] = Header(default=None)) -> dict:
@@ -99,9 +110,20 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
             raise _http(exc) from exc
 
     @app.get("/api/fleet/detections/config", tags=["tracking"])
-    async def detection_config(authorization: Optional[str] = Header(default=None)) -> dict:
+    async def detection_config(authorization: Optional[str] = Header(default=None),
+                               include_preview: bool = False) -> dict:
         try:
-            return tracking.config_for(authorization)
+            result = tracking.config_for(authorization)
+            if include_preview:
+                result['measured_preview'] = measured.config(tracking.authenticate(authorization))
+            return result
+        except TrackingError as exc:
+            raise _http(exc) from exc
+
+    @app.post('/api/fleet/detections/preview-status', tags=['tracking'])
+    async def measured_status(body: PreviewStatus, authorization: Optional[str] = Header(default=None)):
+        try:
+            return measured.report(authorization, body)
         except TrackingError as exc:
             raise _http(exc) from exc
 
@@ -141,21 +163,27 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
         return result
 
     @app.get("/api/fleet/calibrations", dependencies=read_guard, tags=["tracking"])
-    async def calibration_listing() -> dict:
-        return tracking.calibration_listing()
+    async def calibration_listing(purpose: Literal['tracking', 'preview'] = 'tracking') -> dict:
+        return measured.listing() if purpose == 'preview' else tracking.calibration_listing()
 
     @app.post("/api/fleet/calibrations", tags=["tracking"])
-    async def approve_calibration(body: CalibrationApproval,
+    async def approve_calibration(body: CalibrationApproval | MeasuredCalibrationApproval,
                                   principal: SitePrincipal = Depends(require_operator)) -> dict:
         try:
+            if isinstance(body, MeasuredCalibrationApproval):
+                return measured.approve(body, named(principal).principal_id)
             return tracking.approve(body.model_dump(), approved_by=principal.principal_id)
         except TrackingError as exc:
             raise _http(exc) from exc
 
     @app.delete("/api/fleet/calibrations/{source_id}", tags=["tracking"])
     async def revoke_calibration(source_id: str,
+                                 purpose: Literal['tracking', 'preview'] = 'tracking',
+                                 expected_revision: Optional[str] = None,
                                  principal: SitePrincipal = Depends(require_operator)) -> dict:
         try:
+            if purpose == 'preview':
+                return measured.revoke(source_id, expected_revision, named(principal).principal_id)
             return tracking.revoke(source_id, principal_id=principal.principal_id)
         except TrackingError as exc:
             raise _http(exc) from exc

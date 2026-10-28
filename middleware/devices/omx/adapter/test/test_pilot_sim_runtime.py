@@ -1,4 +1,5 @@
 import time
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -7,10 +8,16 @@ import pytest
 
 from core_common.protocol.omx_sim import OmxSimGripperGoal, OmxSimJog
 from omx_adapter.command_owner import ArmCommandConfig, CommandDecision, JointStateSnapshot
-from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+from omx_adapter.pilot_sim.runtime import PilotSimRuntime
 from omx_adapter.ros_goal_contract import RosGoalEvent
 
 ROOT = Path(__file__).resolve().parents[5]
+
+
+class FakeOwner(SimpleNamespace):
+    @property
+    def joint_state(self):
+        return self.arm.latest_joint_state
 
 
 class Arm:
@@ -20,7 +27,8 @@ class Arm:
             position_limits={"joint1": (-1, 1), "gripper_joint_1": (-0.1, 0.1)},
             allowed_owners=("pilot_sim",), calibration_revision="sim",
         )
-        self.owner = SimpleNamespace(config=config, state="ready", session_id="session")
+        self.owner = FakeOwner(arm=self, config=config, state="ready", session_id="session")
+        self.owner.command_transaction = threading.RLock
         self.latest_joint_state = JointStateSnapshot(
             positions={"joint1": 0.0, "gripper_joint_1": 0.0}, sequence=8,
             received_at=time.monotonic(), calibration_revision="sim",
@@ -41,6 +49,58 @@ class Arm:
 def jog(sequence=8):
     return OmxSimJog(instance_id="instance", seat_id="seat", request_id="request", joint="joint1",
                      delta_rad=0.02, duration_s=0.4, state_sequence=sequence, expires_at_ms=9999999999999)
+
+
+@pytest.mark.parametrize('automatic_hold', [False, True])
+def test_feedback_cannot_advance_between_target_build_and_owner_submission(automatic_hold):
+    from omx_adapter.command_owner import ArmCommandOwner
+    from test_omx_command_owner import FakeActionClient
+
+    arm = Arm()
+    port = FakeActionClient()
+    port.server_is_ready = lambda: True
+    arm.owner = ArmCommandOwner(arm.owner.config, port)
+    arm.owner.observe_joint_state(arm.latest_joint_state)
+    arm.submit = arm.owner.submit
+    runtime = PilotSimRuntime(arm, **GRIPPER)
+    runtime.snapshot()
+    attempted, delivered = threading.Event(), threading.Event()
+    next_state = JointStateSnapshot(positions=dict(arm.latest_joint_state.positions), sequence=9,
+                                   received_at=time.monotonic(), calibration_revision='sim')
+
+    def feedback():
+        attempted.set()
+        def deliver(_):
+            arm.owner.observe_joint_state(next_state)
+            arm.latest_joint_state = next_state
+        arm.owner.run_admission_policy(deliver)
+        delivered.set()
+
+    worker = threading.Thread(target=feedback)
+
+    def build_target(*args):
+        worker.start()
+        assert attempted.wait(1)
+        assert not delivered.wait(.1), 'feedback advanced between source selection and submission'
+        return .02 if automatic_hold else ''
+
+    try:
+        if automatic_hold:
+            runtime._hold_pending = True
+            runtime._gripper_goal = ('prior', 0.)
+            runtime._held_gripper_target = build_target
+            runtime._issue_hold()
+            command_id = 'hold-prior'
+        else:
+            result = runtime._dispatch('request', 'instance', 8, .4, build_target, '', '')
+            assert result['state'] == 'LOCAL_ACCEPTED'
+            command_id = 'request'
+        assert len(port.commands) == 1
+        assert port.commands[0].source_state_sequence == 8
+        assert runtime.goal(command_id)['state'] == 'LOCAL_ACCEPTED'
+    finally:
+        worker.join(2)
+    assert not worker.is_alive() and delivered.is_set()
 
 
 def event(kind, goal_id=None, sequence=1, **facts):
@@ -124,13 +184,13 @@ def test_controls_announce_a_bounded_joint_jog_with_limits():
 
 def test_controls_step_bound_is_the_shared_jog_bound():
     from core_common.protocol.controls import BOUNDED_JOG_MAX_STEP_RAD
-    from omx_adapter import pilot_sim_runtime
+    from omx_adapter.pilot_sim import runtime as pilot_sim_runtime
     assert pilot_sim_runtime.JOG_MAX_STEP_RAD is BOUNDED_JOG_MAX_STEP_RAD
 
 
 def test_urdf_limits_come_from_the_pinned_kinematics_record():
     import math
-    from omx_adapter.pilot_sim_runtime import urdf_position_limits
+    from omx_adapter.pilot_sim.runtime import urdf_position_limits
     limits = urdf_position_limits()
     assert limits["joint1"] == (-2 * math.pi, 2 * math.pi)
     assert limits["gripper_joint_1"] == (-2 * math.pi, 2 * math.pi)
@@ -209,7 +269,7 @@ def test_gripper_goal_faster_than_the_gripper_speed_is_rejected():
 
 def test_gripper_speed_check_tolerates_small_readback_drift_but_not_more():
     """The client sizes a goal at max_velocity from one readback; the readback drifts before dispatch."""
-    from omx_adapter.pilot_sim_gripper import GRIPPER_TOLERANCE_RAD
+    from omx_adapter.pilot_sim.gripper import GRIPPER_TOLERANCE_RAD
     arm = Arm()
     arm.owner.config = ArmCommandConfig(
         enabled=True, workcell_id="sim", instance_id="instance", joint_names=("joint1", "gripper_joint_1"),
@@ -410,7 +470,7 @@ def test_an_overshoot_past_the_offered_upper_bound_does_not_latch_hold():
 
 
 def test_sim_admission_is_the_cell_profile_within_the_urdf():
-    from omx_adapter.pilot_sim_runtime import sim_admission_limits, urdf_position_limits, urdf_velocity_limits
+    from omx_adapter.pilot_sim.runtime import sim_admission_limits, urdf_position_limits, urdf_velocity_limits
     from omx_adapter.pose_plan import CellPlanningProfile
     cell = CellPlanningProfile.load(ROOT / "deploy/robot/omx/sim/cell_profile.yaml")
     limits = sim_admission_limits(cell.position_limits, urdf_position_limits())
@@ -429,7 +489,7 @@ def test_sim_admission_is_the_cell_profile_within_the_urdf():
 
 
 def test_server_builds_admission_from_the_cell_profile_and_two_second_goals():
-    source = (ROOT / "middleware/devices/omx/adapter/omx_adapter/pilot_sim_server.py").read_text(encoding="utf-8")
+    source = (ROOT / "middleware/devices/omx/adapter/omx_adapter/pilot_sim/server.py").read_text(encoding="utf-8")
     assert "CellPlanningProfile.load(cell_path)" in source
     assert "position_limits=sim_admission_limits(cell.position_limits, urdf_limits)" in source
     assert "max_goal_duration_s=GRIPPER_GOAL_MAX_DURATION_S" in source

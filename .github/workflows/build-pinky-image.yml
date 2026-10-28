@@ -26,7 +26,7 @@ jobs:
       IMAGE_WORK: /tmp/rosy-image-work
       RESOLVED_LOCK: /tmp/rosy-inputs.resolved.yaml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -46,7 +46,8 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
-            bmap-tools build-essential cloud-guest-utils cmake curl gpg python3-yaml xz-utils
+            bmap-tools build-essential cloud-guest-utils cmake curl gpg python3-yaml xz-utils \
+            fdisk dosfstools rsync e2fsprogs
           ros_source=/tmp/ros2-apt-source.deb
           curl --fail --location --proto '=https' --proto-redir '=https' \
             --output "$ros_source" \
@@ -87,6 +88,7 @@ jobs:
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo chown -R root:root -- "$GITHUB_WORKSPACE"
           sudo env \
             GITHUB_ACTIONS=true \
             ROSY_IMAGE_CACHE="$IMAGE_CACHE" \
@@ -109,12 +111,39 @@ jobs:
           test -f "$release/rosy-os-pinky-pro-$RELEASE_ID-arm64.img.xz"
           test -f "$release/manifest.json"
           test -f "$release/SHA256SUMS"
+          test -f "$release/rosy-os-pinky-pro-$RELEASE_ID-arm64.capacity.json"
+          test -f "$release/os-bundle-inputs/inputs.json"
+          test -f "$release/os-bundle-inputs/rootfs.ext4.xz"
+          test -f "$release/os-bundle-inputs/boot.vfat.xz"
           test ! -e "$release/SHA256SUMS.sig"
+          python3 - "$release" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          folder = Path(sys.argv[1])
+          manifest = json.loads((folder / "manifest.json").read_text())
+          assert manifest["schema_version"] == 2
+          capacity = json.loads(next(folder.glob("*.capacity.json")).read_text())
+          assert capacity["raw_size_bytes"] == manifest["layout"]["raw_size_bytes"]
+          assert set(capacity["roots"]) == {"a", "b"}
+          for root in capacity["roots"].values():
+              assert root["available_bytes"] >= root["reserve_required_bytes"]
+          inputs = json.loads((folder / "os-bundle-inputs/inputs.json").read_bytes())
+          manifest_revision = json.loads((folder / "build-provenance.json").read_bytes())["source_revision"]
+          assert inputs["source_revision"] == manifest_revision
+          assert inputs["release_id"] == manifest["release_id"]
+          assert inputs["layout"] == manifest["layout"]
+          assert inputs["boot_abi"] == 2 and inputs["state_schema"] == {"read_min": 1, "read_max": 1, "write": 1}
+          assert set(inputs["images"]) == {"rootfs.ext4", "boot.vfat"}
+          factory = folder / "factory-release" / inputs["release_id"] / "SHA256SUMS"
+          assert inputs["native_factory"] == {"release_id": inputs["release_id"],
+              "checksums_sha256": hashlib.sha256(factory.read_bytes()).hexdigest()}
+          PY
           xz --test "$release/rosy-os-pinky-pro-$RELEASE_ID-arm64.img.xz"
+          xz --test "$release/os-bundle-inputs/rootfs.ext4.xz" "$release/os-bundle-inputs/boot.vfat.xz"
           (cd "$release" && sha256sum --check SHA256SUMS)
 
       - name: Upload unsigned image handoff
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
         with:
           name: rosy-pinky-image-unsigned-${{ inputs.release_id }}-${{ github.sha }}
           path: /tmp/rosy-image-dist/${{ inputs.release_id }}/*

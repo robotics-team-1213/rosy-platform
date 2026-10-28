@@ -402,10 +402,23 @@ def trust_files(directory, host, existing):
     return values
 
 
+def _tls_publication(store):
+    raw = store.read('proc/cmdline', max_bytes=16384) if (store.root / 'proc/cmdline').exists() else None
+    if (not os.path.lexists(store.root / 'etc/rosy/os-slot.json')
+            and not any(word.startswith(b'rosy.os_layout=') for word in (raw[0].split() if raw else []))):
+        return contextlib.nullcontext()
+    source = Path(__file__).resolve().parent.parent
+    directory = source / 'native' if source.name == 'pinky_pro' else store.root / 'opt/rosy/native-runtime'
+    sys.path.insert(0, str(directory))
+    from os_state_tls import publication
+    return publication(store)
+
+
 def provision(store, holder, host, yaml, *, fence=None, stage_parent=None):
     authority = fence or (lambda: (assert_claim(store, holder), assert_quiescent(store)))
     with store.lock('run/rosy-claim.lock') as claim_lock, \
             store.lock('var/lib/rosy/releases/native-release.lock') as release_lock, \
+            _tls_publication(store) as publication, \
             store.lock(CONFIG + '.lock', store.uid, store.gid) as config_lock:
         def fence():
             claim_lock()
@@ -414,6 +427,9 @@ def provision(store, holder, host, yaml, *, fence=None, stage_parent=None):
             authority()
 
         fence()
+        recovered = publication.recover(host, fence) if publication is not None else None
+        if recovered is not None:
+            return recovered
         before_config, before_env = store.read(CONFIG), store.read(ENV)
         if before_config is None or before_env is None:
             raise Hold('CONFIG_MISSING')
@@ -441,6 +457,8 @@ def provision(store, holder, host, yaml, *, fence=None, stage_parent=None):
         targets[CONFIG] = (proposed_config, *before_config[1][2:5])
         targets[ENV] = (proposed_env, *before_env[1][2:5])
         originals = {path: store.read(path) for path in targets}
+        if publication is not None:
+            publication.begin(targets, originals, host)
         attempted = []
         try:
             for path, (data, uid, gid, mode) in targets.items():
@@ -456,9 +474,13 @@ def provision(store, holder, host, yaml, *, fence=None, stage_parent=None):
                 current = store.read(path)
                 if current is None or current[0] != data or current[1][2:] != (uid, gid, mode, 1):
                     raise Hold('READBACK_FAILED')
+            if publication is not None:
+                publication.commit(fence)
             return {'ok': True, 'status': 'TLS_STAGED_RUNTIME_STOPPED', 'files': len(FILES),
                     'existing_ca_retained': existing['ca.pem'] is not None}
         except BaseException as original_error:
+            if publication is not None and publication.published():
+                raise Hold('TLS_PUBLICATION_UNCERTAIN_KEEP_STOPPED') from None
             try:
                 # No restoration while runtime might still read changing files.
                 fence()
@@ -480,6 +502,8 @@ def provision(store, holder, host, yaml, *, fence=None, stage_parent=None):
                             (before is not None and (current is None or current[0] != before[0]
                              or current[1][2:] != before[1][2:]))):
                         raise Hold('ROLLBACK_READBACK_FAILED')
+                if publication is not None:
+                    publication.abort()
             except BaseException:
                 raise Hold('ROLLBACK_UNVERIFIED_KEEP_STOPPED') from None
             raise original_error

@@ -25,10 +25,20 @@ class CandidateSignatureError(ValueError):
     """A site candidate has no acceptable detached signature."""
 
 
+def _git_for_windows_dirs() -> tuple[str, ...]:
+    # Same lookup as deploy/robot/pinky_pro/release/signing.py: git on PATH first, then %ProgramFiles%\Git.
+    roots = [os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Git")]
+    git = shutil.which("git")
+    if git:
+        exe = Path(git).resolve()
+        roots[:0] = [str(parent) for parent in exe.parents[1:3]]
+    return tuple(os.path.join(r, s) for r in dict.fromkeys(roots) for s in (r"usr\bin", r"mingw64\bin"))
+
+
 def _openssl() -> str:
     path = shutil.which("openssl")
     if path is None and os.name == "nt":
-        for folder in (r"C:\Program Files\Git\usr\bin", r"C:\Program Files\Git\mingw64\bin"):
+        for folder in _git_for_windows_dirs():
             candidate = os.path.join(folder, "openssl.exe")
             if os.path.isfile(candidate):
                 path = candidate

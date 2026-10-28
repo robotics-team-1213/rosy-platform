@@ -12,7 +12,6 @@ import pytest
 
 from fakes import FakeClock, FakeRobot, run
 from fleet import cli
-from fleet.server import app as fleet_app
 from fleet.server.background_workers import attempt_open
 from fleet.server.console import FleetConsole
 from fleet.server.goal_lease import goal_lease_supported
@@ -448,7 +447,10 @@ def test_renew_task_runs_only_when_leases_are_on(tmp_path, monkeypatch, ttl, sta
     async def loop(console, logger):
         calls.append(console)
 
-    monkeypatch.setattr(fleet_app, "goal_lease_renew_loop", loop)
+    # The loop lives in fleet.server.loop_supervision since the D-766 extraction.
+    from fleet.server import loop_supervision
+
+    monkeypatch.setattr(loop_supervision, "goal_lease_renew_loop", loop)
     client, _tasks, _store, _robot, console = _app(tmp_path, Ports())
     console.goal_leases.ttl_s = ttl
     with client:

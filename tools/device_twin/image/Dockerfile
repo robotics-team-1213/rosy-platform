@@ -1,6 +1,6 @@
 # D-412 device twin: a systemd container standing in for a Pinky Pro robot.
 # Twin-only; never part of the device image or a payload. run_twin.py builds it
-# from a context it assembles under X:\DevTemp\d406-twin\ctx (LF content from
+# from a context it assembles under $ROSY_SCRATCH\d406-twin\ctx (LF content from
 # `git archive HEAD`).
 FROM ubuntu:24.04 AS base
 ENV DEBIAN_FRONTEND=noninteractive

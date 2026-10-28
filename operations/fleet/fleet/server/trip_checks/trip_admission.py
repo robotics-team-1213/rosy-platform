@@ -14,13 +14,11 @@ from types import SimpleNamespace
 
 from core_common.protocol.line_authority import MAX_TTL_S as AUTHORITY_MAX_TTL_S
 from core_common.robot_body import nominal_body_for
-from fleet.lane_route import STEP_M
 from fleet.routing.trip import ARRIVED_M
 from rosy.world.state.projections.map_pose import OPERATOR_PIN
 from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
-from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.traffic import rule_m
 from fleet.site_map import _inside
 
@@ -77,32 +75,7 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
             "off_lane_m": round(max(0.0, dist - arc.width_m / 2), 3)}
 
 
-class _GoalRefused(RuntimeError):
-    """The console refused submission of a trip goal."""
-
-
 class TripAdmission:
-    async def _step_free(self, live, index, s):
-        segment = live.segments[index]
-        if live.view['hold'] is not None:
-            x, y, yaw = live.arc(index).point_at(segment['s_to'])
-        elif s + STEP_M > segment['s_to'] and index + 1 < len(live.segments):
-            nxt = live.segments[index + 1]
-            x, y, yaw = live.arc(index + 1).point_at(min(nxt['s_from'] + s + STEP_M - segment['s_to'], nxt['s_to']))
-        else:
-            x, y, yaw = live.arc(index).point_at(min(s + STEP_M, segment['s_to']))
-        if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
-            return
-        if not await ready_free_goal(self, live):
-            return
-        if not live.open:
-            return
-        reply = await self._call(self._goal(live.view['robot_id'], x, y, yaw)) or {}
-        live.last_goal = (x, y)
-        await self._after_send(live)
-        if reply.get('accepted') is False or reply.get('queued'):
-            raise _GoalRefused(reply.get('reason') or '')
-
     def _check_engaged(self, robot_id):
         engaged = self._engaged(robot_id)
         if engaged is not None:

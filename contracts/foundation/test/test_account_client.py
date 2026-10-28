@@ -78,6 +78,21 @@ def test_logout_erases_local_session_and_revokes_family(receiver):
     assert any(path == 'revoke' for path, _ in calls)
 
 
+def test_media_session_check_does_not_use_offline_or_ten_second_grace(receiver):
+    from hashlib import sha256
+    client, _, _, active = receiver
+    cookie = session(client)
+    session_id = sha256(cookie.encode()).hexdigest()
+    assert hasattr(client, 'media_session_active'), 'D-789 needs strict online session revalidation'
+    assert client.media_session_active(session_id) is True
+    active[0] = 'offline'
+    assert client.media_session_active(session_id) is False
+    active[0] = True
+    assert client.media_session_active(session_id) is True
+    active[0] = False
+    assert client.media_session_active(session_id) is False
+
+
 def test_expired_flow_and_external_return_are_refused(receiver):
     client, clock, _, _ = receiver
     for target in ['//evil.test', 'https://evil.test', '/pilot?token=secret', '/api/stop']:
@@ -115,6 +130,35 @@ def test_logout_retries_revocation_after_outage(receiver):
     client.post = original
     client.retry_revocations()
     assert calls[-1][0] == 'revoke'
+
+
+def test_pending_revocation_survives_receiver_reopen(receiver):
+    original, _, calls, active = receiver
+    settings = dict(issuer=original.issuer, client_id=original.client_id,
+        resource=original.resource, callback=original.callback,
+        public_keys=original.public_keys, encryption_key=Fernet.generate_key(),
+        clock=original.clock, post=original.post)
+    client = AccountClient(original.path, **settings)
+    cookie = session(client)
+    assert client.resolve(cookie)
+
+    def unavailable(endpoint, fields):
+        raise AccountUnavailable()
+
+    client.post = unavailable
+    with pytest.raises(AccountUnavailable):
+        client.logout(cookie)
+    assert client.resolve(cookie) is None
+    assert active[0] is True
+    assert b'fresh-secret' not in client.path.read_bytes()
+
+    reopened = AccountClient(client.path, **settings)
+    assert reopened.resolve(cookie) is None
+    reopened.retry_revocations()
+    assert active[0] is False
+    revocations = sum(endpoint == 'revoke' for endpoint, _ in calls)
+    reopened.retry_revocations()
+    assert sum(endpoint == 'revoke' for endpoint, _ in calls) == revocations
 
 
 def test_expired_refresh_cannot_change_account_identity(receiver):

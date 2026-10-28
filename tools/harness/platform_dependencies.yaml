@@ -2,6 +2,9 @@ schema: rosy.platform-dependencies.v1
 
 # Existing Python components only. Add new paths in the same change that creates them.
 components:
+  - name: fleet_app_dev
+    path: applications/fleet/dev
+    import_prefix: fleet_app_dev
   - name: contracts
     path: contracts/foundation/core_common
     import_prefix: core_common
@@ -39,7 +42,7 @@ components:
     path: integrations/robots/omx/src/rosy/integrations/robots/omx
     import_prefix: rosy.integrations.robots.omx
   - name: gateway_app
-    path: operations/apps/fleet/src/rosy_gateway
+    path: applications/fleet/gateway/src/rosy_gateway
     import_prefix: rosy_gateway
   - name: agent_app
     path: middleware/devices/omx/agent/src/rosy_agent
@@ -47,6 +50,8 @@ components:
 
 # Static absolute imports and relative imports resolved from their package path.
 boundaries:
+  - importer_prefix: fleet_app_dev
+    forbidden_imports: [fleet, rclpy, rosy.execution, rosy.processes, omx_adapter]
   - importer_prefix: rosy.world.state
     forbidden_imports: [fleet, rosy_situation, omx_adapter, core_features, rclpy]
   - importer_prefix: core_common
@@ -65,8 +70,10 @@ boundaries:
     forbidden_imports: [fleet, rosy_cell, omx_adapter, rclpy]
   - importer_prefix: rosy.integrations.robots.omx
     forbidden_imports: [fleet, rosy_cell, rclpy]
+  # Allow list (the standard library is always allowed): the real-arm agent composes only these.
   - importer_prefix: rosy_agent
-    forbidden_imports: [fleet, rosy_cell, rclpy]
+    allowed_imports: [rosy_agent, core_common, omx_adapter, rosy.processes.palletizing,
+                      rosy.integrations.robots.omx, yaml, pydantic]
 
 # Contract canaries exercise forbidden edges even when one endpoint is not built yet.
 future_boundary_canaries:

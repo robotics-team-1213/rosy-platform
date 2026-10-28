@@ -1468,7 +1468,7 @@ def test_already_done_from_core_counts_as_carried_out():
     assert runner.running()["segment_index"] == 1 and ports.sent[-1] == ("straight", "NE", None)
 
 
-def test_lane_arrival_needs_our_accepted_stop_and_accepts_core_holding_it():
+def test_lane_arrival_requires_an_accepted_stop_even_within_the_arrival_window():
     runner, store, ports = _setup()
     arc = _arc(store, "east:fwd")
     _plan(store, ports, "east:fwd", 0.5, "SE")
@@ -1477,15 +1477,6 @@ def test_lane_arrival_needs_our_accepted_stop_and_accepts_core_holding_it():
     ports.at(arc, arc.length_m - 0.05)
     _ticks(runner, ports)
     assert runner.view("p1")["state"] == "failed" and runner.view("p1")["reason"] == "MODE_CONFLICT"
-    runner, store, ports = _setup()
-    _plan(store, ports, "east:fwd", 0.5, "SE")
-    run(runner.start("p1", "bob"))
-    ports.at(arc, arc.length_m - 0.25)
-    _ticks(runner, ports)
-    assert runner.view("p1")["state"] == "running"  # stop sent this tick
-    ports.core.see_junction()  # CORE holds our stop at the junction it sighted (M7)
-    _ticks(runner, ports)
-    assert runner.view("p1")["state"] == "arrived"
 
 
 def test_confirm_replan_forgets_the_last_instruction():

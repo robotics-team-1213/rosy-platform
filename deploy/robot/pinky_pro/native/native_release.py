@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import stat
 import subprocess
 import sys
 import time
@@ -63,6 +64,24 @@ RESTARTABLE_ALONE = {"rosy-camera.service"}
 UNIT_SETTLE_S = 3.0
 
 
+def _ab_marked(root: Path) -> bool:
+    # Legacy standalone verifiers ship only this file and signing.py.
+    slot = root / "etc/rosy/os-slot.json"
+    if slot.exists() or slot.is_symlink():
+        return True
+    try:
+        descriptor = os.open(root / "proc/cmdline", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return False
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError("OS_PAYLOAD_INCOMPATIBLE: kernel command line is not regular")
+        raw = stream.read(16385)
+    if len(raw) > 16384:
+        raise ValueError("OS_PAYLOAD_INCOMPATIBLE: kernel command line exceeds limit")
+    return any(word.startswith(b"rosy.os_layout=") for word in raw.split())
+
+
 def _runtime_id(path: Path) -> str | None:
     if path.is_symlink() or not path.is_file():
         return None
@@ -95,46 +114,6 @@ class LinkStore(Protocol):
     def set(self, name: str, release_id: str | None) -> None: ...
 
 
-class SymlinkStore:
-    """Linux implementation of the two atomic release pointers."""
-
-    def __init__(self, base: Path, releases: Path) -> None:
-        self.base = base
-        self.releases = releases
-
-    def _path(self, name: str) -> Path:
-        if name not in {"current", "previous"}:
-            raise ValueError("NATIVE_LINK_UNSAFE: unknown release link")
-        return self.base / name
-
-    def get(self, name: str) -> str | None:
-        link = self._path(name)
-        if not link.exists() and not link.is_symlink():
-            return None
-        if not link.is_symlink():
-            raise ValueError(f"NATIVE_LINK_UNSAFE: {link} is not a symlink")
-        resolved = link.resolve()
-        if resolved.parent != self.releases.resolve() or not RELEASE_ID.fullmatch(resolved.name):
-            raise ValueError(f"NATIVE_LINK_UNSAFE: {link} leaves the release store")
-        return resolved.name
-
-    def set(self, name: str, release_id: str | None) -> None:
-        link = self._path(name)
-        link.parent.mkdir(parents=True, exist_ok=True)
-        if link.exists() and not link.is_symlink():
-            raise ValueError(f"NATIVE_LINK_UNSAFE: refusing to replace {link}")
-        if release_id is None:
-            link.unlink(missing_ok=True)
-            return
-        target = self.releases / release_id
-        if target.is_symlink() or not target.is_dir() or target.resolve().parent != self.releases.resolve():
-            raise ValueError("NATIVE_RELEASE_PATH: release link target is unsafe")
-        temporary = link.with_name(f".{link.name}.new")
-        temporary.unlink(missing_ok=True)
-        temporary.symlink_to(target, target_is_directory=True)
-        os.replace(temporary, link)
-
-
 class NativeReleaseManager:
     """Native-systemd release switcher with fail-closed recovery."""
 
@@ -159,7 +138,7 @@ class NativeReleaseManager:
         self.journal = self.state / "native-activation.json"
         self.lock = self.state / "native-release.lock"
         self._runtime = runtime or self._systemctl
-        self.links = links or SymlinkStore(self.current.parent, self.releases)
+        self._links = links or None
         # D-412 review N1: a last condition (the updater's hold/seal/idle check) run
         # after verification and right before the runtime stops; raising refuses.
         self.precheck = precheck
@@ -181,6 +160,16 @@ class NativeReleaseManager:
             check=True,
             timeout=120,
         )
+
+    @property
+    def links(self) -> LinkStore:
+        if self._links is None:
+            if __package__:
+                from .native_release_links import SymlinkStore
+            else:
+                from native_release_links import SymlinkStore
+            self._links = SymlinkStore(self.current.parent, self.releases)
+        return self._links
 
     @staticmethod
     def _systemctl_units(action: str, units: tuple[str, ...]) -> None:
@@ -228,7 +217,8 @@ class NativeReleaseManager:
             raise ValueError("NATIVE_RELEASE_PATH: release escapes the release store")
         return candidate
 
-    def verify(self, release_id: str) -> dict:
+    def verify_payload(self, release_id: str) -> dict:
+        """Read-only signed native payload validation; caller owns live/offline A/B admission."""
         release = self._release(release_id)
         if self.public_key.is_symlink() or not self.public_key.is_file():
             raise ValueError("SIGNATURE_KEY_UNREADABLE: trusted public key is missing")
@@ -300,10 +290,21 @@ class NativeReleaseManager:
                 raise ValueError(f"NATIVE_MANIFEST_PAYLOAD: digest mismatch for {relative}")
         return manifest
 
+    def verify(self, release_id: str) -> dict:
+        manifest = self.verify_payload(release_id)
+        release = self._release(release_id)
+        if _ab_marked(self.root):
+            try:
+                from os_payload_compatibility import require_ab_payload
+            except ImportError as exc:
+                raise ValueError("OS_PAYLOAD_INCOMPATIBLE: installed SDK lacks the A/B verifier") from exc
+            require_ab_payload(self.root, release)
+        return manifest
+
     def check_python_runtime(self, release_id: str) -> str:
         """Refuse a verified release whose Python runtime is not the image's.
 
-        Only activate and rollback call this. Recovery restores the release that
+        Activation, rollback and offline factory checks call this. Recovery restores the release that
         was already running and must never hold on it.
         """
         release = self._release(release_id)
@@ -349,6 +350,14 @@ class NativeReleaseManager:
         self._set_link(self.current, old_current)
         self._set_link(self.previous, candidate)
 
+    def _maintenance(self) -> None:
+        if _ab_marked(self.root):
+            try:
+                from os_payload_compatibility import require_native_maintenance
+            except ImportError as exc:
+                raise ValueError("OS_UPDATE_STATE_HOLD: installed SDK lacks the maintenance fence") from exc
+            require_native_maintenance(self.root)
+
     def activate(self, release_id: str, restart_units: tuple[str, ...] = ()) -> dict:
         restart_units = tuple(restart_units)
         if not set(restart_units) <= RESTARTABLE_ALONE:
@@ -359,6 +368,7 @@ class NativeReleaseManager:
         else:
             runtime = self._runtime
         with self._locked():
+            self._maintenance()
             self.verify(release_id)
             self.check_python_runtime(release_id)
             old_current = self._link_id(self.current)
@@ -402,6 +412,7 @@ class NativeReleaseManager:
 
     def rollback(self) -> dict:
         with self._locked():
+            self._maintenance()
             old_current = self._link_id(self.current)
             candidate = self._link_id(self.previous)
             if old_current is None or candidate is None:
@@ -431,10 +442,16 @@ class NativeReleaseManager:
             self.journal.unlink(missing_ok=True)
             return {"ok": True, "release_id": candidate, "previous": old_current}
 
-    def recover(self) -> dict:
+    def recover(self, *, admit_current: bool = False) -> dict:
         with self._locked():
             if not self.journal.is_file():
-                return {"ok": True, "recovered": False, "release_id": self._link_id(self.current)}
+                active = self._link_id(self.current)
+                if admit_current:
+                    if active is None:
+                        raise ValueError("NATIVE_RECOVERY_HOLD: active payload is unavailable")
+                    self.verify(active)
+                    self.check_python_runtime(active)
+                return {"ok": True, "recovered": False, "release_id": active}
             try:
                 data = json.loads(self.journal.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -455,6 +472,10 @@ class NativeReleaseManager:
             candidate = data.get("candidate")
             if old_current is not None:
                 self.verify(old_current)
+                if admit_current:
+                    self.check_python_runtime(old_current)
+            elif admit_current:
+                raise ValueError("NATIVE_RECOVERY_HOLD: active payload is unavailable")
             self._restore(old_current, candidate)
             self.journal.unlink(missing_ok=True)
             return {"ok": True, "recovered": True, "release_id": old_current}

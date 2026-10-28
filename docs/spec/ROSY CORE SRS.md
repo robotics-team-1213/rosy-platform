@@ -1062,7 +1062,7 @@ Timestamp / Robot ID / Source / Command·Event / Result / Error Code
 
 ### 시간 동기화
 
-로봇은 chrony(NTP)로 시간 동기화를 권장하며, 타임스탬프는 UTC(ISO 8601)로 기록한다. Fleet 로그 상관 분석의 전제가 된다.
+물리 로봇과 Linux 운영 호스트는 [D-859](../adr/D-859-shared-utc-time-synchronization.md)의 현장 NTP 계층으로 시간을 동기화하고, 타임스탬프는 UTC(ISO 8601)로 기록한다. Fleet 로그 상관 분석의 전제가 된다. 시각 변경은 호스트 유지보수 책임이며 CORE에는 OS 시계 변경 권한을 주지 않는다. 수용 오차·갱신 시각·Windows와 모바일의 범위는 해당 ADR을 따른다.
 
 ### 확장성 제약
 
@@ -1110,11 +1110,11 @@ Timestamp / Robot ID / Source / Command·Event / Result / Error Code
 
 - **DNC-008:** CORE는 station ID·위치 버전·지도 revision·로봇 boot/odom 세대·충전 session이 일치하는 유효 상대 관측만 정밀 접안에 사용한다. 위치 무효화나 관측 만료 시 이전 동작을 종료하고 새 위치 수락 전에 재시작하지 않는다.
 - **DNC-008 복귀 인계:** bound 세션의 귀환은 현재 Fleet 소유 trip lease의 정확한 ID·trip·충전 session과 지도/위치 버전·native boot/generation을 결속해 수락한다. 최종 출력은 만료/교체/조회 경합 때 비차단으로 닫힌다. IDLE·연속 측정 정지를 확인한 인계만 정밀 접안 대기로 돌아오며 귀환 terminal·경로/에너지 검증을 대체하지 않는다.
-- **DNC-008 terminal navigation 인계 (v1.252):** ARRIVED만으로 IDLE을 가정하지 않는다. 현재 부트의 성공 terminal native navigation과 실제 transport quiescence를 Navigation owner lock 아래 검증하고, goal/admission/moving session/mapping/goal lease/pending submission/actuating callback이 없을 때만 해당 복귀의 NAVIGATION→IDLE을 허용한다. 일반 goal 취소와 MANUAL/E-stop 덮어쓰기는 금지한다. 이 전환도 RETURNING을 유지하는 명시적 정지 미충족 응답이며, 이후 새 원본 odom의 연속 정지 dwell 없이는 BOUND나 접안/충전 시작을 허용하지 않는다.
+- **DNC-008 terminal navigation 인계 (v1.283):** ARRIVED만으로 IDLE을 가정하지 않는다. 현재 부트의 성공 terminal native navigation과 실제 transport quiescence를 Navigation owner lock 아래 검증하고, goal/admission/moving session/mapping/goal lease/pending submission/actuating callback이 없을 때만 해당 복귀의 NAVIGATION→IDLE을 허용한다. 일반 goal 취소와 MANUAL/E-stop 덮어쓰기는 금지한다. 이 전환도 RETURNING을 유지하는 명시적 정지 미충족 응답이며, 이후 새 원본 odom의 연속 정지 dwell 없이는 BOUND나 접안/충전 시작을 허용하지 않는다.
 - **DNC-009:** 실제 정지·물리 착좌·허용 위치를 함께 확인하고 충전 중 확인과 정상 종단 근거를 구분한다. ACK·명령 0·높은 전압만으로 자동 출발하지 않는다. 저배터리 보호와 접점 로컬 인터록은 관제와 독립적으로 유지한다.
-- **DNC-009 세션 중단 (v1.253):** 관제의 접안 중단은 고정 principal/session/boot/native generation과 수락된 실행의 correlation을 검증한다. 수락 전 BOUND 중단은 세션을 닫아 지연 시작을 막는다. 근거 만료는 중단을 막지 않으며 다른 실행을 취소하지 않는다. 중단 ACK는 측정 정지나 충전 자원 해제 근거가 아니다.
+- **DNC-009 세션 중단 (v1.284):** 관제의 접안 중단은 고정 principal/session/boot/native generation과 수락된 실행의 correlation을 검증한다. 수락 전 BOUND 중단은 세션을 닫아 지연 시작을 막는다. 근거 만료는 중단을 막지 않으며 다른 실행을 취소하지 않는다. 중단 ACK는 측정 정지나 충전 자원 해제 근거가 아니다.
 - **DNC-010:** 이안은 최신 배터리·도크 상태와 작업/귀환 예산, 소유권·정지 latch·후방 공간을 재검사한 뒤 수행한다. 이전 세션 완료 근거나 이안 요청 ACK를 실제 이안 완료로 표시하지 않는다.
-- **DNC-010 실측 이탈 계약 (v1.254):** 작업 요청 digest와 충전 attempt를 결속한 허가는 실제 충전 출력 차단·무전류·후방 여유·검증된 sweep·원본 시각의 로컬 측정을 요구한다. 명시적 프로필의 직선 후진 거리·속도가 native 제어 설정과 일치해야 한다. native 성공 이후 새 접점 이탈·연속 정지 표본과 IDLE을 확인한 경우에만 이탈 receipt를 만든다. 동일 패킷 재수신이나 시계 복구로 만료 표본을 되살리지 않는다. 로컬 피드/프로필과 관제 에너지 검증이 없으면 자동 이안을 허용하지 않으며, DTO 추가 자체는 실기 수용 근거가 아니다.
+- **DNC-010 실측 이탈 계약 (v1.285):** 작업 요청 digest와 충전 attempt를 결속한 허가는 실제 충전 출력 차단·무전류·후방 여유·검증된 sweep·원본 시각의 로컬 측정을 요구한다. 명시적 프로필의 직선 후진 거리·속도가 native 제어 설정과 일치해야 한다. native 성공 이후 새 접점 이탈·연속 정지 표본과 IDLE을 확인한 경우에만 이탈 receipt를 만든다. 동일 패킷 재수신이나 시계 복구로 만료 표본을 되살리지 않는다. 로컬 피드/프로필과 관제 에너지 검증이 없으면 자동 이안을 허용하지 않으며, DTO 추가 자체는 실기 수용 근거가 아니다.
 
 이 요구의 구현·장치 수용은 [D-772](../adr/D-772-station-position-and-charge-lifecycle.md)의 단계별 검증을 따른다.
 

@@ -68,7 +68,7 @@ def test_round_trip_core_no_motion_to_fleet_answer():
 def test_site_config_names_enrolled_robots(tmp_path):
     from types import SimpleNamespace
 
-    from fleet.cli import _stuck_resolver_enrolled
+    from fleet.stuck.cli_config import _stuck_resolver_enrolled
 
     path = tmp_path / "fleet-site.yaml"
     path.write_text("fleet:\n  stuck_resolver:\n    enrolled_robots: [rosy_40, rosy_41]\n",

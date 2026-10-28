@@ -427,7 +427,7 @@ class NavigationManager:
     def cancel(self, source: str = "api", close_session: bool = True,
                session: Optional[int] = None,
                correlation_id: Optional[str] = None, *, run_id: UUID | None = None,
-               receipt_sink=None) -> bool:
+               expected_boot_id: UUID | None = None, receipt_sink=None) -> bool:
         """Cancel only the matching run/session/correlation; True iff sent.
 
         Moving sessions cancel even from an idle facade state (a preempted
@@ -437,6 +437,10 @@ class NavigationManager:
         """
         with self._lock:
             closed_receipt = None
+            if expected_boot_id is not None and (
+                    self.native.current is None or self.native.current.phase == "TERMINAL"
+                    or self.native.current.boot_id != expected_boot_id):
+                return False
             if run_id is not None and (self.native.current is None
                                        or self.native.current.run_id != run_id):
                 return False

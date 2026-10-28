@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/common/tokens.css">
   <script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/dashboard/assets/styles.css">
  <link rel="stylesheet" href="/dashboard/assets/console-detail.css">
   <script type="module" src="/common/ui.js"></script>
@@ -119,7 +120,7 @@
       <p>카드 토큰이나 설정에서 만든 토큰입니다. 키는 이 탭이 열려 있는 동안에만 보관됩니다.</p>
       <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
     </form>
-    <ui-button kind="quiet" id="close-auth" class="drawer-close" type="button" aria-label="접속 키 창 닫기">×</ui-button>
+    <ui-button kind="quiet" id="close-auth" class="drawer-close" type="button" data-action-icon="close" data-icon-only="" aria-label="접속 키 창 닫기"></ui-button>
   </aside>
 
   <main id="dashboard-main" class="dashboard" aria-label="Rosy Robot 상태" tabindex="-1">
@@ -348,10 +349,10 @@
               <span>직진 0.03 m/s · 회전 0.10 rad/s · 최대 2초</span>
             </div>
             <div class="teleop-pad" role="group" aria-label="저속 수동 주행">
-              <ui-button kind="toggle" type="button" data-teleop="forward" data-linear="0.03" data-angular="0" aria-label="전진">↑<small>전진</small></ui-button>
-              <ui-button kind="toggle" type="button" data-teleop="left" data-linear="0" data-angular="0.1" aria-label="좌회전">←<small>좌회전</small></ui-button>
-              <ui-button kind="toggle" type="button" data-teleop="backward" data-linear="-0.03" data-angular="0" aria-label="후진">↓<small>후진</small></ui-button>
-              <ui-button kind="toggle" type="button" data-teleop="right" data-linear="0" data-angular="-0.1" aria-label="우회전">→<small>우회전</small></ui-button>
+              <ui-button kind="toggle" type="button" data-teleop="forward" data-linear="0.03" data-angular="0" data-action-icon="forward" aria-label="전진">전진</ui-button>
+              <ui-button kind="toggle" type="button" data-teleop="left" data-linear="0" data-angular="0.1" data-action-icon="left" aria-label="좌회전">좌회전</ui-button>
+              <ui-button kind="toggle" type="button" data-teleop="backward" data-linear="-0.03" data-angular="0" data-action-icon="reverse" aria-label="후진">후진</ui-button>
+              <ui-button kind="toggle" type="button" data-teleop="right" data-linear="0" data-angular="-0.1" data-action-icon="right" aria-label="우회전">우회전</ui-button>
             </div>
             <span id="teleop-speed" class="teleop-speed" aria-label="명령 속도"></span>
             <p id="teleop-message" class="teleop-message" role="status" aria-live="assertive">수동 모드에서 버튼을 누르고 있는 동안만 움직입니다.</p>

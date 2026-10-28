@@ -58,6 +58,8 @@ SPEED_CAP = 0.08
 #: Pass: `arrived` and, SETTLE_AFTER_S later, within Fleet's own lane arrive_lane_m (trip_ports.py) of the place.
 ARRIVE_M = 0.15
 SETTLE_AFTER_S = 10.0
+#: --lap via place: the west road's west side, where the straight rosy_02 trip starts.
+LAP_VIA = ('west', 'rev', 1.00)
 TERMINAL = ('arrived', 'canceled', 'stopped', 'failed')
 #: Marks this run's children so cleanup never touches a parent shell or another run.
 MARK = 'FLEET_TRIPS_RUN'
@@ -90,15 +92,38 @@ def place_id(ns):
     return f'{ns}_end'
 
 
-def seed_site_map(tasks_db):
+def layout(graph, lap=False):
+    """(spawn pose per robot, stop places {id: pose}, trip request per robot that drives).
+    --lap: rosy_01 drives one D-517 finite lap (start_at) from its east start via the west road and
+    back, so it passes both outer loops, the ring twice and every corner; rosy_02 waits off the
+    loop on the parking spot."""
+    trips = plan_trips(graph)
+    if isinstance(lap, str) and lap not in ('', '1'):   # --scenario NAME: one short drive over one place
+        from lap_scenarios import SCENARIOS, route_pose
+        start, end = (route_pose(graph, d, lane_pose) for d in SCENARIOS[lap][:2])
+        return ({'rosy_01': start, 'rosy_02': tuple(graph['parking']['spot'])}, {'scenario_end': end},
+                {'rosy_01': {'to': 'scenario_end', 'speed_cap': SPEED_CAP}})
+    if not lap:
+        return ({ns: t[0] for ns, t in trips.items()}, {place_id(ns): t[1] for ns, t in trips.items()},
+                {ns: {'to': place_id(ns), 'speed_cap': SPEED_CAP} for ns in trips})
+    start = trips['rosy_01'][0]
+    return ({'rosy_01': start, 'rosy_02': tuple(graph['parking']['spot'])},
+            {'lap_start': start, 'lap_via': lane_pose(graph, *LAP_VIA)},
+            {'rosy_01': {'to': 'lap_start', 'via': ['lap_via'], 'start_at': 'lap_start', 'speed_cap': SPEED_CAP}})
+
+
+def seed_site_map(tasks_db, lap=False):
     """Site map version 1 = the lane graph import plus each trip end as a stop place: a lane trip
     must end at a place (Fleet refuses LANE_END_NOT_A_PLACE). Fleet's own import then finds a map."""
     from fleet.server.site_map_store import SiteMapStore
     from fleet.site_map import SiteMap, from_lane_graph
     base = from_lane_graph(GRAPH, map_id=GRAPH.parent.name).model_dump(by_alias=True)
-    ends = [dict(id=place_id(ns), name=place_id(ns), kind='stop', x=end[0], y=end[1], yaw=end[2])
-            for ns, (_, end) in plan_trips(yaml.safe_load(GRAPH.read_text(encoding='utf-8'))).items()]
-    SiteMapStore(Path(tasks_db)).import_if_empty(SiteMap.model_validate({**base, 'places': base['places'] + ends}),
+    ends = [dict(id=pid, name=pid, kind='stop', x=pose[0], y=pose[1], yaw=pose[2])
+            for pid, pose in layout(yaml.safe_load(GRAPH.read_text(encoding='utf-8')), lap)[1].items()]
+    # D-573 rev 8: the surveyed walls of this world from its site map (the lane graph has none)
+    walls = json.loads((REPO / 'deploy/site/site-maps/map_v2_fleet-v5.json').read_text(encoding='utf-8'))['walls']
+    SiteMapStore(Path(tasks_db)).import_if_empty(SiteMap.model_validate({**base, 'places': base['places'] + ends,
+                                                                         'walls': walls}),
                                                  source=GRAPH.name)
 
 
@@ -154,7 +179,11 @@ def stop(run_id):
     return owned(run_id)
 
 
-def write_run(root, run_id, partition, reservations):
+#: --skip-check: the CORE check a lap proof leaves out (kept in result.json; robot configs are untouched)
+SKIP_CHECKS = {'crosswalk': 'crosswalk_gate_enabled', 'lane_return': 'recovery_local_enabled'}
+
+
+def write_run(root, run_id, partition, reservations, stall_s=None, *, route_guide=False, skip=()):
     """CORE overlays, Fleet manifest/site/users and the D-725 binding. Returns the operator token."""
     base = yaml.safe_load((GAZEBO / 'config/map_v2_fleet_core.yaml').read_text(encoding='utf-8'))
     sensors = yaml.safe_load((GAZEBO / 'config/sim_sensors_core.yaml').read_text(encoding='utf-8'))
@@ -170,9 +199,11 @@ def write_run(root, run_id, partition, reservations):
             # The regulated lane drive of the D-763 checks: Fleet line authority, map entries,
             # route context, body path stop, calibrated IR guard (SIM_IR_CALIBRATION), site floor.
             line_follow={'bend_map_entry_enabled': True, 'turn_map_entry_enabled': True,
-                         'authority_required': True, 'route_context_enabled': True, 'obstacle_mode': 'path',
+                         'authority_required': True, 'route_context_enabled': True, 'route_guide_enabled': route_guide, 'obstacle_mode': 'path',
                          'ir_guard_enabled': True, 'site_floor_map_id': 'map_v2_fleet',
-                         'junction_signal_enabled': True},
+                         'junction_signal_enabled': True,
+                         'crosswalk_map_wall_band_m': .01,   # D-573 rev 8: the sim pose is exact
+                         **{SKIP_CHECKS[name]: False for name in skip}},
             auth={'tokens': [{'token': rest, 'role': 'operator', 'label': f'{run_id} Fleet'},
                              {'token': resolver, 'role': 'stuck_resolver', 'label': f'{run_id} resolver'}]})
         (root / f'core_{ns}.yaml').write_text(yaml.safe_dump(config), encoding='utf-8')
@@ -187,6 +218,8 @@ def write_run(root, run_id, partition, reservations):
     site['fleet']['traffic']['authority'] = True
     site['fleet']['trip_lease_required'] = True
     site['fleet']['trip_lease_ttl_s'] = 8.0  # D-760 1: longer than the 5 s line authority ttl
+    if stall_s is not None:  # Fleet times a stall by the wall clock; a slow sim (RTF ~0.3) needs it scaled
+        site['fleet']['trip']['stall_s'] = stall_s
     (root / 'site.yaml').write_text(yaml.safe_dump(site), encoding='utf-8')
     operator = secrets.token_urlsafe(24)
     (root / 'users.yaml').write_text(yaml.safe_dump({'users': [{
@@ -205,12 +238,13 @@ def write_run(root, run_id, partition, reservations):
     return operator
 
 
-def drive(fleet, operator, trips, budget_s, log):
-    """Plan and start one trip per robot, poll until both end. Returns the per-robot evidence."""
+def drive(fleet, operator, spawns, places, requests, budget_s, log, core=None):
+    """Plan and start each robot's trip, poll until all end. Returns the per-robot evidence.
+    core(ns) -> CORE's line-follow status; each change of why CORE drives or holds goes to row['core']."""
     rows = {}
-    for ns in trips:
-        code, plan = call(f'{fleet}/robots/{ns}/trip', operator, 'POST', {'to': place_id(ns), 'speed_cap': SPEED_CAP}, log)
-        rows[ns] = {'plan_status': code, 'plan': plan, 'states': [], 'trip_id': None}
+    for ns, body in requests.items():
+        code, plan = call(f'{fleet}/robots/{ns}/trip', operator, 'POST', body, log)
+        rows[ns] = {'plan_status': code, 'plan': plan, 'states': [], 'trip_id': None, 'path': [], 'core': []}
         if code == 200:
             code, started = call(f"{fleet}/trips/{plan['plan_id']}/start", operator, 'POST', {}, log)
             rows[ns].update(start_status=code, start=started, trip_id=plan['plan_id'] if code == 200 else None)
@@ -226,6 +260,16 @@ def drive(fleet, operator, trips, budget_s, log):
             row['last_view'] = view
             if isinstance(pose.get('x'), (int, float)) and isinstance(pose.get('y'), (int, float)):
                 row['last_xy'] = (pose['x'], pose['y'])
+                row['path'].append((round(time.monotonic(), 1), round(pose['x'], 3), round(pose['y'], 3)))
+            if core is not None:
+                status = core(ns)
+                why = {k: status.get(k) for k in ('state', 'reason', 'regulation_wait', 'lane_return_containment')}
+                why.update({k: None if status.get(k) is None else round(status[k], 2)   # 1 cm: changes stay few
+                            for k in ('linear', 'stop_gap_m', 'body_gap_m')})
+                why.update(stuck=(status.get('stuck') or {}).get('reason'),
+                           junction=(status.get('junction') or {}).get('state'))
+                if not row['core'] or {k: v for k, v in row['core'][-1].items() if k != 't'} != why:
+                    row['core'].append(dict(t=round(time.monotonic(), 1), **why))
         return not open_rows()
 
     until(budget_s, poll)
@@ -238,10 +282,14 @@ def drive(fleet, operator, trips, budget_s, log):
             row['settled_xy'] = (pose['x'], pose['y'])
         # From the spawn pose: polling starts after both starts, so its first sample can be late.
         xy = row.get('settled_xy') or row.get('last_xy')
-        moved = math.dist(trips[ns][0][:2], xy) if xy else 0.0
-        short = math.dist(trips[ns][1][:2], xy) if xy else math.inf
-        row.update(moved_m=round(moved, 3), short_m=round(short, 3),
-                   arrived=row['states'][-1:] == ['arrived'] and short <= ARRIVE_M)
+        moved = math.dist(spawns[ns][:2], xy) if xy else 0.0
+        short = math.dist(places[requests[ns]['to']][:2], xy) if xy else math.inf
+        # A lap ends where it began: it counts only if the robot also came within ARRIVE_M of each via place.
+        via_m = {p: round(min((math.dist(places[p][:2], s[1:]) for s in row['path']), default=math.inf), 3)
+                 for p in requests[ns].get('via', ())}
+        row.update(moved_m=round(moved, 3), short_m=round(short, 3), via_m=via_m,
+                   arrived=row['states'][-1:] == ['arrived'] and short <= ARRIVE_M
+                   and all(v <= ARRIVE_M for v in via_m.values()))
     return rows
 
 
@@ -262,21 +310,27 @@ def run(args):
         jobs.mkdir(exist_ok=True)
         lock.write_text(f'{os.getpid()} sim 6 8\n')
     root = Path(tempfile.mkdtemp(prefix='fleet-trips-'))
-    operator = write_run(root, run_id, partition, reservations)
+    operator = write_run(root, run_id, partition, reservations, args.stall_s,
+                         route_guide=bool(args.learned_lane_pointer) and args.learned_paint_target == 'drivable',
+                         skip=args.skip_check)
     manifest = yaml.safe_load((root / 'robots.yaml').read_text(encoding='utf-8'))['robots']
     rest = {row['robot_id']: row['token'] for row in manifest}
     cores = {row['robot_id']: row['base_url'] for row in manifest}
     fleet = f'http://127.0.0.1:{reservations.console_port}/api/fleet'
-    trips = plan_trips(yaml.safe_load(GRAPH.read_text(encoding='utf-8')))
+    if args.lap:   # a whole lap at ~0.3 real time takes 10+ min of wall time; 240 s cut r42a 0.6 m short of the end
+        args.budget_s = max(args.budget_s, 900.)
+    mode = args.scenario or args.lap
+    spawns, places, requests = layout(yaml.safe_load(GRAPH.read_text(encoding='utf-8')), mode)
     env = dict(os.environ, GZ_PARTITION=partition, ROS_DOMAIN_ID=str(reservations.ros_domain_id), GZ_IP='127.0.0.1',
                ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST', RMW_IMPLEMENTATION='rmw_cyclonedds_cpp',
                CYCLONEDDS_URI='file://' + str(REPO / 'middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml'),
-               **RENDER[args.render], **{MARK: run_id})
+               FLEET_TRIPS_LAP=args.scenario or ('1' if args.lap else ''), **RENDER[args.render], **{MARK: run_id})
     launch = ['ros2', 'launch', 'gz_sim', 'map_v2_fleet_multi_real.launch.py', 'map_variant:=.',
               f'run_spec:={root / "run_spec.yaml"}',
-              'spawn_poses:=' + ';'.join('%.5f,%.5f,%.6f' % trips[ns][0] for ns in ROBOTS)]
+              'spawn_poses:=' + ';'.join('%.5f,%.5f,%.6f' % tuple(spawns[ns]) for ns in ROBOTS)]
     if args.learned_lane_pointer:
-        launch.append(f'learned_lane_pointer:={args.learned_lane_pointer}')
+        launch += [f'learned_lane_pointer:={args.learned_lane_pointer}',
+                   f'learned_paint_target:={args.learned_paint_target}']
     fleet_cmd = [sys.executable, __file__, 'fleet', str(root / 'binding.json'), 'console',
                  '--robots', str(root / 'robots.yaml'), '--host', '127.0.0.1', '--port', str(reservations.console_port),
                  '--token-env', 'FLEET_TRIPS_TOKEN', '--tasks-db', str(root / 'tasks.sqlite'),
@@ -285,12 +339,16 @@ def run(args):
     result = dict(run_id=run_id, domain=reservations.ros_domain_id,
                   ports=[*reservations.api_ports, reservations.console_port],
                   learned_lane_pointer=args.learned_lane_pointer or None, render=args.render,
-                  trips={ns: dict(zip(('segment', 'direction', 'start_s'), TRIPS[ns]), spawn=t[0], end=t[1])
-                         for ns, t in trips.items()}, load_start=os.getloadavg())
+                  learned_paint_target=args.learned_paint_target if args.learned_lane_pointer else None,
+                  lap=args.lap, scenario=args.scenario, skipped_checks=sorted(args.skip_check), stall_s=args.stall_s, spawns=spawns, places=places, requests=requests, load_start=os.getloadavg())
     log = (out / 'api-log.jsonl').open('w', buffering=1)
     try:
         with (out / 'launch.log').open('w') as launch_log, (out / 'fleet.log').open('w') as fleet_log:
             subprocess.Popen(launch, env=env, stdout=launch_log, stderr=subprocess.STDOUT, start_new_session=True)
+            if args.record:   # camera PNGs, keep_debug, odom, cmd_vel; stopped with the run (MARK)
+                subprocess.Popen([sys.executable, __file__, 'record', str(out / 'observations.jsonl')], env=env,
+                                 stdout=(out / 'recorder.log').open('w'), stderr=subprocess.STDOUT,
+                                 start_new_session=True)
             result['core_ready'] = until(args.boot_s, lambda: all(
                 call(f'{cores[ns]}/api/v1/robot/state', rest[ns])[1].get('robot_id') == ns for ns in ROBOTS), 2.0)
             if result['core_ready']:
@@ -304,7 +362,9 @@ def run(args):
                     for ns in ROBOTS), 2.0)
                 if result['camera']:
                     time.sleep(args.settle_s)  # observers and lane keepers settle, as the lap probe does
-                    result['robots'] = drive(fleet, operator, trips, args.budget_s, log)
+                    result['recorder_ready'] = not args.record or Path(str(out / 'observations.jsonl') + '.ready').exists()
+                    result['robots'] = drive(fleet, operator, spawns, places, requests, args.budget_s, log,
+                                             core=lambda ns: call(f'{cores[ns]}/api/v1/line-follow', rest[ns])[1])
     finally:
         log.close()
         result['load_end'] = os.getloadavg()
@@ -312,10 +372,11 @@ def run(args):
         if lock is not None:
             lock.unlink(missing_ok=True)
     robots = result.get('robots') or {}
-    result['pass'] = len(robots) == len(ROBOTS) and all(row['arrived'] for row in robots.values())
+    result['pass'] = len(robots) == len(requests) and all(row['arrived'] for row in robots.values())
     (out / 'result.json').write_text(json.dumps(result, indent=2, default=str), encoding='utf-8')
     print(json.dumps({k: result.get(k) for k in ('core_ready', 'localized', 'camera')}))
-    print(json.dumps({ns: dict(states=row['states'], moved_m=row['moved_m'], short_m=row['short_m']) for ns, row in robots.items()}))
+    print(json.dumps({ns: dict(states=row['states'], moved_m=row['moved_m'], short_m=row['short_m'], via_m=row['via_m'])
+                      for ns, row in robots.items()}))
     print('[fleet-trips]', 'PASS' if result['pass'] else 'FAIL', out / 'result.json', flush=True)
     return 0 if result['pass'] else 1
 
@@ -332,6 +393,10 @@ def fleet_console(binding_path, cli_args):
     from rclpy.qos import QoSProfile, ReliabilityPolicy
     from rosgraph_msgs.msg import Clock
     import fleet.server.app as app_module
+    import fleet.traffic.route_guide as route_guide
+    # D-769 rev 3: the sim runs at ~0.3 real time, so a 1 s wall-clock route prior expires before the next
+    # authority (r37-r41 lost it for 4-14 s at the ring exit); 3 s wall is ~1 s of sim time, as on a robot.
+    route_guide.MAX_AGE_S = 3.
     from fleet.cli import main as fleet_main
     from native_gazebo_map_pose import (NativeGazeboBinding, NativeGazeboMapPosePort, NativeGazeboSample,
                                         NativeRobotBinding)
@@ -394,10 +459,10 @@ def fleet_console(binding_path, cli_args):
 
         @asynccontextmanager
         async def bound(app):
-            async def refresh():  # actual CORE snapshots at 2 Hz (MapPose odom_stamp)
+            async def refresh():  # actual CORE snapshots at 5 Hz (MapPose odom_stamp; a 2 Hz stamp aged the 1 s route prior out, r39)
                 while True:
                     await asyncio.gather(*(port.refresh(r.robot_id) for r in binding.robots), return_exceptions=True)
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.2)
             thread = threading.Thread(target=spin, name='native-pose', daemon=True)
             thread.start()
             async with lifespan(app):
@@ -407,6 +472,8 @@ def fleet_console(binding_path, cli_args):
                 finally:
                     task.cancel()
                     stopping.set()
+                    for r in binding.robots:  # a latched UNKNOWN pose names its first reason in fleet.log
+                        print('native pose', r.robot_id, json.dumps(port.diagnostics(r.robot_id), default=str), flush=True)
                     thread.join(timeout=3)
                     node.destroy_node()
                     rclpy.shutdown()
@@ -414,7 +481,8 @@ def fleet_console(binding_path, cli_args):
         return app
 
     app_module.create_app = create_app
-    seed_site_map(cli_args[cli_args.index('--tasks-db') + 1])
+    mode = os.environ.get('FLEET_TRIPS_LAP', '')
+    seed_site_map(cli_args[cli_args.index('--tasks-db') + 1], lap=mode == '1' or mode)
     return fleet_main(cli_args)
 
 
@@ -422,15 +490,31 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ['fleet']:
         return fleet_console(argv[1], argv[2:])
+    if argv[:1] == ['record']:
+        sys.path.insert(0, str(Path(__file__).parent))
+        from fleet_trip_recorder import record_observations
+        return record_observations(argv[1], ROBOTS)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--out', required=True, help='new directory for result.json and logs')
     parser.add_argument('--render', choices=sorted(RENDER), default='cpu',
                         help='camera rendering: cpu (llvmpipe) or gpu (NVIDIA EGL; the model PC needs it)')
-    parser.add_argument('--learned-lane-pointer', default='', help='model folder on this host; empty: denoise paint')
+    parser.add_argument('--learned-lane-pointer', default='', help='pointer file on this host whose text is a model folder (ModelSlot); empty: denoise paint')
+    parser.add_argument('--learned-paint-target', choices=('lane_marking', 'drivable'), default='lane_marking',
+                        help='with a model: its lane_marking paint, or its drivable way (D-597)')
+    parser.add_argument('--lap', action='store_true', help='rosy_01 drives one whole-map lap; rosy_02 parks')
+    from lap_scenarios import SCENARIOS
+    parser.add_argument('--scenario', choices=sorted(SCENARIOS), help='one short drive over one hard place of the lap')
+    parser.add_argument('--skip-check', action='append', default=[], choices=sorted(SKIP_CHECKS),
+                        help='leave this CORE check out of the run (a lap proof of the driving alone)')
+    parser.add_argument('--record', action='store_true', help='record camera PNGs and keep_debug (fleet_trip_recorder)')
     parser.add_argument('--boot-s', type=float, default=300, help='wait for both COREs (includes Gazebo start)')
-    parser.add_argument('--settle-s', type=float, default=30)
-    parser.add_argument('--budget-s', type=float, default=240, help='wall time for both trips')
-    return run(parser.parse_args(argv))
+    parser.add_argument('--settle-s', type=float, default=10)   # observers settle in a few seconds (30 s cost every run)
+    parser.add_argument('--budget-s', type=float, default=240, help='wall time for both trips (a --lap gets at least 900)')
+    parser.add_argument('--stall-s', type=float, help="Fleet's trip stall_s (wall clock; default 20 s), scaled for a slow sim")
+    args = parser.parse_args(argv)
+    if args.learned_paint_target == 'drivable' and not args.learned_lane_pointer:
+        parser.error('--learned-paint-target drivable needs --learned-lane-pointer')
+    return run(args)
 
 
 if __name__ == '__main__':

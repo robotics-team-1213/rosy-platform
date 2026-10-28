@@ -89,6 +89,12 @@ def test_direct_action_and_mission_candidates_contend_for_object_and_workcell(tm
     assert store.resource_claims(resource_kind="robot", resource_id="rosy_01") == []
 
 
+def test_legacy_normalizer_import_is_the_shared_leaf_contract():
+    from core_common.resource_keys import normalize_resources
+    from fleet.server.dispatch_admission import normalize_resources as legacy
+    assert legacy is normalize_resources
+
+
 def test_new_claim_cannot_forge_inflight_phase_and_restore_requires_dispatch_closed(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     control = store.dispatch_control()

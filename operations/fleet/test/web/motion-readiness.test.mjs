@@ -4,7 +4,7 @@ const { register } = await import('node:module');
 register('./resolve-console-assets.mjs', import.meta.url);
 const {
   capabilityReason, chooseConvoyLeader, chooseLeader, motionCommandReason, formationReason, leaderPathKind, noRobotServesGrid,
-} = await import('../../../site_ui/console/motion-readiness.js');
+} = await import('../../../../applications/fleet/web/motion-readiness.js');
 
 test('motor runtime explains why autonomous actions are unavailable', () => {
   const caps = {runtime: {mode: 'motor'}, navigation: {goal_navigation: false}};

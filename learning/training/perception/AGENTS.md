@@ -40,7 +40,7 @@ The trainer-side contract of the D-356/D-373 learned loop. Training itself runs 
 ### Testing Requirements
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/learning-perception -- test/learning/perception/test_training_contract.py test/learning/perception/test_training_handover.py test/learning/perception/test_training_model.py test/learning/perception/test_training_notebook.py test/learning/perception/test_training_run_log.py test/learning/perception/test_drivable_head.py test/learning/perception/test_drivable_cli_admission.py -q -p no:cacheprovider
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/learning-perception" -- test/learning/perception/test_training_contract.py test/learning/perception/test_training_handover.py test/learning/perception/test_training_model.py test/learning/perception/test_training_notebook.py test/learning/perception/test_training_run_log.py test/learning/perception/test_drivable_head.py test/learning/perception/test_drivable_cli_admission.py -q -p no:cacheprovider
 ```
 
 Needs `torch` and `onnxruntime`; tests skip where missing.

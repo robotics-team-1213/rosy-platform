@@ -1,0 +1,7 @@
+{
+  "version": "7.6.8",
+  "architecture": "x86_64",
+  "size_bytes": 75908143,
+  "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.8/powershell-7.6.8-linux-x64.tar.gz",
+  "sha256": "59112e38ad83350e4f6dc0195953c66b5926792f300ca2e7691b8242e7a16e7f"
+}

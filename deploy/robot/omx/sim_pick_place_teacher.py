@@ -1,0 +1,405 @@
+"""Private native SIM teacher: real short goals, RGB frames and object observations."""
+import argparse
+from dataclasses import asdict, replace
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import sys
+import threading
+import time
+import uuid
+
+from g2_common import ROOT, configure_imports
+from g2_ports import ObserverClient, isolation_guard, write_json
+from sim_pick_place_demonstrations import (
+    TEACHER_STEP_RAD, TEACHER_READBACK_LIMIT_RAD, short_targets, dispatch_readback_target,
+)
+from sim_pick_place_task import judge_episode
+from sim_policy_trial_evidence import contact_held
+from sim_teacher_gripper_evidence import gripper_failure_evidence
+
+
+PLACE_CLEARANCE_M = .005
+
+
+def teacher_watchdog_evidence(owner):
+    try:
+        from omx_adapter.watchdog_observation import WatchdogObservation
+        observation = owner.watchdog_observation
+        if observation is None:
+            return None
+        if type(observation) is not WatchdogObservation:
+            raise TypeError('invalid watchdog observation')
+        evidence = asdict(observation)
+        json.dumps(evidence, allow_nan=False)
+        return evidence
+    except Exception as exc:
+        # Diagnostic failure must preserve the original outcome and shutdown path.
+        return {'error': type(exc).__name__}
+
+
+def contact_hold_target(position,*,close,contact):
+    if not contact_held(position,close=close,contact=contact):
+        raise RuntimeError('teacher_hold_contact_not_confirmed')
+    return max(close,position-TEACHER_STEP_RAD)
+
+
+def grasp_contact_reached(current,target,*,gripper,close,contact,arm_tolerance):
+    if not contact_held(current[gripper],close=close,contact=contact):
+        return False
+    if any(not math.isfinite(current[name]) or not math.isfinite(value)
+           or abs(current[name]-value)>arm_tolerance for name,value in target.items() if name!=gripper):
+        raise RuntimeError('teacher_grasp_arm_not_at_target')
+    return True
+
+
+def teacher_place_pose(pose):
+    return replace(pose,z=pose.z+PLACE_CLEARANCE_M)
+
+
+def release_clearance_evidence(observation,tcp,box,goal):
+    pose=observation['model_pose_base']
+    roll,pitch=pose['roll_rad'],pose['pitch_rad']
+    half_height=(abs(math.sin(pitch))*box.length+abs(math.cos(pitch)*math.sin(roll))*box.width
+                 +abs(math.cos(pitch)*math.cos(roll))*box.height)/2
+    bottom=pose['z_m']-half_height
+    surface=goal[2]-box.height/2
+    clearance=bottom-surface
+    if not math.isfinite(clearance) or clearance<PLACE_CLEARANCE_M/2:
+        raise RuntimeError('measured_release_clearance_too_small')
+    return dict(observation=observation,tcp_m=dict(x=tcp.x,y=tcp.y,z=tcp.z),
+                object_bottom_z_m=bottom,support_surface_z_m=surface,clearance_m=clearance)
+
+
+def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic', box_turn_deg=0.0):
+    isolation_guard(ROOT)
+    configure_imports()
+    sys.path.insert(0, str(ROOT/'operations/processes/cell'))
+    import rclpy
+    import yaml
+    from rclpy.node import Node
+    from rclpy.parameter import Parameter
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
+    from omx_adapter.ros_runtime import RosArmCommandRuntime
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.capture import PilotSimCapture
+    from omx_adapter.pilot_sim.camera import PilotSimCamera
+    from omx_adapter.kinematics import ARM_JOINTS, OmxKinematics, TopDownPose
+    from omx_adapter.manipulation_plan import ExecutionStateSnapshot
+    from omx_adapter.pose_plan import CellPlanningProfile, AnalyticCellTransferPlanner, CellTransferRequest
+    from omx_adapter.gripper_contract import GripperObservation, verify_held_object, verify_released_object
+    from rosy_cell.cell import load_cell
+    from rosy_cell.recipe import load_recipe
+    from rosy_cell.compiler import compile_job
+    from cell_sim_tools import SimAid, refuse_second_owner
+    from instance_names import names_from_environment
+
+    names = names_from_environment()
+    refuse_second_owner(namespace=names.namespace)
+    profile = CellPlanningProfile.load(ROOT/'deploy/robot/omx/sim/cell_profile.yaml')
+    kin = OmxKinematics.load()
+    cell_path = ROOT/'operations/processes/cell/examples/omx_sim/cell.yaml'
+    recipe_path = cell_path.with_name('recipe.yaml')
+    cell, recipe = load_cell(cell_path.read_text()), load_recipe(recipe_path.read_text())
+    job = compile_job(recipe, cell, tol_m=.001)
+    if not (cell.kinematics_revision == profile.kinematics_revision == kin.revision):
+        raise ValueError('kinematics mismatch')
+    pick, place = [step for step in job.steps if step.kind != 'pallet_done'][:2]
+    goal = (place.target.x, place.target.y, place.target.z+recipe.box.grasp_depth-recipe.box.height/2)
+    native = json.loads((Path(os.environ['OMX_NATIVE_STATE'])/'manifest.json').read_text())
+    if Path(native['source']).resolve() != ROOT.resolve():
+        raise ValueError('native source mismatch')
+    source = {'source_revision': native['revision'],
+        'source_tree_sha256': hashlib.sha256(json.dumps(native['source_hashes'], sort_keys=True,
+                                                       separators=(',', ':')).encode()).hexdigest(),
+        'vendor_revision': yaml.safe_load((ROOT/'deploy/robot/omx/stack.lock.yaml').read_text())['vendor']['revision'],
+        'world_sha256': hashlib.sha256(world.read_bytes()).hexdigest()}
+    rclpy.init()
+    node = Node('rosy_sim_pick_place_teacher', parameter_overrides=[Parameter('use_sim_time', value=True)])
+    facade = None
+    events, samples, commands = [], [], []
+
+    def on_event(event):
+        if facade is not None:
+            facade.on_goal_event(event)
+
+    config = profile.arm_command_config(workcell_id='omx_cell_sim', instance_id='omx_cell_sim_01',
+        calibration_revision='omx-f-gazebo-only-v1', allowed_owners=('pilot_sim',))
+    arm = RosArmCommandRuntime(node, config, joint_state_topic=names.joint_state_topic,
+        trajectory_action=names.trajectory_action, on_goal_event=on_event)
+    facade = PilotSimRuntime(arm, gripper=profile.gripper_joint,
+        range_inset_rad=profile.start_state_tolerance_rad, gripper_open=profile.gripper_open,
+        gripper_closed=profile.gripper_closed, gripper_velocity=profile.velocity_limits[profile.gripper_joint],
+        gripper_preload=profile.gripper_preload_rad)
+    capture = facade.capture = PilotSimCapture(facade, directory/'recordings', source,
+        sim_time_ns=lambda: node.get_clock().now().nanoseconds, recording_fps=5)
+    camera = PilotSimCamera(node, capture, source['world_sha256'], world_name='omx_cell_workcell')
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
+    executor.add_node(node)
+    spinner = threading.Thread(target=executor.spin, daemon=True)
+    spinner.start()
+    observer, aid = ObserverClient(observer_path), SimAid()
+    episode_id, success, error = None, False, None
+    receipt = {'sim_aid': True, 'sim_gripper_sensor': True, 'source': source,
+               'goal_m': goal, 'cell_sha256': job.cell_hash, 'recipe_sha256': job.recipe_hash,
+               'profile_revision': profile.revision, 'training': 'NOT_RUN',
+               'gripper_verification_failure': None,
+               'motion_strategy': {'type':'release_above_support_v1',
+                   'place_clearance_m':PLACE_CLEARANCE_M,
+                   'min_measured_clearance_m':PLACE_CLEARANCE_M/2,
+                   'transfer_hold':'verified_contact_bounded_squeeze_v1',
+                   'grasp_stop':'verified_contact_before_blocked_close_v1',
+                   'max_planned_step_rad':TEACHER_STEP_RAD,
+                   'max_readback_step_rad':TEACHER_READBACK_LIMIT_RAD,
+                   'max_gripper_squeeze_rad':TEACHER_STEP_RAD}}
+
+    def sim_time():
+        return node.get_clock().now().nanoseconds / 1_000_000_000
+
+    def observe():
+        value = observer('infeed_block', require_open=False)
+        if not samples or value['clock'] != samples[-1]['clock']:
+            samples.append(value)
+        return value
+
+    def wait_ready(timeout=90):
+        deadline = time.monotonic()+timeout
+        while time.monotonic() < deadline:
+            state = facade.snapshot()
+            if state['owner_state'] == 'hold':
+                raise RuntimeError('owner HOLD: '+state['owner_reason'])
+            if state['ready'] and state['active_goal'] is None:
+                return state
+            time.sleep(.02)
+        raise TimeoutError('owner not ready')
+
+    def dispatch_once(target):
+        state = wait_ready()
+        command_id = str(uuid.uuid4())
+        def bounded(current, limits):
+            for name, value in target.items():
+                low, high = limits[name]
+                if not math.isfinite(value) or not low <= value <= high or abs(value-current[name]) > .04:
+                    return 'teacher_target_outside_bounded_step'
+            current.update(target)
+            return ''
+        response = facade._dispatch(command_id, facade.instance_id, state['state_sequence'], .8,
+                                    bounded, '', '')
+        commands.append({'command_id': command_id, 'target': target, 'duration_s': .8,
+                         'response': response, 'sim_time': sim_time()})
+        if response['state'] == 'REJECTED':
+            raise RuntimeError('teacher command rejected: '+response['reason'])
+        deadline = time.monotonic()+30
+        while time.monotonic() < deadline:
+            if episode_id:
+                observe()
+                quality = capture.status()
+                if quality['status'] == 'incomplete' or quality['issues']:
+                    raise RuntimeError('capture incomplete: '+str(quality))
+            result = facade.goal(command_id)
+            if result['state'] == 'SUCCEEDED':
+                return wait_ready()
+            if result['state'] in {'UNKNOWN_HOLD', 'CANCELED'}:
+                raise RuntimeError('teacher goal failed: '+str(result))
+            time.sleep(.02)
+        raise TimeoutError('teacher goal result unknown')
+
+    def dispatch(target,*,holding=False):
+        if holding:
+            evidence,position=grip('held')
+            target=dict(target)
+            target[profile.gripper_joint]=contact_hold_target(position,
+                close=profile.gripper_close_for_width(recipe.box.width),
+                contact=profile.gripper_contact_for_width(recipe.box.width))
+            event.setdefault('hold_commands',[]).append(dict(evidence=evidence,position_rad=position,
+                                                           target=dict(target)))
+        dispatch_readback_target(target, lambda: wait_ready()['positions'], dispatch_once)
+
+    def grip(expect):
+        js = arm.latest_joint_state
+        q = js.positions[profile.gripper_joint]
+        close = profile.gripper_close_for_width(recipe.box.width)
+        contact = profile.gripper_contact_for_width(recipe.box.width)
+        held = contact_held(q,close=close,contact=contact)
+        opened = abs(q-profile.gripper_open) <= .05
+        observation = GripperObservation(config.workcell_id, config.instance_id,
+            'omx-sim-width-matched-position-v2', js.sequence, js.received_at,
+            'CLOSED' if expect == 'held' else 'OPEN' if opened else 'UNKNOWN',
+            held if expect == 'held' else False if opened else None,
+            'box' if expect == 'held' and held else None, 1)
+        verifier = verify_held_object if expect == 'held' else verify_released_object
+        checked = arm.monotonic()
+        try:
+            verified = verifier(observation, object_id='box', now=checked,
+                                max_age_s=profile.max_joint_state_age_s)
+        except Exception:
+            receipt['gripper_verification_failure'] = gripper_failure_evidence(observation,
+                position_rad=q, joint_positions_rad=js.positions, expected=expect,
+                close_rad=close, contact_rad=contact,
+                checked_owner_s=checked, max_age_s=profile.max_joint_state_age_s,
+                phase_id=event.get('phase_id'),
+                preceding_command_id=commands[-1]['command_id'] if commands else None)
+            raise
+        return ({'observation': vars(observation), 'receipt': vars(verified),
+                 'checked_owner_s': checked, 'max_age_s': profile.max_joint_state_age_s},q)
+
+    try:
+        state = wait_ready()
+        home = TopDownPose(cell.home.x, cell.home.y, cell.home.z, cell.home.yaw)
+        home_q = dict(zip(ARM_JOINTS, kin.solve_top_down(home, profile.ik_limits()).joints))
+        home_q[profile.gripper_joint] = profile.gripper_open
+        order = config.joint_names
+        for point in short_targets([tuple(state['positions'][n] for n in order), tuple(home_q[n] for n in order)]):
+            dispatch(dict(zip(order, point)))
+        if home_only:
+            final = wait_ready()
+            if final['active_goal'] is not None or final['owner_state'] != 'ready':
+                raise RuntimeError('startup owner did not become idle')
+            receipt['purpose'] = 'startup_home_only'
+            success = True
+            return 0
+        deadline = time.monotonic()+60
+        while not capture.camera_status()['fresh']:
+            if time.monotonic() > deadline:
+                raise TimeoutError('real RGB camera unavailable: '+str(camera.error))
+            time.sleep(.05)
+        js = arm.latest_joint_state
+        snapshot = ExecutionStateSnapshot(sequence=js.sequence, joint_positions=dict(js.positions),
+            calibration_revision=config.calibration_revision, transform_revision='gz-world-is-link0-v1',
+            planning_scene_revision=kin.planning_scene_revision, observed_at_monotonic_s=js.received_at)
+        geometry = {'grasp_width_m': recipe.box.width, 'grasp_depth_m': recipe.box.grasp_depth,
+                    'height_m': recipe.box.height}
+        planner = AnalyticCellTransferPlanner(kin, accepted_cell_sha256=lambda: job.cell_hash,
+            monotonic=arm.monotonic,
+            accepted_item_geometry=lambda sha, item: geometry if sha == job.recipe_hash and item == 'box' else None)
+        request = CellTransferRequest(job_id='sim-object-demonstration', recipe_sha256=job.recipe_hash,
+            cell_sha256=job.cell_hash, step_index=0, item='box', home=home,
+            pick=TopDownPose(pick.target.x,pick.target.y,pick.target.z,pick.target.yaw),
+            place=teacher_place_pose(TopDownPose(place.target.x,place.target.y,place.target.z,place.target.yaw)),
+            pick_approach_z=pick.approach_z, place_approach_z=place.approach_z, carry_z=job.carry_z,
+            grasp_depth_m=recipe.box.grasp_depth, grasp_width_m=recipe.box.width)
+        if plan_kind == 'chunks':  # pick-place-chunks: arm S's top-down chunks and transit (D-872)
+            from grasp_planner import Planner
+            from sim_chunk_plan import phases as chunk_phases, sim_plan
+            carry = TopDownPose(cell.home.x, cell.home.y, job.carry_z, cell.home.yaw)
+            limits = profile.ik_limits()
+            # aim at the box where the observer sees it (the real pipeline locates it with the top camera);
+            # the yaw is the site's, or turned by the box when the scenario asks for that candidate
+            seen = observe()['model_pose_base']
+            pick_pose = (seen['x_m'], seen['y_m'], request.pick.z, request.pick.yaw + math.radians(box_turn_deg))
+            arm_plan = sim_plan(home_q=[home_q[n] for n in ARM_JOINTS],
+                transit_q=kin.solve_top_down(carry, limits, reference_q5=home_q[ARM_JOINTS[4]]).joints,
+                pick=pick_pose,
+                place=(request.place.x, request.place.y, request.place.z, request.place.yaw),
+                approach_m=request.pick_approach_z-request.pick.z, grip_open=profile.gripper_open,
+                grip_close=profile.gripper_close_for_width(recipe.box.width),
+                limits={'joints_rad': {n: list(limits.position_limits[n]) for n in ARM_JOINTS},
+                        'workspace_min_m': list(limits.workspace_min_m),
+                        'workspace_max_m': list(limits.workspace_max_m),
+                        'singularity_radius_m': limits.singularity_radius_m})
+            plan_phases = chunk_phases(Planner(arm_plan), config.joint_names, profile.gripper_joint,
+                                       TEACHER_STEP_RAD)
+            receipt['motion_strategy']['plan'] = {'type': 'arm_s_chunks_v1', 'grasp_plan': arm_plan,
+                                                  'box_seen': seen, 'box_turn_deg': box_turn_deg}
+        else:
+            plan_phases = planner.plan_transfer(request, profile, snapshot).phases
+        initial = observe()
+        aid.watch('infeed_block')
+        aid._robot_entity_id()
+        episode_id = capture.start('Lift infeed_block and place in fixed pallet A slot 1')['episode_id']
+        receipt['episode_id'] = episode_id
+        receipt['recording_start_sim_s'] = sim_time()
+        for phase in plan_phases:
+            event = {'phase_id': phase.phase_id, 'started_sim_s': sim_time(),
+                     'started_owner_s': arm.monotonic()}
+            events.append(event)
+            if phase.phase_id == 'release':
+                observation=observe()
+                js=arm.latest_joint_state
+                checked=arm.monotonic()
+                if not 0<=checked-js.received_at<=profile.max_joint_state_age_s:
+                    raise RuntimeError('release joint-state stale')
+                tcp=kin.fk([js.positions[n] for n in ARM_JOINTS])
+                event['pre_detach_geometry']=release_clearance_evidence(observation,tcp,recipe.box,goal)
+                event['pre_detach_geometry']['joint_state']=dict(positions=dict(js.positions),
+                    sequence=js.sequence,received_at=js.received_at,checked_owner_s=checked)
+                event['detach'] = aid.detach('infeed_block')
+                if not event['detach']['confirmed']:
+                    raise RuntimeError('detach unconfirmed')
+            if plan_kind == 'chunks' and phase.phase_id == 'release':
+                from sim_chunk_plan import open_from
+                phase = open_from(phase, profile.gripper_joint, wait_ready()['positions'][profile.gripper_joint])
+            targets = short_targets([phase.start_state_positions, *[p.positions for p in phase.points]])
+            for point in targets:
+                target=dict(zip(phase.joint_names, point))
+                if phase.phase_id=='grasp' and grasp_contact_reached(wait_ready()['positions'],target,
+                        gripper=profile.gripper_joint,close=profile.gripper_close_for_width(recipe.box.width),
+                        contact=profile.gripper_contact_for_width(recipe.box.width),
+                        arm_tolerance=profile.start_state_tolerance_rad):
+                    event['contact_limited_grasp']=grip('held')[0]
+                    break
+                dispatch(target,holding=phase.phase_id=='transfer')
+            if phase.phase_id == 'grasp':
+                event['hold_evidence'],_ = grip('held')
+                event['hold_receipt'] = event['hold_evidence']['receipt']
+                tcp = kin.fk([arm.latest_joint_state.positions[n] for n in ARM_JOINTS])
+                pose = observe()['model_pose_base']
+                if math.hypot(tcp.x-pose['x_m'], tcp.y-pose['y_m']) > .01 or abs(tcp.z-(pose['z_m']+recipe.box.height/2-recipe.box.grasp_depth)) > .01:
+                    raise RuntimeError('grasp readback is not at observed object')
+                event['attach'] = aid.attach('infeed_block')
+                if not event['attach']['confirmed']:
+                    raise RuntimeError('attach unconfirmed')
+            if phase.phase_id == 'release':
+                event['release_evidence'],_ = grip('open')
+                event['release_receipt'] = event['release_evidence']['receipt']
+            event['ended_sim_s'] = sim_time()
+            event['ended_owner_s'] = arm.monotonic()
+        released_at = observe()['clock']
+        deadline = time.monotonic()+30
+        while observe()['clock']-released_at < 2.2:
+            if time.monotonic() > deadline:
+                raise TimeoutError('settling clock did not advance')
+            time.sleep(.05)
+        metrics = judge_episode(samples, model='infeed_block', initial_z=initial['model_pose_base']['z_m'],
+            goal=goal, released_at=released_at, released=bool(events[-1].get('release_receipt')
+                                                           and events[-1].get('detach',{}).get('confirmed')))
+        receipt['metrics'] = metrics
+        success = metrics['success']
+        receipt['capture'] = capture.stop(episode_id, 'success' if success else 'failure')
+        success = bool(success and capture.manifest(episode_id).get('status') == 'complete')
+    except Exception as exc:
+        error = type(exc).__name__+': '+str(exc)
+        if episode_id and capture.recorder.active:
+            receipt['capture'] = capture.stop(episode_id, 'failure')
+    finally:
+        receipt['watchdog_observation'] = teacher_watchdog_evidence(arm.owner)
+        receipt.update(success=success, error=error, recording_end_sim_s=sim_time(),
+                       owner_final=facade.snapshot(), camera_final=capture.camera_status(),
+                       camera_error=camera.error,
+                       source_pairing_error=capture.source_pairing_error,
+                       camera_stream_error=capture.camera.last_error if capture.camera else None)
+        write_json(directory/'observations.json', samples)
+        write_json(directory/'teacher-phases.json', events)
+        write_json(directory/'teacher-commands.json', commands)
+        write_json(directory/'teacher-result.json', receipt)
+        camera.destroy()
+        executor.shutdown()
+        arm.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
+    return 0 if success else 1
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--evidence', type=Path, required=True)
+    parser.add_argument('--world', type=Path, required=True)
+    parser.add_argument('--observer', type=Path, required=True)
+    parser.add_argument('--home-only', action='store_true')
+    parser.add_argument('--plan', choices=('analytic', 'chunks'), default='analytic')
+    parser.add_argument('--box-turn-deg', type=float, default=0.0)
+    args = parser.parse_args()
+    raise SystemExit(run(args.evidence, args.world, args.observer, home_only=args.home_only,
+                         plan_kind=args.plan, box_turn_deg=args.box_turn_deg))

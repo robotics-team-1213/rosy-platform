@@ -52,7 +52,7 @@ surfaces:
     ports:
       - {port: 8767, source: learning/curation/perception/review_app.py}
     audience: Pinky 학습 객체·픽셀 라벨 검수자
-    role: Rosy Learning — 홈·자료·정답·학습·평가·승격 다섯 단계 메뉴로 로봇 자료를 정답과 모델 평가 근거로 바꾸는 학습 센터(D-857). 도메인은 메뉴가 아니라 필터이고 로그인·계정은 상단 막대에 있다. 자료 단계의 작업 공간 화면은 같은 센터의 별도 검수 인스턴스로 가는 링크 목록이다(D-857 §2). Studio는 검수 작업대 이름이다. 별도 런처·PWA·ROS·Android 앱 등록은 아니다 (D-461·D-806).
+    role: Rosy Learning — 홈·자료·정답·학습·평가·승격 다섯 단계 메뉴로 로봇 자료를 정답과 모델 평가 근거로 바꾸는 학습 센터(D-857). 도메인은 메뉴가 아니라 필터이고 계정·저장 공간은 상단 설정이다. Studio는 검수 작업대 이름이다. 별도 런처·PWA·ROS·Android 앱 등록은 아니다 (D-461·D-792·D-806).
     owns: [pinky-object-review, pinky-pixel-review, pinky-review-export]
     contracts: [shared_controls, typography_focus]
     contract_reason: 로컬 학습 도구이며 로봇 명령·운용 셸·비상정지 또는 비가역 장치 행동이 없다. 초안 교체 확인은 브라우저 기본 dialog다.
@@ -90,7 +90,7 @@ surfaces:
     app_name_en: Rosy Fleet
     short_name: Rosy Fleet
     icon: shared/web/icons/console.svg
-    path: operations/site_ui/console
+    path: applications/fleet/web
     themes: [dark, light]
     surface: site
     medium: web
@@ -152,7 +152,8 @@ surfaces:
         reason: PARKED(D-266) 한 파일 진단 표면(D-150)의 원래 배치 값 — 해제 회차에서 세 단으로 옮긴다
     raw_colours:
       - file: diagnostic.html
-        reason: PARKED(D-266) 한 파일 진단 표면(D-150) — 자기 <style> 팔레트와 캔버스 색을 품는다. 해제 회차에서 tokens.css로 옮긴다
+        block: ":root"
+        reason: PARKED(D-266) 진단 표면의 역할 블록 — 다른 역할은 tokens.css를 참조하고, 토큰이 없는 지도 래스터(render_png와 같은 값)와 대안 경로·핀 색만 여기에 둔다
     contract_reason: >
       타이포·확인 계약은 이 표면에 도입된 적이 없다 — D-150이 한 파일 고정으로 두고
       PARKED(D-266)라 새로 적용할 회차가 없었다. 두 계약을 받게 되는 날 이 문장을 지운다.
@@ -174,7 +175,7 @@ surfaces:
     surface: robot
     medium: web
     ports:
-      - {port: 8088, source: middleware/devices/omx/adapter/omx_adapter/pilot_sim_server.py}
+      - {port: 8088, source: middleware/devices/omx/adapter/omx_adapter/pilot_sim/server.py}
     audience: 현장 운전자 한 사람 (D-323 원격 조종 PWA — Pinky는 CORE /pilot, OMX 연습은 격리된 Gazebo 호스트 8088)
     role: 한 로봇 직접 수동 운전·운전석 영상·누르는 동안만 가는 운전 보조 (D-370 1항, D-323·D-344)
     owns: [manual-drive, driver-video, drive-assist, sim-arm-practice, estop]
@@ -219,8 +220,7 @@ surfaces:
 
   - id: lane-live-view
     path: integrations/simulation/gazebo/scripts/lane_live_view.html
-    themes: [dark]
-    theme_reason: 개발 도구(제품 표면 아님, D-359 §3.3) — 바탕이 곧 시뮬 영상이다
+    themes: [dark, light]
     surface: sim
     medium: web
     ports:
@@ -234,11 +234,8 @@ surfaces:
         reason: 개발 도구(제품 표면 아님, contracts 없음) — 두 격자를 한 열로 접는 뷰어 고유 폭
       - value: 640px
         reason: 개발 도구(제품 표면 아님, contracts 없음) — 머리 줄을 접는 뷰어 고유 폭
-    raw_colours:
-      - file: lane_live_view.html
-        reason: 개발 도구(제품 표면 아님, contracts 없음) — 뷰어 고유 팔레트를 한 파일에 품는다
     contract_reason: >
-      제품 셸·토큰·확인 문법의 대상이 아니다. 라인 예산과 판정은
+      색과 부품은 /common(tokens·components·ui.js)을 쓰지만 제품 셸·확인 문법 계약의 대상은 아니다. 라인 예산과 판정은
       test_web_budgets의 D-262 VERDICTS가 맡는다.
     baseline_reason: 제품 표면이 아니므로 G2 기준선이 없다.
 

@@ -30,7 +30,7 @@ WORD = re.compile(r"^[a-z]+$")
 #: Rows not yet moved, keyed by registry id (plan 2026-09-30-app-identity-rename-plan.md §3).
 PENDING = {
     "robot": "D-377 stage 3: folder is middleware/robot_ui/robot; package.xml stays dashboard until rosy_robot (D-362 gate)",
-    "console": "D-487 display is Rosy Fleet while id and icon stay console; source is operations/site_ui/console; package rosy_console was not opened",
+    "console": "D-487 display is Rosy Fleet while id and icon stay console; source is applications/fleet/web; package rosy_console was not opened",
 }
 
 #: Packages kept by the D-377 decision table ("unchanged"), keyed by id.

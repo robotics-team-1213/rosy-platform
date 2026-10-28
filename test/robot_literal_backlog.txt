@@ -8,7 +8,7 @@ contracts/foundation/core_common/protocol/schemas.py
 middleware/robot_ui/face/emotion/info_screen.py
 middleware/robot_ui/face/emotion/wifi_qr.py
 shared/web/surfaces.yaml
-middleware/devices/omx/adapter/omx_adapter/pilot_sim_api.py
+middleware/devices/omx/adapter/omx_adapter/pilot_sim/api.py
 middleware/core/api/core_api_web/api/app.py
 middleware/drive/planning/nav2/launch/hardware.launch.py
 middleware/drive/planning/nav2/params/nav2_params.yaml
@@ -50,8 +50,8 @@ integrations/simulation/gazebo/worlds/rosy_maze.world
 # Service Control (D-524): the AI PC unit names contain pinky. They are systemd unit names.
 operations/fleet/fleet/host_control.py
 operations/fleet/fleet/localization/service_logic.py
-operations/fleet/fleet/server/bays.py
-operations/fleet/fleet/server/traffic.py
+operations/fleet/fleet/server/rightofway/bays.py
+operations/fleet/fleet/server/rightofway/traffic.py
 operations/fleet/fleet/server/cancel_all.py
 # D-536 guide defaults to the Pinky body geometry for its read-only clearance display.
 operations/fleet/fleet/server/guide_service.py

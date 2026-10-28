@@ -22,6 +22,7 @@ D-438/D-577 Fleet stuck judgment, moved out of `server/` by D-607 P0 (`docs/plan
 | `realign.py` | D-622 standalone REALIGN (R9): opt-in `realign_robots`/recovery-area config, sweep geometry, evidence selection; pure, returns a request or a hold reason |
 | `loop.py` | `StuckResolverLoop` — 1 s poll + hub wake, board update, sends answers as `fleet-resolver` |
 | `ai_facts.py` | D-577 AI PC facts, heartbeat and proposals (`ai_observer`, no command path), routes and audit |
+| `cli_config.py` | `fleet console` adapters from `--site-config` `fleet.stuck_resolver`/`fleet.ai_first` to `ResolverConfig`/`AiFirst`; no I/O beyond reading that YAML |
 
 ## For AI Agents
 

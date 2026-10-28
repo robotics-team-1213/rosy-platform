@@ -10,6 +10,7 @@ run these in a worker thread, never on the trip loop's event loop.
 from __future__ import annotations
 
 import hashlib
+import json
 from contextlib import closing
 
 from fleet.server.cell_job_store import CANCELLED_REASON, CellJobStore
@@ -41,11 +42,54 @@ class TripJobRows:
                 f"AND s.step_index=j.current_step_index WHERE s.action_kind=? AND j.status IN "
                 f"({', '.join('?' * len(statuses))}) ORDER BY j.updated_at", (KIND, *statuses))]
 
-    def create(self, mission_id: str, robot_id: str, principal_id: str, steps: list) -> dict:
+    def find_request(self, principal_id: str, request_key: str, request_digest: str) -> dict | None:
+        with closing(self.store._connect()) as connection:
+            row = connection.execute("SELECT mission_id,request_digest FROM fleet_cell_jobs "
+                                     "WHERE proposal_principal_id=? AND request_key=?",
+                                     (principal_id, request_key)).fetchone()
+            if row is None:
+                return None
+            if row["request_digest"] != request_digest:
+                raise TripError(409, "TRIP_REQUEST_CONFLICT")
+            return CellJobStore._get(connection, row["mission_id"])
+
+    def read(self, principal_id: str, *, mission_id: str | None = None,
+             request_key: str | None = None) -> dict | None:
+        """Read a principal's transport-only job in one consistent SQLite snapshot."""
+        if (mission_id is None) == (request_key is None):
+            raise ValueError("Supply exactly one mission ID or candidate request key")
+        field, value = ("mission_id", mission_id) if mission_id is not None else ("request_key", "trip-pool:" + request_key)
+        with closing(self.store._connect()) as connection:
+            connection.execute("BEGIN")
+            row = connection.execute(
+                f"SELECT j.* FROM fleet_cell_jobs j WHERE j.proposal_principal_id=? AND j.{field}=? "
+                "AND EXISTS (SELECT 1 FROM fleet_cell_steps s WHERE s.mission_id=j.mission_id AND s.action_kind=?) "
+                "AND NOT EXISTS (SELECT 1 FROM fleet_cell_steps s WHERE s.mission_id=j.mission_id AND s.action_kind!=?)",
+                (principal_id, value, KIND, KIND)).fetchone()
+            if row is None:
+                return None
+            steps = [dict(step) for step in connection.execute(
+                "SELECT step_index,step_json,status,action_id,attempt_id,reason FROM fleet_cell_steps "
+                "WHERE mission_id=? ORDER BY step_index", (row["mission_id"],))]
+            for step in steps:
+                step["step"] = json.loads(step.pop("step_json"))
+            key = row["request_key"]
+            return {"mission_id": row["mission_id"],
+                    "request_key": key.removeprefix("trip-pool:") if key.startswith("trip-pool:") else None,
+                    "request_digest": row["request_digest"], "robot_id": row["instance_id"],
+                    "status": row["status"], "current_step_index": row["current_step_index"],
+                    "steps": steps, "reason": row["reason"], "updated_at": row["updated_at"]}
+
+    def create(self, mission_id: str, robot_id: str, principal_id: str, steps: list, *,
+               request_key: str | None = None, request_digest: str | None = None) -> dict:
         body = _json({"robot_id": robot_id, "steps": steps})
         digest, now = hashlib.sha256(body.encode()).hexdigest(), _now()
         with closing(self.store._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if request_key is not None and connection.execute(
+                    "SELECT 1 FROM fleet_cell_jobs WHERE proposal_principal_id=? AND request_key=?",
+                    (principal_id, request_key)).fetchone() is not None:
+                raise MissionConflict("trip request already committed")
             control = connection.execute("SELECT authority_epoch, generation, dispatch_enabled FROM "
                                          "fleet_dispatch_control WHERE control_id=1").fetchone()
             if control is None or not control["dispatch_enabled"]:
@@ -55,7 +99,8 @@ class TripJobRows:
                 "workcell_id, instance_id, recipe_digest, cell_digest, process_artifact_digest, job_json, "
                 "resources_json, ledger_markers_json, status, authority_epoch, dispatch_generation, created_at, "
                 "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 'READY', ?, ?, ?, ?)",
-                (mission_id, principal_id, mission_id, digest, mission_id, robot_id, robot_id, digest, digest, digest,
+                (mission_id, principal_id, request_key or mission_id, request_digest or digest, mission_id,
+                 robot_id, robot_id, digest, digest, digest,
                  body, _json([["robot", robot_id]]), control["authority_epoch"], control["generation"], now, now))
             for index, step in enumerate(steps):
                 connection.execute("INSERT INTO fleet_cell_steps (mission_id, step_index, step_id, action_kind, "

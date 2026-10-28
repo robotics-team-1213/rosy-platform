@@ -22,6 +22,7 @@ from fleet.host_control import (
     catalogue,
     decide,
     helper_from_config,
+    update_summary,
 )
 from fleet.server.host_control_routes import install_host_control_routes
 
@@ -43,7 +44,8 @@ def test_catalogue_is_the_three_ubuntu_hosts():
     hosts = {row["host"]: row for row in catalogue()["hosts"]}
     assert set(hosts) == {"site", "ai", "model"}
     assert hosts["model"]["units"] == []
-    assert hosts["model"]["actions"] == ["reboot", "cancel-reboot"]
+    assert hosts["model"]["actions"] == ["reboot", "cancel-reboot", "clean-storage"]
+    assert hosts["ai"]["actions"][:3] == ["reboot", "cancel-reboot", "clean-storage"]
     assert hosts["site"]["actions"] == ["reboot", "cancel-reboot", "restart-unit"]
     assert hosts["site"]["stoppable_units"] == []
     assert "docker.service" in hosts["site"]["units"]
@@ -63,11 +65,20 @@ def test_site_units_restart_but_never_stop():
 
 
 def test_only_an_allowlisted_unit_on_that_host_can_stop():
-    assert decide("ai", "stop-unit", "pinky-nav2.service", confirmed=True)["argv"] == (
-        "stop-unit", "pinky-nav2.service")
+    assert decide("ai", "stop-unit", "pinky-backend.service", confirmed=True)["argv"] == (
+        "stop-unit", "pinky-backend.service")
     for host, unit in (("ai", "docker.service"), ("site", "ssh.service"),
-                       ("model", "ollama.service"), ("ai", "pinky-nav2.service;reboot")):
+                       ("model", "ollama.service"), ("ai", "pinky-backend.service;reboot"),
+                       # D-795: cross-host DDS units (AI PC Nav2, rosbridge) are gone.
+                       ("ai", "pinky-nav2.service"), ("ai", "pinky-rosbridge-d12.service")):
         assert _code(lambda: decide(host, "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
+
+
+def test_only_the_lab_pcs_clean_storage_and_never_with_a_unit():
+    for host in ("ai", "model"):
+        assert decide(host, "clean-storage", None, confirmed=True)["argv"] == ("clean-storage",)
+        assert _code(lambda: decide(host, "clean-storage", "docker.service", confirmed=True)) == "UNIT_NOT_ALLOWED"
+    assert _code(lambda: decide("site", "clean-storage", None, confirmed=True)) == "ACTION_NOT_ALLOWED"
 
 
 def test_reboot_rejects_a_unit_and_an_unconfirmed_call():
@@ -85,6 +96,15 @@ def test_helper_script_matches_the_allowlist_and_has_no_test_switch():
             for action in ("restart-unit", "stop-unit"):
                 listed = re.search(rf"\b{host}:{action}:{re.escape(unit)}[|)]", text) is not None
                 assert listed is (action in actions), (host, action, unit)
+
+
+@posix
+@pytest.mark.parametrize("role, writes", [("ai", True), ("model", True), ("site", False)])
+def test_installer_names_the_storage_owner_on_the_lab_pcs(role, writes):
+    """D-883: a model PC without units-user refused every clean-storage request."""
+    out = subprocess.run(["bash", str(INSTALL), "--role", role, "--dry-run", "--units-user", "lab"],
+                         capture_output=True, text=True, timeout=20, check=True).stdout
+    assert ("+ write /etc/rosy/host-control/units-user (0644)\n    lab\n" in out) is writes
 
 
 def test_installer_ships_a_sudoers_line_without_env_rights():
@@ -133,9 +153,10 @@ def test_vision_cannot_reach_fleet_secrets():
             assert item["source"].endswith("/site-cameras.yaml") and item["read_only"], item
     mounted = str(services["vision"]["volumes"])
     assert "SECRETS_DIR" not in mounted and "host-control" not in mounted
+    # D-796: the fleet service also reads the site context-log store's password.
     own = {"fleet": {"registry_token", "fleet_sighting_token", "discovery_token",
                      "vision_preview_secret", "robot_credential_key", "site_cert", "site_key",
-                     "site_ca"},
+                     "site_ca", "postgres_password"},
            "vision": {"phone_ingress_token", "fleet_sighting_token", "vision_preview_secret",
                       "site_cert", "site_key", "site_ca"},
            "proxy": {"site_cert", "site_key", "site_ca"}}
@@ -187,12 +208,12 @@ def test_ssh_helper_uses_an_argument_list_and_a_fixed_ssh(monkeypatch, tmp_path)
 
 
 def test_helper_exit_codes_become_api_codes(monkeypatch, tmp_path):
-    codes = iter([3, 4, 255])
+    codes = iter([3, 4, 5, 255])
     monkeypatch.setattr(subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(
         argv, next(codes), stdout="", stderr=""))
     helper = helper_from_config(_config(tmp_path, "model rosy@model-pc.local\n"))
-    assert [helper.run("model", ("reboot",))["code"] for _ in range(3)] == [
-        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "HOST_HELPER_FAILED"]
+    assert [helper.run("model", ("reboot",))["code"] for _ in range(4)] == [
+        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "NO_STORAGE_SERVICE", "HOST_HELPER_FAILED"]
 
 
 def test_missing_or_bad_config_stays_unavailable(tmp_path):
@@ -214,7 +235,10 @@ def _client(helper, *, named=True):
             raise HTTPException(status_code=403, detail={"code": "OPERATOR_IDENTITY_REQUIRED"})
         return operator()
 
-    install_host_control_routes(app, require_operator=operator,
+    def viewer():
+        return SimpleNamespace(principal_id="viewer-1", role="viewer")
+
+    install_host_control_routes(app, require_operator=operator, require_viewer=viewer,
                                 require_named_operator=named_operator, helper=helper)
     return TestClient(app)
 
@@ -284,17 +308,17 @@ def test_hosts_route_attaches_guard_headroom_and_ignores_a_bad_drift_file(tmp_pa
 
 
 def test_install_task_shows_host_headroom_and_has_no_process_kill():
-    web = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
-    page = (web / "install.html").read_text(encoding="utf-8")
-    script = (web / "host-services.js").read_text(encoding="utf-8")
-    install = (web / "install.js").read_text(encoding="utf-8")
-    backend = Path(__file__).resolve().parents[1] / "fleet" / "server"
-    assets = (backend / "console" / "static_routes.py").read_text(encoding="utf-8")
+    web = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
+    page = (web / "installation" / "install.html").read_text(encoding="utf-8")
+    script = (web / "installation" / "host-services.js").read_text(encoding="utf-8")
+    install = (web / "installation" / "install.js").read_text(encoding="utf-8")
+    assets = json.loads((web / 'assets.json').read_text(encoding='utf-8'))['assets']
     assert 'id="host-services"' in page and "호스트 서비스" in page
     assert "pkill" not in script and "kill" not in script
     assert "10분 뒤 재부팅" in script and "operator_confirmed: true" in script
+    assert '.includes("clean-storage")' in script  # only hosts whose catalogue offers it get the button
     assert 'id: "hosts"' in install and 'from "./host-services.js"' in install
-    assert '"host-services.js"' in assets
+    assert assets['host-services.js']['path'] == 'installation/host-services.js'
 
 
 def test_app_without_named_principals_never_reaches_a_helper(monkeypatch):
@@ -357,6 +381,32 @@ def test_helper_refuses_a_second_reboot_and_cancels_only_its_own(tmp_path):
 
 
 @posix
+def _systemd_like(tmp_path, load_state):
+    """systemd 255 refuses `cat` over --machine ("Cannot remotely cat units.") and answers
+    `show -p LoadState --value` with loaded or not-found; the plain stub accepted both."""
+    (tmp_path / "bin" / "systemctl").write_text(
+        f'#!/bin/sh\necho "systemctl $*" >> {tmp_path}/calls\n'
+        'case "$*" in *--machine=*" cat "*) echo "Cannot remotely cat units." >&2; exit 1;;\n'
+        f'  *"show -p LoadState --value"*) echo {load_state};; esac\n')
+
+
+@posix
+def test_helper_starts_only_the_lab_storage_service_and_refuses_the_site(tmp_path):
+    """2026-10-26 on the model PC: the linked unit was refused with exit 5 by a remote `cat`."""
+    helper = _helper_copy(tmp_path, "model")
+    _systemd_like(tmp_path, "loaded")
+    assert helper("clean-storage") == 0
+    calls = (tmp_path / "calls").read_text()
+    assert "systemctl --user --machine=pinky@ --no-block start rosy-test-storage.service" in calls
+    assert helper("clean-storage", "x.service") == 2
+    _systemd_like(tmp_path, "not-found")  # a PC where rosy-ops never linked the unit
+    assert helper("clean-storage") == 5
+    (tmp_path / "conf" / "role").write_text("site\n")
+    assert helper("clean-storage") == 2
+    assert (tmp_path / "calls").read_text().count(" start rosy-test-storage.service") == 1
+
+
+@posix
 def test_helper_refuses_site_stop_and_unknown_role(tmp_path):
     helper = _helper_copy(tmp_path, "site")
     assert helper("stop-unit", "rosy-site-firewall.service") == 2
@@ -365,8 +415,8 @@ def test_helper_refuses_site_stop_and_unknown_role(tmp_path):
     (tmp_path / "conf" / "role").write_text("robot\n")
     assert helper("reboot") == 2
     (tmp_path / "conf" / "role").write_text("ai\n")
-    assert helper("stop-unit", "pinky-nav2.service") == 0
-    assert "systemctl --user --machine=pinky@ --no-block stop pinky-nav2.service" in (
+    assert helper("stop-unit", "pinky-backend.service") == 0
+    assert "systemctl --user --machine=pinky@ --no-block stop pinky-backend.service" in (
         tmp_path / "calls").read_text()
 
 
@@ -437,3 +487,51 @@ def test_site_config_install_copies_checks_and_backs_up(tmp_path):
 def test_fleet_key_cannot_install_site_config():
     env = {**os.environ, "SSH_ORIGINAL_COMMAND": "install-site-config fleet-site.yaml"}
     assert subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, timeout=10).returncode == 2
+
+
+NOW = 2_000_000_000.0
+
+
+def _report(*updaters, gate="open", **extra):
+    return {"schema": "rosy.update-report/1", "time": int(NOW), "gate": gate, "updaters": list(updaters), **extra}
+
+
+def _updater(unit, *, timer="enabled", healthy=NOW - 60, step="up_to_date", release="c47d7c3e78c9", reason=None):
+    return {"unit": unit, "timer": timer, "healthy_at": healthy,
+            "last": {"step": step, "release": release, "reason": reason, "at": NOW - 30}}
+
+
+def test_update_summary_names_each_channel_ok_off_or_stuck_and_never_guesses_a_silent_pc():
+    guard = {
+        "site": {"updates": _report(_updater("rosy-omx-devices-autoupdate.service"),
+                                    site_stack={"current": "site-221aedf1bdd5", "result": "idle"})},
+        "model": {"updates": _report(_updater("rosy-learning-center-update.service", timer="disabled"),
+                                     _updater("rosy-model-code-update.service", healthy=NOW - 7 * 3600,
+                                              step="held", reason="work_lock_busy"))},
+        "ai": {"state": "ok", "updates": None},  # an older forced command: no report
+        "robot-a": {"state": "ok"},  # robots are probed, not updated here
+        "cell-c": {"updates": _report({"unit": "../../etc/passwd", "timer": "enabled"},
+                                      _updater("rosy-omx-autoupdate.service", release="<script>"), gate="open; rm")},
+        "cell-b": {"updates": _report(_updater("rosy-omx-autoupdate.service"), gate="frozen")},
+    }
+    hosts = {h["host"]: h for h in update_summary(guard, NOW)["hosts"]}
+    assert hosts["site"]["state"] == "ok"
+    assert [c["release"] for c in hosts["site"]["channels"]] == ["c47d7c3e78c9", "site-221aedf1bdd5"]
+    assert [c["state"] for c in hosts["model"]["channels"]] == ["off", "stuck"] and hosts["model"]["state"] == "stuck"
+    assert hosts["ai"] == {"host": "ai", "state": "unknown", "gate": None, "channels": []}
+    assert hosts["cell-b"]["state"] == "frozen"  # more than three PCs: one per OMX cell
+    assert "robot-a" not in hosts
+    assert [c["unit"] for c in hosts["cell-c"]["channels"]] == ["rosy-omx-autoupdate.service"]
+    assert hosts["cell-c"]["channels"][0]["release"] is None and hosts["cell-c"]["gate"] is None
+    assert "work_lock_busy" not in json.dumps(hosts)  # reasons are for operators (/api/fleet/hosts)
+
+
+def test_every_signed_in_role_reads_the_update_summary(tmp_path, monkeypatch):
+    import fleet.server.host_control_routes as routes
+
+    guard = tmp_path / "guard.json"
+    guard.write_text(json.dumps({"ai": {"updates": _report(_updater("rosy-situation-autoupdate.service"))}}),
+                     encoding="utf-8")
+    monkeypatch.setattr(routes, "GUARD_STATUS", guard)
+    body = _client(UnavailableHostHelper()).get("/api/fleet/updates").json()
+    assert body["hosts"][0]["host"] == "ai" and body["hosts"][0]["channels"][0]["unit"] == "rosy-situation-autoupdate.service"

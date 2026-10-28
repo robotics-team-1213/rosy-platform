@@ -1,0 +1,5 @@
+.measured-calibration { min-width: 0; }
+.measured-calibration input { max-width: 100%; min-width: 0; }
+.measured-calibration p { overflow-wrap: anywhere; }
+.measured-calibration .measured-limits { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.measured-calibration img { display: block; width: 100%; max-width: 100%; height: auto; }

@@ -64,7 +64,8 @@ def single_arm_jobs(connection: sqlite3.Connection, *statuses: str) -> list[sqli
     """``fleet_cell_jobs`` rows in ``statuses`` that are not multi-arm (the single-arm stop path)."""
     marks = ", ".join("?" for _ in statuses)
     exclude = " AND mission_id NOT IN (SELECT mission_id FROM fleet_cell_arm_jobs)" if marked(connection) else ""
-    return connection.execute(f"SELECT * FROM fleet_cell_jobs WHERE status IN ({marks}){exclude}", statuses
+    return connection.execute(f"SELECT * FROM fleet_cell_jobs WHERE provenance_kind='legacy' "
+                              f"AND status IN ({marks}){exclude}", statuses
                               ).fetchall()
 
 

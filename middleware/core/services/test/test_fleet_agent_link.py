@@ -760,3 +760,48 @@ def test_heartbeat_resync_puts_skipped_events_back():
     assert asyncio.run(run()) is True
     assert [e.seq for e in agent._event_buffer] == [1, 2]
     assert list(agent._awaiting) == []
+
+
+def test_a_backlog_replay_starts_after_a_jittered_delay(monkeypatch):
+    """Network load: robots reconnecting together do not all replay their backlog at once."""
+    agent = _agent()
+    agent._event_buffer.extend(_event(i) for i in range(agent_mod.MAX_EVENTS_IN_FLIGHT + 1))
+    asked = []
+    monkeypatch.setattr(agent_mod, "retry_delay", lambda value, **kw: asked.append((value, kw)) or 0.0)
+
+    class Gone:
+        async def send(self, _text):
+            raise OSError("connection reset")
+
+    asyncio.run(asyncio.wait_for(agent._event_loop(Gone()), timeout=1.0))
+    assert asked == [(0.5, {"maximum_s": 0.5})]
+    agent._event_buffer[:] = agent._event_buffer[:1]          # a small replay is not delayed
+    asyncio.run(asyncio.wait_for(agent._event_loop(Gone()), timeout=1.0))
+    assert len(asked) == 1
+
+
+@pytest.mark.parametrize("reconnecting", [False, True], ids=["new-core", "unanswered-reconnect"])
+def test_welcome_watermark_never_discards_unacknowledged_events(monkeypatch, reconnecting):
+    """A previous producer or a later accepted event cannot acknowledge this event."""
+    agent = _agent()
+    event = _bus_event(1)
+    original = event.model_dump(mode="json")
+    if reconnecting:
+        agent._awaiting.append((EnvelopeType.EVENT, event))
+        agent._requeue_unanswered()
+    else:
+        agent._event_buffer.append(event)
+
+    class OldHub:
+        async def send(self, _text):
+            pass
+
+        async def recv(self):
+            return envelope(EnvelopeType.WELCOME, {"last_event_seq": 50})
+
+    async def serve(_ws):
+        assert [e.model_dump(mode="json") for e in agent._event_buffer] == [original]
+        return False
+
+    monkeypatch.setattr(agent, "_serve", serve)
+    asyncio.run(agent._session(OldHub(), "pair-token"))

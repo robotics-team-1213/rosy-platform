@@ -48,6 +48,8 @@ METHOD = 'camera_board/1'
 # The robot runtime's install root; its presence means this process runs on a robot.
 ROBOT_INSTALL = Path('/opt/rosy/current')
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tools"))
+from data_paths import data_root  # noqa: E402
 SHAPES = ((9, 6), (8, 6), (8, 5), (7, 5), (6, 5), (7, 4), (6, 4), (5, 4), (4, 3))
 
 
@@ -236,7 +238,7 @@ def main(argv=None):
                         help='Record an approximate rather than measured board elevation')
     parser.add_argument('--store', metavar='ROBOT',
                         help='write a camera_profile candidate for ROBOT (device name) into --store-root')
-    parser.add_argument('--store-root', type=Path, default=REPO / 'data' / 'calibration',
+    parser.add_argument('--store-root', type=Path, default=data_root(REPO) / 'calibration',
                         help='PC mirror of the calibration store (gitignored data/)')
     for key, unit in (('height', 'mm'), ('pitch', 'deg'), ('roll', 'deg')):
         parser.add_argument(f'--truth-{key}-{unit}', type=float, nargs=2, metavar=('VALUE', 'TOL'),

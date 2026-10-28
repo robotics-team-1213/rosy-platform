@@ -122,7 +122,7 @@ def test_cell_runner_without_shared_admission_fails_before_journaling(tmp_path):
 
 def test_http_sessions_claim_and_revoke_shared_admission(tmp_path):
     from fastapi import HTTPException
-    from omx_adapter.pilot_sim_api import _Sessions
+    from omx_adapter.pilot_sim.api import _Sessions
     _, store, admission, clock = _setup(tmp_path)
     sessions = _Sessions("operator-code", clock=lambda: clock[0], control_admission=admission)
     token = sessions.pair("operator-code")
@@ -140,7 +140,7 @@ def test_http_sessions_claim_and_revoke_shared_admission(tmp_path):
 
 def test_pilot_runtime_reserves_before_send_and_revoked_seat_sends_nothing(tmp_path):
     from test_pilot_sim_runtime import Arm, jog
-    from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     arm = Arm()
     _, store, admission, _ = _setup(tmp_path)
     arm.control_admission = admission
@@ -219,7 +219,7 @@ def test_expired_seat_exact_terminal_and_ready_allow_reacquire(tmp_path):
 def test_runtime_goal_identity_is_durable_and_unknown_send_stays_fenced(tmp_path):
     from uuid import uuid4
     from test_pilot_sim_runtime import Arm, jog, event
-    from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     arm = Arm()
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
     store = ActionStore(tmp_path / "runtime.sqlite3")
@@ -247,11 +247,11 @@ def test_runtime_goal_identity_is_durable_and_unknown_send_stays_fenced(tmp_path
 
 def test_unknown_send_persists_pending_and_preload_cannot_follow_release(tmp_path, monkeypatch):
     from omx_adapter.command_owner import CommandDecision
-    from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     from test_pilot_sim_runtime import Arm, jog
     arm = Arm()
     # This tests a lost send reply, not expiry of the synthetic readback during SQLite I/O.
-    import omx_adapter.pilot_sim_runtime as pilot_runtime
+    import omx_adapter.pilot_sim.runtime as pilot_runtime
     observed_at = arm.latest_joint_state.received_at
     monkeypatch.setattr(pilot_runtime, "time", SimpleNamespace(monotonic=lambda: observed_at))
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
@@ -290,7 +290,7 @@ def test_canonical_cli_forwards_exact_terminal_to_shared_pilot(tmp_path, monkeyp
     from pathlib import Path
     from uuid import uuid4
     from test_pilot_sim_runtime import Arm, jog, event
-    from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     repo = Path(__file__).resolve().parents[5]
     monkeypatch.setenv("ROSY_SIM_REPO", str(repo))
     spec = importlib.util.spec_from_file_location("cell_owner_entrypoint", repo / "deploy/robot/omx/run_cell_owner.py")
@@ -322,11 +322,11 @@ def test_preload_requires_its_original_live_seat(tmp_path, revoke, monkeypatch):
     from dataclasses import replace
     from uuid import uuid4
     from test_pilot_sim_runtime import Arm, event
-    from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     arm = Arm()
     # This tests seat lifetime; joint freshness has separate runtime tests.
     runtime_clock = arm.latest_joint_state.received_at
-    monkeypatch.setattr("omx_adapter.pilot_sim_runtime.time",
+    monkeypatch.setattr("omx_adapter.pilot_sim.runtime.time",
                         SimpleNamespace(monotonic=lambda: runtime_clock))
     arm.owner.run_admission_policy = lambda operation: operation(arm.owner.state)
     clock = [10.0]
@@ -361,7 +361,7 @@ def test_preload_requires_its_original_live_seat(tmp_path, revoke, monkeypatch):
 
 
 def test_wall_expiry_revokes_queued_goal_while_owner_clock_is_paused(tmp_path):
-    from omx_adapter.pilot_sim_api import _Sessions
+    from omx_adapter.pilot_sim.api import _Sessions
     owner, _, admission, owner_clock = _setup(tmp_path)
     wall_clock = [100.0]
     sessions = _Sessions("operator-code", clock=lambda: wall_clock[0], control_admission=admission)
@@ -381,7 +381,7 @@ def test_delayed_old_seat_cleanup_does_not_cancel_new_seat_goal(tmp_path):
     from dataclasses import replace
     import time
     from test_pilot_sim_runtime import Arm, jog
-    from omx_adapter.pilot_sim_runtime import PilotSimRuntime
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
     arm = Arm()
     # This test exercises seat cleanup, not the 0.5 s joint-state freshness gate.
     arm.owner.config = replace(arm.owner.config, max_joint_state_age_s=60.0)

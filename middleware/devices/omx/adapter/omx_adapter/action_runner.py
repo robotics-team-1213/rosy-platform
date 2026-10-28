@@ -8,23 +8,24 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Mapping, Protocol
 
-from core_common.protocol.schemas import FleetActionGrant, FleetCellTransferGrant
+from core_common.protocol.schemas import FleetActionGrant, FleetArmTransferGrant, FleetCellTransferGrant
 
 from .action_store import ActionStore, InvalidActionTransition
 from .local_stop import LocalStopBlocked
+from .managed_transfer_scope import validate_transfer_owner
 from .phase_recorder import ActionPhaseRecorder
 
 
 # Kinds the ordered phase runner may execute, and the only kind the direct
 # driver path admits. CELL_TRANSFER runs through the phase runner only (D-402 §3).
-PHASE_RUNNER_KINDS = frozenset({"PICK_PLACE", "CELL_TRANSFER"})
+PHASE_RUNNER_KINDS = frozenset({"PICK_PLACE", "CELL_TRANSFER", "ARM_TRANSFER"})
 DIRECT_DRIVER_KINDS = frozenset({"PICK_PLACE"})
-ActionGrant = FleetActionGrant | FleetCellTransferGrant
+ActionGrant = FleetActionGrant | FleetCellTransferGrant | FleetArmTransferGrant
 
 
 def parse_action_grant(value: ActionGrant | Mapping[str, object]) -> ActionGrant:
-    """Parse the two explicitly supported local Action grant variants."""
-    if isinstance(value, (FleetActionGrant, FleetCellTransferGrant)):
+    """Parse explicitly supported local Action grant variants; parsing grants no authority."""
+    if isinstance(value, (FleetActionGrant, FleetCellTransferGrant, FleetArmTransferGrant)):
         return value
     if not isinstance(value, Mapping):
         raise ValueError("grant must be an object")
@@ -33,6 +34,8 @@ def parse_action_grant(value: ActionGrant | Mapping[str, object]) -> ActionGrant
         return FleetActionGrant.model_validate(value)
     if action_kind == "CELL_TRANSFER":
         return FleetCellTransferGrant.model_validate(value)
+    if action_kind == "ARM_TRANSFER":
+        return FleetArmTransferGrant.model_validate(value)
     raise ValueError("grant action_kind is unsupported")
 
 
@@ -185,6 +188,9 @@ class ActionRunner:
 
     def _receipt(self, action: Mapping[str, object], *, created: bool,
                  reason: str | None = None) -> dict[str, object]:
+        from .policy_parent import projection
+        snapshot = self.store.attempt_snapshot(str(action['action_id']), action.get('attempt_id'))
+        action = snapshot['action']
         request = action.get("request", {})
         payload = request.get("payload", {}) if isinstance(request, Mapping) else {}
         if not isinstance(payload, Mapping):
@@ -198,13 +204,11 @@ class ActionRunner:
             "authority_epoch": payload.get("authority_epoch"),
             "dispatch_generation": payload.get("dispatch_generation"),
             "state": action["state"], "driver_goal_id": action.get("driver_goal_id"),
-            "journal_event_id": action.get("journal_event_id")
-            or self.store.latest_event_id(str(action["action_id"])),
+            "journal_event_id": action["journal_event_id"],
             "observed_at": action["updated_at"],
             "reason": reason or action.get("reason"), "created": created,
-            "phase_summaries": self.store.action_phase_receipts(
-                str(action["action_id"]), str(action.get("attempt_id")),
-            ) if action.get("attempt_id") else [],
+            "phase_summaries": projection(snapshot)['phase_summaries'] if action.get('attempt_id') else [],
+            **({"journal_id": snapshot["journal_id"]} if action["action_kind"] == "ARM_TRANSFER" else {}),
         }
 
     def submit(self, grant: ActionGrant, *, peer_uid: int) -> dict[str, object]:
@@ -217,8 +221,10 @@ class ActionRunner:
             # Fail closed before any journal row: unknown kinds never reach the driver.
             raise PermissionError(f"action kind {grant.action_kind!r} has no admitted executor")
         self._validate(grant)
-        if grant.action_kind == "CELL_TRANSFER" and self.control_admission is None:
-            raise PermissionError("CELL_TRANSFER requires shared control admission")
+        if grant.action_kind in {"CELL_TRANSFER", "ARM_TRANSFER"} and self.control_admission is None:
+            raise PermissionError(f"{grant.action_kind} requires shared control admission")
+        if isinstance(grant, FleetArmTransferGrant):
+            validate_transfer_owner(self.control_admission, grant)
         request = grant.model_dump(mode="json")
         def create_action():
             return self.store.create_action(
@@ -232,8 +238,14 @@ class ActionRunner:
                                 if isinstance(grant, FleetActionGrant) else ""),
                 owner_generation=grant.dispatch_generation, payload=request,
             )
-        created = (create_action() if self.control_admission is None else
-                   self.control_admission.run_action_admission(create_action))
+        if self.control_admission is None:
+            created = create_action()
+        elif isinstance(grant, FleetArmTransferGrant):
+            created = self.control_admission.run_action_admission(
+                create_action, action_kind=grant.action_kind,
+                resource_policy_digest=grant.arm_transfer.resource_policy_digest)
+        else:
+            created = self.control_admission.run_action_admission(create_action)
         action = created["action"]
         if not created["created"] and action["state"] != "PREPARED":
             return self._receipt(action, created=False)

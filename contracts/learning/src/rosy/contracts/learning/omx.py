@@ -18,6 +18,24 @@ ROBOT_TYPE = "omx_sim_ros"
 ACTION_SEMANTICS = "absolute_joint_position_target_rad"
 MAX_SKEW_NS = 50_000_000
 MAX_FRAMES = 3000
+#: D-794 stage B: the OMX wrist camera arrives as ``front`` (legacy) or ``wrist``. Readers map either
+#: name to WRIST, the name writers still emit; stage C flips WRIST to "wrist", stage D drops "front".
+WRIST = "front"
+WRIST_ALIASES = frozenset({"front", "wrist"})
+
+
+def camera_role(name):
+    """The writer-side name for one OMX camera name; ``front`` and ``wrist`` are the same wrist camera."""
+    return WRIST if name in WRIST_ALIASES else name
+
+
+def camera_roles(names):
+    """Normalized names, refusing a recording that lists the wrist camera under both names."""
+    names = list(names)
+    roles = [camera_role(name) for name in names]
+    if len(set(roles)) != len(names):
+        raise ValueError("duplicate camera role")
+    return set(roles)
 #: Goal duration bounds: a jog is 0.1-1.0 s (OmxSimJog), a gripper goal up to 2.0 s (D-411 C).
 MIN_GOAL_DURATION_S = 0.1
 MAX_GOAL_DURATION_S = 2.0  # OMX demonstration v1 (D-411 C), radians and seconds.
@@ -57,7 +75,7 @@ def _provenance(source: dict) -> dict:
         if len(limit) != 2 or not all(_finite(x) for x in limit) or limit[0] >= limit[1]:
             raise ValueError("invalid radian joint limits")
     camera = value.get("camera", {})
-    if camera.get("name") != "front" or not camera.get("identity"):
+    if camera_role(camera.get("name")) != WRIST or not camera.get("identity"):
         raise ValueError("explicit front camera identity required")
     if not re.fullmatch(r"[0-9a-f]{64}", camera.get("camera_info_sha256", "")):
         raise ValueError("camera calibration fingerprint required")
@@ -145,7 +163,7 @@ def _validate_demonstration(path: Path) -> dict:
         relative = Path(row.get("image_path", ""))
         image = (root / relative).resolve()
         if (relative.is_absolute() or not image.is_relative_to(root)
-                or image.parent != root / "images/front" or (root / relative).is_symlink()):
+                or image.parent != root / "images" / source["camera"]["name"] or (root / relative).is_symlink()):
             raise ValueError("image path escapes episode")
         data = image.read_bytes()
         if _sha(data) != row.get("image_sha256"):
@@ -189,9 +207,20 @@ def validate_profile(doc, *, root):
                 'task': manifest['task'], 'status': 'complete'}
     if any(value[key] != item for key, item in expected.items()):
         raise ValueError('OMX Episode metadata binding differs')
+    evidence = [refs[name]]
+    judge = 'operator'
+    if 'sim-truth/truth.json' in refs:
+        from .sim_object_truth import validate_truth
+        truth = validate_truth(root/'sim-truth/truth.json', validated, source=original.parent)
+        for ref in truth['document']['files'].values():
+            target = 'sim-truth/'+ref['path']
+            if refs.get(target) != {**ref, 'path': target}:
+                raise ValueError('SIM truth file absent from Episode closure')
+        judge = 'sim_ground_truth'
+        evidence.append(refs['sim-truth/truth.json'])
     if (value['revisions']['calibration'] != provenance['calibration_revision']
             or value['outcome'] != {'task': manifest['task_outcome'], 'action': 'unknown',
-                                    'judge': 'operator', 'evidence': [refs[name]]}):
+                                    'judge': judge, 'evidence': evidence}):
         raise ValueError('OMX Episode outcome/calibration binding differs')
     receipt_names = sorted(path for path in refs if path.startswith('owner-receipts/'))
     if receipt_names != [f'owner-receipts/{i:06d}.json' for i in range(len(receipt_names))]:

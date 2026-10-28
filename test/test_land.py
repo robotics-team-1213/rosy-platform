@@ -1,4 +1,4 @@
-"""tools/land.py against throwaway git repos: a main checkout plus one topic worktree."""
+"""tools/land.py (+ land_checks.py, land_queue.py, land_full.py, land_merge.py, land_cache.py) on throwaway repos: main and a worktree."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
 import land  # noqa: E402
+import land_merge  # noqa: E402
 
 LOG = "docs/reference/ROSY ADR Log.md"
 BOM = b"\xef\xbb\xbf"
@@ -51,6 +52,8 @@ def repos(tmp_path, monkeypatch, request):
     git(main, "worktree", "add", "-q", str(wt), "-b", "feat/x", "main")
     monkeypatch.chdir(wt)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
+    monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
+    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)
 
     def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
         # Fixture repos are throwaway and cannot be shipped to a test host; this test itself
@@ -137,16 +140,21 @@ def test_web_change_adds_its_browser_tests_opted_in_and_other_changes_do_not(rep
     assert land.browser_tier(wt, "HEAD~1") == []
 
 
-def test_browser_files_split_into_size_balanced_chunks_for_both_hosts(tmp_path):
-    sizes = {"a_browser.py": 900, "b_browser.py": 500, "c_browser.py": 400, "d_browser.py": 300,
-             "e_browser.py": 200, "f_browser.py": 100}
-    for name, size in sizes.items():
-        (tmp_path / name).write_text("x" * size)
-    chunks = land.balanced(tmp_path, sorted(sizes), land.BROWSER_CHUNKS)
-    assert sorted(p for c in chunks for p in c) == sorted(sizes) and len(chunks) == 4
-    totals = sorted(sum(sizes[p] for p in c) for c in chunks)
-    assert totals == [500, 500, 500, 900]  # LPT: no chunk waits behind more than the largest file
-    assert land.balanced(tmp_path, ["a_browser.py"], 4) == [["a_browser.py"]]  # never an empty invocation
+def test_a_browser_chunk_that_only_skipped_stops_the_landing(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"operations/apps/games/x.py": "y = 1\n"}, "games page")  # selects the games browser chunk
+    before = git(main, "rev-parse", "HEAD")
+
+    def opt_in_lost(invocations, logs, *args, **kwargs):  # the browser job never saw ROSY_RUN_BROWSER_TESTS=1
+        for inv, log in zip(invocations, logs):
+            log.write_text("s [100%]\n12 skipped in 0.50s\n" if land.remote_pytest.BROWSER_ENV in inv
+                           else ". [100%]\n1 passed in 0.01s\n", encoding="utf-8")
+        return [0] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", opt_in_lost)
+    assert land.main(["--tests", "auto"]) == 1
+    assert "ran no browser test for real (0 passed, 12 skipped" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
 
 
 def test_dirty_worktree_refused(repos):
@@ -342,7 +350,9 @@ FULL = ('{"mode": "full", "escalations": ["a -> b/a: folder move"], "invocations
 ])
 def test_harness_selector(repos, monkeypatch, capsys, affected, red, code):
     main, wt = repos
-    stub = f"import sys\nif sys.argv[1] == 'affected':\n    {affected}\n"
+    stub = (f"import sys\nif sys.argv[1] == 'affected' and '--head' in sys.argv:\n"  # main's delta: nothing
+            "    print('{\"mode\": \"affected\", \"escalations\": [], \"invocations\": []}')\n"
+            f"elif sys.argv[1] == 'affected':\n    {affected}\n")
     files = {"tools/harness/rosy_harness.py": stub, "tools/harness/affected_tests.py": "", "pkg/a.py": "x = 2\n"}
     if red:
         files["pkg/test/test_bad.py"] = "def test_bad():\n    assert False\n"
@@ -356,8 +366,9 @@ def test_harness_selector(repos, monkeypatch, capsys, affected, red, code):
         assert ("affected selector failed" if affected.startswith("sys") else "NEW failure") in captured.err
         assert git(main, "rev-parse", "HEAD") == before
     else:
-        assert calls == [[["pkg/test"]]], "a FULL landing runs full_invocations, not the guards alone"
-        assert "FULL tier took" in captured.out.split("== landed")[1]
+        assert calls[0] == [["pkg/test"]], "a FULL landing runs full_invocations, not the guards alone"
+        assert not any(calls[1:]), "outside the lock first; the turn runs main's (empty) delta only"
+        assert "FULL tier before the turn" in captured.out
 
 
 GUARD = ("from pathlib import Path\n\n\n"
@@ -490,6 +501,10 @@ def test_untrailered_safety_commit_already_on_main_does_not_block_a_landing(repo
 
 
 FULL_THEN_DELTA = """import json, sys
+def generated_targets(repo):
+    return {}
+def generate(repo):
+    return []
 if sys.argv[1] == 'affected':
     if '--head' in sys.argv:
         print(json.dumps({"mode": "affected", "escalations": [], "invocations": [["pkg/test/test_a.py"]]}))
@@ -508,7 +523,7 @@ def test_main_moving_during_a_full_round_reruns_only_the_delta_tier(repos, monke
 
     def run_tests(wt_, args, invocations, logdir, round_no):
         calls.append(invocations)
-        if round_no == 1:  # a peer lands while the full tier runs
+        if round_no == "pre":  # a peer lands while the full tier runs, before this lander's turn
             commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
         return real(wt_, args, invocations, logdir, round_no)
 
@@ -534,13 +549,15 @@ def test_peer_edit_to_a_path_the_branch_moved_reruns_full(repos, monkeypatch, ca
 
     def run_tests(wt_, args, invocations, logdir, round_no):
         calls.append(invocations)
-        if round_no == 1:  # a peer edits the file at its old path while the full tier runs
+        if round_no == "pre" and "line_0 = -1" not in (main / "pkg/big.py").read_text():  # once, during the FULL tier
             commit(main, {"pkg/big.py": big.replace("line_0 = 0", "line_0 = -1")}, "peer edit")
         return real(wt_, args, invocations, logdir, round_no)
 
     monkeypatch.setattr(land, "run_tests", run_tests)
     assert land.main(["--tests", "auto"]) == 0
-    assert calls == [[["pkg/test"]], [["pkg/test"]]]
+    # FULL before the turn; the gone path makes it FULL again, prepared outside the lock; the next turn runs
+    # the (stub) selector's answer for main's now empty delta
+    assert calls == [[["pkg/test"]], [["pkg/test"]], [["pkg/test/test_a.py"]]]
     assert "gone here (pkg/big.py): FULL again" in capsys.readouterr().out
     assert "line_0 = -1" in (main / "moved/big.py").read_text()
 
@@ -589,7 +606,8 @@ def test_logs_md_edit_of_an_existing_entry_still_refuses():
 @pytest.mark.parametrize("files, calls_expected, code", [
     # A NEW guard failure stops before the long round (pkg/test never runs).
     ({"test/architecture/test_rule.py": "def test_rule():\n    assert False\n", "pkg/a.py": "x = 2\n"},
-     [[["test/architecture"]]], 1),
+     [[["test/architecture"]], [["test/architecture/test_rule.py::test_rule"]],  # D-790: rerun alone once
+      [["test/architecture/test_rule.py::test_rule"]]], 1),  # then once on main (MAIN-RED check)
     # Green guards, then the round as selected.
     ({"test/architecture/test_rule.py": "def test_rule():\n    assert True\n", "pkg/a.py": "x = 2\n"},
      [[["test/architecture"]], [["pkg/test", "test/architecture/test_rule.py"]]], 0),
@@ -612,6 +630,45 @@ def test_logs_md_side_reordering_base_entries_refuses():
     ours = base + dated("2026-10-15", "branch")
     theirs = "# docs logs\n" + b + a  # main's entries swapped: not ours to move
     assert land.append_blocks(base.encode(), ours.encode(), theirs.encode()) is None
+
+
+def test_logs_md_this_branch_reordering_mains_entries_keeps_mains_order():
+    """2026-10-26: a hand-fitted merge left main's entries in another order on the branch; the turn stopped
+    "a side changed existing lines". Nothing was edited or dropped, so main's order wins."""
+    a, b = dated("2026-10-13", "a"), dated("2026-10-14", "b")
+    base = "# docs logs\n" + a + b
+    ours = "# docs logs\n" + b + a + dated("2026-10-15", "branch")
+    for theirs, tail in ((base + dated("2026-10-16", "peer"), dated("2026-10-15", "branch") + dated("2026-10-16", "peer")),
+                         (base, dated("2026-10-15", "branch"))):
+        merged = land.append_blocks(base.encode(), ours.encode(), theirs.encode()).decode()
+        assert merged.rstrip() == (base + tail).rstrip()
+    edited = ours.replace("- 증거: 없음", "- 증거: 있음", 1)  # reordered and edited: still a human's call
+    assert land.append_blocks(base.encode(), edited.encode(), base.encode()) is None
+
+
+AGENTS = b"# tools\n\n| File | Description |\n|---|---|\n| `a.py` | a |\n| `b.py` | b |\n| `c.py` | c |\n\nEnd.\n"
+
+
+def test_agents_md_rows_edited_on_different_sides_merge_by_first_cell():
+    """2026-10-26: two landings lost 121 and 149 min of queue to an AGENTS.md table with one row edited each."""
+    ours = AGENTS.replace(b"| `a.py` | a |", b"| `a.py` | a, ours |").replace(b"| `c.py` | c |\n", b"| `c.py` | c |\n| `d.py` | new |\n")
+    theirs = AGENTS.replace(b"| `b.py` | b |", b"| `b.py` | b, main |")
+    merged = land_merge.table_rows(AGENTS, ours, theirs)
+    assert merged == AGENTS.replace(b"| `a.py` | a |", b"| `a.py` | a, ours |").replace(
+        b"| `b.py` | b |", b"| `b.py` | b, main |").replace(b"| `c.py` | c |\n", b"| `c.py` | c |\n| `d.py` | new |\n")
+    assert land_merge.resolver("tools/AGENTS.md") == "table-rows"
+
+
+@pytest.mark.parametrize("ours, theirs", [
+    (b"| `a.py` | a, ours |", b"| `a.py` | a, main |"),   # the same row changed on both sides
+    (b"", b"| `a.py` | a, main |"),                      # dropped on one side, edited on the other
+])
+def test_agents_md_same_row_on_both_sides_needs_a_human(ours, theirs):
+    row = b"| `a.py` | a |\n"
+    assert land_merge.table_rows(AGENTS, AGENTS.replace(row, ours + (b"\n" if ours else b"")),
+                                      AGENTS.replace(row, theirs + b"\n")) is None
+    edited_prose = AGENTS.replace(b"End.", b"End, edited.")
+    assert land_merge.table_rows(AGENTS, edited_prose, AGENTS.replace(row, theirs + b"\n")) is None
 
 
 def test_logs_md_same_new_entry_on_both_sides_is_written_once():
@@ -653,3 +710,771 @@ def test_main_moving_during_the_guard_round_skips_to_the_next_round(repos, monke
     assert land.main(["--tests", "auto"]) == 0
     long_round = [["pkg/test", "test/architecture/test_rule.py"]]
     assert calls == [[["test/architecture"]], [["test/architecture"]], long_round]
+
+
+# --- D-790: load-flaky rerun, stale history, size advice ----------------------------
+
+def _red_once(repos, monkeypatch, alone_codes, ids=("pkg/test/test_a.py::test_a",)):
+    """The landing run fails ``ids``; the rerun alone returns ``alone_codes``. Returns the calls made."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    calls = []
+
+    def run(invocations, logs, *args, **kwargs):
+        calls.append([list(inv) for inv in invocations])
+        if len(calls) > 1:
+            return list(alone_codes)
+        for log in logs:
+            log.write_text("F [100%]\n" + "".join(f"FAILED {i} - TimeoutError\n" for i in ids) + "1 failed\n",
+                           encoding="utf-8")
+        return [1] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    return calls
+
+
+def test_new_failure_that_passes_alone_lands_as_load_flaky(repos, monkeypatch, capsys):
+    main, wt = repos
+    calls = _red_once(repos, monkeypatch, [0])
+    assert land.main(["--tests", "pkg/test"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+    assert calls == [[["pkg/test"]], [["pkg/test/test_a.py::test_a"]]]  # one more invocation, the id alone
+    out = capsys.readouterr().out
+    assert "LOAD-FLAKY pkg/test/test_a.py::test_a" in out
+    candidates = (main / ".git" / land.land_checks.CANDIDATES).read_text(encoding="utf-8")
+    assert candidates.startswith("pkg/test/test_a.py::test_a  # LOAD-FLAKY ") and "flaky_quarantine" in candidates
+    assert "pkg/test/test_a.py" not in (wt / "test" / "known_failures.txt").read_text(encoding="utf-8")
+
+
+def test_head_move_during_remote_checks_cannot_create_flaky_receipt(repos, monkeypatch, capsys):
+    main, wt = repos
+    calls = _red_once(repos, monkeypatch, [0])
+    original = land.remote_pytest.run
+
+    def run(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if len(calls) == 1:
+            commit(wt, {"pkg/a.py": "x = 3\n"}, "fix while original tests run")
+        return result
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert len(calls) == 1
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+    assert git(main, "rev-parse", "HEAD") == before
+    assert "HEAD changed" in capsys.readouterr().err
+
+
+def test_isolated_rerun_keeps_original_revision_even_when_head_moves(repos, tmp_path):
+    main, wt = repos
+    tested = git(wt, "rev-parse", "HEAD")
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "later fix")
+    received = []
+
+    def run(invocations, logs, sha, **kwargs):
+        received.append(sha)
+        return [0 if sha == tested else 1] * len(invocations)
+
+    ids, why = land.land_checks.load_flaky(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW pkg/test/test_a.py::test_a\n",
+        tmp_path, "pinned", sys.executable, run, tested_sha=tested)
+    assert not ids and "HEAD changed" in why
+    assert received == [tested]
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+
+
+@pytest.mark.parametrize("waiting", [False, True])
+def test_head_move_cannot_publish_full_record(repos, monkeypatch, waiting):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL"))
+
+    def run_tests(*args, **kwargs):
+        commit(wt, {"pkg/a.py": "x = 3\n"}, "late branch commit")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    monkeypatch.setattr(land.land_full, "save", lambda *a: pytest.fail("published an obsolete FULL record"))
+    if waiting:
+        with pytest.raises(land.Stop, match="HEAD changed"):
+            land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto"), sys.executable,
+                                      None, None)
+    else:
+        before = git(main, "rev-parse", "HEAD")
+        assert land.main(["--tests", "auto"]) == 1
+        assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_incomplete_remote_results_cannot_land(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: [])
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert git(main, "rev-parse", "HEAD") == before
+    assert "incomplete remote results" in capsys.readouterr().err
+
+
+def test_incomplete_isolated_results_cannot_create_flaky_receipt(repos, tmp_path):
+    main, wt = repos
+    ids, why = land.land_checks._rerun_alone(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW pkg/test/test_a.py::test_a\n",
+        tmp_path, "incomplete", sys.executable, lambda *a, **k: [],
+        tested_sha=git(wt, "rev-parse", "HEAD"))
+    assert not ids and "incomplete" in why
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+
+
+def test_head_move_during_isolated_check_cannot_publish_verdict_or_cache(repos, monkeypatch, tmp_path):
+    main, wt = repos
+    calls = _red_once(repos, monkeypatch, [0])
+    original, kept = land.remote_pytest.run, []
+
+    def run(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if len(calls) == 2:
+            commit(wt, {"test/known_failures.txt": "pkg/test/test_a.py::test_a  # later classification\n"},
+                   "change classification while isolated check runs")
+        return result
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    monkeypatch.setattr(land.land_cache, "split", lambda wt_, args, inv, *a:
+                        ([], inv, lambda *item: kept.append(item)))
+    with pytest.raises(land.Stop, match="HEAD changed"):
+        land.run_tests(wt, land.argparse.Namespace(tests="auto", no_cache=False, node=False),
+                       [["pkg/test"], ["pkg/test"]], tmp_path, "drift")
+    assert not kept
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+    assert (wt / "test/known_failures.txt").read_text(encoding="utf-8") == (
+        "pkg/test/test_a.py::test_a  # later classification\n")
+
+
+@pytest.mark.parametrize("alone_codes, ids, why", [
+    ([1], ("pkg/test/test_a.py::test_a",), "failed again when run alone"),
+    ([0] * 6, tuple(f"pkg/test/test_a.py::test_{n}" for n in range(6)), "a rerun alone is tried only for 1 to 5"),
+])
+def test_new_failure_that_fails_again_or_too_many_still_stops(repos, monkeypatch, capsys, alone_codes, ids, why):
+    main, wt = repos
+    before = git(main, "rev-parse", "HEAD")
+    calls = _red_once(repos, monkeypatch, alone_codes, ids)
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert why in capsys.readouterr().err and git(main, "rev-parse", "HEAD") == before
+    assert len(calls) == (3 if len(ids) == 1 else 2)  # + the MAIN-RED check on main
+    assert not (main / ".git" / land.land_checks.CANDIDATES).exists()
+
+
+def test_rerun_ids_from_another_rootdir_are_mapped_to_the_tree_and_no_test_found_is_no_verdict(repos, tmp_path):
+    """2026-10-26: ids printed from another pytest rootdir made both reruns find no file."""
+    main, wt = repos
+    sent = []
+    verdict = "NEW elsewhere/local/test_a.py::test_a\n"
+    for codes, why in (([4], "gave no verdict"), ([1], "failed again when run alone")):
+        ids, said = land.land_checks._rerun_alone(
+            wt, ["pkg/test"], tmp_path / "original.txt", verdict, tmp_path, "map", sys.executable,
+            lambda invs, *a, **k: sent.extend(invs) or list(codes), tested_sha=git(wt, "rev-parse", "HEAD"))
+        assert not ids and why in said
+    assert sent[0] == ["pkg/test/test_a.py::test_a"], "the one tracked test_a.py, not the printed path"
+
+
+def test_a_directory_printed_for_the_file_maps_to_the_file_that_defines_the_test(repos, tmp_path):
+    """2026-10-27: pytest printed middleware/robot_execution/local::test_x for a shared/web/test file, and
+    the rerun stopped with "directory argument cannot contain :: selection parts"."""
+    main, wt = repos
+    sent = []
+    land.land_checks._rerun_alone(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW elsewhere/local::test_a\n", tmp_path, "dir",
+        sys.executable, lambda invs, *a, **k: sent.extend(invs) or [1], tested_sha=git(wt, "rev-parse", "HEAD"))
+    assert sent[0] == ["pkg/test/test_a.py::test_a"]
+
+
+def test_safety_root_test_is_never_rerun(repos, monkeypatch, capsys):
+    main, wt = repos
+    monkeypatch.setattr(land.land_checks, "_safety", lambda wt_, python, ids: list(ids))
+    calls = _red_once(repos, monkeypatch, [0])
+    assert land.main(["--tests", "pkg/test"]) == 1
+    assert "never retried (D-762)" in capsys.readouterr().err and len(calls) == 2  # + the MAIN-RED check
+
+
+def test_new_failure_that_also_fails_on_main_is_named_main_red(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before, shas = git(main, "rev-parse", "HEAD"), []
+
+    def run(invocations, logs, sha="HEAD", *args, **kwargs):  # red everywhere, main included
+        shas.append(sha)
+        for log in logs:
+            log.write_text("F [100%]\nFAILED pkg/test/test_a.py::test_a - AssertionError\n1 failed\n", encoding="utf-8")
+        return [1] * len(invocations)
+
+    monkeypatch.setattr(land.remote_pytest, "run", run)
+    assert land.main(["--tests", "pkg/test"]) == 1
+    captured = capsys.readouterr()
+    assert shas[-1] == before and "MAIN-RED pkg/test/test_a.py::test_a" in captured.out
+    assert "Main is broken, not this branch" in captured.err and git(main, "rev-parse", "HEAD") == before
+
+
+def test_branch_on_the_pre_rewrite_history_is_refused(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    monkeypatch.setattr(land.worktree_rules, "STALE_COMMITS", 0)
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "none"]) == 1
+    assert "more than 0 commits not in main" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def test_size_failure_says_how_to_fix_it(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {land.SIZE_RANGE: "import sys\nprint('tools/x.py 612 > 600', file=sys.stderr)\nsys.exit(1)\n"}, "size")
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: pytest.fail("test host reached"))
+    assert land.main(["--tests", "auto"]) == 1
+    err = capsys.readouterr().err
+    assert "tools/x.py 612 > 600" in err and "never raise a row" in err and f"python {land.SIZE_RANGE} main HEAD" in err
+
+
+# --- land_cache: passed invocations reused across land.py runs ---------------------------------
+
+@pytest.fixture
+def cached(repos, monkeypatch, tmp_path):
+    """run_tests with a known test-environment hash; returns (wt, run(invocations, **args), remote calls)."""
+    main, wt = repos
+    monkeypatch.setattr(land.land_cache, "env_id", lambda wt_, sha: "env1")
+    real, calls = land.remote_pytest.run, []
+    monkeypatch.setattr(land.remote_pytest, "run", lambda inv, *a, **k: calls.append(inv) or real(inv, *a, **k))
+
+    def run(invocations, **kw):
+        args = land.argparse.Namespace(**{"tests": "auto", "node": False, "no_cache": False, **kw})
+        return land.run_tests(wt, args, invocations, tmp_path / "logs", len(calls) + 1)
+    return wt, run, calls
+
+
+def test_cache_reuses_a_pass_on_the_identical_tree_only(cached, capsys):
+    wt, run, calls = cached
+    assert run([["pkg/test"]]) == ["pytest pkg/test ok (run-1-1.txt)"]
+    tree = git(wt, "rev-parse", "HEAD^{tree}")
+    git(wt, "commit", "-q", "--allow-empty", "-m", "same tree, new commit")  # a retry's re-merge
+    done = run([["pkg/test"]])
+    assert calls == [[["pkg/test"]], []] and done == [f"pytest pkg/test reused: passed on this tree {tree[:10]} (env env1)"]
+    assert "[cache] pytest pkg/test reused" in capsys.readouterr().out
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "changed tree")
+    run([["pkg/test"]])
+    assert calls[-1] == [["pkg/test"]], "another tree reruns (no selector here for a narrow reuse)"
+    assert run([["pkg/test"]], tests="pkg/test") and calls[-1] == []  # explicit --tests reuse too
+
+
+def test_cache_never_keeps_a_failure_or_a_partial_run(cached, monkeypatch):
+    wt, run, calls = cached
+    commit(wt, {"pkg/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red")
+    for _ in range(2):
+        with pytest.raises(land.Stop, match="NEW failure"):
+            run([["pkg/test"]])
+    assert calls.count([["pkg/test"]]) == 2 and land.land_cache.entries(wt) == []  # plus D-790 reruns alone
+    git(wt, "rm", "-q", "pkg/test/test_bad.py")
+    git(wt, "commit", "-q", "-m", "green")
+    real = land.remote_pytest.capture
+    lost = lambda invs, logs, *a, **k: [real([sys.executable, "-m", "pytest", *inv], log, cwd=wt)
+                                        if inv == ["pkg/test"] else 255 for inv, log in zip(invs, logs)]
+    monkeypatch.setattr(land.remote_pytest, "run", lost)  # the second invocation's host was lost
+    with pytest.raises(land.Stop, match="exited 255"):
+        run([["pkg/test"], ["pkg/test/test_a.py"]])
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["pkg/test"]], "only the lost invocation reruns"
+
+
+def test_a_new_failure_still_keeps_the_invocations_that_passed_beside_it(cached):
+    """2026-10-25: a stop on the first NEW failure dropped every pass after it; the fix then reran them all."""
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red elsewhere")
+    with pytest.raises(land.Stop, match="NEW failure in other/test"):
+        run([["other/test"], ["pkg/test"]])
+    # the fix changes the tree; the selector's narrow reuse (ancestor..fix) then skips pkg/test
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["pkg/test"]]
+
+
+def test_what_failed_last_run_runs_alone_first_and_a_repeat_stops_before_the_rest(cached):
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red elsewhere")
+    with pytest.raises(land.Stop):
+        run([["other/test"], ["pkg/test"]])
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "not the fix")
+    calls.clear()
+    with pytest.raises(land.Stop, match="1 other invocation"):
+        run([["other/test"], ["pkg/test"]])
+    assert calls[0] == [["other/test"]] and [["pkg/test"]] not in calls, "the rest never reached a test PC"
+    git(wt, "rm", "-q", "other/test/test_bad.py")
+    git(wt, "commit", "-q", "-m", "fixed")
+    commit(wt, {"other/test/test_ok.py": "def test_ok():\n    assert True\n"}, "green")
+    calls.clear()
+    run([["other/test"], ["pkg/test"]])
+    assert calls == [[["other/test"]], [["pkg/test"]]] and land.land_cache.failed_first(wt, [["other/test"]]) == []
+
+
+def _runner(results):
+    """remote_pytest.run that writes each invocation's log, asks on_done after each, and cancels the rest."""
+    def run(invocations, logs, *args, on_done=None, **kwargs):
+        codes, stop = [], False
+        for inv, log in zip(invocations, logs):
+            if stop:
+                codes.append(land.remote_pytest.CANCELLED)
+                continue
+            code, text = results[inv[0]]
+            log.parent.mkdir(parents=True, exist_ok=True)
+            log.write_text(text, encoding="utf-8")
+            codes.append(code)
+            stop = bool(on_done and on_done(inv, log))
+        return codes
+    return run
+
+
+RED = (1, "F [100%]\nFAILED other/test/test_bad.py::test_bad - assert False\n1 failed\n")
+GREEN = (0, "1 passed\n")
+
+
+def test_a_confirmed_new_failure_cancels_the_rest_and_the_cancelled_are_neither_kept_nor_failures(cached, monkeypatch):
+    """D-889: a round ran 19 more minutes after its first real failure (2026-10-26)."""
+    wt, run, calls = cached
+    commit(wt, {"other/test/test_bad.py": "def test_bad():\n    assert False\n"}, "red")
+    monkeypatch.setattr(land.remote_pytest, "run", _runner({"other/test": RED, "pkg/test": GREEN,
+                                                            "other/test/test_bad.py::test_bad": RED}))
+    with pytest.raises(land.Stop) as stop:
+        run([["other/test"], ["pkg/test"]])
+    assert "NEW failure in other/test" in str(stop.value) and "1 invocation(s) not run" in str(stop.value)
+    assert land.land_cache.entries(wt) == [], "the cancelled pkg/test never passed here"
+
+
+def test_the_turns_time_cap_cancels_the_rest_as_overtime_and_a_prepare_round_has_no_cap(cached, monkeypatch):
+    wt, run, calls = cached
+    monkeypatch.setattr(land, "TURN_CAP_S", -1)
+    monkeypatch.setattr(land.remote_pytest, "run", _runner({"pkg/test": GREEN, "pkg/test/test_a.py": GREEN}))
+    with pytest.raises(land.Overtime):
+        land.run_tests(wt, land.argparse.Namespace(tests="auto", node=False, no_cache=False),
+                       [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", 1)
+    assert land.run_tests(wt, land.argparse.Namespace(tests="auto", node=False, no_cache=False),
+                          [["pkg/test"], ["pkg/test/test_a.py"]], wt.parent / "logs", "pre")
+
+
+def test_cache_ignores_corrupt_lines_and_no_cache_reruns(cached, capsys):
+    wt, run, calls = cached
+    assert land.main(["--no-cache", "--dry-run"]) == 0  # the flag parses (before pytest leaves __pycache__)
+    run([["pkg/test"]])
+    path = land.land_cache.path(wt)
+    good = path.read_text(encoding="utf-8")
+    path.write_text("not json\n{\"tree\": 1}\n[]\n" + good + "{\"truncated", encoding="utf-8")
+    assert len(land.land_cache.entries(wt)) == 1
+    run([["pkg/test"]])
+    assert calls[-1] == []
+    run([["pkg/test"]], no_cache=True)
+    assert calls[-1] == [["pkg/test"]] and "[cache] off (--no-cache)" in capsys.readouterr().out
+
+
+def test_cache_file_is_trimmed_to_its_newest_lines(cached, monkeypatch):
+    wt, run, _ = cached
+    monkeypatch.setattr(land.land_cache, "MAX_LINES", 3)
+    monkeypatch.setattr(land.land_cache, "KEEP", 2)
+    for n in range(4):
+        land.land_cache.record(wt, "a" * 40, "b" * 40, "env1", [f"t{n}"], Path("log"))
+    assert [e["argv"] for e in land.land_cache.entries(wt)] == [["t2"], ["t3"]]
+
+
+@pytest.mark.parametrize("change, picked, full, reused", [
+    ({"pkg/b.py": "y = 1\n"}, [["other/test"]], False, True),     # the delta selects other tests only
+    ({"pkg/b.py": "y = 1\n"}, [["pkg/test/test_a.py"]], False, False),  # it selects this invocation's tests
+    ({"pkg/b.py": "y = 1\n"}, [["other/test"]], True, False),      # a FULL-class delta
+    ({"test/known_failures.txt": "x\n"}, [["other/test"]], False, False),  # the known-failure list moved
+    (None, [["other/test"]], False, False),                         # the delta deletes a file
+])
+def test_cache_narrow_reuse_across_trees_only_where_the_selector_vouches(cached, change, picked, full, reused):
+    wt, run, calls = cached
+    commit(wt, {"tools/harness/affected_tests.py": "", "pkg/gone.py": ""}, "harness")
+    land.land_cache.record(wt, git(wt, "rev-parse", "HEAD"), git(wt, "rev-parse", "HEAD^{tree}"), "env1",
+                           ["pkg/test"], Path("log"))
+    if change:
+        commit(wt, change, "delta")
+    else:
+        git(wt, "rm", "-q", "pkg/gone.py")
+        git(wt, "commit", "-q", "-m", "delete")
+    select = lambda wt_, base, python, head=None: (picked, "FULL" if full else None)
+    args = land.argparse.Namespace(tests="auto", no_cache=False)
+    done, todo, _ = land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
+                                          select)
+    assert (todo, bool(done)) == (([], True) if reused else ([["pkg/test"]], False))
+    assert all(land.land_cache.NARROW in line for line in done)
+
+def queued(main: Path) -> list[str]:
+    return sorted(p.name for p in (main / ".git" / land.land_queue.QUEUE).glob("*"))
+
+
+def test_a_live_ticket_ahead_holds_the_landing_until_the_queue_timeout(repos, monkeypatch, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    peer = land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # this test process: alive
+    monkeypatch.setattr(land.remote_pytest, "run", lambda *a, **k: pytest.fail("test host reached"))
+    before = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1
+    captured = capsys.readouterr()
+    assert "position 2; ahead: feat/peer" in captured.out and "--no-queue" in captured.err
+    assert git(main, "rev-parse", "HEAD") == before and git(wt, "rev-list", "--merges", "main..HEAD") == ""
+    assert queued(main) == [peer.name], "the waiting run removed its own ticket, not the peer's"
+
+
+def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos, monkeypatch, capsys):
+    """2026-10-19: five landers ahead, each with its FULL tier inside the queue, held a landing 100+ min."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n", "test/architecture/test_guard.py": "def test_guard(): pass\n"}, "branch")
+    land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")      # a live lander ahead
+    real_select, rounds = land.select, []
+    monkeypatch.setattr(land, "select", lambda *a, **k: (real_select(*a, **k)[0], "FULL tier (test)"))
+    monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append(round_no) or [])
+    real_save = land.land_full.save
+
+    def save(*args):
+        rounds.append("save")
+        return real_save(*args)
+
+    monkeypatch.setattr(land.land_full, "save", save)
+    assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1                # the peer never leaves
+    # the guard round runs beside the selection, so their order is free; both finish before the record
+    assert sorted(rounds[:2]) == ["gpre", "pre"] and rounds[2:] == ["save"]
+    assert "FULL tier before the turn" in capsys.readouterr().out
+    assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
+
+
+@pytest.mark.parametrize("tier", ["full", "affected"])
+def test_a_landing_prepared_before_its_turn_leaves_a_record_with_the_prepared_tier(repos, monkeypatch, tier):
+    """2026-10-26: after A' every landing prepared outside the lock, and no land record was written."""
+    main, wt = repos
+    start = git(main, "rev-parse", "HEAD")
+    # its presence lets an affected tier prepare (land_prepare.prepare); the selection itself is faked
+    commit(wt, {"pkg/a.py": "x = 2\n", "tools/harness/affected_tests.py": "# stub\n"}, "branch")
+    note = "FULL tier (test)" if tier == "full" else None
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], None if k.get("landed") else note))
+    assert land.main(["--tests", "auto"]) == 0
+    record = land.land_record.read(main, git(main, "rev-parse", "HEAD"))
+    assert record and record["tier"] == tier and record["prepared_on"] == start
+    assert record["invocations"] == [["pkg/test"], ["pkg/test"]]  # the prepared tier, then the turn's delta
+
+
+@pytest.mark.parametrize("guard_outcome", ["failure", "head_move"])
+def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeypatch, capsys, guard_outcome):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n", "test/architecture/test_guard.py": "def test_guard(): pass\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    qdir = main / ".git" / land.land_queue.QUEUE
+    peer = land.land_queue.take(qdir, "feat/peer")
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL tier (test)"))
+    phases, saved = [], []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        phases.append(round_no)
+        if round_no == "gpre":
+            assert invocations == [["test/architecture"]] and args.node is False
+            if guard_outcome == "failure":
+                raise land.Stop("structural guard failed")
+            commit(wt, {"pkg/a.py": "x = 3\n"}, "changed during guard")
+        return []
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    monkeypatch.setattr(land.land_full, "save", lambda *a: saved.append(a))
+    assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1
+    # the selection ran beside the guards (2026-10-27); a failed guard still records nothing and lands nothing
+    assert sorted(phases) == ["gpre", "pre"] and saved == []
+    assert git(main, "rev-parse", "HEAD") == before
+    assert sorted(qdir.glob("*.json")) == [peer]
+    expected = "structural guard failed" if guard_outcome == "failure" else "HEAD changed"
+    assert expected in capsys.readouterr().err
+
+
+AFFECTED_THEN_DELTA = """import json, sys
+def generated_targets(repo):
+    return {}
+def generate(repo):
+    return []
+if sys.argv[1] == 'affected':
+    print(json.dumps({"mode": "affected", "escalations": [],
+                      "invocations": [] if '--head' in sys.argv else [["pkg/test"]]}))
+"""
+
+
+def test_an_affected_landing_prepares_outside_the_lock_and_its_turn_runs_mains_delta_only(repos, monkeypatch):
+    """D-889 A' (2026-10-26): every affected tier ran inside the lock, 4-13 min a turn."""
+    main, wt = repos
+    commit(wt, {"tools/harness/rosy_harness.py": AFFECTED_THEN_DELTA, "tools/harness/affected_tests.py": "",
+                "pkg/a.py": "x = 2\n"}, "branch with a selector")
+    rounds = []
+    monkeypatch.setattr(land, "run_tests", lambda wt_, args, inv, logdir, round_no: rounds.append((round_no, inv)) or [])
+    assert land.main(["--tests", "auto"]) == 0
+    assert ("pre", [["pkg/test"]]) in rounds, "the branch's own selection, before its turn"
+    assert all(not inv for r, inv in rounds if r == 1), "main did not move: the turn runs nothing of the branch again"
+
+
+def test_the_ticket_is_released_after_a_stop_and_after_ctrl_c(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    seen = []
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        seen.append(queued(main))
+        raise land.Stop("simulated NEW failure")
+
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto"]) == 1
+    assert len(seen[0]) == 1 and queued(main) == []
+
+    def interrupted(*a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(land, "run_tests", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        land.main(["--tests", "auto"])
+    assert queued(main) == []
+
+
+def test_a_branch_with_older_landing_code_lands_with_mains_copy(repos, monkeypatch):
+    """2026-10-26: land.py ran from the landing branch's own copy, so an old branch landed with old rules."""
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    stub = main / "tools" / "land.py"
+    stub.parent.mkdir()
+    stub.write_text("import os, pathlib, sys\n"
+                    "pathlib.Path('reexec.txt').write_text(' '.join(sys.argv[1:]) + os.environ['ROSY_LAND_OWN_COPY'])\n"
+                    "sys.exit(7)\n")
+    assert land.main(["--tests", "none"]) == 7
+    assert (wt / "reexec.txt").read_text() == "--tests none1", "same arguments, run in the branch's worktree"
+    (wt / "reexec.txt").unlink()
+    monkeypatch.setenv(land.land_checks.OWN_COPY, "1")  # the landed copy itself: lands, never re-runs
+    assert land.main(["--tests", "none"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+
+
+def test_a_landing_leaves_its_queue_turn_round_tests_and_landed_events(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    monkeypatch.setattr(land.land_cache, "env_id", lambda wt_, sha: None)
+    assert land.main(["--tests", "pkg/test"]) == 0
+    rows = land.land_events.read(main / ".git" / land.land_events.EVENTS)
+    assert [r["event"] for r in rows] == ["queue", "turn", "round", "tests", "landed"]
+    assert rows[3]["verdict"] == "pass" and rows[-1]["sha"] == git(main, "rev-parse", "HEAD")
+    assert {r["branch"] for r in rows} == {"feat/x"}
+
+
+def test_no_queue_lands_without_a_ticket(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    assert land.main(["--tests", "none", "--no-queue"]) == 0
+    assert git(main, "rev-parse", "HEAD") == git(wt, "rev-parse", "HEAD")
+    assert queued(main) == []
+
+
+def test_no_queue_is_refused_while_a_lander_holds_its_turn(repos, capsys):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    before = git(main, "rev-parse", "HEAD")
+    land.land_queue.take(main / ".git" / land.land_queue.QUEUE, "feat/peer")  # this live pid: holds its turn
+    assert land.main(["--tests", "none", "--no-queue"]) == 1
+    assert "--no-queue refused: feat/peer" in capsys.readouterr().err
+    assert git(main, "rev-parse", "HEAD") == before
+
+
+def full_pass_then_host_lost(main: Path, wt: Path, monkeypatch) -> list:
+    """Run 1: the FULL tier passes while a peer lands, then the delta round loses its test host."""
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch")
+    calls = []
+
+    def select(wt_, base, python, head=None, landed=False):
+        calls.append(head)
+        return [["pkg/test"]], (None if head else "selector escalated to FULL")
+
+    def run_tests(wt_, args, invocations, logdir, round_no):
+        if round_no == 1:  # the FULL tier ran outside the lock ("pre"); the delta round loses its host
+            raise land.Stop("no test host reachable")
+        commit(main, {"lib/util.py": "peer = 1\n"}, "peer")
+        return ["pytest ok"]
+
+    monkeypatch.setattr(land, "select", select)
+    monkeypatch.setattr(land, "run_tests", run_tests)
+    assert land.main(["--tests", "auto"]) == 1
+    assert calls == [None, git(main, "rev-parse", "HEAD")]
+    calls.clear()
+    monkeypatch.setattr(land, "run_tests", lambda *a: ["pytest ok"])
+    return calls
+
+
+def test_a_later_run_reruns_only_main_delta_over_an_earlier_full_pass(repos, monkeypatch):
+    main, wt = repos
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    peer_main = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [peer_main], "delta selection only, no FULL tier"
+    assert not list((main / ".git" / land.land_full.RECORDS).glob("*")), "the record goes once landed"
+
+
+def test_a_branch_commit_after_the_full_pass_means_full_again(repos, monkeypatch):
+    main, wt = repos
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(wt, {"pkg/a.py": "x = 3\n"}, "fix after the FULL tier")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls[0] is None
+
+
+def test_a_merge_that_changed_more_than_main_voids_the_full_pass(repos, monkeypatch):
+    main, wt = repos
+    full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(main, {"lib/other.py": "peer = 2\n"}, "peer 2")
+    subprocess.run(["git", "-C", str(wt), "merge", "--no-commit", "--no-ff", "main"], check=True, capture_output=True)
+    commit(wt, {"pkg/a.py": "x = 4\n"}, "merge main, with an edit of its own")
+    assert land.land_full.restore(wt, "feat/x") is None
+
+
+def test_a_gap_line_whose_adr_landed_on_main_is_dropped_after_the_merge(repos, capsys):
+    main, wt = repos
+    gaps = "tools/harness/adr_gaps.txt"
+    commit(wt, {gaps: "D-3 reserved in another worktree\nD-4 reserved in another worktree\n"}, "declare peers' gaps")
+    commit(main, {"docs/adr/D-3-peer.md": "## D-3 peer\n"}, "peer lands D-3")
+    assert land.main(["--tests", "none"]) == 0
+    assert (main / gaps).read_text() == "D-4 reserved in another worktree\n"
+    assert git(main, "log", "-1", "--format=%s").startswith("Merge branch 'main'"), "in the merge commit"
+    assert "dropped ['D-3']" in capsys.readouterr().out
+
+
+def test_a_gap_main_declared_for_an_adr_this_branch_adds_is_dropped_by_the_pretest_merge(repos):
+    """D-877, 2026-10-25: a peer declared the gap while the branch waited; the pretest's merge drops it too."""
+    main, wt = repos
+    gaps = "tools/harness/adr_gaps.txt"
+    commit(wt, {"docs/adr/D-3-mine.md": "## D-3 mine\n"}, "branch adds D-3")
+    commit(main, {gaps: "D-3 reserved in another worktree\n"}, "peer declares D-3 as a gap")
+    land.merge(wt, git(main, "rev-parse", "HEAD"), "feat/x", sys.executable, False)
+    assert (wt / gaps).read_text() == ""
+    assert len(git(wt, "log", "-1", "--format=%P").split()) == 2
+
+
+def test_a_merge_that_only_dropped_gap_lines_keeps_the_full_pass(repos, monkeypatch):
+    main, wt = repos
+    gaps = "tools/harness/adr_gaps.txt"
+    commit(wt, {gaps: "D-3 reserved in another worktree\n"}, "declare a peer's gap")
+    calls = full_pass_then_host_lost(main, wt, monkeypatch)
+    commit(main, {"docs/adr/D-3-peer.md": "## D-3 peer\n"}, "peer lands D-3")
+    peer_main = git(main, "rev-parse", "HEAD")
+    assert land.main(["--tests", "auto"]) == 0
+    assert calls == [peer_main], "delta selection only: the gap drop is a record, not a change of the branch"
+    assert (main / gaps).read_text() == ""
+
+
+HARNESS_ONLY = """import json, sys
+def generated_targets(repo):
+    return {}
+def generate(repo):
+    return []
+if sys.argv[1] == 'affected':
+    print(json.dumps({"mode": "full", "escalations": ["tools/harness/x.py: harness configuration or the selector itself"],
+                      "invocations": [], "local_invocations": [["pkg/test/test_a.py"]], "full_invocations": [["pkg/test"]]}))
+"""
+
+
+@pytest.mark.parametrize("landed", [True, False])
+def test_main_delta_escalated_only_by_landed_harness_files_runs_its_mapped_suites(repos, landed):
+    """2026-10-25: a selector edit on main held every lander behind it for a FULL tier of its own."""
+    main, wt = repos
+    commit(wt, {"tools/harness/rosy_harness.py": HARNESS_ONLY, "tools/harness/affected_tests.py": ""}, "harness")
+    invocations, note = land.select(wt, "main", sys.executable, head="HEAD", landed=landed)
+    if landed:
+        assert (invocations, note) == ([["pkg/test/test_a.py"]], None)
+    else:
+        assert invocations == [["pkg/test"]] and note.startswith("selector escalated to FULL")
+
+
+_CANONICAL_GENERATOR = r'''from pathlib import Path
+
+def generated_targets(repo):
+    a = int((repo / "a.txt").read_text())
+    b = int((repo / "b.txt").read_text())
+    left = "".join(f"gap-a-{n}\n" for n in range(8))
+    right = "".join(f"gap-b-{n}\n" for n in range(8))
+    content = f"a={a}\n{left}b={b}\n{right}both={int(bool(a and b))}\n"
+    return {repo / "docs/index.md": content}
+
+def generate(repo):
+    mode = (repo / "mode.txt").read_text() if (repo / "mode.txt").exists() else ""
+    if mode == "failure":
+        (repo / "left-behind.md").write_text("partial\n")
+        raise RuntimeError("generation failed")
+    targets = generated_targets(repo)
+    for path, content in targets.items():
+        path.write_text(content)
+    if mode == "partial":
+        raise RuntimeError("generation failed after tracked output")
+    if mode == "unexpected":
+        (repo / "pkg/a.py").write_text("unexpected = True\n")
+    return list(targets)
+
+if __name__ == "__main__":
+    repo = Path.cwd()
+    for path in generate(repo):
+        print("wrote", path.relative_to(repo).as_posix())
+'''
+
+
+def _canonical_index(a, b):
+    left = "".join(f"gap-a-{n}\n" for n in range(8))
+    right = "".join(f"gap-b-{n}\n" for n in range(8))
+    return f"a={a}\n{left}b={b}\n{right}both={int(bool(a and b))}\n"
+
+
+def _canonical_merge_case(repos, mode=""):
+    main, wt = repos
+    commit(main, {land.HARNESS: _CANONICAL_GENERATOR, "a.txt": "0", "b.txt": "0",
+                  "docs/index.md": _canonical_index(0, 0)}, "canonical base")
+    git(wt, "merge", "--ff-only", "main")
+    commit(wt, {"a.txt": "1", "docs/index.md": _canonical_index(1, 0),
+                "mode.txt": mode}, "branch input")
+    commit(main, {"b.txt": "1", "docs/index.md": _canonical_index(0, 1)}, "main input")
+    return main, wt
+
+
+def test_clean_main_merge_generates_inside_its_original_merge_commit(repos):
+    main, wt = _canonical_merge_case(repos)
+    before, incoming = git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")
+    raw = git(wt, "merge-tree", "--write-tree", "--no-messages", before, incoming).splitlines()[0]
+    assert git(wt, "show", f"{raw}:docs/index.md").endswith("both=0")
+    assert land.merge(wt, incoming, "feat/x", sys.executable, False) == []
+    assert (wt / "docs/index.md").read_text() == _canonical_index(1, 1)
+    assert git(wt, "rev-list", "--parents", "-n", "1", "HEAD").split()[1:] == [before, incoming]
+    assert git(wt, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("mode", ["failure", "unexpected", "partial"])
+def test_clean_merge_aborts_when_generation_cannot_be_staged_safely(repos, mode):
+    main, wt = _canonical_merge_case(repos, mode)
+    before, incoming = git(wt, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD")
+    with pytest.raises(land.Stop) as error:
+        land.merge(wt, incoming, "feat/x", sys.executable, False)
+    assert git(wt, "rev-parse", "HEAD") == before
+    assert git(main, "rev-parse", "HEAD") == incoming
+    if mode == "failure":
+        assert land.git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0
+        assert git(wt, "diff", "--cached", "--name-only") == ""
+        assert "left-behind.md" in str(error.value)
+        assert (wt / "left-behind.md").read_text() == "partial\n"
+    else:
+        assert "abort failed" in str(error.value)
+        assert "preserved for manual recovery" in str(error.value)
+        assert git(wt, "rev-parse", "MERGE_HEAD") == incoming
+        assert "b.txt" in git(wt, "diff", "--cached", "--name-only")
+        assert (wt / "docs/index.md").read_text() == _canonical_index(1, 1)
+        if mode == "unexpected":
+            assert "pkg/a.py" in str(error.value)
+            assert (wt / "pkg/a.py").read_text() == "unexpected = True\n"
+        else:
+            assert "generation failed after tracked output" in str(error.value)
+
+
+@pytest.mark.parametrize("already_current", [False, True])
+def test_fast_forward_or_current_main_does_not_generate_or_add_a_commit(repos, already_current):
+    main, wt = repos
+    commit(main, {land.HARNESS: _CANONICAL_GENERATOR, "a.txt": "0", "b.txt": "0",
+                  "mode.txt": "failure", "docs/index.md": _canonical_index(0, 0)}, "main")
+    incoming = git(main, "rev-parse", "HEAD")
+    if already_current:
+        git(wt, "merge", "--ff-only", "main")
+    assert land.merge(wt, incoming, "feat/x", sys.executable, False) == []
+    assert git(wt, "rev-parse", "HEAD") == incoming
+    assert not (wt / "left-behind.md").exists()

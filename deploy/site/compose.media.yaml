@@ -1,0 +1,86 @@
+# D-789 T5: the site media service, a separate Compose project from Fleet:
+#   docker compose --env-file <site env> -f deploy/site/compose.media.yaml -p rosy-media up -d
+# A media crash or restart never restarts Fleet or Vision, and Fleet never relays video.
+# shortcut: ROSY_MEDIA_BIND_ADDRESS is not managed by site-firewall.py (it covers the Fleet proxy
+# port only); set it to the site LAN address and add the two media ports to the host firewall.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  media:
+    image: rosy-site-media:${ROSY_SITE_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: deploy/site/Dockerfile.media
+    user: "10001:10001"
+    ports:
+      # HTTPS (served by media-gateway, which shares this network namespace) and the one ICE UDP port.
+      - "${ROSY_MEDIA_BIND_ADDRESS:-127.0.0.1}:${ROSY_MEDIA_HTTPS_PORT:?set ROSY_MEDIA_HTTPS_PORT}:${ROSY_MEDIA_HTTPS_PORT:?set ROSY_MEDIA_HTTPS_PORT}"
+      - "${ROSY_MEDIA_BIND_ADDRESS:-127.0.0.1}:${ROSY_MEDIA_ICE_PORT:-8189}:8189/udp"
+    environment:
+      # The LAN address browsers and robots reach for ICE (D-789 7: explicit ICE host).
+      MTX_WEBRTCADDITIONALHOSTS: ${ROSY_MEDIA_ICE_HOST:?set ROSY_MEDIA_ICE_HOST}
+    volumes:
+      # media-authority.json, the MediaMTX management credential, robot public keys and CORE CAs.
+      - ${ROSY_MEDIA_CONFIG_DIR:?set ROSY_MEDIA_CONFIG_DIR}:/run/rosy-media:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: 512m
+    cpus: 2
+    # Docker restarts with its own growing delay; the supervisor exits non-zero on any child or
+    # authority-heartbeat failure, so both processes always come back together and fresh.
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9121/health', timeout=1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks: [media_edge]
+    logging: *default-logging
+
+  media-gateway:
+    image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy
+    user: "10001:10001"
+    network_mode: "service:media"
+    volumes:
+      - ./Caddyfile.media:/etc/caddy/Caddyfile:ro
+    secrets:
+      - media_cert
+      - media_key
+    environment:
+      XDG_CONFIG_HOME: /config
+      XDG_DATA_HOME: /data
+      ROSY_MEDIA_HTTPS_PORT: ${ROSY_MEDIA_HTTPS_PORT:?set ROSY_MEDIA_HTTPS_PORT}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m,uid=10001,gid=10001
+      - /config:rw,noexec,nosuid,size=8m,uid=10001,gid=10001
+      - /data:rw,noexec,nosuid,size=8m,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      media:
+        condition: service_healthy
+
+secrets:
+  media_cert:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/media_cert
+  media_key:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/media_key
+
+networks:
+  media_edge:

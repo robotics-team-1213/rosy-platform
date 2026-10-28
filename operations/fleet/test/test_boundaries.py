@@ -2,6 +2,7 @@
 import 하면 순수 함수가 아니게 되고 Windows pytest 도 깨진다."""
 
 import ast
+from importlib.util import resolve_name
 from pathlib import Path
 
 import pytest
@@ -25,11 +26,40 @@ def _imports(path: Path) -> set[str]:
     return names
 
 
+FORMATION_API_LEAVES = frozenset({"fleet.swarm.api.types", "fleet.swarm.api.ports"})
+
+
+def _formation_import_names(path: Path, package: str) -> set[str]:
+    names = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            module = (resolve_name("." * node.level + (node.module or ""), package)
+                      if node.level else node.module or "")
+            if module in FORMATION_API_LEAVES or any(alias.name == "*" for alias in node.names):
+                names.add(module)
+            else:
+                names.update(f"{module}.{alias.name}" for alias in node.names)
+    return names
+
+
+def _assert_formation_import_boundary(path: Path, fleet_root: Path) -> None:
+    checks = [(path, "fleet.formation"),
+              (fleet_root / "swarm/api/types.py", "fleet.swarm.api"),
+              (fleet_root / "swarm/api/ports.py", "fleet.swarm.api"),
+              (fleet_root / "__init__.py", "fleet"),
+              (fleet_root / "swarm/__init__.py", "fleet.swarm"),
+              (fleet_root / "swarm/api/__init__.py", "fleet.swarm.api")]
+    for checked, package in checks:
+        for name in _formation_import_names(checked, package):
+            assert name in FORMATION_API_LEAVES or not name.startswith(FORBIDDEN), (
+                f"{checked.relative_to(fleet_root)} imports {name}")
+
+
 @pytest.mark.parametrize("module", sorted(p.name for p in FORMATION_DIR.glob("*.py")))
 def test_formation_modules_import_no_transport(module):
-    names = _imports(FORMATION_DIR / module)
-    for name in names:
-        assert not name.startswith(FORBIDDEN), f"{module} imports {name}"
+    _assert_formation_import_boundary(FORMATION_DIR / module, FORMATION_DIR.parent)
 
 
 def test_arming_stays_pure_so_the_plan_can_run_before_the_relay_is_touched():
@@ -98,7 +128,8 @@ def test_localization_arbiter_modules_import_no_transport(module):
 #: the console state route (which hands it robot states) and the CLI may name it.
 #: tracking_drift.py is one of its own modules (the server-side calibration-drift watch).
 TRACKING_IMPORTERS = {"server/app.py", "server/console/console_routes.py", "server/tracking/tracking.py",
-                      "server/tracking/tracking_routes.py", "server/tracking/tracking_drift.py", "cli.py"}
+                      "server/tracking/tracking_routes.py", "server/tracking/tracking_drift.py",
+                      "server/tracking/measured_calibration.py", "cli.py"}
 
 
 def _server_imports(source: str, stem: str) -> list[str]:
@@ -154,9 +185,9 @@ def test_traffic_bays_missions_and_localization_never_read_overhead_tracking():
 #: D-472 addendum 3: a LED-confirmed track feeds D-511 lane compliance and the console only.
 #: Map pose arbitration, trips, initialpose, routes, bays, formations and commands never read it,
 #: neither by import nor through the wiring attributes ``tracking.identity`` / ``app.state.identity``.
-IDENTITY_READERS = {"server/app.py", "server/console/console_routes.py", "server/identity.py",
-                    "server/tracking/tracking.py", "server/tracking/tracking_routes.py", "server/site_observation/sightings_config.py",
-                    "server/lane_compliance_service.py"}
+IDENTITY_READERS = {"server/app.py", "server/console/console_routes.py", "server/recognition/identity.py",
+                    "server/tracking/tracking.py", "server/tracking/tracking_routes.py", "server/recognition/sightings_config.py",
+                    "server/pose/lane_compliance_service.py"}
 #: Never on that list: the D-494 map pose arbitration and the trip loop (addendum 3).
 IDENTITY_NEVER = ("server/pose/map_pose_service.py", "server/trips/trip_*.py", "server/trip_checks/trip_*.py", "server/trip_progress/trip_*.py",
                   "routing/execute.py")
@@ -223,3 +254,86 @@ def test_map_pose_and_trip_modules_never_read_the_led_identity_binding():
         if "confirmed_track_pose" in text:
             offenders.append(f"{rel} reads confirmed_track_pose")
     assert offenders == []
+
+
+@pytest.fixture
+def formation_api_tree(tmp_path, monkeypatch):
+    root = tmp_path / "fleet"
+    files = {
+        "__init__.py": "",
+        "formation/__init__.py": "",
+        "formation/geometry.py": "import math\n",
+        "swarm/__init__.py": "",
+        "swarm/api/__init__.py": "",
+        "swarm/api/types.py": "class Point: pass\n",
+        "swarm/api/ports.py": "from .types import Point\nclass RobotClient: pass\n",
+    }
+    for relative, source in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+    monkeypatch.setitem(globals(), "FORMATION_DIR", root / "formation")
+    return root
+
+
+@pytest.mark.parametrize("source", [
+    "from fleet.swarm.api.types import Point as Position\n",
+    "import fleet.swarm.api.ports as contracts\n",
+    "from fleet.swarm.api import types as data, ports as contracts\n",
+    "from ..swarm.api.types import Point\n",
+    "from ..swarm.api import ports as contracts\n",
+    "from fleet.swarm.api.ports import RobotClient\n",
+])
+def test_formation_boundary_accepts_only_neutral_api_leaves(formation_api_tree, source):
+    (formation_api_tree / "formation/geometry.py").write_text(source, encoding="utf-8")
+    test_formation_modules_import_no_transport("geometry.py")
+
+
+@pytest.mark.parametrize("relative", [
+    "formation/geometry.py", "swarm/api/types.py", "swarm/api/ports.py",
+    "__init__.py", "swarm/__init__.py", "swarm/api/__init__.py",
+])
+@pytest.mark.parametrize("source", [
+    "import httpx as client\n",
+    "from websockets import connect as connect_socket\n",
+    "import rclpy as ros\n",
+    "from asyncio import create_task as schedule\n",
+    "from fleet.swarm import relay as delivery\n",
+])
+def test_formation_boundary_rejects_forbidden_imports_in_each_fixed_file(
+        formation_api_tree, relative, source):
+    (formation_api_tree / relative).write_text(source, encoding="utf-8")
+    with pytest.raises(AssertionError):
+        test_formation_modules_import_no_transport("geometry.py")
+
+
+@pytest.mark.parametrize("relative, source", [
+    ("formation/geometry.py", "from fleet import swarm as network\n"),
+    ("formation/geometry.py", "from fleet.swarm import transport as wire\n"),
+    ("formation/geometry.py", "from ..swarm import transport as wire\n"),
+    ("formation/geometry.py", "import fleet.swarm.api_extra as extra\n"),
+    ("formation/geometry.py", "from fleet.swarm.api_extra import types\n"),
+    ("formation/geometry.py", "import fleet.swarm.api\n"),
+    ("formation/geometry.py", "from fleet.swarm import api\n"),
+    ("formation/geometry.py", "from fleet.swarm.api import *\n"),
+    ("swarm/api/types.py", "from .. import relay as delivery\n"),
+    ("swarm/api/ports.py", "from . import relay as delivery\n"),
+    ("__init__.py", "from .swarm import transport as wire\n"),
+    ("swarm/__init__.py", "from . import transport as wire\n"),
+    ("swarm/api/__init__.py", "from .. import transport as wire\n"),
+])
+def test_formation_boundary_resolves_members_relatives_and_exact_leaf_names(
+        formation_api_tree, relative, source):
+    (formation_api_tree / relative).write_text(source, encoding="utf-8")
+    with pytest.raises(AssertionError):
+        test_formation_modules_import_no_transport("geometry.py")
+
+
+@pytest.mark.parametrize("relative", [
+    "swarm/api/types.py", "swarm/api/ports.py", "__init__.py",
+    "swarm/__init__.py", "swarm/api/__init__.py",
+])
+def test_formation_boundary_requires_every_fixed_api_file(formation_api_tree, relative):
+    (formation_api_tree / relative).unlink()
+    with pytest.raises(OSError):
+        test_formation_modules_import_no_transport("geometry.py")

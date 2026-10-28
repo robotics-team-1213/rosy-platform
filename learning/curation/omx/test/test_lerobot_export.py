@@ -40,6 +40,36 @@ def test_export_rejects_missing_source_before_creating_dataset(tmp_path):
     assert not output.exists()
 
 
+def test_export_checks_explicit_sim_truth_before_dataset_dependencies(tmp_path, monkeypatch):
+    manifest = complete_episode(tmp_path/'raw')
+    monkeypatch.setattr('lerobot_export.importlib.metadata.version', lambda *_: pytest.fail('too early'))
+    output = tmp_path/'export'
+    with pytest.raises(FileNotFoundError):
+        export_episode(tmp_path/'raw'/manifest['episode_id'], output, 'rosy-local/test',
+                       sim_ground_truth=tmp_path/'absent.json')
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("linked", [False, True])
+def test_export_refuses_checkout_before_loading_dataset(tmp_path, monkeypatch, linked):
+    manifest = complete_episode(tmp_path / "raw")
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    if linked:
+        (checkout / ".git").write_text("gitdir: elsewhere\n")
+    else:
+        (checkout / ".git").mkdir()
+    output = checkout / "nested" / "export"
+
+    def unexpected_version_lookup(*args):
+        pytest.fail("checkout refusal must precede dataset dependency access")
+
+    monkeypatch.setattr("lerobot_export.importlib.metadata.version", unexpected_version_lookup)
+    with pytest.raises(ValueError, match="outside the source checkout"):
+        export_episode(tmp_path / "raw" / manifest["episode_id"], output, "rosy-local/omx-sim")
+    assert not output.parent.exists()
+
+
 def test_real_lerobot_v3_export_reopens_state_action_and_video(tmp_path):
     pytest.importorskip("lerobot")
     manifest = complete_episode(tmp_path / "raw")

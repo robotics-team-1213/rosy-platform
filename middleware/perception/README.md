@@ -26,8 +26,8 @@ console scripts and `share/control/{config,launch,map,web}` remain the same.
 Run pytest through the remote runner from the repository root (D-584):
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<session> -- middleware/perception/test/
-python test/known_failures.py X:/DevTemp/<session>/run-1.txt
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<session>" -- middleware/perception/test/
+python test/known_failures.py "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<session>/run-1.txt"
 ```
 
 Build in a ROS 2 Jazzy environment:

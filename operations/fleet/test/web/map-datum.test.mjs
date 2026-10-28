@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {drawMapDatum} from "../../../site_ui/console/map-datum.js";
+import {drawMapDatum} from "../../../../applications/fleet/web/map/map-datum.js";
 
 globalThis.window = {RosyPalette: {canvasFont: () => "16px monospace"}};
 

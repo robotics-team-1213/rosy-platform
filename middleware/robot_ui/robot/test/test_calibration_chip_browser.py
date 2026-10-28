@@ -7,6 +7,7 @@ opens the lease through the API, so the chip proves the whole path CORE → scre
 from __future__ import annotations
 
 import os
+import tempfile
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -16,10 +17,9 @@ from browser_harness import browser_tests_enabled
 import yaml
 
 ROOT = Path(__file__).resolve().parents[4]
-SRC = ROOT / "src"
-for package in ("runtime/api_web", "runtime/gateway", "runtime/events", "runtime/services",
+for package in ("middleware/core/api", "middleware/core/gateway", "middleware/core/events", "middleware/core/services",
                 "contracts/foundation"):
-    sys.path.insert(0, str(SRC / package))
+    sys.path.insert(0, str(ROOT / package))
 
 pytestmark = pytest.mark.skipif(
     not browser_tests_enabled(),
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 OPERATOR = "rosy-dev-operator"
-SHOTS = Path(os.environ.get("ROSY_SHOT_DIR", "X:/DevTemp/calibration-mode"))
+SHOTS = Path(os.environ.get("ROSY_SHOT_DIR") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "calibration-mode")
 
 
 def _core_client(tmp_path):
@@ -36,7 +36,7 @@ def _core_client(tmp_path):
     from core_common.profile import RobotProfile, robot_config_dir
     from core.services import CoreServices
 
-    config_dir = SRC.parent / "contracts/foundation/config"
+    config_dir = ROOT / "contracts/foundation/config"
     config = yaml.safe_load((config_dir / "rosy_default.yaml").read_text(encoding="utf-8"))
     config["auth"] = {**config["auth"], **yaml.safe_load(
         (config_dir / "rosy_dev_auth.yaml").read_text(encoding="utf-8"))["auth"]}

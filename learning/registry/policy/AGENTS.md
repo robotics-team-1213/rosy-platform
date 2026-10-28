@@ -30,7 +30,7 @@ None.
 
 ### Testing Requirements
 
-Run the policy tests beside this folder with a temporary `--root` under X: or a temp directory. Do not use a shared lab registry.
+Run the policy tests beside this folder with a temporary `--root` under $ROSY_SCRATCH or a temp directory. Do not use a shared lab registry.
 
 ### Common Patterns
 

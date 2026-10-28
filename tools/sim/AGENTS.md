@@ -19,6 +19,7 @@ Developer-side simulation helpers that compose several packages: ROS-free host s
 | `d395_s1_bench.py` | D-395 S1 bench driver, run inside WSL with ROS 2 Jazzy: launches `gz_multi.launch.py` and the Fleet console in their own process groups, waits for both robots to localise, then runs the pickup (`d`) and forced-mirror (`c`) phases judged against Gazebo ground truth. Stops only processes it started. Writes `run.json`, `launch.log`, `fleet.log` |
 | `fleet_trips.py` | Committed two-robot Fleet + Gazebo lane trip bench (`remote_sim.py ... fleet_trips`, never this laptop): owns its D-426 reservations (domain 80-99, ports) and lock, launches `map_v2_fleet_multi_real` with the regulated SIM CORE/Fleet settings (line authority, trip lease, IR guard), runs Fleet with the D-725 `native_gazebo_map_pose` port, sends one coordinate lane trip per robot on a straight lane-graph stretch and exits 0 only when both arrive. `result.json` + logs in `--out`; tokens stay in a temp run root. Kills only processes carrying its `FLEET_TRIPS_RUN` mark. Test `test/test_fleet_trips.py` |
 | `native_gazebo_map_pose.py` | D-725 SIM-only Fleet pose port (actual Gazebo odom + /clock + CORE snapshots); built only by a developer SIM bootstrap such as `fleet_trips.py fleet` |
+| `run_sim_reach_pipeline.py` | OMX SIM reach loop on the sim host: teacher -> `docker cp` recordings -> batch export -> `act_job.py` (CPU, `--steps`) -> restart -> closed loop -> eval (the last two skipped when not landed); `--dry-run`, `--from-stage`. Test `test/test_sim_reach_pipeline.py` |
 | `d395_truth.py` | Judges a reported map pose against the Gazebo model pose; `test/test_d395_s1_truth.py` covers it |
 | `d395_s1_summary.py` | Markdown rows from `run.json` files of the bench |
 | `sim_verify.sh` | D-131 live check in one session: cleanup, start sim, T6 optional formation, leader drive, evidence collection (Korean comments) |
@@ -31,7 +32,7 @@ Developer-side simulation helpers that compose several packages: ROS-free host s
 ### Working In This Directory
 
 - Placement: a script that imports several packages belongs here (or another root group), not inside one package, to avoid an undeclared cross-package import (see `../AGENTS.md`).
-- The `.sh` probes and bench need WSL Ubuntu with ROS 2 Jazzy and a built workspace; they do not run on plain Windows. Write their output under `X:\DevTemp` or `/tmp`, never into the repo.
+- The `.sh` probes and bench need WSL Ubuntu with ROS 2 Jazzy and a built workspace; they do not run on plain Windows. Write their output under `$ROSY_SCRATCH` or `/tmp`, never into the repo.
 - Treat the probes as disposable: do not extend them; fold any lasting check into a pytest or `sim_verify.sh`.
 - Shell scripts compute the repo root from their own path; keep it that way.
 - A passing sim run is LOCAL evidence only; do not cite it as device or field acceptance.

@@ -238,7 +238,15 @@
 | D-777 | 사람과 에이전트를 위한 간결한 문서와 단일 기준 |
 | D-783 | Native adopted-map readback with finite parent evidence |
 | D-784 | 공개 소스·비공개 운영 설정과 staging 경계 |
-| D-825 | STL 도면 참조와 Fleet 평면 지도 편집 |
+| D-789 | 6대 로봇의 실시간 카메라는 별도 영상 서비스를 통한 H.264 WebRTC로 전환한다 |
+| D-791 | WebRTC 발행자와 사이트 미디어 권한 서비스를 독립 선택 설치 wheel로 둔다 |
+| D-827 | 도메인 중립 플랫폼·재사용 공정·업무 앱의 책임을 분리한다 |
+| D-828 | 작업 접수·진행·물리 완료·인계 근거를 구분한다 |
+| D-829 | 업무 목표·제약과 공통 자원 배정·물리 점유를 분리한다 |
+| D-836 | 업무 앱의 공정 제안·후보 배정·완료 근거 경계를 연결한다 |
+| D-850 | 독립 운영과 하위 구성을 지원하는 관제 단위 |
+| D-851 | 독립·상하위 관제의 상태 소유권과 위임·복구 계약 |
+| D-855 | 관제 위임 요청과 실행 시도에 결속된 취소 계약 |
 
 ## 계획·결과 문서
 
@@ -328,11 +336,14 @@
 - [2026-10-15-omx-learning-operations-design.md](plans/2026-10-15-omx-learning-operations-design.md)
 - [2026-10-15-omx-learning-operations.md](plans/2026-10-15-omx-learning-operations.md)
 - [2026-10-17-native-map-adoption.md](plans/2026-10-17-native-map-adoption.md)
+- [2026-10-24-neutral-arm-planning-design.md](plans/2026-10-24-neutral-arm-planning-design.md)
 
 ## 교훈 (docs/solutions)
 
 - [Cell 시뮬레이터는 홈 복귀를 관측한 뒤 Action을 받는다](solutions/logic-errors/cell-startup-must-reach-home-before-action-admission.md)
+- [모듈 logs.md 의 BOM 상태가 제각각이라 append 만 해도 append-only 검사가 깨진다](solutions/workflow-issues/logs-md-bom-states-vary-preserve-per-file-2026-10-25.md)
 - [PowerShell 한글 저널 append가 UTF-8을 망가뜨린다 (2026-10-04, 4회)](solutions/workflow-issues/powershell-utf8-append-mangles-korean-journals.md)
+- [병합 해결 중 main이 움직이면 스쿼시 커밋이 동료 착지를 되돌릴 수 있다](solutions/workflow-issues/squash-after-stale-merge-can-revert-concurrent-landings-2026-10-25.md)
 - [Verify what you ship - the working tree is not the commit](solutions/workflow-issues/verify-what-you-ship-the-working-tree-is-not-the-commit.md)
 
 ## 시험
@@ -342,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-25 · uncommitted · D-871 학습 센터 자동 업데이트
-- 2026-10-25 · uncommitted · D-871 여러 유닛 재시작: 하나씩 확인, 순서대로
-- 2026-10-25 · uncommitted · D-871 관측 env를 uv로 만들기
-- 2026-10-25 · uncommitted · Learning 서명 sequence41 실제 활성화 검증
-- 2026-10-25 · uncommitted · D-871 셀 카메라·관측기 자동 업데이트
+- 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
+- 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
+- 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
+- 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로

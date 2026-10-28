@@ -14,10 +14,15 @@ foreach ($directory in @($sd, $release, $local, $scratch, (Join-Path $sandbox "r
 $utf8 = New-Object Text.UTF8Encoding($true)
 function Save-Fixture([string]$Path, [string]$Text) { [IO.File]::WriteAllText($Path, $Text, $utf8) }
 Copy-Item -LiteralPath $Source -Destination (Join-Path $sd "setup-moved-device.ps1")
-foreach ($helper in @("sd-setup-settings.ps1", "sd-card-completion.ps1")) {
+foreach ($helper in @("sd-setup-settings.ps1", "sd-card-completion.ps1", "sd-batch-state.ps1")) {
     Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $Source) $helper) -Destination $sd
 }
-Save-Fixture (Join-Path $sd "verify-image-release.py") "raise SystemExit(0)"
+Save-Fixture (Join-Path $sd "verify-image-release.py") @'
+import json
+print(json.dumps(dict(ok='true', release_id='2026.10.18-001',
+    image='rosy-os-pinky-pro-2026.10.18-001-arm64.img.xz', sha256='a' * 64,
+    source_revision='c' * 40)))
+'@
 Save-Fixture (Join-Path $sd "imager.exe") "fixture executable, never run"
 Save-Fixture (Join-Path $sandbox "release\public-keys\rosy-release-2026-01.pem") "fixture public key"
 Save-Fixture (Join-Path $release "manifest.json") '{"release_id":"2026.10.18-001"}'

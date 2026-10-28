@@ -1,5 +1,6 @@
 """Immutable DatasetManifest/Episode closure and OMX v1 body checks; no task certification."""
 import argparse
+from policy_output_paths import in_source_checkout
 from contextlib import closing
 import json
 import os
@@ -58,8 +59,8 @@ def closure(root, *, policy=None):
 class DatasetStore:
     def __init__(self, root, *, read_only=False):
         self.root = Path(root).resolve()
-        if self.root.drive.upper() == 'F:':
-            raise ValueError('dataset output belongs outside source drive F:')
+        if in_source_checkout(self.root):
+            raise ValueError('dataset output belongs outside the source checkout')
         if not isinstance(read_only, bool):
             raise ValueError('read_only must be boolean')
         self._read_only = read_only

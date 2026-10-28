@@ -12,9 +12,10 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT / 'contracts/learning/src'),
+sys.path[:0] = [str(Path(__file__).resolve().parent), str(ROOT / 'contracts/learning/src'),
                str(ROOT / 'contracts/foundation')]
 
+from policy_output_paths import in_source_checkout  # noqa: E402
 from core_common.protocol.schemas import DeviceActionReceipt  # noqa: E402
 from rosy.contracts.learning import validate_episode  # noqa: E402
 from rosy.contracts.learning.fleet_export import join_metadata, export_metadata  # noqa: E402
@@ -40,8 +41,8 @@ def join(episode, receipt):
 def export(episode_file, receipt_file, output):
     """Validate source file closure, preserve input hashes, and never replace an export."""
     episode_file, receipt_file, output = map(Path, (episode_file, receipt_file, output))
-    if output.resolve().drive.upper() == 'F:':
-        raise ValueError('artifact output belongs on X:, not the source drive')
+    if in_source_checkout(output):
+        raise ValueError('artifact output belongs outside the source checkout')
     episode_bytes, receipt_bytes = episode_file.read_bytes(), receipt_file.read_bytes()
     episode = json.loads(episode_bytes)
     validate_episode(episode, root=episode_file.parent)

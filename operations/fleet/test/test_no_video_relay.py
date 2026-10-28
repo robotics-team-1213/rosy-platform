@@ -20,8 +20,8 @@ SRC = Path(__file__).resolve().parents[1]
 
 FORBIDDEN_IMPORTS = frozenset({"cv2", "sensor_msgs", "ffmpeg", "av", "picamera2", "PIL"})
 DRAWING_IMPORTS = {
-    "fleet/server/maps/site_map_raster.py": {"PIL", "cv2"},
-    "fleet/server/maps/site_map_extract.py": {"PIL", "cv2"},
+    "fleet/server/sitemap/site_map_raster.py": {"PIL", "cv2"},
+    "fleet/server/sitemap/site_map_extract.py": {"PIL", "cv2"},
 }
 
 FORBIDDEN_ROUTE = re.compile(r"video|stream|camera|preview|proxy|relay|mjpeg|jpeg|image",

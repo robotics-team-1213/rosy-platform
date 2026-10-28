@@ -1,17 +1,27 @@
 # OMX 실물 모방학습 준비
 
-## 필요한 파지 구간만 내보내기
+## 필요한 파지 구간만 검수·학습하기
 
-[D-833](../../../docs/adr/D-833-native-omx-grasp-segments.md)의 `rosy.omx-native-segments.v1` 선택 JSON은 원본 inspection의 SHA-256, 원본 Episode의 identity·session·cycle, 시작 포함·끝 제외 프레임과 사람의 대상·결과·개입·검수자·근거·분할을 기록한다. 성공을 직접 확인하고 개입이 없는 구간만 학습에 포함한다. 실패·미판정·개입은 제외로 보존한다.
+`/learning/omx`에서 등록한 intake의 「파지 구간 검수」를 연다. 원본 카메라 프레임을 확인하고 시작(포함)·끝(제외), 대상 물체, 실제 관찰 결과, 개입 여부, 검수자·근거와 분할을 기록한다. 저장은 review DB에 새 검수 revision을 추가하고 원본 `decisions.json`을 유지한다. 프로젝트 계정에서는 manage 권한이 필요하고 인증된 사용자를 검수자로 기록한다. 원본 확인에는 모델 PC의 LeRobot 0.4.4 환경이 필요하다.
+
+1. 「원본을 보고 구간 선택」에서 Episode·카메라·프레임을 선택하고 프레임을 확인한다. 시작은 포함, 끝은 제외한다. `[2, 6)`은 2~5번 프레임이다.
+2. 「구간 결과 확인」에서 대상·관찰 근거·결과·개입·분할을 입력한 뒤 「구간 추가」를 누른다. 입력 중인 폼은 구간 추가 전에는 저장 대상이 아니다.
+3. 「구간 저장·내려받기」에서 저장 상태와 분할별 개수를 확인한다. 저장 중 추가·삭제한 구간은 다음 저장 대상으로 남으며, 미저장 구간이 있으면 JSON 내려받기가 막힌다. 저장 실패·버전 충돌은 현재 편집을 유지한다. 다른 검수자의 최신 revision을 다시 읽으려면 필요한 미저장 내용을 확인한 뒤 「다시 확인」에서 버리기를 명시한다.
+
+「원본 전체 시연 상태·메타데이터」는 원본 결과다. 구간 검수로 원본의 미판정 결과를 성공으로 바꾸지 않는다. 화면에 저장된 JSON이 있어도 실제 내보내기에는 독립 학습·평가 구간과 원본 검증이 필요하다. 미저장 이탈 경고는 제공하지만 탭 강제 종료 후 임시 편집 복구는 제공하지 않는다.
+
+선택 JSON을 내려받은 뒤 같은 모델 PC의 전용 venv에서 실행한다. 출력은 모두 기존 자료와 분리된 새 폴더여야 한다.
 
 ```text
-python learning/curation/omx/native_segments.py <intake-root> --report <intake-root>/inspection.json --segments <selection.json> --out <new-segment-splits>
+python learning/curation/omx/native_segments.py <intake-root> --report <intake-root>/inspection.json --segments <downloaded-segments.json> --out <new-segment-splits>
 python learning/training/omx/native_cycle.py run --splits <new-segment-splits> --out <new-act-run> --steps 100 --device cpu
 ```
 
-각 구간은 별도 child Episode다. 원본 state/action·대응 카메라·source clocks를 보존하고 child index/time만 다시 매긴다. 같은 원본·content hash·session·cycle의 후손은 한 분할에만 두며 독립 train/eval이 필요하다. 원본에 session/cycle이 없으면 독립성을 추정하지 않는다. 원본 전체 outcome과 환경 coverage도 구간 결과로 바꾸지 않는다. 출력은 기존 자료와 분리된 새 폴더여야 한다. native 정규화 단위를 SIM rad와 혼합하지 않는다.
+각 파지 구간은 별도 child Episode다. 원본 state/action·대응 카메라·source clocks를 보존하고 child index/time만 다시 매긴다. 성공을 직접 확인했고 개입이 없는 구간만 학습에 넣는다. 실패·미판정·개입은 제외로 보존한다. 같은 원본·content hash·session·cycle의 후손은 한 분할에만 둔다. 독립 train/eval이 필요하며 test를 선택하면 test도 비어 있으면 안 된다. native 정규화 단위를 SIM rad와 혼합하지 않는다.
 
-`split-receipt.json`은 선택 JSON·원본 hashes·child frame 계보·실제 reader readback·출력 hashes를 묶는다. ACT 실행 전에도 이 기록과 출력 파일을 다시 확인한다. 실제 장치 성공·모델 품질·다른 작업자에 대한 일반화와 데이터 절감 효과는 별도 평가다.
+Legacy `leader_native` inspection에 session/cycle이 선언되지 않았으면 session 독립성을 보장할 수 없다. 누락된 계보를 추정하지 않는다. Production `scripted_teacher` intake는 원본 bytes에 묶인 session/cycle을 계속 검증한다.
+
+`split-receipt.json`은 원본 report/hash, 구간 선택, child→원본 frame 계보, readback과 출력 hashes를 묶는다. 원본 전체의 outcome은 구간 outcome과 별개이고, 환경 coverage도 원본 parent Episode 범위다. 다른 작업자·카메라·물체·장비에서 재사용 가능하다는 뜻은 아니다. [D-833](../../../docs/adr/D-833-native-omx-grasp-segments.md)과 [구현 계획](../../../docs/plans/2026-10-21-omx-native-grasp-segments.md)을 따른다.
 
 수집 대상은 Fleet PC, 학습·독립 평가는 모델 PC다. HF 조직은 미정이며 로컬 수집의 선행 조건이 아니다.
 현재 도구는 host 주소를 고정하지 않고 장치를 시작하거나 기존 ROSY 실물 profile을 활성화하지 않는다.
@@ -25,7 +35,7 @@ LeRobot 0.4.4 전용 venv를 사용한다. ROS venv에 설치하지 않는다.
 CPU 시험 환경과 GPU 학습 환경을 구분하고, 설치 후 `pip check`와 `pip freeze`를 보존한다.
 원격 CPU 통합 시험은 torch 2.7.1+cpu / torchvision 0.22.1+cpu / av 15.1.0으로 수행했다.
 검토·분할·학습 예제의 영상 backend는 `pyav`다. 이 환경의 기본 TorchCodec 경로는 검증하지 않았으므로 backend를 생략하지 않는다.
-Windows의 데이터·HF cache·로그는 X: 세션에, Linux는 선정한 호스트의 명시적 데이터 경로에 둔다.
+Windows의 데이터·HF cache·로그는 스크래치 세션에, Linux는 선정한 호스트의 명시적 데이터 경로에 둔다.
 `HF_HOME`도 그 데이터 드라이브로 설정한다.
 
 1. `deploy/robot/omx/lerobot-record.example.json`을 private 설정 위치로 복사한다.
@@ -52,6 +62,11 @@ gripper는 0..100이며 ROSY SIM rad와 다르다.
 다음 명령은 로컬 LeRobotDataset을 읽으며 네트워크를 사용하지 않는다.
 해당 venv에 LeRobot 0.4.4·PyAV가 필요하다. 장치 identity와 보정값을 추정하지 않는다.
 
+native reader는 `omx_follower`의 6관절과 `bi_omx_follower`의 12관절을 지원한다.
+양팔은 `arm_a.*` 6개 다음 `arm_b.*` 6개의 동일한 관절 순서를 사용해야 한다.
+state/action 이름·개수·순서가 robot_type과 다르면 거절하며 분할 출력도 원래 robot_type을 보존한다.
+실제 SDK의 양팔 합성 연결 범위와 한계는 [검증 기록](../../../docs/validation/omx-bimanual-native-cycle-2026-10-23/result.md)을 따른다.
+
 ```text
 python learning/curation/omx/native_review.py inspect <dataset-root> --repo-id local/omx-pick --body-units normalized_-100_100 --rig-revision <rig-revision> --calibration-revision <calibration-revision> --source-mode leader_native --out <new-review-directory>
 ```
@@ -63,6 +78,11 @@ python learning/curation/omx/native_review.py inspect <dataset-root> --repo-id l
 선택적으로 final test를 `split=test`로 분리할 수 있다. 이때 train/eval/test가 모두 비어 있지 않아야 한다.
 출처를 생략한 검사는 `unverified_native`를 기록하며 학습용 분할을 거절한다.
 검토 명령은 body 단위를 변환하지 않는다. 선언한 rig/보정은 실물 검증 증거가 아니다.
+
+`--calibration <follower.json>`(양팔은 `arm_a=<a.json> arm_b=<b.json>`)을 주면 [D-854](../../../docs/adr/D-854-omx-policy-runner-and-action-space.md)
+행동 단위 선언 `action_space`(`lerobot_norm_v1`, omx_follower 모터 순서, 보정 range digest)를 `inspection.json`에 남긴다.
+정규화 데이터만 선언할 수 있고, 분할과 구간 선택은 선언을 그대로 다시 확인한다. 선언 없는 보고서는 지금처럼 동작한다.
+VLA 학습 입구에서 선언을 필수로 하는 일은 D-854 정책 실행기 단계에서 한다. SIM rad 데이터셋은 변환하지 않는다.
 
 ```text
 python learning/curation/omx/native_review.py split <dataset-root> --report <review-directory>/inspection.json --decisions <review-directory>/decisions.json --out <new-split-directory>
@@ -110,6 +130,7 @@ final test는 학습·eval 지표 계산에서 제외한다. 모델은 예시의
 원본을 다시 검증하고 새 디렉터리에 분할해야 한다.
 
 `evaluation.json`은 native 단위의 관절별 MAE와 train 평균 상수 기준선이다.
+train/eval의 관절 layout이 같아야 하며 결과의 `joint_names`와 MAE 배열은 해당 6/12관절 순서다.
 실물 과제 성공률은 `null`로 유지한다. 결과는 offline-only이며 장치 실행·승격·업로드를 하지 않는다.
 
 ## 학습과 저장된 모델 확인
@@ -134,14 +155,22 @@ python learning/registry/policy/hub_sync.py upload <new-bundle>
 
 `prepare`는 선택 파일만 snapshot하고 manifest를 출력한다. 목록·대상·내용을 검토한 후에만
 `upload`를 실행한다. 완전한 LeRobot dataset은 meta/data/videos의 필요한 파일을 전부 선택해야 한다.
-도구는 dataset의 완결성을 대신 판단하지 않으며, 부분 파일 전송도 byte receipt만 발급한다.
+일반 dataset의 완결성은 별도로 검사하며 부분 파일 전송은 byte receipt만 발급한다.
+`lerobot_export.py`의 OMX export는 `rosy_export.json`, 원본 `rosy_provenance/`, SIM이면
+`rosy_sim_truth/`까지 전체 파일을 선택해야 한다. 누락된 원본 증거는 전송 전에 거부한다.
+파일이 많으면 검토한 상대 POSIX 경로 문자열의 JSON 배열을 `--file-list <files.json>`으로
+전달한다(`--file`과 함께 사용하지 않는다). 이 목록은 export 밖에 보존한다.
 기존 private 저장소만 허용하고 새 저장소 생성·가시성 변경은 하지 않는다.
 commit SHA를 고정해 재다운로드·hash 비교 후 `receipt.json`을 만든다.
 중단된 다운로드는 동일 bundle로 재시도한다. `upload.json`이 있으면 같은 commit을 재검증한다.
 성공 receipt가 있는 bundle은 다시 전송하지 않는다. 원본·이전 receipt는 보존한다.
-`bytes_verified=true`는 형식/품질 검증이 아니다. reader 검증 필드는 false로 남는다.
-다운로드한 `readback/`을 다시 `native_review.py inspect`에 넣거나 공식 model loader로 읽는다.
-이 별도 보고서를 Hub receipt와 함께 보존해야 왕복 검증이 완료된다.
+`bytes_verified=true`는 형식/품질 검증이 아니다. OMX export는 준비·전송 직전·고정 commit
+재다운로드 후에 원본 시연과 SIM 과제 증거를 다시 검사하고 LeRobot 0.4.4 reader로 모든
+RGB·원본 시각·state/action·관절 순서를 비교한다. 통과한 receipt만 `reader_verified=true`와
+`reader` 보고서를 가진다. 전용 LeRobot 환경에서 실행하며 ROS 환경에 설치하지 않는다.
+그 밖의 dataset/model은 `reader_verified=false`다. 다운로드한 `readback/`을
+`native_review.py inspect` 또는 공식 model loader로 읽고 별도 보고서를 receipt와 보존한다.
+reader 통과는 독립 정책 과제 성공·승격·장치 실행 승인이 아니다.
 
 ## Spaces와 Pilot
 
@@ -230,6 +259,7 @@ dataset의 action은 guard가 실제로 보낸 명령이고 `teacher/trajectory.
 합친 dataset `meta/info.json`의 폭·높이(이름 붙은 축으로 읽음)·fps와 다르면 거절한다. 통과하면 `{역할: revision}`만
 `inspection.json`·`capture.json`의 `camera_setup`에 남긴다. `camera_identity`(시리얼일 수 있음)와 경로는 남기지 않는다.
 이 첫 조각은 프레임을 기준과 비교하지 않으며 `camera-setup.json`도 쓰지 않는다. 옵션이 없으면 출력은 예전과 같다.
+같은 옵션을 LeRobot 세션용 `prepare`에 주면 뜻이 다르다: 사진(`.jpg`)이 있는 기준 JSON으로 프레임을 섀도 비교해 `camera-setup.json`을 쓰고, 거절하지 않는다(`camera_setup_intake.py`).
 정적 episode·`DO_NOT_TRAIN.txt` 규칙은 리더 녹화와 같다.
 
 ## 학습센터에서 파지 구간 검수

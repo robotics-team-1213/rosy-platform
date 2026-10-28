@@ -21,15 +21,19 @@ from pathlib import Path
 from typing import Callable, Optional, Sequence
 
 from fleet.server.console_builders import build_pairing as _build_pairing
+from fleet.server.context_options import activate_from_args, add_cli_arguments
 from fleet.server.sightings_config import _relax_retired_sighting_targets
+from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled, _realign_config
+from fleet.console_site_config import (_build_site_map, _goal_lease_ttl_s, _policy_admission_core,
+                                       _lane_compliance_config, _map_pose_config, _trip_config)
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
 from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint, load_robots
-from fleet.swarm.session import FormationSession, FormationSpec, HoldPolicy, SessionError
+from fleet.swarm.session import FormationSession
+from fleet.swarm.api.types import FormationSpec, HoldPolicy, SessionError
 from fleet.swarm.transport import HttpRobotClient
-
 
 def default_web_common() -> Path:
     """Resolve installed assets first, with a source-tree fallback for host tools.
@@ -153,6 +157,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="SQLite path for durable CORE Agent event history")
     console.add_argument("--tasks-db", default=None, type=Path,
                          help="SQLite path for durable operator and policy task history")
+    console.add_argument("--control-unit-config", default=os.environ.get("ROSY_CONTROL_UNIT_CONFIG") or None, type=Path,
+                         help="optional static control-unit ownership and direct-neighbor configuration")
+    add_cli_arguments(console)
     console.add_argument("--robot-credential-key-file", default=None, type=Path,
                          help="base64 AES key sealing enrolled robot tokens (D-361); needs --tasks-db")
     console.add_argument("--mission-api", action="store_true",
@@ -474,7 +481,7 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--robots is required unless --robot-credential-key-file is set")
     endpoints = []
     if args.robots is not None:
-        endpoints = load_robots(args.robots, allow_empty=key_file is not None)
+        endpoints = load_robots(args.robots, allow_empty=bool(key_file or getattr(args, "control_unit_config", None)))
         _warn_if_world_readable(args.robots)
     enrollment_store = robot_key = robot_key_text = robot_key_error = None
     if key_file is not None:
@@ -667,12 +674,14 @@ def run_console(args: argparse.Namespace) -> None:
     if getattr(args, 'notifications_config', None) is not None:
         from fleet.incidents.notifications import NotificationConfig
         notification_config = NotificationConfig.load(args.notifications_config)
+    activate_from_args(args)
     workcell_observations = None
     observation_config = getattr(args, "workcell_observations", None)
     if observation_config is not None:
         from fleet.server.workcell_observation_config import load_workcell_observations
         workcell_observations = load_workcell_observations(observation_config)
     app = create_app(console, console_token=console_token, web_common=args.web_common,
+                     control_unit_config=getattr(args, "control_unit_config", None),
                      workcell_observations=workcell_observations,
                      hub=hub, sightings=sighting_service, tracking=tracking_service,
                      calibration_drift_watch=calibration_drift_watch, task_service=task_service,
@@ -696,7 +705,7 @@ def run_console(args: argparse.Namespace) -> None:
                      ai_facts_acting=_stuck_resolver_enrolled(args, "ai_facts_acting"),
                      ai_first=_ai_first(args),
                      autonomous_robots=_stuck_resolver_enrolled(args, "autonomous_robots"),
-                     central_registry=central_registry,
+                     policy_admission_core=_policy_admission_core(args), central_registry=central_registry,
                      development_sessions=development_sessions,
                      site_maps=site_maps, routing_config=routing_config,
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
@@ -724,127 +733,7 @@ def _omx_instances() -> dict[str, str]:
     return dict(pairs)
 
 
-def _goal_lease_ttl_s(args) -> float:
-    """D-550 10: ``fleet.goal_lease_ttl_s`` of ``--site-config``; 0 (default) = no goal lease.
-    Otherwise floor..5 s: CORE takes at most 5 s; the floor is 2 x ``fleet.trip.port_timeout_s`` +
-    ``period_s`` (3.5 s by default), so a trip step that times out once on its pose read and once
-    on its renewal still renews before the lease runs out."""
-    import yaml
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        value = (site_config.get("fleet") or {}).get("goal_lease_ttl_s", 0)
-    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"goal lease config: {exc}")
-    trip = _trip_config(args)
-    floor = 2 * trip.port_timeout_s + trip.period_s
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
-            value == 0 or floor <= value <= 5):
-        sys.exit(f"goal lease config: fleet.goal_lease_ttl_s must be 0 (off) or {floor:g}..5")
-    return float(value)
-
-
-def _ai_first(args):
-    """D-610 3: ``fleet.ai_first`` of ``--site-config`` (robots default empty, keep_gates default trip_wait_only)."""
-    import yaml
-
-    from fleet.stuck.ai_first import AiFirst
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return AiFirst.from_config((site_config.get("fleet") or {}).get("ai_first"))
-    except (OSError, TypeError, AttributeError, ValueError, yaml.YAMLError) as exc:
-        sys.exit(f"ai_first config: {exc}")
-
-
-def _stuck_resolver_enrolled(args, key: str = "enrolled_robots") -> frozenset:
-    """``fleet.stuck_resolver.<key>`` of ``--site-config``, a robot id list. ``enrolled_robots``: enrolled
-    robots (D-361) the resolver answers with Fleet's enrolled CORE credential. ``ai_facts_acting``: robots
-    whose acting AI facts may stop a resolver back-off (D-577 7). Empty (default) = none."""
-    import yaml
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        section = (site_config.get("fleet") or {}).get("stuck_resolver") or {}
-        ids = section.get(key) or []
-    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"stuck resolver config: {exc}")
-    if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids):
-        sys.exit(f"stuck resolver config: fleet.stuck_resolver.{key} must be a list of robot ids")
-    return frozenset(ids)
-
-
-def _realign_config(args):
-    """D-622 opt-in standalone recovery; empty areas and robot list by default."""
-    import yaml
-    from fleet.stuck.realign import RealignConfig
-    try:
-        site = (yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-                if getattr(args, "site_config", None) else {})
-        return RealignConfig.from_mapping((site.get("fleet") or {}).get("stuck_resolver"))
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"realign config: {exc}")
-
-
-def _trip_config(args):
-    """D-494 5: the trip loop's ``fleet.trip`` section of ``--site-config`` (e.g. ``stall_s``)."""
-    import yaml
-
-    from fleet.server.trip_runner import TripConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        trip = (site_config.get("fleet") or {}).get("trip") if isinstance(site_config, dict) else None
-        return TripConfig.from_mapping(trip)
-    except (OSError, ValueError, TypeError, yaml.YAMLError) as exc:
-        sys.exit(f"trip config: {exc}")
-
-
-def _build_site_map(args, tasks_db):
-    """D-488/D-490: site map store (+ first import) and the planner's ``fleet.routing`` costs."""
-    from fleet.server.site_map_bootstrap import build_site_map
-    return build_site_map(args, tasks_db)
-
-
-def _map_pose_config(args):
-    """D-494 3: the site YAML's ``fleet.map_pose`` limits; defaults without a site config."""
-    import yaml
-
-    from rosy.world.state.projections.map_pose import MapPoseConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return MapPoseConfig.from_mapping((site_config.get("fleet") or {}).get("map_pose"))
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"map_pose config: {exc}")
-
-
-def _lane_compliance_config(args):
-    """D-511 2: the site YAML's ``fleet.lane_compliance`` thresholds; provisional defaults without."""
-    import yaml
-
-    from fleet.localization.lane_compliance import LaneComplianceConfig
-
-    try:
-        site_config = {}
-        if getattr(args, "site_config", None) is not None:
-            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
-        return LaneComplianceConfig.from_mapping((site_config.get("fleet") or {}).get("lane_compliance"))
-    except (OSError, ValueError, TypeError, AttributeError, yaml.YAMLError) as exc:
-        sys.exit(f"lane_compliance config: {exc}")
-
-
-def _main_impl(argv: Optional[Sequence[str]] = None) -> None:
+def run(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
     if args.command == "console":
         try:
@@ -860,12 +749,8 @@ def _main_impl(argv: Optional[Sequence[str]] = None) -> None:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
-    """Use the gateway app composition when installed, retaining the legacy fallback."""
-    try:
-        from rosy_gateway.compose import main as gateway_main
-    except ImportError:
-        return _main_impl(argv)
-    return gateway_main(argv)
+    """Run Fleet through its public execution interface."""
+    return run(argv)
 
 
 if __name__ == "__main__":

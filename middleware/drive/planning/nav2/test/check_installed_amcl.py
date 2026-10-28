@@ -30,7 +30,11 @@ def main():
         rclpy.spin_until_future_complete(node, future, timeout_sec=8)
         assert future.done() and future.result() is not None
         assert future.result().current_state.id == State.PRIMARY_STATE_UNCONFIGURED
-        assert ('amcl', namespace) in node.get_node_names_and_namespaces()
+        deadline = time.monotonic() + 8
+        while ('amcl', namespace) not in (observed := node.get_node_names_and_namespaces()):
+            if child.poll() is not None or time.monotonic() >= deadline:
+                raise RuntimeError(f'installed AMCL node was not discovered: {observed}')
+            rclpy.spin_once(node, timeout_sec=.1)
         for topic in ('cmd_vel', 'nav_cmd_vel'):
             owned = [info for info in node.get_publishers_info_by_topic(namespace + '/' + topic)
                      if info.node_name == 'amcl' and info.node_namespace == namespace]

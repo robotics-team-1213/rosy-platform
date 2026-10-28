@@ -23,7 +23,7 @@ COPY operations/fleet/ /opt/rosy/src/site/fleet/
 COPY integrations/messaging/discord/rosy_discord/ /opt/rosy/src/site/fleet/_source_roots/discord/rosy_discord/
 COPY operations/decision/ /opt/rosy/src/site/decision/
 COPY operations/site_execution/src/ /opt/rosy/src/site/site_execution/src/
-COPY operations/site_ui/console/ /opt/rosy/src/site/site_ui/console/
+COPY applications/fleet/web/ /opt/rosy/src/site/fleet/_source_roots/console/
 COPY operations/situation/rosy_situation/__init__.py operations/situation/rosy_situation/assessment.py operations/situation/rosy_situation/snapshot_assessment.py operations/situation/rosy_situation/fact_rules.py operations/situation/rosy_situation/wait_graph.py /opt/rosy/src/site/situation/rosy_situation/
 COPY operations/site_execution/src/rosy/execution/site/__init__.py operations/site_execution/src/rosy/execution/site/goal_evidence.py operations/site_execution/src/rosy/execution/site/workflow.py /opt/rosy/src/site/site_execution/src/rosy/execution/site/
 COPY operations/world/src/ /opt/rosy/src/operations/world/
@@ -31,7 +31,7 @@ COPY contracts/foundation/core_common/ /opt/rosy/src/contracts/foundation/core_c
 COPY contracts/learning/src/ /opt/rosy/src/contracts/learning/
 COPY contracts/skill/src/ /opt/rosy/src/contracts/skill/
 COPY operations/processes/palletizing/src/ /opt/rosy/src/processes/palletizing/
-COPY operations/apps/fleet/src/ /opt/rosy/apps/gateway/src/
+COPY applications/fleet/gateway/src/ /opt/rosy/apps/gateway/src/
 COPY shared/web/ /opt/rosy/web-common/
 # D-375 console map-fit overlay: site lane geometry, display only (--site-lane-graph/--site-lane-paint).
 COPY middleware/perception/map/map_v2_fleet/lane_graph.yaml middleware/perception/map/map_v2_fleet/meshes/road_lines.stl /opt/rosy/maps/map_v2_fleet/

@@ -2,7 +2,6 @@
 import asyncio
 import json
 import logging
-import random
 import re
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -11,6 +10,7 @@ from urllib.parse import urlsplit
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
+from core_common.link_retry import ReconnectBackoff, start_offset
 from .intake import project_message
 
 LOG = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class GatewayStop(Exception):
 
 
 @dataclass
-class DiscordGateway:
+class DiscordGateway(ReconnectBackoff):   # D-432 reconnect backoff (network load)
     token: str = field(repr=False)
     guild_id: str
     channel_id: str
@@ -88,7 +88,7 @@ class DiscordGateway:
             self.sequence = packet["s"]
 
     async def pulse(self, socket, interval):
-        await asyncio.sleep(interval * random.random())
+        await asyncio.sleep(start_offset(interval))
         while await self.heartbeat(socket):
             await asyncio.sleep(interval)
 
@@ -167,4 +167,4 @@ class DiscordGateway:
             except Exception:
                 LOG.error("Discord Gateway stopped after invalid transport state")
                 return
-            await asyncio.sleep(5)
+            await asyncio.sleep(self.reconnect_delay())

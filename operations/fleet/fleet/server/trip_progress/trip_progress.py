@@ -11,7 +11,7 @@ from typing import Optional
 from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.cost import STOP
 from fleet.server.trip_laps import hold_back_m
-from fleet.server.trip_ports import LiveTrip
+from fleet.server.trip_live import LiveTrip
 
 #: D-495 1: CORE is executing a junction manoeuvre; a new instruction would abort it. CORE's own
 #: ``recovery/junction/gate.py`` ``MANEUVER`` (incl. D-507 4 ``approaching``); test_trip_runner pins both.
@@ -76,17 +76,17 @@ class TripProgress:
         newer = isinstance(seq, int) and isinstance(sent["seq"], int) and seq > sent["seq"]
         return bool(sent.get("carried")) and (junction.get("state") == "idle" or newer)
 
-    def _arrived(self, live: LiveTrip, index: int, remaining: float, lane: bool) -> bool:
-        """Free: within the D-463 ``DONE_M``. Lane: our stop for this place was accepted, and the
-        robot is within ``arrive_lane_m``, or CORE holds that stop within ``pass_window_m``."""
+    def _arrived(self, live: LiveTrip, index: int, remaining: float, lane: bool, pose: MapPose) -> bool:
+        """Lane arrival needs our accepted stop and the actual pose within its stop destination."""
         if not lane:
             return remaining <= self.config.arrive_free_m
         sent = live.sent
         if sent is None or (sent["index"], sent["action"]) != (index, STOP):
             return False
-        holding = live.junction.get("seq") == sent["seq"] and live.junction.get("state") == "executing"
-        remaining -= hold_back_m(self.traffic, live.segments[index]) or 0.0  # D-517 3: it stops short of a zone
-        return remaining <= self.config.arrive_lane_m or (holding and remaining <= self.config.pass_window_m)
+        segment = live.segments[index]
+        stop_s = segment["s_to"] - (hold_back_m(self.traffic, segment) or 0.0)
+        x, y, _ = live.arc(index).point_at(stop_s)
+        return math.hypot(pose.x - x, pose.y - y) <= self.config.arrive_lane_m
 
     def _stalled(self, live: LiveTrip, index: Optional[int] = None, s: float = 0.0) -> bool:
         """No ``stall_m`` of progress for ``stall_s``; ``index`` None: the robot could not be located."""

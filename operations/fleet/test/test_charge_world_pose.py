@@ -101,6 +101,23 @@ def test_original_proof_expires_and_cannot_be_forged():
     asyncio.run(run())
 
 
+def test_new_revision_requires_new_odometry_scope_and_camera_anchor():
+    async def run():
+        source, poses, _, _, wall, active, facts = fixture()
+        original, old = await localized(source, poses, wall, facts)
+        wall.now += .1
+        active[1] = 'map-2'
+        current_facts = lambda: facts() | {'map_revision': 'map-2'}
+        assert await source.read(current_facts()) is None
+        assert not source.current(old, original)
+        assert await source.read(current_facts()) is None
+        sample, proof = await localized(source, poses, wall, current_facts)
+        assert proof is not None and source.current(proof, sample)
+        assert proof.map_revision == 'map-2' and proof.scope is not old.scope
+        assert proof.anchor_stamp > old.anchor_stamp
+    asyncio.run(run())
+
+
 def test_final_guard_cannot_rebind_issued_pose_to_other_facts():
     async def run():
         source, poses, _, _, wall, _, facts = fixture()

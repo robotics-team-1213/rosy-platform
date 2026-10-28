@@ -605,7 +605,7 @@ def test_console_page_and_its_assets_are_served():
     assert "ROSY FLEET" not in page.text
     assert "SITE CONSOLE" not in page.text
     # D-540 2: the site name is drawn by the shared header module for all four documents.
-    script = (Path(__file__).resolve().parents[2] / 'site_ui' / 'console' / "shared" / "fleet-header.js").read_text(encoding="utf-8")
+    script = (Path(__file__).resolve().parents[3] / 'applications/fleet/web' / "shared" / "fleet-header.js").read_text(encoding="utf-8")
     assert '$("fleet-name").textContent = fleet.name || "사이트";' in script
     assert client.get("/console/assets/fleet-header.js").status_code == 200
     assert client.get("/console/assets/fleet-header.css").status_code == 200
@@ -697,7 +697,7 @@ def test_every_console_module_import_is_served():
     import re
     from pathlib import Path
 
-    web = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
+    web = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
     client = _client(FakeRobot("rosy_01"))
     imported = set()
     spec = re.compile(r"""from\s+['"](?:\./|/console/assets/)([\w.-]+\.js)['"]""")

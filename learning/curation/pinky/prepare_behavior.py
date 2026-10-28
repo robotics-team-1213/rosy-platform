@@ -9,11 +9,17 @@ from pinky_episode import ref
 from verify_raw import verify
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def prepare(root, output):
     root, output = Path(root).resolve(), Path(output).resolve()
-    if (output.exists() or output.drive.upper() == 'F:' or output.is_relative_to(root)
+    if (output.exists() or _in_checkout(output) or output.is_relative_to(root)
             or root.is_relative_to(output)):
-        raise ValueError('new behavior input directory separate from source, outside F: required')
+        raise ValueError('new behavior input directory separate from source, outside the source checkout required')
     report = verify(root)  # Never trust an externally supplied pass report or marker.
     context = report['episode_context']  # Same validated object; no unchecked metadata reread.
     output.parent.mkdir(parents=True, exist_ok=True)

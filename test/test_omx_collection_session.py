@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 import sys
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,30 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'deploy/robot/omx'))
 
 
-class RehearsalClock:
-    def __init__(self):
-        self.ns = 1_700_000_000_000_000_000
-
-    def time_ns(self):
-        return self.ns
-
-    def time(self):
-        return self.ns / 1e9
-
-    monotonic = time
-
-    def sleep(self, seconds):
-        self.ns += round(seconds * 1e9)
-
-
 @pytest.fixture
-def module(monkeypatch):
+def module():
     spec = importlib.util.spec_from_file_location('collection_session', ROOT/'deploy/robot/omx/collection_session.py')
     result = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(result)
-    clock = RehearsalClock()
-    monkeypatch.setattr(result, 'time', clock)
-    monkeypatch.setattr(sys.modules[__name__], 'time', clock)
     return result
 
 
@@ -52,10 +34,10 @@ class Backend:
     mode = 'rehearsal'
     def __init__(self, fault=None):
         self.fault, self.commands, self.stops, self.n = fault, [], [], 0
+        self.clock = time
     def observe(self):
         self.n += 1
-        time.sleep(.001)
-        now = time.time_ns()
+        now = self.clock.time_ns()
         conditions = 'UNDEREXPOSED' if self.fault == 'dark' and self.commands else 'NORMAL'
         env = dict(policy='omx-photometric-v3', recorded_ns=now, expires_ns=now+750_000_000,
                    run_id='fixture-run', profile_sha256='a'*64, physical_acceptance=False,
@@ -93,11 +75,31 @@ def teacher():
     return dict(schema='rosy.omx-collection-teacher.v1', steps=[dict(positions=[.1]*6, duration_s=.2)])
 
 
-def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path):
+@pytest.mark.parametrize('storage_delay', [0, .6])
+def test_rehearsal_records_windows_original_images_and_never_claims_hardware(module, tmp_path, monkeypatch, storage_delay):
+    original = module.RawCollection.environment
+    receipts = 0
+    def environment(store, receipt):
+        nonlocal receipts
+        receipts += 1
+        if storage_delay and receipts == 2:
+            time.sleep(storage_delay)
+        return original(store, receipt)
+    monkeypatch.setattr(module.RawCollection, 'environment', environment)
     backend = Backend()
+    # Advance rehearsal time explicitly so host fsync latency cannot age fixture images.
+    clock_ns = [1_000_000_000]
+    def now():
+        clock_ns[0] += 1_000_000
+        return clock_ns[0]
+    def sleep(seconds):
+        clock_ns[0] += int(seconds * 1e9)
+    clock = SimpleNamespace(time_ns=now, monotonic=lambda: clock_ns[0] / 1e9, sleep=sleep)
+    backend.clock = clock
+    monkeypatch.setattr(module, 'time', clock)
     result = module.run_session(profile(), teacher(), tmp_path/'capture', backend)
     assert result['mode'] == 'rehearsal' and result['source_mode'] == 'simulation'
-    assert result['episodes'][0]['complete'] is True, result['episodes'][0]['reason']
+    assert result['episodes'][0]['complete'] is True
     assert result['episodes'][0]['frames'] >= 2
     assert result['episodes'][0]['start_ns'] < result['episodes'][0]['end_ns']
     assert result['episodes'][0]['outcome'] == 'unknown'

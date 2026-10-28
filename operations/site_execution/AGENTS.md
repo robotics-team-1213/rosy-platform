@@ -26,7 +26,7 @@ None beyond `src/`.
 ### Working In This Directory
 
 - Project authority that already exists. Do not add a new publisher or a stop fence here.
-- The site gateway (`operations/apps/fleet/`) depends on this wheel. A signature change has to install there too.
+- The site gateway (`applications/fleet/gateway/`) depends on this wheel. A signature change has to install there too.
 
 ### Testing Requirements
 
@@ -42,7 +42,7 @@ Two namespace packages in one wheel: `api` and `site`.
 
 - `contracts/skill/`.
 - `contracts/foundation/` for progress wire serialization.
-- Used by `operations/apps/fleet/` and palletizing.
+- Used by `applications/fleet/gateway/` and palletizing.
 
 ### External
 

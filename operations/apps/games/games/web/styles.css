@@ -54,7 +54,7 @@ h1 {
 .score {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   margin: 0 var(--space-5) var(--space-3);
   background: var(--score-gap);
@@ -67,6 +67,7 @@ h1 {
 
 .score span {
   display: block;
+  overflow-wrap: anywhere;
   font-size: var(--text-label);
   color: var(--mute);
 }
@@ -125,8 +126,6 @@ h1 {
   font-size: var(--text-label);
 }
 
-#score-evidence[hidden] { display: none; }
-
 #pitch {
   display: block;
   /* D-201 — 초점 문법: 초점 물체는 줄어들 수 있어도 보드를 스크롤하게 만들 수는
@@ -179,8 +178,6 @@ h1 {
   border-radius: var(--radius-button);
 }
 
-#frame[hidden] { display: none; }
-
 /* 칸 폭이 칩보다 좁아지면 네 칸을 고집하지 않고 줄 수를 늘린다 — 320px에서 nowrap 칩이
    칸 밖으로 넘치던 것을 막는다(D-359 §6.6). 넓은 칸에서는 한 줄 네 칸을 넘지 않는다. */
 .chips {
@@ -226,7 +223,6 @@ h1 {
   color: var(--text-on-danger);
   font-weight: var(--weight-label);
 }
-.lost[hidden] { display: none; }
 
 /* D-741 3·4 — 정지는 앱 바의 마지막 조작이다(D-201의 아래 붙박이 줄을 바꾼다). 머리는 붙박이라
    스크롤해도 정지가 남는다. 스페이스 안내와 요청 결과는 같은 머리의 아랫줄이다. */
@@ -262,7 +258,6 @@ ui-shell[grammar="focal"] ui-topbar {
 #halt-status[data-state="error"] { color: var(--status-crit); }
 
 #halt { min-width: 96px; }
-#halt[hidden], #account-login[hidden], #account-logout[hidden] { display: none; }
 #account-login, #account-logout { grid-column: 5; grid-row: 1; }
 #halt { grid-column: 6; grid-row: 1; }
 

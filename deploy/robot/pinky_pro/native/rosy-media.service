@@ -1,0 +1,49 @@
+[Unit]
+Description=ROSY optional robot media publisher (D-789 WebRTC, own cgroup)
+# Started beside the camera (rosy-camera Wants= it) but never part of the runtime:
+# a media crash or restart stops video only, never CORE, I/O or the camera.
+After=network-online.target rosy-camera.service
+Wants=network-online.target
+# Robots without site media stay on JPEG: no config file, no media process.
+ConditionPathExists=/etc/rosy/media/rosy-media.json
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# Same user as the camera owner only to read its 0600 frame mailbox; no device access.
+User=rosy-camera
+Group=rosy-camera
+EnvironmentFile=/etc/rosy/runtime.env
+RuntimeDirectory=rosy-media-worker
+RuntimeDirectoryMode=0700
+Environment=HOME=/run/rosy-media-worker
+Environment=PYTHONNOUSERSITE=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+WorkingDirectory=/opt/rosy/current
+ExecStart=/usr/bin/bash --noprofile --norc -c 'source /opt/ros/jazzy/setup.bash && source /opt/rosy/current/install/setup.bash && exec /usr/bin/python3 -m rosy_media_edge.worker /etc/rosy/media/rosy-media.json'
+# Bounded restart backoff: 2 s growing to 30 s, never giving up (StartLimitIntervalSec=0).
+Restart=always
+RestartSec=2
+RestartSteps=5
+RestartMaxDelaySec=30
+TimeoutStopSec=5
+# D-789 T5 resource boundary: one CPU and 256 MiB; control keeps priority.
+MemoryMax=256M
+MemorySwapMax=0
+CPUQuota=100%
+CPUWeight=50
+Nice=5
+UMask=0077
+
+NoNewPrivileges=true
+PrivateDevices=true
+DevicePolicy=closed
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK

@@ -142,9 +142,9 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
     for ident in GLYPH_TOKEN:
         assert assets.get(f"icons/{ident}.svg") == "image/svg+xml"
     pages = {
-        "operations/site_ui/console/index.html": "console",
-        "operations/site_ui/console/install.html": "console",
-        "operations/site_ui/console/cell/cell.html": "console",
+        "applications/fleet/web/index.html": "console",
+        "applications/fleet/web/installation/install.html": "console",
+        "applications/fleet/web/cell/cell.html": "console",
         "middleware/robot_ui/robot/index.html": "robot",
         "middleware/robot_ui/robot/surface.html": "robot",
         "middleware/robot_ui/pilot/index.html": "pilot",

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,7 +29,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
                  "candidate_signing.py", "sign_candidate.py",
                  "verify_candidate.py",
-                 "discovery-token.template.txt", "site_db.py",
+                 "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
@@ -72,10 +73,14 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert manifest["source_commit"] == COMMIT
     assert manifest["image_tag"] == COMMIT
     assert manifest["platform"] == "linux/amd64"
-    assert len(manifest["images"]) == 3
+    assert len(manifest["images"]) == 4
     assert all(item["image_id"].startswith("sha256:") for item in manifest["images"].values())
     assert all(item["sbom_sha256"] for item in manifest["images"].values())
     assert manifest["image_archive_sha256"]
+    assert manifest["site_users_tool_required"] is True
+    assert (output / "deploy/site/site_users.py").read_bytes() == (site / "site_users.py").read_bytes()
+    assert manifest["deployment_file_sha256"]["site_users.py"] == sha256(
+        (site / "site_users.py").read_bytes()).hexdigest()
     assert "compose.workcell.yaml" in manifest["deployment_file_sha256"]
     assert (output / "release.json").is_file()
     assert (output / "images.tar").is_file()
@@ -100,7 +105,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
         "verify_candidate.py",
         "candidate_signing.py", "sign_candidate.py",
-        "discovery-token.template.txt", "site_db.py",
+        "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account",
     }
@@ -152,7 +157,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "site-firewall.py", "rosy-site-firewall.service", "rosy-site-firewall-failclosed.service",
                  "rosy-site-firewall-check.service", "rosy-site-firewall-check.timer",
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
-                 "discovery-token.template.txt", "site_db.py",
+                 "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
                  "compose.account.yaml", "Caddyfile.account",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy"):
@@ -237,7 +242,8 @@ def test_site_candidate_syft_sbom_keeps_the_scout_file_layout(tmp_path):
 
     syft_calls = [call for call in calls if call[0] == "syft"]
     assert [call[2] for call in syft_calls] == [
-        f"docker:rosy-site-{service}:{COMMIT}" for service in ("fleet", "vision", "proxy")]
+        f"docker:rosy-site-{service}:{COMMIT}"
+        for service in ("fleet", "vision", "proxy", "postgres")]
     assert not any(call[1:2] == ["scout"] for call in calls)
     for service, row in manifest["images"].items():
         assert row["sbom"] == f"sbom/{service}.spdx"
@@ -285,12 +291,26 @@ def test_ignored_file_guard_covers_every_path_the_images_copy():
 
     root = Path(__file__).resolve().parents[1]
     paths = _image_source_paths(root / "deploy" / "site")
+    assert not [path for path in paths if not (root / path).exists()], "image COPY source is missing"
 
     for expected in ("deploy/site", "operations/fleet", "operations/world/src", "operations/overhead/rosy_vision",
                      "operations/apps/games/games", "shared/web",
-                     "contracts/foundation/core_common", "operations/apps/fleet/src",
+                     "contracts/foundation/core_common", "applications/fleet/gateway/src", "applications/fleet/web",
                      "middleware/perception/map/map_v2_fleet/meshes/road_lines.stl"):
         assert expected in paths, expected
+
+
+def test_image_copy_source_guard_detects_a_missing_application_holder(monkeypatch):
+    missing = Path(__file__).resolve().parents[1] / "applications/fleet/web"
+    exists = Path.exists
+    assert missing.exists()
+    with monkeypatch.context() as mutation:
+        mutation.setattr(Path, "exists", lambda path: False if path == missing else exists(path))
+        assert not missing.exists()
+        with pytest.raises(AssertionError, match="image COPY source is missing"):
+            test_ignored_file_guard_covers_every_path_the_images_copy()
+    assert missing.exists()
+    test_ignored_file_guard_covers_every_path_the_images_copy()
 
 
 def test_site_candidate_refuses_ignored_files_under_an_image_source_path(tmp_path):

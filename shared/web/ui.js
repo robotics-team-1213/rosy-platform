@@ -1,8 +1,8 @@
 // 빌드 없는 공용 조작 부품. 그림자는 쓰지 않는다 — 자식 글자와 기존 리스너가
 // 요소 자체에 남는다. 색과 크기는 components.css 가 tokens.css 로 그린다.
-
 import { createConfirmIrreversible } from "/common/confirmation.js";
 import { disjointRectangles } from "/common/live-dialog-geometry.js";
+import "/common/ui-wiring.js";  // document-level wiring: theme cycle button, Enter submits a form
 const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
 const BUTTON_SIZES = ["secondary", "primary", "irreversible"];
 const KIND_SIZES = { primary: "primary", irreversible: "irreversible" };
@@ -91,7 +91,7 @@ class UiButton extends HTMLElement {
     if (BUTTON_SIZES.includes(size)) delete this.dataset.sizeMissing;
     else this.dataset.sizeMissing = "true";
     const off = this.disabled;
-    this.tabIndex = off ? -1 : 0;
+    this.tabIndex = off || this.matches('[role="tab"][aria-selected="false"]') ? -1 : 0;
     this.setAttribute("aria-disabled", off ? "true" : "false");
     this._syncReason();
   }
@@ -605,19 +605,19 @@ export function actionIcon(button, name) {
   const paths = {
     fleet: "M9 9h6v6H9zM3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4zM7 7l2 2M15 9l2-2M7 17l2-2M15 15l2 2",
     map: "M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2zM9 3v16M15 5v16",
-    install: "M4 13h16v8H4zM12 2v12M8 10l4 4 4-4M8 17h8",
+    install: "M15 12l-8.5 8.5a2.12 2.12 0 0 1-3-3L12 9M17.64 15 22 10.64M20.91 11.7l-1.25-1.25a3.2 3.2 0 0 1-.93-2.25v-.86L16 4.6a5.56 5.56 0 0 0-3.94-1.64H9l.92.82A6.18 6.18 0 0 1 12 8.4v1.56l2 2h2.47l2.26 1.91",
     cell: "M3 3h18v18H3zM7 17v-4l5-6 5 4M7 13l5 4M12 7h.01M17 11h.01",
     notification: "M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 21h4M12 2v2",
     history: "M3 3v5h5M3 8a9 9 0 1 1-1 7M12 7v5l3 2",
     connect: "M9 15l6-6M7 13l-2 2a4 4 0 0 0 6 6l2-2M11 5l2-2a4 4 0 0 1 6 6l-2 2",
     login: "M3 12h12M11 8l4 4-4 4M19 4v16",
-    account: "M4 6h16v12H4zM8 10h8M8 14h5",
+    account: "M12 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM20 21a8 8 0 0 0-16 0",
     logout: "M9 12h12M17 8l4 4-4 4M5 4v16",
     wifi: "M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a6 6 0 0 1 8 0M12 20h.01",
-    fit: "M4 4h16v16H4zM8 8h8v8H8z",
+    fit: "M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3M9 9h6v6H9z",
     expand: "M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6",
-    tools: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M8 15v6",
-    settings: "M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M7 15v4",
+    tools: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z",
+    settings: "M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4",
     "theme-dark": "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
     "theme-light": [
       {d: "M12,8 A4,4 0 1,1 12,16 A4,4 0 1,1 12,8 Z"},
@@ -670,7 +670,7 @@ export function actionIcon(button, name) {
     obstacle: "M12 3 21 20H3zM12 9v5M12 17h.01",
     next: "M4 12h16m-7-7 7 7-7 7",
     list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
-    box: "M4 4h16v16H4zM9 9h6v6H9z",
+    box: "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.3 7 12 12l8.7-5M12 22V12",
     area: "M4 18 8 5l12 3-3 12zM4 18h.01M8 5h.01M20 8h.01M17 20h.01",
     pixels: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
     folder: "M3 7V5h7l2 2h9v12H3z",

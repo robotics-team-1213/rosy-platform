@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { approvalBody, relationshipText } from '../../../site_ui/console/camera-peer.js';
+import { approvalBody, relationshipText } from '../../../../applications/fleet/web/installation/camera-peer.js';
 
 test('approval requires named receiver owner, pending revision and selected source', () => {
   const row = {state:'pending',revision:2};

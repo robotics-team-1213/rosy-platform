@@ -13,6 +13,12 @@ from rosy.contracts.learning import seal, validate_dataset  # noqa: E402
 from rosy.contracts.learning.pinky import validate_profile, validate_recording  # noqa: E402
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def ref(path, root):
     digest = hashlib.sha256()
     with path.open('rb') as stream:
@@ -27,8 +33,8 @@ def convert(raw, metadata, output, *, environment, clock_domain):
     if environment not in ('sim', 'real') or not clock_domain or (
             environment == 'real' and clock_domain in ('gazebo_sim', 'isaac_sim')):
         raise ValueError('explicit environment and compatible source clock required')
-    if output.drive.upper() == 'F:':
-        raise ValueError('artifact output belongs outside source drive F:')
+    if _in_checkout(output):
+        raise ValueError('artifact output belongs outside the source checkout')
     if output.exists() or any(output.is_relative_to(path) or path.is_relative_to(output)
                               for path in (raw, metadata.parent)):
         raise ValueError('new separate output directory required')

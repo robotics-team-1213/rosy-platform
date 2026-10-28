@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 
 
 def ssh_command(alias):
@@ -24,9 +25,9 @@ def verdict(result):
 def checked_output(path, root=None):
     path = path.resolve()
     if root is None and os.name == 'nt':
-        root = Path('X:/DevTemp')
+        root = Path(os.environ.get('ROSY_SCRATCH') or tempfile.gettempdir())
     if root is not None and not path.is_relative_to(root.resolve()):
-        raise ValueError('Windows evidence belongs under X:/DevTemp')
+        raise ValueError('Windows evidence belongs under ROSY_SCRATCH or the system temp directory')
     if path.exists():
         raise ValueError('Output exists; use a new run filename')
     return path

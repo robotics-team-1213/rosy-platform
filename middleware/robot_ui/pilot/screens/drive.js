@@ -1,12 +1,12 @@
 // 주행 화면(D-323 T7). 2축 스틱·홀드 페달·제자리 회전·게임패드·키보드가 모두 같은
 // hold-to-drive 원칙 아래 stick.js 매핑을 공유한다. 상태 채널은 link.js,
-// 영상은 vision.js(인증 JPEG 폴링). 서버 텍스트로 HTML 을 만들지 않는다.
+// 영상은 drive-video.js(WebRTC 기본, JPEG 폴링 폴백). 서버 텍스트로 HTML 을 만들지 않는다.
 //
 // 부호: angular > 0 은 반시계(좌회전, REP-103). 화면 오른쪽 입력은 우회전이어야
 // 한다 — 변환은 stick.js 한 곳에서만 한다.
 
 import {postJson, whoami, api as apiGet, authHeaders, token} from "../client.js";
-import {createDriverStream, STREAM_STALE_WARN_MS} from "../vision.js";
+import {mountDriveVideo} from "./drive-video.js";
 import {createDeviceSession} from "../link.js";
 import {createModelStatus, renderModels} from "../models.js";
 import {driverFor} from "../drivers/registry.js";
@@ -105,12 +105,12 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     if (velocityState === "fresh" || velocityState === "delayed") {
       element.speed.textContent = Math.abs(velocity.linear).toFixed(2);
       const turn = velocity.angular * DEG;
-      const direction = turn > 0.5 ? "↺" : turn < -0.5 ? "↻" : "·";
-      element.turn.textContent = `${direction} ${Math.abs(turn).toFixed(0)}°/s`
+      const direction = turn > 0.5 ? "좌 " : turn < -0.5 ? "우 " : "";
+      element.turn.textContent = `${direction}${Math.abs(turn).toFixed(0)}°/s`
         + (velocityState === "delayed" ? ` · 지연${ageText(frame, "velocity")}` : "");
     } else {
       element.speed.textContent = "—";
-      element.turn.textContent = velocityState === "disconnected" ? "· 속도 연결 끊김" : "· 속도 정보 없음";
+      element.turn.textContent = velocityState === "disconnected" ? "속도 연결 끊김" : "속도 정보 없음";
     }
 
     const percent = frame?.battery?.percent;
@@ -214,52 +214,9 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   });
   session.open();
 
-  // --- 영상: 인증 JPEG 폴링 --------------------------------------------------
+  // --- 영상(D-789 T4): drive-video.js — 사이트 미디어가 있으면 WebRTC, 없으면 D-368 경로 ------
   const {capture, vision, acceptPreview} = mountBrowserRecording({element, apiGet, authHeaders});
-
-  // --- D-368: 운전자 MJPEG 스트림(폴링 대체, 끊기면 자동 복귀) ----------------
-  // 운전자 판정은 서버가 한다(409 = 운전자 아님·이미 열림). 이 화면은 결과만 따른다:
-  // 스트림이 붙으면 폴링을 끊고, 끊기면 폴링으로 돌아가 잠시 뒤 다시 시도한다.
-  // 주석 쌍(annotated) 캡처는 원본 짝이 필요해 폴링만 가능하다 — raw 모드에서만 스트림.
-  const videoFact = el("span", "영상 폴링", {"data-drive-fact": "video"});
-  root.querySelector("[data-drive-facts]")?.append(videoFact);
-  let streamAlive = true;
-  let streaming = false;
-  let retryTimer = null;
-  function tryStream() {
-    if (!streamAlive || streaming) return;
-    if (capture.state().previewMode !== "raw") return;
-    stream.start(false);
-  }
-  function scheduleStreamRetry(ms = 3000) {
-    if (!streamAlive) return;
-    clearTimeout(retryTimer);
-    retryTimer = setTimeout(tryStream, ms);
-  }
-  const stream = createDriverStream({
-    headers: () => authHeaders(),
-    onFrame: (url, meta) => {
-      if (!streaming) {
-        streaming = true;
-        vision.stop();   // 스트림이 붙었다 — 폴링의 대역폭을 돌려준다
-      }
-      acceptPreview(url, {blob: meta.blob, rawBlob: meta.blob, sequence: meta.seq,
-                          source: meta.source, capturedAt: meta.capturedAt, previewMode: "raw"});
-    },
-    onStats: ({fps, ageMs}) => {
-      videoFact.hidden = false;
-      videoFact.textContent = `영상 ${fps}fps${ageMs == null ? "" : ` · ${Math.round(ageMs)}ms`}`;
-      videoFact.dataset.stale = String(ageMs != null && ageMs > STREAM_STALE_WARN_MS);
-    },
-    onLost: ({status}) => {
-      streaming = false;
-      videoFact.textContent = status === 409 ? "영상 폴링 · 운전자 아님" : "영상 폴링";
-      videoFact.dataset.stale = "false";
-      vision.start();    // 폴링 복귀(D-368 §5) — start()는 이미 돌면 아무것도 안 한다
-      scheduleStreamRetry();
-    },
-  });
-  tryStream();
+  const driveVideo = mountDriveVideo({root, element, capture, vision, acceptPreview});
 
   // --- 모델(D-423 §3.6): 읽기 전용 상태, 교체는 rosy_ml CLI ------------------
   const modelPanel = document.createElement("details");
@@ -533,17 +490,17 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   if (announced.max_linear != null || announced.max_angular != null) setServerLimits(withProfileLimits(null));
   loadLimits();
 
-  // --- 로봇 상태 폴링: 실측 속도·회전율 ---------------------------------------
+  // --- 로봇 상태 폴링(폴백): /ws/state(10 Hz)가 1초 넘게 조용할 때만 REST로 실측 속도·회전율을 읽는다 ---
   const stateTimer = setInterval(async () => {
+    if (Date.now() - lastSocketReadbackAt < READBACK_GAP_MS) return;
     const state = await apiGet("/api/v1/robot/state", {timeoutMs: READBACK_GAP_MS}).catch(() => null);
+    if (Date.now() - lastSocketReadbackAt < READBACK_GAP_MS) return;   // 그 사이 소켓 값이 왔다: 소켓이 이긴다
     if (!state || state.status !== 200) {
-      if (Date.now() - lastSocketReadbackAt >= READBACK_GAP_MS) {
-        renderTelemetry(null);
-        element.mode.textContent = "—";
-        if (session.state() === "OPEN") {
-          element.state.textContent = "상태 수신 없음";
-          element.state.dataset.readback = "silent";
-        }
+      renderTelemetry(null);
+      element.mode.textContent = "—";
+      if (session.state() === "OPEN") {
+        element.state.textContent = "상태 수신 없음";
+        element.state.dataset.readback = "silent";
       }
       return;
     }
@@ -565,13 +522,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
   browserLabel.append(browserMode); element.browserMode = browserMode;
   browserMode.addEventListener("change", () => {
     if (!capture.setPreviewMode(browserMode.value)) browserMode.value = capture.state().previewMode;
-    else {
-      streaming = false;
-      stream.stop();       // 주석 쌍 모드는 스트림이 못 섬긴다 — 폴링 짝으로 갈아탄다
-      vision.stop(); vision.start();
-      if (browserMode.value === "raw") scheduleStreamRetry(500);
-      else videoFact.textContent = "영상 폴링";
-    }
+    else driveVideo.previewModeChanged(browserMode.value);   // 주석 쌍은 폴링만 섬긴다
   });
   const shotButton = el("ui-button", "촬영", {type: "button", "data-evidence-shot": ""});
   shotButton.setAttribute("kind", "quiet");
@@ -760,9 +711,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
       return gate.disengage((path, body) => postJson(path, body, {timeoutMs: MODE_TIMEOUT_MS})).catch(() => null);
     });
     clearTimeout(whoamiTimer);
-    streamAlive = false;
-    clearTimeout(retryTimer);
-    stream.stop();
+    driveVideo.stop();
     vision.stop();
     models.stop();
     perception.dispose();

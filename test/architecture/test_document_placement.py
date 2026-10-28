@@ -81,9 +81,10 @@ _LAB_ENDPOINTS = (
 )
 _LAB_ROBOT_LAN = ("192.168.1.201", "192.168.1.202")
 
-# DESIGN.md is the shared visual guide D-359 §8 places at the repo root.
+# DESIGN.md is the shared visual guide D-359 §8 places at the repo root. conftest.py reports sys.path inserters
+# for every suite remote_pytest.py runs with --rootdir=. (tools/land_isolation.py).
 ROOT_FILES = {
-    ".dockerignore", ".gitattributes", ".gitignore",
+    ".dockerignore", ".gitattributes", ".gitignore", "conftest.py",
     "AGENTS.md", "CONCEPTS.md", "CONTRIBUTING.md", "DESIGN.md", "LICENSE", "PRODUCT.md", "README.md", "STATUS.md", "env.sh",
 }
 MODULE_ROOT_DOCS = {"README.md", "AGENTS.md", "CLAUDE.md", "progress.md", "logs.md", "index.md"}
@@ -124,6 +125,22 @@ def test_templates_beside_the_secrets_stay_tracked():
 def test_repo_root_carries_only_the_listed_files():
     root = {path for path in _tracked() if "/" not in path}
     assert sorted(root - ROOT_FILES) == []
+
+
+def test_progress_md_lives_only_in_harness_modules():
+    # A progress.md outside harness.yaml modules never reaches STATUS.md (2026-10-27 survey §1-5).
+    modules = {m["path"] for m in yaml.safe_load(
+        (ROOT / "tools" / "harness" / "harness.yaml").read_text(encoding="utf-8"))["modules"]}
+    stray = [path for path in _tracked()
+             if PurePosixPath(path).name == "progress.md" and str(PurePosixPath(path).parent) not in modules]
+    assert stray == []
+
+
+def test_every_nested_agents_md_names_its_parent():
+    # Header forms vary (`<!-- Parent: -->`, `**Parent context:**`, `Parent:`); any of them in the first lines.
+    missing = [path for path in _tracked() if path.endswith("/AGENTS.md")
+               and "Parent" not in "".join((ROOT / path).read_text(encoding="utf-8").splitlines(True)[:6])]
+    assert missing == []
 
 
 def test_dated_evidence_does_not_live_inside_modules():

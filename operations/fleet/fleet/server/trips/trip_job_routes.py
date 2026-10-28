@@ -6,32 +6,22 @@ import asyncio
 import logging
 import uuid
 
-from fastapi import Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import Depends, HTTPException, Path
+from core_common.protocol.schemas import (TripJobRequest, TripJobStep,  # noqa: F401 (legacy route exports)
+                                         TripJobReadResponse, TripRequestKey)
 
 from fleet.server.job_trip_rows import ACTIVE, TripJobRows
 from fleet.server.job_trip_steps import KIND, JobTripSteps
 from fleet.server.mission_store import MissionConflict
 from fleet.server.step_action_kinds import dispatch_open, required_approval
 from fleet.server.trip_ports import TripError
-from fleet.server.trip_routes import PlaceRef, TripRequest
+from fleet.server.trip_routes import TripRequest
 
 _LOG = logging.getLogger(__name__)
 
 
-class TripJobStep(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    to: PlaceRef
-    via: list[PlaceRef] = Field(default_factory=list, max_length=8)
-
-
-class TripJobRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    robot_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
-    steps: list[TripJobStep] = Field(min_length=1, max_length=8)
-
-
-async def create_trip_job(jobs, robot_id: str, steps: list, principal_id: str) -> dict:
+async def create_trip_job(jobs, robot_id: str, steps: list, principal_id: str, *,
+                          request_key: str | None = None, request_digest: str | None = None) -> dict:
     """The 새 작업 approval: one named operator approves and starts it (registry ``one_person``); the gate is
     ``hold_job``'s, then the ledger row (``JobTripSteps`` runs it from there)."""
     if required_approval([KIND] * len(steps)) != "one_person":
@@ -43,7 +33,8 @@ async def create_trip_job(jobs, robot_id: str, steps: list, principal_id: str) -
         jobs.runner.release_job(robot_id, mission_id)
         raise TripError(409, "JOB_ESTOP")
     try:
-        job = await asyncio.to_thread(jobs.rows.create, mission_id, robot_id, principal_id, steps)
+        identity = {"request_key": request_key, "request_digest": request_digest} if request_key is not None else {}
+        job = await asyncio.to_thread(jobs.rows.create, mission_id, robot_id, principal_id, steps, **identity)
     except BaseException:
         jobs.runner.release_job(robot_id, mission_id)
         raise
@@ -52,12 +43,30 @@ async def create_trip_job(jobs, robot_id: str, steps: list, principal_id: str) -
 
 
 def install_trip_job_routes(app, *, store, runner, console, deployment_profile: str, episodes,
-                            require_named_operator, operator_guard):
-    """The route and the loop (``app.state.job_trips``); nothing at all outside a profile the registry opens."""
+                            require_named_operator, operator_guard, require_viewer, read_guard):
+    """Scoped facts remain readable when a profile closes; only open profiles install the writer and loop."""
     if store is None:
         return None
+    rows = TripJobRows(store)
+
+    async def read(principal, **identity):
+        job = await asyncio.to_thread(rows.read, principal.principal_id, **identity)
+        if job is None:
+            raise HTTPException(404, detail={"code": "TRIP_JOB_NOT_FOUND"})
+        return {"job": job}
+
+    @app.get("/api/fleet/trip-jobs", dependencies=read_guard, response_model=TripJobReadResponse,
+             tags=["fleet-work"])
+    async def trip_job_request(request_key: TripRequestKey, principal=Depends(require_viewer)):
+        return await read(principal, request_key=request_key)
+
+    @app.get("/api/fleet/trip-jobs/{mission_id}", dependencies=read_guard, response_model=TripJobReadResponse,
+             tags=["fleet-work"])
+    async def trip_job_read(mission_id: str = Path(min_length=1, max_length=192),
+                            principal=Depends(require_viewer)):
+        return await read(principal, mission_id=mission_id)
+
     if not dispatch_open(deployment_profile, KIND):  # a TRIP ledger opened here: its open jobs keep no robot moving
-        rows = TripJobRows(store)
         for mission_id in rows.ids(ACTIVE):
             rows.hold(mission_id, "FLEET_PROFILE_CLOSED", {})
             _LOG.warning("trip job %s held: the %s profile does not run trip steps", mission_id, deployment_profile)
@@ -87,14 +96,21 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
 
     @app.post("/api/fleet/trip-jobs", dependencies=operator_guard, tags=["fleet-work"])
     async def fleet_trip_job(body: TripJobRequest, principal=Depends(require_named_operator)) -> dict:
-        if body.robot_id not in console.robot_ids:
-            raise HTTPException(404, detail={"code": "UNKNOWN_ROBOT", "detail": {}})
-        active = runner._store.active()
-        unknown = sorted({p for s in body.steps for p in (s.to, *s.via)} - set(active[2].places if active else ()))
-        if unknown:
-            raise HTTPException(422, detail={"code": "TRIP_UNKNOWN_PLACE", "detail": {"places": unknown}})
+        def validate():
+            candidates = body.candidate_robot_ids or [body.robot_id]
+            if any(robot not in console.robot_ids for robot in candidates):
+                raise HTTPException(404, detail={"code": "UNKNOWN_ROBOT", "detail": {}})
+            active = runner._store.active()
+            unknown = sorted({p for s in body.steps for p in (s.to, *s.via)} - set(active[2].places if active else ()))
+            if unknown:
+                raise HTTPException(422, detail={"code": "TRIP_UNKNOWN_PLACE", "detail": {"places": unknown}})
         try:
             steps = [step.model_dump(mode="json") for step in body.steps]
+            if body.candidate_robot_ids is not None:
+                from fleet.server.trip_candidates import create_candidate_trip_job
+                return {"job": await create_candidate_trip_job(
+                    jobs, body.candidate_robot_ids, steps, principal.principal_id, body.request_key, validate=validate)}
+            validate()
             return {"job": await create_trip_job(jobs, body.robot_id, steps, principal.principal_id)}
         except TripError as exc:
             raise HTTPException(exc.status, detail={"code": exc.code, "detail": exc.detail}) from exc

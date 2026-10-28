@@ -5,11 +5,16 @@ import json
 import math
 import re
 from collections import Counter
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
+from rosy.contracts.learning.omx import WRIST, camera_role, camera_roles  # noqa: E402  D-794 B
 
 
 SCHEMA = 'rosy.omx-native-environment.v1'
 POLICY = 'omx-photometric-v3'
-ROLES = ('top', 'front')
+ROLES = ('top', WRIST)
 CONDITIONS = {'NORMAL', 'UNDEREXPOSED', 'OVEREXPOSED', 'MIXED_LIGHTING',
               'LOW_CONTRAST', 'LOW_SPATIAL_SIGNAL'}
 STATES = {'OBSERVING', 'NORMAL', 'UNSUPPORTED', 'COOLDOWN', 'BUDGET_LIMITED',
@@ -91,8 +96,11 @@ def _events(raw):
                  'image evidence cannot grant physical admission')
         _require(type(event.get('photometric_ready')) is bool, 'missing photometric assessment')
         plans, observations = event.get('environment'), event.get('observations')
-        _require(isinstance(plans, dict) and set(plans) == set(ROLES)
-                 and isinstance(observations, dict), 'both camera roles required')
+        _require(isinstance(plans, dict) and len(plans) == len(ROLES) and isinstance(observations, dict)
+                 and _roles(plans) == set(ROLES), 'both camera roles required')
+        # D-794 B: a recorder that already says "wrist" is read as the same wrist camera.
+        plans = event['environment'] = {camera_role(k): v for k, v in plans.items()}
+        observations = {camera_role(k): v for k, v in observations.items()}
         event['_image_conditions'] = {}
         for role in ROLES:
             plan = plans[role]
@@ -115,6 +123,13 @@ def _events(raw):
             event['_image_conditions'][role] = condition
         result.append(event)
     return result
+
+
+def _roles(names):
+    try:
+        return camera_roles(names)
+    except ValueError:
+        return None
 
 
 def seal_environment(raw, windows, files, *, rig_revision, calibration_revision):

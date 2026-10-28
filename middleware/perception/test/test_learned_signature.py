@@ -18,12 +18,31 @@ from control.sensing.perception.learned.signature import (
 REPO = Path(__file__).resolve().parents[3]
 
 
+@pytest.mark.parametrize("layout", ["cmd/git.exe", "mingw64/bin/git.exe"])
+def test_git_openssl_candidates_follow_the_installation(monkeypatch, tmp_path, layout):
+    from control.sensing.perception.learned import signature
+
+    root = tmp_path / "custom-git"
+    monkeypatch.setattr(signature.shutil, "which", lambda name: str(root / layout))
+    assert str(root / r"usr\bin") in signature._git_for_windows_dirs()
+    assert str(root / r"mingw64\bin") in signature._git_for_windows_dirs()
+
+
 def _openssl():
     from control.sensing.perception.learned.signature import openssl_path
     try:
         return openssl_path()
     except SignatureError:
         pytest.skip("openssl not available")
+
+
+def test_git_shim_at_drive_root_keeps_program_files_fallback(monkeypatch, tmp_path):
+    from control.sensing.perception.learned import signature
+
+    git = Path(Path.cwd().anchor) / "git.exe"
+    monkeypatch.setattr(signature.shutil, "which", lambda name: str(git))
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "programs"))
+    assert str(tmp_path / "programs" / "Git" / r"usr\bin") in signature._git_for_windows_dirs()
 
 
 def _release_signing():

@@ -3,7 +3,7 @@
 !integrations/messaging/discord/rosy_discord/**
 !operations/decision/**
 !operations/site_execution/src/**
-!operations/site_ui/console/**
+!applications/fleet/web/**
 !operations/situation/rosy_situation/__init__.py
 !operations/situation/rosy_situation/assessment.py
 !operations/situation/rosy_situation/snapshot_assessment.py
@@ -17,7 +17,7 @@
 !contracts/learning/src/**
 !contracts/skill/src/**
 !operations/processes/palletizing/src/**
-!operations/apps/fleet/src/**
+!applications/fleet/gateway/src/**
 !shared/web/**
 !deploy/site/requirements-fleet.txt
 !deploy/site/secret_exec.py

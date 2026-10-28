@@ -1,5 +1,6 @@
 """D-773: the structure report uses the size gate's own counter and only reads the tree."""
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,14 @@ sys.path.insert(0, str(ROOT / "tools/harness"))
 
 import size_limits  # noqa: E402
 import structure_report  # noqa: E402
+
+
+def test_report_workflow_uses_only_job_token_and_leaves_jira_manual():
+    workflow = (ROOT / '.github/workflows/structure-report.yml').read_text(encoding='utf-8')
+    assert re.findall(r'secrets\.([A-Za-z_][A-Za-z_0-9]*)', workflow) == []
+    assert '${{ github.token }}' in workflow
+    assert 'structure_jira.py' not in workflow
+    assert 'issues: write' in workflow
 
 
 def test_units_over_the_limit_match_the_frozen_ratchet_rows():

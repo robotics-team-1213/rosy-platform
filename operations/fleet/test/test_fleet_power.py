@@ -19,7 +19,7 @@ from fakes import FakeRobot
 from fleet.server.console_routes import install_console_routes
 from fleet.swarm.transport import HttpRobotClient
 
-ROSTER = Path(__file__).resolve().parents[2] / "site_ui" / "console" / "shared" / "power-action.js"
+ROSTER = Path(__file__).resolve().parents[3] / "applications/fleet/web" / "shared" / "power-action.js"
 
 
 class Console:

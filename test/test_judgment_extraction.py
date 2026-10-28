@@ -15,7 +15,7 @@ SITE = ROOT / 'operations/site_execution/src/rosy/execution/site'
 def test_decision_no_longer_owns_fleet_store_dispatch():
     decision = ROOT / 'operations/decision/src/rosy/decision'
     assert not (decision / 'tool_dispatch.py').exists()
-    assert (ROOT / 'operations/fleet/fleet/server/model_feedback_dispatch.py').is_file()
+    assert (ROOT / 'operations/fleet/fleet/server/evidence/model_feedback_dispatch.py').is_file()
     for path in decision.glob('*.py'):
         for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
             modules = ([node.module or ''] if isinstance(node, ast.ImportFrom) else

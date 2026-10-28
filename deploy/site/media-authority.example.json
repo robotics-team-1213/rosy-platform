@@ -1,0 +1,18 @@
+{
+  "audience": "site:<site-id>",
+  "listen_port": 9121,
+  "mediamtx_api": "http://127.0.0.1:9997",
+  "admin_token_file": "/run/rosy-media/media-admin-token",
+  "site_issuer": {
+    "fleet_url": "https://<site-host>:<site-https-port>",
+    "fleet_ca": "/run/rosy-media/site-ca.pem",
+    "keys": {"<site-key-id>": "/run/rosy-media/site-media.pub.pem"}
+  },
+  "robots": {
+    "<robot-id>": {
+      "core_url": "https://<robot-host>:8080",
+      "core_ca": "/run/rosy-media/robots/<robot-id>-ca.pem",
+      "keys": {"<key-id>": "/run/rosy-media/robots/<robot-id>-media.pub.pem"}
+    }
+  }
+}

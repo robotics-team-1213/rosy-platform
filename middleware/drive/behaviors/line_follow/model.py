@@ -120,6 +120,9 @@ class LineFollowConfig:
     # edge cell with per-scan chance p counts with chance 3p^2 (< 1 % for p < 0.05). Deeper than
     # the band one return is a person at once (no filter there).
     crosswalk_range_sigma_m: float = 0.0035
+    # D-573 rev 8: the look ignores returns this (+ 3 sigma) inside a Fleet map wall face; it must cover the
+    # map pose's lateral error toward the wall. None (default) = map walls unused until that error is measured.
+    crosswalk_map_wall_band_m: Optional[float] = None
     crosswalk_persist_k: int = 2
     crosswalk_persist_n: int = 3
     # D-407 막힘 복구. 관제에 묻고 recovery_ask_s 안에 답이 없으면(또는 관제 연결이 없으면)
@@ -225,6 +228,7 @@ class LineFollowConfig:
     turn_map_entry_enabled: bool = False  # D-759 rev 1: the same for a junction turn's exit heading
     instruction_stamp_enabled: bool = False  # D-767 A: measure from a junction instruction's pose_stamp
     route_context_enabled: bool = False
+    route_guide_enabled: bool = False  # D-769: opt in only with the source-expiring camera inbox deployed
     arc_curvature_gain: float = 1.0
     arc_blind_max_m: float = 1.0
     authority_required: bool = False  # D-517 4: no motion without a live Fleet authority, even before one
@@ -378,6 +382,9 @@ class LineFollowConfig:
             raise ValueError("crosswalk_approach_default_m must be in [0, 0.5]")
         if not (_finite(self.crosswalk_range_sigma_m) and 0.0 <= self.crosswalk_range_sigma_m <= 0.02):
             raise ValueError("crosswalk_range_sigma_m must be in [0, 0.02]")
+        if self.crosswalk_map_wall_band_m is not None and (isinstance(self.crosswalk_map_wall_band_m, bool) or not (
+                _finite(self.crosswalk_map_wall_band_m) and 0.0 <= self.crosswalk_map_wall_band_m <= 0.05)):
+            raise ValueError("crosswalk_map_wall_band_m must be null or in [0, 0.05]")
         if (type(self.crosswalk_persist_k) is not int or type(self.crosswalk_persist_n) is not int
                 or not 1 <= self.crosswalk_persist_k <= self.crosswalk_persist_n <= 20):
             raise ValueError("crosswalk_persist_k/n must be whole numbers, 1 <= k <= n <= 20")
@@ -402,7 +409,7 @@ class LineFollowConfig:
             raise ValueError("junction_still_linear must be in (0, 0.05] m/s")
         if not _finite(self.junction_still_angular) or not 0.0 < self.junction_still_angular <= 0.2:
             raise ValueError("junction_still_angular must be in (0, 0.2] rad/s")
-        for flag in ("arc_enabled", "bend_map_entry_enabled", "turn_map_entry_enabled", "route_context_enabled",
+        for flag in ("arc_enabled", "bend_map_entry_enabled", "turn_map_entry_enabled", "route_context_enabled", "route_guide_enabled",
                      "instruction_stamp_enabled"):
             if type(getattr(self, flag)) is not bool:
                 raise ValueError(f"{flag} must be a boolean")

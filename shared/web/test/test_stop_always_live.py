@@ -13,7 +13,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]  # repository root (D-427: keys are repo-relative)
 #: D-427: product pages live under these part roots while src/ empties.
-PAGE_ROOTS = tuple(REPO / name for name in ("src", "operations", "middleware", "shared") if (REPO / name).is_dir())
+PAGE_ROOTS = tuple(REPO / name for name in ("src", "applications", "operations", "middleware", "shared") if (REPO / name).is_dir())
 
 
 def _rel(path: Path) -> str:
@@ -72,7 +72,7 @@ def test_every_stop_on_a_ui_js_page_is_always_live():
                 offenders.append(f"{_rel(path)}:{line}")
     assert offenders == [], f"정지 컨트롤에 data-always-live가 없다(대화상자가 열리면 막힌다): {offenders}"
     names = {_rel(path) for path, _ in pages}
-    for page in ("middleware/robot_ui/robot/surface.html", "middleware/robot_ui/robot/index.html", "operations/site_ui/console/index.html"):
+    for page in ("middleware/robot_ui/robot/surface.html", "middleware/robot_ui/robot/index.html", "applications/fleet/web/index.html"):
         assert page in names, f"스캔이 {page}를 놓쳤다"
     assert stops >= 6, "셸·옛 대시보드·Fleet·게임·진단 정지를 모두 센다"
 
@@ -95,7 +95,7 @@ WEB_SCRIPT_ROOTS = (
     REPO / 'middleware' / 'robot_ui' / "robot",
     REPO / "shared" / "web",
     REPO / 'middleware' / 'robot_ui' / "pilot",
-    REPO / 'operations' / 'site_ui' / "console",
+    REPO / 'applications' / 'fleet' / 'web',
     REPO / "operations" / "apps" / "games" / "games" / "web",
 )
 
@@ -117,7 +117,7 @@ def test_no_surface_script_opens_a_modal_dialog():
                  for match in SHOW_MODAL.finditer(text)]
     assert offenders == [], f"showModal()은 정지를 inert로 만든다 — ui.js openLiveDialog를 쓴다: {offenders}"
     names = {_rel(path) for path in scripts}
-    for script in ("operations/site_ui/console/devices/enrollment.js", "operations/site_ui/console/devices/camera-pairing.js",
+    for script in ("applications/fleet/web/devices/enrollment.js", "applications/fleet/web/devices/camera-pairing.js",
                    "shared/web/ui.js", "middleware/robot_ui/pilot/app.js",
                    "middleware/robot_ui/robot/settings.js", "operations/apps/games/games/web/board.js"):
         assert script in names, f"스캔이 {script}를 놓쳤다"

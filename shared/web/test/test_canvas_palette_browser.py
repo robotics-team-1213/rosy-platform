@@ -1,7 +1,7 @@
 """D-359 §4 — 캔버스 색이 토큰에서 오고, 테마를 바꾸면 새로 고침 없이 다시 칠한다.
 
 로봇 지도(dashboard map.js)와 Fleet 지도(map-view.js)를 가짜 호스트
-(`http://rosy.test`)에 띄우고 빈 칸(free)의 픽셀을 dark → light로 잰다.
+(`https://rosy.test`)에 띄우고 빈 칸(free)의 픽셀을 dark → light로 잰다.
 color-mix 토큰이 검정으로 풀리지 않는지도 여기서 본다(hex 전용 파서가 그랬다).
 """
 
@@ -24,9 +24,9 @@ pytestmark = pytest.mark.skipif(
 SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / 'middleware' / 'robot_ui' / "robot"
-FLEET = SRC.parent / 'operations' / 'site_ui' / "console"
+FLEET = SRC.parent / 'applications' / 'fleet' / 'web'
 FLEET_ASSETS = run_path(str(SRC.parent / "operations/fleet/fleet/server/console/static_routes.py"))["CONSOLE_ASSETS"]
-HOST = "http://rosy.test"
+HOST = "https://rosy.test"  # Console startup uses secure-context crypto.randomUUID().
 PALETTES = token_themes.palettes(token_themes.read())
 TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
 SHOTS = os.environ.get("ROSY_D359_SHOTS")

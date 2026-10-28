@@ -13,7 +13,7 @@ from deploy.site.build_candidate import DEPLOY_FILES, DOC_FILES
 
 
 COMMIT = "a" * 40
-SERVICES = ("fleet", "vision", "proxy")
+SERVICES = ("fleet", "vision", "proxy", "postgres")
 TEST_KEY_ID = "rosy-site-test-1"
 
 
@@ -38,7 +38,7 @@ def _image_blobs(service: str, config_digest: str | None = None):
     return config, image_manifest
 
 
-def _write_images_tar(path, *, with_index=True, overrides=None):
+def _write_images_tar(path, *, with_index=True, overrides=None, services=SERVICES):
     """Write a docker-save shaped archive; return {service: (config_id, manifest_id)}.
 
     overrides[service] may set "manifest" (bytes stored as the manifest blob) or
@@ -47,7 +47,7 @@ def _write_images_tar(path, *, with_index=True, overrides=None):
     overrides = overrides or {}
     files: dict[str, bytes] = {}
     docker_manifest, index_rows, ids = [], [], {}
-    for service in SERVICES:
+    for service in services:
         reference = f"rosy-site-{service}:{COMMIT}"
         config, image_manifest = _image_blobs(service)
         config_id, manifest_id = _sha(config), _sha(image_manifest)
@@ -109,7 +109,7 @@ def candidate(tmp_path):
     sbom_dir.mkdir()
     docs.mkdir(parents=True)
 
-    deploy_files = (*DEPLOY_FILES, "verify_candidate.py")
+    deploy_files = (*DEPLOY_FILES, "verify_candidate.py", "site_users.py")
     for name in deploy_files:
         (deploy / name).write_text(f"candidate:{name}\n", encoding="utf-8")
     (deploy / ".env.example").write_text(
@@ -152,6 +152,7 @@ def candidate(tmp_path):
     })
     manifest = {
         "manifest_version": 1,
+        "site_users_tool_required": True,
         "source_commit": COMMIT,
         "image_tag": COMMIT,
         "platform": "linux/amd64",
@@ -297,6 +298,83 @@ def test_rejects_changed_deployment_file(candidate):
     (root / "deploy/site/compose.yaml").write_text("changed\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="deployment file hash mismatch"):
+        _verify(candidate)
+
+
+def test_rejects_candidate_without_site_users_tool(candidate):
+    root = candidate[0]
+    manifest_path = root / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["deployment_file_sha256"].pop("site_users.py")
+    (root / "deploy/site/site_users.py").unlink()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="required deployment"):
+        _verify(candidate)
+
+
+def test_legacy_candidate_without_site_users_marker_or_tool_remains_verifiable(candidate):
+    root = candidate[0]
+    manifest_path = root / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["site_users_tool_required"]
+    del manifest["deployment_file_sha256"]["site_users.py"]
+    (root / "deploy/site/site_users.py").unlink()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert _verify(candidate)["source_commit"] == COMMIT
+
+
+@pytest.mark.parametrize("marker", [False, None, 0, 1, "true", [], {}])
+def test_site_users_requirement_marker_must_be_literal_true_when_present(candidate, marker):
+    manifest_path = candidate[0] / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["site_users_tool_required"] = marker
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="site_users_tool_required"):
+        _verify(candidate)
+
+
+def test_legacy_candidate_listing_site_users_tool_still_checks_its_hash(candidate):
+    root = candidate[0]
+    manifest_path = root / "release.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["site_users_tool_required"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert _verify(candidate)["source_commit"] == COMMIT
+    (root / "deploy/site/site_users.py").write_text("changed\n", encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file hash mismatch"):
+        _verify(candidate)
+
+
+def test_site_users_requirement_marker_is_bound_by_the_real_signature(candidate):
+    from deploy.site.candidate_signing import sign_manifest_bytes
+
+    root = candidate[0]
+    private = root / "site-test.key"
+    public = root / "site-test.pub.pem"
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
+                   check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                   check=True, capture_output=True)
+    manifest_path = root / "release.json"
+    envelope = sign_manifest_bytes(manifest_path.read_bytes(), key_id=TEST_KEY_ID,
+                                   private_key=private, public_key=public)
+    (root / "release.json.sig").write_bytes(envelope)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["site_users_tool_required"]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="signature"):
+        _load_verifier().verify_candidate(
+            root, trusted_key_id=TEST_KEY_ID, trusted_public_key=public, inspect_loaded_images=False)
+
+
+@pytest.mark.parametrize("damage", ["missing", "changed"])
+def test_site_users_tool_must_exist_and_match_signed_hash(candidate, damage):
+    tool = candidate[0] / "deploy/site/site_users.py"
+    if damage == "missing":
+        tool.unlink()
+    else:
+        tool.write_text("changed\n", encoding="utf-8")
+    with pytest.raises(_load_verifier().CandidateVerificationError, match="deployment file"):
         _verify(candidate)
 
 

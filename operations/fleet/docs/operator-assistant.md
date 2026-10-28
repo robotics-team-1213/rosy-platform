@@ -46,13 +46,13 @@ broker는 실제 `prompt_eval_count`, `eval_count`, 경과 시간과 전처리 d
 | 변경 | 소유 위치 |
 |---|---|
 | 입력·응답 계약 | `contracts/foundation/core_common/protocol/assistant.py`, API v1.290 |
-| 문맥·대화·영속 상태 | `operations/fleet/fleet/server/work/assistant/` (`fleet.server.assistant`) |
+| 문맥·대화·영속 상태 | `operations/fleet/fleet/server/assistant/` |
 | 모델 입력·검증 | `operations/decision/src/rosy/decision/conversation/operator.py` |
 | 공통 정규화·등록 이름·행동 후보 차단 | `operations/decision/src/rosy/decision/conversation/preprocessing.py`, `codec.py` |
 | 고정 추론·평가 | `deploy/ai_pc/operator_broker.py`, `operator_acceptance.py` |
-| 명시적 이동 연결 | `operations/fleet/fleet/server/work/assistant/execution.py` → 기존 `IntentExecution`/Task owner |
+| 명시적 이동 연결 | `operations/fleet/fleet/server/assistant/execution.py` → 기존 `IntentExecution`/Task owner |
 | 보호 설치 | `deploy/site/install_operator_broker.py`, 기존 D-728 설치기 |
-| 화면·음성 | `operations/site_ui/console/assistant/` |
+| 화면·음성 | `applications/fleet/web/assistant/` |
 
 원인 조사 시 요청 ID로 대화 원장 상태, 현재 관측 시각, 모델 승인·source binding을 먼저 확인한다. UNKNOWN을 지우거나 새 키로 자동 재호출하지 않는다. 같은 요청 확인은 같은 ID와 원문을 다시 보내며, 다른 본문이면 409다. 기능 비활성화는 신규 접수를 보류하며 기존 원장과 작업 기록을 삭제하지 않는다.
 

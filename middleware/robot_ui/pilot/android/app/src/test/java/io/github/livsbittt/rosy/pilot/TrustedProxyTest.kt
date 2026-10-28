@@ -164,10 +164,13 @@ class TrustedProxyTest {
         MockWebServer().use { remote ->
             remote.useHttps(HandshakeCertificates.Builder().heldCertificate(leaf, ca.certificate).build().sslSocketFactory(), false)
             remote.start(); remote.enqueue(MockResponse().setBody("{\"robot_id\":\"rosy_01\"}"))
+            remote.enqueue(MockResponse().setResponseCode(200))
             val config = profile(ca, remote.port); val store = CandidateStore(); val version = store.found("robot")!!
             store.resolved("robot", version, Candidate("robot-a.local", remote.port, listOf("127.0.0.1")))
             val proxy = PilotProxy(config, config.robots.single(), store, {})
-            proxy.verifyIdentity(); remote.takeRequest(1, TimeUnit.SECONDS)
+            proxy.verifyIdentity()
+            assertEquals("/api/v1/system/info", remote.takeRequest(1, TimeUnit.SECONDS)!!.path)
+            assertEquals("/pilot", remote.takeRequest(1, TimeUnit.SECONDS)!!.path)
             remote.enqueue(MockResponse().setBody("{}"))
             proxy.stop()
             val stop = remote.takeRequest(1, TimeUnit.SECONDS)!!

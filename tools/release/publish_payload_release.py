@@ -2,7 +2,7 @@
 
 Takes the signed tarball prepare_payload_release.py made and does what the robots' updater reads:
 
-    python tools/release/publish_payload_release.py --tarball X:/DevTemp/rosy-release-<id>/<id>.tar.gz --canary <robot-ip>
+    python tools/release/publish_payload_release.py --tarball $ROSY_SCRATCH/rosy-release-<id>/<id>.tar.gz --canary <robot-ip>
     python tools/release/publish_payload_release.py --release-id <id> --canary <robot-ip> --resume
     python tools/release/publish_payload_release.py --release-id <id> --withdraw --reason "canary drove badly"
 
@@ -13,7 +13,7 @@ Takes the signed tarball prepare_payload_release.py made and does what the robot
    (docs/plans/2026-10-01-d412-robot-auto-update.md, schema 1).
 3. sign: `signing.sign_checksums` with the operator's private key <key-name>, then verified against the
    repo public key before anything is uploaded.
-4. release: `gh release create payload-<id> --target <source_revision>` with the tarball, rollout.json and
+4. release: create `payload-<id>` for bridges or `payload-v2-<id>` for verified boot catalogs, with the tarball,
    rollout.json.sig. An existing tag is refused unless --resume.
 5. canary: `rosy_auto_update.py status --json` over ssh every 30 s for --canary-timeout-min. Only a result
    newer than the one the canary reported before the release (and not older than published_at) counts.
@@ -36,7 +36,7 @@ import datetime as dt
 import importlib.util
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -60,25 +60,25 @@ STATUS_COMMAND = "sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py s
 POLL_S = 30
 #: Robot and PC clocks are NTP-synced; allow this much when comparing a robot's result time to published_at.
 CLOCK_SKEW_S = 120
-DEFAULT_EVIDENCE = Path("X:/DevTemp/rosy-rollout-evidence")
+DEFAULT_EVIDENCE = Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-rollout-evidence"
 SCRIPT = r"python tools\release\publish_payload_release.py"
 
 Runner = Callable[[list[str]], tuple[int, str, str]]
 
 
-def _load_prepare():
-    spec = importlib.util.spec_from_file_location("prepare_payload_release",
-                                                  Path(__file__).with_name("prepare_payload_release.py"))
+def _load_inspection():
+    spec = importlib.util.spec_from_file_location("payload_inspection", Path(__file__).with_name("payload_inspection.py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-prepare = _load_prepare()
-
-
-class PublishError(RuntimeError):
-    pass
+inspection = _load_inspection()
+prepare = inspection.prepare
+PublishError = inspection.PublishError
+_rejections = inspection._rejections
+read_tarball_identity = inspection.read_tarball_identity
+verify_tarball = inspection.verify_tarball
 
 
 class RolloutUnverified(PublishError):
@@ -114,10 +114,6 @@ def rollout_bytes(rollout: dict) -> bytes:
     return (json.dumps(rollout, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("utf-8")
 
 
-def _rejections(rejections) -> str:
-    return "; ".join(f"{r.code} {r.field}: {r.detail}" for r in rejections)
-
-
 def sign_rollout(data: bytes, private_key: Path, public_key: Path,
                  signer: Callable[[bytes, Path], str] = signing.sign_checksums, key_name: str = "release key") -> str:
     """Sign, then verify against the public key the robots trust before anything leaves this PC.
@@ -135,51 +131,6 @@ def sign_rollout(data: bytes, private_key: Path, public_key: Path,
     if rejections:
         raise PublishError("rollout.json self-verify failed: " + _rejections(rejections))
     return signature
-
-
-def read_tarball_identity(tarball: Path) -> tuple[str, str]:
-    """(release_id from manifest.json, source_revision from source-revision.txt)."""
-    found: dict[str, bytes] = {}
-    with tarfile.open(tarball, "r:gz") as tar:
-        for member in tar:
-            name = str(PurePosixPath(member.name)).removeprefix("./")
-            if name in ("manifest.json", "source-revision.txt", "source-ref.txt") and member.isreg():
-                found[name] = tar.extractfile(member).read()
-            if name == ".rosy-delta-base":
-                # D-553 addendum 3: deltas are manual pushes only; a robot that
-                # auto-updates may not hold the delta's base release.
-                raise PublishError(f"{tarball.name} is a delta payload; publish only full releases")
-    if "source-ref.txt" in found and found["source-ref.txt"].decode("ascii", "replace").strip() != "main":
-        # D-553 addendum 3: branch builds are bench pushes, never the D-412 channel.
-        raise PublishError(f"{tarball.name} was built from "
-                           f"{found['source-ref.txt'].decode('ascii', 'replace').strip()!r}, not main")
-    for name in ("manifest.json", "source-revision.txt"):
-        if name not in found:
-            raise PublishError(f"{tarball.name} has no top-level {name}")
-    release_id = json.loads(found["manifest.json"].decode("utf-8")).get("release_id")
-    if release_id != tarball.name.removesuffix(".tar.gz"):
-        raise PublishError(f"manifest.json release_id is {release_id!r}, not the tarball name {tarball.name}")
-    revision = found["source-revision.txt"].decode("ascii").strip()
-    if not REVISION.fullmatch(revision):
-        raise PublishError(f"source-revision.txt is not a full Git commit: {revision!r}")
-    return release_id, revision
-
-
-def verify_tarball(tarball: Path, public_key: Path, work_dir: Path) -> None:
-    """The release signature over SHA256SUMS and every file, on a temporary extract (the robot checks it too)."""
-    work_dir.mkdir(parents=True, exist_ok=True)
-    temporary = Path(tempfile.mkdtemp(prefix=".verify-", dir=work_dir))
-    try:
-        with tarfile.open(tarball, "r:gz") as tar:
-            for member in tar:
-                if member.issym() or member.islnk():
-                    raise PublishError(f"{tarball.name} has a link member {member.name!r}")
-            tar.extractall(temporary, filter="tar")
-        rejections = signing.verify_release_files(temporary, public_key)
-        if rejections:
-            raise PublishError(f"{tarball.name} release signature does not verify: {_rejections(rejections)}")
-    finally:
-        prepare._remove_tree(temporary)
 
 
 # --- runners ---------------------------------------------------------------------
@@ -230,9 +181,16 @@ class Publisher:
             raise PublishError(f"gh {args[0]} {args[1] if len(args) > 1 else ''} failed (exit {code}): {detail}")
         return out
 
-    def tag_exists(self) -> bool:
-        refs = json.loads(self.gh("api", f"repos/{self.repo}/git/matching-refs/tags/{self.tag}") or "[]")
-        return any(item.get("ref") == f"refs/tags/{self.tag}" for item in refs)
+    def tag_exists(self, tag: str | None = None) -> bool:
+        tag = tag or self.tag
+        refs = json.loads(self.gh("api", f"repos/{self.repo}/git/matching-refs/tags/{tag}") or "[]")
+        return any(item.get("ref") == f"refs/tags/{tag}" for item in refs)
+
+    def existing_tag(self) -> str | None:
+        tags = [tag for tag in (f"payload-{self.release_id}", f"payload-v2-{self.release_id}") if self.tag_exists(tag)]
+        if len(tags) > 1:
+            raise PublishError(f"release id {self.release_id} exists under both legacy and feature tags")
+        return tags[0] if tags else None
 
     def write_signed(self, rollout: dict) -> tuple[bytes, list[Path]]:
         data = rollout_bytes(rollout)
@@ -553,7 +511,7 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--tarball", type=Path, help="the signed <id>.tar.gz from prepare_payload_release.py")
     source.add_argument("--release-id", help="YYYY.MM.DD-NNN; the tarball is <out-dir>/<id>.tar.gz")
-    parser.add_argument("--out-dir", type=Path, help=r"prepare's work folder (default X:\DevTemp\rosy-release-<id>)")
+    parser.add_argument("--out-dir", type=Path, help=r"prepare's work folder (default $ROSY_SCRATCH\rosy-release-<id>, else the system temp directory)")
     parser.add_argument("--canary", help="IP or host of the canary robot")
     parser.add_argument("--robot", action="append", default=[], help="other robots, only shown after canary_ok")
     parser.add_argument("--resume", action="store_true", help="re-attach to an existing release")
@@ -609,6 +567,8 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
             raise PublishError(f"private signing key {args.key_name} not found in the operator signing folder")
         if not publisher.public_key.is_file():
             raise PublishError(f"public key not found: {publisher.public_key}")
+        if args.resume or args.withdraw:
+            publisher.tag = publisher.existing_tag() or publisher.tag
         if args.withdraw:
             return withdraw(publisher, args.reason.strip(), out_dir)
 
@@ -633,9 +593,11 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
             if not tarball.is_file():
                 raise PublishError(f"signed tarball not found: {tarball}")
             tarball_id, revision = read_tarball_identity(tarball)
-            verify_tarball(tarball, publisher.public_key, publisher.work_dir)
-            if publisher.tag_exists():
-                raise PublishError(f"tag {publisher.tag} already exists on {args.repo}; "
+            feature = verify_tarball(tarball, publisher.public_key, publisher.work_dir)
+            publisher.tag = f"payload-{'v2-' if feature else ''}{release_id}"
+            existing = publisher.existing_tag()
+            if existing:
+                raise PublishError(f"tag {existing} already exists on {args.repo}; "
                                    "pass --resume to re-attach, or use a new release id")
             canary = publisher.hostname(args.canary)
             before = publisher.status(args.canary)

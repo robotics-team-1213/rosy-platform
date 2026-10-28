@@ -1,0 +1,253 @@
+{
+  "log_root": "%LOCALAPPDATA%/Temp/rosy-land/feat-omx-core-lerobot",
+  "full_tested_commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+  "full_tested_main_commit": "fb5070705be1aaffff2f91bc8cf863cdba1814b0",
+  "full_invocation_totals": {
+    "passed": 27760,
+    "skipped": 1918,
+    "failed": 2
+  },
+  "scope": "Original FULL and browser execution plus isolated failure resolution. Initial failures are preserved. This is not a clean FULL run of the later document-only revision.",
+  "logs": [
+    {
+      "log": "run-g1-1.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "61008c103c3c6b90c5be10f7319daabe578d1baac0903a06859ba538c31b4b10",
+      "summary": "247 passed, 40 warnings in 38.76s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-1.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "623464ce933aadc952db2a8151dc6d096607ab579143d50c7692c4d700194e63",
+      "summary": "106 passed in 4.16s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-2.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "240f6d852c86208dd42b5568d6f3881eaa9fd558c1769e0c8fb08bf97701e190",
+      "summary": "66 passed, 5 skipped in 0.90s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-3.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "8bf935968d2fea916d298d1299ae878d4caa242df4fb809841cc00e3e83778da",
+      "summary": "6 passed, 6 skipped in 0.13s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-4.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "14ab9705de6e9b4dbd49ad05e88d7badd46305d4b0eb741ea4fc10fdaada5bda",
+      "summary": "147 passed, 2 skipped in 0.60s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-5.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "169baeaf2652a95b1b0c32f05229230676fdb05fbf2b91273c503b76c5211891",
+      "summary": "21 passed, 28 skipped in 0.17s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-6.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "61ca266d920fafef052343603b50fecd4732b9b475dffd38709cbf8c33c80949",
+      "summary": "3 passed in 0.17s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-7.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "006ba2e6e18954ad086677bc060e3290380048985a443818578f6ef51ed1b21b",
+      "summary": "4 passed in 0.21s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-8.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "7a31e66378c8cfe7c15128f94cc1506ce059a413da978d80115e1e55e5e976e5",
+      "summary": "12 passed in 0.08s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-9.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "4dce59d1bef5337d6445a557b53636f37688dc86e885a38c6e47697953a99cd3",
+      "summary": "6329 passed, 63 skipped, 2 warnings, 5 subtests passed in 250.01s (0:04:10)",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-10.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "449226f3d01217d62533d6744bc55c847c6d8d01569d50324d8a5f2693926e93",
+      "summary": "1 passed, 1 skipped, 2 warnings in 7.07s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-11.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "bd12e7101d310209ae3c1b5ce6be2bb10a709d2c4ddbb1df36f5214ae6976a97",
+      "summary": "3320 passed, 113 skipped, 62 subtests passed in 182.73s (0:03:02)",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-12.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "b4d4475c4e92e9f81c90d3380b93b861cae2646756207e1cacd219856b77dd99",
+      "summary": "5508 passed, 315 skipped, 2 warnings in 684.36s (0:11:24)",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-13.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "7daeb4bf90ccaa22f309696c00ef0faf55a415d0ba68da7dc73d345549761809",
+      "summary": "646 passed in 55.32s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-14.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "058aeef32daaf702cbae372ccb26e26525665253add39810c20a14f00f01748a",
+      "summary": "155 passed in 0.37s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-15.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "17f46e9c71c30d337658e0d6b4652ff045b6703a4642202828ad3d3888853372",
+      "summary": "120 passed, 2 warnings in 5.82s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-16.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "ef11dfb49973a3ffd692d70dd52dcec5c8c87edd829b9a01c837bfaa2e41c5a4",
+      "summary": "9 passed in 1.66s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-17.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "28e6195af57c465836b79448a5210e752d4321f0743aef6d8d01482f3749c49d",
+      "summary": "25 passed in 1.01s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-18.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "66a333587c3aa779a51aa10a84eefdeda45acc229d351af19bedd98387aa118b",
+      "summary": "327 passed, 4 skipped in 9.36s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-19.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "a6c4756aff04ec497c1e90afb799e7a2d1f051633051e3d385a91db2aa425b94",
+      "summary": "473 passed in 0.51s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-20.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "d6acb7e836a990a733724a8e60ca55c327b9a09ee9c644b237dc068090e621f9",
+      "summary": "2 failed, 8438 passed, 1076 skipped, 53 warnings in 727.37s (0:12:07)",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\nNEW       test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds\nNEW       test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files\n2 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 1
+    },
+    {
+      "log": "run-1-21.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "503b92bcbc9bf690dc08ab8e5f19b1a73a01193456d7743b0f82dd56422e550f",
+      "summary": "1857 passed, 292 skipped, 2 warnings in 58.52s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-22.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "ff9e580ab146f7ea46cd59beec8c8d82a23e16e13fac80d9216f62cca8f3ec0b",
+      "summary": "187 passed, 13 skipped, 2 warnings, 25 subtests passed in 7.15s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-23.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "f17c2ebbfb09d0ffe1080f6ec8fc5ad05a1b1d3591d582f620c235bca54da211",
+      "summary": "14 passed, 2 warnings in 182.72s (0:03:02)",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-24.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "1a100167aaabafe3243da8381e603055b0a13e90dfb787fc717f54431390702b",
+      "summary": "14 passed, 2 warnings in 45.02s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-25.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "fa850550b082623f2e12f46689b04d2b96ca180a8879c1965cfdf3c7481dcdbd",
+      "summary": "13 passed, 2 warnings in 23.63s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "run-1-26.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "33534c85c21c62504f6f656bd19ecede3a610757fef5789eda7f6385c259d04b",
+      "summary": "4 passed, 2 warnings in 11.90s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "alone-1-20-1.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "6f716bb025558e1221fa2a4237e8ca655d54d3e5c283edabf5a49f762853bc98",
+      "summary": "1 passed in 3.76s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    },
+    {
+      "log": "alone-1-20-2.txt",
+      "commit": "8e25dee1c8c5c24a40231e7d2d6664a05378bb4f",
+      "sha256": "bbfbead73ff0fbf852e0e5afd65de8fac1bbaf2281c767957466ffd60d51a8da",
+      "summary": "1 failed in 25.73s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\nNEW       test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files\n1 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 1
+    },
+    {
+      "log": "main-1-20.txt",
+      "commit": "fb5070705be1aaffff2f91bc8cf863cdba1814b0",
+      "sha256": "878d1e2f4b6d8c29a51f2743d97475176e8848c2b48f5c3d26b30649af06d4dc",
+      "summary": "2 passed in 27.95s",
+      "comparison": "not failing here  test/test_web_dialog_contract.py::test_confirm_lives_only_in_the_pinned_files_and_counts\n0 new, 0 known, 0 flaky, 1 listed but not failing",
+      "comparison_exit": 0
+    }
+  ]
+}

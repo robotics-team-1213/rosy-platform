@@ -9,8 +9,11 @@ SOURCE_ROOTS = {
     name: (PACKAGE_ROOT / '_source_roots' / name
            if (PACKAGE_ROOT / '_source_roots' / name).is_dir()
            else PACKAGE_ROOT.parent / relative)
-    for name, relative in (('decision', 'decision'), ('console', 'site_ui/console'), ('assessment', 'situation'), ('execution', 'site_execution'))
+    for name, relative in (('decision', 'decision'), ('assessment', 'situation'), ('execution', 'site_execution'))
 }
+SOURCE_ROOTS['console'] = (PACKAGE_ROOT / '_source_roots/console'
+                          if (PACKAGE_ROOT / '_source_roots/console').is_dir()
+                          else PACKAGE_ROOT.parents[1] / 'applications/fleet/web')
 SOURCE_ROOTS['discord'] = (PACKAGE_ROOT / '_source_roots/discord'
                           if (PACKAGE_ROOT / '_source_roots/discord').is_dir()
                           else PACKAGE_ROOT.parents[1] / 'integrations/messaging/discord')
@@ -30,4 +33,5 @@ def console_root():
     return PACKAGE_ROOT / 'fleet/server/web'
 
 
-SERVER_HOLDERS = ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking', 'pose', 'site_observation', 'maps')
+SERVER_HOLDERS = ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking',
+                  'evidence', 'sitemap', 'pose', 'recognition', 'rightofway')

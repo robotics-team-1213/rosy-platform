@@ -13,7 +13,7 @@ python tools/device_twin/run_twin.py --list
 ```
 
 - **Needs:** Docker Desktop (WSL2 backend, cgroup v2), Python 3.12+ on the host, and Git's `openssl.exe`. `signing.py` finds Git's copy by itself.
-- **Output:** everything goes under `X:\DevTemp\d406-twin` (`--work`).
+- **Output:** everything goes under `$ROSY_SCRATCH/d406-twin` (`--work`).
   - `report.md`: pass or fail per scenario, with the commands and their key output.
   - `logs/publish-<id>.log`: what the publish tool printed.
   - `store/`: the fake GitHub, including `requests.jsonl` and `gh-calls.jsonl`.

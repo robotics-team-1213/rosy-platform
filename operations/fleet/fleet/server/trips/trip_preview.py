@@ -12,7 +12,8 @@ import time
 from core_common.robot_body import nominal_body_for
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import exit_segment, lane_action, turn_target
-from fleet.server.trip_ports import MAX_EXPECT_IN_M, bend_geometry, line_past, next_bend
+from fleet.server.trip_geometry import bend_geometry, line_past, next_bend
+from fleet.server.trip_ports import MAX_EXPECT_IN_M
 from fleet.server.trips.trip_crosswalks import route_crosswalks
 from fleet.traffic.trip_advice import FLEET_EPOCH
 from fleet.traffic.zone_hold import hold_back_m

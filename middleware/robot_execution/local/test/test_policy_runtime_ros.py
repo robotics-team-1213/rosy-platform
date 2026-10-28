@@ -20,12 +20,12 @@ import pytest
 rclpy = pytest.importorskip('rclpy', reason='requires isolated Jazzy ROS transport')
 from rclpy.action import ActionServer, CancelResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
-from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
 from rclpy.node import Node
 from control_msgs.action import FollowJointTrajectory
 from sensor_msgs.msg import JointState
 
 from test_omx_policy_session import setup_session, candidate, owner_binding, ROOT
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
 from omx_adapter.ros_runtime import RosArmCommandRuntime
 from rosy.execution.local.policy_install import InstallBinding, load_policy
 from rosy.execution.local.policy_journal import PolicyExecutionJournal

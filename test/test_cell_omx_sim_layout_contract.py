@@ -31,6 +31,7 @@ from omx_adapter.pose_plan import (  # noqa: E402
     CellTransferPlanRejected,
     CellPlanningProfile,
     CellTransferRequest,
+    validate_cell_transfer_plan,
 )
 from rosy_cell.cell import load_cell  # noqa: E402
 from rosy_cell.compiler import compile_job  # noqa: E402
@@ -157,4 +158,5 @@ def test_every_box_transfer_plans_and_slip_sheets_are_refused_by_width(demo, kin
             assert rejected.value.reason in (GRASP_DEPTH_BELOW_FINGERTIPS, GRIPPER_WIDTH_INVALID)
             continue
         plan = planner.plan_transfer(request, profile, state)  # raises on any HOLD reason
+        validate_cell_transfer_plan(plan, profile, kinematics_revision=kin.revision, now_monotonic_s=1.)
         assert [phase.phase_id for phase in plan.phases] == ["approach", "grasp", "transfer", "release"]

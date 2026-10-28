@@ -17,6 +17,12 @@ _SENSITIVE_FIELD = re.compile(
 _PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----")
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def _contains_sensitive_field(value):
     if isinstance(value, dict):
         return any(_SENSITIVE_FIELD.search(str(key)) or _contains_sensitive_field(child)
@@ -28,8 +34,8 @@ def _contains_sensitive_field(value):
 
 def export(database, output, *, robot_id=None):
     database, output = Path(database), Path(output)
-    if output.resolve().drive.upper() == "F:":
-        raise ValueError("recording output belongs on X:, not the source drive")
+    if _in_checkout(output):
+        raise ValueError("recording output belongs outside the source checkout")
     connection = sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)
     try:
         connection.execute("BEGIN")  # One read snapshot, even while Fleet prunes or appends.
@@ -200,8 +206,8 @@ def main():
     parser.add_argument('--max-gap-s', type=float)
     args = parser.parse_args()
     if args.window:
-        if args.output.resolve().drive.upper() == 'F:':
-            raise ValueError('recording output belongs on X:, not the source drive')
+        if _in_checkout(args.output):
+            raise ValueError('recording output belongs outside the source checkout')
         result = capture_window(args.database, robot_id=args.robot_id, start=args.start,
                                 end=args.end, max_gap_s=args.max_gap_s)
         with args.output.open('xb') as stream:

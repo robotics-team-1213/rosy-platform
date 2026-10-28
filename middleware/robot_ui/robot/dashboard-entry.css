@@ -19,6 +19,7 @@ body[data-dashboard-entry] .auth-row input { min-width: 0; width: 100%; }
 body[data-dashboard-entry] .auth-drawer label { font: var(--weight-label) var(--text-label)/var(--leading-copy) var(--body); text-transform: none; }
 body[data-dashboard-entry] .auth-drawer .bench-confirmation { font-weight: var(--weight-regular); align-items: start; }
 #entry-destinations { display: grid; gap: var(--space-3); }
+#entry-identity { overflow-wrap: anywhere; }
 #entry-navigation { display: grid; }
 #entry-navigation a { display: flex; align-items: center; gap: var(--space-3); min-height: var(--target-primary); padding: var(--space-3) 0; border-bottom: 1px solid var(--surface-line); color: var(--text-primary); text-decoration: none; font-weight: var(--weight-label); }
 #entry-navigation a:hover { text-decoration: underline; text-underline-offset: var(--space-1); }

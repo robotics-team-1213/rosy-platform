@@ -74,7 +74,8 @@ def test_conversation_config_refuses_drift(installer, admission, field, value):
 
 
 @pytest.mark.parametrize('field,value', [('verdict','HOLD'), ('evaluation_owner','ai_pc'),
-    ('evaluated_at',0), ('evaluated_at',float('inf')), ('evaluated_at',time.time()+3600)])
+    ('evaluated_at',0), ('evaluated_at',float('inf')), ('evaluated_at',time.time()+3600)],
+    ids=['hold', 'ai-pc-owner', 'evaluated-at-zero', 'evaluated-at-inf', 'evaluated-at-future'])  # stable for xdist
 def test_even_pinned_proof_requires_current_independent_admission(installer, admission, field, value):
     cfg, raw = admission
     proof = json.loads(raw); proof[field] = value

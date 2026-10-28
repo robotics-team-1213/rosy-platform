@@ -3,9 +3,9 @@
 import re
 from pathlib import Path
 
-WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
-DOCS = {"index.html": "console.js", "install.html": "install.js",
-        "maps/site-map.html": "maps/site-map.js", "cell/cell.html": "cell/cell.js"}
+WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
+DOCS = {"index.html": "console.js", "installation/install.html": "installation/install.js",
+        "sitemap/site-map.html": "sitemap/site-map.js", "cell/cell.html": "cell/cell.js"}
 
 
 def _header(name):
@@ -82,7 +82,7 @@ def test_estop_is_live_in_markup_and_one_module_gates_it():
         assert "bindEstop(" in source, entry
         assert "'/api/fleet/estop'" not in source and '"/api/fleet/estop"' not in source, entry
         assert "gate('estop'" not in source, entry
-    for entry in ("console.js", "install.js"):
+    for entry in ("console.js", "installation/install.js"):
         assert "ui-button:not(#estop)" in (WEB / entry).read_text(encoding="utf-8"), entry
 
 
@@ -90,7 +90,7 @@ def test_document_sheets_do_not_paint_the_header():
     header_sheet = (WEB / "shared/fleet-header.css").read_text(encoding="utf-8")
     assert "body { margin: 0; }" in header_sheet
     assert ".fleet-header { position: sticky; top: 0;" in header_sheet
-    for sheet in ("shared/styles.css", "maps/site-map.css", "cell/cell.css"):
+    for sheet in ("shared/styles.css", "sitemap/site-map.css", "cell/cell.css"):
         body = (WEB / sheet).read_text(encoding="utf-8")
         assert "ui-topbar" not in body and ".estop" not in body and "#topbar-more" not in body, sheet
     assert ".fleet-footer" not in (WEB / "shared/doc-tabs.css").read_text(encoding="utf-8")
@@ -107,5 +107,8 @@ def test_app_bar_folds_by_the_shell_container_not_the_viewport():
     assert ".fleet-shell { container-type: inline-size;" in tabs_sheet
     assert tabs_sheet.count("container-type") == 1
     assert re.findall(r"@media ([^{]+?)\s*\{", tabs_sheet) == ["(width >= 64rem) and (height >= 40rem)"]
-    assert "min-height: var(--appbar-height);" in header_sheet
+    # The shared ui-topbar carries the D-741 app bar height; Fleet does not restate it.
+    shared = (WEB.parents[2] / "shared/web/components.css").read_text(encoding="utf-8")
+    assert "min-height: var(--appbar-height);" in shared.split("ui-topbar {", 1)[1].split("}", 1)[0]
+    assert "min-height" not in header_sheet.split("ui-topbar {", 1)[1].split("}", 1)[0]
     assert "var(--rail-track)" in tabs_sheet

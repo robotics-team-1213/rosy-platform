@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Offline training jobs and their input/output contracts. Each job uses its declared separate CPU/GPU environment and a new output directory; local development artifacts belong on X:. Existing remote stores retain their paths. Training does not deploy or activate robot behavior.
+Offline training jobs and their input/output contracts. Each job uses its declared separate CPU/GPU environment and a new output directory; local development artifacts belong on $ROSY_SCRATCH. Existing remote stores retain their paths. Training does not deploy or activate robot behavior.
 
 ## Subdirectories
 

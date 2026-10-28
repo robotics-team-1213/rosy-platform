@@ -194,6 +194,8 @@ class TrackWorker:
             self.ingest.report_calibration(self.camera.source_id,
                                            (self._config or {}).get("calibration"),
                                            self.camera.map_id)
+            from rosy_vision.measured_preview import synchronize_preview
+            await synchronize_preview(self)
 
     async def run_config_sync(self, stop_event: asyncio.Event,
                               interval_s: float = CONFIG_REFRESH_S) -> None:

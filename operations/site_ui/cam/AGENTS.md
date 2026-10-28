@@ -40,7 +40,7 @@ Moved out of `src/site/overhead/android` on 2026-09-30 (D-374 stage 1), then ren
 ### Testing Requirements
 
 ```powershell
-$env:JAVA_HOME='X:\java\jdk-21.0.8'; $env:GRADLE_USER_HOME='X:\DevCaches\gradle'
+$env:JAVA_HOME='<JDK 21 path>'
 cd operations/site_ui/cam; .\gradlew.bat testDebugUnitTest assembleDebug; .\gradlew.bat --stop
 ```
 

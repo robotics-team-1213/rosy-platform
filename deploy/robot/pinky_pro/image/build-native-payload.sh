@@ -176,6 +176,8 @@ mkdir -p "$OVERLAY/opt/rosy" "$OVERLAY/opt/rosy/deploy" \
 "$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$OVERLAY/opt/rosy/native-runtime"
 cp -a "$FIRST_BOOT_SOURCE" "$OVERLAY/opt/rosy/first-boot"
 cp -a "$SD_TOOLS_SOURCE" "$OVERLAY/opt/rosy/deploy/sd"
+# A/B launchers and their libraries must survive interrupted application sync.
+python3 "$SCRIPT_DIR/stage-os-firstboot.py" --prefix "$OVERLAY/opt/rosy"
 # The native units address the motor bus as /dev/rosy-motor; the image must
 # carry the rule so a freshly flashed device has the alias on first boot.
 cp "$UDEV_RULE_SOURCE" "$OVERLAY/etc/udev/rules.d/"
@@ -191,6 +193,8 @@ cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.service" "$OVERLAY/etc/systemd/syst
 cp "$FIRST_BOOT_SOURCE/rosy-first-boot-retry.timer" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-release-recover.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-sd-provision.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-os-storage.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-os-tailnet.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-core.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-host-agent.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-pairing.service" "$OVERLAY/etc/systemd/system/"
@@ -201,6 +205,8 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-io.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-camera.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-camera-healthy.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-camera-healthy.timer" "$OVERLAY/etc/systemd/system/"
+# D-789: optional robot media publisher; not enabled, condition-gated on /etc/rosy/media.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-media.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-navigation.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-boot-status.timer" "$OVERLAY/etc/systemd/system/"
@@ -212,6 +218,12 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-face.service" "$OVERLAY/etc/systemd/system/"
 # D-176: boot settings file and fallback AP, both root and outside CORE.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-config.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-network.service" "$OVERLAY/etc/systemd/system/"
+if [[ "${ROSY_BOOT_SUPPORT:-feature}" != bridge ]]; then
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-users.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-agent.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-recovery.service" "$OVERLAY/etc/systemd/system/"
+    cp "$NATIVE_RUNTIME_SOURCE/rosy-network-recovery.timer" "$OVERLAY/etc/systemd/system/"
+fi
 # D-193: the root login-code issuer (no network), enabled by the image.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-login-code.service" "$OVERLAY/etc/systemd/system/"
 # D-247: the read-only root board device probe and CORE's refresh request watch.

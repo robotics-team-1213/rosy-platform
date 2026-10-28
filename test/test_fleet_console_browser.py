@@ -10,10 +10,8 @@ from __future__ import annotations
 
 import os
 import json
-import socket
-import threading
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from console_browser_site import ROOT, WEB, WEB_COMMON, console_url  # noqa: F401
 from urllib.parse import urlparse
 
 import pytest
@@ -24,11 +22,6 @@ pytestmark = pytest.mark.skipif(
     not browser_tests_enabled(),
     reason="set ROSY_RUN_BROWSER_TESTS=1 to run the optional Chromium regression",
 )
-
-ROOT = Path(__file__).resolve().parents[1]
-WEB = ROOT / 'operations' / 'site_ui' / "console"
-#: D-129·D-157 — 공용 자산의 단일 파일. Fleet 사본은 없다.
-WEB_COMMON = ROOT / "shared" / "web"
 
 from browser_harness import (  # noqa: E402
     DECLINE_CONFIRM,
@@ -96,54 +89,13 @@ API = {
 }
 
 
-@pytest.fixture()
-def console_url():
-    # index.html 의 절대 경로(/common/tokens.css, /console/assets/*)를 풀어 준다.
-    class Handler(SimpleHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(WEB), **kwargs)
+def test_console_fixture_serves_registered_assets(console_url):
+    from urllib.request import urlopen
 
-        def translate_path(self, path: str) -> str:
-            if path.startswith("/common/"):
-                name = path.removeprefix("/common/")
-                if name in json.loads((WEB_COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]:
-                    return str(WEB_COMMON / name)
-            if path.startswith("/console/assets/"):
-                name = path[len("/console/assets/"):].split("?", 1)[0]
-                path = "/" + CONSOLE_ASSETS.get(name, (name, None))[0]
-            return super().translate_path(path)
-
-        def log_message(self, *args):  # 시험 출력을 조용히
-            pass
-
-    class ConsoleServer(ThreadingHTTPServer):
-        # Windows SO_REUSEADDR permits concurrent servers on the same endpoint.
-        # Each browser must receive this fixture's files, including mutations.
-        allow_reuse_address = os.name != "nt"
-
-        def server_bind(self):
-            if os.name == "nt":
-                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-            super().server_bind()
-
-    # Windows may assign Chromium-blocked ports (for example 10080) for port 0.
-    for port in range(40000, 41000):
-        try:
-            server = ConsoleServer(("127.0.0.1", port), Handler)
-        except OSError:
-            continue
-        else:
-            break
-    else:
-        raise RuntimeError("could not allocate a browser-safe local port")
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_address[1]}/index.html"
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=5)
+    base = console_url.rsplit("/", 1)[0]
+    for name, (relative, _) in CONSOLE_ASSETS.items():
+        with urlopen(f"{base}/console/assets/{name}", timeout=5) as response:
+            assert response.read() == (WEB / relative).read_bytes(), name
 
 
 def test_the_console_renders_what_swarm_control_says(console_url):
@@ -2964,11 +2916,11 @@ def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
 
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
-def test_single_column_tier_puts_exceptions_before_the_map_and_formation_last(console_url, width, height):
-    """D-629: compact intervention/map/context order and mounted tab owners survive resizing."""
+def test_single_column_tier_puts_exceptions_and_robot_context_before_the_map(console_url, width, height):
+    """D-892: intervention/context/map order and mounted owners survive resizing."""
     from playwright.sync_api import sync_playwright
 
-    panels = ['.queues-panel', '[aria-labelledby="map-heading"]', '.console-context']
+    panels = ['.queues-panel', '.console-context', '[aria-labelledby="map-heading"]']
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
         page.set_viewport_size({"width": width, "height": height})
@@ -3840,8 +3792,8 @@ def test_paired_console_keeps_the_token_field_and_never_asks_for_a_session(conso
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.getElementById('online-pill').textContent === '접속 전'",
                                timeout=8000)
-
         assert page.is_hidden("#development-badge")
+        _open_token_access(page)
         assert page.is_visible("#console-token")
         assert posts == []
         assert not errors, f"페이지 오류: {errors}"

@@ -52,7 +52,7 @@ from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 base = Path(sys.argv[1])
-for target, expected in (('grid', 6), ('amcl', 10)):
+for target, expected in (('grid', 7), ('amcl', 10)):
     paths = list(base.rglob(f'native_map_{target}.gtest.xml'))
     assert len(paths) == 1, (target, paths)
     root = ET.parse(paths[0]).getroot()

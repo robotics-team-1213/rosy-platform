@@ -36,19 +36,21 @@ schema reuse (D-18). No ROS imports anywhere in this package.
 | `fleet/cli.py` | `fleet relay ...` / `formation ...` / `console ...` |
 | `fleet/incidents/handoff.py`, `incidents/notifications.py` | D-661 named human ownership and team notification journal/worker; separate from stuck resolver and final device authority |
 | `fleet/server/console/console.py` | `FleetConsole`: N대 상태 gather + goal/cancel/e-stop scatter. 하달한 목표를 기억하는 곳(D-12) |
-| `fleet/server/signals.py` | 신호등 계약(ROSY-SIGNAL-001) 클라이언트: `HttpSignalClient`, `SignalConsole`(의도 재단언·all_red scatter·**3자 교차 검증 `verify` 행**), `cross_check()`, `HttpSignalObserver` — `swarm/` 과 별개 계약이라 별도 파일 |
-| `fleet/server/signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 형식 (`observer_url`·`observer_map` 포함) |
+| `fleet/server/rightofway/signals.py` | 신호등 계약(ROSY-SIGNAL-001) 클라이언트: `HttpSignalClient`, `SignalConsole`(의도 재단언·all_red scatter·**3자 교차 검증 `verify` 행**), `cross_check()`, `HttpSignalObserver` — `swarm/` 과 별개 계약이라 별도 파일 |
+| `fleet/server/rightofway/signal_config.py` | signals.yaml 로더·라이터와 신호등 endpoint 형식 (`observer_url`·`observer_map` 포함) |
 | `fleet/server/app.py` | FastAPI 표면 — `/api/fleet/*` 와 `/console` UI |
 | `fleet/server/web/` | 관제 UI 정적 자산 (CSP `style-src 'self'` — 인라인 스타일 금지) |
 | `fleet/site_map.py` | D-488 `rosy.site_map/1` 스키마(장소·방향 있는 차로·회전 금지·D-573 횡단보도 구역)와 `lane_graph.yaml` 가져오기. 순수 |
 | `fleet/routing/` | D-489/D-490 경로 계획기: 차로 단위 상태 A*(`graph`·`cost`·`planner`·`snap`·`trip`)와 호출자에게 넘길 사실 묶음(`brief`). 표준 라이브러리만, 네트워크·DB·시계 없음 |
-| `fleet/server/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 진행 중 trip이 있으면 거절), `POST /trip` 계획 응답과 계획 본문 저장 |
-| `fleet/server/trips/trip_runner.py` | D-494 5 / D-517 서버 trip 루프(로봇마다 trip 하나, 반복 운행): 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(`lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |
+| `fleet/server/sitemap/site_map_store.py`, `site_map_routes.py`, `trip_routes.py` | 지도 초안·활성 버전 저장과 활성화(이름 있는 운영자, 진행 중 trip이 있으면 거절), `POST /trip` 계획 응답과 계획 본문 저장 |
+| `fleet/server/trips/trip_runner.py` | D-494 5 / D-517 서버 trip 루프(로봇마다 trip 하나, 반복 운행): 시작 검사·상태기계(재시작 뒤 `stopped`)·0.5 s 루프(첫 tick은 바로, 그 뒤 D-432 `start_offset` 한 번; `lane` 교차로 지시, `free` D-463 점)·다음 장소 재계획 대기. 능력·지도 자세·교차로 지시는 `trip_ports.py`의 포트로 주입, 실행 가능 규칙은 `fleet/routing/execute.py`, trip 중 다른 이동 거절은 `trip_guard.py` |
 | `fleet/traffic/lane_traffic.py` | D-517 3 (M1) `TrafficService`: 열린 trip 전부를 `fleet/traffic/blocks.py` 고정 블록 표로 계산해 `GET /api/fleet/traffic`에 보인다. 로봇에 보내지 않는다(M2). trip 루프의 교차로 보류(`holds`)와 고정 점유 갱신도 여기서 한다. 운행 블록 허가를 쓰는 곳은 이 모듈 하나다 |
 | `fleet/traffic/rule_m.py` | D-550 8 / D-760 3 1단계 규칙 M 판정(순수): 로봇마다 Fleet이 시작한 움직임을 `bounded`·`unbounded`·`idle`로 본다. Fleet이 쥔 TTL(통행권·trip 임대·목표 임대)만 센다. `/api/fleet/state` 행 `rule_m`으로만 쓰인다. 경고만이고 거절하지 않는다 |
 | `fleet/traffic/handover.py` | D-517 5 (M4) Fleet 해결기의 순수 판단: 교착 순환에서 다음 장소 뒤의 막힌 차로를 피해 갈 수 있는 한 대만 `replan`(운영자 확인 `replan_hold`), 나머지 `wait`, 피할 수 없거나 같은 경로 두 번째면 `human`, 30 s 넘는 UNKNOWN은 `human`. `GET /api/fleet/traffic` `resolver` |
 | `fleet/traffic/trip_lease.py` | D-541 7 Fleet trip lease: 현장 설정 `fleet.trip_lease_required`(기본 false)가 참일 때만 연다. trip마다 새 `lease_id`(uuid, 재사용 없음)로 `PUT /trip-lease`, 주기마다 자기 슬롯에서 renew, 끝에서 정지 뒤 `DELETE`. renew가 404·409·`renewed:false`·`ttl_s` 동안 확인 없음이면 trip은 `stopped`/`lease_lost`로 끝나고 다시 열지 않는다. lease 주인은 로봇 REST 토큰이다: Fleet 전용이어야 하고(D-541 1), 관제 토큰과 같으면 app.py가 거절한다 |
 | `fleet/server/trips/trip_laps.py` | D-517 2 반복 운행의 순수 계산: 바퀴 경로(`lap_arcs`), 바퀴 끝 판정(`lap_due`), 실패한 바퀴 검사 재시도(`lap_retry_due`), 다음 바퀴 잇기·지난 바퀴 정리(`carry_on`). 로봇을 부르지 않는다 |
+| `fleet/server/trips/trip_steps.py`, `trip_replan.py` | D-798 `TripRunner` mixin들(동작 그대로 옮김): `TripSteps`는 주기마다의 단계(`_step`·`_step_lane`·`_step_bend`·sighting 무시·`_send`·`_step_free`), `TripReplan`은 재계획 확인·AI 확인·다음 바퀴·실패한 바퀴 재시도 |
+| `fleet/server/trips/trip_geometry.py`, `trip_live.py` | D-798 `trip_ports.py`에서 옮김(동작 그대로): 교차로·굽은 길 필드와 기하(`junction_fields`·`bend_fields`·`line_past`·`pose_view`), 로봇 하나의 trip 실행 상태 `LiveTrip`. 읽기-보내기 시계는 `trip_ports._monotonic` 그대로 |
 | `fleet/server/trips/trip_preview.py` | D-767 P0 경로 미리보기: trip 주기마다 표 뒤에 그 단계가 읽은 자세로 2 m 안의 사건(turn·bend·arc·crosswalk·signal·stop·authority_end, ≤ 8)을 만들어 `/api/fleet/traffic` 로봇 행 `preview`에 보인다(≤ 2 s). 로봇에 보내지 않는다. 방금 보낸 지시와 0.005 m 넘게 다르면 `preview_mismatch`. `ROSY_ROUTE_PREVIEW_LOG`로 JSON 줄을 남기고 `tools/sim/route_preview_accuracy.py`가 잰다 |
 | `fleet/server/trips/trip_crosswalks.py` | D-767 P0: 경로가 횡단보도 다각형에 들어가는 곳(CORE의 가까운 가장자리, D-491)과 나오는 곳을 route m로 찾는다. 경로마다 캐시, 상자로 먼저 거른다. `trip_preview.py`만 쓴다 |
 | `fleet/server/trips/trip_halts.py` | D-494/D-517 로봇 정지: `TripHalts.halt_robot`, 재시작 뒤 열려 있던 trip의 로봇 정지(`run_restart`, `halt_restarted`). 교차로·취소 포트만 쓴다 |
@@ -84,6 +86,12 @@ Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 li
 | `fleet/fleet/server/cell` | Server holder: Rosy Cell app and job store, compiler, goal evidence registry and routes |
 | `fleet/fleet/swarm` | Formation session: robots, transport, relay, arming, anchor (see `fleet/swarm/AGENTS.md`) |
 | `fleet/fleet/routing` | D-489/D-490 route planning on the D-488 site map, standard library only |
+| `fleet/fleet/server/tracking` | Existing tracking service, purpose-specific calibration stores/routes and signed Vision preview grants. Static holder preserves `fleet.server.*` imports and resource identity |
+| `fleet/fleet/server/evidence` | D-798 server holder: model proposals and feedback dispatch, goal and policy evidence, learning bundle/receiver, incident deliberation |
+| `fleet/fleet/server/sitemap` | D-798 server holder: site map store/routes, drive teaching, site lanes, lane routes, path history, start points |
+| `fleet/fleet/server/pose` | D-798 server holder: localization service, D-494 `MapPoseService`, D-511 lane compliance monitor, D-772 `MapPoseScopes` ingestion fences and `StateSourceRead` receipts |
+| `fleet/fleet/server/recognition` | D-798 server holder: D-472 identity and triggers, sightings and their store/config, ingest routes, discovery, address drift, `SiteRoster`, D-772 versioned station installation (`station_store`/`station_service`) and source-authenticated station ingress routes (no motor writer) |
+| `fleet/fleet/server/rightofway` | D-798 server holder: signal client/config/routes, junction signal, traffic and reservations, segment store, bays |
 | `decision/src/rosy/decision` | Holder `operations/decision`: proposal-only model adapters (`rosy.decision`) outside its own deliberation/conversation units |
 | `situation` | Holder `operations/situation` (`SOURCE_ROOTS['assessment']`): the D-577 AI PC situation service `rosy_situation` (see its `AGENTS.md`) |
 | `site_execution` | Holder `operations/site_execution` (`SOURCE_ROOTS['execution']`): `rosy.execution.api`/`site` PlanBundle and cell workflow projections (see its `AGENTS.md`) |

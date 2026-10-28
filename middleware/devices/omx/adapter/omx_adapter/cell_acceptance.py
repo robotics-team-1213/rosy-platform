@@ -274,7 +274,9 @@ class CellAcceptanceStore:
         return None if row is None else row["cell_sha256"]
 
     def accepted_item_geometry(self, recipe_sha256: str, item: str) -> dict[str, float] | None:
-        """Geometry of ``item`` (a grant's ``item_key``, ``box:<sku>`` for recipe/3) if accepted, else None."""
+        """Geometry of ``item`` in a recipe accepted against the current cell, else None. ``item``
+        is the grant's ``item_key``: ``box``/``slip_sheet``, or ``box:<sku>`` for a recipe/3 step,
+        whose accepted recipe holds one entry per sku (D-781 §2)."""
         with self._lock, closing(self._connect()) as connection:
             row = connection.execute(
                 """SELECT r.items_json FROM omx_accepted_recipes r JOIN omx_accepted_cell c

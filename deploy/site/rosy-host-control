@@ -55,13 +55,19 @@ case "$ROLE:$ACTION:$UNIT" in
     ;;
   ai:stop-unit:pinky-backend.service|ai:restart-unit:pinky-backend.service|\
   ai:stop-unit:pinky-frontend.service|ai:restart-unit:pinky-frontend.service|\
-  ai:stop-unit:pinky-nav2.service|ai:restart-unit:pinky-nav2.service|\
-  ai:stop-unit:pinky-rosbridge-d12.service|ai:restart-unit:pinky-rosbridge-d12.service|\
-  ai:stop-unit:pinky-rosbridge-d13.service|ai:restart-unit:pinky-rosbridge-d13.service|\
   ai:stop-unit:pinky-r2-watch.service|ai:restart-unit:pinky-r2-watch.service)
     owner=$(cat "$CONF/units-user" 2>/dev/null || true)
     [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
     systemctl --user --machine="$owner@" --no-block "${ACTION%-unit}" "$UNIT"
+    ;;
+  ai:clean-storage:|model:clean-storage:)
+    # D-883: start the rosy-ops lab storage service once; host_storage.py owns what is kept.
+    owner=$(cat "$CONF/units-user" 2>/dev/null || true)
+    [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
+    # systemd refuses `cat` over --machine ("Cannot remotely cat units."); LoadState works there.
+    [ "$(systemctl --user --machine="$owner@" show -p LoadState --value rosy-test-storage.service 2>/dev/null)" = loaded ] \
+      || refuse "no rosy-test-storage.service" 5
+    systemctl --user --machine="$owner@" --no-block start rosy-test-storage.service
     ;;
   site:install-site-config:fleet-site.yaml|\
   site:install-site-config:site-cameras.yaml)

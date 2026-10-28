@@ -20,8 +20,7 @@ gates:
     state: PARKED
   FIELD:
     state: PARKED
-adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497, D-636, D-655]
-adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497, D-636, D-655, D-772, D-774]
+adrs: [D-257, D-261, D-269, D-318, D-374, D-375, D-377, D-472, D-497, D-636, D-655, D-772, D-774, D-775]
 plans:
   - docs/plans/2026-09-30-app-identity-rename-plan.md
   - docs/plans/2026-09-26-overhead-camera-android-app-design.md
@@ -52,6 +51,13 @@ D-636의 소형 AprilGrid 렌즈·바닥 측정 워크숍, 유효 픽셀 mask와
 사용 절차는 [compact-camera-calibration.md](docs/compact-camera-calibration.md), 검증 범위는
 [result.md](../../docs/validation/compact-camera-calibration-2026-10-11/result.md)에 기록한다.
 운영 교정 자동 교체·모델 자동 호출·현장 오차 수용은 포함하지 않는다. 기존 DEVICE/FIELD gate는 유지한다.
+
+## 2026-10-17 · D-775 실측 교정 운영 연결
+
+실측 수치 묶음의 목적별 승인·영속 저장·현재 촬영 session 확인·미리보기·철회 경로를 추가했다.
+기존 tracking/sighting 승인과 World/CORE 권한은 유지한다. 원격 시험의 커밋·실행·실패 수정·skipped와
+실측 근거의 한계는 [구현 검증 기록](../../docs/validation/measured-camera-lifecycle-2026-10-16/result.md)에 모은다. 기존 모듈 gate의 물리 수용 범위를
+넓히지 않는다. D-598의 현재 현장 readback·로봇별 오차 계수는 아직 확보하지 못했다.
 
 ## 2026-10-16 스테이션 측정 설치 실행
 

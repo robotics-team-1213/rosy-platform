@@ -1,6 +1,6 @@
 ## D-449 학습 산출물은 출처·시계·단위·owner binding과 승격 증거를 공용 계약으로 보존한다
 
-**Status:** Proposed (2026-10-04, active learning closure implementation; 구조·wire 초안이며 runtime 활성화·장치 수용 승인 아님)
+**Status:** Proposed (2026-10-04, active learning closure implementation; 2026-10-21 고정 OMX SIM 정답 결속 보강; 구조·wire 초안이며 runtime 활성화·장치 수용 승인 아님)
 
 ### Context
 
@@ -109,6 +109,45 @@ task unknown, skill null, action 결과와 native terminal 결과는 구분해 �
 실행 원장을 인증·새 dispatch 권한·학습 GT로 승격하지 않는다. DatasetStore와
 승격은 기존 demonstration profile만 허용하며 이 실행 profile을 학습으로 받지 않는다.
 실제 설치/추론/장치/원래 timing·물리 승인은 별도이고 기존 공개 Action wire는 유지한다.
+
+### 구현 보강 — 2026-10-21 고정 OMX 물체 과제의 SIM 정답
+
+계약 0.1.13은 고정 infeed→pallet A 첫 슬롯의 보조 부착 SIM 과제에 한해 명시적인
+원본 증거 묶음으로 `sim_ground_truth` 판정을 재계산한다. 원본 시연·물체 pose·고정
+장면/카메라·명령 수락/완료·원 owner 시계의 gripper 신선도를 함께 검증한다.
+초기 원점 이동은 기록 구간 밖임을 확인하며, 기록 안의 모든 명령은 실제 callback에
+연결한다. 늦은 관측에 새 시각을 붙이거나 누락된 과거 증거를 복원하지 않는다.
+
+독립 SIM 관측을 사람 검수로 표시하지 않기 위해 별도 companion을 선택했다.
+기본 operator 판정과 native review의 사람 검수 조건은 유지한다. 증거는 LeRobot
+export·ACT reader snapshot·공통 Episode·DatasetStore 파일 목록에 보존한다.
+학습 20/검증 5의 분리는 정규화와 chunk에도 적용하며, 실제 학습 정책의 새 과제
+성공률은 별도 실행 증거가 필요하다. 파일 결속은 인증·CORE 실행 권한·DEVICE/FIELD
+수용을 부여하지 않는다. 전체 목표는 실제 학습과 독립 실행 검증 전까지 active다.
+
+### 연구 실행 초안 — 2026-10-21 승격 전 격리 OMX SIM
+
+미등록 checkpoint의 독립 SIM 평가에는 운영 Fleet 승격·승인 창과 구별되는 연구
+authority가 필요하다. 이 초안의 발급자는 deploy/robot/omx의 명시적인 native 작업
+조립 내부에만 존재한다. 고정 물체 과제의 독립 설치 검증, 실제 격리 OS 증거,
+user-state의 native 시작 및 별도 정책 연구 승인, 정확한 native service/cgroup과
+process start identity에 결속한다. 사용자 승인문구를 root helper의 승인 증명으로
+표현하지 않으며, 기존 Fleet rearm/정책 lease 의미를 대체하지 않는다.
+
+부모 checkpoint·파생 설치·normalization/dataset·owner/session·run/episode를
+고정하고, DB 경로와 무관한 run 전용 영속 one-shot claim을 OPEN 전에 exclusive
+생성한다. steady 기한은 최대 600초, 갱신 가능한 개별 lease는 최대 1초다.
+철회·scope/격리/소유자 상실·기한 만료·기존 stop/HOLD에서 닫히며 같은 작업의
+재초기화와 rearm은 허용하지 않는다. SIM 전용 LocalStopController 하위형의 최초
+OPEN 출처는 실제 native 사용자 승인에 결속한 operator_local과 별도 연구 receipt다.
+D-780 workcell coordinator나 운영 Fleet가 승인한 것으로 기록하지 않는다.
+
+기존 단일 owner/session/journal의 최종 admission과 원 추론 provenance, 실제 위치
+대비 0.04rad 제한을 유지한다. 부모 연구 artifact와 weights를 보존하고 SIM 설치
+compatibility 파일은 과제 평가·승격 기록에 합산하지 않는다. 기본 운영 runtime,
+FleetLeaseConsumer/SimPolicyChain, 외부 Action wire와 물리 장치에는 연결하지 않는다.
+이 절은 연구 경계의 초안이며 실제 구현·시간 측정·철회/격리 실패 차단·새 학습 정책
+물체 평가 증거가 제출되기 전까지 실행 완료나 DEVICE/FIELD 수용을 뜻하지 않는다.
 
 ## Amendment by D-857 (2026-10-24)
 

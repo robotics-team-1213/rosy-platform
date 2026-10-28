@@ -38,10 +38,10 @@ plans:
 
 - v1 routers reach `core_features` only through `api/deps` (`test_v1_import_boundary.py`).
 
-## 2026-10-16 D-772 finish 인계 v1.252
+## 2026-10-16 D-772 finish 인계 v1.283 (origin #92 v1.252)
 
 station-return/finish의 terminal navigation→IDLE 동작을 공유 계약·SRS·9개 live pin에 반영했다. 첫 인계의 명시적 standstill 409는 완료가 아니며 새 측정 dwell 이후에만 ACK/BOUND를 반환한다. 활성·불명 navigation은 전환 없이 거절한다. 50a6ef719 원격 35개 통과, NEW 0. 운영 자동 활성화·전체 lifecycle·장치 수용은 미완료다.
 
-## 2026-10-16 D-772 세션 한정 접안 중단 v1.253
+## 2026-10-16 D-772 세션 한정 접안 중단 v1.284 (origin #92 v1.253)
 
 station-stop은 고정 Fleet principal과 session/boot/native generation 및 수락된 run/correlation이 일치할 때만 해당 접안 권한을 닫는다. 근거가 만료되어도 중단할 수 있으며 ACK는 물리 정지나 자원 해제가 아니다. API/SRS/9개 live pin과 실제 HTTP 소비자를 갱신했다. c3ac314b5 CORE/HTTP 144개 통과, NEW 0/skip 0. 운영 활성화와 장치 수용은 미완료다.

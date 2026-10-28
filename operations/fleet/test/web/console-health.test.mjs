@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { powerHealthView } from '../../../site_ui/console/power-health-view.js';
+import { powerHealthView } from '../../../../applications/fleet/web/power-health-view.js';
 
 function robot(battery = {}) {
   return { online: true, power_health_age_s: 0.2, power_health: {

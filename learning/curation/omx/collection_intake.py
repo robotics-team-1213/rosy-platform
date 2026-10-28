@@ -1,7 +1,6 @@
 """Offline, closed OMX collection sessions into inspected native LeRobot datasets."""
 from __future__ import annotations
 
-import argparse
 import hashlib
 import importlib.metadata
 import json
@@ -12,9 +11,10 @@ import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from omx_output_paths import in_source_checkout
 import camera_reference
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA, redacted as _redacted
-from native_environment import _events, seal_environment
+from native_environment import ROLES, _events, _roles, seal_environment
 from native_review import (JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset,
                            static_episodes, write_json)
 
@@ -199,7 +199,8 @@ def validate_session(root, *, completed_only=False, require_complete=True):
              and manifest.get('gripper_units') == 'normalized_0_100', 'normalized units required')
     _require(type(manifest.get('fps')) is int and 0 < manifest['fps'], 'positive integer fps required')
     shapes = manifest.get('camera_shapes')
-    _require(isinstance(shapes, dict) and set(shapes) == {'top', 'front'}, 'both camera shapes required')
+    _require(isinstance(shapes, dict) and len(shapes) == 2 and _roles(shapes) == set(ROLES),
+             'both camera shapes required')
     for shape in shapes.values():
         _require(isinstance(shape, list) and len(shape) == 3 and shape[2] == 3
                  and all(type(n) is int and n > 0 for n in shape), 'positive HWC RGB shape required')
@@ -279,12 +280,14 @@ def validate_session(root, *, completed_only=False, require_complete=True):
                 manifest_sha256=hashlib.sha256(blobs['manifest.json']).hexdigest())
 
 
-def prepare(sessions, output, repo_id, *, completed_only=False):
-    """Produce a new, locally read-back dataset; leave all decisions unknown/exclude."""
+def prepare(sessions, output, repo_id, *, completed_only=False, camera_references=None):
+    """Produce a new, locally read-back dataset; leave all decisions unknown/exclude.
+
+    ``camera_references`` (role -> reference JSON path) adds D-792 shadow checks as camera-setup.json."""
     records = [validate_session(path, completed_only=completed_only) for path in sessions]
     _require(bool(records), 'at least one session required')
     output = Path(output).absolute()
-    _require(not output.exists() and output.drive.upper() != 'F:', 'new output outside source drive required')
+    _require(not output.exists() and not in_source_checkout(output), 'new output outside the source checkout required')
     for record in records:
         source = record['root']
         _require(not output.resolve().is_relative_to(source) and not source.is_relative_to(output.resolve()),
@@ -321,7 +324,7 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
     features = {key: dict(dtype='float32', shape=(6,), names=JOINTS[:])
                 for key in ('observation.state', 'action')}
     features['source.capture_time_ns'] = dict(dtype='int64', shape=(1,), names=['fleet_host_unix_ns'])
-    for source in ('joint', 'reference', 'top', 'front'):
+    for source in ('joint', 'reference', *baseline['camera_shapes']):
         features[f'source.{source}_time_ns'] = dict(dtype='int64', shape=(1,), names=[source+'_source_unix_ns'])
     features.update({f'observation.images.{role}': dict(dtype='video', shape=tuple(shape),
                      names=['height', 'width', 'channels']) for role, shape in baseline['camera_shapes'].items()})
@@ -378,12 +381,15 @@ def prepare(sessions, output, repo_id, *, completed_only=False):
                    episodes=[dict(episode_index=i, session_id=r['manifest']['session_id'],
                                   attempt_index=e['episode_index'], cycle_id=e['cycle_id'])
                              for i, (r, e) in enumerate(episodes)])
-    for name, document in (('capture.json', capture), ('environment.json', environment),
-                           ('inspection.json', report), ('decisions.json', report['episodes']),
-                           ('intake-receipt.json', receipt)):
+    documents = [('capture.json', capture), ('environment.json', environment),
+                 ('inspection.json', report), ('decisions.json', report['episodes'])]
+    if camera_references:
+        import camera_setup_intake
+        references = {role: camera_setup_intake.load_reference(path) for role, path in camera_references.items()}
+        documents.append(('camera-setup.json', camera_setup_intake.report(records, episodes, references)))
+    for name, document in (*documents, ('intake-receipt.json', receipt)):
         write_json(output / name, document)
     return receipt
-
 
 
 TEACHER_FILE = 'teacher/trajectory.json'
@@ -511,7 +517,7 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
                  and m.get('robot_type') == first.get('robot_type') for _, m, _ in sealed),
              'recordings with different rig, calibration or robot type cannot share one intake')
     output = Path(output).absolute()
-    _require(not output.exists() and output.drive.upper() != 'F:', 'new output outside source drive required')
+    _require(not output.exists() and not in_source_checkout(output), 'new output outside the source checkout required')
     for collection, _, _ in sealed:
         _require(not output.resolve().is_relative_to(collection.resolve())
                  and not collection.resolve().is_relative_to(output.resolve()), 'output must be separate from every source')
@@ -581,19 +587,8 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
     return receipt
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    commands = parser.add_subparsers(dest='command', required=True)
-    command = commands.add_parser('prepare')
-    command.add_argument('sessions', nargs='+', type=Path)
-    command.add_argument('--out', type=Path, required=True)
-    command.add_argument('--repo-id', required=True)
-    command.add_argument('--completed-only', action='store_true')
-    args = parser.parse_args()
-    try:
-        prepare(args.sessions, args.out, args.repo_id, completed_only=args.completed_only)
-    except (ValueError, OSError, ImportError) as exc:
-        parser.exit(2, f'refused: {exc}\n')
-    print(f'Written: {args.out}; review required, no upload or device action performed.')
+    import collection_pipeline  # one CLI: its `prepare` takes the same arguments
+    collection_pipeline.main()
 
 
 if __name__ == '__main__':

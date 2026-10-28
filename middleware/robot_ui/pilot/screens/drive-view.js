@@ -302,9 +302,10 @@ export function buildControls(profile) {
   left.append(modes);
   left.append(pedals);
   if (profile.autonomy?.includes("line")) {
-    const go = el("ui-button", "진행 ▶ 누르는 동안", {type: "button", size: "primary", tone: "good", "data-drive-go": "",
-                                                     "aria-label": "차선 따라 진행(누르는 동안만)"});
+    const go = el("ui-button", "진행 · 누르는 동안", {type: "button", size: "primary", tone: "good", "data-drive-go": "",
+                                                    "aria-label": "차선 따라 진행(누르는 동안만)"});
     go.setAttribute("kind", "toggle");
+    actionIcon(go, "forward");
     left.append(go);
   }
   if (profile.pivot !== false) {
@@ -313,12 +314,10 @@ export function buildControls(profile) {
                                                   "aria-label": "제자리 좌회전(누르는 동안)"});
     pivotLeft.setAttribute("kind", "toggle");
     actionIcon(pivotLeft, "left");
-    pivotLeft.setAttribute("kind", "toggle");
     const pivotRight = el("ui-button", "우회전", {type: "button", size: "primary", "data-drive-pivot": "right",
                                                    "aria-label": "제자리 우회전(누르는 동안)"});
     pivotRight.setAttribute("kind", "toggle");
     actionIcon(pivotRight, "right");
-    pivotRight.setAttribute("kind", "toggle");
     pivots.append(pivotLeft, pivotRight);
     left.append(pivots);
   }
@@ -328,7 +327,7 @@ export function buildControls(profile) {
                                  "aria-label": "주행 스틱 — 위 전진, 아래 후진, 좌우 조향, 옆으로만 밀면 제자리 회전"});
   stick.append(el("div", null, {"data-drive-stick-knob": ""}));
   right.append(stick);
-  if (profile.pivot !== false) right.append(el("span", "↓ 회전 조작", {"data-drive-scroll-cue": ""}));
+  if (profile.pivot !== false) right.append(el("span", "아래에 회전 조작", {"data-drive-scroll-cue": ""}));
 
   controls.append(left, right);
   return controls;

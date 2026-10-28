@@ -18,12 +18,14 @@ from typing import Callable, Literal, Optional
 
 import httpx
 from fastapi import Depends, HTTPException, Path, Query, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
 from core_common.protocol.motor_health import MotorHealthResponse
 from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
+from fleet.server.monitoring_routes import cached_projection, install_monitoring_routes
 from fleet.server.http_errors import http_error
 from fleet.server.identity import IdentityError, IdentityService
 from fleet.stuck.board import LineStuckBoard
@@ -104,8 +106,13 @@ class SharedGather:
         self._snapshot: Optional[dict] = None
         self._at = 0.0
         self.gathered_at = 0.0  # D-493: server UTC epoch s of the last real gather (display only)
+        self._monitoring_cache = None
         self.observations = None
         self.recording_status = {"state": "disabled", "reason": "durable_database_not_configured"}
+
+    def cached_monitoring(self):
+        return cached_projection(self._monitoring_cache, now=self._clock(),
+                                 state_now=getattr(self._console, "_clock", time.monotonic)())
 
     def _observed_at(self, robots) -> dict:
         """Each row's own read time (D-493 ``_state_mono``, console clock) on the tracking clock."""
@@ -135,6 +142,8 @@ class SharedGather:
                 await asyncio.to_thread(self._board.flush)   # episode SQLite off the loop
                 self._snapshot, self._at = snapshot, self._clock()
                 self.gathered_at = time.time()
+                # One publication keeps body and capture clocks from different gathers apart.
+                self._monitoring_cache = snapshot, self._at, self.gathered_at
             return self._snapshot
 
 
@@ -150,6 +159,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         board.map_pose = map_pose.arbitrated_pose
 
     gather = app.state.fleet_gather = SharedGather(console, board, tracking=tracking)
+    install_monitoring_routes(app, gather, read_guard=read_guard)
     journal = getattr(getattr(console, "hub", None), "event_store", None)
     observation_path = answer_log_path or (journal.path if journal is not None else None)
     if observation_path is not None:
@@ -301,10 +311,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return {"pending": board.pending(), "answers": board.answers(),
                 "observed_age_s": board.observed_age_s()}
 
-    @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
-    async def line_stuck_evidence(robot_id: str, response: Response, stuck_id: str = Query(
-            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$"), live: bool = False) -> dict:
-        response.headers["Cache-Control"] = "no-store"
+    async def stuck_evidence(robot_id: str, stuck_id: str, live: bool) -> tuple[dict, bytes]:
+        """The evidence picture's metadata and JPEG bytes (shared by the JSON and binary routes)."""
         # D-577 8: the stuck's one evidence picture, asked of the robot on first read and held in
         # memory until the stuck closes. A failed read is not kept: the next read asks again.
         if not board.is_open(robot_id, stuck_id):
@@ -338,14 +346,25 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                                                  "message": "current raw frame age unknown or stale"})
                 return {"robot_id": robot_id, "stuck_id": stuck_id, "sequence": status.get("sequence"),
                         "source": status.get("source"), "media_type": "image/jpeg", "live": True,
-                        "captured_at": captured, "age_s": round(age_s, 3),
-                        "jpeg_base64": base64.b64encode(jpeg).decode("ascii")}
+                        "captured_at": captured, "age_s": round(age_s, 3)}, bytes(jpeg)
             board.keep_preview(robot_id, stuck_id, jpeg, status)
             shown = board.preview(robot_id, stuck_id)
             if shown is None:   # the stuck closed while the robot answered
                 raise HTTPException(status_code=404, detail={"code": "STUCK_NOT_OPEN",
                                                              "message": f"{stuck_id} closed"})
-        return shown
+        return shown, board.preview_jpeg(robot_id, stuck_id)
+
+    @app.get("/api/fleet/robots/{robot_id}/line-stuck/evidence", dependencies=read_guard, tags=["line-stuck"])
+    async def line_stuck_evidence(robot_id: str, request: Request, stuck_id: str = Query(
+            min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$"), live: bool = False):
+        meta, jpeg = await stuck_evidence(robot_id, stuck_id, live)
+        # Network load: `Accept: image/jpeg` (the console's 2 s live poll) gets the raw JPEG with the
+        # metadata in X-Stuck-Evidence instead of base64 in JSON (+33 %). Same route, same D-136 exception.
+        if request.headers.get("accept", "").startswith("image/jpeg"):
+            return Response(jpeg, media_type="image/jpeg", headers={
+                "Cache-Control": "no-store", "X-Stuck-Evidence": json.dumps(meta, separators=(",", ":"))})
+        return JSONResponse({**meta, "jpeg_base64": base64.b64encode(jpeg).decode("ascii")},
+                            headers={"Cache-Control": "no-store"})
 
     @app.get("/api/fleet/line-stuck/episodes", dependencies=read_guard, tags=["line-stuck"])
     def line_stuck_episodes(limit: int = Query(100, ge=1, le=1000)) -> dict:

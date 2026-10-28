@@ -13,6 +13,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 LIMIT = 1024 * 1024
+TERMINAL = {'SUCCEEDED', 'FAILED', 'STOPPED'}  # learning/envs/isaac/run_store.py
 
 
 def choose_target(lab, role):
@@ -107,6 +108,7 @@ def start(request, receipt_file, remote):
     row = remote.call(value['source_sha'], {'action': 'start', 'request': request})
     if row['run_id'] != value['run_id'] or row['input_sha256'] != value['input_sha256']:
         raise ValueError('Remote run differs from the persisted receipt')
+    remote.hold(value['run_id'], row['status'] not in TERMINAL)
     return row
 
 
@@ -120,6 +122,7 @@ def observe(receipt_file, remote, *, stop=False):
     if stop:
         row = remote.call(value['source_sha'], {'action': 'stop', 'run_id': value['run_id'],
                                                'expected_revision': row['revision']})
+    remote.hold(value['run_id'], not stop and row['status'] not in TERMINAL)
     return row
 
 
@@ -217,6 +220,21 @@ finally: os.close(fd)
 print('{"ready":true}')
 '''
 
+# The supervisor run holds no ~/rosy-jobs lock, so host_probe would call the model PC idle: hold a
+# gpu reservation (Gazebo sim budget, 6 cores 8 GB) renewed per poll. The probe deletes it 2 h after a lost client.
+HOLD = r'''
+import json,os,sys,time
+from pathlib import Path
+value=json.loads(sys.stdin.buffer.read(4097)); run=value['run_id']
+if len(run)!=32 or any(c not in '0123456789abcdef' for c in run): raise ValueError('run')
+path=Path.home()/'rosy-jobs'/('isaac-'+run+'.resv')
+if value['active'] is True:
+ path.parent.mkdir(parents=True,exist_ok=True); temporary=path.with_name('.pending-isaac-'+run)
+ temporary.write_text('%d gpu 6 8\n'%(time.time()+7200)); os.replace(temporary,path)
+else: path.unlink(missing_ok=True)
+print(json.dumps({'held':path.exists()}))
+'''
+
 
 class SSH:
     def __init__(self, repo):
@@ -242,6 +260,9 @@ class SSH:
             self.runner.ship(self.repo, self.host, sha, name)
             self._invoke(PREPARE, {'sha': sha, 'name': name})
 
+    def hold(self, run_id, active):
+        self._invoke(HOLD, {'run_id': run_id, 'active': active})
+
     def call(self, sha, payload):
         return self._invoke(BOOTSTRAP, {'sha': _sha(sha), 'payload': payload})
 
@@ -250,7 +271,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='action', required=True)
     check = commands.add_parser('check')
-    check.add_argument('--scenario', required=True, choices=['omx-f-import', 'pinky-conveyor-roundtrip'])
+    check.add_argument('--scenario', required=True, choices=['omx-f-import', 'pinky-conveyor-roundtrip',
+                       'arm-s-cell-nominal', 'arm-s-cell-overhang', 'arm-s-cell-wrong-yaw', 'arm-s-cell-case'])
     check.add_argument('--config', required=True, type=Path)
     check.add_argument('--sha', required=True)
     start_command = commands.add_parser('start')

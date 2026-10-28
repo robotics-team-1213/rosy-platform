@@ -14,6 +14,55 @@ from test_station_docking_api import station_api
 from test_station_camera_pipeline import pipeline_sources
 
 
+@pytest.mark.parametrize('change', ['refresh', 'moved', 'source', 'session', 'expired', 'motion', 'permit'])
+def test_navigation_read_revalidates_camera_refresh_without_reusing_old_ack(
+        station_api, pipeline_sources, tmp_path, change):
+    async def run():
+        port, client, http, svc, now, ledger, session, target, context, stations = await configured(station_api, tmp_path)
+        try:
+            await port.grant_return(session, target, context)
+            original = client.station_navigation_state
+            stations.trusted_sources[target.source_id] = (target.source_epoch, target.calibration_revision)
+            reads, requests = [], []
+            async def record(request):
+                requests.append((request.method, request.url.path))
+            http.event_hooks['request'].append(record)
+            async def refresh_during_read():
+                body = await original()
+                reads.append(body)
+                now[0] += .05
+                candidate = target.model_copy(update={'status': 'CANDIDATE', 'captured_at': now[0]})
+                if change == 'moved':
+                    candidate = candidate.model_copy(update={'pose': target.pose.model_copy(update={'x': .1})})
+                if change == 'source':
+                    candidate = candidate.model_copy(update={'source_epoch': 'replacement-source'})
+                    stations.trusted_sources[target.source_id] = ('replacement-source', target.calibration_revision)
+                stations.observe(candidate)
+                if change == 'session':
+                    stations.robot_scope = lambda _: (session.boot_id, 'replacement-session')
+                if change == 'expired':
+                    now[0] += .3
+                if change == 'permit':
+                    now[0] += 1.1
+                if change == 'motion':
+                    svc.station_docking.motion_feed = SimpleNamespace(snapshot=lambda: None, clear=lambda: None)
+                return body
+            client.station_navigation_state = refresh_during_read
+            if change == 'refresh':
+                assert await port.navigation_ready(session, context) is True
+                assert stations.store.get(target.station_id).pose_revision == target.pose_revision
+                assert svc.station_docking.target == target  # Readiness never renews the installed target.
+            else:
+                with pytest.raises(ValueError):
+                    await port.navigation_ready(session, context)
+            assert len(reads) == 1
+            assert requests and all(method == 'GET' for method, _ in requests)
+            assert svc.docking.native.current is None and ledger.admitted(session.session_id)
+        finally:
+            await http.aclose()
+    asyncio.run(run())
+
+
 async def configured(station_api, tmp_path, *, trip=False):
     name = 'fleet.server.station_return_http'
     assert importlib.util.find_spec(name) is not None, 'actual CORE return HTTP port is missing'

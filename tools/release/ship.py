@@ -5,7 +5,7 @@
 1. Starts each robot's calibration guard (rosy-calibration-guard.ps1) in the background.
 2. Reserves the next release id with the payload-reserved-<id> tag robot_cd.py uses
    (or takes --release-id).
-3. Builds the signed delta on X:/DevTemp/rosy-release-<base>/x/<base> with
+3. Builds the signed delta on $ROSY_SCRATCH/rosy-release-<base>/x/<base> with
    make_delta_release.py (metadata only, ~5 s).
 4. Picks the restart scope: "camera" when every changed payload file is camera
    perception code (CAMERA_ONLY) -- the robot then restarts rosy-camera alone and
@@ -13,10 +13,10 @@
    CORE readiness), as rosy-release-push.ps1 does. The image-layer sync runs only
    when the delta changes a deploy/robot/native file.
 5. Pushes to every robot at once, one ssh session each (ship_remote.sh), and
-   prints one summary. Logs: X:/DevTemp/rosy-release-<id>/ship-<robot>.txt.
+   prints one summary. Logs: $ROSY_SCRATCH/rosy-release-<id>/ship-<robot>.txt.
 
 Signatures, the robot's full-tree verify (native_release.py) and its rollback on a
-failed start are unchanged. --dry-run builds into X:/DevTemp/fast-ship-dry and
+failed start are unchanged. --dry-run builds into $ROSY_SCRATCH/fast-ship-dry and
 prints the plan without reserving, guarding or pushing. Full builds and rollbacks
 still go through rosy-release-push(-many).ps1.
 """
@@ -33,10 +33,12 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
 PINKY = ROOT / "deploy" / "robot" / "pinky_pro"
+SCRATCH = Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir())
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(ROOT / "tools" / "remote"))
 import lab_hosts  # noqa: E402
@@ -69,7 +71,7 @@ def reserve() -> str:
     tags = subprocess.run(["git", "-C", str(ROOT), "ls-remote", "--tags", "origin", "refs/tags/payload-*"],
                           check=True, capture_output=True, text=True).stdout
     names = [line.rsplit("/", 1)[-1] for line in tags.splitlines()]
-    names += [p.name.removeprefix("rosy-release-") for p in Path("X:/DevTemp").glob("rosy-release-*")]
+    names += [p.name.removeprefix("rosy-release-") for p in SCRATCH.glob("rosy-release-*")]
     sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "origin/main"],
                          check=True, capture_output=True, text=True).stdout.strip()
     for _ in range(5):
@@ -160,10 +162,10 @@ def main(argv: list[str] | None = None) -> int:
         release_id = args.release_id or (
             next_release_id(datetime.now(timezone.utc).strftime("%Y.%m.%d"), [args.base]) if args.dry_run
             else reserve())
-        out_dir = Path("X:/DevTemp") / ("fast-ship-dry" if args.dry_run else "") / f"rosy-release-{release_id}"
+        out_dir = SCRATCH / ("fast-ship-dry" if args.dry_run else "") / f"rosy-release-{release_id}"
         if args.dry_run:
             shutil.rmtree(out_dir, ignore_errors=True)
-        build = ["--base-dir", str(Path("X:/DevTemp") / f"rosy-release-{args.base}" / "x" / args.base),
+        build = ["--base-dir", str(SCRATCH / f"rosy-release-{args.base}" / "x" / args.base),
                  "--release-id", release_id, "--revision", args.revision, "--out-dir", str(out_dir)]
         for prefix in args.not_shipped:
             build += ["--not-shipped", prefix]

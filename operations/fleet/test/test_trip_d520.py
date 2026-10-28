@@ -311,7 +311,7 @@ def test_an_unarmed_note_goes_when_the_arc_reason_changes():
 
 
 def test_arc_newer_refuses_a_bool():
-    from fleet.server.trip_ports import arc_newer
+    from fleet.server.trip_geometry import arc_newer
     assert arc_newer(2, 1) and arc_newer(0, None) and not arc_newer(1, 1) and not arc_newer(True, None)
 
 

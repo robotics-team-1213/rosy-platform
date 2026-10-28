@@ -9,6 +9,175 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from act_job import chunk_indices, offline_report, compatible_sources, run
 
 
+def test_bounded_sampling_checks_the_whole_chunk_without_changing_labels():
+    import copy
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id='a',ros_goal_id='ga',
+               **{'observation.state':[state]+[0.]*5,'action':[action]+[0.]*5})
+          for state,action in [(0.,.02),(.01,.02),(.02,.04),(.03,.04),(.04,.04)]]
+    original=copy.deepcopy(rows)
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry_and_exit',
+        max_delta_rad=.035)==[1,4]
+    assert rows==original
+
+
+@pytest.mark.parametrize('sampling',['all_frames','command_entry','command_entry_and_exit'])
+def test_bounded_sampling_refuses_an_unrepresentable_gripper_command(sampling):
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id='a',ros_goal_id='ga',
+               **{'observation.state':[0.]*6,'action':[0.]*5+[.039]})]
+    with pytest.raises(ValueError,match='bound|every command'):
+        act_job.training_sample_indices(rows,names,sampling=sampling,max_delta_rad=.035)
+
+
+def test_bounded_state_noise_preserves_all_absolute_chunk_targets():
+    import act_job
+    origin=np.array([0.,0.])
+    targets=np.array([[.02,-.01],[.03,.01]])
+    original=targets.copy()
+    noisy=act_job.augment_training_origin(origin,targets,np.array([-.1,.1]),max_delta_rad=.035)
+    np.testing.assert_allclose(noisy,[-.005,.025])
+    assert np.max(np.abs(targets-noisy))<=.035+1e-12
+    np.testing.assert_array_equal(targets,original)
+    np.testing.assert_array_equal(origin,[0.,0.])
+
+
+def test_state_noise_without_a_bounded_head_remains_gaussian_input_only():
+    import act_job
+    np.testing.assert_allclose(act_job.augment_training_origin(
+        np.array([.1]),np.array([[.9]]),np.array([.02])),[.12])
+
+
+def test_bounded_state_noise_refuses_original_targets_outside_the_head_support():
+    import act_job
+    with pytest.raises(ValueError,match='bound'):
+        act_job.augment_training_origin(np.array([0.]),np.array([[.04]]),
+            np.array([0.]),max_delta_rad=.035)
+
+
+def test_command_entry_sampling_keeps_every_command_and_original_labels():
+    import copy
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id=command,ros_goal_id=goal,
+               **{'observation.state':[0.]*6,'action':[arm,0.,0.,0.,0.,gripper]})
+          for command,goal,arm,gripper in [('a','ga',.041,.0399),('a','ga',.034,.0399),
+              ('a','ga',.001,.0399),('b','gb',.03,.0399),('b','gb',.001,.0399)]]
+    original=copy.deepcopy(rows)
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry')==[1,3]
+    assert rows==original
+    assert chunk_indices(len(rows),1,4)==[1,2,3,4]  # Chunk still follows original frames.
+    assert act_job.training_sample_indices(rows,names,sampling='all_frames')==list(range(5))
+
+
+def test_command_entry_and_exit_keeps_last_eligible_original_frame_and_order():
+    import copy
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id=command,ros_goal_id=goal,
+               **{'observation.state':[0.]*6,'action':[arm,0.,0.,0.,0.,gripper]})
+          for command,goal,arm,gripper in [('a','ga',.041,.0399),('a','ga',.034,.0399),
+              ('a','ga',.001,.0399),('a','ga',.001,.0401),('b','gb',.03,.0399),
+              ('b','gb',.001,.0401),('c','gc',.02,.0399),('c','gc',.001,.0399)]]
+    original=copy.deepcopy(rows)
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry_and_exit')==[1,2,4,6,7]
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry')==[1,4,6]
+    assert rows==original
+    assert chunk_indices(len(rows),2,4)==[2,3,4,5]
+
+
+def test_place_open_sampling_adds_only_eligible_original_interiors_until_arm_moves(tmp_path):
+    import copy
+    import json
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    commands=[dict(command_id=key,sim_time=stamp,
+                   target=dict(zip(names,[arm,0.,0.,0.,0.,grip])))
+              for key,stamp,arm,grip in [('a',1.,.1,.4),('b',2.,.2,.4),
+                  ('c',3.,.2,.3),('d',4.,.3,.3),('e',5.,.2,.2)]]
+    phases=[dict(phase_id='transfer',started_sim_s=.5,ended_sim_s=2.5)]
+    proof=tmp_path/'truth.json'
+    for name,value in [('phases',phases),('commands',commands)]:
+        (tmp_path/(name+'.json')).write_text(json.dumps(value))
+    proof.write_text(json.dumps(dict(files={key:dict(path=key+'.json')
+                                           for key in ('phases','commands')})))
+    rows=[]
+    for command in commands:
+        action=list(command['target'].values())
+        for _ in range(4):
+            rows.append(dict(command_id=command['command_id'],ros_goal_id='g'+command['command_id'],
+                             **{'action':action[:],'observation.state':action[:]}))
+    rows[5]['observation.state'][0]-=.0351
+    original=copy.deepcopy(rows)
+    endpoints=[0,3,4,7,8,11,12,15,16,19]
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry_and_exit')==endpoints
+    assert act_job.training_sample_indices(rows,names,sampling='command_entry_exit_and_place_open',
+        sim_truth=proof)==sorted(endpoints+[6,9,10])
+    assert rows==original
+    assert chunk_indices(len(rows),6,4)==[6,7,8,9]
+
+
+def test_place_open_sampling_requires_original_sim_truth_metadata():
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    with pytest.raises(ValueError,match='SIM truth'):
+        act_job.training_sample_indices([],names,sampling='command_entry_exit_and_place_open')
+
+
+@pytest.mark.parametrize('sampling',['command_entry','command_entry_and_exit'])
+def test_command_entry_sampling_refuses_to_drop_unrepresented_commands(sampling):
+    import act_job
+    names=[f'joint{i}' for i in range(1,6)]+['gripper_joint_1']
+    rows=[dict(command_id='a',ros_goal_id='ga',
+               **{'observation.state':[0.]*6,'action':[0.,0.,0.,0.,0.,.0401]})]
+    with pytest.raises(ValueError,match='every command'):
+        act_job.training_sample_indices(rows,names,sampling=sampling)
+
+
+def test_invalid_training_sampling_fails_before_source_or_model_access(tmp_path):
+    with pytest.raises(ValueError,match='sampling'):
+        run([],tmp_path/'absent',tmp_path/'out',sampling='unknown')
+    assert not (tmp_path/'out').exists()
+
+
+def test_unknown_action_representation_fails_before_source_or_model_access(tmp_path):
+    with pytest.raises(ValueError,match='action representation'):
+        run([],tmp_path/'absent',tmp_path/'out',action_representation='unknown')
+    assert not (tmp_path/'out').exists()
+
+
+@pytest.mark.parametrize('std',[True,-.01,float('inf'),float('nan')])
+def test_invalid_state_noise_fails_before_source_or_model_access(tmp_path,std):
+    with pytest.raises(ValueError,match='state noise'):
+        run([],tmp_path/'absent',tmp_path/'out',state_noise_std_rad=std,
+            action_representation='joint_delta_from_chunk_source_v1')
+    assert not (tmp_path/'out').exists()
+
+
+def test_state_noise_requires_source_relative_targets(tmp_path):
+    with pytest.raises(ValueError,match='relative'):
+        run([],tmp_path/'absent',tmp_path/'out',state_noise_std_rad=.02)
+    assert not (tmp_path/'out').exists()
+
+
+@pytest.mark.parametrize('mode,parent',[('absolute_tanh_from_chunk_source_v1',None),
+    ('absolute','unused-parent'),('joint_delta_tanh_from_chunk_source_v1','unused-parent')])
+def test_parent_initialization_is_explicit_and_only_for_bounded_absolute(tmp_path,mode,parent):
+    with pytest.raises(ValueError,match='initial policy'):
+        run([],tmp_path/'absent',tmp_path/'out',action_representation=mode,initial_policy=parent)
+    assert not (tmp_path/'out').exists()
+
+
+def test_multiple_validation_episodes_cannot_overlap_training(tmp_path, monkeypatch):
+    monkeypatch.setattr('act_job.importlib.metadata.version', lambda *_: '0.4.4')
+    with pytest.raises(ValueError, match='disjoint'):
+        run([tmp_path/'train-a', tmp_path/'train-b'],
+            [tmp_path/'val-a', tmp_path/'train-b'],tmp_path/'out')
+    assert not (tmp_path/'out').exists()
+
+
 def test_chunk_padding_never_crosses_episode_boundary():
     assert chunk_indices(3, 1, 4) == [1, 2, None, None]
     with pytest.raises(ValueError):

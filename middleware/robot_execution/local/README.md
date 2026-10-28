@@ -3,10 +3,10 @@
 `core_arm_policy.CoreArmPolicyPort` exposes one explicitly installed,
 watchdog-bound `OwnerPolicySession` to CORE's authenticated HTTP app. It preserves
 single-use observation provenance and delegates final admission to the same owner.
-See [LeRobot through CORE](../../../integrations/robots/omx/CORE_LEROBOT.md).
+See [LeRobot through CORE](../../../integrations/robots/omx/docs/CORE_LEROBOT.md).
 It adds no physical policy activation, issuer, model loader or recovery authority.
 
-`rosy-execution-local` 0.1.4 depends on the ROS-free skill0.1.0 and learning0.1.6
+`rosy-execution-local` 0.1.7 depends on the ROS-free skill0.1.0 and learning0.1.13
 contracts wheels. The policy installation loader imports no learning registry,
 inference framework, ROS node, device driver, or network client.
 
@@ -78,6 +78,15 @@ final freshness/lease checks; failed storage cannot dispatch. Composition must
 also supply `journal.observe` to the actual ROS transport event sink. Without
 that wiring, an intent alone supplies no accepted goal or result evidence.
 
+Pending submits are serialized separately. Durable intent I/O holds neither the
+session lock nor the stop-fence lock, so observation, polling, lease renewal and
+stop can proceed. After commit the session reacquires its lock and the final
+stop fence, then rechecks the original candidate and command against all live
+admission boundaries. Both the recorded grant and current lease must remain
+valid through native transport; renewal does not revive an expired intent.
+Pre-transport rejection removes an unused callback sink. Once transport starts,
+its sink remains available for original late goal and cancellation facts.
+
 The WAL/FULL journal records original callback UUIDs, sequences, times and result
 facts; unknown commands, changed goal/phase, duplicate/out-of-order events and
 events after terminal are rejected transactionally. Readback uses one snapshot.
@@ -99,5 +108,6 @@ synthetic installed policy/authority and fake callbacks; no ROS/SIM/device,
 training, promotion or physical acceptance follows from their results.
 
 ```powershell
-python -B -m pytest middleware/robot_execution/local/test/test_policy_install.py -q -p no:cacheprovider --basetemp X:/DevTemp/policy-install-tests
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+python -B -m pytest middleware/robot_execution/local/test/test_policy_install.py -q -p no:cacheprovider --basetemp $RosyScratch/policy-install-tests
 ```

@@ -1,5 +1,87 @@
 # PC 자동 복구와 모니터링
 
+## 공통 시간 동기화 (D-859)
+
+관제 PC가 현장 NTP 서버이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
+기준과 수용 조건은 [D-859](../../docs/adr/D-859-shared-utc-time-synchronization.md),
+전체 기기의 동일한 단일 endpoint 결정은 [D-861](../../docs/adr/D-861-one-identical-ntp-endpoint-for-all-devices.md)다.
+실제 서버 이름·주소·CIDR은 호스트에만 둔다. 아래 자리표시자는 운영 값으로 바꾼다.
+표시 시간대(예: Asia/Seoul)는 UTC 동기화와 별개이며 바꿀 필요가 없다.
+
+1. **유지보수:** 작업·주행·학습·수집과 현장 컨테이너를 중지한다. `chrony`를 설치한다
+   (`sudo apt-get install chrony`). 다른 시간 데몬(`systemd-timesyncd`, `ntp`, `ntpsec`)이
+   실행 중이면 운영자가 중지·비활성화한다. 자동 설치가 이 작업을 대신하지 않는다.
+   최초 보정과 chrony 재시작은 시계 점프를 일으킬 수 있다.
+2. **관제:** 아래 명령으로 먼저 미리 보고, 외부 서버 세 곳의 독립성·도달성과 현장
+   CIDR을 확인한다. `render`는 출력만 한다. 기존 방화벽 절차로 승인된 LAN 인터페이스와
+   클라이언트 CIDR에서 UDP 123만 허용한다. 인터넷에 NTP 포트를 공개하지 않는다.
+
+   ```bash
+   python3 deploy/hosts/common/rosy_time_sync.py render --role site \
+     --source <upstream-a> --source <upstream-b> --source <upstream-c> --allow <client-cidr>
+   sudo python3 deploy/hosts/common/rosy_time_sync.py install --maintenance --role site \
+     --source <upstream-a> --source <upstream-b> --source <upstream-c> --allow <client-cidr>
+   ```
+
+   관제의 외부 공용 시간원은 64초마다 조회한다. 현장 Linux 클라이언트는 승인된 내부
+   관제 서버만 16–64초 간격으로 조회한다. 공용 서버에 내부용 16초 간격을 적용하지 않는다.
+
+3. **각 Linux PC·로봇:** 관제 서버가 먼저 동기된 뒤 같은 도구로 등록한다. 서버는 DHCP가
+   바뀌어도 유지되는 승인된 DNS/mDNS 이름을 쓴다. 서로 다른 공용 pool로 우회하지 않는다.
+   모든 기기에 같은 `--source` 하나를 사용한다. 두 번째 source와 개별 공용 fallback은 거부한다.
+
+   적용 전에 해당 기기에서 공통 이름이 해석되고 UDP 123으로 도달하는지 확인한다.
+   Pinky의 기본 VPN 가입은 `--accept-dns=false`이므로 PC의 VPN DNS 성공을 로봇에도
+   적용된 사실로 읽지 않는다. LAN 전용 운용과 VPN 운용의 실제 resolver·경로를 각각 확인한다.
+
+   ```bash
+   sudo python3 deploy/hosts/common/rosy_time_sync.py install --maintenance --role client --source <site-ntp-name>
+   python3 deploy/hosts/common/rosy_time_sync.py check
+   chronyc -N sources -v
+   ```
+
+   새 Pinky native runtime에는 `rosy_time_sync.py`가 함께 배포된다. 저장소가 없는 장치는
+   `/opt/rosy/native-runtime/rosy_time_sync.py` 또는 승인된 release의 native 사본을 사용한다.
+   예전 장치에는 승인된 리비전의 도구를 먼저 복사한다. 이미지/OTA 설치만으로 현장별
+   NTP 등록이 끝나는 것은 아니다. 컨테이너·Harbor 앱은 호스트 시간을 공유하며 별도 NTP
+   데몬이나 `CAP_SYS_TIME`을 넣지 않는다. OMX는 팔 자체가 아닌 제어 호스트에 적용한다.
+4. **Windows 개발 PC:** 관리자 PowerShell 유지보수 창에서 먼저 `-WhatIf`로 확인한다.
+   도메인·정책 관리 PC는 스크립트가 거부하며 도메인 관리자가 같은 기준을 연결한다.
+
+   ```powershell
+   ./deploy/hosts/common/install-time-sync.ps1 -Server <site-ntp-name> -Maintenance -WhatIf
+   ./deploy/hosts/common/install-time-sync.ps1 -Server <site-ntp-name> -Maintenance
+   w32tm /query /status /verbose
+   w32tm /stripchart /computer:<site-ntp-name> /dataonly /samples:10
+   ```
+
+   Windows 설치기는 registry 원본을 먼저 보존하고 내부 관제 peer의 최소·최대 polling을
+   64초로 맞춘다. 실제 서비스 설정은 관리자 창에서 `w32tm /query /configuration`으로 확인한다.
+
+5. **수용:** Linux `check`의 JSON `synchronized=true`와 exit 0, 선택된 시간원, 표본 시각을
+   장치별로 기록한다. 보고 오차 상한 50ms·표본 나이 180초 기준을 벗어나면 exit 1이다.
+   UDP 차단/해제·재부팅 뒤 다시 확인한다. 실패하면 시간 의존 작업을 재개하지 않는다.
+   이 명령은 읽기 전용이며 앱의 자동 차단 기능은 아니다. Windows는 source·최근 성공
+   시각·offset을 별도로 관측하고 Linux의 50ms 통과로 간주하지 않는다. 휴대전화·MCU는
+   OS/MDM 시간 설정과 원본 capture clock domain을 별도로 확인한다. 앱 설치나 서버의
+   수신 시각만으로 모바일 시계까지 맞았다고 기록하지 않는다.
+
+chrony의 시간원 선택 한도(`maxdistance`, 기본 3초)와 위의 정밀도 수용은 별개다.
+상위 NTP가 보고한 root distance가 100ms를 넘을 수 있으므로 선택 한도를 100ms로 줄이면
+응답이 정상이어도 시계 보정 자체가 중단된다. 공통 서버로의 보정은 허용하되, UTC 오차
+상한 50ms·표본 나이 검사는 유지하며 기준 밖이면 수용 실패로 보고한다. 설정에 같은
+서버가 들어 있다는 사실만으로 동기를 판정하지 않고 `chronyc sources`의 선택 표시와
+tracking의 stratum/leap 상태를 확인한다.
+
+설치 전 chrony 원본은 `/etc/chrony/chrony.conf.rosy-backup-*`에 보존된다. 구문 오류는
+적용 전 거부하고 서비스 재시작 실패는 이전 설정으로 복구한다. 시간원 연결 실패는 새
+설정을 유지하되 실패를 반환한다. DNS·UDP 123·관제 시간원부터 고친 뒤 `check`한다.
+구성 복구는 유지보수 중 출력된 원본 백업을 `chrony.conf`로 복사하고 chrony를 재시작한 뒤
+재검증한다. Windows는 출력된 `.reg`를 `reg import`하고 W32Time 재시작·상태 확인을 한다.
+백업은 운영 설정이므로 공개 저장소에 넣지 않는다.
+
+## PC 복구 설치
+
 모델·AI·관제 PC의 복구 기준은 `common/host-state/manifest`가 소유한다.
 각 PC는 승인된 저장소 리비전을 설치하고, 이후에는 로컬 사본과 실행값을 점검한다.
 Fleet은 결과만 읽으며 root 설치 명령을 실행하지 않는다(D-530).
@@ -68,8 +150,10 @@ sudo python3 deploy/hosts/common/rosy-host-state install site --approve recovery
 
 이후 Fleet의 **설치·보정 → 호스트 서비스**에서 세 PC를 각각 확인한다.
 
-- 가드는 10분마다 원격 PC의 `health`(메모리·swap 사용률·CPU 부하)와 `recovery` 캐시를 읽는다.
-  관제 PC는 자기 로컬 보고를 사용한다.
+- 가드는 10분마다 원격 PC의 `health`(메모리·swap·부하, D-883의 디스크·RAM 용량·CPU 사용률/온도·GPU)와 `recovery` 캐시를 읽는다.
+  관제 PC는 자기 로컬 보고에 같은 `health`를 로컬로 실행한 값을 더한다(D-885).
+- 디스크 여유 30GiB 미만 또는 사용률 90% 이상은 `disk-low`다. AI·모델 PC면 가드가 6시간에 한 번
+  `clean-storage`(rosy-ops `rosy-test-storage.service`)를 요청하고, 운영자는 같은 동작을 화면에서 요청할 수 있다.
 - 로컬 점검은 설치 직후 및 30분마다 실제 워치독·커널 설정·SSH 복구의 최근 실행과
   실패 카운터·활성 swap 총량과 사용량을 기록한다. 화면은 30초마다 읽는다.
 - 원격 호스트 결과 15분, 복구 설정 결과 35분 초과는 점검 지연이다. 결과 부재·미지원·접속
@@ -77,7 +161,9 @@ sudo python3 deploy/hosts/common/rosy-host-state install site --approve recovery
 - 설정 누락은 보고만 하며 기존 가드의 재부팅 조건·상한을 바꾸지 않는다.
 
 원본은 각 PC의 `/var/lib/rosy-host-state/status.json`과 관제 PC의
-`/var/lib/rosy-host-guard/status.json`이다. 가드가 멈추면 파일의 시각으로 지연을 표시한다.
+`/var/lib/rosy-host-guard/status.json`이다.
+
+**업데이트 현황 (D-871).** 가드는 PC마다 `health` 옆에서 강제 명령 `updates`도 부른다. 그 PC의 `rosy-update-report`(`install-guard-remote.sh`가 `/usr/local/sbin`에 설치)가 업데이트 유닛별 타이머, 마지막 단계·릴리스·사유 코드, 동결 관문 상태를 JSON으로 돌려주고, 가드는 이를 `status.json`의 `updates`에 둔다. 로그 원문은 보내지 않는다. 가드가 도는 관제 PC 자신의 사용자 유닛은 `hosts.conf`의 `site updates <user>@127.0.0.1` 줄로 읽는다. 이 줄은 `updates`만 부르고 복구 사다리(재시작·재부팅)는 돌리지 않는다. 그 사용자의 `authorized_keys`에도 가드 키를 강제 명령으로 넣는다. Fleet은 운영자에게 `/api/fleet/hosts`(사유 포함)를, 모든 역할에 `/api/fleet/updates`(상태·릴리스 요약)를 보여 준다. 셀마다 관제 PC가 따로 있으면 `pc` 줄을 늘린다. 화면은 가드가 보고한 PC를 모두 그린다. 가드가 멈추면 파일의 시각으로 지연을 표시한다.
 가드의 상태 디렉터리는 `0751`, 비밀 없는 JSON은 `0644`로 Fleet 컨테이너의 UID 10001이 읽는다.
 SSH 키가 있는 `/etc/rosy/host-guard`는 `0750`을 유지한다.
 Fleet 자체가 중단되면 이 화면도 사용할 수 없으며, 외부 가용성 감시는 별도다.

@@ -156,3 +156,25 @@ TEST(NativeMapGrid, AcceptsExactCellLimitAndRejectsLargerGrid)
   value.data.assign(static_cast<size_t>(value.info.width) * value.info.height, 0);
   EXPECT_THROW(identify(value), std::invalid_argument);
 }
+
+TEST(NativeMapGrid, RejectsOversizedOriginalBeforeCallingItsCopier)
+{
+  auto value = grid();
+  int copies = 0;
+  auto copy = [&](const OccupancyGrid & original) {
+      ++copies;
+      EXPECT_EQ(&original, &value);
+      return 1;
+    };
+  value.data.resize(4194305);
+  EXPECT_THROW(rosy_native_map::capture_original(value, copy), std::invalid_argument);
+  EXPECT_EQ(copies, 0);
+  value = grid();
+  value.info.width = value.info.height = UINT32_MAX;
+  EXPECT_THROW(rosy_native_map::capture_original(value, copy), std::invalid_argument);
+  EXPECT_EQ(copies, 0);
+  value.info.width = value.info.height = 2048;
+  value.data.assign(4194304, 0);
+  EXPECT_EQ(rosy_native_map::capture_original(value, copy), 1);
+  EXPECT_EQ(copies, 1);
+}

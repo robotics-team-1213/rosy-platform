@@ -63,6 +63,22 @@ def test_a_fresh_centre_way_returns_the_steer_error_and_a_live_path():
     assert all(len(point) == 2 for point in last["expected_path_m"])
 
 
+def test_the_corridor_core_checks_is_the_ways_near_edges_not_the_tape_keepers_fit():
+    steer, ways, last = DrivableSteer(), _Ways(_lane(HALF, -HALF)), {
+        'boundaries': [dict(side='right', selected=True, ends_m=[[0.16, 0.08], [0.36, -0.16]])]}   # r3's crossing line
+    _step(steer, ways, last, 0.0)
+    edges = {b['side']: b for b in last['boundaries']}
+    assert set(edges) == {'left', 'right'} and all(b['edge_m'] and b['selected'] for b in edges.values())
+    assert all(abs(y - HALF) < 0.01 for _, y in edges['left']['ends_m'])
+    assert all(abs(y + HALF) < 0.01 for _, y in edges['right']['ends_m'])
+
+
+def test_the_keepers_junction_sighting_reaches_core():
+    steer, ways, last = DrivableSteer(), _Ways(_lane(HALF, -HALF)), {'junction_ahead_m': 0.3}
+    _step(steer, ways, last, 0.0)
+    assert last['junction_ahead_m'] == 0.3     # CORE carries out Fleet's junction on it (v2 lap r18)
+
+
 def test_a_missing_way_after_commit_holds_instead_of_the_tape_keeper():
     steer, ways, last, _step_live, _decided, _error, _confidence, _info = _commit_centre()
     ways.way = None

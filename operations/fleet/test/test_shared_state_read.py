@@ -308,9 +308,11 @@ def test_every_fleet_loop_together_reads_a_robot_at_most_3_times_a_second(tmp_pa
 
 #: Fleet's periodic loops (D-760 8). Excluded: swarm/session.py (K3) and one-off command paths.
 PERIODIC = ("server/app.py", "server/pose/map_pose_service.py", "server/trips/trip_runner.py",
-            "server/trips/trip_ports.py", "server/lane_compliance_service.py",
-            "server/pose/localization_service.py", "server/pose/path_history.py", "swarm/anchor.py",
+            "server/trips/trip_ports.py", "server/pose/lane_compliance_service.py",
+            "server/pose/localization_service.py", "server/sitemap/path_history.py", "swarm/anchor.py",
             "server/tether_routes.py", "server/tether_watch.py",
+            "server/trips/trip_steps.py", "server/trips/trip_replan.py", "server/trips/trip_geometry.py",
+            "server/trips/trip_live.py",
             "server/console/console.py", "server/trips/trip_preview.py")
 #: Where a direct read may stay: a constructor's fallback without the shared read, and app.py's
 #: ``_rest_state``, the shared read's own transport.

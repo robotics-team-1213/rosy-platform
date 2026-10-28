@@ -18,6 +18,7 @@ for path in (
     ROOT / "deploy" / "robot" / "pinky_pro" / "release",
     ROOT / "tools" / "harness",
     ROOT / "contracts" / "foundation",
+    ROOT / "middleware" / "devices" / "omx" / "adapter",
     ROOT / "operations" / "fleet",
     ROOT / "operations" / "decision" / "src",
     ROOT / "operations" / "world" / "src",
@@ -31,10 +32,9 @@ for path in (
 # 경우가 많다. 서명·readback·bundle 계약이 전부 openssl 을 부르므로, 없으면
 # 여기서 Git 것을 PATH 앞에 붙인다. 있으면 무엇도 건드리지 않는다.
 if os.name == "nt" and shutil.which("openssl") is None:
-    for candidate in (
-        r"C:\Program Files\Git\usr\bin",
-        r"C:\Program Files\Git\mingw64\bin",
-    ):
+    from signing import _WINDOWS_OPENSSL_DIRS
+
+    for candidate in _WINDOWS_OPENSSL_DIRS:
         if os.path.isfile(os.path.join(candidate, "openssl.exe")):
             os.environ["PATH"] = candidate + os.pathsep + os.environ.get("PATH", "")
             break

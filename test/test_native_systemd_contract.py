@@ -146,6 +146,8 @@ def test_native_recovery_is_a_required_fail_closed_boot_gate():
         "DefaultDependencies=no", "After=local-fs.target", "Before=rosy-core.service rosy-runtime.target",
         "Type=oneshot", "RemainAfterExit=yes",
         "ExecStart=/opt/rosy/native-runtime/recover-release.sh",
+        # A rejected boot inverse must fail the dependency before CORE starts.
+        "ExecStartPost=+/usr/bin/python3 -I -B /opt/rosy/native-runtime/image-layer-reconcile.py",
     ):
         assert directive in unit
     assert "Restart=" not in unit
@@ -153,6 +155,10 @@ def test_native_recovery_is_a_required_fail_closed_boot_gate():
     assert "native_release.py" in script
     assert " recover" in script
     assert "docker" not in (unit + script).lower()
+    for consumer in ("rosy-core.service", "rosy-runtime.target"):
+        directives = _directives(consumer)
+        for dependency in ("Requires", "After"):
+            assert "rosy-release-recover.service" in " ".join(directives[dependency]).split()
 
 
 def test_provisioning_gate_refuses_an_unpersonalized_device():
@@ -333,6 +339,29 @@ ROOT_ONLY_STATE = (
 # What each ProtectSystem=strict unit's program writes, derived from the code.
 # "$HOME" is the unit's Environment=HOME. Keep this next to the code references.
 DECLARED_WRITES = {
+    "rosy-os-update.service": {"/var/lib/rosy-device/os-update", "/var/lib/rosy/updates/.run.lock",
+        "/var/lib/rosy/releases/native-release.lock", "/var/lib/rosy-device/state/config.lock",
+        "/run/rosy-os-update", "/run/systemd/system/rosy-os-rauc.service.d",
+        "/run/rosy-claim", "/run/rosy-claim.lock", "/run/rosy-claim.stale.x", "/run/rosy-provision-boot/autoboot.txt"},
+    "rosy-os-rauc.service": {"/run/rosy-os-update/rauc", "/var/lib/rosy-device/os-update/rauc"},
+    "rosy-os-motion-guard.service": {"/run/rosy-os-update"},
+    "rosy-os-trial-deadline.service": set(),
+    "rosy-os-storage.service": set(),
+    "rosy-os-tailnet.service": {"/var/lib/rosy-device/tailscale", "/var/lib/rosy-device/state/config.lock"},
+    "rosy-network-agent.service": {
+        "/var/lib/rosy/network", "/etc/NetworkManager/system-connections",
+        "/run/rosy-network", "/run/rosy-claim", "/run/rosy-claim.lock", "/run/rosy-claim.stale.x",
+        "/run/rosy-network-agent/core.sock", "/run/rosy-network-agent/recovery.sock",
+        "/var/log/rosy-network-agent/audit.jsonl",
+        # Root ExecStartPre creates the recovery permissions after systemd creates the leaves.
+        "/var/lib/rosy/network-recovery", "/run/rosy-network-recovery/auth",
+    },
+    "rosy-network-recovery.service": {
+        # Only root ExecStartPre writes the verifier/TLS/display; POSIX ownership
+        # keeps the unprivileged HTTP process confined to its 0700 auth child.
+        "/var/lib/rosy/network-recovery", "/run/rosy-boot/recovery-display.txt",
+        "/run/rosy-network-recovery", "$HOME/auth-state.json",
+    },
     "rosy-ssh-pairing.service": {
         "/home/rosy/.ssh/authorized_keys", "/run/rosy-host/ssh-pairing.sock",
         "/var/log/rosy-ssh-pairing/audit.jsonl",
@@ -345,7 +374,7 @@ DECLARED_WRITES = {
         # SymlinkStore.set: temporary ".<name>.new" link, then os.replace.
         "/opt/rosy/current", "/opt/rosy/previous", "/opt/rosy/.current.new",
     },
-    "rosy-sd-provision.service": set(),
+    "rosy-sd-provision.service": {"/run/rosy-os-state", "/var/lib/rosy-device/state/config.lock"},
     "rosy-core.service": {
         # core_common/config.py LOCAL_CONFIG_PATH / overlay_path (API writes).
         "$HOME/.rosy/rosy.yaml",
@@ -381,7 +410,11 @@ DECLARED_WRITES = {
         "/var/lib/rosy/camera/recordings",
         # D-411: the Pilot recorder (pilot_recorder_node), setgid rosy-core.
         "/var/lib/rosy/pilot-recordings",
+        # D-789 T3: rosy_media_edge.camera_tap FrameWriter mailbox (and its .owner lock).
+        "/run/rosy-media/front.rgb", "/run/rosy-media/front.rgb.owner",
     },
+    # D-789 T5: the optional media publisher writes nothing on disk (journal only).
+    "rosy-media.service": set(),
     "rosy-navigation.service": {
         "/var/log/rosy-navigation/launch.log",
         # slam_toolbox save_map output: ros_bridge.py ROSY_MAP_OUTPUT_DIR default.
@@ -418,6 +451,7 @@ DECLARED_WRITES = {
         "/var/lib/rosy/updates/state.json", "/var/lib/rosy/updates/status.json",
         "/var/lib/rosy/updates/history.jsonl", "/var/lib/rosy/updates/hold.json",
         "/var/lib/rosy/updates/downloads",
+        "/var/lib/rosy-device/policy/updates/config.json", "/var/lib/rosy-device/policy/updates/hold.json",
         # rosy_claim.py CLAIM_DIR: mkdir in /run, and the stale rename beside it.
         "/run/rosy-claim", "/run/rosy-claim.stale.x",
         # rosy-release-unpack.sh into the release store; native_release.py
@@ -438,20 +472,58 @@ DECLARED_WRITES = {
         # lgpio's notification files in LG_WD (the unit's own runtime directory).
         "/run/rosy-hw-test/.lgd-nfy0",
     },
-    # D-477: the one-shot tailnet join. The spent key leaves the provisioned
-    # file by an in-place rewrite, and the outcome lands in its StateDirectory.
+    # Legacy rewrites the leaf in place; A/B atomically consumes a shared channel.
     "rosy-tailscale-join.service": {
         "/etc/rosy/tailscale-join.json", "/var/lib/rosy/tailscale/join-result.json",
+        "/var/lib/rosy-device/tailscale/join", "/var/lib/rosy-device/state/config.lock",
     },
 }
 
-# Absolute paths a unit's program names but only reads.
+# Absolute paths a unit's program names but never writes.
+NETWORK_EVIDENCE_READS = {
+    "/etc/rosy/runtime.env", "/etc/rosy/device-identity.json", "/var/lib/rosy/provisioning",
+    "/run/rosy/status-inputs.json", "/run/rosy-boot/boot-status.json", "/run/rosy-boot/network.json",
+    "/boot/firmware/rosy-provision/provision.json", "/proc/sys/kernel/random/boot_id",
+    "/sys/firmware/devicetree/base/serial-number", "/proc/cpuinfo",
+    "/opt/rosy/first-boot/rosy-first-boot.py", "/opt/rosy/native-runtime/network_handoff.py",
+}
+
 DECLARED_READS = {
+    "rosy-os-update.service": {"/etc/rosy", "/etc/rauc", "/etc/systemd", "/etc/dbus-1", "/opt/rosy",
+        "/var/lib/rosy-device", "/var/lib/rosy/releases", "/var/lib/rosy/updates", "/run/rosy",
+        "/sys", "/dev", "/proc", "/usr/local/share/rosy", "/boot/firmware", "$HOME"},
+    # These entrypoints only read journal/bootstrap/media; controller writers are separate.
+    "rosy-os-motion-guard.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
+    "rosy-os-trial-deadline.service": {"/etc/rosy", "/var/lib/rosy-device", "/run/rosy-provision-boot"},
+    "rosy-os-rauc.service": {"/etc/rosy", "/etc/rauc", "/etc/systemd", "/etc/dbus-1",
+                              "/opt/rosy", "/var/lib/rosy-device", "/var/lib/rosy/releases", "/run/rosy-claim",
+                              "/run/rosy-provision-boot", "/run/systemd/system"},
+    # Only the admission methods are called: none of firstboot's writers run here.
+    "rosy-os-storage.service": {
+        "/var/lib/rosy-device", "/etc/rosy", "/etc/hostname", "/etc/hosts",
+        "/etc/passwd", "/etc/group", "/var/lib/tailscale", "/proc/device-tree/serial-number",
+        "/var/lib/rosy/provisioning", "/var/lib/rosy/core", "/var/lib/rosy/ssh",
+        "/etc/NetworkManager/system-connections", "/home/rosy/.ssh",
+        "/run/rosy-provision-boot", "/proc/1/mountinfo", "/proc/self/mountinfo",
+        "/proc/1/root/dev/disk/by-partuuid", "/sys/dev/block", "/opt/rosy/native-runtime", "/opt/rosy/os-bootstrap",
+    },
+    "rosy-network-agent.service": NETWORK_EVIDENCE_READS | {
+        # Imported generic transport default; the entrypoint overrides it with
+        # both dedicated sockets. This name is never opened by this service.
+        "/run/rosy/host-agent.sock",
+    },
+    "rosy-network-recovery.service": NETWORK_EVIDENCE_READS | {
+        "/run/rosy-network-agent/recovery.sock", "/opt/rosy/native-runtime/recovery-web",
+    },
     "rosy-release-recover.service": {"/opt/rosy/releases"},  # verify() of old_current
     "rosy-auto-update.service": {
         # sync only reads metadata in the updater's namespace. PID 1 starts a
         # separate bounded tmpfiles worker to create/repair these directories.
         "/var/lib/rosy/maps", "/var/lib/rosy/models", "/var/lib/rosy/pilot-recordings",
+        # A/B admission only reads storage identities and the projection receipt.
+        "/run/rosy-provision-boot", "/run/rosy-os-state/ready.json", "/etc/rosy/os-slot.json",
+        "/var/lib/rosy-device/state", "/proc/1/mountinfo", "/proc/self/mountinfo",
+        "/proc/1/root/dev/disk/by-partuuid",
     },
     "rosy-core.service": {
         # D-456: signed receiver crypto is loaded from immutable release payloads.
@@ -459,6 +531,7 @@ DECLARED_READS = {
         "/var/lib/rosy",       # calibration data_root, runtime probe default
         # D-432: connect to the root helper socket; CORE does not create it.
         "/run/rosy-host/ssh-pairing.sock",
+        "/run/rosy-network-agent/core.sock",
         "/var/lib/rosy/maps",  # save_map read-back; slam_toolbox is the writer
         # D-193: the root issuer's verifier, root:rosy-core 0640. CORE never writes there (D-161).
         "/run/rosy-boot/login-code.json",
@@ -512,8 +585,50 @@ DECLARED_READS = {
     },
 }
 
+# Shared imported source closure, including helpers whose privileged functions
+# are used only by the agent or root issuer, never by the HTTP process.
+NETWORK_SOURCES = [
+    "deploy/robot/pinky_pro/native/network_runtime.py",
+    "deploy/robot/pinky_pro/native/network_handoff.py",
+    "deploy/robot/pinky_pro/native/network_recovery.py",
+    "deploy/robot/pinky_pro/native/rosy_claim.py",
+    "deploy/robot/pinky_pro/release/network_transaction.py",
+    "deploy/robot/pinky_pro/release/network.py",
+]
+
 # Program sources scanned for write roots, per unit.
 PROGRAM_SOURCES = {
+    "rosy-os-update.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_update_controller", "os_update_commit", "os_update_health", "os_update_policy", "os_update_watchdog",
+         "os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout",
+         "os_update_install", "os_installed_factory", "native_release", "os_motion_guard", "auto_update_host", "auto_update_records",
+         "os_update_feed", "os_update_stage", "os_update_rollout")] + ["deploy/hosts/common/host-state/rosy-update-gate"],
+    "rosy-os-motion-guard.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_motion_guard", "os_bootloader", "os_update_state", "os_state_layout", "os_state_io")],
+    "rosy-os-trial-deadline.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_trial_deadline", "os_bootloader", "os_update_state", "os_state_layout")],
+    "rosy-os-rauc.service": [f"deploy/robot/pinky_pro/native/{name}.py" for name in
+        ("os_rauc_service", "os_rauc_runtime", "os_rauc", "os_bootloader", "os_update_state", "os_state_layout",
+         "os_update_install", "os_installed_factory", "native_release")],
+    "rosy-os-storage.service": ["deploy/robot/pinky_pro/native/os_storage_dispatch.py",
+                                "deploy/robot/pinky_pro/native/os_state_storage.py",
+                                "deploy/robot/pinky_pro/native/os_state_layout.py",
+                                "deploy/robot/pinky_pro/native/os_state_accounts.py",
+                                "deploy/robot/pinky_pro/native/os_state_files.py",
+                                "deploy/robot/pinky_pro/native/os_state_firstboot.py",
+                                "deploy/robot/pinky_pro/native/os_state_io.py"],
+    "rosy-network-agent.service": NETWORK_SOURCES + [
+        "deploy/robot/pinky_pro/native/rosy-network-agent.py",
+        "deploy/robot/pinky_pro/native/network_agent.py",
+        "deploy/robot/pinky_pro/release/nm_network.py",
+        "deploy/robot/pinky_pro/release/host_agent.py",
+        "deploy/robot/pinky_pro/release/host_agent_server.py",
+    ],
+    "rosy-network-recovery.service": NETWORK_SOURCES + [
+        "deploy/robot/pinky_pro/native/rosy-network-recovery.py",
+        "deploy/robot/pinky_pro/native/recovery_launcher.py",
+        "deploy/robot/pinky_pro/native/network_recovery_http.py",
+    ],
     "rosy-ssh-pairing.service": ["deploy/robot/pinky_pro/native/rosy-ssh-pairing.py"],
     "rosy-release-recover.service": ["deploy/robot/pinky_pro/native/native_release.py",
                                      "deploy/robot/pinky_pro/native/recover-release.sh"],
@@ -543,6 +658,8 @@ PROGRAM_SOURCES = {
     "rosy-navigation.service": ["middleware/drive/planning/nav2", "middleware/devices/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
+                          "deploy/robot/pinky_pro/native/face_card_renderer.py",
+                          "deploy/robot/pinky_pro/native/recovery_display.py",
                           # D-260: the rule table it imports from the release.
                           "contracts/foundation/core_common/robot_state.py",
                           # D-433: the situation table and the face-inputs reader.
@@ -566,11 +683,30 @@ PROGRAM_SOURCES = {
     "rosy-tailscale-join.service": ["deploy/robot/pinky_pro/native/rosy-tailscale-join.py"],
     # D-412: the updater, its claim, and the programs it runs as children.
     "rosy-auto-update.service": ["deploy/robot/pinky_pro/native/rosy_auto_update.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_host.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_records.py", "deploy/robot/pinky_pro/native/os_state_layout.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_stage.py",
+                                 "deploy/robot/pinky_pro/native/auto_update_apply.py",
                                  "deploy/robot/pinky_pro/native/rosy_claim.py",
+                                 "deploy/robot/pinky_pro/native/rosy_transfer.py",
                                  "deploy/robot/pinky_pro/native/rosy-release-unpack.sh",
                                  "deploy/robot/pinky_pro/native/native_release.py",
                                  "deploy/robot/pinky_pro/native/sync-image-layer.py"],
 }
+
+DECLARED_READS["rosy-os-tailnet.service"] = DECLARED_READS["rosy-os-storage.service"]
+DECLARED_READS["rosy-sd-provision.service"] = set(DECLARED_READS["rosy-os-storage.service"])
+DECLARED_READS["rosy-sd-provision.service"] |= {"/proc/sys/kernel/hostname", "/proc/sys/kernel/random/boot_id",
+    "/etc/timezone", "/usr/share/zoneinfo", "/etc/localtime"}
+DECLARED_READS["rosy-tailscale-join.service"] = DECLARED_READS["rosy-os-storage.service"]
+PROGRAM_SOURCES["rosy-os-tailnet.service"] = [*PROGRAM_SOURCES["rosy-os-storage.service"],
+                                           "deploy/robot/pinky_pro/native/os_state_config.py"]
+PROGRAM_SOURCES["rosy-sd-provision.service"] = [*PROGRAM_SOURCES["rosy-os-storage.service"],
+    "deploy/robot/pinky_pro/native/os_state_config.py", "deploy/robot/pinky_pro/native/os_state_ready.py"]
+PROGRAM_SOURCES["rosy-auto-update.service"] += PROGRAM_SOURCES["rosy-sd-provision.service"]
+DECLARED_READS["rosy-auto-update.service"] |= DECLARED_READS["rosy-sd-provision.service"]
+DECLARED_WRITES["rosy-auto-update.service"].add("/var/lib/rosy-device/state/config.lock")
+PROGRAM_SOURCES["rosy-tailscale-join.service"] += PROGRAM_SOURCES["rosy-os-tailnet.service"]
 
 PATH_LITERAL = re.compile(r"""["'](/(?:var|opt|run|etc|srv|home|root)/[^"'\s]*)["']""")
 SEGMENT_CHAIN = re.compile(r"""["'](var|opt|run|etc)["'](?:\s*/\s*["'][^"'/]+["'])+""")
@@ -713,6 +849,47 @@ def test_no_unit_takes_the_shared_rosy_state_parent(unit):
     assert "rosy" not in _words(directives, "StateDirectory"), unit
     for path, _optional in _writable(directives):
         assert path.rstrip("/") not in {"/var/lib", "/var/lib/rosy", "/opt", "/etc", "/etc/rosy"}, (unit, path)
+
+
+def test_network_account_provisioning_runs_only_fixed_signed_commands():
+    directives = _directives("rosy-network-users.service")
+    assert directives["User"] == ["root"] and directives["Type"] == ["oneshot"]
+    assert directives["ExecStart"] == [
+        "/usr/bin/systemd-sysusers /opt/rosy/native-runtime/rosy-network-users.conf",
+        "/usr/bin/install -d -m 0755 /etc/issue.d",
+        "/usr/bin/ln -sfn /run/rosy-boot/recovery-display.txt /etc/issue.d/65-rosy-network-recovery.issue",
+    ]
+    # Account databases need atomic replacement in /etc. No general-purpose
+    # shell or long-running process receives this provisioning filesystem view.
+    assert "ProtectSystem" not in directives and "ReadWritePaths" not in directives
+    assert "StateDirectory" not in directives and "RuntimeDirectory" not in directives
+
+
+def test_network_agent_preserves_root_owned_credential_parents_and_auth_attempts():
+    agent = _directives("rosy-network-agent.service")
+    assert agent["User"] == ["root"] and agent["Group"] == ["rosy-recovery"]
+    assert "rosy-network-users.service" in _words(agent, "Requires")
+    assert "rosy-network-users.service" in _words(agent, "After")
+    assert set(_words(agent, "StateDirectory")) == {"rosy/network", "rosy/network-recovery"}
+    assert set(_words(agent, "RuntimeDirectory")) == {"rosy-network-agent", "rosy-network-recovery"}
+    assert agent["RuntimeDirectoryPreserve"] == ["yes"]
+    assert agent["ExecStartPre"] == [
+        "/usr/bin/install -d -m 0750 -o root -g rosy-recovery /var/lib/rosy/network-recovery",
+        "/usr/bin/install -d -m 0750 -o root -g rosy-recovery /run/rosy-network-recovery",
+        "/usr/bin/install -d -m 0700 -o rosy-recovery -g rosy-recovery /run/rosy-network-recovery/auth",
+    ]
+
+
+def test_recovery_http_never_owns_issuer_parent_directories():
+    recovery = _directives("rosy-network-recovery.service")
+    assert recovery["User"] == ["rosy-recovery"]
+    assert recovery["Group"] == ["rosy-recovery"]
+    assert _environment(recovery)["HOME"] == "/run/rosy-network-recovery/auth"
+    assert "StateDirectory" not in recovery and "RuntimeDirectory" not in recovery
+    assert recovery["ExecStartPre"] == [
+        "+/usr/bin/python3 -I /opt/rosy/native-runtime/rosy-network-recovery.py issue"]
+    assert recovery["ExecStart"] == [
+        "/usr/bin/python3 -I /opt/rosy/native-runtime/rosy-network-recovery.py serve"]
 
 
 def _non_root(directives: dict[str, list[str]]) -> bool:
@@ -1100,9 +1277,10 @@ def test_camera_reads_the_optional_learned_perception_switch_file():
         "/etc/rosy/runtime.env", "-/etc/rosy/learned-perception.env"]
     for line in CAMERA_HARDENING:
         assert line in unit.splitlines(), line
-    # The switch opens no write path of its own (D-411's recorder owns exactly one)
-    # and never reaches the command line: the launch file reads the variables itself.
-    assert directives["ReadWritePaths"] == ["/var/lib/rosy/pilot-recordings"]
+    # The switch opens no write path of its own (D-411's recorder and the D-789 media
+    # mailbox are the only two) and never reaches the command line: the launch file
+    # reads the variables itself.
+    assert directives["ReadWritePaths"] == ["/var/lib/rosy/pilot-recordings", "/run/rosy-media"]
     exec_start = directives["ExecStart"][0]
     assert "ROSY_LEARNED_SHADOW" not in exec_start and "ROSY_CAPTURE" not in exec_start
     assert "learned_shadow:=" not in exec_start and "capture:=" not in exec_start

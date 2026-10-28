@@ -1,5 +1,6 @@
 /* Shared read-only motor presentation. Surface adapters own placement and transport. */
 .motor-health { min-width: 0; display: grid; gap: var(--space-3); }
+.motor-health[hidden] { display: none; }
 .motor-health-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
 .motor-health-age, .motor-health-sub, .motor-health-note, .motor-health-empty { color: var(--text-secondary); }
 .motor-health-note, .motor-health-empty, .motor-health-fault, .motor-health-warnings { margin: 0; }

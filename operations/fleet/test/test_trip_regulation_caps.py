@@ -107,7 +107,7 @@ def test_the_next_lap_is_checked_on_its_own_segments(monkeypatch):
     run(runner.start("p1", "bob"))
     live = runner._live["rosy_60"]
     body = {"segments": live.view["plan"]["segments"][:1]}
-    module = sys.modules[type(runner).__module__]
+    module = sys.modules[type(runner)._next_lap.__module__]  # trip_replan since the D-798 split
     checked = []
 
     async def caps_checks(_robot_id, _graph, segments, *_args, **_kwargs):

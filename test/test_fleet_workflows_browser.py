@@ -3,6 +3,7 @@ import os
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from browser_harness import browser_tests_enabled
@@ -15,10 +16,10 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
 
 def _open_console(*args, **kwargs):
     browser, page, errors = _open_base(*args, **kwargs)
-    # X-only served mutation proves the guard without ever changing the product file.
+    # A served mutation outside the checkout proves the guard without changing the product file.
     if candidate := os.environ.get('ROSY_FLEET_MUTATION_ASSET'):
         asset = Path(candidate).resolve()
-        assert asset.drive.upper() == 'X:'
+        assert not asset.is_relative_to(Path(__file__).resolve().parents[1])
         assert asset.name in {'install.js', 'vision-view.js'}
         body = asset.read_bytes()
         digest = hashlib.sha256(body).hexdigest()
@@ -29,6 +30,23 @@ def _open_console(*args, **kwargs):
                 'asset': str(asset), 'bytes': len(body)}), encoding='utf-8')
         page.route('**/console/assets/' + asset.name, deliver)
     return browser, page, errors
+
+
+def test_mutation_assets_stay_outside_checkout(tmp_path, monkeypatch):
+    routes = []
+    page = SimpleNamespace(route=lambda pattern, callback: routes.append(pattern))
+    monkeypatch.setitem(_open_console.__globals__, '_open_base', lambda: (None, page, []))
+    asset = tmp_path / 'install.js'
+    asset.write_text('// isolated mutation', encoding='utf-8')
+    monkeypatch.setenv('ROSY_FLEET_MUTATION_ASSET', str(asset))
+    assert _open_console()[1] is page
+    assert routes == ['**/console/assets/install.js']
+
+    inside = Path(__file__).resolve().parents[1] / 'install.js'
+    monkeypatch.setenv('ROSY_FLEET_MUTATION_ASSET', str(inside))
+    with pytest.raises(AssertionError):
+        _open_console()
+    assert len(routes) == 1
 
 
 def install_url(console):
@@ -188,12 +206,14 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
 
     api = {**API, '/api/fleet/session': {'principal_id': 'installer', 'role': 'operator'},
            '/api/fleet/enrollment/robots': {'available': True, 'robots': [], 'identity': {}},
-           '/api/fleet/discovery': {'scanner_online': True, 'devices': []}}
+           '/api/fleet/discovery': {'scanner_online': True, 'devices': []},
+           '/api/fleet/device-profiles': {'profiles': []}}
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, api)
         page.goto(install_url(console_url), wait_until='networkidle')
         tabs = page.get_by_role('tab')
-        expect(tabs).to_have_count(5)
+        expect(tabs).to_have_text([
+            '장비 찾기', '로봇 등록', '장치 정보', '카메라 연결 승인', '카메라 설치·보정', '호스트 서비스'])
         for tab in tabs.all():
             expect(tab).to_be_enabled()
         expect(page.locator('#peer-picker')).to_be_visible()
@@ -207,6 +227,9 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         _open_token_access(page)
         page.locator('#token-save').click()
         expect(page.locator('#user-role')).to_contain_text('보기 전용')  # D-540 2
+        choose(page, '장치 정보')
+        expect(page.locator('#device-profiles')).to_be_visible()
+        expect(page.locator('[data-profile="save"]')).to_be_disabled()
         choose(page, '카메라 연결 승인')
         expect(page.locator('#camera-link')).to_be_visible()
         choose(page, '카메라 설치·보정')
@@ -227,6 +250,8 @@ def test_install_tasks_stay_mounted_and_navigate_while_role_locked(console_url):
         page.set_viewport_size({'width': 390, 'height': 844})
         compact = page.get_by_role('combobox', name='작업 선택')
         expect(compact).to_be_enabled()
+        compact.select_option('device-profiles')
+        expect(page.locator('#device-profiles')).to_be_visible()
         compact.select_option('calibration')
         expect(page.locator('#camera-calibration')).to_be_visible()
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')

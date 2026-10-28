@@ -75,9 +75,11 @@ def test_a_hidden_view_does_not_take_layout():
     그 버그로 숨긴 점검 뷰가 레이아웃을 차지해 페이지가 3582px 스크롤했고
     지도가 24px로 눌렸다. 측정으로 확인했고, 이 규칙이 그걸 막는다.
     """
-    assert re.search(r"\[hidden\]\s*\{[^}]*display:\s*none\s*!important", css()), (
-        "[hidden]을 display:none !important로 고정하는 규칙이 없다"
+    shared = (WEB_ROOT.parents[2] / "shared" / "web" / "components.css").read_text(encoding="utf-8")
+    assert re.search(r"(?m)^\[hidden\]\s*\{[^}]*display:\s*none\s*!important", shared), (
+        "[hidden]을 display:none !important로 고정하는 공용 규칙이 없다"
     )
+    assert "/common/components.css" in INDEX.read_text(encoding="utf-8"), "콘솔이 그 공용 규칙을 싣지 않는다"
 
 
 def test_the_console_does_not_scroll():

@@ -22,6 +22,22 @@ CORE는 그것에 **요청만** 한다. Host Agent는 임의 셸을 제공하지
 
 ## 2. 전송: unix domain socket
 
+D-863 native network authority uses `/run/rosy-network-agent/core.sock` for the
+dedicated CORE UID and `/run/rosy-network-agent/recovery.sock` for the nonlogin
+`rosy-recovery` UID. Each listener checks its exact peer UID and has only
+`network.status`, `network.connect`, `network.start`; the existing native lane-only
+agent retains its separate socket and commands. The generic transport below also
+describes development/compatibility deployments, not a claim that native enables
+its whole allowlist.
+
+`network.connect` prepares a stable request/idempotency ID with PSK held only in
+memory. After flushing its HTTP response, CORE or the recovery frontend sends
+`network.start` with that job's `request_id`. It never reuses the generic cached
+connect receipt as a start acknowledgement. Native status accepts an optional
+`params.request_id` and returns actual transaction state. Repeated requests are
+reauthorized and checked against the durable transaction identity. A restarted
+agent reports needs_resubmit rather than guessing the missing PSK.
+
 **결정: `/run/rosy/host-agent.sock` 위의 unix domain socket. 로컬 HTTP 포트는
 쓰지 않는다.**
 
@@ -166,6 +182,7 @@ Host Agent는 아래 명령만 안다. 임의 명령, 임의 경로, 임의 인�
 | `network.apply_profile` | `profile_id` (등록된 프로파일 id만) | administrator | 필요 |
 | `network.set_mode` | `mode` (`SITE_STA` 또는 `RELAY_AP_STA`) | administrator | 필요 |
 | `network.connect` | `ssid`, `psk` (PSK는 감사·응답에 남기지 않음) | administrator | 필요 |
+| `network.start` | `request_id` (준비된 네트워크 작업) | administrator | 필요 |
 | `release.status` | — | viewer | 불필요 |
 | `release.install` | `release_id` (staging에 존재하는 것만) | administrator | 필요 |
 | `release.rollback` | — | administrator | 필요 |

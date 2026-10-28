@@ -128,8 +128,8 @@ class DemonstrationRecorder:
 
     def __init__(self, root: Path, provenance: dict) -> None:
         self.root = Path(root).resolve()
-        if self.root.drive.upper() == "F:":
-            raise ValueError("recording output belongs on X:, not the source drive")
+        if any((p / '.git').exists() for p in (self.root, *self.root.parents)):
+            raise ValueError("recording output belongs outside the source checkout")
         self.source = _provenance(provenance)
         self._lock = threading.RLock()
         self._manifest: dict | None = None

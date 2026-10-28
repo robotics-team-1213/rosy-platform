@@ -174,3 +174,26 @@ def test_auto_preview_ignores_an_expired_field_report():
     assert response.status_code == 200
     assert response.body == raw
     assert response.headers["X-Frame-Rectified"] == "false"
+
+
+def test_rectified_preview_encodes_once_per_frame_for_every_viewer(monkeypatch):
+    """Network load: N viewers of one frame and setting cost one rectify encode."""
+    import rosy_vision.preview_plane as preview_plane
+
+    calls = []
+    monkeypatch.setattr(preview_plane, "rectify_jpeg", lambda jpeg, settings: calls.append(jpeg) or b"warped")
+    server = _server_with_frame(time.time())
+    profile = {"corners": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]], "output_aspect": 1}
+    for viewer in ("a", "b", "c"):
+        token = server.preview_signer.issue(principal_id=viewer, source_id="ceiling-north",
+                                            rectification=profile)
+        response = _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}")
+        assert response.status_code == 200 and response.body == b"warped"
+    assert len(calls) == 1
+    server._sources["ceiling-north"].latest = LatestFrame(
+        header=FrameHeader(seq=43, age_ms=0, width=640, height=480, rotation_deg=0),
+        jpeg=b"next-frame", captured_at=time.time(), received_at=time.time())
+    token = server.preview_signer.issue(principal_id="d", source_id="ceiling-north", rectification=profile)
+    assert _get(server, "/api/vision/sources/ceiling-north/frame", f"Bearer {token}").body == b"warped"
+    assert calls == [b"jpeg-frame", b"next-frame"]
+    assert len(server._rectify_cache) == 1

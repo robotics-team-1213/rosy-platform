@@ -42,11 +42,12 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 REPO = Path(__file__).resolve().parents[3]
-for _p in (HERE, REPO / "contracts" / "foundation"):
+for _p in (HERE, REPO / "contracts" / "foundation", REPO / "tools"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 import lane_derived_drivable as ldd  # noqa: E402
+from data_paths import data_root  # noqa: E402
 from ceiling_pose import FUSE, estimate_clock_offset, fuse, read_calibration  # noqa: E402
 from geometry import PROFILE_PATH, Camera  # noqa: E402
 
@@ -54,7 +55,7 @@ SCHEMA = "rosy.map-projected-drivable/1"
 ORIGIN = "map_projected"
 ADR = "D-563"
 BUNDLE = REPO / "middleware" / "perception" / "map" / "map_v2_fleet"
-CACHE = REPO / "data" / "perception" / "cache"
+CACHE = data_root(REPO) / "perception" / "cache"
 HALF_WIDTH_M = 0.0925
 OFF, ROAD, LINE, PAINT, WALL = 0, 1, 2, 3, 4
 PARAMS = {"near_m": 0.15, "far_m": 0.40, "ignore_top": 110, "stripe_min": ldd.STRIPE_MIN,
@@ -131,7 +132,7 @@ def robot_camera(device, *, root=None, pitch_rad=None, height_m=None):
     from core_common.calibration_store import resolve
     static = yaml.safe_load(Path(PROFILE_PATH).read_text(encoding="utf-8"))
     values, source = resolve("camera_profile", static, fallback_source=str(PROFILE_PATH.name), robot=device,
-                             root=root or str(REPO / "data" / "calibration"),
+                             root=root or str(data_root(REPO) / "calibration"),
                              override={"pitch_rad": pitch_rad, "height_m": height_m})
     camera = Camera(int(values["width"]), int(values["height"]), float(values["fx"]), float(values["cx"]),
                     float(values["cy"]), float(values["pitch_rad"]), float(values["height_m"]),

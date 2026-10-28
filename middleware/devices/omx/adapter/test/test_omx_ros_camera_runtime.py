@@ -15,6 +15,98 @@ from omx_adapter.camera_contract import CameraFrameGate, CameraStreamConfig
 from omx_adapter.ros_camera_runtime import RosCameraStreamRuntime
 
 
+def test_sim_joint_capture_is_not_blocked_by_default_camera_callback_group():
+    import threading
+    from types import SimpleNamespace
+    from sensor_msgs.msg import JointState
+    from rclpy.qos import qos_profile_sensor_data
+    from omx_adapter.pilot_sim.camera import PilotSimCamera
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
+    rclpy.init()
+    source, receiver = Node('capture_group_source'), Node('capture_group_receiver')
+    entered, release, received = threading.Event(), threading.Event(), threading.Event()
+    capture = SimpleNamespace(camera=None, tick=lambda: None,
+        observe_joint_state=lambda _: received.set(), interrupt=lambda *_: None)
+    camera = PilotSimCamera(receiver,capture,'a'*64)
+    publisher = source.create_publisher(JointState,'/joint_states',qos_profile_sensor_data)
+    def occupy_camera_group():
+        entered.set()
+        release.wait(3)
+    timer = receiver.create_timer(.01,occupy_camera_group)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
+    executor.add_node(receiver)
+    spinner = threading.Thread(target=executor.spin)
+    spinner.start()
+    try:
+        deadline = time.monotonic()+3
+        while publisher.get_subscription_count() == 0 and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert publisher.get_subscription_count() > 0
+        assert entered.wait(2)
+        publisher.publish(JointState())
+        assert received.wait(.5), 'joint capture waits behind the camera callback group'
+    finally:
+        release.set()
+        receiver.destroy_timer(timer)
+        executor.shutdown(timeout_sec=3)
+        spinner.join(timeout=3)
+        camera.destroy()
+        source.destroy_node()
+        receiver.destroy_node()
+        rclpy.shutdown()
+
+
+def test_sim_capture_preserves_past_joint_samples_during_a_bounded_callback_pause():
+    import threading
+    from types import SimpleNamespace
+    from sensor_msgs.msg import JointState
+    from rclpy.qos import qos_profile_sensor_data
+    from omx_adapter.pilot_sim.camera import PilotSimCamera
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
+    rclpy.init()
+    source, receiver = Node('capture_history_source'), Node('capture_history_receiver')
+    entered, release = threading.Event(), threading.Event()
+    sequences = []
+    def receive(message):
+        sequences.append(message.header.stamp.nanosec)
+        if len(sequences) == 1:
+            entered.set()
+            release.wait(3)
+    capture = SimpleNamespace(camera=None,tick=lambda: None,observe_joint_state=receive,
+                              interrupt=lambda *_:None)
+    camera = PilotSimCamera(receiver,capture,'a'*64)
+    publisher = source.create_publisher(JointState,'/joint_states',qos_profile_sensor_data)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
+    executor.add_node(receiver)
+    spinner = threading.Thread(target=executor.spin)
+    spinner.start()
+    try:
+        deadline = time.monotonic()+3
+        while publisher.get_subscription_count() == 0 and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert publisher.get_subscription_count() > 0
+        publisher.publish(JointState())
+        assert entered.wait(2)
+        for index in range(1,101):
+            message = JointState()
+            message.header.stamp.nanosec = index*2_000_000
+            publisher.publish(message)
+            time.sleep(.001)
+        release.set()
+        deadline = time.monotonic()+2
+        while len(sequences) < 101 and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert sequences == [index*2_000_000 for index in range(101)]
+    finally:
+        release.set()
+        executor.shutdown(timeout_sec=3)
+        spinner.join(timeout=3)
+        camera.destroy()
+        source.destroy_node()
+        receiver.destroy_node()
+        rclpy.shutdown()
+
+
 def test_camera_runtime_pairs_by_capture_stamp_and_keeps_only_latest_frame():
     rclpy.init()
     source = Node("omx_camera_test_source")
@@ -29,11 +121,13 @@ def test_camera_runtime_pairs_by_capture_stamp_and_keeps_only_latest_frame():
     info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
     info.p = [1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
     calibration_digest = CameraFrameGate.camera_info_fingerprint(info)
+    accepted = []
     runtime = RosCameraStreamRuntime(
         receiver,
         CameraStreamConfig("test-camera-serial", "overhead_optical", "test-cal-v1", calibration_digest),
         image_topic="/test/omx/image",
         camera_info_topic="/test/omx/camera_info",
+        on_frame=accepted.append,
     )
     executor = MultiThreadedExecutor(num_threads=3)
     executor.add_node(source)
@@ -58,6 +152,7 @@ def test_camera_runtime_pairs_by_capture_stamp_and_keeps_only_latest_frame():
         info_pub.publish(info)
         time.sleep(0.1)
         assert runtime.latest_frame is None
+        assert accepted == []
 
         info.header.stamp.nanosec = 10
         image_pub.publish(image)
@@ -78,6 +173,10 @@ def test_camera_runtime_pairs_by_capture_stamp_and_keeps_only_latest_frame():
         while time.monotonic() < deadline and runtime.latest_frame[0].sequence == first[0].sequence:
             time.sleep(0.01)
         assert runtime.latest_frame[0].sequence == first[0].sequence + 1
+        deadline = time.monotonic()+1
+        while len(accepted) < 2 and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert [frame[0].capture_time_ns for frame in accepted] == [7_000_000_010, 7_000_000_020]
     finally:
         executor.shutdown(timeout_sec=2.0)
         spinning.result(timeout=3.0)

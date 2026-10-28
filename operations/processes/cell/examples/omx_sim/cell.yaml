@@ -9,9 +9,9 @@ schema: rosy_cell.cell/2
 frame_rules: {min_span_m: 0.02, min_angle_deg: 10.0, max_tilt_deg: 5.0}
 frames:
   base: {origin: [0, 0, 0], x_point: [0.1, 0, 0], plane_point: [0, 0.1, 0]}
-  # 0.10 x 0.08 x 0.01 m pallet plates; origin = near-left corner of the top face.
-  pallet_a: {origin: [0.13, 0.01, 0.01], x_point: [0.23, 0.01, 0.01], plane_point: [0.13, 0.09, 0.01]}
-  pallet_b: {origin: [0.13, -0.09, 0.01], x_point: [0.23, -0.09, 0.01], plane_point: [0.13, -0.01, 0.01]}
+  # 0.115 x 0.095 x 0.01 m plates; B is 10 mm nearer the base to retain the 40 s phase cap.
+  pallet_a: {origin: [0.115, -0.005, 0.01], x_point: [0.215, -0.005, 0.01], plane_point: [0.115, 0.075, 0.01]}
+  pallet_b: {origin: [0.105, -0.125, 0.01], x_point: [0.205, -0.125, 0.01], plane_point: [0.105, -0.045, 0.01]}
 stations:
   # Pose of the item's top face (TCP convention of rosy_cell Steps).
   # yaw pi/2 (C3b): the pick then runs at joint5 ~ 0. At yaw 0 it needs joint5 ~ pi/2, where

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createScope} from '../../scope.js';
-import {createRequest} from '../../../../operations/site_ui/console/shared/request.js';
+import {createRequest} from '../../request.js';
 
 test('dispose aborts one scope and cleans subscriptions exactly once', () => {
   const scope = createScope();

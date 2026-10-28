@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMapView } from '../../../site_ui/console/map-view.js';
+import { createMapView } from '../../../../applications/fleet/web/map/map-view.js';
 
 test('an active camera map keeps its coordinate view when a robot starts serving a grid', async () => {
   const ctx = new Proxy({}, { get: (_, key) => key === 'measureText' ? () => ({ width: 10 }) : () => {} });

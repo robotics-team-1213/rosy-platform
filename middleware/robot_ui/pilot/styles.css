@@ -5,7 +5,6 @@
 :root { color-scheme: dark; }
 
 * { box-sizing: border-box; }
-[hidden] { display: none !important; }
 
 html { min-width: 320px; background: var(--surface-recessed); }
 
@@ -66,8 +65,8 @@ form[data-pilot-token-form] label { flex: 1 1 14rem; min-width: 0; }
 
 [data-recent-list] { display: grid; gap: var(--space-2); }
 [data-recent-item] { display: flex; gap: var(--space-1); align-items: center; }
-[data-recent-item] ui-button[data-recent-connect] { flex: 1; }
-[data-lobby-list] { display: grid; gap: var(--space-2); min-width: 0; }
+[data-recent-item] ui-button[data-recent-connect] { flex: 1; max-width: 100%; overflow-wrap: anywhere; }
+[data-lobby-list] { display: grid; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
 [data-lobby-list] > ui-tag { justify-self: start; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
 .sr-only {
@@ -93,10 +92,8 @@ body[data-pilot-screen="drive"] ui-shell {
   overflow: hidden;
 }
 
-body[data-pilot-screen="drive"] ui-topbar {
-  position: static;
-  flex: none;
-}
+ui-topbar { min-height: var(--topbar-height); } /* D-741 부기: 공용 앱 바는 64px, Pilot은 두 줄 머리 높이(접속 화면 넓은 폭만 한 줄) */
+body[data-pilot-screen="drive"] ui-topbar { position: static; flex: none; }
 
 body[data-pilot-screen="drive"] .pilot-main {
   flex: 1 1 auto;
@@ -147,7 +144,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   overflow: hidden;
 }
 
-[data-drive-frame] {
+[data-drive-frame], [data-drive-video] {
   display: block;
   transform-origin: 50% 50%;
   width: 100%;
@@ -173,7 +170,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   -webkit-user-select: none;
   user-select: none;
 }
-[data-drive-frame] { pointer-events: none; -webkit-user-drag: none; }
+[data-drive-frame], [data-drive-video] { pointer-events: none; -webkit-user-drag: none; }
 [data-drive-frame]:not([src]) { opacity: 0; }
 
 [data-drive-stage] ui-empty {
@@ -246,7 +243,6 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
 [data-drive-fact=link][data-readback=silent] { color: var(--status-warn); }
 [data-drive-fact=latency][data-slow=true] { color: var(--status-warn); }
 [data-drive-fact=activity] { color: var(--status-warn); }
-[data-drive-fact=activity][hidden] { display: none; }
 
 /* HUD 액션은 공용 quiet 버튼 그대로(표적 --target-secondary). 자리만 오른쪽 끝. */
 [data-drive-hud] ui-actions { flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-left: auto; }
@@ -419,7 +415,6 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
 /* 녹화 준비 중: 버튼은 따로 꾸미지 않는다. 표면이 공용 부품을 다시 칠하는 것은
    계약 위반이다(test_surfaces_do_not_repaint_shared_controls, D-194/D-359).
    준비 상태는 HUD 칩([data-drive-fact=recording], 위 규칙)과 토글 눌림이 이미 말한다. */
-[data-drive-fact=recording][hidden] { display: none; }
 [data-recordings-sheet] {
   position: absolute;
   /* HUD 바로 아래: robot-recording.js 가 HUD 아래끝을 재어 두 속성에 넣는다 */
@@ -437,7 +432,6 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   z-index: 25;
   backdrop-filter: blur(6px);
 }
-[data-recordings-sheet] [data-recordings-notice][hidden] { display: none; }
 [data-recordings-list] { display: grid; gap: var(--space-2); }
 [data-recordings-list] [data-recording-id] {
   display: flex;
@@ -568,7 +562,6 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   color: var(--ground-deep);
   background: var(--status-warn);
 }
-[data-drive-hud] [data-drive-fact=zoom][hidden] { display: none; }
 /* 확대 중에는 조작부가 영상 위에 올라온다 — 판 바탕을 더 짙게 */
 .pilot-drive[data-zoomed="true"] [data-drive-left],
 .pilot-drive[data-zoomed="true"] [data-drive-stick] {
@@ -600,7 +593,7 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
 .pilot-drive[data-view-mode="full"] [data-drive-view] {
   grid-row: 1 / span 2;
 }
-.pilot-drive[data-view-mode="full"] [data-drive-frame] {
+.pilot-drive[data-view-mode="full"] :is([data-drive-frame], [data-drive-video]) {
   object-fit: cover;
   transform: none;
 }
@@ -687,7 +680,6 @@ body[data-pilot-screen="drive"] ui-brand small { display: none; }
   width: attr(data-strip-width type(<length>));
   top: attr(data-strip-top type(<length>));
 }
-[data-drive-intent][hidden] { display: none; }
 [data-intent-track] {
   position: relative;
   flex: 1;
@@ -746,10 +738,8 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 /* D-411 B·C 팔 조작 콘솔: 위 작업 공간(영상·readback), 가운데 조작부 그리드(왼손 joint_jog,
    오른손 gripper), 아래 취소·시연 기록. 좁은 화면은 한 줄로 쌓인다. */
 .arm-console { display: grid; gap: var(--space-4); min-width: 0; }
-.arm-console[hidden] { display: none; }
 .arm-view { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
 .arm-camera { margin: 0; display: grid; gap: var(--space-1); }
-.arm-camera[hidden] { display: none; }
 .arm-camera img { width: 100%; height: auto; border-radius: var(--radius-panel); background: var(--surface-recessed); }
 .arm-camera figcaption { font-size: var(--text-label); color: var(--text-secondary); }
 .arm-controls { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }
@@ -874,7 +864,6 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
   border: 1px solid var(--status-warn);
   border-radius: var(--radius-panel);
 }
-[data-drive-calibration][hidden] { display: none; }
 /* 남의 보정 중에는 주행 조작부 전체가 입력을 받지 않는다. 비상 정지(상단 막대)는 이 밖에 있다. */
 [data-drive-controls][data-locked] {
   pointer-events: none;

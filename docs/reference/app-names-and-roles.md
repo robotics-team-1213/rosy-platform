@@ -7,13 +7,13 @@
 | 표시 이름 | 사람이 하는 일 | 구현·소유 |
 |---|---|---|
 | **Rosy Robot** | 로봇 한 대 상태 확인·조작·설치·정비 | `middleware/robot_ui/robot`, CORE가 제공하는 웹 역할 화면 |
-| **Rosy Fleet** | 현장 관제·작업 승인·진행·기기 연결·계정 관리 | `operations/site_ui/console`의 웹, `operations/fleet`의 서비스·원장. 화면 id는 `console` 유지 |
+| **Rosy Fleet** | 현장 관제·작업 승인·진행·기기 연결·계정 관리 | `applications/fleet/web`의 웹, `operations/fleet`의 서비스·원장. 화면 id는 `console` 유지 |
 | **Rosy Pilot** | 직접 수동 운전과 운전석 영상 | `middleware/robot_ui/pilot`의 웹/PWA와 Android 연결 셸. 연결 로비는 별도 앱이 아님 |
 | **Rosy Cam** | 카메라 폰에서 천장 영상 캡처·전송 | `operations/site_ui/cam`의 Android 앱. 관측 처리는 Vision 서비스가 담당 |
-| **Rosy Learning** | 객체·픽셀 검수·자료 등록·학습 작업 | `learning/curation/perception/review_app.py`와 `review_app_web`의 웹앱. 학습 관리 센터이며 작업 실행은 기존 학습 소유자를 호출. 별도 미게시 화면을 이름 변경과 함께 추가하지 않음 |
+| **Rosy Learning** | 객체·픽셀 검수·자료 등록·학습 작업·카메라 맞춤·모방학습 | `learning/curation/perception/review_app.py`와 `review_app_web`의 웹앱. 학습 관리 센터이며 작업 실행은 기존 학습 소유자를 호출 |
 | **Rosy Games** | 경기 운영과 게임 호스트 상태 확인 | `operations/apps/games`의 노트북 호스트·경기 보드. Fleet 관제나 CORE 로봇 모드가 아님 |
-| **Rosy Vault** | (은퇴 2026-10-24) 보관고 입고·출고·장부·보류 작업 처리 | `rosy-vault` 저장소가 GitHub archived로 은퇴해 개발하지 않는다 |
-| **Rosy Device** | (은퇴 2026-10-24) 로봇팔 등 연결 기기의 상태·보정·설정·복구 | `rosy-vault`의 `device_core/web`이었다. 실물 팔 실행 경로는 플랫폼 OMX owner로 흡수한다(D-858). Robot의 `/device` 역할 화면과는 다른 구현이었다 |
+| **Rosy Vault** | (은퇴 2026-10-24) 보관고 입고·출고·장부·보류 작업 처리 | `rosy-vault` 저장소가 GitHub archived로 은퇴해 개발하지 않는다. 보관고 도메인은 선정되지 않았다 |
+| **Rosy Device** | (은퇴 2026-10-24) 로봇팔 등 연결 기기의 상태·보정·설정·복구 | `rosy-vault`의 `device_core/web`이었다. 실물 팔 실행 경로는 플랫폼 OMX owner로 흡수 인계한다(D-797). Robot의 `/device` 역할 화면과는 다른 구현이었다 |
 
 ## 외부 업무 앱
 
@@ -21,7 +21,7 @@ ROSY 제품 앱이 아닌 외부 업무 앱은 플랫폼 Python·DB·ROS를 쓰�
 
 | 앱 | 하는 일 | 저장소 |
 |---|---|---|
-| **Harbor** (HarborLogi) | 항만 모형 야드의 회수 순위·방해 화물 처리 제안, 업무 장부, 업무 완료 판정. Fleet HTTP로 제안·조회만 하고 로봇을 직접 움직리거나 승인하지 않는다 | 공개 팀 저장소 [kernel-robot-8th/kernel-robot-repo-2](https://github.com/kernel-robot-8th/kernel-robot-repo-2)의 `harborlogi/` |
+| **Harbor** (HarborLogi) | 항만 모형 야드의 반출 순위·재취급 화물 처리 제안, 업무 장부, 업무 완료 판정. Fleet HTTP로 제안·조회만 하고 로봇을 직접 움직이거나 승인하지 않는다 | 공개 팀 저장소 [kernel-robot-8th/kernel-robot-repo-2](https://github.com/kernel-robot-8th/kernel-robot-repo-2)의 `harborlogi/` |
 
 ## 상위 앱 안의 기능과 화면
 
@@ -58,7 +58,7 @@ Workcell은 좌표·설비·접근·공유 자원을 가진 작업 공간이다.
 | **Decision** | 규칙·정책·판단 후보를 다루는 영역. 독립 앱명 아님 |
 | **Dock / Signal / Signal Observer** | 충전·교통 신호 장치와 관측 서비스. 독립 사용자 앱으로 세지 않음 |
 | **Media** | 영상 세션 권한·시청 요청·미디어 프로세스를 관리하는 별도 서비스. `operations/site_ui/media`에 있으며 Fleet이 설치·제공하는 화면이 아님 |
-| **Site App Gateway** | `operations/apps/fleet`의 프로세스 조립 코드. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Fleet 서버나 Fleet 화면과 구분 |
+| **Site App Gateway** | `applications/fleet/gateway`의 프로세스 조립 코드. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Fleet 서버나 Fleet 화면과 구분 |
 | **device-core** | 은퇴한 rosy-vault 저장소가 제공하던 Rosy Device 콘솔·기기 API의 서비스 코드 이름(2026-10-24 은퇴). 로봇 CORE와는 다른 것이었다 |
 | **ROSY Site / Runtime / Fabric / Operations** | 각각 현장 배포 범위 / 로컬 실행 기반 / 연결 계약·어댑터 / 운영 목표 표현. [D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md)의 역할 이름 |
 | **rosy-platform / rosy-vault / rosy-ops / rosy-docs** | 각각 플랫폼 소스 / Vault·Device 소스(2026-10-24 은퇴, GitHub archived) / 비공개 운영 설정·기록 / 설계·가이드 문서 저장소 |

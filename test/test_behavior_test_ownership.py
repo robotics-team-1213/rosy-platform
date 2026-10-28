@@ -30,6 +30,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_fleet_agent.py",
     "middleware/core/gateway/test/test_fleet_agent_mdns.py",
     "middleware/core/gateway/test/test_initial_pose.py",
+    # D-769 route prior: CORE's bridge publication checked end to end with the camera's control inbox.
+    "middleware/core/gateway/test/test_lane_route_publication.py",
     "middleware/core/gateway/test/test_line_follow.py",
     "middleware/core/gateway/test/test_line_follow_api.py",
     # D-760 rev 3: gateway HTTP serialization of the real manager wait judgement.
@@ -76,6 +78,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # D-760 rev 3 item 9: CORE HTTP snapshot and line-follow responses expose the feature state.
     "middleware/core/gateway/test/test_line_regulation_wait_api.py",
     "middleware/core/gateway/test/test_navigation_readiness.py",
+    # D-890 public HTTP /do -> real CORE Home reservation; Waypoint is fixture setup.
+    "middleware/core/gateway/test/test_intent_home_epoch.py",
     # D-732 actual CORE API/manager wiring and native callback/stop ownership seams.
     "middleware/core/gateway/test/test_native_owner_receipts.py",
     # D-772/776 CORE composition seams: rendered station lifecycle harness, post-write

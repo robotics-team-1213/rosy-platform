@@ -1,0 +1,9 @@
+# Source preparation only: no measured geometry, speed or accepted sensor is available.
+profile:
+  model: RaspTank Metal
+  vendor: adeept
+  drivetrain: tracked_skid_steer
+  wheel_base: null
+  max_linear_velocity: 0.0
+  max_angular_velocity: 0.0
+  sensors: []

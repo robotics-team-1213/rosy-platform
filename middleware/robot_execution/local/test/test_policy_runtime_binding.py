@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Any
 import threading
+import time
 from uuid import uuid4
 
 import pytest
@@ -15,6 +16,7 @@ from rosy.execution.local.policy_journal import PolicyExecutionJournal
 from omx_adapter.command_owner import JointStateSnapshot, CommandDecision, TrajectoryCommand
 from omx_adapter.ros_goal_contract import RosGoalEvent
 from omx_adapter.joint_state_intake import JointStateIntake
+from omx_adapter.watchdog_observation import intake_observation
 
 
 def runtime_methods(session, client):
@@ -23,10 +25,12 @@ def runtime_methods(session, client):
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef)
                and node.name == 'RosArmCommandRuntime')
     names = {'bind_policy_driver', 'register_phase_event_sink', 'unregister_phase_event_sink',
-             '_dispatch_goal_event', '_on_joint_state', '_watchdog_tick', 'submit', '_submit_policy'}
+             '_dispatch_goal_event', '_on_joint_state', '_record_joint_intake',
+             '_watchdog_tick', 'submit', '_submit_policy'}
     cls.body = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in names]
     scope = dict(RosGoalEvent=RosGoalEvent, Callable=Callable, JointStateSnapshot=JointStateSnapshot,
-                 CommandDecision=CommandDecision, TrajectoryCommand=TrajectoryCommand, JointState=Any, Any=Any)
+                 CommandDecision=CommandDecision, TrajectoryCommand=TrajectoryCommand, JointState=Any, Any=Any,
+                 time=time, intake_observation=intake_observation)
     exec(compile(ast.Module(body=[cls], type_ignores=[]), str(file), 'exec',
                  flags=__future__.annotations.compiler_flag, dont_inherit=True), scope)
     runtime = scope['RosArmCommandRuntime'].__new__(scope['RosArmCommandRuntime'])
@@ -64,6 +68,28 @@ def attached(tmp_path, camera=False):
     runtime = runtime_methods(session, client)
     session.bind_runtime(runtime)
     return session, runtime, client, clock, authority, journal, root
+
+
+@pytest.mark.parametrize('fault', ['installed_bytes', 'stored_bytes'])
+def test_prepared_source_never_bypasses_binding_integrity(tmp_path, fault):
+    import sqlite3
+    from rosy.execution.local.policy_source import capture_source
+
+    journal = PolicyExecutionJournal(tmp_path/'policy.sqlite3')
+    session, client, _, _, root = setup_session(tmp_path, execution_journal=journal)
+    header, payloads = capture_source(session.policy, session.owner)
+    journal.store_source(header, payloads)
+    if fault == 'installed_bytes':
+        (root/'model.bin').write_bytes(b'changed after preparation')
+    else:
+        with sqlite3.connect(journal.path) as db:
+            db.execute("UPDATE policy_source_files SET payload=? WHERE path='policy/model.bin'",
+                       (b'changed after preparation',))
+    runtime = runtime_methods(session, client)
+    with pytest.raises(ValueError):
+        session.bind_runtime(runtime)
+    assert runtime._policy_binding is None
+    assert not client.commands
 
 
 def test_same_runtime_observes_once_registers_before_send_and_preserves_source_bytes(tmp_path):

@@ -97,7 +97,8 @@ if ($CheckOnly) {
     return
 }
 
-$evidenceDir = Join-Path 'X:\DevTemp' ("rosy-motor-{0}-{1}" -f $DeviceName, (Get-Date -Format 'yyyyMMddTHHmmssfff'))
+$scratchRoot = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [IO.Path]::GetTempPath() }
+$evidenceDir = Join-Path $scratchRoot ("rosy-motor-{0}-{1}" -f $DeviceName, (Get-Date -Format 'yyyyMMddTHHmmssfff'))
 New-Item -ItemType Directory -Path $evidenceDir -ErrorAction Stop | Out-Null
 [IO.File]::WriteAllText((Join-Path $evidenceDir 'runtime.before.env'), $runtimeText,
     [Text.UTF8Encoding]::new($false))
@@ -124,7 +125,7 @@ try {
             [Text.UTF8Encoding]::new($false))
         $edit = @'
 from pathlib import Path
-import os, tempfile
+import os, sys, tempfile
 p = Path('/etc/rosy/runtime.env')
 old = p.read_text()
 if old.count('ROSY_RUNTIME_MODE=core') != 1 or 'ROSY_IO_DRIVE_ENABLED=' in old:
@@ -132,16 +133,23 @@ if old.count('ROSY_RUNTIME_MODE=core') != 1 or 'ROSY_IO_DRIVE_ENABLED=' in old:
 if 'ROSY_DEVICE_UID=__UID__' not in old:
     raise SystemExit('device UID drift')
 new = old.replace('ROSY_RUNTIME_MODE=core', 'ROSY_RUNTIME_MODE=motor').rstrip('\n') + '\nROSY_IO_DRIVE_ENABLED=true\n'
-fd, name = tempfile.mkstemp(prefix='.runtime-motor-', dir=p.parent)
-try:
-    os.fchmod(fd, 0o640)
-    with os.fdopen(fd, 'w') as out:
-        out.write(new)
-        out.flush()
-        os.fsync(out.fileno())
-    os.replace(name, p)
-finally:
-    if os.path.exists(name): os.unlink(name)
+root = Path('/')
+marked = os.path.lexists(root / 'etc/rosy/os-slot.json') or 'rosy.os_layout=' in (root / 'proc/cmdline').read_text()
+if marked:
+    sys.path.insert(0, '/opt/rosy/native-runtime')
+    from os_state_config import commit_runtime
+    commit_runtime(root, new.encode(), expected=old.encode())
+else:
+    fd, name = tempfile.mkstemp(prefix='.runtime-motor-', dir=p.parent)
+    try:
+        os.fchmod(fd, 0o640)
+        with os.fdopen(fd, 'w') as out:
+            out.write(new)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(name, p)
+    finally:
+        if os.path.exists(name): os.unlink(name)
 '@.Replace('__UID__', $uid)
         $changed = $true
         Invoke-RobotPython $edit
@@ -193,20 +201,31 @@ catch {
             Invoke-RobotSsh 'sudo -n systemctl stop rosy-io.service' | Out-Null
             $backup64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($runtimeText))
             $restore = @'
-import base64, os, tempfile
+import base64, os, sys, tempfile
 from pathlib import Path
 p = Path('/etc/rosy/runtime.env')
 data = base64.b64decode('__BACKUP__')
-fd, name = tempfile.mkstemp(prefix='.runtime-restore-', dir=p.parent)
-try:
-    os.fchmod(fd, 0o640)
-    with os.fdopen(fd, 'wb') as out:
-        out.write(data)
-        out.flush()
-        os.fsync(out.fileno())
-    os.replace(name, p)
-finally:
-    if os.path.exists(name): os.unlink(name)
+root = Path('/')
+marked = os.path.lexists(root / 'etc/rosy/os-slot.json') or 'rosy.os_layout=' in (root / 'proc/cmdline').read_text()
+if marked:
+    sys.path.insert(0, '/opt/rosy/native-runtime')
+    from os_state_config import commit_runtime
+    current = p.read_bytes()
+    enabled = data.replace(b'ROSY_RUNTIME_MODE=core', b'ROSY_RUNTIME_MODE=motor').rstrip(b'\n') + b'\nROSY_IO_DRIVE_ENABLED=true\n'
+    if current not in (data, enabled):
+        raise SystemExit('runtime changed before rollback; keep stopped for recovery')
+    commit_runtime(root, data, expected=current)
+else:
+    fd, name = tempfile.mkstemp(prefix='.runtime-restore-', dir=p.parent)
+    try:
+        os.fchmod(fd, 0o640)
+        with os.fdopen(fd, 'wb') as out:
+            out.write(data)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(name, p)
+    finally:
+        if os.path.exists(name): os.unlink(name)
 '@.Replace('__BACKUP__', $backup64)
             Invoke-RobotPython $restore
             Invoke-RobotSsh 'sudo -n systemctl restart rosy-core.service' | Out-Null

@@ -3,8 +3,8 @@
 녹화(mp4) 또는 프레임 폴더를 풀어 차선 검출기들을 같은 프레임에 돌리고, 격자 그림·프레임별 JSON·
 지표를 낸다. 녹화와 결과는 공개 저장소 밖에 둔다(D-226) — --out 이 저장소 안이면 거부한다.
 
-  python tools/lane_replay.py --video X:/DevTemp/rosy-pilot-evidence/.../run3.mp4 \
-      --crop pilot-side --out X:/DevTemp/lane-replay/run3 --detectors line,between
+  python tools/lane_replay.py --video $ROSY_SCRATCH/rosy-pilot-evidence/.../run3.mp4 \
+      --crop pilot-side --out $ROSY_SCRATCH/lane-replay/run3 --detectors line,between
 
 지표(검출기별):
   on_line_rate  목표가 흰 선 위에 있는 프레임 비율 — 차로 유지에서는 결함이다. 목표 열(error)의

@@ -324,22 +324,44 @@ def test_same_core_stamp_cannot_describe_a_different_pose():
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
 
 
-def test_clock_gap_is_revoked_even_without_an_intermediate_pose_read():
-    _, port, sample, clocks, _ = _setup()
+def test_a_late_clock_reads_unknown_until_fresh_and_a_clock_regression_latches():
+    """D-725 rev 1 (v2 lap r32, model PC load 24): a /clock tick late under load is not a reset. The old
+    sample is stale, so the pose reads UNKNOWN; a fresh sample with a fresh CORE snapshot localizes again.
+    A clock that goes backwards still revokes the run."""
+    _, port, sample, clocks, core = _setup()
     assert feed(port, sample)
     clocks['mono'] += .3; clocks['wall'] += .3
-    assert not port.observe_clock(2_310_000_000)
+    assert port.observe_clock(2_310_000_000)
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+    assert port.observe(replace(sample, stamp_ns=2_300_000_000), clock_stamp_ns=2_310_000_000)
+    core['odom_pose']['stamp'] = clocks['wall']
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'LOCALIZED'
+    assert not port.observe_clock(2_000_000_000)
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+    clocks['mono'] += .05; clocks['wall'] += .05
+    assert port.observe_clock(2_400_000_000)
+    assert not port.observe(replace(sample, stamp_ns=2_390_000_000))  # the robot stays revoked for the run
+    asyncio.run(port.refresh('rosy_02'))
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
 
 
-def test_native_gap_is_revoked_even_while_clock_keeps_advancing():
-    _, port, sample, clocks, _ = _setup()
+def test_a_native_gap_is_spanned_by_stamp_but_a_jump_across_it_latches():
+    _, port, sample, clocks, core = _setup()
     assert feed(port, sample)
     for i in range(1, 7):
         clocks['mono'] += .05; clocks['wall'] += .05
         assert port.observe_clock(2_010_000_000 + i*50_000_000)
-    assert not port.observe(replace(sample, stamp_ns=2_300_000_000))
+    assert port.observe(replace(sample, stamp_ns=2_300_000_000))     # 0.3 s gap, no motion: admitted
+    core['odom_pose']['stamp'] = clocks['wall']
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'LOCALIZED'
+    clocks['mono'] += .05; clocks['wall'] += .05
+    assert port.observe_clock(2_360_000_000)
+    jumped = replace(sample, stamp_ns=2_350_000_000, pose=(sample.pose[0] + 1.0, *sample.pose[1:]))
+    assert not port.observe(jumped)                                   # faster than the robot moves
     assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+    assert not port.observe(replace(sample, stamp_ns=2_350_000_000))  # latched
 
 
 def test_immutable_run_binding_refuses_mutable_robot_collections():
@@ -347,3 +369,42 @@ def test_immutable_run_binding_refuses_mutable_robot_collections():
     with pytest.raises(ValueError):
         m.NativeGazeboMapPosePort(replace(sample.binding, robots=list(sample.binding.robots)),
                                  gather_core=lambda _: None)
+
+
+def test_one_failed_core_read_keeps_the_pose_until_the_snapshot_ages_out():
+    _, port, sample, clocks, _ = _setup()
+    assert feed(port, sample)
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'LOCALIZED'
+
+    async def broken(robot_id):
+        raise OSError('CORE busy')
+    port._gather_core = broken
+    with pytest.raises(OSError):
+        asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'LOCALIZED'
+    clocks['wall'] += port.config.max_odom_age_s + 1
+    clocks['mono'] += port.config.max_odom_age_s + 1
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+
+
+def test_a_core_snapshot_without_odometry_yet_waits_instead_of_latching():
+    _, port, sample, _, core = _setup()
+    assert feed(port, sample)
+    odom = core.pop('odom_pose')
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'UNKNOWN'
+    core['odom_pose'] = odom
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'LOCALIZED'
+
+
+def test_a_clock_pause_or_restart_before_any_pose_only_re_anchors():
+    _, port, sample, clocks, core = _setup()
+    assert port.observe_clock(3_000_000)
+    clocks['mono'] += 1.0; clocks['wall'] += 1.0            # Gazebo stalls while it spawns the robots
+    assert port.observe_clock(1_000_000)                     # ... and restarts its clock
+    assert port.observe_clock(2_010_000_000)
+    assert port.observe(sample, clock_stamp_ns=2_010_000_000)
+    asyncio.run(port.refresh('rosy_02'))
+    assert port.arbitrated_pose('rosy_02').state == 'LOCALIZED'

@@ -28,11 +28,13 @@ class MotorHealth:
         if str(UUID(self.session_id)) != self.session_id:
             raise ValueError('invalid motor health session identity')
         self.status, self.stop_reasons = 'active', []
+        self.terminal_at = None
 
     def publish(self):
         motors, stamps = [], []
         fields = ('joint', 'id', 'command_raw', 'present_raw', 'error_deg', 'pwm', 'pwm_limit',
-                  'pwm_utilization', 'temperature_c', 'temperature_limit_c', 'voltage_v', 'warnings')
+                  'pwm_utilization', 'temperature_c', 'temperature_limit_c', 'voltage_v', 'warnings',
+                  'hardware_error', 'torque_enabled', 'fault')
         for state in self.motions.values():
             last = state['last']
             if last is None:
@@ -43,12 +45,17 @@ class MotorHealth:
                 motors.append({**{key: motor[key] for key in fields}, 'group': last['arm'],
                                'min_voltage_v': motor['min_voltage_raw'] / 10,
                                'max_voltage_v': motor['max_voltage_raw'] / 10, 'observed_at': stamp})
-        atomic_snapshot(self.state_path, dict(schema_version='rosy.motor-health.v1', owner_id=self.owner_id,
-            session_id=self.session_id, status=self.status, observed_at=max(stamps) if stamps else time.time(),
+        row = dict(schema_version='rosy.motor-health.v1', owner_id=self.owner_id,
+            session_id=self.session_id, status=self.status, observed_at=max(stamps) if stamps else self.terminal_at or time.time(),
             expected_motor_count=sum(len(state['limits']) for state in self.motions.values()),
-            motors=motors, stop_reasons=self.stop_reasons))
+            motors=motors, stop_reasons=self.stop_reasons)
+        if self.terminal_at is not None:
+            row['terminal_at'] = self.terminal_at
+        atomic_snapshot(self.state_path, row)
 
     def end(self):
+        if self.terminal_at is None:
+            self.terminal_at = time.time()
         if self.status != 'fault':
             self.status = 'ended'
             self.stop_reasons = ['session ended']
@@ -124,6 +131,18 @@ class MotorHealth:
             effort = (bus.read("Present_PWM", name, normalize=False) if name == "gripper" else pwm.get(name))
             effort = self.number(effort, name + " PWM")
             temperature, voltage, unsafe = self.health(bus, name, limits)
+            hardware_error = torque_enabled = None
+            if not unsafe:
+                hardware_error = bus.read('Hardware_Error_Status', name, normalize=False)
+                if type(hardware_error) is not int or not 0 <= hardware_error <= 255:
+                    raise ValueError(f'{name}: invalid measured hardware status')
+                if hardware_error:
+                    unsafe.append(f'{name}: hardware error {hardware_error}')
+                else:
+                    torque_raw = bus.read('Torque_Enable', name, normalize=False)
+                    if type(torque_raw) is not int or torque_raw not in (0, 1):
+                        raise ValueError(f'{name}: invalid measured torque state')
+                    torque_enabled = bool(torque_raw)
             violations.extend(unsafe)
             warnings = []
             utilization = abs(effort) / limits["pwm_limit"]
@@ -134,7 +153,9 @@ class MotorHealth:
             motors.append(dict(joint=name, id=bus.motors[name].id, usb_port=port if isinstance(port, str) else None,
                                command_raw=command, present_raw=present, error_deg=abs(present - command) * 360 / 4096,
                                pwm=effort, pwm_utilization=utilization, temperature_c=temperature,
-                               voltage_raw=voltage, voltage_v=voltage / 10, warnings=warnings, **limits))
+                               voltage_raw=voltage, voltage_v=voltage / 10, warnings=warnings,
+                               hardware_error=hardware_error, torque_enabled=torque_enabled,
+                               fault=bool(unsafe), **limits))
             if unsafe:
                 break  # Stop further bus reads as soon as an actual configured hard limit is known.
         if not violations and not 0 <= self.number(motion.clock(), "sample completion time") - now <= 0.5:
@@ -157,6 +178,8 @@ class MotorHealth:
         state["warnings"] = warnings
 
     def fault(self, motion, exc):
+        if self.terminal_at is None:
+            self.terminal_at = time.time()
         state = self.motions.get(self.key(motion))
         last = state["last"] if state else None
         now = motion.clock()
@@ -224,4 +247,5 @@ def finish_snapshot(path, owner_id, session_id, *, safe_end):
         row['stop_reasons'] = list(dict.fromkeys([*row.get('stop_reasons', []), 'cleanup unconfirmed']))
     elif row.get('status') != 'fault':
         row['status'], row['stop_reasons'] = 'ended', ['session ended']
+    row.setdefault('terminal_at', time.time())
     atomic_snapshot(path, row)

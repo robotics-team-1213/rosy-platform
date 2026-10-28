@@ -59,7 +59,8 @@ class TrackClient:
         return _body(response, "IDENTITY_HTTP_ERROR", "BAD_RESPONSE")
 
     async def fetch_config(self) -> dict[str, Any]:
-        response = await self._client.get(CONFIG_PATH, headers={"Authorization": self._authorization})
+        response = await self._client.get(CONFIG_PATH, params={'include_preview': 'true'},
+                                          headers={"Authorization": self._authorization})
         body = _body(response, "CONFIG_HTTP_ERROR", "CONFIG_BAD_RESPONSE")
         calibration = body.get("calibration")
         if (not isinstance(body.get("source_id"), str) or not isinstance(body.get("map_id"), str)
@@ -68,6 +69,11 @@ class TrackClient:
             raise TrackPublishError(response.status_code, "CONFIG_BAD_RESPONSE",
                                     "Fleet returned a malformed tracking config")
         return body
+
+    async def publish_preview_status(self, body):
+        response = await self._client.post('/api/fleet/detections/preview-status', json=body,
+                                           headers={'Authorization': self._authorization})
+        return _body(response, 'PREVIEW_STATUS_HTTP_ERROR', 'BAD_RESPONSE')
 
 
 def _body(response: httpx.Response, error_code: str, bad_code: str, *,

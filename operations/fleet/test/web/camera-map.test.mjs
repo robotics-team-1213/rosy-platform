@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cameraMapCalibration, createCameraBackdrop } from "../../../site_ui/console/camera-backdrop.js";
+import { cameraMapCalibration, createCameraBackdrop } from "../../../../applications/fleet/web/map/camera-backdrop.js";
 
 const frame = { state: "live", rectified: false, source: "ceiling_north",
   ageMs: 100, image: { naturalWidth: 1280, naturalHeight: 720 },

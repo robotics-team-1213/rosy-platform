@@ -2,7 +2,9 @@
 
 **설계:** [2026-10-23-vlm-fast-judge-design.md](2026-10-23-vlm-fast-judge-design.md)
 **위치:** 모델 PC, 오프라인 재생만. 노트북·AI PC 운영 경로·로봇은 쓰지 않는다. `operations/situation`의 운영 코드는 이 계획에서 바꾸지 않는다.
-**시작 전:** rosy-ops의 시험 저장소 운영 규칙(`docs/lab-host-storage.md`)대로 `df -h ~/rosy-test`를 확인한다.
+**시작 전:** [시험 저장소 운영 규칙](../../../rosy-ops/docs/lab-host-storage.md)대로 `df -h ~/rosy-test`를 확인한다.
+
+> **2026-10-25 정정:** rosy-vault 저장소와 그 `device_core` 서비스는 2026-10-24에 은퇴했다(D-858). 이 계획의 「rosy-vault 배치 관측기 구현」 항목은 무효이며, 배치 관측기의 구현 위치와 소유는 플랫폼에서 다시 정한다.
 
 ## 목표
 

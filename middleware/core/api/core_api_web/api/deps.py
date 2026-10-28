@@ -43,6 +43,8 @@ from core_features.swarm import SwarmError
 from core_features.waypoints.manager import Waypoint
 from core_features.vision import VisionFrameAdvanced, VisionPullRateLimited
 from core_features.vision.stream import StreamRefused as VisionStreamRefused
+from core_features.vision.media_grants import MediaGrantService, MediaGrantRefused
+from core_common.protocol.schemas import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest
 from core_common.protocol.schemas import VisionPreviewStatus, VisionEvidenceRecord, VisionEvidenceList
 
 #: 라우터용 재수출 면. __all__ 선언으로 재수출임을 명시한다(F401 진정).
@@ -71,6 +73,11 @@ __all__ = [
     "VisionFrameAdvanced",
     "VisionPullRateLimited",
     "VisionStreamRefused",
+    "MediaGrantService",
+    "MediaGrantRefused",
+    "MediaGrantRequest",
+    "MediaGrantResponse",
+    "MediaSourceGrantRequest",
 ]
 
 

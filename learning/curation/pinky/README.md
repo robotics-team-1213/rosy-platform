@@ -44,7 +44,8 @@ python -B learning/curation/pinky/prepare_behavior.py <immutable-dataset> <new-i
 CORE cmd_vel에 대한 새로운 publisher나 로봇 접속 기능은 없다.
 
 ```powershell
-python -B -m pytest learning/curation/pinky/test -q -p no:cacheprovider --basetemp X:/DevTemp/pinky-episode-tests
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+python -B -m pytest learning/curation/pinky/test -q -p no:cacheprovider --basetemp $RosyScratch/pinky-episode-tests
 ```
 
 

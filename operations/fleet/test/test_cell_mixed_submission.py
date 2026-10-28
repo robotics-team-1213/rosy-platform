@@ -34,7 +34,8 @@ from test_cell_goal_evidence_service import _tolerance  # noqa: E402
 from test_cell_job_store import _stores  # noqa: E402
 
 MIXED = ROOT / "operations/processes/palletizing/test/fixtures/mixed_two_arm"
-SINGLE = ROOT / "operations/processes/cell/examples/omx_sim"
+# Immutable inputs from the original recipe/1 golden at 26a148117.
+SINGLE = ROOT / "test/fixtures/recipe1_pre_g2"
 TOL_M = 0.001
 CELL = "bench_01"
 

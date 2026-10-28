@@ -51,9 +51,3 @@
 - [ ] 원격 시험 생략 지시를 PR에 기록하고, 정적 검사·독립 검토·GitHub CI로 공개 문서 변경을 검증해 게시·병합한다. staging 호스트 기동·로봇·DEVICE/FIELD는 미실행으로 기록한다.
 
 **완료 조건:** private 저장소와 검증 CI, 명시적 HOLD 설정, 운영 안내, 공개 문서 연결이 있고 실제 GitHub 결과를 확인했다. 실행 환경의 완료 조건은 D-784의 격리·기능·복구 검증으로 별도 판정한다.
-
-## 실행 결과 · 2026-10-17
-
-비공개 [`rosy-ops` PR #1](https://github.com/robotics-team-1213/rosy-ops/pull/1)을 병합했다. main의 소스 SHA `249861b7c1d37da8033dd01a710569178fdb3513`의 [CI 38995663882](https://github.com/robotics-team-1213/rosy-ops/actions/runs/38995663882)에서 15개 시험과 HOLD 설정 검사가 통과했다. 공개 문서 연결과 파이프라인 점검은 [PR 절차](../reference/pr-pipeline.md#검사산출물staging)에서 관리한다.
-
-별도 운영 인력은 없으며 게시 담당은 기존 계정을 사용한다. 호스트·접속 범위·격리·기능·복구 근거는 미정이므로 설정의 빈 항목과 HOLD를 유지한다. 실제 staging 기동은 이 준비 결과에 포함하지 않는다.

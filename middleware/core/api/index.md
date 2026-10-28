@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
-- 2026-10-22 · 79a11a4a54 · 모터 상태 API와 공용 출처 검증
-- 2026-10-19 · uncommitted · OMX SIM CORE 준비와 안전한 내부 port 연결
-- 2026-10-16 · 560a2ff27 · v1.255 정확한 항법 인계와 경합 회귀 검증
-- 2026-10-16 · uncommitted · 정확한 완료 항법의 수동적 IDLE 인계
-- 2026-10-16 · 1216b3f7b · 이안 계약과 실제 native API 최종 회귀
+- 2026-10-27 · uncommitted · deepinit Dashboard 소스 링크 복구
+- 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
+- 2026-10-26 · 62173b9899 · 모터 관측 없음 사유를 한국어로
+- 2026-10-25 · uncommitted · D-876 API reference v1.318 표시 정렬
+- 2026-10-25 · uncommitted · 호스트 에이전트 중계 문구 표기 정렬

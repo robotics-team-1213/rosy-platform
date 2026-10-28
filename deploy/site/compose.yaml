@@ -5,6 +5,14 @@ x-rosy-site:
   allow_literal_bind: "${ROSY_SITE_ALLOW_LITERAL_BIND:-}"
   tls_host: "${ROSY_SITE_TLS_HOST:-}"
 
+# Bounded json-file logging for every long-running service: unbounded container
+# logs have no upper bound on the site host's disk otherwise.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 services:
   fleet:
     image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
@@ -56,6 +64,19 @@ services:
       - /var/lib/rosy/fleet.sqlite3
       - --tasks-db
       - /var/lib/rosy/fleet.sqlite3
+      # D-796: additive advisory context/log mirror on the site host only. The
+      # fleet.sqlite3 ledger above stays the single source of truth; absent the
+      # service/secret the flags are simply not passed.
+      - --context-db-host
+      - postgres
+      - --context-db-port
+      - "5432"
+      - --context-db-name
+      - rosy_context
+      - --context-db-user
+      - rosy
+      - --context-db-password-file
+      - /run/secrets/postgres_password
       - --robot-credential-key-file
       - /run/secrets/robot_credential_key
       - --tls-cert
@@ -83,6 +104,8 @@ services:
       ROSY_ENROLLED_TLS_BINDINGS_FILE: "${ROSY_SITE_ENROLLED_TLS_BINDINGS_FILE:-}"
       ROSY_DEPLOYMENT: "${ROSY_DEPLOYMENT:-}"
       ROSY_ACCOUNT_CONFIG: "${ROSY_ACCOUNT_CONFIG:-}"
+      # D-801: e.g. /run/rosy-fleet-media/fleet-media.json; empty keeps site robot media grants off.
+      ROSY_FLEET_MEDIA_CONFIG: "${ROSY_FLEET_MEDIA_CONFIG:-}"
       ROSY_LEARNING_APPS_CONFIG: "${ROSY_LEARNING_APPS_CONFIG:-}"
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
@@ -95,6 +118,8 @@ services:
       - /etc/rosy/fleet-deliberation:/run/rosy-deliberation:ro
       # D-757: signing keys stay outside camera config and image contents.
       - /etc/rosy/account:/run/rosy-account:ro
+      # D-801: the site media grant signing key and its config, Fleet only.
+      - /etc/rosy/fleet-media:/run/rosy-fleet-media:ro
       - /etc/rosy/fleet-learning:/run/rosy-fleet-learning:ro
       # D-530 read-only reports. Absent dirs come up empty; the hosts route then returns null.
       - /var/lib/rosy-host-guard:/var/lib/rosy-host-guard:ro
@@ -115,6 +140,7 @@ services:
       - site_cert
       - site_key
       - site_ca
+      - postgres_password
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
@@ -130,7 +156,11 @@ services:
       timeout: 3s
       retries: 3
       start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks: [site_backend, robot_egress]
+    logging: *default-logging
 
   vision:
     image: rosy-site-vision:${ROSY_SITE_IMAGE_TAG:-local}
@@ -198,6 +228,76 @@ services:
       retries: 3
       start_period: 15s
     networks: [site_backend]
+    logging: *default-logging
+
+  # D-796: optional site-host context/log store. It is an additive mirror of the
+  # D-640 advisory journal only — the Fleet SQLite ledger stays the single source
+  # of truth. It lives on the internal site network: the port is never published
+  # and no robot, AI PC or model PC connects to it. Less hardened than fleet and
+  # vision (stock upstream image, so read_only with tmpfs and a minimal cap set)
+  # — see the D-796 ADR. An absent image.tags entry fails the stack loudly.
+  postgres:
+    image: rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:-local}
+    command:
+      - postgres
+      - -c
+      - "max_connections=${ROSY_SITE_PG_MAX_CONNECTIONS:-50}"
+    environment:
+      POSTGRES_DB: rosy_context
+      POSTGRES_USER: rosy
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    secrets:
+      - postgres_password
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+      - /var/run/postgresql:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U rosy -d rosy_context"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [site_backend]
+    logging: *default-logging
+
+  # Daily ledger backup target for the host timer (rosy-site-ledger-backup.timer):
+  # `docker compose ... run --rm fleet-backup`. The fleet image already ships
+  # site_db.py; the online backup reads the live volume read-only and writes to
+  # the host bind. The profile keeps it out of plain `up` runs.
+  fleet-backup:
+    image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
+    profiles: ["backup"]
+    entrypoint: ["python3"]
+    command:
+      - /opt/rosy/site_db.py
+      - backup
+      - --source
+      - /var/lib/rosy/fleet.sqlite3
+      - --dest-dir
+      - /backup
+      - --prune
+      - "14"
+    user: "10001:10001"
+    volumes:
+      - sighting_data:/var/lib/rosy:ro
+      - ${ROSY_SITE_BACKUP_DIR:-/var/backups/rosy-site}:/backup
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    network_mode: "none"
 
   proxy:
     image: rosy-site-proxy:${ROSY_SITE_IMAGE_TAG:-local}
@@ -248,10 +348,12 @@ services:
       site_backend:
         aliases: [proxy]
       site_edge: {}
+    logging: *default-logging
 
 volumes:
   sighting_data:
   vision_state:
+  pg_data:
 
 networks:
   site_backend:
@@ -272,6 +374,8 @@ secrets:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/vision_preview_secret
   robot_credential_key:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/robot_credential_key
+  postgres_password:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/postgres_password
   site_cert:
     file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site.crt
   site_key:

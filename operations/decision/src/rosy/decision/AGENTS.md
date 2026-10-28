@@ -21,6 +21,7 @@ Actual proposal implementation under `operations/decision/src/rosy/decision`, ca
 | `fleet.server.model_feedback_dispatch` (Fleet holder) | D-657 store/journal/fence adapter consumes these contracts; no Decision implementation or old module shim |
 | `selector_bridge.py` | Resolves ER 2 image selectors against candidates from the same camera frame |
 | `vision_observation_source.py` | Trusted, bounded reads of the source-scoped Vision preview API |
+| `structured_output.py` | D-878 wire per provider family (Ollama `format`, OpenAI-compatible `response_format`) and one reply-envelope check; callers keep schema, error code and semantic validation |
 | `decision_pipeline.py` | D-523 parsers: identity fact or allowlisted choice. No stuck answer and no network |
 | `deliberation/` | D-640 bounded advisory supervisor and fixed CLI translator; Fleet owns durable records and activation |
 
@@ -40,7 +41,7 @@ Actual proposal implementation under `operations/decision/src/rosy/decision`, ca
 D-584: send committed HEAD to a remote test PC and keep logs in the X session. Preserve the existing proposal/catalog/transaction regression suites.
 
 ```bash
-python tools/remote/remote_pytest.py --log-dir X:/DevTemp/<name>/decision -- operations/fleet/test/test_er2_standard.py operations/fleet/test/test_er2_candidate_fence.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_model_tool_catalog.py operations/fleet/test/test_model_tool_contract.py operations/fleet/test/test_model_tool_adapter_conformance.py operations/fleet/test/test_selector_bridge.py operations/fleet/test/test_vision_observation_source.py operations/fleet/test/test_decision_pipeline.py -q
+python tools/remote/remote_pytest.py --log-dir "${ROSY_SCRATCH:-${TMPDIR:-/tmp}}/<name>/decision" -- operations/fleet/test/test_er2_standard.py operations/fleet/test/test_er2_candidate_fence.py operations/fleet/test/test_er2_tool_dispatch.py operations/fleet/test/test_model_tool_catalog.py operations/fleet/test/test_model_tool_contract.py operations/fleet/test/test_model_tool_adapter_conformance.py operations/fleet/test/test_selector_bridge.py operations/fleet/test/test_vision_observation_source.py operations/fleet/test/test_decision_pipeline.py -q
 ```
 
 Related: `test_model_tool_call_journal.py`, `test_mission_ai_proposal.py`, `test_mission_model_turn_store.py`. `test/test_remaining_platform_installed.py` checks installed namespaces and self-contained sdist delivery in both import orders alongside World/execution/skills. Source-move records: [progress.md](../../../progress.md), [logs.md](../../../logs.md), [index.md](../../../index.md).

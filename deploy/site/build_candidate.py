@@ -21,7 +21,7 @@ DEPLOY_FILES = (
     "rosy-site-stack.service", "site-firewall.py", "rosy-site-firewall.service",
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
-    "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
+    "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
     "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
@@ -29,6 +29,12 @@ DEPLOY_FILES = (
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SBOM_TOOLS = ("scout", "syft")
+# Upstream images the site host runs but does not build (D-796). The builder pulls
+# the pinned tag at build time and records its resolved image ID in the signed
+# manifest; verify_candidate.py checks the host-loaded image against it.
+MIRRORED_IMAGES = {
+    "postgres": "postgres:16-alpine",
+}
 # deploy/site is the proxy image build context, and the Fleet/Vision COPY
 # sources are copied whole, so ignored files under any of them could reach the
 # Docker daemon or an image. Python caches and egg-info carry no secrets.
@@ -180,6 +186,35 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         }
         references.append(reference)
 
+    for service, upstream in MIRRORED_IMAGES.items():
+        reference = f"rosy-site-{service}:{tag}"
+        runner(["docker", "pull", "--platform", "linux/amd64", upstream], cwd=root, check=True)
+        runner(["docker", "tag", upstream, reference], cwd=root, check=True)
+        inspect = runner(["docker", "image", "inspect", "--format",
+                          "{{.Id}}|{{.Os}}|{{.Architecture}}", reference],
+                         cwd=root, check=True, capture_output=True, text=True).stdout.strip()
+        parts = inspect.split("|")
+        if len(parts) != 3 or not parts[0].startswith("sha256:"):
+            raise RuntimeError(f"Docker returned invalid image identity for {service}")
+        image_id, image_os, architecture = parts
+        if (image_os, architecture) != ("linux", "amd64"):
+            raise RuntimeError(f"{service} image is {image_os}/{architecture}, expected linux/amd64")
+
+        sbom_path = sbom_dir / f"{service}.spdx"
+        runner(_sbom_command(sbom_tool, reference, sbom_path), cwd=root, check=True)
+        if not sbom_path.is_file() or sbom_path.stat().st_size == 0:
+            raise RuntimeError(f"{sbom_tool} did not produce the {service} SBOM")
+        images[service] = {
+            "reference": reference,
+            "image_id": image_id,
+            "platform": "linux/amd64",
+            "source": "mirror",
+            "upstream": upstream,
+            "sbom": str(sbom_path.relative_to(output)).replace("\\", "/"),
+            "sbom_sha256": _sha256(sbom_path),
+        }
+        references.append(reference)
+
     archive = output / "images.tar"
     runner(["docker", "image", "save", "--output", str(archive), *references],
            cwd=root, check=True)
@@ -193,6 +228,7 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
     config_hashes.update({name: _sha256(output / name) for name in DOC_FILES})
     manifest = {
         "manifest_version": 1,
+        "site_users_tool_required": True,
         "source_commit": commit,
         "image_tag": tag,
         "platform": "linux/amd64",

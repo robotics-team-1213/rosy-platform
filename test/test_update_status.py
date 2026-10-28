@@ -1,6 +1,11 @@
 """update_status flags a channel that has stopped being healthy, not one that is briefly waiting."""
+import hashlib
 import importlib.util
+import os
 from pathlib import Path
+import subprocess
+import time
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('update_status', ROOT / 'tools/remote/update_status.py')
@@ -9,6 +14,21 @@ spec.loader.exec_module(status)
 
 NOW = 1_000_000.0
 DAY = 86400
+
+
+def git_repo(path, files):
+    path.mkdir(parents=True, exist_ok=True)
+
+    def git(*args):
+        subprocess.run(['git', '-C', str(path), '-c', 'user.name=t', '-c', 'user.email=t@t', *args],
+                       check=True, capture_output=True)
+    git('init', '-q')
+    for name, data in files.items():
+        (path / name).parent.mkdir(parents=True, exist_ok=True)
+        (path / name).write_bytes(data)
+    git('add', '-A')
+    git('commit', '-q', '-m', 'base')
+    return git
 
 
 def channel(unit, result='success', timer='enabled', healthy=NOW - 60, last='{"step": "up_to_date", "release": "8e542e6b4221"}'):
@@ -124,3 +144,71 @@ def test_audit_reports_drift_in_unit_copies_dropins_and_code_path_unless_known()
     host['copies']['bin/tool.py'], host['files']['rosy-x@.service']['sha256'] = 'fresh', 'new'
     host['instances']['rosy-x@a.service']['dropins'] = ['ok.conf']
     assert findings({'rosy-x@.service': entry}, host, digests) == []
+
+
+def test_ref_state_names_the_ref_and_ages_the_last_fetch_not_the_tip_commit(tmp_path):
+    git = git_repo(tmp_path, {'a.txt': b'a'})
+    state = status.ref_state(tmp_path, time.time(), 12)
+    assert (state['ref'], state['verdict']) == ('HEAD', 'STALE-REF')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    reflog = tmp_path / '.git/logs/refs/remotes/origin/main'
+    now = time.time()
+    state = status.ref_state(tmp_path, now, 12)
+    assert (state['ref'], state['verdict']) == ('origin/main', 'ok') and state['fetched_h'] < 1
+    os.utime(reflog, (now - 20 * 3600, now - 20 * 3600))
+    state = status.ref_state(tmp_path, now, 12)
+    assert state['verdict'] == 'STALE-REF' and state['fetched_h'] == 20.0
+    (tmp_path / '.git/FETCH_HEAD').write_text('')  # a later fetch that did not move origin/main
+    assert status.ref_state(tmp_path, now, 12)['verdict'] == 'ok'
+    assert status.ref_state(tmp_path / 'absent', now, 12)['verdict'] == 'STALE-REF'
+
+
+def test_repo_digest_reads_only_the_named_ref(tmp_path):
+    git = git_repo(tmp_path, {'f': b'old\r\n'})
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    (tmp_path / 'f').write_bytes(b'new')
+    (tmp_path / 'g').write_bytes(b'g')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'unpublished')
+    assert status.repo_digest('f', tmp_path, tmp_path) == hashlib.sha256(b'old\n').hexdigest()
+    assert status.repo_digest('g', tmp_path, tmp_path) is None
+    assert status.repo_digest('g', tmp_path, tmp_path, {tmp_path: 'HEAD'}) == hashlib.sha256(b'g').hexdigest()
+
+
+def test_the_cam_stream_runs_the_auto_updated_code_with_its_private_config_left_in_place():
+    unit = (ROOT / 'deploy/site/rosy-cam-stream.service').read_text(encoding='utf-8')
+    start = next(line for line in unit.splitlines() if line.startswith('ExecStart='))
+    assert '%h/.local/share/rosy/site-tools/current/deploy/site/rosy_cam_screen.py stream-start' in start
+    assert '--config %h/.local/share/rosy/cam-screen/cam-screen.json' in start
+
+
+@pytest.mark.parametrize('count', [1, 2, 3])
+def test_selected_arms_replace_fixed_instances_and_ignore_extra_connected_devices(count):
+    template = 'rosy-omx-observer@.service'
+    host = observed()
+    host['files'][template] = dict(enabled='enabled', active='template', sha256='x', dropins=[])
+    host['topology'] = {'arms': {f'selected_{i}': {'configured': True, 'connected': True} for i in range(count)}}
+    host['instances'] = {f'rosy-omx-observer@selected_{i}.service': dict(active='active', dropins=[]) for i in range(count)}
+    declaration = {template: dict(run='active', channel='autoupdate', instances=['old_a', 'old_b'], instances_from='workcell-arms')}
+    assert findings(declaration, host) == []
+    host['instances']['rosy-omx-observer@connected_but_unselected.service'] = dict(active='active', dropins=[])
+    assert findings(declaration, host) == [('UNEXPECTED', 'rosy-omx-observer@connected_but_unselected.service')]
+
+
+def test_selected_arms_distinguish_disconnection_stopped_service_and_missing_config():
+    template = 'rosy-omx-observer@.service'
+    host = observed()
+    host['files'][template] = dict(enabled='enabled', active='template', sha256='x', dropins=[])
+    declaration = {template: dict(run='active', channel='autoupdate', instances_from='workcell-arms')}
+    host['topology'] = {'arms': {'chosen': {'configured': True, 'connected': False}}}
+    assert findings(declaration, host) == [('DISCONNECTED', 'rosy-omx-observer@chosen.service')]
+    host['topology']['arms']['chosen']['connected'] = True
+    assert findings(declaration, host) == [('DOWN', 'rosy-omx-observer@chosen.service')]
+    host['topology'] = {'error': 'workcell selection unavailable'}
+    assert findings(declaration, host) == [('CONFIGURATION', template)]
+
+
+def test_observer_manifest_uses_selected_workcell_arms_without_a_fixed_count():
+    entry = status.load_inventory()['site']['rosy-omx-observer@.service']
+    assert entry.get('instances_from') == 'workcell-arms'
+    assert 'instances' not in entry

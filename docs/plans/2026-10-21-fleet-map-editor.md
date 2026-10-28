@@ -48,11 +48,11 @@
 | 책임 | 경로와 인터페이스 |
 |---|---|
 | 계약 | 새 `contracts/foundation/core_common/protocol/site_drawing.py`: `DrawingTransform`, `DrawingReference`; 기존 `operations/fleet/fleet/site_map.py`의 선택 drawing·도로 name 필드 |
-| 기존 map/teach holder | `operations/fleet/fleet/server/maps/`로 `site_map_store.py`, `site_map_routes.py`, `teach_service.py`, `teach_routes.py`를 이동. `_source_layout.SERVER_HOLDERS`와 manifest `source_packages`로 기존 `fleet.server.*` import 유지 |
+| 기존 map/teach holder | `operations/fleet/fleet/server/sitemap/`로 `site_map_store.py`, `site_map_routes.py`, `teach_service.py`, `teach_routes.py`를 이동. `_source_layout.SERVER_HOLDERS`와 manifest `source_packages`로 기존 `fleet.server.*` import 유지 |
 | STL 변환 | 새 holder의 `site_map_projection.py`: `inspect_stl(path: Path) -> dict`, `project_stl(path: Path, transform: DrawingTransform) -> dict`; `python -m fleet.server.site_map_projection` 자식 프로세스 진입점 |
 | 보관·HTTP | 같은 holder의 `site_map_assets.py`: `SiteMapAssetStore(root: Path)`, `put_stl(path: Path) -> dict`, `project(asset_sha256: str, transform: DrawingTransform) -> dict`, `projection(projection_sha256: str) -> dict`, `source(asset_sha256: str) -> Path`, `validate_reference(reference: DrawingReference, survey_revision: str) -> None`; `site_map_drawing_routes.py`: `install_site_map_drawing_routes(app, *, assets, read_guard, require_named_operator)` |
 | runtime 구성 | 같은 holder의 `site_map_bootstrap.py`로 CLI `_build_site_map(args, tasks_db)` 본문을 이동하고 기존 함수는 위임한다. 반환 `(site_maps, routing_config)` 유지; `SiteMapStore(..., drawing_assets=None)`에 보관 객체 주입 |
-| 지도 화면 holder | `operations/site_ui/console/maps/`로 기존 `site-map.html`, `.css`, `.js`, `site-map-survey.js`, `site-map-teach.js`, `site-map-camera.js` 이동. `console/static_routes.py`와 기존 정적 자산/패키징 시험에서 공개 URL을 유지 |
+| 지도 화면 holder | `applications/fleet/web/sitemap/`로 기존 `site-map.html`, `.css`, `.js`, `site-map-survey.js`, `site-map-teach.js`, `site-map-camera.js` 이동. `console/static_routes.py`와 기존 정적 자산/패키징 시험에서 공개 URL을 유지 |
 | 새 편집 기능 | UI holder의 `drawing-import.js`, `edit-history.js`, `map-editor.js`, `map-editor.css`; 기존 shared 편집 함수와 `fitView(...).toPx/toMap` 재사용 |
 
 ## Task 1: 도면 참조 계약과 이전 지도 호환성
@@ -68,7 +68,7 @@
 
 ## Task 2: 제한된 STL 파서·투영과 source holder 분리
 
-**Files:** Move 위 map/teach 4파일; Create `operations/fleet/fleet/server/maps/site_map_projection.py`, `site_map_bootstrap.py`, `operations/fleet/test/test_site_map_projection.py`; Modify `operations/fleet/fleet/site_map.py`, `_source_layout.py`, CLI 위임, `tools/harness/platform_parts.yaml`, `test/architecture/size_units.txt`, 측정에 따라 낮아지는 `size_ratchet.txt` 행과 source-path 소비자.
+**Files:** Move 위 map/teach 4파일; Create `operations/fleet/fleet/server/sitemap/site_map_projection.py`, `site_map_bootstrap.py`, `operations/fleet/test/test_site_map_projection.py`; Modify `operations/fleet/fleet/site_map.py`, `_source_layout.py`, CLI 위임, `tools/harness/platform_parts.yaml`, `test/architecture/size_units.txt`, 측정에 따라 낮아지는 `size_ratchet.txt` 행과 source-path 소비자.
 
 **Interfaces:** Task 1 모델을 받아 표의 `inspect_stl`·`project_stl`을 제공한다. projection hash는 원본 hash·변환기 버전·정규화한 transform·결과의 canonical JSON으로 계산한다. 사용자 원본 이름은 경로에 쓰지 않는다.
 
@@ -94,7 +94,7 @@
 
 ## Task 4: 기존 편집 연산에 실행 취소·꼭짓점 수정을 연결
 
-**Files:** Move 표의 Console 6파일 into `operations/site_ui/console/maps/`; Create 그 holder의 `edit-history.js`, `operations/fleet/test/web/map-editor.test.mjs`; Modify `server/console/static_routes.py`, 패키징/정적 경로 소비자, `size_units.txt`·낮아지는 ratchet 행과 `shared/site-map-edit.js`의 선택 도로 이름 보존.
+**Files:** Move 표의 Console 6파일 into `applications/fleet/web/sitemap/`; Create 그 holder의 `edit-history.js`, `operations/fleet/test/web/map-editor.test.mjs`; Modify `server/console/static_routes.py`, 패키징/정적 경로 소비자, `size_units.txt`·낮아지는 ratchet 행과 `shared/site-map-edit.js`의 선택 도로 이름 보존.
 
 **Interfaces:** `createEditHistory(initialMap)` → `{current(), apply(nextMap), undo(), redo(), reset(savedMap), canUndo(), canRedo()}`. 반환 snapshot은 호출자가 원본을 변경할 수 없게 복사한다. 최대 50 snapshot/직렬화 합계 8 MiB로 오래된 undo부터 제거하며 재접속 시 저장 revision에서 새 이력을 시작한다.
 
@@ -108,7 +108,7 @@
 
 2026-10-21 사용자 보완: 특정 지역·지도·업무 도메인에 종속되지 않는 기반 기능을 우선한다. STL 변환은 순수 좌표 입력 어댑터로 유지하고, 이력과 점·선·다각형 편집은 Fleet 필드·시설 종류·현장 상수를 모르는 코드로 먼저 검증한다. `maps/geometry-edit.js`가 유한 2D 좌표와 꼭짓점 교체/삭제·화면 좌표 역변환을 맡으며, `map-editor.js`가 기존 Fleet DTO와 편집 연산을 연결한다. 지도/업무의 의미와 활성화 권한은 기존 Fleet 계층에 남긴다. 추가 도메인용 플러그인 체계나 새 서비스는 만들지 않는다.
 
-**Files:** Create `operations/site_ui/console/maps/drawing-import.js`, `maps/map-editor.js`, `maps/map-editor.css`, `operations/fleet/test/test_map_editor_browser.py`; Modify Task 4에서 이동된 map HTML/CSS/JS, `server/console/static_routes.py`의 새 asset 등록.
+**Files:** Create `applications/fleet/web/sitemap/drawing-import.js`, `maps/map-editor.js`, `maps/map-editor.css`, `operations/fleet/test/test_map_editor_browser.py`; Modify Task 4에서 이동된 map HTML/CSS/JS, `server/console/static_routes.py`의 새 asset 등록.
 
 **Interfaces:** `createDrawingImport({request, map, replaceDraft, confirmDiscard})` → `{load(file), register(transform), cancel()}`; 요청 취소/세대 확인으로 뒤늦은 결과가 새 초안을 덮지 않게 한다. `createMapEditor({svg, map, view, changed, reason})` → `{sync(), cancel(), destroy()}`; `map()`·`view()`는 현재 상태, `changed(nextMap)`는 Task 4 history에 반영한다. `reason()`이 있으면 편집을 금지한다.
 

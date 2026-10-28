@@ -115,13 +115,13 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html
         bar = re.search(r'<ui-topbar role="banner">(.*?)</ui-topbar>', html, re.S).group(1)
         assert bar.startswith('<ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand>')
-        assert '<h1' not in bar and '<nav' not in bar and 'class="theme-label"' in bar
+        assert '<h1' not in bar and '<nav' not in bar and 'data-theme-cycle=""' in bar, 'the shared theme cycle (D-668), no page select'
         assert 'data-learning-account-entry href="/accounts"' in bar, 'accounts stay in the top bar (D-857 §3)'
         assert 'kind="irreversible"' not in html, 'this tool commands no robot, so it has no stop'
         body = html.split('</ui-topbar>', 1)[1]
-        # D-542 §2: the two editors carry the 정답 pages in one nav right after the title (shown in the title row on
-        # wide screens and after the editor on phones), not in an extra sub-menu row above the photo.
-        merged = name in ('index.html', 'pixels.html')
+        # D-542 §2: every 정답 page carries the 정답 pages in one nav right after the title (shown in the title row on
+        # wide screens and after the editor on phones), not in an extra sub-menu column; all four look alike.
+        merged = name in ('index.html', 'pixels.html', 'omx.html', 'vlm.html')
         seats = ' data-seats="rail"' if subs[stage] is None or merged else ''
         rail = re.search(rf'<div class="ui-app-body"{seats}><div class="ui-rail">'
                          r'<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면">(.*?)</nav></div>', body, re.S).group(1)
@@ -132,7 +132,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert [(href, current) for _, href, _, current, _ in items if current] == [
             (stage, 'page' if here in (None, stage) else 'true')], name
         assert all(short in full for _, _, full, _, short in items), 'the visible label is part of the name'
-        sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1></div>'
+        sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1>(?:<span data-spacer></span><ui-button [^>]*>[^<]*</ui-button>)?</div>'
                          r'<nav class="review-kinds" aria-label="정답 하위 메뉴">(.*?)</nav>', body, re.S) if merged else
                re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
                          r'<span class="ui-subnav-head">[^<]+</span>(.*?)</nav></div>', body, re.S))
@@ -142,7 +142,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
             links = re.findall(r'<a class="ui-subnav-item" href="([^"]+)"( aria-current="page")?>[^<]+</a>', sub.group(1))
             assert [href for href, _ in links] == subs[stage], name
             assert [href for href, current in links if current] == [here], name
-        assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1></div>', body)
+        assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1>', body)
         assert not merged or '<div class="ui-subnav">' not in body, name
         assert html.count('<h1') == 1
         rails.add(re.sub(r' aria-current="(?:page|true)"', '', rail))

@@ -18,6 +18,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -404,6 +406,7 @@ private fun InstallGuide(guide: CornerGuide) {
 }
 
 /** One sentence naming the next step, an optional action, and the raw detail behind "자세히". */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProblemMessage(
     guidance: Guidance,
@@ -450,18 +453,27 @@ private fun ProblemMessage(
     }
     val retrying = if (guidance.retrying) "\n" + stringResource(R.string.problem_retrying) else ""
     CritMessage(text + manualLine + retrying)
-    Row(horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp), verticalAlignment = Alignment.CenterVertically) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp),
+        verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp),
+    ) {
         if (guidance.step == NextStep.OPEN_SETTINGS) {
-            if (ProblemGuide.stopsCameraFirst(guidance.problem, running)) {
-                OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp), onClick = { onStop(); onOpenSettings() }) {
-                    Text(stringResource(R.string.button_stop_and_open_settings))
-                }
-            } else {
-                OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp), onClick = onOpenSettings) { Text(stringResource(R.string.button_open_settings)) }
+            val stopFirst = ProblemGuide.stopsCameraFirst(guidance.problem, running)
+            OutlinedButton(
+                contentPadding = RosyButtonPadding,
+                shape = RosyButtonShape,
+                modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).align(Alignment.CenterVertically),
+                onClick = {
+                    if (stopFirst) onStop()
+                    onOpenSettings()
+                },
+            ) {
+                Text(stringResource(if (stopFirst) R.string.button_stop_and_open_settings else R.string.button_open_settings))
             }
         }
         if (guidance.detail != null) {
-            TextButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp), onClick = { showDetail = !showDetail }) {
+            TextButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).align(Alignment.CenterVertically), onClick = { showDetail = !showDetail }) {
                 Text(stringResource(if (showDetail) R.string.button_details_hide else R.string.button_details))
             }
         }

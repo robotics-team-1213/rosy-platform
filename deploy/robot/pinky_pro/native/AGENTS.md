@@ -52,8 +52,9 @@ Jazzy. This directory is copied into every offline ROSY release payload.
 - `rosy-auto-update.timer` → `rosy_auto_update.py run` (D-412) stages and applies signed
   GitHub payload releases only when the rollout and the robot allow it; state lives in
   `/var/lib/rosy/updates/`. It and `rosy-release-push.ps1` both hold `/run/rosy-claim`
-  (`rosy_claim.py`) and share `rosy-release-unpack.sh`. Tests: `test/test_rosy_auto_update.py`,
-  `test/test_rosy_claim.py`.
+  (`rosy_claim.py`) and share `rosy-release-unpack.sh`. Tarball downloads are paced by
+  `rosy_transfer.py` (`ROSY_UPDATE_LIMIT_KBPS`, default 2000 kbit/s, 0 = off). Tests:
+  `test/test_rosy_auto_update.py`, `test/test_rosy_claim.py`, `test/test_rosy_transfer.py`.
 
 - `rosy-tailscale-join.service` (D-477) is a one-shot root unit, condition-gated on the
   provisioned `/etc/rosy/tailscale-join.json` (0600; absent → the robot stays LAN-only).

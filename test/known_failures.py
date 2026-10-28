@@ -31,7 +31,8 @@ PASSED = re.compile(r"^PASSED (?P<nodeid>\S+)")
 # whole session: "collected 0 items / 1 skipped", exit 0. No suite here is a launch test.
 # One token each, so callers that read every non-dash word as a path stay right.
 NO_ROS_LAUNCH_PLUGINS = ["-pno:launch_testing", "-pno:launch_ros"]
-NOTHING_COLLECTED = re.compile(r"\bcollected 0 items\b")
+# pytest-xdist prints "6 workers [0 items]" instead of "collected 0 items".
+NOTHING_COLLECTED = re.compile(r"\bcollected 0 items\b|\bworkers? \[0 items\]")
 
 
 def collected_nothing(report: str, paths: list[str]) -> bool:
@@ -111,6 +112,8 @@ def compare(report: str, known: dict[str, str]) -> tuple[list[str], list[str], l
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("report", nargs="?", help="saved pytest output (default: stdin)")
+    parser.add_argument("--must-fail", action="append", default=[], metavar="NODEID",
+                        help="a listed id this run must see failing (land.py: ids the landing adds to the list)")
     args = parser.parse_args(argv)
     if args.report:
         data = Path(args.report).read_bytes()
@@ -131,8 +134,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FLAKY     {nodeid}")
     for nodeid in new:
         print(f"NEW       {nodeid}")
+    # Design 0.7 rule 7: a line added to the list must hide a real failure, not a passing test.
+    passing = [nodeid for nodeid in args.must_fail if nodeid not in seen]
+    for nodeid in passing:
+        print(f"MUST-FAIL {nodeid}  (added to known_failures.txt, but it did not fail here)")
     print(f"{len(new)} new, {len(seen)} known, {len(passed_once)} flaky, {len(quiet)} listed but not failing")
-    return 1 if new else 0
+    return 1 if new or passing else 0
 
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+{
+  "site_url": "https://<site-media-host>:<media-https-port>",
+  "audience": "site:<site-id>",
+  "key_id": "<site-key-id>",
+  "signing_key_file": "/run/rosy-fleet-media/site-media.pem",
+  "audit_db": "/var/lib/rosy/fleet.sqlite3"
+}

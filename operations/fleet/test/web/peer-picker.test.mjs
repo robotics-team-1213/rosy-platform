@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {peerOwnerAction, peerStateText, createPeerPicker} from '../../../site_ui/console/peer-picker.js';
+import {peerOwnerAction, peerStateText, createPeerPicker} from '../../../../applications/fleet/web/installation/peer-picker.js';
 
 const approved = {role: 'robot', peer_id: 'pinky / one', approval: 'approved',
   freshness: 'unavailable', readiness: 'unknown', hostname: 'untrusted.local', address: '192.168.1.9'};

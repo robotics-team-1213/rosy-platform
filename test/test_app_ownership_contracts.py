@@ -178,8 +178,8 @@ def test_console_documents_have_one_api_and_session_owner(fleet):
 @pytest.mark.parametrize("surface,source,function,path", [
     ("robot", "middleware/robot_ui/robot/client.js", "api", "/api/v1/auth/whoami"),
     ("pilot", "middleware/robot_ui/pilot/client.js", "api", "/api/v1/auth/whoami"),
-    ("console", "operations/site_ui/console/console.js", "call", "/api/fleet/state"),
-    ("console", "operations/site_ui/console/install.js", "call", "/api/fleet/discovery"),
+    ("console", "applications/fleet/web/console.js", "call", "/api/fleet/state"),
+    ("console", "applications/fleet/web/installation/install.js", "call", "/api/fleet/discovery"),
 ])
 def test_existing_client_request_reaches_its_declared_plane(surface, source, function, path):
     """Run the exact request function; isolate its DOM/session hooks, not its fetch path."""
@@ -190,9 +190,9 @@ def test_existing_client_request_reaches_its_declared_plane(surface, source, fun
     script = r"""
 import fs from 'node:fs';
 import {pathToFileURL} from 'node:url';
-const [source, name, path, owner, fleetModule, scopeModule] = JSON.parse(process.argv[1]);
+const [source, name, path, owner, fleetModule] = JSON.parse(process.argv[1]);
 const {createFleetClient} = await import(pathToFileURL(fleetModule));
-const {createPageScope} = await import(pathToFileURL(scopeModule));
+const {createPageScope} = await import(new URL('./scope.js', pathToFileURL(fleetModule)));
 const text = fs.readFileSync(source, 'utf8');
 const match = text.match(new RegExp('(?:export )?async function ' + name + '\\([^]*?\\n\\}'));
 if (!match) throw new Error('request function not found');
@@ -216,8 +216,7 @@ pageScope.dispose();
 console.log(JSON.stringify(calls));
 """
     data = json.dumps([str(ROOT / source), function, path, owner,
-                       str(ROOT / "operations/site_ui/console/shared/fleet-client.js"),
-                       str(ROOT / "shared/web/scope.js")])
+                       str(ROOT / "shared/web/fleet-client.js")])
     result = subprocess.run([node, "--input-type=module", "--eval", script, data],
                             capture_output=True, text=True, encoding="utf-8")
     assert result.returncode == 0, result.stderr

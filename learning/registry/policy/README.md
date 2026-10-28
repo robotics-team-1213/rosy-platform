@@ -4,7 +4,7 @@
 
 D-706·D-707의 `ReasoningRegistry`는 행동 정책 stage와 별도의 reasoning snapshot·table·hash chain을 같은 소유자와 SQLite에서 관리한다. 생성/재검증은 Decision 순수 evaluation이 맡고 registry는 명시적으로 주입된 validator 포트를 사용한다. learning에서 운영 Decision을 직접 import하지 않는다. 설치 책임자는 기존 `tools/decision_calibration.py --candidate`가 생산한 자료와 신뢰 설정을 공급한다.
 
-Python API는 `register(candidate_file)`, `candidate(revision)`, `history()`, `approve(revision, receipt, expected_head=...)`, `revoke(...)`, `approved_artifacts()`다. `register`의 반환값은 후보 revision이며 같은 후보는 이력을 늘리지 않는다. 매 조회에서 원본 보정 자료 재계산·seal·snapshot·상태 table·chain·과거 receipt의 현재 key/kind 신뢰를 재검증한다. output은 F:에 만들지 않는다.
+Python API는 `register(candidate_file)`, `candidate(revision)`, `history()`, `approve(revision, receipt, expected_head=...)`, `revoke(...)`, `approved_artifacts()`다. `register`의 반환값은 후보 revision이며 같은 후보는 이력을 늘리지 않는다. 매 조회에서 원본 보정 자료 재계산·seal·snapshot·상태 table·chain·과거 receipt의 현재 key/kind 신뢰를 재검증한다. output은 저장소에 만들지 않는다.
 
 별도 주입한 trusted principal의 최소 32-byte key와 `reasoning_calibration` 또는 `reasoning_revocation` scope를 사용한다. `receipt_payload(candidate, kind, head)`가 서명 대상의 정확한 candidate/profile/domain/calibration digest/head/verdict를 반환한다. 서명 key는 원장·후보·CLI 출력에 기록하지 않는다. 운영 키·검증자를 설치하거나 서명하는 명령은 추가하지 않았다. 테스트 receipt는 합성 자료다.
 
@@ -129,3 +129,9 @@ from their preserved snapshots; this is an integrity audit, not operating approv
 ## Private Hub 동기화
 
 `hub_sync.py`는 명시적으로 고른 파일만 기존 private 저장소에 올린다. 고정 commit의 재다운로드 해시가 일치해야 receipt를 남긴다. [실행 안내](../../curation/omx/README.md)를 따른다. 모델 loader 검증·배포 승인은 별도다.
+
+`test/test_hub_model_native.py`는 실제 native ACT 6·12관절 모델을 fixture Hub로 왕복한 뒤,
+다운로드한 모델만 새 Python 프로세스의 `native_cycle.py verify`로 읽는다. 저장된 processor가
+빠진 모델도 검사한다. 모델 전송 receipt의 `reader_verified=False`는 유지하며, 이 별도 SDK
+통합 시험은 실제 HF 서비스 전달·모델 품질·장치 실행을 입증하지 않는다. SDK 없는 일반 원격
+시험의 skip과 MODEL PC의 고정 CPU 환경에서 실행한 결과를 구분한다.

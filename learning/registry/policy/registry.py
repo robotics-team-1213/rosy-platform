@@ -1,5 +1,6 @@
 """Local policy metadata ledger; never dispatches or grants actuator authority."""
 import argparse
+from policy_output_paths import in_source_checkout
 from contextlib import contextmanager
 import hashlib
 import hmac
@@ -92,8 +93,8 @@ def pinky_assessment(report):
 class Registry:
     def __init__(self, root, *, trusted=None, read_only=False):
         self.root = Path(root).resolve()
-        if self.root.drive.upper() == 'F:':
-            raise ValueError('registry output belongs outside source drive F:')
+        if in_source_checkout(self.root):
+            raise ValueError('registry output belongs outside the source checkout')
         if not isinstance(read_only, bool):
             raise ValueError("read_only must be boolean")
         self._read_only = read_only

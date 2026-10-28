@@ -7,7 +7,6 @@
 drive/behaviors/line_follow
 foundation/core_common/protocol/native small
 drive/behaviors/navigation
-drive/behaviors/docking
 drive/behaviors/line_follow/recovery
 drive/behaviors/line_follow/recovery/junction
 drive/behaviors/line_follow/recovery/stuck
@@ -17,6 +16,7 @@ drive/behaviors/line_follow/cue small
 drive/behaviors/line_follow/crosswalk small
 drive/behaviors/line_follow/signal small
 drive/behaviors/localization
+drive/behaviors/docking
 drive/behaviors/swarm small
 fleet/fleet/traffic
 fleet/fleet/observe small
@@ -41,27 +41,23 @@ decision/src/rosy/decision/deliberation/providers small
 decision/src/rosy/decision/deliberation/evaluation small
 perception/front_camera/perception
 perception/front_camera/perception/learned
-perception/front_camera/perception/drivable small
-site_ui/console
-site_ui/console/cell
-site_ui/console/maps
-site_ui/console/devices
+perception/front_camera/perception/drivable
+fleet/web
+fleet/web/devices
 fleet/fleet/server/ledger
-site_ui/console/work small
+fleet/web/work
 fleet/fleet/server/missions
-fleet/fleet/server/work small
+fleet/fleet/server/work
 fleet/fleet/server/trips
 fleet/fleet/server/trip_checks small
 fleet/fleet/server/trip_progress small
-fleet/fleet/server/tracking
-fleet/fleet/server/pose
+devices/omx/adapter/omx_adapter/pilot_sim
 foundation/core_common/protocol
 robot_ui/robot/panels
+site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/ui
 fleet/fleet/server/auth
 fleet/fleet/server/console
 fleet/fleet/server/cell
-fleet/fleet/server/site_observation
-fleet/fleet/server/maps
 fleet/fleet/swarm
 fleet/fleet/routing
 decision/src/rosy/decision
@@ -72,7 +68,17 @@ drive/motion_limits
 drive/calibration
 drive/recovery
 perception/sensors/line_observation
-site_ui/console/shared
+fleet/web/shared
+fleet/web/calibration
+fleet/web/sitemap
+fleet/web/installation
+fleet/web/map
+fleet/fleet/server/tracking
+fleet/fleet/server/evidence
+fleet/fleet/server/sitemap
+fleet/fleet/server/pose
+fleet/fleet/server/recognition
+fleet/fleet/server/rightofway
 situation
-devices/omx/adapter/omx_adapter/pick_place
+devices/omx/adapter/omx_adapter/contracts
 devices/omx/adapter/omx_adapter/real

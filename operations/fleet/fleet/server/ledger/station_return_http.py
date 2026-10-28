@@ -172,7 +172,9 @@ class StationReturnHttp:
         self._live(session, target, live, returning=True, context=stored)
         body = await client.station_navigation_state()
         await self._context(session, stored)
-        self._live(session, target, live, returning=True, context=stored)
+        fresh = await client.station_target()
+        StationTargetStatus.model_validate(live.model_dump(), context={'now': self.clock()})
+        self._live(session, target, fresh, returning=True, context=stored)
         owner = body.get('owner') or {}
         if (owner.get('boot_id') != session.boot_id or type(owner.get('owner_generation')) is not int
                 or owner['owner_generation'] < 0

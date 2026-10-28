@@ -114,6 +114,16 @@ def acquire_action_lock(trajectory_action: str, domain: str):
     return guard
 
 
+def close_runtime(owner, executor, node, context, lock):
+    owner.uds_server.stop()
+    if executor.shutdown(timeout_sec=5, wait_for_threads=False) is not True:
+        raise RuntimeError('CLEANUP_HOLD: OWNER_SHUTDOWN_INCOMPLETE')
+    owner.runtime.destroy()
+    node.destroy_node()
+    context.shutdown()
+    lock.close()
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", required=True, type=Path, help="private rosy.omx-hardware-owner.v1 JSON")
@@ -134,7 +144,7 @@ def main(argv=None) -> int:
     lock = acquire_action_lock(names.trajectory_action, domain)
 
     import rclpy
-    from rclpy.executors import MultiThreadedExecutor
+    from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
     from omx_adapter.ros_runtime import RosArmCommandRuntime
     from rosy_agent.omx_hardware_owner import build_hardware_owner
 
@@ -149,7 +159,7 @@ def main(argv=None) -> int:
             trajectory_action=names.trajectory_action, owner_clock="steady"),
         refuse_second_owner=lambda: refuse_second_owner(namespace=names.namespace),
         fleet_fence_current=fleet_fence)
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True).start()
     uds = threading.Thread(target=owner.uds_server.serve_forever, daemon=True)
@@ -164,11 +174,7 @@ def main(argv=None) -> int:
             if not uds.is_alive():
                 raise RuntimeError("UDS server stopped")
     finally:
-        owner.uds_server.stop()
-        executor.shutdown()
-        node.destroy_node()
-        rclpy.shutdown()
-        lock.close()
+        close_runtime(owner, executor, node, rclpy, lock)
     return 0
 
 

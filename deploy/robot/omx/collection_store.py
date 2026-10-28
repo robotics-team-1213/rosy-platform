@@ -98,7 +98,9 @@ class RawCollection:
         row = dict(frame_index=frame, time_ns=observation['time_ns'],
                    **{'observation.state': observation['observation_state'], 'action': observation['action']},
                    requested_target_rad=list(requested), joint_source_stamp=observation['joint_source_stamp'],
-                   reference_source_stamp=observation['reference_source_stamp'], images=images)
+                   reference_source_stamp=observation['reference_source_stamp'], images=images,
+                   # D-792 S3: measured readback in profile joint order, for the wrist camera check pose.
+                   joint_positions_rad=list(observation['joint_positions']))
         append(self.root/episode['samples_path'], row)
         episode['frames'] += 1
 

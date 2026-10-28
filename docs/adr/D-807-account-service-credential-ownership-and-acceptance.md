@@ -74,11 +74,10 @@ D-757의 온라인 30초·기존 자격 최대 5분은 일반 Account 경계의 
 만료와 자원 scope 안에서만 사용한다. 확인하지 못한 자격을 캐시에 넣거나 단절을 이유로
 수명을 연장하지 않는다. WS·worker·다운로드·영상도 각 owner의 재검증 대상이다.
 
-이 상한은 모든 연결을 5분 유지하라는 정책이 아니다. 아직 공개되지 않은 선행 작업
-D-789의 미디어를 포함하는 배포에서는 해당 계약·구현의 공개 착지 후 최대 60초 입장
-자격과 활성 lease, 원본 권한 1초 재검사, 철회·CORE 단절 확인 후 실제 세션 5초 이내
-종료를 별도로 인수한다. 이 수치를 현재 공개 main에 구현된 것으로 간주하지 않는다.
-CORE watchdog·좌석·명령 lease 및 기타 더 짧은 기존 제한도 그대로 우선한다.
+이 상한은 모든 연결을 5분 유지하라는 정책이 아니다. 예를 들어
+[D-789](D-789-six-robot-webrtc-camera-transport.md)의 미디어는 최대 60초 입장 자격과
+활성 lease, 원본 권한 1초 재검사, 철회·CORE 단절 확인 후 실제 세션 5초 이내 종료를
+따른다. CORE watchdog·좌석·명령 lease 및 기타 더 짧은 기존 제한도 그대로 우선한다.
 
 회수는 중앙 원장 commit, 수신 verifier 반영, 업무 owner의 취소/checkpoint,
 실제 연결 종료를 구분한다. 이미 실행 중인 업무의 처리 방식은 업무 owner가 결정한다.
@@ -165,6 +164,6 @@ CORE watchdog·좌석·명령 lease 및 기타 더 짧은 기존 제한도 그�
 - [Account protocol](../reference/rosy-account-protocol.md)
 - [통합 완성 계획과 검증 기록](../plans/2026-10-14-rosy-account-completion.md)
 - [D-755 외부 제공자와 협업 계정](D-755-learning-data-and-collaborative-provider-accounts.md)
-- D-789 미디어의 위임·회수 계약: 미게시 선행 작업. 공개 착지 뒤 연결한다.
+- [D-789 미디어의 위임·회수 계약](D-789-six-robot-webrtc-camera-transport.md)
 - [OAuth 2.0 보안 권고 RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html)
 - [OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)

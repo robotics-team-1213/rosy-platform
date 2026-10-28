@@ -10,6 +10,8 @@ set -e
 : "${ROSY_COLLECTION_OUTPUT:?new raw session directory required}"
 source "$ROSY_ROS_SETUP"
 source "$ROSY_OMX_OVERLAY_SETUP"
+# No-cross-host DDS: collection runs on the controller/camera host only.
+export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_STATIC_PEERS=
 exec python3 "$ROSY_OMX_COLLECTION_ROOT/deploy/robot/omx/collection_cli.py" collect \
   --profile "$ROSY_COLLECTION_PROFILE" --teacher "$ROSY_COLLECTION_TEACHER" \
   --acceptance "$ROSY_COLLECTION_ACCEPTANCE" --out "$ROSY_COLLECTION_OUTPUT" \

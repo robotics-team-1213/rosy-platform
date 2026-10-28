@@ -1,11 +1,8 @@
 // D-540 (d): the one trip path the site map and the 관제 robot card share (plan, start, texts).
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripReason, startCheckText, startTrip,
-  tripErrorText, tripRefusalText,
-  tripStartReason, tripPoseReason,
-} from '../../../site_ui/console/shared/site-map-model.js';
+import {oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripReason, startTrip, tripRefusalText, tripStartReason, tripPoseReason} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {startCheckText, tripErrorText} from '../../../../applications/fleet/web/shared/trip-display.js';
 
 const ACTIVE = {version: 4, map: {places: [{id: 'A', kind: 'start'}, {id: 'B', kind: 'start'}, {id: 'X', kind: 'junction'}]}};
 

@@ -7,19 +7,20 @@ An entry that reaches another document's module fails this test.
 """
 
 import re
+import json
 from pathlib import Path
-from fleet.server.static_routes import CONSOLE_ASSETS
 
 
-WEB = Path(__file__).resolve().parents[2] / 'site_ui' / 'console'
+WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
+ASSETS = json.loads((WEB / 'assets.json').read_text(encoding='utf-8'))['assets']
 
 _FROM = re.compile(r"""\bfrom\s+['"]([^'"]+)['"]""")
 _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 _ASSET = "/console/assets/"
 
 SHARED = {
-    "fleet-client.js",
-    "request.js",
+    "robot-profile-view.js",  # Read-only profiles shared by Console, Cell and Installation.
+    "app-runtime.js",
     "address-drift.js",
     "authorization.js",
     "poll-gate.js",
@@ -36,28 +37,39 @@ SHARED = {
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
     "site-map-model.js",  # D-517 10: DOM-free lane/trip model; the console reads the traffic helpers
+    "trip-display.js",  # DOM-free trip vocabulary shared by map and Console consumers.
+    "route-attention.js",
     "drawing-errors.js",
 }
 
 OWN = {
     "account-page.js": set(),
     "console.js": {
-        "assistant.js", "assistant-voice.js",
-        "console-auth.js", "console-goal.js", "console-refresh.js",
+        "assistant.js", "assistant-voice.js",  # D-810: operator dialogue belongs to Console.
         "work-view.js",  # D-664: common read view; execution stays with each owner
         "channel-request-view.js",  # D-680: named review and existing navigation submission
+        "control-unit-view.js",  # D-855: delegation review belongs to Console.
+        "arm-transfer-view.js",  # Neutral ARM admission belongs to Console, never install or Cell.
+        "integrated-control-view.js",  # D-862: unit information and stop requests belong to Console.
         "inbox.js",  # D-632: console notification and context view owner
         "incident-view.js",  # D-362/D-641: incident evidence, review and export view
         "connection-view.js",
         "formation.js",
         "map-view.js",
+        "map-overlays.js",  # D-798 3.2: map-view.js overlay drawing
+        "map-polling.js",  # D-798 3.2: map-view.js polling
+        "console-auth.js",  # D-798 3.2: console.js lock, session and token handling
+        "console-goal.js",  # D-798 3.2: console.js goal targeting and operator pin
+        "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
         "motor-health-view.js",  # Fleet robot rows adapt shared read-only motor evidence.
+        "roster-presentation.js",
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
         "line-stuck.js",
+        "stuck-evidence.js",  # network load: the stuck picture as raw JPEG (line-stuck.js)
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
@@ -77,13 +89,14 @@ OWN = {
         "state-age.js",
     },
     "install.js": {
+        "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.
         "enrollment.js",
-        "device-request.js",
         "camera-pairing.js",
         "camera-peer.js",
         "field-view.js",
         "field-layers.js",
         "map-fit-view.js",
+        "measured-calibration-view.js",
         "peer-picker.js",
         "start-point-view.js",  # D-540 5: 카메라 설치·보정
         "start-point-layer.js",
@@ -115,7 +128,9 @@ def _local(spec):
 
 
 def _path(name):
-    return WEB / CONSOLE_ASSETS.get(name, (name, None))[0]
+    if name in ASSETS:
+        return WEB / ASSETS[name]['path']
+    return WEB / name
 
 
 def _imports(name):

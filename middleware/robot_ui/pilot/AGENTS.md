@@ -43,7 +43,7 @@ Rosy Pilot 원격 조종 표면(D-323). 정적 파일이며 `core_api_web`이 `/
 
 - Harness (D-61): 변경 뒤 `logs.md` 추가, gate 가 움직이면 `progress.md` 갱신, 루트에서 `python tools/harness/rosy_harness.py generate`.
 - CSP 인라인 스크립트·스타일 금지. 같은 출처의 `/api/v1`·`/ws/*` 만 호출한다.
-- 새 JS 모듈은 다섯 곳에 함께 등록한다: `api/app.py` `pilot_assets`, OMX `pilot_sim_api.py` `PILOT_ASSETS`, `sw.js` `SHELL`(+`CACHE` 이름 올림), `test/dev_server.py` `PILOT_MIME`, `CMakeLists.txt`(빠뜨리면 404, `test_shell_assets.py` 가 잡는다).
+- 새 JS 모듈은 다섯 곳에 함께 등록한다: `api/app.py` `pilot_assets`, OMX `pilot_sim/api.py` `PILOT_ASSETS`, `sw.js` `SHELL`(+`CACHE` 이름 올림), `test/dev_server.py` `PILOT_MIME`, `CMakeLists.txt`(빠뜨리면 404, `test_shell_assets.py` 가 잡는다).
 - 순수 모듈(`stick.js`·`recording.js`·`controls.js`·`arm-stick.js`)은 import 없이 자족한다(Node 시험이 data: URL 로 읽는다).
 - 팔은 100 ms 스트림을 쓰지 않는다(D-390 §2): 제한 목표 하나씩, 이전 목표가 끝난 뒤에만. 떼면 취소하지 않는다(취소 = HOLD, D-411 구현 부록).
 - **hold-to-drive**: 손을 떼면·탭이 화면을 벗어나면·게임패드가 끊기면 즉시 0 을 발행한다.

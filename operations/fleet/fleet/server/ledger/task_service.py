@@ -14,7 +14,7 @@ from fleet.server.cancel_all_store import CANCEL_ALL_REASON
 from fleet.server.policy_evidence import PolicyEvidenceStore
 from fleet.server.task_scheduler import FleetTaskScheduler
 from fleet.server.task_store import FleetTaskStore
-from fleet.server.channel.execution.journal import native_required
+from fleet.server.channel.execution.journal import native_required as channel_native_required
 from fleet.server.channel.execution.outcomes.task_receipt import bind_native_task_result
 from fleet.server.channel.execution.outcomes.handover import handover_completed_navigation
 from fleet.swarm.transport import RobotApiError
@@ -42,9 +42,13 @@ class FleetTaskService:
         self.channel_admission = None
         self.charge_admission = None
         self.core_events = None
+        self.control_units = None
 
     bind_native_receipt = bind_native_task_result
-    native_required = native_required
+    def native_required(self, task_id):
+        return ((self.control_units is not None and self.control_units.owns_task(task_id))
+                or channel_native_required(self, task_id))
+
     handover_completed_navigation = handover_completed_navigation
 
     async def submit_navigation(
@@ -172,6 +176,13 @@ class FleetTaskService:
                     reason=admission or "POLICY_NOT_ACCEPTED",
                 )
         attempt = self.scheduler.begin_dispatch(task["task_id"])
+        _LOG.info(
+            "fleet task dispatch claimed: task=%s robot=%s priority=%s queue_wait_s=%s "
+            "total_queue_wait_s=%s attempt_seq=%s",
+            task["task_id"], task["robot_id"], task.get("priority_class"),
+            task.get("queue_wait_seconds"), task.get("total_queue_wait_seconds"),
+            attempt.get("attempt_seq"),
+        )
 
         try:
             if not self.store.dispatch_generation_is_current(attempt["dispatch_generation"]):

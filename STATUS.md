@@ -9,8 +9,13 @@
 | [deploy](deploy/progress.md) | 릴리스·플랫폼 | 4e99d92e (2026-10-02) | GO | GO | N/A | HOLD | HOLD | N/A |
 | [control](middleware/perception/progress.md) | CONTROL | 4e99d92e (2026-10-02) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [fleet](operations/fleet/progress.md) | FLEET | bed604ef (2026-09-30) | GO | GO | HOLD | PARKED | PARKED | PARKED |
+| [monitoring](operations/monitoring/progress.md) | MONITORING | 6b0f7568f5 (2026-10-26) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
 | [fleet_decision](operations/decision/progress.md) | fleet_decision | 8036d90c09 (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | HOLD |
-| [console_source](operations/site_ui/console/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [situation](operations/situation/progress.md) | SITUATION | 3627ec21fb (2026-10-28) | GO | HOLD | N/A | HOLD | HOLD | HOLD |
+| [media](operations/site_ui/media/progress.md) | SITE MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
+| [media_edge](middleware/media/progress.md) | ROBOT MEDIA | 2190ba6889 (2026-10-18) | GO | GO | N/A | HOLD | HOLD | HOLD |
+| [console_source](applications/fleet/web/progress.md) | console_source | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
+| [fleet_app_dev](applications/fleet/dev/progress.md) | fleet_app_dev | c000a57004 (2026-10-21) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_curation](learning/curation/perception/progress.md) | perception_curation | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_registry](learning/registry/perception/progress.md) | perception_registry | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [perception_training](learning/training/perception/progress.md) | perception_training | d4988bffba (2026-10-11) | GO | GO | HOLD | HOLD | HOLD | HOLD |
@@ -36,10 +41,16 @@
 | [web_common](shared/web/progress.md) | CORE | 0409c371 (2026-09-30) | GO | GO | N/A | N/A | N/A | N/A |
 | [dashboard](middleware/robot_ui/robot/progress.md) | 화면 | e7cdf490 (2026-09-29) | GO | GO | N/A | HOLD | N/A | N/A |
 | [pilot](middleware/robot_ui/pilot/progress.md) | 화면 | 10daaae5 (2026-10-02) | GO | HOLD | HOLD | HOLD | GO | N/A |
-| [omx_adapter](middleware/devices/omx/adapter/progress.md) | OMX workcell | 7ae0f65c (2026-10-02) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [omx_transfer](integrations/robots/omx/progress.md) | OMX workcell | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [omx_agent](middleware/devices/omx/agent/progress.md) | OMX workcell | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [execution_local](middleware/robot_execution/local/progress.md) | Robot execution | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [skill_api](middleware/skills/api/progress.md) | Skills | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [skill_manipulation](middleware/skills/manipulation/progress.md) | Skills | uncommitted (2026-10-27) | GO | PARKED | PARKED | PARKED | PARKED | PARKED |
+| [omx_adapter](middleware/devices/omx/adapter/progress.md) | OMX workcell | aec7f05a35 (2026-10-27) | GO | GO | HOLD | HOLD | PARKED | PARKED |
 | [interfaces](contracts/ros_idl/progress.md) | 장치 | 8058c3676 (2026-10-17) | GO | GO | N/A | HOLD | HOLD | PARKED |
 | [pinky_pro](middleware/devices/pinky/profile/progress.md) | 로봇 통합 | uncommitted (2026-09-24) | GO | GO | GO | HOLD | HOLD | PARKED |
 | [omx](middleware/devices/omx/profile/progress.md) | OMX workcell | uncommitted (2026-09-26) | GO | GO | HOLD | HOLD | PARKED | PARKED |
+| [rasptank_metal](middleware/devices/rasptank/profile/progress.md) | 로봇 통합 | 4fdf8c9fee (2026-10-25) | GO | GO | HOLD | HOLD | HOLD | HOLD |
 | [description](middleware/devices/pinky/description/progress.md) | 로봇 통합 | c0bb0393c (2026-10-12) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [dock](operations/site_devices/dock/progress.md) | 도킹 | dc89264 (2026-09-17) | GO | GO | HOLD | HOLD | HOLD | PARKED |
 | [signal](operations/site_devices/signal/progress.md) | 사이트 인프라 | uncommitted (2026-09-22) | GO | GO | PARKED | HOLD | HOLD | PARKED |
@@ -56,14 +67,32 @@
 - control ARTIFACT: 서명된 ARM64 manifest·immutable digest 발행 전. 흡수된 코드는 deploy가 소유하는 OS 이미지에 번들된다
 - control DEVICE: Pi bench Device 설치와 device-readback.sh --json 증거 없음. Control sensor adapter 활성화는 Device 보정 generation에 묶인다(D-47)
 - fleet ROS-SIM: D-87: 현재 트리의 colcon install/setup.bash가 없다. 2026-09-17 WSL Task 14 로그는 설계 입력이며 GO가 아니다 (D-89)
+- monitoring LOCAL: 개별·중앙·중앙 단독 프로세스와 프로세스 간 lease는 검증했으며 실제 backend 상태 화면의 브라우저 수용이 남아 있다.
+- monitoring ARTIFACT: CLI 포함 wheel 설치는 검증했으며 화면·native 서비스·TLS 프록시 배포 묶음이 남아 있다.
+- monitoring DEVICE: 실제 관제 PC의 네이티브 설치·프로세스 수명 검증을 수행하지 않았다.
+- monitoring FIELD: 실 PC 배치·LAN/TLS 단절 및 복구·시각·제어 영향 수용이 남아 있다.
 - fleet_decision ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - fleet_decision FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- situation LOCAL: AI PC 루프백 서비스로서의 연속 운영·재시작 관찰은 별도다(현재는 Fleet 분포에 3개 순수 파일만 설치되어 소비자가 섀도 운영).
+- situation ARTIFACT: AI PC 설치·버전 고정 산출물 검증은 별도.
+- situation DEVICE: 장치 연결 경로 없음 — 활성화 시 별도.
+- situation FIELD: D-516에 따라 AI PC의 현장 경로는 아직 활성화되지 않았다.
+- media ARTIFACT: measurement skipped by user decision 2026-10-18; compose.media.yaml/Dockerfile.media exist but no site media image was built, digest-pinned or read back
+- media DEVICE: measurement skipped by user decision 2026-10-18; no robot, Android device or production site installation
+- media FIELD: measurement skipped by user decision 2026-10-18; six physical robots never ran the 30-minute bandwidth/latency/control scenario
+- media_edge ARTIFACT: measurement skipped by user decision 2026-10-18; the payload now installs rosy-media-edge and rosy-media.service but no signed ARM64 payload was built or its GStreamer closure probed
+- media_edge DEVICE: measurement skipped by user decision 2026-10-18; no Pinky ran the camera tap, rosy-media.service limits or a real camera stream
+- media_edge FIELD: measurement skipped by user decision 2026-10-18; six physical robots have not run D-789 acceptance
 - console_source ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - console_source ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - console_source DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - console_source FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
+- fleet_app_dev ROS-SIM: Frontend sample and fake robot transport do not prove simulation behavior.
+- fleet_app_dev ARTIFACT: Operational Fleet package verification is recorded by console_source; no new device artifact.
+- fleet_app_dev DEVICE: No device access or physical action acceptance performed.
+- fleet_app_dev FIELD: No deployment or field acceptance performed.
 - perception_curation ROS-SIM: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - perception_curation ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - perception_curation DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
@@ -84,7 +113,7 @@
 - perception_cli ARTIFACT: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - perception_cli DEVICE: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
 - perception_cli FIELD: D-637 is source-only; no corresponding ROS-SIM, ARM64 artifact, deployment, device or field proof.
-- rosy_cell ROS-SIM: No Fleet route (C4) or end-to-end Job run (C6). Step z is the item top face, but the OMX-F TCP is at the fingertips, so a box grasp needs a depth below the top that no Rosy Cell or grant field carries yet.
+- rosy_cell ROS-SIM: Recovered 2026-10-17 native evidence exercised canonical topic proposal/admission through Fleet and the OMX owner with the box grasp-depth profile. Independent placement confirmed 3/16 goals and 15 ROS phases succeeded, then insufficient held-object proof caused HOLD before the fourth release. Failure-time gripper evidence, complete box/slip-sheet Job success and the full G2 fault matrix remain unproven. See docs/validation/omx-native-held-proof-2026-10-17/result.md; recovery itself does not rerun Gazebo.
 - palletizing ROS-SIM: Task 8 must verify fixed-cell transfer execution and interrupted recovery in Gazebo
 - palletizing ARTIFACT: The wheel is locally built and installed for validation; a declared installation profile and release provenance are Task 6
 - navigation SOURCE: native AMCL/static은 검증했지만 CORE 연결·운영 failed-config 정리·FULL CI 미완료. branch safety exception ancestry guard 1 FAIL(이번 변경 이전 cb19bf69f도 재현, 현재 main은 PASS)
@@ -116,6 +145,10 @@
 - pinky_pro DEVICE: 새 이미지에서 CORE_READY와 GET /system/capabilities readback 증거 없음
 - omx ROS-SIM: Two isolated AI follower Gazebo instances, action/cancel, and restart were observed; native single-command ownership, target-workstation timing, timeout HOLD policy, and camera stream remain unverified (docs/validation/omx-two-instance-ros-sim-2026-09-26/README.md)
 - omx ARTIFACT: No OMX workstation image digest or package inventory
+- rasptank_metal ROS-SIM: ament install/share와 ROS 실행 검증 미수행
+- rasptank_metal ARTIFACT: Pi 4 native payload와 서명된 ROSY 통합 이미지 없음
+- rasptank_metal DEVICE: 기체 미도착. 모델 결속·I/O·전원·독립 정지·보정·실물 수용 미수행
+- rasptank_metal FIELD: 현장 수용 미수행
 - description ROS-SIM: 지도 미완주; 현재 경로의 body gap이 stop gap 미만이며 이전 Leg9 policy_failed 원인도 실제 재현 미확정
 - description ARTIFACT: io 이미지에 포함된다(deploy/robot/pinky_pro/image/ 빌더 `COPY src/description`, `--packages-select`에 포함; meshes는 `RUN mkdir -p`로 빈 폴더만 생성). 서명 manifest·OCI archive·immutable registry digest 발행 전
 - description DEVICE: Pi OS Lite bench Device의 install-pi.sh 설치, verify-pi.sh, device-readback.sh --json 증거 없음

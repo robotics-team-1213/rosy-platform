@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 
 test('drawing and candidate failures explain the next action in operator language', async () => {
-  const {siteMapErrorText} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {siteMapErrorText} = await import('/console/assets/site-map-model.js');
   for (const [status, code] of [[422, 'SITE_MAP_DRAWING_INVALID'], [413, 'SITE_MAP_DRAWING_LIMIT'],
     [429, 'SITE_MAP_DRAWING_BUSY'], [404, 'SITE_MAP_DRAWING_NOT_FOUND']]) {
     const message = siteMapErrorText({status, code, message: code});
@@ -10,15 +10,13 @@ test('drawing and candidate failures explain the next action in operator languag
   }
 });
 import assert from 'node:assert/strict';
-import {
-  arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, tripErrorText, rectangularView,
-  addApproach, removeApproach, mergeCrosswalks,
-} from '../../../site_ui/console/shared/site-map-model.js';
+import {arrowMarks, fitView, editViewTurn, viewTurnOf, planPolylines, segmentPoints, rectangularView, addApproach, removeApproach, mergeCrosswalks} from '../../../../applications/fleet/web/shared/site-map-model.js';
+import {tripErrorText} from '../../../../applications/fleet/web/shared/trip-display.js';
 import {
   editEdge, editPlace,
   createSurveyDraft, appendSurveyElement, reviewSurveyDraft,
   editSurveyElement, removeSurveyElement,
-} from '../../../site_ui/console/shared/site-map-edit.js';
+} from '../../../../applications/fleet/web/shared/site-map-edit.js';
 
 const MAP = {
   places: [{id: 'A', name: 'A', x: 0, y: 0, kind: 'junction'}, {id: 'B', name: 'B', x: 2, y: 0, kind: 'park'}],
@@ -133,7 +131,7 @@ test('trip errors read in Korean with the leg and the unblock hint', () => {
 });
 
 test('actions read the address names and stale plans are refused', async () => {
-  const {actionRows, planIsCurrent, siteMapErrorText} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {actionRows, planIsCurrent, siteMapErrorText} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
   const map = {places: [{id: 'B', name: '충전'}]};
   const plan = {map_version: 2, actions: [{place_id: 'B', action: 'left'}, {place_id: null, action: 'stop'}]};
   assert.deepEqual(actionRows(plan, map), ['충전 · 좌회전', '찍은 좌표 · 정지']);
@@ -146,14 +144,15 @@ test('actions read the address names and stale plans are refused', async () => {
 });
 
 test('invalid draft errors list the fields', async () => {
-  const {siteMapErrorText} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {siteMapErrorText} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
   const text = siteMapErrorText({code: 'SITE_MAP_INVALID',
     detail: {errors: [{loc: ['map', 'edges', '0', 'width_m'], msg: 'Input should be greater than 0'}]}});
   assert.match(text, /맞지 않는 값.*map\.edges\.0\.width_m: Input should be greater than 0/);
 });
 
 test('D-494 trip panel text and button reasons', async () => {
-  const {tripStatusText, tripStartReason} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {tripStartReason} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const {tripStatusText} = await import('../../../../applications/fleet/web/shared/trip-display.js');
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
     pose: {state: 'LOCALIZED', source: 'bridged'}, hold: null, reason: null};
@@ -180,7 +179,7 @@ test('D-494 trip panel text and button reasons', async () => {
 });
 
 test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who', async () => {
-  const {tripStatusText, tripErrorText} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {tripStatusText, tripErrorText} = await import('../../../../applications/fleet/web/shared/trip-display.js');
   const trip = {state: 'running', robot_id: 'r1', reason: null, detail: {}, lease: {state: 'held'}};
   assert.match(tripStatusText(trip, MAP), /CORE 점유 중/);
   const lost = {...trip, state: 'stopped', reason: 'lease_lost', lease: {state: 'lost'},
@@ -192,7 +191,8 @@ test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who
 });
 
 test('D-494 trip stop reasons name the configured stall time and loop errors', async () => {
-  const {tripStatusText, PLACE_KIND_LABEL} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {PLACE_KIND_LABEL} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const {tripStatusText} = await import('../../../../applications/fleet/web/shared/trip-display.js');
   const trip = {state: 'stopped', robot_id: 'r1', reason: 'stall', detail: {stall_s: 35}};
   assert.match(tripStatusText(trip, MAP), /35초 넘게 경로를 따라 나아가지 않아/);
   assert.match(tripStatusText({...trip, reason: 'TRIP_LOOP_ERROR', detail: {}}, MAP), /관제 운행 처리에 오류/);
@@ -218,7 +218,7 @@ test('D-494 trip stop reasons name the configured stall time and loop errors', a
 });
 
 test('teach status reads the recording, then what waits for confirm', async () => {
-  const {teachStatusText} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {teachStatusText} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
   assert.equal(teachStatusText({recording: null, pending: []}), '기록 없음');
   assert.equal(teachStatusText({recording: {robot_id: 'r1', points: [[0, 0], [1, 0]], started_by: 'bob'}, pending: []}),
     '기록 중 · r1 · 2점 · bob');
@@ -226,7 +226,7 @@ test('teach status reads the recording, then what waits for confirm', async () =
 });
 
 test('survey teach start requires a saved explicit basis and a checked physical origin', async () => {
-  const {teachStartBody} = await import('../../../site_ui/console/shared/site-map-edit.js');
+  const {teachStartBody} = await import('../../../../applications/fleet/web/shared/site-map-edit.js');
   const draft = {revision: 'd1', map: {map_id: 'yard', survey: {revision: 'r1'}}};
   assert.deepEqual(teachStartBody({robotId: 'r1', mode: 'map'}), {robot_id: 'r1'});
   assert.throws(() => teachStartBody({robotId: 'r1', mode: 'survey', draft, confirmed: false}), /시작점/);
@@ -236,7 +236,7 @@ test('survey teach start requires a saved explicit basis and a checked physical 
 });
 
 test('survey records are shown only against their original coordinate reference', async () => {
-  const {surveyTeachMatches} = await import('../../../site_ui/console/shared/site-map-edit.js');
+  const {surveyTeachMatches} = await import('../../../../applications/fleet/web/shared/site-map-edit.js');
   const reference = {revision: 'r1', origin: [1, 2], heading_rad: 0, description: 'mark'};
   const record = {mode: 'survey', map_id: 'yard', survey_reference: reference};
   const map = {map_id: 'yard', survey: {...reference, reviewed: true, review_note: 'checked'}};
@@ -247,7 +247,7 @@ test('survey records are shown only against their original coordinate reference'
 });
 
 test('teach confirm body: a place id, or a new address name; speed is bounded', async () => {
-  const {teachConfirmBody} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {teachConfirmBody} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
   const args = {teachId: 't1', from: 'A', fromName: '', to: '', toName: ' 새 곳 ', direction: 'two_way',
     driveMode: 'lane', speed: '0.2', revision: undefined};
   assert.deepEqual(teachConfirmBody(args), {teach_id: 't1', from: 'A', to: {name: '새 곳', kind: 'junction'},
@@ -258,7 +258,7 @@ test('teach confirm body: a place id, or a new address name; speed is bounded', 
 });
 
 test('the confirm form acts on the newest stopped recording, whatever the list order', async () => {
-  const {newestPending} = await import('../../../site_ui/console/shared/site-map-model.js');
+  const {newestPending} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
   const old = {teach_id: 'old', expires_at: 100}, fresh = {teach_id: 'new', expires_at: 200};
   assert.equal(newestPending({pending: [old, fresh]}).teach_id, 'new');
   assert.equal(newestPending({pending: [fresh, old]}).teach_id, 'new');
@@ -323,7 +323,7 @@ test('D-573 waiting bands are added mm-rounded, capped at four, removed by index
   assert.deepEqual(merged.crosswalks.map(c => [c.id, c.revision, c.approach.length]), [['cw1', 'r2', 1], ['cw2', 'r2', 0]]);
 });
 test("soccer profile template uses measured metres and never creates driving lanes", async () => {
-  const { soccerProfileMap } = await import("../../../site_ui/console/shared/site-map-model.js");
+  const { soccerProfileMap } = await import("../../../../applications/fleet/web/shared/site-map-model.js");
   const map = soccerProfileMap({length_m: 2, width_m: 1.4, goal_width_m: 0.35}, "pitch");
   assert.equal(map.map_id, "pitch");
   assert.deepEqual(map.places.map(p => [p.x, p.y]), [[-1, -0.7], [1, -0.7], [1, 0.7], [-1, 0.7]]);
@@ -333,7 +333,7 @@ test("soccer profile template uses measured metres and never creates driving lan
 
 
 test('survey edits preserve legal IDs shared across categories', async () => {
-  const {editSurveyElement, removeSurveyElement} = await import('../../../site_ui/console/shared/site-map-edit.js');
+  const {editSurveyElement, removeSurveyElement} = await import('../../../../applications/fleet/web/shared/site-map-edit.js');
   const map = {schema: 'rosy.site_map/1', places: [{id: 'a', name: 'Place', kind: 'park', x: 0, y: 0}], edges: [],
     facilities: [{id: 'a', name: 'Marker', kind: 'landmark', geometry: [[1, 1]], approaches: []}],
     survey: {revision: 's1', reviewed: true}};
@@ -349,7 +349,7 @@ test('survey edits preserve legal IDs shared across categories', async () => {
 
 
 test('normal teach previews follow their captured frame and cannot overlay another profile', async () => {
-  const {teachFrameMatches} = await import('../../../site_ui/console/shared/site-map-edit.js');
+  const {teachFrameMatches} = await import('../../../../applications/fleet/web/shared/site-map-edit.js');
   const record = {mode: 'map', map_id: 'site'};
   assert.equal(teachFrameMatches(record, MAP), true);
   assert.equal(teachFrameMatches(record, {...MAP, map_id: 'other'}), false);
@@ -363,7 +363,7 @@ test('normal teach previews follow their captured frame and cannot overlay anoth
 
 
 test('camera observations accumulate in the same survey without invented joins or duplicate roads', async () => {
-  const {mergeCameraMap} = await import('../../../site_ui/console/shared/site-map-edit.js');
+  const {mergeCameraMap} = await import('../../../../applications/fleet/web/shared/site-map-edit.js');
   const reference = {revision: 's1', origin: [0, 0], heading_rad: 0, scale_source: 'measured',
     measured_distance_m: 2, description: 'Measured frame'};
   const base = {...MAP, map_id: 'yard', survey: {...reference, reviewed: true, review_note: 'Checked'},
@@ -420,7 +420,7 @@ test('camera maps without a survey can be reviewed and edits require re-review',
 });
 
 test('camera endpoint connections need explicit same-frame review and remain inferred until approved', async () => {
-  const {cameraConnectionCandidates, mergeCameraMap} = await import('../../../site_ui/console/shared/site-map-edit.js');
+  const {cameraConnectionCandidates, mergeCameraMap} = await import('../../../../applications/fleet/web/shared/site-map-edit.js');
   const survey = {revision: 's1', origin: [0, 0], heading_rad: 0, scale_source: 'odometry', description: 'Marked origin'};
   const base = {...MAP, map_id: 'yard', survey};
   const observation = {schema: 'rosy.site_map/1', map_id: 'yard', survey,

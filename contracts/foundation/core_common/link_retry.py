@@ -7,6 +7,7 @@ not input to an automatic network retry.
 
 import math
 import random
+import time
 
 
 def retry_delay(current_s: float, *, maximum_s: float, remaining_s: float | None = None,
@@ -21,3 +22,25 @@ def retry_delay(current_s: float, *, maximum_s: float, remaining_s: float | None
     interval = min(current_s, maximum_s)
     delay = interval * (.5 + .5 * sample)
     return delay if remaining_s is None else min(delay, remaining_s)
+
+
+def start_offset(interval_s: float, random_value=random.random) -> float:
+    """A random start offset in [0, interval) so periodic loops do not run in lockstep."""
+    return interval_s * random_value()
+
+
+class ReconnectBackoff:
+    """Mixin: reconnect delays from ``retry_delay``, doubling from ``reconnect_base_s`` to ``reconnect_max_s``.
+
+    A session that lasted ``reconnect_stable_s`` resets the interval (reset only after a stable session).
+    """
+    reconnect_base_s, reconnect_max_s, reconnect_stable_s = 5.0, 60.0, 60.0
+
+    def reconnect_delay(self, now: float | None = None) -> float:
+        now = time.monotonic() if now is None else now
+        current, session_start = getattr(self, "_reconnect_state", (self.reconnect_base_s, None))
+        if session_start is not None and now - session_start >= self.reconnect_stable_s:
+            current = self.reconnect_base_s
+        delay = retry_delay(current, maximum_s=self.reconnect_max_s)
+        self._reconnect_state = (min(current * 2, self.reconnect_max_s), now + delay)
+        return delay

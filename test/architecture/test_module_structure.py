@@ -169,6 +169,7 @@ ROLE_DIR = {
     "dashboard": ("robot_ui", "robot"),  # middleware/robot_ui/robot (D-427 wave 4b)
     # D-427 wave 4c: middleware/apps/device/<robot>/<role>, middleware/drivers/<robot>_<role>.
     "pinky_pro": ("devices", "pinky", "profile"),
+    "rasptank_metal": ("devices", "rasptank", "profile"),
     "bringup": ("devices", "pinky", "bringup"),
     "description": ("devices", "pinky", "description"),
     "sensor_adc": ("drivers", "pinky_adc"),
@@ -479,6 +480,33 @@ def _holders() -> set[str]:
     return found
 
 
+def _kotlin_package(directory: Path) -> bool:
+    source_root = next((p for p in directory.parents if p.name in ("java", "kotlin")
+                        and p.parent.name == "main" and p.parent.parent.name == "src"), None)
+    if source_root is None:
+        return False
+    package = ".".join(directory.relative_to(source_root).parts)
+    files = list(directory.glob("*.kt"))
+    declaration = re.compile(r"^package[ \t]+" + re.escape(package) + r"[ \t]*;?[ \t]*$", re.M)
+    return bool(files) and all(declaration.search(p.read_text(encoding="utf-8")) for p in files)
+
+
+@pytest.mark.parametrize("source_root, package, expected", [
+    ("src/main/java", "io.example.cam.ui", True),
+    ("src/main/kotlin", "io.example.cam.ui", True),
+    ("src/main/java", "io.example.cam", False),
+    ("src/androidTest/java", "io.example.cam.ui", False),
+    ("other", "io.example.cam.ui", False),
+    ("src/main/java", None, False),
+])
+def test_kotlin_size_unit_requires_its_production_package_path(tmp_path, source_root, package, expected):
+    directory = tmp_path / source_root / "io/example/cam/ui"
+    directory.mkdir(parents=True)
+    if package is not None:
+        (directory / "Screen.kt").write_text(f"package {package}\n\nfun screen() = Unit\n", encoding="utf-8")
+    assert _kotlin_package(directory) is expected
+
+
 def test_size_units_are_real_and_meet_the_floor():
     """D-766 3/7(a): a unit is a subpackage or declared holder that counts lines; a new unit is
     1,000 lines or more when its parent was 2,000 or more; SMALL_UNITS only shrink."""
@@ -489,8 +517,8 @@ def test_size_units_are_real_and_meet_the_floor():
     bad = []
     for unit in SIZE_UNITS:
         dirs = [root / unit for root in COLCON_ROOTS if (root / unit).is_dir()]
-        if not any((d / "__init__.py").is_file() or _relpath(d) in holders for d in dirs):
-            bad.append(f"{unit}: neither a Python subpackage (__init__.py) nor a declared holder under a colcon root")
+        if not any((d / "__init__.py").is_file() or _kotlin_package(d) or _relpath(d) in holders for d in dirs):
+            bad.append(f"{unit}: neither a Python/Kotlin subpackage nor a declared holder under a colcon root")
     bad += size_limits.unit_problems(counts, owner, SIZE_UNITS, SMALL_UNITS, base_small)
     assert bad == [], bad
 

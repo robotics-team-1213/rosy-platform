@@ -22,7 +22,7 @@ gates:
     blocker: "Ubuntu native product image의 SD write/readback, Pi 5 boot, ROS graph, 장치 ACL, deadman 실기 증거 없음"
   FIELD:
     state: N/A
-adrs: [D-679, D-681, D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291, D-311, D-312, D-314, D-319, D-321, D-325, D-373, D-389, D-411, D-433, D-472]
+adrs: [D-679, D-681, D-22, D-26, D-30, D-33, D-36, D-46, D-53, D-124, D-144, D-145, D-146, D-161, D-164, D-165, D-179, D-291, D-311, D-312, D-314, D-319, D-321, D-325, D-373, D-389, D-411, D-433, D-472, D-859, D-861]
 plans:
   - docs/plans/2026-09-01-rosy-os-v1-image-release-design.md
   - docs/plans/2026-09-08-release-delivery-design.md
@@ -47,6 +47,8 @@ plans:
   - docs/plans/2026-10-02-d411-pilot-recording-controls-plan.md
 ---
 ## 지금 상태
+
+- 2026-10-27 whole-OS A/B: disposable ARM SYSTEM에서 A→B(68d343b8c5,9passed)·B→A(cec31dcf9d,1passed)의 실제 RAUC 비활성 설치/readback·공용 mount 유지·180초 PID1 복구/reboot를 확인했다. firmware DT·payload·정책 입력은 합성이며, 독립 기준선 두 실행은 healthy commit의 연속 왕복이나 Pi 수용을 증명하지 않는다. native 최종 이미지·capacity·제품 CMS/서명·SD full readback과 실기 boot/watchdog/powercut은 계속 HOLD다. 상세 범위와 원격 증거는 [실행 기록](logs.md#2026-10-27--cec31dcf9d--arm-system-양방향-비활성-os-설치와-독립-복구-검증)을 따른다.
 
 - 2026-10-05 D-456: 수신 암호화 보조 payload와 claim 기반 TLS 유지보수 도구의 SOURCE/LOCAL 검사를 확인했다. CORE는 `/opt/rosy/releases`를 읽기만 한다. 실 POSIX 권한·ARM 빌드·서명된 장치 반영·LAN HTTPS 연결은 미확인으로 남긴다.
 

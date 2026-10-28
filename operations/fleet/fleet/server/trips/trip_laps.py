@@ -4,7 +4,8 @@ import heapq
 from fleet.routing.cost import transition_cost, turn_deg
 from fleet.routing.execute import arc_id, ends_at_place, plan_again, plan_body, route_key, unsupported
 from fleet.routing.trip import _assemble
-from fleet.server.trip_ports import LiveTrip, TripError
+from fleet.server.trip_live import LiveTrip
+from fleet.server.trip_ports import TripError
 from fleet.traffic.zone_hold import hold_back_m
 
 #: D-517 2/5: a failed lap check is retried this often, this many times (D-438), then it is the operator's.

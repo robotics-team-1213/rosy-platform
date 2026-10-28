@@ -7,9 +7,8 @@ After=rosy-omx-camera@top.service rosy-omx-camera@front.service
 Type=simple
 EnvironmentFile=%h/.config/rosy/omx-camera-top.env
 EnvironmentFile=%h/.config/rosy/omx-camera-readiness.env
-Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST ROS_STATIC_PEERS=
-# The 4 MiB UDP receive buffer keeps both camera streams fresh in the viewer (field PC 2026-10-17).
-ExecStart=/bin/bash -c 'source "$ROSY_ROS_SETUP"; unset CYCLONEDDS_URI FASTRTPS_DEFAULT_PROFILES_FILE ROS_DISCOVERY_SERVER; export FASTDDS_DEFAULT_PROFILES_FILE="$ROSY_CAMERA_PIPELINE_ROOT/camera-view-receive.xml"; exec /usr/bin/python3 "$ROSY_CAMERA_PIPELINE_ROOT/commissioning_view.py" --port 8767'
+Environment=ROSY_OBSERVATION_DIR=%t/rosy-observations
+ExecStart=:/bin/bash -c 'export PYTHONPATH="$ROSY_CAMERA_PIPELINE_ROOT/../../../contracts/foundation${PYTHONPATH:+:$PYTHONPATH}"; exec /usr/bin/python3 "$ROSY_CAMERA_PIPELINE_ROOT/commissioning_view.py" --port 8767'
 Restart=on-failure
 RestartSec=2
 TimeoutStopSec=5

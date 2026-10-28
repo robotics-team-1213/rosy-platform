@@ -4,9 +4,13 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 
 ## Platform and execution roles
 
+### Control Unit, Integrated Control and Sub-control
+
+A Control Unit coordinates work within its own scope. It can operate independently or participate as a Sub-control unit under a parent. Integrated Control names its role when coordinating child units; the same unit may coordinate children while participating under another parent. These are logical roles, not PC or process counts. Hierarchical delegation remains a target; device execution authority stays with the existing owners (D-850).
+
 ### App names and supporting surfaces
 
-Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device live in the separate `rosy-vault` repository. Cell is Fleet's palletizing preparation workspace; Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
+Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device were work applications in the separate `rosy-vault` repository, which was retired on 2026-10-24; the real arm path is the OMX owner, not its device-core service (D-858). Cell is Fleet's palletizing preparation workspace; Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
 
 ### ROSY Platform
 
@@ -223,7 +227,28 @@ Its budgets and deadline count per chain of stucks on the same robot rather than
 
 ### Rosy Learning
 
-The model-PC web app for object and pixel review, catalog, and learning work, also called 학습 관리 센터 (D-461). Browser titles use "Rosy Learning — <screen>" (D-806). Its code runs as `review_app.py` under `rosy-review-v13.service` (D-545). It calls existing curation and training jobs and does not hold its own training logic.
+The model-PC web app for review and learning, also called 학습 관리 센터; the display name already set by D-461. It is one app: object review, pixel review, catalog, the learning work list, camera setup, and imitation learning are its screens (D-792). Browser titles use "Rosy Learning — <screen>" (D-806). Its code still runs as `review_app.py` under `rosy-review-v13.service` (D-545). It calls existing curation and training jobs and does not hold its own training logic.
+
+### Camera setup reference
+
+The immutable record of where one camera role stood when a dataset was recorded: intrinsics, one reference still with guide outlines, and optional tape-measured height, distance, tilt, pan and roll (`rosy.camera-setup-reference/1`, D-792). The default method `features` needs no markers and matches the still's static background; the optional `markers` method adds work-surface markers and marker-estimated centimetres. Moving the camera on purpose makes a new reference; the old one stays.
+
+### Setup check
+
+The result of comparing one camera frame against a camera setup reference: matched features or seen markers, screen shift in pixels, pan, tilt and roll differences, scale (features) or height and distance (markers), and a verdict of ok, adjust, or unmeasurable. The camera setup screen draws the reference dashed and the current frame solid. A check runs before and after each recorded Episode and is stored in its camera provenance; it records only (shadow) until its thresholds are confirmed, then blocks recording (enforce).
+
+### OMX cameras
+
+`top` is the camera fixed above the workcell: it sees both arms, the mat and where objects lie. `front` is the wrist camera on the follower gripper: it moves with the arm and sees the grasp up close (D-794). `front` is being renamed `wrist` in stages; until then readers treat the two names as the same wrist role. A wrist camera is checked against its camera setup reference only at the reference's check pose (D-792).
+
+## Port vocabulary (Harbor)
+
+Harbor, the first domain application (`harborlogi/`), fixes its own port business words; the canon is that repository's `CONTEXT.md` (confirmed 2026-10-24, ADR 0005 decision 10), and this glossary does not override it. The platform keeps its own neutral words and reads the port words through the 「업무 앱 용어 대응 (Harbor)」 table in [application-contract-support](docs/reference/application-contract-support.md) rather than repeating it here.
+
+- A dated record — an ADR, plan or validation entry — keeps the words of its time. D-823, D-826, D-856 and the like read through that mapping, not as current usage.
+- `적층암 A·B` · `공급암 S` · `적층 작업대` are names, not activities; the activities are 장치 (stacking), 반출 (taking cargo out), 재취급 (rehandling) and 이송 (transport).
+- A port word that also lives in the platform with a different meaning — 회수 (session or token recovery), 장치 (a board or part) — is resolved by the 「같은 말이 두 뜻인 것」 section of the team glossary (rosy-docs `설계/8 용어집.md`), not by aliasing it here.
+
 ## Flagged ambiguities
 
 - "Robot id" had been used for both the Robot number and the namespace derived from it — these are distinct, and only the number is supplied by a person.
@@ -231,3 +256,6 @@ The model-PC web app for object and pixel review, catalog, and learning work, al
 - "Profile" still means Compose service grouping or hardware YAML; Runtime mode is the staged install preset (core, then motor, then hardware). D-62 slices are the install units. None of these is a Capability, and they are not interchangeable even where they share names.
 - "Node" in this glossary is the computer running CORE (`RuntimeNode`), not an rclpy node.
 - "Task" here is an atomic REST action; Fleet missions and concept 08 workflows are a different object (D-12).
+- "front" on the OMX is the wrist camera, not a fixed front view; on Pinky it is the forward camera (D-601). They share the word only (D-794).
+- "Studio" is the review workbench of D-538 only; the whole model-PC app is Rosy Learning (D-792).
+- A camera setup reference is not a camera profile: the profile (D-199, D-423) carries calibration and mount values a node uses at run time, while the setup reference is learning-side evidence that recordings share one viewpoint.

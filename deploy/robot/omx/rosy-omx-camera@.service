@@ -6,7 +6,9 @@ StartLimitBurst=10
 [Service]
 Type=simple
 EnvironmentFile=%h/.config/rosy/omx-camera-%i.env
-ExecStart=/bin/bash -c 'source "$ROSY_ROS_SETUP"; exec /usr/bin/python3 "$ROSY_CAMERA_SOURCE" --device "$ROSY_CAMERA_DEVICE" --topic "$ROSY_CAMERA_TOPIC" --frame-id "$ROSY_CAMERA_FRAME"'
+Environment=ROSY_OBSERVATION_DIR=%t/rosy-observations
+# The registration key selects private latest-value IPC; no ROS setup or DDS is used.
+ExecStart=:/bin/bash -c 'root="${ROSY_CAMERA_SOURCE%/middleware/*}"; export PYTHONPATH="$root/contracts/foundation:$root/deploy/robot/omx${PYTHONPATH:+:$PYTHONPATH}"; exec /usr/bin/python3 "$ROSY_CAMERA_SOURCE" --device "$ROSY_CAMERA_DEVICE" --topic "$ROSY_CAMERA_TOPIC" --frame-id "$ROSY_CAMERA_FRAME" --max-fps "${ROSY_CAMERA_MAX_FPS:-10}"'
 Restart=on-failure
 RestartSec=2
 WatchdogSec=8

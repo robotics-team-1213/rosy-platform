@@ -19,6 +19,12 @@ from rosy.contracts.learning import seal, validate_dataset, validate_policy
 from rosy.contracts.learning.pinky import validate_profile
 
 
+def _in_checkout(path) -> bool:
+    """True inside a git working tree: artifacts stay out of source checkouts, on any drive."""
+    path = Path(path).resolve()
+    return any((p / '.git').exists() for p in (path, *path.parents))
+
+
 def read(path):
     return json.loads(path.read_text(encoding='utf-8'))
 
@@ -127,7 +133,7 @@ def export(source, output, *, model='tiny_cnn'):
     if model not in ('tiny_cnn', 'rgb_ridge'):
         raise ValueError('supported trained model required')
     source, output = Path(source).resolve(), Path(output).resolve()
-    if output.exists() or output.drive.upper() == 'F:' or output.is_relative_to(source) or source.is_relative_to(output):
+    if output.exists() or _in_checkout(output) or output.is_relative_to(source) or source.is_relative_to(output):
         raise ValueError('new output separate from source and outside F required')
     before, config, sources, roots, episodes, shape, truth, predictions, comparison = source_check(source)
     fresh_raw = [verify(path) for path in roots]

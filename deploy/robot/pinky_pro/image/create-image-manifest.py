@@ -10,6 +10,10 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sd"))
+from media_layout import inspect_image
 
 
 def digest(path: Path) -> str:
@@ -71,12 +75,20 @@ def main() -> int:
     parser.add_argument("--lock", type=Path, required=True)
     parser.add_argument("--release-id", required=True)
     parser.add_argument("--source-revision", required=True)
+    parser.add_argument("--layout-file", type=Path, help="six-role GPT prototype snapshot; not production BUILD_GO")
     args = parser.parse_args()
 
     dist, payload = args.dist.resolve(), args.payload.resolve()
     image = dist / f"rosy-os-pinky-pro-{args.release_id}-arm64.img.xz"
     if not image.is_file():
         parser.error(f"missing image: {image}")
+    image_sha = digest(image)
+    layout = None
+    if args.layout_file:
+        try:
+            layout = inspect_image(image, json.loads(args.layout_file.read_text(encoding="utf-8-sig")), image_sha)
+        except (OSError, ValueError) as exc:
+            parser.error(f"LAYOUT: {exc}")
     for name in ("deb-packages.txt", "rosy-packages.txt", "required-ros-packages.txt", "source-revision.txt"):
         source = payload / name
         if not source.is_file():
@@ -88,15 +100,16 @@ def main() -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    image_sha = digest(image)
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2 if layout else 1,
         "release_id": args.release_id,
         "product": "rosy-os",
         "board": "pinky_pro",
         "architecture": "arm64",
         "image": {"filename": image.name, "sha256": image_sha},
     }
+    if layout:
+        manifest["layout"] = layout
     write_json(dist / "manifest.json", manifest)
 
     packages = []
@@ -146,6 +159,8 @@ def main() -> int:
         *(path.name for path in dist.iterdir()
           if path.is_file() and path.name not in {"SHA256SUMS", "SHA256SUMS.sig"}),
         *factory,
+        *("os-bundle-inputs/" + name for name in ("inputs.json", "rootfs.ext4.xz", "boot.vfat.xz")
+          if (dist / "os-bundle-inputs").is_dir()),
     ])
     sums = "".join(f"{digest(dist / name)}  {name}\n" for name in names)
     (dist / "SHA256SUMS").write_text(sums, encoding="utf-8", newline="\n")

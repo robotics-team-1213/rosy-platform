@@ -29,7 +29,7 @@ COMMAND_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("POST", r"/api/v1/localization/initialpose", "navigation"),
     ("POST", r"/api/v1/motion/rotate_to", "navigation"),
     ("POST", r"/api/v1/localization/(mission|decision|suspect)", "mission"),
-    ("POST", r"/api/v1/docking/(dock|undock|cancel|station-dock)", "docking"),
+    ("POST", r"/api/v1/docking/(dock|undock|cancel|station-dock|station-undock|station-stop)", "docking"),
     ("PUT", r"/api/v1/line-follow/mode", "line_follow"),
     ("POST", r"/api/v1/line-follow/(hold|stuck/decision)", "line_follow"),
     ("POST", r"/api/v1/swarm/(follow|cancel)", "fleet_task"),

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {splitRoad, joinRoads} from '../../../site_ui/console/maps/map-topology.js';
+import {splitRoad, joinRoads} from '/console/assets/map-topology.js';
 
 const map = () => ({map_id: 'any-floor', places: [
   {id: 'a', name: 'A', x: 0, y: 0}, {id: 'b', name: 'B', x: 2, y: 0}, {id: 'c', name: 'C', x: 4, y: 0}],

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   LAYER_DEFAULTS, parseLayers, normalizeProposal, quadAspect, configuredSize, aspectMismatch,
   parseFieldSize, homography, applyHomography, rectifiedLayout,
-} from "../../../site_ui/console/field-layers.js";
+} from "../../../../applications/fleet/web/calibration/field-layers.js";
 
 const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} vs ${b}`);
 

@@ -10,7 +10,7 @@
 
 | 자리 | 소유 | 이 트리에서 하는 일 |
 |---|---|---|
-| 브라우저 (Rosy Fleet, D-487) | `operations/site_ui/console` (원본, D-518·D-637) | 정적 ES 모듈이며 Fleet이 `fleet.server.web`으로 설치해 서빙한다. 문서는 `/console`, `/console/install`, `/console/cell`, `/console/site-map`, `/console/login`, `/console/profile`이다. 공통 머리 `shared/fleet-header.js`가 있다(D-540 2). ADR 자체는 Proposed다 |
+| 브라우저 (Rosy Fleet, D-487) | `applications/fleet/web` (원본, D-518·D-637) | 정적 ES 모듈이며 Fleet이 `fleet.server.web`으로 설치해 서빙한다. 문서는 `/console`, `/console/install`, `/console/cell`, `/console/site-map`, `/console/login`, `/console/profile`이다. 공통 머리 `shared/fleet-header.js`가 있다(D-540 2). ADR 자체는 Proposed다 |
 | 현장 프록시 | `deploy/site/Caddyfile` | 운영 PC는 `ROSY_SITE_HTTPS_PORT`(`.env.example` 예시 8443)로 연다. `/api/vision/sources/*`와 `/overhead/v1/frames`는 Vision, 그 밖은 Fleet이다. Fleet 리스 경로는 Fleet으로 간다 |
 | Fleet | `fleet` 패키지, CLI 기본 포트 8090 | 사이트 오케스트레이터. 로봇 계약 호출은 `HttpRobotClient`(`fleet/swarm/transport.py`) 하나다. `/cmd_vel`을 내지 않고 JPEG를 중계하지 않는다 |
 | CORE | `middleware/core` | 동작과 최종 `/cmd_vel`. Fleet 경로는 `/api/fleet/*`, 로봇 경로는 `/api/v1/*` |

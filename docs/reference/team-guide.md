@@ -2,7 +2,7 @@
 
 - **대상:** `robotics-team-1213` org에 새로 합류한 팀원
 - **갱신:** 2026-10-17. 문서 구조는 D-777을 적용했다. 환경 설치 명령의 새 클론 확인일은 2026-10-05다.
-- **규칙 원본:** 이 문서는 안내다. 계약과 다르면 [README 「핵심 계약」](../../README.md#핵심-계약), SRS, ADR이 이긴다.
+- **규칙 원본:** 이 문서는 안내다. 계약과 다르면 [README 「핵심 계약」](../../README.md#핵심-계약), SRS, ADR이 이긴다. git 규칙 전체는 [git으로 일하는 법](git-workflow.md), 날짜별 작업 현황은 [인수인계](handoff.md)다.
 
 **먼저 작업 위치를 고른다.** 이 문서의 브랜치·시험·push 명령은 팀원 **개인 클론**용이다. 실험실 공유 체크아웃에서 일하는 사람·AI 세션은 [같이 하는 깃](shared-checkout.md)과 루트 [AGENTS.md](../../AGENTS.md)를 따른다. 실험실 노트북에서 pytest를 돌리지 않는 규칙은 그대로다(D-762 Decision 4). 개인 클론의 설정·훅 예외는 이 문서, 게시·검토·CI 기준은 [PR 파이프라인](pr-pipeline.md)이 맡는다.
 
@@ -261,9 +261,10 @@ git push
 
 | # | 문서 | 읽을 때 |
 |---|---|---|
-| 1 | [README](../../README.md) — 「핵심 계약」 | 필수 |
-| 2 | [CONCEPTS.md](../../CONCEPTS.md) | 필수 |
-| 3 | [STATUS.md](../../STATUS.md) — 모듈별 게이트 (SOURCE → LOCAL → ROS-SIM → ARTIFACT → DEVICE → FIELD) | 필수 |
+| 0 | [인수인계](handoff.md) — 목표, 지금 상태, 다음 할 일 · [git으로 일하는 법](git-workflow.md) | 10분, 필수 |
+| 1 | [README](../../README.md) — 「핵심 계약」 | 5분, 필수 |
+| 2 | [CONCEPTS.md](../../CONCEPTS.md) | 10분, 필수 |
+| 3 | [STATUS.md](../../STATUS.md) — 모듈별 게이트 (SOURCE → LOCAL → ROS-SIM → ARTIFACT → DEVICE → FIELD) | 5분, 필수 |
 | 4 | [개발 가이드](developer-guide.md) — 구조·빌드·시뮬·테스트 | 맡을 일을 정한 뒤 |
 | 5 | 맡을 모듈의 `AGENTS.md`, `progress.md` | 작업 시작 전 |
 | 6 | [CORE SRS](../spec/ROSY%20CORE%20SRS.md), [FLEET SRS](../spec/ROSY%20FLEET%20SRS.md), [API reference](ROSY%20API%20&%20Protocol%20Reference.md) | 필요할 때 |
@@ -274,17 +275,17 @@ git push
 
 소스 경로와 책임은 [폴더 책임표](platform-folder-responsibilities.md), 소유 영역의 정본은 `tools/harness/platform_parts.yaml`을 본다. 경로별 GitHub 리뷰 담당은 [CODEOWNERS](../../.github/CODEOWNERS), 역할별 사람 담당은 아래 표에서 확인한다.
 
-2026-10-17 [PR #59](https://github.com/robotics-team-1213/rosy-platform/pull/59)에 반영된 배정이다. 담당은 리드가 정하며 Jira 역할별 Epic의 담당이 바뀌면 이 표와 관련 `CODEOWNERS` 항목을 함께 갱신한다. 그 외 영역의 담당은 아직 지정되지 않았다.
+2026-10-27 기준 배정이다. 담당은 리드가 정한다. 각 root의 역할은 `platform_parts.yaml`의 `capability:`이고, 계정은 같은 파일의 `capabilities:`에 둔다. Epic 담당이 바뀌면 그 계정, `CODEOWNERS`, 이 표를 함께 고친다. `test/architecture/test_capability_owners.py`가 앞의 둘이 맞는지 확인한다. `platform`(공통 코드)은 기본 담당(`*`)이 리뷰한다.
 
 | Epic | 역할 | 담당 |
 |---|---|---|
-| KAN-19 | 관제·충전·물류 | 장원종 (@livsbittt) |
-| KAN-20 | Pinky | 노재용, GitHub 계정 확인 필요 |
-| KAN-21 | OMX | 김승용·서정민 공동, GitHub 계정 확인 필요 |
-| KAN-22 | 비전·AI | 윤영민 (@now2466) |
+| KAN-19 | 관제·충전·물류 (`fleet`) | 장원종 (@livsbittt) |
+| KAN-20 | Pinky (`pinky`) | 노재용 (@PURPLE-SY) |
+| KAN-21 | OMX (`omx`) | 김승용·서정민 공동 (@sajy0804, @ddaokki) |
+| KAN-22 | 비전·AI (`vision_ai`) | 윤영민 (@now2466) |
 | KAN-23 | 통합 시나리오·시연·일정 | 민주환 (@WINNAKEN, PM) 조율, 전원 참여 |
 
-KAN-23은 특정 경로의 담당이 아니다. Epic의 역할을 GitHub 경로 소유권으로 확대하지 않는다. 노재용·김승용·서정민의 GitHub 계정이 확인되면 `CODEOWNERS`에 장치 경로를 추가한다.
+KAN-23은 특정 경로의 담당이 아니다. Epic의 역할을 GitHub 경로 소유권으로 확대하지 않는다. 실물 팔·로봇 장치·이미지 경로(`middleware/devices/`, `middleware/drivers/`, `deploy/robot/`, OMX 연동)는 역할 담당과 기본 담당이 함께 리뷰한다.
 
 ### 5.2 처음 잡기 좋은 일
 

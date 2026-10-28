@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sendSignalPresence, signalIntentLabel, createSignals } from "../../../site_ui/console/signals.js";
+import { sendSignalPresence, signalIntentLabel, createSignals } from "../../../../applications/fleet/web/signals.js";
 
 test("presence is sent only for a visible operator console with signals", async () => {
   const calls = [];

@@ -16,10 +16,6 @@ from control import goal_escape
 from control.goal_escape import GoalEscape
 
 
-def test_escape_runtime_source_is_owned_by_drive():
-    assert Path(goal_escape.__file__).resolve().parent == Path(__file__).resolve().parents[2] / 'drive/runtime'
-
-
 def test_escape_imports_from_built_distribution_outside_checkout(tmp_path):
     stage = tmp_path / 'installed'
     result = subprocess.run([sys.executable, 'setup.py', 'build_py', '--build-lib', str(stage)],

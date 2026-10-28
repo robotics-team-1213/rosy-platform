@@ -23,6 +23,9 @@ def _module_page(playwright, modules: dict[str, Path], width: int = 390):
     geometry = ROOT / "shared" / "web" / "live-dialog-geometry.js"
     page.route("http://rosy.test/common/live-dialog-geometry.js", lambda route: route.fulfill(
         status=200, content_type="application/javascript", body=geometry.read_text(encoding="utf-8")))
+    wiring = ROOT / "shared" / "web" / "ui-wiring.js"
+    page.route("http://rosy.test/common/ui-wiring.js", lambda route: route.fulfill(
+        status=200, content_type="application/javascript", body=wiring.read_text(encoding="utf-8")))
     page.route(
         "http://rosy.test/panel-test",
         lambda route: route.fulfill(
@@ -119,6 +122,7 @@ def test_dashboard_api_preserves_structured_http_errors_and_network_failures():
                 "/assets/camera-capture.js": WEB / "camera-capture.js",
                 # camera-capture.js re-exports the promoted web_common module (D-323 T9).
                 "/common/evidence.js": ROOT / "shared" / "web" / "evidence.js",
+                "/common/account-session.js": ROOT / "shared" / "web" / "account-session.js",
             })
         except Exception as error:
             pytest.skip(f"Playwright Chromium unavailable: {error}")

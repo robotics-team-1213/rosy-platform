@@ -1,4 +1,4 @@
-"""Turn the weekly structure picks into Jira tasks (D-773; run by .github/workflows/structure-report.yml).
+"""Manually publish weekly structure picks to Jira (D-773; separately configured CLI).
 
 python tools/harness/structure_jira.py PICKS_JSON GITHUB_ISSUE_URL
 

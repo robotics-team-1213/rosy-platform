@@ -360,11 +360,13 @@
 - Change: Add the existing payload-boot-smoke workflow dispatch command to the ARTIFACT progress entry; preserve its state and evidence. No screen or runtime code changed.
 - Evidence: GitHub run 37200780702 was independently read back as completed/success at commit af0b3211384c9a8f2e5abbc2863c2fbcb54b0ca3. This records the command missing from the existing GO entry; it does not repeat the observation or claim device acceptance.
 - Gate: Metadata correction only; existing physical and field gates are unchanged.
+
 ## 2026-10-04 · uncommitted · fix: 과노출 판정 불가 안내
 
 - 변경: 원본 영상 위에 덧씌우지 않고 기존 품질 경고에서 과노출 · 차선 정보 확인 불가를 표시한다. 저조도·과노출·회복·구형 응답을 각각 구분한다.
 - 증거: Pilot/Dashboard bright-dark browser 2 passed; native quality/alarm 9 passed.
 - gate 변화: SOURCE/LOCAL. No device writes or motion.
+
 ## 2026-10-04 · uncommitted · fix(pilot): 시작 대상 확인 실패와 재시도
 
 - 변경: 대상 발견 실패·잘못된 응답은 빈 본문 대신 대상 미확인 안내와 같은 발견 재시도를 제공한다. 짧은 pending 잠금으로 중복 발견을 막고 실제 404만 기존 Pinky 연결로 간다. 성공·실패 응답은 시작 안내를 아직 소유할 때만 상단 문구를 바꿔 더 늦은 정지 안내를 보존한다. 연결 화면의 작은 상단 행을 감싸고 이미 전체 주행 폭에서 숨기는 세 중복 selector를 제거해 styles.css 800줄을 유지한다. SW CACHE를 올리고 실제 공용 import 두 자산을 셸·개발 fixture에 등록했다.
@@ -418,6 +420,7 @@
 - 증거: 사용자 확인 ("건했어. pilot 는 돼", 2026-10-05). 합격선 참조: `docs/plans/2026-10-04-pilot-device-stop-contract-measurement.md`.
 - gate 변화: pilot DEVICE **GO** (사용자 확인 등급). FIELD는 별개(D-454 결정 3).
 - 결정: D-444 §2 R2 충족. 사다리 P2 완료.
+
 ## 2026-10-05 · uncommitted · feat(pairing): LAN 승인 기록과 신원 확인 재연결
 
 - 변경: 같은 LAN 목록에서 선택한 장비에 수신 승인을 요청하고 P256 키·TLS 신원 확인 뒤 기존 조종 세션으로 연결한다. 승인 기록은 일반 세션과 별도로 암호화해 보관한다. 승인 직후 연결 실패에도 기록을 남기고, 키 변경·폐기·발급자 만료 시 기록을 보존한 채 접속을 차단한다. 마지막 선택 장비의 연결 정보를 실패 화면에서도 열 수 있다.
@@ -569,6 +572,7 @@
 - 변경: 짧은 전화와 넓은 화면 사이를 전환할 때 열린 도구 판과 모델·차선 세부 내용을 닫아, 설정이 다른 자리로 옮겨진 뒤 빈 판이 남지 않게 했다.
 - 증거: [UI/UX 회차](../../../docs/validation/uiux-surfaces-2026-10-06/README.md)의 320→390→320 반응형 브라우저 1 passed, `known_failures.py` 0 NEW.
 - gate 변화: Pilot LOCAL G2 전환 부분 근거 추가. 실제 전화 회전·운전자 G3와 제품 전체는 HOLD다.
+
 ## 2026-10-06 · uncommitted · uiux(pilot): 팔 영상·조작 칸 동등 폭
 
 - 변경: 영상이 있는 팔 화면의 작업 공간과 조작 칸을 1:1로 맞추고 넓은 화면에서 조작 카드가 나란히 설 공간을 확보했다.
@@ -592,6 +596,7 @@
 - 변경: 기존 전화 주행 브라우저 시험에 좌/우 제자리 회전 버튼의 렌더 폭 차이 ≤1px 검사를 추가했다.
 - 증거: 현재 트리의 320×568·390×844 회전 버튼 시험 2 passed, 카메라·조작 배치와 회전 안내 7 passed, 각각 `known_failures.py` 0 NEW. 320px 원본은 X: `captures/pilot-current-320/`이다.
 - gate 변화: Pilot 320px LOCAL 폭 근거 추가. 선언 상태 전체·운전자 G3·실물 장치 readback은 HOLD다.
+
 ## 2026-10-06 · uncommitted · feat(pilot): D-483 수신 승인 대기에 로봇 화면 승인 코드 입력
 
 - 변경: "수신 장치 승인 대기" 대화상자에 "로봇 화면의 승인 코드" 입력칸(6자, 대문자, 같은 알파벳)과 "승인 코드 확인" 버튼을 둔다. `PeerClient.confirm`이 `/requests/{id}/confirm`에 `X-Request-Secret`과 함께 보내고, 결과는 기존 상태 폴링이 받아 그대로 이어간다. 틀리면 남은 시도 횟수를 보이고 대화상자를 유지하며, 404(옛 CORE)면 입력칸을 "이 로봇은 콘솔 승인만 지원합니다"로 바꾼다. 콘솔 승인 경로는 그대로다.
@@ -796,6 +801,7 @@
 - 변경: 운전 화면 시험은 dev_server의 토큰을, 실제 CORE 연계 시험은 `rosy_dev_auth.yaml`의 operator 토큰을 직접 사용한다. 시험 코드에 같은 값을 다시 적지 않는다.
 - 증거: 공개 저장소 비밀값 검사와 Pilot 시험 수집·관련 실행으로 확인한다.
 - gate 변화: 없음. 실제 장치 인증이나 주행 수용의 증거가 아니다.
+
 ## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다
 - 실기(태블릿 Gboard 한국어): 코드가 한글로 바뀌어 입력됐고, 키보드가 "승인 코드 확인" 버튼을 가렸다. 입력칸을 `VISIBLE_PASSWORD`(라틴 배열)로 바꾸고 코드 알파벳만 남기는 필터, 키보드 완료 키로 보내기를 넣었다. 연결 기록을 지운 뒤 옛 실패 문구가 남던 것을 "기록을 지웠습니다"로 바꾸고, 승인 폐기(401/403/409)도 만료처럼 "다시 승인 요청" 대화상자를 연다. 코드 거절은 클래스·HTTP 상태만 로그에 남긴다.
 
@@ -833,6 +839,7 @@
 - Change: Semantic color roles preserve both palettes; shared controls and active CSS consume the same roles. Existing gallery collects colors, five button kinds, readback and task compositions. Fleet map/header and robot evidence containment improved.
 - Evidence: Parallel independent source assessments; remote contracts and batched browser verification pending.
 - Gate: SOURCE; no robot commands, motion policy, new theme or physical acceptance.
+
 ## 2026-10-11 · uncommitted · uiux: UI 역할과 공용 토큰 소비 (D-639)
 
 - 변경: 현재 영상 중심 focal 배치, 공용 target/inset 소비, native 생성 type/space/control 소비를 정리했다. 승인·안전·영상 신선도·hold-to-drive 권한은 유지한다. 원격 검증의 SHA와 종료 로그는 통합 증거에 연결하며 SOURCE·browser·Android compile·DEVICE를 구분한다.
@@ -919,6 +926,36 @@
 - 증거: 바꾸기 전 `X:/DevTemp/browser-run/p1r-long-7.txt`(모델 PC)와 `p1r-long-7ai.txt`(AI PC), sha 821e9d5f5: 1024에서 머리 124px·정지 48x48, 1366에서 정지 56x48. 바꾼 뒤 `p1r-long-9.txt`(AI PC, sha 468838479) 8 passed: 1024·1366 모두 머리 64px, 정지 82x48(x 918·1260, y 8)이 맨 위 요소, 지도 82x48, 알림 389·639px 한 줄, 가로 넘침 0. `test_pilot_browser.py` 전체와 `test_app_bar.py` 164 passed(`p1r-full-10.txt`, AI PC, sha a3a4befa7). 원격 pilot·shared/web·architecture 529 passed 211 skipped, known_failures NEW 0(`X:/DevTemp/pilot-one-row/run-1.txt`).
 - gate 변화: 없음. 말줄임으로 잘린 알림 글의 뒷부분은 화면에서 보이지 않는다(낭독기는 전문을 읽는다). 실기 전화·태블릿·Android WebView는 확인하지 못했다.
 
+## 2026-10-19 · b83c616cd7 · native mock의 identity 뒤 CSP 요청 반영
+
+- 변경: ShellConnectionTest·TrustedProxyTest의 mock에 기존 identity 확인 뒤 `/pilot` CSP 응답을 준비하고 두 요청을 순서대로 소비한다. 제품 Kotlin·bounded-zero stop·자격 검사를 변경하지 않았다.
+- 증거: 동일 모델 PC·기존 SDK에서 기준선 48fdd711ae의 선택 3개 시험 실패를 재현했다. 수정 b83c616cd7을 Account 브랜치에 30acdffbfb로 반영해 전체 Pilot JVM 111 tests, failures/errors 0, skipped 1, debug APK 1을 확인했다. launcher 계약 2개도 원격 통과했다. 상세 기록은 Account 브랜치의 docs/validation/account-service-2026-10-19/results.md에 있다.
+- gate 변화: 없음. opt-in ShellPageProbe 1개는 전체 Gradle 기본 실행에서 제외되며 Account 브랜치의 별도 실제 JVM/Chromium 검사로 통과했다. 운영 설정·실물·서명 배포는 미확인이다.
+
+## 2026-10-19 · uncommitted · 조회 전용 Account도 조종 차단 화면에서 로그아웃
+
+- 변경: Account 로그아웃 동작을 조종 차단/준비 화면에서 재사용하고, 중앙 계정 사용자에게 의미 없는 로컬 토큰 초기화를 숨겼다. 조작 권한·gate는 유지한다.
+- 증거: 실제 HTTPS Authority→Pilot browser 회귀의 pending-revocation 사례가 기존 차단 화면의 로그아웃 버튼 부재로 실패했다. 같은 회귀를 수정 SHA로 원격 재실행한다.
+- gate 변화: 없음. 제품 배포·실제 단말은 미확인이다.
+
+## 2026-10-19 · 30acdffbfb · Account 로그아웃과 native fixture 원격 검증
+
+- 변경: PWA 캐시 갱신, 원격 시험의 기존 SDK 전달과 고정 의존성 해석을 허용했다. native mock의 identity 뒤 `/pilot` CSP 응답 누락은 별도 fix/pilot-native-fixtures에서 두 시험만 수정해 반영했다. 제품 stop 경로는 바꾸지 않았다.
+- 증거: 최종 보안/실제 Chromium/proxy 묶음 d58258fee6에서 35 passed, skip 0, NEW 0. 같은 모델 PC의 기존 main에서 native 3개 실패 재현 후 30acdffbfb 전체 JVM 111 tests, failures/errors 0, skipped 1, debug APK 1. skip된 opt-in proxy는 앞의 실제 browser 묶음에서 통과했다. 상세 SHA·로그·한계는 docs/validation/account-service-2026-10-19/results.md.
+- gate 변화: 없음. 기본 debug 빌드이며 운영 Account 설정 포함 서명·실물 callback/Keystore·설치는 미확인이다.
+
+## 2026-10-19 · 212a8b51b2 · Account 앱 변경을 독립 착지 단위로 재적용
+
+- 변경: 조회 전용 로그아웃·PWA 캐시·원격 SDK 전달·native CSP mock 수정을 최신 main 기반 앱 브랜치로 모았다. foundation 회귀는 별도 브랜치에서 먼저 착지한다.
+- 증거: 기존30acdffbfb의 Pilot JVM111 tests 중 skip1·실패0·APK1과 실제 proxy Chromium 결과는 기존 기록에 남긴다. 최신 main 착지 검사는 따로 수행하며 설치·실물 수용을 뜻하지 않는다.
+- gate 변화: 없음. 운영 배포와 실제 사용자·단말 수용은 미확인이다.
+
+## 2026-10-19 · 4a5d5eef7f · 보관 Account 통합의 버튼 선언과 검증 해시 표기
+
+- 변경: 보관된 Account 앱·운영 문서를 최신 main과 통합했다. 로그아웃 버튼의 기존 quiet 종류를 공용 검사에서 읽는 명시적 setter로 옮겼다. 기존 공개 커밋·로그 무결성 해시의 값은 그대로 두고 commit/SHA-256 표기를 보충했다. 인증 동작·검사 규칙·비밀값 허용 목록은 바꾸지 않았다.
+- 증거: 첫805ce7d116 착지 검사에서 버튼 선언·문서 해시의2NEW를 확인해 착지하지 않았다. 수정4a5d5eef7f의 원격 공용 컨트롤·release 경계·secret scanner121개 통과, skip0·NEW0. 독립 최종 소스 검토 finding 없음. 실패 로그11개는 외부 scratch account-failed-805ce7d116에 hash 대조 보존했다. 첫 검사에서 잘못 축약된 middleware/media:: node id의 단독·main 재실행은 exit4로 판정 불가였으며 main-red나 flaky로 세지 않는다.
+- gate 변화: 없음. 전체 착지 관문은 수정된 커밋으로 다시 수행한다. 운영 설정·서명 배포·실물·사용자 수용은 미확인이다.
+
 ## 2026-10-19 · uncommitted · Account 차단 화면에서도 앱 로그아웃
 
 - 변경: 권한이 없어 막힌 화면에도 Account 로그아웃을 표시하고 legacy 토큰 초기화는 숨긴다. 기존 공개 service worker 목록을 유지하며 캐시 키만 갱신했다.
@@ -930,3 +967,21 @@
 - 변경: 로컬 프록시의 `127.0.0.1` domain에 `includeSubdomains="false"`를 명시했다. 기존 LAN 연결과 TLS 정책은 그대로다.
 - 증거: main `85150a1514ec`의 실제 `testReleaseUnitTest assembleRelease`에서 JVM 107건 중 실패 0/skip 1 뒤 `lintVitalRelease`가 누락된 필수 속성을 거절했다. `432b0b909` 소스로 같은 release 작업을 다시 실행해 lint와 APK 생성에 성공했고 JVM 107건 중 실패 0/skip 1을 확인했다. lint를 끄거나 baseline에 숨기지 않았다.
 - gate 변화: 없음. 서명 APK 생성·단말 설치와 Account의 실제 로봇 등록/권한 수용은 별도로 확인한다.
+
+## 2026-10-21 · uncommitted · 글자 기호 아이콘 정리
+
+- 변경: 최근 접속 지우기 `✕`, 진행 `▶`, 회전 안내 `↓`를 공용 actionIcon(close·forward)과 글로 바꿨다. 차선 조향 글의 `◀ ▲ ▶`, 회전 속도의 `↺ ↻ ·`는 방향 낱말로 바꿨다. 제자리 회전 단추의 중복 kind 설정을 지웠다.
+- 증거: Node 구문 점검. 원격 pytest·브라우저 검사는 별도 기록한다.
+- gate 변화: 없음. 주행 명령·속도·안전 규칙은 바뀌지 않는다.
+
+## 2026-10-22 · uncommitted · 접속 목록의 긴 로봇 이름 줄바꿈
+
+- 변경: 최근 접속 이름과 LAN 로봇 이름 버튼에만 긴 단어 줄바꿈과 최대 폭을 적용했다. 전체 이름과 최근 접속 지우기 버튼을 유지하며 서비스 워커 셸 캐시 버전을 올렸다.
+- 증거: 시험만 추가한 `70087db1c9`에서 세 폭 모두 실패했다. 수정 `a4d2200d86`의 원격 Chromium Pilot·Games 전체 206 passed, skipped 0, NEW 0. 2000·390·320px 캡처와 좁은 화면을 확인했다. 로비 시험을 별도 파일로 옮긴 뒤의 검증은 검증 기록에서 추적한다.
+- gate 변화: 없음. 실제 태블릿·장치 수용은 미확인이다. CE: 해당 없음 — 원인과 해결이 CSS와 브라우저 회귀 시험에 드러나는 제한된 배치 수정이다.
+
+## 2026-10-26 · 62173b9899 · 앱 바 높이 덧쓰기 정리
+
+- 변경: 공용 `ui-topbar`가 D-741 앱 바 높이(64px)를 기본으로 갖게 되어 이 표면의 같은 값 덧쓰기를 지웠다(Pilot은 두 줄 머리 높이를 명시로 유지).
+- 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
+- gate 변화: 없음.

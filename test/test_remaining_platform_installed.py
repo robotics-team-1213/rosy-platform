@@ -40,39 +40,36 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     support.parent.mkdir(parents=True)
     shutil.copy2(ROOT / 'tools/packaging/fleet_sources.py', support)
     sources = []
-    for relative in ('operations/fleet', 'operations/decision', 'operations/site_ui/console', 'operations/situation',
+    for relative in ('operations/fleet', 'operations/decision', 'applications/fleet/web', 'operations/situation',
                      'contracts/foundation', 'contracts/skill', 'contracts/motion', 'contracts/learning', 'operations/world',
-                     'operations/site_execution', 'operations/processes/palletizing', 'operations/apps/fleet',
+                     'operations/site_execution', 'operations/processes/palletizing', 'applications/fleet/gateway',
                      'middleware/core/api', 'middleware/skills/api', 'integrations/messaging/discord'):
         copied = staging / relative
         shutil.copytree(ROOT / relative, copied,
                         ignore=shutil.ignore_patterns('__pycache__', '.pytest_cache', '*.egg-info'))
-        if relative not in ('operations/decision', 'operations/site_ui/console', 'operations/situation',
+        if relative not in ('operations/decision', 'applications/fleet/web', 'operations/situation',
                             'integrations/messaging/discord'):
             sources.append(copied)
-    expected = {p.relative_to(ROOT / 'operations/site_ui/console').as_posix():
+    expected = {p.relative_to(ROOT / 'applications/fleet/web').as_posix():
                 hashlib.sha256(p.read_bytes()).hexdigest()
-                for p in (ROOT / 'operations/site_ui/console').rglob('*')
-                if p.is_file() and p.suffix in ('.py', '.html', '.css', '.js')}
-    assert {'motor-health-view.js', 'roster-cards.js'} <= expected.keys()
-    assert 'learning.html' in expected
-    assert 'cell/cell-observation.js' in expected
-    assert {'assistant/panel.js', 'assistant/assistant-voice.js', 'assistant/panel.css',
-            'shared/console-auth.js', 'shared/console-goal.js', 'shared/console-refresh.js'} <= expected.keys()
-    assert {'shared/fleet-client.js', 'shared/request.js'} <= expected.keys()
-    assert 'shared/device-request.js' in expected
-    assert 'shared/host-health.js' in expected
+                for p in (ROOT / 'applications/fleet/web').rglob('*')
+                if p.is_file() and (p.suffix in ('.py', '.html', '.css', '.js') or p.name == 'assets.json')}
+    assert {'asset_registry.py', 'assets.json', 'runtime.js'} <= expected.keys()
+    assert not any(p.startswith(('dev/', 'sample/')) for p in expected)
+    assert {'shared/host-health.js', 'shared/stuck-evidence.js',
+            'shared/robot-video.js', 'shared/robot-video.css'} <= expected.keys()
+    assert {'calibration/__init__.py', 'calibration/measured-calibration-view.js',
+            'calibration/measured-calibration.css'} <= expected.keys()
     assert {'devices/__init__.py', 'devices/device-discovery.js'} <= expected.keys()
     assert {'accounts.html', 'shared/account-page.js', 'shared/account-permissions.js'} <= expected.keys()
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
-    assert {'incident-view.js', 'maps/site-map-survey.js', 'maps/site-map-camera.js', 'shared/site-map-edit.js',
+    assert {'incident-view.js', 'sitemap/site-map-survey.js', 'sitemap/site-map-camera.js', 'shared/site-map-edit.js',
             'work/__init__.py', 'work/work-view.js', 'work/work.css', 'shared/power-action.js', 'shared/area-nav.js', 'work/channel-request-view.js'} <= expected.keys()
-    assert {'maps/__init__.py', 'maps/site-map.html', 'maps/site-map.css', 'maps/site-map.js',
-            'maps/site-map-teach.js', 'maps/edit-history.js', 'maps/geometry-edit.js', 'maps/map-topology.js'} <= expected.keys()
-    assert {'maps/drawing-import.js', 'maps/map-editor.js', 'maps/map-authoring.js', 'maps/map-editor.css'} <= expected.keys()
-    assert 'maps/extraction-review.js' in expected
-    assert 'shared/drawing-errors.js' in expected
+    assert {'sitemap/edit-history.js', 'sitemap/geometry-edit.js', 'sitemap/drawing-import.js', 'sitemap/map-editor.js',
+            'sitemap/map-authoring.js', 'sitemap/map-editor.css', 'sitemap/map-topology.js',
+            'sitemap/extraction-review.js', 'shared/drawing-errors.js', 'cell/cell-observation.js',
+            'motor-health-view.js', 'roster-cards.js', 'learning.html'} <= expected.keys()
     # Colcon selects full install for external holders instead of unsafe editable cleanup.
     develop_help = run(['setup.py', '--help', 'develop'], staging / 'operations/fleet').stdout
     assert not any(line.lstrip().startswith('--editable') for line in develop_help.splitlines()), develop_help
@@ -91,7 +88,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
                                         'wait_graph.py', 'fact_rules.py'}
         # Removing the sibling holders proves the archive is self-contained.
         shutil.rmtree(staging / 'operations/decision')
-        shutil.rmtree(staging / 'operations/site_ui/console')
+        shutil.rmtree(staging / 'applications/fleet/web')
         shutil.rmtree(staging / 'operations/situation')
         shutil.rmtree(staging / 'integrations/messaging/discord')
         shutil.rmtree(staging / 'tools')
@@ -100,7 +97,10 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
          '--no-build-isolation', '--wheel-dir', str(wheels), *map(str, sources)], tmp_path)
     with zipfile.ZipFile(next(wheels.glob('fleet-*.whl'))) as wheel:
         names = wheel.namelist()
-        for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking', 'pose'):
+        assert not any(name.startswith(('fleet_app_dev/', 'fleet/server/web/dev/', 'fleet/server/web/sample/'))
+                       or name.endswith('runtime-sample.js') for name in names)
+        for holder in ('peer', 'cell', 'auth', 'console', 'ledger', 'missions', 'work', 'trips', 'trip_checks', 'trip_progress', 'tracking',
+                       'evidence', 'sitemap', 'pose', 'recognition', 'rightofway'):
             for source in (ROOT / 'operations/fleet/fleet/server' / holder).glob('*.py'):
                 target = 'fleet/server/' + source.name
                 assert names.count(target) == 1
@@ -188,7 +188,7 @@ assert NativeReceipts is LegacyNativeReceipts
 assert LineStuckPrecondition is OwnedPrecondition
 assert Path(__import__('core_common.protocol.line_stuck', fromlist=['']).__file__).is_relative_to(installed)
 assert LineStuckPrecondition(phase='ASKING', attempts=0).model_dump() == {'phase': 'ASKING', 'attempts': 0}
-assert ('rosy-contracts-learning', '>=0.1.12', (), None, None) in fleet_requirements, fleet_requirements
+assert ('rosy-contracts-learning', '>=0.1.14', (), None, None) in fleet_requirements, fleet_requirements
 from rosy.contracts.learning import incident_rule
 assert Path(incident_rule.__file__).is_relative_to(installed)
 from rosy.contracts.learning import incident_operation
@@ -341,9 +341,6 @@ else:
 print('installed namespace, resources, HTTP guards and Fleet Cell submission verified')
 '''
     modules = ['rosy.decision.deliberation.evaluation.reasoning_candidate',
-               'core_common.protocol.assistant', 'fleet.server.assistant.runtime',
-               'fleet.server.assistant.routes', 'rosy.decision.conversation.operator',
-               'rosy.decision.conversation.preprocessing',
                'rosy.decision.conversation.codec', 'fleet.server.channel.conversation.jobs',
                'fleet.server.channel.conversation.worker', 'fleet.server.channel.conversation.runtime',
                'fleet.server.channel.execution.instructions', 'fleet.server.channel.execution.journal',
@@ -360,6 +357,7 @@ print('installed namespace, resources, HTTP guards and Fleet Cell submission ver
                'fleet.server.proposal_store', 'rosy.decision.model_tool_contract',
                'fleet.server.model_feedback_dispatch', 'rosy.decision.deliberation',
                'rosy.decision.deliberation.cli', 'fleet.server.deliberation_journal',
+               'fleet.server.context_log', 'fleet.server.context_options',
                'rosy.decision.deliberation.profiles', 'rosy.decision.deliberation.judgment',
                'rosy.decision.deliberation.calibration', 'rosy.decision.deliberation.versioned_request',
                'rosy.decision.deliberation.versioned_cli', 'rosy.decision.deliberation.local',

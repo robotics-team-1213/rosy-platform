@@ -6,7 +6,7 @@
 
 웹, Android 앱, 로봇 LCD
 
-앱 이름과 현재 구현·소유의 기준은 [앱 이름과 역할](docs/reference/app-names-and-roles.md)이다(D-806). Robot·Fleet·Pilot·Cam·Learning·Games를 구분한다. 별도 저장소 업무 앱이던 Vault·Device는 rosy-vault 은퇴(2026-10-24, D-858)로 개발하지 않으며, 외부 업무 앱은 [지원 계약](docs/reference/application-contract-support.md)을 따른다(첫 사례 항만 앱 Harbor). Cell은 Fleet의 팔레타이징 작업 준비, Account는 공용 계정 기능이며 얼굴 LCD와 Pilot 연결 로비는 상위 앱의 하위 화면이다.
+앱 이름과 현재 구현·소유의 기준은 [앱 이름과 역할](docs/reference/app-names-and-roles.md)이다(D-806). Robot·Fleet·Pilot·Cam·Learning·Games를 구분한다. 별도 저장소 업무 앱이던 Vault·Device는 rosy-vault 은퇴(2026-10-24)로 개발하지 않으며, 외부 업무 앱은 [지원 계약](docs/reference/application-contract-support.md)을 따른다(첫 사례 항만 앱 Harbor). Cell은 Fleet의 팔레타이징 작업 준비, Account는 공용 계정 기능이며 얼굴 LCD와 Pilot 연결 로비는 상위 앱의 하위 화면이다.
 
 ## Users
 
@@ -19,6 +19,16 @@
 - 학습 검수자 — Rosy Learning(학습 관리 센터). 학습 결과를 찾고 실패 이유를 확인하며 객체 라벨을 수정·명시 승인한다.
 
 ## Product Purpose
+
+**목표(2026-10-24 사용자 결정):** ROSY Platform은 업무 앱이 플랫폼 코드를 고치지 않고 로봇(Pinky 주행, OMX 팔)에 작업을 맡기는 범용 실행 플랫폼이다. 첫 적용 사례는 HarborLogi 항만 앱 Harbor다. 플랫폼은 장치 능력·관측(World)·작업 실행과 자원 조정(Fleet)·실행 권한(CORE · OMX owner)을, 업무 앱은 업무 목표·도메인 모델·정책·화면을 소유하고 버전 고정 공개 계약과 어댑터로만 연결한다.
+
+완료 조건(시뮬 기준, 실물·현장은 DEVICE·FIELD 게이트로 따로 판정):
+
+1. Harbor 첫 흐름이 공개 계약만으로 끝까지 돈다: 반출 전 변경 지시 → 재취급 화물 처리 → 반출 대상 화물 이송 → S 내려놓기 → 재취급 화물 정리·팔 퇴피.
+2. 항만 정책 하나를 바꿔도 이 저장소의 diff가 0이다.
+3. 최종 명령은 주행은 CORE, 팔은 OMX owner만 낸다(D-858: device-core 은퇴, 실물 Dynamixel 경로는 owner로 흡수). 실물 owner 조립·수용(D-858 S4·S5)이 끝나기 전까지 owner의 실물 동작은 꺼져 있다.
+
+Pinky 차로 주행과 OMX 집기는 이 목표의 능력 증명 마일스톤이고, Rosy Cell 팔레타이징은 Harbor 흐름에 흡수한다.
 
 ROSY Platform은 ROS 2 Jazzy 기반으로 관측한 세계 상태, 현장 작업 조정, 장치별 안전한 실행, 오프라인 학습·평가를 연결하는 로봇 작업 플랫폼이며 첫 하드웨어는 Pinky Pro다. UI 표면의 일은 사람이 로봇을 안전하게 감시·개입·설치·점검하게 돕는 것이다. 성공 = 운용자·설치자·검수자가 각 표면의 선언 질문에 근거 있게 답하고 다음 안전한 작업을 끝낼 수 있는 것(D-153).
 

@@ -30,6 +30,8 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tools"))
+from data_paths import data_root  # noqa: E402
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))
 
 from core_common.calibration_store import KINDS, CalibrationStore, check_values  # noqa: E402
@@ -41,7 +43,7 @@ def main(argv=None) -> int:
     ap.add_argument("robot")
     ap.add_argument("kind", nargs="?", choices=KINDS)
     ap.add_argument("record", nargs="?")
-    ap.add_argument("--root", type=Path, default=REPO / "data" / "calibration")
+    ap.add_argument("--root", type=Path, default=data_root(REPO) / "calibration")
     ap.add_argument("--from", dest="other", type=Path, help="sync: the other store root")
     ap.add_argument("--actor", default="")
     ap.add_argument("--note", default="")

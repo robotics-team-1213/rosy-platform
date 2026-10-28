@@ -585,6 +585,30 @@ def test_websocket_refuses_a_wrong_or_missing_first_message(robot, monkeypatch):
     assert closed.value.code == 4403
 
 
+
+def test_state_socket_refuses_past_the_client_cap_and_shares_one_frame(robot, monkeypatch):
+    """Network load: a robot serves at most MAX_STATE_CLIENTS /ws/state sockets; more get 1013."""
+    from contextlib import ExitStack
+    from starlette.websockets import WebSocketDisconnect
+    import core_api_web.api.ws as ws_module
+
+    monkeypatch.setattr(ws_module, "MAX_STATE_CLIENTS", 2)
+    tc, _svc, _state, _events = robot()
+    url = "/ws/state?token=rosy-dev-" + "viewer"
+    with ExitStack() as stack:
+        frames = []
+        for _ in range(2):
+            socket = stack.enter_context(tc.websocket_connect(url))
+            frames.append(socket.receive_text())
+        assert all(isinstance(json.loads(frame), dict) for frame in frames)
+        with pytest.raises(WebSocketDisconnect) as closed:
+            with tc.websocket_connect(url) as extra:
+                extra.receive_text()
+        assert closed.value.code == 1013 and "2 clients" in closed.value.reason
+    with tc.websocket_connect(url) as socket:            # a closed socket frees its slot
+        assert isinstance(socket.receive_json(), dict)
+
+
 # --- 2026-09-24 security review ------------------------------------------------
 
 

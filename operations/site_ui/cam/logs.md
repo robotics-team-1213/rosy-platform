@@ -99,6 +99,7 @@
 - gate 변화: 없음.
 - 결정: Python과 읽기가 다른 곳은 의도다. 지문 입력은 64 hex만 받는다(Python은 아무 문자열이나 자른다). 이름표 길이는 code point로 센다(Python `len`과 같게). `pairable`은 Fleet 레코드 파서가 앱에 없어 `_rosy-fleet._tcp`를 형식 검사 없이 `not_overhead`로 본다. org.json은 Python json보다 관대하고 중복 키를 거절한다. 벡터 사례는 모두 Python과 같은 답을 낸다.
 - 열린 후속: 2단계(HTTP transport, 설정 화면 진입, UI)는 이어서 같은 브랜치에서 한다.
+
 ## 2026-10-01 · 05280213 · feat(cam): D-341 페어링 클라이언트 2단계 — HTTPS, 조회 간격, 설정 진입과 화면
 
 - 변경: (bbbfc85f) `SiteLink`에 `credential_id`를 더했다(DataStore 키 `credential_id`, 손으로 저장하면 지운다). `SettingsStore.replace`/`restore`로 confirm 실패 때 이전 링크를 되돌린다. `OverheadServiceRecord`가 NSD 주소(페어링에만 다이얼, 저장 안 함)와 `pair=rosy-pair/1` 여부를 가진다. (7fc9c713) `HttpPairingTransport`: rosy-00 S2 라우트(`/api/fleet/pairing/v1/requests`, `…/reveal`, `GET …/{id}`, `…/confirm`, poll secret bearer). URL·SNI는 `tls_host`, TCP는 NSD 주소로만 간다(시스템 DNS 없음). 사전 고정 TLS는 D-341 3·8항 그대로다. `FirstContactTrust`는 첫 leaf를 검증 없이 기록하고, 같은 시도 안에서는 그 leaf만 받는다. 신뢰는 코드 입력, 설치자의 지문 확인, 받은 CA가 그 leaf에 서명했는지(9항)에서 온다. 오류는 FastAPI `{"detail":{"code"}}`와 `Retry-After`로 읽는다. `PairingSession`은 2 s보다 빨리 조회하지 않고 429의 Retry-After를 기다린다. 조회 중 네트워크 오류는 요청 기한까지 다시 시도하고, 다른 leaf가 나오면 멈춘다. `PairingScreen`: 6자리 코드를 크게("123 456"), 승인 대기 문구, 인증서 지문과 자격 번호, "같습니다 — 연결"/"다릅니다 — 취소", 끝 사유별 한국어 문구. (05280213) 설정의 "사이트에 연결 요청": TLS 수신기가 `pair=rosy-pair/1`을 광고하고 주소가 풀렸을 때만 버튼을 띄운다(D-341 2·14항). 기기 이름표는 `Build.MODEL`을 요청 규칙에 맞춰 쓴다. rosy-00 920bef4d 반영: 결과의 `credential_id`가 `^[A-Za-z0-9_-]{1,64}$`가 아니면 저장도 confirm도 하지 않고 "연결 정보가 올바르지 않습니다"를 띄운다.
@@ -106,12 +107,14 @@
 - gate 변화: 없음. DEVICE는 사이트 TXT `pair` 광고(rosy-00) 뒤.
 - 결정: confirm이 거절되거나 응답이 오지 않으면 저장한 링크를 버리고 이전 링크를 되돌린다(코디네이터 지시). 저장 → confirm 순서는 D-341 4항 그대로다. S2 오류 코드는 소문자로 상태 사유가 된다(`commit_mismatch` 등). 404는 요청을 잃은 것(Fleet 재시작)으로 보고 만료로 끝낸다.
 - 열린 후속: progress "페어링에서 남은 것" 1–6.
+
 ## 2026-10-01 · 8fb4b1a8 · fix(cam): D-341 페어링 클라이언트 보안 리뷰 반영(APPROVE WITH FIXES)
 
 - 변경: (d3a8041c) 로컬 main(9dd0948b 포함)을 병합했다. `pairing.v1.json`은 93336f48과 같다. (5c3437ca) M1: confirm을 보낸 뒤의 실패는 모두 `confirm_*` 사유와 `credential_id`를 남긴다. confirm 410은 `confirm_gone`이고 조회 410(`gone`)과 다르다. 응답이 없으면 `confirm_unanswered`로 끝나고 더는 예외를 던지지 않는다. 링크는 버린다. 화면은 "콘솔에서 이 카메라 자격을 폐기한 뒤 다시 연결하세요", 무응답이면 "확인 응답을 받지 못했습니다. 콘솔 자격 목록에서 자격 번호 %1$s가 '활성'이면 폐기한 뒤 다시 연결하세요"와 자격 번호를 띄운다. OkHttp가 실패한 호출을 몰래 다시 보내지 않는다(`retryOnConnectionFailure(false)`). M2: 승인 뒤 `tls_host` SAN 검사(D-341 9 b) 시험. minor 3: S2 오류 코드는 `^[A-Z0-9_]{1,40}$`일 때만 사유가 되고 아니면 `refused_<status>`다. `site_name`은 표시·저장 전에 64 code point로 자르고 제어·서식 문자(양방향 재정렬 포함)를 뺀다. 지문 확인 화면에는 사이트가 보낸 자유 문자열을 띄우지 않는다(패턴 검사된 `source_id`만). minor 5: 대기 기한은 min(서버 `expires_at`, 시작 + 330 s). 악성 자기 승인 수신기 시험, `state` `@Volatile`. (0a3b5259) minor 4: `PairingSession`은 실행 전에 busy를 켜고, 두 번 누름을 무시하며, 진행 중인 답(저장 + confirm)은 취소하지 않는다. 단계 안의 RuntimeException은 `Rejected("internal")`로 끝난다. 조회 간격은 max(2 s, min(Retry-After, 30 s)). (96dbdc44) minor 6: 시도는 `PairingViewModel`(viewModelScope)에 있어 회전에도 이어진다. (dc0aabe2) minor 7: 페어링은 zone id 없는 IP 리터럴로만 다이얼한다. (8fb4b1a8) nit: nonce `toString` 가림, org.json 중복 키·`peekBody` 주석 정정.
 - 증거: `gradlew testDebugUnitTest lintDebug assembleDebug --rerun-tasks` BUILD SUCCESSFUL, JVM 시험 303 passed, 0 failed, lint 0 errors·44 warnings(새 경고 없음). 변이: M3(승인 뒤 SAN 검사 제거)는 `aResultTlsHostTheLeafDoesNotNameIsRejected`가, M6(무응답 confirm의 discard 제거)는 `aConfirmWithoutAnswerDiscardsTheLinkAndNamesTheCredential`·`everyS2RefusalMapsToAState`가 잡는다. 호스트 시험은 progress 참조 (2026-10-01 Windows, JDK 21).
 - gate 변화: 없음.
 - 결정: confirm 뒤 실패는 서버 쪽 자격이 활성일 수 있으므로 사유와 상관없이 폐기 안내를 띄운다. confirm 전 기한 초과(`confirm_deadline`)는 서버가 120 s 뒤 스스로 회수하므로 폐기 안내가 없다.
+
 ## 2026-10-01 · 2370b41b · feat(cam): 응답 없는 confirm은 한 번만 다시 보낸다(S2 멱등 confirm, rosy-00 d5d4a2e4)
 
 - 변경: (aefe32fa) 로컬 main(d5d4a2e4·6dbcc01b 포함)을 병합했다. `pairing.v1.json`은 그대로다. (2370b41b) confirm이 응답 없이(I/O) 끝나면 약 1 s 뒤, 승인 후 120 s 창이 열려 있을 때만, 같은 고정 세션(같은 첫 접촉 leaf)으로 같은 confirm을 정확히 한 번 더 보낸다. 이 자격의 200이 오면 링크를 지킨다(Paired, discard 없음). 다시 무응답·거절(410 등)·엉뚱한 응답이면 지금처럼 `confirm_unanswered`(링크 버림 + 자격 번호와 폐기 안내)다. 처음 confirm이 거절(409/400/410)되면 다시 보내지 않는다. `retryOnConnectionFailure(false)`는 그대로이고, 이 한 번이 유일한 재전송이다.
@@ -153,6 +156,7 @@
 - 증거: Cam testDebugUnitTest/assembleDebug 재실행 성공. 실제 소등/온도 하강은 미검증이다.
 - gate 변화: DEVICE/FIELD 이동 없음.
 - 결정: D-432 앱 실행 기기 발열과 화면 끄기.
+
 ## 2026-10-03 · uncommitted · fix(cam): NSD 탐색 종료 뒤 늦은 콜백이 앱을 중단하지 않는다
 
 - 원인: Galaxy S21(Android 15)의 NSD가 탐색 종료·콜백 해제 뒤에도 `ConnectivityThread`에서 이미 종료된 scheduler로 콜백을 전달해 `RejectedExecutionException`을 냈다.
@@ -307,6 +311,7 @@
 - 변경: 인증된 미리보기 읽기가 있으면 센서를 열고 JPEG를 보낸다. 마지막 읽기 뒤 30초가 지나면 demand.wanted가 false가 되고, 소켓과 wake lock은 둔 채 센서와 송출을 멈춘다. 앱 화면이 열려 있으면 맞추기용 미리보기만 하고 보내지 않는다. demand를 모르는 이전 앱과 demand를 보내지 않는 이전 Vision은 지금처럼 계속 보낸다.
 - 증거: Windows Gradle testDebugUnitTest 418 passed, 0 failed (JDK 21, X:/DevTemp/cam-standby/gradle-unit.txt). 원격 AI PC에서 d780942b9 Vision·버전 핀 294 passed, known_failures NEW 0 (X:/DevTemp/cam-standby/pytest/run-1.txt).
 - gate 변화: SOURCE/JVM. 대기 전류와 요청 뒤 첫 프레임 시간은 측정하지 않았다. APK를 설치하지 않았다. DEVICE/FIELD는 PARKED.
+
 ## 2026-10-12 · uncommitted · feat(cam): 심한 발열이면 센서와 송출을 멈춘다
 
 - 변경: D-691에 안전 예외를 더했다. PowerManager 열 상태가 SEVERE 이상이거나, 열 상태를 모를 때 배터리 45°C 이상이면 요청과 미리보기보다 먼저 센서와 JPEG를 멈춘다. 화면 끄기와 같은 기준이고, LIGHT 이하 또는 배터리 41°C 이하로 식으면 다시 따른다. 소켓과 wake lock은 유지한다. 36°C대 충전 온도로는 멈추지 않는다.
@@ -338,6 +343,20 @@
 - 변경: Accepted the Vault site capabilities in strict access-token validation. JVM coverage checks Vault-only and combined camera grants without granting camera.manage implicitly.
 - 증거: committed-SHA remote checks are recorded separately; no deployment, device or field acceptance claimed.
 - gate 변화: none.
+
+## 2026-10-22 · d297635cd4 · refactor(cam): 오류 복구 조작 배치 정리
+
+- 변경: 촬영 오류 안내의 설정 버튼 두 선언을 하나로 합쳤다. 정지가 필요한 오류는 기존 판정에 따라 카메라 정지 후 설정으로 이동한다. 설정·자세히 버튼은 FlowRow로 배치해 폭이 부족하면 줄을 바꾸고 기존 간격·누름면 토큰을 유지한다.
+- 범위: Cam의 StreamScreen만 변경했다. Learning·공용 토큰·연결 및 촬영 정책은 변경하지 않았다.
+- 검증: commit d297635cd4의 Cam·공용 웹 자산·공유 벡터를 git archive로 원격 시험 PC에 전달했다. JDK 21/SDK 35에서 testDebugUnitTest·assembleDebug·lintDebug BUILD SUCCESSFUL, JVM 440 tests / failures 0 / errors 0 / skipped 0(57 suites), debug APK 존재를 확인했다. lint는 오류 0·경고 42·정보 1이며 경고의 기준 브랜치 비교는 수행하지 않았다. 원격 역할·아이콘 계약시험 22 passed, known_failures NEW 0. 독립 코드 검토 승인. 로그·JUnit XML·lint XML은 시스템 TEMP의 rosy-cam-ui-refactor/에 보존했다.
+- gate 변화: 없음. 실제 폰의 큰 글꼴·좁은 폭·TalkBack은 미확인이다. Learning·전체 제품·DEVICE/FIELD 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 기존 UI 배치와 중복 코드 정리이며 장치·운영 장애 해결을 주장하지 않는다.
+
+## 2026-10-22 · dadf5eed1f · Cam 복구 화면 렌더링과 안전한 lint 정리
+
+- 변경: 동일 버전의 의존성을 카탈로그로 이동하고 정수 상태·불필요한 SDK 분기를 정리했다. 실제 StreamScreen을 검증하는 Android instrumentation 시험을 추가했다. 기존 ui 패키지를 크기 단위로 등록하며 Gradle 모듈·런타임 소유권은 바꾸지 않았다.
+- 증거: 원격 JVM 440 passed, debug·androidTest APK 빌드 성공. 격리한 API 35 에뮬레이터에서 320·390·800dp/글꼴 1.3 복구 조작 3 passed. lint 오류 0·경고 43·정보 0(기존 경고 2·정보 1 해결, 새 시험 의존성 업데이트 알림 3 추가). 자세한 범위와 캡처는 docs/validation/ui-hardening-2026-10-22/README.md.
+- gate 변화: 없음. 실제 폰·촬영 서비스·음성 TalkBack·DEVICE/FIELD 수용은 미확인. CE: 해당 없음 — 코드와 회귀 시험으로 설명되는 변경이다.
 
 ## 2026-10-23 · bc6edabfe0 · 원격 송출 제어와 바닥 경계 설치 안내
 

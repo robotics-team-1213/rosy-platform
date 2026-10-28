@@ -41,10 +41,24 @@ def test_preparation_keeps_official_config_without_connecting(module, config):
     assert config == original
 
 
+@pytest.mark.parametrize("linked", [False, True])
+def test_recording_root_refuses_any_source_checkout(module, config, tmp_path, linked):
+    checkout = tmp_path / "source"
+    checkout.mkdir()
+    if linked:
+        (checkout / ".git").write_text("gitdir: elsewhere\n")
+    else:
+        (checkout / ".git").mkdir()
+    config['dataset']['root'] = str(checkout / "new-recording")
+    with pytest.raises(ValueError, match='outside the source checkout'):
+        module.validate_config(config)
+    assert not Path(config['dataset']['root']).exists()
+
+
 @pytest.mark.parametrize('section,key,value', [
     ('dataset', 'push_to_hub', True), ('dataset', 'private', False),
     ('dataset', 'fps', 0), ('dataset', 'fps', True),
-    ('dataset', 'root', 'F:/recording'), ('dataset', 'root', '../recording'),
+    ('dataset', 'root', str(Path(__file__).resolve().parents[1] / 'recording')), ('dataset', 'root', '../recording'),
     ('dataset', 'repo_id', '<org>/recording'), ('dataset', 'single_task', ''),
     ('robot', 'port', '/dev/ttyACM0'), ('robot', 'id', ''),
     ('robot', 'max_relative_target', None), ('robot', 'max_relative_target', float('nan')),
@@ -84,3 +98,47 @@ def test_example_is_inert_and_default_private(module):
     assert example['dataset']['private'] is True
     with pytest.raises(ValueError):
         module.validate_config(example)
+
+
+def bimanual(config):
+    robot, leader = config['robot'], config['teleop']
+    config['robot'] = {'type': 'bi_omx_follower', 'id': 'two_followers', 'cameras': robot['cameras']}
+    config['teleop'] = {'type': 'bi_omx_leader', 'id': 'two_leaders'}
+    for name in ('arm_a', 'arm_b'):
+        config['robot'][name] = {**robot, 'id': name + '_follower',
+                                 'port': robot['port'] + '_' + name, 'cameras': {}}
+        config['teleop'][name] = {**leader, 'id': name + '_leader', 'port': leader['port'] + '_' + name}
+    return config
+
+
+def test_bimanual_config_has_four_distinct_ports_and_parent_camera(module, config):
+    config = bimanual(config)
+    assert module.validate_config(config) == config
+    config['teleop']['arm_b']['port'] = config['robot']['arm_a']['port']
+    with pytest.raises(ValueError, match='distinct'):
+        module.validate_config(config)
+
+
+def test_bimanual_children_cannot_reopen_shared_camera(module, config):
+    config = bimanual(config)
+    config['robot']['arm_a']['cameras'] = config['robot']['cameras']
+    with pytest.raises(ValueError, match='camera'):
+        module.validate_config(config)
+
+
+@pytest.mark.parametrize('paired', [False, True])
+@pytest.mark.parametrize('video', [False, None, 0, 'true'])
+def test_native_sdk_camera_omission_is_rejected_before_recording(module, config, paired, video):
+    if paired:
+        config = bimanual(config)
+    config['dataset']['video'] = video
+    with pytest.raises(ValueError, match='video'):
+        module.validate_config(config)
+
+
+@pytest.mark.parametrize('paired', [False, True])
+def test_explicit_native_video_recording_remains_admissible(module, config, paired):
+    if paired:
+        config = bimanual(config)
+    config['dataset']['video'] = True
+    assert module.validate_config(config) == config

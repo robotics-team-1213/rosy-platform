@@ -1,5 +1,6 @@
 """D-413 current import ownership and future edge canaries."""
 
+import sys
 from pathlib import Path
 
 import yaml
@@ -11,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 POLICY = ROOT / "tools" / "harness" / "platform_dependencies.yaml"
 
 CURRENT_COMPONENTS = {
+    "fleet_app_dev": ("applications/fleet/dev", "fleet_app_dev"),
     "contracts": ("contracts/foundation/core_common", "core_common"),
     "cell_process_compat": ("operations/processes/cell/rosy_cell", "rosy_cell"),
     "palletizing_process": (
@@ -29,7 +31,7 @@ CURRENT_COMPONENTS = {
         "integrations/robots/omx/src/rosy/integrations/robots/omx",
         "rosy.integrations.robots.omx",
     ),
-    "gateway_app": ("operations/apps/fleet/src/rosy_gateway", "rosy_gateway"),
+    "gateway_app": ("applications/fleet/gateway/src/rosy_gateway", "rosy_gateway"),
     "agent_app": ("middleware/devices/omx/agent/src/rosy_agent", "rosy_agent"),
 }
 
@@ -44,9 +46,13 @@ def _violations(importer: str, source: str, boundaries: list[dict], *, module_na
     package_name = package_name or importer
     for name in _imports(source, package_name):
         for boundary in boundaries:
-            if _matches(importer, boundary["importer_prefix"]):
-                if any(_matches(name, target) for target in boundary["forbidden_imports"]):
-                    bad.append(name)
+            if not _matches(importer, boundary["importer_prefix"]):
+                continue
+            if any(_matches(name, target) for target in boundary.get("forbidden_imports", ())):
+                bad.append(name)
+            elif "allowed_imports" in boundary and name.split(".")[0] not in sys.stdlib_module_names and not any(
+                    _matches(name, target) for target in boundary["allowed_imports"]):
+                bad.append(name)
     return bad
 
 
@@ -96,6 +102,13 @@ def test_injected_forbidden_imports_fail_future_boundary_canaries():
             ]
 
 
+def test_allow_list_rejects_anything_not_listed():
+    rules = [b for b in _policy()["boundaries"] if b["importer_prefix"] == "rosy_agent"]
+    assert "allowed_imports" in rules[0]
+    source = "import json\nimport omx_adapter.action_api\nfrom . import barrier_journal\nimport fleet.db\nimport rclpy\n"
+    assert _violations("rosy_agent", source, rules, package_name="rosy_agent") == ["fleet.db", "rclpy"]
+
+
 def test_prefix_matching_does_not_reject_similar_unrelated_packages():
     policy = _policy()
     rules = policy["future_boundary_canaries"]
@@ -115,7 +128,7 @@ def test_platform_python_roots_are_not_ament_packages():
         str(path.relative_to(ROOT))
         for root in ("modules", "integrations/robots", "apps", "profiles", "operations/world",
                      "operations/processes/palletizing", "operations/site_execution",
-                     "operations/apps/fleet")
+                     "applications/fleet/gateway")
         for path in (ROOT / root).rglob("package.xml")
     ]
     assert package_xml == []

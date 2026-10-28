@@ -85,6 +85,7 @@ MAX_APPROACH = 4
 CROSSWALK_MAX_SPAN_M = 3.0
 CROSSWALK_MIN_AREA_M2 = 1e-4
 SITE_FLOOR_MARGIN_M = 0.30
+MAX_WALLS, MIN_WALL_M = 200, 0.05
 
 Id = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
 Finite = Field(allow_inf_nan=False)
@@ -215,6 +216,24 @@ class SiteCrosswalk(BaseModel):
         return self
 
 
+class SiteWall(BaseModel):
+    """D-573 rev 8: one straight wall face (the side the floor is on), as surveyed. Fleet tells a robot how far
+    the nearest one stands beside its lane, so its crosswalk look ignores returns on that wall only."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Id
+    face: tuple[tuple[float, float], tuple[float, float]]
+
+    @model_validator(mode="after")
+    def _length(self) -> "SiteWall":
+        if not all(math.isfinite(v) for point in self.face for v in point):
+            raise ValueError(f"wall {self.id} needs finite points")
+        if math.dist(*self.face) < MIN_WALL_M:
+            raise ValueError(f"wall {self.id} is shorter than {MIN_WALL_M} m")
+        return self
+
+
 class TurnBan(BaseModel):
     """D-489 3: no turn from edge ``from_edge`` into edge ``to_edge`` at place ``at``."""
 
@@ -238,6 +257,8 @@ class SiteMap(BaseModel):
     view_turn_deg: Literal[0, 90, 180, 270] = 0
     #: D-573 1: crosswalk areas (polygon from lane_graph.yaml, waiting bands from the editor).
     crosswalks: list[SiteCrosswalk] = Field(default_factory=list, max_length=MAX_CROSSWALKS)
+    #: D-573 rev 8: surveyed wall faces (optional; none = the crosswalk look ignores no return).
+    walls: list[SiteWall] = Field(default_factory=list, max_length=MAX_WALLS)
     survey: Optional[SurveyReference] = None
     drawing: Optional[DrawingReference] = None
     facilities: list[SiteFacility] = Field(default_factory=list, max_length=500)
@@ -277,6 +298,8 @@ class SiteMap(BaseModel):
                 raise ValueError("turn ban names an unknown place or edge")
             if ban.at not in (into.from_, into.to) or ban.at not in (out.from_, out.to):
                 raise ValueError(f"turn ban edges do not meet at {ban.at}")
+        if len({wall.id for wall in self.walls}) != len(self.walls):
+            raise ValueError("wall ids must be unique")
         if len({facility.id for facility in self.facilities}) != len(self.facilities):
             raise ValueError("facility ids must be unique")
         for facility in self.facilities:
@@ -328,6 +351,8 @@ class SiteMap(BaseModel):
             del body["view_turn_deg"]
         if not body["crosswalks"]:  # D-573: a map without crosswalks stays byte-equal
             del body["crosswalks"]
+        if not body["walls"]:  # D-573 rev 8: a map without walls stays byte-equal
+            del body["walls"]
         if body["survey"] is None:
             del body["survey"]
         if body["drawing"] is None:

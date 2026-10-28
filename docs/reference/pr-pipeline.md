@@ -9,7 +9,7 @@ flowchart TD
     review -->|수정 필요 사항 없음| post["게시 담당: pre-push·PR"]
     post --> ci{"최신 SHA의 CI·개별 잡 확인"}
     ci -->|새 실패·미확인| author
-    ci -->|병합 조건 충족| merge["같은 SHA로 squash 병합"]
+    ci -->|병합 조건 충족| merge["같은 SHA로 merge commit 병합"]
     merge --> check["병합 SHA·반영 내용·후속 상태 확인"]
 ```
 
@@ -43,17 +43,29 @@ PR에는 다음 근거를 남긴다. 인수인계 내용은 [팀 가이드 §3.6
 
 ## CI와 병합
 
+### 로컬 FULL 근거와 게시 SHA
+
+게시할 마지막 기능이 있는 작업 worktree에서, 변경 범위가 작아도 정본 FULL 검증이 필요하면 다음 모드를 쓴다. 이 명령은 기존 착지 대기열·검토·크기·원격 시험 관문을 거쳐 로컬 main에 착지하며 push하지 않는다.
+
+```bash
+python tools/land.py --tests full --no-cache
+```
+
+`full`은 현재 후보의 CI·모듈·전체 root 시험과 등록된 모든 opt-in 브라우저의 chunk·ALONE 계획을 고른다. 매 프로세스 실행마다 정상 준비를 거치고 guard·isolation은 현재 실행에서 cache 없이 확인한다. 본시험은 같은 tree·시험 환경의 clean cache를 재사용할 수 있으며, `--no-cache`는 이 본시험 재사용을 끈다. 한 실행에서 확인한 준비 근거로 main 변경분을 검증하는 흐름은 유지하므로, 이 옵션을 모든 후속 호출의 무조건 재실행으로 설명하지 않는다. main·registry·packing·환경이 달라져 근거가 부족하면 다시 준비한다. `full --no-queue`는 지원하지 않는다.
+
+LOAD-FLAKY·다른 tree의 좁은 재사용·불완전 본시험·빈 브라우저 통과는 explicit FULL의 저장·착지를 막는다. isolation의 기존 정책은 유지한다. Safety 미도달·새 실패·죽거나 report가 없는 job은 중단하고, 허용된 nonSafety 예산 초과는 미완료로 기록·보고한다. auto의 착지 허용은 그대로지만 부적격 준비·차례 결과는 재사용 가능한 게시 기록이 되지 않는다. 준비 기록의 `tier=full` 문자열만으로 이전 실행을 신뢰하지 않는다.
+
+게시 담당은 `tools/publish_main.py`가 선택한 **실제 SHA**에 요청된 모든 착지가 포함되는지 각각 `git merge-base --is-ancestor <착지-SHA> <선택-SHA>`로 확인한다. 도구가 고른 가장 최근 FULL 조상에 마지막 기능이 없으면 게시하지 않는다. 해당 SHA의 적격 FULL 기록, 같은 PR head의 녹색 `ci-result`, merge commit 병합과 origin 역동기화를 함께 확인한다(D-868). `--force-blocked`는 FULL 근거나 기능 포함 확인을 대신하지 않는다. 실제 FULL·공개 CI·산출물·현장 수용은 별도 근거다.
+
 `ci-result` 성공이 모든 개별 잡의 통과를 뜻하지는 않는다. 보고용 비게이팅 잡도 읽고 실패·수집 오류·미실행을 별도로 기록한다. 새로 드러난 실패는 원인을 확인하고 해결한다. 기존 실패로 판단하려면 변경 전 기준선의 같은 실패 근거를 남긴다. 시험을 숨기거나 freshness·안전 기준을 느슨하게 바꾸지 않는다. 관리자 예외로 적색 CI를 넘기지 않는다.
 
 ```bash
 gh pr checks <PR번호> --required --watch
 gh pr view <PR번호> --json headRefOid,statusCheckRollup,mergeable
-gh pr merge <PR번호> --squash --match-head-commit <확인한-head-SHA>
+gh pr merge <PR번호> --merge --match-head-commit <확인한-head-SHA>
 ```
 
-squash 메시지는 PR 제목·본문을 사용한다(설정 `PR_TITLE`/`PR_BODY`). 안전 경로 PR은 본문에서 줄 맨 앞에 실제 독립 검토의 `Safety-Review: <검토자/레인> <증거>`를 남긴다. 원본 커밋 trailer가 유실되면 main scope가 실패한다(#81→#82, #78→#86).
-
-검토 base/head와 근거를 담은 저장소 밖 파일을 `gh pr merge ... --body-file <본문파일>`로 전달하고, 병합 후 `git show -s --format=%B <병합-SHA>`로 실제 trailer를 확인한다. 빈 양식을 승인 근거로 쓰지 않는다. 유실 이력 복구는 독립 검토 후 `tools/harness/safety_review_exempt.json`에서 정확한 squash SHA를 원본 head와 연결한다.
+merge commit 병합은 브랜치의 원래 커밋과 그 `Safety-Review:` trailer를 그대로 `main`에 남긴다(D-868). 예전 squash 병합은 trailer를 지워 `tools/harness/safety_review_exempt.json`에 squash SHA를 원본 head와 이어 주는 항목이 필요했다(#81→#82, #78). 그 항목은 지우지 않는다.
 
 병합 상태·SHA와 기본 브랜치에 반영된 파일을 확인한다. 파일 존재와 실제 화면 확인은 구분하고, 로그인 등으로 화면을 확인하지 못했으면 그 한계를 남긴다. 공유 로컬 `main`은 임의로 reset·stash·clean하지 않는다. 다른 세션의 변경과 현재의 손실 없는 정리 규칙을 지킨다.
 
@@ -85,9 +97,7 @@ Fleet와 명시된 계정 SSO 여정 외의 CORE 브라우저 시험은 기본 �
 
 [2026-10-17 점검 기록](../validation/pipeline-audit-2026-10-17.md)에 실제 설정·CI 근거와 후속 조건을 남겼다. 당시 staging은 `HOLD`였고, 릴리스 게시의 `release` 환경과 필수 변수는 미구성이었다. 릴리스 실행 전에는 현재 설정을 다시 확인한다.
 
-이후 공개 `release` 승인 환경과 기존 파일럿 키 ID를 구성했다. 현재 설정과 실제 게시 전 조건은 [릴리스 키 운용 §7.0](../deployment/release-signing-key.md#70-파일럿-키와-게시-승인)을 따른다.
-
-병합 후 `modules` 잡의 OMX ROS 시험에서 새 실패를 관찰했다. [당시 실패 기록](../validation/pipeline-modules-2026-10-17.md)은 보존하고, 이후 조사는 [owner 스케줄링과 검증 범위](../validation/omx-owner-scheduling-2026-10-17.md)에서 확인한다. 판단할 때는 최신 head의 개별 잡과 미검증 조건을 함께 읽는다.
+병합 후 `modules` 잡의 OMX ROS 시험에서 새 실패를 관찰했다. [실패 기록과 후속 조건](../validation/pipeline-modules-2026-10-17.md)을 확인하며, 기존 실패나 해결 완료로 분류하지 않는다.
 
 ## GitHub 설정
 
@@ -99,7 +109,7 @@ Fleet와 명시된 계정 SSO 여정 외의 CORE 브라우저 시험은 기본 �
 | main 보호 | PR 필요, 삭제·force-push 제한, 관리자 우회도 PR 경로로 제한 |
 | 필수 검사 | `ci-result` |
 | 사람 승인 | 0명, code owner 승인 강제 꺼짐. `CODEOWNERS`의 리뷰 요청과 서버의 승인 강제는 구분 |
-| 병합 | squash만 허용, 병합 후 원격 브랜치 자동 삭제 |
+| 병합 | merge commit만 허용(D-868, 2026-10-25), 병합 후 원격 브랜치 자동 삭제 |
 | auto-merge·merge queue | auto-merge 꺼짐, ruleset에 queue 없음 |
 
 ```bash

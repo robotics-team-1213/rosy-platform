@@ -21,6 +21,7 @@ from .command_owner import (
 )
 from .pick_place.pick_place_runner import PhaseDispatch
 from .joint_state_intake import JointStateIntake
+from .watchdog_observation import intake_observation
 from .ros_goal_contract import RosGoalEvent
 from .ros_trajectory_action import (
     RosTrajectoryActionHandle,  # noqa: F401 - preserve the existing import path
@@ -113,14 +114,19 @@ class RosArmCommandRuntime:
             raise
 
     def _on_joint_state(self, message: JointState) -> None:
+        callback_entered = time.monotonic()
+        prior_attempt = self._joint_state_intake.last_attempt
         try:
             snapshot = self._joint_state_intake.snapshot(
                 message.name, message.position,
                 stamp_ns=message.header.stamp.sec * 1_000_000_000 + message.header.stamp.nanosec,
                 source_now_ns=self._node.get_clock().now().nanoseconds, received_at=self.monotonic())
         except (TypeError, ValueError, OverflowError):
-            # Invalid feedback never refreshes the existing stale-state HOLD timer.
+            self._record_joint_intake(callback_entered, prior_attempt)
+            # Rejected packets cannot refresh the state or watchdog. Loss of valid
+            # feedback reaches the existing stale-state HOLD and cancel path.
             return
+        self._record_joint_intake(callback_entered, prior_attempt)
         self.latest_joint_state = snapshot
         def deliver_owner(state):
             binding = self._policy_binding
@@ -133,6 +139,17 @@ class RosArmCommandRuntime:
                 binding.observe(snapshot)
             except Exception:
                 self.last_decision = binding.poll()
+
+    def _record_joint_intake(self, callback_entered, prior_attempt):
+        # Immutable publication happens before owner-lock acquisition, including rejection.
+        # It neither delivers a snapshot nor changes source/owner/wall freshness.
+        try:
+            facts = self._joint_state_intake.last_attempt
+            self.owner.joint_intake_observation = (None if facts is prior_attempt else intake_observation(
+                facts, callback_entered_steady=callback_entered, intake_observed_steady=time.monotonic(),
+                intake_sequence=self._joint_state_intake._sequence))
+        except Exception:
+            self.owner.joint_intake_observation = None
 
     def submit(self, command: TrajectoryCommand) -> CommandDecision:
         if self._policy_binding is not None:
@@ -218,6 +235,10 @@ class RosArmPhaseGoalPort:
         self.runtime = runtime
         self._lock = threading.RLock()
         self._command_by_goal: dict[str, tuple[str, str]] = {}
+
+    @property
+    def command_owner(self):
+        return self.runtime.owner
 
     def submit(
         self, command: TrajectoryCommand, *,

@@ -21,9 +21,10 @@ def test_the_hero_strip_has_a_formation_cell_that_starts_hidden():
 
 
 def test_the_formation_cell_hides_when_the_robot_has_no_role():
-    # hidden must win over the flex layout, or an empty cell takes map height.
-    css = (ROOT / "console-detail.css").read_text(encoding="utf-8")
-    assert ".hero-formation[hidden] { display: none; }" in css
+    # hidden must win over the flex layout, or an empty cell takes map height: the one shared rule does it.
+    shared = (ROOT.parents[2] / "shared" / "web" / "components.css").read_text(encoding="utf-8")
+    assert "[hidden] { display: none !important; }" in shared
+    assert ".hero-formation[hidden]" not in (ROOT / "console-detail.css").read_text(encoding="utf-8")
 
 
 def test_the_mode_control_speaks_korean():
@@ -176,7 +177,7 @@ def test_map_interaction_controls_explain_and_enforce_the_operator_boundary():
     assert 'el("ui-actions", "surface-actions map-layer-actions")' in script
     assert 'el("ui-actions", "surface-actions map-click-actions")' in script
     panel_styles = (ROOT / "panels" / "surface-panels.css").read_text(encoding="utf-8")
-    assert ".surface-link[hidden] { display: none; }" in panel_styles
+    assert ".surface-link[hidden]" not in panel_styles  # components.css owns [hidden]
     assert 'ui-button[kind="segment"][aria-pressed="true"]' in shared_controls
     assert "#shell-estop { flex: none; white-space: nowrap; }" in shell
     assert ".surface-actions:is(.map-click-actions, .map-layer-actions) > ui-button { flex: 1;" in shell

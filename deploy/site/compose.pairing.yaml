@@ -52,6 +52,19 @@ services:
       - /var/lib/rosy/fleet.sqlite3
       - --tasks-db
       - /var/lib/rosy/fleet.sqlite3
+      # D-796: additive advisory context/log mirror on the site host only. The
+      # fleet.sqlite3 ledger above stays the single source of truth; absent the
+      # service/secret the flags are simply not passed.
+      - --context-db-host
+      - postgres
+      - --context-db-port
+      - "5432"
+      - --context-db-name
+      - rosy_context
+      - --context-db-user
+      - rosy
+      - --context-db-password-file
+      - /run/secrets/postgres_password
       - --robot-credential-key-file
       - /run/secrets/robot_credential_key
       - --tls-cert

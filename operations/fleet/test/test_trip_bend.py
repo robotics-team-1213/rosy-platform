@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from fleet.routing.graph import build_graph
 from fleet.server.console_view import TripCaps, trip_caps
-from fleet.server.trip_ports import bend_geometry, line_past, straight_approach
+from fleet.server.trip_geometry import bend_geometry, line_past, straight_approach
 from fleet.site_map import SiteMap, SitePlace, from_lane_graph
 from test_trip_caps import _caps
 from test_trip_runner import LANE, LANE_GRAPH, _arc, _plan, _setup, _ticks, run
@@ -98,7 +98,8 @@ def test_bend_instruction_goes_out_only_on_the_bend_stretch():
     # 0.4 m along the lane, led by the top speed over the measured pose latency (0.2 m/s x 0.1 s);
     # no fixed send allowance: on top it began the arc 2 cm early (Gazebo m16/m17)
     assert fields["bend_in_m"] == pytest.approx(0.38, abs=0.005)
-    from fleet.server.trip_ports import TripConfig, bend_fields
+    from fleet.server.trip_geometry import bend_fields
+    from fleet.server.trip_ports import TripConfig
     assert TripConfig.from_mapping({"bend_send_s": 0.1}).bend_send_s == 0.1      # a site's measured send time leads more
     assert fields["bend_tol_m"] == pytest.approx(0.12, abs=0.001)         # the junction tol rule
     assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}
@@ -151,9 +152,9 @@ def test_without_the_capability_or_an_odom_stamp_the_bend_is_todays():
 
 def test_bend_fields_without_a_located_pose_carry_no_map_entry(monkeypatch):
     """Review 6: the capability alone is not enough; no pose passed in, no object."""
-    from fleet.server import trip_runner
-    real = trip_runner.bend_fields
-    monkeypatch.setattr(trip_runner, "bend_fields", lambda live, *args: real(live, *args[:4]))
+    from fleet.server import trip_steps
+    real = trip_steps.bend_fields
+    monkeypatch.setattr(trip_steps, "bend_fields", lambda live, *args: real(live, *args[:4]))
     fields = _trip(_bend_map(SW_BEND), ENTRY_CAPS, before=_stamped(1790000000.25))[2].expects[0]
     assert set(fields) == {"map_id", "bend_in_m", "bend_tol_m", "bend_radius_m"}
 
@@ -293,13 +294,13 @@ def test_no_bend_while_core_executes_another_instruction():
 
 
 def test_a_trip_closed_mid_step_sends_no_bend(monkeypatch):
-    from fleet.server import trip_runner
+    from fleet.server import trip_steps
 
     def closing(live, *args):
         live.view["state"] = "canceled"
         return real(live, *args)
-    real = trip_runner.bend_fields
-    monkeypatch.setattr(trip_runner, "bend_fields", closing)
+    real = trip_steps.bend_fields
+    monkeypatch.setattr(trip_steps, "bend_fields", closing)
     runner, store, ports, arc, s_start = _trip(_bend_map(SW_BEND))
     assert ports.sent == []
 

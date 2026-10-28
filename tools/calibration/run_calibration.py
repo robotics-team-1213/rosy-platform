@@ -50,14 +50,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "tools"))
+from data_paths import data_root  # noqa: E402
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / "contracts" / "foundation"))
 sys.path.insert(0, str(REPO / "learning" / "training" / "perception" / "dataset"))
 
 from core_common.robot_body import PINKY_PRO  # noqa: E402
 
-RAW = REPO / "data" / "perception" / "raw"
-STORE = REPO / "data" / "calibration"
+RAW = data_root(REPO) / "perception" / "raw"
+STORE = data_root(REPO) / "calibration"
 RATE_HZ = 10.0
 # D-424: clearance comes from the shared URDF body; a pivot keeps the D-422 body margin.
 BODY = PINKY_PRO

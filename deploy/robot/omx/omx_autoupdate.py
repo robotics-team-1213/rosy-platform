@@ -104,8 +104,9 @@ class Host:
 
     def build_env(self, lock: Path | None, target: Path) -> None:
         if lock is None:  # a service on the host's own packages
-            subprocess.run([self.cfg["base_python"], "-m", "venv", "--system-site-packages", str(target)],
-                           check=True, timeout=300)
+            make = ([os.path.expanduser(self.cfg["uv"]), "venv", "-q", "--python", self.cfg["base_python"]]
+                    if self.cfg.get("uv") else [self.cfg["base_python"], "-m", "venv"])
+            subprocess.run([*make, "--system-site-packages", str(target)], check=True, timeout=300)
             return
         system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
         if self.cfg.get("uv"):  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
@@ -291,6 +292,12 @@ class Updater:
             self.envs.mkdir(parents=True, exist_ok=True)
             self.host.build_env(lock, staging)
             os.replace(staging, target)
+            # A venv is not relocatable: console scripts keep "#!<staging>/bin/python" (2026-10-24:
+            # lerobot-teleoperate failed with ENOENT on the missing envs/<hash>.tmp interpreter).
+            old, new = str(staging).encode(), str(target).encode()
+            for script in (target / "bin").iterdir():
+                if script.is_file() and not script.is_symlink() and old in (data := script.read_bytes()):
+                    script.write_bytes(data.replace(old, new))
             log(step="env_built", env=name)
         return name
 

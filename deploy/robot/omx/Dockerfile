@@ -5,7 +5,7 @@ FROM ros:jazzy-ros-base
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV ROS_DISTRO=jazzy \
     ROS_DOMAIN_ID=30 \
-    ROS_LOCALHOST_ONLY=0 \
+    ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
     PYTHONDONTWRITEBYTECODE=1
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

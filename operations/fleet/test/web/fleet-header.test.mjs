@@ -2,14 +2,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON } from "../../../site_ui/console/shared/authorization.js";
+import { OPERATOR_REASON } from "../../../../applications/fleet/web/shared/authorization.js";
 // Header unit tests isolate authorization; shared icon rendering has real-browser coverage.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
   LATE_MS, SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, linkState, noteLink, roleLabel, showFleet,
   showInboxCount, showSession, showSignedOut, tickClock, watchFleet,
-} = await import("../../../site_ui/console/shared/fleet-header.js");
+} = await import("../../../../applications/fleet/web/shared/fleet-header.js");
 
 function fakeNode(id) {
   const attributes = new Map();
@@ -29,25 +29,18 @@ function fakeHeader() {
     "fleet-login", "fleet-account", "fleet-account-identity", "link-state"].map(id => [id, fakeNode(id)]));
   nodes["development-badge"].hidden = true;
   nodes["topbar-more"].setAttribute("aria-expanded", "false");
+  nodes["topbar-extra"].dataset.open = "false";  // the markup ships closed (D-741 3)
   globalThis.document = {getElementById: id => nodes[id], addEventListener() {}};
   return nodes;
 }
 
-test("one theme button cycles the shared choices; one status click toggles once", () => {
+test("one status click toggles once; the theme button is wired by the shared ui.js", () => {
   const nodes = fakeHeader();
-  let preference = "dark";
-  const choices = [{value: "dark", label: "dark", icon: "theme-dark"},
-    {value: "light", label: "light", icon: "theme-light"},
-    {value: "system", label: "system", icon: "theme-system"}];
-  globalThis.window = {RosyTheme: {choices, get: () => preference, set: value => {preference = value;}}};
   globalThis.MutationObserver = class { observe() {} };
   bindTopbarToggle();
   assert.match(nodes["topbar-more"].getAttribute("aria-label"), /^계정과 접속/);
   assert.equal(typeof nodes["fleet-inbox"].listeners.click, "function");
-  for (const value of ["light", "system", "dark"]) {
-    nodes["fleet-theme"].listeners.click();
-    assert.equal(preference, value);
-  }
+  assert.equal(nodes["fleet-theme"].listeners.click, undefined);
   nodes["topbar-more"].listeners.click();
   assert.equal(nodes["topbar-extra"].dataset.open, "true");
   nodes["topbar-more"].listeners.click();
@@ -107,7 +100,7 @@ test("a session shows its Korean role and title identity; a development session 
   assert.equal(nodes.estop.getAttribute("reason"), OPERATOR_REASON);
 });
 
-test("a refused session locks the E-stop and opens the fold once; a lost Fleet does not lock it", () => {
+test("a refused session locks the E-stop but leaves the account row closed; a lost Fleet does not lock it", () => {
   const nodes = fakeHeader();
   showSignedOut({refused: false});
   assert.equal(nodes["user-role"].textContent, "인증 필요");
@@ -117,12 +110,14 @@ test("a refused session locks the E-stop and opens the fold once; a lost Fleet d
   assert.equal(nodes["user-role"].getAttribute("status"), "crit");
   assert.equal(nodes.estop.disabled, true);
   assert.equal(nodes.estop.getAttribute("reason"), SESSION_REASON);
-  assert.equal(nodes["topbar-extra"].dataset.open, "true");
+  // D-741 3: the row stays closed; the guide strip's 관제 접속 opens it.
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");
 
+  nodes["topbar-extra"].dataset.open = "true";  // the operator opened it to enter access
   showSession({principal_id: "bob", role: "operator"});
   assert.equal(nodes.estop.disabled, false);
   assert.equal(nodes.estop.getAttribute("reason"), null);
-  assert.equal(nodes["topbar-extra"].dataset.open, "false");  // closed again: it opened for the lock
+  assert.equal(nodes["topbar-extra"].dataset.open, "false");  // a session folds it again
 });
 
 test("the shared press posts once and reports partial stops as an error", async () => {
@@ -187,13 +182,14 @@ test("only the request feeds the link word: a paint error after an answer is not
 
 test("the console counts every Fleet answer and keeps asking while signed out", async () => {
   const {readFile} = await import("node:fs/promises");
-  const source = await readFile(new URL("../../../site_ui/console/console.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../../../applications/fleet/web/console.js", import.meta.url), "utf8");
   const wrapper = source.slice(source.indexOf("const fleetClient ="), source.indexOf("async function call("));
   assert.match(wrapper, /fleetApi\(path, options\)\.then\(body => \{ noteLink\(\);/);  // every answer, 401/403 included
   assert.match(wrapper, /path === "\/api\/fleet\/state" \|\| error\.status < 500\) noteLink\(error\)/);
-  const refresh = await readFile(new URL("../../../site_ui/console/shared/console-refresh.js", import.meta.url), "utf8");
-  assert.match(source, /createConsoleRefresh\(\{/);
+  // D-798 3.2: the state poll lives in console-refresh.js; the cancel-all handler follows it there.
+  const refresh = await readFile(new URL("../../../../applications/fleet/web/console-refresh.js", import.meta.url), "utf8");
   const poll = refresh.slice(refresh.indexOf("async function refreshState("), refresh.indexOf("const CANCEL_ALL_RESULT"));
+  assert.ok(poll.length > 0);
   assert.match(poll, /if \(auth\.locked\) return void fleetApi\("\/api\/fleet\/auth\/connection"/);
   assert.doesNotMatch(poll, /noteLink\(err\)/);  // a throw after the answer (render) never paints 연결 끊김
 });

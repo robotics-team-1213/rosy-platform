@@ -31,6 +31,44 @@ Messages before startup or an unrecoverable session gap require manual readback
 and resubmission; an unresolved journal delivery stops reception on session loss.
 Resume the updater only after the configuration and running identities agree.
 
+## Context/log mirror store (D-796)
+
+The stack has a fourth service, `postgres`, as a derived context/log store. It is
+not the Fleet ledger: Fleet's task/ledger SQLite (`fleet.sqlite3`) stays the only
+source of truth (D-750), and the database here only mirrors the terminal runs of
+the D-640 deliberation journal. Fleet writes it best-effort after the SQLite
+commit; a missing or failing store never blocks a decision and never changes a
+ledger transaction.
+
+The console activates that sink through its `--context-db-*` flags (host, port, name,
+user, and the password file secret); without `--context-db-host` the mirror stays off
+and the process is SQLite-only.
+
+`postgres` joins only the internal Compose network. Do not publish its port and
+do not let robots, AI PCs, or model PCs connect to it directly — they reach Fleet
+over HTTPS/WSS as before. Fleet is the only client, over `postgres:5432`.
+
+Prepare the password before the first start, outside the checkout:
+
+```bash
+umask 077
+tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48 > "$ROSY_SITE_SECRETS_DIR/postgres_password"
+chown root:10001 "$ROSY_SITE_SECRETS_DIR/postgres_password"
+chmod 0440 "$ROSY_SITE_SECRETS_DIR/postgres_password"
+```
+
+Compose mounts it as the `postgres_password` secret into both `postgres`
+(`POSTGRES_PASSWORD_FILE`) and Fleet (psycopg `password_file`); the value never
+appears in `site.env`, argv, or logs. Keep the data in the named `pg_data`
+volume. `ROSY_SITE_PG_MAX_CONNECTIONS` bounds Fleet's connections. The service
+uses the repo image `rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:-local}`, built or
+mirrored from `postgres:16-alpine` by the candidate build. Because it is stock
+upstream, its hardening is weaker than Fleet/Vision; `read_only` with a tmpfs,
+dropped capabilities, `no-new-privileges`, and an internal-only network are the
+bounds. The signed candidate covers four images (Fleet, Vision, proxy,
+Postgres), and the updater checks the compose-config image pins, container
+health, and drift for all four.
+
 ## Where the control console runs
 
 ### Rosy Account activation (D-757)
@@ -81,9 +119,8 @@ ACCEPTANCE separately. Prepare these inputs before a maintenance transition:
 5. Confirm login, app return, an allowed operation, denied cross-resource access,
    persisted result readback and logout/revocation of existing sessions. On
    authority failure, distinguish local logout from pending central revocation.
-   Validate media against D-789's stricter online checks and actual connection
-   teardown on the deployed revision; the general five-minute Account limit is
-   not a media grace period. Record uninstalled media changes as pending.
+   Media follows D-789's stricter online checks and actual connection teardown;
+   the general five-minute Account limit is not a media grace period.
 6. Exercise restart, key rotation and recovery on an isolated copy before
    production recovery. Never restore a stale ledger that reactivates old
    passwords, revoked families or consumed refresh tokens. Retain the existing
@@ -117,8 +154,8 @@ TLS and Account signing keys. The candidate's `Caddyfile.account` retains
 verified Fleet backend TLS and serves the existing public app-link statements.
 
 The daily `rosy-account-tls-renew.timer` keeps that pair valid. It runs
-`account_tls_renew.py` from a release folder
-(`~/.local/share/rosy/account-tls/releases/<sha>/`), never from a preparation copy. The
+`account_tls_renew.py` from a release folder, never from a preparation copy. Since D-871 that is the
+auto-updated site-tools release: `ROSY_ACCOUNT_TLS_SOURCE=~/.local/share/rosy/site-tools/current/deploy/site/account_tls_renew.py`. The
 certificate folder (keys, `backups/`) is data and stays where it was prepared.
 `~/.config/rosy/account-tls.env` sets `ROSY_ACCOUNT_TLS_SOURCE` (the release script),
 `ROSY_ACCOUNT_TLS_CERTS` (that folder) and `ROSY_ACCOUNT_TLS_DOMAIN` (the approved
@@ -181,6 +218,15 @@ not proof of robot completion. Record the site host, client PC, image digest,
 certificate identity, config revision, and readback in the site validation
 record. These steps require the actual site host and devices for SITE/FIELD
 acceptance; local Compose checks establish only LOCAL behavior.
+
+Loop liveness is separate from process liveness (2026-10-27). `GET /readyz` on the
+Fleet service reports every background loop as `running`, `not_configured`, or
+`dead` — a dead loop makes it answer 503 with the loop names and counters. Keep
+`/healthz` for what consumes it today (the compose healthcheck, the mDNS
+advertise check, the autoupdate health gate): it keeps answering
+`{"status": "ok"}` while the process is up, and wiring any of those consumers to
+`/readyz` is a separate decision, not part of this stack. `/readyz` exposes names
+and counters only; it never echoes exception messages.
 
 ### Operator PC: resolve the name and verify trust before login
 
@@ -824,8 +870,11 @@ set-policy-admin /etc/rosy/site/site-users.yaml --principal <id> [--principal <i
 Deploy a Fleet that knows `policy_admin` before setting it: an older Fleet refuses the
 key at startup. All roles remain subject to CORE's local safety checks.
 
-Maintain `site-users.yaml` with `deploy/site/site_users.py` instead of an
-editor: `python3 deploy/site/site_users.py add /etc/rosy/site/site-users.yaml
+The signed candidate includes the host tool at
+`/opt/rosy/candidate/deploy/site/site_users.py`; it runs on the site host with
+Python 3 and PyYAML, without installing Fleet there. Maintain `site-users.yaml`
+with that tool instead of an editor:
+`sudo python3 /opt/rosy/candidate/deploy/site/site_users.py add /etc/rosy/site/site-users.yaml
 --principal <id> --role <operator|viewer|policy-admin> --token-stdin` pipes the
 raw token through stdin only (it never enters argv, `ps`, or logs), stores just
 its SHA-256 digest, and publishes atomically — temp file plus rename, then a
@@ -837,10 +886,23 @@ empty users list. After each write the tool applies `root:10001` mode `0440`
 itself when run as root, and otherwise prints the exact `chown`/`chmod` line
 to run.
 
+For a machine client, provision a distinct high-entropy token through the
+approved secret manager and privately pipe it to
+`sudo python3 /opt/rosy/candidate/deploy/site/site_users.py add-service
+/etc/rosy/site/site-users.yaml --principal <machine-id> --token-stdin`.
+Use `--dry-run` first. The token travels through stdin; never paste it into
+command arguments, shell history, logs, or chat. Deliver the same raw token to
+the client's protected credential store through the secret manager. The registry
+stores only its digest, and this command prints only the principal, fixed
+`service` role, outcome and ownership guidance. It grants the existing Fleet
+service permissions; it adds no operator, policy, or scoped grants. A service
+principal cannot have a Console login or password. `add` remains limited to its
+human-role whitelist; use the separate person login flow below for operators.
+
 For a human Console login, generate the password hash with the existing
 `python3 -m fleet.server.site_users hash-password` command in the Fleet
 environment. It prompts without echo on an interactive terminal. Supply the
-result through a private pipe to `sudo python3 deploy/site/site_users.py
+result through a private pipe to `sudo python3 /opt/rosy/candidate/deploy/site/site_users.py
 add-login /etc/rosy/site/site-users.yaml --principal <person-id> --role operator
 --login <login-id> --password-hash-stdin`. Do not put the password or hash in
 command arguments, logs, or chat. `--dry-run` validates without publishing;
@@ -857,7 +919,7 @@ manually restored file was published with group `101` instead of `10001`, and
 the watcher fed the unreadable file straight into a roughly two-minute Fleet
 crash loop (`unable to load site user credentials`). Never edit or restore
 this file by hand — always use `site_users.py`. Gate every automatic restart
-on `python3 deploy/site/site_users.py validate <file>` (YAML shape, digest
+on `python3 /opt/rosy/candidate/deploy/site/site_users.py validate <file>` (YAML shape, digest
 formats, permission bits, owning group; a non-zero exit means keep Fleet on
 the last good file and log instead of restarting).
 
@@ -998,6 +1060,33 @@ authenticate that same candidate: an unsigned replacement could replace both.
 The production site key ID and public key are not selected or present in this
 repository yet; until they are independently provisioned, host activation is
 HOLD.
+
+Candidates built with the service-token tool carry the signed manifest field
+`site_users_tool_required: true` and the hash of `deploy/site/site_users.py`.
+Before accepting these candidates, an administrator must refresh the independently
+installed verifier from the reviewed checkout through the trusted administrator
+path above. For the updater, use the reviewed-checkout installation procedure
+below; it imports the verifier installed beside it, never the candidate's copy.
+The previous verifier rejects the new tool as an unsupported deployment file.
+The updated verifier accepts historical signed candidates without the marker;
+when a tool is listed, its file and hash are always checked. A present marker
+must be literal `true`, and requires the tool and its hash. Removing or changing
+the marker also invalidates the manifest signature.
+
+Before enabling updates, run the independently installed verifier against the
+running candidate, each retained rollback candidate, and the new signed candidate.
+Use `--signature-only` for the new candidate before loading its images, then
+verify the loaded images as below. Historical running and rollback candidates
+must retain their original signed manifests; do not add the marker or tool to
+them. Record this transition matrix in host evidence:
+
+| Signed candidate | Updated verifier outcome |
+|---|---|
+| Historical, no marker and no tool | Accepted under the existing checks |
+| No marker, tool listed | Tool must exist and match its signed hash |
+| Marker `true`, tool listed | Tool must exist and match its signed hash |
+| Marker `true`, tool omitted | Rejected |
+| Marker present with any other value | Rejected |
 
 Copy the signed candidate to the approved Ubuntu host using the site's
 controlled transfer path. Verify its signature and files before Docker loads
@@ -1233,7 +1322,8 @@ beside the reviewed verifier from a reviewed checkout, never from a candidate:
 sudo install -o root -g root -m 0755 deploy/site/rosy_site_autoupdate.py \
   /usr/local/lib/rosy-site/rosy_site_autoupdate.py
 sudo install -o root -g root -m 0644 deploy/site/verify_candidate.py \
-  deploy/site/candidate_signing.py deploy/site/site_update_io.py /usr/local/lib/rosy-site/
+  deploy/site/candidate_signing.py deploy/site/site_update_io.py \
+  deploy/site/site_update_runtime.py /usr/local/lib/rosy-site/
 sudo install -o root -g root -m 0644 deploy/site/rosy-site-autoupdate.service \
   deploy/site/rosy-site-autoupdate.timer /etc/systemd/system/
 sudoedit /etc/rosy/site/autoupdate.conf   # JSON below, mode 0644, owner root
@@ -1282,7 +1372,7 @@ Each eligible candidate:
    existing real directory there is moved once to
    `/opt/rosy/candidates/<its commit>`), and restarts
    `rosy-site-stack.service`;
-5. waits up to `health_timeout_s` for `healthz` 200 and all three containers
+5. waits up to `health_timeout_s` for `healthz` 200 and the authenticated service set
    running, healthy, and on the new image. Otherwise it restores the previous
    symlink and `site.env`, restarts, and records the tag as failed. A failed
    tag is never retried automatically. Any exception during switching also
@@ -1302,9 +1392,27 @@ After fixing the cause of a failed tag, allow it again with
 This command takes the updater lock. An unreadable or malformed state file
 blocks changes and is preserved for operator recovery. Interrupted rollback
 requires the backup environment and signed previous candidate to match the journal.
-When `verify_candidate.py`, `candidate_signing.py`, or `site_update_io.py` change on `main`, the
-administrator reinstalls them by the same reviewed path; the updater never
-copies them from a candidate.
+
+D-887 preserves authentic legacy candidates with exactly Fleet, Vision and Proxy;
+new builds still contain those three services plus PostgreSQL. Verification reports
+the signed service set in both modes. Current, staged and rollback checks use each
+candidate's own Compose files and verified overlays without changing the active
+link or environment during staging. Normal cold rollback also freshly verifies
+the outgoing canonical candidate and loaded image references. Missing files or
+image proof keep recovery pending, even if cached identities remain.
+
+On four-to-three rollback, only PostgreSQL with the exact outgoing immutable
+container ID, signed image identity, project/service labels and Compose hash may
+be stopped and removed. No force or volume removal is used; hashless manual
+containers survive. Absence is rechecked before restoring the prior environment
+and link, and full incoming health must pass before the journal is cleared.
+The one-time physical-directory relocation is a separate same-commit journal;
+it verifies the original physical/previous directory and retires no service.
+Install the complete reviewed external helper set before a separately authorized
+operational migration; source tests do not establish site acceptance.
+When the updater, verifier, signing helper, I/O helper or `site_update_runtime.py`
+changes on `main`, the administrator reinstalls the complete five-file unit from the
+same reviewed commit by the path above; the updater never copies them from a candidate.
 
 ### Local maintenance and manual installation (D-441 follow-up)
 
@@ -1446,6 +1554,25 @@ Retain the command JSON output (including digest), backup filename, image
 digest, and timestamp in the site's deployment record; transfer copies using
 the approved encrypted path and verify them again after transfer. Define and
 enforce a site retention period before production operation.
+
+#### Daily automatic backups (ledger timer)
+
+The `rosy-site-ledger-backup.service`/`.timer` pair automates the same
+utility: once a day (`OnCalendar=daily`, persistent across downtime) it runs
+the compose `fleet-backup` profile service — the fleet image's `site_db.py`
+against the live volume, read-only — into the host bind
+`ROSY_SITE_BACKUP_DIR` (default `/var/backups/rosy-site`, the directory from
+the manual procedure above) and prunes to the newest 14 backups. Enable it
+once:
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 0700 /var/backups/rosy-site
+sudo systemctl enable --now rosy-site-ledger-backup.timer
+```
+
+The timer keeps only the operational SQLite ledger; keep transferring copies
+to the approved encrypted target as above — the retention here bounds disk
+use on the site host, it is not an off-site backup.
 
 Before relying on recovery, test the backup against a separate Compose project
 so it receives a different named `sighting_data` volume. The installed site
@@ -1818,14 +1945,17 @@ serial·model·포커스·잠금·상태를 다시 읽고, 서비스 상태가 �
 `started`/`stopped`다. 이 상태는 카메라 세션이며 Vision의 프레임 수신 증거가 아니다.
 `snapshot`은 폰 화면(미리보기·상태 문구)을 PNG로 받아 화각을 원격으로 확인할 때 쓴다.
 
-멈춘 송출을 사람 없이 다시 켜려면 관제 PC 사용자 계정에 타이머를 둔다. 스크립트와
-개인 설정은 `~/.local/share/rosy/cam-screen/`에 있어야 한다. 일부러 끄는 동안에는
+멈춘 송출을 사람 없이 다시 켜려면 관제 PC 사용자 계정에 타이머를 둔다. 개인 설정은
+`~/.local/share/rosy/cam-screen/cam-screen.json`에 둔다. 스크립트는 D-871부터 자동 업데이트되는
+site-tools 릴리스(`~/.local/share/rosy/site-tools/current/deploy/site/rosy_cam_screen.py`)에서 실행한다. 일부러 끄는 동안에는
 타이머를 먼저 멈춘다(`systemctl --user stop rosy-cam-stream.timer`).
 
 ```bash
 install -m 0644 deploy/site/rosy-cam-stream.service deploy/site/rosy-cam-stream.timer ~/.config/systemd/user/
 systemctl --user daemon-reload && systemctl --user enable --now rosy-cam-stream.timer
 ```
+
+**site-tools 자동 업데이트 (D-871).** `site-tools-autoupdate.json.example`을 `~/.config/rosy/site-tools-autoupdate.json`에 복사하고 `<owner>`를 채운다. 저장소 사본의 `deploy/robot/omx/omx_autoupdate.py --config ~/.config/rosy/site-tools-autoupdate.json run`을 한 번 실행하면 `current`가 생긴다. 그다음 `account-tls.env`의 `ROSY_ACCOUNT_TLS_SOURCE`를 `current` 경로로 바꾸고 `systemctl --user enable --now rosy-site-tools-autoupdate.timer`를 실행한다. 이후 업데이터는 30분마다 CI를 통과한 main을 받아 cam-stream과 account-tls 타이머만 다시 띄운다.
 
 CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Avahi의
 `_adb-tls-connect._tcp`에서 예상 serial의 후보를 찾아 변경된 포트로 재연결한다.
@@ -1955,6 +2085,26 @@ exit 64인지 확인한다. 기존 D-720 status wrapper와 config가 모두 없�
 거절은 항상 확인하며, 기존 status wrapper가 있으면 보호 metadata와 HOLD 응답도 확인한다.
 `optional_status_transport_checked`는 이 검사 여부이며 status 추론 admission을 뜻하지 않는다.
 이 검사는 추론·유료 provider 호출 없이 경로 접근과 sudo 경계를 검증한다.
+
+## 로봇 실시간 영상 서비스 (D-789)
+
+Fleet과 별도 Compose 프로젝트다. Fleet은 영상을 중계하지 않는다.
+
+```bash
+docker compose --env-file <site env> -f deploy/site/compose.media.yaml -p rosy-media up -d
+```
+
+- `ROSY_MEDIA_CONFIG_DIR`: `media-authority.json`(`media-authority.example.json` 형식), MediaMTX 관리 자격,
+  로봇별 media 공개키·CORE CA. `ROSY_SITE_SECRETS_DIR`에 `media_cert`·`media_key`.
+- `ROSY_MEDIA_HTTPS_PORT`, `ROSY_MEDIA_ICE_HOST`(사이트 LAN 주소), `ROSY_MEDIA_BIND_ADDRESS`, `ROSY_MEDIA_ICE_PORT`(UDP, 기본 8189).
+  `site-firewall.py`는 이 두 포트를 관리하지 않는다.
+- 로봇 CORE에는 `vision.media.site_url` 등을 설정하면 WebRTC가 기본이 되고(`enabled: false`로 끔),
+  로봇에 `/etc/rosy/media/rosy-media.json`(`deploy/robot/pinky_pro/native/rosy-media.example.json`)이 있으면
+  `rosy-media.service`가 발행한다. 둘 다 없으면 기존 JPEG다.
+- 장치·6대 현장 측정은 2026-10-18 사용자 결정으로 생략했다. 이 설치는 DEVICE/FIELD 수용이 아니다.
+- 관제 콘솔 로봇 영상(D-801): `/etc/rosy/fleet-media/`에 사이트 전용 Ed25519 키와 `fleet-media.json`
+  (`fleet-media.example.json` 형식)을 두고 `ROSY_FLEET_MEDIA_CONFIG=/run/rosy-fleet-media/fleet-media.json`을 준다.
+  미디어 권한 서비스 설정에 같은 키의 공개키를 `site_issuer`로 넣는다. 로봇은 CORE `vision.media.enabled: false`로 거부할 수 있다.
 
 ## Workcell observations
 

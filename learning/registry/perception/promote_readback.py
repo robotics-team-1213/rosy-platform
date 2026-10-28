@@ -4,8 +4,9 @@ After a successful push, rollback or promote, deliver.py appends one line to
 <journal-dir>/pointer-changes/pointer_changes.jsonl, adding no network step. With --readback it reads the moved
 pointer again and the node's latched status topic (perception/learned/status for lane_seg shadow,
 perception/learned/object_det/status for object_det active; D-423 §3.6) a few times and
-records whether the node's model_revision equals the pointer. Slots no node reads (object_det
-shadow, lane_seg paint) are recorded as "no_node".
+records whether the node's model_revision equals the pointer. Paint reads the next volatile
+line/keep_debug frame's consumed paint_model_revision and rechecks its pointer. Slots no
+node reads (object_det shadow) are recorded as "no_node".
 
 The record is evidence for people, never device acceptance; the exit code of the pointer change
 is unchanged by a readback result, so the site watcher's exit-code contract stays as it was.
@@ -16,6 +17,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import os
 import shlex
 import time
@@ -41,8 +43,8 @@ def pointer_command(root: str, slot: str) -> str:
     return f"sudo -n cat -- {root}/{slot}"
 
 
-def status_command(topic: str, timeout_s: int = 5) -> str:
-    """One latched status message; runtime.env is root-only (0600), so it is read under sudo.
+def status_command(topic: str, timeout_s: int = 5, *, durability="transient_local") -> str:
+    """One status message; runtime.env is root-only (0600), so it is read under sudo.
 
     The script is single-quoted so ``$ROSY_NAMESPACE`` expands in the root shell after
     runtime.env is sourced, not in the login shell ssh starts. The echo form follows
@@ -52,7 +54,7 @@ def status_command(topic: str, timeout_s: int = 5) -> str:
     inner = ("set -a; . /etc/rosy/runtime.env; set +a; . /opt/ros/jazzy/setup.bash; "
              'NS="${ROSY_NAMESPACE:+/$ROSY_NAMESPACE}"; '
              f"timeout {int(timeout_s)} ros2 topic echo --once --full-length --field data "
-             f'--qos-durability transient_local "$NS/{topic}" std_msgs/msg/String')
+             f'--qos-durability {durability} "$NS/{topic}" std_msgs/msg/String')
     return "sudo -n bash -c " + shlex.quote(inner)
 
 
@@ -61,8 +63,7 @@ def revision_of(pointer_text: str) -> str | None:
     return text.rsplit("/", 1)[-1] if text else None
 
 
-def parse_status(text: str) -> dict | None:
-    """The status JSON from `ros2 topic echo --field data` output, or None."""
+def _message(text: str) -> dict | None:
     body = (text or "").split("\n---", 1)[0].strip()
     if body.startswith("'") and body.endswith("'"):
         body = body[1:-1].replace("''", "'")  # YAML single-quoted scalar
@@ -72,7 +73,25 @@ def parse_status(text: str) -> dict | None:
         doc = json.loads(body)
     except ValueError:
         return None
-    return doc if isinstance(doc, dict) and doc.get("schema") == STATUS_SCHEMA else None
+    return doc if isinstance(doc, dict) else None
+
+
+def parse_status(text: str) -> dict | None:
+    """The versioned status JSON from `ros2 topic echo --field data`, or None."""
+    doc = _message(text)
+    return doc if doc is not None and doc.get("schema") == STATUS_SCHEMA else None
+
+
+def _paint_status(text: str) -> dict | None:
+    doc = _message(text)
+    if doc is None or doc.get("paint_source_used") not in ("learned", "learned_drivable"):
+        return None
+    revision, stamp = doc.get("paint_model_revision"), doc.get("stamp")
+    if (not isinstance(revision, str) or not revision.strip()
+            or isinstance(stamp, bool) or not isinstance(stamp, (int, float))
+            or not math.isfinite(stamp) or stamp < 0):
+        return None
+    return {"model_revision": revision}
 
 
 def verdict(pointer_revision: str | None, status: dict | None, topic: str | None) -> str:
@@ -89,13 +108,15 @@ def read_back(ssh, target: str, root: str, task: str, slot: str, runner, *,
     pointer = runner([*ssh, target, pointer_command(root, slot)], capture_output=True, text=True,
                      timeout=timeout, check=False)
     pointer_revision = revision_of(pointer.stdout) if pointer.returncode == 0 else None
-    topic = STATUS_TOPICS.get((task, slot))
+    paint = (task, slot) == ("lane_seg", "paint")
+    topic = "line/keep_debug" if paint else STATUS_TOPICS.get((task, slot))
     result = {"pointer_revision": pointer_revision, "node_revision": None, "signed": None}
     status = None
     for attempt in range(max(1, attempts) if topic else 0):
-        r = runner([*ssh, target, status_command(topic)], capture_output=True, text=True,
+        command = status_command(topic, durability="volatile" if paint else "transient_local")
+        r = runner([*ssh, target, command], capture_output=True, text=True,
                    timeout=timeout, check=False)
-        status = parse_status(r.stdout) if r.returncode == 0 else None
+        status = (_paint_status(r.stdout) if paint else parse_status(r.stdout)) if r.returncode == 0 else None
         if status is not None and status.get("model_revision") == pointer_revision:
             break
         if attempt + 1 < attempts:
@@ -103,6 +124,11 @@ def read_back(ssh, target: str, root: str, task: str, slot: str, runner, *,
     result.update(readback=verdict(pointer_revision, status, topic),
                   node_revision=(status or {}).get("model_revision"),
                   signed=(status or {}).get("signed") if isinstance((status or {}).get("signed"), bool) else None)
+    if paint:
+        after = runner([*ssh, target, pointer_command(root, slot)], capture_output=True, text=True,
+                       timeout=timeout, check=False)
+        if after.returncode != 0 or revision_of(after.stdout) != pointer_revision:
+            result["readback"] = "unavailable"
     return result
 
 

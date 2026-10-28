@@ -1130,3 +1130,27 @@ def test_a_busy_rung_is_not_retried_while_the_robot_checks():
     r1._state = candidates_state("r1", "r1-1")
     ticks(svc, clock, 0.5)
     assert len(r1.missions) == 2                                # retried once the check is over
+
+
+def test_spread_reads_cap_in_flight_and_start_each_robot_at_its_own_offset():
+    """Network load: N robots are not read at the same instant; at most max_reads at once."""
+    from fleet.swarm import read_spread
+    in_flight, peak = 0, 0
+
+    async def read(rid):
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.01)
+        in_flight -= 1
+        return {"robot_id": rid}
+
+    async def tick():
+        spread = read_spread.spread(read, 0.05, max_reads=2)
+        return await asyncio.gather(*(spread(f"r{i}") for i in range(6)))
+
+    assert [row["robot_id"] for row in run(tick())] == [f"r{i}" for i in range(6)]
+    assert peak <= 2
+    offsets = {read_spread.offset(f"r{i}", 0.05) for i in range(6)}
+    assert all(0 <= o < 0.05 for o in offsets) and len(offsets) > 1
+    assert read_spread.offset("r0", 0.05) == read_spread.offset("r0", 0.05)

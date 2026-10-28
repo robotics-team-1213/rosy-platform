@@ -1,0 +1,76 @@
+/* D-741 2 — 본문은 칸이다. 아래 60rem 접힘은 뷰포트가 아니라 레일과 하위 탐색(304px)을 뺀 본문 폭에 답한다(D-359 §6.3). 값의 이유는 surfaces.yaml에 있다. */
+main { container-type: inline-size; display: grid; gap: var(--space-4); padding: var(--space-4); max-width: 90rem; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
+ui-section { display: grid; gap: var(--space-3); }
+.map-workflow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "trip edit" "run edit"; gap: var(--space-4); align-items: start; }
+.map-workflow > [aria-labelledby="trip-heading"] { grid-area: trip; }
+.map-workflow > [aria-labelledby="run-heading"] { grid-area: run; }
+.map-workflow > [aria-labelledby="edit-heading"] { grid-area: edit; }
+.plane-tools { min-width: 0; }
+.survey-form { margin-block: var(--space-3); }
+.survey-elements { max-height: 16rem; overflow-y: auto; padding-inline-start: var(--space-5); }
+#site-map-svg .facility { fill: var(--surface-raised); stroke: var(--series-goal); stroke-width: 3px; }
+#site-map-svg .facility.exclusion { fill: var(--status-crit); fill-opacity: .12; stroke: var(--status-crit); stroke-dasharray: 5 3; }
+#site-map-svg .facility.stop-line { fill: none; stroke: var(--status-warn); stroke-width: 5px; }
+#site-map-svg .edge.inferred { stroke-dasharray: 2 6; }
+.plane-tools summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.plane-tools-body { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
+.form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+label { display: grid; gap: var(--space-2); }
+label.inline { display: inline-flex; flex: none; max-width: 100%; align-items: center; gap: var(--space-2); }
+ui-head:has(label.inline) { flex-wrap: wrap; align-items: center; }
+.ui-field:not([type="checkbox"], label.inline > *) { width: 100%; }  /* components.css caps fields at 100%; an inline label's select keeps its own width */
+a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.draft-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+a { color: var(--text-primary); }
+.map-viewport { min-width: 0; max-width: 100%; }
+.map-viewport:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.map-scroll-hint { display: none; }
+#site-map-svg { width: 100%; height: 30rem; background: var(--surface-flat); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
+#site-map-svg.picking { cursor: crosshair; }
+#site-map-svg .plane-border { fill: none; stroke: var(--ink-quiet); stroke-width: 1px; pointer-events: none; }
+#site-map-svg.has-plane .edge { stroke: var(--series-primary); }
+#site-map-svg .edge { fill: none; stroke: var(--ink-quiet); stroke-width: 3px; cursor: pointer; }
+#site-map-svg .edge.free { stroke-dasharray: 8 6; }
+#site-map-svg .edge.selected { stroke: var(--series-primary); stroke-width: 5px; }
+#site-map-svg .arrow { fill: var(--ink-quiet); pointer-events: none; }
+#site-map-svg .place { fill: var(--surface-raised); stroke: var(--ink); stroke-width: 2px; cursor: pointer; }
+#site-map-svg .place.start { fill: var(--series-secondary); }
+#site-map-svg .start-heading { fill: var(--series-secondary); stroke: var(--ink); stroke-width: 1px; pointer-events: none; }
+#site-map-svg .place.selected { stroke: var(--series-primary); stroke-width: 4px; }
+#site-map-svg .label { fill: var(--ink); font: var(--text-micro) var(--mono); pointer-events: none; }
+#site-map-svg .plan { fill: none; stroke: var(--series-goal); stroke-width: 6px; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+#site-map-svg .target { fill: var(--series-goal); pointer-events: none; }
+#site-map-svg .teach { fill: none; stroke: var(--series-secondary); stroke-width: 4px; stroke-dasharray: 2 4; stroke-linecap: round; pointer-events: none; }
+/* D-573 1/7: crosswalk areas (outline = no live state on this page) and waiting bands. */
+#site-map-svg .crosswalk { fill: var(--ink-quiet); fill-opacity: .12; stroke: var(--ink); stroke-width: 2px; stroke-dasharray: 5 3; cursor: pointer; }
+#site-map-svg .crosswalk.selected { stroke: var(--series-primary); stroke-width: 4px; }
+#site-map-svg .crosswalk-approach { fill: var(--series-secondary); fill-opacity: .18; stroke: var(--series-secondary); stroke-width: 2px; pointer-events: none; }
+#site-map-svg .band-draft { fill: none; stroke: var(--series-secondary); stroke-width: 3px; stroke-dasharray: 3 3; pointer-events: none; }
+#site-map-svg.drawing { cursor: crosshair; }
+#robot-layer { pointer-events: none; }
+#robot-layer .c1 { color: var(--robot-1); } #robot-layer .c2 { color: var(--robot-2); } #robot-layer .c3 { color: var(--robot-3); }
+#robot-layer .trip-line { fill: none; stroke: currentColor; stroke-width: 4px; stroke-opacity: .7; stroke-linecap: round; }
+#robot-layer .next-place { fill: none; stroke: currentColor; stroke-width: 3px; stroke-dasharray: 4 3; }
+#robot-layer .robot-ring { fill: none; stroke: currentColor; stroke-width: 1.5px; stroke-dasharray: 3 4; }
+#robot-layer .robot-body { fill: currentColor; fill-opacity: .35; stroke: currentColor; stroke-width: 2px; }
+#robot-layer .degraded .robot-body { fill-opacity: .18; stroke-dasharray: 4 3; }
+#robot-layer [data-alert="warn"] .robot-body { stroke: var(--status-warn); stroke-width: 3px; }
+#robot-layer [data-alert="crit"] .robot-body { stroke: var(--status-crit); stroke-width: 3px; }
+#robot-layer .offline { opacity: var(--disabled-opacity); }
+#robot-layer .robot-heading { stroke: currentColor; stroke-width: 3px; stroke-linecap: round; }
+#robot-layer .robot-tip { fill: currentColor; }
+#robot-layer .robot-label { fill: var(--ink); font: var(--text-micro) var(--mono); text-anchor: middle; paint-order: stroke; stroke: var(--surface-flat); stroke-width: 3px; }
+#trip-actions { margin: 0; padding-inline-start: var(--space-5); }
+#estop-feedback { margin: var(--space-2) var(--space-4) 0; }
+@container (width < 60rem) {
+  .map-workflow { grid-template-columns: minmax(0, 1fr); grid-template-areas: "trip" "run" "edit"; }
+  .form { grid-template-columns: 1fr; }
+  .map-viewport { overflow-x: auto; }
+  .map-scroll-hint { display: block; }
+  #site-map-svg { width: 50rem; height: 30rem; }
+}
+@media (width < 30rem) {
+  .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .draft-actions { grid-template-columns: minmax(0, 1fr); }
+}

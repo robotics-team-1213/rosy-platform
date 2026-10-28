@@ -29,10 +29,11 @@ from dataclasses import dataclass, field
 from typing import Mapping
 
 import websockets
+import cv2
 
 try:
     from websockets.asyncio.server import Server, ServerConnection, serve
-    from websockets.http11 import Headers, Response
+    from websockets.http11 import Response
 except ImportError as exc:  # apt python3-websockets on Ubuntu 24.04 is 10.x
     raise ImportError(
         f"overhead needs websockets>=14 (found {websockets.__version__}); "
@@ -40,13 +41,18 @@ except ImportError as exc:  # apt python3-websockets on Ubuntu 24.04 is 10.x
     ) from exc
 
 from rosy_vision import protocol
-from core_common.protocol.vision_preview import VisionLeaseSigner
+from rosy_vision.loops import LoopWatch, readyz_body
+from core_common.protocol.vision_preview import (
+    PreviewRectification, VisionLeaseError, VisionLeaseSigner,
+)
 from rosy_vision import map_worker
+from rosy_vision.ingest_status import MARKER_REPORT_TTL_S, marker_status, status_message  # noqa: F401
 from rosy_vision.map_register import MapPaint
 from rosy_vision.pairing_sync import PairedCredentials
-from rosy_vision import ingest_preview
-from rosy_vision.ingest_preview import _FieldRun, _MapRun, _http_response, _lens_text, FIELD_REPORT_TTL_S
+from rosy_vision.preview_plane import map_plane_response, rectified_jpeg
 from rosy_vision.stream_demand import StreamDemand
+from rosy_vision import ingest_proposals
+from rosy_vision.ingest_proposals import _FieldRun, _MapRun, _http_response  # noqa: F401 (moved; tests and measured_preview import them here)
 
 logger = logging.getLogger(__name__)
 # websockets logs every handshake header at DEBUG, the phone's Authorization included.
@@ -55,9 +61,9 @@ _WS_LOGGER = logging.getLogger(__name__ + ".websocket")
 _WS_LOGGER.setLevel(logging.INFO)
 
 STATUS_INTERVAL_S = 1.0
-# A marker report older than this is not repeated in ``status`` (worker stopped
-# detecting, e.g. frames went stale); the phone then sees empty lists again.
-MARKER_REPORT_TTL_S = 3.0
+# D-484: a field-calibration report older than this no longer rectifies the
+# preview (the worker stopped feeding detections; show the raw frame instead).
+FIELD_REPORT_TTL_S = 5.0
 # A peer that upgrades but never sends hello is closed after this long, counted in
 # steps of _HELLO_STEP_S so a stalled event loop cannot use the peer's time up.
 HELLO_TIMEOUT_S = 5.0
@@ -72,6 +78,10 @@ _MAX_SIZE_MARGIN = 64 * 1024
 # its transport is aborted. Runs in the background; never delays the new one.
 _REPLACED_CLOSE_TIMEOUT_S = 2.0
 _STATS_WINDOW_S = 1.0
+# Minimum spacing between one viewer's frame reads of one source.
+_FRAME_INTERVAL_S = 0.2
+# Field proposals (D-360) are operator-requested and CPU-bound: own, slower bucket.
+_FIELD_PROPOSAL_INTERVAL_S = 1.0
 # D-341 11: an upgrade refused because the paired-credential state is unknown asks the phone
 # to come back after one sync interval.
 _PAIRING_RETRY_AFTER_S = 2
@@ -166,6 +176,7 @@ class IngestServer:
                  source_widths: Mapping[str, int] | None = None) -> None:
         if not source_tokens and paired is None:
             raise ValueError("at least one source token or paired source is required")
+        self.loop_watch = LoopWatch()  # death-watch: /readyz 503 on a dead loop, /healthz untouched
         tokens = dict(source_tokens)
         if paired is not None:
             for source in paired.sources:
@@ -213,6 +224,8 @@ class IngestServer:
         self._sources: dict[str, _Source] = {}
         self._closing: set[asyncio.Task] = set()
         self._links = itertools.count(1)
+        from rosy_vision.measured_preview import MeasuredPreview
+        self.measured = MeasuredPreview()
         # D-691: authorized preview reads keep the phone sending for a hold.
         self._demand = StreamDemand()
         self._demand_tasks: set[asyncio.Task] = set()
@@ -249,6 +262,13 @@ class IngestServer:
     def source_lens(self, source: str) -> dict | None:
         """The lens ``source`` reported in its hello, or None (older app, or not connected)."""
         return getattr(self._sources.get(source), "lens", None)
+
+    def report_measured_config(self, source, config, map_id):
+        self.measured.update(source, config, map_id)
+
+    def measured_status(self, source):
+        from rosy_vision.measured_preview import current_status
+        return current_status(self, source)
 
     def camera_link(self, source: str) -> tuple[int | None, protocol.CameraState | None]:
         """D-589: (connection number, last valid camera_state) of ``source``; (None, None) when
@@ -290,18 +310,27 @@ class IngestServer:
         else:
             self._plane_records.pop(source, None)
 
-    _field_corners = ingest_preview._field_corners
-
-    def _marker_status(self, src: _Source) -> tuple[list[int], list[str]]:
-        if src.markers is None or time.monotonic() - src.markers[2] > MARKER_REPORT_TTL_S:
-            return [], []
-        return list(src.markers[0]), list(src.markers[1])
+    def _field_corners(self, source: str) -> tuple[tuple[tuple[float, float], ...], str] | None:
+        """Fresh auto-rectification corners and the calibration state, or None."""
+        src = self._sources.get(source)
+        report_state = getattr(src, "field", None) if src is not None else None
+        if report_state is None:
+            return None
+        report, at = report_state
+        if time.monotonic() - at > FIELD_REPORT_TTL_S:
+            return None
+        corners = report.get("corners_normalized")
+        if not isinstance(corners, list) or len(corners) != 4:
+            return None
+        return tuple(tuple(point) for point in corners), str(report.get("state", ""))
 
     # -- handshake --------------------------------------------------------
 
     async def _process_request(self, connection: ServerConnection, request):
         if request.path == "/healthz" and request.method == "GET":
             return connection.respond(200, '{"status":"ok"}\n')
+        if request.path == "/readyz" and request.method == "GET":
+            return connection.respond(*readyz_body(self.loop_watch))
         if request.path.startswith("/api/vision/sources/"):
             if request.method != "GET":
                 return _http_response(404, b"not found\n")
@@ -324,15 +353,115 @@ class IngestServer:
                                       extra={"Retry-After": str(_PAIRING_RETRY_AFTER_S)})
         return connection.respond(401, "unauthorized\n")
 
-    _preview_response = ingest_preview._preview_response
+    async def _preview_response(self, path: str, authorization: str | None) -> Response:
+        """Serve one authorized latest-frame read directly from Vision, never from Fleet."""
+        prefix = "/api/vision/sources/"
+        source, _, view = path[len(prefix):].partition("/") if path.startswith(prefix) else ("", "", "")
+        if (not source or view not in ("frame", "field-proposal", "map-proposal", "measured-status")
+                or self.preview_signer is None):
+            return _http_response(404, b"not found\n")
+        bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
+        try:
+            lease = self.preview_signer.verify(bearer, source_id=source)
+        except VisionLeaseError:
+            return _http_response(401, b"unauthorized\n")
+        # A missing, stale, or rate-limited frame is still a request (D-691).
+        self._note_stream_request(source)
+        if view == 'measured-status':
+            return _http_response(200, json.dumps(self.measured_status(source)).encode(), extra={
+                'Content-Type': 'application/json', 'Cache-Control': 'no-store'})
+        if view == "map-proposal" and self.map_paint is None:
+            return _http_response(404, b"site map paint not configured\n")
+        if view == "frame":
+            limited = self._rate_limited((str(lease["sub"]), source), _FRAME_INTERVAL_S)
+        else:
+            limited = self._rate_limited((str(lease["sub"]), source, view), _FIELD_PROPOSAL_INTERVAL_S)
+        if limited is not None:
+            return limited
+        frame = self.latest_frame(source)
+        if frame is None:
+            return _http_response(404, b"frame unavailable\n")
+        age = max(0.0, time.time() - frame.captured_at)
+        if age > self.preview_max_age_s:
+            return _http_response(404, b"frame stale\n", extra={"X-Frame-State": "stale"})
+        if view == "field-proposal":
+            return await self._field_proposal_response(source, frame)
+        if view == "map-proposal":
+            return await self._map_proposal_response(source, frame)
+        jpeg = frame.jpeg
+        if 'measured' in lease:
+            from rosy_vision.measured_preview import frame_response
+            return await frame_response(self, source, frame, lease)
+        rectified_header = "false"
+        extra_state: dict[str, str] = {}
+        if "rectification" in lease:
+            try:
+                settings = PreviewRectification.from_mapping(lease["rectification"])
+                if settings.mode == "map":
+                    return await self._map_plane_response(source, frame, age, lease)
+                if settings.mode == "auto":
+                    # D-484: swap the lease's corners for the calibration's accepted quad.
+                    field = self._field_corners(source)
+                    if field is None:
+                        return _http_response(200, frame.jpeg, extra={
+                            "Content-Type": "image/jpeg", "Cache-Control": "no-store",
+                            "X-Frame-Seq": str(frame.header.seq),
+                            "X-Frame-Age-Ms": str(round(age * 1000)),
+                            "X-Frame-Rectified": "false",
+                            "X-Frame-State": "field-unavailable",
+                            **_lens_header(self.source_lens(source)),
+                        })
+                    corners, calib_state = field
+                    settings = PreviewRectification(
+                        mode="manual",
+                        fx=settings.fx, fy=settings.fy, cx=settings.cx, cy=settings.cy,
+                        k1=settings.k1, k2=settings.k2, p1=settings.p1, p2=settings.p2,
+                        k3=settings.k3, corners=corners, output_aspect=settings.output_aspect)
+                    rectified_header = "auto"
+                    extra_state = {"X-Field-Calib": calib_state}
+                elif not settings.is_identity:
+                    rectified_header = "true"
+                if rectified_header != "false":
+                    jpeg = await rectified_jpeg(self, source, frame, settings)
+            except (TypeError, ValueError, cv2.error):
+                return _http_response(422, b"rectification failed\n",
+                                      extra={"X-Frame-State": "rectification-error"})
+        return _http_response(200, jpeg, extra={
+            "Content-Type": "image/jpeg", "Cache-Control": "no-store",
+            "X-Frame-Seq": str(frame.header.seq),
+            "X-Frame-Age-Ms": str(round(age * 1000)),
+            "X-Frame-Captured-At": str(frame.captured_at),
+            "X-Frame-Width": str(frame.header.width),
+            "X-Frame-Height": str(frame.header.height),
+            "X-Frame-Rotation-Deg": str(frame.header.rotation_deg),
+            "X-Frame-Rectified": rectified_header,
+            **extra_state,
+            **_lens_header(self.source_lens(source)),
+        })
 
-    _map_plane_response = ingest_preview._map_plane_response
+    async def _map_plane_response(self, source, frame, age, lease=None):
+        return await map_plane_response(self, source, frame, age, lease,
+                                        unavailable=_plane_unavailable, response=_http_response,
+                                        lens_header=_lens_header)
 
-    _rate_limited = ingest_preview._rate_limited
+    def _rate_limited(self, key: tuple[str, ...], interval_s: float) -> Response | None:
+        now_mono = time.monotonic()
+        previous = self._preview_last_sent.get(key)
+        if previous is not None and now_mono - previous < interval_s:
+            return _http_response(429, b"rate limited\n", extra={"Retry-After": "1"})
+        if len(self._preview_last_sent) >= 512:
+            self._preview_last_sent = {
+                item: stamp for item, stamp in self._preview_last_sent.items()
+                if now_mono - stamp < 10.0
+            }
+            if len(self._preview_last_sent) >= 512 and key not in self._preview_last_sent:
+                return _http_response(429, b"preview capacity reached\n",
+                                      extra={"Retry-After": "1"})
+        self._preview_last_sent[key] = now_mono
+        return None
 
-    _field_proposal_response = ingest_preview._field_proposal_response
-
-    _map_proposal_response = ingest_preview._map_proposal_response
+    _field_proposal_response = ingest_proposals._field_proposal_response
+    _map_proposal_response = ingest_proposals._map_proposal_response
 
     # -- per-connection lifecycle ------------------------------------------
 
@@ -405,7 +534,7 @@ class IngestServer:
             self._drop_if_current(source_name, connection)
             return
 
-        status_task = asyncio.create_task(self._status_loop(src))
+        status_task = self.loop_watch.supervised(f"status:{source_name}", self._status_loop(src))
         try:
             async for message in connection:
                 if isinstance(message, (bytes, bytearray)):
@@ -462,23 +591,12 @@ class IngestServer:
             self._map_done.pop(source_name, None)
             self._plane_cache.pop(source_name, None)
 
+    def _marker_status(self, src: _Source) -> tuple[list[int], list[str]]:
+        return marker_status(src, time.monotonic())
+
     def _status_message(self, src: _Source) -> dict:
-        snap = src.stats.snapshot()
-        corners_seen, robots_seen = self._marker_status(src)
-        # A field_boundary source calibrates from the floor boundary (D-484), not four
-        # corner markers: report its calibration state so the phone stops asking for markers.
-        field = src.field
-        field_state = (field[0].get("state") if field is not None
-                       and time.monotonic() - field[1] <= MARKER_REPORT_TTL_S else None)
-        return {
-            "type": "status",
-            "corners_seen": corners_seen,
-            "corners_needed": 0 if field_state is not None else 4,
-            "robots_seen": robots_seen,
-            "rx_fps": snap["rx_fps"],
-            "dropped": snap["dropped_bad_header"] + snap["oversize"],
-            "field_state": field_state,
-        }
+        return status_message(src.stats.snapshot(), *self._marker_status(src), src.field, time.monotonic(),
+                              MARKER_REPORT_TTL_S)
 
     async def _status_loop(self, src: _Source) -> None:
         while True:
@@ -554,6 +672,8 @@ class IngestServer:
             src.stats.oversize += 1
             return
         captured_at = now - header.age_ms / 1000.0
+        self.measured.observe(src.name, self.measured.session_id(src.link, src.name), {
+            'image_size': [header.width, header.height], 'rotation_deg': header.rotation_deg, 'lens': src.lens})
         src.latest = LatestFrame(header=header, jpeg=jpeg, captured_at=captured_at, received_at=now)
         src.stats.record_frame(now, len(jpeg), header.age_ms, header.seq)
 
@@ -582,3 +702,16 @@ async def _receive_hello(connection: ServerConnection):
 def _bearer_digest(authorization: str | None) -> bytes:
     bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
     return hashlib.sha256(bearer.encode("utf-8")).digest()
+
+
+def _lens_text(lens: dict) -> str:
+    return f"kind={lens['kind']};focal_mm={lens['focal_mm']:g};hfov_deg={lens['hfov_deg']:g}"
+
+
+def _lens_header(lens: dict | None) -> dict[str, str]:
+    """``X-Source-Lens`` for preview readers; absent when the app did not report a lens."""
+    return {"X-Source-Lens": _lens_text(lens)} if lens else {}
+
+
+def _plane_unavailable() -> Response:
+    return _http_response(409, b"map plane unavailable\n", extra={"X-Frame-State": "plane-unavailable"})

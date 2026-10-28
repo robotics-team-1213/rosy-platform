@@ -204,6 +204,33 @@ def test_pending_logout_does_not_revoke_new_login_family(authenticated_pipeline)
     assert core.get('/api/account/session').json()['authenticated']
 
 
+@pytest.mark.parametrize('authority_state', ['offline', 'revoked'])
+def test_account_media_revalidation_denies_authority_outage_and_revocation(
+        authenticated_pipeline, tmp_path, authority_state):
+    from core_api_web.api.media_binding import install_media
+    from test_media_grant_api import configured_media
+    core, fleet, sessions, _, receiver, _ = authenticated_pipeline
+    from fleet.server.password_session import COOKIE
+    install_media(core.app, {'vision': {'media': configured_media(tmp_path)}}, core.app.state.core)
+    origin = {'Origin': str(core.base_url).rstrip('/')}
+    path = '/api/v1/vision/media/grants'
+    grant = core.post(path, json={'robot_id': core.app.state.core.identity.robot_id}, headers=origin)
+    assert grant.status_code == 201
+    credential = grant.json()
+    if authority_state == 'revoked':
+        sessions.revoke(fleet.cookies[COOKIE])
+    else:
+        def unavailable(endpoint, fields):
+            raise AccountUnavailable()
+        receiver.post = unavailable
+    # Ordinary authentication still has a fresh cache; media must check the authority now.
+    assert core.get('/api/v1/auth/whoami').status_code == 200
+    checked = core.post('/api/v1/vision/media/validate',
+                       headers={'Authorization': 'Bearer ' + credential['token']})
+    assert checked.status_code == 200 and checked.json() == {'active': False}
+    assert core.post(path + '/' + credential['grant_id'] + '/renew', headers=origin).status_code == 403
+
+
 @pytest.mark.parametrize('revocation_outage', [False, True], ids=['normal', 'pending-revocation'])
 def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_path, revocation_outage):
     from browser_harness import browser_tests_enabled, launch_options
@@ -295,10 +322,9 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
                 page.get_by_text('로그아웃', exact=True).click()
                 expect(page.get_by_text('이 앱에서 로그아웃했습니다. 전체 세션 회수는 연결 복구 후 완료됩니다.', exact=True)).to_be_visible()
             else:
-                with page.expect_navigation(url=robot+'/pilot'):
-                    page.get_by_text('로그아웃', exact=True).click()
+                page.get_by_text('로그아웃', exact=True).click()
             expect(page.locator('[data-account-profile]')).to_be_hidden()
-            assert not context.request.get(robot+'/api/account/session').json()['authenticated']
+            assert not page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
             assert not failures, failures
         finally:
             browser.close()

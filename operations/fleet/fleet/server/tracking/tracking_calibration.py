@@ -146,6 +146,8 @@ class TrackingCalibrationStore:
     (``--sightings-db``), memory only otherwise (records are then lost on restart)."""
 
     def __init__(self, path: Path | str | None = None) -> None:
+        from .measured_calibration_store import MeasuredCalibrationStore
+        self.preview = MeasuredCalibrationStore(path)
         self.path = Path(path) if path is not None else None
         self._records: dict[str, CalibrationRecord] = {}
         if self.path is None:

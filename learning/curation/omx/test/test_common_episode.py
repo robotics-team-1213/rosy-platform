@@ -18,6 +18,22 @@ from rosy.contracts.learning import seal
 from rosy.contracts.learning.omx import validate_profile
 
 
+@pytest.mark.parametrize("linked", [False, True])
+def test_common_episode_refuses_output_in_any_checkout(tmp_path, linked):
+    original = tmp_path / "recordings"
+    manifest = complete_episode(original)
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    if linked:
+        (checkout / ".git").write_text("gitdir: elsewhere\n")
+    else:
+        (checkout / ".git").mkdir()
+    output = checkout / "nested" / "episode"
+    with pytest.raises(ValueError, match="outside the source checkout"):
+        convert(original / manifest["episode_id"], output)
+    assert not output.exists()
+
+
 def test_common_episode_roundtrip_keeps_source_clock_action_and_unknowns(tmp_path):
     original = tmp_path / "recordings"
     manifest = complete_episode(original)

@@ -112,6 +112,7 @@ def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(p
         'places': [], 'edges': [], 'survey': {'revision': 'reference-1', 'origin': [10, 20],
         'heading_rad': math.pi / 2, 'scale_source': 'odometry', 'description': 'Start at the marked origin'}}),
         expected_revision=None, principal_id='bob')
+    open_token_access(page)
     page.locator('#console-token').fill('operator-token')
     page.locator('#token-save').click()
     expect(page.locator('#draft-status')).to_contain_text('초안')
@@ -237,6 +238,7 @@ def test_rectangular_camera_coordinates_are_display_only(page_site):
     page.route("**/api/fleet/vision/lease", lambda route: route.fulfill(json={"lease": "preview-test", "frame_path": "/test-camera-frame"}))
     headers = {"X-Frame-Age-Ms": "10", "X-Frame-Rectified": "false"}
     page.route("**/test-camera-frame", lambda route: route.fulfill(body=encoded, content_type="image/png", headers=headers))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
@@ -318,6 +320,7 @@ def test_vision_map_plane_is_drawn_and_picked_by_its_scale_then_falls_back_on_40
     page.route("**/api/fleet/calibrations", lambda route: route.fulfill(json={"calibrations": [record]}))
     page.route("**/api/fleet/vision/lease", serve_lease)
     page.route("**/test-camera-frame", serve_frame)
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
@@ -362,6 +365,7 @@ def test_import_camera_map_draft_never_activates(page_site):
     from test_site_map_trip import _line
 
     page, store, robot = page_site
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
@@ -483,6 +487,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     expect(page).to_have_title("Rosy Fleet — 현장 지도")
     expect(page.locator("ui-brand")).to_contain_text("Fleet")
     expect(page.locator("ui-brand a")).to_have_attribute("aria-label", "Rosy Fleet 관제 홈")
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
@@ -551,6 +556,7 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
 def test_site_map_fits_declared_widths(page_site, width, height):
     page, _, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     from playwright.sync_api import expect
@@ -599,6 +605,7 @@ def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width,
     from playwright.sync_api import expect
 
     page, _, _ = page_site
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -649,6 +656,7 @@ def test_robot_safety_is_named_during_plan_only_preview(page_site, width, height
         status=200, content_type="application/json",
         body='{"robots":[{"robot_id":"rosy_60","online":true,"state":{"safety":'
              + ('{"estop":true}' if safety else 'null') + '}}]}'))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -664,6 +672,7 @@ def test_changing_trip_target_clears_old_plan_evidence(page_site):
     from playwright.sync_api import expect
 
     page, _, _ = page_site
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -681,6 +690,7 @@ def test_late_trip_response_cannot_restore_old_target(page_site):
     from playwright.sync_api import expect
 
     page, _, _ = page_site
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -704,6 +714,7 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
 
     page, _, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
+    open_token_access(page)
     page.locator("#console-token").fill("viewer-token")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "vic · viewer")
@@ -726,6 +737,7 @@ def test_failed_reconnect_clears_old_map_and_actions(page_site, width, height):
 
     page, _, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -758,6 +770,7 @@ def test_site_map_server_error_has_recovery_and_no_stale_controls(page_site, wid
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/site-map/active", lambda route: route.fulfill(
         status=503, content_type="application/json", body='{"detail":{"code":"SITE_MAP_UNAVAILABLE"}}'))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text("잠시 뒤 다시 접속")
@@ -780,6 +793,7 @@ def test_slow_site_map_load_shows_elapsed_wait(page_site, width, height):
 
     pending = []
     page.route("**/api/fleet/site-map/active", lambda route: pending.append(route))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#notice")).to_contain_text("접속 중")
@@ -802,6 +816,7 @@ def test_pending_map_read_then_disconnect(page_site, width, height):
     page.set_viewport_size({"width": width, "height": height})
     pending = []
     page.route("**/api/fleet/site-map/active", lambda route: pending.append(route))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("지도 조회 중")
@@ -829,6 +844,7 @@ def test_empty_site_map_names_the_next_step(page_site, width, height):
         status=404, content_type="application/json", body='{"detail":{"code":"SITE_MAP_NOT_ACTIVE"}}'))
     page.route("**/api/fleet/site-map/draft", lambda route: route.fulfill(
         status=200, content_type="application/json", body='{"map":null,"revision":null}'))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 없음")
@@ -853,6 +869,7 @@ def test_offline_robot_cannot_be_offered_for_trip_preview(page_site, width, heig
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=200, content_type="application/json",
         body='{"robots":[{"robot_id":"rosy_60","online":false}]}'))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -875,6 +892,7 @@ def test_connected_robot_can_be_selected_after_offline_robot(page_site):
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=200, content_type="application/json",
         body='{"robots":[{"robot_id":"rosy_99","online":false},{"robot_id":"rosy_60","online":true}]}'))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#trip-plan")).to_be_disabled()
@@ -891,6 +909,7 @@ def test_no_robot_explains_why_trip_preview_is_unavailable(page_site, width, hei
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=200, content_type="application/json", body='{"robots":[]}'))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -910,6 +929,7 @@ def test_robot_state_failure_keeps_loaded_map_and_names_missing_evidence(page_si
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=503, content_type="application/json", body='{"detail":"state unavailable"}'))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -929,6 +949,7 @@ def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
     page, _, _ = page_site
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=status, content_type="application/json", body='{"detail":"unauthorized"}'))
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("관제 접속 필요" if status == 401 else "지도 조회 실패")
@@ -943,6 +964,7 @@ def test_changed_draft_keeps_local_edits_and_conflict_after_reconnect(page_site,
 
     page, store, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
@@ -979,6 +1001,7 @@ def test_crosswalk_waiting_band_is_drawn_saved_and_deleted_on_the_draft(page_sit
     from playwright.sync_api import expect
 
     page, store, _robot = page_site
+    open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
@@ -1019,6 +1042,7 @@ def test_viewer_sees_crosswalks_without_band_tools(page_site):
     from playwright.sync_api import expect
 
     page, _store, _robot = page_site
+    open_token_access(page)
     page.locator("#console-token").fill("viewer-token")
     page.locator("#token-save").click()
     expect(page.locator("#site-map-svg [data-crosswalk]")).to_have_count(2)

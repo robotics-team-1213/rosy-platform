@@ -7,6 +7,7 @@ import time
 import uuid
 
 from g2_common import ClockProgress, canonical_digest
+from g2_placement_trace import PlacementTrace
 
 
 class Observations:
@@ -17,6 +18,7 @@ class Observations:
         self.gripper = None
         self.clock = None
         self.progress = ClockProgress(monotonic=lambda: time.monotonic())
+        self.placement_trace = PlacementTrace()
 
     def pose(self, message):
         received = time.time()
@@ -31,6 +33,23 @@ class Observations:
                     "x_m": float(item.position.x), "y_m": float(item.position.y),
                     "z_m": float(item.position.z), "roll_rad": roll,
                     "pitch_rad": pitch, "yaw_rad": yaw})
+                try:
+                    self.placement_trace.observe(item.name, self.models[item.name][1], wall=received,
+                        steady=time.monotonic(), sim_clock=self.clock[1] if self.clock else None)
+                except Exception:
+                    self.placement_trace.diagnostic_failure_count = min(
+                        self.placement_trace.diagnostic_failure_count + 1, 2**63-1)
+
+    def request(self, request):
+        operation = request.get('operation')
+        if operation in ('watch_placement', 'placement_trace'):
+            with self.lock:
+                if operation == 'watch_placement':
+                    self.placement_trace.watch(**{key: request[key] for key in
+                        ('model', 'action_id', 'attempt_id', 'baseline', 'baseline_observed_at', 'confirmation_seen_at')})
+                    return {'ok': True}
+                return {'ok': True, 'trace': self.placement_trace.snapshot()}
+        return {'ok': True, 'observation': self.read(request['model'], require_open=request['require_open'])}
 
     def joints(self, message):
         if "gripper_joint_1" in message.name:
@@ -103,8 +122,7 @@ def main():
                 return
             try:
                 request = json.loads(line)
-                result = {"ok": True, "observation": observations.read(
-                    request["model"], require_open=request["require_open"])}
+                result = observations.request(request)
             except (ValueError, KeyError, RuntimeError) as exc:
                 result = {"ok": False, "error": str(exc)}
             self.wfile.write(json.dumps(result, allow_nan=False).encode()+b"\n")

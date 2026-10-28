@@ -171,7 +171,9 @@ void VerifiedAmcl::receive(const nav_msgs::msg::OccupancyGrid::ConstSharedPtr & 
 {
   try {
     // Own the immutable original before hashing; none of this runs in readback.
-    auto captured = std::make_shared<const nav_msgs::msg::OccupancyGrid>(*message);
+    auto captured = capture_original(*message, [](const auto & original) {
+        return std::make_shared<const nav_msgs::msg::OccupancyGrid>(original);
+      });
     const auto identity = identify(*captured);
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     if (native_input_count_ == std::numeric_limits<uint64_t>::max()) {retire("counter_exhausted"); return;}

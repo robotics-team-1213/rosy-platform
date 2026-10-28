@@ -6,9 +6,53 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 
 from __future__ import annotations
 
+from .device_actions import (  # noqa: F401
+    DeviceActionState, DeviceActionPhaseReceipt, MissionPhaseProgress, LocalStopState,
+    StopRequestSource, ResolvedTargetEvidence, FleetActionGrant, DeviceActionReceipt,
+    DeviceActionLookup, DeviceActionCancelRequest, LocalStopRequest, LocalStopQuery,
+    LocalStopRearmRequest, LocalStopSnapshot)
+from .arm_transfer import ArmTransferCapability, ArmTransferPayload, FleetArmTransferGrant  # noqa: F401
+from .arm_transfer_jobs import (  # noqa: F401
+    ArmTransferRequest, ArmTransferRequestKey, ArmTransferJobCreate, ArmTransferJobAdmit,
+    ArmTransferJobSnapshot, ArmTransferJobResponse)
+from .wire_status import RobotMode, NavigationState, HealthState, Severity, AckStatus
+from .arm_transfer_observations import (  # noqa: F401
+    ArmObservationPose, ArmObservationBounds, ArmLinkObservation, ArmOwnerObservation,
+    ArmTransferObservation, ArmTransferObservationRequest, ArmTransferOwnerContext,
+    ArmTransferObservationContext, ArmTransferObservationContextResponse, ArmTransferPhysicalReceipt,
+    ArmTransferPhysicalReceiptResponse, ArmTransferObservationReply, ArmTransferCancelRequest)
+from .arm_transfer_recovery import (  # noqa: F401
+    ArmTransferRecoveryCreate, ArmTransferRecoveryApprove, ArmTransferRecoveryRequestSnapshot,
+    ArmTransferRecoveryRequestResponse, ArmTransferRecoveryPreview, ArmTransferRecoveryPreviewResponse,
+    ArmTransferRecoveryOwnerContext, ArmTransferRecoveryEvidenceContext, ArmTransferRecoveryContext,
+    ArmTransferRecoveryContextResponse, ArmTransferRecoveryObservationRequest,
+    ArmTransferRecoveryObservationReply, ArmTransferExecutionReview)
+
+from .arm_transfer_preflight import (  # noqa: F401
+    ArmTransferCheckRequest, ArmTransferCheckResult, ArmTransferCheckResponse, ArmTransferCheckRejection)
 from .account_access import AccountAccess, AccountGrant  # noqa: F401
-from .workcell_observations import ArmObservation, WorkcellObservationManifest  # noqa: F401 (D-837)
-from .site_drawing import RasterDrawingTransform, DrawingExtractionRequest, ExtractionSettings  # noqa: F401
+from .monitoring import FleetLinkObservation, FleetMonitoringRead  # noqa: F401
+from .trip_jobs import (TripJobRequest, TripJobStep, TripJobSnapshot, TripJobStepSnapshot,
+                        TripJobReadResponse, TripRequestKey)  # noqa: F401
+from .policy_admission import (  # noqa: F401
+    POLICY_ADMISSION_PRINCIPAL, PolicyAdmissionAuditEntry, PolicyAdmissionAuditResponse,
+    PolicyAdmissionReadResponse, PolicyAdmissionScope, PolicyAdmissionStatus,
+    PolicyAdmissionToggleRequest,
+)
+from .control_units import (  # noqa: F401
+    ControlGoal, ControlNavigationCandidate, ControlWorkRequest, ControlIngressRequest,
+    ControlApproveRequest, ControlDelegationState, ControlDelegationSnapshot, ControlUnitReply,
+)
+from .integrated_control import (  # noqa: F401
+    ControlDispatchFence, ControlMapRef, ControlUnitSummary, ControlOverview,
+    ControlRobotPose, ControlRobotInfo, ControlTaskInfo, ControlUnitDetail,
+    ControlMapPoint, ControlMapPlace, ControlMapLane, ControlMapSnapshot,
+    ControlStopRequest, ControlStopIngress, ControlStopUnitResult, ControlStopSnapshot,
+    ControlStopReconcile, ControlStopReference, ControlStopHistory,
+)
+from .navigation_cancel import NAVIGATION_ADMISSION_FENCE_VERSION, ScopedNavigationCancelRequest  # noqa: F401
+from .lamp import LampIdentifyRequest  # noqa: F401
+from .media_grants import MediaGrantRequest, MediaGrantResponse, MediaSourceGrantRequest  # noqa: F401
 from .channel_requests import (  # noqa: F401
     DiscordRequestEnvelope, ChannelRequestReceipt, ChannelRequestList, ChannelNavigationCandidate,
     ChannelReviewRequest, ChannelSubmitRequest, ChannelTaskLinkRequest, ChannelWorkflowView,
@@ -18,8 +62,6 @@ from .channel_requests import (  # noqa: F401
 
 import enum
 import json
-import math
-import re
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from uuid import uuid4
@@ -37,8 +79,7 @@ from core_common.protocol.power import (  # noqa: F401 (PWR-001~005, D-440)
 from core_common.protocol.swarm import SwarmRole, SwarmStatus, SwarmReferenceSource, SwarmFollowParams  # noqa: F401
 from core_common.protocol.evidence import EvidenceState, HostStatusEvidence, ValueEvidence
 from core_common.protocol.line_stuck import LineStuckPrecondition  # noqa: F401
-from core_common.protocol.work import (  # noqa: F401
-    FleetTaskStatus, FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary, FleetWorkWait)
+from core_common.protocol.work import FleetTaskStatus, FleetWorkDecisionRequest, FleetWorkOverview, FleetWorkSummary, FleetWorkWait  # noqa: F401
 from core_common.protocol.fleet_judgment import FleetJudgmentReceipt, FleetObservedClosure  # noqa: F401
 from core_common.protocol.network_peers import DiscoveryScanPayload  # noqa: F401
 from core_common.protocol.route_context import RouteContext
@@ -73,382 +114,6 @@ def new_msg_id() -> str:
 
 
 # --- 공용 enum (API Ref §4) ----------------------------------------------
-
-class RobotMode(str, enum.Enum):
-    IDLE = "IDLE"
-    MANUAL = "MANUAL"
-    NAVIGATION = "NAVIGATION"
-    DOCKING = "DOCKING"
-    EMERGENCY = "EMERGENCY"
-
-
-class NavigationState(str, enum.Enum):
-    IDLE = "IDLE"
-    PLANNING = "PLANNING"
-    NAVIGATING = "NAVIGATING"
-    ARRIVED = "ARRIVED"
-    CANCELED = "CANCELED"
-    FAILED = "FAILED"
-    BLOCKED = "BLOCKED"
-
-
-class HealthState(str, enum.Enum):
-    OK = "OK"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    UNKNOWN = "UNKNOWN"
-
-
-class Severity(str, enum.Enum):
-    INFO = "info"
-    WARNING = "warning"
-    ERROR = "error"
-    CRITICAL = "critical"
-
-
-class AckStatus(str, enum.Enum):
-    ACCEPTED = "ACCEPTED"
-    STARTED = "STARTED"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
-
-
-class DeviceActionState(str, enum.Enum):
-    """Durable local Action journal state; independent of Mission goal evidence."""
-
-    PREPARED = "PREPARED"
-    SUBMITTING = "SUBMITTING"
-    ACCEPTED = "ACCEPTED"
-    RUNNING = "RUNNING"
-    CANCEL_REQUESTED = "CANCEL_REQUESTED"
-    UNKNOWN = "UNKNOWN"
-    SUCCEEDED = "SUCCEEDED"
-    FAILED = "FAILED"
-    HOLD = "HOLD"
-
-
-class DeviceActionPhaseReceipt(BaseModel):
-    """Allowlisted ROS phase snapshot; excludes goal IDs and motion data."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    phase_id: Literal["approach", "grasp", "transfer", "release"]
-    ordinal: int = Field(strict=True, ge=0, le=3)
-    state: Literal[
-        "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED",
-        "UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED",
-    ]
-    journal_event_id: int = Field(strict=True, ge=1)
-    observed_at: datetime
-
-    @field_validator("observed_at")
-    @classmethod
-    def _phase_time_aware(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("phase observed_at must include a timezone")
-        return value
-
-    @model_validator(mode="after")
-    def _phase_identity_matches_ordinal(self):
-        expected = ("approach", "grasp", "transfer", "release")[self.ordinal]
-        if self.phase_id != expected:
-            raise ValueError("phase ID does not match its fixed ordinal")
-        return self
-
-
-class MissionPhaseProgress(BaseModel):
-    """Read-only Mission projection of one device phase."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    phase_id: Literal["approach", "grasp", "transfer", "release"]
-    ordinal: int = Field(strict=True, ge=0, le=3)
-    state: Literal[
-        "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED",
-        "UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED",
-    ]
-    last_event_id: int = Field(strict=True, ge=1)
-    observed_at: datetime
-
-
-class LocalStopState(str, enum.Enum):
-    """Software latch facts only. No value means physical standstill is proven."""
-
-    OPEN = "OPEN"
-    REQUESTED = "REQUESTED"
-    LOCAL_LATCHED = "LOCAL_LATCHED"
-    UNKNOWN = "UNKNOWN"
-
-
-class StopRequestSource(str, enum.Enum):
-    FLEET = "fleet"
-    OPERATOR_LOCAL = "operator_local"
-    COORDINATOR = "coordinator"  # D-780 2: workcell coordinator peer; reason codes in workcell_barrier
-
-
-class ResolvedTargetEvidence(BaseModel):
-    """Pixel-level object identity evidence tied to one camera observation."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    object_id: str = Field(min_length=1, max_length=128)
-    observation_id: str = Field(min_length=1, max_length=160)
-    frame_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    camera_identity: str = Field(min_length=1, max_length=160)
-    optical_frame_id: str = Field(min_length=1, max_length=160)
-    calibration_revision: str = Field(min_length=1, max_length=128)
-    transform_revision: str = Field(min_length=1, max_length=128)
-    capture_time_ns: int = Field(strict=True, gt=0)
-    selector_kind: str = Field(pattern=r"^(object_id|inventory_id|label|relation|point|bbox)$")
-    image_bbox_xyxy: tuple[float, float, float, float]
-
-    @field_validator("object_id", "observation_id", "camera_identity", "optical_frame_id",
-                     "calibration_revision", "transform_revision")
-    @classmethod
-    def _trimmed_evidence_id(cls, value: str) -> str:
-        if value != value.strip() or not value:
-            raise ValueError("evidence identities and revisions must be non-empty and trimmed")
-        return value
-
-    @field_validator("image_bbox_xyxy", mode="before")
-    @classmethod
-    def _bbox_numbers(cls, value):
-        if (not isinstance(value, (list, tuple)) or len(value) != 4
-                or any(isinstance(item, bool) for item in value)):
-            raise ValueError("image_bbox_xyxy must contain four finite pixel coordinates")
-        try:
-            result = tuple(float(item) for item in value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("image_bbox_xyxy must contain four finite pixel coordinates") from exc
-        if not all(math.isfinite(item) for item in result):
-            raise ValueError("image_bbox_xyxy must contain four finite pixel coordinates")
-        return result
-
-    @field_validator("image_bbox_xyxy")
-    @classmethod
-    def _bbox_increasing(cls, value: tuple[float, float, float, float]):
-        if value[0] < 0 or value[1] < 0 or value[0] >= value[2] or value[1] >= value[3]:
-            raise ValueError("image_bbox_xyxy must be non-negative and increasing")
-        return value
-
-
-class FleetActionGrant(BaseModel):
-    """Short-lived Fleet authority to prepare one local, fixed-workcell Action."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    mission_id: str = Field(min_length=1, max_length=192)
-    step_id: str = Field(min_length=1, max_length=192)
-    action_id: str = Field(min_length=1, max_length=192)
-    attempt_id: str = Field(min_length=1, max_length=192)
-    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    workcell_id: str = Field(min_length=1, max_length=96)
-    instance_id: str = Field(min_length=1, max_length=96)
-    action_kind: str = Field(pattern=r"^PICK_PLACE$")
-    source_evidence: ResolvedTargetEvidence
-    destination_evidence: ResolvedTargetEvidence
-    capability_revision: str = Field(min_length=1, max_length=128)
-    config_revision: str = Field(min_length=1, max_length=128)
-    observation_revision: str = Field(min_length=1, max_length=128)
-    authority_epoch: int = Field(strict=True, ge=0)
-    dispatch_generation: int = Field(strict=True, ge=0)
-    issued_at: datetime
-    expires_at: datetime
-
-    @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id",
-                     "instance_id", "capability_revision", "config_revision", "observation_revision")
-    @classmethod
-    def _identifier(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("identity must be a trimmed identifier")
-        return value
-
-    @model_validator(mode="after")
-    def _grant_consistency(self):
-        identities = (self.mission_id, self.step_id, self.action_id, self.attempt_id)
-        if len(set(identities)) != len(identities):
-            raise ValueError("mission, step, action and attempt identifiers must be distinct")
-        source, destination = self.source_evidence, self.destination_evidence
-        same_observation = (
-            source.observation_id == destination.observation_id
-            and source.frame_sha256 == destination.frame_sha256
-            and source.camera_identity == destination.camera_identity
-            and source.optical_frame_id == destination.optical_frame_id
-            and source.calibration_revision == destination.calibration_revision
-            and source.transform_revision == destination.transform_revision
-            and source.capture_time_ns == destination.capture_time_ns
-        )
-        if not same_observation:
-            raise ValueError("source and destination must cite the same observation")
-        if source.object_id == destination.object_id:
-            raise ValueError("source and destination must identify distinct objects")
-        if (self.issued_at.tzinfo is None or self.expires_at.tzinfo is None
-                or self.expires_at <= self.issued_at):
-            raise ValueError("grant expiry must follow an aware issuance timestamp")
-        return self
-
-
-class DeviceActionReceipt(BaseModel):
-    """Local journal receipt; driver success and Mission goal are separate facts."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    mission_id: str = Field(min_length=1, max_length=192)
-    step_id: str = Field(min_length=1, max_length=192)
-    action_id: str = Field(min_length=1, max_length=192)
-    attempt_id: str = Field(min_length=1, max_length=192)
-    workcell_id: str = Field(min_length=1, max_length=96)
-    instance_id: str = Field(min_length=1, max_length=96)
-    request_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    authority_epoch: int = Field(strict=True, ge=0)
-    dispatch_generation: int = Field(strict=True, ge=0)
-    state: DeviceActionState
-    journal_event_id: int = Field(strict=True, ge=1)
-    observed_at: datetime
-    driver_goal_id: str | None = Field(default=None, max_length=192)
-    reason: str | None = Field(default=None, max_length=256)
-    created: bool = False
-    phase_summaries: tuple[DeviceActionPhaseReceipt, ...] | None = Field(default=None, max_length=4)
-    journal_id: str | None = Field(default=None, max_length=64)  # owner journal identity (C4b 1d)
-
-    @field_validator("mission_id", "step_id", "action_id", "attempt_id", "workcell_id", "instance_id")
-    @classmethod
-    def _receipt_identifier(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("receipt identity must be a trimmed identifier")
-        return value
-
-    @field_validator("observed_at")
-    @classmethod
-    def _receipt_time_aware(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("observed_at must include a timezone")
-        return value
-
-    @model_validator(mode="after")
-    def _phase_summaries_are_ordered(self):
-        if self.phase_summaries is not None:
-            ordinals = [phase.ordinal for phase in self.phase_summaries]
-            if ordinals != list(range(len(ordinals))):
-                raise ValueError("phase summaries must be contiguous and ordered")
-            if any(phase.journal_event_id > self.journal_event_id
-                   for phase in self.phase_summaries):
-                raise ValueError("phase event cannot follow the receipt journal watermark")
-        return self
-
-
-class DeviceActionLookup(BaseModel):
-    """Identity pair for attempt-scoped operations, including cancellation."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    action_id: str = Field(min_length=1, max_length=192)
-    attempt_id: str = Field(min_length=1, max_length=192)
-
-    @field_validator("action_id", "attempt_id")
-    @classmethod
-    def _lookup_identifier(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("lookup identity must be a trimmed identifier")
-        return value
-
-
-class DeviceActionCancelRequest(DeviceActionLookup):
-    """Request cancellation of the matching driver goal; ACK is not stop proof."""
-
-    reason: str = Field(min_length=1, max_length=256)
-    requested_at: datetime
-
-    @field_validator("requested_at")
-    @classmethod
-    def _cancel_time_aware(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("requested_at must include a timezone")
-        return value
-
-
-class LocalStopRequest(BaseModel):
-    """A software stop request fenced to one workcell and dispatch generation."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    workcell_id: str = Field(min_length=1, max_length=96)
-    instance_id: str = Field(min_length=1, max_length=96)
-    authority_epoch: int = Field(strict=True, ge=0)
-    dispatch_generation: int = Field(strict=True, ge=0)
-    requested_at: datetime
-    reason: str = Field(min_length=1, max_length=256)
-
-    @field_validator("workcell_id", "instance_id")
-    @classmethod
-    def _request_stop_identity(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("stop identity must be a trimmed identifier")
-        return value
-
-    @field_validator("requested_at")
-    @classmethod
-    def _stop_time_aware(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("requested_at must include a timezone")
-        return value
-
-
-class LocalStopQuery(BaseModel):
-    """Read the latched software stop state for exactly one workcell instance."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    workcell_id: str = Field(min_length=1, max_length=96)
-    instance_id: str = Field(min_length=1, max_length=96)
-
-    @field_validator("workcell_id", "instance_id")
-    @classmethod
-    def _query_stop_identity(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("stop query identity must be a trimmed identifier")
-        return value
-
-
-class LocalStopRearmRequest(BaseModel):
-    """Fleet-only signal to reopen local dispatch after operator reconciliation."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    workcell_id: str = Field(min_length=1, max_length=96)
-    instance_id: str = Field(min_length=1, max_length=96)
-    authority_epoch: int = Field(strict=True, ge=0)
-    dispatch_generation: int = Field(strict=True, ge=0)
-
-    @field_validator("workcell_id", "instance_id")
-    @classmethod
-    def _rearm_stop_identity(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("stop rearm identity must be a trimmed identifier")
-        return value
-
-
-class LocalStopSnapshot(BaseModel):
-    """Stop request/latch projection without driver or physical completion claims."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    workcell_id: str = Field(min_length=1, max_length=96)
-    instance_id: str = Field(min_length=1, max_length=96)
-    authority_epoch: int = Field(strict=True, ge=0)
-    dispatch_generation: int = Field(strict=True, ge=0)
-    state: LocalStopState
-    source: StopRequestSource
-    observed_at: datetime
-    reason: str = Field(min_length=1, max_length=256)
-
-    @field_validator("workcell_id", "instance_id")
-    @classmethod
-    def _stop_identity(cls, value: str) -> str:
-        if not _ACTION_ID.fullmatch(value):
-            raise ValueError("stop identity must be a trimmed identifier")
-        return value
-
 
 # --- Envelope (API Ref §7.1, PRT-001) ------------------------------------
 
@@ -755,284 +420,12 @@ class WelcomePayload(BaseModel):
 
 # --- Heartbeat (API Ref §7.3, PRT-003) ------------------------------------
 
-class Pose(BaseModel):
-    x: float = 0.0
-    y: float = 0.0
-    yaw: float = 0.0
-
-
-class Velocity(BaseModel):
-    linear: float = 0.0
-    angular: float = 0.0
-
-
-class Battery(BaseModel):
-    """Raw battery reading. `None` means no reading has arrived yet.
-
-    A missing reading is not 0% (D-82 Law 0): 0% reads as a flat battery, a
-    false critical alarm on a robot whose battery source simply is not running.
-    """
-
-    percent: Optional[float] = None
-    voltage: Optional[float] = None
-
-
-class BatteryLevel(str, enum.Enum):
-    """SAF-005 경보 단계. DEEP만 신설이고 나머지는 기존 임계 그대로다."""
-
-    OK = "ok"
-    WARNING = "warning"        # SAF-005 경고 — 기본 20%
-    CRITICAL = "critical"      # SAF-005 크리티컬 — 기본 10%
-    DEEP = "deep"              # 모터 정지 후 호스트 셧다운 (D-27)
-
-
-class BatteryStatus(BaseModel):
-    """필터를 통과한 배터리 판정. `battery`(생 percent/voltage)와 별개로 붙는다.
-
-    `filtered_voltage`는 저역통과를 거친 값이라 `battery.voltage`와 다를 수 있다.
-    전류 센싱이 없으므로 percent는 어디까지나 추정치다.
-    """
-
-    level: BatteryLevel = BatteryLevel.OK
-    shutdown_armed: bool = False
-    filtered_voltage: Optional[float] = None
-    charging: bool = False      # 확인된 충전 — DEEP 셧다운을 억제한다 (D-27)
-    shown_percent: Optional[float] = None  # D-688 display estimate; percent stays the live policy value
-
-
-class SafetySummary(BaseModel):
-    estop: bool = False
-
-
-# --- 절전/근접 웨이크 (PWR-001~004, D-24) -----------------------------------
-
-# --- Swarm (D-20, SWM-001~006, API Ref §7.8) --------------------------------
-
-class PoseSample(BaseModel):
-    """Leader Pose Stream payload (SWM-003, ≥10 Hz)."""
-
-    robot_id: str
-    pose: Pose
-    seq: int
-    #: v1.7 additive. 어느 맵의 좌표인지 — 없으면 확인하지 않는다(구 릴레이 호환).
-    map_id: Optional[str] = None
-    frame: Optional[Literal["map", "odom"]] = None  # D-559 additive; trail drops "odom" samples
-    #: D-581 additive. "fleet": Fleet re-expressed the leader in `for_robot_id`'s own odom frame
-    #: from ceiling-camera anchors (frame "odom"); only that follower's trail accepts it.
-    anchor: Optional[Literal["fleet"]] = None
-    for_robot_id: Optional[str] = None
-    anchor_age_s: Optional[float] = None  # oldest of the two camera anchors behind this sample
-    anchor_hold: Optional[str] = None  # set: Fleet has no usable anchor (why); hold, keep the stream
-
-
-class LineStuckStatus(BaseModel):
-    """D-407 open lane stuck: the console answers it by ``stuck_id``."""
-
-    stuck_id: str
-    cause: str  # obstacle_ahead | lane_lost | crosswalk_blocked (D-573 4) | no_motion | no_progress | dithering (D-607)
-    phase: str                            # ASKING | WAITING_CONSOLE | BACKING | SETTLING
-    held_s: float = 0.0
-    attempts: int = 0
-    max_attempts: int = 0
-    local_enabled: bool = False
-    conditional_back: bool = False  # D-718: absent on old CORE; no conditional POST admission
-    ask_remaining_s: Optional[float] = None   # None = console answer only, no local fallback
-    last_answer: Optional[str] = None
-    decisions: list[str] = Field(default_factory=list)
-    # D-573 4 crosswalk_blocked: person_present | look_unknown | sensor_stale | zone_lost; else the (last) HOLD reason
-    detail: Optional[str] = None
-    inquiry: Optional[dict] = None  # D-623 current typed situation context; not execution permission
-
-
-class LineJunctionStatus(BaseModel):
-    """D-494 decision 4 / D-495: the one pending next-junction instruction and its progress."""
-
-    pending_action: Optional[str] = None  # straight | left | right | stop
-    place_id: Optional[str] = None
-    state: str = "idle"  # API ref line_follow.junction.state list (D-507: approaching, unexpected)
-    seq: int = 0
-    turn_deg: Optional[float] = None      # D-495: signed bounded turn (left +)
-    reason: Optional[str] = None          # D-495: why a maneuver aborted
-    pivot_basis: Optional[str] = None     # D-507 4: map | stop_point; D-520: segment_end
-    signal_request_id: Optional[str] = None  # D-620: one stopped junction episode
-    signal_state: Optional[str] = None       # waiting | red | unknown | green | fallback | entered
-    #: D-759 5: the bend pass took its entry heading from Fleet's map_entry, not the body's own yaw.
-    map_entry_used: bool = False
-    #: D-759 5: why not (none_sent, disabled, stale, future, no_sample, epoch, carry, heading); None when used,
-    #: before the take-over of a placed one, and for every instruction that is not a bend.
-    map_entry_reason: Optional[str] = None
-    #: D-767 A: what a window's or bend's distance counts from: stamp (the odom sample at pose_stamp) |
-    #: receipt (as before); None for an instruction without either.
-    distance_basis: Optional[str] = None
-    #: D-767 A: none_sent when receipt (an unusable pose_stamp is refused, 409 INSTRUCTION_STAMP_UNUSABLE).
-    distance_basis_reason: Optional[str] = None
-
-
-class LineFollowStatus(BaseModel):
-    """Selected line source and the last fail-closed control decision (D-143)."""
-
-    mode: str = "OFF"
-    state: str = "OFF"
-    source: Optional[str] = None
-    error: Optional[float] = None
-    confidence: float = 0.0
-    age_s: Optional[float] = None
-    linear: float = 0.0
-    angular: float = 0.0
-    reason: str = "mode_off"
-    clearance_m: Optional[float] = None   # D-344 §11: 정면 LiDAR 최소 거리(없으면 None)
-    # D-422 몸 기준 정지(path + URDF 몸 기하): 의도 경로를 따라 몸이 닿기까지의 거리,
-    # 그 속도의 정지 간격, 가장 가까운 것을 본 센서("lidar" | "ultrasonic"). 아니면 None.
-    body_gap_m: Optional[float] = None
-    stop_gap_m: Optional[float] = None
-    clearance_source: Optional[str] = None
-    stuck: Optional[LineStuckStatus] = None  # D-407: open stuck (None = not stuck)
-    # D-507 7: D-468 while following -- "contained" (proven) | "unknown" (D-468 idle,
-    # following as recovery off). None when D-468 is not tracking or not configured.
-    lane_return_containment: Optional[Literal['contained', 'unknown']] = None
-    junction: LineJunctionStatus = Field(default_factory=LineJunctionStatus)  # D-494 decision 4
-    arc: Optional[LineArcStatus] = None  # D-520 2: the latest arc of this process, if any
-    route_context: Optional[RouteContext] = None
-    route_context_published_at_s: Optional[float] = None
-    lane_cue: Optional[dict] = None  # D-511 rev 1: the unexpired Fleet lane cue (LaneCueRequest)
-    # D-573 6 (개정 2026-10-10): CORE always reports it; absent = an older CORE (D-577 R3 fails closed).
-    crosswalk: Optional[LineCrosswalkStatus] = None
-    crosswalk_reported: bool = Field(default=False, exclude=True)
-    # D-760 rev 3 item 9 (v1.227): the regulation standing the robot, by precedence authority > signal >
-    # crosswalk_held > crosswalk_wait > crosswalk_look; None = line-follow off or none holds it.
-    regulation_wait: Optional[Literal['authority', 'signal', 'crosswalk_held', 'crosswalk_wait',
-                                      'crosswalk_look']] = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _crosswalk_key_means_reported(cls, data):
-        # Only the key says "reported" (hub copy, D-555); a bare flag is not null=outside (D-577 R3).
-        if isinstance(data, dict):
-            data = {**data, "crosswalk_reported": "crosswalk" in data}
-        return data
-
-    @model_serializer(mode="wrap")
-    def _omit_unreported_crosswalk(self, handler):
-        data = handler(self)
-        if not self.crosswalk_reported:
-            data.pop("crosswalk", None)
-        return data
-
-
-class TrafficPolicyStatus(BaseModel):
-    """Semantic road evidence and the latest command-gating verdict."""
-
-    mode: str = "DISABLED"
-    state: str = "DISABLED"
-    reason: str = "policy_disabled"
-    enforced: bool = False
-    map_id: Optional[str] = None
-    scene_revision: Optional[str] = None
-    policy_revision: str = "traffic-policy-v1"
-    junction_rule: str = "signal_controlled"
-    evidence_revision: int = 0
-    age_s: Optional[float] = None
-    stop_line_visible: bool = False
-    stop_line_distance_m: Optional[float] = None
-    crosswalk_visible: bool = False
-    signal_colour: Optional[str] = None
-    signal_confidence: float = 0.0
-    signal_conflict: bool = False
-    signal_source_kind: str = "camera"
-    signal_head_age_s: Optional[float] = None
-    signal_head_frozen: bool = False
-    linear_scale: float = 0.0
-
-
-class VisionEvidenceRecord(BaseModel):
-    """Saved operator camera evidence on the robot SD (API Ref v1.39)."""
-
-    id: str
-    kind: str
-    file_name: str
-    mime_type: str
-    bytes: int
-    sha256: str
-    created_at: str
-    preview_mode: Optional[Literal['raw', 'annotated']] = None
-    pair_group_id: Optional[str] = Field(default=None, pattern=r'^[0-9a-f]{32}$')
-    annotation_origin: Optional[Literal['none', 'model_unreviewed']] = None
-
-
-class VisionEvidenceList(BaseModel):
-    records: list[VisionEvidenceRecord] = Field(default_factory=list)
-
-
-class ActivityOwner(BaseModel):
-    """The token that holds an activity lease. `id` is the opaque token id (whoami)."""
-
-    id: str
-    role: str = ""
-    label: str = ""
-
-
-class RobotActivity(BaseModel):
-    """An attended activity every screen must show (D-321 addendum, v1.68 additive).
-
-    Present only while a calibration session lease is alive; `null` otherwise.
-    """
-
-    kind: str = "CALIBRATING"
-    session_id: str
-    calibration_kind: str
-    label: str
-    owner: ActivityOwner
-    started_at: str
-    remaining_s: float
-
-
-class ShadowRecordRef(BaseModel):
-    """Last stop/unavailable shadow verdict. `t` is CORE monotonic seconds."""
-
-    t: float
-    reason: str
-    source: str
-
-
-class ShadowEvalStats(BaseModel):
-    p50: Optional[float] = None
-    p99: Optional[float] = None
-    n: int = 0
-
-
-class SafetyShadowStatus(BaseModel):
-    """D-400 shadow counters (v1.71 additive).
-
-    No extra="forbid" on these: an older hub must keep accepting a heartbeat
-    from a newer robot that adds a key.
-    """
-
-    counts: dict[str, int]
-    last_stop: Optional[ShadowRecordRef] = None
-    last_unavailable: Optional[ShadowRecordRef] = None
-    eval_ms: ShadowEvalStats
-    dropped_events: int = 0
-    suppressed_events: int = 0
-    record_errors: int = 0
-
-
-class SafetyPolicyHold(BaseModel):
-    """D-400 4: enforce sensor gaps answered with HOLD since CORE start (v1.223 additive)."""
-
-    count: int = 0
-    reason: str = ""
-
-
-class SafetyPolicyStatus(BaseModel):
-    """D-400: the safety policy mode CORE runs, and why (v1.71 additive)."""
-
-    mode: str
-    mode_effective: str
-    mode_error: str = ""
-    revision: str = ""
-    sources: dict[str, str] = Field(default_factory=dict)
-    shadow: Optional[SafetyShadowStatus] = None
-    hold: Optional[SafetyPolicyHold] = None  # enforce only
+from .state_components import (  # noqa: F401
+    Pose, Velocity, Battery, BatteryLevel, BatteryStatus, SafetySummary, PoseSample,
+    LineStuckStatus, LineJunctionStatus, LineFollowStatus, TrafficPolicyStatus,
+    VisionEvidenceRecord, VisionEvidenceList, ActivityOwner, RobotActivity,
+    ShadowRecordRef, ShadowEvalStats, SafetyShadowStatus, SafetyPolicyHold, SafetyPolicyStatus,
+)
 
 
 class StateSnapshot(TripLeaseFields):
@@ -1105,117 +498,16 @@ class AckPayload(BaseModel):
     error: Optional[str] = None
 
 
-class UiSurfaceLink(BaseModel):
-    id: str
-    title: str
-
-
-class UiPanelDescriptor(BaseModel):
-    id: str
-    title: str
-    slot: str
-    order: int
-    module: str
-    css: list[str]
-    action_group: str | None = None
-    state: str
-    reason: str | None = None
-
-
-class UiActionGroup(BaseModel):
-    id: str
-    title: str
-    order: int
-
-
-class UiSurfaceManifest(BaseModel):
-    surface: str
-    grammar: str
-    role: str
-    surfaces: list[UiSurfaceLink]
-    action_groups: list[UiActionGroup]
-    panels: list[UiPanelDescriptor]
-    revision: str
-
+from .ui_surface import (  # noqa: F401
+    UiSurfaceLink, UiPanelDescriptor, UiActionGroup, UiSurfaceManifest)
 
 # --- D-418 로봇 SSH 접속 (API Ref §5.8, v1.89 additive) ----------------------
 #
 # administrator 전용 /api/v1/host/ssh/... 의 본문과 응답. CORE 는 이 모양을 검사한
 # 뒤 root rosy-ssh-access 에 넘기고, 그 도우미가 같은 규칙을 따로 다시 검사한다.
 
-SSH_LABEL_PATTERN = r"^[a-z0-9][a-z0-9._:-]{0,47}$"
-SSH_KEY_TYPES = ("ssh-ed25519", "sk-ssh-ed25519@openssh.com",
-                 "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521")
-SSH_TIME_PATTERN = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
-SSH_MAX_KEYS = 32
-_SSH_PUBLIC_KEY = re.compile(r"^(?P<type>[a-z0-9@.-]+) [A-Za-z0-9+/]+={0,2}(?: [!-~ ]{1,100})?$")
-
-
-class SshKeyAddRequest(BaseModel):
-    """POST /host/ssh/keys. 선택 항목·authorized_keys 옵션은 받지 않는다."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    public_key: str = Field(min_length=1, max_length=1200)
-    label: str = Field(pattern=SSH_LABEL_PATTERN)
-    expires_days: int = Field(ge=1, le=365)
-
-    @field_validator("public_key")
-    @classmethod
-    def _one_allowed_line(cls, value: str) -> str:
-        match = _SSH_PUBLIC_KEY.fullmatch(value.strip())
-        if match is None or match["type"] not in SSH_KEY_TYPES:
-            raise ValueError(f"one OpenSSH public key line of {', '.join(SSH_KEY_TYPES)}")
-        return value.strip()
-
-
-class SshKeyAdded(BaseModel):
-    label: str = Field(pattern=SSH_LABEL_PATTERN)
-    fingerprint: str = Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")
-    expires_at: str = Field(pattern=SSH_TIME_PATTERN)
-
-
-class SshKeyInfo(BaseModel):
-    label: str = Field(pattern=SSH_LABEL_PATTERN)
-    type: Literal["ssh-ed25519", "sk-ssh-ed25519@openssh.com",
-                  "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"]
-    fingerprint: str = Field(pattern=r"^SHA256:[A-Za-z0-9+/]{43}$")
-    added_at: str = Field(pattern=SSH_TIME_PATTERN)
-    expires_at: str = Field(pattern=SSH_TIME_PATTERN)
-    added_by: str = Field(max_length=128)
-
-
-class SshKeyList(BaseModel):
-    keys: list[SshKeyInfo] = Field(max_length=SSH_MAX_KEYS)
-
-
-class SshHostKeys(BaseModel):
-    hostname: str
-    host_keys: list[str]
-
-
-class LampIdentifyRequest(BaseModel):
-    """A short, display-only LED challenge (color None: the robot's own); the face owner may refuse it."""
-    model_config = ConfigDict(extra="forbid")
-    color: Optional[Literal["blue", "amber"]] = None
-
-
-class SshPasswordRequest(BaseModel):
-    """POST /host/ssh/password. 분 단위, 1..60."""
-
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    minutes: int = Field(ge=1, le=60)
-
-
-class SshPasswordIssued(BaseModel):
-    user: Literal["rosy"]
-    password: str = Field(pattern=r"^rosy-[a-hjkmnp-z2-9]{4}-[a-hjkmnp-z2-9]{4}-[a-hjkmnp-z2-9]{4}$")
-    expires_at: str = Field(pattern=SSH_TIME_PATTERN)
-
-
-class SshPasswordStatus(BaseModel):
-    enabled: bool
-    expires_at: Optional[str] = Field(default=None, pattern=SSH_TIME_PATTERN)
-    #: usermod could not lock the password; sshd refuses it by a drop-in until the retry locks it.
-    lock_pending: bool = False
+from .ssh import (  # noqa: F401
+    SSH_LABEL_PATTERN, SSH_KEY_TYPES, SSH_TIME_PATTERN, SSH_MAX_KEYS,
+    SshKeyAddRequest, SshKeyAdded, SshKeyInfo, SshKeyList, SshHostKeys,
+    SshPasswordRequest, SshPasswordIssued, SshPasswordStatus,
+)

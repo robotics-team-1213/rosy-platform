@@ -1,4 +1,4 @@
-"""tools/worktrees.py against throwaway git repos: a main checkout and worktrees under .worktrees/."""
+"""tools/worktrees.py and tools/worktree_rules.py against throwaway git repos: a main checkout and worktrees under .worktrees/."""
 
 from __future__ import annotations
 
@@ -46,6 +46,7 @@ def main(tmp_path, monkeypatch):
     monkeypatch.chdir(main)
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_SESSION_ID", raising=False)
+    monkeypatch.setattr(worktrees.rules, "scratch", lambda: None)  # no orphan archive unless a test gives one
     return main
 
 
@@ -230,15 +231,20 @@ def test_locked_worktree_is_never_removed(main):
 
 
 def test_idle_threshold_is_respected(main):
-    wt = add(main, "fresh", commit=True, merge=True, owner=PEER)
+    wt = add(main, "fresh", owner=PEER)  # merged-looking, but no commit of its own landed: the 72 h rule
+    landed = add(main, "landed", commit=True, merge=True, owner=PEER)
     now = time.time()
     assert worktrees.prune(main, apply=True, snapshot=True, now=now) == 0
+    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 0.9 * HOUR) == 0
+    assert landed.is_dir()
+    assert worktrees.prune(main, apply=True, now=now + 1.1 * HOUR) == 1  # D-790: landed and clean, anyone's, 1 h
+    assert not landed.exists() and wt.is_dir()
     assert worktrees.prune(main, apply=True, snapshot=True, now=now + 71 * HOUR) == 0
     assert wt.is_dir()
 
 
 def test_idle_counts_uncommitted_files_and_the_given_threshold(main):
-    wt = add(main, "fresh", commit=True, merge=True, owner=PEER)
+    wt = add(main, "fresh", owner=PEER)
     now = time.time()
     assert worktrees.prune(main, apply=True, now=now + 100 * HOUR, idle_hours=200) == 0
     # An uncommitted file written an hour before the clock keeps the worktree active.
@@ -316,10 +322,11 @@ def test_failed_remove_keeps_the_branch_and_reports_an_orphan(main, monkeypatch,
     assert refs(main, "refs/heads/feat") == ["refs/heads/feat/stuck"]
 
     assert worktrees.main(["status"], now=LATER) == 0
-    assert [line for line in capsys.readouterr().out.splitlines() if line.startswith("stuck ")][0].endswith("orphan")
+    stuck = [line for line in capsys.readouterr().out.splitlines() if line.startswith("stuck ")][0]
+    assert " orphan  [" in stuck and "files" in stuck and "to archive]" in stuck
     monkeypatch.setattr(worktrees, "CAP", 1)  # the orphan counts toward the cap
     assert worktrees.main(["new", "more", "feat/more"]) == 1
-    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 0  # not empty
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 0  # files, no archive folder
     assert (wt / "a.txt").is_file()
     shutil.rmtree(wt)
     wt.mkdir()
@@ -390,6 +397,26 @@ def test_new_creates_below_the_cap_and_refuses_at_it(main, monkeypatch, capsys):
     assert "[t <t@t>; session sess-7]" in capsys.readouterr().out
 
 
+def test_default_cap_is_the_fifteen_slot_budget_counts_orphans_and_preserves_explicit_exception(main, capsys):
+    assert worktrees.CAP == 14  # D-886: 14 under .worktrees/ plus main
+    for index in range(13):
+        (main / ".worktrees" / f"orphan-{index}").mkdir(parents=True)
+
+    assert worktrees.main(["new", "fourteenth", "docs/fourteenth", "--no-prune"]) == 0
+    capsys.readouterr()
+    assert worktrees.main(["new", "overflow", "docs/overflow", "--no-prune"]) == 1
+    assert "the cap is 14" in capsys.readouterr().err
+    assert not (main / ".worktrees" / "overflow").exists()
+    assert "refs/heads/docs/overflow" not in refs(main, "refs/heads")
+    assert len(list((main / ".worktrees").iterdir())) == 14
+
+    assert worktrees.main(["new", "overflow", "docs/overflow", "--no-prune",
+                           "--force-over-cap", "user-approved ADR exception"]) == 0
+    description = git(main, "config", "branch.docs/overflow.description")
+    assert "over cap (14 >= 14): user-approved ADR exception" in description
+    assert all((main / ".worktrees" / f"orphan-{index}").is_dir() for index in range(13))
+
+
 def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, monkeypatch, capsys):
     monkeypatch.setattr(worktrees, "CAP", 2)
     done = add(main, "done", commit=True, merge=True)
@@ -427,7 +454,7 @@ def test_snapshot_takes_only_the_callers_worktrees_unless_all(main, capsys):
     assert "--all needs snapshot" in line["peer"] and "--all needs snapshot" in line["bare"]
     assert worktrees.main(["prune", "--snapshot", "--apply"], now=LATER) == 0
     out = capsys.readouterr().out
-    assert "owner unowned: only with --all" in out and "owner t <t@t>; session other: only with --all" in out
+    assert "owner unknown: only with --all" in out and "owner t <t@t>; session other: only with --all" in out
     assert not mine.exists() and peer.is_dir() and (bare / "wip.txt").is_file()
     assert refs(main, "refs/wip") == []
     assert worktrees.main(["prune", "--snapshot", "--apply", "--all"], now=LATER) == 0
@@ -442,8 +469,10 @@ def test_cap_refusal_counts_removable_worktrees_per_owner(main, monkeypatch, cap
     add(main, "open", commit=True, owner=None)  # unmerged: not removable, not counted
     assert worktrees.main(["new", "x", "feat/x", "--no-prune"], now=LATER) == 1
     err = capsys.readouterr().err
-    assert "removable, owner t <t@t>: 1" in err and "removable, owner unowned: 1" in err
+    assert "removable now by anyone: bare (removable; owner unknown)" in err
+    assert "removable now by anyone: mine (removable; owner t <t@t>)" in err
     assert f"you may remove all 2: {worktrees.SWEEP}" in err
+    assert "removable by its owner (unknown) through prune --snapshot" in err and "open (needs snapshot)" in err
 
 
 def test_status_explains_a_tip_that_is_a_merge_of_main(main, capsys):
@@ -462,12 +491,53 @@ def test_status_explains_a_tip_that_is_a_merge_of_main(main, capsys):
 
 @pytest.mark.parametrize("name, branch", [
     ("x", "wip/x"), ("x", "feat"), ("x", "feat/"), ("x", "feat/a..b"), ("../x", "feat/x"), ("x.", "feat/x"),
+    ("x", "feat/Upper"), ("x", "feat/snake_case"), ("x", "feat/a/b"), ("x", "feat/-x"), ("x", "feat/" + "a" * 49),
     ("taken", "feat/y"), ("y", "feat/taken")])
 def test_new_rejects_bad_type_name_and_existing_path_or_branch(main, name, branch):
     add(main, "taken")
     assert worktrees.main(["new", name, branch]) == 1
     assert sorted(p.name for p in (main / ".worktrees").iterdir()) == ["taken"]
     assert refs(main, "refs/heads") == ["refs/heads/feat/taken", "refs/heads/main"]
+
+
+def test_gc_rewriting_logs_head_does_not_make_an_idle_worktree_active(main):
+    wt = add(main, "done", commit=True, merge=True, owner=PEER)
+    os.utime(Path(git(wt, "rev-parse", "--absolute-git-dir")) / "logs" / "HEAD", (LATER, LATER))  # reflog expire --all
+    assert worktrees.prune(main, apply=True, now=LATER) == 1  # its newest entry is 75 h old
+    assert not wt.exists()
+
+
+def test_prune_deletes_merged_branches_no_worktree_uses_and_keeps_the_rest(main, capsys):
+    landed = main / "landed.txt"
+    git(main, "branch", "fix/landed")
+    git(main, "branch", "archive/kept")
+    git(main, "config", "branch.fix/landed.description", "owner: p <p@p>")
+    wt = add(main, "open")  # checked out (locked, so the worktree stays): kept even though it is in main
+    git(main, "worktree", "lock", str(wt))
+    git(main, "branch", "feat/ahead", "main")
+    landed.write_text("x", encoding="utf-8")
+    git(main, "add", "landed.txt")
+    git(main, "commit", "-q", "-m", "landed")
+    git(main, "switch", "-q", "feat/ahead")
+    (main / "ahead.txt").write_text("y", encoding="utf-8")
+    git(main, "add", "ahead.txt")
+    git(main, "commit", "-q", "-m", "ahead")
+    git(main, "switch", "-q", "main")
+
+    assert worktrees.prune(main, now=time.time()) == 0  # created just now: inside the 1 h wait
+    assert "would delete 0 merged branch(es)" in capsys.readouterr().out
+    for reflog in (main / ".git" / "logs" / "refs" / "heads").rglob("*"):
+        os.utime(reflog, (LATER, LATER))  # gc / reflog expire rewrote every file; their entries are old
+    worktrees.prune(main, now=LATER)
+    assert "would delete 1 merged branch(es)" in capsys.readouterr().out  # dry run touches nothing
+    assert "refs/heads/fix/landed" in refs(main, "refs/heads")
+
+    worktrees.prune(main, apply=True, now=LATER)
+    assert "deleted 1 merged branch(es)" in capsys.readouterr().out
+    assert refs(main, "refs/heads") == ["refs/heads/archive/kept", "refs/heads/feat/ahead", "refs/heads/feat/open",
+                                        "refs/heads/main"]
+    assert "fix/landed" not in git(main, "config", "--list")
+    assert wt.is_dir()
 
 
 def test_lint_note_is_silent_in_ci_and_without_worktrees_and_never_raises(main, monkeypatch):
@@ -496,6 +566,7 @@ def landing(main, tmp_path, monkeypatch):
     topic = add(main, "topic", commit=True)
     monkeypatch.chdir(topic)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
+    monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
     monkeypatch.setattr(land.remote_pytest, "run", lambda invocations, logs, *a, **kw: [])  # --tests none
     clock = types.SimpleNamespace(time=lambda: LATER, strftime=time.strftime, localtime=time.localtime)
     monkeypatch.setattr(worktrees, "time", clock)
@@ -557,8 +628,11 @@ def test_owner_fast_path_takes_only_the_callers_landed_clean_worktree(main, caps
     assert worktrees.prune(main, apply=True, now=now) == 1
     assert not mine.exists() and "refs/heads/feat/mine" not in refs(main, "refs/heads/feat")
     assert all(wt.is_dir() for wt in (peer, empty, other, blind))
+    assert worktrees.prune(main, apply=True, now=now + 0.5 * HOUR) == 0
+    assert worktrees.prune(main, apply=True, now=now + 2 * HOUR) == 2  # D-790: anyone's landed one after 1 h
+    assert not peer.exists() and not other.exists() and empty.is_dir() and blind.is_dir()
     assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0
-    assert worktrees.prune(main, apply=True, now=now + 73 * HOUR) == 4  # the 72 h rule still takes the rest
+    assert worktrees.prune(main, apply=True, now=now + 73 * HOUR) == 2  # no landing evidence: the 72 h rule
     assert not any(wt.exists() for wt in (peer, empty, other, blind))
 
 
@@ -588,3 +662,198 @@ def test_dot_directories_and_plain_files_under_worktrees_are_not_worktrees(main,
     assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER + 100 * HOUR) >= 1
     assert (holder / ".omc" / "state.json").is_file() and (holder / ".empty").is_dir()
     assert (holder / "README.md").is_file() and not wt.exists()
+
+
+# --- D-790: landed-dirty, orphans, stale history, owner ------------------------------
+
+def test_landed_worktree_with_uncommitted_files_is_flagged_and_kept(main, capsys):
+    late = add(main, "late", commit=True, merge=True, owner=PEER)
+    (late / "more.txt").write_text("work after landing", encoding="utf-8")
+    fresh = add(main, "fresh")  # no commit yet: uncommitted work in a new worktree is not "landed"
+    (fresh / "wip.txt").write_text("wip", encoding="utf-8")
+    assert worktrees.main(["status"], now=LATER) == 0
+    out = capsys.readouterr().out
+    line = {text.split()[0]: text for text in out.splitlines()}
+    assert line["late"].rstrip().endswith("landed-dirty  [p <p@p>]") and "landed-dirty" not in line["fresh"]
+    assert "WARN    late: feat/late is already in main and 1 file(s) are uncommitted here (owner p <p@p>)" in out
+    assert "start a new one" in out and "WARN    fresh" not in out
+    assert worktrees.prune(main, apply=True, now=LATER) == 0  # lossless never takes it
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 2  # kept under refs/wip
+    assert git(main, "show", f"refs/wip/{DAY}/late:more.txt") == "work after landing"
+
+
+def _orphans(main: Path) -> dict[str, Path]:
+    holder = main / ".worktrees"
+    found = {name: holder / name for name in ("empty", "state", "files")}
+    for path in found.values():
+        path.mkdir(parents=True)
+    (found["empty"] / "sub").mkdir()
+    for rel in (".omc/state/session.json", "pkg/__pycache__/m.pyc"):
+        (found["state"] / rel).parent.mkdir(parents=True)
+        (found["state"] / rel).write_text("{}", encoding="utf-8")
+    for rel, text in (("notes/plan.md", "plan"), (".omc/handoff.md", "handoff"), ("__pycache__/x.pyc", "c")):
+        (found["files"] / rel).parent.mkdir(parents=True, exist_ok=True)
+        (found["files"] / rel).write_text(text, encoding="utf-8")
+    return found
+
+
+def test_orphans_are_summed_up_and_removed_or_archived_first(main, tmp_path, monkeypatch, capsys):
+    import zipfile
+    found = _orphans(main)
+    assert worktrees.main(["status"], now=LATER) == 0
+    line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
+    assert "[empty]" in line["empty"] and "[only caches and .omc/state (2 files)]" in line["state"]
+    assert "[2 files" in line["files"] and "to archive]" in line["files"] and "-     orphan" in line["files"]
+    assert worktrees.prune(main, apply=True, now=time.time()) == 0  # touched seconds ago: not idle 1 h
+    assert worktrees.prune(main, apply=True, now=LATER) == 2  # no archive folder: the one with files stays
+    assert not found["empty"].exists() and not found["state"].exists() and found["files"].is_dir()
+    monkeypatch.setattr(worktrees.rules, "scratch", lambda: tmp_path / "scratch" / "worktree-orphans")
+    assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    out = capsys.readouterr().out
+    archive = tmp_path / "scratch" / "worktree-orphans" / f"files-{DAY}.zip"
+    assert f"archived to {archive}" in out and not found["files"].exists()
+    with zipfile.ZipFile(archive) as kept:
+        assert sorted(kept.namelist()) == [".omc/handoff.md", "notes/plan.md"]  # caches are not kept
+        assert kept.read("notes/plan.md") == b"plan"
+
+
+def test_orphan_archive_that_does_not_verify_keeps_the_directory(main, tmp_path, monkeypatch, capsys):
+    found = _orphans(main)
+    monkeypatch.setattr(worktrees.rules, "scratch", lambda: tmp_path / "orphans")
+    monkeypatch.setattr(worktrees.rules.zipfile.ZipFile, "testzip", lambda self: "notes/plan.md")
+    assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert "FAIL    files [orphan]" in out and "did not verify" in out
+    assert (found["files"] / "notes" / "plan.md").read_text(encoding="utf-8") == "plan"
+
+
+def test_orphan_archive_folder_comes_from_rosy_scratch(monkeypatch):
+    monkeypatch.setenv("ROSY_SCRATCH", "/scratch/here")
+    assert worktrees.rules.scratch() == Path("/scratch/here") / "worktree-orphans"
+
+
+def _old_line(main: Path, monkeypatch) -> str:
+    """A branch the D-790 rules read as pre-rewrite history: forked at or before REWRITE_TIME."""
+    wt = add(main, "old", commit=True)
+    monkeypatch.setattr(worktrees.rules, "REWRITE_TIME", int(time.time()) + HOUR)
+    return git(wt, "rev-parse", "HEAD")
+
+
+def test_stale_history_is_flagged_never_pruned_and_never_a_base(main, monkeypatch, capsys):
+    _old_line(main, monkeypatch)
+    assert worktrees.main(["status"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert "stale-history" in out and "before the history rewrite" in out and "WARN    old: feat/old" in out
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 0
+    assert worktrees.main(["new", "again", "fix/again", "--from", "feat/old"]) == 1
+    assert "refused: --from feat/old" in capsys.readouterr().err
+    assert not (main / ".worktrees" / "again").exists()
+    monkeypatch.setattr(worktrees.rules, "REWRITE_TIME", 0)
+    monkeypatch.setattr(worktrees.rules, "STALE_COMMITS", 0)  # one commit not in main is "too many" now
+    assert "more than 0 commits not in main" in worktrees.rules.stale_history(main, "feat/old")
+    monkeypatch.setattr(worktrees.rules, "STALE_COMMITS", 2000)
+    assert worktrees.rules.stale_history(main, "feat/old") is None
+    assert worktrees.main(["new", "again", "fix/again", "--from", "feat/old"]) == 0
+    assert (main / ".worktrees" / "again" / "old.txt").is_file()
+
+
+def test_new_records_the_owner_override_and_status_names_unknown_owners(main, capsys):
+    assert worktrees.main(["new", "mine", "feat/mine", "--owner", "dispatcher lane 3"]) == 0
+    assert git(main, "config", "branch.feat/mine.description") == "owner: dispatcher lane 3"
+    assert worktrees.main(["new", "blank", "feat/blank", "--owner", " "]) == 1
+    add(main, "bare", owner=None)
+    add(main, "noname", owner=" <>")  # made while git had no user.name / user.email
+    assert worktrees.main(["new", "x", "feat/x", "--from", "no-such-ref"]) == 1
+    capsys.readouterr()
+    assert worktrees.main(["status"]) == 0
+    line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
+    assert line["mine"].endswith("[dispatcher lane 3]")
+    assert line["bare"].endswith("[unknown]") and line["noname"].endswith("[unknown]")
+
+
+def _git_fails_inside(folder: Path, main: Path) -> None:
+    """A real git in the tombstoned folder stops there: no fall-through to the parent repository."""
+    run = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=folder, capture_output=True, text=True)
+    assert run.returncode == 128 and str(main) not in run.stdout, (run.stdout, run.stderr)
+
+
+def _held(monkeypatch, wt: Path) -> None:
+    """What a process with ``wt`` as its cwd does on Windows: the folder itself cannot be deleted."""
+    real = Path.rmdir
+
+    def rmdir(self):
+        if self == wt:
+            raise PermissionError(32, "The process cannot access the file", str(self))
+        real(self)
+
+    monkeypatch.setattr(Path, "rmdir", rmdir)
+    monkeypatch.setattr(worktrees.rules.shutil, "rmtree",
+                        lambda path, **kw: (_ for _ in ()).throw(PermissionError(32, "in use", str(path))))
+
+
+def test_held_folder_after_removal_gets_a_tombstone_and_the_next_prune_deletes_it(main, monkeypatch, capsys):
+    wt = add(main, "held", commit=True, merge=True)
+
+    def half_remove(real, cwd, args):
+        if args[:2] != ("worktree", "remove"):
+            return None
+        for item in wt.iterdir():  # git deleted the files; the open handle keeps the empty folder
+            shutil.rmtree(item) if item.is_dir() else item.unlink()
+        real(cwd, "worktree", "prune")
+        return subprocess.CompletedProcess(args, 1, "", "error: failed to delete: Permission denied")
+
+    wrap_git(monkeypatch, half_remove)
+    with monkeypatch.context() as held:
+        _held(held, wt)
+        assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert "ORPHAN  " in out and "tombstone" in out and "FAIL    held" in out
+    assert [p.name for p in wt.iterdir()] == [".git"] and worktrees.rules.is_tombstone(wt)
+    _git_fails_inside(wt, main)
+    assert str(wt) not in git(main, "worktree", "list", "--porcelain")
+    root, rows = worktrees.scan(main)
+    assert [(r["name"], r["orphan"]) for r in rows] == [("held", True)]  # never a live worktree
+    assert worktrees.main(["status"], now=LATER) == 0
+    assert "only caches" in [line for line in capsys.readouterr().out.splitlines() if line.startswith("held ")][0]
+    assert worktrees.prune(main, apply=True, now=time.time()) == 1  # nothing to lose: no idle wait
+    assert not wt.exists()
+
+
+def test_empty_leftover_folder_is_removed_not_tombstoned(main, monkeypatch, capsys):
+    wt = add(main, "gone", commit=True, merge=True)
+
+    def half_remove(real, cwd, args):
+        if args[:2] != ("worktree", "remove"):
+            return None
+        for item in wt.iterdir():
+            shutil.rmtree(item) if item.is_dir() else item.unlink()
+        real(cwd, "worktree", "prune")
+        return subprocess.CompletedProcess(args, 1, "", "error: failed to delete: Permission denied")
+
+    wrap_git(monkeypatch, half_remove)
+    assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    assert "empty folder removed" in capsys.readouterr().out and not wt.exists()
+
+
+def test_orphan_that_cannot_be_cleared_gets_a_tombstone(main, monkeypatch, capsys):
+    orphan = main / ".worktrees" / "stuck" / "__pycache__"
+    orphan.mkdir(parents=True)
+    (orphan / "m.pyc").write_text("c", encoding="utf-8")
+    with monkeypatch.context() as held:
+        _held(held, orphan.parent)
+        assert worktrees.main(["prune", "--apply"], now=LATER) == 0
+    assert "FAIL    stuck [orphan]" in capsys.readouterr().out
+    _git_fails_inside(orphan.parent, main)
+    assert worktrees.prune(main, apply=True, now=LATER) == 1 and not orphan.parent.exists()
+
+
+def test_new_clears_a_tombstone_folder_or_refuses_while_it_is_held(main, monkeypatch, capsys):
+    folder = main / ".worktrees" / "again"
+    folder.mkdir(parents=True)
+    with monkeypatch.context() as held:
+        _held(held, folder)
+        assert "tombstone" in worktrees.rules.leave_tombstone(folder)
+        assert worktrees.main(["new", "again", "feat/again"]) == 1
+        assert "could not be cleared" in capsys.readouterr().err
+    assert worktrees.main(["new", "again", "feat/again"]) == 0
+    assert git(folder, "rev-parse", "--abbrev-ref", "HEAD") == "feat/again"

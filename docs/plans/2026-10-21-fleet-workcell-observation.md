@@ -40,7 +40,7 @@
 - [x] Add committed RED tests for native source mapping, advancing sample transmission, original capture age and Vision wire encoding.
 - [x] Implement a native ROS intake and user service using the explicit manifest. Reuse existing image encoding/Vision wire protocol, keep latest samples and bound transport queues.
 - [x] Add an explicit persistent torque-OFF reader mode/service preserving current packet/model/fault/exclusive guards. Stop on torque/fault/ownership conflict without automatic re-entry; never loop the bounded observer. Define reader stop and verified bus release before any accepted owner handoff.
-- [x] Add `operations/site_ui/console/cell/cell-observation.js` using current Fleet client, shared components and Vision leases; wire existing Cell session lifecycle and static allowlist.
+- [x] Add `applications/fleet/web/cell/cell-observation.js` using current Fleet client, shared components and Vision leases; wire existing Cell session lifecycle and static allowlist.
 - [x] Verify two arm panels and three images with real Chromium, source disconnects and logout; keep command controls unchanged. Fixture-backed images/API only; live deployment is Task 3.
 - [ ] Commit, remotely verify, review and merge dependent implementation.
 

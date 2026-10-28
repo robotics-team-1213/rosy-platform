@@ -5,8 +5,21 @@ from __future__ import annotations
 import browser_scope
 
 
+def test_monitoring_backend_and_app_share_the_real_browser_contract():
+    expected = ['test/test_monitoring_browser.py']
+    assert browser_scope.targets(['applications/monitoring/README.md']) == expected
+    assert browser_scope.targets(['operations/monitoring/src/rosy/monitoring/service.py']) == expected
+
+
+def test_fleet_development_changes_include_independent_browser_flows():
+    for path in ('applications/fleet/dev/sample/engine.py', 'applications/fleet/web/runtime.js'):
+        found = browser_scope.targets([path])
+        assert 'applications/fleet/test/test_feature_browser_flows.py' in found
+        assert 'applications/fleet/test/test_sample_browser.py' in found
+
+
 def test_fleet_web_change_selects_fleet_browser_tests():
-    found = browser_scope.targets(["operations/site_ui/console/maps/site-map.js"])
+    found = browser_scope.targets(["applications/fleet/web/sitemap/site-map.js"])
     assert "test/test_fleet_console_browser.py" in found
     assert "operations/fleet/test/test_start_point_browser.py" in found
     assert "operations/fleet/test/test_site_map_browser.py" in found
@@ -24,11 +37,21 @@ def test_shared_web_change_reaches_every_surface_family():
 def test_a_changed_browser_test_selects_itself_and_unrelated_paths_select_nothing():
     assert browser_scope.targets(["test/test_games_board_browser.py"]) == ["test/test_games_board_browser.py"]
     assert browser_scope.targets(["docs/logs.md", "middleware/drive/planning/grid/goals.py"]) == []
+    assert browser_scope.targets(["tools/land_browser.py"]) == []  # a module named *_browser.py is not a test
 
 
 def test_windows_separators_are_accepted():
     found = browser_scope.targets(["middleware\\robot_ui\\pilot\\styles.css"])
     assert found and found == browser_scope.targets(["middleware/robot_ui/pilot/styles.css"])
+
+
+def test_pilot_and_shared_styles_select_moved_lobby_tests_without_widening_omx():
+    lobby = "middleware/robot_ui/pilot/test/test_lobby_browser.py"
+    for path in ("middleware/robot_ui/pilot/styles.css", "shared/web/components.css"):
+        assert lobby in browser_scope.targets([path])
+    assert browser_scope.targets(["middleware/devices/omx/adapter/example.py"]) == [
+        "middleware/devices/omx/adapter/test/test_pilot_sim_browser.py"
+    ]
 
 
 def test_every_scope_target_exists():
@@ -78,9 +101,26 @@ def test_empty_selection_exits_3_without_targets(capsys):
     assert capsys.readouterr().out.strip() == "test/test_games_board_browser.py"
 
 
+def test_sim_sources_select_sim_browser():
+    for path in (
+        "learning/curation/perception/review_app_web/sim.js",
+        "learning/curation/perception/sim_web.py",
+        "shared/web/ui.js",
+    ):
+        assert "test/learning/perception/test_sim_browser.py" in browser_scope.targets([path])
+
+
 def test_common_robot_tasks_select_real_browser_flow():
     expected = 'test/learning/perception/test_learning_tasks_browser.py'
     for source in ('learning_tasks.py', 'learning_tasks_web.py', 'review_app.py',
                    'review_app_web/tasks.js', 'review_app_web/tasks.html', 'review_app_web/learning.html'):
         assert expected in browser_scope.targets(['learning/curation/perception/' + source])
     assert expected in browser_scope.targets(['learning/training/omx/experiment_center.py'])
+
+
+def test_all_json_expands_the_actual_browser_registry_without_fake_changed_paths(capsys):
+    import json
+    assert browser_scope.main(["--all", "--json"]) == 0
+    found = json.loads(capsys.readouterr().out)
+    assert found == sorted({path for pattern in browser_scope.EVERYTHING for path in browser_scope._expand(pattern)})
+    assert found and "tools/land_browser.py" not in found

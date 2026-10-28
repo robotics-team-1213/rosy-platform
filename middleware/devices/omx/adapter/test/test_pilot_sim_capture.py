@@ -1,7 +1,7 @@
 import time
 from types import SimpleNamespace as NS
 
-from omx_adapter.pilot_sim_capture import PilotSimCapture
+from omx_adapter.pilot_sim.capture import PilotSimCapture
 from omx_adapter.ros_goal_contract import RosGoalEvent
 from test_demonstration import sample
 
@@ -152,3 +152,137 @@ def test_gripper_mode_records_the_gripper_joint_and_action_column(tmp_path):
     assert capture.status()["issues"] == []
     row = json.loads((tmp_path / episode["episode_id"] / "samples.jsonl").read_text().splitlines()[0])
     assert row["action.gripper"] == 0.3 and row["duration_s"] == 1.6
+
+
+def test_delayed_frame_at_goal_boundary_uses_its_accepted_action_without_a_gap(tmp_path):
+    import json
+    capture = create_capture(tmp_path)
+    episode = capture.start('continuous short goals')
+
+    def accept(command, accepted_ns, target, goal):
+        capture.sim_time_ns = lambda: accepted_ns
+        capture.prepare(NS(command_id=command, positions={'joint1': target, 'gripper_joint_1': -.1},
+                           duration_s=.8))
+        capture.on_goal_event(RosGoalEvent(kind='GOAL_ACCEPTED', command_id=command, phase_id=None,
+            goal_id=goal, observed_at_monotonic_s=time.monotonic(), sequence=1))
+
+    def frame(stamp, sequence):
+        capture.observe_joint_state(state(stamp-2_000_000, .01))
+        metadata = capture.camera.latest_frame[0]
+        metadata.capture_time_ns, metadata.sequence = stamp, sequence
+        capture.tick()
+
+    accept('first', 1_050_000_000, .02, '11111111-1111-4111-8111-111111111111')
+    frame(1_100_000_000, 2)
+    accept('second', 1_206_000_000, .04, '22222222-2222-4222-8222-222222222222')
+    frame(1_200_000_000, 3)
+    frame(1_300_000_000, 4)
+    assert capture.status()['issues'] == []
+    rows = [json.loads(line) for line in (tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()]
+    assert [row['command_id'] for row in rows] == ['first', 'first', 'second']
+    assert [row['action'][0] for row in rows] == [.02, .02, .04]
+    assert [row['capture_time_ns'] for row in rows] == [1_100_000_000, 1_200_000_000, 1_300_000_000]
+
+
+def test_camera_burst_keeps_each_real_frame_until_the_writer_consumes_it(tmp_path):
+    import copy
+    import json
+    capture = create_capture(tmp_path)
+    episode = capture.start('camera burst')
+    capture.prepare(NS(command_id='command', positions={'joint1': .02, 'gripper_joint_1': -.1}, duration_s=.8))
+    capture.on_goal_event(RosGoalEvent(kind='GOAL_ACCEPTED', command_id='command', phase_id=None,
+        goal_id='11111111-1111-4111-8111-111111111111',
+        observed_at_monotonic_s=time.monotonic(), sequence=1))
+    for sequence, stamp in [(2,1_100_000_000), (3,1_200_000_000)]:
+        capture.observe_joint_state(state(stamp-2_000_000, .01))
+        frame = copy.deepcopy(capture.camera.latest_frame)
+        frame[0].capture_time_ns, frame[0].sequence = stamp, sequence
+        capture.camera.latest_frame = frame
+        capture.observe_frame(frame)
+    capture.tick()
+    capture.tick()
+    assert capture.status()['frame_count'] == 2 and capture.status()['issues'] == []
+    rows = [json.loads(line) for line in (tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()]
+    assert [row['capture_time_ns'] for row in rows] == [1_100_000_000, 1_200_000_000]
+
+
+def test_full_camera_queue_marks_incomplete_instead_of_silently_discarding_frames(tmp_path):
+    capture = create_capture(tmp_path)
+    capture.start('bounded camera queue')
+    for _ in range(33):
+        capture.observe_frame(capture.camera.latest_frame)
+    capture.tick()
+    assert capture.status()['status'] == 'incomplete'
+    assert 'camera_queue_overflow' in capture.status()['issues']
+
+
+def test_stop_drains_the_accepted_tail_and_fences_new_frames(tmp_path):
+    import copy
+    import json
+    capture = create_capture(tmp_path)
+    episode = capture.start('close queued frames')
+    capture.prepare(NS(command_id='command', positions={'joint1': .02, 'gripper_joint_1': -.1}, duration_s=.8))
+    capture.on_goal_event(RosGoalEvent(kind='GOAL_ACCEPTED', command_id='command', phase_id=None,
+        goal_id='11111111-1111-4111-8111-111111111111',
+        observed_at_monotonic_s=time.monotonic(), sequence=1))
+    for sequence, stamp in [(2,1_100_000_000), (3,1_200_000_000), (4,1_300_000_000)]:
+        capture.observe_joint_state(state(stamp-2_000_000, .01))
+        frame = copy.deepcopy(capture.camera.latest_frame)
+        frame[0].capture_time_ns, frame[0].sequence = stamp, sequence
+        capture.camera.latest_frame = frame
+        capture.observe_frame(frame)
+    capture.tick()
+    capture.tick()
+    original = capture.recorder.sample
+    def sample_and_receive_later_frame(**values):
+        original(**values)
+        later = copy.deepcopy(capture.camera.latest_frame)
+        later[0].capture_time_ns, later[0].sequence = 1_400_000_000, 5
+        capture.observe_frame(later)
+    capture.recorder.sample = sample_and_receive_later_frame
+    result = capture.stop(episode['episode_id'], 'success')
+    assert result['status'] == 'complete' and result['frame_count'] == 3
+    rows = [json.loads(line) for line in (tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()]
+    assert [row['capture_time_ns'] for row in rows] == [1_100_000_000,1_200_000_000,1_300_000_000]
+
+
+def pending_frame(tmp_path):
+    capture = create_capture(tmp_path)
+    episode = capture.start('late source state')
+    capture.prepare(NS(command_id='command',positions={'joint1':.02,'gripper_joint_1':-.1},duration_s=.8))
+    capture.on_goal_event(RosGoalEvent(kind='GOAL_ACCEPTED',command_id='command',phase_id=None,
+        goal_id='11111111-1111-4111-8111-111111111111',
+        observed_at_monotonic_s=time.monotonic(),sequence=1))
+    capture.camera.latest_frame[0].sequence = 2
+    capture.observe_frame(capture.camera.latest_frame)
+    capture.observe_joint_state(state(1_040_000_000,.01))
+    return capture, episode
+
+
+def test_late_past_state_can_pair_without_changing_the_captured_frame(tmp_path):
+    import json
+    capture, episode = pending_frame(tmp_path)
+    capture.tick()
+    assert capture.status()['issues'] == [] and capture.status()['frame_count'] == 0
+    capture.observe_joint_state(state(1_090_000_000,.02))
+    capture.tick()
+    assert capture.status()['issues'] == [] and capture.status()['frame_count'] == 1
+    row = json.loads((tmp_path/episode['episode_id']/'samples.jsonl').read_text().splitlines()[0])
+    assert row['capture_time_ns'] == 1_100_000_000 and row['state_time_ns'] == 1_090_000_000
+    assert row['observation.state'][0] == .02
+
+
+def test_future_source_watermark_keeps_irreparable_skew_rejected(tmp_path):
+    capture, _ = pending_frame(tmp_path)
+    capture.observe_joint_state(state(1_120_000_000,.9))
+    capture.tick()
+    assert 'state_camera_skew' in capture.status()['issues']
+    assert capture.status()['frame_count'] == 0
+
+
+def test_stop_with_an_unpairable_tail_finishes_incomplete_within_a_bound(tmp_path):
+    capture, episode = pending_frame(tmp_path)
+    started = time.monotonic()
+    closed = capture.stop(episode['episode_id'],'success')
+    assert time.monotonic()-started < 1.
+    assert closed['status'] == 'incomplete' and closed['frame_count'] == 0

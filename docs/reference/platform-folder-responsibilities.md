@@ -1,5 +1,7 @@
 # ROSY Platform 현재 폴더 책임
 
+제품 앱의 개발 위치는 `applications/<제품명>`이다. [D-822](../adr/D-822-fleet-application-source-boundary.md)에 따라 Fleet 화면은 `applications/fleet/web`, 앱 조립은 `applications/fleet/gateway`에 둔다. API·원장·실행 조정은 `operations/fleet`에 남고 Fleet 배포·설치 신원은 유지한다. 시작 방법은 [Fleet 앱 안내](../../applications/fleet/README.md)를 본다.
+
 2026-10-13 폴더 정리의 착지 범위는 [최신 단계 기록](../validation/folder-remaining-2026-10-13/result.md)이다. 아래 단계 표의 S3–S10은 그 기록과 같고, S1은 D-743, S2는 D-747이다. 원격 재검증·CI·배포·장치는 그 기록이 NOT RUN으로 남긴 항목이다. 단계 표와 편집 집·manifest가 다르면 편집 집 표와 manifest가 현재 경로다.
 
 2026-10-13 D-743 S1 보완: 현재 Drive holder는 `middleware/drive`다. 기존 설치 identity와 CORE 조립은 유지하며 [검증 기록](../validation/drive-holder-s1-2026-10-13/result.md)에 source/설치/착지와 배포/장치 증거를 구분한다.
@@ -28,7 +30,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 8 | Fleet 원장 | `operations/fleet/fleet/server/{ledger,auth,cell,console,peer}`와 기존 `server/channel`. app.py는 조립하고 기존 fleet.server.* 설치 이름을 유지한다 |
 | 9 | Fleet 조정 | `operations/fleet/fleet/{traffic,routing,swarm,formation,stuck,incidents}`, 그리고 `server/tracking`(D-457 천장 무마커 추적, 표시·대조 전용)과 `server/pose`(D-395 위치 서비스, D-494 지도 자세, D-594 경로 기록). 두 holder는 기존 `fleet.server.*` 설치 이름을 유지하고, 원장 테이블이 아닌 자기 기록 테이블(추적 보정, 경로 기록)에만 쓴다 |
 | 10 | 순수 판단 | `operations/world`, `operations/situation`, `operations/decision`, `operations/site_execution` |
-| 11 | 현장 표면 | `operations/processes`, `operations/site_devices`, `operations/site_ui/{console,cam}`, `operations/apps`, `operations/overhead`, `operations/signal_observation` |
+| 11 | 현장 표면 | `applications/fleet/{web,gateway}`, `operations/processes`, `operations/site_devices`, `operations/site_ui/{cam,media}`, `operations/apps`, `operations/overhead`, `operations/signal_observation` |
 | 12 | 학습 | `learning/{curation,training,evaluation,registry}` |
 
 집 10은 Fleet, ROS, 장치 writer를 import하지 않는다. World MapPose는 받은 sighting·운영자 pin·odom의 현재 자세다. Fleet은 `rosy.world.state.projections.map_pose`를 직접 읽는다(D-752). `source=bridged`는 dead reckoning이고 미래 예측이나 완료 증거가 아니다. Fleet 원장 테이블(`fleet_tasks`, `fleet_task_history`, `fleet_robot_reservations`, `fleet_action_claims`)은 집 8의 `task_store`가 만들지만, 쓰는 모듈은 집 8 안팎에 열 개다. 그 목록은 `test/architecture/test_fleet_ledger_writers.py`가 고정하고, 새 writer는 리뷰를 거쳐 목록에 올려야 한다. stuck·incidents 등은 자기 테이블에만 쓴다. 최종 Base 명령 선택은 집 2의 `core_features.command`, `core_features.safety`와 `core.bridge`에 남는다. 집 12는 실행 권한이 없다.
@@ -48,13 +50,13 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | vision | 앞 카메라 구현 | 5 | `middleware/perception/front_camera` |
 | vision | 천장 관측 서비스 Rosy Vision | 11 | `operations/overhead`. 패키지 `rosy_vision`, 명령 `rosy-vision`. 화면은 없다. 폴더 이름이 단어와 다른 것은 D-748 |
 | vision | 신호등 관측 | 11 | `operations/signal_observation`. 천장 카메라 앱이 아니다 |
-| console | Rosy Fleet 화면 | 11 | `operations/site_ui/console`. 표시 이름은 Rosy Fleet이다(D-487). 레지스트리 id, 아이콘 `console.svg`, 경로 `/console`은 유지한다 |
+| console | Rosy Fleet 화면 | 11 | `applications/fleet/web`. 표시 이름은 Rosy Fleet이다(D-487). 레지스트리 id, 아이콘 `console.svg`, 경로 `/console`은 유지한다 |
 | console | 로봇 한 대의 운용 칸 | 1 | Rosy Robot의 경로 `/console`. 폴더는 `middleware/robot_ui/robot`이고 포트는 CORE 8080 |
 | console | Fleet 서버의 콘솔 조립 | 8 | `operations/fleet/fleet/server/console`. 화면 파일이 아니다 |
 | fleet | 현장 서비스와 원장 | 8, 9 | `operations/fleet`. 패키지 `fleet`. 화면 표시 이름 Rosy Fleet과 같은 서비스다 |
-| fleet | 사이트 게이트웨이 휠 | 11 옆 | `operations/apps/fleet`. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Rosy Fleet 화면이 아니고 `operations/fleet`도 아니다 |
+| fleet | 사이트 게이트웨이 휠 | 11 옆 | `applications/fleet/gateway`. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Rosy Fleet 화면이 아니고 `operations/fleet`도 아니다 |
 | ui | 로봇 쪽 화면 집 | 1 | `middleware/robot_ui`. 권한은 자식 `robot`, `pilot`, `face`에 있다. 각각 Rosy Robot, Rosy Pilot, 얼굴 LCD |
-| ui | 현장 화면 집 | 11 | `operations/site_ui`. 권한은 자식 `console`, `cam`에 있다. 각각 Rosy Fleet 원본과 Rosy Cam |
+| ui | 현장 캡처·미디어 | 11 | `operations/site_ui/{cam,media}`. Rosy Fleet 화면은 `applications/fleet/web` |
 
 `middleware/skills`와 `middleware/robot_execution/local`은 집 7과 같은 장치 측 wheel이고 별도 manifest root다. `contracts`, `integrations`, `shared/web`, `deploy`, `tools`, `test`, `docs`는 아래 파트 설명 그대로다. 행동 조건부 미래 예측은 D-782 기반 위치(`operations/prediction`, `learning/{training,evaluation}/world_model`)에만 둔다.
 
@@ -73,7 +75,7 @@ D-747 S2: 위치 보조·상태는 `middleware/perception/localization`, graph �
 | 5 | `middleware/robot_ui`, `operations/site_ui` | 검증 기록 S5. 설치 이름은 `dashboard`, `emotion`, `fleet.server.web`, Rosy Cam |
 | 6 | `operations/overhead`, `operations/signal_observation`, `middleware/perception/front_camera` | D-748. 검증 기록 S6. 패키지 `rosy_vision` |
 | 7 | `action_rules`, `safety_gate`, `preview`, `motion_limits`. 옛 import 패키지는 facade | D-749. 검증 기록 S7. 폴더 이름 `lane_rules`는 쓰지 않는다 |
-| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | D-750. 검증 기록 S8. SQLite는 하나 |
+| 8 | Fleet `server`를 원장, 채널, 셀 어댑터, 콘솔 조립, 피어로 | D-750. 검증 기록 S8. SQLite는 하나. 사이트 문맥·로그 미러(D-796)는 원장 밖 파생 저장소다 |
 | 9 | 호스트 도구를 `tools/sim`, `tools/calibration`, `tools/validation`로 | D-751. 검증 기록 S9. `middleware/perception/tools/device`의 hotpath·IR 측정은 그 자리에 남긴다 |
 | 10 | MapPose 호출자를 World로 옮긴 뒤 별칭을 거둠 | D-752. 검증 기록 S10. 소비자는 `rosy.world.state.projections.map_pose`를 직접 import |
 
@@ -140,9 +142,9 @@ CORE의 `core/drive`는 같은 CORE 프로세스 안의 조립 코드다. `line_
 
 CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `core_features.command`, `core.bridge`에 남는다. Drive의 body/sweep/floor/envelope 검사는 해당 운동 후보의 실행 근거이며 공통 Safety를 대체하지 않는다. Arm의 joint/action writer와 stop/rearm/HOLD는 OMX owner에 남는다. Base `cmd_vel`과 Arm 출력을 하나의 writer로 합치지 않는다.
 
-## 전체 manifest root 판정
+## manifest root 판정 기록
 
-현재 manifest의 **90개 root를 각각 한 행**으로 기록했다. 하위 root는 상위 root의 일부를 따로 소유하므로 행 개수를 패키지 개수로 읽지 않는다. `유지`는 실제 책임이 현재 위치에 맞는다는 뜻이다. `이전 완료`·`분리 완료`는 소스 holder 변경을 뜻한다. `후속 분리 보류`는 기존 패키지·transaction 소비자를 유지한다는 결정이며 새로운 빈 폴더를 뜻하지 않는다. ROS 배포명과 Python import명이 다른 경우 둘 다 적었다.
+아래는 각 소유 경계를 판정한 기록이다. 현재 root 목록과 권한은 `tools/harness/platform_parts.yaml`이 정본이다. 하위 root는 상위 root의 일부를 따로 소유하므로 행 개수를 패키지 개수로 읽지 않는다. `유지`는 실제 책임이 현재 위치에 맞는다는 뜻이다. `이전 완료`·`분리 완료`는 소스 holder 변경을 뜻한다. `후속 분리 보류`는 기존 패키지·transaction 소비자를 유지한다는 결정이며 새로운 빈 폴더를 뜻하지 않는다. ROS 배포명과 Python import명이 다른 경우 둘 다 적었다.
 
 | 현재 manifest root | 실제 패키지·import 또는 형식 | 판정과 현재 책임·소비자 |
 |---|---|---|
@@ -193,9 +195,11 @@ CORE의 공통 Safety와 최종 Base 명령 선택은 `core_features.safety`, `c
 | `operations/fleet` | ROS `fleet`; `fleet` | 분리 완료 — pure MapPose는 World, 순수 목표/진척 규칙은 execution 소비. D-657 `server/model_feedback_dispatch` 원장 어댑터와 admission·claim·dispatch·producer 인증·MapPoseService 조립·trip consumer는 Fleet 소유 |
 | `operations/fleet/fleet/incidents` | `fleet.incidents.handoff`, `fleet.incidents.notifications` | 분리 완료 — D-661 이름 있는 담당자의 사건 인수와 기존 Fleet DB의 알림 outbox·고정 채널 worker·receipt. 판단·resolver는 `fleet/stuck`, 인증·라우트·worker 생명주기는 `fleet/server`에 유지. 실제 운영 수용은 HOLD |
 | `operations/decision` | `rosy.decision`; 기존 `fleet` 배포 | 이전 완료 — ER2/VLM·candidate·provider-neutral tool 계약/제안. store 결속 dispatcher는 D-657에서 Fleet로 이전; 기존 transaction/배포 유지, 옛 module shim 없음 |
-| `operations/site_ui/console` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
-| `operations/apps/fleet` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
+| `applications/fleet/web` | source assets; 설치 `fleet.server.web` | 이전 완료 — canonical Console 자산, 동일 allowlist/CSP/URL. wheel·sdist는 checkout 없이 self-contained; server는 Fleet 소유 |
+| `applications/monitoring` | 독립 상태 앱의 소유·표면 기준, backend 브라우저 계약 | D-876 등록 — 서비스의 scoped read API를 소비한다. 현재 화면 구현/G1·G2·G3는 HOLD이며 API 브라우저 시험을 화면 완성으로 계산하지 않는다 |
+| `applications/fleet/gateway` | wheel `rosy-app-gateway`; `rosy_gateway` | 유지 — site gateway 앱 조립. Fleet ROS 패키지·device agent와 구분 |
 | `operations/world` | wheel `rosy-world`; `rosy.world` | 이전 완료 — `ObservationSnapshot`과 `state/projections/map_pose.py`. Fleet은 그 모듈을 직접 import한다(D-752). MapPoseService·trip·swarm·lane·history의 서비스와 원장은 Fleet |
+| `operations/monitoring` | wheel `rosy-monitoring`; `rosy.monitoring`, CLI `rosy-monitoring` | D-876 독립 수집·집계·durable 관측·scoped read API/POSIX 실행기. CORE/Fleet/host 기존 출력을 읽으며 명령·원장·복구 소유권을 갖지 않는다 |
 | `operations/processes/palletizing` | wheel `rosy-palletizing`; `rosy.processes.palletizing` | 유지 — palletizing process 정의/조정. Arm owner·skill·site execution 소비 경계 유지 |
 | `operations/processes/cell` | ROS `rosy_cell`; `rosy_cell` | 유지 — cell process·site 조립. agent/gateway contract 소비; 직접 joint writer가 아님 |
 | `operations/situation` | `rosy_situation` | 분리 완료 — 기존 사실과 제한된 advisory 제안은 별도 출력. D-652 `assessment`는 개입 필요성, `snapshot_assessment`는 관측 변환을 소유하며 Fleet/Situation이 내부 shadow로 소비. 기존 import/patch identity 유지 |

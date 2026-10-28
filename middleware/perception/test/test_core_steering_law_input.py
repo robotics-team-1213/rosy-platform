@@ -117,17 +117,27 @@ def test_waiting_for_native_law_still_subscribes_scan_and_route_prior():
     import ast
     from pathlib import Path
     from types import SimpleNamespace
+    from control.lane_route_guide_input import LaneRouteGuideInput, subscribe_route_guide
+    from test_lane_route_guide_input import message
     source = Path(__file__).resolve().parents[1] / 'sensors/line_observation/line_observer_node.py'
     tree = ast.parse(source.read_text(encoding='utf-8'))
     guard = next(n for n in ast.walk(tree) if isinstance(n, ast.If)
                  and n.body and isinstance(n.body[0], ast.Expr)
                  and ast.unparse(n.body[0].value).startswith('self.create_subscription(LaserScan'))
-    topics = []
+    topics = {}
     node = SimpleNamespace(_drivable_required=True, _drivable_steer=None, _on_scan=lambda _: None,
-                           create_subscription=lambda _, topic, *args: topics.append(topic))
+                           _lane_guide=LaneRouteGuideInput(), _stamp=lambda: 10.2,
+                           create_subscription=lambda _, topic, callback, qos: topics.update({topic: callback}))
     exec(compile(ast.Module(body=[guard], type_ignores=[]), str(source), 'exec'),
-         dict(self=node, LaserScan=object, String=object, qos_profile_sensor_data=None))
-    assert topics == ['scan', 'line/lane_guide']
+         dict(self=node, LaserScan=object, String=object, qos_profile_sensor_data=None,
+              subscribe_route_guide=subscribe_route_guide))
+    assert list(topics) == ['scan', 'line/lane_guide']
+    receive = topics['line/lane_guide']
+    receive(SimpleNamespace(data=message()))
+    assert node._lane_guide.for_frame(10.2).authority_seq == 3
+    receive(SimpleNamespace(data=message(seq=2, clear=True)))
+    receive(SimpleNamespace(data=message()))
+    assert node._lane_guide.for_frame(10.3) is None
 
 
 def test_missing_untrusted_or_symlink_file_is_refused(tmp_path):

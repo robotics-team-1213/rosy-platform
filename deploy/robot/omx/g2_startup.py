@@ -5,7 +5,18 @@ import threading
 import time
 
 
-def prepare_home(runtime, profile, target, *, wall_clock=time.monotonic, sleep=time.sleep):
+def prepare_home(runtime, profile, target, *, startup_gate=None, wall_clock=time.monotonic, sleep=time.sleep):
+    if startup_gate is None:
+        raise PermissionError("explicit stop-fenced startup authorization is required")
+    try:
+        return _prepare_home(runtime, profile, target, startup_gate=startup_gate,
+                             wall_clock=wall_clock, sleep=sleep)
+    except BaseException:
+        startup_gate.cancel()
+        raise
+
+
+def _prepare_home(runtime, profile, target, *, startup_gate, wall_clock, sleep):
     from omx_adapter.command_owner import TrajectoryCommand
 
     config = runtime.owner.config
@@ -60,13 +71,14 @@ def prepare_home(runtime, profile, target, *, wall_clock=time.monotonic, sleep=t
     admission.acquire(token, seat, ttl_s=bound+30.)
     admission.reserve_pilot(seat, command_id)
     runtime.register_phase_event_sink(command_id, event_sink)
-    decision = runtime.submit(command)
+    decision = startup_gate.submit(command)
     if not decision.accepted:
         if decision.reason != "action_submission_failed":
             admission.note_rejected(command_id)
         raise RuntimeError("SIM startup goal rejected: " + decision.reason)
     stable_since, stable_sample_stamp, last_sequence = None, None, current.sequence
     while wall_clock() < deadline:
+        startup_gate.assert_current()
         with lock:
             if events.get("error"):
                 raise RuntimeError(events["error"])
@@ -90,15 +102,17 @@ def prepare_home(runtime, profile, target, *, wall_clock=time.monotonic, sleep=t
             last_sequence = sample.sequence
             if (new_sample and sample.received_at > stable_sample_stamp
                     and wall_clock()-stable_since >= .5):
-                admission.release(token, seat)
-                admission.run_action_admission(lambda: None)
-                return {"fixture": "SIM_STARTUP_HOME", "result": "READY", "command_id": command_id,
+                def finish():
+                    admission.release(token, seat)
+                    admission.run_action_admission(lambda: None)
+                    return {"fixture": "SIM_STARTUP_HOME", "result": "READY", "command_id": command_id,
                         "session_id": command.session_id, "ros_goal_id": events["goal_id"],
                         "terminal_status": 4, "terminal_result_code": 0, "seat_reconciled": True,
                         "target": dict(target), "profile_revision": getattr(profile, "revision", None),
                         "initial_sequence": current.sequence, "initial_positions": dict(current.positions),
                         "final_sequence": sample.sequence, "final_positions": dict(sample.positions),
                         "elapsed_wall_s": wall_clock()-start_wall, "elapsed_sim_s": stamp-start_sim}
+                return startup_gate.complete(finish)
         else:
             stable_since, stable_sample_stamp = None, None
         sleep(.05)

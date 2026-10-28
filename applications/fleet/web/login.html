@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy Fleet — 로그인</title>
+  <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
+  <link rel="stylesheet" href="/common/tokens.css">
+  <script src="/common/theme.js"></script>
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/console/assets/password-login.css">
+  <script type="module" src="/common/ui.js"></script>
+  <script type="module" src="/console/assets/login-page.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#login-main">로그인 입력으로 이동</a>
+  <ui-shell grammar="procedure">
+    <ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>관제 로그인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+    <main id="login-main" class="fleet-login-main" tabindex="-1">
+      <ui-section aria-labelledby="login-title">
+      <h1 id="login-title" class="ui-page-heading">관제 로그인</h1>
+      <p>이 현장의 계정으로 로그인하세요.</p>
+      <p id="login-site"></p>
+      <p id="login-context">로그인 후 원래 업무로 돌아갑니다.</p>
+      <ui-section id="login-recovery" aria-labelledby="login-recovery-title" hidden>
+        <h2 id="login-recovery-title" class="ui-section-heading">앱 접근을 확인해 주세요</h2>
+        <ui-status id="login-recovery-status" state="forbidden" role="alert"></ui-status>
+        <ui-actions><a id="login-profile" class="ui-disclosure-row" href="/console/profile">내 계정·권한 확인</a><a id="login-retry" class="ui-disclosure-row">접근 다시 확인</a></ui-actions>
+      </ui-section>
+      <div id="password-login" class="password-login"></div>
+      <ui-status id="login-availability" state="pending">로그인 설정을 확인하고 있습니다.</ui-status>
+      <p>계정이 없거나 비밀번호를 잊었다면 현장 관리자에게 문의하세요.</p>
+      <a id="login-back" href="/console">원래 업무로 돌아가기</a>
+      </ui-section>
+    </main>
+  </ui-shell>
+</body>
+</html>

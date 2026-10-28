@@ -10,6 +10,12 @@ Before=rosy-core.service rosy-runtime.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/opt/rosy/native-runtime/recover-release.sh
+# D-798: settle an image-layer sync a power cut left half done (files from two releases in
+# native-runtime) before rosy-core and the runtime target start. Signed boot inverses must
+# succeed before this required gate admits CORE. Generic pending.json deferrals still succeed;
+# raised reconciliation errors hold startup. "+" permits writes to managed files and backups
+# outside this sandbox.
+ExecStartPost=+/usr/bin/python3 -I -B /opt/rosy/native-runtime/image-layer-reconcile.py
 TimeoutStartSec=60
 NoNewPrivileges=true
 PrivateDevices=true

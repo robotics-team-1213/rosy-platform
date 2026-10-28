@@ -35,6 +35,48 @@ def timeout_peer():
         yield peer
 
 
+def test_pilot_snapshot_uses_admitted_state_while_native_intake_is_pending():
+    from omx_adapter.pilot_sim.runtime import PilotSimRuntime
+    rclpy.init()
+    node = Node('omx_snapshot_publication_test')
+    config = ArmCommandConfig(enabled=True, workcell_id='w', instance_id='i', joint_names=('joint1',),
+                             position_limits={'joint1': (-1., 1.)}, allowed_owners=('pilot_sim',),
+                             calibration_revision='cal')
+    runtime = RosArmCommandRuntime(node, config)
+    entered, release = threading.Event(), threading.Event()
+    original = runtime.owner.run_admission_policy
+    runtime.action_port.server_is_ready = lambda: True
+    pilot = PilotSimRuntime(runtime)
+
+    def paused(operation):
+        entered.set()
+        assert release.wait(3)
+        return original(operation)
+
+    runtime.owner.run_admission_policy = paused
+    message = JointState()
+    message.name, message.position = ['joint1'], [0.]
+    message.header.stamp = node.get_clock().now().to_msg()
+    worker = threading.Thread(target=runtime._on_joint_state, args=(message,))
+    try:
+        worker.start()
+        assert entered.wait(2)
+        assert runtime.latest_joint_state.sequence == 1, 'pending intake must remain visible to policy guard'
+        pending = pilot.snapshot()
+        assert pending['state_sequence'] is None and pending['positions'] == {} and not pending['ready']
+        release.set()
+        worker.join(2)
+        assert not worker.is_alive()
+        assert runtime.latest_joint_state == runtime.owner._joint_state
+        assert pilot.snapshot()['state_sequence'] == 1
+    finally:
+        release.set()
+        worker.join(3)
+        runtime.destroy()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
 def test_feedback_source_stamp_cannot_be_replayed_as_a_fresh_owner_state():
     rclpy.init()
     node = Node("omx_source_replay_test")
@@ -405,6 +447,11 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         return decision
 
     runtime.owner.poll = observed_poll
+    import os
+    trace = None
+    if os.environ.get('ROSY_OMX_FEEDBACK_TRACE') == '1':
+        from feedback_trace import FeedbackTrace
+        trace = FeedbackTrace(runtime)
     sink_times = []
     sink_entered = threading.Event()
     release_sink = threading.Event()
@@ -420,10 +467,14 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
     def slow_sink(event):
         if event.kind == "RUNNING_FEEDBACK" and not slow_feedbacks:
             slow_feedbacks.append(event)
+            if trace is not None:
+                trace.add('sink_begin')
             sink_times.append(time.monotonic())
             sink_entered.set()
             release_sink.wait(5.0)
             sink_times.append(time.monotonic())
+            if trace is not None:
+                trace.add('sink_end')
         return True
 
     try:
@@ -452,10 +503,13 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         observed = runtime.owner._joint_state
         with publication_stats.get_lock():
             published, max_publish_gap, _ = publication_stats[:]
+        received = sorted({at for _, _, at in owner_samples})
+        owner_max_gap = max((b - a for a, b in zip(received, received[1:])), default=float("inf"))
         evidence = {
             "decision": runtime.last_terminal_decision,
             "published": int(published),
             "max_publish_gap": max_publish_gap,
+            "owner_max_gap": owner_max_gap,
             "owner_tail": owner_samples[-10:],
             "owner_age": now - observed.received_at,
             "slow_sink_times": sink_times,
@@ -464,6 +518,8 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         assert any(t > sink_times[0] + config.max_joint_state_age_s and seq > initial.sequence
                    for t, seq, _ in owner_samples), evidence
         assert now - observed.received_at < config.max_joint_state_age_s, evidence
+        # Owner intake may lag publisher pauses only by part of the freshness budget.
+        assert owner_max_gap < max_publish_gap + config.max_joint_state_age_s / 2, evidence
         assert any(t > sink_times[0] + config.max_joint_state_age_s for t in watchdog_ticks), evidence
         if timeout_while_blocked:
             assert runtime.owner.state == "hold", evidence
@@ -501,6 +557,8 @@ def test_slow_feedback_handling_cannot_starve_the_joint_state_subscription(
         runtime.destroy()
         owner_node.destroy_node()
         rclpy.shutdown()
+        if trace is not None:
+            trace.dump()
 
 
 @pytest.mark.parametrize("scheduler_stopped", [False, True])
@@ -533,7 +591,16 @@ def test_timeout_never_falls_back_to_the_owner_thread_sink(scheduler_stopped):
 
 
 @pytest.mark.parametrize("mode", ["spin", "spin_once", "future"])
-def test_owner_executor_schedules_callbacks_and_shuts_down(mode):
+def test_owner_executor_schedules_callbacks_and_shuts_down(mode, monkeypatch):
+    # The yield lives in a protected Jazzy hook; a release that stops calling it must fail here.
+    hook_calls = []
+    hook = OwnerMultiThreadedExecutor._spin_once_impl
+
+    def counted_hook(self, *args, **kwargs):
+        hook_calls.append(mode)
+        return hook(self, *args, **kwargs)
+
+    monkeypatch.setattr(OwnerMultiThreadedExecutor, "_spin_once_impl", counted_hook)
     rclpy.init()
     node = Node("omx_executor_modes")
     executor = OwnerMultiThreadedExecutor(num_threads=4)
@@ -559,6 +626,7 @@ def test_owner_executor_schedules_callbacks_and_shuts_down(mode):
         else:
             executor.spin_until_future_complete(completed, timeout_sec=3.0)
         assert completed.done() and completed.result() == "observed"
+        assert hook_calls, "OwnerMultiThreadedExecutor._spin_once_impl was never invoked"
     finally:
         stopped = executor.shutdown(timeout_sec=2.0)
         if spinning is not None:

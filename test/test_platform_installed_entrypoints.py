@@ -8,7 +8,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 for relative in (
     "middleware/devices/omx/agent/src",
-    "operations/apps/fleet/src",
+    "applications/fleet/gateway/src",
 ):
     path = ROOT / relative
     if str(path) not in sys.path:
@@ -52,11 +52,27 @@ def test_site_cell_profile_composes_existing_fleet_server_without_new_runtime():
     assert compose_site(profile, lambda selected: sentinel if selected is profile else None) is sentinel
 
 
-def test_existing_fleet_cli_delegates_through_gateway_composition(monkeypatch):
+def test_fleet_cli_runs_without_gateway(monkeypatch):
+    import builtins
+    original = builtins.__import__
+    def without_gateway(name, *args, **kwargs):
+        assert not name.startswith('rosy_gateway'), 'Fleet must not import its application caller'
+        return original(name, *args, **kwargs)
+    assert callable(getattr(fleet_cli, 'run', None)), 'Fleet needs a public execution entry'
     calls = []
-    monkeypatch.setattr(fleet_cli, "_main_impl", lambda argv=None: calls.append(argv) or 7)
+    monkeypatch.setattr(fleet_cli, 'run', lambda argv=None: calls.append(argv) or 7)
+    monkeypatch.setattr(builtins, '__import__', without_gateway)
     assert fleet_cli.main(["console"]) == 7
     assert calls == [["console"]]
+
+
+def test_gateway_calls_public_fleet_run_once(monkeypatch):
+    from rosy_gateway.compose import main
+    assert callable(getattr(fleet_cli, 'run', None)), 'Fleet needs a public execution entry'
+    calls = []
+    monkeypatch.setattr(fleet_cli, 'run', lambda argv=None: calls.append(argv) or 7)
+    assert main(['console']) == 7
+    assert calls == [['console']]
 
 
 def test_installation_profiles_exclude_learning_and_pinky_runtime_dependencies():

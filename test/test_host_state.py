@@ -228,6 +228,15 @@ def test_sudoers_gets_the_login_and_a_broken_file_is_never_installed(tmp_path):
     assert not list(sudoers.parent.glob("*.rosy-tmp"))
 
 
+@pytest.mark.parametrize("role, wanted", [("ai", True), ("model", True), ("site", False)])
+def test_the_lab_pcs_carry_the_storage_owner_as_desired_state(role, wanted):
+    """D-883: a model PC installed without units-user refused every clean-storage request."""
+    lines = (ROOT / "deploy" / ROLES[role] / "host-state" / "manifest").read_text(encoding="utf-8").splitlines()
+    line = "approval=recovery file /etc/rosy/host-control/units-user common/host-control-units-user.in"
+    assert (line in lines) is wanted
+    assert (ROOT / "deploy/hosts/common/host-state/host-control-units-user.in").read_text() == "@LOGIN@\n"
+
+
 @pytest.mark.parametrize("role", sorted(ROLES))
 def test_every_role_manifest_parses_and_its_sources_exist(role):
     dirs = {"common": ROOT / "deploy/hosts/common/host-state", "role": ROOT / "deploy" / ROLES[role] / "host-state"}
@@ -434,6 +443,73 @@ def test_sim_packages_are_approval_only_and_never_on_the_site_pc():
             assert not lines
         else:
             assert len(lines) == 1 and lines[0].startswith("approval=sim apt ros-jazzy-ros-gz "), role
-    # The common manifest reaches every PC, the site PC included.
+    # The common manifest reaches every PC, the site PC included: no sim package, only uv's pip (D-802).
     common = (ROOT / "deploy/hosts/common/host-state/manifest").read_text(encoding="utf-8").splitlines()
-    assert not [line for line in common if line.split("#", 1)[0].split()[1:2] == ["apt"]]
+    assert [line for line in common if line.split("#", 1)[0].split()[1:2] == ["apt"]] == [
+        "approval=uv apt python3-pip"]
+
+
+def _pip_fake(bin_dir):
+    """python3 -m pip install ... --target DIR: logs the call and drops DIR/bin/uv and uvx."""
+    path = bin_dir / "python3"
+    path.write_text('#!/bin/sh\necho "python3 $*" >> "$FAKE/calls"\n'
+                    'while [ $# -gt 0 ]; do [ "$1" = --target ] && T="$2"; shift; done\n'
+                    'mkdir -p "$T/bin" && touch "$T/bin/uv" "$T/bin/uvx"\nexit 0\n')
+    path.chmod(0o755)
+
+
+def test_uv_installs_only_with_its_approval_hash_checked_and_linked(tmp_path):
+    """D-802: the pinned uv wheel goes in with --approve uv; without it, install and the timer only report."""
+    fake, bin_dir = _apt_fakes(tmp_path, ["python3-pip"])
+    _pip_fake(bin_dir)
+    dry = _run(tmp_path, bin_dir, fake, "install", "model").stdout
+    assert "[approval=uv] uv 0.12.22 not installed in" in dry and "skip (needs --approve)" in dry
+    assert not [c for c in _calls(fake) if c.startswith("python3")]
+
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "uv").returncode == 0
+    pip = [c for c in _calls(fake) if c.startswith("python3")]
+    assert len(pip) == 1 and "--no-deps --only-binary=:all: --require-hashes --target" in pip[0]
+    folder = tmp_path / "host/usr/local/lib/rosy-tools/uv-0.12.22"
+    for name in ("uv", "uvx"):
+        link = tmp_path / "host/usr/local/bin" / name
+        assert link.is_symlink() and Path(os.readlink(link)) == folder / "bin" / name
+    _run(tmp_path, bin_dir, fake, "check")  # the model's unapproved sim apt lines still report
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    assert not [item for item in status["awaiting_approval"] if "uv" in item]
+
+
+@pytest.mark.parametrize("stale", [False, True], ids=["missing", "stale"])
+def test_uvx_link_drift_is_reported_and_repaired_only_with_approval(tmp_path, stale):
+    fake, bin_dir = _apt_fakes(tmp_path, ["python3-pip"])
+    _pip_fake(bin_dir)
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "uv").returncode == 0
+    link = tmp_path / "host/usr/local/bin/uvx"
+    expected = Path(os.readlink(link))
+    link.unlink()
+    if stale:
+        link.symlink_to(expected.with_name("old-uvx"))
+
+    _run(tmp_path, bin_dir, fake, "check")  # unrelated unapproved SIM packages can report drift
+    status = json.loads((tmp_path / "host/var/lib/rosy-host-state/status.json").read_text())
+    assert any("uvx" in item for item in status["awaiting_approval"])
+    assert not link.exists()
+
+    assert _run(tmp_path, bin_dir, fake, "install", "model", "--approve", "uv").returncode == 0
+    assert link.is_symlink() and Path(os.readlink(link)) == expected
+    assert len([c for c in _calls(fake) if c.startswith("python3")]) == 1
+
+
+def test_a_wheel_tool_line_without_an_approval_policy_is_refused(tmp_path):
+    fake, bin_dir = _apt_fakes(tmp_path, [])
+    _lib(tmp_path, "safe wheel-tool uv 0.12.22 " + "ab" * 32 + "\n", "", {})
+    result = _run(tmp_path, bin_dir, fake, "check")
+    assert result.returncode != 0 and "wheel-tool needs an approval policy" in result.stderr
+
+
+def test_the_installed_copy_tells_install_to_run_from_the_repo(tmp_path):
+    copy = tmp_path / "sbin" / "rosy-host-state"
+    copy.parent.mkdir()
+    copy.write_bytes(TOOL.read_bytes())
+    result = subprocess.run([sys.executable, str(copy), "install", "model", "--dry-run"],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode != 0 and "install reads the repo" in result.stderr

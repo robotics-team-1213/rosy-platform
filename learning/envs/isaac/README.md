@@ -19,8 +19,8 @@ worker는 두 잠금을 SDK child에 상속하고 실행 165초, 로그 16MiB, �
 `import_omx.py`의 선택적 `--report <새 JSON 경로>`는 정상 SDK 정리 후 모델·관절·자산 지문·관측 프레임 수를 기록한다. 기존 파일은 덮어쓰지 않는다. `import_report.verify_report`는 일반 파일·크기·SDK 버전·자산 지문·필수 관절과 프레임 수를 다시 검사한다. 이 보고서는 모델 import 증거이며 `task_success`는 null이다. 물체 파지·정책 평가·실물 수용을 뜻하지 않는다. 고정 시나리오 원격 실행 관리와 접촉 왕복은 별도 공개 단위로 연결한다.
 
 - Ubuntu 24.04 with ROS 2 Jazzy `xacro` and the separately managed Isaac Sim SDK on a supported NVIDIA GPU host. See [D-434](../../../docs/adr/D-434-model-pc-and-site-pc-roles.md) for the accepted host/version/resource boundary. The GPU runtime is not part of this repository or the Pinky Pi image.
-- Source the ROSY Jazzy workspace for `xacro` package lookup. Before running Isaac Sim, configure its ROS 2 bridge. Set `ROS_DOMAIN_ID=41` for `rosy_01`; CORE retains its configured CycloneDDS transport, and the SDK's bridge transport must interoperate with it.
-- Choose an output directory outside the repository. On this Windows workspace, generated files belong only under `X:\DevTemp\`; on the Linux GPU host, use a scratch directory outside the checkout.
+- Source the ROSY Jazzy workspace for `xacro` package lookup. Before running Isaac Sim, configure its ROS 2 bridge. Set `ROS_DOMAIN_ID=41` for `rosy_01` and `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`; CORE retains its configured CycloneDDS transport, and the SDK's bridge transport must interoperate with it. Isaac Sim and its CORE run on the same GPU host: DDS never crosses machines (D-795), so a real Pinky (loopback-only DDS) cannot be driven from Isaac over the LAN.
+- Choose an output directory outside the repository. On this Windows workspace, generated files belong only under `$ROSY_SCRATCH/`; on the Linux GPU host, use a scratch directory outside the checkout.
 
 ## Run on the GPU host
 
@@ -29,7 +29,7 @@ source /opt/ros/jazzy/setup.bash
 export ROSY_REPO=/path/to/rosy-platform
 export ISAAC_PYTHON=/path/to/isaac-sdk-venv/bin/python
 source "$ROSY_REPO/install/setup.bash"
-export ROS_DOMAIN_ID=41
+export ROS_DOMAIN_ID=41 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp  # or use the same supported RMW as CORE
 python3 "$ROSY_REPO/learning/envs/isaac/prepare_urdf.py" --output /scratch/rosy-isaac/rosy.urdf
 "$ISAAC_PYTHON" "$ROSY_REPO/learning/envs/isaac/run_rosy.py" \
@@ -91,7 +91,7 @@ The Pinky URDF places wheel joint origins at ±0.04055 m, a geometric center sep
   --source-revision "$(git -C "$ROSY_REPO" rev-parse HEAD)" --train-episodes 6
 ```
 
-baseline, 짧은 구간 학습, 정책을 고정한 평가 시드 202/303 순서로 실행한다. 실제 pose의 ordered progress·이탈·물리 정지를 판정하고 trace·Q table·결과를 출력한다. 학습 업데이트 없이 기존 규칙만 완주한 결과는 학습 성공으로 처리하지 않는다. [검증 결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다. 내부 날짜별 일지는 Git 제외 경로 `private/isaac/{plans,journal,results,templates}/`에, 원시 로그는 관리된 X: 세션과 모델 PC scratch에 보관한다.
+baseline, 짧은 구간 학습, 정책을 고정한 평가 시드 202/303 순서로 실행한다. 실제 pose의 ordered progress·이탈·물리 정지를 판정하고 trace·Q table·결과를 출력한다. 학습 업데이트 없이 기존 규칙만 완주한 결과는 학습 성공으로 처리하지 않는다. [검증 결과](../../../docs/validation/isaac-map-rl-2026-10-11/result.md)를 따른다. 내부 날짜별 일지는 Git 제외 경로 `private/isaac/{plans,journal,results,templates}/`에, 원시 로그는 관리된 스크래치 세션과 모델 PC scratch에 보관한다.
 
 ### 실제 화면 녹화와 네 시작 방향
 

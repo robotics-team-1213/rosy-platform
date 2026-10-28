@@ -12,11 +12,13 @@ import sys
 import time
 
 import pytest
+from sd_writer_fixture import make_writer
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "deploy" / "robot" / "pinky_pro" / "sd" / "prepare-rosy-sd.ps1"
 POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
+IMAGE_METADATA = ("manifest.json", "source-revision.txt", "build-provenance.json")
 sys.path.insert(0, str(ROOT / "deploy" / "robot" / "pinky_pro" / "release"))
 from signing import build_sha256sums, sign_checksums  # noqa: E402
 
@@ -57,17 +59,16 @@ def writer_case(tmp_path: Path):
             "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
         },
     }, sort_keys=True), encoding="utf-8")
-    private_key = tmp_path / "release-private.pem"
-    public_key = tmp_path / "release-public.pem"
-    subprocess.run(
+    (release / "source-revision.txt").write_text("a" * 40 + "\n", encoding="ascii")
+    (release / "build-provenance.json").write_text(
+        json.dumps({"release_id": "2026.09.21-001", "source_revision": "a" * 40}), encoding="utf-8")
+    private_key, public_key = tmp_path / "release-private.pem", tmp_path / "release-public.pem"
+    for command in (
         ["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private_key)],
-        check=True,
-    )
-    subprocess.run(
         ["openssl", "pkey", "-in", str(private_key), "-pubout", "-out", str(public_key)],
-        check=True,
-    )
-    sums = build_sha256sums(release, ["manifest.json", image.name])
+    ):
+        subprocess.run(command, check=True)
+    sums = build_sha256sums(release, [*IMAGE_METADATA, image.name])
     (release / "SHA256SUMS").write_bytes(sums)
     signature = release / "SHA256SUMS.sig"
     signature.write_text(sign_checksums(sums, private_key), encoding="utf-8")
@@ -78,13 +79,7 @@ def writer_case(tmp_path: Path):
         json.dumps({"robot_numbers": [], "device_names": [], "device_uids": []}),
         encoding="utf-8",
     )
-    marker = tmp_path / "writer-called.txt"
-    writer_args = tmp_path / "writer-args.txt"
-    fake_writer = tmp_path / "fake-writer.cmd"
-    fake_writer.write_text(
-        f'@echo off\n> "{marker}" echo called\n> "{writer_args}" echo %*\nexit /b 0\n',
-        encoding="utf-8",
-    )
+    fake_writer, marker, writer_args = make_writer(tmp_path)
     local_app_data = tmp_path / "local-app-data"
     credential_dir = local_app_data / "Rosy" / "credentials"
     credential_dir.mkdir(parents=True)
@@ -273,7 +268,7 @@ def test_manifest_identity_mismatch_is_rejected_before_writer(writer_case):
     data = json.loads(manifest.read_text(encoding="utf-8"))
     data["board"] = "not-pinky"
     manifest.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
-    sums = build_sha256sums(manifest.parent, ["manifest.json", writer_case["image"].name])
+    sums = build_sha256sums(manifest.parent, [*IMAGE_METADATA, writer_case["image"].name])
     (manifest.parent / "SHA256SUMS").write_bytes(sums)
     writer_case["signature"].write_text(
         sign_checksums(sums, writer_case["private_key"]), encoding="utf-8"
@@ -1633,7 +1628,7 @@ def _rerelease(case, raw: bytes):
     data = json.loads(manifest.read_text(encoding="utf-8"))
     data["image"]["sha256"] = hashlib.sha256(image.read_bytes()).hexdigest()
     manifest.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
-    sums = build_sha256sums(release, ["manifest.json", image.name])
+    sums = build_sha256sums(release, [*IMAGE_METADATA, image.name])
     (release / "SHA256SUMS").write_bytes(sums)
     case["signature"].write_text(sign_checksums(sums, case["private_key"]), encoding="utf-8")
 

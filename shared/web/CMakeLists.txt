@@ -8,6 +8,7 @@ install(FILES
   shared-assets.json
   tokens.css
   components.css
+  stage-strip.css
   template.html
   template.css
   app-shell.css
@@ -18,13 +19,27 @@ install(FILES
   confirmation.js
   live-dialog-geometry.js
   task-chooser.js
+  ui-wiring.js
   task-chooser.css
   theme.js
   evidence.js
+  webrtc.js
+  request.js
   motor-health.js
   motor-health.css
   scope.js
+  fleet-client.js
   account-profile.js
+  account-session.js
+  control-dom.js
+  form-controls.js
+  collection-controls.js
+  interaction-controls.js
+  workflow-controls.js
+  component-controls.css
+  component-gallery.css
+  component-gallery.html
+  component-gallery.js
   DESTINATION share/${PROJECT_NAME}
 )
 

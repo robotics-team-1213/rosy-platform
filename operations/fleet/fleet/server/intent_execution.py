@@ -9,6 +9,12 @@ _LOG = logging.getLogger(__name__)
 STOP_VERBS = frozenset({'estop','cancel','stop','formation_stop','follow_cancel'})
 
 
+def _reject_navigation_epoch(call):
+    if call.verb == "navigate" and any(key in (call.body or {}) for key in (
+            "expected_boot_id", "expected_owner_generation")):
+        raise HubError("COMMAND_REJECTED", "FLEET_NAVIGATION_CALLER_EPOCH_UNSUPPORTED")
+
+
 async def _site_call(console, call) -> dict:
     if call.verb == "formation_start":
         return await console.formation_start(
@@ -25,6 +31,7 @@ async def _site_call(console, call) -> dict:
 
 
 async def _robot_call(console, call) -> dict:
+    _reject_navigation_epoch(call)
     robot = call.robot
     if call.verb == "navigate":
         if call.body.get("x") is None or call.body.get("y") is None:
@@ -53,6 +60,7 @@ class IntentExecution:
         return list(self.console.robot_ids)
 
     async def step(self, call, principal, idempotency_key, index, *, admission=None, owner_id=None):
+        _reject_navigation_epoch(call)
         from fleet.swarm.dispatch_guard import dispatch_guard
         def resources_available():
             if self.task_service is None or call.verb in STOP_VERBS or call.verb=='navigate':return
@@ -68,6 +76,7 @@ class IntentExecution:
             return await self._step(call,principal,idempotency_key,index,admission=admission)
 
     async def _step(self, call, principal, idempotency_key, index, *, admission=None):
+        _reject_navigation_epoch(call)
         console, task_service = self.console, self.task_service
         local_stop_fanout, cancel_pending = self.local_stop_fanout, self.cancel_pending
         if call.scope == "site":

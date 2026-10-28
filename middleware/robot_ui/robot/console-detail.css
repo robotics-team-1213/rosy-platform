@@ -106,7 +106,6 @@
   gap: var(--space-2);
   border-left: 1px solid var(--surface-line);
 }
-.hero-formation[hidden] { display: none; }
 .hero-formation strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: var(--track-wide); }
 .hero-formation > span:last-child { color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
 
@@ -687,7 +686,6 @@
   border-left: var(--space-1) solid var(--status-crit);
   border-radius: var(--radius-control);
 }
-.hitl-escalation[hidden] { display: none; }
 .hitl-escalation h3 {
   margin: 0 0 var(--space-2) 0;
   color: var(--status-crit);

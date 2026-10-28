@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy Fleet — 학습 정책 승인</title>
+  <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
+  <link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/console/assets/policy.css">
+  <script type="module" src="/common/ui.js"></script>
+  <script type="module" src="/console/assets/policy-page.js"></script>
+</head>
+<body><ui-shell grammar="procedure">
+  <ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>학습 정책 승인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+  <main class="policy-main">
+    <h1>학습 정책 승인</h1>
+    <p>학습을 마친 정책은 L0으로만 등록되고 실물을 움직이지 않습니다. 단계는 관리자 승인으로 하나씩 오르고,
+      실물을 움직이는 단계(L3·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다. 실행은 승인 창 안에서
+      1–2초 lease로만 이어지며, 확인 요청이나 사고가 열리면 다음 갱신에서 멈춥니다(D-793).</p>
+    <label for="policy-workcell" class="ui-field-label">작업셀</label>
+    <select id="policy-workcell" class="ui-field"></select>
+    <ui-status id="policy-verdict" state="pending" role="status">상태를 확인하고 있습니다.</ui-status>
+    <a id="policy-login" href="/console/login?return=%2Fconsole%2Fpolicy" hidden>로그인</a>
+    <ui-status id="policy-message" role="alert" hidden></ui-status>
+
+    <section aria-labelledby="policy-incidents-heading">
+      <h2 id="policy-incidents-heading">사고 잠금</h2>
+      <ul id="policy-incidents" class="policy-list"></ul>
+      <form id="policy-incident-form" class="ui-form">
+        <label for="policy-incident-text" class="ui-field-label">사고·파손 신고 — 이 작업셀의 승인 창을 모두 닫습니다</label>
+        <textarea id="policy-incident-text" class="ui-field" maxlength="1000" required></textarea>
+        <ui-actions><ui-button id="policy-incident-report" kind="quiet">사고 신고…</ui-button></ui-actions>
+      </form>
+    </section>
+
+    <section aria-labelledby="policy-confirmations-heading">
+      <h2 id="policy-confirmations-heading">확인 요청</h2>
+      <ui-actions><ui-button id="policy-sync-owner" kind="quiet">owner HOLD 가져오기</ui-button></ui-actions>
+      <ul id="policy-confirmations" class="policy-list"></ul>
+    </section>
+
+    <section aria-labelledby="policy-windows-heading">
+      <h2 id="policy-windows-heading">승인 창</h2>
+      <ul id="policy-windows" class="policy-list"></ul>
+      <form id="policy-window-form" class="ui-form">
+        <label for="policy-window-policy" class="ui-field-label">정책 revision</label>
+        <select id="policy-window-policy" class="ui-field"></select>
+        <label for="policy-window-kind" class="ui-field-label">종류</label>
+        <select id="policy-window-kind" class="ui-field"></select>
+        <label for="policy-window-minutes" class="ui-field-label">길이(분) — 비우면 기본값</label>
+        <input id="policy-window-minutes" class="ui-field" type="number" min="1" max="480">
+        <label for="policy-window-scope" class="ui-field-label">허용 과제·범위</label>
+        <input id="policy-window-scope" class="ui-field" maxlength="500" required>
+        <ui-actions><ui-button id="policy-window-request" kind="quiet">승인 창 요청</ui-button></ui-actions>
+      </form>
+    </section>
+
+    <section aria-labelledby="policy-stages-heading">
+      <h2 id="policy-stages-heading">정책 단계</h2>
+      <ul id="policy-stages" class="policy-list"></ul>
+      <h3>대기 중인 단계 제안</h3>
+      <ul id="policy-proposals" class="policy-list"></ul>
+      <form id="policy-proposal-form" class="ui-form">
+        <label for="policy-proposal-revision" class="ui-field-label">정책 revision (새 학습 결과는 L0 등록)</label>
+        <input id="policy-proposal-revision" class="ui-field" maxlength="128" required>
+        <label for="policy-proposal-rig" class="ui-field-label">rig revision</label>
+        <input id="policy-proposal-rig" class="ui-field" maxlength="128" required>
+        <label for="policy-proposal-cal" class="ui-field-label">보정 revision</label>
+        <input id="policy-proposal-cal" class="ui-field" maxlength="128" required>
+        <label for="policy-proposal-evidence" class="ui-field-label">근거 receipt SHA-256</label>
+        <input id="policy-proposal-evidence" class="ui-field" pattern="[0-9a-f]{64}" required>
+        <label for="policy-proposal-note" class="ui-field-label">근거 설명</label>
+        <input id="policy-proposal-note" class="ui-field" maxlength="500" required>
+        <ui-actions><ui-button id="policy-proposal-submit" kind="quiet">다음 단계 제안</ui-button></ui-actions>
+      </form>
+    </section>
+    <p><a href="/console">관제로 돌아가기</a></p>
+  </main>
+</ui-shell></body></html>

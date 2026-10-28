@@ -30,20 +30,29 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-stack.service", "site-firewall.py", "rosy-site-firewall.service",
     "rosy-site-firewall-failclosed.service", "rosy-site-firewall-check.service",
     "rosy-site-firewall-check.timer",
-    "discovery-token.template.txt", "site_db.py", "candidate_signing.py",
+    "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "pairing-sync-token.template.txt",
     "compose.account.yaml", "Caddyfile.account",
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
-SERVICES = ("fleet", "vision", "proxy")
+SERVICES = ("fleet", "vision", "proxy", "postgres")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
 class CandidateVerificationError(ValueError):
     """Candidate metadata or local host image state does not match."""
+
+
+def verified_services(value: object) -> tuple[str, ...]:
+    """Canonicalize only the two authenticated service inventories (D-887)."""
+    if isinstance(value, list) and all(isinstance(s, str) for s in value):
+        for services in (SERVICES[:3], SERVICES):
+            if len(value) == len(services) and set(value) == set(services):
+                return services
+    raise CandidateVerificationError("candidate images must contain exactly Fleet, Vision, proxy, optionally Postgres")
 
 
 def _digest(path: Path) -> str:
@@ -99,11 +108,15 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         raise CandidateVerificationError("invalid source commit")
     if manifest.get("image_tag") != commit or manifest.get("platform") != "linux/amd64":
         raise CandidateVerificationError("manifest tag or platform mismatch")
+    if "site_users_tool_required" in manifest and manifest["site_users_tool_required"] is not True:
+        raise CandidateVerificationError("site_users_tool_required must be true when present")
 
     hashes = manifest.get("deployment_file_sha256")
     if not isinstance(hashes, dict):
         raise CandidateVerificationError("deployment file hashes are missing")
     required = set(REQUIRED_DEPLOYMENT_FILES) | set(REQUIRED_DOCUMENT_FILES)
+    if "site_users_tool_required" not in manifest and "site_users.py" not in hashes:
+        required.discard("site_users.py")  # historical signed candidates remain valid for rollback
     # Preserve verification/rollback of earlier signed candidates; the new pair is indivisible.
     if not set(hashes) & set(ACCOUNT_DEPLOYMENT_FILES):
         required.difference_update(ACCOUNT_DEPLOYMENT_FILES)
@@ -138,10 +151,9 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         raise CandidateVerificationError("image archive hash mismatch")
 
     images = manifest.get("images")
-    if not isinstance(images, dict) or set(images) != set(SERVICES):
-        raise CandidateVerificationError("candidate must contain Fleet, Vision, and proxy images")
+    services = verified_services(list(images) if isinstance(images, dict) else None)
     image_ids: dict[str, str] = {}
-    for service in SERVICES:
+    for service in services:
         row = images[service]
         if not isinstance(row, dict):
             raise CandidateVerificationError(f"invalid {service} image record")
@@ -165,7 +177,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "manifest": manifest,
         "source_commit": commit,
         "platform": "linux/amd64",
-        "verified_images": list(SERVICES),
+        "verified_images": list(services),
         "image_ids": image_ids,
         "deployment_files": len(hashes),
         "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
@@ -336,16 +348,17 @@ def verify_candidate(
             "workcell": summary["workcell"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
+            "verified_images": summary["verified_images"],
         }
     archive_ids = _archive_image_ids(
         root / "images.tar",
         {service: (summary["manifest"]["images"][service]["reference"],
                    summary["manifest"]["images"][service]["image_id"])
-         for service in SERVICES},
+         for service in summary["verified_images"]},
     )
     image_ids: dict[str, str] = {}
     id_forms: dict[str, str] = {}
-    for service in SERVICES:
+    for service in summary["verified_images"]:
         row = summary["manifest"]["images"][service]
         reference = row["reference"]
         accepted = archive_ids[service]

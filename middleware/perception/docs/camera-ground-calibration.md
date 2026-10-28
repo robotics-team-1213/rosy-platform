@@ -24,11 +24,12 @@
 이 명령은 읽기 전용 센서 구독만 하며 모터 명령이나 모드 변경을 보내지 않습니다.
 
 ```powershell
-python tools/calibration/camera_auto.py --robot rosy-pinky-9dfk --output X:/DevTemp/camera-auto/run-01.json
+$RosyScratch = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+python tools/calibration/camera_auto.py --robot rosy-pinky-9dfk --output $RosyScratch/camera-auto/run-01.json
 ```
 
 `--robot`은 미리 등록된 SSH 별칭입니다. 호스트 키를 엄격히 검증하고 대화형 로그인을 시도하지 않습니다.
-`--output`은 새 파일이어야 하며 기존 보정·증거를 덮어쓰지 않습니다. Windows 검증 출력은 X:에 둡니다.
+`--output`은 새 파일이어야 하며 기존 보정·증거를 덮어쓰지 않습니다. Windows 검증 출력은 $ROSY_SCRATCH에 둡니다.
 
 이 맞춤은 최초 주행 전, 로봇이 정지해 있고 `/camera/controls`가 `exposure=` 또는 `v4l2 exposure=`로 잠긴 뒤에 한 번 합니다. 잠기기 전에는 거절합니다. 후보는 그때의 잠금 문구와 선명도 0, 노이즈 감소 Fast를 `image_controls`에 적습니다. 주행에 쓰는 선명도가 그 값입니다. 나중에 노출만 다시 잠겨도 피치·높이·선명도는 이 후보를 다시 맞추지 않습니다.
 
@@ -58,7 +59,7 @@ NOMINAL 추종의 진행 확인, 장애물 정지, 일반 보정 작업의 소�
 두께를 추정했다면 `--board-elevation-estimated`로 표시합니다. 모르면 두께 옵션을 생략합니다.
 
 ```powershell
-python tools/calibration/camera_board.py --reference X:/DevTemp/board/near.png --validation X:/DevTemp/board/far.png --camera-profile middleware/devices/pinky/profile/config/camera_nominal.yaml --square-mm 17 --board-elevation-mm 1 --board-elevation-estimated --output X:/DevTemp/board/candidate.json
+python tools/calibration/camera_board.py --reference $RosyScratch/board/near.png --validation $RosyScratch/board/far.png --camera-profile middleware/devices/pinky/profile/config/camera_nominal.yaml --square-mm 17 --board-elevation-mm 1 --board-elevation-estimated --output $RosyScratch/board/candidate.json
 ```
 
 원본 픽셀 재투영 오차와 두 영상의 자세 일치도를 검사합니다. 종료 코드 0은 이 일치도 검사를

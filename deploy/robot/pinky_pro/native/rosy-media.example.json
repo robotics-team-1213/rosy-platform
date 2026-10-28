@@ -1,0 +1,11 @@
+{
+  "core_url": "https://localhost:8080",
+  "core_ca": "/etc/rosy/media/core-ca.pem",
+  "site_url": "https://<site-media-host>",
+  "site_ca": "/etc/rosy/media/site-ca.pem",
+  "robot_id": "<robot-id>",
+  "audience": "site:<site-id>",
+  "source_token_file": "/etc/rosy/media/source-credential",
+  "mailbox": "/run/rosy-media/front.rgb",
+  "interface": "wlan0"
+}

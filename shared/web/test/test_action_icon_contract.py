@@ -5,10 +5,11 @@ the visible label. The two Fleet documents share one markup for the stop and
 the top-bar icons.
 """
 
+import re
 from pathlib import Path
 
 UI = Path(__file__).resolve().parents[1] / "ui.js"
-FLEET = Path(__file__).resolve().parents[3] / 'operations' / 'site_ui' / "console"
+FLEET = Path(__file__).resolve().parents[3] / 'applications' / 'fleet' / 'web'
 
 CHROME = ("settings:", '"theme-dark":', '"theme-light":', '"theme-system":', "estop:")
 SESSION = ("login:", "account:", "logout:")
@@ -19,14 +20,18 @@ def test_action_icon_names_cover_fleet_chrome_and_keep_screen_reader_text():
     for name in (*CHROME, *SESSION):
         assert name in body, name
     assert "sr-only" in body
-    assert 'tools: "M4 6h16M4 12h16M4 18h16M9 3v6M15 9v6M8 15v6"' in body
-    assert 'settings: "M4 7h16M4 12h16M4 17h16M9 5v4M15 10v4M7 15v4"' in body
+    # One name, one glyph: tools (wrench) and settings (sliders) once differed only by coordinates.
+    glyphs = re.findall(r'^\s+"?([\w-]+)"?: "([^"]+)",$', body.split("};", 1)[0], re.M)
+    paths = [d for _, d in glyphs]
+    assert len(glyphs) > 40 and len(set(paths)) == len(paths), [n for n, d in glyphs if paths.count(d) > 1]
+    names = dict(glyphs)
+    assert names["tools"] != names["settings"] and names["fit"] != names["box"] != names["expand"]
     for side in ("pose:", "yaw:", "battery:", "safety:"):
         assert side in body, side
 
 
 def test_fleet_documents_share_the_stop_and_chrome_icons():
-    for name in ("index.html", "install.html"):
+    for name in ("index.html", "installation/install.html"):
         page = (FLEET / name).read_text(encoding="utf-8")
         assert 'data-action-icon="estop"' in page
         assert ">비상 정지</span>" in page

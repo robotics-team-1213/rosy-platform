@@ -321,9 +321,33 @@ def test_handshake_retry_is_bounded_to_transient_status(monkeypatch, status, ret
             raise InvalidStatus(Response(status, "private server body", Headers()))
 
         async def pause(seconds):
-            assert seconds == 5
+            assert 2.5 <= seconds <= 5            # D-432 equal jitter on the 5 s base
         monkeypatch.setattr(DiscordGateway, "session", session)
         monkeypatch.setattr(module.asyncio, "sleep", pause)
         await gateway(None).run()
         assert len(attempts) == retries
+    asyncio.run(scenario())
+
+
+def test_reconnect_backs_off_with_jitter_after_repeated_transport_failures(monkeypatch):
+    """Network load: repeated drops back off 5 -> 10 -> 20 s (equal jitter) instead of a fixed 5 s."""
+    import rosy_discord.gateway as module
+
+    async def scenario():
+        attempts, pauses = [], []
+
+        async def session(self):
+            attempts.append(True)
+            if len(attempts) > 3:
+                raise GatewayStop("finished test")
+            raise OSError("connection reset")
+
+        async def pause(seconds):
+            pauses.append(seconds)
+        monkeypatch.setattr(DiscordGateway, "session", session)
+        monkeypatch.setattr(module.asyncio, "sleep", pause)
+        await gateway(None).run()
+        assert len(pauses) == 3
+        for seconds, base in zip(pauses, (5, 10, 20)):
+            assert base / 2 <= seconds <= base
     asyncio.run(scenario())

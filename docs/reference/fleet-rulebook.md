@@ -81,7 +81,7 @@ law는 후보의 우선순위보다 먼저 적용하며 실행 직전에도 적�
 | FR-STALL | AI-first 대상, 라인 모드 켜짐, stuck 없음, 20 s 동안 정지·이동 < 0.05 m | 허용 선택 WAIT/LINE_OFF/STOP. 최종 condition·law 검사 뒤 기존 CORE API. trip은 WAIT만 | `ProblemWatch`; D-610 |
 | FR-POSE | AI-first 대상, 지도 자세 DEGRADED/UNKNOWN | WAIT/IDENTIFY/STOP. 현재 자세가 회복됐으면 `problem_changed`로 미전송 | `ProblemWatch`; D-395/D-610 |
 | FR-NECESSITY | 동일 사건·revision·유효 근거의 정상/막힘/부족 상태 | DO_NOT_INTERVENE / INTERVENE / ABSTAIN. 실행 권한 아님 | Situation `assessment.py`, `snapshot_assessment.py`; D-652 |
-| FR-DELIBERATION | 현재 CORE blocked 사건에서 유효한 INTERVENE | reobserve/human 후보 토론만. 항상 `action_admissible=False`; 공개 자동 호출 없음 | `server/incident_deliberation.py`, Decision supervisor; D-672 |
+| FR-DELIBERATION | 현재 CORE blocked 사건에서 유효한 INTERVENE | reobserve/human 후보 토론만. 항상 `action_admissible=False`; 공개 자동 호출 없음 | `server/evidence/incident_deliberation.py`, Decision supervisor; D-672 |
 
 ## 4. AI가 파이프라인에 들어오는 위치
 
@@ -198,6 +198,6 @@ CORE 결과 식별 계약과 건강 보고, 숙고형 모델 수용, 배포·실
 
 Fleet SharedGather는 캐시를 새 관측으로 복제하지 않고 refresh된 기기 state/센서값, robot ID·online·출처·수신/원본 시간·신선도·목표/대기열을 기존 durable journal의 `fleet_observations`에 보존한다. 원본 기기 시각은 state에 남고 Fleet 관측 시각은 receive-clock의 추정값이다. 원장 지연·offline·결측을 신선한 센서나 정상 결과로 승격하지 않는다. `/api/fleet/observations`는 기존 read_guard와 robot/cursor pagination으로 조회하고 저장 장애를 표시한다. 기록은 30일 이내이면서 전체 로봇 합계 최근 100000행만 남기며 행당 64KiB 제한이다. 빈도가 높으면 30일 전에 행 한도에 도달한다. payload 최악 크기는 약 6.55GB이며 SQLite/WAL 공간은 별도다. 정확한 고속 센서·카메라·LiDAR와 최종 cmd_vel은 기존 기기 녹화가 원본이며 Fleet 상태 기록으로 대신 만들지 않는다.
 
-`learning/curation/pinky/fleet_observations.py`는 보존된 원장을 일관된 read snapshot으로 JSONL/manifest로 내보내고 행/파일 해시를 재검증한다. 출력은 덮어쓰지 않으며 X:에 저장한다. 원본은 `observed_not_labeled`, 학습 준비 export는 `train_eligible:false/labels:null`이다. 기기 recording → 기존 [Pinky Episode](../../learning/curation/pinky/README.md)와 raw 검증 → dataset registry가 실제 센서/행동 dataset 경로다. 원장·이벤트·Task/Mission/attempt·지도/model revision과 시간 근거를 대조해 학습 입력을 준비하되 모호한 연결과 AI 판단을 정답으로 쓰지 않는다. 학습·독립 평가·모델 승격·활성화는 각각 별도 gate다.
+`learning/curation/pinky/fleet_observations.py`는 보존된 원장을 일관된 read snapshot으로 JSONL/manifest로 내보내고 행/파일 해시를 재검증한다. 출력은 덮어쓰지 않으며 $ROSY_SCRATCH에 저장한다. 원본은 `observed_not_labeled`, 학습 준비 export는 `train_eligible:false/labels:null`이다. 기기 recording → 기존 [Pinky Episode](../../learning/curation/pinky/README.md)와 raw 검증 → dataset registry가 실제 센서/행동 dataset 경로다. 원장·이벤트·Task/Mission/attempt·지도/model revision과 시간 근거를 대조해 학습 입력을 준비하되 모호한 연결과 AI 판단을 정답으로 쓰지 않는다. 학습·독립 평가·모델 승격·활성화는 각각 별도 gate다.
 
 자율 대상 설정은 durable Task journal과 백그라운드 stuck resolver가 모두 구성된 경우에만 시작한다. 이동 후보는 owner 호출 전에 기존 원장에 `FLEET_STUCK_DISPATCH_PENDING`을 FULL synchronous로 저장하고, 저장/재대조 실패면 전송하지 않는다. 쓰기 await 뒤 law/AI/사람 점유를 다시 확인한다. 이미 전송을 시작한 pending은 확정 receipt 또는 정확한 CORE 사건 종료를 durable 대조한 뒤에만 해제한다. 강제 프로세스 종료로 receipt 기록이 없어도 재시작에서 pending을 동결하며, 기록 손실을 근거로 재발행하지 않는다. 새 코드들은 Fleet 내부 원장 표식이며 CORE receipt를 위조하지 않는다. 저장 매체 자체의 파손은 별도 현장 장애다.

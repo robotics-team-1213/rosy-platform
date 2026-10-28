@@ -166,6 +166,7 @@ assert parsed.dataset.push_to_hub is False and parsed.dataset.private is True
 features = {key: {'dtype':'float32','shape':(6,), 'names':JOINTS}
             for key in ('action', 'observation.state')}
 features['observation.images.front'] = {'dtype':'video', 'shape':(32,32,3), 'names':['height','width','channels']}
+features['source.capture_time_ns'] = {'dtype':'int64','shape':(1,),'names':['original_clock']}
 source = tmp / 'source'
 writer = LeRobotDataset.create(repo_id='local/native-fixture', root=source, fps=10,
                                robot_type='omx_follower', features=features, use_videos=True,
@@ -174,6 +175,7 @@ for episode in range(3):
     for frame in range(4):
         vector = np.full(6, episode * 20 + frame, dtype=np.float32)
         writer.add_frame({'observation.state':vector, 'action':vector,
+                          'source.capture_time_ns':np.array([(episode+1)*10**9+frame],dtype=np.int64),
                           'observation.images.front':np.full((32,32,3), episode * 100 + frame, dtype=np.uint8),
                           'task':'Pick cube'})
     writer.save_episode()
@@ -257,11 +259,60 @@ loaded.eval()
 with torch.no_grad():
     action = post(loaded.select_action(pre(batch)))
 assert action.shape == (1,6) and torch.isfinite(action).all()
+from native_segments import selection, export_segments
+from native_cycle import validate_split
+segments = []
+for episode, split in zip(report['episodes'], ('train','eval','test')):
+    segment = {key: episode[key] for key in ('episode_index','frames','content_sha256','session_id','cycle_id')}
+    segment.update(start_frame=1,end_frame=3,object='synthetic cube',intervention=False,
+                   outcome='success',reviewer='synthetic-test',reason='fixture only',split=split)
+    segments.append(segment)
+cropped = tmp/'segments'
+segment_receipt = export_segments(source,report,selection(report,segments),cropped)
+assert validate_split(cropped) == segment_receipt
+assert segment_receipt['source']['capture_provenance'] == provenance
+assert segment_receipt['source']['environment_evidence'] == environment
+assert segment_receipt['environment_coverage_scope'] == 'original_parent_episodes'
+assert segment_receipt['decisions'][0]['outcome'] == 'unknown'
+segment_train = LeRobotDataset('local/native-fixture_train',root=cropped/'train',video_backend='pyav',download_videos=False)
+assert [segment_train[i]['action'][0].item() for i in range(2)] == [1.,2.]
+assert [segment_train[i]['source.capture_time_ns'].item() for i in range(2)] == [10**9+1,10**9+2]
+assert segment_train[0]['frame_index'].item() == 0 and segment_train[0]['timestamp'].item() == 0
+assert float(segment_train.meta.stats['action']['max'][0]) == 2., 'segment eval data leaked into train stats'
+segment_cycle = run_cycle(cropped,tmp/'segment-training',steps=2,batch_size=2,device='cpu',timeout=120)
+assert segment_cycle['evaluation']['samples'] == 2
+assert segment_cycle['evaluation']['physical_task_success'] is None
 print('OFFICIAL_CONFIG_READER_SPLIT_PASS')
 '''
     env = {**os.environ, 'HF_HUB_OFFLINE': '1', 'HF_DATASETS_OFFLINE': '1',
            'HF_HOME': str(tmp_path / 'hf'), 'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2'}
     result = subprocess.run([str(PYTHON), '-c', script, str(ROOT), str(tmp_path)],
-                            capture_output=True, text=True, env=env, timeout=180)
+                            capture_output=True, text=True, env=env, timeout=360)
     assert result.returncode == 0, result.stdout + '\n' + result.stderr
     assert 'OFFICIAL_CONFIG_READER_SPLIT_PASS' in result.stdout
+
+
+@pytest.mark.skipif(not PYTHON.is_file(), reason='isolated LeRobot 0.4.4 CPU environment not configured')
+def test_rosy_omx_extra_cameras_decode_in_installed_order():
+    script = r'''
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1])/'integrations/robots/omx/src'))
+import draccus
+from lerobot.robots import RobotConfig
+import lerobot_robot_rosy_omx
+base = dict(type='rosy_omx', url='http://localhost:8080', token_file='/not-read', policy_revision='a'*64,
+            joint_names=['joint1'], camera_height=2, camera_width=2)
+config = draccus.decode(RobotConfig, dict(base, extra_cameras={'top': [4, 6]}))
+robot = lerobot_robot_rosy_omx.RosyOmx(config)
+assert list(robot.cameras) == ['front', 'top']
+assert robot.observation_features == {'joint1.pos': float, 'front': (2, 2, 3), 'top': (4, 6, 3)}
+for bad in ({'top': [4]}, {'front': [2, 2]}, {'top': [0, 6]}):
+    try:
+        lerobot_robot_rosy_omx.RosyOmxConfig(**{k: v for k, v in base.items() if k != 'type'}, extra_cameras=bad)
+    except ValueError:
+        continue
+    raise AssertionError(bad)
+'''
+    result = subprocess.run([str(PYTHON), '-c', script, str(ROOT)], capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr[-3000:]

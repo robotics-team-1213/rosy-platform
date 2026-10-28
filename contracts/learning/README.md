@@ -10,11 +10,28 @@ D-727의 0.1.11은 `incident_operation`에 별도 운영 수용·폐기 receipt�
 
 0.1.12는 D-622 후속으로 `validate_rule()`의 ANSWER에 `REALIGN`을 받는다. REALIGN 선택만 조작 본문의 정렬 JSON SHA-256인 `selection.realign_sha256`을 반드시 가지며 다른 선택에는 이 키가 없다. 기존 `rule_selection/1` 기록은 그대로 유효하다. 자세·각도 원문은 receipt에 복사하지 않고 REALIGN도 물리 ANSWER라 reobserve/human 기준으로 변환하지 않는다.
 
+0.1.13은 고정 OMX SIM 물체 과제에 명시적으로 제공된 `rosy.omx-sim-object-truth/1`을
+검증한다. 원본 영상·명령 수락/완료·물체 관측·gripper owner 시계와 신선도·고정 장면을
+파일 해시에 연결하고 성공을 재계산한다. 공통 Episode의 `sim_ground_truth`는 이 증거를
+모두 보존하며, 기본 operator 기록과 사람 검수·운영 승격 기준은 그대로 둔다.
+고정 10Hz 카메라의 기록은 10fps 또는 교사 시연용 5fps만 받는다. 원본 capture/state
+시각과 선택한 기록 주기의 간격을 그대로 검증하며, 주기 표기만 바꾼 원본은 거절한다.
+
+0.1.14는 D-891로 `promotion_request`에 D-874 승격 요청 묶음의 `SCHEMA`·`FORBIDDEN`·`validate`와 정본 인코더 `encoded`(비ASCII 유지, 끝 줄바꿈, `fleet_export.encoded`와 다름)를 둔다. Learning이 만들고 Fleet이 다시 검사하는 바이트가 하나다. 모양만 검사하며 승인·배포 권한이 아니다.
+
 [D-854](../../docs/adr/D-854-omx-policy-runner-and-action-space.md)의 `action_space`는 OMX 데이터셋·정책이 선언하는 행동 단위
 (`lerobot_norm_v1`, `dynamixel_rad_v1`)와 버전이 붙은 순수 변환기다. 식은 lerobot 0.4.4 `omx_follower`
 (`use_degrees: false`) 정규화와 같고, 범위 밖 값은 잘라 맞추되 `convert()`가 잘린 개수를 돌려준다. lerobot
 0.4.4 Dynamixel 버스는 `apply_drive_mode = False`라 `drive_mode`를 읽지 않으며, 보정 digest는 `range_min`·`range_max`만 쓴다. `dynamixel_rad_v1`이 설치된 ROS 관절 rad와 같은지는
 보증하지 않는다. 다음 wheel 버전은 첫 소비자(정책 실행기)가 붙을 때 올린다.
+
+[D-864](../../docs/adr/D-864-d854-units-trajectory-and-simulator-roles.md)의 `ros_joint_rad`는 CORE·Gazebo·Isaac Sim이 쓰는
+ROS 관절 rad(`joint1..5`, `gripper_joint_1`)다. 이 단위로 바꾸려면 `validate_joint_map()`이 받아들이는 관절 대응 판정이 필요하다.
+판정은 통과해야 하고, 판정의 팔이 데이터의 팔 정체(`arm_identity()`: rig revision, 두 팔이면 `/arm_a`·`/arm_b`)와 같아야 하며,
+판정이 기록한 보정 range digest와 보정 파일의 homing offset·drive mode(0)도 맞아야 한다. 작업대의 보정은 모두 range가 같을 수 있어
+팔 구분은 팔 정체가 맡는다. 팔 정체는 운영자가 정하는 이름이라 배선을 바꾸거나 팔을 교체하면 새 이름과 새 판정이 필요하다.
+`ros_joint_rad` 선언은 `joint_map_revision`을 더 가진다. 보정과 판정이 둘 다 `null`이면 SIM 데이터이고, 실물 데이터를 바꾼 것이면
+`ros_declaration()`이 둘을 채운다.
 
 ```python
 from rosy.contracts.learning import seal, validate_episode
