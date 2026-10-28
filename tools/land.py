@@ -286,6 +286,8 @@ def land(args) -> int:
     dirty = git(wt, "status", "--porcelain").stdout.strip()
     if dirty:
         raise Stop(f"worktree is dirty; commit or remove first:\n{dirty}")
+    if wt.parent.name == ".worktrees":  # D-889 addendum 5: land_async lands from a hidden snapshot instead
+        print("[land] tip: python tools/land_async.py --tests auto frees this worktree at once", flush=True)
     stale = worktree_rules.stale_history(wt, "HEAD")
     if stale:
         raise Stop(f"{branch}: {stale}; landing it would bring that history back. Rebuild on a new branch from"

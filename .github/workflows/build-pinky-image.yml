@@ -88,6 +88,7 @@ jobs:
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo chown -R root:root -- "$GITHUB_WORKSPACE"
           sudo env \
             GITHUB_ACTIONS=true \
             ROSY_IMAGE_CACHE="$IMAGE_CACHE" \
