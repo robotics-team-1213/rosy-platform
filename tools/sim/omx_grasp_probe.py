@@ -37,8 +37,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--trials', type=int, default=5)
     parser.add_argument('--ready-s', type=float, default=300)
+    parser.add_argument('--aim-mm', default='0,0', help='world x,y mm added to the block pose; the jaws close along x')
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
+    aim = [float(v)/1000 for v in args.aim_mm.split(',')]
     sys.path.insert(0, str(ROOT/'deploy/robot/omx'))
     from g2_common import configure_imports  # the teacher's source paths, so both plan the grasp alike
     configure_imports()
@@ -116,9 +118,10 @@ def main():
 
     trials = []
     for index in range(args.trials):
-        (x, y, z), yaw = latest['block'], pick_yaw
+        (bx, by, z), yaw = latest['block'], pick_yaw
+        x, y = bx+aim[0], by+aim[1]
         grasp_z = z + box.height/2 - box.grasp_depth
-        trial = {'trial': index + 1, 'block_start_xy': (x, y), 'block_start_z': z, 'codes': []}
+        trial = {'trial': index + 1, 'block_start_xy': (bx, by), 'aim_m': aim, 'block_start_z': z, 'codes': []}
         try:
             for target in (tcp(x, y, grasp_z + LIFT_M, yaw, profile.gripper_open),
                            tcp(x, y, grasp_z, yaw, profile.gripper_open),
@@ -138,7 +141,7 @@ def main():
         print('OMX_GRASP_TRIAL=' + json.dumps(trial), flush=True)
     passed = sum(bool(t.get('held') and t.get('rested')) for t in trials)
     summary = {'trials': len(trials), 'passed': passed, 'lift_m': LIFT_M, 'close_rad': close,
-               'grasp_depth_m': box.grasp_depth, 'box_width_m': box.width}
+               'grasp_depth_m': box.grasp_depth, 'box_width_m': box.width, 'aim_mm': args.aim_mm}
     args.out.write_text(json.dumps({'summary': summary, 'trials': trials}, indent=1))
     print(('OMX_GRASP_PASS=' if passed == len(trials) else 'OMX_GRASP_FAIL=') + json.dumps(summary), flush=True)
     node.destroy_node()

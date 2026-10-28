@@ -139,3 +139,26 @@ def test_every_gated_unit_and_drop_in_points_at_the_installed_gate():
         for unit in units:
             assert (f"safe file /etc/systemd/system/{unit}.service.d/10-update-gate.conf "
                     "common/10-update-gate.conf") in text, (manifest, unit)
+
+
+def test_the_site_nightly_reboot_skips_while_an_omx_arm_session_holds_its_lock(tmp_path):
+    """2026-10-28: the 06:10 reboot cut a chunk session mid-move and the arm dropped with torque off."""
+    fcntl = pytest.importorskip("fcntl")
+    if not Path("/usr/bin/flock").exists():
+        pytest.skip("util-linux flock not installed")
+    unit = (ROOT / "deploy/site/host-state/rosy-nightly-reboot.service").read_text()
+    line = next(row for row in unit.splitlines() if row.startswith("ExecCondition=") and "session.lock" in row)
+    script = line.split("-c ", 1)[1].strip("'").replace("/home/*/rosy-omx", str(tmp_path / "home" / "*" / "rosy-omx"))
+
+    def condition():
+        return subprocess.run(["/bin/sh", "-c", script]).returncode
+
+    assert condition() == 0  # no OMX user on this host
+    lock = tmp_path / "home" / "robttt" / "rosy-omx" / "session.lock"
+    lock.parent.mkdir(parents=True)
+    lock.touch()
+    assert condition() == 0  # a lock nobody holds
+    with lock.open("a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert condition() == 1  # an arm session is running: skip tonight
+    assert condition() == 0
