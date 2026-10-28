@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Fleet SQLite ledger backup (online, inside the site compose project)
+Documentation=file:/opt/rosy/candidate/deploy/site/README.md
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/rosy/site/site.env
+# The backup runs in the fleet image (site_db.py) against the live volume,
+# read-only, and writes to the host bind (ROSY_SITE_BACKUP_DIR, default
+# /var/backups/rosy-site — create it once with: install -d -o 10001 -g 10001 DIR).
+ExecStart=/usr/bin/docker compose --project-name rosy-site --env-file /etc/rosy/site/site.env -f /opt/rosy/candidate/deploy/site/compose.yaml run --rm --no-deps fleet-backup

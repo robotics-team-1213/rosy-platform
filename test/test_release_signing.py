@@ -375,6 +375,12 @@ def test_only_public_release_key_pems_are_tracked_in_the_repository():
             content = (ROOT / path).read_text(encoding="utf-8")
             if "BEGIN PUBLIC KEY" in content and "PRIVATE KEY" not in content:
                 continue
+            if path.name == 'rosy-os-cms-2026-01.pem' and 'BEGIN CERTIFICATE' in content and 'PRIVATE KEY' not in content:
+                from secret_scan import scan_text
+                if not scan_text(path.as_posix(), content):
+                    subprocess.run(['openssl', 'x509', '-in', str(ROOT / path), '-noout'],
+                                   capture_output=True, check=True, timeout=10)
+                    continue
         suspicious.append(name)
     assert not suspicious, f"key-shaped files are tracked: {suspicious}"
 

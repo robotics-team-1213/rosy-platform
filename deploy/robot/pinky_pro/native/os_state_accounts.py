@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from os_state_layout import COMMON, _path, _read
 
 ACCOUNT_IDS = {"rosy-core": 960, "rosy-io": 961, "rosy-display": 962, "rosy-camera": 963, "rosy": 1001}
+CALIBRATION_GROUP_ID = 964
 
 
 def _table(root: Path, relative: str, count: int) -> dict:
@@ -39,6 +40,14 @@ def validate_local_accounts(root: Path) -> None:
             raise ValueError("reserved shared-state ID has another account/group alias")
     if users["rosy"][5:] != ["/home/rosy", "/bin/bash"]:
         raise ValueError("operator home or login shell differs")
+    calibration = groups.get("rosy-calib")
+    # Approval and pin events are imported by the privileged commissioning operator.
+    if (calibration is None or int(calibration[2]) != CALIBRATION_GROUP_ID or calibration[3]
+            or "rosy-calib" in users
+            or any(int(user[3]) == CALIBRATION_GROUP_ID for user in users.values())
+            or any(name != "rosy-calib" and int(group[2]) == CALIBRATION_GROUP_ID
+                   for name, group in groups.items())):
+        raise ValueError("calibration group identity or write authority differs")
 
 
 def validate_shared_owners(root: Path) -> None:
@@ -54,7 +63,8 @@ def validate_shared_owners(root: Path) -> None:
         raise ValueError("shared TLS owner/group/permissions differ")
     for name, uid, gid, mode in (("maps", ACCOUNT_IDS["rosy-io"], ACCOUNT_IDS["rosy-core"], 0o2750),
                                  ("models", root.stat().st_uid, ACCOUNT_IDS["rosy-camera"], 0o750),
-                                 ("pilot-recordings", ACCOUNT_IDS["rosy-camera"], ACCOUNT_IDS["rosy-core"], 0o2750)):
+                                 ("pilot-recordings", ACCOUNT_IDS["rosy-camera"], ACCOUNT_IDS["rosy-core"], 0o2750),
+                                 ("calibration", root.stat().st_uid, CALIBRATION_GROUP_ID, 0o2775)):
         info = (root / "var/lib/rosy" / name).stat()
         if (info.st_uid, info.st_gid, info.st_mode & 0o7777) != (uid, gid, mode):
             raise ValueError("shared data owner/group/permissions differ")
