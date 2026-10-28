@@ -31,3 +31,5 @@ Existing physical receipt routes, old observation payloads, writer boundaries an
 Verify exact stored-proof export, original times/IDs, old canonical bytes, optional measurement validation, stale/future/sequence refusals, pending legacy proof, creator scope, tamper detection and zero write/dispatch effects. Then verify Harbor's single-move confirmation over a real isolated HTTP server with explicitly injected observations. Independent Gazebo measurement, actual source-clock mapping, real hardware and FIELD remain separate gates.
 
 Rollback disables the new consumer/provider and read route while preserving journals, proof bytes and original claims. Do not erase evidence, change request keys or auto-replay an uncertain submission.
+
+Implementation note: optional-joint omission uses the existing wrap serializer pattern because the SIM image pins Pydantic 2.11.7; newer `Field(exclude_if=...)` breaks JSON Schema generation there. Preserve both schema generation and absent/null/measured round trips. Exact source revisions and the distinct software/physical gates are in [the verification record](../validation/physical-evidence-export-2026-10-29/result.md).

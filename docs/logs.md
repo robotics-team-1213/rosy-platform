@@ -12840,3 +12840,10 @@ osy-d395-s1d\`.
 - 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
+
+## 2026-10-29 · 66ba49bef8 · D-915 원문 물리 근거와 Harbor 연결 기록
+
+- 변경: D-915/API v1.330과 live version pins, 지원표, [소유 저장소 검증 기록](validation/physical-evidence-export-2026-10-29/result.md)을 정렬했다. 새 read 계약은 원문 증거의 조회이며 명령·관측 쓰기·업무 완료 권한을 추가하지 않는다.
+- 증거: 원격 고정 source, 독립 contract/Safety·최종 branch 검토, 실제 HTTP/UDS, 구형 SIM 직렬화와 FULL의 실패/skip·격리 재검증을 정본에서 구분한다.
+- Gate: 기존 module gate 변화 없음. 실제 source-clock/전체 측정·실물·배포·착지/push는 수용하지 않았다.
+- CE: 해당 없음 — 판단은 ADR·직접 회귀·검증 정본에 보존하며, unresolved producer를 해결된 통합으로 기록하지 않는다.

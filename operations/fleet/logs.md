@@ -5060,3 +5060,10 @@
 - 증거: 특성 시험(키 순서 `list(d.items())` 고정, 독립 리스트) + 검토가 요구한 두 미피복 동작 — goal 순간 빈 상태 읽기의 폐쇄 실패(TRUSTED 이력이 전송하지 않음)와 보류의 대기열 항목 무병합 교체. 원격 4 suite(신규·traffic·console·boundaries) green, known NEW 0. 변이 검증: 전송 전 untrusted 보류 비활성화 → 폐쇄 실패 시험 red(`6c6f45582b`), 복원 green(`239740362c`). 독립 검토 2건(codex·claude) 반영 — 단계 분리 판정, 깃발·route 부재 규칙, 판정 문자열만 경계 통과, 무병합 교체, attempt_seq=0.
 - Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
 - CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.
+
+## 2026-10-29 · 66ba49bef8 · D-915 원본 물리 근거의 읽기 인계
+
+- 변경: 선택형 측정 관절을 원래 canonical proof에 결속하고 creator-scoped physical-evidence GET을 추가했다. 원문·receipt·원래 released zone을 같은 read snapshot에서 읽으며, 누락된 관절·과거 receipt에 현재 pose를 보충하지 않는다. nested PRE/POST source 재사용을 shared guard에서 거절한다.
+- 증거: 원격 baseline/RED/GREEN·source-order 변이·실제 HTTP/UDS와 Harbor 단계 확인·구형 Pydantic 호환을 검증했다. 정확한 source·계수·실패/skip·최종 FULL 결과는 [검증 정본](../../docs/validation/physical-evidence-export-2026-10-29/result.md)에 둔다.
+- Gate: 기존 module gate 변화 없음. G1c 원본 clock/전체 측정 생산자, 최종 업무 완료, 실물·운영·배포 수용은 별도다.
+- CE: 해당 없음 — 해결 판단은 D-915·회귀·검증 정본에 남고, 미해결 source clock은 해결 교훈으로 기록하지 않는다.
