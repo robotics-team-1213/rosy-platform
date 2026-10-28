@@ -5,6 +5,8 @@ const $ = id => document.getElementById(id);
 let token, session, active = false, pending = false, loginOptions = null;
 let actionError='',pollError='';
 const connectionChoiceRequired=[false,false];
+const lockedButtons=new Map();
+let pendingOpener=null,pendingFocus=null;
 const loginFailures = new Map([
   ['account_callback_failed', ['error', '로그인 연결을 완료하지 못했습니다. 로그인 요청이 만료되었거나 확인되지 않았습니다. Rosy Account에서 로그인을 다시 시작하세요.']],
   ['account_unavailable', ['unavailable', '로그인 서비스에 연결할 수 없습니다. 연결을 확인한 뒤 Rosy Account에서 다시 로그인하세요.']],
@@ -54,10 +56,16 @@ function line(parent,text) { const p=document.createElement('p'); p.textContent=
 function button(parent,label,action) {
   const b=document.createElement('button'); b.type='button'; b.className='ui-field'; b.textContent=label;
   b.addEventListener('click',()=>perform(action)); parent.append(b);
+  if(pending)lockButton(b);
 }
+function lockButton(node){if(!lockedButtons.has(node))lockedButtons.set(node,node.disabled);node.disabled=true;}
 async function perform(action,owner='action') {
   if(pending)return;
   pending=true; if(owner!=='poll')error('');
+  pendingOpener=document.activeElement;pendingFocus=null;lockedButtons.clear();
+  for(const node of $('accounts-main').querySelectorAll('button,ui-button'))lockButton(node);
+  const previousStatus=$('account-status').textContent,progress=owner==='poll'?'가져오기 상태 확인 중…':'요청 처리 중…';
+  $('account-status').textContent=progress;
   $('accounts-main').setAttribute('aria-busy','true');
   try { await action(); } catch(e) {
     if(active) error(e.message,owner);
@@ -66,7 +74,17 @@ async function perform(action,owner='action') {
       $('account-retry').hidden=false;
     } else error(e.message,owner);
   }
-  finally { pending=false; $('accounts-main').setAttribute('aria-busy','false'); }
+  finally {
+    pending=false; $('accounts-main').setAttribute('aria-busy','false');
+    for(const [node,disabled] of lockedButtons)if(node.isConnected)node.disabled=disabled;
+    lockedButtons.clear();
+    if($('account-status').textContent===progress)$('account-status').textContent=previousStatus;
+    if(document.activeElement===document.body||document.activeElement===pendingOpener){
+      const target=pendingFocus?.isConnected?pendingFocus:pendingOpener;
+      if(target?.isConnected&&!target.disabled&&target.getClientRects().length&&document.activeElement!==target)target.focus({preventScroll:true});
+    }
+    pendingOpener=pendingFocus=null;
+  }
 }
 async function refresh() {
   status('로그인 상태를 확인하는 중입니다.','pending');
@@ -137,7 +155,7 @@ async function jobs() {
   if(!active||session!==identity)return;
   error('','poll');
   const opened=new Set([...root.querySelectorAll('details[open]')].map(node=>node.dataset.job));
-  const focused=document.activeElement, focusId=focused.closest('article')?.dataset.job;
+  const focused=document.activeElement===document.body&&root.contains(pendingOpener)?pendingOpener:document.activeElement, focusId=focused.closest('article')?.dataset.job;
   const focusText=root.contains(focused)?focused.textContent:null;
   root.replaceChildren();
   if(!result.jobs.length) line(root,'가져오기 작업이 없습니다.');
@@ -161,7 +179,7 @@ async function jobs() {
     if(canControl && ['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
       await api('/api/learning/imports/cancel',{id:job.id}); await jobs();
     });
-    if(focusId===job.id) [...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText)?.focus({preventScroll:true});
+    if(focusId===job.id){const target=[...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText);if(pending)pendingFocus=target;else target?.focus({preventScroll:true});}
   }
 }
 $('logout').addEventListener('click',()=>perform(async()=>{
@@ -225,5 +243,5 @@ $('account-retry').addEventListener('click',()=>perform(async()=>{
   const url=new URL(location.href); url.searchParams.delete('error'); history.replaceState(null,'',url);
   await refresh();
 }));
-setInterval(()=>{if(active&&!pending&&!document.hidden)perform(jobs,'poll');},5000);
+setInterval(()=>{if(active&&!pending&&!document.hidden&&$('account-status').getAttribute('state')==='ready')perform(jobs,'poll');},5000);
 perform(refresh);
