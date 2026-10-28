@@ -18,13 +18,9 @@ import json
 import math
 from pathlib import Path
 
+from omx_adapter.chunk_library import GUARD_UNITS_PER_S, NAMES, too_fast
+
 SCHEMA = "rosy.omx-replay-trajectory.v1"
-#: The guard's teacher mode streams at most 10 deg/s (guarded_native.py). A body unit is at most 1.8
-#: degrees (200 units over a full 4096-tick range), so 5 units/s keeps every joint under 9 deg/s and
-#: the arm follows the frames instead of lagging behind the recorded episode time.
-GUARD_UNITS_PER_S = 5.0
-NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
-         "gripper.pos"]
 
 
 def slow(frames: list, fps: int, start=None) -> list:
@@ -36,11 +32,6 @@ def slow(frames: list, fps: int, start=None) -> list:
         n = max(1, math.ceil(max(abs(a - b) for a, b in zip(frame, previous)) / limit - 1e-9))
         out += [[p + (f - p) * k / n for p, f in zip(previous, frame)] for k in range(1, n + 1)]
     return out[1:] if start is not None else out
-
-
-def too_fast(frames: list, fps: int) -> bool:
-    limit = GUARD_UNITS_PER_S / fps + 1e-3  # frames are stored rounded to 3 decimals
-    return any(abs(a - b) > limit for p, q in zip(frames, frames[1:]) for a, b in zip(p, q))
 
 
 def compose(actions: list, fps: int, split_s: float, end_s: float, reset_s: float, source: dict) -> dict:

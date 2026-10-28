@@ -385,3 +385,11 @@ def test_full_current_report_cannot_fall_back_to_historical_cache_complete(prepa
         land_isolation.run(pair, "feat/x", [["m/test"]], args, logdir, "pre", run, [], True)
         assert [name for name, _ in calls] == ["gpre"]
         assert land_isolation.rows(pair)[-1]["incomplete"] == []
+
+
+def test_a_quarantined_timing_flake_is_not_an_isolation_failure():
+    """The alone runs judge import isolation; flaky_quarantine.txt entries are rerun-as-FLAKY elsewhere."""
+    quarantined = "test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds"
+    other = "test/test_other.py::test_new"
+    report = f"FAILED {quarantined} - AssertionError\nFAILED {other} - AssertionError\n2 failed in 1.00s\n"
+    assert land_isolation.new_failures(report) == [other]

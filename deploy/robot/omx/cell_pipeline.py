@@ -22,6 +22,7 @@ Each stage can also be run alone:
   verify     after the release, is the box where the next grasp on that surface reaches (place_check)?
   record     one A/B cycle recorded as two training episodes through record_session --replay, labelled
              held/empty from the recorded jaws (cell_record.py); no chunk session may be running.
+  survey     above the box, never descending: the jaws' offset from it (cell_survey.py). Rows: cell_attempts.py.
 
 The arm is moved only by the chunk_runner session already running under record_session.py --chunks
 (the guard's teacher mode owns the bus). This pipeline sends it commands; it never opens a port.
@@ -47,7 +48,7 @@ from cell_observe import (  # noqa: E402
 )
 import numpy as np  # noqa: E402
 
-STAGES = ("run", "reset", "calibrate", "locate", "transfer", "verify", "recover", "record")
+STAGES = ("run", "reset", "calibrate", "locate", "transfer", "verify", "recover", "record", "survey")
 
 
 def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
@@ -67,6 +68,8 @@ def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
 
 SEQUENCE = ("goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick", "goto above_place",
             "run descend_place", "run release_place", "run lift_place", "park")
+STEP_KEYS = ("ok", "error", "holding", "gripper_current_ma", "settled", "fault", "contact", "state", "target", "t",
+             "paced_ticks")
 
 
 def transfer(cell, library: Path, hover=None) -> dict:
@@ -74,8 +77,7 @@ def transfer(cell, library: Path, hover=None) -> dict:
     steps, seen = [], None
     for command in (f"load {library}", *SEQUENCE):
         status = cell.act(command)
-        steps.append({"command": command, **{k: status.get(k) for k in ("ok", "error", "holding", "gripper_current_ma",
-                                                                         "settled", "fault")}})
+        steps.append({"command": command, **{k: status.get(k) for k in STEP_KEYS}})
         if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
             for after in ("retreat", "park"):
                 steps.append({"command": after, "ok": cell.act(after).get("ok")})
@@ -184,7 +186,7 @@ def rule_backend(prompt, images, schema):
 def scene(config: dict, source: str, dest: str, tried: dict) -> dict | None:
     """What a simulator needs to replay this attempt (cell_cases.from_row): box, jaw turn, place, outcome."""
     found, transfer = tried["locate"], tried.get("transfer") or {}
-    if not found.get("found") or "grasp_yaw" not in tried:
+    if not found.get("found") or "grasp_yaw" not in tried or "transfer" not in tried:  # nothing moved: nothing to replay
         return None
     place = config["sites"][dest]["place"]
     return {"box_m": found["arm_m"], "box_turn_deg": found.get("turn_deg", 0.0),
@@ -372,20 +374,27 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
          attempts: int = 2, choices=None) -> dict:
     """locate -> transfer -> verify, with the judge seat at each check (D-872 §2.2): measured facts decide
     first, the decision model picks among what is left, and every decision is kept as training data."""
+    import cell_attempts
     import judge_seat
 
     seat = seat or judge_seat.Seat(rule_backend)
     out = {"from": source, "to": dest, "attempts": [], "decisions": []}
     for attempt in range(attempts):
-        found = locate(cell, config, calibration, source)
+        t_start, found = time.time(), locate(cell, config, calibration, source)
         tried = {"locate": found}
         out["attempts"].append(tried)
         if found["found"]:
             yaw_pick, yaw = grasp_yaw(config, calibration, source, found, choices)
             tried["grasp_yaw"] = {"choice": yaw_pick, "yaw_deg": yaw}
-            library = write_library(config, target(config, source, found["arm_m"], yaw),
-                                    target(config, dest, config["sites"][dest]["place"], place=True),
-                                    work / f"move-{source}-{dest}.json")
+            tried["plan"] = {"pick": target(config, source, found["arm_m"], yaw),
+                             "place": target(config, dest, config["sites"][dest]["place"], place=True)}
+            try:
+                library = write_library(config, *tried["plan"].values(), work / f"move-{source}-{dest}.json")
+            except SystemExit as exc:  # no IK for where the box was seen: an attempt to keep, not a crash
+                tried["plan_error"] = str(exc)[:200]
+        if "plan_error" in tried:
+            facts = {"box_found": True, "next": "grasp", "aligned": False, "check": f"plan refused: {tried['plan_error']}"}
+        elif found["found"]:
             tried["transfer"] = transfer(cell, library, lambda: hover_check(cell, config, calibration, source))
             moved = tried["transfer"]["result"]
             if choices is not None and moved in ("placed", "empty", "fault", "refused", "contact"):
@@ -395,8 +404,10 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
             if moved == "placed":
                 tried["verify"] = verify(cell, config, dest, calibration, config["sites"][dest]["place"])
                 if tried["verify"].get("inside"):
+                    attempt_id = cell_attempts.record(config, calibration, source, dest, attempt, tried, t_start, choices)
                     if out["decisions"]:  # the outcome of the last decision: this retry worked
-                        case(work, {"from": source, "to": dest, "attempt": attempt, "outcome": "placed"})
+                        case(work, {"from": source, "to": dest, "attempt": attempt, "outcome": "placed",
+                                    "attempt_id": attempt_id})
                     return {**out, "result": "placed"}
                 facts = {"box_found": tried["verify"].get("found", False), "next": "grasp", "aligned": False,
                          "check": "placed out of the next grasp's reach"}
@@ -414,11 +425,12 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
                          "wrist": (tried["transfer"].get("hover") or {}).get("wrist")}
         else:
             facts = {"box_found": False, "next": "grasp", "check": found.get("error")}
+        attempt_id = cell_attempts.record(config, calibration, source, dest, attempt, tried, t_start, choices)
         decision = seat.decide(dict(facts, site=source, attempt=attempt))
         out["decisions"].append(decision)
         case(work, {"from": source, "to": dest, "attempt": attempt, "facts": facts, "decision": decision["decision"],
                     "by": decision["by"], "reason": decision.get("reason"),
-                    "scene": scene(config, source, dest, tried)})
+                    "scene": scene(config, source, dest, tried), "attempt_id": attempt_id})
         if decision["decision"] != "retry" or (facts.get("fault")):
             return {**out, "result": f"stopped: {decision['decision']} ({facts['check']})"}
     return {**out, "result": f"stopped: {attempts} attempts"}
@@ -546,6 +558,9 @@ def main(argv=None):
 
         seat = judge_seat.Seat(judge_seat.ollama(**config["decision_model"]))
     KEEP["dir"] = work / "frames"
+    import cell_attempts
+
+    cell_attempts.start(work / "attempts.jsonl")
     if args.stage == "record":
         import cell_record
 
@@ -568,6 +583,10 @@ def main(argv=None):
             cal.save(calibration_path, key, record)
     elif args.stage == "locate":
         result = locate(cell, config, cal.load(calibration_path), args.source)
+    elif args.stage == "survey":
+        import cell_survey
+
+        result = cell_survey.stage(cell, config, calibration_path, args.source, work)
     elif args.stage == "transfer":
         result = move(cell, config, cal.load(calibration_path), args.source, args.to, work, seat)
     else:

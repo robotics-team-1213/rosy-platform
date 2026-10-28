@@ -39,14 +39,17 @@ SCENARIOS = {
 }
 OUTCOMES = ('placed', 'held_not_placed', 'not_held', 'frame_contact')
 # a case from the real cell (deploy/robot/omx/cell_cases.py) stays on the tray and inside the arm's reach here
-CASE_LIMITS = dict(box_m=.025, turn_deg=45., grasp_turn_deg=45., place_x=(.03, .20), place_y=(-.10, .20))
+CASE_LIMITS = dict(box_m=.025, turn_deg=45., grasp_turn_deg=45., place_x=(.03, .20), place_y=(-.10, .20),
+                   aim_m=.025)
 
 
 def check_case(case):
     """A real-cell case as a scenario: box (dx, dy from the tray centre in m, turn in deg), place ('belt' or an
-    arm-frame point), grasp_turn (deg added to the site's jaw yaw) and expect (an outcome, or None: measure)."""
-    if not isinstance(case, dict) or set(case) != {'box', 'place', 'grasp_turn', 'expect'}:
-        raise ValueError('a case needs exactly box, place, grasp_turn and expect')
+    arm-frame point), grasp_turn (deg added to the site's jaw yaw) and expect (an outcome, or None: measure).
+    Optional aim (dx, dy in m): the pick aimed that far off the box, as a map or arm error would aim it."""
+    if not isinstance(case, dict) or not {'box', 'place', 'grasp_turn', 'expect'} <= set(case) \
+            or not set(case) <= {'box', 'place', 'grasp_turn', 'expect', 'aim'}:
+        raise ValueError('a case needs exactly box, place, grasp_turn and expect, and may add aim')
     box, place, turn, expect = case['box'], case['place'], case['grasp_turn'], case['expect']
     number = lambda v: type(v) in (int, float) and math.isfinite(v)  # noqa: E731
     if not (isinstance(box, list) and len(box) == 3 and all(map(number, box))
@@ -59,8 +62,15 @@ def check_case(case):
         raise ValueError("case place must be 'belt' or a reachable [x, y]")
     if not number(turn) or abs(turn) > CASE_LIMITS['grasp_turn_deg'] or expect not in (*OUTCOMES, None):
         raise ValueError('case grasp_turn or expect out of range')
-    return dict(box=[float(v) for v in box], place=place if place == 'belt' else [float(v) for v in place],
-                grasp_turn=float(turn), expect=expect)
+    checked = dict(box=[float(v) for v in box], place=place if place == 'belt' else [float(v) for v in place],
+                   grasp_turn=float(turn), expect=expect)
+    if 'aim' in case:
+        aim = case['aim']
+        if not (isinstance(aim, list) and len(aim) == 2 and all(map(number, aim))
+                and all(abs(v) <= CASE_LIMITS['aim_m'] for v in aim)):
+            raise ValueError('case aim must be [dx, dy] within 25 mm')
+        checked['aim'] = [float(v) for v in aim]
+    return checked
 
 
 def spec(scenario):
