@@ -163,6 +163,7 @@ def _show_theme_button(page):
 
 def test_the_fleet_topbar_selector_switches_the_theme_live(browser):
     page = _open(browser, "/console")
+    assert page.evaluate("isSecureContext && typeof crypto.randomUUID === 'function'")
     page.wait_for_function("customElements.get('ui-button') !== undefined")
     button = page.locator("#fleet-theme")
     assert "어둡게" in button.get_attribute("aria-label")
