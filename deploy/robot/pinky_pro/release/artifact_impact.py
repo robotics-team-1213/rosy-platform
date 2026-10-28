@@ -131,6 +131,18 @@ def classify_paths(paths: list[str] | tuple[str, ...]) -> ImpactReport:
     return ImpactReport(impact=impact, paths=classified)
 
 
+def delivery_policy(paths: list[str] | tuple[str, ...]) -> str:
+    """Executable CD route; delta additionally needs authenticated artifact checks.
+
+    Host release tooling does not change the robot's installed payload. Unknown
+    paths retain the existing review gate. OS delivery requires its own approval.
+    """
+    robot_paths = [path for path in paths if not path.startswith("tools/release/")]
+    impact = classify_paths(robot_paths).impact
+    return {"none": "none", "native-payload": "full-payload",
+            "flashable-image": "os-image", "review": "review"}[impact]
+
+
 def select_impact(base: str, head: str, *, repository: Path | str = ".") -> ImpactReport:
     """Classify changes on the candidate side of the merge-base diff."""
     if not base.strip() or not head.strip():

@@ -20,11 +20,19 @@ $files = @(
     "tools/release/robot_cd.py",
     "tools/release/prepare_payload_release.py",
     "tools/release/publish_payload_release.py",
+    "tools/release/payload_inspection.py",
+    "tools/release/make_delta_release.py",
+    "tools/harness/colcon_roots.py",
+    "tools/harness/platform_parts.yaml",
     "tools/release/download_artifact.py",
     "deploy/robot/pinky_pro/release/signing.py",
     "deploy/hosts/common/release/signing.py",
     "deploy/robot/pinky_pro/release/sign_image_release.py",
-    "deploy/robot/pinky_pro/release/build_payload_release.py"
+    "deploy/robot/pinky_pro/release/build_payload_release.py",
+    "deploy/robot/pinky_pro/release/artifact_impact.py",
+    "deploy/robot/pinky_pro/native/image_layer_boot.py",
+    "deploy/robot/pinky_pro/native/image_layer_files.py",
+    "deploy/robot/pinky_pro/native/sync-image-layer.py"
 )
 $keyFiles = @(& git -C $repo ls-files "deploy/robot/pinky_pro/release/public-keys/*.pem")
 if ($LASTEXITCODE -ne 0 -or $keyFiles.Count -eq 0) { throw "No tracked public release keys." }

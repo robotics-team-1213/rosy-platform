@@ -106,6 +106,18 @@ PY
 # that base's SHA256SUMS. The full release is rebuilt here from a copy of the
 # base plus the delta; activation (native_release.py verify) then checks the
 # complete tree against the new signed SHA256SUMS, exactly as for a full one.
+verify_auto_delta_base() {
+  [[ -n "${ROSY_DELTA_BASE_ID:-}" ]] || return 0
+  [[ "$BASE_ID" == "$ROSY_DELTA_BASE_ID" && "$BASE_SUMS" == "${ROSY_DELTA_BASE_SUMS:-}" ]] \
+    || { echo "DELTA_BASE_BINDING: marker differs from signed rollout" >&2; return 1; }
+  [[ "$(readlink -f -- "$RELEASES_DIR/../current")" == "$(readlink -f -- "$BASE")" ]] \
+    || { echo "DELTA_BASE_CHANGED: base is no longer current" >&2; return 1; }
+  [[ "$(sha256sum "$BASE/SHA256SUMS" | awk '{print $1}')" == "$ROSY_DELTA_BASE_SUMS" ]] \
+    || { echo "DELTA_BASE_CHANGED: signed checksum identity changed" >&2; return 1; }
+  (cd "$BASE" && sha256sum --strict --status -c SHA256SUMS) \
+    || { echo "DELTA_BASE_CHANGED: base preimages no longer verify" >&2; return 1; }
+}
+
 if [[ -n "$DELTA" ]]; then
   mapfile -t delta_lines <<< "$DELTA"
   BASE_ID="${delta_lines[0]:-}"
@@ -117,16 +129,26 @@ if [[ -n "$DELTA" ]]; then
     || { echo "DELTA_BASE_MISSING: base release $BASE_ID is not on this device; push a full release" >&2; exit 1; }
   [[ "$(sha256sum "$BASE/SHA256SUMS" | awk '{print $1}')" == "$BASE_SUMS" ]] \
     || { echo "DELTA_BASE_MISMATCH: $BASE_ID on this device is not the release the delta was built on" >&2; exit 1; }
+  verify_auto_delta_base
   # D-553 addendum 4: hard links, not a copy of the ~90 MB base (47 s on the SD
   # card). Releases are never written in place: tar unlinks a path before it
   # extracts the delta's file there, so the base keeps its own content, and
   # the chown/chmod below are no-ops on the base's already-normalized inodes.
   cp -al -- "$BASE/." "$TMP/"
   rm -f -- "$TMP/SHA256SUMS" "$TMP/SHA256SUMS.sig" "$TMP/manifest.json"
+elif [[ -n "${ROSY_DELTA_BASE_ID:-}" ]]; then
+  echo "DELTA_MARKER_MISSING: signed delta has no base marker" >&2
+  exit 1
 fi
 
-tar --no-same-owner --no-same-permissions -xzf "$TARBALL" -C "$TMP"
+tar --unlink-first --no-same-owner --no-same-permissions -xzf "$TARBALL" -C "$TMP"
 rm -f -- "$TMP/.rosy-delta-base"
+if [[ -n "${ROSY_DELTA_BASE_ID:-}" ]]; then
+  # Check again after extraction: changed files must not hide a raced preimage.
+  verify_auto_delta_base
+  [[ "$(sha256sum "$TMP/SHA256SUMS" | awk '{print $1}')" == "${ROSY_DELTA_TARGET_SUMS:-}" ]] \
+    || { echo "DELTA_TARGET_MISMATCH: target checksum identity differs from signed rollout" >&2; exit 1; }
+fi
 
 # Reassert ownership/mode rather than trust either the tarball or
 # --no-same-owner's umask-derived result: this is what native_release.py's

@@ -34,7 +34,8 @@ def trees(tmp_path):
         root = tmp_path / release
         (root / "install/pkg").mkdir(parents=True)
         (root / "install/pkg/a.py").write_bytes(data)
-        (root / "install/pkg/b.py").write_bytes(b"unchanged\n")
+        (root / "install/pkg/b.py").write_bytes(b"# unchanged\n" + b"".join(
+            hashlib.sha256(str(i).encode()).digest() for i in range(2048)))
         (root / "install/.rosy-release").write_text(release + "\n")
         (root / "source-revision.txt").write_text(str(number) * 40 + "\n")
         (root / "source-ref.txt").write_text("main\n")
@@ -91,6 +92,16 @@ def test_corrupt_signed_base_is_a_hold_not_a_full_fallback(trees, tmp_path):
         tool.transport_delta(archive, target, key, tmp_path / "delta", [("M", "src/pkg/a.py")], lambda *_: b"old\n")
 
 
+def test_publisher_rejects_transport_changed_after_preparation(trees, tmp_path):
+    tool, key, ((_, base), (_, full)) = trees
+    delta, binding = tool.transport_delta(base, full, key, tmp_path / "delta",
+        [("M", "src/pkg/a.py")], lambda side, _: b"old\n" if side == "old" else b"new\n")
+    producer = load("delta_publisher_check", "tools/release/publish_payload_release.py")
+    delta.write_bytes(delta.read_bytes() + b"mutation")
+    with pytest.raises(producer.PublishError, match="bytes differ"):
+        producer.inspection.verify_transport_delta(full, delta, binding, key, tmp_path)
+
+
 @pytest.mark.parametrize("paths,wanted", [(["docs/a.md"], "none"),
     (["deploy/robot/pinky_pro/image/customize-rootfs.sh"], "os-image"),
     (["unowned/a.py"], "review"), (["operations/setup.py"], "full-payload")])
@@ -145,6 +156,50 @@ def test_installed_snapshot_contains_executable_delivery_policy(tmp_path):
     checked = subprocess.run([sys.executable, "-I", "-B", "-c", script, str(tmp_path)],
                              cwd=tmp_path, capture_output=True, text=True)
     assert checked.returncode == 0, checked.stderr
+
+
+def test_coordinator_prepared_full_selects_delta_for_actual_publisher(trees, tmp_path, monkeypatch):
+    _, public, ((_, base), (target, full)) = trees
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    cd = load("delivery_connected_cd", "tools/release/robot_cd.py")
+    state_dir = tmp_path / "cd-state"
+    state_dir.mkdir()
+    work = state_dir / target.name / "attempt-1"
+    work.mkdir(parents=True)
+    shutil.copyfile(full, work / full.name)
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": state_dir,
+              "robots": ["unused"], "canary": "unused", "key_name": "ephemeral-test"}
+    cd.write_json(state_dir / "state.json", {"sha": "2" * 40, "phase": "preparing",
+        "release_id": target.name, "work_dir": str(work), "base_tarball": str(base),
+        "canary_name": "rosy-test"})
+    coordinator = cd.Coordinator(config)
+    coordinator.ci = lambda _: "success"
+    coordinator.delta_sources = lambda *_: ([("M", "src/pkg/a.py")],
+        lambda side, _: b"old\n" if side == "old" else b"new\n")
+
+    def api(path):
+        if path == "git/ref/heads/main":
+            return {"object": {"sha": "2" * 40}}
+        if path.startswith("compare/"):
+            return {"status": "identical"}
+        if path.startswith("git/matching-refs/"):
+            return []
+        raise AssertionError(path)
+
+    coordinator.api = api
+    import make_delta_release
+    original = make_delta_release.transport_delta
+    monkeypatch.setattr(make_delta_release, "transport_delta", lambda base, full, _, out, **kwargs:
+                        original(base, full, public, out, **kwargs))
+    import publish_payload_release
+    calls = []
+    monkeypatch.setattr(publish_payload_release, "main", lambda args, **kwargs: calls.append((args, kwargs)) or 0)
+    assert coordinator.tick() == "done"
+    assert coordinator.state["delivery_policy"] == "delta"
+    assert len(calls) == 1
+    delta_path, binding = calls[0][1]["transport_delta"]
+    assert delta_path.is_file() and binding["full_tarball_sha256"] == hashlib.sha256(full.read_bytes()).hexdigest()
+    assert coordinator.state["payload_tarball"] == str(work / full.name)
 
 
 @pytest.mark.parametrize("mode", ["same", "different", "missing", "tamper", "dirty-base", "raced-base"])
@@ -221,12 +276,36 @@ def test_signed_producer_local_http_consumer_transport(trees, tmp_path, mode):
     stager.host, stager.http = Host(), HTTP()
     hub = FakeGitHub()
     try:
-        hub.publish({"private": public.with_name("key")}, target.name, tarball=full.read_bytes(),
-                    rollout_overrides={"delta": binding})
+        producer = load("delta_http_publisher", "tools/release/publish_payload_release.py")
+        from auto_update_fakes import HOST, T0
+
+        def publish_to_http(arguments):
+            assert arguments[:3] == ["gh", "release", "create"]
+            paths = [Path(arg) for arg in arguments[4:] if arg in
+                     {str(full), str(delta), str(tmp_path / "publish/rollout.json"),
+                      str(tmp_path / "publish/rollout.json.sig")}]
+            assert len(paths) == 4
+            assets = []
+            for path in paths:
+                name = f"{target.name}/{path.name}"
+                hub.assets[name] = path.read_bytes()
+                assets.append({"name": path.name, "size": path.stat().st_size,
+                    "browser_download_url": f"{hub.base}/dl/{name}"})
+            hub.releases = [{"tag_name": f"payload-{target.name}", "draft": False,
+                             "prerelease": False, "assets": assets}]
+            return 0, "", ""
+
+        publisher = producer.Publisher(release_id=target.name, repo="team/robots", work_dir=tmp_path / "publish",
+            key_name="ephemeral-test", private_key=public.with_name("key"), public_key=public,
+            local_appdata=tmp_path, evidence_dir=tmp_path / "evidence", gh=publish_to_http,
+            ssh=lambda _: (_ for _ in ()).throw(AssertionError("no device access")),
+            now=lambda: T0, monotonic=lambda: 0, sleep=lambda _: None)
+        rollout = producer.build_rollout(target.name, hashlib.sha256(full.read_bytes()).hexdigest(), "2" * 40,
+                                         T0.isoformat(), HOST, 600)
+        rollout["delta"] = binding
+        publisher.create(rollout, full, HOST, delta_asset=delta)
         name = binding["tarball"]
         hub.assets[f"{target.name}/{name}"] = b"tampered" if mode == "tamper" else delta.read_bytes()
-        hub.releases[0]["assets"].append({"name": name, "size": delta.stat().st_size,
-            "browser_download_url": f"{hub.base}/dl/{target.name}/{name}"})
         stager.api_base = hub.base
         # The fixture repository is the same API used by the production discovery parser.
         from auto_update_fakes import REPO
