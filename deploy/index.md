@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · 8facd08fea · Native enrollment current-main integration candidate
 - 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 - 2026-10-27 · 83b85f7f8a · 네이티브 수집 호출자의 시뮬레이션 호스트 중복 거부
 - 2026-10-27 · 1f121be8a1 · 네이티브 OMX 제어 호스트 명시 등록
-- 2026-10-27 · b6f8f0b46f · Arm S 파일 관측 producer 관리 경로
-- 2026-10-27 · 40f4a8b96d · README에 /readyz 운영 안내
+- 2026-10-27 · 6e71f6ad62 · 매일 원장 백업 타이머(14개 보존)

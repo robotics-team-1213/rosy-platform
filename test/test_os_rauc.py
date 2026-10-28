@@ -75,6 +75,22 @@ def test_real_cms_verity_and_exact_outer_metadata_are_accepted(tmp_path, monkeyp
     assert bundle.read_bytes() == before
 
 
+def test_real_verifier_accepts_cpython_without_seal_constant_names(tmp_path, monkeypatch, rauc_tool):
+    module()
+    m = importlib.import_module("os_rauc")
+    import fcntl
+    root, bundle, raw, signature, _, _ = _case(tmp_path, rauc_tool)
+    try:
+        with monkeypatch.context() as headers:
+            for name in ("F_ADD_SEALS", "F_SEAL_SEAL", "F_SEAL_SHRINK", "F_SEAL_GROW", "F_SEAL_WRITE"):
+                headers.delattr(fcntl, name, raising=False)
+            importlib.reload(m)
+            headers.setattr(m, "RAUC", str(rauc_tool))
+            assert m.verify_bundle(root, bundle, raw, signature)["metadata"] == json.loads(raw)
+    finally:
+        importlib.reload(m)
+
+
 def test_frozen_verifier_works_after_the_mutable_sdk_is_poisoned(tmp_path, rauc_tool):
     from test_os_frozen_firstboot import _prefix, _stage
     root, bundle, raw, signature, _, _ = _case(tmp_path, rauc_tool)

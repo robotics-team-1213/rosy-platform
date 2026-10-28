@@ -17,7 +17,7 @@ import uuid
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from auto_update_host import Host, UPDATES
+from auto_update_host import Host, UPDATES, UpdateError
 from native_release import IO_SETTLE_S, NativeReleaseManager
 from os_bootloader import (PERMIT, PERMIT_FIELDS, RAUC_STATE, _binding, _snapshot, _write, invoke)
 from os_factory_release import PUBLIC_KEY
@@ -25,7 +25,7 @@ from os_media import capture
 from os_motion_guard import reconcile
 from os_rauc import verify_bundle
 from os_rauc_service import RUNTIME, _empty_cgroup, _stop, install as rauc_install, recover as rauc_recover
-from os_state_layout import COMMON, _pairs, _path, _read
+from os_state_layout import COMMON, _layout, _pairs, _path, _read
 import os_update_commit as commit_owner
 import os_update_health as health
 from os_update_install import read_report
@@ -291,15 +291,41 @@ def resume(root: Path = Path("/"), *, host: Host | None = None, run=_run):
         raise ValueError(f"OS_CONTROLLER_HOLD: {exc}") from exc
 
 
+def status(root: Path = Path("/"), *, host=None) -> dict:
+    """Observe local state and shared policy; this is not update eligibility or a catalogue check."""
+    root = Path(root).absolute()
+    state = read_state(root)
+    admitted = _layout(root)
+    if admitted is None or admitted[0]["schema_version"] != 2:
+        raise ValueError("OS_STATUS_LAYOUT_HOLD")
+    policy = _Policy(root, Host(root) if host is None else host)
+    try:
+        config = policy._config()
+        hold, _ = policy._hold()
+    except UpdateError as exc:
+        raise ValueError("OS_STATUS_POLICY_HOLD") from exc
+    pending = state["pending"]
+    return dict(schema_version=1, running_slot=admitted[0]["slot"], committed=state["committed"],
+                pending=None if pending is None else dict(phase=pending["phase"],
+                    release_id=pending["verified"]["metadata"]["release_id"],
+                    source_slot=pending["source_slot"], target_slot=pending["target_slot"]),
+                failed_versions=state["failed_versions"],
+                policy=dict(enabled=config["enabled"], repo=config["repo"], hold=hold))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("run", "resume", "install"))
+    parser.add_argument("command", choices=("run", "resume", "install", "status"))
     parser.add_argument("--bundle", type=Path)
     parser.add_argument("--metadata", type=Path)
     parser.add_argument("--signature", type=Path)
     args = parser.parse_args(argv)
     try:
-        if args.command in {"run", "resume"}:
+        if args.command == "status":
+            if any((args.bundle, args.metadata, args.signature)):
+                raise ValueError("status does not accept install paths")
+            result = status()
+        elif args.command in {"run", "resume"}:
             if any((args.bundle, args.metadata, args.signature)):
                 raise ValueError("run/resume do not accept install paths")
             if args.command == "run":

@@ -14,6 +14,7 @@ from test_os_bundle_export import module as exporter, inputs
 from test_factory_release_signature import _keys
 from sign_image_release import sign_image_release
 from signing import sign_checksums
+import signing
 from os_rauc_fakes import rauc_tool, signer
 from test_os_update_feed import feed  # Actual HTTP catalogue/staging fixture.
 from auto_update_fakes import HOST
@@ -58,6 +59,58 @@ def test_authenticates_distribution_and_factory_before_parsing_os_inputs(tmp_pat
     value = m.read_inputs(dist, public)
     assert value["release_id"] == RELEASE_ID
     assert value["native_factory"]["checksums_sha256"] == hashlib.sha256((dist / "factory-release" / RELEASE_ID / "SHA256SUMS").read_bytes()).hexdigest()
+
+
+def test_os_signing_rejects_records_changed_after_authentication(tmp_path, monkeypatch):
+    m, dist, _, public = distribution(tmp_path)
+    original = m._read
+    changed = []
+
+    def replace_record(path, *args):
+        if path == dist / 'os-bundle-inputs/inputs.json' and not changed:
+            changed.append(True)
+            for name in ('os-bundle-inputs/inputs.json', 'build-provenance.json'):
+                target = dist / name
+                value = json.loads(target.read_bytes())
+                target.write_text(json.dumps(dict(value, source_revision='b' * 40)))
+        return original(path, *args)
+
+    monkeypatch.setattr(m, '_read', replace_record)
+    with pytest.raises(ValueError, match='authenticated'):
+        m.read_inputs(dist, public)
+    assert changed
+
+
+def test_os_signing_uses_the_authenticated_checksum_snapshot(tmp_path, monkeypatch):
+    m, dist, private, public = distribution(tmp_path)
+    names = ('os-bundle-inputs/inputs.json', 'build-provenance.json', 'SHA256SUMS', 'SHA256SUMS.sig')
+    before = {name: (dist / name).read_bytes() for name in names}
+    verify = signing.verify_release_checksums
+    observed = []
+
+    def verify_other_snapshot(root, key):
+        try:
+            for name in names[:2]:
+                path = dist / name
+                path.write_text(json.dumps(dict(json.loads(path.read_bytes()), source_revision='b' * 40)))
+            paths = [p.relative_to(dist).as_posix() for p in dist.rglob('*') if p.is_file()
+                     and p.relative_to(dist).as_posix() not in {'SHA256SUMS', 'SHA256SUMS.sig'}]
+            sums = signing.build_sha256sums(dist, paths)
+            (dist / 'SHA256SUMS').write_bytes(sums)
+            (dist / 'SHA256SUMS.sig').write_text(sign_checksums(sums, private))
+            entries, errors = verify(root, key)
+            assert not errors
+            observed.append(entries)
+            return entries, errors
+        finally:
+            for name, raw in before.items():
+                (dist / name).write_bytes(raw)
+
+    monkeypatch.setattr(signing, 'verify_release_checksums', verify_other_snapshot)
+    monkeypatch.setattr(m, 'verify_release_checksums', verify_other_snapshot, raising=False)
+    with pytest.raises(ValueError, match='authenticated'):
+        m.read_inputs(dist, public)
+    assert observed
 
 
 @pytest.mark.parametrize("change", ["metadata", "archive", "outer_signature", "factory_signature", "foreign_board"])
