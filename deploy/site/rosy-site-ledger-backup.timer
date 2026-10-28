@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Fleet ledger backup timer
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=15m
+Unit=rosy-site-ledger-backup.service
+
+[Install]
+WantedBy=timers.target

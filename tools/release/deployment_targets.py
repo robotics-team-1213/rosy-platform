@@ -9,7 +9,11 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[2]
-_FIELDS = {"id", "deployment", "install_target", "status", "operations", "reason"}
+_FIELDS = {"id", "deployment", "install_target", "status", "operations", "reason", "delivery"}
+_PINKY_DELIVERY = dict(platform="raspberry-pi-5", architecture="arm64", image_backend="pinky_pro",
+    application_updater="native-release", os_updater="rauc", os_compatible="rosy-pinky-pro-ab-v2",
+    os_tag_prefix="os-pinky-pro-")
+_PLATFORMS = {"rasptank_metal": "raspberry-pi-4", "dji_neo_2": "external-sdk-host", "omx": "workcell-host"}
 
 
 class DeploymentError(ValueError):
@@ -30,7 +34,7 @@ def load_targets(root=ROOT):
             raise DeploymentError(f"cannot read target descriptor: {path.name}") from exc
         if not isinstance(data, dict) or set(data) != _FIELDS:
             raise DeploymentError("target descriptor has invalid fields")
-        if any(not isinstance(data[key], str) or not data[key].strip() for key in _FIELDS - {"operations"}):
+        if any(not isinstance(data[key], str) or not data[key].strip() for key in _FIELDS - {"operations", "delivery"}):
             raise DeploymentError("target descriptor requires nonempty text fields")
         target = data["id"]
         if target != path.parent.name or not re.fullmatch(r"[a-z][a-z0-9_]*", target) or target in targets:
@@ -47,8 +51,23 @@ def load_targets(root=ROOT):
             raise DeploymentError("duplicate deployment operation")
         if operations and (target != "pinky_pro" or data["status"] != "existing_implementation"):
             raise DeploymentError("target has no reviewed deployment executor")
+        # Reviewed backend bindings are code-owned; descriptor edits cannot enable another executor.
+        delivery = _PINKY_DELIVERY if target == "pinky_pro" else dict.fromkeys(_PINKY_DELIVERY) | {"platform": _PLATFORMS.get(target)}
+        if target != "pinky_pro" and target not in _PLATFORMS or data["delivery"] != delivery:
+            raise DeploymentError("target delivery capabilities differ from the reviewed backend")
         targets[target] = data
     return targets
+
+
+def require_image_backend(target, *, root=ROOT):
+    """Resolve the reviewed image profile before an operator starts preparation."""
+    inventory = load_targets(root)
+    if target not in inventory:
+        raise DeploymentError("unknown deployment target")
+    info = inventory[target]
+    if target != "pinky_pro" or info["status"] != "existing_implementation":
+        raise DeploymentError(info["reason"])
+    return info["delivery"]
 
 
 def dispatch(target, operation, robot, *, tarball=None, public_key=None, execute=False, runner=None):
@@ -62,7 +81,7 @@ def dispatch(target, operation, robot, *, tarball=None, public_key=None, execute
     info = inventory[target]
     result = {"target": target, "deployment": info["deployment"], "operation": operation,
               "status": info["status"], "reason": info["reason"], "executed": False,
-              "command": [], "returncode": 0}
+              "command": [], "returncode": 0, "delivery": info["delivery"]}
     if operation not in info["operations"]:
         if execute:
             raise DeploymentError(info["reason"])
