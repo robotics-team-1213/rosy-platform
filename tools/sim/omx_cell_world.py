@@ -4,6 +4,7 @@ omx_cell_workcell.sdf is the one source (table, pallets, sheet stand, slip sheet
 directly; the MuJoCo and Isaac adapters call boxes() and add the same boxes. ROS-free and stdlib only, because the
 Isaac adapter runs on the Isaac SDK's own Python.
 """
+import os
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -31,8 +32,13 @@ def boxes(path=WORLD):
         mu = model.findtext('.//friction/ode/mu')
         if not static and mass is None:
             raise ValueError(f"movable box {model.get('name')} has no mass")
-        out.append(dict(name=model.get('name'), pos=pose[:3], rpy=pose[3:], size=_floats(shapes[0].findtext('size'), 3),
-                        static=static, mass=None if static else float(mass), friction=float(mu) if mu else 1.0))
+        size, mass = _floats(shapes[0].findtext('size'), 3), None if static else float(mass)
+        if model.get('name') == 'infeed_block' and os.environ.get('OMX_BLOCK_LENGTH_MM'):
+            # Grasp-tolerance sweeps: a longer container (30/60/90 mm cells), same section and density.
+            length = float(os.environ['OMX_BLOCK_LENGTH_MM'])/1000
+            mass, size[0] = mass*length/size[0], length
+        out.append(dict(name=model.get('name'), pos=pose[:3], rpy=pose[3:], size=size,
+                        static=static, mass=mass, friction=float(mu) if mu else 1.0))
     if not out:
         raise ValueError(f'no box models in {path}')
     return out
