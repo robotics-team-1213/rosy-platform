@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from browser_harness import browser_tests_enabled
 from playwright.sync_api import expect
-from test_pilot_browser import _enter_drive
+from test_pilot_browser import _enter_drive, dev_server
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='opt-in Chromium stop scenario')
 
@@ -88,4 +88,24 @@ def test_stop_result_remains_visible_in_the_drive_screen(tablet_page, width):
     expect(page.locator('#pilot-notice')).to_be_visible()
     expect(page.locator('[data-estop]')).to_be_visible()
     capture(page, f'pilot-drive-stop-{width}')
+    assert not errors
+
+
+def test_connection_notice_replaces_stop_feedback_and_rejects_its_late_reply(tablet_page):
+    origin, page, errors = tablet_page
+    held = []
+    page.route('**/api/v1/safety/stop', lambda route: held.append(route))
+    page.goto(origin + '/pilot')
+    page.locator('[data-estop]').click()
+    expect(page.locator('#pilot-notice')).to_contain_text('요청 중')
+    page.locator('form[data-pilot-token-form] ui-field input').fill(dev_server.DEV_TOKEN)
+    page.locator('form[data-pilot-token-form] ui-button').click()
+    expect(page.locator('[data-drive-enter]')).to_be_visible()
+    assert page.locator('#pilot-notice').get_attribute('data-stop-state') is None
+    held[0].fulfill(json={'estop': True, 'operations': []})
+    page.wait_for_timeout(100)
+    assert page.locator('#pilot-notice').get_attribute('data-stop-state') is None
+    page.locator('[data-drive-enter]').click()
+    expect(page.locator('body')).to_have_attribute('data-pilot-screen', 'drive')
+    expect(page.locator('#pilot-notice')).to_be_hidden()
     assert not errors
