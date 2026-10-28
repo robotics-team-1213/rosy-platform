@@ -63,3 +63,35 @@ def test_stacking_training_is_bounded_and_not_a_physics_success_claim():
     assert finished[0]['training_verified'] is True
     assert finished[0]['task_success'] is False
     assert finished[0]['stage'] == 'stacking_rl'
+
+
+def test_real_store_requires_training_artifacts_but_accepts_zero_task_successes(tmp_path):
+    import hashlib
+    import uuid
+    from run_store import RunStore
+    store = RunStore(tmp_path/'runs')
+    row = store.create(uuid.uuid4().hex, 'omx-stacking-rl', {'seed': 42}, 'a'*40)
+    row = store.update(row['run_id'], row['revision'], {'status': 'RUNNING'})
+    result = dict(status='SUCCEEDED', stage='stacking_rl', training_verified=True, task_success=False,
+                  updates=32, transitions=1024, evaluation_successes=0, evaluation_episodes=1,
+                  cleanup='OWNED_PROCESSES_EXITED_GPU_RELEASED', coordinate_scope='SYNTHETIC_NOT_CAMERA_REGISTERED')
+    with pytest.raises(ValueError, match='verified stacking'):
+        store.finish(row['run_id'], row['revision'], result, [])
+    artifacts = []
+    for name in ('stacking-report.json', 'stacking-policy.pt', 'stacking-initial.png', 'stacking-evaluation.png'):
+        raw = b'evidence'
+        (tmp_path/'runs/runs'/row['run_id']/name).write_bytes(raw)
+        artifacts.append(dict(id=Path(name).stem, name=name, bytes=len(raw),
+                              sha256=hashlib.sha256(raw).hexdigest(), media_type='application/octet-stream'))
+    done = store.finish(row['run_id'], row['revision'], result, artifacts)
+    assert done['status'] == 'SUCCEEDED'
+    assert done['result']['task_success'] is False
+
+
+def test_long_cargo_rotated_outside_the_envelope_is_rejected():
+    import math
+    mod = fixture()
+    item = mod.stack_plan()[0]
+    angle = math.radians(2)
+    assert not mod.placed(item, position=mod.target(item), orientation=[math.cos(angle/2), 0., 0., math.sin(angle/2)],
+                          speed=0., finger_force=0., support_force=.1, lifted=True)

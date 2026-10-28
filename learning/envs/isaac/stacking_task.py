@@ -5,10 +5,13 @@ import json
 import math
 import os
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from stacking_fixture import BELT_TOP, DT, FIXTURE, UNIT, placed, stack_plan, target
 from importer_compat import import_model, reference_model
 from model_checks import check_urdf, check_vendor_manifest
+from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, PAD_REST_OFFSET_M,
+                            FOLLOWER_STIFFNESS, FOLLOWER_DAMPING, FOLLOWER_MAX_EFFORT_NM, jaw_contact_point)
 
 
 def run(args):
@@ -18,10 +21,10 @@ def run(args):
     import omni.kit.app
     import omni.kit.commands
     import omni.usd
-    from pxr import Gf, Usd, UsdGeom, UsdLux, UsdPhysics, PhysxSchema
+    from pxr import Gf, Usd, UsdGeom, UsdLux, UsdPhysics, UsdShade, PhysxSchema
     from isaacsim.core.api import World
     from isaacsim.core.api.robots import Robot
-    from isaacsim.core.api.objects import DynamicCuboid, FixedCuboid
+    from isaacsim.core.api.objects import DynamicCuboid, FixedCuboid, VisualCuboid
     from isaacsim.core.api.materials import PhysicsMaterial
     from isaacsim.core.prims import RigidPrim
     from isaacsim.core.utils.types import ArticulationAction
@@ -58,6 +61,26 @@ def run(args):
     surface.CreateSurfaceVelocityAttr(Gf.Vec3f(0., FIXTURE['belt_speed_m_s'], 0.))
     fixed('BeltStop', [.20, -.029, .035], [.12, .004, .02], [.65, .65, .65])
     fixed('Bin', [.20, .02, .0125], [.09, .09, .025], [.15, .48, .7])
+    origin = np.array(FIXTURE['bin_origin_m'])
+    for axis in range(3):
+        others = [i for i in range(3) if i != axis]
+        for ai, a in enumerate((0., .09)):
+            for bi, b in enumerate((0., .09)):
+                center = origin.copy()
+                center[axis] += .045
+                center[others] += [a, b]
+                size = np.full(3, .0007); size[axis] = .09
+                name = f'Envelope{axis}_{ai}_{bi}'
+                world.scene.add(VisualCuboid('/World/'+name, name=name, size=1.,
+                    position=center, scale=size, color=np.array([.95, .8, .12])))
+    for axis in range(2):
+        for n in (1, 2):
+            center = origin+np.array([.045, .045, .0001])
+            center[axis] = origin[axis]+UNIT*n
+            size = np.array([.09, .09, .0002]); size[axis] = .0004
+            name = f'Grid{axis}_{n}'
+            world.scene.add(VisualCuboid('/World/'+name, name=name, size=1.,
+                position=center, scale=size, color=np.ones(3)))
     # The target is an open cargo envelope; walls would consume the zero-clearance packing space.
     for i, x in enumerate((.154, .246)):
         fixed('Boundary'+str(i), [x, .02, .001], [.001, .092, .002], [.95, .8, .12])
@@ -82,12 +105,35 @@ def run(args):
                 drive.CreateStiffnessAttr(30. if finger else 5000.)
                 drive.CreateDampingAttr(2. if finger else 100.)
                 drive.CreateMaxForceAttr(.2 if finger else 30.)
+                if prim.GetName() == 'gripper_joint_2':
+                    drive.CreateStiffnessAttr(FOLLOWER_STIFFNESS)
+                    drive.CreateDampingAttr(FOLLOWER_DAMPING)
+                    drive.CreateMaxForceAttr(FOLLOWER_MAX_EFFORT_NM)
+                    for schema in prim.GetAppliedSchemas():
+                        if str(schema).startswith('PhysxMimicJointAPI:'):
+                            prim.RemoveAPI(PhysxSchema.PhysxMimicJointAPI, str(schema).split(':', 1)[1])
             if prim.HasAPI(UsdPhysics.CollisionAPI):
                 collision = PhysxSchema.PhysxCollisionAPI.Apply(prim)
                 collision.CreateContactOffsetAttr(.0005)
                 collision.CreateRestOffsetAttr(0.)
                 if prim.IsA(UsdGeom.Mesh):
                     UsdPhysics.MeshCollisionAPI.Apply(prim).CreateApproximationAttr('convexHull')
+        x, y = jaw_contact_point()
+        for finger, side in (('link6', 1), ('link7', -1)):
+            body = stage.GetPrimAtPath(tool[finger])
+            for prim in Usd.PrimRange(body):
+                if prim.HasAPI(UsdPhysics.CollisionAPI):
+                    UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Set(False)
+            pad = UsdGeom.Capsule.Define(stage, body.GetPath().AppendChild('grip_pad'))
+            pad.CreateAxisAttr('Z'); pad.CreateRadiusAttr(PAD_RADIUS); pad.CreateHeightAttr(2*PAD_HALF_LENGTH)
+            UsdGeom.Xformable(pad).AddTranslateOp().Set(Gf.Vec3d(x, side*(y+PAD_RADIUS), 0.))
+            pad.CreatePurposeAttr('guide')
+            UsdPhysics.CollisionAPI.Apply(pad.GetPrim())
+            offsets = PhysxSchema.PhysxCollisionAPI.Apply(pad.GetPrim())
+            offsets.CreateContactOffsetAttr(PAD_CONTACT_OFFSET_M)
+            offsets.CreateRestOffsetAttr(PAD_REST_OFFSET_M)
+            UsdShade.MaterialBindingAPI.Apply(pad.GetPrim()).Bind(UsdShade.Material.Get(stage, '/World/GripMaterial'),
+                UsdShade.Tokens.weakerThanDescendants, 'physics')
         robot = world.scene.add(Robot(str(roots[0].GetPath()), name='arm'+str(len(robots))))
         robots.append(robot)
     plan = stack_plan()
@@ -100,7 +146,8 @@ def run(args):
             position=np.array([.7, -.5+i*.065, .015]), color=np.array(colors[item['cells']]), physics_material=mat))
         cargo.append(box)
         contacts.append(world.scene.add(RigidPrim('/World/Cargo'+str(i), name='contact'+str(i),
-            track_contact_forces=True, contact_filter_prim_paths_expr=filters, max_contact_count=128)))
+            track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+
+            ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=128)))
     eye = Gf.Vec3d(.75, -.75, .65)
     look = Gf.Matrix4d().SetLookAt(eye, Gf.Vec3d(.13, -.07, .06), Gf.Vec3d(0., 0., 1.)).GetInverse()
     rotation = look.ExtractRotationQuat()
@@ -109,9 +156,17 @@ def run(args):
     camera.initialize()
     camera.set_world_pose(np.array(eye), np.array([rotation.GetReal(), *rotation.GetImaginary()]), camera_axes='usd')
     camera.set_clipping_range(.01, 10.)
+    camera.prim.GetAttribute('focalLength').Set(18.)
+    camera.prim.GetAttribute('horizontalAperture').Set(36.)
+    camera.prim.GetAttribute('verticalAperture').Set(27.)
+    limits_by_name = {joint.get('name'): [float(joint.find('limit').get(key)) for key in ('lower', 'upper')]
+                      for joint in ET.parse(args.urdf).getroot().iter('joint')
+                      if joint.get('type') in ('revolute', 'prismatic')}
+    joint_limits = []
     for robot in robots:
         joint_indices.append([robot.get_dof_index('joint'+str(i)) for i in range(1, 6)])
         fingers.append([robot.get_dof_index('gripper_joint_1'), robot.get_dof_index('gripper_joint_2')])
+        joint_limits.append(np.array([limits_by_name[name] for name in robot.dof_names]))
 
     class StackingEnv:
         # shortcut: one CPU-facing SDK world, use Isaac Lab vector scenes when measured rollout throughput is limiting.
@@ -123,6 +178,7 @@ def run(args):
             self.transitions = self.completed = self.episodes = 0
             self.rng = np.random.default_rng(args.seed)
             self.belt_start = self.belt_observed = None
+            self.auto_reset = True
             self.reset()
 
         def reset(self, seed=None):
@@ -156,12 +212,13 @@ def run(args):
 
         def measured(self, index):
             position, orientation = cargo[index].get_world_pose()
-            force = np.linalg.norm(np.asarray(contacts[index].get_contact_force_matrix(dt=DT))[0], axis=-1)
-            net = float(np.linalg.norm(contacts[index].get_net_contact_forces(dt=DT)))
+            vectors = np.asarray(contacts[index].get_contact_force_matrix(dt=DT))[0]
+            force = np.linalg.norm(vectors[:4], axis=-1)
             speed = max(float(np.linalg.norm(cargo[index].get_linear_velocity())),
                         UNIT*float(np.linalg.norm(cargo[index].get_angular_velocity())))
             return position, dict(position=position.tolist(), orientation=orientation.tolist(), speed=speed,
-                finger_force=float(force.sum()), support_force=max(0., net-float(force.sum())), lifted=self.lifted), force
+                finger_force=float(force.sum()), support_force=max(0., float(vectors[4:, 2].sum())),
+                lifted=self.lifted), force
 
         def get_observations(self):
             values = []
@@ -188,7 +245,7 @@ def run(args):
                 if i != active:
                     continue
                 state = robot.get_joint_positions().copy()
-                limits = np.asarray(robot.get_dof_limits()).reshape(-1, 2)
+                limits = joint_limits[i]
                 idx = joint_indices[i]
                 state[idx] = np.clip(state[idx]+.03*action[i*6:i*6+5], limits[idx, 0], limits[idx, 1])
                 opening = -.12+1.12*(action[i*6+5]+1)/2
@@ -214,7 +271,7 @@ def run(args):
                 previous['lifted'] = True
                 # New loads may increase support forces; any displaced earlier cargo invalidates this stack.
                 done |= not placed(plan[i], **previous)
-            success = self.settle >= FIXTURE['settle_steps']
+            success = not done and self.settle >= FIXTURE['settle_steps']
             full_stack = success and self.index == len(plan)-1
             if success:
                 reward += 20
@@ -230,7 +287,8 @@ def run(args):
             done |= timeout
             if done:
                 self.episodes += 1
-                self.reset()
+                if self.auto_reset:
+                    self.reset()
             return self.get_observations(), torch.tensor([reward], device=self.device), torch.tensor([done], device=self.device), info
 
     env = StackingEnv()
@@ -267,6 +325,7 @@ def run(args):
     runner.save(str(checkpoint))
     trained_transitions = env.transitions
     policy = runner.get_inference_policy(device=env.device)
+    env.auto_reset = False
     obs = env.reset(seed=args.seed+FIXTURE['evaluation_seed_offset'])
     evaluation_successes = 0
     for _ in range(env.max_episode_length):

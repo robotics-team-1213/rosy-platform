@@ -382,7 +382,19 @@ class RunStore:
                 raise ValueError('a terminal result is required')
             value = self._change(row, expected_revision, {'status': result['status']})
             if result['status'] == 'SUCCEEDED':
-                if row['input']['scenario_id'] == 'pinky-conveyor-roundtrip':
+                if row['input']['scenario_id'] == 'omx-stacking-rl':
+                    required = {'stacking-report', 'stacking-policy', 'stacking-initial', 'stacking-evaluation'}
+                    if (result.get('stage') != 'stacking_rl' or result.get('training_verified') is not True
+                            or result.get('updates') != 32 or result.get('transitions') != 1024
+                            or result.get('evaluation_episodes') != 1
+                            or type(result.get('evaluation_successes')) is not int
+                            or result['evaluation_successes'] not in (0, 1)
+                            or result.get('task_success') is not (result['evaluation_successes'] == 1)
+                            or result.get('cleanup') != 'OWNED_PROCESSES_EXITED_GPU_RELEASED'
+                            or result.get('coordinate_scope') != 'SYNTHETIC_NOT_CAMERA_REGISTERED'
+                            or not required <= {item.get('id') for item in artifacts}):
+                        raise ValueError('SDK exit alone is not verified stacking training')
+                elif row['input']['scenario_id'] == 'pinky-conveyor-roundtrip':
                     required = {'contact-report', 'pinky_initial', 'out_lift', 'conveyor_settle', 'back_lift', 'pinky_settle'}
                     if (result.get('stage') != 'contact_roundtrip' or result.get('import_verified') is not True
                             or type(result.get('completed_frames')) is not int or not 0 < result['completed_frames'] <= 4800
