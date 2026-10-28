@@ -16,7 +16,7 @@ def world_observations(samples):
         data = sample.model_dump()
         owners = []
         for owner in data.pop("owners"):
-            joints = owner.pop("joints")
+            joints = owner.pop("joints", None)
             links = {name: LinkPhysicalState(bounds=Bounds3(**link["bounds"]),
                 linear_velocity_m_s=link["linear_velocity_m_s"], angular_velocity_rad_s=link["angular_velocity_rad_s"])
                 for name, link in owner.pop("links").items()}

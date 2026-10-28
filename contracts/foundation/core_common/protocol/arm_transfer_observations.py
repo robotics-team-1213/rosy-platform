@@ -88,7 +88,7 @@ class ArmOwnerObservation(ArmTransferOwnerContext):
     gripper_state: Literal["OPEN", "CLOSED", "MOVING", "UNKNOWN"]
     held_state: Literal["NONE", "HELD", "UNKNOWN"]
     held_object_ref: ArmPhysicalRef | None
-    joints: ArmJointObservation | None = None
+    joints: ArmJointObservation | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _held_reference(self):

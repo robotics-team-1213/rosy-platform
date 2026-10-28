@@ -67,9 +67,11 @@ def test_source_joint_facts_are_closed_finite_and_ordered():
             cls.model_validate({**joint_measurement(1_000_000_000, 4), **changes})
 
 
-def test_legacy_canonical_proof_omits_absent_joint_measurements(policy):
+@pytest.mark.parametrize("explicit_null", [False, True])
+def test_legacy_canonical_proof_omits_absent_joint_measurements(policy, explicit_null):
     from test_physical_transfer_evidence import context, samples
-    from fleet.server.physical_transfer_observations import evidence_document
+    from fleet.server.physical_transfer_observations import evidence_document, world_observations
+    from core_common.protocol.arm_transfer_observations import ArmTransferObservation
     physical = import_module("rosy.world.state.projections.physical_transfer")
     assert hasattr(physical, "JointPhysicalState")
     raw = samples(policy)
@@ -77,6 +79,13 @@ def test_legacy_canonical_proof_omits_absent_joint_measurements(policy):
     assert '"joints"' not in document
     decoded = json.loads(document)
     assert decoded["samples"][0]["owners"][0]["links_observed_at_ns"] == raw[0].owners[0].links_observed_at_ns
+    if explicit_null:
+        for sample in decoded["samples"]:
+            for owner in sample["owners"]:
+                owner["joints"] = None
+    dtos = tuple(ArmTransferObservation.model_validate(sample) for sample in decoded["samples"])
+    assert all("joints" not in owner for dto in dtos for owner in dto.model_dump(mode="json")["owners"])
+    assert evidence_document(context(policy), world_observations(dtos)) == document
 
 
 def test_scoped_export_preserves_original_proof_and_never_refreshes_it(rig):
