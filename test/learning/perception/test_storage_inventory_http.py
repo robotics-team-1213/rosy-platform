@@ -1,5 +1,7 @@
 import json
+import os
 import threading
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -73,7 +75,9 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                     expect(control).to_have_attribute('kind', 'quiet')
                     assert control.evaluate('(el) => el.tagName') == 'UI-BUTTON'
                     assert control.bounding_box()['height'] >= 48
-                capture = f'storage-controls-{theme}-{width}-{uuid4().hex}'
+                capture_dir = Path(os.environ.get('ROSY_UI_CAPTURE_DIR', os.environ.get('TEMP', '/tmp')))
+                capture_dir.mkdir(parents=True, exist_ok=True)
+                capture = str(capture_dir / f'storage-controls-{theme}-{width}-{uuid4().hex}')
                 page.locator('#storage-section').evaluate("el => el.scrollIntoView({block: 'start'})")
                 save_temp_screenshot(page, capture + '-ready.png')
                 page.locator('#storage-download').fill('8000001')
