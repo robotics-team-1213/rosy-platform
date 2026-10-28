@@ -191,7 +191,8 @@ async function start() {
     who = roles(await request('/api/fleet/auth/session'));
     const {workcells} = await request('/api/fleet/policy-governance/workcells');
     $('policy-workcell').replaceChildren(...workcells.map(id => element('option', id, {value: id})));
-    $('policy-workcell').disabled = !workcells.length;
+    $('policy-workcell').hidden = !workcells.length;
+    document.querySelector('[for="policy-workcell"]').hidden = !workcells.length;
     if (!workcells.length) {
       $('policy-verdict').textContent = '설정된 OMX 작업셀이 없습니다. 사이트 설치 담당자에게 작업셀 등록을 요청하세요.';
       $('policy-verdict').setAttribute('state', 'empty'); return;
