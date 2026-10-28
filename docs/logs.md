@@ -12633,3 +12633,10 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-889 추가 5
 - 교훈: 없음
+
+## 2026-10-28 · uncommitted · fix(monitoring): Monitoring 화면 배경을 의미 색 역할로
+
+- 변경: `applications/monitoring/web/monitoring.css`의 `body` 배경을 `--ground`에서 `--surface-canvas`로 바꾼다. 이 레인은 main보다 늦게 합쳐졌고, 그사이 main에 들어온 `shared/web/test/test_design_scope_gates.py::test_direct_colour_declarations_use_semantic_roles`가 직접 배경 선언에 의미 역할을 요구한다.
+- 증거: 원격 `operations/monitoring/test`·`shared/web/test`·`test/architecture`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 토큰 이름 차이다.

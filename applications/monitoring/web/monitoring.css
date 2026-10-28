@@ -1,4 +1,4 @@
-body { margin: 0; background: var(--ground); color: var(--text-primary); font: var(--text-body)/var(--leading-copy) var(--body); }
+body { margin: 0; background: var(--surface-canvas); color: var(--text-primary); font: var(--text-body)/var(--leading-copy) var(--body); }
 * { box-sizing: border-box; }
 ::selection { background: var(--surface-raised); color: var(--text-primary); }
 :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
