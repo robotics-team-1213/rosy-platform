@@ -252,6 +252,7 @@ def test_existing_install_policy_is_closed_between_each_transport_file(repair, m
 
 
 def test_host_preparer_signs_only_exact_git_bytes_and_refuses_overwrite(tmp_path, monkeypatch):
+    monkeypatch.delenv('GITHUB_ACTIONS', raising=False)
     monkeypatch.syspath_prepend(str(NATIVE))
     from tools.release import prepare_os_transport_repair as host
     private, public = _keys(tmp_path / 'host-keys', 'repair')
@@ -271,6 +272,17 @@ def test_host_preparer_signs_only_exact_git_bytes_and_refuses_overwrite(tmp_path
     assert all(payload[name] == expected[name] for name in host.FILES)
     with pytest.raises(ValueError):
         host.prepare(output, private, public, cms_private, source_revision='a' * 40, canary=['rosy-pinky-geg6'])
+
+
+@pytest.mark.parametrize('ci_value', ['true', 'TRUE'])
+def test_host_preparer_refuses_ci_before_reading_keys(tmp_path, monkeypatch, ci_value):
+    from tools.release import prepare_os_transport_repair as host
+    monkeypatch.setenv('GITHUB_ACTIONS', ci_value)
+    output = tmp_path / 'forbidden-repair'
+    missing = tmp_path / 'missing-key'
+    with pytest.raises(ValueError, match='only on the operator PC'):
+        host.prepare(output, missing, missing, missing, source_revision='a' * 40, canary=['rosy-pinky-geg6'])
+    assert not output.exists()
 
 
 def test_standalone_commands_expose_help_without_bootstrap_import_side_effects():
