@@ -96,22 +96,25 @@ def _stale(info: dict | None, age: float) -> str | None:
     return None
 
 
-def set_status(ticket: Path, status: str) -> None:
-    """Rewrite a held ticket's status by rename (also refreshes it)."""
+def set_status(ticket: Path, status: str, **fields) -> None:
+    """Rewrite a held ticket's status (and ``fields``, e.g. ``batch``) by rename (also refreshes it)."""
     info = json.loads(ticket.read_text(encoding="utf-8"))
     tmp = ticket.with_name(f".{ticket.name}.tmp")
-    tmp.write_text(json.dumps({**info, "status": status}), encoding="utf-8")
+    tmp.write_text(json.dumps({**info, **fields, "status": status}), encoding="utf-8")
     os.replace(tmp, ticket)
 
 
 def blockers(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
-    """Who keeps ``ticket`` from its turn: any ticket in its turn, and every earlier one not preparing.
+    """Who keeps ``ticket`` from its turn: any ticket in its turn, every earlier one not preparing, and a
+    batch leader (``land_batch.py``) whose ``batch`` names this ticket's branch, wherever it stands.
 
     A FULL tier in the lock held every lander behind it for 40+ min (2026-10-26); a preparing ticket now
     runs it outside the lock and keeps its place."""
     rows = ahead(qdir, Path("~"), now)  # every live ticket ("~" sorts after the digits)
+    mine = next((r.get("branch") for r in rows if r["ticket"] == ticket.name), None)
     return [r for r in rows if r["ticket"] != ticket.name and (
-        r.get("status") == "turn" or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")))]
+        r.get("status") == "turn" or (mine is not None and mine in (r.get("batch") or []))
+        or (r["ticket"] < ticket.name and r.get("status") not in ("preparing", "pending")))]
 
 
 def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
@@ -144,6 +147,7 @@ def describe(rows: list[dict]) -> str:
 
 def touch(ticket: Path | None = None) -> None:
     """Refresh a held ticket so others do not reclaim it while its holder still waits or tests."""
+    land_events.beat()
     for path in [ticket] if ticket else list(_held):
         try:
             os.utime(path)
@@ -151,19 +155,26 @@ def touch(ticket: Path | None = None) -> None:
             pass
 
 
-def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None) -> None:
-    """Mark ``ticket`` waiting; return once nothing blocks it (``blockers``), marked as in its turn;
-    QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop."""
+def wait(qdir: Path, ticket: Path, timeout: float, clock=time.time, sleep=time.sleep, check=None,
+         done=None, form=None) -> str | None:
+    """Mark ``ticket`` waiting; return None once nothing blocks it (``blockers``), marked as in its turn;
+    QueueError after ``timeout`` seconds (0: no limit), or as soon as ``check()`` names a reason to stop.
+    ``"landed"`` as soon as ``done()`` is true (a batch landed this branch), ``"batch"`` when ``form(rows)``
+    made this ticket a batch leader while ``rows`` blocked it (``land_batch.py``)."""
     set_status(ticket, "waiting")
     began, said, last = clock(), None, 0.0
     while True:
+        if done and done():
+            return "landed"
         rows = blockers(qdir, ticket, clock())
         if not rows:
             if said is not None:
                 print(f"[queue] first in line after {(clock() - began) / 60:.0f} min", flush=True)
             land_events.emit("turn", waited_s=round(clock() - began))
             set_status(ticket, "turn")
-            return
+            return None
+        if form and form(rows):
+            return "batch"
         if len(rows) != said or clock() - last >= REPORT_EVERY:
             print(f"[queue] position {len(rows) + 1}; ahead: {describe(rows)}", flush=True)
             said, last = len(rows), clock()

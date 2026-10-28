@@ -236,6 +236,20 @@ def test_only_publish_mains_own_check_of_this_sha_skips_the_repeated_scans(tmp_p
 
 
 @pytest.mark.skipif(BASH is None, reason="bash is required")
+def test_publish_mains_push_skips_the_size_rule_every_other_push_runs_it(tmp_path):
+    """Each landing ran the size rule on its commits and CI reruns it on the range; 40+ min here (2026-10-28)."""
+    git, commit = _safety_step_repo(tmp_path, "roots: []\n")
+    commit({"app.py": "x = 1\n"}, "change\n\nSafety-Review: t unit")
+    sha = git("rev-parse", "HEAD").strip()
+    (tmp_path / "tools/harness/size_range.py").write_text("import sys\nprint('SIZE-RAN')\nsys.exit(1)\n")
+    ran = _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED="0" * 40)
+    assert ran.returncode == 1 and "SIZE-RAN" in ran.stdout, ran.stderr  # a plain push to publish/main-*
+    assert _run_safety_step(tmp_path, PUBLISH_REF="", ROSY_PUBLISH_CHECKED=sha).returncode == 1  # a branch push
+    skipped = _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED=sha)
+    assert skipped.returncode == 0 and "SIZE-RAN" not in skipped.stdout, skipped.stderr
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required")
 @pytest.mark.parametrize("case", ["trailer", "missing", "no-origin", "crash"])
 def test_safety_step_refuses_the_range_ci_checks(tmp_path, case):
     """D-762 stage 0: origin/main..tip, the range a push to main makes CI check, refused not warned."""

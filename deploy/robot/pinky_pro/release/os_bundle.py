@@ -24,7 +24,7 @@ from os_rauc import _spki, verify_bundle
 from os_state_layout import _pairs, _path, _read
 from os_update_manifest import COMPATIBLE, _digest, _fields, _integer, release_id, validate_metadata, verify_metadata
 from os_update_rollout import _shape as validate_rollout, verify as verify_rollout
-from signing import parse_sha256sums, sha256_file, sign_checksums, verify_release_files, verify_signature
+from signing import parse_sha256sums, sha256_file, sign_checksums, verify_release_checksums, verify_signature
 
 INPUT_FIELDS = {"schema_version", "kind", "board", "arch", "release_id", "source_revision", "boot_abi",
                 "state_schema", "layout", "native_factory", "images"}
@@ -34,16 +34,16 @@ CHUNK = 2 * 1024**2
 def read_inputs(dist: Path, public: Path) -> dict:
     dist = ab._offline_directory(dist)
     owner = dist.stat().st_uid
-    sums = _read(_path(dist, "SHA256SUMS"), 16 * 1024**2, owner)
+    _read(_path(dist, "SHA256SUMS"), 16 * 1024**2, owner)
     _read(_path(dist, "SHA256SUMS.sig"), 512, owner)
-    errors = verify_release_files(dist, public)
+    entries, errors = verify_release_checksums(dist, public)
     if errors:
         raise ValueError("untrusted image distribution: " + str(errors[0]))
-    entries, errors = parse_sha256sums(sums)
-    if errors:
-        raise ValueError("invalid image checksum list")
     def record(name, limit=65536):
-        return json.loads(_read(_path(dist, name), limit, owner), object_pairs_hook=_pairs)
+        raw = _read(_path(dist, name), limit, owner)
+        if entries.get(name) != hashlib.sha256(raw).hexdigest():
+            raise ValueError("OS input metadata differs from authenticated checksum: " + name)
+        return json.loads(raw, object_pairs_hook=_pairs)
     value = record("os-bundle-inputs/inputs.json")
     _fields(value, INPUT_FIELDS)
     _integer(value["schema_version"], 1, 1)

@@ -24,6 +24,7 @@ SHARED_BINDINGS = {
     "var/lib/tailscale": "/tailscale/machine",
     "var/lib/rosy/maps": "/maps", "var/lib/rosy/models": "/models",
     "var/lib/rosy/pilot-recordings": "/pilot-recordings",
+    "var/lib/rosy/calibration": "/calibration",
 }
 
 

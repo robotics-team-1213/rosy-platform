@@ -15,7 +15,10 @@ BASE_FILES = {"etc/rosy/device-identity.json": 0o644, "etc/rosy/runtime.env": 0o
               "etc/hostname": 0o644, "etc/hosts": 0o644}
 CONFIG_FILES = {"etc/rosy/network-policy.json": 0o600, "etc/rosy/login-policy.json": 0o600,
                 "etc/rosy/ap-credentials.json": 0o600, "etc/rosy/fleet-bootstrap.json": 0o600,
-                "etc/rosy/timezone.json": 0o600, "var/lib/rosy/config/applied.json": 0o600}
+                "etc/rosy/timezone.json": 0o600, "var/lib/rosy/config/applied.json": 0o600,
+                "etc/rosy/ir_calibration.yaml": 0o644,
+                "etc/rosy/line_observer_overrides.yaml": 0o644,
+                "etc/rosy/camera_nominal.yaml": 0o644}
 ROOT_FILES = {**BASE_FILES, **CONFIG_FILES}
 INITIAL = COMMON + "/state/config-initializing.json"
 PUBLICATION = COMMON + "/state/config-publishing.json"
