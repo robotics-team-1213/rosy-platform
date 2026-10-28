@@ -43,6 +43,19 @@ def test_reference_controller_is_a_distinct_mapped_scenario():
         run_catalog.normalize('omx-map-long-stack', {'seed': 42, 'attachment': True})
 
 
+def test_mapped_ppo_uses_the_verified_geometry_and_a_three_layer_horizon():
+    mod = fixture()
+    import run_catalog
+    config = run_catalog.normalize('omx-map-stacking-rl', {'seed': 42})
+    assert config['fixture'] == mod.RL_FIXTURE['revision']
+    for key in ('board_size_m', 'arm_bases_m', 'bin_origin_m', 'bin_size_m', 'finger_collision', 'fixed_base'):
+        assert mod.RL_FIXTURE[key] == mod.FIXTURE[key]
+    assert mod.RL_FIXTURE['max_episode_steps']*mod.RL_FIXTURE['control_decimation']*mod.DT >= 120
+    assert mod.RL_FIXTURE['controller'] == 'RSL_RL_PPO_DIRECT_JOINT_VELOCITY'
+    with pytest.raises(ValueError):
+        run_catalog.normalize('omx-map-stacking-rl', {'seed': 42, 'iterations': 1000})
+
+
 def test_tcp_is_a_massless_fixed_frame_in_the_pinned_vendor_model(tmp_path):
     mod = fixture()
     vendor = Path(__file__).resolve().parents[1]/'assets/open_manipulator_description/urdf/omx_f/omx_f.urdf'
