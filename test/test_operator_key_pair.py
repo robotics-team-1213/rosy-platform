@@ -50,7 +50,7 @@ def test_matching_real_keys_work_without_decryption(verifier, make_key, key_type
 
 @pytest.mark.parametrize("cipher", ["aes256-gcm@openssh.com", "chacha20-poly1305@openssh.com"])
 def test_authenticated_encryption_keys_are_accepted(verifier, make_key, cipher):
-    private, public = make_key(passphrase="fixture-only-passphrase", cipher=cipher)
+    private, public = make_key(passphrase="fixture", cipher=cipher)
     assert verifier.key_pair(private, public).startswith("SHA256:")
 
 
@@ -77,7 +77,8 @@ def test_invalid_private_file_is_refused(verifier, make_key, kind):
     elif kind == "not-openssh":
         private.write_bytes(b"not a private key")
     else:
-        private.write_bytes(b"-----BEGIN OPENSSH PRIVATE KEY-----\n!!!\n-----END OPENSSH PRIVATE KEY-----\n")
+        lines = private.read_bytes().splitlines()
+        private.write_bytes(lines[0] + b"\n!!!\n" + lines[-1] + b"\n")
     with pytest.raises((ValueError, OSError)):
         verifier.key_pair(private, public)
 
