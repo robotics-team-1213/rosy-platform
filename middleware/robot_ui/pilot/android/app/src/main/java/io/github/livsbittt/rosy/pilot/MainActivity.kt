@@ -220,12 +220,14 @@ class MainActivity : Activity() {
         reselect?.let { wanted -> records.firstOrNull { it.host == wanted.host && it.port == wanted.port }?.let { reselect = null; select(it); return } }
         status.text = lastError ?: if (cooling.coolingRequired) "태블릿 발열이 내려갈 때까지 조종 연결을 닫았습니다." else if (records.isEmpty()) discovery?.status ?: "같은 Wi-Fi에서 로봇을 찾고 있습니다…" else "${records.size}대 발견 · 연결할 로봇을 선택하세요."
         if (shownCandidates == records && shownCooling == cooling.coolingRequired) return
-        shownCandidates = records; shownCooling = cooling.coolingRequired; robots.removeAllViews()
-        if (records.isEmpty()) { robots.addView(label(if (cooling.coolingRequired) "태블릿이 식으면 다시 연결할 수 있습니다." else "로봇이 없나요? Wi-Fi와 전원을 확인하세요.", RosyMetrics.TextBody)); return }
-        records.forEach { candidate ->
-            val valid = runCatching { candidates.addresses(candidate.host, candidate.port) != null }.getOrDefault(false)
-            robots.addView(views.robot(candidate, valid && !cooling.coolingRequired) { select(candidate) },
-                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space3.toInt()) })
+        shownCandidates = records; shownCooling = cooling.coolingRequired
+        views.replaceRobots(robots, status) {
+            if (records.isEmpty()) { robots.addView(label(if (cooling.coolingRequired) "태블릿이 식으면 다시 연결할 수 있습니다." else "로봇이 없나요? Wi-Fi와 전원을 확인하세요.", RosyMetrics.TextBody)); return@replaceRobots }
+            records.forEach { candidate ->
+                val valid = runCatching { candidates.addresses(candidate.host, candidate.port) != null }.getOrDefault(false)
+                robots.addView(views.robot(candidate, valid && !cooling.coolingRequired) { select(candidate) },
+                    LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = views.dp(RosyMetrics.Space3.toInt()) })
+            }
         }
     }
     private fun chooseGroupRobots() {

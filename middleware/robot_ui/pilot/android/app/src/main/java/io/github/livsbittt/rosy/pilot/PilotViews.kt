@@ -38,7 +38,12 @@ class PilotViews(private val context: Context) {
         }
         setOnClickListener { action() }
     }
+    fun replaceRobots(container: LinearLayout, status: View, content: () -> Unit) {
+        container.removeAllViews()
+        content()
+    }
     fun robot(candidate: Candidate, enabled: Boolean, action: () -> Unit): View = LinearLayout(context).apply {
+        tag = Triple(candidate.host, candidate.port, candidate.secure)
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(RosyMetrics.Space4.toInt()), dp(RosyMetrics.Space4.toInt()), dp(RosyMetrics.Space4.toInt()), dp(RosyMetrics.Space4.toInt())); minimumHeight = dp(RosyMetrics.TargetSecondary.toInt())
         background = StateListDrawable().apply {
