@@ -17,6 +17,18 @@ def test_four_static_documents_match_canonical_components():
     assert component_api()['check'](WEB) == []
 
 
+def test_lightweight_documents_use_one_canonical_header_without_consuming_server_slots(tmp_path):
+    api = component_api()
+    assert len(api['DOCUMENT_PAGES']) == 5
+    shutil.copytree(WEB, tmp_path/'web')
+    root = tmp_path/'web'
+    source = root/'shared/fleet-document-header.html.inc'
+    source.write_text(source.read_text(encoding='utf-8').replace('테마 변경', '테마 변경 fixture'), encoding='utf-8')
+    assert set(api['check'](root)) == set(api['DOCUMENT_PAGES'])
+    assert '{{focus}}' in api['render'](root, 'learning.html')
+    assert '{{model_origin}}' in api['render'](root, 'learning.html')
+
+
 def test_component_change_propagates_without_changing_page_task_content(tmp_path):
     api = component_api()
     shutil.copytree(WEB, tmp_path/'web')
