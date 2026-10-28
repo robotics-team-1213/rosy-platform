@@ -40,7 +40,7 @@ def workspace(tmp_path):
             state['posts'].append((urlsplit(route.request.url).path, route.request.post_data_json))
             if state['hold_post']: state['held_post'].append(route)
             else: route.fulfill(status=state['post_status'], json={} if state['post_status'] == 200 else {'error': 'fixture operation rejected'})
-        for path in ['review', 'retry', 'create']:
+        for path in ['review', 'retry', 'create', 'cancel']:
             page.route('**/api/learning/imports/' + path, post)
         page.route('**/api/accounts/repos/create', post)
         page.route('**/api/accounts/options', lambda route: route.fulfill(json={'enabled': True, 'oauth': False, 'rosy_account': True}))
@@ -64,6 +64,7 @@ def test_catalog_import_states_follow_the_producer(workspace, status, label, wid
     expect(page.locator('#hf-imports ui-button')).to_have_count(0)
     expect(page.locator('#hf-imports a[href="/accounts"]')).to_be_visible()
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.locator('#hf-imports').scroll_into_view_if_needed()
     capture(page, f'import-{status}-{width}')
 
 
@@ -85,6 +86,7 @@ def test_catalog_subread_failure_is_visible_and_recoverable(workspace, status, w
     if status in [401, 403]:
         expect(page.locator('#import')).to_be_disabled()
         expect(page.locator('#catalog-retry')).to_be_visible()
+    page.locator('#hf-load').scroll_into_view_if_needed()
     capture(page, f'catalog-error-{status}-{width}')
     state['hold_get'] = False
     page.locator('#hf-retry').click()
@@ -93,6 +95,7 @@ def test_catalog_subread_failure_is_visible_and_recoverable(workspace, status, w
     expect(page.locator('#import')).to_be_enabled()
     assert not state['posts']
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.locator('#hf-imports').scroll_into_view_if_needed()
     capture(page, f'catalog-recovered-{status}-{width}')
 
 
@@ -279,6 +282,28 @@ def test_account_poll_restores_replaced_job_control_without_stealing_focus(works
     expect(theme if move_focus else retry).to_be_focused()
     assert not state['posts']
     capture(page, 'account-poll-focus-' + str(move_focus))
+
+
+@pytest.mark.parametrize('initial,action,after', [('queued', '가져오기 취소', 'cancelled'), ('failed', '같은 버전 재시도', 'running')])
+@pytest.mark.parametrize('move_focus', [False, True])
+def test_account_action_that_replaces_its_button_returns_to_the_job_status(workspace, initial, action, after, move_focus):
+    page, state, origin, expect = workspace
+    state['jobs'][0]['status'] = initial
+    state['hold_post'] = True
+    ready_accounts(page, origin, expect)
+    page.locator('#imports').get_by_role('button', name=action, exact=True).click()
+    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'true')
+    assert len(state['held_post']) == 1
+    theme = page.locator('ui-topbar [data-theme-cycle]')
+    if move_focus: theme.focus()
+    state['jobs'][0]['status'] = after
+    state['held_post'].pop().fulfill(json={})
+    expect(page.locator('#accounts-main')).to_have_attribute('aria-busy', 'false')
+    row_status = page.locator('#imports article > p[tabindex="-1"]')
+    expect(theme if move_focus else row_status).to_be_focused()
+    assert len(state['posts']) == 1
+    row_status.scroll_into_view_if_needed()
+    capture(page, f'account-transition-{after}-{move_focus}')
 
 
 @pytest.mark.parametrize('status', [401, 403, 503])

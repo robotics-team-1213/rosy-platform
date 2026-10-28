@@ -161,7 +161,7 @@ async function jobs() {
   if(!result.jobs.length) line(root,'가져오기 작업이 없습니다.');
   for(const job of result.jobs) {
     const row=document.createElement('article'); row.dataset.job=job.id; root.append(row);
-    line(row,`${job.repo_id} · ${states[job.status] || job.status}`);
+    const heading=line(row,`${job.repo_id} · ${states[job.status] || job.status}`);heading.tabIndex=-1;
     line(row,`버전 ${job.revision} · 요청자 ${job.requester_id || job.requester || ''}`);
     if(job.error) line(row,job.error==='gated_team_use_evidence_required'?'팀 이용 허가 근거가 필요합니다. 확인 후 새 가져오기를 등록하세요.':failures[job.error] || job.error);
     const files=job.files || [], received=f=>f.downloaded_bytes ?? (job.status==='completed'?f.bytes:0);
@@ -179,7 +179,7 @@ async function jobs() {
     if(canControl && ['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
       await api('/api/learning/imports/cancel',{id:job.id}); await jobs();
     });
-    if(focusId===job.id){const target=[...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText);if(pending)pendingFocus=target;else target?.focus({preventScroll:true});}
+    if(focusId===job.id){const target=[...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText)||heading;if(pending)pendingFocus=target;else target.focus({preventScroll:true});}
   }
 }
 $('logout').addEventListener('click',()=>perform(async()=>{
