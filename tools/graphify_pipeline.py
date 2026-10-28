@@ -51,6 +51,9 @@ def snapshot(repo: Path, scope: Path) -> dict:
     hashes = {}
     for name in sorted(set(paths) - {""}):
         path = repo / name
+        # Git enumerates nested checkouts as directories, while Graphify reads their untracked contents.
+        if path.is_dir():
+            raise ValueError(f"Nested checkout or directory link must be analyzed separately: {name}")
         if path.is_file():
             if not path.resolve().is_relative_to(scope):
                 raise ValueError(f"Source link escapes scope: {name}")

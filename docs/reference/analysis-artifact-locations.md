@@ -29,6 +29,8 @@ python tools/graphify_pipeline.py query --run "<run-path>" "CommandManager"
 
 `build`의 기본 범위는 기존과 같이 `middleware/core`다. `--scope .`은 전체 저장소, `--repository`는 별도 Git 체크아웃을 선택한다. scope는 선택한 저장소 안의 디렉터리여야 하며 Git 메타데이터·작업 워크트리 폴더를 직접 선택할 수 없다. 코드와 테스트를 함께 색인하며 `package.xml` 등 미지원 파일은 extract 로그에 남는다. Harbor 앱 코드를 플랫폼에 복사하거나 런타임 의존성을 추가하지 않는다.
 
+선택 범위에 초기화된 submodule·중첩 Git 저장소·디렉터리 링크가 Git 목록의 디렉터리 항목으로 나타나면 중단한다. 바깥 저장소의 revision·파일 해시만으로 그 안의 변경을 검증할 수 없기 때문이다. 해당 체크아웃을 `--repository`로 별도 분석한다.
+
 `--documents`는 Graphify 0.9.91이 이번 실행에서 생성한 `cache/stat-index.json`을 사용한다. ignore·민감 파일 필터를 통과한 파일만 목록 노드로 추가하고 Markdown의 명시적인 로컬 링크를 연결한다. 인라인·참조형 링크와 URL 인코딩된 파일명을 지원하며, 코드 블록·인라인 코드·외부 URL·범위 밖 경로는 제외한다. 없는 대상과 미지원·필터 제외 대상은 `coverage.json`의 `unresolved_links`에 남긴다. 중첩 괄호 같은 복잡한 Markdown 구문, 문서·ADR의 의미 관계, 이미지·영상 내용은 분석하지 않는다. corpus index가 없거나 깨졌거나 범위를 벗어나면 문서 분석 성공으로 처리하지 않는다.
 
 출력 부모는 `--output` → `DEV_SESSION/scratch/graphify` → Windows의 `%LOCALAPPDATA%/ROSY/analysis/graphify`, 그 외 운영체제의 `$XDG_CACHE_HOME/ROSY/analysis/graphify` 또는 `~/.cache/ROSY/analysis/graphify` 순서로 고른다. 실제 결과는 그 아래 고유한 실행 폴더에 둔다. 분석 대상과 도구 저장소 양쪽의 저장소·worktree 내부 출력은 거절한다.
