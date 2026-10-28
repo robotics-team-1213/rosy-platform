@@ -12744,3 +12744,10 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_queue.py`·`test/test_land_batch.py`·`test/test_land_prepare.py`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙이 코드와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · feat(land): FULL 등급끼리 묶음 착지 (D-889 추가 6)
+
+- 변경: D-889 추가 6. `tools/land_batch.py`가 준비 등급 무리(affected/full)별로 묶고, full 묶음은 병합 트리에서 FULL을 한 번 돌린다. full 묶음 크기는 min(kopt(p), 3). safety와 `--tests` 지정은 혼자 간다.
+- 근거: 10-28 12시간 착지 39건 중 묶음 2번, 준비 78건 중 FULL 48건(게이트 도구 Rule 8 약 60회, safety 25회).
+- gate 변화: 없음(착지 절차).
+- CE: 해당 없음 — 측정과 규칙은 ADR 추가 6에 남겼다.
