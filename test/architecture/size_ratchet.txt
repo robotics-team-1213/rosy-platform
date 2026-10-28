@@ -12,7 +12,6 @@
 641 deploy/robot/pinky_pro/native/rosy-hw-probe.py
 862 deploy/robot/pinky_pro/native/rosy-ssh-access.py
 1014 deploy/robot/pinky_pro/native/sync-image-layer.py
-815 deploy/robot/pinky_pro/release/secret_scan.py
 686 deploy/robot/pinky_pro/release/updater.py
 1132 devices/omx/adapter/omx_adapter/action_store.py
 771 drive/behaviors/docking/manager.py

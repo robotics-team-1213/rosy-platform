@@ -21,6 +21,62 @@ def _card(root, text):
     return path
 
 
+@pytest.mark.parametrize('relative', ['etc/rosy/ir_calibration.yaml', 'etc/rosy/line_observer_overrides.yaml'])
+def test_operator_overlay_changes_and_deletion_survive_fallback(tmp_path, monkeypatch, relative):
+    from os_state_config import configuration_update
+
+    first, root_a, root_b, _, bundle = _provision_a(tmp_path, monkeypatch, protocol=2)
+    with configuration_update(root_a) as update:
+        update.stage(relative, b'calibration: first\n', 0o644)
+        update.commit()
+    first.FirstBootProvisioner(root=root_b).apply(bundle=bundle, hardware_serial=SERIAL)
+    assert (root_b / relative).read_bytes() == b'calibration: first\n'
+    with configuration_update(root_b) as update:
+        update.stage(relative, b'calibration: replacement\n', 0o644)
+        update.commit()
+    first.FirstBootProvisioner(root=root_a).apply(bundle=bundle, hardware_serial=SERIAL)
+    assert (root_a / relative).read_bytes() == b'calibration: replacement\n'
+    with configuration_update(root_b) as update:
+        update.stage(relative, None, 0o644)
+        update.commit()
+    first.FirstBootProvisioner(root=root_a).apply(bundle=bundle, hardware_serial=SERIAL)
+    assert not (root_a / relative).exists()
+
+
+def test_host_lane_change_and_restart_rollback_publish_canonical_overlay(tmp_path, monkeypatch):
+    from host_lane_perception import LanePerceptionConfig
+    from os_state_config import configuration_update
+    from test_lane_perception_host import idle
+
+    first, root_a, root_b, _, bundle = _provision_a(tmp_path, monkeypatch, protocol=2)
+    relative = 'etc/rosy/line_observer_overrides.yaml'
+    original = b'/**/line_observer_node:\n  ros__parameters:\n    camera_lane_mode: keep\n'
+    with configuration_update(root_a) as update:
+        update.stage(relative, original, 0o644)
+        update.commit()
+    status = tmp_path / 'status.json'
+    status.write_text(json.dumps(idle()))
+    config = LanePerceptionConfig(root=root_a, overlay=root_a / relative, status_inputs=status,
+                                  model_check=lambda: 'fixture-model', overlay_check=lambda _: None)
+    assert config.set('denoise')['applied'] is True
+    accepted = config.overlay.read_bytes()
+    first.FirstBootProvisioner(root=root_b).apply(bundle=bundle, hardware_serial=SERIAL)
+    assert (root_b / relative).read_bytes() == accepted
+    calls = []
+
+    def fail_first_restart():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError('fixture camera restart failed')
+
+    config.root, config.overlay, config.restart = root_b, root_b / relative, fail_first_restart
+    with pytest.raises(RuntimeError, match='fixture camera'):
+        config.set('threshold')
+    assert len(calls) == 2
+    first.FirstBootProvisioner(root=root_a).apply(bundle=bundle, hardware_serial=SERIAL)
+    assert config.overlay.read_bytes() == (root_a / relative).read_bytes() == accepted
+
+
 def test_actual_config_changes_and_applied_digest_survive_b_and_return_to_a(tmp_path, monkeypatch):
     first, root_a, root_b, _, bundle = _provision_a(tmp_path, monkeypatch)
     card_a = _card(root_a, "ap:\n  mode: off\nlogin:\n  boot_code: off\n")
@@ -41,6 +97,45 @@ def test_actual_config_changes_and_applied_digest_survive_b_and_return_to_a(tmp_
     assert (root_a / "var/lib/rosy/config/applied.json").read_bytes() == (
         root_b / "var/lib/rosy/config/applied.json").read_bytes()
     assert config_module().apply(root_a, lambda _: "")["state"] == "unchanged"
+
+
+@pytest.mark.parametrize('race', ['geometry', 'movement'])
+def test_host_lane_rechecks_snapshot_and_stopped_state_at_publication(tmp_path, monkeypatch, race):
+    import contextlib
+    import os_state_config
+    from host_lane_perception import LanePerceptionConfig
+    from test_lane_perception_host import idle
+
+    _, root, _, _, _ = _provision_a(tmp_path, monkeypatch, protocol=2)
+    relative = 'etc/rosy/line_observer_overrides.yaml'
+    initial = b'/**/line_observer_node:\n  ros__parameters:\n    camera_lane_mode: keep\n    camera_height_m_override: 0.059\n'
+    changed = initial.replace(b'0.059', b'0.061')
+    publication = os_state_config.configuration_update
+    with publication(root) as update:
+        update.stage(relative, initial, 0o644)
+        update.commit()
+    status = tmp_path / 'status.json'
+    status.write_text(json.dumps(idle()))
+
+    def overlay_check(_):
+        if race == 'geometry':
+            with publication(root) as update:
+                update.stage(relative, changed, 0o644)
+                update.commit()
+        return None
+
+    if race == 'movement':
+        @contextlib.contextmanager
+        def delayed_lock(*args, **kwargs):
+            with publication(*args, **kwargs) as update:
+                status.write_text(json.dumps({**idle(), 'velocity_linear': 0.1}))
+                yield update
+        monkeypatch.setattr(os_state_config, 'configuration_update', delayed_lock)
+    config = LanePerceptionConfig(root=root, overlay=root / relative, status_inputs=status,
+                                  model_check=lambda: 'fixture-model', overlay_check=overlay_check)
+    with pytest.raises(ValueError, match='changed|moving'):
+        config.set('denoise')
+    assert config.overlay.read_bytes() == (changed if race == 'geometry' else initial)
 
 
 def test_config_during_initialization_is_not_overwritten_by_the_first_bundle(tmp_path, monkeypatch):

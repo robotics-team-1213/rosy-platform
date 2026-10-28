@@ -29,3 +29,9 @@
 - 변경: service의 setup 이름 충돌 수정을 CLI 후보에도 반영하고 추가 Fleet 캐시 회귀의 호출도 source_context로 바꿨다. 제품 동작과 시험 조건은 유지한다.
 - 증거: 원격 원천 어댑터22 PASS/0 SKIP, NEW/KNOWN/FLAKY0. service 수정과 함께 들어가면 새 nose 훅 검사에서 보조함수를 잘못 초기화하지 않는다.
 - gate 변화: 없음. 공식 병합 전체 검증은 후속이며 장치·현장 수용을 올리지 않는다. CE 해당 없음 — 기존 검사·회귀가 해당 조건을 직접 설명한다.
+
+## 2026-10-26 · uncommitted · 독립 앱 경계와 실제 backend 브라우저 경로 등록
+
+- 변경: `applications/monitoring`의 소유·표면·상태/뷰포트 기준을 기록하고 source part·측정·browser scope·CI 실행 경로를 등록했다. 원격 Chromium은 실제 독립 backend의 인증·사이트 범위·이력 API를 읽으며 API를 가로채지 않는다.
+- 증거: `1a9cd5b164` 실제 Chromium3 PASS/0 SKIP, 구조/harness/affected/browser-scope262 PASS/0 SKIP, 두 비교 NEW/KNOWN/FLAKY0. 화면 HTML/JS·G1/G2/G3는 아직 구현/수용하지 않았다.
+- gate 변화: 없음. UI와 배포·DEVICE/FIELD HOLD를 유지한다. CE: 해당 없음 — 등록과 실제 경로 시험에 직접 기록했다.

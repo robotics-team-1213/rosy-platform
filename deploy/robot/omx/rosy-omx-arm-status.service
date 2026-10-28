@@ -1,0 +1,15 @@
+[Unit]
+Description=ROSY Arm S read-only live state and guard health to Fleet
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/rosy/omx-arm-status.env
+ExecStart=/bin/bash -c 'exec "$ROSY_ARM_STATUS_PYTHON" "$ROSY_ARM_STATUS_SOURCE" --live "$ROSY_ARM_STATUS_LIVE" --source-id "$ROSY_ARM_STATUS_SOURCE_ID" --arm-id "$ROSY_ARM_STATUS_ARM_ID" --calibration "$ROSY_ARM_STATUS_CALIBRATION" --health-file "$ROSY_ARM_STATUS_HEALTH_FILE" --fleet-url "$ROSY_ARM_STATUS_FLEET_URL" --ca-file "$ROSY_ARM_STATUS_CA_FILE" --token-env ROSY_ARM_S_TOKEN'
+Restart=no
+KillSignal=SIGTERM
+TimeoutStopSec=10
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
