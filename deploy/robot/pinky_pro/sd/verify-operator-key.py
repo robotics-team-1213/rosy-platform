@@ -53,13 +53,17 @@ def _public_header(raw: bytes) -> str:
         offset += length
         return value
 
-    for _ in range(3):  # cipher, KDF and KDF options precede the public key.
+    cipher = string()
+    for _ in range(2):  # KDF and KDF options precede the public key.
         string()
     if data[offset:offset + 4] != b"\0\0\0\1":
         raise ValueError("operator private key must contain exactly one key")
     offset += 4
     public = string()
-    if not string() or offset != len(data):
+    # OpenSSH appends AEAD tags after the encrypted payload's length-delimited bytes.
+    tag_length = 16 if cipher in {b"aes128-gcm@openssh.com", b"aes256-gcm@openssh.com",
+                                  b"chacha20-poly1305@openssh.com"} else 0
+    if not string() or len(data) - offset != tag_length:
         raise ValueError("invalid OpenSSH private key payload framing")
     length = int.from_bytes(public[:4], "big")
     key_type = public[4:4 + length].decode("ascii")
