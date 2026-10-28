@@ -34,6 +34,7 @@ import select
 import stat
 import sys
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health
@@ -49,6 +50,7 @@ from omx_adapter.chunk_library import (  # noqa: E402
     transit_path,
 )
 from omx_adapter.motion_profile import smooth as smooth  # noqa: E402
+from cell_envelope import digest, runtime_context  # noqa: E402
 
 JOG_MAX = 5.0
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0   # body joints, LeRobot units; the clip alone keeps steps small
@@ -88,7 +90,7 @@ MOTORS = [n.split(".")[0] for n in ["shoulder_pan.pos", "shoulder_lift.pos", "el
 
 class Runner:
     def __init__(self, robot, library: dict, *, fps: int, status, clock=time.monotonic, sleep=time.sleep,
-                 live=None):
+                 live=None, operating_context=None):
         self.robot, self.library, self.fps, self.status = robot, library, fps, status
         self.clock, self.sleep = clock, sleep
         self.target = None
@@ -105,6 +107,7 @@ class Runner:
         self.last_input, self.home_since = 0.0, None  # home_since: a park settled and nothing moved since
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
         self.health_present = None
+        self.operating_context = operating_context
 
     def present(self) -> list:
         observation = self.robot.get_observation()
@@ -113,7 +116,8 @@ class Runner:
     def report(self, **fields) -> None:
         self.status(dict(fields, state=[round(v, 2) for v in self.present()],
                          target=[round(v, 2) for v in self.target], health=self.health, fault=self.fault,
-                         t=round(time.time(), 3)))
+                         operating_context=self.operating_context, library_sha256=digest(self.library),
+                         t=time.time()))
 
     def read_health(self):
         """Temperature, PWM and current of every motor, or None when the robot exposes no bus (tests)."""
@@ -132,9 +136,21 @@ class Runner:
         if not words:
             return True
         verb = words[0]
+        expected_library = None
         if verb not in ("state", "stop", "park"):
             self.home_since = None
         try:
+            if verb not in ("checked", "state", "stop") and self.operating_context:
+                self.operating_context = {**self.operating_context, "session_id": uuid.uuid4().hex}
+            if verb == "checked":
+                if len(words) < 4:
+                    raise ValueError("checked requires session, library digest and command")
+                session, expected_library, words = words[1], words[2], words[3:]
+                line, verb = " ".join(words), words[0]
+                if not self.operating_context or self.operating_context.get("session_id") != session:
+                    raise ValueError("checked command targets another session")
+                if verb != "load" and digest(self.library) != expected_library:
+                    raise ValueError("checked command targets another library")
             if verb == "stop":
                 self.report(command=line, ok=True)
                 return False
@@ -210,6 +226,8 @@ class Runner:
                     raise ValueError(str(exc)) from None
                 if library["fps"] != self.fps:
                     raise ValueError(f"library fps {library['fps']} differs from the runner fps {self.fps}")
+                if expected_library is not None and digest(library) != expected_library:
+                    raise ValueError("checked load content differs from the reviewed library")
                 self.library = library
             elif verb != "state":
                 raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | state | stop")
@@ -434,7 +452,9 @@ def main(argv=None):
             tmp.write_text(json.dumps(row))
             os.replace(tmp, live_path)
 
-        Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live).run(lines)
+        context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"])
+        Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
+               operating_context=context).run(lines)
     finally:
         lines.close()
         try:
