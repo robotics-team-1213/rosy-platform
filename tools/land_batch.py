@@ -83,12 +83,12 @@ _BATCHABLE: dict[tuple[str, str], bool] = {}  # (branch, tip) -> not safety and 
 def batchable(land, wt: Path, other: Path, name: str, tip: str) -> bool:
     """Not safety-tagged and not FULL-class. A prepared tier says which; a ticket still ``pending`` (no pretest
     yet) gets its selection from its fork point, so it may join without a pretest of its own."""
+    if land_full.restore(other, name) is not None:  # read each time: a pretest may record its tier later
+        return affected(other, name) and not safety(land, wt, name)
     key = (name, tip)
     if key not in _BATCHABLE:
         if safety(land, wt, name):
             _BATCHABLE[key] = False
-        elif land_full.restore(other, name) is not None:
-            _BATCHABLE[key] = affected(other, name)
         else:
             fork = land.out(other, "merge-base", "main", "HEAD")
             try:

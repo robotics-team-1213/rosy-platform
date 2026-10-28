@@ -18,6 +18,11 @@ import land_queue as queue  # noqa: E402
 from test_land import commit, git, repos  # noqa: E402,F401  (land.py's fixture repos)
 
 
+@pytest.fixture(autouse=True)
+def fresh_selection_cache(monkeypatch):
+    monkeypatch.setattr(land_batch, "_BATCHABLE", {})  # fixture commits repeat their SHAs across tests
+
+
 def info(ticket: Path) -> dict:
     return json.loads(ticket.read_text(encoding="utf-8"))
 
@@ -121,10 +126,12 @@ def test_a_batch_that_selects_the_full_tier_goes_alone_before_any_pretest(repos,
     assert git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/x"
 
 
-def test_eligible_wants_a_prepared_member_at_its_worktree_head(repos, tmp_path):
+def test_eligible_wants_a_member_at_its_worktree_head_judged_by_its_tier_or_selection(repos, tmp_path, monkeypatch):
     main, wt, rows = batch_repos(repos, tmp_path)
     row = {**rows[0], "host": socket.gethostname(), "status": "waiting"}
-    assert not land_batch.eligible(land, wt, row), "no prepared tier yet"
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["test"]], "selector escalated to FULL (x)"))
+    assert not land_batch.eligible(land, wt, row), "no prepared tier: its selection is FULL"
+    assert not land_batch.eligible(land, wt, {**row, "status": "preparing"}), "a pretest under way is not carried"
     member = Path(row["worktree"])
     land.land_full.save(member, "feat/m", git(member, "rev-parse", "HEAD"), git(main, "rev-parse", "HEAD"), "affected", [])
     assert land_batch.eligible(land, wt, row)
