@@ -47,6 +47,10 @@ def test_tcp_is_a_massless_fixed_frame_in_the_pinned_vendor_model(tmp_path):
     mod = fixture()
     vendor = Path(__file__).resolve().parents[1]/'assets/open_manipulator_description/urdf/omx_f/omx_f.urdf'
     mod.check_massless_tcp(vendor)
+    root = mod.physical_model(vendor).getroot()
+    assert root.find("link[@name='end_effector_link']") is None
+    assert root.find("joint[@name='end_effector_joint']") is None
+    assert {j.get('name') for j in root.findall('joint')} >= {'joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'gripper_joint_1', 'gripper_joint_2'}
     bad = tmp_path/'weighted.urdf'
     bad.write_text(vendor.read_text().replace('<link name="end_effector_link">',
         '<link name="end_effector_link"><inertial/>'))

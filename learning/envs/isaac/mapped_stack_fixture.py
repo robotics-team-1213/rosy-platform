@@ -46,6 +46,14 @@ def check_massless_tcp(urdf):
             or joint.find('parent').get('link') != 'link5'
             or joint.find('child').get('link') != 'end_effector_link'):
         raise ValueError('TCP must be the pinned massless visual frame fixed to link5')
+    return root
+
+
+def physical_model(urdf):
+    root = check_massless_tcp(urdf)
+    root.remove(root.find("link[@name='end_effector_link']"))
+    root.remove(root.find("joint[@name='end_effector_joint']"))
+    return ET.ElementTree(root)
 
 
 @lru_cache(maxsize=1)

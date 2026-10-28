@@ -117,18 +117,16 @@ def run(args):
             articulation.CreateSolverVelocityIterationCountAttr(16)
         tool = {p.GetName(): str(p.GetPath()) for p in prims
                 if p.GetName() in ('link6', 'link7', 'end_effector_link')}
+        if mapped:
+            parents = [p for p in prims if p.GetName() == 'link5']
+            if len(parents) != 1 or 'end_effector_link' in tool:
+                raise RuntimeError('Expected one physical link5 without a dynamic TCP body')
+            frame = UsdGeom.Xform.Define(stage, parents[0].GetPath().AppendChild('end_effector_link'))
+            UsdGeom.XformCommonAPI(frame).SetTranslate(Gf.Vec3d(.09193, -.0016, 0.))
+            tool['end_effector_link'] = str(frame.GetPath())
         if set(tool) != {'link6', 'link7', 'end_effector_link'}:
             raise RuntimeError('Each OMX requires both finger and TCP links')
         links.append(tool)
-        if mapped:
-            from mapped_stack_fixture import check_massless_tcp
-            check_massless_tcp(args.urdf)
-            # SDK 6.2 assigns a default 1 kg to this URDF visual-only frame if kept as a rigid body.
-            stage.GetPrimAtPath(tool['end_effector_link']).RemoveAPI(UsdPhysics.RigidBodyAPI)
-            tcp_joints = [p for p in prims if p.GetName() == 'end_effector_joint' and p.IsA(UsdPhysics.FixedJoint)]
-            if len(tcp_joints) != 1:
-                raise RuntimeError('Expected one fixed TCP frame joint')
-            tcp_joints[0].SetActive(False)
         for prim in prims:
             if prim.IsA(UsdPhysics.RevoluteJoint):
                 finger = prim.GetName().startswith('gripper')
@@ -415,6 +413,14 @@ def main():
     parser.add_argument('--mapped-long-stack', action='store_true')
     args = parser.parse_args()
     check_vendor_manifest()
+    if args.mapped_long_stack:
+        from mapped_stack_fixture import physical_model
+        # The original remains unchanged; the visual-only TCP is restored as a nonphysical USD child of link5.
+        model = physical_model(args.urdf)
+        path = args.report.parent/'physical-omx.urdf'
+        with path.open('xb') as stream:
+            model.write(stream, encoding='utf-8', xml_declaration=True)
+        args.urdf = path
     check_urdf(args.urdf, 'omx_f', allow_package=False)
     args.output_dir.mkdir()
     from isaacsim import SimulationApp
