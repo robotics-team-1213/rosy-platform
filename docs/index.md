@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-27 · uncommitted · feat(sim): 파지 반복 시험, MuJoCo 손가락 충돌 패드; fix(land): 디렉터리로 찍힌 실패 id
-- 2026-10-27 · uncommitted · docs(adr): D-867 모델 PC 상한 근거, D-571에서 D-867 가리키기
-- 2026-10-27 · uncommitted · D-865 P3 착지 SHA 기록
-- 2026-10-27 · 10f4997e11 · fix(land): affected 재준비에서도 유효한 FULL 원본 보존
-- 2026-10-27 · uncommitted · docs(validation): SmolVLA 미세 조정 GPU 메모리
+- 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
+- 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
+- 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
+- 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지

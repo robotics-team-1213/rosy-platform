@@ -2,6 +2,7 @@
 import json
 import sys
 import threading
+import time
 import traceback
 
 
@@ -77,22 +78,30 @@ def install_readback_probe(owner, motion, clock, monkeypatch):
     return reports
 
 
-def install_hold_probe(motion, clock):
+def install_hold_probe(motion, clock, *, timing=None):
     """Observe the caught cause at HOLD entry without changing the real stop."""
     original = motion.stop_hold
 
     async def stop_hold(current, reason, **kwargs):
         error = sys.exception()
+        if timing is not None:
+            timing('fleet_stop_enter', state=current.state, reason=reason)
         if error is not None and reason in (
                 'CHARGE_MOTION_READBACK_UNAVAILABLE', 'CHARGE_DEPARTURE_UNVERIFIED'):
             report = dict(session_id=current.session_id, reason=reason, clock=clock(),
                 exception_type=type(error).__name__, exception=str(error),
                 traceback=traceback.format_exception(error))
+            if timing is not None:
+                report['real_monotonic'] = time.monotonic()
             for frame, _ in traceback.walk_tb(error.__traceback__):
                 view = frame.f_locals.get('view') if frame.f_code.co_name == 'read_return' else None
                 if isinstance(view, dict):
                     report['return_trip'] = {key: view.get(key) for key in ('state', 'reason', 'detail')}
             print('STATION_HOLD_DIAGNOSTIC '+json.dumps(report), flush=True)
-        return await original(current, reason, **kwargs)
+        try:
+            return await original(current, reason, **kwargs)
+        finally:
+            if timing is not None:
+                timing('fleet_stop_exit', reason=reason)
 
     motion.stop_hold = stop_hold

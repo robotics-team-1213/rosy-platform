@@ -78,7 +78,6 @@ def full_anchor(repos, monkeypatch):
     commit(main, {"lib/peer.py": "peer = 1\n"}, "peer after FULL")
     git(wt, "merge", "--no-edit", "main")
     monkeypatch.setattr(land.land_mainred, "CARRIED", [])
-    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)
     monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
     monkeypatch.setattr(land, "run_tests", lambda *a, **k: [])
     return main, wt, base, candidate, path, original

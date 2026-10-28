@@ -1,0 +1,17 @@
+{
+  "id": "omx",
+  "deployment": "native",
+  "install_target": "OMX workcell host; separate from Pinky product images",
+  "status": "existing_implementation",
+  "operations": [],
+  "delivery": {
+    "platform": "workcell-host",
+    "architecture": null,
+    "image_backend": null,
+    "application_updater": null,
+    "os_updater": null,
+    "os_compatible": null,
+    "os_tag_prefix": null
+  },
+  "reason": "Existing native workcell tools and owners remain separate; no reviewed common image, OS update backend or deployment executor."
+}

@@ -5,7 +5,7 @@ import math
 
 from ..contracts.judgment import judgment
 from ..contracts.profiles import AdapterCapabilities, BoundProfile, ModelProfile, bind_profile
-from ..contracts.billing import _RejectedJudgment
+from ..contracts.billing import RejectedJudgment
 from .versioned_request import prepare_request
 
 
@@ -44,5 +44,5 @@ class VersionedLocalProvider:
         try: checked = judgment(problem, bound, raw, missing_allowlist=missing_allowlist)
         except (ValueError, TypeError, KeyError, RecursionError, OverflowError):
             unsafe = type(raw) is dict and type(raw.get('objections')) is list and 'unsafe' in raw['objections']
-            raise _RejectedJudgment(bound, 0.0, unsafe) from None
+            raise RejectedJudgment(bound, 0.0, unsafe) from None
         return checked, 0.0

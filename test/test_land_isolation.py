@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import land_guards  # noqa: E402
 import land_isolation  # noqa: E402
+from known_failures import NO_ROS_LAUNCH_PLUGINS
 from test_land import GREEN, _runner, commit, repos  # noqa: E402,F401  (land.py's fixture repos)
 
 PAIR = {
@@ -48,7 +49,8 @@ def pair(tmp_path):
 
 
 def pytest_run(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *args],
+    return subprocess.run([sys.executable, "-m", "pytest", "-q", *NO_ROS_LAUNCH_PLUGINS,
+                           "-p", "no:cacheprovider", *args],
                           cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
                           env={**os.environ, **(env or {})}, timeout=300)
 
@@ -84,6 +86,31 @@ def test_root_conftest_names_the_inserter_and_never_fails(pair, xdist):
         pytest.skip("pytest-xdist not installed (CI)")
     (pair / "conftest.py").write_bytes((ROOT / "conftest.py").read_bytes())
     run = pytest_run(pair, ".", *xdist)
+    text = run.stdout + run.stderr
+    assert run.returncode == 0, text
+    assert "sys.path added by 1 test module(s)" in text and "test_a_inserts.py: helpers" in text, text
+
+
+def test_ros_environment_does_not_skip_path_reporting(pair, monkeypatch):
+    monkeypatch.setenv("AMENT_PREFIX_PATH", str(pair / "ros"))
+    try:
+        test_root_conftest_names_the_inserter_and_never_fails(pair, [])
+    except pytest.skip.Exception as error:
+        pytest.fail(f"ROS environment must retain the path-report assertions: {error}")
+
+
+@pytest.mark.parametrize("plugin_name", ["launch_testing", "launch_ros"])
+def test_nested_pytest_reports_paths_when_ros_plugins_preimport_modules(pair, plugin_name):
+    (pair / "conftest.py").write_bytes((ROOT / "conftest.py").read_bytes())
+    plugins = pair / "ros_plugins"
+    metadata = plugins / "fake_ros_launch-0.0.dist-info"
+    metadata.mkdir(parents=True)
+    (metadata / "METADATA").write_text("Metadata-Version: 2.1\nName: fake-ros-launch\nVersion: 0.0\n")
+    (metadata / "entry_points.txt").write_text(f"[pytest11]\n{plugin_name} = early_collect\n")
+    # ROS launch collection can import a module before the report hook observes its sys.path change.
+    (plugins / "early_collect.py").write_text(
+        f"import runpy\nrunpy.run_path({str(pair / 'test_a_inserts.py')!r})\n")
+    run = pytest_run(pair, ".", env={"PYTHONPATH": str(plugins), "PYTEST_DISABLE_PLUGIN_AUTOLOAD": ""})
     text = run.stdout + run.stderr
     assert run.returncode == 0, text
     assert "sys.path added by 1 test module(s)" in text and "test_a_inserts.py: helpers" in text, text
@@ -290,11 +317,12 @@ def test_alone_files_put_safety_references_first_with_no_count_cap(monkeypatch, 
     assert safety == {"s/test/test_brake.py"}
 
 
-def test_guard_round_wiring(monkeypatch):
+@pytest.mark.parametrize("mode", ["auto", "full"])
+def test_guard_round_wiring(monkeypatch, mode):
     seen = []
     monkeypatch.setattr(land_isolation, "run", lambda wt, branch, sel, args, logdir, rnd, rt, guards, prep:
                         seen.append((sel, rnd, guards, prep)) or ["x"])
-    out = land_guards.first(ROOT, argparse.Namespace(tests="auto", node=True), [["pkg/test"]], Path("."), "pre",
+    out = land_guards.first(ROOT, argparse.Namespace(tests=mode, node=True), [["pkg/test"]], Path("."), "pre",
                             None, isolated=True)
     assert seen == [([["pkg/test"]], "pre", [list(land_guards.GUARDS)], True)] and out == ["round pre: guard round first: x"]
 
@@ -327,3 +355,33 @@ def test_close_needs_a_reason_and_records_who_and_when(prepared, monkeypatch, ca
     assert (rec["kind"], rec["reason"], rec["by"], rec["alone"]) == ("done", "nightly not built yet",
                                                                   "closer@example.invalid", ["m/test/test_b.py"])
     assert rec["at"] and rec["t"]
+
+
+@pytest.mark.parametrize("mode", ["auto", "full"])
+@pytest.mark.parametrize("fresh", [False, True])
+def test_full_current_report_cannot_fall_back_to_historical_cache_complete(prepared, monkeypatch, tmp_path, mode, fresh):
+    import land_cache
+    pair, logdir, args = prepared
+    args.tests = mode
+    git(pair, "config", "user.name", "t")
+    git(pair, "config", "user.email", "t@t")
+    monkeypatch.setattr(land_isolation, "_cache_entries", land_cache.entries)
+    candidate = git(pair, "rev-parse", "HEAD")
+    commit(pair, {"current.py": "VALUE = 1\n"}, "different current candidate")
+    old = tmp_path / "historical-complete.txt"
+    old.write_text("[isolation] complete: 2\n", encoding="utf-8")
+    land_cache.record(pair, candidate, git(pair, "rev-parse", candidate + "^{tree}"), "old-env",
+                      land_isolation.job(FILES)[0], old)
+    assert any(entry["log"] == str(old) for entry in land_isolation._cache_entries(pair))
+    calls = []
+    report = "[isolation] complete: 2\n" if fresh else "1 passed\n"
+    run = fake_round({"gpre": {"run-gpre-1.txt": report}, "gprer": {"run-gprer-1.txt": report}}, calls)
+    if mode == "full" and not fresh:
+        with pytest.raises(RuntimeError, match=r"without its \[isolation\] report"):
+            land_isolation.run(pair, "feat/x", [["m/test"]], args, logdir, "pre", run, [], True)
+        assert [name for name, _ in calls] == ["gpre", "gprer"]
+        assert land_isolation.rows(pair)[-1]["error"] == "no [isolation] report twice"
+    else:
+        land_isolation.run(pair, "feat/x", [["m/test"]], args, logdir, "pre", run, [], True)
+        assert [name for name, _ in calls] == ["gpre"]
+        assert land_isolation.rows(pair)[-1]["incomplete"] == []
