@@ -315,7 +315,7 @@ def test_account_actions_use_readable_shared_targets_in_both_themes(workspace, w
     page.set_viewport_size({'width': width, 'height': 900})
     page.add_init_script('localStorage.setItem("rosy.theme", "' + theme + '")')
     ready_accounts(page, origin, expect)
-    page.locator('#connect-panel details summary').click()
+    page.get_by_text('토큰으로 연결', exact=True).click()
     expect(page.locator('#provider-token')).to_be_visible()
     expect(page.locator('#repo-delete-form ui-button')).to_have_attribute('kind', 'irreversible')
     assert page.locator('#accounts-main button').count() == 0
