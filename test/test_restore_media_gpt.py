@@ -1,5 +1,6 @@
 """Restore only the exact observed Windows capacity relocation, on file-backed media."""
 import hashlib
+import importlib.util
 import json
 import lzma
 from pathlib import Path
@@ -82,3 +83,27 @@ def test_wrong_signed_layout_refuses_before_device_changes(media):
     snapshot.write_text(json.dumps(layout))
     assert invoke(media).returncode != 0
     assert device.read_bytes() == before
+
+
+def test_image_authentication_cannot_redirect_the_pinned_device_handle(media, monkeypatch):
+    raw, image, device, snapshot, capacity = media
+    spec = importlib.util.spec_from_file_location("restore_gpt_test", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    original = device.with_name("original.bin")
+    before = bytearray(device.read_bytes())
+    before[512:1024] = relocated(raw[512:1024], capacity)
+    device.write_bytes(before)
+    authenticate = module.authenticate
+
+    def replace_path(*args):
+        device.rename(original)
+        device.write_bytes(before)
+        authenticate(*args)
+
+    monkeypatch.setattr(module, "authenticate", replace_path)
+    result = module.restore(image, str(device), json.loads(snapshot.read_text()),
+                            hashlib.sha256(image.read_bytes()).hexdigest(), capacity)
+    assert result["restored"] is True
+    assert device.read_bytes() == before, "the replacement path must never be written"
+    assert original.read_bytes() == raw + bytes(capacity - len(raw))

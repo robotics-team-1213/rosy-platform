@@ -99,7 +99,7 @@ def test_wrong_backup_gpt_stops_before_personalization(gpt_writer):
     case["readback"].write_bytes(raw)
     result = _write(case)
     assert result.returncode != 0
-    assert "readback" in result.stderr.lower()
+    assert "signed GPT restoration failed" in result.stderr
     assert not case["receipt"].exists()
 
 
