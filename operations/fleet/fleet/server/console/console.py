@@ -33,7 +33,7 @@ from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError, SiteHub
 from fleet.localization import trust
 from fleet.server import bays, goal_lease, traffic
-from fleet.server.console.observe import observe_states
+from fleet.server.observe import observe_states  # SERVER_HOLDERS composes console/*.py as fleet.server.<name>
 from fleet.server.console_view import (
     CapabilityDisplay, TripAware, _error_of, _formation_stream_evidence, _shown,
     _stream_evidence,  # noqa: F401
