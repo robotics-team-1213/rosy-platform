@@ -3860,6 +3860,12 @@
 - gate 변화: 없음. 실제 현장에서 postgres 지연 시 관제 기동·경고 로그 관찰은 별도.
 - CE: 해당 없음 — 계약 시험과 변이 이력이 커밋에 남아 있다.
 
+## 2026-10-27 · 752c9b0aed · 네이티브 chunk 스크립트의 설치 패키지 import 유지
+
+- 변경: chunk 계산의 설치 패키지 추출에 맞춰 기존 스크립트 이름을 호환 export로 유지하고, 네이티브 배포 예제에 최소 package import 파일과 smoke를 추가했다. adapter 부모 PYTHONPATH와 개인 배포 설정 이전을 README에 적었다. 현재 개인 설정과 장치는 바꾸지 않았다.
+- 증거: tests-only `9a2a504f02` 원격 RED 10개 실패. 독립 검토한 소스 `752c9b0aed`에서 소스 체크아웃이 없는 임시 배포본의 예제 paths/smoke·기존 import와 배포 회귀 62 passed, 별도 기존 스크립트 회귀 113 passed/2 skipped, NEW 0. 후자는 adapter 시험 하위 트리 없이 실행해 공통 fixture의 import 경로를 확인했다. 건너뛴 녹화 데이터 leader 활동 검사 두 개는 별도 node 실행에서도 skipped였으며, 장치·배포 수용으로 세지 않는다.
+- gate 변화: 없음. 실행·토크·실물 활성화를 바꾸지 않는다. CE: 해당 없음 — 배포 import 의존 파일과 검증은 코드·예제·회귀에 남겼다.
+
 ## 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 
 - 변경: 실제 MotorHealth와 부모 cleanup snapshot에 최초 terminal_at을 보존하는 수정 초안이다. 관측된 motor 측정 시각과 값은 유지하며 읽기·토크·guard 경계는 바꾸지 않는다.
