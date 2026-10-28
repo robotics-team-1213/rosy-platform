@@ -355,6 +355,6 @@
 
 - 2026-10-28 · 030c2fb110 · 녹화 인계 UI 후속 검증 기록
 - 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
-- 2026-10-28 · uncommitted · docs(adr): D-902 Pilot 실물 OMX 조종·녹화는 Fleet과 CORE 수동 팔 경로로
-- 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
-- 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 2026-10-28 · uncommitted · CORE host-file C6 published triage
+- 2026-10-28 · uncommitted · fix(omx): 값 계약 이동을 OMX 배포 묶음 경로에 반영
+- 2026-10-28 · uncommitted · fix(omx): 움직임 분리 시험 파일의 BOM 제거

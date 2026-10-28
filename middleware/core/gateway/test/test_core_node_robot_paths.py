@@ -237,3 +237,25 @@ def test_device_accepts_current_pinky_package(node_module, installed_rasptank, m
     profile, capabilities = node_module._load_robot_settings({"robot": {"model": "pinky_pro"}})
     assert profile.model == "Pinky Pro"
     assert capabilities["teleop"] is True
+
+
+def test_status_publication_uses_injected_host_owner_and_recovers_after_write_failure(node_module):
+    attempts, warnings = [], []
+
+    class Owner:
+        def write_status_inputs(self, svc):
+            attempts.append(svc)
+            if len(attempts) <= 2:
+                raise OSError("handoff unavailable")
+
+    node = node_module.RosyCoreNode.__new__(node_module.RosyCoreNode)
+    node.core = types.SimpleNamespace(host_files=Owner())
+    node.get_logger = lambda: types.SimpleNamespace(warning=warnings.append)
+    node._status_inputs_failed = False
+    node._write_status_inputs()
+    assert attempts == [node.core] and node._status_inputs_failed is True
+    node._write_status_inputs()
+    assert attempts == [node.core, node.core] and len(warnings) == 1
+    node._write_status_inputs()
+    assert attempts == [node.core] * 3 and node._status_inputs_failed is False
+    assert len(warnings) == 1
