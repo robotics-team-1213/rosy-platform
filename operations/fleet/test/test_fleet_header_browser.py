@@ -296,6 +296,9 @@ def test_authenticated_account_refresh_preserves_explicit_menu_and_token_access(
         expect(page.locator('#console-token')).to_have_value('replacement-pending')
         assert abs(page.locator('ui-topbar').bounding_box()['height']-before['height'])<=1
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        if shots := os.environ.get('ROSY_SHOT_DIR'):
+            target=Path(shots).expanduser();target.mkdir(parents=True,exist_ok=True)
+            page.screenshot(path=str(target/f'account-menu-open-{name}-{width}.png'))
         page.locator('#fleet-theme').focus()
         page.keyboard.press('Escape')
         expect(page.locator('#topbar-more')).to_be_focused()
