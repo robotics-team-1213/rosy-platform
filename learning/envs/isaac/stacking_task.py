@@ -253,18 +253,20 @@ def run(args):
             if not np.isfinite(action).all():
                 raise ValueError('Finite policy actions required')
             active = plan[self.index]['arm']
+            braking = any(np.max(np.abs(self.target_velocities[i])) > 1e-8
+                          for i in range(2) if i != active)
             for i, robot in enumerate(robots):
-                if i != active:
-                    continue
+                moving = i == active and not braking
                 state, speed = self.targets[i], self.target_velocities[i]
                 control_dt = DT*FIXTURE['control_decimation']
                 for n, idx in enumerate(joint_indices[i]):
                     limit = profile['joints']['joint'+str(n+1)]
                     state[idx], speed[idx] = advance_joint(state[idx], speed[idx],
-                        action[i*6+n]*limit['velocity'], limit, control_dt)
+                        action[i*6+n]*limit['velocity'] if moving else 0., limit, control_dt)
                 grip = profile['gripper']
-                goal = grip['position'][0]+(grip['position'][1]-grip['position'][0])*(action[i*6+5]+1)/2
                 idx = fingers[i][0]
+                goal = (grip['position'][0]+(grip['position'][1]-grip['position'][0])*(action[i*6+5]+1)/2
+                        if moving else state[idx])
                 opening, speed[idx] = advance_joint(state[idx], speed[idx], (goal-state[idx])/control_dt, grip, control_dt)
                 state[fingers[i]] = [opening, -opening]
                 robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=state))

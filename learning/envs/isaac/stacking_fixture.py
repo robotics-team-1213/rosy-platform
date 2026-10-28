@@ -25,10 +25,16 @@ def advance_joint(position, velocity, requested_velocity, limits, dt):
     if not all(math.isfinite(v) for v in (position, velocity, requested_velocity, dt)) or dt <= 0:
         raise ValueError('Finite joint command and positive control interval required')
     vmax, amax = limits['velocity'], limits['acceleration']
-    requested_velocity = max(-vmax, min(vmax, requested_velocity))
-    velocity += max(-amax*dt, min(amax*dt, requested_velocity-velocity))
     low, high = limits['position']
+    # Euler target integration includes one control interval before subsequent braking.
+    def braking_speed(distance):
+        return (math.sqrt((amax*dt)**2+8*amax*max(0., distance))-amax*dt)/2
+    requested_velocity = max(-min(vmax, braking_speed(position-low)),
+                             min(vmax, braking_speed(high-position), requested_velocity))
+    velocity += max(-amax*dt, min(amax*dt, requested_velocity-velocity))
     wanted = position+velocity*dt
+    if wanted < low-1e-12 or wanted > high+1e-12:
+        raise ValueError('Previous joint command cannot stop within the profile')
     bounded = max(low, min(high, wanted))
     return bounded, 0. if bounded != wanted else velocity
 
