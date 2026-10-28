@@ -123,3 +123,15 @@ def test_training_report_checks_transport_and_checkpoint_without_loading_weights
     (tmp_path/'stacking-policy.pt').write_bytes(b'tampered')
     with pytest.raises(ValueError, match='fingerprint'):
         verify_report(path, sdk_version='6.2.0.0', seed=42)
+
+
+def test_joint_commands_accelerate_within_sim_profile_and_stop_at_position_limit():
+    mod = fixture()
+    limits = dict(position=[-.1, 1.1], velocity=.5, acceleration=.5)
+    position, velocity = mod.advance_joint(0., 0., 100., limits, 1/30)
+    assert velocity == pytest.approx(.5/30)
+    assert position == pytest.approx(.5/900)
+    for _ in range(300):
+        position, velocity = mod.advance_joint(position, velocity, 100., limits, 1/30)
+        assert -.1 <= position <= 1.1 and abs(velocity) <= .5
+    assert position == 1.1 and velocity == 0.
