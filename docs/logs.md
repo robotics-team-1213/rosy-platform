@@ -12855,12 +12855,44 @@ osy-d395-s1d\`.
 - 한계: MEDIA만 확인했다. 첫 부팅·실물 OTA·롤백은 미검증이며 제품 main 착지·공개 게시를 주장하지 않는다.
 - CE: 새 교훈 기록 — 일회성 헤더 복구 후 재발한 실제 저장 장치 조회 순서와 증거를 보존했다. Frontmatter 통과, claims의 미게시 commit 참조 1개는 pending 표기와 함께 판정했다.
 
+## 2026-10-28 · uncommitted · docs(reference): 문서로 남긴 작업 기록을 Jira 이슈에 짧은 코멘트로 연결한다
+
+- 변경: `docs/reference/atlassian-integration.md` §4 첫 항목에 기록 연결 규칙 추가. 작업의 기록·결과·결정을 Confluence 문서로 남긴 뒤 그 일을 추적하는 Jira 이슈에 짧은 코멘트와 문서 링크를 남기고, 상태·담당자·기한은 바꾸지 않는다. Notion 등 다른 문서 도구 기록도 같다. 3장의 스마트 커밋 금지와 충돌하지 않게 코멘트는 Atlassian 연결 도구(MCP·API)로 남긴다고 명시했고, 머리 갱신 날짜를 2026-10-28로 올렸다.
+- 근거: 2026-10-28 사용자 결정. 같은 규칙을 작업 공간 내부 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)의 절차와 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절에도 반영했고, 이 문서 4장을 정본으로 지정했다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 코멘트 규칙 문구는 기존 §3 스마트 커밋 금지와 주체를 구분해 충돌하지 않는다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 관례 추가이며 코드·장치·시험 경로 변경이 없다.
+
 ## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
 
 - 변경: D-912(Proposed)에 고정 세 파일의 별도 OS 유지보수 소유권, Ed25519와 OS CMS 이중 권한, 정책 freeze와 중단 복구 경계를 기록했다. 다른 세션의 D-903~D-911 예약은 gap ledger에 보존했다.
 - 검증: OS publisher 54 passed, consumer 초기 79 passed, 잔여 부분파일 공간 복구 39 passed, 실제 publisher→HTTP→서명 canary staging 연결 5 passed(각 0 skipped/0 NEW). 실제 173 원본의 분할 게시 dry-run도 통과했다. 후속 bridge 보강과 부분 delta 연결의 최종 검증은 진행 중이다.
 - gate 변화: 없음 — 실제 Pinky boot·GitHub OTA·rollback은 아직 미검증이고 OS 유지보수 결정은 Proposed다.
 - CE: 해당 없음 — 현재 새 코드의 계약과 회귀로 판별할 수 있는 구현 내용이다. 해결이 검증되지 않은 후속 항목은 작업 기록에 남긴다.
+
+## 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
+
+- 변경: `docs/reference/atlassian-integration.md` §4 기록 연결 규칙을 다듬었다. 문서마다 새 코멘트를 만들지 않고 이슈 하나에 기록용 코멘트 하나를 두고, 새 기록(문서 링크·한두 문장 요약)을 그 코멘트에 이어 붙인다. KAN-61 댓글10020에서 하던 방식과 같은 형태다. 머리 갱신 날짜를 2026-10-29로 올렸다.
+- 근거: 2026-10-29 사용자 결정 — 댓글이 이슈마다 흩어지지 않게 스레드 하나로 이어 붙이고, 문서는 링크로 건다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 작업 공간 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)과 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절의 같은 규칙 문구도 같은 날 함께 고쳤다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 관례 다듬기이며 코드·장치·시험 경로 변경이 없다.
+
+## 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
+
+- 변경: `docs/reference/AGENTS.md`의 `atlassian-integration.md` 행 설명에 「문서 기록을 이슈의 기록용 코멘트 하나에 링크로 이어 붙이는 규칙(§4)」을 넣고, 문서 갱신 날짜를 2026-10-29로 올렸다.
+- 근거: 같은 날 확정한 §4 규칙을 이 목차만 읽는 세션도 찾을 수 있게 한다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행).
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 요약 갱신이다.
+
+## 2026-10-29 · uncommitted · docs(reference): 기록용 Jira 코멘트 예외를 기존 사람 작업 규칙에 명시한다
+
+- 변경: `atlassian-integration.md` §3의 사람 작업 규칙에서 §4 문서 기록용 코멘트의 연결 도구 갱신을 예외로 명시한다. 다른 댓글과 상태 변경은 기존대로 사람이 한다.
+- 근거: 독립 검토에서 §3과 §4의 댓글 작성 주체가 충돌함을 확인했다. 기존 사용자 결정과 우산 지침에 있는 기록용 코멘트 범위만 연결했다.
+- 검증: 공식 착지 도구의 문서 lint·원격 게이트로 확인한다. 외부 Jira 변경은 실행하지 않았다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 정본 문구가 충돌과 해결 범위를 설명한다.
 
 ## 2026-10-29 · ccc8712ece · 이송 결과 검수 패키지 검증 기록
 
