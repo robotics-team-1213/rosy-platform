@@ -41,8 +41,9 @@ def augment(graph: dict, out: Path, scope: Path) -> dict:
             raise ValueError(f'Corpus file disappeared: {name}')
         paths[path] = path.relative_to(scope).as_posix()
     file_ids = {node['source_file']: node['id'] for node in graph['nodes']
-                if node.get('source_file') and node.get('source_location') is None
-                and node.get('label') in (node['source_file'], Path(node['source_file']).name)}
+                if node.get('source_file') and node.get('label')
+                and (node['label'] == node['source_file']
+                     or node['source_file'].endswith('/' + node['label']))}
     ids = {path: file_ids.get(rel, 'inventory:' + rel) for path, rel in paths.items()}
     existing = {node['id'] for node in graph['nodes']}
     if any(ids[path] in existing for path, rel in paths.items() if rel not in file_ids):
