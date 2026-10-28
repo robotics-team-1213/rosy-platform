@@ -15,13 +15,15 @@
   "source_sha": "FULL_40_LOWERCASE_HEX_COMMIT",
   "sdk_python": "/ABSOLUTE/EXISTING/SDK_VENV/bin/python",
   "sdk_python_sha256": "SHA256_OF_INTERPRETER_BYTES",
-  "sdk_version": "5.1.0.0",
+  "sdk_version": "6.2.0.0",
   "model_code_root": "/ABSOLUTE/INSTALLED/MODEL_CODE_ROOT",
   "data_root": "/ABSOLUTE/EXTERNAL/RUN_DATA"
 }
 ```
 
 binding과 경로는 같은 계정 소유이며 group/world 쓰기를 허용하지 않는다. `data_root`는 미리 만든 외부 디렉터리다. SDK Python의 마지막 symlink는 venv 관례대로 허용하되 실행 파일 지문을 확인한다. source는 실행 모듈이 있는 깨끗한 전체 SHA checkout이어야 한다. `~/.config/rosy/model-code.json`의 설치 root와 다르면 거절한다. SDK 설치나 서비스 enable은 이 실행기의 기능이 아니다.
+
+허용 SDK 버전은 정확히 `5.1.0.0`, `6.0.0.0`, `6.2.0.0`이다. 6.2 호환 환경의 kernel 배포판은 `6.2.0.0+rosy.1`이지만 SDK binding의 version은 `6.2.0.0`을 사용한다. 기본 SDK를 전환할 때는 `~/.config/rosy/isaac-sdk.json`과 직접 ROS conformance launcher가 읽는 `~/rosy-isaac-ready/sdk-path.txt`를 함께 백업·확인한다. SHA별 기존 source binding은 덮어쓰지 않는다. 전환 후 새 commit의 binding을 생성하고 `check`와 실행 결과를 별도로 확인한다.
 
 ## 실행·중지·증거
 

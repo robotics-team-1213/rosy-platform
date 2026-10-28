@@ -26,6 +26,15 @@ def split(data: bytes) -> tuple[bytes, list[bytes]]:
     return b"".join(head), [b"".join(block) for block in blocks]
 
 
+def shared(ours: bytes, theirs: bytes) -> bytes:
+    """theirs' head and the entries both sides hold unchanged, in theirs' order: the base of this append-only log
+    when git's is virtual (criss-cross history). A real merge base fails too: each holds one side's hand-merged
+    entries, so both sides look like they inserted them."""
+    head, blocks = split(theirs)
+    mine = {_key(block) for block in split(ours)[1]}
+    return head + b"".join(block for block in blocks if _key(block) in mine)
+
+
 def _key(block: bytes) -> bytes:
     return block.rstrip()  # the blank line before the next entry is not part of the entry
 

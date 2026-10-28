@@ -2,6 +2,7 @@
 (deploy/robot/omx/cell_case_suite.py) says which still match the real outcome."""
 import importlib.util
 import json
+import math
 from pathlib import Path
 import sys
 
@@ -96,3 +97,25 @@ def test_a_known_isaac_gap_is_reported_as_such_and_any_other_result_is_flagged(t
         row = suite_runner.run_case(case, "f" * 40, tmp_path / result, sleep=lambda s: None, call=call)
         assert row["matches"] is matches and suite_runner.verdict([row]) == failing
     assert "known Isaac gap" in suite_runner.table([dict(row, known_gap="why", matches=None)], [])
+
+
+def test_the_aim_sweep_measures_offsets_both_ways_along_and_across_the_jaws():
+    sweep = cases.aim_sweep()
+    assert len(sweep) == 1 + 2 * 2 * len(cases.AIM_MM) and len({c["id"] for c in sweep}) == len(sweep)
+    for case in sweep:
+        assert F.check_case(case["sim"]) == case["sim"] and case["sim"]["expect"] is None
+    by_id = {c["id"]: c["sim"]["aim"] for c in sweep}
+    assert by_id["aim-0mm"] == [0.0, 0.0]
+    assert math.hypot(*by_id["aim-along+15mm"]) == pytest.approx(0.015, abs=1e-4)
+    along, across = by_id["aim-along+10mm"], by_id["aim-across+10mm"]
+    assert along[0] * across[0] + along[1] * across[1] == pytest.approx(0.0, abs=1e-6)  # perpendicular
+    assert by_id["aim-along-5mm"] == [-v for v in by_id["aim-along+5mm"]]
+
+
+def test_a_case_may_add_an_aim_but_only_a_small_finite_one():
+    case = {"box": [0.0, 0.0, 0.0], "place": "belt", "grasp_turn": 0.0, "expect": None}
+    assert F.check_case(case) == case  # no aim: the case is as before
+    assert F.check_case(dict(case, aim=[0.005, 0])) == dict(case, aim=[0.005, 0.0])
+    for bad in ([0.03, 0.0], [0.0], [float("nan"), 0.0], "0,0"):
+        with pytest.raises(ValueError):
+            F.check_case(dict(case, aim=bad))
