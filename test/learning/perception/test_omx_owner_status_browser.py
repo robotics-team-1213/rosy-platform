@@ -133,6 +133,41 @@ def test_conversion_poll_preserves_action_focus_and_falls_back_to_run_heading(em
             browser.close()
 
 
+def test_conversion_poll_retains_pending_stop_and_its_rejection(empty_learning_center):
+    playwright = pytest.importorskip('playwright.sync_api')
+    run = {'id': 'conversion-pending', 'name': 'Pending conversion', 'prepared_id': 'prepared-fixture',
+           'execution_mode': 'native_export', 'method': 'act', 'status': 'running', 'progress': {}}
+    held = []
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.route('**/api/learning/omx/center', lambda route: route.fulfill(json={'datasets': [], 'runs': [run], 'methods': {}}))
+            page.route('**/api/learning/omx/center/stop', lambda route: held.append(route))
+            page.goto(empty_learning_center+'/learning/omx#dataset-section', wait_until='networkidle')
+            expect = playwright.expect
+            stop = page.get_by_role('button', name='이 변환 중지', exact=True)
+            with page.expect_request('**/api/learning/omx/center/stop'):
+                stop.click()
+            expect(stop).to_be_disabled()
+            run['name'] = 'Progress while stopping'
+            with page.expect_response('**/api/learning/omx/center'):
+                pass
+            expect(page.locator('#export-runs')).to_contain_text(run['name'])
+            expect(stop).to_be_disabled()
+            assert len(held) == 1
+            held.pop().fulfill(status=503, json={'error': 'fixture stop rejected'})
+            expect(page.locator('#export-runs [role="alert"]')).to_have_text('fixture stop rejected')
+            expect(stop).to_be_enabled()
+            run['name'] = 'Progress after rejection'
+            with page.expect_response('**/api/learning/omx/center'):
+                pass
+            expect(page.locator('#export-runs')).to_contain_text(run['name'])
+            expect(page.locator('#export-runs [role="alert"]')).to_have_text('fixture stop rejected')
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize('width', [1440, 390])
 def test_purposeful_workspace_keeps_goal_and_explains_one_next_action(empty_learning_center, width):
     playwright = pytest.importorskip('playwright.sync_api')
