@@ -171,18 +171,53 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
             return 0
         if got != "batch":
             return None
-        members = chosen[:]
-        while members:
-            code, took = lead(land, wt, branch, args, python, qdir, ticket, main_co, members, measured, kind)
-            if code is not None:
-                return code
-            group = [branch, *took]
-            keep = [r for r in members if r["branch"] in took][:(len(group) + 1) // 2 - 1]  # the first half
-            land_queue.set_status(ticket, "waiting", batch=[r["branch"] for r in keep])
-            land_events.emit("train", branches=group, k=len(group), **measured, result="stopped",
-                             bisect=f"keeps {len(keep) + 1} of {len(group)}, the rest re-form or go alone")
-            members = keep
+        if (code := run(land, wt, branch, args, python, qdir, ticket, main_co, chosen[:], measured, kind)) is not None:
+            return code
         form = None  # once its half is down to itself, this landing goes alone
+
+
+def run(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path,
+        members: list[dict], measured: dict, kind: str, after: str = "waiting") -> int | None:
+    """Lead ``members``, bisecting by halving on a stop; 0 once landed, None when this landing is left alone."""
+    while members:
+        code, took = lead(land, wt, branch, args, python, qdir, ticket, main_co, members, measured, kind)
+        if code is not None:
+            return code
+        group = [branch, *took]
+        keep = [r for r in members if r["branch"] in took][:(len(group) + 1) // 2 - 1]  # the first half
+        land_queue.set_status(ticket, after, batch=[r["branch"] for r in keep])
+        land_events.emit("train", branches=group, k=len(group), **measured, result="stopped",
+                         bisect=f"keeps {len(keep) + 1} of {len(group)}, the rest re-form or go alone")
+        members = keep
+    return None
+
+
+def early(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path) -> int | None:
+    """At the start, before a pretest of its own: lead the waiting and pending tickets of this landing's group,
+    so they share one pretest. On 2026-10-28 every waiting ticket was FULL-class or unprepared, so the pending
+    affected ones never found a leader and each waited for a pretest slot of its own. 0 when the batch landed
+    this branch; None to go on alone (its own pretest, then ``queue``)."""
+    if ticket is None or args.tests != "auto" or land_full.restore(wt, branch) is not None:
+        return None  # a prepared landing leads from its wait (``former``); a skipped or explicit run never leads
+    kind = batchable(land, wt, wt, branch, land.out(wt, "rev-parse", "HEAD"))
+    tickets = land_queue.ahead(qdir, Path("~"))
+    if kind is None or any(r.get("batch") for r in tickets):
+        return None  # safety lands alone; one batch at a time
+    joined = [r for r in tickets if r["ticket"] != ticket.name and eligible(land, wt, r, kind)]
+    if not joined:
+        return None
+    p, runs = rate(qdir.parent / land_events.EVENTS)
+    joined = joined[:(kopt(p) if kind == "affected" else min(kopt(p), KFULL)) - 1]
+    land_queue.set_status(ticket, "pending", batch=[r["branch"] for r in joined])
+    rivals = [r for r in land_queue.ahead(qdir, Path("~")) if r["ticket"] < ticket.name and r.get("batch")]
+    if rivals:  # an earlier ticket formed in the same moment: it leads, this one goes alone
+        land_queue.set_status(ticket, "pending", batch=[])
+        return None
+    measured = {"p": None if p is None else round(p, 3), "runs": runs}
+    code = run(land, wt, branch, args, python, qdir, ticket, main_co, joined, measured, kind, after="pending")
+    if code is None:
+        land_queue.set_status(ticket, "preparing", batch=[])
+    return code
 
 
 def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path,
