@@ -118,16 +118,16 @@ def stage(root: Path, metadata: dict, raw: bytes, signature: str, url: str | lis
         else: _write_atomic(target, content, 0o400)
     target = _path(root, directory.relative_to(root).as_posix() + "/" + expected["filename"])
     cached = _cached(root, target, expected)
+    part = _path(root, target.relative_to(root).as_posix() + ".part")
+    chunk = _path(root, target.relative_to(root).as_posix() + ".chunk")
+    _remove_partial(root, part)
+    _remove_partial(root, chunk)
     need = DISK_MARGIN_BYTES + (0 if cached else expected["size_bytes"] + (max(size for _, size in assets) if multipart else 0))
     if host.free_bytes(staging) < need:
         _reclaim(root, staging, metadata["release_id"])
     if host.free_bytes(staging) < need:
         raise ValueError("OS_STAGE_DISK_LOW: bundle and safety margin do not fit")
     if cached: return target
-    part = _path(root, target.relative_to(root).as_posix() + ".part")
-    chunk = _path(root, target.relative_to(root).as_posix() + ".chunk")
-    _remove_partial(root, part)
-    _remove_partial(root, chunk)
     _create_partial(part)
     try:
         try:
