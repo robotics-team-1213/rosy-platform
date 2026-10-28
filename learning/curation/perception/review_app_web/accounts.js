@@ -54,7 +54,7 @@ async function api(path, body) {
 }
 function line(parent,text) { const p=document.createElement('p'); p.textContent=text; parent.append(p); return p; }
 function button(parent,label,action) {
-  const b=document.createElement('button'); b.type='button'; b.className='ui-field'; b.textContent=label;
+  const b=document.createElement('ui-button'); b.setAttribute('type','button'); b.setAttribute('kind','quiet'); b.textContent=label;
   b.addEventListener('click',()=>perform(action)); parent.append(b);
   if(pending)lockButton(b);
 }
@@ -179,7 +179,7 @@ async function jobs() {
     if(canControl && ['queued','running'].includes(job.status)) button(row,'가져오기 취소',async()=>{
       await api('/api/learning/imports/cancel',{id:job.id}); await jobs();
     });
-    if(focusId===job.id){const target=[...row.querySelectorAll('button, summary')].find(node=>node.textContent===focusText)||heading;if(pending)pendingFocus=target;else target.focus({preventScroll:true});}
+    if(focusId===job.id){const target=[...row.querySelectorAll('ui-button, button, summary')].find(node=>node.textContent===focusText)||heading;if(pending)pendingFocus=target;else target.focus({preventScroll:true});}
   }
 }
 $('logout').addEventListener('click',()=>perform(async()=>{

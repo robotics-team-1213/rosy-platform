@@ -23,15 +23,15 @@
 <div class="learning-next-actions learning-section"><ui-button id="account-retry" kind="quiet" type="button">로그인 연결 다시 확인</ui-button><a class="workspace-link" href="/learning">학습 홈으로 돌아가기</a></div>
 <ui-empty id="account-setup" hidden><h2>계정 연결을 준비해야 합니다</h2><p>프로젝트 로그인이 설정되지 않아 로그인과 Hugging Face 연결을 시작할 수 없습니다.</p><ol><li>담당자가 프로젝트 로그인 방식과 서버 주소를 설정합니다.</li><li>초대된 사용자로 로그인한 뒤 Hugging Face 계정을 연결합니다.</li><li>사용할 자료의 접근 권한과 버전을 확인하고 가져옵니다.</li></ol><p>비밀번호나 토큰은 채팅에 보내지 말고, 설정이 완료된 계정 화면에 입력하세요. 계정 설정 전에도 과제와 장치의 학습 계획을 확인할 수 있습니다.</p><div class="learning-next-actions"><a class="workspace-link" href="/learning/omx#profile-panel">과제·팔·카메라 준비</a><a class="workspace-link" href="/learning">학습 홈으로 돌아가기</a></div></ui-empty>
 <div id="signed-in" hidden>
-<section class="learning-section"><h2>현재 작업자</h2><p id="identity"></p><a data-account-profile hidden>프로필</a><button id="logout" class="ui-field" type="button">로그아웃</button></section>
+<section class="learning-section"><h2>현재 작업자</h2><p id="identity"></p><a data-account-profile hidden>프로필</a><ui-button id="logout" kind="quiet" type="button">로그아웃</ui-button></section>
 <section class="learning-section"><h2>연결한 Hugging Face 계정</h2><div id="connections" aria-live="polite"></div>
-<button id="hf-link" class="ui-field" type="button" hidden>Hugging Face 연결</button>
+<ui-button id="hf-link" kind="quiet" type="button" hidden>Hugging Face 연결</ui-button>
 <details id="connect-panel"><summary>토큰으로 연결</summary><p class="quiet">학습 결과를 저장하려면 쓰기 권한이 있는 Hugging Face 토큰을 연결하세요. 토큰은 연결 후 다시 표시하지 않습니다.</p>
 <form id="connect-form" class="ui-form learning-form">
 <label class="ui-field-label">Hugging Face 토큰<input id="provider-token" class="ui-field" type="password" autocomplete="off" required maxlength="4096"></label>
 <label class="ui-field-label">사용 범위<select id="sharing" class="ui-field"><option value="personal">내 작업만</option><option value="project">프로젝트 작업 — 관리자</option></select></label>
 <label class="ui-field-label">프로젝트 연결의 허용 저장소<textarea id="resources" class="ui-field" rows="2" placeholder="dataset:조직/자료&#10;model:조직/모델"></textarea></label>
-<button class="ui-field" type="submit">계정 확인 후 연결</button></form></details></section>
+<ui-button kind="primary" type="submit">계정 확인 후 연결</ui-button></form></details></section>
 <section id="import-panel" class="learning-section"><h2>외부 자료 가져오기</h2>
 <p class="quiet">고정 버전으로 내려받아 검수 대기 자료로 보관합니다. 자료 이용 조건은 별도로 확인하세요.</p>
 <form id="import-form" class="ui-form learning-form">
@@ -46,21 +46,21 @@
 <p class="quiet">개인에게만 승인된 제한 자료는 팀 이용 근거가 없으면 보류됩니다.</p>
 <details><summary>제한 자료의 팀 이용 허가가 있는 경우</summary><label class="ui-check"><input id="gated-team-use" class="ui-field" type="checkbox">팀 이용이 별도로 허용됨을 확인했습니다.</label>
 <label class="ui-field-label">팀 이용 허가 근거<textarea id="team-use-evidence" class="ui-field" rows="2"></textarea></label></details>
-<button class="ui-field" type="submit">접근 확인 후 가져오기</button></form></section>
+<ui-button kind="primary" type="submit">접근 확인 후 가져오기</ui-button></form></section>
 <section id="repo-panel" class="learning-section" hidden><h2>비공개 저장소</h2>
 <p><a class="workspace-link" href="/learning#storage-title">저장 대상·용량 설정 이어가기</a></p>
 <p class="quiet">외부 게시 권한으로 비공개 데이터셋과 모델 저장소를 만들고 지웁니다. 파일을 올리거나 공개로 바꾸지 않습니다.</p>
 <form id="repo-list-form" class="ui-form learning-form">
 <label class="ui-field-label">관리 계정<select id="repo-connection" class="ui-field" required></select></label>
 <label class="ui-field-label">관리할 종류<select id="manage-repo-type" class="ui-field"><option value="dataset">데이터셋</option><option value="model">모델</option></select></label>
-<button class="ui-field" type="submit">목록 보기</button></form>
+<ui-button kind="quiet" type="submit">목록 보기</ui-button></form>
 <div id="repos" aria-live="polite"></div>
 <form id="repo-create-form" class="ui-form learning-form">
 <label class="ui-field-label">저장소<input id="manage-repo-id" class="ui-field" required placeholder="계정/저장소" maxlength="200"></label>
-<button class="ui-field" type="submit">비공개 저장소 만들기</button></form>
+<ui-button kind="quiet" type="submit">비공개 저장소 만들기</ui-button></form>
 <form id="repo-delete-form" class="ui-form learning-form">
 <label class="ui-field-label">삭제할 저장소 이름을 그대로 입력<input id="repo-confirm" class="ui-field" required placeholder="계정/저장소" maxlength="200" autocomplete="off"></label>
-<button class="ui-field" type="submit">비공개 저장소 삭제</button></form>
+<ui-button kind="quiet" type="submit">비공개 저장소 삭제</ui-button></form>
 <p class="quiet">공개 저장소는 목록에만 보이고 삭제하지 않습니다. 삭제는 위에 적은 저장소 이름과 확인 입력이 같을 때만 진행합니다.</p></section>
-<section class="learning-section"><h2>가져오기 작업</h2><button id="reload" class="ui-field" type="button">최신 상태 확인</button><div id="imports" aria-live="polite"></div></section>
+<section class="learning-section"><h2>가져오기 작업</h2><ui-button id="reload" kind="quiet" type="button">최신 상태 확인</ui-button><div id="imports" aria-live="polite"></div></section>
 </div></main></div></div></ui-shell></body></html>

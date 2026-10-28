@@ -244,7 +244,7 @@ def test_slow_account_poll_locks_actions_but_keeps_the_typed_request(workspace):
     state['hold_get'] = True
     page.wait_for_timeout(5500)
     assert len(state['held_get']) == 1
-    expect(page.locator('#import-form button[type=submit]')).to_be_disabled()
+    expect(page.locator('#import-form ui-button[type=submit]')).to_be_disabled()
     expect(page.locator('#reload')).to_be_disabled()
     expect(page.locator('#repo-id')).to_be_enabled()
     expect(page.locator('#repo-id')).to_be_focused()
@@ -254,7 +254,7 @@ def test_slow_account_poll_locks_actions_but_keeps_the_typed_request(workspace):
     capture(page, 'account-poll-pending')
     state['hold_get'] = False
     state['held_get'].pop().fulfill(json={'jobs': state['jobs']})
-    expect(page.locator('#import-form button[type=submit]')).to_be_enabled()
+    expect(page.locator('#import-form ui-button[type=submit]')).to_be_enabled()
     expect(page.locator('#repo-id')).to_have_value('fixture/data')
     expect(page.locator('#connection')).to_have_value('b')
     expect(page.locator('#repo-id')).to_be_focused()
@@ -304,6 +304,27 @@ def test_account_action_that_replaces_its_button_returns_to_the_job_status(works
     assert len(state['posts']) == 1
     row_status.scroll_into_view_if_needed()
     capture(page, f'account-transition-{after}-{move_focus}')
+
+
+@pytest.mark.parametrize('width', [320, 390, 1440])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_account_actions_use_readable_shared_targets_in_both_themes(workspace, width, theme):
+    page, state, origin, expect = workspace
+    state['jobs'][0]['status'] = 'failed'
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.add_init_script('localStorage.setItem("rosy.theme", "' + theme + '")')
+    ready_accounts(page, origin, expect)
+    page.locator('#connect-panel details summary').click()
+    expect(page.locator('#provider-token')).to_be_visible()
+    assert page.locator('#accounts-main button').count() == 0
+    for action in page.locator('#accounts-main ui-button:visible').all():
+        box = action.bounding_box()
+        assert box['height'] >= 44 and box['x'] >= 0 and box['x'] + box['width'] <= width + 1, box
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    page.locator('#import-form ui-button').scroll_into_view_if_needed()
+    capture(page, f'account-controls-{theme}-{width}')
+    page.locator('#imports').scroll_into_view_if_needed()
+    capture(page, f'account-job-controls-{theme}-{width}')
 
 
 @pytest.mark.parametrize('status', [401, 403, 503])
