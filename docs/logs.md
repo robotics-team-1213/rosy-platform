@@ -12266,6 +12266,12 @@ osy-d395-s1d\`.
 - 증거: `1a9cd5b164` 실제 Chromium3시험과 구조/harness/affected/browser-scope262시험이 통과했다(각 NEW/KNOWN/FLAKY0, SKIP0). API 브라우저 경로의 증거이며 화면 완성·G1/G2/G3·native 배포·현장 수용은 아니다.
 - gate 변화: UI·배포·실제 PC HOLD 유지. CE: 해당 없음 — 소유/등록/회귀로 기록했다.
 
+## 2026-10-26 · uncommitted · feat(remote): OMX 팔 S 핫픽스 반복 도구
+
+- 변경: `tools/remote/omx_hotfix.py` 추가. 손으로 하던 임시 커밋(임시 `GIT_INDEX_FILE`·`commit-tree`·`refs/rosy-wip/<이름>`), 원격 시험(`remote_pytest.py --sha`), 현장 PC 배포(`git archive`를 ssh 표준 입력으로 `~/rosy-test/omx-tools-<sha10>/`에 풀고 `REVISION`이 같으면 건너뜀, `omx-tools-current` 링크를 임시 이름 `ln -sfn` 뒤 `mv -T`로 교체), 상태 보기를 하위 명령 넷으로 묶었다. 배포는 `test`가 같은 sha로 남긴 로그의 마지막 pytest 요약이 `passed`이고 `failed`/`error`가 없을 때만 한다. 주소는 `--host`나 `OMX_HOTFIX_HOST`로만 받는다(D-226). 팔을 움직이거나 세션을 시작하지 않는다.
+- 증거: 원격 `test/test_omx_hotfix.py test/architecture/test_document_placement.py` 28 passed(exit 0, 모델 PC). 변이 4개(로그의 `failed` 검사 제거, 링크를 제자리 `ln -sfn`, `REVISION` 건너뜀 끔, 임시 인덱스 대신 공유 인덱스)는 해당 시험 5 failed. 실제 `run-1.txt`에 배포 관문이 통과, 다른 sha로는 거절. 현장 PC 배포·실물 수용은 하지 않았다.
+- gate 변화: 없음. 현장 PC 배포 전에 원격 시험 통과 로그가 필요하다.
+
 ## 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
 
 - 변경: 분리 소스와 G2 구현·시험·종료 예산은 유지하고, 최신 main 합류 뒤 공식 root6 NEW 실패 원본과 같은 AI 호스트 A–B–B–A 대조를 보존했다. 실패한 writer close 경계와 실제 main 동일 blob을 구분했다.
@@ -12685,9 +12691,40 @@ osy-d395-s1d\`.
 - 결정: D-889 추가 5
 - 교훈: 없음
 
+## 2026-10-28 · uncommitted · fix(remote): omx_hotfix 시험의 가짜 SHA를 비밀 검사에 걸리지 않게
+
+- 변경: `test/test_omx_hotfix.py`의 가짜 리비전 `"0123…4567"`을 `"d" * 40`으로 바꾼다. 시험의 뜻은 같다(새 커밋 `"c" * 40`과 다르다).
+- 근거: 착지 사전 시험의 `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`가 그 리터럴을 high-entropy-token으로 잡았다.
+- 증거: 원격 `test/test_omx_hotfix.py`·`test/test_release_boundary_guards.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 픽스처 값이다.
+
 ## 2026-10-28 · uncommitted · docs(adr): D-902 Pilot 실물 OMX 조종·녹화는 Fleet과 CORE 수동 팔 경로로
 
 - 변경: `docs/adr/D-902-pilot-real-omx-teleop-and-recording.md`(Proposed)와 ADR Log 행. 실물 OMX Pilot은 Fleet origin에서 제공하고 D-894 seat·deadman·jog/park/goto/run만 쓴다. 녹화는 OMX 수집 owner가 하고 D-411·D-534·D-848 원칙을 따른다. 실행 중인 수집 세션을 빼앗지 않는다.
 - 근거: Pilot 팔 드라이버는 `omx_sim.js`뿐이고(D-390), 실물 팔 S는 SSH·FIFO로만 조작·녹화한다. D-894는 브라우저가 Fleet origin만 부르게 해 장치-origin Pilot과 맞지 않는다.
 - gate 변화: 없음(문서만, 구현·실물 동작 없음). D-894 착지·런타임 수용이 선행 조건이다.
 - CE: 해당 없음 — 방향 결정이며 해결한 장애가 없다.
+
+## 2026-10-28 · uncommitted · fix(omx): 움직임 분리 시험 파일의 BOM 제거
+
+- 변경: `middleware/devices/omx/adapter/test/test_omx_dynamixel_motion.py` 맨 앞의 UTF-8 BOM을 지운다. 내용은 같다.
+- 근거: 착지 사전 시험에서 `test/test_source_encoding.py::test_no_active_tracked_python_file_starts_with_a_bom`과 `test/test_ci_dependencies.py::test_no_test_module_defines_a_nose_style_setup_function`이 이 파일의 BOM 때문에 실패했다(BOM이 있으면 파일을 파싱하지 못한다).
+- 증거: 원격 위 두 시험과 `middleware/devices/omx/adapter/test`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 인코딩 실수다.
+
+## 2026-10-28 · uncommitted · fix(omx): 값 계약 이동을 OMX 배포 묶음 경로에 반영
+
+- 변경: `deploy/robot/omx/omx-devices-autoupdate.json.example`의 `paths`에 `omx_adapter/contracts/adapter_profile.py`·`contracts/watchdog_observation.py`를 더한다. 이 브랜치가 `watchdog_observation.py`·`profile.py`가 쓰는 값을 `contracts/` 아래로 옮겼는데, main에 먼저 들어온 chunk-library의 배포 묶음에는 그 두 모듈이 없었다.
+- 근거: 착지 사전 시험의 `middleware/devices/omx/adapter/test/test_chunk_library.py::test_native_export_contains_the_script_import_closure`가 `No module named 'omx_adapter.contracts.watchdog_observation'`으로 실패했다(main에서는 통과).
+- 증거: 원격 `middleware/devices/omx/adapter/test`·`test/test_omx_arm_status_bridge.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 두 착지의 import 목록을 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · CORE host-file C6 published triage
+
+- Change: Record individual verdicts for the 33 remaining host-file reaches in the existing C6 criteria; the exact tuples live only in its literal registry. Three declared-member reaches are fixed in source instead of admitted. Correct the battery absent-judgment rationale without tightening runtime freshness.
+- Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
+- gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
+- CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.
