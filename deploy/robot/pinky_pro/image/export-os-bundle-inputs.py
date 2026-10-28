@@ -35,7 +35,7 @@ def _extract(source, offset, size, destination):
     source.seek(offset)
     remaining = size
     with destination.open("xb") as output:
-        with lzma.LZMAFile(output, "w", format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC64, preset=6) as archive:
+        with lzma.LZMAFile(output, "w", format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC64, preset=1) as archive:
             while remaining:
                 data = source.read(min(CHUNK, remaining))
                 if not data:

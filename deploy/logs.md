@@ -3895,3 +3895,11 @@
 - 증거: 수정 커밋 bc32cb9b41에서 정지 파일 27개와 Fleet 상태 파일 11개를 함께 원격 실행해 38 passed / 0 skipped / NEW 0. 같은 pytest 9.2 환경 1fde7a90b47fe7fb의 결과이며, 독립 검토는 전용 모듈 격리·실제 fsync 유지·안전 assertion 보존을 확인했다. 실행 로그는 native-cell-transport 작업 기록에 연결했다.
 - gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
 - CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.
+
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
+
+- 변경: OS bundle의 staged 분할 게시와 전체 해시 재조립, 서명된 engineering canary 제한, 독립 OS CMS가 필요한 전송기 유지보수 및 durable recovery, 기존 전체 파일을 보존하는 native delta 전송 정책을 연결했다. OS·부팅 변경과 알 수 없는 기준은 native 델타로 처리하지 않는다.
+- 검증: OS 게시54·초기수신79·잔여 partial 복구39·게시→HTTP 연결5·유지보수127개 원격 통과(각 0 skipped/0 NEW). 부분 전송 초기430개 통과 후 v2 resume·실패 baseline·OS 정책 보강을 별도로 재검증 중이다. 실제 GitHub 게시·Pinky 부팅·OTA·롤백은 아직 미검증이다.
+- 성능: exporter preset만6→1로 이행했다. 원본 변경의22개 원격 회귀와 독립 검토, 제한된 x86 표본은 [측정 기록](../docs/validation/pinky-image-throughput-2026-10-28/result.md)에 보존했다. 전체 ARM 빌드 절감량은 주장하지 않는다.
+- gate 변화: 없음. SOURCE·모델링된 중단 복구·MEDIA·실제 장치 수용을 구분하며 최종 통합 검증 전 배포 완료를 기록하지 않는다.
+- CE: 해당 없음 — 이 변경의 계약과 적용 조건은 코드·회귀·측정 기록으로 복원할 수 있다. 실제 GPT 재발 순서의 교훈은 별도 solutions 기록에 보존했다.
