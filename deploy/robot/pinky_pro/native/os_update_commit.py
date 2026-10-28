@@ -115,12 +115,13 @@ def _commit(root, transaction_id, host, run):
             or facts["slot"] != pending["target_slot"] or default != pending["source_slot"]):
         raise ValueError("commit requires the uncommitted healthy trial")
     _controls(root, pending, facts, host)
-    report = health.revalidate(root, pending, run=run)
+    report = health.revalidate(root, pending, host=host, run=run)
     if _proof(root, pending) != report:
         raise ValueError("current health differs from persisted proof")
     _media(root, pending, facts)
     _controls(root, pending, facts, host)
-    health.read_health(root, pending)  # Recheck the deadline after slow observations and GPT capture.
+    health._running_core(root, host, report['native_factory'], report['services'], run=run)
+    health.read_health(root, pending)  # Recheck the deadline after media and service observations.
     if _snapshot(root) != (facts, state, default):
         raise ValueError("trial changed before durable intent")
     if pending["phase"] == "HEALTHY":
@@ -137,6 +138,7 @@ def _commit(root, transaction_id, host, run):
         _intent(root, pending)
     _media(root, pending, facts)
     _controls(root, pending, facts, host)
+    health._running_core(root, host, report['native_factory'], report['services'], run=run)
     health.read_health(root, pending)
     if _snapshot(root) != (facts, state, default):
         raise ValueError("trial changed during durable intent publication")

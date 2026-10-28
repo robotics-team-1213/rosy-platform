@@ -91,6 +91,12 @@ python3 tools/device/ir_line_calibrate.py check --session ~/rosy-ir/session.json
        ir_min_span: 100.0
    ```
    값은 반드시 소수점이 있는 실수로 둔다(정수면 ROS 파라미터 형이 달라 노드가 뜨지 않는다).
+   A/B OS 이미지에서는 첫 블록을 `~/rosy-ir/ir_calibration.yaml`에 저장한 뒤 다음 명령으로 적용한다. 공통 설정에 기록하므로 다음 OS와 이전 슬롯으로 돌아온 OS가 같은 보정 파일을 읽는다. `/etc/rosy` 파일만 직접 바꾸면 다음 부팅의 공통 설정 투영 때 그 변경이 사라질 수 있다.
+   ```bash
+   sudo /usr/bin/python3 -I -B /opt/rosy/native-runtime/os_state_config.py \
+     --file ir_calibration.yaml --input "$HOME/rosy-ir/ir_calibration.yaml"
+   ```
+   A/B 이미지에서 제거할 때도 같은 명령의 `--input ...` 대신 `--clear`를 쓴다. 기존 단일 루트 이미지는 위의 root 소유 0644 파일 적용 절차를 따른다. 이 명령은 보정 파일과 NOMINAL 참조 프로필을 공통 설정에 기록하며, 노드 설정 검증과 재시작은 아래 절차대로 확인한다. `line_observer_overrides apply/clear`와 대시보드의 차선 인식 설정은 A/B 공통 설정을 자동으로 갱신한다. NOMINAL 프로필은 `apply --profile ...` 때 overlay와 함께 보존되어 `/etc/rosy/camera_nominal.yaml`로 참조되므로, 이전 릴리스나 홈 디렉터리의 원본이 없어져도 같은 값을 읽는다. `clear`는 이 복사본도 제거한다.
 2. CORE 설정 `line_follow.ir_calibration_revision: <64자리 해시>` — 네이티브 CORE 의 로컬 설정은 `/var/lib/rosy/core/.rosy/rosy.yaml`(`HOME=/var/lib/rosy/core`)이다. 기존 `line_follow:` 블록이 있으면 그 안에 한 줄만 넣는다.
 3. `sudo systemctl restart rosy-camera rosy-core`.
 4. `journalctl -u rosy-camera -b | grep "IR calibration overlay"` 가 `... loaded` 여야 한다. `skipped: <이유>` 면 파일을 고치고 다시 시작한다.

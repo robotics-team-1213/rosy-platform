@@ -22,6 +22,7 @@ def test_integrated_sample_reads_ownership_and_stops_without_claiming_device_pro
             page.on('request', lambda request: writes.append((urlsplit(request.url).path, request.post_data))
                     if request.method == 'POST' and urlsplit(request.url).path.startswith(prefix + '/stops') else None)
             page.goto(origin + '/console?view=work')
+            page.locator('#work-integrations > summary').click()  # the panel sits in a closed disclosure
             panel = page.locator('#integrated-control')
             expect(panel).to_be_visible()
             expect(panel).to_contain_text('구성 sample-v1')
@@ -41,6 +42,7 @@ def test_integrated_sample_reads_ownership_and_stops_without_claiming_device_pro
             assert engine.work.dispatch['dispatch_enabled'] is True
             child_generation = engine.control_units.fence('A')['generation']
             page.reload()
+            page.locator('#work-integrations > summary').click()
             expect(page.locator('#integrated-control')).to_be_visible()
             page.locator('#integrated-control summary').filter(has_text='이 관제의 정지 요청 기록').click()
             page.locator('#integrated-stop-history').get_by_role('button').click()

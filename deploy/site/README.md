@@ -1555,6 +1555,25 @@ digest, and timestamp in the site's deployment record; transfer copies using
 the approved encrypted path and verify them again after transfer. Define and
 enforce a site retention period before production operation.
 
+#### Daily automatic backups (ledger timer)
+
+The `rosy-site-ledger-backup.service`/`.timer` pair automates the same
+utility: once a day (`OnCalendar=daily`, persistent across downtime) it runs
+the compose `fleet-backup` profile service — the fleet image's `site_db.py`
+against the live volume, read-only — into the host bind
+`ROSY_SITE_BACKUP_DIR` (default `/var/backups/rosy-site`, the directory from
+the manual procedure above) and prunes to the newest 14 backups. Enable it
+once:
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 0700 /var/backups/rosy-site
+sudo systemctl enable --now rosy-site-ledger-backup.timer
+```
+
+The timer keeps only the operational SQLite ledger; keep transferring copies
+to the approved encrypted target as above — the retention here bounds disk
+use on the site host, it is not an off-site backup.
+
 Before relying on recovery, test the backup against a separate Compose project
 so it receives a different named `sighting_data` volume. The installed site
 configuration and secret files must be available to Compose, but this one-off
