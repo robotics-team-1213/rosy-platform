@@ -122,3 +122,42 @@ def test_legacy_stable_cache_remains_stable_and_unknown_classification_fails_clo
     assert client._cached_entry(normalized)["prerelease"] is False
     normalized["prerelease"] = "false"
     with pytest.raises(ValueError): client._cached_entry(normalized)
+
+
+@pytest.mark.parametrize("leftovers", [(".part",), (".chunk",), (".part", ".chunk")])
+def test_interrupted_current_release_reclaims_safe_partials_before_space_check(feed, leftovers):
+    from auto_update_host import DISK_MARGIN_BYTES
+    m, hub, host, root, _, journal, private, _ = feed
+    value, body, _, _ = chunked(hub, private)
+    directory = root / "var/lib/rosy-device/os-update/staging" / value["release_id"]
+    directory.mkdir(parents=True, mode=0o700)
+    directory.parent.chmod(0o700)
+    paths = [directory / (value["bundle"]["filename"] + suffix) for suffix in leftovers]
+    for path in paths:
+        path.write_bytes(b"interrupted download")
+        path.chmod(0o600)
+    need = DISK_MARGIN_BYTES + len(body) + 512
+    # Model available filesystem bytes, including the real files left by a crash.
+    host.free_bytes = lambda p: need - sum(path.stat().st_size for path in paths if path.exists())
+    assert host.free_bytes(directory) < need
+    before = journal.read_bytes()
+    assert m.Feed(root, host=host).poll(apply=False)["outcome"] == "staged"
+    assert (directory / value["bundle"]["filename"]).read_bytes() == body
+    assert not any(path.exists() for path in paths)
+    assert journal.read_bytes() == before
+
+
+@pytest.mark.parametrize("unsafe", [False, True])
+def test_partial_recovery_preserves_unknown_or_unsafe_current_release_files(feed, unsafe):
+    m, hub, host, root, _, _, private, _ = feed
+    value, _, _, _ = chunked(hub, private)
+    directory = root / "var/lib/rosy-device/os-update/staging" / value["release_id"]
+    directory.mkdir(parents=True, mode=0o700)
+    directory.parent.chmod(0o700)
+    path = directory / (value["bundle"]["filename"] + ".part" if unsafe else "operator-note.txt")
+    path.write_bytes(b"preserve")
+    path.chmod(0o644)
+    host.free_bytes = lambda p: 0
+    with pytest.raises(ValueError): m.Feed(root, host=host).poll(apply=False)
+    assert path.read_bytes() == b"preserve"
+    assert not any(".part00" in address for address, _ in hub.requests)
