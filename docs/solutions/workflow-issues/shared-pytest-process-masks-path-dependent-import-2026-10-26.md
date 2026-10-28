@@ -1,11 +1,12 @@
 ---
-module: learning/training/omx
+module: learning/training/omx + deploy/robot/pinky_pro/image
 date: 2026-10-26
+last_updated: 2026-10-28
 problem_type: workflow_issue
 component: testing_framework
 severity: high
-tags: ["land", "full-tier", "pytest", "sys.path", "sys.modules", "test-isolation", "main-red"]
-applies_when: "시험이 원본 모듈을 importlib.util.spec_from_file_location으로 경로를 직접 지정해 읽을 때, 원본 모듈이 같은 폴더 형제 모듈을 맨 이름으로 import하도록 고칠 때, 또는 FULL 착지가 초록인데 착지 뒤 좁은 선택에서 같은 파일이 빨갛게 나올 때"
+tags: ["land", "full-tier", "pytest", "sys.path", "sys.modules", "test-isolation", "main-red", "standalone-cli"]
+applies_when: "시험이 원본 모듈을 importlib.util.spec_from_file_location으로 읽거나 conftest가 제품 경로를 보충할 때, 원본이 형제 모듈을 맨 이름으로 import할 때, 또는 FULL이 초록인데 파일 단독이나 실제 CLI가 실패할 때"
 ---
 
 # 폴더 단위 pytest 초록은 파일 하나의 초록이 아니다
@@ -36,8 +37,39 @@ FULL 계층(`full_invocations`)은 모듈 폴더 단위로 호출을 만들고, 
 - 잡은 것은 바뀐 원본을 참조하는 시험(D-436 셀렉터의 `references X` 간선)을 파일마다 따로 끝까지 돌리는 단독 실행이다. `native_cycle.py`를 참조하는 시험은 7개이고 `test_native_cycle.py`가 그 안에 든다.
 - 그래서 `tools/land_isolation.py`는 착지 준비 단계에서 수집 게이트와 함께 참조 시험 단독 실행(안전 태그 원본의 참조 시험 먼저, 개수 상한 없이 시간 상한, 못 돈 파일은 `<git-common-dir>/rosy-land-isolation.jsonl`에 기록)을 돌린다. 수집 게이트만으로 충분하다고 다시 제안하지 않는다.
 
+## pytest 파일 단독 실행도 실제 CLI를 대신하지 않는다 (2026-10-28)
+
+고정 소스 `7b3245d3c594a8b5856ad791a334e1e342be6bdb`의 FULL과 관련 원격 시험은 통과했지만,
+실제 native ARM [이미지 실행 40632587457](https://github.com/robotics-team-1213/rosy-platform/actions/runs/40632587457)
+attempt1/job122632180302는 이미지 생성 전 lock 해석에서 실패했다.
+`resolve-build-lock.py` → `os_cms_trust.py` → `os_rauc.py` → `os_update_manifest.py`의
+`from signing import verify_signature`가 `ModuleNotFoundError`를 냈다.
+
+`test/conftest.py`가 `deploy/robot/pinky_pro/release/`를 pytest 경로에 넣었으므로 시험 파일을 혼자 돌려도 이 누락은 보이지 않았다.
+`export-os-bundle-inputs.py`에도 같은 누락이 있었다. 두 CLI는 서로 다른 Python 프로세스이므로
+앞선 CLI에서 경로를 고쳐도 뒤의 exporter에 전달되지 않는다.
+
+두 진입점이 각자 필요한 `release/` 경로를 명시하게 고쳤다. 회귀 검사는 빈 임시 cwd에서
+`sys.executable -I <실제 CLI> --help`를 실행하고 `PYTHONPATH`를 제거한다. pytest의 `sys.path`나
+이미 import한 `sys.modules`가 자식에 새어 들어가 통과할 수 없게 한다.
+빌드 인증서·지문·소유권 검사와 native ARM 거절 조건은 바꾸지 않았다.
+
+근거는 Git 밖의 로컬 receipt `Rosy/artifacts/receipts/2026-10-27-full-os-integration/`에 보존했다.
+`native-image-40632587457/image-failed/`에는 인증된 API 상태와 실제 실패 step 로그가 있다.
+`image-cli-import-red/run-1.txt`와 `image-cli-export-red/run-1.txt`는 각각 같은 누락으로 실패했다.
+`image-cli-import-green/run-1.txt`는 20 passed/0 skipped,
+`image-cli-export-green/run-1.txt`는 CMS·resolver·exporter·signer 43 passed/0 skipped, classifier 0 NEW다.
+수정 검증 SHA `b515fb03c86ea96896e00eb71106524f24be8777`, `28f95ef47e45c6346196dbdf173026954e73c63d`는
+이 기록을 쓸 때 아직 게시 전인 로컬 커밋이다. 이 결과는 독립 CLI import와 원격 기능 검증이며,
+다음 native ARM 이미지 생성·SD·실물 부팅 성공을 뜻하지 않는다.
+
+`resolve-build-lock.py` 전체 명령은 x86 시험 PC에서 native ARM gate에 걸린다.
+플랫폼을 속인 실행을 실제 native 명령의 증거로 쓰지 않는다. 독립 helper import 검증과
+향후 실제 native resolve/build 검증을 구분한다.
+
 ## 다음에 적용할 조건
 
 - 착지 뒤 main에서 파일 하나가 빨간데 착지 기록·캐시가 초록이면, 먼저 그 파일을 혼자 원격 실행하고 폴더 실행과 비교한다. 캐시나 known_failures부터 의심하지 않는다.
 - 시험 모듈 최상위의 `sys.path.insert`와 `sys.modules` 적재는 같은 프로세스의 다른 시험 파일 전부에 새어 나간다. 원본 모듈이 import 경로를 시험의 부작용에 기대지 않는지 파일 혼자 실행으로 확인한다.
 - `spec_from_file_location`으로 읽히는 모듈에 형제 import를 추가하는 변경은, 해당 시험 파일을 혼자 돌린 결과를 검증 근거로 남긴다.
+- conftest가 경로를 보충하는 CLI는 파일 단독 pytest만으로 충분하지 않다. 실제 진입점을 빈 cwd의 격리된 자식 프로세스에서도 실행한다.
