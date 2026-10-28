@@ -156,9 +156,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 15s
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks: [site_backend, robot_egress]
     logging: *default-logging
 
@@ -236,6 +233,8 @@ services:
   # and no robot, AI PC or model PC connects to it. Less hardened than fleet and
   # vision (stock upstream image, so read_only with tmpfs and a minimal cap set)
   # — see the D-796 ADR. An absent image.tags entry fails the stack loudly.
+  # Fleet deliberately does not wait for this service: the mirror is best-effort
+  # and a slow or broken postgres only produces warnings, never a blocked console.
   postgres:
     image: rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:-local}
     command:
