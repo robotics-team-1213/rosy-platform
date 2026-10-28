@@ -76,3 +76,9 @@ def test_layout_values_have_one_role_owner_and_no_per_page_duplicates():
     for role, sheet in [('measure-credential-field', header), ('measure-account-label', header), ('measure-login-field', login)]:
         assert f'--{role}:' in tokens and f'var(--{role})' in sheet
     assert '.token { width:' not in header
+    document = (WEB/'shared/fleet-document.css').read_text(encoding='utf-8')
+    policy = (WEB/'work/policy.css').read_text(encoding='utf-8')
+    for role, sheet in [('content-auth-max', document), ('content-learning-max', document),
+                        ('content-policy-max', document), ('content-policy-form-max', policy),
+                        ('block-policy-evidence-max', policy), ('measure-login-identity', login)]:
+        assert f'--{role}:' in tokens and f'var(--{role})' in sheet

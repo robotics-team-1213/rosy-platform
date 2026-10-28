@@ -6,14 +6,17 @@
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
   <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/console/assets/fleet-document.css">
   <link rel="stylesheet" href="/console/assets/policy.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/policy-page.js"></script>
 </head>
 <body><ui-shell grammar="procedure">
-  <ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>학습 정책 승인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
-  <main class="policy-main">
-    <h1>학습 정책 승인</h1>
+  <!-- fleet:document-header:start -->
+<ui-topbar><ui-brand href="/console"><b>Rosy Fleet</b><small>학습 정책 승인</small></ui-brand><span data-spacer></span><ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- fleet:document-header:end -->
+  <main class="policy-main fleet-document">
+    <h1 class="ui-page-heading">학습 정책 승인</h1>
     <p>학습을 마친 정책은 L0으로만 등록되고 실물을 움직이지 않습니다. 단계는 관리자 승인으로 하나씩 오르고,
       실물을 움직이는 단계(L3·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다. 실행은 승인 창 안에서
       1–2초 lease로만 이어지며, 확인 요청이나 사고가 열리면 다음 갱신에서 멈춥니다(D-793).</p>

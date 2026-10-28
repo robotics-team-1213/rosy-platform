@@ -5,14 +5,16 @@ import re
 
 PAGES = {'index.html': 'console', 'installation/install.html': 'install',
          'sitemap/site-map.html': 'map', 'cell/cell.html': 'work'}
+DOCUMENT_PAGES = {'accounts.html': '계정 관리', 'profile.html': '내 계정', 'login.html': '관제 로그인',
+                  'work/policy.html': '학습 정책 승인', 'learning.html': '학습'}
 
 
 def render(root, name):
-    if name not in PAGES:
+    if name not in PAGES | DOCUMENT_PAGES:
         raise ValueError('unknown Fleet document')
     root = Path(root)
     document = (root/name).read_text(encoding='utf-8')
-    for component in ('header', 'nav'):
+    for component in (('header', 'nav') if name in PAGES else ('document-header',)):
         start, end = f'<!-- fleet:{component}:start -->', f'<!-- fleet:{component}:end -->'
         if document.count(start) != 1 or document.count(end) != 1:
             raise ValueError(f'{name}: missing or duplicate {component} slot')
@@ -23,6 +25,8 @@ def render(root, name):
         if component == 'nav':
             for key in ('console', 'work', 'records', 'map', 'install'):
                 fragment = fragment.replace(' {{'+key+'}}', ' aria-current="page"' if key == PAGES[name] else '')
+        if component == 'document-header':
+            fragment = fragment.replace('{{document-title}}', DOCUMENT_PAGES[name])
         if '{{' in fragment or '<!-- fleet:' in fragment:
             raise ValueError('unresolved or nested Fleet component')
         document = pattern.sub(lambda _: start+'\n'+fragment+'\n'+end, document)
@@ -30,7 +34,7 @@ def render(root, name):
 
 
 def check(root):
-    return [name for name in PAGES if render(root, name) != (Path(root)/name).read_text(encoding='utf-8')]
+    return [name for name in PAGES | DOCUMENT_PAGES if render(root, name) != (Path(root)/name).read_text(encoding='utf-8')]
 
 
 def main():
@@ -43,7 +47,7 @@ def main():
         if stale:
             parser.exit(1, 'Stale Fleet components: '+', '.join(stale)+'\n')
     else:
-        for name in PAGES:
+        for name in PAGES | DOCUMENT_PAGES:
             (root/name).write_text(render(root, name), encoding='utf-8')
 
 

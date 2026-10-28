@@ -34,6 +34,10 @@
     }
   },
   "assets": {
+    "fleet-document.css": {
+      "path": "shared/fleet-document.css",
+      "media_type": "text/css"
+    },
     "app-runtime.js": {
       "path": "runtime.js",
       "media_type": "application/javascript"
