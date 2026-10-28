@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 from pathlib import Path, PurePosixPath
 
-from land_logs import append_blocks  # logs.md: whole entries, date order
+from land_logs import append_blocks, shared  # logs.md: whole entries, date order
 
 ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
@@ -210,8 +210,45 @@ def table_rows(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
     return b"".join(out) if all(row in out for row in added) else None  # a new row's neighbour was dropped
 
 
-def plan(wt: Path, conflicts: dict[str, dict[int, str]]) -> tuple[dict[str, bytes], list[str]]:
-    """Resolved bytes per auto-resolvable path, and `path: why` for the rest. Touches nothing."""
+MARKER = re.compile(rb"^(<{7,}|>{7,}) ", re.MULTILINE)  # a virtual base nests longer markers (9 for one level)
+
+
+def _resolve(kind: str, base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
+    if kind == "generated":
+        return theirs
+    if kind == "append":
+        return append_blocks(base, ours, theirs)
+    if kind == "table-rows":
+        return table_rows(base, ours, theirs)
+    if not clashes_are_insertions(base, ours, theirs):
+        return None
+    data = union(base, ours, theirs)
+    return sort_adr_rows(data) if kind == "adr-log" else b"".join(dict.fromkeys(data.splitlines(keepends=True)))
+
+
+def _real_bases(wt: Path, sides: tuple[str, str], path: str) -> list[bytes]:
+    """``path`` at each real merge base of ``sides`` (``git merge-base --all``), oldest first."""
+    found = subprocess.run(["git", "-C", str(wt), "merge-base", "--all", *sides], capture_output=True, text=True,
+                           env=ENV).stdout.split()
+    found.sort(key=lambda sha: subprocess.run(["git", "-C", str(wt), "show", "-s", "--format=%ct", sha],
+                                              capture_output=True, text=True, env=ENV).stdout.strip())
+    blobs = []
+    for sha in found:
+        oid = subprocess.run(["git", "-C", str(wt), "rev-parse", "--verify", "-q", f"{sha}:{path}"],
+                             capture_output=True, text=True, env=ENV).stdout.strip()
+        if oid:
+            blobs.append(_blob(wt, oid, path))
+    return blobs
+
+
+def plan(wt: Path, conflicts: dict[str, dict[int, str]],
+         sides: tuple[str, str] | None = None) -> tuple[dict[str, bytes], list[str]]:
+    """Resolved bytes per auto-resolvable path, and `path: why` for the rest. Touches nothing.
+
+    With criss-cross history (two merge bases) git's stage 1 is a virtual base that may itself hold conflict
+    markers, so every base entry looks dropped (2026-10-28, isaac3-environment-repair, publish-pinned-hook).
+    Given the merged ``sides``, such a base is replaced: for the append-only logs by the entries both sides hold
+    (``land_logs.shared``), for the other records by each real merge base in turn, oldest first."""
     resolved: dict[str, bytes] = {}
     manual: list[str] = []
     for path, stage in conflicts.items():
@@ -223,20 +260,10 @@ def plan(wt: Path, conflicts: dict[str, dict[int, str]]) -> tuple[dict[str, byte
             manual.append(f"{path}: modify/delete or add/add (stages {sorted(stage)})")
             continue
         base, ours, theirs = (_blob(wt, stage[n], path) for n in (1, 2, 3))
-        if kind == "generated":
-            data: bytes | None = theirs
-        elif kind == "append":
-            data = append_blocks(base, ours, theirs)
-        elif kind == "table-rows":
-            data = table_rows(base, ours, theirs)
-        elif clashes_are_insertions(base, ours, theirs):
-            data = union(base, ours, theirs)
-            if kind == "adr-log":
-                data = sort_adr_rows(data)
-            else:
-                data = b"".join(dict.fromkeys(data.splitlines(keepends=True)))
-        else:
-            data = None
+        data = _resolve(kind, base, ours, theirs)
+        if data is None and sides and MARKER.search(base):
+            bases = [shared(ours, theirs)] if kind == "append" else _real_bases(wt, sides, path)
+            data = next((d for real in bases if (d := _resolve(kind, real, ours, theirs)) is not None), None)
         if data is None:
             manual.append(f"{path}: a side changed existing lines, not only appended")
         else:

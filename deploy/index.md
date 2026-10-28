@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인
 - 2026-10-28 · f1627fb4b · fix(site): 원장 보존 정리 — 종료 작업 history 30일·감사 90일
 - 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
 - 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
-- 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
-- 2026-10-27 · 2ecb9b9015 · fleet가 best-effort 컨텍스트 미러를 기다리지 않는다
+- 2026-10-28 · 8facd08fea · Native enrollment current-main integration candidate

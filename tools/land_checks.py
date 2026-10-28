@@ -344,7 +344,24 @@ def run_tests(land, wt: Path, args, invocations: list[list[str]], logdir: Path, 
                 cancelled.append(inv)
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="cancelled", seconds=secs)
                 continue
-            if why := land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log):
+            why = land.land_cache.unusable(code, log) or land.land_browser.vacuous(inv, log)
+            if why == land.land_cache.NO_EVIDENCE:
+                # 2026-10-28: exit 1 with every test passed and no FAILED/ERROR line stopped 8 landings in a day;
+                # one rerun of the same invocation decides, and a second exit without evidence still stops.
+                again = logdir / f"rerun-{round_no}-{n}.txt"
+                try:
+                    rerun = (diagnostic_run if stop is not None else land.remote_pytest.run)(
+                        [inv], [again], head, repo=wt, label=f"land-rerun-{round_no}")
+                except CancelledError:
+                    cancelled.append(inv)
+                    continue
+                if rerun == [0]:
+                    land.land_events.emit("tests", round=round_no, argv=inv, verdict="flaky", seconds=secs)
+                    done.append(f"pytest {' '.join(inv)} ok on one rerun ({again.name}); the first exited 1 "
+                                f"without failures ({log.name})")
+                    continue
+                why = f"{why}, rerun exit {rerun[0] if rerun else '?'} (log {again})"
+            if why:
                 stops.append(f"pytest {' '.join(inv)} {why} (log {log}); not landing")
                 land.land_events.emit("tests", round=round_no, argv=inv, verdict="unusable", seconds=secs)
                 continue

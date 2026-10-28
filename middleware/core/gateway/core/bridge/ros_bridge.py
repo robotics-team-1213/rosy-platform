@@ -621,10 +621,7 @@ class RosBridge:
                                        self._face_inputs_at, FACE_INPUTS_PERIOD_S):
             return
         try:
-            # Inside the try: an import failure must not stop the bridge tick either.
-            from core_api_web.api.v1.host import write_face_inputs
-
-            write_face_inputs(self._svc, content)
+            self._svc.host_files.write_face_inputs(self._svc, content)
         except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
             if not self._face_inputs_failed:
                 self._node.get_logger().warning(f"face inputs not written: {type(exc).__name__}: {exc}")

@@ -116,6 +116,40 @@ def test_who_is_ahead_shows_each_tickets_status(tmp_path):
     assert "feat/full (preparing," in queue.describe(queue.ahead(tmp_path, mine))
 
 
+def test_preparation_slot_reserves_capacity_for_older_pending_ticket(tmp_path):
+    import land_prepare
+    busy = [queue.take(tmp_path, f"feat/p{n}", status="preparing") for n in range(2)]
+    older = queue.take(tmp_path, "feat/older", status="pending")
+    mine = queue.take(tmp_path, "feat/mine", status="pending")
+    naps = []
+
+    def nap(seconds):
+        naps.append(seconds)
+        assert json.loads(mine.read_text())["status"] == "pending"
+        if len(naps) == 1:
+            queue.set_status(older, "preparing")
+        else:
+            busy.pop().unlink()
+
+    land_prepare.slot(tmp_path, mine, sleep=nap)
+    assert len(naps) == 2
+    assert json.loads(mine.read_text())["status"] == "preparing"
+
+
+@pytest.mark.parametrize("status,later", [("pending", True), ("waiting", False), ("turn", False)])
+def test_preparation_slot_ignores_non_preparing_tickets_without_prior_claim(tmp_path, status, later):
+    import land_prepare
+    for n in range(2):
+        queue.take(tmp_path, f"feat/p{n}", status="preparing")
+    if not later:
+        queue.take(tmp_path, "feat/peer", status=status)
+    mine = queue.take(tmp_path, "feat/mine", status="pending")
+    if later:
+        queue.take(tmp_path, "feat/peer", status=status)
+    land_prepare.slot(tmp_path, mine, sleep=lambda _: pytest.fail("a preparation slot is available"))
+    assert json.loads(mine.read_text())["status"] == "preparing"
+
+
 def test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_limit(tmp_path):
     """Rule 9 (2026-10-26): a conflict main made during the wait stopped the landing only at its turn."""
     ticket(tmp_path, "feat/peer", os.getpid())
@@ -125,3 +159,16 @@ def test_a_check_that_names_a_reason_stops_the_wait_at_once_and_zero_means_no_li
         queue.wait(tmp_path, mine, timeout=0, sleep=lambda s: None,
                    check=lambda: calls.append(1) or ("main abc conflicts with this branch" if len(calls) > 2 else None))
     assert len(calls) == 3, "no time limit: it waited until the check spoke"
+
+
+def test_an_older_pending_ticket_a_batch_carries_reserves_no_preparation_slot(tmp_path):
+    """A carried member never prepares on its own (land_batch), so it must not hold back younger tickets."""
+    import land_prepare
+    for n in range(2):
+        queue.take(tmp_path, f"feat/p{n}", status="preparing")
+    queue.take(tmp_path, "feat/carried", status="pending")
+    leader = queue.take(tmp_path, "feat/leader", status="waiting")
+    queue.set_status(leader, "waiting", batch=["feat/carried"])
+    mine = queue.take(tmp_path, "feat/mine", status="pending")
+    land_prepare.slot(tmp_path, mine, sleep=lambda _: pytest.fail("a carried ticket kept the slot"))
+    assert json.loads(mine.read_text())["status"] == "preparing"

@@ -5060,3 +5060,9 @@
 - 증거: 원격 시험 resource-bounds-2(AI PC) `test_server_console.py` 신규 2 시험 통과 — 하트비트 신선 대기 로봇 REST 0회·활동 로봇 REST 유지·낡은 하트비트 REST 폴백 각각 확인.
 - gate 변화: 없음. 실물·현장 수용은 별개다.
 - CE: 해당 없음.
+## 2026-10-28 · 239740362c · 목표 어드미션 판정의 순수 모듈 분리 A단계 (계획 2026-10-28-fleet-traffic-arbitration-split)
+
+- 변경: `console.py`의 `_goal()`이 판정과 미션/응답 dict 조립을 다섯 곳에서 반복하며 D-766 래칫(1325)에 묶여 있었다. `fleet/traffic/goal_admission.py`(신규, 순수)이 대기열 보류를 frozen `QueueDecision`(yield_hold·untrusted_self_hold·route_conflict_hold·untrusted_blocker_hold·standing_hold)과 `mission_of`/`response_of`로 소유한다 — 키 순서 동결, reason으로 깃발 유도 금지(LOCALIZATION_UNTRUSTED는 양 단계에 존재), 전송 전 보류는 route 키 없음, `attempt_seq=0` 보존, 저장 미션과 응답은 독립 리스트. 콘솔은 상태 읽기·폐쇄 실패 사슬(`_seen.pop`→`_remember`→`_verdict`)과 전송 순서를 그대로 소유하고 판정 문자열만 넘긴다. `_task_mission`은 별칭 없이 이동, console.py 1325→1299(래칫 행 동락).
+- 증거: 특성 시험(키 순서 `list(d.items())` 고정, 독립 리스트) + 검토가 요구한 두 미피복 동작 — goal 순간 빈 상태 읽기의 폐쇄 실패(TRUSTED 이력이 전송하지 않음)와 보류의 대기열 항목 무병합 교체. 원격 4 suite(신규·traffic·console·boundaries) green, known NEW 0. 변이 검증: 전송 전 untrusted 보류 비활성화 → 폐쇄 실패 시험 red(`6c6f45582b`), 복원 green(`239740362c`). 독립 검토 2건(codex·claude) 반영 — 단계 분리 판정, 깃발·route 부재 규칙, 판정 문자열만 경계 통과, 무병합 교체, attempt_seq=0.
+- Gate: 없음. B단계(전송 후 경로 충돌 판정)·C단계(_make_room/bays)는 별도 착지.
+- CE: 해당 없음 — 판정·모양이 특성 시험과 변이 이력으로 고정됐다.

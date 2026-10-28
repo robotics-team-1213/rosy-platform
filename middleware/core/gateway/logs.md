@@ -2007,3 +2007,23 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 원격 시험 resource-bounds-1(AI PC, run-1) middleware/core/gateway/test/test_bridge_timers.py 통과 — 구조 계약 불변.
 - gate 변화: 없음. ROS 그래프 동작은 호스트 시험이 본래부터 못 본다.
 - CE: 해당 없음 — 정정 사실(기본값 10초)과 근거를 이 기록과 계획 문서가 보존한다.
+## 2026-10-28 · uncommitted · CORE host-file owner 위임 RED 준비
+
+- 변경: 독립 검토된 v3 테스트 6파일을 적용한다. API 2·connection 1·node 1·bridge 1 위임 동작을 실제 기존 경로에서 확인하며 제품 소스는 바꾸지 않는다. 승인 패치의 새 EOF 빈 줄 2개만 제거했고 전체 AST·assertion·parameter는 보존했다.
+- 증거: BASE commit `1d5ff5145c61570742107462a6638ec95f57b1da`의 source binding 25개와 승인 SHA-256을 대조했다. 정적 AST·원본 함수 보존 검사를 통과했으며 원격 committed-SHA RED는 이 커밋 뒤 실행한다. owner 부재로 실패할 composition·installed·clocked 사례를 동작 RED로 계산하지 않는다.
+- gate 변화: 없음. 새 owner 구현·GREEN·설치본·장치·현장 수용은 미확인이다.
+- CE: 해당 없음 — 테스트 우선 준비이며 운영 장애의 원인·복구를 검증한 단계가 아니다.
+
+## 2026-10-28 · uncommitted · CORE host-file 실행 소유권 분리
+
+- 변경: 기존 `core.system`에 무인자 `HostFileExchange`를 조립하고 API·connection·node·bridge가 같은 live service의 owner를 사용한다. bounded/schema/overlay 처리는 sibling `host_hardware`로 옮기고 요청 경로별 전역 map·두 lock·confirmation 전체 read-modify-write·원자적 쓰기와 face rename 전 0644를 보존한다. 기존 fixture는 실제 owner와 실행 전역을 사용한다.
+- 증거: commit `2249cc5130c37c37b501501d64584367235b2661`의 공식 원격 동작 RED는 5 collected/5 FAILED/0 skipped이며 collection/setup 오류는 없었다. 새 제품 소스는 정적 AST·호출 경로·크기 검사 후 독립 SOURCE/safety 검토를 기다린다. 상태 파일의 overlay와 live 필드는 한 snapshot을 공유하며 실제 파일 기반 회귀를 추가했다. GREEN은 아직 실행하지 않았다.
+- gate 변화: 없음. 제품 변경은 검토 전 미커밋이고 설치본·장치·현장 수용을 주장하지 않는다.
+- CE: 해당 없음 — 경계 이동의 판단은 코드·보존 회귀·검토 기록에 남으며 운영 장애 해결 단계가 아니다.
+
+## 2026-10-28 · uncommitted · CORE host-file declared reads and C6 triage
+
+- Change: Read declared state/snapshot/get_sensor and present BatteryPolicy.warning_percent directly; preserve explicit None, existing defaults/float fallback, one snapshot and sensor None. Publish only the 33 remaining reviewed observation/platform/config tuples (41 occurrences), preserving strict C6 equality and current battery evidence-absence behavior.
+- Evidence: committed 50ba472d focused preservation has 246 PASS; its broader mapped run has 5285 PASS, one C6 registry failure, and 186 summary skips (180 attributed nodes; six unbound skip events). This candidate has no remote result yet; static per-commit preflight and independent SOURCE/safety review precede its normal commit.
+- gate 변화: none. No installed/device/field acceptance or C6 GREEN is claimed.
+- CE: unresolved; existing folder-move-widens-path-scoped-contract-tests-2026-09-25.md applies. No solved lesson is added before verification.
