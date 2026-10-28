@@ -12615,6 +12615,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 전체 착지 검사를 재개한다.
 - CE: 해당 없음 — 기존 공개 provenance 표기 규칙을 적용한 문서 수정이며 검사 예외를 늘리지 않았다.
 
+## 2026-10-27 · 477761474d · 공개 simulation 복구 연결 검증과 clipping 교훈
+
+- 변경: 기존 복구 how-to에 authenticated 요청·독립 관측·정확 승인·자식 조회 경로를 기록했다. frozen public 검증 기록은 실제 source revision과 RED/GREEN·skip·실물 미수행을 구분한다. source-only commit은 공개 PR이나 main 착지 증거로 표현하지 않는다.
+- 증거: auth 109, HTTP/service 37, 최종 API/auth 18, 최종 actual browser 14 pass; broad 453 pass/35 skip는 별도 범위다. 독립 계약 검토의 simulation 표시 Minor를 해결했고 시각 검토 ship. 공개 ingress·진행 기록과 별개로 장치·학습 수용은 남는다.
+- gate 변화: 없음. 공식 선행 계약/제품 로컬 착지 도구 결과는 별도 후속 기록한다.
+- CE: 새 교훈 기록 — page/element scrollWidth만으로 nested card clipping을 검출할 수 없는 실제 반례와 ancestor-bounds 회귀를 solutions/logic-errors/page-overflow-guards-miss-clipped-child-identifiers-2026-10-27.md에 남겼다. Frontmatter parser 통과, local-only commit 인용 2건은 미게시·착지 대기로 명시해 의도 확인했다.
+
 ## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
 - 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
@@ -12684,6 +12691,20 @@ osy-d395-s1d\`.
 - gate 변화: 없음(문서만). `tools/remote/remote_pytest.py`는 598줄이라 다음 변경 전에 나눠야 한다. `fix/land-turn-deadline-v3`가 C 뒤에 착지하면 그 브랜치가 `remote_pytest.py`·`work_queue.py` 충돌을 푼다.
 - 교훈: 기존 교훈 갱신 없음. 튕김("main 따라잡기")의 정본 기록은 D-889 추가 3이다.
 
+## 2026-10-28 · ce1ef8ebb0 · 제안자의 요청 응답 유실 후 조회 검증
+
+- 변경: 27일 public 기록은 보존하고 조회 입력의 role-lock 수정·실제 lost-request 흐름·독립 재검토를 새 날짜의 frozen 기록에 분리했다. 승인 응답 유실과 요청 응답 유실을 혼동하지 않는다.
+- 증거: focused RED1은 조회 입력 disabled였고 HTTP 재조회 자체는 성공했다. source ce1ef8ebb0의 actual browser 14 passed/0 skipped·NEW0, 원격 PNG SHA-256 대조, 계약 재검토의 권한 확대 없음. docs/validation/transfer-recovery-public-2026-10-28/result.md 참고.
+- gate 변화: 없음. 공식 로컬 병합 결과는 별도 확인한다.
+- CE: 추가 기록 없음 — 기존 clipping 교훈과 새 source 회귀가 판단 근거를 보존한다.
+
+## 2026-10-28 · b948a23204 · public UI 계약 실패와 수정 검증 기록
+
+- 변경: 이전 frozen 결과는 보존하고 native UI 계약 실패, 수정 중 초기화 회귀, 후속 공용 계약·실제 browser 통과를 ui-contract-correction.md에 구분했다. 최종 캡처와 중간 응답 유실 검증의 증거 범위를 분리했다.
+- 증거: source af1b7ac467의 계약 37 PASS/0 skip·browser 14 PASS/0 skip, 최신 b948a23204의 실제 browser 14 PASS/0 skip·NEW0. 원격 PNG 6개의 SHA-256을 대조했다. 초기화 순서의 독립 재검토에서 남은 회귀 없음.
+- gate 변화: 없음. 공유 계약은 main에 반영됐고 public 공식 재착지는 후속 결과를 따른다.
+- CE: 새 교훈 추가 없음. 기존 nested clipping 교훈과 코드·시험이 각 판단을 보존한다.
+
 ## 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
 - 변경: `reference/shared-checkout.md` 4·6번의 기본 착지를 `python tools/land_async.py --tests auto`로 바꾸고 숨은 스냅샷 워크트리·`.log`·`.stopped`·복구 순서, 대기열 동작(10분 마감, 미리 준비, 적응형 묶음, 30분 감시자), 게시 push 규칙(자기 pre-push 사본, 자기 기록 재사용, 중복 검사·크기 규칙 생략, `--merge-when-green`)을 적었다. D-889 추가 5에 이유·측정·남은 일. `tools/land.py`는 `.worktrees`에서 직접 돌면 land_async를 권하는 한 줄을 찍는다
 - 증거: 10-28 게시 1회 59분 → 10.5분, 04:16~04:42 착지 5건, 대기열 10개 이상 → 3개 (rosy-land-events.jsonl, publish 로그)
@@ -12744,3 +12765,17 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_queue.py`·`test/test_land_batch.py`·`test/test_land_prepare.py`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙이 코드와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · feat(land): urgent ticket (`--urgent "<the user's words>"`)
+- 변경: `land_queue`에 급한 표(한 번에 하나, 사유 필수, `urgent` 사건)를 넣고 `land.py --urgent`로 받는다. 기다리는 일반 표를 앞지르고 차례는 끊지 않는다. `shared-checkout.md` 6번에 쓰는 법과 남의 `land.py`를 멈추지 않는다는 규칙
+- 증거: test_land_urgent.py 3건, land_queue·land·land_batch 시험 142 passed (원격)
+- gate 변화: 없음
+- 결정: D-889 추가 5의 남은 일(우선 차선)
+- 교훈: 없음
+
+## 2026-10-28 · uncommitted · feat(land): FULL 등급끼리 묶음 착지 (D-889 추가 6)
+
+- 변경: D-889 추가 6. `tools/land_batch.py`가 준비 등급 무리(affected/full)별로 묶고, full 묶음은 병합 트리에서 FULL을 한 번 돌린다. full 묶음 크기는 min(kopt(p), 3). safety와 `--tests` 지정은 혼자 간다.
+- 근거: 10-28 12시간 착지 39건 중 묶음 2번, 준비 78건 중 FULL 48건(게이트 도구 Rule 8 약 60회, safety 25회).
+- gate 변화: 없음(착지 절차).
+- CE: 해당 없음 — 측정과 규칙은 ADR 추가 6에 남겼다.

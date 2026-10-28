@@ -539,3 +539,24 @@
 - 변경: work 뷰가 `GET /api/fleet/policy-admission`을 함께 읽어 승인 대기 행에 범위 소속 배지(`자동 승인`)를 붙이고, work 개요에 범위 readback(로봇·종류·잔여 상한·revision·차단 사유)과 기명 운영자 전환 단추를 둔 `<details>` 패널을 추가했다. 판정·문구는 순수 함수(`autoAdmitScope`·`policyScopeText`·`autoAdmitDetail`)이고 readback이 없으면 fail-closed로 배지를 끈다. 범위 밖 로봇·`two_person`·상한 소진·전환 꺼짐은 배지 없이 사람 승인으로 남는다. 새 자산이 없어 allowlist·CSP는 그대로다.
 - 증거: node `work-view.test.mjs` 6 통과(범위 안·로봇 밖·two_person·소진·비활성·readback 문구). 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1`로 `test_work_overview_browser.py` 36 통과·`test_console_palette`·`test_console_disabled_features`·`test_document_imports`·`test_doc_tabs` 포함 0 NEW, `test_server_app`·`test_remaining_platform_installed` 50 통과 0 NEW. 전체 affected/FULL 통과를 뜻하지 않는다.
 - gate 변화: 제품·장치·현장 수용 승격 없음. 자동 승인 활성화는 P5 현장 수용 기록이 별도다.
+
+## 2026-10-27 · 477761474d · 원래 실패와 별도 복구 시도의 관제 표시
+
+- 변경: 기존 ARM 작업 상세에 simulation 범위, owner가 보고한 실행·단계, 독립 관측 대기, 다른 운영자 승인과 별도 자식 결과를 연결했다. 응답 유실은 자동 재전송하지 않으며 자식 조회 실패에도 알고 있는 ID·소비한 복구 횟수를 보존한다. 원래 제안자의 관측 요청만 일반 운영자 잠금에서 제외하고 승인 제한은 유지한다. 기존 ui-actions·work-detail을 사용하며 새 자산·색·의존성은 없다.
+- 증거: 실제 HTTP/SQLite/Chromium 320·390·1920px, 정상/승인 응답 유실 및 자식 GET 실패를 포함한 최종 14 passed/0 skipped·NEW0. 원격 PNG 6개를 SHA-256 대조해 가져왔고 실제 3개 폭을 확인했다. 독립 시각 검토 disposition: ship, incumbent 디자인 보존. docs/validation/transfer-recovery-public-2026-10-27/result.md 참고.
+- gate 변화: 배포·장치·모델 수용 승격 없음. 합성 World/owner이며 공개 계약은 별도 선행 착지한다.
+- CE: 새 교훈 기록 — 넓은 UUID에서 보이는 카드 경계를 검사하는 회귀와 기존 상세 값 줄바꿈으로 nested clipping을 해결했다.
+
+## 2026-10-28 · ce1ef8ebb0 · 제안자 조회 입력과 요청 응답 유실 후 재조회
+
+- 변경: 기존 ARM GET 조회 단추에 data-work-read를 표시하고 작업 식별자 조회 입력만 일반 운영자 잠금에서 제외했다. 실행 승인·요청 자격과 backend 권한은 유지한다. 조회값을 바꾸면 기존 작업/승인 snapshot을 무효화한다.
+- 증거: 실제 요청 응답을 서버 commit 뒤 끊고 제안자가 재조회하는 반례에서 입력 disabled RED1을 확인했다. 수정 뒤 기존 승인 응답 유실·자식 GET503·단일 복구 한도·긴 ID 검사까지 actual Chromium 14 passed/0 skipped, NEW0. docs/validation/transfer-recovery-public-2026-10-28/result.md 참고.
+- gate 변화: 없음. 선행 계약 검증은 계속 진행하며 공개 source 착지는 별도다.
+- CE: 추가 교훈 없음 — 이 조회 수정은 selector와 회귀로 설명된다. 기존 clipping 교훈은 유지한다.
+
+## 2026-10-28 · b948a23204 · 복구 버튼의 공용 계약·초기화·소진 사유
+
+- 변경: 두 공용 버튼을 명시적으로 선언하고 종류·비활성 사유를 제공했다. 두 번째 승인 확인을 정확한 기존 inventory에 등록했다. 최초 render에서 인증 초기화 전 role 콜백을 읽지 않도록 기존 단락 평가 순서를 보존하고, 자식이 있으면 복구 횟수 소진을 표시한다.
+- 증거: native 후보 d01의 UI 계약 2개 wrapper 실패와 수정 중 초기화 회귀의 실제 browser 14 FAIL을 보존했다. af1b7ac467에서 공용 계약 37 PASS/0 skip와 browser 14 PASS/0 skip, 최신 b948a23204에서 소진 사유를 포함한 실제 browser 14 PASS/0 skip·NEW0. 독립 계약 재검토는 초기화 경로를 대조해 남은 회귀 없음. docs/validation/transfer-recovery-public-2026-10-28/ui-contract-correction.md 참고.
+- gate 변화: 없음. 합성 World/owner 검증이며 최종 공식 public 착지는 별도다.
+- CE: 추가 교훈 없음. 기존 clipping 교훈은 유지하며 초기화 판단은 source comment와 실제 회귀가 보존한다.

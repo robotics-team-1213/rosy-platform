@@ -38,6 +38,7 @@ BATCH_MIN = 2  # waiting tickets, the leader included, that make a batch
 # (p 0.25: k2 0.80 vs k1 0.75; p 0.05: k6 2.29). p above the bound -> k; else KMAX. Unknown p -> 2.
 KOPT = ((0.2, 2), (0.12, 3), (0.07, 4))
 KMAX = 6
+KFULL = 3  # a FULL batch costs a whole FULL run per try: at most this many, and never more than kopt(p)
 WINDOW_S, WINDOW_RUNS = 24 * 3600, 50  # the last 24 h, widened to the last 50 runs when it holds fewer
 
 
@@ -77,28 +78,29 @@ def safety(land, wt: Path, branch: str) -> bool:
     return any(safety_review._is_safety_in(path, manifest) for path in paths)
 
 
-_BATCHABLE: dict[tuple[str, str], bool] = {}  # (branch, tip) -> not safety and not FULL-class; a tip never changes
+_BATCHABLE: dict[tuple[str, str], str | None] = {}  # (branch, tip) -> group or None; a tip never changes
 
 
-def batchable(land, wt: Path, other: Path, name: str, tip: str) -> bool:
-    """Not safety-tagged and not FULL-class. A prepared tier says which; a ticket still ``pending`` (no pretest
-    yet) gets its selection from its fork point, so it may join without a pretest of its own."""
+def batchable(land, wt: Path, other: Path, name: str, tip: str) -> str | None:
+    """The batch group, "affected" or "full", or None for a safety-tagged branch (alone, D-889 3). A prepared
+    tier says which; a ticket still ``pending`` (no pretest yet) gets its selection from its fork point, so it
+    may join without a pretest of its own."""
     if land_full.restore(other, name) is not None:  # read each time: a pretest may record its tier later
-        return affected(other, name) and not safety(land, wt, name)
+        return None if safety(land, wt, name) else group_of(other, name)
     key = (name, tip)
     if key not in _BATCHABLE:
         if safety(land, wt, name):
-            _BATCHABLE[key] = False
+            _BATCHABLE[key] = None
         else:
             fork = land.out(other, "merge-base", "main", "HEAD")
             try:
-                _BATCHABLE[key] = land.select(other, fork, sys.executable)[1] is None
+                _BATCHABLE[key] = "affected" if land.select(other, fork, sys.executable)[1] is None else "full"
             except Exception:  # noqa: BLE001 - a selection that cannot run says nothing: alone
-                _BATCHABLE[key] = False
+                _BATCHABLE[key] = None
     return _BATCHABLE[key]
 
 
-def eligible(land, wt: Path, row: dict) -> bool:
+def eligible(land, wt: Path, row: dict, kind: str = "affected") -> bool:
     """A waiting or pending ticket another landing may carry: this host, a clean branch at its worktree's HEAD."""
     other, name = Path(row.get("worktree") or "."), row.get("branch") or ""
     if row.get("status") not in ("waiting", "pending") or row.get("host") != socket.gethostname():
@@ -109,7 +111,7 @@ def eligible(land, wt: Path, row: dict) -> bool:
         return False
     head = land.git(other, "rev-parse", "HEAD", check=False).stdout.strip()
     tip = land.git(wt, "rev-parse", f"refs/heads/{name}", check=False).stdout.strip()
-    return bool(head) and head == tip and batchable(land, wt, other, name, tip)
+    return bool(head) and head == tip and batchable(land, wt, other, name, tip) == kind
 
 
 def carried(qdir: Path, branch: str) -> bool:
@@ -117,13 +119,14 @@ def carried(qdir: Path, branch: str) -> bool:
     return any(branch in (r.get("batch") or []) for r in land_queue.ahead(qdir, Path("~")))
 
 
-def affected(wt: Path, branch: str) -> bool:
-    """A green affected prepared tier; a FULL-class landing goes alone (D-889 6)."""
+def group_of(wt: Path, branch: str) -> str | None:
+    """The green prepared tier, "affected" or "full": the batch group this landing may lead or join. FULL-class
+    landings batch only with each other and run one FULL on the merged tree (D-889 addendum 6)."""
     record = land_full.prepared(wt, branch, land_full.restore(wt, branch))
-    return record is not None and record["tier"] == "affected"
+    return record["tier"] if record is not None and record["tier"] in ("affected", "full") else None
 
 
-def former(land, wt: Path, qdir: Path, ticket: Path):
+def former(land, wt: Path, qdir: Path, ticket: Path, kind: str = "affected"):
     """``form`` for ``land_queue.wait``, the list it fills with the members it chose, and its ``p``."""
     chosen: list[dict] = []
     measured: dict = {}
@@ -134,16 +137,16 @@ def former(land, wt: Path, qdir: Path, ticket: Path):
             return False  # one batch at a time
         # The earliest waiting ticket that may batch leads; a safety or FULL-class head no longer stops the rest.
         earlier = [r for r in tickets if r.get("status") == "waiting" and r["ticket"] < ticket.name]
-        if any(eligible(land, wt, r) for r in earlier):
+        if any(eligible(land, wt, r, kind) for r in earlier):
             return False
         joined = []
         for row in tickets:  # waiting and pending, in arrival order: a pending member skips its own pretest
-            if row["ticket"] != ticket.name and len(joined) < KMAX - 1 and eligible(land, wt, row):
+            if row["ticket"] != ticket.name and len(joined) < KMAX - 1 and eligible(land, wt, row, kind):
                 joined.append(row)
         if len(joined) + 1 < BATCH_MIN:
             return False
         p, runs = rate(qdir.parent / land_events.EVENTS)  # recomputed at every formation
-        joined = joined[:kopt(p) - 1]
+        joined = joined[:(kopt(p) if kind == "affected" else min(kopt(p), KFULL)) - 1]
         land_queue.set_status(ticket, "preparing", batch=[r["branch"] for r in joined])
         chosen[:] = joined
         measured.update(p=None if p is None else round(p, 3), runs=runs)
@@ -153,9 +156,10 @@ def former(land, wt: Path, qdir: Path, ticket: Path):
 
 def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path) -> int | None:
     """Wait for the turn. 0 when a batch landed this branch; None when it lands alone (``land.rounds``)."""
-    form, chosen, measured = former(land, wt, qdir, ticket)
-    if args.tests != "auto" or safety(land, wt, branch) or not affected(wt, branch):
-        form = None  # a batch is tested; safety and FULL-class branches land alone (D-889 3/6)
+    kind = group_of(wt, branch)
+    form, chosen, measured = former(land, wt, qdir, ticket, kind or "affected")
+    if args.tests != "auto" or safety(land, wt, branch) or kind is None:
+        form = None  # a batch is tested; safety branches and explicit --tests land alone (D-889 3)
     while True:
         got = land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt),
                               done=lambda: in_main(land, wt, branch), form=form)
@@ -169,7 +173,7 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
             return None
         members = chosen[:]
         while members:
-            code, took = lead(land, wt, branch, args, python, qdir, ticket, main_co, members, measured)
+            code, took = lead(land, wt, branch, args, python, qdir, ticket, main_co, members, measured, kind)
             if code is not None:
                 return code
             group = [branch, *took]
@@ -182,7 +186,7 @@ def queue(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pa
 
 
 def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, main_co: Path,
-         joined: list[dict], measured: dict) -> tuple[int | None, list[str]]:
+         joined: list[dict], measured: dict, kind: str = "affected") -> tuple[int | None, list[str]]:
     """Merge, prepare and land the batch: (code, merged members); code None after a stop, back on ``branch``."""
     name, took = f"{branch}-batch{time.strftime('%H%M%S')}-k{len(joined) + 1}", []  # a halved retry gets its own
     try:
@@ -198,11 +202,11 @@ def lead(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Pat
             raise land.Stop("no member merged without a conflict")
         land_queue.set_status(ticket, "preparing", batch=took)
         print(f"[batch] {name}: {branch} + {', '.join(took)}", flush=True)
-        land_events.emit("train", branches=[branch, *took], k=len(took) + 1, **measured, result="formed")
+        land_events.emit("train", branches=[branch, *took], k=len(took) + 1, **measured, group=kind, result="formed")
         main_sha = land.out(wt, "rev-parse", "main")
         land.merge(wt, main_sha, name, python, False)
-        if land.select(wt, main_sha, python)[1]:
-            raise land.Stop("the batch selects the FULL tier: FULL-class landings go alone (D-889 6)")
+        if kind == "affected" and land.select(wt, main_sha, python)[1]:
+            raise land.Stop("the affected batch selects the FULL tier: it re-forms by group (D-889 addendum 6)")
         land_prepare.prepare(land, wt, name, args, python, qdir, ticket)
         land_queue.wait(qdir, ticket, args.queue_timeout * 60, check=land_prepare.watch(land, wt))
         code = land.rounds(args, wt, name, main_co, python, qdir, ticket)
