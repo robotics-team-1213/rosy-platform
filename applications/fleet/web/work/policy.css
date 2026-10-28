@@ -1,4 +1,5 @@
 /* D-793 /console/policy layout. Paint comes from shared tokens and components. */
+.policy-main #policy-content { display: grid; gap: var(--gap-section); }
 .policy-main section { margin-top: var(--space-5); }
 .policy-list { display: grid; gap: var(--space-3); padding-inline-start: 0; list-style: none; }
 .policy-list > li { overflow-wrap: anywhere; }

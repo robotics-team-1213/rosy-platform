@@ -21,11 +21,12 @@
       실물을 움직이는 단계(L3·제한 사용)는 제안한 사람과 다른 관리자가 승인합니다. 실행은 승인 창 안에서
       1–2초 lease로만 이어지며, 확인 요청이나 사고가 열리면 다음 갱신에서 멈춥니다(D-793).</p>
     <label for="policy-workcell" class="ui-field-label">작업셀</label>
-    <select id="policy-workcell" class="ui-field"></select>
+    <select id="policy-workcell" class="ui-field" aria-describedby="policy-verdict"></select>
     <ui-status id="policy-verdict" state="pending" role="status">상태를 확인하고 있습니다.</ui-status>
     <a id="policy-login" href="/console/login?return=%2Fconsole%2Fpolicy" hidden>로그인</a>
     <ui-status id="policy-message" role="alert" hidden></ui-status>
 
+    <div id="policy-content" hidden>
     <section aria-labelledby="policy-incidents-heading">
       <h2 id="policy-incidents-heading">사고 잠금</h2>
       <ul id="policy-incidents" class="policy-list"></ul>
@@ -77,6 +78,7 @@
         <ui-actions><ui-button id="policy-proposal-submit" kind="quiet">다음 단계 제안</ui-button></ui-actions>
       </form>
     </section>
+    </div>
     <p><a href="/console">관제로 돌아가기</a></p>
   </main>
 </ui-shell></body></html>

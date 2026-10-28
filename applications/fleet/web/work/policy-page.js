@@ -122,6 +122,7 @@ function renderProposal(item) {
 }
 
 function render() {
+  $('policy-content').hidden = false;
   const verdict = executionVerdict(state);
   $('policy-verdict').textContent = verdict.text; $('policy-verdict').setAttribute('state', verdict.state);
   list('policy-incidents', state.incidents, renderIncident, '사고 기록이 없습니다.');
@@ -148,7 +149,10 @@ function render() {
 async function refresh() {
   if (!workcell()) return;
   try { state = await request(base()); render(); }
-  catch (error) { $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable'); }
+  catch (error) {
+    $('policy-content').hidden = true;
+    $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
+  }
 }
 
 $('policy-incident-report').addEventListener('click', async () => {
@@ -187,7 +191,11 @@ async function start() {
     who = roles(await request('/api/fleet/auth/session'));
     const {workcells} = await request('/api/fleet/policy-governance/workcells');
     $('policy-workcell').replaceChildren(...workcells.map(id => element('option', id, {value: id})));
-    if (!workcells.length) { $('policy-verdict').textContent = '설정된 OMX 작업셀이 없습니다.'; return; }
+    $('policy-workcell').disabled = !workcells.length;
+    if (!workcells.length) {
+      $('policy-verdict').textContent = '설정된 OMX 작업셀이 없습니다. 사이트 설치 담당자에게 작업셀 등록을 요청하세요.';
+      $('policy-verdict').setAttribute('state', 'empty'); return;
+    }
     await refresh();
     setInterval(refresh, 2000);
   } catch (error) {

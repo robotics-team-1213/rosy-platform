@@ -24,6 +24,7 @@ SRC = (Path(__file__).resolve().parents[3] / "src")
 COMMON = SRC.parent / "shared" / "web"
 DASHBOARD = SRC.parent / 'middleware' / 'robot_ui' / "robot"
 FLEET = SRC.parent / 'applications' / 'fleet' / 'web'
+# Fleet modules use crypto.randomUUID; the virtual origin needs a secure context.
 HOST = "https://rosy.test"
 PALETTES = token_themes.palettes(token_themes.read())
 TYPES = {".css": "text/css", ".js": "application/javascript", ".html": "text/html"}
@@ -154,7 +155,7 @@ def test_a_pinned_surface_ignores_the_preference(browser):
 
 
 def _show_theme_button(page):
-    """D-741 3: 화면 표시는 계정 단추 아래에 있다. 접속을 잃으면 그 칸이 저절로 열리므로 닫혀 있을 때만 연다."""
+    """D-741 3: 화면 표시는 요청해서 연 계정 메뉴 안에 있다."""
     page.wait_for_load_state("networkidle")
     more = page.locator("#topbar-more")
     if more.get_attribute("aria-expanded") != "true":
