@@ -26,9 +26,12 @@ def verifier(monkeypatch):
 def make_key(tmp_path):
     if KEYGEN is None:
         pytest.fail("OpenSSH key generation is required to validate real operator keys")
-    def create(name="operator", key_type="ed25519", passphrase=""):
+    def create(name="operator", key_type="ed25519", passphrase="", cipher=None):
         private = tmp_path / name
-        subprocess.run([KEYGEN, "-q", "-t", key_type, "-N", passphrase, "-f", str(private)],
+        command = [KEYGEN, "-q", "-t", key_type, "-N", passphrase, "-f", str(private)]
+        if cipher:
+            command += ["-Z", cipher]
+        subprocess.run(command,
                        capture_output=True, check=True, timeout=15)
         return private, private.with_name(private.name + ".pub")
     return create
@@ -43,6 +46,12 @@ def test_matching_real_keys_work_without_decryption(verifier, make_key, key_type
     expected = "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
     assert verifier.key_pair(private, public) == expected
     assert (private.read_bytes(), public.read_bytes()) == before
+
+
+@pytest.mark.parametrize("cipher", ["aes256-gcm@openssh.com", "chacha20-poly1305@openssh.com"])
+def test_authenticated_encryption_keys_are_accepted(verifier, make_key, cipher):
+    private, public = make_key(passphrase="fixture-only-passphrase", cipher=cipher)
+    assert verifier.key_pair(private, public).startswith("SHA256:")
 
 
 @pytest.mark.parametrize("passphrase", ["", "fixture-only-passphrase"])
