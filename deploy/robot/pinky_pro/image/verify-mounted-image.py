@@ -202,10 +202,11 @@ def camera_stack_findings(root: Path) -> list[str]:
     return findings
 
 
-def lamp_driver_findings(root: Path) -> list[str]:
+def lamp_driver_findings(root: Path, *, boot_root: Path | None = None) -> list[str]:
     """D-247: the rp1_ws281x_pwm module for the image kernel, its overlay, udev rule and channel."""
     findings = []
-    if not (root / LAMP_DTBO).is_file():
+    overlay = root / LAMP_DTBO if boot_root is None else boot_root / "overlays/rosy-ws281x.dtbo"
+    if not overlay.is_file():
         findings.append(f"missing lamp overlay: {LAMP_DTBO}")
     record = root / LAMP_KERNEL_RECORD
     kernel = record.read_text(encoding="utf-8").strip() if record.is_file() else ""
@@ -279,8 +280,9 @@ def storage_gate_findings(root: Path) -> list[str]:
     return findings
 
 
-def inspect(root: Path, release_id: str) -> list[str]:
+def inspect(root: Path, release_id: str, *, boot_root: Path | None = None) -> list[str]:
     root = root.resolve()
+    boot = root / "boot/firmware" if boot_root is None else boot_root.resolve()
     findings: list[str] = storage_gate_findings(root)
     release = root / "opt/rosy/releases" / release_id
     required_paths = (
@@ -336,7 +338,7 @@ def inspect(root: Path, release_id: str) -> list[str]:
     elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / ready):
         findings.append(f"{ready} is not enabled")
     # D-192 US-004: the motor bus (UART4) and its /dev/rosy-motor alias.
-    config = root / "boot/firmware/config.txt"
+    config = boot / "config.txt"
     if not config.is_file():
         findings.append("missing boot configuration: boot/firmware/config.txt")
     elif not overlay_applies_to_pi5(config.read_text(encoding="utf-8", errors="replace")):
@@ -354,9 +356,9 @@ def inspect(root: Path, release_id: str) -> list[str]:
             findings.append("boot/firmware/config.txt does not enable OV5647 CAM1 with camera_auto_detect=0")
         if not overlay_applies_to_pi5(text, LAMP_OVERLAY):
             findings.append(f"boot/firmware/config.txt does not enable {LAMP_OVERLAY} for the Pi 5 (lamp driver)")
-    findings += lamp_driver_findings(root)
+    findings += lamp_driver_findings(root, boot_root=boot)
     findings += camera_stack_findings(root)
-    cmdline = root / "boot/firmware/cmdline.txt"
+    cmdline = boot / "cmdline.txt"
     if not cmdline.is_file():
         findings.append("missing kernel command line: boot/firmware/cmdline.txt")
     else:
@@ -516,6 +518,7 @@ def verify_factory_release(root: Path, release_id: str, dist: Path, public_key: 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--boot-root", type=Path, help="separate read-only boot filesystem; defaults to ROOT/boot/firmware")
     parser.add_argument("--release-id", required=True)
     # D-225 2.2 (BUILD_GO): the signed dist and the trusted key, to prove the
     # factory release verifies once first boot adds the dist's signature.
@@ -524,7 +527,7 @@ def main() -> int:
     args = parser.parse_args()
     if (args.factory_dist is None) != (args.public_key is None):
         parser.error("--factory-dist and --public-key go together")
-    findings = inspect(args.root, args.release_id)
+    findings = inspect(args.root, args.release_id, boot_root=args.boot_root)
     if args.factory_dist is not None:
         findings += verify_factory_release(args.root, args.release_id, args.factory_dist, args.public_key)
     if findings:

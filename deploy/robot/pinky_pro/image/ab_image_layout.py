@@ -30,6 +30,7 @@ DATA_DIRECTORIES = {
     "ssh": (0o755, 0, 0), "operator-ssh": (0o700, 1001, 1001), "tls": (0o750, 0, 960),
     "tailscale": (0o700, 0, 0), "tailscale/machine": (0o700, 0, 0), "tailscale/join": (0o700, 0, 0),
     "maps": (0o2750, 961, 960), "models": (0o750, 0, 963), "pilot-recordings": (0o2750, 963, 960),
+    "calibration": (0o2775, 0, 964),
     "os-update": (0o700, 0, 0), "os-update/rauc": (0o700, 0, 0), "os-update/staging": (0o700, 0, 0),
 }
 

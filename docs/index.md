@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-27 · uncommitted · SDK 검증 기록의 공개 지문 종류 명시
-- 2026-10-27 · uncommitted · AI ROS 거절의 관측 범위 보충
-- 2026-10-27 · uncommitted · docs(isaac): SDK 6.2 기본 경로 전환과 제어 증거
-- 2026-10-27 · uncommitted · docs(isaac): 실행 파일의 SHA-256 표기를 명확히 함
-- 2026-10-27 · uncommitted · docs(isaac): SDK 복구와 두 PC 동시 학습 검증
+- 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
+- 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
+- 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
+- 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지

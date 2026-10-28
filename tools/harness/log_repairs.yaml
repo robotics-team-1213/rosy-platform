@@ -32,3 +32,6 @@
 # The #179 squash published an earlier draft of a local docs/logs.md entry; joining
 # origin/main into local main keeps the local text under the one heading (D-868).
 "e31abcc5329c5fef808fa07d4b39d186dd748afaa1a84ffb2ed0abbe9e63c8cb": "04add7a64764b4e9428ec40beb0b4c997760e803e9112a04191fd2361a96b525"
+
+# 9c8dbc22d0 provenance journal: rename the confirmation label to the required evidence label; prose and outcomes unchanged.
+"aa3a02dd581162c79e25104aad77f11c2220a27e4aeaf21cc793b53a000b1195": "40ed93cdc4bd535efec83aa97ed02b98009b47b25dd61436349e2368e94f7a18" # SHA256 normalized journal block pair
