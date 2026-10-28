@@ -286,6 +286,10 @@ services:
       - /backup
       - --prune
       - "14"
+      - --prune-history
+      - "30"
+      - --prune-audit
+      - "90"
     user: "10001:10001"
     volumes:
       - sighting_data:/var/lib/rosy:ro

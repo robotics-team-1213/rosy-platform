@@ -8,10 +8,11 @@ import json
 import os
 import sqlite3
 import tempfile
+import time
 from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from itertools import zip_longest
 from pathlib import Path
 
@@ -26,6 +27,58 @@ def _prune_backups(directory: Path, keep: int) -> list[str]:
     removed = [path.name for path in backups[:-keep]]
     for stale in backups[:-keep]:
         stale.unlink(missing_ok=True)
+    return removed
+
+
+#: 2026-10-28 자원 경계: 무한히 쌓이던 원장 행의 보존 기간(일).
+DEFAULT_HISTORY_RETENTION_DAYS = 30   # 종료 작업의 fleet_task_history
+DEFAULT_AUDIT_RETENTION_DAYS = 90     # rosy_account_audit / device_pairing_audit
+
+
+def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETENTION_DAYS,
+                 audit_days: int = DEFAULT_AUDIT_RETENTION_DAYS) -> dict[str, int]:
+    """Delete terminal-task history rows older than ``history_days`` and audit rows
+    older than ``audit_days``. Runs on the live volume after a fresh backup; tables
+    missing from an older schema are skipped."""
+    path = Path(source)
+    if history_days < 0 or audit_days < 0:
+        raise DatabaseError("retention days must not be negative")
+    if not path.is_file():
+        raise DatabaseError("source database is missing")
+    # fleet_tasks.updated_at / fleet_task_history.created_at are `_now()` ISO strings
+    # (task_store_types._now); the same shape keeps the string comparison exact.
+    # A retention of 0 days skips that group entirely (the CLI's "disable" value).
+    history_cutoff = (datetime.now(timezone.utc)
+                      - timedelta(days=history_days)).isoformat(timespec="milliseconds") \
+        if history_days > 0 else None
+    audit_cutoff = time.time() - audit_days * 86400.0 if audit_days > 0 else None
+    removed = {"fleet_task_history": 0, "rosy_account_audit": 0, "device_pairing_audit": 0}
+    try:
+        with closing(sqlite3.connect(path, timeout=30.0)) as db:
+            tables = {row[0] for row in
+                      db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                if history_cutoff is not None and {"fleet_task_history", "fleet_tasks"} <= tables:
+                    removed["fleet_task_history"] = db.execute(
+                        "DELETE FROM fleet_task_history WHERE task_id IN ("
+                        " SELECT task_id FROM fleet_tasks WHERE status IN"
+                        " ('COMPLETED','FAILED','CANCELED','EXPIRED')"
+                        " AND updated_at < ?)", (history_cutoff,)).rowcount
+                if audit_cutoff is not None and "rosy_account_audit" in tables:
+                    removed["rosy_account_audit"] = db.execute(
+                        "DELETE FROM rosy_account_audit WHERE created_at < ?",
+                        (audit_cutoff,)).rowcount
+                if audit_cutoff is not None and "device_pairing_audit" in tables:
+                    removed["device_pairing_audit"] = db.execute(
+                        "DELETE FROM device_pairing_audit WHERE at < ?",
+                        (audit_cutoff,)).rowcount
+                db.commit()
+            except sqlite3.Error:
+                db.rollback()
+                raise
+    except sqlite3.Error as exc:
+        raise DatabaseError("ledger retention prune failed") from exc
     return removed
 
 
@@ -250,6 +303,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="timestamped backup directory (timer use); prunes old backups")
     backup.add_argument("--prune", type=int, default=14,
                         help="backups to keep when --dest-dir is used (default 14)")
+    backup.add_argument("--prune-history", type=int, default=DEFAULT_HISTORY_RETENTION_DAYS,
+                        metavar="DAYS",
+                        help="delete terminal-task history rows older than DAYS after the "
+                             "backup (default 30; 0 disables)")
+    backup.add_argument("--prune-audit", type=int, default=DEFAULT_AUDIT_RETENTION_DAYS,
+                        metavar="DAYS",
+                        help="delete account/pairing audit rows older than DAYS after the "
+                             "backup (default 90; 0 disables)")
     verify = commands.add_parser("verify", help="run SQLite integrity_check")
     verify.add_argument("--path", type=Path, required=True)
     restore = commands.add_parser("restore", help="restore after stopping the site services")
@@ -267,6 +328,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _rekey(parser, args)
     try:
         pruned = []
+        pruned_ledger = None
         if args.command == "backup":
             if bool(args.destination) == bool(args.dest_dir):
                 parser.error("pass exactly one of --destination or --dest-dir")
@@ -279,6 +341,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = backup_database(args.source, args.destination)
             if args.dest_dir is not None:
                 pruned = _prune_backups(args.dest_dir, args.prune)
+            # Retention runs only after the backup file exists (2026-10-28 resource bounds).
+            pruned_ledger = prune_ledger(args.source, history_days=args.prune_history,
+                                         audit_days=args.prune_audit)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
             return 0
@@ -293,6 +358,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "sha256": result.sha256,
         "rollback_path": str(result.rollback_path) if result.rollback_path else None,
         "pruned": pruned,
+        "pruned_ledger": pruned_ledger,
     }))
     return 0
 

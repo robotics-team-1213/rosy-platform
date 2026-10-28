@@ -12,6 +12,7 @@ from deploy.site import site_db
 from deploy.site.site_db import (
     DatabaseError,
     backup_database,
+    prune_ledger,
     restore_database,
     verify_database,
 )
@@ -333,3 +334,100 @@ def test_rekey_refuses_a_missing_database_and_an_unchanged_key(tmp_path):
     with pytest.raises(SystemExit):
         site_db.main(["rekey", "--path", str(database), "--old-key-file", str(key_file),
                       "--new-key-file", str(key_file), "--assume-stopped"])
+
+
+def _retention_database(path: Path) -> None:
+    """task 원장과 감사 표를 과거·최근 행과 함께 만든다(2026-10-28 자원 경계 시험)."""
+    from datetime import datetime, timedelta, timezone
+
+    def iso(days_ago: float) -> str:
+        return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat(
+            timespec="milliseconds")
+
+    with closing(sqlite3.connect(path)) as db, db:
+        db.execute("""CREATE TABLE fleet_tasks (
+            task_id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, task_type TEXT NOT NULL,
+            source TEXT NOT NULL, actor_id TEXT NOT NULL, request_key TEXT NOT NULL,
+            status TEXT NOT NULL, reason TEXT, request_json TEXT NOT NULL,
+            evidence_json TEXT, receipt_json TEXT,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+        db.execute("""CREATE TABLE fleet_task_history (
+            audit_id INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL,
+            status TEXT NOT NULL, source TEXT NOT NULL, actor_id TEXT NOT NULL,
+            reason TEXT, created_at TEXT NOT NULL)""")
+        db.execute("""CREATE TABLE rosy_account_audit (
+            actor_account_id TEXT NOT NULL, target_account_id TEXT NOT NULL,
+            operation TEXT NOT NULL, previous_revision INTEGER NOT NULL,
+            next_revision INTEGER NOT NULL, created_at REAL NOT NULL)""")
+        db.execute("""CREATE TABLE device_pairing_audit (
+            audit_id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL,
+            device_kind TEXT NOT NULL, action TEXT NOT NULL, outcome TEXT NOT NULL,
+            principal_id TEXT)""")
+        rows = [  # (task_id, status, days_ago)
+            ("old-done", "COMPLETED", 40.0), ("old-failed", "FAILED", 60.0),
+            ("old-hold", "HOLD", 40.0),            # HOLD는 종료 상태가 아니다 — 남는다
+            ("new-done", "COMPLETED", 2.0),
+            ("old-running", "RUNNING", 40.0),      # 종료 상태가 아니다 — 남는다
+        ]
+        for task_id, status, days_ago in rows:
+            stamp = iso(days_ago)
+            db.execute("INSERT INTO fleet_tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (task_id, "rosy_01", "delivery", "console", "op", task_id,
+                        status, None, "{}", None, None, stamp, stamp))
+            db.execute("INSERT INTO fleet_task_history (task_id,status,source,actor_id,reason,"
+                       "created_at) VALUES (?,?,?,?,?,?)",
+                       (task_id, status, "console", "op", None, stamp))
+        db.execute("INSERT INTO rosy_account_audit VALUES ('a','a','create',0,1,?)", (0.0,))
+        db.execute("INSERT INTO rosy_account_audit VALUES ('a','a','rotate',1,2,?)",
+                   (datetime.now(timezone.utc).timestamp() - 3 * 86400.0,))
+        db.execute("INSERT INTO device_pairing_audit (at,device_kind,action,outcome,principal_id)"
+                   " VALUES (?,?,?,?,?)", (0.0, "overhead-camera", "pair", "ok", "op"))
+
+
+def test_prune_ledger_deletes_only_terminal_task_history_and_expired_audit(tmp_path):
+    database = tmp_path / "fleet.sqlite3"
+    _retention_database(database)
+
+    removed = prune_ledger(database)
+
+    with closing(sqlite3.connect(database)) as db:
+        kept_tasks = {row[0] for row in db.execute("SELECT task_id FROM fleet_task_history")}
+        kept_audit = db.execute("SELECT COUNT(*) FROM rosy_account_audit").fetchone()[0]
+        kept_pairing = db.execute("SELECT COUNT(*) FROM device_pairing_audit").fetchone()[0]
+    assert removed == {"fleet_task_history": 2, "rosy_account_audit": 1,
+                       "device_pairing_audit": 1}
+    assert kept_tasks == {"old-hold", "new-done", "old-running"}
+    assert kept_audit == 1 and kept_pairing == 0
+
+
+def test_prune_ledger_zero_retention_disables_and_missing_tables_are_skipped(tmp_path):
+    database = tmp_path / "fleet.sqlite3"
+    _retention_database(database)
+
+    disabled = prune_ledger(database, history_days=0, audit_days=0)
+    assert disabled == {"fleet_task_history": 0, "rosy_account_audit": 0,
+                        "device_pairing_audit": 0}
+    with closing(sqlite3.connect(database)) as db:
+        assert db.execute("SELECT COUNT(*) FROM fleet_task_history").fetchone()[0] == 5
+
+    empty = tmp_path / "empty.sqlite3"
+    with closing(sqlite3.connect(empty)) as db:   # 표가 하나도 없는 오래된 스키마
+        db.execute("CREATE TABLE marker (v INT)")
+    assert prune_ledger(empty) == {"fleet_task_history": 0, "rosy_account_audit": 0,
+                                   "device_pairing_audit": 0}
+
+
+def test_backup_command_prunes_the_live_ledger_after_writing_the_backup(tmp_path, capsys):
+    database = tmp_path / "fleet.sqlite3"
+    _retention_database(database)
+
+    code = site_db.main(["backup", "--source", str(database),
+                         "--destination", str(tmp_path / "b.sqlite3"),
+                         "--prune-history", "30", "--prune-audit", "90"])
+
+    assert code == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["pruned_ledger"] == {"fleet_task_history": 2, "rosy_account_audit": 1,
+                                       "device_pairing_audit": 1}
+    with closing(sqlite3.connect(database)) as db:
+        assert db.execute("SELECT COUNT(*) FROM fleet_task_history").fetchone()[0] == 3
