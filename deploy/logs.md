@@ -3866,3 +3866,11 @@
 - 증거: 수정 커밋 bc32cb9b41에서 정지 파일 27개와 Fleet 상태 파일 11개를 함께 원격 실행해 38 passed / 0 skipped / NEW 0. 같은 pytest 9.2 환경 1fde7a90b47fe7fb의 결과이며, 독립 검토는 전용 모듈 격리·실제 fsync 유지·안전 assertion 보존을 확인했다. 실행 로그는 native-cell-transport 작업 기록에 연결했다.
 - gate 변화: 없음. 전체 착지 검증은 별도이며 실제 포트·모터·서비스를 실행한 수용 근거가 아니다.
 - CE: 해당 없음 — 가짜 호출이 프레임워크에 번지는 원인과 적용 조건을 시험 주석·이 기록에서 복원할 수 있다.
+
+## 2026-10-28 · f1627fb4b · fix(site): 원장 보존 정리 — 종료 작업 history 30일·감사 90일
+
+- 변경: site_db.py backup이 성공한 뒤 prune_ledger를 돌을 수 있게 짰다. leet_task_history는 종료 작업(COMPLETED/FAILED/CANCELED/EXPIRED)의 30일 경과 행만, 
+osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD와 비종료 작업은 남기고 --prune-history 0/·--prune-audit 0은 비활성화다. 표가 없는 오래된 스키마는 건너뛰고, compose leet-backup 명령에 30/90을 명시했다. 지금까지 세 표 모두 DELETE가 없어 영구 쌑였다(2026-10-28 자원 조사).
+- 증거: 원격 시험 resource-bounds-1(AI PC, run-1) 	est/test_site_db_maintenance.py 신규 3 시험 통과 — 종료·HOLD·비종료 구분, 0일 비활성화, backup 명령 통합 각각 확인.
+- gate 변화: 없음. 착지 FULL 기록은 착지 때 land record로 남긴다.
+- CE: 해당 없음 — 보존 기간과 SQL이 코드와 시험로 읽힐 수 있다.

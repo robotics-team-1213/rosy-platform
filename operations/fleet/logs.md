@@ -5046,3 +5046,17 @@
 - 증거: 후보 `651ec7a06a`의 Fleet 전체·단독 재실행에서 종료 오류 RED, 기준 main의 pytest 9.1.1 환경에서는 단독 통과. 수정 커밋 `cdbd0c332e`는 같은 pytest 9.2.0 환경(`1fde7a90b47fe7fb`)에서 해당 파일 11 passed / 0 skipped / NEW 0. 독립 검토는 전용 앱 격리·검증 조건 유지를 확인했다. 원격 로그는 작업 공간의 native-cell-transport 실행 기록에 연결했다.
 - Gate: 전체 착지 검증은 별도이며 실물·서비스 수용 근거가 아니다.
 - CE: 해당 없음 — 전용 앱이라는 적용 조건과 버전별 원인은 시험 주석·이 기록에서 복원할 수 있다.
+
+## 2026-10-28 · 1e6b5fdc0 · fix(fleet): hub 이벤트 메모리 3분리
+
+- 변경: `RobotRecord.events`가 받은 모든 CORE 사건을 영구로 쥐고 있었다(2026-10-28 자원 조사). 세 저장소로 나눴다: `events` deque(maxlen=500)은 /registry·events_since 공급, `stuck_events`는 (type, stuck_id) 인덱스로 막힘 복구 판정에 쓰고 퇴출하지 않는다, `seen_event_hashes`는 event_id→본문 sha256으로 개발 경로 중복 제거를 O(1)로 대신했다. StuckResolverLoop와 LineStuckBoard가 `stuck_event()`만 읽어 초당 전체 스캔을 없앴다. 연결이 끊길 때 창을 비우는 것은 링크 재접속 때 운영자 피드가 비워지는 계약 위반(1e6b5fdc0, test_console_hub_integration)이라 offline은 표시만 하고 창을 유지한다 — 재생 중복은 해시·스토어가 이미 차단한다.
+- 증거: 원격 시험 resource-bounds-1·2(AI PC) — run-1에서 창 폭·stuck 인덱스 생존·창 밖 재생 중복 제거를 확인하고, 창 유지로 바로잡은 회차(run-2)에서 test_hub·test_console_hub_integration·test_server_console known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 설계는 독립 검토 2건을 거쳤고 계획 문서가 근거를 보존한다.
+
+## 2026-10-28 · 0268ab50f · fix(fleet): 목표 판정 때 대기 로봇은 hub 하트비트로 읽는다
+
+- 변경: `_observe()`가 목표를 내릴 때마다 전 로봇에 REST 상태 읽기를 폭격했다. 활동 로봇(목표·claim·양보)은 REST를 유지하고 대기 로봇은 `_gather_state`(D-447)를 탄다 — 하트비트 스냅샷(≤3s) 우선, 낡으면 REST 폴백. 모든 로봇의 `_verdict`는 매 목표마다 갱신되어 D-395 P2-2 불변식을 유지한다. console.py는 D-430 안전 태그라 Safety-Review 트레일러와 판정 분석을 커밋에 남겼다.
+- 증거: 원격 시험 resource-bounds-2(AI PC) `test_server_console.py` 신규 2 시험 통과 — 하트비트 신선 대기 로봇 REST 0회·활동 로봇 REST 유지·낡은 하트비트 REST 폴백 각각 확인.
+- gate 변화: 없음. 실물·현장 수용은 별개다.
+- CE: 해당 없음.
