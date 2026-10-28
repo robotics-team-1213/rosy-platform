@@ -18,6 +18,7 @@ from native_review import reviewed_splits  # noqa: E402
 
 STATIC = Path(__file__).with_name('review_app_web')
 PAGES = {'/learning/omx': ('omx.html', 'text/html; charset=utf-8'),
+         '/omx-export.js': ('omx-export.js', 'text/javascript; charset=utf-8'),
          '/omx-profiles.js': ('omx-profiles.js', 'text/javascript; charset=utf-8'),
          '/omx-review.js': ('omx-review.js', 'text/javascript; charset=utf-8'),
          '/omx.js': ('omx.js', 'text/javascript; charset=utf-8')}

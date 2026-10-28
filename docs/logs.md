@@ -12816,3 +12816,33 @@ osy-d395-s1d\`.
 - 증거: 원격 `ROSY_RUN_BROWSER_TESTS=1 test/test_role_surface_states_browser.py`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 같은 브랜치가 바꾼 import에 하네스를 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · fix(land): 착지가 시작할 때 같은 무리의 대기 티켓을 묶어 이끈다
+
+- 변경: `tools/land_batch.py`(`early`, 나누기 반복을 `run`으로 묶음), `tools/land.py`(줄에 선 직후 `early`). 사전 시험 기록이 없는 착지가 같은 무리의 `waiting`·`pending` 티켓을 곧바로 묶어 사전 시험을 한 번만 받는다. robot-f4의 `feat/land-batch-full`(무리별 묶음) 위에 쌓았다. D-889 추가 4.
+- 근거: 19:35 대기열에서 `waiting`이 모두 FULL급이거나 tier 기록이 없어 affected 리더가 없었다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · fix(land): 겹치지 않는 묶음은 함께 있을 수 있다
+
+- 변경: `tools/land_batch.py`. "묶음은 한 번에 하나" 대신, 이미 실린 브랜치(`taken`)를 다른 묶음의 구성원에서 빼고 실린 착지는 리더가 되지 않게 했다. 동시에 생긴 두 리더는 구성원이 겹칠 때만 늦은 쪽이 물러난다. D-889 추가 4.
+- 근거: 21:31에 FULL 묶음 하나가 사전 시험 슬롯을 1.5시간 기다리는 동안, 차례를 기다리는 FULL 티켓이 묶음을 만들지 못했다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
+
+- 변경: 고정 OMX 자료의 보관 인계, 검수 유실 방지, 변환 상태와 API v1.328, signed runtime closure의 구현·화면·원격 증거를 `docs/validation/recording-learning-handoff-2026-10-28/`에 보존한다. HTTP 이름의 Chromium 시험도 선택되도록 브라우저 선택기를 고쳤다.
+- 증거: FULL 26 invocation 전부 원격 실행, 종료 코드 모두 0. 첫 실행 합계 36,657 passed / 2,297 skipped / 1 failed이며 기존 quarantine의 G1 timing 한 건은 공식 재시도 통과다. 전체 로그 비교 NEW0 / known0 / flaky1. 두 화면 크기·테마의 실제 Chromium 캡처를 독립 검토했다. 실패·중단·후속 시험은 결과 기록에서 구분한다.
+- gate 변화: 없음. fixture HTTP/Chromium, 소스·계약·패키지 회귀 근거다. 실물 녹화·실제 HF 쓰기·reader 왕복·장치/현장 수용·설치/배포·착지/push는 새로 수행하지 않았다.
+- CE: 해당 없음. 검수 상태, 파일 무결성과 시험 선택·동기화 판단이 코드·회귀 시험·기존 안내에 남아 별도 교훈을 늘리지 않는다.
+
+## 2026-10-28 · 030c2fb110 · 녹화 인계 UI 후속 검증 기록
+
+- 변경: 전체 도구/anchor, 폴링 중 초점과 중지 대기, 조회 오류, 검수 접근성, 보관 키보드 도착을 보완하고 새 frozen 검증 기록을 `docs/validation/recording-handoff-ui-followup-2026-10-28/`에 쓴다. 이전 증거의 Git commit 메타데이터만 명확히 하며 원래 결과·로그는 보존했다.
+- 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
+- gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
+- CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.

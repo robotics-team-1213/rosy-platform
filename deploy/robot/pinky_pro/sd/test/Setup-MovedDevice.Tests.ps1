@@ -32,6 +32,12 @@ Save-Fixture (Join-Path $release $image) "fixture image"
 Save-Fixture (Join-Path $release "SHA256SUMS") (("a" * 64) + "  " + $image)
 $credentials = Join-Path $local "Rosy\credentials"
 New-Item -ItemType Directory -Path $credentials -Force | Out-Null
+$operatorDirectory = Join-Path $local "Rosy\ssh"
+New-Item -ItemType Directory -Path $operatorDirectory -Force | Out-Null
+$operatorPrivate = Join-Path $operatorDirectory "rosy-operator-ed25519"
+$operatorPublic = $operatorPrivate + ".pub"
+Save-Fixture $operatorPrivate "fixture private key, never read"
+Save-Fixture $operatorPublic "fixture public key, only passed to the fixture writer"
 $profile = Join-Path $credentials "site.credential.xml"
 function Save-WifiFixture {
     $secure = ConvertTo-SecureString "fixture only" -AsPlainText -Force
@@ -46,7 +52,7 @@ Save-Fixture (Join-Path $sd "prepare-rosy-sd.ps1") @'
 param([string]$PlanPath, [string]$ReceiptPath, [string]$RegistryJson,
       [string]$DiskNumber, [string]$Preset, [string]$WifiProfile,
       [string]$ImagePath, [string]$ImageSha256, [string]$ImageSignaturePath,
-      [string]$ReleasePublicKey, [string]$ReleaseId, [string]$RpiImager,
+      [string]$ReleasePublicKey, [string]$ReleaseId, [string]$RpiImager, [string]$OperatorPublicKey,
       [switch]$PlanOnly)
 if (-not $PlanOnly -or $Preset -cne "core") { throw "expected a no-write core plan" }
 $PSBoundParameters | ConvertTo-Json | Set-Content -LiteralPath $env:PLAN_MARKER
@@ -59,7 +65,7 @@ $json
 '@
 Save-Fixture (Join-Path $sd "write-card.ps1") @'
 param([string]$PlanPath, [string]$ReleaseDir, [string]$WifiProfile,
-      [string]$RpiImager, [string]$EvidenceDir, [switch]$Detach)
+      [string]$RpiImager, [string]$EvidenceDir, [string]$OperatorPublicKey, [switch]$Detach)
 if (-not $Detach) { throw "expected the existing detached writer" }
 $PSBoundParameters | ConvertTo-Json | Set-Content -LiteralPath $env:WRITER_MARKER
 '@
@@ -69,6 +75,7 @@ param([switch]$WriteCard, [string]$Address)
 $ErrorActionPreference = "Stop"
 $env:LOCALAPPDATA = $env:FIXTURE_LOCAL
 $env:ROSY_SCRATCH = $env:FIXTURE_SCRATCH
+$env:USERPROFILE = $env:FIXTURE_SCRATCH
 function Get-Disk {
     [pscustomobject]@{Number=7;BusType="USB";Size=34359738368;
         IsBoot=$false;IsSystem=$false;FriendlyName="fixture";SerialNumber="FIXTURE-7"}
@@ -151,7 +158,18 @@ Assert ($result.Code -eq 0) ("guided write must delegate to existing writer: " +
 Assert (Test-Path -LiteralPath $writerMarker) "confirmed plan must reach the fixture writer"
 $written = Get-Content -LiteralPath $writerMarker -Raw | ConvertFrom-Json
 Assert ($written.Detach -and $written.WifiProfile -ceq "site") "writer must retain the selected profile and detached mode"
+$planned = Get-Content -LiteralPath $planMarker -Raw | ConvertFrom-Json
+Assert ($planned.OperatorPublicKey -ceq $operatorPublic -and $written.OperatorPublicKey -ceq $operatorPublic) "the reviewed operator key must reach both plan and writer"
 Assert ($result.Text -match "rosy-auto-update.timer" -and $result.Text -match "rosy_auto_update.py status") "completion must explain how to check automatic updates"
 Assert ($result.Text -notmatch '-RobotAddress\s+-OperatorPresent') "fresh-card instructions must not contain an empty address"
 Write-Output "PASS: confirmed new-card plan delegates to the existing writer and shows update checks"
-Write-Output "All 6 guided SD self-checks passed. Fixture files: $sandbox"
+Remove-Item -LiteralPath $planMarker, $writerMarker
+foreach ($missing in @($operatorPrivate, $operatorPublic)) {
+    Remove-Item -LiteralPath $missing
+    $result = Invoke-Case @("-WriteCard")
+    Assert ($result.Code -ne 0) "a missing operator key pair must fail"
+    Assert (-not (Test-Path -LiteralPath $planMarker) -and -not (Test-Path -LiteralPath $writerMarker)) "a missing SSH key must fail before identity planning and media writes"
+    Save-Fixture $missing "fixture key, never read"
+}
+Write-Output "PASS: missing private or public operator key cannot create an inaccessible card"
+Write-Output "All 7 guided SD self-checks passed. Fixture files: $sandbox"
