@@ -85,9 +85,16 @@ class CooperationSupervisor(Supervisor):
             latest = self.environment()
             return (fresh() and tuple(p.profile_key for p in providers) == keys and remaining() > 0
                     and type(latest) is ExecutionEnvironment and latest.expires_at > self.clock()
-                    and latest.revision == plan.environment.revision)
+                    and latest.revision == plan.environment.revision
+                    and latest.workload_key == self.measurements.workload_key
+                    and self.measurements.expires_at > self.clock())
+        async def release(token):
+            async with asyncio.timeout(0.2):
+                if await self.admission.release(token) is not True:
+                    raise ValueError('RESOURCE_RELEASE_UNKNOWN')
         async def invoke(index, token=None):
             provider, request = providers[index], requests[index]
+            call_id, cancel = provider.call_id(request), provider.exchange.cancel
             owned = token is None
             if owned:
                 token = await self.admission.reserve((keys[index],), plan.environment.revision)
@@ -97,7 +104,6 @@ class CooperationSupervisor(Supervisor):
             try:
                 if not unchanged():
                     raise ValueError('STALE_OR_CHANGED')
-                call_id = provider.call_id(request)
                 pending_ids[index] = call_id
                 result['calls'] += 1
                 result['total_calls'] += 1
@@ -127,14 +133,13 @@ class CooperationSupervisor(Supervisor):
                 if not confirmed:
                     try:
                         async with asyncio.timeout(0.2):
-                            confirmed = await provider.cancel(provider.call_id(request))
+                            confirmed = await cancel(call_id) is True
                     except Exception:
                         confirmed = False
                     if confirmed:
                         pending_ids.pop(index, None)
                 if owned and confirmed:
-                    if await self.admission.release(token) is not True:
-                        raise ValueError('RESOURCE_RELEASE_UNKNOWN')
+                    await release(token)
         try:
             async with asyncio.timeout(deadline):
                 indices = [0, 1]
@@ -144,7 +149,8 @@ class CooperationSupervisor(Supervisor):
                     if type(self.reused) is not ReviewReceipt:
                         raise ValueError('INVALID_REUSE')
                     checked = self.reused.validate(requests[0], providers[0])
-                    if checked['objections'] or self.reused.cost_usd != self.primary_cost_usd:
+                    if (checked['objections'] or self.reused.cost_usd != self.primary_cost_usd
+                            or canonical(checked) != self.primary_json):
                         raise ValueError('INVALID_REUSE')
                     receipt_by_role[0] = checked
                     result['opinions'].append({'role': 'proposal', 'profile_key': keys[0],
@@ -160,7 +166,8 @@ class CooperationSupervisor(Supervisor):
                     remaining_usd=self.max_cost_usd - self.primary_cost_usd)
                 result.update(decision_hash=plan.decision_hash, selection_reason=plan.reason,
                     effective_mode=plan.mode, environment_revision=environment.revision,
-                    measurement_revision=self.measurements.revision, decision_inputs=asdict(plan))
+                    measurement_revision=self.measurements.revision, decision_inputs=asdict(plan),
+                    initial_decision_inputs=asdict(plan), initial_decision_hash=plan.decision_hash)
                 if plan.mode == 'hold':
                     return finish(plan.reason)
                 result['reserved_usd'] = sum(self.measurements.cost_caps[i] for i in indices)
@@ -190,8 +197,7 @@ class CooperationSupervisor(Supervisor):
                             if not task.done(): task.cancel()
                         await asyncio.gather(*tasks, return_exceptions=True)
                         if not pending_ids:
-                            if await self.admission.release(token) is not True:
-                                raise ValueError('RESOURCE_RELEASE_UNKNOWN')
+                            await release(token)
                 else:
                     for i in indices:
                         await invoke(i)

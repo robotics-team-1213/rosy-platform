@@ -14,9 +14,9 @@ def api():
 
 def inputs(**changes):
     m = api()
-    environment = m.ExecutionEnvironment('env-1', 110.0, True, True)
+    environment = m.ExecutionEnvironment('env-1', 110.0, True, True, 'workload-1')
     measurements = m.ExecutionMeasurements('measure-1', ('a-r1', 'b-r1'), 110.0,
-        1.2, 0.7, (0.02, 0.03), 0.1, True)
+        1.2, 0.7, (0.02, 0.03), 0.1, True, 'workload-1')
     return dict(requested_mode='auto', environment=environment, measurements=measurements,
         profile_keys=('a-r1', 'b-r1'), input_hash='input-1', now=101.0,
         remaining_s=2.0, remaining_usd=0.1, **changes)

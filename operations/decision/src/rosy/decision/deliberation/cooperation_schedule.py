@@ -18,9 +18,11 @@ class ExecutionEnvironment:
     expires_at: float
     sequential_ready: bool
     parallel_ready: bool
+    workload_key: str
 
     def __post_init__(self):
         identifier(self.revision)
+        identifier(self.workload_key)
         number(self.expires_at)
         if any(type(v) is not bool for v in (self.sequential_ready, self.parallel_ready)):
             raise ValueError('INVALID_CAPACITY_ADMISSION')
@@ -36,9 +38,11 @@ class ExecutionMeasurements:
     cost_caps: tuple[float, float]
     min_gain_s: float
     parallel_accepted: bool
+    workload_key: str
 
     def __post_init__(self):
         identifier(self.revision)
+        identifier(self.workload_key)
         if (type(self.profile_keys) is not tuple or len(self.profile_keys) != 2
                 or type(self.cost_caps) is not tuple or len(self.cost_caps) != 2):
             raise ValueError('EXPLICIT_PROFILE_PAIR_REQUIRED')
@@ -87,6 +91,7 @@ def select_mode(*, requested_mode, environment, measurements, profile_keys, inpu
         number(value)
     mode, reason = 'hold', 'NO_FEASIBLE_MODE'
     valid = (environment.expires_at > now and measurements.expires_at > now
+             and environment.workload_key == measurements.workload_key
              and profile_keys == measurements.profile_keys and remaining_s > 0
              and sum(measurements.cost_caps) <= remaining_usd)
     if valid:

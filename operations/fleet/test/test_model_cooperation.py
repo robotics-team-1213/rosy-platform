@@ -100,8 +100,8 @@ def supervisor(ports, *, mode='auto', admission=None, primary=None, environment=
     keys = tuple(p.profile_key for p in ports)
     return api().CooperationSupervisor(primary=primary or reply(problem()), primary_cost_usd=0.01,
         mode=mode, admission=admission or Admission(),
-        environment=environment or (lambda: schedule.ExecutionEnvironment('env-1', 104, True, True)),
-        measurements=schedule.ExecutionMeasurements('measure-1', keys, 104, 0.3, 0.1, (0.04, 0.04), 0.05, True),
+        environment=environment or (lambda: schedule.ExecutionEnvironment('env-1', 104, True, True, 'workload-1')),
+        measurements=schedule.ExecutionMeasurements('measure-1', keys, 104, 0.3, 0.1, (0.04, 0.04), 0.05, True, 'workload-1'),
         clock=clock, timeout_s=1.0, max_cost_usd=0.1)
 
 
@@ -224,10 +224,11 @@ def test_journal_restart_after_dispatch_never_replays(tmp_path):
         assert any(p.exchange.calls for p in ports)
         task.cancel()
         with pytest.raises(asyncio.CancelledError): await task
+        cancelled_counts = [len(p.exchange.calls) for p in ports]
         restarted = await journal.run(problem(), supervisor(ports), ports, current=lambda: True)
         assert restarted['state'] == 'HOLD'
         assert restarted['reason'] == 'RESTART_OR_INFLIGHT_UNKNOWN'
-        assert sum(len(p.exchange.calls) for p in ports) >= 1
+        assert [len(p.exchange.calls) for p in ports] == cancelled_counts
     asyncio.run(scenario())
 
 
@@ -281,7 +282,7 @@ def test_environment_expiration_after_resource_reservation_prevents_dispatch():
             return token
     ports = providers()
     result = asyncio.run(supervisor(ports, admission=Expiring(), clock=lambda: now[0],
-        environment=lambda: schedule.ExecutionEnvironment('env-1', 101.5, True, True)).run(
+        environment=lambda: schedule.ExecutionEnvironment('env-1', 101.5, True, True, 'workload-1')).run(
             problem(), ports, current=lambda: True))
     assert result['state'] == 'HOLD'
     assert not any(p.exchange.calls for p in ports)
