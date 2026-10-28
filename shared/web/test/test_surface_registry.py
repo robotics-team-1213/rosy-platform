@@ -7,6 +7,7 @@
 """
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,24 @@ import pytest
 import surface_registry as registry
 
 REPO = registry.REPO
+
+
+@pytest.mark.parametrize("holder", ["applications", "middleware", "learning", "integrations", "operations", "shared"])
+def test_discovery_sees_new_and_tracked_pages_in_current_source_holders(tmp_path, holder):
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    (tmp_path / ".gitignore").write_text("ignored.html\n", encoding="utf-8")
+    source = tmp_path / holder / "web"
+    source.mkdir(parents=True)
+    for name in ("tracked.html", "new.html", "ignored.html", "notes.txt"):
+        (source / name).write_text("fixture", encoding="utf-8")
+    subprocess.run(["git", "add", "--", f"{holder}/web/tracked.html"], cwd=tmp_path, check=True)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "report.html").write_text("report", encoding="utf-8")
+
+    assert {page.relative_to(tmp_path).as_posix() for page in registry.discover_html(tmp_path)} == {
+        f"{holder}/web/tracked.html", f"{holder}/web/new.html",
+    }
 
 
 @pytest.mark.parametrize("prefix", ["/", "./"])
