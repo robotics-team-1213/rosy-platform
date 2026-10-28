@@ -10,6 +10,8 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-897 | AI PC와 모델 PC에서 격리된 시뮬레이션 학습 작업을 병렬 실행한다 | Accepted (2026-10-27, 사용자 요청; 운영 권한·승격 별도) |
+| D-902 | Pilot real OMX teleop and recording through Fleet and the CORE manual arm path. [전문](../adr/D-902-pilot-real-omx-teleop-and-recording.md) | Proposed (2026-10-28) |
 | D-901 | Native workcell observation communication isolation. [전문](../adr/D-901-native-workcell-observation-isolation.md) | Accepted (2026-10-28) |
 | D-893 | 관제 단위와 호스트 배치를 분리하고 부하에 따라 합치거나 나눈다 | Accepted (2026-10-27) |
 | D-899 | 인증된 이송 복구 요청과 독립 운영자 승인. [전문](../adr/D-899-authenticated-transfer-recovery-intent.md) | Accepted for implementation (2026-10-27) |
