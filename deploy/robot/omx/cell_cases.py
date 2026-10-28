@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -80,13 +81,34 @@ def suite(rows=()) -> list[dict]:
     return out
 
 
+AIM_MM = (5, 10, 15)
+
+
+def aim_sweep() -> list[dict]:
+    """How far off the box the pick may aim and still hold it (2026-10-28): the coarse map is 10-15 mm off, the
+    arm 2-3 mm on the descent, and the real tolerance is unmeasured. The nominal box, the pick aimed along the
+    site's jaw yaw and across it by each of AIM_MM both ways; candidates (expect None), so the suite measures."""
+    yaw = math.radians(fixture().BOX_YAW_DEG)
+    cases = [{"id": "aim-0mm", "source": "aim sweep", "sim": {"box": [0.0, 0.0, 0.0], "place": "belt",
+                                                               "grasp_turn": 0.0, "expect": None, "aim": [0.0, 0.0]}}]
+    for axis, angle in (("along", yaw), ("across", yaw + math.pi / 2)):
+        for mm in AIM_MM:
+            for sign in (1, -1):
+                d = sign * mm / 1000
+                cases.append({"id": f"aim-{axis}{sign * mm:+d}mm", "source": "aim sweep",
+                              "sim": {"box": [0.0, 0.0, 0.0], "place": "belt", "grasp_turn": 0.0, "expect": None,
+                                      "aim": [round(d * math.cos(angle), 4), round(d * math.sin(angle), 4)]}})
+    return cases
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--cases", type=Path, action="append", default=[], help="a pipeline cases.jsonl")
+    parser.add_argument("--aim-sweep", action="store_true", help="only the aim tolerance candidates (aim_sweep)")
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv)
     rows = [json.loads(line) for path in args.cases for line in path.read_text().splitlines() if line.strip()]
-    cases = suite(rows)
+    cases = aim_sweep() if args.aim_sweep else suite(rows)
     args.out.write_text(json.dumps({"schema": SCHEMA, "cases": cases}, indent=1))
     print(json.dumps({"out": str(args.out), "cases": len(cases), "sim": sum("sim" in c for c in cases)}))
 

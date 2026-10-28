@@ -45,7 +45,7 @@ for topic in joint_commands joint_states; do
   pids+=($!)
 done
 if [[ $check == grasp ]]; then
-  python3 "$here/omx_grasp_probe.py" --trials "${GRASP_TRIALS:-5}" --ready-s "${CONFORMANCE_READY_S:-300}" \
+  python3 "$here/omx_grasp_probe.py" --trials "${GRASP_TRIALS:-5}" --aim-mm "${GRASP_AIM_MM:-0,0}" --ready-s "${CONFORMANCE_READY_S:-300}" \
     --out "$OUT/grasp.json"
   exit
 fi
