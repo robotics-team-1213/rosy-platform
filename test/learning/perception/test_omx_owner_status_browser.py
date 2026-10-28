@@ -11,11 +11,11 @@ from review_app import ReviewStore, make_server
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
-def capture(page, name):
+def capture(page, name, selector=None):
     if root := os.environ.get('ROSY_SCREENSHOT_DIR'):
         target = Path(root).expanduser() / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(target))
+        (page.locator(selector) if selector else page).screenshot(path=str(target))
 
 
 @pytest.fixture
@@ -98,8 +98,10 @@ def test_center_read_error_is_visible_from_conversion_stage_and_clears_on_recove
             expect(alert).to_contain_text('fixture center unavailable')
             expect(page.locator('#center-status')).to_be_visible()
             expect(page.locator('#train-section')).to_be_hidden()
-            alert.scroll_into_view_if_needed()
-            capture(page, 'omx-center-read-failure.png')
+            page.evaluate('document.fonts.ready')
+            alert.evaluate('el=>el.scrollIntoView({block:"center"})')
+            assert alert.evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=document.querySelector("ui-topbar").getBoundingClientRect().bottom&&r.bottom<=innerHeight;}')
+            capture(page, 'omx-center-read-failure.png', '#center-read-error')
             failed[0] = False
             page.locator('#refresh').click()
             expect(alert).to_be_hidden()
