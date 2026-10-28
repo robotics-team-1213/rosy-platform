@@ -12900,3 +12900,9 @@ osy-d395-s1d\`.
 - 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
 - Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
 - CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
+
+## 2026-10-29 · 177706a581 · Pilot 네이티브 초점·안전 여백 검증 기록
+
+- 변경: `validation/pilot-native-focus-2026-10-29/result.md`에 endpoint 초점 복구와 공통 Android 루트 여백의 실제 RED/GREEN, 빌드·JVM·에뮬레이터·독립22장 검토를 구분해 보존했다.
+- 증거: 최종 Android 각5 pass, JVM110 pass/1 skip, 영향 pytest615 pass/166 skip/NEW0. 보고서27개와 캡처22개 해시를 남겼으며 이전 촬영을 최종 근거와 혼합하지 않았다.
+- gate 변화: 없음. 실제 연결·실물·FIELD·서명 release·배포는 수용하지 않았다. CE: 해당 없음 — 코드·시험·결과 기록에서 판단을 복원할 수 있다.

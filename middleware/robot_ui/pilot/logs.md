@@ -991,3 +991,9 @@
 - 변경: 다운로드 완료 안내에 Pinky MCAP 원본 수신·영상 변환 후 Learning 자료 등록으로 이어가는 순서를 표시하고 OMX 시연 입력과 구분했다. 녹화 시작/정지·다운로드 가드는 바꾸지 않았다.
 - 증거: 학습 인계와 저장 UI의 실제 Chromium 회귀는 소유 Learning 기록을 따른다. Pilot의 영향·브라우저 회귀는 최종 선택 로그에 별도로 남긴다.
 - gate 변화: 없음. 실제 녹화·기기·현장 수용은 수행하지 않았다. CE: 해당 없음 — 지원 형식과 다음 행동의 안내이며 녹화 제어 변경은 없다.
+
+## 2026-10-29 · 177706a581 · Android 목록 초점과 공통 안전 여백
+
+- 변경: 발견 목록의 endpoint 초점 보존·보이는 상태 안내 fallback, 생성 본문 토큰, 실제 MainActivity와 preview/fixture가 소비하는 공통 시스템 바 여백 및 라벨 초점 표시를 적용했다.
+- 증거: 실제 SDK35 빌드와 JVM110 pass/1 skip, Android 두 크기에서 각각5 pass. 초점 전 RED3/4와 안전 여백 전 RED3/5를 구분했다. 실제 그려진 프레임의22장과 source를 독립 검토했다. 영향 pytest615 pass/166 skip/NEW0. 정본: `docs/validation/pilot-native-focus-2026-10-29/result.md`.
+- gate 변화: 없음. debug fixture이며 실제 Lobby·TalkBack·실물·FIELD·release 배포 수용이 아니다. CE: 해당 없음 — 원인과 해결이 코드·회귀·검증 기록에 드러난다.
