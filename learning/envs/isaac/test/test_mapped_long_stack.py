@@ -23,6 +23,8 @@ def test_board_uses_the_confluence_cad_and_long_bars_use_both_arms():
     assert mod.FIXTURE['cad_attachment'] == '8585450'
     assert mod.FIXTURE['photo_attachment'] == '8585456'
     assert mod.FIXTURE['cell_pose_scope'] == 'PHOTO_DERIVED_NOMINAL_NOT_CALIBRATED'
+    assert mod.FIXTURE['physics_dt_s'] * mod.FIXTURE['physics_substeps'] == pytest.approx(mod.DT)
+    assert mod.FIXTURE['settle_steps'] * mod.DT >= 1.
     assert [p['arm'] for p in mod.plan()] == [0, 1, 0]
     assert all(p['size'] == [.09, .03, .03] for p in mod.plan())
     assert [p['target'][2] for p in mod.plan()] == pytest.approx([.04, .07, .10])
