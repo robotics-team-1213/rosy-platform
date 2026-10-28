@@ -80,6 +80,11 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 capture = str(capture_dir / f'storage-controls-{theme}-{width}-{uuid4().hex}')
                 page.locator('#storage-section').evaluate("el => el.scrollIntoView({block: 'start'})")
                 save_temp_screenshot(page, capture + '-ready.png')
+                heading = page.locator('#storage-preflight > h3').bounding_box()
+                first_field = page.locator('#storage-preflight > label').first.bounding_box()
+                assert heading['y'] + heading['height'] <= first_field['y']
+                page.locator('#storage-preflight').evaluate("el => el.scrollIntoView({block: 'start'})")
+                save_temp_screenshot(page, capture + '-form.png')
                 page.locator('#storage-download').fill('8000001')
                 preflight.click()
                 assert page.locator('#storage-download').evaluate('(el) => el.validity.rangeOverflow')
