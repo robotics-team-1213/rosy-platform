@@ -29,7 +29,6 @@ function generalNotice(message) {
 }
 
 function showConnect() {
-  generalNotice("");
   brandHome.removeAttribute("aria-disabled");
   leaveDrive = null;
   document.body.dataset.pilotScreen = "connect";

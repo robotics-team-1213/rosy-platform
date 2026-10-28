@@ -109,3 +109,21 @@ def test_connection_notice_replaces_stop_feedback_and_rejects_its_late_reply(tab
     expect(page.locator('body')).to_have_attribute('data-pilot-screen', 'drive')
     expect(page.locator('#pilot-notice')).to_be_hidden()
     assert not errors
+
+
+@pytest.mark.parametrize('status', [404, 503])
+def test_discovery_completion_keeps_a_real_stop_receipt(tablet_page, status):
+    origin, page, errors = tablet_page
+    held = []
+    page.route('**/api/v1/sim/omx/target', lambda route: held.append(route))
+    page.route('**/api/v1/safety/stop', lambda route: route.fulfill(json={'estop': True, 'operations': []}))
+    page.goto(origin + '/pilot')
+    page.locator('[data-estop]').click()
+    notice = page.locator('#pilot-notice')
+    expect(notice).to_contain_text('요청 접수')
+    assert len(held) == 1
+    held[0].fulfill(status=status, json={})
+    expect(page.locator('form[data-pilot-token-form]' if status == 404 else '[data-discovery-retry]')).to_be_visible()
+    expect(notice).to_contain_text('요청 접수')
+    expect(notice).to_have_attribute('data-stop-state', 'received')
+    assert not errors
