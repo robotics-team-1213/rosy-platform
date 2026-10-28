@@ -12751,3 +12751,11 @@ osy-d395-s1d\`.
 - 증거: 원격 `middleware/core/gateway/test/test_dashboard.py`·`shared/web/test`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 같은 레인이 바꾼 import를 시험에 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · fix(test): 역할 화면 브라우저 시험이 공용 부품의 상대 import를 어느 mount에서나 제공
+
+- 변경: `test/test_role_surface_states_browser.py`가 `confirmation.js`·`live-dialog-geometry.js`·`ui-wiring.js`를 `/common/` 밑에서만 내주던 것을 `**/` 밑 어디서나 내준다. 이 브랜치가 `shared/web/ui.js`의 import를 상대 경로로 바꿨는데, 이 하네스는 `ui.js`를 `/assets/ui.js`로 올리고 이웃 파일은 `/common/`에만 두어 `Failed to fetch dynamically imported module`이 났다.
+- 근거: 착지 사전 시험의 `test_shared_components_apply_button_size_palette_and_status_contracts`가 실패했다(main에서는 통과).
+- 증거: 원격 `ROSY_RUN_BROWSER_TESTS=1 test/test_role_surface_states_browser.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 같은 브랜치가 바꾼 import에 하네스를 맞춘 것이다.
