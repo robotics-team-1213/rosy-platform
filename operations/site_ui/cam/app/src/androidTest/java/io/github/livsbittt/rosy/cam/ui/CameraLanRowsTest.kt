@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
@@ -24,6 +25,7 @@ import org.junit.Test
 /** Stateless LAN rows only: no discovery, pairing, settings writes, or camera start. */
 class CameraLanRowsTest {
     @get:Rule val compose = createComposeRule()
+    private var screenDensity = 1f
     private val peer = OverheadServiceRecord("승인 가능한 기기", "peer.local", 8443, "192.0.2.1", peerApproval = true)
     private val legacy = peer.copy(serviceName = "기존 승인 기기", tlsHost = "legacy.local", pairable = true, peerApproval = false)
     private val missing = peer.copy(serviceName = "주소를 찾지 못한 기기", tlsHost = "missing.local", address = null)
@@ -54,7 +56,7 @@ class CameraLanRowsTest {
         for (record in listOf(peer, legacy)) {
             val button = compose.onNodeWithText(record.name).performScrollTo().assertIsEnabled()
             val bounds = button.fetchSemanticsNode().boundsInRoot
-            assertTrue("button must retain the shared touch target", bounds.height >= 48f)
+            assertTrue("button must retain the shared touch target", bounds.height / screenDensity >= 47.5f)
             button.performClick()
         }
         compose.runOnIdle { assertEquals(listOf(peer, legacy), calls) }
@@ -73,9 +75,24 @@ class CameraLanRowsTest {
         capture("800-reordered-focus")
     }
 
+    @Test fun tabFocusSurvivesReorderWithoutSelectingAnotherEndpoint() {
+        var records by mutableStateOf(listOf(peer, legacy))
+        val calls = mutableListOf<OverheadServiceRecord>()
+        show(800) { CameraLanRows(records) { calls += it } }
+        compose.onNodeWithText(peer.name).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithText(peer.name).performKeyInput { pressKey(Key.Tab) }
+        compose.onNodeWithText(legacy.name).assertIsFocused()
+        compose.runOnIdle { records = listOf(legacy, peer) }
+        compose.onNodeWithText(legacy.name).assertIsFocused()
+        compose.onNodeWithText(peer.name).assertIsNotFocused()
+        compose.runOnIdle { assertTrue(calls.isEmpty()) }
+        capture("800-tab-reordered-focus")
+    }
+
     private fun show(width: Int, content: @Composable () -> Unit) {
         compose.setContent {
             val density = LocalDensity.current.density
+            screenDensity = density
             CompositionLocalProvider(LocalDensity provides Density(density, fontScale = 1.3f)) {
                 RosyTheme {
                     Column(

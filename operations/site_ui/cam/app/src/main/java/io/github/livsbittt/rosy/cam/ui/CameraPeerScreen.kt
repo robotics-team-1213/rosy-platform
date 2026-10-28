@@ -47,8 +47,19 @@ fun CameraLanScreen(onSelect: (OverheadServiceRecord) -> Unit, onSettings: () ->
 internal fun CameraLanRows(records: List<OverheadServiceRecord>, onSelect: (OverheadServiceRecord) -> Unit) {
     records.forEach { record ->
         val conflict = records.any { it !== record && it.tlsHost == record.tlsHost && it.port == record.port && it.address != record.address }
-        OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { onSelect(record) }, enabled = !conflict && record.address != null && (record.peerApproval || record.pairable), modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
-            Column { Text(record.name); Text(record.tlsHost); if (conflict) Text("같은 이름의 주소가 충돌합니다.") }
+        val reason = when {
+            conflict -> "같은 이름의 주소가 충돌합니다. 상대 기기의 연결 설정을 확인하세요."
+            record.address == null -> "기기 주소를 확인하지 못했습니다. Wi-Fi를 확인하고 다시 찾으세요."
+            !(record.peerApproval || record.pairable) -> "연결 승인을 확인할 수 없습니다. 상대 기기의 연결 화면을 확인하세요."
+            else -> null
+        }
+        key(record.serviceName, record.tlsHost, record.port) {
+            Column(verticalArrangement = Arrangement.spacedBy(RosyMetrics.Space2.dp)) {
+                OutlinedButton(contentPadding = RosyButtonPadding, shape = RosyButtonShape, onClick = { onSelect(record) }, enabled = !conflict && record.address != null && (record.peerApproval || record.pairable), modifier = Modifier.heightIn(min = RosyMetrics.TargetSecondary.dp).fillMaxWidth()) {
+                    Column { Text(record.name); Text(record.tlsHost) }
+                }
+                reason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium) }
+            }
         }
     }
 }
