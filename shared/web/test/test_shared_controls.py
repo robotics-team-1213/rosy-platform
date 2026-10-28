@@ -531,9 +531,12 @@ def test_shell_recognizes_entry_module_loading_shared_controls(tmp_path, stateme
     assert loads_shared_ui(page, markup)
     (tmp_path / "app.js").write_text("const unused = '/common/ui.js';", encoding="utf-8")
     assert not loads_shared_ui(page, markup)
+    (tmp_path / "app.js").write_text(f"/*\n{statement}\n*/", encoding="utf-8")
+    assert not loads_shared_ui(page, markup)
     assert not loads_shared_ui(page, markup.replace('type="module"', 'type="text/javascript"'))
     assert not loads_shared_ui(page, '<script type="module" src="/missing.js"></script>')
     assert loads_shared_ui(page, '<script type="module" src="/common/ui.js"></script>')
+    assert not loads_shared_ui(page, '<!-- <script type="module" src="/common/ui.js"></script> -->')
 
 
 def test_a_browser_page_starts_from_the_shell():
