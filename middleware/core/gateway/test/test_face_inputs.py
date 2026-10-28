@@ -1,4 +1,4 @@
-"""D-433: CORE's face hand-over — built by the bridge, written by host.py, read by rosy-face.
+"""D-433: CORE's face hand-over — built by the bridge, written by the CORE host-file owner, read by rosy-face.
 
 One snapshot goes through ``display.face_inputs_payload`` -> ``write_face_inputs``
 -> ``face_screen.read_face_inputs`` -> ``screen_for``, so the writer and the
@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from core.bridge import display
-from core_api_web.api.v1 import host as host_api
+from core.system import host_files
 from core_common import face_screen as fs
 from core_common import robot_state as rs
 from core_common.protocol.schemas import DockState
@@ -220,13 +220,13 @@ def test_the_goal_rides_the_drive_card_while_navigating():
 
 def _svc(tmp_path):
     (tmp_path / "run/rosy").mkdir(parents=True)
-    return SimpleNamespace(config={"hardware_probe": {
+    return SimpleNamespace(host_files=host_files.HostFileExchange(), config={"hardware_probe": {
         "face_inputs_path": str(tmp_path / "run/rosy/face-inputs.json")}})
 
 
 def test_written_file_round_trips_through_the_strict_reader(tmp_path):
     svc = _svc(tmp_path)
-    host_api.write_face_inputs(svc, _payload())
+    svc.host_files.write_face_inputs(svc, _payload())
     path = tmp_path / "run/rosy/face-inputs.json"
 
     read = fs.read_face_inputs(str(path), NOW + timedelta(seconds=1), owner_uid=os.stat(path).st_uid)
@@ -241,7 +241,7 @@ def test_written_file_is_world_readable_under_cores_umask(tmp_path):
     svc = _svc(tmp_path)
     previous = os.umask(0o027)  # rosy-core.service UMask
     try:
-        host_api.write_face_inputs(svc, _payload())
+        svc.host_files.write_face_inputs(svc, _payload())
     finally:
         os.umask(previous)
 
@@ -258,8 +258,8 @@ def test_the_file_is_never_visible_with_cores_umask_mode(tmp_path, monkeypatch):
         seen.append(os.stat(source).st_mode & 0o777)
         real_replace(source, destination)
 
-    monkeypatch.setattr(host_api.os, "replace", replace)
-    host_api.write_face_inputs(svc, _payload())
+    monkeypatch.setattr(host_files.os, "replace", replace)
+    svc.host_files.write_face_inputs(svc, _payload())
 
     if os.name == "posix":
         assert seen == [0o644]
@@ -268,7 +268,7 @@ def test_the_file_is_never_visible_with_cores_umask_mode(tmp_path, monkeypatch):
 
 def test_a_stale_file_sends_the_screen_back_to_the_status_card(tmp_path):
     svc = _svc(tmp_path)
-    host_api.write_face_inputs(svc, _payload())
+    svc.host_files.write_face_inputs(svc, _payload())
     read = fs.read_face_inputs(str(tmp_path / "run/rosy/face-inputs.json"), NOW + timedelta(seconds=10))
 
     assert read is None

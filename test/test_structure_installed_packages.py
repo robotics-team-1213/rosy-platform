@@ -49,12 +49,29 @@ def test_source_holder_builds_and_installs_the_original_package(
         assert result.returncode == 0, result.stdout + result.stderr
     probe = subprocess.run([sys.executable, "-I", "-c", """
 import importlib
+import importlib.abc
 import importlib.metadata
 import json
 from pathlib import Path
+import pkgutil
 import sys
-target, package, modules = sys.argv[1:]
+target, package, modules, repository = sys.argv[1:]
 sys.path.insert(0, target)
+assert not any(Path(p).resolve().is_relative_to(Path(repository).resolve()) for p in sys.path)
+blocked_attempts = []
+if package == 'core':
+    blocked = {'core_api_web', 'rclpy', 'geometry_msgs', 'nav_msgs', 'nav2_msgs',
+               'lifecycle_msgs', 'sensor_msgs', 'std_msgs', 'std_srvs', 'interfaces',
+               'tf2_ros', 'slam_toolbox'}
+
+    class NoApiOrRos(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname.split('.')[0] in blocked:
+                blocked_attempts.append(fullname)
+                raise AssertionError('installed CORE imported forbidden dependency: ' + fullname)
+
+    assert not any(name.split('.')[0] in blocked for name in sys.modules)
+    sys.meta_path.insert(0, NoApiOrRos())
 dist = importlib.metadata.distribution(package)
 assert Path(dist.locate_file('')).resolve() == Path(target).resolve()
 for name in json.loads(modules):
@@ -67,8 +84,130 @@ if package == 'core':
     from core_common.protocol.native_receipts import NativeReceipts as LegacyNativeReceipts
     assert NativeOperation is LegacyNativeOperation
     assert NativeReceipts is LegacyNativeReceipts
+    import core.system
+    # ros_graph is the existing ROS adapter; every other installed owner module is ROS-free.
+    for info in pkgutil.walk_packages(core.system.__path__, core.system.__name__ + '.'):
+        if info.name == 'core.system.ros_graph':
+            continue
+        loaded = importlib.import_module(info.name)
+        assert Path(loaded.__file__).resolve().is_relative_to(Path(target).resolve())
+    # Record attempts too: optional-import exception handlers must not hide a dependency.
+    assert not blocked_attempts, blocked_attempts
+    assert not any(name.split('.')[0] in blocked for name in sys.modules)
+    from datetime import datetime, timedelta, timezone
+    import os
+    from types import SimpleNamespace
+    import core.system.host_files as host_files
+    from core.system.host_files import HostFileExchange
+
+    assert Path(host_files.__file__).resolve().is_relative_to(Path(target).resolve())
+    owner = HostFileExchange()
+    files = Path(target).parent / 'host-file-operations'
+    files.mkdir()
+    paths = {name: str(files / filename) for name, filename in {
+        'result_path': 'hardware.json', 'request_path': 'hw-probe.request',
+        'test_request_path': 'hw-test.request', 'test_result_path': 'hw-test.json',
+        'confirm_path': 'hw-confirmations.json', 'boot_status_path': 'boot-status.json',
+        'status_inputs_path': 'status-inputs.json', 'face_inputs_path': 'face-inputs.json',
+    }.items()}
+    svc = SimpleNamespace(config={'hardware_probe': paths},
+                          state=SimpleNamespace(snapshot=lambda: SimpleNamespace(robot_id='fixture')))
+    now = datetime.now(timezone.utc)
+    Path(paths['boot_status_path']).write_text(json.dumps({
+        'stage': 'CORE_READY', 'failed_unit': None, 'release_id': 'fixture-release'}))
+    assert owner.read_boot_status(paths['boot_status_path']) == {
+        'stage': 'CORE_READY', 'failed_unit': None, 'release_id': 'fixture-release'}
+    assert owner.read_boot_status(str(files / 'absent-boot.json')) is None
+    Path(paths['result_path']).write_text(json.dumps({
+        'schema': 1, 'boot_id': 'fixture', 'measured_at': now.isoformat(),
+        'devices': [{'id': 'buzzer', 'label': 'buzzer', 'bus': 'gpio', 'state': 'ok',
+                     'evidence': 'fixture', 'product': True}]}))
+    owner.hardware(svc)
+    owner.write_status_inputs(svc)
+    status = json.loads(Path(paths['status_inputs_path']).read_text())
+    assert status['schema'] == 2 and status['robot_id'] == 'fixture'
+    assert status['devices'] == [{'id': 'buzzer', 'state': 'ok', 'product': True}]
+    paths['status_inputs_path'] = str(files / 'live-config-status.json')
+    owner.write_status_inputs(svc)
+    assert Path(paths['status_inputs_path']).is_file()
+
+    face_path = Path(paths['face_inputs_path'])
+    content = {'schema': 1, 'written_at': now.isoformat(), 'face': 'happy'}
+    real_replace, prior_umask = host_files.os.replace, os.umask(0o027)
+    modes = []
+    fail_replace = [False]
+
+    def replace(source, destination):
+        if Path(destination) == face_path:
+            modes.append(os.stat(source).st_mode & 0o777)
+            if fail_replace[0]:
+                raise OSError('replace unavailable')
+        return real_replace(source, destination)
+
+    host_files.os.replace = replace
+    try:
+        owner.write_face_inputs(svc, content)
+        assert json.loads(face_path.read_text()) == content
+        fail_replace[0] = True
+        try:
+            owner.write_face_inputs(svc, {**content, 'face': 'sad'})
+        except OSError:
+            pass
+        else:
+            raise AssertionError('failed replacement was hidden')
+        assert json.loads(face_path.read_text()) == content
+        assert not list(files.glob('.face-inputs.*'))
+        fail_replace[0] = False
+        owner.write_face_inputs(svc, content)
+    finally:
+        host_files.os.replace = real_replace
+        os.umask(prior_umask)
+    if os.name == 'posix':
+        assert modes == [0o644, 0o644, 0o644]
+    assert not list(files.glob('.face-inputs.*'))
+
+    clock = [100.0]
+    real_time = host_files.time
+    host_files.time = SimpleNamespace(monotonic=lambda: clock[0])
+    try:
+        owner.refresh_hardware(svc, by='fixture-actor')
+        assert json.loads(Path(paths['request_path']).read_text())['by'] == 'fixture-actor'
+        owner.test_hardware(svc, device='buzzer', by='fixture-actor')
+        request_path = Path(paths['test_request_path'])
+        written = request_path.read_bytes()
+        request = json.loads(written)
+        assert request['action'] == 'buzzer' and request['by'] == 'fixture-actor'
+        assert len(request['request_id']) == 16
+        try:
+            HostFileExchange().identify(svc, color='blue', quiet=True, by='fixture-actor')
+        except owner.Error as exc:
+            assert exc.code == 'HW_TEST_COOLDOWN'
+        else:
+            raise AssertionError('a second owner bypassed the process-wide request cooldown')
+        assert request_path.read_bytes() == written
+        Path(paths['test_result_path']).write_text(json.dumps({
+            'schema': 1, 'action': 'buzzer', 'state': 'done', 'detail': 'fixture',
+            'request_id': request['request_id'],
+            'finished_at': (now - timedelta(seconds=1)).isoformat(timespec='seconds')}))
+        owner.confirm_hardware(svc, device='buzzer', observed=True, by='fixture-actor', label='fixture')
+        answer = json.loads(Path(paths['confirm_path']).read_text())['devices']['buzzer']
+        assert answer['observed'] is True and answer['request_id'] == request['request_id']
+        assert answer['by'] == 'fixture-actor' and answer['label'] == 'fixture'
+        clock[0] += 10
+        owner.identify(svc, color='blue', quiet=True, by='fixture-actor')
+        identified = json.loads(request_path.read_text())
+        assert identified['action'] == 'identify_blue_quiet'
+        owner.identify_result(svc, identified['request_id'])
+        Path(paths['test_result_path']).write_text(json.dumps({
+            'schema': 1, 'action': 'identify_blue_quiet', 'state': 'done', 'detail': 'fixture',
+            'request_id': identified['request_id'], 'finished_at': now.isoformat(timespec='seconds')}))
+        owner.identify_result(svc, identified['request_id'])
+    finally:
+        host_files.time = real_time
+    assert not blocked_attempts, blocked_attempts
+    assert not any(name.split('.')[0] in blocked for name in sys.modules)
 print(json.dumps({e.name: e.value for e in dist.entry_points if e.group == 'console_scripts'}))
-""", str(installed), package, json.dumps(modules)], cwd=tmp_path,
+""", str(installed), package, json.dumps(modules), str(ROOT)], cwd=tmp_path,
         capture_output=True, text=True, timeout=30)
     assert probe.returncode == 0, probe.stdout + probe.stderr
     assert json.loads(probe.stdout) == entrypoints
@@ -76,3 +215,256 @@ print(json.dumps({e.name: e.value for e in dist.entry_points if e.group == 'cons
     assert (installed / "share" / package / "package.xml").is_file()
     if config:
         assert (installed / "share" / package / "config" / config).is_file()
+    if package == "omx_adapter":
+        _check_omx_installed_values(installed, tmp_path)
+
+
+# Explicit compatibility surface, including private helpers used by old imports.
+_OMX_VALUE_FAMILIES = {
+    "profile": ("adapter_profile", "_ALIASES _KNOWN_MODELS _DEFAULT_JOINTS "
+                "_finite_positive _normalize_model _joints _frame OmxAdapterProfile"),
+    "ros_goal_contract": ("ros_goal_contract", "RosGoalEventKind _KINDS _GOAL_BOUND_KINDS "
+                          "canonical_ros_goal_id RosGoalEvent"),
+    "watchdog_observation": ("watchdog_observation", "_number _count JointIntakeObservation "
+                            "intake_observation WatchdogObservation watchdog_observation"),
+    "hardware_profile": ("hardware_profile", "_fields _number _vector _range "
+                         "validate_profile _UniqueLoader"),
+    "kinematics": ("kinematic_types", "ARM_JOINTS IK_OK IK_OUTSIDE_WORKSPACE IK_SINGULAR "
+                   "IK_UNREACHABLE IK_JOINT_LIMIT IK_YAW_LIMIT Matrix _finite _triple "
+                   "ChainJoint TopDownPose TcpPose IkLimits IkResult"),
+}
+
+# These programs run only in isolated children against installed/exported files.
+# Canonical imports stay here, so the pre-move baseline collects normally.
+_OMX_PROBE_SETUP = """
+import importlib
+import importlib.abc
+import json
+from pathlib import Path
+import sys
+
+target = Path(sys.argv[1]).resolve()
+repository = Path(sys.argv[2]).resolve()
+families = json.loads(sys.argv[3])
+assert not any(Path(entry).resolve().is_relative_to(repository) for entry in sys.path if entry)
+sys.path.insert(0, str(target))
+
+class NoRobotRuntime(importlib.abc.MetaPathFinder):
+    canonical_only = False
+
+    def find_spec(self, fullname, path=None, target=None):
+        assert fullname.split('.')[0] not in {'serial', 'dynamixel_sdk', 'lerobot', 'rclpy',
+                                             'guarded_native'}, fullname
+        if self.canonical_only and fullname.startswith('omx_adapter.'):
+            # Existing package __init__ bootstraps these legacy modules.
+            bootstrap = {'omx_adapter.profile', 'omx_adapter.command_owner',
+                         'omx_adapter.final_state', 'omx_adapter.manipulation_plan',
+                         'omx_adapter.watchdog_observation'}
+            assert (fullname in bootstrap or
+                    fullname.startswith('omx_adapter.contracts')), fullname
+
+guard = NoRobotRuntime()
+sys.meta_path.insert(0, guard)
+
+def local_module(name):
+    module = importlib.import_module(name)
+    assert Path(module.__file__).resolve().is_relative_to(target), name
+    return module
+
+def assert_aliases(old, new, names):
+    for name in names.split():
+        assert getattr(old, name) is getattr(new, name), (old.__name__, name)
+"""
+
+_OMX_IDENTITY_AND_GEOMETRY = """
+import builtins
+import inspect
+import pickle
+from types import ModuleType
+
+canonical_first = sys.argv[4] == 'canonical-first'
+guard.canonical_only = canonical_first
+for legacy, (canonical, names) in families.items():
+    first = 'omx_adapter.contracts.' + canonical if canonical_first else 'omx_adapter.' + legacy
+    local_module(first)
+guard.canonical_only = False
+for legacy, (canonical, names) in families.items():
+    old = local_module('omx_adapter.' + legacy)
+    new = local_module('omx_adapter.contracts.' + canonical)
+    assert_aliases(old, new, names)
+    for name in names.split():
+        value = getattr(new, name)
+        if inspect.isfunction(value) or inspect.isclass(value):
+            assert value.__module__ == new.__name__, name
+            old_global = ('c' + old.__name__ + '\\n' + name + '\\n.').encode('ascii')
+            assert pickle.loads(old_global) is value, name
+
+kin = local_module('omx_adapter.kinematics')
+pose = kin.TopDownPose(0.1, 0.2, 0.3, 0.4)
+assert pickle.loads(pickle.dumps(pose)) == pose
+asset = target / 'share/omx_adapter/config/omx_f_kinematics.yaml'
+assert asset.is_file()
+expected_revision = kin.OmxKinematics.load(asset).revision
+opened = []
+def record_open(path, *args, **kwargs):
+    opened.append(Path(path).resolve())
+    return builtins.open(path, *args, **kwargs)
+kin.open = record_open
+kin.DEFAULT_KINEMATICS_PATH = Path.cwd() / 'missing-source-geometry.yaml'
+sys.prefix = str(target)
+assert kin.OmxKinematics.load().revision == expected_revision
+assert opened == [asset]
+
+# Ament fallback still resolves the actual installed share asset.
+sys.prefix = str(Path.cwd() / 'empty-prefix')
+calls = []
+ament = ModuleType('ament_index_python')
+packages = ModuleType('ament_index_python.packages')
+packages.PackageNotFoundError = type('PackageNotFoundError', (LookupError,), {})
+def share_directory(name):
+    calls.append(name)
+    return str(target / 'share' / name)
+packages.get_package_share_directory = share_directory
+ament.packages = packages
+sys.modules['ament_index_python'] = ament
+sys.modules['ament_index_python.packages'] = packages
+opened.clear()
+assert kin.OmxKinematics.load().revision == expected_revision
+assert calls == ['omx_adapter'] and opened == [asset]
+
+# An explicit missing path must not fall back to that available asset.
+calls.clear()
+try:
+    kin.OmxKinematics.load(Path.cwd() / 'explicit-missing.yaml')
+except FileNotFoundError:
+    pass
+else:
+    raise AssertionError('explicit missing geometry silently fell back')
+assert calls == []
+sys.modules['ament_index_python'] = None
+sys.modules['ament_index_python.packages'] = None
+try:
+    kin.OmxKinematics.load()
+except FileNotFoundError:
+    pass
+else:
+    raise AssertionError('missing installed geometry silently fell back')
+print('installed value identities and geometry ok')
+"""
+
+_OMX_CLI = """
+from contextlib import redirect_stdout
+import importlib.metadata
+import io
+import runpy
+
+disabled, valid_hardware = sys.argv[4:6]
+entry = next(e for e in importlib.metadata.distribution('omx_adapter').entry_points
+             if e.group == 'console_scripts' and e.name == 'omx-profile-check')
+cli = local_module('omx_adapter.cli')
+assert entry.load() is cli.main
+for invoke in (lambda: entry.load()([disabled]),
+               lambda: runpy.run_module('omx_adapter.cli', run_name='__main__')):
+    sys.argv = ['omx-profile-check', disabled]
+    output = io.StringIO()
+    with redirect_stdout(output):
+        try:
+            code = invoke()
+        except SystemExit as exc:
+            code = exc.code
+    assert code == 0 and json.loads(output.getvalue()) == {}
+
+hardware = local_module('omx_adapter.hardware_profile')
+duplicate = Path.cwd() / 'duplicate-profile.yaml'
+duplicate.write_text('profile: hardware\\nprofile: hardware\\n', encoding='utf-8')
+for path in (Path(valid_hardware), Path.cwd() / 'missing-profile.yaml', duplicate):
+    for invoke in (lambda: hardware.main([str(path)]),
+                   lambda: runpy.run_module('omx_adapter.hardware_profile', run_name='__main__')):
+        sys.argv = ['omx_adapter.hardware_profile', str(path)]
+        output = io.StringIO()
+        with redirect_stdout(output):
+            try:
+                code = invoke()
+            except SystemExit as exc:
+                code = exc.code
+        report = json.loads(output.getvalue())
+        assert report['motion_admitted'] is False
+        if path == Path(valid_hardware):
+            assert code == 0 and report['profile_document_valid'] is True
+            assert report['joint_names'] == [f'joint{i}' for i in range(1, 6)]
+            assert 'independent_stop' in report['unverified']
+        else:
+            assert code == 2 and report['profile_document_valid'] is False
+            assert report['error']
+        if path == duplicate:
+            assert 'unique string keys' in report['error']
+print('installed CLI entry paths ok')
+"""
+
+
+def _check_omx_installed_values(installed, tmp_path):
+    for order in ('canonical-first', 'legacy-first'):
+        probe = subprocess.run(
+            [sys.executable, '-I', '-c', _OMX_PROBE_SETUP + _OMX_IDENTITY_AND_GEOMETRY,
+             str(installed), str(ROOT), json.dumps(_OMX_VALUE_FAMILIES), order],
+            cwd=tmp_path, capture_output=True, text=True, timeout=30)
+        assert probe.returncode == 0, order + '\n' + probe.stdout + probe.stderr
+    disabled = tmp_path / 'omx.disabled.yaml'
+    shutil.copy2(ROOT / 'middleware/devices/omx/profile/config/omx.disabled.yaml', disabled)
+    # Serialize shared synthetic input in the parent; the child imports installed code only.
+    data = json.loads((ROOT / 'middleware/devices/omx/adapter/test/fixtures/'
+                      'synthetic_hardware_profile.json').read_text(encoding='utf-8'))
+    hardware = tmp_path / 'hardware-profile.json'
+    hardware.write_text(json.dumps(data), encoding='utf-8')
+    probe = subprocess.run(
+        [sys.executable, '-I', '-c', _OMX_PROBE_SETUP + _OMX_CLI,
+         str(installed), str(ROOT), json.dumps(_OMX_VALUE_FAMILIES), str(disabled), str(hardware)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert probe.returncode == 0, probe.stdout + probe.stderr
+
+
+def test_omx_updater_selected_files_close_over_value_contracts(tmp_path):
+    # Reuse the updater's declared export and smoke; never fill missing dependencies here.
+    config = json.loads((ROOT / 'deploy/robot/omx/omx-devices-autoupdate.json.example').read_text())
+    stage = tmp_path / 'native-release'
+    stage.mkdir()
+    source_paths = config['paths']
+    for relative in source_paths:
+        source, destination = ROOT / relative, stage / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_dir():
+            shutil.copytree(source, destination,
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        else:
+            shutil.copy2(source, destination)
+    adapter = 'middleware/devices/omx/adapter/omx_adapter'
+    selected = {
+        legacy: family for legacy, family in _OMX_VALUE_FAMILIES.items()
+        if any(Path(f'{adapter}/{legacy}.py').is_relative_to(Path(relative))
+               for relative in source_paths)
+    }
+    script = _OMX_PROBE_SETUP + """
+# Only directories under the selected export are made importable.
+sys.path[:0] = [str(target / relative) for relative in (
+    'deploy/robot/omx', 'contracts/foundation', 'operations/overhead',
+    'middleware/devices/omx/adapter')]
+exec(sys.argv[4])
+checked = []
+for legacy, (canonical, names) in families.items():
+    old = local_module('omx_adapter.' + legacy)
+    new = local_module('omx_adapter.contracts.' + canonical)
+    assert_aliases(old, new, names)
+    checked.append(legacy)
+assert sorted(checked) == sorted(families)
+for name in ('hardware_observer', 'register_probe', 'passive_motor_health',
+             'workcell_observation_bridge', 'camera_readiness', 'commissioning_view',
+             'camera_source', 'omx_autoupdate'):
+    assert Path(sys.modules[name].__file__).resolve().is_relative_to(target), name
+print(json.dumps({'checked_value_families': sorted(checked)}))
+"""
+    probe = subprocess.run(
+        [sys.executable, '-I', '-c', script, str(stage), str(ROOT),
+         json.dumps(selected), config['smoke']], cwd=stage,
+        capture_output=True, text=True, timeout=30)
+    assert probe.returncode == 0, probe.stdout + probe.stderr
+    assert json.loads(probe.stdout.splitlines()[-1]) == {'checked_value_families': sorted(selected)}

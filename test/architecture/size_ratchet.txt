@@ -7,7 +7,7 @@
 # learning). Regenerate the measured rows: python test/architecture/test_module_structure.py
 15914 control
 748 core/events/core_events/events/audit.py
-873 core/gateway/core/bridge/ros_bridge.py
+870 core/gateway/core/bridge/ros_bridge.py
 1235 deploy/robot/pinky_pro/native/rosy-face.py
 641 deploy/robot/pinky_pro/native/rosy-hw-probe.py
 862 deploy/robot/pinky_pro/native/rosy-ssh-access.py
@@ -22,7 +22,7 @@
 828 fleet/fleet/server/app.py
 847 fleet/fleet/server/auth/enrollment.py
 790 fleet/fleet/server/cell/cell_job_store.py
-1325 fleet/fleet/server/console/console.py
+1298 fleet/fleet/server/console/console.py
 797 fleet/fleet/server/evidence/proposal_store.py
 936 fleet/fleet/server/missions/mission_store.py
 755 fleet/web/line-stuck.js
