@@ -1257,7 +1257,7 @@ def test_plan_gives_xdist_words_and_args_only_to_safe_invocations_on_full_hosts(
     full = {"cores": 14.0, "mem": 10.0, "site": False, "light": False}
     words, extra, note = xp.plan(GROUP, full, [])
     assert (words, extra, note) == (["ROSY_JOB_CORES=6"], ["-n", "6", "--dist", "loadfile"], "xdist: 6 workers")
-    assert xp.plan(["test"], full, ["test"])[:2] == (["ROSY_JOB_ALONE=1"], [])  # serial: alone on the host
+    assert xp.plan(["test"], full, ["test"])[:2] == ([], [])  # serial (no -n), not alone on the host
     assert xp.plan(GROUP, None, [])[:2] == ([], [])  # D-568 7 fallback host: unmeasured, serial
     assert xp.plan(GROUP, {**full, "light": True, "mem": 4.7}, [])[:2] == (["ROSY_JOB_MEM_GB=4"], [])
 

@@ -36,10 +36,16 @@ def test_a_full_host_gets_up_to_max_main_workers_and_each_job_sizes_xdist_from_i
     assert xp.plan(["pkg/test"], FULL, [])[0] == [f"ROSY_JOB_CORES={xp.MAX_WORKERS}"], "one worker: whole host"
 
 
-def test_serial_suites_and_alone_browser_chunks_ask_the_host_for_it_alone():
-    assert "ROSY_JOB_ALONE=1" in xp.plan(["tools/x.py"], FULL, ["tools"])[0]
-    assert "ROSY_JOB_ALONE=1" in xp.plan(["ROSY_BROWSER_ALONE=1", "a/test"], FULL, [])[0]
-    assert "ROSY_JOB_ALONE=1" not in xp.plan(["pkg/test"], FULL, [])[0]
+def test_only_gazebo_isaac_and_alone_browser_chunks_ask_the_host_for_it_alone():
+    """robot-08: serial (no -n) and alone on the host are different needs; an alone job empties a host."""
+    serial = ["integrations/simulation/gazebo/test", "learning/envs/isaac/test", "tools"]
+    alone = lambda inv: "ROSY_JOB_ALONE=1" in xp.plan(inv, FULL, serial)[0]  # noqa: E731
+    assert alone(["integrations/simulation/gazebo/test/test_x.py"]) and alone(["learning/envs/isaac/test"])
+    assert alone(["integrations"]), "a parent directory runs the gazebo suites too"
+    assert alone(["ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1", "a/test/test_b_browser.py"])
+    assert not alone(["ROSY_JOB_CORES=6", "tools/collect_alone.py"]), "the isolation gate: serial, admitted normally"
+    assert not alone(["ROSY_RUN_BROWSER_TESTS=1", "a/test/test_b_browser.py"]), "browser lanes run beside others"
+    assert not alone(["pkg/test/test_a.py::test_one"]) and not alone(["pkg/test"])
 
 
 HOLD = 'touch "$HOME/started.$$"; while [ ! -e "$HOME/release" ]; do sleep 0.05; done\n'
