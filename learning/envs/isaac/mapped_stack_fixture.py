@@ -29,7 +29,7 @@ def plan():
 
 
 def home(arm):
-    return [.10, FIXTURE['arm_bases_m'][arm][1]+(-.06 if arm == 0 else .06), .13]
+    return [.05, FIXTURE['arm_bases_m'][arm][1]+(-.20 if arm == 0 else .20), .13]
 
 
 @lru_cache(maxsize=1)

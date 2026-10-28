@@ -129,6 +129,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             photo('mapped-overview.png', True)
             photo('mapped-initial.png')
         try:
+            if any(np.max(np.abs(robot.get_joint_positions()[joints[i]]-targets[i][joints[i]])) > .03
+                   for i, robot in enumerate(robots)):
+                raise ValueError('initial arm tracking exceeds 0.03 rad')
             for index, item in enumerate(plan()):
                 arm, box = item['arm'], cargo[index]
                 yaw = float(rng.uniform(-.01, .01))
