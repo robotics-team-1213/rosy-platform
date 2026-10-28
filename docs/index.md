@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · 030c2fb110 · 녹화 인계 UI 후속 검증 기록
 - 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
 - 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
 - 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
 - 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
-- 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
