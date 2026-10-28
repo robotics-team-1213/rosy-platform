@@ -39,6 +39,7 @@ def task_page(tmp_path):
                 else:
                     route.fulfill(status=503, json={'error': 'fixture save rejected'})
             page.route('**/api/learning/tasks**', serve)
+            page.route('**/api/learning/robots', serve)
             yield page, state, f'http://127.0.0.1:{server.server_port}/learning/tasks', errors
             browser.close()
     finally:
@@ -65,9 +66,10 @@ def test_failed_save_message_survives_successful_background_reads(task_page):
         page.locator('#' + key).fill('fixture-value')
     page.locator('#robot-save').click()
     expect(page.locator('#tasks-error')).to_contain_text('fixture save rejected')
-    count = state['gets']
-    page.wait_for_timeout(5500)
-    assert state['gets'] > count
+    state['status'] = 503
+    expect(page.locator('#tasks-error')).to_contain_text('fixture read failed', timeout=9000)
+    state['status'] = 200
+    expect(page.locator('#tasks-status')).to_contain_text('최신 기록 확인됨', timeout=9000)
     expect(page.locator('#tasks-error')).to_contain_text('fixture save rejected')
     assert not errors
 
