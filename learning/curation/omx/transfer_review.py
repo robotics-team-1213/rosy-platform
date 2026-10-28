@@ -2,6 +2,7 @@
 import argparse
 from hashlib import sha256
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -38,7 +39,14 @@ def _json(raw):
     def nonfinite(value):
         raise ValueError('nonfinite JSON value')
 
-    return json.loads(raw.decode('utf-8'), object_pairs_hook=pairs, parse_constant=nonfinite)
+    def finite(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError('nonfinite JSON number')
+        return number
+
+    return json.loads(raw.decode('utf-8'), object_pairs_hook=pairs,
+                      parse_constant=nonfinite, parse_float=finite)
 
 
 def _identifier(value):
@@ -71,7 +79,7 @@ def _inspect(raw):
 def _records(items):
     if not items or len(items) > 1000 or sum(len(raw) for _, raw in items) > TOTAL_LIMIT:
         raise ValueError('1..1000 review exports totalling at most 128 MiB required')
-    records, missions, groups, splits = [], set(), {}, set()
+    records, missions, groups, members, splits = [], set(), {}, {}, set()
     for number, (split, raw) in enumerate(items):
         if split not in ('train', 'eval'):
             raise ValueError('explicit train/eval partition required')
@@ -87,6 +95,11 @@ def _records(items):
             if groups[root] != binding:
                 raise ValueError('conflicting recovery lineage within root')
         groups[root] = binding
+        for member in (root, line['child_mission_id']):
+            if member is not None:
+                if member in members and members[member] != root:
+                    raise ValueError('conflicting recovery lineage across mission identities')
+                members[member] = root
         splits.add(split)
         records.append(dict(source_file=f'{number:04}.json', source_sha256=sha256(raw).hexdigest(),
                             mission_id=mission, root_mission_id=root, split=split))
