@@ -148,7 +148,7 @@ def test_full_and_affected_landings_batch_only_within_their_group():
 
 def test_eligible_wants_a_member_at_its_worktree_head_judged_by_its_tier_or_selection(repos, tmp_path, monkeypatch):
     main, wt, rows = batch_repos(repos, tmp_path)
-    row = {**rows[0], "host": socket.gethostname(), "status": "waiting"}
+    row = {**rows[0], "host": socket.gethostname(), "status": "waiting", "batch_auto": True}
     monkeypatch.setattr(land, "select", lambda *a, **k: ([["test"]], "selector escalated to FULL (x)"))
     assert not land_batch.eligible(land, wt, row), "no prepared tier: its selection is FULL"
     assert land_batch.eligible(land, wt, row, "full"), "a pending FULL-class ticket joins a FULL batch"
@@ -259,6 +259,41 @@ def test_a_pending_member_is_judged_by_its_selection_from_the_fork_point(repos, 
         "FULL-class joins only a FULL batch (D-889 addendum 6)"
 
 
+@pytest.mark.parametrize("tests,flags,allowed", [("auto", [], True), ("full", [], False),
+                                               ("pkg/test", [], False), ("auto", ["--node"], False),
+                                               ("auto", ["--no-cache"], False)])
+def test_requested_checks_control_whether_a_pending_landing_can_be_carried(repos, monkeypatch, tests, flags, allowed):
+    main, wt = repos
+    commit(wt, {"pkg/member.py": "member = 1\n"}, "member")
+    monkeypatch.delenv(land.FIXTURE_ENV)  # custom --tests become auto plus EXTRA in production
+    monkeypatch.setattr(land_batch, "batchable", lambda *a: "affected")
+    seen = []
+
+    def prepare(land_, wt_, branch, args, python, qdir, ticket):
+        queue.set_status(ticket, "pending")
+        row = next(r for r in queue.ahead(qdir, Path("~")) if r["ticket"] == ticket.name)
+        seen.append(land_batch.eligible(land, main, row))
+
+    monkeypatch.setattr(land.land_prepare, "prepare", prepare)
+    monkeypatch.setattr(land_batch, "queue", lambda *a: 0)
+    assert land.main(["--tests", tests, *flags]) == 0
+    assert seen == [allowed]
+
+
+@pytest.mark.parametrize("consent,allowed", [(True, True), (False, False), (None, False), ("auto", False), (1, False)])
+def test_batch_formation_requires_explicit_member_consent(repos, tmp_path, monkeypatch, consent, allowed):
+    main, wt, rows = batch_repos(repos, tmp_path)
+    qdir = tmp_path / "q"
+    mine = queue.take(qdir, "feat/x", str(wt), status="waiting")
+    member = queue.take(qdir, "feat/m", rows[0]["worktree"], status="pending")
+    if consent is not None:
+        queue.set_status(member, "pending", batch_auto=consent)
+    monkeypatch.setattr(land_batch, "batchable", lambda *a: "affected")
+    form, chosen, _ = land_batch.former(land, wt, qdir, mine)
+    assert form([]) is allowed
+    assert [r["branch"] for r in chosen] == (["feat/m"] if allowed else [])
+
+
 def _early_setup(tmp_path, monkeypatch, kind="affected"):
     qdir = tmp_path / "q"
     peer = queue.take(qdir, "feat/peer", status="pending")
@@ -270,6 +305,16 @@ def _early_setup(tmp_path, monkeypatch, kind="affected"):
     monkeypatch.setattr(land_batch.land_full, "restore", lambda *a: None)
     monkeypatch.setattr(land, "out", lambda *a: "c" * 40)
     return qdir, peer, mine
+
+
+@pytest.mark.parametrize("flags,extra", [({"node": True}, []), ({"no_cache": True}, []), ({}, ["pkg/test"])])
+def test_early_batch_keeps_explicit_checks_and_freshness_requests_alone(tmp_path, monkeypatch, flags, extra):
+    qdir, peer, mine = _early_setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(land, "EXTRA", extra)
+    monkeypatch.setattr(land_batch, "run", lambda *a, **k: pytest.fail("explicit request led a batch"))
+    args = land.argparse.Namespace(tests="auto", **flags)
+    assert land_batch.early(land, tmp_path, "feat/mine", args, sys.executable, qdir, mine, tmp_path) is None
+    assert not info(mine).get("batch")
 
 
 def test_a_landing_leads_pending_tickets_of_its_group_before_any_pretest(tmp_path, monkeypatch):

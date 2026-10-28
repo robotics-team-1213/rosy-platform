@@ -40,6 +40,10 @@ print(json.dumps(dict(ok='true', release_id='2026.10.19-001',
     image='rosy-os-pinky-pro-2026.10.19-001-arm64.img.xz', sha256='a' * 64,
     source_revision='c' * 40)))
 '@
+Save "$sd\verify-operator-key.py" @'
+import json
+print(json.dumps({'fingerprint': 'SHA256:' + 'A' * 43}))
+'@
 Save "$sd\prepare-rosy-sd.ps1" @'
 param([string]$PlanPath, [string]$ReceiptPath, [string]$RegistryJson, [int]$DiskNumber,
       [string]$Preset, [string]$WifiProfile, [string]$WifiSsid, [string]$ImagePath,
