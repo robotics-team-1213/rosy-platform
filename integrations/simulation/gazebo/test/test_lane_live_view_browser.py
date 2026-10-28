@@ -120,6 +120,14 @@ def test_shared_assets_responsive_layout_and_tab_targets(viewer_url, theme, widt
         if state == "long":
             expect(page.locator("#runTitle")).to_have_text(LONG_RUN)
             expect(page.locator("#runFacts")).to_contain_text(LONG_REASON)
+            assert page.locator("#runRows td, #runFacts dd, #runTitle").evaluate_all("""nodes =>
+                nodes.filter(node => node.getClientRects().length).every(node => {
+                    const box = node.getBoundingClientRect();
+                    const card = node.closest('.card').getBoundingClientRect();
+                    return node.scrollWidth <= node.clientWidth + 1 &&
+                        box.left >= card.left && box.right <= card.right &&
+                        box.left >= 0 && box.right <= innerWidth;
+                })""")
             row = page.locator("#runRows tr[data-id]")
             row.focus()
             page.keyboard.press("Enter")
