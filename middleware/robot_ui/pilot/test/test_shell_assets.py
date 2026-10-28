@@ -105,6 +105,12 @@ def test_every_pilot_stylesheet_is_loaded_in_order_and_cached():
     assert sheets == ['/pilot/assets/styles.css', '/pilot/assets/layout.css']
     assert set(sheets) <= _shell()
     assert {url.removeprefix('/pilot/assets/') for url in sheets} == {p.name for p in PILOT.glob('*.css')}
+    cmake = (PILOT / 'CMakeLists.txt').read_text(encoding='utf-8')
+    android = (PILOT / 'android/app/build.gradle.kts').read_text(encoding='utf-8')
+    for url in sheets:
+        name = url.removeprefix('/pilot/assets/')
+        assert re.search(rf'^\s+{re.escape(name)}$', cmake, re.M), name
+        assert f'"{name}"' in android, name
 
 
 def _dict_keys(path: Path, name: str) -> set[str]:

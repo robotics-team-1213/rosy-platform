@@ -42,7 +42,7 @@ val sharedScreenResources = tasks.register<Sync>("sharedScreenResources") {
 val sharedAssetNames = ((groovy.json.JsonSlurper().parse(file("../../../../../shared/web/shared-assets.json")) as Map<*, *>)["shared_assets"] as Map<*, *>).keys.map { it.toString() }
 val screens = tasks.register<Sync>("bundleScreens") {
     from("../../../../../middleware/robot_ui/pilot") {
-        include("index.html", "styles.css", "manifest.webmanifest", "*.js", "drivers/**/*.js", "screens/**/*.js", "widgets/**/*.js")
+        include("index.html", "styles.css", "layout.css", "manifest.webmanifest", "*.js", "drivers/**/*.js", "screens/**/*.js", "widgets/**/*.js")
         into("pilot")
     }
     from("../../../../../shared/web") { include(sharedAssetNames); into("common") }
