@@ -23,13 +23,15 @@ D-913의 후보 전용 `conditional-cooperation-v1`을 구현했다. 기존 cano
 
 영향 선택(`affected --base fd6fecfb82`)은 FULL이 아닌 affected 3개 invocation이다. `a6f107d79d`에서 12,694개 통과, 615개 skip, 3개 실패였다(별도 subtest 5개 통과). Fleet/설치 묶음은 7,477개 통과·418개 skip, Gazebo 계약 묶음은 328개 통과·4개 skip이다. skip에는 opt-in browser/모델/환경 검사가 포함되며 실제 브라우저·모델 검증으로 세지 않는다.
 
-나머지 묶음의 실패는 아래 3개다. 이 invocation은 4,889개 통과·193개 skip이었다. 시작 기준 커밋 `fd6fecfb82`에서 같은 node ID 3개를 원격 단독 재실행하면 모두 통과했다. 현재 소스에서도 같은 재실행을 확인 중이며, 원래 affected 실행을 전체 통과로 바꾸어 보고하지 않는다. 시간 제한이나 known-failure 기준은 수정하지 않았다.
+나머지 묶음의 실패는 아래 3개다. 이 invocation은 4,889개 통과·193개 skip이었다. 시작 기준 커밋 `fd6fecfb82`와 최종 소스 `587c0b4c8c`에서 같은 node ID 3개를 각각 원격 단독 재실행하면 모두 통과했다(양쪽 NEW0). 원래 affected 실행을 전체 통과로 바꾸어 보고하지 않는다. 시간 제한이나 known-failure 기준은 수정하지 않았다.
 
 - `middleware/core/gateway/test/test_station_redeployment_http.py::test_native_completion_between_status_and_renewal_keeps_exact_departure[lost_response]`
 - `test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds`
 - `middleware/core/gateway/test/test_station_camera_pipeline_continuous.py::test_station_camera_http_pipeline_aligns_then_requires_contact_and_measured_stop[continuous]`
 
-전체 영향 로그는 저장소 밖 세션의 `model-cooperation/affected/run-{1,2,3}.txt`, 기준 비교는 `base-failures/run-1.txt`다. known_failures 비교 결과 run-1/run-3과 기준 비교는 NEW0, 원래 run-2는 NEW3이다. 이 기록은 코드 영향과 실행 부하의 관계를 확정한 원인 분석이 아니다.
+전체 영향 로그는 저장소 밖 세션의 `model-cooperation/affected/run-{1,2,3}.txt`, 기준 비교는 `base-failures/run-1.txt`, 소스 재검사는 `head-failures/run-1.txt`다. known_failures 비교 결과 run-1/run-3과 분리 재검사는 NEW0, 원래 run-2는 NEW3이다. 증상은 광역 동시 실행의 타이밍 실패이며, 부하/시험 간 간섭은 가설이다. 원인을 확정하려면 같은 호스트·같은 동시 부하를 통제해 재현해야 한다.
+
+문서·생성 기록 head `c50d21ffc1`도 원격 `test_harness_contracts.py`, `test_document_placement.py`, `test_module_structure.py`를 통과했다(NEW0; `final-records/run-1.txt`). 최종 소스 이후 변경은 이 검증 기록과 모듈 기록뿐이다. 로컬 harness lint는 0 errors/40 warnings, size-range는 당시 16개 커밋 통과였다. 경고는 기존 모듈의 오래된 검증 상태와 worktree 슬롯 등에 관한 것이며 이번 정책의 모델·현장 수용 근거로 세지 않는다.
 
 원격 runner의 환경 ID는 `28156067a848c865`, freeze ID는 `279c2df20eca6924`다. 실제 주소·계정·원시 서비스 자료는 기록하지 않았다. 최종 소스 시험 로그는 저장소 밖 세션의 `model-cooperation/final-focused/run-1.txt`다.
 
