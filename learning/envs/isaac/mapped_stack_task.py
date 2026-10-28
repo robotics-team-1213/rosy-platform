@@ -31,7 +31,7 @@ def build_map(world, stage):
             color=np.array([.95, .72, .06])))
 
 
-def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture):
+def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture, grasp_probes):
     import numpy as np
     from pxr import UsdGeom
     from isaacsim.core.utils.types import ArticulationAction
@@ -111,6 +111,18 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 result.append(snapshot())
         return result
 
+    def grasp_snapshot(arm):
+        value = snapshot()
+        filters, probes = grasp_probes[arm]
+        value['arm_contacts'] = []
+        for path, probe in probes:
+            forces = np.asarray(probe.get_contact_force_matrix(dt=DT))[0]
+            for name, force in zip(filters, forces):
+                if np.linalg.norm(force) > .01:
+                    value['arm_contacts'].append(dict(body=path, other=name, force=force.tolist()))
+        print('MAPPED_GRASP_CONTACT', arm, value['arm_contacts'], flush=True)
+        return value
+
     def photo(name, overview=False):
         capture(name, overview)
         images.append(name)
@@ -188,9 +200,9 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 move(arm, [p[0], p[1], .145], yaw)
                 grip(arm, profile.gripper_contact_for_width(.036))
                 move(arm, [p[0], p[1], p[2]+.002], yaw)
-                layer['grasp_samples'].append(snapshot())
+                layer['grasp_samples'].append(grasp_snapshot(arm))
                 grip(arm, profile.gripper_close_for_width(.03))
-                layer['grasp_samples'].append(snapshot())
+                layer['grasp_samples'].append(grasp_snapshot(arm))
                 move(arm, [p[0], p[1], .145], yaw)
                 layer['lift_samples'] = samples(36)
                 if not all(free_lift(s['boxes'][index], arm, float(p[2])) for s in layer['lift_samples']):
