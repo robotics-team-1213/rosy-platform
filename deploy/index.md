@@ -79,5 +79,5 @@
 - 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
 - 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
 - 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
-- 2026-10-27 · f44520f70e · exact-line provenance 원격 가드 확인
-- 2026-10-27 · uncommitted · 고정 검증 기록의 전체 파일 검사 provenance 보완
+- 2026-10-27 · 2ecb9b9015 · fleet가 best-effort 컨텍스트 미러를 기다리지 않는다
+- 2026-10-27 · 82ca57ab0b · 사이트 컨테이너 로그 회전 경계

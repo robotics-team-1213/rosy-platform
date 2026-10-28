@@ -28,3 +28,11 @@ def test_native_arm_workflow_has_real_filesystem_tools_and_preserves_unsigned_bo
         assert package in workflow
     assert '.capacity.json"' in workflow
     assert 'test ! -e "$release/SHA256SUMS.sig"' in workflow
+
+
+def test_privileged_image_build_owns_the_checkout_before_cms_preflight():
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/build-pinky-image.yml").read_text()
+    build = workflow.split("- name: Build unsigned flashable image", 1)[1].split("- name:", 1)[0]
+    assert build.index('sudo chown -R root:root -- "$GITHUB_WORKSPACE"') < build.index("sudo env")
+    assert '--workspace "$GITHUB_WORKSPACE"' in build
+    assert 'os_cms_trust.py" --lock "$LOCK" --source-tree "$WORKSPACE"' in (IMAGE / "build-image.sh").read_text()
