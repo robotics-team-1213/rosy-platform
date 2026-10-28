@@ -12846,3 +12846,10 @@ osy-d395-s1d\`.
 - 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
+
+## 2026-10-29 · 068aa03060 · Games 수신 신선도와 복구 UI 검증
+
+- 변경: GET/JSON 대기·늦은 응답·시각 근거 부재에서 current/last 상태를 구분하고 frozen 결과·로그8개/캡처18장 SHA를 `docs/validation/games-receipt-freshness-2026-10-29/`에 보존한다.
+- 증거: 전체 board Chromium61 passed, 강화부분16 passed, 공식 영향641 passed/61 skipped와 overhead785 passed, NEW0. A source/B18장 직접 검토를 수행했다. 초기50 통과 뒤 발견한 늦은 응답 역전도 RED4→수정했고 실패 원본을 유지했다.
+- gate 변화: 없음. 실제 정지 전달/readback·FIELD·전체 G2/G3·배포/착지/push/merge 수용과 분리한다.
+- CE: 해당 없음 — 시간/상태·권한 경계의 이유가 코드·회귀·이 기록에 남는다.
