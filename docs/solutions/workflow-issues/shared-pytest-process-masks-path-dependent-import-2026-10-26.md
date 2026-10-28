@@ -50,7 +50,7 @@ attempt1/job122632180302는 이미지 생성 전 lock 해석에서 실패했다.
 앞선 CLI에서 경로를 고쳐도 뒤의 exporter에 전달되지 않는다.
 
 두 진입점이 각자 필요한 `release/` 경로를 명시하게 고쳤다. 회귀 검사는 빈 임시 cwd에서
-`sys.executable -I <실제 CLI> --help`를 실행하고 `PYTHONPATH`를 제거한다. pytest의 `sys.path`나
+`sys.executable -I <실제 CLI> --help`를 실행해 `PYTHONPATH`를 무시한다. pytest의 `sys.path`나
 이미 import한 `sys.modules`가 자식에 새어 들어가 통과할 수 없게 한다.
 빌드 인증서·지문·소유권 검사와 native ARM 거절 조건은 바꾸지 않았다.
 
