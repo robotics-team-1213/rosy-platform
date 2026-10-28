@@ -181,7 +181,7 @@ def remote(host: str, script: str, *args: str, timeout: float, tries: int = 1, *
         kw["stdin"] = subprocess.DEVNULL
     for attempt in range(tries):
         try:
-            result = subprocess.run([*SSH, host, command], timeout=timeout, **kw)
+            result = remote_job.step([*SSH, host, command], timeout=timeout, **kw)  # beats while it runs
         except subprocess.TimeoutExpired:
             print(f"[remote-pytest] {host}: step timed out after {timeout:.0f} s", file=sys.stderr, flush=True)
             return subprocess.CompletedProcess([], 124, b"", b"")
