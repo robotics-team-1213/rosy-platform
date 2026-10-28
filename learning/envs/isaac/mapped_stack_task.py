@@ -45,13 +45,13 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         gains = controller.get_gains()
         print('MAPPED_IMPORTED_GAINS', i, [np.asarray(v).tolist() for v in gains], flush=True)
         kp, kd = np.zeros(robot.num_dof), np.zeros(robot.num_dof)
-        kp[joints[i]], kd[joints[i]] = 400., 20.
+        kp[joints[i]], kd[joints[i]] = FIXTURE['arm_stiffness_si'], FIXTURE['arm_damping_si']
         kp[fingers[i]], kd[fingers[i]] = [30., 300.], [2., 5.]
         controller.set_gains(kps=kp, kds=kd)
         print('MAPPED_SI_GAINS', i, [np.asarray(v).tolist() for v in controller.get_gains()], flush=True)
         view = robot._articulation_view
         print('MAPPED_IMPORTED_EFFORTS', i, view.get_max_efforts().tolist(), flush=True)
-        efforts = np.full((1, robot.num_dof), 30.)
+        efforts = np.full((1, robot.num_dof), FIXTURE['arm_max_effort_nm'])
         efforts[0, fingers[i]] = [.2, 2.]
         view.set_max_efforts(efforts)
         print('MAPPED_SI_EFFORTS', i, view.get_max_efforts().tolist(), flush=True)
@@ -69,7 +69,10 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             if not np.isfinite(state).all():
                 raise ValueError(f'nonfinite articulation arm={i} tick={tick}')
             targets[i][fingers[i][1]] = -state[fingers[i][0]]
-            robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=targets[i]))
+            effort = np.zeros(robot.num_dof)
+            gravity = np.asarray(robot._articulation_view.get_generalized_gravity_forces())[0]
+            effort[joints[i]] = np.clip(gravity[joints[i]], -FIXTURE['arm_max_effort_nm'], FIXTURE['arm_max_effort_nm'])
+            robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=targets[i], joint_efforts=effort))
         world.step(render=False, update_fabric=True)
         tick += 1
         if tick <= 3:
@@ -124,7 +127,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         for u in np.linspace(0., 1., math.ceil(duration/DT)+1)[1:]:
             targets[arm][joints[arm]] = curve(u)
             step()
-        hold(24)
+        hold(120)
 
     def grip(arm, value):
         start = targets[arm][fingers[arm][0]]

@@ -137,9 +137,9 @@ def run(args):
                     raise RuntimeError('Joint velocity limit readback failed')
                 drive = UsdPhysics.DriveAPI.Apply(prim, 'angular')
                 drive.CreateTypeAttr('force')
-                drive.CreateStiffnessAttr(math.radians(30. if finger else 400.) if mapped else (30. if finger else 5000.))
-                drive.CreateDampingAttr(math.radians(2. if finger else 20.) if mapped else (2. if finger else 100.))
-                drive.CreateMaxForceAttr(.2 if finger else 30.)
+                drive.CreateStiffnessAttr(math.radians(30. if finger else FIXTURE['arm_stiffness_si']) if mapped else (30. if finger else 5000.))
+                drive.CreateDampingAttr(math.radians(2. if finger else FIXTURE['arm_damping_si']) if mapped else (2. if finger else 100.))
+                drive.CreateMaxForceAttr(.2 if finger else (FIXTURE['arm_max_effort_nm'] if mapped else 30.))
                 if prim.GetName() == 'gripper_joint_2':
                     drive.CreateStiffnessAttr(math.radians(FOLLOWER_STIFFNESS) if mapped else FOLLOWER_STIFFNESS)
                     drive.CreateDampingAttr(math.radians(FOLLOWER_DAMPING) if mapped else FOLLOWER_DAMPING)
