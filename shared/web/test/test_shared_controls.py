@@ -505,6 +505,19 @@ def test_diagnostic_palette_references_the_tokens():
     assert not RAW_COLOR.findall(rest), "colours past the role block come from a role, not a literal"
 
 
+@pytest.mark.parametrize("statement", ["import '/common/ui.js';", 'import {cssColor} from "/common/ui.js";'])
+def test_shell_recognizes_entry_module_loading_shared_controls(tmp_path, statement):
+    page = tmp_path / "index.html"
+    markup = '<script type="module" src="/app.js"></script>'
+    (tmp_path / "app.js").write_text(statement, encoding="utf-8")
+    assert loads_shared_ui(page, markup)
+    (tmp_path / "app.js").write_text("const unused = '/common/ui.js';", encoding="utf-8")
+    assert not loads_shared_ui(page, markup)
+    assert not loads_shared_ui(page, markup.replace('type="module"', 'type="text/javascript"'))
+    assert not loads_shared_ui(page, '<script type="module" src="/missing.js"></script>')
+    assert loads_shared_ui(page, '<script type="module" src="/common/ui.js"></script>')
+
+
 def test_a_browser_page_starts_from_the_shell():
     """다음 화면은 template.html 의 틀을 쓴다. 문법 없는 껍질은 실패다."""
     if not registry.git_available(registry.REPO):
