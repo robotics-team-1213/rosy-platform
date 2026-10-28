@@ -19,7 +19,7 @@
 <details open><summary id="learning-entry-heading">로그인·외부 자료 연결 상태</summary>
 <p id="learning-account-state" role="status">로그인과 계정 연결을 확인하는 중입니다.</p>
 <div class="learning-next-actions"><a id="learning-account-link" class="workspace-link" href="/accounts">로그인·Hugging Face 연결 확인</a><a id="learning-task-link" class="workspace-link" href="#profile-panel">과제·팔·카메라 설정</a></div>
-</details></section>
+</details><ui-status id="center-status" state="pending" role="status">실행기 연결을 확인하는 중입니다.</ui-status><p id="center-read-error" role="alert" hidden></p><p id="center-error" role="alert" hidden></p></section>
 <div class="learning-workflow-layout"><nav id="omx-sections" class="learning-step-menu" aria-label="로봇암 학습 단계">
 <h2>과제 작업</h2>
 <a href="#profile-panel">1 · 과제·팔·카메라</a><a href="#owner-section">2 · 현장 상태</a><a href="#capture-section">3 · 시범·교정 수집</a><a href="#dataset-section">4 · 검수·학습 데이터</a><a href="#reward-section">5 · 성공 판정·초기화</a><a href="#train-section">6 · ACT / HIL-SERL</a><a href="#comparison-section">7 · 평가·실물 적용</a><a href="/accounts">계정·Hugging Face</a>
@@ -69,7 +69,7 @@
 <label class="ui-check"><input id="export-saved-review" class="ui-field" type="checkbox" disabled> 현재 불러온 저장 검수 사용</label><p id="export-review-status" class="quiet">선택하지 않으면 원본 검수 결정을 사용합니다.</p>
 <p class="quiet">단일 6관절 팔, normalized_-100_100 단위와 원본에 기록된 모든 카메라의 입력 키·영상 크기가 일치하는 프로필 파일이 필요합니다(1 MiB 이하). 추가 카메라도 원본 그대로 변환합니다. 서버가 시연·분할·영수증과 대응을 검증합니다. 미상·시험 fixture 자료는 변환 실행이 거절됩니다.</p>
 <ui-button kind="quiet" id="native-export" type="submit" class="ui-field" disabled>시연 검증하고 ACT 데이터 만들기</ui-button><p id="export-status" role="status"></p></form>
-<div id="export-runs" aria-live="polite"></div>
+<div id="export-runs" aria-live="polite" role="region" aria-label="시연 데이터 변환 작업" tabindex="-1"></div>
 <section aria-labelledby="native-review-heading"><h3 id="native-review-heading">시연 프레임과 결과 직접 검수</h3>
 <ui-button kind="quiet" id="review-open" class="ui-field" type="button" disabled>선택 자료 검수 열기 / 다시 불러오기</ui-button>
 <p id="review-status" role="status"></p><div id="review-editor" hidden>
@@ -116,8 +116,7 @@
 <ui-button kind="quiet" id="start" class="ui-field" type="submit" disabled>학습 시작</ui-button></form>
 <form id="experience-form" class="ui-form learning-form"><label class="ui-field-label">경험을 받을 지속 SAC 작업 <select id="experience-run" class="ui-field" disabled><option value="">실행 중인 지속 SAC 작업 없음</option></select></label>
 <ui-button kind="quiet" id="add-experience" class="ui-field" type="submit" disabled>선택 자료를 경험으로 추가</ui-button><p id="experience-status" role="status"></p></form>
-<ui-status id="center-status" state="pending" role="status">실행기 연결을 확인하는 중입니다.</ui-status>
-<p id="center-error" role="alert" hidden></p><div id="runs" aria-live="polite"></div></section>
+<div id="runs" aria-live="polite"></div></section>
 <section id="comparison-section" class="learning-section learning-panel" aria-labelledby="comparison-heading"><h2 id="comparison-heading">7 · 평가·실물 적용 준비</h2>
 <p class="quiet">저장된 평가 기록을 비교합니다. 지속 SAC는 추가 경험과 누적 학습 예산이 다릅니다. 행동 MAE는 기록된 동작과의 오차이며, 과제 성공률이나 현장 성능 순위가 아닙니다.</p>
 <div id="comparison" aria-live="polite"></div>

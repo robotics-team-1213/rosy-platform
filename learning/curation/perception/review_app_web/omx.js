@@ -4,7 +4,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
 import '/omx-review.js';
 import {profileDocumentKey} from '/omx-profiles.js';
-import {renderExportRun} from '/omx-export.js';
+import {renderExportRuns} from '/omx-export.js';
 const $=id=>document.getElementById(id);
 const VERDICT={ok:'맞음',adjust:'조정 필요',unmeasurable:'측정 불가'};
 const SPLIT={train:'학습',eval:'평가',test:'시험',exclude:'제외'};
@@ -233,11 +233,12 @@ function showSection(){
   const all=new URLSearchParams(location.search).get('view')==='all';
   for(const [key] of STAGES)$(key).hidden=!all&&key!==id;
   $('sets').parentElement.hidden=!all&&id!=='dataset-section';
-  $('stage-question').textContent=question;$('stage-purpose').textContent=purpose;$('stage-done').textContent=done;
+  $('stage-question').textContent=all?'전체 도구':question;$('stage-purpose').textContent=all?'과제 설정부터 검수·변환·학습·평가까지 펼쳐 봅니다. 왼쪽 메뉴에서 필요한 작업으로 이동하세요.':purpose;$('stage-done').textContent=all?'도구를 펼치거나 단계로 이동해도 작업 완료나 승인을 기록하지 않습니다.':done;
   $('stage-next').href='#'+STAGES[(STAGES.indexOf(stage)+1)%STAGES.length][0];$('stage-next').textContent=next;
-  $('workflow-view').textContent=all?'단계별 작업으로 돌아가기':'전체 도구 펼쳐 보기';$('workflow-view').href=all?'?'+location.hash:'?view=all'+location.hash;
+  const view=new URL(location.href);if(all)view.searchParams.delete('view');else view.searchParams.set('view','all');
+  $('workflow-view').textContent=all?'단계별 작업으로 돌아가기':'전체 도구 펼쳐 보기';$('workflow-view').href=view.pathname+view.search+view.hash;
   for(const link of $('omx-sections').querySelectorAll('a')){
-    if(link.getAttribute('href')==='#'+id)link.setAttribute('aria-current','location');
+    if(!all&&link.getAttribute('href')==='#'+id)link.setAttribute('aria-current','location');
     else link.removeAttribute('aria-current');
   }
   if(all&&!location.hash)return;
@@ -245,7 +246,7 @@ function showSection(){
   if(!location.hash)return;
   const focus=id==='profile-panel'?$('profile-task'):target;
   if(focus===target)target.tabIndex=-1;
-  focus.focus({preventScroll:true});$('stage-question').scrollIntoView({block:'start'});
+  focus.focus({preventScroll:true});(all?focus:$('stage-question')).scrollIntoView({block:'start'});
   window.scrollBy({top:-document.querySelector('ui-topbar').getBoundingClientRect().height,behavior:'instant'});
 }
 $('omx-main').addEventListener('click',event=>{
@@ -415,9 +416,8 @@ function renderRuns(){
   if(live.some(run=>run.id===selected))$('experience-run').value=selected;
   if(!live.length)$('experience-run').value='';
   $('experience-run').disabled=!live.length;
-  const conversions=snapshot.runs.filter(run=>run.execution_mode==='native_export').map(run=>renderExportRun(run,{states:STATE,request,refresh:refreshCenter,
-    selectDataset:id=>{$('dataset').value=id;pendingRequest=null;selection();}}));
-  $('export-runs').replaceChildren(...(conversions.length?conversions:[el('p','변환 기록이 없습니다. 검수할 시연과 프로필을 선택하세요.','quiet')]));
+  renderExportRuns($('export-runs'),snapshot.runs.filter(run=>run.execution_mode==='native_export'),{states:STATE,request,refresh:refreshCenter,
+    selectDataset:id=>{$('dataset').value=id;pendingRequest=null;selection();}});
   const nodes=snapshot.runs.filter(run=>run.execution_mode!=='native_export').map(run=>{
     const online=run.execution_mode==='online_experience',section=el('section',null,'learning-section');
     section.append(el('h3',`${online?'지속 SAC·경험 수신':run.method==='act'?'ACT 시범/교정':'HIL-SERL SAC 오프라인 재학습'} · ${STATE[run.status]||run.status}`));
@@ -460,8 +460,9 @@ async function refreshCenter(){
     $('dataset').disabled=!snapshot.datasets.length;
     $('empty-datasets').hidden=!!snapshot.datasets.length;
     renderRuns();selection();
+    $('center-read-error').hidden=true;$('center-read-error').textContent='';
     $('center-status').setAttribute('state','ready');$('center-status').textContent=`데이터 ${snapshot.datasets.length}개 · 작업 ${snapshot.runs.length}개 · ${new Date().toLocaleTimeString('ko-KR')} 확인`;
-  }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state','error');$('center-status').textContent='실행기 연결을 확인하세요.';$('start').disabled=true;error(exc.message);}
+  }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state','error');$('center-status').textContent='실행기 연결을 확인하세요. 아래 목록은 이전 확인 결과일 수 있습니다.';$('start').disabled=true;$('center-read-error').hidden=false;$('center-read-error').textContent=exc.message;}
   finally{loading=false;}
 }
 function uuid(){
