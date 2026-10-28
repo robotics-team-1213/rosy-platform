@@ -11,6 +11,7 @@ import pytest
 from signing import sign_checksums
 from test_factory_release_signature import _keys
 from test_os_update_controller import _source
+from os_rauc_fakes import signer, run as openssl
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / 'deploy/robot/pinky_pro/native'
@@ -35,6 +36,10 @@ def repair(tmp_path, monkeypatch):
     authority = root / m.PUBLIC_KEY
     authority.parent.mkdir(parents=True, exist_ok=True)
     authority.write_bytes(public.read_bytes())
+    cms_private, cms_certificate = signer(tmp_path / 'cms')
+    keyring = root / 'etc/rauc/keyring.pem'
+    keyring.parent.mkdir(parents=True, exist_ok=True)
+    keyring.write_bytes(cms_certificate.read_bytes())
     package = tmp_path / 'package'
     package.mkdir()
     installer = package / 'os_transport_repair.py'
@@ -51,10 +56,14 @@ def repair(tmp_path, monkeypatch):
                     canary=['rosy-pinky-geg6'], installer_sha256=hashlib.sha256(installer.read_bytes()).hexdigest(),
                     files=records)
 
-    def seal():
+    def seal(cms_raw=None, cms_signer=None):
         raw = json.dumps(manifest, sort_keys=True).encode()
         (package / 'transport-repair.json').write_bytes(raw)
         (package / 'transport-repair.json.sig').write_text(sign_checksums(raw, private))
+        key, cert = cms_signer or (cms_private, cms_certificate)
+        (package / 'transport-repair.cms').write_bytes(openssl([
+            'openssl', 'cms', '-sign', '-binary', '-signer', cert, '-inkey', key,
+            '-nodetach', '-outform', 'DER'], data=raw if cms_raw is None else cms_raw))
     seal()
     calls = []
 
@@ -84,7 +93,8 @@ def test_initial_disabled_policy_stays_disabled(repair):
     assert config.read_bytes() == original
 
 
-@pytest.mark.parametrize('fault', ['signature', 'payload', 'installer', 'preimage', 'symlink', 'hostname', 'fields'])
+@pytest.mark.parametrize('fault', ['signature', 'payload', 'installer', 'preimage', 'symlink', 'hostname', 'fields',
+                                  'ed_only', 'cms_only', 'cms_tamper', 'cms_content', 'cms_signer'])
 def test_bad_authority_or_target_never_disables_policy_or_changes_other_files(repair, fault):
     m, root, package, prefix, config, manifest, seal, _, run, _, _ = repair
     if fault == 'signature':
@@ -101,15 +111,39 @@ def test_bad_authority_or_target_never_disables_policy_or_changes_other_files(re
         target.symlink_to(prefix / 'outside')
     elif fault == 'hostname':
         (root / 'etc/hostname').write_text('another-robot\n')
-    else:
+    elif fault == 'fields':
         manifest['files']['os_update_controller.py'] = manifest['files'][m.FILES[0]]
         seal()
+    elif fault == 'ed_only': (package / 'transport-repair.cms').unlink()
+    elif fault == 'cms_only': (package / 'transport-repair.json.sig').unlink()
+    elif fault == 'cms_tamper': (package / 'transport-repair.cms').write_bytes(b'invalid')
+    elif fault == 'cms_content': seal(cms_raw=b'{"different":"content"}')
+    elif fault == 'cms_signer': seal(cms_signer=signer(package.parent / 'other-cms'))
     original = config.read_bytes()
     before = (prefix / m.FILES[1]).read_bytes()
     with pytest.raises((ValueError, OSError)):
         m.apply(root, package, run=run)
     assert config.read_bytes() == original
     assert (prefix / m.FILES[1]).read_bytes() == before
+
+
+@pytest.mark.parametrize('filename', ['config.backup', 'os_update_feed.py.backup', 'os_update_stage.py.backup', 'journal.json'])
+def test_death_during_initial_backup_does_not_block_a_new_attempt(repair, filename):
+    m, root, package, prefix, config, _, _, _, run, _, _ = repair
+    original = config.read_bytes()
+    atomic = m._atomic
+    child = os.fork()
+    if child == 0:
+        def interrupted(path, raw, mode):
+            atomic(path, raw, mode)
+            if path.name == filename: os._exit(78)
+        m._atomic = interrupted
+        m.apply(root, package, run=run)
+        os._exit(99)
+    _, status = os.waitpid(child, 0)
+    assert os.waitstatus_to_exitcode(status) == 78
+    assert config.read_bytes() == original
+    assert m.apply(root, package, run=run)['phase'] == 'COMPLETE'
 
 
 @pytest.mark.parametrize('fault', ['pending', 'tryboot', 'service'])
@@ -195,12 +229,34 @@ def test_process_death_releases_locks_but_keeps_policy_disabled_until_recovered(
     assert json.loads(config.read_bytes())['enabled'] is False
     assert m.recover(root, package, run=run)['phase'] == 'ROLLED_BACK'
     assert config.read_bytes() == original
+    assert m.apply(root, package, run=run)['phase'] == 'COMPLETE'
+
+
+def test_existing_install_policy_is_closed_between_each_transport_file(repair, monkeypatch):
+    from auto_update_fakes import FakeHost
+    from os_update_policy import _Policy
+    m, root, package, prefix, config, _, _, calls, run, _, _ = repair
+    atomic = m._atomic
+    observations = []
+    def observe(path, raw, mode):
+        atomic(path, raw, mode)
+        if path.parent == prefix:
+            assert json.loads(config.read_bytes())['enabled'] is False
+            reasons = _Policy(root, FakeHost(root))._controls('33333333-3333-4333-8333-333333333333')
+            assert 'automatic updates disabled' in reasons
+            observations.append(path.name)
+    monkeypatch.setattr(m, '_atomic', observe)
+    assert m.apply(root, package, run=run)['phase'] == 'COMPLETE'
+    assert observations == list(m.FILES)
+    assert all(command[:2] == ['/usr/bin/systemctl', 'show'] for command in calls)
 
 
 def test_host_preparer_signs_only_exact_git_bytes_and_refuses_overwrite(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(NATIVE))
     from tools.release import prepare_os_transport_repair as host
     private, public = _keys(tmp_path / 'host-keys', 'repair')
+    cms_private, cms_certificate = signer(tmp_path / 'host-cms')
+    monkeypatch.setattr(host, '_approved_cms', lambda: dict(certificate=cms_certificate.read_bytes()))
     expected = {name: ('# exact target ' + name + '\n').encode() for name in host.FILES}
     expected['os_transport_repair.py'] = (NATIVE / 'os_transport_repair.py').read_bytes()
     def blob(revision, name, *, optional=False):
@@ -208,13 +264,13 @@ def test_host_preparer_signs_only_exact_git_bytes_and_refuses_overwrite(tmp_path
         return None if optional else ('# exact base ' + name).encode()
     monkeypatch.setattr(host, '_blob', blob)
     output = tmp_path / 'signed-repair'
-    result = host.prepare(output, private, public, source_revision='a' * 40, canary=['rosy-pinky-geg6'])
-    value, _, payload = host.validate_package(output, public)
+    result = host.prepare(output, private, public, cms_private, source_revision='a' * 40, canary=['rosy-pinky-geg6'])
+    value, _, payload = host.validate_package(output, public, cms_certificate=cms_certificate.read_bytes())
     assert set(payload) == set(host.FILES)
     assert value['source_revision'] == result['source_revision'] == 'a' * 40
     assert all(payload[name] == expected[name] for name in host.FILES)
     with pytest.raises(ValueError):
-        host.prepare(output, private, public, source_revision='a' * 40, canary=['rosy-pinky-geg6'])
+        host.prepare(output, private, public, cms_private, source_revision='a' * 40, canary=['rosy-pinky-geg6'])
 
 
 def test_standalone_commands_expose_help_without_bootstrap_import_side_effects():
