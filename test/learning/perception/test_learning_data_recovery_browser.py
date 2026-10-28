@@ -245,6 +245,7 @@ def test_slow_account_poll_locks_actions_but_keeps_the_typed_request(workspace):
     page.wait_for_timeout(5500)
     assert len(state['held_get']) == 1
     expect(page.locator('#import-form ui-button[type=submit]')).to_be_disabled()
+    expect(page.locator('#repo-delete-form ui-button[type=submit]')).to_be_disabled()
     expect(page.locator('#reload')).to_be_disabled()
     expect(page.locator('#repo-id')).to_be_enabled()
     expect(page.locator('#repo-id')).to_be_focused()
@@ -316,6 +317,7 @@ def test_account_actions_use_readable_shared_targets_in_both_themes(workspace, w
     ready_accounts(page, origin, expect)
     page.locator('#connect-panel details summary').click()
     expect(page.locator('#provider-token')).to_be_visible()
+    expect(page.locator('#repo-delete-form ui-button')).to_have_attribute('kind', 'irreversible')
     assert page.locator('#accounts-main button').count() == 0
     for action in page.locator('#accounts-main ui-button:visible').all():
         box = action.bounding_box()
