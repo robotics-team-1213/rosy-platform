@@ -4,6 +4,8 @@ import os
 import json
 from pathlib import Path
 import shlex
+import io
+from types import SimpleNamespace
 
 import pytest
 
@@ -22,6 +24,54 @@ def test_arm_guest_has_owned_virtio_card_and_kernel_nocloud_without_host_devices
     drives = [v for k, v in zip(argv, argv[1:]) if k == "-drive"]
     assert len(drives) == 3 and all(v.startswith("file=" + str(tmp_path) + "/") for v in drives)
     assert any("ab-media.raw" in v for v in drives)
+
+
+def stopped_guest(tmp_path, monkeypatch):
+    guest = module().ArmGuest(tmp_path)
+    guest.process = SimpleNamespace(poll=lambda: 0, wait=lambda **k: 0)
+    guest.stderr = io.BytesIO()
+    guest.env = {}
+    guest.server = SimpleNamespace(server_port=22023)
+    guest.ssh_port = 22022
+    calls = []
+    monkeypatch.setattr(guest, "run", lambda command, **kw:
+                        guest.instance_id if "instance-id" in command else "")
+    monkeypatch.setattr(guest, "_ssh", lambda *a, **k: SimpleNamespace(returncode=0))
+    monkeypatch.setattr(module().subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0))
+    def launch(argv, **kwargs):
+        calls.append(argv)
+        return SimpleNamespace(poll=lambda: None)
+    monkeypatch.setattr(module().subprocess, "Popen", launch)
+    return guest, calls
+
+
+def test_trial_start_can_observe_recovery_without_waiting_for_ssh(tmp_path, monkeypatch):
+    guest, calls = stopped_guest(tmp_path, monkeypatch)
+    monkeypatch.setattr(guest, "wait_boot", lambda: pytest.fail("trial recovery must not require SSH readiness"))
+    guest.restart_slot("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "b", trial=True, wait=False)
+    assert len(calls) == 1
+    assert "rauc.slot=b" in calls[0][calls[0].index("-append") + 1]
+    assert guest.slot == "b"
+
+
+def test_observer_restarts_original_cloud_without_source_slot_recovery(tmp_path, monkeypatch):
+    guest, calls = stopped_guest(tmp_path, monkeypatch)
+    guest.slot = "b"
+    ready = []
+    monkeypatch.setattr(guest, "wait_boot", lambda: ready.append(True))
+    guest.start_observer()
+    assert ready == [True] and len(calls) == 1
+    arguments = calls[0][calls[0].index("-append") + 1]
+    assert arguments.startswith("root=/dev/vda1 ") and "rauc.slot=" not in arguments
+
+
+@pytest.mark.parametrize("returncode", [None, -15])
+def test_observer_refuses_live_or_abnormally_exited_guest(tmp_path, monkeypatch, returncode):
+    guest, calls = stopped_guest(tmp_path, monkeypatch)
+    guest.process = SimpleNamespace(poll=lambda: returncode)
+    with pytest.raises(ValueError):
+        guest.start_observer()
+    assert calls == []
 
 
 @pytest.mark.skipif(os.environ.get("ROSY_RUN_OS_SYSTEM_TESTS") != "1", reason="explicit disposable ARM SYSTEM guest opt-in")
@@ -47,6 +97,7 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path, so
         facts = guest.run("python3 -c \"import sys,json;sys.path.insert(0,'/opt/rosy/os-bootstrap/native-runtime');from os_media import capture;print(json.dumps(capture()))\"")
         media = json.loads(facts)
         assert media["slot"] == source_slot and media["layout"] == layout
+        source_boot = guest.run("cat /proc/sys/kernel/random/boot_id").strip()
         target_slot = "b" if source_slot == "a" else "a"
         installed = json.loads(guest.run(scenario.format(command="install"), timeout=5400))
         assert installed["installed"] is True
@@ -58,16 +109,19 @@ def test_actual_arm_kernel_exposes_strict_synthetic_boot_properties(tmp_path, so
         assert all(media["partitions"][role]["device"] in mounted for role in ("bootstrap", "data"))
         # Fault injection: select an installed but unarmed trial. Independent PID1 deadline must recover.
         target_root = next(p["unique_guid"] for p in layout["partitions"] if p["role"] == "root_" + target_slot)
-        guest.restart_slot(target_root, target_slot, trial=True)
-        assert guest.run("findmnt -n -o SOURCE /").strip() == ("/dev/vdc5" if target_slot == "b" else "/dev/vdc4")
-        assert guest.run("od -An -tx1 /proc/device-tree/chosen/bootloader/tryboot").split() == ["00", "00", "00", "01"]
-        assert guest.run("systemctl is-active rosy-os-trial-deadline.timer").strip() == "active"
-        assert "OnBootSec=180s" in guest.run("systemctl cat rosy-os-trial-deadline.timer")
-        boot = guest.run("cat /proc/sys/kernel/random/boot_id").strip()
-        journal = guest._ssh("stdbuf -oL journalctl --boot --follow "
-                             "--unit=rosy-os-trial-deadline.service --output=json --no-pager", timeout=240)
-        importlib.import_module("os_system_vm").pid1_start(
-            journal.stdout, "rosy-os-trial-deadline.service", boot, 180_000_000)
-        assert guest.process.wait(timeout=90) == 0  # QEMU -no-reboot exits on the guest's reboot request.
-        console = (tmp_path / "guest-console.log").read_text(errors="replace")
-        assert "reboot: Restarting system" in console
+        # Recovery can outrun SSH readiness; inspect the retained journal from the original cloud observer.
+        guest.restart_slot(target_root, target_slot, trial=True, wait=False)
+        assert guest.process.wait(timeout=480) == 0  # Includes the real boot and normal shutdown, without SSH admission.
+        with (tmp_path / "guest-console.log").open("rb") as stream:
+            console = stream.read(1024**2 + 1)
+        assert len(console) <= 1024**2 and b"reboot: Restarting system" in console
+        with (tmp_path / "trial-console.log").open("xb") as stream:
+            stream.write(console)
+        print("ARM_TRIAL_REBOOT " + next(line.decode(errors="replace") for line in console.splitlines()
+                                         if b"reboot: Restarting system" in line))
+        guest.start_observer()
+        evidence = json.loads(guest.run(scenario.format(command="journal"), timeout=120))
+        (tmp_path / "trial-journal.jsonl").write_text(evidence["journal"])
+        print("ARM_TRIAL_JOURNAL_BEGIN\n" + evidence["journal"] + "\nARM_TRIAL_JOURNAL_END")
+        importlib.import_module("os_system_trial").validate(evidence["journal"], target_slot=target_slot,
+                                                           root_uuid=target_root, previous_boot=source_boot)

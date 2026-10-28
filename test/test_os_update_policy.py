@@ -8,8 +8,8 @@ from auto_update_fakes import FakeHost
 from test_os_update_state import _state, _begin, SOURCE_BOOT, TRANSACTION
 
 
-def _policy(tmp_path, monkeypatch):
-    state, root, journal, _, verified, facts = _state(tmp_path, monkeypatch)
+def _policy(tmp_path, monkeypatch, *, slot="a"):
+    state, root, journal, _, verified, facts = _state(tmp_path, monkeypatch, slot=slot)
     module = importlib.import_module("os_update_policy")
     records = importlib.import_module("auto_update_records")
     directory = root / "var/lib/rosy-device/policy/updates"
