@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
 - 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
 - 2026-10-28 · uncommitted · docs(reference): 문서로 남긴 작업 기록을 Jira 이슈에 짧은 코멘트로 연결한다
 - 2026-10-28 · uncommitted · fix(land): 겹치지 않는 묶음은 함께 있을 수 있다
 - 2026-10-28 · uncommitted · fix(land): 착지가 시작할 때 같은 무리의 대기 티켓을 묶어 이끈다
-- 2026-10-28 · uncommitted · fix(test): 역할 화면 브라우저 시험이 공용 부품의 상대 import를 어느 mount에서나 제공

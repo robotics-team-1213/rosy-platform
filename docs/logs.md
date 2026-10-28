@@ -12842,3 +12842,11 @@ osy-d395-s1d\`.
 - 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 작업 공간 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)과 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절의 같은 규칙 문구도 같은 날 함께 고쳤다.
 - gate 변화: 없음.
 - CE: 해당 없음 — 문서 관례 다듬기이며 코드·장치·시험 경로 변경이 없다.
+
+## 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
+
+- 변경: `docs/reference/AGENTS.md`의 `atlassian-integration.md` 행 설명에 「문서 기록을 이슈의 기록용 코멘트 하나에 링크로 이어 붙이는 규칙(§4)」을 넣고, 문서 갱신 날짜를 2026-10-29로 올렸다.
+- 근거: 같은 날 확정한 §4 규칙을 이 목차만 읽는 세션도 찾을 수 있게 한다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행).
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 요약 갱신이다.
