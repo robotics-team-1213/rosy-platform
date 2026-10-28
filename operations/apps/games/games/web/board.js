@@ -215,6 +215,7 @@ async function tick() {
   expireMatchEvidence();
   if (polling) return;
   polling = true;
+  const requestedAt = performance.now();
   try {
     const res = await fetch("/overlay.json", { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error(`overlay ${res.status}`);
@@ -232,16 +233,20 @@ async function tick() {
       return;
     }
     hasMatch = true;
-    receipt = payload.evidence === "fresh" && Number.isFinite(payload.age_s) && payload.age_s >= 0
-      && Number.isFinite(payload.stale_after_s) && payload.stale_after_s > 0
-      ? {at: performance.now(), age: payload.age_s, after: payload.stale_after_s} : null;
-    const evidence = payload.evidence || "unavailable";
+    const receivedAt = performance.now();
+    const timed = Number.isFinite(payload.age_s) && payload.age_s >= 0
+      && Number.isFinite(payload.stale_after_s) && payload.stale_after_s > 0;
+    // Request elapsed time bounds transit age without requiring synchronized UTC clocks.
+    const age = timed ? payload.age_s + (receivedAt - requestedAt) / 1000 : 0;
+    let evidence = payload.evidence || "unavailable";
+    if (evidence === "fresh") evidence = !timed ? "unavailable" : age > payload.stale_after_s ? "delayed" : "fresh";
+    receipt = evidence === "fresh" ? {at: receivedAt, age, after: payload.stale_after_s} : null;
     setFieldEvidence(evidence);
     connection.dataset.evidence = evidence;
-    if (payload.evidence === "fresh") {
+    if (evidence === "fresh") {
       setTextIfChanged(connection, "\uD638\uC2A4\uD2B8 \uC5F0\uACB0\uB428");
-    } else if (payload.evidence === "delayed") {
-      const age = typeof payload.age_s === "number" ? ` \u00B7 \uB9C8\uC9C0\uB9C9 \uC0DD\uC131 ${payload.age_s.toFixed(1)}\uCD08 \uC804` : "";
+    } else if (evidence === "delayed") {
+      const age = payload.evidence === "delayed" && typeof payload.age_s === "number" ? ` \u00B7 \uB9C8\uC9C0\uB9C9 \uC0DD\uC131 ${payload.age_s.toFixed(1)}\uCD08 \uC804` : "";
       setTextIfChanged(connection, `\uC9C0\uC5F0 \u00B7 \uB9C8\uC9C0\uB9C9 \uC218\uC2E0 \uACBD\uAE30 \uC815\uBCF4${age}`);
     } else {
       setTextIfChanged(connection, "\uC2DC\uAC01 \uC815\uBCF4 \uC5C6\uC74C \u00B7 \uB9C8\uC9C0\uB9C9 \uACBD\uAE30 \uC815\uBCF4");
