@@ -24,7 +24,7 @@ def test_long_stop_error_wraps_and_scrolls_without_hiding_stop(tmp_path, width, 
         def serve(route):
             path = urlsplit(route.request.url).path
             if path == '/api/v1/safety/stop':
-                route.fulfill(status=503, json={'error': {'code': 'INTERNAL_ERROR', 'message': 'fixture-' + 'x' * 600}})
+                route.fulfill(status=503, json={'error': {'code': 'INTERNAL_ERROR', 'message': '상태 확인: fixture-' + 'x' * 600}})
                 return
             if route.request.method != 'GET':
                 route.fulfill(status=501, json={'detail': 'fixture blocks writes'}); return
