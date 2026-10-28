@@ -48,12 +48,16 @@ def _keys(root: Path) -> tuple[bytes, os.stat_result | None]:
     if uid <= 0 or gid <= 0:
         raise ValueError("invalid operator account identity")
     directory = root
-    for part in ("home", "rosy", ".ssh"):
+    for part in ("", "home", "rosy", ".ssh"):
         directory /= part
         info = directory.lstat()
         if not stat.S_ISDIR(info.st_mode) or info.st_mode & 0o022:
             raise ValueError("operator key directory is unsafe")
-        if part != "home" and (info.st_uid, info.st_gid) != (uid, gid):
+        search = (stat.S_IXUSR if info.st_uid == uid else
+                  stat.S_IXGRP if info.st_gid == gid else stat.S_IXOTH)
+        if not info.st_mode & search:
+            raise ValueError("operator key directory cannot be traversed by the account")
+        if part in {"rosy", ".ssh"} and (info.st_uid, info.st_gid) != (uid, gid):
             raise ValueError("operator key directory ownership differs from the account")
     try:
         path = card.plain_file(root, KEYS)
@@ -63,7 +67,8 @@ def _keys(root: Path) -> tuple[bytes, os.stat_result | None]:
     with os.fdopen(descriptor, "rb") as stream:
         info = os.fstat(stream.fileno())
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 65536
-                or info.st_mode & 0o022 or (info.st_uid, info.st_gid) != (uid, gid)):
+                or info.st_mode & 0o022 or not info.st_mode & stat.S_IRUSR
+                or (info.st_uid, info.st_gid) != (uid, gid)):
             raise ValueError("operator key file is unsafe")
         return stream.read(65537), info
 
