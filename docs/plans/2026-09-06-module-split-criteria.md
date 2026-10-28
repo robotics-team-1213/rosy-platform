@@ -180,6 +180,72 @@ its `id`/`label` representations. They are listed in the test allowlist and
 are kept inside the ROS bridge; none reaches a private owner or adds a command
 path.
 
+### Host-file extraction triage (2026-10-28)
+
+Moving the existing host handoff reads from the API package into `core.system`
+brings them into this scan. The exact tuples and multiplicities remain solely
+in `ALLOWED` in `middleware/core/gateway/test/test_module_criteria.py`.
+All accepted expressions already existed in the API; this relocation grants
+no device access, command authority, provider selection, or new exported key.
+
+Three declared-member reaches are fixed rather than admitted: `svc.state`
+is read directly, an explicit `state is None` remains absent and its declared
+`snapshot()` is called once; after the existing None-state guard the overlay
+calls declared `state.get_sensor(sensor)` directly and retains a None sample;
+`policy.warning_percent` is read directly only when policy is not None, with
+the existing absent-policy default and float-conversion fallback unchanged.
+They gain no registry entries. Snapshot fields below still support existing
+partial observations; that does not imply the full StateSnapshot omits them.
+
+| Review ID / read | Verdict and bounded absence semantics |
+|---|---|
+| C6-HOST-01 / `system/host_files.py`: `line_config` / `key` | **Accepted: CONFIG_DISPATCH.** The only keys are cruise_speed/max_linear/steering_gain/min_confidence, all declared LineFollowConfig floats. This is an existing allowlisted public projection, with no fallback: a missing declared key still raises. No auth/config secret or new command parameter is exported. |
+| C6-HOST-02 / `system/host_files.py`: `os` / `"O_NOFOLLOW"` | **Accepted: PLATFORM_GUARD.** Existing public OS capability flag with zero fallback on platforms lacking it. The same bounded regular-file checks/no-follow/nonblocking/close-on-exec paths and atomic writes are retained; no new filesystem privilege or process operation is introduced. |
+| C6-HOST-03 / `system/host_files.py`: `snapshot` / `'robot_id'` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares robot_id. A None/partial observational snapshot yields None, preserving the existing handoff absence; a real snapshot exports only its public identity. The effective-law regression checks real robot_id and excludes credentials. |
+| C6-HOST-04 / `system/host_files.py`: `svc` / `"calibration"` | **Accepted: OPTIONAL_SERVICE.** CoreServices/CoreServicesLike declare calibration. Existing handoff contract explicitly permits absent service in partial/installed callers and writes calibration_active=None, never false/idle; test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode asserts this. |
+| C6-HOST-06 / `system/host_files.py`: `svc` / `'line_follow'` | **Accepted: OPTIONAL_SERVICE.** CoreServices declares line_follow. The no-API installed operation intentionally supplies no line-follow service and exports line_follow_steering_law=None; when present, only the four declared public config fields are projected. No provider/manager factory is chosen. |
+| C6-HOST-07 / `system/host_files.py`: `os` / `"fchmod"` | **Accepted: PLATFORM_GUARD.** Existing platform guard: POSIX sets 0644 on the temporary descriptor; without fchmod the existing path-based chmod runs before rename. Both checks preserve mode-before-visibility and cleanup, not a private service seam. |
+| C6-HOST-08 / `system/host_hardware.py`: `battery` / `"percent"` | **Accepted: NULLABLE_VALUE.** Battery.percent is Optional[float]. Missing battery/percent remains None and bool/non-numeric values are rejected. Explicit non-fresh judgment suppresses both numbers; absent judgment currently retains a numeric percent. This existing absence behavior is preserved, not strengthened to a mandatory fresh-evidence gate. |
+| C6-HOST-09 / `system/host_hardware.py`: `battery` / `"voltage"` | **Accepted: NULLABLE_VALUE.** Battery.voltage is Optional[float]. Missing battery/voltage remains None and bool/non-numeric values are rejected. Explicit non-fresh judgment suppresses both numbers; absent judgment currently retains a numeric voltage. The separate device-topic overlay still requires fresh judgment. No raw hardware access or freshness tightening is introduced. |
+| C6-HOST-10 / `system/host_hardware.py`: `judged` / `"value"` | **Accepted: ENUM_OR_STRING.** ValueEvidence.evidence is EvidenceState, while existing injected observations may already carry the same public wire string. Enum.value-or-string normalization preserves that supported union; missing evidence is not fresh. |
+| C6-HOST-11 / `system/host_hardware.py`: `line_follow` / `"mode"` | **Accepted: PARTIAL_OBSERVATION.** LineFollowStatus declares mode. An absent partial snapshot component yields None; _name bounds/type-checks the value before export. It never manufactures OFF/idle for an unknown producer. |
+| C6-HOST-12 / `system/host_hardware.py`: `line_follow` / `"state"` | **Accepted: PARTIAL_OBSERVATION.** LineFollowStatus declares state. Missing component/field remains unknown via _name, not a guessed OFF state. This only exports the existing public status field. |
+| C6-HOST-13 / `system/host_hardware.py`: `mode` / `"value"` | **Accepted: ENUM_OR_STRING.** RobotMode is a str Enum. Existing handoff also accepts its public string representation and rejects missing/invalid modes with robot_state.valid_robot_mode. This is type normalization, not private manager access. |
+| C6-HOST-14 / `system/host_hardware.py`: `nav` / `"value"` | **Accepted: ENUM_OR_STRING.** NavigationState is a str Enum. Existing partial observations may supply its wire string; valid_nav_state retains None for unknown/invalid data. No navigation method or command is invoked. |
+| C6-HOST-15 / `system/host_hardware.py`: `os` / `"O_CLOEXEC"` | **Accepted: PLATFORM_GUARD.** Existing public OS capability flag with zero fallback on platforms lacking it. The same bounded regular-file checks/no-follow/nonblocking/close-on-exec paths and atomic writes are retained; no new filesystem privilege or process operation is introduced. |
+| C6-HOST-16 / `system/host_hardware.py`: `os` / `"O_NOFOLLOW"` | **Accepted: PLATFORM_GUARD.** Existing public OS capability flag with zero fallback on platforms lacking it. The same bounded regular-file checks/no-follow/nonblocking/close-on-exec paths and atomic writes are retained; no new filesystem privilege or process operation is introduced. |
+| C6-HOST-17 / `system/host_hardware.py`: `os` / `"O_NONBLOCK"` | **Accepted: PLATFORM_GUARD.** Existing public OS capability flag with zero fallback on platforms lacking it. The same bounded regular-file checks/no-follow/nonblocking/close-on-exec paths and atomic writes are retained; no new filesystem privilege or process operation is introduced. |
+| C6-HOST-19 / `system/host_hardware.py`: `snapshot` / `"activity"` | **Accepted: NULLABLE_VALUE.** StateSnapshot.activity is Optional[RobotActivity]. None stays unknown; only a bounded public activity kind is exported. No lifecycle/activity mutation occurs. |
+| C6-HOST-20 / `system/host_hardware.py`: `snapshot` / `"battery"` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares Battery via default_factory. Both existing reads accept a None/partial snapshot. _battery_reading retains numeric values when judgment is absent and suppresses them when explicitly non-fresh; the device-topic overlay separately requires fresh judgment. No observation or authorization rule changes. |
+| C6-HOST-21 / `system/host_hardware.py`: `snapshot` / `"battery_status"` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares BatteryStatus. The existing handoff can retain confirmed charging when battery judgment is absent; explicit non-fresh judgment removes the numeric battery reading and prevents that charging value. Missing/non-boolean charging remains None. This is preservation of current observation semantics, not a claim that every charging export requires an explicit fresh judgment. |
+| C6-HOST-22 / `system/host_hardware.py`: `snapshot` / `"docking"` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares DockingStatus; a None/partial snapshot gives no bounded docking state, not UNDOCKED. This avoids guessing updater eligibility. |
+| C6-HOST-23 / `system/host_hardware.py`: `snapshot` / `"evidence"` | **Accepted: OPTIONAL_MAP_ENTRY.** StateSnapshot.evidence is dict[str,ValueEvidence] with default empty map. Missing/partial evidence or an absent channel stays unknown; only declared fresh evidence can improve a topic overlay. |
+| C6-HOST-24 / `system/host_hardware.py`: `snapshot` / `"line_follow"` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares LineFollowStatus. Existing partial/no-state input preserves unknown mode/state; validated real snapshots retain their declared values. No controller/manager member is reached. |
+| C6-HOST-25 / `system/host_hardware.py`: `snapshot` / `"mode"` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares RobotMode. Partial/None input yields None, and the subsequent valid-mode check rejects unknown strings; the no-mode/invalid-mode regressions preserve this behavior. |
+| C6-HOST-26 / `system/host_hardware.py`: `snapshot` / `"navigation"` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares NavigationState. A missing partial component is absent; the validator never invents an IDLE navigation state. |
+| C6-HOST-27 / `system/host_hardware.py`: `snapshot` / `"safety"` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares SafetySummary. The existing nested boolean estop extraction returns None if unavailable/non-bool, not false; this handoff read cannot clear e-stop or authorize commands. |
+| C6-HOST-28 / `system/host_hardware.py`: `snapshot` / `"swarm"` | **Accepted: PARTIAL_OBSERVATION.** StateSnapshot declares SwarmStatus. Two existing reads export role and boolean active; absent/partial data stays None, not an inactive safe state. |
+| C6-HOST-29 / `system/host_hardware.py`: `snapshot` / `"velocity"` | **Accepted: FRESHNESS_GATED_VALUE.** StateSnapshot declares Velocity. It is read only when the velocity evidence channel is fresh; otherwise None propagates to both finite-number outputs, preserving the existing anti-false-idle condition. |
+| C6-HOST-30 / `system/host_hardware.py`: `svc` / `"safety"` | **Accepted: OPTIONAL_SERVICE.** CoreServices declares safety. Standalone installed/partial observational callers can omit it; the existing documented default threshold is used without constructing/mutating any policy. A populated service reads its public battery_policy. |
+| C6-HOST-31 / `system/host_hardware.py`: `swarm` / `"role"` | **Accepted: PARTIAL_OBSERVATION.** SwarmStatus.role is the public SwarmRole. Missing component yields None and valid_swarm_role rejects invalid values; no swarm lifecycle or dispatch operation is called. |
+| C6-HOST-32 / `system/host_hardware.py`: `value` / `"evidence"` | **Accepted: OPTIONAL_MAP_ENTRY.** The channel lookup may return None when absent; ValueEvidence publicly declares evidence when present. Missing judgment remains None and cannot be counted fresh. This is an existing nullable map-value read. |
+| C6-HOST-33 / `system/host_hardware.py`: `value` / `"value"` | **Accepted: ENUM_OR_STRING.** The bounded state-name helper intentionally accepts either a public str Enum or an already serialized string/None across docking, line, activity and swarm values. It checks string type and length; no service/config field is selected. |
+| C6-HOST-34 / `system/host_hardware.py`: `velocity` / `"angular"` | **Accepted: FRESHNESS_GATED_VALUE.** Velocity.angular is a declared float. The receiver is None when evidence is not fresh; _number returns None for missing/non-finite/bool data, never fabricated zero. |
+| C6-HOST-35 / `system/host_hardware.py`: `velocity` / `"linear"` | **Accepted: FRESHNESS_GATED_VALUE.** Velocity.linear is a declared float. The same evidence gate and finite-number checks preserve unknown speed instead of false rest. |
+
+Battery evidence absence must not be described as stale: current numeric
+battery values survive an absent judgment, and confirmed charging may survive
+with them. An explicit non-fresh judgment suppresses the numeric reading;
+the separate topic overlay requires fresh judgment. This triage preserves
+those rules. It does not tighten freshness or manufacture a zero/idle value.
+The full confirmation read-modify-write locks, request IDs, shared cooldowns,
+one-snapshot publication, authentication, and bounded atomic file operations
+are outside these direct-read changes and remain unchanged.
+
+The finder scope, regex, Counter multiplicities and strict added/removed
+equality remain unchanged. Every future new tuple or changed multiplicity
+requires its own verdict; this table grants no blanket dynamic allowance.
+
 ### C7 — a service field whose methods span two requirement families
 
 C5 (below) is defined over the *current* service graph, so it is a fixed point: it can see misplacement in the API layer and is structurally blind to misplacement in the service layer. C7 is the criterion C5 cannot express.
