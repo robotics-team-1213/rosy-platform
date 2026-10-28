@@ -137,3 +137,16 @@ def test_joint_commands_accelerate_within_sim_profile_and_stop_at_position_limit
         assert -.1 <= position <= 1.1 and abs(velocity) <= .5
         assert abs(velocity-previous_velocity) <= .5/30+1e-12
     assert position == pytest.approx(1.1) and abs(velocity) < 1e-9
+
+
+def test_fractional_velocity_steps_can_brake_after_changing_policy_requests():
+    import random
+    mod = fixture()
+    limits = dict(position=[-.02, .02], velocity=.5, acceleration=.5)
+    rng = random.Random(42)
+    position = velocity = 0.
+    for _ in range(10000):
+        previous_velocity = velocity
+        position, velocity = mod.advance_joint(position, velocity, rng.uniform(-10, 10), limits, 1/30)
+        assert -.02 <= position <= .02
+        assert abs(velocity-previous_velocity) <= .5/30+1e-12
