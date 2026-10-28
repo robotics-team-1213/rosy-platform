@@ -49,7 +49,7 @@ def test_ssh_write_failure_survives_followup_read_and_explicit_retry(panel, meth
         save_temp_screenshot(page, str(destination))
     if not read_failed:
         page.evaluate("""() => {window.__api = async (_path, options = {}) => {
-          if (options.method) { sshWrites++; return {password:'fixture-only', expires_at:'fixture expiry'}; }
+          if (options.method) { sshWrites++; return {password:'fixture-one-time-credential', expires_at:'fixture expiry'}; }
           return {enabled: false};
         };}""")
         control.click()
@@ -84,7 +84,7 @@ def test_ssh_mutations_lock_both_actions_through_readback(panel, method):
     page = panel('system/security.js', role='administrator')
     section = page.locator('section').filter(has=page.get_by_role('heading', name='임시 SSH 비밀번호', exact=True))
     page.evaluate("""() => {window.__api = async (_path, options = {}) => options.method
-      ? {password:'fixture-before', expires_at:'fixture expiry'} : {enabled:true};}""")
+      ? {password:'fixture-one-time-credential-before', expires_at:'fixture expiry'} : {enabled:true};}""")
     section.locator('form').evaluate('form => form.requestSubmit()')
     expect(section.get_by_text('임시 비밀번호 켜짐 · 만료 알 수 없음', exact=True)).to_be_visible()
     page.evaluate("""() => {
@@ -99,7 +99,7 @@ def test_ssh_mutations_lock_both_actions_through_readback(panel, method):
         expect(control).to_be_disabled()
     section.locator('form').evaluate('form => form.requestSubmit()')
     assert page.evaluate('sshWrites') == 1
-    page.evaluate("finishWrite({password:'fixture-only', expires_at:'fixture expiry'})")
+    page.evaluate("finishWrite({password:'fixture-one-time-credential', expires_at:'fixture expiry'})")
     page.wait_for_function("typeof finishRead === 'function'")
     for control in section.locator('ui-button').all():
         expect(control).to_be_disabled()
@@ -111,15 +111,15 @@ def test_ssh_mutations_lock_both_actions_through_readback(panel, method):
 def test_ssh_one_time_credential_survives_read_failure(panel):
     page = panel('system/security.js', role='administrator')
     page.evaluate("""() => {window.__api = async (_path, options = {}) => {
-      if (options.method === 'POST') return {password:'fixture-only-password', expires_at:'fixture expiry'};
+      if (options.method === 'POST') return {password:'fixture-one-time-credential', expires_at:'fixture expiry'};
       throw new Error('read unavailable');
     };}""")
     section = page.locator('section').filter(has=page.get_by_role('heading', name='임시 SSH 비밀번호', exact=True))
     section.locator('form').evaluate('form => form.requestSubmit()')
     expect(section.get_by_text('임시 비밀번호가 발급되었습니다(rosy@로봇, fixture expiry까지).', exact=True)).to_be_visible()
     expect(section.get_by_text('SSH 비밀번호 상태를 가져오지 못했습니다. 호스트 에이전트를 확인하세요.', exact=True)).to_be_visible()
-    expect(section.get_by_text('rosy 계정 비밀번호: fixture-only-password · fixture expiry까지', exact=True)).to_be_visible()
-    assert page.evaluate("Object.values(localStorage).concat(Object.values(sessionStorage)).join('').includes('fixture-only-password')") is False
+    expect(section.get_by_text('rosy 계정 비밀번호: fixture-one-time-credential · fixture expiry까지', exact=True)).to_be_visible()
+    assert page.evaluate("Object.values(localStorage).concat(Object.values(sessionStorage)).join('').includes('fixture-one-time-credential')") is False
 
 
 @pytest.mark.parametrize('method', ['GET', 'POST', 'DELETE'])
@@ -133,20 +133,20 @@ def test_ssh_late_response_does_not_mutate_disposed_panel(panel, method):
     if method == 'DELETE':
         section.locator('form').evaluate('form => form.requestSubmit()')
         page.wait_for_function("typeof finishSsh === 'function'")
-        page.evaluate("finishSsh({password:'fixture-before', expires_at:'fixture expiry'})")
+        page.evaluate("finishSsh({password:'fixture-one-time-credential-before', expires_at:'fixture expiry'})")
         expect(section.get_by_text('임시 비밀번호 켜짐 · 만료 알 수 없음', exact=True)).to_be_visible()
         section.get_by_role('button', name='지금 끄기', exact=True).click()
     else:
         if method == 'GET':
             page.evaluate("""() => {window.__api = async (_path, options = {}) => options.method
-              ? {password:'fixture-before', expires_at:'fixture expiry'}
+              ? {password:'fixture-one-time-credential-before', expires_at:'fixture expiry'}
               : new Promise(resolve => window.finishSsh = resolve);}""")
         section.locator('form').evaluate('form => form.requestSubmit()')
     page.wait_for_function("typeof finishSsh === 'function'")
     page.evaluate("""() => {
       __unmount(); window.closedDOM = document.querySelector('#root').innerHTML;
       window.closedCalls = __calls.length;
-      finishSsh({enabled:true, password:'fixture-late', expires_at:'fixture expiry'});
+      finishSsh({enabled:true, password:'fixture-one-time-credential-late', expires_at:'fixture expiry'});
     }""")
     page.wait_for_timeout(50)
     assert page.evaluate("document.querySelector('#root').innerHTML === closedDOM")
