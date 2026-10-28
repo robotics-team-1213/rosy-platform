@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import stat
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -81,20 +82,37 @@ class LanePerceptionConfig:
     restart: Callable[[], None] = lambda: None
     model_check: Callable[[], str] = installed_model_revision
     overlay_check: Callable[[dict], str | None] = installed_overlay_problem
+    root: Path = Path('/')
 
-    def _overlay(self) -> dict:
+    def _snapshot_overlay(self) -> bytes | None:
+        if self.overlay.is_symlink():
+            raise ValueError('observer overlay is unsafe or too large')
         if not self.overlay.exists():
-            return {NODE_KEY: {"ros__parameters": {}}}
-        if self.overlay.is_symlink() or self.overlay.stat().st_size > 16384:
+            return None
+        flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0)
+        descriptor = os.open(self.overlay, flags)
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 16384:
+                raise ValueError('observer overlay is unsafe or too large')
+            raw = os.read(descriptor, 16385)
+        finally:
+            os.close(descriptor)
+        if len(raw) > 16384:
             raise ValueError("observer overlay is unsafe or too large")
+        return raw
+
+    def _overlay(self, raw: bytes | None) -> dict:
+        if raw is None:
+            return {NODE_KEY: {"ros__parameters": {}}}
         import yaml  # python3-yaml is an explicit native-image apt dependency
-        data = yaml.safe_load(self.overlay.read_text(encoding="utf-8"))
+        data = yaml.safe_load(raw.decode('utf-8'))
         if not isinstance(data, dict) or not isinstance(data.get(NODE_KEY, {}).get("ros__parameters"), dict):
             raise ValueError("observer overlay is invalid")
         return data
 
     def get(self) -> dict:
-        params = self._overlay()[NODE_KEY]["ros__parameters"]
+        params = self._overlay(self._snapshot_overlay())[NODE_KEY]["ros__parameters"]
         revision, reason = None, "configuration readback; live inference source requires camera evidence"
         try:
             revision = self.model_check()
@@ -112,7 +130,25 @@ class LanePerceptionConfig:
         if problem:
             raise ValueError(problem)
 
-    def _replace(self, content: bytes) -> None:
+    def _replace(self, content: bytes | None, *, expected: bytes | None, check_stopped: bool = True) -> None:
+        relative = 'etc/rosy/line_observer_overrides.yaml'
+        if self.overlay.absolute() == self.root.absolute() / relative:
+            source = Path(__file__).resolve().parent.parent
+            directory = source / 'native' if source.name == 'pinky_pro' else self.root / 'opt/rosy/native-runtime'
+            sys.path.insert(0, str(directory))
+            from os_state_config import configuration_update
+            with configuration_update(self.root) as update:
+                if update.handles(self.overlay):
+                    if update.values.get(relative) != expected:
+                        raise ValueError('canonical observer overlay changed before publication')
+                    if check_stopped:
+                        self._check_stopped()
+                    update.stage(relative, content, 0o644)
+                    update.commit()
+                    return
+        if content is None:
+            self.overlay.unlink(missing_ok=True)
+            return
         self.overlay.parent.mkdir(parents=True, exist_ok=True)
         fd, name = tempfile.mkstemp(prefix=".lane-perception-", dir=self.overlay.parent)
         try:
@@ -137,7 +173,8 @@ class LanePerceptionConfig:
         if paint_source not in PAINT_SOURCES:
             raise ValueError("unknown paint_source")
         self._check_stopped()
-        data = self._overlay()
+        before = self._snapshot_overlay()
+        data = self._overlay(before)
         params = data[NODE_KEY]["ros__parameters"]
         # Keep is the metric lane path; preserve accepted device ground geometry.
         if paint_source != "threshold" and params.get("camera_lane_mode") != "keep":
@@ -151,16 +188,14 @@ class LanePerceptionConfig:
         problem = self.overlay_check(data)
         if problem:
             raise ValueError(problem)
-        before = self.overlay.read_bytes() if self.overlay.exists() else None
         self._check_stopped()  # after model hashing, immediately before mutation
-        self._replace(yaml.safe_dump(data, sort_keys=False).encode("utf-8"))
+        content = yaml.safe_dump(data, sort_keys=False).encode("utf-8")
+        self._replace(content, expected=before)
         try:
             self.restart()
         except Exception:
-            if before is None:
-                self.overlay.unlink(missing_ok=True)
-            else:
-                self._replace(before)
+            # Restore the previous configuration even if stopped evidence expired during restart.
+            self._replace(before, expected=content, check_stopped=False)
             self.restart()  # restore runtime too; failure remains visible to caller
             raise
         result = self.get()

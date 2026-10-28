@@ -52,6 +52,11 @@ modules:
     tests: [operations/fleet/test]
     functional_kind: pytest
     functional: [test/test_remaining_platform_installed.py]
+  - name: situation
+    path: operations/situation
+    tests: [operations/situation/test]
+    functional_kind: pytest
+    functional: [operations/situation/test]
   - name: media
     path: operations/site_ui/media
     tests: [operations/site_ui/media/test]

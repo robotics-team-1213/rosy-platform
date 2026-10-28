@@ -1,11 +1,12 @@
 ---
 module: tools
 date: 2026-10-24
+last_updated: 2026-10-27
 problem_type: workflow_issue
 component: development_workflow
 severity: medium
 tags: ["windows", "python", "utf8", "remote-tests", "evidence"]
-applies_when: "Windows의 Python 표준 출력이 cp1252이고 원격 pytest 실패 본문에 한국어가 포함될 때"
+applies_when: "Windows Python의 cp1252 표준 출력으로 한국어 시험 결과나 상태 변경 명령의 사유를 출력할 때"
 ---
 
 # 원격 시험의 부모 Python도 UTF-8로 실행한다
@@ -37,3 +38,11 @@ python -X utf8 test/known_failures.py <scratch>/run-1.txt
 - 후속 UI 수정은 별도 commit에서 원격 검증했다. 인코딩 복구만으로 UI가 고쳐진 것으로 계산하지 않는다. 원시 두 로그는 Git 밖 작업 기록 `Rosy/docs/workspace-records/2026-10-24/fleet-ui-boundaries-evidence/`에서 보존한다.
 
 예방 조건은 **부모 표준 출력의 실제 인코딩**이다. 모든 Windows 환경이 cp1252라고 일반화하지 않는다. 파일에 한글을 쓰는 경로의 인코딩 손실은 [별도 기록](powershell-utf8-append-mangles-korean-journals.md)을 따른다. 이번 방법은 runner 출력 복구이며 파일 쓰기 방법을 대체하지 않는다.
+
+## 상태 변경 명령은 실패 전에 일부 작업을 끝냈을 수 있다
+
+2026-10-27 `worktrees.py new`도 같은 출력 문제를 보였다. 승인된 임시 슬롯을 재사용하는 호출이 워크트리 생성·Git 등록을 끝낸 뒤 한국어 한도 예외 사유를 출력하다 실패했고, 이후 단계의 소유 메타데이터는 저장되지 않았다. 명령의 실패 종료만 보고 생성 자체가 없었다고 판단하면 안 된다.
+
+재실행 전에 실제 경로, Git 워크트리 등록, 저장소 루트, 대상 브랜치와 HEAD, 작업 트리의 clean 상태, 소유 메타데이터를 대조했다. 생성된 워크트리가 의도한 기준 커밋과 일치하고 마지막 메타데이터만 없음을 확인한 뒤, 현재 공식 도구의 identity와 이미 승인된 사유로 그 누락 단계만 완료했다. 저장된 값이 의도한 값과 같은지도 확인했다. 임의 소유자를 만들거나 `new`를 다시 실행하거나 기존 경로를 삭제하지 않았다. 경로나 저장소 정체가 불확실하면 [빈 워크트리의 Git 실행 주의](empty-worktree-folder-runs-git-on-the-shared-main-2026-10-25.md)를 먼저 따른다.
+
+예방 호출은 `python -X utf8 tools/worktrees.py new ...`이며, 자식 Python까지 필요하면 위의 `PYTHONUTF8` 조건을 적용한다. 이는 검증한 부분 실행 복구와 호출 인코딩 예방이다. `worktrees.py` 소스의 출력 순서나 예외 처리를 수정한 것은 아니며, 같은 문제가 난 모든 명령에 메타데이터 복구를 일반화하지 않는다. 각 명령의 실제 단계와 완료된 부작용부터 확인한다. 이 후속 관련 교훈 검색은 복구 뒤에 수행했다.

@@ -46,7 +46,7 @@ def test_the_mirror_hypothesis_sees_the_same_objects():
     ranges, angles = scan(pose, peers=[peer])
     true = unmapped_objects(field(), sensor_from_base(pose, MOUNT), ranges, angles, MOUNT)
     mirrored = unmapped_objects(field(), sensor_from_base(mirror(pose), MOUNT), ranges, angles, MOUNT)
-    assert mirrored == pytest.approx(true, abs=1e-6)
+    assert np.asarray(mirrored) == pytest.approx(np.asarray(true), abs=1e-6)
 
 
 # --- 2026-10-02 post-processing audit: self beams, peer centre, merged peers -------------------

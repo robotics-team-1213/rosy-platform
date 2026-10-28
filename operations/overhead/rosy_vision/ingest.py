@@ -41,11 +41,12 @@ except ImportError as exc:  # apt python3-websockets on Ubuntu 24.04 is 10.x
     ) from exc
 
 from rosy_vision import protocol
+from rosy_vision.loops import LoopWatch, readyz_body
 from core_common.protocol.vision_preview import (
     PreviewRectification, VisionLeaseError, VisionLeaseSigner,
 )
 from rosy_vision import map_worker
-from rosy_vision.ingest_status import status_message
+from rosy_vision.ingest_status import MARKER_REPORT_TTL_S, marker_status, status_message  # noqa: F401
 from rosy_vision.map_register import MapPaint
 from rosy_vision.pairing_sync import PairedCredentials
 from rosy_vision.preview_plane import map_plane_response, rectified_jpeg
@@ -60,9 +61,6 @@ _WS_LOGGER = logging.getLogger(__name__ + ".websocket")
 _WS_LOGGER.setLevel(logging.INFO)
 
 STATUS_INTERVAL_S = 1.0
-# A marker report older than this is not repeated in ``status`` (worker stopped
-# detecting, e.g. frames went stale); the phone then sees empty lists again.
-MARKER_REPORT_TTL_S = 3.0
 # D-484: a field-calibration report older than this no longer rectifies the
 # preview (the worker stopped feeding detections; show the raw frame instead).
 FIELD_REPORT_TTL_S = 5.0
@@ -178,6 +176,7 @@ class IngestServer:
                  source_widths: Mapping[str, int] | None = None) -> None:
         if not source_tokens and paired is None:
             raise ValueError("at least one source token or paired source is required")
+        self.loop_watch = LoopWatch()  # death-watch: /readyz 503 on a dead loop, /healthz untouched
         tokens = dict(source_tokens)
         if paired is not None:
             for source in paired.sources:
@@ -325,16 +324,13 @@ class IngestServer:
             return None
         return tuple(tuple(point) for point in corners), str(report.get("state", ""))
 
-    def _marker_status(self, src: _Source) -> tuple[list[int], list[str]]:
-        if src.markers is None or time.monotonic() - src.markers[2] > MARKER_REPORT_TTL_S:
-            return [], []
-        return list(src.markers[0]), list(src.markers[1])
-
     # -- handshake --------------------------------------------------------
 
     async def _process_request(self, connection: ServerConnection, request):
         if request.path == "/healthz" and request.method == "GET":
             return connection.respond(200, '{"status":"ok"}\n')
+        if request.path == "/readyz" and request.method == "GET":
+            return connection.respond(*readyz_body(self.loop_watch))
         if request.path.startswith("/api/vision/sources/"):
             if request.method != "GET":
                 return _http_response(404, b"not found\n")
@@ -538,7 +534,7 @@ class IngestServer:
             self._drop_if_current(source_name, connection)
             return
 
-        status_task = asyncio.create_task(self._status_loop(src))
+        status_task = self.loop_watch.supervised(f"status:{source_name}", self._status_loop(src))
         try:
             async for message in connection:
                 if isinstance(message, (bytes, bytearray)):
@@ -594,6 +590,9 @@ class IngestServer:
             self._map_cache.pop(source_name, None)
             self._map_done.pop(source_name, None)
             self._plane_cache.pop(source_name, None)
+
+    def _marker_status(self, src: _Source) -> tuple[list[int], list[str]]:
+        return marker_status(src, time.monotonic())
 
     def _status_message(self, src: _Source) -> dict:
         return status_message(src.stats.snapshot(), *self._marker_status(src), src.field, time.monotonic(),

@@ -13,6 +13,33 @@ from control.line_observer_overrides import main
 PROFILE = "/opt/rosy/current/install/share/pinky_pro/config/camera_nominal.yaml"
 
 
+@pytest.mark.parametrize('content', [b'fixture: overlay\n', None])
+@pytest.mark.parametrize('returncode', [0, 1])
+def test_ab_overlay_routes_write_and_tombstone_to_canonical_owner(monkeypatch, content, returncode):
+    import control.line_observer_overrides as m
+
+    original = m.os.path.lexists
+    monkeypatch.setattr(m.os.path, 'lexists', lambda path: path == '/etc/rosy/os-slot.json' or original(path))
+    calls = []
+
+    def publish(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return SimpleNamespace(returncode=returncode)
+
+    monkeypatch.setattr(m.subprocess, 'run', publish)
+    if returncode:
+        with pytest.raises(ValueError, match='canonical'):
+            m._canonical_write('/etc/rosy/line_observer_overrides.yaml', content)
+    else:
+        assert m._canonical_write('/etc/rosy/line_observer_overrides.yaml', content) is True
+    argv, kwargs = calls[0]
+    assert argv[:4] == ['/usr/bin/python3', '-I', '-B', '/opt/rosy/native-runtime/os_state_config.py']
+    assert argv[4:6] == ['--file', 'line_observer_overrides.yaml']
+    assert argv[6:] == (['--clear'] if content is None else ['--input', '-'])
+    assert kwargs['input'] == content
+    assert kwargs['timeout'] == 30
+
+
 def test_apply_learned_paint_writes_a_loadable_overlay(tmp_path):
     target = tmp_path / "learned.yaml"
     calls, run = _run_log()
@@ -24,6 +51,33 @@ def test_apply_learned_paint_writes_a_loadable_overlay(tmp_path):
     assert params["learned_lane_pointer"] == "/var/lib/rosy/models/shadow"
     assert usable_operator_overlay(str(target))[0] == str(target)
     assert calls == [["systemctl", "restart", "rosy-camera"]]
+
+
+def test_apply_and_clear_use_canonical_owner_without_local_fallback(tmp_path, monkeypatch):
+    import control.line_observer_overrides as m
+
+    target = tmp_path / 'line_observer_overrides.yaml'
+    calls = []
+    monkeypatch.setattr(m, '_canonical_write', lambda path, raw: calls.append((path, raw)) or True)
+    assert main(['--path', str(target), 'apply', '--profile', PROFILE, '--no-restart']) == 0
+    assert not target.exists()
+    assert yaml.safe_load(calls[0][1])[NODE_KEY]['ros__parameters']['camera_lane_mode'] == 'keep'
+    assert main(['--path', str(target), 'clear', '--no-restart']) == 0
+    assert calls[1] == (str(target), None)
+    assert not target.exists()
+
+
+def test_ab_nominal_overlay_requests_its_explicit_profile_dependency(monkeypatch):
+    import control.line_observer_overrides as m
+
+    original = m.os.path.lexists
+    monkeypatch.setattr(m.os.path, 'lexists', lambda path: path == '/etc/rosy/os-slot.json' or original(path))
+    calls = []
+    monkeypatch.setattr(m.subprocess, 'run', lambda argv, **kwargs: calls.append(argv) or SimpleNamespace(returncode=0))
+    document = {NODE_KEY: {'ros__parameters': {'camera_ground_source': 'NOMINAL',
+                                             'nominal_camera_profile_path': PROFILE}}}
+    assert m._canonical_write('/etc/rosy/line_observer_overrides.yaml', yaml.safe_dump(document).encode())
+    assert calls[0][-2:] == ['--profile-input', PROFILE]
 
 
 @pytest.fixture(autouse=True)

@@ -28,6 +28,7 @@ class MotorHealth:
         if str(UUID(self.session_id)) != self.session_id:
             raise ValueError('invalid motor health session identity')
         self.status, self.stop_reasons = 'active', []
+        self.terminal_at = None
 
     def publish(self):
         motors, stamps = [], []
@@ -44,12 +45,17 @@ class MotorHealth:
                 motors.append({**{key: motor[key] for key in fields}, 'group': last['arm'],
                                'min_voltage_v': motor['min_voltage_raw'] / 10,
                                'max_voltage_v': motor['max_voltage_raw'] / 10, 'observed_at': stamp})
-        atomic_snapshot(self.state_path, dict(schema_version='rosy.motor-health.v1', owner_id=self.owner_id,
-            session_id=self.session_id, status=self.status, observed_at=max(stamps) if stamps else time.time(),
+        row = dict(schema_version='rosy.motor-health.v1', owner_id=self.owner_id,
+            session_id=self.session_id, status=self.status, observed_at=max(stamps) if stamps else self.terminal_at or time.time(),
             expected_motor_count=sum(len(state['limits']) for state in self.motions.values()),
-            motors=motors, stop_reasons=self.stop_reasons))
+            motors=motors, stop_reasons=self.stop_reasons)
+        if self.terminal_at is not None:
+            row['terminal_at'] = self.terminal_at
+        atomic_snapshot(self.state_path, row)
 
     def end(self):
+        if self.terminal_at is None:
+            self.terminal_at = time.time()
         if self.status != 'fault':
             self.status = 'ended'
             self.stop_reasons = ['session ended']
@@ -172,6 +178,8 @@ class MotorHealth:
         state["warnings"] = warnings
 
     def fault(self, motion, exc):
+        if self.terminal_at is None:
+            self.terminal_at = time.time()
         state = self.motions.get(self.key(motion))
         last = state["last"] if state else None
         now = motion.clock()
@@ -239,4 +247,5 @@ def finish_snapshot(path, owner_id, session_id, *, safe_end):
         row['stop_reasons'] = list(dict.fromkeys([*row.get('stop_reasons', []), 'cleanup unconfirmed']))
     elif row.get('status') != 'fault':
         row['status'], row['stop_reasons'] = 'ended', ['session ended']
+    row.setdefault('terminal_at', time.time())
     atomic_snapshot(path, row)
