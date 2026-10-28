@@ -21,7 +21,7 @@ def test_component_change_propagates_without_changing_page_task_content(tmp_path
     api = component_api()
     shutil.copytree(WEB, tmp_path/'web')
     root = tmp_path/'web'
-    source = root/'shared/fleet-header.html'
+    source = root/'shared/fleet-header.html.inc'
     source.write_text(source.read_text(encoding='utf-8').replace('계정과 접속 상세', '계정 상세 fixture'), encoding='utf-8')
     assert set(api['check'](root)) == set(api['PAGES'])
     for name in api['PAGES']:

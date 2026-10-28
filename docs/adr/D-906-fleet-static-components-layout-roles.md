@@ -8,7 +8,7 @@
 
 ### Decision
 
-1. Fleet의 헤더·전역 탐색은 `applications/fleet/web/shared/fleet-header.html`과 `fleet-nav.html`이 정본이다. `fleet_components.py`가 고정 네 문서의 고정 슬롯만 합성한다. 생성된 HTML은 첫 HTTP 응답부터 완성되어 있으며 기존 FileResponse·CSP·URL·초기 정지 표시는 그대로다. `--check`와 회귀가 원본/산출물의 어긋남을 거절한다. 클라이언트가 뒤늦게 셸을 삽입하지 않는다.
+1. Fleet의 헤더·전역 탐색은 `applications/fleet/web/shared/fleet-header.html.inc`과 `fleet-nav.html.inc`이 정본이다. `fleet_components.py`가 고정 네 문서의 고정 슬롯만 합성한다. `.html.inc`는 독립 페이지가 아닌 조각임을 표시한다. 생성된 HTML은 첫 HTTP 응답부터 완성되어 있으며 기존 FileResponse·CSP·URL·초기 정지 표시는 그대로다. `--check`와 회귀가 원본/산출물의 어긋남을 거절한다. 클라이언트가 뒤늦게 셸을 삽입하지 않는다.
 2. Fleet 공통 배치 컴포넌트는 `shared/doc-tabs.css`가 소유한다. 페이지는 업무별 열·지도/문서 배치를 소유한다. 본문 안쪽 여백과 피드백 기준선을 네 문서에 맞춘다. 지도·SVG의 좌표/선·카메라/물리 단위는 시각 토큰 치환 대상이 아니다.
 3. 값의 정본은 `shared/web/tokens.css`다. 다음 역할은 팔레트나 기본 척도를 늘리지 않고 실제 컴포넌트에서만 소비한다. 공용 갤러리는 계산된 값을 읽어 보여 준다.
 

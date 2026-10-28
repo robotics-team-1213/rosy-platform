@@ -19,10 +19,10 @@ def render(root, name):
         pattern = re.compile(re.escape(start)+r'.*?'+re.escape(end), re.S)
         if len(pattern.findall(document)) != 1:
             raise ValueError(f'{name}: malformed {component} slot')
-        fragment = (root/f'shared/fleet-{component}.html').read_text(encoding='utf-8').strip()
+        fragment = (root/f'shared/fleet-{component}.html.inc').read_text(encoding='utf-8').strip()
         if component == 'nav':
             for key in ('console', 'work', 'records', 'map', 'install'):
-                fragment = fragment.replace('{{'+key+'}}', 'aria-current="page"' if key == PAGES[name] else '')
+                fragment = fragment.replace(' {{'+key+'}}', ' aria-current="page"' if key == PAGES[name] else '')
         if '{{' in fragment or '<!-- fleet:' in fragment:
             raise ValueError('unresolved or nested Fleet component')
         document = pattern.sub(lambda _: start+'\n'+fragment+'\n'+end, document)
