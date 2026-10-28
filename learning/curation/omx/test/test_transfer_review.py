@@ -73,6 +73,20 @@ def test_partial_recovery_group_is_reviewable_without_inventing_parent(module, t
     assert len(result['records']) == 2
 
 
+def test_linked_child_cannot_redeclare_itself_as_an_independent_eval_root(module, tmp_path):
+    parent = source(tmp_path, 'parent', child='child')
+    child = source(tmp_path, 'child')
+    with pytest.raises(ValueError, match='lineage'):
+        module.prepare(tmp_path / 'package', train=[parent], evaluation=[child])
+
+
+def test_different_roots_cannot_claim_the_same_missing_child(module, tmp_path):
+    first = source(tmp_path, 'first', child='missing')
+    second = source(tmp_path, 'second', child='missing')
+    with pytest.raises(ValueError, match='lineage'):
+        module.prepare(tmp_path / 'package', train=[first], evaluation=[second])
+
+
 @pytest.mark.parametrize('change', ['unlinked-root', 'wrong-child', 'bool-index', 'limit', 'reciprocal'])
 def test_invalid_or_inconsistent_lineage_is_rejected(module, tmp_path, change):
     parent = source(tmp_path, 'parent', child='child')
@@ -90,7 +104,7 @@ def test_invalid_or_inconsistent_lineage_is_rejected(module, tmp_path, change):
         module.prepare(tmp_path / 'package', train=[parent, child], evaluation=[other])
 
 
-@pytest.mark.parametrize('change', ['scope', 'training', 'schema', 'duplicate-key', 'nan'])
+@pytest.mark.parametrize('change', ['scope', 'training', 'schema', 'duplicate-key', 'nan', 'overflow'])
 def test_unaccepted_export_is_rejected(module, tmp_path, change):
     one, other = source(tmp_path, 'one'), source(tmp_path, 'other')
     doc = json.loads(one.read_bytes())
@@ -103,6 +117,8 @@ def test_unaccepted_export_is_rejected(module, tmp_path, change):
         raw = raw[:-1] + ', "mission_id": "other"}'
     elif change == 'nan':
         raw = raw.replace('null', 'NaN')
+    elif change == 'overflow':
+        raw = raw.replace('null', '1e999')
     one.write_text(raw, encoding='utf-8')
     with pytest.raises(ValueError):
         module.prepare(tmp_path / 'package', train=[one], evaluation=[other])
