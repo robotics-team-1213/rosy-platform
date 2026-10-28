@@ -485,7 +485,7 @@ def main(argv: list[str] | None = None) -> int:
         return code
     except (Stop, land_queue.QueueError) as exc:
         print(f"[land] STOP: {exc}", file=sys.stderr)
-        land_events.emit("stop", reason=str(exc).splitlines()[0][:300])
+        land_events.emit("stop", reason=" ".join(str(exc).split())[:300])  # whole STOP: which files, not only why
         return 1
     except SystemExit as exc:  # remote_pytest gives up on its hosts this way (no host, venv setup): still a stop
         if isinstance(exc.code, str):
