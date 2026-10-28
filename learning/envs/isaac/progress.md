@@ -1,12 +1,12 @@
 ---
 module: isaac_sim
 owner: sim
-last_verified: { commit: "764b591ed6", date: 2026-10-11 }
+last_verified: { commit: "dc2f2f05c5", date: 2026-10-29 }
 gates:
   SOURCE:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-source -- learning/envs/isaac/test"
-    evidence: "CORE final port and existing Drive reused by D-638 diagnostic. 764b591ed6 tools/sim/isaac ownership fix and Isaac/architecture/release/harness remote regression exit 0, 0 NEW; independent source review approved placement, native recording and frozen policy restore. Runtime revisions and source hash readback are separate in docs/validation/isaac-map-rl-2026-10-11/result.md."
+    evidence: "dc2f2f05c5 remote Isaac regression: 419 passed, 1 ROS xacro-overlay skip, exit 0. 117aab03c1 affected architecture/release/harness and OMX owner checks: 428 passed, exit 0, 0 NEW. Offline OMX JSON planning boundary, native TCP observations and mapped physics substep consistency reviewed independently. Runtime outcomes are separate in docs/validation/omx-map-stacking-2026-10-29/result.md; learned proficiency and hardware acceptance remain unverified. Earlier CORE/Drive evidence remains in docs/validation/isaac-map-rl-2026-10-11/result.md."
   LOCAL:
     state: GO
     cmd: "python tools/remote/remote_pytest.py --log-dir X:/DevTemp/isaac-core -- learning/envs/isaac/test middleware/core/gateway/test middleware/core/services/test test/test_structure_installed_packages.py"

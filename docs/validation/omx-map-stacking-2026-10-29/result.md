@@ -53,9 +53,9 @@ Further diagnostic runs (all owned cleanup confirmed):
 | 7532a4331a | af413f1cb6155ad8933d1cf62507e9f1 | Solver 64/16 reduced shoulder errors to 0.076/0.077 rad. Native body masses included a default 1 kg TCP frame absent from URDF inertia. |
 | 5ccbad9154 | c18f9af9ca8a5e59a0c3f456a3f9f512 | Removing the TCP rigid body and fixed joint removed the extra mass, but articulation became nonfinite during initialization/first hold. |
 
-The subsequent experiment authors moderate SI gains in USD degree units and
-solver iteration counts before `world.reset`, in addition to runtime readback.
-Neither the numerical failure nor complete physical stacking is resolved yet.
+At that investigation stage, moderate SI gains in USD degree units and solver
+iterations had not resolved the failure. The later fixed-root and collider
+corrections below established physical reference success on the recorded source.
 
 Artifacts for the second run are under workspace
 `Rosy/artifacts/isaac/omx-stacking-20261029/6d2e0b0b94d350c3a9a518cc9df7b4c9-305f304bc6b34b7d9318db6af820d4e0/`.
@@ -117,6 +117,27 @@ their own verification; that source result does not establish physical success.
 The mapped-RL source `729acc9729` then passed 417 tests, skipped one and had
 0 NEW. The `77d74168bb` runtime additionally verified the corrected grasp-goal
 variable and one-episode mapped RL metadata. Final affected checks follow below.
+
+## Final ownership and trajectory checks
+
+The learning runtime now requests bounded joint frames from the OMX owner's
+offline SIM-only JSON CLI, `deploy/robot/omx/isaac_stack_plan.py`. It does not
+import device adapters. TCP observations come from native link5 rigid-body poses.
+The planner resets its wrist branch after its coarse reach sweep and verifies
+each frame against the SIM profile's velocity and acceleration bounds.
+
+Source `117aab03c1` passed the full remote Isaac suite (one ROS xacro-overlay
+skip) and affected architecture/release/harness/OMX owner checks, both exit 0,
+0 NEW. Source `af233392bb` additionally passed all 16 mapped/stacking fixture
+tests. These CPU checks do not establish physical success.
+
+The rate-corrected reference on `117aab03c1`, run
+`6d69d59d71945d1b9fe7948053d2bdd3`, failed the third-layer stability interlock.
+The released middle/top bars had approximately 10.66/11.79 mm/s reported speed,
+above the unchanged 10 mm/s limit, while positions remained nearly constant.
+Expected supports, absent finger contact and explained contact forces passed.
+Source `af233392bb` raises mapped cargo solver iterations to 64 position / 16
+velocity, matching the arms; its physical rerun remains separately classified.
 
 ## Scope and remaining uncertainty
 

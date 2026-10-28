@@ -382,3 +382,10 @@
 - 증거: `83e3d61303`, `c6cb3a15e1985f0bb686c272867734ce`는 32 PPO update / 1,024 transition과 유효한 파라미터 변화를 확인했다. 실제 적재 평가는 0/1이다. 맵 기준 동작은 물리 적재를 통과하지 않았다. `ac9d8e00db` 원격 Isaac 회귀 415 통과·1 건너뜀·신규 실패 0. 이후 모델 물리 변경의 시험과 실행은 [검증 기록](../../../docs/validation/omx-map-stacking-2026-10-29/result.md)에 구분한다.
 - gate 변화: 기존 ROS-SIM HOLD를 유지한다. 맵의 긴 화물 3단 기준 동작은 `ea39371f17` / `03a9b112fb34518cb10997cc27e70d1e`에서 시드 42/43/44 모두 통과했고 GPU 정리를 확인했다. 같은 물리 모델의 직접 제어 정책은 `omx-map-stacking-rl`로 연결했다. 학습 구동과 정책 숙련, 카메라 인식·실물·현장 수용은 구분한다.
 - CE: 새 교훈 기록 — [고정 관절 articulation 루트](../../../docs/solutions/runtime-errors/isaac62-omx-fixed-joint-articulation-root-2026-10-29.md). 원격 모델 관측에서 floating-base 상태와 잘못 선택된 중력 벡터를 확인했고, 루트를 고정 관절로 옮긴 뒤 native fixed-base와 관절 추종·첫 층 적재를 검증했다. 초기 단발 import 중단은 원인 미확정으로 보존한다.
+
+## 2026-10-29 · uncommitted · OMX 오프라인 계획 경계와 물리 시간 간격 검증
+
+- 변경: learning의 device adapter 직접 참조를 OMX owner의 SIM 전용 JSON CLI로 옮겼다. 실제 TCP는 SDK link5 자세에서 관측한다. 계획 프레임의 속도·가속도 검증을 추가하고 손목 분기 초기화 오류를 수정했다. 맵 물리는 제어 주기를 유지하며 240 Hz로 계산한다.
+- 증거: 앞 항목의 초기 실패 이후 `ea39371f17` 맵 기준 동작은 3/3 통과했다. 맵 PPO `77d74168bb`는 32 update / 1,024 transition, 독립 평가 0/1이다. `dc2f2f05c5` 원격 Isaac 419 통과·1 ROS overlay 건너뜀, `117aab03c1` 관련 구조·릴리스·하네스·OMX owner 검사 428 통과·신규 실패 0. 속도 경로 수정 뒤 물리 재실행과 시간 간격 변경 결과는 검증 기록에서 소스별로 구분한다.
+- gate 변화: SOURCE 근거를 갱신했다. 기존 ROS-SIM HOLD, 실물·카메라·학습 숙련 미검증 상태를 유지한다.
+- CE: 고정 관절 루트 교훈은 유지하며, 접촉 시간 간격 실험은 검증 전 해결 교훈으로 기록하지 않는다.
