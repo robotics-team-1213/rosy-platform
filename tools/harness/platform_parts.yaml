@@ -1154,6 +1154,7 @@ safety_modules:
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
   - operations/fleet/fleet/server/console/console.py
+  - operations/fleet/fleet/server/console/goal_admission.py  # D-430 pure goal-admission hold shapes (console helper)
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
 
@@ -1166,6 +1167,8 @@ safety_modules:
 # PUT or device overlays): a robot config whose safety.fleet_loss_policy is not
 # STOP/HOLD carries safety.fleet_loss_policy_approval {robot, approver, evidence}.
 safety_anchors:
+  - {symbol: fleet.server.goal_admission.QueueDecision}  # D-430 frozen hold shapes (console helper)
+  - {symbol: fleet.server.goal_admission.response_of}
   - {symbol: fleet.swarm.session_lifecycle.FormationLifecycle, public: true}
   - {symbol: fleet.swarm.session_lifecycle.EVENT_TYPES, public: true}
   - {symbol: fleet.swarm.session_lifecycle.TRIGGERS, public: true}
