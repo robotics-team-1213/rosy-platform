@@ -38,8 +38,9 @@ def test_storage_http_read_permissions_paths_and_revocation(tmp_path, accounts):
         make_server(store, 0, accounts=accounts, storage=storage)
 
 
-@pytest.mark.parametrize('width', [1440, 320])
-def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, width, monkeypatch):
+@pytest.mark.parametrize('width', [320, 390, 768, 1440])
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, width, theme, monkeypatch):
     from browser_harness import browser_tests_enabled, free_port, open_page
     if not browser_tests_enabled(): pytest.skip('requires explicit Chromium browser run')
     playwright = pytest.importorskip('playwright.sync_api')
@@ -58,6 +59,7 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 session, _ = sign_in(accounts, 'bob')
                 page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
                 page.goto(url + '/learning', wait_until='networkidle')
+                page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
                 expect = playwright.expect
                 expect(page.locator('#storage-roots')).to_contain_text('Incoming media')
                 expect(page.locator('#storage-roots')).to_contain_text('파일 1개')
@@ -65,14 +67,24 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 page.keyboard.press('Control+k')
                 page.get_by_role('textbox', name='기능 검색어').fill('공간 사전 점검')
                 page.keyboard.press('Escape')
-                page.locator('#storage-preflight button').click()
+                preflight = page.get_by_role('button', name='공간 사전 점검', exact=True)
+                for control in (page.locator('#storage-refresh'), preflight):
+                    expect(control).to_have_attribute('kind', 'quiet')
+                    assert control.evaluate('(el) => el.tagName') == 'UI-BUTTON'
+                    assert control.bounding_box()['height'] >= 48
+                page.locator('#storage-download').fill('8000001')
+                preflight.click()
+                assert page.locator('#storage-download').evaluate('(el) => el.validity.rangeOverflow')
+                expect(page.locator('#storage-result')).to_have_text('')
+                page.locator('#storage-download').fill('1')
+                page.locator('#storage-download').press('Enter')
                 expect(page.locator('#storage-result')).to_contain_text('공간 추정 충족')
                 expect(page.locator('#storage-result')).to_contain_text('잔여 10 GiB')
                 page.locator('#storage-upload').fill('1')
-                page.locator('#storage-preflight button').click()
+                preflight.click()
                 expect(page.locator('#storage-result')).to_contain_text('공간 확인 보류')
                 page.locator('#storage-download').fill('8000000')
-                page.locator('#storage-preflight button').click()
+                preflight.click()
                 expect(page.locator('#storage-result')).to_contain_text('공간 부족')
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
                 page.route('**/api/learning/storage', lambda route: route.fulfill(status=503,
