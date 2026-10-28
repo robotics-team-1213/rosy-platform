@@ -12,8 +12,9 @@ It also lists where each running rosy service's code comes from (its ExecStart a
 files): an auto-updated `current` link, a pinned `release` commit, or `ADHOC` (a `~/rosy-test`
 copy, which no updater or installer owns). Pinned and ad hoc sources do not change the exit code.
 
-D-852: each host is then checked against `deploy/hosts/services.yaml` for its role (the site host
-is `site`, `sim_hosts` entries give `model`/`ai`). An installed rosy/pinky unit file with no entry is
+D-852: each host is then checked against `deploy/hosts/services.yaml` for its composed roles:
+`site_host` gives `site`, `omx_hosts` gives `omx`, `sim_hosts` gives `model`/`ai`.
+An absent `omx_hosts` preserves site co-location. An installed rosy/pinky unit file with no entry is
 UNDECLARED; a declared unit that is absent is MISSING; a unit that should run but does not is DOWN;
 an `off` unit that is enabled or running is UNEXPECTED; a unit file, copied file, code path or
 drop-in that differs from its declaration is DRIFT. Any of these exits 1. `adhoc` entries are listed,
@@ -192,15 +193,40 @@ def load_inventory(path: Path | None = None) -> dict:
 
 
 def roles(config: dict) -> dict:
-    """Host -> role: the site host is `site`; `sim_hosts` entries are `<ssh>=<role>`."""
-    found = {}
-    for entry in config.get('sim_hosts') or []:
-        target, _, role = str(entry).partition('=')
-        if role:
-            found[target.strip()] = role.strip()
-    if config.get('site_host'):
-        found[str(config['site_host']).strip()] = 'site'
+    """Host -> service roles; native OMX may share the site host, never a sim role."""
+    found = {target: {role} for target, role in lab_hosts.sim_roles(config).items() if role}
+    site = config.get('site_host', '')
+    if site != '':
+        site = lab_hosts.ssh_target(site, 'site_host')
+        if site in found:
+            raise SystemExit('lab-hosts.json site_host conflicts with a simulation role')
+        found[site] = {'site'}
+    for target in lab_hosts.omx_hosts(config):
+        found.setdefault(target, set()).add('omx')
     return found
+
+
+def probe_targets(config: dict) -> list[str]:
+    """Production service hosts are monitored without becoming test candidates."""
+    raw = config.get('test_hosts', [])
+    if not isinstance(raw, list):
+        raise SystemExit('lab-hosts.json test_hosts must be a list')
+    tests = [lab_hosts.ssh_target(item, 'test_hosts') for item in raw
+             if not (isinstance(item, str) and not item.strip())]
+    return list(dict.fromkeys([*tests, *roles(config)]))
+
+
+def declared_units(inventory: dict, host_roles: set[str]) -> dict:
+    """Compose complete declarations, refusing conflicting ownership of a unit."""
+    declared = {}
+    for role in sorted(host_roles):
+        if role not in inventory:
+            raise SystemExit(f'unknown host service role: {role}')
+        for name, entry in inventory[role].items():
+            if name in declared and declared[name] != entry:
+                raise SystemExit(f'host service role conflict: {name}')
+            declared[name] = entry
+    return declared
 
 
 def ref_state(root: Path, now: float, stale_hours: float) -> dict:
@@ -336,7 +362,10 @@ def main() -> None:
     args = parser.parse_args()
     stuck = False
     inventory = load_inventory()
-    role_of = roles(lab_hosts.load())
+    config = lab_hosts.load()
+    role_of = roles(config)
+    declarations = {target: declared_units(inventory, host_roles) for target, host_roles in role_of.items()}
+    targets = probe_targets(config)
     platform = Path(__file__).resolve().parents[2]
     ops = lab_hosts.main_checkout().parent / 'rosy-ops'
     refs = {}
@@ -366,10 +395,10 @@ def main() -> None:
         if spec not in digests:
             digests[spec] = repo_digest(spec, platform, ops, refs)
         return digests[spec]
-    for target in dict.fromkeys(lab_hosts.test_hosts() + [lab_hosts.site_host()]):
+    for target in targets:
         if not target:
             continue
-        declared = inventory.get(role_of.get(target), {})
+        declared = declarations.get(target, {})
         copies = sorted({path for entry in declared.values() for path in (entry.get('copies') or {})})
         # bytes, not text: Windows text mode would send CRLF into bash
         topology = Path(__file__).with_name('host_topology.py').read_text(encoding='utf-8')
@@ -399,7 +428,8 @@ def main() -> None:
         findings = audit(declared, host, digest)
         for verdict, unit, detail in findings:
             print(f'  {verdict:10} {unit}: {detail}')
-        print(f'  {role_of[target]}: {len(declared)} declared units, {sum(f[0] in FAILING for f in findings)} findings')
+        print(f'  {"+".join(sorted(role_of[target]))}: {len(declared)} declared units, '
+              f'{sum(f[0] in FAILING for f in findings)} findings')
         stuck |= any(f[0] in FAILING for f in findings)
     sys.exit(1 if stuck else 0)
 
