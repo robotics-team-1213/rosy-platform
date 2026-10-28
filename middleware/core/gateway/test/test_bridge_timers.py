@@ -391,3 +391,37 @@ def test_lifecycle_transition_parser_accepts_active_id_and_label(registered):
 def test_constructor_declares_inactive_trial_before_registered_callbacks(registered):
     # Structural constructor contract only; no stub motion semantics.
     assert registered.bridge._bounded_trial_guard is None
+
+
+def test_face_publication_uses_injected_host_owner_and_recovers_after_write_failure(registered, monkeypatch):
+    from core_common.face_screen import FACE_INPUTS_PERIOD_S
+
+    bridge, svc = registered.bridge, registered.services
+    attempts, warnings = [], []
+
+    class Owner:
+        def write_face_inputs(self, actual, content):
+            assert actual is svc
+            attempts.append(dict(content))
+            if len(attempts) <= 2:
+                raise OSError("handoff unavailable")
+
+    monkeypatch.setattr(svc, "host_files", Owner(), raising=False)
+    monkeypatch.setattr(registered.node, "get_logger", lambda: types.SimpleNamespace(warning=warnings.append))
+    status = types.SimpleNamespace(info_visible=False, mode=types.SimpleNamespace(value="ACTIVE"))
+    bridge._maybe_write_face_inputs(status, 100.0)
+    assert len(attempts) == 1 and bridge._face_inputs_failed is True
+    assert bridge._face_inputs_last is None and bridge._face_inputs_at is None
+    bridge._maybe_write_face_inputs(status, 100.0)
+    assert len(attempts) == 2 and len(warnings) == 1
+    assert bridge._face_inputs_last is None and bridge._face_inputs_at is None
+    bridge._maybe_write_face_inputs(status, 100.0)
+    assert len(attempts) == 3 and bridge._face_inputs_failed is False
+    assert bridge._face_inputs_last == attempts[-1] and bridge._face_inputs_at == 100.0
+    bridge._maybe_write_face_inputs(status, 100.0 + FACE_INPUTS_PERIOD_S / 2)
+    assert len(attempts) == 3
+    bridge._face_desired = "happy"
+    bridge._maybe_write_face_inputs(status, 100.0 + FACE_INPUTS_PERIOD_S / 2)
+    assert len(attempts) == 4 and attempts[-1]["face"] == "happy"
+    bridge._maybe_write_face_inputs(status, 100.0 + FACE_INPUTS_PERIOD_S * 1.5)
+    assert len(attempts) == 5 and len(warnings) == 1

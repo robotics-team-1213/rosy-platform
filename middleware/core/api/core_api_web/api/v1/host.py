@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-import json
-import math
-import os
-import secrets
 from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, HTTPException
@@ -15,7 +10,7 @@ from pydantic import BaseModel, Field
 from core_api_web.api.v1.common import admin, require_calibration_owner, viewer
 from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.host_agent_client import HostAgentClient, TIMEOUT, UNAVAILABLE
-from core_common import face_screen, robot_state
+from core_common import robot_state
 from core_common.protocol.evidence import EvidenceState
 from core_common.protocol.schemas import SshPairRequest
 from .host_evidence import HOST_STATUS_STALE_AFTER_S, status_evidence as _status_evidence
@@ -49,12 +44,10 @@ def host_ssh_pair(body: SshPairRequest, request: Request, auth: AuthContext = De
     return _relay(reply, absent_detail='호스트 에이전트에 연결할 수 없어 SSH 키를 등록하지 못했습니다.')
 
 
-# Keep the status summary built from the hardware module's validated readback.
-_read_small_json = _host_hardware._read_small_json
-_evidence_of = _host_hardware._evidence_of
-_write_private = _host_hardware._write_private
-host_hardware = _host_hardware.host_hardware
-MAX_TEXT = _host_hardware.MAX_TEXT
+def _evidence_of(snapshot: Any, channel: str) -> Optional[str]:
+    value = (getattr(snapshot, "evidence", None) or {}).get(channel)
+    judged = getattr(value, "evidence", None)
+    return None if judged is None else str(getattr(judged, "value", judged))
 
 
 def _agent(svc: CoreServicesLike) -> HostAgentClient:
@@ -363,21 +356,6 @@ def host_commissioning(_: AuthContext = Depends(viewer), svc: CoreServicesLike =
 BOOT_STATUS_FILE = "/run/rosy-boot/boot-status.json"
 
 
-def read_boot_status(path: str) -> Optional[dict[str, Optional[str]]]:
-    """rosy-boot-status's stage and failed unit, or None when absent, unreadable or malformed."""
-    data = _read_small_json(path)
-    if not isinstance(data, dict):
-        return None
-    stage, failed_unit = data.get("stage"), data.get("failed_unit")
-    if not isinstance(stage, str) or not stage or len(stage) > MAX_TEXT:
-        return None
-    if failed_unit is not None and (not isinstance(failed_unit, str) or len(failed_unit) > MAX_TEXT):
-        return None
-    release = data.get("release_id")  # D-535: the release the mDNS TXT already shows
-    release = release if isinstance(release, str) and 0 < len(release) <= 64 else None
-    return {"stage": stage, "failed_unit": failed_unit, "release_id": release}
-
-
 def _battery_reading(snapshot: Any) -> tuple[Optional[float], Optional[float]]:
     """(percent, voltage) from the state snapshot; a reading whose channel is not fresh is none."""
     battery = getattr(snapshot, "battery", None)
@@ -394,11 +372,11 @@ def _battery_reading(snapshot: Any) -> tuple[Optional[float], Optional[float]]:
 def host_status_summary(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
     """운용 화면 요약줄(D-260 5): 로봇 상태 하나, 이유, 장치 요약, 배터리·온도, 할 일."""
     cfg = (svc.config or {}).get("hardware_probe", {}) or {}
-    boot = read_boot_status(str(cfg.get("boot_status_path", BOOT_STATUS_FILE)))
+    boot = svc.host_files.read_boot_status(str(cfg.get("boot_status_path", BOOT_STATUS_FILE)))
     # CORE is answering, so a missing indicator file is not "booting": the stage
     # is taken as CORE_READY and the response says the file was not there.
     stage = boot["stage"] if boot else "CORE_READY"
-    hardware = host_hardware(auth, svc)
+    hardware = _host_hardware.host_hardware(auth, svc)
     devices = hardware["devices"] if hardware.get("available") else []
     state = getattr(svc, "state", None)
     snapshot = state.snapshot() if state is not None and hasattr(state, "snapshot") else None
@@ -432,10 +410,6 @@ def host_status_summary(auth: AuthContext = Depends(viewer), svc: CoreServicesLi
 # read CORE's SAF-005 policy or the overlays (topic judgment, human answers), so
 # CORE hands them over in its own runtime directory; root rosy-boot-status reads
 # the file strictly and copies the values into boot-status.json.
-STATUS_INPUTS_FILE = "/run/rosy/status-inputs.json"
-STATUS_INPUTS_PERIOD_S = 1.0
-
-
 def _warning_percent(svc: CoreServicesLike) -> float:
     policy = getattr(getattr(svc, "safety", None), "battery_policy", None)
     value = getattr(policy, "warning_percent", robot_state.BATTERY_WARNING_PERCENT)
@@ -443,145 +417,3 @@ def _warning_percent(svc: CoreServicesLike) -> float:
         return float(value)
     except (TypeError, ValueError):
         return robot_state.BATTERY_WARNING_PERCENT
-
-
-def _snapshot(svc: CoreServicesLike) -> Any:
-    """One StateSnapshot (what GET /robot/state serves), or None without a state manager."""
-    snapshot = getattr(getattr(svc, "state", None), "snapshot", None)
-    return snapshot() if callable(snapshot) else None
-
-
-def _robot_mode(snapshot: Any) -> Optional[str]:
-    """D-380: CORE's live RobotMode for the boot display; absent rather than wrong.
-
-    Duck-typed like ``_warning_percent``: a test double (or a CORE without a state
-    manager) reports no mode, and the lamp falls back to the health patterns.
-    """
-    mode = getattr(snapshot, "mode", None)
-    return robot_state.valid_robot_mode(getattr(mode, "value", mode))
-
-
-def _nav_state(snapshot: Any) -> Optional[str]:
-    """D-381: CORE's live NavigationState, same duck-typing and same absence rule."""
-    nav = getattr(snapshot, "navigation", None)
-    return robot_state.valid_nav_state(getattr(nav, "value", nav))
-
-
-def _swarm_role(snapshot: Any) -> Optional[str]:
-    """D-383: the live swarm role (leader/follower), same rules as the mode."""
-    swarm = getattr(snapshot, "swarm", None)
-    return robot_state.valid_swarm_role(getattr(swarm, "role", None))
-
-
-def _number(value: Any) -> Optional[float]:
-    """A finite float; NaN/Inf would be written as non-JSON and pass no bound."""
-    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
-        return None
-    return float(value)
-
-
-def _flag(value: Any) -> Optional[bool]:
-    return value if isinstance(value, bool) else None
-
-
-#: A free state string longer than this is not a state name; the file stays small.
-MAX_STATUS_NAME = 64
-
-
-def _name(value: Any) -> Optional[str]:
-    value = getattr(value, "value", value)
-    return value if isinstance(value, str) and len(value) <= MAX_STATUS_NAME else None
-
-
-def _idleness_inputs(snapshot: Any) -> dict[str, Any]:
-    """D-412: what the device updater judges idleness from.
-
-    Every value is typed or null: an unknown is never written as a resting default,
-    because the updater reads null as "not eligible". Sensor-derived values are
-    freshness-gated: velocity only while its evidence is fresh (a silent odometry
-    keeps its last 0.0, a false idle), the battery by the status summary's rule,
-    and the charging flag (a dock latch) only beside a battery reading. Docking,
-    line follow, swarm, E-stop and activity are CORE's own state, marked on change.
-    """
-    velocity_fresh = _evidence_of(snapshot, "velocity") == "fresh"
-    velocity = getattr(snapshot, "velocity", None) if velocity_fresh else None
-    line_follow = getattr(snapshot, "line_follow", None)
-    percent = _number(_battery_reading(snapshot)[0])
-    charging = getattr(getattr(snapshot, "battery_status", None), "charging", None)
-    return {
-        "velocity_linear": _number(getattr(velocity, "linear", None)),
-        "velocity_angular": _number(getattr(velocity, "angular", None)),
-        "battery_percent": percent,
-        "battery_charging": _flag(charging) if percent is not None else None,
-        "docking_state": _name(getattr(getattr(snapshot, "docking", None), "state", None)),
-        "line_follow_mode": _name(getattr(line_follow, "mode", None)),
-        "line_follow_state": _name(getattr(line_follow, "state", None)),
-        "swarm_active": _flag(getattr(getattr(snapshot, "swarm", None), "active", None)),
-        "estop": _flag(getattr(getattr(snapshot, "safety", None), "estop", None)),
-        "activity_kind": _name(getattr(getattr(snapshot, "activity", None), "kind", None)),
-    }
-
-
-def status_inputs(svc: CoreServicesLike) -> dict[str, Any]:
-    """What the root side cannot know: the live warning threshold, the overlaid device states and the live robot mode.
-
-    Schema 2 (D-412) keeps every schema-1 key and adds the updater's idleness
-    inputs. It also carries robot_id, core_process_id, and line_follow_steering_law
-    so a device camera can invert the law this process loaded. All state keys
-    come from one snapshot, so they describe one instant.
-    """
-    hardware = host_hardware(None, svc)
-    devices = [{"id": row["id"], "state": row["state"], "product": row["product"]}
-               for row in (hardware["devices"] if hardware.get("available") else [])]
-    snapshot = _snapshot(svc)
-    line_config = getattr(getattr(svc, 'line_follow', None), 'config', None)
-    law = (None if line_config is None else
-           {key: getattr(line_config, key) for key in
-            ('cruise_speed', 'max_linear', 'steering_gain', 'min_confidence')})
-    return {"schema": 2, "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "robot_id": getattr(snapshot, 'robot_id', None), "core_process_id": os.getpid(),
-            "line_follow_steering_law": law,
-            "battery_warning_percent": _warning_percent(svc), "devices": devices,
-            "robot_mode": _robot_mode(snapshot), "nav_state": _nav_state(snapshot),
-            "swarm_role": _swarm_role(snapshot), **_idleness_inputs(snapshot),
-            "calibration_active": (svc.calibration.current() is not None
-                                   if getattr(svc, "calibration", None) is not None else None)}
-
-
-def write_face_inputs(svc: CoreServicesLike, content: dict[str, Any]) -> None:
-    """D-433: replace rosy-face's hand-over atomically (0644: nothing in it is secret).
-
-    ``content`` is ``core.bridge.display.face_inputs_payload``; rosy-face reads it
-    with ``core_common.face_screen.read_face_inputs`` (owner, size, freshness).
-    """
-    cfg = (svc.config or {}).get("hardware_probe", {}) or {}
-    path = str(cfg.get("face_inputs_path", face_screen.FACE_INPUTS_FILE))
-    payload = (json.dumps(content, sort_keys=True) + "\n").encode("utf-8")
-    temporary = os.path.join(os.path.dirname(path) or ".", f".face-inputs.{secrets.token_hex(6)}")
-    try:
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
-        try:
-            # rosy-core's UMask=0027 would leave 0640; rosy-face (rosy-display) must read it.
-            # Set the mode on the temporary file so the name never points at an unreadable one.
-            if hasattr(os, "fchmod"):
-                os.fchmod(descriptor, 0o644)
-            os.write(descriptor, payload)
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-        if not hasattr(os, "fchmod"):
-            os.chmod(temporary, 0o644)
-        os.replace(temporary, path)
-    except OSError:
-        try:
-            os.unlink(temporary)
-        except OSError:
-            pass
-        raise
-
-
-def write_status_inputs(svc: CoreServicesLike) -> None:
-    """Replace the hand-over atomically (0644: rosy-boot-status is root, nothing in it is secret)."""
-    cfg = (svc.config or {}).get("hardware_probe", {}) or {}
-    path = str(cfg.get("status_inputs_path", STATUS_INPUTS_FILE))
-    _write_private(path, json.dumps(status_inputs(svc), sort_keys=True) + "\n", 0o644, "status-inputs")

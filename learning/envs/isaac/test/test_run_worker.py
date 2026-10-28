@@ -71,8 +71,9 @@ def test_disk_pressure_reaps_only_the_owned_child(tmp_path, monkeypatch):
     assert row['reason'] == 'insufficient_space' and row['exit_code'] != 0
 
 
-@pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual', 'missing_residual'])
-def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, evidence):
+@pytest.mark.parametrize('sdk_version', ['5.1.0.0', '6.2.0.0'])
+@pytest.mark.parametrize('evidence', ['none', 'incomplete', 'complete', 'gpu_residual', 'missing_residual', 'exception'])
+def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, evidence, sdk_version):
     from contextlib import nullcontext
     import os
     import uuid
@@ -87,7 +88,7 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
     monkeypatch.setenv('INVOCATION_ID', 'b' * 32)
     monkeypatch.setattr(mod.System, 'observe', lambda self, unit: dict(owner, unit=unit))
     monkeypatch.setattr(mod, 'load_binding', lambda *args: {'source_sha': 'a' * 40,
-        'sdk_python': sys.executable, 'sdk_version': '5.1.0.0'})
+        'sdk_python': sys.executable, 'sdk_version': sdk_version})
     monkeypatch.setattr(mod, 'sdk_check', lambda binding: {'ready': True, 'uuid': 'GPU-test', 'driver': 'test-driver'})
     from contextlib import contextmanager
     held = [False]
@@ -106,11 +107,15 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
     monkeypatch.setattr(mod, 'gpu_state', lambda: {'ready': evidence not in {'gpu_residual', 'missing_residual'},
                                                   'uuid': 'GPU-test', 'driver': 'test-driver'})
     def sdk(*args, **kwargs):
+        assert kwargs['env'].get('OMNI_KIT_ACCEPT_EULA') == 'YES'
+        assert kwargs['env'].get('ACCEPT_EULA') == 'Y'
+        if evidence == 'exception':
+            raise FileNotFoundError('temporary SDK output disappeared')
         if evidence not in {'none', 'missing_residual'}:
             path = kwargs['output'] / 'import-report.json'
             import_report.write_report(path, model='omx_f', frames=120, requested=120,
                 articulations=['/Manipulator'], joints=sorted(model_checks.EXPECTED_JOINTS['omx_f']),
-                sdk_version='5.1.0.0')
+                sdk_version=sdk_version)
             if evidence == 'incomplete':
                 value = __import__('json').loads(path.read_text())
                 value['completed_frames'] = 119
@@ -119,6 +124,8 @@ def test_worker_needs_report_and_cleanup_before_success(tmp_path, monkeypatch, e
     monkeypatch.setattr(mod, 'supervise', sdk)
     mod.execute(store, tmp_path / 'binding.json', row['run_id'])
     final = store.get(row['run_id'])
+    if evidence == 'exception':
+        assert final['result']['error_type'] == 'FileNotFoundError'
     assert final['status'] == ('SUCCEEDED' if evidence == 'complete' else
                                'UNKNOWN' if evidence in {'gpu_residual', 'missing_residual'} else 'FAILED')
     if final['status'] == 'SUCCEEDED':
