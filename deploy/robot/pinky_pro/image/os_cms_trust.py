@@ -12,6 +12,7 @@ import tempfile
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "release"))
 import ab_image_layout as ab
 from os_rauc import _certificate, _run, _spki
 from os_state_layout import _digest, _path, _read

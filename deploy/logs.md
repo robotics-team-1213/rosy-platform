@@ -3925,3 +3925,11 @@
 - 증거: tests-only `b808a821c2`의 공식 원격 실행에서 도구 부재 15 ERROR를 확인했다. Windows PowerShell의 폐기용 도우미 fixture는 수정 전 키 누락 assertion으로 실패했고 수정 후 7개 self-check와 설정·3장 연속 기록 fixture가 통과했다. 후보 `f594cb588d`의 집중 원격 회귀는 140 passed/2 Windows-only skipped, NEW 0이다. 독립 검토의 계정 디렉터리 탐색·키 읽기 권한 누락은 `bf3cab97bc`에서 6 FAILED로 재현했다. 보강한 `8c3a60f344`의 영향 선택은 459 passed/2 skipped이며 갱신 전 생성 인덱스의 계약 2건이 실패했다. 인덱스를 재생성해 후속 커밋에서 재검증한다. 독립 재검토의 Critical/Important는 0이다.
 - gate 변화: 없음. 카드 마운트·실물 키 변경·장치 등록·모터 활성화·배포·착지는 수행하지 않았다. 유지보수용 관리자 웹 endpoint를 새로 열지 않는다.
 - CE: 미해결 — 실제 장치의 인증 장애 원인과 실물 복구는 확인하지 못했다. 코드의 복구 거절·원본 보존과 장치 수용을 구분한다.
+
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
+
+- 변경: OS bundle의 staged 분할 게시와 전체 해시 재조립, 서명된 engineering canary 제한, 독립 OS CMS가 필요한 전송기 유지보수 및 durable recovery, 기존 전체 파일을 보존하는 native delta 전송 정책을 연결했다. OS·부팅 변경과 알 수 없는 기준은 native 델타로 처리하지 않는다.
+- 검증: OS 게시54·초기수신79·잔여 partial 복구39·게시→HTTP 연결5·유지보수127개 원격 통과(각 0 skipped/0 NEW). 부분 전송 초기430개 통과 후 v2 resume·실패 baseline·OS 정책 보강을 별도로 재검증 중이다. 실제 GitHub 게시·Pinky 부팅·OTA·롤백은 아직 미검증이다.
+- 성능: exporter preset만6→1로 이행했다. 원본 변경의22개 원격 회귀와 독립 검토, 제한된 x86 표본은 [측정 기록](../docs/validation/pinky-image-throughput-2026-10-28/result.md)에 보존했다. 전체 ARM 빌드 절감량은 주장하지 않는다.
+- gate 변화: 없음. SOURCE·모델링된 중단 복구·MEDIA·실제 장치 수용을 구분하며 최종 통합 검증 전 배포 완료를 기록하지 않는다.
+- CE: 해당 없음 — 이 변경의 계약과 적용 조건은 코드·회귀·측정 기록으로 복원할 수 있다. 실제 GPT 재발 순서의 교훈은 별도 solutions 기록에 보존했다.

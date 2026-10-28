@@ -356,5 +356,5 @@
 - 2026-10-29 · uncommitted · docs(reference): 기록용 Jira 코멘트 예외를 기존 사람 작업 규칙에 명시한다
 - 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
 - 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
+- 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
 - 2026-10-28 · uncommitted · docs(reference): 문서로 남긴 작업 기록을 Jira 이슈에 짧은 코멘트로 연결한다
-- 2026-10-28 · 030c2fb110 · 녹화 인계 UI 후속 검증 기록

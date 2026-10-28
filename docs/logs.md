@@ -12847,6 +12847,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
 
+## 2026-10-28 · uncommitted · docs: GPT 용량 재배치 뒤 SD 검증 복구 교훈
+
+- 변경: GPT primary 용량 필드 변경을 카드 고장으로 단정하지 않고 읽기 전용 원시 증거와 표준 resume로 판별하는 교훈을 추가했다.
+- 검증: 원격 SD 도구 94 passed/0 skipped/0 NEW와 독립 검토 후 실제 31,138,512,896바이트 전체 읽기 검증·개별 설정·최종 GPT 확인·등록·receipt 완료(exit 0). 기존 FAT Windows metadata 허용 범위와 raw digest 차이도 구분했다.
+- gate 변화: 없음 — 개별 engineering 카드의 MEDIA만 확인했으며 배포 모듈 전체의 수용을 올리지 않았다.
+- 한계: MEDIA만 확인했다. 첫 부팅·실물 OTA·롤백은 미검증이며 제품 main 착지·공개 게시를 주장하지 않는다.
+- CE: 새 교훈 기록 — 일회성 헤더 복구 후 재발한 실제 저장 장치 조회 순서와 증거를 보존했다. Frontmatter 통과, claims의 미게시 commit 참조 1개는 pending 표기와 함께 판정했다.
+
 ## 2026-10-28 · uncommitted · docs(reference): 문서로 남긴 작업 기록을 Jira 이슈에 짧은 코멘트로 연결한다
 
 - 변경: `docs/reference/atlassian-integration.md` §4 첫 항목에 기록 연결 규칙 추가. 작업의 기록·결과·결정을 Confluence 문서로 남긴 뒤 그 일을 추적하는 Jira 이슈에 짧은 코멘트와 문서 링크를 남기고, 상태·담당자·기한은 바꾸지 않는다. Notion 등 다른 문서 도구 기록도 같다. 3장의 스마트 커밋 금지와 충돌하지 않게 코멘트는 Atlassian 연결 도구(MCP·API)로 남긴다고 명시했고, 머리 갱신 날짜를 2026-10-28로 올렸다.
@@ -12854,6 +12862,13 @@ osy-d395-s1d\`.
 - 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 코멘트 규칙 문구는 기존 §3 스마트 커밋 금지와 주체를 구분해 충돌하지 않는다.
 - gate 변화: 없음.
 - CE: 해당 없음 — 문서 관례 추가이며 코드·장치·시험 경로 변경이 없다.
+
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
+
+- 변경: D-912(Proposed)에 고정 세 파일의 별도 OS 유지보수 소유권, Ed25519와 OS CMS 이중 권한, 정책 freeze와 중단 복구 경계를 기록했다. 다른 세션의 D-903~D-911 예약은 gap ledger에 보존했다.
+- 검증: OS publisher 54 passed, consumer 초기 79 passed, 잔여 부분파일 공간 복구 39 passed, 실제 publisher→HTTP→서명 canary staging 연결 5 passed(각 0 skipped/0 NEW). 실제 173 원본의 분할 게시 dry-run도 통과했다. 후속 bridge 보강과 부분 delta 연결의 최종 검증은 진행 중이다.
+- gate 변화: 없음 — 실제 Pinky boot·GitHub OTA·rollback은 아직 미검증이고 OS 유지보수 결정은 Proposed다.
+- CE: 해당 없음 — 현재 새 코드의 계약과 회귀로 판별할 수 있는 구현 내용이다. 해결이 검증되지 않은 후속 항목은 작업 기록에 남긴다.
 
 ## 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
 
