@@ -160,7 +160,16 @@ def targets(paths: list[str]) -> list[str]:
     return sorted(selected)
 
 
+def all_targets() -> list[str]:
+    """Expand every registered browser target in this candidate tree."""
+    return sorted({path for pattern in EVERYTHING for path in _expand(pattern)})
+
+
 def main(argv: list[str]) -> int:
+    if argv == ["--all", "--json"]:
+        import json
+        print(json.dumps(all_targets()))
+        return 0
     found = targets(argv)
     if not found:
         print("browser_scope: no browser tests for these paths", file=sys.stderr)
