@@ -14,11 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-if __package__:
-    from .verify_candidate import verify_candidate, _archive_image_ids
-else:
-    from verify_candidate import verify_candidate, _archive_image_ids
-
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_FILES = (
     "compose.yaml", "Caddyfile", ".env.example", "README.md",
@@ -159,6 +154,10 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
 
     base, proofs, changed = {}, {}, []
     if base_candidate is not None:
+        if __package__:
+            from .verify_candidate import verify_candidate, _archive_image_ids
+        else:
+            from verify_candidate import verify_candidate, _archive_image_ids
         if not trusted_key_id or trusted_public_key is None:
             raise ValueError("incremental builds require an independently trusted key ID and public key")
         base_candidate = base_candidate.resolve(strict=True)
