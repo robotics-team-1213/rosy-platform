@@ -375,6 +375,7 @@ chroot "$ROOT" getent passwd rosy-io >/dev/null 2>&1 || \
 chroot "$ROOT" getent group rosy-camera >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 963 rosy-camera
 chroot "$ROOT" getent passwd rosy-camera >/dev/null 2>&1 || \
     chroot "$ROOT" useradd --uid 963 --gid 963 --system --no-create-home --shell /usr/sbin/nologin rosy-camera
+chroot "$ROOT" getent group rosy-calib >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 964 rosy-calib
 # A/B roots must agree before either root installs keys into the shared operator home.
 chroot "$ROOT" getent group rosy >/dev/null 2>&1 || chroot "$ROOT" groupadd --gid 1001 rosy
 chroot "$ROOT" getent passwd rosy >/dev/null 2>&1 || \
@@ -397,6 +398,7 @@ install -d -m 0755 -o root -g root "$ROOT/var/lib/rosy"
 chroot "$ROOT" install -d -m 2750 -o rosy-io -g rosy-core /var/lib/rosy/maps
 chroot "$ROOT" install -d -m 0750 -o root -g rosy-camera /var/lib/rosy/models  # D-373
 chroot "$ROOT" install -d -m 2750 -o rosy-camera -g rosy-core /var/lib/rosy/pilot-recordings  # D-411
+chroot "$ROOT" install -d -m 2775 -o root -g rosy-calib /var/lib/rosy/calibration
 cp -a "$PAYLOAD/." "$RELEASE/"
 cp -a "$PAYLOAD/image-overlay/." "$ROOT/"
 chroot "$ROOT" /usr/bin/python3 -I -B /opt/rosy/native-runtime/os_state_accounts.py

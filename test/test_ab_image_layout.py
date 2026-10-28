@@ -73,9 +73,11 @@ def test_factory_data_is_explicit_and_has_existing_service_directory_ownership(t
     assert calls["maps"] == (961, 960)
     assert calls["models"] == (tmp_path.stat().st_uid, 963)
     assert calls["pilot-recordings"] == (963, 960)
+    assert calls["calibration"] == (tmp_path.stat().st_uid, 964)
     assert calls["operator-ssh"] == (1001, 1001)
     for name, mode in [("core", 0o750), ("maps", 0o2750), ("models", 0o750),
-                       ("pilot-recordings", 0o2750), ("operator-ssh", 0o700), ("tls", 0o750)]:
+                       ("pilot-recordings", 0o2750), ("calibration", 0o2775),
+                       ("operator-ssh", 0o700), ("tls", 0o750)]:
         assert (tmp_path / name).stat().st_mode & 0o7777 == mode
     assert json.loads((tmp_path / "policy/updates/config.json").read_text())["enabled"] is True
 
