@@ -119,10 +119,18 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
     A short deferral (a running job, waiting for CI) is normal; the same deferral for longer than
     `stale_hours` is what hid the field PC (4 days) and AI PC (3 days) stalls in October.
     """
-    host = dict(gate='unknown', channels=[], failed=[], sources=[], files={}, instances={}, copies={}, paths={})
+    host = dict(gate='unknown', channels=[], failed=[], sources=[], files={}, instances={}, copies={}, paths={}, topology={})
     for raw in text.splitlines():
         kind, _, rest = raw.partition(' ')
-        if kind == 'gate':
+        if kind == 'topology':
+            try:
+                report = json.loads(rest)
+                if not isinstance(report, dict):
+                    raise ValueError('invalid topology report')
+                host['topology'] = report
+            except ValueError:
+                host['topology'] = {'error': 'invalid workcell selection report'}
+        elif kind == 'gate':
             host['gate'] = rest.strip()
         elif kind == 'failed':
             host['failed'].append(rest.strip())
@@ -167,7 +175,7 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
     return host
 
 
-FAILING = {'UNDECLARED', 'MISSING', 'DOWN', 'UNEXPECTED', 'DRIFT'}
+FAILING = {'UNDECLARED', 'MISSING', 'DOWN', 'UNEXPECTED', 'DRIFT', 'DISCONNECTED', 'CONFIGURATION'}
 
 
 def load_inventory(path: Path | None = None) -> dict:
@@ -259,13 +267,30 @@ def audit(declared: dict, host: dict, digest) -> list:
             if run != 'off':
                 findings.append(('MISSING', name, 'declared but no unit file is installed'))
             continue
-        units = [name.replace('@.', f'@{i}.') for i in entry.get('instances', [])] if '@.' in name else [name]
+        selected = None
+        instances = entry.get('instances', [])
+        if entry.get('instances_from') == 'workcell-arms':
+            selected = host.get('topology', {}).get('arms')
+            if not isinstance(selected, dict) or not selected or host.get('topology', {}).get('error'):
+                findings.append(('CONFIGURATION', name, 'selected workcell arm configuration unavailable'))
+                selected = {}
+            instances = list(selected)
+        units = [name.replace('@.', f'@{i}.') for i in instances] if '@.' in name else [name]
+        if selected is not None:
+            for unit, record in host['instances'].items():
+                if fnmatch(unit, name.replace('@.', '@*.')) and unit not in units and record['active'] == 'active':
+                    findings.append(('UNEXPECTED', unit, 'observer is running outside the selected workcell arms'))
         if run == 'off':
             if installed['enabled'] == 'enabled' or installed['active'] == 'active':
                 findings.append(('UNEXPECTED', name, f'declared off but {installed["enabled"]}/{installed["active"]}'))
         elif '@.' in name:
             for unit in units:
-                if host['instances'].get(unit, {}).get('active') != 'active':
+                arm = selected[unit.split('@', 1)[1].removesuffix('.service')] if selected is not None else None
+                if arm is not None and not arm.get('configured'):
+                    findings.append(('CONFIGURATION', unit, 'selected arm needs an explicit observer device configuration'))
+                elif arm is not None and not arm.get('connected'):
+                    findings.append(('DISCONNECTED', unit, 'selected arm device is not connected; selection is unchanged'))
+                elif host['instances'].get(unit, {}).get('active') != 'active':
                     findings.append(('DOWN', unit, 'declared instance is not active'))
         elif run == 'active' and installed['active'] != 'active':
             findings.append(('DOWN', name, f'declared active but {installed["active"]}'))
@@ -347,7 +372,9 @@ def main() -> None:
         declared = inventory.get(role_of.get(target), {})
         copies = sorted({path for entry in declared.values() for path in (entry.get('copies') or {})})
         # bytes, not text: Windows text mode would send CRLF into bash
-        done = subprocess.run([*SSH, '--', target, 'bash -s -- ' + ' '.join(copies)], input=PROBE.encode(),
+        topology = Path(__file__).with_name('host_topology.py').read_text(encoding='utf-8')
+        probe = PROBE + "\npython3 - <<'ROSY_TOPOLOGY'\n" + topology + '\nROSY_TOPOLOGY\n'
+        done = subprocess.run([*SSH, '--', target, 'bash -s -- ' + ' '.join(copies)], input=probe.encode(),
                               capture_output=True, timeout=120)
         if done.returncode:
             print(f'\n{target}: UNREACHABLE ({done.stderr.decode(errors="replace").strip()[-120:]})')

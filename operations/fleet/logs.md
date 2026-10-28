@@ -4759,6 +4759,19 @@
 - 증거: [통합 기록](../../docs/validation/fleet-ui-boundaries-2026-10-24/2026-10-24-main-label-integration.md). 새 고정 커밋의 집중·공식 회귀는 후속 검증 대상이다. 이전 지도 시험의 단발 실패와 단독 통과는 Git 밖 원장에서 구분했다.
 - gate 변화: 없음. 기준선·신선도·대기시간·실행 권한 변경 없음. CE 해당 없음: 판단은 소유 경계와 단언으로 설명된다.
 
+## 2026-10-24 · uncommitted · 장치 설명 정보 저장과 조회 (D-860)
+
+- 변경: 기존 Fleet task DB에 장치 이름·제조사·모델·종류·선언된 팔 수·하드웨어 식별자를 저장한다. Viewer 조회와 기명 Operator 교체를 기존 역할 가드로 구분한다. 등록 로스터·실물 owner·보정·명령 권한과 결합하지 않는다.
+- 증거: 누락 구현의 원격 RED를 확인했다(0054db7523, 저장/API 모듈 없음). 최종 revision의 원격 회귀와 독립 검토는 후속 기록 대상이다.
+- gate 변화: 연결 검증은 not_checked, 제어 허용은 false다. 현재 OMX S 실물 동작·보정·정지 수용은 미해결이며 이 기능으로 열지 않는다.
+
+## 2026-10-24 · 9a0f3ae2b2 · 장치 정보 검증과 실물 경계
+
+- 증거: [검증 기록](../../docs/validation/device-information-2026-10-24/result.md). 원격 회귀 191개, 활성 브라우저 4개, 최종 연결 변경 회귀 15개 통과와 독립 검토를 구분해 기록했다. 모든 공식 로그의 NEW는 0이다.
+- 운영: 사용자 선언 OMX S 한팔 정보를 기존 현장 Fleet DB에 저장하고 재조회했다. 운영 코드 배포·서비스 재시작·토크·이동은 수행하지 않았다. CE 미해결: 실물 식별·보정·정지 수용은 미검증이다.
+- 변경: 장치 정보의 최종 소스·원격 시험·관리자 메타데이터 저장 증거를 검증 기록에 연결했다.
+- gate 변화: 소프트웨어 검증만 추가했다. 연결·보정·실물 정지·동작 수용은 미확인 상태다.
+
 ## 2026-10-24 · uncommitted · D-862 공통 API reference 버전 정렬
 
 - 변경: 공식 api_reserve bump 도구로 Fleet의 현행 API reference 검증 pin을 v1.309에 정렬했다. 기존 TRIP·Task·Mission 읽기/쓰기의 내용과 권한은 유지한다.
@@ -4941,3 +4954,95 @@
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-27 · uncommitted · feat: 로봇 상세의 지속 프로필과 하중 분석 파이프라인
+
+- 변경: D-860 설명 프로필에 별도 care 테이블을 연결했다. 등록 source 명시 결속, 주의사항·고장 관찰·정비 기록과 원본 특성 JSON, source-token 전용 모니터 출력 수신을 제공한다. 재바인딩과 수신을 쓰기 트랜잭션으로 직렬화하며 원본 capture 시각과 구성 해시로 신선도를 판정한다. 계산기 검증은 ROS-free motion 계약에서 공유한다. API v1.324.
+- 증거: 구현 commit `24c1d225b0`의 원격 관련 129건 PASS·NEW 0, UI commit `bf3470f9fe`의 실제 Chromium 10건 PASS·NEW 0. 기록은 `docs/validation/robot-profile-pipeline-2026-10-27/result.md`. 최종 통합 후보는 착지 gateway가 전체 회귀로 검사한다.
+- gate 변화: 관련 SOURCE/원격 UI GO. 배포·장치 활성화·실물 하중 수용은 미수행이다. 조언은 명령 허가나 실제 정지·복구가 아니다.
+- CE: 해당 없음 — 판단은 코드와 회귀 시험에 직접 남기며 별도 해결 교훈으로 중복하지 않는다.
+
+## 2026-10-27 · e7093c177a · ARM transfer 결과 판정과 검수용 export
+
+- 변경: 기존 simulation observer의 POST_ACTION 관측에서 Action 결과와 task succeeded/failed/unknown을 분리하고, 원본 근거를 기존 Fleet 이벤트 원장에 보존한다. 검수 export는 metadata-only이며 완료·재시도 권한을 만들지 않는다. POST_ACTION 계보 검사를 기존 완료 경로와 공유한다.
+- 증거: tests-only RED와 구현 GREEN, 독립 검토 반례 RED/GREEN을 공식 원격 실행했다. 관련 통합은 81988c1eb0의 116 passed/0 skipped. e7093c177a affected는 역의존·guard 4607 passed/190 skipped, Fleet 7052 passed/389 skipped, 두 invocation exit 0·known NEW 0. 독립 계약 재검토에서 중요 발견 없음. `docs/validation/transfer-outcomes-2026-10-27/result.md`와 `operations/fleet/docs/transfer-outcome-review.md` 참고.
+- Gate: 기존 모듈 gate를 올리지 않는다. 실제 장치·모델 품질·자동 재파지·다중 attempt·현장 수용은 별도다. 착지·push 미수행.
+- CE: 해당 없음 — 판단과 회귀 증거가 코드·시험·검증 기록에 남아 있다.
+
+## 2026-10-27 · c86b3e51d5 · owner 실행 단계와 복구 다음 확인
+
+- 변경: 보존된 네 단계 owner receipt의 명시적 FAILED·취소·불확실성을 검수 export v2에 연결했다. 종료 후 관측이 없는 Action 실패도 내보내고, 현재 HOLD를 유지한 채 대기·실행 대조·재관측·사람 검토 등 읽기 전용 다음 확인을 제안한다. 물리 실패 원인이나 새 실행 권한은 추정하지 않는다.
+- 증거: tests-only 26344ecf9b의 원격 16 failed/1 passed → 812b3b224c 156 passed. 독립 검토 TTL 반례 e231ff081a 2 failed → c86b3e51d5의 관련 통합 172 passed/0 skipped, runner exit 0·known NEW 0. 같은 source affected는 역의존·guard 4604 passed/190 skipped와 문서 검사 1 failed, Fleet 7070 passed/391 skipped와 기존 콘솔 계약 불일치 1 failed다. 문서 표기를 고친 a24f265097에서 해당 guard·문서 배치 9 passed/NEW 0. 전체 회귀 통과로 보고하지 않는다. `docs/validation/transfer-execution-review-2026-10-27/result.md` 참고.
+- Gate: 기존 gate 변화 없음. 실제 재파지·다중 attempt 이관·단계별 독립 물리 관측·VLA 학습·실물 수용·착지·push는 별도다.
+- CE: 해당 없음 — 기존 허가 유효시간 계약과 새 회귀 시험·검증 기록으로 해결 근거를 확인할 수 있다.
+
+## 2026-10-27 · uncommitted · fix: 등록 변경 시 이전 팔 프로필 연결 격리
+
+- 변경: 등록 당시 source·owner·board·관절 구성 지문을 보존한다. 등록 변경·제거와 legacy 연결은 현재 팔에서 숨기고 재확인을 요구한다. 원본 관리 기록은 보존하고 분석 수신은 duplicate 처리 전에 현재 지문을 확인한다. 자격 누락은 가용성 검사보다 먼저 거절한다.
+- 증거: commit `d57547ed3b`의 owner 변경·source 제거 3건 RED 후 commit `2bb5853fe3`의 관련 저장소·경로·Workcell·실제 브라우저 회귀 PASS. commit `24c5c92c19`의 인증 관련 원격 37건 PASS. FULL 재검증과 main 병합은 진행 중이다.
+- gate 변화: 기존 gate 유지. 설정 연결 검증은 물리 수용·실행 허가·고장 해제·자동 복구를 활성화하지 않는다.
+- CE: 해당 없음 — 원인과 회귀 조건은 코드·시험·검증 기록에 남겼다. 설정 지문은 물리 신원 증명이나 실행 권한이 아니다.
+
+## 2026-10-27 · 980fa75e8c · 백그라운드 루프 감시와 /readyz (계획 2026-10-27)
+
+- 변경: `fleet/server/loop_supervision.py` 신설 — lifespan이 여는 모든 루프(보조 시작 알림·제어유닛 짝·테더 포함 23개 이름)의 사망 감시(supervised/attach), 주기 실패 rate-limit 로그(주입 시계), 종료 stopping 플래그. 스폰 블록 전체를 app.py에서 `start_fleet_loops()`로 옮겼다(app.py는 D-766 파일 한도 초과라 늘지 못한다 — 래칫 행 882→829 동락). 작업 디스패치 루프의 무음 `except: pass`를 감시 기록+로그로 교체(가용성 불확실 시 작업은 큐에 두는 의미 보존). `/readyz`(ops 평면, 스키마 비노출)가 루프 상태를 내고 죽은 루프에 503. `/healthz`·tether_watch.py는 그대로.
+- 증거: 원격(모델/AI PC) 시험 — 첫 회차에서 새 시험 3개가 readyz 속성명 오타(`loop_supervisor` vs `loop_supervision`)를 잡아 red, 수정 후 green. 변이 검증 3종: 무음 pass 복원→red, stopping no-op→red, readyz 가드는 오타 결함으로 유기 증명(프로브 이력은 로컬 브랜치 `fix/fleet-loop-supervision`·`fix/fleet-loop-supervision-clean`에 보존). D-766 추출 리팩터링 뒤 관련 4 suite 재시험 green, known_failures NEW 0, size_range 통과(래칫 882→828). 계획: Rosy/docs/superpowers/plans/2026-10-27-fleet-loop-supervision.md(우산 밖 로컬).
+- Gate: 없음. 호스트 시험까지만 유효하며 실제 Ubuntu 사이트에서 `/readyz` 관찰 기록은 별도. 선택 루프 전부를 켠 열거 시험과 vision 서비스 루프는 후속.
+- CE: 해당 없음 — 계획·검토·변이 증거가 커밋과 시험에 남아 있다.
+
+## 2026-10-27 · d02b8d65e7 · 작업 큐 총 대기시간 계측 first_queued_at (계획 2026-10-27-fleet-queue-first-queued-at)
+
+- 변경: `fleet_tasks.first_queued_at` 컬럼(스키마 마이그레이션 additions 경로). `enqueue`가 COALESCE로 task id당 최초 입장 시각을 한 번만 기록하고 `release_traffic_wait`의 `queued_at` 재작성은 이 값을 건드리지 않는다. `FleetTaskScheduler.claim_next`가 주입 wall-clock으로 `total_queue_wait_seconds`를 함께 내놓고(기원 없는 옛 행은 None), 디스패치 시도마다 두 대기시간·우선순위·attempt_seq를 INFO 1줄로 남긴다. 노출은 로그뿐(API·UI 없음, 계획 결정).
+- 증거: 신규 `test_queue_wait_metrics.py` 8건 포함 원격 시험 77 passed, known NEW 0(관련 5 suite). 변이 검증: COALESCE 보존 제거 → 재대기열 보존 시험 red(`042bf8a957`), 되돌림 후 green(`d02b8d65e7`).
+- Gate: 없음. 호스트 시험까지만 유효 — 실제 사이트 큐에서 쌓이는 로그로 지표 노출·집계를 별도 결정한다.
+- CE: 해당 없음 — 계획 문서와 시험·커밋에 근거가 남아 있다.
+
+## 2026-10-27 · db6f4f8c02 · 승인된 단일 이송 복구 후손
+
+- 변경: 기존 부모 attempt·관측을 보존하고 현재 source/clearance·별도 운영자·fence/claims 조건을 만족한 새 자식 미션을 한 번 승인한다. 부모 자원을 원자적으로 이전하고, 자식을 명시 prepare한 뒤 새 관측과 기존 send/closure 경로를 사용한다. 중복 요청·재시작·준비 실패가 예산을 초기화하지 않는다. 검수 export에 root 계보를 보존한다.
+- 증거: 원격 승인 RED 21 failed → 관련 128 passed, 흐름 RED 3 failed → 통합 201 passed. 독립 검토 반례 4 failed와 첫/재조회 snapshot 차이 2 failed를 수정해 7f0a8a152a의 통합 214 passed, 추가 epoch/session 거절을 포함한 73f2fe5a03의 최종 216 passed/0 skipped·known NEW 0을 확인했다. 코드 7f0a8a152a의 독립 계약 재검토에서 추가 중요 발견 없음. `docs/validation/transfer-recovery-2026-10-27/result.md` 참고(저장소 루트 기준). 전체 영향 범위·착지 gate는 별도로 기록한다.
+- Gate: 기존 gate 변화 없음. 공개 복구 ingress·화면·무인 반복·Gazebo 과제·실물·모델 학습 수용은 별도다. 원래 미션은 HOLD로 유지한다.
+- CE: 해당 없음 — D-895·회귀 시험·검증 기록이 판단과 수정 이유를 보존한다.
+
+## 2026-10-27 · 167bae90bb · 전체 옵션 구성의 루프 열거 시험 (루프 감시 후속)
+
+- 변경: `test_loop_supervision.py`에 모든 선택 서비스(알림·신호·resolver·localization·드리프트·charge·lease·job-trips·제안·미션/셀 디스패처·목표 증거·모델 턴·제어유닛·물리 이송)가 켜진 구성의 시험을 추가했다. 루프 몸체는 걸어 뺀 채 `start_fleet_loops`의 스폰 배선만 돌려 23개 선언 이름 전부가 running으로 언랩되는지 본다. 최소 앱 시험이 못 잡던 "선택 분기 언랩 누락" 간극을 닫는다(모듈 docstring의 후속 과제 해소).
+- 증거: 원격 시험 10 passed, known NEW 0. 변이 검증: job-trips 분기의 supervised 제거 → 신규 시험 red(`498989d626`), 복원 green(`167bae90bb`).
+- Gate: 없음. 호스트 시험까지만 유효하며 실제 사이트에서의 `/readyz` 관찰 기록은 여전히 별도.
+- CE: 해당 없음 — 시험과 변이 이력이 커밋에 남아 있다.
+
+## 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀
+
+- 변경: 없음(코드 변경은 `applications/fleet/web` 참조). 이 모듈에서는 콘솔 계약 시험을 확장했다 — `test_work_overview_browser.py`에 범위 readback·배지·기명 운영자 전환·409 사유·보기 전용 잠금 시험 추가, `test/web/work-view.test.mjs`에 순수 판정·문구 시험 추가.
+- 증거: 모델 PC 원격 `ROSY_RUN_BROWSER_TESTS=1` `test_work_overview_browser.py` 36 통과(신규 3건 포함)·known_failures NEW 0. `test_server_app`·`test_remaining_platform_installed` 50 통과 NEW 0. 전체 affected/FULL 통과를 뜻하지 않는다.
+- Gate: 기존 gate 유지. P4 원격 회귀·착지와 P5 현장 수용은 이 브랜치 밖의 별도 단계다.
+- CE: 해당 없음 — 새 판단은 없고 시험·코드가 근거를 담는다.
+
+## 2026-10-27 · c36bfb48ad · feat: 인증된 복구 요청과 원본 결속
+
+- 변경: D-899 내부 요청·독립 근거 원장을 기존 Fleet DB에 추가했다. 자식 생성의 동일 트랜잭션에서 최신 요청/근거·완전한 원본 tuple·현재 제안자 권한을 대조하며 정확한 승인 replay는 역사적 근거로 같은 자식을 읽는다. 원래 실패와 단일 자식 예산은 유지한다.
+- 증거: 서비스 부재 RED 7 → 46 passed. 독립 검토의 직접 C 원본 판정 교체 반례 RED 1 → 47 passed. read-only Account preview RED 1을 수정해 최종 16 suites 283 passed/0 skipped·runner exit 0·NEW 0. 독립 source 재검토 완료. `docs/validation/transfer-recovery-intent-2026-10-27/result.md` 참고(저장소 루트 기준).
+- Gate: 기존 gate 변화 없음. 실제 HTTP 인증 resolver·공유 API 계약·콘솔과 관측 생산자는 다음 별도 착지 단위다. 합성 World/fake owner의 호스트 시험을 장치·현장·학습 수용으로 보고하지 않는다.
+- CE: 해당 없음 — 원본 결속과 권한 표시의 판단은 ADR·원장 코드·직접 회귀 시험에 남아 있다.
+
+## 2026-10-27 · 441d50c066 · 재시작 lease 회수의 원장 기록 LEASE_RECLAIMED
+
+- 변경: `recover_interrupted_work`의 safe 재대기열이 lease·로봇 예약·dispatch claim을 정리하면서 아무 기록도 남기지 않아, 회수당한 작업이 한 번도 잡을 쥔 적 없는 것처럼 보였다. 이제 실제로 lease를 쥐고 있었거나(lease_owner) 트래픽 대기 중이던(WAITING_TRAFFIC) 행에만 `QUEUED`/`LEASE_RECLAIMED` history(system/fleet-recovery)를 남긴다. 미사용 READY 행은 조용히 두어 재시작마다 원장이 도배되지 않는다.
+- 증거: 신규 시험(보유 lease 2종·미보유 1종) 포함 원격 4 suite green, known NEW 0. 변이 검증: 기록 조건을 끄면 신규 시험 red(`2790088abd`), 복원 green(`441d50c066`).
+- Gate: 없음. 감사 행 추가일 뿐 상태 기계·전이 조건은 불변(기존 재시작 시험 회귀 없음).
+- CE: 해당 없음 — 결함·수정·근거가 시험과 커밋에 남아 있다.
+
+## 2026-10-27 · 398b533c38 · 자동화 worker의 거절 증거 import 공개 이름 전환
+
+- 변경: `incidents/automation/execution/worker.py`가 분포 경계 너머 import하던 `rosy.decision.billing._RejectedJudgment`가 공개 `RejectedJudgment`로 바뀜에 따라 import·엄격 타입 검사를 따라갔다. 정본 기록은 `operations/decision/logs.md` 같은 SHA 행.
+- 증거: 원격 5 suite(known-cost·deliberation 3종·installed wheel) green, known NEW 0.
+- Gate: 없음. 순수 이름 변경.
+- CE: 해당 없음.
+
+## 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
+
+- 변경: `test_work_sources.py`가 매번 새로 만드는 앱의 State 설정 4곳을 직접 대입한다. 실제 요청·작업 종류 판정 assertion은 유지한다. 생산 코드와 설정은 바꾸지 않는다.
+- 원인: 같은 Starlette 1.6.0에서 pytest 9.1.1은 동적 속성의 원래 값을 저장하지만 9.2.0은 인스턴스 `__dict__`에 없는 값을 NOTSET으로 저장한다. 같은 State 속성을 두 번 patch하면 종료 시 두 번 삭제해 KeyError가 난다. 두 원격 환경의 독립 재현으로 차이를 확인했다.
+- 증거: 후보 `651ec7a06a`의 Fleet 전체·단독 재실행에서 종료 오류 RED, 기준 main의 pytest 9.1.1 환경에서는 단독 통과. 수정 커밋 `cdbd0c332e`는 같은 pytest 9.2.0 환경(`1fde7a90b47fe7fb`)에서 해당 파일 11 passed / 0 skipped / NEW 0. 독립 검토는 전용 앱 격리·검증 조건 유지를 확인했다. 원격 로그는 작업 공간의 native-cell-transport 실행 기록에 연결했다.
+- Gate: 전체 착지 검증은 별도이며 실물·서비스 수용 근거가 아니다.
+- CE: 해당 없음 — 전용 앱이라는 적용 조건과 버전별 원인은 시험 주석·이 기록에서 복원할 수 있다.

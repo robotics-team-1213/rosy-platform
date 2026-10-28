@@ -104,8 +104,8 @@
 
 ## 최근 기록
 
-- 2026-10-26 · 959ec51bbf · D-890 navigation intent epoch preservation
-- 2026-10-26 · uncommitted · D-856 forward-port to local main
-- 2026-10-26 · uncommitted · Service Control `clean-storage`와 디스크 표시 (D-883)
-- 2026-10-25 · uncommitted · fix(fleet): worker 상한 연결·로봇 묶음 우선 검사 순서 수정
-- 2026-10-25 · uncommitted · fix(fleet): 가짜 저장소가 list_resolved 지원 시 그대로 쓰기
+- 2026-10-28 · cdbd0c332e · 전용 앱 상태 시험의 pytest 9.2 종료 오류 수정
+- 2026-10-27 · 398b533c38 · 자동화 worker의 거절 증거 import 공개 이름 전환
+- 2026-10-27 · 441d50c066 · 재시작 lease 회수의 원장 기록 LEASE_RECLAIMED
+- 2026-10-27 · c36bfb48ad · feat: 인증된 복구 요청과 원본 결속
+- 2026-10-27 · uncommitted · D-865 P3 콘솔 표시 회귀

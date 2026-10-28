@@ -430,9 +430,10 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
         sel.invocations = pack(repo, sorted(sel.reasons))
         sel.local_invocations = [list(GUARD_SET)]
         sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
-    if matrix and allow_full and sel.mode != "full":
+    if allow_full and (matrix or as_json) and sel.mode != "full":
         sel.mode = "full"
-        sel.escalations.append("forced (--full): CI event other than pull_request")
+        sel.escalations.append("forced (--full)")
+        sel.full_invocations = lab_full_invocations(repo, sel.local_invocations)
     if matrix:
         print(json.dumps({"mode": sel.mode, "matrix": ci_matrix(repo, sel)}, separators=(",", ":")))
         return 0

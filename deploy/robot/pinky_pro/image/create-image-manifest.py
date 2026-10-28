@@ -159,6 +159,8 @@ def main() -> int:
         *(path.name for path in dist.iterdir()
           if path.is_file() and path.name not in {"SHA256SUMS", "SHA256SUMS.sig"}),
         *factory,
+        *("os-bundle-inputs/" + name for name in ("inputs.json", "rootfs.ext4.xz", "boot.vfat.xz")
+          if (dist / "os-bundle-inputs").is_dir()),
     ])
     sums = "".join(f"{digest(dist / name)}  {name}\n" for name in names)
     (dist / "SHA256SUMS").write_text(sums, encoding="utf-8", newline="\n")

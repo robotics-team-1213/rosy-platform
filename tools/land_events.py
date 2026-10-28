@@ -11,6 +11,7 @@ fields; one ``os.write`` on an ``O_APPEND`` descriptor per line, so concurrent l
            (its batch's wall time)
   landed   main fast-forwarded: sha, rounds
   stop     the run ended without landing: reason (first line)
+  skip     --tests none on the user's words: reason (--skip-reason)
 
 ``tools/land_stats.py`` turns the file into the daily numbers. Writing never stops a landing.
 Standard library only.
@@ -36,7 +37,15 @@ def bind(wt: Path, branch: str) -> None:
         _where.update(path=Path(common.stdout.strip()) / EVENTS, branch=branch)
 
 
+LAST = [time.monotonic()]  # the latest sign of progress, for land_watchdog
+
+
+def beat() -> None:
+    LAST[0] = time.monotonic()
+
+
 def emit(event: str, **fields) -> None:
+    beat()
     path = _where.get("path")
     if path is None:
         return

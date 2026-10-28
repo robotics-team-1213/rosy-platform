@@ -15,6 +15,10 @@ import time
 JOINTS = ('joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'gripper_joint_1')
 ACTION = '/arm_controller/follow_joint_trajectory'
 CAMERAS = {'top': '/top_camera/image_raw', 'front': '/front_camera/image_raw'}
+# Evaluation facts (D-866 §2): world poses of the movable work-scene objects, never a policy input. Optional; a
+# backend that publishes it must keep untouched objects still.
+OBJECTS = '/sim/object_tf'
+OBJECT_DRIFT_M = .005
 JOINT_MIN_HZ = 20.0
 STOP_TOLERANCE_RAD = .005  # Joint travel allowed after the cancel is acknowledged and the settle window ends.
 MOVED_MIN_RAD = .02  # The probe joint must have moved before the cancel, or a backend ignoring goals would pass.
@@ -62,6 +66,10 @@ def check(samples, *, shape, camera_hz, joint_hz=JOINT_MIN_HZ):
     clock = samples.get('clock') or []
     if len(clock) < 2 or clock[-1] <= clock[0] or any(b < a for a, b in zip(clock, clock[1:])):
         failures.append('clock: must advance without going back')
+    for name, track in (samples.get('objects') or {}).items():
+        drift = sum((b-a)**2 for a, b in zip(track[0], track[-1]))**.5
+        if drift > OBJECT_DRIFT_M:
+            failures.append(f'object {name}: drifted {drift*1000:.1f} mm while untouched')
     stop = samples.get('stop') or {}
     if not (stop.get('accepted') and stop.get('cancel_acknowledged')):
         failures.append('stop: trajectory goal must be accepted and its cancel acknowledged')
@@ -84,17 +92,24 @@ def collect(*, seconds=10.0, ready_s=120.0, settle_s=1.0, probe_joint='joint1', 
     from control_msgs.action import FollowJointTrajectory
     from rosgraph_msgs.msg import Clock
     from sensor_msgs.msg import Image, JointState
+    from tf2_msgs.msg import TFMessage
     from trajectory_msgs.msg import JointTrajectoryPoint
 
     rclpy.init()
     node = Node('omx_backend_conformance', parameter_overrides=[Parameter('use_sim_time', value=True)])
-    samples = dict(joint_states=[], cameras={name: [] for name in CAMERAS}, clock=[])
+    samples = dict(joint_states=[], cameras={name: [] for name in CAMERAS}, clock=[], objects={})
+    live_objects = {}
     stamp = lambda header: header.stamp.sec*1_000_000_000+header.stamp.nanosec
     node.create_subscription(JointState, '/joint_states', lambda m: samples['joint_states'].append(
         (stamp(m.header), list(m.name), list(m.position))), 50)
     for name, topic in CAMERAS.items():
         node.create_subscription(Image, topic, lambda m, name=name: samples['cameras'][name].append(
             (stamp(m.header), m.encoding, m.height, m.width)), qos_profile_sensor_data)
+    def objects(message):
+        for pose in message.transforms:
+            p = pose.transform.translation
+            live_objects.setdefault(pose.child_frame_id, []).append((p.x, p.y, p.z))
+    node.create_subscription(TFMessage, OBJECTS, objects, 10)
     node.create_subscription(Clock, '/clock', lambda m: samples['clock'].append(
         m.clock.sec*1_000_000_000+m.clock.nanosec), qos_profile_sensor_data)
     client = ActionClient(node, FollowJointTrajectory, ACTION)
@@ -117,10 +132,17 @@ def collect(*, seconds=10.0, ready_s=120.0, settle_s=1.0, probe_joint='joint1', 
         while time.monotonic() < deadline and not (samples['joint_states'] and samples['clock']
                 and all(samples['cameras'].values()) and client.server_is_ready()):
             executor.spin_once(timeout_sec=.1)
-        samples['joint_states'].clear(); samples['clock'].clear()
+        samples['joint_states'].clear(); samples['clock'].clear(); live_objects.clear()
         for frames in samples['cameras'].values():
             frames.clear()
+        began = time.monotonic()
         spin_for(seconds)
+        # Simulation seconds per wall second over the recording window; reported, not judged (D-866 §2 switch
+        # conditions ask for >= 1 separately from conformance).
+        clock = samples['clock']
+        samples['real_time_factor'] = ((clock[-1]-clock[0])/1e9/(time.monotonic()-began) if len(clock) > 1 else None)
+        # Object drift is judged over this window only; the stop probe below moves the arm.
+        samples['objects'] = {name: list(track) for name, track in live_objects.items()}
         stop = dict(accepted=False, cancel_acknowledged=False)
         if samples['joint_states'] and client.wait_for_server(timeout_sec=10):
             _, names, positions = samples['joint_states'][-1]
@@ -163,7 +185,10 @@ def main():
     failures = check(samples, shape=shape, camera_hz=args.camera_hz)
     summary = dict(failures=failures, shape=shape, camera_hz=args.camera_hz,
                    joint_messages=len(samples['joint_states']), camera_frames={k: len(v) for k, v in samples['cameras'].items()},
-                   clock_messages=len(samples['clock']), stop=samples['stop'])
+                   clock_messages=len(samples['clock']), real_time_factor=samples.get('real_time_factor'),
+                   object_drift_mm={name: round(sum((b-a)**2 for a, b in zip(track[0], track[-1]))**.5*1000, 2)
+                                    for name, track in samples['objects'].items()},
+                   stop=samples['stop'])
     with open(args.out, 'x', encoding='utf-8') as stream:
         json.dump(summary, stream, indent=2)
     print('OMX_BACKEND_CONFORMANCE_'+('PASS' if not failures else 'FAIL')+'='+json.dumps(summary), flush=True)

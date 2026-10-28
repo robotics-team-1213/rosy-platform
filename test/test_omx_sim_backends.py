@@ -49,3 +49,30 @@ def test_adjacent_links_come_from_urdf_joints_without_the_world_anchor():
             '<joint name="joint1" type="revolute"><origin/><parent link="link0"/>\n<child link="link1"/></joint>'
             '<ros2_control><joint name="joint1"><command_interface name="position"/></joint></ros2_control>')
     assert mod.adjacent_links(urdf) == [("link0", "link1")]
+
+
+def test_cell_world_reads_the_gazebo_work_scene_boxes():
+    mod = _mod("omx_cell_world")
+    boxes = {b["name"]: b for b in mod.boxes()}
+    assert {"table", "pallet_a", "pallet_b", "sheet_stand", "slip_sheet_0", "infeed_block"} <= set(boxes)
+    assert boxes["table"]["static"] and boxes["table"]["mass"] is None
+    assert not boxes["infeed_block"]["static"] and boxes["infeed_block"]["mass"] == pytest.approx(0.02)
+    assert mod.quaternion([0, 0, 0]) == pytest.approx([1, 0, 0, 0])
+    assert mod.quaternion([0, 0, 3.141592653589793]) == pytest.approx([0, 0, 0, 1], abs=1e-9)
+
+
+def test_cell_world_refuses_a_movable_box_without_mass(tmp_path):
+    mod = _mod("omx_cell_world")
+    world = tmp_path / "w.sdf"
+    world.write_text('<sdf><world><model name="b"><pose>0 0 0 0 0 0</pose><link><collision><geometry><box>'
+                     '<size>1 1 1</size></box></geometry></collision></link></model></world></sdf>')
+    with pytest.raises(ValueError):
+        mod.boxes(world)
+
+
+def test_finger_pads_sit_on_the_calibrated_jaw_contact_point():
+    """Both simulator backends grip through pads on this point; it must stay the teacher's calibrated value."""
+    import yaml
+    mod = _mod("omx_cell_world")
+    profile = yaml.safe_load(mod.PROFILE.read_text(encoding="utf-8"))
+    assert mod.jaw_contact_point() == tuple(profile["gripper"]["jaw"]["contact_point_m"])

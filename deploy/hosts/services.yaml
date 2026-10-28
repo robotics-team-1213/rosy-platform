@@ -13,6 +13,7 @@
 # template: repo unit file the installed unit file must equal byte for byte (CR ignored)
 # copies:   installed path (relative to home) -> repo path (or "<repo>:<path>" for another repository)
 # dropins:  drop-in file names the unit may carry; any other drop-in is reported
+# instances_from: workcell-arms reads the selected workcell from the host's existing bridge configuration
 # known_drift: why the installed unit or copy may differ for now; reported as KNOWN, not a failure
 schema: rosy.host-services/1
 roles:
@@ -90,7 +91,8 @@ roles:
     rosy-omx-camera@.service: {run: active, instances: [top, front, arm_a_wrist], channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-collection.service: {run: "off", channel: snapshot, template: deploy/robot/omx/rosy-omx-collection.service, doc: docs/plans/2026-10-17-omx-next-day-collection.md}
     rosy-omx-observation-bridge.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observation-bridge.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
-    rosy-omx-observer@.service: {run: active, instances: [arm_a, arm_b], channel: autoupdate, template: deploy/robot/omx/rosy-omx-observer@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-arm-status.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-arm-status.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-observer@.service: {run: active, instances_from: workcell-arms, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observer@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-site-config-reload.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-fleet-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-overhead-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}

@@ -110,6 +110,28 @@ def test_registered_sources_are_visible_before_any_samples_without_private_bindi
                                                       "credential_sha256", sha256(b"top-secret").hexdigest()))
 
 
+@pytest.mark.parametrize('field', ['board_id', 'joint_topic', 'joint_names'])
+def test_profile_binding_changes_with_registered_hardware_and_joint_source(setup, field):
+    service, _, manifest, tokens = setup
+    data = manifest.model_dump(by_alias=True)
+    arm = data['workcells'][0]['arms'][0]
+    changes = {'board_id': 'EXAMPLE-REPLACEMENT',
+               'joint_topic': '/omx_commissioning/replacement/joint_states', 'joint_names': ['replacement_joint']}
+    arm[field] = changes[field]
+    changed = WorkcellObservations(WorkcellObservationManifest.model_validate(data), tokens)
+    assert changed.arm_binding('feedback_a')['owner_id'] == service.arm_binding('feedback_a')['owner_id']
+    assert changed.arm_binding('feedback_a')['sha256'] != service.arm_binding('feedback_a')['sha256']
+
+
+def test_profile_binding_ignores_presentation_and_credential_environment_names(setup):
+    service, _, manifest, tokens = setup
+    data = manifest.model_dump(by_alias=True)
+    data['workcells'][0]['arms'][0].update(label='Renamed arm', token_env='EXAMPLE_RENAMED_ENV')
+    renamed = WorkcellObservations(WorkcellObservationManifest.model_validate(data), tokens)
+    assert renamed.arm_binding('feedback_a') == service.arm_binding('feedback_a')
+    assert arms(service)['feedback_a']['binding_sha256'] == service.arm_binding('feedback_a')['sha256']
+
+
 @pytest.mark.parametrize("tokens", [{}, {"feedback_a": "a"}, {"feedback_a": "", "feedback_b": "b"},
     {"feedback_a": "same", "feedback_b": "same"}, {"feedback_a": "a", "feedback_b": "b", "top": "c"}])
 def test_constructor_requires_exact_distinct_arm_credentials(setup, tokens):

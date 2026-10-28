@@ -10,9 +10,15 @@ import os
 from pathlib import Path
 import re
 import sys
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "native"))
+from os_storage_dispatch import BOOTSTRAP_FILES
 
 
 REQUIRED_UNITS = (
+    "rosy-os-storage.service",
+    "rosy-os-tailnet.service",
     "rosy-first-boot.service",
     "rosy-new-device-setup.service",
     "rosy-release-recover.service",
@@ -95,30 +101,37 @@ def default_config_tokens(text: str) -> bool | None:
     return bool(tokens) or "rosy-dev-" in text
 
 
-def installed_debs(root: Path) -> set[str]:
-    """Packages dpkg records as installed in the mounted root."""
+def _deb_records(root: Path) -> list[dict]:
     status = root / "var/lib/dpkg/status"
     if not status.is_file():
-        return set()
-    installed = set()
-    for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n"):
-        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
-        if fields.get("Status") == "install ok installed" and fields.get("Package"):
-            installed.add(fields["Package"])
-    return installed
+        return []
+    return [dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
+            for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n")]
+
+
+def installed_debs(root: Path) -> set[str]:
+    """Packages dpkg records as installed in the mounted root."""
+    return {row["Package"] for row in _deb_records(root)
+            if row.get("Status") == "install ok installed" and row.get("Package")}
 
 
 def package_states(root: Path) -> dict[str, str]:
     """Each package's dpkg Status line in the mounted root (e.g. "hold ok installed")."""
-    status = root / "var/lib/dpkg/status"
-    if not status.is_file():
-        return {}
-    states = {}
-    for stanza in status.read_text(encoding="utf-8", errors="replace").split("\n\n"):
-        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and line[0] != " ")
-        if fields.get("Package") and fields.get("Status"):
-            states[fields["Package"]] = fields["Status"]
-    return states
+    return {row["Package"]: row["Status"] for row in _deb_records(root) if row.get("Package") and row.get("Status")}
+
+
+def rauc_package_findings(root: Path) -> list[str]:
+    pin = yaml.safe_load(Path(__file__).with_name("inputs.lock.yaml").read_text())["os_updates"]["rauc_package_version"]
+    records = _deb_records(root)
+    versions = [row.get("Version") for row in records
+                if row.get("Package") == "rauc" and row.get("Status") == "install ok installed"]
+    findings = []
+    binary = root / "usr/bin/rauc"
+    if versions != [pin] or not binary.is_file() or binary.is_symlink():
+        findings.append("RAUC binary or installed version differs from the locked input")
+    if any(row.get("Package") == "rauc-service" for row in records):
+        findings.append("RAUC upstream service policy must not be installed in the product image")
+    return findings
 
 
 def module_vermagic(path: Path) -> str | None:
@@ -189,10 +202,11 @@ def camera_stack_findings(root: Path) -> list[str]:
     return findings
 
 
-def lamp_driver_findings(root: Path) -> list[str]:
+def lamp_driver_findings(root: Path, *, boot_root: Path | None = None) -> list[str]:
     """D-247: the rp1_ws281x_pwm module for the image kernel, its overlay, udev rule and channel."""
     findings = []
-    if not (root / LAMP_DTBO).is_file():
+    overlay = root / LAMP_DTBO if boot_root is None else boot_root / "overlays/rosy-ws281x.dtbo"
+    if not overlay.is_file():
         findings.append(f"missing lamp overlay: {LAMP_DTBO}")
     record = root / LAMP_KERNEL_RECORD
     kernel = record.read_text(encoding="utf-8").strip() if record.is_file() else ""
@@ -232,9 +246,44 @@ def lamp_driver_findings(root: Path) -> list[str]:
     return findings
 
 
-def inspect(root: Path, release_id: str) -> list[str]:
+STORAGE_CONSUMERS = ("NetworkManager.service", "ssh.service", "ssh.socket", "tailscaled.service",
+                     "rosy-ssh-access-boot.service", "rosy-first-boot.service", "rosy-first-boot-retry.service")
+BOOTSTRAP_HELPERS = BOOTSTRAP_FILES
+STORAGE_HELPERS = (*BOOTSTRAP_HELPERS, "first_boot_runtime.py")
+
+
+def storage_gate_findings(root: Path) -> list[str]:
+    findings = []
+    for name in STORAGE_HELPERS:
+        helper = root / "opt/rosy/native-runtime" / name
+        if helper.is_symlink() or not helper.is_file():
+            findings.append(f"missing storage admission helper: {name}")
+    for name in BOOTSTRAP_HELPERS:
+        helper = root / "opt/rosy/os-bootstrap" / name
+        if helper.is_symlink() or not helper.is_file():
+            findings.append(f"missing OS-owned bootstrap helper: {name}")
+    for name, consumers, label in (
+            ("rosy-os-storage.service", STORAGE_CONSUMERS, "storage"),
+            ("rosy-os-tailnet.service", ("tailscaled.service", "rosy-tailscale-join.service"), "tailnet")):
+        unit = root / "etc/systemd/system" / name
+        if unit.is_symlink() or not unit.is_file():
+            findings.append(f"missing regular {label} admission unit")
+        for consumer in consumers:
+            link = root / "etc/systemd/system" / (consumer + ".requires") / unit.name
+            if not link.is_symlink():
+                findings.append(f"{consumer} has no required {label} admission dependency")
+                continue
+            target = Path(os.readlink(link))
+            target = root / str(target).lstrip("/") if target.is_absolute() else link.parent / target
+            if not target.resolve().is_relative_to(root.resolve()) or target.resolve() != unit.resolve():
+                findings.append(f"{consumer} {label} admission dependency points outside its unit")
+    return findings
+
+
+def inspect(root: Path, release_id: str, *, boot_root: Path | None = None) -> list[str]:
     root = root.resolve()
-    findings: list[str] = []
+    boot = root / "boot/firmware" if boot_root is None else boot_root.resolve()
+    findings: list[str] = storage_gate_findings(root)
     release = root / "opt/rosy/releases" / release_id
     required_paths = (
         root / "opt/ros/jazzy/setup.bash",
@@ -274,6 +323,7 @@ def inspect(root: Path, release_id: str) -> list[str]:
 
     if (root / "usr/bin/docker").exists() or (root / "usr/bin/dockerd").exists():
         findings.append("docker must not be installed in the product image")
+    findings.extend(rauc_package_findings(root))
     # CORE SRS §25: UTC ISO 8601 timestamps (evidence freshness, Fleet log
     # correlation) presume a synced clock — chrony ships enabled in the image.
     if not (root / "usr/sbin/chronyd").exists():
@@ -288,7 +338,7 @@ def inspect(root: Path, release_id: str) -> list[str]:
     elif not os.path.lexists(root / "etc/systemd/system/multi-user.target.wants" / ready):
         findings.append(f"{ready} is not enabled")
     # D-192 US-004: the motor bus (UART4) and its /dev/rosy-motor alias.
-    config = root / "boot/firmware/config.txt"
+    config = boot / "config.txt"
     if not config.is_file():
         findings.append("missing boot configuration: boot/firmware/config.txt")
     elif not overlay_applies_to_pi5(config.read_text(encoding="utf-8", errors="replace")):
@@ -306,9 +356,9 @@ def inspect(root: Path, release_id: str) -> list[str]:
             findings.append("boot/firmware/config.txt does not enable OV5647 CAM1 with camera_auto_detect=0")
         if not overlay_applies_to_pi5(text, LAMP_OVERLAY):
             findings.append(f"boot/firmware/config.txt does not enable {LAMP_OVERLAY} for the Pi 5 (lamp driver)")
-    findings += lamp_driver_findings(root)
+    findings += lamp_driver_findings(root, boot_root=boot)
     findings += camera_stack_findings(root)
-    cmdline = root / "boot/firmware/cmdline.txt"
+    cmdline = boot / "cmdline.txt"
     if not cmdline.is_file():
         findings.append("missing kernel command line: boot/firmware/cmdline.txt")
     else:
@@ -402,6 +452,25 @@ def inspect(root: Path, release_id: str) -> list[str]:
     connections = root / "etc/NetworkManager/system-connections"
     if connections.is_dir() and any(connections.iterdir()):
         findings.append(f"common image contains device-specific state: {connections.relative_to(root)}")
+    tls = root / "etc/rosy/tls"
+    if any(path.is_symlink() for path in (root / "etc", root / "etc/rosy", tls)) or not tls.is_dir():
+        findings.append("factory TLS directory is missing or unsafe: etc/rosy/tls")
+    else:
+        info = tls.stat()
+        if info.st_uid != root.stat().st_uid or info.st_mode & 0o7777 != 0o750:
+            findings.append("factory TLS directory owner/permissions differ: etc/rosy/tls")
+        if any(tls.iterdir()):
+            findings.append("common image contains device-specific TLS state: etc/rosy/tls")
+    machine = root / "var/lib/tailscale"
+    if (any(path.is_symlink() for path in (root / "var", root / "var/lib", machine))
+            or not machine.is_dir()):
+        findings.append("factory tailnet state directory is missing or unsafe")
+    else:
+        info = machine.stat()
+        if info.st_uid != root.stat().st_uid or info.st_mode & 0o7777 != 0o700:
+            findings.append("factory tailnet state owner/permissions differ")
+        if any(machine.iterdir()):
+            findings.append("common image contains device-specific tailnet state")
     return findings
 
 
@@ -449,6 +518,7 @@ def verify_factory_release(root: Path, release_id: str, dist: Path, public_key: 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--boot-root", type=Path, help="separate read-only boot filesystem; defaults to ROOT/boot/firmware")
     parser.add_argument("--release-id", required=True)
     # D-225 2.2 (BUILD_GO): the signed dist and the trusted key, to prove the
     # factory release verifies once first boot adds the dist's signature.
@@ -457,7 +527,7 @@ def main() -> int:
     args = parser.parse_args()
     if (args.factory_dist is None) != (args.public_key is None):
         parser.error("--factory-dist and --public-key go together")
-    findings = inspect(args.root, args.release_id)
+    findings = inspect(args.root, args.release_id, boot_root=args.boot_root)
     if args.factory_dist is not None:
         findings += verify_factory_release(args.root, args.release_id, args.factory_dist, args.public_key)
     if findings:

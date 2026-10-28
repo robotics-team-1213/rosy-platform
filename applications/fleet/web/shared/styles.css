@@ -341,7 +341,7 @@ main {
 .robot-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .convoy-form-wrap > summary { display: list-item; }
 /* 버튼 글자는 낱자로 끊지 않는다. 좁으면 버튼째 다음 줄로 내린다. */
-.robot-actions ui-button { flex: 1 1 0; white-space: nowrap; word-break: keep-all; }
+.robot-actions ui-button { flex: 1 1 8rem; white-space: nowrap; word-break: keep-all; }
 
 /* 대형 행동은 넓은 화면에서 접고, 좁은 칸에서는 두 열의 같은 폭으로 읽는다. */
 .formation-actions ui-button { white-space: normal; }
@@ -449,8 +449,8 @@ main {
   main { grid-template-columns: minmax(0, 1fr); }
   .console-primary, .console-secondary { display: contents; }
   .queues-panel { order: 0; }
-  .panel[aria-labelledby="map-heading"] { order: 1; }
-  .console-context { order: 2; }
+  .panel[aria-labelledby="map-heading"] { order: 2; }
+  .console-context { order: 1; }
   #fleet-main > [data-raised] { order: -1; }
   #fleet-main:has(> [data-raised]) > .console-context { order: 0; }
   #fleet-main:has(> [data-raised]) > .queues-panel { order: 1; }
@@ -462,7 +462,7 @@ main {
 }
 
 @media (width < 30rem) {
-  .context-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .context-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   main { gap: var(--space-3); padding: var(--space-3); }
   .dispatch-control:not(:is(:not([data-state]), [data-state="absent"])) { align-items: flex-start; flex-direction: column; padding: var(--space-3); }
   .panel { padding: var(--space-3); }
@@ -630,7 +630,7 @@ main {
 .site-path { margin: var(--space-2) 0; }
 .site-path > summary span { color: var(--text-secondary); }
 .site-path > summary span[data-kind="warn"] { color: var(--status-warn); }
-.site-path > summary span[data-kind="crit"] { color: var(--status-crit); }
+.site-path > summary span[data-kind="crit"] { color: var(--text-on-danger); background: var(--status-crit); padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); }
 .site-path[open] ul { margin-top: var(--space-2); }
 .site-path ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .site-path li { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }

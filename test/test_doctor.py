@@ -112,6 +112,32 @@ def test_land_queue_counts_holder_and_dead_tickets_without_removing_them(repo):
     assert dead.exists(), "doctor is read-only"
 
 
+def test_land_queue_warns_on_a_run_that_keeps_preparing_or_went_quiet(repo, tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "land-tmp"))
+    qdir = repo / ".git/rosy-land-queue"
+    qdir.mkdir()
+    me, start = socket.gethostname(), time.time() - 3600
+    ticket = qdir / "00000000000000000001-1.json"
+    ticket.write_text(json.dumps({"pid": os.getpid(), "host": me, "branch": "fix/loop", "start": start,
+                                  "status": "pending"}), encoding="utf-8")
+    events = [{"t": start - 60, "event": "prepared", "pid": os.getpid()}]  # an earlier run with the same pid
+    events += [{"t": start + 60 * n, "event": "prepared", "pid": os.getpid()} for n in (1, 2, 3)]
+    (repo / ".git/rosy-land-events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
+    code, text = lines(repo)
+    assert code == 0
+    assert f"WARN land queue: fix/loop (pid {os.getpid()}, pending) prepared 3 times in this run" in text
+    assert "no activity" not in text
+
+    os.utime(ticket, (time.time() - 40 * 60,) * 2)
+    (repo / ".git/rosy-land-events.jsonl").write_text("", encoding="utf-8")
+    code, text = lines(repo)
+    assert "shows no activity for 40 min" in text and "prepared" not in text
+    logs = tmp_path / "land-tmp/fix-loop"
+    logs.mkdir(parents=True)
+    (logs / "run-pre-1.txt").write_text("streaming\n", encoding="utf-8")  # a remote log still growing
+    assert "no activity" not in lines(repo)[1]
+
+
 def test_hosts_reads_report_and_disk_low_over_ssh(repo, monkeypatch):
     monkeypatch.setattr(doctor.lab_hosts, "test_hosts", lambda: ["pc-a", "pc-b", "pc-c"])
     replies = {"pc-a": (0, '{"free_after_GiB": 88.5}\nROSY-DISK-LOW=0\n'),
@@ -134,3 +160,18 @@ def test_hosts_reads_report_and_disk_low_over_ssh(repo, monkeypatch):
     assert "WARN host pc-c: unreachable over ssh" in text
     monkeypatch.setattr(doctor.subprocess, "run", real_run)
     assert "host pc" not in lines(repo)[1], "--hosts is off by default"
+
+
+def test_capacity_warns_on_a_refusal_the_hosts_raw_numbers_do_not_explain(monkeypatch):
+    """2026-10-27: 3 GB locks for 0.3 GB jobs showed the model PC (20 GB available) as -5.2 GB free."""
+    monkeypatch.setattr(doctor.remote_pytest, "SITES", set())
+    base = {"nproc": 24, "load1": 4.0, "total_gb": 30.0, "pytest": True, "sim": True, "busy": False,
+            "lock_cores": 4, "site": False, "disk_free_gb": 99.0, "disk_use": 78}
+    probes = {"booked": {**base, "avail_gb": 20.0, "lock_gb": 35},  # reservations only
+              "full": {**base, "avail_gb": 2.0, "lock_gb": 6},  # really out of memory
+              "free": {**base, "avail_gb": 20.0, "lock_gb": 6}, "gone": None}
+    found = doctor.check_capacity(list(probes), probe=probes.get)
+    levels = {text.split(":")[0].split()[-1]: level for level, text, _ in found}
+    assert levels == {"booked": "WARN", "full": "OK", "free": "OK", "gone": "WARN"}
+    assert "refused by bookkeeping" in found[0][1] and "locks 35 GB" in found[0][1]
+    assert "no probe answer" in found[3][1]

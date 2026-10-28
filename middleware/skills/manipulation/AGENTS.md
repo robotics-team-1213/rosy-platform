@@ -46,3 +46,5 @@ Depends on `rosy-skill-api`, which depends on `rosy-contracts-skill`.
 - Python >= 3.12.
 
 ## Manual Notes
+
+Read [progress.md](progress.md) for current gates and append results to [logs.md](logs.md). Regenerate the module index and repository STATUS with `python tools/harness/rosy_harness.py generate`.

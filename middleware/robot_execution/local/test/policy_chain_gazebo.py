@@ -31,7 +31,7 @@ sys.path[:0] = [str(ROOT/'middleware/devices/omx/adapter'), str(ROOT/'contracts/
     *[str(ROOT/'middleware/core'/part) for part in ('api','gateway','services','events')]]
 
 import rclpy
-from rclpy.executors import MultiThreadedExecutor
+from omx_adapter.ros_owner_executor import OwnerMultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from rclpy.qos import qos_profile_sensor_data
@@ -383,9 +383,9 @@ def prove(out, runtime, camera, controllers, calibration):
             owner_state=runtime.owner.state,hold_reason=chain.session.hold_reason,
             final_window_samples=len(window),final_spread_rad=max(window)-min(window),reconnect=reconnect)
         (out/'chain-result.json').write_text(json.dumps(proof,indent=2))
-        print('OMX_POLICY_CHAIN_GAZEBO_PASS='+json.dumps(proof),flush=True)
         child.wait(3)
         assert child.returncode == 0
+        return proof
 
 
 def main():
@@ -443,12 +443,14 @@ def main():
         intake.snapshot = traced_snapshot
         camera = Camera(node,runtime.monotonic,calibration)
         controllers = node.create_client(ListControllers,'/controller_manager/list_controllers')
-        executor = MultiThreadedExecutor(num_threads=4)
+        # The product owner executor; the stock one starved the lease renewal thread (D-866 P0 lesson,
+        # docs/solutions/runtime-errors/stock-rclpy-executor-starves-sim-lease-renewal-2026-10-25.md).
+        executor = OwnerMultiThreadedExecutor(num_threads=4)
         executor.add_node(node)
-        errors = []
+        errors, passed = [], []
         def work():
             try:
-                prove(out,runtime,camera,controllers,calibration)
+                passed.append(prove(out,runtime,camera,controllers,calibration))
             except BaseException as error:
                 errors.append(error)
         worker = threading.Thread(target=work,name='sim-policy-chain-probe')
@@ -472,13 +474,16 @@ def main():
                 cpu_after=(cpu_group/'cpu.stat').read_text(),finished_monotonic_s=time.monotonic(),
                 remaining_thread_stacks={} if workers_stopped else {
                     str(ident):traceback.format_stack(frame) for ident,frame in sys._current_frames().items()}),indent=2))
-            assert stopped and workers_stopped, 'own executor/workers did not drain; do not destroy live entities'
+            if not (stopped and workers_stopped):  # Do not destroy live entities; keep the probe's failure as the cause.
+                raise AssertionError('own executor/workers did not drain') from (errors[0] if errors else None)
             (out/'joint-intake.json').write_text(json.dumps(list(intake_trace),indent=2))
             runtime.destroy()
             node.destroy_node()
             rclpy.try_shutdown()
         if errors:
             raise errors[0]
+        # PASS only after a clean teardown and child exit, so a grep for PASS cannot count a failed cleanup.
+        print('OMX_POLICY_CHAIN_GAZEBO_PASS='+json.dumps(passed[0]),flush=True)
         print('OMX_POLICY_CHAIN_EXIT_OK',flush=True)
 
 

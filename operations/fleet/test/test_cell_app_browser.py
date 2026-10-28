@@ -89,6 +89,7 @@ def _prepare(page):
         expect(page.locator(f"#{kind}-revision")).to_contain_text("저장된 버전")
     page.locator("#compile").click()
     expect(page.locator("#summary")).to_contain_text("18회 전송")
+    expect(page.locator('#proposal-stage')).to_have_attribute('open', '')
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -106,6 +107,7 @@ def test_discord_request_uses_real_cell_preparation_and_separate_confirmation(br
     page.locator('#cell-channel-reason').fill('reviewed saved recipe and cell')
     page.locator('#propose').click()
     expect(page.locator('#proposal')).to_contain_text('운영자 별도 승인 대기')
+    expect(page.locator('#mission-stage')).to_have_attribute('open', '')
     proposal_id = page.locator('#mission-id').input_value()
     from fleet.server.cell_job_store import CellJobStore
     jobs = CellJobStore(tasks.store.path)
@@ -120,6 +122,25 @@ def test_discord_request_uses_real_cell_preparation_and_separate_confirmation(br
     expect(page.locator('#job-summary')).to_contain_text('실행 대기')
     assert jobs.get(proposal_id)['status'] == 'READY'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+
+@pytest.mark.parametrize("heading,stage,field", [
+    ("proposal-heading", "proposal-stage", "workcell"),
+    ("mission-heading", "mission-stage", "mission-id"),
+])
+def test_cell_stage_links_reveal_controls_on_entry_and_repeat_click(browser_site, heading, stage, field):
+    from playwright.sync_api import expect
+
+    page, _, origin = browser_site
+    page.set_viewport_size({"width": 390, "height": 844})
+    expect(page.locator(f"#{field}")).to_be_hidden()
+    page.goto(origin + "/console/cell#" + heading)
+    page.reload()
+    expect(page.locator(f"#{field}")).to_be_visible()
+    page.locator(f"#{stage} > summary").click()
+    expect(page.locator(f"#{field}")).to_be_hidden()
+    page.locator(f'.ui-subnav a[href="#{heading}"]').click()
+    expect(page.locator(f"#{field}")).to_be_visible()
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
@@ -687,6 +708,7 @@ def test_sheet_access_unavailable_is_visible_and_generic_resume_is_disabled(brow
            "operator_checkpoints": [{"checkpoint_id": "a" * 64, "status": "WAITING_ACCESS",
                                      "pallet_id": "A", "layer_index": 1, "thickness_m": 0.002}]}
     page.route("**/api/fleet/cell-jobs/sheet-held", lambda route: route.fulfill(json={"job": job}))
+    page.locator("#mission-stage > summary").click()
     page.locator("#mission-id").fill("sheet-held")
     page.locator("#read-job").click()
     expect(page.locator("#job-summary")).to_contain_text("작업 보류")

@@ -158,6 +158,7 @@ def _shots(page, name, fits=False):
     for width, height in SIZES:
         page.set_viewport_size({"width": width, "height": height})
         page.clock.run_for(1500)  # a poll and a redraw at this size
+        page.evaluate('window.scrollTo(0, 0)')
         if out:
             page.screenshot(path=str(Path(out) / f"{name}-{width}x{height}.png"), full_page=True)
         if width < 480:
@@ -167,7 +168,16 @@ def _shots(page, name, fits=False):
             stop = page.locator("#estop").bounding_box()
             assert stop and stop["x"] >= 0 and stop["y"] >= 0
             assert stop["x"] + stop["width"] <= width and stop["y"] + stop["height"] <= height
-            if width == 390:
+            if width == 390 and urlparse(page.url).path == '/console':
+                choice = page.locator('#robot-choice').bounding_box()
+                assert 0 <= choice["y"] and choice["y"] + choice["height"] <= height
+                map_panel = page.locator('[aria-labelledby="map-heading"]')
+                assert choice["y"] < map_panel.bounding_box()["y"]
+                map_panel.scroll_into_view_if_needed()
+                canvas = page.locator('#map-canvas').bounding_box()
+                assert canvas["y"] < height and canvas["y"] + canvas["height"] > 0
+                page.evaluate('window.scrollTo(0, 0)')
+            elif width == 390:
                 assert page.locator('[aria-labelledby="map-heading"]').bounding_box()["y"] < height
         if fits and (width, height) == (1920, 1080):  # D-517 10: the console never scrolls at 1920x1080
             fit = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll(
