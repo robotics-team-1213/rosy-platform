@@ -22,6 +22,7 @@ from pathlib import Path
 import remote_test_tools
 
 POLL_S = 10.0
+LAST_POLL = 0.0  # monotonic time of the latest poll in this process (land_watchdog reads it)
 BACKOFF = (5, 10, 20, 30)
 RECONNECT_S = float(os.environ.get("ROSY_TEST_RECONNECT", "600"))
 CALL_TIMEOUT = 60
@@ -223,6 +224,8 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
         deadline = clock() + timeout_s + 120  # the job's own timeout fires first
         with log.open("ab") as out:
             while True:
+                global LAST_POLL
+                LAST_POLL = time.monotonic()  # progress for land_watchdog: a job is still being followed
                 got, lost = retrying(poll, "poll", host, budget, sleep, clock)
                 if got is None:
                     raise Lost(f"[remote-pytest] lost contact with {host} for {lost:.0f} s; "
