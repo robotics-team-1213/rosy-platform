@@ -100,7 +100,10 @@ def _stale(info: dict | None, age: float) -> str | None:
 
 def set_status(ticket: Path, status: str, **fields) -> None:
     """Rewrite a held ticket's status (and ``fields``, e.g. ``batch``) by rename (also refreshes it)."""
-    info = json.loads(ticket.read_text(encoding="utf-8"))
+    try:
+        info = json.loads(ticket.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise QueueError(f"landing ticket disappeared: {ticket.name}; run land.py again to rejoin the queue") from error
     tmp = ticket.with_name(f".{ticket.name}.tmp")
     tmp.write_text(json.dumps({**info, **fields, "status": status}), encoding="utf-8")
     os.replace(tmp, ticket)
