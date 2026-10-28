@@ -12819,6 +12819,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙과 근거가 D-889 추가 4와 시험에 남는다.
 
+## 2026-10-28 · uncommitted · fix(land): 겹치지 않는 묶음은 함께 있을 수 있다
+
+- 변경: `tools/land_batch.py`. "묶음은 한 번에 하나" 대신, 이미 실린 브랜치(`taken`)를 다른 묶음의 구성원에서 빼고 실린 착지는 리더가 되지 않게 했다. 동시에 생긴 두 리더는 구성원이 겹칠 때만 늦은 쪽이 물러난다. D-889 추가 4.
+- 근거: 21:31에 FULL 묶음 하나가 사전 시험 슬롯을 1.5시간 기다리는 동안, 차례를 기다리는 FULL 티켓이 묶음을 만들지 못했다(사용자 지시).
+- 증거: 원격 `test/test_land_batch.py`·`test_land_queue.py`·`test_land_prepare.py`·`test_land.py`·`test_land_speculate.py`, known_failures NEW 0.
+- gate 변화: 없음.
+- CE: 해당 없음 — 규칙이 D-889 추가 4와 시험에 남는다.
+
 ## 2026-10-28 · 55117575a3 · 녹화·검수·학습·HF 보관 연결 검증
 
 - 변경: 고정 OMX 자료의 보관 인계, 검수 유실 방지, 변환 상태와 API v1.328, signed runtime closure의 구현·화면·원격 증거를 `docs/validation/recording-learning-handoff-2026-10-28/`에 보존한다. HTTP 이름의 Chromium 시험도 선택되도록 브라우저 선택기를 고쳤다.
