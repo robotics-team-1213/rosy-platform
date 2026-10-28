@@ -83,6 +83,7 @@ def test_legacy_root_is_not_modified(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
+@NEEDS_KEYGEN
 def test_published_pair_is_reused_after_parent_sync_error(tmp_path, monkeypatch):
     root, _, common, _ = shared_roots(tmp_path, monkeypatch)
     helper = _module()

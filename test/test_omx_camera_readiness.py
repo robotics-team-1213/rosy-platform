@@ -210,7 +210,8 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     view = configparser.ConfigParser(interpolation=None, strict=False)
     view.read(REPO / 'deploy/robot/omx/rosy-omx-camera-view.service')
     assert 'commissioning_view.py' in view['Service']['ExecStart']
-    assert 'FASTDDS_DEFAULT_PROFILES_FILE="$ROSY_CAMERA_PIPELINE_ROOT/camera-view-receive.xml"' in view['Service']['ExecStart']
+    assert 'ROSY_ROS_SETUP' not in view['Service']['ExecStart']
+    assert 'FASTDDS' not in view['Service']['ExecStart']
     assert 'rosy-omx-camera@top.service' in view['Unit']['After']
     assert 'rosy-omx-camera@front.service' in view['Unit']['After']
 
