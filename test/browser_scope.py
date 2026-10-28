@@ -141,7 +141,7 @@ SCOPE: dict[str, list[str]] = {
     "integrations/simulation/gazebo/scripts/": GAZEBO,
     "deploy/robot/omx/commissioning_view.py": COMMISSIONING,
     # Every surface loads /common (ui.js, components.css, tokens.css).
-    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING,
+    "shared/web/": SHARED + FLEET + ROBOT + API_WEB[:1] + PILOT + GAMES + REVIEW + LEARNING + MONITORING + GAZEBO,
     "test/browser_harness.py": EVERYTHING,
 }
 

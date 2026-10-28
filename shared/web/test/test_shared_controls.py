@@ -505,6 +505,24 @@ def test_diagnostic_palette_references_the_tokens():
     assert not RAW_COLOR.findall(rest), "colours past the role block come from a role, not a literal"
 
 
+def loads_shared_ui(page, text):
+    for attrs in re.findall(r"<script\b([^>]*)>", text):
+        if 'type="module"' not in attrs:
+            continue
+        source = re.search(r'\bsrc="([^"]+)"', attrs)
+        if not source:
+            continue
+        if source[1] in ("/common/ui.js", "./common/ui.js"):
+            return True
+        entry = page.parent / source[1].lstrip("/")
+        if entry.is_file() and re.search(
+            r'''^\s*import\s+(?:[^;]*?\s+from\s+)?['"]/common/ui\.js['"]''',
+            entry.read_text(encoding="utf-8"), re.M,
+        ):
+            return True
+    return False
+
+
 @pytest.mark.parametrize("statement", ["import '/common/ui.js';", 'import {cssColor} from "/common/ui.js";'])
 def test_shell_recognizes_entry_module_loading_shared_controls(tmp_path, statement):
     page = tmp_path / "index.html"
@@ -533,10 +551,12 @@ def test_a_browser_page_starts_from_the_shell():
         text = page.read_text(encoding="utf-8")
         for bit in (
             "<ui-shell", "<ui-topbar", 'grammar="',
-            "/common/tokens.css", "/common/components.css", "/common/ui.js",
+            "/common/tokens.css", "/common/components.css",
         ):
             if bit not in text:
                 missing.append(f"{page.relative_to(ROOT)} 에 {bit} 이 없다")
+        if not loads_shared_ui(page, text):
+            missing.append(f"{page.relative_to(ROOT)} 에 공용 UI를 읽는 module이 없다")
     template = (COMMON / "template.html").read_text(encoding="utf-8")
     for bit in (
         "<ui-shell", "<ui-topbar", "<ui-brand", "<ui-section", "<ui-empty",
