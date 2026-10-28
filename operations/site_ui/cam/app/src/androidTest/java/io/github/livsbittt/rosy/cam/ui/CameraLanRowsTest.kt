@@ -61,9 +61,13 @@ class CameraLanRowsTest {
         compose.onNodeWithText(other.name).performScrollTo().assertIsNotEnabled().performTouchInput { click() }
         compose.runOnIdle { assertTrue(calls.isEmpty()) }
         for (record in listOf(peer, legacy)) {
-            val button = compose.onNodeWithText(record.name).performScrollTo().assertIsEnabled()
+            val button = compose.onNodeWithText(record.name).performScrollTo().assertIsDisplayed().assertIsEnabled()
             val bounds = button.fetchSemanticsNode().boundsInRoot
+            val screen = compose.onNodeWithTag("screen").fetchSemanticsNode().boundsInRoot
             assertTrue("button must retain the shared touch target", bounds.height / screenDensity >= 47.5f)
+            assertTrue("button must fit screen width", bounds.left >= screen.left && bounds.right <= screen.right)
+            assertTrue("button must be fully visible", bounds.top >= screen.top && bounds.bottom <= screen.bottom)
+            capture("$width-${record.tlsHost}")
             button.performClick()
         }
         compose.runOnIdle { assertEquals(listOf(peer, legacy), calls) }
