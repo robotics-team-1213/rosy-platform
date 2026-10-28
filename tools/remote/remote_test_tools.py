@@ -130,6 +130,7 @@ def render_job(base_job: str, profile: str | None) -> str:
 
 DEFAULT_CONTEXT = '[ ! -e "$V/.test-tools" ] || { echo "[remote] test-tools context mismatch" >&2; exit 1; }\n'
 
+# pytest 9.2 changes setattr restoration for dict-backed State; keep the verified runner version.
 VENV = r"""set -euo pipefail
 R=~/rosy-test; DEPS=$2; V=$R/venvs/$DEPS; N=$R/venvs/.new-$DEPS; cd "$R/runs/$1"; shift 2
 mkdir -p "$R/venvs"
@@ -158,7 +159,6 @@ extra = (line for filename in sys.argv[2:-1] for line in Path(filename).read_tex
          if normalize(line.split("==", 1)[0]) not in pinned)
 Path(sys.argv[-1]).write_text("".join(extra))
 PY
-# pytest 9.2 changes setattr restoration for dict-backed State; keep the verified runner version.
 $P install -c "$N/constraints.txt" -r "$N/site-extra.txt" pytest==9.1.1 setuptools wheel flake8 httpx pyyaml \
   jsonschema ext4 numpy pillow playwright pytest-xdist==3.8.0
 $P install --require-hashes --no-deps --only-binary=:all: \
