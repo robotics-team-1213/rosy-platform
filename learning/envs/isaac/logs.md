@@ -376,7 +376,7 @@
 - 증거: helper의 gpu_empty가 두 경우를 모두 false로 반환함을 확인했고 서비스 복원과 NRestarts 0을 별도 재조회했다.
 - gate 변화: 없음. AI ROS 통과를 주장하지 않는다.
 
-## 2026-10-29 — OMX 두 팔 PPO 구동과 Confluence 맵 적재 기준 동작
+## 2026-10-29 · uncommitted · OMX 두 팔 PPO 구동과 Confluence 맵 적재 기준 동작
 
 - 변경: 고정 `omx-stacking-rl` 실행에 두 OMX-F, 이동 벨트, 30/60/90 mm 화물과 90 mm 적재 공간, PPO 체크포인트/평가 보고서 검증을 연결했다. 이어 사용자가 선택한 합판 CAD·현장 사진의 맵 문맥에 `omx-map-long-stack` 기준 동작을 추가했다. 긴 화물 3개를 A/B/A가 처리하며 원시 접촉으로 들어 올림·해제·지지·후퇴를 판정한다. 사진 기반 작업대 좌표는 실측 보정이 아니다.
 - 증거: `83e3d61303`, `c6cb3a15e1985f0bb686c272867734ce`는 32 PPO update / 1,024 transition과 유효한 파라미터 변화를 확인했다. 실제 적재 평가는 0/1이다. 맵 기준 동작은 물리 적재를 통과하지 않았다. `ac9d8e00db` 원격 Isaac 회귀 415 통과·1 건너뜀·신규 실패 0. 이후 모델 물리 변경의 시험과 실행은 [검증 기록](../../../docs/validation/omx-map-stacking-2026-10-29/result.md)에 구분한다.

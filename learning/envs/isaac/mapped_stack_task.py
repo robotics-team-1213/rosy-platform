@@ -1,7 +1,33 @@
 """CAD board context and measured-contact three-layer reference execution."""
 import math
+import hashlib
+import json
+from pathlib import Path
+import subprocess
 
-from mapped_stack_fixture import DT, FIXTURE, free_lift, home, judge, plan, planning, solve, stable_box
+from mapped_stack_fixture import DT, FIXTURE, PROFILE, ROOT, free_lift, home, judge, plan, stable_box
+
+
+class Planner:
+    """Use the OMX owner's offline JSON producer without importing its device adapter."""
+    def __init__(self, directory):
+        self.directory, self.count = Path(directory), 0
+
+    def request(self, operation, **fields):
+        from stacking_report import read_regular
+        self.count += 1
+        request = self.directory/f'plan-request-{self.count}.json'
+        output = self.directory/f'plan-frames-{self.count}.json'
+        with request.open('x', encoding='utf-8') as stream:
+            json.dump(dict(schema='rosy.omx-sim-stack-plan/1', operation=operation, **fields), stream, allow_nan=False)
+        subprocess.run(['/usr/bin/python3', str(ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
+            '--case', str(request), '--out', str(output)], check=True, timeout=60, capture_output=True)
+        value = json.loads(read_regular(output, limit=16*1024*1024))
+        if (value.get('schema') != 'rosy.omx-sim-stack-plan/1'
+                or value.get('joints') != ['joint'+str(i) for i in range(1, 6)]
+                or value.get('profile_sha256') != hashlib.sha256(PROFILE.read_bytes()).hexdigest()):
+            raise ValueError('Offline SIM plan provenance differs')
+        return value
 
 
 def apply_servo(robot, targets, joints, fingers):
@@ -44,10 +70,10 @@ def build_map(world, stage):
             color=np.array([.95, .72, .06])))
 
 
-def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture, grasp_probes):
+def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture, grasp_probes,
+            planner, initial, tcp_position):
     import numpy as np
     from pxr import UsdGeom
-    kin, profile = planning()
     targets = [np.zeros(r.num_dof) for r in robots]
     tick = 0
     images, trials = [], []
@@ -103,9 +129,8 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                 velocity=box.get_linear_velocity().tolist(), angular_velocity=box.get_angular_velocity().tolist(),
                 net_force=np.asarray(contacts[i].get_net_contact_forces(dt=DT))[0].tolist(),
                 forces=np.asarray(contacts[i].get_contact_force_matrix(dt=DT))[0].tolist()))
-        for i, robot in enumerate(robots):
-            pose = kin.fk(robot.get_joint_positions()[joints[i]])
-            tcps.append([pose.x+FIXTURE['arm_bases_m'][i][0], pose.y+FIXTURE['arm_bases_m'][i][1], pose.z])
+        for i in range(2):
+            tcps.append(tcp_position(i).tolist())
         return dict(tick=tick, boxes=boxes, tcps=tcps,
             joints=[r.get_joint_positions().tolist() for r in robots],
             commands=[v.tolist() for v in targets],
@@ -136,21 +161,10 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
         images.append(name)
 
     def move(arm, point, yaw=0.):
-        start_pose = kin.fk(targets[arm][joints[arm]])
-        base = FIXTURE['arm_bases_m'][arm]
-        start = np.array([start_pose.x+base[0], start_pose.y+base[1], start_pose.z])
-        q5 = float(targets[arm][joints[arm][-1]])
-        def curve(u):
-            nonlocal q5
-            s = u*u*u*(10+u*(-15+6*u))
-            q = solve(arm, start+(np.array(point)-start)*s, start_pose.yaw+(yaw-start_pose.yaw)*s, q5)
-            q5 = q[-1]
-            return q
-        coarse = np.array([curve(u) for u in np.linspace(0., 1., 101)])
-        duration = max(.8, float(np.abs(np.diff(coarse, axis=0)*100).max())/.4,
-                       math.sqrt(float(np.abs(np.diff(coarse, n=2, axis=0)*10000).max())/.4))
-        for u in np.linspace(0., 1., math.ceil(duration/DT)+1)[1:]:
-            targets[arm][joints[arm]] = curve(u)
+        frames = planner.request('move', base=FIXTURE['arm_bases_m'][arm],
+            start=targets[arm][joints[arm]].tolist(), target=[float(v) for v in point], yaw=float(yaw), dt=DT)['frames']
+        for q in frames:
+            targets[arm][joints[arm]] = q
             step()
         hold(120)
 
@@ -171,7 +185,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
             box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
             UsdGeom.Imageable(box.prim).MakeInvisible()
         for i, robot in enumerate(robots):
-            targets[i][joints[i]] = solve(i, home(i), 0.)
+            targets[i][joints[i]] = initial['homes'][i]
             targets[i][fingers[i]] = [.6, -.6]
             robot.set_joint_positions(targets[i])
             robot.set_joint_velocities(np.zeros(robot.num_dof))
@@ -206,10 +220,10 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     infeed_start=start.tolist(), infeed_settled=p.tolist(), grasp_samples=[], lift_samples=[], settle_samples=[])
                 trial['layers'].append(layer)
                 move(arm, [p[0], p[1], .145], yaw)
-                grip(arm, profile.gripper_contact_for_width(.036))
+                grip(arm, initial['gripper']['preopen'])
                 move(arm, [p[0], p[1], p[2]+.002], yaw)
                 layer['grasp_samples'].append(grasp_snapshot(arm))
-                grip(arm, profile.gripper_close_for_width(.03))
+                grip(arm, initial['gripper']['close'])
                 layer['grasp_samples'].append(grasp_snapshot(arm))
                 move(arm, [p[0], p[1], .145], yaw)
                 layer['lift_samples'] = samples(36)
@@ -218,7 +232,7 @@ def execute(args, world, stage, robots, joints, fingers, cargo, contacts, captur
                     raise ValueError('bilateral free lift failed; transport interlock stopped the arm')
                 move(arm, [*item['target'][:2], .145])
                 move(arm, [*item['target'][:2], item['target'][2]+.003])
-                grip(arm, profile.gripper_contact_for_width(.04))
+                grip(arm, initial['gripper']['release'])
                 move(arm, [*item['target'][:2], .145])
                 move(arm, home(arm))
                 layer['settle_samples'] = samples(132)

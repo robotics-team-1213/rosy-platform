@@ -1,6 +1,9 @@
 """Photo-layout provenance and three physical layers must precede a stacking success claim."""
 import importlib
+import json
+import math
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -25,14 +28,51 @@ def test_board_uses_the_confluence_cad_and_long_bars_use_both_arms():
     assert [p['target'][2] for p in mod.plan()] == pytest.approx([.04, .07, .10])
 
 
-def test_all_grasp_carry_and_three_layer_targets_have_nominal_profile_ik():
+def owner_plan(tmp_path, **case):
     mod = fixture()
+    request = tmp_path/f'case-{len(list(tmp_path.iterdir()))}.json'
+    output = request.with_suffix('.frames.json')
+    request.write_text(json.dumps(dict(schema='rosy.omx-sim-stack-plan/1', **case)))
+    subprocess.run([sys.executable, str(mod.ROOT/'deploy/robot/omx/isaac_stack_plan.py'),
+                    '--case', str(request), '--out', str(output)], check=True, capture_output=True)
+    value = json.loads(output.read_text())
+    assert value['joints'] == ['joint'+str(i) for i in range(1, 6)]
+    return value
+
+
+def test_all_grasp_carry_and_three_layer_targets_have_nominal_profile_ik(tmp_path):
+    mod = fixture()
+    initial = owner_plan(tmp_path, operation='homes', bases=mod.FIXTURE['arm_bases_m'], points=[mod.home(0), mod.home(1)])
+    assert initial['gripper']['close'] < initial['gripper']['preopen'] < initial['gripper']['release']
     for item in mod.plan():
         arm = item['arm']
-        for point in (mod.home(arm), [.16, -.047, .04], [.16, -.047, .145],
-                      [.16, 0., .145], item['target']):
-            joints = mod.solve(arm, point, 0.)
-            assert len(joints) == 5
+        q = initial['homes'][arm]
+        for point in ([.16, -.046, .145], [.16, -.046, .042], [.16, -.046, .145],
+                      [.16, 0., .145], [*item['target'][:2], item['target'][2]+.003],
+                      [.16, 0., .145], mod.home(arm)):
+            value = owner_plan(tmp_path, operation='move', base=mod.FIXTURE['arm_bases_m'][arm],
+                               start=q, target=point, yaw=0., dt=mod.DT)
+            velocity = [0.]*5
+            for frame in value['frames']:
+                assert len(frame) == 5 and all(math.isfinite(v) for v in frame)
+                next_velocity = [(frame[j]-q[j])/mod.DT for j in range(5)]
+                assert max(abs(v) for v in next_velocity) <= .5
+                assert max(abs(next_velocity[j]-velocity[j])/mod.DT for j in range(5)) <= .5
+                q, velocity = frame, next_velocity
+
+
+def test_offline_owner_rejects_unreachable_targets(tmp_path):
+    mod = fixture()
+    with pytest.raises(subprocess.CalledProcessError):
+        owner_plan(tmp_path, operation='move', base=[0., 0., 0.], start=[0.]*5,
+                   target=[10., 0., 0.], yaw=0., dt=mod.DT)
+
+
+def test_native_wrist_pose_uses_the_pinned_tcp_offset():
+    mod = fixture()
+    assert mod.tcp_from_wrist([1., 2., 3.], [1., 0., 0., 0.]) == pytest.approx([1.09193, 1.9984, 3.])
+    a = math.sqrt(.5)
+    assert mod.tcp_from_wrist([1., 2., 3.], [a, 0., a, 0.]) == pytest.approx([1., 1.9984, 2.90807])
 
 
 def test_reference_controller_is_a_distinct_mapped_scenario():

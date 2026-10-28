@@ -221,6 +221,11 @@ def run(args):
             track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+(['/World/Conveyor'] if mapped else [])+
             ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=128)))
     eye = Gf.Vec3d(.60, -.62, .48)
+    wrist_views = []
+    if mapped:
+        for i, link in enumerate(links):
+            path = stage.GetPrimAtPath(link['end_effector_link']).GetParent().GetPath()
+            wrist_views.append(world.scene.add(RigidPrim(str(path), name='wrist_pose'+str(i))))
     grasp_probes = []
     probe_filters = ['/World/Table', '/World/PlywoodMap', '/World/Conveyor', '/World/BeltStop', '/World/Bin']+[
         '/World/Cargo'+str(i) for i in range(len(plan))]
@@ -263,14 +268,20 @@ def run(args):
             raise RuntimeError('Actual SDK image unavailable')
         Image.fromarray(rgba.astype(np.uint8)).save(args.report.parent/name)
 
+    if mapped:
+        from mapped_stack_fixture import free_lift, home, stable_box, tcp_from_wrist
+        from mapped_stack_task import Planner, apply_servo
+        planner = Planner(args.report.parent)
+        initial = planner.request('homes', bases=FIXTURE['arm_bases_m'], points=[home(0), home(1)])
+
+    def tcp_position(arm):
+        positions, quaternions = wrist_views[arm].get_world_poses()
+        return np.array(tcp_from_wrist(positions[0], quaternions[0]))
+
     if args.mapped_long_stack:
         from mapped_stack_task import execute
-        return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, grasp_probes)
-
-    if mapped:
-        from mapped_stack_fixture import free_lift, home, planning, solve, stable_box
-        from mapped_stack_task import apply_servo
-        kin, _ = planning()
+        return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture, grasp_probes,
+                       planner, initial, tcp_position)
 
     def goal(item):
         return item['target'] if mapped else target(item)
@@ -278,9 +289,8 @@ def run(args):
     def accepted(index, sample):
         if not mapped:
             return placed(plan[index], **sample)
-        for i, robot in enumerate(robots):
-            pose = kin.fk(robot.get_joint_positions()[joint_indices[i]])
-            tcp = np.array([pose.x, pose.y, pose.z])+np.array(FIXTURE['arm_bases_m'][i])
+        for i in range(2):
+            tcp = tcp_position(i)
             if np.linalg.norm(tcp-np.array(sample['position'])) < .04:
                 return False
         return sample['lifted'] and stable_box(sample['body'], index)
@@ -311,7 +321,7 @@ def run(args):
                     UsdGeom.Imageable(box.prim).MakeInvisible()
             for i, robot in enumerate(robots):
                 state = np.zeros(robot.num_dof)
-                state[joint_indices[i]] = solve(i, home(i), 0.) if mapped else [0., -.4, .7, 1.27, 0.]
+                state[joint_indices[i]] = initial['homes'][i] if mapped else [0., -.4, .7, 1.27, 0.]
                 state[fingers[i]] = [1., -1.]
                 robot.set_joint_positions(state)
                 robot.set_joint_velocities(np.zeros(robot.num_dof))
@@ -405,8 +415,7 @@ def run(args):
             sample['lifted'] = self.lifted
             good = accepted(self.index, sample)
             if mapped:
-                pose = kin.fk(robots[active].get_joint_positions()[joint_indices[active]])
-                tcp = np.array([pose.x, pose.y, pose.z])+np.array(FIXTURE['arm_bases_m'][active])
+                tcp = tcp_position(active)
             else:
                 tcp = np.array(UsdGeom.XformCache().GetLocalToWorldTransform(
                     stage.GetPrimAtPath(links[active]['end_effector_link'])).ExtractTranslation())

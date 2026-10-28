@@ -1,0 +1,88 @@
+"""Offline SIM-only OMX IK producer; consumes a pose case and emits joint frames."""
+import argparse
+import hashlib
+import json
+import math
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT/'middleware/devices/omx/adapter'))
+from omx_adapter.kinematics import OmxKinematics, TopDownPose
+from omx_adapter.contracts.transfer_motion import ArmPlanningProfile
+
+PROFILE = ROOT/'deploy/robot/omx/sim/cell_profile.yaml'
+SCHEMA = 'rosy.omx-sim-stack-plan/1'
+
+
+def vector(value, count):
+    if (not isinstance(value, list) or len(value) != count
+            or not all(type(v) in (int, float) and math.isfinite(v) for v in value)):
+        raise ValueError('Finite planning vector required')
+    return value
+
+
+def build(case):
+    if not isinstance(case, dict) or case.get('schema') != SCHEMA:
+        raise ValueError('Unexpected SIM planning case')
+    kin, profile = OmxKinematics.load(), ArmPlanningProfile.load(PROFILE)
+
+    def solve(base, point, yaw, reference=0.):
+        pose = TopDownPose(*(point[i]-base[i] for i in range(3)), yaw)
+        result = kin.solve_top_down(pose, profile.ik_limits(), reference_q5=reference)
+        if not result.ok:
+            raise ValueError(f'Unreachable SIM target: {result.reason} {result.detail}')
+        return list(result.joints)
+
+    result = dict(schema=SCHEMA, joints=['joint'+str(i) for i in range(1, 6)],
+                  profile_sha256=hashlib.sha256(PROFILE.read_bytes()).hexdigest())
+    if case.get('operation') == 'homes':
+        if set(case) != {'schema', 'operation', 'bases', 'points'} or len(case['bases']) != 2 or len(case['points']) != 2:
+            raise ValueError('Two simulation homes required')
+        result['homes'] = [solve(vector(b, 3), vector(p, 3), 0.) for b, p in zip(case['bases'], case['points'])]
+        result['gripper'] = dict(preopen=profile.gripper_contact_for_width(.036),
+            close=profile.gripper_close_for_width(.03), release=profile.gripper_contact_for_width(.04))
+        return result
+    if case.get('operation') != 'move' or set(case) != {'schema', 'operation', 'base', 'start', 'target', 'yaw', 'dt'}:
+        raise ValueError('Unexpected SIM planning operation')
+    base, start, target = vector(case['base'], 3), vector(case['start'], 5), vector(case['target'], 3)
+    yaw, dt = vector([case['yaw'], case['dt']], 2)
+    if not math.isclose(dt, 1/120, rel_tol=1e-9):
+        raise ValueError('Only the pinned simulation timestep is supported')
+    initial = kin.fk(start)
+    point = [initial.x+base[0], initial.y+base[1], initial.z+base[2]]
+    q5 = start[-1]
+
+    def curve(u):
+        nonlocal q5
+        s = u**3*(10+u*(-15+6*u))
+        q = solve(base, [point[i]+(target[i]-point[i])*s for i in range(3)],
+                  initial.yaw+(yaw-initial.yaw)*s, q5)
+        q5 = q[-1]
+        return q
+
+    coarse = [curve(i/100) for i in range(101)]
+    vmax = max(abs(coarse[i+1][j]-coarse[i][j])*100 for i in range(100) for j in range(5))
+    amax = max(abs(coarse[i+2][j]-2*coarse[i+1][j]+coarse[i][j])*10000 for i in range(99) for j in range(5))
+    duration = max(.8, vmax/.4, math.sqrt(amax/.4))
+    steps = math.ceil(duration/dt)
+    if steps > 60000:
+        raise ValueError('SIM trajectory exceeds the planning budget')
+    result.update(dt=dt, frames=[curve(i/steps) for i in range(1, steps+1)])
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--case', type=Path, required=True)
+    parser.add_argument('--out', type=Path, required=True)
+    args = parser.parse_args()
+    if args.case.stat().st_size > 16384:
+        raise ValueError('SIM planning case too large')
+    value = build(json.loads(args.case.read_text(encoding='utf-8')))
+    with args.out.open('x', encoding='utf-8') as stream:
+        json.dump(value, stream, allow_nan=False)
+
+
+if __name__ == '__main__':
+    main()

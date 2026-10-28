@@ -1,8 +1,6 @@
 """Confluence board layout and contact-only acceptance for three long-bar layers."""
-from functools import lru_cache
 import math
 from pathlib import Path
-import sys
 import xml.etree.ElementTree as ET
 
 from stacking_fixture import DT, PROFILE
@@ -66,25 +64,13 @@ def physical_model(urdf):
     return ET.ElementTree(root)
 
 
-@lru_cache(maxsize=1)
-def planning():
-    path = str(ROOT/'middleware/devices/omx/adapter')
-    if path not in sys.path:
-        sys.path.insert(0, path)
-    from omx_adapter.kinematics import OmxKinematics
-    from omx_adapter.contracts.transfer_motion import ArmPlanningProfile
-    return OmxKinematics.load(), ArmPlanningProfile.load(PROFILE)
-
-
-def solve(arm, point, yaw, reference_q5=0.):
-    kin, profile = planning()
-    from omx_adapter.kinematics import TopDownPose
-    base = FIXTURE['arm_bases_m'][arm]
-    pose = TopDownPose(*(point[i]-base[i] for i in range(3)), yaw)
-    result = kin.solve_top_down(pose, profile.ik_limits(), reference_q5=reference_q5)
-    if not result.ok:
-        raise ValueError(f'Mapped arm {arm} target {point}: {result.reason} {result.detail}')
-    return result.joints
+def tcp_from_wrist(position, quaternion):
+    w, x, y, z = quaternion
+    matrix = ((1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)),
+              (2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)),
+              (2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)))
+    offset = (.09193, -.0016, 0.)
+    return [position[i]+sum(matrix[i][j]*offset[j] for j in range(3)) for i in range(3)]
 
 
 def contact_names(index):

@@ -64,10 +64,10 @@ The source run manifest binds the raw report and actual 800 × 600 PNGs.
 Accepted artifacts are under workspace
 `Rosy/artifacts/isaac/omx-stacking-20261029/03a9b112fb34518cb10997cc27e70d1e-3cda294dfabc45ec878a9add9a0600c9/`.
 The bounded report is 455,980 bytes, SHA-256
-`6f2d6eaff258dcbcdddc84aa37f9955a8fcd5658f9ba01d420af849b3ae4e0df`.
+`sha256=6f2d6eaff258dcbcdddc84aa37f9955a8fcd5658f9ba01d420af849b3ae4e0df`.
 Actual images include the map overview, initial workcell, layers 1/2/3 and each
 trial's final state. `mapped-layer-3.png` SHA-256 is
-`a35f8ea27734afe5339324ad4919951e08ee42d36f21e4563ef962187f115ce7`.
+`sha256=a35f8ea27734afe5339324ad4919951e08ee42d36f21e4563ef962187f115ce7`.
 
 The successful continuation corrected imported topology and collider traversal:
 
@@ -94,9 +94,9 @@ and completed **0/1** stacks. The policy directly controls bounded joint motions
 it does not replay the successful reference trajectory.
 
 Its checkpoint is 200,319 bytes, SHA-256
-`cbe0e45f25949a4930c6258cd276c3d9a96f94fd1b7562e705a34bdacb58823a`.
+`sha256=cbe0e45f25949a4930c6258cd276c3d9a96f94fd1b7562e705a34bdacb58823a`.
 Its report is 2,518 bytes, SHA-256
-`d13d69d51a13ce16d84e1835af0104e0fdf741e3438f5e881bc9b5fcdbe3705c`.
+`sha256=d13d69d51a13ce16d84e1835af0104e0fdf741e3438f5e881bc9b5fcdbe3705c`.
 The snapshot is under workspace
 `Rosy/artifacts/isaac/omx-stacking-20261029/394741d76b9c582e97bdabc48dd9aef0-5012136c47b44dfcb3211666b040d0d5/`.
 This proves mapped training integration, not learned palletizing proficiency.
