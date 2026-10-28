@@ -4,10 +4,12 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "tools/graphify_pipeline.py"
+sys.path.insert(0, str(SCRIPT.parent))
 spec = importlib.util.spec_from_file_location("graphify_pipeline", SCRIPT)
 pipeline = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pipeline)

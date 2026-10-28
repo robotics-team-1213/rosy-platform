@@ -1,4 +1,4 @@
-"""Build and query a local, code-only Graphify snapshot outside the checkout."""
+"""Build and query external Graphify snapshots of code and optional document links."""
 from __future__ import annotations
 
 import argparse
@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import sys
 import uuid
+
+from graphify_documents import augment
 
 
 def git(repo: Path, *args: str) -> str:
@@ -84,15 +86,19 @@ def run(binary: str, args: list[str], folder: Path, name: str, env: dict) -> Non
 
 
 def build(args: argparse.Namespace) -> None:
-    repo = Path(__file__).resolve().parents[1]
+    tool_repo = Path(__file__).resolve().parents[1]
+    repo = Path(getattr(args, "repository", None) or tool_repo).expanduser().resolve()
+    if Path(git(repo, "rev-parse", "--show-toplevel")).resolve() != repo:
+        raise ValueError("Repository must be a Git checkout root")
     scope = (repo / args.scope).resolve()
-    core = (repo / "middleware/core").resolve()
-    if not scope.is_dir() or not scope.is_relative_to(core):
-        raise ValueError("This trial accepts middleware/core or one of its subdirectories only")
+    if (not scope.is_dir() or not scope.is_relative_to(repo)
+            or {".git", ".worktrees"}.intersection(scope.relative_to(repo).parts)):
+        raise ValueError("Source scope must be inside the repository, outside Git metadata/worktrees")
     base = (args.output or output_base()).expanduser().resolve()
-    common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")).parent
-    if base.is_relative_to(common) or base.is_relative_to(repo):
-        raise ValueError("Output must be outside the repository and its worktrees")
+    for root in (repo, tool_repo):
+        common = Path(git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")).parent
+        if base.is_relative_to(common) or base.is_relative_to(root):
+            raise ValueError("Output must be outside the repository and its worktrees (source and tool)")
     binary = executable()
     before = snapshot(repo, scope)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -102,12 +108,21 @@ def build(args: argparse.Namespace) -> None:
     env = {**os.environ, "GRAPHIFY_OUT": str(folder / "graphify-out"),
            "PYTHONPYCACHEPREFIX": str(folder / "python-cache"), "PYTHONUTF8": "1"}
     record = {"status": "building", "repository": str(repo), "scope": str(scope),
-              "started_utc": stamp, "source": before, "mode": "code-only",
+              "started_utc": stamp, "source": before,
+              "mode": "code and explicit document links" if getattr(args, "documents", False) else "code-only",
               "graphify_version": subprocess.check_output([binary, "--version"], env=env, encoding="utf-8").strip()}
     save(folder / "provenance.json", record)
     graph = folder / "graphify-out/graph.json"
     try:
-        run(binary, ["extract", str(scope), "--code-only", "--max-workers", "4", "--out", str(folder)], folder, "extract", env)
+        run(binary, ["extract", str(scope), "--code-only", "--no-cluster", "--max-workers", "4", "--out", str(folder)], folder, "extract", env)
+        coverage = {"semantic_inference": False, "multimedia_content_analysis": False}
+        if getattr(args, "documents", False):
+            data = json.loads(graph.read_text(encoding="utf-8"))
+            coverage.update(augment(data, graph.parent, scope))
+            save(graph, data)
+        coverage["extractor_warnings"] = [line for line in (folder / "extract.log").read_text(encoding="utf-8").splitlines()
+                                          if "warning:" in line.lower()]
+        save(folder / "coverage.json", coverage)
         run(binary, ["cluster-only", str(scope), "--graph", str(graph), "--no-label", "--no-viz"], folder, "report", env)
         data = json.loads(graph.read_text(encoding="utf-8"))
         edges = data.get("links", data.get("edges", []))
@@ -156,7 +171,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     builder = commands.add_parser("build")
+    builder.add_argument("--repository", type=Path, help="Source Git checkout root (default: this tool's repository)")
     builder.add_argument("--scope", default="middleware/core")
+    builder.add_argument("--documents", action="store_true", help="Include filtered file inventory and explicit local Markdown links")
     builder.add_argument("--output", type=Path, help="External output parent; each build creates a new run")
     reader = commands.add_parser("query")
     reader.add_argument("--run", type=Path, required=True)
