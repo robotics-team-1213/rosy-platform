@@ -418,8 +418,9 @@ async def _run_vision(args: argparse.Namespace) -> int:
                                    ingest.enforce_paired_credentials))
             sync.start()
         stop_tracking = asyncio.Event()
-        config_tasks = [asyncio.create_task(tracker.run_config_sync(stop_tracking))
-                        for tracker in trackers]
+        config_tasks = [ingest.loop_watch.supervised(f"config-sync:{index}",
+                                                     tracker.run_config_sync(stop_tracking))
+                        for index, tracker in enumerate(trackers)]
         try:
             while True:
                 for worker in workers:
