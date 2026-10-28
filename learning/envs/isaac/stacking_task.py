@@ -217,6 +217,12 @@ def run(args):
             scale=np.array([UNIT*item['cells'], UNIT, UNIT]), mass=.02*item['cells'],
             position=np.array([.7, -.5+i*.065, .015]), color=np.array(colors[item['cells']]), physics_material=mat))
         cargo.append(box)
+        if mapped:
+            # Resolve the small stacked contacts with the same solver budget as the arms.
+            body = PhysxSchema.PhysxRigidBodyAPI.Apply(box.prim)
+            body.CreateSolverPositionIterationCountAttr(64)
+            body.CreateSolverVelocityIterationCountAttr(16)
+            assert body.GetSolverVelocityIterationCountAttr().Get() == 16
         contacts.append(world.scene.add(RigidPrim('/World/Cargo'+str(i), name='contact'+str(i),
             track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+(['/World/Conveyor'] if mapped else [])+
             ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=128)))
