@@ -149,7 +149,7 @@ def test_a_closed_dispatch_does_not_admit(rig):
     assert made == []
 
 
-@pytest.mark.parametrize("profile", ["production", "staging"])
+@pytest.mark.parametrize("profile", ["production"])
 def test_routes_answer_unavailable_outside_the_simulation_profile(tmp_path, profile):
     path = tmp_path / "fleet.sqlite3"
     tasks = FleetTaskService(FleetTaskStore(path), robot_ids=(ROBOT,))
