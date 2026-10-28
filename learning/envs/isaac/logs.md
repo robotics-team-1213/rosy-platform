@@ -375,3 +375,10 @@
 - 변경: 앞 항목의 외부 GPU owner는 helper의 오류 문구다. 당시 점유와 조회 오류를 구분한 원본 응답을 저장하지 않았으므로 GPU 무점유 확인 조건 미충족까지만 확인된 사실로 유지한다. SDK 미시작·승인 서비스 복원은 확인했다.
 - 증거: helper의 gpu_empty가 두 경우를 모두 false로 반환함을 확인했고 서비스 복원과 NRestarts 0을 별도 재조회했다.
 - gate 변화: 없음. AI ROS 통과를 주장하지 않는다.
+
+## 2026-10-29 — OMX 두 팔 PPO 구동과 Confluence 맵 적재 기준 동작
+
+- 변경: 고정 `omx-stacking-rl` 실행에 두 OMX-F, 이동 벨트, 30/60/90 mm 화물과 90 mm 적재 공간, PPO 체크포인트/평가 보고서 검증을 연결했다. 이어 사용자가 선택한 합판 CAD·현장 사진의 맵 문맥에 `omx-map-long-stack` 기준 동작을 추가했다. 긴 화물 3개를 A/B/A가 처리하며 원시 접촉으로 들어 올림·해제·지지·후퇴를 판정한다. 사진 기반 작업대 좌표는 실측 보정이 아니다.
+- 증거: `83e3d61303`, `c6cb3a15e1985f0bb686c272867734ce`는 32 PPO update / 1,024 transition과 유효한 파라미터 변화를 확인했다. 실제 적재 평가는 0/1이다. 맵 기준 동작은 물리 적재를 통과하지 않았다. `ac9d8e00db` 원격 Isaac 회귀 415 통과·1 건너뜀·신규 실패 0. 이후 모델 물리 변경의 시험과 실행은 [검증 기록](../../../docs/validation/omx-map-stacking-2026-10-29/result.md)에 구분한다.
+- gate 변화: 기존 ROS-SIM HOLD를 유지한다. 맵의 긴 화물 3단 기준 동작은 `ea39371f17` / `03a9b112fb34518cb10997cc27e70d1e`에서 시드 42/43/44 모두 통과했고 GPU 정리를 확인했다. 같은 물리 모델의 직접 제어 정책은 `omx-map-stacking-rl`로 연결했다. 학습 구동과 정책 숙련, 카메라 인식·실물·현장 수용은 구분한다.
+- CE: 새 교훈 기록 — [고정 관절 articulation 루트](../../../docs/solutions/runtime-errors/isaac62-omx-fixed-joint-articulation-root-2026-10-29.md). 원격 모델 관측에서 floating-base 상태와 잘못 선택된 중력 벡터를 확인했고, 루트를 고정 관절로 옮긴 뒤 native fixed-base와 관절 추종·첫 층 적재를 검증했다. 초기 단발 import 중단은 원인 미확정으로 보존한다.
