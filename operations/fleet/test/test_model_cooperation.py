@@ -194,3 +194,95 @@ def test_changed_provider_response_binding_is_rejected():
     result = asyncio.run(supervisor(ports, mode='sequential').run(problem(), ports, current=lambda: True))
     assert result['state'] == 'HOLD' and result['calls'] == 1
     assert not ports[1].exchange.calls
+
+
+def test_journal_keeps_mode_and_profile_policy_fences(tmp_path):
+    from fleet.server.deliberation_journal import DeliberationJournal
+    ports, journal = providers(), DeliberationJournal(tmp_path / 'fleet.db')
+    request = problem()
+    first = asyncio.run(journal.run(request, supervisor(ports, mode='sequential'), ports, current=lambda: True))
+    again = asyncio.run(journal.run(request, supervisor(ports, mode='sequential'), ports, current=lambda: True))
+    changed = asyncio.run(journal.run(request, supervisor(ports, mode='parallel'), ports, current=lambda: True))
+    assert first == again and first['state'] == 'CANDIDATE'
+    assert changed['state'] == 'HOLD' and changed['reason'] == 'EVALUATION_CONFIGURATION_CHANGED'
+    assert [len(p.exchange.calls) for p in ports] == [1, 1]
+    ports[0].prompt_revision = 'prompt-r2'
+    changed_profile = asyncio.run(journal.run(request, supervisor(ports, mode='sequential'), ports, current=lambda: True))
+    assert changed_profile['state'] == 'HOLD'
+    assert [len(p.exchange.calls) for p in ports] == [1, 1]
+
+
+def test_journal_restart_after_dispatch_never_replays(tmp_path):
+    from fleet.server.deliberation_journal import DeliberationJournal
+    async def scenario():
+        gate, journal = asyncio.Event(), DeliberationJournal(tmp_path / 'fleet.db')
+        ports = providers((Exchange(gate), Exchange(gate)))
+        task = asyncio.create_task(journal.run(problem(), supervisor(ports), ports, current=lambda: True))
+        for _ in range(500):
+            if any(p.exchange.calls for p in ports): break
+            await asyncio.sleep(0.001)
+        assert any(p.exchange.calls for p in ports)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError): await task
+        restarted = await journal.run(problem(), supervisor(ports), ports, current=lambda: True)
+        assert restarted['state'] == 'HOLD'
+        assert restarted['reason'] == 'RESTART_OR_INFLIGHT_UNKNOWN'
+        assert [len(p.exchange.calls) for p in ports] == [1, 1]
+    asyncio.run(scenario())
+
+
+def test_readable_case_adapter_can_use_cooperation_without_new_execution_path(tmp_path):
+    from fleet.server.deliberation_journal import DeliberationJournal
+    from fleet.server.incident_deliberation import run_line_judgment, FleetBaseline
+    from test_incident_deliberation import judgment
+    assessment = judgment()
+    ports = providers()
+    baseline = FleetBaseline.from_assessment(assessment, 'human')
+    # The adapter owns the canonical Problem; derive it from the same immutable Assessment.
+    request = Problem(assessment.request.subject_id, assessment.request.case_id, assessment.request.revision,
+        'line_follow', min(e.observed_at for e in assessment.request.evidence),
+        tuple(e.reference for e in assessment.request.evidence), ('reobserve', 'human'), 'INTERVENE',
+        facts_json='{"state":"blocked"}', fleet_choice='human')
+    for port in ports:
+        original = port.exchange.__call__
+        class BoundExchange(Exchange):
+            async def __call__(self, body, remaining, *, budget_usd):
+                response = await super().__call__(body, remaining, budget_usd=budget_usd)
+                response['opinion']['evidence_ids'] = list(request.evidence_ids)
+                return response
+        port.exchange = BoundExchange()
+    result = asyncio.run(run_line_judgment(assessment, DeliberationJournal(tmp_path / 'fleet.db'),
+        supervisor(ports, primary={**reply(request), 'evidence_ids': list(request.evidence_ids)}), ports,
+        current=lambda: assessment, baseline=baseline, current_baseline=lambda: baseline))
+    assert result['state'] == 'CANDIDATE' and result['action_admissible'] is False
+
+
+def test_reuse_calls_only_missing_role_with_its_own_budget():
+    async def scenario():
+        ports = providers()
+        review = api().ReviewRequest(problem(), 'proposal', 'baseline_disagreement')
+        previous = await ports[0](review, 1, budget_usd=0.04)
+        runner = supervisor(ports)
+        runner.reused, runner.max_cost_usd = previous, 0.06
+        result = await runner.run(problem(), ports, current=lambda: True)
+        assert result['state'] == 'CANDIDATE'
+        assert result['calls'] == 1 and result['total_calls'] == 2
+        assert [len(p.exchange.calls) for p in ports] == [1, 1]
+        assert len(result['opinions']) == 2 and result['reused'] is True
+    asyncio.run(scenario())
+
+
+def test_environment_expiration_after_resource_reservation_prevents_dispatch():
+    schedule = importlib.import_module('rosy.decision.deliberation.cooperation_schedule')
+    now = [101.0]
+    class Expiring(Admission):
+        async def reserve(self, *args):
+            token = await super().reserve(*args)
+            now[0] = 102.0
+            return token
+    ports = providers()
+    result = asyncio.run(supervisor(ports, admission=Expiring(), clock=lambda: now[0],
+        environment=lambda: schedule.ExecutionEnvironment('env-1', 101.5, True, True)).run(
+            problem(), ports, current=lambda: True))
+    assert result['state'] == 'HOLD'
+    assert not any(p.exchange.calls for p in ports)
