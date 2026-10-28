@@ -27,14 +27,48 @@ BACKOFF = (5, 10, 20, 30)
 RECONNECT_S = float(os.environ.get("ROSY_TEST_RECONNECT", "600"))
 CALL_TIMEOUT = 60
 
+# Admission (2026-10-28, several main workers per run): a job starts only within the host's cores and GB (every
+# live lock and unexpired reservation, of any run), never beside an alone job (ROSY_JOB_ALONE=1: timing-sensitive
+# or serial suites) or one waiting to start, and an alone job only once no other job runs. A job alone on the host
+# always starts, however large. One flock makes check and lock one step across runs. Waiting keeps the laptop
+# polling (its pid is up), so land_watchdog sees it as alive.
+ADMIT = r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone
+CAPC=${ROSY_HOST_CORES:-$(nproc)}; CAPG=${ROSY_HOST_GB:-$(awk '/^MemTotal:/{print int($2 / 1048576)}' /proc/meminfo)}
+exec 9> ~/rosy-jobs/.admit
+while :; do
+  flock 9; uc=0; ug=0; others=0; held=0; pending=0; now=$(date +%s)
+  for f in ~/rosy-jobs/*.lock; do
+    [ -e "$f" ] || continue; read -r p k fc fm < "$f" || true
+    kill -0 "$p" 2>/dev/null || continue
+    others=$((others + 1)); [ "$k" = alone ] && held=1
+    [[ $fc$fm =~ ^[0-9]+$ ]] && { uc=$((uc + fc)); ug=$((ug + fm)); }
+  done
+  for f in ~/rosy-jobs/*.resv; do
+    [ -e "$f" ] || continue; read -r t k fc fm < "$f" || true
+    [[ $t$fc$fm =~ ^[0-9]+$ ]] && [ "$t" -gt "$now" ] && { uc=$((uc + fc)); ug=$((ug + fm)); }
+  done
+  for f in ~/rosy-jobs/*.alone-wait; do
+    [ -e "$f" ] || continue; read -r p < "$f" || true
+    [ "$p" != $$ ] && kill -0 "$p" 2>/dev/null && pending=1
+  done
+  if [ "$AL" = 1 ]; then ok=$((others == 0))
+  else ok=$((held == 0 && pending == 0 && (others == 0 || (uc + RC <= CAPC && ug + G <= CAPG)))); fi
+  if [ $ok = 1 ]; then echo "$$ $X $RC $G" > "$L"; rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; break; fi
+  [ "$AL" = 1 ] && echo $$ > ~/rosy-jobs/$$.alone-wait
+  flock -u 9
+  [ -n "${said:-}" ] || { echo "[remote-pytest] waiting for host room ($others job(s), ${uc}c ${ug}GB in use)"; said=1; }
+  sleep 5
+done
+exec 9>&-"""
+
 # $1 run, $2 deps, $3 CPUQuota ('' = none), $4 job k, $5 timeout s, then [ROSY_*=value ...] pytest args.
 # The lock pid is this shell's: it lives until pytest ends (the trap keeps bash from exec'ing).
-JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L=~/rosy-jobs/$1.lock
-echo "$$ pytest 2 6" > "$L"; echo $$ > "$D/$K.pid"; rm -f ~/rosy-jobs/"$1".resv
-# The next invocation reuses L; release it before publishing completion.
+JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L=~/rosy-jobs/$1.$4.lock
+echo $$ > "$D/$K.pid"; rm -f ~/rosy-jobs/"$1".resv
+# One lock per job (a run may run several at once on a host); release it before publishing completion.
 trap 'c=$?; [ $c = 124 ] && echo "[remote-pytest] timed out after $T s"
 [ -z "${B:-}" ] || { chmod -R u+rwX -- "$B"; rm -rf -- "$B"; } 2>/dev/null  # tests leave read-only dirs
-echo $c > "$D/$K.rc.tmp"; rm -f "$L"; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' EXIT
+echo $c > "$D/$K.rc.tmp"; rm -f "$L" ~/rosy-jobs/$$.alone-wait; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' EXIT
 trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would still be 0
 """ + remote_test_tools.DEFAULT_CONTEXT + r"""shift 5
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
@@ -46,7 +80,7 @@ while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
 C=${ROSY_JOB_CORES:-2}; M=${ROSY_JOB_MEM_GB:-6}; G=${ROSY_JOB_RESERVE_GB:-$M}; RC=${ROSY_JOB_RESERVE_CORES:-$C}
 [[ $C$M$G$RC =~ ^[0-9]+$ ]] || { echo "[remote-pytest] ROSY_JOB_CORES/_MEM_GB/_RESERVE_* must be whole numbers"; exit 2; }
 X=pytest; [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && X=browser  # PROBE counts browser locks per host
-echo "$$ $X $RC $G" > "$L"
+""" + ADMIT + r"""
 # Browser jobs: Chromium for the venv's playwright into the shared ~/.cache/ms-playwright (a no-op when present).
 [ "${ROSY_RUN_BROWSER_TESTS:-}" = 1 ] && { timeout 900 nice -n 15 "$V/bin/python" -m playwright install chromium \
   > /dev/null || echo "[remote-pytest] playwright install chromium failed; browser tests will error"; }
@@ -111,7 +145,7 @@ SWEEP = r"""for J in "$R"/runs/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f
   [ -d "$J" ] && compgen -G "$J/*.rc" > /dev/null && [ -n "$(find "$J" -maxdepth 0 -mmin +120)" ] || continue
   n=$(basename "$J" .jobs); live=0
   case $n in sim-*) continue;; esac  # remote_sim.py runs clean up themselves
-  for p in "$J"/*.pid ~/rosy-jobs/"$n".lock; do
+  for p in "$J"/*.pid ~/rosy-jobs/"$n".lock ~/rosy-jobs/"$n".*.lock; do
     if [ -f "$p" ] && read -r q _ < "$p" && kill -0 "$q" 2>/dev/null; then live=1; fi
   done
   [ $live = 0 ] || continue
@@ -124,7 +158,7 @@ done  # SHIP runs git worktree prune next
 """
 
 # Ctrl-C / laptop deadline: TERM the job's process group (setsid made its pid the group id).
-KILL = r"""read -r pid _ < ~/rosy-jobs/"$1".lock 2>/dev/null && kill -TERM -- "-$pid" 2>/dev/null; true"""
+KILL = r"""read -r pid < ~/rosy-test/runs/"$1".jobs/"$2".pid 2>/dev/null && kill -TERM -- "-$pid" 2>/dev/null; true"""
 
 
 LOST_EXIT = 255  # what land.py sees for an invocation whose host went silent
@@ -269,13 +303,13 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                               f" killed); exit {VANISHED_EXIT}: {where}\n".encode())
                     return VANISHED_EXIT
                 if clock() > deadline:
-                    call(ssh, host, KILL, name)
+                    call(ssh, host, KILL, name, str(k))
                     return 124
                 if stop is not None and stop.is_set():  # only a job this poll just saw; a lost one is left alone
-                    call(ssh, host, KILL, name)
+                    call(ssh, host, KILL, name, str(k))
                     out.write(f"\n[remote-pytest] cancelled after a failure elsewhere: {where}\n".encode())
                     return CANCELLED
                 sleep(POLL_S)
     except KeyboardInterrupt:
-        call(ssh, host, KILL, name)  # as before: the caller's cleanup then removes the run
+        call(ssh, host, KILL, name, str(k))  # as before: the caller's cleanup then removes the run
         raise

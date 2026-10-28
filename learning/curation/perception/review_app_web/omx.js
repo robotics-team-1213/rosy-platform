@@ -4,6 +4,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
 import '/omx-review.js';
 import {profileDocumentKey} from '/omx-profiles.js';
+import {renderExportRuns} from '/omx-export.js';
 const $=id=>document.getElementById(id);
 const VERDICT={ok:'맞음',adjust:'조정 필요',unmeasurable:'측정 불가'};
 const SPLIT={train:'학습',eval:'평가',test:'시험',exclude:'제외'};
@@ -232,11 +233,12 @@ function showSection(){
   const all=new URLSearchParams(location.search).get('view')==='all';
   for(const [key] of STAGES)$(key).hidden=!all&&key!==id;
   $('sets').parentElement.hidden=!all&&id!=='dataset-section';
-  $('stage-question').textContent=question;$('stage-purpose').textContent=purpose;$('stage-done').textContent=done;
+  $('stage-question').textContent=all?'전체 도구':question;$('stage-purpose').textContent=all?'과제 설정부터 검수·변환·학습·평가까지 펼쳐 봅니다. 왼쪽 메뉴에서 필요한 작업으로 이동하세요.':purpose;$('stage-done').textContent=all?'도구를 펼치거나 단계로 이동해도 작업 완료나 승인을 기록하지 않습니다.':done;
   $('stage-next').href='#'+STAGES[(STAGES.indexOf(stage)+1)%STAGES.length][0];$('stage-next').textContent=next;
-  $('workflow-view').textContent=all?'단계별 작업으로 돌아가기':'전체 도구 펼쳐 보기';$('workflow-view').href=all?'?'+location.hash:'?view=all'+location.hash;
+  const view=new URL(location.href);if(all)view.searchParams.delete('view');else view.searchParams.set('view','all');
+  $('workflow-view').textContent=all?'단계별 작업으로 돌아가기':'전체 도구 펼쳐 보기';$('workflow-view').href=view.pathname+view.search+view.hash;
   for(const link of $('omx-sections').querySelectorAll('a')){
-    if(link.getAttribute('href')==='#'+id)link.setAttribute('aria-current','location');
+    if(!all&&link.getAttribute('href')==='#'+id)link.setAttribute('aria-current','location');
     else link.removeAttribute('aria-current');
   }
   if(all&&!location.hash)return;
@@ -244,7 +246,7 @@ function showSection(){
   if(!location.hash)return;
   const focus=id==='profile-panel'?$('profile-task'):target;
   if(focus===target)target.tabIndex=-1;
-  focus.focus({preventScroll:true});$('stage-question').scrollIntoView({block:'start'});
+  focus.focus({preventScroll:true});(all?focus:$('stage-question')).scrollIntoView({block:'start'});
   window.scrollBy({top:-document.querySelector('ui-topbar').getBoundingClientRect().height,behavior:'instant'});
 }
 $('omx-main').addEventListener('click',event=>{
@@ -315,11 +317,12 @@ function describe(value){return typeof value==='string'?value:JSON.stringify(val
 function exportSelection(){
   const prepared=preparedSets.find(set=>set.id===$('prepared-set').value);
   const saved=loadedReview?.prepared_id===prepared?.id&&loadedReview?.latest_review_id;
-  $('export-saved-review').disabled=!saved;
-  if(!saved)$('export-saved-review').checked=false;
-  $('export-review-status').textContent=$('export-saved-review').checked?`저장 검수 ${saved} 사용 · 원본 revision ${loadedReview.source_revision}`:'선택하지 않으면 원본 검수 결정을 사용합니다. 저장 검수 사용은 검수를 불러온 뒤 명시적으로 선택하세요.';
+  const chosenSaved=$('export-saved-review').checked;
+  const savedPending=chosenSaved&&(!saved||loadedReview?.dirty||loadedReview?.saving);
+  $('export-saved-review').disabled=!saved&&!chosenSaved;
+  $('export-review-status').textContent=chosenSaved&&!saved?'저장 검수 사용 대기 · 현재 원본에 맞는 저장 검수가 없습니다. 검수를 저장하거나 유효한 검수를 다시 불러오세요. 원본 결정을 쓰려면 위 선택을 해제하세요.':chosenSaved?`저장 검수 ${saved} 사용 · 원본 revision ${loadedReview.source_revision}${savedPending?' · 미저장 편집 또는 검수 처리 중입니다. 저장·다시 불러오기를 마치거나 원본 검수 사용을 선택하세요.':''}`:`원본 검수 결정 사용${saved?' · 저장 검수 '+saved+'를 사용하려면 위 항목을 선택하세요.':' · 저장 검수는 검수를 불러온 뒤 선택할 수 있습니다.'}`;
   $('prepared-status').textContent=!preparedReady?'등록 자료 연결을 다시 확인하세요.':!prepared?'검수 시연을 자료 등록 화면에서 연결하세요.':prepared.trainable?.ok?'검수 분할 준비됨 · 실제 변환 입력은 서버가 다시 검증합니다.':`변환 준비 안 됨: ${prepared.error||prepared.trainable?.reason||'검수·분할을 확인하세요.'}`;
-  $('native-export').disabled=exporting||!token||!preparedReady||!prepared?.trainable?.ok||!exportProfile||!$('export-name').value.trim();
+  $('native-export').disabled=exporting||savedPending||!token||!preparedReady||!prepared?.trainable?.ok||!exportProfile||!$('export-name').value.trim();
 }
 function onlineReady(row){return row?.profile?.schema==='rosy.omx.learning-profile/2';}
 function needsArm(dataset){return dataset?.profile?.mode==='independent'&&dataset.profile.arms?.length>1;}
@@ -413,8 +416,9 @@ function renderRuns(){
   if(live.some(run=>run.id===selected))$('experience-run').value=selected;
   if(!live.length)$('experience-run').value='';
   $('experience-run').disabled=!live.length;
-  const nodes=snapshot.runs.map(run=>{
-    if(run.execution_mode==='native_export')return renderExportRun(run);
+  renderExportRuns($('export-runs'),snapshot.runs.filter(run=>run.execution_mode==='native_export'),{states:STATE,request,refresh:refreshCenter,
+    selectDataset:id=>{$('dataset').value=id;pendingRequest=null;selection();}});
+  const nodes=snapshot.runs.filter(run=>run.execution_mode!=='native_export').map(run=>{
     const online=run.execution_mode==='online_experience',section=el('section',null,'learning-section');
     section.append(el('h3',`${online?'지속 SAC·경험 수신':run.method==='act'?'ACT 시범/교정':'HIL-SERL SAC 오프라인 재학습'} · ${STATE[run.status]||run.status}`));
     section.append(el('p',`작업 ${run.id} · 데이터 ${run.dataset_id}`,'quiet'));
@@ -444,23 +448,6 @@ function renderRuns(){
   });
   $('runs').replaceChildren(...(nodes.length?nodes:[el('p','학습 기록이 없습니다. 데이터를 선택하고 학습을 시작하세요.','quiet')]));
 }
-function renderExportRun(run){
-  const section=el('section',null,'learning-section');
-  section.append(el('h3',`시연 → ACT 데이터 변환 · ${STATE[run.status]||run.status}`));
-  section.append(el('p',`${run.name} · 작업 ${run.id} · 준비 자료 ${run.prepared_id}`,'quiet'));
-  const phase={verifying:'시연 자료 검증 중',exporting:'데이터 변환 중',completed:'데이터 등록 완료'};
-  section.append(el('p',phase[run.progress?.phase]||'변환 상태 확인 중'));
-  if(run.error)section.append(el('p',describe(run.error)));
-  if(run.status==='succeeded'&&run.result){
-    section.append(el('p',`데이터 ${run.result.dataset_id} · revision ${run.result.dataset_revision}`));
-    section.append(el('p',run.result.act_only?'ACT 전용 데이터 · 정책 학습은 별도로 시작하세요.':'정책 학습은 별도로 시작하세요.'));
-  }
-  if(['queued','running'].includes(run.status)){
-    const stop=el('ui-button','이 변환 중지');stop.type='button';stop.setAttribute('kind','quiet');
-    stop.onclick=async()=>{stop.disabled=true;try{await request(CENTER+'/stop',{id:run.id});await refreshCenter();}catch(exc){error(exc.message);stop.disabled=false;}};section.append(stop);
-  }
-  return section;
-}
 async function refreshCenter(){
   if(loading)return;loading=true;
   try{
@@ -473,8 +460,9 @@ async function refreshCenter(){
     $('dataset').disabled=!snapshot.datasets.length;
     $('empty-datasets').hidden=!!snapshot.datasets.length;
     renderRuns();selection();
+    $('center-read-error').hidden=true;$('center-read-error').textContent='';
     $('center-status').setAttribute('state','ready');$('center-status').textContent=`데이터 ${snapshot.datasets.length}개 · 작업 ${snapshot.runs.length}개 · ${new Date().toLocaleTimeString('ko-KR')} 확인`;
-  }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state','error');$('center-status').textContent='실행기 연결을 확인하세요.';$('start').disabled=true;error(exc.message);}
+  }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state','error');$('center-status').textContent='실행기 연결을 확인하세요. 아래 목록은 이전 확인 결과일 수 있습니다.';$('start').disabled=true;$('center-read-error').hidden=false;$('center-read-error').textContent=exc.message;}
   finally{loading=false;}
 }
 function uuid(){
@@ -484,7 +472,7 @@ function uuid(){
 }
 $('prepared-set').onchange=()=>{pendingExport=null;exportSelection();};
 $('export-saved-review').onchange=()=>{pendingExport=null;exportSelection();};
-document.addEventListener('omx-review-loaded',event=>{loadedReview=event.detail;pendingExport=null;$('export-saved-review').checked=false;exportSelection();});
+document.addEventListener('omx-review-loaded',event=>{if(loadedReview?.prepared_id!==event.detail.prepared_id)$('export-saved-review').checked=false;loadedReview=event.detail;pendingExport=null;exportSelection();});
 document.addEventListener('omx-review-saved',()=>{load();refreshCenter();});
 $('export-name').oninput=()=>{pendingExport=null;exportSelection();};
 $('export-profile').onchange=async()=>{
@@ -516,7 +504,7 @@ $('native-export-form').onsubmit=async event=>{
   if($('export-saved-review').checked)pendingExport.review_id=loadedReview.latest_review_id;
   if(selectedProfileRecord)pendingExport.profile_id=selectedProfileRecord.id;
   try{await request(CENTER+'/export',pendingExport);pendingExport=null;$('export-status').textContent='변환 작업을 접수했습니다. 아래 실제 검증·변환 상태를 확인하세요.';await refreshCenter();}
-  catch(exc){$('export-status').textContent='변환 접수 응답을 확인하지 못했습니다. 같은 입력으로 다시 시도할 수 있습니다.';error(exc.message);}
+  catch(exc){$('export-status').textContent=`변환 접수 응답: ${exc.message} · 같은 입력으로 다시 시도할 수 있습니다.`;error(exc.message);}
   finally{exporting=false;exportSelection();}
 };
 $('dataset').onchange=()=>{pendingRequest=null;selection();};
