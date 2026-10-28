@@ -742,6 +742,81 @@ def test_stop_failure_is_visible_and_can_be_retried(width, height):
         server.close()
 
 
+@pytest.mark.parametrize('width,height', [(1280, 800), (320, 900)])
+@pytest.mark.parametrize('stage', ['headers', 'body'])
+@pytest.mark.parametrize('prior_match', [False, True])
+def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, height, stage, prior_match):
+    import json
+    import threading
+    from functools import partial
+    from playwright.sync_api import sync_playwright, expect
+    from games.host.preview import _Handler
+
+    paused, entered, release = threading.Event(), threading.Event(), threading.Event()
+    class PausedHandler(_Handler):
+        def do_GET(self):
+            if self.path != '/overlay.json' or not paused.is_set():
+                return super().do_GET()
+            body = json.dumps(self.board.snapshot()[0]).encode()
+            entered.set()
+            try:
+                if stage == 'body':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body[:1]); self.wfile.flush()
+                release.wait(12)
+                if stage == 'body':
+                    self.wfile.write(body[1:])
+                else:
+                    self._send(200, 'application/json', body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    board = PreviewBoard(clock=lambda: 100.0)
+    board.publish(_play_payload(), jpeg=None)
+    server = PreviewServer(board, port=0)
+    server._httpd.RequestHandlerClass = partial(PausedHandler, board=board, account=server.account)
+    if not prior_match:
+        paused.set()
+    url = server.start()
+    try:
+        with sync_playwright() as playwright:
+            browser, page, errors = open_page(playwright, width, height, url=url)
+            try:
+                page.goto(url, wait_until='domcontentloaded')
+                if prior_match:
+                    page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'fresh'")
+                    paused.set()
+                assert entered.wait(5), 'fixture did not receive the paused overlay GET'
+                if prior_match:
+                    page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'delayed'", timeout=4500)
+                    expect(page.locator('#home-score')).to_have_text('2')
+                    expect(page.locator('#phase')).to_have_text('마지막 수신 단계 · 경기 진행')
+                    expect(page.locator('#field-evidence')).to_contain_text('현재 위치 아님')
+                    expect(page.locator('.score')).to_have_attribute('aria-label', '마지막 수신 점수')
+                page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'disconnected'", timeout=7500)
+                expect(page.locator('#halt')).to_be_enabled()
+                expect(page.locator('#halt')).to_be_visible()
+                expect(page.locator('#home-score')).to_have_text('2' if prior_match else '—')
+                if not prior_match:
+                    expect(page.locator('#connection')).to_contain_text('경기 정보 없음')
+                    assert '마지막 수신 값' not in page.locator('#match-announcement').inner_text()
+                paused.clear(); release.set()
+                page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'fresh'")
+                expect(page.locator('#phase')).to_have_text('경기 진행')
+                expect(page.locator('#field-evidence')).to_be_hidden()
+                expect(page.locator('.score')).to_have_attribute('aria-label', '점수')
+                assert not errors, errors
+            finally:
+                release.set()
+                browser.close()
+    finally:
+        release.set()
+        server.close()
+
+
 def test_overlay_failure_marks_last_received_match_as_stale():
     pytest.importorskip("playwright.sync_api")
     from playwright.sync_api import sync_playwright
