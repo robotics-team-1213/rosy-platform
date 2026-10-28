@@ -281,3 +281,24 @@
 - 이분 탐색은 k > 2에서도 반으로 거듭 나눈다. 멈춘 묶음의 리더는 묶음의 앞 절반(리더 포함 ⌈k/2⌉)을 `batch`에 남기고 다시 시도한다. 뒤 절반은 풀려나서, 그중 맨 앞 대기자가 같은 규칙으로 다시 묶거나 단독으로 착지한다. 절반이 리더 하나가 되면 리더는 단독으로 착지한다. 멈춤마다 `train` 사건의 `bisect`에 남긴 크기를 적는다.
 - 제외는 그대로다. 안전 경로, FULL급, 합친 선택이 FULL인 묶음은 단독으로 착지한다.
 - robot-72의 미리 준비(`perf/land-speculative-prepare`)는 묶음 하나를 예측 후보 하나로 다룬다.
+
+### 추가 5 (2026-10-28): 착지 방법 변경과 게시 push 단순화 (사용자 지시 2026-10-28)
+
+**왜.** 착지 하나가 대기열 진입부터 p50 3시간 39분, p90 8시간 5분 걸렸고 그 동안 브랜치 워크트리를 붙잡았다. 착지를 기다리는 워크트리가 15개 한도를 채워 새 작업이 멈췄다(10-28 새벽 26~27개 등록). 게시 push는 범위 전체(약 4,000커밋)를 다시 검사·시험해 2시간 21분 뒤 거부되거나(10-27), 크기 규칙에서 45분을 썼다(10-28 05시).
+
+**결정.**
+1. 착지 기본 명령은 `python tools/land_async.py --tests auto`다. 커밋된 HEAD를 `land/<브랜치>-<UTC 시각>`으로 떼어 `<git-common-dir>/rosy-land-wt/` 숨은 워크트리에서 `land.py`를 돌리고, 감독 프로세스는 그 폴더를 작업 폴더로 삼아 자기 사본을 실행한다. 원래 워크트리는 넣는 즉시 비고 Windows에서도 지울 수 있다. 착지하면 숨은 워크트리·스냅샷 브랜치를 지우고, 멈추면 `.stopped`와 `.log`(land.py 출력 포함)를 남긴다. 절차는 [shared-checkout](../reference/shared-checkout.md) 6번이 정본이다.
+2. 게시 push(`publish_main.py --apply`)는 그 커밋 자신의 pre-push 사본으로 하고, 그 커밋의 녹색 착지 기록만 재사용한다(`land_record.py owed --own`). publish_main이 방금 돌린 비밀 검사·Safety-Review와 크기 규칙은 push에서 다시 돌리지 않는다. 착지마다 크기 규칙이 돌았고 PR CI가 범위 전체를 다시 본다. 일반 `git push`는 셋 다 돈다. 녹색 FULL 기록을 고를 때 main과 hook이 같아야 한다는 규칙은 없앴다.
+3. 차례 안 시험이 빠르도록 선택기는 직렬 전용 묶음(gazebo, isaac, tools)을 다른 묶음과 한 호출에 섞지 않는다. 섞이면 호출 전체가 xdist 없이 1코어로 돌았다.
+4. 격리 게이트의 단독 실행은 `flaky_quarantine.txt` 항목을 NEW로 세지 않는다. 그 게이트는 import 격리를 본다.
+
+**측정(10-28).** 게시 1회: 59분(크기 규칙 45분+) → 10.5분. Safety-Review 범위 검사: manifest 파싱 캐시로 810커밋 245초 → 73초. 04:16~04:42에 착지 5건(건당 약 5분, 00:38~03:41은 0건). 대기열 표: 10개 이상 → 3개.
+
+**구현.** `61cd3185ae`(게시 ref 자기 기록 재사용, Safety-Review 캐시, robttt 이식성), `6c4d24221b`(hook 일치 규칙 삭제·중복 검사 생략·사본 hook push), `051c3795f5`(직렬 묶음 분리), `ff9f4eb03a`(게시 push 크기 규칙 생략), `land_async.py`(feat/land-async). 로그·작업 폴더 수정(fix/land-async-log), 격리 게이트 격리 목록(fix/isolation-honors-quarantine), CI 환경 수정 2건(`05a548af54`, fix/ci-env-publish-2)은 이 추가와 같은 날 착지 대기열에 있다.
+
+**남은 일.**
+- CI 컨테이너(root, ssh-keygen 없음, apt pytest 7.4 + ament)와 시험 PC의 차이가 게시 PR에서야 드러나 고칠 때마다 FULL 착지·게시·CI 한 바퀴(1.5~2시간)를 다시 탄다. 게시 전에 시험 PC에서 CI 컨테이너 조건의 root test를 도는 길(docker 권한 또는 rootless)이 필요하다.
+- 실험실 venv의 pytest가 고정되지 않아 `ci.yml`을 고치면 다시 지은 venv가 9.2.0을 받고 다른 시험이 깨진다(test_loc_objects, operations/fleet). 고정은 `test_remote_test_tools`의 기준 레시피 계약과 함께 바꾼다.
+- 시험 PC는 바뀐 경로가 고른 브라우저 시험만 돌아, 남의 변경이 깬 브라우저 시험은 GitHub에서야 보인다. 시험 PC 야간 전체 브라우저 실행이 필요하다.
+- ROS CI 컨테이너에서 루트 conftest의 sys.path 보고가 나오지 않는 원인(지금은 그 검사만 건너뜀).
+- 시험 PC 아침 정비(05:15~06:10) 동안 준비가 시작되지 않는다. PC별 재부팅을 엇갈려 두면 대기열이 멈추지 않는다.
