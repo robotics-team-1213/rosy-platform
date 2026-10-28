@@ -3,6 +3,7 @@ from functools import lru_cache
 import math
 from pathlib import Path
 import sys
+import xml.etree.ElementTree as ET
 
 from stacking_fixture import DT, PROFILE
 
@@ -20,6 +21,7 @@ FIXTURE = dict(revision='confluence-map-long-stack-v1',
     physics_dt_s=DT, attachment_aid=False, trials=3,
     drive_gain_units='N_M_PER_RAD_NATIVE_ARTICULATION_API',
     solver_position_iterations=64, solver_velocity_iterations=16,
+    massless_tcp_frame=True,
     minimum_lift_m=.03, xy_tolerance_m=.0015, z_tolerance_m=.0015,
     envelope_tolerance_m=.001, settle_steps=120, seed_effect='INFEED_XY_AND_YAW',
     controller='NOMINAL_IK_REFERENCE_NOT_LEARNED_POLICY')
@@ -32,6 +34,17 @@ def plan():
 
 def home(arm):
     return [.05, FIXTURE['arm_bases_m'][arm][1]+(-.20 if arm == 0 else .20), .13]
+
+
+def check_massless_tcp(urdf):
+    root = ET.parse(urdf).getroot()
+    link = root.find("link[@name='end_effector_link']")
+    joint = root.find("joint[@name='end_effector_joint']")
+    if (link is None or link.find('inertial') is not None or link.find('collision') is not None
+            or joint is None or joint.get('type') != 'fixed'
+            or joint.find('parent').get('link') != 'link5'
+            or joint.find('child').get('link') != 'end_effector_link'):
+        raise ValueError('TCP must be the pinned massless visual frame fixed to link5')
 
 
 @lru_cache(maxsize=1)

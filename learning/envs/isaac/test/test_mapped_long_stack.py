@@ -43,6 +43,17 @@ def test_reference_controller_is_a_distinct_mapped_scenario():
         run_catalog.normalize('omx-map-long-stack', {'seed': 42, 'attachment': True})
 
 
+def test_tcp_is_a_massless_fixed_frame_in_the_pinned_vendor_model(tmp_path):
+    mod = fixture()
+    vendor = Path(__file__).resolve().parents[1]/'assets/open_manipulator_description/urdf/omx_f/omx_f.urdf'
+    mod.check_massless_tcp(vendor)
+    bad = tmp_path/'weighted.urdf'
+    bad.write_text(vendor.read_text().replace('<link name="end_effector_link">',
+        '<link name="end_effector_link"><inertial/>'))
+    with pytest.raises(ValueError):
+        mod.check_massless_tcp(bad)
+
+
 def test_success_requires_free_lift_release_support_and_retreat():
     import copy
     mod = fixture()

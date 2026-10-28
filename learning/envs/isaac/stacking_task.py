@@ -116,6 +116,15 @@ def run(args):
         if set(tool) != {'link6', 'link7', 'end_effector_link'}:
             raise RuntimeError('Each OMX requires both finger and TCP links')
         links.append(tool)
+        if mapped:
+            from mapped_stack_fixture import check_massless_tcp
+            check_massless_tcp(args.urdf)
+            # SDK 6.2 assigns a default 1 kg to this URDF visual-only frame if kept as a rigid body.
+            stage.GetPrimAtPath(tool['end_effector_link']).RemoveAPI(UsdPhysics.RigidBodyAPI)
+            tcp_joints = [p for p in prims if p.GetName() == 'end_effector_joint' and p.IsA(UsdPhysics.FixedJoint)]
+            if len(tcp_joints) != 1:
+                raise RuntimeError('Expected one fixed TCP frame joint')
+            tcp_joints[0].SetActive(False)
         for prim in prims:
             if prim.IsA(UsdPhysics.RevoluteJoint):
                 finger = prim.GetName().startswith('gripper')
