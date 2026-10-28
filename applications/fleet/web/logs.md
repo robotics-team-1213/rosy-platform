@@ -521,6 +521,12 @@
 - 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.
 
+## 2026-10-26 · 916a6b79bd · 독립 Monitoring 화면 진입
+
+- 변경: 관제 utility 영역에 `/monitoring/` 새 창 링크를 추가했다. Fleet 자격 전달·추가 polling·명령은 없다. 같은 TLS site의 독립 Monitoring proxy 경로가 배포 전제다.
+- 증거: 고정 topbar·5영역·정지 배선은 변경하지 않았다. b6e8620373의 Fleet header·grammar·shared controls 원격44 PASS/0 SKIP, NEW/KNOWN/FLAKY0이다. 별도 Monitoring의 실제 prefixed UI는 Chromium에서 독립 검증했다.
+- gate 변화: 기존 관제·장치 수용을 올리지 않는다. CE 해당 없음 — 단순 링크이며 별도 판단을 숨기지 않는다.
+
 ## 2026-10-27 · uncommitted · 모바일 관제와 작업 화면 위계 개선
 
 - 변경: 모바일 로봇 선택·상태·작업을 지도보다 먼저 배치하고 DOM 이동 순서도 D-892에 맞췄다. 로그인 도움말·계정 구획·작업 연동 접힘·Cell 단계 열기를 정리했다. 인증·승인·명령 경로와 넓은 화면 배치는 유지한다.

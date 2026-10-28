@@ -12780,6 +12780,37 @@ osy-d395-s1d\`.
 - gate 변화: 없음(착지 절차).
 - CE: 해당 없음 — 측정과 규칙은 ADR 추가 6에 남겼다.
 
+## 2026-10-28 · uncommitted · fix(monitoring): Monitoring 화면 배경을 의미 색 역할로
+
+- 변경: `applications/monitoring/web/monitoring.css`의 `body` 배경을 `--ground`에서 `--surface-canvas`로 바꾼다. 이 레인은 main보다 늦게 합쳐졌고, 그사이 main에 들어온 `shared/web/test/test_design_scope_gates.py::test_direct_colour_declarations_use_semantic_roles`가 직접 배경 선언에 의미 역할을 요구한다.
+- 증거: 원격 `operations/monitoring/test`·`shared/web/test`·`test/architecture`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 시험이 잡은 토큰 이름 차이다.
+
+## 2026-10-28 · uncommitted · fix(release): Monitoring TLS 시험이 고정한 Caddy 배포 파일 SHA256을 공개 출처로 등록
+
+- 변경: `deploy/robot/pinky_pro/release/public_provenance.json`에 `operations/monitoring/test/test_tls_proxy.py`의 Caddy v2.10.2 linux_amd64 배포 파일 SHA256 줄을 기록한다. 2026-10-28에 그 파일을 내려받아 크기 15875694와 값이 맞음을 확인했다.
+- 근거: 착지 사전 시험의 `test/test_release_boundary_guards.py::test_no_secrets_in_tracked_files`가 그 값을 high-entropy-token으로 잡았다(main에서는 통과).
+- 증거: 원격 `test/test_release_boundary_guards.py`·`test/test_secret_public_provenance.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 저장소의 공개 출처 등록 절차를 따른 것이다.
+
+## 2026-10-28 · uncommitted · fix(web): 대시보드 시험을 공용 부품의 상대 import에 맞춤 (monitoring 레인)
+
+- 변경: `middleware/core/gateway/test/test_dashboard.py`가 공용 `shared/web/ui.js`에서 찾는 줄을 `"./confirmation.js"`로 바꾼다. 이 레인이 공용 control 모듈을 상대 import로 바꿨다(feat/monitoring-surface-registration과 같은 변경과 같은 수정).
+- 근거: 착지 사전 시험의 `test_dashboard_assets_are_local_and_reference_runtime_contract`·`test_dashboard_exposes_local_field_settings_not_fleet`가 실패했다(main에서는 통과).
+- 증거: 원격 `middleware/core/gateway/test/test_dashboard.py`·`shared/web/test`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 같은 레인이 바꾼 import를 시험에 맞춘 것이다.
+
+## 2026-10-28 · uncommitted · fix(test): 역할 화면 브라우저 시험이 공용 부품의 상대 import를 어느 mount에서나 제공
+
+- 변경: `test/test_role_surface_states_browser.py`가 `confirmation.js`·`live-dialog-geometry.js`·`ui-wiring.js`를 `/common/` 밑에서만 내주던 것을 `**/` 밑 어디서나 내준다. 이 브랜치가 `shared/web/ui.js`의 import를 상대 경로로 바꿨는데, 이 하네스는 `ui.js`를 `/assets/ui.js`로 올리고 이웃 파일은 `/common/`에만 두어 `Failed to fetch dynamically imported module`이 났다.
+- 근거: 착지 사전 시험의 `test_shared_components_apply_button_size_palette_and_status_contracts`가 실패했다(main에서는 통과).
+- 증거: 원격 `ROSY_RUN_BROWSER_TESTS=1 test/test_role_surface_states_browser.py`.
+- gate 변화: 없음.
+- CE: 해당 없음 — 같은 브랜치가 바꾼 import에 하네스를 맞춘 것이다.
+
 ## 2026-10-28 · uncommitted · fix(land): 착지가 시작할 때 같은 무리의 대기 티켓을 묶어 이끈다
 
 - 변경: `tools/land_batch.py`(`early`, 나누기 반복을 `run`으로 묶음), `tools/land.py`(줄에 선 직후 `early`). 사전 시험 기록이 없는 착지가 같은 무리의 `waiting`·`pending` 티켓을 곧바로 묶어 사전 시험을 한 번만 받는다. robot-f4의 `feat/land-batch-full`(무리별 묶음) 위에 쌓았다. D-889 추가 4.

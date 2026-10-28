@@ -5,8 +5,8 @@
 계약은 [Monitoring API](../../docs/reference/rosy-monitoring-api.md), 구조는
 [D-876](../../docs/adr/D-876-rosy-monitoring-independent-site-and-aggregate.md)을 따른다.
 
-현재 등록은 소유 경계·표면 기준과 실제 backend의 브라우저 조회 시험을 포함한다.
-화면 구현과 G1/G2/G3 수용은 후속이며, API 브라우저 시험을 화면 완성으로 계산하지 않는다.
+상태 화면과 scoped 조회·논리 그래프·변경 이력을 구현했다.
+실제 backend의 브라우저/G1 검사와 G2 캡처·G3 검토는 [UI 검증 기록](../../docs/validation/uiux-surfaces-2026-10-26/monitoring/README.md)에 있다.
 검증 상태는 [Monitoring 진행 기록](../../operations/monitoring/progress.md)이 정본이다.
 
 화면은 허용된 사이트의 원천 판정·정보 나이·수집/보고 경로·확인된 실패 단계·변경 이력을 읽는다.
