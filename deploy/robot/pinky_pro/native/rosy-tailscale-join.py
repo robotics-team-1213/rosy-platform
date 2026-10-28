@@ -9,7 +9,7 @@ D-226): {"auth_key": ..., "tags": [...], "hostname": ...}. This program
 * validates the file again on its own — it never trusts what wrote it,
 * resolves the tailscale CLI and refuses to run anything else,
 * when the daemon is not logged in yet, runs
-  `tailscale up --auth-key=... --advertise-tags=... --hostname=...
+  `tailscale up --auth-key=file:... --advertise-tags=... --hostname=...
   --accept-dns=false --accept-routes=false`, each step bounded,
 * rewrites the file in place WITHOUT the key (same inode; /etc/rosy stays
   read-only otherwise) so a spent key cannot be replayed from the card,
@@ -28,15 +28,20 @@ ROSY_TAILSCALE_CLI are test seams (the unit sets neither).
 from __future__ import annotations
 
 import json
+import contextlib
+import fcntl
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import stat
 import sys
+import tempfile
 from typing import Any
 
 sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 SCHEMA = 1
 #: The provisioned one-time join request (root 0600, rewritten in place).
@@ -66,15 +71,55 @@ def _tail(text: str, limit: int = 400) -> str:
     return cleaned[-limit:]
 
 
+def _private_fd(path: Path, flags: int) -> int:
+    descriptor = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid()
+                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > JOIN_FILE_MAX_BYTES):
+            raise ValueError("join file type/owner/permissions/size differ")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+@contextlib.contextmanager
+def _request_lock(path: Path):
+    descriptor = _private_fd(path, os.O_RDWR)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        opened, current = os.fstat(descriptor), path.lstat()
+        if (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino):
+            raise ValueError("join request changed while acquiring its lock")
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def _pairs(items):
+    result = {}
+    for key, value in items:
+        if key in result:
+            raise ValueError("join file has duplicate keys")
+        result[key] = value
+    return result
+
+
 def _load_join(path: Path) -> dict[str, Any]:
-    if path.stat().st_size > JOIN_FILE_MAX_BYTES:
+    with os.fdopen(_private_fd(path, os.O_RDONLY), "rb") as handle:
+        raw = handle.read(JOIN_FILE_MAX_BYTES + 1)
+    if len(raw) > JOIN_FILE_MAX_BYTES:
         raise ValueError("join file is implausibly large")
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or set(data) != {"auth_key", "tags", "hostname"}:
+    data = json.loads(raw, object_pairs_hook=_pairs)
+    if not isinstance(data, dict) or set(data) not in (
+            {"auth_key", "tags", "hostname"}, {"schema_version", "tags", "hostname"}):
         raise ValueError("join file keys are invalid")
-    key = data["auth_key"]
-    if not isinstance(key, str) or not KEY_PATTERN.fullmatch(key):
+    key = data.get("auth_key")
+    if "auth_key" in data and (not isinstance(key, str) or not KEY_PATTERN.fullmatch(key)):
         raise ValueError("join auth key is invalid")
+    if "schema_version" in data and (type(data["schema_version"]) is not int or data["schema_version"] != SCHEMA):
+        raise ValueError("consumed join schema is unsupported")
     tags = data["tags"]
     if not isinstance(tags, list) or not 1 <= len(tags) <= MAX_TAGS:
         raise ValueError("join tags are invalid")
@@ -87,7 +132,11 @@ def _load_join(path: Path) -> dict[str, Any]:
     return data
 
 
-def _write_result(path: Path, payload: dict[str, Any]) -> None:
+def _write_result(path: Path, payload: dict[str, Any], *, atomic: bool = False) -> None:
+    if atomic:
+        from os_state_io import _json_atomic
+        _json_atomic(path, payload, 0o600)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name("." + path.name + ".new")
     temp.write_text(
@@ -95,10 +144,16 @@ def _write_result(path: Path, payload: dict[str, Any]) -> None:
     os.replace(temp, path)
 
 
-def _consume_key(path: Path, data: dict[str, Any]) -> None:
+def _consume_key(path: Path, data: dict[str, Any], *, atomic: bool = False) -> None:
     """Rewrite the join file in place without the key (same inode, then fsync)."""
     kept = {"schema_version": SCHEMA, "tags": data["tags"], "hostname": data["hostname"]}
-    with open(path, "r+", encoding="utf-8") as handle:
+    if _load_join(path) != data:
+        raise ValueError("join request changed before consumption")
+    if atomic:
+        from os_state_io import _json_atomic
+        _json_atomic(path, kept, 0o600)
+        return
+    with os.fdopen(_private_fd(path, os.O_RDWR), "r+", encoding="utf-8") as handle:
         handle.write(json.dumps(kept, sort_keys=True, ensure_ascii=True))
         handle.truncate()
         handle.flush()
@@ -134,19 +189,39 @@ def _joined(cli: str) -> bool:
         status = json.loads(done.stdout)
     except ValueError:
         return False
-    return status.get("BackendState") == "Running" and isinstance(status.get("Self"), dict)
+    return isinstance(status, dict) and status.get("BackendState") == "Running" and isinstance(status.get("Self"), dict)
 
 
-def main(argv: list[str] | None = None) -> int:
-    root = Path(os.environ.get("ROSY_TAILSCALE_ROOT", "/"))
-    join_path = root / JOIN
-    result_path = root / RESULT
-    try:
-        data = _load_join(join_path)
-        cli = _resolve_cli()
-    except (OSError, ValueError, RuntimeError) as error:
-        print(f"rosy-tailscale-join: refusing: {error}", file=sys.stderr)
-        return 1
+def _paths(root: Path):
+    from os_storage_dispatch import marked
+    if not marked(root):
+        return root / JOIN, root / RESULT, False, None
+    from os_state_storage import admit_tailnet
+    from os_state_layout import COMMON, _path
+    admitted = admit_tailnet(root)
+    return (_path(root, COMMON + "/tailscale/join/request.json"),
+            _path(root, COMMON + "/tailscale/join/result.json"), True, admitted["hostname"])
+
+
+@contextlib.contextmanager
+def _secret_file(key: str):
+    with tempfile.TemporaryDirectory(prefix="rosy-tailnet-key-") as directory:
+        path = Path(directory) / "auth-key"
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+            handle.write(key)
+        yield "file:" + str(path)
+
+
+def _join(join_path: Path, result_path: Path, atomic: bool, expected_hostname: str | None) -> int:
+    data = _load_join(join_path)
+    if expected_hostname is not None and data["hostname"] != expected_hostname:
+        raise ValueError("join request hostname differs from the committed identity")
+    if "auth_key" not in data:
+        _write_result(result_path, {"schema_version": SCHEMA, "status": "already_consumed",
+                                   "hostname": data["hostname"]}, atomic=atomic)
+        return 0
+    cli = _resolve_cli()
 
     key = data["auth_key"]
     error_text = ""
@@ -155,14 +230,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         up = [
             cli, "up",
-            "--auth-key=" + key,
             "--advertise-tags=" + ",".join(data["tags"]),
             "--hostname=" + data["hostname"],
             "--accept-dns=false",
             "--accept-routes=false",
         ]
         try:
-            done = _invoke(up, UP_TIMEOUT_S)
+            with _secret_file(key) as reference:
+                done = _invoke([*up, "--auth-key=" + reference], UP_TIMEOUT_S)
         except subprocess.TimeoutExpired:
             done = None
             error_text = "tailscale up timed out"
@@ -177,13 +252,24 @@ def main(argv: list[str] | None = None) -> int:
                 parts = [done.stderr, done.stdout]  # type: ignore[union-attr]
                 error_text = _tail(_scrub(" ".join(parts), key))
     if status != "failed":
-        _consume_key(join_path, data)
+        _consume_key(join_path, data, atomic=atomic)
     result = {"schema_version": SCHEMA, "status": status, "hostname": data["hostname"]}
     if error_text:
         result["error"] = _tail(error_text)
-    _write_result(result_path, result)
+    _write_result(result_path, result, atomic=atomic)
     print(f"rosy-tailscale-join: {status} ({data['hostname']})", file=sys.stderr)
     return 0 if status != "failed" else 1
+
+
+def main(argv: list[str] | None = None) -> int:
+    root = Path(os.environ.get("ROSY_TAILSCALE_ROOT", "/")).absolute()
+    try:
+        join, result, atomic, hostname = _paths(root)
+        with _request_lock(join):
+            return _join(join, result, atomic, hostname)
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f"rosy-tailscale-join: refusing: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

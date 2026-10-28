@@ -76,8 +76,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
+- 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
+- 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
 - 2026-10-27 · 752c9b0aed · 네이티브 chunk 스크립트의 설치 패키지 import 유지
-- 2026-10-27 · ef0cd62783 · 선택된 셀의 팔 목록으로 관측기 점검
-- 2026-10-26 · uncommitted · clean-storage helper가 원격 `cat` 대신 LoadState로 유닛 확인
-- 2026-10-26 · d4a0e5b968 · D-887 source migration verified
-- 2026-10-26 · 8e856f02a9 · D-887 signed site service-set migration
+- 2026-10-27 · 2ecb9b9015 · fleet가 best-effort 컨텍스트 미러를 기다리지 않는다

@@ -17,11 +17,18 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from omx_topic_backend import SIM_COMMANDS, SIM_STATES  # noqa: E402
 from omx_backend_conformance import CAMERAS, JOINTS, OBJECTS  # noqa: E402
-from omx_cell_world import boxes, quaternion  # noqa: E402
+from omx_cell_world import PAD_HALF_LENGTH, PAD_RADIUS, boxes, jaw_contact_point, quaternion  # noqa: E402
 
 TIMESTEP_S, STATE_PERIOD_S = .002, .01
 KP, DAMPING, ARMATURE = 40.0, .3, .01  # Position servo and joint damping; stable at 2 ms, not tuned to the real arm.
 TOP_CAMERA_POS = (.12, 0.0, .65)  # Above the work area, looking down (cell top camera ~650 mm, D-794).
+# Grasping (2026-10-27, omx_grasp_probe). MuJoCo collides a mesh as its convex hull, and each finger's hull spans
+# pivot to tip: the two overlap at every opening, so the hulls never close on an item as fingertips do. Each finger
+# collides through one pad box instead, its inner face on the Gazebo-calibrated fingertip contact point
+# (cell_profile.yaml gripper.jaw; link7 mirrors link6), so the jaw gap matches the teacher's width-matched close.
+# The default pyramidal friction cone let the squeeze drop a 20 g block; the elliptic cone with impratio 10 holds
+# it, and stiff pad/object contacts keep the soft-contact overlap out of the jaw gap.
+GRIP_SOLREF, GRIP_SOLIMP = [.002, 1], [.95, .99, .001, .5, 2]
 
 
 def mjcf_urdf(urdf, mesh_root):
@@ -43,6 +50,7 @@ def build(urdf, mesh_root, shape):
     import mujoco
     spec = mujoco.MjSpec.from_string(mjcf_urdf(urdf, mesh_root))
     spec.option.timestep = TIMESTEP_S
+    spec.option.cone, spec.option.impratio = mujoco.mjtCone.mjCONE_ELLIPTIC, 10
     spec.visual.global_.offwidth, spec.visual.global_.offheight = shape[1], shape[0]
     world = spec.worldbody
     world.add_geom(type=mujoco.mjtGeom.mjGEOM_PLANE, size=[1, 1, .1], rgba=[.6, .6, .6, 1], pos=[0, 0, -.02])
@@ -54,7 +62,14 @@ def build(urdf, mesh_root, shape):
         else:
             body = world.add_body(name=box['name'], pos=box['pos'], quat=quaternion(box['rpy']))
             body.add_freejoint()
-            body.add_geom(name=box['name'], mass=box['mass'], **geom)
+            body.add_geom(name=box['name'], mass=box['mass'], solref=GRIP_SOLREF, solimp=GRIP_SOLIMP, **geom)
+    x, y = jaw_contact_point()
+    for finger, side in (('link6', 1), ('link7', -1)):
+        for part in spec.body(finger).geoms:
+            part.contype = part.conaffinity = 0
+        spec.body(finger).add_geom(type=mujoco.mjtGeom.mjGEOM_CAPSULE, size=[PAD_RADIUS, PAD_HALF_LENGTH, 0],
+                                   pos=[x, side*(y + PAD_RADIUS), 0], rgba=[0, 0, 0, 0],
+                                   solref=GRIP_SOLREF, solimp=GRIP_SOLIMP)
     world.add_light(pos=[0, 0, 1.5], dir=[0, 0, -1], diffuse=[.8, .8, .8])
     world.add_camera(name='top', pos=list(TOP_CAMERA_POS), xyaxes=[0, -1, 0, 1, 0, 0], fovy=60)
     spec.body('link5').add_camera(name='front', pos=[.05, 0, .03], xyaxes=[0, -1, 0, 0, 0, 1], fovy=70)

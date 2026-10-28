@@ -7,6 +7,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import runpy
 import subprocess
 import sys
 
@@ -270,6 +271,10 @@ def _valid_root(tmp_path: Path) -> Path:
         f"Package: {name}\nStatus: hold ok installed\nVersion: 1\n\n"
         for name in ("linux-image-6.8.0-1064-raspi", "linux-modules-6.8.0-1064-raspi", "linux-raspi")),
         encoding="utf-8")
+    with (root / "var/lib/dpkg/status").open("a", encoding="utf-8") as status:
+        status.write("Package: rauc\nStatus: install ok installed\nVersion: 1.11.3-2\n\n")
+    (root / "usr/bin").mkdir(parents=True, exist_ok=True)
+    (root / "usr/bin/rauc").write_text("# fixture\n")
     # D-193: the login-code issuer (enabled), its banner link and command, and
     # CORE defaults without tokens.
     (root / "etc/systemd/system/rosy-login-code.service").write_text("[Unit]\n", encoding="utf-8")
@@ -289,7 +294,33 @@ def _valid_root(tmp_path: Path) -> Path:
     defaults.parent.mkdir(parents=True, exist_ok=True)
     defaults.write_text((ROOT / "contracts/foundation/config/rosy_default.yaml").read_text(encoding="utf-8"),
                         encoding="utf-8")
+    # Model current factory storage prerequisites as well as the legacy runtime files.
+    contract = runpy.run_path(str(VERIFY))
+    for directory, names in (("opt/rosy/native-runtime", contract["STORAGE_HELPERS"]),
+                             ("opt/rosy/os-bootstrap", contract["BOOTSTRAP_HELPERS"])):
+        for name in names:
+            path = root / directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                path.write_text("# image helper fixture\n")
+    for unit in ("rosy-os-storage.service", "rosy-os-tailnet.service"):
+        (root / "etc/systemd/system" / unit).write_text("[Unit]\n")
+    for unit, consumers in (("rosy-os-storage.service", contract["STORAGE_CONSUMERS"]),
+                            ("rosy-os-tailnet.service", ("tailscaled.service", "rosy-tailscale-join.service"))):
+        for consumer in consumers:
+            _link(root / "etc/systemd/system" / (consumer + ".requires") / unit, "../" + unit)
+    (root / "etc/rosy/tls").mkdir(mode=0o750, exist_ok=True)
+    (root / "var/lib/tailscale").mkdir(parents=True, mode=0o700, exist_ok=True)
     return root
+
+
+def test_factory_storage_verifier_checks_the_complete_frozen_bootstrap(tmp_path):
+    contract = runpy.run_path(str(VERIFY))
+    root = _valid_root(tmp_path)
+    helper = root / "opt/rosy/os-bootstrap/os_ssh_hostkeys.py"
+    assert helper.is_file()
+    helper.unlink()
+    assert any("os_ssh_hostkeys.py" in finding for finding in contract["storage_gate_findings"](root))
 
 
 def _link(path: Path, target: str) -> None:
@@ -463,7 +494,7 @@ def test_mounted_image_verifier_rejects_missing_required_package(tmp_path):
 
 def test_mounted_image_verifier_rejects_product_docker_or_device_secrets(tmp_path):
     root = _valid_root(tmp_path)
-    (root / "usr/bin").mkdir(parents=True)
+    (root / "usr/bin").mkdir(parents=True, exist_ok=True)
     (root / "usr/bin/docker").write_text("fixture\n", encoding="utf-8")
     (root / "etc/rosy/runtime.env").write_text("ROSY_NAMESPACE=rosy_01\n", encoding="utf-8")
     connections = root / "etc/NetworkManager/system-connections"

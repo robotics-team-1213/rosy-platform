@@ -2,8 +2,9 @@
 
 On 2026-10-15 a ``safety_modules`` tag change failed
 ``test/architecture/test_safety_separation.py`` only inside a ~25-minute FULL round.
-The guards run first (lab PCs, known_failures compare, as every round) and a NEW
-failure stops the landing before the long round starts. The same round carries land_isolation's checks of what a
+In the turn the guards run first (lab PCs, known_failures compare, as every round) and a NEW
+failure stops the landing before the long round starts; before the turn (land_prepare) they run beside the
+selection, since waiting for them held a pretest slot 150-870 s (2026-10-27). The same round carries land_isolation's checks of what a
 shared pytest process hides: before the turn (``isolated``, land_prepare) the collection gate and the tests run
 alone; in the turn only those alone runs main's delta made stale. Standard library only.
 """
@@ -25,7 +26,7 @@ def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: 
 
     Skipped for explicit --tests; the guards are left out when every selected path already is a guard.
     """
-    if args.tests != "auto":
+    if args.tests not in ("auto", "full"):
         return []
     guards = [g for g in GUARDS if (wt / g).exists()]
     paths = [p.rstrip("/") for inv in invocations for p in inv]

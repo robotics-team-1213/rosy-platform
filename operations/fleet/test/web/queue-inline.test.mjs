@@ -22,7 +22,7 @@ test("the four must-expand states: offline, E-stop latched, safety not nominal, 
 });
 
 test("all four safety exceptions stay ahead of nominal robots even without a queue row", () => {
-  const { needsAttention } = createRoster({ view: { stateUnavailable: false, trafficTrips: [], endedTrips: [] }, streamEvidence: () => null });
+  const { needsAttention } = createRoster({ scope: {onDispose() {}, interval() {}}, view: { stateUnavailable: false, trafficTrips: [], endedTrips: [] }, streamEvidence: () => null });
   assert.equal(needsAttention(nominal()), false);
   for (const row of [nominal({ online: false }), nominal({ state: null }),
     nominal({ state: { safety: { estop: true } } }), nominal({ state: { safety: {} } }),
@@ -39,7 +39,7 @@ test("one queue row is open: the operator's pick while it lives, else the most u
 });
 
 const view = { robots: [], formation: null, stateUnavailable: false, receivedAtMs: Date.now(), trafficTrips: [] };
-const { attentionItems } = createRoster({ view, streamEvidence: () => null });
+const { attentionItems } = createRoster({ scope: {onDispose() {}, interval() {}}, view, streamEvidence: () => null });
 
 test("an offline stuck robot keeps its decision row after the disconnect row", () => {
   const items = attentionItems({ robot_id: "a", online: false, state: null, line_stuck: { stuck_id: "s" } });

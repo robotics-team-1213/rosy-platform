@@ -28,6 +28,7 @@ class TaskSchemaMigrations:
         additions = {
             "priority_class": "INTEGER NOT NULL DEFAULT 0",
             "queued_at": "TEXT",
+            "first_queued_at": "TEXT",
             "expires_at": "TEXT",
             "lease_owner": "TEXT",
             "lease_until": "TEXT",

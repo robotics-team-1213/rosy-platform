@@ -171,7 +171,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 if storage_web.get(self, path): return
                 if learning_tasks_web.get(self, path, tasks, omx_center, token):
                     return
-                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
+                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center, store.state) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})

@@ -1803,3 +1803,16 @@
 - 변경: 루트와 nodes/AGENTS.md에서 ROS composition과 import facade를 실제 nodes/·control/ 위치로 구분하고, 카메라 구현·Drive motion limits·관련 안내 링크를 현재 소스에 맞췄다.
 - 증거: control/_source_layout.py의 PACKAGE_DIRS·CONTROL_ROOTS·FLAT_ROOTS와 setup.py의 설치 경로를 대조했다. 전체 AGENTS.md의 로컬 Markdown 링크와 Parent context 경로를 정적으로 확인한다. 런타임 코드는 변경하지 않았다.
 - gate 변화: 없음. ROS·장치·현장 수용을 검증한 변경이 아니다.
+
+## 2026-10-27 · fe49e767b3 · A/B OS에서 operator overlay와 참조 프로필 보존
+
+- 변경: 기존 line_observer_overrides CLI의 기본 경로는 A/B marker/descriptor가 있으면 root canonical configuration owner에 write/clear를 맡긴다. helper 실패는 로컬 파일 쓰기로 우회하지 않는다. NOMINAL은 사용자가 고른 프로필을 overlay와 같은 generation에 보존하고 참조를 안정된 root 설정 경로로 바꾼다. 기존 사용자 지정 파일 경로와 단일 root의 atomic writer는 유지한다. 노드 주행 권한·NOMINAL 증거 등급은 바꾸지 않는다.
+- 증거: canonical dispatch/clear/no-fallback 및 profile dependency argv를 포함한 이 모듈14passedfe49e767b3. 배포 owner31passed는 실제 profile 원본 삭제 뒤 A→B→A의 exact bytes와 nominal_ground_plane 결과, 잘못된 profile 입력의 무변경 거절을 확인한다. mount/boot는 해당 모델 시험의 범위이며 실제 camera/기체 수용은 미실행이다.
+- gate 변화: 없음. 보정과 재시작의 현장 확인은 기존 runbook을 따른다. CE: 해당 없음 — 동작과 의존성은 코드·회귀 시험에 직접 남는다.
+
+## 2026-10-28 · 8325da055d · 거울 위치 가설의 좌표 비교 형식 정렬
+
+- 변경: `test_loc_objects.py`의 두 좌표 목록을 기존 NumPy 배열로 비교한다. 점 개수·배열 모양·좌표 순서와 `abs=1e-6` 허용 오차는 유지한다. 생산 위치 추정·장애물 판정·명령 경로는 바꾸지 않는다.
+- 증거: pytest 9.2 후보 환경에서 기존 중첩 Python 목록 비교가 TypeError로 실패했고 단독 재현됐다. 수정 커밋의 전체 지각 모듈 원격 시험은 3563 passed / 113 skipped / NEW 0이며 독립 검토가 모양·좌표별 허용 오차 보존을 확인했다. 실행 원본은 native-cell-transport 작업 기록의 커밋 고정 호환 감사에 연결했다.
+- gate 변화: 없음. 전체 감사에는 별도 ROOT 시험의 E2BIG 1건이 있어 전체 통과로 보고하지 않는다. ROS 그래프·기기·현장 수용은 미실행이다.
+- CE: 해당 없음 — 자료 형식과 허용 오차의 이유는 비교식·이 기록으로 복원할 수 있다.

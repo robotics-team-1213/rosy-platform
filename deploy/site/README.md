@@ -219,6 +219,15 @@ certificate identity, config revision, and readback in the site validation
 record. These steps require the actual site host and devices for SITE/FIELD
 acceptance; local Compose checks establish only LOCAL behavior.
 
+Loop liveness is separate from process liveness (2026-10-27). `GET /readyz` on the
+Fleet service reports every background loop as `running`, `not_configured`, or
+`dead` — a dead loop makes it answer 503 with the loop names and counters. Keep
+`/healthz` for what consumes it today (the compose healthcheck, the mDNS
+advertise check, the autoupdate health gate): it keeps answering
+`{"status": "ok"}` while the process is up, and wiring any of those consumers to
+`/readyz` is a separate decision, not part of this stack. `/readyz` exposes names
+and counters only; it never echoes exception messages.
+
 ### Operator PC: resolve the name and verify trust before login
 
 운영자는 인증서의 `ROSY_SITE_TLS_HOST`와 같은 이름으로
@@ -1545,6 +1554,25 @@ Retain the command JSON output (including digest), backup filename, image
 digest, and timestamp in the site's deployment record; transfer copies using
 the approved encrypted path and verify them again after transfer. Define and
 enforce a site retention period before production operation.
+
+#### Daily automatic backups (ledger timer)
+
+The `rosy-site-ledger-backup.service`/`.timer` pair automates the same
+utility: once a day (`OnCalendar=daily`, persistent across downtime) it runs
+the compose `fleet-backup` profile service — the fleet image's `site_db.py`
+against the live volume, read-only — into the host bind
+`ROSY_SITE_BACKUP_DIR` (default `/var/backups/rosy-site`, the directory from
+the manual procedure above) and prunes to the newest 14 backups. Enable it
+once:
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 0700 /var/backups/rosy-site
+sudo systemctl enable --now rosy-site-ledger-backup.timer
+```
+
+The timer keeps only the operational SQLite ledger; keep transferring copies
+to the approved encrypted target as above — the retention here bounds disk
+use on the site host, it is not an off-site backup.
 
 Before relying on recovery, test the backup against a separate Compose project
 so it receives a different named `sighting_data` volume. The installed site

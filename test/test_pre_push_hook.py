@@ -145,6 +145,22 @@ def test_publish_only_clone_pushes_publish_branches_only(tmp_path, refs, config,
         assert "ROSY_PUSH_REASON" in pushed.stderr
 
 
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+@pytest.mark.parametrize("ref, scanned", [("publish/main-20261027", "1"), ("feat/x", "")])
+def test_only_a_publish_ref_runs_the_secret_scan_before_safety_review(ref, scanned):
+    """2026-10-27: a plain git push to publish/main-* skipped publish_main.py's per-commit secret scan."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    scan = text.index('tools/publish_main.py --secret-scan "$PUSH_SHA"')
+    assert scan < text.index("safety_review.py origin/main"), "scan before the slower range checks"
+    stdin_part = text.split("# Git exports repository-local", 1)[0].split("set -euo pipefail", 1)[1]
+    probe = stdin_part.replace('cd "$(git rev-parse --show-toplevel)"', "") + 'echo "$PUBLISH_REF"'
+    line = f"refs/heads/b {'1' * 40} refs/heads/{ref} {'0' * 40}\n"
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    pushed = subprocess.run([BASH, "-c", probe, "hook", "origin", "url"], input=line, capture_output=True,
+                            text=True, cwd=ROOT, env={**env, "ROSY_PUSH_REASON": "test"})
+    assert pushed.stdout.strip() == scanned, pushed
+
+
 @pytest.mark.skipif(BASH is None or shutil.which("git") is None, reason="bash and git are required")
 @pytest.mark.parametrize("same", [True, False])
 def test_a_stale_installed_copy_refuses_the_push(tmp_path, same):
@@ -198,13 +214,39 @@ def _safety_step_repo(tmp_path, manifest="roots:\n  - path: safe\n    concern: s
     return git, commit
 
 
-def _run_safety_step(repo):
+def _run_safety_step(repo, **env):
     """The hook's Safety-Review step, exactly as written, in `repo`."""
     step = (SCRIPT.read_text(encoding="utf-8").split("# No origin/main would narrow", 1)[1]
             .split("\n", 1)[1].split("FAST_SUITES=(", 1)[0])
     head = 'set -euo pipefail\nPUSH_SHA="$(git rev-parse HEAD)"\n'
     return subprocess.run([BASH, "-c", head + step], cwd=repo, capture_output=True, text=True,
-                          env={**os.environ, "PY": sys.executable})
+                          env={**os.environ, "PY": sys.executable, **env})
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+def test_only_publish_mains_own_check_of_this_sha_skips_the_repeated_scans(tmp_path):
+    """D-889: publish_main --apply passed the secret scan and Safety-Review for this SHA just before its push."""
+    git, commit = _safety_step_repo(tmp_path, "roots:\n  - path: safe\n    concern: safety\n")
+    commit({"safe/stop.py": "LIMIT = 2\n"}, "loosen")  # no trailer: the step refuses it when it runs
+    sha = git("rev-parse", "HEAD").strip()
+    assert _run_safety_step(tmp_path, PUBLISH_REF="", ROSY_PUBLISH_CHECKED=sha).returncode == 1  # a branch push
+    assert _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED="0" * 40).returncode == 1
+    skipped = _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED=sha)
+    assert skipped.returncode == 0 and "publish_main.py passed them" in skipped.stdout, skipped.stderr
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is required")
+def test_publish_mains_push_skips_the_size_rule_every_other_push_runs_it(tmp_path):
+    """Each landing ran the size rule on its commits and CI reruns it on the range; 40+ min here (2026-10-28)."""
+    git, commit = _safety_step_repo(tmp_path, "roots: []\n")
+    commit({"app.py": "x = 1\n"}, "change\n\nSafety-Review: t unit")
+    sha = git("rev-parse", "HEAD").strip()
+    (tmp_path / "tools/harness/size_range.py").write_text("import sys\nprint('SIZE-RAN')\nsys.exit(1)\n")
+    ran = _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED="0" * 40)
+    assert ran.returncode == 1 and "SIZE-RAN" in ran.stdout, ran.stderr  # a plain push to publish/main-*
+    assert _run_safety_step(tmp_path, PUBLISH_REF="", ROSY_PUBLISH_CHECKED=sha).returncode == 1  # a branch push
+    skipped = _run_safety_step(tmp_path, PUBLISH_REF="1", ROSY_PUBLISH_CHECKED=sha)
+    assert skipped.returncode == 0 and "SIZE-RAN" not in skipped.stdout, skipped.stderr
 
 
 @pytest.mark.skipif(BASH is None, reason="bash is required")

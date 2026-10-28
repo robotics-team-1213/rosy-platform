@@ -1018,6 +1018,7 @@
 - 변경: 13개 closed wire 모델을 facade에서 재수출한다. 기존5개 status enum은 AST 동일하게 leaf로 옮겨 facade767행 ratchet을 지켰다. 빈 raw coverage는 unknown으로 보존하며 evaluator의 완전 coverage gate는 유지한다. v1.312는 정식 선점했고 기존 pin의 header/assertion 문맥도 복구했다.
 - 증거: wire RED16, empty coverage/observer/store RED8NEW, source c4 Foundation/정합성/관련 Fleet1266passed/skip0/0NEW, 최종 bb38 auth/observer/release122passed/skip0/0NEW 및 독립 재검토. docs/validation/harbor-arm-observer-http-2026-10-24/result.md를 따른다.
 - gate 변화: 최신 bb38 FULL23개 모두exit0/official0NEW·독립 전체 증거 검토를 확인했다. 이전 dc FULL의2개 gate 실패를 보존하며 이전58 FULL에 합치지 않는다. 실제 HTTP/UDS의 raw facts도 synthetic이며 schema/통신 결과를 물리 수용으로 부르지 않는다. CE 미해결: 이전G1 timing 원인은 미확정, 이번 수정은 source·회귀·ADR로 복원 가능해 새 교훈 없음.
+
 ## 2026-10-24 · 73fc8b2b09 · 공통 Action·상태 구성 모델의 소유 분리
 
 - 변경: 기존 Action·국소 정지 모델14개를 `protocol/device_actions.py`, 상태 구성 모델20개를 `protocol/state_components.py`로 옮겼다. canonical `schemas` import·공개 필드·검증·Envelope1.0을 유지하고 schemas를1170줄에서569줄로 줄여 기존 초과 ratchet 행을 제거했다.
@@ -1037,6 +1038,7 @@
 - 변경: PoseSample.sampled_at을 strict finite UTC 선택 필드로 추가하고 공유 순수 helper가 별도 수용된 양 끝 UTC±50ms 전제 아래 remaining을 보수적으로 계산한다. 실제 시계 품질·로봇 작동을 만들어내지 않는다. APIv1.316·pin과 기존 envelope1.0 지침을 정렬했다.
 - 증거: [공유 계약 검증](../../docs/validation/swarm-reference-contract-2026-10-25/result.md). schema20 RED와 helper 미구현 collectionerror 뒤 신규58개+기존 계약을 합쳐 원격86개 통과, skip0. 안전 태그·독립 제한 범위 검토와 source trailer 포함. FULL 착지 gate는 별도다.
 - gate 변화: 공유 계약 회귀만 확인했다. consumer·혼합 peer 관문·실물 UTC/운행은 다음 단계다. CE 해당 없음: 근거는 D-870·helper·회귀로 복원된다.
+
 ## 2026-10-25 · uncommitted · feat(contracts): D-865 policy admission wire schemas v1.314
 
 - 변경: core_common/protocol/policy_admission.py 신설(범위·상태·감사·전환 형태), schemas.py canonical 재수출, test/test_policy_admission_contract.py 추가.
@@ -1057,3 +1059,23 @@
 - 증거: tests-only0916d397f4의 원격 RED Foundation21FAIL/Core2FAIL/Fleet12FAIL4PASS를 보존했다. source959ec51bbf의 새 GREEN은 Foundation1318/Core25/Fleet·pin109PASS, 모두0SKIP/official·outer·known exit0/NEW0·known0·flaky0이다. 검증 기록: docs/validation/navigation-intent-epoch-prelude-2026-10-26/result.md.
 - Gate: 기존 gate를 올리지 않는다. 계약 prelude이며 전체 admission fence·idle cancel·lease/UI·공식 FULL·공개 CI·현장 수용은 별도다.
 - CE: 해당 없음 — 코드·회귀 시험과 ADR에 판단 근거를 남겼다.
+
+## 2026-10-27 · 2d932dad6b · D-899 bounded simulation recovery wire contract
+
+- 변경: API v1.327에 복구 요청·독립 관측·별도 운영자 승인 DTO13개와 schemas 정본 재수출을 등록했다. 기존 입장 승인·관측·단계 receipt 타입을 재사용하며 실행 권한·물리 원인·성공을 만들지 않는다. HTTP 설치는 별도 제품 변경이다.
+- 증거: tests-only f5bf86ef2c의 missing-contract RED30을 확인한 뒤 source2d932dad6b의 Foundation 전체·gateway protocol·변경 pin suites 원격1,583 passed/0 skipped, NEW0·known0·flaky0을 확인했다. docs/validation/transfer-recovery-contract-2026-10-27/result.md.
+- Gate: 기존 gate 변화 없음. 공유 변경의 공식 FULL·HTTP·독립 생산자·브라우저·장치·학습 수용을 이 focused GREEN으로 대신하지 않는다.
+- CE: 해당 없음 — 계약·직접 회귀 시험과 D-899에 판단 근거를 남겼다.
+
+## 2026-10-27 · 6645ad829b · D-899 canonical API version table alignment
+
+- 변경: 공식 FULL의 collect-alone 가드에서 발견한 API Ref v1.327 변경이력표 행 누락을 한 행으로 보완했다. 기존 버전 정렬 시험의 RED를 그대로 재현 근거로 쓴다.
+- 증거: 원격 Foundation 전체·gateway schema/version alignment·변경 pin suites1,586 passed/0 skipped in22.41s. docs/validation/transfer-recovery-contract-2026-10-27b/result.md. 앞선 FULL은 실패·미완료이며 착지하지 않았다.
+- gate 변화: 없음. 모델·실행 코드·실패 baseline은 바꾸지 않았고 공식 FULL을 다시 수행한다.
+- CE: 해당 없음 — 기존 독립 계약 시험으로 검출·방지하는 문서 수정이다.
+
+## 2026-10-28 · b3641b2165 · ROS 없는 로컬 최신 관측 스냅샷
+
+- 변경: stdlib `observation_snapshot`은 같은 사용자·호스트의 bounded atomic IPC와 원본 source/monotonic 시각을 보존한다. 느린 독자를 위한 큐나 재조회에 의한 freshness 갱신은 없다. 외부 API wire shape는 바꾸지 않는다. 사용자는 OMX 운영 producer/viewer/bridge이며 D-901이 경계를 정한다.
+- 검증: tests-only7368fd6fed의 원격 RED 뒤 교체·오염·크기·시간·소스 분리·ROS 없는 세 팔 viewer 회귀 시험을 추가했다. 집중 원격 결과는 실행 기록에 남긴다.
+- gate 변화: 없음. 라이브러리 통과로 장치·녹화·노출 동기화 수용을 주장하지 않는다. CE: 해당 없음 — 구현과 시험에 판단이 직접 남는다.

@@ -104,11 +104,16 @@ def main(argv: list[str] | None = None) -> int:
     check = sub.add_parser("owed")
     check.add_argument("--head", required=True)
     check.add_argument("--upstream", default="origin/main")
+    # D-889: a publish ref carries every landing since the last publish (3,900 commits on 2026-10-27), so
+    # the chain to origin/main never closes and the gate re-ran the affected tier of the whole range for
+    # hours. The pushed commit's own record is the landing gate; the publish PR's ci-result is the FULL gate.
+    check.add_argument("--own", action="store_true", help="publish ref: only the head's own record")
     check.add_argument("suites", nargs="*")
     args = parser.parse_args(argv)
     repo = Path.cwd()
     head = _git(repo, "rev-parse", "--verify", f"{args.head}^{{commit}}").stdout.strip()
-    result = owed(repo, head, args.upstream, args.suites)
+    record = read(repo, head) if args.own else None
+    result = owed(repo, head, record["base"] if record else args.upstream, args.suites)
     if result is None:
         return 3
     for suite in result:

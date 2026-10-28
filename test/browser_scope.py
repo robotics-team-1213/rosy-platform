@@ -71,7 +71,7 @@ REVIEW = [
     "test/learning/perception/test_review_app_smoke.py",
 ]
 OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for name in
-                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments")]
+                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments", "camera_reference")]
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
@@ -83,9 +83,12 @@ LEARNING = OMX_LEARNING + CAMERA + SIM + PIPELINE + ACCOUNTS + TASKS + STAGES
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING
+MONITORING = ["test/test_monitoring_browser.py"]
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING
 
 SCOPE: dict[str, list[str]] = {
+    "applications/monitoring/": MONITORING,
+    "operations/monitoring/": MONITORING,
     "applications/fleet/dev/": FLEET,
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
@@ -157,7 +160,16 @@ def targets(paths: list[str]) -> list[str]:
     return sorted(selected)
 
 
+def all_targets() -> list[str]:
+    """Expand every registered browser target in this candidate tree."""
+    return sorted({path for pattern in EVERYTHING for path in _expand(pattern)})
+
+
 def main(argv: list[str]) -> int:
+    if argv == ["--all", "--json"]:
+        import json
+        print(json.dumps(all_targets()))
+        return 0
     found = targets(argv)
     if not found:
         print("browser_scope: no browser tests for these paths", file=sys.stderr)

@@ -52,6 +52,8 @@ def repos(tmp_path, monkeypatch, request):
     git(main, "worktree", "add", "-q", str(wt), "-b", "feat/x", "main")
     monkeypatch.chdir(wt)
     monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "logs"))
+    monkeypatch.setenv("ROSY_LAND_FIXTURE", "1")  # --tests none/"<args>" replace the selection here
+    monkeypatch.setattr(land.land_prepare, "after_reboot", lambda ticket: None)
 
     def fake_run(invocations, logs, sha="HEAD", repo=None, label=None, **kw):
         # Fixture repos are throwaway and cannot be shipped to a test host; this test itself
@@ -875,6 +877,17 @@ def test_rerun_ids_from_another_rootdir_are_mapped_to_the_tree_and_no_test_found
     assert sent[0] == ["pkg/test/test_a.py::test_a"], "the one tracked test_a.py, not the printed path"
 
 
+def test_a_directory_printed_for_the_file_maps_to_the_file_that_defines_the_test(repos, tmp_path):
+    """2026-10-27: pytest printed middleware/robot_execution/local::test_x for a shared/web/test file, and
+    the rerun stopped with "directory argument cannot contain :: selection parts"."""
+    main, wt = repos
+    sent = []
+    land.land_checks._rerun_alone(
+        wt, ["pkg/test"], tmp_path / "original.txt", "NEW elsewhere/local::test_a\n", tmp_path, "dir",
+        sys.executable, lambda invs, *a, **k: sent.extend(invs) or [1], tested_sha=git(wt, "rev-parse", "HEAD"))
+    assert sent[0] == ["pkg/test/test_a.py::test_a"]
+
+
 def test_safety_root_test_is_never_rerun(repos, monkeypatch, capsys):
     main, wt = repos
     monkeypatch.setattr(land.land_checks, "_safety", lambda wt_, python, ids: list(ids))
@@ -1120,7 +1133,9 @@ def test_a_full_tier_runs_while_waiting_and_counts_as_the_turns_full_tier(repos,
 
     monkeypatch.setattr(land.land_full, "save", save)
     assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1                # the peer never leaves
-    assert rounds == ["gpre", "pre", "save"] and "FULL tier before the turn" in capsys.readouterr().out
+    # the guard round runs beside the selection, so their order is free; both finish before the record
+    assert sorted(rounds[:2]) == ["gpre", "pre"] and rounds[2:] == ["save"]
+    assert "FULL tier before the turn" in capsys.readouterr().out
     assert land.land_full.restore(wt, git(wt, "rev-parse", "--abbrev-ref", "HEAD")) == git(wt, "rev-parse", "main")
 
 
@@ -1161,7 +1176,8 @@ def test_queued_full_guard_stops_before_long_tests_or_full_record(repos, monkeyp
     monkeypatch.setattr(land, "run_tests", run_tests)
     monkeypatch.setattr(land.land_full, "save", lambda *a: saved.append(a))
     assert land.main(["--tests", "auto", "--queue-timeout", "0.001"]) == 1
-    assert phases == ["gpre"] and saved == []
+    # the selection ran beside the guards (2026-10-27); a failed guard still records nothing and lands nothing
+    assert sorted(phases) == ["gpre", "pre"] and saved == []
     assert git(main, "rev-parse", "HEAD") == before
     assert sorted(qdir.glob("*.json")) == [peer]
     expected = "structural guard failed" if guard_outcome == "failure" else "HEAD changed"

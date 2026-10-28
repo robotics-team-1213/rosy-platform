@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-10-27 · uncommitted · feat(sim): D-877 물체 위치 평가 사실, 탐침 PASS 순서
-- 2026-10-27 · uncommitted · D-892 모바일 관제 정보 순서
-- 2026-10-27 · uncommitted · selector 분리 FULL 실패와 G2 교차 대조
-- 2026-10-26 · uncommitted · Monitoring 독립 CLI와 프로세스 수용
-- 2026-10-26 · b82af1ec31 · pure landing selection extraction
+- 2026-10-28 · uncommitted · docs(landing): land_async is the default landing; publish push reuses its own record (D-889 addendum 5)
+- 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
+- 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
+- 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
