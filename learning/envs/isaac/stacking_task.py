@@ -110,7 +110,11 @@ def run(args):
         if len(roots) != 1:
             raise RuntimeError('Each OMX reference requires one articulation')
         # Match the existing OMX backend: imported adjacent finger hulls overlap and must not self-collide.
-        PhysxSchema.PhysxArticulationAPI.Apply(roots[0]).CreateEnabledSelfCollisionsAttr(False)
+        articulation = PhysxSchema.PhysxArticulationAPI.Apply(roots[0])
+        articulation.CreateEnabledSelfCollisionsAttr(False)
+        if mapped:
+            articulation.CreateSolverPositionIterationCountAttr(64)
+            articulation.CreateSolverVelocityIterationCountAttr(16)
         tool = {p.GetName(): str(p.GetPath()) for p in prims
                 if p.GetName() in ('link6', 'link7', 'end_effector_link')}
         if set(tool) != {'link6', 'link7', 'end_effector_link'}:
@@ -135,12 +139,12 @@ def run(args):
                     raise RuntimeError('Joint velocity limit readback failed')
                 drive = UsdPhysics.DriveAPI.Apply(prim, 'angular')
                 drive.CreateTypeAttr('force')
-                drive.CreateStiffnessAttr(30. if finger else 5000.)
-                drive.CreateDampingAttr(2. if finger else 100.)
+                drive.CreateStiffnessAttr(math.radians(30. if finger else 400.) if mapped else (30. if finger else 5000.))
+                drive.CreateDampingAttr(math.radians(2. if finger else 20.) if mapped else (2. if finger else 100.))
                 drive.CreateMaxForceAttr(.2 if finger else 30.)
                 if prim.GetName() == 'gripper_joint_2':
-                    drive.CreateStiffnessAttr(FOLLOWER_STIFFNESS)
-                    drive.CreateDampingAttr(FOLLOWER_DAMPING)
+                    drive.CreateStiffnessAttr(math.radians(FOLLOWER_STIFFNESS) if mapped else FOLLOWER_STIFFNESS)
+                    drive.CreateDampingAttr(math.radians(FOLLOWER_DAMPING) if mapped else FOLLOWER_DAMPING)
                     drive.CreateMaxForceAttr(FOLLOWER_MAX_EFFORT_NM)
                     for schema in prim.GetAppliedSchemas():
                         if str(schema).startswith('PhysxMimicJointAPI:'):
