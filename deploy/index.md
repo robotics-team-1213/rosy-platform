@@ -79,5 +79,5 @@
 - 2026-10-28 · 0f76cb9a4e · Learning 인계 런타임의 필수 파일 closure
 - 2026-10-28 · bc32cb9b41 · 정지 시험의 OS 가짜 호출 격리
 - 2026-10-28 · b3641b2165 · OMX 운영 관측의 native 통신 경계
+- 2026-10-28 · 8facd08fea · Native enrollment current-main integration candidate
 - 2026-10-28 · uncommitted · Native motor-health 종료 시각 수정 초안
-- 2026-10-27 · f44520f70e · exact-line provenance 원격 가드 확인

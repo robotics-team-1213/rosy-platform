@@ -14,3 +14,12 @@ def test_every_test_host_role_declares_the_storage_maintenance():
         units = ROLES[role]
         assert {"rosy-test-storage.service", "rosy-test-storage.timer"} <= set(units), role
         assert units["rosy-test-storage.timer"]["run"] == "timer", role
+
+
+def test_native_omx_units_are_declared_once_separately_from_fleet_site_units():
+    native = {name for units in ROLES.values() for name in units if name.startswith('rosy-omx-')}
+    assert native and native == set(ROLES['omx'])
+    assert not (native & set(ROLES['site']))
+    assert 'rosy-site-tools-autoupdate.timer' in ROLES['site']
+    assert 'rosy-omx-arm-status.service' in ROLES['omx']
+    assert 'rosy-omx-devices-autoupdate.timer' in ROLES['omx']
