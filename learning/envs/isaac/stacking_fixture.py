@@ -36,7 +36,7 @@ def advance_joint(position, velocity, requested_velocity, limits, dt):
     if wanted < low-1e-12 or wanted > high+1e-12:
         raise ValueError('Previous joint command cannot stop within the profile')
     bounded = max(low, min(high, wanted))
-    return bounded, 0. if bounded != wanted else velocity
+    return bounded, velocity
 
 
 def stack_plan():
