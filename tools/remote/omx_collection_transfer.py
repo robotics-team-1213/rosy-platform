@@ -153,11 +153,14 @@ def transfer(session, destination=None):
     session, destination = _safe(session), _safe(destination or session)
     config = lab_hosts.load()
     hosts = config.get('test_hosts')
-    source = config.get('site_host')
+    sources = lab_hosts.omx_hosts(config)
+    if len(sources) != 1:
+        raise ValueError('exactly one native OMX host is required for collection transfer')
+    source = sources[0]
     model = hosts[0] if isinstance(hosts, list) and hosts else None
     pattern = r'[A-Za-z0-9][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9_.-]*'
     if (not all(isinstance(h, str) and re.fullmatch(pattern, h) for h in (source, model)) or source == model):
-        raise ValueError('private site_host and first test_hosts model destination must be distinct SSH endpoints')
+        raise ValueError('private native OMX host and first test_hosts model destination must be distinct SSH endpoints')
     token = uuid.uuid4().hex
     original = _remote(source, 'source', session, destination, token)
     expected = original['manifest_sha256']
