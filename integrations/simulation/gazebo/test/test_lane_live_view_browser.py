@@ -85,7 +85,7 @@ def test_shared_assets_responsive_layout_and_tab_targets(viewer_url, theme, widt
         browser = playwright.chromium.launch()
         page = browser.new_page(viewport={"width": width, "height": 900})
         page.add_init_script("localStorage.setItem('rosy.theme', " + json.dumps(theme) + ")")
-        page.goto(viewer_url, wait_until="networkidle")
+        page.goto(viewer_url, wait_until="domcontentloaded")
         page.wait_for_function("customElements.get('ui-button') !== undefined")
         page.evaluate("document.documentElement.dataset.theme = " + json.dumps(theme))
         for asset in ["tokens.css", "components.css", "ui.js"]:
