@@ -12564,6 +12564,57 @@ osy-d395-s1d\`.
 - gate 변화: Isaac 전환 조건 중 파지 반복 충족(시험 범위 안). 카메라 640×480 10Hz와 렌더링 비교는 미충족.
 - CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`에 Isaac 원인 세 겹과 공용 패드 위치.
 
+## 2026-10-27 · uncommitted · test(isaac): Lab 3 설치 증거와 복구 회귀
+
+- 변경: 별도 Newton·Sim 후보 환경의 최초 설치 증거와 SDK 호환·종료 정리의 회귀 조건을 기록했다.
+- 증거: Newton 의존성·GPU·PPO 기본 실행을 확인했고 Sim 후보의 의존성 충돌·종료 정리 실패를 분리했다. 코드 복구와 새 실행은 후속 검증으로 확인한다.
+- gate 변화: 없음. 설치 검증은 제품 task·장치 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인·판정 범위는 설정 문서와 회귀 조건에 보존한다.
+
+- 2026-10-27: Lab 3 분리 환경의 최초 설치 증거를 기록했다. Newton 기본 학습은 통과했고 Sim 후보 의존성·종료 정리 복구를 별도 검증한다. 실제 Torch fsspec 요구와 상위 주석 차이를 정정했다.
+
+## 2026-10-27 · uncommitted · docs(learning): D-897 두 호스트 오프라인 시뮬레이션 학습
+
+- 변경: AI PC·모델 PC의 격리된 학습 병렬 배치와 첫 검증의 AI 추론 서비스 일시 중지·원상 복원 승인 범위를 기록했다. 운영 권한·승격 경계는 유지한다.
+- 증거: 사용자 요청과 두 호스트의 GPU·RAM·드라이버·실제 서비스 상태를 조회했다. 설치와 동시 학습의 실제 수용은 후속 기록으로 확인한다.
+- gate 변화: 없음. 역할 예외 승인과 환경·제품 수용을 구분한다.
+- CE: 해당 없음 — 새 사용자 결정은 ADR에 보존한다.
+
+## 2026-10-27 · uncommitted · docs(isaac): SDK 복구와 두 PC 동시 학습 검증
+
+- 변경: Lab 3 README의 두 호스트 실행 조건과 동결 복구 기록을 추가했다. 설치된 Torch metadata로 fsspec 설명을 정정하고 로컬 kernel 버전·원본 payload 보존·SDK 보안 범위를 구분했다.
+- 증거: AI·모델 PC에서 각각 Newton 64환경·64iteration·65,536 transitions, 새 checkpoint 3개와 clean을 확인했다. 실제 learn 구간이 8.457134초 겹쳤고 AI의 두 user unit은 active/running/enabled로 복원됐다. 모델 SDK는 CUDA·PhysX·fsspec IO·PPO와 종료 정리를 통과했다. helper SHA·lock·정제 증거 ZIP은 docs/validation/isaaclab3-repair-2026-10-27/result.md와 Confluence 10190849에 연결했다.
+- 검증 범위: 구현 회귀는 원격 RED→GREEN, 이전 소스 회귀 511 PASS/1 SKIP/NEW 0이다. 최종 커밋의 원격 검사·착지는 후속 관문에서 확인한다. SDK 종료 직전 관측과 Hub disabled 조건을 검토했고 최초 실패도 보존했다.
+- gate 변화: 없음. 설치 검증은 제품 task·일반화·실물 수용을 뜻하지 않는다.
+- CE: 해당 없음 — 원인·복구 판단은 구현·회귀 시험·README·동결 검증 기록으로 보존돼 별도 교훈을 중복하지 않는다.
+
+## 2026-10-27 · uncommitted · docs(isaac): 실행 파일의 SHA-256 표기를 명확히 함
+
+- 변경: 동결 기록의 두 공개 파일 해시를 SHA-256으로 명시했다. 해시 값과 구현은 그대로다.
+- 증거: 착지 회귀에서 문서의 `SHA는` 표기가 비밀정보 검사에 걸렸고 단독 재현은 실패, main 대조는 통과했다. 실제 검사기의 자기 검사로 원래 표기 RED·명시한 SHA-256 GREEN을 확인했다. 검사 규칙과 예외 목록은 바꾸지 않았다.
+- gate 변화: 없음. 수정 커밋은 원격 착지 관문을 다시 통과해야 한다.
+- CE: 해당 없음 — 수정과 기존 검사 규칙에서 원인이 명확하다.
+
+## 2026-10-27 · uncommitted · docs(isaac): SDK 6.2 기본 경로 전환과 제어 증거
+
+- 변경: 두 PC의 SDK 설치·PPO, 모델 PC의 실제 ROS 제어·카메라와 기본 pointer 전환을 별도 [검증 기록](validation/isaac62-sdk-migration-2026-10-27/result.md)으로 보존하고 운영 binding·Lab 3 안내를 갱신했다.
+- 증거: 원격 Isaac 전체 시험 exit 0·신규 실패 0, ROS conformance failures 빈 목록, 두 pointer와 인터프리터 해시 전환 후 재조회. AI 추가 ROS는 외부 GPU owner로 실행 전에 거절됐으며 승인 서비스 복원을 확인했다.
+- gate 변화: 특정 SDK/소프트웨어 실행 증거만 추가한다. 학습 정책·실물·현장 수용을 주장하지 않는다. 초기 UNKNOWN/조기 실패의 미확정 원인을 보존한다.
+- CE: 새 교훈 기록 — USD variant와 누락된 position drive gain은 import 성공만으로 놓칠 수 있어 [해결·회귀·복구 조건](solutions/runtime-errors/isaac62-imported-articulation-with-zero-position-drive-2026-10-27.md)을 남겼다.
+
+## 2026-10-27 · uncommitted · AI ROS 거절의 관측 범위 보충
+
+- 변경: 앞 기록의 외부 GPU owner 표현을 GPU 무점유 확인 조건 미충족으로 한정한다. 당시 원본 조회 응답이 없어 점유와 조회 실패를 구분하지 않는다. SDK 미시작·서비스 복원과 AI 학습 스모크 성공의 구분은 유지한다.
+- 증거: helper의 gpu_empty는 비어 있지 않은 결과와 조회 실패를 모두 false로 반환한다. 두 서비스의 실제 복원과 후속 NRestarts 0은 별도 재조회했다.
+- gate 변화: 없음. 추가 runtime 성공으로 표시하지 않는다.
+
+## 2026-10-27 · uncommitted · SDK 검증 기록의 공개 지문 종류 명시
+
+- 변경: SDK 이관 기록과 해결 문서의 커밋 지문에 commit, 파일 지문 표의 각 행에 SHA-256을 명시했다. 값·실행 코드·비밀정보 검사 규칙은 유지한다.
+- 증거: 착지 검사의 비밀정보 guard가 브랜치에서 실패하고 main에서 통과했다. 실제 scan_text로 원문 8건 탐지와 수정문 0건 탐지를 확인했다. 커밋 뒤 같은 guard를 원격 재검증한다.
+- gate 변화: 없음. 전체 착지 검사를 재개한다.
+- CE: 해당 없음 — 기존 공개 provenance 표기 규칙을 적용한 문서 수정이며 검사 예외를 늘리지 않았다.
+
 ## 2026-10-28 · uncommitted · perf(remote): per-invocation timing and D-889 addendum 3
 - 변경: `rosy-pytest-memory.jsonl` 행에 호출별 `queued_s`·`job_s`·`pytest_s`를 남긴다(`memory_history.timing`, `work_queue.Work.began`). D-889 추가 3에 차례 튕김 측정과 B·A·C 규칙을 적었다.
 - 증거: 10-27 00:00~10-28 01:40 차례 119번 가운데 착지 46, 한도 초과 44, main delta FULL 12, 멈춤 12. 잠금 시간의 56%가 튕긴 차례. 원격 `test_remote_pytest_memory.py`·`test_remote_pytest.py`·`test_remote_test_tools.py`·`test_harness_contracts.py` exit 0. `pytest_s`를 cpu 사용량 칸에서 읽는 변이를 새 시험이 잡았다.
