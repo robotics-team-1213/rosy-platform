@@ -12846,3 +12846,25 @@ osy-d395-s1d\`.
 - 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
+
+## 2026-10-28 · uncommitted · docs: GPT 용량 재배치 뒤 SD 검증 복구 교훈
+
+- 변경: GPT primary 용량 필드 변경을 카드 고장으로 단정하지 않고 읽기 전용 원시 증거와 표준 resume로 판별하는 교훈을 추가했다.
+- 검증: 원격 SD 도구 94 passed/0 skipped/0 NEW와 독립 검토 후 실제 31,138,512,896바이트 전체 읽기 검증·개별 설정·최종 GPT 확인·등록·receipt 완료(exit 0). 기존 FAT Windows metadata 허용 범위와 raw digest 차이도 구분했다.
+- gate 변화: 없음 — 개별 engineering 카드의 MEDIA만 확인했으며 배포 모듈 전체의 수용을 올리지 않았다.
+- 한계: MEDIA만 확인했다. 첫 부팅·실물 OTA·롤백은 미검증이며 제품 main 착지·공개 게시를 주장하지 않는다.
+- CE: 새 교훈 기록 — 일회성 헤더 복구 후 재발한 실제 저장 장치 조회 순서와 증거를 보존했다. Frontmatter 통과, claims의 미게시 commit 참조 1개는 pending 표기와 함께 판정했다.
+
+## 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 부분 업데이트 정책 연결
+
+- 변경: D-912(Proposed)에 고정 세 파일의 별도 OS 유지보수 소유권, Ed25519와 OS CMS 이중 권한, 정책 freeze와 중단 복구 경계를 기록했다. 다른 세션의 D-903~D-911 예약은 gap ledger에 보존했다.
+- 검증: OS publisher 54 passed, consumer 초기 79 passed, 잔여 부분파일 공간 복구 39 passed, 실제 publisher→HTTP→서명 canary staging 연결 5 passed(각 0 skipped/0 NEW). 실제 173 원본의 분할 게시 dry-run도 통과했다. 후속 bridge 보강과 부분 delta 연결의 최종 검증은 진행 중이다.
+- gate 변화: 없음 — 실제 Pinky boot·GitHub OTA·rollback은 아직 미검증이고 OS 유지보수 결정은 Proposed다.
+- CE: 해당 없음 — 현재 새 코드의 계약과 회귀로 판별할 수 있는 구현 내용이다. 해결이 검증되지 않은 후속 항목은 작업 기록에 남긴다.
+
+## 2026-10-29 · ccc8712ece · 이송 결과 검수 패키지 검증 기록
+
+- 변경: `validation/transfer-review-package-2026-10-29/result.md`에 export 원본 보존·root/자식 분할 검사·재조회 해시의 범위, 실제 RED/GREEN과 독립 검토 결과를 동결했다.
+- 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
+- Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
+- CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.

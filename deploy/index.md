@@ -77,7 +77,7 @@
 ## 최근 기록
 
 - 2026-10-29 · 8704f12108 · 운영 키 조합 검사와 접속 복구 중단 상태
+- 2026-10-29 · uncommitted · deploy: GitHub OS 전송과 서명된 부분 갱신
 - 2026-10-28 · 8c3a60f344 · Pinky 접속 복구와 운영 키 누락 차단
 - 2026-10-28 · 0f76cb9a4e · Learning 인계 런타임의 필수 파일 closure
 - 2026-10-28 · uncommitted · feat(omx): native 셀의 검증된 작업 범위를 실행 조건과 연결 (D-911)
-- 2026-10-28 · uncommitted · fix(omx): 카메라 자동 조정이 역할마다 실제 미리보기 유닛을 확인

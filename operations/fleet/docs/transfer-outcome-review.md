@@ -2,15 +2,15 @@
 
 현재 연결은 기존 ARM transfer HTTP의 **simulation 프로필**에서 사용한다. 관측을 받은 뒤 Action 결과와 물체 목표 달성 결과를 나누어 기록한다. 실물 활성화·자동 복구·학습 데이터 수용을 추가한 기능은 아니다.
 
-운영자 승인을 받은 한 번의 복구는 아래의 내부 trusted-host 호출로 준비한다. 현재 공개 화면·HTTP에 복구 시료 제출이나 승인 버튼을 추가하지 않았다.
+운영자 승인을 받은 한 번의 복구는 기존 HTTP·콘솔에 연결돼 있다. 공개 사용 흐름은 아래 「시뮬레이션 복구 HTTP와 콘솔」을 따른다. 내부 trusted-host 호출은 같은 원장의 호스트 조합용 인터페이스다.
 
 ## 인증된 복구 요청 원장 준비
 
-D-899의 `RecoveryRequestService`는 이후 HTTP 연결에서 사용할 요청·근거·승인의 내부 원장이다. 원래 제안자의 요청과 독립 producer의 새 관측을 보존하고, 요청 ID·proposal/evidence digest·원래 grant/receipt/assessment/generation을 자식 생성 트랜잭션에 결속한다. 원래 제안자의 현재 권한은 해당 트랜잭션의 resolver로 확인한다. 주체와 역할을 사용자 body에서 구성하면 안 된다.
+D-899의 `RecoveryRequestService`는 HTTP와 콘솔이 사용하는 요청·근거·승인의 내부 원장이다. 원래 제안자의 요청과 독립 producer의 새 관측을 보존하고, 요청 ID·proposal/evidence digest·원래 grant/receipt/assessment/generation을 자식 생성 트랜잭션에 결속한다. 원래 제안자의 현재 권한은 해당 트랜잭션의 resolver로 확인한다. 주체와 역할을 사용자 body에서 구성하면 안 된다.
 
 관측은 요청 생성 시점보다 새로워야 하며, 요청 대체·근거 만료·권한 취소에서는 승인을 거절한다. 승인한 뒤에는 원래 요청과 근거를 역사적으로 대조해 같은 자식을 반환하므로 owner 장애·현재 TTL 경과가 새 시도를 만들지 않는다. 부모 기록과 최대 1회 예산은 기존 D-895 경계를 따른다.
 
-이 단계는 내부 서비스와 호스트 시험이다. 실제 HTTP 인증 resolver·복구 관측 API·콘솔·실제 Gazebo/실물 생산자는 아직 연결하지 않았다. 공개 API는 공유 schema/API reference 계약을 먼저 반영한 뒤 연결한다. [내부 원장 검증 기록](../../../docs/validation/transfer-recovery-intent-2026-10-27/result.md).
+공유 API v1.327과 HTTP 인증 resolver·복구 관측 API·콘솔은 main에 반영됐다. 실제 Gazebo/실물 관측 생산자는 별도 연결과 수용이 필요하다. [내부 원장 검증 기록](../../../docs/validation/transfer-recovery-intent-2026-10-27/result.md), [공개 흐름 검증 기록](../../../docs/validation/transfer-recovery-public-2026-10-28/result.md).
 
 ## 관측 제출 뒤 남는 기록
 
@@ -51,6 +51,8 @@ export_transfer_outcomes(store, "<mission-id>", Path("<external-scratch>/outcome
 목적지의 부모 디렉터리는 미리 준비한다. 출력은 새 파일이어야 하며 기존 파일은 덮어쓰지 않는다. 임시 파일 쓰기·fsync 뒤 배타적 hard link로 게시한다. 내보내기는 기록된 관측 bytes의 digest와 Action/attempt 결속을 확인한다. DB 전체를 다시 작성하는 행위에 대한 인증이나 서명 증거는 아니다.
 
 출력은 `unreviewed_metadata_only`다. `raw_camera_bytes_available=false`, `behavior_training_eligible=false`를 보존한다. 원본 RGB·상태·실제 적용 행동을 갖춘 ACT/VLA 시연이나 독립 정답으로 바로 사용하지 않는다. 첫 사용처는 사람의 결과 검수와 단계별 실패 데이터 요구사항 확인이다.
+
+여러 export를 모을 때에는 [OMX curation의 검수 패키지](../../../learning/curation/omx/README.md)를 사용한다. 원본 bytes와 해시를 보존하고 같은 복구 root가 train/eval 양쪽에 들어가는 것을 거절한다. 분할은 검수 준비이며, export를 학습 시연이나 정답으로 승격하지 않는다.
 
 ## 실행 실패 단계와 복구 다음 행동
 
