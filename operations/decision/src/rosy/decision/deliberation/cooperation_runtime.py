@@ -6,7 +6,6 @@ import json
 import time
 
 from . import Supervisor, canonical
-from .cooperation import CooperationProvider, ReviewRequest, cooperation_trigger
 from .cooperation_schedule import ExecutionEnvironment, ExecutionMeasurements, number, select_mode
 
 
@@ -33,6 +32,8 @@ class CooperationSupervisor(Supervisor):
             'reused': asdict(self.reused) if self.reused is not None else None}).encode()).hexdigest()
 
     async def run(self, problem, providers, *, current, record=None):
+        from .cooperation import CooperationProvider, ReviewRequest, cooperation_trigger
+
         result = dict(state='HOLD', reason='UNCONFIGURED', choice=None, calls=0, total_calls=1,
             known_cost_usd=self.primary_cost_usd, cost_usd=self.primary_cost_usd,
             cost_complete=True, unknown_cost_calls=0, opinions=[], policy_id=self.policy_id,
