@@ -12846,3 +12846,35 @@ osy-d395-s1d\`.
 - 증거: 원격 영향 선택 affected/no escalation 3059 passed /352 skipped /NEW0. 공식17개 Chromium 파일 최초262 passed/1 failed, 실패한 로딩 대기 시험을 보강한 두 파일 전체19 passed/skip0/NEW0. 릴리스·비밀값·배치108 passed. 캡처·원본별 SHA와 실패 이력을 결과 기록에 구분했다.
 - gate 변화: 없음. 실물·실제 HF·reader·학습 품질·설치/배포·merge/push는 별도 수용이다.
 - CE: 해당 없음. 판단 근거가 최종 코드·회귀·기존 문서에 남는다.
+
+## 2026-10-28 · uncommitted · docs(reference): 문서로 남긴 작업 기록을 Jira 이슈에 짧은 코멘트로 연결한다
+
+- 변경: `docs/reference/atlassian-integration.md` §4 첫 항목에 기록 연결 규칙 추가. 작업의 기록·결과·결정을 Confluence 문서로 남긴 뒤 그 일을 추적하는 Jira 이슈에 짧은 코멘트와 문서 링크를 남기고, 상태·담당자·기한은 바꾸지 않는다. Notion 등 다른 문서 도구 기록도 같다. 3장의 스마트 커밋 금지와 충돌하지 않게 코멘트는 Atlassian 연결 도구(MCP·API)로 남긴다고 명시했고, 머리 갱신 날짜를 2026-10-28로 올렸다.
+- 근거: 2026-10-28 사용자 결정. 같은 규칙을 작업 공간 내부 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)의 절차와 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절에도 반영했고, 이 문서 4장을 정본으로 지정했다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 코멘트 규칙 문구는 기존 §3 스마트 커밋 금지와 주체를 구분해 충돌하지 않는다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 관례 추가이며 코드·장치·시험 경로 변경이 없다.
+
+## 2026-10-29 · uncommitted · docs(reference): 기록 코멘트는 이슈마다 하나로 이어 붙인다
+
+- 변경: `docs/reference/atlassian-integration.md` §4 기록 연결 규칙을 다듬었다. 문서마다 새 코멘트를 만들지 않고 이슈 하나에 기록용 코멘트 하나를 두고, 새 기록(문서 링크·한두 문장 요약)을 그 코멘트에 이어 붙인다. KAN-61 댓글10020에서 하던 방식과 같은 형태다. 머리 갱신 날짜를 2026-10-29로 올렸다.
+- 근거: 2026-10-29 사용자 결정 — 댓글이 이슈마다 흩어지지 않게 스레드 하나로 이어 붙이고, 문서는 링크로 건다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행). 작업 공간 스킬(`.agents/skills/rosy-confluence`·`rosy-notion`)과 우산 `Rosy/AGENTS.md` 「Jira 이슈와 문서 기록 연결」 절의 같은 규칙 문구도 같은 날 함께 고쳤다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 관례 다듬기이며 코드·장치·시험 경로 변경이 없다.
+
+## 2026-10-29 · uncommitted · docs(reference): 연결 안내 행에 §4 기록 코멘트 규칙을 넣는다
+
+- 변경: `docs/reference/AGENTS.md`의 `atlassian-integration.md` 행 설명에 「문서 기록을 이슈의 기록용 코멘트 하나에 링크로 이어 붙이는 규칙(§4)」을 넣고, 문서 갱신 날짜를 2026-10-29로 올렸다.
+- 근거: 같은 날 확정한 §4 규칙을 이 목차만 읽는 세션도 찾을 수 있게 한다.
+- 증거: `python tools/harness/rosy_harness.py generate`·`lint` 통과(이 항목 추가 뒤 실행).
+- gate 변화: 없음.
+- CE: 해당 없음 — 문서 요약 갱신이다.
+
+## 2026-10-29 · uncommitted · docs(reference): 기록용 Jira 코멘트 예외를 기존 사람 작업 규칙에 명시한다
+
+- 변경: `atlassian-integration.md` §3의 사람 작업 규칙에서 §4 문서 기록용 코멘트의 연결 도구 갱신을 예외로 명시한다. 다른 댓글과 상태 변경은 기존대로 사람이 한다.
+- 근거: 독립 검토에서 §3과 §4의 댓글 작성 주체가 충돌함을 확인했다. 기존 사용자 결정과 우산 지침에 있는 기록용 코멘트 범위만 연결했다.
+- 검증: 공식 착지 도구의 문서 lint·원격 게이트로 확인한다. 외부 Jira 변경은 실행하지 않았다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 정본 문구가 충돌과 해결 범위를 설명한다.
