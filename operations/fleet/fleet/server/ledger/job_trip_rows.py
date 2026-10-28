@@ -81,7 +81,8 @@ class TripJobRows:
                     "steps": steps, "reason": row["reason"], "updated_at": row["updated_at"]}
 
     def create(self, mission_id: str, robot_id: str, principal_id: str, steps: list, *,
-               request_key: str | None = None, request_digest: str | None = None) -> dict:
+               request_key: str | None = None, request_digest: str | None = None,
+               approved_by: str | None = None) -> dict:  # D-908: an admitting operator other than the proposer
         body = _json({"robot_id": robot_id, "steps": steps})
         digest, now = hashlib.sha256(body.encode()).hexdigest(), _now()
         with closing(self.store._connect()) as connection:
@@ -110,9 +111,9 @@ class TripJobRows:
             if not reserve_claims(connection, owner_kind="mission", owner_id=mission_id, phase="CLAIMED",
                                   generation=control["generation"], resources=[("robot", robot_id)]):
                 raise MissionConflict("another task or job claims this robot")
-            CellJobStore._event(connection, mission_id, None, "CELL_JOB_ADMITTED", principal_id, {
+            CellJobStore._event(connection, mission_id, None, "CELL_JOB_ADMITTED", approved_by or principal_id, {
                 "authority_epoch": control["authority_epoch"], "dispatch_generation": control["generation"],
-                "approval": "one_person"})
+                "approval": "one_person" if approved_by is None else "proposal", "proposed_by": principal_id})
             job = CellJobStore._get(connection, mission_id)
             connection.commit()
             return job

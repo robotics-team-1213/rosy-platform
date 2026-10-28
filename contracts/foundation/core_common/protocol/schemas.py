@@ -34,6 +34,8 @@ from .account_access import AccountAccess, AccountGrant  # noqa: F401
 from .monitoring import FleetLinkObservation, FleetMonitoringRead  # noqa: F401
 from .trip_jobs import (TripJobRequest, TripJobStep, TripJobSnapshot, TripJobStepSnapshot,
                         TripJobReadResponse, TripRequestKey)  # noqa: F401
+from .trip_proposals import (  # noqa: F401
+    TripProposalAdmit, TripProposalCreate, TripProposalResponse, TripProposalSnapshot)
 from .policy_admission import (  # noqa: F401
     POLICY_ADMISSION_PRINCIPAL, PolicyAdmissionAuditEntry, PolicyAdmissionAuditResponse,
     PolicyAdmissionReadResponse, PolicyAdmissionScope, PolicyAdmissionStatus,
