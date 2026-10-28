@@ -79,3 +79,9 @@ def test_decision_hash_covers_budget_context_policy_and_requested_mode():
     ('remaining_s', True), ('now', float('inf')), ('requested_mode', 'fastest')])
 def test_invalid_selection_inputs_are_rejected(field, value):
     with pytest.raises(ValueError): api().select_mode(**{**inputs(), field: value})
+
+
+def test_measurements_from_another_host_or_workload_cannot_admit_parallel():
+    args = inputs()
+    args['environment'] = replace(args['environment'], workload_key='other-host-workload')
+    assert api().select_mode(**args).mode == 'hold'

@@ -285,3 +285,44 @@ def test_environment_expiration_after_resource_reservation_prevents_dispatch():
             problem(), ports, current=lambda: True))
     assert result['state'] == 'HOLD'
     assert not any(p.exchange.calls for p in ports)
+
+
+def test_measurement_expiration_during_reservation_prevents_dispatch():
+    now = [101.0]
+    class Expiring(Admission):
+        async def reserve(self, *args):
+            token = await super().reserve(*args)
+            now[0] = 101.5
+            return token
+    ports = providers()
+    runner = supervisor(ports, admission=Expiring(), clock=lambda: now[0])
+    runner.measurements = replace(runner.measurements, expires_at=101.25)
+    result = asyncio.run(runner.run(problem(), ports, current=lambda: True))
+    assert result['state'] == 'HOLD'
+    assert not any(p.exchange.calls for p in ports)
+
+
+def test_reused_opinion_must_equal_the_paid_triggering_primary():
+    async def scenario():
+        ports = providers((Exchange(choice='human'), Exchange(choice='human')))
+        review = api().ReviewRequest(problem(), 'proposal', 'baseline_disagreement')
+        previous = await ports[0](review, 1, budget_usd=0.04)
+        runner = supervisor(ports)
+        runner.reused = previous
+        result = await runner.run(problem(), ports, current=lambda: True)
+        assert result['state'] == 'HOLD'
+        assert not ports[1].exchange.calls
+    asyncio.run(scenario())
+
+
+def test_stalled_resource_release_cannot_hang_the_journal():
+    async def scenario():
+        class Stalled(Admission):
+            async def release(self, token):
+                await asyncio.Event().wait()
+        ports = providers()
+        result = await asyncio.wait_for(supervisor(ports, mode='sequential', admission=Stalled()).run(
+            problem(), ports, current=lambda: True), 0.8)
+        assert result['state'] == 'HOLD'
+        assert not ports[1].exchange.calls
+    asyncio.run(scenario())
