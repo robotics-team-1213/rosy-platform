@@ -1,5 +1,7 @@
 """Real Chromium checks observer selection, failure clearing and no control claim."""
 import threading
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +9,13 @@ from browser_harness import browser_tests_enabled, free_port
 from review_app import ReviewStore, make_server
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
+
+
+def capture(page, name):
+    if root := os.environ.get('ROSY_SCREENSHOT_DIR'):
+        target = Path(root).expanduser() / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(target))
 
 
 @pytest.fixture
@@ -38,11 +47,13 @@ def test_all_tools_has_no_false_step_and_reveals_nested_keyboard_target(empty_le
             page.goto(empty_learning_center+'/learning/omx?view=all', wait_until='networkidle')
             expect(page.locator('#stage-question')).to_have_text('전체 도구')
             expect(page.locator('#omx-sections [aria-current]')).to_have_count(0)
+            capture(page, f'omx-all-tools-{width}.png')
             page.goto(empty_learning_center+'/learning/omx?view=all#native-review-heading', wait_until='networkidle')
             target = page.locator('#native-review-heading')
             expect(target).to_be_focused()
             assert target.evaluate('el=>{const r=el.getBoundingClientRect();return r.top>=document.querySelector("ui-topbar").getBoundingClientRect().bottom-1&&r.bottom<=innerHeight;}')
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            capture(page, f'omx-nested-review-{width}.png')
         finally:
             browser.close()
 
@@ -87,6 +98,8 @@ def test_center_read_error_is_visible_from_conversion_stage_and_clears_on_recove
             expect(alert).to_contain_text('fixture center unavailable')
             expect(page.locator('#center-status')).to_be_visible()
             expect(page.locator('#train-section')).to_be_hidden()
+            alert.scroll_into_view_if_needed()
+            capture(page, 'omx-center-read-failure.png')
             failed[0] = False
             page.locator('#refresh').click()
             expect(alert).to_be_hidden()
