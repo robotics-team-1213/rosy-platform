@@ -33,7 +33,7 @@ def test_class_choices_use_shared_controls_and_keep_keyboard_editing(browser_wor
     page.set_viewport_size({'width': width, 'height': 900})
     page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)
     choices = page.locator(f'#{view}-quick-classes .review-class-chip')
-    chip = choices.nth(1) if view == 'pixel' else choices.locator('[value="obstacle_box"]')
+    chip = choices.nth(1) if view == 'pixel' else page.locator('#object-quick-classes .review-class-chip[value="obstacle_box"]')
     expect(chip).to_have_attribute('kind', 'segment')
     assert chip.evaluate('el => el.tagName') == 'UI-BUTTON'
     assert chip.bounding_box()['height'] >= 48
