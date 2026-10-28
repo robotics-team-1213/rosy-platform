@@ -1353,3 +1353,9 @@
 - 변경: 콘솔 지도 칸은 아홉 줄 격자로 자리를 셌는데, 상태 줄 둘이 숨으면 레이어 단추 줄이 `1fr` 줄에 들어가 17px로 눌리고 48px 단추가 아래 `작업 준비에서 지도 확인` 링크를 덮었다. ui-section의 세로 flex를 그대로 쓰고 지도 프레임만 남는 높이를 받게 했다(1366×768 측정: 레이어 630–678, 링크 682). 표면 링크 글자는 장미색 대신 본문색이다(D-277: 장미는 워드마크·현재 위치만).
 - 증거: 원격 서버 시험 8f85ca2d0f 기준 shared/web·Robot·Fleet·Pilot 471 passed/0 NEW, Learning 브라우저 2456 passed/1 NEW(왼쪽 정렬 누락, 고친 뒤 89421d5732 해당 5묶음 210 passed/0 NEW). 이 커밋은 착지 시험(land.py --tests auto)이 다시 돈다.
 - gate 변화: 없음.
+
+## 2026-10-29 · 70d4a0e579 · 임시 SSH 작업 결과와 화면 수명
+
+- 변경: 비밀번호 발급·끄기 결과를 상태 조회와 분리하고 초기 조회·쓰기·후속 조회 동안 두 버튼을 잠근다. 화면 해제 뒤 응답의 DOM 변경·후속 조회를 막는다. 기존 공용 ui-status·button과 API/관리자 경계를 유지했다.
+- 증거: 수정 전 browser8fail을 재현했다. 최종70d4a0e579의 원격 Chromium 전체47pass/0skip, affected593pass/189skip/NEW0. 첫 affected의 가짜 credential 검사 실패를 기존 허용 시험 문자열로 해결하고 재검증했다. A가 초기 GET P2 해결을 확인했고 B가 최종32장 전수 직접 검토했다. frozen `docs/validation/robot-ssh-action-status-2026-10-29/`에 실패·skip·SHA·캡처 범위를 보존했다.
+- gate 변화: 없음. 실제 SSH·장치·ARTIFACT/FIELD·착지·배포·공개 push/merge는 별도다. CE: 해당 없음 — 원인과 수명 판단은 코드·회귀·검증 기록에 남는다.

@@ -12868,3 +12868,9 @@ osy-d395-s1d\`.
 - 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
 - Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
 - CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
+
+## 2026-10-29 · 70d4a0e579 · Robot SSH 작업 결과 UI 검증
+
+- 변경: `validation/robot-ssh-action-status-2026-10-29/`에 작업/조회 상태 분리·초기/상호 잠금·화면 수명의 원격 RED/GREEN, 실제 실패 복구와 캡처32장 hash를 동결했다.
+- 증거: 최종 browser47pass/0skip, 공식 affected593pass/189skip/NEW0. 독립 A source 검토의 초기 P2를 해결했고 B는32/32장 직접 확인했다. 전체 셸·실제 장치 수용과 단독 패널 근거를 구분한다.
+- gate 변화: 없음. CE: 해당 없음 — 코드·회귀·frozen 기록으로 설명되는 수정이다.
