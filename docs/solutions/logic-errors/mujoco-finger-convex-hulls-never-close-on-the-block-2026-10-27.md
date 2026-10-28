@@ -1,5 +1,5 @@
 ---
-title: MuJoCo collides the OMX finger meshes as convex hulls that never close on a block; grip through calibrated pad capsules
+title: Simulated OMX fingers (MuJoCo hulls, Isaac imported collision and mimic) never close on a block; grip through calibrated pad capsules
 date: 2026-10-27
 category: logic-errors
 module: tools/sim/omx_mujoco_backend.py (D-877); tools/sim/omx_grasp_probe.py
@@ -52,5 +52,24 @@ gripper closing all the way to the width-matched target (0.380 rad) instead of s
 
 - Measure the collision jaw gap against `profile.jaw_gap_m(q)` (`mujoco.mj_geomDistance` between the finger geoms)
   before tuning friction or gains.
-- Isaac shows the same failure plus an unmimicked `gripper_joint_2` and soft arm drives (same record); see also
-  [isaac-imported-gripper-drive-modes-must-match-gain-units](../runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md).
+- The pad definition lives in `tools/sim/omx_cell_world.py` (`PAD_RADIUS`, `PAD_HALF_LENGTH`, `jaw_contact_point()`); both
+  backends use it, so a recalibrated contact point moves both.
+
+## Isaac (same day, resolved)
+
+Isaac 5.1 failed the same probe for three stacked reasons; each hid the next:
+1. Imported drives: arm and `gripper_joint_1` on acceleration drives, `gripper_joint_2` undriven. Force drives with
+   the 2026-10-25 cargo fixture gains fixed arm tracking (see
+   [isaac-imported-gripper-drive-modes-must-match-gain-units](../runtime-errors/isaac-imported-gripper-drive-modes-must-match-gain-units-2026-10-25.md)).
+2. The imported `PhysxMimicJointAPI` referenced the lead joint's rotX (its axis is Z), damping ratio 0.005. Correcting
+   both still left the fingers uncoupled. Removing the mimic and setting `gripper_joint_2`'s target each frame to the
+   mirror of the measured `gripper_joint_1` made them symmetric (0.380/-0.380).
+3. The imported finger collision then closed past the 30 mm block. The same calibrated capsule pads fixed it: 5/5.
+4. "Held" is not enough: Isaac held at 0.385 rad, below the teacher's `contact_held` floor (0.3935), because the pads
+   sank ~1 mm per side into the block (more solver iterations did not help). A 1 mm pad rest offset and a stiff
+   follower finger (the real gripper is one motor) bring the held angle to 0.405-0.408, matching Gazebo's 0.407.
+   Compare the held angle with the calibrated one, not only lifted/not lifted.
+
+Read back the composed joint attributes (drive type, mimic axis, damping) and the measured finger pair before tuning
+anything; a probe that only reports "not held" cannot tell these apart. Record:
+`docs/validation/omx-sim-grasp-2026-10-27b/`.

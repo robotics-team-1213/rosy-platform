@@ -12365,6 +12365,40 @@ osy-d395-s1d\`.
 - gate 변화: 없음(시험 판정은 같고, 시험 전 단계의 일시적 접속 끊김만 다시 시도).
 - CE: 해당 없음 — 재시도와 그 근거가 코드·시험에 남는다.
 
+## 2026-10-27 · b36e441576 · 명시적 FULL의 현재 준비와 게시 적격성
+
+- 변경: literal full을 현재 candidate의 정본 normal FULL·ALL browser/chunk/ALONE으로 연결했다. 매 실행 정상 준비와 fresh guard/isolation, 기존 exact body-cache와 같은 실행의 witness/main-delta bridge를 유지한다. 두 save의 guarded+tested LOAD-FLAKY/NARROW는 auto tier=None, full은 save/FF 전에 중단한다. 과거 isolation cache report는 full 초기·retry에서 제외하고 기존 nonSafety 추적/Safety 중단 정책을 유지한다.
+- 증거: 독립 source tree ef757dad18와 Monitoring incoming 15경로를 보존한 통합 tree 09379a4fe6 승인. 로컬 commit 259605fb2c의 selector·실제 소유권 299P/0S와 생산 source 7개가 같은 b36e441576의 도구 8파일 234P/0S는 각 official/outer/known0·NEW0이다. 첫 fixture 오류·빈 -k 실행·10F/2F는 원본을 보존하고 새 SHA에서 보완했다. 실제 old-candidate/env cache report 반례 1F/3P는 수정 전 RED다. quiet progress 수와 범위·SHA·미실행 항목은 validation/land-explicit-full-2026-10-27/result.md에서 구분한다.
+- gate 변화: 집중 소스 검증만 완료. 실제 FULL·착지·push·게시·site/robot/UTC/FIELD 수용은 실행하지 않았다. main commit 3125704e24의 후속 UI 변경은 Root가 공식 착지 때 정상 통합하며 이 소스 PASS에 포함했다고 주장하지 않는다.
+- CE: 기존 land-record와 Windows UTF-8 교훈을 갱신했다. Root의 검증된 부분 worktree 복구 기록은 gateway 소스 수정과 구분한다. 새 교훈·dependency·제품 API·권한·ratchet 완화는 없다.
+
+## 2026-10-27 · 3d199fe1d1 · 명시적 FULL 착지 시도의 충전 실패와 동일 호스트 대조
+
+- 변경: `validation/land-explicit-full-2026-10-27b/result.md`에 공식 실패와 대조 근거를 고정했다. 후보 3d199fe1d1의 본시험 11/25 호출에서 15,697P/562S/1F 뒤 14호출이 취소됐으며 FULL·착지는 실패했다. guard/isolation 결과와 중복 범위를 별도 기록했다.
+- 증거: product·fixture·runner의 동일성을 확인했지만 원인 해결을 주장하지 않는다. 후보 단독 실패 AI와 기준선 통과 모델의 호스트 차이를 확인하고 AI-only 후보→기준선→후보 exact node 대조를 수행했다. 세 실행은 실제 node·dot·exit0·known0로 확인했으며 quiet에 없는 통과 요약줄을 만들지 않았다.
+- gate 변화: 실패 자료를 유지하고 독립 검토 조건에 따라 fresh 공식 FULL 1회를 준비한다. 재실패 시 최초 HOLD·SQL/상태 전이 시각 계측을 먼저 한다. 제품·timeout·quarantine·NTP/장치 설정 변경은 없으며 CE는 원인 미해결이다.
+
+## 2026-10-27 · f44520f70e · 고정 기록의 두 비밀 검사 경로와 집중 회복 근거
+
+- 변경: `validation/land-explicit-full-2026-10-27c/result.md`에 후보의 owning secret guard 실패, 취소된 범위, 기존 exact provenance 보완, 로그 형식 복구, 커밋된 집중 검증을 고정했다. 기존 27b와 원본 실패 기록은 수정하지 않았다.
+- 증거: 공식 원격 두 파일 183 PASS/0 SKIP/0 FAIL, 49.39초, runner·외부 명령·known exit0·NEW0. 실패 회차의 완료 body는 두 호출뿐이며 Core10 partial을 충전 통과로 세지 않았다.
+- gate 변화: 전체 FULL·착지·게시·배포는 별도 대기다. source guard 회복을 장치·UTC·충전 원인 해결로 확대하지 않는다.
+- CE: 기존 Git ID 교훈을 갱신했다. 게시 commit/path/rule과 전체 파일 path/line/token 판정은 독립이며, 새 문서의 표기 예방책이 기존 고정 기록의 재작성 허가는 아님을 정본 지침과 연결했다. 새 용어·AGENT 변경은 없다.
+
+## 2026-10-27 · 877cf55c01 · Tool1 actual main737 통합과 literal full 보존
+
+- 변경: 정상 병합에서 incoming 병렬 준비·크기 사전 검사·nonSafety main-delta 최적화·custom 추가 시험·명시적 skip 정책을 보존했다. fixture 예외를 해제한 실제 CLI 회귀를 먼저 커밋하고 literal `full`을 EXTRA로 바꾸지 않는 한 줄 수정만 후속 커밋했다. Root가 두 staged tree를 실제 검토했다.
+- 증거: checkpoint `d2217085fe`의 단일 CLI node가 실제 canonical 목록 누락 AssertionError/NEW1을 보였다. source `877cf55c01`에서 CLI 3 PASS, 관련 도구 11파일 336 PASS, selector/architecture 5파일 299 PASS, 모두 SKIP0·official/outer/known exit0·NEW0. CLI는 도구 묶음과 겹치며 합산하지 않는다. quiet 진행 행만 세었고 출력되지 않은 시간 요약은 인용하지 않는다. 별도 raw와 근거는 [후속 검증 기록](validation/land-explicit-full-2026-10-27d/result.md)에 연결했다.
+- gate 변화: 새 집중 검증이며 실제 전체 FULL·착지·게시·장치 수용은 아니다. 기존 frozen 27b/27c, incoming charging 분리의 body·timeout·assertion 및 이전 실패 근거는 보존했다. source까지 D766 20커밋이 통과했고 최종 docs HEAD 검사는 별도 handoff로 확인한다.
+- CE: 기존 교훈을 적용했다. 정규화 반례와 최소 수정은 코드·실제 RED/GREEN이 설명하므로 통합만을 위한 새 교훈은 만들지 않았다.
+
+## 2026-10-27 · 1bdd41e94a · Tool1 main445 통합과 full carry 자격 차단
+
+- 변경: incoming MAINRED·publisher·재부팅 대기·SIM 변경을 보존했다. 기존 CLI 정책을 이미 착지한 land_selection 모듈의 새 configure helper로 옮겨 land.py를 579→570행으로 줄였고 대응 AST를 확인했다. full은 live CARRIED와 반환 carried summary를 둘 다 거절하며, 두 save의 auto carried 우선순위·다른 unclean None bridge·나중 clean close 정책은 유지했다. Root가 known-RED 및 fix tree를 실제 검토했다.
+- 증거: checkpoint commit `2663fcfd9d`에서 full guard/body 6개가 실제 DID NOT RAISE Stop/NEW6을 보였고 대조 5개는 통과했다. fix commit `1bdd41e94a`에서 같은 11개, 관련 owner 15파일 395개, selector/actual architecture 5파일 299개가 PASS/0 SKIP/NEW0, official·outer·known exit0이었다. 11개는 395개와 겹치며 합산하지 않는다. 새 [고정 검증 기록](validation/land-explicit-full-2026-10-27e/result.md)에 실제 argv·raw 12개 SHA-256·정적 proof를 결속했다.
+- gate 변화: 집중 소스 검증이며 정식 FULL·착지·게시·실제 Chromium·G2/충전 원인 해결이 아니다. 기존 고정 기록·provenance·peer bytes를 보존했다. CRLF plain diff flags는 원본과 구분해 남기고 명령 한정 CR-at-EOL 처리로 실제 space/tab/EOF 검사를 유지했다. 최종 docs HEAD 검사는 후속 handoff에 별도로 기록한다.
+- CE: 해당 없음. state/summary 반례와 수정은 코드·시험·새 기록이 설명하므로 중복 교훈은 추가하지 않았다.
+
 ## 2026-10-27 · 6ffe52ae26 · docs: D-895 단일 이송 복구 후손과 원본 증거 보존
 
 - 변경: 사용자 승인한 내부 simulation 복구 설계를 D-895에 기록했다. root당 자식 하나, 별도 운영자 승인, 원래 효과·새 관측·현재 claims/fence 검사와 원자적 승인, 동일 요청 대조와 계보 보존을 정한다. 공개 API·실물·학습 승격은 별도다.
@@ -12516,6 +12550,14 @@ osy-d395-s1d\`.
 - 증거: 전용 문서 워크트리에서 D-893을 예약해 본문·ADR Log를 함께 등록한다. 링크·생성 기록·harness lint와 문서 계약 원격 시험의 결과는 검증 후 작업 기록에 남긴다.
 - gate 변화: 배치 원칙만 Accepted. 런타임·API·배포·DEVICE/FIELD 상태는 바꾸지 않는다. CE: 해당 없음 — 새로 해결·검증한 운영 장애나 장치 성질이 없는 설계 결정이다.
 
+## 2026-10-27 · uncommitted · feat(sim): Isaac 파지 반복 5/5 — 구동, 손가락 대칭, 공용 손가락 패드
+
+- 변경: `learning/envs/isaac/run_omx_backend.py`(force 구동과 화물 fixture 이득, 가져온 mimic 대신 측정한 `gripper_joint_1`의 반대 각으로 `gripper_joint_2` 구동, 보정 접촉점 캡슐 패드, 마찰 재질, 자기 충돌 끔). 패드 정의는 `tools/sim/omx_cell_world.py`로 옮겨 MuJoCo와 함께 쓴다.
+- 근거: 1차 기록에서 Isaac 0/5. D-866 §2 Isaac 전환 조건의 파지 반복.
+- 증거: `docs/validation/omx-sim-grasp-2026-10-27b/`(Isaac 5/5, MuJoCo 5/5, 두 백엔드 적합성 통과), 원격 `test/test_omx_sim_backends.py`.
+- gate 변화: Isaac 전환 조건 중 파지 반복 충족(시험 범위 안). 카메라 640×480 10Hz와 렌더링 비교는 미충족.
+- CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/mujoco-finger-convex-hulls-never-close-on-the-block-2026-10-27.md`에 Isaac 원인 세 겹과 공용 패드 위치.
+
 ## 2026-10-27 · uncommitted · feat(perception): Fleet 승인을 모델 PC 레지스트리에 반영(D-898)
 
 - 변경: Fleet `GET /api/fleet/perception-promotions/{sha}/decision.signed`(viewer)가 정본 결정과 새 역할 키 `perception-decision`의 Ed25519 서명을 돌려준다(키 없음 503, 미결정 409). 모델 PC `approval_import.py`가 서명·APPROVED·묶음 해시·revision·files·결과 폴더·제안자≠승인자를 확인한 뒤 model-watch와 같은 work.lock 아래 `accepted/`와 `models/approvals/<sha>/`에 기록한다. 활성 포인터·shadow·배포는 건드리지 않는다. contracts 0.1.15(`decision_encoded`·`sign`·`verify`), 상태 행 조회는 `promotion_request.ready_rows`로 공유.
@@ -12576,3 +12618,17 @@ osy-d395-s1d\`.
 - 증거: 원격 `test/test_land_batch.py`.
 - gate 변화: 없음.
 - CE: 해당 없음 — 규칙과 표가 D-889 추가 4와 시험에 남는다.
+
+## 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
+
+- 변경: `learning/envs/isaac/run_omx_backend.py`. 손가락 패드에 rest offset 1mm, 뒤 손가락(`gripper_joint_2`)을 단단한 추종자로.
+- 근거: Isaac이 0.385rad에서 쥐어 교사 판정 하한 0.3935에 못 미쳤다. 패드가 블록에 약 1mm씩 박혔고, 뒤 손가락이 약해 블록이 한쪽으로 밀렸다.
+- 증거: `docs/validation/omx-sim-grasp-2026-10-27b/`(Isaac 0.405–0.408rad, 5/5, 적합성 0.972).
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — 같은 교훈 파일에 4번 항목(쥔 각도를 보정값과 비교).
+
+## 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 변경: D-889 추가 3 후속에 A를 투기적 준비(`9c6a6c55b1`)로 바꾼 것, C(`6ca3fd3d9e`)·실패 이벤트(`48c2522593`) 구현, 독립 착지 레인 측정(1/48), coverage 시험 영향 지도 파일럿과 다음 단계를 적었다.
+- 증거: 착지 48건의 발자국 측정, ai PC 파일럿(fleet 시험 serial 1,478초 → coverage 2,323초, 엄격 규칙 48%).
+- gate 변화: 없음(문서만). `tools/remote/remote_pytest.py`는 598줄이라 다음 변경 전에 나눠야 한다. `fix/land-turn-deadline-v3`가 C 뒤에 착지하면 그 브랜치가 `remote_pytest.py`·`work_queue.py` 충돌을 푼다.
+- 교훈: 기존 교훈 갱신 없음. 튕김("main 따라잡기")의 정본 기록은 D-889 추가 3이다.

@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-10-28 · uncommitted · docs(adr): D-889 addendum 3 follow-up, speculative prepare and measurements
+- 2026-10-28 · uncommitted · feat(sim): Isaac 쥐는 각도를 Gazebo 보정값에 맞춤
 - 2026-10-28 · uncommitted · feat(land): 묶음 크기를 이동 NEW 비율로 정하고 반으로 거듭 나눔
 - 2026-10-28 · uncommitted · fix(land): 묶음 착지를 k=2로 줄이고 FULL급은 단독으로
 - 2026-10-28 · uncommitted · feat(land): 대기 중인 착지를 묶어 한 번에 착지
-- 2026-10-28 · uncommitted · fix(harness): operations/monitoring 루트의 capability 복구
-- 2026-10-28 · uncommitted · fix(test): ARM trial 복구를 SSH 준비와 분리해 관측

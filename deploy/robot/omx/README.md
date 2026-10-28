@@ -153,22 +153,22 @@ python3 deploy/robot/omx/hardware_observer.py --device /dev/serial/by-id/<confir
 ```
 
 This commissioning process holds the same read-only, exclusive port for at most
-the requested 1..300 seconds. It publishes nominal vendor radians at up to 10 Hz
-on `/omx_commissioning/joint_states`, separate from synthetic `/joint_states`.
+the requested 1..300 seconds. It writes nominal vendor radians at up to 10 Hz
+to native local snapshots keyed by `/omx_commissioning/joint_states`.
 The gripper value is an angle, not a measured jaw width. Homing Offset is already
 included in Present Position and is not applied a second time.
 
 Every published sample requires the six ordered, matching motor models, torque
 off, no hardware errors, and a read window of at most 250 ms. A failed sample
 ends the process without publishing that sample; exit 2 also covers cleanup or
-early ROS termination. Timestamp is the start of the read, not publication time.
+early termination. Timestamp is the start of the read, not delivery time.
 Private JSONL stdout contains the raw snapshots. Normal duration completion is
 exit 0. A controller must not consume this uncalibrated commissioning topic.
 
-The process pins Fast DDS, clears static peers and requests localhost discovery;
-external DDS profiles/discovery-server overrides are rejected. This limits
-discovery, not an authorization boundary against other local or privileged
-processes. It has no Action server, subscription or register-write path, never
+The process starts no ROS or DDS communication (D-901). The old `--domain-id`
+argument is accepted but unused. Local snapshots trust the same user; they are
+not an authorization boundary against privileged processes.
+It has no Action server, subscription or register-write path, never
 enables torque and never reconnects automatically. Stop it before any subsequent
 accepted controller takes the port. It is physical feedback preparation, not an
 operational arm control server or mechanical calibration acceptance.
@@ -178,28 +178,30 @@ for the remaining native runtime and physical acceptance work.
 ## Local camera preview recovery
 
 `omx_adapter/camera_source.py` reads an explicitly selected `/dev/v4l/by-id/`
-camera through V4L2 MJPEG at 640×480, publishing at most `--max-fps` (default
-10 Hz, `ROSY_CAMERA_MAX_FPS` in the unit env) with a one-image queue. It refuses raw-format fallback, reopens failed capture, and notifies the
+camera through V4L2 MJPEG at 640×480, capturing at most `--max-fps` (default
+10 Hz, `ROSY_CAMERA_MAX_FPS` in the unit env) with a one-image buffer. It refuses raw-format fallback, reopens failed capture, and notifies the
 `rosy-omx-camera@.service` watchdog so a blocked driver read is restarted.
-It publishes host-receive timestamps and no CameraInfo or calibrated target;
+It measures quality on original pixels, encodes JPEG once and atomically replaces
+one native snapshot with its host-receive timestamp; it publishes no ROS Image or CameraInfo.
 these previews do not admit an arm operation.
 
 Install the reviewed source snapshot and user unit on the camera host. Each
-`~/.config/rosy/omx-camera-<name>.env` binds `ROSY_ROS_SETUP`, `ROSY_CAMERA_SOURCE`,
-`ROSY_CAMERA_DEVICE`, `ROSY_CAMERA_TOPIC`, `ROSY_CAMERA_FRAME`, and `ROS_DOMAIN_ID`
-to that host's accepted runtime and selected camera. The camera, viewer and
-collection units force `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` with no static
-peers (D-795): raw Image topics never cross machines. Every DDS consumer of these
-frames (`commissioning_view.py`, collection, the pilot simulation) runs on the
-camera host; another machine reads `commissioning_view.py`'s loopback HTTP/JPEG
+`~/.config/rosy/omx-camera-<name>.env` binds `ROSY_CAMERA_SOURCE`,
+`ROSY_CAMERA_DEVICE`, `ROSY_CAMERA_TOPIC` and `ROSY_CAMERA_FRAME`
+to that host's accepted runtime and selected camera. `ROSY_CAMERA_TOPIC` is now
+only an opaque local registration key. Native camera, viewer, passive observer and
+bridge units use the same `%t/rosy-observations` runtime directory without ROS setup
+or DDS. A standalone process must set the same `ROSY_OBSERVATION_DIR` explicitly
+to share these unit snapshots; otherwise it uses its private state directory.
+Another machine reads `commissioning_view.py`'s loopback HTTP/JPEG
 through an SSH localhost forward, or the WebRTC media path once it lands. Keep device identities and
 host paths in private configuration. Stop the previous producer for that exact
 camera before starting the unit, and verify advancing fresh frames and measured
 format after start. Arm drivers and their admission profiles remain separate.
 
-The selected native ROS installation must already provide `rclpy`, `sensor_msgs`,
-`cv_bridge`, and OpenCV's `cv2` (`python3-opencv`); verify those imports with
-`/usr/bin/python3` after sourcing `ROSY_ROS_SETUP`. The optional standalone
+The camera needs OpenCV's `cv2` (`python3-opencv`), NumPy, `core_common` and
+the deployed `camera_quality` helper. Native units set their source import paths;
+they do not require `rclpy`, `sensor_msgs` or `cv_bridge`. The optional standalone
 preview is not provisioned by the disabled adapter profile or workstation image.
 For boot activation, enable the user units and verify `loginctl show-user
 <camera-user> -p Linger` reports `Linger=yes`. A unit active during login alone
@@ -207,7 +209,12 @@ does not prove boot activation. Capture buffer size must read back as one;
 host-receive stamps do not measure sensor exposure age. Test actual USB
 unplug/replug and cold boot on site before accepting unattended operation.
 
-### Native preview receiver transport check
+### Historical DDS preview receiver check (before D-901)
+
+The receiver tuning below records the old transport. D-901 native units do not
+use Fast DDS or `camera-view-receive.xml`. A DDS-only collection/simulator adapter
+must not be attached to the native camera expecting ROS frames. Stop its existing
+device owner and select an explicitly validated native input before use.
 
 Measure advancing frames at the **consumer**, not just the camera unit's active
 state. On the separately observed Lyrical/Fast DDS preview host, a default
@@ -661,11 +668,11 @@ in [the startup validation](../../../docs/validation/omx-native-startup-2026-10-
 
 ### Local camera and commissioning feedback viewer
 
-After sourcing the camera ROS environment and selecting its ROS domain, run
+With `contracts/foundation` on `PYTHONPATH`, run
 `python3 deploy/robot/omx/commissioning_view.py`. The read-only tool binds to
 `127.0.0.1:8766`; an authenticated SSH forward can expose that same loopback port
-on the development PC. It subscribes to existing top/front images and the
-commissioning joint topic, opens no devices, and issues no actuator commands.
+on the development PC. It reads existing top/front and commissioning joint
+snapshot channels, opens no devices, and issues no actuator commands.
 Source/receipt age, decoded picture expiry and disconnected joint feedback are
 checked independently. See the [observation evidence](../../../docs/validation/omx-observation-web-2026-10-16.md).
 
@@ -674,7 +681,7 @@ USB serial, with separate `--joint-topic /omx_commissioning/arm_a/joint_states`
 and `--joint-topic /omx_commissioning/arm_b/joint_states`. Both retain exclusive
 serial access, torque-OFF checks and the duration limit. Names such as `arm_a`
 are diagnostic labels; they do not assign physical left/right or calibration.
-The viewer subscribes to both streams and three cameras:
+The viewer reads both streams and three cameras (topic-shaped keys do not start ROS):
 
 ```bash
 python3 deploy/robot/omx/commissioning_view.py \
@@ -1106,15 +1113,15 @@ Learning 네이티브 검사와 ACT 평가 경로는 기존 단일 팔 6개 또�
 `observer.env.example`을 팔마다 다른 by-id 장치와 commissioning 토픽에 결속한다.
 이 관절값은 원시 엔코더 변환이며, 보정된 제어 좌표나 실물 구동 수용 증거가 아니다.
 
-`workcell_observation_bridge.py`는 같은 호스트의 관측 토픽만 구독한다.
+`workcell_observation_bridge.py`는 같은 호스트의 선택된 native snapshot만 읽는다.
+manifest의 topic 문자열은 로컬 키이며 ROS 발행·구독이나 DDS discovery를 시작하지 않는다(D-901).
 원본 capture 시간과 source별 최신값을 Fleet HTTPS와 기존 Vision WSS에 보낸다.
 설정은 `observation-bridge.env.example`, source 결속은
 `../../site/workcell-observations.yaml.example`을 참고한다. 예제 장치와 digest는
 자리 표시자다. private manifest의 다섯 토큰은 서로 달라야 하며 실제 SHA-256과
 일치해야 한다. 별도 로컬 뷰어나 SSH 포트 전달은 이 제품 경로에 필요하지 않다.
 
-Python은 호스트 ROS ABI와 맞아야 한다. Jazzy setup을 먼저 source하고, 해당 Python의
-격리 환경에서 시스템 `rclpy`, `sensor_msgs`, OpenCV와 canonical
+ROS setup은 필요하지 않다. 해당 Python의 격리 환경에서 OpenCV와 canonical
 `core_common.protocol.workcell_observations`, `rosy_vision.protocol`을 확인한다.
 기존 사이트 pin의 `websockets==17.0.1`, SDK `dynamixel-sdk==3.8.4`를 사용한다.
 다른 Python minor 버전의 compiled site-packages를 통째로 연결하지 않는다.
