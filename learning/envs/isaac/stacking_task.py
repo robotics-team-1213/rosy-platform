@@ -14,6 +14,10 @@ from run_omx_backend import (PAD_RADIUS, PAD_HALF_LENGTH, PAD_CONTACT_OFFSET_M, 
 
 
 def run(args):
+    global FIXTURE
+    mapped = args.mapped_long_stack
+    if mapped:
+        from mapped_stack_fixture import FIXTURE
     import numpy as np
     import torch
     import yaml
@@ -59,27 +63,32 @@ def run(args):
             position=np.array(position), scale=np.array(size), color=np.array(color), physics_material=mat))
 
     fixed('Table', [0., 0., -.025], [1.8, 1.8, .05], [.30, .32, .34])
-    belt = fixed('Conveyor', [.20, -.28, .0125], FIXTURE['belt_size_m'], [.12, .15, .18])
+    belt = fixed('Conveyor', [.16 if mapped else .20, -.28, .0125], FIXTURE['belt_size_m'], [.12, .15, .18])
     UsdPhysics.RigidBodyAPI.Apply(belt.prim).CreateKinematicEnabledAttr(True)
     surface = PhysxSchema.PhysxSurfaceVelocityAPI.Apply(belt.prim)
     surface.CreateSurfaceVelocityEnabledAttr(True)
     surface.CreateSurfaceVelocityLocalSpaceAttr(False)
     surface.CreateSurfaceVelocityAttr(Gf.Vec3f(0., FIXTURE['belt_speed_m_s'], 0.))
-    fixed('BeltStop', [.20, -.029, .035], [.12, .004, .02], [.65, .65, .65])
-    fixed('Bin', [.20, .02, .0125], [.09, .09, .025], [.15, .48, .7])
+    fixed('BeltStop', [.16 if mapped else .20, -.029, .027 if mapped else .035],
+          [.12, .004, .004 if mapped else .02], [.65, .65, .65])
+    fixed('Bin', [.16, 0., .0125] if mapped else [.20, .02, .0125],
+          [.09, .03 if mapped else .09, .025], [.15, .48, .7])
+    if mapped:
+        from mapped_stack_task import build_map
+        build_map(world, stage)
     origin = np.array(FIXTURE['bin_origin_m'])
     for axis in range(3):
         others = [i for i in range(3) if i != axis]
-        for ai, a in enumerate((0., .09)):
-            for bi, b in enumerate((0., .09)):
+        for ai, a in enumerate((0., FIXTURE['bin_size_m'][others[0]])):
+            for bi, b in enumerate((0., FIXTURE['bin_size_m'][others[1]])):
                 center = origin.copy()
-                center[axis] += .045
+                center[axis] += FIXTURE['bin_size_m'][axis]/2
                 center[others] += [a, b]
-                size = np.full(3, .0007); size[axis] = .09
+                size = np.full(3, .0007); size[axis] = FIXTURE['bin_size_m'][axis]
                 name = f'Envelope{axis}_{ai}_{bi}'
                 world.scene.add(VisualCuboid('/World/'+name, name=name, size=1.,
                     position=center, scale=size, color=np.array([.95, .8, .12])))
-    for axis in range(2):
+    for axis in range(0 if mapped else 2):
         for n in (1, 2):
             center = origin+np.array([.045, .045, .0001])
             center[axis] = origin[axis]+UNIT*n
@@ -88,7 +97,7 @@ def run(args):
             world.scene.add(VisualCuboid('/World/'+name, name=name, size=1.,
                 position=center, scale=size, color=np.ones(3)))
     # The target is an open cargo envelope; walls would consume the zero-clearance packing space.
-    for i, x in enumerate((.154, .246)):
+    for i, x in enumerate(() if mapped else (.154, .246)):
         fixed('Boundary'+str(i), [x, .02, .001], [.001, .092, .002], [.95, .8, .12])
     light = UsdLux.DomeLight.Define(stage, '/World/Light')
     light.CreateIntensityAttr(1600.)
@@ -149,7 +158,11 @@ def run(args):
                 UsdShade.Tokens.weakerThanDescendants, 'physics')
         robot = world.scene.add(Robot(str(roots[0].GetPath()), name='arm'+str(len(robots))))
         robots.append(robot)
-    plan = stack_plan()
+    if mapped:
+        from mapped_stack_fixture import plan as mapped_plan
+        plan = mapped_plan()
+    else:
+        plan = stack_plan()
     colors = {1: [.03, .08, .24], 2: [.15, .65, .25], 3: [.95, .4, .08]}
     cargo, contacts = [], []
     filters = [link[key] for link in links for key in ('link6', 'link7')]
@@ -159,7 +172,7 @@ def run(args):
             position=np.array([.7, -.5+i*.065, .015]), color=np.array(colors[item['cells']]), physics_material=mat))
         cargo.append(box)
         contacts.append(world.scene.add(RigidPrim('/World/Cargo'+str(i), name='contact'+str(i),
-            track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+
+            track_contact_forces=True, contact_filter_prim_paths_expr=filters+['/World/Bin']+(['/World/Conveyor'] if mapped else [])+
             ['/World/Cargo'+str(j) for j in range(len(plan)) if j != i], max_contact_count=128)))
     eye = Gf.Vec3d(.60, -.62, .48)
     look = Gf.Matrix4d().SetLookAt(eye, Gf.Vec3d(.13, -.10, .12), Gf.Vec3d(0., 0., 1.)).GetInverse()
@@ -175,6 +188,22 @@ def run(args):
     for robot in robots:
         joint_indices.append([robot.get_dof_index('joint'+str(i)) for i in range(1, 6)])
         fingers.append([robot.get_dof_index('gripper_joint_1'), robot.get_dof_index('gripper_joint_2')])
+
+    def capture(name, overview=False):
+        position = Gf.Vec3d(2.2, -2.2, 3.) if overview else eye
+        focus = Gf.Vec3d(0., 1.1, 0.) if overview else Gf.Vec3d(.13, -.10, .12)
+        rotation = Gf.Matrix4d().SetLookAt(position, focus, Gf.Vec3d(0., 0., 1.)).GetInverse().ExtractRotationQuat()
+        camera.set_world_pose(np.array(position), np.array([rotation.GetReal(), *rotation.GetImaginary()]), camera_axes='usd')
+        for _ in range(8):
+            world.render()
+        rgba = camera.get_rgba()
+        if rgba is None or rgba.shape != (600, 800, 4):
+            raise RuntimeError('Actual SDK image unavailable')
+        Image.fromarray(rgba.astype(np.uint8)).save(args.report.parent/name)
+
+    if mapped:
+        from mapped_stack_task import execute
+        return execute(args, world, stage, robots, joint_indices, fingers, cargo, contacts, capture)
 
     class StackingEnv:
         # shortcut: one CPU-facing SDK world, use Isaac Lab vector scenes when measured rollout throughput is limiting.
@@ -312,14 +341,6 @@ def run(args):
 
     env = StackingEnv()
 
-    def capture(name):
-        for _ in range(8):
-            world.render()
-        rgba = camera.get_rgba()
-        if rgba is None or rgba.shape != (600, 800, 4):
-            raise RuntimeError('Actual SDK image unavailable')
-        Image.fromarray(rgba.astype(np.uint8)).save(args.report.parent/name)
-
     # Observe uncommanded cargo transport on the belt before any policy is applied.
     start = cargo[0].get_world_pose()[0].copy()
     for _ in range(120):
@@ -376,6 +397,7 @@ def main():
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('--seed', type=int, required=True)
+    parser.add_argument('--mapped-long-stack', action='store_true')
     args = parser.parse_args()
     check_vendor_manifest()
     check_urdf(args.urdf, 'omx_f', allow_package=False)

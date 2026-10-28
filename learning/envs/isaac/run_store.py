@@ -194,6 +194,12 @@ def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:
         from conveyor_fixture import FIXTURE, fixture_sha256
         value.update(scene=FIXTURE, scene_sha256=fixture_sha256(), scene_not_applicable_reason=None,
             verifier_sha256=hashlib.sha256(Path(__file__).with_name('conveyor_report.py').read_bytes()).hexdigest())
+    if scenario_id == 'omx-map-long-stack':
+        from mapped_stack_fixture import FIXTURE as MAPPED
+        scene = json.loads(json.dumps(MAPPED))
+        value.update(scene=scene, scene_sha256=hashlib.sha256(_bytes(scene)).hexdigest(),
+            scene_not_applicable_reason=None,
+            verifier_sha256=hashlib.sha256(Path(__file__).with_name('mapped_stack_report.py').read_bytes()).hexdigest())
     if scenario_id == 'omx-stacking-rl':
         from stacking_fixture import FIXTURE as STACKING
         scene = json.loads(json.dumps(STACKING))
@@ -382,7 +388,15 @@ class RunStore:
                 raise ValueError('a terminal result is required')
             value = self._change(row, expected_revision, {'status': result['status']})
             if result['status'] == 'SUCCEEDED':
-                if row['input']['scenario_id'] == 'omx-stacking-rl':
+                if row['input']['scenario_id'] == 'omx-map-long-stack':
+                    required = {'mapped-stack-report', 'mapped-overview', 'mapped-initial', 'mapped-layer-3', 'mapped-trial-3'}
+                    if (result.get('stage') != 'mapped_long_stack' or result.get('task_success') is not True
+                            or result.get('successful_trials') != 3
+                            or result.get('cleanup') != 'OWNED_PROCESSES_EXITED_GPU_RELEASED'
+                            or result.get('coordinate_scope') != 'CONFLUENCE_CAD_WITH_NOMINAL_PHOTO_CELL'
+                            or not required <= {item.get('id') for item in artifacts}):
+                        raise ValueError('Measured three-trial stacking evidence is required')
+                elif row['input']['scenario_id'] == 'omx-stacking-rl':
                     required = {'stacking-report', 'stacking-policy', 'stacking-initial', 'stacking-evaluation'}
                     if (result.get('stage') != 'stacking_rl' or result.get('training_verified') is not True
                             or result.get('updates') != 32 or result.get('transitions') != 1024

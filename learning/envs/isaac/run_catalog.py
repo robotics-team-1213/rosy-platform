@@ -8,6 +8,10 @@ _CATALOG = [
      'timeout_seconds': 180,
      'requirements': ['승인 SDK·GPU·동일 계정의 두 학습 잠금 확인'],
      'reason': '모델·관절 검사이며 물리 집기 성공을 검증하지 않습니다.'},
+    {'id': 'omx-map-long-stack', 'name': 'Confluence map: two-arm three-layer physical stacking',
+     'implemented': True, 'stage': 'mapped_long_stack', 'seed_effect': 'INFEED_XY_AND_YAW',
+     'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU'],
+     'reason': 'Nominal photo cell poses; deterministic contact reference, not learned or hardware accepted.'},
     {'id': 'omx-stacking-rl', 'name': 'OMX-F 두 팔 90 mm 적재 PPO 구동 검사',
      'implemented': True, 'stage': 'stacking_rl', 'seed_effect': 'CARGO_RESET_XY_AND_YAW',
      'timeout_seconds': 900, 'requirements': ['승인 SDK·GPU·학습 잠금', 'RSL-RL 5.5 PPO'],
@@ -61,6 +65,9 @@ def normalize(scenario_id: str, config: dict) -> dict:
             or type(config['seed']) is not int or not 0 <= config['seed'] <= 2147483647):
         raise ValueError('settings require an integer seed in 0..2147483647'
                          + (' and a case' if scenario_id == 'arm-s-cell-case' else ' only'))
+    if scenario_id == 'omx-map-long-stack':
+        return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
+                'fixture': 'confluence-map-long-stack-v1', 'trials': 3}
     if scenario_id == 'omx-stacking-rl':
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
                 'fixture': 'omx-stacking-v1', 'iterations': 32, 'num_envs': 1}

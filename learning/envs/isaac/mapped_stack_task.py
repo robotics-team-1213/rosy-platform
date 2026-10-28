@@ -1,0 +1,164 @@
+"""CAD board context and measured-contact three-layer reference execution."""
+import math
+
+from mapped_stack_fixture import DT, FIXTURE, home, judge, plan, planning, solve
+
+
+def build_map(world, stage):
+    import numpy as np
+    from pxr import Gf, UsdGeom
+    from isaacsim.core.api.objects import FixedCuboid, VisualCuboid
+    world.scene.add(FixedCuboid('/World/PlywoodMap', name='plywood_map', size=1.,
+        position=np.array([0., 1.42, -.008]), scale=np.array(FIXTURE['board_size_m']),
+        color=np.array([.35, .36, .37])))
+    # shortcut: CAD paint is visually transcribed; surveyed workbench registration replaces nominal photo poses.
+    paths = [[(.738, .10), (.738, .02), (1.13, .02), (1.21, .10), (1.21, 2.34),
+              (1.13, 2.42), (.818, 2.42), (.738, 2.34), (.738, 1.69),
+              (.338, 1.49), (.338, .56), (.738, .36), (.738, .10)],
+             [(.98, .30), (.98, 2.14)], [(.738, .675), (.738, 1.375)]]
+    count = 0
+    for path in paths:
+        for a, b in zip(path, path[1:]):
+            dx, dy = b[0]-a[0], b[1]-a[1]
+            obj = world.scene.add(VisualCuboid('/World/Tape'+str(count), name='tape'+str(count), size=1.,
+                position=np.array([(a[0]+b[0])/2-.61, (a[1]+b[1])/2+.20, .0015]),
+                scale=np.array([math.hypot(dx, dy), .01, .001]), color=np.ones(3)))
+            UsdGeom.XformCommonAPI(obj.prim).SetRotate(Gf.Vec3f(0., 0., math.degrees(math.atan2(dy, dx))))
+            count += 1
+    for i, y in enumerate((-.15, .15)):
+        world.scene.add(VisualCuboid('/World/YellowBench'+str(i), name='yellow_bench'+str(i), size=1.,
+            position=np.array([-.10, y, -.001]), scale=np.array([.26, .25, .002]),
+            color=np.array([.95, .72, .06])))
+
+
+def execute(args, world, stage, robots, joints, fingers, cargo, contacts, capture):
+    import numpy as np
+    from isaacsim.core.utils.types import ArticulationAction
+    kin, profile = planning()
+    targets = [np.zeros(r.num_dof) for r in robots]
+    tick = 0
+    images, trials = [], []
+
+    def step():
+        nonlocal tick
+        for i, robot in enumerate(robots):
+            state = robot.get_joint_positions()
+            if not np.isfinite(state).all():
+                raise ValueError('nonfinite articulation')
+            targets[i][fingers[i][1]] = -state[fingers[i][0]]
+            robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=targets[i]))
+        world.step(render=False, update_fabric=True)
+        tick += 1
+
+    def hold(steps):
+        for _ in range(steps):
+            step()
+
+    def snapshot():
+        boxes, tcps = [], []
+        for i, box in enumerate(cargo):
+            p, q = box.get_world_pose()
+            boxes.append(dict(position=p.tolist(), orientation=q.tolist(),
+                velocity=box.get_linear_velocity().tolist(), angular_velocity=box.get_angular_velocity().tolist(),
+                forces=np.asarray(contacts[i].get_contact_force_matrix(dt=DT))[0].tolist()))
+        for i, robot in enumerate(robots):
+            pose = kin.fk(robot.get_joint_positions()[joints[i]])
+            tcps.append([pose.x+FIXTURE['arm_bases_m'][i][0], pose.y+FIXTURE['arm_bases_m'][i][1], pose.z])
+        return dict(tick=tick, boxes=boxes, tcps=tcps)
+
+    def samples(steps):
+        result = [snapshot()]
+        for n in range(steps):
+            step()
+            if (n+1) % 12 == 0:
+                result.append(snapshot())
+        return result
+
+    def photo(name, overview=False):
+        capture(name, overview)
+        images.append(name)
+
+    def move(arm, point, yaw=0.):
+        start_pose = kin.fk(targets[arm][joints[arm]])
+        base = FIXTURE['arm_bases_m'][arm]
+        start = np.array([start_pose.x+base[0], start_pose.y+base[1], start_pose.z])
+        q5 = float(targets[arm][joints[arm][-1]])
+        def curve(u):
+            nonlocal q5
+            s = u*u*u*(10+u*(-15+6*u))
+            q = solve(arm, start+(np.array(point)-start)*s, start_pose.yaw+(yaw-start_pose.yaw)*s, q5)
+            q5 = q[-1]
+            return q
+        coarse = np.array([curve(u) for u in np.linspace(0., 1., 101)])
+        duration = max(.8, float(np.abs(np.diff(coarse, axis=0)*100).max())/.4,
+                       math.sqrt(float(np.abs(np.diff(coarse, n=2, axis=0)*10000).max())/.4))
+        for u in np.linspace(0., 1., math.ceil(duration/DT)+1)[1:]:
+            targets[arm][joints[arm]] = curve(u)
+            step()
+        hold(24)
+
+    def grip(arm, value):
+        start = targets[arm][fingers[arm][0]]
+        duration = max(.8, 1.875*abs(value-start)/.4, math.sqrt(5.774*abs(value-start)/.4))
+        for u in np.linspace(0., 1., math.ceil(duration/DT)+1)[1:]:
+            targets[arm][fingers[arm][0]] = start+(value-start)*u**3*(10+u*(-15+6*u))
+            step()
+        hold(60)
+
+    for trial_index in range(FIXTURE['trials']):
+        trial = dict(seed=args.seed+trial_index, layers=[])
+        trials.append(trial)
+        rng = np.random.default_rng(trial['seed'])
+        for i, box in enumerate(cargo):
+            box.set_world_pose(np.array([.7, -.5+i*.065, .015]), np.array([1., 0., 0., 0.]))
+            box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
+        for i, robot in enumerate(robots):
+            targets[i][joints[i]] = solve(i, home(i), 0.)
+            targets[i][fingers[i]] = [.6, -.6]
+            robot.set_joint_positions(targets[i])
+            robot.set_joint_velocities(np.zeros(robot.num_dof))
+        hold(120)
+        if trial_index == 0:
+            photo('mapped-overview.png', True)
+            photo('mapped-initial.png')
+        try:
+            for index, item in enumerate(plan()):
+                arm, box = item['arm'], cargo[index]
+                yaw = float(rng.uniform(-.01, .01))
+                box.set_world_pose(np.array([.16+rng.uniform(-.001, .001), -.09, .041]),
+                    np.array([math.cos(yaw/2), 0., 0., math.sin(yaw/2)]))
+                box.set_linear_velocity(np.zeros(3)); box.set_angular_velocity(np.zeros(3))
+                start = box.get_world_pose()[0].copy()
+                hold(360)
+                p, q = box.get_world_pose()
+                trial['belt_displacement_m'] = (p-start).tolist()
+                if not .01 < p[1]-start[1] < .06:
+                    raise ValueError('belt failed to transport cargo')
+                yaw = math.atan2(2*(q[0]*q[3]+q[1]*q[2]), 1-2*(q[2]**2+q[3]**2))
+                layer = dict(item=index, arm=arm, source_center_z=float(p[2]), lift_samples=[], settle_samples=[])
+                trial['layers'].append(layer)
+                move(arm, [p[0], p[1], .145], yaw)
+                move(arm, p.tolist(), yaw)
+                grip(arm, profile.gripper_close_for_width(.03))
+                move(arm, [p[0], p[1], .145], yaw)
+                layer['lift_samples'] = samples(36)
+                move(arm, [*item['target'][:2], .145])
+                move(arm, [*item['target'][:2], item['target'][2]+.001])
+                grip(arm, profile.gripper_contact_for_width(.04))
+                move(arm, [*item['target'][:2], .145])
+                move(arm, home(arm))
+                layer['settle_samples'] = samples(132)
+                if trial_index == 0:
+                    photo('mapped-layer-'+str(index+1)+'.png')
+                print('MAPPED_LAYER', trial_index, index+1, flush=True)
+        except (ValueError, RuntimeError) as exc:
+            trial['error'] = str(exc)[:400]
+        trial.update(judge(trial))
+        photo('mapped-trial-'+str(trial_index+1)+'.png')
+        print('MAPPED_TRIAL', trial_index, trial['task_success'], trial.get('error'), trial['failures'], flush=True)
+        if not trial['task_success']:
+            break
+    stage.GetRootLayer().Export(str(args.report.parent/'mapped-scene.usda'))
+    return dict(schema='rosy.omx-map-long-stack/1', fixture=FIXTURE, seed=args.seed, trials=trials,
+        task_success=len(trials) == 3 and all(t['task_success'] for t in trials),
+        controller=FIXTURE['controller'], attachment_aid=False, images=images)

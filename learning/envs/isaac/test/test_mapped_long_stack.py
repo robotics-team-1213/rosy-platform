@@ -41,3 +41,39 @@ def test_reference_controller_is_a_distinct_mapped_scenario():
     assert row['trials'] == 3 and row['fixture'] == 'confluence-map-long-stack-v1'
     with pytest.raises(ValueError):
         run_catalog.normalize('omx-map-long-stack', {'seed': 42, 'attachment': True})
+
+
+def test_success_requires_free_lift_release_support_and_retreat():
+    import copy
+    mod = fixture()
+    trial = {'layers': []}
+    for i in range(3):
+        boxes = []
+        for j, item in enumerate(mod.plan()):
+            forces = [[0., 0., 0.] for _ in range(8)]
+            below = 'bin' if j == 0 else mod.plan()[j-1]['id']
+            forces[mod.contact_names(j).index(below)][2] = .6
+            boxes.append(dict(position=item['target'][:], orientation=[1., 0., 0., 0.],
+                velocity=[0., 0., 0.], angular_velocity=[0., 0., 0.], forces=forces))
+        settled = dict(boxes=boxes, tcps=[[0., -.15, .13], [0., .15, .13]])
+        lifted = copy.deepcopy(settled)
+        lifted['boxes'][i]['position'][2] = .145
+        lifted['boxes'][i]['forces'] = [[0., 0., 0.] for _ in range(8)]
+        for finger in (2*(i % 2), 2*(i % 2)+1):
+            lifted['boxes'][i]['forces'][finger] = [0., .1, .3]
+        trial['layers'].append(dict(item=i, arm=i % 2, source_center_z=.04,
+            lift_samples=[dict(copy.deepcopy(lifted), tick=t) for t in (0, 12, 24)],
+            settle_samples=[dict(copy.deepcopy(settled), tick=t) for t in range(120, 253, 12)]))
+    assert mod.judge(trial)['task_success']
+    for mutation in ('held', 'no_lift', 'unsupported', 'displaced'):
+        bad = copy.deepcopy(trial)
+        layer = bad['layers'][2]
+        if mutation == 'held':
+            layer['settle_samples'][0]['boxes'][2]['forces'][0] = [0., 0., .1]
+        elif mutation == 'no_lift':
+            layer['lift_samples'][0]['boxes'][2]['position'][2] = .04
+        elif mutation == 'unsupported':
+            layer['settle_samples'][0]['boxes'][2]['forces'] = [[0., 0., 0.] for _ in range(8)]
+        else:
+            layer['settle_samples'][0]['boxes'][0]['position'][0] += .01
+        assert not mod.judge(bad)['task_success'], mutation
