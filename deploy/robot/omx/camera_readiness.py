@@ -47,8 +47,11 @@ def validate_profile(profile):
     cameras = profile['cameras']
     if set(cameras) != {'top', 'front'}:
         raise ValueError('both camera roles required')
-    devices = []
-    for spec in cameras.values():
+    devices, units = [], []
+    for role, spec in cameras.items():
+        units.append(unit(role, spec))
+        if not re.fullmatch(r'[a-z][a-z0-9_]{0,31}', units[-1]):
+            raise ValueError('camera preview unit must be a plain instance name')
         device = Path(spec['device'])
         if device.parent != Path('/dev/v4l/by-id'):
             raise ValueError('persistent camera identity required')
@@ -65,9 +68,14 @@ def validate_profile(profile):
                     or not all(type(value) is int for value in candidate.values())
                     or not 1 <= candidate.get('exposure_time_absolute', 0) <= 800):
                 raise ValueError('manual exposure up to 80 ms and supported controls required')
-    if len(set(devices)) != 2:
-        raise ValueError('camera roles must have different devices')
+    if len(set(devices)) != 2 or len(set(units)) != 2:
+        raise ValueError('camera roles must have different devices and preview units')
     return profile
+
+
+def unit(role, spec):
+    # 2026-10-28: the front role's camera is arm S's gripper camera, opened by rosy-omx-camera@arm_a_wrist
+    return spec.get('unit', role)
 
 
 def command(args):
@@ -201,7 +209,7 @@ def prepare(profile, root, digest):
             if identity(spec['device']) != spec['identity']:
                 raise RuntimeError('camera identity changed')
             # The baseline keeps the original settings; the owner to guard is this run's preview, not the first one.
-            spec['producer'] = producer(role, spec['device'])
+            spec['producer'] = producer(unit(role, spec), spec['device'])
             if get_controls(spec['device'], spec['original']) != spec['original']:
                 raise RuntimeError('camera settings changed since baseline; refusing overwrite')
         return baseline
@@ -220,7 +228,8 @@ def prepare(profile, root, digest):
                 lo, hi, step = ranges[name]
                 if not lo <= value <= hi or (value-lo) % step:
                     raise ValueError('candidate outside actual device control range: '+name)
-        cameras[role] = dict(device=device, identity=identity(device), producer=producer(role, device),
+        cameras[role] = dict(device=device, identity=identity(device), unit=unit(role, spec),
+                             producer=producer(unit(role, spec), device),
                              original=get_controls(device, names), control_metadata=metadata)
     if len({s['identity']['rdev'] for s in cameras.values()}) != 2:
         raise RuntimeError('camera aliases select the same device')
@@ -239,7 +248,7 @@ def restore(root):
         try:
             if identity(spec['device']) != spec['identity']:
                 raise RuntimeError('camera identity changed; refusing wrong device')
-            producer(role, spec['device'], wait_s=5.0)  # two cameras stay inside TimeoutStopSec=20
+            producer(unit(role, spec), spec['device'], wait_s=5.0)  # two cameras stay inside TimeoutStopSec=20
             errors = restore_controls(spec['original'], lambda n, v: write_control(spec['device'], n, v))
             actual = get_controls(spec['device'], spec['original'])
             results[role] = dict(errors=errors, actual=actual, restored=actual == spec['original'] and not errors)

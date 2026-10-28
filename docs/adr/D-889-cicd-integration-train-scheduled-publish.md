@@ -309,3 +309,15 @@
 - 시험 PC는 바뀐 경로가 고른 브라우저 시험만 돌아, 남의 변경이 깬 브라우저 시험은 GitHub에서야 보인다. 시험 PC 야간 전체 브라우저 실행이 필요하다.
 - ROS CI 컨테이너에서 루트 conftest의 sys.path 보고가 나오지 않는 원인(지금은 그 검사만 건너뜀).
 - 시험 PC 아침 정비(05:15~06:10) 동안 준비가 시작되지 않는다. PC별 재부팅을 엇갈려 두면 대기열이 멈추지 않는다.
+
+### 추가 6 (2026-10-28): FULL 등급끼리 묶음 착지 (사용자 지시 2026-10-28)
+
+**왜.** 10-28 저녁 12시간 동안 착지 39건 중 묶음은 2번(각 k=2)뿐이었다. 준비를 마친 78건 중 48건이 FULL 등급이었고, 추가 4의 규칙에서 FULL 등급은 혼자 착지했다. FULL로 간 이유는 대부분 브랜치 자신의 변경이었다. 게이트 도구(Rule 8: `tools/land*`, `tools/remote/*`, `test/browser_scope.py`)가 약 60회, safety 경로가 25회, compose·`tools/sim`이 11회였다.
+
+**결정.**
+1. 묶음은 같은 무리끼리만 만든다. 무리는 준비 등급 `affected` 또는 `full`이다. 아직 `pending`인 표는 fork 지점의 선택으로 정한다(FULL 메모가 있으면 `full`). 리더는 자기 무리에서 가장 이른 표이고, 자기 무리의 표만 고른다.
+2. `full` 묶음은 병합한 트리에서 FULL을 한 번 돌린다(`land_prepare.prepare`가 FULL 메모를 그대로 처리한다). 시험 범위는 줄지 않고, 실패하면 추가 4의 반으로 나누기로 다시 묶거나 혼자 간다.
+3. `full` 묶음의 크기는 `min(kopt(p), 3)`이다. 한 번의 실패가 FULL 한 바퀴를 버리기 때문이다.
+4. safety 경로를 건드린 브랜치와 `--tests`를 직접 준 착지는 지금처럼 혼자 간다(이 ADR 3). `affected` 묶음이 main과 합친 뒤 FULL을 고르면 지금처럼 멈추고 무리별로 다시 묶인다.
+
+**구현.** `tools/land_batch.py`(`group_of`, `batchable`이 무리를 돌려줌, `eligible`·`former`·`lead`의 `kind`, `KFULL`), `test/test_land_batch.py`.
