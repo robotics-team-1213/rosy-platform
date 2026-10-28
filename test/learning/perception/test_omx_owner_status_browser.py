@@ -355,6 +355,8 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                 playwright.expect(page.locator('main')).to_be_visible()
                 playwright.expect(page.locator('[data-learning-account-entry]')).to_have_attribute('href', '/accounts')
                 playwright.expect(page.locator('[data-learning-account-entry]')).to_be_visible()
+                if href=='/':
+                    playwright.expect(page.locator('#empty-review h2')).not_to_have_text('검수 내용을 확인하는 중')
                 assert len(page.locator('main').inner_text().strip()) > 40
                 assert page.url == empty_learning_center+href
             reached = set()
