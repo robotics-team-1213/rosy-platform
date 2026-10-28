@@ -39,7 +39,7 @@ FULL 계층(`full_invocations`)은 모듈 폴더 단위로 호출을 만들고, 
 
 ## pytest 파일 단독 실행도 실제 CLI를 대신하지 않는다 (2026-10-28)
 
-고정 소스 `7b3245d3c594a8b5856ad791a334e1e342be6bdb`의 FULL과 관련 원격 시험은 통과했지만,
+고정 소스 commit `7b3245d3c594a8b5856ad791a334e1e342be6bdb`의 FULL과 관련 원격 시험은 통과했지만,
 실제 native ARM [이미지 실행 40632587457](https://github.com/robotics-team-1213/rosy-platform/actions/runs/40632587457)
 attempt1/job122632180302는 이미지 생성 전 lock 해석에서 실패했다.
 `resolve-build-lock.py` → `os_cms_trust.py` → `os_rauc.py` → `os_update_manifest.py`의
