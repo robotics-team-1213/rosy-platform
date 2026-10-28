@@ -54,8 +54,11 @@ def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, 
     git(cwd, "branch", snap, "HEAD")
     git(cwd, "worktree", "add", "-q", str(tree), snap)
     log = tree.parent / (tree.name + ".log")
-    launch([sys.executable, "-X", "utf8", str(Path(__file__).resolve()), "--supervise", str(tree), snap, *land_args],
-           log)
+    # The supervisor runs a copy beside the log, never the caller's file: Windows keeps a running script's
+    # folder from being deleted, and the caller's worktree must be free (2026-10-28).
+    script = place / (tree.name + ".land_async.py")  # one per landing: a running copy cannot be rewritten
+    script.write_bytes(Path(__file__).read_bytes())
+    launch([sys.executable, "-X", "utf8", str(script), "--supervise", str(tree), snap, *land_args], log)
     return snap, log
 
 
