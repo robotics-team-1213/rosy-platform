@@ -12900,3 +12900,9 @@ osy-d395-s1d\`.
 - 증거: 원격 curation 전체 328 pass·10 skip·NEW 0. 분할 별칭 두 사례와 숫자 overflow를 실제 실패로 먼저 확인했으며 최종 구현에서 통과했다. 이전 실패를 최초 통과로 바꾸지 않았다.
 - Gate: 없음. metadata 검수 준비이며 사람 정답·ACT/VLA 수용·장치 수용은 아니다.
 - CE: 해당 없음 — 재현과 최종 판단을 코드·시험·결과 기록에서 복원할 수 있다.
+
+## 2026-10-29 · da361c0aa0 · Pilot 녹화 시험 경계 분리 근거
+
+- 변경: `validation/pilot-recording-browser-split-2026-10-29/`에 AST 동일성·fixture 재사용·OMX 선택 범위·ratchet 감소와 원격 검증을 동결했다. runtime 변경은 없다.
+- 증거: browser16+scope17=33pass/0skip, 공식 affected635pass/137skip/NEW0. 선택 확대 및 ratchet 갱신 누락 실패를 숨기지 않았다. mapped full preflight를 전체 CI/FULL로 간주하지 않는다.
+- gate 변화: 없음. CE: 해당 없음 — 최종 코드·guard·측정·기록으로 복원된다.
