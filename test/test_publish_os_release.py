@@ -156,6 +156,7 @@ def test_success_uploads_exact_captured_bytes_before_opening_engineering_prerele
 
 @pytest.mark.parametrize("mutate_original", [False, True])
 def test_chunked_upload_preserves_signed_bytes_and_original_inputs(prepared, monkeypatch, mutate_original):
+    module()
     import os_update_transport as transport
     monkeypatch.setattr(transport, "CHUNK_BYTES", 17)
     monkeypatch.setattr(transport, "GITHUB_MAX_ASSET_BYTES", 20)
@@ -178,6 +179,7 @@ def test_chunked_upload_preserves_signed_bytes_and_original_inputs(prepared, mon
 
 @pytest.mark.parametrize("fault", ["missing_chunk", "corrupt_chunk"])
 def test_missing_or_corrupt_uploaded_chunk_never_opens_the_draft(prepared, monkeypatch, fault):
+    module()
     import os_update_transport as transport
     monkeypatch.setattr(transport, "CHUNK_BYTES", 17)
     monkeypatch.setattr(transport, "GITHUB_MAX_ASSET_BYTES", 20)
@@ -190,6 +192,7 @@ def test_missing_or_corrupt_uploaded_chunk_never_opens_the_draft(prepared, monke
 
 
 def test_changed_captured_bundle_is_refused_before_chunk_publication(prepared, monkeypatch):
+    module()
     import os_update_transport as transport
     monkeypatch.setattr(transport, "CHUNK_BYTES", 17)
     monkeypatch.setattr(transport, "GITHUB_MAX_ASSET_BYTES", 20)
